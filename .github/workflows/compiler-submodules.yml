@@ -1,0 +1,27 @@
+name: compiler-submodules
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify-submodules:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          submodules: recursive
+
+      - name: Verify imported compiler sources
+        shell: bash
+        run: |
+          test -f external/compilers/ericw-tools/README.md
+          test -d external/compilers/netradiant-custom/tools/quake3/q3map2
+          test -f external/compilers/zdbsp/README.md
+          test -f external/compilers/zokumbsp/README.md
+          git submodule status --recursive

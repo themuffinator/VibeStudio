@@ -1,0 +1,21 @@
+option(
+  'github_repo',
+  type: 'string',
+  value: 'themuffinator/VibeStudio',
+  description: 'GitHub repo (owner/name) used for update checks and documentation badges.'
+)
+
+option(
+  'update_channel',
+  type: 'combo',
+  choices: ['stable', 'beta', 'dev'],
+  value: 'dev',
+  description: 'Update channel selection.'
+)
+
+option(
+  'compiler_tools',
+  type: 'feature',
+  value: 'disabled',
+  description: 'Reserved for building bundled external compiler toolchains from submodules.'
+)

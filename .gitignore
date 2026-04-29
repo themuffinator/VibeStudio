@@ -30,3 +30,33 @@
 *.exe
 *.out
 *.app
+
+# Clang
+.cache
+
+# Python
+__pycache__/
+*.py[cod]
+
+# Meson build outputs
+build/
+builddir*/
+meson-private/
+meson-logs/
+install/
+
+# Release outputs
+dist/
+_artifact_ubuntu/
+squashfs-root/
+
+# Local packaging/debug logs
+*.log
+_log_*
+_linuxdeploy_*
+_wsl_linuxpkg.log
+aqtinstall.log
+
+# Local scratch/reference checkouts
+tmp/
+.tmp_refs/
