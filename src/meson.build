@@ -13,6 +13,7 @@ vibestudio_includes = include_directories('.')
 
 core_sources = files(
   'core/studio_manifest.cpp',
+  'core/studio_settings.cpp',
 )
 
 vibestudio_core = static_library(
@@ -29,7 +30,7 @@ vibestudio_core_dep = declare_dependency(
   link_with: [vibestudio_core],
 )
 
-install_headers(files('core/studio_manifest.h'), subdir: 'vibestudio/core')
+install_headers(files('core/studio_manifest.h', 'core/studio_settings.h'), subdir: 'vibestudio/core')
 
 app_sources = files(
   'main.cpp',
@@ -54,3 +55,13 @@ core_smoke_test = executable(
 )
 
 test('core-smoke', core_smoke_test)
+
+settings_smoke_test = executable(
+  'settings_smoke_test',
+  ['tests/settings_smoke_test.cpp'],
+  include_directories: vibestudio_includes,
+  dependencies: [vibestudio_core_dep],
+  install: false,
+)
+
+test('settings-smoke', settings_smoke_test)

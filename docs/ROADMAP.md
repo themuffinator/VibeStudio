@@ -211,8 +211,8 @@ Goal: make the repository easy to build, test, credit, and extend.
 
 ### Product Shell
 - [x] Add mode rail and placeholder studio shell.
-- [ ] Add persistent settings storage.
-- [ ] Add recent projects list.
+- [x] Add persistent settings storage.
+- [x] Add recent projects list.
 - [ ] Add global status/log panel.
 - [ ] Add global activity center with task list, progress, result, warnings, failures, and cancellation.
 - [ ] Add reusable operation-state model for idle/loading/running/warning/failed/cancelled/completed states.
@@ -744,7 +744,7 @@ related area.
 
 Use this queue to get to MVP quickly.
 
-1. [ ] Add persistent settings and recent projects.
+1. [x] Add persistent settings and recent projects.
 2. [ ] Add accessibility and language preferences: scale, high-visibility, density, reduced motion, TTS, locale.
 3. [ ] Add first-run setup shell with skip/resume and setup summary.
 4. [ ] Add global activity center and reusable operation-state model.

@@ -73,7 +73,7 @@ QVector<CompilerIntegration> compilerIntegrations()
 		},
 		{
 			"q3map2-nrc",
-			"q3map2-nrc",
+			"NetRadiant Custom q3map2",
 			"idTech3 / Quake III BSP family",
 			"q3map2 compiler source imported from NetRadiant Custom under tools/quake3/q3map2.",
 			"external/compilers/q3map2-nrc",

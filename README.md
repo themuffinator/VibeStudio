@@ -67,9 +67,10 @@ What exists today:
 - Documentation for product goals, stack, roadmap, UX, accessibility,
   localization, AI connectors, setup, compiler integration, and credits.
 - Cross-platform Meson/Qt scaffold.
-- Minimal Qt Widgets shell.
+- Minimal Qt Widgets shell with persistent window/mode settings and a recent
+  projects panel.
 - Minimal CLI diagnostics for version, platform, planned modules, and compiler
-  import metadata.
+  import metadata, plus settings/recent-project diagnostics.
 - Imported compiler source submodules.
 - Early CI/build validation.
 
@@ -198,6 +199,13 @@ Current scaffold commands:
 - `--studio-report`: print planned studio modules.
 - `--compiler-report`: print imported compiler metadata.
 - `--platform-report`: print platform and Qt runtime details.
+- `--settings-report`: print persistent settings storage and recent projects.
+- `--recent-projects`: print remembered project folders.
+- `--add-recent-project <path>`: remember a project folder.
+- `--remove-recent-project <path>`: forget a project folder without touching
+  files.
+- `--clear-recent-projects`: clear remembered project folders without touching
+  project files.
 
 ## Documentation
 - [`AGENTS.md`](AGENTS.md): contributor and automation rules.

@@ -20,7 +20,7 @@ rendering portability, source editing, media handling, search, or automation.
 | Build system | [Meson](https://mesonbuild.com/) + [Ninja](https://ninja-build.org/) | Active | Fast, readable, cross-platform, and suitable for CI. |
 | Automation | Python scripts + GitHub Actions | Active | Good fit for validation, release helpers, documentation checks, and CI orchestration. |
 | Project manifests | JSON | Planned | Human-readable, easy to diff, scriptable, and already natural for CLI output. |
-| User settings | Qt `QSettings` plus project overrides | Planned | Cross-platform native settings with project-local override support. |
+| User settings | Qt `QSettings` plus project overrides | Active/planned | Application shell settings and recent projects use `QSettings`; project-local override support is planned. |
 | Accessibility | [Qt Accessibility](https://doc.qt.io/qt-6/accessible.html), OS accessibility settings, accessible custom widgets | Planned core layer | Supports screen readers, keyboard access, scalable UI, contrast, and assistive tool metadata. |
 | Scaling | [Qt High DPI](https://doc.qt.io/qt-6/highdpi.html), layout-driven UI, app text scale preferences | Planned core layer | Keeps the studio usable across DPI, monitor, and vision needs. |
 | Text to speech | [Qt TextToSpeech](https://doc.qt.io/qt-6/qttexttospeech-index.html) | Planned optional module | Uses native OS speech engines for task summaries, diagnostics, setup guidance, and warnings. |
@@ -108,8 +108,10 @@ Use JSON for project manifests and command manifests. Keep schemas versioned
 and validate them through both GUI and CLI paths.
 
 Use Qt `QSettings` for application settings and store project-specific
-overrides under the project root. Settings must be exportable enough for support
-and issue reports without exposing secrets.
+overrides under the project root. The first active settings slice persists shell
+geometry/state, selected mode, and recent project folders through shared
+GUI/CLI services. Settings must be exportable enough for support and issue
+reports without exposing secrets.
 
 Use SQLite for the project asset index once package browsing and installation
 profiles move beyond in-memory MVP structures. The index should cover mounted

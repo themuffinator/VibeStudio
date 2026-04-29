@@ -1,10 +1,13 @@
 #include "cli/cli.h"
 
 #include "core/studio_manifest.h"
+#include "core/studio_settings.h"
 #include "vibestudio_config.h"
 
 #include <QCoreApplication>
 #include <QByteArray>
+#include <QDir>
+#include <QSettings>
 #include <QSysInfo>
 
 #include <cstddef>
@@ -21,6 +24,38 @@ std::string text(const QString& value)
 	return std::string(bytes.constData(), static_cast<std::size_t>(bytes.size()));
 }
 
+QString nativePath(const QString& path)
+{
+	return QDir::toNativeSeparators(path);
+}
+
+QString settingsStatusText(QSettings::Status status)
+{
+	switch (status) {
+	case QSettings::NoError:
+		return QStringLiteral("ready");
+	case QSettings::AccessError:
+		return QStringLiteral("access-error");
+	case QSettings::FormatError:
+		return QStringLiteral("format-error");
+	}
+	return QStringLiteral("unknown");
+}
+
+QString optionValue(const QStringList& args, const QString& option)
+{
+	const int index = args.indexOf(option);
+	if (index < 0 || index + 1 >= args.size()) {
+		return {};
+	}
+	return args[index + 1];
+}
+
+bool hasOption(const QStringList& args, const QString& option)
+{
+	return args.contains(option);
+}
+
 void printHelp()
 {
 	std::cout << "VibeStudio " << text(versionString()) << "\n";
@@ -31,6 +66,14 @@ void printHelp()
 	std::cout << "  --studio-report     Print planned studio modules.\n";
 	std::cout << "  --compiler-report   Print imported compiler integrations.\n";
 	std::cout << "  --platform-report   Print platform and Qt runtime details.\n";
+	std::cout << "  --settings-report   Print settings storage and recent projects.\n";
+	std::cout << "  --recent-projects   Print recent projects only.\n";
+	std::cout << "  --add-recent-project <path>\n";
+	std::cout << "                      Remember a project folder in persistent settings.\n";
+	std::cout << "  --remove-recent-project <path>\n";
+	std::cout << "                      Forget a project folder without touching files.\n";
+	std::cout << "  --clear-recent-projects\n";
+	std::cout << "                      Clear remembered project folders without touching files.\n";
 }
 
 void printStudioReport()
@@ -70,28 +113,113 @@ void printPlatformReport()
 	std::cout << "Product: " << text(QSysInfo::prettyProductName()) << "\n";
 }
 
+void printRecentProjects(const StudioSettings& settings)
+{
+	const QVector<RecentProject> projects = settings.recentProjects();
+	if (projects.isEmpty()) {
+		std::cout << "Recent projects: none\n";
+		return;
+	}
+
+	std::cout << "Recent projects\n";
+	for (const RecentProject& project : projects) {
+		std::cout << "- " << text(project.displayName) << "\n";
+		std::cout << "  Path: " << text(nativePath(project.path)) << "\n";
+		std::cout << "  State: " << (project.exists ? "ready" : "missing") << "\n";
+		std::cout << "  Last opened UTC: " << text(project.lastOpenedUtc.toUTC().toString(Qt::ISODate)) << "\n";
+	}
+}
+
+void printSettingsReport()
+{
+	const StudioSettings settings;
+	std::cout << "VibeStudio settings\n";
+	std::cout << "Storage: " << text(nativePath(settings.storageLocation())) << "\n";
+	std::cout << "Status: " << text(settingsStatusText(settings.status())) << "\n";
+	std::cout << "Schema: " << settings.schemaVersion() << "\n";
+	std::cout << "Selected mode index: " << settings.selectedMode() << "\n";
+	printRecentProjects(settings);
+}
+
 } // namespace
 
 int run(const QStringList& args)
 {
-	if (args.contains("--version")) {
+	QStringList requestedOptions = args.mid(1);
+	requestedOptions.removeAll(QStringLiteral("--cli"));
+
+	if (hasOption(args, "--version")) {
 		std::cout << "VibeStudio " << text(versionString()) << "\n";
 		return 0;
 	}
-	if (args.contains("--help") || args.size() <= 1) {
+	if (hasOption(args, "--help") || requestedOptions.isEmpty()) {
 		printHelp();
 		return 0;
 	}
-	if (args.contains("--studio-report")) {
+	if (hasOption(args, "--studio-report")) {
 		printStudioReport();
 		return 0;
 	}
-	if (args.contains("--compiler-report")) {
+	if (hasOption(args, "--compiler-report")) {
 		printCompilerReport();
 		return 0;
 	}
-	if (args.contains("--platform-report")) {
+	if (hasOption(args, "--platform-report")) {
 		printPlatformReport();
+		return 0;
+	}
+	if (hasOption(args, "--settings-report")) {
+		printSettingsReport();
+		return 0;
+	}
+	if (hasOption(args, "--recent-projects")) {
+		const StudioSettings settings;
+		printRecentProjects(settings);
+		return 0;
+	}
+	if (hasOption(args, "--add-recent-project")) {
+		const QString path = optionValue(args, "--add-recent-project");
+		if (path.isEmpty()) {
+			std::cerr << "--add-recent-project requires a path.\n";
+			return 2;
+		}
+
+		StudioSettings settings;
+		settings.recordRecentProject(path);
+		settings.sync();
+		if (settings.status() != QSettings::NoError) {
+			std::cerr << "Failed to save settings: " << text(settingsStatusText(settings.status())) << "\n";
+			return 1;
+		}
+		std::cout << "Remembered recent project: " << text(nativePath(normalizedProjectPath(path))) << "\n";
+		return 0;
+	}
+	if (hasOption(args, "--remove-recent-project")) {
+		const QString path = optionValue(args, "--remove-recent-project");
+		if (path.isEmpty()) {
+			std::cerr << "--remove-recent-project requires a path.\n";
+			return 2;
+		}
+
+		StudioSettings settings;
+		settings.removeRecentProject(path);
+		settings.sync();
+		if (settings.status() != QSettings::NoError) {
+			std::cerr << "Failed to save settings: " << text(settingsStatusText(settings.status())) << "\n";
+			return 1;
+		}
+		std::cout << "Forgot recent project: " << text(nativePath(normalizedProjectPath(path))) << "\n";
+		return 0;
+	}
+	if (hasOption(args, "--clear-recent-projects")) {
+		StudioSettings settings;
+		settings.clearRecentProjects();
+		settings.sync();
+		if (settings.status() != QSettings::NoError) {
+			std::cerr << "Failed to save settings: " << text(settingsStatusText(settings.status())) << "\n";
+			return 1;
+		}
+		std::cout << "Recent projects cleared.\n";
 		return 0;
 	}
 
