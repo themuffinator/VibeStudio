@@ -13,7 +13,9 @@ path.
 - Python 3 for validation scripts and CI helpers.
 
 Required Qt modules should stay minimal in `meson.build` until code uses them.
-Planned modules include SQL, Multimedia, Concurrent, and OpenGLWidgets.
+Planned modules include SQL, Multimedia, Concurrent, OpenGLWidgets, and
+TextToSpeech. Qt Linguist tools are planned for localization extraction and
+release translation bundles.
 
 ## Imported Compiler Source Dependencies
 The external compiler submodules keep their own build systems and dependency
@@ -28,6 +30,8 @@ requirements. VibeStudio does not build them by default yet.
 Likely future additions:
 - [CLI11](https://github.com/CLIUtils/CLI11): command parser for the full CLI.
 - [SQLite](https://sqlite.org/) through Qt SQL, with [FTS5](https://sqlite.org/fts5.html) where available: asset index, dependency search, diagnostics, recent activity, and project metadata.
+- [Qt TextToSpeech](https://doc.qt.io/qt-6/qttexttospeech-index.html): OS-backed TTS for setup guidance, task summaries, diagnostics, and optional spoken status.
+- [Qt internationalization](https://doc.qt.io/qt-6/internationalization.html) and Qt Linguist tools: localization pipeline, translation bundles, pseudo-localization, and right-to-left validation.
 - [bgfx](https://bkaradzic.github.io/bgfx/overview.html): long-term renderer backend behind a VibeStudio render abstraction.
 - Qt OpenGLWidgets: early MVP 3D preview backend while the renderer abstraction matures.
 - [KSyntaxHighlighting](https://api.kde.org/frameworks/syntax-highlighting/html/index.html): reusable syntax highlighting definitions for editor surfaces.

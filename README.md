@@ -44,6 +44,7 @@ of Doom, Quake, Quake II, and Quake III-era games.
 - UI framework: Qt6 Widgets.
 - Primary scope: end-to-end idTech1-3 game development.
 - Product emphasis: efficient, AI-accelerated, AI-optional workflows that reduce setup friction, repeated work, context switching, and time-to-test.
+- Accessibility emphasis: high-visibility themes, scalable UI, OS-backed TTS, keyboard/screen-reader support, and localization-first design.
 - Repository state: foundation scaffold with documentation, CI, compiler submodules, and a minimal Qt shell/CLI.
 
 ## Studio Goals
@@ -60,6 +61,9 @@ of Doom, Quake, Quake II, and Quake III-era games.
 - User-aware design that keeps people informed with clear loading states, progress displays, task logs, previews, cancellation, and visible outcomes.
 - Modern UX with progressive disclosure: simple workflows stay clean, while advanced users can drill into detailed logs, metadata, manifests, dependency graphs, and compiler output.
 - Creative graphical communication for asset relationships, package structure, compiler pipelines, map statistics, shader stages, and project health.
+- Accessibility-first design with high-visibility themes, scaling controls, keyboard navigation, assistive-tool metadata, OS-backed text-to-speech, and non-color-only status.
+- Localization architecture targeting 20 predominant world languages, including right-to-left and non-Latin script coverage.
+- Modern initial setup flow for tailoring language, accessibility, theme, editor profile, game installs, projects, compilers, AI connectors, CLI, and automation preferences.
 - Efficiency-first workflows that streamline setup, browsing, editing, compiling, packaging, validation, and launch/testing as much as possible.
 - Optional generative and agentic AI-assisted workflows through a provider-neutral connector layer, with planned connector targets including [OpenAI](https://platform.openai.com/docs/quickstart), [Claude](https://platform.claude.com/docs/en/home), [Gemini](https://ai.google.dev/api), [ElevenLabs](https://elevenlabs.io/docs/overview/intro), [Meshy](https://docs.meshy.ai/en), local/offline models, and custom integrations.
 - Complete AI-free workflows for users and projects that prefer deterministic local tooling.
@@ -158,6 +162,7 @@ Current scaffold commands:
 
 ## Documentation
 - [`AGENTS.md`](AGENTS.md): contributor and automation rules.
+- [`docs/ACCESSIBILITY_LOCALIZATION.md`](docs/ACCESSIBILITY_LOCALIZATION.md): accessibility, high-visibility, scaling, TTS, and localization goals.
 - [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md): studio architecture and module boundaries.
 - [`docs/AI_AUTOMATION.md`](docs/AI_AUTOMATION.md): provider-neutral generative and agentic AI connector strategy.
 - [`docs/CLI_STRATEGY.md`](docs/CLI_STRATEGY.md): full-featured CLI strategy and command coverage goals.
@@ -166,6 +171,7 @@ Current scaffold commands:
 - [`docs/EFFICIENCY.md`](docs/EFFICIENCY.md): efficiency philosophy, acceleration techniques, AI-free mode, and speed metrics.
 - [`docs/EDITOR_PROFILES.md`](docs/EDITOR_PROFILES.md): adaptable level-editor layout and control profiles.
 - [`docs/GAME_INSTALLATIONS.md`](docs/GAME_INSTALLATIONS.md): installation detection and profile management plan.
+- [`docs/INITIAL_SETUP.md`](docs/INITIAL_SETUP.md): first-run setup and ecosystem tailoring flow.
 - [`docs/ROADMAP.md`](docs/ROADMAP.md): metric-driven roadmap, MVP definition, and task checklist.
 - [`docs/STACK.md`](docs/STACK.md): preferred technology stack and stack decision rationale.
 - [`docs/SUPPORT_MATRIX.md`](docs/SUPPORT_MATRIX.md): initial format and workflow support target.
@@ -196,6 +202,7 @@ section and `docs/CREDITS.md` in the same change.
 - Rendering: Qt custom widgets/QPainter for 2D, thin QOpenGLWidget previews for MVP 3D, planned bgfx renderer backend for production viewports.
 - Text/IDE: Qt text widgets first, planned KSyntaxHighlighting, Tree-sitter, and LSP integration.
 - Media: native idTech parsers first, with planned Qt Multimedia, miniaudio, and optional Assimp support.
+- Accessibility/localization: Qt accessibility APIs, Qt High DPI behavior, Qt TextToSpeech, Qt Linguist/QTranslator, and QLocale.
 - AI automation: optional provider-neutral connector layer through Qt Network, with OpenAI first and planned Claude, Gemini, ElevenLabs, Meshy, local/offline, and custom connector paths.
 - External compiler imports: Git submodules.
 

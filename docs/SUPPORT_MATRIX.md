@@ -17,6 +17,12 @@ are not implemented in the initial scaffold.
 | User-visible task/loading/progress feedback | planned |
 | Progressive detail disclosure | planned |
 | Graphical project/package/compiler state views | planned |
+| High-visibility themes | planned |
+| UI/text scaling settings | planned |
+| Keyboard and screen-reader accessibility | planned |
+| OS-backed text-to-speech | planned |
+| 20-language localization target | planned |
+| First-run setup flow | planned |
 | Game installation detection | planned |
 | Package manager | planned from PakFu lineage |
 | Level editor | planned |

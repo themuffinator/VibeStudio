@@ -12,12 +12,16 @@ credits list.
 - Preserve cross-platform support for Windows, macOS, and Linux.
 - Maintain a documented CLI for diagnostics, automation, compiler orchestration, and package operations.
 - Treat VibeStudio as an integrated development environment for idTech1, idTech2, and idTech3 games first.
+- Treat accessibility, localization, and first-run setup as product requirements, not optional polish.
 
 ## Product Direction
 - Build toward an all-in-one studio: level editor, modeller, texture editor, audio editor, package manager, coding IDE, script editor, sprite creator, shader graph, and compiler pipeline.
 - Borrow workflow lessons from modern idStudio-style production tooling while staying appropriate for Quake, Doom, and Quake III-era assets.
 - Treat editor adaptability as a core feature: the level editor must support interaction/layout profiles inspired by GtkRadiant 1.6.0, NetRadiant Custom, TrenchBroom, and QuArK so users can work from familiar controls.
 - Treat efficiency as a core product feature: streamline setup, editing, compiling, packaging, validation, and launch/testing so common development loops are as quick and easy as possible.
+- Make VibeStudio accessible by design: high-visibility themes, scalable text/UI, keyboard navigation, screen-reader metadata, OS-backed TTS, reduced motion, and non-color-only status.
+- Localize from the start. Keep UI strings translatable, support right-to-left layouts, preserve room for translated text, and target the initial language set in `docs/ACCESSIBILITY_LOCALIZATION.md`.
+- Provide a full modern first-run setup flow so users can tailor language, accessibility, theme, editor profile, game installs, projects, compilers, AI connectors, CLI, and automation preferences.
 - Embrace the AI era through optional, transparent, provider-neutral generative and agentic AI workflows. Plan for connectors such as OpenAI, Claude, Gemini, ElevenLabs, Meshy, local/offline models, and custom integrations, but never make cloud AI mandatory for core editing, building, packaging, validation, CLI use, or launching.
 - Treat the CLI as a first-class product surface. GUI and CLI behavior should share services, validation, project state, diagnostics, and tests.
 - Think like the user: the user should always know what is happening, what is blocked, what is safe to do next, and where to inspect more detail.
@@ -31,6 +35,9 @@ credits list.
 - Prefer moving PakFu-derived reusable logic into clear VibeStudio modules instead of copy-pasting large opaque blocks.
 - Keep heavy file, preview, compiler, and asset indexing work asynchronous so the UI stays responsive.
 - Keep editor interaction profiles data-driven where practical: keybinds, mouse gestures, camera movement, panel layout, grid behavior, selection behavior, and terminology should be configurable without forking editor logic.
+- All custom widgets must expose accessible names, roles, descriptions, focus behavior, and state changes where applicable.
+- New UI must be tested against scaling, high-visibility themes, keyboard-only navigation, and translation expansion expectations.
+- User-visible strings must be localizable; avoid hard-coded English in UI code except stable technical identifiers.
 - AI integrations must be opt-in, connector-neutral where practical, redact sensitive paths/secrets where possible, show proposed actions before applying changes, and route all file/package/compiler operations through normal VibeStudio services.
 - AI-free mode must remain complete and tested for core workflows.
 - Agentic workflows must expose plan, context, tool calls, staged changes, validation results, cancellation, and final summaries.
@@ -38,6 +45,7 @@ credits list.
 - Update docs and help text whenever behavior, CLI options, supported formats, dependencies, or build requirements change.
 - Update `docs/DEPENDENCIES.md` when adding or changing libraries.
 - Keep stack, dependency, roadmap, and credits documents aligned when introducing or removing a library.
+- Keep `docs/ACCESSIBILITY_LOCALIZATION.md` and `docs/INITIAL_SETUP.md` aligned when changing UI, setup, settings, accessibility, TTS, or localization behavior.
 - Keep `.editorconfig` formatting: tabs for C/C++ files, spaces for Markdown/YAML/JSON/Meson.
 
 ## Credits, Licensing, And Borrowed Code
@@ -70,6 +78,7 @@ credits list.
 - Graphical elements should clarify real project information; avoid decorative visuals that do not help the user decide or act.
 - Avoid one-off UI metaphors that do not scale across level, asset, package, and code workflows.
 - Let users choose familiar editor profiles without making any profile a second-class path.
+- Respect OS scaling and accessibility settings by default, while providing app-level high-visibility, text scale, density, motion, and TTS controls.
 - Do not add visible tutorial text where a direct control, tooltip, status message, or contextual inspector would be better.
 
 ## Contribution Boundaries

@@ -21,6 +21,10 @@ rendering portability, source editing, media handling, search, or automation.
 | Automation | Python scripts + GitHub Actions | Active | Good fit for validation, release helpers, documentation checks, and CI orchestration. |
 | Project manifests | JSON | Planned | Human-readable, easy to diff, scriptable, and already natural for CLI output. |
 | User settings | Qt `QSettings` plus project overrides | Planned | Cross-platform native settings with project-local override support. |
+| Accessibility | [Qt Accessibility](https://doc.qt.io/qt-6/accessible.html), OS accessibility settings, accessible custom widgets | Planned core layer | Supports screen readers, keyboard access, scalable UI, contrast, and assistive tool metadata. |
+| Scaling | [Qt High DPI](https://doc.qt.io/qt-6/highdpi.html), layout-driven UI, app text scale preferences | Planned core layer | Keeps the studio usable across DPI, monitor, and vision needs. |
+| Text to speech | [Qt TextToSpeech](https://doc.qt.io/qt-6/qttexttospeech-index.html) | Planned optional module | Uses native OS speech engines for task summaries, diagnostics, setup guidance, and warnings. |
+| Localization | [Qt internationalization](https://doc.qt.io/qt-6/internationalization.html), Qt Linguist, `QTranslator`, `QLocale` | Planned core layer | Enables 20-language UI targets, locale formatting, pluralization, Unicode, and RTL support. |
 | Asset index/search | [SQLite](https://sqlite.org/) through [Qt SQL](https://doc.qt.io/qt-6/qtsql-index.html), with [FTS5](https://sqlite.org/fts5.html) where available | Planned | Lightweight local database for project metadata, dependencies, search, diagnostics, and recent activity. |
 | CLI parser | [CLI11](https://github.com/CLIUtils/CLI11) | Planned | Modern C++ parser with subcommands, validation, help output, and JSON-friendly command design. |
 | Task execution | Qt `QProcess`, thread pools, futures, signals, and a VibeStudio task model | Planned | Keeps GUI and CLI using the same async operations, progress, cancellation, and logs. |
@@ -67,6 +71,14 @@ The UX stack must directly support the project philosophies:
   metadata, and diagnostics available on demand.
 - User awareness: every noticeable operation exposes loading, progress,
   cancellation, success, warning, failure, and detail states.
+- Accessibility: high-visibility themes, scalable text/UI, keyboard access,
+  screen-reader metadata, reduced motion, OS-backed TTS, and non-color-only
+  status are normal shell capabilities.
+- Localization: all user-facing strings should be translatable and layouts must
+  support right-to-left, non-Latin scripts, and translation expansion.
+- First-run setup: users can tailor language, accessibility, theme, density,
+  editor profile, installations, projects, compilers, AI, CLI, and automation
+  before work begins.
 - Adaptability: editor profiles change layout, controls, selection behavior,
   terminology, camera behavior, and keybinds without forking editor logic.
 - Graphical communication: use diagrams, timelines, dependency graphs,
@@ -104,6 +116,32 @@ profiles move beyond in-memory MVP structures. The index should cover mounted
 package entries, metadata, dependency edges, compiler outputs, diagnostics,
 recent activity, and search. Use FTS5 for fast text search where available, with
 a graceful fallback if a platform build lacks it.
+
+## Accessibility, Localization, And Setup Stack
+
+Use Qt's accessibility APIs and normal Qt widgets wherever possible so platform
+assistive tools can understand the UI. Custom viewports, inspectors, graph
+views, timeline views, map views, shader graphs, and package trees must add
+explicit accessible names, roles, descriptions, focus handling, values, and
+state changes.
+
+Use layout-driven UI, OS font/scaling defaults, app-level text scale settings,
+and high-visibility themes. Scaling and localization must be treated as layout
+requirements, not post-release bug categories.
+
+Use Qt TextToSpeech for optional OS-backed TTS. TTS should read selected
+summaries, compiler errors, task outcomes, AI proposals, and setup guidance
+without becoming the only way to receive that information.
+
+Use Qt Linguist, `QTranslator`, and `QLocale` from the beginning. Initial
+localization work should prove extraction, pseudo-localization, right-to-left
+layout, and a 20-language target set documented in
+[`docs/ACCESSIBILITY_LOCALIZATION.md`](ACCESSIBILITY_LOCALIZATION.md).
+
+Build the first-run setup flow as a real settings workbench. It should configure
+accessibility, language, theme, density, editor profile, game installations,
+projects, compilers, AI connectors, CLI behavior, and automation preferences,
+then leave those choices editable.
 
 ## CLI Stack
 
@@ -224,6 +262,10 @@ license files, compiler/toolchain attribution, and a generated credits bundle.
 - [Qt OpenGL / QOpenGLWidget](https://doc.qt.io/qt-6/qopenglwidget.html)
 - [Qt Multimedia](https://doc.qt.io/qt-6/qtmultimedia-index.html)
 - [Qt Network](https://doc.qt.io/qt-6/qtnetwork-index.html)
+- [Qt Accessibility](https://doc.qt.io/qt-6/accessible.html)
+- [Qt High DPI](https://doc.qt.io/qt-6/highdpi.html)
+- [Qt TextToSpeech](https://doc.qt.io/qt-6/qttexttospeech-index.html)
+- [Qt internationalization](https://doc.qt.io/qt-6/internationalization.html)
 - [Meson](https://mesonbuild.com/)
 - [Ninja](https://ninja-build.org/)
 - [bgfx](https://bkaradzic.github.io/bgfx/overview.html)

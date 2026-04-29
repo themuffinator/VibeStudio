@@ -23,6 +23,8 @@ In practical terms, the long-term goal is:
 - [ ] Users can choose familiar level-editor profiles inspired by GtkRadiant 1.6.0, NetRadiant Custom, TrenchBroom, and QuArK.
 - [ ] Users always know what VibeStudio is doing, what is queued, what succeeded, what failed, and where output went.
 - [ ] Users can start simple and delve into deeper metadata, logs, graphs, manifests, and raw format details when needed.
+- [ ] Users can tailor language, accessibility, theme, editor profile, game installs, projects, compilers, AI, CLI, and automation through a complete modern setup flow.
+- [ ] Users can work comfortably with high-visibility themes, UI/text scaling, keyboard navigation, assistive tools, OS-backed TTS, and localized UI.
 - [ ] Advanced users can adapt the studio through profiles, toolchain settings, plugins, AI-assisted automation, and external compiler wrappers.
 - [ ] Power users and CI systems can drive the same project workflows through a full-featured CLI.
 
@@ -53,6 +55,7 @@ changes behavior, update or add a metric-backed test where practical.
 
 ### User Friendliness
 - [ ] First-run flow supports auto-detect, manual setup, and skip/later paths.
+- [ ] First-run flow exposes language, scale, high-visibility, reduced motion, TTS, role, editor profile, installs, projects, compilers, AI, and CLI settings.
 - [ ] Dangerous actions use staging, previews, undoable state, backups, or explicit confirmation.
 - [ ] Error messages explain what failed, where, and the next practical action.
 - [ ] Built-in help can be generated from user-facing docs before public MVP.
@@ -60,6 +63,17 @@ changes behavior, update or add a metric-backed test where practical.
 - [ ] Any background task over roughly 1 second appears in an activity surface with status.
 - [ ] Completed write/export/compiler operations report exact output paths.
 - [ ] Cancelable operations expose cancellation and report cleanup state.
+
+### Accessibility And Localization
+- [ ] UI follows OS font/scaling defaults and supports 100%, 125%, 150%, 175%, and 200% app scale checks.
+- [ ] High-contrast dark and high-contrast light themes are available from setup and preferences.
+- [ ] Color-blind-aware status palette and non-color-only state indicators are used across project, package, compiler, AI, and validation surfaces.
+- [ ] Core shell, setup, package tree, activity center, compiler log, preferences, and editor profile controls support keyboard-only navigation.
+- [ ] Custom widgets expose accessible names, roles, descriptions, focus, values, and state changes.
+- [ ] OS-backed TTS can read selected summaries, diagnostics, setup guidance, and task completion/failure events.
+- [ ] Reduced motion setting affects transitions, loading visuals, and timeline effects.
+- [ ] Translation pipeline supports pseudo-localization, right-to-left checks, pluralization, locale formatting, and stale-string reporting.
+- [ ] Initial localization target set covers the 20 languages documented in `docs/ACCESSIBILITY_LOCALIZATION.md`.
 
 ### User-Visible Progress And Detail
 - [ ] Global activity center shows queued, running, completed, warning, failed, and cancelled tasks.
@@ -111,17 +125,18 @@ The fastest valuable MVP is not the full editor suite. The MVP is an integrated
 idTech project workbench that proves the end-to-end loop:
 
 1. Detect or configure a game installation.
-2. Open a project folder or package.
-3. Browse package/project contents.
-4. Preview common assets.
-5. Edit project text assets safely.
-6. Run at least one compiler/toolchain profile.
-7. Capture diagnostics and produced files.
-8. Package or stage the result.
-9. Launch or reveal the output for in-game testing.
-10. Run the same core workflow from the CLI for automation.
-11. See loading/progress/results for every long-running step.
-12. Open detailed logs/manifests/metadata when the summary is not enough.
+2. Tailor language, accessibility, theme, editor profile, AI mode, CLI, and core preferences.
+3. Open a project folder or package.
+4. Browse package/project contents.
+5. Preview common assets.
+6. Edit project text assets safely.
+7. Run at least one compiler/toolchain profile.
+8. Capture diagnostics and produced files.
+9. Package or stage the result.
+10. Launch or reveal the output for in-game testing.
+11. Run the same core workflow from the CLI for automation.
+12. See loading/progress/results for every long-running step.
+13. Open detailed logs/manifests/metadata when the summary is not enough.
 
 MVP exit criteria:
 
@@ -137,6 +152,9 @@ MVP exit criteria:
 - [ ] Provides at least one useful graphical project/package/compiler summary.
 - [ ] Provides CLI coverage for project info, package inspection, validation, compiler runs, and command manifests.
 - [ ] Provides at least a documented first pass of editor profile architecture, even if full profile fidelity lands after MVP.
+- [ ] Provides first-run setup with language, accessibility, high-visibility, scaling, editor profile, install/project/compiler, AI-free, and CLI choices.
+- [ ] Provides high-visibility themes, app scaling settings, keyboard-accessible MVP flows, and OS-backed TTS architecture.
+- [ ] Provides localization pipeline proof with pseudo-localization, right-to-left smoke checks, and initial translation catalog structure.
 - [ ] Provides opt-in AI documentation and a safe architecture path; AI implementation may remain experimental after MVP.
 - [ ] Preserves credits and third-party license visibility in README, docs, About, and release bundles.
 
@@ -155,6 +173,8 @@ MVP exit criteria:
 - [ ] Prefer reusable presets, manifests, templates, and batch actions when users repeat a workflow.
 - [ ] Add CLI coverage alongside every workflow that can reasonably run headless.
 - [ ] Treat user-visible state as part of the feature, not polish.
+- [ ] Treat accessibility and localization as part of every UI feature.
+- [ ] Make setup choices editable later; first-run setup should never be the only place to configure a core behavior.
 - [ ] Build summary-first/detail-on-demand UI before adding advanced-only panels.
 - [ ] Prefer graphical communication when it clarifies real project state, relationships, or workflow progress.
 - [ ] Mark rough edges in docs and issues rather than blocking useful slices.
@@ -184,6 +204,8 @@ Goal: make the repository easy to build, test, credit, and extend.
 - [x] Add editor profile, AI automation, and CLI strategy docs.
 - [x] Add stack decision record.
 - [x] Add efficiency philosophy.
+- [x] Add accessibility/localization philosophy.
+- [x] Add initial setup flow philosophy.
 - [ ] Add contribution guide for task sizing, attribution, and fixture expectations.
 - [ ] Add issue templates for feature, bug, format support, compiler integration, and attribution updates.
 
@@ -200,6 +222,9 @@ Goal: make the repository easy to build, test, credit, and extend.
 - [ ] Add command palette shell.
 - [ ] Add keyboard shortcut registry.
 - [ ] Add interaction profile registry placeholder.
+- [ ] Add accessibility settings placeholder: theme, scale, density, reduced motion, and TTS.
+- [ ] Add language/locale settings placeholder.
+- [ ] Add first-run setup shell with skip/resume behavior.
 - [ ] Add AI integration disabled/experimental settings placeholder.
 
 ### Visual Communication Foundation
@@ -443,14 +468,19 @@ Goal: ship the smallest public version that proves the complete loop.
 ### MVP UX Completion
 - [ ] Add About dialog with credits and license links.
 - [ ] Add Preferences for paths, theme, compilers, and installations.
+- [ ] Add Preferences for language, scale, density, high-visibility themes, reduced motion, and TTS.
 - [ ] Add project recent list and reopen-last-project option.
-- [ ] Add first-run setup checklist.
+- [ ] Add first-run setup checklist and guided flow.
+- [ ] Add setup summary with warnings, skipped steps, detected installs, toolchain probes, AI mode, and CLI details.
 - [ ] Add failure-friendly empty states.
 - [ ] Add loading/progress coverage audit for MVP workflows.
 - [ ] Add summary/detail coverage audit for MVP workflows.
 - [ ] Add graphical project/package/compiler summary views.
 - [ ] Add task history persistence for recent compiler/package operations.
 - [ ] Add basic keyboard navigation audit.
+- [ ] Add high-visibility theme audit.
+- [ ] Add localization/pseudo-localization audit.
+- [ ] Add OS-backed TTS smoke path.
 
 ### MVP Validation
 - [ ] Smoke-test Windows clean machine launch.
@@ -461,6 +491,12 @@ Goal: ship the smallest public version that proves the complete loop.
 - [ ] Measure startup time.
 - [ ] Measure package open time on small, medium, and large archives.
 - [ ] Verify visible feedback during package open, extraction, validation, compiler run, and AI request.
+- [ ] Verify first-run setup can be completed with keyboard-only navigation.
+- [ ] Verify first-run setup offers high-visibility, scaling, language, TTS, AI-free, and skip/later paths.
+- [ ] Verify MVP shell at 100%, 125%, 150%, 175%, and 200% scale.
+- [ ] Verify high-contrast dark and high-contrast light smoke flows.
+- [ ] Verify pseudo-localization and right-to-left smoke flows.
+- [ ] Verify TTS reads a test phrase and one task result where OS support exists.
 - [ ] Verify every MVP write/export operation reports output path.
 - [ ] Verify raw details/logs/manifests are reachable from summary views.
 - [ ] Verify credits and license bundle.
@@ -656,13 +692,26 @@ related area.
 ### Accessibility And Usability
 - [ ] Audit keyboard navigation.
 - [ ] Audit high-DPI scaling.
-- [ ] Audit color contrast.
+- [ ] Audit app text/UI scaling at 100%, 125%, 150%, 175%, and 200%.
+- [ ] Audit color contrast for normal, high-contrast dark, and high-contrast light themes.
 - [ ] Add configurable font size.
+- [ ] Add high-visibility theme tests.
+- [ ] Add color-blind-aware status palette tests.
 - [ ] Add reduced motion preference if animations are introduced.
+- [ ] Add OS-backed TTS smoke tests.
 - [ ] Add tooltips for icon-only actions.
 - [ ] Audit each editor profile for discoverable controls and non-conflicting shortcuts.
 - [ ] Audit loading/progress UI for screen-reader labels and non-color-only status.
 - [ ] Audit detail drawers for keyboard access.
+
+### Localization
+- [ ] Add Qt translation extraction workflow.
+- [ ] Add pseudo-localization target.
+- [ ] Add right-to-left layout smoke test.
+- [ ] Add initial translation catalog structure for the 20-language target set.
+- [ ] Add locale formatting tests for dates, numbers, sizes, durations, and sorting.
+- [ ] Add stale/untranslated string report.
+- [ ] Add translation expansion layout smoke checks.
 
 ### User Awareness And Progressive Disclosure
 - [ ] Add UX checklist requiring state, progress, result, next action, and details for each workflow.
@@ -696,23 +745,25 @@ related area.
 Use this queue to get to MVP quickly.
 
 1. [ ] Add persistent settings and recent projects.
-2. [ ] Add global activity center and reusable operation-state model.
-3. [ ] Add loading/skeleton/detail-drawer UI primitives.
-4. [ ] Port PakFu archive interfaces and path safety.
-5. [ ] Add read-only folder/PAK/WAD/PK3 package browsing with visible loading/progress.
-6. [ ] Add text/image/binary metadata preview pane with summary/detail split.
-7. [ ] Add manual game installation profiles.
-8. [ ] Add project manifest and workspace dashboard with project health summary.
-9. [ ] Add compiler registry and executable discovery.
-10. [ ] Add CLI subcommand router, JSON output, and exit-code contract.
-11. [ ] Add ericw-tools `qbsp/vis/light` wrapper profile.
-12. [ ] Add ZDBSP or ZokumBSP wrapper profile.
-13. [ ] Add q3map2 probe/compile wrapper profile.
-14. [ ] Add structured task logs, command manifests, and output-path reporting.
-15. [ ] Add package composition and compiler pipeline graphical summaries.
-16. [ ] Add editor profile registry and placeholder presets.
-17. [ ] Add AI connector opt-in settings and provider-neutral automation design stub.
-18. [ ] Add MVP sample projects and CI smoke checks.
-19. [ ] Add portable packaging skeleton.
-20. [ ] Add About/Credits/license surface.
-21. [ ] Cut first MVP release candidate.
+2. [ ] Add accessibility and language preferences: scale, high-visibility, density, reduced motion, TTS, locale.
+3. [ ] Add first-run setup shell with skip/resume and setup summary.
+4. [ ] Add global activity center and reusable operation-state model.
+5. [ ] Add loading/skeleton/detail-drawer UI primitives.
+6. [ ] Port PakFu archive interfaces and path safety.
+7. [ ] Add read-only folder/PAK/WAD/PK3 package browsing with visible loading/progress.
+8. [ ] Add text/image/binary metadata preview pane with summary/detail split.
+9. [ ] Add manual game installation profiles.
+10. [ ] Add project manifest and workspace dashboard with project health summary.
+11. [ ] Add compiler registry and executable discovery.
+12. [ ] Add CLI subcommand router, JSON output, and exit-code contract.
+13. [ ] Add ericw-tools `qbsp/vis/light` wrapper profile.
+14. [ ] Add ZDBSP or ZokumBSP wrapper profile.
+15. [ ] Add q3map2 probe/compile wrapper profile.
+16. [ ] Add structured task logs, command manifests, and output-path reporting.
+17. [ ] Add package composition and compiler pipeline graphical summaries.
+18. [ ] Add editor profile registry and placeholder presets.
+19. [ ] Add AI connector opt-in settings and provider-neutral automation design stub.
+20. [ ] Add MVP sample projects and CI smoke checks.
+21. [ ] Add portable packaging skeleton.
+22. [ ] Add About/Credits/license surface.
+23. [ ] Cut first MVP release candidate.

@@ -9,12 +9,39 @@ where results will appear, and how to inspect more detail.
 - The user should never wonder whether VibeStudio is frozen, busy, waiting, done, or blocked.
 - Common workflows should stay clean and direct.
 - Efficient workflows are part of UX: reduce repeated setup, duplicate file picking, unnecessary modal stops, context switching, and manual command reconstruction.
+- Accessibility is part of UX: support high-visibility themes, scaling, keyboard access, screen-reader metadata, reduced motion, and OS-backed TTS as normal product features.
+- Localization is part of UX: layouts must survive longer text, right-to-left languages, non-Latin scripts, pluralization, locale formatting, and translated terminology.
+- Initial setup should let users tailor the application ecosystem before work begins, without trapping them in a rigid wizard.
 - Advanced details should be available without overwhelming the default view.
 - Graphical elements should communicate real structure, state, or relationships.
 - Every long-running task should have a visible home, a progress state, and a result.
 - Errors should explain what happened, where it happened, and what the next practical action is.
 - AI-assisted workflows should feel like supervised acceleration: clear context, provider, plan, cost/usage where available, proposed actions, and review state.
 - AI-free users should never encounter dead ends that require cloud services.
+
+## Accessibility Baseline
+Accessibility behavior should be designed into every surface:
+- [ ] High-contrast dark and high-contrast light themes.
+- [ ] Text/UI scale support at 100%, 125%, 150%, 175%, and 200%.
+- [ ] Comfortable, standard, and compact density presets.
+- [ ] Reduced-motion setting for transitions and loading visuals.
+- [ ] Keyboard-visible focus and no keyboard traps.
+- [ ] Accessible names, roles, descriptions, and status changes for custom widgets.
+- [ ] Screen-reader-readable task states, compiler diagnostics, validation results, and setup warnings.
+- [ ] OS-backed TTS for selected summaries, errors, task outcomes, and setup guidance.
+- [ ] No color-only status communication.
+
+## Initial Setup Experience
+The first-run setup flow should configure the studio without becoming a tour:
+- [ ] Language, scale, high-visibility, motion, and TTS first.
+- [ ] Role and experience presets for mapper, artist, programmer, package maintainer, shader author, audio creator, release maintainer, all-in-one, or custom.
+- [ ] Editor profile selection for VibeStudio default, GtkRadiant 1.6.0-style, NetRadiant Custom-style, TrenchBroom-style, and QuArK-style workflows.
+- [ ] Game installation detection with manual add, skip, and later paths.
+- [ ] Project/package setup with output/temp/backup paths.
+- [ ] Compiler/source-port probing with visible results.
+- [ ] AI-free mode and optional connector configuration.
+- [ ] CLI integration and command-copy preferences.
+- [ ] Final summary with warnings, smoke checks, and editable preferences.
 
 ## User-Visible State
 Every noticeable operation should expose an appropriate state:

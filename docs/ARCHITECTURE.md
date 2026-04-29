@@ -8,8 +8,10 @@ understand the same project graph.
 Implementation choices should follow the stack decision record in
 [`docs/STACK.md`](STACK.md). Architecture documents describe boundaries and data
 flow; the stack document describes preferred libraries, rendering progression,
-CLI infrastructure, AI integration, persistence, and packaging strategy.
-Efficiency goals are documented in [`docs/EFFICIENCY.md`](EFFICIENCY.md).
+CLI infrastructure, AI integration, accessibility, localization, persistence,
+and packaging strategy. Efficiency goals are documented in
+[`docs/EFFICIENCY.md`](EFFICIENCY.md), and accessibility/localization goals are
+documented in [`docs/ACCESSIBILITY_LOCALIZATION.md`](ACCESSIBILITY_LOCALIZATION.md).
 
 ## Layers
 
@@ -19,6 +21,8 @@ Efficiency goals are documented in [`docs/EFFICIENCY.md`](EFFICIENCY.md).
 - Shared inspector, status, search, diagnostics, and task surfaces.
 - Dockable panes for asset context, compiler logs, map/object properties, and dependency information.
 - Layout preset service for editor-profile workspaces and user-customized panes.
+- Accessibility, language, theme, scale, density, motion, and TTS preferences.
+- First-run setup/resume service for tailoring the application ecosystem.
 - Global activity center for queued/running/completed tasks, progress, cancellation, and detailed logs.
 - Notification and status system for inline feedback, toasts, task cards, warnings, and recoverable errors.
 
@@ -53,6 +57,19 @@ Efficiency goals are documented in [`docs/EFFICIENCY.md`](EFFICIENCY.md).
 - Visual summaries for project health, asset dependencies, package composition, shader stages, and compiler pipelines.
 - Expandable detail drawers that expose raw logs, manifests, metadata, and diagnostic traces.
 - Consistent success/failure/retry/cancel affordances.
+
+### Accessibility And Localization Layer
+- High-visibility themes, scalable text/UI, density presets, reduced motion, and OS-backed TTS.
+- Accessible metadata for shell widgets, custom editors, package trees, compiler logs, graph views, and setup screens.
+- Keyboard navigation, command palette coverage, focus order, and no keyboard traps.
+- Translation catalog loading, locale formatting, pluralization, pseudo-localization, and right-to-left layout validation.
+- Initial 20-language localization target set and translation status reporting.
+
+### Initial Setup Layer
+- First-run flow for language, accessibility, theme, density, role, editor profile, game installs, projects, toolchains, AI connectors, CLI, and automation.
+- Auto-detection with manual add, skip, later, and review paths.
+- Exportable/importable setup profile and editable preferences after setup.
+- Smoke-check summary for installs, compilers, AI connectors, TTS, and workspace readiness.
 
 ### CLI Layer
 - Full command-line surface over projects, packages, previews, compilers, validation, automation, and release workflows.
@@ -91,6 +108,9 @@ The current scaffold contains:
 - Think from the user's current uncertainty: show what VibeStudio is doing, why it is waiting, and what the next safe action is.
 - Keep modern UX clean at the surface while preserving detailed inspection paths for expert users.
 - Treat efficiency as a product feature: reduce setup time, repeated work, context switching, uncertainty, and waiting.
+- Treat accessibility as a product feature: the studio must support high visibility, scaling, keyboard use, screen readers, TTS, and non-color-only state.
+- Treat localization as architecture: every user-visible string, layout, status, and setup step should be designed for translation and locale-aware formatting.
+- Treat initial setup as a tailoring workbench, not a tour.
 - Use graphical representations to communicate real structure and status, not as decoration.
 - Treat packages as editable project containers, not just files to extract.
 - Make compiler runs reproducible and inspectable.

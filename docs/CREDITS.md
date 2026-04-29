@@ -6,6 +6,8 @@
 ## Core Technology
 - [Qt 6](https://www.qt.io/product/qt6)
   - Application framework and primary UI toolkit.
+- [Qt Accessibility](https://doc.qt.io/qt-6/accessible.html), [Qt TextToSpeech](https://doc.qt.io/qt-6/qttexttospeech-index.html), and [Qt internationalization](https://doc.qt.io/qt-6/internationalization.html)
+  - Planned accessibility, OS-backed speech, and localization support.
 - [Meson](https://mesonbuild.com/) and [Ninja](https://ninja-build.org/)
   - Build configuration and build execution.
 
@@ -52,6 +54,10 @@ inspiration and compatibility research should credit:
 - [Gemini API documentation](https://ai.google.dev/api), planned as an optional provider reference for multimodal and large-context workflows.
 - [ElevenLabs documentation](https://elevenlabs.io/docs/overview/intro), planned as an optional provider reference for voice, speech, sound effects, and audio experiments.
 - [Meshy API documentation](https://docs.meshy.ai/en), planned as an optional provider reference for prompt/image-to-3D, AI texturing, and rapid placeholder asset workflows.
+
+## Accessibility And Localization References
+- [WCAG 2.2](https://www.w3.org/TR/WCAG22/), planned as the baseline accessibility reference where web-oriented guidance applies to desktop UI.
+- [Ethnologue 200](https://www.ethnologue.com/insights/ethnologue200/), used as one reference point for reviewing the initial 20-language localization target set.
 
 ## Community Thanks
 - The idTech mapping, modding, speedrunning, source-port, and preservation communities who kept these workflows usable and documented across decades.
