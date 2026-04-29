@@ -1,7 +1,8 @@
 # VibeStudio
 
 <p align="center">
-  <a href="VERSION"><img alt="Version" src="https://img.shields.io/badge/version-0.1.0-0A66C2?style=for-the-badge"></a>
+  <a href="VERSION"><img alt="Version" src="https://img.shields.io/badge/version-0.0.0-0A66C2?style=for-the-badge"></a>
+  <img alt="Development Stage" src="https://img.shields.io/badge/stage-extremely%20early%20pre--alpha-B85C00?style=for-the-badge">
   <a href="#tech-stack"><img alt="Tech Stack" src="https://img.shields.io/badge/stack-C%2B%2B20%20%7C%20Qt6%20Widgets-00599C?style=for-the-badge"></a>
   <a href="#build-and-run"><img alt="Build" src="https://img.shields.io/badge/build-Meson%20%2B%20Ninja-4C8EDA?style=for-the-badge"></a>
   <a href="#overview"><img alt="Platforms" src="https://img.shields.io/badge/platforms-Windows%20%7C%20macOS%20%7C%20Linux-444444?style=for-the-badge"></a>
@@ -16,6 +17,14 @@ by folding archive management, asset inspection, game installation management,
 and format parsing into a broader production environment for maps, models,
 textures, sounds, scripts, shaders, packages, and build pipelines.
 
+> [!WARNING]
+> VibeStudio is at an extremely early pre-alpha stage. The repository is
+> currently a concept/foundation scaffold with planning documentation, CI,
+> imported compiler submodules, and a minimal Qt shell/CLI. The studio features
+> described below are product goals and roadmap targets, not implemented user
+> workflows. It is not ready for production modding, mapping, packaging, or
+> asset-authoring work.
+
 The product direction borrows the clear, always-in-context workflow of modern
 idStudio-style tools while staying grounded in the constraints and file formats
 of Doom, Quake, Quake II, and Quake III-era games.
@@ -24,6 +33,7 @@ of Doom, Quake, Quake II, and Quake III-era games.
   <summary><strong>Table of Contents</strong></summary>
 
 - [Overview](#overview)
+- [Current Development State](#current-development-state)
 - [Studio Goals](#studio-goals)
 - [Initial Scaffold](#initial-scaffold)
 - [Imported Level Compilers](#imported-level-compilers)
@@ -38,14 +48,43 @@ of Doom, Quake, Quake II, and Quake III-era games.
 </details>
 
 ## Overview
-- Current version: `0.1.0` (see `VERSION`).
+- Current version: `0.0.0` (see `VERSION`).
 - Cross-platform targets: Windows, macOS, Linux.
 - Build system: Meson + Ninja.
 - UI framework: Qt6 Widgets.
 - Primary scope: end-to-end idTech1-3 game development.
 - Product emphasis: efficient, AI-accelerated, AI-optional workflows that reduce setup friction, repeated work, context switching, and time-to-test.
 - Accessibility emphasis: high-visibility themes, scalable UI, OS-backed TTS, keyboard/screen-reader support, and localization-first design.
-- Repository state: foundation scaffold with documentation, CI, compiler submodules, and a minimal Qt shell/CLI.
+- Repository state: extremely early concept/foundation scaffold with documentation, CI, compiler submodules, and a minimal Qt shell/CLI.
+
+## Current Development State
+VibeStudio is barely beyond the conceptual stage. The repository exists to
+capture the product direction, stack, architecture, roadmap, contributor rules,
+credits policy, imported compiler sources, and a tiny buildable application
+shell.
+
+What exists today:
+- Documentation for product goals, stack, roadmap, UX, accessibility,
+  localization, AI connectors, setup, compiler integration, and credits.
+- Cross-platform Meson/Qt scaffold.
+- Minimal Qt Widgets shell.
+- Minimal CLI diagnostics for version, platform, planned modules, and compiler
+  import metadata.
+- Imported compiler source submodules.
+- Early CI/build validation.
+
+What does not exist yet:
+- Usable package browsing/editing.
+- Level, model, texture, audio, sprite, shader, code, or script editors.
+- Game installation management.
+- Compiler orchestration UI.
+- Full CLI parity.
+- AI connector implementation.
+- First-run setup, accessibility settings, or localization runtime.
+- Production-ready workflows of any kind.
+
+Treat every feature list below as roadmap intent until the roadmap and support
+matrix mark it implemented.
 
 ## Studio Goals
 - Level editor for Doom-family sectors and Quake-family brush workflows.
@@ -72,7 +111,7 @@ of Doom, Quake, Quake II, and Quake III-era games.
 - Installation detection and management guided by PakFu's game profile work.
 
 ## Initial Scaffold
-The first committed scaffold includes:
+The current scaffold includes:
 - A Meson/Qt6 C++20 app target named `vibestudio`.
 - A small but working Qt Widgets studio shell.
 - A CLI diagnostics surface for version, platform, planned modules, and compiler imports.
