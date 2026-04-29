@@ -30,6 +30,10 @@ surface using the same core services as the GUI.
 - [ ] `install select`
 
 ### Packages
+- [x] `--package-formats` scaffold report for package/archive interface descriptors.
+- [x] `--check-package-path <path>` scaffold validation for normalized safe package virtual paths.
+- [x] `--info <path>` scaffold package summary for folders, PAK, WAD, ZIP, and PK3.
+- [x] `--list <path>` scaffold package entry listing for folders, PAK, WAD, ZIP, and PK3.
 - [ ] `package info`
 - [ ] `package list`
 - [ ] `package extract`

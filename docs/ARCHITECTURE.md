@@ -37,7 +37,10 @@ documented in [`docs/ACCESSIBILITY_LOCALIZATION.md`](ACCESSIBILITY_LOCALIZATION.
 - Operation state model for loading, scanning, indexing, compiling, extracting, saving, cancelling, and failure recovery.
 
 ### Format And Package Layer
-- PakFu-derived archive readers/writers and format parsers.
+- PakFu-derived archive interfaces, virtual path safety, readers/writers, and
+  format parsers.
+- Shared package entry metadata, read-only listing readers, and mount-layer
+  session state for folder, PAK, WAD, ZIP, and PK3 workflows.
 - Fixture-backed support matrix.
 - Safe write-back model with staging, diffing, conflict handling, and reproducible manifests.
 - Palette, material, shader, model, and map metadata services.
@@ -96,6 +99,9 @@ documented in [`docs/ACCESSIBILITY_LOCALIZATION.md`](ACCESSIBILITY_LOCALIZATION.
 ## Initial Code Shape
 The current scaffold contains:
 - `src/core`: manifest and future non-UI studio logic.
+- `src/core/package_archive.*`: PakFu-derived package/archive interface
+  descriptors, read-only folder/PAK/WAD/ZIP/PK3 readers, package entry
+  metadata, mount-layer session state, and safe normalized virtual paths.
 - `src/cli`: diagnostics and automation entry points.
 - `src/app`: Qt Widgets studio shell.
 - `src/tests`: smoke tests for core manifests.

@@ -14,8 +14,8 @@ are not implemented in the initial scaffold.
 | Workflow | Status |
 |---|---|
 | Workspace/project hub | scaffolded |
-| User-visible task/loading/progress feedback | planned |
-| Progressive detail disclosure | planned |
+| User-visible task/loading/progress feedback | scaffolded for setup, activity, and package scanning |
+| Progressive detail disclosure | scaffolded for inspector, activity, and package entries |
 | Graphical project/package/compiler state views | planned |
 | High-visibility themes | planned |
 | UI/text scaling settings | planned |
@@ -24,7 +24,7 @@ are not implemented in the initial scaffold.
 | 20-language localization target | planned |
 | First-run setup flow | planned |
 | Game installation detection | planned |
-| Package manager | planned from PakFu lineage |
+| Package manager | read-only folder/PAK/WAD/ZIP/PK3 browsing scaffolded from PakFu lineage; previews/extract/write-back planned |
 | Level editor | planned |
 | GtkRadiant 1.6.0-style editor profile | planned |
 | NetRadiant Custom-style editor profile | planned |

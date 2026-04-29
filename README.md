@@ -74,14 +74,21 @@ What exists today:
   cancellation, and selected-task logs.
 - Reusable Qt Widgets loading/skeleton panes and collapsible detail drawers for
   summary-first logs, metadata, manifests, and raw diagnostics.
+- PakFu-derived package/archive interface scaffolding with normalized virtual
+  paths, path traversal checks, safe output-path joining, and mount-layer
+  session metadata.
+- Basic read-only package browsing for folders, PAK, WAD, ZIP, and PK3:
+  entry metadata, filtering, detail drawers, activity-center scan tasks, and
+  CLI `--info`/`--list` coverage.
 - Minimal CLI diagnostics for version, platform, planned modules, and compiler
   import metadata, plus settings, setup, preference, recent-project,
-  operation-state, and UI-primitive diagnostics.
+  operation-state, UI-primitive, package-interface, and package-browsing
+  diagnostics.
 - Imported compiler source submodules.
 - Early CI/build validation.
 
 What does not exist yet:
-- Usable package browsing/editing.
+- Package editing, extraction, previews, and write-back.
 - Level, model, texture, audio, sprite, shader, code, or script editors.
 - Game installation management.
 - Compiler orchestration UI.
@@ -125,6 +132,10 @@ The current scaffold includes:
 - A CLI diagnostics surface for version, platform, planned modules, and compiler imports.
 - Reusable shell UI primitives for loading/progress placeholders and
   detail-on-demand logs or metadata.
+- A small shared package/archive interface layer adapted from PakFu's archive
+  surface, including safe normalized virtual paths and read-only reader behavior.
+- Read-only folder, PAK, WAD, ZIP, and PK3 entry listing through shared core
+  services used by both GUI and CLI.
 - CI workflows for cross-platform build/test and submodule verification.
 - Documentation for architecture, compiler integration, installation management, support scope, dependencies, roadmap, and credits.
 - External compiler imports preserved as Git submodules.
@@ -210,6 +221,10 @@ Current scaffold commands:
 - `--platform-report`: print platform and Qt runtime details.
 - `--operation-states`: print reusable operation state identifiers.
 - `--ui-primitives`: print reusable UI primitive identifiers and use cases.
+- `--package-formats`: print package/archive interface descriptors.
+- `--check-package-path <path>`: normalize and validate a package virtual path.
+- `--info <path>`: print read-only package summary for a folder, PAK, WAD, ZIP, or PK3.
+- `--list <path>`: list package entries and metadata.
 - `--settings-report`: print persistent settings storage and recent projects.
 - `--setup-report`: print first-run setup status and summary.
 - `--setup-start`: start or resume first-run setup.
@@ -253,7 +268,7 @@ Current scaffold commands:
 
 ## Credits
 - Creator: [themuffinator](https://github.com/themuffinator) (DarkMatter Productions)
-- Structural and archive-tooling reference: [PakFu](https://github.com/themuffinator/PakFu)
+- Structural and archive-tooling reference: [PakFu](https://github.com/themuffinator/PakFu), with the current package interface and virtual-path safety slice adapted from its `src/archive` surface at `c82dfb0ef0b5d7442e243ace8cd83bc45f82f257`.
 - Imported compiler/toolchain sources: [ericw-tools](https://github.com/ericwa/ericw-tools), q3map2 from [NetRadiant Custom](https://github.com/Garux/netradiant-custom), [ZDBSP](https://github.com/rheit/zdbsp), and [ZokumBSP](https://github.com/zokum-no/zokumbsp)
 - Editor workflow inspirations: [GtkRadiant](https://github.com/TTimo/GtkRadiant), [NetRadiant Custom](https://github.com/Garux/netradiant-custom), [TrenchBroom](https://trenchbroom.github.io/), and [QuArK](https://quark.sourceforge.io/)
 - Optional AI automation references: [OpenAI API documentation](https://platform.openai.com/docs/quickstart), [Claude API docs](https://platform.claude.com/docs/en/home), [Gemini API docs](https://ai.google.dev/api), [ElevenLabs docs](https://elevenlabs.io/docs/overview/intro), and [Meshy docs](https://docs.meshy.ai/en)

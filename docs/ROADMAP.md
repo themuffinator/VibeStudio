@@ -247,32 +247,32 @@ Goal: make VibeStudio useful as a safe package/project browser before deeper
 editors arrive.
 
 ### Core Package Abstractions
-- [ ] Port or adapt PakFu archive interfaces with attribution.
-- [ ] Add path safety and normalized virtual paths.
-- [ ] Add folder package session.
-- [ ] Add PAK reader.
-- [ ] Add WAD reader.
-- [ ] Add ZIP/PK3 reader.
-- [ ] Add package entry metadata model: path, size, modified time, type hints, source package.
-- [ ] Add nested package detection as metadata, with mounting deferred if needed.
+- [x] Port or adapt PakFu archive interfaces with attribution.
+- [x] Add path safety and normalized virtual paths.
+- [x] Add folder package session.
+- [x] Add PAK reader.
+- [x] Add WAD reader.
+- [x] Add ZIP/PK3 reader.
+- [x] Add package entry metadata model: path, size, modified time, type hints, source package.
+- [x] Add nested package detection as metadata, with mounting deferred if needed.
 
 ### Read-Only GUI
 - [ ] Add package/project tree view.
-- [ ] Add entry list/details view.
-- [ ] Add search/filter for paths and type hints.
-- [ ] Add package loading state with progress when entry count is known.
-- [ ] Add package scan task card in activity center.
+- [x] Add entry list/details view.
+- [x] Add search/filter for paths and type hints.
+- [x] Add package loading state with progress when entry count is known.
+- [x] Add package scan task card in activity center.
 - [ ] Add preview pane for text.
 - [ ] Add preview pane for basic images.
 - [ ] Add metadata preview for unknown/binary entries.
-- [ ] Add summary/detail split for entries: friendly overview first, raw metadata on demand.
+- [x] Add summary/detail split for entries: friendly overview first, raw metadata on demand.
 - [ ] Add package composition graphic by type and size.
 - [ ] Add extract selected/all workflow.
 - [ ] Add extraction progress, cancellation, completion summary, and exact output paths.
 
 ### CLI
-- [ ] Add `--list`.
-- [ ] Add `--info`.
+- [x] Add `--list`.
+- [x] Add `--info`.
 - [ ] Add `--extract`.
 - [ ] Add `--validate-package`.
 - [ ] Add JSON output mode for automation.
@@ -280,12 +280,12 @@ editors arrive.
 - [ ] Add dry-run/staged write conventions before write support lands.
 
 ### Tests
-- [ ] Add tiny fixture PAK.
-- [ ] Add tiny fixture WAD.
-- [ ] Add tiny fixture PK3.
-- [ ] Add path traversal and duplicate-path tests.
-- [ ] Add CLI validation for package commands.
-- [ ] Add package loading/progress state tests.
+- [x] Add tiny fixture PAK.
+- [x] Add tiny fixture WAD.
+- [x] Add tiny fixture PK3.
+- [x] Add path traversal and duplicate-path tests.
+- [x] Add CLI validation for package commands.
+- [x] Add package loading/progress state tests.
 - [ ] Add extract output-path reporting tests.
 
 Exit criteria:
@@ -749,8 +749,8 @@ Use this queue to get to MVP quickly.
 3. [x] Add first-run setup shell with skip/resume and setup summary.
 4. [x] Add global activity center and reusable operation-state model.
 5. [x] Add loading/skeleton/detail-drawer UI primitives.
-6. [ ] Port PakFu archive interfaces and path safety.
-7. [ ] Add read-only folder/PAK/WAD/PK3 package browsing with visible loading/progress.
+6. [x] Port PakFu archive interfaces and path safety.
+7. [x] Add read-only folder/PAK/WAD/PK3 package browsing with visible loading/progress.
 8. [ ] Add text/image/binary metadata preview pane with summary/detail split.
 9. [ ] Add manual game installation profiles.
 10. [ ] Add project manifest and workspace dashboard with project health summary.

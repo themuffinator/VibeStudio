@@ -1,6 +1,7 @@
 #pragma once
 
 #include "core/operation_state.h"
+#include "core/package_archive.h"
 #include "core/studio_settings.h"
 
 #include <QMainWindow>
@@ -8,6 +9,7 @@
 class QCheckBox;
 class QComboBox;
 class QLabel;
+class QLineEdit;
 class QListWidget;
 class QListWidgetItem;
 class QProgressBar;
@@ -31,6 +33,13 @@ private:
 	void saveShellState();
 	void refreshRecentProjects();
 	void openProjectFolder();
+	void openPackageFile();
+	void openPackageFolder();
+	void loadPackagePath(const QString& path);
+	void refreshPackageBrowser();
+	void refreshPackageEntryDetails(const QString& virtualPath);
+	void filterPackageEntries();
+	QString selectedPackageEntryPath() const;
 	void activateRecentProject(QListWidgetItem* item);
 	void removeSelectedRecentProject();
 	void clearRecentProjects();
@@ -58,12 +67,18 @@ private:
 
 	StudioSettings m_settings;
 	OperationStateModel m_activity;
+	PackageArchive m_packageArchive;
 	LoadingPane* m_inspectorState = nullptr;
 	DetailDrawer* m_inspectorDrawer = nullptr;
 	QListWidget* m_modeRail = nullptr;
 	QListWidget* m_recentProjects = nullptr;
 	QTextEdit* m_inspector = nullptr;
 	QLabel* m_recentSummary = nullptr;
+	QLabel* m_packageSummary = nullptr;
+	QLineEdit* m_packageFilter = nullptr;
+	LoadingPane* m_packageState = nullptr;
+	QListWidget* m_packageEntries = nullptr;
+	DetailDrawer* m_packageDrawer = nullptr;
 	QLabel* m_setupStatus = nullptr;
 	QLabel* m_setupStep = nullptr;
 	QLabel* m_setupNextAction = nullptr;
@@ -88,6 +103,7 @@ private:
 	QCheckBox* m_textToSpeech = nullptr;
 	QString m_setupActivityId;
 	QString m_settingsActivityId;
+	QString m_packageActivityId;
 };
 
 } // namespace vibestudio

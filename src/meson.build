@@ -13,6 +13,7 @@ vibestudio_includes = include_directories('.')
 
 core_sources = files(
   'core/operation_state.cpp',
+  'core/package_archive.cpp',
   'core/studio_manifest.cpp',
   'core/studio_settings.cpp',
 )
@@ -31,7 +32,7 @@ vibestudio_core_dep = declare_dependency(
   link_with: [vibestudio_core],
 )
 
-install_headers(files('core/operation_state.h', 'core/studio_manifest.h', 'core/studio_settings.h'), subdir: 'vibestudio/core')
+install_headers(files('core/operation_state.h', 'core/package_archive.h', 'core/studio_manifest.h', 'core/studio_settings.h'), subdir: 'vibestudio/core')
 
 app_sources = files(
   'main.cpp',
@@ -77,6 +78,16 @@ operation_state_smoke_test = executable(
 )
 
 test('operation-state-smoke', operation_state_smoke_test)
+
+package_archive_smoke_test = executable(
+  'package_archive_smoke_test',
+  ['tests/package_archive_smoke_test.cpp'],
+  include_directories: vibestudio_includes,
+  dependencies: [vibestudio_core_dep],
+  install: false,
+)
+
+test('package-archive-smoke', package_archive_smoke_test)
 
 ui_primitives_smoke_test = executable(
   'ui_primitives_smoke_test',

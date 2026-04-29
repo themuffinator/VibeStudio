@@ -2,6 +2,7 @@
 
 #include "app/ui_primitives.h"
 #include "core/operation_state.h"
+#include "core/package_archive.h"
 #include "core/studio_manifest.h"
 #include "core/studio_settings.h"
 #include "vibestudio_config.h"
@@ -99,6 +100,11 @@ void printHelp()
 	std::cout << "  --platform-report   Print platform and Qt runtime details.\n";
 	std::cout << "  --operation-states  Print reusable operation state identifiers.\n";
 	std::cout << "  --ui-primitives     Print reusable UI primitive identifiers.\n";
+	std::cout << "  --package-formats   Print package/archive interface descriptors.\n";
+	std::cout << "  --check-package-path <path>\n";
+	std::cout << "                      Normalize and validate a package virtual path.\n";
+	std::cout << "  --info <path>       Print read-only package summary for a folder, PAK, WAD, ZIP, or PK3.\n";
+	std::cout << "  --list <path>       List entries in a folder, PAK, WAD, ZIP, or PK3 package.\n";
 	std::cout << "  --settings-report   Print settings storage and recent projects.\n";
 	std::cout << "  --setup-report      Print first-run setup status and summary.\n";
 	std::cout << "  --setup-start       Start or resume first-run setup.\n";
@@ -183,6 +189,104 @@ void printUiPrimitives()
 		std::cout << "  Title: " << text(primitive.title) << "\n";
 		std::cout << "  Description: " << text(primitive.description) << "\n";
 		std::cout << "  Use cases: " << text(primitive.useCases.join(", ")) << "\n";
+	}
+}
+
+void printPackageFormats()
+{
+	std::cout << "Package archive interfaces\n";
+	for (const PackageArchiveFormatDescriptor& descriptor : packageArchiveFormatDescriptors()) {
+		std::cout << "- " << text(descriptor.id) << "\n";
+		std::cout << "  Label: " << text(descriptor.displayName) << "\n";
+		std::cout << "  Extensions: " << text(descriptor.extensions.isEmpty() ? QStringLiteral("(folder)") : descriptor.extensions.join(", ")) << "\n";
+		std::cout << "  Capabilities: " << text(descriptor.capabilities.join(", ")) << "\n";
+		std::cout << "  " << text(descriptor.description) << "\n";
+	}
+}
+
+void printPackagePathCheck(const QString& path)
+{
+	const PackageVirtualPath normalized = normalizePackageVirtualPath(path);
+	std::cout << "Package path check\n";
+	std::cout << "Original: " << text(path) << "\n";
+	std::cout << "Normalized: " << text(normalized.normalizedPath.isEmpty() ? QStringLiteral("(empty)") : normalized.normalizedPath) << "\n";
+	std::cout << "Safe: " << (normalized.isSafe() ? "yes" : "no") << "\n";
+	std::cout << "Issue: " << text(packagePathIssueId(normalized.issue)) << " (" << text(packagePathIssueDisplayName(normalized.issue)) << ")\n";
+	if (normalized.isSafe()) {
+		std::cout << "File name: " << text(packageVirtualPathFileName(normalized.normalizedPath)) << "\n";
+		std::cout << "Parent: " << text(packageVirtualPathParent(normalized.normalizedPath).isEmpty() ? QStringLiteral("/") : packageVirtualPathParent(normalized.normalizedPath)) << "\n";
+		std::cout << "Nested archive candidate: " << (packageEntryLooksNestedArchive(normalized.normalizedPath) ? "yes" : "no") << "\n";
+	}
+}
+
+QString sizeText(quint64 bytes)
+{
+	if (bytes >= 1024ull * 1024ull * 1024ull) {
+		return QStringLiteral("%1 GiB").arg(static_cast<double>(bytes) / (1024.0 * 1024.0 * 1024.0), 0, 'f', 2);
+	}
+	if (bytes >= 1024ull * 1024ull) {
+		return QStringLiteral("%1 MiB").arg(static_cast<double>(bytes) / (1024.0 * 1024.0), 0, 'f', 2);
+	}
+	if (bytes >= 1024ull) {
+		return QStringLiteral("%1 KiB").arg(static_cast<double>(bytes) / 1024.0, 0, 'f', 2);
+	}
+	return QStringLiteral("%1 B").arg(bytes);
+}
+
+bool loadPackageForCli(const QString& path, PackageArchive* archive)
+{
+	QString error;
+	if (!archive || !archive->load(path, &error)) {
+		std::cerr << "Unable to open package: " << text(error.isEmpty() ? QStringLiteral("unknown error") : error) << "\n";
+		return false;
+	}
+	return true;
+}
+
+void printPackageWarnings(const PackageArchive& archive)
+{
+	const QVector<PackageLoadWarning> warnings = archive.warnings();
+	if (warnings.isEmpty()) {
+		return;
+	}
+	std::cout << "Warnings\n";
+	for (const PackageLoadWarning& warning : warnings) {
+		std::cout << "- " << text(warning.virtualPath.isEmpty() ? QStringLiteral("(package)") : warning.virtualPath) << ": " << text(warning.message) << "\n";
+	}
+}
+
+void printPackageInfo(const PackageArchive& archive)
+{
+	const PackageArchiveSummary summary = archive.summary();
+	std::cout << "Package info\n";
+	std::cout << "Path: " << text(nativePath(summary.sourcePath)) << "\n";
+	std::cout << "Format: " << text(packageArchiveFormatId(summary.format)) << " (" << text(packageArchiveFormatDisplayName(summary.format)) << ")\n";
+	std::cout << "Entries: " << summary.entryCount << "\n";
+	std::cout << "Files: " << summary.fileCount << "\n";
+	std::cout << "Directories: " << summary.directoryCount << "\n";
+	std::cout << "Nested archive candidates: " << summary.nestedArchiveCount << "\n";
+	std::cout << "Total file bytes: " << text(sizeText(summary.totalSizeBytes)) << "\n";
+	std::cout << "Warnings: " << summary.warningCount << "\n";
+	printPackageWarnings(archive);
+}
+
+void printPackageList(const PackageArchive& archive)
+{
+	printPackageInfo(archive);
+	std::cout << "Entries\n";
+	for (const PackageEntry& entry : archive.entries()) {
+		std::cout << "- " << text(entry.virtualPath) << "\n";
+		std::cout << "  Kind: " << text(packageEntryKindId(entry.kind)) << "\n";
+		std::cout << "  Size: " << text(sizeText(entry.sizeBytes)) << "\n";
+		std::cout << "  Type: " << text(entry.typeHint) << "\n";
+		std::cout << "  Storage: " << text(entry.storageMethod.isEmpty() ? QStringLiteral("unknown") : entry.storageMethod) << "\n";
+		std::cout << "  Readable: " << (entry.readable ? "yes" : "no") << "\n";
+		if (entry.nestedArchiveCandidate) {
+			std::cout << "  Nested archive candidate: yes\n";
+		}
+		if (!entry.note.isEmpty()) {
+			std::cout << "  Note: " << text(entry.note) << "\n";
+		}
 	}
 }
 
@@ -288,6 +392,45 @@ int run(const QStringList& args)
 	}
 	if (hasOption(args, "--ui-primitives")) {
 		printUiPrimitives();
+		return 0;
+	}
+	if (hasOption(args, "--package-formats")) {
+		printPackageFormats();
+		return 0;
+	}
+	if (hasOption(args, "--check-package-path")) {
+		const QString path = optionValue(args, "--check-package-path");
+		if (path.isEmpty()) {
+			std::cerr << "--check-package-path requires a virtual package path.\n";
+			return 2;
+		}
+		printPackagePathCheck(path);
+		return 0;
+	}
+	if (hasOption(args, "--info")) {
+		const QString path = optionValue(args, "--info");
+		if (path.isEmpty()) {
+			std::cerr << "--info requires a folder, PAK, WAD, ZIP, or PK3 path.\n";
+			return 2;
+		}
+		PackageArchive archive;
+		if (!loadPackageForCli(path, &archive)) {
+			return 1;
+		}
+		printPackageInfo(archive);
+		return 0;
+	}
+	if (hasOption(args, "--list")) {
+		const QString path = optionValue(args, "--list");
+		if (path.isEmpty()) {
+			std::cerr << "--list requires a folder, PAK, WAD, ZIP, or PK3 path.\n";
+			return 2;
+		}
+		PackageArchive archive;
+		if (!loadPackageForCli(path, &archive)) {
+			return 1;
+		}
+		printPackageList(archive);
 		return 0;
 	}
 	if (hasOption(args, "--setup-start") || hasOption(args, "--setup-step") || hasOption(args, "--setup-next") || hasOption(args, "--setup-skip") || hasOption(args, "--setup-complete") || hasOption(args, "--setup-reset")) {

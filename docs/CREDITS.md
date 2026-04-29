@@ -20,6 +20,12 @@ detection, parser hardening, and credits practice.
 When PakFu code is moved into VibeStudio, this file must name the source module
 and revision when practical.
 
+Current adapted modules:
+
+| VibeStudio area | PakFu reference | Revision | Notes |
+|---|---|---|---|
+| Package/archive interface, read-only readers, and virtual path safety in `src/core/package_archive.*` | `src/archive/archive_entry.h`, `src/archive/archive.h`, `src/archive/archive_session.h`, `src/archive/dir_archive.*`, `src/archive/path_safety.h`, `src/pak/pak_archive.*`, `src/wad/wad_archive.*`, and `src/zip/zip_archive.*` | `c82dfb0ef0b5d7442e243ace8cd83bc45f82f257` | VibeStudio reimplements the concepts as a smaller core layer with explicit path-safety issue reporting, normalized virtual paths, safe output joining, folder/PAK/WAD/ZIP/PK3 entry listing, and mount-layer metadata. |
+
 ## Imported Compiler Toolchains
 
 | Tool | Role | Upstream | Imported revision | License notes |

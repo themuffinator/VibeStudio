@@ -16,6 +16,7 @@
 #include <QGridLayout>
 #include <QHBoxLayout>
 #include <QLabel>
+#include <QLineEdit>
 #include <QListWidget>
 #include <QListWidgetItem>
 #include <QLocale>
@@ -172,6 +173,50 @@ QString localizedOperationStateName(OperationState state)
 		return ApplicationShell::tr("Completed");
 	}
 	return ApplicationShell::tr("Idle");
+}
+
+QString localizedPackageFormatName(PackageArchiveFormat format)
+{
+	switch (format) {
+	case PackageArchiveFormat::Folder:
+		return ApplicationShell::tr("Folder");
+	case PackageArchiveFormat::Pak:
+		return ApplicationShell::tr("PAK");
+	case PackageArchiveFormat::Wad:
+		return ApplicationShell::tr("WAD");
+	case PackageArchiveFormat::Zip:
+		return ApplicationShell::tr("ZIP");
+	case PackageArchiveFormat::Pk3:
+		return ApplicationShell::tr("PK3");
+	case PackageArchiveFormat::Unknown:
+		break;
+	}
+	return ApplicationShell::tr("Unknown");
+}
+
+QString localizedPackageEntryKindName(PackageEntryKind kind)
+{
+	switch (kind) {
+	case PackageEntryKind::File:
+		return ApplicationShell::tr("File");
+	case PackageEntryKind::Directory:
+		return ApplicationShell::tr("Directory");
+	}
+	return ApplicationShell::tr("File");
+}
+
+QString byteSizeText(quint64 bytes)
+{
+	if (bytes >= 1024ull * 1024ull * 1024ull) {
+		return ApplicationShell::tr("%1 GiB").arg(static_cast<double>(bytes) / (1024.0 * 1024.0 * 1024.0), 0, 'f', 2);
+	}
+	if (bytes >= 1024ull * 1024ull) {
+		return ApplicationShell::tr("%1 MiB").arg(static_cast<double>(bytes) / (1024.0 * 1024.0), 0, 'f', 2);
+	}
+	if (bytes >= 1024ull) {
+		return ApplicationShell::tr("%1 KiB").arg(static_cast<double>(bytes) / 1024.0, 0, 'f', 2);
+	}
+	return ApplicationShell::tr("%1 B").arg(bytes);
 }
 
 } // namespace
@@ -373,6 +418,68 @@ void ApplicationShell::buildUi()
 	recentActions->addWidget(clearRecent);
 	centerLayout->addLayout(recentActions);
 
+	auto* packageHeader = new QHBoxLayout;
+	packageHeader->addWidget(sectionLabel(tr("Package Browser")));
+	m_packageSummary = new QLabel;
+	m_packageSummary->setObjectName("panelMeta");
+	m_packageSummary->setAccessibleName(tr("Package summary"));
+	packageHeader->addWidget(m_packageSummary, 1, Qt::AlignRight);
+	centerLayout->addLayout(packageHeader);
+
+	m_packageState = new LoadingPane;
+	m_packageState->setAccessibleName(tr("Package loading state"));
+	m_packageState->setPlaceholderRows({
+		tr("Package entries"),
+		tr("Directory tree"),
+		tr("Entry metadata"),
+	});
+	centerLayout->addWidget(m_packageState);
+
+	m_packageFilter = new QLineEdit;
+	m_packageFilter->setObjectName("packageFilter");
+	m_packageFilter->setAccessibleName(tr("Package entry filter"));
+	m_packageFilter->setAccessibleDescription(tr("Filters loaded package entries by path or type hint."));
+	m_packageFilter->setPlaceholderText(tr("Filter package entries"));
+	connect(m_packageFilter, &QLineEdit::textChanged, this, [this]() {
+		filterPackageEntries();
+	});
+	centerLayout->addWidget(m_packageFilter);
+
+	m_packageEntries = new QListWidget;
+	m_packageEntries->setObjectName("packageEntries");
+	m_packageEntries->setAccessibleName(tr("Package entries"));
+	m_packageEntries->setAccessibleDescription(tr("Read-only entries from the loaded folder, PAK, WAD, ZIP, or PK3 package."));
+	m_packageEntries->setMinimumHeight(150);
+	connect(m_packageEntries, &QListWidget::itemSelectionChanged, this, [this]() {
+		refreshPackageEntryDetails(selectedPackageEntryPath());
+	});
+	centerLayout->addWidget(m_packageEntries);
+
+	m_packageDrawer = new DetailDrawer;
+	m_packageDrawer->setAccessibleName(tr("Package entry detail drawer"));
+	m_packageDrawer->setTitle(tr("Package Entry Details"));
+	m_packageDrawer->setSubtitle(tr("Open a package to inspect entry metadata."));
+	centerLayout->addWidget(m_packageDrawer);
+
+	auto* packageActions = new QHBoxLayout;
+	packageActions->addStretch(1);
+	auto* openPackage = new QPushButton(style()->standardIcon(QStyle::SP_DialogOpenButton), tr("Open Package"));
+	openPackage->setAccessibleName(tr("Open package file"));
+	openPackage->setToolTip(tr("Open a PAK, WAD, ZIP, or PK3 package for read-only browsing."));
+	connect(openPackage, &QPushButton::clicked, this, [this]() {
+		openPackageFile();
+	});
+	packageActions->addWidget(openPackage);
+
+	auto* openFolderPackage = new QPushButton(style()->standardIcon(QStyle::SP_DirOpenIcon), tr("Open Folder"));
+	openFolderPackage->setAccessibleName(tr("Open folder package"));
+	openFolderPackage->setToolTip(tr("Open a folder as a read-only package source."));
+	connect(openFolderPackage, &QPushButton::clicked, this, [this]() {
+		openPackageFolder();
+	});
+	packageActions->addWidget(openFolderPackage);
+	centerLayout->addLayout(packageActions);
+
 	centerLayout->addWidget(sectionLabel(tr("Accessibility And Language")));
 
 	auto* preferencesPanel = new QFrame;
@@ -541,6 +648,7 @@ void ApplicationShell::buildUi()
 	seedActivityCenter();
 	refreshSetupPanel();
 	refreshRecentProjects();
+	refreshPackageBrowser();
 	refreshPreferenceControls();
 	loadShellState();
 	applyPreferencesToUi();
@@ -631,6 +739,246 @@ void ApplicationShell::openProjectFolder()
 	applyPreferencesToUi();
 	updateInspectorForProject(normalizedProjectPath(path));
 	statusBar()->showMessage(tr("Project folder remembered: %1").arg(nativePath(normalizedProjectPath(path))));
+}
+
+void ApplicationShell::openPackageFile()
+{
+	const QString path = QFileDialog::getOpenFileName(
+		this,
+		tr("Open Package"),
+		QString(),
+		tr("Packages (*.pak *.wad *.wad2 *.wad3 *.zip *.pk3);;All Files (*)"));
+	if (path.isEmpty()) {
+		return;
+	}
+	loadPackagePath(path);
+}
+
+void ApplicationShell::openPackageFolder()
+{
+	const QString path = QFileDialog::getExistingDirectory(this, tr("Open Folder Package"));
+	if (path.isEmpty()) {
+		return;
+	}
+	loadPackagePath(path);
+}
+
+void ApplicationShell::loadPackagePath(const QString& path)
+{
+	const QString absolutePath = QFileInfo(path).absoluteFilePath();
+	const AccessibilityPreferences preferences = m_settings.accessibilityPreferences();
+
+	m_packageState->setReducedMotion(preferences.reducedMotion);
+	m_packageState->setTitle(tr("Opening Package"));
+	m_packageState->setDetail(nativePath(absolutePath));
+	m_packageState->setState(OperationState::Loading, tr("Loading"));
+	m_packageState->setProgress({0, 1});
+
+	m_packageActivityId = m_activity.createTask(tr("Package Scan"), nativePath(absolutePath), tr("package"), OperationState::Loading, false);
+	m_activity.setProgress(m_packageActivityId, 0, 1, tr("Opening package."));
+	refreshActivityCenter(m_packageActivityId);
+
+	PackageArchive loadedPackage;
+	QString error;
+	if (!loadedPackage.load(absolutePath, &error)) {
+		m_activity.failTask(m_packageActivityId, error.isEmpty() ? tr("Package could not be opened.") : error);
+		m_packageState->setTitle(tr("Package Open Failed"));
+		m_packageState->setDetail(error.isEmpty() ? nativePath(absolutePath) : error);
+		m_packageState->setState(OperationState::Failed, tr("Failed"));
+		m_packageState->setProgress({0, 1});
+		m_packageSummary->setText(tr("No package loaded"));
+		m_packageEntries->clear();
+		m_packageEntries->addItem(tr("Package open failed"));
+		m_packageDrawer->setTitle(tr("Package Details"));
+		m_packageDrawer->setSubtitle(error);
+		m_packageDrawer->setSections({
+			{QStringLiteral("error"), tr("Error"), nativePath(absolutePath), error, OperationState::Failed},
+		});
+		refreshActivityCenter(m_packageActivityId);
+		statusBar()->showMessage(tr("Package open failed: %1").arg(error));
+		return;
+	}
+
+	const PackageArchiveSummary summary = loadedPackage.summary();
+	m_activity.setProgress(m_packageActivityId, summary.entryCount, std::max(1, summary.entryCount), tr("Indexed %n package entries.", nullptr, summary.entryCount));
+	for (const PackageLoadWarning& warning : loadedPackage.warnings()) {
+		m_activity.appendWarning(m_packageActivityId, warning.virtualPath.isEmpty() ? warning.message : QStringLiteral("%1: %2").arg(warning.virtualPath, warning.message));
+	}
+	m_activity.completeTask(m_packageActivityId, tr("Opened %1 with %n entries.", nullptr, summary.entryCount).arg(localizedPackageFormatName(summary.format)));
+
+	m_packageArchive = loadedPackage;
+	refreshPackageBrowser();
+	refreshActivityCenter(m_packageActivityId);
+	statusBar()->showMessage(tr("Package opened: %1").arg(nativePath(absolutePath)));
+}
+
+void ApplicationShell::refreshPackageBrowser()
+{
+	if (!m_packageEntries || !m_packageState || !m_packageDrawer) {
+		return;
+	}
+
+	const AccessibilityPreferences preferences = m_settings.accessibilityPreferences();
+	m_packageState->setReducedMotion(preferences.reducedMotion);
+
+	if (!m_packageArchive.isOpen()) {
+		m_packageSummary->setText(tr("No package loaded"));
+		m_packageState->setTitle(tr("No Package Loaded"));
+		m_packageState->setDetail(tr("Open a folder, PAK, WAD, ZIP, or PK3 to browse entries read-only."));
+		m_packageState->setState(OperationState::Idle, tr("Idle"));
+		m_packageState->setProgress({});
+		m_packageEntries->clear();
+		auto* item = new QListWidgetItem(tr("No package loaded"));
+		item->setFlags(Qt::NoItemFlags);
+		m_packageEntries->addItem(item);
+		m_packageDrawer->setTitle(tr("Package Entry Details"));
+		m_packageDrawer->setSubtitle(tr("Open a package to inspect entry metadata."));
+		m_packageDrawer->setSections({});
+		return;
+	}
+
+	const PackageArchiveSummary summary = m_packageArchive.summary();
+	const OperationState state = summary.warningCount > 0 ? OperationState::Warning : OperationState::Completed;
+	m_packageSummary->setText(tr("%1 / %n entries", nullptr, summary.entryCount).arg(localizedPackageFormatName(summary.format)));
+	m_packageState->setTitle(tr("Package Browser"));
+	m_packageState->setDetail(QStringLiteral("%1 / %2 files / %3 directories / %4 warnings")
+		.arg(nativePath(summary.sourcePath))
+		.arg(summary.fileCount)
+		.arg(summary.directoryCount)
+		.arg(summary.warningCount));
+	m_packageState->setState(state, summary.warningCount > 0 ? tr("Warnings") : tr("Ready"));
+	m_packageState->setProgress({summary.entryCount, std::max(1, summary.entryCount)});
+	filterPackageEntries();
+}
+
+void ApplicationShell::refreshPackageEntryDetails(const QString& virtualPath)
+{
+	if (!m_packageDrawer || !m_packageArchive.isOpen()) {
+		return;
+	}
+
+	PackageEntry selectedEntry;
+	bool found = false;
+	for (const PackageEntry& entry : m_packageArchive.entries()) {
+		if (entry.virtualPath == virtualPath) {
+			selectedEntry = entry;
+			found = true;
+			break;
+		}
+	}
+
+	if (!found) {
+		m_packageDrawer->setTitle(tr("Package Entry Details"));
+		m_packageDrawer->setSubtitle(tr("No entry selected."));
+		m_packageDrawer->setSections({});
+		return;
+	}
+
+	QStringList summaryLines;
+	summaryLines << tr("Path: %1").arg(selectedEntry.virtualPath);
+	summaryLines << tr("Kind: %1").arg(localizedPackageEntryKindName(selectedEntry.kind));
+	summaryLines << tr("Type: %1").arg(selectedEntry.typeHint);
+	summaryLines << tr("Size: %1").arg(byteSizeText(selectedEntry.sizeBytes));
+	summaryLines << tr("Compressed size: %1").arg(byteSizeText(selectedEntry.compressedSizeBytes));
+	summaryLines << tr("Storage: %1").arg(selectedEntry.storageMethod.isEmpty() ? tr("unknown") : selectedEntry.storageMethod);
+	summaryLines << tr("Readable now: %1").arg(selectedEntry.readable ? tr("yes") : tr("no"));
+	summaryLines << tr("Nested archive candidate: %1").arg(selectedEntry.nestedArchiveCandidate ? tr("yes") : tr("no"));
+	if (!selectedEntry.modifiedUtc.isValid()) {
+		summaryLines << tr("Modified: unknown");
+	} else {
+		summaryLines << tr("Modified: %1").arg(QLocale::system().toString(selectedEntry.modifiedUtc.toLocalTime(), QLocale::LongFormat));
+	}
+	if (!selectedEntry.note.isEmpty()) {
+		summaryLines << tr("Note: %1").arg(selectedEntry.note);
+	}
+
+	QStringList rawLines;
+	rawLines << tr("Source: %1").arg(nativePath(m_packageArchive.sourcePath()));
+	rawLines << tr("Format: %1").arg(packageArchiveFormatId(m_packageArchive.format()));
+	rawLines << tr("Virtual path: %1").arg(selectedEntry.virtualPath);
+	rawLines << tr("Kind id: %1").arg(packageEntryKindId(selectedEntry.kind));
+	rawLines << tr("Data offset: %1").arg(selectedEntry.dataOffset);
+	rawLines << tr("Size bytes: %1").arg(selectedEntry.sizeBytes);
+	rawLines << tr("Compressed bytes: %1").arg(selectedEntry.compressedSizeBytes);
+	rawLines << tr("Source archive id: %1").arg(selectedEntry.sourceArchiveId);
+
+	QStringList warningLines;
+	for (const PackageLoadWarning& warning : m_packageArchive.warnings()) {
+		if (warning.virtualPath.isEmpty() || warning.virtualPath == selectedEntry.virtualPath) {
+			warningLines << QStringLiteral("%1: %2").arg(warning.virtualPath.isEmpty() ? tr("package") : warning.virtualPath, warning.message);
+		}
+	}
+	if (warningLines.isEmpty()) {
+		warningLines << tr("No warnings for this entry.");
+	}
+
+	const OperationState entryState = !selectedEntry.note.isEmpty() ? OperationState::Warning : OperationState::Completed;
+	m_packageDrawer->setTitle(tr("Package Entry Details"));
+	m_packageDrawer->setSubtitle(selectedEntry.virtualPath);
+	m_packageDrawer->setSections({
+		{QStringLiteral("summary"), tr("Summary"), selectedEntry.typeHint, summaryLines.join('\n'), entryState},
+		{QStringLiteral("warnings"), tr("Warnings"), tr("%n package warnings", nullptr, m_packageArchive.warnings().size()), warningLines.join('\n'), warningLines.size() == 1 && warningLines.front() == tr("No warnings for this entry.") ? OperationState::Completed : OperationState::Warning},
+		{QStringLiteral("raw"), tr("Raw Metadata"), selectedEntry.virtualPath, rawLines.join('\n'), entryState},
+	});
+}
+
+void ApplicationShell::filterPackageEntries()
+{
+	if (!m_packageEntries) {
+		return;
+	}
+
+	const QString selectedPath = selectedPackageEntryPath();
+	const QString filter = m_packageFilter ? m_packageFilter->text().trimmed().toCaseFolded() : QString();
+	m_packageEntries->clear();
+
+	if (!m_packageArchive.isOpen()) {
+		auto* item = new QListWidgetItem(tr("No package loaded"));
+		item->setFlags(Qt::NoItemFlags);
+		m_packageEntries->addItem(item);
+		refreshPackageEntryDetails(QString());
+		return;
+	}
+
+	int selectedRow = -1;
+	int visibleRow = 0;
+	for (const PackageEntry& entry : m_packageArchive.entries()) {
+		const QString haystack = QStringLiteral("%1 %2 %3").arg(entry.virtualPath, entry.typeHint, entry.storageMethod).toCaseFolded();
+		if (!filter.isEmpty() && !haystack.contains(filter)) {
+			continue;
+		}
+		auto* item = new QListWidgetItem(QStringLiteral("%1 [%2]\n%3 / %4 / %5")
+			.arg(entry.virtualPath,
+				localizedPackageEntryKindName(entry.kind),
+				byteSizeText(entry.sizeBytes),
+				entry.typeHint,
+				entry.storageMethod.isEmpty() ? tr("unknown") : entry.storageMethod));
+		item->setData(Qt::UserRole, entry.virtualPath);
+		item->setData(Qt::UserRole + 1, entry.note.isEmpty() ? QStringLiteral("completed") : QStringLiteral("warning"));
+		m_packageEntries->addItem(item);
+		if (entry.virtualPath == selectedPath) {
+			selectedRow = visibleRow;
+		}
+		++visibleRow;
+	}
+
+	if (m_packageEntries->count() == 0) {
+		auto* item = new QListWidgetItem(tr("No matching package entries"));
+		item->setFlags(Qt::NoItemFlags);
+		m_packageEntries->addItem(item);
+		refreshPackageEntryDetails(QString());
+		return;
+	}
+
+	m_packageEntries->setCurrentRow(selectedRow >= 0 ? selectedRow : 0);
+	refreshPackageEntryDetails(selectedPackageEntryPath());
+	applyPreferencesToUi();
+}
+
+QString ApplicationShell::selectedPackageEntryPath() const
+{
+	const QListWidgetItem* item = m_packageEntries ? m_packageEntries->currentItem() : nullptr;
+	return item ? item->data(Qt::UserRole).toString() : QString();
 }
 
 void ApplicationShell::activateRecentProject(QListWidgetItem* item)
@@ -1277,7 +1625,7 @@ void ApplicationShell::applyPreferencesToUi()
 			font-size: %11pt;
 			font-weight: 600;
 		}
-		QFrame#modulePanel, QFrame#preferencesPanel, QFrame#loadingPane, QFrame#detailDrawer, QTextEdit#inspector, QTextEdit#detailContent, QListWidget#recentProjects, QListWidget#activityTasks, QListWidget#detailSections {
+		QFrame#modulePanel, QFrame#preferencesPanel, QFrame#loadingPane, QFrame#detailDrawer, QTextEdit#inspector, QTextEdit#detailContent, QListWidget#recentProjects, QListWidget#packageEntries, QListWidget#activityTasks, QListWidget#detailSections, QLineEdit#packageFilter {
 			background: %12;
 			border: 1px solid %13;
 			border-radius: 6px;
@@ -1287,13 +1635,13 @@ void ApplicationShell::applyPreferencesToUi()
 			border: 1px solid %13;
 			border-radius: 6px;
 		}
-		QListWidget#recentProjects, QListWidget#activityTasks, QListWidget#detailSections {
+		QListWidget#recentProjects, QListWidget#packageEntries, QListWidget#activityTasks, QListWidget#detailSections {
 			padding: 6px;
 		}
 		QListWidget#setupSummary {
 			padding: 6px;
 		}
-		QListWidget#recentProjects::item, QListWidget#activityTasks::item, QListWidget#detailSections::item {
+		QListWidget#recentProjects::item, QListWidget#packageEntries::item, QListWidget#activityTasks::item, QListWidget#detailSections::item {
 			border-radius: 4px;
 			padding: %14px 10px;
 		}
@@ -1301,7 +1649,7 @@ void ApplicationShell::applyPreferencesToUi()
 			border-radius: 4px;
 			padding: %14px 10px;
 		}
-		QListWidget#recentProjects::item:selected, QListWidget#activityTasks::item:selected, QListWidget#detailSections::item:selected {
+		QListWidget#recentProjects::item:selected, QListWidget#packageEntries::item:selected, QListWidget#activityTasks::item:selected, QListWidget#detailSections::item:selected {
 			background: %6;
 			color: %7;
 		}
@@ -1407,6 +1755,7 @@ void ApplicationShell::applyPreferencesToUi()
 			}
 		}
 	};
+	applyStateColor(m_packageEntries);
 	applyStateColor(m_activityTasks);
 	if (m_inspectorState) {
 		m_inspectorState->setReducedMotion(preferences.reducedMotion);

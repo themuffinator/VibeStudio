@@ -29,7 +29,7 @@ rendering portability, source editing, media handling, search, or automation.
 | Asset index/search | [SQLite](https://sqlite.org/) through [Qt SQL](https://doc.qt.io/qt-6/qtsql-index.html), with [FTS5](https://sqlite.org/fts5.html) where available | Planned | Lightweight local database for project metadata, dependencies, search, diagnostics, and recent activity. |
 | CLI parser | [CLI11](https://github.com/CLIUtils/CLI11) | Planned | Modern C++ parser with subcommands, validation, help output, and JSON-friendly command design. |
 | Task execution | Qt `QProcess`, thread pools, futures, signals, and a VibeStudio task model | Active/planned | The reusable operation-state model and shell activity center are active; process execution, futures, and long-running service integration are planned. |
-| Package/archive layer | PakFu-derived C++ services plus focused format readers | Planned | Preserves the strongest existing project lineage while moving logic into shared GUI/CLI services. |
+| Package/archive layer | PakFu-derived C++ services plus focused format readers | Active/planned | Package/archive interfaces, virtual path safety, and read-only folder, PAK, WAD, ZIP, and PK3 entry readers are active; preview, extract, and write-back support are planned next. |
 | 2D editor rendering | Custom Qt Widgets, `QPainter`, and Qt Graphics View where useful | Planned | Fast path to responsive map views, sprite/texture surfaces, overlays, and inspectable editor state. |
 | Early 3D preview | Qt `QOpenGLWidget` behind a renderer interface | Planned | Acceptable for MVP preview work while keeping the future backend replaceable. |
 | Long-term 3D rendering | [bgfx](https://bkaradzic.github.io/bgfx/overview.html) behind a renderer abstraction | Planned | Cross-platform renderer backend for durable editor viewports across Direct3D, Metal, Vulkan, and OpenGL-style platforms. |
@@ -131,6 +131,15 @@ operations, tracks progress, warnings, result summaries, cancellation
 eligibility, and timestamped logs. Future package, compiler, validation, AI,
 and export services should emit through this model instead of inventing local
 task status enums.
+
+Use the package/archive layer for package metadata and read-only browsing. The
+active slice defines stable descriptors and readers for folder, PAK, WAD, ZIP,
+and PK3 package formats; shared package entry metadata; mount-layer session
+state; safe normalized virtual paths; traversal rejection; and output-path
+joining that proves extraction targets remain under the chosen root. This layer
+is adapted from PakFu's archive surface and credited in `docs/CREDITS.md`;
+future preview, extraction, and write-back services should build on it instead
+of duplicating path safety rules per format.
 
 ## Accessibility, Localization, And Setup Stack
 
