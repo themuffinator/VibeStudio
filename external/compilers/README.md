@@ -8,7 +8,7 @@ upstream history, licenses, and local patches cleanly.
 | Path | Upstream | Role |
 |---|---|---|
 | `ericw-tools` | [ericwa/ericw-tools](https://github.com/ericwa/ericw-tools) | Quake/idTech2 BSP, VIS, and lighting tools. |
-| `netradiant-custom` | [Garux/netradiant-custom](https://github.com/Garux/netradiant-custom) | NetRadiant Custom source tree containing q3map2 at `tools/quake3/q3map2`. |
+| `q3map2-nrc` | [Garux/netradiant-custom](https://github.com/Garux/netradiant-custom) | q3map2 from NetRadiant Custom, located at `tools/quake3/q3map2` inside the imported source tree. |
 | `zdbsp` | [rheit/zdbsp](https://github.com/rheit/zdbsp) | Doom-family node builder. |
 | `zokumbsp` | [zokum-no/zokumbsp](https://github.com/zokum-no/zokumbsp) | Doom-family node, blockmap, and reject builder. |
 

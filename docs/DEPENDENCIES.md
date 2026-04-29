@@ -22,7 +22,7 @@ The external compiler submodules keep their own build systems and dependency
 requirements. VibeStudio does not build them by default yet.
 
 - [ericw-tools](https://github.com/ericwa/ericw-tools): CMake, Embree, oneTBB, optional Qt6 for `lightpreview`, and bundled third-party libraries documented upstream.
-- [NetRadiant Custom](https://github.com/Garux/netradiant-custom): upstream Makefile-based build and dependencies documented in its `COMPILING` file.
+- [q3map2-nrc](https://github.com/Garux/netradiant-custom): q3map2 compiler source imported from NetRadiant Custom; upstream Makefile-based build and dependencies documented in its `COMPILING` file.
 - [ZDBSP](https://github.com/rheit/zdbsp): CMake and zlib-oriented source tree as documented upstream.
 - [ZokumBSP](https://github.com/zokum-no/zokumbsp): upstream source/build instructions in its README and `doc` directory.
 

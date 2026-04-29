@@ -50,6 +50,6 @@ are not implemented in the initial scaffold.
 | Tool | Status |
 |---|---|
 | ericw-tools | imported as submodule |
-| NetRadiant Custom q3map2 | imported as submodule |
+| q3map2-nrc | q3map2 from NetRadiant Custom imported as submodule |
 | ZDBSP | imported as submodule |
 | ZokumBSP | imported as submodule |

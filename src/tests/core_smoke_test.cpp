@@ -24,7 +24,7 @@ int main(int argc, char** argv)
 	bool hasQ3Map2 = false;
 	bool hasIdTech1 = false;
 	for (const vibestudio::CompilerIntegration& compiler : compilers) {
-		hasQ3Map2 = hasQ3Map2 || compiler.id == "netradiant-custom";
+		hasQ3Map2 = hasQ3Map2 || compiler.id == "q3map2-nrc";
 		hasIdTech1 = hasIdTech1 || compiler.engines.contains("idTech1");
 		if (compiler.upstreamUrl.isEmpty() || compiler.pinnedRevision.size() < 12) {
 			std::cerr << "Compiler manifest entry is missing provenance.\n";

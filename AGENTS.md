@@ -59,7 +59,7 @@ credits list.
 
 ## External Compiler Toolchains
 - Imported compilers live under `external/compilers` as Git submodules unless there is a strong reason to vendor a specific fork.
-- Preserve upstream history for ericw-tools, NetRadiant Custom/q3map2, ZDBSP, ZokumBSP, and future compilers.
+- Preserve upstream history for ericw-tools, q3map2 from NetRadiant Custom, ZDBSP, ZokumBSP, and future compilers.
 - VibeStudio-owned changes to external compilers should be made in explicit forks or patch directories, with upstream links and rationale documented in `docs/COMPILER_INTEGRATION.md`.
 - The studio should invoke external compilers through a wrapper/orchestration layer with structured logs, progress, inputs, outputs, and reproducible command manifests.
 

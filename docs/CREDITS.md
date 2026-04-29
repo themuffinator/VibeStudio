@@ -25,7 +25,7 @@ and revision when practical.
 | Tool | Role | Upstream | Imported revision | License notes |
 |---|---|---|---|---|
 | ericw-tools | Quake/idTech2-style `qbsp`, `vis`, `light`, `bspinfo`, `bsputil` | [ericwa/ericw-tools](https://github.com/ericwa/ericw-tools) | `f80b1e216a415581aea7475cb52b16b8c4859084` | GPL-2.0-or-later; upstream notes GPL-3.0+ compatibility for Embree-enabled builds. See `external/compilers/ericw-tools/COPYING` and `gpl_v3.txt`. |
-| NetRadiant Custom q3map2 | idTech3 BSP, lighting, conversion, and packaging compiler | [Garux/netradiant-custom](https://github.com/Garux/netradiant-custom) | `68ecbed64b7be78741878c730279b5471d978c7c` | Mixed GPL/LGPL/BSD by file; upstream marks Quake III tools, including q3map2, as GPL. See `external/compilers/netradiant-custom/LICENSE`, `GPL`, and `LGPL`. |
+| q3map2-nrc | q3map2 compiler from NetRadiant Custom for idTech3 BSP, lighting, conversion, and packaging | [Garux/netradiant-custom](https://github.com/Garux/netradiant-custom) | `68ecbed64b7be78741878c730279b5471d978c7c` | Mixed GPL/LGPL/BSD by file; upstream marks Quake III tools, including q3map2, as GPL. See `external/compilers/q3map2-nrc/LICENSE`, `GPL`, and `LGPL`. |
 | ZDBSP | Doom-family node builder | [rheit/zdbsp](https://github.com/rheit/zdbsp) | `bcb9bdbcaf8ad296242c03cf3f9bff7ee732f659` | GPL-2.0-or-later. See `external/compilers/zdbsp/COPYING`. |
 | ZokumBSP | Doom-family node/blockmap/reject builder | [zokum-no/zokumbsp](https://github.com/zokum-no/zokumbsp) | `22af6defeb84ce836e0b184d6be5e80f127d9451` | GPL-2.0 text in `external/compilers/zokumbsp/src/COPYING`; based on ZenNode lineage credited upstream. |
 

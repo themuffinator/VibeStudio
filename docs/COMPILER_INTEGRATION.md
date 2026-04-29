@@ -10,7 +10,7 @@ feed outputs back into the project/package graph.
 | Tool | Local path | Main role |
 |---|---|---|
 | ericw-tools | `external/compilers/ericw-tools` | Quake/idTech2 `qbsp`, `vis`, `light`, `bspinfo`, `bsputil`. |
-| NetRadiant Custom q3map2 | `external/compilers/netradiant-custom/tools/quake3/q3map2` | Quake III/idTech3 BSP compile, light, conversion, and package helpers. |
+| q3map2-nrc | `external/compilers/q3map2-nrc/tools/quake3/q3map2` | q3map2 from NetRadiant Custom for Quake III/idTech3 BSP compile, light, conversion, and package helpers. |
 | ZDBSP | `external/compilers/zdbsp` | Doom-family node building, including GL and extended node formats. |
 | ZokumBSP | `external/compilers/zokumbsp` | Doom-family node, blockmap, and reject building with vanilla-focused output. |
 
@@ -49,7 +49,7 @@ Rules:
 ## Engine Mapping
 - idTech1 Doom-family maps: WAD map lumps, UDMF/TextMap variants, ZDBSP and ZokumBSP node/blockmap/reject profiles.
 - idTech2 Quake-family maps: `.map` to BSP through ericw-tools `qbsp`, `vis`, and `light`.
-- idTech3 Quake III-family maps: `.map` to BSP through NetRadiant Custom q3map2, including shader-aware light and packaging flows.
+- idTech3 Quake III-family maps: `.map` to BSP through q3map2-nrc, the q3map2 compiler imported from NetRadiant Custom, including shader-aware light and packaging flows.
 
 ## Diagnostics Contract
 Compiler wrappers should emit:

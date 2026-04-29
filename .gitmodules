@@ -1,8 +1,8 @@
 [submodule "external/compilers/ericw-tools"]
 	path = external/compilers/ericw-tools
 	url = https://github.com/ericwa/ericw-tools.git
-[submodule "external/compilers/netradiant-custom"]
-	path = external/compilers/netradiant-custom
+[submodule "external/compilers/q3map2-nrc"]
+	path = external/compilers/q3map2-nrc
 	url = https://github.com/Garux/netradiant-custom.git
 [submodule "external/compilers/zdbsp"]
 	path = external/compilers/zdbsp
