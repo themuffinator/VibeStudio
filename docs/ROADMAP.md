@@ -213,18 +213,18 @@ Goal: make the repository easy to build, test, credit, and extend.
 - [x] Add mode rail and placeholder studio shell.
 - [x] Add persistent settings storage.
 - [x] Add recent projects list.
-- [ ] Add global status/log panel.
-- [ ] Add global activity center with task list, progress, result, warnings, failures, and cancellation.
-- [ ] Add reusable operation-state model for idle/loading/running/warning/failed/cancelled/completed states.
-- [ ] Add reusable loading/skeleton components for panes and previews.
-- [ ] Add reusable detail drawer pattern for logs, metadata, manifests, and raw diagnostics.
+- [x] Add global status/log panel.
+- [x] Add global activity center with task list, progress, result, warnings, failures, and cancellation.
+- [x] Add reusable operation-state model for idle/loading/running/warning/failed/cancelled/completed states.
+- [x] Add reusable loading/skeleton components for panes and previews.
+- [x] Add reusable detail drawer pattern for logs, metadata, manifests, and raw diagnostics.
 - [ ] Add status chips for project, package, compiler, install, and AI states.
 - [ ] Add command palette shell.
 - [ ] Add keyboard shortcut registry.
 - [ ] Add interaction profile registry placeholder.
-- [ ] Add accessibility settings placeholder: theme, scale, density, reduced motion, and TTS.
-- [ ] Add language/locale settings placeholder.
-- [ ] Add first-run setup shell with skip/resume behavior.
+- [x] Add accessibility settings placeholder: theme, scale, density, reduced motion, and TTS.
+- [x] Add language/locale settings placeholder.
+- [x] Add first-run setup shell with skip/resume behavior.
 - [ ] Add AI integration disabled/experimental settings placeholder.
 
 ### Visual Communication Foundation
@@ -745,10 +745,10 @@ related area.
 Use this queue to get to MVP quickly.
 
 1. [x] Add persistent settings and recent projects.
-2. [ ] Add accessibility and language preferences: scale, high-visibility, density, reduced motion, TTS, locale.
-3. [ ] Add first-run setup shell with skip/resume and setup summary.
-4. [ ] Add global activity center and reusable operation-state model.
-5. [ ] Add loading/skeleton/detail-drawer UI primitives.
+2. [x] Add accessibility and language preferences: scale, high-visibility, density, reduced motion, TTS, locale.
+3. [x] Add first-run setup shell with skip/resume and setup summary.
+4. [x] Add global activity center and reusable operation-state model.
+5. [x] Add loading/skeleton/detail-drawer UI primitives.
 6. [ ] Port PakFu archive interfaces and path safety.
 7. [ ] Add read-only folder/PAK/WAD/PK3 package browsing with visible loading/progress.
 8. [ ] Add text/image/binary metadata preview pane with summary/detail split.

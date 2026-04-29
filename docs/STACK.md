@@ -16,18 +16,19 @@ rendering portability, source editing, media handling, search, or automation.
 | Primary language | C++20 | Active | Fits idTech-era native tooling, Qt, compilers, binary formats, and high-performance editors. |
 | Application framework | [Qt 6](https://doc.qt.io/qt-6/) | Active | Mature cross-platform desktop framework with UI, networking, settings, processes, models, threading, and deployment support. |
 | Primary UI | [Qt Widgets](https://doc.qt.io/qt-6/qtwidgets-index.html) | Active | Best fit for dense production tools, dockable panes, model/view data, custom inspectors, and native desktop behavior. |
+| Shell UI primitives | Reusable Qt Widgets loading panes and detail drawers | Active | Shared shell components now cover operation state, progress, reduced-motion loading placeholders, and collapsible details for logs, metadata, manifests, and raw diagnostics. |
 | Rich animated surfaces | [Qt Quick/QML](https://doc.qt.io/qt-6/qtquick-index.html) | Planned, bounded | Use for contained high-value surfaces only, such as onboarding, visual status views, or graph-like experiences. Do not rewrite the shell around QML without a migration plan. |
 | Build system | [Meson](https://mesonbuild.com/) + [Ninja](https://ninja-build.org/) | Active | Fast, readable, cross-platform, and suitable for CI. |
 | Automation | Python scripts + GitHub Actions | Active | Good fit for validation, release helpers, documentation checks, and CI orchestration. |
 | Project manifests | JSON | Planned | Human-readable, easy to diff, scriptable, and already natural for CLI output. |
-| User settings | Qt `QSettings` plus project overrides | Active/planned | Application shell settings and recent projects use `QSettings`; project-local override support is planned. |
-| Accessibility | [Qt Accessibility](https://doc.qt.io/qt-6/accessible.html), OS accessibility settings, accessible custom widgets | Planned core layer | Supports screen readers, keyboard access, scalable UI, contrast, and assistive tool metadata. |
-| Scaling | [Qt High DPI](https://doc.qt.io/qt-6/highdpi.html), layout-driven UI, app text scale preferences | Planned core layer | Keeps the studio usable across DPI, monitor, and vision needs. |
-| Text to speech | [Qt TextToSpeech](https://doc.qt.io/qt-6/qttexttospeech-index.html) | Planned optional module | Uses native OS speech engines for task summaries, diagnostics, setup guidance, and warnings. |
-| Localization | [Qt internationalization](https://doc.qt.io/qt-6/internationalization.html), Qt Linguist, `QTranslator`, `QLocale` | Planned core layer | Enables 20-language UI targets, locale formatting, pluralization, Unicode, and RTL support. |
+| User settings | Qt `QSettings` plus project overrides | Active/planned | Application shell settings, recent projects, and accessibility/language preferences use `QSettings`; project-local override support is planned. |
+| Accessibility | [Qt Accessibility](https://doc.qt.io/qt-6/accessible.html), OS accessibility settings, accessible custom widgets | Active/planned | Shell preference storage and accessible control metadata are active; deeper workflow audits and custom-widget coverage are planned. |
+| Scaling | [Qt High DPI](https://doc.qt.io/qt-6/highdpi.html), layout-driven UI, app text scale preferences | Active/planned | Shell text scale presets are active; broader high-DPI and layout smoke coverage is planned. |
+| Text to speech | [Qt TextToSpeech](https://doc.qt.io/qt-6/qttexttospeech-index.html) | Planned optional module | TTS enablement preference is active; native OS speech playback for task summaries, diagnostics, setup guidance, and warnings is planned. |
+| Localization | [Qt internationalization](https://doc.qt.io/qt-6/internationalization.html), Qt Linguist, `QTranslator`, `QLocale` | Active/planned | Locale preference storage and `QLocale` formatting are active; translation catalogs, pseudo-localization, and RTL validation are planned. |
 | Asset index/search | [SQLite](https://sqlite.org/) through [Qt SQL](https://doc.qt.io/qt-6/qtsql-index.html), with [FTS5](https://sqlite.org/fts5.html) where available | Planned | Lightweight local database for project metadata, dependencies, search, diagnostics, and recent activity. |
 | CLI parser | [CLI11](https://github.com/CLIUtils/CLI11) | Planned | Modern C++ parser with subcommands, validation, help output, and JSON-friendly command design. |
-| Task execution | Qt `QProcess`, thread pools, futures, signals, and a VibeStudio task model | Planned | Keeps GUI and CLI using the same async operations, progress, cancellation, and logs. |
+| Task execution | Qt `QProcess`, thread pools, futures, signals, and a VibeStudio task model | Active/planned | The reusable operation-state model and shell activity center are active; process execution, futures, and long-running service integration are planned. |
 | Package/archive layer | PakFu-derived C++ services plus focused format readers | Planned | Preserves the strongest existing project lineage while moving logic into shared GUI/CLI services. |
 | 2D editor rendering | Custom Qt Widgets, `QPainter`, and Qt Graphics View where useful | Planned | Fast path to responsive map views, sprite/texture surfaces, overlays, and inspectable editor state. |
 | Early 3D preview | Qt `QOpenGLWidget` behind a renderer interface | Planned | Acceptable for MVP preview work while keeping the future backend replaceable. |
@@ -61,7 +62,10 @@ their upstream build systems until a wrapper or import strategy is documented.
 ## UI And UX Stack
 
 The shell should use Qt Widgets, model/view classes, custom widgets, icons,
-dockable panes, persistent layouts, and reusable status/detail components.
+dockable panes, persistent layouts, and reusable status/detail components. The
+active shell includes a reusable `LoadingPane` for pane and preview loading
+states and a reusable `DetailDrawer` for logs, metadata, manifests, raw
+diagnostics, and support-copy text.
 
 The UX stack must directly support the project philosophies:
 
@@ -108,16 +112,25 @@ Use JSON for project manifests and command manifests. Keep schemas versioned
 and validate them through both GUI and CLI paths.
 
 Use Qt `QSettings` for application settings and store project-specific
-overrides under the project root. The first active settings slice persists shell
-geometry/state, selected mode, and recent project folders through shared
-GUI/CLI services. Settings must be exportable enough for support and issue
-reports without exposing secrets.
+overrides under the project root. The active settings slice persists shell
+geometry/state, selected mode, recent project folders, first-run setup
+progress, locale, theme, text scale, UI density, reduced motion, and OS-backed
+TTS preference through shared GUI/CLI services. Settings must be exportable
+enough for support and issue reports without exposing secrets.
 
 Use SQLite for the project asset index once package browsing and installation
 profiles move beyond in-memory MVP structures. The index should cover mounted
 package entries, metadata, dependency edges, compiler outputs, diagnostics,
 recent activity, and search. Use FTS5 for fast text search where available, with
 a graceful fallback if a platform build lacks it.
+
+Use the reusable operation-state model for activity reporting across GUI and
+CLI-backed workflows. The active model defines stable state identifiers for
+idle, queued, loading, running, warning, failed, cancelled, and completed
+operations, tracks progress, warnings, result summaries, cancellation
+eligibility, and timestamped logs. Future package, compiler, validation, AI,
+and export services should emit through this model instead of inventing local
+task status enums.
 
 ## Accessibility, Localization, And Setup Stack
 

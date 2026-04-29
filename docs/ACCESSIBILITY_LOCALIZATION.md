@@ -41,18 +41,18 @@ VibeStudio should use Qt's accessibility and internationalization stack:
 Required settings and behavior:
 
 - [ ] Follow OS font and scaling defaults on first launch.
-- [ ] Support application text scale presets: 100%, 125%, 150%, 175%, 200%, and
+- [x] Support application text scale presets: 100%, 125%, 150%, 175%, 200%, and
   a custom scale path where practical.
 - [ ] Support high-visibility themes: high-contrast dark, high-contrast light,
   color-blind-aware status palette, and reduced-saturation option.
-- [ ] Support UI density presets: comfortable, standard, compact.
+- [x] Support UI density presets: comfortable, standard, compact.
 - [ ] Ensure toolbars, tabs, cards, inspectors, dialogs, and status chips do not
   clip text at 100%, 125%, 150%, 175%, and 200% scale.
 - [ ] Use icons plus accessible labels/tooltips for key actions.
 - [ ] Never communicate state through color alone; pair color with text, icon,
   shape, pattern, or position.
 - [ ] Provide visible focus states for keyboard and assistive-technology users.
-- [ ] Provide reduced-motion settings for animations, transitions, loading
+- [x] Provide reduced-motion settings for animations, transitions, loading
   visuals, and timeline effects.
 - [ ] Provide preview checks for maps, textures, sprites, shaders, and package
   summaries under high-visibility themes.
@@ -73,6 +73,11 @@ Required behavior:
 - [ ] The CLI provides accessible plain-text output and machine-readable JSON.
 - [ ] Editor profile controls document keyboard/mouse changes clearly and expose
   reset/revert actions.
+
+Current shell custom widgets include a reusable loading pane and detail drawer.
+They expose accessible names and descriptions for their title, state,
+progress, placeholder, section-list, copy, and detail-content controls; broader
+screen-reader and keyboard audits remain required before MVP.
 
 ## OS-Backed Text To Speech
 

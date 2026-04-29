@@ -37,8 +37,12 @@ def main() -> int:
         (["--cli", "--version"], args.expected_version),
         (["--cli", "--help"], "Usage: vibestudio --cli"),
         (["--cli", "--platform-report"], "VibeStudio platform report"),
+        (["--cli", "--operation-states"], "Operation states"),
+        (["--cli", "--ui-primitives"], "UI primitives"),
         (["--cli", "--studio-report"], "Level Editor"),
         (["--cli", "--compiler-report"], "NetRadiant Custom q3map2"),
+        (["--cli", "--setup-report"], "First-run setup"),
+        (["--cli", "--preferences-report"], "Accessibility and language preferences"),
     ]
 
     for cli_args, expected in checks:

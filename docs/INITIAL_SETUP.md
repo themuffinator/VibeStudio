@@ -122,7 +122,7 @@ Profile areas:
 
 ## MVP Acceptance
 
-- [ ] First-run setup appears on a clean profile and can be skipped.
+- [x] First-run setup appears on a clean profile and can be skipped.
 - [ ] Accessibility/language choices are available before visual-heavy setup.
 - [ ] High-contrast and scaling choices apply immediately or after a clearly
   explained restart.
@@ -133,3 +133,18 @@ Profile areas:
   non-OpenAI connector design.
 - [ ] Setup summary explains incomplete, skipped, failed, and successful steps.
 - [ ] Setup choices are editable in preferences after completion.
+
+## Current Scaffold Slice
+
+The current shell includes a persistent first-run setup panel backed by
+`QSettings`. It tracks not-started, in-progress, skipped, and completed states;
+stores the current setup step; exposes skip, resume, next, finish, and reset
+actions; and shows a summary with completed, pending, and warning items. The
+same state is available from the CLI through `--setup-report`,
+`--setup-start`, `--setup-step`, `--setup-next`, `--setup-skip`,
+`--setup-complete`, and `--setup-reset`.
+
+The full guided setup flow remains planned. Game installation detection,
+toolchain probing, editor profile selection, AI connector configuration, TTS
+test playback, and project/package mounting are represented as setup steps or
+warnings until their dedicated roadmap slices land.

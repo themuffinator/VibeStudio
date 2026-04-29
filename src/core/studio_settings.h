@@ -23,6 +23,16 @@ enum class UiDensity {
 	Compact,
 };
 
+enum class SetupStep {
+	WelcomeAccess,
+	WorkspaceProfile,
+	ProjectsPackages,
+	Toolchains,
+	AiAutomation,
+	CliIntegration,
+	ReviewFinish,
+};
+
 struct AccessibilityPreferences {
 	QString localeName = QStringLiteral("en");
 	int textScalePercent = 100;
@@ -30,6 +40,25 @@ struct AccessibilityPreferences {
 	UiDensity density = UiDensity::Standard;
 	bool reducedMotion = false;
 	bool textToSpeechEnabled = false;
+};
+
+struct SetupProgress {
+	SetupStep currentStep = SetupStep::WelcomeAccess;
+	bool started = false;
+	bool skipped = false;
+	bool completed = false;
+	QDateTime lastUpdatedUtc;
+};
+
+struct SetupSummary {
+	QString status;
+	QString currentStepId;
+	QString currentStepName;
+	QString currentStepDescription;
+	QString nextAction;
+	QStringList completedItems;
+	QStringList pendingItems;
+	QStringList warnings;
 };
 
 struct RecentProject {
@@ -73,6 +102,14 @@ public:
 	void setReducedMotion(bool reducedMotion);
 	void setTextToSpeechEnabled(bool enabled);
 
+	SetupProgress setupProgress() const;
+	SetupSummary setupSummary() const;
+	void startOrResumeSetup(SetupStep step);
+	void advanceSetup();
+	void skipSetup();
+	void completeSetup();
+	void resetSetup();
+
 	int selectedMode() const;
 	void setSelectedMode(int modeIndex);
 
@@ -101,5 +138,10 @@ QString densityDisplayName(UiDensity density);
 UiDensity densityFromId(const QString& id);
 QStringList densityIds();
 int normalizedTextScalePercent(int textScalePercent);
+QString setupStepId(SetupStep step);
+QString setupStepDisplayName(SetupStep step);
+QString setupStepDescription(SetupStep step);
+SetupStep setupStepFromId(const QString& id);
+QVector<SetupStep> setupSteps();
 
 } // namespace vibestudio

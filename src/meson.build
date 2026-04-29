@@ -12,6 +12,7 @@ configure_file(
 vibestudio_includes = include_directories('.')
 
 core_sources = files(
+  'core/operation_state.cpp',
   'core/studio_manifest.cpp',
   'core/studio_settings.cpp',
 )
@@ -30,11 +31,12 @@ vibestudio_core_dep = declare_dependency(
   link_with: [vibestudio_core],
 )
 
-install_headers(files('core/studio_manifest.h', 'core/studio_settings.h'), subdir: 'vibestudio/core')
+install_headers(files('core/operation_state.h', 'core/studio_manifest.h', 'core/studio_settings.h'), subdir: 'vibestudio/core')
 
 app_sources = files(
   'main.cpp',
   'app/application_shell.cpp',
+  'app/ui_primitives.cpp',
   'cli/cli.cpp',
 )
 
@@ -65,3 +67,32 @@ settings_smoke_test = executable(
 )
 
 test('settings-smoke', settings_smoke_test)
+
+operation_state_smoke_test = executable(
+  'operation_state_smoke_test',
+  ['tests/operation_state_smoke_test.cpp'],
+  include_directories: vibestudio_includes,
+  dependencies: [vibestudio_core_dep],
+  install: false,
+)
+
+test('operation-state-smoke', operation_state_smoke_test)
+
+ui_primitives_smoke_test = executable(
+  'ui_primitives_smoke_test',
+  ['tests/ui_primitives_smoke_test.cpp', 'app/ui_primitives.cpp'],
+  include_directories: vibestudio_includes,
+  dependencies: [qt6_dep, vibestudio_core_dep],
+  install: false,
+)
+
+ui_primitives_test_env = []
+if host_machine.system() != 'windows'
+  ui_primitives_test_env += 'QT_QPA_PLATFORM=offscreen'
+endif
+
+test(
+  'ui-primitives-smoke',
+  ui_primitives_smoke_test,
+  env: ui_primitives_test_env,
+)

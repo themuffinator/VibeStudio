@@ -67,10 +67,16 @@ What exists today:
 - Documentation for product goals, stack, roadmap, UX, accessibility,
   localization, AI connectors, setup, compiler integration, and credits.
 - Cross-platform Meson/Qt scaffold.
-- Minimal Qt Widgets shell with persistent window/mode settings and a recent
-  projects panel.
+- Minimal Qt Widgets shell with persistent window/mode settings, a recent
+  projects panel, accessibility/language preference controls, and a first-run
+  setup panel with skip/resume/progress summary.
+- Global activity center scaffold with task state, progress, warnings,
+  cancellation, and selected-task logs.
+- Reusable Qt Widgets loading/skeleton panes and collapsible detail drawers for
+  summary-first logs, metadata, manifests, and raw diagnostics.
 - Minimal CLI diagnostics for version, platform, planned modules, and compiler
-  import metadata, plus settings/recent-project diagnostics.
+  import metadata, plus settings, setup, preference, recent-project,
+  operation-state, and UI-primitive diagnostics.
 - Imported compiler source submodules.
 - Early CI/build validation.
 
@@ -81,7 +87,8 @@ What does not exist yet:
 - Compiler orchestration UI.
 - Full CLI parity.
 - AI connector implementation.
-- First-run setup, accessibility settings, or localization runtime.
+- Full guided first-run setup, full accessibility audits, or localization
+  runtime.
 - Production-ready workflows of any kind.
 
 Treat every feature list below as roadmap intent until the roadmap and support
@@ -116,6 +123,8 @@ The current scaffold includes:
 - A Meson/Qt6 C++20 app target named `vibestudio`.
 - A small but working Qt Widgets studio shell.
 - A CLI diagnostics surface for version, platform, planned modules, and compiler imports.
+- Reusable shell UI primitives for loading/progress placeholders and
+  detail-on-demand logs or metadata.
 - CI workflows for cross-platform build/test and submodule verification.
 - Documentation for architecture, compiler integration, installation management, support scope, dependencies, roadmap, and credits.
 - External compiler imports preserved as Git submodules.
@@ -199,7 +208,24 @@ Current scaffold commands:
 - `--studio-report`: print planned studio modules.
 - `--compiler-report`: print imported compiler metadata.
 - `--platform-report`: print platform and Qt runtime details.
+- `--operation-states`: print reusable operation state identifiers.
+- `--ui-primitives`: print reusable UI primitive identifiers and use cases.
 - `--settings-report`: print persistent settings storage and recent projects.
+- `--setup-report`: print first-run setup status and summary.
+- `--setup-start`: start or resume first-run setup.
+- `--setup-step <id>`: resume setup at a specific step.
+- `--setup-next`: advance setup to the next step.
+- `--setup-skip`: skip setup for now without completing it.
+- `--setup-complete`: mark setup complete.
+- `--setup-reset`: reset setup progress.
+- `--preferences-report`: print accessibility and language preferences.
+- `--set-locale <code>`: set the preferred UI locale code.
+- `--set-theme <id>`: set `system`, `dark`, `light`,
+  `high-contrast-dark`, or `high-contrast-light`.
+- `--set-text-scale <percent>`: set text scale from 100 to 200.
+- `--set-density <id>`: set `comfortable`, `standard`, or `compact`.
+- `--set-reduced-motion <on|off>`: store the reduced-motion preference.
+- `--set-tts <on|off>`: store the OS-backed text-to-speech preference.
 - `--recent-projects`: print remembered project folders.
 - `--add-recent-project <path>`: remember a project folder.
 - `--remove-recent-project <path>`: forget a project folder without touching
