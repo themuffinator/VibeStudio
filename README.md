@@ -11,11 +11,14 @@
   <a href="https://github.com/themuffinator/VibeStudio/actions/workflows/compiler-submodules.yml"><img alt="Compiler Imports" src="https://img.shields.io/github/actions/workflow/status/themuffinator/VibeStudio/compiler-submodules.yml?label=compiler%20imports&style=for-the-badge"></a>
 </p>
 
-VibeStudio is the open-source, integrated development studio for idTech1,
-idTech2, and idTech3 game projects. It is intended to replace PakFu over time
-by folding archive management, asset inspection, game installation management,
-and format parsing into a broader production environment for maps, models,
-textures, sounds, scripts, shaders, packages, and build pipelines.
+## Introduction
+
+VibeStudio is an open-source, cross-platform development studio for idTech1,
+idTech2, and idTech3 game projects. Its goal is to unify level editing,
+modelling, texture and audio workflows, scripting and shader tooling, package
+management, asset inspection, compiler orchestration, diagnostics, automation,
+and optional AI-assisted workflows in one integrated environment for creating,
+validating, packaging, and launching classic game content.
 
 > [!WARNING]
 > VibeStudio is at an extremely early pre-alpha stage. The repository is
@@ -32,6 +35,7 @@ of Doom, Quake, Quake II, and Quake III-era games.
 <details>
   <summary><strong>Table of Contents</strong></summary>
 
+- [Introduction](#introduction)
 - [Overview](#overview)
 - [Current Development State](#current-development-state)
 - [Studio Goals](#studio-goals)
