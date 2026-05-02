@@ -35,8 +35,8 @@ of Doom, Quake, Quake II, and Quake III-era games.
 <details>
   <summary><strong>Table of Contents</strong></summary>
 
-- [Overview](#overview)
 - [Introduction](#introduction)
+- [Overview](#overview)
 - [Current Development State](#current-development-state)
 - [Studio Goals](#studio-goals)
 - [Initial Scaffold](#initial-scaffold)
