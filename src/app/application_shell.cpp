@@ -1,12 +1,14 @@
 #include "app/application_shell.h"
 
 #include "app/ui_primitives.h"
+#include "core/advanced_studio.h"
 #include "core/ai_connectors.h"
 #include "core/ai_workflows.h"
 #include "core/compiler_profiles.h"
 #include "core/compiler_registry.h"
 #include "core/compiler_runner.h"
 #include "core/editor_profiles.h"
+#include "core/level_map.h"
 #include "core/package_preview.h"
 #include "core/project_manifest.h"
 #include "core/studio_manifest.h"
@@ -254,10 +256,29 @@ QString localizedPackagePreviewKindName(PackagePreviewKind kind)
 		return ApplicationShell::tr("Text");
 	case PackagePreviewKind::Image:
 		return ApplicationShell::tr("Image");
+	case PackagePreviewKind::Model:
+		return ApplicationShell::tr("Model");
+	case PackagePreviewKind::Audio:
+		return ApplicationShell::tr("Audio");
 	case PackagePreviewKind::Binary:
 		return ApplicationShell::tr("Binary");
 	}
 	return ApplicationShell::tr("Unavailable");
+}
+
+QString localizedPackageStageOperationName(PackageStageOperationType type)
+{
+	switch (type) {
+	case PackageStageOperationType::Add:
+		return ApplicationShell::tr("Add");
+	case PackageStageOperationType::Replace:
+		return ApplicationShell::tr("Replace");
+	case PackageStageOperationType::Rename:
+		return ApplicationShell::tr("Rename");
+	case PackageStageOperationType::Delete:
+		return ApplicationShell::tr("Delete");
+	}
+	return ApplicationShell::tr("Stage");
 }
 
 QString byteSizeText(quint64 bytes)
@@ -306,6 +327,36 @@ QString previewContentText(const PackagePreview& preview)
 		lines << ApplicationShell::tr("Dimensions: %1").arg(preview.imageSize.isValid()
 			? ApplicationShell::tr("%1 x %2 px").arg(preview.imageSize.width()).arg(preview.imageSize.height())
 			: ApplicationShell::tr("unknown"));
+		lines << ApplicationShell::tr("Depth: %1").arg(preview.imageDepth > 0 ? ApplicationShell::tr("%1 bpp").arg(preview.imageDepth) : ApplicationShell::tr("unknown"));
+		lines << ApplicationShell::tr("Palette-aware: %1").arg(preview.imagePaletteAware ? ApplicationShell::tr("yes") : ApplicationShell::tr("no"));
+		if (!preview.imagePaletteLines.isEmpty()) {
+			lines << ApplicationShell::tr("Palette sample:");
+			lines << preview.imagePaletteLines.join('\n');
+		}
+		break;
+	case PackagePreviewKind::Model:
+		lines << QString();
+		lines << ApplicationShell::tr("Model viewport:");
+		lines << (preview.modelViewportLines.isEmpty() ? ApplicationShell::tr("(metadata viewport unavailable)") : preview.modelViewportLines.join('\n'));
+		if (!preview.modelMaterialLines.isEmpty()) {
+			lines << QString();
+			lines << ApplicationShell::tr("Skin/material dependencies:");
+			lines << preview.modelMaterialLines.join('\n');
+		}
+		if (!preview.modelAnimationLines.isEmpty()) {
+			lines << QString();
+			lines << ApplicationShell::tr("Animation/frame names:");
+			lines << preview.modelAnimationLines.join('\n');
+		}
+		break;
+	case PackagePreviewKind::Audio:
+		lines << QString();
+		lines << ApplicationShell::tr("Audio metadata:");
+		lines << ApplicationShell::tr("Format: %1").arg(preview.audioFormat.isEmpty() ? ApplicationShell::tr("unknown") : preview.audioFormat);
+		if (!preview.audioWaveformLines.isEmpty()) {
+			lines << ApplicationShell::tr("Waveform preview:");
+			lines << preview.audioWaveformLines.join('\n');
+		}
 		break;
 	case PackagePreviewKind::Binary:
 		lines << QString();
@@ -823,6 +874,151 @@ void ApplicationShell::buildUi()
 
 	centerLayout->addWidget(workspaceTabs);
 
+	auto* levelHeader = new QHBoxLayout;
+	levelHeader->addWidget(sectionLabel(tr("Level Editor")));
+	levelHeader->addStretch(1);
+	auto* openLevelMap = new QPushButton(style()->standardIcon(QStyle::SP_FileDialogContentsView), tr("Open Map"));
+	openLevelMap->setAccessibleName(tr("Open level map"));
+	openLevelMap->setToolTip(tr("Choose a Doom WAD map or Quake-family .map source to inspect."));
+	connect(openLevelMap, &QPushButton::clicked, this, [this]() {
+		openLevelMapFile();
+	});
+	levelHeader->addWidget(openLevelMap);
+	auto* inspectLevelMap = new QPushButton(style()->standardIcon(QStyle::SP_BrowserReload), tr("Inspect"));
+	inspectLevelMap->setAccessibleName(tr("Inspect level map"));
+	inspectLevelMap->setToolTip(tr("Load the selected level map and refresh entities, textures, validation, and preview state."));
+	connect(inspectLevelMap, &QPushButton::clicked, this, [this]() {
+		loadLevelMapPath(m_levelMapPath ? m_levelMapPath->text() : QString());
+	});
+	levelHeader->addWidget(inspectLevelMap);
+	centerLayout->addLayout(levelHeader);
+
+	auto* levelControls = new QGridLayout;
+	levelControls->setHorizontalSpacing(8);
+	levelControls->setVerticalSpacing(8);
+	m_levelMapPath = new QLineEdit;
+	m_levelMapPath->setAccessibleName(tr("Level map path"));
+	m_levelMapPath->setAccessibleDescription(tr("Absolute or relative path to a Doom WAD map or Quake-family .map file."));
+	m_levelMapPath->setPlaceholderText(tr("Map source path"));
+	connect(m_levelMapPath, &QLineEdit::returnPressed, this, [this]() {
+		loadLevelMapPath(m_levelMapPath->text());
+	});
+	levelControls->addWidget(m_levelMapPath, 0, 0, 1, 3);
+
+	m_levelMapName = new QLineEdit;
+	m_levelMapName->setAccessibleName(tr("Doom map marker"));
+	m_levelMapName->setAccessibleDescription(tr("Optional Doom map marker such as MAP01 or E1M1."));
+	m_levelMapName->setPlaceholderText(tr("MAP01 / E1M1"));
+	levelControls->addWidget(m_levelMapName, 0, 3);
+
+	m_levelMapEngine = new QComboBox;
+	m_levelMapEngine->setAccessibleName(tr("Level map engine hint"));
+	m_levelMapEngine->setAccessibleDescription(tr("Optional parser hint for Doom, Quake, or Quake III map sources."));
+	m_levelMapEngine->addItem(tr("Auto"), QString());
+	m_levelMapEngine->addItem(tr("idTech1"), QStringLiteral("idtech1"));
+	m_levelMapEngine->addItem(tr("idTech2"), QStringLiteral("idtech2"));
+	m_levelMapEngine->addItem(tr("idTech3"), QStringLiteral("idtech3"));
+	levelControls->addWidget(m_levelMapEngine, 0, 4);
+
+	m_levelMapCompilerProfile = new QComboBox;
+	m_levelMapCompilerProfile->setAccessibleName(tr("Level compiler profile"));
+	m_levelMapCompilerProfile->setAccessibleDescription(tr("Compiler profile used for map compile-plan review."));
+	for (const CompilerProfileDescriptor& profile : compilerProfileDescriptors()) {
+		m_levelMapCompilerProfile->addItem(profile.displayName, profile.id);
+	}
+	levelControls->addWidget(m_levelMapCompilerProfile, 1, 0);
+
+	m_levelMapEditProperty = new QPushButton(style()->standardIcon(QStyle::SP_FileDialogDetailedView), tr("Edit Key"));
+	m_levelMapEditProperty->setAccessibleName(tr("Edit selected entity key"));
+	connect(m_levelMapEditProperty, &QPushButton::clicked, this, [this]() {
+		editSelectedLevelMapProperty();
+	});
+	levelControls->addWidget(m_levelMapEditProperty, 1, 1);
+
+	m_levelMapMoveSelection = new QPushButton(style()->standardIcon(QStyle::SP_ArrowForward), tr("Move"));
+	m_levelMapMoveSelection->setAccessibleName(tr("Move selected map object"));
+	connect(m_levelMapMoveSelection, &QPushButton::clicked, this, [this]() {
+		moveSelectedLevelMapObject();
+	});
+	levelControls->addWidget(m_levelMapMoveSelection, 1, 2);
+
+	m_levelMapSaveAs = new QPushButton(style()->standardIcon(QStyle::SP_DialogSaveButton), tr("Save As"));
+	m_levelMapSaveAs->setAccessibleName(tr("Save level map as"));
+	connect(m_levelMapSaveAs, &QPushButton::clicked, this, [this]() {
+		saveLevelMapAsFromUi();
+	});
+	levelControls->addWidget(m_levelMapSaveAs, 1, 3);
+
+	m_levelMapPlanCompile = new QPushButton(style()->standardIcon(QStyle::SP_MediaPlay), tr("Run Profile"));
+	m_levelMapPlanCompile->setAccessibleName(tr("Run level map compiler profile"));
+	m_levelMapPlanCompile->setToolTip(tr("Build a reviewable compiler plan for the loaded map, then run it when the selected profile is runnable."));
+	connect(m_levelMapPlanCompile, &QPushButton::clicked, this, [this]() {
+		planLevelMapCompile();
+	});
+	levelControls->addWidget(m_levelMapPlanCompile, 1, 4);
+
+	m_levelMapCopyCli = new QPushButton(style()->standardIcon(QStyle::SP_DialogSaveButton), tr("Copy CLI"));
+	m_levelMapCopyCli->setAccessibleName(tr("Copy level map CLI command"));
+	connect(m_levelMapCopyCli, &QPushButton::clicked, this, [this]() {
+		copyLevelMapCliEquivalent();
+	});
+	levelControls->addWidget(m_levelMapCopyCli, 1, 5);
+	centerLayout->addLayout(levelControls);
+
+	m_levelMapState = new LoadingPane;
+	m_levelMapState->setAccessibleName(tr("Level map loading state"));
+	m_levelMapState->setTitle(tr("Level Map"));
+	m_levelMapState->setDetail(tr("Open a Doom WAD map or Quake-family .map source to inspect and edit."));
+	m_levelMapState->setPlaceholderRows({
+		tr("Map statistics"),
+		tr("Entity list"),
+		tr("Validation health"),
+	});
+	centerLayout->addWidget(m_levelMapState);
+
+	auto* levelSplit = new QSplitter(Qt::Horizontal);
+	levelSplit->setAccessibleName(tr("Level map workbench"));
+	auto* levelLeft = new QWidget;
+	auto* levelLeftLayout = new QVBoxLayout(levelLeft);
+	levelLeftLayout->setContentsMargins(0, 0, 0, 0);
+	levelLeftLayout->setSpacing(8);
+	levelLeftLayout->addWidget(sectionLabel(tr("Objects")));
+	m_levelMapObjects = new QListWidget;
+	m_levelMapObjects->setAccessibleName(tr("Level map objects"));
+	m_levelMapObjects->setAccessibleDescription(tr("Parsed map entities, Doom things, vertices, linedefs, and Quake brushes."));
+	m_levelMapObjects->setMinimumHeight(138);
+	connect(m_levelMapObjects, &QListWidget::itemSelectionChanged, this, [this]() {
+		refreshLevelMapSelection();
+	});
+	levelLeftLayout->addWidget(m_levelMapObjects);
+	levelLeftLayout->addWidget(sectionLabel(tr("Statistics")));
+	m_levelMapStatistics = new QListWidget;
+	m_levelMapStatistics->setAccessibleName(tr("Level map statistics"));
+	m_levelMapStatistics->setMinimumHeight(124);
+	levelLeftLayout->addWidget(m_levelMapStatistics);
+	levelSplit->addWidget(levelLeft);
+
+	auto* levelRightTabs = new QTabWidget;
+	levelRightTabs->setAccessibleName(tr("Level map preview tabs"));
+	m_levelMapView = new QListWidget;
+	m_levelMapView->setAccessibleName(tr("Level map preview"));
+	m_levelMapView->setAccessibleDescription(tr("Textual 2D Doom or orthographic brush preview lines for the loaded map."));
+	levelRightTabs->addTab(m_levelMapView, tr("Preview"));
+	m_levelMapValidation = new QListWidget;
+	m_levelMapValidation->setAccessibleName(tr("Level map validation"));
+	m_levelMapValidation->setAccessibleDescription(tr("Validation, map health, texture, entity, leak, and compiler preflight issues."));
+	levelRightTabs->addTab(m_levelMapValidation, tr("Health"));
+	levelSplit->addWidget(levelRightTabs);
+	levelSplit->setStretchFactor(0, 2);
+	levelSplit->setStretchFactor(1, 3);
+	centerLayout->addWidget(levelSplit);
+
+	m_levelMapDrawer = new DetailDrawer;
+	m_levelMapDrawer->setAccessibleName(tr("Level map detail drawer"));
+	m_levelMapDrawer->setTitle(tr("Level Map Details"));
+	m_levelMapDrawer->setSubtitle(tr("Inspect map statistics, properties, textures, validation, and undo history."));
+	centerLayout->addWidget(m_levelMapDrawer);
+
 	centerLayout->addWidget(sectionLabel(tr("First-Run Setup")));
 
 	auto* setupPanel = new QFrame;
@@ -1029,6 +1225,14 @@ void ApplicationShell::buildUi()
 	m_packageComposition->setMinimumHeight(116);
 	centerLayout->addWidget(m_packageComposition);
 
+	centerLayout->addWidget(sectionLabel(tr("Package Staging")));
+	m_packageStagingSummary = new QListWidget;
+	m_packageStagingSummary->setObjectName("packageStagingSummary");
+	m_packageStagingSummary->setAccessibleName(tr("Package staging summary"));
+	m_packageStagingSummary->setAccessibleDescription(tr("Staged add, replace, rename, delete, conflict, blocker, and before-after composition state for package save-as workflows."));
+	m_packageStagingSummary->setMinimumHeight(142);
+	centerLayout->addWidget(m_packageStagingSummary);
+
 	m_packageFilter = new QLineEdit;
 	m_packageFilter->setObjectName("packageFilter");
 	m_packageFilter->setAccessibleName(tr("Package entry filter"));
@@ -1054,6 +1258,7 @@ void ApplicationShell::buildUi()
 			selectPackageEntryPath(path);
 			refreshPackageEntryDetails(path);
 		}
+		refreshPackageStagingSummary();
 	});
 	packageEntrySplit->addWidget(m_packageTree);
 
@@ -1067,6 +1272,7 @@ void ApplicationShell::buildUi()
 		const QString path = selectedPackageEntryPath();
 		selectPackageTreeEntryPath(path);
 		refreshPackageEntryDetails(path);
+		refreshPackageStagingSummary();
 	});
 	packageEntrySplit->addWidget(m_packageEntries);
 	packageEntrySplit->setStretchFactor(0, 1);
@@ -1081,6 +1287,47 @@ void ApplicationShell::buildUi()
 
 	auto* packageActions = new QHBoxLayout;
 	packageActions->addStretch(1);
+
+	m_packageStageAdd = new QPushButton(style()->standardIcon(QStyle::SP_FileIcon), tr("Stage Add"));
+	m_packageStageAdd->setAccessibleName(tr("Stage package add"));
+	m_packageStageAdd->setToolTip(tr("Stage a local file as a new virtual package entry."));
+	connect(m_packageStageAdd, &QPushButton::clicked, this, [this]() {
+		stagePackageAddFile();
+	});
+	packageActions->addWidget(m_packageStageAdd);
+
+	m_packageStageReplace = new QPushButton(style()->standardIcon(QStyle::SP_BrowserReload), tr("Stage Replace"));
+	m_packageStageReplace->setAccessibleName(tr("Stage package replace"));
+	m_packageStageReplace->setToolTip(tr("Stage a local file to replace the selected package entry."));
+	connect(m_packageStageReplace, &QPushButton::clicked, this, [this]() {
+		stagePackageReplaceSelected();
+	});
+	packageActions->addWidget(m_packageStageReplace);
+
+	m_packageStageRename = new QPushButton(style()->standardIcon(QStyle::SP_FileDialogDetailedView), tr("Stage Rename"));
+	m_packageStageRename->setAccessibleName(tr("Stage package rename"));
+	m_packageStageRename->setToolTip(tr("Stage a rename for the selected package entry."));
+	connect(m_packageStageRename, &QPushButton::clicked, this, [this]() {
+		stagePackageRenameSelected();
+	});
+	packageActions->addWidget(m_packageStageRename);
+
+	m_packageStageDelete = new QPushButton(style()->standardIcon(QStyle::SP_DialogDiscardButton), tr("Stage Delete"));
+	m_packageStageDelete->setAccessibleName(tr("Stage package delete"));
+	m_packageStageDelete->setToolTip(tr("Stage deletion for the selected package entries."));
+	connect(m_packageStageDelete, &QPushButton::clicked, this, [this]() {
+		stagePackageDeleteSelected();
+	});
+	packageActions->addWidget(m_packageStageDelete);
+
+	m_packageStageSaveAs = new QPushButton(style()->standardIcon(QStyle::SP_DialogSaveButton), tr("Save As"));
+	m_packageStageSaveAs->setAccessibleName(tr("Save staged package as"));
+	m_packageStageSaveAs->setToolTip(tr("Write the staged package to a new PAK, ZIP, PK3, or tested PWAD path without overwriting by default."));
+	connect(m_packageStageSaveAs, &QPushButton::clicked, this, [this]() {
+		saveStagedPackageAs();
+	});
+	packageActions->addWidget(m_packageStageSaveAs);
+
 	m_packageExtractSelected = new QPushButton(style()->standardIcon(QStyle::SP_ArrowDown), tr("Extract Selected"));
 	m_packageExtractSelected->setAccessibleName(tr("Extract selected package entries"));
 	m_packageExtractSelected->setToolTip(tr("Extract selected package entries to a chosen folder without overwriting existing files."));
@@ -1159,6 +1406,151 @@ void ApplicationShell::buildUi()
 	compilerActions->addWidget(m_compilerCopyManifest);
 	compilerActions->addStretch(1);
 	centerLayout->addLayout(compilerActions);
+
+	centerLayout->addWidget(sectionLabel(tr("Advanced Studio")));
+
+	auto* advancedControls = new QGridLayout;
+	advancedControls->setHorizontalSpacing(8);
+	advancedControls->setVerticalSpacing(8);
+	m_advancedShaderPath = new QLineEdit;
+	m_advancedShaderPath->setAccessibleName(tr("Shader script path"));
+	m_advancedShaderPath->setAccessibleDescription(tr("Path to an idTech3 shader script for graph parsing, preview, edits, and package validation."));
+	m_advancedShaderPath->setPlaceholderText(tr("Shader script path"));
+	advancedControls->addWidget(m_advancedShaderPath, 0, 0, 1, 3);
+
+	auto* browseShader = new QPushButton(style()->standardIcon(QStyle::SP_DialogOpenButton), tr("Open Shader"));
+	browseShader->setAccessibleName(tr("Open shader script"));
+	connect(browseShader, &QPushButton::clicked, this, [this]() {
+		const QString path = QFileDialog::getOpenFileName(this, tr("Open Shader Script"), QString(), tr("Shader scripts (*.shader *.txt);;All files (*.*)"));
+		if (!path.isEmpty() && m_advancedShaderPath) {
+			m_advancedShaderPath->setText(path);
+			inspectAdvancedShaderScript();
+		}
+	});
+	advancedControls->addWidget(browseShader, 0, 3);
+
+	m_advancedShaderInspect = new QPushButton(style()->standardIcon(QStyle::SP_BrowserReload), tr("Inspect"));
+	m_advancedShaderInspect->setAccessibleName(tr("Inspect shader script"));
+	connect(m_advancedShaderInspect, &QPushButton::clicked, this, [this]() {
+		inspectAdvancedShaderScript();
+	});
+	advancedControls->addWidget(m_advancedShaderInspect, 0, 4);
+
+	m_advancedSpriteEngine = new QComboBox;
+	m_advancedSpriteEngine->setAccessibleName(tr("Sprite engine"));
+	m_advancedSpriteEngine->addItem(tr("Doom"), QStringLiteral("doom"));
+	m_advancedSpriteEngine->addItem(tr("Quake"), QStringLiteral("quake"));
+	advancedControls->addWidget(m_advancedSpriteEngine, 1, 0);
+
+	m_advancedSpriteName = new QLineEdit;
+	m_advancedSpriteName->setAccessibleName(tr("Sprite name"));
+	m_advancedSpriteName->setPlaceholderText(tr("SPRT / torch"));
+	advancedControls->addWidget(m_advancedSpriteName, 1, 1);
+
+	m_advancedSpriteFrames = new QLineEdit;
+	m_advancedSpriteFrames->setAccessibleName(tr("Sprite frame count"));
+	m_advancedSpriteFrames->setPlaceholderText(tr("frames"));
+	m_advancedSpriteFrames->setText(QStringLiteral("4"));
+	advancedControls->addWidget(m_advancedSpriteFrames, 1, 2);
+
+	m_advancedSpriteRotations = new QLineEdit;
+	m_advancedSpriteRotations->setAccessibleName(tr("Sprite rotations"));
+	m_advancedSpriteRotations->setPlaceholderText(tr("rotations"));
+	m_advancedSpriteRotations->setText(QStringLiteral("8"));
+	advancedControls->addWidget(m_advancedSpriteRotations, 1, 3);
+
+	m_advancedSpritePlanButton = new QPushButton(style()->standardIcon(QStyle::SP_FileDialogDetailedView), tr("Sprite Plan"));
+	m_advancedSpritePlanButton->setAccessibleName(tr("Create sprite workflow plan"));
+	connect(m_advancedSpritePlanButton, &QPushButton::clicked, this, [this]() {
+		createAdvancedSpritePlan();
+	});
+	advancedControls->addWidget(m_advancedSpritePlanButton, 1, 4);
+
+	m_advancedAiKind = new QComboBox;
+	m_advancedAiKind->setAccessibleName(tr("AI creation kind"));
+	m_advancedAiKind->addItem(tr("Shader"), QStringLiteral("shader"));
+	m_advancedAiKind->addItem(tr("Entity"), QStringLiteral("entity"));
+	m_advancedAiKind->addItem(tr("Package Plan"), QStringLiteral("package"));
+	m_advancedAiKind->addItem(tr("Batch Recipe"), QStringLiteral("batch"));
+	m_advancedAiKind->addItem(tr("CLI Command"), QStringLiteral("cli"));
+	advancedControls->addWidget(m_advancedAiKind, 2, 0);
+
+	m_advancedAiPrompt = new QLineEdit;
+	m_advancedAiPrompt->setAccessibleName(tr("AI creation prompt"));
+	m_advancedAiPrompt->setAccessibleDescription(tr("Prompt for staged, reviewable local AI-assisted creation proposals."));
+	m_advancedAiPrompt->setPlaceholderText(tr("Prompt"));
+	advancedControls->addWidget(m_advancedAiPrompt, 2, 1, 1, 3);
+
+	m_advancedAiCreate = new QPushButton(style()->standardIcon(QStyle::SP_FileDialogDetailedView), tr("Create Proposal"));
+	m_advancedAiCreate->setAccessibleName(tr("Create AI proposal"));
+	connect(m_advancedAiCreate, &QPushButton::clicked, this, [this]() {
+		createAdvancedAiProposal();
+	});
+	advancedControls->addWidget(m_advancedAiCreate, 2, 4);
+
+	m_advancedExtensionRoot = new QLineEdit;
+	m_advancedExtensionRoot->setAccessibleName(tr("Extension discovery root"));
+	m_advancedExtensionRoot->setAccessibleDescription(tr("Folder searched for vibestudio.extension.json manifests."));
+	m_advancedExtensionRoot->setPlaceholderText(tr("Extension root"));
+	advancedControls->addWidget(m_advancedExtensionRoot, 3, 0, 1, 3);
+
+	m_advancedExtensionDiscover = new QPushButton(style()->standardIcon(QStyle::SP_FileDialogContentsView), tr("Discover Extensions"));
+	m_advancedExtensionDiscover->setAccessibleName(tr("Discover extensions"));
+	connect(m_advancedExtensionDiscover, &QPushButton::clicked, this, [this]() {
+		discoverAdvancedExtensions();
+	});
+	advancedControls->addWidget(m_advancedExtensionDiscover, 3, 3);
+
+	m_advancedCodeIndexButton = new QPushButton(style()->standardIcon(QStyle::SP_DirIcon), tr("Index Code"));
+	m_advancedCodeIndexButton->setAccessibleName(tr("Index code workspace"));
+	connect(m_advancedCodeIndexButton, &QPushButton::clicked, this, [this]() {
+		indexAdvancedCodeWorkspace();
+	});
+	advancedControls->addWidget(m_advancedCodeIndexButton, 3, 4);
+	centerLayout->addLayout(advancedControls);
+
+	m_advancedStudioState = new LoadingPane;
+	m_advancedStudioState->setAccessibleName(tr("Advanced studio state"));
+	m_advancedStudioState->setTitle(tr("Advanced Studio"));
+	m_advancedStudioState->setDetail(tr("Shader graph, sprite creator, code IDE, AI creation, and extension system."));
+	m_advancedStudioState->setPlaceholderRows({
+		tr("Shader graph"),
+		tr("Sprite sequence"),
+		tr("Code symbols"),
+		tr("AI proposal"),
+		tr("Extensions"),
+	});
+	centerLayout->addWidget(m_advancedStudioState);
+
+	auto* advancedTabs = new QTabWidget;
+	advancedTabs->setAccessibleName(tr("Advanced studio tabs"));
+	m_advancedShaderGraph = new QListWidget;
+	m_advancedShaderGraph->setAccessibleName(tr("Shader graph stages"));
+	m_advancedShaderGraph->setAccessibleDescription(tr("Parsed shader stages, blend modes, and texture dependency graph lines."));
+	advancedTabs->addTab(m_advancedShaderGraph, tr("Shaders"));
+	m_advancedSpriteSequence = new QListWidget;
+	m_advancedSpriteSequence->setAccessibleName(tr("Sprite sequence"));
+	m_advancedSpriteSequence->setAccessibleDescription(tr("Doom and Quake sprite frame naming, palette, and package staging lines."));
+	advancedTabs->addTab(m_advancedSpriteSequence, tr("Sprites"));
+	m_advancedCodeTree = new QListWidget;
+	m_advancedCodeTree->setAccessibleName(tr("Code source tree"));
+	m_advancedCodeTree->setAccessibleDescription(tr("Project source tree, language hooks, symbol search, diagnostics, build tasks, and launch profiles."));
+	advancedTabs->addTab(m_advancedCodeTree, tr("Code"));
+	m_advancedAiProposalList = new QListWidget;
+	m_advancedAiProposalList->setAccessibleName(tr("AI proposal review"));
+	m_advancedAiProposalList->setAccessibleDescription(tr("Reviewable AI proposal summary, context, generated actions, and prompt/response log."));
+	advancedTabs->addTab(m_advancedAiProposalList, tr("AI"));
+	m_advancedExtensions = new QListWidget;
+	m_advancedExtensions->setAccessibleName(tr("Extensions"));
+	m_advancedExtensions->setAccessibleDescription(tr("Discovered extension manifests, trust model, sandbox model, commands, and staged generated files."));
+	advancedTabs->addTab(m_advancedExtensions, tr("Extensions"));
+	centerLayout->addWidget(advancedTabs);
+
+	m_advancedStudioDrawer = new DetailDrawer;
+	m_advancedStudioDrawer->setAccessibleName(tr("Advanced studio detail drawer"));
+	m_advancedStudioDrawer->setTitle(tr("Advanced Studio Details"));
+	m_advancedStudioDrawer->setSubtitle(tr("Inspect shader, sprite, code, AI, and extension details."));
+	centerLayout->addWidget(m_advancedStudioDrawer);
 
 	centerLayout->addWidget(sectionLabel(tr("Accessibility And Language")));
 
@@ -1384,6 +1776,8 @@ void ApplicationShell::buildUi()
 	refreshGameInstallations();
 	refreshPackageBrowser();
 	refreshCompilerPipelineSummary();
+	refreshLevelMapWorkbench();
+	refreshAdvancedStudioSurface();
 	refreshPreferenceControls();
 	loadShellState();
 	applyPreferencesToUi();
@@ -1900,6 +2294,8 @@ void ApplicationShell::loadPackagePath(const QString& path)
 		m_packageDrawer->setSections({
 			{QStringLiteral("error"), tr("Error"), nativePath(absolutePath), error, OperationState::Failed},
 		});
+		m_packageStaging.clear();
+		refreshPackageStagingSummary();
 		persistActivityTask(m_packageActivityId);
 		refreshActivityCenter(m_packageActivityId);
 		refreshWorkspaceContextPanels();
@@ -1911,6 +2307,11 @@ void ApplicationShell::loadPackagePath(const QString& path)
 	m_activity.setProgress(m_packageActivityId, summary.entryCount, std::max(1, summary.entryCount), tr("Indexed %n package entries.", nullptr, summary.entryCount));
 	for (const PackageLoadWarning& warning : loadedPackage.warnings()) {
 		m_activity.appendWarning(m_packageActivityId, warning.virtualPath.isEmpty() ? warning.message : QStringLiteral("%1: %2").arg(warning.virtualPath, warning.message));
+	}
+	m_packageStaging.clear();
+	QString stagingError;
+	if (!m_packageStaging.loadBaseArchive(loadedPackage, &stagingError)) {
+		m_activity.appendWarning(m_packageActivityId, tr("Package staging is blocked: %1").arg(stagingError));
 	}
 	m_activity.completeTask(m_packageActivityId, tr("Opened %1 with %n entries.", nullptr, summary.entryCount).arg(localizedPackageFormatName(summary.format)));
 	persistActivityTask(m_packageActivityId);
@@ -1948,7 +2349,9 @@ void ApplicationShell::refreshPackageBrowser()
 		m_packageDrawer->setTitle(tr("Package Entry Details"));
 		m_packageDrawer->setSubtitle(tr("Open a package to inspect entry metadata."));
 		m_packageDrawer->setSections({});
+		m_packageStaging.clear();
 		refreshPackageCompositionSummary();
+		refreshPackageStagingSummary();
 		refreshWorkspaceContextPanels();
 		return;
 	}
@@ -1965,6 +2368,7 @@ void ApplicationShell::refreshPackageBrowser()
 	m_packageState->setState(state, summary.warningCount > 0 ? tr("Warnings") : tr("Ready"));
 	m_packageState->setProgress({summary.entryCount, std::max(1, summary.entryCount)});
 	refreshPackageCompositionSummary();
+	refreshPackageStagingSummary();
 	refreshPackageTree();
 	filterPackageEntries();
 	refreshWorkspaceContextPanels();
@@ -2246,6 +2650,581 @@ void ApplicationShell::refreshRecentActivityTimeline()
 	}
 }
 
+void ApplicationShell::openLevelMapFile()
+{
+	const QString path = QFileDialog::getOpenFileName(
+		this,
+		tr("Open Level Map"),
+		m_settings.currentProjectPath().isEmpty() ? QDir::homePath() : m_settings.currentProjectPath(),
+		tr("Level maps (*.map *.wad);;Quake-family maps (*.map);;Doom WAD maps (*.wad);;All files (*.*)"));
+	if (path.isEmpty()) {
+		return;
+	}
+	if (m_levelMapPath) {
+		m_levelMapPath->setText(path);
+	}
+	loadLevelMapPath(path);
+}
+
+void ApplicationShell::loadLevelMapPath(const QString& path)
+{
+	if (!m_levelMapState) {
+		return;
+	}
+	const QString trimmedPath = path.trimmed();
+	if (trimmedPath.isEmpty()) {
+		m_levelMapDocument = {};
+		m_levelMapState->setState(OperationState::Failed, tr("Path required"));
+		m_levelMapState->setDetail(tr("Choose a Doom WAD map or Quake-family .map source."));
+		refreshLevelMapWorkbench();
+		return;
+	}
+
+	m_levelMapState->setState(OperationState::Loading, tr("Parsing"));
+	m_levelMapState->setDetail(tr("Reading %1").arg(nativePath(trimmedPath)));
+	m_levelMapState->setProgress({0, 4});
+
+	LevelMapLoadRequest request;
+	request.path = trimmedPath;
+	request.mapName = m_levelMapName ? m_levelMapName->text().trimmed() : QString();
+	request.engineHint = m_levelMapEngine ? m_levelMapEngine->currentData().toString() : QString();
+	QString error;
+	LevelMapDocument document;
+	if (!loadLevelMap(request, &document, &error)) {
+		m_levelMapDocument = {};
+		m_levelMapState->setState(OperationState::Failed, tr("Load failed"));
+		m_levelMapState->setDetail(error);
+		recordActivity(tr("Level map load failed"), nativePath(trimmedPath), QStringLiteral("level-map"), OperationState::Failed, error);
+		refreshLevelMapWorkbench();
+		return;
+	}
+
+	m_levelMapDocument = document;
+	if (m_levelMapPath) {
+		m_levelMapPath->setText(document.sourcePath);
+	}
+	if (m_levelMapName && !document.mapName.isEmpty() && document.format == LevelMapFormat::DoomWad) {
+		m_levelMapName->setText(document.mapName);
+	}
+	const QString defaultProfile = compilerRequestForLevelMap(document, QString()).profileId;
+	if (m_levelMapCompilerProfile) {
+		const int index = m_levelMapCompilerProfile->findData(defaultProfile);
+		if (index >= 0) {
+			m_levelMapCompilerProfile->setCurrentIndex(index);
+		}
+	}
+	recordActivity(tr("Level map inspected"), nativePath(document.sourcePath), QStringLiteral("level-map"), document.issues.isEmpty() ? OperationState::Completed : OperationState::Warning, tr("%1 issues").arg(document.issues.size()));
+	refreshLevelMapWorkbench();
+}
+
+void ApplicationShell::refreshLevelMapWorkbench()
+{
+	if (!m_levelMapState || !m_levelMapObjects || !m_levelMapStatistics || !m_levelMapView || !m_levelMapValidation || !m_levelMapDrawer) {
+		return;
+	}
+
+	m_levelMapObjects->clear();
+	m_levelMapStatistics->clear();
+	m_levelMapView->clear();
+	m_levelMapValidation->clear();
+
+	const bool hasMap = !m_levelMapDocument.sourcePath.trimmed().isEmpty();
+	if (!hasMap) {
+		m_levelMapState->setTitle(tr("Level Map"));
+		m_levelMapState->setDetail(tr("Open a Doom WAD map or Quake-family .map source to inspect entities, textures, health, and safe edits."));
+		m_levelMapState->setState(OperationState::Idle, tr("Idle"));
+		m_levelMapState->setProgress({0, 1});
+		m_levelMapObjects->addItem(disabledListItem(tr("No level map loaded.")));
+		m_levelMapStatistics->addItem(disabledListItem(tr("Map statistics will appear after inspection.")));
+		m_levelMapView->addItem(disabledListItem(tr("2D or orthographic preview lines will appear after inspection.")));
+		m_levelMapValidation->addItem(disabledListItem(tr("Map validation and health overlay will appear after inspection.")));
+		m_levelMapDrawer->setTitle(tr("Level Map Details"));
+		m_levelMapDrawer->setSubtitle(tr("Open a map to inspect statistics, properties, textures, validation, and undo history."));
+		m_levelMapDrawer->setSections({});
+	} else {
+		const LevelMapStatistics stats = levelMapStatistics(m_levelMapDocument);
+		const OperationState state = stats.errorCount > 0 ? OperationState::Failed : (stats.warningCount > 0 ? OperationState::Warning : OperationState::Completed);
+		m_levelMapState->setTitle(tr("Level Map"));
+		m_levelMapState->setDetail(tr("%1 / %2 / %3 objects / %4 unique textures")
+			.arg(nativePath(m_levelMapDocument.sourcePath), levelMapFormatDisplayName(m_levelMapDocument.format))
+			.arg(stats.entityCount + stats.brushCount + stats.doomVertexCount + stats.doomLinedefCount)
+			.arg(stats.uniqueTextureCount));
+		m_levelMapState->setState(state, stats.errorCount > 0 ? tr("Errors") : (stats.warningCount > 0 ? tr("Warnings") : tr("Ready")));
+		m_levelMapState->setProgress({stats.entityCount + stats.brushCount + stats.doomLinedefCount, std::max(1, stats.entityCount + stats.brushCount + stats.doomLinedefCount)});
+
+		const QString selectedSelector = m_levelMapDocument.selectionKind == LevelMapSelectionKind::None
+			? QString()
+			: QStringLiteral("%1:%2").arg(levelMapSelectionKindId(m_levelMapDocument.selectionKind)).arg(m_levelMapDocument.selectedObjectId);
+		auto addObject = [this, &selectedSelector](const QString& selector, const QString& label, const QString& detail) {
+			auto* item = new QListWidgetItem(QStringLiteral("%1\n%2").arg(label, detail));
+			item->setData(Qt::UserRole, selector);
+			m_levelMapObjects->addItem(item);
+			if (!selectedSelector.isEmpty() && selector == selectedSelector) {
+				m_levelMapObjects->setCurrentItem(item);
+			}
+		};
+		for (const LevelMapEntity& entity : m_levelMapDocument.entities) {
+			addObject(QStringLiteral("entity:%1").arg(entity.id), tr("Entity %1: %2").arg(entity.id).arg(entity.className), tr("Origin %1 / %2 keys").arg(entity.origin.valid ? QStringLiteral("%1,%2,%3").arg(entity.origin.x, 0, 'f', 0).arg(entity.origin.y, 0, 'f', 0).arg(entity.origin.z, 0, 'f', 0) : tr("unknown")).arg(entity.properties.size()));
+		}
+		for (const LevelMapBrush& brush : m_levelMapDocument.brushes) {
+			addObject(QStringLiteral("brush:%1").arg(brush.id), tr("Brush %1").arg(brush.id), tr("Entity %1 / %2 faces").arg(brush.entityId).arg(brush.faceCount));
+		}
+		for (const LevelMapDoomVertex& vertex : m_levelMapDocument.doomVertices) {
+			addObject(QStringLiteral("vertex:%1").arg(vertex.id), tr("Vertex %1").arg(vertex.id), tr("%1, %2").arg(vertex.x, 0, 'f', 0).arg(vertex.y, 0, 'f', 0));
+		}
+		for (const LevelMapDoomLinedef& linedef : m_levelMapDocument.doomLinedefs) {
+			addObject(QStringLiteral("linedef:%1").arg(linedef.id), tr("Linedef %1").arg(linedef.id), tr("%1 > %2 / tag %3").arg(linedef.startVertex).arg(linedef.endVertex).arg(linedef.tag));
+		}
+		for (const LevelMapDoomThing& thing : m_levelMapDocument.doomThings) {
+			addObject(QStringLiteral("thing:%1").arg(thing.id), tr("Thing %1").arg(thing.id), tr("Type %1 at %2, %3").arg(thing.type).arg(thing.x, 0, 'f', 0).arg(thing.y, 0, 'f', 0));
+		}
+		if (m_levelMapObjects->count() == 0) {
+			m_levelMapObjects->addItem(disabledListItem(tr("No objects parsed from the loaded map.")));
+		}
+		for (const QString& line : levelMapStatisticsLines(m_levelMapDocument)) {
+			m_levelMapStatistics->addItem(line);
+		}
+		for (const QString& line : levelMapViewLines(m_levelMapDocument)) {
+			m_levelMapView->addItem(line);
+		}
+		for (const QString& line : levelMapValidationLines(m_levelMapDocument)) {
+			m_levelMapValidation->addItem(line);
+		}
+	}
+
+	const bool canEdit = hasMap && m_levelMapDocument.selectionKind == LevelMapSelectionKind::Entity;
+	const bool canMove = hasMap && m_levelMapDocument.selectionKind != LevelMapSelectionKind::None;
+	if (m_levelMapEditProperty) {
+		m_levelMapEditProperty->setEnabled(canEdit);
+	}
+	if (m_levelMapMoveSelection) {
+		m_levelMapMoveSelection->setEnabled(canMove);
+	}
+	if (m_levelMapSaveAs) {
+		m_levelMapSaveAs->setEnabled(hasMap);
+	}
+	if (m_levelMapPlanCompile) {
+		m_levelMapPlanCompile->setEnabled(hasMap);
+	}
+	if (m_levelMapCopyCli) {
+		m_levelMapCopyCli->setEnabled(hasMap);
+	}
+	refreshLevelMapSelection();
+}
+
+void ApplicationShell::refreshLevelMapSelection()
+{
+	if (!m_levelMapDrawer) {
+		return;
+	}
+	const QString selector = selectedLevelMapObjectSelector();
+	if (!selector.isEmpty()) {
+		QString error;
+		selectLevelMapObject(&m_levelMapDocument, selector, &error);
+	}
+	const bool hasMap = !m_levelMapDocument.sourcePath.trimmed().isEmpty();
+	const bool canEdit = hasMap && m_levelMapDocument.selectionKind == LevelMapSelectionKind::Entity;
+	const bool canMove = hasMap && m_levelMapDocument.selectionKind != LevelMapSelectionKind::None;
+	if (m_levelMapEditProperty) {
+		m_levelMapEditProperty->setEnabled(canEdit);
+	}
+	if (m_levelMapMoveSelection) {
+		m_levelMapMoveSelection->setEnabled(canMove);
+	}
+	if (!hasMap) {
+		return;
+	}
+
+	m_levelMapDrawer->setTitle(tr("Level Map Details"));
+	m_levelMapDrawer->setSubtitle(tr("%1 / %2").arg(m_levelMapDocument.mapName, levelMapFormatDisplayName(m_levelMapDocument.format)));
+	m_levelMapDrawer->setSections({
+		{QStringLiteral("properties"), tr("Properties"), tr("Selected object properties"), levelMapPropertyLines(m_levelMapDocument).join('\n'), OperationState::Completed},
+		{QStringLiteral("statistics"), tr("Statistics"), tr("Map statistics summary"), levelMapStatisticsLines(m_levelMapDocument).join('\n'), OperationState::Completed},
+		{QStringLiteral("textures"), tr("Textures"), tr("Texture and material references"), levelMapTextureLines(m_levelMapDocument).join('\n'), OperationState::Completed},
+		{QStringLiteral("validation"), tr("Health"), tr("Validation and compiler preflight warnings"), levelMapValidationLines(m_levelMapDocument).join('\n'), levelMapStatistics(m_levelMapDocument).errorCount > 0 ? OperationState::Failed : (levelMapStatistics(m_levelMapDocument).warningCount > 0 ? OperationState::Warning : OperationState::Completed)},
+		{QStringLiteral("preview"), tr("Preview"), tr("2D or orthographic preview lines"), levelMapViewLines(m_levelMapDocument).join('\n'), OperationState::Completed},
+		{QStringLiteral("undo"), tr("Undo"), tr("Edit state and undo history"), levelMapUndoLines(m_levelMapDocument).join('\n'), m_levelMapDocument.undoStack.isEmpty() ? OperationState::Idle : OperationState::Warning},
+	});
+	m_levelMapDrawer->showSection(QStringLiteral("properties"));
+}
+
+QString ApplicationShell::selectedLevelMapObjectSelector() const
+{
+	const QListWidgetItem* item = m_levelMapObjects ? m_levelMapObjects->currentItem() : nullptr;
+	return item ? item->data(Qt::UserRole).toString() : QString();
+}
+
+void ApplicationShell::editSelectedLevelMapProperty()
+{
+	if (m_levelMapDocument.sourcePath.trimmed().isEmpty() || m_levelMapDocument.selectionKind != LevelMapSelectionKind::Entity) {
+		statusBar()->showMessage(tr("Select an entity before editing a key."));
+		return;
+	}
+	bool ok = false;
+	const QString key = QInputDialog::getText(this, tr("Edit Entity Key"), tr("Key"), QLineEdit::Normal, QStringLiteral("targetname"), &ok).trimmed();
+	if (!ok || key.isEmpty()) {
+		return;
+	}
+	const QString value = QInputDialog::getText(this, tr("Edit Entity Value"), tr("Value"), QLineEdit::Normal, QString(), &ok);
+	if (!ok) {
+		return;
+	}
+	QString error;
+	if (!setLevelMapEntityProperty(&m_levelMapDocument, m_levelMapDocument.selectedObjectId, key, value, &error)) {
+		statusBar()->showMessage(tr("Map edit failed: %1").arg(error));
+		return;
+	}
+	recordActivity(tr("Level map entity edited"), key, QStringLiteral("level-map"), OperationState::Warning, tr("Unsaved map edit"));
+	refreshLevelMapWorkbench();
+	statusBar()->showMessage(tr("Entity key edited; use Save As to write a non-destructive copy."));
+}
+
+void ApplicationShell::moveSelectedLevelMapObject()
+{
+	const QString selector = selectedLevelMapObjectSelector();
+	if (m_levelMapDocument.sourcePath.trimmed().isEmpty() || selector.isEmpty()) {
+		statusBar()->showMessage(tr("Select a map object before moving it."));
+		return;
+	}
+	bool ok = false;
+	const QString deltaText = QInputDialog::getText(this, tr("Move Map Object"), tr("Delta x,y,z"), QLineEdit::Normal, QStringLiteral("16,0,0"), &ok);
+	if (!ok || deltaText.trimmed().isEmpty()) {
+		return;
+	}
+	const QStringList parts = deltaText.split(QRegularExpression(QStringLiteral(R"([,\s]+)")), Qt::SkipEmptyParts);
+	if (parts.size() < 2 || parts.size() > 3) {
+		statusBar()->showMessage(tr("Move delta must be x,y or x,y,z."));
+		return;
+	}
+	bool okX = false;
+	bool okY = false;
+	bool okZ = true;
+	const double dx = parts.value(0).toDouble(&okX);
+	const double dy = parts.value(1).toDouble(&okY);
+	const double dz = parts.size() == 3 ? parts.value(2).toDouble(&okZ) : 0.0;
+	if (!okX || !okY || !okZ) {
+		statusBar()->showMessage(tr("Move delta contains a non-numeric value."));
+		return;
+	}
+	const QStringList selectorParts = selector.split(':', Qt::SkipEmptyParts);
+	QString error;
+	if (selectorParts.size() != 2 || !moveLevelMapObject(&m_levelMapDocument, selectorParts.value(0), selectorParts.value(1).toInt(), dx, dy, dz, &error)) {
+		statusBar()->showMessage(tr("Map move failed: %1").arg(error));
+		return;
+	}
+	recordActivity(tr("Level map object moved"), selector, QStringLiteral("level-map"), OperationState::Warning, tr("Unsaved map edit"));
+	refreshLevelMapWorkbench();
+	statusBar()->showMessage(tr("Map object moved; use Save As to write a non-destructive copy."));
+}
+
+void ApplicationShell::saveLevelMapAsFromUi()
+{
+	if (m_levelMapDocument.sourcePath.trimmed().isEmpty()) {
+		statusBar()->showMessage(tr("Open a level map before saving."));
+		return;
+	}
+	const QString suffix = m_levelMapDocument.format == LevelMapFormat::DoomWad ? QStringLiteral("wad") : QStringLiteral("map");
+	const QString suggested = QDir(QFileInfo(m_levelMapDocument.sourcePath).absolutePath()).filePath(QStringLiteral("%1-edited.%2").arg(QFileInfo(m_levelMapDocument.sourcePath).completeBaseName(), suffix));
+	const QString outputPath = QFileDialog::getSaveFileName(this, tr("Save Level Map As"), suggested, tr("Level maps (*.map *.wad);;All files (*.*)"));
+	if (outputPath.isEmpty()) {
+		return;
+	}
+	const LevelMapSaveReport report = saveLevelMapAs(m_levelMapDocument, outputPath, false, false);
+	if (!report.succeeded()) {
+		statusBar()->showMessage(tr("Map save-as failed: %1").arg(report.errors.join(QStringLiteral("; "))));
+		recordActivity(tr("Level map save failed"), nativePath(outputPath), QStringLiteral("level-map"), OperationState::Failed, report.errors.join(QStringLiteral("; ")));
+		return;
+	}
+	m_levelMapDocument.outputPath = report.outputPath;
+	m_levelMapDocument.editState = QStringLiteral("saved");
+	recordActivity(tr("Level map saved"), nativePath(outputPath), QStringLiteral("level-map"), OperationState::Completed, tr("Saved non-destructive map copy"));
+	refreshLevelMapWorkbench();
+	statusBar()->showMessage(tr("Level map saved: %1").arg(nativePath(outputPath)));
+}
+
+void ApplicationShell::planLevelMapCompile()
+{
+	if (m_compilerRunThread) {
+		statusBar()->showMessage(tr("A compiler task is already running"));
+		return;
+	}
+	if (m_levelMapDocument.sourcePath.trimmed().isEmpty()) {
+		statusBar()->showMessage(tr("Open a level map before planning a compile."));
+		return;
+	}
+	const QString profileId = m_levelMapCompilerProfile ? m_levelMapCompilerProfile->currentData().toString() : QString();
+	CompilerCommandRequest request = compilerRequestForLevelMap(m_levelMapDocument, profileId);
+	request.workspaceRootPath = m_settings.currentProjectPath();
+	ProjectManifest manifest;
+	if (!request.workspaceRootPath.trimmed().isEmpty() && loadProjectManifest(request.workspaceRootPath, &manifest)) {
+		request.extraSearchPaths = effectiveProjectCompilerSearchPaths(manifest, request.extraSearchPaths);
+		request.executableOverrides = effectiveProjectCompilerToolOverrides(manifest, m_settings.compilerToolPathOverrides());
+	} else {
+		request.executableOverrides = m_settings.compilerToolPathOverrides();
+	}
+	const CompilerCommandPlan plan = buildCompilerCommandPlan(request);
+	m_levelMapDrawer->setSections({
+		{QStringLiteral("compile-plan"), tr("Compile Plan"), tr("Reviewable compiler command"), compilerCommandPlanText(plan), plan.state()},
+		{QStringLiteral("map-health"), tr("Map Health"), tr("Validation before compile"), levelMapValidationLines(m_levelMapDocument).join('\n'), levelMapStatistics(m_levelMapDocument).errorCount > 0 ? OperationState::Failed : OperationState::Warning},
+	});
+	m_levelMapDrawer->showSection(QStringLiteral("compile-plan"));
+	if (!plan.isRunnable()) {
+		recordActivity(tr("Level compile plan"), request.profileId, QStringLiteral("level-map"), plan.state(), tr("Review required"), plan.warnings);
+		statusBar()->showMessage(tr("Compiler plan needs review."));
+		return;
+	}
+
+	CompilerRunRequest runRequest;
+	runRequest.command = request;
+	runRequest.registerOutputs = true;
+	const QString manifestRoot = request.workspaceRootPath.trimmed().isEmpty() ? QFileInfo(request.inputPath).absolutePath() : request.workspaceRootPath;
+	runRequest.manifestPath = QDir(manifestRoot).filePath(QStringLiteral(".vibestudio/compiler-runs/%1-%2.json").arg(request.profileId, QDateTime::currentDateTimeUtc().toString(QStringLiteral("yyyyMMddTHHmmssZ"))));
+
+	m_compilerRunCancelRequested.store(false);
+	m_compilerRunActivityId = m_activity.createTask(tr("Level Compile"), request.profileId, tr("level-map"), OperationState::Running, true);
+	m_activity.setProgress(m_compilerRunActivityId, 0, 4, tr("Planning compiler command."));
+	refreshActivityCenter(m_compilerRunActivityId);
+	statusBar()->showMessage(tr("Level compiler run started: %1").arg(request.profileId));
+
+	const QString taskId = m_compilerRunActivityId;
+	const QString projectPath = request.workspaceRootPath;
+	auto* thread = QThread::create([this, runRequest, taskId, projectPath]() {
+		CompilerRunCallbacks callbacks;
+		callbacks.cancellationRequested = [this]() {
+			return m_compilerRunCancelRequested.load();
+		};
+		callbacks.logEntry = [this, taskId](const CompilerTaskLogEntry& entry) {
+			QMetaObject::invokeMethod(this, [this, taskId, entry]() {
+				m_activity.appendLog(taskId, OperationState::Running, entry.message);
+				refreshActivityCenter(taskId);
+			}, Qt::QueuedConnection);
+		};
+		CompilerRunResult result = runCompilerCommand(runRequest, callbacks);
+		QMetaObject::invokeMethod(this, [this, result, taskId, projectPath]() {
+			finishCompilerRun(result, taskId, projectPath);
+		}, Qt::QueuedConnection);
+	});
+	m_compilerRunThread = thread;
+	connect(thread, &QThread::finished, thread, &QObject::deleteLater);
+	thread->start();
+}
+
+void ApplicationShell::copyLevelMapCliEquivalent()
+{
+	if (m_levelMapDocument.sourcePath.trimmed().isEmpty()) {
+		statusBar()->showMessage(tr("Open a level map before copying a CLI command."));
+		return;
+	}
+	QStringList parts = {
+		QStringLiteral("vibestudio"),
+		QStringLiteral("--cli"),
+		QStringLiteral("map"),
+		QStringLiteral("compile-plan"),
+		m_levelMapDocument.outputPath.trimmed().isEmpty() ? m_levelMapDocument.sourcePath : m_levelMapDocument.outputPath,
+	};
+	if (m_levelMapDocument.format == LevelMapFormat::DoomWad && !m_levelMapDocument.mapName.isEmpty()) {
+		parts << QStringLiteral("--map") << m_levelMapDocument.mapName;
+	}
+	if (m_levelMapCompilerProfile && !m_levelMapCompilerProfile->currentData().toString().isEmpty()) {
+		parts << QStringLiteral("--profile") << m_levelMapCompilerProfile->currentData().toString();
+	}
+	for (QString& part : parts) {
+		part = quoteCliPart(part);
+	}
+	QGuiApplication::clipboard()->setText(parts.join(' '));
+	statusBar()->showMessage(tr("Level map CLI command copied."));
+}
+
+void ApplicationShell::refreshAdvancedStudioSurface()
+{
+	if (!m_advancedStudioState || !m_advancedStudioDrawer) {
+		return;
+	}
+
+	auto setListLines = [](QListWidget* list, const QStringList& lines, const QString& emptyText) {
+		if (!list) {
+			return;
+		}
+		list->clear();
+		if (lines.isEmpty()) {
+			list->addItem(disabledListItem(emptyText));
+			return;
+		}
+		list->addItems(lines);
+	};
+
+	const bool hasShader = !m_advancedShaderDocument.shaders.isEmpty();
+	const bool hasSprite = !m_advancedSpritePlan.frames.isEmpty();
+	const bool hasCode = !m_advancedCodeIndex.files.isEmpty();
+	const bool hasAi = !m_advancedAiProposal.title.isEmpty();
+	const bool hasExtensions = !m_advancedExtensionDiscovery.manifests.isEmpty();
+	const int ready = static_cast<int>(hasShader) + static_cast<int>(hasSprite) + static_cast<int>(hasCode) + static_cast<int>(hasAi) + static_cast<int>(hasExtensions);
+	const OperationState state = ready >= 5 ? OperationState::Completed : (ready > 0 ? OperationState::Warning : OperationState::Idle);
+	const QString projectPath = m_settings.currentProjectPath();
+
+	m_advancedStudioState->setTitle(tr("Advanced Studio"));
+	m_advancedStudioState->setDetail(tr("%1 of 5 surfaces populated / project: %2").arg(ready).arg(projectPath.isEmpty() ? tr("none") : nativePath(projectPath)));
+	m_advancedStudioState->setState(state, localizedOperationStateName(state));
+	m_advancedStudioState->setProgress({ready, 5});
+
+	QStringList shaderLines;
+	if (hasShader) {
+		shaderLines = shaderGraphLines(m_advancedShaderDocument);
+	} else {
+		shaderLines = advancedStudioCapabilityLines().filter(QStringLiteral("Shader"));
+	}
+	setListLines(m_advancedShaderGraph, shaderLines, tr("No shader script inspected yet."));
+
+	QStringList spriteLines;
+	if (hasSprite) {
+		spriteLines << m_advancedSpritePlan.sequenceLines;
+		spriteLines << m_advancedSpritePlan.palettePreviewLines;
+		spriteLines << m_advancedSpritePlan.stagingLines;
+	}
+	setListLines(m_advancedSpriteSequence, spriteLines, tr("No sprite workflow plan yet."));
+
+	QStringList codeLines;
+	if (hasCode) {
+		codeLines << m_advancedCodeIndex.treeLines.mid(0, 60);
+		codeLines << tr("Symbols:");
+		for (const CodeSymbol& symbol : m_advancedCodeIndex.symbols.mid(0, 60)) {
+			codeLines << QStringLiteral("%1 %2 / %3:%4").arg(symbol.kind, symbol.name, symbol.relativePath).arg(symbol.line);
+		}
+		codeLines << tr("Build tasks:");
+		codeLines << m_advancedCodeIndex.buildTaskLines;
+		codeLines << tr("Launch profiles:");
+		codeLines << m_advancedCodeIndex.launchProfileLines;
+	}
+	setListLines(m_advancedCodeTree, codeLines, tr("No code workspace indexed yet."));
+
+	QStringList aiLines;
+	if (hasAi) {
+		aiLines = aiProposalReviewSurfaceText(m_advancedAiProposal).split('\n');
+	}
+	setListLines(m_advancedAiProposalList, aiLines, tr("No AI proposal generated yet."));
+
+	QStringList extensionLines;
+	if (hasExtensions || !m_advancedExtensionDiscovery.warnings.isEmpty()) {
+		extensionLines = extensionDiscoveryText(m_advancedExtensionDiscovery).split('\n');
+	} else {
+		extensionLines = extensionTrustModelLines();
+	}
+	setListLines(m_advancedExtensions, extensionLines, tr("No extensions discovered yet."));
+
+	m_advancedStudioDrawer->setTitle(tr("Advanced Studio Details"));
+	m_advancedStudioDrawer->setSubtitle(tr("Shader, sprite, code, AI, and extension surfaces"));
+	m_advancedStudioDrawer->setSections({
+		{QStringLiteral("capabilities"), tr("Capabilities"), tr("Milestone 8 surfaces"), advancedStudioCapabilityLines().join('\n'), OperationState::Completed},
+		{QStringLiteral("shader"), tr("Shader Graph"), hasShader ? tr("%1 shader(s)").arg(m_advancedShaderDocument.shaders.size()) : tr("No shader"), hasShader ? shaderDocumentReportText(m_advancedShaderDocument, m_advancedShaderValidation, m_advancedShaderValidationWarnings) : tr("Open an idTech3 shader script to inspect graph stages and references."), hasShader ? OperationState::Completed : OperationState::Idle},
+		{QStringLiteral("sprite"), tr("Sprite Creator"), hasSprite ? tr("%1 frame(s)").arg(m_advancedSpritePlan.frames.size()) : tr("No sprite plan"), hasSprite ? spriteWorkflowPlanText(m_advancedSpritePlan) : tr("Create a Doom or Quake sprite plan to inspect naming, palette, sequencing, and package staging."), hasSprite ? m_advancedSpritePlan.state : OperationState::Idle},
+		{QStringLiteral("code"), tr("Code IDE"), hasCode ? tr("%1 file(s)").arg(m_advancedCodeIndex.files.size()) : tr("No index"), hasCode ? codeWorkspaceIndexText(m_advancedCodeIndex) : tr("Index the active project to inspect source files, symbols, diagnostics, build tasks, and launch profiles."), hasCode ? m_advancedCodeIndex.state : OperationState::Idle},
+		{QStringLiteral("ai"), tr("AI Proposal"), hasAi ? m_advancedAiProposal.title : tr("No proposal"), hasAi ? aiProposalReviewSurfaceText(m_advancedAiProposal) : tr("Generate a staged proposal to inspect summary, context, generated actions, and prompt/response log."), hasAi ? m_advancedAiProposal.manifest.state : OperationState::Idle},
+		{QStringLiteral("extensions"), tr("Extensions"), hasExtensions ? tr("%1 manifest(s)").arg(m_advancedExtensionDiscovery.manifests.size()) : tr("Trust model"), extensionLines.join('\n'), hasExtensions ? m_advancedExtensionDiscovery.state : OperationState::Idle},
+	});
+	if (m_advancedStudioDrawer->currentSectionId().isEmpty()) {
+		m_advancedStudioDrawer->showSection(QStringLiteral("capabilities"));
+	}
+}
+
+void ApplicationShell::inspectAdvancedShaderScript()
+{
+	const QString path = m_advancedShaderPath ? m_advancedShaderPath->text().trimmed() : QString();
+	if (path.isEmpty()) {
+		statusBar()->showMessage(tr("Choose a shader script before inspecting."));
+		return;
+	}
+	QString error;
+	if (!loadShaderScript(path, &m_advancedShaderDocument, &error)) {
+		statusBar()->showMessage(tr("Shader inspect failed: %1").arg(error));
+		recordActivity(tr("Shader inspect failed"), nativePath(path), QStringLiteral("shader"), OperationState::Failed, error);
+		return;
+	}
+	QStringList packagePaths;
+	if (m_packageArchive.isOpen()) {
+		packagePaths << m_packageArchive.sourcePath();
+	}
+	m_advancedShaderValidation = validateShaderReferences(m_advancedShaderDocument, packagePaths, &m_advancedShaderValidationWarnings);
+	recordActivity(tr("Shader inspected"), nativePath(path), QStringLiteral("shader"), m_advancedShaderValidationWarnings.isEmpty() ? OperationState::Completed : OperationState::Warning, tr("%1 shader(s), %2 reference(s)").arg(m_advancedShaderDocument.shaders.size()).arg(m_advancedShaderValidation.size()), m_advancedShaderValidationWarnings);
+	refreshAdvancedStudioSurface();
+	m_advancedStudioDrawer->showSection(QStringLiteral("shader"));
+	statusBar()->showMessage(tr("Shader inspected: %1").arg(nativePath(path)));
+}
+
+void ApplicationShell::createAdvancedSpritePlan()
+{
+	SpriteWorkflowRequest request;
+	request.engineFamily = m_advancedSpriteEngine ? m_advancedSpriteEngine->currentData().toString() : QStringLiteral("doom");
+	request.spriteName = m_advancedSpriteName && !m_advancedSpriteName->text().trimmed().isEmpty() ? m_advancedSpriteName->text().trimmed() : QStringLiteral("SPRT");
+	bool framesOk = false;
+	bool rotationsOk = false;
+	request.frameCount = m_advancedSpriteFrames ? m_advancedSpriteFrames->text().toInt(&framesOk) : 4;
+	request.rotations = m_advancedSpriteRotations ? m_advancedSpriteRotations->text().toInt(&rotationsOk) : 8;
+	if (!framesOk || request.frameCount <= 0) {
+		request.frameCount = 4;
+	}
+	if (!rotationsOk || request.rotations < 0) {
+		request.rotations = request.engineFamily == QStringLiteral("doom") ? 8 : 1;
+	}
+	request.paletteId = request.engineFamily == QStringLiteral("doom") ? QStringLiteral("doom-playpal") : QStringLiteral("quake-palette");
+	request.outputPackageRoot = request.engineFamily == QStringLiteral("doom") ? QStringLiteral("sprites") : QStringLiteral("progs");
+	m_advancedSpritePlan = buildSpriteWorkflowPlan(request);
+	recordActivity(tr("Sprite plan created"), request.spriteName, QStringLiteral("sprite"), m_advancedSpritePlan.state, tr("%1 staged frame(s)").arg(m_advancedSpritePlan.frames.size()), m_advancedSpritePlan.warnings);
+	refreshAdvancedStudioSurface();
+	m_advancedStudioDrawer->showSection(QStringLiteral("sprite"));
+	statusBar()->showMessage(tr("Sprite workflow plan created."));
+}
+
+void ApplicationShell::indexAdvancedCodeWorkspace()
+{
+	const QString root = m_settings.currentProjectPath().isEmpty() ? QDir::currentPath() : m_settings.currentProjectPath();
+	CodeWorkspaceIndexRequest request;
+	request.rootPath = root;
+	request.symbolQuery = m_workspaceSearch ? m_workspaceSearch->text().trimmed() : QString();
+	m_advancedCodeIndex = indexCodeWorkspace(request);
+	recordActivity(tr("Code workspace indexed"), nativePath(root), QStringLiteral("code"), m_advancedCodeIndex.state, tr("%1 file(s), %2 symbol(s)").arg(m_advancedCodeIndex.files.size()).arg(m_advancedCodeIndex.symbols.size()), m_advancedCodeIndex.warnings);
+	refreshAdvancedStudioSurface();
+	m_advancedStudioDrawer->showSection(QStringLiteral("code"));
+	statusBar()->showMessage(tr("Code workspace indexed: %1").arg(nativePath(root)));
+}
+
+void ApplicationShell::createAdvancedAiProposal()
+{
+	const QString prompt = m_advancedAiPrompt && !m_advancedAiPrompt->text().trimmed().isEmpty() ? m_advancedAiPrompt->text().trimmed() : tr("Create a reviewable idTech asset workflow");
+	const QString kind = m_advancedAiKind ? m_advancedAiKind->currentData().toString() : QStringLiteral("shader");
+	const AiAutomationPreferences preferences = m_settings.aiAutomationPreferences();
+	if (kind == QStringLiteral("entity")) {
+		m_advancedAiProposal = promptToEntityDefinitionAiExperiment(prompt, preferences);
+	} else if (kind == QStringLiteral("package")) {
+		m_advancedAiProposal = promptToPackageValidationPlanAiExperiment(prompt, m_packageArchive.isOpen() ? m_packageArchive.sourcePath() : QString(), preferences);
+	} else if (kind == QStringLiteral("batch")) {
+		m_advancedAiProposal = promptToBatchConversionRecipeAiExperiment(prompt, preferences);
+	} else if (kind == QStringLiteral("cli")) {
+		m_advancedAiProposal = generateCliCommandAiExperiment(prompt, preferences);
+	} else {
+		m_advancedAiProposal = promptToShaderScaffoldAiExperiment(prompt, preferences);
+	}
+	recordActivity(tr("AI proposal generated"), kind, QStringLiteral("ai"), m_advancedAiProposal.manifest.state, m_advancedAiProposal.summary, m_advancedAiProposal.manifest.warnings);
+	refreshAdvancedStudioSurface();
+	m_advancedStudioDrawer->showSection(QStringLiteral("ai"));
+	statusBar()->showMessage(tr("AI proposal generated for review."));
+}
+
+void ApplicationShell::discoverAdvancedExtensions()
+{
+	QString root = m_advancedExtensionRoot ? m_advancedExtensionRoot->text().trimmed() : QString();
+	if (root.isEmpty() && !m_settings.currentProjectPath().isEmpty()) {
+		root = QDir(m_settings.currentProjectPath()).filePath(QStringLiteral("extensions"));
+	}
+	if (root.isEmpty()) {
+		root = QDir::currentPath();
+	}
+	m_advancedExtensionDiscovery = discoverExtensions({root});
+	recordActivity(tr("Extensions discovered"), nativePath(root), QStringLiteral("extension"), m_advancedExtensionDiscovery.state, tr("%1 extension manifest(s)").arg(m_advancedExtensionDiscovery.manifests.size()), m_advancedExtensionDiscovery.warnings);
+	refreshAdvancedStudioSurface();
+	m_advancedStudioDrawer->showSection(QStringLiteral("extensions"));
+	statusBar()->showMessage(tr("Extension discovery complete."));
+}
+
 QString ApplicationShell::selectedWorkspaceFilePath() const
 {
 	const QListWidget* lists[] = {m_workspaceSearchResults, m_changedFiles, m_dependencyGraph, m_projectProblems, m_recentActivityTimeline};
@@ -2403,6 +3382,112 @@ void ApplicationShell::refreshPackageCompositionSummary()
 	}
 }
 
+void ApplicationShell::refreshPackageStagingSummary()
+{
+	if (!m_packageStagingSummary) {
+		return;
+	}
+
+	m_packageStagingSummary->clear();
+	const bool stagingLoaded = m_packageArchive.isOpen() && m_packageStaging.isLoaded();
+	const auto setStageButtons = [this, stagingLoaded](bool canSave) {
+		if (m_packageStageAdd) {
+			m_packageStageAdd->setEnabled(stagingLoaded);
+		}
+		if (m_packageStageReplace) {
+			m_packageStageReplace->setEnabled(stagingLoaded && !selectedPackageEntryPath().isEmpty());
+		}
+		if (m_packageStageRename) {
+			m_packageStageRename->setEnabled(stagingLoaded && !selectedPackageEntryPath().isEmpty());
+		}
+		if (m_packageStageDelete) {
+			m_packageStageDelete->setEnabled(stagingLoaded && !selectedPackageEntryPaths().isEmpty());
+		}
+		if (m_packageStageSaveAs) {
+			m_packageStageSaveAs->setEnabled(stagingLoaded && canSave);
+		}
+	};
+
+	const auto addItem = [this](const QString& text, const QString& state, const QString& virtualPath = QString()) {
+		auto* item = new QListWidgetItem(text);
+		if (!virtualPath.isEmpty()) {
+			item->setData(Qt::UserRole, virtualPath);
+		}
+		item->setData(Qt::UserRole + 1, state);
+		m_packageStagingSummary->addItem(item);
+		return item;
+	};
+
+	if (!stagingLoaded) {
+		auto* item = addItem(tr("No package loaded for staging\nOpen a folder, PAK, WAD, ZIP, or PK3 before staging changes."), QStringLiteral("idle"));
+		item->setFlags(Qt::NoItemFlags);
+		setStageButtons(false);
+		return;
+	}
+
+	const PackageStagingSummary summary = m_packageStaging.summary();
+	const QString state = summary.blockingCount > 0 ? QStringLiteral("failed") : QStringLiteral("completed");
+	addItem(QStringLiteral("%1\n%2 / %3 -> %4 / %5")
+			.arg(summary.canSave ? tr("Staging ready") : tr("Staging blocked"),
+				tr("%1 operations, %2 conflicts, %3 blockers").arg(summary.operationCount).arg(summary.conflictCount).arg(summary.blockingCount),
+				tr("%n base files", nullptr, summary.baseFileCount),
+				tr("%n staged files", nullptr, summary.stagedFileCount),
+				tr("%1 before, %2 after").arg(byteSizeText(summary.beforeBytes), byteSizeText(summary.afterBytes))),
+		state);
+
+	if (summary.operationCount == 0) {
+		addItem(tr("No staged changes yet\nUse Stage Add, Replace, Rename, or Delete to build a save-as plan."), QStringLiteral("idle"));
+	}
+
+	for (const PackageStageOperation& operation : m_packageStaging.operations()) {
+		QStringList lines;
+		lines << QStringLiteral("%1: %2").arg(localizedPackageStageOperationName(operation.type), operation.virtualPath);
+		if (!operation.targetVirtualPath.isEmpty()) {
+			lines << tr("Target: %1").arg(operation.targetVirtualPath);
+		}
+		if (!operation.sourceFilePath.isEmpty()) {
+			lines << tr("Source: %1").arg(nativePath(operation.sourceFilePath));
+		}
+		lines << tr("Conflict policy: %1").arg(packageStageConflictResolutionId(operation.conflictResolution));
+		addItem(lines.join('\n'), QStringLiteral("running"), operation.virtualPath);
+	}
+
+	for (const PackageStageConflict& conflict : m_packageStaging.conflicts()) {
+		addItem(QStringLiteral("%1\n%2")
+				.arg(conflict.blocking ? tr("Blocked") : tr("Notice"),
+					conflict.virtualPath.isEmpty() ? conflict.message : QStringLiteral("%1: %2").arg(conflict.virtualPath, conflict.message)),
+			conflict.blocking ? QStringLiteral("failed") : QStringLiteral("warning"),
+			conflict.virtualPath);
+	}
+
+	const auto addCompositionLines = [&](const QString& title, const QVector<PackageCompositionBucket>& buckets, quint64 totalBytes) {
+		const int limit = 4;
+		int shown = 0;
+		for (const PackageCompositionBucket& bucket : buckets) {
+			if (shown >= limit) {
+				break;
+			}
+			const double fraction = bucket.sizeBytes > 0 ? static_cast<double>(bucket.sizeBytes) / static_cast<double>(std::max<quint64>(1, totalBytes)) : 0.0;
+			addItem(QStringLiteral("%1: %2\n%3 %4 / %5")
+					.arg(title,
+						bucket.label,
+						compositionBar(fraction),
+						byteSizeText(bucket.sizeBytes),
+						tr("%n files", nullptr, bucket.fileCount)),
+				QStringLiteral("completed"));
+			++shown;
+		}
+		if (buckets.isEmpty()) {
+			addItem(QStringLiteral("%1\n%2").arg(title, tr("No files in this composition.")), QStringLiteral("warning"));
+		}
+	};
+	addCompositionLines(tr("Before"), m_packageStaging.beforeComposition(), summary.beforeBytes);
+	addCompositionLines(tr("After"), m_packageStaging.afterComposition(), summary.afterBytes);
+
+	setStageButtons(summary.canSave);
+	applyPreferencesToUi();
+}
+
 void ApplicationShell::refreshPackageEntryDetails(const QString& virtualPath)
 {
 	if (!m_packageDrawer || !m_packageArchive.isOpen()) {
@@ -2450,6 +3535,14 @@ void ApplicationShell::refreshPackageEntryDetails(const QString& virtualPath)
 	if (previewDetailLines.isEmpty()) {
 		previewDetailLines << tr("No preview details available.");
 	}
+	QStringList assetDetailLines = preview.assetDetailLines;
+	if (assetDetailLines.isEmpty()) {
+		assetDetailLines << tr("No specialized asset metadata available.");
+	}
+	QStringList assetRawLines = preview.assetRawLines;
+	if (assetRawLines.isEmpty()) {
+		assetRawLines << tr("No raw asset metadata available.");
+	}
 
 	QStringList rawLines;
 	rawLines << tr("Source: %1").arg(nativePath(m_packageArchive.sourcePath()));
@@ -2494,6 +3587,8 @@ void ApplicationShell::refreshPackageEntryDetails(const QString& virtualPath)
 		{QStringLiteral("preview"), tr("Preview"), preview.summary.isEmpty() ? localizedPackagePreviewKindName(preview.kind) : preview.summary, previewContentText(preview), previewState},
 		{QStringLiteral("summary"), tr("Summary"), selectedEntry.typeHint, summaryLines.join('\n'), entryState},
 		{QStringLiteral("preview-details"), tr("Preview Details"), localizedPackagePreviewKindName(preview.kind), previewDetailLines.join('\n'), previewState},
+		{QStringLiteral("asset-details"), tr("Asset Details"), preview.assetKindId.isEmpty() ? localizedPackagePreviewKindName(preview.kind) : preview.assetKindId, assetDetailLines.join('\n'), previewState},
+		{QStringLiteral("asset-raw"), tr("Asset Raw Metadata"), preview.assetKindId.isEmpty() ? selectedEntry.virtualPath : preview.assetKindId, assetRawLines.join('\n'), previewState},
 		{QStringLiteral("composition"), tr("Composition"), tr("%n buckets", nullptr, compositionBuckets.size()), compositionLines.join('\n'), packageSummary.warningCount > 0 ? OperationState::Warning : OperationState::Completed},
 		{QStringLiteral("warnings"), tr("Warnings"), tr("%n package warnings", nullptr, m_packageArchive.warnings().size()), warningLines.join('\n'), warningLines.size() == 1 && warningLines.front() == tr("No warnings for this entry.") ? OperationState::Completed : OperationState::Warning},
 		{QStringLiteral("raw"), tr("Raw Metadata"), selectedEntry.virtualPath, rawLines.join('\n'), entryState},
@@ -3018,6 +4113,235 @@ void ApplicationShell::showPackageExtractionReport(const PackageExtractionReport
 		{QStringLiteral("raw"), tr("Raw Report"), report.cancelled ? tr("cancelled") : (report.succeeded() ? tr("completed") : tr("failed")), packageExtractionReportText(report), state},
 	});
 	m_packageDrawer->showSection(QStringLiteral("outputs"));
+}
+
+bool ApplicationShell::choosePackageStageResolution(const QString& title, PackageStageConflictResolution* resolution)
+{
+	if (!resolution) {
+		return false;
+	}
+	const QString block = tr("Block on conflict");
+	const QString replace = tr("Replace existing");
+	const QString skip = tr("Skip conflicting operation");
+	bool accepted = false;
+	const QString choice = QInputDialog::getItem(
+		this,
+		title,
+		tr("Conflict policy:"),
+		{block, replace, skip},
+		0,
+		false,
+		&accepted);
+	if (!accepted) {
+		return false;
+	}
+	if (choice == replace) {
+		*resolution = PackageStageConflictResolution::ReplaceExisting;
+	} else if (choice == skip) {
+		*resolution = PackageStageConflictResolution::Skip;
+	} else {
+		*resolution = PackageStageConflictResolution::Block;
+	}
+	return true;
+}
+
+void ApplicationShell::stagePackageAddFile()
+{
+	if (!m_packageStaging.isLoaded()) {
+		statusBar()->showMessage(tr("Open a package before staging files"));
+		return;
+	}
+
+	const QString sourcePath = QFileDialog::getOpenFileName(this, tr("Stage File Into Package"));
+	if (sourcePath.isEmpty()) {
+		return;
+	}
+	bool accepted = false;
+	const QString defaultVirtualPath = QFileInfo(sourcePath).fileName();
+	const QString virtualPath = QInputDialog::getText(this, tr("Stage Add"), tr("Virtual package path:"), QLineEdit::Normal, defaultVirtualPath, &accepted).trimmed();
+	if (!accepted || virtualPath.isEmpty()) {
+		return;
+	}
+	PackageStageConflictResolution resolution = PackageStageConflictResolution::Block;
+	if (!choosePackageStageResolution(tr("Stage Add Conflict Policy"), &resolution)) {
+		return;
+	}
+
+	QString error;
+	if (!m_packageStaging.addFile(sourcePath, virtualPath, &error, resolution)) {
+		statusBar()->showMessage(tr("Stage add blocked: %1").arg(error));
+	}
+	refreshPackageStagingSummary();
+	recordActivity(tr("Package Stage Add"), virtualPath, tr("package"), error.isEmpty() ? OperationState::Completed : OperationState::Failed, error.isEmpty() ? tr("File staged for save-as.") : error);
+}
+
+void ApplicationShell::stagePackageReplaceSelected()
+{
+	if (!m_packageStaging.isLoaded()) {
+		statusBar()->showMessage(tr("Open a package before staging replacements"));
+		return;
+	}
+	const QString virtualPath = selectedPackageEntryPath();
+	if (virtualPath.isEmpty()) {
+		statusBar()->showMessage(tr("Select a package entry to replace"));
+		return;
+	}
+	const QString sourcePath = QFileDialog::getOpenFileName(this, tr("Choose Replacement File"));
+	if (sourcePath.isEmpty()) {
+		return;
+	}
+
+	QString error;
+	if (!m_packageStaging.replaceFile(virtualPath, sourcePath, &error)) {
+		statusBar()->showMessage(tr("Stage replace blocked: %1").arg(error));
+	}
+	refreshPackageStagingSummary();
+	recordActivity(tr("Package Stage Replace"), virtualPath, tr("package"), error.isEmpty() ? OperationState::Completed : OperationState::Failed, error.isEmpty() ? tr("Replacement staged for save-as.") : error);
+}
+
+void ApplicationShell::stagePackageRenameSelected()
+{
+	if (!m_packageStaging.isLoaded()) {
+		statusBar()->showMessage(tr("Open a package before staging renames"));
+		return;
+	}
+	const QString virtualPath = selectedPackageEntryPath();
+	if (virtualPath.isEmpty()) {
+		statusBar()->showMessage(tr("Select a package entry to rename"));
+		return;
+	}
+	bool accepted = false;
+	const QString targetVirtualPath = QInputDialog::getText(this, tr("Stage Rename"), tr("New virtual package path:"), QLineEdit::Normal, virtualPath, &accepted).trimmed();
+	if (!accepted || targetVirtualPath.isEmpty()) {
+		return;
+	}
+	PackageStageConflictResolution resolution = PackageStageConflictResolution::Block;
+	if (!choosePackageStageResolution(tr("Stage Rename Conflict Policy"), &resolution)) {
+		return;
+	}
+
+	QString error;
+	if (!m_packageStaging.renameEntry(virtualPath, targetVirtualPath, &error, resolution)) {
+		statusBar()->showMessage(tr("Stage rename blocked: %1").arg(error));
+	}
+	refreshPackageStagingSummary();
+	recordActivity(tr("Package Stage Rename"), tr("%1 -> %2").arg(virtualPath, targetVirtualPath), tr("package"), error.isEmpty() ? OperationState::Completed : OperationState::Failed, error.isEmpty() ? tr("Rename staged for save-as.") : error);
+}
+
+void ApplicationShell::stagePackageDeleteSelected()
+{
+	if (!m_packageStaging.isLoaded()) {
+		statusBar()->showMessage(tr("Open a package before staging deletes"));
+		return;
+	}
+	const QStringList virtualPaths = selectedPackageEntryPaths();
+	if (virtualPaths.isEmpty()) {
+		statusBar()->showMessage(tr("Select package entries to delete"));
+		return;
+	}
+
+	QStringList errors;
+	for (const QString& virtualPath : virtualPaths) {
+		QString error;
+		if (!m_packageStaging.deleteEntry(virtualPath, &error, PackageStageConflictResolution::Block)) {
+			errors << QStringLiteral("%1: %2").arg(virtualPath, error);
+		}
+	}
+	refreshPackageStagingSummary();
+	const bool succeeded = errors.isEmpty();
+	recordActivity(tr("Package Stage Delete"), virtualPaths.join(QStringLiteral("; ")), tr("package"), succeeded ? OperationState::Completed : OperationState::Failed, succeeded ? tr("Delete staged for save-as.") : errors.join(QStringLiteral("; ")));
+	if (!succeeded) {
+		statusBar()->showMessage(tr("Stage delete blocked: %1").arg(errors.join(QStringLiteral("; "))));
+	}
+}
+
+void ApplicationShell::saveStagedPackageAs()
+{
+	if (!m_packageStaging.isLoaded()) {
+		statusBar()->showMessage(tr("Open a package before saving staged output"));
+		return;
+	}
+
+	const QString outputPath = QFileDialog::getSaveFileName(
+		this,
+		tr("Save Staged Package As"),
+		QString(),
+		tr("Package Archives (*.pak *.pk3 *.zip *.wad);;PAK Packages (*.pak);;PK3 Packages (*.pk3);;ZIP Packages (*.zip);;WAD Packages (*.wad);;All Files (*)"));
+	if (outputPath.isEmpty()) {
+		return;
+	}
+
+	PackageWriteRequest request;
+	request.destinationPath = outputPath;
+	request.format = packageArchiveFormatFromFileName(outputPath);
+	request.allowOverwrite = false;
+	request.writeManifest = true;
+	const QFileInfo outputInfo(outputPath);
+	request.manifestPath = QDir(outputInfo.absolutePath()).filePath(QStringLiteral("%1.manifest.json").arg(outputInfo.completeBaseName()));
+
+	const QString detail = tr("%1 -> %2").arg(nativePath(m_packageStaging.sourcePath()), nativePath(outputPath));
+	const QString taskId = m_activity.createTask(tr("Package Save As"), detail, tr("package"), OperationState::Running, false);
+	m_activity.setProgress(taskId, 0, 1, tr("Writing staged package."));
+	m_packageState->setTitle(tr("Saving Package"));
+	m_packageState->setDetail(detail);
+	m_packageState->setState(OperationState::Running, tr("Running"));
+	m_packageState->setProgress({0, 1});
+	refreshActivityCenter(taskId);
+
+	const PackageWriteReport report = m_packageStaging.writeArchive(request);
+	for (const QString& warning : report.warnings) {
+		m_activity.appendWarning(taskId, warning);
+	}
+	for (const QString& blocker : report.blockedMessages) {
+		m_activity.appendWarning(taskId, blocker);
+	}
+
+	const OperationState finalState = report.succeeded()
+		? (report.warnings.isEmpty() ? OperationState::Completed : OperationState::Warning)
+		: OperationState::Failed;
+	if (report.succeeded()) {
+		m_activity.completeTask(taskId, tr("Saved %1 with %n entries.", nullptr, report.entryCount).arg(nativePath(report.outputPath)));
+	} else {
+		m_activity.failTask(taskId, report.blockedMessages.isEmpty() ? tr("Package save-as failed.") : report.blockedMessages.join(QStringLiteral("; ")));
+	}
+	persistActivityTask(taskId);
+
+	QStringList summaryLines;
+	summaryLines << tr("Source: %1").arg(nativePath(report.sourcePath));
+	summaryLines << tr("Output: %1").arg(report.outputPath.isEmpty() ? nativePath(outputPath) : nativePath(report.outputPath));
+	summaryLines << tr("Mode: %1").arg(report.dryRun ? tr("dry run") : tr("write"));
+	summaryLines << tr("Format: %1").arg(localizedPackageFormatName(report.format));
+	summaryLines << tr("Entries: %1").arg(report.entryCount);
+	summaryLines << tr("Bytes written: %1").arg(byteSizeText(report.bytesWritten));
+	summaryLines << tr("SHA-256: %1").arg(report.sha256.isEmpty() ? tr("not written") : report.sha256);
+	summaryLines << tr("Deterministic writer: %1").arg(report.deterministic ? tr("yes") : tr("no"));
+	summaryLines << tr("Manifest: %1").arg(report.wroteManifest ? nativePath(report.manifestPath) : tr("not written"));
+
+	QStringList warningLines = report.warnings;
+	if (warningLines.isEmpty()) {
+		warningLines << tr("No writer warnings.");
+	}
+	QStringList blockerLines = report.blockedMessages;
+	if (blockerLines.isEmpty()) {
+		blockerLines << tr("No save-as blockers.");
+	}
+
+	m_packageDrawer->setTitle(tr("Package Save As"));
+	m_packageDrawer->setSubtitle(nativePath(outputPath));
+	m_packageDrawer->setSections({
+		{QStringLiteral("summary"), tr("Summary"), report.succeeded() ? tr("saved") : tr("blocked"), summaryLines.join('\n'), finalState},
+		{QStringLiteral("blockers"), tr("Blockers"), tr("%n blockers", nullptr, report.blockedMessages.size()), blockerLines.join('\n'), report.blockedMessages.isEmpty() ? OperationState::Completed : OperationState::Failed},
+		{QStringLiteral("warnings"), tr("Warnings"), tr("%n warnings", nullptr, report.warnings.size()), warningLines.join('\n'), report.warnings.isEmpty() ? OperationState::Completed : OperationState::Warning},
+		{QStringLiteral("raw"), tr("Raw Report"), report.succeeded() ? tr("completed") : tr("failed"), packageWriteReportText(report), finalState},
+	});
+	m_packageDrawer->showSection(report.succeeded() ? QStringLiteral("summary") : QStringLiteral("blockers"));
+	m_packageState->setTitle(report.succeeded() ? tr("Save Complete") : tr("Save Blocked"));
+	m_packageState->setDetail(report.succeeded() ? nativePath(report.outputPath) : blockerLines.join(QStringLiteral("; ")));
+	m_packageState->setState(finalState, localizedOperationStateName(finalState));
+	m_packageState->setProgress({report.succeeded() ? 1 : 0, 1});
+	refreshPackageStagingSummary();
+	refreshActivityCenter(taskId);
+	statusBar()->showMessage(report.succeeded() ? tr("Package saved: %1").arg(nativePath(report.outputPath)) : tr("Package save-as blocked"));
 }
 
 void ApplicationShell::activateRecentProject(QListWidgetItem* item)
@@ -3872,7 +5196,7 @@ void ApplicationShell::applyPreferencesToUi()
 			font-size: %11pt;
 			font-weight: 600;
 		}
-		QFrame#modulePanel, QFrame#preferencesPanel, QFrame#loadingPane, QFrame#detailDrawer, QTextEdit#inspector, QTextEdit#detailContent, QListWidget#recentProjects, QListWidget#gameInstallations, QListWidget#projectProblems, QListWidget#workspaceSearchResults, QListWidget#changedFiles, QListWidget#dependencyGraph, QListWidget#recentActivityTimeline, QListWidget#packageComposition, QTreeWidget#packageTree, QListWidget#packageEntries, QListWidget#compilerPipeline, QListWidget#activityTasks, QListWidget#detailSections, QLineEdit#packageFilter, QLineEdit#workspaceSearch {
+		QFrame#modulePanel, QFrame#preferencesPanel, QFrame#loadingPane, QFrame#detailDrawer, QTextEdit#inspector, QTextEdit#detailContent, QListWidget#recentProjects, QListWidget#gameInstallations, QListWidget#projectProblems, QListWidget#workspaceSearchResults, QListWidget#changedFiles, QListWidget#dependencyGraph, QListWidget#recentActivityTimeline, QListWidget#packageComposition, QListWidget#packageStagingSummary, QTreeWidget#packageTree, QListWidget#packageEntries, QListWidget#compilerPipeline, QListWidget#activityTasks, QListWidget#detailSections, QLineEdit#packageFilter, QLineEdit#workspaceSearch {
 			background: %12;
 			border: 1px solid %13;
 			border-radius: 6px;
@@ -3882,13 +5206,13 @@ void ApplicationShell::applyPreferencesToUi()
 			border: 1px solid %13;
 			border-radius: 6px;
 		}
-		QListWidget#recentProjects, QListWidget#gameInstallations, QListWidget#projectProblems, QListWidget#workspaceSearchResults, QListWidget#changedFiles, QListWidget#dependencyGraph, QListWidget#recentActivityTimeline, QListWidget#packageComposition, QTreeWidget#packageTree, QListWidget#packageEntries, QListWidget#compilerPipeline, QListWidget#activityTasks, QListWidget#detailSections {
+		QListWidget#recentProjects, QListWidget#gameInstallations, QListWidget#projectProblems, QListWidget#workspaceSearchResults, QListWidget#changedFiles, QListWidget#dependencyGraph, QListWidget#recentActivityTimeline, QListWidget#packageComposition, QListWidget#packageStagingSummary, QTreeWidget#packageTree, QListWidget#packageEntries, QListWidget#compilerPipeline, QListWidget#activityTasks, QListWidget#detailSections {
 			padding: 6px;
 		}
 		QListWidget#setupSummary {
 			padding: 6px;
 		}
-		QListWidget#recentProjects::item, QListWidget#gameInstallations::item, QListWidget#projectProblems::item, QListWidget#workspaceSearchResults::item, QListWidget#changedFiles::item, QListWidget#dependencyGraph::item, QListWidget#recentActivityTimeline::item, QListWidget#packageComposition::item, QTreeWidget#packageTree::item, QListWidget#packageEntries::item, QListWidget#compilerPipeline::item, QListWidget#activityTasks::item, QListWidget#detailSections::item {
+		QListWidget#recentProjects::item, QListWidget#gameInstallations::item, QListWidget#projectProblems::item, QListWidget#workspaceSearchResults::item, QListWidget#changedFiles::item, QListWidget#dependencyGraph::item, QListWidget#recentActivityTimeline::item, QListWidget#packageComposition::item, QListWidget#packageStagingSummary::item, QTreeWidget#packageTree::item, QListWidget#packageEntries::item, QListWidget#compilerPipeline::item, QListWidget#activityTasks::item, QListWidget#detailSections::item {
 			border-radius: 4px;
 			padding: %14px 10px;
 		}
@@ -3896,7 +5220,7 @@ void ApplicationShell::applyPreferencesToUi()
 			border-radius: 4px;
 			padding: %14px 10px;
 		}
-		QListWidget#recentProjects::item:selected, QListWidget#gameInstallations::item:selected, QListWidget#projectProblems::item:selected, QListWidget#workspaceSearchResults::item:selected, QListWidget#changedFiles::item:selected, QListWidget#dependencyGraph::item:selected, QListWidget#recentActivityTimeline::item:selected, QListWidget#packageComposition::item:selected, QTreeWidget#packageTree::item:selected, QListWidget#packageEntries::item:selected, QListWidget#compilerPipeline::item:selected, QListWidget#activityTasks::item:selected, QListWidget#detailSections::item:selected {
+		QListWidget#recentProjects::item:selected, QListWidget#gameInstallations::item:selected, QListWidget#projectProblems::item:selected, QListWidget#workspaceSearchResults::item:selected, QListWidget#changedFiles::item:selected, QListWidget#dependencyGraph::item:selected, QListWidget#recentActivityTimeline::item:selected, QListWidget#packageComposition::item:selected, QListWidget#packageStagingSummary::item:selected, QTreeWidget#packageTree::item:selected, QListWidget#packageEntries::item:selected, QListWidget#compilerPipeline::item:selected, QListWidget#activityTasks::item:selected, QListWidget#detailSections::item:selected {
 			background: %6;
 			color: %7;
 		}
@@ -4007,6 +5331,7 @@ void ApplicationShell::applyPreferencesToUi()
 		}
 	};
 	applyStateColor(m_packageComposition);
+	applyStateColor(m_packageStagingSummary);
 	applyStateColor(m_packageEntries);
 	applyStateColor(m_compilerPipeline);
 	applyStateColor(m_gameInstallations);

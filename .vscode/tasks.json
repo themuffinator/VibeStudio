@@ -1,0 +1,167 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "VibeStudio: configure",
+      "type": "shell",
+      "command": "pwsh",
+      "args": [
+        "-NoProfile",
+        "-ExecutionPolicy",
+        "Bypass",
+        "-File",
+        "${workspaceFolder}/scripts/meson_build.ps1",
+        "-BuildDir",
+        "${workspaceFolder}/builddir",
+        "-Backend",
+        "ninja",
+        "-ConfigureOnly"
+      ],
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "VibeStudio: compile",
+      "type": "shell",
+      "command": "pwsh",
+      "args": [
+        "-NoProfile",
+        "-ExecutionPolicy",
+        "Bypass",
+        "-File",
+        "${workspaceFolder}/scripts/meson_build.ps1",
+        "-BuildDir",
+        "${workspaceFolder}/builddir",
+        "-Backend",
+        "ninja",
+        "-SkipTests",
+        "-SkipValidation"
+      ],
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "group": "build",
+      "problemMatcher": [
+        "$gcc",
+        "$msCompile"
+      ],
+      "detail": "Configure if needed, then compile the Meson build directory."
+    },
+    {
+      "label": "VibeStudio: build and validate",
+      "type": "shell",
+      "command": "pwsh",
+      "args": [
+        "-NoProfile",
+        "-ExecutionPolicy",
+        "Bypass",
+        "-File",
+        "${workspaceFolder}/scripts/meson_build.ps1",
+        "-BuildDir",
+        "${workspaceFolder}/builddir",
+        "-Backend",
+        "ninja",
+        "-WarningLevel",
+        "2",
+        "-WarningsAsErrors"
+      ],
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "group": {
+        "kind": "build",
+        "isDefault": true
+      },
+      "problemMatcher": [
+        "$gcc",
+        "$msCompile"
+      ],
+      "detail": "Configure, compile with warnings as errors, run Meson tests, and run repository validation scripts."
+    },
+    {
+      "label": "VibeStudio: strict warnings build",
+      "type": "shell",
+      "command": "pwsh",
+      "args": [
+        "-NoProfile",
+        "-ExecutionPolicy",
+        "Bypass",
+        "-File",
+        "${workspaceFolder}/scripts/meson_build.ps1",
+        "-BuildDir",
+        "${workspaceFolder}/builddir",
+        "-Backend",
+        "ninja",
+        "-WarningLevel",
+        "2",
+        "-WarningsAsErrors",
+        "-SkipTests",
+        "-SkipValidation"
+      ],
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "group": "build",
+      "problemMatcher": [
+        "$gcc",
+        "$msCompile"
+      ],
+      "detail": "Compile with Meson werror enabled at the project warning level so VibeStudio warnings fail the build."
+    },
+    {
+      "label": "VibeStudio: test",
+      "type": "shell",
+      "command": "meson",
+      "args": [
+        "test",
+        "-C",
+        "${workspaceFolder}/builddir",
+        "--print-errorlogs"
+      ],
+      "dependsOn": "VibeStudio: compile",
+      "dependsOrder": "sequence",
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "group": "test",
+      "problemMatcher": []
+    },
+    {
+      "label": "VibeStudio: launch app (no build)",
+      "type": "shell",
+      "command": "pwsh",
+      "args": [
+        "-NoProfile",
+        "-ExecutionPolicy",
+        "Bypass",
+        "-File",
+        "${workspaceFolder}/.vscode/launch-vibestudio.ps1"
+      ],
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "problemMatcher": [],
+      "detail": "Launch the already-built app. This task never configures, compiles, or tests."
+    },
+    {
+      "label": "VibeStudio: launch CLI help (no build)",
+      "type": "shell",
+      "command": "pwsh",
+      "args": [
+        "-NoProfile",
+        "-ExecutionPolicy",
+        "Bypass",
+        "-File",
+        "${workspaceFolder}/.vscode/launch-vibestudio.ps1",
+        "-CliHelp"
+      ],
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "problemMatcher": [],
+      "detail": "Launch the already-built CLI help. This task never configures, compiles, or tests."
+    }
+  ]
+}

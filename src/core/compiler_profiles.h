@@ -50,6 +50,8 @@ struct CompilerCommandPlan {
 	QString inputPath;
 	QString expectedOutputPath;
 	QString commandLine;
+	QStringList knownIssueWarnings;
+	QStringList preflightWarnings;
 	QStringList warnings;
 	QStringList errors;
 
@@ -80,7 +82,7 @@ struct CompilerDiagnostic {
 };
 
 struct CompilerCommandManifest {
-	static constexpr int kSchemaVersion = 2;
+	static constexpr int kSchemaVersion = 3;
 
 	int schemaVersion = kSchemaVersion;
 	QString manifestId;
@@ -106,6 +108,8 @@ struct CompilerCommandManifest {
 	QVector<CompilerFileHash> inputHashes;
 	QVector<CompilerFileHash> outputHashes;
 	QVector<CompilerDiagnostic> diagnostics;
+	QStringList knownIssueWarnings;
+	QStringList preflightWarnings;
 	QString stdoutText;
 	QString stderrText;
 	QStringList warnings;

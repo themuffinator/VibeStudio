@@ -62,6 +62,7 @@ private:
 	QProgressBar* m_progress = nullptr;
 	QWidget* m_placeholderHost = nullptr;
 	QVBoxLayout* m_placeholderLayout = nullptr;
+	QVector<QLabel*> m_placeholderLabels;
 	QString m_title;
 	QString m_detail;
 	QString m_statusText;

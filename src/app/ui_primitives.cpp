@@ -142,6 +142,7 @@ LoadingPane::LoadingPane(QWidget* parent)
 	m_placeholderLayout = new QVBoxLayout(m_placeholderHost);
 	m_placeholderLayout->setContentsMargins(0, 0, 0, 0);
 	m_placeholderLayout->setSpacing(6);
+	m_placeholderLayout->addStretch(1);
 	root->addWidget(m_placeholderHost);
 
 	setTitle(uiText("Loading"));
@@ -263,20 +264,25 @@ void LoadingPane::rebuildPlaceholders()
 		return;
 	}
 
-	while (QLayoutItem* item = m_placeholderLayout->takeAt(0)) {
-		delete item->widget();
-		delete item;
+	const QStringList rows = m_placeholderRows.isEmpty() ? defaultPlaceholderRows() : m_placeholderRows;
+	while (m_placeholderLabels.size() < rows.size()) {
+		auto* label = new QLabel(m_placeholderHost);
+		label->setObjectName("skeletonRow");
+		label->setMinimumHeight(24);
+		m_placeholderLayout->insertWidget(m_placeholderLabels.size(), label);
+		m_placeholderLabels.push_back(label);
 	}
 
-	const QStringList rows = m_placeholderRows.isEmpty() ? defaultPlaceholderRows() : m_placeholderRows;
-	for (const QString& row : rows) {
-		auto* label = new QLabel(uiText("%1 loading placeholder").arg(row));
-		label->setObjectName("skeletonRow");
-		label->setAccessibleName(uiText("%1 placeholder").arg(row));
-		label->setMinimumHeight(24);
-		m_placeholderLayout->addWidget(label);
+	for (int index = 0; index < m_placeholderLabels.size(); ++index) {
+		QLabel* label = m_placeholderLabels[index];
+		const bool active = index < rows.size();
+		if (active) {
+			const QString& row = rows[index];
+			label->setText(uiText("%1 loading placeholder").arg(row));
+			label->setAccessibleName(uiText("%1 placeholder").arg(row));
+		}
+		label->setVisible(active);
 	}
-	m_placeholderLayout->addStretch(1);
 }
 
 DetailDrawer::DetailDrawer(QWidget* parent)

@@ -27,16 +27,18 @@ rendering portability, source editing, media handling, search, or automation.
 | Text to speech | [Qt TextToSpeech](https://doc.qt.io/qt-6/qttexttospeech-index.html) | Planned optional module | TTS enablement preference is active; native OS speech playback for task summaries, diagnostics, setup guidance, and warnings is planned. |
 | Localization | [Qt internationalization](https://doc.qt.io/qt-6/internationalization.html), Qt Linguist, `QTranslator`, `QLocale` | Active/planned | Locale preference storage and `QLocale` formatting are active; translation catalogs, pseudo-localization, and RTL validation are planned. |
 | Asset index/search | [SQLite](https://sqlite.org/) through [Qt SQL](https://doc.qt.io/qt-6/qtsql-index.html), with [FTS5](https://sqlite.org/fts5.html) where available | Planned | Lightweight local database for project metadata, dependencies, search, diagnostics, and recent activity. |
-| CLI parser | Lightweight Qt `QStringList` router with in-process command registry; [CLI11](https://github.com/CLIUtils/CLI11) deferred | Active | Current router keeps project/package/install/compiler/AI/credits subcommands dependency-free with JSON output, quiet/verbose/watch/task-state switches, stable exit codes, and testable command metadata through `cli commands`; CLI11 remains deferred until shell completion and broader validation justify the dependency. |
+| CLI parser | Lightweight Qt `QStringList` router with in-process command registry; [CLI11](https://github.com/CLIUtils/CLI11) deferred | Active | Current router keeps project/package/install/asset/map/shader/sprite/code/extension/compiler/AI/credits subcommands dependency-free with JSON output, quiet/verbose/watch/task-state switches, stable exit codes, and testable command metadata through `cli commands`; CLI11 remains deferred until shell completion and broader validation justify the dependency. |
 | Task execution | Qt `QProcess`, threads, signals, and a VibeStudio task model | Active/planned | The reusable operation-state model, shell activity center, compiler process runner, captured logs, cancellation plumbing, and run manifests are active; broader thread-pool/future integration is planned. |
-| Package/archive layer | PakFu-derived C++ services plus focused format readers | Active/planned | Package/archive interfaces, virtual path safety, read-only folder/PAK/WAD/ZIP/PK3 entry readers, text/image/binary metadata previews, and safe extraction reports are active; write-back support is planned later. |
+| Package/archive layer | PakFu-derived C++ services plus focused format readers and deterministic writers | Active | Package/archive interfaces, virtual path safety, read-only folder/PAK/WAD/ZIP/PK3 entry readers, text/image/model/audio/script metadata previews, safe extraction reports, staged write-back, package manifests, and deterministic PAK/ZIP/PK3/tested PWAD save-as writers are active. |
+| Level-map services | Native C++ parser/editor model over Doom WAD lumps and Quake-family `.map` text | Active | Provides shared GUI/CLI map inspection, entity/texture/statistics/validation surfaces, safe MVP edits, undo/redo, non-destructive save-as, and compiler profile handoff without adding a rendering dependency yet. |
+| Advanced Studio services | Native C++ services for shader scripts, sprite workflow plans, code indexing, extension manifests, and staged AI creation proposals | Active | Provides shared GUI/CLI coverage for idTech3 shader graph data, stage edits, mounted texture validation, Doom/Quake sprite planning, source tree diagnostics, extension trust/sandbox command plans, and reviewable prompt-to-creation workflows without new dependencies. |
 | 2D editor rendering | Custom Qt Widgets, `QPainter`, and Qt Graphics View where useful | Planned | Fast path to responsive map views, sprite/texture surfaces, overlays, and inspectable editor state. |
 | Early 3D preview | Qt `QOpenGLWidget` behind a renderer interface | Planned | Acceptable for MVP preview work while keeping the future backend replaceable. |
 | Long-term 3D rendering | [bgfx](https://bkaradzic.github.io/bgfx/overview.html) behind a renderer abstraction | Planned | Cross-platform renderer backend for durable editor viewports across Direct3D, Metal, Vulkan, and OpenGL-style platforms. |
-| Text editing | Qt text widgets first, then [KSyntaxHighlighting](https://api.kde.org/frameworks/syntax-highlighting/html/index.html) and [Tree-sitter](https://tree-sitter.github.io/tree-sitter/) | Planned | Starts simple, then adds high-quality highlighting and incremental parsing for scripts, shaders, configs, and code. |
+| Text editing | Qt text widgets first, then [KSyntaxHighlighting](https://api.kde.org/frameworks/syntax-highlighting/html/index.html) and [Tree-sitter](https://tree-sitter.github.io/tree-sitter/) | Active/planned | Local CFG, shader, QuakeC, and idTech text highlighter/diagnostic boundaries plus project find/replace are active; KSyntaxHighlighting and Tree-sitter remain deferred until packaging and parser value justify dependencies. |
 | Language services | LSP client architecture | Planned | Allows QuakeC, C/C++, shader/config helpers, and future language tools without hardwiring one parser model. |
-| Audio | Qt Multimedia first, [miniaudio](https://miniaud.io/) for low-level decode/playback/waveform gaps | Planned | Keeps basic playback simple while retaining a small portable fallback for editing-oriented audio tasks. |
-| Model formats | Native idTech loaders, optional [Assimp](https://www.assimp.org/) for adjacent import/export | Planned | Native loaders preserve game-format fidelity; Assimp expands interchange support without becoming the source of truth. |
+| Audio | Qt metadata/playback candidates first, [miniaudio](https://miniaud.io/) for low-level decode/playback/waveform gaps | Active/planned | WAV metadata, platform-codec playback candidacy, waveform summaries, and WAV export are active; miniaudio remains the planned portable fallback for compressed decoding and richer editing. |
+| Model formats | Native idTech loaders, optional [Assimp](https://www.assimp.org/) for adjacent import/export | Active/planned | Native MDL/MD2/MD3 metadata, skin/material dependency, animation-name, and fallback loader boundaries are active; Assimp remains optional for future adjacent import/export. |
 | AI connector layer | Provider-neutral connector/model metadata plus manifest-backed workflow experiments | Active experimental | Lets users route reasoning, coding, image, audio, voice, 3D, and agentic workflows through OpenAI, Claude, Gemini, ElevenLabs, Meshy, local/offline models, or future connectors while keeping credentials redacted and outputs staged. |
 | First AI provider | OpenAI connector scaffold, with future provider calls following [Responses](https://platform.openai.com/docs/api-reference/responses) and [tools/function calling](https://developers.openai.com/api/docs/guides/tools) patterns | Active experimental | OpenAI is implemented for configuration, credential discovery, model routing, safe tool descriptors, and no-write first experiments; network invocation remains opt-in future work. |
 | Tests | Meson tests, Qt Test, focused executable tests, parser fixtures, and later fuzzing | Active/planned | Scales from smoke tests to parser safety, CLI parity, package safety, and editor regression coverage. |
@@ -66,7 +68,9 @@ dockable panes, persistent layouts, and reusable status/detail components. The
 active shell includes a reusable `LoadingPane` for pane and preview loading
 states, a reusable `DetailDrawer` for logs, metadata, manifests, raw
 diagnostics, and support-copy text, and compact graphical summaries for project
-health, package composition, and compiler pipeline readiness.
+health, package composition, map health/statistics, and compiler pipeline
+readiness. The Advanced Studio workbench adds shader, sprite, code, AI, and
+extension summaries with detail-on-demand tabs while staying in Qt Widgets.
 
 The UX stack must directly support the project philosophies:
 
@@ -168,19 +172,23 @@ eligibility, and timestamped logs. Future package, compiler, validation, AI,
 and export services should emit through this model instead of inventing local
 task status enums.
 
-Use the package/archive layer for package metadata, read-only browsing, and
-safe extraction. The
-active slice defines stable descriptors and readers for folder, PAK, WAD, ZIP,
-and PK3 package formats; shared package entry metadata; mount-layer session
-state; safe normalized virtual paths; traversal rejection; and output-path
-joining that proves extraction targets remain under the chosen root. The
-package preview and extraction slices now build on those readers for text
-samples, basic image format/dimension metadata, binary hex summaries, GUI
-composition buckets by entry type and byte size, selected/all extraction,
-dry-run output reporting, cancellation-aware GUI progress, and CLI validation.
-This layer is adapted from PakFu's archive surface and credited in
-`docs/CREDITS.md`; future write-back services should build on it instead of
-duplicating path safety rules per format.
+Use the package/archive layer for package metadata, read-only browsing, safe
+extraction, and save-as write-back. The active slice defines stable descriptors
+and readers for folder, PAK, WAD, ZIP, and PK3 package formats; shared package
+entry metadata; mount-layer session state; safe normalized virtual paths;
+traversal rejection; and output-path joining that proves extraction targets
+remain under the chosen root. Package preview and extraction build on those
+readers for text samples, basic image format/dimension metadata, binary hex
+summaries, GUI composition buckets by entry type and byte size, selected/all
+extraction, dry-run output reporting, cancellation-aware GUI progress, and CLI
+validation.
+
+The write-back slice adds a staged package model with add, replace, rename,
+delete, conflict reporting, before/after composition, blocked-state messages,
+manifest export, save-as guards, deterministic PAK and ZIP/PK3 writers, and a
+PWAD writer covered by map-lump ordering tests. This layer is adapted from
+PakFu's archive surface and credited in `docs/CREDITS.md`; future package
+writers should build on it instead of duplicating path safety rules per format.
 
 ## Accessibility, Localization, And Setup Stack
 
@@ -212,12 +220,12 @@ then leave those choices editable.
 
 Use the active lightweight in-process router plus command registry for the
 command-line interface. The CLI is a first-class product surface, not a debug
-afterthought. It exposes project, package, installation, compiler, AI,
-credits, and registry commands with JSON output, stable exit codes, quiet and
-verbose modes, dry-run behavior, compiler watch streaming, machine-readable
-task state, and examples for PowerShell and POSIX shells. CLI11 remains
-deferred for the fuller parser/completion layer once that dependency earns its
-weight.
+afterthought. It exposes project, package, installation, asset, map, shader,
+sprite, code, extension, compiler, AI, credits, and registry commands with JSON
+output, stable exit codes, quiet and verbose modes, dry-run behavior, compiler
+watch streaming, machine-readable task state, and examples for PowerShell and
+POSIX shells. CLI11 remains deferred for the fuller parser/completion layer
+once that dependency earns its weight.
 
 CLI commands must call the same services as GUI actions. Output should support
 human text by default and `--json` for automation. The active router exposes
@@ -226,10 +234,16 @@ commands should emit task state, progress, warnings, and reproducible manifests.
 
 ## Text, Script, And IDE Stack
 
-Start with Qt text widgets for MVP editors. Add KSyntaxHighlighting for
-high-quality highlighting once packaging is understood. Add Tree-sitter for
-incremental parsing where it materially improves diagnostics, outlines,
-refactoring, shader/script structure, or AI context extraction.
+Start with Qt text widgets for MVP editors. The active asset-tools slice uses
+local syntax-highlighting and diagnostic boundaries for CFG, shader scripts,
+QuakeC, and idTech text assets, plus project-wide find/replace with clean,
+modified, saving, saved, and failed states. The Advanced Studio slice adds a
+source tree index with language service hook descriptors, diagnostics, symbol
+search, compiler task suggestions, and source-port launch profile summaries.
+Add KSyntaxHighlighting for high-quality highlighting once packaging is
+understood. Add Tree-sitter for incremental parsing where it materially
+improves diagnostics, outlines, refactoring, shader/script structure, or AI
+context extraction.
 
 Use an LSP client boundary for external language tooling. Avoid hard-coding one
 language server into the editor core.
@@ -240,13 +254,25 @@ Prefer native idTech parsers for core formats. VibeStudio must understand WAD,
 PAK, PK3, BSP, MAP, shader scripts, palettes, sprites, textures, model formats,
 and compiler outputs on their own terms.
 
+The active Advanced Studio slice parses idTech3 shader scripts into editable
+stage models, validates texture references against mounted folders/packages,
+round-trips selected stage directive edits back to text, and plans Doom/Quake
+sprite names, rotations, palette actions, frame sequences, and package staging
+paths. These are native C++/Qt services; no new graphics, parser, or media
+library is required for the current milestone.
+
 Use optional helper libraries where they expand workflows without weakening
 format fidelity:
 
 - Qt image APIs for standard image loading and conversion.
-- Qt Multimedia for simple playback and device integration.
+- Qt image APIs plus VibeStudio palette metadata for texture previews, crop,
+  resize, grayscale/indexed conversion, and batch output queues.
+- Qt Multimedia for simple playback and device integration; the active service
+  records platform codec candidacy without making codec availability mandatory.
 - miniaudio for small portable audio playback/decoding/waveform tasks where Qt
   backends are insufficient.
+- Native MDL, MD2, and MD3 metadata loaders for package preview and dependency
+  inspection before any generic model library is introduced.
 - Assimp for adjacent model import/export, while keeping native MDL, MD2, MD3,
   MDC, MDR, IQM, and BSP-related loaders authoritative for game workflows.
 
@@ -280,12 +306,20 @@ VibeStudio can expose a small, reviewable set of actions.
 
 AI tools must route through normal services: project summary, package metadata
 search, compiler profile listing, command proposal, staged text edits, staged
-asset generation requests, diagnostics explanation, and manifest generation.
+asset generation requests, diagnostics explanation, shader scaffold/entity
+snippet/package validation/batch conversion proposals, proposal review
+surfaces, and manifest generation.
 AI workflow manifests capture provider, model, prompt, context summary, tool
 calls, staged outputs, approval state, validation, cancellation/retry state, and
 cost/usage placeholders. AI must not write directly to project files, packages,
 compiler outputs, settings, or source trees without a preview and explicit user
 approval.
+
+Extension integration starts with `vibestudio.extension.json` manifests parsed
+through the same C++/Qt service layer. The active model records schema version,
+trust level, sandbox model, capabilities, command descriptors, reviewed command
+plans, dry-run defaults, and extension-generated staged files before any command
+can mutate user projects.
 
 AI-free mode must remain complete. Core editing, package management, compiler
 orchestration, validation, CLI use, and launching must work without API keys or

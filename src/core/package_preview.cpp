@@ -1,10 +1,8 @@
 #include "core/package_preview.h"
 
-#include <QBuffer>
+#include "core/asset_tools.h"
+
 #include <QCoreApplication>
-#include <QFileInfo>
-#include <QImageReader>
-#include <QStringDecoder>
 
 #include <algorithm>
 #include <limits>
@@ -32,72 +30,6 @@ std::optional<PackageEntry> findEntry(const PackageArchive& archive, const QStri
 		}
 	}
 	return std::nullopt;
-}
-
-bool extensionUsuallyText(const QString& virtualPath)
-{
-	const QString ext = QFileInfo(virtualPath).suffix().toLower();
-	return QStringList {
-		QStringLiteral("txt"),
-		QStringLiteral("cfg"),
-		QStringLiteral("shader"),
-		QStringLiteral("map"),
-		QStringLiteral("def"),
-		QStringLiteral("ent"),
-		QStringLiteral("json"),
-		QStringLiteral("xml"),
-		QStringLiteral("log"),
-		QStringLiteral("lst"),
-		QStringLiteral("script"),
-		QStringLiteral("arena"),
-		QStringLiteral("skin"),
-	}.contains(ext);
-}
-
-bool extensionUsuallyImage(const QString& virtualPath)
-{
-	const QString ext = QFileInfo(virtualPath).suffix().toLower();
-	return QStringList {
-		QStringLiteral("png"),
-		QStringLiteral("jpg"),
-		QStringLiteral("jpeg"),
-		QStringLiteral("bmp"),
-		QStringLiteral("gif"),
-		QStringLiteral("tga"),
-		QStringLiteral("webp"),
-	}.contains(ext);
-}
-
-bool bytesLookTextual(const QByteArray& bytes)
-{
-	if (bytes.isEmpty()) {
-		return true;
-	}
-
-	int printable = 0;
-	int suspicious = 0;
-	for (uchar byte : bytes) {
-		if (byte == '\0') {
-			++suspicious;
-			continue;
-		}
-		if (byte == '\n' || byte == '\r' || byte == '\t' || (byte >= 0x20 && byte < 0x7f) || byte >= 0x80) {
-			++printable;
-		} else {
-			++suspicious;
-		}
-	}
-	return suspicious == 0 || (static_cast<double>(printable) / static_cast<double>(bytes.size())) >= 0.88;
-}
-
-QString decodeUtf8Preview(const QByteArray& bytes, bool* ok)
-{
-	QStringDecoder decoder(QStringDecoder::Utf8);
-	const QString decoded = decoder.decode(bytes);
-	if (ok) {
-		*ok = !decoder.hasError();
-	}
-	return decoded;
 }
 
 QString hexDump(const QByteArray& bytes)
@@ -148,6 +80,62 @@ PackagePreview unavailablePreview(const QString& virtualPath, const QString& err
 	return preview;
 }
 
+void applyAssetAnalysis(PackagePreview* preview, const AssetAnalysis& analysis)
+{
+	if (!preview || analysis.kind == AssetPreviewKind::Unknown) {
+		return;
+	}
+	preview->assetKindId = analysis.kindId;
+	preview->assetDetailLines = analysis.detailLines;
+	preview->assetRawLines = analysis.rawLines;
+	preview->summary = analysis.summary;
+	preview->title = analysis.title;
+	preview->body = analysis.body;
+	preview->detailLines << analysis.detailLines;
+	preview->rawLines = preview->detailLines;
+	if (!analysis.rawLines.isEmpty()) {
+		preview->rawLines << analysis.rawLines;
+	}
+
+	preview->imageFormat = analysis.imageFormat;
+	preview->imageSize = analysis.imageSize;
+	preview->imageDepth = analysis.imageDepth;
+	preview->imageColorCount = analysis.imageColorCount;
+	preview->imagePaletteAware = analysis.imagePaletteAware;
+	preview->imagePaletteLines = analysis.imagePaletteLines;
+	preview->modelFormat = analysis.modelFormat;
+	preview->modelViewportLines = analysis.modelViewportLines;
+	preview->modelMaterialLines = analysis.modelMaterialLines;
+	preview->modelAnimationLines = analysis.modelAnimationNames;
+	preview->audioFormat = analysis.audioFormat;
+	preview->audioWaveformLines = analysis.audioWaveformLines;
+	preview->textLanguageId = analysis.textLanguageId;
+	preview->textLanguageName = analysis.textLanguageName;
+	preview->textHighlightLines = analysis.textHighlightLines;
+	preview->textDiagnosticLines = analysis.textDiagnosticLines;
+	preview->textSaveState = analysis.textSaveState;
+
+	switch (analysis.kind) {
+	case AssetPreviewKind::Image:
+		preview->kind = PackagePreviewKind::Image;
+		break;
+	case AssetPreviewKind::Model:
+		preview->kind = PackagePreviewKind::Model;
+		break;
+	case AssetPreviewKind::Audio:
+		preview->kind = PackagePreviewKind::Audio;
+		break;
+	case AssetPreviewKind::Text:
+		preview->kind = PackagePreviewKind::Text;
+		break;
+	case AssetPreviewKind::Binary:
+		preview->kind = PackagePreviewKind::Binary;
+		break;
+	case AssetPreviewKind::Unknown:
+		break;
+	}
+}
+
 } // namespace
 
 QString packagePreviewKindId(PackagePreviewKind kind)
@@ -161,6 +149,10 @@ QString packagePreviewKindId(PackagePreviewKind kind)
 		return QStringLiteral("text");
 	case PackagePreviewKind::Image:
 		return QStringLiteral("image");
+	case PackagePreviewKind::Model:
+		return QStringLiteral("model");
+	case PackagePreviewKind::Audio:
+		return QStringLiteral("audio");
 	case PackagePreviewKind::Binary:
 		return QStringLiteral("binary");
 	}
@@ -178,6 +170,10 @@ QString packagePreviewKindDisplayName(PackagePreviewKind kind)
 		return previewText("Text");
 	case PackagePreviewKind::Image:
 		return previewText("Image");
+	case PackagePreviewKind::Model:
+		return previewText("Model");
+	case PackagePreviewKind::Audio:
+		return previewText("Audio");
 	case PackagePreviewKind::Binary:
 		return previewText("Binary");
 	}
@@ -226,39 +222,9 @@ PackagePreview buildPackageEntryPreview(const PackageArchive& archive, const QSt
 	preview.detailLines << previewText("Total size: %1").arg(sizeText(preview.totalBytes));
 	preview.detailLines << previewText("Truncated: %1").arg(preview.truncated ? previewText("yes") : previewText("no"));
 
-	if (extensionUsuallyImage(entry.virtualPath) || entry.typeHint.startsWith(QStringLiteral("image/"))) {
-		QBuffer buffer(&bytes);
-		buffer.open(QIODevice::ReadOnly);
-		QImageReader reader(&buffer);
-		const QSize size = reader.size();
-		const QByteArray format = reader.format();
-		if (size.isValid() || !format.isEmpty()) {
-			preview.kind = PackagePreviewKind::Image;
-			preview.title = previewText("Image metadata");
-			preview.imageFormat = QString::fromLatin1(format).toUpper();
-			preview.imageSize = size;
-			preview.summary = size.isValid()
-				? previewText("%1 image, %2 x %3").arg(preview.imageFormat.isEmpty() ? previewText("Image") : preview.imageFormat).arg(size.width()).arg(size.height())
-				: previewText("%1 image").arg(preview.imageFormat.isEmpty() ? previewText("Image") : preview.imageFormat);
-			preview.body = preview.summary;
-			preview.detailLines << previewText("Image format: %1").arg(preview.imageFormat.isEmpty() ? previewText("unknown") : preview.imageFormat);
-			preview.detailLines << previewText("Image size: %1").arg(size.isValid() ? previewText("%1 x %2").arg(size.width()).arg(size.height()) : previewText("unknown"));
-			preview.rawLines = preview.detailLines;
-			return preview;
-		}
-	}
-
-	bool utf8Ok = false;
-	const QString decoded = decodeUtf8Preview(bytes, &utf8Ok);
-	if (extensionUsuallyText(entry.virtualPath) || (utf8Ok && bytesLookTextual(bytes))) {
-		preview.kind = PackagePreviewKind::Text;
-		preview.title = previewText("Text preview");
-		preview.summary = preview.truncated ? previewText("Text preview truncated at %1.").arg(sizeText(preview.bytesRead)) : previewText("Text preview");
-		preview.body = decoded;
-		preview.detailLines << previewText("Encoding: UTF-8");
-		preview.rawLines = preview.detailLines;
-		preview.rawLines << previewText("Preview text follows:");
-		preview.rawLines << decoded;
+	const AssetAnalysis analysis = analyzeAssetBytes(entry.virtualPath, bytes, preview.totalBytes);
+	if (analysis.kind != AssetPreviewKind::Unknown && analysis.kind != AssetPreviewKind::Binary) {
+		applyAssetAnalysis(&preview, analysis);
 		return preview;
 	}
 
@@ -270,6 +236,11 @@ PackagePreview buildPackageEntryPreview(const PackageArchive& archive, const QSt
 	preview.rawLines = preview.detailLines;
 	preview.rawLines << previewText("Hex sample:");
 	preview.rawLines << preview.body;
+	if (analysis.kind == AssetPreviewKind::Binary) {
+		preview.assetKindId = analysis.kindId;
+		preview.assetDetailLines = analysis.detailLines;
+		preview.assetRawLines = analysis.rawLines;
+	}
 	return preview;
 }
 

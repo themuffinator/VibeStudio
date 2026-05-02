@@ -19,11 +19,11 @@ textures, sounds, scripts, shaders, packages, and build pipelines.
 
 > [!WARNING]
 > VibeStudio is at an extremely early pre-alpha stage. The repository is
-> currently a concept/foundation scaffold with planning documentation, CI,
-> imported compiler submodules, and a minimal Qt shell/CLI. The studio features
-> described below are product goals and roadmap targets, not implemented user
-> workflows. It is not ready for production modding, mapping, packaging, or
-> asset-authoring work.
+> currently a foundation scaffold with planning documentation, CI, imported
+> compiler submodules, a Qt shell, shared core services, and CLI workflows. Many
+> studio features described below remain product goals and roadmap targets; the
+> implemented surfaces are listed in Current Development State. It is not ready
+> for production modding, mapping, packaging, or asset-authoring work.
 
 The product direction borrows the clear, always-in-context workflow of modern
 idStudio-style tools while staying grounded in the constraints and file formats
@@ -55,13 +55,13 @@ of Doom, Quake, Quake II, and Quake III-era games.
 - Primary scope: end-to-end idTech1-3 game development.
 - Product emphasis: efficient, AI-accelerated, AI-optional workflows that reduce setup friction, repeated work, context switching, and time-to-test.
 - Accessibility emphasis: high-visibility themes, scalable UI, OS-backed TTS, keyboard/screen-reader support, and localization-first design.
-- Repository state: extremely early concept/foundation scaffold with documentation, CI, compiler submodules, and a minimal Qt shell/CLI.
+- Repository state: early foundation scaffold with documentation, CI, compiler submodules, shared core services, a Qt shell, and CLI workflow coverage.
 
 ## Current Development State
-VibeStudio is barely beyond the conceptual stage. The repository exists to
-capture the product direction, stack, architecture, roadmap, contributor rules,
-credits policy, imported compiler sources, and a tiny buildable application
-shell.
+VibeStudio is still pre-alpha, but it now has enough shared services to prove
+the early project/package/compiler loop. The repository captures the product
+direction, stack, architecture, roadmap, contributor rules, credits policy,
+imported compiler sources, and a buildable application shell.
 
 What exists today:
 - Documentation for product goals, stack, roadmap, UX, accessibility,
@@ -78,10 +78,25 @@ What exists today:
   paths, path traversal checks, safe output-path joining, and mount-layer
   session metadata.
 - Basic read-only package browsing for folders, PAK, WAD, ZIP, and PK3:
-  tree and entry-list browsing, filtering, text/image/binary metadata previews,
+  tree and entry-list browsing, filtering,
+  text/image/model/audio/script/binary metadata previews,
   detail drawers, activity-center scan/extract tasks, safe selected/all
   extraction with exact output paths, and CLI `--info`/`--list`/preview/
   extract/validate coverage.
+- Safe package staging and save-as workflows with add/import, replace, rename,
+  delete, conflict reporting, before/after composition, package manifest export,
+  deterministic PAK and ZIP/PK3 writers, a map-lump-tested PWAD writer, GUI
+  staging summaries, and CLI `package stage`/`manifest`/`save-as` coverage.
+- Asset preview and editing-depth services for texture/image metadata,
+  palette-aware previews, crop/resize/palette conversion queues, MDL/MD2/MD3
+  model metadata, skin/material dependencies, WAV metadata/waveform export, and
+  CFG/shader/QuakeC text diagnostics with CLI `asset inspect`/`convert`/
+  `audio-wav`/`find`/`replace` coverage.
+- Advanced Studio MVP services for idTech3 shader script graphs, shader stage
+  editing and package-reference validation, Doom/Quake sprite workflow plans,
+  project source indexing, language hook descriptors, extension manifests, and
+  reviewable AI creation proposals for shaders, entity definitions, package
+  validation, batch conversion, and CLI commands.
 - Manual game installation profiles with stable IDs, game keys, engine-family
   defaults, read-only validation, GUI management, confirmable Steam/GOG
   candidate detection/import, and CLI report/add/select/validate/remove/detect
@@ -100,9 +115,10 @@ What exists today:
   schema-versioned command manifests, user/project executable overrides,
   captured stdout/stderr, parsed diagnostics, run/rerun CLI execution, and
   project output registration.
-- CLI subcommand router for the first project, package, installation, and
-  compiler command families, with JSON output for automation and a documented
-  stable exit-code contract.
+- CLI subcommand router for project, package, installation, asset, map,
+  shader, sprite, code, extension, compiler, AI, credits, and diagnostics
+  command families, with JSON output for automation and a documented stable
+  exit-code contract.
 - Portable release packaging scripts for Windows, macOS, and Linux target
   bundles with generated offline guide, platform smoke notes, checksums,
   samples, package manifests, and VibeStudio/imported-compiler license bundle.
@@ -114,8 +130,10 @@ What exists today:
 - Early CI/build validation.
 
 What does not exist yet:
-- Package editing, write-back, package diffing, and save-as.
-- Level, model, texture, audio, sprite, shader, code, or script editors.
+- Broad in-place package editing, package compare tooling, and advanced binary
+  format editors beyond the current staged save-as workflow.
+- Full-production level editing, model, texture, audio, sprite, shader, code,
+  or script editors beyond the current MVP service/UI slices.
 - Full CLI parity.
 - Provider network execution for AI connectors.
 - Full guided first-run setup, full accessibility audits, or localization
@@ -153,18 +171,28 @@ matrix mark it implemented.
 The current scaffold includes:
 - A Meson/Qt6 C++20 app target named `vibestudio`.
 - A small but working Qt Widgets studio shell.
-- A CLI surface for version/platform diagnostics, project/package/compiler
-  workflows, AI experiments, credits validation, JSON output, quiet/verbose
-  modes, watch streaming, and task-state automation.
+- A CLI surface for version/platform diagnostics, project/package/compiler,
+  map, shader, sprite, code, extension, and AI workflows, credits validation,
+  JSON output, quiet/verbose modes, watch streaming, and task-state automation.
 - Reusable shell UI primitives for loading/progress placeholders and
   detail-on-demand logs or metadata.
 - A small shared package/archive interface layer adapted from PakFu's archive
   surface, including safe normalized virtual paths and read-only reader behavior.
-- Read-only folder, PAK, WAD, ZIP, and PK3 entry listing through shared core
-  services used by both GUI and CLI, plus path-safe extraction for selected
-  entries or entire packages.
+- Folder, PAK, WAD, ZIP, and PK3 entry listing through shared core services
+  used by both GUI and CLI, plus path-safe extraction for selected entries or
+  entire packages.
+- Safe package staging with save-as writers for simple PAK, ZIP/PK3, and tested
+  PWAD outputs plus schema-versioned staging manifests.
 - Summary-first graphical shell views for project health, package composition
-  by type/size, and compiler pipeline profile readiness.
+  by type/size, level-map health/statistics, and compiler pipeline profile
+  readiness.
+- Level-map MVP services and UI/CLI surfaces for Doom WAD map lump inspection,
+  Quake-family and Quake III `.map` inspection, entity/property lists,
+  texture/material references, validation, safe entity/movement edits,
+  undo/redo state, non-destructive save-as, and compiler profile handoff.
+- Advanced Studio MVP services and UI/CLI surfaces for shader script parsing
+  and stage edits, sprite naming/sequencing/package plans, source indexing,
+  extension discovery/command planning, and staged AI creation proposals.
 - A data-driven editor profile registry with placeholder presets for
   VibeStudio default, GtkRadiant 1.6.0-style, NetRadiant Custom-style,
   TrenchBroom-style, and QuArK-style workflows.
@@ -282,12 +310,13 @@ Current scaffold commands:
 - `--check-package-path <path>`: normalize and validate a package virtual path.
 - `--info <path>`: print read-only package summary for a folder, PAK, WAD, ZIP, or PK3.
 - `--list <path>`: list package entries and metadata.
-- `--preview-package <path> --preview-entry <virtual-path>`: print a text,
-  image metadata, or binary hex preview for a package entry.
+- `--preview-package <path> --preview-entry <virtual-path>`: print text,
+  image, model, audio, script, or binary metadata for a package entry.
 - `--extract <path> --output <folder> [--extract-entry <virtual-path>]`:
   extract selected entries, or every entry when no entry is passed.
 - `--extract-all` / `--dry-run` / `--overwrite`: control package extraction
-  scope, staged output reporting, and explicit replacement behavior.
+  scope, package save-as planning, staged output reporting, and explicit
+  replacement behavior.
 - `--validate-package <path>`: validate package loading and report warnings.
 - `--settings-report`: print persistent settings storage and recent projects.
 - `--setup-report`: print first-run setup status and summary.
@@ -339,6 +368,39 @@ Current subcommands:
   one or more entries, or all entries when no entry is supplied.
 - `package validate <path>`: validate package loading and return
   `validation-failed` when loader warnings are present.
+- `package stage <path> [stage options] [--resolve block|replace-existing|skip]`:
+  preview staged add, replace, rename, and delete operations with before/after
+  entry and composition JSON.
+- `package manifest <path> --output <manifest.json> [stage options]`: export a
+  schema-versioned staged package manifest without writing an archive.
+- `package save-as <path> <output> [--format pak|zip|pk3|wad] [stage options] [--dry-run]`:
+  write or dry-run a staged package to a new path, report blockers, hashes,
+  output paths, and optional manifest JSON.
+- `asset inspect <package> <virtual-path>`: inspect image, model, audio, text,
+  script, or binary metadata for one package entry.
+- `asset convert <package> --output <folder> [--entry <virtual-path>]`:
+  batch-convert package images with optional `--format`, `--crop`, `--resize`,
+  `--palette`, `--dry-run`, and `--overwrite`.
+- `asset audio-wav <package> <virtual-path> --output <file.wav>`: export
+  readable WAV/PCM package entries with dry-run and overwrite controls.
+- `asset find` / `asset replace`: search or safely replace project text/script
+  assets with file/line matches and save-state reporting.
+- `map inspect`, `map edit`, `map move`, and `map compile-plan`: inspect Doom
+  WAD map lumps and Quake-family `.map` files, make safe non-destructive edits,
+  and hand off to compiler profile plans.
+- `shader inspect <shader-file> [--package <path>]`: parse idTech3 shader
+  scripts into stage graphs, previews, raw detail, and package-reference
+  validation reports.
+- `shader set-stage`: round-trip a stage directive edit with `--shader`,
+  `--stage`, `--directive`, `--value`, and `--output` without modifying the
+  source in place.
+- `sprite plan --engine doom|quake --name <name>`: create Doom lump naming or
+  Quake `.spr` frame plans with palette, sequence, and package staging notes.
+- `code index <project-root> [--find <symbol>]`: scan source trees, language
+  hooks, diagnostics, symbols, build task hints, and source-port launch profiles.
+- `extension discover`, `extension inspect`, and `extension run`: load
+  `vibestudio.extension.json` manifests, report trust/sandbox metadata, and
+  dry-run or execute reviewed extension command plans.
 - `compiler list`: print compiler registry and executable discovery.
 - `compiler profiles`: list wrapper profiles, currently ericw-tools
   `qbsp`/`vis`/`light`, ZDBSP nodes, ZokumBSP nodes, and q3map2 probe/BSP
@@ -370,6 +432,10 @@ Current subcommands:
   metadata.
 - `ai cli-command --prompt <text>`, `ai fix-plan`, `ai asset-request`, and
   `ai compare`: generate staged, reviewable automation proposals.
+- `ai shader-scaffold`, `ai entity-snippet`, `ai package-plan`,
+  `ai batch-recipe`, and `ai review`: generate and inspect staged Advanced
+  Studio creation proposals with summary, context, actions, prompts, and
+  response detail.
 
 ## Documentation
 - [`AGENTS.md`](AGENTS.md): contributor and automation rules.
@@ -393,7 +459,7 @@ Current subcommands:
 
 ## Credits
 - Creator: [themuffinator](https://github.com/themuffinator) (DarkMatter Productions)
-- Structural, archive-tooling, and installation-profile reference: [PakFu](https://github.com/themuffinator/PakFu), with the current package interface and virtual-path safety slice adapted from its `src/archive` surface at `c82dfb0ef0b5d7442e243ace8cd83bc45f82f257`; the game installation profile/detection model is a VibeStudio-owned adaptation of PakFu's profile-driven workflow ideas.
+- Structural, archive-tooling, and installation-profile reference: [PakFu](https://github.com/themuffinator/PakFu), with the current package interface, virtual-path safety, and staged package write-back concepts adapted from its archive direction at `c82dfb0ef0b5d7442e243ace8cd83bc45f82f257`; the game installation profile/detection model is a VibeStudio-owned adaptation of PakFu's profile-driven workflow ideas.
 - Imported compiler/toolchain sources: [ericw-tools](https://github.com/ericwa/ericw-tools), q3map2 from [NetRadiant Custom](https://github.com/Garux/netradiant-custom), [ZDBSP](https://github.com/rheit/zdbsp), and [ZokumBSP](https://github.com/zokum-no/zokumbsp)
 - Editor workflow inspirations: [GtkRadiant](https://github.com/TTimo/GtkRadiant), [NetRadiant Custom](https://github.com/Garux/netradiant-custom), [TrenchBroom](https://trenchbroom.github.io/), and [QuArK](https://quark.sourceforge.io/)
 - Optional AI automation references: [OpenAI API documentation](https://platform.openai.com/docs/quickstart), [Claude API docs](https://platform.claude.com/docs/en/home), [Gemini API docs](https://ai.google.dev/api), [ElevenLabs docs](https://elevenlabs.io/docs/overview/intro), and [Meshy docs](https://docs.meshy.ai/en)
@@ -413,15 +479,16 @@ section and `docs/CREDITS.md` in the same change.
 - Project data: JSON manifests, Qt settings, and planned SQLite/FTS indexing.
 - CLI: active lightweight subcommand router with testable command registry,
   JSON output, stable exit codes, quiet/verbose modes, dry-run behavior, watch
-  streaming, task-state output, and deferred CLI11 adoption.
+  streaming, task-state output, Advanced Studio command families, and deferred
+  CLI11 adoption.
 - Rendering: Qt custom widgets/QPainter for 2D, thin QOpenGLWidget previews for MVP 3D, planned bgfx renderer backend for production viewports.
 - Text/IDE: Qt text widgets first, planned KSyntaxHighlighting, Tree-sitter, and LSP integration.
 - Media: native idTech parsers first, with planned Qt Multimedia, miniaudio, and optional Assimp support.
 - Accessibility/localization: Qt accessibility APIs, Qt High DPI behavior, Qt TextToSpeech, Qt Linguist/QTranslator, and QLocale.
 - AI automation: optional provider-neutral connector/model/workflow layer, with
   OpenAI implemented first for configuration and reviewable no-write
-  experiments, and planned Claude, Gemini, ElevenLabs, Meshy, local/offline, and
-  custom connector paths.
+  experiments including shader/entity/package/batch proposals, and planned
+  Claude, Gemini, ElevenLabs, Meshy, local/offline, and custom connector paths.
 - External compiler imports: Git submodules.
 
 See [`docs/STACK.md`](docs/STACK.md) for the full stack decision record.

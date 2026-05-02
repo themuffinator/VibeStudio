@@ -1,15 +1,19 @@
 #include "cli/cli.h"
 
 #include "app/ui_primitives.h"
+#include "core/advanced_studio.h"
 #include "core/ai_connectors.h"
 #include "core/ai_workflows.h"
+#include "core/asset_tools.h"
 #include "core/compiler_profiles.h"
 #include "core/compiler_registry.h"
 #include "core/compiler_runner.h"
 #include "core/editor_profiles.h"
+#include "core/level_map.h"
 #include "core/operation_state.h"
 #include "core/package_archive.h"
 #include "core/package_preview.h"
+#include "core/package_staging.h"
 #include "core/project_manifest.h"
 #include "core/studio_manifest.h"
 #include "core/studio_settings.h"
@@ -26,6 +30,7 @@
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QProcess>
+#include <QRegularExpression>
 #include <QSettings>
 #include <QSysInfo>
 
@@ -137,6 +142,25 @@ QVector<CliCommandDescriptor> cliCommandDescriptors()
 		{QStringLiteral("package"), QStringLiteral("preview"), QStringLiteral("Preview a package entry."), {QStringLiteral("vibestudio --cli package preview ./pak0.pak maps/start.bsp")}},
 		{QStringLiteral("package"), QStringLiteral("extract"), QStringLiteral("Extract staged package entries with dry-run support."), {QStringLiteral("vibestudio --cli package extract ./pak0.pak --output ./out --entry maps/start.bsp --dry-run")}, true, true, true},
 		{QStringLiteral("package"), QStringLiteral("validate"), QStringLiteral("Validate package loading."), {QStringLiteral("vibestudio --cli package validate ./pak0.pak")}},
+		{QStringLiteral("package"), QStringLiteral("stage"), QStringLiteral("Preview staged package add, replace, rename, and delete operations."), {QStringLiteral("vibestudio --cli package stage ./pak0.pak --add-file ./autoexec.cfg --as scripts/autoexec.cfg --json")}, true, true, true},
+		{QStringLiteral("package"), QStringLiteral("save-as"), QStringLiteral("Write a staged package to a new PAK, ZIP, PK3, or tested PWAD path."), {QStringLiteral("vibestudio --cli package save-as ./pak0.pak ./rebuilt.pk3 --format pk3 --manifest ./rebuilt.manifest.json")}, true, true, true},
+		{QStringLiteral("package"), QStringLiteral("manifest"), QStringLiteral("Export a package staging manifest without writing a package."), {QStringLiteral("vibestudio --cli package manifest ./pak0.pak --output ./stage.manifest.json")}, true, true, true},
+		{QStringLiteral("asset"), QStringLiteral("inspect"), QStringLiteral("Inspect package entry asset metadata, including image, model, audio, and script details."), {QStringLiteral("vibestudio --cli asset inspect ./pak0.pk3 textures/base/wall.png --json")}},
+		{QStringLiteral("asset"), QStringLiteral("convert"), QStringLiteral("Batch-convert package image entries with crop, resize, palette, and dry-run previews."), {QStringLiteral("vibestudio --cli asset convert ./pak0.pk3 --entry textures/base/wall.png --output ./converted --format png --resize 128x128 --dry-run")}, true, true, true},
+		{QStringLiteral("asset"), QStringLiteral("audio-wav"), QStringLiteral("Export readable WAV/PCM package audio entries to a WAV file."), {QStringLiteral("vibestudio --cli asset audio-wav ./pak0.pk3 sound/items/pickup.wav --output ./pickup.wav --dry-run")}, true, true, true},
+		{QStringLiteral("asset"), QStringLiteral("find"), QStringLiteral("Search project text/script assets with compiler-style locations."), {QStringLiteral("vibestudio --cli asset find ./mymod --find \"seta\" --json")}},
+		{QStringLiteral("asset"), QStringLiteral("replace"), QStringLiteral("Preview or write project-wide text/script replacements with save-state reporting."), {QStringLiteral("vibestudio --cli asset replace ./mymod --find \"devmap\" --replace \"map\" --dry-run")}, true, true, true},
+		{QStringLiteral("map"), QStringLiteral("inspect"), QStringLiteral("Inspect Doom WAD maps and Quake-family .map files with entities, textures, statistics, validation, and preview lines."), {QStringLiteral("vibestudio --cli map inspect ./maps/start.map --select entity:0 --json")}},
+		{QStringLiteral("map"), QStringLiteral("edit"), QStringLiteral("Edit map entity key/value pairs and write the result to a non-destructive save-as path."), {QStringLiteral("vibestudio --cli map edit ./maps/start.map --entity 1 --set targetname=lift --output ./maps/start-edited.map")}, true, true, true},
+		{QStringLiteral("map"), QStringLiteral("move"), QStringLiteral("Move a selected Doom vertex/linedef/thing or Quake entity and save to a new path."), {QStringLiteral("vibestudio --cli map move ./maps/start.map --object entity:1 --delta 16,0,0 --output ./maps/start-moved.map")}, true, true, true},
+		{QStringLiteral("map"), QStringLiteral("compile-plan"), QStringLiteral("Build a compiler command plan from the inspected map and selected compiler profile."), {QStringLiteral("vibestudio --cli map compile-plan ./maps/start.map --profile ericw-qbsp --json")}, true, true, true},
+		{QStringLiteral("shader"), QStringLiteral("inspect"), QStringLiteral("Parse idTech3 shader scripts into an editable graph model and validate texture references."), {QStringLiteral("vibestudio --cli shader inspect ./scripts/common.shader --package ./baseq3 --json")}},
+		{QStringLiteral("shader"), QStringLiteral("set-stage"), QStringLiteral("Edit a shader stage directive and write a round-tripped shader script to a save-as path."), {QStringLiteral("vibestudio --cli shader set-stage ./scripts/common.shader --shader textures/base/wall --stage 1 --directive blendFunc --value \"GL_ONE GL_ONE\" --output ./scripts/common-edited.shader")}, true, true, true},
+		{QStringLiteral("sprite"), QStringLiteral("plan"), QStringLiteral("Create Doom or Quake sprite frame, palette, sequencing, and package staging plans."), {QStringLiteral("vibestudio --cli sprite plan --engine doom --name TROO --frames 2 --rotations 8 --palette doom --json")}, true, true, true},
+		{QStringLiteral("code"), QStringLiteral("index"), QStringLiteral("Index a project source tree with language hooks, diagnostics, symbols, build tasks, and launch profiles."), {QStringLiteral("vibestudio --cli code index ./mymod --find monster --json")}},
+		{QStringLiteral("extension"), QStringLiteral("discover"), QStringLiteral("Discover VibeStudio extension manifests and report trust and sandbox metadata."), {QStringLiteral("vibestudio --cli extension discover ./extensions --json")}},
+		{QStringLiteral("extension"), QStringLiteral("inspect"), QStringLiteral("Inspect a VibeStudio extension manifest."), {QStringLiteral("vibestudio --cli extension inspect ./extensions/tool/vibestudio.extension.json")}},
+		{QStringLiteral("extension"), QStringLiteral("run"), QStringLiteral("Build or execute an approved extension command plan with generated-file staging."), {QStringLiteral("vibestudio --cli extension run ./extensions/tool/vibestudio.extension.json build --dry-run --json")}, true, true, true},
 		{QStringLiteral("compiler"), QStringLiteral("list"), QStringLiteral("Print compiler registry and executable discovery."), {QStringLiteral("vibestudio --cli compiler list --json")}},
 		{QStringLiteral("compiler"), QStringLiteral("profiles"), QStringLiteral("Print compiler wrapper profiles."), {QStringLiteral("vibestudio --cli compiler profiles")}},
 		{QStringLiteral("compiler"), QStringLiteral("plan"), QStringLiteral("Build a reviewable compiler command plan."), {QStringLiteral("vibestudio --cli compiler plan ericw-qbsp --input ./maps/start.map --dry-run")}, true, true, true},
@@ -154,6 +178,11 @@ QVector<CliCommandDescriptor> cliCommandDescriptors()
 		{QStringLiteral("ai"), QStringLiteral("fix-plan"), QStringLiteral("Generate a supervised fix-and-retry plan from compiler output."), {QStringLiteral("vibestudio --cli ai fix-plan --log ./build/qbsp.log --command \"vibestudio --cli compiler run ericw-qbsp --input maps/start.map\"")}},
 		{QStringLiteral("ai"), QStringLiteral("asset-request"), QStringLiteral("Stage an ElevenLabs/Meshy/OpenAI asset generation request before import."), {QStringLiteral("vibestudio --cli ai asset-request --provider meshy --kind texture --prompt \"rusty sci-fi panel\"")}, true, true, true},
 		{QStringLiteral("ai"), QStringLiteral("compare"), QStringLiteral("Prepare side-by-side provider output comparison metadata."), {QStringLiteral("vibestudio --cli ai compare --provider-a openai --provider-b claude --prompt \"explain this build failure\"")}},
+		{QStringLiteral("ai"), QStringLiteral("shader-scaffold"), QStringLiteral("Generate a staged prompt-to-shader scaffold proposal."), {QStringLiteral("vibestudio --cli ai shader-scaffold --prompt \"glowing gothic wall\" --json")}, true, true, true},
+		{QStringLiteral("ai"), QStringLiteral("entity-snippet"), QStringLiteral("Generate a staged prompt-to-entity-definition snippet."), {QStringLiteral("vibestudio --cli ai entity-snippet --prompt \"trigger starts lift\" --json")}, true, true, true},
+		{QStringLiteral("ai"), QStringLiteral("package-plan"), QStringLiteral("Generate a staged prompt-to-package-validation plan."), {QStringLiteral("vibestudio --cli ai package-plan --prompt \"release check\" --package ./release.pk3 --json")}, true, true, true},
+		{QStringLiteral("ai"), QStringLiteral("batch-recipe"), QStringLiteral("Generate a staged prompt-to-batch-conversion recipe."), {QStringLiteral("vibestudio --cli ai batch-recipe --prompt \"convert doom sprites\" --json")}, true, true, true},
+		{QStringLiteral("ai"), QStringLiteral("review"), QStringLiteral("Render the AI proposal review surface for a generated workflow."), {QStringLiteral("vibestudio --cli ai review --prompt \"glowing shader\" --kind shader --json")}, true, true, true},
 		{QStringLiteral("credits"), QStringLiteral("validate"), QStringLiteral("Validate README and docs credits coverage for imported lineage."), {QStringLiteral("vibestudio --cli credits validate --json")}},
 	};
 }
@@ -217,10 +246,10 @@ QStringList commandTokens(const QStringList& args)
 	QStringList tokens;
 	for (int i = 1; i < args.size(); ++i) {
 		const QString token = args.at(i);
-		if (token == QStringLiteral("--cli") || token == QStringLiteral("--json") || token == QStringLiteral("--quiet") || token == QStringLiteral("--verbose") || token == QStringLiteral("--dry-run") || token == QStringLiteral("--watch") || token == QStringLiteral("--task-state")) {
+		if (token == QStringLiteral("--cli") || token == QStringLiteral("--json") || token == QStringLiteral("--quiet") || token == QStringLiteral("--verbose") || token == QStringLiteral("--dry-run") || token == QStringLiteral("--write") || token == QStringLiteral("--overwrite") || token == QStringLiteral("--case-sensitive") || token == QStringLiteral("--watch") || token == QStringLiteral("--task-state") || token == QStringLiteral("--execute") || token == QStringLiteral("--allow-execution") || token == QStringLiteral("--no-stage")) {
 			continue;
 		}
-		if (token == QStringLiteral("--installation") || token == QStringLiteral("--project-installation") || token == QStringLiteral("--set-editor-profile") || token == QStringLiteral("--set-ai-free") || token == QStringLiteral("--set-ai-cloud") || token == QStringLiteral("--set-ai-agentic") || token == QStringLiteral("--set-ai-reasoning") || token == QStringLiteral("--set-ai-text-model") || token == QStringLiteral("--provider") || token == QStringLiteral("--provider-a") || token == QStringLiteral("--provider-b") || token == QStringLiteral("--model") || token == QStringLiteral("--model-a") || token == QStringLiteral("--model-b") || token == QStringLiteral("--prompt") || token == QStringLiteral("--text") || token == QStringLiteral("--log") || token == QStringLiteral("--command") || token == QStringLiteral("--kind") || token == QStringLiteral("--name") || token == QStringLiteral("--manifest") || token == QStringLiteral("--workspace-root")) {
+		if (token == QStringLiteral("--installation") || token == QStringLiteral("--project-installation") || token == QStringLiteral("--set-editor-profile") || token == QStringLiteral("--set-ai-free") || token == QStringLiteral("--set-ai-cloud") || token == QStringLiteral("--set-ai-agentic") || token == QStringLiteral("--set-ai-reasoning") || token == QStringLiteral("--set-ai-text-model") || token == QStringLiteral("--provider") || token == QStringLiteral("--provider-a") || token == QStringLiteral("--provider-b") || token == QStringLiteral("--model") || token == QStringLiteral("--model-a") || token == QStringLiteral("--model-b") || token == QStringLiteral("--prompt") || token == QStringLiteral("--text") || token == QStringLiteral("--log") || token == QStringLiteral("--command") || token == QStringLiteral("--kind") || token == QStringLiteral("--name") || token == QStringLiteral("--sprite-name") || token == QStringLiteral("--manifest") || token == QStringLiteral("--workspace-root") || token == QStringLiteral("--working-directory") || token == QStringLiteral("--input") || token == QStringLiteral("--output") || token == QStringLiteral("--format") || token == QStringLiteral("--crop") || token == QStringLiteral("--resize") || token == QStringLiteral("--palette") || token == QStringLiteral("--find") || token == QStringLiteral("--symbol") || token == QStringLiteral("--replace") || token == QStringLiteral("--extensions") || token == QStringLiteral("--add-file") || token == QStringLiteral("--import-file") || token == QStringLiteral("--as") || token == QStringLiteral("--replace-file") || token == QStringLiteral("--replace-entry") || token == QStringLiteral("--entry") || token == QStringLiteral("--rename") || token == QStringLiteral("--to") || token == QStringLiteral("--delete") || token == QStringLiteral("--remove-entry") || token == QStringLiteral("--resolve") || token == QStringLiteral("--map") || token == QStringLiteral("--map-name") || token == QStringLiteral("--engine") || token == QStringLiteral("--engine-hint") || token == QStringLiteral("--shader") || token == QStringLiteral("--stage") || token == QStringLiteral("--directive") || token == QStringLiteral("--value") || token == QStringLiteral("--frames") || token == QStringLiteral("--rotations") || token == QStringLiteral("--package") || token == QStringLiteral("--mounted-package") || token == QStringLiteral("--package-root") || token == QStringLiteral("--source-frame") || token == QStringLiteral("--extension-root") || token == QStringLiteral("--root") || token == QStringLiteral("--select") || token == QStringLiteral("--entity") || token == QStringLiteral("--set") || token == QStringLiteral("--property") || token == QStringLiteral("--object") || token == QStringLiteral("--delta") || token == QStringLiteral("--profile") || token == QStringLiteral("--compiler-profile") || token == QStringLiteral("--extra-args") || token == QStringLiteral("--compiler-search-paths") || token == QStringLiteral("--timeout-ms") || token == QStringLiteral("--executable")) {
 			++i;
 			continue;
 		}
@@ -309,10 +338,10 @@ void printHelp()
 	std::cout << "  --validate-package <path>\n";
 	std::cout << "                      Validate a package can be opened without loader warnings.\n";
 	std::cout << "  --output <path>     Output folder for package extraction or output path for compiler planning.\n";
-	std::cout << "  --dry-run           Report staged package writes or compiler command plans without touching the file system.\n";
+	std::cout << "  --dry-run           Report package extraction/save-as writes or compiler command plans without touching the file system.\n";
 	std::cout << "  --watch             Stream compiler task log entries while a long-running command is active.\n";
 	std::cout << "  --task-state        Include machine-readable task state objects in JSON output where supported.\n";
-	std::cout << "  --overwrite         Allow package extraction to replace existing output files.\n";
+	std::cout << "  --overwrite         Allow package extraction or save-as to replace existing output files.\n";
 	std::cout << "  --settings-report   Print settings storage and recent projects.\n";
 	std::cout << "  --setup-report      Print first-run setup status and summary.\n";
 	std::cout << "  --setup-start       Start or resume first-run setup.\n";
@@ -404,6 +433,30 @@ void printHelp()
 	std::cout << "                      Extract selected entries or every entry when no entry is provided.\n";
 	std::cout << "  package validate <path>\n";
 	std::cout << "                      Validate package loading and return validation-failed for warnings.\n";
+	std::cout << "  package stage <path> [--add-file <file> --as <virtual-path>] [--replace-file <file> --replace-entry <virtual-path>] [--rename <old> --to <new>] [--delete <virtual-path>] [--resolve block|replace-existing|skip]\n";
+	std::cout << "                      Preview staged changes, conflicts, and before/after composition without writing.\n";
+	std::cout << "  package save-as <path> <output> [--format pak|zip|pk3|wad] [stage options] [--dry-run] [--overwrite] [--manifest <path>]\n";
+	std::cout << "                      Write staged changes to a new package path; in-place overwrite is blocked.\n";
+	std::cout << "  package manifest <path> --output <manifest.json> [stage options]\n";
+	std::cout << "                      Export a reproducible staged package manifest without writing a package.\n";
+	std::cout << "  asset inspect <package> <virtual-path>\n";
+	std::cout << "                      Inspect texture/image, model, audio, or text/script metadata for one package entry.\n";
+	std::cout << "  asset convert <package> --output <folder> [--entry <virtual-path>] [--format png|jpg|bmp] [--crop x,y,w,h] [--resize WxH] [--palette grayscale|indexed] [--dry-run] [--overwrite]\n";
+	std::cout << "                      Batch-convert package image entries with before/after size previews.\n";
+	std::cout << "  asset audio-wav <package> <virtual-path> --output <file.wav> [--dry-run] [--overwrite]\n";
+	std::cout << "                      Export readable WAV/PCM audio entries without decoding compressed codecs.\n";
+	std::cout << "  asset find <project-root> --find <text> [--extensions cfg;shader;qc]\n";
+	std::cout << "                      Search local text/script assets and print file, line, and column matches.\n";
+	std::cout << "  asset replace <project-root> --find <text> --replace <text> [--dry-run|--write] [--extensions cfg;shader;qc]\n";
+	std::cout << "                      Preview or write text/script replacements with save-state reporting.\n";
+	std::cout << "  map inspect <path> [--map MAP01] [--engine idtech2|idtech3] [--select entity:0]\n";
+	std::cout << "                      Inspect entities, textures/materials, map statistics, validation, and preview lines.\n";
+	std::cout << "  map edit <path> --entity <id> --set key=value --output <path> [--dry-run] [--overwrite]\n";
+	std::cout << "                      Edit entity key/value pairs and write a non-destructive save-as path.\n";
+	std::cout << "  map move <path> --object entity:0|vertex:0|linedef:0|thing:0 --delta x,y,z --output <path>\n";
+	std::cout << "                      Move safe MVP selections and write a non-destructive save-as path.\n";
+	std::cout << "  map compile-plan <path> [--profile <compiler-profile>] [--output <path>]\n";
+	std::cout << "                      Build a compiler command plan from the inspected map.\n";
 	std::cout << "  compiler list       Print compiler registry and executable discovery.\n";
 	std::cout << "  compiler profiles   Print available compiler wrapper profiles.\n";
 	std::cout << "  compiler set-path <tool> --executable <path>\n";
@@ -773,22 +826,40 @@ QJsonObject packagePreviewJson(const PackagePreview& preview)
 	object.insert(QStringLiteral("virtualPath"), preview.virtualPath);
 	object.insert(QStringLiteral("kind"), packagePreviewKindId(preview.kind));
 	object.insert(QStringLiteral("kindLabel"), packagePreviewKindDisplayName(preview.kind));
+	object.insert(QStringLiteral("assetKind"), preview.assetKindId);
 	object.insert(QStringLiteral("title"), preview.title);
 	object.insert(QStringLiteral("summary"), preview.summary);
 	object.insert(QStringLiteral("body"), preview.body);
 	object.insert(QStringLiteral("details"), stringArrayJson(preview.detailLines));
 	object.insert(QStringLiteral("raw"), stringArrayJson(preview.rawLines));
+	object.insert(QStringLiteral("assetDetails"), stringArrayJson(preview.assetDetailLines));
+	object.insert(QStringLiteral("assetRaw"), stringArrayJson(preview.assetRawLines));
 	object.insert(QStringLiteral("truncated"), preview.truncated);
 	object.insert(QStringLiteral("bytesRead"), static_cast<double>(preview.bytesRead));
 	object.insert(QStringLiteral("totalBytes"), static_cast<double>(preview.totalBytes));
 	object.insert(QStringLiteral("error"), preview.error);
 	object.insert(QStringLiteral("imageFormat"), preview.imageFormat);
+	object.insert(QStringLiteral("imageDepth"), preview.imageDepth);
+	object.insert(QStringLiteral("imageColorCount"), preview.imageColorCount);
+	object.insert(QStringLiteral("imagePaletteAware"), preview.imagePaletteAware);
+	object.insert(QStringLiteral("imagePalette"), stringArrayJson(preview.imagePaletteLines));
 	if (preview.imageSize.isValid()) {
 		QJsonObject size;
 		size.insert(QStringLiteral("width"), preview.imageSize.width());
 		size.insert(QStringLiteral("height"), preview.imageSize.height());
 		object.insert(QStringLiteral("imageSize"), size);
 	}
+	object.insert(QStringLiteral("modelFormat"), preview.modelFormat);
+	object.insert(QStringLiteral("modelViewport"), stringArrayJson(preview.modelViewportLines));
+	object.insert(QStringLiteral("modelMaterials"), stringArrayJson(preview.modelMaterialLines));
+	object.insert(QStringLiteral("modelAnimations"), stringArrayJson(preview.modelAnimationLines));
+	object.insert(QStringLiteral("audioFormat"), preview.audioFormat);
+	object.insert(QStringLiteral("audioWaveform"), stringArrayJson(preview.audioWaveformLines));
+	object.insert(QStringLiteral("textLanguageId"), preview.textLanguageId);
+	object.insert(QStringLiteral("textLanguageName"), preview.textLanguageName);
+	object.insert(QStringLiteral("textHighlights"), stringArrayJson(preview.textHighlightLines));
+	object.insert(QStringLiteral("textDiagnostics"), stringArrayJson(preview.textDiagnosticLines));
+	object.insert(QStringLiteral("textSaveState"), preview.textSaveState);
 	return object;
 }
 
@@ -830,6 +901,104 @@ QJsonObject packageExtractionReportJson(const PackageExtractionReport& report)
 		entries.append(packageExtractionEntryJson(result));
 	}
 	object.insert(QStringLiteral("entries"), entries);
+	return object;
+}
+
+QJsonObject assetImageConversionEntryJson(const AssetImageConversionEntryResult& result)
+{
+	QJsonObject object;
+	object.insert(QStringLiteral("virtualPath"), result.virtualPath);
+	object.insert(QStringLiteral("outputPath"), result.outputPath);
+	object.insert(QStringLiteral("outputFormat"), result.outputFormat);
+	if (result.beforeSize.isValid()) {
+		QJsonObject size;
+		size.insert(QStringLiteral("width"), result.beforeSize.width());
+		size.insert(QStringLiteral("height"), result.beforeSize.height());
+		object.insert(QStringLiteral("beforeSize"), size);
+	}
+	if (result.afterSize.isValid()) {
+		QJsonObject size;
+		size.insert(QStringLiteral("width"), result.afterSize.width());
+		size.insert(QStringLiteral("height"), result.afterSize.height());
+		object.insert(QStringLiteral("afterSize"), size);
+	}
+	object.insert(QStringLiteral("inputBytes"), static_cast<double>(result.inputBytes));
+	object.insert(QStringLiteral("outputBytes"), static_cast<double>(result.outputBytes));
+	object.insert(QStringLiteral("dryRun"), result.dryRun);
+	object.insert(QStringLiteral("written"), result.written);
+	object.insert(QStringLiteral("message"), result.message);
+	object.insert(QStringLiteral("error"), result.error);
+	object.insert(QStringLiteral("preview"), stringArrayJson(result.previewLines));
+	return object;
+}
+
+QJsonObject assetImageConversionReportJson(const AssetImageConversionReport& report)
+{
+	QJsonObject object;
+	object.insert(QStringLiteral("sourcePath"), report.sourcePath);
+	object.insert(QStringLiteral("outputDirectory"), report.outputDirectory);
+	object.insert(QStringLiteral("requestedCount"), report.requestedCount);
+	object.insert(QStringLiteral("processedCount"), report.processedCount);
+	object.insert(QStringLiteral("writtenCount"), report.writtenCount);
+	object.insert(QStringLiteral("errorCount"), report.errorCount);
+	object.insert(QStringLiteral("totalInputBytes"), static_cast<double>(report.totalInputBytes));
+	object.insert(QStringLiteral("totalOutputBytes"), static_cast<double>(report.totalOutputBytes));
+	object.insert(QStringLiteral("dryRun"), report.dryRun);
+	object.insert(QStringLiteral("succeeded"), report.succeeded());
+	object.insert(QStringLiteral("warnings"), stringArrayJson(report.warnings));
+	QJsonArray entries;
+	for (const AssetImageConversionEntryResult& result : report.entries) {
+		entries.append(assetImageConversionEntryJson(result));
+	}
+	object.insert(QStringLiteral("entries"), entries);
+	return object;
+}
+
+QJsonObject assetAudioExportReportJson(const AssetAudioExportReport& report)
+{
+	QJsonObject object;
+	object.insert(QStringLiteral("sourcePath"), report.sourcePath);
+	object.insert(QStringLiteral("virtualPath"), report.virtualPath);
+	object.insert(QStringLiteral("outputPath"), report.outputPath);
+	object.insert(QStringLiteral("bytes"), static_cast<double>(report.bytes));
+	object.insert(QStringLiteral("dryRun"), report.dryRun);
+	object.insert(QStringLiteral("written"), report.written);
+	object.insert(QStringLiteral("message"), report.message);
+	object.insert(QStringLiteral("error"), report.error);
+	object.insert(QStringLiteral("succeeded"), report.succeeded());
+	return object;
+}
+
+QJsonObject assetTextMatchJson(const AssetTextMatch& match)
+{
+	QJsonObject object;
+	object.insert(QStringLiteral("filePath"), match.filePath);
+	object.insert(QStringLiteral("line"), match.line);
+	object.insert(QStringLiteral("column"), match.column);
+	object.insert(QStringLiteral("lineText"), match.lineText);
+	return object;
+}
+
+QJsonObject assetTextSearchReportJson(const AssetTextSearchReport& report)
+{
+	QJsonObject object;
+	object.insert(QStringLiteral("rootPath"), report.rootPath);
+	object.insert(QStringLiteral("findText"), report.findText);
+	object.insert(QStringLiteral("replaceText"), report.replaceText);
+	object.insert(QStringLiteral("replace"), report.replace);
+	object.insert(QStringLiteral("dryRun"), report.dryRun);
+	object.insert(QStringLiteral("filesScanned"), report.filesScanned);
+	object.insert(QStringLiteral("filesWithMatches"), report.filesWithMatches);
+	object.insert(QStringLiteral("matchCount"), report.matchCount);
+	object.insert(QStringLiteral("replacementCount"), report.replacementCount);
+	object.insert(QStringLiteral("saveState"), report.saveState);
+	object.insert(QStringLiteral("warnings"), stringArrayJson(report.warnings));
+	object.insert(QStringLiteral("succeeded"), report.succeeded());
+	QJsonArray matches;
+	for (const AssetTextMatch& match : report.matches) {
+		matches.append(assetTextMatchJson(match));
+	}
+	object.insert(QStringLiteral("matches"), matches);
 	return object;
 }
 
@@ -1268,6 +1437,8 @@ QJsonObject compilerCommandPlanJson(const CompilerCommandPlan& plan)
 	object.insert(QStringLiteral("inputPath"), plan.inputPath);
 	object.insert(QStringLiteral("expectedOutputPath"), plan.expectedOutputPath);
 	object.insert(QStringLiteral("commandLine"), plan.commandLine);
+	object.insert(QStringLiteral("knownIssueWarnings"), stringArrayJson(plan.knownIssueWarnings));
+	object.insert(QStringLiteral("preflightWarnings"), stringArrayJson(plan.preflightWarnings));
 	object.insert(QStringLiteral("warnings"), stringArrayJson(plan.warnings));
 	object.insert(QStringLiteral("errors"), stringArrayJson(plan.errors));
 	return object;
@@ -1319,6 +1490,571 @@ QJsonObject compilerRunResultJson(const CompilerRunResult& result)
 	object.insert(QStringLiteral("manifestPath"), result.manifestPath);
 	object.insert(QStringLiteral("error"), result.error);
 	object.insert(QStringLiteral("manifest"), compilerCommandManifestJson(result.manifest));
+	return object;
+}
+
+QJsonObject levelMapVec3Json(const LevelMapVec3& value)
+{
+	QJsonObject object;
+	object.insert(QStringLiteral("valid"), value.valid);
+	object.insert(QStringLiteral("x"), value.x);
+	object.insert(QStringLiteral("y"), value.y);
+	object.insert(QStringLiteral("z"), value.z);
+	return object;
+}
+
+QJsonObject levelMapIssueJson(const LevelMapIssue& issue)
+{
+	QJsonObject object;
+	object.insert(QStringLiteral("severity"), levelMapIssueSeverityId(issue.severity));
+	object.insert(QStringLiteral("code"), issue.code);
+	object.insert(QStringLiteral("message"), issue.message);
+	object.insert(QStringLiteral("objectId"), issue.objectId);
+	object.insert(QStringLiteral("line"), issue.line);
+	return object;
+}
+
+QJsonArray levelMapIssuesJson(const QVector<LevelMapIssue>& issues)
+{
+	QJsonArray array;
+	for (const LevelMapIssue& issue : issues) {
+		array.append(levelMapIssueJson(issue));
+	}
+	return array;
+}
+
+QJsonObject levelMapPropertyJson(const LevelMapProperty& property)
+{
+	QJsonObject object;
+	object.insert(QStringLiteral("key"), property.key);
+	object.insert(QStringLiteral("value"), property.value);
+	object.insert(QStringLiteral("line"), property.line);
+	return object;
+}
+
+QJsonArray levelMapPropertiesJson(const QVector<LevelMapProperty>& properties)
+{
+	QJsonArray array;
+	for (const LevelMapProperty& property : properties) {
+		array.append(levelMapPropertyJson(property));
+	}
+	return array;
+}
+
+QJsonObject levelMapEntityJson(const LevelMapEntity& entity)
+{
+	QJsonObject object;
+	object.insert(QStringLiteral("id"), entity.id);
+	object.insert(QStringLiteral("className"), entity.className);
+	object.insert(QStringLiteral("origin"), levelMapVec3Json(entity.origin));
+	object.insert(QStringLiteral("startLine"), entity.startLine);
+	object.insert(QStringLiteral("endLine"), entity.endLine);
+	object.insert(QStringLiteral("selected"), entity.selected);
+	object.insert(QStringLiteral("properties"), levelMapPropertiesJson(entity.properties));
+	return object;
+}
+
+QJsonArray levelMapEntitiesJson(const QVector<LevelMapEntity>& entities)
+{
+	QJsonArray array;
+	for (const LevelMapEntity& entity : entities) {
+		array.append(levelMapEntityJson(entity));
+	}
+	return array;
+}
+
+QJsonObject levelMapBrushJson(const LevelMapBrush& brush)
+{
+	QJsonObject object;
+	object.insert(QStringLiteral("id"), brush.id);
+	object.insert(QStringLiteral("entityId"), brush.entityId);
+	object.insert(QStringLiteral("faceCount"), brush.faceCount);
+	object.insert(QStringLiteral("textureNames"), stringArrayJson(brush.textureNames));
+	object.insert(QStringLiteral("mins"), levelMapVec3Json(brush.mins));
+	object.insert(QStringLiteral("maxs"), levelMapVec3Json(brush.maxs));
+	object.insert(QStringLiteral("selected"), brush.selected);
+	return object;
+}
+
+QJsonArray levelMapBrushesJson(const QVector<LevelMapBrush>& brushes)
+{
+	QJsonArray array;
+	for (const LevelMapBrush& brush : brushes) {
+		array.append(levelMapBrushJson(brush));
+	}
+	return array;
+}
+
+QJsonObject levelMapDoomVertexJson(const LevelMapDoomVertex& vertex)
+{
+	QJsonObject object;
+	object.insert(QStringLiteral("id"), vertex.id);
+	object.insert(QStringLiteral("x"), vertex.x);
+	object.insert(QStringLiteral("y"), vertex.y);
+	object.insert(QStringLiteral("selected"), vertex.selected);
+	return object;
+}
+
+QJsonArray levelMapDoomVerticesJson(const QVector<LevelMapDoomVertex>& vertices)
+{
+	QJsonArray array;
+	for (const LevelMapDoomVertex& vertex : vertices) {
+		array.append(levelMapDoomVertexJson(vertex));
+	}
+	return array;
+}
+
+QJsonObject levelMapDoomLinedefJson(const LevelMapDoomLinedef& linedef)
+{
+	QJsonObject object;
+	object.insert(QStringLiteral("id"), linedef.id);
+	object.insert(QStringLiteral("startVertex"), linedef.startVertex);
+	object.insert(QStringLiteral("endVertex"), linedef.endVertex);
+	object.insert(QStringLiteral("flags"), linedef.flags);
+	object.insert(QStringLiteral("special"), linedef.special);
+	object.insert(QStringLiteral("tag"), linedef.tag);
+	object.insert(QStringLiteral("frontSidedef"), linedef.frontSidedef);
+	object.insert(QStringLiteral("backSidedef"), linedef.backSidedef);
+	object.insert(QStringLiteral("selected"), linedef.selected);
+	return object;
+}
+
+QJsonArray levelMapDoomLinedefsJson(const QVector<LevelMapDoomLinedef>& linedefs)
+{
+	QJsonArray array;
+	for (const LevelMapDoomLinedef& linedef : linedefs) {
+		array.append(levelMapDoomLinedefJson(linedef));
+	}
+	return array;
+}
+
+QJsonObject levelMapDoomThingJson(const LevelMapDoomThing& thing)
+{
+	QJsonObject object;
+	object.insert(QStringLiteral("id"), thing.id);
+	object.insert(QStringLiteral("x"), thing.x);
+	object.insert(QStringLiteral("y"), thing.y);
+	object.insert(QStringLiteral("angle"), thing.angle);
+	object.insert(QStringLiteral("type"), thing.type);
+	object.insert(QStringLiteral("flags"), thing.flags);
+	object.insert(QStringLiteral("selected"), thing.selected);
+	return object;
+}
+
+QJsonArray levelMapDoomThingsJson(const QVector<LevelMapDoomThing>& things)
+{
+	QJsonArray array;
+	for (const LevelMapDoomThing& thing : things) {
+		array.append(levelMapDoomThingJson(thing));
+	}
+	return array;
+}
+
+QJsonObject levelMapStatisticsJson(const LevelMapStatistics& stats)
+{
+	QJsonObject object;
+	object.insert(QStringLiteral("entityCount"), stats.entityCount);
+	object.insert(QStringLiteral("brushCount"), stats.brushCount);
+	object.insert(QStringLiteral("brushFaceCount"), stats.brushFaceCount);
+	object.insert(QStringLiteral("doomThingCount"), stats.doomThingCount);
+	object.insert(QStringLiteral("doomVertexCount"), stats.doomVertexCount);
+	object.insert(QStringLiteral("doomLinedefCount"), stats.doomLinedefCount);
+	object.insert(QStringLiteral("doomSidedefCount"), stats.doomSidedefCount);
+	object.insert(QStringLiteral("doomSectorCount"), stats.doomSectorCount);
+	object.insert(QStringLiteral("textureReferenceCount"), stats.textureReferenceCount);
+	object.insert(QStringLiteral("uniqueTextureCount"), stats.uniqueTextureCount);
+	object.insert(QStringLiteral("issueCount"), stats.issueCount);
+	object.insert(QStringLiteral("warningCount"), stats.warningCount);
+	object.insert(QStringLiteral("errorCount"), stats.errorCount);
+	object.insert(QStringLiteral("mins"), levelMapVec3Json(stats.mins));
+	object.insert(QStringLiteral("maxs"), levelMapVec3Json(stats.maxs));
+	return object;
+}
+
+QJsonObject levelMapDocumentJson(const LevelMapDocument& document)
+{
+	QJsonObject object;
+	object.insert(QStringLiteral("sourcePath"), document.sourcePath);
+	object.insert(QStringLiteral("outputPath"), document.outputPath);
+	object.insert(QStringLiteral("mapName"), document.mapName);
+	object.insert(QStringLiteral("engineFamily"), document.engineFamily);
+	object.insert(QStringLiteral("format"), levelMapFormatId(document.format));
+	object.insert(QStringLiteral("formatLabel"), levelMapFormatDisplayName(document.format));
+	object.insert(QStringLiteral("editState"), document.editState);
+	object.insert(QStringLiteral("selectionKind"), levelMapSelectionKindId(document.selectionKind));
+	object.insert(QStringLiteral("selectedObjectId"), document.selectedObjectId);
+	object.insert(QStringLiteral("statistics"), levelMapStatisticsJson(levelMapStatistics(document)));
+	object.insert(QStringLiteral("statisticsLines"), stringArrayJson(levelMapStatisticsLines(document)));
+	object.insert(QStringLiteral("entityLines"), stringArrayJson(levelMapEntityLines(document)));
+	object.insert(QStringLiteral("textureLines"), stringArrayJson(levelMapTextureLines(document)));
+	object.insert(QStringLiteral("validationLines"), stringArrayJson(levelMapValidationLines(document)));
+	object.insert(QStringLiteral("viewLines"), stringArrayJson(levelMapViewLines(document)));
+	object.insert(QStringLiteral("selectionLines"), stringArrayJson(levelMapSelectionLines(document)));
+	object.insert(QStringLiteral("propertyLines"), stringArrayJson(levelMapPropertyLines(document)));
+	object.insert(QStringLiteral("undoLines"), stringArrayJson(levelMapUndoLines(document)));
+	object.insert(QStringLiteral("textureReferences"), stringArrayJson(document.textureReferences));
+	object.insert(QStringLiteral("issues"), levelMapIssuesJson(document.issues));
+	object.insert(QStringLiteral("entities"), levelMapEntitiesJson(document.entities));
+	object.insert(QStringLiteral("brushes"), levelMapBrushesJson(document.brushes));
+	object.insert(QStringLiteral("doomVertices"), levelMapDoomVerticesJson(document.doomVertices));
+	object.insert(QStringLiteral("doomLinedefs"), levelMapDoomLinedefsJson(document.doomLinedefs));
+	object.insert(QStringLiteral("doomThings"), levelMapDoomThingsJson(document.doomThings));
+	return object;
+}
+
+QJsonObject levelMapSaveReportJson(const LevelMapSaveReport& report)
+{
+	QJsonObject object;
+	object.insert(QStringLiteral("sourcePath"), report.sourcePath);
+	object.insert(QStringLiteral("outputPath"), report.outputPath);
+	object.insert(QStringLiteral("mapName"), report.mapName);
+	object.insert(QStringLiteral("format"), levelMapFormatId(report.format));
+	object.insert(QStringLiteral("dryRun"), report.dryRun);
+	object.insert(QStringLiteral("written"), report.written);
+	object.insert(QStringLiteral("editState"), report.editState);
+	object.insert(QStringLiteral("summaryLines"), stringArrayJson(report.summaryLines));
+	object.insert(QStringLiteral("warnings"), stringArrayJson(report.warnings));
+	object.insert(QStringLiteral("errors"), stringArrayJson(report.errors));
+	object.insert(QStringLiteral("succeeded"), report.succeeded());
+	return object;
+}
+
+QJsonObject advancedStudioIssueJson(const AdvancedStudioIssue& issue)
+{
+	QJsonObject object;
+	object.insert(QStringLiteral("severity"), issue.severity);
+	object.insert(QStringLiteral("code"), issue.code);
+	object.insert(QStringLiteral("message"), issue.message);
+	object.insert(QStringLiteral("objectId"), issue.objectId);
+	object.insert(QStringLiteral("line"), issue.line);
+	return object;
+}
+
+QJsonArray advancedStudioIssuesJson(const QVector<AdvancedStudioIssue>& issues)
+{
+	QJsonArray array;
+	for (const AdvancedStudioIssue& issue : issues) {
+		array.append(advancedStudioIssueJson(issue));
+	}
+	return array;
+}
+
+QJsonObject shaderStageJson(const ShaderStage& stage)
+{
+	QJsonObject object;
+	object.insert(QStringLiteral("id"), stage.id);
+	object.insert(QStringLiteral("shaderName"), stage.shaderName);
+	object.insert(QStringLiteral("startLine"), stage.startLine);
+	object.insert(QStringLiteral("endLine"), stage.endLine);
+	object.insert(QStringLiteral("mapDirective"), stage.mapDirective);
+	object.insert(QStringLiteral("blendFunc"), stage.blendFunc);
+	object.insert(QStringLiteral("rgbGen"), stage.rgbGen);
+	object.insert(QStringLiteral("alphaGen"), stage.alphaGen);
+	object.insert(QStringLiteral("tcMod"), stage.tcMod);
+	object.insert(QStringLiteral("directives"), stringArrayJson(stage.directives));
+	object.insert(QStringLiteral("textureReferences"), stringArrayJson(stage.textureReferences));
+	object.insert(QStringLiteral("rawText"), stage.rawText);
+	object.insert(QStringLiteral("selected"), stage.selected);
+	return object;
+}
+
+QJsonArray shaderStagesJson(const QVector<ShaderStage>& stages)
+{
+	QJsonArray array;
+	for (const ShaderStage& stage : stages) {
+		array.append(shaderStageJson(stage));
+	}
+	return array;
+}
+
+QJsonObject shaderDefinitionJson(const ShaderDefinition& shader)
+{
+	QJsonObject object;
+	object.insert(QStringLiteral("id"), shader.id);
+	object.insert(QStringLiteral("name"), shader.name);
+	object.insert(QStringLiteral("startLine"), shader.startLine);
+	object.insert(QStringLiteral("endLine"), shader.endLine);
+	object.insert(QStringLiteral("directives"), stringArrayJson(shader.directives));
+	object.insert(QStringLiteral("textureReferences"), stringArrayJson(shader.textureReferences));
+	object.insert(QStringLiteral("rawText"), shader.rawText);
+	object.insert(QStringLiteral("selected"), shader.selected);
+	object.insert(QStringLiteral("stages"), shaderStagesJson(shader.stages));
+	return object;
+}
+
+QJsonArray shaderDefinitionsJson(const QVector<ShaderDefinition>& shaders)
+{
+	QJsonArray array;
+	for (const ShaderDefinition& shader : shaders) {
+		array.append(shaderDefinitionJson(shader));
+	}
+	return array;
+}
+
+QJsonObject shaderReferenceValidationJson(const ShaderReferenceValidation& validation)
+{
+	QJsonObject object;
+	object.insert(QStringLiteral("textureReference"), validation.textureReference);
+	object.insert(QStringLiteral("candidatePaths"), stringArrayJson(validation.candidatePaths));
+	object.insert(QStringLiteral("found"), validation.found);
+	object.insert(QStringLiteral("foundInPackage"), validation.foundInPackage);
+	return object;
+}
+
+QJsonArray shaderReferenceValidationsJson(const QVector<ShaderReferenceValidation>& validation)
+{
+	QJsonArray array;
+	for (const ShaderReferenceValidation& item : validation) {
+		array.append(shaderReferenceValidationJson(item));
+	}
+	return array;
+}
+
+QJsonObject advancedShaderDocumentJson(const ShaderDocument& document, const QVector<ShaderReferenceValidation>& validation = {}, const QStringList& validationWarnings = {})
+{
+	QJsonObject object;
+	object.insert(QStringLiteral("sourcePath"), document.sourcePath);
+	object.insert(QStringLiteral("editState"), document.editState);
+	object.insert(QStringLiteral("shaderCount"), document.shaders.size());
+	object.insert(QStringLiteral("shaders"), shaderDefinitionsJson(document.shaders));
+	object.insert(QStringLiteral("issues"), advancedStudioIssuesJson(document.issues));
+	object.insert(QStringLiteral("graphLines"), stringArrayJson(shaderGraphLines(document)));
+	object.insert(QStringLiteral("previewLines"), stringArrayJson(shaderStagePreviewLines(document)));
+	object.insert(QStringLiteral("referenceValidation"), shaderReferenceValidationsJson(validation));
+	object.insert(QStringLiteral("referenceValidationLines"), stringArrayJson(shaderReferenceValidationLines(validation, validationWarnings)));
+	object.insert(QStringLiteral("referenceValidationWarnings"), stringArrayJson(validationWarnings));
+	return object;
+}
+
+QJsonObject shaderSaveReportJson(const ShaderSaveReport& report)
+{
+	QJsonObject object;
+	object.insert(QStringLiteral("sourcePath"), report.sourcePath);
+	object.insert(QStringLiteral("outputPath"), report.outputPath);
+	object.insert(QStringLiteral("dryRun"), report.dryRun);
+	object.insert(QStringLiteral("written"), report.written);
+	object.insert(QStringLiteral("editState"), report.editState);
+	object.insert(QStringLiteral("summaryLines"), stringArrayJson(report.summaryLines));
+	object.insert(QStringLiteral("warnings"), stringArrayJson(report.warnings));
+	object.insert(QStringLiteral("errors"), stringArrayJson(report.errors));
+	object.insert(QStringLiteral("succeeded"), report.succeeded());
+	return object;
+}
+
+QJsonObject spriteFramePlanJson(const SpriteFramePlan& frame)
+{
+	QJsonObject object;
+	object.insert(QStringLiteral("index"), frame.index);
+	object.insert(QStringLiteral("frameId"), frame.frameId);
+	object.insert(QStringLiteral("rotationId"), frame.rotationId);
+	object.insert(QStringLiteral("lumpName"), frame.lumpName);
+	object.insert(QStringLiteral("sourcePath"), frame.sourcePath);
+	object.insert(QStringLiteral("virtualPath"), frame.virtualPath);
+	object.insert(QStringLiteral("paletteAction"), frame.paletteAction);
+	return object;
+}
+
+QJsonObject spriteWorkflowPlanJson(const SpriteWorkflowPlan& plan)
+{
+	QJsonObject object;
+	object.insert(QStringLiteral("engineFamily"), plan.engineFamily);
+	object.insert(QStringLiteral("spriteName"), plan.spriteName);
+	object.insert(QStringLiteral("paletteId"), plan.paletteId);
+	object.insert(QStringLiteral("outputPackageRoot"), plan.outputPackageRoot);
+	object.insert(QStringLiteral("state"), operationStateJson(plan.state));
+	object.insert(QStringLiteral("palettePreviewLines"), stringArrayJson(plan.palettePreviewLines));
+	object.insert(QStringLiteral("sequenceLines"), stringArrayJson(plan.sequenceLines));
+	object.insert(QStringLiteral("stagingLines"), stringArrayJson(plan.stagingLines));
+	object.insert(QStringLiteral("warnings"), stringArrayJson(plan.warnings));
+	QJsonArray frames;
+	for (const SpriteFramePlan& frame : plan.frames) {
+		frames.append(spriteFramePlanJson(frame));
+	}
+	object.insert(QStringLiteral("frames"), frames);
+	return object;
+}
+
+QJsonObject codeSourceFileJson(const CodeSourceFile& file)
+{
+	QJsonObject object;
+	object.insert(QStringLiteral("filePath"), file.filePath);
+	object.insert(QStringLiteral("relativePath"), file.relativePath);
+	object.insert(QStringLiteral("languageId"), file.languageId);
+	object.insert(QStringLiteral("bytes"), QString::number(file.bytes));
+	object.insert(QStringLiteral("lineCount"), file.lineCount);
+	return object;
+}
+
+QJsonObject codeSymbolJson(const CodeSymbol& symbol)
+{
+	QJsonObject object;
+	object.insert(QStringLiteral("name"), symbol.name);
+	object.insert(QStringLiteral("kind"), symbol.kind);
+	object.insert(QStringLiteral("filePath"), symbol.filePath);
+	object.insert(QStringLiteral("relativePath"), symbol.relativePath);
+	object.insert(QStringLiteral("line"), symbol.line);
+	object.insert(QStringLiteral("column"), symbol.column);
+	return object;
+}
+
+QJsonObject languageServiceHookJson(const LanguageServiceHook& hook)
+{
+	QJsonObject object;
+	object.insert(QStringLiteral("languageId"), hook.languageId);
+	object.insert(QStringLiteral("displayName"), hook.displayName);
+	object.insert(QStringLiteral("extensions"), stringArrayJson(hook.extensions));
+	object.insert(QStringLiteral("capabilities"), stringArrayJson(hook.capabilities));
+	object.insert(QStringLiteral("serverCommand"), hook.serverCommand);
+	object.insert(QStringLiteral("available"), hook.available);
+	object.insert(QStringLiteral("status"), hook.status);
+	return object;
+}
+
+QJsonObject codeDiagnosticJson(const CodeDiagnostic& diagnostic)
+{
+	QJsonObject object;
+	object.insert(QStringLiteral("severity"), diagnostic.severity);
+	object.insert(QStringLiteral("message"), diagnostic.message);
+	object.insert(QStringLiteral("filePath"), diagnostic.filePath);
+	object.insert(QStringLiteral("relativePath"), diagnostic.relativePath);
+	object.insert(QStringLiteral("line"), diagnostic.line);
+	object.insert(QStringLiteral("column"), diagnostic.column);
+	return object;
+}
+
+QJsonObject codeWorkspaceIndexJson(const CodeWorkspaceIndex& index)
+{
+	QJsonObject object;
+	object.insert(QStringLiteral("rootPath"), index.rootPath);
+	object.insert(QStringLiteral("state"), operationStateJson(index.state));
+	object.insert(QStringLiteral("treeLines"), stringArrayJson(index.treeLines));
+	object.insert(QStringLiteral("buildTaskLines"), stringArrayJson(index.buildTaskLines));
+	object.insert(QStringLiteral("launchProfileLines"), stringArrayJson(index.launchProfileLines));
+	object.insert(QStringLiteral("warnings"), stringArrayJson(index.warnings));
+	QJsonArray files;
+	for (const CodeSourceFile& file : index.files) {
+		files.append(codeSourceFileJson(file));
+	}
+	object.insert(QStringLiteral("files"), files);
+	QJsonArray symbols;
+	for (const CodeSymbol& symbol : index.symbols) {
+		symbols.append(codeSymbolJson(symbol));
+	}
+	object.insert(QStringLiteral("symbols"), symbols);
+	QJsonArray hooks;
+	for (const LanguageServiceHook& hook : index.languageHooks) {
+		hooks.append(languageServiceHookJson(hook));
+	}
+	object.insert(QStringLiteral("languageHooks"), hooks);
+	QJsonArray diagnostics;
+	for (const CodeDiagnostic& diagnostic : index.diagnostics) {
+		diagnostics.append(codeDiagnosticJson(diagnostic));
+	}
+	object.insert(QStringLiteral("diagnostics"), diagnostics);
+	return object;
+}
+
+QJsonObject extensionGeneratedFileJson(const ExtensionGeneratedFile& file)
+{
+	QJsonObject object;
+	object.insert(QStringLiteral("virtualPath"), file.virtualPath);
+	object.insert(QStringLiteral("sourceDescription"), file.sourceDescription);
+	object.insert(QStringLiteral("summary"), file.summary);
+	object.insert(QStringLiteral("staged"), file.staged);
+	return object;
+}
+
+QJsonArray extensionGeneratedFilesJson(const QVector<ExtensionGeneratedFile>& files)
+{
+	QJsonArray array;
+	for (const ExtensionGeneratedFile& file : files) {
+		array.append(extensionGeneratedFileJson(file));
+	}
+	return array;
+}
+
+QJsonObject extensionCommandDescriptorJson(const ExtensionCommandDescriptor& command)
+{
+	QJsonObject object;
+	object.insert(QStringLiteral("id"), command.id);
+	object.insert(QStringLiteral("displayName"), command.displayName);
+	object.insert(QStringLiteral("description"), command.description);
+	object.insert(QStringLiteral("program"), command.program);
+	object.insert(QStringLiteral("arguments"), stringArrayJson(command.arguments));
+	object.insert(QStringLiteral("workingDirectory"), command.workingDirectory);
+	object.insert(QStringLiteral("capabilities"), stringArrayJson(command.capabilities));
+	object.insert(QStringLiteral("generatedFiles"), extensionGeneratedFilesJson(command.generatedFiles));
+	object.insert(QStringLiteral("requiresApproval"), command.requiresApproval);
+	return object;
+}
+
+QJsonObject extensionManifestJson(const ExtensionManifest& manifest)
+{
+	QJsonObject object;
+	object.insert(QStringLiteral("schemaVersion"), manifest.schemaVersion);
+	object.insert(QStringLiteral("manifestPath"), manifest.manifestPath);
+	object.insert(QStringLiteral("rootPath"), manifest.rootPath);
+	object.insert(QStringLiteral("id"), manifest.id);
+	object.insert(QStringLiteral("displayName"), manifest.displayName);
+	object.insert(QStringLiteral("version"), manifest.version);
+	object.insert(QStringLiteral("description"), manifest.description);
+	object.insert(QStringLiteral("trustLevel"), manifest.trustLevel);
+	object.insert(QStringLiteral("sandboxModel"), manifest.sandboxModel);
+	object.insert(QStringLiteral("capabilities"), stringArrayJson(manifest.capabilities));
+	object.insert(QStringLiteral("warnings"), stringArrayJson(manifest.warnings));
+	QJsonArray commands;
+	for (const ExtensionCommandDescriptor& command : manifest.commands) {
+		commands.append(extensionCommandDescriptorJson(command));
+	}
+	object.insert(QStringLiteral("commands"), commands);
+	return object;
+}
+
+QJsonObject extensionDiscoveryJson(const ExtensionDiscoveryResult& result)
+{
+	QJsonObject object;
+	object.insert(QStringLiteral("searchRoots"), stringArrayJson(result.searchRoots));
+	object.insert(QStringLiteral("state"), operationStateJson(result.state));
+	object.insert(QStringLiteral("warnings"), stringArrayJson(result.warnings));
+	object.insert(QStringLiteral("trustModel"), stringArrayJson(extensionTrustModelLines()));
+	QJsonArray manifests;
+	for (const ExtensionManifest& manifest : result.manifests) {
+		manifests.append(extensionManifestJson(manifest));
+	}
+	object.insert(QStringLiteral("manifests"), manifests);
+	return object;
+}
+
+QJsonObject extensionCommandPlanJson(const ExtensionCommandPlan& plan)
+{
+	QJsonObject object;
+	object.insert(QStringLiteral("manifest"), extensionManifestJson(plan.manifest));
+	object.insert(QStringLiteral("command"), extensionCommandDescriptorJson(plan.command));
+	object.insert(QStringLiteral("program"), plan.program);
+	object.insert(QStringLiteral("arguments"), stringArrayJson(plan.arguments));
+	object.insert(QStringLiteral("workingDirectory"), plan.workingDirectory);
+	object.insert(QStringLiteral("dryRun"), plan.dryRun);
+	object.insert(QStringLiteral("executionAllowed"), plan.executionAllowed);
+	object.insert(QStringLiteral("state"), operationStateJson(plan.state));
+	object.insert(QStringLiteral("warnings"), stringArrayJson(plan.warnings));
+	object.insert(QStringLiteral("stagingLines"), stringArrayJson(plan.stagingLines));
+	return object;
+}
+
+QJsonObject extensionCommandResultJson(const ExtensionCommandResult& result)
+{
+	QJsonObject object;
+	object.insert(QStringLiteral("plan"), extensionCommandPlanJson(result.plan));
+	object.insert(QStringLiteral("started"), result.started);
+	object.insert(QStringLiteral("dryRun"), result.dryRun);
+	object.insert(QStringLiteral("exitCode"), result.exitCode);
+	object.insert(QStringLiteral("stdout"), result.stdoutText);
+	object.insert(QStringLiteral("stderr"), result.stderrText);
+	object.insert(QStringLiteral("error"), result.error);
+	object.insert(QStringLiteral("state"), operationStateJson(result.state));
+	if (result.finishedUtc.isValid()) {
+		object.insert(QStringLiteral("finishedUtc"), result.finishedUtc.toUTC().toString(Qt::ISODate));
+	}
 	return object;
 }
 
@@ -1447,6 +2183,30 @@ bool printPackagePreview(const PackageArchive& archive, const QString& virtualPa
 	if (!preview.imageFormat.isEmpty() || preview.imageSize.isValid()) {
 		std::cout << "Image format: " << text(preview.imageFormat.isEmpty() ? QStringLiteral("unknown") : preview.imageFormat) << "\n";
 		std::cout << "Image size: " << text(preview.imageSize.isValid() ? QStringLiteral("%1 x %2").arg(preview.imageSize.width()).arg(preview.imageSize.height()) : QStringLiteral("unknown")) << "\n";
+		std::cout << "Image depth: " << preview.imageDepth << "\n";
+		std::cout << "Palette-aware: " << (preview.imagePaletteAware ? "yes" : "no") << "\n";
+	}
+	if (!preview.modelFormat.isEmpty() || !preview.modelViewportLines.isEmpty()) {
+		std::cout << "Model format: " << text(preview.modelFormat.isEmpty() ? QStringLiteral("unknown") : preview.modelFormat) << "\n";
+		if (!preview.modelViewportLines.isEmpty()) {
+			std::cout << "Model viewport\n";
+			for (const QString& line : preview.modelViewportLines) {
+				std::cout << "- " << text(line) << "\n";
+			}
+		}
+	}
+	if (!preview.audioFormat.isEmpty() || !preview.audioWaveformLines.isEmpty()) {
+		std::cout << "Audio format: " << text(preview.audioFormat.isEmpty() ? QStringLiteral("unknown") : preview.audioFormat) << "\n";
+		if (!preview.audioWaveformLines.isEmpty()) {
+			std::cout << "Waveform\n";
+			for (const QString& line : preview.audioWaveformLines) {
+				std::cout << "- " << text(line) << "\n";
+			}
+		}
+	}
+	if (!preview.textLanguageName.isEmpty()) {
+		std::cout << "Text language: " << text(preview.textLanguageName) << "\n";
+		std::cout << "Text save state: " << text(preview.textSaveState.isEmpty() ? QStringLiteral("clean") : preview.textSaveState) << "\n";
 	}
 	if (!preview.detailLines.isEmpty()) {
 		std::cout << "Details\n";
@@ -1495,6 +2255,137 @@ QStringList packageExtractionEntriesFromArgs(const QStringList& args)
 		}
 	}
 	return normalized;
+}
+
+PackageArchiveFormat packageWriteFormatFromArgs(const QStringList& args, const QString& outputPath)
+{
+	const QString formatId = optionValue(args, QStringLiteral("--format"));
+	if (!formatId.trimmed().isEmpty()) {
+		return packageArchiveFormatFromId(formatId);
+	}
+	return packageArchiveFormatFromFileName(outputPath);
+}
+
+QJsonObject packageStagingJson(const PackageStagingModel& staging)
+{
+	return QJsonDocument::fromJson(staging.manifestJson()).object();
+}
+
+QJsonObject packageWriteReportJson(const PackageWriteReport& report)
+{
+	QJsonObject object;
+	object.insert(QStringLiteral("sourcePath"), report.sourcePath);
+	object.insert(QStringLiteral("outputPath"), report.outputPath);
+	object.insert(QStringLiteral("manifestPath"), report.manifestPath);
+	object.insert(QStringLiteral("format"), packageArchiveFormatId(report.format));
+	object.insert(QStringLiteral("entryCount"), report.entryCount);
+	object.insert(QStringLiteral("bytesWritten"), static_cast<double>(report.bytesWritten));
+	object.insert(QStringLiteral("sha256"), report.sha256);
+	object.insert(QStringLiteral("deterministic"), report.deterministic);
+	object.insert(QStringLiteral("dryRun"), report.dryRun);
+	object.insert(QStringLiteral("wroteManifest"), report.wroteManifest);
+	object.insert(QStringLiteral("warnings"), stringArrayJson(report.warnings));
+	object.insert(QStringLiteral("blockedMessages"), stringArrayJson(report.blockedMessages));
+	object.insert(QStringLiteral("succeeded"), report.succeeded());
+	return object;
+}
+
+void printPackageStagingSummary(const PackageStagingModel& staging)
+{
+	const PackageStagingSummary summary = staging.summary();
+	std::cout << "Package staging\n";
+	std::cout << "Source: " << text(nativePath(summary.sourcePath)) << "\n";
+	std::cout << "Format: " << text(packageArchiveFormatId(summary.sourceFormat)) << "\n";
+	std::cout << "Base files: " << summary.baseFileCount << "\n";
+	std::cout << "Staged files: " << summary.stagedFileCount << "\n";
+	std::cout << "Operations: " << summary.operationCount << " (add " << summary.addedCount << ", replace " << summary.replacedCount << ", rename " << summary.renamedCount << ", delete " << summary.deletedCount << ")\n";
+	std::cout << "Bytes before/after: " << summary.beforeBytes << " -> " << summary.afterBytes << "\n";
+	std::cout << "Save state: " << (summary.canSave ? "ready" : "blocked") << "\n";
+	for (const PackageStageConflict& conflict : staging.conflicts()) {
+		std::cout << "- " << (conflict.blocking ? "BLOCKED" : "notice") << " " << text(conflict.virtualPath) << ": " << text(conflict.message) << "\n";
+	}
+}
+
+bool loadPackageStaging(const QString& packagePath, PackageStagingModel* staging, QString* error)
+{
+	if (error) {
+		error->clear();
+	}
+	if (!staging) {
+		if (error) {
+			*error = QStringLiteral("Missing staging model.");
+		}
+		return false;
+	}
+	PackageArchive archive;
+	if (!loadPackageForCliQuiet(packagePath, &archive, error)) {
+		return false;
+	}
+	return staging->loadBaseArchive(archive, error);
+}
+
+bool applyPackageStageArgs(PackageStagingModel* staging, const QStringList& args, QString* error)
+{
+	if (error) {
+		error->clear();
+	}
+	if (!staging) {
+		if (error) {
+			*error = QStringLiteral("Missing staging model.");
+		}
+		return false;
+	}
+
+	const PackageStageConflictResolution resolution = packageStageConflictResolutionFromId(optionValue(args, QStringLiteral("--resolve")));
+
+	const QStringList addFiles = optionValues(args, QStringLiteral("--add-file")) + optionValues(args, QStringLiteral("--import-file"));
+	const QStringList addTargets = optionValues(args, QStringLiteral("--as"));
+	for (int index = 0; index < addFiles.size(); ++index) {
+		const QString target = addTargets.value(index, QFileInfo(addFiles[index]).fileName());
+		if (!staging->addFile(addFiles[index], target, error, resolution)) {
+			return false;
+		}
+	}
+
+	const QStringList replaceFiles = optionValues(args, QStringLiteral("--replace-file"));
+	QStringList replaceTargets = optionValues(args, QStringLiteral("--replace-entry"));
+	if (replaceTargets.isEmpty() && !replaceFiles.isEmpty()) {
+		replaceTargets = optionValues(args, QStringLiteral("--entry"));
+	}
+	if (replaceFiles.size() != replaceTargets.size()) {
+		if (error) {
+			*error = QStringLiteral("Each --replace-file requires a matching --replace-entry.");
+		}
+		return false;
+	}
+	for (int index = 0; index < replaceFiles.size(); ++index) {
+		if (!staging->replaceFile(replaceTargets[index], replaceFiles[index], error)) {
+			return false;
+		}
+	}
+
+	const QStringList renameSources = optionValues(args, QStringLiteral("--rename"));
+	const QStringList renameTargets = optionValues(args, QStringLiteral("--to"));
+	if (renameSources.size() != renameTargets.size()) {
+		if (error) {
+			*error = QStringLiteral("Each --rename requires a matching --to target.");
+		}
+		return false;
+	}
+	for (int index = 0; index < renameSources.size(); ++index) {
+		if (!staging->renameEntry(renameSources[index], renameTargets[index], error, resolution)) {
+			return false;
+		}
+	}
+
+	const QStringList deleteTargets = optionValues(args, QStringLiteral("--delete")) + optionValues(args, QStringLiteral("--remove-entry"));
+	for (const QString& target : deleteTargets) {
+		if (!staging->deleteEntry(target, error, resolution)) {
+			return false;
+		}
+	}
+
+	return true;
 }
 
 void printInstallationValidation(const GameInstallationProfile& profile)
@@ -2086,6 +2977,95 @@ int runAiCompareCommand(const QString& commandName, const QStringList& args, Cli
 		format);
 }
 
+int runAiShaderScaffoldCommand(const QString& commandName, const QStringList& args, CliOutputFormat format)
+{
+	const QString prompt = optionValue(args, QStringLiteral("--prompt"));
+	if (prompt.trimmed().isEmpty()) {
+		return printCliError(commandName, CliExitCode::Usage, QStringLiteral("%1 requires --prompt <text>.").arg(commandName), format);
+	}
+	const StudioSettings settings;
+	return finishAiWorkflowCommand(
+		commandName,
+		promptToShaderScaffoldAiExperiment(prompt, settings.aiAutomationPreferences(), optionValue(args, QStringLiteral("--provider")), optionValue(args, QStringLiteral("--model"))),
+		args,
+		format);
+}
+
+int runAiEntitySnippetCommand(const QString& commandName, const QStringList& args, CliOutputFormat format)
+{
+	const QString prompt = optionValue(args, QStringLiteral("--prompt"));
+	if (prompt.trimmed().isEmpty()) {
+		return printCliError(commandName, CliExitCode::Usage, QStringLiteral("%1 requires --prompt <text>.").arg(commandName), format);
+	}
+	const StudioSettings settings;
+	return finishAiWorkflowCommand(
+		commandName,
+		promptToEntityDefinitionAiExperiment(prompt, settings.aiAutomationPreferences(), optionValue(args, QStringLiteral("--provider")), optionValue(args, QStringLiteral("--model"))),
+		args,
+		format);
+}
+
+int runAiPackagePlanCommand(const QString& commandName, const QStringList& args, CliOutputFormat format)
+{
+	const QString prompt = optionValue(args, QStringLiteral("--prompt"));
+	if (prompt.trimmed().isEmpty()) {
+		return printCliError(commandName, CliExitCode::Usage, QStringLiteral("%1 requires --prompt <text>.").arg(commandName), format);
+	}
+	const StudioSettings settings;
+	return finishAiWorkflowCommand(
+		commandName,
+		promptToPackageValidationPlanAiExperiment(prompt, optionValue(args, QStringLiteral("--package")), settings.aiAutomationPreferences(), optionValue(args, QStringLiteral("--provider")), optionValue(args, QStringLiteral("--model"))),
+		args,
+		format);
+}
+
+int runAiBatchRecipeCommand(const QString& commandName, const QStringList& args, CliOutputFormat format)
+{
+	const QString prompt = optionValue(args, QStringLiteral("--prompt"));
+	if (prompt.trimmed().isEmpty()) {
+		return printCliError(commandName, CliExitCode::Usage, QStringLiteral("%1 requires --prompt <text>.").arg(commandName), format);
+	}
+	const StudioSettings settings;
+	return finishAiWorkflowCommand(
+		commandName,
+		promptToBatchConversionRecipeAiExperiment(prompt, settings.aiAutomationPreferences(), optionValue(args, QStringLiteral("--provider")), optionValue(args, QStringLiteral("--model"))),
+		args,
+		format);
+}
+
+AiWorkflowResult aiReviewWorkflowFromArgs(const QStringList& args, const AiAutomationPreferences& preferences)
+{
+	const QString prompt = optionValue(args, QStringLiteral("--prompt"));
+	const QString kind = normalizedOptionId(optionValue(args, QStringLiteral("--kind")));
+	if (kind == QStringLiteral("entity") || kind == QStringLiteral("entity-snippet") || kind == QStringLiteral("entity-definition")) {
+		return promptToEntityDefinitionAiExperiment(prompt, preferences, optionValue(args, QStringLiteral("--provider")), optionValue(args, QStringLiteral("--model")));
+	}
+	if (kind == QStringLiteral("package") || kind == QStringLiteral("package-plan") || kind == QStringLiteral("package-validation")) {
+		return promptToPackageValidationPlanAiExperiment(prompt, optionValue(args, QStringLiteral("--package")), preferences, optionValue(args, QStringLiteral("--provider")), optionValue(args, QStringLiteral("--model")));
+	}
+	if (kind == QStringLiteral("batch") || kind == QStringLiteral("batch-recipe") || kind == QStringLiteral("conversion")) {
+		return promptToBatchConversionRecipeAiExperiment(prompt, preferences, optionValue(args, QStringLiteral("--provider")), optionValue(args, QStringLiteral("--model")));
+	}
+	if (kind == QStringLiteral("cli") || kind == QStringLiteral("command")) {
+		return generateCliCommandAiExperiment(prompt, preferences, optionValue(args, QStringLiteral("--provider")), optionValue(args, QStringLiteral("--model")));
+	}
+	return promptToShaderScaffoldAiExperiment(prompt, preferences, optionValue(args, QStringLiteral("--provider")), optionValue(args, QStringLiteral("--model")));
+}
+
+int runAiReviewCommand(const QString& commandName, const QStringList& args, CliOutputFormat format)
+{
+	const QString prompt = optionValue(args, QStringLiteral("--prompt"));
+	if (prompt.trimmed().isEmpty()) {
+		return printCliError(commandName, CliExitCode::Usage, QStringLiteral("%1 requires --prompt <text>.").arg(commandName), format);
+	}
+	const StudioSettings settings;
+	AiWorkflowResult result = aiReviewWorkflowFromArgs(args, settings.aiAutomationPreferences());
+	result.title = QStringLiteral("%1 %2").arg(result.title, QStringLiteral("Review"));
+	result.reviewableText = aiProposalReviewSurfaceText(result);
+	result.summary = QStringLiteral("%1 %2").arg(result.summary, QStringLiteral("Review surface rendered."));
+	return finishAiWorkflowCommand(commandName, result, args, format);
+}
+
 int runProjectInitCommand(const QString& commandName, const QString& path, const QStringList& args, CliOutputFormat format)
 {
 	if (path.isEmpty()) {
@@ -2360,6 +3340,838 @@ int runPackageValidateCommand(const QString& commandName, const QString& package
 		printJson(object);
 	} else {
 		printPackageValidation(archive);
+	}
+	return exitCodeValue(code);
+}
+
+int runPackageStageCommand(const QString& commandName, const QString& packagePath, const QStringList& args, CliOutputFormat format)
+{
+	if (packagePath.isEmpty()) {
+		return printCliError(commandName, CliExitCode::Usage, QStringLiteral("%1 requires a folder, PAK, WAD, ZIP, or PK3 path.").arg(commandName), format);
+	}
+
+	PackageStagingModel staging;
+	QString error;
+	if (!loadPackageStaging(packagePath, &staging, &error)) {
+		return printCliError(commandName, CliExitCode::Failure, QStringLiteral("Unable to stage package: %1").arg(error), format);
+	}
+	if (!applyPackageStageArgs(&staging, args, &error)) {
+		return printCliError(commandName, CliExitCode::Usage, error, format);
+	}
+
+	const CliExitCode code = staging.summary().canSave ? CliExitCode::Success : CliExitCode::ValidationFailed;
+	if (format == CliOutputFormat::Json) {
+		QJsonObject object = cliResultJson(commandName, code);
+		object.insert(QStringLiteral("staging"), packageStagingJson(staging));
+		printJson(object);
+	} else {
+		printPackageStagingSummary(staging);
+	}
+	return exitCodeValue(code);
+}
+
+int runPackageManifestCommand(const QString& commandName, const QString& packagePath, const QString& outputPath, const QStringList& args, CliOutputFormat format)
+{
+	if (packagePath.isEmpty()) {
+		return printCliError(commandName, CliExitCode::Usage, QStringLiteral("%1 requires a folder, PAK, WAD, ZIP, or PK3 path.").arg(commandName), format);
+	}
+	if (outputPath.trimmed().isEmpty()) {
+		return printCliError(commandName, CliExitCode::Usage, QStringLiteral("%1 requires --output <manifest.json>.").arg(commandName), format);
+	}
+
+	PackageStagingModel staging;
+	QString error;
+	if (!loadPackageStaging(packagePath, &staging, &error)) {
+		return printCliError(commandName, CliExitCode::Failure, QStringLiteral("Unable to stage package: %1").arg(error), format);
+	}
+	if (!applyPackageStageArgs(&staging, args, &error)) {
+		return printCliError(commandName, CliExitCode::Usage, error, format);
+	}
+	if (!staging.exportManifest(outputPath, &error)) {
+		return printCliError(commandName, CliExitCode::Failure, QStringLiteral("Unable to export package manifest: %1").arg(error), format);
+	}
+
+	if (format == CliOutputFormat::Json) {
+		QJsonObject object = cliResultJson(commandName);
+		object.insert(QStringLiteral("manifestPath"), QFileInfo(outputPath).absoluteFilePath());
+		object.insert(QStringLiteral("staging"), packageStagingJson(staging));
+		printJson(object);
+	} else {
+		std::cout << "Package staging manifest exported: " << text(nativePath(QFileInfo(outputPath).absoluteFilePath())) << "\n";
+		printPackageStagingSummary(staging);
+	}
+	return exitCodeValue(CliExitCode::Success);
+}
+
+int runPackageSaveAsCommand(const QString& commandName, const QString& packagePath, const QString& outputPath, const QStringList& args, CliOutputFormat format)
+{
+	if (packagePath.isEmpty()) {
+		return printCliError(commandName, CliExitCode::Usage, QStringLiteral("%1 requires a source package path.").arg(commandName), format);
+	}
+	if (outputPath.trimmed().isEmpty()) {
+		return printCliError(commandName, CliExitCode::Usage, QStringLiteral("%1 requires a save-as output path.").arg(commandName), format);
+	}
+
+	PackageStagingModel staging;
+	QString error;
+	if (!loadPackageStaging(packagePath, &staging, &error)) {
+		return printCliError(commandName, CliExitCode::Failure, QStringLiteral("Unable to stage package: %1").arg(error), format);
+	}
+	if (!applyPackageStageArgs(&staging, args, &error)) {
+		return printCliError(commandName, CliExitCode::Usage, error, format);
+	}
+
+	PackageWriteRequest request;
+	request.destinationPath = outputPath;
+	request.format = packageWriteFormatFromArgs(args, outputPath);
+	request.allowOverwrite = hasOption(args, QStringLiteral("--overwrite"));
+	request.writeManifest = hasOption(args, QStringLiteral("--manifest")) || hasOption(args, QStringLiteral("--write-manifest"));
+	request.dryRun = hasOption(args, QStringLiteral("--dry-run"));
+	request.manifestPath = optionValue(args, QStringLiteral("--manifest"));
+	const PackageWriteReport report = staging.writeArchive(request);
+	const CliExitCode code = report.succeeded() ? CliExitCode::Success : CliExitCode::ValidationFailed;
+	if (format == CliOutputFormat::Json) {
+		QJsonObject object = cliResultJson(commandName, code);
+		object.insert(QStringLiteral("write"), packageWriteReportJson(report));
+		object.insert(QStringLiteral("staging"), packageStagingJson(staging));
+		printJson(object);
+	} else {
+		std::cout << text(packageWriteReportText(report)) << "\n";
+	}
+	return exitCodeValue(code);
+}
+
+QStringList semicolonOrCommaList(const QString& value)
+{
+	QStringList result;
+	for (const QString& chunk : value.split(QRegularExpression(QStringLiteral("[;,]")), Qt::SkipEmptyParts)) {
+		const QString trimmed = chunk.trimmed();
+		if (!trimmed.isEmpty()) {
+			result.push_back(trimmed);
+		}
+	}
+	return result;
+}
+
+QStringList assetEntryArgs(const QStringList& args)
+{
+	QStringList entries = optionValues(args, QStringLiteral("--entry"));
+	entries += optionValues(args, QStringLiteral("--asset-entry"));
+	entries += semicolonOrCommaList(optionValue(args, QStringLiteral("--entries")));
+
+	QStringList normalized;
+	for (const QString& entry : entries) {
+		const QString trimmed = entry.trimmed();
+		if (!trimmed.isEmpty() && !normalized.contains(trimmed)) {
+			normalized.push_back(trimmed);
+		}
+	}
+	return normalized;
+}
+
+QStringList assetTextExtensionsFromArgs(const QStringList& args)
+{
+	QStringList extensions;
+	for (QString extension : semicolonOrCommaList(optionValue(args, QStringLiteral("--extensions")))) {
+		extension = extension.trimmed().toLower();
+		if (extension.startsWith(QLatin1Char('.'))) {
+			extension.remove(0, 1);
+		}
+		if (!extension.isEmpty() && !extensions.contains(extension)) {
+			extensions.push_back(extension);
+		}
+	}
+	return extensions;
+}
+
+QRect cropRectFromOption(const QString& value, bool* ok)
+{
+	if (ok) {
+		*ok = true;
+	}
+	if (value.trimmed().isEmpty()) {
+		return {};
+	}
+	const QStringList parts = value.split(',', Qt::SkipEmptyParts);
+	if (parts.size() != 4) {
+		if (ok) {
+			*ok = false;
+		}
+		return {};
+	}
+	bool parsed = true;
+	const int x = parts.value(0).trimmed().toInt(&parsed);
+	if (!parsed) {
+		if (ok) {
+			*ok = false;
+		}
+		return {};
+	}
+	const int y = parts.value(1).trimmed().toInt(&parsed);
+	if (!parsed) {
+		if (ok) {
+			*ok = false;
+		}
+		return {};
+	}
+	const int width = parts.value(2).trimmed().toInt(&parsed);
+	if (!parsed) {
+		if (ok) {
+			*ok = false;
+		}
+		return {};
+	}
+	const int height = parts.value(3).trimmed().toInt(&parsed);
+	if (!parsed || width <= 0 || height <= 0) {
+		if (ok) {
+			*ok = false;
+		}
+		return {};
+	}
+	return QRect(x, y, width, height);
+}
+
+QSize resizeSizeFromOption(QString value, bool* ok)
+{
+	if (ok) {
+		*ok = true;
+	}
+	value = value.trimmed().toLower();
+	if (value.isEmpty()) {
+		return {};
+	}
+	value.replace(QLatin1Char('x'), QLatin1Char(','));
+	const QStringList parts = value.split(',', Qt::SkipEmptyParts);
+	if (parts.size() != 2) {
+		if (ok) {
+			*ok = false;
+		}
+		return {};
+	}
+	bool widthOk = false;
+	bool heightOk = false;
+	const int width = parts.value(0).trimmed().toInt(&widthOk);
+	const int height = parts.value(1).trimmed().toInt(&heightOk);
+	if (!widthOk || !heightOk || width <= 0 || height <= 0) {
+		if (ok) {
+			*ok = false;
+		}
+		return {};
+	}
+	return QSize(width, height);
+}
+
+int runAssetInspectCommand(const QString& commandName, const QString& packagePath, const QString& entryPath, CliOutputFormat format)
+{
+	return runPackagePreviewCommand(commandName, packagePath, entryPath, format);
+}
+
+int runAssetConvertCommand(const QString& commandName, const QString& packagePath, const QString& outputPath, const QStringList& args, CliOutputFormat format)
+{
+	if (packagePath.isEmpty()) {
+		return printCliError(commandName, CliExitCode::Usage, QStringLiteral("%1 requires a folder, PAK, WAD, ZIP, or PK3 path.").arg(commandName), format);
+	}
+	if (outputPath.trimmed().isEmpty()) {
+		return printCliError(commandName, CliExitCode::Usage, QStringLiteral("%1 requires --output <folder>.").arg(commandName), format);
+	}
+
+	bool cropOk = true;
+	bool resizeOk = true;
+	const QRect cropRect = cropRectFromOption(optionValue(args, QStringLiteral("--crop")), &cropOk);
+	const QSize resizeSize = resizeSizeFromOption(optionValue(args, QStringLiteral("--resize")), &resizeOk);
+	if (!cropOk) {
+		return printCliError(commandName, CliExitCode::Usage, QStringLiteral("--crop must be x,y,w,h with positive width and height."), format);
+	}
+	if (!resizeOk) {
+		return printCliError(commandName, CliExitCode::Usage, QStringLiteral("--resize must be WxH with positive dimensions."), format);
+	}
+	const QString paletteMode = optionValue(args, QStringLiteral("--palette")).trimmed().toLower();
+	if (!paletteMode.isEmpty() && paletteMode != QStringLiteral("grayscale") && paletteMode != QStringLiteral("indexed")) {
+		return printCliError(commandName, CliExitCode::Usage, QStringLiteral("--palette must be grayscale or indexed."), format);
+	}
+
+	PackageArchive archive;
+	QString error;
+	if (!loadPackageForCliQuiet(packagePath, &archive, &error)) {
+		return printCliError(commandName, CliExitCode::Failure, QStringLiteral("Unable to open package: %1").arg(error), format);
+	}
+
+	AssetImageConversionRequest request;
+	request.outputDirectory = outputPath;
+	request.virtualPaths = assetEntryArgs(args);
+	request.outputFormat = optionValue(args, QStringLiteral("--format")).trimmed().isEmpty() ? QStringLiteral("png") : optionValue(args, QStringLiteral("--format")).trimmed();
+	request.cropRect = cropRect;
+	request.resizeSize = resizeSize;
+	request.paletteMode = paletteMode;
+	request.dryRun = hasOption(args, QStringLiteral("--dry-run"));
+	request.overwriteExisting = hasOption(args, QStringLiteral("--overwrite"));
+	const AssetImageConversionReport report = convertPackageImages(archive, request);
+	const CliExitCode code = report.succeeded() ? CliExitCode::Success : CliExitCode::ValidationFailed;
+	if (format == CliOutputFormat::Json) {
+		QJsonObject object = cliResultJson(commandName, code);
+		object.insert(QStringLiteral("imageConversion"), assetImageConversionReportJson(report));
+		printJson(object);
+	} else {
+		std::cout << text(assetImageConversionReportText(report)) << "\n";
+	}
+	return exitCodeValue(code);
+}
+
+int runAssetAudioWavCommand(const QString& commandName, const QString& packagePath, const QString& entryPath, const QString& outputPath, const QStringList& args, CliOutputFormat format)
+{
+	if (packagePath.isEmpty()) {
+		return printCliError(commandName, CliExitCode::Usage, QStringLiteral("%1 requires a folder, PAK, WAD, ZIP, or PK3 path.").arg(commandName), format);
+	}
+	if (entryPath.isEmpty()) {
+		return printCliError(commandName, CliExitCode::Usage, QStringLiteral("%1 requires a virtual package audio entry path.").arg(commandName), format);
+	}
+	if (outputPath.trimmed().isEmpty()) {
+		return printCliError(commandName, CliExitCode::Usage, QStringLiteral("%1 requires --output <file.wav>.").arg(commandName), format);
+	}
+
+	PackageArchive archive;
+	QString error;
+	if (!loadPackageForCliQuiet(packagePath, &archive, &error)) {
+		return printCliError(commandName, CliExitCode::Failure, QStringLiteral("Unable to open package: %1").arg(error), format);
+	}
+	const AssetAudioExportReport report = exportPackageAudioToWav(archive, entryPath, outputPath, hasOption(args, QStringLiteral("--dry-run")), hasOption(args, QStringLiteral("--overwrite")));
+	const CliExitCode code = report.succeeded() ? CliExitCode::Success : CliExitCode::ValidationFailed;
+	if (format == CliOutputFormat::Json) {
+		QJsonObject object = cliResultJson(commandName, code);
+		object.insert(QStringLiteral("audioExport"), assetAudioExportReportJson(report));
+		printJson(object);
+	} else {
+		std::cout << text(assetAudioExportReportText(report)) << "\n";
+	}
+	return exitCodeValue(code);
+}
+
+int runAssetTextCommand(const QString& commandName, const QString& projectRoot, const QString& positionalFind, const QString& positionalReplace, bool replace, const QStringList& args, CliOutputFormat format)
+{
+	if (projectRoot.isEmpty()) {
+		return printCliError(commandName, CliExitCode::Usage, QStringLiteral("%1 requires a project root path.").arg(commandName), format);
+	}
+	const QString findText = hasOption(args, QStringLiteral("--find")) ? optionValue(args, QStringLiteral("--find")) : positionalFind;
+	const QString replaceText = hasOption(args, QStringLiteral("--replace")) ? optionValue(args, QStringLiteral("--replace")) : positionalReplace;
+	if (findText.isEmpty()) {
+		return printCliError(commandName, CliExitCode::Usage, QStringLiteral("%1 requires --find <text>.").arg(commandName), format);
+	}
+	if (replace && replaceText.isEmpty()) {
+		return printCliError(commandName, CliExitCode::Usage, QStringLiteral("%1 requires --replace <text>.").arg(commandName), format);
+	}
+
+	AssetTextSearchRequest request;
+	request.rootPath = projectRoot;
+	request.findText = findText;
+	request.replaceText = replaceText;
+	request.extensions = assetTextExtensionsFromArgs(args);
+	request.replace = replace;
+	request.dryRun = replace ? !hasOption(args, QStringLiteral("--write")) || hasOption(args, QStringLiteral("--dry-run")) : true;
+	request.caseSensitive = hasOption(args, QStringLiteral("--case-sensitive"));
+	const AssetTextSearchReport report = findReplaceProjectText(request);
+	const CliExitCode code = report.succeeded() ? CliExitCode::Success : CliExitCode::ValidationFailed;
+	if (format == CliOutputFormat::Json) {
+		QJsonObject object = cliResultJson(commandName, code);
+		object.insert(QStringLiteral("textSearch"), assetTextSearchReportJson(report));
+		printJson(object);
+	} else {
+		std::cout << text(assetTextSearchReportText(report)) << "\n";
+	}
+	return exitCodeValue(code);
+}
+
+LevelMapLoadRequest levelMapLoadRequestFromArgs(const QString& path, const QStringList& args)
+{
+	LevelMapLoadRequest request;
+	request.path = hasOption(args, QStringLiteral("--input")) ? optionValue(args, QStringLiteral("--input")) : path;
+	request.mapName = hasOption(args, QStringLiteral("--map-name")) ? optionValue(args, QStringLiteral("--map-name")) : optionValue(args, QStringLiteral("--map"));
+	request.engineHint = hasOption(args, QStringLiteral("--engine-hint")) ? optionValue(args, QStringLiteral("--engine-hint")) : optionValue(args, QStringLiteral("--engine"));
+	return request;
+}
+
+CliExitCode levelMapLoadFailureCode(const LevelMapLoadRequest& request)
+{
+	return QFileInfo::exists(request.path) ? CliExitCode::Failure : CliExitCode::NotFound;
+}
+
+bool parseLevelMapSelector(const QString& selector, QString* objectKind, int* objectId)
+{
+	const QStringList parts = selector.trimmed().split(':', Qt::SkipEmptyParts);
+	if (parts.size() != 2) {
+		return false;
+	}
+	bool ok = false;
+	const int parsedId = parts.value(1).toInt(&ok);
+	if (!ok || parsedId < 0) {
+		return false;
+	}
+	if (objectKind) {
+		*objectKind = normalizedOptionId(parts.value(0));
+	}
+	if (objectId) {
+		*objectId = parsedId;
+	}
+	return true;
+}
+
+bool parseLevelMapEntityId(const QString& value, int* entityId)
+{
+	QString kind;
+	int id = -1;
+	if (parseLevelMapSelector(value, &kind, &id)) {
+		if (kind != QStringLiteral("entity")) {
+			return false;
+		}
+		if (entityId) {
+			*entityId = id;
+		}
+		return true;
+	}
+	bool ok = false;
+	id = value.trimmed().toInt(&ok);
+	if (!ok || id < 0) {
+		return false;
+	}
+	if (entityId) {
+		*entityId = id;
+	}
+	return true;
+}
+
+bool parseLevelMapDelta(const QString& value, double* dx, double* dy, double* dz)
+{
+	const QStringList parts = value.split(QRegularExpression(QStringLiteral(R"([,\s]+)")), Qt::SkipEmptyParts);
+	if (parts.size() < 2 || parts.size() > 3) {
+		return false;
+	}
+	bool okX = false;
+	bool okY = false;
+	bool okZ = true;
+	const double parsedX = parts.value(0).toDouble(&okX);
+	const double parsedY = parts.value(1).toDouble(&okY);
+	const double parsedZ = parts.size() >= 3 ? parts.value(2).toDouble(&okZ) : 0.0;
+	if (!okX || !okY || !okZ) {
+		return false;
+	}
+	if (dx) {
+		*dx = parsedX;
+	}
+	if (dy) {
+		*dy = parsedY;
+	}
+	if (dz) {
+		*dz = parsedZ;
+	}
+	return true;
+}
+
+QStringList levelMapSetArguments(const QStringList& args)
+{
+	QStringList sets = optionValues(args, QStringLiteral("--set"));
+	sets += optionValues(args, QStringLiteral("--property"));
+	return sets;
+}
+
+bool splitLevelMapPropertyAssignment(const QString& assignment, QString* key, QString* value)
+{
+	const int equals = assignment.indexOf('=');
+	if (equals <= 0) {
+		return false;
+	}
+	const QString parsedKey = assignment.left(equals).trimmed();
+	const QString parsedValue = assignment.mid(equals + 1);
+	if (parsedKey.isEmpty()) {
+		return false;
+	}
+	if (key) {
+		*key = parsedKey;
+	}
+	if (value) {
+		*value = parsedValue;
+	}
+	return true;
+}
+
+int runMapInspectCommand(const QString& commandName, const QString& path, const QStringList& args, CliOutputFormat format)
+{
+	const LevelMapLoadRequest request = levelMapLoadRequestFromArgs(path, args);
+	if (request.path.trimmed().isEmpty()) {
+		return printCliError(commandName, CliExitCode::Usage, QStringLiteral("%1 requires a Doom WAD or Quake-family .map path.").arg(commandName), format);
+	}
+	LevelMapDocument document;
+	QString error;
+	if (!loadLevelMap(request, &document, &error)) {
+		return printCliError(commandName, levelMapLoadFailureCode(request), QStringLiteral("Unable to load map: %1").arg(error), format);
+	}
+	const QString selector = optionValue(args, QStringLiteral("--select"));
+	if (!selector.trimmed().isEmpty() && !selectLevelMapObject(&document, selector, &error)) {
+		return printCliError(commandName, CliExitCode::Usage, QStringLiteral("Unable to select map object: %1").arg(error), format);
+	}
+	if (format == CliOutputFormat::Json) {
+		QJsonObject object = cliResultJson(commandName);
+		object.insert(QStringLiteral("map"), levelMapDocumentJson(document));
+		printJson(object);
+	} else {
+		std::cout << text(levelMapReportText(document)) << "\n";
+	}
+	return exitCodeValue(CliExitCode::Success);
+}
+
+int runMapEditCommand(const QString& commandName, const QString& path, const QStringList& args, CliOutputFormat format)
+{
+	const LevelMapLoadRequest request = levelMapLoadRequestFromArgs(path, args);
+	if (request.path.trimmed().isEmpty()) {
+		return printCliError(commandName, CliExitCode::Usage, QStringLiteral("%1 requires a Doom WAD or Quake-family .map path.").arg(commandName), format);
+	}
+	const QString entityValue = hasOption(args, QStringLiteral("--entity")) ? optionValue(args, QStringLiteral("--entity")) : optionValue(args, QStringLiteral("--select"));
+	int entityId = -1;
+	if (!parseLevelMapEntityId(entityValue, &entityId)) {
+		return printCliError(commandName, CliExitCode::Usage, QStringLiteral("%1 requires --entity <id> or --select entity:<id>.").arg(commandName), format);
+	}
+	const QStringList assignments = levelMapSetArguments(args);
+	if (assignments.isEmpty()) {
+		return printCliError(commandName, CliExitCode::Usage, QStringLiteral("%1 requires at least one --set key=value assignment.").arg(commandName), format);
+	}
+	const QString outputPath = optionValue(args, QStringLiteral("--output"));
+	if (outputPath.trimmed().isEmpty()) {
+		return printCliError(commandName, CliExitCode::Usage, QStringLiteral("%1 requires --output <save-as path>.").arg(commandName), format);
+	}
+
+	LevelMapDocument document;
+	QString error;
+	if (!loadLevelMap(request, &document, &error)) {
+		return printCliError(commandName, levelMapLoadFailureCode(request), QStringLiteral("Unable to load map: %1").arg(error), format);
+	}
+	if (!selectLevelMapObject(&document, QStringLiteral("entity:%1").arg(entityId), &error)) {
+		return printCliError(commandName, CliExitCode::Usage, QStringLiteral("Unable to select entity: %1").arg(error), format);
+	}
+	for (const QString& assignment : assignments) {
+		QString key;
+		QString value;
+		if (!splitLevelMapPropertyAssignment(assignment, &key, &value)) {
+			return printCliError(commandName, CliExitCode::Usage, QStringLiteral("Map property assignment must be formatted as key=value: %1").arg(assignment), format);
+		}
+		if (!setLevelMapEntityProperty(&document, entityId, key, value, &error)) {
+			return printCliError(commandName, CliExitCode::Failure, QStringLiteral("Unable to edit entity property: %1").arg(error), format);
+		}
+	}
+	const LevelMapSaveReport report = saveLevelMapAs(document, outputPath, hasOption(args, QStringLiteral("--dry-run")), hasOption(args, QStringLiteral("--overwrite")));
+	const CliExitCode code = report.succeeded() ? CliExitCode::Success : CliExitCode::ValidationFailed;
+	if (format == CliOutputFormat::Json) {
+		QJsonObject object = cliResultJson(commandName, code);
+		object.insert(QStringLiteral("map"), levelMapDocumentJson(document));
+		object.insert(QStringLiteral("save"), levelMapSaveReportJson(report));
+		printJson(object);
+	} else {
+		std::cout << text(levelMapSaveReportText(report)) << "\n";
+		std::cout << text(levelMapReportText(document)) << "\n";
+	}
+	return exitCodeValue(code);
+}
+
+int runMapMoveCommand(const QString& commandName, const QString& path, const QStringList& args, CliOutputFormat format)
+{
+	const LevelMapLoadRequest request = levelMapLoadRequestFromArgs(path, args);
+	if (request.path.trimmed().isEmpty()) {
+		return printCliError(commandName, CliExitCode::Usage, QStringLiteral("%1 requires a Doom WAD or Quake-family .map path.").arg(commandName), format);
+	}
+	const QString selector = hasOption(args, QStringLiteral("--object")) ? optionValue(args, QStringLiteral("--object")) : optionValue(args, QStringLiteral("--select"));
+	QString objectKind;
+	int objectId = -1;
+	if (!parseLevelMapSelector(selector, &objectKind, &objectId)) {
+		return printCliError(commandName, CliExitCode::Usage, QStringLiteral("%1 requires --object kind:id.").arg(commandName), format);
+	}
+	double dx = 0.0;
+	double dy = 0.0;
+	double dz = 0.0;
+	if (!parseLevelMapDelta(optionValue(args, QStringLiteral("--delta")), &dx, &dy, &dz)) {
+		return printCliError(commandName, CliExitCode::Usage, QStringLiteral("%1 requires --delta x,y,z.").arg(commandName), format);
+	}
+	const QString outputPath = optionValue(args, QStringLiteral("--output"));
+	if (outputPath.trimmed().isEmpty()) {
+		return printCliError(commandName, CliExitCode::Usage, QStringLiteral("%1 requires --output <save-as path>.").arg(commandName), format);
+	}
+
+	LevelMapDocument document;
+	QString error;
+	if (!loadLevelMap(request, &document, &error)) {
+		return printCliError(commandName, levelMapLoadFailureCode(request), QStringLiteral("Unable to load map: %1").arg(error), format);
+	}
+	if (!moveLevelMapObject(&document, objectKind, objectId, dx, dy, dz, &error)) {
+		return printCliError(commandName, CliExitCode::Failure, QStringLiteral("Unable to move map object: %1").arg(error), format);
+	}
+	const LevelMapSaveReport report = saveLevelMapAs(document, outputPath, hasOption(args, QStringLiteral("--dry-run")), hasOption(args, QStringLiteral("--overwrite")));
+	const CliExitCode code = report.succeeded() ? CliExitCode::Success : CliExitCode::ValidationFailed;
+	if (format == CliOutputFormat::Json) {
+		QJsonObject object = cliResultJson(commandName, code);
+		object.insert(QStringLiteral("map"), levelMapDocumentJson(document));
+		object.insert(QStringLiteral("save"), levelMapSaveReportJson(report));
+		printJson(object);
+	} else {
+		std::cout << text(levelMapSaveReportText(report)) << "\n";
+		std::cout << text(levelMapReportText(document)) << "\n";
+	}
+	return exitCodeValue(code);
+}
+
+int runMapCompilePlanCommand(const QString& commandName, const QString& path, const QStringList& args, CliOutputFormat format)
+{
+	const LevelMapLoadRequest request = levelMapLoadRequestFromArgs(path, args);
+	if (request.path.trimmed().isEmpty()) {
+		return printCliError(commandName, CliExitCode::Usage, QStringLiteral("%1 requires a Doom WAD or Quake-family .map path.").arg(commandName), format);
+	}
+	LevelMapDocument document;
+	QString error;
+	if (!loadLevelMap(request, &document, &error)) {
+		return printCliError(commandName, levelMapLoadFailureCode(request), QStringLiteral("Unable to load map: %1").arg(error), format);
+	}
+	const QString profileId = hasOption(args, QStringLiteral("--compiler-profile")) ? optionValue(args, QStringLiteral("--compiler-profile")) : optionValue(args, QStringLiteral("--profile"));
+	CompilerCommandRequest compilerRequest = compilerRequestForLevelMap(document, profileId, optionValue(args, QStringLiteral("--output")));
+	compilerRequest.workingDirectory = optionValue(args, QStringLiteral("--working-directory")).trimmed().isEmpty() ? compilerRequest.workingDirectory : optionValue(args, QStringLiteral("--working-directory"));
+	compilerRequest.workspaceRootPath = optionValue(args, QStringLiteral("--workspace-root"));
+	const QString extraArgs = optionValue(args, QStringLiteral("--extra-args"));
+	if (!extraArgs.trimmed().isEmpty()) {
+		compilerRequest.extraArguments = QProcess::splitCommand(extraArgs);
+	}
+	applyCompilerRequestContext(&compilerRequest, args);
+	const CompilerCommandPlan plan = buildCompilerCommandPlan(compilerRequest);
+	const CliExitCode code = plan.errors.isEmpty() ? CliExitCode::Success : (!plan.profileFound ? CliExitCode::Usage : CliExitCode::NotFound);
+	if (format == CliOutputFormat::Json) {
+		QJsonObject object = cliResultJson(commandName, code);
+		object.insert(QStringLiteral("map"), levelMapDocumentJson(document));
+		object.insert(QStringLiteral("plan"), compilerCommandPlanJson(plan));
+		printJson(object);
+	} else {
+		std::cout << text(levelMapReportText(document)) << "\n";
+		std::cout << text(compilerCommandPlanText(plan)) << "\n";
+	}
+	return exitCodeValue(code);
+}
+
+QStringList shaderPackagePathsFromArgs(const QStringList& args)
+{
+	QStringList paths = optionValues(args, QStringLiteral("--package"));
+	paths += optionValues(args, QStringLiteral("--mounted-package"));
+	QStringList normalized;
+	for (const QString& path : paths) {
+		const QString trimmed = path.trimmed();
+		if (!trimmed.isEmpty() && !normalized.contains(trimmed)) {
+			normalized.push_back(trimmed);
+		}
+	}
+	return normalized;
+}
+
+int runShaderInspectCommand(const QString& commandName, const QString& path, const QStringList& args, CliOutputFormat format)
+{
+	const QString shaderPath = path.trimmed().isEmpty() ? optionValue(args, QStringLiteral("--input")) : path;
+	if (shaderPath.trimmed().isEmpty()) {
+		return printCliError(commandName, CliExitCode::Usage, QStringLiteral("%1 requires a shader script path.").arg(commandName), format);
+	}
+	ShaderDocument document;
+	QString error;
+	if (!loadShaderScript(shaderPath, &document, &error)) {
+		return printCliError(commandName, CliExitCode::Failure, QStringLiteral("Unable to load shader script: %1").arg(error), format);
+	}
+	QStringList validationWarnings;
+	const QVector<ShaderReferenceValidation> validation = validateShaderReferences(document, shaderPackagePathsFromArgs(args), &validationWarnings);
+	const bool missingReference = std::any_of(validation.cbegin(), validation.cend(), [](const ShaderReferenceValidation& item) {
+		return !item.found;
+	});
+	const CliExitCode code = document.shaders.isEmpty() ? CliExitCode::ValidationFailed : (missingReference && !validation.isEmpty() ? CliExitCode::ValidationFailed : CliExitCode::Success);
+	if (format == CliOutputFormat::Json) {
+		QJsonObject object = cliResultJson(commandName, code);
+		object.insert(QStringLiteral("shader"), advancedShaderDocumentJson(document, validation, validationWarnings));
+		printJson(object);
+	} else {
+		std::cout << text(shaderDocumentReportText(document, validation, validationWarnings)) << "\n";
+	}
+	return exitCodeValue(code);
+}
+
+int runShaderSetStageCommand(const QString& commandName, const QString& path, const QStringList& args, CliOutputFormat format)
+{
+	const QString shaderPath = path.trimmed().isEmpty() ? optionValue(args, QStringLiteral("--input")) : path;
+	if (shaderPath.trimmed().isEmpty()) {
+		return printCliError(commandName, CliExitCode::Usage, QStringLiteral("%1 requires a shader script path.").arg(commandName), format);
+	}
+	const QString shaderName = optionValue(args, QStringLiteral("--shader"));
+	const QString directive = optionValue(args, QStringLiteral("--directive"));
+	const QString value = optionValue(args, QStringLiteral("--value"));
+	const QString outputPath = optionValue(args, QStringLiteral("--output"));
+	bool stageOk = false;
+	const int stageIndex = optionValue(args, QStringLiteral("--stage")).toInt(&stageOk);
+	if (shaderName.trimmed().isEmpty() || !stageOk || directive.trimmed().isEmpty()) {
+		return printCliError(commandName, CliExitCode::Usage, QStringLiteral("%1 requires --shader <name> --stage <index> --directive <name> --value <text>.").arg(commandName), format);
+	}
+	if (outputPath.trimmed().isEmpty()) {
+		return printCliError(commandName, CliExitCode::Usage, QStringLiteral("%1 requires --output <save-as path>.").arg(commandName), format);
+	}
+
+	ShaderDocument document;
+	QString error;
+	if (!loadShaderScript(shaderPath, &document, &error)) {
+		return printCliError(commandName, CliExitCode::Failure, QStringLiteral("Unable to load shader script: %1").arg(error), format);
+	}
+	if (!setShaderStageDirective(&document, shaderName, stageIndex, directive, value, &error)) {
+		return printCliError(commandName, CliExitCode::Usage, QStringLiteral("Unable to edit shader stage: %1").arg(error), format);
+	}
+	const ShaderSaveReport report = saveShaderScriptAs(document, outputPath, hasOption(args, QStringLiteral("--dry-run")), hasOption(args, QStringLiteral("--overwrite")));
+	QStringList validationWarnings;
+	const QVector<ShaderReferenceValidation> validation = validateShaderReferences(document, shaderPackagePathsFromArgs(args), &validationWarnings);
+	const CliExitCode code = report.succeeded() ? CliExitCode::Success : CliExitCode::ValidationFailed;
+	if (format == CliOutputFormat::Json) {
+		QJsonObject object = cliResultJson(commandName, code);
+		object.insert(QStringLiteral("shader"), advancedShaderDocumentJson(document, validation, validationWarnings));
+		object.insert(QStringLiteral("save"), shaderSaveReportJson(report));
+		printJson(object);
+	} else {
+		std::cout << text(shaderSaveReportText(report)) << "\n";
+		std::cout << text(shaderDocumentReportText(document, validation, validationWarnings)) << "\n";
+	}
+	return exitCodeValue(code);
+}
+
+int runSpritePlanCommand(const QString& commandName, const QStringList& args, CliOutputFormat format)
+{
+	SpriteWorkflowRequest request;
+	request.engineFamily = optionValue(args, QStringLiteral("--engine")).trimmed().isEmpty() ? QStringLiteral("doom") : optionValue(args, QStringLiteral("--engine"));
+	request.spriteName = hasOption(args, QStringLiteral("--sprite-name")) ? optionValue(args, QStringLiteral("--sprite-name")) : optionValue(args, QStringLiteral("--name"));
+	if (request.spriteName.trimmed().isEmpty()) {
+		return printCliError(commandName, CliExitCode::Usage, QStringLiteral("%1 requires --name <sprite-name>.").arg(commandName), format);
+	}
+	bool framesOk = true;
+	bool rotationsOk = true;
+	if (hasOption(args, QStringLiteral("--frames"))) {
+		request.frameCount = optionValue(args, QStringLiteral("--frames")).toInt(&framesOk);
+	}
+	if (hasOption(args, QStringLiteral("--rotations"))) {
+		request.rotations = optionValue(args, QStringLiteral("--rotations")).toInt(&rotationsOk);
+	}
+	if (!framesOk || request.frameCount <= 0) {
+		return printCliError(commandName, CliExitCode::Usage, QStringLiteral("--frames must be a positive integer."), format);
+	}
+	if (!rotationsOk || request.rotations < 0) {
+		return printCliError(commandName, CliExitCode::Usage, QStringLiteral("--rotations must be 0 through 8 for Doom workflows."), format);
+	}
+	request.paletteId = optionValue(args, QStringLiteral("--palette")).trimmed().isEmpty() ? QStringLiteral("generic") : optionValue(args, QStringLiteral("--palette"));
+	request.outputPackageRoot = optionValue(args, QStringLiteral("--package-root")).trimmed().isEmpty() ? QStringLiteral("sprites") : optionValue(args, QStringLiteral("--package-root"));
+	request.sourceFramePaths = optionValues(args, QStringLiteral("--source-frame"));
+	request.stageForPackage = !hasOption(args, QStringLiteral("--no-stage"));
+	const SpriteWorkflowPlan plan = buildSpriteWorkflowPlan(request);
+	const CliExitCode code = plan.state == OperationState::Failed ? CliExitCode::Failure : CliExitCode::Success;
+	if (format == CliOutputFormat::Json) {
+		QJsonObject object = cliResultJson(commandName, code);
+		object.insert(QStringLiteral("sprite"), spriteWorkflowPlanJson(plan));
+		printJson(object);
+	} else {
+		std::cout << text(spriteWorkflowPlanText(plan)) << "\n";
+	}
+	return exitCodeValue(code);
+}
+
+int runCodeIndexCommand(const QString& commandName, const QString& rootPath, const QStringList& args, CliOutputFormat format)
+{
+	const QString root = rootPath.trimmed().isEmpty() ? optionValue(args, QStringLiteral("--workspace-root")) : rootPath;
+	if (root.trimmed().isEmpty()) {
+		return printCliError(commandName, CliExitCode::Usage, QStringLiteral("%1 requires a project source root path.").arg(commandName), format);
+	}
+	CodeWorkspaceIndexRequest request;
+	request.rootPath = root;
+	request.extensions = assetTextExtensionsFromArgs(args);
+	request.symbolQuery = optionValue(args, QStringLiteral("--find"));
+	if (hasOption(args, QStringLiteral("--symbol"))) {
+		request.symbolQuery = optionValue(args, QStringLiteral("--symbol"));
+	}
+	const CodeWorkspaceIndex index = indexCodeWorkspace(request);
+	const CliExitCode code = index.state == OperationState::Failed ? CliExitCode::Failure : CliExitCode::Success;
+	if (format == CliOutputFormat::Json) {
+		QJsonObject object = cliResultJson(commandName, code);
+		object.insert(QStringLiteral("code"), codeWorkspaceIndexJson(index));
+		printJson(object);
+	} else {
+		std::cout << text(codeWorkspaceIndexText(index)) << "\n";
+	}
+	return exitCodeValue(code);
+}
+
+QStringList extensionRootsFromArgs(const QString& positionalRoot, const QStringList& args)
+{
+	QStringList roots;
+	if (!positionalRoot.trimmed().isEmpty()) {
+		roots << positionalRoot;
+	}
+	roots += optionValues(args, QStringLiteral("--extension-root"));
+	roots += optionValues(args, QStringLiteral("--root"));
+	if (roots.isEmpty()) {
+		roots << QDir::currentPath();
+	}
+	return roots;
+}
+
+int runExtensionDiscoverCommand(const QString& commandName, const QString& rootPath, const QStringList& args, CliOutputFormat format)
+{
+	const ExtensionDiscoveryResult discovery = discoverExtensions(extensionRootsFromArgs(rootPath, args));
+	const CliExitCode code = discovery.state == OperationState::Failed ? CliExitCode::Failure : CliExitCode::Success;
+	if (format == CliOutputFormat::Json) {
+		QJsonObject object = cliResultJson(commandName, code);
+		object.insert(QStringLiteral("extensions"), extensionDiscoveryJson(discovery));
+		printJson(object);
+	} else {
+		std::cout << text(extensionDiscoveryText(discovery)) << "\n";
+	}
+	return exitCodeValue(code);
+}
+
+int runExtensionInspectCommand(const QString& commandName, const QString& manifestPath, CliOutputFormat format)
+{
+	if (manifestPath.trimmed().isEmpty()) {
+		return printCliError(commandName, CliExitCode::Usage, QStringLiteral("%1 requires an extension manifest path.").arg(commandName), format);
+	}
+	ExtensionManifest manifest;
+	QString error;
+	if (!loadExtensionManifest(manifestPath, &manifest, &error)) {
+		return printCliError(commandName, CliExitCode::Failure, QStringLiteral("Unable to load extension manifest: %1").arg(error), format);
+	}
+	if (format == CliOutputFormat::Json) {
+		QJsonObject object = cliResultJson(commandName);
+		object.insert(QStringLiteral("extension"), extensionManifestJson(manifest));
+		object.insert(QStringLiteral("trustModel"), stringArrayJson(extensionTrustModelLines()));
+		printJson(object);
+	} else {
+		std::cout << text(extensionManifestText(manifest)) << "\n";
+		std::cout << text(extensionTrustModelLines().join('\n')) << "\n";
+	}
+	return exitCodeValue(CliExitCode::Success);
+}
+
+int runExtensionRunCommand(const QString& commandName, const QString& manifestPath, const QString& commandId, const QStringList& args, CliOutputFormat format)
+{
+	if (manifestPath.trimmed().isEmpty() || commandId.trimmed().isEmpty()) {
+		return printCliError(commandName, CliExitCode::Usage, QStringLiteral("%1 requires a manifest path and command id.").arg(commandName), format);
+	}
+	ExtensionManifest manifest;
+	QString error;
+	if (!loadExtensionManifest(manifestPath, &manifest, &error)) {
+		return printCliError(commandName, CliExitCode::Failure, QStringLiteral("Unable to load extension manifest: %1").arg(error), format);
+	}
+	const bool allowExecution = hasOption(args, QStringLiteral("--execute")) || hasOption(args, QStringLiteral("--allow-execution"));
+	const bool dryRun = hasOption(args, QStringLiteral("--dry-run")) || !allowExecution;
+	QStringList extraArguments;
+	if (hasOption(args, QStringLiteral("--extra-args"))) {
+		extraArguments = QProcess::splitCommand(optionValue(args, QStringLiteral("--extra-args")));
+	}
+	bool timeoutOk = false;
+	const int requestedTimeout = optionValue(args, QStringLiteral("--timeout-ms")).toInt(&timeoutOk);
+	const ExtensionCommandPlan plan = buildExtensionCommandPlan(manifest, commandId, extraArguments, dryRun, allowExecution);
+	const ExtensionCommandResult result = runExtensionCommand(plan, timeoutOk && requestedTimeout > 0 ? requestedTimeout : 30000);
+	const CliExitCode code = result.state == OperationState::Failed ? CliExitCode::Failure : CliExitCode::Success;
+	if (format == CliOutputFormat::Json) {
+		QJsonObject object = cliResultJson(commandName, code);
+		object.insert(QStringLiteral("extensionCommand"), extensionCommandResultJson(result));
+		printJson(object);
+	} else {
+		std::cout << text(extensionCommandResultText(result)) << "\n";
 	}
 	return exitCodeValue(code);
 }
@@ -2773,6 +4585,87 @@ int runSubcommand(const QStringList& args)
 		if (action == QStringLiteral("validate") || action == QStringLiteral("check")) {
 			return runPackageValidateCommand(QStringLiteral("package validate"), tokens.value(2), format);
 		}
+		if (action == QStringLiteral("stage") || action == QStringLiteral("staging")) {
+			return runPackageStageCommand(QStringLiteral("package stage"), tokens.value(2), args, format);
+		}
+		if (action == QStringLiteral("manifest")) {
+			const QString outputPath = hasOption(args, QStringLiteral("--output")) ? optionValue(args, QStringLiteral("--output")) : tokens.value(3);
+			return runPackageManifestCommand(QStringLiteral("package manifest"), tokens.value(2), outputPath, args, format);
+		}
+		if (action == QStringLiteral("save-as") || action == QStringLiteral("write") || action == QStringLiteral("rebuild")) {
+			const QString outputPath = hasOption(args, QStringLiteral("--output")) ? optionValue(args, QStringLiteral("--output")) : tokens.value(3);
+			return runPackageSaveAsCommand(QStringLiteral("package save-as"), tokens.value(2), outputPath, args, format);
+		}
+	}
+
+	if (family == QStringLiteral("asset") || family == QStringLiteral("assets")) {
+		if (action == QStringLiteral("inspect") || action == QStringLiteral("preview")) {
+			return runAssetInspectCommand(QStringLiteral("asset inspect"), tokens.value(2), tokens.value(3), format);
+		}
+		if (action == QStringLiteral("convert") || action == QStringLiteral("image-convert")) {
+			const QString outputPath = hasOption(args, QStringLiteral("--output")) ? optionValue(args, QStringLiteral("--output")) : tokens.value(3);
+			return runAssetConvertCommand(QStringLiteral("asset convert"), tokens.value(2), outputPath, args, format);
+		}
+		if (action == QStringLiteral("audio-wav") || action == QStringLiteral("wav") || action == QStringLiteral("export-wav")) {
+			const QString outputPath = hasOption(args, QStringLiteral("--output")) ? optionValue(args, QStringLiteral("--output")) : tokens.value(4);
+			return runAssetAudioWavCommand(QStringLiteral("asset audio-wav"), tokens.value(2), tokens.value(3), outputPath, args, format);
+		}
+		if (action == QStringLiteral("find") || action == QStringLiteral("search")) {
+			return runAssetTextCommand(QStringLiteral("asset find"), tokens.value(2), tokens.value(3), QString(), false, args, format);
+		}
+		if (action == QStringLiteral("replace") || action == QStringLiteral("replace-text")) {
+			return runAssetTextCommand(QStringLiteral("asset replace"), tokens.value(2), tokens.value(3), tokens.value(4), true, args, format);
+		}
+	}
+
+	if (family == QStringLiteral("map") || family == QStringLiteral("maps") || family == QStringLiteral("level")) {
+		const QString mapPath = hasOption(args, QStringLiteral("--input")) ? optionValue(args, QStringLiteral("--input")) : tokens.value(2);
+		if (action == QStringLiteral("inspect") || action == QStringLiteral("info") || action == QStringLiteral("preview")) {
+			return runMapInspectCommand(QStringLiteral("map inspect"), mapPath, args, format);
+		}
+		if (action == QStringLiteral("edit") || action == QStringLiteral("set-property")) {
+			return runMapEditCommand(QStringLiteral("map edit"), mapPath, args, format);
+		}
+		if (action == QStringLiteral("move") || action == QStringLiteral("translate")) {
+			return runMapMoveCommand(QStringLiteral("map move"), mapPath, args, format);
+		}
+		if (action == QStringLiteral("compile-plan") || action == QStringLiteral("plan") || action == QStringLiteral("compiler-plan")) {
+			return runMapCompilePlanCommand(QStringLiteral("map compile-plan"), mapPath, args, format);
+		}
+	}
+
+	if (family == QStringLiteral("shader") || family == QStringLiteral("shaders")) {
+		const QString shaderPath = hasOption(args, QStringLiteral("--input")) ? optionValue(args, QStringLiteral("--input")) : tokens.value(2);
+		if (action == QStringLiteral("inspect") || action == QStringLiteral("info") || action == QStringLiteral("validate")) {
+			return runShaderInspectCommand(QStringLiteral("shader inspect"), shaderPath, args, format);
+		}
+		if (action == QStringLiteral("set-stage") || action == QStringLiteral("edit-stage") || action == QStringLiteral("edit")) {
+			return runShaderSetStageCommand(QStringLiteral("shader set-stage"), shaderPath, args, format);
+		}
+	}
+
+	if (family == QStringLiteral("sprite") || family == QStringLiteral("sprites")) {
+		if (action == QStringLiteral("plan") || action == QStringLiteral("create") || action == QStringLiteral("sequence")) {
+			return runSpritePlanCommand(QStringLiteral("sprite plan"), args, format);
+		}
+	}
+
+	if (family == QStringLiteral("code") || family == QStringLiteral("ide") || family == QStringLiteral("source")) {
+		if (action == QStringLiteral("index") || action == QStringLiteral("tree") || action == QStringLiteral("symbols")) {
+			return runCodeIndexCommand(QStringLiteral("code index"), tokens.value(2), args, format);
+		}
+	}
+
+	if (family == QStringLiteral("extension") || family == QStringLiteral("extensions") || family == QStringLiteral("plugin") || family == QStringLiteral("plugins")) {
+		if (action == QStringLiteral("discover") || action == QStringLiteral("list") || action == QStringLiteral("ls")) {
+			return runExtensionDiscoverCommand(QStringLiteral("extension discover"), tokens.value(2), args, format);
+		}
+		if (action == QStringLiteral("inspect") || action == QStringLiteral("info")) {
+			return runExtensionInspectCommand(QStringLiteral("extension inspect"), tokens.value(2), format);
+		}
+		if (action == QStringLiteral("run") || action == QStringLiteral("plan")) {
+			return runExtensionRunCommand(QStringLiteral("extension run"), tokens.value(2), tokens.value(3), args, format);
+		}
 	}
 
 	if (family == QStringLiteral("compiler")) {
@@ -2850,6 +4743,21 @@ int runSubcommand(const QStringList& args)
 		}
 		if (action == QStringLiteral("compare") || action == QStringLiteral("compare-providers")) {
 			return runAiCompareCommand(QStringLiteral("ai compare"), args, format);
+		}
+		if (action == QStringLiteral("shader-scaffold") || action == QStringLiteral("shader") || action == QStringLiteral("prompt-to-shader")) {
+			return runAiShaderScaffoldCommand(QStringLiteral("ai shader-scaffold"), args, format);
+		}
+		if (action == QStringLiteral("entity-snippet") || action == QStringLiteral("entity") || action == QStringLiteral("prompt-to-entity")) {
+			return runAiEntitySnippetCommand(QStringLiteral("ai entity-snippet"), args, format);
+		}
+		if (action == QStringLiteral("package-plan") || action == QStringLiteral("package-validation") || action == QStringLiteral("prompt-to-package-validation")) {
+			return runAiPackagePlanCommand(QStringLiteral("ai package-plan"), args, format);
+		}
+		if (action == QStringLiteral("batch-recipe") || action == QStringLiteral("batch-conversion") || action == QStringLiteral("prompt-to-batch-conversion")) {
+			return runAiBatchRecipeCommand(QStringLiteral("ai batch-recipe"), args, format);
+		}
+		if (action == QStringLiteral("review") || action == QStringLiteral("proposal-review")) {
+			return runAiReviewCommand(QStringLiteral("ai review"), args, format);
 		}
 	}
 

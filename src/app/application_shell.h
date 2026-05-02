@@ -1,8 +1,11 @@
 #pragma once
 
+#include "core/advanced_studio.h"
 #include "core/operation_state.h"
 #include "core/package_archive.h"
+#include "core/package_staging.h"
 #include "core/compiler_runner.h"
+#include "core/level_map.h"
 #include "core/studio_settings.h"
 
 #include <QMainWindow>
@@ -59,12 +62,29 @@ private:
 	void refreshChangedFilesPanel();
 	void refreshProjectDependencyGraph();
 	void refreshRecentActivityTimeline();
+	void openLevelMapFile();
+	void loadLevelMapPath(const QString& path);
+	void refreshLevelMapWorkbench();
+	void refreshLevelMapSelection();
+	QString selectedLevelMapObjectSelector() const;
+	void editSelectedLevelMapProperty();
+	void moveSelectedLevelMapObject();
+	void saveLevelMapAsFromUi();
+	void planLevelMapCompile();
+	void copyLevelMapCliEquivalent();
+	void refreshAdvancedStudioSurface();
+	void inspectAdvancedShaderScript();
+	void createAdvancedSpritePlan();
+	void indexAdvancedCodeWorkspace();
+	void createAdvancedAiProposal();
+	void discoverAdvancedExtensions();
 	QString selectedWorkspaceFilePath() const;
 	QString selectedWorkspaceVirtualPath() const;
 	void revealSelectedWorkspacePath();
 	void copySelectedWorkspaceVirtualPath();
 	void refreshPackageTree();
 	void refreshPackageCompositionSummary();
+	void refreshPackageStagingSummary();
 	void refreshPackageEntryDetails(const QString& virtualPath);
 	void filterPackageEntries();
 	void refreshCompilerPipelineSummary();
@@ -82,6 +102,12 @@ private:
 	void extractAllPackageEntries();
 	void extractPackageEntriesToDirectory(const QStringList& virtualPaths, bool extractAll);
 	void showPackageExtractionReport(const PackageExtractionReport& report);
+	bool choosePackageStageResolution(const QString& title, PackageStageConflictResolution* resolution);
+	void stagePackageAddFile();
+	void stagePackageReplaceSelected();
+	void stagePackageRenameSelected();
+	void stagePackageDeleteSelected();
+	void saveStagedPackageAs();
 	void activateRecentProject(QListWidgetItem* item);
 	void removeSelectedRecentProject();
 	void clearRecentProjects();
@@ -111,6 +137,15 @@ private:
 	StudioSettings m_settings;
 	OperationStateModel m_activity;
 	PackageArchive m_packageArchive;
+	PackageStagingModel m_packageStaging;
+	LevelMapDocument m_levelMapDocument;
+	ShaderDocument m_advancedShaderDocument;
+	QVector<ShaderReferenceValidation> m_advancedShaderValidation;
+	QStringList m_advancedShaderValidationWarnings;
+	SpriteWorkflowPlan m_advancedSpritePlan;
+	CodeWorkspaceIndex m_advancedCodeIndex;
+	ExtensionDiscoveryResult m_advancedExtensionDiscovery;
+	AiWorkflowResult m_advancedAiProposal;
 	LoadingPane* m_inspectorState = nullptr;
 	DetailDrawer* m_inspectorDrawer = nullptr;
 	LoadingPane* m_workspaceState = nullptr;
@@ -128,12 +163,53 @@ private:
 	QListWidget* m_changedFiles = nullptr;
 	QListWidget* m_dependencyGraph = nullptr;
 	QListWidget* m_recentActivityTimeline = nullptr;
+	QLineEdit* m_levelMapPath = nullptr;
+	QLineEdit* m_levelMapName = nullptr;
+	QComboBox* m_levelMapEngine = nullptr;
+	QComboBox* m_levelMapCompilerProfile = nullptr;
+	LoadingPane* m_levelMapState = nullptr;
+	QListWidget* m_levelMapObjects = nullptr;
+	QListWidget* m_levelMapStatistics = nullptr;
+	QListWidget* m_levelMapView = nullptr;
+	QListWidget* m_levelMapValidation = nullptr;
+	DetailDrawer* m_levelMapDrawer = nullptr;
+	QPushButton* m_levelMapSaveAs = nullptr;
+	QPushButton* m_levelMapEditProperty = nullptr;
+	QPushButton* m_levelMapMoveSelection = nullptr;
+	QPushButton* m_levelMapPlanCompile = nullptr;
+	QPushButton* m_levelMapCopyCli = nullptr;
+	QLineEdit* m_advancedShaderPath = nullptr;
+	QLineEdit* m_advancedSpriteName = nullptr;
+	QLineEdit* m_advancedSpriteFrames = nullptr;
+	QLineEdit* m_advancedSpriteRotations = nullptr;
+	QLineEdit* m_advancedAiPrompt = nullptr;
+	QLineEdit* m_advancedExtensionRoot = nullptr;
+	QComboBox* m_advancedSpriteEngine = nullptr;
+	QComboBox* m_advancedAiKind = nullptr;
+	LoadingPane* m_advancedStudioState = nullptr;
+	QListWidget* m_advancedShaderGraph = nullptr;
+	QListWidget* m_advancedSpriteSequence = nullptr;
+	QListWidget* m_advancedCodeTree = nullptr;
+	QListWidget* m_advancedAiProposalList = nullptr;
+	QListWidget* m_advancedExtensions = nullptr;
+	DetailDrawer* m_advancedStudioDrawer = nullptr;
+	QPushButton* m_advancedShaderInspect = nullptr;
+	QPushButton* m_advancedSpritePlanButton = nullptr;
+	QPushButton* m_advancedCodeIndexButton = nullptr;
+	QPushButton* m_advancedAiCreate = nullptr;
+	QPushButton* m_advancedExtensionDiscover = nullptr;
 	QLineEdit* m_packageFilter = nullptr;
 	LoadingPane* m_packageState = nullptr;
 	QListWidget* m_packageComposition = nullptr;
+	QListWidget* m_packageStagingSummary = nullptr;
 	QTreeWidget* m_packageTree = nullptr;
 	QListWidget* m_packageEntries = nullptr;
 	DetailDrawer* m_packageDrawer = nullptr;
+	QPushButton* m_packageStageAdd = nullptr;
+	QPushButton* m_packageStageReplace = nullptr;
+	QPushButton* m_packageStageRename = nullptr;
+	QPushButton* m_packageStageDelete = nullptr;
+	QPushButton* m_packageStageSaveAs = nullptr;
 	QPushButton* m_packageExtractSelected = nullptr;
 	QPushButton* m_packageExtractAll = nullptr;
 	QPushButton* m_packageExtractCancel = nullptr;

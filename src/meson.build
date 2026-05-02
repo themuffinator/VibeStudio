@@ -12,16 +12,23 @@ configure_file(
 vibestudio_includes = include_directories('.')
 
 core_sources = files(
+  'core/advanced_studio.cpp',
   'core/ai_connectors.cpp',
   'core/ai_workflows.cpp',
+  'core/asset_tools.cpp',
+  'core/compiler_artifact_validation.cpp',
+  'core/compiler_known_issues.cpp',
   'core/compiler_profiles.cpp',
   'core/compiler_registry.cpp',
   'core/compiler_runner.cpp',
   'core/editor_profiles.cpp',
+  'core/ericw_map_preflight.cpp',
   'core/game_installation.cpp',
+  'core/level_map.cpp',
   'core/operation_state.cpp',
   'core/package_archive.cpp',
   'core/package_preview.cpp',
+  'core/package_staging.cpp',
   'core/project_manifest.cpp',
   'core/studio_manifest.cpp',
   'core/studio_settings.cpp',
@@ -41,7 +48,7 @@ vibestudio_core_dep = declare_dependency(
   link_with: [vibestudio_core],
 )
 
-install_headers(files('core/ai_connectors.h', 'core/ai_workflows.h', 'core/compiler_profiles.h', 'core/compiler_registry.h', 'core/compiler_runner.h', 'core/editor_profiles.h', 'core/game_installation.h', 'core/operation_state.h', 'core/package_archive.h', 'core/package_preview.h', 'core/project_manifest.h', 'core/studio_manifest.h', 'core/studio_settings.h'), subdir: 'vibestudio/core')
+install_headers(files('core/advanced_studio.h', 'core/ai_connectors.h', 'core/ai_workflows.h', 'core/asset_tools.h', 'core/compiler_artifact_validation.h', 'core/compiler_known_issues.h', 'core/compiler_profiles.h', 'core/compiler_registry.h', 'core/compiler_runner.h', 'core/ericw_map_preflight.h', 'core/editor_profiles.h', 'core/game_installation.h', 'core/level_map.h', 'core/operation_state.h', 'core/package_archive.h', 'core/package_preview.h', 'core/package_staging.h', 'core/project_manifest.h', 'core/studio_manifest.h', 'core/studio_settings.h'), subdir: 'vibestudio/core')
 
 app_sources = files(
   'main.cpp',
@@ -88,6 +95,16 @@ ai_workflows_smoke_test = executable(
 
 test('ai-workflows-smoke', ai_workflows_smoke_test)
 
+advanced_studio_smoke_test = executable(
+  'advanced_studio_smoke_test',
+  ['tests/advanced_studio_smoke_test.cpp'],
+  include_directories: vibestudio_includes,
+  dependencies: [vibestudio_core_dep],
+  install: false,
+)
+
+test('advanced-studio-smoke', advanced_studio_smoke_test)
+
 compiler_registry_smoke_test = executable(
   'compiler_registry_smoke_test',
   ['tests/compiler_registry_smoke_test.cpp'],
@@ -98,6 +115,16 @@ compiler_registry_smoke_test = executable(
 
 test('compiler-registry-smoke', compiler_registry_smoke_test)
 
+compiler_known_issues_smoke_test = executable(
+  'compiler_known_issues_smoke_test',
+  ['tests/compiler_known_issues_smoke_test.cpp'],
+  include_directories: vibestudio_includes,
+  dependencies: [vibestudio_core_dep],
+  install: false,
+)
+
+test('compiler-known-issues-smoke', compiler_known_issues_smoke_test)
+
 compiler_profiles_smoke_test = executable(
   'compiler_profiles_smoke_test',
   ['tests/compiler_profiles_smoke_test.cpp'],
@@ -107,6 +134,36 @@ compiler_profiles_smoke_test = executable(
 )
 
 test('compiler-profiles-smoke', compiler_profiles_smoke_test)
+
+compiler_artifact_validation_smoke_test = executable(
+  'compiler_artifact_validation_smoke_test',
+  ['tests/compiler_artifact_validation_smoke_test.cpp'],
+  include_directories: vibestudio_includes,
+  dependencies: [vibestudio_core_dep],
+  install: false,
+)
+
+test('compiler-artifact-validation-smoke', compiler_artifact_validation_smoke_test)
+
+ericw_map_preflight_smoke_test = executable(
+  'ericw_map_preflight_smoke_test',
+  ['tests/ericw_map_preflight_smoke_test.cpp'],
+  include_directories: vibestudio_includes,
+  dependencies: [vibestudio_core_dep],
+  install: false,
+)
+
+test('ericw-map-preflight-smoke', ericw_map_preflight_smoke_test)
+
+level_map_smoke_test = executable(
+  'level_map_smoke_test',
+  ['tests/level_map_smoke_test.cpp'],
+  include_directories: vibestudio_includes,
+  dependencies: [vibestudio_core_dep],
+  install: false,
+)
+
+test('level-map-smoke', level_map_smoke_test)
 
 editor_profiles_smoke_test = executable(
   'editor_profiles_smoke_test',
@@ -167,6 +224,26 @@ package_preview_smoke_test = executable(
 )
 
 test('package-preview-smoke', package_preview_smoke_test)
+
+asset_tools_smoke_test = executable(
+  'asset_tools_smoke_test',
+  ['tests/asset_tools_smoke_test.cpp'],
+  include_directories: vibestudio_includes,
+  dependencies: [vibestudio_core_dep],
+  install: false,
+)
+
+test('asset-tools-smoke', asset_tools_smoke_test)
+
+package_staging_smoke_test = executable(
+  'package_staging_smoke_test',
+  ['tests/package_staging_smoke_test.cpp'],
+  include_directories: vibestudio_includes,
+  dependencies: [vibestudio_core_dep],
+  install: false,
+)
+
+test('package-staging-smoke', package_staging_smoke_test)
 
 project_manifest_smoke_test = executable(
   'project_manifest_smoke_test',

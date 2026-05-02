@@ -47,35 +47,61 @@ documented in [`docs/ACCESSIBILITY_LOCALIZATION.md`](ACCESSIBILITY_LOCALIZATION.
 - Schema-versioned compiler command manifests with structured task-log entries,
   environment subsets, inputs/outputs, hashes, duration, exit code, and raw
   process output.
+- Level-map document services for Doom WAD map lumps, Quake-family `.map`
+  text, Quake III `.map` text, entity/brush/thing inspection, texture/material
+  references, validation health, safe entity and movement edits, undo/redo, and
+  non-destructive save-as.
+- Advanced Studio services for idTech3 shader script models, shader stage
+  edits, sprite workflow planning, source tree indexing, extension manifests,
+  and deterministic AI creation proposals.
 - Shared command services used by both GUI actions and CLI commands.
 - Operation state model for loading, scanning, indexing, compiling, extracting, saving, cancelling, and failure recovery.
 
 ### Format And Package Layer
 - PakFu-derived archive interfaces, virtual path safety, read-only readers,
-  extraction reports, and format parsers.
+  extraction reports, staging manifests, deterministic writers, and format
+  parsers.
 - Shared package entry metadata, read-only listing readers, and mount-layer
   session state for folder, PAK, WAD, ZIP, and PK3 workflows.
-- Shared package preview service for text samples, basic image metadata, and
-  binary hex/metadata summaries used by both GUI and CLI surfaces.
+- Shared package preview service for text/script samples, image/texture
+  metadata, model metadata, audio metadata/waveform summaries, and binary
+  hex/metadata summaries used by both GUI and CLI surfaces.
+- Shared asset tooling service for image conversion queues, WAV export helpers,
+  native idTech model metadata boundaries, and project text find/replace.
+- Shared level-map parsing and save-as service for direct WAD map lump access
+  and text-map round-tripping, keeping map edits independent from package entry
+  sorting or archive browser presentation.
+- Shared Advanced Studio format helpers for shader text round-tripping, mounted
+  texture-reference validation, Doom/Quake sprite package paths, and
+  extension-generated staged-file declarations.
 - Shared safe extraction service for selected/all entries, dry-run output-path
   reporting, no-overwrite defaults, progress callbacks, and cancellation.
 - Fixture-backed support matrix.
-- Safe write-back model with staging, diffing, conflict handling, and reproducible manifests.
+- Safe write-back model with staging, diffing, conflict handling, deterministic
+  save-as writers, and reproducible manifests.
 - Palette, material, shader, model, and map metadata services.
 
 ### Tool Surfaces
 - Level editor for Doom-family and Quake-family workflows.
 - Interaction profile registry with placeholder presets for GtkRadiant 1.6.0-style, NetRadiant Custom-style, TrenchBroom-style, and QuArK-style layouts/controls.
 - Texture, sprite, model, audio, and cinematic editors.
-- Code/script IDE.
-- idTech3 shader graph with text round-tripping.
+- Code/script IDE, with an active source index, language-hook descriptors,
+  diagnostics, symbol search, build task hints, and launch-profile summaries.
+- idTech3 shader graph with text round-tripping, stage previews, mounted
+  package-reference validation, and safe stage directive edits.
+- Sprite creator workflows for Doom lump names, Quake sprite sequencing,
+  palette previews, frame rotations, and package staging paths.
+- Extension surface for manifest inspection, trust/sandbox metadata, reviewed
+  command plans, dry-run execution, and staged generated files.
 - Compiler pipeline editor.
 - Detail-on-demand inspectors for raw metadata, dependency graphs, manifests, logs, and format-specific internals.
 
 ### UX Feedback Layer
 - Loading displays and progress surfaces for every noticeable background operation.
 - Skeleton/placeholder views while project, package, preview, or compiler data is arriving.
-- Visual summaries for project health, package composition, and compiler pipeline readiness, with asset dependency and shader-stage graphs planned.
+- Visual summaries for project health, package composition, map health,
+  compiler pipeline readiness, and Advanced Studio shader/sprite/code/extension
+  status, with broader run graphs planned.
 - Expandable detail drawers that expose raw logs, manifests, metadata, and diagnostic traces.
 - Consistent success/failure/retry/cancel affordances.
 
@@ -97,8 +123,9 @@ documented in [`docs/ACCESSIBILITY_LOCALIZATION.md`](ACCESSIBILITY_LOCALIZATION.
 - Human-readable output by default, structured JSON output for automation.
 - Stable exit codes, command manifests, and scriptable operations.
 - Active lightweight router and command registry for `project`, `package`,
-  `install`, `compiler`, `ai`, `credits`, and `cli` subcommands, with flat
-  legacy options kept compatible.
+  `install`, `asset`, `map`, `shader`, `sprite`, `code`, `extension`,
+  `compiler`, `ai`, `credits`, and `cli` subcommands, with flat legacy options
+  kept compatible.
 - Global `--json`, `--quiet`, `--verbose`, `--dry-run`, `--watch`, and
   `--task-state` behavior for automation-friendly workflows where supported.
 
@@ -108,8 +135,9 @@ documented in [`docs/ACCESSIBILITY_LOCALIZATION.md`](ACCESSIBILITY_LOCALIZATION.
 - Connector capability registry for reasoning, coding, vision, image, audio, voice, 3D generation, embeddings, tool calling, streaming, cost/usage, and local/offline execution.
 - OpenAI implemented as the first general-purpose connector scaffold; design-stub connector targets remain for Claude, Gemini, ElevenLabs, Meshy, local/offline models, and custom HTTP/MCP-style integrations.
 - Safe AI-callable tools for project summaries, package metadata search,
-  compiler profile listing, compiler command proposals, staged text edits, and
-  staged asset-generation requests.
+  compiler profile listing, compiler command proposals, staged text edits,
+  shader scaffolds, entity snippets, package validation plans, batch conversion
+  recipes, and staged asset-generation requests.
 - Prompt-to-plan, prompt-to-asset, prompt-to-command, and prompt-to-action workflows that call explicit VibeStudio tools.
 - Supervised agentic loops for gather context, plan, review, stage, validate, and summarize.
 - Reviewable proposals before file/package/compiler changes are applied.
@@ -148,12 +176,29 @@ The current scaffold contains:
   descriptors, read-only folder/PAK/WAD/ZIP/PK3 readers, package entry
   metadata, mount-layer session state, safe normalized virtual paths, and
   selected/all extraction reporting.
+- `src/core/package_staging.*`: staged package add/import, replace, rename,
+  delete, conflict reporting, before/after composition, manifest export,
+  save-as guards, deterministic PAK/ZIP/PK3 writers, and a map-lump-tested PWAD
+  writer.
 - `src/core/package_preview.*`: shared read-only preview model for package
-  entry text samples, image dimensions/format, and binary metadata samples.
+  entry text/script samples, image dimensions/format/palette metadata, native
+  model metadata, audio metadata/waveform summaries, and binary samples.
+- `src/core/asset_tools.*`: image conversion, texture metadata, MDL/MD2/MD3
+  metadata, audio metadata/WAV export, local text highlighting/diagnostics, and
+  project-wide find/replace services shared by GUI and CLI surfaces.
+- `src/core/level_map.*`: Doom WAD map lump reader/writer, Quake-family and
+  Quake III `.map` parser, map statistics, texture/material references,
+  validation/preflight health, selection/property views, undo/redo edit stack,
+  safe movement/entity edits, save-as, and compiler-request handoff.
+- `src/core/advanced_studio.*`: idTech3 shader script parser/editor model,
+  mounted package-reference validation, Doom/Quake sprite workflow planning,
+  source workspace indexing, extension manifest/trust/sandbox command plans,
+  and staged AI creation proposal helpers.
 - `src/cli`: diagnostics and automation entry points, including the active
   subcommand router, JSON output envelopes, and stable exit-code contract.
 - `src/app`: Qt Widgets studio shell.
-- `src/tests`: smoke tests for core manifests.
+- `src/tests`: smoke tests for core services, package flows, compiler flows,
+  asset tooling, level maps, Advanced Studio services, and UI primitives.
 - `scripts/package_portable.py`, `scripts/generate_offline_guide.py`,
   `scripts/validate_packaging.py`, and `scripts/validate_release_assets.py`:
   portable package staging, generated offline docs, license/checksum bundling,

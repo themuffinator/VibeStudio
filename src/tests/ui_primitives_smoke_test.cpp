@@ -1,6 +1,6 @@
 #include "app/ui_primitives.h"
 
-#include <QCoreApplication>
+#include <QApplication>
 #include <QString>
 #include <QVector>
 
@@ -33,7 +33,7 @@ bool hasPrimitive(const QVector<UiPrimitiveDescriptor>& primitives, const QStrin
 
 int main(int argc, char** argv)
 {
-	QCoreApplication app(argc, argv);
+	QApplication app(argc, argv);
 	bool ok = true;
 
 	const QVector<UiPrimitiveDescriptor> primitives = uiPrimitiveDescriptors();
@@ -47,6 +47,26 @@ int main(int argc, char** argv)
 		ok &= expect(!primitive.description.trimmed().isEmpty(), "primitive description is empty");
 		ok &= expect(!primitive.useCases.isEmpty(), "primitive use cases are empty");
 	}
+
+	LoadingPane loadingPane;
+	loadingPane.setState(OperationState::Loading);
+	loadingPane.setPlaceholderRows({QStringLiteral("First"), QStringLiteral("Second")});
+	loadingPane.setPlaceholderRows({QStringLiteral("Project manifest"), QStringLiteral("Diagnostics")});
+	loadingPane.setPlaceholderRows({});
+	ok &= expect(loadingPane.placeholderRows().isEmpty(), "empty placeholder rows should use default rendered rows without storing them");
+
+	DetailDrawer drawer;
+	drawer.setSections({
+		{
+			QStringLiteral("summary"),
+			QStringLiteral("Summary"),
+			QStringLiteral("Smoke test summary"),
+			QStringLiteral("Smoke test content"),
+			OperationState::Completed,
+		},
+	});
+	drawer.showSection(QStringLiteral("summary"));
+	ok &= expect(drawer.currentSectionText() == QStringLiteral("Smoke test content"), "detail drawer should expose selected section content");
 
 	return ok ? 0 : 1;
 }

@@ -27,13 +27,13 @@ remains in the `docs/` directory.
 VibeStudio is currently an integrated foundation for idTech1, idTech2, and
 idTech3 projects. It provides a Qt6 Widgets shell, first-run setup scaffold,
 project manifests, read-only package browsing and extraction, compiler command
-planning/runs, sample projects, safe AI workflow stubs, credits visibility, and
-a CLI for repeatable automation.
+planning/runs, staged package save-as, sample projects, safe AI workflow stubs,
+credits visibility, and a CLI for repeatable automation.
 
 The MVP is honest about unfinished surfaces: level, model, texture, audio,
-sprite, shader, package write-back, and code-editing tools are still roadmap
-work. Existing write/export operations report exact output paths and keep raw
-details, logs, and manifests inspectable.
+sprite, shader, broad in-place package editing, and code-editing tools are
+still roadmap work. Existing write/export operations report exact output paths
+and keep raw details, logs, and manifests inspectable.
 
 ## First Launch Checklist
 
@@ -62,11 +62,20 @@ vibestudio --cli package info ./id1/pak0.pak --json
 vibestudio --cli package list ./baseq3/pak0.pk3 --json
 vibestudio --cli package validate ./maps.wad
 vibestudio --cli package extract ./pak0.pak --output ./out --dry-run
+vibestudio --cli package stage ./mod-folder --add-file ./autoexec.cfg --as scripts/autoexec.cfg --json
+vibestudio --cli package save-as ./mod-folder ./build/mod.pk3 --format pk3 --add-file ./autoexec.cfg --as scripts/autoexec.cfg --manifest ./build/mod.manifest.json
+vibestudio --cli asset inspect ./baseq3/pak0.pk3 textures/base_wall/wall.bmp
+vibestudio --cli asset convert ./baseq3/pak0.pk3 --entry textures/base_wall/wall.bmp --output ./converted --resize 128x128 --dry-run
+vibestudio --cli asset find ./my-mod --find developer
 ```
 
 In the GUI, package open and extraction operations create Activity Center tasks
 with loading/progress/result states, warnings, cancellation where available,
-and exact output paths.
+and exact output paths. Package staging shows add, replace, rename, delete,
+conflict, blocker, and before/after composition summaries before save-as writes
+a new PAK, ZIP/PK3, or tested PWAD output. Asset commands share the same
+package services for metadata previews, image conversion queues, WAV export,
+and project text find/replace reporting.
 
 ## Project And Compiler Workflows
 

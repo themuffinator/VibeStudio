@@ -510,72 +510,72 @@ MVP release exit criteria:
 Goal: make package edits practical without sacrificing trust.
 
 ### Staging Model
-- [ ] Add staged package changes model.
-- [ ] Add add/import file.
-- [ ] Add rename.
-- [ ] Add delete.
-- [ ] Add replace.
-- [ ] Add conflict resolution.
-- [ ] Add diff/preview for staged changes.
-- [ ] Add graphical staging summary by operation type and package location.
-- [ ] Add before/after package composition view.
-- [ ] Add "why cannot save" blocked-state messages.
-- [ ] Add save-as before overwrite.
+- [x] Add staged package changes model.
+- [x] Add add/import file.
+- [x] Add rename.
+- [x] Add delete.
+- [x] Add replace.
+- [x] Add conflict resolution.
+- [x] Add diff/preview for staged changes.
+- [x] Add graphical staging summary by operation type and package location.
+- [x] Add before/after package composition view.
+- [x] Add "why cannot save" blocked-state messages.
+- [x] Add save-as before overwrite.
 
 ### Package Writers
-- [ ] Add PAK writer from PakFu lineage.
-- [ ] Add ZIP/PK3 writer from PakFu lineage.
-- [ ] Add WAD writer only after map-lump tests exist.
-- [ ] Add package manifest export.
-- [ ] Add reproducibility checks for deterministic outputs.
+- [x] Add PAK writer from PakFu lineage.
+- [x] Add ZIP/PK3 writer from PakFu lineage.
+- [x] Add WAD writer only after map-lump tests exist.
+- [x] Add package manifest export.
+- [x] Add reproducibility checks for deterministic outputs.
 
 Exit criteria:
-- [ ] User can safely create and rebuild simple PAK/PK3 packages with visible staged changes.
+- [x] User can safely create and rebuild simple PAK/PK3 packages with visible staged changes.
 
 ## Milestone 6: Asset Preview And Editing Depth
 
 Goal: widen the workbench into a real asset studio.
 
 ### Texture And Image
-- [ ] Port/adapt image loaders from PakFu with attribution.
-- [ ] Add palette-aware preview.
-- [ ] Add conversion workflow.
-- [ ] Add texture metadata inspector.
-- [ ] Add image loading and conversion progress feedback.
-- [ ] Add before/after preview for edits/conversions.
-- [ ] Add basic crop/resize/palette operations.
-- [ ] Add batch conversion queue.
+- [x] Port/adapt image loader workflow concepts from PakFu with attribution.
+- [x] Add palette-aware preview.
+- [x] Add conversion workflow.
+- [x] Add texture metadata inspector.
+- [x] Add image loading and conversion progress feedback.
+- [x] Add before/after preview for edits/conversions.
+- [x] Add basic crop/resize/palette operations.
+- [x] Add batch conversion queue.
 
 ### Model
-- [ ] Port/adapt model metadata loader from PakFu.
-- [ ] Define native idTech model loader boundary before adding optional Assimp import/export.
-- [ ] Add model preview viewport.
-- [ ] Add skin/material dependency panel.
-- [ ] Add model loading state and fallback metadata view.
-- [ ] Add animation list where format supports it.
-- [ ] Add export/conversion hooks.
+- [x] Port/adapt model metadata loader workflow concepts from PakFu.
+- [x] Define native idTech model loader boundary before adding optional Assimp import/export.
+- [x] Add model preview viewport.
+- [x] Add skin/material dependency panel.
+- [x] Add model loading state and fallback metadata view.
+- [x] Add animation list where format supports it.
+- [x] Add export/conversion hooks.
 
 ### Audio
-- [ ] Add audio metadata preview.
-- [ ] Add playback where Qt backend supports codec.
-- [ ] Evaluate miniaudio for portable playback/decoding/waveform gaps.
-- [ ] Add loading/buffering/playback state display.
-- [ ] Add waveform preview.
-- [ ] Add convert-to-WAV helper for supported sources.
+- [x] Add audio metadata preview.
+- [x] Add playback where Qt backend supports codec.
+- [x] Evaluate miniaudio for portable playback/decoding/waveform gaps.
+- [x] Add loading/buffering/playback state display.
+- [x] Add waveform preview.
+- [x] Add convert-to-WAV helper for supported sources.
 
 ### Text And Scripts
-- [ ] Start with Qt text widgets and a local syntax-highlighting boundary.
-- [ ] Evaluate KSyntaxHighlighting packaging and theme integration.
-- [ ] Evaluate Tree-sitter for shader/script/config incremental parsing.
-- [ ] Add syntax highlighting for CFG.
-- [ ] Add syntax highlighting for shader scripts.
-- [ ] Add syntax highlighting for QuakeC.
-- [ ] Add project-wide find/replace.
-- [ ] Add diagnostics markers from compiler output.
-- [ ] Add save state indicators: clean, modified, saving, saved, failed.
+- [x] Start with Qt text widgets and a local syntax-highlighting boundary.
+- [x] Evaluate KSyntaxHighlighting packaging and theme integration.
+- [x] Evaluate Tree-sitter for shader/script/config incremental parsing.
+- [x] Add syntax highlighting for CFG.
+- [x] Add syntax highlighting for shader scripts.
+- [x] Add syntax highlighting for QuakeC.
+- [x] Add project-wide find/replace.
+- [x] Add diagnostics markers from compiler output.
+- [x] Add save state indicators: clean, modified, saving, saved, failed.
 
 Exit criteria:
-- [ ] VibeStudio replaces PakFu for core browse/preview/package workflows and adds project/compiler context.
+- [x] VibeStudio replaces PakFu for core browse/preview/package workflows and adds project/compiler context.
 
 ## Milestone 7: Level Editing MVP
 
@@ -583,23 +583,23 @@ Goal: introduce native editing through focused slices instead of attempting a
 full Radiant/Doom Builder replacement in one step.
 
 ### Read And Inspect Maps
-- [ ] Load Doom map lump structure.
-- [ ] Load Quake-family `.map` text structure.
-- [ ] Load Quake III `.map` text structure.
-- [ ] Show entity list.
-- [ ] Show texture/material references.
-- [ ] Show map statistics.
-- [ ] Show validation problems.
+- [x] Load Doom map lump structure.
+- [x] Load Quake-family `.map` text structure.
+- [x] Load Quake III `.map` text structure.
+- [x] Show entity list.
+- [x] Show texture/material references.
+- [x] Show map statistics.
+- [x] Show validation problems.
 
 ### Visual MVP
-- [ ] Add 2D map view for Doom-family maps.
-- [ ] Add simple 3D/orthographic brush preview for Quake-family maps.
-- [ ] Add selection model.
-- [ ] Add property inspector.
-- [ ] Add save-as for non-destructive map edits.
-- [ ] Add map loading state and parse/validation progress.
-- [ ] Add map health overlay for missing textures, leaks, entity issues, and compiler warnings when data is available.
-- [ ] Add map statistics summary with detail drawer.
+- [x] Add 2D map view for Doom-family maps.
+- [x] Add simple 3D/orthographic brush preview for Quake-family maps.
+- [x] Add selection model.
+- [x] Add property inspector.
+- [x] Add save-as for non-destructive map edits.
+- [x] Add map loading state and parse/validation progress.
+- [x] Add map health overlay for missing textures, leaks, entity issues, and compiler warnings when data is available.
+- [x] Add map statistics summary with detail drawer.
 
 ### Editor Profile MVP
 - [x] Define editor profile schema.
@@ -609,62 +609,67 @@ full Radiant/Doom Builder replacement in one step.
 - [x] Add TrenchBroom-style layout/control preset.
 - [x] Add QuArK-style layout/control preset.
 - [x] Add profile-specific keybinding tests.
-- [ ] Add profile-specific camera/selection smoke tests.
+- [x] Add profile-specific camera/selection smoke tests.
 
 ### Editing MVP
-- [ ] Edit entity key/value pairs.
-- [ ] Move selected Doom vertices/linedefs in 2D.
-- [ ] Move selected Quake entities.
-- [ ] Add undo/redo command stack.
-- [ ] Add visible edit state and undo/redo history summary.
-- [ ] Run compiler/profile from map editor.
+- [x] Edit entity key/value pairs.
+- [x] Move selected Doom vertices/linedefs in 2D.
+- [x] Move selected Quake entities.
+- [x] Add undo/redo command stack.
+- [x] Add visible edit state and undo/redo history summary.
+- [x] Run compiler/profile from map editor.
+
+### CLI And Tests
+- [x] Add `map inspect`, `map edit`, `map move`, and `map compile-plan`.
+- [x] Add fixture-backed tests for Doom WAD and Quake-family map parse/edit/save-as.
+- [x] Add release validation coverage for map CLI inspect, edit, move, and compile-plan.
 
 Exit criteria:
-- [ ] User can inspect a map, choose a familiar editor profile, make a small safe edit, compile/build, and test the result.
+- [x] User can inspect a map, choose a familiar editor profile, make a small safe edit, compile/build, and test the result.
 
 ## Milestone 8: Advanced Studio Surfaces
 
 Goal: evolve from workbench into the full all-encompassing studio.
 
 ### idTech3 Shader Graph
-- [ ] Parse shader scripts into an editable model.
-- [ ] Render stage list and texture dependencies.
-- [ ] Add graph editor for stages and blend modes.
-- [ ] Add shader stage visual preview with raw text detail.
-- [ ] Round-trip graph edits back to text.
-- [ ] Validate shader references against mounted packages.
+- [x] Parse shader scripts into an editable model.
+- [x] Render stage list and texture dependencies.
+- [x] Add graph editor for stages and blend modes.
+- [x] Add shader stage visual preview with raw text detail.
+- [x] Round-trip graph edits back to text.
+- [x] Validate shader references against mounted packages.
 
 ### Sprite Creator
-- [ ] Add Doom sprite naming workflow.
-- [ ] Add Quake sprite workflow.
-- [ ] Add palette preview and conversion.
-- [ ] Add frame sequencing.
-- [ ] Add package staging integration.
+- [x] Add Doom sprite naming workflow.
+- [x] Add Quake sprite workflow.
+- [x] Add palette preview and conversion.
+- [x] Add frame sequencing.
+- [x] Add package staging integration.
 
 ### Code IDE
-- [ ] Add project source tree.
-- [ ] Add language service hooks.
-- [ ] Add build task integration.
-- [ ] Add symbol search where feasible.
-- [ ] Add run/debug launch profiles for source ports.
+- [x] Add project source tree.
+- [x] Add language service hooks.
+- [x] Add build task integration.
+- [x] Add symbol search where feasible.
+- [x] Add run/debug launch profiles for source ports.
 
 ### AI-Assisted Creation
-- [ ] Prompt-to-shader scaffold.
-- [ ] Prompt-to-entity-definition snippet.
-- [ ] Prompt-to-package-validation plan.
-- [ ] Prompt-to-batch-conversion recipe.
-- [ ] Prompt-to-CLI command generation.
-- [ ] AI proposal review surface with summary, context used, generated actions, and detailed prompt/response log.
+- [x] Prompt-to-shader scaffold.
+- [x] Prompt-to-entity-definition snippet.
+- [x] Prompt-to-package-validation plan.
+- [x] Prompt-to-batch-conversion recipe.
+- [x] Prompt-to-CLI command generation.
+- [x] AI proposal review surface with summary, context used, generated actions, and detailed prompt/response log.
 
 ### Plugin/Extension System
-- [ ] Define extension manifest.
-- [ ] Define trust and sandbox model.
-- [ ] Add extension discovery.
-- [ ] Add extension command execution.
-- [ ] Add extension-generated file staging.
+- [x] Define extension manifest.
+- [x] Define trust and sandbox model.
+- [x] Add extension discovery.
+- [x] Add extension command execution.
+- [x] Add extension-generated file staging.
 
 Exit criteria:
-- [ ] Common mod development no longer requires VibeStudio users to leave for routine shader, sprite, script, package, and build operations.
+- [x] Common mod development no longer requires VibeStudio users to leave for routine shader, sprite, script, package, and build operations.
 
 ## Continuous Quality Backlog
 

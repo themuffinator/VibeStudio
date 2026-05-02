@@ -13,9 +13,15 @@ path.
 - Python 3 for validation scripts and CI helpers.
 
 Required Qt modules should stay minimal in `meson.build` until code uses them.
+Qt Gui is active for image metadata/conversion in the package and asset tools.
 Planned modules include SQL, Multimedia, Concurrent, OpenGLWidgets, and
 TextToSpeech. Qt Linguist tools are planned for localization extraction and
 release translation bundles.
+
+Milestone 8 Advanced Studio services use the existing C++20/Qt Core, Gui, and
+Widgets baseline for shader parsing/editing, sprite planning, source indexing,
+extension manifests, and deterministic AI proposal review. No new third-party
+library was added for this slice.
 
 ## Imported Compiler Source Dependencies
 The external compiler submodules keep their own build systems and dependency
@@ -40,7 +46,8 @@ Likely future additions:
 - Qt Multimedia: simple playback and device integration for audio previews.
 - [miniaudio](https://miniaud.io/): small portable audio fallback for playback, decoding, and waveform-oriented workflows.
 - [Assimp](https://www.assimp.org/): optional adjacent model import/export, never the authoritative parser for core idTech formats.
-- Image codecs and palette tooling for texture/sprite editing.
+- Additional image codecs and palette tooling for deeper texture/sprite editing
+  beyond the active Qt image conversion and palette metadata path.
 - Optional provider-neutral AI connector layer for AI-assisted workflows, implemented through Qt Network unless a future SDK clearly improves maintainability for a specific connector.
 - Parser hardening and fuzzing toolchains before broad write-back support.
 

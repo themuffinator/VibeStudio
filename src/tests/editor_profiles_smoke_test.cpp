@@ -1,6 +1,8 @@
 #include "core/editor_profiles.h"
 
 #include <QCoreApplication>
+#include <QMap>
+#include <QPair>
 #include <QSet>
 
 #include <cstdlib>
@@ -75,6 +77,23 @@ int main(int argc, char** argv)
 	}
 	if (!vibestudio::editorProfileDisplayNameForId(QStringLiteral("trenchbroom")).contains(QStringLiteral("TrenchBroom"))) {
 		return fail("Expected editor profile display-name lookup.");
+	}
+
+	const QMap<QString, QPair<QString, QString>> expectedCameraSelection = {
+		{QStringLiteral("vibestudio-default"), {QStringLiteral("hybrid-orbit-and-fly"), QStringLiteral("explicit-object-and-component")}},
+		{QStringLiteral("gtkradiant-1-6"), {QStringLiteral("radiant-camera"), QStringLiteral("radiant-brush-entity")}},
+		{QStringLiteral("netradiant-custom"), {QStringLiteral("radiant-enhanced-camera"), QStringLiteral("radiant-fast-manipulation")}},
+		{QStringLiteral("trenchbroom"), {QStringLiteral("trenchbroom-fly-camera"), QStringLiteral("component-face-edge-vertex")}},
+		{QStringLiteral("quark"), {QStringLiteral("quark-linked-views"), QStringLiteral("object-tree-property")}},
+	};
+	for (auto it = expectedCameraSelection.cbegin(); it != expectedCameraSelection.cend(); ++it) {
+		vibestudio::EditorProfileDescriptor profile;
+		if (!vibestudio::editorProfileForId(it.key(), &profile)) {
+			return fail("Expected editor profile lookup for camera/selection smoke.");
+		}
+		if (profile.cameraPresetId != it.value().first || profile.selectionPresetId != it.value().second) {
+			return fail("Expected profile-specific camera and selection presets to remain stable.");
+		}
 	}
 
 	return EXIT_SUCCESS;

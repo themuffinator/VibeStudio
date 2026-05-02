@@ -74,11 +74,12 @@ Use the right feedback surface for the job:
 VibeStudio should present a clear summary first, then let users delve into
 detail:
 - [x] Package summary before raw entry tables.
-- [ ] Compiler status before raw stdout/stderr.
+- [x] Compiler status before raw stdout/stderr.
 - [x] Project health before validation traces.
 - [ ] Asset preview before byte-level metadata.
-- [ ] Shader stage graph before raw shader text, while preserving round-trip access.
-- [ ] AI proposal summary before prompts, context, and generated commands.
+- [x] Map statistics and health before raw map details.
+- [x] Shader stage graph before raw shader text, while preserving round-trip access.
+- [x] AI proposal summary before prompts, context, and generated commands.
 - [ ] Agentic workflow plan before tool calls, writes, generated assets, or validation loops.
 - [x] Friendly error summary before stack traces or diagnostic dumps.
 
@@ -86,21 +87,22 @@ detail:
 Graphical elements should help users decide and act:
 - [x] Package composition charts for file types and sizes.
 - [ ] Asset dependency graphs for textures, shaders, models, maps, and packages.
-- [ ] Compiler pipeline diagrams for source map to output artifacts.
-- [ ] Map health overlays for leaks, missing textures, entity problems, and compile warnings.
-- [ ] Shader stage diagrams for idTech3 material flow.
+- [x] Compiler pipeline diagrams for source map to output artifacts.
+- [x] Map health overlays for leaks, missing textures, entity problems, and compile warnings.
+- [x] Shader stage diagrams for idTech3 material flow.
 - [x] Timeline views for task history.
-- [ ] Visual diff/staging views for package writes.
+- [x] Visual diff/staging views for package writes.
 
 ## Detail Surfaces
 Advanced users should be able to inspect:
 - [x] Raw package metadata.
 - [x] Virtual paths and physical source paths.
-- [ ] Parsed format structures.
+- [x] Parsed format structures.
 - [x] Compiler command manifests.
 - [x] Compiler stdout/stderr.
 - [x] Hashes and reproducibility manifests.
-- [ ] AI prompts, selected context, responses, and proposed tool calls.
+- [x] Map entity properties, texture/material references, validation, preview lines, and undo history.
+- [x] AI prompts, selected context, responses, and proposed tool calls.
 - [ ] AI provider, model, connector capability, cost/usage metadata where available, and generated asset provenance.
 - [x] CLI-equivalent command for GUI compiler actions.
 
@@ -109,14 +111,20 @@ Advanced users should be able to inspect:
 - [x] Every compiler run creates a visible task with progress, logs, result, and output paths.
 - [x] Every validation run has a summary and expandable details.
 - [x] Every extract/package operation reports exact output paths.
-- [ ] Every destructive or write operation is staged, previewed, or confirmed.
+- [x] Every destructive or write operation is staged, previewed, or confirmed.
 - [x] Empty states say what the user can do next.
 - [x] Errors avoid dead ends.
 
 Milestone 4 adds durable recent task history for completed package/compiler
 operations and a release validation script that checks loading/progress,
 summary/detail, graphical summary, high-visibility, keyboard, localization, and
-TTS smoke coverage before a release-candidate package can pass.
+TTS smoke coverage before a release-candidate package can pass. Milestone 5
+adds visible package staging with operation summaries, blocker messages,
+before/after composition, exact save-as output paths, hashes, and manifests.
+Milestone 8 adds an Advanced Studio workbench with summary cards and detail
+tabs for shader graphs, sprite plans, source indexes, AI proposal review, and
+extension manifests so users can inspect generated plans before writes or
+external commands run.
 
 ## Anti-Patterns
 - Silent background work.

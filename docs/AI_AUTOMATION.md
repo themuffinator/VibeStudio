@@ -49,6 +49,10 @@ storage, and smoke tests. OpenAI is the first implemented general-purpose
 connector scaffold for configuration, credential discovery, model routing, and
 manifest-backed experiments. Provider network calls remain opt-in future work;
 the current experiments are deterministic, reviewable, and do not write files.
+Milestone 8 adds Advanced Studio proposal helpers for shader scaffolds, entity
+definition snippets, package validation plans, batch conversion recipes, and a
+proposal review surface that exposes summary, context, staged outputs, tool
+calls, prompts, and response previews.
 
 Initial connector targets:
 
@@ -96,10 +100,10 @@ completed, failed, or cancelled.
 - [x] Generate q3map2, ericw-tools, ZDBSP, or ZokumBSP command presets from natural language.
 - [x] Draft project manifests from an existing folder.
 - [x] Suggest missing asset dependencies from package/project scans.
-- [ ] Generate batch conversion recipes.
-- [ ] Draft shader-script scaffolds from a prompt.
-- [ ] Create entity definition snippets or documentation from selected assets.
-- [ ] Summarize package contents and potential release issues.
+- [x] Generate batch conversion recipes.
+- [x] Draft shader-script scaffolds from a prompt.
+- [x] Create entity definition snippets or documentation from selected assets.
+- [x] Summarize package contents and potential release issues.
 - [x] Generate CLI commands for a requested workflow.
 - [x] Generate a supervised "fix and retry" plan for compiler failures.
 - [x] Draft placeholder textures, sprites, sounds, voices, or models through

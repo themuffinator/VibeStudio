@@ -133,6 +133,18 @@ QString commandLineText(const QString& program, const QStringList& arguments)
 	return parts.join(' ');
 }
 
+QStringList ericwToolCandidatePaths(const QString& baseName)
+{
+	const QString buildPath = QStringLiteral("external/compilers/ericw-tools/build/bin/%1");
+	const QString binPath = QStringLiteral("external/compilers/ericw-tools/bin/%1");
+	return {
+		buildPath.arg(QStringLiteral("%1.exe").arg(baseName)),
+		buildPath.arg(baseName),
+		binPath.arg(QStringLiteral("%1.exe").arg(baseName)),
+		binPath.arg(baseName),
+	};
+}
+
 QString firstUsefulProbeLine(const QString& text)
 {
 	const QStringList lines = text.split('\n');
@@ -195,13 +207,14 @@ CompilerToolDescriptor tool(
 	const QStringList& baseExecutableNames,
 	const QStringList& candidateRelativePaths,
 	const QStringList& versionProbeArguments,
-	const QStringList& capabilityFlags)
+	const QStringList& capabilityFlags,
+	const QStringList& readinessWarnings = {})
 {
 	QStringList executableNames;
 	for (const QString& name : baseExecutableNames) {
 		executableNames << executableName(name);
 	}
-	return {id, integrationId, displayName, engineFamily, role, sourcePath, executableNames, candidateRelativePaths, versionProbeArguments, capabilityFlags};
+	return {id, integrationId, displayName, engineFamily, role, sourcePath, executableNames, candidateRelativePaths, versionProbeArguments, capabilityFlags, readinessWarnings};
 }
 
 } // namespace
@@ -234,9 +247,12 @@ OperationState CompilerRegistrySummary::overallState() const
 QVector<CompilerToolDescriptor> compilerToolDescriptors()
 {
 	return {
-		tool(QStringLiteral("ericw-qbsp"), QStringLiteral("ericw-tools"), registryText("ericw-tools qbsp"), QStringLiteral("idTech2"), registryText("Quake BSP compiler"), QStringLiteral("external/compilers/ericw-tools"), {QStringLiteral("qbsp")}, {QStringLiteral("external/compilers/ericw-tools/build/bin/qbsp.exe"), QStringLiteral("external/compilers/ericw-tools/build/bin/qbsp"), QStringLiteral("external/compilers/ericw-tools/bin/qbsp.exe"), QStringLiteral("external/compilers/ericw-tools/bin/qbsp")}, {QStringLiteral("--version")}, {QStringLiteral("quake-map-to-bsp"), QStringLiteral("bsp2"), QStringLiteral("lit-support"), QStringLiteral("ericw-tools")}),
-		tool(QStringLiteral("ericw-vis"), QStringLiteral("ericw-tools"), registryText("ericw-tools vis"), QStringLiteral("idTech2"), registryText("Quake visibility compiler"), QStringLiteral("external/compilers/ericw-tools"), {QStringLiteral("vis")}, {QStringLiteral("external/compilers/ericw-tools/build/bin/vis.exe"), QStringLiteral("external/compilers/ericw-tools/build/bin/vis"), QStringLiteral("external/compilers/ericw-tools/bin/vis.exe"), QStringLiteral("external/compilers/ericw-tools/bin/vis")}, {QStringLiteral("--version")}, {QStringLiteral("quake-vis"), QStringLiteral("fastvis"), QStringLiteral("ericw-tools")}),
-		tool(QStringLiteral("ericw-light"), QStringLiteral("ericw-tools"), registryText("ericw-tools light"), QStringLiteral("idTech2"), registryText("Quake light compiler"), QStringLiteral("external/compilers/ericw-tools"), {QStringLiteral("light")}, {QStringLiteral("external/compilers/ericw-tools/build/bin/light.exe"), QStringLiteral("external/compilers/ericw-tools/build/bin/light"), QStringLiteral("external/compilers/ericw-tools/bin/light.exe"), QStringLiteral("external/compilers/ericw-tools/bin/light")}, {QStringLiteral("--version")}, {QStringLiteral("quake-light"), QStringLiteral("bounce-light"), QStringLiteral("lit-output"), QStringLiteral("ericw-tools")}),
+		tool(QStringLiteral("ericw-qbsp"), QStringLiteral("ericw-tools"), registryText("ericw-tools qbsp"), QStringLiteral("idTech2"), registryText("Quake BSP compiler"), QStringLiteral("external/compilers/ericw-tools"), {QStringLiteral("qbsp")}, ericwToolCandidatePaths(QStringLiteral("qbsp")), {QStringLiteral("--version")}, {QStringLiteral("quake-map-to-bsp"), QStringLiteral("bsp2"), QStringLiteral("lit-support"), QStringLiteral("ericw-tools")}),
+		tool(QStringLiteral("ericw-vis"), QStringLiteral("ericw-tools"), registryText("ericw-tools vis"), QStringLiteral("idTech2"), registryText("Quake visibility compiler"), QStringLiteral("external/compilers/ericw-tools"), {QStringLiteral("vis")}, ericwToolCandidatePaths(QStringLiteral("vis")), {QStringLiteral("--version")}, {QStringLiteral("quake-vis"), QStringLiteral("fastvis"), QStringLiteral("ericw-tools"), QStringLiteral("generic-binary-name-risk"), QStringLiteral("upstream-issue-335")}),
+		tool(QStringLiteral("ericw-light"), QStringLiteral("ericw-tools"), registryText("ericw-tools light"), QStringLiteral("idTech2"), registryText("Quake light compiler"), QStringLiteral("external/compilers/ericw-tools"), {QStringLiteral("light")}, ericwToolCandidatePaths(QStringLiteral("light")), {QStringLiteral("--version")}, {QStringLiteral("quake-light"), QStringLiteral("bounce-light"), QStringLiteral("lit-output"), QStringLiteral("ericw-tools"), QStringLiteral("generic-binary-name-risk"), QStringLiteral("upstream-issue-335")}),
+		tool(QStringLiteral("ericw-bspinfo"), QStringLiteral("ericw-tools"), registryText("ericw-tools bspinfo"), QStringLiteral("idTech2"), registryText("Quake BSP inspection helper"), QStringLiteral("external/compilers/ericw-tools"), {QStringLiteral("bspinfo")}, ericwToolCandidatePaths(QStringLiteral("bspinfo")), {QStringLiteral("--help")}, {QStringLiteral("bsp-inspection"), QStringLiteral("bsp-metadata"), QStringLiteral("captured-output-log"), QStringLiteral("ericw-helper"), QStringLiteral("ericw-tools"), QStringLiteral("helper-probe-limited"), QStringLiteral("upstream-issue-225"), QStringLiteral("upstream-issue-289")}, {registryText("Helper discovery currently verifies executable presence and help/version output only; operation-level bspinfo diagnostics still need smoke-test coverage before automation depends on them.")}),
+		tool(QStringLiteral("ericw-bsputil"), QStringLiteral("ericw-tools"), registryText("ericw-tools bsputil"), QStringLiteral("idTech2"), registryText("Quake BSP utility helper"), QStringLiteral("external/compilers/ericw-tools"), {QStringLiteral("bsputil")}, ericwToolCandidatePaths(QStringLiteral("bsputil")), {QStringLiteral("--help")}, {QStringLiteral("bsp-utility"), QStringLiteral("bsp-inspection"), QStringLiteral("bsp-mutation-risk"), QStringLiteral("ericw-helper"), QStringLiteral("ericw-tools"), QStringLiteral("helper-probe-limited"), QStringLiteral("argument-parser-risk"), QStringLiteral("upstream-issue-289"), QStringLiteral("upstream-issue-435")}, {registryText("bsputil has known upstream argument parsing risk (#435); VibeStudio should keep BSP-changing operations behind explicit operation smoke tests."), registryText("Helper discovery currently verifies executable presence and help/version output only; operation-level bsputil diagnostics still need smoke-test coverage before automation depends on them.")}),
+		tool(QStringLiteral("ericw-lightpreview"), QStringLiteral("ericw-tools"), registryText("ericw-tools lightpreview"), QStringLiteral("idTech2"), registryText("Quake lighting preview helper"), QStringLiteral("external/compilers/ericw-tools"), {QStringLiteral("lightpreview")}, ericwToolCandidatePaths(QStringLiteral("lightpreview")), {}, {QStringLiteral("lighting-preview"), QStringLiteral("gui-helper"), QStringLiteral("platform-launch-risk"), QStringLiteral("temp-dir-risk"), QStringLiteral("ericw-helper"), QStringLiteral("ericw-tools"), QStringLiteral("helper-probe-limited"), QStringLiteral("upstream-issue-463"), QStringLiteral("upstream-issue-480")}, {registryText("lightpreview launch readiness is not smoke-tested because platform OpenGL/Qt setup can fail on some systems (#480)."), registryText("lightpreview may write preview outputs beside the map unless launched through an isolated temporary workflow (#463); registry discovery is presence-only for now."), registryText("Helper discovery currently verifies executable presence only for lightpreview; VibeStudio does not launch GUI preview helpers during registry probes.")}),
 		tool(QStringLiteral("q3map2"), QStringLiteral("q3map2-nrc"), registryText("NetRadiant Custom q3map2"), QStringLiteral("idTech3"), registryText("Quake III BSP compiler"), QStringLiteral("external/compilers/q3map2-nrc"), {QStringLiteral("q3map2")}, {QStringLiteral("external/compilers/q3map2-nrc/install/q3map2.exe"), QStringLiteral("external/compilers/q3map2-nrc/install/q3map2"), QStringLiteral("external/compilers/q3map2-nrc/tools/quake3/q3map2/q3map2.exe"), QStringLiteral("external/compilers/q3map2-nrc/tools/quake3/q3map2/q3map2")}, {QStringLiteral("-help")}, {QStringLiteral("idtech3-bsp"), QStringLiteral("meta"), QStringLiteral("vis"), QStringLiteral("light"), QStringLiteral("shader-aware")}),
 		tool(QStringLiteral("zdbsp"), QStringLiteral("zdbsp"), registryText("ZDBSP"), QStringLiteral("idTech1"), registryText("Doom node builder"), QStringLiteral("external/compilers/zdbsp"), {QStringLiteral("zdbsp")}, {QStringLiteral("external/compilers/zdbsp/build/zdbsp.exe"), QStringLiteral("external/compilers/zdbsp/build/zdbsp"), QStringLiteral("external/compilers/zdbsp/zdbsp.exe"), QStringLiteral("external/compilers/zdbsp/zdbsp")}, {QStringLiteral("-h")}, {QStringLiteral("doom-nodes"), QStringLiteral("extended-nodes"), QStringLiteral("gl-nodes")}),
 		tool(QStringLiteral("zokumbsp"), QStringLiteral("zokumbsp"), registryText("ZokumBSP"), QStringLiteral("idTech1"), registryText("Doom node/blockmap/reject builder"), QStringLiteral("external/compilers/zokumbsp"), {QStringLiteral("zokumbsp"), QStringLiteral("zennode")}, {QStringLiteral("external/compilers/zokumbsp/build/zokumbsp.exe"), QStringLiteral("external/compilers/zokumbsp/build/zokumbsp"), QStringLiteral("external/compilers/zokumbsp/src/zokumbsp/zokumbsp.exe"), QStringLiteral("external/compilers/zokumbsp/src/zokumbsp/zokumbsp"), QStringLiteral("external/compilers/zokumbsp/src/zokumbsp/zennode.exe"), QStringLiteral("external/compilers/zokumbsp/src/zokumbsp/zennode")}, {QStringLiteral("-h")}, {QStringLiteral("doom-nodes"), QStringLiteral("blockmap"), QStringLiteral("reject"), QStringLiteral("visplane-aware")}),
@@ -274,6 +290,7 @@ CompilerRegistrySummary discoverCompilerTools(const CompilerRegistryOptions& opt
 		CompilerToolDiscovery discovery;
 		discovery.descriptor = descriptor;
 		discovery.capabilityFlags = descriptor.capabilityFlags;
+		discovery.warnings.append(descriptor.readinessWarnings);
 		discovery.sourcePath = absolutePath(rootPath, descriptor.sourcePath);
 		discovery.sourceAvailable = QFileInfo(discovery.sourcePath).isDir();
 		discovery.executablePath = findExecutableOverride(descriptor, rootPath, options.executableOverrides, &discovery.warnings);

@@ -18,8 +18,12 @@ surfaces that later editor work can build on.
   registry discovery, compiler wrapper profiles, editor profile presets, AI
   connector design stubs, and release metadata.
 - CLI router with text and JSON output for project, package inspection,
-  package extraction/validation, installation, compiler, editor profile, AI,
-  about, and exit-code surfaces.
+  package extraction/validation/staging/save-as, installation, compiler, editor
+  profile, AI, about, and exit-code surfaces.
+- Safe package write-back MVP with staged add/import, replace, rename, delete,
+  conflict/blocker reporting, package manifests, before/after composition, and
+  deterministic save-as writers for simple PAK and ZIP/PK3 archives plus tested
+  PWAD outputs.
 - Structured compiler command plans and schema-versioned command manifests.
 - License-clean Doom, Quake, and Quake III-family sample projects.
 - Portable package generation for Windows, macOS, and Linux targets with
@@ -33,7 +37,8 @@ surfaces that later editor work can build on.
 
 - No production level, model, texture, audio, sprite, shader, code, or script
   editor yet.
-- No package write-back, package diffing, or package save-as.
+- No in-place package overwrite workflow, package compare tooling, or advanced
+  package editing beyond the current staged save-as path.
 - No source-port installation detection yet.
 - AI provider network calls remain opt-in future work; current AI workflows are
   safe, no-write, manifest-backed experiments and connector configuration.

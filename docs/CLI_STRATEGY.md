@@ -16,11 +16,14 @@ surface using the same core services as the GUI.
 ## Command Architecture
 - [x] Lightweight in-process router for early subcommand families.
 - [x] Global `--json` output mode for router-backed project, package,
-  installation, compiler, and exit-code commands.
+  installation, asset, map, shader, sprite, code, extension, compiler, AI, and
+  exit-code commands.
 - [x] Stable exit-code contract exposed through `--exit-codes` and
   `cli exit-codes`.
 - [x] Schema-versioned command manifest writer for compiler command plans.
 - [x] Schema-versioned command manifest loader and re-run path for compiler runs.
+- [x] Shared Advanced Studio command services for shader scripts, sprite plans,
+  code indexing, extension manifests, and reviewable AI creation proposals.
 - [x] Evaluate CLI11 and adopt an in-process command registry that exposes
   testable command metadata through `cli commands`; keep the external CLI11
   parser dependency deferred until generated help, validation, and shell
@@ -72,17 +75,42 @@ surface using the same core services as the GUI.
 - [x] `package preview`
 - [x] `package extract`
 - [x] `package validate`
-- [ ] `package manifest`
+- [x] `package manifest`
 - [ ] `package compare`
-- [ ] `package stage`
-- [ ] `package save-as`
+- [x] `package stage`
+- [x] `package save-as`
 
 ### Assets
-- [ ] `asset inspect`
+- [x] `asset inspect`
 - [ ] `asset preview-export`
-- [ ] `asset convert`
+- [x] `asset convert`
+- [x] `asset audio-wav`
 - [ ] `asset graph`
-- [ ] `asset search`
+- [x] `asset find`
+- [x] `asset replace`
+- [x] `asset search` through the `asset find` alias.
+
+### Maps
+- [x] `map inspect` for Doom WAD map lumps and Quake-family `.map` files.
+- [x] `map edit` for entity key/value edits with non-destructive `--output`.
+- [x] `map move` for Doom vertices/linedefs/things and Quake entities.
+- [x] `map compile-plan` for profile-backed compiler command review.
+- [x] JSON output for map statistics, entities, brushes, textures, validation,
+  preview lines, selection, properties, and save reports.
+
+### Shaders
+- [x] `shader inspect` for idTech3 `.shader` parsing, stage graphs, stage
+  previews, raw text detail, and mounted-package texture-reference validation.
+- [x] `shader set-stage` for non-destructive stage directive edits with
+  `--output`, `--dry-run`, `--overwrite`, and JSON save reports.
+
+### Sprites
+- [x] `sprite plan` for Doom lump naming, Quake `.spr` sequencing, palette
+  preview notes, frame rotations, and package staging paths.
+
+### Code IDE
+- [x] `code index` for source tree discovery, language hook descriptors,
+  diagnostics, symbol search, compiler task suggestions, and launch profiles.
 
 ### Compilers
 - [x] `--compiler-registry` scaffold compiler registry and executable discovery.
@@ -119,7 +147,20 @@ surface using the same core services as the GUI.
 - [x] `ai fix-plan`
 - [x] `ai asset-request`
 - [x] `ai compare`
+- [x] `ai shader-scaffold`
+- [x] `ai entity-snippet`
+- [x] `ai package-plan`
+- [x] `ai batch-recipe`
+- [x] `ai review`
 - [ ] `ai apply-staged`
+
+### Extensions
+- [x] `extension discover` for `vibestudio.extension.json` manifests across one
+  or more roots.
+- [x] `extension inspect` for manifest, trust, sandbox, command, capability,
+  and staged generated-file reporting.
+- [x] `extension run` for command-plan review, dry-run-first execution, extra
+  arguments, and staged generated-file summaries.
 
 ### Release And QA
 - [x] `scripts/validate_samples.py`
@@ -137,7 +178,9 @@ surface using the same core services as the GUI.
 - [x] `--quiet` suppresses non-error narration.
 - [x] `--verbose` includes diagnostics and timing.
 - [x] `--manifest <path>` writes compiler command manifests.
-- [x] `--dry-run` shows planned package extraction writes and compiler command runs without touching files.
+- [x] `--dry-run` shows planned package extraction writes, package save-as
+  writes, shader save reports, extension command plans, and compiler command
+  runs without touching files.
 - [x] `--watch` streams compiler task log entries while long-running process-backed commands are active.
 - [x] `--task-state` adds automation-friendly task-state objects to JSON output where supported.
 - [x] Non-zero exit codes distinguish usage errors, not-found cases,
@@ -156,14 +199,26 @@ PowerShell:
 
 ```powershell
 vibestudio --cli package validate "C:\Games\Quake\id1\pak0.pak" --json
+vibestudio --cli package save-as ".\mod-folder" ".\build\mod.pk3" --format pk3 --add-file ".\autoexec.cfg" --as "scripts/autoexec.cfg" --manifest ".\build\mod.manifest.json"
+vibestudio --cli map edit ".\maps\start.map" --entity 1 --set targetname=lift --output ".\maps\start-edited.map"
+vibestudio --cli shader set-stage ".\scripts\common.shader" --shader "textures/base/wall" --stage 1 --directive blendFunc --value "GL_ONE GL_ONE" --output ".\scripts\common-edited.shader" --json
+vibestudio --cli sprite plan --engine doom --name TROO --frames 2 --rotations 8 --palette doom --json
 vibestudio --cli compiler run ericw-qbsp --input ".\maps\start.map" --watch --manifest ".\build\start.run.json"
+vibestudio --cli extension discover ".\extensions" --json
 vibestudio --cli ai explain-log --log ".\build\qbsp.log" --json
+vibestudio --cli ai review --kind shader --prompt "glowing gothic wall" --json
 ```
 
 POSIX shells:
 
 ```sh
 vibestudio --cli package list './baseq3/pak0.pk3' --json
+vibestudio --cli package stage './mod-folder' --add-file './autoexec.cfg' --as 'scripts/autoexec.cfg' --json
+vibestudio --cli map inspect './maps/start.map' --select entity:0 --json
+vibestudio --cli shader inspect './scripts/common.shader' --package './baseq3' --json
+vibestudio --cli code index './mymod' --find monster --json
 vibestudio --cli compiler plan ericw-qbsp --input './maps/start.map' --dry-run
+vibestudio --cli extension run './extensions/sample/vibestudio.extension.json' make-file --dry-run --json
 vibestudio --cli ai propose-command --prompt 'build quake map maps/start.map with qbsp'
+vibestudio --cli ai batch-recipe --prompt 'convert doom sprites to indexed png' --json
 ```

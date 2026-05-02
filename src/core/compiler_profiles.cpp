@@ -1,5 +1,8 @@
 #include "core/compiler_profiles.h"
 
+#include "core/compiler_known_issues.h"
+#include "core/ericw_map_preflight.h"
+
 #include <QCoreApplication>
 #include <QCryptographicHash>
 #include <QDir>
@@ -536,17 +539,33 @@ CompilerCommandPlan buildCompilerCommandPlan(const CompilerCommandRequest& reque
 	}
 
 	plan.workingDirectory = request.workingDirectory.trimmed().isEmpty() ? defaultWorkingDirectory(plan.inputPath) : absoluteCleanPath(request.workingDirectory);
-	plan.expectedOutputPath = request.outputPath.trimmed().isEmpty() ? defaultOutputPath(plan.inputPath, plan.profile.defaultOutputExtension) : absoluteCleanPath(request.outputPath);
+	const QString requestedOutputPath = request.outputPath.trimmed().isEmpty() ? QString() : absoluteCleanPath(request.outputPath);
+	const QString defaultExpectedOutputPath = defaultOutputPath(plan.inputPath, plan.profile.defaultOutputExtension);
+	plan.expectedOutputPath = (!requestedOutputPath.isEmpty() && plan.profile.outputPathArgumentSupported) ? requestedOutputPath : defaultExpectedOutputPath;
 
 	plan.arguments = plan.profile.defaultArguments;
 	plan.arguments += request.extraArguments;
 	if (!plan.inputPath.isEmpty()) {
 		plan.arguments << plan.inputPath;
 	}
-	if (plan.profile.outputPathArgumentSupported && !request.outputPath.trimmed().isEmpty()) {
+	if (plan.profile.outputPathArgumentSupported && !requestedOutputPath.isEmpty()) {
 		plan.arguments << plan.expectedOutputPath;
-	} else if (!plan.profile.outputPathArgumentSupported && !request.outputPath.trimmed().isEmpty() && plan.expectedOutputPath != plan.inputPath) {
-		plan.warnings << profileText("This compiler profile normally updates the BSP in place; output path is recorded as an expected artifact only.");
+	} else if (!plan.profile.outputPathArgumentSupported && !requestedOutputPath.isEmpty() && requestedOutputPath != plan.expectedOutputPath) {
+		plan.warnings << profileText("This compiler profile updates its input in place; the requested output path cannot be passed to the tool and will not be registered as the expected artifact.");
+	}
+
+	if (plan.profile.toolId.startsWith(QStringLiteral("ericw-"), Qt::CaseInsensitive)) {
+		plan.knownIssueWarnings += ericwKnownIssuePlanWarnings(plan.profile.id, plan.inputPath, plan.arguments);
+		plan.warnings += plan.knownIssueWarnings;
+		if (QFileInfo(plan.inputPath).suffix().compare(QStringLiteral("map"), Qt::CaseInsensitive) == 0) {
+			QString preflightError;
+			const EricwMapPreflightReport preflight = inspectEricwMapPreflightFile(plan.inputPath, &preflightError);
+			if (!preflightError.isEmpty()) {
+				plan.preflightWarnings << preflightError;
+			}
+			plan.preflightWarnings += preflight.warningMessages();
+			plan.warnings += plan.preflightWarnings;
+		}
 	}
 
 	plan.commandLine = compilerCommandLineText(plan.program, plan.arguments);
@@ -582,6 +601,18 @@ QString compilerCommandPlanText(const CompilerCommandPlan& plan)
 	lines << profileText("Input: %1").arg(QDir::toNativeSeparators(plan.inputPath));
 	lines << profileText("Expected output: %1").arg(QDir::toNativeSeparators(plan.expectedOutputPath));
 	lines << profileText("Command line: %1").arg(plan.commandLine);
+	if (!plan.knownIssueWarnings.isEmpty()) {
+		lines << profileText("Known issue checks");
+		for (const QString& warning : plan.knownIssueWarnings) {
+			lines << QStringLiteral("- %1").arg(warning);
+		}
+	}
+	if (!plan.preflightWarnings.isEmpty()) {
+		lines << profileText("Preflight warnings");
+		for (const QString& warning : plan.preflightWarnings) {
+			lines << QStringLiteral("- %1").arg(warning);
+		}
+	}
 	if (!plan.warnings.isEmpty()) {
 		lines << profileText("Warnings");
 		for (const QString& warning : plan.warnings) {
@@ -613,6 +644,8 @@ CompilerCommandManifest compilerCommandManifestFromPlan(const CompilerCommandPla
 	manifest.commandLine = plan.commandLine;
 	manifest.workingDirectory = plan.workingDirectory;
 	manifest.environmentSubset = compilerEnvironmentSubset();
+	manifest.knownIssueWarnings = plan.knownIssueWarnings;
+	manifest.preflightWarnings = plan.preflightWarnings;
 	if (!plan.inputPath.isEmpty()) {
 		manifest.inputPaths << plan.inputPath;
 		manifest.inputHashes.push_back(compilerFileHash(plan.inputPath));
@@ -678,6 +711,8 @@ QJsonObject compilerCommandManifestJson(const CompilerCommandManifest& manifest)
 	object.insert(QStringLiteral("inputHashes"), fileHashesJson(manifest.inputHashes));
 	object.insert(QStringLiteral("outputHashes"), fileHashesJson(manifest.outputHashes));
 	object.insert(QStringLiteral("diagnostics"), diagnosticsJson(manifest.diagnostics));
+	object.insert(QStringLiteral("knownIssueWarnings"), stringArrayJson(manifest.knownIssueWarnings));
+	object.insert(QStringLiteral("preflightWarnings"), stringArrayJson(manifest.preflightWarnings));
 	object.insert(QStringLiteral("stdout"), manifest.stdoutText);
 	object.insert(QStringLiteral("stderr"), manifest.stderrText);
 	object.insert(QStringLiteral("warnings"), stringArrayJson(manifest.warnings));
@@ -745,6 +780,18 @@ QString compilerCommandManifestText(const CompilerCommandManifest& manifest)
 		for (const CompilerDiagnostic& diagnostic : manifest.diagnostics) {
 			lines << QStringLiteral("- %1: %2%3")
 				.arg(diagnostic.level, diagnostic.message, diagnostic.filePath.isEmpty() ? QString() : QStringLiteral(" (%1:%2)").arg(QDir::toNativeSeparators(diagnostic.filePath)).arg(diagnostic.line));
+		}
+	}
+	if (!manifest.knownIssueWarnings.isEmpty()) {
+		lines << profileText("Known issue checks");
+		for (const QString& warning : manifest.knownIssueWarnings) {
+			lines << QStringLiteral("- %1").arg(warning);
+		}
+	}
+	if (!manifest.preflightWarnings.isEmpty()) {
+		lines << profileText("Preflight warnings");
+		for (const QString& warning : manifest.preflightWarnings) {
+			lines << QStringLiteral("- %1").arg(warning);
 		}
 	}
 	if (!manifest.stdoutText.trimmed().isEmpty()) {
@@ -862,6 +909,8 @@ bool loadCompilerCommandManifest(const QString& path, CompilerCommandManifest* m
 	loaded.inputHashes = fileHashesFromJson(object.value(QStringLiteral("inputHashes")));
 	loaded.outputHashes = fileHashesFromJson(object.value(QStringLiteral("outputHashes")));
 	loaded.diagnostics = diagnosticsFromJson(object.value(QStringLiteral("diagnostics")));
+	loaded.knownIssueWarnings = stringArrayFromJson(object.value(QStringLiteral("knownIssueWarnings")));
+	loaded.preflightWarnings = stringArrayFromJson(object.value(QStringLiteral("preflightWarnings")));
 	loaded.stdoutText = object.value(QStringLiteral("stdout")).toString();
 	loaded.stderrText = object.value(QStringLiteral("stderr")).toString();
 	loaded.warnings = stringArrayFromJson(object.value(QStringLiteral("warnings")));

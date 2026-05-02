@@ -57,6 +57,13 @@ Smoke-test current-platform packaging:
 python scripts/validate_packaging.py --binary builddir/src/vibestudio
 ```
 
+Smoke-test the built CLI, including package staging, manifest export, and
+deterministic save-as validation for simple PAK and PK3 outputs:
+
+```sh
+python scripts/validate_build.py --binary builddir/src/vibestudio --expected-version 0.1.0-rc1
+```
+
 Run the MVP release asset gate:
 
 ```sh

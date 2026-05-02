@@ -13,6 +13,8 @@ enum class PackagePreviewKind {
 	Directory,
 	Text,
 	Image,
+	Model,
+	Audio,
 	Binary,
 };
 
@@ -28,8 +30,26 @@ struct PackagePreview {
 	qint64 bytesRead = 0;
 	qint64 totalBytes = 0;
 	QString error;
+	QString assetKindId;
+	QStringList assetDetailLines;
+	QStringList assetRawLines;
 	QString imageFormat;
 	QSize imageSize;
+	int imageDepth = 0;
+	int imageColorCount = 0;
+	bool imagePaletteAware = false;
+	QStringList imagePaletteLines;
+	QString modelFormat;
+	QStringList modelViewportLines;
+	QStringList modelMaterialLines;
+	QStringList modelAnimationLines;
+	QString audioFormat;
+	QStringList audioWaveformLines;
+	QString textLanguageId;
+	QString textLanguageName;
+	QStringList textHighlightLines;
+	QStringList textDiagnosticLines;
+	QString textSaveState;
 };
 
 QString packagePreviewKindId(PackagePreviewKind kind);

@@ -83,6 +83,19 @@ They expose accessible names and descriptions for their title, state,
 progress, placeholder, section-list, copy, and detail-content controls; broader
 screen-reader and keyboard audits remain required before MVP.
 
+The Level Editor MVP adds accessible names/descriptions for the map path,
+Doom map marker, engine hint, compiler profile, object list, statistics,
+preview, validation, save-as, edit, move, run-profile, and CLI-copy controls.
+All visible map workbench strings route through Qt translation APIs, while map
+format identifiers and CLI flags remain stable technical identifiers.
+
+The Advanced Studio MVP adds accessible names/descriptions for shader script
+paths, stage inspection, sprite engine/name/frame/rotation controls, code index
+paths, AI proposal kind/prompt controls, extension discovery roots, summary
+cards, and detail tabs. Visible shader, sprite, code, AI, and extension strings
+route through Qt translation APIs; shader directives, CLI flags, extension IDs,
+file paths, and format identifiers remain stable technical identifiers.
+
 ## MVP Release Audit Status
 
 Milestone 4 adds a release asset gate in
@@ -100,7 +113,10 @@ the documented smoke paths for:
   validation surfaces;
 - accessible custom-widget metadata for loading panes, detail drawers, package
   trees, activity tasks, setup controls, preferences, and editor profile
-  selectors.
+  selectors. Level-map path, object, validation, preview, and compiler-profile
+  controls are now part of the manual screen-reader spot-check scope. Advanced
+  Studio shader, sprite, code, AI proposal, and extension controls are included
+  in the same manual spot-check scope.
 
 ## OS-Backed Text To Speech
 

@@ -19,6 +19,7 @@ struct CompilerToolDescriptor {
 	QStringList candidateRelativePaths;
 	QStringList versionProbeArguments;
 	QStringList capabilityFlags;
+	QStringList readinessWarnings;
 };
 
 struct CompilerToolPathOverride {

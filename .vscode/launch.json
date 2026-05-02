@@ -1,0 +1,75 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "VibeStudio: debug app (Windows, no build)",
+      "type": "cppvsdbg",
+      "request": "launch",
+      "program": "${workspaceFolder}\\builddir\\src\\vibestudio.exe",
+      "args": [],
+      "cwd": "${workspaceFolder}",
+      "console": "integratedTerminal",
+      "environment": [
+        {
+          "name": "PATH",
+          "value": "C:\\Qt\\6.10.1\\msvc2022_64\\bin;${env:PATH}"
+        }
+      ],
+      "stopAtEntry": false
+    },
+    {
+      "name": "VibeStudio: debug CLI help (Windows, no build)",
+      "type": "cppvsdbg",
+      "request": "launch",
+      "program": "${workspaceFolder}\\builddir\\src\\vibestudio.exe",
+      "args": [
+        "--cli",
+        "--help"
+      ],
+      "cwd": "${workspaceFolder}",
+      "console": "integratedTerminal",
+      "environment": [
+        {
+          "name": "PATH",
+          "value": "C:\\Qt\\6.10.1\\msvc2022_64\\bin;${env:PATH}"
+        }
+      ],
+      "stopAtEntry": false
+    },
+    {
+      "name": "VibeStudio: debug app (Unix, no build)",
+      "type": "cppdbg",
+      "request": "launch",
+      "program": "${workspaceFolder}/builddir/src/vibestudio",
+      "args": [],
+      "cwd": "${workspaceFolder}",
+      "externalConsole": false,
+      "stopAtEntry": false,
+      "linux": {
+        "MIMode": "gdb"
+      },
+      "osx": {
+        "MIMode": "lldb"
+      }
+    },
+    {
+      "name": "VibeStudio: debug CLI help (Unix, no build)",
+      "type": "cppdbg",
+      "request": "launch",
+      "program": "${workspaceFolder}/builddir/src/vibestudio",
+      "args": [
+        "--cli",
+        "--help"
+      ],
+      "cwd": "${workspaceFolder}",
+      "externalConsole": false,
+      "stopAtEntry": false,
+      "linux": {
+        "MIMode": "gdb"
+      },
+      "osx": {
+        "MIMode": "lldb"
+      }
+    }
+  ]
+}
