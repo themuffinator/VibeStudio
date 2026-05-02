@@ -15,64 +15,70 @@ navigation, selection, camera movement, grid behavior, and common shortcuts.
 
 ## Target Profiles
 
+The MVP registry is active in `src/core/editor_profiles.*` and is shared by the
+Qt preferences surface, inspector drawer, CLI, settings storage, and smoke
+tests. These profiles are intentionally placeholder presets for layout,
+camera, selection, grid, terminology, panels, workflow notes, and reserved
+bindings; they do not yet switch real map-editor behavior.
+
 ### GtkRadiant 1.6.0-Style
 Reference: [GtkRadiant](https://github.com/TTimo/GtkRadiant)
 
 Checklist:
-- [ ] Four-pane/orthographic-forward workflow option.
-- [ ] Radiant-style camera navigation.
-- [ ] Radiant-style brush and entity selection defaults.
-- [ ] Radiant-style grid stepping and clipping expectations.
-- [ ] Radiant-like texture browser placement and terminology.
-- [ ] Common Radiant shortcuts mapped by default.
+- [x] Four-pane/orthographic-forward workflow option placeholder.
+- [x] Radiant-style camera navigation preset placeholder.
+- [x] Radiant-style brush and entity selection defaults placeholder.
+- [x] Radiant-style grid stepping and clipping expectations placeholder.
+- [x] Radiant-like texture browser placement and terminology placeholder.
+- [x] Common Radiant shortcuts reserved in the placeholder binding table.
 
 ### NetRadiant Custom-Style
 Reference: [NetRadiant Custom](https://github.com/Garux/netradiant-custom)
 
 Checklist:
-- [ ] NetRadiant Custom-inspired dense toolbars and filter controls.
-- [ ] 3D editing-forward behavior where appropriate.
-- [ ] Fast selection/manipulation workflow presets.
-- [ ] Texture projection and face-editing shortcuts inspired by NetRadiant Custom behavior.
-- [ ] Compiler/build menu conventions aligned with q3map2 workflows.
+- [x] NetRadiant Custom-inspired dense toolbars and filter controls placeholder.
+- [x] 3D editing-forward behavior placeholder where appropriate.
+- [x] Fast selection/manipulation workflow preset placeholder.
+- [x] Texture projection and face-editing shortcuts reserved in the placeholder binding table.
+- [x] Compiler/build menu conventions aligned with q3map2 workflows placeholder.
 
 ### TrenchBroom-Style
 Reference: [TrenchBroom](https://trenchbroom.github.io/)
 
 Checklist:
-- [ ] Single-window, modern brush-editing layout option.
-- [ ] TrenchBroom-like camera and selection feel.
-- [ ] Face, edge, vertex, and entity workflows exposed through compact inspectors.
-- [ ] Fast texture application and face alignment workflow.
-- [ ] Project/game configuration flow familiar to TrenchBroom users.
+- [x] Single-window, modern brush-editing layout option placeholder.
+- [x] TrenchBroom-like camera and selection feel placeholder.
+- [x] Face, edge, vertex, and entity workflow placeholders.
+- [x] Fast texture application and face alignment workflow placeholder.
+- [x] Project/game configuration flow familiar to TrenchBroom users placeholder.
 
 ### QuArK-Style
 Reference: [QuArK](https://quark.sourceforge.io/)
 
 Checklist:
-- [ ] Explorer/tree-heavy layout option.
-- [ ] Multi-document asset/map/package organization.
-- [ ] Object/property editing flow inspired by QuArK's integrated model.
-- [ ] Package and asset editing visible alongside map structure.
-- [ ] Familiar terminology where it helps users migrate.
+- [x] Explorer/tree-heavy layout option placeholder.
+- [x] Multi-document asset/map/package organization placeholder.
+- [x] Object/property editing flow inspired by QuArK's integrated model placeholder.
+- [x] Package and asset editing visible alongside map structure placeholder.
+- [x] Familiar terminology where it helps users migrate placeholder.
 
 ## Shared Profile Schema
 Profiles should eventually cover:
-- [ ] Pane layout and default docks.
-- [ ] Keybindings.
-- [ ] Mouse bindings.
-- [ ] Camera movement.
-- [ ] Selection behavior.
-- [ ] Grid defaults.
+- [x] Pane layout and default docks placeholder schema.
+- [x] Keybindings placeholder schema.
+- [x] Mouse bindings placeholder schema.
+- [x] Camera movement placeholder schema.
+- [x] Selection behavior placeholder schema.
+- [x] Grid defaults placeholder schema.
 - [ ] Transform gizmo preferences.
 - [ ] Texture browser behavior.
 - [ ] Entity/property inspector layout.
 - [ ] Build/compiler menu layout.
-- [ ] Terminology aliases.
+- [x] Terminology aliases placeholder schema.
 
 ## Implementation Rules
-- [ ] Keep profile settings declarative where practical.
+- [x] Keep profile settings declarative where practical.
 - [ ] Route all profiles through the same editor command stack and undo/redo model.
-- [ ] Add profile-specific tests for keybindings and command routing.
+- [x] Add profile-specific tests for keybindings and command routing placeholders.
 - [ ] Avoid copying third-party icons, artwork, or proprietary assets.
-- [ ] Credit profile inspiration in README, docs, and About.
+- [x] Credit profile inspiration in README and docs; About surface remains planned.

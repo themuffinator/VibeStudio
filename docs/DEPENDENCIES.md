@@ -28,7 +28,7 @@ requirements. VibeStudio does not build them by default yet.
 
 ## Planned Dependencies
 Likely future additions:
-- [CLI11](https://github.com/CLIUtils/CLI11): command parser for the full CLI.
+- [CLI11](https://github.com/CLIUtils/CLI11): evaluated for the full CLI parser/completion layer and deliberately deferred. The active in-process command registry now covers testable command metadata without adding a dependency.
 - [SQLite](https://sqlite.org/) through Qt SQL, with [FTS5](https://sqlite.org/fts5.html) where available: asset index, dependency search, diagnostics, recent activity, and project metadata.
 - [Qt TextToSpeech](https://doc.qt.io/qt-6/qttexttospeech-index.html): OS-backed TTS for setup guidance, task summaries, diagnostics, and optional spoken status.
 - [Qt internationalization](https://doc.qt.io/qt-6/internationalization.html) and Qt Linguist tools: localization pipeline, translation bundles, pseudo-localization, and right-to-left validation.
@@ -49,9 +49,9 @@ whether it is required, optional, bundled, or external, and any credits updates
 required in `README.md` and `docs/CREDITS.md`.
 
 ## Optional Service Integrations
-- [OpenAI API](https://platform.openai.com/docs/quickstart): optional, user-configured integration for prompt-based automation. Core editing, packaging, compiling, and launching must work without an API key.
-- [OpenAI Responses API](https://platform.openai.com/docs/api-reference/responses): likely initial API surface for model responses and tool-using workflows.
-- [OpenAI function calling / tools](https://developers.openai.com/api/docs/guides/tools): planned pattern for exposing safe VibeStudio actions to AI-assisted workflows.
+- [OpenAI API](https://platform.openai.com/docs/quickstart): optional, user-configured integration for prompt-based automation. VibeStudio now has the first OpenAI connector scaffold for configuration, credential discovery through redacted environment references, model routing, and manifest-backed no-write experiments. Core editing, packaging, compiling, and launching work without an API key.
+- [OpenAI Responses API](https://platform.openai.com/docs/api-reference/responses): intended future API surface for model responses and tool-using workflows once network invocation is enabled.
+- [OpenAI function calling / tools](https://developers.openai.com/api/docs/guides/tools): active architectural pattern for safe VibeStudio tool descriptors; provider calls remain future work.
 - [Claude API](https://platform.claude.com/docs/en/home): optional connector target for reasoning, coding, review, long-context, and agentic planning workflows.
 - [Gemini API](https://ai.google.dev/api): optional connector target for multimodal and large-context workflows.
 - [ElevenLabs API](https://elevenlabs.io/docs/overview/intro): optional connector target for voice, speech-to-text, sound effects, narration, and audio ideation.

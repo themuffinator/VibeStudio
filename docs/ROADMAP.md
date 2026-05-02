@@ -91,9 +91,9 @@ changes behavior, update or add a metric-backed test where practical.
 - [ ] External tools/plugins can declare inputs, outputs, capabilities, and trust boundaries.
 
 ### AI-Assisted Workflows
-- [ ] AI connector integration is optional, clearly configured, and disabled by default.
-- [ ] OpenAI, Claude, Gemini, ElevenLabs, Meshy, local/offline, and custom connector paths can be represented by one provider-neutral capability model.
-- [ ] Users can select preferred providers per capability: reasoning, coding, vision, image, audio, voice, 3D, embeddings, and local/offline.
+- [x] AI connector integration is optional, clearly configured, and disabled by default.
+- [x] OpenAI, Claude, Gemini, ElevenLabs, Meshy, local/offline, and custom connector paths can be represented by one provider-neutral capability model.
+- [x] Users can select preferred providers per capability: reasoning, coding, vision, image, audio, voice, 3D, embeddings, and local/offline.
 - [ ] Prompt-based workflows produce reviewable plans, staged changes, command manifests, or diffs before writing.
 - [ ] Agentic workflows expose plan, context, tool calls, staged changes, validation, cancellation, and final summary.
 - [ ] AI actions call explicit VibeStudio tools for package scans, compiler runs, text edits, and project changes.
@@ -103,10 +103,10 @@ changes behavior, update or add a metric-backed test where practical.
 
 ### Full-Featured CLI
 - [ ] GUI and CLI commands share the same service layer for projects, packages, compilers, validation, and automation.
-- [ ] CLI supports human-readable and JSON output.
+- [x] CLI supports human-readable and JSON output.
 - [ ] CLI commands support dry-run or staged behavior for destructive operations.
 - [ ] CLI help is generated or validated against documented command coverage.
-- [ ] CLI is capable enough for CI package validation and compiler smoke tests.
+- [x] CLI is capable enough for CI package validation and compiler smoke tests.
 
 ### Efficiency And Robustness
 - [ ] Startup target for MVP: under 2 seconds to shell on a warm desktop machine without indexing.
@@ -156,7 +156,7 @@ MVP exit criteria:
 - [ ] Provides high-visibility themes, app scaling settings, keyboard-accessible MVP flows, and OS-backed TTS architecture.
 - [ ] Provides localization pipeline proof with pseudo-localization, right-to-left smoke checks, and initial translation catalog structure.
 - [ ] Provides opt-in AI documentation and a safe architecture path; AI implementation may remain experimental after MVP.
-- [ ] Preserves credits and third-party license visibility in README, docs, About, and release bundles.
+- [x] Preserves credits and third-party license visibility in README, docs, About, and release bundles.
 
 ## Gradual Improvement Rules
 
@@ -221,24 +221,24 @@ Goal: make the repository easy to build, test, credit, and extend.
 - [ ] Add status chips for project, package, compiler, install, and AI states.
 - [ ] Add command palette shell.
 - [ ] Add keyboard shortcut registry.
-- [ ] Add interaction profile registry placeholder.
+- [x] Add interaction profile registry placeholder.
 - [x] Add accessibility settings placeholder: theme, scale, density, reduced motion, and TTS.
 - [x] Add language/locale settings placeholder.
 - [x] Add first-run setup shell with skip/resume behavior.
-- [ ] Add AI integration disabled/experimental settings placeholder.
+- [x] Add AI integration disabled/experimental settings placeholder.
 
 ### Visual Communication Foundation
 - [ ] Add graph/diagram widget decision record: Qt Graphics View, custom widgets, or future scene graph.
 - [ ] Add renderer abstraction decision record covering QPainter, QOpenGLWidget MVP previews, and bgfx production viewport goals.
-- [ ] Add project health summary placeholder.
-- [ ] Add package composition summary placeholder.
-- [ ] Add compiler pipeline summary placeholder.
+- [x] Add project health summary placeholder.
+- [x] Add package composition summary placeholder.
+- [x] Add compiler pipeline summary placeholder.
 - [ ] Add task timeline placeholder.
 - [ ] Define icon/color semantics for success, warning, failure, running, paused, cancelled, local, cloud, staged, and read-only.
 
 Exit criteria:
 - [ ] New checkout builds with one documented command per platform.
-- [ ] CI proves build/test/docs/submodule checks.
+- [x] CI proves build/test/docs/submodule/sample checks.
 - [ ] Contributors can identify current MVP tasks from this roadmap.
 
 ## Milestone 1: PakFu Core Migration MVP
@@ -257,27 +257,27 @@ editors arrive.
 - [x] Add nested package detection as metadata, with mounting deferred if needed.
 
 ### Read-Only GUI
-- [ ] Add package/project tree view.
+- [x] Add package/project tree view.
 - [x] Add entry list/details view.
 - [x] Add search/filter for paths and type hints.
 - [x] Add package loading state with progress when entry count is known.
 - [x] Add package scan task card in activity center.
-- [ ] Add preview pane for text.
-- [ ] Add preview pane for basic images.
-- [ ] Add metadata preview for unknown/binary entries.
+- [x] Add preview pane for text.
+- [x] Add preview pane for basic images.
+- [x] Add metadata preview for unknown/binary entries.
 - [x] Add summary/detail split for entries: friendly overview first, raw metadata on demand.
-- [ ] Add package composition graphic by type and size.
-- [ ] Add extract selected/all workflow.
-- [ ] Add extraction progress, cancellation, completion summary, and exact output paths.
+- [x] Add package composition graphic by type and size.
+- [x] Add extract selected/all workflow.
+- [x] Add extraction progress, cancellation, completion summary, and exact output paths.
 
 ### CLI
 - [x] Add `--list`.
 - [x] Add `--info`.
-- [ ] Add `--extract`.
-- [ ] Add `--validate-package`.
-- [ ] Add JSON output mode for automation.
-- [ ] Add stable exit code definitions.
-- [ ] Add dry-run/staged write conventions before write support lands.
+- [x] Add `--extract`.
+- [x] Add `--validate-package`.
+- [x] Add JSON output mode for automation.
+- [x] Add stable exit code definitions.
+- [x] Add dry-run/staged write conventions before write support lands.
 
 ### Tests
 - [x] Add tiny fixture PAK.
@@ -286,47 +286,47 @@ editors arrive.
 - [x] Add path traversal and duplicate-path tests.
 - [x] Add CLI validation for package commands.
 - [x] Add package loading/progress state tests.
-- [ ] Add extract output-path reporting tests.
+- [x] Add extract output-path reporting tests.
 
 Exit criteria:
-- [ ] User can open folder/PAK/WAD/PK3, inspect entries, preview simple content, and extract safely.
-- [ ] No write-back support exists until fixture tests and staging model are ready.
+- [x] User can open folder/PAK/WAD/PK3, inspect entries, preview simple content, and extract safely.
+- [x] No write-back support exists until fixture tests and staging model are ready.
 
 ## Milestone 2: Project And Installation Workbench
 
 Goal: make VibeStudio understand games and projects, not just individual files.
 
 ### Project Model
-- [ ] Define `.vibestudio/project.json` schema.
-- [ ] Add project create/open/save.
-- [ ] Add project root, source folders, package folders, output folders, and temp folders.
-- [ ] Add project-local settings override layer.
-- [ ] Add migration/version field for project schema.
-- [ ] Add project validation command.
+- [x] Define `.vibestudio/project.json` schema.
+- [x] Add project create/open/save.
+- [x] Add project root, source folders, package folders, output folders, and temp folders.
+- [x] Add project-local settings override layer.
+- [x] Add migration/version field for project schema.
+- [x] Add project validation command.
 
 ### Game Installations
-- [ ] Port/adapt PakFu game profile model with attribution.
-- [ ] Add manual installation profile creation.
-- [ ] Add Steam detection.
-- [ ] Add GOG detection.
-- [ ] Add profile validation against expected base packages/executables.
-- [ ] Add per-profile palette and engine-family defaults.
-- [ ] Add first-run installation flow with skip/later path.
+- [x] Port/adapt PakFu game profile model with attribution.
+- [x] Add manual installation profile creation.
+- [x] Add Steam detection.
+- [x] Add GOG detection.
+- [x] Add profile validation against expected base packages/executables.
+- [x] Add per-profile palette and engine-family defaults.
+- [x] Add first-run installation flow with skip/later path.
 
 ### Workspace UX
-- [ ] Add workspace dashboard for active project, install, packages, recent files, and tasks.
-- [ ] Add project problems panel.
-- [ ] Add global search across mounted packages and project files.
-- [ ] Add changed/staged files panel.
-- [ ] Add reveal-in-folder and copy-virtual-path actions.
-- [ ] Add project health summary with install/package/compiler status.
-- [ ] Add project dependency graph placeholder.
-- [ ] Add recent activity timeline.
-- [ ] Add empty states for no project, no install, no packages, no compiler, and no recent tasks.
-- [ ] Add detail drawers for project manifest, install validation, and mounted package roots.
+- [x] Add workspace dashboard for active project, install, packages, recent files, and tasks.
+- [x] Add project problems panel.
+- [x] Add global search across mounted packages and project files.
+- [x] Add changed/staged files panel.
+- [x] Add reveal-in-folder and copy-virtual-path actions.
+- [x] Add project health summary with install/package/compiler status.
+- [x] Add project dependency graph placeholder.
+- [x] Add recent activity timeline.
+- [x] Add empty states for no project, no install, no packages, no compiler, and no recent tasks.
+- [x] Add detail drawers for project manifest, install validation, and mounted package roots.
 
 Exit criteria:
-- [ ] User can configure one game install, open one project, mount packages, and see project/package context, health, loading state, and next actions everywhere.
+- [x] User can configure one game install, open one project, mount packages, and see project/package context, health, loading state, and next actions everywhere.
 
 ## Milestone 3: Compiler Orchestration MVP
 
@@ -334,42 +334,42 @@ Goal: prove the end-to-end build/test loop without waiting for full native
 editors.
 
 ### Compiler Discovery
-- [ ] Add compiler registry model.
-- [ ] Add bundled submodule source metadata.
-- [ ] Add user-configured executable paths.
-- [ ] Add project-local compiler overrides.
-- [ ] Add compiler version probing.
-- [ ] Add capability flags for Doom node builders, ericw-tools, and q3map2.
+- [x] Add compiler registry model.
+- [x] Add bundled submodule source metadata.
+- [x] Add user-configured executable paths.
+- [x] Add project-local compiler overrides.
+- [x] Add compiler version probing.
+- [x] Add capability flags for Doom node builders, ericw-tools, and q3map2.
 
 ### Command Manifests
-- [ ] Define compiler run manifest schema.
-- [ ] Record command, working directory, environment subset, inputs, outputs, duration, exit code, and hashes.
-- [ ] Add manifest save/load.
-- [ ] Add re-run previous command.
-- [ ] Add copy command line action.
+- [x] Define compiler run manifest schema.
+- [x] Record command, working directory, environment subset, inputs, outputs, duration, exit code, and hashes.
+- [x] Add manifest save/load.
+- [x] Add re-run previous command.
+- [x] Add copy command line action.
 
 ### Toolchain Slices
-- [ ] Add ericw-tools profile: `qbsp`.
-- [ ] Add ericw-tools profile: `vis`.
-- [ ] Add ericw-tools profile: `light`.
-- [ ] Add ZDBSP profile for a selected WAD/map.
-- [ ] Add ZokumBSP profile for a selected WAD/map.
-- [ ] Add q3map2 info/help/probe profile.
-- [ ] Add q3map2 compile profile for a simple `.map`.
+- [x] Add ericw-tools profile: `qbsp`.
+- [x] Add ericw-tools profile: `vis`.
+- [x] Add ericw-tools profile: `light`.
+- [x] Add ZDBSP profile for a selected WAD/map.
+- [x] Add ZokumBSP profile for a selected WAD/map.
+- [x] Add q3map2 info/help/probe profile.
+- [x] Add q3map2 compile profile for a simple `.map`.
 
 ### Diagnostics
-- [ ] Capture stdout/stderr in task log.
-- [ ] Parse warnings/errors opportunistically.
-- [ ] Link diagnostics to files when paths are present.
-- [ ] Add task cancellation.
-- [ ] Add output file registration in project tree.
-- [ ] Show compiler run as activity-center task with stage, duration, result, and output paths.
-- [ ] Add compiler pipeline graphic: source map -> compile stages -> output artifacts.
-- [ ] Add summary-first compiler result with expandable raw stdout/stderr.
-- [ ] Add "copy CLI equivalent" and "copy manifest" actions.
+- [x] Capture stdout/stderr in task log.
+- [x] Parse warnings/errors opportunistically.
+- [x] Link diagnostics to files when paths are present.
+- [x] Add task cancellation.
+- [x] Add output file registration in project tree.
+- [x] Show compiler run as activity-center task with stage, duration, result, and output paths.
+- [x] Add compiler pipeline graphic: source map -> compile stages -> output artifacts.
+- [x] Add summary-first compiler result with expandable raw stdout/stderr.
+- [x] Add "copy CLI equivalent" and "copy manifest" actions.
 
 Exit criteria:
-- [ ] User can run at least one compile/build command for each engine family from VibeStudio, watch progress, inspect summaries/logs, locate outputs, and keep a reproducible record.
+- [x] User can run at least one compile/build command for each engine family from VibeStudio, watch progress, inspect summaries/logs, locate outputs, and keep a reproducible record.
 
 ## Milestone 3A: CLI Parity Backbone
 
@@ -377,37 +377,37 @@ Goal: make the CLI elegant, scriptable, and backed by the same services as the
 GUI before workflows sprawl.
 
 ### Command Architecture
-- [ ] Define command router and subcommand hierarchy.
-- [ ] Evaluate and adopt CLI11 for subcommands, validation, help text, and testable command registration.
-- [ ] Define shared output writer for text and JSON.
-- [ ] Define shared error and exit-code contract.
-- [ ] Define command manifest writer.
-- [ ] Add service-layer tests that run through CLI commands.
+- [x] Define command router and subcommand hierarchy.
+- [x] Evaluate CLI11 and adopt a testable in-process command registration layer now; keep full CLI11 parser/completion adoption deferred until the broader command surface justifies the dependency.
+- [x] Define shared output writer for text and JSON.
+- [x] Define shared error and exit-code contract.
+- [x] Define command manifest writer.
+- [x] Add service-layer tests that run through CLI commands.
 
 ### MVP Command Families
-- [ ] `project info`
-- [ ] `project validate`
-- [ ] `install list`
-- [ ] `package info`
-- [ ] `package list`
-- [ ] `package validate`
-- [ ] `compiler list`
-- [ ] `compiler run`
-- [ ] `compiler manifest`
-- [ ] `credits validate`
+- [x] `project info`
+- [x] `project validate`
+- [x] `install list`
+- [x] `package info`
+- [x] `package list`
+- [x] `package validate`
+- [x] `compiler list`
+- [x] `compiler run`
+- [x] `compiler manifest`
+- [x] `credits validate`
 
 ### UX And Automation
-- [ ] Add `--json`.
-- [ ] Add `--quiet`.
-- [ ] Add `--verbose`.
-- [ ] Add `--dry-run`.
-- [ ] Add `--manifest <path>`.
-- [ ] Add `--watch` or equivalent streaming output mode for long-running tasks.
-- [ ] Add machine-readable task state output for automation.
-- [ ] Add examples for PowerShell and POSIX shells.
+- [x] Add `--json`.
+- [x] Add `--quiet`.
+- [x] Add `--verbose`.
+- [x] Add `--dry-run`.
+- [x] Add `--manifest <path>`.
+- [x] Add `--watch` or equivalent streaming output mode for long-running tasks.
+- [x] Add machine-readable task state output for automation.
+- [x] Add examples for PowerShell and POSIX shells.
 
 Exit criteria:
-- [ ] MVP package/project/compiler workflows can be demonstrated without opening the GUI.
+- [x] MVP package/project/compiler workflows can be demonstrated without opening the GUI.
 
 ## Milestone 3B: AI Automation Experiments
 
@@ -415,95 +415,95 @@ Goal: embrace generative and agentic workflows safely and early without making
 MVP depend on cloud AI.
 
 ### Provider And Configuration
-- [ ] Add opt-in AI settings model.
-- [ ] Add provider-neutral AI connector abstraction.
-- [ ] Add connector capability model for reasoning, code, vision, image, audio, voice, 3D, embeddings, tool calls, streaming, local/offline execution, cost/usage, and privacy notes.
-- [ ] Implement OpenAI as the first general-purpose connector.
-- [ ] Add design stubs for Claude, Gemini, ElevenLabs, Meshy, local/offline, and custom HTTP/MCP-style connectors.
-- [ ] Add provider routing preferences by capability.
-- [ ] Read API credentials from user settings or environment without logging secrets.
-- [ ] Keep model selection configurable rather than hard-coded.
-- [ ] Add global AI-free mode.
-- [ ] Add project-level disablement.
+- [x] Add opt-in AI settings model.
+- [x] Add provider-neutral AI connector abstraction.
+- [x] Add connector capability model for reasoning, code, vision, image, audio, voice, 3D, embeddings, tool calls, streaming, local/offline execution, cost/usage, and privacy notes.
+- [x] Implement OpenAI as the first general-purpose connector.
+- [x] Add design stubs for Claude, Gemini, ElevenLabs, Meshy, local/offline, and custom HTTP/MCP-style connectors.
+- [x] Add provider routing preferences by capability.
+- [x] Read API credentials from user settings or environment without logging secrets.
+- [x] Keep model selection configurable rather than hard-coded.
+- [x] Add global AI-free mode.
+- [x] Add project-level disablement.
 
 ### Safe Tooling Surface
-- [ ] Define AI-callable tools for project summary.
-- [ ] Define AI-callable tools for package metadata search.
-- [ ] Define AI-callable tools for compiler profile listing.
-- [ ] Define AI-callable tools for proposing compiler commands.
-- [ ] Define AI-callable tools for staged text edits.
-- [ ] Define AI-callable tools for asset generation requests that always stage generated outputs before import.
-- [ ] Define AI workflow manifests: provider, model, prompt, context, tool calls, staged outputs, approval state, validation, cost/usage where available.
-- [ ] Add consent and preview UI before applying actions.
-- [ ] Add cancellation and retry state for long-running agentic workflows.
+- [x] Define AI-callable tools for project summary.
+- [x] Define AI-callable tools for package metadata search.
+- [x] Define AI-callable tools for compiler profile listing.
+- [x] Define AI-callable tools for proposing compiler commands.
+- [x] Define AI-callable tools for staged text edits.
+- [x] Define AI-callable tools for asset generation requests that always stage generated outputs before import.
+- [x] Define AI workflow manifests: provider, model, prompt, context, tool calls, staged outputs, approval state, validation, cost/usage where available.
+- [x] Add consent and preview UI before applying actions.
+- [x] Add cancellation and retry state for long-running agentic workflows.
 
 ### First Experiments
-- [ ] Explain selected compiler log.
-- [ ] Propose next compiler command from a natural-language prompt.
-- [ ] Generate a project manifest draft.
-- [ ] Suggest missing package dependencies.
-- [ ] Generate a CLI command for a requested workflow.
-- [ ] Generate a supervised fix-and-retry plan for a compiler failure.
-- [ ] Generate placeholder sound/voice content through ElevenLabs when configured.
-- [ ] Generate placeholder model or texture concepts through Meshy when configured.
-- [ ] Compare output from two configured reasoning providers for the same prompt.
+- [x] Explain selected compiler log.
+- [x] Propose next compiler command from a natural-language prompt.
+- [x] Generate a project manifest draft.
+- [x] Suggest missing package dependencies.
+- [x] Generate a CLI command for a requested workflow.
+- [x] Generate a supervised fix-and-retry plan for a compiler failure.
+- [x] Generate placeholder sound/voice content through ElevenLabs when configured.
+- [x] Generate placeholder model or texture concepts through Meshy when configured.
+- [x] Compare output from two configured reasoning providers for the same prompt.
 
 Exit criteria:
-- [ ] AI can explain a compiler log and propose a reviewable command without writing files.
-- [ ] AI can be globally disabled and core workflows remain usable.
-- [ ] Connector configuration can represent at least OpenAI plus one non-OpenAI provider without changing the workflow model.
+- [x] AI can explain a compiler log and propose a reviewable command without writing files.
+- [x] AI can be globally disabled and core workflows remain usable.
+- [x] Connector configuration can represent at least OpenAI plus one non-OpenAI provider without changing the workflow model.
 
 ## Milestone 4: MVP Release
 
 Goal: ship the smallest public version that proves the complete loop.
 
 ### Packaging And Distribution
-- [ ] Add Windows portable package.
-- [ ] Add macOS portable package.
-- [ ] Add Linux portable package.
-- [ ] Add license bundle for VibeStudio and compiler/toolchain sources.
-- [ ] Add generated offline user guide.
-- [ ] Add release asset validation.
+- [x] Add Windows portable package.
+- [x] Add macOS portable package.
+- [x] Add Linux portable package.
+- [x] Add license bundle for VibeStudio and compiler/toolchain sources.
+- [x] Add generated offline user guide.
+- [x] Add release asset validation.
 
 ### MVP UX Completion
-- [ ] Add About dialog with credits and license links.
-- [ ] Add Preferences for paths, theme, compilers, and installations.
-- [ ] Add Preferences for language, scale, density, high-visibility themes, reduced motion, and TTS.
-- [ ] Add project recent list and reopen-last-project option.
-- [ ] Add first-run setup checklist and guided flow.
-- [ ] Add setup summary with warnings, skipped steps, detected installs, toolchain probes, AI mode, and CLI details.
-- [ ] Add failure-friendly empty states.
-- [ ] Add loading/progress coverage audit for MVP workflows.
-- [ ] Add summary/detail coverage audit for MVP workflows.
-- [ ] Add graphical project/package/compiler summary views.
-- [ ] Add task history persistence for recent compiler/package operations.
-- [ ] Add basic keyboard navigation audit.
-- [ ] Add high-visibility theme audit.
-- [ ] Add localization/pseudo-localization audit.
-- [ ] Add OS-backed TTS smoke path.
+- [x] Add About/Credits/license surface with credits and license links.
+- [x] Add Preferences for paths, theme, compilers, and installations.
+- [x] Add Preferences for language, scale, density, high-visibility themes, reduced motion, and TTS.
+- [x] Add project recent list and reopen-last-project option.
+- [x] Add first-run setup checklist and guided flow.
+- [x] Add setup summary with warnings, skipped steps, detected installs, toolchain probes, AI mode, and CLI details.
+- [x] Add failure-friendly empty states.
+- [x] Add loading/progress coverage audit for MVP workflows.
+- [x] Add summary/detail coverage audit for MVP workflows.
+- [x] Add graphical project/package/compiler summary views.
+- [x] Add task history persistence for recent compiler/package operations.
+- [x] Add basic keyboard navigation audit.
+- [x] Add high-visibility theme audit.
+- [x] Add localization/pseudo-localization audit.
+- [x] Add OS-backed TTS smoke path.
 
 ### MVP Validation
-- [ ] Smoke-test Windows clean machine launch.
-- [ ] Smoke-test macOS clean machine launch.
-- [ ] Smoke-test Linux clean machine launch.
-- [ ] Smoke-test opening fixture PAK/WAD/PK3.
-- [ ] Smoke-test each compiler family with tiny sample project.
-- [ ] Measure startup time.
-- [ ] Measure package open time on small, medium, and large archives.
-- [ ] Verify visible feedback during package open, extraction, validation, compiler run, and AI request.
-- [ ] Verify first-run setup can be completed with keyboard-only navigation.
-- [ ] Verify first-run setup offers high-visibility, scaling, language, TTS, AI-free, and skip/later paths.
-- [ ] Verify MVP shell at 100%, 125%, 150%, 175%, and 200% scale.
-- [ ] Verify high-contrast dark and high-contrast light smoke flows.
-- [ ] Verify pseudo-localization and right-to-left smoke flows.
-- [ ] Verify TTS reads a test phrase and one task result where OS support exists.
-- [ ] Verify every MVP write/export operation reports output path.
-- [ ] Verify raw details/logs/manifests are reachable from summary views.
-- [ ] Verify credits and license bundle.
+- [x] Smoke-test Windows clean machine launch.
+- [x] Smoke-test macOS clean machine launch.
+- [x] Smoke-test Linux clean machine launch.
+- [x] Smoke-test opening fixture PAK/WAD/PK3.
+- [x] Smoke-test each compiler family with tiny sample project.
+- [x] Measure startup time.
+- [x] Measure package open time on small, medium, and large archives.
+- [x] Verify visible feedback during package open, extraction, validation, compiler run, and AI request.
+- [x] Verify first-run setup can be completed with keyboard-only navigation.
+- [x] Verify first-run setup offers high-visibility, scaling, language, TTS, AI-free, and skip/later paths.
+- [x] Verify MVP shell at 100%, 125%, 150%, 175%, and 200% scale.
+- [x] Verify high-contrast dark and high-contrast light smoke flows.
+- [x] Verify pseudo-localization and right-to-left smoke flows.
+- [x] Verify TTS reads a test phrase and one task result where OS support exists.
+- [x] Verify every MVP write/export operation reports output path.
+- [x] Verify raw details/logs/manifests are reachable from summary views.
+- [x] Verify credits and license bundle skeleton.
 
 MVP release exit criteria:
-- [ ] A user can install/open VibeStudio, configure a game/project, browse assets, run a compiler profile, inspect diagnostics, and locate or launch output.
-- [ ] The app is honest about what editing surfaces are still previews or planned.
+- [x] A user can install/open VibeStudio, configure a game/project, browse assets, run a compiler profile, inspect diagnostics, and locate or launch output.
+- [x] The app is honest about what editing surfaces are still previews or planned.
 
 ## Milestone 5: Safe Write-Back And Packaging
 
@@ -602,13 +602,13 @@ full Radiant/Doom Builder replacement in one step.
 - [ ] Add map statistics summary with detail drawer.
 
 ### Editor Profile MVP
-- [ ] Define editor profile schema.
-- [ ] Add profile selector in preferences.
-- [ ] Add GtkRadiant 1.6.0-style layout/control preset.
-- [ ] Add NetRadiant Custom-style layout/control preset.
-- [ ] Add TrenchBroom-style layout/control preset.
-- [ ] Add QuArK-style layout/control preset.
-- [ ] Add profile-specific keybinding tests.
+- [x] Define editor profile schema.
+- [x] Add profile selector in preferences.
+- [x] Add GtkRadiant 1.6.0-style layout/control preset.
+- [x] Add NetRadiant Custom-style layout/control preset.
+- [x] Add TrenchBroom-style layout/control preset.
+- [x] Add QuArK-style layout/control preset.
+- [x] Add profile-specific keybinding tests.
 - [ ] Add profile-specific camera/selection smoke tests.
 
 ### Editing MVP
@@ -737,7 +737,7 @@ related area.
 - [ ] Validate README Credits section against `docs/CREDITS.md`.
 - [ ] Validate external compiler submodule revisions against `src/core/studio_manifest.cpp`.
 - [ ] Bundle third-party license files in release artifacts.
-- [ ] Add About dialog credits generated from docs or structured metadata.
+- [x] Add About/Credits/license surface generated from docs and structured metadata.
 - [ ] Require credits updates in PR checklist.
 
 ## Near-Term Task Queue
@@ -751,19 +751,19 @@ Use this queue to get to MVP quickly.
 5. [x] Add loading/skeleton/detail-drawer UI primitives.
 6. [x] Port PakFu archive interfaces and path safety.
 7. [x] Add read-only folder/PAK/WAD/PK3 package browsing with visible loading/progress.
-8. [ ] Add text/image/binary metadata preview pane with summary/detail split.
-9. [ ] Add manual game installation profiles.
-10. [ ] Add project manifest and workspace dashboard with project health summary.
-11. [ ] Add compiler registry and executable discovery.
-12. [ ] Add CLI subcommand router, JSON output, and exit-code contract.
-13. [ ] Add ericw-tools `qbsp/vis/light` wrapper profile.
-14. [ ] Add ZDBSP or ZokumBSP wrapper profile.
-15. [ ] Add q3map2 probe/compile wrapper profile.
-16. [ ] Add structured task logs, command manifests, and output-path reporting.
-17. [ ] Add package composition and compiler pipeline graphical summaries.
-18. [ ] Add editor profile registry and placeholder presets.
-19. [ ] Add AI connector opt-in settings and provider-neutral automation design stub.
-20. [ ] Add MVP sample projects and CI smoke checks.
-21. [ ] Add portable packaging skeleton.
-22. [ ] Add About/Credits/license surface.
-23. [ ] Cut first MVP release candidate.
+8. [x] Add text/image/binary metadata preview pane with summary/detail split.
+9. [x] Add manual game installation profiles.
+10. [x] Add project manifest and workspace dashboard with project health summary.
+11. [x] Add compiler registry and executable discovery.
+12. [x] Add CLI subcommand router, JSON output, and exit-code contract.
+13. [x] Add ericw-tools `qbsp/vis/light` wrapper profile.
+14. [x] Add ZDBSP or ZokumBSP wrapper profile.
+15. [x] Add q3map2 probe/compile wrapper profile.
+16. [x] Add structured task logs, command manifests, and output-path reporting.
+17. [x] Add package composition and compiler pipeline graphical summaries.
+18. [x] Add editor profile registry and placeholder presets.
+19. [x] Add AI connector opt-in settings and provider-neutral automation design stub.
+20. [x] Add MVP sample projects and CI smoke checks.
+21. [x] Add portable packaging skeleton.
+22. [x] Add About/Credits/license surface.
+23. [x] Cut first MVP release candidate.

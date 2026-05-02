@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "projectId": "sample-quake-minimal",
+  "displayName": "Sample Quake Minimal",
+  "sourceFolders": [
+    "maps",
+    "scripts"
+  ],
+  "packageFolders": [
+    "packages"
+  ],
+  "outputFolder": "out",
+  "tempFolder": ".vibestudio/cache",
+  "selectedInstallationId": "",
+  "createdUtc": "2026-04-30T00:00:00Z",
+  "updatedUtc": "2026-04-30T00:00:00Z"
+}

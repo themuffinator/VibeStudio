@@ -83,3 +83,45 @@ jobs:
           python scripts/validate_build.py
           --binary "builddir/src/vibestudio"
           --expected-version "$(cat VERSION)"
+
+      - name: Validate Sample Projects (Windows)
+        if: matrix.os == 'windows-latest'
+        shell: pwsh
+        run: >
+          python scripts/validate_samples.py
+          --binary "builddir/src/vibestudio.exe"
+
+      - name: Validate Sample Projects (Unix)
+        if: matrix.os != 'windows-latest'
+        shell: bash
+        run: >
+          python scripts/validate_samples.py
+          --binary "builddir/src/vibestudio"
+
+      - name: Validate Portable Package Skeleton (Windows)
+        if: matrix.os == 'windows-latest'
+        shell: pwsh
+        run: >
+          python scripts/validate_packaging.py
+          --binary "builddir/src/vibestudio.exe"
+
+      - name: Validate Portable Package Skeleton (Unix)
+        if: matrix.os != 'windows-latest'
+        shell: bash
+        run: >
+          python scripts/validate_packaging.py
+          --binary "builddir/src/vibestudio"
+
+      - name: Validate Release Assets (Windows)
+        if: matrix.os == 'windows-latest'
+        shell: pwsh
+        run: >
+          python scripts/validate_release_assets.py
+          --binary "builddir/src/vibestudio.exe"
+
+      - name: Validate Release Assets (Unix)
+        if: matrix.os != 'windows-latest'
+        shell: bash
+        run: >
+          python scripts/validate_release_assets.py
+          --binary "builddir/src/vibestudio"

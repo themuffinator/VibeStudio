@@ -1,0 +1,6 @@
+// Minimal Quake III-family placeholder map for command planning.
+// This file is intentionally not a production-ready map.
+{
+"classname" "worldspawn"
+"message" "VibeStudio Q3 Sample"
+}

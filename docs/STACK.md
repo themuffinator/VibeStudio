@@ -20,16 +20,16 @@ rendering portability, source editing, media handling, search, or automation.
 | Rich animated surfaces | [Qt Quick/QML](https://doc.qt.io/qt-6/qtquick-index.html) | Planned, bounded | Use for contained high-value surfaces only, such as onboarding, visual status views, or graph-like experiences. Do not rewrite the shell around QML without a migration plan. |
 | Build system | [Meson](https://mesonbuild.com/) + [Ninja](https://ninja-build.org/) | Active | Fast, readable, cross-platform, and suitable for CI. |
 | Automation | Python scripts + GitHub Actions | Active | Good fit for validation, release helpers, documentation checks, and CI orchestration. |
-| Project manifests | JSON | Planned | Human-readable, easy to diff, scriptable, and already natural for CLI output. |
-| User settings | Qt `QSettings` plus project overrides | Active/planned | Application shell settings, recent projects, and accessibility/language preferences use `QSettings`; project-local override support is planned. |
+| Project manifests | JSON | Active | Human-readable `.vibestudio/project.json` manifests store roots, folders, timestamps, selected install IDs, project-local overrides, compiler executable overrides, and registered compiler outputs. |
+| User settings | Qt `QSettings` plus project overrides | Active | Application shell settings, recent projects, recent terminal activity, editor profile selection, accessibility/language preferences, installation profiles, and project-local overrides are active. |
 | Accessibility | [Qt Accessibility](https://doc.qt.io/qt-6/accessible.html), OS accessibility settings, accessible custom widgets | Active/planned | Shell preference storage and accessible control metadata are active; deeper workflow audits and custom-widget coverage are planned. |
 | Scaling | [Qt High DPI](https://doc.qt.io/qt-6/highdpi.html), layout-driven UI, app text scale preferences | Active/planned | Shell text scale presets are active; broader high-DPI and layout smoke coverage is planned. |
 | Text to speech | [Qt TextToSpeech](https://doc.qt.io/qt-6/qttexttospeech-index.html) | Planned optional module | TTS enablement preference is active; native OS speech playback for task summaries, diagnostics, setup guidance, and warnings is planned. |
 | Localization | [Qt internationalization](https://doc.qt.io/qt-6/internationalization.html), Qt Linguist, `QTranslator`, `QLocale` | Active/planned | Locale preference storage and `QLocale` formatting are active; translation catalogs, pseudo-localization, and RTL validation are planned. |
 | Asset index/search | [SQLite](https://sqlite.org/) through [Qt SQL](https://doc.qt.io/qt-6/qtsql-index.html), with [FTS5](https://sqlite.org/fts5.html) where available | Planned | Lightweight local database for project metadata, dependencies, search, diagnostics, and recent activity. |
-| CLI parser | [CLI11](https://github.com/CLIUtils/CLI11) | Planned | Modern C++ parser with subcommands, validation, help output, and JSON-friendly command design. |
-| Task execution | Qt `QProcess`, thread pools, futures, signals, and a VibeStudio task model | Active/planned | The reusable operation-state model and shell activity center are active; process execution, futures, and long-running service integration are planned. |
-| Package/archive layer | PakFu-derived C++ services plus focused format readers | Active/planned | Package/archive interfaces, virtual path safety, and read-only folder, PAK, WAD, ZIP, and PK3 entry readers are active; preview, extract, and write-back support are planned next. |
+| CLI parser | Lightweight Qt `QStringList` router with in-process command registry; [CLI11](https://github.com/CLIUtils/CLI11) deferred | Active | Current router keeps project/package/install/compiler/AI/credits subcommands dependency-free with JSON output, quiet/verbose/watch/task-state switches, stable exit codes, and testable command metadata through `cli commands`; CLI11 remains deferred until shell completion and broader validation justify the dependency. |
+| Task execution | Qt `QProcess`, threads, signals, and a VibeStudio task model | Active/planned | The reusable operation-state model, shell activity center, compiler process runner, captured logs, cancellation plumbing, and run manifests are active; broader thread-pool/future integration is planned. |
+| Package/archive layer | PakFu-derived C++ services plus focused format readers | Active/planned | Package/archive interfaces, virtual path safety, read-only folder/PAK/WAD/ZIP/PK3 entry readers, text/image/binary metadata previews, and safe extraction reports are active; write-back support is planned later. |
 | 2D editor rendering | Custom Qt Widgets, `QPainter`, and Qt Graphics View where useful | Planned | Fast path to responsive map views, sprite/texture surfaces, overlays, and inspectable editor state. |
 | Early 3D preview | Qt `QOpenGLWidget` behind a renderer interface | Planned | Acceptable for MVP preview work while keeping the future backend replaceable. |
 | Long-term 3D rendering | [bgfx](https://bkaradzic.github.io/bgfx/overview.html) behind a renderer abstraction | Planned | Cross-platform renderer backend for durable editor viewports across Direct3D, Metal, Vulkan, and OpenGL-style platforms. |
@@ -37,10 +37,10 @@ rendering portability, source editing, media handling, search, or automation.
 | Language services | LSP client architecture | Planned | Allows QuakeC, C/C++, shader/config helpers, and future language tools without hardwiring one parser model. |
 | Audio | Qt Multimedia first, [miniaudio](https://miniaud.io/) for low-level decode/playback/waveform gaps | Planned | Keeps basic playback simple while retaining a small portable fallback for editing-oriented audio tasks. |
 | Model formats | Native idTech loaders, optional [Assimp](https://www.assimp.org/) for adjacent import/export | Planned | Native loaders preserve game-format fidelity; Assimp expands interchange support without becoming the source of truth. |
-| AI connector layer | Provider-neutral HTTP/streaming connectors via Qt Network | Planned, optional core layer | Lets users route reasoning, coding, image, audio, voice, 3D, and agentic workflows through OpenAI, Claude, Gemini, ElevenLabs, Meshy, local/offline models, or future connectors. |
-| First AI provider | OpenAI API, using [Responses](https://platform.openai.com/docs/api-reference/responses) and [tools/function calling](https://developers.openai.com/api/docs/guides/tools) patterns | Planned, optional | Strong first path for reviewable tool calls, structured outputs, and agentic workflow experiments. |
+| AI connector layer | Provider-neutral connector/model metadata plus manifest-backed workflow experiments | Active experimental | Lets users route reasoning, coding, image, audio, voice, 3D, and agentic workflows through OpenAI, Claude, Gemini, ElevenLabs, Meshy, local/offline models, or future connectors while keeping credentials redacted and outputs staged. |
+| First AI provider | OpenAI connector scaffold, with future provider calls following [Responses](https://platform.openai.com/docs/api-reference/responses) and [tools/function calling](https://developers.openai.com/api/docs/guides/tools) patterns | Active experimental | OpenAI is implemented for configuration, credential discovery, model routing, safe tool descriptors, and no-write first experiments; network invocation remains opt-in future work. |
 | Tests | Meson tests, Qt Test, focused executable tests, parser fixtures, and later fuzzing | Active/planned | Scales from smoke tests to parser safety, CLI parity, package safety, and editor regression coverage. |
-| Packaging | PakFu-style scripts, Qt deployment tools, GitHub Actions artifacts | Planned | Produces portable packages while keeping license bundles and credits explicit. |
+| Packaging | PakFu-style scripts, Qt deployment tools, GitHub Actions artifacts | MVP package gate active, deployment planned | The active scripts stage Windows, macOS, and Linux portable release directories/zips with binary, docs, generated offline guide, checksums, samples, manifests, and license bundles; Qt deployment and signing remain planned. |
 
 ## Core Application Stack
 
@@ -64,8 +64,9 @@ their upstream build systems until a wrapper or import strategy is documented.
 The shell should use Qt Widgets, model/view classes, custom widgets, icons,
 dockable panes, persistent layouts, and reusable status/detail components. The
 active shell includes a reusable `LoadingPane` for pane and preview loading
-states and a reusable `DetailDrawer` for logs, metadata, manifests, raw
-diagnostics, and support-copy text.
+states, a reusable `DetailDrawer` for logs, metadata, manifests, raw
+diagnostics, and support-copy text, and compact graphical summaries for project
+health, package composition, and compiler pipeline readiness.
 
 The UX stack must directly support the project philosophies:
 
@@ -113,10 +114,45 @@ and validate them through both GUI and CLI paths.
 
 Use Qt `QSettings` for application settings and store project-specific
 overrides under the project root. The active settings slice persists shell
-geometry/state, selected mode, recent project folders, first-run setup
-progress, locale, theme, text scale, UI density, reduced motion, and OS-backed
-TTS preference through shared GUI/CLI services. Settings must be exportable
-enough for support and issue reports without exposing secrets.
+geometry/state, selected mode, recent project folders, recent terminal activity
+records, first-run setup progress, locale, theme, text scale, UI density,
+reduced motion, OS-backed TTS, selected editor profile, manual game
+installation profiles, and the current project path through shared GUI/CLI
+services. Settings must be exportable enough for support and issue reports
+without exposing secrets.
+
+Project manifests use `.vibestudio/project.json` at the project root. The active
+schema stores a version, project ID, display name, source folders, package
+folders, output/temp folders, optional selected installation ID, project-local
+settings overrides, compiler executable search paths/overrides, registered
+compiler outputs, and timestamps. The workspace dashboard and CLI project
+reports build a summary-first health view from this manifest.
+
+Editor profiles are currently registry-backed placeholder presets with a
+settings-backed global selection. The active schema records layout, camera,
+selection, grid, terminology, default panels, workflow notes, and reserved
+bindings for the VibeStudio default, GtkRadiant 1.6.0-style, NetRadiant
+Custom-style, TrenchBroom-style, and QuArK-style workflows. Real editor command
+routing, camera behavior, and per-project overrides remain planned.
+
+Game installation profiles are currently settings-backed. They keep a stable
+profile ID, game key, engine-family default, root path, optional executable,
+package path hints, palette/compiler defaults, read-only state, and read-only
+validation results. Steam/GOG detection produces unsaved candidates that the
+GUI can import after confirmation and the CLI can report with `install detect`;
+source-port detection remains planned.
+
+Compiler registry data is now modeled as descriptors over imported compiler
+submodules, expected executable names/build paths, capability flags, user
+executable overrides, and project-local executable overrides. Discovery checks
+source directories, known build-output paths, extra search paths, overrides,
+and PATH, and registry reports can run short version/help probes. ericw-tools
+`qbsp`, `vis`, and `light`, ZDBSP/ZokumBSP node-builder profiles, and q3map2
+probe/BSP profiles can produce command plans with arguments, working directory,
+expected output, warnings, and readiness. Plans and runs emit
+schema-versioned JSON command manifests with command/environment details,
+duration, exit code, hashes, stdout/stderr, diagnostics, task-log entries, and
+registered outputs.
 
 Use SQLite for the project asset index once package browsing and installation
 profiles move beyond in-memory MVP structures. The index should cover mounted
@@ -132,14 +168,19 @@ eligibility, and timestamped logs. Future package, compiler, validation, AI,
 and export services should emit through this model instead of inventing local
 task status enums.
 
-Use the package/archive layer for package metadata and read-only browsing. The
+Use the package/archive layer for package metadata, read-only browsing, and
+safe extraction. The
 active slice defines stable descriptors and readers for folder, PAK, WAD, ZIP,
 and PK3 package formats; shared package entry metadata; mount-layer session
 state; safe normalized virtual paths; traversal rejection; and output-path
-joining that proves extraction targets remain under the chosen root. This layer
-is adapted from PakFu's archive surface and credited in `docs/CREDITS.md`;
-future preview, extraction, and write-back services should build on it instead
-of duplicating path safety rules per format.
+joining that proves extraction targets remain under the chosen root. The
+package preview and extraction slices now build on those readers for text
+samples, basic image format/dimension metadata, binary hex summaries, GUI
+composition buckets by entry type and byte size, selected/all extraction,
+dry-run output reporting, cancellation-aware GUI progress, and CLI validation.
+This layer is adapted from PakFu's archive surface and credited in
+`docs/CREDITS.md`; future write-back services should build on it instead of
+duplicating path safety rules per format.
 
 ## Accessibility, Localization, And Setup Stack
 
@@ -169,12 +210,19 @@ then leave those choices editable.
 
 ## CLI Stack
 
-Use CLI11 for the full command-line interface. The CLI is a first-class product
-surface, not a debug afterthought.
+Use the active lightweight in-process router plus command registry for the
+command-line interface. The CLI is a first-class product surface, not a debug
+afterthought. It exposes project, package, installation, compiler, AI,
+credits, and registry commands with JSON output, stable exit codes, quiet and
+verbose modes, dry-run behavior, compiler watch streaming, machine-readable
+task state, and examples for PowerShell and POSIX shells. CLI11 remains
+deferred for the fuller parser/completion layer once that dependency earns its
+weight.
 
 CLI commands must call the same services as GUI actions. Output should support
-human text by default and `--json` for automation. Long-running commands should
-emit task state, progress, warnings, and reproducible manifests.
+human text by default and `--json` for automation. The active router exposes
+stable exit codes through `--exit-codes` and `cli exit-codes`. Long-running
+commands should emit task state, progress, warnings, and reproducible manifests.
 
 ## Text, Script, And IDE Stack
 
@@ -209,6 +257,15 @@ product architecture should be AI-native. VibeStudio should treat generative and
 agentic AI as a core acceleration layer that can plan, draft, explain, generate,
 validate, and repeat workflows through explicit VibeStudio tools.
 
+The active MVP slice stores global AI-free mode, cloud-connector opt-in,
+agentic-workflow opt-in, provider preferences, configurable model preferences,
+and redacted credential environment references without storing secrets. It
+also exposes provider-neutral connectors, models, credential status, safe
+AI-callable tools, and manifest-backed experiments through shared core
+services, the GUI inspector/preferences surface, CLI text/JSON, and smoke
+tests. OpenAI is the first implemented general-purpose connector scaffold;
+provider network integration remains opt-in future work.
+
 Use Qt Network and provider-specific HTTP/streaming adapters before introducing
 heavy SDK dependencies. The connector model should support OpenAI, Claude,
 Gemini, ElevenLabs, Meshy, local/offline models, and future community or studio
@@ -217,15 +274,18 @@ tool calls, vision, embeddings, image generation, audio generation,
 speech-to-text, voice, 3D asset generation, streaming, local execution, cost
 reporting, and privacy notes.
 
-OpenAI should be the first general-purpose connector. The initial model should
-follow the Responses API and tool-calling pattern so VibeStudio can expose a
-small, reviewable set of actions.
+OpenAI is the first general-purpose connector scaffold. Future networked
+provider calls should follow the Responses API and tool-calling pattern so
+VibeStudio can expose a small, reviewable set of actions.
 
-AI tools must route through normal services: project summary, package search,
-compiler profile listing, command proposal, staged text edits, diagnostics
-explanation, and manifest generation. AI must not write directly to project
-files, packages, compiler outputs, settings, or source trees without a preview
-and explicit user approval.
+AI tools must route through normal services: project summary, package metadata
+search, compiler profile listing, command proposal, staged text edits, staged
+asset generation requests, diagnostics explanation, and manifest generation.
+AI workflow manifests capture provider, model, prompt, context summary, tool
+calls, staged outputs, approval state, validation, cancellation/retry state, and
+cost/usage placeholders. AI must not write directly to project files, packages,
+compiler outputs, settings, or source trees without a preview and explicit user
+approval.
 
 AI-free mode must remain complete. Core editing, package management, compiler
 orchestration, validation, CLI use, and launching must work without API keys or
@@ -240,6 +300,12 @@ outputs, and exit state.
 
 VibeStudio-owned compiler orchestration should not depend on a GUI. Every
 compiler run must be reproducible from the CLI.
+The active wrapper slices define ericw-tools, Doom-family node-builder, and
+q3map2 command profiles with CLI command planning, manifest writing/loading,
+run/rerun execution, copyable command lines, output registration, and GUI
+readiness/run summaries by engine/stage. Process execution captures
+stdout/stderr, parsed diagnostics, duration, exit code, file hashes, and
+manifest records through the shared core runner.
 
 ## Testing And Quality Stack
 
@@ -248,6 +314,11 @@ for core services and parsers. Use Qt Test for Qt-specific behavior. Add fixture
 corpora for packages, maps, scripts, textures, audio, and models as support
 lands. Add fuzzing for untrusted binary/text parsers before write-back features
 become broad.
+
+The active sample-project slice keeps tiny license-clean Doom, Quake, and
+Quake III-family workspaces under `samples/projects`. `scripts/validate_samples.py`
+checks their manifests, package folders, and compiler command plans locally and
+in PR CI using the built CLI.
 
 Every new dependency must have:
 
@@ -261,6 +332,21 @@ Every new dependency must have:
 
 Use GitHub Actions and PakFu-style release scripting as the automation model.
 Package with Qt deployment tools and platform-specific wrappers as needed.
+
+The active packaging scripts are `scripts/package_portable.py`,
+`scripts/generate_offline_guide.py`, `scripts/validate_packaging.py`, and
+`scripts/validate_release_assets.py`, validated locally and in PR CI. They
+create versioned Windows, macOS, and Linux staging directories plus optional
+zips with the built binary, documentation, generated offline guide, platform
+smoke notes, samples, checksums, copied VibeStudio/imported-compiler license
+files, and schema-versioned package manifests. They do not yet run Qt
+deployment tools, bundle external compiler executables, sign artifacts, or
+publish release downloads.
+
+The active About/Credits/license surface is backed by structured metadata in
+`src/core/studio_manifest.*`, exposed through the GUI inspector and CLI
+`--about`/`about` commands, and points to `LICENSE`, `docs/CREDITS.md`,
+`docs/DEPENDENCIES.md`, and `docs/PACKAGING.md`.
 
 Every release artifact must include VibeStudio license text, third-party
 license files, compiler/toolchain attribution, and a generated credits bundle.

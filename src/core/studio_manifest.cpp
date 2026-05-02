@@ -104,9 +104,71 @@ QVector<CompilerIntegration> compilerIntegrations()
 	};
 }
 
+QVector<AboutDocument> aboutDocuments()
+{
+	return {
+		{
+			"license",
+			"Project License",
+			"LICENSE",
+			"GPLv3 license text for VibeStudio-owned code.",
+		},
+		{
+			"credits",
+			"Credits",
+			"docs/CREDITS.md",
+			"Project, PakFu lineage, compiler toolchain, editor inspiration, AI reference, accessibility, and community credits.",
+		},
+		{
+			"dependencies",
+			"Dependencies",
+			"docs/DEPENDENCIES.md",
+			"Required, planned, optional, imported, and service-integration dependency notes.",
+		},
+		{
+			"packaging",
+			"Packaging",
+			"docs/PACKAGING.md",
+			"Portable packaging skeleton, release packaging plan, and license bundle expectations.",
+		},
+	};
+}
+
 QString versionString()
 {
 	return QString::fromUtf8(VIBESTUDIO_VERSION);
+}
+
+QString githubRepository()
+{
+	return QString::fromUtf8(VIBESTUDIO_GITHUB_REPO);
+}
+
+QString updateChannel()
+{
+	return QString::fromUtf8(VIBESTUDIO_UPDATE_CHANNEL);
+}
+
+QString projectLicenseSummary()
+{
+	return QStringLiteral("VibeStudio-owned code is distributed under GPLv3. External compiler submodules and future third-party components retain their own licenses.");
+}
+
+QString aboutSurfaceText()
+{
+	QStringList lines;
+	lines << QStringLiteral("VibeStudio %1").arg(versionString());
+	lines << QStringLiteral("Repository: %1").arg(githubRepository());
+	lines << QStringLiteral("Update channel: %1").arg(updateChannel());
+	lines << QStringLiteral("License: %1").arg(projectLicenseSummary());
+	lines << QString();
+	lines << QStringLiteral("Credits and license documents:");
+	for (const AboutDocument& document : aboutDocuments()) {
+		lines << QStringLiteral("- %1 [%2]: %3").arg(document.title, document.path, document.description);
+	}
+	lines << QString();
+	lines << QStringLiteral("Imported compiler tools are separate submodules with their own upstream licenses; VibeStudio should invoke them as external tools until a documented source-level license review says otherwise.");
+	return lines.join('\n');
 }
 
 } // namespace vibestudio

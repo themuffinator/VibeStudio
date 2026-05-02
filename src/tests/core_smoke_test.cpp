@@ -37,5 +37,10 @@ int main(int argc, char** argv)
 		return EXIT_FAILURE;
 	}
 
+	if (vibestudio::aboutDocuments().size() < 4 || !vibestudio::aboutSurfaceText().contains(QStringLiteral("GPLv3"))) {
+		std::cerr << "About, credits, and license surface metadata is incomplete.\n";
+		return EXIT_FAILURE;
+	}
+
 	return EXIT_SUCCESS;
 }

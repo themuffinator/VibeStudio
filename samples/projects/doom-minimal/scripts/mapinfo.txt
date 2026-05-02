@@ -1,0 +1,2 @@
+map E1M1 "Sample Entry"
+next E1M2

@@ -45,19 +45,22 @@ profiles, compilers, AI connectors, CLI use, and workflow preferences.
 
 ### 3. Editor Familiarity
 
-- [ ] Choose level-editor profile: VibeStudio default, GtkRadiant 1.6.0-style,
+- [x] Choose level-editor profile: VibeStudio default, GtkRadiant 1.6.0-style,
   NetRadiant Custom-style, TrenchBroom-style, QuArK-style, or decide later.
-- [ ] Preview key differences: layout, camera, grid, selection, clipping,
+- [x] Preview key differences: layout, camera, grid, selection, clipping,
   shortcuts, and terminology.
 - [ ] Import or skip shortcut/profile files where supported later.
 
 ### 4. Game Installations
 
-- [ ] Auto-detect Steam, GOG, and common manual install locations.
+- [x] Auto-detect Steam and GOG install candidates.
+- [x] Let users skip game installation setup and resume it later.
 - [ ] Detect source ports where possible.
-- [ ] Let users add installs manually.
-- [ ] Validate expected packages/executables.
-- [ ] Let users mark installs as read-only, active, hidden, or later.
+- [x] Let users add installs manually.
+- [x] Validate expected packages/executables.
+- [x] Let users import detected candidates only after confirmation.
+- [x] Let users mark installs as read-only, active, hidden, or later in stored
+  profile data.
 
 ### 5. Projects And Packages
 
@@ -66,7 +69,7 @@ profiles, compilers, AI connectors, CLI use, and workflow preferences.
 - [ ] Create empty project.
 - [ ] Mount folders, WADs, PAKs, PK3s, and package roots.
 - [ ] Choose output, temp, backup, and export directories.
-- [ ] Explain project-local settings and portable project options.
+- [x] Explain and persist project-local settings overrides in the manifest.
 
 ### 6. Toolchains And Build
 
@@ -78,14 +81,14 @@ profiles, compilers, AI connectors, CLI use, and workflow preferences.
 
 ### 7. AI And Automation
 
-- [ ] Choose AI-free mode, configure later, or configure now.
-- [ ] Configure provider connectors: OpenAI, Claude, Gemini, ElevenLabs, Meshy,
+- [x] Choose AI-free mode, configure later, or configure now.
+- [x] Configure provider connectors: OpenAI, Claude, Gemini, ElevenLabs, Meshy,
   local/offline, or custom connector.
-- [ ] Choose preferred provider per capability when configured.
+- [x] Choose preferred provider per capability when configured.
 - [ ] Explain what project context may be sent to providers.
 - [ ] Configure consent, redaction, cost/usage display, and generated-asset
   provenance.
-- [ ] Enable or skip agentic workflows.
+- [x] Enable or skip agentic workflows.
 
 ### 8. CLI And Integration
 
@@ -102,7 +105,7 @@ profiles, compilers, AI connectors, CLI use, and workflow preferences.
 - [ ] Run optional smoke checks.
 - [ ] Save settings.
 - [ ] Offer export of setup profile.
-- [ ] Open workspace dashboard with detected next actions.
+- [x] Open workspace dashboard with detected next actions.
 
 ## Setup Profiles
 
@@ -123,16 +126,17 @@ Profile areas:
 ## MVP Acceptance
 
 - [x] First-run setup appears on a clean profile and can be skipped.
-- [ ] Accessibility/language choices are available before visual-heavy setup.
-- [ ] High-contrast and scaling choices apply immediately or after a clearly
-  explained restart.
-- [ ] Game installation setup supports auto-detect, manual add, skip, and later.
-- [ ] Editor profile selection is present even if only placeholders exist.
-- [ ] AI-free mode is visible and selectable.
-- [ ] OpenAI-first AI connector settings are represented without blocking
+- [x] Accessibility/language choices are available before visual-heavy setup.
+- [x] High-contrast and scaling choices apply immediately through the shared
+  preferences path.
+- [x] Game installation setup supports auto-detect, manual add, skip, and later.
+- [x] Editor profile selection is present even if only placeholders exist.
+- [x] AI-free mode is visible and selectable.
+- [x] OpenAI-first AI connector settings are represented without blocking
   non-OpenAI connector design.
-- [ ] Setup summary explains incomplete, skipped, failed, and successful steps.
-- [ ] Setup choices are editable in preferences after completion.
+- [x] Setup summary explains incomplete, skipped, failed, successful, warning,
+  install, toolchain, AI, and CLI states.
+- [x] Setup choices are editable in preferences after completion.
 
 ## Current Scaffold Slice
 
@@ -144,7 +148,10 @@ same state is available from the CLI through `--setup-report`,
 `--setup-start`, `--setup-step`, `--setup-next`, `--setup-skip`,
 `--setup-complete`, and `--setup-reset`.
 
-The full guided setup flow remains planned. Game installation detection,
-toolchain probing, editor profile selection, AI connector configuration, TTS
-test playback, and project/package mounting are represented as setup steps or
-warnings until their dedicated roadmap slices land.
+The full guided setup flow remains planned. Steam/GOG game installation
+detection, manual install profiles, editor profile selection, language/theme/
+scale/density/reduced-motion/TTS preferences, AI connector preference storage,
+CLI setup reports, and setup summaries are active scaffold slices. Source-port
+detection, live TTS playback, deeper project/package mounting, and richer
+toolchain probes remain represented as setup steps, preferences, release smoke
+checks, or warnings until their dedicated roadmap slices land.

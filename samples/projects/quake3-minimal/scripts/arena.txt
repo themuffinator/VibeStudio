@@ -1,0 +1,5 @@
+{
+  map "sample_q3"
+  longname "VibeStudio Sample"
+  type "ffa"
+}

@@ -272,6 +272,55 @@ int main()
 	ok &= expect(archive.readEntryBytes(QStringLiteral("textures/wall.txt"), &bytes, &error), "folder entry bytes should read");
 	ok &= expect(bytes == QByteArray("wall"), "folder entry bytes mismatch");
 
+	QTemporaryDir extractionRoot;
+	ok &= expect(extractionRoot.isValid(), "extraction output root should be valid");
+	PackageExtractionRequest dryRunRequest;
+	dryRunRequest.targetDirectory = QDir(extractionRoot.path()).filePath(QStringLiteral("dry-run"));
+	dryRunRequest.virtualPaths = {QStringLiteral("textures/wall.txt")};
+	dryRunRequest.dryRun = true;
+	PackageExtractionReport dryRunReport = extractPackageEntries(archive, dryRunRequest);
+	ok &= expect(dryRunReport.succeeded(), "dry-run extraction should succeed");
+	ok &= expect(dryRunReport.entries.size() == 1, "dry-run extraction should report one entry");
+	ok &= expect(!dryRunReport.entries.front().outputPath.isEmpty(), "dry-run extraction should report output path");
+	ok &= expect(!QFileInfo::exists(dryRunReport.entries.front().outputPath), "dry-run extraction should not write output file");
+	ok &= expect(packageExtractionReportText(dryRunReport).contains(QStringLiteral("would write")), "dry-run report should describe staged write");
+
+	PackageExtractionRequest extractRequest;
+	extractRequest.targetDirectory = QDir(extractionRoot.path()).filePath(QStringLiteral("actual"));
+	extractRequest.virtualPaths = {QStringLiteral("textures/wall.txt")};
+	PackageExtractionReport extractReport = extractPackageEntries(archive, extractRequest);
+	ok &= expect(extractReport.succeeded(), "selected extraction should succeed");
+	ok &= expect(extractReport.writtenCount == 1, "selected extraction should write one entry");
+	ok &= expect(extractReport.entries.size() == 1, "selected extraction should report one output entry");
+	ok &= expect(packagePathIsInsideDirectory(extractRequest.targetDirectory, extractReport.entries.front().outputPath), "reported output should stay under extraction root");
+	ok &= expect(QFileInfo::exists(extractReport.entries.front().outputPath), "selected extraction should create output file");
+	QFile extractedFile(extractReport.entries.front().outputPath);
+	ok &= expect(extractedFile.open(QIODevice::ReadOnly), "extracted file should open");
+	ok &= expect(extractedFile.readAll() == QByteArray("wall"), "extracted file bytes mismatch");
+
+	PackageExtractionReport noOverwriteReport = extractPackageEntries(archive, extractRequest);
+	ok &= expect(noOverwriteReport.succeeded(), "no-overwrite extraction should not fail");
+	ok &= expect(noOverwriteReport.skippedCount == 1, "no-overwrite extraction should skip existing output");
+	ok &= expect(packageExtractionReportText(noOverwriteReport).contains(QStringLiteral("skipped")), "no-overwrite report should include skip state");
+
+	PackageExtractionRequest treeRequest;
+	treeRequest.targetDirectory = QDir(extractionRoot.path()).filePath(QStringLiteral("tree"));
+	treeRequest.virtualPaths = {QStringLiteral("textures")};
+	treeRequest.dryRun = true;
+	PackageExtractionReport treeReport = extractPackageEntries(archive, treeRequest);
+	ok &= expect(treeReport.succeeded(), "directory extraction dry-run should succeed");
+	ok &= expect(treeReport.requestedCount >= 2, "directory extraction should include subtree entries");
+
+	PackageExtractionRequest cancelRequest;
+	cancelRequest.targetDirectory = QDir(extractionRoot.path()).filePath(QStringLiteral("cancelled"));
+	cancelRequest.extractAll = true;
+	cancelRequest.dryRun = true;
+	PackageExtractionReport cancelledReport = extractPackageEntries(archive, cancelRequest, [](const PackageExtractionEntryResult&, const PackageExtractionReport&) {
+		return false;
+	});
+	ok &= expect(cancelledReport.cancelled, "extraction callback should be able to cancel");
+	ok &= expect(!cancelledReport.succeeded(), "cancelled extraction should not report success");
+
 	const QString pakPath = packageDir.filePath(QStringLiteral("tiny.pak"));
 	ok &= expect(writeFile(pakPath, pakFixture()), "PAK fixture should be written");
 	ok &= expect(archive.load(pakPath, &error), "PAK fixture should load");

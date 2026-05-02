@@ -1,7 +1,7 @@
 # VibeStudio
 
 <p align="center">
-  <a href="VERSION"><img alt="Version" src="https://img.shields.io/badge/version-0.0.0-0A66C2?style=for-the-badge"></a>
+  <a href="VERSION"><img alt="Version" src="https://img.shields.io/badge/version-0.1.0-rc1-0A66C2?style=for-the-badge"></a>
   <img alt="Development Stage" src="https://img.shields.io/badge/stage-extremely%20early%20pre--alpha-B85C00?style=for-the-badge">
   <a href="#tech-stack"><img alt="Tech Stack" src="https://img.shields.io/badge/stack-C%2B%2B20%20%7C%20Qt6%20Widgets-00599C?style=for-the-badge"></a>
   <a href="#build-and-run"><img alt="Build" src="https://img.shields.io/badge/build-Meson%20%2B%20Ninja-4C8EDA?style=for-the-badge"></a>
@@ -48,7 +48,7 @@ of Doom, Quake, Quake II, and Quake III-era games.
 </details>
 
 ## Overview
-- Current version: `0.0.0` (see `VERSION`).
+- Current version: `0.1.0-rc1` (see `VERSION`).
 - Cross-platform targets: Windows, macOS, Linux.
 - Build system: Meson + Ninja.
 - UI framework: Qt6 Widgets.
@@ -78,8 +78,34 @@ What exists today:
   paths, path traversal checks, safe output-path joining, and mount-layer
   session metadata.
 - Basic read-only package browsing for folders, PAK, WAD, ZIP, and PK3:
-  entry metadata, filtering, detail drawers, activity-center scan tasks, and
-  CLI `--info`/`--list` coverage.
+  tree and entry-list browsing, filtering, text/image/binary metadata previews,
+  detail drawers, activity-center scan/extract tasks, safe selected/all
+  extraction with exact output paths, and CLI `--info`/`--list`/preview/
+  extract/validate coverage.
+- Manual game installation profiles with stable IDs, game keys, engine-family
+  defaults, read-only validation, GUI management, confirmable Steam/GOG
+  candidate detection/import, and CLI report/add/select/validate/remove/detect
+  coverage.
+- Project manifest scaffolding with `.vibestudio/project.json`, current-project
+  persistence, project-local settings overrides, a workspace dashboard health
+  summary, and CLI project init/info/validate coverage.
+- Workspace workbench panels for project problems, search across project files
+  and mounted package entries, Git changed/staged files, dependency graph
+  placeholders, recent activity, reveal-in-folder, and copy-virtual-path
+  actions.
+- Compiler registry and executable discovery for imported ericw-tools, q3map2,
+  ZDBSP, and ZokumBSP tool descriptors, plus ericw-tools `qbsp`/`vis`/`light`,
+  Doom-family node-builder, and q3map2 probe/BSP wrapper profiles that produce
+  reviewable command plans, structured task-log entries, expected output paths,
+  schema-versioned command manifests, user/project executable overrides,
+  captured stdout/stderr, parsed diagnostics, run/rerun CLI execution, and
+  project output registration.
+- CLI subcommand router for the first project, package, installation, and
+  compiler command families, with JSON output for automation and a documented
+  stable exit-code contract.
+- Portable release packaging scripts for Windows, macOS, and Linux target
+  bundles with generated offline guide, platform smoke notes, checksums,
+  samples, package manifests, and VibeStudio/imported-compiler license bundle.
 - Minimal CLI diagnostics for version, platform, planned modules, and compiler
   import metadata, plus settings, setup, preference, recent-project,
   operation-state, UI-primitive, package-interface, and package-browsing
@@ -88,12 +114,10 @@ What exists today:
 - Early CI/build validation.
 
 What does not exist yet:
-- Package editing, extraction, previews, and write-back.
+- Package editing, write-back, package diffing, and save-as.
 - Level, model, texture, audio, sprite, shader, code, or script editors.
-- Game installation management.
-- Compiler orchestration UI.
 - Full CLI parity.
-- AI connector implementation.
+- Provider network execution for AI connectors.
 - Full guided first-run setup, full accessibility audits, or localization
   runtime.
 - Production-ready workflows of any kind.
@@ -129,14 +153,33 @@ matrix mark it implemented.
 The current scaffold includes:
 - A Meson/Qt6 C++20 app target named `vibestudio`.
 - A small but working Qt Widgets studio shell.
-- A CLI diagnostics surface for version, platform, planned modules, and compiler imports.
+- A CLI surface for version/platform diagnostics, project/package/compiler
+  workflows, AI experiments, credits validation, JSON output, quiet/verbose
+  modes, watch streaming, and task-state automation.
 - Reusable shell UI primitives for loading/progress placeholders and
   detail-on-demand logs or metadata.
 - A small shared package/archive interface layer adapted from PakFu's archive
   surface, including safe normalized virtual paths and read-only reader behavior.
 - Read-only folder, PAK, WAD, ZIP, and PK3 entry listing through shared core
-  services used by both GUI and CLI.
-- CI workflows for cross-platform build/test and submodule verification.
+  services used by both GUI and CLI, plus path-safe extraction for selected
+  entries or entire packages.
+- Summary-first graphical shell views for project health, package composition
+  by type/size, and compiler pipeline profile readiness.
+- A data-driven editor profile registry with placeholder presets for
+  VibeStudio default, GtkRadiant 1.6.0-style, NetRadiant Custom-style,
+  TrenchBroom-style, and QuArK-style workflows.
+- AI-free-by-default settings, provider-neutral connector/model metadata,
+  redacted credential discovery, safe AI-callable tool descriptors, and
+  manifest-backed first experiments with OpenAI as the first implemented
+  connector scaffold plus Claude, Gemini, ElevenLabs, Meshy, local/offline, and
+  custom connector paths.
+- Tiny license-clean sample projects for Doom, Quake, and Quake III-family
+  smoke checks.
+- A portable packaging skeleton that stages the built binary, docs, credits,
+  licenses scaffold, samples, and a package manifest.
+- An About/Credits/license surface shared by the GUI inspector and CLI.
+- CI workflows for cross-platform build/test, sample validation, packaging
+  skeleton validation, and submodule verification.
 - Documentation for architecture, compiler integration, installation management, support scope, dependencies, roadmap, and credits.
 - External compiler imports preserved as Git submodules.
 
@@ -211,20 +254,41 @@ Windows:
 Usage:
 ```text
 vibestudio --cli [options]
+vibestudio --cli [--json] <family> <command> [arguments]
 ```
 
 Current scaffold commands:
 - `--version`: print the application version.
 - `--help`: print CLI help.
+- `--json`: emit machine-readable JSON for supported command families.
+- `--exit-codes`: print stable exit-code identifiers and meanings.
 - `--studio-report`: print planned studio modules.
 - `--compiler-report`: print imported compiler metadata.
+- `--compiler-registry`: print compiler registry and executable discovery.
 - `--platform-report`: print platform and Qt runtime details.
+- `--project-init <path>`: create or refresh `.vibestudio/project.json`.
+- `--project-info <path>`: print project manifest and health summary.
+- `--project-validate <path>`: validate project health and return a stable
+  validation exit code for blocking issues.
+- `--project-installation <id>` / `--project-editor-profile <id>` /
+  `--project-palette <id>` / `--project-compiler-profile <id>` /
+  `--project-compiler-search-paths <paths>` /
+  `--project-compiler-tool <id> --project-compiler-executable <path>` /
+  `--project-ai-free <on|off>`: set project-local overrides while refreshing a
+  manifest.
 - `--operation-states`: print reusable operation state identifiers.
 - `--ui-primitives`: print reusable UI primitive identifiers and use cases.
 - `--package-formats`: print package/archive interface descriptors.
 - `--check-package-path <path>`: normalize and validate a package virtual path.
 - `--info <path>`: print read-only package summary for a folder, PAK, WAD, ZIP, or PK3.
 - `--list <path>`: list package entries and metadata.
+- `--preview-package <path> --preview-entry <virtual-path>`: print a text,
+  image metadata, or binary hex preview for a package entry.
+- `--extract <path> --output <folder> [--extract-entry <virtual-path>]`:
+  extract selected entries, or every entry when no entry is passed.
+- `--extract-all` / `--dry-run` / `--overwrite`: control package extraction
+  scope, staged output reporting, and explicit replacement behavior.
+- `--validate-package <path>`: validate package loading and report warnings.
 - `--settings-report`: print persistent settings storage and recent projects.
 - `--setup-report`: print first-run setup status and summary.
 - `--setup-start`: start or resume first-run setup.
@@ -241,12 +305,71 @@ Current scaffold commands:
 - `--set-density <id>`: set `comfortable`, `standard`, or `compact`.
 - `--set-reduced-motion <on|off>`: store the reduced-motion preference.
 - `--set-tts <on|off>`: store the OS-backed text-to-speech preference.
+- `--installations-report`: print saved manual game installation profiles.
+- `--add-installation <root>`: add or update a manual installation profile.
+- `--install-game <key>` / `--install-engine <id>` / `--install-name <name>`:
+  refine the profile created by `--add-installation`.
+- `--select-installation <id>`: mark a saved installation profile as selected.
+- `--validate-installation <id>`: validate a saved profile read-only.
+- `--remove-installation <id>`: remove a saved profile without touching files.
+- `--detect-installations [--detect-install-root <path>]`: scan common Steam
+  and GOG roots plus optional explicit roots for confirmable candidates without
+  saving profiles.
 - `--recent-projects`: print remembered project folders.
 - `--add-recent-project <path>`: remember a project folder.
 - `--remove-recent-project <path>`: forget a project folder without touching
   files.
 - `--clear-recent-projects`: clear remembered project folders without touching
   project files.
+
+Current subcommands:
+- `cli exit-codes`: print the exit-code contract.
+- `project init <path> [--installation <id>] [--editor-profile <id>]`: create
+  or refresh a project manifest and optional project-local overrides.
+- `project info <path>`: print project manifest and health summary.
+- `project validate <path>`: validate project health and return
+  `validation-failed` for blocking issues.
+- `install list`: list saved manual game installation profiles.
+- `install detect [--root <path>]`: detect Steam/GOG candidates read-only
+  without saving profiles.
+- `package info <path>` / `package list <path>`: inspect a folder, PAK, WAD,
+  ZIP, or PK3 package.
+- `package preview <path> <virtual-path>`: preview one package entry.
+- `package extract <path> --output <folder> [--entry <virtual-path>]`: extract
+  one or more entries, or all entries when no entry is supplied.
+- `package validate <path>`: validate package loading and return
+  `validation-failed` when loader warnings are present.
+- `compiler list`: print compiler registry and executable discovery.
+- `compiler profiles`: list wrapper profiles, currently ericw-tools
+  `qbsp`/`vis`/`light`, ZDBSP nodes, ZokumBSP nodes, and q3map2 probe/BSP
+  plans.
+- `compiler set-path <tool> --executable <path>` / `compiler clear-path <tool>`:
+  manage user-configured compiler executable overrides.
+- `compiler plan <profile> --input <path>`: build a reviewable compiler command
+  plan. Optional flags include `--output <path>`, `--extra-args "<args>"`, and
+  `--workspace-root <path>`.
+- `compiler manifest <profile> --input <path>`: print or write a
+  schema-versioned command manifest. Add `--manifest <path>` to save JSON.
+- `compiler run <profile> --input <path>`: execute a profile through the shared
+  runner, capture stdout/stderr, diagnostics, hashes, duration, and exit code,
+  stream `--watch` task logs, emit `--task-state` JSON, and optionally write
+  `--manifest <path>` and `--register-output`.
+- `compiler rerun <manifest-path>`: re-run a saved command manifest.
+- `compiler copy-command <manifest-path|profile>`: print a reproducible command
+  line for support, automation, or CI.
+- `credits validate`: validate README and `docs/CREDITS.md` coverage for core
+  borrowed lineage and compiler imports.
+- `ai tools`: list safe AI-callable VibeStudio tool descriptors.
+- `ai explain-log --log <path>|--text <text>`: explain compiler output as a
+  no-write workflow manifest.
+- `ai propose-command --prompt <text>`: propose a reviewable compiler command
+  from natural language.
+- `ai propose-manifest <project-root>`: draft a project manifest preview without
+  writing it.
+- `ai package-deps <package>`: suggest likely missing package dependencies from
+  metadata.
+- `ai cli-command --prompt <text>`, `ai fix-plan`, `ai asset-request`, and
+  `ai compare`: generate staged, reviewable automation proposals.
 
 ## Documentation
 - [`AGENTS.md`](AGENTS.md): contributor and automation rules.
@@ -260,6 +383,8 @@ Current scaffold commands:
 - [`docs/EDITOR_PROFILES.md`](docs/EDITOR_PROFILES.md): adaptable level-editor layout and control profiles.
 - [`docs/GAME_INSTALLATIONS.md`](docs/GAME_INSTALLATIONS.md): installation detection and profile management plan.
 - [`docs/INITIAL_SETUP.md`](docs/INITIAL_SETUP.md): first-run setup and ecosystem tailoring flow.
+- [`docs/PACKAGING.md`](docs/PACKAGING.md): portable packaging skeleton and release packaging plan.
+- [`docs/RELEASE_CANDIDATE.md`](docs/RELEASE_CANDIDATE.md): current MVP release-candidate scope, gaps, and validation gate.
 - [`docs/ROADMAP.md`](docs/ROADMAP.md): metric-driven roadmap, MVP definition, and task checklist.
 - [`docs/STACK.md`](docs/STACK.md): preferred technology stack and stack decision rationale.
 - [`docs/SUPPORT_MATRIX.md`](docs/SUPPORT_MATRIX.md): initial format and workflow support target.
@@ -268,7 +393,7 @@ Current scaffold commands:
 
 ## Credits
 - Creator: [themuffinator](https://github.com/themuffinator) (DarkMatter Productions)
-- Structural and archive-tooling reference: [PakFu](https://github.com/themuffinator/PakFu), with the current package interface and virtual-path safety slice adapted from its `src/archive` surface at `c82dfb0ef0b5d7442e243ace8cd83bc45f82f257`.
+- Structural, archive-tooling, and installation-profile reference: [PakFu](https://github.com/themuffinator/PakFu), with the current package interface and virtual-path safety slice adapted from its `src/archive` surface at `c82dfb0ef0b5d7442e243ace8cd83bc45f82f257`; the game installation profile/detection model is a VibeStudio-owned adaptation of PakFu's profile-driven workflow ideas.
 - Imported compiler/toolchain sources: [ericw-tools](https://github.com/ericwa/ericw-tools), q3map2 from [NetRadiant Custom](https://github.com/Garux/netradiant-custom), [ZDBSP](https://github.com/rheit/zdbsp), and [ZokumBSP](https://github.com/zokum-no/zokumbsp)
 - Editor workflow inspirations: [GtkRadiant](https://github.com/TTimo/GtkRadiant), [NetRadiant Custom](https://github.com/Garux/netradiant-custom), [TrenchBroom](https://trenchbroom.github.io/), and [QuArK](https://quark.sourceforge.io/)
 - Optional AI automation references: [OpenAI API documentation](https://platform.openai.com/docs/quickstart), [Claude API docs](https://platform.claude.com/docs/en/home), [Gemini API docs](https://ai.google.dev/api), [ElevenLabs docs](https://elevenlabs.io/docs/overview/intro), and [Meshy docs](https://docs.meshy.ai/en)
@@ -286,12 +411,17 @@ section and `docs/CREDITS.md` in the same change.
 - Build: Meson + Ninja.
 - Automation: Python validation scripts and GitHub Actions.
 - Project data: JSON manifests, Qt settings, and planned SQLite/FTS indexing.
-- CLI: planned CLI11-backed first-class command surface shared with GUI services.
+- CLI: active lightweight subcommand router with testable command registry,
+  JSON output, stable exit codes, quiet/verbose modes, dry-run behavior, watch
+  streaming, task-state output, and deferred CLI11 adoption.
 - Rendering: Qt custom widgets/QPainter for 2D, thin QOpenGLWidget previews for MVP 3D, planned bgfx renderer backend for production viewports.
 - Text/IDE: Qt text widgets first, planned KSyntaxHighlighting, Tree-sitter, and LSP integration.
 - Media: native idTech parsers first, with planned Qt Multimedia, miniaudio, and optional Assimp support.
 - Accessibility/localization: Qt accessibility APIs, Qt High DPI behavior, Qt TextToSpeech, Qt Linguist/QTranslator, and QLocale.
-- AI automation: optional provider-neutral connector layer through Qt Network, with OpenAI first and planned Claude, Gemini, ElevenLabs, Meshy, local/offline, and custom connector paths.
+- AI automation: optional provider-neutral connector/model/workflow layer, with
+  OpenAI implemented first for configuration and reviewable no-write
+  experiments, and planned Claude, Gemini, ElevenLabs, Meshy, local/offline, and
+  custom connector paths.
 - External compiler imports: Git submodules.
 
 See [`docs/STACK.md`](docs/STACK.md) for the full stack decision record.

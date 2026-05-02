@@ -40,11 +40,21 @@ VibeStudio should expose a provider-neutral connector layer with capability
 flags instead of one-off integrations. Connectors may be built in, bundled,
 community-provided, or project-local where licensing and security allow.
 
+The MVP connector and workflow scaffold is active in `src/core/ai_connectors.*`
+and `src/core/ai_workflows.*`. It registers provider-neutral capability
+descriptors, connector descriptors, configurable model descriptors,
+credential-source redaction, safe AI-callable tools, workflow manifests, and
+opt-in settings used by the Qt preferences surface, inspector, CLI, settings
+storage, and smoke tests. OpenAI is the first implemented general-purpose
+connector scaffold for configuration, credential discovery, model routing, and
+manifest-backed experiments. Provider network calls remain opt-in future work;
+the current experiments are deterministic, reviewable, and do not write files.
+
 Initial connector targets:
 
 | Provider | Planned role |
 | --- | --- |
-| [OpenAI](https://platform.openai.com/docs/quickstart) | General reasoning, coding help, tool-calling workflows, project summarization, compiler-log explanation, multimodal assistance. |
+| [OpenAI](https://platform.openai.com/docs/quickstart) | Implemented scaffold for general reasoning, coding help, tool-calling workflows, project summarization, compiler-log explanation, model routing, and multimodal assistance. |
 | [Claude](https://platform.claude.com/docs/en/home) | Long-context reasoning, code and document review, agentic planning, script and shader assistance. |
 | [Gemini](https://ai.google.dev/api) | Multimodal reasoning, large-context project understanding, alternative model routing. |
 | [ElevenLabs](https://elevenlabs.io/docs/overview/intro) | Voice, narration, speech-to-text, sound effects, audio ideation, and audio pipeline experiments. |
@@ -82,49 +92,50 @@ calling tools, waiting for review, applying staged changes, running validation,
 completed, failed, or cancelled.
 
 ## Initial Experiments
-- [ ] Explain compiler errors and suggest likely fixes.
-- [ ] Generate q3map2, ericw-tools, ZDBSP, or ZokumBSP command presets from natural language.
-- [ ] Draft project manifests from an existing folder.
-- [ ] Suggest missing asset dependencies from package/project scans.
+- [x] Explain compiler errors and suggest likely fixes.
+- [x] Generate q3map2, ericw-tools, ZDBSP, or ZokumBSP command presets from natural language.
+- [x] Draft project manifests from an existing folder.
+- [x] Suggest missing asset dependencies from package/project scans.
 - [ ] Generate batch conversion recipes.
 - [ ] Draft shader-script scaffolds from a prompt.
 - [ ] Create entity definition snippets or documentation from selected assets.
 - [ ] Summarize package contents and potential release issues.
-- [ ] Generate CLI commands for a requested workflow.
-- [ ] Generate a supervised "fix and retry" plan for compiler failures.
-- [ ] Draft placeholder textures, sprites, sounds, voices, or models through
+- [x] Generate CLI commands for a requested workflow.
+- [x] Generate a supervised "fix and retry" plan for compiler failures.
+- [x] Draft placeholder textures, sprites, sounds, voices, or models through
   connector-specific providers when configured.
 - [ ] Convert user intent into a batch operation plan with cost, time, affected
   files, and rollback/staging notes.
-- [ ] Compare provider outputs for the same prompt where multiple connectors are configured.
+- [x] Compare provider outputs for the same prompt where multiple connectors are configured.
 
 ## Safety And UX
-- [ ] Require explicit opt-in and user-provided API configuration.
-- [ ] Provide global AI-free mode and project-level AI disablement.
-- [ ] Let users choose preferred providers per capability.
-- [ ] Show provider, model, estimated cost/usage where available, context sent,
+- [x] Require explicit opt-in before cloud or agentic AI settings are enabled.
+- [x] Provide global AI-free mode.
+- [x] Provide project-level AI disablement.
+- [x] Let users choose preferred providers per capability in the settings model.
+- [x] Show provider, model, estimated cost/usage where available, context sent,
   and generated artifacts for each AI task.
-- [ ] Provide a clear AI activity log.
+- [x] Provide a clear AI activity log.
 - [ ] Show source context sent to the provider before first use of a project.
-- [ ] Redact API keys and known secrets from logs.
-- [ ] Prefer staged changes and diffs over direct writes.
-- [ ] Let users copy prompts, responses, generated commands, and manifests.
-- [ ] Allow cancellation and retry for long-running agentic workflows.
-- [ ] Mark generated assets and text until accepted by the user.
-- [ ] Keep cloud-dependent features visually distinct from local deterministic actions.
+- [x] Redact API keys and known secrets from logs.
+- [x] Prefer staged changes and diffs over direct writes.
+- [x] Let users copy prompts, responses, generated commands, and manifests.
+- [x] Allow cancellation and retry for long-running agentic workflows.
+- [x] Mark generated assets and text until accepted by the user.
+- [x] Keep cloud-dependent features visually distinct from local deterministic actions.
 
 ## Architecture Direction
-- [ ] Add an AI connector abstraction with provider capability flags.
-- [ ] Implement OpenAI as the first general-purpose connector.
-- [ ] Add connector stubs/design notes for Claude, Gemini, ElevenLabs, Meshy, local/offline models, and custom HTTP/MCP-style connectors.
-- [ ] Use model-agnostic configuration rather than hard-coded model assumptions.
-- [ ] Add per-capability provider routing: reasoning, code, vision, image,
+- [x] Add an AI connector abstraction with provider capability flags.
+- [x] Implement OpenAI as the first general-purpose connector.
+- [x] Add connector stubs/design notes for Claude, Gemini, ElevenLabs, Meshy, local/offline models, and custom HTTP/MCP-style connectors.
+- [x] Use model-agnostic configuration rather than hard-coded model assumptions.
+- [x] Add per-capability provider routing: reasoning, code, vision, image,
   audio, voice, 3D, embeddings, and local/offline execution.
-- [ ] Add provider health, quota/cost, authentication, and rate-limit status where available.
-- [ ] Expose safe VibeStudio tools for project scanning, package metadata, compiler runs, text edits, and staged writes.
-- [ ] Capture AI request/response metadata in task logs without storing secrets.
-- [ ] Support CLI access for AI workflows where safe and useful.
-- [ ] Store AI workflow manifests for reproducibility: provider, model, prompt
+- [x] Add provider health, quota/cost, authentication, and rate-limit status where available.
+- [x] Expose safe VibeStudio tools for project scanning, package metadata, compiler runs, text edits, and staged writes.
+- [x] Capture AI request/response metadata in task logs without storing secrets.
+- [x] Support CLI access for AI status, connector/model/tool inspection, and first experiments.
+- [x] Store AI workflow manifests for reproducibility: provider, model, prompt
   template, selected context, tool calls, generated artifacts, approvals, and validation results.
 
 ## MVP Boundary

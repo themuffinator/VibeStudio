@@ -7,6 +7,7 @@
 #include <QFileInfo>
 #include <QSet>
 #include <QRegularExpression>
+#include <QSaveFile>
 #include <QTimeZone>
 
 #include <algorithm>
@@ -160,9 +161,83 @@ bool entryPathLess(const PackageEntry& left, const PackageEntry& right)
 	return left.virtualPath.compare(right.virtualPath, Qt::CaseInsensitive) < 0;
 }
 
+bool entryPathEquals(const QString& left, const QString& right)
+{
+	return left.compare(right, Qt::CaseInsensitive) == 0;
+}
+
 QString duplicateKey(const QString& path)
 {
 	return path.toCaseFolded();
+}
+
+void addExtractionResult(PackageExtractionReport* report, const PackageExtractionEntryResult& result)
+{
+	if (!report) {
+		return;
+	}
+
+	report->entries.push_back(result);
+	if (result.error.isEmpty()) {
+		++report->processedCount;
+	} else {
+		++report->errorCount;
+		report->warnings.push_back(result.virtualPath.isEmpty() ? result.error : QStringLiteral("%1: %2").arg(result.virtualPath, result.error));
+	}
+	if (result.kind == PackageEntryKind::Directory) {
+		++report->directoryCount;
+	}
+	if (result.written) {
+		++report->writtenCount;
+		report->totalBytes += result.bytes;
+	}
+	if (result.skipped) {
+		++report->skippedCount;
+		if (!result.message.isEmpty()) {
+			report->warnings.push_back(QStringLiteral("%1: %2").arg(result.virtualPath, result.message));
+		}
+	}
+}
+
+QVector<PackageEntry> selectedEntriesForExtraction(const QVector<PackageEntry>& entries, const QStringList& requestedPaths, PackageExtractionReport* report)
+{
+	QVector<PackageEntry> selected;
+	QSet<QString> selectedKeys;
+
+	for (const QString& requestedPath : requestedPaths) {
+		const PackageVirtualPath normalized = normalizePackageVirtualPath(requestedPath, false);
+		if (!normalized.isSafe()) {
+			PackageExtractionEntryResult result;
+			result.virtualPath = requestedPath;
+			result.error = QStringLiteral("Unsafe package path: %1").arg(packagePathIssueDisplayName(normalized.issue));
+			addExtractionResult(report, result);
+			continue;
+		}
+
+		bool found = false;
+		const QString prefix = normalized.normalizedPath + '/';
+		for (const PackageEntry& entry : entries) {
+			if (!entryPathEquals(entry.virtualPath, normalized.normalizedPath) && !entry.virtualPath.startsWith(prefix, Qt::CaseInsensitive)) {
+				continue;
+			}
+			found = true;
+			const QString key = duplicateKey(entry.virtualPath);
+			if (!selectedKeys.contains(key)) {
+				selectedKeys.insert(key);
+				selected.push_back(entry);
+			}
+		}
+
+		if (!found) {
+			PackageExtractionEntryResult result;
+			result.virtualPath = normalized.normalizedPath;
+			result.error = QStringLiteral("Package entry not found.");
+			addExtractionResult(report, result);
+		}
+	}
+
+	std::sort(selected.begin(), selected.end(), entryPathLess);
+	return selected;
 }
 
 void addSyntheticDirectories(QVector<PackageEntry>* entries, const QString& sourceArchiveId)
@@ -947,6 +1022,11 @@ bool PackageArchiveSession::normalizeLayer(PackageMountLayer* layer, QString* er
 	return true;
 }
 
+bool PackageExtractionReport::succeeded() const
+{
+	return !cancelled && errorCount == 0;
+}
+
 QString packageArchiveFormatId(PackageArchiveFormat format)
 {
 	switch (format) {
@@ -1304,6 +1384,177 @@ QString safePackageOutputPath(const QString& rootDirectory, const QString& virtu
 		return {};
 	}
 	return QDir::cleanPath(candidate);
+}
+
+PackageExtractionReport extractPackageEntries(const PackageArchive& archive, const PackageExtractionRequest& request, PackageExtractionProgressCallback progress)
+{
+	PackageExtractionReport report;
+	report.sourcePath = archive.sourcePath();
+	report.targetDirectory = QDir::cleanPath(QFileInfo(request.targetDirectory).absoluteFilePath());
+	report.extractAll = request.extractAll;
+	report.dryRun = request.dryRun;
+	report.overwriteExisting = request.overwriteExisting;
+
+	auto failBeforeEntries = [&report](const QString& message) {
+		PackageExtractionEntryResult result;
+		result.outputPath = report.targetDirectory;
+		result.error = message;
+		addExtractionResult(&report, result);
+	};
+
+	if (!archive.isOpen()) {
+		failBeforeEntries(QStringLiteral("No package is open."));
+		return report;
+	}
+	if (request.targetDirectory.trimmed().isEmpty()) {
+		failBeforeEntries(QStringLiteral("Output directory is required."));
+		return report;
+	}
+
+	const QFileInfo targetInfo(report.targetDirectory);
+	if (targetInfo.exists() && !targetInfo.isDir()) {
+		failBeforeEntries(QStringLiteral("Output path exists but is not a directory."));
+		return report;
+	}
+	if (!request.dryRun && !QDir().mkpath(report.targetDirectory)) {
+		failBeforeEntries(QStringLiteral("Unable to create output directory."));
+		return report;
+	}
+
+	const QVector<PackageEntry> archiveEntries = archive.entries();
+	QVector<PackageEntry> selectedEntries;
+	if (request.extractAll || request.virtualPaths.isEmpty()) {
+		selectedEntries = archiveEntries;
+		std::sort(selectedEntries.begin(), selectedEntries.end(), entryPathLess);
+	} else {
+		selectedEntries = selectedEntriesForExtraction(archiveEntries, request.virtualPaths, &report);
+	}
+	report.requestedCount = selectedEntries.size() + report.errorCount;
+
+	for (const PackageEntry& entry : selectedEntries) {
+		PackageExtractionEntryResult result;
+		result.virtualPath = entry.virtualPath;
+		result.kind = entry.kind;
+		result.bytes = entry.sizeBytes;
+		result.dryRun = request.dryRun;
+
+		QString pathError;
+		result.outputPath = safePackageOutputPath(report.targetDirectory, entry.virtualPath, &pathError);
+		if (!pathError.isEmpty()) {
+			result.error = pathError;
+			addExtractionResult(&report, result);
+		} else if (entry.kind == PackageEntryKind::Directory) {
+			const QFileInfo outputInfo(result.outputPath);
+			if (outputInfo.exists() && !outputInfo.isDir()) {
+				result.error = QStringLiteral("Cannot create directory because a file already exists at the output path.");
+			} else if (request.dryRun) {
+				result.message = QStringLiteral("Would create directory.");
+			} else if (!QDir().mkpath(result.outputPath)) {
+				result.error = QStringLiteral("Unable to create output directory.");
+			} else {
+				result.written = true;
+				result.message = QStringLiteral("Created directory.");
+			}
+			addExtractionResult(&report, result);
+		} else if (!entry.readable) {
+			result.error = entry.note.isEmpty() ? QStringLiteral("Package entry is not readable by the current reader.") : entry.note;
+			addExtractionResult(&report, result);
+		} else {
+			const QFileInfo outputInfo(result.outputPath);
+			if (outputInfo.exists() && outputInfo.isDir()) {
+				result.error = QStringLiteral("Cannot write file because a directory already exists at the output path.");
+			} else if (outputInfo.exists() && !request.overwriteExisting) {
+				result.skipped = true;
+				result.message = QStringLiteral("Output exists; pass overwrite to replace it.");
+			} else if (request.dryRun) {
+				result.message = outputInfo.exists() ? QStringLiteral("Would overwrite file.") : QStringLiteral("Would write file.");
+			} else {
+				QByteArray bytes;
+				QString readError;
+				if (!archive.readEntryBytes(entry.virtualPath, &bytes, &readError)) {
+					result.error = readError.isEmpty() ? QStringLiteral("Unable to read package entry.") : readError;
+				} else {
+					const QString parentPath = QFileInfo(result.outputPath).absolutePath();
+					if (!QDir().mkpath(parentPath)) {
+						result.error = QStringLiteral("Unable to create output parent directory.");
+					} else {
+						QSaveFile file(result.outputPath);
+						if (!file.open(QIODevice::WriteOnly)) {
+							result.error = QStringLiteral("Unable to open output file for writing.");
+						} else if (file.write(bytes) != bytes.size()) {
+							result.error = QStringLiteral("Unable to write all output bytes.");
+							file.cancelWriting();
+						} else if (!file.commit()) {
+							result.error = QStringLiteral("Unable to commit output file.");
+						} else {
+							result.bytes = static_cast<quint64>(std::max<qsizetype>(0, bytes.size()));
+							result.written = true;
+							result.message = outputInfo.exists() ? QStringLiteral("Overwrote file.") : QStringLiteral("Wrote file.");
+						}
+					}
+				}
+			}
+			addExtractionResult(&report, result);
+		}
+
+		if (progress && !progress(report.entries.back(), report)) {
+			report.cancelled = true;
+			report.warnings.push_back(QStringLiteral("Package extraction cancelled."));
+			break;
+		}
+	}
+
+	return report;
+}
+
+QString packageExtractionReportText(const PackageExtractionReport& report)
+{
+	QStringList lines;
+	lines << QStringLiteral("Package extraction");
+	lines << QStringLiteral("Source: %1").arg(QDir::toNativeSeparators(report.sourcePath));
+	lines << QStringLiteral("Target: %1").arg(QDir::toNativeSeparators(report.targetDirectory));
+	lines << QStringLiteral("Mode: %1").arg(report.dryRun ? QStringLiteral("dry-run") : QStringLiteral("write"));
+	lines << QStringLiteral("Overwrite: %1").arg(report.overwriteExisting ? QStringLiteral("yes") : QStringLiteral("no"));
+	lines << QStringLiteral("State: %1").arg(report.cancelled ? QStringLiteral("cancelled") : (report.succeeded() ? QStringLiteral("completed") : QStringLiteral("failed")));
+	lines << QStringLiteral("Requested entries: %1").arg(report.requestedCount);
+	lines << QStringLiteral("Processed entries: %1").arg(report.processedCount);
+	lines << QStringLiteral("Written entries: %1").arg(report.writtenCount);
+	lines << QStringLiteral("Created directories: %1").arg(report.directoryCount);
+	lines << QStringLiteral("Skipped entries: %1").arg(report.skippedCount);
+	lines << QStringLiteral("Errors: %1").arg(report.errorCount);
+	lines << QStringLiteral("Bytes written: %1").arg(report.totalBytes);
+	lines << QStringLiteral("Output paths");
+	for (const PackageExtractionEntryResult& result : report.entries) {
+		QString state = QStringLiteral("planned");
+		if (!result.error.isEmpty()) {
+			state = QStringLiteral("failed");
+		} else if (result.skipped) {
+			state = QStringLiteral("skipped");
+		} else if (result.dryRun) {
+			state = result.kind == PackageEntryKind::Directory ? QStringLiteral("would create") : QStringLiteral("would write");
+		} else if (result.kind == PackageEntryKind::Directory && result.written) {
+			state = QStringLiteral("created");
+		} else if (result.written) {
+			state = QStringLiteral("wrote");
+		}
+		lines << QStringLiteral("- %1: %2 -> %3")
+			.arg(state,
+				result.virtualPath.isEmpty() ? QStringLiteral("(package)") : result.virtualPath,
+				result.outputPath.isEmpty() ? QStringLiteral("(no output path)") : QDir::toNativeSeparators(result.outputPath));
+		if (!result.message.isEmpty()) {
+			lines << QStringLiteral("  %1").arg(result.message);
+		}
+		if (!result.error.isEmpty()) {
+			lines << QStringLiteral("  Error: %1").arg(result.error);
+		}
+	}
+	if (!report.warnings.isEmpty()) {
+		lines << QStringLiteral("Warnings");
+		for (const QString& warning : report.warnings) {
+			lines << QStringLiteral("- %1").arg(warning);
+		}
+	}
+	return lines.join('\n');
 }
 
 } // namespace vibestudio

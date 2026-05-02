@@ -24,30 +24,48 @@ documented in [`docs/ACCESSIBILITY_LOCALIZATION.md`](ACCESSIBILITY_LOCALIZATION.
 - Accessibility, language, theme, scale, density, motion, and TTS preferences.
 - First-run setup/resume service for tailoring the application ecosystem.
 - Global activity center for queued/running/completed tasks, progress, cancellation, and detailed logs.
+- Durable recent activity history for terminal package, compiler, setup, and
+  shell tasks shown in the workspace timeline after restart.
 - Notification and status system for inline feedback, toasts, task cards, warnings, and recoverable errors.
 
 ### Project Core
-- Project manifest and settings.
-- Game installation profiles.
+- Project manifest and settings with `.vibestudio/project.json` metadata,
+  current-project persistence, and dashboard health checks.
+- Game installation profiles with manual settings persistence, stable IDs,
+  engine-family defaults, and read-only validation.
 - Asset database and dependency graph.
 - Automation graph for reusable workflows, presets, command manifests, and batch operations.
 - Package mount graph for folders, WADs, PAKs, PK3s, and nested containers.
 - Task runner for compilers, converters, validators, and external tools.
+- Compiler registry descriptors and executable discovery for imported external
+  tools, user-configured executable paths, project-local overrides, version
+  probes, and capability flags.
+- Compiler wrapper profiles and command planning for ericw-tools `qbsp`, `vis`,
+  and `light`, Doom-family node-builder stages, and q3map2 probe/BSP stages.
+- Compiler runner services for `QProcess` execution, cancellation, stdout/stderr
+  capture, diagnostic parsing, output registration, and re-running manifests.
+- Schema-versioned compiler command manifests with structured task-log entries,
+  environment subsets, inputs/outputs, hashes, duration, exit code, and raw
+  process output.
 - Shared command services used by both GUI actions and CLI commands.
 - Operation state model for loading, scanning, indexing, compiling, extracting, saving, cancelling, and failure recovery.
 
 ### Format And Package Layer
-- PakFu-derived archive interfaces, virtual path safety, readers/writers, and
-  format parsers.
+- PakFu-derived archive interfaces, virtual path safety, read-only readers,
+  extraction reports, and format parsers.
 - Shared package entry metadata, read-only listing readers, and mount-layer
   session state for folder, PAK, WAD, ZIP, and PK3 workflows.
+- Shared package preview service for text samples, basic image metadata, and
+  binary hex/metadata summaries used by both GUI and CLI surfaces.
+- Shared safe extraction service for selected/all entries, dry-run output-path
+  reporting, no-overwrite defaults, progress callbacks, and cancellation.
 - Fixture-backed support matrix.
 - Safe write-back model with staging, diffing, conflict handling, and reproducible manifests.
 - Palette, material, shader, model, and map metadata services.
 
 ### Tool Surfaces
 - Level editor for Doom-family and Quake-family workflows.
-- Interaction profiles for GtkRadiant 1.6.0-style, NetRadiant Custom-style, TrenchBroom-style, and QuArK-style layouts/controls.
+- Interaction profile registry with placeholder presets for GtkRadiant 1.6.0-style, NetRadiant Custom-style, TrenchBroom-style, and QuArK-style layouts/controls.
 - Texture, sprite, model, audio, and cinematic editors.
 - Code/script IDE.
 - idTech3 shader graph with text round-tripping.
@@ -57,7 +75,7 @@ documented in [`docs/ACCESSIBILITY_LOCALIZATION.md`](ACCESSIBILITY_LOCALIZATION.
 ### UX Feedback Layer
 - Loading displays and progress surfaces for every noticeable background operation.
 - Skeleton/placeholder views while project, package, preview, or compiler data is arriving.
-- Visual summaries for project health, asset dependencies, package composition, shader stages, and compiler pipelines.
+- Visual summaries for project health, package composition, and compiler pipeline readiness, with asset dependency and shader-stage graphs planned.
 - Expandable detail drawers that expose raw logs, manifests, metadata, and diagnostic traces.
 - Consistent success/failure/retry/cancel affordances.
 
@@ -78,16 +96,25 @@ documented in [`docs/ACCESSIBILITY_LOCALIZATION.md`](ACCESSIBILITY_LOCALIZATION.
 - Full command-line surface over projects, packages, previews, compilers, validation, automation, and release workflows.
 - Human-readable output by default, structured JSON output for automation.
 - Stable exit codes, command manifests, and scriptable operations.
+- Active lightweight router and command registry for `project`, `package`,
+  `install`, `compiler`, `ai`, `credits`, and `cli` subcommands, with flat
+  legacy options kept compatible.
+- Global `--json`, `--quiet`, `--verbose`, `--dry-run`, `--watch`, and
+  `--task-state` behavior for automation-friendly workflows where supported.
 
 ### AI Automation Layer
-- Optional provider-neutral AI connector abstraction.
-- Connector capability registry for reasoning, coding, vision, image, audio, voice, 3D generation, embeddings, tool calling, streaming, and local/offline execution.
-- Planned connector targets for OpenAI, Claude, Gemini, ElevenLabs, Meshy, local/offline models, and custom HTTP/MCP-style integrations.
+- Optional provider-neutral AI connector abstraction with active connector,
+  model, credential-status, and workflow-manifest registries.
+- Connector capability registry for reasoning, coding, vision, image, audio, voice, 3D generation, embeddings, tool calling, streaming, cost/usage, and local/offline execution.
+- OpenAI implemented as the first general-purpose connector scaffold; design-stub connector targets remain for Claude, Gemini, ElevenLabs, Meshy, local/offline models, and custom HTTP/MCP-style integrations.
+- Safe AI-callable tools for project summaries, package metadata search,
+  compiler profile listing, compiler command proposals, staged text edits, and
+  staged asset-generation requests.
 - Prompt-to-plan, prompt-to-asset, prompt-to-command, and prompt-to-action workflows that call explicit VibeStudio tools.
 - Supervised agentic loops for gather context, plan, review, stage, validate, and summarize.
 - Reviewable proposals before file/package/compiler changes are applied.
 - Local project context redaction and consent controls.
-- AI-free mode and per-project disablement.
+- Active global AI-free mode and project-level disablement.
 
 ### External Toolchain Layer
 - Wrapper model around external compiler submodules.
@@ -99,12 +126,38 @@ documented in [`docs/ACCESSIBILITY_LOCALIZATION.md`](ACCESSIBILITY_LOCALIZATION.
 ## Initial Code Shape
 The current scaffold contains:
 - `src/core`: manifest and future non-UI studio logic.
+- `src/core/game_installation.*`: PakFu-inspired game installation profile
+  model, known idTech game keys, engine-family defaults, read-only validation,
+  and confirmable Steam/GOG candidate detection.
+- `src/core/compiler_registry.*`: compiler tool descriptors and discovery
+  results for imported ericw-tools, q3map2, ZDBSP, and ZokumBSP executables.
+- `src/core/compiler_profiles.*`: wrapper profile descriptors and command-plan
+  generation for ericw-tools, Doom-family node builders, and q3map2, plus
+  schema-versioned compiler command manifests.
+- `src/core/compiler_runner.*`: compiler execution, re-run, stdout/stderr
+  capture, diagnostic parsing, cancellation callbacks, manifest saving, and
+  output registration data.
+- `src/core/project_manifest.*`: project manifest schema, project-local
+  settings/compiler overrides, registered compiler outputs, JSON load/save, and
+  health summary checks for the workspace dashboard and CLI.
+- `src/core/studio_settings.*`: Qt settings facade for shell state, recent
+  projects, recent activity history, accessibility/localization preferences,
+  setup progress, editor profile selection, game installations, compiler
+  executable overrides, and AI automation preferences.
 - `src/core/package_archive.*`: PakFu-derived package/archive interface
   descriptors, read-only folder/PAK/WAD/ZIP/PK3 readers, package entry
-  metadata, mount-layer session state, and safe normalized virtual paths.
-- `src/cli`: diagnostics and automation entry points.
+  metadata, mount-layer session state, safe normalized virtual paths, and
+  selected/all extraction reporting.
+- `src/core/package_preview.*`: shared read-only preview model for package
+  entry text samples, image dimensions/format, and binary metadata samples.
+- `src/cli`: diagnostics and automation entry points, including the active
+  subcommand router, JSON output envelopes, and stable exit-code contract.
 - `src/app`: Qt Widgets studio shell.
 - `src/tests`: smoke tests for core manifests.
+- `scripts/package_portable.py`, `scripts/generate_offline_guide.py`,
+  `scripts/validate_packaging.py`, and `scripts/validate_release_assets.py`:
+  portable package staging, generated offline docs, license/checksum bundling,
+  fixture smoke tests, timing checks, and release asset gates.
 - `external/compilers`: imported compiler submodules.
 
 ## Design Principles

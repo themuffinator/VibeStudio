@@ -35,11 +35,11 @@ Accessibility behavior should be designed into every surface:
 The first-run setup flow should configure the studio without becoming a tour:
 - [ ] Language, scale, high-visibility, motion, and TTS first.
 - [ ] Role and experience presets for mapper, artist, programmer, package maintainer, shader author, audio creator, release maintainer, all-in-one, or custom.
-- [ ] Editor profile selection for VibeStudio default, GtkRadiant 1.6.0-style, NetRadiant Custom-style, TrenchBroom-style, and QuArK-style workflows.
-- [ ] Game installation detection with manual add, skip, and later paths.
+- [x] Editor profile selection for VibeStudio default, GtkRadiant 1.6.0-style, NetRadiant Custom-style, TrenchBroom-style, and QuArK-style workflows.
+- [x] Game installation detection with manual add, skip, and later paths.
 - [ ] Project/package setup with output/temp/backup paths.
 - [ ] Compiler/source-port probing with visible results.
-- [ ] AI-free mode and optional connector configuration.
+- [x] AI-free mode and optional connector configuration.
 - [ ] CLI integration and command-copy preferences.
 - [ ] Final summary with warnings, smoke checks, and editable preferences.
 
@@ -59,59 +59,64 @@ Every noticeable operation should expose an appropriate state:
 
 ## Feedback Patterns
 Use the right feedback surface for the job:
-- [ ] Inline skeletons for panes waiting on content.
-- [ ] Progress bars for measurable work.
+- [x] Inline skeletons for panes waiting on content.
+- [x] Progress bars for measurable work.
 - [ ] Indeterminate activity indicators only when progress cannot be measured.
-- [ ] Task cards for background operations.
-- [ ] Activity center for queued/running/completed work.
-- [ ] Status chips for package, project, compiler, and install health.
+- [x] Task cards for background operations.
+- [x] Activity center for queued/running/completed work.
+- [x] Status chips for package, project, compiler, and install health.
 - [ ] Toasts for short-lived confirmations.
-- [ ] Persistent problem panels for actionable warnings/errors.
-- [ ] Expandable logs for compiler, package, AI, and CLI-backed operations.
-- [ ] Cancellation controls when an operation can safely stop.
+- [x] Persistent problem panels for actionable warnings/errors.
+- [x] Expandable logs for compiler, package, AI, and CLI-backed operations.
+- [x] Cancellation controls when an operation can safely stop.
 
 ## Progressive Disclosure
 VibeStudio should present a clear summary first, then let users delve into
 detail:
-- [ ] Package summary before raw entry tables.
+- [x] Package summary before raw entry tables.
 - [ ] Compiler status before raw stdout/stderr.
-- [ ] Project health before validation traces.
+- [x] Project health before validation traces.
 - [ ] Asset preview before byte-level metadata.
 - [ ] Shader stage graph before raw shader text, while preserving round-trip access.
 - [ ] AI proposal summary before prompts, context, and generated commands.
 - [ ] Agentic workflow plan before tool calls, writes, generated assets, or validation loops.
-- [ ] Friendly error summary before stack traces or diagnostic dumps.
+- [x] Friendly error summary before stack traces or diagnostic dumps.
 
 ## Creative Graphical Communication
 Graphical elements should help users decide and act:
-- [ ] Package composition charts for file types, sizes, and changed assets.
+- [x] Package composition charts for file types and sizes.
 - [ ] Asset dependency graphs for textures, shaders, models, maps, and packages.
 - [ ] Compiler pipeline diagrams for source map to output artifacts.
 - [ ] Map health overlays for leaks, missing textures, entity problems, and compile warnings.
 - [ ] Shader stage diagrams for idTech3 material flow.
-- [ ] Timeline views for task history and build attempts.
+- [x] Timeline views for task history.
 - [ ] Visual diff/staging views for package writes.
 
 ## Detail Surfaces
 Advanced users should be able to inspect:
-- [ ] Raw package metadata.
-- [ ] Virtual paths and physical source paths.
+- [x] Raw package metadata.
+- [x] Virtual paths and physical source paths.
 - [ ] Parsed format structures.
-- [ ] Compiler command manifests.
-- [ ] Compiler stdout/stderr.
-- [ ] Hashes and reproducibility manifests.
+- [x] Compiler command manifests.
+- [x] Compiler stdout/stderr.
+- [x] Hashes and reproducibility manifests.
 - [ ] AI prompts, selected context, responses, and proposed tool calls.
 - [ ] AI provider, model, connector capability, cost/usage metadata where available, and generated asset provenance.
-- [ ] CLI-equivalent command for GUI actions where practical.
+- [x] CLI-equivalent command for GUI compiler actions.
 
 ## MVP UX Requirements
-- [ ] Every package open shows loading feedback.
-- [ ] Every compiler run creates a visible task with progress, logs, result, and output paths.
-- [ ] Every validation run has a summary and expandable details.
-- [ ] Every extract/package operation reports exact output paths.
+- [x] Every package open shows loading feedback.
+- [x] Every compiler run creates a visible task with progress, logs, result, and output paths.
+- [x] Every validation run has a summary and expandable details.
+- [x] Every extract/package operation reports exact output paths.
 - [ ] Every destructive or write operation is staged, previewed, or confirmed.
-- [ ] Empty states say what the user can do next.
-- [ ] Errors avoid dead ends.
+- [x] Empty states say what the user can do next.
+- [x] Errors avoid dead ends.
+
+Milestone 4 adds durable recent task history for completed package/compiler
+operations and a release validation script that checks loading/progress,
+summary/detail, graphical summary, high-visibility, keyboard, localization, and
+TTS smoke coverage before a release-candidate package can pass.
 
 ## Anti-Patterns
 - Silent background work.

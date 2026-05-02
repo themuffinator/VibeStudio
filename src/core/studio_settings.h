@@ -1,5 +1,10 @@
 #pragma once
 
+#include "core/ai_connectors.h"
+#include "core/compiler_registry.h"
+#include "core/game_installation.h"
+#include "core/operation_state.h"
+
 #include <QByteArray>
 #include <QDateTime>
 #include <QSettings>
@@ -27,6 +32,7 @@ enum class SetupStep {
 	WelcomeAccess,
 	WorkspaceProfile,
 	ProjectsPackages,
+	GameInstallations,
 	Toolchains,
 	AiAutomation,
 	CliIntegration,
@@ -68,10 +74,26 @@ struct RecentProject {
 	bool exists = false;
 };
 
+struct RecentActivityTask {
+	QString id;
+	QString title;
+	QString detail;
+	QString source;
+	OperationState state = OperationState::Idle;
+	QString resultSummary;
+	QStringList warnings;
+	QDateTime createdUtc;
+	QDateTime updatedUtc;
+	QDateTime finishedUtc;
+};
+
 class StudioSettings final {
 public:
 	static constexpr int kSchemaVersion = 1;
 	static constexpr int kMaximumRecentProjects = 12;
+	static constexpr int kMaximumRecentActivityTasks = 24;
+	static constexpr int kMaximumGameInstallationProfiles = 32;
+	static constexpr int kMaximumCompilerToolPathOverrides = 32;
 	static constexpr int kMinimumTextScalePercent = 100;
 	static constexpr int kMaximumTextScalePercent = 200;
 
@@ -89,9 +111,21 @@ public:
 	int schemaVersion() const;
 
 	QVector<RecentProject> recentProjects() const;
+	QString currentProjectPath() const;
+	void setCurrentProjectPath(const QString& path);
 	void recordRecentProject(const QString& path, const QString& displayName = QString(), const QDateTime& openedUtc = QDateTime::currentDateTimeUtc());
 	void removeRecentProject(const QString& path);
 	void clearRecentProjects();
+	QVector<RecentActivityTask> recentActivityTasks() const;
+	void recordRecentActivityTask(const RecentActivityTask& task);
+	void clearRecentActivityTasks();
+
+	QVector<GameInstallationProfile> gameInstallations() const;
+	void upsertGameInstallation(GameInstallationProfile profile);
+	void removeGameInstallation(const QString& id);
+	void clearGameInstallations();
+	QString selectedGameInstallationId() const;
+	void setSelectedGameInstallation(const QString& id);
 
 	AccessibilityPreferences accessibilityPreferences() const;
 	void setAccessibilityPreferences(const AccessibilityPreferences& preferences);
@@ -101,6 +135,14 @@ public:
 	void setDensity(UiDensity density);
 	void setReducedMotion(bool reducedMotion);
 	void setTextToSpeechEnabled(bool enabled);
+	QString selectedEditorProfileId() const;
+	void setSelectedEditorProfileId(const QString& id);
+	QVector<CompilerToolPathOverride> compilerToolPathOverrides() const;
+	void upsertCompilerToolPathOverride(const CompilerToolPathOverride& override);
+	void removeCompilerToolPathOverride(const QString& toolId);
+	void clearCompilerToolPathOverrides();
+	AiAutomationPreferences aiAutomationPreferences() const;
+	void setAiAutomationPreferences(const AiAutomationPreferences& preferences);
 
 	SetupProgress setupProgress() const;
 	SetupSummary setupSummary() const;
@@ -121,6 +163,9 @@ public:
 private:
 	void ensureSchema();
 	void writeRecentProjects(const QVector<RecentProject>& projects);
+	void writeRecentActivityTasks(const QVector<RecentActivityTask>& tasks);
+	void writeGameInstallations(const QVector<GameInstallationProfile>& profiles);
+	void writeCompilerToolPathOverrides(const QVector<CompilerToolPathOverride>& overrides);
 
 	mutable QSettings m_settings;
 };

@@ -50,6 +50,11 @@ if (!(Test-Path "$BuildDir/meson-info") -or !(Test-Path "$BuildDir/build.ninja")
   if ($LASTEXITCODE -ne 0) {
     exit $LASTEXITCODE
   }
+} else {
+  meson setup $BuildDir --reconfigure
+  if ($LASTEXITCODE -ne 0) {
+    exit $LASTEXITCODE
+  }
 }
 
 meson compile -C $BuildDir
@@ -62,4 +67,27 @@ if ($LASTEXITCODE -ne 0) {
   exit $LASTEXITCODE
 }
 
-python scripts/validate_build.py --binary "$BuildDir/src/vibestudio.exe" --expected-version "$((Get-Content VERSION -Raw).Trim())"
+$BinaryPath = Join-Path $BuildDir "src/vibestudio"
+if ($IsWindows -or $env:OS -eq "Windows_NT") {
+  $BinaryPath = Join-Path $BuildDir "src/vibestudio.exe"
+}
+
+python scripts/validate_build.py --binary "$BinaryPath" --expected-version "$((Get-Content VERSION -Raw).Trim())"
+if ($LASTEXITCODE -ne 0) {
+  exit $LASTEXITCODE
+}
+
+python scripts/validate_samples.py --binary "$BinaryPath"
+if ($LASTEXITCODE -ne 0) {
+  exit $LASTEXITCODE
+}
+
+python scripts/validate_packaging.py --binary "$BinaryPath"
+if ($LASTEXITCODE -ne 0) {
+  exit $LASTEXITCODE
+}
+
+python scripts/validate_release_assets.py --binary "$BinaryPath"
+if ($LASTEXITCODE -ne 0) {
+  exit $LASTEXITCODE
+}

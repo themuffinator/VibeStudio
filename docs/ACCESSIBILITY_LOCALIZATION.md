@@ -74,10 +74,33 @@ Required behavior:
 - [ ] Editor profile controls document keyboard/mouse changes clearly and expose
   reset/revert actions.
 
+The active editor profile registry exposes placeholder keyboard and mouse
+binding descriptions in preferences, inspector details, CLI text, and JSON.
+Reset/revert actions and full keyboard/mouse audits remain planned.
+
 Current shell custom widgets include a reusable loading pane and detail drawer.
 They expose accessible names and descriptions for their title, state,
 progress, placeholder, section-list, copy, and detail-content controls; broader
 screen-reader and keyboard audits remain required before MVP.
+
+## MVP Release Audit Status
+
+Milestone 4 adds a release asset gate in
+`scripts/validate_release_assets.py`. The gate does not replace manual assistive
+technology testing, but it prevents release-candidate packages from omitting
+the documented smoke paths for:
+
+- keyboard-only setup completion, skip, and resume checks;
+- high-contrast dark and high-contrast light preference coverage;
+- text scale checks at 100%, 125%, 150%, 175%, and 200%;
+- pseudo-localization and right-to-left Arabic/Urdu smoke checks;
+- OS-backed TTS test phrase and task-result smoke coverage where the platform
+  exposes an engine;
+- non-color-only state names for project, package, compiler, AI, setup, and
+  validation surfaces;
+- accessible custom-widget metadata for loading panes, detail drawers, package
+  trees, activity tasks, setup controls, preferences, and editor profile
+  selectors.
 
 ## OS-Backed Text To Speech
 

@@ -6,6 +6,8 @@
 #include <QStringList>
 #include <QVector>
 
+#include <functional>
+
 namespace vibestudio {
 
 enum class PackageArchiveFormat {
@@ -93,6 +95,48 @@ struct PackageMountLayer {
 	bool readOnly = true;
 };
 
+struct PackageExtractionRequest {
+	QString targetDirectory;
+	QStringList virtualPaths;
+	bool extractAll = false;
+	bool dryRun = false;
+	bool overwriteExisting = false;
+};
+
+struct PackageExtractionEntryResult {
+	QString virtualPath;
+	QString outputPath;
+	PackageEntryKind kind = PackageEntryKind::File;
+	quint64 bytes = 0;
+	bool dryRun = false;
+	bool written = false;
+	bool skipped = false;
+	QString message;
+	QString error;
+};
+
+struct PackageExtractionReport {
+	QString sourcePath;
+	QString targetDirectory;
+	bool extractAll = false;
+	bool dryRun = false;
+	bool overwriteExisting = false;
+	bool cancelled = false;
+	int requestedCount = 0;
+	int processedCount = 0;
+	int writtenCount = 0;
+	int directoryCount = 0;
+	int skippedCount = 0;
+	int errorCount = 0;
+	quint64 totalBytes = 0;
+	QVector<PackageExtractionEntryResult> entries;
+	QStringList warnings;
+
+	[[nodiscard]] bool succeeded() const;
+};
+
+using PackageExtractionProgressCallback = std::function<bool(const PackageExtractionEntryResult& result, const PackageExtractionReport& report)>;
+
 class PackageArchiveReader {
 public:
 	virtual ~PackageArchiveReader() = default;
@@ -175,5 +219,7 @@ bool packageEntryLooksNestedArchive(const QString& virtualPath);
 
 bool packagePathIsInsideDirectory(const QString& rootDirectory, const QString& candidatePath);
 QString safePackageOutputPath(const QString& rootDirectory, const QString& virtualPath, QString* error = nullptr);
+PackageExtractionReport extractPackageEntries(const PackageArchive& archive, const PackageExtractionRequest& request, PackageExtractionProgressCallback progress = {});
+QString packageExtractionReportText(const PackageExtractionReport& report);
 
 } // namespace vibestudio

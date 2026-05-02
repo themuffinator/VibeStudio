@@ -60,3 +60,4 @@ aqtinstall.log
 # Local scratch/reference checkouts
 tmp/
 .tmp_refs/
+/.omx

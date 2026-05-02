@@ -1,0 +1,4 @@
+Sample Doom-family map notes.
+
+Purpose: exercise project manifests, package browsing, and node-builder command
+planning without including proprietary game data.

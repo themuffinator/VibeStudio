@@ -26,8 +26,20 @@ struct CompilerIntegration {
 	QString license;
 };
 
+struct AboutDocument {
+	QString id;
+	QString title;
+	QString path;
+	QString description;
+};
+
 QVector<StudioModule> plannedModules();
 QVector<CompilerIntegration> compilerIntegrations();
+QVector<AboutDocument> aboutDocuments();
 QString versionString();
+QString githubRepository();
+QString updateChannel();
+QString projectLicenseSummary();
+QString aboutSurfaceText();
 
 } // namespace vibestudio

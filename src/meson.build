@@ -12,8 +12,17 @@ configure_file(
 vibestudio_includes = include_directories('.')
 
 core_sources = files(
+  'core/ai_connectors.cpp',
+  'core/ai_workflows.cpp',
+  'core/compiler_profiles.cpp',
+  'core/compiler_registry.cpp',
+  'core/compiler_runner.cpp',
+  'core/editor_profiles.cpp',
+  'core/game_installation.cpp',
   'core/operation_state.cpp',
   'core/package_archive.cpp',
+  'core/package_preview.cpp',
+  'core/project_manifest.cpp',
   'core/studio_manifest.cpp',
   'core/studio_settings.cpp',
 )
@@ -32,7 +41,7 @@ vibestudio_core_dep = declare_dependency(
   link_with: [vibestudio_core],
 )
 
-install_headers(files('core/operation_state.h', 'core/package_archive.h', 'core/studio_manifest.h', 'core/studio_settings.h'), subdir: 'vibestudio/core')
+install_headers(files('core/ai_connectors.h', 'core/ai_workflows.h', 'core/compiler_profiles.h', 'core/compiler_registry.h', 'core/compiler_runner.h', 'core/editor_profiles.h', 'core/game_installation.h', 'core/operation_state.h', 'core/package_archive.h', 'core/package_preview.h', 'core/project_manifest.h', 'core/studio_manifest.h', 'core/studio_settings.h'), subdir: 'vibestudio/core')
 
 app_sources = files(
   'main.cpp',
@@ -59,6 +68,56 @@ core_smoke_test = executable(
 
 test('core-smoke', core_smoke_test)
 
+ai_connectors_smoke_test = executable(
+  'ai_connectors_smoke_test',
+  ['tests/ai_connectors_smoke_test.cpp'],
+  include_directories: vibestudio_includes,
+  dependencies: [vibestudio_core_dep],
+  install: false,
+)
+
+test('ai-connectors-smoke', ai_connectors_smoke_test)
+
+ai_workflows_smoke_test = executable(
+  'ai_workflows_smoke_test',
+  ['tests/ai_workflows_smoke_test.cpp'],
+  include_directories: vibestudio_includes,
+  dependencies: [vibestudio_core_dep],
+  install: false,
+)
+
+test('ai-workflows-smoke', ai_workflows_smoke_test)
+
+compiler_registry_smoke_test = executable(
+  'compiler_registry_smoke_test',
+  ['tests/compiler_registry_smoke_test.cpp'],
+  include_directories: vibestudio_includes,
+  dependencies: [vibestudio_core_dep],
+  install: false,
+)
+
+test('compiler-registry-smoke', compiler_registry_smoke_test)
+
+compiler_profiles_smoke_test = executable(
+  'compiler_profiles_smoke_test',
+  ['tests/compiler_profiles_smoke_test.cpp'],
+  include_directories: vibestudio_includes,
+  dependencies: [vibestudio_core_dep],
+  install: false,
+)
+
+test('compiler-profiles-smoke', compiler_profiles_smoke_test)
+
+editor_profiles_smoke_test = executable(
+  'editor_profiles_smoke_test',
+  ['tests/editor_profiles_smoke_test.cpp'],
+  include_directories: vibestudio_includes,
+  dependencies: [vibestudio_core_dep],
+  install: false,
+)
+
+test('editor-profiles-smoke', editor_profiles_smoke_test)
+
 settings_smoke_test = executable(
   'settings_smoke_test',
   ['tests/settings_smoke_test.cpp'],
@@ -79,6 +138,16 @@ operation_state_smoke_test = executable(
 
 test('operation-state-smoke', operation_state_smoke_test)
 
+game_installation_smoke_test = executable(
+  'game_installation_smoke_test',
+  ['tests/game_installation_smoke_test.cpp'],
+  include_directories: vibestudio_includes,
+  dependencies: [vibestudio_core_dep],
+  install: false,
+)
+
+test('game-installation-smoke', game_installation_smoke_test)
+
 package_archive_smoke_test = executable(
   'package_archive_smoke_test',
   ['tests/package_archive_smoke_test.cpp'],
@@ -88,6 +157,26 @@ package_archive_smoke_test = executable(
 )
 
 test('package-archive-smoke', package_archive_smoke_test)
+
+package_preview_smoke_test = executable(
+  'package_preview_smoke_test',
+  ['tests/package_preview_smoke_test.cpp'],
+  include_directories: vibestudio_includes,
+  dependencies: [vibestudio_core_dep],
+  install: false,
+)
+
+test('package-preview-smoke', package_preview_smoke_test)
+
+project_manifest_smoke_test = executable(
+  'project_manifest_smoke_test',
+  ['tests/project_manifest_smoke_test.cpp'],
+  include_directories: vibestudio_includes,
+  dependencies: [vibestudio_core_dep],
+  install: false,
+)
+
+test('project-manifest-smoke', project_manifest_smoke_test)
 
 ui_primitives_smoke_test = executable(
   'ui_primitives_smoke_test',
