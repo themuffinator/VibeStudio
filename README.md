@@ -120,9 +120,14 @@ What exists today:
   captured stdout/stderr, parsed diagnostics, run/rerun CLI execution, and
   project output registration.
 - CLI subcommand router for project, package, installation, asset, map,
-  shader, sprite, code, extension, compiler, AI, credits, and diagnostics
-  command families, with JSON output for automation and a documented stable
-  exit-code contract.
+  shader, sprite, code, extension, compiler, localization, diagnostics, AI, and
+  credits command families, with JSON output for automation and a documented
+  stable exit-code contract.
+- Localization target metadata and seed Qt TS catalogs for 20 languages plus
+  pseudo-localization, with CLI reports for right-to-left smoke coverage,
+  locale formatting, pluralization samples, translation expansion layout
+  smoke checks, stale/untranslated catalog status, and dry-run Qt Linguist
+  extraction validation.
 - Portable release packaging scripts for Windows, macOS, and Linux target
   bundles with generated offline guide, platform smoke notes, checksums,
   samples, package manifests, and VibeStudio/imported-compiler license bundle.
@@ -140,8 +145,8 @@ What does not exist yet:
   or script editors beyond the current MVP service/UI slices.
 - Full CLI parity.
 - Provider network execution for AI connectors.
-- Full guided first-run setup, full accessibility audits, or localization
-  runtime.
+- Full guided first-run setup, full accessibility audits, complete translated
+  bundles, or localization runtime loading.
 - Production-ready workflows of any kind.
 
 Treat every feature list below as roadmap intent until the roadmap and support
@@ -176,8 +181,9 @@ The current scaffold includes:
 - A Meson/Qt6 C++20 app target named `vibestudio`.
 - A small but working Qt Widgets studio shell.
 - A CLI surface for version/platform diagnostics, project/package/compiler,
-  map, shader, sprite, code, extension, and AI workflows, credits validation,
-  JSON output, quiet/verbose modes, watch streaming, and task-state automation.
+  map, shader, sprite, code, extension, localization, diagnostics, and AI
+  workflows, credits validation, JSON output, quiet/verbose modes, watch
+  streaming, and task-state automation.
 - Reusable shell UI primitives for loading/progress placeholders and
   detail-on-demand logs or metadata.
 - A small shared package/archive interface layer adapted from PakFu's archive
@@ -197,7 +203,7 @@ The current scaffold includes:
 - Advanced Studio MVP services and UI/CLI surfaces for shader script parsing
   and stage edits, sprite naming/sequencing/package plans, source indexing,
   extension discovery/command planning, and staged AI creation proposals.
-- A data-driven editor profile registry with placeholder presets for
+- A data-driven editor profile registry with routed MVP presets for
   VibeStudio default, GtkRadiant 1.6.0-style, NetRadiant Custom-style,
   TrenchBroom-style, and QuArK-style workflows.
 - AI-free-by-default settings, provider-neutral connector/model metadata,
@@ -309,7 +315,12 @@ Current scaffold commands:
   `--project-ai-free <on|off>`: set project-local overrides while refreshing a
   manifest.
 - `--operation-states`: print reusable operation state identifiers.
+- `--localization-report`: print localization targets, pseudo-localization,
+  RTL smoke coverage, formatting samples, expansion stress status, and
+  translation catalog status.
 - `--ui-primitives`: print reusable UI primitive identifiers and use cases.
+- `--ui-semantics`: print status chip, shortcut registry, and command palette
+  metadata.
 - `--package-formats`: print package/archive interface descriptors.
 - `--check-package-path <path>`: normalize and validate a package virtual path.
 - `--info <path>`: print read-only package summary for a folder, PAK, WAD, ZIP, or PK3.
@@ -402,6 +413,14 @@ Current subcommands:
   Quake `.spr` frame plans with palette, sequence, and package staging notes.
 - `code index <project-root> [--find <symbol>]`: scan source trees, language
   hooks, diagnostics, symbols, build task hints, and source-port launch profiles.
+- `ui semantics`: report non-color-only status chip semantics, default
+  shortcuts, shortcut conflicts, and command palette entries.
+- `localization targets` / `localization report`: list the target language set
+  or report pseudo-localization, RTL, locale formatting, expansion, and TS
+  catalog status.
+- `diagnostics bundle [--output <folder>]`: print or write a redacted support
+  bundle with version, platform, command, module, operation-state, and
+  localization diagnostics.
 - `extension discover`, `extension inspect`, and `extension run`: load
   `vibestudio.extension.json` manifests, report trust/sandbox metadata, and
   dry-run or execute reviewed extension command plans.
@@ -423,8 +442,8 @@ Current subcommands:
 - `compiler rerun <manifest-path>`: re-run a saved command manifest.
 - `compiler copy-command <manifest-path|profile>`: print a reproducible command
   line for support, automation, or CI.
-- `credits validate`: validate README and `docs/CREDITS.md` coverage for core
-  borrowed lineage and compiler imports.
+- `credits validate`: validate README and `docs/CREDITS.md` coverage plus
+  compiler pins, `.gitmodules`, and checked-out submodule revisions.
 - `ai tools`: list safe AI-callable VibeStudio tool descriptors.
 - `ai explain-log --log <path>|--text <text>`: explain compiler output as a
   no-write workflow manifest.
@@ -443,6 +462,8 @@ Current subcommands:
 
 ## Documentation
 - [`AGENTS.md`](AGENTS.md): contributor and automation rules.
+- [`docs/CONTRIBUTING.md`](docs/CONTRIBUTING.md): task sizing, validation,
+  accessibility/localization, and credits expectations.
 - [`docs/ACCESSIBILITY_LOCALIZATION.md`](docs/ACCESSIBILITY_LOCALIZATION.md): accessibility, high-visibility, scaling, TTS, and localization goals.
 - [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md): studio architecture and module boundaries.
 - [`docs/AI_AUTOMATION.md`](docs/AI_AUTOMATION.md): provider-neutral generative and agentic AI connector strategy.
@@ -488,7 +509,9 @@ section and `docs/CREDITS.md` in the same change.
 - Rendering: Qt custom widgets/QPainter for 2D, thin QOpenGLWidget previews for MVP 3D, planned bgfx renderer backend for production viewports.
 - Text/IDE: Qt text widgets first, planned KSyntaxHighlighting, Tree-sitter, and LSP integration.
 - Media: native idTech parsers first, with planned Qt Multimedia, miniaudio, and optional Assimp support.
-- Accessibility/localization: Qt accessibility APIs, Qt High DPI behavior, Qt TextToSpeech, Qt Linguist/QTranslator, and QLocale.
+- Accessibility/localization: Qt accessibility APIs, Qt High DPI behavior, Qt
+  TextToSpeech, Qt Linguist/QTranslator, QLocale, seed TS catalogs, and CLI
+  localization diagnostics.
 - AI automation: optional provider-neutral connector/model/workflow layer, with
   OpenAI implemented first for configuration and reviewable no-write
   experiments including shader/entity/package/batch proposals, and planned
