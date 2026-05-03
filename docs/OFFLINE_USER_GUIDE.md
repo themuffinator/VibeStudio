@@ -11,7 +11,8 @@ VibeStudio is currently an integrated foundation for idTech1, idTech2, and
 idTech3 projects. It provides a Qt6 Widgets shell, first-run setup scaffold,
 project manifests, read-only package browsing and extraction, compiler command
 planning/runs, staged package save-as, sample projects, safe AI workflow stubs,
-credits visibility, and a CLI for repeatable automation.
+localization smoke reports, diagnostic bundle export, credits visibility, and a
+CLI for repeatable automation.
 
 The MVP is honest about unfinished surfaces: level, model, texture, audio,
 sprite, shader, broad in-place package editing, and code-editing tools are
@@ -107,9 +108,22 @@ Before publishing a release asset, verify:
 - High-contrast dark and high-contrast light themes.
 - Keyboard-only setup completion or skip/resume.
 - Pseudo-localization and right-to-left smoke modes for Arabic and Urdu.
+- Translation catalog status, including missing, unfinished, obsolete, and
+  vanished message counts.
+- Translation expansion stress sample, layout smoke checks, pluralization
+  samples, locale formatting output, and dry-run `lupdate` extraction.
 - TTS test phrase and one task-result announcement where OS support exists.
 - Non-color-only status labels for project, package, compiler, AI, and setup
   states.
+
+Useful CLI checks:
+
+```sh
+vibestudio --cli localization targets
+vibestudio --cli localization report --locale ar --json
+python scripts/extract_translations.py --check --dry-run
+vibestudio --cli diagnostics bundle --output ./diagnostics
+```
 
 ## Release Bundle Contents
 
@@ -118,6 +132,8 @@ Portable release assets include:
 - `bin/` with the staged VibeStudio executable.
 - `README.md`, `VERSION`, and `docs/`.
 - `docs/OFFLINE_USER_GUIDE.md`.
+- `i18n/` with seed Qt TS catalogs for the 20-language target set plus
+  pseudo-localization.
 - `samples/` with license-clean Doom, Quake, and Quake III-family projects.
 - `licenses/THIRD_PARTY_LICENSES.md` plus VibeStudio and imported compiler
   license files.
@@ -132,6 +148,9 @@ Portable release assets include:
   --json` and configure a tool path override.
 - If setup was skipped, reopen the setup panel or use the CLI setup commands to
   resume, advance, complete, or reset it.
+- If a support report is needed, run `vibestudio --cli diagnostics bundle
+  --output <folder>`; the bundle excludes secrets, environment values, home
+  directory contents, and project file payloads.
 - If AI must stay disabled, keep AI-free mode enabled; package, compiler,
   project, validation, CLI, and launch/test preparation workflows still work.
 - If a release artifact is being checked on a clean machine, run the commands in

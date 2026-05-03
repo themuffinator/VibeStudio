@@ -161,6 +161,21 @@ if ($LASTEXITCODE -ne 0) {
   exit $LASTEXITCODE
 }
 
+python scripts/validate_cli_docs.py --binary "$BinaryPath"
+if ($LASTEXITCODE -ne 0) {
+  exit $LASTEXITCODE
+}
+
+python scripts/validate_credits.py
+if ($LASTEXITCODE -ne 0) {
+  exit $LASTEXITCODE
+}
+
+python scripts/extract_translations.py --check --dry-run --require-tool
+if ($LASTEXITCODE -ne 0) {
+  exit $LASTEXITCODE
+}
+
 python scripts/validate_samples.py --binary "$BinaryPath"
 if ($LASTEXITCODE -ne 0) {
   exit $LASTEXITCODE

@@ -34,6 +34,9 @@ int main(int argc, char** argv)
 	if (!model.contains(scanId) || model.task(scanId).state != vibestudio::OperationState::Queued) {
 		return fail("Expected created queued task.");
 	}
+	if (model.task(scanId).transitions.size() != 1 || model.task(scanId).durationMs != 0) {
+		return fail("Expected task timing to start with one zero-duration transition.");
+	}
 	model.transitionTask(scanId, vibestudio::OperationState::Running, QStringLiteral("Scan started."));
 	model.transitionTask(scanId, vibestudio::OperationState::Loading, QStringLiteral("Entries loading."));
 	model.setProgress(scanId, 5, 10, QStringLiteral("Halfway."));
@@ -51,6 +54,14 @@ int main(int argc, char** argv)
 	if (model.task(scanId).state != vibestudio::OperationState::Warning || model.task(scanId).progress.current != model.task(scanId).progress.total) {
 		return fail("Expected warning task to remain warning after completion.");
 	}
+	const vibestudio::OperationTask scanTask = model.task(scanId);
+	if (scanTask.durationMs < 0 || vibestudio::operationTaskElapsedMs(scanTask) < 0 || scanTask.transitions.size() < 5) {
+		return fail("Expected task elapsed timing and transition history.");
+	}
+	const QString scanTimeline = vibestudio::operationTaskTimelineText(scanTask);
+	if (!scanTimeline.contains(QStringLiteral("[queued]")) || !scanTimeline.contains(QStringLiteral("[running]")) || !scanTimeline.contains(QStringLiteral("[warning]"))) {
+		return fail("Expected timeline text to include timed state transitions.");
+	}
 
 	const QString compilerId = model.createTask(QStringLiteral("Compiler Probe"), QStringLiteral("Run q3map2 help"), QStringLiteral("compiler"), vibestudio::OperationState::Running, true);
 	if (!model.cancelTask(compilerId, QStringLiteral("Probe cancelled by user."))) {
@@ -64,6 +75,9 @@ int main(int argc, char** argv)
 	model.failTask(failedId, QStringLiteral("Validation failed."));
 	if (model.task(failedId).state != vibestudio::OperationState::Failed || model.task(failedId).finishedUtc.isNull()) {
 		return fail("Expected failed terminal task.");
+	}
+	if (model.task(failedId).durationMs < 0 || model.task(failedId).transitions.constLast().state != vibestudio::OperationState::Failed) {
+		return fail("Expected terminal transition timing.");
 	}
 
 	const QMap<vibestudio::OperationState, int> counts = model.stateCounts();

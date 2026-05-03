@@ -23,6 +23,9 @@ REQUIRED_PACKAGE_FILES = [
     "licenses/external/compilers/ZokumBSP/COPYING",
     "platform/README.txt",
     "CHECKSUMS.sha256",
+    "i18n/README.md",
+    "i18n/vibestudio_en.ts",
+    "i18n/vibestudio_pseudo.ts",
     "samples/README.md",
 ]
 
@@ -90,14 +93,21 @@ def main() -> int:
             return fail("Expected offline user guide to be recorded in the manifest")
         if manifest.get("licenseBundle") != "licenses/THIRD_PARTY_LICENSES.md":
             return fail("Expected third-party license bundle to be recorded in the manifest")
+        if manifest.get("localizationCatalogRoot") != "i18n":
+            return fail("Expected localization catalog root to be recorded in the manifest")
+        if len(manifest.get("includedLocalizationCatalogs", [])) < 21:
+            return fail("Expected 20 localization target catalogs plus pseudo catalog in the manifest")
         staged_binary = package_dir / "bin" / binary.name
         if not staged_binary.exists():
             return fail(f"Missing staged binary: {staged_binary}")
         for relative in REQUIRED_PACKAGE_FILES:
             if not (package_dir / relative).exists():
                 return fail(f"Missing packaged file: {relative}")
-        if "package-manifest.json" not in (package_dir / "CHECKSUMS.sha256").read_text(encoding="utf-8"):
+        checksums = (package_dir / "CHECKSUMS.sha256").read_text(encoding="utf-8")
+        if "package-manifest.json" not in checksums:
             return fail("Expected package manifest to be covered by CHECKSUMS.sha256")
+        if "i18n/vibestudio_en.ts" not in checksums:
+            return fail("Expected localization catalogs to be covered by CHECKSUMS.sha256")
 
     print("Portable packaging validated.")
     return 0

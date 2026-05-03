@@ -1,6 +1,7 @@
 #include "core/studio_settings.h"
 
 #include "core/editor_profiles.h"
+#include "core/localization.h"
 
 #include <QDir>
 #include <QFileInfo>
@@ -982,28 +983,7 @@ QString recentProjectDisplayName(const QString& path, const QString& preferredNa
 
 QStringList supportedLocaleNames()
 {
-	return {
-		QStringLiteral("en"),
-		QStringLiteral("zh-Hans"),
-		QStringLiteral("hi"),
-		QStringLiteral("es"),
-		QStringLiteral("fr"),
-		QStringLiteral("ar"),
-		QStringLiteral("bn"),
-		QStringLiteral("pt-BR"),
-		QStringLiteral("ru"),
-		QStringLiteral("ur"),
-		QStringLiteral("id"),
-		QStringLiteral("de"),
-		QStringLiteral("ja"),
-		QStringLiteral("pcm"),
-		QStringLiteral("mr"),
-		QStringLiteral("te"),
-		QStringLiteral("tr"),
-		QStringLiteral("ta"),
-		QStringLiteral("vi"),
-		QStringLiteral("ko"),
-	};
+	return localizationTargetIds();
 }
 
 QString normalizedLocaleName(const QString& localeName)

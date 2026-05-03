@@ -38,6 +38,9 @@ jobs:
       - name: Validate Documentation Version
         run: python scripts/sync_doc_versions.py --check
 
+      - name: Validate Credits And Compiler Pins
+        run: python scripts/validate_credits.py
+
       - name: Install Meson + Ninja
         run: python -m pip install --upgrade pip meson ninja
 
@@ -52,6 +55,9 @@ jobs:
         with:
           version: "6.10.1"
           arch: ${{ matrix.os == 'windows-latest' && 'win64_msvc2022_64' || matrix.os == 'macos-latest' && 'clang_64' || 'linux_gcc_64' }}
+
+      - name: Validate Translation Extraction
+        run: python scripts/extract_translations.py --check --dry-run --require-tool
 
       - name: Configure
         shell: bash
@@ -83,6 +89,30 @@ jobs:
           python scripts/validate_build.py
           --binary "builddir/src/vibestudio"
           --expected-version "$(cat VERSION)"
+
+      - name: Validate CLI Docs (Windows)
+        if: matrix.os == 'windows-latest'
+        shell: pwsh
+        run: >
+          python scripts/validate_cli_docs.py
+          --binary "builddir/src/vibestudio.exe"
+
+      - name: Validate Credits (Windows)
+        if: matrix.os == 'windows-latest'
+        shell: pwsh
+        run: python scripts/validate_credits.py
+
+      - name: Validate CLI Docs (Unix)
+        if: matrix.os != 'windows-latest'
+        shell: bash
+        run: >
+          python scripts/validate_cli_docs.py
+          --binary "builddir/src/vibestudio"
+
+      - name: Validate Credits (Unix)
+        if: matrix.os != 'windows-latest'
+        shell: bash
+        run: python scripts/validate_credits.py
 
       - name: Validate Sample Projects (Windows)
         if: matrix.os == 'windows-latest'
@@ -125,3 +155,31 @@ jobs:
         run: >
           python scripts/validate_release_assets.py
           --binary "builddir/src/vibestudio"
+
+      - name: Stage Portable Artifact (Windows)
+        if: matrix.os == 'windows-latest'
+        shell: pwsh
+        run: >
+          python scripts/package_portable.py
+          --binary "builddir/src/vibestudio.exe"
+          --output "artifacts"
+          --archive
+          --target-platform current
+
+      - name: Stage Portable Artifact (Unix)
+        if: matrix.os != 'windows-latest'
+        shell: bash
+        run: >
+          python scripts/package_portable.py
+          --binary "builddir/src/vibestudio"
+          --output "artifacts"
+          --archive
+          --target-platform current
+
+      - name: Upload Portable Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: vibestudio-${{ matrix.os }}-${{ github.sha }}
+          path: artifacts/**
+          if-no-files-found: error
+          retention-days: 14

@@ -43,4 +43,24 @@ if python_for_tests.found()
     python_for_tests,
     args: [files('scripts/sync_doc_versions.py'), '--check'],
   )
+  test(
+    'documentation-validation',
+    python_for_tests,
+    args: [files('scripts/validate_docs.py')],
+  )
+  test(
+    'source-layout-validation',
+    python_for_tests,
+    args: [files('scripts/validate_source_layout.py')],
+  )
+  test(
+    'credits-validation',
+    python_for_tests,
+    args: [files('scripts/validate_credits.py')],
+  )
+  test(
+    'translation-extraction-validation',
+    python_for_tests,
+    args: [files('scripts/extract_translations.py'), '--check'],
+  )
 endif

@@ -10,11 +10,13 @@
 #include "core/compiler_runner.h"
 #include "core/editor_profiles.h"
 #include "core/level_map.h"
+#include "core/localization.h"
 #include "core/operation_state.h"
 #include "core/package_archive.h"
 #include "core/package_preview.h"
 #include "core/package_staging.h"
 #include "core/project_manifest.h"
+#include "core/studio_semantics.h"
 #include "core/studio_manifest.h"
 #include "core/studio_settings.h"
 #include "vibestudio_config.h"
@@ -134,6 +136,7 @@ QVector<CliCommandDescriptor> cliCommandDescriptors()
 	return {
 		{QStringLiteral("cli"), QStringLiteral("exit-codes"), QStringLiteral("Print stable exit-code identifiers."), {QStringLiteral("vibestudio --cli cli exit-codes --json")}},
 		{QStringLiteral("cli"), QStringLiteral("commands"), QStringLiteral("Print the registered command surface used for help and docs validation."), {QStringLiteral("vibestudio --cli cli commands --json")}},
+		{QStringLiteral("ui"), QStringLiteral("semantics"), QStringLiteral("Print status chip, shortcut registry, and command palette metadata."), {QStringLiteral("vibestudio --cli ui semantics --json")}},
 		{QStringLiteral("project"), QStringLiteral("init"), QStringLiteral("Create or refresh a project manifest."), {QStringLiteral("vibestudio --cli project init C:\\Games\\Quake\\mymod"), QStringLiteral("vibestudio --cli project init ./mymod --project-ai-free on")}},
 		{QStringLiteral("project"), QStringLiteral("info"), QStringLiteral("Print project manifest and health summary."), {QStringLiteral("vibestudio --cli project info ./mymod --json")}},
 		{QStringLiteral("project"), QStringLiteral("validate"), QStringLiteral("Validate project health and return validation-failed for blocking issues."), {QStringLiteral("vibestudio --cli project validate ./mymod")}},
@@ -158,6 +161,9 @@ QVector<CliCommandDescriptor> cliCommandDescriptors()
 		{QStringLiteral("shader"), QStringLiteral("set-stage"), QStringLiteral("Edit a shader stage directive and write a round-tripped shader script to a save-as path."), {QStringLiteral("vibestudio --cli shader set-stage ./scripts/common.shader --shader textures/base/wall --stage 1 --directive blendFunc --value \"GL_ONE GL_ONE\" --output ./scripts/common-edited.shader")}, true, true, true},
 		{QStringLiteral("sprite"), QStringLiteral("plan"), QStringLiteral("Create Doom or Quake sprite frame, palette, sequencing, and package staging plans."), {QStringLiteral("vibestudio --cli sprite plan --engine doom --name TROO --frames 2 --rotations 8 --palette doom --json")}, true, true, true},
 		{QStringLiteral("code"), QStringLiteral("index"), QStringLiteral("Index a project source tree with language hooks, diagnostics, symbols, build tasks, and launch profiles."), {QStringLiteral("vibestudio --cli code index ./mymod --find monster --json")}},
+		{QStringLiteral("localization"), QStringLiteral("report"), QStringLiteral("Print localization targets, pseudo-localization, RTL smoke coverage, locale formatting, and catalog status."), {QStringLiteral("vibestudio --cli localization report --locale ar --json")}},
+		{QStringLiteral("localization"), QStringLiteral("targets"), QStringLiteral("List the documented localization target set."), {QStringLiteral("vibestudio --cli localization targets")}},
+		{QStringLiteral("diagnostics"), QStringLiteral("bundle"), QStringLiteral("Export a redacted diagnostic bundle for support, QA, and reproducibility."), {QStringLiteral("vibestudio --cli diagnostics bundle --output ./diagnostics")}, true},
 		{QStringLiteral("extension"), QStringLiteral("discover"), QStringLiteral("Discover VibeStudio extension manifests and report trust and sandbox metadata."), {QStringLiteral("vibestudio --cli extension discover ./extensions --json")}},
 		{QStringLiteral("extension"), QStringLiteral("inspect"), QStringLiteral("Inspect a VibeStudio extension manifest."), {QStringLiteral("vibestudio --cli extension inspect ./extensions/tool/vibestudio.extension.json")}},
 		{QStringLiteral("extension"), QStringLiteral("run"), QStringLiteral("Build or execute an approved extension command plan with generated-file staging."), {QStringLiteral("vibestudio --cli extension run ./extensions/tool/vibestudio.extension.json build --dry-run --json")}, true, true, true},
@@ -183,7 +189,7 @@ QVector<CliCommandDescriptor> cliCommandDescriptors()
 		{QStringLiteral("ai"), QStringLiteral("package-plan"), QStringLiteral("Generate a staged prompt-to-package-validation plan."), {QStringLiteral("vibestudio --cli ai package-plan --prompt \"release check\" --package ./release.pk3 --json")}, true, true, true},
 		{QStringLiteral("ai"), QStringLiteral("batch-recipe"), QStringLiteral("Generate a staged prompt-to-batch-conversion recipe."), {QStringLiteral("vibestudio --cli ai batch-recipe --prompt \"convert doom sprites\" --json")}, true, true, true},
 		{QStringLiteral("ai"), QStringLiteral("review"), QStringLiteral("Render the AI proposal review surface for a generated workflow."), {QStringLiteral("vibestudio --cli ai review --prompt \"glowing shader\" --kind shader --json")}, true, true, true},
-		{QStringLiteral("credits"), QStringLiteral("validate"), QStringLiteral("Validate README and docs credits coverage for imported lineage."), {QStringLiteral("vibestudio --cli credits validate --json")}},
+		{QStringLiteral("credits"), QStringLiteral("validate"), QStringLiteral("Validate README/docs credits, compiler pins, .gitmodules, and checked-out submodule revisions."), {QStringLiteral("vibestudio --cli credits validate --json")}},
 	};
 }
 
@@ -249,7 +255,7 @@ QStringList commandTokens(const QStringList& args)
 		if (token == QStringLiteral("--cli") || token == QStringLiteral("--json") || token == QStringLiteral("--quiet") || token == QStringLiteral("--verbose") || token == QStringLiteral("--dry-run") || token == QStringLiteral("--write") || token == QStringLiteral("--overwrite") || token == QStringLiteral("--case-sensitive") || token == QStringLiteral("--watch") || token == QStringLiteral("--task-state") || token == QStringLiteral("--execute") || token == QStringLiteral("--allow-execution") || token == QStringLiteral("--no-stage")) {
 			continue;
 		}
-		if (token == QStringLiteral("--installation") || token == QStringLiteral("--project-installation") || token == QStringLiteral("--set-editor-profile") || token == QStringLiteral("--set-ai-free") || token == QStringLiteral("--set-ai-cloud") || token == QStringLiteral("--set-ai-agentic") || token == QStringLiteral("--set-ai-reasoning") || token == QStringLiteral("--set-ai-text-model") || token == QStringLiteral("--provider") || token == QStringLiteral("--provider-a") || token == QStringLiteral("--provider-b") || token == QStringLiteral("--model") || token == QStringLiteral("--model-a") || token == QStringLiteral("--model-b") || token == QStringLiteral("--prompt") || token == QStringLiteral("--text") || token == QStringLiteral("--log") || token == QStringLiteral("--command") || token == QStringLiteral("--kind") || token == QStringLiteral("--name") || token == QStringLiteral("--sprite-name") || token == QStringLiteral("--manifest") || token == QStringLiteral("--workspace-root") || token == QStringLiteral("--working-directory") || token == QStringLiteral("--input") || token == QStringLiteral("--output") || token == QStringLiteral("--format") || token == QStringLiteral("--crop") || token == QStringLiteral("--resize") || token == QStringLiteral("--palette") || token == QStringLiteral("--find") || token == QStringLiteral("--symbol") || token == QStringLiteral("--replace") || token == QStringLiteral("--extensions") || token == QStringLiteral("--add-file") || token == QStringLiteral("--import-file") || token == QStringLiteral("--as") || token == QStringLiteral("--replace-file") || token == QStringLiteral("--replace-entry") || token == QStringLiteral("--entry") || token == QStringLiteral("--rename") || token == QStringLiteral("--to") || token == QStringLiteral("--delete") || token == QStringLiteral("--remove-entry") || token == QStringLiteral("--resolve") || token == QStringLiteral("--map") || token == QStringLiteral("--map-name") || token == QStringLiteral("--engine") || token == QStringLiteral("--engine-hint") || token == QStringLiteral("--shader") || token == QStringLiteral("--stage") || token == QStringLiteral("--directive") || token == QStringLiteral("--value") || token == QStringLiteral("--frames") || token == QStringLiteral("--rotations") || token == QStringLiteral("--package") || token == QStringLiteral("--mounted-package") || token == QStringLiteral("--package-root") || token == QStringLiteral("--source-frame") || token == QStringLiteral("--extension-root") || token == QStringLiteral("--root") || token == QStringLiteral("--select") || token == QStringLiteral("--entity") || token == QStringLiteral("--set") || token == QStringLiteral("--property") || token == QStringLiteral("--object") || token == QStringLiteral("--delta") || token == QStringLiteral("--profile") || token == QStringLiteral("--compiler-profile") || token == QStringLiteral("--extra-args") || token == QStringLiteral("--compiler-search-paths") || token == QStringLiteral("--timeout-ms") || token == QStringLiteral("--executable")) {
+		if (token == QStringLiteral("--installation") || token == QStringLiteral("--project-installation") || token == QStringLiteral("--set-editor-profile") || token == QStringLiteral("--set-ai-free") || token == QStringLiteral("--set-ai-cloud") || token == QStringLiteral("--set-ai-agentic") || token == QStringLiteral("--set-ai-reasoning") || token == QStringLiteral("--set-ai-text-model") || token == QStringLiteral("--provider") || token == QStringLiteral("--provider-a") || token == QStringLiteral("--provider-b") || token == QStringLiteral("--model") || token == QStringLiteral("--model-a") || token == QStringLiteral("--model-b") || token == QStringLiteral("--prompt") || token == QStringLiteral("--text") || token == QStringLiteral("--log") || token == QStringLiteral("--command") || token == QStringLiteral("--kind") || token == QStringLiteral("--name") || token == QStringLiteral("--sprite-name") || token == QStringLiteral("--manifest") || token == QStringLiteral("--workspace-root") || token == QStringLiteral("--working-directory") || token == QStringLiteral("--input") || token == QStringLiteral("--output") || token == QStringLiteral("--format") || token == QStringLiteral("--crop") || token == QStringLiteral("--resize") || token == QStringLiteral("--palette") || token == QStringLiteral("--find") || token == QStringLiteral("--symbol") || token == QStringLiteral("--replace") || token == QStringLiteral("--extensions") || token == QStringLiteral("--add-file") || token == QStringLiteral("--import-file") || token == QStringLiteral("--as") || token == QStringLiteral("--replace-file") || token == QStringLiteral("--replace-entry") || token == QStringLiteral("--entry") || token == QStringLiteral("--rename") || token == QStringLiteral("--to") || token == QStringLiteral("--delete") || token == QStringLiteral("--remove-entry") || token == QStringLiteral("--resolve") || token == QStringLiteral("--map") || token == QStringLiteral("--map-name") || token == QStringLiteral("--engine") || token == QStringLiteral("--engine-hint") || token == QStringLiteral("--shader") || token == QStringLiteral("--stage") || token == QStringLiteral("--directive") || token == QStringLiteral("--value") || token == QStringLiteral("--frames") || token == QStringLiteral("--rotations") || token == QStringLiteral("--package") || token == QStringLiteral("--mounted-package") || token == QStringLiteral("--package-root") || token == QStringLiteral("--source-frame") || token == QStringLiteral("--extension-root") || token == QStringLiteral("--root") || token == QStringLiteral("--select") || token == QStringLiteral("--entity") || token == QStringLiteral("--set") || token == QStringLiteral("--property") || token == QStringLiteral("--object") || token == QStringLiteral("--delta") || token == QStringLiteral("--profile") || token == QStringLiteral("--compiler-profile") || token == QStringLiteral("--extra-args") || token == QStringLiteral("--compiler-search-paths") || token == QStringLiteral("--timeout-ms") || token == QStringLiteral("--executable") || token == QStringLiteral("--locale") || token == QStringLiteral("--catalog-root")) {
 			++i;
 			continue;
 		}
@@ -322,6 +328,7 @@ void printHelp()
 	std::cout << "                      Optional project-local AI-free mode override for --project-init.\n";
 	std::cout << "  --operation-states  Print reusable operation state identifiers.\n";
 	std::cout << "  --ui-primitives     Print reusable UI primitive identifiers.\n";
+	std::cout << "  --ui-semantics      Print status chip, shortcut, and command palette metadata.\n";
 	std::cout << "  --package-formats   Print package/archive interface descriptors.\n";
 	std::cout << "  --check-package-path <path>\n";
 	std::cout << "                      Normalize and validate a package virtual path.\n";
@@ -352,12 +359,14 @@ void printHelp()
 	std::cout << "  --setup-reset       Reset setup progress.\n";
 	std::cout << "  --preferences-report\n";
 	std::cout << "                      Print accessibility and language preferences.\n";
+	std::cout << "  --localization-report\n";
+	std::cout << "                      Print localization target, pseudo-localization, RTL, formatting, and catalog status.\n";
 	std::cout << "  --set-locale <code> Set the preferred UI locale. Supported: " << text(supportedLocaleNames().join(", ")) << "\n";
 	std::cout << "  --set-theme <id>    Set theme: " << text(themeIds().join(", ")) << "\n";
 	std::cout << "  --set-text-scale <percent>\n";
 	std::cout << "                      Set text scale from 100 to 200.\n";
 	std::cout << "  --set-density <id>  Set density: " << text(densityIds().join(", ")) << "\n";
-	std::cout << "  --editor-profiles   Print placeholder editor interaction profiles.\n";
+	std::cout << "  --editor-profiles   Print routed editor interaction profiles.\n";
 	std::cout << "  --set-editor-profile <id>\n";
 	std::cout << "                      Select editor profile: " << text(editorProfileIds().join(", ")) << "\n";
 	std::cout << "  --ai-status         Print AI-free mode, opt-in settings, and connector stubs.\n";
@@ -415,7 +424,8 @@ void printHelp()
 	std::cout << "  cli exit-codes\n";
 	std::cout << "                      Print the stable exit-code contract.\n";
 	std::cout << "  cli commands        Print testable command registration metadata and shell examples.\n";
-	std::cout << "  credits validate    Validate README and docs credits coverage.\n";
+	std::cout << "  ui semantics        Print status chip, shortcut registry, and command palette metadata.\n";
+	std::cout << "  credits validate    Validate credits coverage and compiler submodule pins.\n";
 	std::cout << "  about               Print version, repository, credits, and license pointers.\n";
 	std::cout << "  project init <path> [--installation <id>] [--editor-profile <id>]\n";
 	std::cout << "                      Create or refresh .vibestudio/project.json.\n";
@@ -473,9 +483,15 @@ void printHelp()
 	std::cout << "                      Re-run a previously saved compiler command manifest. Optional: --manifest <path>.\n";
 	std::cout << "  compiler copy-command <manifest-path|profile> [--input <path>]\n";
 	std::cout << "                      Print the shell-ready command line from a manifest or planned profile.\n";
-	std::cout << "  editor profiles     Print placeholder editor interaction profiles.\n";
+	std::cout << "  editor profiles     Print routed editor interaction profiles.\n";
 	std::cout << "  editor current      Print the selected editor profile.\n";
 	std::cout << "  editor select <id>  Select an editor profile globally.\n";
+	std::cout << "  localization report [--locale <id>] [--catalog-root <path>]\n";
+	std::cout << "                      Print localization targets, pseudo-localization, RTL smoke, locale formatting, and catalog status.\n";
+	std::cout << "  localization targets\n";
+	std::cout << "                      List the documented localization target set.\n";
+	std::cout << "  diagnostics bundle [--output <folder>]\n";
+	std::cout << "                      Export redacted version, platform, command, module, and localization diagnostics.\n";
 	std::cout << "  ai status           Print AI-free mode, opt-in settings, and connector stubs.\n";
 	std::cout << "  ai connectors       Print provider-neutral AI connector design stubs.\n";
 	std::cout << "  ai tools            Print safe AI-callable VibeStudio tools.\n";
@@ -502,7 +518,7 @@ void printHelp()
 
 void printStudioReport()
 {
-	std::cout << "VibeStudio planned modules\n";
+	std::cout << "VibeStudio studio modules\n";
 	for (const StudioModule& module : plannedModules()) {
 		std::cout << "- " << text(module.name) << " [" << text(module.maturity) << "]\n";
 		std::cout << "  Category: " << text(module.category) << "\n";
@@ -579,6 +595,13 @@ void printUiPrimitives()
 		std::cout << "  Description: " << text(primitive.description) << "\n";
 		std::cout << "  Use cases: " << text(primitive.useCases.join(", ")) << "\n";
 	}
+}
+
+void printUiSemantics()
+{
+	std::cout << text(statusChipSummaryText()) << "\n\n";
+	std::cout << text(shortcutRegistrySummaryText()) << "\n\n";
+	std::cout << text(commandPaletteSummaryText()) << "\n";
 }
 
 void printPackageFormats()
@@ -718,6 +741,101 @@ QJsonObject operationStateJson(OperationState state)
 	return object;
 }
 
+QJsonArray operationStatesJson()
+{
+	QJsonArray array;
+	for (const QString& id : operationStateIds()) {
+		array.append(operationStateJson(operationStateFromId(id)));
+	}
+	return array;
+}
+
+QJsonObject statusChipJson(const StatusChipDescriptor& descriptor)
+{
+	QJsonObject object;
+	object.insert(QStringLiteral("id"), descriptor.id);
+	object.insert(QStringLiteral("domain"), descriptor.domain);
+	object.insert(QStringLiteral("label"), descriptor.label);
+	object.insert(QStringLiteral("description"), descriptor.description);
+	object.insert(QStringLiteral("state"), operationStateId(descriptor.state));
+	object.insert(QStringLiteral("iconName"), descriptor.iconName);
+	object.insert(QStringLiteral("colorToken"), descriptor.colorToken);
+	object.insert(QStringLiteral("nonColorCue"), descriptor.nonColorCue);
+	object.insert(QStringLiteral("nextAction"), descriptor.nextAction);
+	return object;
+}
+
+QJsonArray statusChipsJson()
+{
+	QJsonArray array;
+	for (const StatusChipDescriptor& descriptor : statusChipDescriptors()) {
+		array.append(statusChipJson(descriptor));
+	}
+	return array;
+}
+
+QJsonObject shortcutJson(const ShortcutDescriptor& descriptor)
+{
+	QJsonObject object;
+	object.insert(QStringLiteral("id"), descriptor.id);
+	object.insert(QStringLiteral("commandId"), descriptor.commandId);
+	object.insert(QStringLiteral("label"), descriptor.label);
+	object.insert(QStringLiteral("context"), descriptor.context);
+	object.insert(QStringLiteral("defaultSequence"), descriptor.defaultSequence);
+	object.insert(QStringLiteral("alternateSequences"), stringArrayJson(descriptor.alternateSequences));
+	object.insert(QStringLiteral("description"), descriptor.description);
+	object.insert(QStringLiteral("userRemappable"), descriptor.userRemappable);
+	return object;
+}
+
+QJsonArray shortcutsJson()
+{
+	QJsonArray array;
+	for (const ShortcutDescriptor& descriptor : shortcutDescriptors()) {
+		array.append(shortcutJson(descriptor));
+	}
+	return array;
+}
+
+QJsonObject commandPaletteEntryJson(const CommandPaletteEntry& entry)
+{
+	QJsonObject object;
+	object.insert(QStringLiteral("id"), entry.id);
+	object.insert(QStringLiteral("commandId"), entry.commandId);
+	object.insert(QStringLiteral("label"), entry.label);
+	object.insert(QStringLiteral("category"), entry.category);
+	object.insert(QStringLiteral("summary"), entry.summary);
+	object.insert(QStringLiteral("defaultShortcut"), entry.defaultShortcut);
+	object.insert(QStringLiteral("requiresProject"), entry.requiresProject);
+	object.insert(QStringLiteral("destructive"), entry.destructive);
+	object.insert(QStringLiteral("stagedOrDryRun"), entry.stagedOrDryRun);
+	return object;
+}
+
+QJsonArray commandPaletteEntriesJson()
+{
+	QJsonArray array;
+	for (const CommandPaletteEntry& entry : commandPaletteEntries()) {
+		array.append(commandPaletteEntryJson(entry));
+	}
+	return array;
+}
+
+QJsonObject uiSemanticsJson()
+{
+	QStringList conflicts;
+	const bool hasShortcutConflicts = shortcutRegistryHasConflicts(&conflicts);
+	QJsonObject object;
+	object.insert(QStringLiteral("statusChips"), statusChipsJson());
+	object.insert(QStringLiteral("statusDomains"), stringArrayJson(statusChipDomains()));
+	object.insert(QStringLiteral("shortcuts"), shortcutsJson());
+	object.insert(QStringLiteral("shortcutConflictCount"), conflicts.size());
+	object.insert(QStringLiteral("shortcutConflicts"), stringArrayJson(conflicts));
+	object.insert(QStringLiteral("shortcutRegistryOk"), !hasShortcutConflicts);
+	object.insert(QStringLiteral("commandPalette"), commandPaletteEntriesJson());
+	return object;
+}
+
 QJsonObject aboutDocumentJson(const AboutDocument& document)
 {
 	QJsonObject object;
@@ -806,6 +924,20 @@ QJsonObject packageInfoJson(const PackageArchive& archive)
 	QJsonObject object;
 	object.insert(QStringLiteral("summary"), packageSummaryJson(archive.summary()));
 	object.insert(QStringLiteral("warnings"), packageWarningsJson(archive.warnings()));
+	return object;
+}
+
+QJsonObject packageTimingJson(qint64 packageOpenMs, qint64 previewMs = -1)
+{
+	QJsonObject object;
+	const qint64 normalizedPackageOpenMs = std::max<qint64>(0, packageOpenMs);
+	object.insert(QStringLiteral("packageOpenMs"), static_cast<double>(normalizedPackageOpenMs));
+	if (previewMs >= 0) {
+		object.insert(QStringLiteral("previewMs"), static_cast<double>(previewMs));
+		object.insert(QStringLiteral("totalMs"), static_cast<double>(normalizedPackageOpenMs + previewMs));
+	} else {
+		object.insert(QStringLiteral("totalMs"), static_cast<double>(normalizedPackageOpenMs));
+	}
 	return object;
 }
 
@@ -1227,6 +1359,9 @@ QJsonObject editorProfileBindingJson(const EditorProfileBinding& binding)
 	object.insert(QStringLiteral("shortcut"), binding.shortcut);
 	object.insert(QStringLiteral("mouseGesture"), binding.mouseGesture);
 	object.insert(QStringLiteral("context"), binding.context);
+	object.insert(QStringLiteral("commandId"), binding.commandId);
+	object.insert(QStringLiteral("surfaceId"), binding.surfaceId);
+	object.insert(QStringLiteral("implemented"), binding.implemented);
 	return object;
 }
 
@@ -1265,6 +1400,169 @@ QJsonArray editorProfilesJson(const QString& selectedId = QString())
 		profiles.append(editorProfileJson(profile, selectedId));
 	}
 	return profiles;
+}
+
+QJsonObject localizationTargetJson(const LocalizationTarget& target)
+{
+	QJsonObject object;
+	object.insert(QStringLiteral("localeName"), target.localeName);
+	object.insert(QStringLiteral("englishName"), target.englishName);
+	object.insert(QStringLiteral("nativeName"), target.nativeName);
+	object.insert(QStringLiteral("rightToLeft"), target.rightToLeft);
+	return object;
+}
+
+QJsonArray localizationTargetsJson()
+{
+	QJsonArray array;
+	for (const LocalizationTarget& target : localizationTargets()) {
+		array.append(localizationTargetJson(target));
+	}
+	return array;
+}
+
+QJsonObject localeFormattingSampleJson(const LocaleFormattingSample& sample)
+{
+	QJsonObject object;
+	object.insert(QStringLiteral("localeName"), sample.localeName);
+	object.insert(QStringLiteral("decimalNumber"), sample.decimalNumber);
+	object.insert(QStringLiteral("integerNumber"), sample.integerNumber);
+	object.insert(QStringLiteral("date"), sample.date);
+	object.insert(QStringLiteral("time"), sample.time);
+	object.insert(QStringLiteral("dateTime"), sample.dateTime);
+	object.insert(QStringLiteral("size"), sample.size);
+	object.insert(QStringLiteral("duration"), sample.duration);
+	object.insert(QStringLiteral("sortedLabels"), stringArrayJson(sample.sortedLabels));
+	return object;
+}
+
+QJsonObject pluralizationSmokeSampleJson(const PluralizationSmokeSample& sample)
+{
+	QJsonObject object;
+	object.insert(QStringLiteral("localeName"), sample.localeName);
+	object.insert(QStringLiteral("count"), sample.count);
+	object.insert(QStringLiteral("localizedNumber"), sample.localizedNumber);
+	object.insert(QStringLiteral("text"), sample.text);
+	object.insert(QStringLiteral("singular"), sample.singular);
+	object.insert(QStringLiteral("localizedNumberVisible"), sample.localizedNumberVisible);
+	return object;
+}
+
+QJsonObject translationExpansionLayoutCheckJson(const TranslationExpansionLayoutCheck& check)
+{
+	QJsonObject object;
+	object.insert(QStringLiteral("surfaceId"), check.surfaceId);
+	object.insert(QStringLiteral("label"), check.label);
+	object.insert(QStringLiteral("sourceText"), check.sourceText);
+	object.insert(QStringLiteral("expandedText"), check.expandedText);
+	object.insert(QStringLiteral("sourceLength"), check.sourceLength);
+	object.insert(QStringLiteral("expandedLength"), check.expandedLength);
+	object.insert(QStringLiteral("maxRecommendedCharacters"), check.maxRecommendedCharacters);
+	object.insert(QStringLiteral("expansionRatio"), check.expansionRatio);
+	object.insert(QStringLiteral("passed"), check.passed);
+	object.insert(QStringLiteral("recommendation"), check.recommendation);
+	return object;
+}
+
+QJsonObject translationCatalogStatusJson(const TranslationCatalogStatus& status)
+{
+	QJsonObject object;
+	object.insert(QStringLiteral("localeName"), status.localeName);
+	object.insert(QStringLiteral("fileName"), status.fileName);
+	object.insert(QStringLiteral("path"), status.path);
+	object.insert(QStringLiteral("present"), status.present);
+	object.insert(QStringLiteral("stale"), status.stale);
+	object.insert(QStringLiteral("messageCount"), status.messageCount);
+	object.insert(QStringLiteral("translatedCount"), status.translatedCount);
+	object.insert(QStringLiteral("unfinishedCount"), status.unfinishedCount);
+	object.insert(QStringLiteral("obsoleteCount"), status.obsoleteCount);
+	object.insert(QStringLiteral("vanishedCount"), status.vanishedCount);
+	object.insert(QStringLiteral("status"), status.status);
+	object.insert(QStringLiteral("issues"), stringArrayJson(status.issues));
+	return object;
+}
+
+QJsonObject localizationSmokeReportJson(const LocalizationSmokeReport& report)
+{
+	QJsonObject object;
+	object.insert(QStringLiteral("localeName"), report.localeName);
+	object.insert(QStringLiteral("targetCount"), report.targets.size());
+	object.insert(QStringLiteral("targets"), localizationTargetsJson());
+	object.insert(QStringLiteral("pseudoSample"), report.pseudoSample);
+	object.insert(QStringLiteral("expansionSample"), report.expansionSample);
+	object.insert(QStringLiteral("expansionSourceLength"), report.expansionSourceLength);
+	object.insert(QStringLiteral("expansionSampleLength"), report.expansionSampleLength);
+	object.insert(QStringLiteral("expansionRatio"), report.expansionRatio);
+	object.insert(QStringLiteral("expansionSmokeOk"), report.expansionSmokeOk);
+	object.insert(QStringLiteral("expansionLayoutSmokeOk"), report.expansionLayoutSmokeOk);
+	object.insert(QStringLiteral("pluralizationSmokeOk"), report.pluralizationSmokeOk);
+	object.insert(QStringLiteral("rightToLeftLocales"), stringArrayJson(report.rightToLeftLocales));
+	object.insert(QStringLiteral("formatting"), localeFormattingSampleJson(report.formatting));
+	QJsonArray pluralization;
+	for (const PluralizationSmokeSample& sample : report.pluralization) {
+		pluralization.append(pluralizationSmokeSampleJson(sample));
+	}
+	object.insert(QStringLiteral("pluralization"), pluralization);
+	QJsonArray layoutChecks;
+	for (const TranslationExpansionLayoutCheck& check : report.layoutChecks) {
+		layoutChecks.append(translationExpansionLayoutCheckJson(check));
+	}
+	object.insert(QStringLiteral("layoutChecks"), layoutChecks);
+	QJsonArray catalogs;
+	for (const TranslationCatalogStatus& status : report.catalogs) {
+		catalogs.append(translationCatalogStatusJson(status));
+	}
+	object.insert(QStringLiteral("catalogs"), catalogs);
+	object.insert(QStringLiteral("catalogCount"), report.catalogCount);
+	object.insert(QStringLiteral("staleCatalogCount"), report.staleCatalogCount);
+	object.insert(QStringLiteral("untranslatedMessageCount"), report.untranslatedMessageCount);
+	object.insert(QStringLiteral("obsoleteMessageCount"), report.obsoleteMessageCount);
+	object.insert(QStringLiteral("warnings"), stringArrayJson(report.warnings));
+	object.insert(QStringLiteral("ok"), report.ok);
+	return object;
+}
+
+QJsonObject studioModuleJson(const StudioModule& module)
+{
+	QJsonObject object;
+	object.insert(QStringLiteral("id"), module.id);
+	object.insert(QStringLiteral("name"), module.name);
+	object.insert(QStringLiteral("category"), module.category);
+	object.insert(QStringLiteral("maturity"), module.maturity);
+	object.insert(QStringLiteral("description"), module.description);
+	object.insert(QStringLiteral("engines"), stringArrayJson(module.engines));
+	return object;
+}
+
+QJsonArray studioModulesJson()
+{
+	QJsonArray array;
+	for (const StudioModule& module : plannedModules()) {
+		array.append(studioModuleJson(module));
+	}
+	return array;
+}
+
+QJsonObject diagnosticBundleJson()
+{
+	QJsonObject object;
+	object.insert(QStringLiteral("schemaVersion"), 1);
+	object.insert(QStringLiteral("generatedUtc"), QDateTime::currentDateTimeUtc().toString(Qt::ISODate));
+	object.insert(QStringLiteral("version"), versionString());
+	object.insert(QStringLiteral("qtVersion"), QString::fromUtf8(qVersion()));
+	object.insert(QStringLiteral("buildAbi"), QSysInfo::buildAbi());
+	object.insert(QStringLiteral("kernelType"), QSysInfo::kernelType());
+	object.insert(QStringLiteral("kernelVersion"), QSysInfo::kernelVersion());
+	object.insert(QStringLiteral("productType"), QSysInfo::productType());
+	object.insert(QStringLiteral("productVersion"), QSysInfo::productVersion());
+	object.insert(QStringLiteral("commandCount"), cliCommandDescriptors().size());
+	object.insert(QStringLiteral("commands"), cliCommandsJson());
+	object.insert(QStringLiteral("modules"), studioModulesJson());
+	object.insert(QStringLiteral("operationStates"), operationStatesJson());
+	object.insert(QStringLiteral("uiSemantics"), uiSemanticsJson());
+	object.insert(QStringLiteral("localization"), localizationSmokeReportJson(buildLocalizationSmokeReport(QStringLiteral("en"), QStringLiteral("i18n"))));
+	object.insert(QStringLiteral("redaction"), QStringLiteral("No secrets, API keys, environment values, home-directory contents, or project file payloads are included."));
+	return object;
 }
 
 QJsonObject aiCapabilityJson(const AiCapabilityDescriptor& capability)
@@ -2105,14 +2403,22 @@ void applyCompilerRequestContext(CompilerCommandRequest* request, const QStringL
 	request->executableOverrides = options.executableOverrides;
 }
 
-bool loadPackageForCliQuiet(const QString& path, PackageArchive* archive, QString* error)
+bool loadPackageForCliQuiet(const QString& path, PackageArchive* archive, QString* error, qint64* durationMs = nullptr)
 {
 	QString localError;
+	QElapsedTimer timer;
+	timer.start();
 	if (!archive || !archive->load(path, &localError)) {
+		if (durationMs) {
+			*durationMs = timer.elapsed();
+		}
 		if (error) {
 			*error = localError.isEmpty() ? QStringLiteral("unknown error") : localError;
 		}
 		return false;
+	}
+	if (durationMs) {
+		*durationMs = timer.elapsed();
 	}
 	return true;
 }
@@ -2164,9 +2470,10 @@ void printPackageList(const PackageArchive& archive)
 	}
 }
 
-bool printPackagePreview(const PackageArchive& archive, const QString& virtualPath)
+bool printPackagePreview(const PackageArchive& archive, const QString& virtualPath, const PackagePreview* prebuiltPreview = nullptr)
 {
-	const PackagePreview preview = buildPackageEntryPreview(archive, virtualPath);
+	const PackagePreview builtPreview = prebuiltPreview ? PackagePreview() : buildPackageEntryPreview(archive, virtualPath);
+	const PackagePreview& preview = prebuiltPreview ? *prebuiltPreview : builtPreview;
 	std::cout << "Package preview\n";
 	std::cout << "Entry: " << text(preview.virtualPath.isEmpty() ? virtualPath : preview.virtualPath) << "\n";
 	std::cout << "Kind: " << text(packagePreviewKindId(preview.kind)) << " (" << text(packagePreviewKindDisplayName(preview.kind)) << ")\n";
@@ -2588,12 +2895,31 @@ int runCliCommandsCommand(const QString& commandName, CliOutputFormat format)
 	return exitCodeValue(CliExitCode::Success);
 }
 
+int runUiSemanticsCommand(const QString& commandName, CliOutputFormat format)
+{
+	if (format == CliOutputFormat::Json) {
+		QJsonObject object = cliResultJson(commandName);
+		object.insert(QStringLiteral("uiSemantics"), uiSemanticsJson());
+		printJson(object);
+		return exitCodeValue(CliExitCode::Success);
+	}
+
+	printUiSemantics();
+	return exitCodeValue(CliExitCode::Success);
+}
+
 struct CreditsValidationCheck {
 	QString id;
 	QString path;
 	QString requiredText;
+	QString observedText;
 	bool passed = false;
 	QString message;
+};
+
+struct CreditTokenRequirement {
+	QString id;
+	QString requiredText;
 };
 
 QString fileText(const QString& path)
@@ -2605,12 +2931,116 @@ QString fileText(const QString& path)
 	return QString::fromUtf8(file.readAll());
 }
 
+bool containsToken(const QString& haystack, const QString& needle)
+{
+	return haystack.contains(needle, Qt::CaseInsensitive);
+}
+
+QString markdownSectionText(const QString& markdown, const QString& heading)
+{
+	const qsizetype headingIndex = markdown.indexOf(heading, 0, Qt::CaseInsensitive);
+	if (headingIndex < 0) {
+		return {};
+	}
+	const qsizetype searchStart = headingIndex + heading.size();
+	const qsizetype nextHeadingIndex = markdown.indexOf(QRegularExpression(QStringLiteral("\\n##\\s+")), searchStart);
+	if (nextHeadingIndex < 0) {
+		return markdown.mid(headingIndex);
+	}
+	return markdown.mid(headingIndex, nextHeadingIndex - headingIndex);
+}
+
+QString normalizedRepositoryUrl(QString url)
+{
+	url = url.trimmed();
+	while (url.endsWith(QLatin1Char('/'))) {
+		url.chop(1);
+	}
+	if (url.endsWith(QStringLiteral(".git"), Qt::CaseInsensitive)) {
+		url.chop(4);
+	}
+	return url.toLower();
+}
+
+QString gitmodulesUrlForSourcePath(const QString& gitmodules, const QString& sourcePath)
+{
+	bool matchingSection = false;
+	const QStringList lines = gitmodules.split(QLatin1Char('\n'));
+	for (const QString& line : lines) {
+		const QString trimmed = line.trimmed();
+		if (trimmed.startsWith(QStringLiteral("[submodule"))) {
+			matchingSection = false;
+			continue;
+		}
+		if (trimmed.startsWith(QStringLiteral("path"))) {
+			const qsizetype equalsIndex = trimmed.indexOf(QLatin1Char('='));
+			matchingSection = equalsIndex >= 0 && trimmed.mid(equalsIndex + 1).trimmed() == sourcePath;
+			continue;
+		}
+		if (matchingSection && trimmed.startsWith(QStringLiteral("url"))) {
+			const qsizetype equalsIndex = trimmed.indexOf(QLatin1Char('='));
+			if (equalsIndex >= 0) {
+				return trimmed.mid(equalsIndex + 1).trimmed();
+			}
+		}
+	}
+	return {};
+}
+
+QString gitHeadRevision(const QString& sourcePath)
+{
+	QProcess process;
+	process.setProgram(QStringLiteral("git"));
+	process.setArguments({QStringLiteral("-C"), sourcePath, QStringLiteral("rev-parse"), QStringLiteral("HEAD")});
+	process.setProcessChannelMode(QProcess::MergedChannels);
+	process.start();
+	if (!process.waitForStarted(3000)) {
+		return {};
+	}
+	if (!process.waitForFinished(5000)) {
+		process.kill();
+		process.waitForFinished(1000);
+		return {};
+	}
+	if (process.exitStatus() != QProcess::NormalExit || process.exitCode() != 0) {
+		return {};
+	}
+	return QString::fromUtf8(process.readAllStandardOutput()).trimmed();
+}
+
+QVector<CreditTokenRequirement> requiredCreditTokens()
+{
+	return {
+		{QStringLiteral("pakfu"), QStringLiteral("PakFu")},
+		{QStringLiteral("ericw-tools"), QStringLiteral("ericw-tools")},
+		{QStringLiteral("netradiant-custom"), QStringLiteral("NetRadiant Custom")},
+		{QStringLiteral("zdbsp"), QStringLiteral("ZDBSP")},
+		{QStringLiteral("zokumbsp"), QStringLiteral("ZokumBSP")},
+		{QStringLiteral("gtkradiant"), QStringLiteral("GtkRadiant")},
+		{QStringLiteral("trenchbroom"), QStringLiteral("TrenchBroom")},
+		{QStringLiteral("quark"), QStringLiteral("QuArK")},
+		{QStringLiteral("openai"), QStringLiteral("OpenAI")},
+		{QStringLiteral("claude"), QStringLiteral("Claude")},
+		{QStringLiteral("gemini"), QStringLiteral("Gemini")},
+		{QStringLiteral("elevenlabs"), QStringLiteral("ElevenLabs")},
+		{QStringLiteral("meshy"), QStringLiteral("Meshy")},
+	};
+}
+
+void appendCreditsTextCheck(QVector<CreditsValidationCheck>& checks, const QString& id, const QString& path, const QString& requiredText, const QString& haystack, const QString& message)
+{
+	checks.append({id, path, requiredText, {}, containsToken(haystack, requiredText), message});
+}
+
 QJsonObject creditsValidationCheckJson(const CreditsValidationCheck& check)
 {
 	QJsonObject object;
 	object.insert(QStringLiteral("id"), check.id);
 	object.insert(QStringLiteral("path"), check.path);
 	object.insert(QStringLiteral("requiredText"), check.requiredText);
+	if (!check.observedText.isEmpty()) {
+		object.insert(QStringLiteral("observedText"), check.observedText);
+	}
 	object.insert(QStringLiteral("passed"), check.passed);
 	object.insert(QStringLiteral("message"), check.message);
 	return object;
@@ -2620,21 +3050,56 @@ int runCreditsValidateCommand(const QString& commandName, CliOutputFormat format
 {
 	const QString readmePath = QDir::current().absoluteFilePath(QStringLiteral("README.md"));
 	const QString creditsPath = QDir::current().absoluteFilePath(QStringLiteral("docs/CREDITS.md"));
+	const QString gitmodulesPath = QDir::current().absoluteFilePath(QStringLiteral(".gitmodules"));
 	const QString readme = fileText(readmePath);
 	const QString credits = fileText(creditsPath);
+	const QString readmeCredits = markdownSectionText(readme, QStringLiteral("## Credits"));
+	const QString gitmodules = fileText(gitmodulesPath);
 	QVector<CreditsValidationCheck> checks = {
-		{QStringLiteral("readme-exists"), readmePath, QStringLiteral("README.md"), !readme.isEmpty(), readme.isEmpty() ? QStringLiteral("README.md could not be read.") : QStringLiteral("README.md is readable.")},
-		{QStringLiteral("credits-exists"), creditsPath, QStringLiteral("docs/CREDITS.md"), !credits.isEmpty(), credits.isEmpty() ? QStringLiteral("docs/CREDITS.md could not be read.") : QStringLiteral("docs/CREDITS.md is readable.")},
-		{QStringLiteral("readme-credits-section"), readmePath, QStringLiteral("Credits"), readme.contains(QStringLiteral("Credits"), Qt::CaseInsensitive), QStringLiteral("README Credits section should stay visible.")},
-		{QStringLiteral("docs-pakfu"), creditsPath, QStringLiteral("PakFu"), credits.contains(QStringLiteral("PakFu"), Qt::CaseInsensitive), QStringLiteral("PakFu lineage must be credited.")},
-		{QStringLiteral("docs-ericw-tools"), creditsPath, QStringLiteral("ericw-tools"), credits.contains(QStringLiteral("ericw-tools"), Qt::CaseInsensitive), QStringLiteral("ericw-tools compiler integration must be credited.")},
-		{QStringLiteral("docs-netradiant"), creditsPath, QStringLiteral("NetRadiant"), credits.contains(QStringLiteral("NetRadiant"), Qt::CaseInsensitive), QStringLiteral("NetRadiant/q3map2 lineage must be credited.")},
-		{QStringLiteral("docs-zdbsp"), creditsPath, QStringLiteral("ZDBSP"), credits.contains(QStringLiteral("ZDBSP"), Qt::CaseInsensitive), QStringLiteral("ZDBSP compiler integration must be credited.")},
-		{QStringLiteral("docs-zokumbsp"), creditsPath, QStringLiteral("ZokumBSP"), credits.contains(QStringLiteral("ZokumBSP"), Qt::CaseInsensitive), QStringLiteral("ZokumBSP compiler integration must be credited.")},
+		{QStringLiteral("readme-exists"), readmePath, QStringLiteral("README.md"), {}, !readme.isEmpty(), readme.isEmpty() ? QStringLiteral("README.md could not be read.") : QStringLiteral("README.md is readable.")},
+		{QStringLiteral("credits-exists"), creditsPath, QStringLiteral("docs/CREDITS.md"), {}, !credits.isEmpty(), credits.isEmpty() ? QStringLiteral("docs/CREDITS.md could not be read.") : QStringLiteral("docs/CREDITS.md is readable.")},
+		{QStringLiteral("gitmodules-exists"), gitmodulesPath, QStringLiteral(".gitmodules"), {}, !gitmodules.isEmpty(), gitmodules.isEmpty() ? QStringLiteral(".gitmodules could not be read.") : QStringLiteral(".gitmodules is readable.")},
+		{QStringLiteral("readme-credits-section"), readmePath, QStringLiteral("## Credits"), {}, !readmeCredits.isEmpty(), QStringLiteral("README Credits section should stay visible and auditable.")},
 	};
+	for (const CreditTokenRequirement& token : requiredCreditTokens()) {
+		appendCreditsTextCheck(checks, QStringLiteral("readme-credit-token-%1").arg(token.id), readmePath, token.requiredText, readmeCredits, QStringLiteral("README Credits section should include %1 attribution.").arg(token.requiredText));
+		appendCreditsTextCheck(checks, QStringLiteral("docs-credit-token-%1").arg(token.id), creditsPath, token.requiredText, credits, QStringLiteral("docs/CREDITS.md should include %1 attribution.").arg(token.requiredText));
+	}
+	for (const CompilerIntegration& compiler : compilerIntegrations()) {
+		appendCreditsTextCheck(checks, QStringLiteral("compiler-readme-revision-%1").arg(compiler.id), readmePath, compiler.pinnedRevision, readme, QStringLiteral("README should include the pinned %1 revision.").arg(compiler.displayName));
+		appendCreditsTextCheck(checks, QStringLiteral("compiler-docs-revision-%1").arg(compiler.id), creditsPath, compiler.pinnedRevision, credits, QStringLiteral("docs/CREDITS.md should include the pinned %1 revision.").arg(compiler.displayName));
+		appendCreditsTextCheck(checks, QStringLiteral("compiler-gitmodules-path-%1").arg(compiler.id), gitmodulesPath, compiler.sourcePath, gitmodules, QStringLiteral(".gitmodules should include the %1 submodule path.").arg(compiler.displayName));
+
+		const QString normalizedGitmoduleUrl = normalizedRepositoryUrl(gitmodulesUrlForSourcePath(gitmodules, compiler.sourcePath));
+		checks.append({
+			QStringLiteral("compiler-gitmodules-url-%1").arg(compiler.id),
+			gitmodulesPath,
+			normalizedRepositoryUrl(compiler.upstreamUrl),
+			normalizedGitmoduleUrl,
+			normalizedGitmoduleUrl == normalizedRepositoryUrl(compiler.upstreamUrl),
+			QStringLiteral(".gitmodules should point %1 at the structured upstream URL.").arg(compiler.displayName),
+		});
+
+		const QString absoluteSourcePath = QDir::current().absoluteFilePath(compiler.sourcePath);
+		const QString headRevision = gitHeadRevision(absoluteSourcePath);
+		checks.append({
+			QStringLiteral("compiler-submodule-revision-%1").arg(compiler.id),
+			absoluteSourcePath,
+			compiler.pinnedRevision,
+			headRevision,
+			headRevision.compare(compiler.pinnedRevision, Qt::CaseInsensitive) == 0,
+			headRevision.isEmpty()
+				? QStringLiteral("Unable to read checked-out submodule revision for %1.").arg(compiler.displayName)
+				: QStringLiteral("Checked-out %1 revision should match the structured manifest pin.").arg(compiler.displayName),
+		});
+	}
 	bool passed = true;
+	int failedCount = 0;
 	for (const CreditsValidationCheck& check : checks) {
 		passed = passed && check.passed;
+		if (!check.passed) {
+			++failedCount;
+		}
 	}
 	const CliExitCode code = passed ? CliExitCode::Success : CliExitCode::ValidationFailed;
 	if (format == CliOutputFormat::Json) {
@@ -2645,6 +3110,8 @@ int runCreditsValidateCommand(const QString& commandName, CliOutputFormat format
 		}
 		object.insert(QStringLiteral("checks"), array);
 		object.insert(QStringLiteral("passed"), passed);
+		object.insert(QStringLiteral("checkCount"), checks.size());
+		object.insert(QStringLiteral("failedCount"), failedCount);
 		printJson(object);
 		return exitCodeValue(code);
 	}
@@ -2653,7 +3120,11 @@ int runCreditsValidateCommand(const QString& commandName, CliOutputFormat format
 	for (const CreditsValidationCheck& check : checks) {
 		std::cout << "- " << (check.passed ? "ok" : "missing") << " " << text(check.id) << "\n";
 		std::cout << "  " << text(check.message) << "\n";
+		if (!check.observedText.isEmpty()) {
+			std::cout << "  Observed: " << text(check.observedText) << "\n";
+		}
 	}
+	std::cout << "Passed: " << (passed ? "yes" : "no") << " (" << (checks.size() - failedCount) << "/" << checks.size() << ")\n";
 	return exitCodeValue(code);
 }
 
@@ -2694,6 +3165,7 @@ int runEditorProfilesCommand(const QString& commandName, CliOutputFormat format)
 		std::cout << "  Terminology: " << text(profile.terminologyPresetId) << "\n";
 		std::cout << "  Engines: " << text(profile.supportedEngineFamilies.join(", ")) << "\n";
 		std::cout << "  Panels: " << text(profile.defaultPanels.join(", ")) << "\n";
+		std::cout << "  Routed commands: " << profile.bindings.size() << "\n";
 		std::cout << "  " << text(profile.description) << "\n";
 	}
 	return exitCodeValue(CliExitCode::Success);
@@ -2738,6 +3210,72 @@ int runEditorSelectCommand(const QString& commandName, const QString& profileId,
 		printJson(object);
 	} else {
 		std::cout << "Selected editor profile: " << text(profile.displayName) << " [" << text(profile.id) << "]\n";
+	}
+	return exitCodeValue(CliExitCode::Success);
+}
+
+int runLocalizationReportCommand(const QString& commandName, const QStringList& args, CliOutputFormat format, bool targetsOnly)
+{
+	const QString localeName = hasOption(args, QStringLiteral("--locale")) ? optionValue(args, QStringLiteral("--locale")) : QStringLiteral("en");
+	const QString catalogRoot = hasOption(args, QStringLiteral("--catalog-root")) ? optionValue(args, QStringLiteral("--catalog-root")) : QStringLiteral("i18n");
+	const LocalizationSmokeReport report = buildLocalizationSmokeReport(localeName, catalogRoot);
+	const CliExitCode code = report.ok ? CliExitCode::Success : CliExitCode::ValidationFailed;
+
+	if (format == CliOutputFormat::Json) {
+		QJsonObject object = cliResultJson(commandName, code);
+		if (targetsOnly) {
+			object.insert(QStringLiteral("targets"), localizationTargetsJson());
+			object.insert(QStringLiteral("targetCount"), localizationTargets().size());
+		} else {
+			object.insert(QStringLiteral("localization"), localizationSmokeReportJson(report));
+		}
+		printJson(object);
+		return exitCodeValue(code);
+	}
+
+	if (targetsOnly) {
+		std::cout << "Localization targets\n";
+		for (const LocalizationTarget& target : localizationTargets()) {
+			std::cout << "- " << text(target.localeName) << ": " << text(target.englishName) << " / " << text(target.nativeName) << (target.rightToLeft ? " [RTL]" : "") << "\n";
+		}
+	} else {
+		std::cout << text(localizationSmokeReportText(report)) << "\n";
+	}
+	return exitCodeValue(code);
+}
+
+int runDiagnosticsBundleCommand(const QString& commandName, const QStringList& args, CliOutputFormat format)
+{
+	const QJsonObject bundle = diagnosticBundleJson();
+	const QString outputPath = optionValue(args, QStringLiteral("--output"));
+	QString writtenPath;
+	if (!outputPath.trimmed().isEmpty()) {
+		QDir outputDir(outputPath);
+		if (!outputDir.exists() && !QDir().mkpath(outputDir.path())) {
+			return printCliError(commandName, CliExitCode::Failure, QStringLiteral("Unable to create diagnostic bundle folder: %1").arg(nativePath(outputPath)), format);
+		}
+		writtenPath = outputDir.filePath(QStringLiteral("vibestudio-diagnostics.json"));
+		QFile file(writtenPath);
+		if (!file.open(QIODevice::WriteOnly | QIODevice::Truncate | QIODevice::Text)) {
+			return printCliError(commandName, CliExitCode::Failure, QStringLiteral("Unable to write diagnostic bundle: %1").arg(file.errorString()), format);
+		}
+		file.write(QJsonDocument(bundle).toJson(QJsonDocument::Indented));
+	}
+
+	if (format == CliOutputFormat::Json) {
+		QJsonObject object = cliResultJson(commandName);
+		object.insert(QStringLiteral("bundle"), bundle);
+		object.insert(QStringLiteral("writtenPath"), writtenPath);
+		printJson(object);
+	} else {
+		std::cout << "Diagnostic bundle\n";
+		std::cout << "Version: " << text(versionString()) << "\n";
+		std::cout << "Commands: " << cliCommandDescriptors().size() << "\n";
+		std::cout << "Modules: " << plannedModules().size() << "\n";
+		std::cout << "Redaction: " << text(bundle.value(QStringLiteral("redaction")).toString()) << "\n";
+		if (!writtenPath.isEmpty()) {
+			std::cout << "Written: " << text(nativePath(QFileInfo(writtenPath).absoluteFilePath())) << "\n";
+		}
 	}
 	return exitCodeValue(CliExitCode::Success);
 }
@@ -3217,16 +3755,21 @@ int runPackageInfoCommand(const QString& commandName, const QString& path, CliOu
 
 	PackageArchive archive;
 	QString error;
-	if (!loadPackageForCliQuiet(path, &archive, &error)) {
+	qint64 packageOpenMs = 0;
+	if (!loadPackageForCliQuiet(path, &archive, &error, &packageOpenMs)) {
 		return printCliError(commandName, CliExitCode::Failure, QStringLiteral("Unable to open package: %1").arg(error), format);
 	}
 
 	if (format == CliOutputFormat::Json) {
 		QJsonObject object = cliResultJson(commandName);
 		object.insert(QStringLiteral("package"), packageInfoJson(archive));
+		object.insert(QStringLiteral("timing"), packageTimingJson(packageOpenMs));
 		printJson(object);
 	} else {
 		printPackageInfo(archive);
+		if (verboseOutput()) {
+			std::cerr << "vibestudio: package opened in " << packageOpenMs << " ms\n";
+		}
 	}
 	return exitCodeValue(CliExitCode::Success);
 }
@@ -3239,16 +3782,21 @@ int runPackageListCommand(const QString& commandName, const QString& path, CliOu
 
 	PackageArchive archive;
 	QString error;
-	if (!loadPackageForCliQuiet(path, &archive, &error)) {
+	qint64 packageOpenMs = 0;
+	if (!loadPackageForCliQuiet(path, &archive, &error, &packageOpenMs)) {
 		return printCliError(commandName, CliExitCode::Failure, QStringLiteral("Unable to open package: %1").arg(error), format);
 	}
 
 	if (format == CliOutputFormat::Json) {
 		QJsonObject object = cliResultJson(commandName);
 		object.insert(QStringLiteral("package"), packageListJson(archive));
+		object.insert(QStringLiteral("timing"), packageTimingJson(packageOpenMs));
 		printJson(object);
 	} else {
 		printPackageList(archive);
+		if (verboseOutput()) {
+			std::cerr << "vibestudio: package listed after open in " << packageOpenMs << " ms\n";
+		}
 	}
 	return exitCodeValue(CliExitCode::Success);
 }
@@ -3264,20 +3812,29 @@ int runPackagePreviewCommand(const QString& commandName, const QString& packageP
 
 	PackageArchive archive;
 	QString error;
-	if (!loadPackageForCliQuiet(packagePath, &archive, &error)) {
+	qint64 packageOpenMs = 0;
+	if (!loadPackageForCliQuiet(packagePath, &archive, &error, &packageOpenMs)) {
 		return printCliError(commandName, CliExitCode::Failure, QStringLiteral("Unable to open package: %1").arg(error), format);
 	}
 
+	QElapsedTimer previewTimer;
+	previewTimer.start();
 	const PackagePreview preview = buildPackageEntryPreview(archive, entryPath);
+	const qint64 previewMs = previewTimer.elapsed();
 	if (format == CliOutputFormat::Json) {
 		QJsonObject object = cliResultJson(commandName, preview.kind == PackagePreviewKind::Unavailable ? CliExitCode::NotFound : CliExitCode::Success);
 		object.insert(QStringLiteral("packagePath"), packagePath);
 		object.insert(QStringLiteral("preview"), packagePreviewJson(preview));
+		object.insert(QStringLiteral("timing"), packageTimingJson(packageOpenMs, previewMs));
 		printJson(object);
 		return preview.kind == PackagePreviewKind::Unavailable ? exitCodeValue(CliExitCode::NotFound) : exitCodeValue(CliExitCode::Success);
 	}
 
-	return printPackagePreview(archive, entryPath) ? exitCodeValue(CliExitCode::Success) : exitCodeValue(CliExitCode::Failure);
+	const bool previewPrinted = printPackagePreview(archive, entryPath, &preview);
+	if (verboseOutput()) {
+		std::cerr << "vibestudio: package opened in " << packageOpenMs << " ms; preview built in " << previewMs << " ms\n";
+	}
+	return previewPrinted ? exitCodeValue(CliExitCode::Success) : exitCodeValue(CliExitCode::Failure);
 }
 
 int runPackageExtractCommand(const QString& commandName, const QString& packagePath, const QString& outputPath, const QStringList& entries, bool extractAll, bool dryRun, bool overwrite, CliOutputFormat format)
@@ -4532,6 +5089,9 @@ int runSubcommand(const QStringList& args)
 	if (family == QStringLiteral("cli") && (action == QStringLiteral("commands") || action == QStringLiteral("help"))) {
 		return runCliCommandsCommand(QStringLiteral("cli commands"), format);
 	}
+	if ((family == QStringLiteral("ui") || family == QStringLiteral("shell")) && (action == QStringLiteral("semantics") || action == QStringLiteral("status") || action == QStringLiteral("shortcuts") || action == QStringLiteral("commands"))) {
+		return runUiSemanticsCommand(QStringLiteral("ui semantics"), format);
+	}
 
 	if (action.isEmpty()) {
 		return printCliError(commandName, CliExitCode::Usage, QStringLiteral("Missing CLI subcommand. Run --cli --help."), format);
@@ -4653,6 +5213,21 @@ int runSubcommand(const QStringList& args)
 	if (family == QStringLiteral("code") || family == QStringLiteral("ide") || family == QStringLiteral("source")) {
 		if (action == QStringLiteral("index") || action == QStringLiteral("tree") || action == QStringLiteral("symbols")) {
 			return runCodeIndexCommand(QStringLiteral("code index"), tokens.value(2), args, format);
+		}
+	}
+
+	if (family == QStringLiteral("localization") || family == QStringLiteral("locale") || family == QStringLiteral("translation") || family == QStringLiteral("translations")) {
+		if (action == QStringLiteral("targets") || action == QStringLiteral("list")) {
+			return runLocalizationReportCommand(QStringLiteral("localization targets"), args, format, true);
+		}
+		if (action == QStringLiteral("report") || action == QStringLiteral("smoke") || action == QStringLiteral("audit")) {
+			return runLocalizationReportCommand(QStringLiteral("localization report"), args, format, false);
+		}
+	}
+
+	if (family == QStringLiteral("diagnostics") || family == QStringLiteral("diagnostic") || family == QStringLiteral("support")) {
+		if (action == QStringLiteral("bundle") || action == QStringLiteral("collect") || action == QStringLiteral("report")) {
+			return runDiagnosticsBundleCommand(QStringLiteral("diagnostics bundle"), args, format);
 		}
 	}
 
@@ -4825,6 +5400,9 @@ int runImpl(const QStringList& args)
 		printUiPrimitives();
 		return 0;
 	}
+	if (hasOption(args, "--ui-semantics")) {
+		return runUiSemanticsCommand(QStringLiteral("--ui-semantics"), outputFormat(args));
+	}
 	if (hasOption(args, "--package-formats")) {
 		printPackageFormats();
 		return 0;
@@ -4986,6 +5564,9 @@ int runImpl(const QStringList& args)
 		const StudioSettings settings;
 		printPreferences(settings.accessibilityPreferences(), settings.selectedEditorProfileId());
 		return 0;
+	}
+	if (hasOption(args, "--localization-report")) {
+		return runLocalizationReportCommand(QStringLiteral("--localization-report"), args, outputFormat(args), false);
 	}
 	if (hasOption(args, "--editor-profiles")) {
 		return runEditorProfilesCommand(QStringLiteral("--editor-profiles"), outputFormat(args));

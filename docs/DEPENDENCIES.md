@@ -15,8 +15,9 @@ path.
 Required Qt modules should stay minimal in `meson.build` until code uses them.
 Qt Gui is active for image metadata/conversion in the package and asset tools.
 Planned modules include SQL, Multimedia, Concurrent, OpenGLWidgets, and
-TextToSpeech. Qt Linguist tools are planned for localization extraction and
-release translation bundles.
+TextToSpeech. Qt Linguist `.ts` catalogs are now scaffolded for localization
+status reporting, and `scripts/extract_translations.py` validates dry-run
+`lupdate` extraction; `lrelease` translation bundles remain planned.
 
 Milestone 8 Advanced Studio services use the existing C++20/Qt Core, Gui, and
 Widgets baseline for shader parsing/editing, sprite planning, source indexing,
@@ -37,7 +38,7 @@ Likely future additions:
 - [CLI11](https://github.com/CLIUtils/CLI11): evaluated for the full CLI parser/completion layer and deliberately deferred. The active in-process command registry now covers testable command metadata without adding a dependency.
 - [SQLite](https://sqlite.org/) through Qt SQL, with [FTS5](https://sqlite.org/fts5.html) where available: asset index, dependency search, diagnostics, recent activity, and project metadata.
 - [Qt TextToSpeech](https://doc.qt.io/qt-6/qttexttospeech-index.html): OS-backed TTS for setup guidance, task summaries, diagnostics, and optional spoken status.
-- [Qt internationalization](https://doc.qt.io/qt-6/internationalization.html) and Qt Linguist tools: localization pipeline, translation bundles, pseudo-localization, and right-to-left validation.
+- [Qt internationalization](https://doc.qt.io/qt-6/internationalization.html) and Qt Linguist tools: active target registry, seed TS catalogs, pseudo-localization, right-to-left smoke checks, pluralization samples, locale formatting, expansion layout smoke checks, stale/untranslated catalog reports, and dry-run `lupdate` extraction; runtime loading and release translation bundles remain planned.
 - [bgfx](https://bkaradzic.github.io/bgfx/overview.html): long-term renderer backend behind a VibeStudio render abstraction.
 - Qt OpenGLWidgets: early MVP 3D preview backend while the renderer abstraction matures.
 - [KSyntaxHighlighting](https://api.kde.org/frameworks/syntax-highlighting/html/index.html): reusable syntax highlighting definitions for editor surfaces.

@@ -97,6 +97,39 @@ QVector<UiPrimitiveDescriptor> uiPrimitiveDescriptors()
 				uiText("raw diagnostics"),
 			},
 		},
+		{
+			QStringLiteral("status-chip"),
+			uiText("Status chip"),
+			uiText("Compact non-color-only status indicator for project, package, compiler, installation, AI, validation, setup, and localization state."),
+			{
+				uiText("project health"),
+				uiText("package staging"),
+				uiText("compiler readiness"),
+				uiText("AI-free mode"),
+			},
+		},
+		{
+			QStringLiteral("shortcut-registry"),
+			uiText("Shortcut registry"),
+			uiText("Shared keyboard shortcut metadata for command surfaces, conflict checks, accessible labels, and future user remapping."),
+			{
+				uiText("global commands"),
+				uiText("package commands"),
+				uiText("compiler commands"),
+				uiText("activity commands"),
+			},
+		},
+		{
+			QStringLiteral("command-palette"),
+			uiText("Command palette shell"),
+			uiText("Searchable command metadata shell with categories, summaries, shortcut hints, and staged/destructive flags."),
+			{
+				uiText("workspace commands"),
+				uiText("support commands"),
+				uiText("QA commands"),
+				uiText("AI review commands"),
+			},
+		},
 	};
 }
 

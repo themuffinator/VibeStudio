@@ -74,6 +74,9 @@ Current implementation:
 - The Qt Widgets shell shows a pipeline graphic, per-profile readiness, run and
   cancellation actions, activity-center summaries/logs, and copy actions for a
   CLI equivalent and JSON manifest.
+- `scripts/validate_credits.py` and CLI `credits validate` compare imported
+  compiler pins across `src/core/studio_manifest.cpp`, `.gitmodules`,
+  `README.md`, `docs/CREDITS.md`, and the checked-out submodule revisions.
 
 ## CLI Examples
 

@@ -74,9 +74,10 @@ Required behavior:
 - [ ] Editor profile controls document keyboard/mouse changes clearly and expose
   reset/revert actions.
 
-The active editor profile registry exposes placeholder keyboard and mouse
-binding descriptions in preferences, inspector details, CLI text, and JSON.
-Reset/revert actions and full keyboard/mouse audits remain planned.
+The active editor profile registry exposes routed keyboard and mouse binding
+descriptions with stable command IDs in preferences, inspector details, CLI
+text, and JSON. Reset/revert actions and full keyboard/mouse audits remain
+planned.
 
 Current shell custom widgets include a reusable loading pane and detail drawer.
 They expose accessible names and descriptions for their title, state,
@@ -107,6 +108,7 @@ the documented smoke paths for:
 - high-contrast dark and high-contrast light preference coverage;
 - text scale checks at 100%, 125%, 150%, 175%, and 200%;
 - pseudo-localization and right-to-left Arabic/Urdu smoke checks;
+- pluralization and translation expansion layout smoke checks;
 - OS-backed TTS test phrase and task-result smoke coverage where the platform
   exposes an engine;
 - non-color-only state names for project, package, compiler, AI, setup, and
@@ -147,7 +149,7 @@ Engineering requirements:
 - [ ] Avoid string concatenation that breaks grammar in translated languages.
 - [ ] Support pluralization, gender-neutral phrasing where possible, and
   translator comments for technical terms.
-- [ ] Use `QLocale` for dates, numbers, sizes, durations, currencies, and
+- [x] Use `QLocale` for dates, numbers, sizes, durations, currencies, and
   collation.
 - [ ] Support bidirectional layouts and text for Arabic and Urdu.
 - [ ] Leave expansion room in layouts for longer translated text.
@@ -155,7 +157,19 @@ Engineering requirements:
   snippets untranslated unless they are explanatory prose.
 - [ ] Allow language selection in setup and preferences, with a restart prompt
   only if live switching is not yet implemented.
-- [ ] Provide pseudo-localization and right-to-left test modes.
+- [x] Provide pseudo-localization and right-to-left test modes.
+
+The active localization scaffold lives in `src/core/localization.*` and is
+shared by preferences, tests, CLI reports, and diagnostic bundles. It defines
+the 20-language target registry, normalizes locale IDs, identifies Arabic and
+Urdu as right-to-left smoke targets, generates pseudo-localized and expansion
+stress samples, emits `QLocale` formatting and pluralization samples, checks
+expanded text against representative shell layout budgets, and inspects Qt
+`.ts` catalogs for missing, unfinished, obsolete, or vanished translations.
+The `i18n/` directory contains seed catalogs for the 20 targets plus a pseudo
+catalog; most are intentionally marked unfinished until real translation work
+begins. `scripts/extract_translations.py` dry-runs Qt `lupdate` against the
+source tree and catalogs so extraction drift is visible before release.
 
 ## Initial Localization Set
 
@@ -200,7 +214,10 @@ UI, and at least a small verified translation slice.
 - [ ] Run screen-reader metadata spot checks for shell, setup, preferences,
   package tree, activity center, compiler log, and editor profile controls.
 - [ ] Run TTS smoke tests for enabled event categories.
-- [ ] Run pseudo-localization and right-to-left layout checks in CI or release
+- [x] Run pseudo-localization and right-to-left layout checks in CI or release
   validation.
+- [x] Run pluralization and translation expansion layout smoke checks in CI or
+  release validation.
+- [x] Run a Qt Linguist extraction dry-run in local and CI validation.
 - [ ] Track untranslated strings and stale translations as release blockers once
   a language is marked supported.

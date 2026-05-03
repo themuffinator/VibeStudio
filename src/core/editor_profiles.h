@@ -12,6 +12,9 @@ struct EditorProfileBinding {
 	QString shortcut;
 	QString mouseGesture;
 	QString context;
+	QString commandId;
+	QString surfaceId;
+	bool implemented = true;
 };
 
 struct EditorProfileDescriptor {
@@ -31,7 +34,7 @@ struct EditorProfileDescriptor {
 	QStringList keybindingNotes;
 	QStringList mouseBindingNotes;
 	QVector<EditorProfileBinding> bindings;
-	bool placeholder = true;
+	bool placeholder = false;
 };
 
 QString defaultEditorProfileId();
@@ -41,5 +44,7 @@ QStringList editorProfileIds();
 bool editorProfileForId(const QString& id, EditorProfileDescriptor* out = nullptr);
 QString editorProfileDisplayNameForId(const QString& id);
 QString editorProfileSummaryText(const EditorProfileDescriptor& profile);
+bool editorProfileBindingForAction(const EditorProfileDescriptor& profile, const QString& actionId, EditorProfileBinding* out = nullptr);
+bool editorProfileHasShortcutConflict(const EditorProfileDescriptor& profile, QString* conflict = nullptr);
 
 } // namespace vibestudio

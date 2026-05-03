@@ -32,7 +32,7 @@ def repo_root() -> Path:
 
 
 def run(command: list[str], *, cwd: Path | None = None, allowed_codes: set[int] | None = None, timeout: int = 30) -> subprocess.CompletedProcess[str]:
-    process = subprocess.run(command, cwd=cwd, text=True, capture_output=True, check=False, timeout=timeout)
+    process = subprocess.run(command, cwd=cwd, text=True, encoding="utf-8", errors="replace", capture_output=True, check=False, timeout=timeout)
     if allowed_codes is None:
         allowed_codes = {0}
     if process.returncode not in allowed_codes:
@@ -148,9 +148,16 @@ def validate_portable_targets(root: Path, binary: Path, temp_root: Path) -> list
             raise RuntimeError(f"Offline guide missing from manifest {manifest_path}")
         if manifest.get("licenseBundle") != "licenses/THIRD_PARTY_LICENSES.md":
             raise RuntimeError(f"License bundle missing from manifest {manifest_path}")
+        if manifest.get("localizationCatalogRoot") != "i18n":
+            raise RuntimeError(f"Localization catalog root missing from manifest {manifest_path}")
+        if len(manifest.get("includedLocalizationCatalogs", [])) < 21:
+            raise RuntimeError(f"Localization catalog list incomplete in manifest {manifest_path}")
         for relative in [
             "bin/" + binary.name,
             "docs/OFFLINE_USER_GUIDE.md",
+            "i18n/README.md",
+            "i18n/vibestudio_en.ts",
+            "i18n/vibestudio_pseudo.ts",
             "platform/README.txt",
             "package-manifest.json",
             "CHECKSUMS.sha256",
@@ -160,7 +167,7 @@ def validate_portable_targets(root: Path, binary: Path, temp_root: Path) -> list
             if not (package_dir / relative).exists():
                 raise RuntimeError(f"Missing packaged file for {target}: {relative}")
         checksums = (package_dir / "CHECKSUMS.sha256").read_text(encoding="utf-8")
-        if "package-manifest.json" not in checksums or "docs/OFFLINE_USER_GUIDE.md" not in checksums:
+        if "package-manifest.json" not in checksums or "docs/OFFLINE_USER_GUIDE.md" not in checksums or "i18n/vibestudio_en.ts" not in checksums:
             raise RuntimeError(f"Checksums do not cover required files in {package_dir}")
     if seen_targets != TARGETS:
         raise RuntimeError(f"Expected targets {sorted(TARGETS)}, got {sorted(seen_targets)}")
@@ -235,6 +242,36 @@ def validate_feedback_cli(binary: Path, temp_root: Path) -> None:
     if "workflow" not in ai:
         raise RuntimeError("AI explain-log did not emit workflow JSON")
 
+    localization = run_json(
+        [
+            str(binary),
+            "--cli",
+            "--json",
+            "localization",
+            "report",
+            "--locale",
+            "ar",
+        ],
+        timeout=30,
+    )
+    localization_report = localization.get("localization", {})
+    if localization_report.get("expansionSmokeOk") is not True:
+        raise RuntimeError("Localization report did not confirm expansion smoke coverage")
+    if localization_report.get("expansionLayoutSmokeOk") is not True:
+        raise RuntimeError("Localization report did not confirm expansion layout smoke coverage")
+    if localization_report.get("pluralizationSmokeOk") is not True:
+        raise RuntimeError("Localization report did not confirm pluralization smoke coverage")
+    if localization_report.get("untranslatedMessageCount", 0) < 1:
+        raise RuntimeError("Localization report did not expose untranslated catalog status")
+
+
+def validate_translation_extraction(root: Path) -> None:
+    run(
+        [sys.executable, str(root / "scripts" / "extract_translations.py"), "--check", "--dry-run"],
+        cwd=root,
+        timeout=180,
+    )
+
 
 def time_command(command: list[str], *, allowed_codes: set[int] | None = None, timeout: int = 30) -> float:
     started = time.perf_counter()
@@ -280,7 +317,7 @@ def validate_performance_smoke(binary: Path, temp_root: Path, report_path: Path 
 
 def validate_static_release_checks(root: Path) -> None:
     workflow = (root / ".github" / "workflows" / "pr-ci.yml").read_text(encoding="utf-8")
-    for token in ("windows-latest", "macos-latest", "ubuntu-latest", "validate_release_assets.py"):
+    for token in ("windows-latest", "macos-latest", "ubuntu-latest", "validate_release_assets.py", "validate_credits.py", "extract_translations.py"):
         if token not in workflow:
             raise RuntimeError(f"PR CI workflow is missing release validation token: {token}")
 
@@ -291,7 +328,7 @@ def validate_static_release_checks(root: Path) -> None:
     for label, haystack, tokens in [
         ("high-visibility theme audit", shell + accessibility, ["HighContrastDark", "HighContrastLight", "200%"]),
         ("keyboard and accessibility audit", shell + accessibility, ["setAccessibleName", "keyboard-only", "DetailDrawer"]),
-        ("localization audit", shell + accessibility, ["QLocale", "pseudo-localization", "Arabic", "Urdu"]),
+        ("localization audit", shell + accessibility, ["QLocale", "pseudo-localization", "pluralization", "Arabic", "Urdu"]),
         ("TTS smoke path", shell + setup + accessibility, ["textToSpeechEnabled", "TTS", "test phrase"]),
         ("task history persistence", shell + settings, ["recentActivityTasks", "persistActivityTask", "Compiler Run"]),
         ("loading/progress/detail coverage", shell, ["LoadingPane", "setProgress", "Raw Task"]),
@@ -321,6 +358,7 @@ def main() -> int:
             fixtures = create_package_fixtures(temp_root)
             validate_package_cli(binary, fixtures, temp_root)
             validate_feedback_cli(binary, temp_root)
+            validate_translation_extraction(root)
             validate_performance_smoke(binary, temp_root, report_path)
             validate_static_release_checks(root)
     except Exception as exc:  # noqa: BLE001 - command-line smoke reports concise failure.

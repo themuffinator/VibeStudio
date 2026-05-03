@@ -1605,7 +1605,7 @@ void ApplicationShell::buildUi()
 
 	m_editorProfileCombo = new QComboBox;
 	m_editorProfileCombo->setAccessibleName(tr("Editor profile"));
-	m_editorProfileCombo->setAccessibleDescription(tr("Selects the placeholder level-editor interaction profile for future map editing surfaces."));
+	m_editorProfileCombo->setAccessibleDescription(tr("Selects the routed level-editor interaction profile used by map, package, compiler, and shell command surfaces."));
 	for (const EditorProfileDescriptor& profile : editorProfileDescriptors()) {
 		m_editorProfileCombo->addItem(profile.displayName, profile.id);
 	}

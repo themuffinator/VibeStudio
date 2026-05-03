@@ -16,8 +16,8 @@ surface using the same core services as the GUI.
 ## Command Architecture
 - [x] Lightweight in-process router for early subcommand families.
 - [x] Global `--json` output mode for router-backed project, package,
-  installation, asset, map, shader, sprite, code, extension, compiler, AI, and
-  exit-code commands.
+  installation, asset, map, shader, sprite, code, extension, compiler,
+  localization, diagnostics, AI, and exit-code commands.
 - [x] Stable exit-code contract exposed through `--exit-codes` and
   `cli exit-codes`.
 - [x] Schema-versioned command manifest writer for compiler command plans.
@@ -42,6 +42,7 @@ surface using the same core services as the GUI.
 - [x] `--project-info <path>` scaffold manifest and health summary output.
 - [x] `--project-validate <path>` scaffold project health validation.
 - [ ] `project create`
+- [x] `project init`
 - [x] `project info`
 - [x] `project validate`
 - [ ] `project set-install`
@@ -128,11 +129,22 @@ surface using the same core services as the GUI.
 - [ ] `compiler explain-log`
 
 ### Editor Profiles
-- [x] `--editor-profiles` scaffold report for placeholder editor interaction profiles.
-- [x] `--set-editor-profile <id>` scaffold selected profile persistence.
+- [x] `--editor-profiles` report for routed editor interaction profiles.
+- [x] `--set-editor-profile <id>` selected profile persistence.
 - [x] `editor profiles`
 - [x] `editor current`
 - [x] `editor select`
+
+### Shell UI Semantics
+- [x] `--ui-primitives`
+- [x] `--ui-semantics`
+- [x] `ui semantics`
+
+### Localization And Diagnostics
+- [x] `--localization-report`
+- [x] `localization targets`
+- [x] `localization report`
+- [x] `diagnostics bundle`
 
 ### AI Automation
 - [x] `--ai-status`
@@ -166,12 +178,17 @@ surface using the same core services as the GUI.
 - [x] `scripts/validate_samples.py`
 - [x] `scripts/validate_packaging.py`
 - [x] `scripts/validate_release_assets.py`
+- [x] `scripts/validate_docs.py`
+- [x] `scripts/validate_source_layout.py`
+- [x] `scripts/validate_cli_docs.py`
+- [x] `scripts/validate_credits.py`
+- [x] `scripts/extract_translations.py`
 - [x] `scripts/package_portable.py`
 - [ ] `qa smoke`
 - [ ] `qa support-matrix`
 - [ ] `release manifest`
 - [x] `credits validate`
-- [ ] `docs validate`
+- [x] `docs validate`
 
 ## Output Contract
 - [x] `--json` emits stable machine-readable output for supported command families.
@@ -204,6 +221,9 @@ vibestudio --cli map edit ".\maps\start.map" --entity 1 --set targetname=lift --
 vibestudio --cli shader set-stage ".\scripts\common.shader" --shader "textures/base/wall" --stage 1 --directive blendFunc --value "GL_ONE GL_ONE" --output ".\scripts\common-edited.shader" --json
 vibestudio --cli sprite plan --engine doom --name TROO --frames 2 --rotations 8 --palette doom --json
 vibestudio --cli compiler run ericw-qbsp --input ".\maps\start.map" --watch --manifest ".\build\start.run.json"
+vibestudio --cli ui semantics --json
+vibestudio --cli localization report --locale ar --json
+vibestudio --cli diagnostics bundle --output ".\diagnostics"
 vibestudio --cli extension discover ".\extensions" --json
 vibestudio --cli ai explain-log --log ".\build\qbsp.log" --json
 vibestudio --cli ai review --kind shader --prompt "glowing gothic wall" --json
@@ -218,6 +238,9 @@ vibestudio --cli map inspect './maps/start.map' --select entity:0 --json
 vibestudio --cli shader inspect './scripts/common.shader' --package './baseq3' --json
 vibestudio --cli code index './mymod' --find monster --json
 vibestudio --cli compiler plan ericw-qbsp --input './maps/start.map' --dry-run
+vibestudio --cli ui semantics
+vibestudio --cli localization targets
+vibestudio --cli diagnostics bundle --output './diagnostics'
 vibestudio --cli extension run './extensions/sample/vibestudio.extension.json' make-file --dry-run --json
 vibestudio --cli ai propose-command --prompt 'build quake map maps/start.map with qbsp'
 vibestudio --cli ai batch-recipe --prompt 'convert doom sprites to indexed png' --json

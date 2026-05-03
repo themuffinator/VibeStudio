@@ -72,8 +72,8 @@ changes behavior, update or add a metric-backed test where practical.
 - [ ] Custom widgets expose accessible names, roles, descriptions, focus, values, and state changes.
 - [ ] OS-backed TTS can read selected summaries, diagnostics, setup guidance, and task completion/failure events.
 - [ ] Reduced motion setting affects transitions, loading visuals, and timeline effects.
-- [ ] Translation pipeline supports pseudo-localization, right-to-left checks, pluralization, locale formatting, and stale-string reporting.
-- [ ] Initial localization target set covers the 20 languages documented in `docs/ACCESSIBILITY_LOCALIZATION.md`.
+- [x] Translation pipeline supports pseudo-localization, right-to-left checks, pluralization, locale formatting, and stale-string reporting.
+- [x] Initial localization target set covers the 20 languages documented in `docs/ACCESSIBILITY_LOCALIZATION.md`.
 
 ### User-Visible Progress And Detail
 - [ ] Global activity center shows queued, running, completed, warning, failed, and cancelled tasks.
@@ -105,7 +105,7 @@ changes behavior, update or add a metric-backed test where practical.
 - [ ] GUI and CLI commands share the same service layer for projects, packages, compilers, validation, and automation.
 - [x] CLI supports human-readable and JSON output.
 - [ ] CLI commands support dry-run or staged behavior for destructive operations.
-- [ ] CLI help is generated or validated against documented command coverage.
+- [x] CLI help is generated or validated against documented command coverage.
 - [x] CLI is capable enough for CI package validation and compiler smoke tests.
 
 ### Efficiency And Robustness
@@ -151,10 +151,10 @@ MVP exit criteria:
 - [ ] Provides progressive disclosure for package metadata, compiler logs, project validation, and asset details.
 - [ ] Provides at least one useful graphical project/package/compiler summary.
 - [ ] Provides CLI coverage for project info, package inspection, validation, compiler runs, and command manifests.
-- [ ] Provides at least a documented first pass of editor profile architecture, even if full profile fidelity lands after MVP.
+- [x] Provides at least a documented first pass of editor profile architecture, even if full profile fidelity lands after MVP.
 - [ ] Provides first-run setup with language, accessibility, high-visibility, scaling, editor profile, install/project/compiler, AI-free, and CLI choices.
 - [ ] Provides high-visibility themes, app scaling settings, keyboard-accessible MVP flows, and OS-backed TTS architecture.
-- [ ] Provides localization pipeline proof with pseudo-localization, right-to-left smoke checks, and initial translation catalog structure.
+- [x] Provides localization pipeline proof with pseudo-localization, right-to-left smoke checks, and initial translation catalog structure.
 - [ ] Provides opt-in AI documentation and a safe architecture path; AI implementation may remain experimental after MVP.
 - [x] Preserves credits and third-party license visibility in README, docs, About, and release bundles.
 
@@ -190,10 +190,10 @@ Goal: make the repository easy to build, test, credit, and extend.
 - [x] Add CLI diagnostics.
 - [x] Add cross-platform CI workflow.
 - [x] Add compiler-submodule verification workflow.
-- [ ] Add release/nightly workflow skeleton adapted from PakFu.
-- [ ] Add `scripts/validate_docs.py` for link, badge, credits, and submodule checks.
-- [ ] Add `scripts/validate_source_layout.py` for required directories and generated-file exclusions.
-- [ ] Add CI artifact retention for app binaries from PR builds.
+- [x] Add release/nightly workflow skeleton adapted from PakFu.
+- [x] Add `scripts/validate_docs.py` for link, credits, localization catalog, and submodule checks.
+- [x] Add `scripts/validate_source_layout.py` for required directories and generated-file exclusions.
+- [x] Add CI artifact retention for app binaries from PR builds.
 
 ### Documentation
 - [x] Add AGENTS rules.
@@ -206,8 +206,8 @@ Goal: make the repository easy to build, test, credit, and extend.
 - [x] Add efficiency philosophy.
 - [x] Add accessibility/localization philosophy.
 - [x] Add initial setup flow philosophy.
-- [ ] Add contribution guide for task sizing, attribution, and fixture expectations.
-- [ ] Add issue templates for feature, bug, format support, compiler integration, and attribution updates.
+- [x] Add contribution guide for task sizing, attribution, and fixture expectations.
+- [x] Add issue templates for feature, bug, format support, compiler integration, and attribution updates.
 
 ### Product Shell
 - [x] Add mode rail and placeholder studio shell.
@@ -218,9 +218,9 @@ Goal: make the repository easy to build, test, credit, and extend.
 - [x] Add reusable operation-state model for idle/loading/running/warning/failed/cancelled/completed states.
 - [x] Add reusable loading/skeleton components for panes and previews.
 - [x] Add reusable detail drawer pattern for logs, metadata, manifests, and raw diagnostics.
-- [ ] Add status chips for project, package, compiler, install, and AI states.
-- [ ] Add command palette shell.
-- [ ] Add keyboard shortcut registry.
+- [x] Add status chips for project, package, compiler, install, and AI states.
+- [x] Add command palette shell.
+- [x] Add keyboard shortcut registry.
 - [x] Add interaction profile registry placeholder.
 - [x] Add accessibility settings placeholder: theme, scale, density, reduced motion, and TTS.
 - [x] Add language/locale settings placeholder.
@@ -234,7 +234,7 @@ Goal: make the repository easy to build, test, credit, and extend.
 - [x] Add package composition summary placeholder.
 - [x] Add compiler pipeline summary placeholder.
 - [ ] Add task timeline placeholder.
-- [ ] Define icon/color semantics for success, warning, failure, running, paused, cancelled, local, cloud, staged, and read-only.
+- [x] Define icon/color semantics for success, warning, failure, running, paused, cancelled, local, cloud, staged, and read-only.
 
 Exit criteria:
 - [ ] New checkout builds with one documented command per platform.
@@ -677,12 +677,12 @@ These tasks never fully end. Pull them forward whenever a feature touches the
 related area.
 
 ### Performance
-- [ ] Add startup timer.
-- [ ] Add package open timing.
-- [ ] Add preview timing.
-- [ ] Add compiler task timing.
+- [x] Add startup timer.
+- [x] Add package open timing.
+- [x] Add preview timing.
+- [x] Add compiler task timing.
 - [ ] Add time-to-first-feedback measurement for long-running operations.
-- [ ] Add task-state transition timing.
+- [x] Add task-state transition timing.
 - [ ] Add cache invalidation tests.
 - [ ] Add memory checks for large package previews.
 
@@ -705,30 +705,31 @@ related area.
 - [ ] Add reduced motion preference if animations are introduced.
 - [ ] Add OS-backed TTS smoke tests.
 - [ ] Add tooltips for icon-only actions.
-- [ ] Audit each editor profile for discoverable controls and non-conflicting shortcuts.
+- [x] Audit each editor profile for discoverable controls and non-conflicting shortcuts.
 - [ ] Audit loading/progress UI for screen-reader labels and non-color-only status.
 - [ ] Audit detail drawers for keyboard access.
 
 ### Localization
-- [ ] Add Qt translation extraction workflow.
-- [ ] Add pseudo-localization target.
-- [ ] Add right-to-left layout smoke test.
-- [ ] Add initial translation catalog structure for the 20-language target set.
-- [ ] Add locale formatting tests for dates, numbers, sizes, durations, and sorting.
-- [ ] Add stale/untranslated string report.
-- [ ] Add translation expansion layout smoke checks.
+- [x] Add Qt translation extraction workflow.
+- [x] Add pseudo-localization target.
+- [x] Add right-to-left layout smoke test.
+- [x] Add initial translation catalog structure for the 20-language target set.
+- [x] Add locale formatting tests for dates, numbers, sizes, durations, and sorting.
+- [x] Add stale/untranslated string report.
+- [x] Add translation expansion stress sample and ratio reporting.
+- [x] Add translation expansion layout smoke checks.
 
 ### User Awareness And Progressive Disclosure
 - [ ] Add UX checklist requiring state, progress, result, next action, and details for each workflow.
 - [ ] Add snapshot tests or scripted QA for loading/empty/error/success states.
-- [ ] Add "copy diagnostic bundle" workflow.
+- [x] Add "copy diagnostic bundle" workflow.
 - [ ] Add operation result summaries for package, compiler, validation, AI, and export tasks.
 - [ ] Add graphical views only when backed by real data and actionable drill-down.
 
 ### Cross-Platform
-- [ ] Add path handling tests.
+- [x] Add path handling tests.
 - [ ] Add shell-open tests.
-- [ ] Add portable package tests.
+- [x] Add portable package tests.
 - [ ] Add file association documentation.
 - [ ] Add platform-specific launcher docs.
 
@@ -739,11 +740,11 @@ related area.
 - [ ] Add project-level AI disablement test.
 
 ### Credits And Licensing
-- [ ] Validate README Credits section against `docs/CREDITS.md`.
-- [ ] Validate external compiler submodule revisions against `src/core/studio_manifest.cpp`.
-- [ ] Bundle third-party license files in release artifacts.
+- [x] Validate README Credits section against `docs/CREDITS.md`.
+- [x] Validate external compiler submodule revisions against `src/core/studio_manifest.cpp`.
+- [x] Bundle third-party license files in release artifacts.
 - [x] Add About/Credits/license surface generated from docs and structured metadata.
-- [ ] Require credits updates in PR checklist.
+- [x] Require credits updates in PR checklist.
 
 ## Near-Term Task Queue
 
@@ -766,7 +767,7 @@ Use this queue to get to MVP quickly.
 15. [x] Add q3map2 probe/compile wrapper profile.
 16. [x] Add structured task logs, command manifests, and output-path reporting.
 17. [x] Add package composition and compiler pipeline graphical summaries.
-18. [x] Add editor profile registry and placeholder presets.
+18. [x] Add editor profile registry and routed MVP presets.
 19. [x] Add AI connector opt-in settings and provider-neutral automation design stub.
 20. [x] Add MVP sample projects and CI smoke checks.
 21. [x] Add portable packaging skeleton.

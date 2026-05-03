@@ -30,6 +30,7 @@ QString OperationStateModel::createTask(const QString& title, const QString& det
 	task.createdUtc = nowUtc();
 	task.updatedUtc = task.createdUtc;
 	task.log.push_back({task.createdUtc, initialState, QStringLiteral("Operation created: %1").arg(task.title)});
+	task.transitions.push_back({task.createdUtc, initialState, 0, QStringLiteral("Operation created: %1").arg(task.title)});
 	m_tasks.prepend(task);
 	return task.id;
 }
@@ -68,6 +69,7 @@ bool OperationStateModel::transitionTask(const QString& taskId, OperationState s
 	if (!message.trimmed().isEmpty()) {
 		task->log.push_back({task->updatedUtc, state, message.trimmed()});
 	}
+	recordTransition(*task, state, message);
 	return true;
 }
 
@@ -96,6 +98,7 @@ bool OperationStateModel::appendLog(const QString& taskId, OperationState state,
 
 	touch(*task, state);
 	task->log.push_back({task->updatedUtc, state, message.trimmed()});
+	recordTransition(*task, state, message);
 	return true;
 }
 
@@ -109,6 +112,7 @@ bool OperationStateModel::appendWarning(const QString& taskId, const QString& wa
 	task->warnings.push_back(warning.trimmed());
 	touch(*task, OperationState::Warning);
 	task->log.push_back({task->updatedUtc, OperationState::Warning, warning.trimmed()});
+	recordTransition(*task, OperationState::Warning, warning);
 	return true;
 }
 
@@ -128,6 +132,7 @@ bool OperationStateModel::completeTask(const QString& taskId, const QString& res
 	if (!task->resultSummary.isEmpty()) {
 		task->log.push_back({task->updatedUtc, task->state, task->resultSummary});
 	}
+	recordTransition(*task, task->state, task->resultSummary);
 	return true;
 }
 
@@ -145,6 +150,7 @@ bool OperationStateModel::failTask(const QString& taskId, const QString& resultS
 	if (!task->resultSummary.isEmpty()) {
 		task->log.push_back({task->updatedUtc, OperationState::Failed, task->resultSummary});
 	}
+	recordTransition(*task, OperationState::Failed, task->resultSummary);
 	return true;
 }
 
@@ -160,6 +166,7 @@ bool OperationStateModel::cancelTask(const QString& taskId, const QString& resul
 	task->finishedUtc = task->updatedUtc;
 	task->cancellable = false;
 	task->log.push_back({task->updatedUtc, OperationState::Cancelled, task->resultSummary});
+	recordTransition(*task, OperationState::Cancelled, task->resultSummary);
 	return true;
 }
 
@@ -214,9 +221,22 @@ void OperationStateModel::touch(OperationTask& task, OperationState state)
 {
 	task.state = state;
 	task.updatedUtc = nowUtc();
+	task.durationMs = operationTaskElapsedMs(task, task.updatedUtc);
 	if (operationStateIsTerminal(state)) {
 		task.finishedUtc = task.updatedUtc;
 	}
+}
+
+void OperationStateModel::recordTransition(OperationTask& task, OperationState state, const QString& message)
+{
+	const QString trimmed = message.trimmed();
+	if (!task.transitions.isEmpty()) {
+		const OperationStateTransition& previous = task.transitions.constLast();
+		if (previous.state == state && previous.message == trimmed) {
+			return;
+		}
+	}
+	task.transitions.push_back({task.updatedUtc, state, task.durationMs, trimmed});
 }
 
 QString operationStateId(OperationState state)
@@ -325,6 +345,32 @@ int operationProgressPercent(const OperationProgress& progress)
 		return 0;
 	}
 	return std::clamp((progress.current * 100) / progress.total, 0, 100);
+}
+
+qint64 operationTaskElapsedMs(const OperationTask& task, const QDateTime& atUtc)
+{
+	if (!task.createdUtc.isValid()) {
+		return 0;
+	}
+	const QDateTime endUtc = atUtc.isValid()
+		? atUtc.toUTC()
+		: (task.finishedUtc.isValid() ? task.finishedUtc.toUTC() : task.updatedUtc.toUTC());
+	return std::max<qint64>(0, task.createdUtc.toUTC().msecsTo(endUtc));
+}
+
+QString operationTaskTimelineText(const OperationTask& task)
+{
+	QStringList lines;
+	for (const OperationStateTransition& transition : task.transitions) {
+		const QString timestamp = transition.timestampUtc.isValid()
+			? transition.timestampUtc.toUTC().toString(Qt::ISODate)
+			: QStringLiteral("unknown-time");
+		const QString message = transition.message.trimmed().isEmpty()
+			? operationStateDisplayName(transition.state)
+			: transition.message.trimmed();
+		lines << QStringLiteral("%1 +%2 ms [%3] %4").arg(timestamp).arg(transition.elapsedMs).arg(operationStateId(transition.state), message);
+	}
+	return lines.join('\n');
 }
 
 } // namespace vibestudio

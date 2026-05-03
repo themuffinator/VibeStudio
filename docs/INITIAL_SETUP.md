@@ -26,7 +26,7 @@ profiles, compilers, AI connectors, CLI use, and workflow preferences.
 
 ### 1. Welcome And Access
 
-- [ ] Choose language.
+- [x] Choose language.
 - [ ] Choose UI scale and font size.
 - [ ] Choose theme: system, dark, light, high-contrast dark, high-contrast
   light.
@@ -130,7 +130,7 @@ Profile areas:
 - [x] High-contrast and scaling choices apply immediately through the shared
   preferences path.
 - [x] Game installation setup supports auto-detect, manual add, skip, and later.
-- [x] Editor profile selection is present even if only placeholders exist.
+- [x] Editor profile selection is present with routed MVP presets.
 - [x] AI-free mode is visible and selectable.
 - [x] OpenAI-first AI connector settings are represented without blocking
   non-OpenAI connector design.
@@ -151,7 +151,8 @@ same state is available from the CLI through `--setup-report`,
 The full guided setup flow remains planned. Steam/GOG game installation
 detection, manual install profiles, editor profile selection, language/theme/
 scale/density/reduced-motion/TTS preferences, AI connector preference storage,
-CLI setup reports, and setup summaries are active scaffold slices. Source-port
-detection, live TTS playback, deeper project/package mounting, and richer
-toolchain probes remain represented as setup steps, preferences, release smoke
-checks, or warnings until their dedicated roadmap slices land.
+CLI setup reports, localization target metadata, and setup summaries are active
+scaffold slices. Source-port detection, live TTS playback, runtime translator
+loading, deeper project/package mounting, and richer toolchain probes remain
+represented as setup steps, preferences, release smoke checks, or warnings
+until their dedicated roadmap slices land.

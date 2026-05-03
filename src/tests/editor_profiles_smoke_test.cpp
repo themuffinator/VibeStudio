@@ -24,7 +24,7 @@ int main(int argc, char** argv)
 
 	const QVector<vibestudio::EditorProfileDescriptor> profiles = vibestudio::editorProfileDescriptors();
 	if (profiles.size() < 5) {
-		return fail("Expected all placeholder editor profiles to be registered.");
+		return fail("Expected all routed editor profiles to be registered.");
 	}
 	if (vibestudio::defaultEditorProfileId() != QStringLiteral("vibestudio-default")) {
 		return fail("Expected stable default editor profile id.");
@@ -42,12 +42,24 @@ int main(int argc, char** argv)
 		if (profile.layoutPresetId.isEmpty() || profile.cameraPresetId.isEmpty() || profile.selectionPresetId.isEmpty() || profile.gridPresetId.isEmpty() || profile.terminologyPresetId.isEmpty()) {
 			return fail("Expected every editor profile to declare schema preset ids.");
 		}
+		if (profile.placeholder) {
+			return fail("Expected editor profiles to be routed MVP presets rather than placeholders.");
+		}
 		if (profile.supportedEngineFamilies.isEmpty() || profile.defaultPanels.isEmpty() || profile.workflowNotes.isEmpty() || profile.bindings.isEmpty()) {
-			return fail("Expected every editor profile to carry placeholder workflow data.");
+			return fail("Expected every editor profile to carry routed workflow data.");
+		}
+		QString conflict;
+		if (vibestudio::editorProfileHasShortcutConflict(profile, &conflict)) {
+			std::cerr << qPrintable(conflict) << "\n";
+			return fail("Expected editor profile shortcuts to avoid surface-local conflicts.");
 		}
 		for (const vibestudio::EditorProfileBinding& binding : profile.bindings) {
-			if (binding.actionId.isEmpty() || binding.displayName.isEmpty() || binding.context.isEmpty()) {
-				return fail("Expected placeholder bindings to be inspectable.");
+			if (binding.actionId.isEmpty() || binding.displayName.isEmpty() || binding.context.isEmpty() || binding.commandId.isEmpty() || binding.surfaceId.isEmpty() || !binding.implemented) {
+				return fail("Expected routed bindings to be inspectable.");
+			}
+			vibestudio::EditorProfileBinding routedBinding;
+			if (!vibestudio::editorProfileBindingForAction(profile, binding.actionId, &routedBinding) || routedBinding.commandId != binding.commandId) {
+				return fail("Expected action lookups to resolve stable command routes.");
 			}
 		}
 	}
@@ -74,6 +86,9 @@ int main(int argc, char** argv)
 	}
 	if (!vibestudio::editorProfileSummaryText(radiant).contains(QStringLiteral("radiant-four-pane"))) {
 		return fail("Expected editor profile summary to expose layout preset.");
+	}
+	if (!vibestudio::editorProfileSummaryText(radiant).contains(QStringLiteral("Command bindings:"))) {
+		return fail("Expected editor profile summary to expose routed command bindings.");
 	}
 	if (!vibestudio::editorProfileDisplayNameForId(QStringLiteral("trenchbroom")).contains(QStringLiteral("TrenchBroom"))) {
 		return fail("Expected editor profile display-name lookup.");

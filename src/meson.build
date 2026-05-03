@@ -25,11 +25,13 @@ core_sources = files(
   'core/ericw_map_preflight.cpp',
   'core/game_installation.cpp',
   'core/level_map.cpp',
+  'core/localization.cpp',
   'core/operation_state.cpp',
   'core/package_archive.cpp',
   'core/package_preview.cpp',
   'core/package_staging.cpp',
   'core/project_manifest.cpp',
+  'core/studio_semantics.cpp',
   'core/studio_manifest.cpp',
   'core/studio_settings.cpp',
 )
@@ -48,7 +50,7 @@ vibestudio_core_dep = declare_dependency(
   link_with: [vibestudio_core],
 )
 
-install_headers(files('core/advanced_studio.h', 'core/ai_connectors.h', 'core/ai_workflows.h', 'core/asset_tools.h', 'core/compiler_artifact_validation.h', 'core/compiler_known_issues.h', 'core/compiler_profiles.h', 'core/compiler_registry.h', 'core/compiler_runner.h', 'core/ericw_map_preflight.h', 'core/editor_profiles.h', 'core/game_installation.h', 'core/level_map.h', 'core/operation_state.h', 'core/package_archive.h', 'core/package_preview.h', 'core/package_staging.h', 'core/project_manifest.h', 'core/studio_manifest.h', 'core/studio_settings.h'), subdir: 'vibestudio/core')
+install_headers(files('core/advanced_studio.h', 'core/ai_connectors.h', 'core/ai_workflows.h', 'core/asset_tools.h', 'core/compiler_artifact_validation.h', 'core/compiler_known_issues.h', 'core/compiler_profiles.h', 'core/compiler_registry.h', 'core/compiler_runner.h', 'core/ericw_map_preflight.h', 'core/editor_profiles.h', 'core/game_installation.h', 'core/level_map.h', 'core/localization.h', 'core/operation_state.h', 'core/package_archive.h', 'core/package_preview.h', 'core/package_staging.h', 'core/project_manifest.h', 'core/studio_semantics.h', 'core/studio_manifest.h', 'core/studio_settings.h'), subdir: 'vibestudio/core')
 
 app_sources = files(
   'main.cpp',
@@ -164,6 +166,26 @@ level_map_smoke_test = executable(
 )
 
 test('level-map-smoke', level_map_smoke_test)
+
+localization_smoke_test = executable(
+  'localization_smoke_test',
+  ['tests/localization_smoke_test.cpp'],
+  include_directories: vibestudio_includes,
+  dependencies: [vibestudio_core_dep],
+  install: false,
+)
+
+test('localization-smoke', localization_smoke_test)
+
+studio_semantics_smoke_test = executable(
+  'studio_semantics_smoke_test',
+  ['tests/studio_semantics_smoke_test.cpp'],
+  include_directories: vibestudio_includes,
+  dependencies: [vibestudio_core_dep],
+  install: false,
+)
+
+test('studio-semantics-smoke', studio_semantics_smoke_test)
 
 editor_profiles_smoke_test = executable(
   'editor_profiles_smoke_test',

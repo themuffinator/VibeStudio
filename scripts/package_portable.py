@@ -149,8 +149,9 @@ def write_platform_readme(package_dir: Path, target_platform: str, target_archit
             "- Run `vibestudio --cli --version`.",
             "- Run `vibestudio --cli package validate <fixture-or-sample-package> --json`.",
             "- Run `vibestudio --cli compiler profiles --json`.",
+            "- Run `vibestudio --cli localization report --locale ar --json`.",
             "- Open the GUI, complete or skip first-run setup, and verify the Activity Center is visible.",
-            "- Confirm docs/OFFLINE_USER_GUIDE.md and licenses/THIRD_PARTY_LICENSES.md are present.",
+            "- Confirm docs/OFFLINE_USER_GUIDE.md, i18n/vibestudio_en.ts, and licenses/THIRD_PARTY_LICENSES.md are present.",
         ]
     )
     readme.write_text("\n".join(lines) + "\n", encoding="utf-8")
@@ -241,6 +242,12 @@ def build_manifest(
     checksums_path: str,
 ) -> dict:
     included_docs = [relative for relative in CANONICAL_DOCS if (root / relative).exists()]
+    localization_root = root / "i18n"
+    included_localization_catalogs = (
+        sorted(relative_path(path, root) for path in localization_root.glob("vibestudio_*.ts") if path.is_file())
+        if localization_root.exists()
+        else []
+    )
     target = TARGETS[target_platform]
     return {
         "schemaVersion": 2,
@@ -260,6 +267,8 @@ def build_manifest(
             "sha256": sha256_file(binary),
         },
         "includedDocs": included_docs,
+        "localizationCatalogRoot": "i18n" if localization_root.exists() else "",
+        "includedLocalizationCatalogs": included_localization_catalogs,
         "offlineUserGuide": "docs/OFFLINE_USER_GUIDE.md" if (root / "docs/OFFLINE_USER_GUIDE.md").exists() else "",
         "platformReadme": platform_readme,
         "includedSamples": included_samples,
@@ -302,6 +311,8 @@ def create_package(
     for relative in ("README.md", "VERSION"):
         copy_path(root / relative, package_dir / relative)
     copy_path(root / "docs", package_dir / "docs")
+    if (root / "i18n").exists():
+        copy_path(root / "i18n", package_dir / "i18n")
     if include_samples:
         copy_path(root / "samples", package_dir / "samples")
 

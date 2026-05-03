@@ -83,7 +83,7 @@ documented in [`docs/ACCESSIBILITY_LOCALIZATION.md`](ACCESSIBILITY_LOCALIZATION.
 
 ### Tool Surfaces
 - Level editor for Doom-family and Quake-family workflows.
-- Interaction profile registry with placeholder presets for GtkRadiant 1.6.0-style, NetRadiant Custom-style, TrenchBroom-style, and QuArK-style layouts/controls.
+- Interaction profile registry with routed MVP presets for GtkRadiant 1.6.0-style, NetRadiant Custom-style, TrenchBroom-style, and QuArK-style layouts/controls.
 - Texture, sprite, model, audio, and cinematic editors.
 - Code/script IDE, with an active source index, language-hook descriptors,
   diagnostics, symbol search, build task hints, and launch-profile summaries.
@@ -99,6 +99,9 @@ documented in [`docs/ACCESSIBILITY_LOCALIZATION.md`](ACCESSIBILITY_LOCALIZATION.
 ### UX Feedback Layer
 - Loading displays and progress surfaces for every noticeable background operation.
 - Skeleton/placeholder views while project, package, preview, or compiler data is arriving.
+- Shared status chip, keyboard shortcut, and command-palette semantics for
+  project, package, compiler, installation, AI, validation, QA, and support
+  workflows.
 - Visual summaries for project health, package composition, map health,
   compiler pipeline readiness, and Advanced Studio shader/sprite/code/extension
   status, with broader run graphs planned.
@@ -109,8 +112,13 @@ documented in [`docs/ACCESSIBILITY_LOCALIZATION.md`](ACCESSIBILITY_LOCALIZATION.
 - High-visibility themes, scalable text/UI, density presets, reduced motion, and OS-backed TTS.
 - Accessible metadata for shell widgets, custom editors, package trees, compiler logs, graph views, and setup screens.
 - Keyboard navigation, command palette coverage, focus order, and no keyboard traps.
-- Translation catalog loading, locale formatting, pluralization, pseudo-localization, and right-to-left layout validation.
-- Initial 20-language localization target set and translation status reporting.
+- Locale target metadata, locale formatting, pseudo-localization, pluralization
+  samples, expansion stress samples, representative layout-budget checks,
+  Arabic/Urdu right-to-left smoke validation, and stale/untranslated
+  translation status reporting.
+- Initial 20-language localization target set, seed Qt TS catalog scaffold,
+  dry-run Qt Linguist extraction validation, and planned runtime translator
+  loading and translated release bundles.
 
 ### Initial Setup Layer
 - First-run flow for language, accessibility, theme, density, role, editor profile, game installs, projects, toolchains, AI connectors, CLI, and automation.
@@ -194,8 +202,16 @@ The current scaffold contains:
   mounted package-reference validation, Doom/Quake sprite workflow planning,
   source workspace indexing, extension manifest/trust/sandbox command plans,
   and staged AI creation proposal helpers.
+- `src/core/localization.*`: shared 20-language target registry, locale
+  normalization, pseudo-localization, right-to-left smoke metadata, `QLocale`
+  formatting samples, translation expansion stress data, and Qt TS catalog
+  status reports.
+- `src/core/studio_semantics.*`: shared non-color-only status chip semantics,
+  default keyboard shortcuts, conflict checks, and command-palette metadata for
+  shell and CLI surfaces.
 - `src/cli`: diagnostics and automation entry points, including the active
-  subcommand router, JSON output envelopes, and stable exit-code contract.
+  subcommand router, localization reports, diagnostic bundle export, JSON
+  output envelopes, and stable exit-code contract.
 - `src/app`: Qt Widgets studio shell.
 - `src/tests`: smoke tests for core services, package flows, compiler flows,
   asset tooling, level maps, Advanced Studio services, and UI primitives.

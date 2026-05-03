@@ -30,6 +30,13 @@ struct OperationLogEntry {
 	QString message;
 };
 
+struct OperationStateTransition {
+	QDateTime timestampUtc;
+	OperationState state = OperationState::Idle;
+	qint64 elapsedMs = 0;
+	QString message;
+};
+
 struct OperationTask {
 	QString id;
 	QString title;
@@ -40,10 +47,12 @@ struct OperationTask {
 	QString resultSummary;
 	QStringList warnings;
 	QVector<OperationLogEntry> log;
+	QVector<OperationStateTransition> transitions;
 	bool cancellable = false;
 	QDateTime createdUtc;
 	QDateTime updatedUtc;
 	QDateTime finishedUtc;
+	qint64 durationMs = 0;
 };
 
 class OperationStateModel final {
@@ -68,6 +77,7 @@ public:
 private:
 	OperationTask* findTask(const QString& taskId);
 	void touch(OperationTask& task, OperationState state);
+	void recordTransition(OperationTask& task, OperationState state, const QString& message);
 
 	QVector<OperationTask> m_tasks;
 	int m_nextId = 1;
@@ -80,5 +90,7 @@ QStringList operationStateIds();
 bool operationStateIsTerminal(OperationState state);
 bool operationStateAllowsCancellation(OperationState state);
 int operationProgressPercent(const OperationProgress& progress);
+qint64 operationTaskElapsedMs(const OperationTask& task, const QDateTime& atUtc = QDateTime());
+QString operationTaskTimelineText(const OperationTask& task);
 
 } // namespace vibestudio

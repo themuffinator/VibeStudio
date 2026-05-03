@@ -11,7 +11,17 @@ int main(int argc, char** argv)
 
 	const QVector<vibestudio::StudioModule> modules = vibestudio::plannedModules();
 	if (modules.size() < 6) {
-		std::cerr << "Expected at least six planned studio modules.\n";
+		std::cerr << "Expected at least six studio modules.\n";
+		return EXIT_FAILURE;
+	}
+	bool hasActiveLevelEditor = false;
+	bool hasActivePackageManager = false;
+	for (const vibestudio::StudioModule& module : modules) {
+		hasActiveLevelEditor = hasActiveLevelEditor || (module.id == QStringLiteral("level-editor") && module.maturity.contains(QStringLiteral("active")));
+		hasActivePackageManager = hasActivePackageManager || (module.id == QStringLiteral("package-manager") && module.maturity == QStringLiteral("active"));
+	}
+	if (!hasActiveLevelEditor || !hasActivePackageManager) {
+		std::cerr << "Studio module maturity should reflect implemented MVP package and level-editor slices.\n";
 		return EXIT_FAILURE;
 	}
 

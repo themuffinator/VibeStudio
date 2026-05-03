@@ -14,6 +14,8 @@ def run_command(command: list[str]) -> tuple[int, str, str]:
     process = subprocess.run(
         command,
         text=True,
+        encoding="utf-8",
+        errors="replace",
         capture_output=True,
         env=os.environ.copy(),
         check=False,
@@ -71,6 +73,22 @@ def main() -> int:
         package_file = package_root_path / "textures" / "wall.txt"
         package_file.parent.mkdir(parents=True, exist_ok=True)
         package_file.write_text("wall", encoding="utf-8")
+        unicode_root = package_root_path / "Spaced Unicode Ω Project"
+        unicode_file = unicode_root / "textures" / "Müller wall Ω.txt"
+        unicode_file.parent.mkdir(parents=True, exist_ok=True)
+        unicode_file.write_text("unicode_path_token", encoding="utf-8")
+        unicode_map_file = unicode_root / "maps" / "start map Ω.map"
+        unicode_map_file.parent.mkdir(parents=True, exist_ok=True)
+        unicode_map_file.write_text(
+            """{
+"classname" "worldspawn"
+{
+( 0 0 0 ) ( 64 0 0 ) ( 64 64 0 ) WALL1 0 0 0 1 1
+}
+}
+""",
+            encoding="utf-8",
+        )
         image_file = package_root_path / "textures" / "wall.bmp"
         image_file.write_bytes(tiny_bmp_bytes())
         map_file = package_root_path / "maps" / "start.map"
@@ -142,6 +160,7 @@ def main() -> int:
         extract_dir = package_root_path / "extracted"
         extract_dry_run_dir = package_root_path / "extract-dry-run"
         extract_json_dir = package_root_path / "extract-json"
+        diagnostics_dir = package_root_path / "diagnostics"
         asset_convert_dir = package_root_path / "asset-converted"
         asset_convert_dry_run_dir = package_root_path / "asset-converted-dry-run"
         asset_wav_output = package_root_path / "pickup-copy.wav"
@@ -188,16 +207,21 @@ def main() -> int:
             (["--cli", "--platform-report"], "VibeStudio platform report"),
             (["--cli", "--operation-states"], "Operation states"),
             (["--cli", "--ui-primitives"], "UI primitives"),
+            (["--cli", "--json", "ui", "semantics"], '"shortcutRegistryOk": true'),
             (["--cli", "--package-formats"], "Package archive interfaces"),
             (["--cli", "--check-package-path", "textures/wall.tga"], "Safe: yes"),
             (["--cli", "--info", str(package_root_path)], "Package info"),
+            (["--cli", "package", "info", str(unicode_root)], "Package info"),
+            (["--cli", "package", "list", str(unicode_root)], "Müller wall Ω.txt"),
             (["--cli", "--json", "--info", str(package_root_path)], '"entryCount"'),
             (["--cli", "--list", str(package_root_path)], "textures/wall.txt"),
             (["--cli", "package", "info", str(package_root_path)], "Package info"),
             (["--cli", "package", "list", str(package_root_path)], "textures/wall.txt"),
             (["--cli", "--json", "package", "list", str(package_root_path)], '"entries"'),
+            (["--cli", "--json", "package", "info", str(package_root_path)], '"packageOpenMs"'),
             (["--cli", "--preview-package", str(package_root_path), "--preview-entry", "textures/wall.txt"], "Kind: text"),
             (["--cli", "--json", "package", "preview", str(package_root_path), "textures/wall.txt"], '"kind": "text"'),
+            (["--cli", "--json", "package", "preview", str(package_root_path), "textures/wall.txt"], '"previewMs"'),
             (["--cli", "asset", "inspect", str(package_root_path), "textures/wall.bmp"], "Kind: image"),
             (["--cli", "--json", "asset", "inspect", str(package_root_path), "sound/pickup.wav"], '"kind": "audio"'),
             (["--cli", "asset", "convert", str(package_root_path), "--entry", "textures/wall.bmp", "--output", str(asset_convert_dry_run_dir), "--format", "png", "--resize", "1x1", "--dry-run"], "Would write converted image"),
@@ -205,6 +229,7 @@ def main() -> int:
             (["--cli", "asset", "audio-wav", str(package_root_path), "sound/pickup.wav", "--output", str(asset_wav_dry_run_output), "--dry-run"], "Would write WAV file"),
             (["--cli", "--json", "asset", "audio-wav", str(package_root_path), "sound/pickup.wav", "--output", str(asset_wav_output)], '"written": true'),
             (["--cli", "asset", "find", str(package_root_path), "--find", "milestone6_find_token"], "Matches: 1"),
+            (["--cli", "asset", "find", str(unicode_root), "--find", "unicode_path_token"], "Matches: 1"),
             (["--cli", "asset", "replace", str(package_root_path), "--find", "milestone6_find_token", "--replace", "milestone6_replace_token", "--dry-run"], "Save state: modified"),
             (["--cli", "asset", "replace", str(package_root_path), "--find", "milestone6_find_token", "--replace", "milestone6_replace_token", "--write"], "Save state: saved"),
             (["--cli", "map", "inspect", str(map_file), "--select", "entity:1"], "Level map"),
@@ -236,6 +261,7 @@ def main() -> int:
             (["--cli", "package", "validate", str(stage_pak)], "Validation: usable"),
             (["--cli", "package", "validate", str(stage_pk3)], "Validation: usable"),
             (["--cli", "--project-init", str(package_root_path)], "Project manifest saved"),
+            (["--cli", "--project-init", str(unicode_root)], "Project manifest saved"),
             (["--cli", "--project-init", str(package_root_path), "--project-editor-profile", "trenchbroom", "--project-ai-free", "on"], "Override editor profile: trenchbroom"),
             (["--cli", "--project-info", str(package_root_path)], "Project health"),
             (["--cli", "--project-validate", str(package_root_path)], "Project health"),
@@ -252,6 +278,7 @@ def main() -> int:
             (["--cli", "compiler", "profiles"], "q3map2-probe"),
             (["--cli", "--json", "compiler", "profiles"], '"profiles"'),
             (["--cli", "compiler", "plan", "ericw-qbsp", "--input", str(map_file)], "Command line:"),
+            (["--cli", "compiler", "plan", "ericw-qbsp", "--input", str(unicode_map_file)], "Command line:"),
             (["--cli", "--json", "compiler", "plan", "ericw-qbsp", "--input", str(map_file)], '"commandLine"'),
             (["--cli", "compiler", "plan", "zdbsp-nodes", "--input", str(wad_file), "--output", str(package_root_path / "maps" / "doom-nodes.wad")], "zdbsp-nodes"),
             (["--cli", "compiler", "plan", "q3map2-probe"], "-help"),
@@ -260,8 +287,16 @@ def main() -> int:
             (["--cli", "--json", "compiler", "manifest", "q3map2-probe"], '"taskLog"'),
             (["--cli", "--setup-report"], "First-run setup"),
             (["--cli", "--preferences-report"], "Accessibility and language preferences"),
+            (["--cli", "localization", "targets"], "Localization targets"),
+            (["--cli", "--json", "localization", "report", "--locale", "ar"], '"untranslatedMessageCount"'),
+            (["--cli", "--json", "--localization-report", "--locale", "ur"], '"expansionSmokeOk"'),
+            (["--cli", "--json", "localization", "report", "--locale", "ar"], '"pluralizationSmokeOk": true'),
+            (["--cli", "--json", "localization", "report", "--locale", "ar"], '"expansionLayoutSmokeOk": true'),
+            (["--cli", "diagnostics", "bundle", "--output", str(diagnostics_dir)], "vibestudio-diagnostics.json"),
+            (["--cli", "--json", "diagnostics", "bundle"], '"redaction"'),
+            (["--cli", "--json", "credits", "validate"], '"compiler-submodule-revision-ericw-tools"'),
             (["--cli", "--editor-profiles"], "GtkRadiant 1.6.0 Style"),
-            (["--cli", "--json", "editor", "profiles"], '"layoutPresetId"'),
+            (["--cli", "--json", "editor", "profiles"], '"commandId"'),
             (["--cli", "editor", "current"], "Selected editor profile"),
             (["--cli", "--ai-status"], "AI automation"),
             (["--cli", "ai", "connectors"], "OpenAI"),

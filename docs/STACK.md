@@ -16,7 +16,7 @@ rendering portability, source editing, media handling, search, or automation.
 | Primary language | C++20 | Active | Fits idTech-era native tooling, Qt, compilers, binary formats, and high-performance editors. |
 | Application framework | [Qt 6](https://doc.qt.io/qt-6/) | Active | Mature cross-platform desktop framework with UI, networking, settings, processes, models, threading, and deployment support. |
 | Primary UI | [Qt Widgets](https://doc.qt.io/qt-6/qtwidgets-index.html) | Active | Best fit for dense production tools, dockable panes, model/view data, custom inspectors, and native desktop behavior. |
-| Shell UI primitives | Reusable Qt Widgets loading panes and detail drawers | Active | Shared shell components now cover operation state, progress, reduced-motion loading placeholders, and collapsible details for logs, metadata, manifests, and raw diagnostics. |
+| Shell UI primitives | Reusable Qt Widgets loading panes, detail drawers, and shared shell semantics | Active | Shared shell components now cover operation state, progress, reduced-motion loading placeholders, collapsible details for logs, metadata, manifests, raw diagnostics, non-color status chip semantics, shortcut metadata, and command-palette entries. |
 | Rich animated surfaces | [Qt Quick/QML](https://doc.qt.io/qt-6/qtquick-index.html) | Planned, bounded | Use for contained high-value surfaces only, such as onboarding, visual status views, or graph-like experiences. Do not rewrite the shell around QML without a migration plan. |
 | Build system | [Meson](https://mesonbuild.com/) + [Ninja](https://ninja-build.org/) | Active | Fast, readable, cross-platform, and suitable for CI. |
 | Automation | Python scripts + GitHub Actions | Active | Good fit for validation, release helpers, documentation checks, and CI orchestration. |
@@ -25,7 +25,7 @@ rendering portability, source editing, media handling, search, or automation.
 | Accessibility | [Qt Accessibility](https://doc.qt.io/qt-6/accessible.html), OS accessibility settings, accessible custom widgets | Active/planned | Shell preference storage and accessible control metadata are active; deeper workflow audits and custom-widget coverage are planned. |
 | Scaling | [Qt High DPI](https://doc.qt.io/qt-6/highdpi.html), layout-driven UI, app text scale preferences | Active/planned | Shell text scale presets are active; broader high-DPI and layout smoke coverage is planned. |
 | Text to speech | [Qt TextToSpeech](https://doc.qt.io/qt-6/qttexttospeech-index.html) | Planned optional module | TTS enablement preference is active; native OS speech playback for task summaries, diagnostics, setup guidance, and warnings is planned. |
-| Localization | [Qt internationalization](https://doc.qt.io/qt-6/internationalization.html), Qt Linguist, `QTranslator`, `QLocale` | Active/planned | Locale preference storage and `QLocale` formatting are active; translation catalogs, pseudo-localization, and RTL validation are planned. |
+| Localization | [Qt internationalization](https://doc.qt.io/qt-6/internationalization.html), Qt Linguist, `QTranslator`, `QLocale` | Active/planned | Locale preference storage, shared 20-language target metadata, seed TS catalogs, pseudo-localization, Arabic/Urdu RTL smoke, `QLocale` formatting, pluralization samples, expansion stress and layout-budget smoke checks, stale/untranslated catalog reporting, and dry-run `lupdate` extraction validation are active; runtime `QTranslator` loading and translated release bundles remain planned. |
 | Asset index/search | [SQLite](https://sqlite.org/) through [Qt SQL](https://doc.qt.io/qt-6/qtsql-index.html), with [FTS5](https://sqlite.org/fts5.html) where available | Planned | Lightweight local database for project metadata, dependencies, search, diagnostics, and recent activity. |
 | CLI parser | Lightweight Qt `QStringList` router with in-process command registry; [CLI11](https://github.com/CLIUtils/CLI11) deferred | Active | Current router keeps project/package/install/asset/map/shader/sprite/code/extension/compiler/AI/credits subcommands dependency-free with JSON output, quiet/verbose/watch/task-state switches, stable exit codes, and testable command metadata through `cli commands`; CLI11 remains deferred until shell completion and broader validation justify the dependency. |
 | Task execution | Qt `QProcess`, threads, signals, and a VibeStudio task model | Active/planned | The reusable operation-state model, shell activity center, compiler process runner, captured logs, cancellation plumbing, and run manifests are active; broader thread-pool/future integration is planned. |
@@ -67,10 +67,12 @@ The shell should use Qt Widgets, model/view classes, custom widgets, icons,
 dockable panes, persistent layouts, and reusable status/detail components. The
 active shell includes a reusable `LoadingPane` for pane and preview loading
 states, a reusable `DetailDrawer` for logs, metadata, manifests, raw
-diagnostics, and support-copy text, and compact graphical summaries for project
-health, package composition, map health/statistics, and compiler pipeline
-readiness. The Advanced Studio workbench adds shader, sprite, code, AI, and
-extension summaries with detail-on-demand tabs while staying in Qt Widgets.
+diagnostics, and support-copy text, shared shell semantics for status chips,
+shortcuts, and command-palette entries, and compact graphical summaries for
+project health, package composition, map health/statistics, and compiler
+pipeline readiness. The Advanced Studio workbench adds shader, sprite, code,
+AI, and extension summaries with detail-on-demand tabs while staying in Qt
+Widgets.
 
 The UX stack must directly support the project philosophies:
 
@@ -132,12 +134,13 @@ settings overrides, compiler executable search paths/overrides, registered
 compiler outputs, and timestamps. The workspace dashboard and CLI project
 reports build a summary-first health view from this manifest.
 
-Editor profiles are currently registry-backed placeholder presets with a
-settings-backed global selection. The active schema records layout, camera,
-selection, grid, terminology, default panels, workflow notes, and reserved
-bindings for the VibeStudio default, GtkRadiant 1.6.0-style, NetRadiant
-Custom-style, TrenchBroom-style, and QuArK-style workflows. Real editor command
-routing, camera behavior, and per-project overrides remain planned.
+Editor profiles are registry-backed routed MVP presets with a settings-backed
+global selection and project-local override path. The active schema records
+layout, camera, selection, grid, terminology, default panels, workflow notes,
+surface-scoped bindings, stable command IDs, and conflict smoke coverage for
+the VibeStudio default, GtkRadiant 1.6.0-style, NetRadiant Custom-style,
+TrenchBroom-style, and QuArK-style workflows. Full camera behavior and deep
+profile-fidelity audits remain planned.
 
 Game installation profiles are currently settings-backed. They keep a stable
 profile ID, game key, engine-family default, root path, optional executable,
@@ -206,10 +209,13 @@ Use Qt TextToSpeech for optional OS-backed TTS. TTS should read selected
 summaries, compiler errors, task outcomes, AI proposals, and setup guidance
 without becoming the only way to receive that information.
 
-Use Qt Linguist, `QTranslator`, and `QLocale` from the beginning. Initial
-localization work should prove extraction, pseudo-localization, right-to-left
-layout, and a 20-language target set documented in
-[`docs/ACCESSIBILITY_LOCALIZATION.md`](ACCESSIBILITY_LOCALIZATION.md).
+Use Qt Linguist, `QTranslator`, and `QLocale` from the beginning. The active
+localization slice defines a shared 20-language target set, seed `.ts`
+catalogs, pseudo-localization, Arabic/Urdu right-to-left smoke coverage,
+locale formatting samples, pluralization samples, expansion stress samples,
+representative layout-budget checks, stale/untranslated catalog status reports,
+and dry-run `lupdate` extraction validation. Runtime translator loading, full
+layout expansion audits, and translated release bundles remain planned.
 
 Build the first-run setup flow as a real settings workbench. It should configure
 accessibility, language, theme, density, editor profile, game installations,
@@ -221,11 +227,11 @@ then leave those choices editable.
 Use the active lightweight in-process router plus command registry for the
 command-line interface. The CLI is a first-class product surface, not a debug
 afterthought. It exposes project, package, installation, asset, map, shader,
-sprite, code, extension, compiler, AI, credits, and registry commands with JSON
-output, stable exit codes, quiet and verbose modes, dry-run behavior, compiler
-watch streaming, machine-readable task state, and examples for PowerShell and
-POSIX shells. CLI11 remains deferred for the fuller parser/completion layer
-once that dependency earns its weight.
+sprite, code, extension, compiler, localization, diagnostics, AI, credits, and
+registry commands with JSON output, stable exit codes, quiet and verbose modes,
+dry-run behavior, compiler watch streaming, machine-readable task state, and
+examples for PowerShell and POSIX shells. CLI11 remains deferred for the fuller
+parser/completion layer once that dependency earns its weight.
 
 CLI commands must call the same services as GUI actions. Output should support
 human text by default and `--json` for automation. The active router exposes
@@ -367,15 +373,16 @@ Every new dependency must have:
 Use GitHub Actions and PakFu-style release scripting as the automation model.
 Package with Qt deployment tools and platform-specific wrappers as needed.
 
-The active packaging scripts are `scripts/package_portable.py`,
-`scripts/generate_offline_guide.py`, `scripts/validate_packaging.py`, and
-`scripts/validate_release_assets.py`, validated locally and in PR CI. They
-create versioned Windows, macOS, and Linux staging directories plus optional
-zips with the built binary, documentation, generated offline guide, platform
-smoke notes, samples, checksums, copied VibeStudio/imported-compiler license
-files, and schema-versioned package manifests. They do not yet run Qt
-deployment tools, bundle external compiler executables, sign artifacts, or
-publish release downloads.
+The active packaging and release validation scripts are
+`scripts/package_portable.py`, `scripts/generate_offline_guide.py`,
+`scripts/validate_packaging.py`, `scripts/validate_release_assets.py`, and
+`scripts/validate_credits.py`, validated locally and in PR CI. They create
+versioned Windows, macOS, and Linux staging directories plus optional zips with
+the built binary, documentation, generated offline guide, platform smoke notes,
+samples, checksums, copied VibeStudio/imported-compiler license files,
+schema-versioned package manifests, and checked attribution/submodule revision
+pins. They do not yet run Qt deployment tools, bundle external compiler
+executables, sign artifacts, or publish release downloads.
 
 The active About/Credits/license surface is backed by structured metadata in
 `src/core/studio_manifest.*`, exposed through the GUI inspector and CLI
