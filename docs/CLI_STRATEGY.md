@@ -35,6 +35,7 @@ surface using the same core services as the GUI.
 - [x] `--about`
 - [x] `--credits`
 - [x] `about`
+- [x] `about show`
 - [x] `credits validate`
 
 ### Project
@@ -57,9 +58,10 @@ surface using the same core services as the GUI.
 - [x] `--detect-installations` read-only Steam/GOG candidate detection.
 - [x] `install list`
 - [x] `install detect`
-- [ ] `install add`
-- [ ] `install validate`
-- [ ] `install select`
+- [x] `install add`
+- [x] `install validate`
+- [x] `install select`
+- [x] `install remove`
 
 ### Packages
 - [x] `--package-formats` scaffold report for package/archive interface descriptors.
@@ -96,8 +98,33 @@ surface using the same core services as the GUI.
 - [x] `map edit` for entity key/value edits with non-destructive `--output`.
 - [x] `map move` for Doom vertices/linedefs/things and Quake entities.
 - [x] `map compile-plan` for profile-backed compiler command review.
+- [x] `map render` for deterministic SVG pictures of Doom and Quake-family maps,
+  usable from CI and documentation without a display.
+- [x] `map textures` to check every texture a map references against the
+  textures a package or folder actually provides, separating genuinely missing
+  names from the ones the engine supplies itself.
 - [x] JSON output for map statistics, entities, brushes, textures, validation,
   preview lines, selection, properties, and save reports.
+
+### Compiled Artifacts
+- [x] `bsp inspect` for Quake, Quake II, and Quake III BSP lump tables, entity
+  and texture lumps, counts, and any `.pts`/`.lin` leak or `.prt` portal file
+  written beside the map.
+
+### Build Pipelines And Launch
+- [x] `build list` for chained pipelines and their stages.
+- [x] `build plan` to resolve stage inputs, outputs, and tool availability
+  without running anything.
+- [x] `build run` to run every enabled stage in order with streamed logs,
+  diagnostics, hashes, and per-stage command manifests.
+- [x] `launch plan` to build a reviewable engine command line.
+- [x] `launch run` to start the configured game installation.
+
+### Textures And Palettes
+- [x] `texture decode` for idTech textures, flats, Doom patches, WAL, MIP, LMP,
+  PCX, TGA, and sprites, with optional PNG export.
+- [x] `texture palette` to resolve the palette used for indexed art and report
+  whether it came from the package or is a generated stand-in.
 
 ### Shaders
 - [x] `shader inspect` for idTech3 `.shader` parsing, stage graphs, stage

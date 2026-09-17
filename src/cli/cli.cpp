@@ -5,12 +5,17 @@
 #include "core/ai_connectors.h"
 #include "core/ai_workflows.h"
 #include "core/asset_tools.h"
+#include "core/bsp_inspect.h"
+#include "core/build_pipeline.h"
 #include "core/compiler_profiles.h"
 #include "core/compiler_registry.h"
 #include "core/compiler_runner.h"
 #include "core/editor_profiles.h"
+#include "core/idtech_image.h"
 #include "core/level_map.h"
 #include "core/localization.h"
+#include "core/map_assets.h"
+#include "core/map_render.h"
 #include "core/operation_state.h"
 #include "core/package_archive.h"
 #include "core/package_preview.h"
@@ -33,6 +38,7 @@
 #include <QJsonObject>
 #include <QProcess>
 #include <QRegularExpression>
+#include <QSet>
 #include <QSettings>
 #include <QSysInfo>
 
@@ -189,6 +195,29 @@ QVector<CliCommandDescriptor> cliCommandDescriptors()
 		{QStringLiteral("ai"), QStringLiteral("package-plan"), QStringLiteral("Generate a staged prompt-to-package-validation plan."), {QStringLiteral("vibestudio --cli ai package-plan --prompt \"release check\" --package ./release.pk3 --json")}, true, true, true},
 		{QStringLiteral("ai"), QStringLiteral("batch-recipe"), QStringLiteral("Generate a staged prompt-to-batch-conversion recipe."), {QStringLiteral("vibestudio --cli ai batch-recipe --prompt \"convert doom sprites\" --json")}, true, true, true},
 		{QStringLiteral("ai"), QStringLiteral("review"), QStringLiteral("Render the AI proposal review surface for a generated workflow."), {QStringLiteral("vibestudio --cli ai review --prompt \"glowing shader\" --kind shader --json")}, true, true, true},
+		{QStringLiteral("about"), QStringLiteral("show"), QStringLiteral("Print version, platform, imported compiler, and credits metadata."), {QStringLiteral("vibestudio --cli about --json")}},
+		{QStringLiteral("install"), QStringLiteral("list"), QStringLiteral("List saved manual game installation profiles."), {QStringLiteral("vibestudio --cli install list --json")}},
+		{QStringLiteral("install"), QStringLiteral("detect"), QStringLiteral("Detect Steam and GOG installation candidates read-only."), {QStringLiteral("vibestudio --cli install detect --root \"D:/SteamLibrary\" --json")}},
+		{QStringLiteral("install"), QStringLiteral("add"), QStringLiteral("Add or update a manual game installation profile."), {QStringLiteral("vibestudio --cli install add \"C:/Games/Quake\" --install-game quake --install-name \"Quake\" --dry-run")}, true, true, true},
+		{QStringLiteral("install"), QStringLiteral("select"), QStringLiteral("Mark a saved installation profile as the selected one."), {QStringLiteral("vibestudio --cli install select quake-games-quake")}},
+		{QStringLiteral("install"), QStringLiteral("validate"), QStringLiteral("Validate a saved installation profile read-only."), {QStringLiteral("vibestudio --cli install validate quake-games-quake --json")}},
+		{QStringLiteral("install"), QStringLiteral("remove"), QStringLiteral("Remove a saved installation profile without touching game files."), {QStringLiteral("vibestudio --cli install remove quake-games-quake --dry-run")}, true, true, true},
+		{QStringLiteral("editor"), QStringLiteral("profiles"), QStringLiteral("List editor interaction profiles and their bindings."), {QStringLiteral("vibestudio --cli editor profiles --json")}},
+		{QStringLiteral("editor"), QStringLiteral("current"), QStringLiteral("Print the selected editor interaction profile."), {QStringLiteral("vibestudio --cli editor current")}},
+		{QStringLiteral("editor"), QStringLiteral("select"), QStringLiteral("Select an editor interaction profile."), {QStringLiteral("vibestudio --cli editor select trenchbroom")}},
+		{QStringLiteral("compiler"), QStringLiteral("set-path"), QStringLiteral("Store a user compiler executable override."), {QStringLiteral("vibestudio --cli compiler set-path ericw-qbsp --executable /opt/ericw-tools/bin/qbsp")}},
+		{QStringLiteral("compiler"), QStringLiteral("clear-path"), QStringLiteral("Remove a user compiler executable override."), {QStringLiteral("vibestudio --cli compiler clear-path ericw-qbsp")}},
+		{QStringLiteral("ai"), QStringLiteral("connectors"), QStringLiteral("List provider-neutral AI connector descriptors and capabilities."), {QStringLiteral("vibestudio --cli ai connectors --json")}},
+		{QStringLiteral("map"), QStringLiteral("render"), QStringLiteral("Render a deterministic SVG picture of a Doom or Quake-family map."), {QStringLiteral("vibestudio --cli map render ./maps/start.map --output ./docs/start.svg --projection top --overwrite")}, true, true, true},
+		{QStringLiteral("map"), QStringLiteral("textures"), QStringLiteral("Check every texture a map references against the textures a package or folder actually provides."), {QStringLiteral("vibestudio --cli map textures ./maps/start.map --package ./id1/pak0.pak --json")}},
+		{QStringLiteral("bsp"), QStringLiteral("inspect"), QStringLiteral("Inspect a compiled BSP plus any leak and portal files beside it."), {QStringLiteral("vibestudio --cli bsp inspect ./out/start.bsp --json")}},
+		{QStringLiteral("build"), QStringLiteral("list"), QStringLiteral("List chained build pipelines and their stages."), {QStringLiteral("vibestudio --cli build list --json")}},
+		{QStringLiteral("build"), QStringLiteral("plan"), QStringLiteral("Plan a chained build pipeline without running anything."), {QStringLiteral("vibestudio --cli build plan quake-full --input ./maps/start.map --json")}, true, true, true},
+		{QStringLiteral("build"), QStringLiteral("run"), QStringLiteral("Run a chained build pipeline stage by stage with logs, diagnostics, and manifests."), {QStringLiteral("vibestudio --cli build run quake-full --input ./maps/start.map --watch")}, true, true, true, true},
+		{QStringLiteral("launch"), QStringLiteral("plan"), QStringLiteral("Build a reviewable game launch command line without starting anything."), {QStringLiteral("vibestudio --cli launch plan --map start --json")}, true, true, true},
+		{QStringLiteral("launch"), QStringLiteral("run"), QStringLiteral("Start the configured game installation with the planned command line."), {QStringLiteral("vibestudio --cli launch run --map start")}, true, true, false},
+		{QStringLiteral("texture"), QStringLiteral("decode"), QStringLiteral("Decode an idTech texture, flat, sprite, or image entry and optionally write a PNG."), {QStringLiteral("vibestudio --cli texture decode ./id1/pak0.pak progs/player.mdl --output ./out/player.png --dry-run")}, true, true, true},
+		{QStringLiteral("texture"), QStringLiteral("palette"), QStringLiteral("Resolve the palette used to decode indexed art and report where it came from."), {QStringLiteral("vibestudio --cli texture palette ./id1/pak0.pak --palette quake --json")}},
 		{QStringLiteral("credits"), QStringLiteral("validate"), QStringLiteral("Validate README/docs credits, compiler pins, .gitmodules, and checked-out submodule revisions."), {QStringLiteral("vibestudio --cli credits validate --json")}},
 	};
 }
@@ -216,19 +245,43 @@ QString settingsStatusText(QSettings::Status status)
 	return QStringLiteral("unknown");
 }
 
+// Options accept both `--option value` and `--option=value`. `commandTokens()`
+// removes both spellings from the positional stream, so every accessor has to
+// understand both or the inline form would be silently dropped.
+bool optionMatchesInline(const QString& token, const QString& option, QString* value)
+{
+	if (!token.startsWith(option + QLatin1Char('='))) {
+		return false;
+	}
+	if (value) {
+		*value = token.mid(option.size() + 1);
+	}
+	return true;
+}
+
 QString optionValue(const QStringList& args, const QString& option)
 {
-	const int index = args.indexOf(option);
-	if (index < 0 || index + 1 >= args.size()) {
-		return {};
+	for (int index = 0; index < args.size(); ++index) {
+		QString inlineValue;
+		if (optionMatchesInline(args.at(index), option, &inlineValue)) {
+			return inlineValue;
+		}
+		if (args.at(index) == option) {
+			return index + 1 < args.size() ? args.at(index + 1) : QString();
+		}
 	}
-	return args[index + 1];
+	return {};
 }
 
 QStringList optionValues(const QStringList& args, const QString& option)
 {
 	QStringList values;
 	for (int index = 0; index < args.size(); ++index) {
+		QString inlineValue;
+		if (optionMatchesInline(args.at(index), option, &inlineValue)) {
+			values.push_back(inlineValue);
+			continue;
+		}
 		if (args.at(index) == option && index + 1 < args.size()) {
 			values.push_back(args.at(index + 1));
 			++index;
@@ -244,19 +297,187 @@ QString normalizedOptionId(const QString& id)
 
 bool hasOption(const QStringList& args, const QString& option)
 {
-	return args.contains(option);
+	if (args.contains(option)) {
+		return true;
+	}
+	const QString inlinePrefix = option + QLatin1Char('=');
+	for (const QString& token : args) {
+		if (token.startsWith(inlinePrefix)) {
+			return true;
+		}
+	}
+	return false;
 }
 
 QStringList commandTokens(const QStringList& args)
 {
+	// Options are recognized from a table rather than an inline chain so that an
+	// option added to a handler cannot silently leak itself, and its value, into
+	// the positional stream. That leak is what made
+	// `project init --project-ai-free on ./mymod` parse "--project-ai-free" as
+	// the project path.
+	static const QSet<QString> booleanFlags = {
+			QStringLiteral("--cli"),
+			QStringLiteral("--json"),
+			QStringLiteral("--quiet"),
+			QStringLiteral("--verbose"),
+			QStringLiteral("--dry-run"),
+			QStringLiteral("--write"),
+			QStringLiteral("--overwrite"),
+			QStringLiteral("--case-sensitive"),
+			QStringLiteral("--watch"),
+			QStringLiteral("--task-state"),
+			QStringLiteral("--execute"),
+			QStringLiteral("--allow-execution"),
+			QStringLiteral("--no-stage"),
+			QStringLiteral("--extract-all"),
+			QStringLiteral("--register-output"),
+			QStringLiteral("--register-outputs"),
+			QStringLiteral("--stream"),
+			QStringLiteral("--no-color"),
+			QStringLiteral("--no-grid"),
+			QStringLiteral("--no-decode"),
+			QStringLiteral("--labels"),
+			QStringLiteral("--high-contrast"),
+			QStringLiteral("--self-test"),
+	};
+
+	static const QSet<QString> valueFlags = {
+			QStringLiteral("--settings-file"),
+			QStringLiteral("--installation"),
+			QStringLiteral("--project-installation"),
+			QStringLiteral("--project-root"),
+			QStringLiteral("--editor-profile"),
+			QStringLiteral("--set-editor-profile"),
+			QStringLiteral("--project-editor-profile"),
+			QStringLiteral("--project-palette"),
+			QStringLiteral("--project-compiler-profile"),
+			QStringLiteral("--project-compiler-search-paths"),
+			QStringLiteral("--project-compiler-tool"),
+			QStringLiteral("--project-compiler-executable"),
+			QStringLiteral("--project-ai-free"),
+			QStringLiteral("--ai-free"),
+			QStringLiteral("--detect-install-root"),
+			QStringLiteral("--set-ai-free"),
+			QStringLiteral("--set-ai-cloud"),
+			QStringLiteral("--set-ai-agentic"),
+			QStringLiteral("--set-ai-reasoning"),
+			QStringLiteral("--set-ai-text-model"),
+			QStringLiteral("--provider"),
+			QStringLiteral("--provider-a"),
+			QStringLiteral("--provider-b"),
+			QStringLiteral("--model"),
+			QStringLiteral("--model-a"),
+			QStringLiteral("--model-b"),
+			QStringLiteral("--prompt"),
+			QStringLiteral("--text"),
+			QStringLiteral("--log"),
+			QStringLiteral("--command"),
+			QStringLiteral("--kind"),
+			QStringLiteral("--name"),
+			QStringLiteral("--sprite-name"),
+			QStringLiteral("--manifest"),
+			QStringLiteral("--write-manifest"),
+			QStringLiteral("--workspace-root"),
+			QStringLiteral("--working-directory"),
+			QStringLiteral("--input"),
+			QStringLiteral("--output"),
+			QStringLiteral("--format"),
+			QStringLiteral("--crop"),
+			QStringLiteral("--resize"),
+			QStringLiteral("--palette"),
+			QStringLiteral("--find"),
+			QStringLiteral("--symbol"),
+			QStringLiteral("--replace"),
+			QStringLiteral("--extensions"),
+			QStringLiteral("--add-file"),
+			QStringLiteral("--import-file"),
+			QStringLiteral("--as"),
+			QStringLiteral("--replace-file"),
+			QStringLiteral("--replace-entry"),
+			QStringLiteral("--entry"),
+			QStringLiteral("--entries"),
+			QStringLiteral("--extract-entry"),
+			QStringLiteral("--asset-entry"),
+			QStringLiteral("--rename"),
+			QStringLiteral("--to"),
+			QStringLiteral("--delete"),
+			QStringLiteral("--remove-entry"),
+			QStringLiteral("--resolve"),
+			QStringLiteral("--map"),
+			QStringLiteral("--map-name"),
+			QStringLiteral("--engine"),
+			QStringLiteral("--engine-hint"),
+			QStringLiteral("--shader"),
+			QStringLiteral("--stage"),
+			QStringLiteral("--directive"),
+			QStringLiteral("--value"),
+			QStringLiteral("--frames"),
+			QStringLiteral("--rotations"),
+			QStringLiteral("--package"),
+			QStringLiteral("--mounted-package"),
+			QStringLiteral("--package-root"),
+			QStringLiteral("--source-frame"),
+			QStringLiteral("--extension-root"),
+			QStringLiteral("--root"),
+			QStringLiteral("--select"),
+			QStringLiteral("--entity"),
+			QStringLiteral("--set"),
+			QStringLiteral("--property"),
+			QStringLiteral("--object"),
+			QStringLiteral("--delta"),
+			QStringLiteral("--profile"),
+			QStringLiteral("--compiler-profile"),
+			QStringLiteral("--extra-args"),
+			QStringLiteral("--compiler-search-paths"),
+			QStringLiteral("--timeout-ms"),
+			QStringLiteral("--executable"),
+			QStringLiteral("--locale"),
+			QStringLiteral("--catalog-root"),
+			QStringLiteral("--install-game"),
+			QStringLiteral("--install-engine"),
+			QStringLiteral("--install-name"),
+			QStringLiteral("--install-executable"),
+			QStringLiteral("--install-base-packages"),
+			QStringLiteral("--install-mod-packages"),
+			QStringLiteral("--install-palette"),
+			QStringLiteral("--install-compiler-profile"),
+			QStringLiteral("--install-read-only"),
+			QStringLiteral("--install-hidden"),
+			QStringLiteral("--pipeline"),
+			QStringLiteral("--stage-args"),
+			QStringLiteral("--disable-stage"),
+			QStringLiteral("--launch-profile"),
+			QStringLiteral("--mod"),
+			QStringLiteral("--basedir"),
+			QStringLiteral("--bsp"),
+			QStringLiteral("--projection"),
+			QStringLiteral("--grid"),
+			QStringLiteral("--width"),
+			QStringLiteral("--height"),
+			QStringLiteral("--margin"),
+			QStringLiteral("--mip"),
+			QStringLiteral("--frame"),
+			QStringLiteral("--compression"),
+			QStringLiteral("--buckets"),
+			QStringLiteral("--highlight"),
+			QStringLiteral("--search-paths"),
+	};
+
 	QStringList tokens;
 	for (int i = 1; i < args.size(); ++i) {
 		const QString token = args.at(i);
-		if (token == QStringLiteral("--cli") || token == QStringLiteral("--json") || token == QStringLiteral("--quiet") || token == QStringLiteral("--verbose") || token == QStringLiteral("--dry-run") || token == QStringLiteral("--write") || token == QStringLiteral("--overwrite") || token == QStringLiteral("--case-sensitive") || token == QStringLiteral("--watch") || token == QStringLiteral("--task-state") || token == QStringLiteral("--execute") || token == QStringLiteral("--allow-execution") || token == QStringLiteral("--no-stage")) {
+		if (booleanFlags.contains(token)) {
 			continue;
 		}
-		if (token == QStringLiteral("--installation") || token == QStringLiteral("--project-installation") || token == QStringLiteral("--set-editor-profile") || token == QStringLiteral("--set-ai-free") || token == QStringLiteral("--set-ai-cloud") || token == QStringLiteral("--set-ai-agentic") || token == QStringLiteral("--set-ai-reasoning") || token == QStringLiteral("--set-ai-text-model") || token == QStringLiteral("--provider") || token == QStringLiteral("--provider-a") || token == QStringLiteral("--provider-b") || token == QStringLiteral("--model") || token == QStringLiteral("--model-a") || token == QStringLiteral("--model-b") || token == QStringLiteral("--prompt") || token == QStringLiteral("--text") || token == QStringLiteral("--log") || token == QStringLiteral("--command") || token == QStringLiteral("--kind") || token == QStringLiteral("--name") || token == QStringLiteral("--sprite-name") || token == QStringLiteral("--manifest") || token == QStringLiteral("--workspace-root") || token == QStringLiteral("--working-directory") || token == QStringLiteral("--input") || token == QStringLiteral("--output") || token == QStringLiteral("--format") || token == QStringLiteral("--crop") || token == QStringLiteral("--resize") || token == QStringLiteral("--palette") || token == QStringLiteral("--find") || token == QStringLiteral("--symbol") || token == QStringLiteral("--replace") || token == QStringLiteral("--extensions") || token == QStringLiteral("--add-file") || token == QStringLiteral("--import-file") || token == QStringLiteral("--as") || token == QStringLiteral("--replace-file") || token == QStringLiteral("--replace-entry") || token == QStringLiteral("--entry") || token == QStringLiteral("--rename") || token == QStringLiteral("--to") || token == QStringLiteral("--delete") || token == QStringLiteral("--remove-entry") || token == QStringLiteral("--resolve") || token == QStringLiteral("--map") || token == QStringLiteral("--map-name") || token == QStringLiteral("--engine") || token == QStringLiteral("--engine-hint") || token == QStringLiteral("--shader") || token == QStringLiteral("--stage") || token == QStringLiteral("--directive") || token == QStringLiteral("--value") || token == QStringLiteral("--frames") || token == QStringLiteral("--rotations") || token == QStringLiteral("--package") || token == QStringLiteral("--mounted-package") || token == QStringLiteral("--package-root") || token == QStringLiteral("--source-frame") || token == QStringLiteral("--extension-root") || token == QStringLiteral("--root") || token == QStringLiteral("--select") || token == QStringLiteral("--entity") || token == QStringLiteral("--set") || token == QStringLiteral("--property") || token == QStringLiteral("--object") || token == QStringLiteral("--delta") || token == QStringLiteral("--profile") || token == QStringLiteral("--compiler-profile") || token == QStringLiteral("--extra-args") || token == QStringLiteral("--compiler-search-paths") || token == QStringLiteral("--timeout-ms") || token == QStringLiteral("--executable") || token == QStringLiteral("--locale") || token == QStringLiteral("--catalog-root")) {
+		if (valueFlags.contains(token)) {
 			++i;
+			continue;
+		}
+		// "--option=value" carries its value inline, so nothing is consumed.
+		const qsizetype equals = token.indexOf(QLatin1Char('='));
+		if (token.startsWith(QStringLiteral("--")) && equals > 2
+			&& (booleanFlags.contains(token.left(equals)) || valueFlags.contains(token.left(equals)))) {
 			continue;
 		}
 		tokens.push_back(token);
@@ -302,6 +523,10 @@ void printHelp()
 	std::cout << "  --quiet             Suppress successful human-readable narration. Errors still go to stderr.\n";
 	std::cout << "  --verbose           Print timing and extra diagnostics for supported text commands.\n";
 	std::cout << "  --exit-codes        Print stable CLI exit-code identifiers.\n";
+	std::cout << "  --settings-file <path>\n";
+	std::cout << "                      Use an INI settings file instead of the user's own preference store.\n";
+	std::cout << "                      Resolved before any settings access, so scripts and CI never touch real preferences.\n";
+	std::cout << "  --self-test         GUI mode only: build every work surface, repaint it, and exit. Used by CI.\n";
 	std::cout << "  --studio-report     Print planned studio modules.\n";
 	std::cout << "  --compiler-report   Print imported compiler integrations.\n";
 	std::cout << "  --compiler-registry Print compiler tool registry and executable discovery.\n";
@@ -420,97 +645,42 @@ void printHelp()
 	std::cout << "                      Forget a project folder without touching files.\n";
 	std::cout << "  --clear-recent-projects\n";
 	std::cout << "                      Clear remembered project folders without touching files.\n";
+	// The subcommand list is generated from the same registry that backs
+	// `cli commands` and scripts/validate_cli_docs.py, so the help text cannot
+	// drift away from what is actually routed. Adding a command to the registry
+	// is enough to document it here.
 	std::cout << "\nSubcommands:\n";
-	std::cout << "  cli exit-codes\n";
-	std::cout << "                      Print the stable exit-code contract.\n";
-	std::cout << "  cli commands        Print testable command registration metadata and shell examples.\n";
-	std::cout << "  ui semantics        Print status chip, shortcut registry, and command palette metadata.\n";
-	std::cout << "  credits validate    Validate credits coverage and compiler submodule pins.\n";
-	std::cout << "  about               Print version, repository, credits, and license pointers.\n";
-	std::cout << "  project init <path> [--installation <id>] [--editor-profile <id>]\n";
-	std::cout << "                      Create or refresh .vibestudio/project.json.\n";
-	std::cout << "  project info <path> Print project manifest and health summary.\n";
-	std::cout << "  project validate <path>\n";
-	std::cout << "                      Validate project health and return validation-failed for blocking issues.\n";
-	std::cout << "  install list        List saved manual game installation profiles.\n";
-	std::cout << "  install detect [--root <path>]\n";
-	std::cout << "                      Detect Steam/GOG candidates read-only. Repeat --root for fixtures or custom libraries.\n";
-	std::cout << "  package info <path> Print read-only package summary.\n";
-	std::cout << "  package list <path> List package entries and metadata.\n";
-	std::cout << "  package preview <path> <virtual-path>\n";
-	std::cout << "                      Preview a text, image, or binary package entry.\n";
-	std::cout << "  package extract <path> --output <folder> [--entry <virtual-path>] [--dry-run] [--overwrite]\n";
-	std::cout << "                      Extract selected entries or every entry when no entry is provided.\n";
-	std::cout << "  package validate <path>\n";
-	std::cout << "                      Validate package loading and return validation-failed for warnings.\n";
-	std::cout << "  package stage <path> [--add-file <file> --as <virtual-path>] [--replace-file <file> --replace-entry <virtual-path>] [--rename <old> --to <new>] [--delete <virtual-path>] [--resolve block|replace-existing|skip]\n";
-	std::cout << "                      Preview staged changes, conflicts, and before/after composition without writing.\n";
-	std::cout << "  package save-as <path> <output> [--format pak|zip|pk3|wad] [stage options] [--dry-run] [--overwrite] [--manifest <path>]\n";
-	std::cout << "                      Write staged changes to a new package path; in-place overwrite is blocked.\n";
-	std::cout << "  package manifest <path> --output <manifest.json> [stage options]\n";
-	std::cout << "                      Export a reproducible staged package manifest without writing a package.\n";
-	std::cout << "  asset inspect <package> <virtual-path>\n";
-	std::cout << "                      Inspect texture/image, model, audio, or text/script metadata for one package entry.\n";
-	std::cout << "  asset convert <package> --output <folder> [--entry <virtual-path>] [--format png|jpg|bmp] [--crop x,y,w,h] [--resize WxH] [--palette grayscale|indexed] [--dry-run] [--overwrite]\n";
-	std::cout << "                      Batch-convert package image entries with before/after size previews.\n";
-	std::cout << "  asset audio-wav <package> <virtual-path> --output <file.wav> [--dry-run] [--overwrite]\n";
-	std::cout << "                      Export readable WAV/PCM audio entries without decoding compressed codecs.\n";
-	std::cout << "  asset find <project-root> --find <text> [--extensions cfg;shader;qc]\n";
-	std::cout << "                      Search local text/script assets and print file, line, and column matches.\n";
-	std::cout << "  asset replace <project-root> --find <text> --replace <text> [--dry-run|--write] [--extensions cfg;shader;qc]\n";
-	std::cout << "                      Preview or write text/script replacements with save-state reporting.\n";
-	std::cout << "  map inspect <path> [--map MAP01] [--engine idtech2|idtech3] [--select entity:0]\n";
-	std::cout << "                      Inspect entities, textures/materials, map statistics, validation, and preview lines.\n";
-	std::cout << "  map edit <path> --entity <id> --set key=value --output <path> [--dry-run] [--overwrite]\n";
-	std::cout << "                      Edit entity key/value pairs and write a non-destructive save-as path.\n";
-	std::cout << "  map move <path> --object entity:0|vertex:0|linedef:0|thing:0 --delta x,y,z --output <path>\n";
-	std::cout << "                      Move safe MVP selections and write a non-destructive save-as path.\n";
-	std::cout << "  map compile-plan <path> [--profile <compiler-profile>] [--output <path>]\n";
-	std::cout << "                      Build a compiler command plan from the inspected map.\n";
-	std::cout << "  compiler list       Print compiler registry and executable discovery.\n";
-	std::cout << "  compiler profiles   Print available compiler wrapper profiles.\n";
-	std::cout << "  compiler set-path <tool> --executable <path>\n";
-	std::cout << "                      Save a user-configured compiler executable path.\n";
-	std::cout << "  compiler clear-path <tool>\n";
-	std::cout << "                      Remove a saved compiler executable path override.\n";
-	std::cout << "  compiler plan <profile> --input <path>\n";
-	std::cout << "                      Build a reviewable compiler command plan. Optional: --output <path>, --extra-args <args>, --workspace-root <path>.\n";
-	std::cout << "  compiler manifest <profile> --input <path>\n";
-	std::cout << "                      Print or write a schema-versioned compiler command manifest. Optional: --manifest <path>.\n";
-	std::cout << "  compiler run <profile> --input <path>\n";
-	std::cout << "                      Execute a compiler command, capture logs, diagnostics, hashes, and an optional --manifest record.\n";
-	std::cout << "  compiler rerun <manifest-path>\n";
-	std::cout << "                      Re-run a previously saved compiler command manifest. Optional: --manifest <path>.\n";
-	std::cout << "  compiler copy-command <manifest-path|profile> [--input <path>]\n";
-	std::cout << "                      Print the shell-ready command line from a manifest or planned profile.\n";
-	std::cout << "  editor profiles     Print routed editor interaction profiles.\n";
-	std::cout << "  editor current      Print the selected editor profile.\n";
-	std::cout << "  editor select <id>  Select an editor profile globally.\n";
-	std::cout << "  localization report [--locale <id>] [--catalog-root <path>]\n";
-	std::cout << "                      Print localization targets, pseudo-localization, RTL smoke, locale formatting, and catalog status.\n";
-	std::cout << "  localization targets\n";
-	std::cout << "                      List the documented localization target set.\n";
-	std::cout << "  diagnostics bundle [--output <folder>]\n";
-	std::cout << "                      Export redacted version, platform, command, module, and localization diagnostics.\n";
-	std::cout << "  ai status           Print AI-free mode, opt-in settings, and connector stubs.\n";
-	std::cout << "  ai connectors       Print provider-neutral AI connector design stubs.\n";
-	std::cout << "  ai tools            Print safe AI-callable VibeStudio tools.\n";
-	std::cout << "  ai explain-log --log <path>|--text <text>\n";
-	std::cout << "                      Explain compiler log text without writing files.\n";
-	std::cout << "  ai propose-command --prompt <text>\n";
-	std::cout << "                      Propose a reviewable compiler command from natural language.\n";
-	std::cout << "  ai propose-manifest <project-root> [--name <display-name>]\n";
-	std::cout << "                      Draft a project manifest preview without writing files.\n";
-	std::cout << "  ai package-deps <package>\n";
-	std::cout << "                      Suggest missing package dependencies from package metadata.\n";
-	std::cout << "  ai cli-command --prompt <text>\n";
-	std::cout << "                      Generate a reviewable CLI command proposal.\n";
-	std::cout << "  ai fix-plan --log <path> [--command <line>]\n";
-	std::cout << "                      Generate a supervised compiler fix-and-retry plan.\n";
-	std::cout << "  ai asset-request --provider <id> --kind <kind> --prompt <text>\n";
-	std::cout << "                      Stage an asset generation request before import.\n";
-	std::cout << "  ai compare --provider-a <id> --provider-b <id> --prompt <text>\n";
-	std::cout << "                      Prepare provider output comparison metadata.\n";
+	int longestName = 0;
+	for (const CliCommandDescriptor& descriptor : cliCommandDescriptors()) {
+		longestName = std::max<int>(longestName, static_cast<int>(descriptor.family.size() + descriptor.command.size() + 1));
+	}
+	QString currentFamily;
+	for (const CliCommandDescriptor& descriptor : cliCommandDescriptors()) {
+		if (descriptor.family != currentFamily) {
+			currentFamily = descriptor.family;
+			std::cout << "\n  " << text(currentFamily) << "\n";
+		}
+		const QString name = QStringLiteral("%1 %2").arg(descriptor.family, descriptor.command);
+		QStringList modes;
+		if (descriptor.json) {
+			modes.push_back(QStringLiteral("--json"));
+		}
+		if (descriptor.dryRun) {
+			modes.push_back(QStringLiteral("--dry-run"));
+		}
+		if (descriptor.watch) {
+			modes.push_back(QStringLiteral("--watch"));
+		}
+		std::cout << "    " << text(name.leftJustified(longestName + 2, QLatin1Char(' '))) << text(descriptor.summary);
+		if (!modes.isEmpty()) {
+			std::cout << " [" << text(modes.join(QLatin1Char(' '))) << "]";
+		}
+		std::cout << "\n";
+		if (!descriptor.examples.isEmpty()) {
+			std::cout << "    " << text(QString(longestName + 2, QLatin1Char(' '))) << "e.g. "
+				<< text(descriptor.examples.first()) << "\n";
+		}
+	}
 	std::cout << "\nExamples:\n";
 	std::cout << "  PowerShell: vibestudio --cli package validate \"C:\\Games\\Quake\\id1\\pak0.pak\" --json\n";
 	std::cout << "  POSIX:      vibestudio --cli compiler plan ericw-qbsp --input './maps/start.map' --dry-run\n";
@@ -1560,7 +1730,7 @@ QJsonObject diagnosticBundleJson()
 	object.insert(QStringLiteral("modules"), studioModulesJson());
 	object.insert(QStringLiteral("operationStates"), operationStatesJson());
 	object.insert(QStringLiteral("uiSemantics"), uiSemanticsJson());
-	object.insert(QStringLiteral("localization"), localizationSmokeReportJson(buildLocalizationSmokeReport(QStringLiteral("en"), QStringLiteral("i18n"))));
+	object.insert(QStringLiteral("localization"), localizationSmokeReportJson(buildLocalizationSmokeReport(QStringLiteral("en"))));
 	object.insert(QStringLiteral("redaction"), QStringLiteral("No secrets, API keys, environment values, home-directory contents, or project file payloads are included."));
 	return object;
 }
@@ -3217,7 +3387,10 @@ int runEditorSelectCommand(const QString& commandName, const QString& profileId,
 int runLocalizationReportCommand(const QString& commandName, const QStringList& args, CliOutputFormat format, bool targetsOnly)
 {
 	const QString localeName = hasOption(args, QStringLiteral("--locale")) ? optionValue(args, QStringLiteral("--locale")) : QStringLiteral("en");
-	const QString catalogRoot = hasOption(args, QStringLiteral("--catalog-root")) ? optionValue(args, QStringLiteral("--catalog-root")) : QStringLiteral("i18n");
+	// Only pass an explicit root when the user gave one: an empty value lets
+	// resolveTranslationCatalogRoot() try VIBESTUDIO_I18N_DIR, the application
+	// directory, and the installed share directory before the relative fallback.
+	const QString catalogRoot = optionValue(args, QStringLiteral("--catalog-root"));
 	const LocalizationSmokeReport report = buildLocalizationSmokeReport(localeName, catalogRoot);
 	const CliExitCode code = report.ok ? CliExitCode::Success : CliExitCode::ValidationFailed;
 
@@ -5057,6 +5230,772 @@ int runCompilerCopyCommandCommand(const QString& commandName, const QString& tar
 	return exitCodeValue(CliExitCode::Success);
 }
 
+// ---------------------------------------------------------------------------
+// map render
+// ---------------------------------------------------------------------------
+
+int runMapRenderCommand(const QString& commandName, const QString& path, const QStringList& args, CliOutputFormat format)
+{
+	const LevelMapLoadRequest request = levelMapLoadRequestFromArgs(path, args);
+	if (request.path.trimmed().isEmpty()) {
+		return printCliError(commandName, CliExitCode::Usage, QStringLiteral("%1 requires a Doom WAD or Quake-family .map path.").arg(commandName), format);
+	}
+	LevelMapDocument document;
+	QString error;
+	if (!loadLevelMap(request, &document, &error)) {
+		return printCliError(commandName, levelMapLoadFailureCode(request), QStringLiteral("Unable to load map: %1").arg(error), format);
+	}
+
+	MapRenderOptions options;
+	const QString projection = optionValue(args, QStringLiteral("--projection"));
+	if (!projection.trimmed().isEmpty() && !mapRenderProjectionFromId(projection, &options.projection)) {
+		return printCliError(commandName, CliExitCode::Usage,
+			QStringLiteral("Unknown --projection value. Expected one of: %1.").arg(mapRenderProjectionIds().join(QStringLiteral(", "))), format);
+	}
+	bool ok = false;
+	const int width = optionValue(args, QStringLiteral("--width")).toInt(&ok);
+	if (ok && width > 0) {
+		options.width = std::clamp(width, 64, 8192);
+	}
+	const int height = optionValue(args, QStringLiteral("--height")).toInt(&ok);
+	if (ok && height > 0) {
+		options.height = std::clamp(height, 64, 8192);
+	}
+	const int grid = optionValue(args, QStringLiteral("--grid")).toInt(&ok);
+	if (ok && grid > 0) {
+		options.gridSize = grid;
+	}
+	if (hasOption(args, QStringLiteral("--no-grid"))) {
+		options.showGrid = false;
+	}
+	if (hasOption(args, QStringLiteral("--labels"))) {
+		options.showLabels = true;
+	}
+	if (hasOption(args, QStringLiteral("--high-contrast"))) {
+		options.highContrast = true;
+	}
+	const QString highlight = optionValue(args, QStringLiteral("--highlight"));
+	if (!highlight.trimmed().isEmpty() && selectLevelMapObject(&document, highlight, &error)) {
+		options.highlightKind = document.selectionKind;
+		options.highlightObjectId = document.selectedObjectId;
+	}
+
+	const QString outputPath = optionValue(args, QStringLiteral("--output"));
+	const bool dryRun = hasOption(args, QStringLiteral("--dry-run"));
+	if (outputPath.trimmed().isEmpty()) {
+		MapRenderReport report;
+		const QString svg = renderLevelMapSvg(document, options, &report);
+		if (format == CliOutputFormat::Json) {
+			QJsonObject object = cliResultJson(commandName);
+			object.insert(QStringLiteral("map"), document.mapName);
+			object.insert(QStringLiteral("projection"), mapRenderProjectionId(options.projection));
+			object.insert(QStringLiteral("width"), report.width);
+			object.insert(QStringLiteral("height"), report.height);
+			object.insert(QStringLiteral("unitsPerPixel"), report.unitsPerPixel);
+			object.insert(QStringLiteral("drawnLinedefs"), report.drawnLinedefCount);
+			object.insert(QStringLiteral("drawnThings"), report.drawnThingCount);
+			object.insert(QStringLiteral("drawnBrushes"), report.drawnBrushCount);
+			object.insert(QStringLiteral("drawnPatches"), report.drawnPatchCount);
+			object.insert(QStringLiteral("drawnEntities"), report.drawnEntityCount);
+			object.insert(QStringLiteral("drawnSectors"), report.drawnSectorCount);
+			object.insert(QStringLiteral("svg"), svg);
+			printJson(object);
+		} else {
+			std::cout << text(svg) << "\n";
+		}
+		return exitCodeValue(CliExitCode::Success);
+	}
+
+	const MapRenderReport report = writeLevelMapSvg(document, options, outputPath, dryRun, hasOption(args, QStringLiteral("--overwrite")));
+	if (format == CliOutputFormat::Json) {
+		QJsonObject object = cliResultJson(commandName, report.succeeded() ? CliExitCode::Success : CliExitCode::Failure);
+		object.insert(QStringLiteral("map"), document.mapName);
+		object.insert(QStringLiteral("outputPath"), report.outputPath);
+		object.insert(QStringLiteral("dryRun"), dryRun);
+		object.insert(QStringLiteral("rendered"), report.rendered);
+		object.insert(QStringLiteral("width"), report.width);
+		object.insert(QStringLiteral("height"), report.height);
+		object.insert(QStringLiteral("warnings"), QJsonArray::fromStringList(report.warnings));
+		if (!report.error.isEmpty()) {
+			object.insert(QStringLiteral("error"), report.error);
+		}
+		printJson(object);
+	} else {
+		std::cout << text(mapRenderReportText(report)) << "\n";
+	}
+	return exitCodeValue(report.succeeded() ? CliExitCode::Success : CliExitCode::Failure);
+}
+
+// ---------------------------------------------------------------------------
+// bsp inspect
+// ---------------------------------------------------------------------------
+
+int runBspInspectCommand(const QString& commandName, const QString& path, const QStringList& args, CliOutputFormat format)
+{
+	Q_UNUSED(args);
+	if (path.trimmed().isEmpty()) {
+		return printCliError(commandName, CliExitCode::Usage, QStringLiteral("%1 requires a compiled .bsp path.").arg(commandName), format);
+	}
+	if (!QFileInfo::exists(path)) {
+		return printCliError(commandName, CliExitCode::NotFound, QStringLiteral("Compiled map not found: %1").arg(QDir::toNativeSeparators(path)), format);
+	}
+
+	const CompiledMapArtifacts artifacts = inspectCompiledMapArtifacts(path);
+	const bool valid = artifacts.bsp.valid;
+	if (format == CliOutputFormat::Json) {
+		QJsonObject object = cliResultJson(commandName, valid ? CliExitCode::Success : CliExitCode::ValidationFailed);
+		object.insert(QStringLiteral("artifacts"), compiledMapArtifactsJson(artifacts));
+		printJson(object);
+	} else {
+		std::cout << text(compiledMapArtifactsText(artifacts)) << "\n";
+	}
+	return exitCodeValue(valid ? CliExitCode::Success : CliExitCode::ValidationFailed);
+}
+
+// ---------------------------------------------------------------------------
+// build pipelines
+// ---------------------------------------------------------------------------
+
+BuildPipelineRequest buildPipelineRequestFromArgs(const QString& pipelineId, const QStringList& args)
+{
+	BuildPipelineRequest request;
+	request.pipelineId = pipelineId;
+	request.inputPath = hasOption(args, QStringLiteral("--input")) ? optionValue(args, QStringLiteral("--input")) : QString();
+	request.outputPath = optionValue(args, QStringLiteral("--output"));
+	request.workingDirectory = optionValue(args, QStringLiteral("--working-directory"));
+	request.workspaceRootPath = optionValue(args, QStringLiteral("--workspace-root"));
+	request.manifestDirectory = optionValue(args, QStringLiteral("--manifest"));
+	request.dryRun = hasOption(args, QStringLiteral("--dry-run"));
+	request.registerOutputs = hasOption(args, QStringLiteral("--register-output")) || hasOption(args, QStringLiteral("--register-outputs"));
+
+	for (int index = 0; index + 1 < args.size(); ++index) {
+		if (args.at(index) == QStringLiteral("--disable-stage")) {
+			request.disabledStageIds << args.at(index + 1);
+		}
+		if (args.at(index) == QStringLiteral("--stage-args")) {
+			// "--stage-args <stageId>=<args>" keeps per-stage flags separable.
+			const QString value = args.at(index + 1);
+			const qsizetype equals = value.indexOf(QLatin1Char('='));
+			if (equals > 0) {
+				request.stageExtraArguments.insert(value.left(equals),
+					value.mid(equals + 1).split(QLatin1Char(' '), Qt::SkipEmptyParts));
+			}
+		}
+	}
+
+	const QString searchPaths = optionValue(args, QStringLiteral("--compiler-search-paths"));
+	if (!searchPaths.trimmed().isEmpty()) {
+		request.extraSearchPaths = searchPaths.split(QLatin1Char(';'), Qt::SkipEmptyParts);
+	}
+	bool ok = false;
+	const int timeout = optionValue(args, QStringLiteral("--timeout-ms")).toInt(&ok);
+	if (ok && timeout > 0) {
+		request.stageTimeoutMs = timeout;
+	}
+
+	if (!request.workspaceRootPath.trimmed().isEmpty()) {
+		ProjectManifest manifest;
+		if (loadProjectManifest(request.workspaceRootPath, &manifest)) {
+			request.extraSearchPaths = effectiveProjectCompilerSearchPaths(manifest, request.extraSearchPaths);
+			request.executableOverrides = effectiveProjectCompilerToolOverrides(manifest, request.executableOverrides);
+		}
+	}
+	return request;
+}
+
+int runBuildListCommand(const QString& commandName, CliOutputFormat format)
+{
+	const QVector<BuildPipelineDescriptor> pipelines = buildPipelineDescriptors();
+	if (format == CliOutputFormat::Json) {
+		QJsonObject object = cliResultJson(commandName);
+		QJsonArray array;
+		for (const BuildPipelineDescriptor& pipeline : pipelines) {
+			QJsonObject entry;
+			entry.insert(QStringLiteral("id"), pipeline.id);
+			entry.insert(QStringLiteral("displayName"), pipeline.displayName);
+			entry.insert(QStringLiteral("engineFamily"), pipeline.engineFamily);
+			entry.insert(QStringLiteral("description"), pipeline.description);
+			entry.insert(QStringLiteral("inputExtensions"), QJsonArray::fromStringList(pipeline.inputExtensions));
+			QJsonArray stages;
+			for (const BuildPipelineStage& stage : pipeline.stages) {
+				QJsonObject stageObject;
+				stageObject.insert(QStringLiteral("id"), stage.id);
+				stageObject.insert(QStringLiteral("profileId"), stage.profileId);
+				stageObject.insert(QStringLiteral("displayName"), stage.displayName);
+				stageObject.insert(QStringLiteral("optional"), stage.optional);
+				stageObject.insert(QStringLiteral("enabledByDefault"), stage.enabledByDefault);
+				stageObject.insert(QStringLiteral("inputFromStageId"), stage.inputFromStageId);
+				stages.append(stageObject);
+			}
+			entry.insert(QStringLiteral("stages"), stages);
+			array.append(entry);
+		}
+		object.insert(QStringLiteral("pipelines"), array);
+		printJson(object);
+		return exitCodeValue(CliExitCode::Success);
+	}
+
+	std::cout << "Build pipelines\n";
+	for (const BuildPipelineDescriptor& pipeline : pipelines) {
+		std::cout << text(QStringLiteral("- %1 (%2, %3)\n").arg(pipeline.id, pipeline.displayName, pipeline.engineFamily));
+		for (const BuildPipelineStage& stage : pipeline.stages) {
+			std::cout << text(QStringLiteral("    %1 -> %2%3\n")
+				.arg(stage.id, stage.profileId, stage.optional ? QStringLiteral(" [optional]") : QString()));
+		}
+	}
+	return exitCodeValue(CliExitCode::Success);
+}
+
+int runBuildPlanCommand(const QString& commandName, const QString& pipelineId, const QStringList& args, CliOutputFormat format)
+{
+	if (pipelineId.trimmed().isEmpty()) {
+		return printCliError(commandName, CliExitCode::Usage,
+			QStringLiteral("%1 requires a pipeline id. Known pipelines: %2.").arg(commandName, buildPipelineIds().join(QStringLiteral(", "))), format);
+	}
+	const BuildPipelineRequest request = buildPipelineRequestFromArgs(pipelineId, args);
+	if (request.inputPath.trimmed().isEmpty()) {
+		return printCliError(commandName, CliExitCode::Usage, QStringLiteral("%1 requires --input <map path>.").arg(commandName), format);
+	}
+	const BuildPipelineResult result = planBuildPipeline(request);
+	if (!result.errors.isEmpty() && result.stages.isEmpty()) {
+		return printCliError(commandName, CliExitCode::NotFound, result.errors.join(QStringLiteral(" ")), format);
+	}
+	if (format == CliOutputFormat::Json) {
+		QJsonObject object = cliResultJson(commandName);
+		object.insert(QStringLiteral("pipeline"), buildPipelineResultJson(result));
+		printJson(object);
+	} else {
+		std::cout << text(buildPipelineResultText(result)) << "\n";
+	}
+	return exitCodeValue(CliExitCode::Success);
+}
+
+int runBuildRunCommand(const QString& commandName, const QString& pipelineId, const QStringList& args, CliOutputFormat format)
+{
+	if (pipelineId.trimmed().isEmpty()) {
+		return printCliError(commandName, CliExitCode::Usage,
+			QStringLiteral("%1 requires a pipeline id. Known pipelines: %2.").arg(commandName, buildPipelineIds().join(QStringLiteral(", "))), format);
+	}
+	BuildPipelineRequest request = buildPipelineRequestFromArgs(pipelineId, args);
+	if (request.inputPath.trimmed().isEmpty()) {
+		return printCliError(commandName, CliExitCode::Usage, QStringLiteral("%1 requires --input <map path>.").arg(commandName), format);
+	}
+
+	const bool watch = hasOption(args, QStringLiteral("--watch")) && format != CliOutputFormat::Json;
+	BuildPipelineCallbacks callbacks;
+	if (watch) {
+		callbacks.logEntry = [](const CompilerTaskLogEntry& entry) {
+			std::cout << text(QStringLiteral("[%1] %2\n").arg(entry.level, entry.message));
+			std::cout.flush();
+		};
+		callbacks.stageStarted = [](int stageIndex, const BuildPipelineStage& stage) {
+			std::cout << text(QStringLiteral("== stage %1: %2\n").arg(stageIndex + 1).arg(stage.displayName));
+			std::cout.flush();
+		};
+		callbacks.stageFinished = [](int stageIndex, const BuildPipelineStageResult& result) {
+			std::cout << text(QStringLiteral("== stage %1 finished: %2\n")
+				.arg(stageIndex + 1).arg(operationStateId(result.state)));
+			std::cout.flush();
+		};
+	}
+
+	const BuildPipelineResult result = runBuildPipeline(request, callbacks);
+
+	if (format == CliOutputFormat::Json) {
+		QJsonObject object = cliResultJson(commandName, result.succeeded() ? CliExitCode::Success : CliExitCode::Failure);
+		object.insert(QStringLiteral("pipeline"), buildPipelineResultJson(result));
+		printJson(object);
+	} else {
+		std::cout << text(buildPipelineResultText(result)) << "\n";
+	}
+	if (result.cancelled) {
+		return exitCodeValue(CliExitCode::Failure);
+	}
+	return exitCodeValue(result.succeeded() ? CliExitCode::Success : CliExitCode::Failure);
+}
+
+// ---------------------------------------------------------------------------
+// launch
+// ---------------------------------------------------------------------------
+
+int runLaunchCommand(const QString& commandName, const QStringList& args, bool execute, CliOutputFormat format)
+{
+	StudioSettings settings;
+	const QVector<GameInstallationProfile> installations = settings.gameInstallations();
+	if (installations.isEmpty()) {
+		return printCliError(commandName, CliExitCode::NotFound,
+			QStringLiteral("No game installation profiles are saved. Add one with `install add` first."), format);
+	}
+
+	const QString requestedId = hasOption(args, QStringLiteral("--installation"))
+		? optionValue(args, QStringLiteral("--installation"))
+		: settings.selectedGameInstallationId();
+	GameInstallationProfile installation = installations.first();
+	bool found = requestedId.trimmed().isEmpty();
+	for (const GameInstallationProfile& profile : installations) {
+		if (sameGameInstallationId(profile.id, requestedId)) {
+			installation = profile;
+			found = true;
+			break;
+		}
+	}
+	if (!found) {
+		return printCliError(commandName, CliExitCode::NotFound,
+			QStringLiteral("Installation profile not found: %1").arg(requestedId), format);
+	}
+
+	GameLaunchRequest request;
+	request.launchProfileId = optionValue(args, QStringLiteral("--launch-profile"));
+	if (request.launchProfileId.trimmed().isEmpty()) {
+		request.launchProfileId = defaultGameLaunchProfileId(installation.engineFamily);
+	}
+	request.executablePath = optionValue(args, QStringLiteral("--executable"));
+	request.mapName = hasOption(args, QStringLiteral("--map")) ? optionValue(args, QStringLiteral("--map")) : optionValue(args, QStringLiteral("--map-name"));
+	request.modDirectory = optionValue(args, QStringLiteral("--mod"));
+	request.baseDirectory = hasOption(args, QStringLiteral("--basedir")) ? optionValue(args, QStringLiteral("--basedir")) : installation.rootPath;
+	request.bspPath = optionValue(args, QStringLiteral("--bsp"));
+	request.workingDirectory = optionValue(args, QStringLiteral("--working-directory"));
+	const QString extraArgs = optionValue(args, QStringLiteral("--extra-args"));
+	if (!extraArgs.trimmed().isEmpty()) {
+		request.extraArguments = extraArgs.split(QLatin1Char(' '), Qt::SkipEmptyParts);
+	}
+	request.dryRun = !execute;
+
+	const GameLaunchPlan plan = buildGameLaunchPlan(request, installation);
+	qint64 pid = 0;
+	QString startError;
+	bool started = false;
+	if (execute && plan.runnable) {
+		started = startGameLaunch(plan, &pid, &startError);
+	}
+
+	const CliExitCode resultCode = !plan.runnable
+		? CliExitCode::Unavailable
+		: ((execute && !started) ? CliExitCode::Failure : CliExitCode::Success);
+	if (format == CliOutputFormat::Json) {
+		QJsonObject object = cliResultJson(commandName, resultCode);
+		object.insert(QStringLiteral("installationId"), installation.id);
+		object.insert(QStringLiteral("plan"), gameLaunchPlanJson(plan));
+		object.insert(QStringLiteral("executed"), started);
+		if (started) {
+			object.insert(QStringLiteral("processId"), pid);
+		}
+		if (!startError.isEmpty()) {
+			object.insert(QStringLiteral("error"), startError);
+		}
+		printJson(object);
+	} else {
+		std::cout << text(gameLaunchPlanText(plan)) << "\n";
+		if (execute) {
+			std::cout << text(started
+				? QStringLiteral("Launched process %1.\n").arg(pid)
+				: QStringLiteral("Launch was not started: %1\n").arg(startError.isEmpty() ? QStringLiteral("plan is not runnable") : startError));
+		}
+	}
+
+	return exitCodeValue(resultCode);
+}
+
+// ---------------------------------------------------------------------------
+// texture decoding and palettes
+// ---------------------------------------------------------------------------
+
+int runTextureDecodeCommand(const QString& commandName, const QString& packagePath, const QString& entryPath, const QStringList& args, CliOutputFormat format)
+{
+	if (packagePath.trimmed().isEmpty() || entryPath.trimmed().isEmpty()) {
+		return printCliError(commandName, CliExitCode::Usage,
+			QStringLiteral("%1 requires a package path and an entry virtual path.").arg(commandName), format);
+	}
+	PackageArchive archive;
+	QString error;
+	if (!archive.load(packagePath, &error)) {
+		return printCliError(commandName, CliExitCode::NotFound, QStringLiteral("Unable to open package: %1").arg(error), format);
+	}
+
+	const QString paletteId = optionValue(args, QStringLiteral("--palette"));
+	IdTechPaletteResolution resolution;
+	const IdTechImageDecodeResult decoded = decodeIdTechImageFromArchive(archive, entryPath, paletteId, &resolution);
+	if (!decoded.decoded) {
+		return printCliError(commandName, CliExitCode::Unavailable,
+			decoded.error.isEmpty() ? QStringLiteral("Entry could not be decoded as an image.") : decoded.error, format);
+	}
+
+	const QString outputPath = optionValue(args, QStringLiteral("--output"));
+	const bool dryRun = hasOption(args, QStringLiteral("--dry-run"));
+	bool written = false;
+	QString writeError;
+	if (!outputPath.trimmed().isEmpty()) {
+		if (QFileInfo::exists(outputPath) && !hasOption(args, QStringLiteral("--overwrite"))) {
+			writeError = QStringLiteral("Output already exists. Pass --overwrite to replace it.");
+		} else if (!dryRun) {
+			QDir().mkpath(QFileInfo(outputPath).absolutePath());
+			written = decoded.image.save(outputPath, "PNG");
+			if (!written) {
+				writeError = QStringLiteral("The decoded image could not be written.");
+			}
+		}
+	}
+
+	if (format == CliOutputFormat::Json) {
+		QJsonObject object = cliResultJson(commandName, writeError.isEmpty() ? CliExitCode::Success : CliExitCode::Failure);
+		object.insert(QStringLiteral("package"), archive.sourcePath());
+		object.insert(QStringLiteral("entry"), entryPath);
+		object.insert(QStringLiteral("format"), decoded.formatId);
+		object.insert(QStringLiteral("formatName"), decoded.formatName);
+		object.insert(QStringLiteral("width"), decoded.width);
+		object.insert(QStringLiteral("height"), decoded.height);
+		object.insert(QStringLiteral("mipLevels"), static_cast<int>(decoded.mipLevels.size()));
+		object.insert(QStringLiteral("frames"), static_cast<int>(decoded.frames.size()));
+		object.insert(QStringLiteral("paletted"), decoded.paletted);
+		object.insert(QStringLiteral("hasTransparency"), decoded.hasTransparency);
+		object.insert(QStringLiteral("paletteId"), resolution.palette.id);
+		object.insert(QStringLiteral("paletteFromPackage"), resolution.fromPackage);
+		object.insert(QStringLiteral("paletteGenerated"), resolution.palette.generated);
+		object.insert(QStringLiteral("paletteSource"), resolution.sourceVirtualPath);
+		object.insert(QStringLiteral("outputPath"), outputPath);
+		object.insert(QStringLiteral("written"), written);
+		object.insert(QStringLiteral("dryRun"), dryRun);
+		object.insert(QStringLiteral("warnings"), QJsonArray::fromStringList(decoded.warnings + resolution.warnings));
+		if (!writeError.isEmpty()) {
+			object.insert(QStringLiteral("error"), writeError);
+		}
+		printJson(object);
+	} else {
+		for (const QString& line : idTechImageSummaryLines(decoded)) {
+			std::cout << text(line) << "\n";
+		}
+		for (const QString& line : idTechPaletteSummaryLines(resolution)) {
+			std::cout << text(line) << "\n";
+		}
+		if (!outputPath.trimmed().isEmpty()) {
+			std::cout << text(dryRun
+				? QStringLiteral("Dry run: would write %1\n").arg(QDir::toNativeSeparators(outputPath))
+				: (written ? QStringLiteral("Wrote %1\n").arg(QDir::toNativeSeparators(outputPath))
+					: QStringLiteral("Not written: %1\n").arg(writeError)));
+		}
+	}
+	return exitCodeValue(writeError.isEmpty() ? CliExitCode::Success : CliExitCode::Failure);
+}
+
+int runTexturePaletteCommand(const QString& commandName, const QString& packagePath, const QStringList& args, CliOutputFormat format)
+{
+	const QString paletteId = optionValue(args, QStringLiteral("--palette"));
+	IdTechPaletteResolution resolution;
+	if (packagePath.trimmed().isEmpty()) {
+		resolution.requestedPaletteId = paletteId;
+		resolution.palette = generatedIdTechPalette(paletteId);
+	} else {
+		PackageArchive archive;
+		QString error;
+		if (!archive.load(packagePath, &error)) {
+			return printCliError(commandName, CliExitCode::NotFound, QStringLiteral("Unable to open package: %1").arg(error), format);
+		}
+		resolution = resolveIdTechPalette(archive, paletteId);
+	}
+
+	if (format == CliOutputFormat::Json) {
+		QJsonObject object = cliResultJson(commandName);
+		object.insert(QStringLiteral("paletteId"), resolution.palette.id);
+		object.insert(QStringLiteral("displayName"), resolution.palette.displayName);
+		object.insert(QStringLiteral("fromPackage"), resolution.fromPackage);
+		object.insert(QStringLiteral("generated"), resolution.palette.generated);
+		object.insert(QStringLiteral("sourceVirtualPath"), resolution.sourceVirtualPath);
+		object.insert(QStringLiteral("transparentIndex"), resolution.palette.transparentIndex);
+		object.insert(QStringLiteral("fullbrightStartIndex"), resolution.palette.fullbrightStartIndex);
+		object.insert(QStringLiteral("colorCount"), static_cast<int>(resolution.palette.colors.size()));
+		object.insert(QStringLiteral("searchedPaths"), QJsonArray::fromStringList(resolution.searchedPaths));
+		object.insert(QStringLiteral("warnings"), QJsonArray::fromStringList(resolution.warnings));
+		QJsonArray known;
+		for (const IdTechPaletteDescriptor& descriptor : idTechPaletteDescriptors()) {
+			QJsonObject entry;
+			entry.insert(QStringLiteral("id"), descriptor.id);
+			entry.insert(QStringLiteral("displayName"), descriptor.displayName);
+			entry.insert(QStringLiteral("engineFamily"), descriptor.engineFamily);
+			known.append(entry);
+		}
+		object.insert(QStringLiteral("knownPalettes"), known);
+		printJson(object);
+	} else {
+		for (const QString& line : idTechPaletteSummaryLines(resolution)) {
+			std::cout << text(line) << "\n";
+		}
+	}
+	return exitCodeValue(CliExitCode::Success);
+}
+
+
+// ---------------------------------------------------------------------------
+// install add / select / validate / remove
+// ---------------------------------------------------------------------------
+
+QJsonObject gameInstallationProfileJsonForCli(const GameInstallationProfile& profile, const QString& selectedId)
+{
+	QJsonObject object;
+	object.insert(QStringLiteral("id"), profile.id);
+	object.insert(QStringLiteral("gameKey"), profile.gameKey);
+	object.insert(QStringLiteral("displayName"), profile.displayName);
+	object.insert(QStringLiteral("engineFamily"), gameEngineFamilyId(profile.engineFamily));
+	object.insert(QStringLiteral("rootPath"), profile.rootPath);
+	object.insert(QStringLiteral("executablePath"), profile.executablePath);
+	object.insert(QStringLiteral("paletteId"), profile.paletteId);
+	object.insert(QStringLiteral("compilerProfileId"), profile.compilerProfileId);
+	object.insert(QStringLiteral("selected"), sameGameInstallationId(profile.id, selectedId));
+	object.insert(QStringLiteral("readOnly"), profile.readOnly);
+	object.insert(QStringLiteral("hidden"), profile.hidden);
+	return object;
+}
+
+QJsonObject gameInstallationValidationJsonForCli(const GameInstallationValidation& validation)
+{
+	QJsonObject object;
+	object.insert(QStringLiteral("usable"), validation.isUsable());
+	object.insert(QStringLiteral("rootExists"), validation.rootExists);
+	object.insert(QStringLiteral("rootIsDirectory"), validation.rootIsDirectory);
+	object.insert(QStringLiteral("executableExists"), validation.executableExists);
+	object.insert(QStringLiteral("executableIsFile"), validation.executableIsFile);
+	object.insert(QStringLiteral("warnings"), QJsonArray::fromStringList(validation.warnings));
+	object.insert(QStringLiteral("errors"), QJsonArray::fromStringList(validation.errors));
+	return object;
+}
+
+int runInstallAddCommand(const QString& commandName, const QString& rootPath, const QStringList& args, CliOutputFormat format)
+{
+	if (rootPath.trimmed().isEmpty()) {
+		return printCliError(commandName, CliExitCode::Usage, QStringLiteral("%1 requires an installation root path.").arg(commandName), format);
+	}
+
+	GameInstallationProfile profile;
+	profile.rootPath = rootPath;
+	profile.gameKey = optionValue(args, QStringLiteral("--install-game"));
+	profile.displayName = optionValue(args, QStringLiteral("--install-name"));
+	profile.engineFamily = hasOption(args, QStringLiteral("--install-engine"))
+		? gameEngineFamilyFromId(optionValue(args, QStringLiteral("--install-engine")))
+		: GameEngineFamily::Unknown;
+	profile.executablePath = optionValue(args, QStringLiteral("--install-executable"));
+	profile.basePackagePaths = optionPathList(args, QStringLiteral("--install-base-packages"));
+	profile.modPackagePaths = optionPathList(args, QStringLiteral("--install-mod-packages"));
+	profile.paletteId = optionValue(args, QStringLiteral("--install-palette"));
+	profile.compilerProfileId = optionValue(args, QStringLiteral("--install-compiler-profile"));
+	if (hasOption(args, QStringLiteral("--install-hidden"))) {
+		bool hidden = false;
+		if (!boolOptionValue(optionValue(args, QStringLiteral("--install-hidden")), &hidden)) {
+			return printCliError(commandName, CliExitCode::Usage, QStringLiteral("--install-hidden requires on or off."), format);
+		}
+		profile.hidden = hidden;
+	}
+	if (hasOption(args, QStringLiteral("--install-read-only"))) {
+		bool readOnly = true;
+		if (!boolOptionValue(optionValue(args, QStringLiteral("--install-read-only")), &readOnly)) {
+			return printCliError(commandName, CliExitCode::Usage, QStringLiteral("--install-read-only requires on or off."), format);
+		}
+		profile.readOnly = readOnly;
+	}
+	profile = normalizedGameInstallationProfile(profile);
+
+	if (hasOption(args, QStringLiteral("--dry-run"))) {
+		const GameInstallationValidation validation = validateGameInstallationProfile(profile);
+		if (format == CliOutputFormat::Json) {
+			QJsonObject object = cliResultJson(commandName);
+			object.insert(QStringLiteral("dryRun"), true);
+			object.insert(QStringLiteral("saved"), false);
+			object.insert(QStringLiteral("installation"), gameInstallationProfileJsonForCli(profile, QString()));
+			object.insert(QStringLiteral("validation"), gameInstallationValidationJsonForCli(validation));
+			printJson(object);
+		} else {
+			std::cout << "Dry run: would save game installation " << text(profile.id) << "\n";
+			printGameInstallationProfile(profile, QString());
+			printInstallationValidation(profile);
+		}
+		return exitCodeValue(CliExitCode::Success);
+	}
+
+	StudioSettings settings;
+	settings.upsertGameInstallation(profile);
+	settings.sync();
+	if (settings.status() != QSettings::NoError) {
+		return printCliError(commandName, CliExitCode::Failure,
+			QStringLiteral("Failed to save installation profile: %1").arg(settingsStatusText(settings.status())), format);
+	}
+
+	const GameInstallationValidation validation = validateGameInstallationProfile(profile);
+	if (format == CliOutputFormat::Json) {
+		QJsonObject object = cliResultJson(commandName);
+		object.insert(QStringLiteral("saved"), true);
+		object.insert(QStringLiteral("installation"), gameInstallationProfileJsonForCli(profile, settings.selectedGameInstallationId()));
+		object.insert(QStringLiteral("validation"), gameInstallationValidationJsonForCli(validation));
+		printJson(object);
+	} else {
+		std::cout << "Saved game installation: " << text(profile.id) << "\n";
+		printGameInstallationProfile(profile, settings.selectedGameInstallationId());
+		printInstallationValidation(profile);
+	}
+	return exitCodeValue(CliExitCode::Success);
+}
+
+int runInstallSelectCommand(const QString& commandName, const QString& installationId, CliOutputFormat format)
+{
+	if (installationId.trimmed().isEmpty()) {
+		return printCliError(commandName, CliExitCode::Usage, QStringLiteral("%1 requires an installation id.").arg(commandName), format);
+	}
+	StudioSettings settings;
+	bool found = false;
+	GameInstallationProfile selected;
+	for (const GameInstallationProfile& profile : settings.gameInstallations()) {
+		if (sameGameInstallationId(profile.id, installationId)) {
+			selected = profile;
+			found = true;
+			break;
+		}
+	}
+	if (!found) {
+		return printCliError(commandName, CliExitCode::NotFound,
+			QStringLiteral("Installation profile not found: %1").arg(installationId), format);
+	}
+	settings.setSelectedGameInstallation(selected.id);
+	settings.sync();
+	if (format == CliOutputFormat::Json) {
+		QJsonObject object = cliResultJson(commandName);
+		object.insert(QStringLiteral("installation"), gameInstallationProfileJsonForCli(selected, settings.selectedGameInstallationId()));
+		printJson(object);
+	} else {
+		std::cout << "Selected game installation: " << text(selected.id) << "\n";
+		printGameInstallationProfile(selected, settings.selectedGameInstallationId());
+	}
+	return exitCodeValue(CliExitCode::Success);
+}
+
+int runInstallValidateCommand(const QString& commandName, const QString& installationId, CliOutputFormat format)
+{
+	StudioSettings settings;
+	const QVector<GameInstallationProfile> profiles = settings.gameInstallations();
+	const QString requested = installationId.trimmed().isEmpty() ? settings.selectedGameInstallationId() : installationId;
+	if (requested.trimmed().isEmpty()) {
+		return printCliError(commandName, CliExitCode::Usage,
+			QStringLiteral("%1 requires an installation id, or a selected installation profile.").arg(commandName), format);
+	}
+	for (const GameInstallationProfile& profile : profiles) {
+		if (!sameGameInstallationId(profile.id, requested)) {
+			continue;
+		}
+		const GameInstallationValidation validation = validateGameInstallationProfile(profile);
+		const CliExitCode code = validation.isUsable() ? CliExitCode::Success : CliExitCode::ValidationFailed;
+		if (format == CliOutputFormat::Json) {
+			QJsonObject object = cliResultJson(commandName, code);
+			object.insert(QStringLiteral("installation"), gameInstallationProfileJsonForCli(profile, settings.selectedGameInstallationId()));
+			object.insert(QStringLiteral("validation"), gameInstallationValidationJsonForCli(validation));
+			printJson(object);
+		} else {
+			printGameInstallationProfile(profile, settings.selectedGameInstallationId());
+			printInstallationValidation(profile);
+		}
+		return exitCodeValue(code);
+	}
+	return printCliError(commandName, CliExitCode::NotFound,
+		QStringLiteral("Installation profile not found: %1").arg(requested), format);
+}
+
+int runInstallRemoveCommand(const QString& commandName, const QString& installationId, const QStringList& args, CliOutputFormat format)
+{
+	if (installationId.trimmed().isEmpty()) {
+		return printCliError(commandName, CliExitCode::Usage, QStringLiteral("%1 requires an installation id.").arg(commandName), format);
+	}
+	StudioSettings settings;
+	bool found = false;
+	GameInstallationProfile target;
+	for (const GameInstallationProfile& profile : settings.gameInstallations()) {
+		if (sameGameInstallationId(profile.id, installationId)) {
+			target = profile;
+			found = true;
+			break;
+		}
+	}
+	if (!found) {
+		return printCliError(commandName, CliExitCode::NotFound,
+			QStringLiteral("Installation profile not found: %1").arg(installationId), format);
+	}
+
+	const bool dryRun = hasOption(args, QStringLiteral("--dry-run"));
+	if (!dryRun) {
+		// Removing a profile never touches the game files it points at.
+		settings.removeGameInstallation(target.id);
+		settings.sync();
+	}
+	if (format == CliOutputFormat::Json) {
+		QJsonObject object = cliResultJson(commandName);
+		object.insert(QStringLiteral("dryRun"), dryRun);
+		object.insert(QStringLiteral("removed"), !dryRun);
+		object.insert(QStringLiteral("installationId"), target.id);
+		object.insert(QStringLiteral("rootPath"), target.rootPath);
+		printJson(object);
+	} else {
+		std::cout << text(dryRun
+			? QStringLiteral("Dry run: would remove installation profile %1. Game files are never touched.\n").arg(target.id)
+			: QStringLiteral("Removed installation profile %1. Game files were not touched.\n").arg(target.id));
+	}
+	return exitCodeValue(CliExitCode::Success);
+}
+
+
+// ---------------------------------------------------------------------------
+// map textures
+// ---------------------------------------------------------------------------
+
+int runMapTexturesCommand(const QString& commandName, const QString& path, const QStringList& args, CliOutputFormat format)
+{
+	const LevelMapLoadRequest request = levelMapLoadRequestFromArgs(path, args);
+	if (request.path.trimmed().isEmpty()) {
+		return printCliError(commandName, CliExitCode::Usage,
+			QStringLiteral("%1 requires a Doom WAD or Quake-family .map path.").arg(commandName), format);
+	}
+	LevelMapDocument document;
+	QString error;
+	if (!loadLevelMap(request, &document, &error)) {
+		return printCliError(commandName, levelMapLoadFailureCode(request), QStringLiteral("Unable to load map: %1").arg(error), format);
+	}
+
+	const bool decodeSizes = !hasOption(args, QStringLiteral("--no-decode"));
+	MapTextureAudit audit;
+	const QString packagePath = optionValue(args, QStringLiteral("--package"));
+	if (!packagePath.trimmed().isEmpty()) {
+		PackageArchive archive;
+		QString packageError;
+		if (!archive.load(packagePath, &packageError)) {
+			return printCliError(commandName, CliExitCode::NotFound,
+				QStringLiteral("Unable to open package: %1").arg(packageError), format);
+		}
+		audit = auditLevelMapTextures(document, archive, decodeSizes);
+	} else {
+		QStringList roots = optionValues(args, QStringLiteral("--root"));
+		const QString searchPaths = optionValue(args, QStringLiteral("--search-paths"));
+		if (!searchPaths.trimmed().isEmpty()) {
+			roots += searchPaths.split(QLatin1Char(';'), Qt::SkipEmptyParts);
+		}
+		if (roots.isEmpty()) {
+			// Default to the project's package folders when the map sits inside one.
+			const QString projectRoot = optionValue(args, QStringLiteral("--project-root"));
+			ProjectManifest manifest;
+			if (!projectRoot.trimmed().isEmpty() && loadProjectManifest(projectRoot, &manifest)) {
+				roots = manifest.packageFolders;
+			}
+		}
+		if (roots.isEmpty()) {
+			return printCliError(commandName, CliExitCode::Usage,
+				QStringLiteral("%1 requires --package <archive>, one or more --root <folder>, or --project-root <path> with package folders.").arg(commandName), format);
+		}
+		audit = auditLevelMapTexturesInDirectories(document, roots, decodeSizes);
+	}
+
+	const CliExitCode code = audit.missingCount > 0 ? CliExitCode::ValidationFailed : CliExitCode::Success;
+	if (format == CliOutputFormat::Json) {
+		QJsonObject object = cliResultJson(commandName, code);
+		object.insert(QStringLiteral("textures"), mapTextureAuditJson(audit));
+		printJson(object);
+	} else {
+		std::cout << text(mapTextureAuditText(audit)) << "\n";
+	}
+	return exitCodeValue(code);
+}
+
 int runSubcommand(const QStringList& args)
 {
 	const QStringList tokens = commandTokens(args);
@@ -5074,7 +6013,9 @@ int runSubcommand(const QStringList& args)
 		return exitCodeValue(CliExitCode::Success);
 	}
 	if (family == QStringLiteral("about") || family == QStringLiteral("license")) {
-		return runAboutCommand(QStringLiteral("about"), format);
+		// `about` and `about show` are the same command; the registry names it
+		// "about show" so every registered command has a family and an action.
+		return runAboutCommand(QStringLiteral("about show"), format);
 	}
 	if (family == QStringLiteral("credits")) {
 		if (action == QStringLiteral("validate") || action == QStringLiteral("check")) {
@@ -5191,6 +6132,74 @@ int runSubcommand(const QStringList& args)
 		}
 		if (action == QStringLiteral("compile-plan") || action == QStringLiteral("plan") || action == QStringLiteral("compiler-plan")) {
 			return runMapCompilePlanCommand(QStringLiteral("map compile-plan"), mapPath, args, format);
+		}
+		if (action == QStringLiteral("render") || action == QStringLiteral("image") || action == QStringLiteral("svg")) {
+			return runMapRenderCommand(QStringLiteral("map render"), mapPath, args, format);
+		}
+		if (action == QStringLiteral("textures") || action == QStringLiteral("materials") || action == QStringLiteral("audit-textures")) {
+			return runMapTexturesCommand(QStringLiteral("map textures"), mapPath, args, format);
+		}
+	}
+
+	if (family == QStringLiteral("install") || family == QStringLiteral("installation") || family == QStringLiteral("installations")) {
+		if (action == QStringLiteral("add") || action == QStringLiteral("create")) {
+			const QString rootPath = hasOption(args, QStringLiteral("--root")) ? optionValue(args, QStringLiteral("--root")) : tokens.value(2);
+			return runInstallAddCommand(QStringLiteral("install add"), rootPath, args, format);
+		}
+		if (action == QStringLiteral("select") || action == QStringLiteral("use")) {
+			const QString id = hasOption(args, QStringLiteral("--installation")) ? optionValue(args, QStringLiteral("--installation")) : tokens.value(2);
+			return runInstallSelectCommand(QStringLiteral("install select"), id, format);
+		}
+		if (action == QStringLiteral("validate") || action == QStringLiteral("check")) {
+			const QString id = hasOption(args, QStringLiteral("--installation")) ? optionValue(args, QStringLiteral("--installation")) : tokens.value(2);
+			return runInstallValidateCommand(QStringLiteral("install validate"), id, format);
+		}
+		if (action == QStringLiteral("remove") || action == QStringLiteral("forget") || action == QStringLiteral("delete")) {
+			const QString id = hasOption(args, QStringLiteral("--installation")) ? optionValue(args, QStringLiteral("--installation")) : tokens.value(2);
+			return runInstallRemoveCommand(QStringLiteral("install remove"), id, args, format);
+		}
+	}
+
+	if (family == QStringLiteral("bsp") || family == QStringLiteral("artifact") || family == QStringLiteral("artifacts")) {
+		const QString bspPath = hasOption(args, QStringLiteral("--input")) ? optionValue(args, QStringLiteral("--input")) : tokens.value(2);
+		if (action == QStringLiteral("inspect") || action == QStringLiteral("info")) {
+			return runBspInspectCommand(QStringLiteral("bsp inspect"), bspPath, args, format);
+		}
+	}
+
+	if (family == QStringLiteral("build") || family == QStringLiteral("pipeline") || family == QStringLiteral("pipelines")) {
+		if (action == QStringLiteral("list") || action == QStringLiteral("pipelines")) {
+			return runBuildListCommand(QStringLiteral("build list"), format);
+		}
+		const QString pipelineId = hasOption(args, QStringLiteral("--pipeline")) ? optionValue(args, QStringLiteral("--pipeline")) : tokens.value(2);
+		if (action == QStringLiteral("plan")) {
+			return runBuildPlanCommand(QStringLiteral("build plan"), pipelineId, args, format);
+		}
+		if (action == QStringLiteral("run") || action == QStringLiteral("compile")) {
+			return runBuildRunCommand(QStringLiteral("build run"), pipelineId, args, format);
+		}
+	}
+
+	if (family == QStringLiteral("launch") || family == QStringLiteral("game") || family == QStringLiteral("play")) {
+		if (action == QStringLiteral("plan")) {
+			return runLaunchCommand(QStringLiteral("launch plan"), args, false, format);
+		}
+		if (action == QStringLiteral("run") || action == QStringLiteral("start")) {
+			return runLaunchCommand(QStringLiteral("launch run"), args, true, format);
+		}
+	}
+
+	if (family == QStringLiteral("texture") || family == QStringLiteral("textures") || family == QStringLiteral("image")) {
+		if (action == QStringLiteral("palette") || action == QStringLiteral("palettes")) {
+			const QString packagePath = hasOption(args, QStringLiteral("--package")) ? optionValue(args, QStringLiteral("--package")) : tokens.value(2);
+			return runTexturePaletteCommand(QStringLiteral("texture palette"), packagePath, args, format);
+		}
+		if (action == QStringLiteral("decode") || action == QStringLiteral("export") || action == QStringLiteral("preview")) {
+			const QString packagePath = hasOption(args, QStringLiteral("--package")) ? optionValue(args, QStringLiteral("--package")) : tokens.value(2);
+			const QString entryPath = hasOption(args, QStringLiteral("--entry"))
+				? optionValue(args, QStringLiteral("--entry"))
+				: (hasOption(args, QStringLiteral("--package")) ? tokens.value(2) : tokens.value(3));
+			return runTextureDecodeCommand(QStringLiteral("texture decode"), packagePath, entryPath, args, format);
 		}
 	}
 

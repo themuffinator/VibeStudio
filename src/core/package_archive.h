@@ -2,11 +2,13 @@
 
 #include <QByteArray>
 #include <QDateTime>
+#include <QHash>
 #include <QString>
 #include <QStringList>
 #include <QVector>
 
 #include <functional>
+#include <memory>
 
 namespace vibestudio {
 
@@ -34,6 +36,9 @@ enum class PackagePathIssue {
 	Colon,
 	ControlCharacter,
 	TooLong,
+	// Appended after the original values so existing serialized ids stay stable.
+	ReservedDeviceName,
+	TrailingDotOrSpace,
 };
 
 struct PackageArchiveFormatDescriptor {
@@ -64,6 +69,12 @@ struct PackageEntry {
 	QString typeHint;
 	QString storageMethod;
 	QString sourceArchiveId;
+	// Identifier of the mount layer that owns this entry inside a
+	// PackageArchiveSession. Empty for entries read straight from a
+	// PackageArchive.
+	QString layerId;
+	quint32 crc32 = 0;
+	bool hasCrc32 = false;
 	bool nestedArchiveCandidate = false;
 	bool readable = true;
 	QString note;
@@ -179,6 +190,10 @@ private:
 	QVector<PackageLoadWarning> m_warnings;
 };
 
+// A stack of package layers. The struct-only API (setPrimaryLayer /
+// pushMountedLayer) is pure bookkeeping and touches no files; the archive API
+// below actually opens each layer and merges the entry lists using idTech pk3
+// semantics, where a later layer shadows an identical path in an earlier one.
 class PackageArchiveSession final {
 public:
 	bool setPrimaryLayer(const PackageMountLayer& layer, QString* error = nullptr);
@@ -192,19 +207,54 @@ public:
 	[[nodiscard]] QVector<PackageMountLayer> mountedLayers() const;
 	[[nodiscard]] PackageMountLayer currentLayer() const;
 	[[nodiscard]] int depth() const;
+	void clear();
+
+	// Opens `path` and makes it the base layer, replacing any mounted layers.
+	bool openPrimaryArchive(const QString& path, QString* error = nullptr);
+	// Opens `path` and pushes it on top of the stack. `mountPath` relocates the
+	// layer's entries under a virtual subdirectory; an empty value mounts at the
+	// session root.
+	bool mountArchive(const QString& path, const QString& mountPath = QString(), QString* error = nullptr);
+
+	[[nodiscard]] int openArchiveCount() const;
+	[[nodiscard]] bool hasOpenArchive() const;
+	// Merged view across all open layers, later layers shadowing earlier ones.
+	[[nodiscard]] QVector<PackageEntry> entries() const;
+	[[nodiscard]] QVector<PackageLoadWarning> warnings() const;
+	[[nodiscard]] PackageArchiveSummary summary() const;
+	bool readEntryBytes(const QString& virtualPath, QByteArray* out, QString* error = nullptr, qint64 maxBytes = -1) const;
+	// Layer index of the winning entry: 0 is the primary layer, 1..n the mounted
+	// layers in push order. Returns -1 when no open layer owns the path.
+	[[nodiscard]] int entryLayerIndex(const QString& virtualPath) const;
+	[[nodiscard]] QString entryLayerId(const QString& virtualPath) const;
+	[[nodiscard]] PackageMountLayer layerAt(int index) const;
+	[[nodiscard]] const PackageArchive* archiveAt(int index) const;
 
 private:
-	bool normalizeLayer(PackageMountLayer* layer, QString* error) const;
+	struct LayerState {
+		PackageMountLayer layer;
+		std::shared_ptr<PackageArchive> archive;
+	};
 
-	PackageMountLayer m_primaryLayer;
+	bool normalizeLayer(PackageMountLayer* layer, QString* error) const;
+	QString uniqueLayerId(const QString& candidate) const;
+	const LayerState* layerStateAt(int index) const;
+	void rebuildIndex() const;
+
+	LayerState m_primary;
 	bool m_hasPrimaryLayer = false;
-	QVector<PackageMountLayer> m_mountedLayers;
+	QVector<LayerState> m_mountedLayers;
+
+	mutable bool m_indexDirty = true;
+	mutable QVector<PackageEntry> m_mergedEntries;
+	mutable QHash<QString, int> m_entryOwner;
 };
 
 QString packageArchiveFormatId(PackageArchiveFormat format);
 QString packageArchiveFormatDisplayName(PackageArchiveFormat format);
 PackageArchiveFormat packageArchiveFormatFromId(const QString& id);
 PackageArchiveFormat packageArchiveFormatFromFileName(const QString& fileName);
+PackageArchiveFormat packageArchiveFormatFromContent(const QString& filePath);
 QVector<PackageArchiveFormatDescriptor> packageArchiveFormatDescriptors();
 QString packageEntryKindId(PackageEntryKind kind);
 QString packageEntryKindDisplayName(PackageEntryKind kind);
@@ -216,6 +266,12 @@ bool isSafePackageVirtualPath(const QString& path);
 QString packageVirtualPathFileName(const QString& path);
 QString packageVirtualPathParent(const QString& path);
 bool packageEntryLooksNestedArchive(const QString& virtualPath);
+
+// Extra restrictions that only matter once a package path becomes a real file
+// on disk: Windows reserved device names and segments ending in a dot or a
+// space. Enforced on every platform so an archive does not extract cleanly on
+// one OS and produce an unusable tree on another.
+PackagePathIssue packageFilesystemPathIssue(const QString& virtualPath);
 
 bool packagePathIsInsideDirectory(const QString& rootDirectory, const QString& candidatePath);
 QString safePackageOutputPath(const QString& rootDirectory, const QString& virtualPath, QString* error = nullptr);

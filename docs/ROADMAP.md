@@ -40,12 +40,12 @@ changes behavior, update or add a metric-backed test where practical.
 - [ ] Common workflows avoid duplicate file picking after a project is configured.
 
 ### Modern UI
-- [ ] Primary shell supports dense studio workflows without modal-first navigation.
-- [ ] Core actions have consistent icons, labels, tooltips, shortcuts, disabled states, and status feedback.
+- [x] Primary shell supports dense studio workflows without modal-first navigation.
+- [x] Core actions have consistent icons, labels, tooltips, shortcuts, disabled states, and status feedback.
 - [ ] Text does not clip or overlap at 100%, 125%, 150%, and 200% scale on Windows, macOS, and Linux.
 - [ ] Dark theme is readable for long sessions, with accessible contrast for primary text and controls.
 - [ ] Every main workflow has summary-first UI with detail-on-demand panels.
-- [ ] Graphical status elements communicate real project/package/compiler/asset state rather than decoration.
+- [x] Graphical status elements communicate real project/package/compiler/asset state rather than decoration.
 
 ### Cross-Platform Quality
 - [ ] CI builds and tests pass on Windows, macOS, and Linux.
@@ -66,7 +66,8 @@ changes behavior, update or add a metric-backed test where practical.
 
 ### Accessibility And Localization
 - [ ] UI follows OS font/scaling defaults and supports 100%, 125%, 150%, 175%, and 200% app scale checks.
-- [ ] High-contrast dark and high-contrast light themes are available from setup and preferences.
+- [x] High-contrast dark and high-contrast light themes are selectable in preferences and repaint the
+  shell, charts, map viewport, asset views, and code highlighting.
 - [ ] Color-blind-aware status palette and non-color-only state indicators are used across project, package, compiler, AI, and validation surfaces.
 - [ ] Core shell, setup, package tree, activity center, compiler log, preferences, and editor profile controls support keyboard-only navigation.
 - [ ] Custom widgets expose accessible names, roles, descriptions, focus, values, and state changes.
@@ -115,9 +116,9 @@ changes behavior, update or add a metric-backed test where practical.
 - [ ] Common compiler failure loop target: failure to actionable summary in under 10 seconds after process exit where logs are available.
 - [ ] Avoid repeated file picking after project setup; project, install, package, compiler, and output paths should be remembered and reusable.
 - [ ] Batch operations and presets exist for repeated package, conversion, compiler, and validation workflows.
-- [ ] Large packages are loaded incrementally; avoid full extraction unless a workflow requires it.
-- [ ] Parser and package code is fuzzable or fixture-tested before supporting write-back.
-- [ ] Compiler runs capture command, environment, duration, exit code, output files, and hashes.
+- [x] Large packages are loaded incrementally; avoid full extraction unless a workflow requires it.
+- [x] Parser and package code is fuzzable or fixture-tested before supporting write-back.
+- [x] Compiler runs capture command, environment, duration, exit code, output files, and hashes.
 
 ## MVP Definition
 
@@ -141,19 +142,22 @@ idTech project workbench that proves the end-to-end loop:
 MVP exit criteria:
 
 - [ ] Runs on Windows, macOS, and Linux from CI-built artifacts.
-- [ ] Supports at least one complete idTech2/Quake-family compile loop using ericw-tools.
-- [ ] Supports at least one Doom-family node-building loop using ZDBSP or ZokumBSP.
-- [ ] Supports at least one idTech3/q3map2 diagnostic or compile loop.
-- [ ] Supports package browsing for folders, PAK, WAD, and PK3/ZIP-family archives.
-- [ ] Supports previews for core text, image, audio metadata/playback where available, and model/map metadata.
-- [ ] Provides project-level logs, diagnostics, and reproducible command manifests.
-- [ ] Provides global activity/task feedback with output paths and expandable logs.
-- [ ] Provides progressive disclosure for package metadata, compiler logs, project validation, and asset details.
-- [ ] Provides at least one useful graphical project/package/compiler summary.
-- [ ] Provides CLI coverage for project info, package inspection, validation, compiler runs, and command manifests.
+- [x] Supports at least one complete idTech2/Quake-family compile loop using ericw-tools.
+- [x] Supports at least one Doom-family node-building loop using ZDBSP or ZokumBSP.
+- [x] Supports at least one idTech3/q3map2 diagnostic or compile loop.
+- [x] Supports package browsing for folders, PAK, WAD, and PK3/ZIP-family archives.
+- [x] Supports previews for core text, image/palette, audio metadata and waveform, and model/map metadata.
+- [ ] Supports audio playback; no audio backend is linked yet, so audio previews stop at metadata and waveform.
+- [x] Provides project-level logs, diagnostics, and reproducible command manifests.
+- [x] Provides global activity/task feedback with output paths and expandable logs.
+- [x] Provides progressive disclosure for package metadata, compiler logs, project validation, and asset details.
+- [x] Provides at least one useful graphical project/package/compiler summary.
+- [x] Provides CLI coverage for project info, package inspection, validation, compiler runs, and command manifests.
 - [x] Provides at least a documented first pass of editor profile architecture, even if full profile fidelity lands after MVP.
 - [ ] Provides first-run setup with language, accessibility, high-visibility, scaling, editor profile, install/project/compiler, AI-free, and CLI choices.
-- [ ] Provides high-visibility themes, app scaling settings, keyboard-accessible MVP flows, and OS-backed TTS architecture.
+- [ ] Provides high-visibility themes, app scaling settings, keyboard-accessible MVP flows, and OS-backed TTS
+  architecture. Themes and the text-scale setting are real; TTS is still only a stored preference with no
+  speech engine behind it.
 - [x] Provides localization pipeline proof with pseudo-localization, right-to-left smoke checks, and initial translation catalog structure.
 - [ ] Provides opt-in AI documentation and a safe architecture path; AI implementation may remain experimental after MVP.
 - [x] Preserves credits and third-party license visibility in README, docs, About, and release bundles.
@@ -219,21 +223,24 @@ Goal: make the repository easy to build, test, credit, and extend.
 - [x] Add reusable loading/skeleton components for panes and previews.
 - [x] Add reusable detail drawer pattern for logs, metadata, manifests, and raw diagnostics.
 - [x] Add status chips for project, package, compiler, install, and AI states.
-- [x] Add command palette shell.
-- [x] Add keyboard shortcut registry.
+- [x] Add command palette: a type-to-filter launcher over the command registry.
+- [x] Add keyboard shortcut registry with conflict detection reported by the shell self-test.
 - [x] Add interaction profile registry placeholder.
-- [x] Add accessibility settings placeholder: theme, scale, density, reduced motion, and TTS.
+- [x] Add accessibility settings for theme, text scale, density, and reduced motion. The TTS preference is
+  stored and reported, but no speech engine is wired up.
 - [x] Add language/locale settings placeholder.
 - [x] Add first-run setup shell with skip/resume behavior.
 - [x] Add AI integration disabled/experimental settings placeholder.
 
 ### Visual Communication Foundation
-- [ ] Add graph/diagram widget decision record: Qt Graphics View, custom widgets, or future scene graph.
-- [ ] Add renderer abstraction decision record covering QPainter, QOpenGLWidget MVP previews, and bgfx production viewport goals.
-- [x] Add project health summary placeholder.
-- [x] Add package composition summary placeholder.
-- [x] Add compiler pipeline summary placeholder.
-- [ ] Add task timeline placeholder.
+- [x] Add graph/diagram widget decision record: Qt Graphics View, custom widgets, or future scene graph
+  ([`docs/STACK.md`](STACK.md)).
+- [x] Add renderer abstraction decision record covering QPainter, QOpenGLWidget MVP previews, and bgfx
+  production viewport goals ([`docs/STACK.md`](STACK.md)).
+- [x] Add project health summary.
+- [x] Add package composition chart: stacked proportions by entry type and by size, with a legend.
+- [x] Add compiler pipeline chart: source, stages, and artifacts with per-stage state glyphs.
+- [x] Add task timeline chart driven by real activity durations.
 - [x] Define icon/color semantics for success, warning, failure, running, paused, cancelled, local, cloud, staged, and read-only.
 
 Exit criteria:
@@ -251,10 +258,10 @@ editors arrive.
 - [x] Add path safety and normalized virtual paths.
 - [x] Add folder package session.
 - [x] Add PAK reader.
-- [x] Add WAD reader.
-- [x] Add ZIP/PK3 reader.
+- [x] Add WAD reader for Doom IWAD/PWAD lumps and Quake/Half-Life WAD2/WAD3 texture lumps.
+- [x] Add ZIP/PK3 reader covering stored and deflated entries, ZIP64, and a dependency-free inflate.
 - [x] Add package entry metadata model: path, size, modified time, type hints, source package.
-- [x] Add nested package detection as metadata, with mounting deferred if needed.
+- [x] Add nested package detection as metadata, plus layered mounting of nested archives.
 
 ### Read-Only GUI
 - [x] Add package/project tree view.
@@ -263,7 +270,8 @@ editors arrive.
 - [x] Add package loading state with progress when entry count is known.
 - [x] Add package scan task card in activity center.
 - [x] Add preview pane for text.
-- [x] Add preview pane for basic images.
+- [x] Add image preview pane with decoded idTech art: Doom patches/flats, Quake `.lmp`, WAD2/WAD3 miptex,
+  Quake II `.wal`, PCX, Targa, and Quake `.spr`, with palette, mip level, and frame selection.
 - [x] Add metadata preview for unknown/binary entries.
 - [x] Add summary/detail split for entries: friendly overview first, raw metadata on demand.
 - [x] Add package composition graphic by type and size.
@@ -477,26 +485,35 @@ Goal: ship the smallest public version that proves the complete loop.
 - [x] Add summary/detail coverage audit for MVP workflows.
 - [x] Add graphical project/package/compiler summary views.
 - [x] Add task history persistence for recent compiler/package operations.
-- [x] Add basic keyboard navigation audit.
-- [x] Add high-visibility theme audit.
-- [x] Add localization/pseudo-localization audit.
-- [x] Add OS-backed TTS smoke path.
+- [ ] Add basic keyboard navigation audit. Partly done: every command carries a registry shortcut, conflicts
+  are detected, and controls set accessible names and focus policies, but no end-to-end keyboard-path audit
+  has been run.
+- [ ] Add high-visibility theme audit. Partly done: both high-contrast themes exist and are applied across the
+  shell, but no measured contrast audit exists.
+- [x] Add localization/pseudo-localization audit via the `localization report` command: pseudo-localization,
+  right-to-left locales, expansion ratio, layout checks, and stale-catalog reporting.
+- [ ] Add OS-backed TTS smoke path. Not started: no speech engine is linked; only the preference is stored.
 
 ### MVP Validation
-- [x] Smoke-test Windows clean machine launch.
-- [x] Smoke-test macOS clean machine launch.
-- [x] Smoke-test Linux clean machine launch.
+- [ ] Smoke-test Windows clean machine launch. Not started: clean-machine steps are documented in the portable
+  package notes but never executed.
+- [ ] Smoke-test macOS clean machine launch.
+- [ ] Smoke-test Linux clean machine launch.
+- [x] Run the offscreen `--self-test` GUI smoke check on Windows, macOS, and Linux in PR CI: the shell is
+  built, every work surface is visited and repainted, and shortcut conflicts are reported.
 - [x] Smoke-test opening fixture PAK/WAD/PK3.
 - [x] Smoke-test each compiler family with tiny sample project.
 - [x] Measure startup time.
 - [x] Measure package open time on small, medium, and large archives.
 - [x] Verify visible feedback during package open, extraction, validation, compiler run, and AI request.
-- [x] Verify first-run setup can be completed with keyboard-only navigation.
+- [ ] Verify first-run setup can be completed with keyboard-only navigation.
 - [x] Verify first-run setup offers high-visibility, scaling, language, TTS, AI-free, and skip/later paths.
-- [x] Verify MVP shell at 100%, 125%, 150%, 175%, and 200% scale.
-- [x] Verify high-contrast dark and high-contrast light smoke flows.
+- [ ] Verify MVP shell at 100%, 125%, 150%, 175%, and 200% scale. Partly done: all five scales are selectable
+  and persist with clamping tests, but no layout/clipping verification has been done at each scale.
+- [x] Verify high-contrast dark and high-contrast light themes repaint the shell, charts, map viewport, asset
+  views, and code highlighting.
 - [x] Verify pseudo-localization and right-to-left smoke flows.
-- [x] Verify TTS reads a test phrase and one task result where OS support exists.
+- [ ] Verify TTS reads a test phrase and one task result where OS support exists.
 - [x] Verify every MVP write/export operation reports output path.
 - [x] Verify raw details/logs/manifests are reachable from summary views.
 - [x] Verify credits and license bundle skeleton.
@@ -520,12 +537,21 @@ Goal: make package edits practical without sacrificing trust.
 - [x] Add graphical staging summary by operation type and package location.
 - [x] Add before/after package composition view.
 - [x] Add "why cannot save" blocked-state messages.
-- [x] Add save-as before overwrite.
+- [x] Add save-as before overwrite. Writing back over the open source package is explicitly blocked.
+- [ ] Add in-place package overwrite once staged save-as has proven itself.
+- [ ] Add package compare between two archives or between a package and its staged result.
 
 ### Package Writers
 - [x] Add PAK writer from PakFu lineage.
-- [x] Add ZIP/PK3 writer from PakFu lineage.
-- [x] Add WAD writer only after map-lump tests exist.
+- [x] Add ZIP/PK3 writer from PakFu lineage, with stored or fixed-Huffman deflate output.
+- [ ] Add a dynamic-Huffman deflate encoder; the writer currently emits stored or fixed-Huffman blocks only.
+- [x] Add WAD writer only after map-lump tests exist, covering PWAD/IWAD and WAD2/WAD3 output.
+- [ ] Support multi-map WAD write-back. The staging model keys entries by
+  virtual path, so a WAD whose maps each repeat `THINGS`, `LINEDEFS` and the
+  rest cannot be represented; writing one is refused with a blocked message
+  instead of interleaving the lumps. Needs a stable per-lump source ordinal
+  threaded through `PackageEntry`, `PackageStagedEntry`, positional
+  `entryBytes`, and the staged plan's ordering.
 - [x] Add package manifest export.
 - [x] Add reproducibility checks for deterministic outputs.
 
@@ -549,7 +575,9 @@ Goal: widen the workbench into a real asset studio.
 ### Model
 - [x] Port/adapt model metadata loader workflow concepts from PakFu.
 - [x] Define native idTech model loader boundary before adding optional Assimp import/export.
-- [x] Add model preview viewport.
+- [ ] Add model preview viewport. Partly done: the Models surface shows a decoded skin image, a metadata
+  detail list, and a text "viewport summary"; no model geometry is rendered.
+- [ ] Add model geometry rendering: decode vertex/triangle data and draw the mesh rather than summarizing it.
 - [x] Add skin/material dependency panel.
 - [x] Add model loading state and fallback metadata view.
 - [x] Add animation list where format supports it.
@@ -557,11 +585,15 @@ Goal: widen the workbench into a real asset studio.
 
 ### Audio
 - [x] Add audio metadata preview.
-- [x] Add playback where Qt backend supports codec.
-- [x] Evaluate miniaudio for portable playback/decoding/waveform gaps.
-- [x] Add loading/buffering/playback state display.
-- [x] Add waveform preview.
-- [x] Add convert-to-WAV helper for supported sources.
+- [ ] Add playback where Qt backend supports codec. Not started: no audio module is linked, so analysis only
+  flags whether an entry would be a playback candidate.
+- [ ] Link an audio playback backend (Qt Multimedia or miniaudio) and add transport controls.
+- [x] Evaluate miniaudio for portable playback/decoding/waveform gaps ([`docs/STACK.md`](STACK.md)).
+- [ ] Add loading/buffering/playback state display. Partly done: load and decode state is shown; there is no
+  playback state to report.
+- [x] Add waveform preview: a min/max envelope painted from decoded PCM peaks.
+- [x] Add convert-to-WAV helper for supported sources. PCM sources are exported or converted; compressed
+  sources are refused with a missing-decoder message.
 
 ### Text And Scripts
 - [x] Start with Qt text widgets and a local syntax-highlighting boundary.
@@ -590,15 +622,20 @@ full Radiant/Doom Builder replacement in one step.
 - [x] Show texture/material references.
 - [x] Show map statistics.
 - [x] Show validation problems.
+- [ ] Parse entity definitions (FGD, DEF, ENT) into a model; only syntax highlighting exists today.
 
 ### Visual MVP
-- [x] Add 2D map view for Doom-family maps.
-- [x] Add simple 3D/orthographic brush preview for Quake-family maps.
+- [x] Add 2D map view for Doom-family maps: a painted, zoomable, selectable viewport with vertices, linedefs,
+  traced sector fills, and things.
+- [x] Add orthographic brush preview for Quake-family maps, with solved brush bounds and tessellated Quake III
+  patches on top, front, and side projections. A perspective 3D view is still future work.
 - [x] Add selection model.
 - [x] Add property inspector.
 - [x] Add save-as for non-destructive map edits.
 - [x] Add map loading state and parse/validation progress.
-- [x] Add map health overlay for missing textures, leaks, entity issues, and compiler warnings when data is available.
+- [x] Add map health overlay for parse/validation issues, entity problems, leak point files, and compiler
+  warnings when data is available.
+- [ ] Add missing-texture detection that resolves map texture references against mounted package textures.
 - [x] Add map statistics summary with detail drawer.
 
 ### Editor Profile MVP
@@ -690,9 +727,13 @@ related area.
 - [ ] Add fuzz target for PAK parser.
 - [ ] Add fuzz target for WAD parser.
 - [ ] Add fuzz target for ZIP/PK3 parser.
-- [ ] Add fixture tests for every claimed format.
-- [ ] Add crash/session log capture.
-- [ ] Add corrupted-file fixture suite.
+- [ ] Add fuzz targets for the new binary parsers: inflate, the idTech image decoders, and BSP/portal/leak
+  inspection.
+- [x] Add fixture tests for every claimed format.
+- [x] Add session log capture: a Qt message handler mirrors warnings and above into a rotating session log.
+- [ ] Add crash-handler capture on top of the session log.
+- [x] Add corrupted-file fixture suite: truncated, malformed, and hostile inputs across the archive, image,
+  deflate, BSP, and preview readers.
 
 ### Accessibility And Usability
 - [ ] Audit keyboard navigation.
@@ -704,7 +745,7 @@ related area.
 - [ ] Add color-blind-aware status palette tests.
 - [ ] Add reduced motion preference if animations are introduced.
 - [ ] Add OS-backed TTS smoke tests.
-- [ ] Add tooltips for icon-only actions.
+- [x] Add tooltips for icon-only actions; toolbar actions show their label and shortcut.
 - [x] Audit each editor profile for discoverable controls and non-conflicting shortcuts.
 - [ ] Audit loading/progress UI for screen-reader labels and non-color-only status.
 - [ ] Audit detail drawers for keyboard access.
@@ -773,3 +814,24 @@ Use this queue to get to MVP quickly.
 21. [x] Add portable packaging skeleton.
 22. [x] Add About/Credits/license surface.
 23. [x] Cut first MVP release candidate.
+
+## Post-RC Task Queue
+
+Work the release-candidate round exposed but did not finish. Each item has a
+matching unchecked entry in the milestone or backlog section above.
+
+- [ ] Render model geometry instead of summarizing it: decode vertex/triangle data for the idTech model
+  families and draw the mesh in the Models surface.
+- [ ] Link an audio playback backend and add transport, buffering, and playback state on top of the existing
+  metadata and waveform preview.
+- [ ] Add a dynamic-Huffman deflate encoder so ZIP/PK3 output is not limited to stored and fixed-Huffman
+  blocks.
+- [ ] Parse entity definitions (FGD, DEF, ENT) into a model that the entity inspector, validation, and AI
+  tooling can share.
+- [ ] Detect missing textures by resolving map texture references against the textures in mounted packages,
+  and surface the result in the map health panel.
+- [ ] Add in-place package overwrite, guarded by backups and an explicit confirmation, now that staged save-as
+  is proven.
+- [ ] Add package compare between two archives, or between a package and its staged result.
+- [ ] Add fuzz targets for the new binary parsers: inflate, the idTech image decoders, and BSP/portal/leak
+  inspection.

@@ -2,14 +2,18 @@
 #include "core/compiler_runner.h"
 
 #include <QCoreApplication>
+#include <QDateTime>
 #include <QDir>
 #include <QFile>
+#include <QFileInfo>
 #include <QJsonObject>
 #include <QTemporaryDir>
 #include <QtEndian>
 
+#include <chrono>
 #include <cstdlib>
 #include <iostream>
+#include <thread>
 
 namespace {
 
@@ -46,6 +50,144 @@ bool writeMinimalQuakeBsp(const QString& path)
 	return writeTextFile(path, bytes);
 }
 
+// IBSP v46: a 4-byte ident, a 4-byte version and 18 directory entries of 8 bytes
+// (external/compilers/q3map2-nrc/tools/quake3/q3map2/q3map2.h, dheader_t).
+bool writeMinimalQuake3Bsp(const QString& path)
+{
+	QByteArray bytes(8 + 18 * 8, '\0');
+	bytes.replace(0, 4, "IBSP");
+	qToLittleEndian<qint32>(46, reinterpret_cast<uchar*>(bytes.data()) + 4);
+	return writeTextFile(path, bytes);
+}
+
+bool backdateFile(const QString& path, int secondsAgo)
+{
+	QFile file(path);
+	if (!file.open(QIODevice::ReadWrite)) {
+		return false;
+	}
+	return file.setFileTime(QDateTime::currentDateTimeUtc().addSecs(-secondsAgo), QFileDevice::FileModificationTime);
+}
+
+QString siblingPath(const QString& path, const QString& suffix)
+{
+	const QFileInfo info(path);
+	return info.absolutePath() + QStringLiteral("/") + info.completeBaseName() + suffix;
+}
+
+QString fakeOutputPath(const QStringList& appArgs)
+{
+	const int outputFlagIndex = appArgs.indexOf(QStringLiteral("-o"));
+	if (outputFlagIndex >= 0 && outputFlagIndex + 1 < appArgs.size()) {
+		return appArgs.at(outputFlagIndex + 1);
+	}
+	const QString last = appArgs.last();
+	if (last.startsWith(QStringLiteral("--"))) {
+		return {};
+	}
+	return last;
+}
+
+int runFakeCompiler(const QStringList& appArgs)
+{
+	if (appArgs.contains(QStringLiteral("--fake-q3-leak"))) {
+		// q3map2 removes "<source>.lin" at startup, LeakFile() rewrites it when the map leaks, and the
+		// process still exits 0. The output carries a "******* leaked *******" banner and an
+		// "Entity <n>, Brush <m>: Entity leaked" line with no classname and no coordinates
+		// (external/compilers/q3map2-nrc/tools/quake3/q3map2/bsp.cpp, leakfile.cpp and
+		// tools/quake3/common/inout.cpp).
+		QString sourcePath;
+		for (const QString& argument : appArgs) {
+			if (argument.endsWith(QStringLiteral(".map"), Qt::CaseInsensitive)) {
+				sourcePath = argument;
+			}
+		}
+		writeTextFile(siblingPath(sourcePath, QStringLiteral(".lin")), QByteArray("0 0 0\n"));
+		writeMinimalQuake3Bsp(siblingPath(sourcePath, QStringLiteral(".bsp")));
+		std::cout << "**********************\n";
+		std::cout << "******* leaked *******\n";
+		std::cout << "**********************\n";
+		std::cout << "Entity 3, Brush 0: Entity leaked\n" << std::flush;
+		return EXIT_SUCCESS;
+	}
+
+	const QString outputPath = fakeOutputPath(appArgs);
+	if (!outputPath.isEmpty()) {
+		if (appArgs.contains(QStringLiteral("--fake-empty-output"))) {
+			writeTextFile(outputPath, QByteArray());
+		} else if (outputPath.endsWith(QStringLiteral(".bsp"), Qt::CaseInsensitive)) {
+			writeMinimalQuakeBsp(outputPath);
+		} else {
+			touchFile(outputPath);
+		}
+	}
+	if (appArgs.contains(QStringLiteral("--print-temp"))) {
+		std::cout << "TMP=" << qgetenv("TMP").constData() << "\n";
+		std::cout << "TMPDIR=" << qgetenv("TMPDIR").constData() << "\n";
+	}
+
+	if (appArgs.contains(QStringLiteral("--fake-stream"))) {
+		std::cout << "STREAM-LINE-1\n" << std::flush;
+		std::this_thread::sleep_for(std::chrono::milliseconds(1500));
+		std::cout << "STREAM-LINE-2\n" << std::flush;
+		return EXIT_SUCCESS;
+	}
+
+	if (appArgs.contains(QStringLiteral("--fake-fatal"))) {
+		// ericw-tools common/log.cc and q3map2 tools/quake3/common/inout.cpp both print a banner
+		// line followed by the real message.
+		std::cout << "************ ERROR ************\r\n";
+		std::cout << "Failed to open maps/missing.map: No such file\r\n" << std::flush;
+		return 1;
+	}
+
+	if (appArgs.contains(QStringLiteral("--fake-leak"))) {
+		const QString leakPath = QFileInfo(outputPath).absolutePath() + QStringLiteral("/") + QFileInfo(outputPath).completeBaseName() + QStringLiteral(".pts");
+		writeTextFile(leakPath, QByteArray("0 0 0\n"));
+		std::cout << "WARNING: Reached occupant \"info_player_start\" at (32 64 -16), no filling performed.\n";
+		std::cout << "Leak file written to " << leakPath.toLocal8Bit().constData() << "\n" << std::flush;
+		return EXIT_SUCCESS;
+	}
+
+	if (appArgs.contains(QStringLiteral("--fake-leaktest"))) {
+		// With -leaktest qbsp writes the leak files first and then aborts with exit code 1 on purpose
+		// (external/compilers/ericw-tools/qbsp/outside.cc).
+		writeTextFile(siblingPath(outputPath, QStringLiteral(".pts")), QByteArray("0 0 0\n"));
+		std::cout << "WARNING: Reached occupant \"info_player_start\" at (32 64 -16), no filling performed.\n";
+		std::cout << "Aborting because -leaktest was used.\n" << std::flush;
+		return 1;
+	}
+
+	if (appArgs.contains(QStringLiteral("--fake-ericw-diagnostics"))) {
+		std::cout << "---- light / ericw-tools v2.0.0-alpha ----\n";
+		std::cout << "WARNING: maps/start.final.map[line 12]: brush bounds out of range\n";
+		std::cout << "WARNING: 34: microbrush\n";
+		std::cout << "0 errors, 0 warnings\n";
+		std::cout << "Error count: 0\n";
+		std::cout << "no warnings were produced\n";
+		std::cout << "Aborting because -leaktest was used is not what happened here\n" << std::flush;
+		std::cerr << "WARNING: stderr side warning\n" << std::flush;
+		return EXIT_SUCCESS;
+	}
+
+	if (appArgs.contains(QStringLiteral("--fake-quiet"))) {
+		return EXIT_SUCCESS;
+	}
+
+	std::cout << "\"maps/start.final.map\":7: warning: fake compiler warning\n";
+	return EXIT_SUCCESS;
+}
+
+bool hasProfile(const QString& id)
+{
+	return vibestudio::compilerProfileIds().contains(id);
+}
+
+bool joinContains(const QStringList& values, const QString& text)
+{
+	return values.join('\n').contains(text, Qt::CaseInsensitive);
+}
+
 } // namespace
 
 int main(int argc, char** argv)
@@ -53,36 +195,56 @@ int main(int argc, char** argv)
 	QCoreApplication app(argc, argv);
 	const QStringList appArgs = QCoreApplication::arguments();
 	if (appArgs.contains(QStringLiteral("--fake-compiler"))) {
-		const QString outputPath = appArgs.last();
-		if (!outputPath.endsWith(QStringLiteral("--fake-compiler"))) {
-			if (appArgs.contains(QStringLiteral("--fake-empty-output"))) {
-				writeTextFile(outputPath, QByteArray());
-			} else if (outputPath.endsWith(QStringLiteral(".bsp"), Qt::CaseInsensitive)) {
-				writeMinimalQuakeBsp(outputPath);
-			} else {
-				touchFile(outputPath);
-			}
-		}
-		if (appArgs.contains(QStringLiteral("--print-temp"))) {
-			std::cout << "TMP=" << qgetenv("TMP").constData() << "\n";
-			std::cout << "TMPDIR=" << qgetenv("TMPDIR").constData() << "\n";
-		}
-		std::cout << "\"maps/start.final.map\":7: warning: fake compiler warning\n";
-		return EXIT_SUCCESS;
+		return runFakeCompiler(appArgs);
 	}
 
 	const QVector<vibestudio::CompilerProfileDescriptor> profiles = vibestudio::compilerProfileDescriptors();
-	if (profiles.size() < 7) {
-		return fail("Expected ericw, Doom node-builder, and q3map2 profiles.");
+	if (profiles.size() < 15) {
+		return fail("Expected ericw, helper, Doom node-builder, and q3map2 stage profiles.");
 	}
-	if (!vibestudio::compilerProfileIds().contains(QStringLiteral("ericw-qbsp"))) {
-		return fail("Expected ericw-qbsp profile id.");
+	for (const QString& id : {QStringLiteral("ericw-qbsp"), QStringLiteral("ericw-vis"), QStringLiteral("ericw-light"),
+			QStringLiteral("zdbsp-nodes"), QStringLiteral("zokumbsp-nodes"), QStringLiteral("q3map2-probe"), QStringLiteral("q3map2-bsp")}) {
+		if (!hasProfile(id)) {
+			return fail("Expected existing compiler profile ids to stay stable.");
+		}
 	}
-	if (!vibestudio::compilerProfileIds().contains(QStringLiteral("zdbsp-nodes"))) {
-		return fail("Expected zdbsp-nodes profile id.");
+	for (const QString& id : {QStringLiteral("q3map2-vis"), QStringLiteral("q3map2-light"), QStringLiteral("q3map2-convert"),
+			QStringLiteral("q3map2-pk3"), QStringLiteral("ericw-bspinfo"), QStringLiteral("ericw-bsputil-check"),
+			QStringLiteral("ericw-bsputil-extract-entities"), QStringLiteral("ericw-bsputil-extract-textures")}) {
+		if (!hasProfile(id)) {
+			return fail("Expected new stage and helper profiles.");
+		}
 	}
-	if (!vibestudio::compilerProfileIds().contains(QStringLiteral("q3map2-probe"))) {
-		return fail("Expected q3map2-probe profile id.");
+
+	vibestudio::CompilerArgumentPreset wadPathPreset;
+	if (!vibestudio::compilerArgumentPresetForId(QStringLiteral("ericw-qbsp"), QStringLiteral("wadpath"), &wadPathPreset)
+		|| !wadPathPreset.requiresValue
+		|| wadPathPreset.arguments != QStringList{QStringLiteral("-wadpath")}) {
+		return fail("Expected a qbsp -wadpath preset that asks for a value.");
+	}
+	vibestudio::CompilerArgumentPreset litPreset;
+	if (!vibestudio::compilerArgumentPresetForId(QStringLiteral("ericw-light"), QStringLiteral("lit"), &litPreset)
+		|| litPreset.requiresValue
+		|| litPreset.arguments != QStringList{QStringLiteral("-lit")}) {
+		return fail("Expected a value-free light -lit preset.");
+	}
+	QStringList qbspPresetArguments;
+	for (const vibestudio::CompilerArgumentPreset& preset : vibestudio::compilerArgumentPresetsForProfile(QStringLiteral("ericw-qbsp"))) {
+		qbspPresetArguments += preset.arguments;
+	}
+	for (const QString& expected : {QStringLiteral("-bsp2"), QStringLiteral("-hlbsp"), QStringLiteral("-qbism"), QStringLiteral("-hexen2"), QStringLiteral("-notex"), QStringLiteral("-leaktest")}) {
+		if (!qbspPresetArguments.contains(expected)) {
+			return fail("Expected the documented ericw qbsp target presets.");
+		}
+	}
+	QStringList q3map2PresetArguments;
+	for (const vibestudio::CompilerArgumentPreset& preset : vibestudio::compilerArgumentPresetsForProfile(QStringLiteral("q3map2-bsp"))) {
+		q3map2PresetArguments += preset.arguments;
+	}
+	for (const QString& expected : {QStringLiteral("-meta"), QStringLiteral("-fast"), QStringLiteral("-fs_basepath"), QStringLiteral("-fs_game"), QStringLiteral("-threads"), QStringLiteral("-v")}) {
+		if (!q3map2PresetArguments.contains(expected)) {
+			return fail("Expected the documented q3map2 presets.");
+		}
 	}
 
 	QTemporaryDir tempDir;
@@ -133,21 +295,29 @@ int main(int argc, char** argv)
 	if (!plan.commandLine.contains(QStringLiteral("start.final.map"))) {
 		return fail("Expected command line to include map input.");
 	}
-	if (plan.knownIssueWarnings.isEmpty()) {
-		return fail("Expected ericw known-issue warnings in command plan.");
+	if (!joinContains(plan.relatedOutputPaths, QStringLiteral("start.final.pts"))
+		|| !joinContains(plan.relatedOutputPaths, QStringLiteral("start.final.prt"))) {
+		return fail("Expected qbsp leak point and portal files among the related outputs.");
 	}
-	if (plan.preflightWarnings.isEmpty() || !plan.preflightWarnings.join('\n').contains(QStringLiteral("#194"))) {
+	if (plan.knownIssueNotes.isEmpty()) {
+		return fail("Expected informational ericw known-issue notes in the command plan.");
+	}
+	if (joinContains(plan.warnings, QStringLiteral("high-value upstream issues are tracked"))) {
+		return fail("Expected the known-issue tracking summary to stay informational instead of warning.");
+	}
+	if (plan.preflightWarnings.isEmpty() || !joinContains(plan.preflightWarnings, QStringLiteral("#194"))) {
 		return fail("Expected ericw map preflight warnings in command plan.");
 	}
 	const vibestudio::CompilerCommandManifest manifest = vibestudio::compilerCommandManifestFromPlan(plan);
-	if (manifest.taskLog.isEmpty() || manifest.expectedOutputPaths.isEmpty()) {
-		return fail("Expected manifest task log and output paths.");
+	if (manifest.taskLog.isEmpty() || manifest.expectedOutputPaths.isEmpty() || manifest.optionalOutputPaths.isEmpty()) {
+		return fail("Expected manifest task log, output paths, and optional outputs.");
 	}
-	if (manifest.knownIssueWarnings.isEmpty() || manifest.preflightWarnings.isEmpty()) {
-		return fail("Expected manifest to carry known-issue and preflight warnings.");
+	if (manifest.knownIssueNotes.isEmpty() || manifest.preflightWarnings.isEmpty()) {
+		return fail("Expected manifest to carry known-issue notes and preflight warnings.");
 	}
-	if (!vibestudio::compilerCommandManifestJson(manifest).contains(QStringLiteral("taskLog"))) {
-		return fail("Expected manifest JSON task log.");
+	if (!vibestudio::compilerCommandManifestJson(manifest).contains(QStringLiteral("taskLog"))
+		|| !vibestudio::compilerCommandManifestJson(manifest).contains(QStringLiteral("optionalOutputPaths"))) {
+		return fail("Expected manifest JSON task log and optional outputs.");
 	}
 	const QString manifestPath = root.filePath(QStringLiteral("build/qbsp-manifest.json"));
 	QString saveError;
@@ -155,8 +325,11 @@ int main(int argc, char** argv)
 		return fail("Expected manifest save to create a JSON file.");
 	}
 	vibestudio::CompilerCommandManifest loadedManifest;
-	if (!vibestudio::loadCompilerCommandManifest(manifestPath, &loadedManifest, &saveError) || loadedManifest.profileId != manifest.profileId) {
-		return fail("Expected manifest load to round-trip profile id.");
+	if (!vibestudio::loadCompilerCommandManifest(manifestPath, &loadedManifest, &saveError)
+		|| loadedManifest.profileId != manifest.profileId
+		|| loadedManifest.optionalOutputPaths != manifest.optionalOutputPaths
+		|| loadedManifest.knownIssueNotes != manifest.knownIssueNotes) {
+		return fail("Expected manifest load to round-trip profile id, optional outputs, and notes.");
 	}
 
 	vibestudio::CompilerRunRequest dryPreflightRequest;
@@ -168,14 +341,14 @@ int main(int argc, char** argv)
 		dryPreflightLog.push_back(entry);
 	};
 	const vibestudio::CompilerRunResult dryPreflightResult = vibestudio::runCompilerCommand(dryPreflightRequest, dryPreflightCallbacks);
-	bool sawKnownIssueWarning = false;
+	bool sawKnownIssueNote = false;
 	bool sawCategorizedPreflightWarning = false;
 	for (const vibestudio::CompilerTaskLogEntry& entry : dryPreflightLog) {
-		sawKnownIssueWarning = sawKnownIssueWarning || entry.message.contains(QStringLiteral("Known issue warning"));
+		sawKnownIssueNote = sawKnownIssueNote || (entry.level == QStringLiteral("info") && entry.message.contains(QStringLiteral("Known issue note")));
 		sawCategorizedPreflightWarning = sawCategorizedPreflightWarning || entry.message.contains(QStringLiteral("Preflight warning"));
 	}
-	if (dryPreflightResult.state != vibestudio::OperationState::Warning || !sawKnownIssueWarning || !sawCategorizedPreflightWarning) {
-		return fail("Expected categorized ericw warnings to surface before a dry-run process launch.");
+	if (dryPreflightResult.state != vibestudio::OperationState::Warning || !sawKnownIssueNote || !sawCategorizedPreflightWarning) {
+		return fail("Expected categorized ericw findings to surface before a dry-run process launch.");
 	}
 
 	vibestudio::CompilerRunRequest runRequest;
@@ -195,8 +368,10 @@ int main(int argc, char** argv)
 	if (!runResult.stdoutText.contains(QStringLiteral("vibestudio-compiler-"))) {
 		return fail("Expected runner to provide an isolated compiler temp directory.");
 	}
-	if (!runResult.diagnostics.first().filePath.endsWith(QStringLiteral("start.final.map"))) {
-		return fail("Expected diagnostics to preserve dotted filenames.");
+	if (!runResult.diagnostics.first().filePath.endsWith(QStringLiteral("start.final.map"))
+		|| runResult.diagnostics.first().line != 7
+		|| runResult.diagnostics.first().channel != QStringLiteral("stdout")) {
+		return fail("Expected diagnostics to preserve dotted filenames, line numbers, and channel.");
 	}
 	if (runResult.registeredOutputPaths.isEmpty() || !QFile::exists(runRequest.command.outputPath)) {
 		return fail("Expected compiler output registration.");
@@ -210,7 +385,7 @@ int main(int argc, char** argv)
 	badArtifactRequest.command.extraArguments = {QStringLiteral("--fake-compiler"), QStringLiteral("--fake-empty-output")};
 	badArtifactRequest.manifestPath.clear();
 	const vibestudio::CompilerRunResult badArtifactResult = vibestudio::runCompilerCommand(badArtifactRequest);
-	if (badArtifactResult.state != vibestudio::OperationState::Failed || !badArtifactResult.manifest.errors.join('\n').contains(QStringLiteral("artifact validation"), Qt::CaseInsensitive)) {
+	if (badArtifactResult.state != vibestudio::OperationState::Failed || !joinContains(badArtifactResult.manifest.errors, QStringLiteral("artifact validation"))) {
 		return fail("Expected post-run artifact validation to fail empty BSP outputs after a successful process exit.");
 	}
 
@@ -225,63 +400,244 @@ int main(int argc, char** argv)
 		return fail("Expected missing working directory error to be surfaced.");
 	}
 
+	// qbsp writes "<bsp>.pts" on a leak and still exits 0 (ericw-tools qbsp/outside.cc).
+	vibestudio::CompilerRunRequest leakRequest = runRequest;
+	leakRequest.command.outputPath = root.filePath(QStringLiteral("maps/leaky.bsp"));
+	leakRequest.command.extraArguments = {QStringLiteral("--fake-compiler"), QStringLiteral("--fake-leak")};
+	leakRequest.manifestPath.clear();
+	const vibestudio::CompilerRunResult leakResult = vibestudio::runCompilerCommand(leakRequest);
+	if (!leakResult.leakDetected || leakResult.exitCode != 0) {
+		return fail("Expected a leak to be detected after a zero-exit qbsp run.");
+	}
+	if (leakResult.leakOccupantClassname != QStringLiteral("info_player_start") || leakResult.leakPointText != QStringLiteral("32 64 -16")) {
+		return fail("Expected the leaked occupant classname and coordinates.");
+	}
+	if (!joinContains(leakResult.manifest.warnings, QStringLiteral("LEAK"))
+		|| !joinContains(leakResult.manifest.warnings, QStringLiteral("info_player_start"))) {
+		return fail("Expected a prominent leak warning naming the occupant.");
+	}
+	if (!joinContains(leakResult.registeredOutputPaths, QStringLiteral("leaky.pts"))) {
+		return fail("Expected the leak point file to be registered as a produced artifact.");
+	}
+
+	// "-leaktest" makes qbsp write the leak files and then exit 1 on purpose; the one run the user
+	// asked to fail on a leak must still be the run that explains the leak.
+	vibestudio::CompilerRunRequest leakTestRequest = runRequest;
+	leakTestRequest.command.outputPath = root.filePath(QStringLiteral("maps/leaktest.bsp"));
+	leakTestRequest.command.extraArguments = {QStringLiteral("--fake-compiler"), QStringLiteral("--fake-leaktest"), QStringLiteral("-leaktest")};
+	leakTestRequest.manifestPath.clear();
+	const vibestudio::CompilerRunResult leakTestResult = vibestudio::runCompilerCommand(leakTestRequest);
+	if (leakTestResult.state != vibestudio::OperationState::Failed || leakTestResult.exitCode == 0) {
+		return fail("Expected the -leaktest abort to stay a failed run.");
+	}
+	if (!leakTestResult.leakDetected || !leakTestResult.leakPointFilePath.endsWith(QStringLiteral("leaktest.pts"))) {
+		return fail("Expected a leak to be diagnosed even when the compile aborts with a non-zero exit code.");
+	}
+	if (!joinContains(leakTestResult.manifest.warnings, QStringLiteral("is not sealed"))
+		|| !joinContains(leakTestResult.manifest.warnings, QStringLiteral("info_player_start"))
+		|| !joinContains(leakTestResult.manifest.warnings, QStringLiteral("-leaktest"))) {
+		return fail("Expected the -leaktest exit code to be explained beside the leak warning.");
+	}
+
+	// qbsp only deletes a stale .pts when neither -onlyents nor -convert is used
+	// (external/compilers/ericw-tools/qbsp/qbsp.cc), so a leftover file is not evidence of a leak.
+	vibestudio::CompilerRunRequest staleLeakRequest = runRequest;
+	staleLeakRequest.command.outputPath = root.filePath(QStringLiteral("maps/onlyents.bsp"));
+	staleLeakRequest.command.extraArguments = {QStringLiteral("--fake-compiler"), QStringLiteral("--fake-quiet"), QStringLiteral("-onlyents")};
+	staleLeakRequest.manifestPath.clear();
+	const QString stalePointsPath = root.filePath(QStringLiteral("maps/onlyents.pts"));
+	if (!writeTextFile(stalePointsPath, QByteArray("0 0 0\n")) || !backdateFile(stalePointsPath, 3600)) {
+		return fail("Expected a stale leak point fixture.");
+	}
+	const vibestudio::CompilerRunResult staleLeakResult = vibestudio::runCompilerCommand(staleLeakRequest);
+	if (staleLeakResult.state == vibestudio::OperationState::Failed) {
+		return fail("Expected an entity-only recompile beside a stale leak point file to succeed.");
+	}
+	if (staleLeakResult.leakDetected || joinContains(staleLeakResult.manifest.warnings, QStringLiteral("is not sealed"))) {
+		return fail("Expected a leak point file that predates the run not to be reported as a fresh leak.");
+	}
+	bool sawStaleLeakNote = false;
+	for (const vibestudio::CompilerTaskLogEntry& entry : staleLeakResult.manifest.taskLog) {
+		sawStaleLeakNote = sawStaleLeakNote || entry.message.contains(QStringLiteral("predates this run"));
+	}
+	if (!sawStaleLeakNote) {
+		return fail("Expected the stale leak point file to be explained in the task log.");
+	}
+
+	const QString cleanBspPath = root.filePath(QStringLiteral("maps/quiet.bsp"));
+	if (!writeMinimalQuakeBsp(cleanBspPath)) {
+		return fail("Expected clean BSP fixture.");
+	}
 	vibestudio::CompilerCommandRequest lightRequest;
 	lightRequest.profileId = QStringLiteral("ericw-light");
-	lightRequest.inputPath = root.filePath(QStringLiteral("maps/start.bsp"));
-	lightRequest.outputPath = root.filePath(QStringLiteral("maps/start-lit.bsp"));
+	lightRequest.inputPath = cleanBspPath;
 	lightRequest.workspaceRootPath = tempDir.path();
-	if (!touchFile(lightRequest.inputPath)) {
-		return fail("Expected fake BSP file.");
+	lightRequest.executableOverrides.push_back({QStringLiteral("ericw-light"), QCoreApplication::applicationFilePath()});
+	const vibestudio::CompilerCommandPlan cleanLightPlan = vibestudio::buildCompilerCommandPlan(lightRequest);
+	if (!cleanLightPlan.warnings.isEmpty() || !cleanLightPlan.knownIssueWarnings.isEmpty()) {
+		return fail("Expected a clean ericw light plan to carry no warnings.");
 	}
-	const vibestudio::CompilerCommandPlan lightPlan = vibestudio::buildCompilerCommandPlan(lightRequest);
-	if (!lightPlan.profileFound || !lightPlan.toolFound) {
-		return fail("Expected light profile and tool to resolve.");
+	if (cleanLightPlan.knownIssueNotes.isEmpty()) {
+		return fail("Expected informational known-issue notes on a clean ericw light plan.");
 	}
-	if (lightPlan.expectedOutputPath != QDir::cleanPath(lightRequest.inputPath)) {
-		return fail("Expected in-place light profile to keep the input BSP as the expected artifact.");
-	}
-	if (lightPlan.commandLine.contains(QStringLiteral("start-lit.bsp"))) {
-		return fail("Expected in-place light command line not to include unsupported custom output path.");
-	}
-	if (lightPlan.warnings.isEmpty()) {
-		return fail("Expected in-place output warning for light.");
-	}
-	if (!lightPlan.commandLine.contains(QStringLiteral("start.bsp"))) {
-		return fail("Expected light command line to include BSP input.");
+	vibestudio::CompilerRunRequest cleanRunRequest;
+	cleanRunRequest.command = lightRequest;
+	cleanRunRequest.command.extraArguments = {QStringLiteral("--fake-compiler"), QStringLiteral("--fake-quiet")};
+	cleanRunRequest.registerOutputs = true;
+	const vibestudio::CompilerRunResult cleanRunResult = vibestudio::runCompilerCommand(cleanRunRequest);
+	if (cleanRunResult.state != vibestudio::OperationState::Completed) {
+		return fail("Expected a warning-free ericw run to reach Completed.");
 	}
 
-	vibestudio::CompilerRunRequest warningRequest;
-	warningRequest.command = lightRequest;
-	warningRequest.command.executableOverrides.push_back({QStringLiteral("ericw-light"), QCoreApplication::applicationFilePath()});
-	warningRequest.dryRun = true;
-	QVector<vibestudio::CompilerTaskLogEntry> warningLog;
-	vibestudio::CompilerRunCallbacks warningCallbacks;
-	warningCallbacks.logEntry = [&warningLog](const vibestudio::CompilerTaskLogEntry& entry) {
-		warningLog.push_back(entry);
+	// "-lit" writes a sibling coloured lighting file (ericw-tools light/light.cc).
+	vibestudio::CompilerCommandRequest litRequest = lightRequest;
+	litRequest.extraArguments = {QStringLiteral("-lit")};
+	const vibestudio::CompilerCommandPlan litPlan = vibestudio::buildCompilerCommandPlan(litRequest);
+	if (!joinContains(litPlan.additionalExpectedOutputPaths, QStringLiteral("quiet.lit"))) {
+		return fail("Expected light -lit to add the sibling .lit file to the expected outputs.");
+	}
+	const vibestudio::CompilerCommandManifest litManifest = vibestudio::compilerCommandManifestFromPlan(litPlan);
+	if (!joinContains(litManifest.expectedOutputPaths, QStringLiteral("quiet.lit")) || litManifest.outputHashes.size() != litManifest.expectedOutputPaths.size()) {
+		return fail("Expected the .lit artifact to be hashed with the other expected outputs.");
+	}
+
+	// ericw-tools locations are "<source>[line N]"; zero-count summaries are not diagnostics.
+	vibestudio::CompilerRunRequest diagnosticsRequest = cleanRunRequest;
+	diagnosticsRequest.command.extraArguments = {QStringLiteral("--fake-compiler"), QStringLiteral("--fake-ericw-diagnostics")};
+	const vibestudio::CompilerRunResult diagnosticsResult = vibestudio::runCompilerCommand(diagnosticsRequest);
+	if (diagnosticsResult.diagnostics.size() != 3) {
+		return fail("Expected exactly the three ericw-style diagnostics and no zero-count false positives.");
+	}
+	for (const vibestudio::CompilerDiagnostic& diagnostic : diagnosticsResult.diagnostics) {
+		if (diagnostic.rawLine.contains('\r')) {
+			return fail("Expected CRLF output to be normalized before diagnostics are recorded.");
+		}
+		if (diagnostic.message.contains(QStringLiteral("0 errors"))
+			|| diagnostic.message.contains(QStringLiteral("Error count"))
+			|| diagnostic.message.contains(QStringLiteral("no warnings"))
+			|| diagnostic.message.contains(QStringLiteral("leaktest"))) {
+			return fail("Expected status lines not to be classified as diagnostics.");
+		}
+	}
+	if (diagnosticsResult.diagnostics.at(0).line != 12 || !diagnosticsResult.diagnostics.at(0).filePath.endsWith(QStringLiteral("start.final.map"))) {
+		return fail("Expected the ericw <source>[line N] location form to be parsed.");
+	}
+	if (diagnosticsResult.diagnostics.at(1).line != 34 || !diagnosticsResult.diagnostics.at(1).filePath.isEmpty()) {
+		return fail("Expected a bare 'WARNING: <line>:' diagnostic to capture the line number only.");
+	}
+	if (diagnosticsResult.diagnostics.at(2).channel != QStringLiteral("stderr")
+		|| diagnosticsResult.diagnostics.at(0).channel != QStringLiteral("stdout")) {
+		return fail("Expected stdout and stderr diagnostics to stay distinguishable.");
+	}
+
+	vibestudio::CompilerRunRequest fatalRequest = cleanRunRequest;
+	fatalRequest.command.extraArguments = {QStringLiteral("--fake-compiler"), QStringLiteral("--fake-fatal")};
+	const vibestudio::CompilerRunResult fatalResult = vibestudio::runCompilerCommand(fatalRequest);
+	if (fatalResult.state != vibestudio::OperationState::Failed || fatalResult.diagnostics.isEmpty()) {
+		return fail("Expected a fatal fake compiler run to fail with a diagnostic.");
+	}
+	const vibestudio::CompilerDiagnostic fatalDiagnostic = fatalResult.diagnostics.first();
+	if (fatalDiagnostic.level != QStringLiteral("error")
+		|| fatalDiagnostic.message != QStringLiteral("Failed to open maps/missing.map: No such file")
+		|| !fatalDiagnostic.rawLine.contains(QStringLiteral("************ ERROR ************"))) {
+		return fail("Expected the fatal error banner and its message to be joined into one diagnostic.");
+	}
+
+	// Output has to be streamed: cancellation is only requested once the first line arrives.
+	vibestudio::CompilerRunRequest streamRequest = cleanRunRequest;
+	streamRequest.command.extraArguments = {QStringLiteral("--fake-compiler"), QStringLiteral("--fake-stream")};
+	bool sawStreamedLine = false;
+	vibestudio::CompilerRunCallbacks streamCallbacks;
+	streamCallbacks.logEntry = [&sawStreamedLine](const vibestudio::CompilerTaskLogEntry& entry) {
+		if (entry.message.contains(QStringLiteral("STREAM-LINE-1"))) {
+			sawStreamedLine = true;
+		}
 	};
-	const vibestudio::CompilerRunResult warningResult = vibestudio::runCompilerCommand(warningRequest, warningCallbacks);
-	bool sawPlanWarning = false;
-	for (const vibestudio::CompilerTaskLogEntry& entry : warningLog) {
-		sawPlanWarning = sawPlanWarning || entry.message.contains(QStringLiteral("Plan warning"));
+	streamCallbacks.cancellationRequested = [&sawStreamedLine]() {
+		return sawStreamedLine;
+	};
+	const vibestudio::CompilerRunResult streamResult = vibestudio::runCompilerCommand(streamRequest, streamCallbacks);
+	if (!sawStreamedLine) {
+		return fail("Expected compiler output lines to be streamed while the process is still running.");
 	}
-	if (warningResult.started || warningResult.state != vibestudio::OperationState::Warning || !sawPlanWarning) {
-		return fail("Expected compiler plan warnings to be surfaced before process launch.");
+	if (!streamResult.cancelled || streamResult.stdoutText.contains(QStringLiteral("STREAM-LINE-2"))) {
+		return fail("Expected streamed output to allow cancellation before the process finished.");
 	}
 
-	vibestudio::CompilerRunRequest lightRunRequest;
-	lightRunRequest.command = lightRequest;
-	lightRunRequest.command.extraArguments = {QStringLiteral("--fake-compiler")};
-	lightRunRequest.command.executableOverrides.push_back({QStringLiteral("ericw-light"), QCoreApplication::applicationFilePath()});
-	lightRunRequest.registerOutputs = true;
-	const vibestudio::CompilerRunResult lightRunResult = vibestudio::runCompilerCommand(lightRunRequest);
-	if (!lightRunResult.started || lightRunResult.state != vibestudio::OperationState::Warning) {
-		return fail("Expected in-place light run with unsupported custom output to complete with warnings.");
+	vibestudio::CompilerManifestRerunRequest rerunRequest;
+	rerunRequest.registerOutputs = false;
+	rerunRequest.timeoutMs = 30000;
+	const vibestudio::CompilerRunResult rerunResult = vibestudio::rerunCompilerCommandManifest(cleanRunResult.manifest, rerunRequest);
+	if (!rerunResult.started || !rerunResult.registeredOutputPaths.isEmpty()) {
+		return fail("Expected the request-shaped manifest rerun to honour registerOutputs=false.");
 	}
-	if (!lightRunResult.registeredOutputPaths.contains(QDir::cleanPath(lightRequest.inputPath))) {
-		return fail("Expected in-place light run to register the updated input BSP.");
+
+	// A rerun replays the stored command, never the previous execution's outcome.
+	vibestudio::CompilerCommandManifest repairedManifest = fatalResult.manifest;
+	if (repairedManifest.errors.isEmpty()) {
+		return fail("Expected the failed run manifest to record its errors.");
 	}
-	if (QFile::exists(lightRequest.outputPath)) {
-		return fail("Expected unsupported custom light output path not to be created or registered.");
+	repairedManifest.arguments.replaceInStrings(QStringLiteral("--fake-fatal"), QStringLiteral("--fake-quiet"));
+	repairedManifest.commandLine = vibestudio::compilerCommandLineText(repairedManifest.program, repairedManifest.arguments);
+	vibestudio::CompilerManifestRerunRequest repairedRerunRequest;
+	repairedRerunRequest.timeoutMs = 30000;
+	QVector<vibestudio::CompilerTaskLogEntry> repairedLog;
+	vibestudio::CompilerRunCallbacks repairedCallbacks;
+	repairedCallbacks.logEntry = [&repairedLog](const vibestudio::CompilerTaskLogEntry& entry) {
+		repairedLog.push_back(entry);
+	};
+	const vibestudio::CompilerRunResult repairedResult = vibestudio::rerunCompilerCommandManifest(repairedManifest, repairedRerunRequest, repairedCallbacks);
+	if (repairedResult.state != vibestudio::OperationState::Completed) {
+		return fail("Expected a repaired rerun to reach Completed instead of inheriting the previous run's findings.");
+	}
+	if (!repairedResult.manifest.errors.isEmpty() || !repairedResult.manifest.warnings.isEmpty()
+		|| !repairedResult.manifest.knownIssueWarnings.isEmpty() || !repairedResult.manifest.preflightWarnings.isEmpty()) {
+		return fail("Expected a rerun not to carry the previous run's warnings and errors.");
+	}
+	for (const vibestudio::CompilerTaskLogEntry& entry : repairedLog) {
+		if (entry.message.contains(QStringLiteral("Preflight error"))) {
+			return fail("Expected a rerun not to replay the previous run's errors into its task log.");
+		}
+	}
+
+	// q3map2 writes "<source>.lin" on a leak and still exits 0, and names neither a classname nor
+	// coordinates (external/compilers/q3map2-nrc/tools/quake3/q3map2/leakfile.cpp).
+	const QString q3LeakMapPath = root.filePath(QStringLiteral("maps/q3leak.map"));
+	if (!writeTextFile(q3LeakMapPath, QByteArray("{\n\"classname\" \"worldspawn\"\n}\n"))) {
+		return fail("Expected a Quake III map fixture.");
+	}
+	vibestudio::CompilerRunRequest q3LeakRequest;
+	q3LeakRequest.command.profileId = QStringLiteral("q3map2-bsp");
+	q3LeakRequest.command.inputPath = q3LeakMapPath;
+	q3LeakRequest.command.workspaceRootPath = tempDir.path();
+	q3LeakRequest.command.extraArguments = {QStringLiteral("--fake-compiler"), QStringLiteral("--fake-q3-leak")};
+	q3LeakRequest.command.executableOverrides.push_back({QStringLiteral("q3map2"), QCoreApplication::applicationFilePath()});
+	const vibestudio::CompilerRunResult q3LeakResult = vibestudio::runCompilerCommand(q3LeakRequest);
+	if (!q3LeakResult.leakDetected || !q3LeakResult.leakPointFilePath.endsWith(QStringLiteral("q3leak.lin"))) {
+		return fail("Expected a q3map2 leak to be detected from its .lin leak file.");
+	}
+	if (!q3LeakResult.leakOccupantClassname.isEmpty() || !q3LeakResult.leakPointText.isEmpty()) {
+		return fail("Expected no invented occupant classname or leak coordinates for a q3map2 leak.");
+	}
+	if (!joinContains(q3LeakResult.manifest.warnings, QStringLiteral("is not sealed"))) {
+		return fail("Expected a prominent leak warning for the q3map2 BSP stage.");
+	}
+
+	// vis needs the portal file qbsp deletes when the map leaks (ericw-tools vis/vis.cc).
+	vibestudio::CompilerCommandRequest visRequest;
+	visRequest.profileId = QStringLiteral("ericw-vis");
+	visRequest.inputPath = cleanBspPath;
+	visRequest.workspaceRootPath = tempDir.path();
+	const vibestudio::CompilerCommandPlan visPlan = vibestudio::buildCompilerCommandPlan(visRequest);
+	if (!joinContains(visPlan.warnings, QStringLiteral("quiet.prt")) || !joinContains(visPlan.warnings, QStringLiteral("leak"))) {
+		return fail("Expected a clear warning when the vis stage has no portal file.");
+	}
+	if (!writeTextFile(root.filePath(QStringLiteral("maps/quiet.prt")), QByteArray("PRT1\n"))) {
+		return fail("Expected portal fixture.");
+	}
+	const vibestudio::CompilerCommandPlan visPlanWithPortals = vibestudio::buildCompilerCommandPlan(visRequest);
+	if (joinContains(visPlanWithPortals.warnings, QStringLiteral("quiet.prt"))) {
+		return fail("Expected the portal warning to disappear once the .prt file exists.");
 	}
 
 	const QString wadPath = root.filePath(QStringLiteral("maps/doom.wad"));
@@ -294,24 +650,116 @@ int main(int argc, char** argv)
 	zdbspRequest.outputPath = root.filePath(QStringLiteral("maps/doom-nodes.wad"));
 	zdbspRequest.workspaceRootPath = tempDir.path();
 	const vibestudio::CompilerCommandPlan zdbspPlan = vibestudio::buildCompilerCommandPlan(zdbspRequest);
-	if (!zdbspPlan.profileFound || !zdbspPlan.toolFound) {
+	if (!zdbspPlan.profileFound || !zdbspPlan.toolFound || !zdbspPlan.errors.isEmpty()) {
 		return fail("Expected ZDBSP profile and tool to resolve.");
 	}
-	if (!zdbspPlan.errors.isEmpty()) {
-		return fail("Expected ZDBSP plan to be valid even when executable discovery only warns.");
+	const int zdbspOutputFlagIndex = zdbspPlan.arguments.indexOf(QStringLiteral("-o"));
+	if (zdbspOutputFlagIndex < 0 || zdbspPlan.arguments.value(zdbspOutputFlagIndex + 1) != QDir::cleanPath(zdbspRequest.outputPath)) {
+		return fail("Expected ZDBSP to receive its output through -o.");
 	}
-	if (!zdbspPlan.commandLine.contains(QStringLiteral("doom.wad")) || !zdbspPlan.commandLine.contains(QStringLiteral("doom-nodes.wad"))) {
-		return fail("Expected ZDBSP command line to include WAD input and output.");
+	if (zdbspPlan.arguments.last() != QDir::cleanPath(wadPath)) {
+		return fail("Expected the ZDBSP input WAD to stay the trailing positional argument.");
+	}
+
+	vibestudio::CompilerCommandRequest zdbspDefaultRequest = zdbspRequest;
+	zdbspDefaultRequest.outputPath.clear();
+	zdbspDefaultRequest.workingDirectory = root.filePath(QStringLiteral("maps"));
+	const vibestudio::CompilerCommandPlan zdbspDefaultPlan = vibestudio::buildCompilerCommandPlan(zdbspDefaultRequest);
+	if (zdbspDefaultPlan.expectedOutputPath == QDir::cleanPath(wadPath)) {
+		return fail("Expected the ZDBSP default output never to collapse onto the input WAD.");
+	}
+	if (!zdbspDefaultPlan.expectedOutputPath.endsWith(QStringLiteral("tmp.wad"))) {
+		return fail("Expected the ZDBSP default output to be tmp.wad in the working directory.");
+	}
+
+	vibestudio::CompilerCommandRequest zokumRequest = zdbspRequest;
+	zokumRequest.profileId = QStringLiteral("zokumbsp-nodes");
+	const vibestudio::CompilerCommandPlan zokumPlan = vibestudio::buildCompilerCommandPlan(zokumRequest);
+	const int zokumOutputFlagIndex = zokumPlan.arguments.indexOf(QStringLiteral("-o"));
+	if (zokumOutputFlagIndex <= zokumPlan.arguments.indexOf(QDir::cleanPath(wadPath))
+		|| zokumPlan.arguments.value(zokumOutputFlagIndex + 1) != QDir::cleanPath(zokumRequest.outputPath)) {
+		return fail("Expected ZokumBSP to receive -o after the input WAD.");
+	}
+
+	const QString q3BspPath = root.filePath(QStringLiteral("maps/arena.bsp"));
+	if (!writeMinimalQuakeBsp(q3BspPath)) {
+		return fail("Expected fake Quake III BSP input.");
+	}
+	vibestudio::CompilerCommandRequest q3VisRequest;
+	q3VisRequest.profileId = QStringLiteral("q3map2-vis");
+	q3VisRequest.inputPath = q3BspPath;
+	q3VisRequest.workspaceRootPath = tempDir.path();
+	q3VisRequest.extraArguments = {QStringLiteral("-fast")};
+	const vibestudio::CompilerCommandPlan q3VisPlan = vibestudio::buildCompilerCommandPlan(q3VisRequest);
+	if (q3VisPlan.arguments.value(0) != QStringLiteral("-vis")) {
+		return fail("Expected the q3map2 stage token to stay argument 0 ahead of user extras.");
+	}
+	if (q3VisPlan.arguments.last() != QDir::cleanPath(q3BspPath)) {
+		return fail("Expected q3map2 to receive the map file as the trailing argument.");
+	}
+	vibestudio::CompilerCommandRequest q3LightRequest = q3VisRequest;
+	q3LightRequest.profileId = QStringLiteral("q3map2-light");
+	if (vibestudio::buildCompilerCommandPlan(q3LightRequest).arguments.value(0) != QStringLiteral("-light")) {
+		return fail("Expected the q3map2 light stage token first.");
+	}
+	vibestudio::CompilerCommandRequest q3ConvertRequest = q3VisRequest;
+	q3ConvertRequest.profileId = QStringLiteral("q3map2-convert");
+	if (vibestudio::buildCompilerCommandPlan(q3ConvertRequest).arguments.value(0) != QStringLiteral("-convert")) {
+		return fail("Expected the q3map2 convert stage token first.");
+	}
+	vibestudio::CompilerCommandRequest q3Pk3Request = q3VisRequest;
+	q3Pk3Request.profileId = QStringLiteral("q3map2-pk3");
+	const vibestudio::CompilerCommandPlan q3Pk3Plan = vibestudio::buildCompilerCommandPlan(q3Pk3Request);
+	if (q3Pk3Plan.arguments.value(0) != QStringLiteral("-pk3")) {
+		return fail("Expected the q3map2 pk3 stage token first.");
+	}
+	if (q3Pk3Plan.expectedOutputKnown || !q3Pk3Plan.expectedOutputPath.isEmpty()) {
+		return fail("Expected the q3map2 auto-package destination to be reported as unknown.");
+	}
+
+	vibestudio::CompilerCommandRequest q3map2BspRequest;
+	q3map2BspRequest.profileId = QStringLiteral("q3map2-bsp");
+	q3map2BspRequest.inputPath = mapPath;
+	q3map2BspRequest.workspaceRootPath = tempDir.path();
+	q3map2BspRequest.extraArguments = {QStringLiteral("-fast")};
+	const vibestudio::CompilerCommandPlan q3map2BspPlan = vibestudio::buildCompilerCommandPlan(q3map2BspRequest);
+	if (q3map2BspPlan.arguments.value(0) != QStringLiteral("-meta")) {
+		return fail("Expected the q3map2 BSP profile to keep -meta first so BSPMain stays the dispatch target.");
+	}
+
+	vibestudio::CompilerCommandRequest bspinfoRequest;
+	bspinfoRequest.profileId = QStringLiteral("ericw-bspinfo");
+	bspinfoRequest.inputPath = cleanBspPath;
+	bspinfoRequest.workspaceRootPath = tempDir.path();
+	const vibestudio::CompilerCommandPlan bspinfoPlan = vibestudio::buildCompilerCommandPlan(bspinfoRequest);
+	if (bspinfoPlan.arguments != QStringList{QDir::cleanPath(cleanBspPath)}) {
+		return fail("Expected bspinfo to receive only its BSP path.");
+	}
+	if (!bspinfoPlan.expectedOutputPath.endsWith(QStringLiteral("quiet.bsp.json"))) {
+		return fail("Expected bspinfo to declare its JSON dump as the expected artifact.");
+	}
+	vibestudio::CompilerCommandRequest bsputilRequest = bspinfoRequest;
+	bsputilRequest.profileId = QStringLiteral("ericw-bsputil-check");
+	const vibestudio::CompilerCommandPlan bsputilPlan = vibestudio::buildCompilerCommandPlan(bsputilRequest);
+	if (bsputilPlan.arguments.value(0) != QStringLiteral("--check") || bsputilPlan.arguments.last() != QDir::cleanPath(cleanBspPath)) {
+		return fail("Expected bsputil operations before the positional BSP path.");
+	}
+	if (!bsputilPlan.expectedOutputPath.isEmpty()) {
+		return fail("Expected bsputil --check to declare no output artifact.");
+	}
+	vibestudio::CompilerCommandRequest bsputilEntitiesRequest = bspinfoRequest;
+	bsputilEntitiesRequest.profileId = QStringLiteral("ericw-bsputil-extract-entities");
+	const vibestudio::CompilerCommandPlan bsputilEntitiesPlan = vibestudio::buildCompilerCommandPlan(bsputilEntitiesRequest);
+	if (bsputilEntitiesPlan.arguments.value(0) != QStringLiteral("--extract-entities")
+		|| !bsputilEntitiesPlan.expectedOutputPath.endsWith(QStringLiteral("quiet.ent"))) {
+		return fail("Expected bsputil --extract-entities to write a sibling .ent file.");
 	}
 
 	vibestudio::CompilerCommandRequest q3map2ProbeRequest;
 	q3map2ProbeRequest.profileId = QStringLiteral("q3map2-probe");
 	q3map2ProbeRequest.workspaceRootPath = tempDir.path();
 	const vibestudio::CompilerCommandPlan q3map2ProbePlan = vibestudio::buildCompilerCommandPlan(q3map2ProbeRequest);
-	if (!q3map2ProbePlan.profileFound || !q3map2ProbePlan.toolFound) {
-		return fail("Expected q3map2 probe profile and tool to resolve.");
-	}
-	if (!q3map2ProbePlan.errors.isEmpty()) {
+	if (!q3map2ProbePlan.profileFound || !q3map2ProbePlan.toolFound || !q3map2ProbePlan.errors.isEmpty()) {
 		return fail("Expected q3map2 probe to allow no input path.");
 	}
 	if (!q3map2ProbePlan.arguments.contains(QStringLiteral("-help"))) {

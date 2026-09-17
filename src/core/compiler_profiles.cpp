@@ -38,22 +38,87 @@ CompilerProfileDescriptor compilerProfile(
 	const QString& defaultOutputExtension,
 	const QString& description,
 	const QStringList& defaultArguments,
-	bool inputRequired,
-	bool outputPathArgumentSupported)
+	bool inputRequired)
+{
+	CompilerProfileDescriptor descriptor;
+	descriptor.id = id;
+	descriptor.toolId = toolId;
+	descriptor.displayName = displayName;
+	descriptor.engineFamily = engineFamily;
+	descriptor.stageId = stageId;
+	descriptor.inputDescription = inputDescription;
+	descriptor.inputExtensions = inputExtensions;
+	descriptor.defaultOutputExtension = defaultOutputExtension;
+	descriptor.description = description;
+	descriptor.defaultArguments = defaultArguments;
+	descriptor.inputRequired = inputRequired;
+	return descriptor;
+}
+
+CompilerArgumentPreset argumentPreset(
+	const QString& id,
+	const QString& displayName,
+	const QString& description,
+	const QStringList& arguments,
+	bool requiresValue = false,
+	const QString& valuePlaceholder = QString())
+{
+	CompilerArgumentPreset preset;
+	preset.id = id;
+	preset.displayName = displayName;
+	preset.description = description;
+	preset.arguments = arguments;
+	preset.requiresValue = requiresValue;
+	preset.valuePlaceholder = valuePlaceholder;
+	return preset;
+}
+
+// ericw-tools qbsp targets and map-development switches, from
+// external/compilers/ericw-tools/qbsp/qbsp.cc (game_target_group / common_format_group / map_development_group).
+QVector<CompilerArgumentPreset> ericwQbspPresets()
 {
 	return {
-		id,
-		toolId,
-		displayName,
-		engineFamily,
-		stageId,
-		inputDescription,
-		inputExtensions,
-		defaultOutputExtension,
-		description,
-		defaultArguments,
-		inputRequired,
-		outputPathArgumentSupported,
+		argumentPreset(QStringLiteral("bsp2"), profileText("Target BSP2"), profileText("Writes Quake's extended BSP2 format for large maps."), {QStringLiteral("-bsp2")}),
+		argumentPreset(QStringLiteral("hlbsp"), profileText("Target Half-Life BSP30"), profileText("Writes Half-Life's BSP version 30 format."), {QStringLiteral("-hlbsp")}),
+		argumentPreset(QStringLiteral("q2bsp"), profileText("Target Quake II BSP"), profileText("Writes Quake II's IBSP format."), {QStringLiteral("-q2bsp")}),
+		argumentPreset(QStringLiteral("qbism"), profileText("Target Qbism BSP"), profileText("Writes Qbism's extended Quake II BSP format."), {QStringLiteral("-qbism")}),
+		argumentPreset(QStringLiteral("hexen2"), profileText("Target Hexen II"), profileText("Writes Hexen II's BSP format."), {QStringLiteral("-hexen2")}),
+		argumentPreset(QStringLiteral("notex"), profileText("Omit textures"), profileText("Writes stub texture data for a faster development compile."), {QStringLiteral("-notex")}),
+		argumentPreset(QStringLiteral("leaktest"), profileText("Fail on leak"), profileText("Makes the compile fail instead of continuing when the map leaks."), {QStringLiteral("-leaktest")}),
+		argumentPreset(QStringLiteral("wadpath"), profileText("Add WAD search path"), profileText("Adds a directory that is searched for the map's WAD files."), {QStringLiteral("-wadpath")}, true, profileText("directory")),
+	};
+}
+
+// ericw-tools vis switches, from external/compilers/ericw-tools/include/vis/vis.hh.
+QVector<CompilerArgumentPreset> ericwVisPresets()
+{
+	return {
+		argumentPreset(QStringLiteral("level4"), profileText("Full detail (level 4)"), profileText("Runs the highest visibility test iteration count."), {QStringLiteral("-level"), QStringLiteral("4")}),
+		argumentPreset(QStringLiteral("fast"), profileText("Fast vis"), profileText("Runs the simple, fast visibility pass for development builds."), {QStringLiteral("-fast")}),
+	};
+}
+
+// ericw-tools light switches, from external/compilers/ericw-tools/light/light.cc.
+QVector<CompilerArgumentPreset> ericwLightPresets()
+{
+	return {
+		argumentPreset(QStringLiteral("extra4"), profileText("4x4 supersampling"), profileText("Supersamples lighting at 4x4 for release-quality output."), {QStringLiteral("-extra4")}),
+		argumentPreset(QStringLiteral("bounce"), profileText("Bounce lighting"), profileText("Enables bounced (radiosity-style) lighting."), {QStringLiteral("-bounce")}),
+		argumentPreset(QStringLiteral("lit"), profileText("Write .lit colour file"), profileText("Writes a sibling .lit coloured lighting file next to the BSP."), {QStringLiteral("-lit")}),
+		argumentPreset(QStringLiteral("soft"), profileText("Soften lighting"), profileText("Applies the post-process softening filter."), {QStringLiteral("-soft")}),
+	};
+}
+
+// q3map2 general options, from external/compilers/q3map2-nrc/tools/quake3/q3map2/main.cpp and path_init.cpp.
+QVector<CompilerArgumentPreset> q3map2Presets()
+{
+	return {
+		argumentPreset(QStringLiteral("meta"), profileText("Meta surfaces"), profileText("Enables surface metadata optimisation for the BSP stage."), {QStringLiteral("-meta")}),
+		argumentPreset(QStringLiteral("fast"), profileText("Fast pass"), profileText("Runs the faster, lower quality variant of the stage."), {QStringLiteral("-fast")}),
+		argumentPreset(QStringLiteral("fs-basepath"), profileText("Set base path"), profileText("Points q3map2 at the game's base installation directory."), {QStringLiteral("-fs_basepath")}, true, profileText("directory")),
+		argumentPreset(QStringLiteral("fs-game"), profileText("Set mod"), profileText("Selects the mod directory used for shaders and assets."), {QStringLiteral("-fs_game")}, true, profileText("mod name")),
+		argumentPreset(QStringLiteral("threads"), profileText("Thread count"), profileText("Limits the number of worker threads."), {QStringLiteral("-threads")}, true, profileText("count")),
+		argumentPreset(QStringLiteral("verbose"), profileText("Verbose output"), profileText("Prints verbose progress output."), {QStringLiteral("-v")}),
 	};
 }
 
@@ -96,6 +161,27 @@ QString defaultOutputPath(const QString& inputPath, const QString& extension)
 	const QString suffix = extension.startsWith('.') ? extension : QStringLiteral(".%1").arg(extension);
 	const QString baseName = info.completeBaseName().isEmpty() ? info.fileName() : info.completeBaseName();
 	return QDir::cleanPath(QDir(info.absolutePath()).filePath(baseName + suffix));
+}
+
+QString siblingPath(const QString& basePath, const QString& extension)
+{
+	if (basePath.trimmed().isEmpty() || extension.trimmed().isEmpty()) {
+		return {};
+	}
+	const QFileInfo info(basePath);
+	const QString suffix = extension.startsWith('.') ? extension : QStringLiteral(".%1").arg(extension);
+	const QString baseName = info.completeBaseName().isEmpty() ? info.fileName() : info.completeBaseName();
+	return QDir::cleanPath(QDir(info.absolutePath()).filePath(baseName + suffix));
+}
+
+bool argumentsContain(const QStringList& arguments, const QString& flag)
+{
+	for (const QString& argument : arguments) {
+		if (argument.compare(flag, Qt::CaseInsensitive) == 0) {
+			return true;
+		}
+	}
+	return false;
 }
 
 bool extensionMatches(const QString& path, const QStringList& extensions)
@@ -275,6 +361,7 @@ QJsonObject diagnosticJson(const CompilerDiagnostic& diagnostic)
 	object.insert(QStringLiteral("line"), diagnostic.line);
 	object.insert(QStringLiteral("column"), diagnostic.column);
 	object.insert(QStringLiteral("rawLine"), diagnostic.rawLine);
+	object.insert(QStringLiteral("channel"), diagnostic.channel);
 	return object;
 }
 
@@ -288,6 +375,7 @@ CompilerDiagnostic diagnosticFromJson(const QJsonValue& value)
 	diagnostic.line = object.value(QStringLiteral("line")).toInt();
 	diagnostic.column = object.value(QStringLiteral("column")).toInt();
 	diagnostic.rawLine = object.value(QStringLiteral("rawLine")).toString();
+	diagnostic.channel = object.value(QStringLiteral("channel")).toString();
 	return diagnostic;
 }
 
@@ -372,8 +460,11 @@ OperationState CompilerCommandPlan::state() const
 
 QVector<CompilerProfileDescriptor> compilerProfileDescriptors()
 {
-	return {
-		compilerProfile(
+	QVector<CompilerProfileDescriptor> profiles;
+
+	{
+		// qbsp accepts "sourcefile.map [destfile.bsp]" (external/compilers/ericw-tools/qbsp/qbsp.cc).
+		CompilerProfileDescriptor qbsp = compilerProfile(
 			QStringLiteral("ericw-qbsp"),
 			QStringLiteral("ericw-qbsp"),
 			profileText("ericw-tools qbsp"),
@@ -384,9 +475,18 @@ QVector<CompilerProfileDescriptor> compilerProfileDescriptors()
 			QStringLiteral("bsp"),
 			profileText("Compiles a Quake-family .map file into an idTech2 BSP."),
 			{},
-			true,
-			true),
-		compilerProfile(
+			true);
+		qbsp.outputArgumentStyle = CompilerOutputArgumentStyle::Positional;
+		qbsp.defaultOutputMode = CompilerDefaultOutputMode::DerivedFromInput;
+		// qbsp writes "<bsp>.prt" for vis and "<bsp>.pts" plus "<bsp>.leak.prt" when the map leaks
+		// (external/compilers/ericw-tools/qbsp/outside.cc).
+		qbsp.relatedOutputExtensions = {QStringLiteral("prt"), QStringLiteral("pts"), QStringLiteral("leak.prt")};
+		qbsp.argumentPresets = ericwQbspPresets();
+		profiles.push_back(qbsp);
+	}
+
+	{
+		CompilerProfileDescriptor vis = compilerProfile(
 			QStringLiteral("ericw-vis"),
 			QStringLiteral("ericw-vis"),
 			profileText("ericw-tools vis"),
@@ -397,9 +497,16 @@ QVector<CompilerProfileDescriptor> compilerProfileDescriptors()
 			QStringLiteral("bsp"),
 			profileText("Runs visibility processing for a Quake-family BSP."),
 			{},
-			true,
-			false),
-		compilerProfile(
+			true);
+		vis.defaultOutputMode = CompilerDefaultOutputMode::InPlace;
+		// vis loads "<bsp base>.prt" (external/compilers/ericw-tools/vis/vis.cc).
+		vis.requiredCompanionInputExtensions = {QStringLiteral("prt")};
+		vis.argumentPresets = ericwVisPresets();
+		profiles.push_back(vis);
+	}
+
+	{
+		CompilerProfileDescriptor light = compilerProfile(
 			QStringLiteral("ericw-light"),
 			QStringLiteral("ericw-light"),
 			profileText("ericw-tools light"),
@@ -410,9 +517,89 @@ QVector<CompilerProfileDescriptor> compilerProfileDescriptors()
 			QStringLiteral("bsp"),
 			profileText("Runs light compilation for a Quake-family BSP."),
 			{},
-			true,
-			false),
-		compilerProfile(
+			true);
+		light.defaultOutputMode = CompilerDefaultOutputMode::InPlace;
+		// "-lit" writes a sibling coloured lighting file (external/compilers/ericw-tools/light/light.cc).
+		light.argumentTriggeredOutputExtensions.insert(QStringLiteral("-lit"), QStringLiteral("lit"));
+		light.argumentPresets = ericwLightPresets();
+		profiles.push_back(light);
+	}
+
+	{
+		// bspinfo takes bsp files only and serialises "<base>.bsp.json"
+		// (external/compilers/ericw-tools/bspinfo/main.cc).
+		CompilerProfileDescriptor bspinfo = compilerProfile(
+			QStringLiteral("ericw-bspinfo"),
+			QStringLiteral("ericw-bspinfo"),
+			profileText("ericw-tools bspinfo"),
+			QStringLiteral("idTech2"),
+			QStringLiteral("inspect"),
+			profileText("Quake BSP"),
+			{QStringLiteral("bsp")},
+			QStringLiteral("bsp.json"),
+			profileText("Prints BSP lump sizes and texture usage, and writes a JSON dump beside the BSP."),
+			{},
+			true);
+		bspinfo.defaultOutputMode = CompilerDefaultOutputMode::DerivedFromInput;
+		profiles.push_back(bspinfo);
+	}
+
+	{
+		// bsputil parses options before the single positional bsp path
+		// (external/compilers/ericw-tools/bsputil/bsputil.cc and common/settings.cc).
+		CompilerProfileDescriptor check = compilerProfile(
+			QStringLiteral("ericw-bsputil-check"),
+			QStringLiteral("ericw-bsputil"),
+			profileText("ericw-tools bsputil --check"),
+			QStringLiteral("idTech2"),
+			QStringLiteral("inspect"),
+			profileText("Quake BSP"),
+			{QStringLiteral("bsp")},
+			QString(),
+			profileText("Verifies BSP data consistency and reports problems on the console."),
+			{},
+			true);
+		check.leadingStageArgument = QStringLiteral("--check");
+		check.defaultOutputMode = CompilerDefaultOutputMode::NoArtifact;
+		profiles.push_back(check);
+
+		CompilerProfileDescriptor entities = compilerProfile(
+			QStringLiteral("ericw-bsputil-extract-entities"),
+			QStringLiteral("ericw-bsputil"),
+			profileText("ericw-tools bsputil --extract-entities"),
+			QStringLiteral("idTech2"),
+			QStringLiteral("extract"),
+			profileText("Quake BSP"),
+			{QStringLiteral("bsp")},
+			QStringLiteral("ent"),
+			profileText("Extracts the BSP entity lump to a sibling .ent file."),
+			{},
+			true);
+		entities.leadingStageArgument = QStringLiteral("--extract-entities");
+		entities.defaultOutputMode = CompilerDefaultOutputMode::DerivedFromInput;
+		profiles.push_back(entities);
+
+		CompilerProfileDescriptor textures = compilerProfile(
+			QStringLiteral("ericw-bsputil-extract-textures"),
+			QStringLiteral("ericw-bsputil"),
+			profileText("ericw-tools bsputil --extract-textures"),
+			QStringLiteral("idTech2"),
+			QStringLiteral("extract"),
+			profileText("Quake BSP"),
+			{QStringLiteral("bsp")},
+			QStringLiteral("wad"),
+			profileText("Extracts embedded BSP textures to a sibling WAD file."),
+			{},
+			true);
+		textures.leadingStageArgument = QStringLiteral("--extract-textures");
+		textures.defaultOutputMode = CompilerDefaultOutputMode::DerivedFromInput;
+		profiles.push_back(textures);
+	}
+
+	{
+		// ZDBSP selects its destination with "-o/--output=FILE" and otherwise writes "tmp.wad"
+		// into the working directory (external/compilers/zdbsp/main.cpp).
+		CompilerProfileDescriptor zdbsp = compilerProfile(
 			QStringLiteral("zdbsp-nodes"),
 			QStringLiteral("zdbsp"),
 			profileText("ZDBSP nodes"),
@@ -423,9 +610,18 @@ QVector<CompilerProfileDescriptor> compilerProfileDescriptors()
 			QStringLiteral("wad"),
 			profileText("Builds Doom-family map nodes with ZDBSP."),
 			{},
-			true,
-			true),
-		compilerProfile(
+			true);
+		zdbsp.outputArgumentStyle = CompilerOutputArgumentStyle::Flag;
+		zdbsp.outputArgumentFlag = QStringLiteral("-o");
+		zdbsp.defaultOutputMode = CompilerDefaultOutputMode::WorkingDirectoryFile;
+		zdbsp.defaultOutputFileName = QStringLiteral("tmp.wad");
+		profiles.push_back(zdbsp);
+	}
+
+	{
+		// ZokumBSP reads "{-o|x output[.wad]}" after the input file and level list
+		// (external/compilers/zokumbsp/src/zokumbsp/zenmain.cpp, getOutputFile).
+		CompilerProfileDescriptor zokum = compilerProfile(
 			QStringLiteral("zokumbsp-nodes"),
 			QStringLiteral("zokumbsp"),
 			profileText("ZokumBSP nodes"),
@@ -436,9 +632,16 @@ QVector<CompilerProfileDescriptor> compilerProfileDescriptors()
 			QStringLiteral("wad"),
 			profileText("Builds Doom-family nodes, blockmap, and reject data with ZokumBSP."),
 			{},
-			true,
-			false),
-		compilerProfile(
+			true);
+		zokum.outputArgumentStyle = CompilerOutputArgumentStyle::Flag;
+		zokum.outputArgumentFlag = QStringLiteral("-o");
+		zokum.outputArgumentAfterInput = true;
+		zokum.defaultOutputMode = CompilerDefaultOutputMode::InPlace;
+		profiles.push_back(zokum);
+	}
+
+	{
+		CompilerProfileDescriptor probe = compilerProfile(
 			QStringLiteral("q3map2-probe"),
 			QStringLiteral("q3map2"),
 			profileText("q3map2 help/probe"),
@@ -449,9 +652,15 @@ QVector<CompilerProfileDescriptor> compilerProfileDescriptors()
 			QString(),
 			profileText("Runs q3map2 help/probe output to verify the executable and inspect supported options."),
 			{QStringLiteral("-help")},
-			false,
-			false),
-		compilerProfile(
+			false);
+		probe.defaultOutputMode = CompilerDefaultOutputMode::NoArtifact;
+		profiles.push_back(probe);
+	}
+
+	{
+		// q3map2 dispatches on the first remaining token; BSPMain is the fall-through case, so the
+		// BSP profile has no leading stage token (tools/quake3/q3map2/main.cpp).
+		CompilerProfileDescriptor bsp = compilerProfile(
 			QStringLiteral("q3map2-bsp"),
 			QStringLiteral("q3map2"),
 			profileText("q3map2 BSP compile"),
@@ -462,9 +671,112 @@ QVector<CompilerProfileDescriptor> compilerProfileDescriptors()
 			QStringLiteral("bsp"),
 			profileText("Builds a Quake III-family BSP from a .map source through q3map2."),
 			{QStringLiteral("-meta")},
-			true,
-			false),
-	};
+			true);
+		bsp.defaultOutputMode = CompilerDefaultOutputMode::DerivedFromInput;
+		bsp.relatedOutputExtensions = {QStringLiteral("prt"), QStringLiteral("srf"), QStringLiteral("lin")};
+		bsp.argumentPresets = q3map2Presets();
+		profiles.push_back(bsp);
+
+		CompilerProfileDescriptor vis = compilerProfile(
+			QStringLiteral("q3map2-vis"),
+			QStringLiteral("q3map2"),
+			profileText("q3map2 vis"),
+			QStringLiteral("idTech3"),
+			QStringLiteral("vis"),
+			profileText("Quake III BSP"),
+			{QStringLiteral("bsp")},
+			QStringLiteral("bsp"),
+			profileText("Runs the q3map2 visibility stage over an existing Quake III-family BSP."),
+			{},
+			true);
+		vis.leadingStageArgument = QStringLiteral("-vis");
+		vis.defaultOutputMode = CompilerDefaultOutputMode::InPlace;
+		// VisMain loads "<base>.prt" written by the BSP stage (tools/quake3/q3map2/vis.cpp).
+		vis.requiredCompanionInputExtensions = {QStringLiteral("prt")};
+		vis.argumentPresets = q3map2Presets();
+		profiles.push_back(vis);
+
+		CompilerProfileDescriptor light = compilerProfile(
+			QStringLiteral("q3map2-light"),
+			QStringLiteral("q3map2"),
+			profileText("q3map2 light"),
+			QStringLiteral("idTech3"),
+			QStringLiteral("light"),
+			profileText("Quake III BSP"),
+			{QStringLiteral("bsp")},
+			QStringLiteral("bsp"),
+			profileText("Runs the q3map2 lighting stage over an existing Quake III-family BSP."),
+			{},
+			true);
+		light.leadingStageArgument = QStringLiteral("-light");
+		light.defaultOutputMode = CompilerDefaultOutputMode::InPlace;
+		light.argumentPresets = q3map2Presets();
+		profiles.push_back(light);
+
+		CompilerProfileDescriptor convert = compilerProfile(
+			QStringLiteral("q3map2-convert"),
+			QStringLiteral("q3map2"),
+			profileText("q3map2 convert"),
+			QStringLiteral("idTech3"),
+			QStringLiteral("convert"),
+			profileText("Quake III BSP or .map source"),
+			{QStringLiteral("bsp"), QStringLiteral("map")},
+			QString(),
+			profileText("Converts a BSP or .map through q3map2; the destination depends on the requested -format."),
+			{},
+			true);
+		convert.leadingStageArgument = QStringLiteral("-convert");
+		// ConvertBSPMain names its output from the chosen -format (tools/quake3/q3map2/convert_bsp.cpp).
+		convert.defaultOutputMode = CompilerDefaultOutputMode::Unknown;
+		convert.argumentPresets = q3map2Presets();
+		profiles.push_back(convert);
+
+		CompilerProfileDescriptor pk3 = compilerProfile(
+			QStringLiteral("q3map2-pk3"),
+			QStringLiteral("q3map2"),
+			profileText("q3map2 auto-package"),
+			QStringLiteral("idTech3"),
+			QStringLiteral("package"),
+			profileText("Quake III BSP"),
+			{QStringLiteral("bsp")},
+			QStringLiteral("pk3"),
+			profileText("Collects the assets a BSP references into an automatic pk3 package."),
+			{},
+			true);
+		pk3.leadingStageArgument = QStringLiteral("-pk3");
+		// pk3BSPMain writes "<engine path>/<name>_autopacked.pk3" (tools/quake3/q3map2/autopk3.cpp).
+		pk3.defaultOutputMode = CompilerDefaultOutputMode::Unknown;
+		pk3.argumentPresets = q3map2Presets();
+		profiles.push_back(pk3);
+	}
+
+	for (CompilerProfileDescriptor& descriptor : profiles) {
+		descriptor.outputPathArgumentSupported = descriptor.outputArgumentStyle != CompilerOutputArgumentStyle::None;
+	}
+	return profiles;
+}
+
+QVector<CompilerArgumentPreset> compilerArgumentPresetsForProfile(const QString& profileId)
+{
+	CompilerProfileDescriptor descriptor;
+	if (!compilerProfileForId(profileId, &descriptor)) {
+		return {};
+	}
+	return descriptor.argumentPresets;
+}
+
+bool compilerArgumentPresetForId(const QString& profileId, const QString& presetId, CompilerArgumentPreset* out)
+{
+	const QString normalized = normalizedId(presetId);
+	for (const CompilerArgumentPreset& preset : compilerArgumentPresetsForProfile(profileId)) {
+		if (normalizedId(preset.id) == normalized) {
+			if (out) {
+				*out = preset;
+			}
+			return true;
+		}
+	}
+	return false;
 }
 
 QStringList compilerProfileIds()
@@ -539,22 +851,112 @@ CompilerCommandPlan buildCompilerCommandPlan(const CompilerCommandRequest& reque
 	}
 
 	plan.workingDirectory = request.workingDirectory.trimmed().isEmpty() ? defaultWorkingDirectory(plan.inputPath) : absoluteCleanPath(request.workingDirectory);
-	const QString requestedOutputPath = request.outputPath.trimmed().isEmpty() ? QString() : absoluteCleanPath(request.outputPath);
-	const QString defaultExpectedOutputPath = defaultOutputPath(plan.inputPath, plan.profile.defaultOutputExtension);
-	plan.expectedOutputPath = (!requestedOutputPath.isEmpty() && plan.profile.outputPathArgumentSupported) ? requestedOutputPath : defaultExpectedOutputPath;
 
-	plan.arguments = plan.profile.defaultArguments;
-	plan.arguments += request.extraArguments;
-	if (!plan.inputPath.isEmpty()) {
-		plan.arguments << plan.inputPath;
-	}
-	if (plan.profile.outputPathArgumentSupported && !requestedOutputPath.isEmpty()) {
-		plan.arguments << plan.expectedOutputPath;
-	} else if (!plan.profile.outputPathArgumentSupported && !requestedOutputPath.isEmpty() && requestedOutputPath != plan.expectedOutputPath) {
+	const bool outputArgumentSupported = plan.profile.outputArgumentStyle != CompilerOutputArgumentStyle::None;
+	const QString requestedOutputPath = request.outputPath.trimmed().isEmpty() ? QString() : absoluteCleanPath(request.outputPath);
+	const QString passedOutputPath = outputArgumentSupported ? requestedOutputPath : QString();
+
+	if (!requestedOutputPath.isEmpty() && !outputArgumentSupported) {
 		plan.warnings << profileText("This compiler profile updates its input in place; the requested output path cannot be passed to the tool and will not be registered as the expected artifact.");
 	}
 
+	if (!passedOutputPath.isEmpty()) {
+		plan.expectedOutputPath = passedOutputPath;
+	} else {
+		switch (plan.profile.defaultOutputMode) {
+		case CompilerDefaultOutputMode::DerivedFromInput:
+			plan.expectedOutputPath = defaultOutputPath(plan.inputPath, plan.profile.defaultOutputExtension);
+			break;
+		case CompilerDefaultOutputMode::InPlace:
+			plan.expectedOutputPath = plan.inputPath;
+			break;
+		case CompilerDefaultOutputMode::WorkingDirectoryFile:
+			plan.expectedOutputPath = QDir::cleanPath(QDir(plan.workingDirectory).filePath(plan.profile.defaultOutputFileName));
+			plan.warnings << profileText("No output path was requested, so this tool writes its default file (%1) into the working directory.").arg(plan.profile.defaultOutputFileName);
+			break;
+		case CompilerDefaultOutputMode::Unknown:
+			plan.expectedOutputPath.clear();
+			plan.expectedOutputKnown = false;
+			plan.warnings << profileText("This stage decides its own destination, so VibeStudio cannot predict or validate the output artifact.");
+			break;
+		case CompilerDefaultOutputMode::NoArtifact:
+			plan.expectedOutputPath.clear();
+			plan.expectedOutputKnown = false;
+			break;
+		}
+	}
+
+	// Never let a derived output collapse onto the input: that would "validate" an untouched input file.
+	if (plan.profile.defaultOutputMode != CompilerDefaultOutputMode::InPlace
+		&& !plan.expectedOutputPath.isEmpty()
+		&& !plan.inputPath.isEmpty()
+		&& plan.expectedOutputPath == plan.inputPath) {
+		plan.expectedOutputPath.clear();
+		plan.expectedOutputKnown = false;
+		plan.warnings << profileText("The expected output path collapsed onto the input file, so the artifact destination is treated as unknown instead of validating an untouched input.");
+	}
+
+	plan.arguments.clear();
+	if (!plan.profile.leadingStageArgument.isEmpty()) {
+		plan.arguments << plan.profile.leadingStageArgument;
+	}
+	plan.arguments += plan.profile.defaultArguments;
+	plan.arguments += request.extraArguments;
+	if (plan.profile.outputArgumentStyle == CompilerOutputArgumentStyle::Flag && !plan.profile.outputArgumentAfterInput && !passedOutputPath.isEmpty()) {
+		plan.arguments << plan.profile.outputArgumentFlag << passedOutputPath;
+	}
+	if (!plan.inputPath.isEmpty()) {
+		plan.arguments << plan.inputPath;
+	}
+	if (plan.profile.outputArgumentStyle == CompilerOutputArgumentStyle::Positional && !passedOutputPath.isEmpty()) {
+		plan.arguments << passedOutputPath;
+	}
+	if (plan.profile.outputArgumentStyle == CompilerOutputArgumentStyle::Flag && plan.profile.outputArgumentAfterInput && !passedOutputPath.isEmpty()) {
+		plan.arguments << plan.profile.outputArgumentFlag << passedOutputPath;
+	}
+
+	const QString artifactBasePath = plan.expectedOutputPath.isEmpty() ? plan.inputPath : plan.expectedOutputPath;
+	for (auto it = plan.profile.argumentTriggeredOutputExtensions.cbegin(); it != plan.profile.argumentTriggeredOutputExtensions.cend(); ++it) {
+		if (!argumentsContain(plan.arguments, it.key())) {
+			continue;
+		}
+		const QString path = siblingPath(artifactBasePath, it.value());
+		if (!path.isEmpty() && path != plan.expectedOutputPath && !plan.additionalExpectedOutputPaths.contains(path)) {
+			plan.additionalExpectedOutputPaths << path;
+		}
+	}
+	for (const QString& extension : plan.profile.relatedOutputExtensions) {
+		const QString path = siblingPath(artifactBasePath, extension);
+		if (!path.isEmpty() && path != plan.expectedOutputPath && !plan.relatedOutputPaths.contains(path)) {
+			plan.relatedOutputPaths << path;
+		}
+	}
+
+	for (const QString& extension : plan.profile.requiredCompanionInputExtensions) {
+		const QString companion = siblingPath(plan.inputPath, extension);
+		if (companion.isEmpty() || QFileInfo(companion).isFile()) {
+			continue;
+		}
+		// Both BSP compilers skip or delete the portal file when the map leaks
+		// (external/compilers/ericw-tools/qbsp/outside.cc and
+		// external/compilers/q3map2-nrc/tools/quake3/q3map2/bsp.cpp), so this warning must not name
+		// one of them: it fires for the q3map2 chain exactly as it does for the Quake chain.
+		plan.warnings << profileText("The %1 stage needs %2 beside its input, but that file is missing. This is usually the classic chain where the BSP stage found a leak, so no portal file was kept and the visibility stage cannot run.")
+			.arg(plan.profile.stageId, QDir::toNativeSeparators(companion));
+	}
+
 	if (plan.profile.toolId.startsWith(QStringLiteral("ericw-"), Qt::CaseInsensitive)) {
+		const QVector<CompilerKnownIssueDescriptor> profileIssues = compilerKnownIssuesForProfile(plan.profile.id);
+		int highValueCount = 0;
+		for (const CompilerKnownIssueDescriptor& issue : profileIssues) {
+			if (issue.highValue) {
+				++highValueCount;
+			}
+		}
+		if (!profileIssues.isEmpty()) {
+			// Informational only: tracking upstream issues must not make every ericw run a warning.
+			plan.knownIssueNotes << profileText("ericw-tools known-issue checks active: %1 high-value upstream issues are tracked for this profile.").arg(highValueCount);
+		}
 		plan.knownIssueWarnings += ericwKnownIssuePlanWarnings(plan.profile.id, plan.inputPath, plan.arguments);
 		plan.warnings += plan.knownIssueWarnings;
 		if (QFileInfo(plan.inputPath).suffix().compare(QStringLiteral("map"), Qt::CaseInsensitive) == 0) {
@@ -599,8 +1001,27 @@ QString compilerCommandPlanText(const CompilerCommandPlan& plan)
 	lines << profileText("Program: %1").arg(plan.program.isEmpty() ? profileText("(not resolved)") : QDir::toNativeSeparators(plan.program));
 	lines << profileText("Working directory: %1").arg(QDir::toNativeSeparators(plan.workingDirectory));
 	lines << profileText("Input: %1").arg(QDir::toNativeSeparators(plan.inputPath));
-	lines << profileText("Expected output: %1").arg(QDir::toNativeSeparators(plan.expectedOutputPath));
+	lines << profileText("Expected output: %1").arg(plan.expectedOutputKnown ? QDir::toNativeSeparators(plan.expectedOutputPath) : profileText("(unknown)"));
+	for (const QString& output : plan.additionalExpectedOutputPaths) {
+		lines << profileText("Expected output: %1").arg(QDir::toNativeSeparators(output));
+	}
+	for (const QString& output : plan.relatedOutputPaths) {
+		lines << profileText("Related output (optional): %1").arg(QDir::toNativeSeparators(output));
+	}
 	lines << profileText("Command line: %1").arg(plan.commandLine);
+	if (!plan.profile.argumentPresets.isEmpty()) {
+		lines << profileText("Argument presets");
+		for (const CompilerArgumentPreset& preset : plan.profile.argumentPresets) {
+			lines << QStringLiteral("- %1 [%2]: %3%4")
+				.arg(preset.displayName, preset.id, preset.arguments.join(' '), preset.requiresValue ? QStringLiteral(" <%1>").arg(preset.valuePlaceholder) : QString());
+		}
+	}
+	if (!plan.knownIssueNotes.isEmpty()) {
+		lines << profileText("Known issue notes");
+		for (const QString& note : plan.knownIssueNotes) {
+			lines << QStringLiteral("- %1").arg(note);
+		}
+	}
 	if (!plan.knownIssueWarnings.isEmpty()) {
 		lines << profileText("Known issue checks");
 		for (const QString& warning : plan.knownIssueWarnings) {
@@ -644,20 +1065,37 @@ CompilerCommandManifest compilerCommandManifestFromPlan(const CompilerCommandPla
 	manifest.commandLine = plan.commandLine;
 	manifest.workingDirectory = plan.workingDirectory;
 	manifest.environmentSubset = compilerEnvironmentSubset();
+	manifest.knownIssueNotes = plan.knownIssueNotes;
 	manifest.knownIssueWarnings = plan.knownIssueWarnings;
 	manifest.preflightWarnings = plan.preflightWarnings;
+	manifest.expectedOutputKnown = plan.expectedOutputKnown;
 	if (!plan.inputPath.isEmpty()) {
 		manifest.inputPaths << plan.inputPath;
 		manifest.inputHashes.push_back(compilerFileHash(plan.inputPath));
 	}
 	if (!plan.expectedOutputPath.isEmpty()) {
 		manifest.expectedOutputPaths << plan.expectedOutputPath;
-		manifest.outputHashes.push_back(compilerFileHash(plan.expectedOutputPath));
+	}
+	for (const QString& output : plan.additionalExpectedOutputPaths) {
+		if (!manifest.expectedOutputPaths.contains(output)) {
+			manifest.expectedOutputPaths << output;
+		}
+	}
+	for (const QString& output : manifest.expectedOutputPaths) {
+		manifest.outputHashes.push_back(compilerFileHash(output));
+	}
+	for (const QString& output : plan.relatedOutputPaths) {
+		if (!manifest.optionalOutputPaths.contains(output) && !manifest.expectedOutputPaths.contains(output)) {
+			manifest.optionalOutputPaths << output;
+		}
 	}
 	manifest.warnings = plan.warnings;
 	manifest.errors = plan.errors;
 
 	manifest.taskLog.push_back(taskLogEntry(QStringLiteral("info"), profileText("Compiler command plan created.")));
+	for (const QString& note : manifest.knownIssueNotes) {
+		manifest.taskLog.push_back(taskLogEntry(QStringLiteral("info"), note));
+	}
 	if (!manifest.profileId.isEmpty()) {
 		manifest.taskLog.push_back(taskLogEntry(QStringLiteral("info"), profileText("Profile: %1").arg(manifest.profileId)));
 	}
@@ -707,10 +1145,13 @@ QJsonObject compilerCommandManifestJson(const CompilerCommandManifest& manifest)
 	object.insert(QStringLiteral("environmentSubset"), environmentSubsetJson(manifest.environmentSubset));
 	object.insert(QStringLiteral("inputPaths"), stringArrayJson(manifest.inputPaths));
 	object.insert(QStringLiteral("expectedOutputPaths"), stringArrayJson(manifest.expectedOutputPaths));
+	object.insert(QStringLiteral("expectedOutputKnown"), manifest.expectedOutputKnown);
+	object.insert(QStringLiteral("optionalOutputPaths"), stringArrayJson(manifest.optionalOutputPaths));
 	object.insert(QStringLiteral("registeredOutputPaths"), stringArrayJson(manifest.registeredOutputPaths));
 	object.insert(QStringLiteral("inputHashes"), fileHashesJson(manifest.inputHashes));
 	object.insert(QStringLiteral("outputHashes"), fileHashesJson(manifest.outputHashes));
 	object.insert(QStringLiteral("diagnostics"), diagnosticsJson(manifest.diagnostics));
+	object.insert(QStringLiteral("knownIssueNotes"), stringArrayJson(manifest.knownIssueNotes));
 	object.insert(QStringLiteral("knownIssueWarnings"), stringArrayJson(manifest.knownIssueWarnings));
 	object.insert(QStringLiteral("preflightWarnings"), stringArrayJson(manifest.preflightWarnings));
 	object.insert(QStringLiteral("stdout"), manifest.stdoutText);
@@ -757,6 +1198,14 @@ QString compilerCommandManifestText(const CompilerCommandManifest& manifest)
 		for (const QString& output : manifest.expectedOutputPaths) {
 			lines << QStringLiteral("- %1").arg(QDir::toNativeSeparators(output));
 		}
+	} else if (!manifest.expectedOutputKnown) {
+		lines << profileText("Expected outputs: (unknown for this stage)");
+	}
+	if (!manifest.optionalOutputPaths.isEmpty()) {
+		lines << profileText("Related outputs (optional)");
+		for (const QString& output : manifest.optionalOutputPaths) {
+			lines << QStringLiteral("- %1").arg(QDir::toNativeSeparators(output));
+		}
 	}
 	if (!manifest.registeredOutputPaths.isEmpty()) {
 		lines << profileText("Registered outputs");
@@ -778,8 +1227,20 @@ QString compilerCommandManifestText(const CompilerCommandManifest& manifest)
 	if (!manifest.diagnostics.isEmpty()) {
 		lines << profileText("Diagnostics");
 		for (const CompilerDiagnostic& diagnostic : manifest.diagnostics) {
-			lines << QStringLiteral("- %1: %2%3")
-				.arg(diagnostic.level, diagnostic.message, diagnostic.filePath.isEmpty() ? QString() : QStringLiteral(" (%1:%2)").arg(QDir::toNativeSeparators(diagnostic.filePath)).arg(diagnostic.line));
+			QString location;
+			if (!diagnostic.filePath.isEmpty()) {
+				location = QStringLiteral(" (%1:%2)").arg(QDir::toNativeSeparators(diagnostic.filePath)).arg(diagnostic.line);
+			} else if (diagnostic.line > 0) {
+				location = QStringLiteral(" (line %1)").arg(diagnostic.line);
+			}
+			lines << QStringLiteral("- [%1] %2: %3%4")
+				.arg(diagnostic.channel.isEmpty() ? QStringLiteral("stdout") : diagnostic.channel, diagnostic.level, diagnostic.message, location);
+		}
+	}
+	if (!manifest.knownIssueNotes.isEmpty()) {
+		lines << profileText("Known issue notes");
+		for (const QString& note : manifest.knownIssueNotes) {
+			lines << QStringLiteral("- %1").arg(note);
 		}
 	}
 	if (!manifest.knownIssueWarnings.isEmpty()) {
@@ -905,10 +1366,13 @@ bool loadCompilerCommandManifest(const QString& path, CompilerCommandManifest* m
 	loaded.environmentSubset = environmentSubsetFromJson(object.value(QStringLiteral("environmentSubset")));
 	loaded.inputPaths = stringArrayFromJson(object.value(QStringLiteral("inputPaths")));
 	loaded.expectedOutputPaths = stringArrayFromJson(object.value(QStringLiteral("expectedOutputPaths")));
+	loaded.expectedOutputKnown = object.value(QStringLiteral("expectedOutputKnown")).toBool(true);
+	loaded.optionalOutputPaths = stringArrayFromJson(object.value(QStringLiteral("optionalOutputPaths")));
 	loaded.registeredOutputPaths = stringArrayFromJson(object.value(QStringLiteral("registeredOutputPaths")));
 	loaded.inputHashes = fileHashesFromJson(object.value(QStringLiteral("inputHashes")));
 	loaded.outputHashes = fileHashesFromJson(object.value(QStringLiteral("outputHashes")));
 	loaded.diagnostics = diagnosticsFromJson(object.value(QStringLiteral("diagnostics")));
+	loaded.knownIssueNotes = stringArrayFromJson(object.value(QStringLiteral("knownIssueNotes")));
 	loaded.knownIssueWarnings = stringArrayFromJson(object.value(QStringLiteral("knownIssueWarnings")));
 	loaded.preflightWarnings = stringArrayFromJson(object.value(QStringLiteral("preflightWarnings")));
 	loaded.stdoutText = object.value(QStringLiteral("stdout")).toString();

@@ -2,6 +2,9 @@ name: compiler-submodules
 
 on:
   pull_request:
+  push:
+    branches:
+      - main
   workflow_dispatch:
 
 permissions:
@@ -21,7 +24,7 @@ jobs:
         shell: bash
         run: |
           test -f external/compilers/ericw-tools/README.md
-          test -d external/compilers/netradiant-custom/tools/quake3/q3map2
+          test -d external/compilers/q3map2-nrc/tools/quake3/q3map2
           test -f external/compilers/zdbsp/README.md
           test -f external/compilers/zokumbsp/README.md
           git submodule status --recursive

@@ -37,6 +37,36 @@ bool containsNormalizedId(const QStringList& ids, const QString& id)
 	return false;
 }
 
+bool isKeywordWordCharacter(QChar character)
+{
+	return character.isLetterOrNumber() || character == QLatin1Char('_');
+}
+
+// Keywords are matched as whole tokens, never as bare substrings: "leak" must not fire on the
+// "-leaktest" argument preset and "Q2" must not fire on a path such as maps/q2dm1.bsp. Only ends
+// that are themselves word characters are anchored, because many catalog keywords deliberately
+// begin with '-', '_', '.' or '\' ("-notex", "_minlight", ".1.bsp", "\b") where a symmetric word
+// boundary would anchor on the wrong side.
+bool textContainsKeyword(const QString& text, const QString& keyword)
+{
+	if (keyword.isEmpty()) {
+		return false;
+	}
+	const bool anchorStart = isKeywordWordCharacter(keyword.front());
+	const bool anchorEnd = isKeywordWordCharacter(keyword.back());
+	int index = text.indexOf(keyword, 0, Qt::CaseInsensitive);
+	while (index >= 0) {
+		const int end = index + keyword.size();
+		const bool startFits = !anchorStart || index == 0 || !isKeywordWordCharacter(text.at(index - 1));
+		const bool endFits = !anchorEnd || end >= text.size() || !isKeywordWordCharacter(text.at(end));
+		if (startFits && endFits) {
+			return true;
+		}
+		index = text.indexOf(keyword, index + 1, Qt::CaseInsensitive);
+	}
+	return false;
+}
+
 bool matchesScope(const CompilerKnownIssueDescriptor& issue, const QString& toolId, const QString& profileId)
 {
 	if (toolId.trimmed().isEmpty() && profileId.trimmed().isEmpty()) {
@@ -170,6 +200,13 @@ QString compilerKnownIssueSeverityText(CompilerKnownIssueSeverity severity)
 	return issueText("Warning");
 }
 
+// Match keywords must discriminate. Two invariants keep the catalog from firing on healthy runs:
+// a keyword may never be a tool's own program name, because ericw-tools prints
+// "---- <program_name> / ericw-tools <version> ----" as the first line of every run
+// (external/compilers/ericw-tools/common/settings.cc, common_settings::set_parameters), and a
+// keyword may never be a word that ordinary compiler output uses for its own status lines
+// ("error", "warning", "failed"). An entry with nothing distinctive to match on carries an empty
+// keyword list and stays a documentation-only note.
 QVector<CompilerKnownIssueDescriptor> compilerKnownIssueDescriptors()
 {
 	return {
@@ -228,7 +265,12 @@ QVector<CompilerKnownIssueDescriptor> compilerKnownIssueDescriptors()
 			"Backslash escape warnings can be unclear.",
 			"Entity keys containing backslashes may be parsed differently than the author expects.",
 			"Preflight suspicious backslashes and offer a map-safe escaped replacement."),
-		knownIssue(QStringLiteral("287"), QStringLiteral("D04"), CompilerKnownIssueSeverity::Warning, true, {QStringLiteral("ericw-qbsp"), QStringLiteral("ericw-vis"), QStringLiteral("ericw-light")}, {QStringLiteral("ericw-qbsp"), QStringLiteral("ericw-vis"), QStringLiteral("ericw-light")}, {QStringLiteral("error"), QStringLiteral("warning"), QStringLiteral("common issue"), QStringLiteral("failed")},
+		// Deliberately unmatchable: this is a user-experience meta-issue about how compiler output is
+		// presented, and no compiler line can legitimately indicate it. Its former keywords ("error",
+		// "warning", "failed") appear in the normal output of every successful ericw-tools run, which
+		// downgraded clean compiles to Warning and cited an unrelated upstream issue. It stays
+		// high-value so the notes for these profiles keep listing it.
+		knownIssue(QStringLiteral("287"), QStringLiteral("D04"), CompilerKnownIssueSeverity::Warning, true, {QStringLiteral("ericw-qbsp"), QStringLiteral("ericw-vis"), QStringLiteral("ericw-light")}, {QStringLiteral("ericw-qbsp"), QStringLiteral("ericw-vis"), QStringLiteral("ericw-light")}, {},
 			"Common compiler errors need richer user-facing guidance.",
 			"Raw compiler output may not explain the practical fix.",
 			"Layer known-issue explanations over parsed diagnostics and keep raw logs available."),
@@ -240,11 +282,11 @@ QVector<CompilerKnownIssueDescriptor> compilerKnownIssueDescriptors()
 			"Numeric parse warnings may lack useful entity coordinates.",
 			"Invalid numeric entity values can be hard to locate from compiler output alone.",
 			"Attach parser warnings to editor entities and include map coordinates in diagnostics."),
-		knownIssue(QStringLiteral("87"), QStringLiteral("D04"), CompilerKnownIssueSeverity::Warning, true, qbspTool(), qbspProfile(), {QStringLiteral("escape sequence"), QStringLiteral("double quote"), QStringLiteral("WAD path"), QStringLiteral("qbsp")},
+		knownIssue(QStringLiteral("87"), QStringLiteral("D04"), CompilerKnownIssueSeverity::Warning, true, qbspTool(), qbspProfile(), {QStringLiteral("escape sequence"), QStringLiteral("double quote"), QStringLiteral("WAD path")},
 			"qbsp escape-sequence warnings need preflight handling.",
 			"Quotes and backslashes in map text can create misleading compiler warnings.",
 			"Run VibeStudio map-text validation before invoking qbsp."),
-		knownIssue(QStringLiteral("129"), QStringLiteral("D04"), CompilerKnownIssueSeverity::Warning, false, qbspTool(), qbspProfile(), {QStringLiteral("\\b"), QStringLiteral("backspace"), QStringLiteral("escape handling"), QStringLiteral("qbsp")},
+		knownIssue(QStringLiteral("129"), QStringLiteral("D04"), CompilerKnownIssueSeverity::Warning, false, qbspTool(), qbspProfile(), {QStringLiteral("\\b"), QStringLiteral("backspace"), QStringLiteral("escape handling")},
 			"Backslash escape handling may happen later than users expect.",
 			"Map text that depends on escape interpretation can be reported inconsistently across pipeline stages.",
 			"Use VibeStudio parser warnings as the stable user-facing explanation before qbsp runs."),
@@ -453,11 +495,11 @@ QVector<CompilerKnownIssueDescriptor> compilerKnownIssueDescriptors()
 			"Bounce lighting can be wrong for total conversions with custom palettes.",
 			"Add a custom-palette profile warning and require visual QA for relit maps."),
 
-		knownIssue(QStringLiteral("463"), QString(), CompilerKnownIssueSeverity::Critical, true, {QStringLiteral("ericw-lightpreview")}, {QStringLiteral("ericw-lightpreview")}, {QStringLiteral("lightpreview"), QStringLiteral("temporary directory"), QStringLiteral("overwrite")},
+		knownIssue(QStringLiteral("463"), QString(), CompilerKnownIssueSeverity::Critical, true, {QStringLiteral("ericw-lightpreview")}, {QStringLiteral("ericw-lightpreview")}, {QStringLiteral("temporary directory"), QStringLiteral("overwrite")},
 			"lightpreview should run in a temporary directory.",
 			"Preview compiles may write beside the source map and overwrite outputs.",
 			"Always launch preview-style compiles in an isolated VibeStudio work directory."),
-		knownIssue(QStringLiteral("435"), QStringLiteral("D09"), CompilerKnownIssueSeverity::Error, true, {QStringLiteral("ericw-bsputil")}, {QStringLiteral("ericw-bsputil")}, {QStringLiteral("bsputil"), QStringLiteral("argument parsing"), QStringLiteral("dummy argument")},
+		knownIssue(QStringLiteral("435"), QStringLiteral("D09"), CompilerKnownIssueSeverity::Error, true, {QStringLiteral("ericw-bsputil")}, {QStringLiteral("ericw-bsputil")}, {QStringLiteral("argument parsing"), QStringLiteral("dummy argument")},
 			"bsputil argument parsing can reject valid operations.",
 			"Some bsputil wrapper commands may fail unless extra dummy arguments are supplied.",
 			"Smoke-test each bsputil operation before exposing it as a package or diagnostics action."),
@@ -465,7 +507,7 @@ QVector<CompilerKnownIssueDescriptor> compilerKnownIssueDescriptors()
 			"Embree/TBB build requirements can fail on older Linux distributions.",
 			"Local ericw-tools builds may need newer compiler dependencies than the host provides.",
 			"Probe dependencies up front and show distro-specific build guidance."),
-		knownIssue(QStringLiteral("480"), QStringLiteral("D09"), CompilerKnownIssueSeverity::Warning, false, lightpreviewTool(), lightpreviewProfile(), {QStringLiteral("lightpreview"), QStringLiteral("Arch"), QStringLiteral("Nvidia"), QStringLiteral("Wayland")},
+		knownIssue(QStringLiteral("480"), QStringLiteral("D09"), CompilerKnownIssueSeverity::Warning, false, lightpreviewTool(), lightpreviewProfile(), {QStringLiteral("Arch"), QStringLiteral("Nvidia"), QStringLiteral("Wayland")},
 			"lightpreview can fail to launch on some Linux graphics stacks.",
 			"Qt/OpenGL context creation may fail before any compile work begins.",
 			"Keep lightpreview optional, expose launch diagnostics, and prefer VibeStudio previews where available."),
@@ -543,7 +585,7 @@ QVector<CompilerKnownIssueDescriptor> compilerKnownIssueDescriptors()
 			"Legacy lightmap-scale compatibility remains under upstream discussion.",
 			"Profiles that mix old `-lmscale` or `-lmshift` behavior with BSPX metadata can confuse compatibility expectations.",
 			"Prefer explicit profile wording around modern BSPX metadata and keep legacy flags visible in manifests."),
-		knownIssue(QStringLiteral("470"), QStringLiteral("D12"), CompilerKnownIssueSeverity::Warning, true, lightTool(), lightProfile(), {QStringLiteral("_minlight"), QStringLiteral("float"), QStringLiteral("integer"), QStringLiteral("Q1"), QStringLiteral("Q2")},
+		knownIssue(QStringLiteral("470"), QStringLiteral("D12"), CompilerKnownIssueSeverity::Warning, true, lightTool(), lightProfile(), {QStringLiteral("_minlight"), QStringLiteral("minlight scale"), QStringLiteral("minlight value")},
 			"_minlight scale differs across output formats.",
 			"Minlight values can be misread when moving between Q1, Q2, and related profiles.",
 			"Apply profile-aware validation and offer value conversion hints."),
@@ -756,7 +798,7 @@ QVector<CompilerKnownIssueMatch> matchCompilerKnownIssues(const QString& text, c
 			continue;
 		}
 		for (const QString& keyword : issue.matchKeywords) {
-			if (!keyword.isEmpty() && text.contains(keyword, Qt::CaseInsensitive)) {
+			if (textContainsKeyword(text, keyword)) {
 				matches.push_back({issue, keyword});
 				break;
 			}
@@ -794,15 +836,9 @@ QStringList ericwKnownIssuePlanWarnings(const QString& profileId, const QString&
 		return warnings;
 	}
 
-	const QVector<CompilerKnownIssueDescriptor> profileIssues = compilerKnownIssuesForProfile(profileId);
-	int highValueCount = 0;
-	for (const CompilerKnownIssueDescriptor& issue : profileIssues) {
-		if (issue.highValue) {
-			++highValueCount;
-		}
-	}
-	warnings << issueText("ericw-tools known-issue checks active: %1 high-value upstream issues are tracked for this profile.").arg(highValueCount);
-
+	// Only genuinely matched, actionable issues belong here. The "N tracked issues" summary is
+	// informational and is surfaced through the plan's known-issue notes instead, so that merely
+	// having a catalog entry can never downgrade a clean run to Warning.
 	QStringList appendedIssueIds;
 	auto appendIssue = [&warnings, &appendedIssueIds](const QString& issueId) {
 		CompilerKnownIssueDescriptor issue;

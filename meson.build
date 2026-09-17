@@ -1,12 +1,10 @@
 project(
   'vibestudio',
   'cpp',
-  version: run_command(
-    'python',
-    '-c',
-    'from pathlib import Path; print(Path("VERSION").read_text().strip())',
-    check: true
-  ).stdout().strip(),
+  # Read straight from the VERSION file: shelling out to `python` made configure
+  # depend on a program named exactly "python", which does not exist on many
+  # Linux and macOS installations that only provide `python3`.
+  version: files('VERSION'),
   default_options: [
     'cpp_std=c++20',
     'warning_level=2',
@@ -34,6 +32,7 @@ if not qt6_core_dep.found()
   error('Qt 6 Core/Gui modules not found. Install Qt 6 and ensure qmake6 is on PATH or pkg-config is available.')
 endif
 
+subdir('i18n')
 subdir('src')
 
 python_for_tests = find_program('python', 'python3', required: false)

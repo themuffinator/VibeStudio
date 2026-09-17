@@ -6,6 +6,7 @@ import json
 import os
 import subprocess
 import sys
+import tempfile
 from pathlib import Path
 
 
@@ -72,6 +73,30 @@ def main() -> int:
                 errors.append(f"Registered command example is not a vibestudio CLI invocation for {name}: {example}")
         if name not in cli_strategy:
             errors.append(f"docs/CLI_STRATEGY.md is missing registered command: {name}")
+
+    # Every registered command must actually be routed. Running it with no
+    # arguments should produce that command's own usage error, never the
+    # router's "Unknown VibeStudio CLI subcommand" fallthrough. This is the
+    # check that stops a command from being documented but unreachable.
+    with tempfile.TemporaryDirectory(prefix="vibestudio-cli-docs-") as isolated:
+        settings_file = Path(isolated) / "settings.ini"
+        for command in commands:
+            family = str(command.get("family") or "").strip()
+            action = str(command.get("command") or "").strip()
+            if not family or not action:
+                continue
+            process = subprocess.run(
+                [str(binary), "--cli", "--settings-file", str(settings_file), family, action],
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+                capture_output=True,
+                env=os.environ.copy(),
+                check=False,
+            )
+            merged = process.stdout + "\n" + process.stderr
+            if "Unknown VibeStudio CLI subcommand" in merged:
+                errors.append(f"Registered command is not routed: {family} {action}")
 
     required_readme_tokens = [
         "CLI Quick Reference",

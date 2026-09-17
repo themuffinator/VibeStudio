@@ -1,6 +1,100 @@
-// Minimal Quake-family placeholder map for command planning.
-// This file is intentionally not a production-ready map.
+// VibeStudio sample map: a sealed Quake-family room.
+//
+// Hand-authored for VibeStudio. No geometry, texture, or entity data is taken
+// from a commercial game; the texture names are generic placeholders, so this
+// is a parser and geometry fixture rather than a compilable level for any
+// particular game.
+//
+// Six box brushes seal a room around the origin and a seventh has a diagonal
+// clip plane whose three defining points lie outside the finished solid, which
+// is exactly the case a bounding box of the plane points gets wrong and a real
+// half-space solve gets right.
 {
 "classname" "worldspawn"
-"message" "VibeStudio Sample"
+"message" "VibeStudio Sample Room"
+"wad" "textures/sample.wad"
+// floor
+{
+( -256 256 0 ) ( 256 256 0 ) ( 256 -256 0 ) SAMPLE_FLOOR 0 0 0 1 1
+( -256 -256 -16 ) ( 256 -256 -16 ) ( 256 256 -16 ) SAMPLE_FLOOR 0 0 0 1 1
+( -256 256 0 ) ( -256 -256 0 ) ( -256 -256 -16 ) SAMPLE_WALL 0 0 0 1 1
+( 256 -256 0 ) ( 256 256 0 ) ( 256 256 -16 ) SAMPLE_WALL 0 0 0 1 1
+( 256 256 0 ) ( -256 256 0 ) ( -256 256 -16 ) SAMPLE_WALL 0 0 0 1 1
+( -256 -256 0 ) ( 256 -256 0 ) ( 256 -256 -16 ) SAMPLE_WALL 0 0 0 1 1
+}
+// ceiling
+{
+( -256 256 144 ) ( 256 256 144 ) ( 256 -256 144 ) SAMPLE_CEIL 0 0 0 1 1
+( -256 -256 128 ) ( 256 -256 128 ) ( 256 256 128 ) SAMPLE_CEIL 0 0 0 1 1
+( -256 256 144 ) ( -256 -256 144 ) ( -256 -256 128 ) SAMPLE_WALL 0 0 0 1 1
+( 256 -256 144 ) ( 256 256 144 ) ( 256 256 128 ) SAMPLE_WALL 0 0 0 1 1
+( 256 256 144 ) ( -256 256 144 ) ( -256 256 128 ) SAMPLE_WALL 0 0 0 1 1
+( -256 -256 144 ) ( 256 -256 144 ) ( 256 -256 128 ) SAMPLE_WALL 0 0 0 1 1
+}
+// south wall
+{
+( -256 -240 128 ) ( 256 -240 128 ) ( 256 -256 128 ) SAMPLE_WALL 0 0 0 1 1
+( -256 -256 0 ) ( 256 -256 0 ) ( 256 -240 0 ) SAMPLE_WALL 0 0 0 1 1
+( -256 -240 128 ) ( -256 -256 128 ) ( -256 -256 0 ) SAMPLE_WALL 0 0 0 1 1
+( 256 -256 128 ) ( 256 -240 128 ) ( 256 -240 0 ) SAMPLE_WALL 0 0 0 1 1
+( 256 -240 128 ) ( -256 -240 128 ) ( -256 -240 0 ) SAMPLE_WALL 0 0 0 1 1
+( -256 -256 128 ) ( 256 -256 128 ) ( 256 -256 0 ) SAMPLE_WALL 0 0 0 1 1
+}
+// north wall
+{
+( -256 256 128 ) ( 256 256 128 ) ( 256 240 128 ) SAMPLE_WALL 0 0 0 1 1
+( -256 240 0 ) ( 256 240 0 ) ( 256 256 0 ) SAMPLE_WALL 0 0 0 1 1
+( -256 256 128 ) ( -256 240 128 ) ( -256 240 0 ) SAMPLE_WALL 0 0 0 1 1
+( 256 240 128 ) ( 256 256 128 ) ( 256 256 0 ) SAMPLE_WALL 0 0 0 1 1
+( 256 256 128 ) ( -256 256 128 ) ( -256 256 0 ) SAMPLE_WALL 0 0 0 1 1
+( -256 240 128 ) ( 256 240 128 ) ( 256 240 0 ) SAMPLE_WALL 0 0 0 1 1
+}
+// west wall
+{
+( -256 240 128 ) ( -240 240 128 ) ( -240 -240 128 ) SAMPLE_WALL 0 0 0 1 1
+( -256 -240 0 ) ( -240 -240 0 ) ( -240 240 0 ) SAMPLE_WALL 0 0 0 1 1
+( -256 240 128 ) ( -256 -240 128 ) ( -256 -240 0 ) SAMPLE_WALL 0 0 0 1 1
+( -240 -240 128 ) ( -240 240 128 ) ( -240 240 0 ) SAMPLE_WALL 0 0 0 1 1
+( -240 240 128 ) ( -256 240 128 ) ( -256 240 0 ) SAMPLE_WALL 0 0 0 1 1
+( -256 -240 128 ) ( -240 -240 128 ) ( -240 -240 0 ) SAMPLE_WALL 0 0 0 1 1
+}
+// east wall
+{
+( 240 240 128 ) ( 256 240 128 ) ( 256 -240 128 ) SAMPLE_WALL 0 0 0 1 1
+( 240 -240 0 ) ( 256 -240 0 ) ( 256 240 0 ) SAMPLE_WALL 0 0 0 1 1
+( 240 240 128 ) ( 240 -240 128 ) ( 240 -240 0 ) SAMPLE_WALL 0 0 0 1 1
+( 256 -240 128 ) ( 256 240 128 ) ( 256 240 0 ) SAMPLE_WALL 0 0 0 1 1
+( 256 240 128 ) ( 240 240 128 ) ( 240 240 0 ) SAMPLE_WALL 0 0 0 1 1
+( 240 -240 128 ) ( 256 -240 128 ) ( 256 -240 0 ) SAMPLE_WALL 0 0 0 1 1
+}
+// pillar with a clipped corner
+{
+( -32 -32 96 ) ( 32 -32 96 ) ( 32 -96 96 ) SAMPLE_TRIM 0 0 0 1 1
+( -32 -96 0 ) ( 32 -96 0 ) ( 32 -32 0 ) SAMPLE_TRIM 0 0 0 1 1
+( -32 -32 96 ) ( -32 -96 96 ) ( -32 -96 0 ) SAMPLE_TRIM 0 0 0 1 1
+( 32 -96 96 ) ( 32 -32 96 ) ( 32 -32 0 ) SAMPLE_TRIM 0 0 0 1 1
+( 32 -32 96 ) ( -32 -32 96 ) ( -32 -32 0 ) SAMPLE_TRIM 0 0 0 1 1
+( -32 -96 96 ) ( 32 -96 96 ) ( 32 -96 0 ) SAMPLE_TRIM 0 0 0 1 1
+( 0 -96 64 ) ( 0 -96 0 ) ( -32 -64 0 ) SAMPLE_TRIM 0 0 0 1 1
+}
+}
+{
+"classname" "info_player_start"
+"origin" "0 0 24"
+"angle" "90"
+}
+{
+"classname" "light"
+"origin" "0 0 96"
+"light" "300"
+}
+{
+"classname" "light"
+"origin" "-160 160 96"
+"light" "200"
+}
+{
+"classname" "info_intermission"
+"origin" "0 -160 96"
+"mangle" "20 90 0"
 }

@@ -14,6 +14,13 @@ struct CompilerRunRequest {
 	int timeoutMs = 5 * 60 * 1000;
 };
 
+struct CompilerManifestRerunRequest {
+	QString manifestPath;
+	bool dryRun = false;
+	bool registerOutputs = true;
+	int timeoutMs = 5 * 60 * 1000;
+};
+
 struct CompilerRunCallbacks {
 	std::function<bool()> cancellationRequested;
 	std::function<void(const CompilerTaskLogEntry&)> logEntry;
@@ -34,10 +41,16 @@ struct CompilerRunResult {
 	QStringList registeredOutputPaths;
 	QString manifestPath;
 	QString error;
+	// True when a qbsp-family run leaked: a leak point file appeared, or the tool reported a reached occupant.
+	bool leakDetected = false;
+	QString leakOccupantClassname;
+	QString leakPointText;
+	QString leakPointFilePath;
 };
 
 CompilerRunResult runCompilerCommand(const CompilerRunRequest& request, const CompilerRunCallbacks& callbacks = {});
 CompilerRunResult rerunCompilerCommandManifest(const CompilerCommandManifest& manifest, const CompilerRunCallbacks& callbacks = {}, const QString& manifestPath = QString());
+CompilerRunResult rerunCompilerCommandManifest(const CompilerCommandManifest& manifest, const CompilerManifestRerunRequest& request, const CompilerRunCallbacks& callbacks = {});
 QString compilerRunResultText(const CompilerRunResult& result);
 
 } // namespace vibestudio

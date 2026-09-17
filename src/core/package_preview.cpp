@@ -1,6 +1,7 @@
 #include "core/package_preview.h"
 
 #include "core/asset_tools.h"
+#include "core/idtech_image.h"
 
 #include <QCoreApplication>
 
@@ -103,11 +104,31 @@ void applyAssetAnalysis(PackagePreview* preview, const AssetAnalysis& analysis)
 	preview->imageColorCount = analysis.imageColorCount;
 	preview->imagePaletteAware = analysis.imagePaletteAware;
 	preview->imagePaletteLines = analysis.imagePaletteLines;
+	preview->imagePixels = analysis.imagePixels;
+	preview->imageFormatId = analysis.imageFormatId;
+	preview->imageIdTechFormat = analysis.imageIdTechFormat;
+	preview->imageMipLevelCount = analysis.imageMipLevelCount;
+	preview->imageFrameCount = analysis.imageFrameCount;
+	// A palette the caller already resolved against the package wins; only fill
+	// in what the decoder reported when nothing was resolved.
+	if (preview->imagePaletteId.isEmpty() && !analysis.imagePaletteId.isEmpty()) {
+		preview->imagePaletteId = analysis.imagePaletteId;
+		preview->imagePaletteGenerated = analysis.imagePaletteGenerated;
+		preview->imagePaletteSourceVirtualPath = analysis.imagePaletteSourceVirtualPath;
+		preview->imagePaletteFromPackage = !analysis.imagePaletteSourceVirtualPath.isEmpty();
+	}
 	preview->modelFormat = analysis.modelFormat;
+	preview->modelCountsPartial = analysis.modelCountsPartial;
 	preview->modelViewportLines = analysis.modelViewportLines;
 	preview->modelMaterialLines = analysis.modelMaterialLines;
 	preview->modelAnimationLines = analysis.modelAnimationNames;
 	preview->audioFormat = analysis.audioFormat;
+	preview->audioCodec = analysis.audioCodec;
+	preview->audioChannels = analysis.audioChannels;
+	preview->audioSampleRate = analysis.audioSampleRate;
+	preview->audioBitsPerSample = analysis.audioBitsPerSample;
+	preview->audioDurationMs = analysis.audioDurationMs;
+	preview->audioPeaks = analysis.audioPeaks;
 	preview->audioWaveformLines = analysis.audioWaveformLines;
 	preview->textLanguageId = analysis.textLanguageId;
 	preview->textLanguageName = analysis.textLanguageName;
@@ -180,7 +201,7 @@ QString packagePreviewKindDisplayName(PackagePreviewKind kind)
 	return previewText("Unavailable");
 }
 
-PackagePreview buildPackageEntryPreview(const PackageArchive& archive, const QString& virtualPath, qint64 byteLimit)
+PackagePreview buildPackageEntryPreview(const PackageArchive& archive, const QString& virtualPath, qint64 byteLimit, qint64 imageByteLimit)
 {
 	const std::optional<PackageEntry> maybeEntry = findEntry(archive, virtualPath);
 	if (!maybeEntry.has_value()) {
@@ -191,7 +212,16 @@ PackagePreview buildPackageEntryPreview(const PackageArchive& archive, const QSt
 	PackagePreview preview;
 	preview.virtualPath = entry.virtualPath;
 	preview.totalBytes = static_cast<qint64>(std::min<quint64>(entry.sizeBytes, static_cast<quint64>(std::numeric_limits<qint64>::max())));
-	preview.truncated = byteLimit >= 0 && preview.totalBytes > byteLimit;
+
+	// Image decoders need the whole payload, so an image entry gets its own,
+	// much larger cap instead of the generic sampling limit.
+	const bool imageCandidate = entry.kind == PackageEntryKind::File
+		&& assetPreviewKindForPath(entry.virtualPath) == AssetPreviewKind::Image;
+	qint64 effectiveLimit = byteLimit;
+	if (imageCandidate && imageByteLimit > 0 && byteLimit >= 0) {
+		effectiveLimit = std::max(byteLimit, imageByteLimit);
+	}
+	preview.truncated = effectiveLimit >= 0 && preview.totalBytes > effectiveLimit;
 
 	if (entry.kind == PackageEntryKind::Directory) {
 		preview.kind = PackagePreviewKind::Directory;
@@ -209,7 +239,7 @@ PackagePreview buildPackageEntryPreview(const PackageArchive& archive, const QSt
 
 	QByteArray bytes;
 	QString error;
-	const qint64 readLimit = byteLimit < 0 ? -1 : std::max<qint64>(1, byteLimit);
+	const qint64 readLimit = effectiveLimit < 0 ? -1 : std::max<qint64>(1, effectiveLimit);
 	if (!archive.readEntryBytes(entry.virtualPath, &bytes, &error, readLimit)) {
 		return unavailablePreview(entry.virtualPath, error.isEmpty() ? previewText("Unable to read entry bytes.") : error);
 	}
@@ -222,7 +252,25 @@ PackagePreview buildPackageEntryPreview(const PackageArchive& archive, const QSt
 	preview.detailLines << previewText("Total size: %1").arg(sizeText(preview.totalBytes));
 	preview.detailLines << previewText("Truncated: %1").arg(preview.truncated ? previewText("yes") : previewText("no"));
 
-	const AssetAnalysis analysis = analyzeAssetBytes(entry.virtualPath, bytes, preview.totalBytes);
+	// Resolve a real game palette out of the package before decoding, so a
+	// paletted entry previews with the colours the project actually ships.
+	const IdTechImageFormat imageFormat = detectIdTechImageFormat(entry.virtualPath, bytes);
+	std::optional<IdTechPaletteResolution> paletteResolution;
+	if (imageFormat != IdTechImageFormat::Unknown && idTechImageFormatIsPaletted(imageFormat)) {
+		paletteResolution = resolveIdTechPalette(archive, defaultIdTechPaletteIdForFormat(imageFormat));
+		preview.imagePaletteId = paletteResolution->palette.id;
+		preview.imagePaletteFromPackage = paletteResolution->fromPackage;
+		preview.imagePaletteGenerated = paletteResolution->palette.generated || !paletteResolution->fromPackage;
+		preview.imagePaletteSourceVirtualPath = paletteResolution->sourceVirtualPath;
+		preview.imagePaletteResolutionLines = idTechPaletteSummaryLines(*paletteResolution);
+		preview.detailLines << previewText("Palette: %1").arg(preview.imagePaletteId.isEmpty() ? previewText("unknown") : preview.imagePaletteId);
+		preview.detailLines << (preview.imagePaletteFromPackage
+			? previewText("Palette source: package entry %1").arg(paletteResolution->sourceVirtualPath.isEmpty() ? previewText("(unnamed)") : paletteResolution->sourceVirtualPath)
+			: previewText("Palette source: generated fallback; this package has no matching game palette."));
+	}
+
+	const AssetAnalysis analysis = analyzeAssetBytes(entry.virtualPath, bytes, preview.totalBytes,
+		paletteResolution.has_value() ? &paletteResolution->palette : nullptr);
 	if (analysis.kind != AssetPreviewKind::Unknown && analysis.kind != AssetPreviewKind::Binary) {
 		applyAssetAnalysis(&preview, analysis);
 		return preview;

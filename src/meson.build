@@ -16,16 +16,23 @@ core_sources = files(
   'core/ai_connectors.cpp',
   'core/ai_workflows.cpp',
   'core/asset_tools.cpp',
+  'core/bsp_inspect.cpp',
+  'core/build_pipeline.cpp',
   'core/compiler_artifact_validation.cpp',
   'core/compiler_known_issues.cpp',
   'core/compiler_profiles.cpp',
   'core/compiler_registry.cpp',
   'core/compiler_runner.cpp',
+  'core/deflate.cpp',
   'core/editor_profiles.cpp',
   'core/ericw_map_preflight.cpp',
   'core/game_installation.cpp',
+  'core/idtech_image.cpp',
   'core/level_map.cpp',
   'core/localization.cpp',
+  'core/map_assets.cpp',
+  'core/map_geometry.cpp',
+  'core/map_render.cpp',
   'core/operation_state.cpp',
   'core/package_archive.cpp',
   'core/package_preview.cpp',
@@ -50,22 +57,114 @@ vibestudio_core_dep = declare_dependency(
   link_with: [vibestudio_core],
 )
 
-install_headers(files('core/advanced_studio.h', 'core/ai_connectors.h', 'core/ai_workflows.h', 'core/asset_tools.h', 'core/compiler_artifact_validation.h', 'core/compiler_known_issues.h', 'core/compiler_profiles.h', 'core/compiler_registry.h', 'core/compiler_runner.h', 'core/ericw_map_preflight.h', 'core/editor_profiles.h', 'core/game_installation.h', 'core/level_map.h', 'core/localization.h', 'core/operation_state.h', 'core/package_archive.h', 'core/package_preview.h', 'core/package_staging.h', 'core/project_manifest.h', 'core/studio_semantics.h', 'core/studio_manifest.h', 'core/studio_settings.h'), subdir: 'vibestudio/core')
+install_headers(files('core/advanced_studio.h', 'core/ai_connectors.h', 'core/ai_workflows.h', 'core/asset_tools.h', 'core/bsp_inspect.h', 'core/build_pipeline.h', 'core/compiler_artifact_validation.h', 'core/compiler_known_issues.h', 'core/compiler_profiles.h', 'core/compiler_registry.h', 'core/compiler_runner.h', 'core/deflate.h', 'core/ericw_map_preflight.h', 'core/editor_profiles.h', 'core/game_installation.h', 'core/idtech_image.h', 'core/level_map.h', 'core/localization.h', 'core/map_assets.h', 'core/map_geometry.h', 'core/map_render.h', 'core/operation_state.h', 'core/package_archive.h', 'core/package_preview.h', 'core/package_staging.h', 'core/project_manifest.h', 'core/studio_semantics.h', 'core/studio_manifest.h', 'core/studio_settings.h'), subdir: 'vibestudio/core')
 
 app_sources = files(
   'main.cpp',
   'app/application_shell.cpp',
+  'app/asset_views.cpp',
+  'app/map_viewport.cpp',
+  'app/studio_actions.cpp',
+  'app/studio_charts.cpp',
+  'app/studio_runtime.cpp',
+  'app/syntax_highlight.cpp',
   'app/ui_primitives.cpp',
   'cli/cli.cpp',
+)
+
+app_moc_headers = files(
+  'app/application_shell.h',
+  'app/asset_views.h',
+  'app/map_viewport.h',
+  'app/studio_actions.h',
+  'app/studio_charts.h',
+  'app/syntax_highlight.h',
+)
+
+app_moc_sources = qt6.preprocess(
+  moc_headers: app_moc_headers,
+  include_directories: vibestudio_includes,
+  dependencies: qt6_dep,
 )
 
 vibestudio = executable(
   'vibestudio',
   app_sources,
+  app_moc_sources,
   include_directories: vibestudio_includes,
   dependencies: [qt6_dep, vibestudio_core_dep],
   install: true,
 )
+
+deflate_smoke_test = executable(
+  'deflate_smoke_test',
+  ['tests/deflate_smoke_test.cpp'],
+  include_directories: vibestudio_includes,
+  dependencies: [vibestudio_core_dep],
+  install: false,
+)
+
+test('deflate-smoke', deflate_smoke_test)
+
+idtech_image_smoke_test = executable(
+  'idtech_image_smoke_test',
+  ['tests/idtech_image_smoke_test.cpp'],
+  include_directories: vibestudio_includes,
+  dependencies: [vibestudio_core_dep],
+  install: false,
+)
+
+test('idtech-image-smoke', idtech_image_smoke_test)
+
+map_assets_smoke_test = executable(
+  'map_assets_smoke_test',
+  ['tests/map_assets_smoke_test.cpp'],
+  include_directories: vibestudio_includes,
+  dependencies: [vibestudio_core_dep],
+  install: false,
+)
+
+test('map-assets-smoke', map_assets_smoke_test)
+
+map_geometry_smoke_test = executable(
+  'map_geometry_smoke_test',
+  ['tests/map_geometry_smoke_test.cpp'],
+  include_directories: vibestudio_includes,
+  dependencies: [vibestudio_core_dep],
+  install: false,
+)
+
+test('map-geometry-smoke', map_geometry_smoke_test)
+
+map_render_smoke_test = executable(
+  'map_render_smoke_test',
+  ['tests/map_render_smoke_test.cpp'],
+  include_directories: vibestudio_includes,
+  dependencies: [vibestudio_core_dep],
+  install: false,
+)
+
+test('map-render-smoke', map_render_smoke_test)
+
+bsp_inspect_smoke_test = executable(
+  'bsp_inspect_smoke_test',
+  ['tests/bsp_inspect_smoke_test.cpp'],
+  include_directories: vibestudio_includes,
+  dependencies: [vibestudio_core_dep],
+  install: false,
+)
+
+test('bsp-inspect-smoke', bsp_inspect_smoke_test)
+
+build_pipeline_smoke_test = executable(
+  'build_pipeline_smoke_test',
+  ['tests/build_pipeline_smoke_test.cpp'],
+  include_directories: vibestudio_includes,
+  dependencies: [vibestudio_core_dep],
+  install: false,
+)
+
+test('build-pipeline-smoke', build_pipeline_smoke_test)
 
 core_smoke_test = executable(
   'core_smoke_test',

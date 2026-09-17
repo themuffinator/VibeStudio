@@ -1,5 +1,7 @@
 #include "core/editor_profiles.h"
 
+#include "core/studio_semantics.h"
+
 #include <QCoreApplication>
 
 namespace vibestudio {
@@ -9,6 +11,19 @@ namespace {
 QString profileText(const char* source)
 {
 	return QCoreApplication::translate("VibeStudioEditorProfiles", source);
+}
+
+// The preset kinds that are still pure data: nothing in the code base reads a
+// layout, camera, selection, or grid preset id and changes behaviour because of
+// it. They are listed on every profile so the GUI and the CLI can say so.
+QStringList unresolvedPresetKinds()
+{
+	return {
+		QStringLiteral("layout"),
+		QStringLiteral("camera"),
+		QStringLiteral("selection"),
+		QStringLiteral("grid"),
+	};
 }
 
 EditorProfileBinding binding(
@@ -23,7 +38,22 @@ EditorProfileBinding binding(
 	const QString normalizedCommandId = commandId.trimmed().isEmpty()
 		? QStringLiteral("editor-command.%1").arg(actionId)
 		: commandId.trimmed();
-	return {actionId, displayName, shortcut, mouseGesture, context, normalizedCommandId, surfaceId.trimmed(), true};
+	// Computed, not asserted: only commands the shell registry knows about can
+	// be honestly reported as implemented.
+	const bool implemented = shellCommandIdExists(normalizedCommandId);
+	return {actionId, displayName, shortcut, mouseGesture, context, normalizedCommandId, surfaceId.trimmed(), implemented};
+}
+
+// A binding that remaps a documented shell command. The action id mirrors the
+// command id so lookups stay predictable.
+EditorProfileBinding shellBinding(
+	const QString& commandId,
+	const QString& displayName,
+	const QString& shortcut,
+	const QString& context,
+	const QString& surfaceId = QStringLiteral("shell"))
+{
+	return binding(commandId, displayName, shortcut, QString(), context, surfaceId, commandId);
 }
 
 EditorProfileDescriptor profile(
@@ -61,7 +91,10 @@ EditorProfileDescriptor profile(
 		keybindingNotes,
 		mouseBindingNotes,
 		bindings,
-		false,
+		unresolvedPresetKinds(),
+		// Placeholder while any preset kind still resolves to nothing. Shell
+		// command remaps are live, but the editor presets are not.
+		!unresolvedPresetKinds().isEmpty(),
 	};
 }
 
@@ -124,10 +157,15 @@ QVector<EditorProfileDescriptor> editorProfileDescriptors()
 				profileText("Mouse bindings route to editor-surface commands and remain inactive outside their declared surface."),
 			},
 			{
-				binding(QStringLiteral("command.palette"), profileText("Command Palette"), QStringLiteral("Ctrl+K"), QString(), profileText("Global"), QStringLiteral("shell")),
-				binding(QStringLiteral("file.save"), profileText("Save"), QStringLiteral("Ctrl+S"), QString(), profileText("Global"), QStringLiteral("shell")),
+				// The default profile keeps the documented shell sequences, so
+				// its remaps are identity mappings of the registry defaults.
+				shellBinding(QStringLiteral("shell.command-palette"), profileText("Command Palette"), QStringLiteral("Ctrl+Shift+P"), profileText("Global")),
+				shellBinding(QStringLiteral("shell.focus-search"), profileText("Focus Workspace Search"), QStringLiteral("Ctrl+F"), profileText("Global")),
+				shellBinding(QStringLiteral("package.save-as"), profileText("Save Package As"), QStringLiteral("Ctrl+Shift+S"), profileText("Package")),
+				shellBinding(QStringLiteral("map.save-as"), profileText("Save Map As"), QStringLiteral("Ctrl+Alt+S"), profileText("Map")),
+				shellBinding(QStringLiteral("compiler.run"), profileText("Run Compiler Profile"), QStringLiteral("Ctrl+R"), profileText("Compiler")),
 				binding(QStringLiteral("view.focus-level"), profileText("Focus Level View"), QStringLiteral("F3"), QString(), profileText("Editor"), QStringLiteral("level-editor")),
-				binding(QStringLiteral("view.focus-inspector"), profileText("Focus Inspector"), QStringLiteral("F8"), QString(), profileText("Shell"), QStringLiteral("shell")),
+				binding(QStringLiteral("view.focus-inspector"), profileText("Focus Inspector"), QStringLiteral("F8"), QString(), profileText("Inspector"), QStringLiteral("inspector")),
 			}),
 		profile(
 			QStringLiteral("gtkradiant-1-6"),
@@ -165,6 +203,12 @@ QVector<EditorProfileDescriptor> editorProfileDescriptors()
 				profileText("Reserve right-button camera movement and orthographic drag gestures for editor-only contexts."),
 			},
 			{
+				// GtkRadiant treats Ctrl+O as "open map" and keeps project
+				// selection on a modified sequence.
+				shellBinding(QStringLiteral("map.open"), profileText("Open Map"), QStringLiteral("Ctrl+O"), profileText("Map")),
+				shellBinding(QStringLiteral("project.open"), profileText("Open Project"), QStringLiteral("Ctrl+Shift+O"), profileText("Project")),
+				shellBinding(QStringLiteral("compiler.run"), profileText("Run Compiler Profile"), QStringLiteral("Ctrl+B"), profileText("Compiler")),
+				shellBinding(QStringLiteral("shell.command-palette"), profileText("Command Palette"), QStringLiteral("Ctrl+Shift+P"), profileText("Global")),
 				binding(QStringLiteral("editor.grid.smaller"), profileText("Grid Smaller"), QStringLiteral("["), QString(), profileText("Map Editor"), QStringLiteral("level-editor")),
 				binding(QStringLiteral("editor.grid.larger"), profileText("Grid Larger"), QStringLiteral("]"), QString(), profileText("Map Editor"), QStringLiteral("level-editor")),
 				binding(QStringLiteral("editor.clone-selection"), profileText("Clone Selection"), QStringLiteral("Space"), QString(), profileText("Map Editor"), QStringLiteral("level-editor")),
@@ -206,6 +250,11 @@ QVector<EditorProfileDescriptor> editorProfileDescriptors()
 				profileText("Reserve Radiant-style camera and manipulation gestures with clear cursor/focus feedback."),
 			},
 			{
+				shellBinding(QStringLiteral("map.open"), profileText("Open Map"), QStringLiteral("Ctrl+O"), profileText("Map")),
+				shellBinding(QStringLiteral("project.open"), profileText("Open Project"), QStringLiteral("Ctrl+Shift+O"), profileText("Project")),
+				shellBinding(QStringLiteral("compiler.run"), profileText("Run Compiler Profile"), QStringLiteral("Ctrl+B"), profileText("Compiler")),
+				shellBinding(QStringLiteral("build.run-pipeline"), profileText("Run Build Pipeline"), QStringLiteral("Ctrl+Shift+B"), profileText("Build")),
+				shellBinding(QStringLiteral("compiler.copy-cli"), profileText("Copy CLI Equivalent"), QStringLiteral("Ctrl+Shift+C"), profileText("Compiler")),
 				binding(QStringLiteral("editor.filters.toggle-caulk"), profileText("Toggle Caulk Filter"), QString(), QString(), profileText("Map Editor"), QStringLiteral("level-editor")),
 				binding(QStringLiteral("editor.texture.fit"), profileText("Fit Texture"), QStringLiteral("Ctrl+F"), QString(), profileText("Texture Tools"), QStringLiteral("texture-tools")),
 				binding(QStringLiteral("compiler.q3map2.plan"), profileText("Plan q3map2 Build"), QString(), QString(), profileText("Compiler"), QStringLiteral("compiler")),
@@ -246,6 +295,10 @@ QVector<EditorProfileDescriptor> editorProfileDescriptors()
 				profileText("Reserve fly-camera and component selection gestures for the 3D view."),
 			},
 			{
+				shellBinding(QStringLiteral("map.open"), profileText("Open Map"), QStringLiteral("Ctrl+O"), profileText("Map")),
+				shellBinding(QStringLiteral("map.save-as"), profileText("Save Map As"), QStringLiteral("Ctrl+Shift+S"), profileText("Map")),
+				shellBinding(QStringLiteral("compiler.run"), profileText("Run Compiler Profile"), QStringLiteral("Ctrl+B"), profileText("Compiler")),
+				shellBinding(QStringLiteral("game.launch"), profileText("Launch Game"), QStringLiteral("Ctrl+L"), profileText("Game")),
 				binding(QStringLiteral("editor.mode.face"), profileText("Face Mode"), QStringLiteral("F"), QString(), profileText("Map Editor"), QStringLiteral("level-editor")),
 				binding(QStringLiteral("editor.mode.vertex"), profileText("Vertex Mode"), QStringLiteral("V"), QString(), profileText("Map Editor"), QStringLiteral("level-editor")),
 				binding(QStringLiteral("editor.camera.fly"), profileText("Fly Camera"), QString(), profileText("Right mouse drag"), profileText("3D View"), QStringLiteral("camera-view")),
@@ -283,9 +336,12 @@ QVector<EditorProfileDescriptor> editorProfileDescriptors()
 				profileText("Reserve tree selection and linked-view gestures for the integrated explorer surface."),
 			},
 			{
+				shellBinding(QStringLiteral("map.open"), profileText("Open Map"), QStringLiteral("Ctrl+O"), profileText("Map")),
+				shellBinding(QStringLiteral("package.open"), profileText("Open Package"), QStringLiteral("Ctrl+Shift+O"), profileText("Package")),
+				shellBinding(QStringLiteral("package.stage-rename"), profileText("Stage Rename"), QStringLiteral("F2"), profileText("Package"), QStringLiteral("package-manager")),
+				shellBinding(QStringLiteral("shell.focus-search"), profileText("Focus Explorer Search"), QStringLiteral("Ctrl+F"), profileText("Explorer")),
 				binding(QStringLiteral("editor.object.properties"), profileText("Object Properties"), QStringLiteral("Alt+Enter"), QString(), profileText("Object Tree"), QStringLiteral("object-tree")),
-				binding(QStringLiteral("editor.tree.focus"), profileText("Focus Object Tree"), QStringLiteral("F6"), QString(), profileText("Shell"), QStringLiteral("shell")),
-				binding(QStringLiteral("package.focus"), profileText("Focus Package View"), QStringLiteral("F7"), QString(), profileText("Package View"), QStringLiteral("package-manager")),
+				binding(QStringLiteral("editor.tree.focus"), profileText("Focus Object Tree"), QStringLiteral("F6"), QString(), profileText("Object Tree"), QStringLiteral("object-tree")),
 				binding(QStringLiteral("editor.object.rename"), profileText("Rename Object"), QStringLiteral("F2"), QString(), profileText("Object Tree"), QStringLiteral("object-tree")),
 			}),
 	};
@@ -335,6 +391,13 @@ QString editorProfileSummaryText(const EditorProfileDescriptor& profile)
 	lines << QCoreApplication::translate("VibeStudioEditorProfiles", "Terminology: %1").arg(profile.terminologyPresetId);
 	lines << QCoreApplication::translate("VibeStudioEditorProfiles", "Engines: %1").arg(profile.supportedEngineFamilies.join(QStringLiteral(", ")));
 	lines << QCoreApplication::translate("VibeStudioEditorProfiles", "Panels: %1").arg(profile.defaultPanels.join(QStringLiteral(", ")));
+	lines << QCoreApplication::translate("VibeStudioEditorProfiles", "Status: %1")
+		.arg(profile.placeholder
+			? QCoreApplication::translate("VibeStudioEditorProfiles", "placeholder presets (%1) with %2 of %3 bindings routed")
+				.arg(profile.unresolvedPresets.join(QStringLiteral(", ")))
+				.arg(editorProfileImplementedBindings(profile).size())
+				.arg(profile.bindings.size())
+			: QCoreApplication::translate("VibeStudioEditorProfiles", "all presets resolve to behaviour"));
 	lines << profile.description;
 	if (!profile.workflowNotes.isEmpty()) {
 		lines << QCoreApplication::translate("VibeStudioEditorProfiles", "Workflow notes:");
@@ -346,7 +409,12 @@ QString editorProfileSummaryText(const EditorProfileDescriptor& profile)
 		lines << QCoreApplication::translate("VibeStudioEditorProfiles", "Command bindings:");
 		for (const EditorProfileBinding& binding : profile.bindings) {
 			const QString gesture = binding.mouseGesture.isEmpty() ? binding.shortcut : binding.mouseGesture;
-			lines << QStringLiteral("- %1 [%2 -> %3 @ %4]: %5").arg(binding.displayName, binding.actionId, binding.commandId, binding.surfaceId, gesture.isEmpty() ? QCoreApplication::translate("VibeStudioEditorProfiles", "unassigned") : gesture);
+			lines << QStringLiteral("- %1 [%2 -> %3 @ %4]: %5 (%6)")
+				.arg(binding.displayName, binding.actionId, binding.commandId, binding.surfaceId,
+					gesture.isEmpty() ? QCoreApplication::translate("VibeStudioEditorProfiles", "unassigned") : gesture,
+					binding.implemented
+						? QCoreApplication::translate("VibeStudioEditorProfiles", "routed")
+						: QCoreApplication::translate("VibeStudioEditorProfiles", "not implemented yet"));
 		}
 	}
 	return lines.join('\n');
@@ -386,6 +454,28 @@ bool editorProfileHasShortcutConflict(const EditorProfileDescriptor& profile, QS
 		seen.push_back(binding);
 	}
 	return false;
+}
+
+QVector<EditorProfileBinding> editorProfileImplementedBindings(const EditorProfileDescriptor& profile)
+{
+	QVector<EditorProfileBinding> implemented;
+	for (const EditorProfileBinding& binding : profile.bindings) {
+		if (binding.implemented) {
+			implemented.push_back(binding);
+		}
+	}
+	return implemented;
+}
+
+QStringList editorProfileRemappedShellCommandIds(const EditorProfileDescriptor& profile)
+{
+	QStringList ids;
+	for (const EditorProfileBinding& binding : editorProfileImplementedBindings(profile)) {
+		ids.push_back(binding.commandId);
+	}
+	ids.removeDuplicates();
+	ids.sort();
+	return ids;
 }
 
 } // namespace vibestudio

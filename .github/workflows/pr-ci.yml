@@ -90,6 +90,26 @@ jobs:
           --binary "builddir/src/vibestudio"
           --expected-version "$(cat VERSION)"
 
+      - name: GUI Self-Test (Windows)
+        if: matrix.os == 'windows-latest'
+        shell: pwsh
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: >
+          ./builddir/src/vibestudio.exe
+          --self-test
+          --settings-file "${{ runner.temp }}/vibestudio-ci.ini"
+
+      - name: GUI Self-Test (Unix)
+        if: matrix.os != 'windows-latest'
+        shell: bash
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: >
+          ./builddir/src/vibestudio
+          --self-test
+          --settings-file "${{ runner.temp }}/vibestudio-ci.ini"
+
       - name: Validate CLI Docs (Windows)
         if: matrix.os == 'windows-latest'
         shell: pwsh

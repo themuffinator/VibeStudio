@@ -91,12 +91,16 @@ void addError(CompilerArtifactValidationReport* report, const QString& path, con
 	addFinding(report, QStringLiteral("error"), path, message);
 }
 
-bool containsArgumentText(const QStringList& arguments, const QStringList& needles)
+// Matches whole arguments only. Substring matching used to confuse "-convert quake2" (a conversion
+// value) with a Quake II target flag and never matched "-qbism" at all.
+bool containsArgument(const QStringList& arguments, const QStringList& candidates)
 {
-	const QString haystack = arguments.join(' ').toLower();
-	for (const QString& needle : needles) {
-		if (haystack.contains(needle.toLower())) {
-			return true;
+	for (const QString& argument : arguments) {
+		const QString trimmed = argument.trimmed();
+		for (const QString& candidate : candidates) {
+			if (trimmed.compare(candidate, Qt::CaseInsensitive) == 0) {
+				return true;
+			}
 		}
 	}
 	return false;
@@ -311,25 +315,25 @@ QStringList expectedBspxLumps(const CompilerCommandManifest& manifest)
 		return expected;
 	}
 	const QStringList arguments = manifest.arguments;
-	if (containsArgumentText(arguments, {QStringLiteral("-bspxlit"), QStringLiteral("-bspxonly"), QStringLiteral("-bspx ")})) {
+	if (containsArgument(arguments, {QStringLiteral("-bspxlit"), QStringLiteral("-bspxonly"), QStringLiteral("-bspx"), QStringLiteral("-novanilla")})) {
 		expected << QStringLiteral("RGBLIGHTING");
 	}
-	if (containsArgumentText(arguments, {QStringLiteral("-bspxlux"), QStringLiteral("-bspxonly"), QStringLiteral("-bspx ")})) {
+	if (containsArgument(arguments, {QStringLiteral("-bspxlux"), QStringLiteral("-bspxonly"), QStringLiteral("-bspx")})) {
 		expected << QStringLiteral("LIGHTINGDIR");
 	}
-	if (containsArgumentText(arguments, {QStringLiteral("-bspxhdr")})) {
+	if (containsArgument(arguments, {QStringLiteral("-bspxhdr")})) {
 		expected << QStringLiteral("LIGHTING_E5BGR9");
 	}
-	if (containsArgumentText(arguments, {QStringLiteral("-wrnormals")})) {
+	if (containsArgument(arguments, {QStringLiteral("-wrnormals")})) {
 		expected << QStringLiteral("FACENORMALS");
 	}
-	if (containsArgumentText(arguments, {QStringLiteral("-world_units_per_luxel")})) {
+	if (containsArgument(arguments, {QStringLiteral("-world_units_per_luxel")})) {
 		expected << QStringLiteral("DECOUPLED_LM");
 	}
-	if (containsArgumentText(arguments, {QStringLiteral("-lmshift"), QStringLiteral("-lightmap_scale")})) {
+	if (containsArgument(arguments, {QStringLiteral("-lmshift"), QStringLiteral("-lightmap_scale")})) {
 		expected << QStringLiteral("LMSHIFT");
 	}
-	if (containsArgumentText(arguments, {QStringLiteral("-lightgrid")})) {
+	if (containsArgument(arguments, {QStringLiteral("-lightgrid")})) {
 		expected << QStringLiteral("LIGHTGRID_OCTREE");
 	}
 	expected.removeDuplicates();
@@ -347,8 +351,13 @@ bool outputLooksLikeRequestedFamily(const CompilerCommandManifest& manifest, Bsp
 	if (!ericwProfile) {
 		return true;
 	}
-	if (containsArgumentText(manifest.arguments, {QStringLiteral("q2bsp"), QStringLiteral("quake2")})) {
+	// qbsp's target flags are "-q2bsp", "-qbism", "-hlbsp", "-bsp2" and "-hexen2"
+	// (external/compilers/ericw-tools/qbsp/qbsp.cc, game_target_group).
+	if (containsArgument(manifest.arguments, {QStringLiteral("-q2bsp"), QStringLiteral("-qbism")})) {
 		return family == BspFamily::Quake2Ibsp || family == BspFamily::QbismIbsp;
+	}
+	if (containsArgument(manifest.arguments, {QStringLiteral("-hlbsp")})) {
+		return family == BspFamily::HalfLifeBsp30;
 	}
 	return family == BspFamily::QuakeBsp29 || family == BspFamily::HalfLifeBsp30 || family == BspFamily::QuakeBsp2 || family == BspFamily::QuakeBsp2Rmq;
 }
@@ -369,7 +378,7 @@ void validateHexen2Heuristic(const QString& path, const CompilerCommandManifest&
 	if (!info.usesQ1Layout || kQ1ModelLump >= info.lumps.size()) {
 		return;
 	}
-	if (containsArgumentText(manifest.arguments, {QStringLiteral("hexen2"), QStringLiteral("h2bsp")})) {
+	if (containsArgument(manifest.arguments, {QStringLiteral("-hexen2")})) {
 		return;
 	}
 	const quint32 modelLength = info.lumps.at(kQ1ModelLump).length;
@@ -457,7 +466,7 @@ CompilerArtifactValidationReport validateCompilerArtifacts(const CompilerCommand
 		const QFileInfo info(path);
 		if (!info.exists()) {
 			addError(&report, path, validationText("Post-run artifact validation: expected compiler output is missing after a successful process exit: %1").arg(nativePath(path)));
-			if (containsArgumentText(manifest.arguments, {QStringLiteral("-convert"), QStringLiteral("valve")})) {
+			if (containsArgument(manifest.arguments, {QStringLiteral("-convert")}) && containsArgument(manifest.arguments, {QStringLiteral("valve")})) {
 				const QStringList alternates = likelyAlternateOutputs(path);
 				const QString suffix = alternates.isEmpty() ? QString() : validationText(" Alternate output found: %1").arg(nativePath(alternates.first()));
 				addWarning(&report, path, validationText("Post-run artifact validation: conversion output naming did not match VibeStudio's expected destination; check ericw-tools #213.%1").arg(suffix));

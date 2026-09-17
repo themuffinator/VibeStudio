@@ -3,7 +3,10 @@
 #include <QCoreApplication>
 #include <QDateTime>
 #include <QDir>
+#include <QFileInfo>
+#include <QSettings>
 #include <QTemporaryDir>
+#include <QTimeZone>
 
 #include <cstdlib>
 #include <iostream>
@@ -16,49 +19,46 @@ int fail(const char* message)
 	return EXIT_FAILURE;
 }
 
-} // namespace
-
-int main(int argc, char** argv)
+bool expect(bool condition, const char* message)
 {
-	QCoreApplication app(argc, argv);
-	QTemporaryDir tempDir;
-	if (!tempDir.isValid()) {
-		return fail("Expected a writable temporary directory.");
+	if (!condition) {
+		std::cerr << message << "\n";
+		return false;
 	}
+	return true;
+}
 
-	const QString settingsPath = tempDir.filePath(QStringLiteral("settings.ini"));
-	const QString alphaProject = tempDir.filePath(QStringLiteral("Alpha Project"));
-	const QString betaProject = tempDir.filePath(QStringLiteral("Beta Project"));
-	const QString quakeInstall = tempDir.filePath(QStringLiteral("Quake Install"));
+bool samePath(const QString& left, const QString& right)
+{
+	return QFileInfo(left).absoluteFilePath() == QFileInfo(right).absoluteFilePath();
+}
+
+bool runPreferenceAndHistorySmoke(const QDir& root)
+{
+	bool ok = true;
+	const QString settingsPath = root.filePath(QStringLiteral("settings.ini"));
+	const QString alphaProject = root.filePath(QStringLiteral("Alpha Project"));
+	const QString betaProject = root.filePath(QStringLiteral("Beta Project"));
+	const QString quakeInstall = root.filePath(QStringLiteral("Quake Install"));
 	if (!QDir().mkpath(alphaProject) || !QDir().mkpath(betaProject) || !QDir().mkpath(quakeInstall)) {
-		return fail("Expected test project directories to be created.");
+		return expect(false, "Expected test project directories to be created.");
 	}
 
 	vibestudio::StudioSettings settings(settingsPath);
-	if (settings.schemaVersion() != vibestudio::StudioSettings::kSchemaVersion) {
-		return fail("Expected default settings schema version.");
-	}
-	if (!settings.recentProjects().isEmpty()) {
-		return fail("Expected no recent projects in a fresh settings file.");
-	}
+	ok &= expect(settings.schemaVersion() == vibestudio::StudioSettings::kSchemaVersion, "Expected default settings schema version.");
+	ok &= expect(!settings.storedSchemaIsNewer() && !settings.isReadOnly(), "Expected a fresh store to be writable.");
+	ok &= expect(settings.recentProjects().isEmpty(), "Expected no recent projects in a fresh settings file.");
 	const vibestudio::AccessibilityPreferences defaultPreferences = settings.accessibilityPreferences();
-	if (defaultPreferences.localeName != QStringLiteral("en") || defaultPreferences.textScalePercent != 100 || defaultPreferences.theme != vibestudio::StudioTheme::Dark || defaultPreferences.density != vibestudio::UiDensity::Standard) {
-		return fail("Expected default accessibility and language preferences.");
-	}
-	if (settings.selectedEditorProfileId() != QStringLiteral("vibestudio-default")) {
-		return fail("Expected default editor profile selection.");
-	}
+	ok &= expect(defaultPreferences.localeName == QStringLiteral("en") && defaultPreferences.textScalePercent == 100 && defaultPreferences.theme == vibestudio::StudioTheme::Dark && defaultPreferences.density == vibestudio::UiDensity::Standard,
+		"Expected default accessibility and language preferences.");
+	ok &= expect(settings.selectedEditorProfileId() == QStringLiteral("vibestudio-default"), "Expected default editor profile selection.");
 	const vibestudio::AiAutomationPreferences defaultAiPreferences = settings.aiAutomationPreferences();
-	if (!defaultAiPreferences.aiFreeMode || defaultAiPreferences.cloudConnectorsEnabled || defaultAiPreferences.agenticWorkflowsEnabled) {
-		return fail("Expected AI automation to be disabled by default.");
-	}
+	ok &= expect(defaultAiPreferences.aiFreeMode && !defaultAiPreferences.cloudConnectorsEnabled && !defaultAiPreferences.agenticWorkflowsEnabled,
+		"Expected AI automation to be disabled by default.");
 	const vibestudio::SetupProgress defaultSetup = settings.setupProgress();
-	if (defaultSetup.started || defaultSetup.skipped || defaultSetup.completed || defaultSetup.currentStep != vibestudio::SetupStep::WelcomeAccess) {
-		return fail("Expected default setup state.");
-	}
-	if (settings.setupSummary().status != QStringLiteral("not-started")) {
-		return fail("Expected default setup summary status.");
-	}
+	ok &= expect(!defaultSetup.started && !defaultSetup.skipped && !defaultSetup.completed && defaultSetup.currentStep == vibestudio::SetupStep::WelcomeAccess,
+		"Expected default setup state.");
+	ok &= expect(settings.setupSummary().status == QStringLiteral("not-started"), "Expected default setup summary status.");
 
 	settings.recordRecentProject(alphaProject, QStringLiteral("Alpha"), QDateTime::fromString(QStringLiteral("2026-04-29T08:00:00Z"), Qt::ISODate));
 	settings.recordRecentProject(betaProject, QString(), QDateTime::fromString(QStringLiteral("2026-04-29T09:00:00Z"), Qt::ISODate));
@@ -67,6 +67,7 @@ int main(int argc, char** argv)
 	settings.setSelectedMode(5);
 	settings.setShellGeometry(QByteArray("geometry-bytes"));
 	settings.setShellWindowState(QByteArray("state-bytes"));
+
 	vibestudio::RecentActivityTask compilerActivity;
 	compilerActivity.id = QStringLiteral("compiler-ericw-qbsp");
 	compilerActivity.title = QStringLiteral("Compiler Run");
@@ -78,7 +79,15 @@ int main(int argc, char** argv)
 	compilerActivity.createdUtc = QDateTime::fromString(QStringLiteral("2026-04-29T10:05:00Z"), Qt::ISODate);
 	compilerActivity.updatedUtc = QDateTime::fromString(QStringLiteral("2026-04-29T10:06:00Z"), Qt::ISODate);
 	compilerActivity.finishedUtc = compilerActivity.updatedUtc;
+	compilerActivity.cancellable = true;
+	compilerActivity.durationMs = 4242;
+	compilerActivity.progress = {3, 7};
+	compilerActivity.transitions.push_back({compilerActivity.createdUtc, vibestudio::OperationState::Running, 0, QStringLiteral("started")});
+	compilerActivity.transitions.push_back({compilerActivity.updatedUtc, vibestudio::OperationState::Completed, 4242, QStringLiteral("finished")});
+	compilerActivity.log.push_back({compilerActivity.createdUtc, vibestudio::OperationState::Running, QStringLiteral("qbsp: reading maps/start.map")});
+	compilerActivity.log.push_back({compilerActivity.updatedUtc, vibestudio::OperationState::Completed, QStringLiteral("qbsp: wrote maps/start.bsp")});
 	settings.recordRecentActivityTask(compilerActivity);
+
 	vibestudio::GameInstallationProfile quakeProfile;
 	quakeProfile.rootPath = quakeInstall;
 	quakeProfile.gameKey = QStringLiteral("quake");
@@ -87,6 +96,7 @@ int main(int argc, char** argv)
 	settings.startOrResumeSetup(vibestudio::SetupStep::WorkspaceProfile);
 	settings.advanceSetup();
 	settings.skipSetup();
+
 	vibestudio::AccessibilityPreferences preferences;
 	preferences.localeName = QStringLiteral("pt_BR");
 	preferences.textScalePercent = 175;
@@ -96,7 +106,7 @@ int main(int argc, char** argv)
 	preferences.textToSpeechEnabled = true;
 	settings.setAccessibilityPreferences(preferences);
 	settings.setSelectedEditorProfileId(QStringLiteral("TrenchBroom"));
-	settings.upsertCompilerToolPathOverride({QStringLiteral("ericw-qbsp"), tempDir.filePath(QStringLiteral("qbsp-test"))});
+	settings.upsertCompilerToolPathOverride({QStringLiteral("ericw-qbsp"), root.filePath(QStringLiteral("qbsp-test"))});
 	vibestudio::AiAutomationPreferences aiPreferences;
 	aiPreferences.aiFreeMode = false;
 	aiPreferences.cloudConnectorsEnabled = true;
@@ -110,73 +120,70 @@ int main(int argc, char** argv)
 
 	vibestudio::StudioSettings reloaded(settingsPath);
 	const QVector<vibestudio::RecentProject> projects = reloaded.recentProjects();
-	if (projects.size() != 2) {
-		return fail("Expected duplicate recent project records to collapse.");
+	ok &= expect(projects.size() == 2, "Expected duplicate recent project records to collapse.");
+	if (projects.size() == 2) {
+		ok &= expect(projects[0].displayName == QStringLiteral("Alpha Renamed"), "Expected most recently opened project first.");
+		ok &= expect(projects[0].exists && projects[1].exists, "Expected existing project directories to be marked ready.");
 	}
-	if (projects[0].displayName != QStringLiteral("Alpha Renamed")) {
-		return fail("Expected most recently opened project first.");
-	}
-	if (reloaded.currentProjectPath() != QDir::cleanPath(alphaProject)) {
-		return fail("Expected current project path to persist.");
-	}
-	if (!projects[0].exists || !projects[1].exists) {
-		return fail("Expected existing project directories to be marked ready.");
-	}
-	if (reloaded.selectedMode() != 5) {
-		return fail("Expected selected shell mode to persist.");
-	}
-	if (reloaded.shellGeometry() != QByteArray("geometry-bytes") || reloaded.shellWindowState() != QByteArray("state-bytes")) {
-		return fail("Expected shell geometry and state to persist.");
-	}
+	ok &= expect(reloaded.currentProjectPath() == QDir::cleanPath(alphaProject), "Expected current project path to persist.");
+	ok &= expect(reloaded.selectedMode() == 5, "Expected selected shell mode to persist.");
+	ok &= expect(reloaded.shellGeometry() == QByteArray("geometry-bytes") && reloaded.shellWindowState() == QByteArray("state-bytes"),
+		"Expected shell geometry and state to persist.");
+
 	const QVector<vibestudio::RecentActivityTask> activities = reloaded.recentActivityTasks();
-	if (activities.size() != 1 || activities.front().id != QStringLiteral("compiler-ericw-qbsp") || activities.front().source != QStringLiteral("compiler") || activities.front().state != vibestudio::OperationState::Completed || activities.front().warnings.size() != 1) {
-		return fail("Expected recent activity task history to persist.");
+	ok &= expect(activities.size() == 1, "Expected recent activity task history to persist.");
+	if (!activities.isEmpty()) {
+		const vibestudio::RecentActivityTask& task = activities.front();
+		ok &= expect(task.id == QStringLiteral("compiler-ericw-qbsp") && task.source == QStringLiteral("compiler") && task.state == vibestudio::OperationState::Completed && task.warnings.size() == 1,
+			"Expected recent activity task headline fields to persist.");
+		// The detail behind the headline must survive too.
+		ok &= expect(task.durationMs == 4242, "Expected task duration to persist.");
+		ok &= expect(task.cancellable, "Expected task cancellability to persist.");
+		ok &= expect(task.progress.current == 3 && task.progress.total == 7, "Expected task progress to persist.");
+		ok &= expect(task.transitions.size() == 2 && task.transitions.last().state == vibestudio::OperationState::Completed && task.transitions.last().elapsedMs == 4242,
+			"Expected the task transition timeline to persist.");
+		ok &= expect(task.log.size() == 2 && task.log.last().message.contains(QStringLiteral("start.bsp")),
+			"Expected captured compiler output to persist.");
+		ok &= expect(!task.logTruncated && task.droppedLogEntryCount == 0, "Expected a short log to persist untruncated.");
 	}
+
 	QVector<vibestudio::GameInstallationProfile> installations = reloaded.gameInstallations();
-	if (installations.size() != 1 || installations.front().displayName != QStringLiteral("Quake Test") || installations.front().engineFamily != vibestudio::GameEngineFamily::IdTech2) {
-		return fail("Expected manual game installation to persist.");
+	ok &= expect(installations.size() == 1 && installations.front().displayName == QStringLiteral("Quake Test") && installations.front().engineFamily == vibestudio::GameEngineFamily::IdTech2,
+		"Expected manual game installation to persist.");
+	if (installations.isEmpty()) {
+		return ok;
 	}
-	if (reloaded.selectedGameInstallationId() != installations.front().id) {
-		return fail("Expected first installation to become selected.");
-	}
-	if (reloaded.selectedEditorProfileId() != QStringLiteral("trenchbroom")) {
-		return fail("Expected selected editor profile to persist with normalized id.");
-	}
-	if (reloaded.compilerToolPathOverrides().size() != 1 || reloaded.compilerToolPathOverrides().front().toolId != QStringLiteral("ericw-qbsp")) {
-		return fail("Expected compiler executable override to persist.");
-	}
+	ok &= expect(reloaded.selectedGameInstallationId() == installations.front().id, "Expected first installation to become selected.");
+	ok &= expect(reloaded.selectedEditorProfileId() == QStringLiteral("trenchbroom"), "Expected selected editor profile to persist with normalized id.");
+	ok &= expect(reloaded.compilerToolPathOverrides().size() == 1 && reloaded.compilerToolPathOverrides().front().toolId == QStringLiteral("ericw-qbsp"),
+		"Expected compiler executable override to persist.");
+
 	const vibestudio::AiAutomationPreferences reloadedAiPreferences = reloaded.aiAutomationPreferences();
-	if (reloadedAiPreferences.aiFreeMode || !reloadedAiPreferences.cloudConnectorsEnabled || !reloadedAiPreferences.agenticWorkflowsEnabled || reloadedAiPreferences.preferredReasoningConnectorId != QStringLiteral("openai") || reloadedAiPreferences.preferredLocalConnectorId != QStringLiteral("local-offline") || reloadedAiPreferences.preferredTextModelId != QStringLiteral("openai-text-default") || reloadedAiPreferences.meshyCredentialEnvironmentVariable != QStringLiteral("VIBESTUDIO_TEST_MESHY_KEY")) {
-		return fail("Expected AI opt-in preferences to persist.");
-	}
+	ok &= expect(!reloadedAiPreferences.aiFreeMode && reloadedAiPreferences.cloudConnectorsEnabled && reloadedAiPreferences.agenticWorkflowsEnabled
+			&& reloadedAiPreferences.preferredReasoningConnectorId == QStringLiteral("openai")
+			&& reloadedAiPreferences.preferredLocalConnectorId == QStringLiteral("local-offline")
+			&& reloadedAiPreferences.preferredTextModelId == QStringLiteral("openai-text-default")
+			&& reloadedAiPreferences.meshyCredentialEnvironmentVariable == QStringLiteral("VIBESTUDIO_TEST_MESHY_KEY"),
+		"Expected AI opt-in preferences to persist.");
+
 	vibestudio::SetupProgress reloadedSetup = reloaded.setupProgress();
-	if (!reloadedSetup.started || !reloadedSetup.skipped || reloadedSetup.completed || reloadedSetup.currentStep != vibestudio::SetupStep::ProjectsPackages) {
-		return fail("Expected setup skip/resume state to persist.");
-	}
-	if (reloaded.setupSummary().status != QStringLiteral("skipped")) {
-		return fail("Expected skipped setup summary.");
-	}
+	ok &= expect(reloadedSetup.started && reloadedSetup.skipped && !reloadedSetup.completed && reloadedSetup.currentStep == vibestudio::SetupStep::ProjectsPackages,
+		"Expected setup skip/resume state to persist.");
+	ok &= expect(reloaded.setupSummary().status == QStringLiteral("skipped"), "Expected skipped setup summary.");
 	reloaded.startOrResumeSetup(reloadedSetup.currentStep);
 	reloaded.advanceSetup();
 	reloaded.completeSetup();
 	reloadedSetup = reloaded.setupProgress();
-	if (!reloadedSetup.started || reloadedSetup.skipped || !reloadedSetup.completed || reloadedSetup.currentStep != vibestudio::SetupStep::ReviewFinish) {
-		return fail("Expected setup completion state.");
-	}
-	if (reloaded.setupSummary().status != QStringLiteral("complete")) {
-		return fail("Expected complete setup summary.");
-	}
+	ok &= expect(reloadedSetup.started && !reloadedSetup.skipped && reloadedSetup.completed && reloadedSetup.currentStep == vibestudio::SetupStep::ReviewFinish,
+		"Expected setup completion state.");
+	ok &= expect(reloaded.setupSummary().status == QStringLiteral("complete"), "Expected complete setup summary.");
 	reloaded.resetSetup();
-	if (reloaded.setupProgress().started || reloaded.setupSummary().status != QStringLiteral("not-started")) {
-		return fail("Expected reset setup state.");
-	}
-	if (vibestudio::setupStepFromId(QStringLiteral("AI_AUTOMATION")) != vibestudio::SetupStep::AiAutomation) {
-		return fail("Expected setup step id normalization.");
-	}
+	ok &= expect(!reloaded.setupProgress().started && reloaded.setupSummary().status == QStringLiteral("not-started"), "Expected reset setup state.");
+	ok &= expect(vibestudio::setupStepFromId(QStringLiteral("AI_AUTOMATION")) == vibestudio::SetupStep::AiAutomation, "Expected setup step id normalization.");
+
 	const vibestudio::AccessibilityPreferences reloadedPreferences = reloaded.accessibilityPreferences();
-	if (reloadedPreferences.localeName != QStringLiteral("pt-BR") || reloadedPreferences.textScalePercent != 175 || reloadedPreferences.theme != vibestudio::StudioTheme::HighContrastLight || reloadedPreferences.density != vibestudio::UiDensity::Compact || !reloadedPreferences.reducedMotion || !reloadedPreferences.textToSpeechEnabled) {
-		return fail("Expected accessibility and language preferences to persist.");
-	}
+	ok &= expect(reloadedPreferences.localeName == QStringLiteral("pt-BR") && reloadedPreferences.textScalePercent == 175 && reloadedPreferences.theme == vibestudio::StudioTheme::HighContrastLight && reloadedPreferences.density == vibestudio::UiDensity::Compact && reloadedPreferences.reducedMotion && reloadedPreferences.textToSpeechEnabled,
+		"Expected accessibility and language preferences to persist.");
 
 	reloaded.setLocaleName(QStringLiteral("zz"));
 	reloaded.setTextScalePercent(999);
@@ -192,62 +199,294 @@ int main(int argc, char** argv)
 	disabledAiPreferences.preferredReasoningConnectorId = QStringLiteral("missing");
 	reloaded.setAiAutomationPreferences(disabledAiPreferences);
 	const vibestudio::AccessibilityPreferences normalizedPreferences = reloaded.accessibilityPreferences();
-	if (normalizedPreferences.localeName != QStringLiteral("en") || normalizedPreferences.textScalePercent != 200 || normalizedPreferences.theme != vibestudio::StudioTheme::HighContrastDark || normalizedPreferences.density != vibestudio::UiDensity::Comfortable || normalizedPreferences.reducedMotion || normalizedPreferences.textToSpeechEnabled) {
-		return fail("Expected preference normalization and individual setters.");
-	}
-	if (reloaded.selectedEditorProfileId() != QStringLiteral("vibestudio-default")) {
-		return fail("Expected invalid editor profile selection to fall back to default.");
-	}
+	ok &= expect(normalizedPreferences.localeName == QStringLiteral("en") && normalizedPreferences.textScalePercent == 200 && normalizedPreferences.theme == vibestudio::StudioTheme::HighContrastDark && normalizedPreferences.density == vibestudio::UiDensity::Comfortable && !normalizedPreferences.reducedMotion && !normalizedPreferences.textToSpeechEnabled,
+		"Expected preference normalization and individual setters.");
+	ok &= expect(reloaded.selectedEditorProfileId() == QStringLiteral("vibestudio-default"), "Expected invalid editor profile selection to fall back to default.");
 	const vibestudio::AiAutomationPreferences normalizedAiPreferences = reloaded.aiAutomationPreferences();
-	if (!normalizedAiPreferences.aiFreeMode || normalizedAiPreferences.cloudConnectorsEnabled || normalizedAiPreferences.agenticWorkflowsEnabled || !normalizedAiPreferences.preferredReasoningConnectorId.isEmpty()) {
-		return fail("Expected AI-free mode and invalid connector preferences to normalize.");
-	}
+	ok &= expect(normalizedAiPreferences.aiFreeMode && !normalizedAiPreferences.cloudConnectorsEnabled && !normalizedAiPreferences.agenticWorkflowsEnabled && normalizedAiPreferences.preferredReasoningConnectorId.isEmpty(),
+		"Expected AI-free mode and invalid connector preferences to normalize.");
 
 	for (int index = 0; index < vibestudio::StudioSettings::kMaximumRecentProjects + 4; ++index) {
-		reloaded.recordRecentProject(tempDir.filePath(QStringLiteral("Project %1").arg(index)));
+		reloaded.recordRecentProject(root.filePath(QStringLiteral("Project %1").arg(index)));
 	}
-	if (reloaded.recentProjects().size() != vibestudio::StudioSettings::kMaximumRecentProjects) {
-		return fail("Expected recent project list to stay bounded.");
-	}
+	ok &= expect(reloaded.recentProjects().size() == vibestudio::StudioSettings::kMaximumRecentProjects, "Expected recent project list to stay bounded.");
 	for (int index = 0; index < vibestudio::StudioSettings::kMaximumRecentActivityTasks + 4; ++index) {
 		vibestudio::RecentActivityTask activity;
 		activity.id = QStringLiteral("package-task-%1").arg(index);
 		activity.title = QStringLiteral("Package Task %1").arg(index);
-		activity.detail = tempDir.filePath(QStringLiteral("package-%1.pak").arg(index));
+		activity.detail = root.filePath(QStringLiteral("package-%1.pak").arg(index));
 		activity.source = QStringLiteral("package");
 		activity.state = vibestudio::OperationState::Completed;
 		activity.resultSummary = QStringLiteral("Task %1 complete.").arg(index);
 		activity.updatedUtc = QDateTime::fromString(QStringLiteral("2026-04-30T10:%1:00Z").arg(index % 60, 2, 10, QLatin1Char('0')), Qt::ISODate);
 		reloaded.recordRecentActivityTask(activity);
 	}
-	if (reloaded.recentActivityTasks().size() != vibestudio::StudioSettings::kMaximumRecentActivityTasks) {
-		return fail("Expected recent activity task list to stay bounded.");
-	}
+	ok &= expect(reloaded.recentActivityTasks().size() == vibestudio::StudioSettings::kMaximumRecentActivityTasks, "Expected recent activity task list to stay bounded.");
 
 	reloaded.removeRecentProject(alphaProject);
 	for (const vibestudio::RecentProject& project : reloaded.recentProjects()) {
-		if (project.displayName == QStringLiteral("Alpha Renamed")) {
-			return fail("Expected selected recent project removal.");
-		}
+		ok &= expect(project.displayName != QStringLiteral("Alpha Renamed"), "Expected selected recent project removal.");
 	}
 
 	reloaded.clearRecentProjects();
-	if (!reloaded.recentProjects().isEmpty()) {
-		return fail("Expected recent projects to clear.");
-	}
+	ok &= expect(reloaded.recentProjects().isEmpty(), "Expected recent projects to clear.");
 	reloaded.clearRecentActivityTasks();
-	if (!reloaded.recentActivityTasks().isEmpty()) {
-		return fail("Expected recent activity task history to clear.");
-	}
+	ok &= expect(reloaded.recentActivityTasks().isEmpty(), "Expected recent activity task history to clear.");
 
 	reloaded.removeGameInstallation(installations.front().id);
-	if (!reloaded.gameInstallations().isEmpty() || !reloaded.selectedGameInstallationId().isEmpty()) {
-		return fail("Expected game installation removal to clear selection.");
-	}
+	ok &= expect(reloaded.gameInstallations().isEmpty() && reloaded.selectedGameInstallationId().isEmpty(), "Expected game installation removal to clear selection.");
 	reloaded.removeCompilerToolPathOverride(QStringLiteral("ericw-qbsp"));
-	if (!reloaded.compilerToolPathOverrides().isEmpty()) {
-		return fail("Expected compiler executable override removal.");
+	ok &= expect(reloaded.compilerToolPathOverrides().isEmpty(), "Expected compiler executable override removal.");
+	return ok;
+}
+
+// A version 1 store is upgraded in place: ids are normalized, the legacy
+// high-contrast flag folds into the theme, and retired keys are dropped.
+bool runMigrationSmoke(const QDir& root)
+{
+	bool ok = true;
+	const QString path = root.filePath(QStringLiteral("legacy-v1.ini"));
+	{
+		QSettings legacy(path, QSettings::IniFormat);
+		legacy.setValue(QStringLiteral("app/settingsSchemaVersion"), 1);
+		legacy.setValue(QStringLiteral("preferences/localeName"), QStringLiteral("pt_BR"));
+		legacy.setValue(QStringLiteral("preferences/theme"), QStringLiteral("DARK"));
+		legacy.setValue(QStringLiteral("preferences/density"), QStringLiteral("COMPACT"));
+		legacy.setValue(QStringLiteral("preferences/textScalePercent"), 999);
+		legacy.setValue(QStringLiteral("preferences/highContrast"), true);
+		legacy.setValue(QStringLiteral("shell/lastMode"), QStringLiteral("packages"));
+		legacy.setValue(QStringLiteral("ai/experimentalConnectorsEnabled"), true);
+		legacy.sync();
 	}
 
+	{
+		vibestudio::StudioSettings migrated(path);
+		ok &= expect(migrated.schemaVersion() == vibestudio::StudioSettings::kSchemaVersion, "Expected a version 1 store to be migrated to the current schema.");
+		ok &= expect(!migrated.storedSchemaIsNewer() && !migrated.isReadOnly(), "Expected a migrated store to stay writable.");
+		ok &= expect(!migrated.migrationNotes().isEmpty(), "Expected the migration to be reported.");
+		const vibestudio::AccessibilityPreferences preferences = migrated.accessibilityPreferences();
+		ok &= expect(preferences.localeName == QStringLiteral("pt-BR"), "Expected the stored locale id to be normalized by the migration.");
+		ok &= expect(preferences.theme == vibestudio::StudioTheme::HighContrastDark, "Expected the retired high-contrast flag to fold into the theme.");
+		ok &= expect(preferences.density == vibestudio::UiDensity::Compact, "Expected the stored density id to be normalized.");
+		ok &= expect(preferences.textScalePercent == 200, "Expected the stored text scale to be clamped by the migration.");
+		migrated.sync();
+	}
+
+	QSettings verify(path, QSettings::IniFormat);
+	ok &= expect(verify.value(QStringLiteral("app/settingsSchemaVersion")).toInt() == vibestudio::StudioSettings::kSchemaVersion,
+		"Expected the migrated schema version to be written back.");
+	ok &= expect(verify.value(QStringLiteral("preferences/theme")).toString() == QStringLiteral("high-contrast-dark"),
+		"Expected the normalized theme id to be stored.");
+	ok &= expect(verify.value(QStringLiteral("preferences/localeName")).toString() == QStringLiteral("pt-BR"),
+		"Expected the normalized locale id to be stored.");
+	for (const QString& retiredKey : {QStringLiteral("preferences/highContrast"), QStringLiteral("shell/lastMode"), QStringLiteral("ai/experimentalConnectorsEnabled")}) {
+		ok &= expect(!verify.contains(retiredKey), "Expected retired version 1 keys to be dropped.");
+	}
+
+	// Re-opening an already migrated store must be a no-op.
+	vibestudio::StudioSettings again(path);
+	ok &= expect(again.schemaVersion() == vibestudio::StudioSettings::kSchemaVersion && again.migrationNotes().isEmpty(),
+		"Expected a second open of a current store to migrate nothing.");
+	return ok;
+}
+
+// A store written by a newer build is never reinterpreted or rewritten.
+bool runNewerStoreGuardSmoke(const QDir& root)
+{
+	bool ok = true;
+	const QString path = root.filePath(QStringLiteral("future.ini"));
+	{
+		QSettings future(path, QSettings::IniFormat);
+		future.setValue(QStringLiteral("app/settingsSchemaVersion"), vibestudio::StudioSettings::kSchemaVersion + 97);
+		future.setValue(QStringLiteral("preferences/localeName"), QStringLiteral("fr"));
+		future.sync();
+	}
+
+	{
+		vibestudio::StudioSettings guarded(path);
+		ok &= expect(guarded.schemaVersion() == vibestudio::StudioSettings::kSchemaVersion + 97, "Expected the newer stored schema version to be reported as-is.");
+		ok &= expect(guarded.storedSchemaIsNewer() && guarded.isReadOnly(), "Expected a newer store to be flagged and opened read-only.");
+		ok &= expect(!guarded.migrationNotes().isEmpty(), "Expected the newer-store refusal to be reported.");
+		guarded.setSelectedMode(7);
+		guarded.setLocaleName(QStringLiteral("de"));
+		guarded.recordRecentProject(root.filePath(QStringLiteral("Alpha Project")));
+		guarded.clearRecentProjects();
+		guarded.sync();
+	}
+
+	QSettings verify(path, QSettings::IniFormat);
+	ok &= expect(verify.value(QStringLiteral("app/settingsSchemaVersion")).toInt() == vibestudio::StudioSettings::kSchemaVersion + 97,
+		"Expected the newer schema version to survive untouched.");
+	ok &= expect(verify.value(QStringLiteral("preferences/localeName")).toString() == QStringLiteral("fr"),
+		"Expected a newer store never to be rewritten.");
+	ok &= expect(!verify.contains(QStringLiteral("shell/selectedMode")), "Expected no writes into a newer store.");
+	return ok;
+}
+
+// An oversized stored array must yield the newest entries, not the first ones.
+bool runSortThenTruncateSmoke(const QDir& root)
+{
+	bool ok = true;
+	const QString path = root.filePath(QStringLiteral("oversized.ini"));
+	const int projectCount = vibestudio::StudioSettings::kMaximumRecentProjects + 6;
+	const int taskCount = vibestudio::StudioSettings::kMaximumRecentActivityTasks + 6;
+	{
+		QSettings oversized(path, QSettings::IniFormat);
+		oversized.setValue(QStringLiteral("app/settingsSchemaVersion"), vibestudio::StudioSettings::kSchemaVersion);
+
+		// Oldest first in array order, so a truncate-before-sort read keeps
+		// exactly the wrong entries.
+		oversized.beginWriteArray(QStringLiteral("recentProjects"), projectCount);
+		for (int index = 0; index < projectCount; ++index) {
+			oversized.setArrayIndex(index);
+			oversized.setValue(QStringLiteral("path"), root.filePath(QStringLiteral("Ordered Project %1").arg(index)));
+			oversized.setValue(QStringLiteral("displayName"), QStringLiteral("Ordered Project %1").arg(index));
+			oversized.setValue(QStringLiteral("lastOpenedUtc"), QDateTime(QDate(2026, 1, 1), QTime(0, 0), QTimeZone::UTC).addDays(index));
+		}
+		oversized.endArray();
+
+		oversized.beginWriteArray(QStringLiteral("recentActivityTasks"), taskCount);
+		for (int index = 0; index < taskCount; ++index) {
+			oversized.setArrayIndex(index);
+			oversized.setValue(QStringLiteral("id"), QStringLiteral("ordered-task-%1").arg(index));
+			oversized.setValue(QStringLiteral("title"), QStringLiteral("Ordered Task %1").arg(index));
+			oversized.setValue(QStringLiteral("source"), QStringLiteral("package"));
+			oversized.setValue(QStringLiteral("state"), QStringLiteral("completed"));
+			oversized.setValue(QStringLiteral("updatedUtc"), QDateTime(QDate(2026, 1, 1), QTime(0, 0), QTimeZone::UTC).addDays(index));
+		}
+		oversized.endArray();
+		oversized.sync();
+	}
+
+	vibestudio::StudioSettings settings(path);
+	const QVector<vibestudio::RecentProject> projects = settings.recentProjects();
+	ok &= expect(projects.size() == vibestudio::StudioSettings::kMaximumRecentProjects, "Expected an oversized project array to be truncated to the cap.");
+	if (!projects.isEmpty()) {
+		ok &= expect(projects.front().displayName == QStringLiteral("Ordered Project %1").arg(projectCount - 1),
+			"Expected the most recently opened project to survive truncation.");
+		ok &= expect(projects.last().displayName == QStringLiteral("Ordered Project %1").arg(projectCount - vibestudio::StudioSettings::kMaximumRecentProjects),
+			"Expected the oldest projects to be dropped, not the newest.");
+	}
+
+	const QVector<vibestudio::RecentActivityTask> tasks = settings.recentActivityTasks();
+	ok &= expect(tasks.size() == vibestudio::StudioSettings::kMaximumRecentActivityTasks, "Expected an oversized activity array to be truncated to the cap.");
+	if (!tasks.isEmpty()) {
+		ok &= expect(tasks.front().id == QStringLiteral("ordered-task-%1").arg(taskCount - 1),
+			"Expected the most recently updated task to survive truncation.");
+		ok &= expect(tasks.last().id == QStringLiteral("ordered-task-%1").arg(taskCount - vibestudio::StudioSettings::kMaximumRecentActivityTasks),
+			"Expected the oldest tasks to be dropped, not the newest.");
+	}
+
+	// Installations use the same read path: newest first.
+	const QString firstInstall = root.filePath(QStringLiteral("Install One"));
+	const QString secondInstall = root.filePath(QStringLiteral("Install Two"));
+	if (!QDir().mkpath(firstInstall) || !QDir().mkpath(secondInstall)) {
+		return expect(false, "Expected installation fixtures to be created.");
+	}
+	vibestudio::GameInstallationProfile first;
+	first.rootPath = firstInstall;
+	first.gameKey = QStringLiteral("quake");
+	first.displayName = QStringLiteral("Install One");
+	settings.upsertGameInstallation(first);
+	vibestudio::GameInstallationProfile second;
+	second.rootPath = secondInstall;
+	second.gameKey = QStringLiteral("quake2");
+	second.displayName = QStringLiteral("Install Two");
+	settings.upsertGameInstallation(second);
+	const QVector<vibestudio::GameInstallationProfile> installations = settings.gameInstallations();
+	ok &= expect(installations.size() == 2 && installations.front().displayName == QStringLiteral("Install Two"),
+		"Expected installations to be ordered by update time.");
+	return ok;
+}
+
+// The process-wide override keeps automation and CI out of the real store.
+bool runOverrideSmoke(const QDir& root)
+{
+	bool ok = true;
+	const QString overridePath = root.filePath(QStringLiteral("override.ini"));
+	ok &= expect(vibestudio::StudioSettings::overrideFilePath().isEmpty(), "Expected no settings override by default.");
+	vibestudio::StudioSettings::setOverrideFilePath(overridePath);
+	ok &= expect(samePath(vibestudio::StudioSettings::overrideFilePath(), overridePath), "Expected the settings override to be readable back.");
+	{
+		vibestudio::StudioSettings overridden;
+		ok &= expect(samePath(overridden.storageLocation(), overridePath), "Expected the default constructor to honour the override path.");
+		overridden.setSelectedMode(4);
+		overridden.sync();
+	}
+	vibestudio::StudioSettings::setOverrideFilePath(QString());
+	ok &= expect(vibestudio::StudioSettings::overrideFilePath().isEmpty(), "Expected the settings override to be clearable.");
+	ok &= expect(QFileInfo::exists(overridePath), "Expected the override store to be the file that was written.");
+
+	vibestudio::StudioSettings reopened(overridePath);
+	ok &= expect(reopened.selectedMode() == 4, "Expected the override store to hold the written value.");
+	return ok;
+}
+
+// Long compiler logs are kept as a bounded, explicitly truncated tail.
+bool runActivityLogTruncationSmoke(const QDir& root)
+{
+	bool ok = true;
+	const QString path = root.filePath(QStringLiteral("activity.ini"));
+	const int logEntryCount = vibestudio::StudioSettings::kMaximumActivityLogEntries + 120;
+	const int transitionCount = vibestudio::StudioSettings::kMaximumActivityTransitions + 16;
+
+	vibestudio::RecentActivityTask task;
+	task.id = QStringLiteral("compiler-q3map2-bsp");
+	task.title = QStringLiteral("q3map2 BSP");
+	task.source = QStringLiteral("compiler");
+	task.state = vibestudio::OperationState::Completed;
+	task.createdUtc = QDateTime::fromString(QStringLiteral("2026-05-01T09:00:00Z"), Qt::ISODate);
+	task.updatedUtc = QDateTime::fromString(QStringLiteral("2026-05-01T09:00:30Z"), Qt::ISODate);
+	task.finishedUtc = task.updatedUtc;
+	for (int index = 0; index < logEntryCount; ++index) {
+		task.log.push_back({task.createdUtc, vibestudio::OperationState::Running, QStringLiteral("q3map2 line %1").arg(index)});
+	}
+	for (int index = 0; index < transitionCount; ++index) {
+		task.transitions.push_back({task.createdUtc, vibestudio::OperationState::Running, index, QStringLiteral("step %1").arg(index)});
+	}
+
+	vibestudio::StudioSettings settings(path);
+	settings.recordRecentActivityTask(task);
+	settings.sync();
+
+	vibestudio::StudioSettings reloaded(path);
+	const QVector<vibestudio::RecentActivityTask> tasks = reloaded.recentActivityTasks();
+	ok &= expect(tasks.size() == 1, "Expected the long-running task to persist.");
+	if (tasks.isEmpty()) {
+		return ok;
+	}
+	const vibestudio::RecentActivityTask& stored = tasks.front();
+	ok &= expect(stored.log.size() == vibestudio::StudioSettings::kMaximumActivityLogEntries, "Expected the persisted log to be capped.");
+	ok &= expect(stored.logTruncated, "Expected truncation to be recorded, not hidden.");
+	ok &= expect(stored.droppedLogEntryCount == logEntryCount - vibestudio::StudioSettings::kMaximumActivityLogEntries,
+		"Expected the number of dropped log entries to be recorded.");
+	ok &= expect(!stored.log.isEmpty() && stored.log.last().message == QStringLiteral("q3map2 line %1").arg(logEntryCount - 1),
+		"Expected the newest log lines to be the ones kept.");
+	ok &= expect(stored.transitions.size() == vibestudio::StudioSettings::kMaximumActivityTransitions, "Expected the transition timeline to be capped.");
+	ok &= expect(stored.durationMs == 30000, "Expected a missing duration to be derived from the task timestamps.");
+	return ok;
+}
+
+} // namespace
+
+int main(int argc, char** argv)
+{
+	QCoreApplication app(argc, argv);
+	QTemporaryDir tempDir;
+	if (!tempDir.isValid()) {
+		return fail("Expected a writable temporary directory.");
+	}
+	const QDir root(tempDir.path());
+
+	bool ok = true;
+	ok &= runPreferenceAndHistorySmoke(root);
+	ok &= runMigrationSmoke(root);
+	ok &= runNewerStoreGuardSmoke(root);
+	ok &= runSortThenTruncateSmoke(root);
+	ok &= runOverrideSmoke(root);
+	ok &= runActivityLogTruncationSmoke(root);
+	if (!ok) {
+		return fail("studio_settings smoke test failed.");
+	}
 	return EXIT_SUCCESS;
 }

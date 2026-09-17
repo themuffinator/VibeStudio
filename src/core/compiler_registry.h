@@ -8,6 +8,18 @@
 
 namespace vibestudio {
 
+// How much confidence VibeStudio has in the version text it recorded for a tool.
+enum class CompilerVersionProbeOutcome {
+	// The probe was not run (disabled, no executable, or unsafe to launch).
+	NotAttempted,
+	// A recognisable version banner was captured.
+	Probed,
+	// The tool produced output but no recognisable version banner; the first useful line was kept.
+	Inferred,
+	// The probe could not start, timed out, crashed, or produced nothing usable.
+	Failed,
+};
+
 struct CompilerToolDescriptor {
 	QString id;
 	QString integrationId;
@@ -17,9 +29,14 @@ struct CompilerToolDescriptor {
 	QString sourcePath;
 	QStringList executableNames;
 	QStringList candidateRelativePaths;
+	// Arguments the probe passes. An empty list still runs the tool with no arguments when
+	// versionProbeSupported is true: ericw-tools has no --version and treats an unknown option as a
+	// parse error, while running with no arguments prints the banner and usage.
 	QStringList versionProbeArguments;
 	QStringList capabilityFlags;
 	QStringList readinessWarnings;
+	// False for tools that must never be launched during discovery (GUI helpers).
+	bool versionProbeSupported = true;
 };
 
 struct CompilerToolPathOverride {
@@ -32,6 +49,9 @@ struct CompilerRegistryOptions {
 	QStringList extraSearchPaths;
 	QVector<CompilerToolPathOverride> executableOverrides;
 	bool probeVersions = true;
+	// Time allowed for the process to appear; a missing or broken executable fails fast.
+	int versionProbeStartTimeoutMs = 750;
+	// Time allowed for the probe to finish printing after it started.
 	int versionProbeTimeoutMs = 1500;
 };
 
@@ -42,6 +62,8 @@ struct CompilerToolDiscovery {
 	bool executablePathOverridden = false;
 	bool versionProbeAttempted = false;
 	bool versionAvailable = false;
+	CompilerVersionProbeOutcome versionProbeOutcome = CompilerVersionProbeOutcome::NotAttempted;
+	int versionProbeExitCode = -1;
 	QString sourcePath;
 	QString executablePath;
 	QString versionText;
@@ -60,6 +82,9 @@ struct CompilerRegistrySummary {
 
 	[[nodiscard]] OperationState overallState() const;
 };
+
+QString compilerVersionProbeOutcomeId(CompilerVersionProbeOutcome outcome);
+QString compilerVersionProbeOutcomeText(CompilerVersionProbeOutcome outcome);
 
 QVector<CompilerToolDescriptor> compilerToolDescriptors();
 bool compilerToolDescriptorForId(const QString& id, CompilerToolDescriptor* out = nullptr);

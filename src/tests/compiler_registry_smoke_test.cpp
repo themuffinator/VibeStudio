@@ -1,5 +1,6 @@
 #include "core/compiler_registry.h"
 
+#include <QCoreApplication>
 #include <QDir>
 #include <QFile>
 #include <QTemporaryDir>
@@ -56,23 +57,50 @@ const vibestudio::CompilerToolDiscovery* discoveryById(const QVector<vibestudio:
 
 } // namespace
 
-int main()
+int main(int argc, char** argv)
 {
+	QCoreApplication app(argc, argv);
+	const QStringList appArgs = QCoreApplication::arguments();
+	// ZDBSP supports "-V/--version" (external/compilers/zdbsp/main.cpp); q3map2 only has "-help".
+	if (appArgs.contains(QStringLiteral("-V"))) {
+		std::cout << "ZDBSP 1.19 (fake build)\n";
+		return EXIT_SUCCESS;
+	}
+	if (appArgs.contains(QStringLiteral("-help"))) {
+		std::cout << "this fake tool prints no version information\n";
+		return EXIT_SUCCESS;
+	}
+
 	const QVector<vibestudio::CompilerToolDescriptor> descriptors = vibestudio::compilerToolDescriptors();
 	if (descriptors.size() < 9) {
 		return fail("Expected compiler descriptors for imported tools.");
 	}
 
+	const vibestudio::CompilerToolDescriptor* qbsp = descriptorById(descriptors, QStringLiteral("ericw-qbsp"));
 	const vibestudio::CompilerToolDescriptor* bspinfo = descriptorById(descriptors, QStringLiteral("ericw-bspinfo"));
 	const vibestudio::CompilerToolDescriptor* bsputil = descriptorById(descriptors, QStringLiteral("ericw-bsputil"));
 	const vibestudio::CompilerToolDescriptor* lightpreview = descriptorById(descriptors, QStringLiteral("ericw-lightpreview"));
-	if (!bspinfo || !bsputil || !lightpreview) {
+	const vibestudio::CompilerToolDescriptor* zdbsp = descriptorById(descriptors, QStringLiteral("zdbsp"));
+	if (!qbsp || !bspinfo || !bsputil || !lightpreview || !zdbsp) {
 		return fail("Expected first-class ericw helper descriptors.");
 	}
+	// ericw-tools has no --version: an unknown option prints help and still exits 0, and
+	// "bspinfo --help" would try to open "--help.bsp". Probing with no arguments is the honest form.
+	if (!qbsp->versionProbeArguments.isEmpty() || !qbsp->versionProbeSupported) {
+		return fail("Expected the ericw qbsp probe to run with no arguments.");
+	}
+	if (!bspinfo->versionProbeArguments.isEmpty() || !bspinfo->versionProbeSupported) {
+		return fail("Expected the bspinfo probe to stop passing --help.");
+	}
+	if (!bsputil->versionProbeArguments.isEmpty() || !bsputil->versionProbeSupported) {
+		return fail("Expected the bsputil probe to stop passing --help.");
+	}
+	if (zdbsp->versionProbeArguments != QStringList{QStringLiteral("-V")}) {
+		return fail("Expected ZDBSP to be probed with its real version flag.");
+	}
 	if (!bspinfo->capabilityFlags.contains(QStringLiteral("upstream-issue-225"))
-		|| !bspinfo->capabilityFlags.contains(QStringLiteral("upstream-issue-289"))
-		|| bspinfo->versionProbeArguments.isEmpty()) {
-		return fail("Expected bspinfo issue capabilities and help probe.");
+		|| !bspinfo->capabilityFlags.contains(QStringLiteral("upstream-issue-289"))) {
+		return fail("Expected bspinfo issue capabilities.");
 	}
 	if (!bsputil->capabilityFlags.contains(QStringLiteral("argument-parser-risk"))
 		|| !bsputil->capabilityFlags.contains(QStringLiteral("upstream-issue-435"))
@@ -81,7 +109,7 @@ int main()
 	}
 	if (!lightpreview->capabilityFlags.contains(QStringLiteral("platform-launch-risk"))
 		|| !lightpreview->capabilityFlags.contains(QStringLiteral("temp-dir-risk"))
-		|| !lightpreview->versionProbeArguments.isEmpty()
+		|| lightpreview->versionProbeSupported
 		|| lightpreview->readinessWarnings.isEmpty()) {
 		return fail("Expected lightpreview launch/temp readiness metadata without an unsafe probe.");
 	}
@@ -125,6 +153,7 @@ int main()
 	if (!bspinfoDiscovery
 		|| !bspinfoDiscovery->executableAvailable
 		|| bspinfoDiscovery->executablePath != QDir::cleanPath(fakeBspinfoPath)
+		|| bspinfoDiscovery->versionProbeOutcome != vibestudio::CompilerVersionProbeOutcome::NotAttempted
 		|| !bspinfoDiscovery->warnings.join('\n').contains(QStringLiteral("operation-level bspinfo diagnostics"))) {
 		return fail("Expected fake bspinfo helper discovery with readiness warning.");
 	}
@@ -150,6 +179,50 @@ int main()
 	}
 	if (!overrideApplied) {
 		return fail("Expected configured executable override to win discovery.");
+	}
+
+	const QString notAnExecutable = root.filePath(QStringLiteral("not-an-executable.bin"));
+	if (!touchFile(notAnExecutable)) {
+		return fail("Expected non-executable fixture.");
+	}
+	vibestudio::CompilerRegistryOptions probeOptions;
+	probeOptions.workspaceRootPath = tempDir.path();
+	probeOptions.probeVersions = true;
+	probeOptions.versionProbeStartTimeoutMs = 750;
+	probeOptions.versionProbeTimeoutMs = 4000;
+	probeOptions.executableOverrides.push_back({QStringLiteral("zdbsp"), QCoreApplication::applicationFilePath()});
+	probeOptions.executableOverrides.push_back({QStringLiteral("q3map2"), QCoreApplication::applicationFilePath()});
+	probeOptions.executableOverrides.push_back({QStringLiteral("zokumbsp"), notAnExecutable});
+	const vibestudio::CompilerRegistrySummary probeSummary = vibestudio::discoverCompilerTools(probeOptions);
+
+	const vibestudio::CompilerToolDiscovery* zdbspProbe = discoveryById(probeSummary.tools, QStringLiteral("zdbsp"));
+	if (!zdbspProbe
+		|| zdbspProbe->versionProbeOutcome != vibestudio::CompilerVersionProbeOutcome::Probed
+		|| !zdbspProbe->versionAvailable
+		|| !zdbspProbe->versionText.contains(QStringLiteral("ZDBSP 1.19"))) {
+		return fail("Expected a recognizable version banner to be reported as probed.");
+	}
+	const vibestudio::CompilerToolDiscovery* q3map2Probe = discoveryById(probeSummary.tools, QStringLiteral("q3map2"));
+	if (!q3map2Probe
+		|| q3map2Probe->versionProbeOutcome != vibestudio::CompilerVersionProbeOutcome::Inferred
+		|| q3map2Probe->versionAvailable
+		|| q3map2Probe->versionProbeExitCode != 0) {
+		return fail("Expected output without a version banner to be reported as inferred, not successful.");
+	}
+	const vibestudio::CompilerToolDiscovery* zokumProbe = discoveryById(probeSummary.tools, QStringLiteral("zokumbsp"));
+	if (!zokumProbe
+		|| zokumProbe->versionProbeOutcome != vibestudio::CompilerVersionProbeOutcome::Failed
+		|| zokumProbe->versionAvailable) {
+		return fail("Expected an unusable probe target to be reported as failed.");
+	}
+	const vibestudio::CompilerToolDiscovery* lightpreviewProbe = discoveryById(probeSummary.tools, QStringLiteral("ericw-lightpreview"));
+	if (!lightpreviewProbe
+		|| lightpreviewProbe->versionProbeAttempted
+		|| lightpreviewProbe->versionProbeOutcome != vibestudio::CompilerVersionProbeOutcome::NotAttempted) {
+		return fail("Expected the GUI lightpreview helper never to be launched by a probe.");
+	}
+	if (!vibestudio::compilerRegistrySummaryText(probeSummary).contains(vibestudio::compilerVersionProbeOutcomeText(vibestudio::CompilerVersionProbeOutcome::Probed))) {
+		return fail("Expected the registry report to state the version probe outcome.");
 	}
 
 	return EXIT_SUCCESS;

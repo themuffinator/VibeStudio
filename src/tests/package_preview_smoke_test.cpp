@@ -1,3 +1,5 @@
+#include "core/asset_tools.h"
+#include "core/idtech_image.h"
 #include "core/package_archive.h"
 #include "core/package_preview.h"
 
@@ -89,6 +91,49 @@ QByteArray md2Fixture()
 	return data;
 }
 
+// An MD3 that declares three surfaces but only carries one, so the surface walk
+// has to admit the counts are partial instead of reporting them as totals.
+// md3Header_t/md3Surface_t layout: Quake III md3.h.
+QByteArray truncatedMd3Fixture()
+{
+	QByteArray header(108, '\0');
+	header.replace(0, 4, "IDP3");
+	writeLe32(&header, 4, 15); // MD3_VERSION
+	header.replace(8, 11, "models/test");
+	writeLe32(&header, 76, 1); // numFrames
+	writeLe32(&header, 80, 0); // numTags
+	writeLe32(&header, 84, 3); // numSurfaces
+	writeLe32(&header, 88, 0); // numSkins
+	writeLe32(&header, 92, 108); // ofsFrames
+	writeLe32(&header, 96, 108); // ofsTags
+	writeLe32(&header, 100, 108); // ofsSurfaces
+	writeLe32(&header, 104, 216); // ofsEnd
+
+	QByteArray surface(108, '\0');
+	surface.replace(0, 4, "IDP3");
+	surface.replace(4, 5, "torso");
+	writeLe32(&surface, 72, 1); // numFrames
+	writeLe32(&surface, 76, 1); // numShaders
+	writeLe32(&surface, 80, 10); // numVerts
+	writeLe32(&surface, 84, 6); // numTriangles
+	writeLe32(&surface, 104, 108); // ofsEnd
+
+	return header + surface;
+}
+
+// Quake "qpic" lump: int width, int height, byte indices[width * height].
+QByteArray quakeLumpFixture(int width, int height)
+{
+	QByteArray data;
+	data.resize(8);
+	writeLe32(&data, 0, static_cast<quint32>(width));
+	writeLe32(&data, 4, static_cast<quint32>(height));
+	for (int index = 0; index < width * height; ++index) {
+		data.append(static_cast<char>(index % 200));
+	}
+	return data;
+}
+
 } // namespace
 
 int main()
@@ -106,11 +151,39 @@ int main()
 	ok &= expect(writeFile(dir.filePath(QStringLiteral("scripts/autoexec.cfg")), QByteArray("bind SPACE +jump\n// WARNING fixture\n")), "CFG fixture should be written");
 	ok &= expect(writeFile(dir.filePath(QStringLiteral("sound/pickup.wav")), wavFixture()), "WAV fixture should be written");
 	ok &= expect(writeFile(dir.filePath(QStringLiteral("models/player.md2")), md2Fixture()), "MD2 fixture should be written");
+	ok &= expect(writeFile(dir.filePath(QStringLiteral("models/partial.md3")), truncatedMd3Fixture()), "MD3 fixture should be written");
 	ok &= expect(writeFile(dir.filePath(QStringLiteral("binary.dat")), QByteArray::fromHex("00010203fffefd")), "binary fixture should be written");
 
 	QImage image(2, 3, QImage::Format_ARGB32);
 	image.fill(qRgba(10, 20, 30, 255));
 	ok &= expect(image.save(dir.filePath(QStringLiteral("textures/tiny.png")), "PNG"), "image fixture should be written");
+
+	ok &= expect(dir.mkpath(QStringLiteral("gfx")), "gfx directory should be created");
+	const QByteArray lumpBytes = quakeLumpFixture(24, 12);
+	ok &= expect(writeFile(dir.filePath(QStringLiteral("gfx/menu.lmp")), lumpBytes), "LMP fixture should be written");
+
+	// Drop a real 768-byte palette where the resolver looks for it, so the
+	// preview must report a package palette rather than the generated fallback.
+	QString paletteCandidate;
+	for (const QString& candidate : idTechPaletteCandidatePaths(defaultIdTechPaletteIdForFormat(IdTechImageFormat::QuakeLump))) {
+		if (candidate.endsWith(QStringLiteral(".lmp"), Qt::CaseInsensitive)) {
+			paletteCandidate = candidate;
+			break;
+		}
+	}
+	if (!paletteCandidate.isEmpty()) {
+		const int slash = paletteCandidate.lastIndexOf('/');
+		if (slash > 0) {
+			ok &= expect(dir.mkpath(paletteCandidate.left(slash)), "palette directory should be created");
+		}
+		QByteArray paletteBytes;
+		for (int index = 0; index < 256; ++index) {
+			paletteBytes.append(static_cast<char>(index));
+			paletteBytes.append(static_cast<char>((index * 5) % 256));
+			paletteBytes.append(static_cast<char>((index * 9) % 256));
+		}
+		ok &= expect(writeFile(dir.filePath(paletteCandidate), paletteBytes), "palette fixture should be written");
+	}
 
 	PackageArchive archive;
 	QString error;
@@ -138,16 +211,61 @@ int main()
 	ok &= expect(!cfgPreview.textHighlightLines.isEmpty(), "CFG highlights should be populated");
 	ok &= expect(!cfgPreview.textDiagnosticLines.isEmpty(), "CFG diagnostics should be populated");
 
+	const PackagePreview lumpPreview = buildPackageEntryPreview(archive, QStringLiteral("gfx/menu.lmp"));
+	ok &= expect(lumpPreview.kind == PackagePreviewKind::Image, "LMP preview kind mismatch");
+	ok &= expect(lumpPreview.imageIdTechFormat, "LMP preview should report an idTech format");
+	ok &= expect(lumpPreview.imageSize == QSize(24, 12), "LMP preview size mismatch");
+	ok &= expect(!lumpPreview.imagePixels.isNull(), "LMP preview should carry decoded pixels");
+	ok &= expect(lumpPreview.imagePixels.size() == QSize(24, 12), "LMP preview pixel size mismatch");
+	ok &= expect(lumpPreview.imagePaletteAware, "LMP preview should be palette-aware");
+	ok &= expect(!lumpPreview.imagePaletteId.isEmpty(), "LMP preview should name the palette it used");
+	if (!paletteCandidate.isEmpty()) {
+		ok &= expect(lumpPreview.imagePaletteFromPackage, "LMP preview should use the palette shipped in the package");
+		ok &= expect(!lumpPreview.imagePaletteGenerated, "a package palette must not be reported as generated");
+		ok &= expect(!lumpPreview.imagePaletteResolutionLines.isEmpty(), "palette resolution lines should be populated");
+	}
+
+	// An image entry must still decode when the generic sampling limit is tiny.
+	const PackagePreview smallLimitImagePreview = buildPackageEntryPreview(archive, QStringLiteral("gfx/menu.lmp"), 8);
+	ok &= expect(smallLimitImagePreview.kind == PackagePreviewKind::Image, "byte-limited image preview kind mismatch");
+	ok &= expect(smallLimitImagePreview.bytesRead == lumpBytes.size(), "an image preview should read the whole entry");
+	ok &= expect(!smallLimitImagePreview.imagePixels.isNull(), "a byte-limited image preview should still decode pixels");
+	ok &= expect(!smallLimitImagePreview.truncated, "an image preview read in full is not truncated");
+
+	// Non-image entries keep the generic byte limit.
+	const PackagePreview smallLimitBinaryPreview = buildPackageEntryPreview(archive, QStringLiteral("models/player.md2"), 16);
+	ok &= expect(smallLimitBinaryPreview.bytesRead == 16, "non-image previews should honour the byte limit");
+	ok &= expect(smallLimitBinaryPreview.truncated, "non-image truncation should still be reported");
+
 	const PackagePreview wavPreview = buildPackageEntryPreview(archive, QStringLiteral("sound/pickup.wav"));
 	ok &= expect(wavPreview.kind == PackagePreviewKind::Audio, "WAV preview kind mismatch");
 	ok &= expect(wavPreview.audioFormat == QStringLiteral("WAV"), "WAV preview format mismatch");
 	ok &= expect(!wavPreview.audioWaveformLines.isEmpty(), "WAV waveform should be populated");
+	ok &= expect(wavPreview.audioPeaks.valid, "WAV preview should carry decoded peaks");
+	ok &= expect(wavPreview.audioPeaks.channels == 1, "WAV preview peak channel count mismatch");
+	ok &= expect(wavPreview.audioChannels == 1, "WAV preview channel count mismatch");
+	ok &= expect(wavPreview.audioSampleRate == 22050, "WAV preview sample rate mismatch");
+	ok &= expect(wavPreview.audioBitsPerSample == 16, "WAV preview bit depth mismatch");
+	ok &= expect(wavPreview.audioPeaks.frameCount == 4, "WAV preview frame count mismatch");
 
 	const PackagePreview modelPreview = buildPackageEntryPreview(archive, QStringLiteral("models/player.md2"));
 	ok &= expect(modelPreview.kind == PackagePreviewKind::Model, "MD2 preview kind mismatch");
 	ok &= expect(modelPreview.modelFormat == QStringLiteral("MD2"), "MD2 model format mismatch");
 	ok &= expect(!modelPreview.modelViewportLines.isEmpty(), "MD2 viewport metadata should be populated");
 	ok &= expect(!modelPreview.modelMaterialLines.isEmpty(), "MD2 material metadata should be populated");
+	ok &= expect(!modelPreview.modelCountsPartial, "a complete MD2 should not be flagged as partial");
+
+	const PackagePreview md3Preview = buildPackageEntryPreview(archive, QStringLiteral("models/partial.md3"));
+	ok &= expect(md3Preview.kind == PackagePreviewKind::Model, "MD3 preview kind mismatch");
+	ok &= expect(md3Preview.modelFormat == QStringLiteral("MD3"), "MD3 model format mismatch");
+	ok &= expect(md3Preview.modelCountsPartial, "a short MD3 surface walk must be reported as partial");
+	bool sawPartialNote = false;
+	for (const QString& line : md3Preview.modelMaterialLines) {
+		if (line.contains(QStringLiteral("Surface walk incomplete"))) {
+			sawPartialNote = true;
+		}
+	}
+	ok &= expect(sawPartialNote, "the MD3 preview should say the surface walk is incomplete");
 
 	const PackagePreview binaryPreview = buildPackageEntryPreview(archive, QStringLiteral("binary.dat"));
 	ok &= expect(binaryPreview.kind == PackagePreviewKind::Binary, "binary preview kind mismatch");

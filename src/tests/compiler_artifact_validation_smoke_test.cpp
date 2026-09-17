@@ -44,6 +44,17 @@ QByteArray minimalQuake3Bsp()
 	return bytes;
 }
 
+QByteArray minimalQbismBsp()
+{
+	QByteArray bytes(8 + 19 * 8, '\0');
+	bytes[0] = 'Q';
+	bytes[1] = 'B';
+	bytes[2] = 'S';
+	bytes[3] = 'P';
+	qToLittleEndian<qint32>(38, reinterpret_cast<uchar*>(bytes.data() + 4));
+	return bytes;
+}
+
 QByteArray hexen2AlignedQuakeHeader()
 {
 	QByteArray bytes = minimalQuakeBsp();
@@ -113,6 +124,34 @@ int main(int argc, char** argv)
 		return fail("Expected rough BSP family mismatch warning for ericw profile.");
 	}
 
+	// "-qbism" is a real qbsp target flag; substring matching on "q2bsp"/"quake2" used to miss it
+	// and flag valid Qbism output as a family mismatch (ericw-tools qbsp/qbsp.cc).
+	const QString qbismPath = root.filePath(QStringLiteral("maps/qbism.bsp"));
+	if (!writeFile(qbismPath, minimalQbismBsp())) {
+		return fail("Expected Qbism BSP fixture.");
+	}
+	vibestudio::CompilerCommandManifest qbismManifest = manifestForOutput(qbismPath);
+	qbismManifest.arguments = {QStringLiteral("-qbism")};
+	const vibestudio::CompilerArtifactValidationReport qbismReport = vibestudio::validateCompilerArtifacts(qbismManifest);
+	if (qbismReport.hasErrors() || containsText(qbismReport.warnings, QStringLiteral("does not match the selected compiler profile"))) {
+		return fail("Expected qbsp -qbism output to validate as a Quake II family BSP.");
+	}
+	vibestudio::CompilerCommandManifest qbismWithoutFlagManifest = manifestForOutput(qbismPath);
+	if (!containsText(vibestudio::validateCompilerArtifacts(qbismWithoutFlagManifest).warnings, QStringLiteral("does not match the selected compiler profile"))) {
+		return fail("Expected Qbism output without a Quake II target flag to still be flagged.");
+	}
+
+	// "-convert quake2" is a conversion value, not a Quake II target flag.
+	const QString convertedPath = root.filePath(QStringLiteral("maps/converted.bsp"));
+	if (!writeFile(convertedPath, minimalQuakeBsp())) {
+		return fail("Expected converted BSP fixture.");
+	}
+	vibestudio::CompilerCommandManifest convertedManifest = manifestForOutput(convertedPath);
+	convertedManifest.arguments = {QStringLiteral("-convert"), QStringLiteral("quake2")};
+	if (containsText(vibestudio::validateCompilerArtifacts(convertedManifest).warnings, QStringLiteral("does not match the selected compiler profile"))) {
+		return fail("Expected a -convert value not to be mistaken for a Quake II target flag.");
+	}
+
 	const QString hexenPath = root.filePath(QStringLiteral("maps/hexenish.bsp"));
 	if (!writeFile(hexenPath, hexen2AlignedQuakeHeader())) {
 		return fail("Expected Hexen2-style BSP fixture.");
@@ -120,6 +159,17 @@ int main(int argc, char** argv)
 	const vibestudio::CompilerArtifactValidationReport hexenReport = vibestudio::validateCompilerArtifacts(manifestForOutput(hexenPath));
 	if (!containsText(hexenReport.warnings, QStringLiteral("#278"))) {
 		return fail("Expected Hexen2-style model layout warning linked to #278.");
+	}
+	// "-hexen2" is the real flag; "h2bsp" is not an ericw-tools option at all.
+	vibestudio::CompilerCommandManifest hexenFlagManifest = manifestForOutput(hexenPath);
+	hexenFlagManifest.arguments = {QStringLiteral("-hexen2")};
+	if (containsText(vibestudio::validateCompilerArtifacts(hexenFlagManifest).warnings, QStringLiteral("Hexen II"))) {
+		return fail("Expected an explicit -hexen2 request to suppress the Hexen II layout warning.");
+	}
+	vibestudio::CompilerCommandManifest fakeHexenFlagManifest = manifestForOutput(hexenPath);
+	fakeHexenFlagManifest.arguments = {QStringLiteral("-h2bsp")};
+	if (!containsText(vibestudio::validateCompilerArtifacts(fakeHexenFlagManifest).warnings, QStringLiteral("Hexen II"))) {
+		return fail("Expected a non-existent h2bsp flag not to suppress the Hexen II layout warning.");
 	}
 
 	const QString bspxPath = root.filePath(QStringLiteral("maps/light.bsp"));
@@ -131,6 +181,18 @@ int main(int argc, char** argv)
 	const vibestudio::CompilerArtifactValidationReport bspxReport = vibestudio::validateCompilerArtifacts(bspxManifest);
 	if (!containsText(bspxReport.warnings, QStringLiteral("#309")) || !containsText(bspxReport.warnings, QStringLiteral("#399")) || !containsText(bspxReport.warnings, QStringLiteral("#415")) || !containsText(bspxReport.warnings, QStringLiteral("#249"))) {
 		return fail("Expected missing BSPX lightmap metadata warnings linked to #309/#399/#415/#249.");
+	}
+
+	// "-bspx" is a bare flag; the old needle "-bspx " (with a trailing space) matched no real option.
+	const QString bspxFlagPath = root.filePath(QStringLiteral("maps/bspxflag.bsp"));
+	if (!writeFile(bspxFlagPath, minimalQuakeBsp())) {
+		return fail("Expected bare -bspx fixture.");
+	}
+	vibestudio::CompilerCommandManifest bspxFlagManifest = manifestForOutput(bspxFlagPath, QStringLiteral("ericw-light"));
+	bspxFlagManifest.arguments = {QStringLiteral("-bspx")};
+	const vibestudio::CompilerArtifactValidationReport bspxFlagReport = vibestudio::validateCompilerArtifacts(bspxFlagManifest);
+	if (!containsText(bspxFlagReport.warnings, QStringLiteral("RGBLIGHTING")) || !containsText(bspxFlagReport.warnings, QStringLiteral("LIGHTINGDIR"))) {
+		return fail("Expected a bare -bspx request to expect both BSPX lightmap lumps.");
 	}
 
 	const QString truncatedPath = root.filePath(QStringLiteral("maps/truncated.bsp"));

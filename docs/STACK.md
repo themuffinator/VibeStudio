@@ -16,6 +16,7 @@ rendering portability, source editing, media handling, search, or automation.
 | Primary language | C++20 | Active | Fits idTech-era native tooling, Qt, compilers, binary formats, and high-performance editors. |
 | Application framework | [Qt 6](https://doc.qt.io/qt-6/) | Active | Mature cross-platform desktop framework with UI, networking, settings, processes, models, threading, and deployment support. |
 | Primary UI | [Qt Widgets](https://doc.qt.io/qt-6/qtwidgets-index.html) | Active | Best fit for dense production tools, dockable panes, model/view data, custom inspectors, and native desktop behavior. |
+| Meta-object system | `Q_OBJECT` plus Meson's `qt6.preprocess` moc step for the app layer | Active | Enabled this round. `Q_OBJECT` gives every shell class its own `tr()` translation context and real signals/slots; both are required now that strings are translated at run time and custom widgets emit selection and activation signals. Core stays moc-free and translates through `QCoreApplication::translate` with explicit contexts. |
 | Shell UI primitives | Reusable Qt Widgets loading panes, detail drawers, and shared shell semantics | Active | Shared shell components now cover operation state, progress, reduced-motion loading placeholders, collapsible details for logs, metadata, manifests, raw diagnostics, non-color status chip semantics, shortcut metadata, and command-palette entries. |
 | Rich animated surfaces | [Qt Quick/QML](https://doc.qt.io/qt-6/qtquick-index.html) | Planned, bounded | Use for contained high-value surfaces only, such as onboarding, visual status views, or graph-like experiences. Do not rewrite the shell around QML without a migration plan. |
 | Build system | [Meson](https://mesonbuild.com/) + [Ninja](https://ninja-build.org/) | Active | Fast, readable, cross-platform, and suitable for CI. |
@@ -25,17 +26,19 @@ rendering portability, source editing, media handling, search, or automation.
 | Accessibility | [Qt Accessibility](https://doc.qt.io/qt-6/accessible.html), OS accessibility settings, accessible custom widgets | Active/planned | Shell preference storage and accessible control metadata are active; deeper workflow audits and custom-widget coverage are planned. |
 | Scaling | [Qt High DPI](https://doc.qt.io/qt-6/highdpi.html), layout-driven UI, app text scale preferences | Active/planned | Shell text scale presets are active; broader high-DPI and layout smoke coverage is planned. |
 | Text to speech | [Qt TextToSpeech](https://doc.qt.io/qt-6/qttexttospeech-index.html) | Planned optional module | TTS enablement preference is active; native OS speech playback for task summaries, diagnostics, setup guidance, and warnings is planned. |
-| Localization | [Qt internationalization](https://doc.qt.io/qt-6/internationalization.html), Qt Linguist, `QTranslator`, `QLocale` | Active/planned | Locale preference storage, shared 20-language target metadata, seed TS catalogs, pseudo-localization, Arabic/Urdu RTL smoke, `QLocale` formatting, pluralization samples, expansion stress and layout-budget smoke checks, stale/untranslated catalog reporting, and dry-run `lupdate` extraction validation are active; runtime `QTranslator` loading and translated release bundles remain planned. |
+| Localization | [Qt internationalization](https://doc.qt.io/qt-6/internationalization.html), Qt Linguist, `lrelease` at build time, `QTranslator` at run time, `QLocale` | Active | Runtime loading landed this round: `i18n/meson.build` compiles each checked-in `.ts` catalog to a `.qm` with `lrelease`, and `installStudioTranslations` resolves and installs the catalog with `QTranslator`, falling back from the exact locale to the base language to the source language and applying layout direction per locale. `lrelease` is optional, so a toolchain without it still builds and simply runs in the source language. Locale preference storage, pseudo-localization, RTL smoke, `QLocale` formatting, pluralization and expansion samples, stale/untranslated reporting, and dry-run `lupdate` validation remain active; finished translations are still seed catalogs. |
 | Asset index/search | [SQLite](https://sqlite.org/) through [Qt SQL](https://doc.qt.io/qt-6/qtsql-index.html), with [FTS5](https://sqlite.org/fts5.html) where available | Planned | Lightweight local database for project metadata, dependencies, search, diagnostics, and recent activity. |
 | CLI parser | Lightweight Qt `QStringList` router with in-process command registry; [CLI11](https://github.com/CLIUtils/CLI11) deferred | Active | Current router keeps project/package/install/asset/map/shader/sprite/code/extension/compiler/AI/credits subcommands dependency-free with JSON output, quiet/verbose/watch/task-state switches, stable exit codes, and testable command metadata through `cli commands`; CLI11 remains deferred until shell completion and broader validation justify the dependency. |
 | Task execution | Qt `QProcess`, threads, signals, and a VibeStudio task model | Active/planned | The reusable operation-state model, shell activity center, compiler process runner, captured logs, cancellation plumbing, and run manifests are active; broader thread-pool/future integration is planned. |
-| Package/archive layer | PakFu-derived C++ services plus focused format readers and deterministic writers | Active | Package/archive interfaces, virtual path safety, read-only folder/PAK/WAD/ZIP/PK3 entry readers, text/image/model/audio/script metadata previews, safe extraction reports, staged write-back, package manifests, and deterministic PAK/ZIP/PK3/tested PWAD save-as writers are active. |
+| Package/archive layer | PakFu-derived C++ services plus focused format readers and deterministic writers | Active | Package/archive interfaces, virtual path safety, read-only folder/PAK/WAD/ZIP/PK3 entry readers, text/image/model/audio/script metadata previews, safe extraction reports, staged write-back, package manifests, and deterministic PAK/ZIP/PK3/WAD save-as writers are active. |
+| Compression codec | In-tree DEFLATE in `src/core/deflate.{h,cpp}`; zlib and miniz declined | Active | Chosen this round over adding a third-party codec. Reading real PK3s requires inflate, and writing them well requires deflate, but a bundled or system compression library costs a packaging story, a license entry, and a platform matrix on every target. The implementation follows RFC 1951, RFC 1950, and the ZIP appnote's CRC-32, is bounds-checked against hostile input, and is deterministic so archives reproduce. Trade-off stated plainly: the decoder handles stored, fixed-Huffman, and dynamic-Huffman blocks, but the *encoder* emits stored and fixed-Huffman blocks only, so a PK3 VibeStudio writes is larger than the same content packed by zlib. Entries that would not shrink are stored verbatim instead. |
 | Level-map services | Native C++ parser/editor model over Doom WAD lumps and Quake-family `.map` text | Active | Provides shared GUI/CLI map inspection, entity/texture/statistics/validation surfaces, safe MVP edits, undo/redo, non-destructive save-as, and compiler profile handoff without adding a rendering dependency yet. |
 | Advanced Studio services | Native C++ services for shader scripts, sprite workflow plans, code indexing, extension manifests, and staged AI creation proposals | Active | Provides shared GUI/CLI coverage for idTech3 shader graph data, stage edits, mounted texture validation, Doom/Quake sprite planning, source tree diagnostics, extension trust/sandbox command plans, and reviewable prompt-to-creation workflows without new dependencies. |
-| 2D editor rendering | Custom Qt Widgets, `QPainter`, and Qt Graphics View where useful | Planned | Fast path to responsive map views, sprite/texture surfaces, overlays, and inspectable editor state. |
+| 2D editor rendering | Custom `QWidget` subclasses painted with `QPainter` | Active | Chosen this round over Qt Graphics View and over an early GPU backend. The map viewport, image and palette views, waveform view, and the composition/pipeline/timeline charts are all hand-painted widgets, so 2D rendering needs no Qt module beyond Widgets and no third-party renderer. |
+| Headless map rendering | Deterministic SVG generated as text by `src/core/map_render.cpp` | Active | Chosen this round so a map picture is available from the CLI, from generated documentation, and from CI without a display or a GUI session. It is pure string generation, shares `map_geometry` with the painted viewport, and produces byte-identical output for the same input. |
 | Early 3D preview | Qt `QOpenGLWidget` behind a renderer interface | Planned | Acceptable for MVP preview work while keeping the future backend replaceable. |
-| Long-term 3D rendering | [bgfx](https://bkaradzic.github.io/bgfx/overview.html) behind a renderer abstraction | Planned | Cross-platform renderer backend for durable editor viewports across Direct3D, Metal, Vulkan, and OpenGL-style platforms. |
-| Text editing | Qt text widgets first, then [KSyntaxHighlighting](https://api.kde.org/frameworks/syntax-highlighting/html/index.html) and [Tree-sitter](https://tree-sitter.github.io/tree-sitter/) | Active/planned | Local CFG, shader, QuakeC, and idTech text highlighter/diagnostic boundaries plus project find/replace are active; KSyntaxHighlighting and Tree-sitter remain deferred until packaging and parser value justify dependencies. |
+| Long-term 3D rendering | [bgfx](https://bkaradzic.github.io/bgfx/overview.html) behind a renderer abstraction | Deferred | Still the intended backend for 3D editor viewports, and still not linked. The 2D work this round deliberately did not pull it in: nothing in the map, texture, audio, or chart surfaces needs a GPU abstraction yet, and adding one would cost packaging and platform work for no current user-visible gain. |
+| Text editing | [`QSyntaxHighlighter`](https://doc.qt.io/qt-6/qsyntaxhighlighter.html) with data-driven language rules; [KSyntaxHighlighting](https://api.kde.org/frameworks/syntax-highlighting/html/index.html) and [Tree-sitter](https://tree-sitter.github.io/tree-sitter/) deferred | Active | Chosen this round. `StudioSyntaxHighlighter` builds its rules from `StudioLanguageDescriptor` records, so plain text, config, idTech3 shader scripts, QuakeC, `.map` source, entity definitions, INI-style key-value files, and JSON are described as data rather than as widget code, and a new language is a new descriptor. Colours come from the active studio theme so high-contrast stays readable. KSyntaxHighlighting and Tree-sitter remain deferred until packaging cost and incremental-parsing value justify the dependencies. |
 | Language services | LSP client architecture | Planned | Allows QuakeC, C/C++, shader/config helpers, and future language tools without hardwiring one parser model. |
 | Audio | Qt metadata/playback candidates first, [miniaudio](https://miniaud.io/) for low-level decode/playback/waveform gaps | Active/planned | WAV metadata, platform-codec playback candidacy, waveform summaries, and WAV export are active; miniaudio remains the planned portable fallback for compressed decoding and richer editing. |
 | Model formats | Native idTech loaders, optional [Assimp](https://www.assimp.org/) for adjacent import/export | Active/planned | Native MDL/MD2/MD3 metadata, skin/material dependency, animation-name, and fallback loader boundaries are active; Assimp remains optional for future adjacent import/export. |
@@ -56,6 +59,21 @@ studio shell with dockable panels, inspectors, tree views, lists, logs, tables,
 property editors, and long-lived desktop workflows. Qt Quick/QML is allowed for
 contained surfaces where animation, transitions, or scene-graph composition
 clearly improve the user experience.
+
+The application layer now uses Qt's meta-object system. `src/meson.build` runs
+`qt6.preprocess` over the app headers, and `Q_OBJECT` is declared by
+`ApplicationShell`, `MapViewport`, the asset views, the studio charts, the
+command registry and palette, and the syntax highlighter. Two things drove
+that: `Q_OBJECT` gives each class its own `tr()` context, which is what makes
+per-class translation contexts work now that catalogs load at run time; and the
+custom widgets need real signals, because a painted viewport that reports a
+picked object has no Qt-provided notification to reuse.
+
+The core library stays moc-free. It links Qt Core and Gui only, declares no
+`Q_OBJECT`, and translates through `QCoreApplication::translate` with explicit
+context strings such as `VibeStudioIdTechImage`. Keeping the boundary there
+means core stays usable from the CLI and from tests without dragging in the
+widget stack.
 
 Meson and Ninja remain canonical. Do not add CMake as a parallel first-class
 build system for VibeStudio-owned code. External compiler projects may keep
@@ -104,14 +122,26 @@ for tests.
 
 Recommended progression:
 
-1. MVP 2D surfaces: custom Qt Widgets and `QPainter`.
+1. MVP 2D surfaces: custom Qt Widgets and `QPainter`. **Done.** The map
+   viewport, image and palette views, waveform view, and the studio charts are
+   `QWidget` subclasses that paint in `paintEvent`. No Qt Graphics View scene,
+   no GPU context, and no extra Qt module are involved.
 2. Early 3D previews: `QOpenGLWidget` through a thin `RenderBackend` interface.
+   Not started; `QOpenGLWidget` is not linked.
 3. Production 3D/editor viewports: bgfx backend once map/model previews need
    durable cross-platform rendering, batching, materials, and GPU portability.
+   Still deferred, and deliberately not pulled forward by the 2D work.
+
+Headless rendering is a separate path, not a fallback for the widgets. The SVG
+renderer in `src/core/map_render.cpp` builds its document as text, so it runs in
+core, from the CLI, and in CI with no display. It reads the same
+`src/core/map_geometry.cpp` results the painted viewport does, which is what
+keeps the two pictures consistent; only the output surface differs.
 
 Do not let rendering details leak into map, model, package, or compiler
 services. Those services should produce editor data; render backends should
-visualize it.
+visualize it. `map_render` is the boundary case that proves the rule: it
+consumes geometry and emits a document, and it never touches QPainter.
 
 ## Data, Search, And Persistence
 
@@ -189,9 +219,36 @@ validation.
 The write-back slice adds a staged package model with add, replace, rename,
 delete, conflict reporting, before/after composition, blocked-state messages,
 manifest export, save-as guards, deterministic PAK and ZIP/PK3 writers, and a
-PWAD writer covered by map-lump ordering tests. This layer is adapted from
-PakFu's archive surface and credited in `docs/CREDITS.md`; future package
-writers should build on it instead of duplicating path safety rules per format.
+WAD writer covered by map-lump ordering tests. This layer is adapted from
+PakFu's archive surface and credited in [`docs/CREDITS.md`](CREDITS.md); future
+package writers should build on it instead of duplicating path safety rules per
+format.
+
+Compression is implemented in tree rather than taken from a library. Real PK3
+and ZIP content needs inflate to read and deflate to write, and the obvious
+answers were zlib or miniz. Both were declined. A bundled or system compression
+library is not free: it adds a build-time dependency on every platform target, a
+license file in every release bundle, a credits entry, and an update path to
+track, and the portable packaging scripts would have to carry it. Weighed
+against that, the codec itself is a bounded, well-specified piece of work with a
+fixture-testable contract.
+
+`src/core/deflate.{h,cpp}` implements it from the public specifications: RFC
+1951 for DEFLATE, RFC 1950 for the zlib wrapper, and the ITU-T V.42 CRC-32 the
+ZIP appnote uses, plus Adler-32. The decoder is bounds-checked throughout, never
+trusts a length or distance taken from the stream, caps output growth, and fails
+with an error on malformed input rather than aborting. Output is deterministic
+for a given input and level, which is what lets the package writers produce
+reproducible archives.
+
+The trade-off is explicit and belongs in the record: the decoder handles stored,
+fixed-Huffman, and dynamic-Huffman blocks, so VibeStudio reads anything a normal
+ZIP tool writes, but the encoder emits stored and fixed-Huffman blocks only. It
+does not build dynamic Huffman tables. PK3s VibeStudio writes are therefore
+larger than the same content packed by zlib. The writer stores an entry verbatim
+whenever deflating would not shrink it, so already-compressed assets are never
+made worse. If archive size becomes a real complaint, the answer is a dynamic
+Huffman encoder in the same file, not a new dependency.
 
 ## Accessibility, Localization, And Setup Stack
 
@@ -214,8 +271,22 @@ localization slice defines a shared 20-language target set, seed `.ts`
 catalogs, pseudo-localization, Arabic/Urdu right-to-left smoke coverage,
 locale formatting samples, pluralization samples, expansion stress samples,
 representative layout-budget checks, stale/untranslated catalog status reports,
-and dry-run `lupdate` extraction validation. Runtime translator loading, full
-layout expansion audits, and translated release bundles remain planned.
+and dry-run `lupdate` extraction validation.
+
+Catalogs are compiled, not shipped as source. `i18n/meson.build` runs `lrelease`
+over every checked-in `vibestudio_<locale>.ts` and writes the `.qm` into the
+build directory, installing it under `<datadir>/vibestudio/i18n`. `lrelease` is
+looked up with `required: false`: a toolchain without Qt Linguist tools still
+builds, and the application runs in the source language rather than failing.
+
+At run time `installStudioTranslations` in `src/app/studio_runtime.cpp` resolves
+a catalog and installs it with `QTranslator`. It searches the
+`VIBESTUDIO_I18N_DIR` override first, then the development, installed, and
+portable layouts relative to the executable, then the working directory, and it
+falls back from the requested locale to the base language to `en`. The matching
+Qt base catalog is installed alongside it when one is present, and layout
+direction is applied from the locale. Full layout expansion audits and finished
+translated bundles remain planned; the catalogs themselves are still seeds.
 
 Build the first-run setup flow as a real settings workbench. It should configure
 accessibility, language, theme, density, editor profile, game installations,
@@ -240,16 +311,28 @@ commands should emit task state, progress, warnings, and reproducible manifests.
 
 ## Text, Script, And IDE Stack
 
-Start with Qt text widgets for MVP editors. The active asset-tools slice uses
-local syntax-highlighting and diagnostic boundaries for CFG, shader scripts,
-QuakeC, and idTech text assets, plus project-wide find/replace with clean,
-modified, saving, saved, and failed states. The Advanced Studio slice adds a
-source tree index with language service hook descriptors, diagnostics, symbol
-search, compiler task suggestions, and source-port launch profile summaries.
-Add KSyntaxHighlighting for high-quality highlighting once packaging is
-understood. Add Tree-sitter for incremental parsing where it materially
-improves diagnostics, outlines, refactoring, shader/script structure, or AI
-context extraction.
+Use Qt text widgets for the editors. Highlighting is `QSyntaxHighlighter`:
+`StudioSyntaxHighlighter` in `src/app/syntax_highlight.{h,cpp}` compiles its
+rules from `StudioLanguageDescriptor` records that declare comment tokens,
+block comment delimiters, keywords, secondary keywords, and case sensitivity.
+Adding a language means adding a descriptor, not writing widget code, and the
+highlighter never changes document text. Its colours come from
+`StudioSyntaxTheme`, which the active studio theme fills in, so high-contrast
+themes stay readable instead of inheriting a hard-coded palette.
+
+The active asset-tools slice adds diagnostic boundaries for CFG, shader
+scripts, QuakeC, and idTech text assets, plus project-wide find/replace with
+clean, modified, saving, saved, and failed states. The Advanced Studio slice
+adds a source tree index with language service hook descriptors, diagnostics,
+symbol search, compiler task suggestions, and source-port launch profile
+summaries.
+
+KSyntaxHighlighting and Tree-sitter both remain deferred. KSyntaxHighlighting
+would bring better definitions at the cost of a KDE Frameworks dependency in
+every portable package, which the data-driven rules above do not yet justify.
+Tree-sitter earns its place when incremental parsing materially improves
+diagnostics, outlines, refactoring, shader/script structure, or AI context
+extraction, and not before.
 
 Use an LSP client boundary for external language tooling. Avoid hard-coding one
 language server into the editor core.
@@ -401,6 +484,11 @@ license files, compiler/toolchain attribution, and a generated credits bundle.
 - Do not assume a single AI provider, model family, or capability set.
 - Do not make bgfx, Assimp, Tree-sitter, or KSyntaxHighlighting mandatory before
   the MVP needs them.
+- Do not add a compression library for ZIP/PK3 work. The in-tree DEFLATE codec
+  covers reading and writing; improve it in place rather than replacing it with
+  a dependency.
+- Do not make a GUI session a precondition for producing a map picture, a
+  compile, or any other CLI-reachable output.
 - Do not bypass shared services for quick GUI-only or CLI-only behavior.
 - Do not import third-party code without updating README credits and
   `docs/CREDITS.md`.
@@ -417,6 +505,12 @@ license files, compiler/toolchain attribution, and a generated credits bundle.
 - [Qt High DPI](https://doc.qt.io/qt-6/highdpi.html)
 - [Qt TextToSpeech](https://doc.qt.io/qt-6/qttexttospeech-index.html)
 - [Qt internationalization](https://doc.qt.io/qt-6/internationalization.html)
+- [Qt Linguist `lrelease`](https://doc.qt.io/qt-6/linguist-lrelease.html)
+- [QTranslator](https://doc.qt.io/qt-6/qtranslator.html)
+- [QSyntaxHighlighter](https://doc.qt.io/qt-6/qsyntaxhighlighter.html)
+- [RFC 1951, DEFLATE Compressed Data Format Specification version 1.3](https://www.rfc-editor.org/rfc/rfc1951)
+- [RFC 1950, ZLIB Compressed Data Format Specification version 3.3](https://www.rfc-editor.org/rfc/rfc1950)
+- [PKWARE .ZIP File Format Specification (APPNOTE.TXT)](https://pkware.cachefly.net/webdocs/casestudies/APPNOTE.TXT)
 - [Meson](https://mesonbuild.com/)
 - [Ninja](https://ninja-build.org/)
 - [bgfx](https://bkaradzic.github.io/bgfx/overview.html)

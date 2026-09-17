@@ -245,13 +245,69 @@ int main()
 		QStringLiteral("ericw-qbsp"),
 		QStringLiteral("ericw-qbsp"));
 	bool foundExternalMapClassname = false;
+	bool foundPresentationMetaIssue = false;
 	for (const vibestudio::CompilerKnownIssueMatch& match : matches) {
 		if (match.issue.issueId == QStringLiteral("194")) {
 			foundExternalMapClassname = true;
 		}
+		if (match.issue.issueId == QStringLiteral("287")) {
+			foundPresentationMetaIssue = true;
+		}
 	}
 	if (!foundExternalMapClassname) {
 		return fail("Expected keyword matching for external-map classname issue.");
+	}
+	if (foundPresentationMetaIssue) {
+		return fail("Expected the #287 presentation meta-issue never to match compiler output.");
+	}
+
+	// Every ericw-tools run opens with "---- <program> / ericw-tools <version> ----"
+	// (external/compilers/ericw-tools/common/settings.cc, common_settings::set_parameters), and
+	// ordinary maps produce non-fatal WARNING lines and an "N errors" summary. A catalog keyword must
+	// therefore never be a tool's own program name or a bare status word, or every healthy compile
+	// would be downgraded to Warning with an unrelated upstream issue attached.
+	struct OrdinaryRun {
+		const char* toolId;
+		QString output;
+	};
+	const QVector<OrdinaryRun> ordinaryRuns = {
+		{"ericw-qbsp", QStringLiteral(
+			"---- qbsp / ericw-tools v2.0.0-alpha ----\n"
+			"Input file: maps/start.map\n"
+			"Output file: maps/start.bsp\n"
+			"WARNING: 3 microbrushes\n"
+			"0 errors\n"
+			"1.234 seconds elapsed\n")},
+		{"ericw-light", QStringLiteral(
+			"---- light / ericw-tools v2.0.0-alpha ----\n"
+			"running 8 threads\n"
+			"0 warnings\n")},
+		{"ericw-vis", QStringLiteral("---- vis / ericw-tools v2.0.0-alpha ----\nno errors\n")},
+		{"ericw-bsputil", QStringLiteral("---- bsputil / ericw-tools v2.0.0-alpha ----\n")},
+		{"ericw-lightpreview", QStringLiteral("---- lightpreview / ericw-tools v2.0.0-alpha ----\n")},
+	};
+	for (const OrdinaryRun& run : ordinaryRuns) {
+		const QString toolId = QString::fromLatin1(run.toolId);
+		for (const vibestudio::CompilerKnownIssueMatch& match : vibestudio::matchCompilerKnownIssues(run.output, toolId, toolId)) {
+			if (match.issue.highValue) {
+				return fail("An ordinary ericw-tools run must not match a high-value known issue.");
+			}
+		}
+	}
+
+	// Keywords match whole tokens: "leak" must not fire on the "-leaktest" argument preset, and
+	// "Q2" must not fire inside a map name such as q2dm1.
+	if (!vibestudio::ericwKnownIssuePlanWarnings(
+			QStringLiteral("ericw-qbsp"),
+			QStringLiteral("maps/start.map"),
+			{QStringLiteral("-leaktest")}).isEmpty()) {
+		return fail("Expected the -leaktest preset not to raise leak known-issue plan warnings.");
+	}
+	for (const vibestudio::CompilerKnownIssueMatch& match : vibestudio::matchCompilerKnownIssues(
+			QStringLiteral("maps/q2dm1.bsp"), QStringLiteral("ericw-light"), QStringLiteral("ericw-light"))) {
+		if (match.issue.highValue) {
+			return fail("Expected a map name to stay clear of whole-token known-issue keywords.");
+		}
 	}
 
 	const QString text = vibestudio::compilerKnownIssueText(issue);

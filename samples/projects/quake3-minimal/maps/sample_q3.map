@@ -1,6 +1,112 @@
-// Minimal Quake III-family placeholder map for command planning.
-// This file is intentionally not a production-ready map.
+// VibeStudio sample map: a Quake III-family room.
+//
+// Hand-authored for VibeStudio. No geometry, shader, or entity data is taken
+// from a commercial game; the shader names are generic placeholders under
+// textures/sample/, so this is a parser and geometry fixture rather than a
+// compilable level for any particular game.
+//
+// It deliberately mixes the three Quake III brush dialects so the parser is
+// exercised on all of them in one file:
+//   - classic faces with the trailing contents/flags/value integers
+//   - a `brushDef` brush using the brush-primitives texture matrix
+//   - a `patchDef2` quadratic Bezier patch
+// Face point ordering follows the Radiant convention, so the half-space
+// normals point out of each brush.
 {
 "classname" "worldspawn"
 "message" "VibeStudio Q3 Sample"
+"_q3map_lightmapscale" "1.0"
+// Floor, classic face syntax with Quake II/III contents, flags and value.
+{
+( -256 256 0 ) ( 256 256 0 ) ( 256 -256 0 ) textures/sample/floor 0 0 0 0.5 0.5 0 0 0
+( -256 -256 -16 ) ( 256 -256 -16 ) ( 256 256 -16 ) textures/common/caulk 0 0 0 0.5 0.5 0 0 0
+( -256 256 0 ) ( -256 -256 0 ) ( -256 -256 -16 ) textures/common/caulk 0 0 0 0.5 0.5 0 0 0
+( 256 -256 0 ) ( 256 256 0 ) ( 256 256 -16 ) textures/common/caulk 0 0 0 0.5 0.5 0 0 0
+( 256 256 0 ) ( -256 256 0 ) ( -256 256 -16 ) textures/common/caulk 0 0 0 0.5 0.5 0 0 0
+( -256 -256 0 ) ( 256 -256 0 ) ( 256 -256 -16 ) textures/common/caulk 0 0 0 0.5 0.5 0 0 0
+}
+// Ceiling, classic face syntax.
+{
+( -256 256 272 ) ( 256 256 272 ) ( 256 -256 272 ) textures/common/caulk 0 0 0 0.5 0.5 0 0 0
+( -256 -256 256 ) ( 256 -256 256 ) ( 256 256 256 ) textures/sample/ceiling 0 0 0 0.5 0.5 0 0 0
+( -256 256 272 ) ( -256 -256 272 ) ( -256 -256 256 ) textures/common/caulk 0 0 0 0.5 0.5 0 0 0
+( 256 -256 272 ) ( 256 256 272 ) ( 256 256 256 ) textures/common/caulk 0 0 0 0.5 0.5 0 0 0
+( 256 256 272 ) ( -256 256 272 ) ( -256 256 256 ) textures/common/caulk 0 0 0 0.5 0.5 0 0 0
+( -256 -256 272 ) ( 256 -256 272 ) ( 256 -256 256 ) textures/common/caulk 0 0 0 0.5 0.5 0 0 0
+}
+// South wall, classic face syntax.
+{
+( -256 -240 256 ) ( 256 -240 256 ) ( 256 -256 256 ) textures/common/caulk 0 0 0 0.5 0.5 0 0 0
+( -256 -256 0 ) ( 256 -256 0 ) ( 256 -240 0 ) textures/common/caulk 0 0 0 0.5 0.5 0 0 0
+( -256 -240 256 ) ( -256 -256 256 ) ( -256 -256 0 ) textures/common/caulk 0 0 0 0.5 0.5 0 0 0
+( 256 -256 256 ) ( 256 -240 256 ) ( 256 -240 0 ) textures/common/caulk 0 0 0 0.5 0.5 0 0 0
+( 256 -240 256 ) ( -256 -240 256 ) ( -256 -240 0 ) textures/sample/wall 0 0 0 0.5 0.5 0 0 0
+( -256 -256 256 ) ( 256 -256 256 ) ( 256 -256 0 ) textures/common/caulk 0 0 0 0.5 0.5 0 0 0
+}
+// North wall, classic face syntax.
+{
+( -256 256 256 ) ( 256 256 256 ) ( 256 240 256 ) textures/common/caulk 0 0 0 0.5 0.5 0 0 0
+( -256 240 0 ) ( 256 240 0 ) ( 256 256 0 ) textures/common/caulk 0 0 0 0.5 0.5 0 0 0
+( -256 256 256 ) ( -256 240 256 ) ( -256 240 0 ) textures/common/caulk 0 0 0 0.5 0.5 0 0 0
+( 256 240 256 ) ( 256 256 256 ) ( 256 256 0 ) textures/common/caulk 0 0 0 0.5 0.5 0 0 0
+( 256 256 256 ) ( -256 256 256 ) ( -256 256 0 ) textures/common/caulk 0 0 0 0.5 0.5 0 0 0
+( -256 240 256 ) ( 256 240 256 ) ( 256 240 0 ) textures/sample/wall 0 0 0 0.5 0.5 0 0 0
+}
+// West wall, classic face syntax.
+{
+( -256 240 256 ) ( -240 240 256 ) ( -240 -240 256 ) textures/common/caulk 0 0 0 0.5 0.5 0 0 0
+( -256 -240 0 ) ( -240 -240 0 ) ( -240 240 0 ) textures/common/caulk 0 0 0 0.5 0.5 0 0 0
+( -256 240 256 ) ( -256 -240 256 ) ( -256 -240 0 ) textures/common/caulk 0 0 0 0.5 0.5 0 0 0
+( -240 -240 256 ) ( -240 240 256 ) ( -240 240 0 ) textures/sample/wall 0 0 0 0.5 0.5 0 0 0
+( -240 240 256 ) ( -256 240 256 ) ( -256 240 0 ) textures/common/caulk 0 0 0 0.5 0.5 0 0 0
+( -256 -240 256 ) ( -240 -240 256 ) ( -240 -240 0 ) textures/common/caulk 0 0 0 0.5 0.5 0 0 0
+}
+// East wall, written in `brushDef` brush-primitives form. The 2x3 matrix after
+// the three plane points is the texture projection, not geometry.
+{
+brushDef
+{
+( 240 240 256 ) ( 256 240 256 ) ( 256 -240 256 ) ( ( 0.0078125 0 0 ) ( 0 0.0078125 0 ) ) textures/common/caulk 0 0 0
+( 240 -240 0 ) ( 256 -240 0 ) ( 256 240 0 ) ( ( 0.0078125 0 0 ) ( 0 0.0078125 0 ) ) textures/common/caulk 0 0 0
+( 240 240 256 ) ( 240 -240 256 ) ( 240 -240 0 ) ( ( 0.0078125 0 0 ) ( 0 0.0078125 0 ) ) textures/sample/wall 0 0 0
+( 256 -240 256 ) ( 256 240 256 ) ( 256 240 0 ) ( ( 0.0078125 0 0 ) ( 0 0.0078125 0 ) ) textures/common/caulk 0 0 0
+( 256 240 256 ) ( 240 240 256 ) ( 240 240 0 ) ( ( 0.0078125 0 0 ) ( 0 0.0078125 0 ) ) textures/common/caulk 0 0 0
+( 240 -240 256 ) ( 256 -240 256 ) ( 256 -240 0 ) ( ( 0.0078125 0 0 ) ( 0 0.0078125 0 ) ) textures/common/caulk 0 0 0
+}
+}
+// A 3x3 quadratic Bezier patch arching over the room.
+{
+patchDef2
+{
+textures/sample/arch
+( 3 3 0 0 0 )
+(
+( ( -128 -128 128 0 0 ) ( -128 0 224 0 0.5 ) ( -128 128 128 0 1 ) )
+( ( 0 -128 128 0.5 0 ) ( 0 0 224 0.5 0.5 ) ( 0 128 128 0.5 1 ) )
+( ( 128 -128 128 1 0 ) ( 128 0 224 1 0.5 ) ( 128 128 128 1 1 ) )
+)
+}
+}
+}
+{
+"classname" "info_player_deathmatch"
+"origin" "0 0 32"
+"angle" "90"
+}
+{
+"classname" "light"
+"origin" "0 0 192"
+"light" "300"
+}
+{
+"classname" "func_static"
+"model" "*1"
+{
+( -64 -64 96 ) ( 64 -64 96 ) ( 64 -96 96 ) textures/sample/trim 0 0 0 0.5 0.5 0 0 0
+( -64 -96 32 ) ( 64 -96 32 ) ( 64 -64 32 ) textures/sample/trim 0 0 0 0.5 0.5 0 0 0
+( -64 -64 96 ) ( -64 -96 96 ) ( -64 -96 32 ) textures/sample/trim 0 0 0 0.5 0.5 0 0 0
+( 64 -96 96 ) ( 64 -64 96 ) ( 64 -64 32 ) textures/sample/trim 0 0 0 0.5 0.5 0 0 0
+( 64 -64 96 ) ( -64 -64 96 ) ( -64 -64 32 ) textures/sample/trim 0 0 0 0.5 0.5 0 0 0
+( -64 -96 96 ) ( 64 -96 96 ) ( 64 -96 32 ) textures/sample/trim 0 0 0 0.5 0.5 0 0 0
+}
 }

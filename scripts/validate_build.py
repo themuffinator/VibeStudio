@@ -226,7 +226,7 @@ def main() -> int:
             (["--cli", "--json", "asset", "inspect", str(package_root_path), "sound/pickup.wav"], '"kind": "audio"'),
             (["--cli", "asset", "convert", str(package_root_path), "--entry", "textures/wall.bmp", "--output", str(asset_convert_dry_run_dir), "--format", "png", "--resize", "1x1", "--dry-run"], "Would write converted image"),
             (["--cli", "asset", "convert", str(package_root_path), "--entry", "textures/wall.bmp", "--output", str(asset_convert_dir), "--format", "png", "--resize", "1x1"], "Wrote converted image"),
-            (["--cli", "asset", "audio-wav", str(package_root_path), "sound/pickup.wav", "--output", str(asset_wav_dry_run_output), "--dry-run"], "Would write WAV file"),
+            (["--cli", "asset", "audio-wav", str(package_root_path), "sound/pickup.wav", "--output", str(asset_wav_dry_run_output), "--dry-run"], "Would write a copy of the source WAV"),
             (["--cli", "--json", "asset", "audio-wav", str(package_root_path), "sound/pickup.wav", "--output", str(asset_wav_output)], '"written": true'),
             (["--cli", "asset", "find", str(package_root_path), "--find", "milestone6_find_token"], "Matches: 1"),
             (["--cli", "asset", "find", str(unicode_root), "--find", "unicode_path_token"], "Matches: 1"),
@@ -313,8 +313,14 @@ def main() -> int:
             (["--cli", "--json", "install", "detect", "--root", str(gog_root)], '"candidateCount"'),
         ]
 
+        # Every check runs against an isolated INI store. Several of these
+        # commands write settings (recent projects, installation profiles,
+        # preferences, setup progress), and validating the build must not
+        # rewrite the developer's own preferences to do it.
+        settings_file = Path(package_root) / "validate-build-settings.ini"
+
         for cli_args, expected in checks:
-            code, out, err = run_command([str(binary), *cli_args])
+            code, out, err = run_command([str(binary), "--settings-file", str(settings_file), *cli_args])
             merged = f"{out}\n{err}"
             if code != 0:
                 print(f"Command failed: {' '.join(cli_args)}", file=sys.stderr)

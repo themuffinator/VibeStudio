@@ -26,6 +26,104 @@ and reproducibility intact.
 - Reduce creative blank-page time through optional generative and agentic AI
   workflows that produce reviewable proposals, not hidden mutations.
 
+## Landed Efficiency Work
+
+These are implemented, not planned. Each names the code that does the work.
+
+### Debounced Workspace Search
+
+`src/app/application_shell.*`
+
+The workspace search box previously ran its query on every `textChanged`
+signal, and that query walks the project tree on disk as well as the mounted
+package entry list. `QLineEdit::textChanged` now calls
+`scheduleWorkspaceSearch()`, which sets a guard flag and arms a single 220 ms
+`QTimer::singleShot`. Further keystrokes inside that window see the flag and
+schedule nothing, so a burst of typing costs one tree walk instead of one per
+character.
+
+### Stylesheet Re-Application
+
+`src/app/application_shell.*`
+
+`applyPreferencesToUi()` rebuilds the entire window stylesheet and then
+unpolishes and repolishes every widget, so calling it repeatedly is expensive.
+A coalescing helper, `scheduleThemeRefresh()`, guards on
+`m_themeRefreshScheduled` and defers the rebuild to a single queued invocation
+per event-loop turn.
+
+The call sites that fire repeatedly now go through it: `refreshPackageTree()`,
+`refreshPackageStagingSummary()`, `filterPackageEntries()`, and
+`refreshActivityCenter()`. That last one matters most, because the activity
+centre refreshes on every streamed compiler log line — before this, a noisy
+compile re-themed the entire window once per line of output. Typing in the
+package filter is now one stylesheet rebuild for a burst of keystrokes rather
+than one per character.
+
+The one-shot sites — a preference change, opening or switching a project, and
+the start-up path — still call `applyPreferencesToUi()` directly, because there
+the user has just asked for a visual change and should see it on the same turn.
+
+### Package Staging: Cached Plan, Lazy Bytes, Streamed Writes
+
+`src/core/package_staging.*`
+
+Three separate changes:
+
+- **The staged plan is cached.** `ensurePlan()` recomputes the merged entry list
+  and conflict set only when `m_planValid` is false, and `invalidatePlan()`
+  clears it when an operation is appended or cleared. Summaries, compositions,
+  before/after views, and the manifest all read the same computed plan instead
+  of each recomputing it.
+- **Base entry bytes are read on demand.** `PackageStagedEntry` no longer
+  carries a resident `QByteArray`. Loading a package used to read every base
+  entry's bytes into memory up front; it now records paths, sizes, and metadata
+  only. `entryBytes()` reopens the source archive lazily — once, into a cached
+  `std::shared_ptr<PackageArchive>` — and reads a single member when something
+  actually needs its contents.
+- **Writes stream.** The PAK, WAD, and ZIP writers take a `ByteSink` and an
+  entry-bytes provider and push each member out as it is produced, into a
+  `QSaveFile`. The old writers appended every member into one growing
+  `QByteArray` before writing it. Manifest generation additionally memoizes
+  SHA-256 digests by content key, so a file staged into several virtual paths is
+  hashed once.
+
+### Streamed Compiler Output
+
+`src/core/compiler_runner.*`
+
+A compiler run used to block on `waitForFinished()` and then call
+`readAllStandardOutput()` / `readAllStandardError()`, so the log appeared only
+after the tool exited. The runner now polls with `waitForFinished(100)` and
+pumps both channels on every iteration, splitting complete lines out of a
+pending buffer and handing each one to the log callback and the diagnostic
+parser immediately. The same loop checks the cancellation callback and the
+timeout, so a long q3map2 stage produces live output, can be cancelled, and can
+be timed out instead of appearing frozen. Full stdout and stderr are still
+captured for the manifest, and any trailing partial line is flushed after exit.
+
+### One Build Pipeline Instead Of Three Hand-Fed Runs
+
+`src/core/build_pipeline.*`
+
+The Quake loop is three tools run in order — BSP, visibility, lighting — and
+each one previously had to be selected and launched by hand as its own compiler
+profile, with the user responsible for pointing each stage at the previous
+stage's output. `runBuildPipeline()` replaces that with a declared chain.
+
+Registered pipelines include `quake-full` (qbsp, vis, light through
+ericw-tools), `quake-fast` (qbsp then light, visibility off by default),
+`quake-bsp-only`, `quake3-full` and `quake3-bsp-only` (q3map2 BSP, vis, and
+light stages), and the `doom-zdbsp` and `doom-zokumbsp` node builders. A stage
+declares `inputFromStageId`, so the first stage is told where to write and the
+in-place stages follow it automatically. `planBuildPipeline()` resolves stages,
+inputs, and outputs without running anything, stages can be disabled per run,
+`stopOnFailure` controls what happens after a failure, and per-stage callbacks
+report start, finish, and log lines. Every stage still goes through the shared
+compiler runner, so logs, diagnostics, hashes, and command manifests are
+identical to a single-profile run. Launch plans in the same module carry the
+result into the configured source port.
+
 ## Modern Acceleration Techniques
 
 VibeStudio should combine deterministic tooling with modern automation:
@@ -39,7 +137,8 @@ VibeStudio should combine deterministic tooling with modern automation:
 - CLI automation for repeatable project validation, package checks, compiler
   runs, batch conversion, and release preparation.
 - Data-driven editor profiles and compiler profiles to avoid forcing users to
-  relearn familiar workflows.
+  relearn familiar workflows. The editor profiles are still declarations rather
+  than applied settings; see [`docs/EDITOR_PROFILES.md`](EDITOR_PROFILES.md).
 - Incremental indexing and caching for packages, assets, previews, diagnostics,
   and dependency data.
 - Graphical workflow surfaces that show what changed, what is blocked, and what

@@ -5,10 +5,15 @@
 
 #include <QDir>
 #include <QFileInfo>
+#include <QJsonArray>
+#include <QJsonDocument>
+#include <QJsonObject>
 #include <QStringList>
 #include <QtGlobal>
 
 #include <algorithm>
+#include <memory>
+#include <utility>
 
 namespace vibestudio {
 
@@ -18,6 +23,7 @@ constexpr auto kSchemaVersionKey = "app/settingsSchemaVersion";
 constexpr auto kSelectedModeKey = "shell/selectedMode";
 constexpr auto kShellGeometryKey = "shell/geometry";
 constexpr auto kShellWindowStateKey = "shell/windowState";
+constexpr auto kShellSplitterStateKey = "shell/splitterState";
 constexpr auto kLocaleNameKey = "preferences/localeName";
 constexpr auto kTextScalePercentKey = "preferences/textScalePercent";
 constexpr auto kThemeKey = "preferences/theme";
@@ -70,6 +76,14 @@ constexpr auto kRecentActivityTaskWarningsKey = "warnings";
 constexpr auto kRecentActivityTaskCreatedKey = "createdUtc";
 constexpr auto kRecentActivityTaskUpdatedKey = "updatedUtc";
 constexpr auto kRecentActivityTaskFinishedKey = "finishedUtc";
+constexpr auto kRecentActivityTaskProgressCurrentKey = "progressCurrent";
+constexpr auto kRecentActivityTaskProgressTotalKey = "progressTotal";
+constexpr auto kRecentActivityTaskCancellableKey = "cancellable";
+constexpr auto kRecentActivityTaskDurationMsKey = "durationMs";
+constexpr auto kRecentActivityTaskLogKey = "log";
+constexpr auto kRecentActivityTaskLogTruncatedKey = "logTruncated";
+constexpr auto kRecentActivityTaskLogDroppedKey = "logDroppedEntries";
+constexpr auto kRecentActivityTaskTransitionsKey = "transitions";
 constexpr auto kGameInstallationsArray = "gameInstallations";
 constexpr auto kSelectedGameInstallationKey = "gameInstallations/selectedId";
 constexpr auto kGameInstallationIdKey = "id";
@@ -120,6 +134,117 @@ QDateTime setupTimestamp()
 	return QDateTime::currentDateTimeUtc();
 }
 
+// Process-wide override honoured by the default constructor. It is a plain
+// global on purpose: it is set once during start-up (CLI --settings-file, or a
+// test fixture) before any StudioSettings instance exists.
+QString& storeOverrideFilePath()
+{
+	static QString overridePath;
+	return overridePath;
+}
+
+// Keys written by schema version 1 that nothing reads any more.
+QStringList retiredV1Keys()
+{
+	return {
+		QStringLiteral("preferences/highContrast"),
+		QStringLiteral("preferences/highVisibility"),
+		QStringLiteral("shell/lastMode"),
+		QStringLiteral("shell/lastSelectedModeName"),
+		QStringLiteral("ai/experimentalConnectorsEnabled"),
+	};
+}
+
+QJsonObject operationLogEntryToJson(const OperationLogEntry& entry)
+{
+	QJsonObject object;
+	object.insert(QStringLiteral("t"), normalizedTimestamp(entry.timestampUtc).toString(Qt::ISODate));
+	object.insert(QStringLiteral("s"), operationStateId(entry.state));
+	object.insert(QStringLiteral("m"), entry.message);
+	return object;
+}
+
+OperationLogEntry operationLogEntryFromJson(const QJsonObject& object)
+{
+	OperationLogEntry entry;
+	entry.timestampUtc = QDateTime::fromString(object.value(QStringLiteral("t")).toString(), Qt::ISODate).toUTC();
+	entry.state = operationStateFromId(object.value(QStringLiteral("s")).toString());
+	entry.message = object.value(QStringLiteral("m")).toString();
+	return entry;
+}
+
+QJsonObject operationTransitionToJson(const OperationStateTransition& transition)
+{
+	QJsonObject object;
+	object.insert(QStringLiteral("t"), normalizedTimestamp(transition.timestampUtc).toString(Qt::ISODate));
+	object.insert(QStringLiteral("s"), operationStateId(transition.state));
+	object.insert(QStringLiteral("e"), static_cast<double>(transition.elapsedMs));
+	object.insert(QStringLiteral("m"), transition.message);
+	return object;
+}
+
+OperationStateTransition operationTransitionFromJson(const QJsonObject& object)
+{
+	OperationStateTransition transition;
+	transition.timestampUtc = QDateTime::fromString(object.value(QStringLiteral("t")).toString(), Qt::ISODate).toUTC();
+	transition.state = operationStateFromId(object.value(QStringLiteral("s")).toString());
+	transition.elapsedMs = static_cast<qint64>(object.value(QStringLiteral("e")).toDouble());
+	transition.message = object.value(QStringLiteral("m")).toString();
+	return transition;
+}
+
+// Keeps the persisted tail of a task log inside the documented bounds: at most
+// kMaximumActivityLogEntries entries and kMaximumActivityLogBytes of encoded
+// text, newest entries kept. Truncation is recorded, never hidden.
+RecentActivityTask boundedActivityTask(RecentActivityTask task)
+{
+	const int transitionOverflow = static_cast<int>(task.transitions.size()) - StudioSettings::kMaximumActivityTransitions;
+	if (transitionOverflow > 0) {
+		task.transitions.remove(0, transitionOverflow);
+	}
+
+	int dropped = task.droppedLogEntryCount;
+	const int entryOverflow = static_cast<int>(task.log.size()) - StudioSettings::kMaximumActivityLogEntries;
+	if (entryOverflow > 0) {
+		task.log.remove(0, entryOverflow);
+		dropped += entryOverflow;
+	}
+
+	const auto encodedSize = [](const QVector<OperationLogEntry>& log) {
+		qsizetype bytes = 0;
+		for (const OperationLogEntry& entry : log) {
+			bytes += entry.message.toUtf8().size() + 48;
+		}
+		return bytes;
+	};
+	while (!task.log.isEmpty() && encodedSize(task.log) > StudioSettings::kMaximumActivityLogBytes) {
+		task.log.remove(0, 1);
+		++dropped;
+	}
+
+	task.droppedLogEntryCount = dropped;
+	task.logTruncated = task.logTruncated || dropped > 0;
+	return task;
+}
+
+QString encodeJsonArray(const QJsonArray& array)
+{
+	if (array.isEmpty()) {
+		return {};
+	}
+	return QString::fromUtf8(QJsonDocument(array).toJson(QJsonDocument::Compact));
+}
+
+QJsonArray decodeJsonArray(const QString& text)
+{
+	const QString trimmed = text.trimmed();
+	if (trimmed.isEmpty()) {
+		return {};
+	}
+	const QJsonDocument document = QJsonDocument::fromJson(trimmed.toUtf8());
+	return document.isArray() ? document.array() : QJsonArray();
+}
+
 int setupStepIndex(SetupStep step)
 {
 	const QVector<SetupStep> steps = setupSteps();
@@ -134,56 +259,96 @@ int setupStepIndex(SetupStep step)
 } // namespace
 
 StudioSettings::StudioSettings()
+	: m_settings(overrideFilePath().isEmpty()
+		? std::make_unique<QSettings>()
+		: std::make_unique<QSettings>(overrideFilePath(), QSettings::IniFormat))
 {
 	ensureSchema();
 }
 
 StudioSettings::StudioSettings(const QString& filePath)
-	: m_settings(filePath, QSettings::IniFormat)
+	: m_settings(std::make_unique<QSettings>(filePath, QSettings::IniFormat))
 {
 	ensureSchema();
 }
 
 StudioSettings::~StudioSettings() = default;
 
+void StudioSettings::setOverrideFilePath(const QString& filePath)
+{
+	storeOverrideFilePath() = filePath.trimmed();
+}
+
+QString StudioSettings::overrideFilePath()
+{
+	return storeOverrideFilePath();
+}
+
 QString StudioSettings::storageLocation() const
 {
-	return m_settings.fileName();
+	return m_settings->fileName();
 }
 
 QSettings::Status StudioSettings::status() const
 {
-	return m_settings.status();
+	// A refused write is an access failure from the caller's point of view, even
+	// though QSettings itself is healthy.
+	if (m_discardedWrites > 0) {
+		return QSettings::AccessError;
+	}
+	return m_settings->status();
+}
+
+int StudioSettings::discardedWriteCount() const
+{
+	return m_discardedWrites;
 }
 
 void StudioSettings::sync()
 {
-	m_settings.sync();
+	m_settings->sync();
 }
 
 int StudioSettings::schemaVersion() const
 {
 	bool ok = false;
-	const int version = m_settings.value(kSchemaVersionKey, kSchemaVersion).toInt(&ok);
+	const int version = m_settings->value(kSchemaVersionKey, kSchemaVersion).toInt(&ok);
 	return ok ? version : kSchemaVersion;
 }
 
 QVector<RecentProject> StudioSettings::recentProjects() const
 {
 	QVector<RecentProject> projects;
-	QStringList seenPaths;
 
-	const int size = m_settings.beginReadArray(kRecentProjectsArray);
+	const int size = m_settings->beginReadArray(kRecentProjectsArray);
 	for (int index = 0; index < size; ++index) {
-		m_settings.setArrayIndex(index);
-		const QString path = normalizedProjectPath(m_settings.value(kRecentProjectPathKey).toString());
+		m_settings->setArrayIndex(index);
+		const QString path = normalizedProjectPath(m_settings->value(kRecentProjectPathKey).toString());
 		if (path.isEmpty()) {
 			continue;
 		}
 
+		RecentProject project;
+		project.path = path;
+		project.displayName = recentProjectDisplayName(path, m_settings->value(kRecentProjectDisplayNameKey).toString());
+		project.lastOpenedUtc = normalizedTimestamp(m_settings->value(kRecentProjectLastOpenedKey).toDateTime());
+		project.exists = QFileInfo::exists(path);
+		projects.push_back(project);
+	}
+	m_settings->endArray();
+
+	// Sort before de-duplicating and truncating: an oversized stored array must
+	// yield the most recent entries, not the first ones in array order.
+	std::stable_sort(projects.begin(), projects.end(), [](const RecentProject& left, const RecentProject& right) {
+		return left.lastOpenedUtc > right.lastOpenedUtc;
+	});
+
+	QVector<RecentProject> unique;
+	QStringList seenPaths;
+	for (const RecentProject& project : std::as_const(projects)) {
 		bool alreadySeen = false;
-		for (const QString& seenPath : seenPaths) {
-			if (sameProjectPath(seenPath, path)) {
+		for (const QString& seenPath : std::as_const(seenPaths)) {
+			if (sameProjectPath(seenPath, project.path)) {
 				alreadySeen = true;
 				break;
 			}
@@ -191,40 +356,28 @@ QVector<RecentProject> StudioSettings::recentProjects() const
 		if (alreadySeen) {
 			continue;
 		}
-
-		RecentProject project;
-		project.path = path;
-		project.displayName = recentProjectDisplayName(path, m_settings.value(kRecentProjectDisplayNameKey).toString());
-		project.lastOpenedUtc = normalizedTimestamp(m_settings.value(kRecentProjectLastOpenedKey).toDateTime());
-		project.exists = QFileInfo::exists(path);
-		projects.push_back(project);
-		seenPaths.push_back(path);
-
-		if (projects.size() >= kMaximumRecentProjects) {
+		unique.push_back(project);
+		seenPaths.push_back(project.path);
+		if (unique.size() >= kMaximumRecentProjects) {
 			break;
 		}
 	}
-	m_settings.endArray();
-
-	std::sort(projects.begin(), projects.end(), [](const RecentProject& left, const RecentProject& right) {
-		return left.lastOpenedUtc > right.lastOpenedUtc;
-	});
-	return projects;
+	return unique;
 }
 
 QString StudioSettings::currentProjectPath() const
 {
-	return normalizedProjectPath(m_settings.value(kCurrentProjectPathKey).toString());
+	return normalizedProjectPath(m_settings->value(kCurrentProjectPathKey).toString());
 }
 
 void StudioSettings::setCurrentProjectPath(const QString& path)
 {
 	const QString normalizedPath = normalizedProjectPath(path);
 	if (normalizedPath.isEmpty()) {
-		m_settings.remove(kCurrentProjectPathKey);
+		removeKey(kCurrentProjectPathKey);
 		return;
 	}
-	m_settings.setValue(kCurrentProjectPathKey, normalizedPath);
+	writeValue(kCurrentProjectPathKey, normalizedPath);
 }
 
 void StudioSettings::recordRecentProject(const QString& path, const QString& displayName, const QDateTime& openedUtc)
@@ -273,34 +426,49 @@ void StudioSettings::removeRecentProject(const QString& path)
 
 void StudioSettings::clearRecentProjects()
 {
-	m_settings.remove(kRecentProjectsArray);
+	removeKey(kRecentProjectsArray);
 }
 
 QVector<RecentActivityTask> StudioSettings::recentActivityTasks() const
 {
 	QVector<RecentActivityTask> tasks;
-	QStringList seenIds;
 
-	const int size = m_settings.beginReadArray(kRecentActivityTasksArray);
+	const int size = m_settings->beginReadArray(kRecentActivityTasksArray);
 	for (int index = 0; index < size; ++index) {
-		m_settings.setArrayIndex(index);
+		m_settings->setArrayIndex(index);
 
 		RecentActivityTask task;
-		task.id = m_settings.value(kRecentActivityTaskIdKey).toString().trimmed();
-		task.title = m_settings.value(kRecentActivityTaskTitleKey).toString().trimmed();
-		task.detail = m_settings.value(kRecentActivityTaskDetailKey).toString().trimmed();
-		task.source = m_settings.value(kRecentActivityTaskSourceKey).toString().trimmed();
-		task.state = operationStateFromId(m_settings.value(kRecentActivityTaskStateKey, operationStateId(OperationState::Idle)).toString());
-		task.resultSummary = m_settings.value(kRecentActivityTaskResultKey).toString().trimmed();
-		task.warnings = m_settings.value(kRecentActivityTaskWarningsKey).toStringList();
-		task.createdUtc = m_settings.value(kRecentActivityTaskCreatedKey).toDateTime().toUTC();
-		task.updatedUtc = normalizedTimestamp(m_settings.value(kRecentActivityTaskUpdatedKey).toDateTime());
-		task.finishedUtc = m_settings.value(kRecentActivityTaskFinishedKey).toDateTime().toUTC();
+		task.id = m_settings->value(kRecentActivityTaskIdKey).toString().trimmed();
+		task.title = m_settings->value(kRecentActivityTaskTitleKey).toString().trimmed();
+		task.detail = m_settings->value(kRecentActivityTaskDetailKey).toString().trimmed();
+		task.source = m_settings->value(kRecentActivityTaskSourceKey).toString().trimmed();
+		task.state = operationStateFromId(m_settings->value(kRecentActivityTaskStateKey, operationStateId(OperationState::Idle)).toString());
+		task.resultSummary = m_settings->value(kRecentActivityTaskResultKey).toString().trimmed();
+		task.warnings = m_settings->value(kRecentActivityTaskWarningsKey).toStringList();
+		task.createdUtc = m_settings->value(kRecentActivityTaskCreatedKey).toDateTime().toUTC();
+		task.updatedUtc = normalizedTimestamp(m_settings->value(kRecentActivityTaskUpdatedKey).toDateTime());
+		task.finishedUtc = m_settings->value(kRecentActivityTaskFinishedKey).toDateTime().toUTC();
+		task.progress.current = m_settings->value(kRecentActivityTaskProgressCurrentKey, 0).toInt();
+		task.progress.total = m_settings->value(kRecentActivityTaskProgressTotalKey, 0).toInt();
+		task.cancellable = m_settings->value(kRecentActivityTaskCancellableKey, false).toBool();
+		task.durationMs = m_settings->value(kRecentActivityTaskDurationMsKey, 0).toLongLong();
+		task.logTruncated = m_settings->value(kRecentActivityTaskLogTruncatedKey, false).toBool();
+		task.droppedLogEntryCount = m_settings->value(kRecentActivityTaskLogDroppedKey, 0).toInt();
+		for (const QJsonValue& value : decodeJsonArray(m_settings->value(kRecentActivityTaskLogKey).toString())) {
+			if (value.isObject()) {
+				task.log.push_back(operationLogEntryFromJson(value.toObject()));
+			}
+		}
+		for (const QJsonValue& value : decodeJsonArray(m_settings->value(kRecentActivityTaskTransitionsKey).toString())) {
+			if (value.isObject()) {
+				task.transitions.push_back(operationTransitionFromJson(value.toObject()));
+			}
+		}
 
 		if (task.id.isEmpty()) {
 			task.id = QStringLiteral("%1-%2").arg(task.source.isEmpty() ? QStringLiteral("activity") : normalizedId(task.source), QString::number(task.updatedUtc.toSecsSinceEpoch()));
 		}
-		if (task.title.isEmpty() || seenIds.contains(task.id)) {
+		if (task.title.isEmpty()) {
 			continue;
 		}
 		if (!task.createdUtc.isValid()) {
@@ -310,17 +478,28 @@ QVector<RecentActivityTask> StudioSettings::recentActivityTasks() const
 			task.finishedUtc = task.updatedUtc;
 		}
 		tasks.push_back(task);
+	}
+	m_settings->endArray();
+
+	// Sort before de-duplicating and truncating so an oversized stored array
+	// keeps the most recently updated tasks.
+	std::stable_sort(tasks.begin(), tasks.end(), [](const RecentActivityTask& left, const RecentActivityTask& right) {
+		return left.updatedUtc > right.updatedUtc;
+	});
+
+	QVector<RecentActivityTask> unique;
+	QStringList seenIds;
+	for (const RecentActivityTask& task : std::as_const(tasks)) {
+		if (seenIds.contains(task.id)) {
+			continue;
+		}
+		unique.push_back(task);
 		seenIds.push_back(task.id);
-		if (tasks.size() >= kMaximumRecentActivityTasks) {
+		if (unique.size() >= kMaximumRecentActivityTasks) {
 			break;
 		}
 	}
-	m_settings.endArray();
-
-	std::sort(tasks.begin(), tasks.end(), [](const RecentActivityTask& left, const RecentActivityTask& right) {
-		return left.updatedUtc > right.updatedUtc;
-	});
-	return tasks;
+	return unique;
 }
 
 void StudioSettings::recordRecentActivityTask(const RecentActivityTask& task)
@@ -345,6 +524,10 @@ void StudioSettings::recordRecentActivityTask(const RecentActivityTask& task)
 	if (!normalized.finishedUtc.isValid() && operationStateIsTerminal(normalized.state)) {
 		normalized.finishedUtc = normalized.updatedUtc;
 	}
+	if (normalized.durationMs <= 0 && normalized.createdUtc.isValid() && normalized.finishedUtc.isValid()) {
+		normalized.durationMs = std::max<qint64>(0, normalized.createdUtc.msecsTo(normalized.finishedUtc));
+	}
+	normalized = boundedActivityTask(normalized);
 
 	QVector<RecentActivityTask> tasks = recentActivityTasks();
 	tasks.erase(
@@ -361,53 +544,63 @@ void StudioSettings::recordRecentActivityTask(const RecentActivityTask& task)
 
 void StudioSettings::clearRecentActivityTasks()
 {
-	m_settings.remove(kRecentActivityTasksArray);
+	removeKey(kRecentActivityTasksArray);
 }
 
 QVector<GameInstallationProfile> StudioSettings::gameInstallations() const
 {
 	QVector<GameInstallationProfile> profiles;
-	QStringList seenIds;
 
-	const int size = m_settings.beginReadArray(kGameInstallationsArray);
+	const int size = m_settings->beginReadArray(kGameInstallationsArray);
 	for (int index = 0; index < size; ++index) {
-		m_settings.setArrayIndex(index);
+		m_settings->setArrayIndex(index);
 
 		GameInstallationProfile profile;
-		profile.id = m_settings.value(kGameInstallationIdKey).toString();
-		profile.gameKey = m_settings.value(kGameInstallationGameKey, QStringLiteral("custom")).toString();
-		profile.engineFamily = gameEngineFamilyFromId(m_settings.value(kGameInstallationEngineFamilyKey, gameEngineFamilyId(GameEngineFamily::Unknown)).toString());
-		profile.displayName = m_settings.value(kGameInstallationDisplayNameKey).toString();
-		profile.rootPath = m_settings.value(kGameInstallationRootPathKey).toString();
-		profile.executablePath = m_settings.value(kGameInstallationExecutablePathKey).toString();
-		profile.basePackagePaths = m_settings.value(kGameInstallationBasePackagePathsKey).toStringList();
-		profile.modPackagePaths = m_settings.value(kGameInstallationModPackagePathsKey).toStringList();
-		profile.paletteId = m_settings.value(kGameInstallationPaletteIdKey).toString();
-		profile.compilerProfileId = m_settings.value(kGameInstallationCompilerProfileIdKey).toString();
-		profile.readOnly = m_settings.value(kGameInstallationReadOnlyKey, true).toBool();
-		profile.active = m_settings.value(kGameInstallationActiveKey, true).toBool();
-		profile.hidden = m_settings.value(kGameInstallationHiddenKey, false).toBool();
-		profile.manual = m_settings.value(kGameInstallationManualKey, true).toBool();
-		profile.createdUtc = m_settings.value(kGameInstallationCreatedUtcKey).toDateTime().toUTC();
-		profile.updatedUtc = normalizedTimestamp(m_settings.value(kGameInstallationUpdatedUtcKey).toDateTime());
+		profile.id = m_settings->value(kGameInstallationIdKey).toString();
+		profile.gameKey = m_settings->value(kGameInstallationGameKey, QStringLiteral("custom")).toString();
+		profile.engineFamily = gameEngineFamilyFromId(m_settings->value(kGameInstallationEngineFamilyKey, gameEngineFamilyId(GameEngineFamily::Unknown)).toString());
+		profile.displayName = m_settings->value(kGameInstallationDisplayNameKey).toString();
+		profile.rootPath = m_settings->value(kGameInstallationRootPathKey).toString();
+		profile.executablePath = m_settings->value(kGameInstallationExecutablePathKey).toString();
+		profile.basePackagePaths = m_settings->value(kGameInstallationBasePackagePathsKey).toStringList();
+		profile.modPackagePaths = m_settings->value(kGameInstallationModPackagePathsKey).toStringList();
+		profile.paletteId = m_settings->value(kGameInstallationPaletteIdKey).toString();
+		profile.compilerProfileId = m_settings->value(kGameInstallationCompilerProfileIdKey).toString();
+		profile.readOnly = m_settings->value(kGameInstallationReadOnlyKey, true).toBool();
+		profile.active = m_settings->value(kGameInstallationActiveKey, true).toBool();
+		profile.hidden = m_settings->value(kGameInstallationHiddenKey, false).toBool();
+		profile.manual = m_settings->value(kGameInstallationManualKey, true).toBool();
+		profile.createdUtc = m_settings->value(kGameInstallationCreatedUtcKey).toDateTime().toUTC();
+		profile.updatedUtc = normalizedTimestamp(m_settings->value(kGameInstallationUpdatedUtcKey).toDateTime());
 		profile = normalizedGameInstallationProfile(profile);
 
-		if (profile.rootPath.isEmpty() || seenIds.contains(profile.id)) {
+		if (profile.rootPath.isEmpty()) {
 			continue;
 		}
 
 		profiles.push_back(profile);
+	}
+	m_settings->endArray();
+
+	// Sort before de-duplicating and truncating so the most recently updated
+	// installation profiles survive an oversized stored array.
+	std::stable_sort(profiles.begin(), profiles.end(), [](const GameInstallationProfile& left, const GameInstallationProfile& right) {
+		return left.updatedUtc > right.updatedUtc;
+	});
+
+	QVector<GameInstallationProfile> unique;
+	QStringList seenIds;
+	for (const GameInstallationProfile& profile : std::as_const(profiles)) {
+		if (seenIds.contains(profile.id)) {
+			continue;
+		}
+		unique.push_back(profile);
 		seenIds.push_back(profile.id);
-		if (profiles.size() >= kMaximumGameInstallationProfiles) {
+		if (unique.size() >= kMaximumGameInstallationProfiles) {
 			break;
 		}
 	}
-	m_settings.endArray();
-
-	std::sort(profiles.begin(), profiles.end(), [](const GameInstallationProfile& left, const GameInstallationProfile& right) {
-		return left.updatedUtc > right.updatedUtc;
-	});
-	return profiles;
+	return unique;
 }
 
 void StudioSettings::upsertGameInstallation(GameInstallationProfile profile)
@@ -461,22 +654,22 @@ void StudioSettings::removeGameInstallation(const QString& id)
 
 	if (sameGameInstallationId(selectedGameInstallationId(), id)) {
 		if (profiles.isEmpty()) {
-			m_settings.remove(kSelectedGameInstallationKey);
+			removeKey(kSelectedGameInstallationKey);
 		} else {
-			m_settings.setValue(kSelectedGameInstallationKey, profiles.front().id);
+			writeValue(kSelectedGameInstallationKey, profiles.front().id);
 		}
 	}
 }
 
 void StudioSettings::clearGameInstallations()
 {
-	m_settings.remove(kGameInstallationsArray);
-	m_settings.remove(kSelectedGameInstallationKey);
+	removeKey(kGameInstallationsArray);
+	removeKey(kSelectedGameInstallationKey);
 }
 
 QString StudioSettings::selectedGameInstallationId() const
 {
-	const QString selectedId = m_settings.value(kSelectedGameInstallationKey).toString();
+	const QString selectedId = m_settings->value(kSelectedGameInstallationKey).toString();
 	if (selectedId.isEmpty()) {
 		return {};
 	}
@@ -491,7 +684,7 @@ QString StudioSettings::selectedGameInstallationId() const
 void StudioSettings::setSelectedGameInstallation(const QString& id)
 {
 	if (id.trimmed().isEmpty()) {
-		m_settings.remove(kSelectedGameInstallationKey);
+		removeKey(kSelectedGameInstallationKey);
 		return;
 	}
 
@@ -499,12 +692,12 @@ void StudioSettings::setSelectedGameInstallation(const QString& id)
 	requested.id = id;
 	const QString normalized = stableGameInstallationId(requested);
 	if (normalized.isEmpty()) {
-		m_settings.remove(kSelectedGameInstallationKey);
+		removeKey(kSelectedGameInstallationKey);
 		return;
 	}
 	for (const GameInstallationProfile& profile : gameInstallations()) {
 		if (sameGameInstallationId(profile.id, normalized)) {
-			m_settings.setValue(kSelectedGameInstallationKey, profile.id);
+			writeValue(kSelectedGameInstallationKey, profile.id);
 			return;
 		}
 	}
@@ -513,58 +706,58 @@ void StudioSettings::setSelectedGameInstallation(const QString& id)
 AccessibilityPreferences StudioSettings::accessibilityPreferences() const
 {
 	AccessibilityPreferences preferences;
-	preferences.localeName = normalizedLocaleName(m_settings.value(kLocaleNameKey, preferences.localeName).toString());
-	preferences.textScalePercent = normalizedTextScalePercent(m_settings.value(kTextScalePercentKey, preferences.textScalePercent).toInt());
-	preferences.theme = themeFromId(m_settings.value(kThemeKey, themeId(preferences.theme)).toString());
-	preferences.density = densityFromId(m_settings.value(kDensityKey, densityId(preferences.density)).toString());
-	preferences.reducedMotion = m_settings.value(kReducedMotionKey, preferences.reducedMotion).toBool();
-	preferences.textToSpeechEnabled = m_settings.value(kTextToSpeechEnabledKey, preferences.textToSpeechEnabled).toBool();
+	preferences.localeName = normalizedLocaleName(m_settings->value(kLocaleNameKey, preferences.localeName).toString());
+	preferences.textScalePercent = normalizedTextScalePercent(m_settings->value(kTextScalePercentKey, preferences.textScalePercent).toInt());
+	preferences.theme = themeFromId(m_settings->value(kThemeKey, themeId(preferences.theme)).toString());
+	preferences.density = densityFromId(m_settings->value(kDensityKey, densityId(preferences.density)).toString());
+	preferences.reducedMotion = m_settings->value(kReducedMotionKey, preferences.reducedMotion).toBool();
+	preferences.textToSpeechEnabled = m_settings->value(kTextToSpeechEnabledKey, preferences.textToSpeechEnabled).toBool();
 	return preferences;
 }
 
 void StudioSettings::setAccessibilityPreferences(const AccessibilityPreferences& preferences)
 {
-	m_settings.setValue(kLocaleNameKey, normalizedLocaleName(preferences.localeName));
-	m_settings.setValue(kTextScalePercentKey, normalizedTextScalePercent(preferences.textScalePercent));
-	m_settings.setValue(kThemeKey, themeId(preferences.theme));
-	m_settings.setValue(kDensityKey, densityId(preferences.density));
-	m_settings.setValue(kReducedMotionKey, preferences.reducedMotion);
-	m_settings.setValue(kTextToSpeechEnabledKey, preferences.textToSpeechEnabled);
+	writeValue(kLocaleNameKey, normalizedLocaleName(preferences.localeName));
+	writeValue(kTextScalePercentKey, normalizedTextScalePercent(preferences.textScalePercent));
+	writeValue(kThemeKey, themeId(preferences.theme));
+	writeValue(kDensityKey, densityId(preferences.density));
+	writeValue(kReducedMotionKey, preferences.reducedMotion);
+	writeValue(kTextToSpeechEnabledKey, preferences.textToSpeechEnabled);
 }
 
 void StudioSettings::setLocaleName(const QString& localeName)
 {
-	m_settings.setValue(kLocaleNameKey, normalizedLocaleName(localeName));
+	writeValue(kLocaleNameKey, normalizedLocaleName(localeName));
 }
 
 void StudioSettings::setTextScalePercent(int textScalePercent)
 {
-	m_settings.setValue(kTextScalePercentKey, normalizedTextScalePercent(textScalePercent));
+	writeValue(kTextScalePercentKey, normalizedTextScalePercent(textScalePercent));
 }
 
 void StudioSettings::setTheme(StudioTheme theme)
 {
-	m_settings.setValue(kThemeKey, themeId(theme));
+	writeValue(kThemeKey, themeId(theme));
 }
 
 void StudioSettings::setDensity(UiDensity density)
 {
-	m_settings.setValue(kDensityKey, densityId(density));
+	writeValue(kDensityKey, densityId(density));
 }
 
 void StudioSettings::setReducedMotion(bool reducedMotion)
 {
-	m_settings.setValue(kReducedMotionKey, reducedMotion);
+	writeValue(kReducedMotionKey, reducedMotion);
 }
 
 void StudioSettings::setTextToSpeechEnabled(bool enabled)
 {
-	m_settings.setValue(kTextToSpeechEnabledKey, enabled);
+	writeValue(kTextToSpeechEnabledKey, enabled);
 }
 
 QString StudioSettings::selectedEditorProfileId() const
 {
-	const QString requested = m_settings.value(kSelectedEditorProfileKey, defaultEditorProfileId()).toString();
+	const QString requested = m_settings->value(kSelectedEditorProfileKey, defaultEditorProfileId()).toString();
 	EditorProfileDescriptor descriptor;
 	if (editorProfileForId(requested, &descriptor)) {
 		return descriptor.id;
@@ -576,22 +769,22 @@ void StudioSettings::setSelectedEditorProfileId(const QString& id)
 {
 	EditorProfileDescriptor descriptor;
 	if (editorProfileForId(id, &descriptor)) {
-		m_settings.setValue(kSelectedEditorProfileKey, descriptor.id);
+		writeValue(kSelectedEditorProfileKey, descriptor.id);
 		return;
 	}
-	m_settings.setValue(kSelectedEditorProfileKey, defaultEditorProfileId());
+	writeValue(kSelectedEditorProfileKey, defaultEditorProfileId());
 }
 
 QVector<CompilerToolPathOverride> StudioSettings::compilerToolPathOverrides() const
 {
 	QVector<CompilerToolPathOverride> overrides;
 	QStringList seen;
-	const int size = m_settings.beginReadArray(kCompilerToolPathOverridesArray);
+	const int size = m_settings->beginReadArray(kCompilerToolPathOverridesArray);
 	for (int index = 0; index < size; ++index) {
-		m_settings.setArrayIndex(index);
+		m_settings->setArrayIndex(index);
 		CompilerToolPathOverride override;
-		override.toolId = normalizedId(m_settings.value(kCompilerToolPathOverrideToolIdKey).toString());
-		override.executablePath = normalizedProjectPath(m_settings.value(kCompilerToolPathOverrideExecutablePathKey).toString());
+		override.toolId = normalizedId(m_settings->value(kCompilerToolPathOverrideToolIdKey).toString());
+		override.executablePath = normalizedProjectPath(m_settings->value(kCompilerToolPathOverrideExecutablePathKey).toString());
 		if (override.toolId.isEmpty() || override.executablePath.isEmpty() || seen.contains(override.toolId)) {
 			continue;
 		}
@@ -601,7 +794,7 @@ QVector<CompilerToolPathOverride> StudioSettings::compilerToolPathOverrides() co
 			break;
 		}
 	}
-	m_settings.endArray();
+	m_settings->endArray();
 	return overrides;
 }
 
@@ -643,76 +836,76 @@ void StudioSettings::removeCompilerToolPathOverride(const QString& toolId)
 
 void StudioSettings::clearCompilerToolPathOverrides()
 {
-	m_settings.remove(kCompilerToolPathOverridesArray);
+	removeKey(kCompilerToolPathOverridesArray);
 }
 
 AiAutomationPreferences StudioSettings::aiAutomationPreferences() const
 {
 	AiAutomationPreferences preferences = defaultAiAutomationPreferences();
-	preferences.aiFreeMode = m_settings.value(kAiFreeModeKey, preferences.aiFreeMode).toBool();
-	preferences.cloudConnectorsEnabled = m_settings.value(kAiCloudConnectorsEnabledKey, preferences.cloudConnectorsEnabled).toBool();
-	preferences.agenticWorkflowsEnabled = m_settings.value(kAiAgenticWorkflowsEnabledKey, preferences.agenticWorkflowsEnabled).toBool();
-	preferences.preferredReasoningConnectorId = m_settings.value(kAiPreferredReasoningConnectorKey).toString();
-	preferences.preferredCodingConnectorId = m_settings.value(kAiPreferredCodingConnectorKey).toString();
-	preferences.preferredVisionConnectorId = m_settings.value(kAiPreferredVisionConnectorKey).toString();
-	preferences.preferredImageConnectorId = m_settings.value(kAiPreferredImageConnectorKey).toString();
-	preferences.preferredAudioConnectorId = m_settings.value(kAiPreferredAudioConnectorKey).toString();
-	preferences.preferredVoiceConnectorId = m_settings.value(kAiPreferredVoiceConnectorKey).toString();
-	preferences.preferredThreeDConnectorId = m_settings.value(kAiPreferredThreeDConnectorKey).toString();
-	preferences.preferredEmbeddingsConnectorId = m_settings.value(kAiPreferredEmbeddingsConnectorKey).toString();
-	preferences.preferredLocalConnectorId = m_settings.value(kAiPreferredLocalConnectorKey).toString();
-	preferences.preferredTextModelId = m_settings.value(kAiPreferredTextModelKey).toString();
-	preferences.preferredCodingModelId = m_settings.value(kAiPreferredCodingModelKey).toString();
-	preferences.preferredVisionModelId = m_settings.value(kAiPreferredVisionModelKey).toString();
-	preferences.preferredImageModelId = m_settings.value(kAiPreferredImageModelKey).toString();
-	preferences.preferredAudioModelId = m_settings.value(kAiPreferredAudioModelKey).toString();
-	preferences.preferredVoiceModelId = m_settings.value(kAiPreferredVoiceModelKey).toString();
-	preferences.preferredThreeDModelId = m_settings.value(kAiPreferredThreeDModelKey).toString();
-	preferences.preferredEmbeddingsModelId = m_settings.value(kAiPreferredEmbeddingsModelKey).toString();
-	preferences.openAiCredentialEnvironmentVariable = m_settings.value(kAiOpenAiCredentialEnvironmentKey, preferences.openAiCredentialEnvironmentVariable).toString();
-	preferences.elevenLabsCredentialEnvironmentVariable = m_settings.value(kAiElevenLabsCredentialEnvironmentKey, preferences.elevenLabsCredentialEnvironmentVariable).toString();
-	preferences.meshyCredentialEnvironmentVariable = m_settings.value(kAiMeshyCredentialEnvironmentKey, preferences.meshyCredentialEnvironmentVariable).toString();
-	preferences.customHttpCredentialEnvironmentVariable = m_settings.value(kAiCustomHttpCredentialEnvironmentKey, preferences.customHttpCredentialEnvironmentVariable).toString();
+	preferences.aiFreeMode = m_settings->value(kAiFreeModeKey, preferences.aiFreeMode).toBool();
+	preferences.cloudConnectorsEnabled = m_settings->value(kAiCloudConnectorsEnabledKey, preferences.cloudConnectorsEnabled).toBool();
+	preferences.agenticWorkflowsEnabled = m_settings->value(kAiAgenticWorkflowsEnabledKey, preferences.agenticWorkflowsEnabled).toBool();
+	preferences.preferredReasoningConnectorId = m_settings->value(kAiPreferredReasoningConnectorKey).toString();
+	preferences.preferredCodingConnectorId = m_settings->value(kAiPreferredCodingConnectorKey).toString();
+	preferences.preferredVisionConnectorId = m_settings->value(kAiPreferredVisionConnectorKey).toString();
+	preferences.preferredImageConnectorId = m_settings->value(kAiPreferredImageConnectorKey).toString();
+	preferences.preferredAudioConnectorId = m_settings->value(kAiPreferredAudioConnectorKey).toString();
+	preferences.preferredVoiceConnectorId = m_settings->value(kAiPreferredVoiceConnectorKey).toString();
+	preferences.preferredThreeDConnectorId = m_settings->value(kAiPreferredThreeDConnectorKey).toString();
+	preferences.preferredEmbeddingsConnectorId = m_settings->value(kAiPreferredEmbeddingsConnectorKey).toString();
+	preferences.preferredLocalConnectorId = m_settings->value(kAiPreferredLocalConnectorKey).toString();
+	preferences.preferredTextModelId = m_settings->value(kAiPreferredTextModelKey).toString();
+	preferences.preferredCodingModelId = m_settings->value(kAiPreferredCodingModelKey).toString();
+	preferences.preferredVisionModelId = m_settings->value(kAiPreferredVisionModelKey).toString();
+	preferences.preferredImageModelId = m_settings->value(kAiPreferredImageModelKey).toString();
+	preferences.preferredAudioModelId = m_settings->value(kAiPreferredAudioModelKey).toString();
+	preferences.preferredVoiceModelId = m_settings->value(kAiPreferredVoiceModelKey).toString();
+	preferences.preferredThreeDModelId = m_settings->value(kAiPreferredThreeDModelKey).toString();
+	preferences.preferredEmbeddingsModelId = m_settings->value(kAiPreferredEmbeddingsModelKey).toString();
+	preferences.openAiCredentialEnvironmentVariable = m_settings->value(kAiOpenAiCredentialEnvironmentKey, preferences.openAiCredentialEnvironmentVariable).toString();
+	preferences.elevenLabsCredentialEnvironmentVariable = m_settings->value(kAiElevenLabsCredentialEnvironmentKey, preferences.elevenLabsCredentialEnvironmentVariable).toString();
+	preferences.meshyCredentialEnvironmentVariable = m_settings->value(kAiMeshyCredentialEnvironmentKey, preferences.meshyCredentialEnvironmentVariable).toString();
+	preferences.customHttpCredentialEnvironmentVariable = m_settings->value(kAiCustomHttpCredentialEnvironmentKey, preferences.customHttpCredentialEnvironmentVariable).toString();
 	return normalizedAiAutomationPreferences(preferences);
 }
 
 void StudioSettings::setAiAutomationPreferences(const AiAutomationPreferences& preferences)
 {
 	const AiAutomationPreferences normalized = normalizedAiAutomationPreferences(preferences);
-	m_settings.setValue(kAiFreeModeKey, normalized.aiFreeMode);
-	m_settings.setValue(kAiCloudConnectorsEnabledKey, normalized.cloudConnectorsEnabled);
-	m_settings.setValue(kAiAgenticWorkflowsEnabledKey, normalized.agenticWorkflowsEnabled);
-	m_settings.setValue(kAiPreferredReasoningConnectorKey, normalized.preferredReasoningConnectorId);
-	m_settings.setValue(kAiPreferredCodingConnectorKey, normalized.preferredCodingConnectorId);
-	m_settings.setValue(kAiPreferredVisionConnectorKey, normalized.preferredVisionConnectorId);
-	m_settings.setValue(kAiPreferredImageConnectorKey, normalized.preferredImageConnectorId);
-	m_settings.setValue(kAiPreferredAudioConnectorKey, normalized.preferredAudioConnectorId);
-	m_settings.setValue(kAiPreferredVoiceConnectorKey, normalized.preferredVoiceConnectorId);
-	m_settings.setValue(kAiPreferredThreeDConnectorKey, normalized.preferredThreeDConnectorId);
-	m_settings.setValue(kAiPreferredEmbeddingsConnectorKey, normalized.preferredEmbeddingsConnectorId);
-	m_settings.setValue(kAiPreferredLocalConnectorKey, normalized.preferredLocalConnectorId);
-	m_settings.setValue(kAiPreferredTextModelKey, normalized.preferredTextModelId);
-	m_settings.setValue(kAiPreferredCodingModelKey, normalized.preferredCodingModelId);
-	m_settings.setValue(kAiPreferredVisionModelKey, normalized.preferredVisionModelId);
-	m_settings.setValue(kAiPreferredImageModelKey, normalized.preferredImageModelId);
-	m_settings.setValue(kAiPreferredAudioModelKey, normalized.preferredAudioModelId);
-	m_settings.setValue(kAiPreferredVoiceModelKey, normalized.preferredVoiceModelId);
-	m_settings.setValue(kAiPreferredThreeDModelKey, normalized.preferredThreeDModelId);
-	m_settings.setValue(kAiPreferredEmbeddingsModelKey, normalized.preferredEmbeddingsModelId);
-	m_settings.setValue(kAiOpenAiCredentialEnvironmentKey, normalized.openAiCredentialEnvironmentVariable);
-	m_settings.setValue(kAiElevenLabsCredentialEnvironmentKey, normalized.elevenLabsCredentialEnvironmentVariable);
-	m_settings.setValue(kAiMeshyCredentialEnvironmentKey, normalized.meshyCredentialEnvironmentVariable);
-	m_settings.setValue(kAiCustomHttpCredentialEnvironmentKey, normalized.customHttpCredentialEnvironmentVariable);
+	writeValue(kAiFreeModeKey, normalized.aiFreeMode);
+	writeValue(kAiCloudConnectorsEnabledKey, normalized.cloudConnectorsEnabled);
+	writeValue(kAiAgenticWorkflowsEnabledKey, normalized.agenticWorkflowsEnabled);
+	writeValue(kAiPreferredReasoningConnectorKey, normalized.preferredReasoningConnectorId);
+	writeValue(kAiPreferredCodingConnectorKey, normalized.preferredCodingConnectorId);
+	writeValue(kAiPreferredVisionConnectorKey, normalized.preferredVisionConnectorId);
+	writeValue(kAiPreferredImageConnectorKey, normalized.preferredImageConnectorId);
+	writeValue(kAiPreferredAudioConnectorKey, normalized.preferredAudioConnectorId);
+	writeValue(kAiPreferredVoiceConnectorKey, normalized.preferredVoiceConnectorId);
+	writeValue(kAiPreferredThreeDConnectorKey, normalized.preferredThreeDConnectorId);
+	writeValue(kAiPreferredEmbeddingsConnectorKey, normalized.preferredEmbeddingsConnectorId);
+	writeValue(kAiPreferredLocalConnectorKey, normalized.preferredLocalConnectorId);
+	writeValue(kAiPreferredTextModelKey, normalized.preferredTextModelId);
+	writeValue(kAiPreferredCodingModelKey, normalized.preferredCodingModelId);
+	writeValue(kAiPreferredVisionModelKey, normalized.preferredVisionModelId);
+	writeValue(kAiPreferredImageModelKey, normalized.preferredImageModelId);
+	writeValue(kAiPreferredAudioModelKey, normalized.preferredAudioModelId);
+	writeValue(kAiPreferredVoiceModelKey, normalized.preferredVoiceModelId);
+	writeValue(kAiPreferredThreeDModelKey, normalized.preferredThreeDModelId);
+	writeValue(kAiPreferredEmbeddingsModelKey, normalized.preferredEmbeddingsModelId);
+	writeValue(kAiOpenAiCredentialEnvironmentKey, normalized.openAiCredentialEnvironmentVariable);
+	writeValue(kAiElevenLabsCredentialEnvironmentKey, normalized.elevenLabsCredentialEnvironmentVariable);
+	writeValue(kAiMeshyCredentialEnvironmentKey, normalized.meshyCredentialEnvironmentVariable);
+	writeValue(kAiCustomHttpCredentialEnvironmentKey, normalized.customHttpCredentialEnvironmentVariable);
 }
 
 SetupProgress StudioSettings::setupProgress() const
 {
 	SetupProgress progress;
-	progress.currentStep = setupStepFromId(m_settings.value(kSetupCurrentStepKey, setupStepId(progress.currentStep)).toString());
-	progress.started = m_settings.value(kSetupStartedKey, false).toBool();
-	progress.skipped = m_settings.value(kSetupSkippedKey, false).toBool();
-	progress.completed = m_settings.value(kSetupCompletedKey, false).toBool();
-	progress.lastUpdatedUtc = m_settings.value(kSetupLastUpdatedUtcKey).toDateTime().toUTC();
+	progress.currentStep = setupStepFromId(m_settings->value(kSetupCurrentStepKey, setupStepId(progress.currentStep)).toString());
+	progress.started = m_settings->value(kSetupStartedKey, false).toBool();
+	progress.skipped = m_settings->value(kSetupSkippedKey, false).toBool();
+	progress.completed = m_settings->value(kSetupCompletedKey, false).toBool();
+	progress.lastUpdatedUtc = m_settings->value(kSetupLastUpdatedUtcKey).toDateTime().toUTC();
 	return progress;
 }
 
@@ -775,11 +968,11 @@ SetupSummary StudioSettings::setupSummary() const
 
 void StudioSettings::startOrResumeSetup(SetupStep step)
 {
-	m_settings.setValue(kSetupStartedKey, true);
-	m_settings.setValue(kSetupSkippedKey, false);
-	m_settings.setValue(kSetupCompletedKey, false);
-	m_settings.setValue(kSetupCurrentStepKey, setupStepId(step));
-	m_settings.setValue(kSetupLastUpdatedUtcKey, setupTimestamp());
+	writeValue(kSetupStartedKey, true);
+	writeValue(kSetupSkippedKey, false);
+	writeValue(kSetupCompletedKey, false);
+	writeValue(kSetupCurrentStepKey, setupStepId(step));
+	writeValue(kSetupLastUpdatedUtcKey, setupTimestamp());
 }
 
 void StudioSettings::advanceSetup()
@@ -803,90 +996,227 @@ void StudioSettings::advanceSetup()
 void StudioSettings::skipSetup()
 {
 	const SetupProgress progress = setupProgress();
-	m_settings.setValue(kSetupStartedKey, progress.started);
-	m_settings.setValue(kSetupSkippedKey, true);
-	m_settings.setValue(kSetupCompletedKey, false);
-	m_settings.setValue(kSetupCurrentStepKey, setupStepId(progress.currentStep));
-	m_settings.setValue(kSetupLastUpdatedUtcKey, setupTimestamp());
+	writeValue(kSetupStartedKey, progress.started);
+	writeValue(kSetupSkippedKey, true);
+	writeValue(kSetupCompletedKey, false);
+	writeValue(kSetupCurrentStepKey, setupStepId(progress.currentStep));
+	writeValue(kSetupLastUpdatedUtcKey, setupTimestamp());
 }
 
 void StudioSettings::completeSetup()
 {
-	m_settings.setValue(kSetupStartedKey, true);
-	m_settings.setValue(kSetupSkippedKey, false);
-	m_settings.setValue(kSetupCompletedKey, true);
-	m_settings.setValue(kSetupCurrentStepKey, setupStepId(SetupStep::ReviewFinish));
-	m_settings.setValue(kSetupLastUpdatedUtcKey, setupTimestamp());
+	writeValue(kSetupStartedKey, true);
+	writeValue(kSetupSkippedKey, false);
+	writeValue(kSetupCompletedKey, true);
+	writeValue(kSetupCurrentStepKey, setupStepId(SetupStep::ReviewFinish));
+	writeValue(kSetupLastUpdatedUtcKey, setupTimestamp());
 }
 
 void StudioSettings::resetSetup()
 {
-	m_settings.remove(kSetupStartedKey);
-	m_settings.remove(kSetupSkippedKey);
-	m_settings.remove(kSetupCompletedKey);
-	m_settings.remove(kSetupCurrentStepKey);
-	m_settings.remove(kSetupLastUpdatedUtcKey);
+	removeKey(kSetupStartedKey);
+	removeKey(kSetupSkippedKey);
+	removeKey(kSetupCompletedKey);
+	removeKey(kSetupCurrentStepKey);
+	removeKey(kSetupLastUpdatedUtcKey);
 }
 
 int StudioSettings::selectedMode() const
 {
 	bool ok = false;
-	const int modeIndex = m_settings.value(kSelectedModeKey, 0).toInt(&ok);
+	const int modeIndex = m_settings->value(kSelectedModeKey, 0).toInt(&ok);
 	return ok ? std::max(0, modeIndex) : 0;
 }
 
 void StudioSettings::setSelectedMode(int modeIndex)
 {
-	m_settings.setValue(kSelectedModeKey, std::max(0, modeIndex));
+	writeValue(kSelectedModeKey, std::max(0, modeIndex));
 }
 
 QByteArray StudioSettings::shellGeometry() const
 {
-	return m_settings.value(kShellGeometryKey).toByteArray();
+	return m_settings->value(kShellGeometryKey).toByteArray();
 }
 
 void StudioSettings::setShellGeometry(const QByteArray& geometry)
 {
-	m_settings.setValue(kShellGeometryKey, geometry);
+	writeValue(kShellGeometryKey, geometry);
 }
 
 QByteArray StudioSettings::shellWindowState() const
 {
-	return m_settings.value(kShellWindowStateKey).toByteArray();
+	return m_settings->value(kShellWindowStateKey).toByteArray();
 }
 
 void StudioSettings::setShellWindowState(const QByteArray& windowState)
 {
-	m_settings.setValue(kShellWindowStateKey, windowState);
+	writeValue(kShellWindowStateKey, windowState);
+}
+
+QByteArray StudioSettings::shellSplitterState() const
+{
+	return m_settings->value(kShellSplitterStateKey).toByteArray();
+}
+
+void StudioSettings::setShellSplitterState(const QByteArray& splitterState)
+{
+	writeValue(kShellSplitterStateKey, splitterState);
 }
 
 void StudioSettings::ensureSchema()
 {
-	if (!m_settings.contains(kSchemaVersionKey)) {
-		m_settings.setValue(kSchemaVersionKey, kSchemaVersion);
+	// A store with no version key is either brand new (nothing to migrate) or a
+	// version 1 store written before the key existed.
+	int storedVersion = kSchemaVersion;
+	if (m_settings->contains(kSchemaVersionKey)) {
+		bool ok = false;
+		const int value = m_settings->value(kSchemaVersionKey).toInt(&ok);
+		storedVersion = ok ? value : 1;
+		if (!ok) {
+			m_migrationNotes.push_back(QStringLiteral("Unreadable schema version; assuming version 1."));
+		}
+	} else if (!m_settings->allKeys().isEmpty()) {
+		storedVersion = 1;
+		m_migrationNotes.push_back(QStringLiteral("No schema version stored; assuming version 1."));
+	} else {
+		writeValue(kSchemaVersionKey, kSchemaVersion);
+		return;
 	}
+
+	if (storedVersion > kSchemaVersion) {
+		// Never reinterpret a newer store: unknown keys would be silently
+		// dropped or misread. Report it and stop writing instead.
+		m_storedSchemaIsNewer = true;
+		m_readOnly = true;
+		m_migrationNotes.push_back(QStringLiteral("Settings schema version %1 is newer than this build's %2; the store is opened read-only.")
+			.arg(storedVersion)
+			.arg(kSchemaVersion));
+		qWarning("VibeStudio settings at %s use schema version %d, newer than the supported version %d; no settings will be written.",
+			qUtf8Printable(m_settings->fileName()),
+			storedVersion,
+			kSchemaVersion);
+		return;
+	}
+
+	if (storedVersion < kSchemaVersion) {
+		runMigrations(storedVersion);
+	}
+}
+
+void StudioSettings::runMigrations(int storedVersion)
+{
+	// Ordered, idempotent steps. Each one ends by stamping the version it
+	// produced so an interrupted upgrade resumes from the right place.
+	for (int version = storedVersion; version < kSchemaVersion; ++version) {
+		switch (version) {
+		case 1: {
+			// 1 -> 2: normalise the stored preference ids so lookups no longer
+			// depend on the exact casing/separator a previous build wrote, then
+			// drop keys nothing reads any more.
+			if (m_settings->contains(kLocaleNameKey)) {
+				writeValue(kLocaleNameKey, normalizedLocaleName(m_settings->value(kLocaleNameKey).toString()));
+			}
+			const bool legacyHighContrast = m_settings->value(QStringLiteral("preferences/highContrast"), false).toBool();
+			if (m_settings->contains(kThemeKey)) {
+				const QString storedTheme = m_settings->value(kThemeKey).toString();
+				StudioTheme theme = themeFromId(storedTheme);
+				if (legacyHighContrast && theme == StudioTheme::Dark) {
+					theme = StudioTheme::HighContrastDark;
+				} else if (legacyHighContrast && theme == StudioTheme::Light) {
+					theme = StudioTheme::HighContrastLight;
+				}
+				writeValue(kThemeKey, themeId(theme));
+			} else if (legacyHighContrast) {
+				writeValue(kThemeKey, themeId(StudioTheme::HighContrastDark));
+			}
+			if (m_settings->contains(kDensityKey)) {
+				writeValue(kDensityKey, densityId(densityFromId(m_settings->value(kDensityKey).toString())));
+			}
+			if (m_settings->contains(kTextScalePercentKey)) {
+				writeValue(kTextScalePercentKey, normalizedTextScalePercent(m_settings->value(kTextScalePercentKey).toInt()));
+			}
+			int droppedKeys = 0;
+			for (const QString& key : retiredV1Keys()) {
+				if (m_settings->contains(key)) {
+					removeKey(key);
+					++droppedKeys;
+				}
+			}
+			m_migrationNotes.push_back(QStringLiteral("Migrated settings schema 1 -> 2: normalized theme/density/locale ids, dropped %1 unused key(s).")
+				.arg(droppedKeys));
+			break;
+		}
+		default:
+			m_migrationNotes.push_back(QStringLiteral("No migration step for schema version %1.").arg(version));
+			break;
+		}
+		writeValue(kSchemaVersionKey, version + 1);
+	}
+}
+
+bool StudioSettings::storedSchemaIsNewer() const
+{
+	return m_storedSchemaIsNewer;
+}
+
+bool StudioSettings::isReadOnly() const
+{
+	return m_readOnly;
+}
+
+QStringList StudioSettings::migrationNotes() const
+{
+	return m_migrationNotes;
+}
+
+void StudioSettings::writeValue(const QString& key, const QVariant& value)
+{
+	if (m_readOnly) {
+		++m_discardedWrites;
+		return;
+	}
+	m_settings->setValue(key, value);
+}
+
+void StudioSettings::removeKey(const QString& key)
+{
+	if (m_readOnly) {
+		++m_discardedWrites;
+		return;
+	}
+	m_settings->remove(key);
 }
 
 void StudioSettings::writeRecentProjects(const QVector<RecentProject>& projects)
 {
+	if (m_readOnly) {
+		++m_discardedWrites;
+		return;
+	}
+
 	const int count = std::min(static_cast<int>(projects.size()), kMaximumRecentProjects);
-	m_settings.beginWriteArray(kRecentProjectsArray, count);
+	m_settings->beginWriteArray(kRecentProjectsArray, count);
 	for (int index = 0; index < count; ++index) {
 		const RecentProject& project = projects[index];
-		m_settings.setArrayIndex(index);
-		m_settings.setValue(kRecentProjectPathKey, project.path);
-		m_settings.setValue(kRecentProjectDisplayNameKey, recentProjectDisplayName(project.path, project.displayName));
-		m_settings.setValue(kRecentProjectLastOpenedKey, normalizedTimestamp(project.lastOpenedUtc));
+		m_settings->setArrayIndex(index);
+		writeValue(kRecentProjectPathKey, project.path);
+		writeValue(kRecentProjectDisplayNameKey, recentProjectDisplayName(project.path, project.displayName));
+		writeValue(kRecentProjectLastOpenedKey, normalizedTimestamp(project.lastOpenedUtc));
 	}
-	m_settings.endArray();
+	m_settings->endArray();
 }
 
 void StudioSettings::writeRecentActivityTasks(const QVector<RecentActivityTask>& tasks)
 {
+	if (m_readOnly) {
+		++m_discardedWrites;
+		return;
+	}
+
 	const int count = std::min(static_cast<int>(tasks.size()), kMaximumRecentActivityTasks);
-	m_settings.beginWriteArray(kRecentActivityTasksArray, count);
+	m_settings->beginWriteArray(kRecentActivityTasksArray, count);
 	for (int index = 0; index < count; ++index) {
-		RecentActivityTask task = tasks[index];
+		RecentActivityTask task = boundedActivityTask(tasks[index]);
 		task.id = task.id.trimmed();
 		task.title = task.title.trimmed();
 		task.detail = task.detail.trimmed();
@@ -898,58 +1228,107 @@ void StudioSettings::writeRecentActivityTasks(const QVector<RecentActivityTask>&
 			task.finishedUtc = task.updatedUtc;
 		}
 
-		m_settings.setArrayIndex(index);
-		m_settings.setValue(kRecentActivityTaskIdKey, task.id);
-		m_settings.setValue(kRecentActivityTaskTitleKey, task.title);
-		m_settings.setValue(kRecentActivityTaskDetailKey, task.detail);
-		m_settings.setValue(kRecentActivityTaskSourceKey, task.source);
-		m_settings.setValue(kRecentActivityTaskStateKey, operationStateId(task.state));
-		m_settings.setValue(kRecentActivityTaskResultKey, task.resultSummary);
-		m_settings.setValue(kRecentActivityTaskWarningsKey, task.warnings);
-		m_settings.setValue(kRecentActivityTaskCreatedKey, task.createdUtc);
-		m_settings.setValue(kRecentActivityTaskUpdatedKey, task.updatedUtc);
-		m_settings.setValue(kRecentActivityTaskFinishedKey, task.finishedUtc);
+		m_settings->setArrayIndex(index);
+		writeValue(kRecentActivityTaskIdKey, task.id);
+		writeValue(kRecentActivityTaskTitleKey, task.title);
+		writeValue(kRecentActivityTaskDetailKey, task.detail);
+		writeValue(kRecentActivityTaskSourceKey, task.source);
+		writeValue(kRecentActivityTaskStateKey, operationStateId(task.state));
+		writeValue(kRecentActivityTaskResultKey, task.resultSummary);
+		writeValue(kRecentActivityTaskWarningsKey, task.warnings);
+		writeValue(kRecentActivityTaskCreatedKey, task.createdUtc);
+		writeValue(kRecentActivityTaskUpdatedKey, task.updatedUtc);
+		writeValue(kRecentActivityTaskFinishedKey, task.finishedUtc);
+		writeValue(kRecentActivityTaskProgressCurrentKey, task.progress.current);
+		writeValue(kRecentActivityTaskProgressTotalKey, task.progress.total);
+		writeValue(kRecentActivityTaskCancellableKey, task.cancellable);
+		writeValue(kRecentActivityTaskDurationMsKey, task.durationMs);
+		writeValue(kRecentActivityTaskLogTruncatedKey, task.logTruncated);
+		writeValue(kRecentActivityTaskLogDroppedKey, task.droppedLogEntryCount);
+
+		QJsonArray logJson;
+		for (const OperationLogEntry& entry : std::as_const(task.log)) {
+			logJson.append(operationLogEntryToJson(entry));
+		}
+		writeValue(kRecentActivityTaskLogKey, encodeJsonArray(logJson));
+
+		QJsonArray transitionsJson;
+		for (const OperationStateTransition& transition : std::as_const(task.transitions)) {
+			transitionsJson.append(operationTransitionToJson(transition));
+		}
+		writeValue(kRecentActivityTaskTransitionsKey, encodeJsonArray(transitionsJson));
 	}
-	m_settings.endArray();
+	m_settings->endArray();
 }
 
 void StudioSettings::writeGameInstallations(const QVector<GameInstallationProfile>& profiles)
 {
+	if (m_readOnly) {
+		++m_discardedWrites;
+		return;
+	}
+
 	const int count = std::min(static_cast<int>(profiles.size()), kMaximumGameInstallationProfiles);
-	m_settings.beginWriteArray(kGameInstallationsArray, count);
+	m_settings->beginWriteArray(kGameInstallationsArray, count);
 	for (int index = 0; index < count; ++index) {
 		const GameInstallationProfile profile = normalizedGameInstallationProfile(profiles[index]);
-		m_settings.setArrayIndex(index);
-		m_settings.setValue(kGameInstallationIdKey, profile.id);
-		m_settings.setValue(kGameInstallationGameKey, profile.gameKey);
-		m_settings.setValue(kGameInstallationEngineFamilyKey, gameEngineFamilyId(profile.engineFamily));
-		m_settings.setValue(kGameInstallationDisplayNameKey, profile.displayName);
-		m_settings.setValue(kGameInstallationRootPathKey, profile.rootPath);
-		m_settings.setValue(kGameInstallationExecutablePathKey, profile.executablePath);
-		m_settings.setValue(kGameInstallationBasePackagePathsKey, profile.basePackagePaths);
-		m_settings.setValue(kGameInstallationModPackagePathsKey, profile.modPackagePaths);
-		m_settings.setValue(kGameInstallationPaletteIdKey, profile.paletteId);
-		m_settings.setValue(kGameInstallationCompilerProfileIdKey, profile.compilerProfileId);
-		m_settings.setValue(kGameInstallationReadOnlyKey, profile.readOnly);
-		m_settings.setValue(kGameInstallationActiveKey, profile.active);
-		m_settings.setValue(kGameInstallationHiddenKey, profile.hidden);
-		m_settings.setValue(kGameInstallationManualKey, profile.manual);
-		m_settings.setValue(kGameInstallationCreatedUtcKey, normalizedTimestamp(profile.createdUtc));
-		m_settings.setValue(kGameInstallationUpdatedUtcKey, normalizedTimestamp(profile.updatedUtc));
+		m_settings->setArrayIndex(index);
+		writeValue(kGameInstallationIdKey, profile.id);
+		writeValue(kGameInstallationGameKey, profile.gameKey);
+		writeValue(kGameInstallationEngineFamilyKey, gameEngineFamilyId(profile.engineFamily));
+		writeValue(kGameInstallationDisplayNameKey, profile.displayName);
+		writeValue(kGameInstallationRootPathKey, profile.rootPath);
+		writeValue(kGameInstallationExecutablePathKey, profile.executablePath);
+		writeValue(kGameInstallationBasePackagePathsKey, profile.basePackagePaths);
+		writeValue(kGameInstallationModPackagePathsKey, profile.modPackagePaths);
+		writeValue(kGameInstallationPaletteIdKey, profile.paletteId);
+		writeValue(kGameInstallationCompilerProfileIdKey, profile.compilerProfileId);
+		writeValue(kGameInstallationReadOnlyKey, profile.readOnly);
+		writeValue(kGameInstallationActiveKey, profile.active);
+		writeValue(kGameInstallationHiddenKey, profile.hidden);
+		writeValue(kGameInstallationManualKey, profile.manual);
+		writeValue(kGameInstallationCreatedUtcKey, normalizedTimestamp(profile.createdUtc));
+		writeValue(kGameInstallationUpdatedUtcKey, normalizedTimestamp(profile.updatedUtc));
 	}
-	m_settings.endArray();
+	m_settings->endArray();
 }
 
 void StudioSettings::writeCompilerToolPathOverrides(const QVector<CompilerToolPathOverride>& overrides)
 {
-	const int count = std::min(static_cast<int>(overrides.size()), kMaximumCompilerToolPathOverrides);
-	m_settings.beginWriteArray(kCompilerToolPathOverridesArray, count);
-	for (int index = 0; index < count; ++index) {
-		m_settings.setArrayIndex(index);
-		m_settings.setValue(kCompilerToolPathOverrideToolIdKey, normalizedId(overrides[index].toolId));
-		m_settings.setValue(kCompilerToolPathOverrideExecutablePathKey, normalizedProjectPath(overrides[index].executablePath));
+	if (m_readOnly) {
+		++m_discardedWrites;
+		return;
 	}
-	m_settings.endArray();
+
+	const int count = std::min(static_cast<int>(overrides.size()), kMaximumCompilerToolPathOverrides);
+	m_settings->beginWriteArray(kCompilerToolPathOverridesArray, count);
+	for (int index = 0; index < count; ++index) {
+		m_settings->setArrayIndex(index);
+		writeValue(kCompilerToolPathOverrideToolIdKey, normalizedId(overrides[index].toolId));
+		writeValue(kCompilerToolPathOverrideExecutablePathKey, normalizedProjectPath(overrides[index].executablePath));
+	}
+	m_settings->endArray();
+}
+
+RecentActivityTask recentActivityTaskFromOperationTask(const OperationTask& task)
+{
+	RecentActivityTask record;
+	record.id = task.id;
+	record.title = task.title;
+	record.detail = task.detail;
+	record.source = task.source;
+	record.state = task.state;
+	record.progress = task.progress;
+	record.resultSummary = task.resultSummary;
+	record.warnings = task.warnings;
+	record.log = task.log;
+	record.transitions = task.transitions;
+	record.cancellable = task.cancellable;
+	record.createdUtc = task.createdUtc;
+	record.updatedUtc = task.updatedUtc;
+	record.finishedUtc = task.finishedUtc;
+	record.durationMs = task.durationMs > 0 ? task.durationMs : operationTaskElapsedMs(task);
+	return boundedActivityTask(record);
 }
 
 QString normalizedProjectPath(const QString& path)

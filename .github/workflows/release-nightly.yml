@@ -3,7 +3,7 @@ name: release-nightly
 on:
   workflow_dispatch:
   schedule:
-    - cron: "17 3 * * 0"
+    - cron: "17 3 * * *"
 
 permissions:
   contents: read
@@ -61,7 +61,7 @@ jobs:
           --backend ninja
           --buildtype=release
           -Dgithub_repo=${{ github.repository }}
-          -Dupdate_channel=nightly
+          -Dupdate_channel=beta
 
       - name: Build
         run: meson compile -C builddir
