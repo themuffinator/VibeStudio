@@ -6,6 +6,7 @@
 #include <QKeyEvent>
 #include <QMouseEvent>
 #include <QPaintEvent>
+#include <QFontMetricsF>
 #include <QPainter>
 #include <QPen>
 #include <QPolygonF>
@@ -38,6 +39,15 @@ constexpr int kMaxGridLines = 1024;
 constexpr int kMaxLabels = 160;
 constexpr int kPatchSubdivisions = 3;
 constexpr double kPi = 3.14159265358979323846;
+// Pixels the pointer must travel before a press on a selected object turns into
+// a move; below this a press-and-release is still just a click.
+constexpr double kDragThresholdPixels = 4.0;
+// Upper bounds on overlay work, so a selection of tens of thousands of objects
+// cannot make painting crawl.
+constexpr int kMaxSelectionMarkers = 512;
+constexpr int kMaxPreviewOutlines = 512;
+// Shift multiplies the arrow-key nudge.
+constexpr int kCoarseNudgeMultiplier = 8;
 
 // Doom linedef flag bit 2 (0x0004, ML_TWOSIDED) marks a linedef with a back
 // side; see https://doomwiki.org/wiki/Linedef.
@@ -405,6 +415,133 @@ bool objectWorldPoint(const LevelMapDocument& document, const QVector<DoomSector
 	return false;
 }
 
+// Projected extent of an object. Point-like objects (things, entities,
+// vertices) report a zero-size rectangle at their position, which is exactly
+// what rubber-band containment and the drag preview want.
+bool objectWorldBounds(const LevelMapDocument& document, const QVector<DoomSectorOutline>& outlines,
+	const QVector<MapBrushGeometry>& brushGeometry, MapViewportProjection projection, LevelMapSelectionKind kind,
+	int id, QRectF* out)
+{
+	if (out == nullptr || id < 0) {
+		return false;
+	}
+	switch (kind) {
+	case LevelMapSelectionKind::None:
+		return false;
+	case LevelMapSelectionKind::DoomLinedef: {
+		const LevelMapDoomLinedef* linedef = findById(document.doomLinedefs, id);
+		if (linedef == nullptr) {
+			return false;
+		}
+		const LevelMapDoomVertex* start = findById(document.doomVertices, linedef->startVertex);
+		const LevelMapDoomVertex* end = findById(document.doomVertices, linedef->endVertex);
+		if (start == nullptr || end == nullptr) {
+			return false;
+		}
+		const double height = projection == MapViewportProjection::TopXY ? 0.0 : doomLinedefHeight(document, *linedef);
+		const QPointF a = projectVec(projection, makeVec(start->x, start->y, height));
+		const QPointF b = projectVec(projection, makeVec(end->x, end->y, height));
+		*out = minMaxRect(std::min(a.x(), b.x()), std::min(a.y(), b.y()), std::max(a.x(), b.x()), std::max(a.y(), b.y()));
+		return true;
+	}
+	case LevelMapSelectionKind::DoomSector: {
+		for (const DoomSectorOutline& outline : outlines) {
+			if (outline.sectorId == id) {
+				if (outline.bounds.isNull()) {
+					return false;
+				}
+				*out = outline.bounds;
+				return true;
+			}
+		}
+		return false;
+	}
+	case LevelMapSelectionKind::QuakeBrush: {
+		for (const MapBrushGeometry& brush : brushGeometry) {
+			if (brush.brushId != id) {
+				continue;
+			}
+			if (brush.solved) {
+				*out = projectedBoundsRect(projection, brush.mins, brush.maxs);
+				return true;
+			}
+			break;
+		}
+		const LevelMapBrush* brush = findById(document.brushes, id);
+		if (brush == nullptr || !brush->boundsSolved) {
+			return false;
+		}
+		*out = projectedBoundsRect(projection, brush->mins, brush->maxs);
+		return true;
+	}
+	case LevelMapSelectionKind::QuakePatch: {
+		const LevelMapPatch* patch = findById(document.patches, id);
+		if (patch == nullptr) {
+			return false;
+		}
+		if (patch->mins.valid && patch->maxs.valid) {
+			*out = projectedBoundsRect(projection, patch->mins, patch->maxs);
+			return true;
+		}
+		if (patch->controlPoints.isEmpty()) {
+			return false;
+		}
+		QPointF minimum = projectVec(projection, patch->controlPoints.first());
+		QPointF maximum = minimum;
+		for (const LevelMapVec3& point : patch->controlPoints) {
+			const QPointF projected = projectVec(projection, point);
+			minimum = QPointF(std::min(minimum.x(), projected.x()), std::min(minimum.y(), projected.y()));
+			maximum = QPointF(std::max(maximum.x(), projected.x()), std::max(maximum.y(), projected.y()));
+		}
+		*out = minMaxRect(minimum.x(), minimum.y(), maximum.x(), maximum.y());
+		return true;
+	}
+	case LevelMapSelectionKind::Entity:
+	case LevelMapSelectionKind::DoomVertex:
+	case LevelMapSelectionKind::DoomThing:
+		break;
+	}
+	QPointF point;
+	if (!objectWorldPoint(document, outlines, brushGeometry, projection, kind, id, &point)) {
+		return false;
+	}
+	*out = QRectF(point, QSizeF(0.0, 0.0));
+	return true;
+}
+
+// QRectF::contains() normalizes, which hides the degenerate cases this viewport
+// relies on (a flat brush, a straight linedef, a bare point), so containment is
+// tested against the raw edges.
+bool rectContainsRect(const QRectF& outer, const QRectF& inner)
+{
+	return inner.left() >= outer.left() && inner.right() <= outer.right() && inner.top() >= outer.top()
+		&& inner.bottom() <= outer.bottom();
+}
+
+// Axis letters of the two drawn axes. These name coordinate components, so they
+// are identifiers rather than translatable prose.
+QString planeAxisLetters(MapViewportProjection projection, bool vertical)
+{
+	switch (projection) {
+	case MapViewportProjection::TopXY:
+		return vertical ? QStringLiteral("Y") : QStringLiteral("X");
+	case MapViewportProjection::FrontXZ:
+		return vertical ? QStringLiteral("Z") : QStringLiteral("X");
+	case MapViewportProjection::SideZY:
+		return vertical ? QStringLiteral("Z") : QStringLiteral("Y");
+	}
+	return vertical ? QStringLiteral("Y") : QStringLiteral("X");
+}
+
+QString planePointText(MapViewportProjection projection, const QPointF& point)
+{
+	return QStringLiteral("%1 %2, %3 %4")
+		.arg(planeAxisLetters(projection, false))
+		.arg(point.x(), 0, 'f', 1)
+		.arg(planeAxisLetters(projection, true))
+		.arg(point.y(), 0, 'f', 1);
+}
+
 } // namespace
 
 // Colour set for one paint pass. Every distinction the viewport draws is also
@@ -456,10 +593,24 @@ MapViewport::MapViewport(QWidget* parent)
 		QKeyEvent keyEvent(QEvent::KeyPress, Qt::Key_Tab, Qt::NoModifier);
 		keyPressEvent(&keyEvent);
 	});
+	// Shift+Tab steps backwards and extends the selection; Ctrl+Tab extends
+	// forwards, so a set can be built in either direction from the keyboard.
 	auto* cycleBackward = new QShortcut(QKeySequence(Qt::SHIFT | Qt::Key_Tab), this);
 	cycleBackward->setContext(Qt::WidgetShortcut);
 	connect(cycleBackward, &QShortcut::activated, this, [this]() {
 		QKeyEvent keyEvent(QEvent::KeyPress, Qt::Key_Backtab, Qt::ShiftModifier);
+		keyPressEvent(&keyEvent);
+	});
+	auto* extendForward = new QShortcut(QKeySequence(Qt::CTRL | Qt::Key_Tab), this);
+	extendForward->setContext(Qt::WidgetShortcut);
+	connect(extendForward, &QShortcut::activated, this, [this]() {
+		QKeyEvent keyEvent(QEvent::KeyPress, Qt::Key_Tab, Qt::ControlModifier);
+		keyPressEvent(&keyEvent);
+	});
+	auto* extendBackward = new QShortcut(QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_Tab), this);
+	extendBackward->setContext(Qt::WidgetShortcut);
+	connect(extendBackward, &QShortcut::activated, this, [this]() {
+		QKeyEvent keyEvent(QEvent::KeyPress, Qt::Key_Backtab, Qt::ShiftModifier | Qt::ControlModifier);
 		keyPressEvent(&keyEvent);
 	});
 }
@@ -470,10 +621,12 @@ void MapViewport::setDocument(const LevelMapDocument& document)
 {
 	m_document = document;
 	m_hasDocument = true;
-	m_selectionKind = document.selectionKind;
-	m_selectedObjectId = document.selectedObjectId;
+	adoptDocumentSelection();
 	m_hover = MapViewportHit();
 	m_panning = false;
+	m_pressArmed = false;
+	m_dragging = false;
+	m_banding = false;
 	unsetCursor();
 	rebuildGeometry();
 	updateWorldBounds();
@@ -482,16 +635,79 @@ void MapViewport::setDocument(const LevelMapDocument& document)
 	update();
 }
 
+void MapViewport::updateDocument(const LevelMapDocument& document)
+{
+	if (!m_hasDocument) {
+		setDocument(document);
+		return;
+	}
+	// An edit changes geometry, not the camera: keep the pan and zoom the user
+	// set, and only re-solve what is drawn.
+	m_document = document;
+	adoptDocumentSelection();
+	m_hover = MapViewportHit();
+	m_pressArmed = false;
+	m_dragging = false;
+	m_banding = false;
+	rebuildGeometry();
+	updateWorldBounds();
+	setAccessibleDescription(accessibleSummary());
+	update();
+}
+
+void MapViewport::adoptDocumentSelection()
+{
+	if (!m_document.selection.isEmpty()) {
+		setSelectionSetInternal(m_document.selection);
+		return;
+	}
+	m_selection.clear();
+	if (m_document.selectionKind != LevelMapSelectionKind::None && m_document.selectedObjectId >= 0) {
+		m_selection.push_back(LevelMapSelectionRef {m_document.selectionKind, m_document.selectedObjectId});
+	}
+	syncPrimaryFromSelection();
+}
+
+void MapViewport::syncPrimaryFromSelection()
+{
+	if (m_selection.isEmpty()) {
+		m_selectionKind = LevelMapSelectionKind::None;
+		m_selectedObjectId = -1;
+		return;
+	}
+	m_selectionKind = m_selection.back().kind;
+	m_selectedObjectId = m_selection.back().objectId;
+}
+
+void MapViewport::setSelectionSetInternal(const QVector<LevelMapSelectionRef>& selection)
+{
+	m_selection.clear();
+	m_selection.reserve(selection.size());
+	for (const LevelMapSelectionRef& ref : selection) {
+		if (ref.kind == LevelMapSelectionKind::None || ref.objectId < 0) {
+			continue;
+		}
+		// Keep the caller's last occurrence so their final entry is primary.
+		m_selection.removeAll(ref);
+		m_selection.push_back(ref);
+	}
+	syncPrimaryFromSelection();
+}
+
 void MapViewport::clearDocument()
 {
 	m_document = LevelMapDocument();
 	m_hasDocument = false;
 	m_brushGeometry.clear();
 	m_sectorOutlines.clear();
+	m_selection.clear();
 	m_selectionKind = LevelMapSelectionKind::None;
 	m_selectedObjectId = -1;
 	m_hover = MapViewportHit();
 	m_panning = false;
+	m_pressArmed = false;
+	m_dragging = false;
+	m_banding = false;
 	unsetCursor();
 	m_worldBounds = minMaxRect(-512.0, -512.0, 512.0, 512.0);
 	m_worldCenter = m_worldBounds.center();
@@ -511,6 +727,9 @@ void MapViewport::setProjection(MapViewportProjection projection)
 	if (m_projection == projection) {
 		return;
 	}
+	// The drag plane and the rubber band are both expressed in the projected
+	// axes, so neither survives a projection change.
+	cancelInteraction();
 	m_projection = projection;
 	updateWorldBounds();
 	zoomToFit();
@@ -525,13 +744,27 @@ MapViewportProjection MapViewport::projection() const
 
 void MapViewport::setSelection(LevelMapSelectionKind kind, int objectId)
 {
+	// A caller that hands back the primary member the viewport already has is
+	// only echoing the document's single-selection fields, so the multi-selection
+	// the user built here must survive it.
 	if (m_selectionKind == kind && m_selectedObjectId == objectId) {
 		return;
 	}
-	m_selectionKind = kind;
-	m_selectedObjectId = objectId;
+	replaceSelection(kind, objectId);
 	setAccessibleDescription(accessibleSummary());
 	update();
+}
+
+void MapViewport::setSelectionSet(const QVector<LevelMapSelectionRef>& selection)
+{
+	setSelectionSetInternal(selection);
+	setAccessibleDescription(accessibleSummary());
+	update();
+}
+
+QVector<LevelMapSelectionRef> MapViewport::selectionSet() const
+{
+	return m_selection;
 }
 
 LevelMapSelectionKind MapViewport::selectionKind() const
@@ -542,6 +775,47 @@ LevelMapSelectionKind MapViewport::selectionKind() const
 int MapViewport::selectedObjectId() const
 {
 	return m_selectedObjectId;
+}
+
+bool MapViewport::selectionContains(LevelMapSelectionKind kind, int objectId) const
+{
+	return m_selection.contains(LevelMapSelectionRef {kind, objectId});
+}
+
+void MapViewport::replaceSelection(LevelMapSelectionKind kind, int objectId)
+{
+	m_selection.clear();
+	if (kind != LevelMapSelectionKind::None && objectId >= 0) {
+		m_selection.push_back(LevelMapSelectionRef {kind, objectId});
+	}
+	syncPrimaryFromSelection();
+}
+
+void MapViewport::addToSelection(LevelMapSelectionKind kind, int objectId)
+{
+	if (kind == LevelMapSelectionKind::None || objectId < 0) {
+		return;
+	}
+	const LevelMapSelectionRef ref {kind, objectId};
+	// Adding a member that is already present promotes it to primary rather than
+	// duplicating it.
+	m_selection.removeAll(ref);
+	m_selection.push_back(ref);
+	syncPrimaryFromSelection();
+}
+
+void MapViewport::toggleInSelection(LevelMapSelectionKind kind, int objectId)
+{
+	if (kind == LevelMapSelectionKind::None || objectId < 0) {
+		return;
+	}
+	const LevelMapSelectionRef ref {kind, objectId};
+	if (m_selection.removeAll(ref) > 0) {
+		syncPrimaryFromSelection();
+		return;
+	}
+	m_selection.push_back(ref);
+	syncPrimaryFromSelection();
 }
 
 void MapViewport::setGridSize(int units)
@@ -557,6 +831,42 @@ void MapViewport::setGridSize(int units)
 int MapViewport::gridSize() const
 {
 	return m_gridSize;
+}
+
+void MapViewport::setSnapToGrid(bool enabled)
+{
+	if (m_snapToGrid == enabled) {
+		return;
+	}
+	m_snapToGrid = enabled;
+	if (m_dragging) {
+		Q_EMIT hoverChanged(dragSummary());
+	}
+	update();
+}
+
+bool MapViewport::snapToGrid() const
+{
+	return m_snapToGrid;
+}
+
+bool MapViewport::isDragging() const
+{
+	return m_dragging;
+}
+
+void MapViewport::cancelInteraction()
+{
+	const bool wasBusy = m_dragging || m_banding || m_pressArmed;
+	m_pressArmed = false;
+	m_dragging = false;
+	m_banding = false;
+	m_dragAnchorPlane = QPointF();
+	m_dragCurrentPlane = QPointF();
+	if (wasBusy) {
+		Q_EMIT hoverChanged(hoverSummary());
+		update();
+	}
 }
 
 void MapViewport::setShowGrid(bool show)
@@ -681,6 +991,16 @@ QString MapViewport::hoverSummary() const
 	if (!m_hasDocument) {
 		return tr("No map loaded.");
 	}
+	if (m_dragging) {
+		return dragSummary();
+	}
+	if (m_banding) {
+		const QRectF band = bandWorldRect();
+		return tr("Selecting inside %1 to %2 (%3 objects)")
+			.arg(planePointText(m_projection, band.topLeft()),
+				planePointText(m_projection, band.bottomRight()))
+			.arg(objectsInWorldRect(band).size());
+	}
 	const QString coordinates = tr("x %1, y %2")
 					    .arg(m_hover.worldX, 0, 'f', 1)
 					    .arg(m_hover.worldY, 0, 'f', 1);
@@ -738,7 +1058,28 @@ QStringList MapViewport::statusLines() const
 	lines << (m_selectionKind == LevelMapSelectionKind::None
 			? tr("Selection: none")
 			: tr("Selection: %1").arg(objectLabelText(m_document, m_selectionKind, m_selectedObjectId)));
+	if (m_selection.size() > 1) {
+		lines << tr("Selected objects: %1 (primary listed above)").arg(m_selection.size());
+	}
+	lines << (m_snapToGrid ? tr("Snap: on (%1 units)").arg(m_gridSize) : tr("Snap: off"));
+	if (m_dragging) {
+		lines << dragSummary();
+	}
 	return lines;
+}
+
+QString MapViewport::dragSummary() const
+{
+	const QPointF delta = snappedPlaneDelta();
+	const QString deltaText = planePointText(m_projection, delta);
+	QPointF world;
+	if (m_selectionKind != LevelMapSelectionKind::None
+		&& objectWorldPoint(m_document, m_sectorOutlines, m_brushGeometry, m_projection, m_selectionKind,
+			m_selectedObjectId, &world)) {
+		return tr("Moving %n object(s) by %1 - destination %2", nullptr, static_cast<int>(m_selection.size()))
+			.arg(deltaText, planePointText(m_projection, world + delta));
+	}
+	return tr("Moving %n object(s) by %1", nullptr, static_cast<int>(m_selection.size())).arg(deltaText);
 }
 
 QString MapViewport::accessibleSummary() const
@@ -747,9 +1088,13 @@ QString MapViewport::accessibleSummary() const
 		return tr("Map viewport: no map is loaded, so there is nothing to draw.");
 	}
 	const QString name = m_document.mapName.isEmpty() ? tr("an unnamed map") : m_document.mapName;
-	const QString selection = m_selectionKind == LevelMapSelectionKind::None
+	QString selection = m_selectionKind == LevelMapSelectionKind::None
 		? tr("nothing selected")
 		: objectLabelText(m_document, m_selectionKind, m_selectedObjectId);
+	if (m_selection.size() > 1) {
+		selection = tr("%1, primary of %n selected object(s)", nullptr, static_cast<int>(m_selection.size()))
+				    .arg(selection);
+	}
 	if (documentIsDoom(m_document)) {
 		return tr("Map viewport showing %1 in the %2 projection at %3 percent zoom, with %4 linedefs, %5 sectors "
 			  "and %6 things; %7.")
@@ -1053,6 +1398,319 @@ MapViewportHit MapViewport::hitTest(const QPointF& viewPoint) const
 		consider(LevelMapSelectionKind::QuakePatch, patch.id, bounds.center(), distance);
 	}
 	return hit;
+}
+
+QRectF MapViewport::bandWorldRect() const
+{
+	const QPointF a = viewToWorld(m_bandAnchorView);
+	const QPointF b = viewToWorld(m_bandCurrentView);
+	return minMaxRect(std::min(a.x(), b.x()), std::min(a.y(), b.y()), std::max(a.x(), b.x()), std::max(a.y(), b.y()));
+}
+
+QVector<LevelMapSelectionRef> MapViewport::objectsInWorldRect(const QRectF& rect) const
+{
+	QVector<LevelMapSelectionRef> result;
+	if (!m_hasDocument) {
+		return result;
+	}
+	const QRectF area = minMaxRect(std::min(rect.left(), rect.right()), std::min(rect.top(), rect.bottom()),
+		std::max(rect.left(), rect.right()), std::max(rect.top(), rect.bottom()));
+	// An object counts as selected when its whole projected extent is inside the
+	// band, which is what a mapper expects from a lasso: clipping half a brush
+	// would be a surprise.
+	//
+	// Each kind walks its own container rather than going through
+	// objectWorldBounds() by id, because that helper scans the solved brush list
+	// per lookup and this runs on every pointer move while the band is open.
+	const int worldspawnId = worldspawnEntityId(m_document);
+	const auto keep = [&](LevelMapSelectionKind kind, int id, const QRectF& bounds) {
+		if (id >= 0 && rectContainsRect(area, bounds)) {
+			result.push_back(LevelMapSelectionRef {kind, id});
+		}
+	};
+	const auto pointRect = [](const QPointF& point) { return QRectF(point, QSizeF(0.0, 0.0)); };
+
+	for (const LevelMapSelectionKind kind : selectionTiers(m_document)) {
+		switch (kind) {
+		case LevelMapSelectionKind::DoomThing:
+			for (const LevelMapDoomThing& thing : m_document.doomThings) {
+				keep(kind, thing.id, pointRect(projectVec(m_projection, makeVec(thing.x, thing.y, 0.0))));
+			}
+			break;
+		case LevelMapSelectionKind::DoomVertex:
+			for (const LevelMapDoomVertex& vertex : m_document.doomVertices) {
+				keep(kind, vertex.id, pointRect(projectVec(m_projection, makeVec(vertex.x, vertex.y, 0.0))));
+			}
+			break;
+		case LevelMapSelectionKind::DoomLinedef:
+			for (const LevelMapDoomLinedef& linedef : m_document.doomLinedefs) {
+				const LevelMapDoomVertex* start = findById(m_document.doomVertices, linedef.startVertex);
+				const LevelMapDoomVertex* end = findById(m_document.doomVertices, linedef.endVertex);
+				if (start == nullptr || end == nullptr) {
+					continue;
+				}
+				const double height = m_projection == MapViewportProjection::TopXY
+					? 0.0
+					: doomLinedefHeight(m_document, linedef);
+				const QPointF a = projectVec(m_projection, makeVec(start->x, start->y, height));
+				const QPointF b = projectVec(m_projection, makeVec(end->x, end->y, height));
+				keep(kind, linedef.id,
+					minMaxRect(std::min(a.x(), b.x()), std::min(a.y(), b.y()), std::max(a.x(), b.x()),
+						std::max(a.y(), b.y())));
+			}
+			break;
+		case LevelMapSelectionKind::Entity:
+			for (const LevelMapEntity& entity : m_document.entities) {
+				// Worldspawn holds the world brushes and is never drawn as a
+				// marker, so it is not band-selectable either.
+				if (!entity.origin.valid || entity.id == worldspawnId) {
+					continue;
+				}
+				keep(kind, entity.id, pointRect(projectVec(m_projection, entity.origin)));
+			}
+			break;
+		case LevelMapSelectionKind::QuakeBrush:
+			for (int index = 0; index < m_document.brushes.size(); ++index) {
+				const LevelMapBrush& brush = m_document.brushes.at(index);
+				// buildLevelMapBrushGeometry() preserves order, so the parallel
+				// entry is normally at the same index; fall back to the parser
+				// bounds when it is not solved or not aligned.
+				if (index < m_brushGeometry.size() && m_brushGeometry.at(index).brushId == brush.id
+					&& m_brushGeometry.at(index).solved) {
+					keep(kind, brush.id,
+						projectedBoundsRect(m_projection, m_brushGeometry.at(index).mins,
+							m_brushGeometry.at(index).maxs));
+					continue;
+				}
+				if (!brush.boundsSolved) {
+					continue;
+				}
+				keep(kind, brush.id, projectedBoundsRect(m_projection, brush.mins, brush.maxs));
+			}
+			break;
+		case LevelMapSelectionKind::QuakePatch:
+			for (const LevelMapPatch& patch : m_document.patches) {
+				if (!patch.mins.valid || !patch.maxs.valid) {
+					continue;
+				}
+				keep(kind, patch.id, projectedBoundsRect(m_projection, patch.mins, patch.maxs));
+			}
+			break;
+		case LevelMapSelectionKind::None:
+		case LevelMapSelectionKind::DoomSector:
+			break;
+		}
+	}
+	return result;
+}
+
+QPointF MapViewport::snappedPlaneDelta() const
+{
+	const QPointF raw = m_dragCurrentPlane - m_dragAnchorPlane;
+	if (!m_snapToGrid || m_gridSize <= 0) {
+		return raw;
+	}
+	// Snapping goes through the core helper so a drag, an arrow-key nudge and a
+	// CLI move all land on the same coordinates.
+	const double grid = static_cast<double>(m_gridSize);
+	return QPointF(snapLevelMapCoordinate(raw.x(), grid), snapLevelMapCoordinate(raw.y(), grid));
+}
+
+void MapViewport::planeDeltaToWorld(const QPointF& planeDelta, double* dx, double* dy, double* dz) const
+{
+	double x = 0.0;
+	double y = 0.0;
+	double z = 0.0;
+	switch (m_projection) {
+	case MapViewportProjection::TopXY:
+		x = planeDelta.x();
+		y = planeDelta.y();
+		break;
+	case MapViewportProjection::FrontXZ:
+		x = planeDelta.x();
+		z = planeDelta.y();
+		break;
+	case MapViewportProjection::SideZY:
+		y = planeDelta.x();
+		z = planeDelta.y();
+		break;
+	}
+	if (dx != nullptr) {
+		*dx = x;
+	}
+	if (dy != nullptr) {
+		*dy = y;
+	}
+	if (dz != nullptr) {
+		*dz = z;
+	}
+}
+
+void MapViewport::requestMove(const QPointF& planeDelta)
+{
+	double dx = 0.0;
+	double dy = 0.0;
+	double dz = 0.0;
+	planeDeltaToWorld(planeDelta, &dx, &dy, &dz);
+	if (dx == 0.0 && dy == 0.0 && dz == 0.0) {
+		return;
+	}
+	Q_EMIT moveRequested(dx, dy, dz);
+}
+
+void MapViewport::beginDrag(const QPointF& viewPoint)
+{
+	m_pressArmed = false;
+	if (!m_hasDocument || m_selection.isEmpty()) {
+		return;
+	}
+	m_dragging = true;
+	m_dragAnchorPlane = viewToWorld(m_pressViewPoint);
+	m_dragCurrentPlane = viewToWorld(viewPoint);
+	Q_EMIT hoverChanged(dragSummary());
+	update();
+}
+
+void MapViewport::updateDrag(const QPointF& viewPoint)
+{
+	const QPointF previous = snappedPlaneDelta();
+	m_dragCurrentPlane = viewToWorld(viewPoint);
+	const QPointF current = snappedPlaneDelta();
+	Q_EMIT hoverChanged(dragSummary());
+	if (current != previous) {
+		update();
+	}
+}
+
+void MapViewport::commitDrag()
+{
+	const QPointF delta = snappedPlaneDelta();
+	m_dragging = false;
+	m_dragAnchorPlane = QPointF();
+	m_dragCurrentPlane = QPointF();
+	// The document belongs to the owner: the widget previewed the move and now
+	// asks for exactly one edit, so a multi-object drag is one undo step.
+	requestMove(delta);
+	Q_EMIT hoverChanged(hoverSummary());
+	update();
+}
+
+void MapViewport::cancelDrag()
+{
+	if (!m_dragging && !m_pressArmed) {
+		return;
+	}
+	m_dragging = false;
+	m_pressArmed = false;
+	m_dragAnchorPlane = QPointF();
+	m_dragCurrentPlane = QPointF();
+	// Nothing was committed, so the objects are still where they started and
+	// dropping the preview is the whole of the undo.
+	Q_EMIT hoverChanged(hoverSummary());
+	update();
+}
+
+void MapViewport::paintSelectionMarkers(QPainter& painter, const Palette& palette) const
+{
+	if (m_selection.isEmpty()) {
+		return;
+	}
+	painter.setBrush(Qt::NoBrush);
+	// Every selected object is ringed; only the primary gets the crosshair and
+	// the label, so the two roles stay distinguishable without colour.
+	QPen memberPen(palette.selection, m_highContrast ? 2.0 : 1.4, Qt::SolidLine);
+	QPointF world;
+	int drawn = 0;
+	for (const LevelMapSelectionRef& ref : m_selection) {
+		if (drawn >= kMaxSelectionMarkers) {
+			break;
+		}
+		if (ref.kind == m_selectionKind && ref.objectId == m_selectedObjectId) {
+			continue;
+		}
+		if (!objectWorldPoint(m_document, m_sectorOutlines, m_brushGeometry, m_projection, ref.kind,
+			    ref.objectId, &world)) {
+			continue;
+		}
+		const QPointF view = worldToView(world.x(), world.y());
+		painter.setPen(memberPen);
+		painter.drawEllipse(view, 8.0, 8.0);
+		++drawn;
+	}
+
+	if (m_selectionKind == LevelMapSelectionKind::None
+		|| !objectWorldPoint(m_document, m_sectorOutlines, m_brushGeometry, m_projection, m_selectionKind,
+			m_selectedObjectId, &world)) {
+		return;
+	}
+	const QPointF view = worldToView(world.x(), world.y());
+	// Ring plus crosshair: shape, not colour, marks the selection. Reduced
+	// motion prefers a solid ring, because fine dashes shimmer while panning.
+	painter.setPen(QPen(palette.selection, 2.0, m_reducedMotion ? Qt::SolidLine : Qt::DashLine));
+	painter.drawEllipse(view, 11.0, 11.0);
+	painter.setPen(QPen(palette.selection, 1.6));
+	painter.drawLine(QPointF(view.x() - 16.0, view.y()), QPointF(view.x() - 4.0, view.y()));
+	painter.drawLine(QPointF(view.x() + 4.0, view.y()), QPointF(view.x() + 16.0, view.y()));
+	painter.drawLine(QPointF(view.x(), view.y() - 16.0), QPointF(view.x(), view.y() - 4.0));
+	painter.drawLine(QPointF(view.x(), view.y() + 4.0), QPointF(view.x(), view.y() + 16.0));
+	painter.setPen(QPen(palette.text, 1.0));
+	painter.drawText(QPointF(view.x() + 14.0, view.y() - 12.0),
+		objectLabelText(m_document, m_selectionKind, m_selectedObjectId));
+}
+
+void MapViewport::paintDragPreview(QPainter& painter, const Palette& palette) const
+{
+	const QPointF delta = snappedPlaneDelta();
+	QPen ghostPen(palette.hover, m_highContrast ? 2.0 : 1.4, Qt::DashLine, Qt::RoundCap, Qt::RoundJoin);
+	ghostPen.setDashPattern({4.0, 3.0});
+	painter.setBrush(Qt::NoBrush);
+	painter.setPen(ghostPen);
+
+	QRectF bounds;
+	int drawn = 0;
+	for (const LevelMapSelectionRef& ref : m_selection) {
+		if (drawn >= kMaxPreviewOutlines) {
+			break;
+		}
+		if (!objectWorldBounds(m_document, m_sectorOutlines, m_brushGeometry, m_projection, ref.kind,
+			    ref.objectId, &bounds)) {
+			continue;
+		}
+		++drawn;
+		const QPointF a = worldToView(bounds.left() + delta.x(), bounds.top() + delta.y());
+		const QPointF b = worldToView(bounds.right() + delta.x(), bounds.bottom() + delta.y());
+		const QRectF ghost = QRectF(a, b).normalized();
+		if (ghost.width() < 3.0 && ghost.height() < 3.0) {
+			// Point-like objects get a cross instead of an invisible rectangle.
+			const QPointF center = ghost.center();
+			painter.drawLine(QPointF(center.x() - 6.0, center.y()), QPointF(center.x() + 6.0, center.y()));
+			painter.drawLine(QPointF(center.x(), center.y() - 6.0), QPointF(center.x(), center.y() + 6.0));
+			continue;
+		}
+		painter.drawRect(ghost);
+	}
+
+	// The move vector itself, drawn from where the drag started.
+	const QPointF from = worldToView(m_dragAnchorPlane.x(), m_dragAnchorPlane.y());
+	const QPointF to = worldToView(m_dragAnchorPlane.x() + delta.x(), m_dragAnchorPlane.y() + delta.y());
+	painter.setPen(QPen(palette.selection, 1.8, Qt::SolidLine, Qt::RoundCap));
+	painter.drawLine(from, to);
+	painter.drawEllipse(to, 3.0, 3.0);
+	painter.setPen(QPen(palette.text, 1.0));
+	painter.drawText(QPointF(to.x() + 12.0, to.y() - 10.0), planePointText(m_projection, delta));
+}
+
+void MapViewport::paintRubberBand(QPainter& painter, const Palette& palette) const
+{
+	const QRectF band = QRectF(m_bandAnchorView, m_bandCurrentView).normalized();
+	QColor fill = palette.selection;
+	fill.setAlpha(m_highContrast ? 72 : 48);
+	painter.setBrush(QBrush(fill));
+	QPen bandPen(palette.selection, m_highContrast ? 2.0 : 1.4, Qt::DashLine, Qt::FlatCap, Qt::MiterJoin);
+	bandPen.setDashPattern({5.0, 4.0});
+	painter.setPen(bandPen);
+	painter.drawRect(band);
+	painter.setBrush(Qt::NoBrush);
 }
 
 void MapViewport::paintGrid(QPainter& painter, const Palette& palette) const
@@ -1403,34 +2061,24 @@ void MapViewport::paintEmptyState(QPainter& painter, const Palette& palette) con
 
 void MapViewport::paintOverlay(QPainter& painter, const Palette& palette) const
 {
-	if (m_hasDocument && m_hover.kind != LevelMapSelectionKind::None) {
+	if (m_hasDocument && !m_dragging && !m_banding && m_hover.kind != LevelMapSelectionKind::None) {
 		const QPointF view = worldToView(m_hover.worldX, m_hover.worldY);
 		painter.setPen(QPen(palette.hover, 1.0, Qt::DotLine));
 		painter.setBrush(Qt::NoBrush);
 		painter.drawRect(QRectF(view.x() - 7.0, view.y() - 7.0, 14.0, 14.0));
 	}
 
-	if (m_hasDocument && m_selectionKind != LevelMapSelectionKind::None) {
-		QPointF world;
-		if (objectWorldPoint(m_document, m_sectorOutlines, m_brushGeometry, m_projection, m_selectionKind,
-			    m_selectedObjectId, &world)) {
-			const QPointF view = worldToView(world.x(), world.y());
-			// Ring plus crosshair: shape, not colour, marks the selection.
-			// Reduced motion prefers a solid ring, because fine dashes shimmer
-			// while panning.
-			QPen selectionPen(palette.selection, 2.0, m_reducedMotion ? Qt::SolidLine : Qt::DashLine);
-			painter.setPen(selectionPen);
-			painter.setBrush(Qt::NoBrush);
-			painter.drawEllipse(view, 11.0, 11.0);
-			painter.setPen(QPen(palette.selection, 1.6));
-			painter.drawLine(QPointF(view.x() - 16.0, view.y()), QPointF(view.x() - 4.0, view.y()));
-			painter.drawLine(QPointF(view.x() + 4.0, view.y()), QPointF(view.x() + 16.0, view.y()));
-			painter.drawLine(QPointF(view.x(), view.y() - 16.0), QPointF(view.x(), view.y() - 4.0));
-			painter.drawLine(QPointF(view.x(), view.y() + 4.0), QPointF(view.x(), view.y() + 16.0));
-			painter.setPen(QPen(palette.text, 1.0));
-			painter.drawText(QPointF(view.x() + 14.0, view.y() - 12.0),
-				objectLabelText(m_document, m_selectionKind, m_selectedObjectId));
+	if (m_hasDocument) {
+		paintSelectionMarkers(painter, palette);
+		if (m_dragging) {
+			paintDragPreview(painter, palette);
 		}
+	}
+	if (m_banding) {
+		paintRubberBand(painter, palette);
+	}
+	if (m_hasDocument) {
+		paintHud(painter, palette);
 	}
 
 	if (hasFocus()) {
@@ -1442,10 +2090,56 @@ void MapViewport::paintOverlay(QPainter& painter, const Palette& palette) const
 	}
 }
 
+void MapViewport::paintHud(QPainter& painter, const Palette& palette) const
+{
+	const QString separator = QStringLiteral("  %1  ").arg(QChar(0x00b7));
+	const QString left = QStringList {
+		mapViewportProjectionDisplayName(m_projection),
+		tr("Grid %1").arg(m_gridSize),
+		m_snapToGrid ? tr("Snap on") : tr("Snap off"),
+	}.join(separator);
+	const QString right = documentIsDoom(m_document)
+		? QStringList {tr("%n thing(s)", nullptr, static_cast<int>(m_document.doomThings.size())),
+			  tr("%n linedef(s)", nullptr, static_cast<int>(m_document.doomLinedefs.size())),
+			  tr("%n sector(s)", nullptr, static_cast<int>(m_document.doomSectors.size()))}.join(separator)
+		: QStringList {tr("%n entit(y)(ies)", nullptr, static_cast<int>(m_document.entities.size())),
+			  tr("%n brush(es)", nullptr, static_cast<int>(m_document.brushes.size()))}.join(separator);
+
+	painter.save();
+	QFont font = painter.font();
+	font.setPointSizeF(std::max(7.0, font.pointSizeF() * 0.9));
+	painter.setFont(font);
+	const QFontMetricsF metrics(font);
+	const qreal margin = 8.0;
+	const qreal padX = 7.0;
+	const qreal padY = 3.0;
+	QColor backdrop = palette.background;
+	backdrop.setAlpha(m_highContrast ? 255 : 210);
+	auto drawTag = [&](const QString& text, bool alignRight) {
+		const qreal width = metrics.horizontalAdvance(text) + padX * 2.0;
+		const qreal height = metrics.height() + padY * 2.0;
+		const qreal x = alignRight ? rect().right() - margin - width : rect().left() + margin;
+		const QRectF tag(x, rect().top() + margin, width, height);
+		painter.setPen(m_highContrast ? QPen(palette.text, 1.0) : Qt::NoPen);
+		painter.setBrush(backdrop);
+		painter.drawRoundedRect(tag, 3.0, 3.0);
+		painter.setPen(palette.subtleText);
+		painter.drawText(tag.adjusted(padX, 0.0, -padX, 0.0), Qt::AlignVCenter | Qt::AlignLeft, text);
+	};
+	drawTag(left, false);
+	if (width() > metrics.horizontalAdvance(left) + metrics.horizontalAdvance(right) + 60.0) {
+		drawTag(right, true);
+	}
+	painter.restore();
+}
+
 void MapViewport::announceSelection()
 {
 	setAccessibleDescription(accessibleSummary());
 	update();
+	// The set goes out first so a receiver that rebuilds the document's
+	// selection from it has already done so by the time the primary arrives.
+	Q_EMIT selectionSetChanged(m_selection);
 	Q_EMIT selectionChanged(static_cast<int>(m_selectionKind), m_selectedObjectId);
 }
 
@@ -1537,12 +2231,42 @@ void MapViewport::mousePressEvent(QMouseEvent* event)
 		return;
 	}
 
+	const bool extend = (event->modifiers() & Qt::ShiftModifier) != 0;
+	const bool toggle = (event->modifiers() & Qt::ControlModifier) != 0;
 	const MapViewportHit hit = hitTest(event->position());
-	if (hit.kind != m_selectionKind || hit.objectId != m_selectedObjectId) {
-		m_selectionKind = hit.kind;
-		m_selectedObjectId = hit.kind == LevelMapSelectionKind::None ? -1 : hit.objectId;
+	m_pressViewPoint = event->position();
+
+	if (hit.kind == LevelMapSelectionKind::None) {
+		// Empty space starts a rubber band. The selection is only replaced on
+		// release, so a plain click that selects nothing still clears it.
+		m_banding = true;
+		m_bandAnchorView = event->position();
+		m_bandCurrentView = event->position();
+		m_bandModifiers = event->modifiers();
+		update();
+		event->accept();
+		return;
 	}
-	announceSelection();
+
+	const bool alreadySelected = selectionContains(hit.kind, hit.objectId);
+	if (toggle) {
+		toggleInSelection(hit.kind, hit.objectId);
+		announceSelection();
+	} else if (extend) {
+		addToSelection(hit.kind, hit.objectId);
+		announceSelection();
+	} else if (!alreadySelected) {
+		replaceSelection(hit.kind, hit.objectId);
+		announceSelection();
+	} else if (hit.kind != m_selectionKind || hit.objectId != m_selectedObjectId) {
+		// Pressing another member of the set promotes it without dropping the
+		// rest, so a multi-object drag can start anywhere in the selection.
+		addToSelection(hit.kind, hit.objectId);
+		announceSelection();
+	}
+
+	// Arm, but do not start, a move: a press that never travels is a click.
+	m_pressArmed = !m_selection.isEmpty() && selectionContains(hit.kind, hit.objectId);
 	event->accept();
 }
 
@@ -1556,6 +2280,29 @@ void MapViewport::mouseMoveEvent(QMouseEvent* event)
 		}
 		update();
 		Q_EMIT viewChanged();
+		event->accept();
+		return;
+	}
+
+	if (m_banding) {
+		m_bandCurrentView = event->position();
+		Q_EMIT hoverChanged(hoverSummary());
+		update();
+		event->accept();
+		return;
+	}
+
+	if (m_pressArmed) {
+		const QPointF travel = event->position() - m_pressViewPoint;
+		if (std::hypot(travel.x(), travel.y()) >= kDragThresholdPixels) {
+			beginDrag(event->position());
+		}
+		event->accept();
+		return;
+	}
+
+	if (m_dragging) {
+		updateDrag(event->position());
 		event->accept();
 		return;
 	}
@@ -1575,6 +2322,43 @@ void MapViewport::mouseReleaseEvent(QMouseEvent* event)
 	if (m_panning && (event->button() == Qt::MiddleButton || event->button() == Qt::LeftButton)) {
 		m_panning = false;
 		setCursor(Qt::OpenHandCursor);
+		event->accept();
+		return;
+	}
+	if (event->button() != Qt::LeftButton) {
+		QWidget::mouseReleaseEvent(event);
+		return;
+	}
+	if (m_dragging) {
+		commitDrag();
+		event->accept();
+		return;
+	}
+	if (m_pressArmed) {
+		// A click on an already-selected object: the selection was settled on
+		// press, so there is nothing left to do.
+		m_pressArmed = false;
+		event->accept();
+		return;
+	}
+	if (m_banding) {
+		const QVector<LevelMapSelectionRef> inside = objectsInWorldRect(bandWorldRect());
+		m_banding = false;
+		if ((m_bandModifiers & Qt::ControlModifier) != 0) {
+			for (const LevelMapSelectionRef& ref : inside) {
+				toggleInSelection(ref.kind, ref.objectId);
+			}
+		} else if ((m_bandModifiers & Qt::ShiftModifier) != 0) {
+			for (const LevelMapSelectionRef& ref : inside) {
+				addToSelection(ref.kind, ref.objectId);
+			}
+		} else {
+			m_selection = inside;
+			syncPrimaryFromSelection();
+		}
+		m_bandModifiers = Qt::NoModifier;
+		announceSelection();
+		Q_EMIT hoverChanged(hoverSummary());
 		event->accept();
 		return;
 	}
@@ -1609,29 +2393,36 @@ void MapViewport::keyPressEvent(QKeyEvent* event)
 	const double panStep = m_zoom > 0.0 ? 48.0 / m_zoom : 48.0;
 	switch (event->key()) {
 	case Qt::Key_Left:
-		m_worldCenter.rx() -= panStep;
-		update();
-		Q_EMIT viewChanged();
-		event->accept();
-		return;
 	case Qt::Key_Right:
-		m_worldCenter.rx() += panStep;
-		update();
-		Q_EMIT viewChanged();
-		event->accept();
-		return;
 	case Qt::Key_Up:
-		m_worldCenter.ry() += panStep;
-		update();
-		Q_EMIT viewChanged();
+	case Qt::Key_Down: {
+		const double sign = (event->key() == Qt::Key_Left || event->key() == Qt::Key_Down) ? -1.0 : 1.0;
+		const bool horizontal = event->key() == Qt::Key_Left || event->key() == Qt::Key_Right;
+		// Arrows nudge the selection, which is the whole point of having one.
+		// Ctrl always pans, and so do bare arrows when nothing is selected, so
+		// the old keyboard panning is still reachable.
+		const bool pan = m_selection.isEmpty() || (event->modifiers() & Qt::ControlModifier) != 0;
+		if (pan) {
+			if (horizontal) {
+				m_worldCenter.rx() += sign * panStep;
+			} else {
+				m_worldCenter.ry() += sign * panStep;
+			}
+			update();
+			Q_EMIT viewChanged();
+			event->accept();
+			return;
+		}
+		if (m_dragging || m_banding) {
+			event->accept();
+			return;
+		}
+		const double grid = m_gridSize > 0 ? static_cast<double>(m_gridSize) : 1.0;
+		const double step = sign * grid * ((event->modifiers() & Qt::ShiftModifier) != 0 ? kCoarseNudgeMultiplier : 1);
+		requestMove(horizontal ? QPointF(step, 0.0) : QPointF(0.0, step));
 		event->accept();
 		return;
-	case Qt::Key_Down:
-		m_worldCenter.ry() -= panStep;
-		update();
-		Q_EMIT viewChanged();
-		event->accept();
-		return;
+	}
 	case Qt::Key_Plus:
 	case Qt::Key_Equal:
 		zoomIn();
@@ -1659,9 +2450,16 @@ void MapViewport::keyPressEvent(QKeyEvent* event)
 	case Qt::Key_Escape:
 		m_panning = false;
 		unsetCursor();
+		if (m_dragging || m_banding || m_pressArmed) {
+			// Escape during a drag throws the preview away; nothing was
+			// committed, so the objects never left their original positions.
+			cancelInteraction();
+			event->accept();
+			return;
+		}
 		if (m_selectionKind != LevelMapSelectionKind::None) {
-			m_selectionKind = LevelMapSelectionKind::None;
-			m_selectedObjectId = -1;
+			m_selection.clear();
+			syncPrimaryFromSelection();
 			announceSelection();
 		} else {
 			// Tab is bound to selection cycling, so Escape is the documented
@@ -1690,8 +2488,11 @@ void MapViewport::keyPressEvent(QKeyEvent* event)
 
 	// Tab / Shift+Tab cycle the selection through things, vertices and lines
 	// (or entities, brushes and patches), so the viewport is usable without a
-	// mouse.
+	// mouse. Holding Shift or Ctrl extends the set instead of replacing it:
+	// Shift+Tab extends backwards, Ctrl+Tab extends forwards.
 	const int step = (event->key() == Qt::Key_Backtab || (event->modifiers() & Qt::ShiftModifier) != 0) ? -1 : 1;
+	const bool extend = (event->modifiers() & (Qt::ShiftModifier | Qt::ControlModifier)) != 0
+		|| event->key() == Qt::Key_Backtab;
 	const QVector<LevelMapSelectionKind> tiers = selectionTiers(m_document);
 	int total = 0;
 	for (const LevelMapSelectionKind kind : tiers) {
@@ -1718,8 +2519,12 @@ void MapViewport::keyPressEvent(QKeyEvent* event)
 	for (const LevelMapSelectionKind kind : tiers) {
 		const int count = objectCountForKind(m_document, kind);
 		if (next < offset + count) {
-			m_selectionKind = kind;
-			m_selectedObjectId = objectIdAtIndex(m_document, kind, next - offset);
+			const int id = objectIdAtIndex(m_document, kind, next - offset);
+			if (extend) {
+				addToSelection(kind, id);
+			} else {
+				replaceSelection(kind, id);
+			}
 			break;
 		}
 		offset += count;
@@ -1748,6 +2553,12 @@ void MapViewport::resizeEvent(QResizeEvent* event)
 
 void MapViewport::leaveEvent(QEvent* event)
 {
+	if (m_dragging || m_banding) {
+		// Qt keeps delivering moves to the grabbing widget, so a gesture that
+		// wanders outside the viewport is still live: leave it alone.
+		QWidget::leaveEvent(event);
+		return;
+	}
 	if (m_hover.kind != LevelMapSelectionKind::None) {
 		update();
 	}

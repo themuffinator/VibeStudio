@@ -124,6 +124,127 @@ compiler runner, so logs, diagnostics, hashes, and command manifests are
 identical to a single-profile run. Launch plans in the same module carry the
 result into the configured source port.
 
+### Per-Block DEFLATE Block Type Selection
+
+`src/core/deflate.*`
+
+`deflateRaw()` cuts the input into chunks of at most `kMaxStoredBlock` bytes
+(65535, RFC 1951 3.2.4) and, for each chunk, measures all three block types in
+bits before writing one: a stored block (`3 + padding + 32 + 8 * length`, where
+the padding depends on where the bit stream currently stands), a fixed Huffman
+block, and a dynamic Huffman block (`trees.headerBits` plus the coded tokens,
+or infinity when `buildDynamicTrees()` reports the tables are unusable). The
+smallest wins, and ties go to stored, so a block is never larger than storing
+its bytes would be.
+
+That measurement is what decoupled the level from the block type. A level now
+only tunes the LZ77 search in `matchConfigFor()`: `fast` walks a short hash
+chain greedily, `default` and the new `best` use lazy matching over longer
+chains, with `best` raising the chain limit to 512 and letting a held match run
+to `kMaxMatch`. `store` still emits stored blocks and runs no matcher at all.
+Every field in that table is a fixed constant, so the token stream depends only
+on the input bytes and the output stays byte-identical for a given input and
+level, which is what the package writers' reproducibility rests on.
+
+`best` round-trips through `deflateLevelFromId()` and `deflateLevelId()`.
+Nothing selects it yet: `PackageWriteRequest::compression` defaults to
+`DeflateLevel::Default`, `package_staging.cpp` applies it to ZIP and PK3 output
+only (`options.level = zipFamily ? request.compression : DeflateLevel::Store`,
+so PAK and WAD ignore it), and the `--compression` token sits in the CLI option
+table without a reader. The ZIP writer also stores a member outright whenever
+the deflated payload is not strictly smaller, which keeps already-compressed
+content byte-for-byte.
+
+### Bounded Polling For External Changes
+
+`src/core/document_watch.*`, `src/app/application_shell.*`
+
+`ApplicationShell` drives `DocumentWatcher::poll()` from one 1000 ms
+`Qt::CoarseTimer`, and `pollWatchedDocuments()` returns immediately while
+nothing is registered. `registerWatchedDocument()` keeps one path per
+`DocumentWatchRole`, unregistering the previous one, so the watched set stays
+the handful of files the studio actually holds open rather than a growing list.
+
+Each poll re-fingerprints every watched path, deliberately: a rewrite can land
+inside the modification time's resolution and keep the same size, so checking
+metadata first would miss it. What bounds the cost is the hash limit.
+`fingerprintDocumentFile()` stats the file and hashes it only when its size is
+at or below `kDocumentWatchHashSizeLimit` (4 MiB). Anything larger is marked
+`hashSkipped` and compared on size and modification time alone, so an open
+multi-hundred-megabyte PAK is never re-read by the timer. The hashing that does
+happen reads `kDocumentWatchHashChunkBytes` (64 KiB) at a time into one
+`QCryptographicHash`, so it never allocates in proportion to the file, and a
+file that grows past the limit mid-hash stops with the `grew-while-reading`
+error id instead of reading without a bound.
+
+The rest of the saving is in prompts rather than cycles. `QFileSystemWatcher`
+notifications are treated as hints that only mark a path worth re-checking —
+`poll()` is authoritative — and a changed path is held back until it has looked
+the same for `coalesceIntervalMsecs()` (250 ms by default), then reported once
+with the number of folded-in notifications attached. An editor that truncates
+and rewrites, or writes a temporary file and renames it over the target, is one
+event. `Touched` — metadata moved, bytes provably identical — is not
+substantive, so the shell says nothing about it at all.
+
+### Local Drag Preview Instead Of A Re-Solved Document
+
+`src/app/map_viewport.*`, `src/app/application_shell.*`
+
+Moving a selection in the map viewport does not touch the document until the
+mouse is released. A press arms a drag that begins only after
+`kDragThresholdPixels` (4) of travel; `updateDrag()` then recomputes the
+grid-snapped delta and repaints only when that snapped value actually changed,
+so pointer movement inside one grid step costs nothing. `paintDragPreview()`
+draws dashed ghost outlines of the selection offset by the delta, up to
+`kMaxPreviewOutlines` (512) of them, plus the move vector and its numeric
+readout — all from geometry that was already solved.
+
+Solving stays where it belongs: `rebuildGeometry()`, which calls
+`buildDoomSectorOutlines()` and `buildLevelMapBrushGeometry()`, runs only from
+`setDocument()` and `updateDocument()`, never from `paintEvent()`.
+`commitDrag()` emits `moveRequested(dx, dy, dz)` exactly once, and
+`moveLevelMapSelectionFromViewport()` turns that into a single
+`moveLevelMapSelectionSnapped()` call — one solve at the end of a drag instead
+of one per mouse move, and one undo step for a drag of any size. Arrow-key
+nudges go through the same single emission, scaled by `kCoarseNudgeMultiplier`
+(8) when Shift is held. `cancelDrag()` on Escape drops the preview; nothing was
+committed, so there is nothing to undo.
+
+`refreshLevelMapViewport()` guards the same boundary from the other side. It
+builds a key from the map's source path, name, edit state, and undo depth, and
+does nothing while that key has not moved, so toggling grid, snap, or
+projection does not re-solve. When the key does move it calls
+`updateDocument()` for an edit to the map already open, which keeps the camera,
+and `setDocument()`, which refits, only for a different map or file.
+
+### Package Compare Reads Only What It Must
+
+`src/core/package_compare.*`
+
+`compareContent()` is ordered cheapest test first and stops at whichever one
+settles the question. A directory pair is not compared at all. Differing sizes
+end it immediately as `SizeOnly`, with no digest taken. A request that set
+`metadataOnly` (the CLI's `--metadata-only`) stops here by choice. When both
+sides carry a stored CRC-32 — which the ZIP family does, because
+`loadZipFamily()` fills `PackageEntry::crc32` from the central directory — that
+32-bit check decides it without reading a byte, and it is meaningful rather
+than a coin flip because the sizes have already matched. An
+unreadable side, and a repeated path the path-addressed reader cannot resolve
+(`duplicate-path`), both stop before any read as well. A PAK or WAD entry
+carries no stored CRC-32, so it falls through to the read.
+
+Only what survives all of that is read and hashed with SHA-256, and that read is
+bounded by `PackageCompareRequest::maxEntryBytes`, which falls back to
+`kPackageCompareDefaultMaxEntryBytes` (256 MiB) when it is not positive and is
+set from `--max-entry-bytes` on `vibestudio --cli package compare`. An entry
+over the budget is skipped with the `entry-too-large` note instead of being
+pulled into memory, so a package holding one enormous member cannot turn a
+comparison into an out-of-memory failure. The cost of that budget is worth
+knowing: a skipped entry counts into `uncomparedCount` and is reported as
+`Identical` with content `NotCompared`, and `PackageCompareResult::identical()`
+— which is what the command's exit code gates on — does not look at
+`uncomparedCount`.
+
 ## Modern Acceleration Techniques
 
 VibeStudio should combine deterministic tooling with modern automation:

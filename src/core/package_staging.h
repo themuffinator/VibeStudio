@@ -43,6 +43,29 @@ struct PackageStageOperation {
 	PackageStageConflictResolution conflictResolution = PackageStageConflictResolution::Block;
 };
 
+// One record of a WAD's own lump directory, in on-disk order.
+//
+// A Doom IWAD/PWAD addresses map data positionally: every map repeats THINGS,
+// LINEDEFS, SIDEDEFS, VERTEXES, SEGS, SSECTORS, NODES, SECTORS, REJECT and
+// BLOCKMAP behind its own marker lump, so a lump *name* is not a key
+// (https://doomwiki.org/wiki/WAD). Staging therefore keeps the source
+// directory and addresses base lumps by ordinal.
+struct PackageWadLumpLocation {
+	// Lump name as the directory spells it, or `lump-NNNN` for a blank name,
+	// matching what the reader exposes as a virtual path.
+	QString name;
+	qint64 dataOffset = -1;
+	// Bytes actually stored (WAD2/WAD3 `diskSize`; the only size a Doom WAD has).
+	qint64 diskSizeBytes = 0;
+	// Logical size, which differs from `diskSizeBytes` only for a compressed
+	// WAD2/WAD3 lump.
+	qint64 sizeBytes = 0;
+	// WAD2/WAD3 directory "type" byte; 0 for Doom WADs.
+	quint8 type = 0;
+	// WAD2/WAD3 "compression" byte; non-zero lumps are not decoded.
+	quint8 compression = 0;
+};
+
 // A planned archive member. Bytes are not resident: they are read on demand from
 // `sourceFilePath` (a staged file on disk) or from the base archive entry named
 // by `baseVirtualPath`, so staging one file into a large package never loads the
@@ -56,6 +79,16 @@ struct PackageStagedEntry {
 	QString operationId;
 	QString sourceFilePath;
 	QString baseVirtualPath;
+	// Zero-based position of this entry in the source package's own directory,
+	// or -1 for an entry that does not come from the base archive.
+	//
+	// `virtualPath` is not a unique key for every package format: a Doom WAD
+	// repeats lump names once per map. The ordinal is what keeps those
+	// duplicates apart, what makes `entryBytes` resolve the right lump, and
+	// what preserves the source lump order through the plan. For a WAD source
+	// it indexes the WAD directory; for every other source it is the base
+	// reader's own entry order.
+	int sourceOrdinal = -1;
 	// WAD2/WAD3 directory "type" byte, preserved from a texture WAD source.
 	quint8 wadLumpType = 0;
 };
@@ -98,6 +131,17 @@ struct PackageWriteRequest {
 	PackageArchiveFormat format = PackageArchiveFormat::Unknown;
 	QString destinationPath;
 	bool allowOverwrite = false;
+	// Opt-in save over an existing package, including the package that is
+	// currently open. Without it `writeArchive` keeps refusing a destination
+	// that resolves to the source path.
+	//
+	// The new bytes are streamed to a temporary sibling of the destination and
+	// verified; only then is the original moved to `backupPath` and the
+	// temporary renamed into place. Any failure before that last rename leaves
+	// the original file exactly as it was.
+	bool allowInPlaceOverwrite = false;
+	// Where the replaced file is moved. Empty means `<destination>.bak`.
+	QString backupPath;
 	bool writeManifest = false;
 	bool dryRun = false;
 	QString manifestPath;
@@ -118,6 +162,10 @@ struct PackageWriteReport {
 	QString sourcePath;
 	QString outputPath;
 	QString manifestPath;
+	// Where the replaced file was moved, empty when nothing was replaced.
+	QString backupPath;
+	// True when the output replaced an existing file through the backup path.
+	bool overwroteInPlace = false;
 	PackageArchiveFormat format = PackageArchiveFormat::Unknown;
 	int entryCount = 0;
 	int directoryCount = 0;
@@ -151,6 +199,9 @@ public:
 	[[nodiscard]] QString sourcePath() const;
 	[[nodiscard]] PackageArchiveFormat sourceFormat() const;
 	[[nodiscard]] QString sourceWadMagic() const;
+	// The source WAD's directory in on-disk order, empty for every other
+	// format. Indexed by `PackageStagedEntry::sourceOrdinal`.
+	[[nodiscard]] QVector<PackageWadLumpLocation> sourceWadLumps() const;
 	[[nodiscard]] QVector<PackageStageOperation> operations() const;
 	[[nodiscard]] QVector<PackageStageConflict> conflicts() const;
 	[[nodiscard]] QVector<PackageStagedEntry> beforeEntries() const;
@@ -172,6 +223,9 @@ public:
 	bool clearOperation(const QString& operationId);
 
 	bool exportManifest(const QString& outputPath, QString* error = nullptr) const;
+	// Writes the plan. After a successful in-place overwrite the model still
+	// describes the package that was replaced, so reload the base archive
+	// before staging anything else on top of it.
 	PackageWriteReport writeArchive(const PackageWriteRequest& request) const;
 
 private:
@@ -183,6 +237,7 @@ private:
 	QString m_sourcePath;
 	PackageArchiveFormat m_sourceFormat = PackageArchiveFormat::Unknown;
 	QString m_sourceWadMagic;
+	QVector<PackageWadLumpLocation> m_sourceWadLumps;
 	bool m_loaded = false;
 	QVector<PackageStagedEntry> m_baseEntries;
 	QVector<PackageStagedEntry> m_baseDirectories;

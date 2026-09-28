@@ -3,6 +3,9 @@
 #include <QApplication>
 #include <QClipboard>
 #include <QCoreApplication>
+#include <QEvent>
+#include <QFontDatabase>
+#include <QFontMetrics>
 #include <QGuiApplication>
 #include <QHBoxLayout>
 #include <QLabel>
@@ -11,6 +14,7 @@
 #include <QProgressBar>
 #include <QPushButton>
 #include <QSignalBlocker>
+#include <QStyle>
 #include <QTextEdit>
 #include <QVBoxLayout>
 
@@ -70,7 +74,78 @@ bool isBusyState(OperationState state)
 	return state == OperationState::Queued || state == OperationState::Loading || state == OperationState::Running;
 }
 
+// Same conservative glyph set the charts use, so a state reads the same in a
+// chip, a chart, and a list row without depending on colour.
+QString stateGlyph(OperationState state)
+{
+	switch (state) {
+	case OperationState::Idle:
+		return QString(QChar(0x00b7));
+	case OperationState::Queued:
+		return QString(QChar(0x00bb));
+	case OperationState::Loading:
+		return QString(QChar(0x25cb));
+	case OperationState::Running:
+		return QString(QChar(0x25b6));
+	case OperationState::Warning:
+		return QString(QChar(0x25b2));
+	case OperationState::Failed:
+		return QString(QChar(0x00d7));
+	case OperationState::Cancelled:
+		return QStringLiteral("||");
+	case OperationState::Completed:
+		return QString(QChar(0x2713));
+	}
+	return QString(QChar(0x00b7));
+}
+
+void repolish(QWidget* widget)
+{
+	if (widget && widget->style()) {
+		widget->style()->unpolish(widget);
+		widget->style()->polish(widget);
+	}
+}
+
 } // namespace
+
+void applyMonospaceContentFont(QTextEdit* content)
+{
+	if (!content) {
+		return;
+	}
+	const QFont font = studioMonospaceFont();
+	content->setFont(font);
+	content->setTabStopDistance(QFontMetricsF(font).horizontalAdvance(QLatin1Char(' ')) * 4.0);
+}
+
+QFont studioMonospaceFont()
+{
+	static const QStringList preferred = {
+		QStringLiteral("Cascadia Mono"),
+		QStringLiteral("Consolas"),
+		QStringLiteral("JetBrains Mono"),
+		QStringLiteral("SF Mono"),
+		QStringLiteral("Menlo"),
+		QStringLiteral("DejaVu Sans Mono"),
+		QStringLiteral("Liberation Mono"),
+		QStringLiteral("Noto Sans Mono"),
+	};
+	QFont font = QFontDatabase::systemFont(QFontDatabase::FixedFont);
+	for (const QString& family : preferred) {
+		if (QFontDatabase::hasFamily(family)) {
+			font = QFont(family);
+			break;
+		}
+	}
+	font.setStyleHint(QFont::Monospace);
+	font.setFixedPitch(true);
+	const qreal base = QApplication::font().pointSizeF();
+	if (base > 0) {
+		font.setPointSizeF(base);
+	}
+	return font;
+}
 
 QVector<UiPrimitiveDescriptor> uiPrimitiveDescriptors()
 {
@@ -140,33 +215,45 @@ LoadingPane::LoadingPane(QWidget* parent)
 	setAccessibleName(uiText("Loading pane"));
 	setAccessibleDescription(uiText("Shows operation state, progress, and placeholder rows while pane content is loading."));
 
+	// One compact status row: state chip, title, detail, and a progress bar
+	// that only appears while work is queued or running. Skeleton rows appear
+	// beneath it for the same busy states.
 	auto* root = new QVBoxLayout(this);
-	root->setContentsMargins(12, 10, 12, 10);
-	root->setSpacing(8);
+	root->setContentsMargins(12, 8, 12, 8);
+	root->setSpacing(6);
 
 	auto* header = new QHBoxLayout;
-	m_titleLabel = new QLabel;
-	m_titleLabel->setObjectName("loadingTitle");
-	m_titleLabel->setAccessibleName(uiText("Loading pane title"));
+	header->setSpacing(10);
 	m_stateLabel = new QLabel;
 	m_stateLabel->setObjectName("statusChip");
 	m_stateLabel->setAccessibleName(uiText("Loading pane state"));
 	m_stateLabel->setAlignment(Qt::AlignCenter);
-	header->addWidget(m_titleLabel, 1);
-	header->addWidget(m_stateLabel, 0, Qt::AlignRight);
-	root->addLayout(header);
+	header->addWidget(m_stateLabel, 0, Qt::AlignTop);
+
+	auto* text = new QVBoxLayout;
+	text->setSpacing(1);
+	m_titleLabel = new QLabel;
+	m_titleLabel->setObjectName("loadingTitle");
+	m_titleLabel->setAccessibleName(uiText("Loading pane title"));
+	m_titleLabel->setTextInteractionFlags(Qt::TextSelectableByMouse);
+	m_titleLabel->setWordWrap(true);
+	text->addWidget(m_titleLabel);
 
 	m_detailLabel = new QLabel;
 	m_detailLabel->setObjectName("loadingDetail");
 	m_detailLabel->setAccessibleName(uiText("Loading pane detail"));
 	m_detailLabel->setWordWrap(true);
-	root->addWidget(m_detailLabel);
+	m_detailLabel->setTextInteractionFlags(Qt::TextSelectableByMouse);
+	text->addWidget(m_detailLabel);
+	header->addLayout(text, 1);
 
 	m_progress = new QProgressBar;
 	m_progress->setObjectName("loadingProgress");
 	m_progress->setAccessibleName(uiText("Loading pane progress"));
 	m_progress->setTextVisible(true);
-	root->addWidget(m_progress);
+	m_progress->setFixedWidth(190);
+	header->addWidget(m_progress, 0, Qt::AlignVCenter);
+	root->addLayout(header);
 
 	m_placeholderHost = new QWidget;
 	m_placeholderHost->setObjectName("skeletonHost");
@@ -268,18 +355,22 @@ void LoadingPane::refresh()
 	const QString stateName = m_statusText.isEmpty() ? localizedStateName(m_state) : m_statusText;
 	const QString titleText = m_title.isEmpty() ? uiText("Loading") : m_title;
 	m_titleLabel->setText(titleText);
-	m_stateLabel->setText(stateName);
-	m_stateLabel->setProperty("operationState", operationStateId(m_state));
-	m_stateLabel->style()->unpolish(m_stateLabel);
-	m_stateLabel->style()->polish(m_stateLabel);
+	m_stateLabel->setText(QStringLiteral("%1 %2").arg(stateGlyph(m_state), stateName));
+	m_stateLabel->setToolTip(stateName);
+	const QString stateId = operationStateId(m_state);
+	if (m_stateLabel->property("operationState").toString() != stateId) {
+		m_stateLabel->setProperty("operationState", stateId);
+		repolish(m_stateLabel);
+	}
 
 	m_detailLabel->setText(m_detail.isEmpty() ? uiText("Preparing content.") : m_detail);
 
+	const bool busy = isBusyState(m_state);
 	if (m_progressValue.total > 0) {
 		m_progress->setRange(0, m_progressValue.total);
 		m_progress->setValue(m_progressValue.current);
 		m_progress->setFormat(uiText("%1%").arg(operationProgressPercent(m_progressValue)));
-	} else if (isBusyState(m_state) && !m_reducedMotion) {
+	} else if (busy && !m_reducedMotion) {
 		m_progress->setRange(0, 0);
 		m_progress->setFormat(stateName);
 	} else {
@@ -287,8 +378,10 @@ void LoadingPane::refresh()
 		m_progress->setValue(operationStateIsTerminal(m_state) ? 1 : 0);
 		m_progress->setFormat(stateName);
 	}
-
-	m_placeholderHost->setVisible(isBusyState(m_state));
+	// A finished or idle pane has nothing to measure, so the bar only takes
+	// space while work is queued or running.
+	m_progress->setVisible(busy);
+	m_placeholderHost->setVisible(busy);
 }
 
 void LoadingPane::rebuildPlaceholders()
@@ -330,10 +423,13 @@ DetailDrawer::DetailDrawer(QWidget* parent)
 	root->setSpacing(8);
 
 	auto* header = new QHBoxLayout;
+	header->setSpacing(6);
 	auto* titleStack = new QVBoxLayout;
+	titleStack->setSpacing(1);
 	m_titleLabel = new QLabel;
 	m_titleLabel->setObjectName("drawerTitle");
 	m_titleLabel->setAccessibleName(uiText("Detail drawer title"));
+	m_titleLabel->setWordWrap(true);
 	m_subtitleLabel = new QLabel;
 	m_subtitleLabel->setObjectName("drawerSubtitle");
 	m_subtitleLabel->setAccessibleName(uiText("Detail drawer subtitle"));
@@ -342,19 +438,22 @@ DetailDrawer::DetailDrawer(QWidget* parent)
 	titleStack->addWidget(m_subtitleLabel);
 	header->addLayout(titleStack, 1);
 
-	m_toggleButton = new QPushButton(uiText("Hide Details"));
-	m_toggleButton->setAccessibleName(uiText("Show or hide detail drawer"));
-	connect(m_toggleButton, &QPushButton::clicked, this, [this]() {
-		setExpanded(!m_expanded);
-	});
-	header->addWidget(m_toggleButton);
-
 	m_copyButton = new QPushButton(uiText("Copy"));
 	m_copyButton->setAccessibleName(uiText("Copy selected detail text"));
+	m_copyButton->setToolTip(uiText("Copy the selected section to the clipboard."));
+	m_copyButton->setProperty("variant", QStringLiteral("ghost"));
 	connect(m_copyButton, &QPushButton::clicked, this, [this]() {
 		copyCurrentSection();
 	});
-	header->addWidget(m_copyButton);
+	header->addWidget(m_copyButton, 0, Qt::AlignTop);
+
+	m_toggleButton = new QPushButton(uiText("Hide Details"));
+	m_toggleButton->setAccessibleName(uiText("Show or hide detail drawer"));
+	m_toggleButton->setProperty("variant", QStringLiteral("ghost"));
+	connect(m_toggleButton, &QPushButton::clicked, this, [this]() {
+		setExpanded(!m_expanded);
+	});
+	header->addWidget(m_toggleButton, 0, Qt::AlignTop);
 	root->addLayout(header);
 
 	m_body = new QWidget;
@@ -362,11 +461,20 @@ DetailDrawer::DetailDrawer(QWidget* parent)
 	bodyLayout->setContentsMargins(0, 0, 0, 0);
 	bodyLayout->setSpacing(8);
 
+	m_emptyLabel = new QLabel(uiText("No details yet."));
+	m_emptyLabel->setObjectName("drawerEmpty");
+	m_emptyLabel->setAccessibleName(uiText("Detail drawer empty state"));
+	m_emptyLabel->setWordWrap(true);
+	m_emptyLabel->setAlignment(Qt::AlignLeft | Qt::AlignTop);
+	bodyLayout->addWidget(m_emptyLabel);
+
 	m_sectionsList = new QListWidget;
 	m_sectionsList->setObjectName("detailSections");
 	m_sectionsList->setAccessibleName(uiText("Detail sections"));
 	m_sectionsList->setAccessibleDescription(uiText("Available summary, log, metadata, manifest, and raw diagnostic sections."));
-	m_sectionsList->setMaximumHeight(116);
+	m_sectionsList->setMaximumHeight(132);
+	m_sectionsList->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+	m_sectionsList->setTextElideMode(Qt::ElideRight);
 	connect(m_sectionsList, &QListWidget::itemSelectionChanged, this, [this]() {
 		refreshCurrentSection();
 	});
@@ -377,6 +485,10 @@ DetailDrawer::DetailDrawer(QWidget* parent)
 	m_content->setAccessibleName(uiText("Detail content"));
 	m_content->setAccessibleDescription(uiText("Selected detail content ready for copying into support notes or diagnostics."));
 	m_content->setReadOnly(true);
+	m_content->setLineWrapMode(QTextEdit::WidgetWidth);
+	// Logs, manifests, and command lines line up in a fixed-pitch font, with
+	// tabs four columns wide the way source files are usually written.
+	applyMonospaceContentFont(m_content);
 	bodyLayout->addWidget(m_content, 1);
 
 	root->addWidget(m_body, 1);
@@ -384,6 +496,30 @@ DetailDrawer::DetailDrawer(QWidget* parent)
 	setTitle(uiText("Details"));
 	setSubtitle(uiText("Select a section for deeper context."));
 	setSections({});
+}
+
+void DetailDrawer::changeEvent(QEvent* event)
+{
+	// An explicitly set font does not follow QApplication::setFont(), so the
+	// fixed-pitch content re-derives its size when the text scale changes.
+	if ((event->type() == QEvent::FontChange || event->type() == QEvent::ApplicationFontChange) && m_content) {
+		applyMonospaceContentFont(m_content);
+	}
+	QFrame::changeEvent(event);
+}
+
+void DetailDrawer::setEmbedded(bool embedded)
+{
+	setProperty("embedded", embedded);
+	// Inside a tab the drawer is the whole panel, so hiding it would leave an
+	// empty tab; only the copy action stays in its header.
+	if (m_toggleButton) {
+		m_toggleButton->setVisible(!embedded);
+	}
+	if (layout()) {
+		layout()->setContentsMargins(embedded ? 0 : 12, embedded ? 4 : 10, embedded ? 0 : 12, embedded ? 0 : 10);
+	}
+	repolish(this);
 }
 
 void DetailDrawer::setTitle(const QString& title)
@@ -487,19 +623,28 @@ void DetailDrawer::refreshSections()
 
 	QSignalBlocker blocker(m_sectionsList);
 	m_sectionsList->clear();
-	if (m_sections.isEmpty()) {
-		auto* item = new QListWidgetItem(uiText("No details available"));
-		item->setFlags(Qt::NoItemFlags);
-		m_sectionsList->addItem(item);
+	const bool empty = m_sections.isEmpty();
+	// With nothing to show, one quiet line replaces the section list and the
+	// content box instead of two empty frames.
+	if (m_emptyLabel) {
+		m_emptyLabel->setVisible(empty);
+	}
+	m_content->setVisible(!empty);
+	if (empty) {
+		m_sectionsList->setVisible(false);
 		m_copyButton->setEnabled(false);
 		return;
 	}
+	// A single section needs no chooser.
+	m_sectionsList->setVisible(m_sections.size() > 1);
 
 	for (const DetailSection& section : m_sections) {
 		const QString label = section.summary.isEmpty()
-			? QStringLiteral("%1 [%2]").arg(section.title, localizedStateName(section.state))
-			: QStringLiteral("%1 [%2]\n%3").arg(section.title, localizedStateName(section.state), section.summary);
+			? QStringLiteral("%1 %2").arg(stateGlyph(section.state), section.title)
+			: QStringLiteral("%1 %2  %3  %4").arg(stateGlyph(section.state), section.title, QString(QChar(0x2014)), section.summary);
 		auto* item = new QListWidgetItem(label);
+		item->setToolTip(QStringLiteral("%1 (%2)\n%3").arg(section.title, localizedStateName(section.state), section.summary));
+		item->setData(Qt::AccessibleTextRole, QStringLiteral("%1, %2. %3").arg(section.title, localizedStateName(section.state), section.summary));
 		item->setData(Qt::UserRole, section.id);
 		item->setData(Qt::UserRole + 1, operationStateId(section.state));
 		m_sectionsList->addItem(item);

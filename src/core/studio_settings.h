@@ -209,6 +209,14 @@ public:
 	// toolbars and dock widgets, so the splitter has to be persisted separately.
 	QByteArray shellSplitterState() const;
 	void setShellSplitterState(const QByteArray& splitterState);
+	// Whether the mode rail shows icons only.
+	bool shellModeRailCompact() const;
+	void setShellModeRailCompact(bool compact);
+	// Saved sizes for one named work-surface splitter, so each page keeps the
+	// panel widths the user chose. Keys are stable object names such as
+	// "levelsWorkbench"; unknown keys read back empty.
+	QByteArray shellLayoutState(const QString& key) const;
+	void setShellLayoutState(const QString& key, const QByteArray& state);
 
 private:
 	void ensureSchema();

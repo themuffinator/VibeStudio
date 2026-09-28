@@ -91,6 +91,22 @@ void sortStagedEntries(QVector<PackageStagedEntry>* entries)
 	std::stable_sort(entries->begin(), entries->end(), stagedEntryLess);
 }
 
+// Source order for formats where position, not path, identifies an entry.
+// Entries with no ordinal (staged additions) keep their insertion order at the
+// end, which is the only place a brand new lump can go without disturbing the
+// map runs that are already there.
+void sortStagedEntriesBySourceOrder(QVector<PackageStagedEntry>* entries)
+{
+	if (!entries) {
+		return;
+	}
+	std::stable_sort(entries->begin(), entries->end(), [](const PackageStagedEntry& left, const PackageStagedEntry& right) {
+		const int leftOrdinal = left.sourceOrdinal < 0 ? std::numeric_limits<int>::max() : left.sourceOrdinal;
+		const int rightOrdinal = right.sourceOrdinal < 0 ? std::numeric_limits<int>::max() : right.sourceOrdinal;
+		return leftOrdinal < rightOrdinal;
+	});
+}
+
 void addConflict(QVector<PackageStageConflict>* conflicts, const QString& operationId, const QString& virtualPath, const QString& message, bool blocking = true)
 {
 	if (!conflicts || message.trimmed().isEmpty()) {
@@ -710,7 +726,10 @@ int doomMapLumpRank(const QString& name)
 	return index >= 0 ? index + 1 : 1000;
 }
 
-QVector<PackageStagedEntry> wadOrderedEntries(QVector<PackageStagedEntry> entries)
+// Single-map fallback ordering: rank every lump globally so that a plan which
+// arrived in path order (a folder converted to a WAD, say) still comes out as
+// marker first, then the canonical map-lump run, then everything else.
+QVector<PackageStagedEntry> wadRankOrderedEntries(QVector<PackageStagedEntry> entries)
 {
 	std::stable_sort(entries.begin(), entries.end(), [](const PackageStagedEntry& left, const PackageStagedEntry& right) {
 		const QString leftName = left.virtualPath.toUpper();
@@ -726,6 +745,89 @@ QVector<PackageStagedEntry> wadOrderedEntries(QVector<PackageStagedEntry> entrie
 		return false;
 	});
 	return entries;
+}
+
+// Groups each map's lumps behind its own marker.
+//
+// A Doom engine locates a map's data as the run of lumps that immediately
+// follows the map's marker lump, which is why every map in a WAD repeats
+// THINGS, LINEDEFS, SIDEDEFS, VERTEXES, SEGS, SSECTORS, NODES, SECTORS, REJECT
+// and BLOCKMAP (https://doomwiki.org/wiki/WAD). The input must therefore
+// already be in source order: this walks it once, opens a group at every
+// marker, attaches the known map lumps that follow to that group, and lets any
+// other lump close the run and pass through where it stands. Each group is then
+// emitted as marker + rank-ordered lumps, so a malformed run is repaired
+// without ever moving a lump between maps.
+//
+// Returns false when the input cannot be grouped, which means it is not in
+// source order: a map lump appears before any marker, or one map claims the
+// same lump name twice. The caller falls back to the global rank order when
+// there is at most one map, and reports the ambiguity otherwise.
+bool wadGroupedEntries(const QVector<PackageStagedEntry>& entries, QVector<PackageStagedEntry>* out, QString* error)
+{
+	struct Run {
+		bool isMap = false;
+		QVector<PackageStagedEntry> entries;
+	};
+
+	QVector<Run> runs;
+	int currentMap = -1;
+	QSet<QString> currentMapLumps;
+	for (const PackageStagedEntry& entry : entries) {
+		const QString name = entry.virtualPath.toUpper();
+		if (isDoomMapMarker(name)) {
+			Run run;
+			run.isMap = true;
+			run.entries.push_back(entry);
+			runs.push_back(run);
+			currentMap = static_cast<int>(runs.size()) - 1;
+			currentMapLumps.clear();
+			continue;
+		}
+		const int rank = doomMapLumpRank(name);
+		if (rank < 1000) {
+			if (currentMap < 0) {
+				if (error) {
+					*error = QCoreApplication::translate("VibeStudioPackageStaging", "Cannot tell which map owns the lump %1: the plan is not in WAD source order.").arg(name);
+				}
+				return false;
+			}
+			if (currentMapLumps.contains(name)) {
+				if (error) {
+					*error = QCoreApplication::translate("VibeStudioPackageStaging", "One map cannot hold the lump %1 twice.").arg(name);
+				}
+				return false;
+			}
+			currentMapLumps.insert(name);
+			runs[currentMap].entries.push_back(entry);
+			continue;
+		}
+		// Any other lump ends the map run it follows.
+		currentMap = -1;
+		currentMapLumps.clear();
+		Run run;
+		run.entries.push_back(entry);
+		runs.push_back(run);
+	}
+
+	QVector<PackageStagedEntry> ordered;
+	ordered.reserve(entries.size());
+	for (const Run& run : runs) {
+		if (!run.isMap || run.entries.size() < 2) {
+			ordered += run.entries;
+			continue;
+		}
+		QVector<PackageStagedEntry> lumps = run.entries.mid(1);
+		std::stable_sort(lumps.begin(), lumps.end(), [](const PackageStagedEntry& left, const PackageStagedEntry& right) {
+			return doomMapLumpRank(left.virtualPath.toUpper()) < doomMapLumpRank(right.virtualPath.toUpper());
+		});
+		ordered.push_back(run.entries.first());
+		ordered += lumps;
+	}
+	if (out) {
+		*out = ordered;
+	}
+	return true;
 }
 
 bool wadMagicIsSupported(const QString& magic)
@@ -748,44 +850,50 @@ bool writeWadStream(const QVector<PackageStagedEntry>& inputEntries, const Entry
 
 	QVector<PackageStagedEntry> entries = fileEntriesOnly(inputEntries);
 	if (textureWad) {
-		// Texture WADs have no lump ordering contract, so the plan's total
-		// order is used directly; Doom WADs keep map-lump order.
-		sortStagedEntries(&entries);
+		// A WAD2/WAD3 texture WAD has no ordering contract at all, so the
+		// plan's own order is written as-is: source order for a WAD source,
+		// the stable path order for anything else.
 	} else {
-		// A Doom engine finds a map's data as the fixed run of lumps that
-		// immediately follows the map's own marker lump, so lump order is only
-		// meaningful *within* one map and every map's lumps must stay grouped
-		// behind their marker (https://doomwiki.org/wiki/WAD).
-		//
-		// The staging plan addresses entries by lump name alone, so it cannot
-		// express two maps that each carry THINGS/LINEDEFS/... : the plan is
-		// name-sorted, entry bytes resolve to the first lump with a given name,
-		// and the ordering below ranks by lump name with no grouping key. A
-		// multi-map WAD written through it would come out interleaved
-		// (MAP01, MAP02, THINGS, THINGS, ...) and no engine could read it.
-		// Refuse the input instead of emitting silent corruption.
-		QSet<QString> seenLumpNames;
+		// Doom map data is positional: the lumps of a map are the run that
+		// follows its marker, so several maps in one WAD legitimately repeat
+		// THINGS, LINEDEFS, ... (https://doomwiki.org/wiki/WAD). Grouping is
+		// tried first and is the only ordering that can express that; it needs
+		// the plan to be in WAD source order, which a WAD-sourced plan is.
 		int markerCount = 0;
 		for (const PackageStagedEntry& entry : entries) {
-			const QString name = entry.virtualPath.toUpper();
-			if (isDoomMapMarker(name)) {
+			if (isDoomMapMarker(entry.virtualPath.toUpper())) {
 				++markerCount;
 			}
-			if (seenLumpNames.contains(name)) {
-				if (error) {
-					*error = QCoreApplication::translate("VibeStudioPackageStaging", "Doom WAD write-back cannot represent duplicate lump names: %1").arg(name);
-				}
-				return false;
-			}
-			seenLumpNames.insert(name);
 		}
-		if (markerCount > 1) {
+		QVector<PackageStagedEntry> grouped;
+		QString groupError;
+		if (wadGroupedEntries(entries, &grouped, &groupError)) {
+			entries = grouped;
+		} else if (markerCount > 1) {
+			// Two or more maps and no usable order: which map owns which lump
+			// is genuinely unknowable, and guessing would emit an interleaved
+			// WAD that no engine can read.
 			if (error) {
-				*error = stageText("Doom WAD write-back does not support WADs that contain more than one map yet.");
+				*error = groupError.isEmpty() ? stageText("Cannot order a multi-map Doom WAD from this plan.") : groupError;
 			}
 			return false;
+		} else {
+			// At most one map: fall back to the global rank order, which is
+			// what a plan assembled from a folder or a path-sorted source
+			// needs.
+			QSet<QString> seenLumpNames;
+			for (const PackageStagedEntry& entry : entries) {
+				const QString name = entry.virtualPath.toUpper();
+				if (seenLumpNames.contains(name)) {
+					if (error) {
+						*error = QCoreApplication::translate("VibeStudioPackageStaging", "Doom WAD write-back cannot represent duplicate lump names: %1").arg(name);
+					}
+					return false;
+				}
+				seenLumpNames.insert(name);
+			}
+			entries = wadRankOrderedEntries(entries);
 		}
-		entries = wadOrderedEntries(entries);
 	}
 	if (entries.size() > std::numeric_limits<qint32>::max()) {
 		if (error) {
@@ -941,7 +1049,10 @@ QString entryContentKey(const PackageStagedEntry& entry)
 		return QStringLiteral("file:%1").arg(entry.sourceFilePath);
 	}
 	if (!entry.baseVirtualPath.isEmpty()) {
-		return QStringLiteral("base:%1").arg(entry.baseVirtualPath);
+		// The ordinal is part of the key: a Doom WAD holds several distinct
+		// lumps that share one name, and collapsing them here would hand every
+		// map the first map's digest.
+		return QStringLiteral("base:%1#%2").arg(entry.baseVirtualPath).arg(entry.sourceOrdinal);
 	}
 	return QStringLiteral("empty:%1").arg(entry.virtualPath);
 }
@@ -951,7 +1062,7 @@ struct PlanSlot {
 	bool alive = true;
 };
 
-QVector<PackageStagedEntry> computePlan(const QVector<PackageStagedEntry>& baseEntries, const QVector<PackageStagedEntry>& baseDirectories, const QVector<PackageStageOperation>& operations, const QVector<PackageStageConflict>& baseConflicts, QVector<PackageStageConflict>* conflicts)
+QVector<PackageStagedEntry> computePlan(const QVector<PackageStagedEntry>& baseEntries, const QVector<PackageStagedEntry>& baseDirectories, const QVector<PackageStageOperation>& operations, const QVector<PackageStageConflict>& baseConflicts, bool preserveSourceOrder, QVector<PackageStageConflict>* conflicts)
 {
 	if (conflicts) {
 		*conflicts = baseConflicts;
@@ -1005,6 +1116,10 @@ QVector<PackageStagedEntry> computePlan(const QVector<PackageStagedEntry>& baseE
 				if (existingIndex >= 0) {
 					if (operation.conflictResolution == PackageStageConflictResolution::ReplaceExisting) {
 						staged.source = QStringLiteral("staged-add-replace");
+						// Replacing content must not move the entry: in a WAD
+						// its position is what binds it to a map.
+						staged.sourceOrdinal = planSlots[existingIndex].entry.sourceOrdinal;
+						staged.wadLumpType = planSlots[existingIndex].entry.wadLumpType;
 						planSlots[existingIndex].entry = staged;
 					} else if (operation.conflictResolution == PackageStageConflictResolution::Skip) {
 						addConflict(conflicts, operation.id, normalized.normalizedPath, stageText("Skipped add because an entry already exists."), false);
@@ -1028,6 +1143,7 @@ QVector<PackageStagedEntry> computePlan(const QVector<PackageStagedEntry>& baseE
 				continue;
 			}
 			staged.source = QStringLiteral("staged-replace");
+			staged.sourceOrdinal = planSlots[existingIndex].entry.sourceOrdinal;
 			staged.wadLumpType = planSlots[existingIndex].entry.wadLumpType;
 			planSlots[existingIndex].entry = staged;
 			continue;
@@ -1099,7 +1215,14 @@ QVector<PackageStagedEntry> computePlan(const QVector<PackageStagedEntry>& baseE
 		}
 		entries.push_back(directory);
 	}
-	sortStagedEntries(&entries);
+	// A WAD plan keeps the source lump order, because in a Doom WAD position
+	// carries meaning that an alphabetical order would destroy; every other
+	// format gets the stable total order over paths.
+	if (preserveSourceOrder) {
+		sortStagedEntriesBySourceOrder(&entries);
+	} else {
+		sortStagedEntries(&entries);
+	}
 	return entries;
 }
 
@@ -1114,6 +1237,38 @@ quint64 totalBytes(const QVector<PackageStagedEntry>& entries)
 	return total;
 }
 
+// An unused sibling of `destinationPath`. The new archive is written here
+// first so the file it is about to replace is never the file being written.
+QString uniqueSiblingPath(const QString& destinationPath)
+{
+	const QString base = QFileInfo(destinationPath).absoluteFilePath();
+	for (int attempt = 0; attempt < 1000; ++attempt) {
+		const QString candidate = QStringLiteral("%1.vibestudio-%2.tmp").arg(base).arg(attempt);
+		if (!QFileInfo::exists(candidate)) {
+			return candidate;
+		}
+	}
+	return {};
+}
+
+// Streams a finished file back through SHA-256 so the overwrite path can prove
+// the replacement is complete and readable before the original is moved aside.
+QString fileSha256(const QString& path, quint64* sizeBytes)
+{
+	QFile file(path);
+	if (!file.open(QIODevice::ReadOnly)) {
+		return {};
+	}
+	QCryptographicHash hash(QCryptographicHash::Sha256);
+	if (!hash.addData(&file)) {
+		return {};
+	}
+	if (sizeBytes) {
+		*sizeBytes = static_cast<quint64>(std::max<qint64>(0, file.size()));
+	}
+	return QString::fromLatin1(hash.result().toHex());
+}
+
 QString canonicalComparePath(const QString& path)
 {
 	const QFileInfo info(path);
@@ -1126,9 +1281,27 @@ QString canonicalComparePath(const QString& path)
 	return QDir::cleanPath(base + QLatin1Char('/') + info.fileName());
 }
 
-// Reads the WAD magic and, for texture WADs, the per-lump "type" byte so a
-// WAD2/WAD3 source can round-trip through the writer.
-void readWadSourceMetadata(const QString& path, QString* magicOut, QHash<QString, quint8>* lumpTypes)
+qint64 readSignedLe32(const QByteArray& data, qsizetype offset)
+{
+	if (offset < 0 || offset + 4 > data.size()) {
+		return -1;
+	}
+	const auto* bytes = reinterpret_cast<const uchar*>(data.constData() + offset);
+	const quint32 value = static_cast<quint32>(bytes[0]) | (static_cast<quint32>(bytes[1]) << 8)
+		| (static_cast<quint32>(bytes[2]) << 16) | (static_cast<quint32>(bytes[3]) << 24);
+	return static_cast<qint64>(static_cast<qint32>(value));
+}
+
+// Reads the WAD magic and the lump directory in on-disk order.
+//
+// The on-disk order is what makes a multi-map Doom WAD writable: lump names
+// repeat once per map, so the plan has to remember where each lump sat rather
+// than key it by name. The layout is the one described by the Unofficial Doom
+// Specs v1.666 (https://www.gamers.org/dhs/helpdocs/dmsp1666.html) for
+// IWAD/PWAD and by the Quake Standards Group "Quake Documentation Version 3.4"
+// / the Half-Life SDK notes for WAD2/WAD3: a 12-byte header of magic,
+// int32 lumpCount, int32 directoryOffset, then fixed-size directory records.
+void readWadSourceMetadata(const QString& path, QString* magicOut, QVector<PackageWadLumpLocation>* lumps)
 {
 	QFile file(path);
 	if (!file.open(QIODevice::ReadOnly)) {
@@ -1145,41 +1318,106 @@ void readWadSourceMetadata(const QString& path, QString* magicOut, QHash<QString
 	if (magicOut) {
 		*magicOut = magic;
 	}
-	const bool textureWad = magic == QStringLiteral("WAD2") || magic == QStringLiteral("WAD3");
-	if (!textureWad || !lumpTypes) {
+	if (!lumps) {
 		return;
 	}
 
-	const auto readLe32 = [](const QByteArray& data, qsizetype offset) {
-		if (offset < 0 || offset + 4 > data.size()) {
-			return static_cast<qint64>(-1);
-		}
-		const auto* bytes = reinterpret_cast<const uchar*>(data.constData() + offset);
-		return static_cast<qint64>(static_cast<quint32>(bytes[0] | (bytes[1] << 8) | (bytes[2] << 16) | (bytes[3] << 24)));
-	};
-	const qint64 lumpCount = readLe32(header, 4);
-	const qint64 directoryOffset = readLe32(header, 8);
-	if (lumpCount < 0 || directoryOffset < kWadHeaderSize || directoryOffset + (lumpCount * kTextureWadRecordSize) > file.size()) {
+	const bool textureWad = magic == QStringLiteral("WAD2") || magic == QStringLiteral("WAD3");
+	const int recordSize = textureWad ? kTextureWadRecordSize : kDoomWadRecordSize;
+	const int nameOffset = textureWad ? 16 : 8;
+	const int nameLimit = textureWad ? kTextureWadNameLimit : kDoomWadNameLimit;
+	const qint64 lumpCount = readSignedLe32(header, 4);
+	const qint64 directoryOffset = readSignedLe32(header, 8);
+	const qint64 fileSize = file.size();
+	// Every bound is checked against the real file size before a seek, so a
+	// truncated or hostile directory yields an empty result instead of a read
+	// loop driven by an attacker-chosen count.
+	if (lumpCount < 0 || directoryOffset < kWadHeaderSize
+		|| lumpCount > (fileSize - kWadHeaderSize) / recordSize
+		|| directoryOffset + (lumpCount * recordSize) > fileSize) {
 		return;
 	}
 	if (!file.seek(directoryOffset)) {
 		return;
 	}
+
+	lumps->reserve(static_cast<qsizetype>(lumpCount));
 	for (qint64 index = 0; index < lumpCount; ++index) {
-		const QByteArray record = file.read(kTextureWadRecordSize);
-		if (record.size() != kTextureWadRecordSize) {
+		const QByteArray record = file.read(recordSize);
+		if (record.size() != recordSize) {
+			lumps->clear();
 			return;
 		}
 		qsizetype nameLength = 0;
-		while (nameLength < kTextureWadNameLimit && record[16 + nameLength] != '\0') {
+		while (nameLength < nameLimit && record[nameOffset + nameLength] != '\0') {
 			++nameLength;
 		}
-		const QString name = QString::fromLatin1(record.constData() + 16, nameLength).trimmed();
-		if (name.isEmpty()) {
-			continue;
+		PackageWadLumpLocation lump;
+		lump.name = QString::fromLatin1(record.constData() + nameOffset, nameLength).trimmed();
+		if (lump.name.isEmpty()) {
+			// Matches the reader's placeholder for a blank directory name so
+			// the two sides can be paired up.
+			lump.name = QStringLiteral("lump-%1").arg(index, 4, 10, QLatin1Char('0'));
 		}
-		lumpTypes->insert(entryKey(name), static_cast<quint8>(record[12]));
+		lump.dataOffset = readSignedLe32(record, 0);
+		lump.diskSizeBytes = readSignedLe32(record, 4);
+		lump.sizeBytes = textureWad ? readSignedLe32(record, 8) : lump.diskSizeBytes;
+		lump.type = textureWad ? static_cast<quint8>(record[12]) : 0;
+		lump.compression = textureWad ? static_cast<quint8>(record[13]) : 0;
+		lumps->push_back(lump);
 	}
+}
+
+// Pairing key for one directory record. Name alone is ambiguous in a Doom WAD,
+// so the offset and stored size join it; two records that agree on all three
+// are interchangeable by construction.
+QString wadLumpPairKey(const QString& name, qint64 dataOffset, qint64 diskSizeBytes)
+{
+	return QStringLiteral("%1|%2|%3").arg(entryKey(name)).arg(dataOffset).arg(diskSizeBytes);
+}
+
+// Reads one lump by position. Every bound is re-checked against the file that
+// is open right now, so a directory that was valid at load time but points
+// outside a file that has since been truncated fails instead of allocating.
+bool readWadLumpBytes(const QString& wadPath, const PackageWadLumpLocation& lump, QByteArray* out, QString* error)
+{
+	if (lump.compression != 0) {
+		if (error) {
+			*error = stageText("WAD2/WAD3 compressed lumps are listed but not decoded.");
+		}
+		return false;
+	}
+	QFile file(wadPath);
+	if (!file.open(QIODevice::ReadOnly)) {
+		if (error) {
+			*error = stageText("Unable to reopen the source package for reading.");
+		}
+		return false;
+	}
+	const qint64 storedSize = lump.diskSizeBytes > 0 ? lump.diskSizeBytes : lump.sizeBytes;
+	if (lump.dataOffset < 0 || storedSize < 0 || storedSize > file.size() || lump.dataOffset > file.size() - storedSize) {
+		if (error) {
+			*error = stageText("Invalid WAD lump offset or size.");
+		}
+		return false;
+	}
+	if (!file.seek(lump.dataOffset)) {
+		if (error) {
+			*error = stageText("Unable to seek to the WAD lump.");
+		}
+		return false;
+	}
+	QByteArray bytes = file.read(storedSize);
+	if (bytes.size() != storedSize) {
+		if (error) {
+			*error = stageText("Unable to read the WAD lump.");
+		}
+		return false;
+	}
+	if (out) {
+		*out = bytes;
+	}
+	return true;
 }
 
 } // namespace
@@ -1206,12 +1444,28 @@ bool PackageStagingModel::loadBaseArchive(const PackageArchiveReader& archive, Q
 	m_sourceFormat = archive.format();
 	m_loaded = true;
 
-	QHash<QString, quint8> wadLumpTypes;
-	if (m_sourceFormat == PackageArchiveFormat::Wad) {
-		readWadSourceMetadata(m_sourcePath, &m_sourceWadMagic, &wadLumpTypes);
+	const bool wadSource = m_sourceFormat == PackageArchiveFormat::Wad;
+	if (wadSource) {
+		readWadSourceMetadata(m_sourcePath, &m_sourceWadMagic, &m_sourceWadLumps);
 	}
 
+	// Maps a reader entry back to its slot in the WAD directory. The reader
+	// sorts its entry list by path and only keeps duplicates in relative
+	// on-disk order, so the directory read above is the only source of the
+	// absolute position a lump occupies.
+	QHash<QString, QVector<int>> wadPairSlots;
+	QHash<QString, QVector<int>> wadNameSlots;
+	QHash<QString, int> wadPairCursor;
+	QHash<QString, int> wadNameCursor;
+	for (int index = 0; index < static_cast<int>(m_sourceWadLumps.size()); ++index) {
+		const PackageWadLumpLocation& lump = m_sourceWadLumps.at(index);
+		wadPairSlots[wadLumpPairKey(lump.name, lump.dataOffset, lump.diskSizeBytes)].push_back(index);
+		wadNameSlots[entryKey(lump.name)].push_back(index);
+	}
+
+	int readerOrdinal = -1;
 	for (const PackageEntry& entry : archive.entries()) {
+		++readerOrdinal;
 		if (entry.kind == PackageEntryKind::Directory) {
 			// Synthetic directories are re-derived from file paths by every
 			// reader, so only real directory records are carried forward.
@@ -1248,10 +1502,37 @@ bool PackageStagingModel::loadBaseArchive(const PackageArchiveReader& archive, Q
 		staged.modifiedUtc = entry.modifiedUtc;
 		staged.source = QStringLiteral("base");
 		staged.baseVirtualPath = entry.virtualPath;
-		staged.wadLumpType = wadLumpTypes.value(entryKey(entry.virtualPath), 0);
+		staged.sourceOrdinal = readerOrdinal;
+		if (wadSource && !m_sourceWadLumps.isEmpty()) {
+			// Prefer the exact (name, offset, stored size) triple, then fall
+			// back to the next unconsumed record with the same name so a
+			// directory the reader partly skipped still lines up.
+			const QString pairKey = wadLumpPairKey(entry.virtualPath, entry.dataOffset, static_cast<qint64>(entry.compressedSizeBytes));
+			const QString nameKey = entryKey(entry.virtualPath);
+			int slot = -1;
+			const QVector<int> pairCandidates = wadPairSlots.value(pairKey);
+			int& pairCursor = wadPairCursor[pairKey];
+			if (pairCursor < static_cast<int>(pairCandidates.size())) {
+				slot = pairCandidates.at(pairCursor++);
+			} else {
+				const QVector<int> nameCandidates = wadNameSlots.value(nameKey);
+				int& nameCursor = wadNameCursor[nameKey];
+				if (nameCursor < static_cast<int>(nameCandidates.size())) {
+					slot = nameCandidates.at(nameCursor++);
+				}
+			}
+			staged.sourceOrdinal = slot;
+			if (slot >= 0) {
+				staged.wadLumpType = m_sourceWadLumps.at(slot).type;
+			}
+		}
 		m_baseEntries.push_back(staged);
 	}
-	sortStagedEntries(&m_baseEntries);
+	if (wadSource) {
+		sortStagedEntriesBySourceOrder(&m_baseEntries);
+	} else {
+		sortStagedEntries(&m_baseEntries);
+	}
 	sortStagedEntries(&m_baseDirectories);
 	invalidatePlan();
 	return true;
@@ -1262,6 +1543,7 @@ void PackageStagingModel::clear()
 	m_sourcePath.clear();
 	m_sourceFormat = PackageArchiveFormat::Unknown;
 	m_sourceWadMagic.clear();
+	m_sourceWadLumps.clear();
 	m_loaded = false;
 	m_baseEntries.clear();
 	m_baseDirectories.clear();
@@ -1292,6 +1574,11 @@ QString PackageStagingModel::sourceWadMagic() const
 	return m_sourceWadMagic;
 }
 
+QVector<PackageWadLumpLocation> PackageStagingModel::sourceWadLumps() const
+{
+	return m_sourceWadLumps;
+}
+
 QVector<PackageStageOperation> PackageStagingModel::operations() const
 {
 	return m_operations;
@@ -1309,7 +1596,7 @@ void PackageStagingModel::ensurePlan() const
 	if (m_planValid) {
 		return;
 	}
-	m_planEntries = computePlan(m_baseEntries, m_baseDirectories, m_operations, m_baseConflicts, &m_planConflicts);
+	m_planEntries = computePlan(m_baseEntries, m_baseDirectories, m_operations, m_baseConflicts, m_sourceFormat == PackageArchiveFormat::Wad, &m_planConflicts);
 	m_planValid = true;
 }
 
@@ -1346,6 +1633,12 @@ bool PackageStagingModel::entryBytes(const PackageStagedEntry& entry, QByteArray
 	}
 	if (entry.baseVirtualPath.isEmpty()) {
 		return true;
+	}
+	// WAD lumps resolve by position, never by name: a Doom WAD repeats
+	// THINGS/LINEDEFS/... once per map, so a name lookup would hand every map
+	// the first map's bytes.
+	if (m_sourceFormat == PackageArchiveFormat::Wad && entry.sourceOrdinal >= 0 && entry.sourceOrdinal < static_cast<int>(m_sourceWadLumps.size())) {
+		return readWadLumpBytes(m_sourcePath, m_sourceWadLumps.at(entry.sourceOrdinal), out, error);
 	}
 	if (!m_baseReader) {
 		auto reader = std::make_shared<PackageArchive>();
@@ -1586,12 +1879,21 @@ PackageWriteReport PackageStagingModel::writeArchive(const PackageWriteRequest& 
 	}
 	// Canonical paths so a junction, symlink, or mapped path cannot point the
 	// save-as output back at the package that is being read.
-	if (canonicalComparePath(request.destinationPath).compare(canonicalComparePath(m_sourcePath), Qt::CaseInsensitive) == 0) {
+	const bool destinationIsSource = canonicalComparePath(request.destinationPath).compare(canonicalComparePath(m_sourcePath), Qt::CaseInsensitive) == 0;
+	if (destinationIsSource && !request.allowInPlaceOverwrite) {
 		report.blockedMessages.push_back(stageText("Save-as destination must be different from the source package path."));
 		return report;
 	}
-	if (QFileInfo::exists(request.destinationPath) && !request.allowOverwrite) {
+	const bool destinationExists = QFileInfo::exists(request.destinationPath);
+	// The backup dance only exists to protect a file that is really there, and
+	// a dry run never touches the filesystem at all.
+	const bool overwriteInPlace = request.allowInPlaceOverwrite && destinationExists && !request.dryRun;
+	if (destinationExists && !request.allowOverwrite && !overwriteInPlace) {
 		report.blockedMessages.push_back(stageText("Destination already exists. Choose a new save-as path or enable overwrite explicitly."));
+		return report;
+	}
+	if (destinationExists && !QFileInfo(request.destinationPath).isFile()) {
+		report.blockedMessages.push_back(stageText("Destination exists and is not a file."));
 		return report;
 	}
 
@@ -1636,7 +1938,16 @@ PackageWriteReport PackageStagingModel::writeArchive(const PackageWriteRequest& 
 		return writeZipStream(entries, provider, options, sink, stats, writerError);
 	};
 
-	QSaveFile outputFile(request.destinationPath);
+	QString writePath = report.outputPath;
+	if (overwriteInPlace) {
+		writePath = uniqueSiblingPath(report.outputPath);
+		if (writePath.isEmpty()) {
+			report.blockedMessages.push_back(stageText("Unable to reserve a temporary file beside the destination."));
+			return report;
+		}
+	}
+
+	QSaveFile outputFile(writePath);
 	if (!request.dryRun && !outputFile.open(QIODevice::WriteOnly)) {
 		report.blockedMessages.push_back(stageText("Unable to open save-as package path."));
 		return report;
@@ -1647,6 +1958,13 @@ PackageWriteReport PackageStagingModel::writeArchive(const PackageWriteRequest& 
 	ByteSink sink(request.dryRun ? nullptr : &outputFile);
 	if (!runWriter(&sink, &stats, &writerError) || !sink.flush()) {
 		report.blockedMessages.push_back(writerError.isEmpty() ? stageText("Unable to write package bytes.") : writerError);
+		if (overwriteInPlace) {
+			// QSaveFile discards its own scratch file when it is never
+			// committed, so the original is already untouched; this only
+			// clears a partial file if the platform left one behind.
+			outputFile.cancelWriting();
+			QFile::remove(writePath);
+		}
 		return report;
 	}
 
@@ -1686,7 +2004,53 @@ PackageWriteReport PackageStagingModel::writeArchive(const PackageWriteRequest& 
 
 	if (!outputFile.commit()) {
 		report.blockedMessages.push_back(stageText("Unable to commit save-as package file."));
+		if (overwriteInPlace) {
+			QFile::remove(writePath);
+		}
 		return report;
+	}
+
+	if (overwriteInPlace) {
+		// Verify before anything irreversible happens: the replacement has to
+		// be complete and readable on disk, not merely reported as written.
+		quint64 verifiedBytes = 0;
+		const QString verifiedDigest = fileSha256(writePath, &verifiedBytes);
+		if (verifiedDigest.isEmpty() || verifiedDigest != report.sha256 || verifiedBytes != report.bytesWritten) {
+			QFile::remove(writePath);
+			report.blockedMessages.push_back(stageText("The replacement package did not verify; the original package was left untouched."));
+			return report;
+		}
+
+		const QString backupPath = request.backupPath.trimmed().isEmpty()
+			? QStringLiteral("%1.bak").arg(report.outputPath)
+			: QFileInfo(request.backupPath).absoluteFilePath();
+		if (canonicalComparePath(backupPath).compare(canonicalComparePath(report.outputPath), Qt::CaseInsensitive) == 0) {
+			QFile::remove(writePath);
+			report.blockedMessages.push_back(stageText("Backup path must be different from the destination path."));
+			return report;
+		}
+		if (QFileInfo::exists(backupPath) && !QFile::remove(backupPath)) {
+			QFile::remove(writePath);
+			report.blockedMessages.push_back(stageText("Unable to replace the previous backup file; the original package was left untouched."));
+			return report;
+		}
+		if (!QFile::rename(report.outputPath, backupPath)) {
+			QFile::remove(writePath);
+			report.blockedMessages.push_back(stageText("Unable to move the original package to its backup path; the original package was left untouched."));
+			return report;
+		}
+		if (!QFile::rename(writePath, report.outputPath)) {
+			// Put the original back before giving up, so a failure here still
+			// ends with the package where the caller left it.
+			QFile::rename(backupPath, report.outputPath);
+			QFile::remove(writePath);
+			report.blockedMessages.push_back(stageText("Unable to move the new package into place; the original package was restored."));
+			return report;
+		}
+		report.backupPath = backupPath;
+		report.overwroteInPlace = true;
+		// The cached reader described the file that has just been replaced.
+		m_baseReader.reset();
 	}
 
 	if (request.writeManifest) {
@@ -1840,6 +2204,9 @@ QString packageWriteReportText(const PackageWriteReport& report)
 	lines << QCoreApplication::translate("VibeStudioPackageStaging", "Timestamps: %1").arg(report.timestampModeId.isEmpty() ? packageTimestampModeId(PackageTimestampMode::Reproducible) : report.timestampModeId);
 	lines << QCoreApplication::translate("VibeStudioPackageStaging", "SHA-256: %1").arg(report.sha256.isEmpty() ? stageText("not available") : report.sha256);
 	lines << QCoreApplication::translate("VibeStudioPackageStaging", "Manifest: %1").arg(report.wroteManifest ? report.manifestPath : stageText("not written"));
+	if (report.overwroteInPlace || !report.backupPath.isEmpty()) {
+		lines << QCoreApplication::translate("VibeStudioPackageStaging", "Replaced in place, backup: %1").arg(report.backupPath.isEmpty() ? stageText("not written") : report.backupPath);
+	}
 	if (!report.blockedMessages.isEmpty()) {
 		lines << stageText("Blocked:");
 		for (const QString& blocked : report.blockedMessages) {

@@ -501,6 +501,165 @@ bool walLooksValid(const QByteArray& bytes, MipHeader* out = nullptr)
 }
 
 // ---------------------------------------------------------------------------
+// Quake II / Heretic II .m8 and .m32 extended mip textures.
+//
+// Layout reference: the `m8tex_t` and `m32tex_t` structures published in the
+// GPL Quake II engine sources, e.g.
+// https://github.com/yquake2/yquake2/blob/master/src/common/header/files.h
+// Implemented from the published field layout; no code was copied.
+//
+// .m8  (1040-byte header, then 8-bit indexed pixels):
+//   unsigned version (2); char name[32]; unsigned width[16];
+//   unsigned height[16]; unsigned offsets[16]; char animname[32];
+//   byte palette[768]; int flags; int contents; int value.
+// .m32 (968-byte header, then RGBA pixels):
+//   int version (4); char name[128]; char altname[128]; char animname[128];
+//   char damagename[128]; unsigned width[16]; unsigned height[16];
+//   unsigned offsets[16]; int flags; int contents; int value;
+//   float scale_x; float scale_y; int mip_scale; then the detail-texture
+//   fields (char dt_name[128], five floats, two ints) and int unused[20].
+//
+// Both store sixteen mip entries; the chain ends at the first entry with a
+// zero width, height or offset. Every one of the sixteen is still bounds
+// checked so a malformed tail cannot slip past.
+// ---------------------------------------------------------------------------
+
+constexpr int kExtendedMipLevels = 16;
+constexpr qsizetype kM8HeaderSize = 1040;
+constexpr qsizetype kM32HeaderSize = 968;
+constexpr qsizetype kM8WidthsAt = 36;
+constexpr qsizetype kM8PaletteAt = 260;
+constexpr qsizetype kM32WidthsAt = 516;
+constexpr quint32 kM8Version = 2;
+constexpr quint32 kM32Version = 4;
+
+struct ExtendedMipHeader {
+	int levelCount = 0;
+	int widths[kExtendedMipLevels] = {};
+	int heights[kExtendedMipLevels] = {};
+	quint32 offsets[kExtendedMipLevels] = {};
+};
+
+// `widthsAt` points at width[0]; height[0] and offsets[0] follow 64 and 128
+// bytes later. `bytesPerPixel` is 1 for .m8 and 4 for .m32.
+bool parseExtendedMipHeader(const QByteArray& bytes, qsizetype headerSize, qsizetype widthsAt, int bytesPerPixel, ExtendedMipHeader* out)
+{
+	if (bytes.size() < headerSize) {
+		return false;
+	}
+	ExtendedMipHeader header;
+	bool chainEnded = false;
+	for (int level = 0; level < kExtendedMipLevels; ++level) {
+		const qsizetype entry = widthsAt + static_cast<qsizetype>(level) * 4;
+		const quint32 width = readLe32(bytes, entry);
+		const quint32 height = readLe32(bytes, entry + 64);
+		const quint32 offset = readLe32(bytes, entry + 128);
+		if (width == 0 || height == 0 || offset == 0) {
+			chainEnded = true;
+			continue;
+		}
+		if (width > 65535u || height > 65535u) {
+			return false;
+		}
+		const qsizetype pixels = static_cast<qsizetype>(width) * static_cast<qsizetype>(height);
+		if (pixels > kMaxDecodedPixels) {
+			return false;
+		}
+		const qsizetype start = static_cast<qsizetype>(offset);
+		if (start < headerSize) {
+			return false;
+		}
+		// `pixels` is capped above, so this product cannot overflow qsizetype.
+		if (start + pixels * bytesPerPixel > bytes.size()) {
+			return false;
+		}
+		if (chainEnded) {
+			// A populated level after an empty one: the chain is inconsistent.
+			return false;
+		}
+		header.widths[level] = static_cast<int>(width);
+		header.heights[level] = static_cast<int>(height);
+		header.offsets[level] = offset;
+		header.levelCount = level + 1;
+	}
+	if (header.levelCount == 0) {
+		return false;
+	}
+	*out = header;
+	return true;
+}
+
+bool m8LooksValid(const QByteArray& bytes, ExtendedMipHeader* out = nullptr)
+{
+	if (bytes.size() < kM8HeaderSize || readLe32(bytes, 0) != kM8Version) {
+		return false;
+	}
+	ExtendedMipHeader header;
+	if (!parseExtendedMipHeader(bytes, kM8HeaderSize, kM8WidthsAt, 1, &header)) {
+		return false;
+	}
+	if (out) {
+		*out = header;
+	}
+	return true;
+}
+
+bool m32LooksValid(const QByteArray& bytes, ExtendedMipHeader* out = nullptr)
+{
+	if (bytes.size() < kM32HeaderSize || readLe32(bytes, 0) != kM32Version) {
+		return false;
+	}
+	ExtendedMipHeader header;
+	if (!parseExtendedMipHeader(bytes, kM32HeaderSize, kM32WidthsAt, 4, &header)) {
+		return false;
+	}
+	if (out) {
+		*out = header;
+	}
+	return true;
+}
+
+// ---------------------------------------------------------------------------
+// Quake II .sp2 sprite container.
+//
+// Layout reference: the `dsprite_t` / `dsprframe_t` structures in the GPL
+// Quake II engine sources (see the files.h link above):
+//   int ident ("IDS2"); int version (2); int numframes;
+//   then per frame: int width; int height; int origin_x; int origin_y;
+//   char name[64] naming an external image (classically a .pcx).
+// The container carries no pixels of its own.
+// ---------------------------------------------------------------------------
+
+constexpr qsizetype kSp2HeaderSize = 12;
+constexpr qsizetype kSp2FrameSize = 80;
+constexpr qsizetype kSp2NameSize = 64;
+constexpr qint32 kSp2MaxFrames = 4096;
+
+bool sp2LooksValid(const QByteArray& bytes, int* frameCountOut = nullptr)
+{
+	if (bytes.size() < kSp2HeaderSize) {
+		return false;
+	}
+	if (std::memcmp(bytes.constData(), "IDS2", 4) != 0) {
+		return false;
+	}
+	if (readLe32Signed(bytes, 4) != 2) {
+		return false;
+	}
+	const qint32 frameCount = readLe32Signed(bytes, 8);
+	if (frameCount < 0 || frameCount > kSp2MaxFrames) {
+		return false;
+	}
+	if (kSp2HeaderSize + static_cast<qsizetype>(frameCount) * kSp2FrameSize > bytes.size()) {
+		return false;
+	}
+	if (frameCountOut) {
+		*frameCountOut = static_cast<int>(frameCount);
+	}
+	return true;
+}
+
+// ---------------------------------------------------------------------------
 // PCX. Reference: the ZSoft PCX File Format Technical Reference Manual.
 // ---------------------------------------------------------------------------
 
@@ -809,13 +968,51 @@ QRgb targaColorFromBytes(const uchar* pixel, int depth, bool honourAlpha)
 }
 
 // ---------------------------------------------------------------------------
-// Quake sprite. Reference: the Quake Specifications sprite chapter and the
-// released id Software Quake tool sources (spritegn.h).
+// IDSP sprites, both dialects.
+//
+// Quake (version 1). Reference: the Quake Specifications sprite chapter and
+// the released id Software Quake tool sources (spritegn.h):
+//   int ident ("IDSP"); int version (1); int type; float boundingradius;
+//   int width; int height; int numframes; float beamlength; int synctype.
+//
+// Half-Life (version 2). Reference: the Half-Life SDK sprite generator,
+// https://github.com/ValveSoftware/halflife/blob/master/utils/sprgen/sprgen.c
+// It inserts `int texFormat` after `type` and writes a `short` palette entry
+// count plus that many RGB triplets directly after the header:
+//   int ident ("IDSP"); int version (2); int type; int texFormat;
+//   float boundingradius; int width; int height; int numframes;
+//   float beamlength; int synctype; short paletteCount; rgb palette[count].
+//
+// The frame stream is identical in both: an int group marker per entry, then
+// either one frame or a group header, an interval list and its frames, where a
+// frame is {int origin_x, int origin_y, int width, int height, pixels}.
 // ---------------------------------------------------------------------------
 
 constexpr qsizetype kSpriteHeaderSize = 36;
+constexpr qsizetype kHalfLifeSpriteHeaderSize = 40;
 
-bool quakeSpriteLooksValid(const QByteArray& bytes)
+// Half-Life texFormat values, from sprgen.c / spritegn.h.
+constexpr qint32 kSprNormal = 0;
+constexpr qint32 kSprAdditive = 1;
+constexpr qint32 kSprIndexAlpha = 2;
+constexpr qint32 kSprAlphaTest = 3;
+
+struct SpriteHeader {
+	int version = 1;
+	qint32 type = 0;
+	qint32 texFormat = kSprNormal;
+	float boundingRadius = 0.0f;
+	int maxWidth = 0;
+	int maxHeight = 0;
+	int frameCount = 0;
+	float beamLength = 0.0f;
+	qint32 syncType = 0;
+	int paletteCount = 0;
+	qsizetype paletteAt = 0;   // 0 when the sprite carries no embedded palette
+	qsizetype framesAt = 0;
+};
+
+bool spriteLooksValid(const QByteArray& bytes, SpriteHeader* out = nullptr)
 {
 	if (bytes.size() < kSpriteHeaderSize) {
 		return false;
@@ -823,16 +1020,55 @@ bool quakeSpriteLooksValid(const QByteArray& bytes)
 	if (std::memcmp(bytes.constData(), "IDSP", 4) != 0) {
 		return false;
 	}
-	if (readLe32Signed(bytes, 4) != 1) {
+	const qint32 version = readLe32Signed(bytes, 4);
+	if (version != 1 && version != 2) {
 		return false;
 	}
-	const qint32 maxWidth = readLe32Signed(bytes, 16);
-	const qint32 maxHeight = readLe32Signed(bytes, 20);
-	const qint32 frameCount = readLe32Signed(bytes, 24);
-	if (maxWidth <= 0 || maxHeight <= 0 || maxWidth > 8192 || maxHeight > 8192) {
+	SpriteHeader header;
+	header.version = static_cast<int>(version);
+	header.type = readLe32Signed(bytes, 8);
+	if (version == 1) {
+		header.boundingRadius = readLeFloat(bytes, 12);
+		header.maxWidth = readLe32Signed(bytes, 16);
+		header.maxHeight = readLe32Signed(bytes, 20);
+		header.frameCount = readLe32Signed(bytes, 24);
+		header.beamLength = readLeFloat(bytes, 28);
+		header.syncType = readLe32Signed(bytes, 32);
+		header.framesAt = kSpriteHeaderSize;
+	} else {
+		if (bytes.size() < kHalfLifeSpriteHeaderSize + 2) {
+			return false;
+		}
+		header.texFormat = readLe32Signed(bytes, 12);
+		header.boundingRadius = readLeFloat(bytes, 16);
+		header.maxWidth = readLe32Signed(bytes, 20);
+		header.maxHeight = readLe32Signed(bytes, 24);
+		header.frameCount = readLe32Signed(bytes, 28);
+		header.beamLength = readLeFloat(bytes, 32);
+		header.syncType = readLe32Signed(bytes, 36);
+		if (header.texFormat < kSprNormal || header.texFormat > kSprAlphaTest) {
+			return false;
+		}
+		header.paletteCount = static_cast<int>(readLe16(bytes, kHalfLifeSpriteHeaderSize));
+		if (header.paletteCount <= 0 || header.paletteCount > 256) {
+			return false;
+		}
+		header.paletteAt = kHalfLifeSpriteHeaderSize + 2;
+		if (header.paletteAt + static_cast<qsizetype>(header.paletteCount) * 3 > bytes.size()) {
+			return false;
+		}
+		header.framesAt = header.paletteAt + static_cast<qsizetype>(header.paletteCount) * 3;
+	}
+	if (header.maxWidth <= 0 || header.maxHeight <= 0 || header.maxWidth > 8192 || header.maxHeight > 8192) {
 		return false;
 	}
-	return frameCount > 0 && frameCount <= 4096;
+	if (header.frameCount <= 0 || header.frameCount > 4096) {
+		return false;
+	}
+	if (out) {
+		*out = header;
+	}
+	return true;
 }
 
 // ---------------------------------------------------------------------------
@@ -1206,6 +1442,167 @@ bool decodeQuake2Wal(const QString& virtualPath, const QByteArray& bytes, const 
 	return true;
 }
 
+bool decodeQuake2M8(const QString& virtualPath, const QByteArray& bytes, const IdTechPalette& palette, IdTechImageDecodeResult* result)
+{
+	ExtendedMipHeader header;
+	if (!m8LooksValid(bytes, &header)) {
+		if (bytes.size() >= 4 && bytes.size() < kM8HeaderSize) {
+			result->error = imageText("Quake II .m8 header is truncated.");
+		} else if (bytes.size() >= 4 && readLe32(bytes, 0) != kM8Version) {
+			result->error = imageText("Quake II .m8 version %1 is not supported (expected 2).").arg(readLe32(bytes, 0));
+		} else {
+			result->error = imageText("Quake II .m8 mip table does not validate.");
+		}
+		return false;
+	}
+	QString name = fixedLatin1(bytes, 4, 32);
+	if (name.isEmpty()) {
+		name = pathBaseName(virtualPath);
+	}
+	result->textureName = name;
+	result->animationNextName = fixedLatin1(bytes, 228, 32);
+	result->surfaceFlags = readLe32(bytes, 1028);
+	result->contentFlags = readLe32(bytes, 1032);
+	result->surfaceValue = readLe32Signed(bytes, 1036);
+
+	// The 768-byte palette lives inside the header and always wins over the
+	// package palette, unless it is entirely black (nothing to preview with).
+	IdTechPalette effective = palette;
+	QVector<QRgb> colors;
+	colors.reserve(256);
+	bool anyColor = false;
+	for (int index = 0; index < 256; ++index) {
+		const qsizetype at = kM8PaletteAt + static_cast<qsizetype>(index) * 3;
+		const int red = readU8(bytes, at);
+		const int green = readU8(bytes, at + 1);
+		const int blue = readU8(bytes, at + 2);
+		anyColor = anyColor || red != 0 || green != 0 || blue != 0;
+		colors.push_back(qRgb(red, green, blue));
+	}
+	const bool embedded = anyColor;
+	if (embedded) {
+		effective.colors = colors;
+		effective.id = QStringLiteral("m8-embedded");
+		effective.displayName = imageText("Embedded .m8 palette");
+		effective.sourceDescription = imageText("256-entry palette stored in the .m8 header");
+		effective.generated = false;
+		effective.transparentIndex = -1;
+		effective.fullbrightStartIndex = -1;
+	} else {
+		result->warnings << imageText("The embedded .m8 palette is empty; the supplied palette was used instead.");
+	}
+
+	const QVector<QRgb> table = paletteColorTable(effective, false);
+	const auto* data = reinterpret_cast<const uchar*>(bytes.constData());
+	for (int level = 0; level < header.levelCount; ++level) {
+		const qsizetype start = static_cast<qsizetype>(header.offsets[level]);
+		const QImage mip = makeIndexedImage(data + start, bytes.size() - start, header.widths[level], header.heights[level], table);
+		if (mip.isNull()) {
+			result->error = imageText("Unable to allocate a .m8 mip level.");
+			return false;
+		}
+		result->mipLevels.push_back(mip);
+	}
+
+	result->image = result->mipLevels.at(0);
+	result->width = header.widths[0];
+	result->height = header.heights[0];
+	applyPaletteLabels(result, effective);
+	result->detailLines << imageText("Texture name: %1").arg(name);
+	if (!result->animationNextName.isEmpty()) {
+		result->detailLines << imageText("Next animation frame: %1").arg(result->animationNextName);
+	}
+	result->detailLines << imageText("Mip levels: %1 of 16 stored.").arg(header.levelCount);
+	result->detailLines << (embedded
+		? imageText("Palette: embedded 256-entry .m8 palette.")
+		: imageText("Palette: external (the embedded palette is empty)."));
+	result->detailLines << imageText("Surface flags: 0x%1").arg(result->surfaceFlags, 8, 16, QLatin1Char('0'));
+	result->detailLines << imageText("Content flags: 0x%1").arg(result->contentFlags, 8, 16, QLatin1Char('0'));
+	result->detailLines << imageText("Surface value: %1").arg(result->surfaceValue);
+	result->decoded = true;
+	return true;
+}
+
+bool decodeQuake2M32(const QString& virtualPath, const QByteArray& bytes, IdTechImageDecodeResult* result)
+{
+	ExtendedMipHeader header;
+	if (!m32LooksValid(bytes, &header)) {
+		if (bytes.size() >= 4 && bytes.size() < kM32HeaderSize) {
+			result->error = imageText("Quake II .m32 header is truncated.");
+		} else if (bytes.size() >= 4 && readLe32(bytes, 0) != kM32Version) {
+			result->error = imageText("Quake II .m32 version %1 is not supported (expected 4).").arg(readLe32(bytes, 0));
+		} else {
+			result->error = imageText("Quake II .m32 mip table does not validate.");
+		}
+		return false;
+	}
+	QString name = fixedLatin1(bytes, 4, 128);
+	if (name.isEmpty()) {
+		name = pathBaseName(virtualPath);
+	}
+	const QString altName = fixedLatin1(bytes, 132, 128);
+	const QString damageName = fixedLatin1(bytes, 388, 128);
+	result->textureName = name;
+	result->animationNextName = fixedLatin1(bytes, 260, 128);
+	result->surfaceFlags = readLe32(bytes, 708);
+	result->contentFlags = readLe32(bytes, 712);
+	result->surfaceValue = readLe32Signed(bytes, 716);
+	const float scaleX = readLeFloat(bytes, 720);
+	const float scaleY = readLeFloat(bytes, 724);
+	const qint32 mipScale = readLe32Signed(bytes, 728);
+
+	// Truecolour: the payload is straight RGBA bytes, no palette involved.
+	const auto* data = reinterpret_cast<const uchar*>(bytes.constData());
+	bool sawTransparency = false;
+	for (int level = 0; level < header.levelCount; ++level) {
+		const int levelWidth = header.widths[level];
+		const int levelHeight = header.heights[level];
+		QImage mip(levelWidth, levelHeight, QImage::Format_ARGB32);
+		if (mip.isNull()) {
+			result->error = imageText("Unable to allocate a .m32 mip level.");
+			return false;
+		}
+		const qsizetype start = static_cast<qsizetype>(header.offsets[level]);
+		for (int y = 0; y < levelHeight; ++y) {
+			const uchar* row = data + start + static_cast<qsizetype>(y) * levelWidth * 4;
+			auto* line = reinterpret_cast<QRgb*>(mip.scanLine(y));
+			for (int x = 0; x < levelWidth; ++x) {
+				const uchar* pixel = row + static_cast<qsizetype>(x) * 4;
+				if (pixel[3] != 255) {
+					sawTransparency = true;
+				}
+				line[x] = qRgba(pixel[0], pixel[1], pixel[2], pixel[3]);
+			}
+		}
+		result->mipLevels.push_back(mip);
+	}
+
+	result->image = result->mipLevels.at(0);
+	result->width = header.widths[0];
+	result->height = header.heights[0];
+	result->hasTransparency = sawTransparency;
+	result->detailLines << imageText("Texture name: %1").arg(name);
+	if (!altName.isEmpty()) {
+		result->detailLines << imageText("Substitute texture: %1").arg(altName);
+	}
+	if (!result->animationNextName.isEmpty()) {
+		result->detailLines << imageText("Next animation frame: %1").arg(result->animationNextName);
+	}
+	if (!damageName.isEmpty()) {
+		result->detailLines << imageText("Damaged texture: %1").arg(damageName);
+	}
+	result->detailLines << imageText("Truecolour RGBA texture, %1 of 16 mip levels stored.").arg(header.levelCount);
+	result->detailLines << imageText("Texture scale: %1 x %2, mip scale %3")
+		.arg(static_cast<double>(scaleX), 0, 'f', 3)
+		.arg(static_cast<double>(scaleY), 0, 'f', 3)
+		.arg(mipScale);
+	result->detailLines << imageText("Surface flags: 0x%1").arg(result->surfaceFlags, 8, 16, QLatin1Char('0'));
+	result->detailLines << imageText("Content flags: 0x%1").arg(result->contentFlags, 8, 16, QLatin1Char('0'));
+	result->detailLines << imageText("Surface value: %1").arg(result->surfaceValue);
+	result->decoded = true;
+	return true;
+}
+
 bool decodePcx(const QByteArray& bytes, const IdTechPalette& palette, IdTechImageDecodeResult* result)
 {
 	PcxHeader header;
@@ -1407,30 +1804,74 @@ bool decodeTarga(const QByteArray& bytes, IdTechImageDecodeResult* result)
 	return true;
 }
 
-bool decodeQuakeSprite(const QByteArray& bytes, const IdTechPalette& palette, IdTechImageDecodeResult* result)
+bool decodeSprite(const QByteArray& bytes, const IdTechPalette& palette, IdTechImageDecodeResult* result)
 {
-	if (!quakeSpriteLooksValid(bytes)) {
-		result->error = imageText("Quake sprite header does not validate.");
+	SpriteHeader header;
+	if (!spriteLooksValid(bytes, &header)) {
+		result->error = imageText("IDSP sprite header does not validate.");
 		return false;
 	}
-	const qint32 type = readLe32Signed(bytes, 8);
-	const float boundingRadius = readLeFloat(bytes, 12);
-	const int maxWidth = readLe32Signed(bytes, 16);
-	const int maxHeight = readLe32Signed(bytes, 20);
-	const int frameCount = readLe32Signed(bytes, 24);
-	const float beamLength = readLeFloat(bytes, 28);
-	const qint32 syncType = readLe32Signed(bytes, 32);
+	const bool halfLife = header.version == 2;
 
-	const bool applyTransparent = palette.transparentIndex >= 0;
-	const QVector<QRgb> table = paletteColorTable(palette, applyTransparent);
+	// Half-Life sprites carry their own palette; Quake sprites rely on the
+	// palette resolved from the package.
+	IdTechPalette effective = palette;
+	if (halfLife) {
+		QVector<QRgb> colors;
+		colors.reserve(header.paletteCount);
+		for (int index = 0; index < header.paletteCount; ++index) {
+			const qsizetype at = header.paletteAt + static_cast<qsizetype>(index) * 3;
+			colors.push_back(qRgb(readU8(bytes, at), readU8(bytes, at + 1), readU8(bytes, at + 2)));
+		}
+		effective.colors = colors;
+		effective.id = QStringLiteral("spr-embedded");
+		effective.displayName = imageText("Embedded sprite palette");
+		effective.sourceDescription = imageText("Palette stored in the Half-Life sprite header");
+		effective.generated = false;
+		// Only SPR_ALPHTEST masks a palette index. SPR_INDEXALPHA is decoded
+		// straight to ARGB below, and the other texture formats are opaque.
+		effective.transparentIndex = header.texFormat == kSprAlphaTest ? 255 : -1;
+		effective.fullbrightStartIndex = -1;
+	}
+
+	const bool indexAlpha = halfLife && header.texFormat == kSprIndexAlpha;
+	const bool applyTransparent = !indexAlpha && effective.transparentIndex >= 0;
+	const QVector<QRgb> table = paletteColorTable(effective, applyTransparent);
+	// SPR_INDEXALPHA carries coverage in the index and takes its colour from the
+	// last palette entry; sprgen.c writes a grey ramp for those sprites.
+	const QRgb indexAlphaColor = table.isEmpty() ? qRgb(255, 255, 255) : table.at(table.size() - 1);
+
 	const auto* data = reinterpret_cast<const uchar*>(bytes.constData());
 	const qsizetype size = bytes.size();
+	bool sawAlpha = false;
 
-	qsizetype cursor = kSpriteHeaderSize;
+	auto makeFrameImage = [&](qsizetype at, int width, int height) -> QImage {
+		if (!indexAlpha) {
+			return makeIndexedImage(data + at, size - at, width, height, table);
+		}
+		QImage image(width, height, QImage::Format_ARGB32);
+		if (image.isNull()) {
+			return {};
+		}
+		for (int y = 0; y < height; ++y) {
+			const uchar* row = data + at + static_cast<qsizetype>(y) * width;
+			auto* line = reinterpret_cast<QRgb*>(image.scanLine(y));
+			for (int x = 0; x < width; ++x) {
+				const QRgb alpha = static_cast<QRgb>(row[x]);
+				if (alpha != 255) {
+					sawAlpha = true;
+				}
+				line[x] = (indexAlphaColor & 0x00ffffffu) | (alpha << 24);
+			}
+		}
+		return image;
+	};
+
+	qsizetype cursor = header.framesAt;
 	int groupCount = 0;
 	auto readFrame = [&](int label, int groupLabel, float intervalSeconds) -> bool {
 		if (cursor + 16 > size) {
-			result->error = imageText("Quake sprite frame header is truncated.");
+			result->error = imageText("Sprite frame header is truncated.");
 			return false;
 		}
 		const int originX = readLe32Signed(bytes, cursor);
@@ -1439,16 +1880,20 @@ bool decodeQuakeSprite(const QByteArray& bytes, const IdTechPalette& palette, Id
 		const qint32 frameHeight = readLe32Signed(bytes, cursor + 12);
 		cursor += 16;
 		if (frameWidth <= 0 || frameHeight <= 0 || frameWidth > 8192 || frameHeight > 8192) {
-			result->error = imageText("Quake sprite frame has implausible dimensions.");
+			result->error = imageText("Sprite frame has implausible dimensions.");
 			return false;
 		}
 		const qsizetype pixelBytes = static_cast<qsizetype>(frameWidth) * frameHeight;
+		if (pixelBytes > kMaxDecodedPixels) {
+			result->error = imageText("Sprite frame exceeds the decoded pixel limit.");
+			return false;
+		}
 		if (cursor + pixelBytes > size) {
-			result->error = imageText("Quake sprite frame pixel data is truncated.");
+			result->error = imageText("Sprite frame pixel data is truncated.");
 			return false;
 		}
 		IdTechImageFrame frame;
-		frame.image = makeIndexedImage(data + cursor, size - cursor, frameWidth, frameHeight, table);
+		frame.image = makeFrameImage(cursor, frameWidth, frameHeight);
 		if (frame.image.isNull()) {
 			result->error = imageText("Unable to allocate a sprite frame.");
 			return false;
@@ -1464,9 +1909,9 @@ bool decodeQuakeSprite(const QByteArray& bytes, const IdTechPalette& palette, Id
 		return true;
 	};
 
-	for (int index = 0; index < frameCount; ++index) {
+	for (int index = 0; index < header.frameCount; ++index) {
 		if (cursor + 4 > size) {
-			result->error = imageText("Quake sprite frame table is truncated.");
+			result->error = imageText("Sprite frame table is truncated.");
 			return false;
 		}
 		const qint32 group = readLe32Signed(bytes, cursor);
@@ -1478,21 +1923,21 @@ bool decodeQuakeSprite(const QByteArray& bytes, const IdTechPalette& palette, Id
 			continue;
 		}
 		if (group != 1) {
-			result->error = imageText("Unsupported Quake sprite frame group type.");
+			result->error = imageText("Unsupported sprite frame group type.");
 			return false;
 		}
 		if (cursor + 4 > size) {
-			result->error = imageText("Quake sprite frame group header is truncated.");
+			result->error = imageText("Sprite frame group header is truncated.");
 			return false;
 		}
 		const qint32 subFrameCount = readLe32Signed(bytes, cursor);
 		cursor += 4;
 		if (subFrameCount <= 0 || subFrameCount > 4096) {
-			result->error = imageText("Quake sprite frame group count is implausible.");
+			result->error = imageText("Sprite frame group count is implausible.");
 			return false;
 		}
 		if (cursor + static_cast<qsizetype>(subFrameCount) * 4 > size) {
-			result->error = imageText("Quake sprite frame group interval list is truncated.");
+			result->error = imageText("Sprite frame group interval list is truncated.");
 			return false;
 		}
 		QVector<float> intervals;
@@ -1514,23 +1959,52 @@ bool decodeQuakeSprite(const QByteArray& bytes, const IdTechPalette& palette, Id
 	}
 
 	if (result->frames.isEmpty()) {
-		result->error = imageText("Quake sprite contains no frames.");
+		result->error = imageText("Sprite contains no frames.");
 		return false;
 	}
-
 	result->image = result->frames.at(0).image;
-	result->width = maxWidth;
-	result->height = maxHeight;
+	result->width = header.maxWidth;
+	result->height = header.maxHeight;
 	result->leftOffset = result->frames.at(0).originX;
 	result->topOffset = result->frames.at(0).originY;
-	applyPaletteLabels(result, palette);
-	result->hasTransparency = applyTransparent && indexedImageUsesIndex(result->image, palette.transparentIndex);
-	result->detailLines << imageText("Quake sprite, %1 frame entries, %2 stored frames.").arg(frameCount).arg(result->frames.size());
-	result->detailLines << imageText("Sprite orientation type: %1").arg(type);
-	result->detailLines << imageText("Max frame size: %1x%2").arg(maxWidth).arg(maxHeight);
-	result->detailLines << imageText("Bounding radius: %1").arg(static_cast<double>(boundingRadius), 0, 'f', 3);
-	result->detailLines << imageText("Beam length: %1").arg(static_cast<double>(beamLength), 0, 'f', 3);
-	result->detailLines << imageText("Sync type: %1").arg(syncType);
+	applyPaletteLabels(result, effective);
+	if (indexAlpha) {
+		result->hasTransparency = sawAlpha;
+	} else if (applyTransparent) {
+		for (const IdTechImageFrame& frame : result->frames) {
+			if (indexedImageUsesIndex(frame.image, effective.transparentIndex)) {
+				result->hasTransparency = true;
+				break;
+			}
+		}
+	}
+	result->detailLines << (halfLife
+		? imageText("Half-Life sprite (IDSP version 2), %1 frame entries, %2 stored frames.").arg(header.frameCount).arg(result->frames.size())
+		: imageText("Quake sprite, %1 frame entries, %2 stored frames.").arg(header.frameCount).arg(result->frames.size()));
+	result->detailLines << imageText("Sprite orientation type: %1").arg(header.type);
+	if (halfLife) {
+		QString textureFormat;
+		switch (header.texFormat) {
+		case kSprAdditive:
+			textureFormat = imageText("additive");
+			break;
+		case kSprIndexAlpha:
+			textureFormat = imageText("index alpha");
+			break;
+		case kSprAlphaTest:
+			textureFormat = imageText("alpha test (index 255 masked)");
+			break;
+		default:
+			textureFormat = imageText("normal");
+			break;
+		}
+		result->detailLines << imageText("Texture format: %1 (%2)").arg(textureFormat).arg(header.texFormat);
+		result->detailLines << imageText("Palette: embedded %1-entry sprite palette.").arg(header.paletteCount);
+	}
+	result->detailLines << imageText("Max frame size: %1x%2").arg(header.maxWidth).arg(header.maxHeight);
+	result->detailLines << imageText("Bounding radius: %1").arg(static_cast<double>(header.boundingRadius), 0, 'f', 3);
+	result->detailLines << imageText("Beam length: %1").arg(static_cast<double>(header.beamLength), 0, 'f', 3);
+	result->detailLines << imageText("Sync type: %1").arg(header.syncType);
 	result->decoded = true;
 	return true;
 }
@@ -1666,6 +2140,126 @@ bool findArchiveEntry(const PackageArchiveReader& archive, const QString& candid
 	return false;
 }
 
+// Quake II .sp2 sprites are a table of frames naming external images, so a
+// decode always yields the frame list and only fills in pixels when a package
+// reader was supplied to resolve those names.
+constexpr int kSp2MaxResolvedFrames = 256;
+
+bool decodeQuake2Sprite(const QString& virtualPath, const QByteArray& bytes, const IdTechPalette& palette, const IdTechImageDecodeContext& context, IdTechImageDecodeResult* result)
+{
+	int frameCount = 0;
+	if (!sp2LooksValid(bytes, &frameCount)) {
+		result->error = imageText("Quake II .sp2 header does not validate.");
+		return false;
+	}
+	if (frameCount == 0) {
+		result->error = imageText("Quake II .sp2 sprite contains no frames.");
+		return false;
+	}
+
+	result->externalFrames = true;
+	const QString directory = virtualPath.left(std::max<qsizetype>(virtualPath.lastIndexOf('/') + 1, 0));
+	int resolved = 0;
+	int attempted = 0;
+	int maxWidth = 0;
+	int maxHeight = 0;
+	for (int index = 0; index < frameCount; ++index) {
+		const qsizetype base = kSp2HeaderSize + static_cast<qsizetype>(index) * kSp2FrameSize;
+		const qint32 frameWidth = readLe32Signed(bytes, base);
+		const qint32 frameHeight = readLe32Signed(bytes, base + 4);
+		if (frameWidth <= 0 || frameHeight <= 0 || frameWidth > 8192 || frameHeight > 8192) {
+			result->error = imageText("Quake II .sp2 frame %1 has implausible dimensions.").arg(index + 1);
+			return false;
+		}
+		if (static_cast<qsizetype>(frameWidth) * frameHeight > kMaxDecodedPixels) {
+			result->error = imageText("Quake II .sp2 frame %1 exceeds the decoded pixel limit.").arg(index + 1);
+			return false;
+		}
+		IdTechImageFrame frame;
+		frame.originX = readLe32Signed(bytes, base + 8);
+		frame.originY = readLe32Signed(bytes, base + 12);
+		frame.sourceName = fixedLatin1(bytes, base + 16, kSp2NameSize);
+		frame.label = frame.sourceName.isEmpty()
+			? imageText("Frame %1").arg(index + 1)
+			: imageText("Frame %1: %2").arg(index + 1).arg(frame.sourceName);
+		maxWidth = std::max(maxWidth, static_cast<int>(frameWidth));
+		maxHeight = std::max(maxHeight, static_cast<int>(frameHeight));
+
+		if (context.archive != nullptr && !frame.sourceName.isEmpty() && attempted < kSp2MaxResolvedFrames) {
+			++attempted;
+			QStringList candidates;
+			candidates << frame.sourceName;
+			if (!frame.sourceName.contains('/') && !directory.isEmpty()) {
+				candidates << directory + frame.sourceName;
+			}
+			for (const QString& candidate : candidates) {
+				QString entryPath;
+				QByteArray entryBytes;
+				QString readError;
+				if (!findArchiveEntry(*context.archive, candidate, &entryPath)) {
+					continue;
+				}
+				if (!context.archive->readEntryBytes(entryPath, &entryBytes, &readError)) {
+					continue;
+				}
+				// An empty context stops a hostile chain of sprites referring to
+				// each other from recursing.
+				const IdTechImageDecodeResult frameResult = decodeIdTechImage(entryPath, entryBytes, palette, {});
+				if (!frameResult.decoded || frameResult.image.isNull()) {
+					continue;
+				}
+				frame.image = frameResult.image;
+				frame.sourceVirtualPath = entryPath;
+				++resolved;
+				break;
+			}
+			if (frame.image.isNull()) {
+				result->warnings << imageText("Sprite frame image was not found in the package: %1").arg(frame.sourceName);
+			}
+		}
+		result->frames.push_back(frame);
+	}
+
+	for (const IdTechImageFrame& frame : result->frames) {
+		if (!frame.image.isNull()) {
+			result->image = frame.image;
+			result->leftOffset = frame.originX;
+			result->topOffset = frame.originY;
+			result->hasTransparency = frame.image.hasAlphaChannel();
+			break;
+		}
+	}
+	result->width = maxWidth;
+	result->height = maxHeight;
+	result->detailLines << imageText("Quake II sprite sheet, %1 frame(s) referencing external images.").arg(frameCount);
+	result->detailLines << imageText("Largest declared frame: %1x%2").arg(maxWidth).arg(maxHeight);
+	if (context.archive != nullptr) {
+		result->detailLines << imageText("Frame images resolved from the package: %1 of %2.").arg(resolved).arg(frameCount);
+		if (attempted < frameCount) {
+			result->warnings << imageText("Only the first %1 sprite frames were resolved.").arg(kSp2MaxResolvedFrames);
+		}
+	} else {
+		result->detailLines << imageText("No package was available, so the frame images were not resolved.");
+	}
+	// Long sprite sheets would swamp the summary, so only the first entries are
+	// listed individually.
+	constexpr int kListedFrames = 32;
+	const int listed = std::min(static_cast<int>(result->frames.size()), kListedFrames);
+	for (int index = 0; index < listed; ++index) {
+		const IdTechImageFrame& frame = result->frames.at(index);
+		result->detailLines << imageText("Frame %1: %2 (origin %3, %4)")
+			.arg(index + 1)
+			.arg(frame.sourceName.isEmpty() ? imageText("(unnamed)") : frame.sourceName)
+			.arg(frame.originX)
+			.arg(frame.originY);
+	}
+	if (listed < result->frames.size()) {
+		result->detailLines << imageText("... and %1 further frame(s).").arg(result->frames.size() - listed);
+	}
+	result->decoded = true;
+	return true;
+}
+
 bool resolveCaseInsensitiveFile(const QString& directoryPath, const QString& relativePath, QString* resolved)
 {
 	QString current = directoryPath;
@@ -1750,8 +2344,16 @@ QString idTechImageFormatId(IdTechImageFormat format)
 		return QStringLiteral("quake-miptex");
 	case IdTechImageFormat::Quake2Wal:
 		return QStringLiteral("quake2-wal");
+	case IdTechImageFormat::Quake2M8:
+		return QStringLiteral("quake2-m8");
+	case IdTechImageFormat::Quake2M32:
+		return QStringLiteral("quake2-m32");
 	case IdTechImageFormat::QuakeSprite:
 		return QStringLiteral("quake-spr");
+	case IdTechImageFormat::HalfLifeSprite:
+		return QStringLiteral("halflife-spr");
+	case IdTechImageFormat::Quake2Sprite:
+		return QStringLiteral("quake2-sp2");
 	case IdTechImageFormat::DoomPatch:
 		return QStringLiteral("doom-patch");
 	case IdTechImageFormat::DoomFlat:
@@ -1783,8 +2385,16 @@ QString idTechImageFormatDisplayName(IdTechImageFormat format)
 		return imageText("Quake WAD2/WAD3 miptex");
 	case IdTechImageFormat::Quake2Wal:
 		return imageText("Quake II .wal texture");
+	case IdTechImageFormat::Quake2M8:
+		return imageText("Quake II .m8 texture");
+	case IdTechImageFormat::Quake2M32:
+		return imageText("Quake II .m32 texture");
 	case IdTechImageFormat::QuakeSprite:
 		return imageText("Quake sprite");
+	case IdTechImageFormat::HalfLifeSprite:
+		return imageText("Half-Life sprite");
+	case IdTechImageFormat::Quake2Sprite:
+		return imageText("Quake II .sp2 sprite");
 	case IdTechImageFormat::DoomPatch:
 		return imageText("Doom picture (patch)");
 	case IdTechImageFormat::DoomFlat:
@@ -1807,7 +2417,12 @@ bool idTechImageFormatIsPaletted(IdTechImageFormat format)
 	case IdTechImageFormat::QuakeLump:
 	case IdTechImageFormat::QuakeMipTexture:
 	case IdTechImageFormat::Quake2Wal:
+	case IdTechImageFormat::Quake2M8:
 	case IdTechImageFormat::QuakeSprite:
+	case IdTechImageFormat::HalfLifeSprite:
+	// .sp2 stores no pixels of its own, but its frames point at indexed images,
+	// so a palette is still worth resolving before one is decoded.
+	case IdTechImageFormat::Quake2Sprite:
 	case IdTechImageFormat::DoomPatch:
 	case IdTechImageFormat::DoomFlat:
 	case IdTechImageFormat::DoomColormap:
@@ -2102,8 +2717,12 @@ IdTechImageFormat detectIdTechImageFormat(const QString& virtualPath, const QByt
 	if (qtNativeMagic(bytes)) {
 		return IdTechImageFormat::QtNative;
 	}
-	if (quakeSpriteLooksValid(bytes)) {
-		return IdTechImageFormat::QuakeSprite;
+	SpriteHeader spriteHeader;
+	if (spriteLooksValid(bytes, &spriteHeader)) {
+		return spriteHeader.version == 2 ? IdTechImageFormat::HalfLifeSprite : IdTechImageFormat::QuakeSprite;
+	}
+	if (sp2LooksValid(bytes)) {
+		return IdTechImageFormat::Quake2Sprite;
 	}
 	if (looksLikePcx(bytes)) {
 		return IdTechImageFormat::Pcx;
@@ -2124,6 +2743,14 @@ IdTechImageFormat detectIdTechImageFormat(const QString& virtualPath, const QByt
 
 	if (targaOk) {
 		return IdTechImageFormat::Targa;
+	}
+	// .m8 and .m32 have no magic, but a matching version word plus sixteen
+	// self-consistent, in-bounds mip entries is specific enough to trust.
+	if (m8LooksValid(bytes)) {
+		return IdTechImageFormat::Quake2M8;
+	}
+	if (m32LooksValid(bytes)) {
+		return IdTechImageFormat::Quake2M32;
 	}
 	if (walOk && (suffix == QStringLiteral("wal") || !mipOk)) {
 		return IdTechImageFormat::Quake2Wal;
@@ -2170,7 +2797,7 @@ IdTechImageFormat detectIdTechImageFormat(const QString& virtualPath, const QByt
 // Decoding
 // ---------------------------------------------------------------------------
 
-IdTechImageDecodeResult decodeIdTechImage(const QString& virtualPath, const QByteArray& bytes, const IdTechPalette& palette)
+IdTechImageDecodeResult decodeIdTechImage(const QString& virtualPath, const QByteArray& bytes, const IdTechPalette& palette, const IdTechImageDecodeContext& context)
 {
 	IdTechImageDecodeResult result;
 	result.format = detectIdTechImageFormat(virtualPath, bytes);
@@ -2208,8 +2835,18 @@ IdTechImageDecodeResult decodeIdTechImage(const QString& virtualPath, const QByt
 	case IdTechImageFormat::Quake2Wal:
 		decodeQuake2Wal(virtualPath, bytes, effective, &result);
 		break;
+	case IdTechImageFormat::Quake2M8:
+		decodeQuake2M8(virtualPath, bytes, effective, &result);
+		break;
+	case IdTechImageFormat::Quake2M32:
+		decodeQuake2M32(virtualPath, bytes, &result);
+		break;
 	case IdTechImageFormat::QuakeSprite:
-		decodeQuakeSprite(bytes, effective, &result);
+	case IdTechImageFormat::HalfLifeSprite:
+		decodeSprite(bytes, effective, &result);
+		break;
+	case IdTechImageFormat::Quake2Sprite:
+		decodeQuake2Sprite(virtualPath, bytes, effective, context, &result);
 		break;
 	case IdTechImageFormat::DoomPatch:
 		decodeDoomPatch(bytes, effective, &result);
@@ -2257,7 +2894,11 @@ IdTechImageDecodeResult decodeIdTechImageFromArchive(const PackageArchiveReader&
 		return result;
 	}
 
-	IdTechImageDecodeResult result = decodeIdTechImage(virtualPath, bytes, resolution.palette);
+	// The archive doubles as the source for formats that reference other
+	// entries, such as the external frame images named by a .sp2 sprite.
+	IdTechImageDecodeContext context;
+	context.archive = &archive;
+	IdTechImageDecodeResult result = decodeIdTechImage(virtualPath, bytes, resolution.palette, context);
 	if (result.paletted) {
 		result.paletteSourceVirtualPath = resolution.fromPackage ? resolution.sourceVirtualPath : QString();
 		result.paletteGenerated = resolution.palette.generated;
@@ -2468,6 +3109,15 @@ QStringList idTechImageSummaryLines(const IdTechImageDecodeResult& result)
 	}
 	if (!result.frames.isEmpty()) {
 		lines << imageText("Frames: %1").arg(result.frames.size());
+	}
+	if (result.externalFrames) {
+		int resolved = 0;
+		for (const IdTechImageFrame& frame : result.frames) {
+			if (!frame.image.isNull()) {
+				++resolved;
+			}
+		}
+		lines << imageText("Frame images: external, %1 of %2 resolved").arg(resolved).arg(result.frames.size());
 	}
 	if (result.surfaceFlags != 0 || result.contentFlags != 0 || result.surfaceValue != 0) {
 		lines << imageText("Surface flags: 0x%1").arg(result.surfaceFlags, 8, 16, QLatin1Char('0'));

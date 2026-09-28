@@ -44,7 +44,7 @@ int main()
 
 	QString error;
 	if (!vibestudio::saveProjectManifest(manifest, &error)) {
-		std::cerr << error.toStdString() << "\n";
+		std::cerr << qUtf8Printable(error) << "\n";
 		return fail("Expected project manifest save.");
 	}
 	if (!QFileInfo::exists(vibestudio::projectManifestPath(tempDir.path()))) {
@@ -53,7 +53,7 @@ int main()
 
 	vibestudio::ProjectManifest loaded;
 	if (!vibestudio::loadProjectManifest(tempDir.path(), &loaded, &error)) {
-		std::cerr << error.toStdString() << "\n";
+		std::cerr << qUtf8Printable(error) << "\n";
 		return fail("Expected project manifest load.");
 	}
 	if (loaded.displayName != QStringLiteral("Manifest Test") || loaded.projectId.isEmpty()) {

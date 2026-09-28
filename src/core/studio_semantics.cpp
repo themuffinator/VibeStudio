@@ -15,12 +15,25 @@ QString semanticsText(const char* source)
 	return QCoreApplication::translate("VibeStudioSemantics", source);
 }
 
+// Shell commands are registered with camelCase ids ("shell.commandPalette")
+// while this registry documents them in kebab-case ("shell.command-palette").
+// Both spellings name the same command, so a lower-to-upper transition becomes
+// a hyphen before the comparison.
 QString normalizedId(QString value)
 {
-	value = value.trimmed().toLower();
-	value.replace('_', '-');
-	value.replace(' ', '-');
-	return value;
+	value = value.trimmed();
+	QString normalized;
+	normalized.reserve(value.size() + 8);
+	for (int index = 0; index < value.size(); ++index) {
+		const QChar ch = value.at(index);
+		if (ch.isUpper() && index > 0 && (value.at(index - 1).isLower() || value.at(index - 1).isDigit())) {
+			normalized += QLatin1Char('-');
+		}
+		normalized += ch.toLower();
+	}
+	normalized.replace('_', '-');
+	normalized.replace(' ', '-');
+	return normalized;
 }
 
 QString normalizedSequence(const QString& sequence)

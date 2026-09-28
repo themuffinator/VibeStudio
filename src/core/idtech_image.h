@@ -15,6 +15,14 @@
 //   released id Software Quake II source headers).
 // - Half-Life WAD3 miptex palette tail: the Valve Developer Community WAD3
 //   documentation (https://developer.valvesoftware.com/wiki/WAD).
+// - Quake II .m8 / .m32 extended mip textures and the .sp2 sprite container:
+//   the `m8tex_t`, `m32tex_t`, `dsprite_t` and `dsprframe_t` layouts published
+//   in the GPL Quake II engine sources
+//   (https://github.com/yquake2/yquake2/blob/master/src/common/header/files.h,
+//   matching id Software's release at https://github.com/id-Software/Quake-2).
+// - Half-Life sprite (IDSP version 2) header, texture format field and
+//   embedded palette: the Half-Life SDK sprite generator
+//   (https://github.com/ValveSoftware/halflife/blob/master/utils/sprgen/sprgen.c).
 // - PCX layout: the ZSoft PCX File Format Technical Reference Manual.
 // - Targa layout: the Truevision TGA File Format Specification 2.0.
 //
@@ -42,7 +50,11 @@ enum class IdTechImageFormat {
 	QuakeLump,
 	QuakeMipTexture,
 	Quake2Wal,
+	Quake2M8,
+	Quake2M32,
 	QuakeSprite,
+	HalfLifeSprite,
+	Quake2Sprite,
 	DoomPatch,
 	DoomFlat,
 	DoomPalette,
@@ -90,6 +102,11 @@ struct IdTechImageFrame {
 	int originY = 0;
 	int durationMs = 0;
 	QString label;
+	// Quake II .sp2 frames carry no pixels: they name an external image.
+	// `sourceName` is the name exactly as stored, `sourceVirtualPath` is where
+	// that image was actually found, and `image` stays null when it was not.
+	QString sourceName;
+	QString sourceVirtualPath;
 };
 
 struct IdTechImageDecodeResult {
@@ -100,6 +117,9 @@ struct IdTechImageDecodeResult {
 	QImage image;
 	QVector<QImage> mipLevels;
 	QVector<IdTechImageFrame> frames;
+	// True when the frames reference images stored elsewhere (Quake II .sp2).
+	// Frame images are only populated when a package reader was supplied.
+	bool externalFrames = false;
 	int width = 0;
 	int height = 0;
 	int leftOffset = 0;
@@ -149,7 +169,15 @@ IdTechPaletteResolution resolveIdTechPaletteFromDirectory(const QString& directo
 
 IdTechImageFormat detectIdTechImageFormat(const QString& virtualPath, const QByteArray& bytes);
 
-IdTechImageDecodeResult decodeIdTechImage(const QString& virtualPath, const QByteArray& bytes, const IdTechPalette& palette);
+// Everything a decoder may need beyond the payload itself. Only Quake II .sp2
+// sprites use it today: they name external frame images that have to be read
+// back out of the package the sprite came from. Decoding without a reader is
+// still valid and simply leaves the frame images empty.
+struct IdTechImageDecodeContext {
+	const PackageArchiveReader* archive = nullptr;
+};
+
+IdTechImageDecodeResult decodeIdTechImage(const QString& virtualPath, const QByteArray& bytes, const IdTechPalette& palette, const IdTechImageDecodeContext& context = {});
 
 // Convenience wrapper that resolves the palette from the archive first.
 IdTechImageDecodeResult decodeIdTechImageFromArchive(const PackageArchiveReader& archive, const QString& virtualPath, const QString& paletteId, IdTechPaletteResolution* resolutionOut = nullptr);

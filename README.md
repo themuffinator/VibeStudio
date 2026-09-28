@@ -22,12 +22,13 @@ validating, packaging, and launching classic game content.
 
 > [!WARNING]
 > VibeStudio is at an extremely early pre-alpha stage. Real format work now
-> exists — idTech image decoding, DEFLATE, brush and sector geometry, BSP
-> inspection, chained compiles — but it sits behind inspect-and-save-as
-> surfaces, not production editors. Many studio features described below remain
-> product goals and roadmap targets; the implemented surfaces are listed in
-> Current Development State. It is not ready for production modding, mapping,
-> packaging, or asset-authoring work.
+> exists — idTech image decoding, DEFLATE, brush and sector geometry, model
+> geometry, BSP inspection, entity definition validation, chained compiles —
+> but it sits behind inspect, preview, and save-as surfaces, not production
+> editors. Many studio features described below remain product goals and
+> roadmap targets; the implemented surfaces are listed in Current Development
+> State. It is not ready for production modding, mapping, packaging, or
+> asset-authoring work.
 
 The product direction borrows the clear, always-in-context workflow of modern
 idStudio-style tools while staying grounded in the constraints and file formats
@@ -60,32 +61,58 @@ of Doom, Quake, Quake II, and Quake III-era games.
 - Primary scope: end-to-end idTech1-3 game development.
 - Product emphasis: efficient, AI-accelerated, AI-optional workflows that reduce setup friction, repeated work, context switching, and time-to-test.
 - Accessibility emphasis: high-visibility themes, scalable UI, OS-backed TTS, keyboard/screen-reader support, and localization-first design.
-- Repository state: pre-alpha, with documentation, CI, compiler submodules, dependency-free idTech format readers, a painted Qt Widgets shell, and a 78-command CLI.
+- Repository state: pre-alpha, with documentation, CI, compiler submodules, dependency-free idTech format readers, a painted Qt Widgets shell, and an 84-command CLI.
 
 ## Current Development State
 VibeStudio is still pre-alpha, but the format layer is no longer a placeholder:
-packages, images, maps, and compiled BSPs are parsed by in-tree readers, drawn
-with real QPainter code, and driven end to end by a chained build pipeline. What
-is still missing is depth — editors, 3D, and audio playback — not honesty about
-what the file readers do.
+packages, images, maps, models, and compiled BSPs are parsed by in-tree readers,
+drawn with real QPainter code, and driven end to end by a chained build
+pipeline. What is still missing is depth — production editors, hardware 3D, and
+audio playback — not honesty about what the file readers do.
 
 What exists today:
 - Documentation for product goals, stack, roadmap, UX, accessibility,
   localization, AI connectors, setup, compiler integration, and credits.
 - Cross-platform Meson/Qt6 C++20 build with moc-generated `Q_OBJECT` widgets and
-  33 Meson tests: 28 C++ smoke-test binaries plus Python validators for docs,
-  samples, packaging, source layout, and build configuration. CI also runs an
-  offscreen `--self-test` GUI pass and the CLI/credits validators.
-- A Qt Widgets shell built around a ten-entry mode rail
+  43 Meson tests: 37 C++ smoke-test binaries plus Python validators for doc
+  version sync, documentation, source layout, credits, translation
+  extraction, and English plural forms. CI also runs an offscreen `--self-test` GUI pass and the build,
+  CLI-docs, credits, samples, packaging, and release-asset validators.
+- Deterministic parser fuzzing and named corruption fixtures. `parser_fuzz`
+  builds a reproducible corpus from a seeded xorshift64\* generator and seven
+  mutations, and `parser-fuzz-smoke` drives it through `inflateRaw`,
+  `inflateZlib`, `decodeIdTechImage`, `detectIdTechImageFormat`,
+  `inspectBspBytes`, `PackageArchive::load`, `loadLevelMap` for both `.map` and
+  Doom WAD input, and `decodeModelMesh`, asserting that a rejection carries an
+  error rather than claiming success. `corrupt-fixture-smoke` pins the exact
+  message for twelve hand-built damaged files. Both corpora are assembled from
+  published format layouts; no game data is embedded.
+- A Qt Widgets shell built around a grouped, collapsible ten-entry mode rail
   (Workspace, Levels, Models, Textures, Audio, Packages, Code, Shaders, Build,
-  Settings) over a `QStackedWidget`, with a generated menu bar, a toolbar, a
-  fuzzy command palette, keyboard shortcuts taken from the shared semantics
-  registry, non-color-only status chips, drag-and-drop file/package opening,
-  confirmation prompts before destructive actions, a persistent window/mode
-  state, and a date-stamped session log that captures Qt warnings and above.
+  Settings) over a `QStackedWidget`, with a generated menu bar, an icon tool bar,
+  a fuzzy command palette, keyboard shortcuts taken from the shared semantics
+  registry, non-color-only status chips, dockable Activity and Inspector panels,
+  drag-and-drop file/package opening, confirmation prompts before destructive
+  actions, persistent window, mode, and panel layouts with **View > Reset
+  Layout**, and a date-stamped session log that captures Qt warnings and above.
+- A design system taking its visual language from idStudio: one token set per
+  theme (charcoal and orange by default, plus light and two high-visibility
+  themes held to WCAG AA contrast by a test), painted theme-aware icons, and
+  shared page parts, so every surface has the same header, tool bar, splitter
+  workbench, empty state, and status strip. The Levels page has an idStudio-style
+  Key / Value entity property grid with in-place editing and spawnflag check
+  boxes, and the Models and Audio inspectors use the same grid; the Packages page
+  is an asset browser with a folder tree, breadcrumbs, and back/forward/up; the
+  Textures page shows decoded thumbnail tiles; the Shaders page is a shader,
+  stage, and texture tree that marks textures missing from the open package; and
+  both viewports carry corner readouts.
 - A dependency-free DEFLATE codec (RFC 1951/1950 inflate plus a deterministic
-  fixed-Huffman encoder, CRC-32, Adler-32), so compressed ZIP/PK3 entries are
-  actually read and written rather than skipped.
+  encoder, CRC-32, Adler-32), so compressed ZIP/PK3 entries are actually read
+  and written rather than skipped. The encoder offers `store`, `fast`,
+  `default`, and `best` levels that differ only in how hard the LZ77 hash-chain
+  search works; each block independently picks the smallest of a stored, fixed
+  Huffman, or dynamic Huffman encoding, so a block is never larger than storing
+  its bytes would be.
 - Package browsing for folders, PAK, WAD, ZIP, and PK3, including ZIP64 central
   directories, nested-archive detection, layered mounting where a second archive
   overrides a base one, normalized virtual paths, traversal and symlink-safe
@@ -93,13 +120,56 @@ What exists today:
   tasks.
 - Package staging and save-as with add/import, replace, rename, delete, conflict
   reporting, before/after composition, schema-versioned manifests, and
-  deterministic PAK, ZIP/PK3, PWAD, and WAD2/WAD3 writers.
+  deterministic PAK, ZIP/PK3, PWAD, and WAD2/WAD3 writers. Doom WADs carrying
+  more than one map now write back: lumps are resolved by their position in the
+  source directory rather than by name, and each map marker keeps its own lumps
+  grouped beneath it, so repeated names like `THINGS` no longer collapse onto
+  the first map.
+- Opt-in in-place package replacement. `PackageWriteRequest::allowInPlaceOverwrite`
+  streams the new archive to a temporary sibling, re-reads it and checks the
+  SHA-256 and byte count, and only then moves the original to `backupPath`
+  (`<destination>.bak` by default) and renames the new file into place. A
+  failure at any earlier step leaves the original untouched, and a failure at
+  the final rename restores it. The GUI asks first with a dialog that defaults
+  to No; the CLI needs an explicit `--in-place`.
+- Package comparison through `comparePackages`, which pairs entries by
+  case-folded, normalized virtual path and by occurrence index so a Doom WAD's
+  repeated lump names line up one map at a time. Each entry comes back as
+  `Identical`, `Added`, `Removed`, `Changed`, or `CaseOnly` — case-only path
+  differences get their own category because they work on Windows and fail on
+  case-sensitive filesystems — and the result records whether the verdict came
+  from size, a stored CRC-32, or a SHA-256 of the bytes. Available as the
+  Packages page **Compare** button and the `package compare` command, which
+  returns `validation-failed` on any difference so a release script can gate on
+  two packages matching.
 - idTech image decoding for Doom patches, flats, `PLAYPAL` and `COLORMAP`,
   Quake `.lmp`, WAD2/WAD3 miptextures with mip chains, Quake II `.wal` with
-  surface/content flags, PCX, Targa, and Quake `.spr` frames — with the palette
-  resolved at run time from the package the user opened, a clearly-labelled
-  generated fallback when no game palette is present, palette quantization, and
-  a swatch view that marks the transparent index.
+  surface/content flags, Quake II `.m8` (embedded palette, up to 16 mip levels)
+  and `.m32` (truecolour RGBA), Quake II `.sp2` sprite containers whose frame
+  images are resolved out of the open package, PCX, Targa, and both Quake and
+  Half-Life `.spr` frames including the Half-Life alpha-test and index-alpha
+  texture formats — with the palette resolved at run time from the package the
+  user opened, a clearly-labelled generated fallback when no game palette is
+  present, palette quantization, and a swatch view that marks the transparent
+  index.
+- Model geometry decoding for Quake MDL (IDPO 6), Quake II MD2 (IDP2 8), and
+  Quake III MD3 (IDP3 15): surfaces, per-frame vertex positions and normals,
+  texture coordinates, MD3 tags, frame bounds, embedded MDL skins, and external
+  skin path references resolved against the open package. MDC, MDR, and IQM are
+  read for their headers only and report that geometry decoding is not
+  implemented. Animations are inferred from frame-name stems, which is how MDL
+  and MD2 store them, not read from a table the formats do not have.
+- A software model viewport on the Models page. It is a QPainter renderer with
+  no OpenGL dependency: orthographic projection, painter's-algorithm depth
+  sorting, and affine skin mapping that orthographic projection makes exact.
+  Textured, flat-shaded, and wireframe modes; orbit, pan, and zoom by mouse or
+  keyboard; frame stepping, timed playback, and per-animation ranges; and a
+  hover readout naming the surface and triangle under the pointer.
+- Single-frame Wavefront OBJ export through `exportModelFrameObj`, writing `v`,
+  `vt`, `vn`, and `f` records with the V axis flipped for OBJ's bottom-left
+  origin. The Models page **Export OBJ** button writes the frame the viewport is
+  showing; `model export` takes `--frame` and an optional `--material` name. No
+  companion `.mtl` file is produced.
 - Graphical asset surfaces painted with QPainter: a zoomable, pannable image
   preview with checkerboard alpha, nearest-neighbour magnification, and mip/frame
   stepping; a palette swatch grid; a per-channel audio waveform; and composition,
@@ -109,11 +179,42 @@ What exists today:
   fills and things, and solved Quake-family brush footprints and Quake III patch
   outlines, with click-to-select, drag-to-pan, wheel zoom, Tab cycling, three
   orthographic projections, grid and label toggles, and a high-contrast mode.
+- Direct manipulation in that viewport. Shift-click extends the selection,
+  Ctrl-click toggles it, a rubber band over empty space selects a set on
+  release, a drag on any selected object moves the whole selection, and arrow
+  keys nudge it by one grid step (eight with Shift). Escape cancels an
+  in-progress drag or band. The widget never edits the document: it previews the
+  move locally and emits `moveRequested` once, and the shell turns that into a
+  single `moveLevelMapSelectionSnapped` undo command, so one undo puts every
+  moved object back. A **Snap** checkbox on the Levels page decides whether the
+  delta is rounded to whole grid steps, and the objects list and the viewport
+  share one selection set in both directions.
 - Map parsing with a real tokenizer covering classic, Valve 220, `brushDef`,
   `brushDef3`, `patchDef2`, and `patchDef3` primitives, Doom and Hexen lump
   strides, brush-plane solving by half-space intersection, sector outline
   tracing, undo/redo, and save-fidelity-checked non-destructive save-as. UDMF
   (`TEXTMAP`) maps are detected and reported, not edited.
+- Entity definition loading for Radiant `/*QUAKED*/` blocks in `.def` and `.qc`,
+  Valve `.fgd` (including `@include`, `@BaseClass` inheritance folding, helpers
+  such as `base()`, `size()`, `color()`, and `model()`, and choice/flag row
+  blocks), and Quake III `.ent` entity lists, with content sniffing that
+  overrides the file extension. Nothing ships a game's definitions: the studio
+  reads whatever the user points it at, from an explicit file or folder or from
+  the project's conventional folders (`.vibestudio/definitions`, `definitions`,
+  `defs`, `scripts`, `base/scripts`, `entities`). Every parse loop is bounded
+  because these files come from mod packages and the internet.
+- Map entity validation against a loaded catalogue. `validateLevelMapEntities`
+  reports a missing or unknown `classname`, an `@BaseClass` placed in a map, a
+  point class that owns brushes or a brush class that owns none, keys the class
+  does not declare, values that do not fit their declared type, missing required
+  keys, a malformed `spawnflags` value, spawnflag bits the class does not
+  define, `target` values with no matching `targetname`, and targetnames nothing
+  references. Quake-family `.map` documents skip spawnflag bits 8–11, which the
+  Quake and Quake II game code owns as the skill and deathmatch filters, and
+  Doom `thing:<type>` entities skip the class and key checks their binary
+  records cannot answer. Results appear on the Levels page **Entity** inspector
+  and in the Health tab, where each issue carries a selector that navigates to
+  the entity, and through `entity definitions` and `entity validate` on the CLI.
 - Deterministic headless SVG map rendering that shares the same geometry solver
   as the viewport, so a `map render` picture matches the on-screen one.
 - Read-only inspection of compiled artifacts: Quake BSP29/BSP2/2PSB, Quake II
@@ -149,11 +250,36 @@ What exists today:
 - Workspace workbench panels for project problems, search across project files
   and mounted package entries, Git changed/staged files, recent activity,
   reveal-in-folder, and copy-virtual-path actions.
-- A CLI subcommand router with 78 registered commands across the `cli`, `ui`,
-  `project`, `package`, `asset`, `map`, `bsp`, `build`, `launch`, `texture`,
-  `shader`, `sprite`, `code`, `localization`, `diagnostics`, `extension`,
-  `compiler`, `install`, `editor`, `about`, `ai`, and `credits` families, with
-  JSON output for automation and a documented stable exit-code contract.
+- External-change detection for the files the studio holds open. A
+  `DocumentWatcher` fingerprints the open map, the open package, the file in the
+  code editor, and the project manifest, and a one-second timer polls them;
+  `QFileSystemWatcher` notifications are treated as hints, and the fingerprint
+  comparison decides. It distinguishes a real edit from a touch whose bytes are
+  provably identical, from a removal, and from a replacement written as
+  temp-then-rename, and it holds a burst of notifications back until the file
+  has been still for a quarter second so one save is reported once. The shell
+  then offers to reload the map, reopen the package, or reload the editor file,
+  defaulting to No whenever unsaved edits or staged operations would be lost;
+  declining re-baselines the path so the same change is not asked about again.
+  A changed project manifest rebuilds the workspace panels without asking.
+- A crash-capture layer in `src/app/studio_runtime.h`. `installCrashHandling()`
+  installs `SetUnhandledExceptionFilter` plus a `SIGABRT` handler on Windows,
+  `sigaction` for SIGSEGV/SIGBUS/SIGFPE/SIGILL/SIGABRT on POSIX, and
+  `std::set_terminate` everywhere; on any other platform it reports itself
+  unavailable rather than failing. Everything that needs formatting is rendered
+  into fixed buffers while the process is healthy, so the handler only opens,
+  writes, and closes. A session marker left behind by a process that is gone is
+  how the next launch detects an unclean exit, and `ApplicationShell` has a
+  dialog to offer the report, which is written next to the session log and never
+  transmitted. This is exercised by `studio-runtime-smoke`; the GUI entry point
+  in `src/main.cpp` still calls only `installSessionLogging()`, so a shipping
+  run does not install the handlers yet.
+- A CLI subcommand router with 84 registered commands across the `cli`, `ui`,
+  `project`, `package`, `asset`, `map`, `entity`, `model`, `bsp`, `build`,
+  `launch`, `texture`, `shader`, `sprite`, `code`, `localization`,
+  `diagnostics`, `extension`, `compiler`, `install`, `editor`, `about`, `ai`,
+  and `credits` families, with JSON output for automation and a documented
+  stable exit-code contract.
 - Runtime translation loading: `lrelease` compiles the checked-in `.ts` catalogs
   into `.qm` files, the application resolves and installs the catalog for the
   selected locale at start-up, and applies right-to-left layout direction where
@@ -169,22 +295,36 @@ What exists today:
   samples and docs, and runs the offscreen GUI smoke pass on every PR.
 
 What does not exist yet:
-- No 3D viewport and no model geometry rendering. Models are read for metadata
-  and their first resolvable skin is decoded and shown; vertices, triangles, and
-  tags are counted and listed, never drawn.
+- No hardware 3D and no 3D level view. The model viewport is a software
+  QPainter renderer: orthographic only, with no perspective camera and no depth
+  buffer, so interpenetrating triangles can sort wrongly by design. Maps are
+  still drawn in 2D only.
+- No geometry for MDC, MDR, or IQM. Those three are header-only: counts and
+  names are reported, nothing is decoded, drawn, or exported. There is no
+  skeletal or bone animation of any kind, no frame interpolation, no assembly of
+  multi-part models from MD3 tags, and no `.shader` material system behind MD3
+  shader names. Only one version per decoded format is accepted — IDPO 6, IDP2
+  8, IDP3 15 — so a Half-Life `.mdl` is rejected rather than misread.
+- No model writing beyond single-frame Wavefront OBJ. Nothing writes MDL, MD2,
+  or MD3, and no `.mtl` companion is generated.
 - No audio playback. Audio entries are analysed and drawn as a waveform; nothing
   is decoded to a sound device, and compressed codecs are read for headers only.
-- No in-place package editing. Save-as to a different path is the only write
-  path, and an in-place overwrite is explicitly blocked. There is no package
-  compare tooling and no binary format editor.
+- No package editing in place. Replacing a package is a whole-archive rewrite
+  through the staged plan — verified first, with the original kept as a backup —
+  not an edit of the bytes already there, and there is still no binary format
+  editor. Package comparison reads two archives on disk; comparing a package
+  against a staged plan exists in `comparePackageToPlan` but no GUI or CLI
+  surface calls it yet.
 - No text-to-speech engine. The TTS preference is stored and reported, but no
   speech backend is wired up.
 - No AI provider network calls. Every AI command produces a local, reviewable,
   no-write proposal; the application makes no outbound HTTP requests at all.
 - No full-production level, model, texture, audio, sprite, shader, code, or
-  script editors. Map editing is limited to entity key/value edits and single
-  object moves written to a new file; shader editing is limited to one stage
-  directive at a time; UDMF maps cannot be edited.
+  script editors. Map editing is limited to entity key/value edits and moving a
+  selection of existing objects, written to a new file — nothing creates,
+  deletes, splits, or reshapes geometry, and there is no texture alignment or
+  clipping. Shader editing is limited to one stage directive at a time; UDMF
+  maps cannot be edited.
 - No translated user interface. The catalogs are seeds: the loading path works,
   but only the pseudo-locale carries translated text, so the UI still renders in
   the source language.
@@ -197,7 +337,8 @@ matrix mark it implemented.
 ## Studio Goals
 These are product targets, not a feature list. Some already have a working slice
 behind them — package management, compiler orchestration, installation
-management, 2D level viewing, texture decoding — and the rest are unbuilt. Read
+management, 2D level viewing and object moves, entity definition validation,
+texture decoding, model preview and OBJ export — and the rest are unbuilt. Read
 Current Development State for what the code does today.
 
 - Level editor for Doom-family sectors and Quake-family brush workflows.
@@ -233,11 +374,12 @@ The repository currently contains:
   chips, drag-and-drop, and an activity center with task state, progress,
   warnings, cancellation, and per-task logs.
 - A CLI surface for version/platform diagnostics, project/package/installation
-  management, asset and texture inspection, map inspection and rendering, BSP
-  inspection, chained builds, game launch plans, shader, sprite, code,
-  extension, localization, diagnostics, and AI workflows, plus credits
-  validation, JSON output, quiet/verbose modes, watch streaming, and task-state
-  automation.
+  management, package comparison, asset and texture inspection, map inspection
+  and rendering, entity definition loading and map entity validation, model
+  inspection and OBJ export, BSP inspection, chained builds, game launch plans,
+  shader, sprite, code, extension, localization, diagnostics, and AI workflows,
+  plus credits validation, JSON output, quiet/verbose modes, watch streaming,
+  and task-state automation.
 - Reusable shell UI primitives for loading/progress placeholders and
   detail-on-demand logs or metadata.
 - A shared package/archive layer adapted from PakFu's archive surface, with safe
@@ -246,16 +388,26 @@ The repository currently contains:
   both GUI and CLI, with a dependency-free DEFLATE decoder so compressed PK3
   entries read, ZIP64 support, and nested-archive detection.
 - Package staging with save-as writers for PAK, ZIP/PK3, PWAD, and WAD2/WAD3
-  outputs plus schema-versioned staging manifests; in-place overwrite is
-  blocked.
+  outputs plus schema-versioned staging manifests, multi-map Doom WAD
+  write-back, an opt-in verified replace that keeps the original as a backup,
+  and entry-by-entry comparison of two packages.
 - Painted graphical shell views for project health, package composition by
   type/size, build pipeline stages, the activity timeline, level-map statistics,
   decoded textures, palette swatches, and audio waveforms.
 - Level-map services and UI/CLI surfaces for Doom WAD map lump inspection,
   Quake-family and Quake III `.map` parsing, brush and sector geometry solving,
-  an interactive 2D viewport, deterministic SVG rendering, entity/property
-  lists, texture/material references, validation, safe entity/movement edits,
-  undo/redo state, non-destructive save-as, and compiler profile handoff.
+  an interactive 2D viewport with rubber-band selection, drag-to-move, and
+  grid-snapped arrow-key nudges, deterministic SVG rendering, entity/property
+  lists, texture/material references, entity definition catalogues, map
+  validation and entity validation, safe entity/movement edits, undo/redo state,
+  non-destructive save-as, and compiler profile handoff.
+- Model services and UI/CLI surfaces for MDL, MD2, and MD3 geometry decoding,
+  MDC, MDR, and IQM header reading, skin resolution against the open package, a
+  software orthographic viewport with textured, flat-shaded, and wireframe modes
+  and frame playback, and single-frame Wavefront OBJ export.
+- Session services for external-change detection across the open map, package,
+  editor file, and project manifest, and a crash-capture layer with an
+  on-disk report format, previous-session detection, and report pruning.
 - Compiled-artifact inspection for Quake, Quake II, and Quake III BSP files plus
   the leak point and portal files emitted alongside them.
 - Chained build pipelines for Quake, Quake III, and Doom node building, and
@@ -379,6 +531,18 @@ smoke check:
 QT_QPA_PLATFORM=offscreen ./builddir/src/vibestudio --self-test
 ```
 
+`--open <path>`, repeatable, opens a map, package, project folder, shader
+script, entity definition file, or text file exactly as dropping it on the
+window would. `--ui-snapshot <dir>` renders every work surface, plus the
+Activity panel, to numbered PNG files and exits; `--ui-snapshot-size WxH` sets
+the window size first. Combined with `--open` and an isolated
+`--settings-file`, it produces documentation screenshots without touching the
+user's session:
+```sh
+QT_QPA_PLATFORM=offscreen ./builddir/src/vibestudio --settings-file /tmp/snap.ini \
+  --open samples/projects/quake-minimal/maps/start.map --ui-snapshot ./screens --ui-snapshot-size 1600x1000
+```
+
 Single-flag commands:
 - `--version`: print the application version.
 - `--help`: print CLI help.
@@ -447,7 +611,7 @@ Single-flag commands:
 - `--clear-recent-projects`: clear remembered project folders without touching
   project files.
 
-Command families (78 registered commands; `vibestudio --cli cli commands --json`
+Command families (84 registered commands; `vibestudio --cli cli commands --json`
 prints the authoritative list):
 
 `cli` and `ui`
@@ -492,10 +656,17 @@ prints the authoritative list):
   entry and composition JSON.
 - `package manifest <path> --output <manifest.json> [stage options]`: export a
   schema-versioned staged package manifest without writing an archive.
-- `package save-as <path> <output> [--format pak|zip|pk3|wad] [stage options] [--dry-run]`:
+- `package save-as <path> <output> [--format pak|zip|pk3|wad] [stage options] [--in-place] [--backup <path>] [--dry-run]`:
   write or dry-run a staged package to a new path, report blockers, hashes,
   output paths, and optional manifest JSON. Writing back over the source path is
-  refused.
+  refused unless `--in-place` is passed, which builds the archive beside the
+  target, verifies it, and only then moves the original to `--backup` (default
+  `<output>.bak`) and renames the new file into place.
+- `package compare <left> <right> [--against <path>] [--metadata-only] [--include-directories] [--max-entry-bytes <n>]`:
+  compare two packages entry by entry and report added, removed, changed,
+  case-only, and identical members plus which test decided each verdict.
+  Returns `validation-failed` on any difference, so a release script can gate on
+  two packages matching.
 
 `asset` and `texture`
 - `asset inspect <package> <virtual-path>`: inspect image, model, audio, text,
@@ -509,24 +680,50 @@ prints the authoritative list):
   assets with file/line matches and save-state reporting.
 - `texture decode <package> <virtual-path> [--palette <id>] [--output <file.png>] [--dry-run] [--overwrite]`:
   decode a Doom patch or flat, Quake `.lmp`, WAD2 or WAD3 miptexture, Quake II
-  `.wal`, PCX, Targa, or Quake `.spr` entry, report dimensions, mip levels,
-  frames, transparency, and which palette was used, and optionally write a PNG.
+  `.wal`, `.m8`, `.m32`, or `.sp2`, PCX, Targa, or a Quake or Half-Life `.spr`
+  entry, report dimensions, mip levels, frames, transparency, and which palette
+  was used, and optionally write a PNG.
 - `texture palette [<package>] [--palette <id>]`: resolve the palette used to
   decode indexed art and report whether it came from the package, which virtual
   path it was read from, which paths were searched, and whether a generated
   stand-in was substituted.
 
-`map` and `bsp`
+`map`, `entity`, and `bsp`
 - `map inspect`, `map edit`, `map move`, and `map compile-plan`: inspect Doom
   WAD map lumps and Quake-family `.map` files, make safe non-destructive edits,
   and hand off to compiler profile plans.
+- `map textures <path> [--package <path>] [--root <path>] [--search-paths <paths>] [--project-root <path>] [--no-decode]`:
+  check every texture a map references against the textures a package or folder
+  actually provides.
 - `map render <path> [--projection top-xy|front-xz|side-zy] [--width <px>] [--height <px>] [--grid <units>] [--no-grid] [--labels] [--high-contrast] [--highlight <object>] [--output <file.svg>] [--dry-run] [--overwrite]`:
   render a deterministic SVG picture of a map. Without `--output` the SVG goes
   to stdout.
+- `entity definitions <paths…> [--definitions <path>] [--definition-paths "<a;b>"] [--project-root <path>] [--class <classname>] [--no-recursive]`:
+  load Radiant `.def`/`.qc`, Valve `.fgd`, and Quake III `.ent` catalogues and
+  list the classes they declare with key and spawnflag counts. `--class` prints
+  one class in full. With no path, `--project-root` falls back to the project's
+  conventional definition folders.
+- `entity validate <map> --definitions <path> [--project-root <path>] [--no-recursive] [--strict]`:
+  check a map's entities against the catalogue — classnames, declared keys,
+  value types, required keys, spawnflag bits, and `target`/`targetname`
+  references. Returns `validation-failed` when any error is reported; `--strict`
+  makes warnings, such as a classname the catalogue does not declare, fail too.
 - `bsp inspect <path.bsp>`: inspect a compiled Quake, Quake II, or Quake III
   BSP — magic, version, lump table, entities, and textures — plus any
   `.pts`/`.lin` leak point file and `.prt` portal file sitting beside it.
   Returns `validation-failed` when the BSP does not parse.
+
+`model`
+- `model inspect <package> <virtual-path> [--palette <id>]` or
+  `model inspect --file <path.md3>`: decode MDL, MD2, and MD3 geometry and
+  report format, version, frames, surfaces, vertices, triangles, tags, skins,
+  inferred animations, bounds, and warnings. MDC, MDR, and IQM report their
+  header only. Returns `unavailable` when the entry is not a recognised idTech
+  model.
+- `model export <package> <virtual-path> [--frame <n>] [--material <name>] [--output <file.obj>] [--dry-run] [--overwrite]`:
+  write one frame as a Wavefront OBJ, or print it to stdout when `--output` is
+  omitted. Returns `unavailable` for the header-only formats, which have no
+  geometry to export.
 
 `build` and `launch`
 - `build list`: list the chained pipelines and their stages. Current pipelines
@@ -642,6 +839,7 @@ prints the authoritative list):
 - Structural, archive-tooling, and installation-profile reference: [PakFu](https://github.com/themuffinator/PakFu), with the current package interface, virtual-path safety, and staged package write-back concepts adapted from its archive direction at `c82dfb0ef0b5d7442e243ace8cd83bc45f82f257`; the game installation profile/detection model is a VibeStudio-owned adaptation of PakFu's profile-driven workflow ideas.
 - Imported compiler/toolchain sources: [ericw-tools](https://github.com/ericwa/ericw-tools), q3map2 from [NetRadiant Custom](https://github.com/Garux/netradiant-custom), [ZDBSP](https://github.com/rheit/zdbsp), and [ZokumBSP](https://github.com/zokum-no/zokumbsp)
 - Editor workflow inspirations: [GtkRadiant](https://github.com/TTimo/GtkRadiant), [NetRadiant Custom](https://github.com/Garux/netradiant-custom), [TrenchBroom](https://trenchbroom.github.io/), and [QuArK](https://quark.sourceforge.io/)
+- Studio interface inspiration: [idStudio](https://idstudio.idsoftware.com/) (id Software's DOOM Eternal editor, public beta August 2024) for the shell's visual language; inspiration only, with no idStudio code, icons, or assets used
 - Optional AI automation references: [OpenAI API documentation](https://platform.openai.com/docs/quickstart), [Claude API docs](https://platform.claude.com/docs/en/home), [Gemini API docs](https://ai.google.dev/api), [ElevenLabs docs](https://elevenlabs.io/docs/overview/intro), and [Meshy docs](https://docs.meshy.ai/en)
 - Full attribution list: [`docs/CREDITS.md`](docs/CREDITS.md)
 
@@ -668,16 +866,20 @@ section and `docs/CREDITS.md` in the same change.
 - Compression: an in-tree DEFLATE codec written from RFC 1951/1950 rather than
   linked against zlib, so ZIP/PK3 reading and writing stays dependency-free,
   deterministic, and fixture-testable, with CRC-32 and Adler-32 alongside it.
-- Rendering: real QPainter work today — the map viewport, image and palette
-  views, waveform, and charts are all custom-painted widgets, and headless map
-  rendering emits SVG as plain text with no Qt paint device at all. 3D is not
-  started; a thin QOpenGLWidget preview and a later bgfx backend remain planned.
+- Rendering: real QPainter work today — the map viewport, model viewport, image
+  and palette views, waveform, and charts are all custom-painted widgets, and
+  headless map rendering emits SVG as plain text with no Qt paint device at all.
+  The model viewport rasterizes triangles in software with an orthographic
+  camera and a painter's-algorithm depth sort, so there is still no OpenGL
+  dependency anywhere; a thin QOpenGLWidget preview and a later bgfx backend
+  remain planned.
 - Text/IDE: Qt text widgets with a data-driven `QSyntaxHighlighter` for config,
   shader, and QuakeC sources; KSyntaxHighlighting, Tree-sitter, and LSP
   integration remain planned.
-- Media: native idTech parsers only — images, models, and audio headers are read
-  in-tree. Qt Multimedia, miniaudio, and optional Assimp support remain planned,
-  and nothing currently plays audio or draws model geometry.
+- Media: native idTech parsers only — images, model geometry, and audio headers
+  are read in-tree, and MDL/MD2/MD3 geometry is drawn and exported as OBJ. Qt
+  Multimedia, miniaudio, and optional Assimp support remain planned, and nothing
+  currently plays audio.
 - Accessibility/localization: Qt accessibility APIs, Qt High DPI behavior, Qt
   Linguist with `QTranslator` installed at start-up, compiled `.qm` catalogs,
   `QLocale`, layout direction applied for RTL locales, seed TS catalogs, and CLI

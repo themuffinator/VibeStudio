@@ -91,6 +91,78 @@ QByteArray pseudoRandom(int size, quint32 seed)
 	return bytes;
 }
 
+// Prose-like bytes: a small vocabulary, spaces and punctuation, which is the
+// shape of input where a dynamic Huffman code pays for its table.
+QByteArray textPayload(int size)
+{
+	static const char* const words[] = {
+		"the", "compiler", "emitted", "a", "leak", "file", "for", "base1", "and",
+		"the", "editor", "reloaded", "it", "before", "the", "next", "build",
+		"texture", "wall", "trim", "light", "panel", "sky", "clip", "hint",
+		"brush", "entity", "worldspawn", "func_door", "info_player_start"
+	};
+	constexpr int kWordCount = static_cast<int>(sizeof(words) / sizeof(words[0]));
+	QByteArray bytes;
+	bytes.reserve(size + 64);
+	quint32 state = 0x2f6e73c1u;
+	int sentence = 0;
+	while (bytes.size() < size) {
+		state = state * 1664525u + 1013904223u;
+		bytes.append(words[static_cast<int>((state >> 13) % static_cast<quint32>(kWordCount))]);
+		if (++sentence >= 9) {
+			bytes.append(".\n");
+			sentence = 0;
+		} else {
+			bytes.append(' ');
+		}
+	}
+	return bytes.left(size);
+}
+
+// A payload whose literal frequencies force an unconstrained Huffman code past
+// fifteen bits, so the encoder has to length-limit it (RFC 1951 3.2.7 caps
+// literal/length and distance codes at fifteen bits).
+//
+// Fibonacci weights are the extremal case for Huffman depth, so twenty-one
+// symbols get Fibonacci counts. Two things keep that skew intact through LZ77
+// tokenisation: the symbols are shuffled rather than left in runs, and every
+// one of them is separated by two bytes drawn from a wide filler alphabet, so
+// three-byte sequences almost never repeat and the bytes survive as literals.
+// Measured on this fixture, a plain Huffman construction reaches seventeen bits
+// while the encoder codes it in fifteen.
+QByteArray deepCodeSkew()
+{
+	QByteArray symbols;
+	quint32 a = 1;
+	quint32 b = 1;
+	for (int symbol = 0; symbol < 21; ++symbol) {
+		const quint32 count = a;
+		const quint32 next = a + b;
+		a = b;
+		b = next;
+		symbols.append(QByteArray(static_cast<int>(count), static_cast<char>(static_cast<quint8>(1 + symbol))));
+	}
+	quint32 state = 0x13579bdfu;
+	for (int i = static_cast<int>(symbols.size()) - 1; i > 0; --i) {
+		state = state * 1664525u + 1013904223u;
+		const int j = static_cast<int>((state >> 8) % static_cast<quint32>(i + 1));
+		const char swap = symbols.at(i);
+		symbols[i] = symbols.at(j);
+		symbols[j] = swap;
+	}
+
+	QByteArray bytes;
+	bytes.reserve(symbols.size() * 3);
+	for (qsizetype i = 0; i < symbols.size(); ++i) {
+		for (int filler = 0; filler < 2; ++filler) {
+			state = state * 1664525u + 1013904223u;
+			bytes.append(static_cast<char>(static_cast<quint8>(56u + ((state >> 11) % 200u))));
+		}
+		bytes.append(symbols.at(i));
+	}
+	return bytes;
+}
+
 QByteArray mixedPayload(int size)
 {
 	QByteArray bytes;
@@ -118,8 +190,40 @@ const char* levelName(DeflateLevel level)
 		return "fast";
 	case DeflateLevel::Default:
 		return "default";
+	case DeflateLevel::Best:
+		return "best";
 	}
 	return "?";
+}
+
+// BTYPE of the first block: 0 stored, 1 fixed Huffman, 2 dynamic Huffman
+// (RFC 1951 3.2.3). BFINAL is the low bit of the first byte.
+int firstBlockType(const QByteArray& stream)
+{
+	if (stream.isEmpty()) {
+		return -1;
+	}
+	return static_cast<int>((static_cast<quint8>(stream.at(0)) >> 1) & 0x03u);
+}
+
+// A valid fixed-Huffman encoding of `payload` built from literals only
+// (RFC 1951 3.2.6): symbols 0-143 are eight bits from 0x30, symbols 144-255 are
+// nine bits from 0x190, and end-of-block is seven zero bits.
+QByteArray fixedLiteralStream(const QByteArray& payload)
+{
+	TestBits bits;
+	bits.bits(1, 1); // BFINAL
+	bits.bits(1, 2); // BTYPE = 01
+	for (qsizetype i = 0; i < payload.size(); ++i) {
+		const int symbol = static_cast<quint8>(payload.at(i));
+		if (symbol < 144) {
+			bits.code(static_cast<quint32>(0x30 + symbol), 8);
+		} else {
+			bits.code(static_cast<quint32>(0x190 + symbol - 144), 9);
+		}
+	}
+	bits.code(0, 7); // end-of-block
+	return bits.finish();
 }
 
 bool roundTrip(const QByteArray& payload, DeflateLevel level, const char* label)
@@ -131,7 +235,7 @@ bool roundTrip(const QByteArray& payload, DeflateLevel level, const char* label)
 	const InflateResult sized = inflateRaw(stream, payload.size());
 	if (!sized.ok) {
 		std::cerr << label << " (" << levelName(level) << ") sized inflate failed: "
-			<< sized.error.toStdString() << "\n";
+			<< qUtf8Printable(sized.error) << "\n";
 		return false;
 	}
 	ok &= expect(sized.data == payload, "Round trip with an expected size must reproduce the input.");
@@ -187,11 +291,13 @@ bool runLevelIdSmoke()
 	ok &= expect(deflateLevelId(DeflateLevel::Store) == QStringLiteral("store"), "Store level id mismatch.");
 	ok &= expect(deflateLevelId(DeflateLevel::Fast) == QStringLiteral("fast"), "Fast level id mismatch.");
 	ok &= expect(deflateLevelId(DeflateLevel::Default) == QStringLiteral("default"), "Default level id mismatch.");
+	ok &= expect(deflateLevelId(DeflateLevel::Best) == QStringLiteral("best"), "Best level id mismatch.");
 
 	DeflateLevel level = DeflateLevel::Default;
 	ok &= expect(deflateLevelFromId(QStringLiteral(" STORE "), &level) && level == DeflateLevel::Store, "Level id parsing should trim and fold case.");
 	ok &= expect(deflateLevelFromId(QStringLiteral("fast"), &level) && level == DeflateLevel::Fast, "Fast level id should parse.");
 	ok &= expect(deflateLevelFromId(QStringLiteral("default"), &level) && level == DeflateLevel::Default, "Default level id should parse.");
+	ok &= expect(deflateLevelFromId(QStringLiteral(" Best "), &level) && level == DeflateLevel::Best, "Best level id should parse.");
 	ok &= expect(deflateLevelFromId(QStringLiteral("store"), nullptr), "Level id parsing should accept a null out pointer.");
 	level = DeflateLevel::Fast;
 	ok &= expect(!deflateLevelFromId(QStringLiteral("ultra"), &level), "Unknown level id should fail.");
@@ -202,7 +308,7 @@ bool runLevelIdSmoke()
 bool runRoundTripSmoke()
 {
 	bool ok = true;
-	const DeflateLevel levels[3] = { DeflateLevel::Store, DeflateLevel::Fast, DeflateLevel::Default };
+	const DeflateLevel levels[4] = { DeflateLevel::Store, DeflateLevel::Fast, DeflateLevel::Default, DeflateLevel::Best };
 
 	const QByteArray empty;
 	const QByteArray tiny = QByteArrayLiteral("a");
@@ -212,6 +318,8 @@ bool runRoundTripSmoke()
 	const QByteArray large = mixedPayload(200000);
 	const QByteArray blockEdge = mixedPayload(65535);
 	const QByteArray blockEdgePlusOne = mixedPayload(65536);
+	const QByteArray text = textPayload(40000);
+	const QByteArray hugeText = textPayload(180000);
 
 	for (DeflateLevel level : levels) {
 		ok &= roundTrip(empty, level, "empty");
@@ -222,6 +330,8 @@ bool runRoundTripSmoke()
 		ok &= roundTrip(large, level, "large multi-block");
 		ok &= roundTrip(blockEdge, level, "exactly one stored block");
 		ok &= roundTrip(blockEdgePlusOne, level, "one byte past a stored block");
+		ok &= roundTrip(text, level, "text");
+		ok &= roundTrip(hugeText, level, "text past one block");
 	}
 
 	// Compressing levels must actually compress repetitive data, and must never
@@ -242,6 +352,103 @@ bool runRoundTripSmoke()
 	const QByteArray emptyStored = deflateRaw(empty, DeflateLevel::Store);
 	ok &= expect(emptyStored.size() == 5 && static_cast<quint8>(emptyStored.at(0)) == 0x01u,
 		"Empty store stream should be one final, empty stored block.");
+	return ok;
+}
+
+bool runBlockChoiceSmoke()
+{
+	bool ok = true;
+	const DeflateLevel compressing[3] = { DeflateLevel::Fast, DeflateLevel::Default, DeflateLevel::Best };
+
+	// Text: the encoder should pay for a dynamic table and come out ahead of a
+	// fixed-Huffman encoding of the same bytes.
+	const QByteArray text = textPayload(40000);
+	const QByteArray fixedEncoding = fixedLiteralStream(text);
+	const InflateResult fixedCheck = inflateRaw(fixedEncoding, text.size());
+	ok &= expect(fixedCheck.ok && fixedCheck.data == text,
+		"The hand-built fixed Huffman encoding should be a valid encoding of the same input.");
+	for (DeflateLevel level : compressing) {
+		const QByteArray stream = deflateRaw(text, level);
+		ok &= expect(firstBlockType(stream) == 2, "Text should be coded as a dynamic Huffman block.");
+		ok &= expect(stream.size() < fixedEncoding.size(),
+			"A dynamic Huffman block should beat the fixed Huffman encoding of the same input.");
+	}
+
+	// Incompressible bytes: stored, and never larger than the payload plus the
+	// five-byte stored block header.
+	const QByteArray randomish = pseudoRandom(40000, 0x5eed1234u);
+	for (DeflateLevel level : compressing) {
+		const QByteArray stream = deflateRaw(randomish, level);
+		ok &= expect(firstBlockType(stream) == 0, "Incompressible input should fall back to a stored block.");
+		ok &= expect(static_cast<quint8>(stream.at(0)) == 0x01u, "A single stored block should be marked final.");
+		ok &= expect(stream.size() == randomish.size() + 5, "A stored block must not expand its payload.");
+	}
+
+	// Nothing may expand, whatever the shape of the input.
+	const QByteArray shapes[5] = {
+		QByteArray(),
+		QByteArrayLiteral("a"),
+		pseudoRandom(1, 0x11u),
+		pseudoRandom(255, 0x2222u),
+		mixedPayload(70000)
+	};
+	for (const QByteArray& payload : shapes) {
+		for (DeflateLevel level : compressing) {
+			const QByteArray stream = deflateRaw(payload, level);
+			const qsizetype blocks = qMax<qsizetype>(1, (payload.size() + 65534) / 65535);
+			ok &= expect(stream.size() <= payload.size() + 5 * blocks, "Deflate must never expand beyond stored block overhead.");
+		}
+	}
+
+	// Determinism at every level, including the dynamic path: package writers
+	// depend on byte-identical repeat runs.
+	const QByteArray fixtures[3] = { text, randomish, mixedPayload(90000) };
+	const DeflateLevel allLevels[4] = { DeflateLevel::Store, DeflateLevel::Fast, DeflateLevel::Default, DeflateLevel::Best };
+	for (const QByteArray& payload : fixtures) {
+		for (DeflateLevel level : allLevels) {
+			ok &= expect(deflateRaw(payload, level) == deflateRaw(payload, level),
+				"Two runs at the same level must produce byte-identical output.");
+		}
+	}
+	return ok;
+}
+
+bool runLengthLimitSmoke()
+{
+	bool ok = true;
+	const QByteArray skewed = deepCodeSkew();
+	ok &= expect(skewed.size() > 65535, "The skewed fixture should span more than one block.");
+
+	const DeflateLevel levels[4] = { DeflateLevel::Store, DeflateLevel::Fast, DeflateLevel::Default, DeflateLevel::Best };
+	for (DeflateLevel level : levels) {
+		ok &= roundTrip(skewed, level, "pathological frequencies");
+	}
+
+	// The decoder refuses any code longer than fifteen bits, so a dynamic block
+	// that inflates back to the input is proof that the encoder length-limited a
+	// distribution whose unconstrained Huffman code would have needed seventeen.
+	for (DeflateLevel level : { DeflateLevel::Fast, DeflateLevel::Default, DeflateLevel::Best }) {
+		const QByteArray stream = deflateRaw(skewed, level);
+		ok &= expect(firstBlockType(stream) == 2, "A skewed block should still be coded as a dynamic Huffman block.");
+		const InflateResult result = inflateRaw(stream, skewed.size());
+		if (!result.ok) {
+			std::cerr << "skewed stream failed: " << qUtf8Printable(result.error) << "\n";
+		}
+		ok &= expect(result.ok && result.data == skewed, "A length-limited dynamic block must round trip.");
+		ok &= expect(stream.size() < skewed.size(), "A skewed distribution should still compress.");
+	}
+
+	// A payload too short and too varied to produce any back reference: whatever
+	// block type wins, it has to round trip.
+	QByteArray noMatches;
+	for (int i = 0; i < 200; ++i) {
+		noMatches.append(static_cast<char>(static_cast<quint8>((i * 37) & 0xffu)));
+	}
+	for (DeflateLevel level : { DeflateLevel::Fast, DeflateLevel::Default, DeflateLevel::Best }) {
+		const QByteArray stream = deflateRaw(noMatches, level);
+		const InflateResult result = inflateRaw(stream, noMatches.size());
+		ok &= expect(result.ok && result.data == noMatches, "A block without back references must round trip.");
+	}
 	return ok;
 }
 
@@ -322,7 +529,7 @@ bool runKnownStreamSmoke()
 	const QByteArray dynamicStream = dynamicBits.finish();
 	result = inflateRaw(dynamicStream, 8);
 	if (!result.ok) {
-		std::cerr << "dynamic stream failed: " << result.error.toStdString() << "\n";
+		std::cerr << "dynamic stream failed: " << qUtf8Printable(result.error) << "\n";
 	}
 	ok &= expect(result.ok && result.data == QByteArrayLiteral("aaaaaaaa"), "Hand-built dynamic Huffman block should inflate.");
 
@@ -468,6 +675,8 @@ int main()
 	ok &= runChecksumSmoke();
 	ok &= runLevelIdSmoke();
 	ok &= runRoundTripSmoke();
+	ok &= runBlockChoiceSmoke();
+	ok &= runLengthLimitSmoke();
 	ok &= runKnownStreamSmoke();
 	ok &= runZlibSmoke();
 	ok &= runHostileInputSmoke();

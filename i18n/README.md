@@ -13,6 +13,18 @@ Dry-run Qt Linguist extraction with:
 python scripts\extract_translations.py --check --dry-run
 ```
 
+`vibestudio_en.ts` is different: it holds the English singular and plural
+forms of every `%n` message, which is how Qt turns "%n item(s)" into "1 item" and
+"5 items" in the source language. Regenerate it after adding or changing a
+plural string:
+
+```powershell
+python scripts\english_plurals.py --write
+```
+
+Without `--write` the script checks the catalog is complete; the gate runs that
+check as `english-plurals-validation`.
+
 Run the full validation gate with:
 
 ```powershell

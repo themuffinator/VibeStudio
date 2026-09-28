@@ -1333,6 +1333,9 @@ bool PackageArchive::readOffsetEntryBytes(const PackageEntry& entry, QByteArray*
 				if (error) {
 					*error = packageText("Package entry failed its CRC check; the archive is damaged.");
 				}
+				// Hand back nothing rather than the damaged bytes: a caller that
+				// checks only for non-empty output must not be able to use them.
+				out->clear();
 				return false;
 			}
 		}

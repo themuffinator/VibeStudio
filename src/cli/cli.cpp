@@ -11,13 +11,17 @@
 #include "core/compiler_registry.h"
 #include "core/compiler_runner.h"
 #include "core/editor_profiles.h"
+#include "core/entity_definitions.h"
 #include "core/idtech_image.h"
 #include "core/level_map.h"
 #include "core/localization.h"
 #include "core/map_assets.h"
 #include "core/map_render.h"
+#include "core/model_mesh.h"
 #include "core/operation_state.h"
+#include "core/deflate.h"
 #include "core/package_archive.h"
+#include "core/package_compare.h"
 #include "core/package_preview.h"
 #include "core/package_staging.h"
 #include "core/project_manifest.h"
@@ -154,6 +158,7 @@ QVector<CliCommandDescriptor> cliCommandDescriptors()
 		{QStringLiteral("package"), QStringLiteral("stage"), QStringLiteral("Preview staged package add, replace, rename, and delete operations."), {QStringLiteral("vibestudio --cli package stage ./pak0.pak --add-file ./autoexec.cfg --as scripts/autoexec.cfg --json")}, true, true, true},
 		{QStringLiteral("package"), QStringLiteral("save-as"), QStringLiteral("Write a staged package to a new PAK, ZIP, PK3, or tested PWAD path."), {QStringLiteral("vibestudio --cli package save-as ./pak0.pak ./rebuilt.pk3 --format pk3 --manifest ./rebuilt.manifest.json")}, true, true, true},
 		{QStringLiteral("package"), QStringLiteral("manifest"), QStringLiteral("Export a package staging manifest without writing a package."), {QStringLiteral("vibestudio --cli package manifest ./pak0.pak --output ./stage.manifest.json")}, true, true, true},
+		{QStringLiteral("package"), QStringLiteral("compare"), QStringLiteral("Compare two packages entry by entry, reporting added, removed, changed, re-cased, and identical members."), {QStringLiteral("vibestudio --cli package compare ./release-1.pk3 ./release-2.pk3 --json")}},
 		{QStringLiteral("asset"), QStringLiteral("inspect"), QStringLiteral("Inspect package entry asset metadata, including image, model, audio, and script details."), {QStringLiteral("vibestudio --cli asset inspect ./pak0.pk3 textures/base/wall.png --json")}},
 		{QStringLiteral("asset"), QStringLiteral("convert"), QStringLiteral("Batch-convert package image entries with crop, resize, palette, and dry-run previews."), {QStringLiteral("vibestudio --cli asset convert ./pak0.pk3 --entry textures/base/wall.png --output ./converted --format png --resize 128x128 --dry-run")}, true, true, true},
 		{QStringLiteral("asset"), QStringLiteral("audio-wav"), QStringLiteral("Export readable WAV/PCM package audio entries to a WAV file."), {QStringLiteral("vibestudio --cli asset audio-wav ./pak0.pk3 sound/items/pickup.wav --output ./pickup.wav --dry-run")}, true, true, true},
@@ -210,6 +215,10 @@ QVector<CliCommandDescriptor> cliCommandDescriptors()
 		{QStringLiteral("ai"), QStringLiteral("connectors"), QStringLiteral("List provider-neutral AI connector descriptors and capabilities."), {QStringLiteral("vibestudio --cli ai connectors --json")}},
 		{QStringLiteral("map"), QStringLiteral("render"), QStringLiteral("Render a deterministic SVG picture of a Doom or Quake-family map."), {QStringLiteral("vibestudio --cli map render ./maps/start.map --output ./docs/start.svg --projection top --overwrite")}, true, true, true},
 		{QStringLiteral("map"), QStringLiteral("textures"), QStringLiteral("Check every texture a map references against the textures a package or folder actually provides."), {QStringLiteral("vibestudio --cli map textures ./maps/start.map --package ./id1/pak0.pak --json")}},
+		{QStringLiteral("entity"), QStringLiteral("definitions"), QStringLiteral("Load Radiant .def, Valve .fgd, and Quake III .ent catalogues and list the entity classes they declare."), {QStringLiteral("vibestudio --cli entity definitions ./defs --json")}},
+		{QStringLiteral("entity"), QStringLiteral("validate"), QStringLiteral("Check a map's entities against an entity definition catalogue, including target and targetname references."), {QStringLiteral("vibestudio --cli entity validate ./maps/start.map --definitions ./defs/quake.def --json")}},
+		{QStringLiteral("model"), QStringLiteral("inspect"), QStringLiteral("Decode MDL, MD2, and MD3 geometry and report surfaces, frames, animations, tags, and skins."), {QStringLiteral("vibestudio --cli model inspect ./id1/pak0.pak progs/player.mdl --json")}},
+		{QStringLiteral("model"), QStringLiteral("export"), QStringLiteral("Export one model frame as a Wavefront OBJ for an external modeller."), {QStringLiteral("vibestudio --cli model export ./id1/pak0.pak progs/player.mdl --frame 0 --output ./out/player.obj --dry-run")}, true, true, true},
 		{QStringLiteral("bsp"), QStringLiteral("inspect"), QStringLiteral("Inspect a compiled BSP plus any leak and portal files beside it."), {QStringLiteral("vibestudio --cli bsp inspect ./out/start.bsp --json")}},
 		{QStringLiteral("build"), QStringLiteral("list"), QStringLiteral("List chained build pipelines and their stages."), {QStringLiteral("vibestudio --cli build list --json")}},
 		{QStringLiteral("build"), QStringLiteral("plan"), QStringLiteral("Plan a chained build pipeline without running anything."), {QStringLiteral("vibestudio --cli build plan quake-full --input ./maps/start.map --json")}, true, true, true},
@@ -337,6 +346,11 @@ QStringList commandTokens(const QStringList& args)
 			QStringLiteral("--no-color"),
 			QStringLiteral("--no-grid"),
 			QStringLiteral("--no-decode"),
+			QStringLiteral("--no-recursive"),
+			QStringLiteral("--metadata-only"),
+			QStringLiteral("--strict"),
+			QStringLiteral("--include-directories"),
+			QStringLiteral("--in-place"),
 			QStringLiteral("--labels"),
 			QStringLiteral("--high-contrast"),
 			QStringLiteral("--self-test"),
@@ -462,6 +476,17 @@ QStringList commandTokens(const QStringList& args)
 			QStringLiteral("--buckets"),
 			QStringLiteral("--highlight"),
 			QStringLiteral("--search-paths"),
+			QStringLiteral("--definitions"),
+			QStringLiteral("--definition"),
+			QStringLiteral("--definition-paths"),
+			QStringLiteral("--path"),
+			QStringLiteral("--paths"),
+			QStringLiteral("--class"),
+			QStringLiteral("--file"),
+			QStringLiteral("--material"),
+			QStringLiteral("--against"),
+			QStringLiteral("--max-entry-bytes"),
+			QStringLiteral("--backup"),
 	};
 
 	QStringList tokens;
@@ -574,6 +599,9 @@ void printHelp()
 	std::cout << "  --watch             Stream compiler task log entries while a long-running command is active.\n";
 	std::cout << "  --task-state        Include machine-readable task state objects in JSON output where supported.\n";
 	std::cout << "  --overwrite         Allow package extraction or save-as to replace existing output files.\n";
+	std::cout << "  --in-place          Replace an existing package only after the new archive is written and verified.\n";
+	std::cout << "  --compression <id>  DEFLATE level for ZIP and PK3 output: store, fast, default, or best.\n";
+	std::cout << "  --backup <path>     Where --in-place moves the replaced file. Default <destination>.bak.\n";
 	std::cout << "  --settings-report   Print settings storage and recent projects.\n";
 	std::cout << "  --setup-report      Print first-run setup status and summary.\n";
 	std::cout << "  --setup-start       Start or resume first-run setup.\n";
@@ -4155,6 +4183,25 @@ int runPackageSaveAsCommand(const QString& commandName, const QString& packagePa
 	request.destinationPath = outputPath;
 	request.format = packageWriteFormatFromArgs(args, outputPath);
 	request.allowOverwrite = hasOption(args, QStringLiteral("--overwrite"));
+	// The encoder measures every RFC 1951 block type per block whatever the
+	// level, so the levels trade search effort for ratio, never correctness.
+	// An unrecognised name is a usage error rather than a silent default,
+	// because "I asked for best and got default" is not something a build
+	// script can notice.
+	const QString compressionId = optionValue(args, QStringLiteral("--compression")).trimmed();
+	if (!compressionId.isEmpty()) {
+		DeflateLevel level = DeflateLevel::Default;
+		if (!deflateLevelFromId(compressionId, &level)) {
+			return printCliError(commandName, CliExitCode::Usage,
+				QStringLiteral("Unknown compression level: %1. Use store, fast, default, or best.").arg(compressionId), format);
+		}
+		request.compression = level;
+	}
+	// --in-place is the safe form of --overwrite: the writer builds the archive
+	// beside the target, verifies it, and only then moves the original aside to
+	// --backup (default <destination>.bak) and renames the new file into place.
+	request.allowInPlaceOverwrite = hasOption(args, QStringLiteral("--in-place"));
+	request.backupPath = optionValue(args, QStringLiteral("--backup"));
 	request.writeManifest = hasOption(args, QStringLiteral("--manifest")) || hasOption(args, QStringLiteral("--write-manifest"));
 	request.dryRun = hasOption(args, QStringLiteral("--dry-run"));
 	request.manifestPath = optionValue(args, QStringLiteral("--manifest"));
@@ -5996,6 +6043,385 @@ int runMapTexturesCommand(const QString& commandName, const QString& path, const
 	return exitCodeValue(code);
 }
 
+// ---------------------------------------------------------------------------
+// entity definitions
+// ---------------------------------------------------------------------------
+
+QStringList entityDefinitionPathsFromArgs(const QStringList& args, const QStringList& tokens, int firstPositional)
+{
+	QStringList paths = optionValues(args, QStringLiteral("--definitions"));
+	paths += optionValues(args, QStringLiteral("--definition"));
+	paths += optionValues(args, QStringLiteral("--path"));
+	paths += optionValues(args, QStringLiteral("--paths"));
+	const QString list = optionValue(args, QStringLiteral("--definition-paths"));
+	if (!list.trimmed().isEmpty()) {
+		paths += list.split(QLatin1Char(';'), Qt::SkipEmptyParts);
+	}
+	for (int index = firstPositional; index < tokens.size(); ++index) {
+		paths << tokens.at(index);
+	}
+
+	// With nothing named explicitly, fall back to the conventional per-project
+	// locations so a configured project just works.
+	if (paths.isEmpty()) {
+		const QString projectRoot = optionValue(args, QStringLiteral("--project-root"));
+		if (!projectRoot.trimmed().isEmpty()) {
+			paths = entityDefinitionSearchPaths(projectRoot);
+		}
+	}
+	return paths;
+}
+
+int runEntityDefinitionsCommand(const QString& commandName, const QStringList& tokens, const QStringList& args, CliOutputFormat format)
+{
+	const QStringList paths = entityDefinitionPathsFromArgs(args, tokens, 2);
+	if (paths.isEmpty()) {
+		return printCliError(commandName, CliExitCode::Usage,
+			QStringLiteral("%1 requires one or more definition files or folders, or --project-root <path>.").arg(commandName), format);
+	}
+
+	const EntityDefinitionCatalogue catalogue = loadEntityDefinitions(paths, !hasOption(args, QStringLiteral("--no-recursive")));
+	if (!catalogue.error.isEmpty()) {
+		return printCliError(commandName, CliExitCode::NotFound, catalogue.error, format);
+	}
+
+	const QString filter = optionValue(args, QStringLiteral("--class"));
+	if (!filter.trimmed().isEmpty()) {
+		EntityClassDefinition definition;
+		if (!catalogue.classForName(filter, &definition)) {
+			return printCliError(commandName, CliExitCode::NotFound,
+				QStringLiteral("Entity class not defined by the loaded catalogue: %1").arg(filter), format);
+		}
+		if (format == CliOutputFormat::Json) {
+			QJsonObject object = cliResultJson(commandName);
+			object.insert(QStringLiteral("catalogue"), entityDefinitionCatalogueJson(catalogue));
+			object.insert(QStringLiteral("className"), definition.className);
+			printJson(object);
+		} else {
+			for (const QString& line : entityClassSummaryLines(definition)) {
+				std::cout << text(line) << "\n";
+			}
+		}
+		return exitCodeValue(CliExitCode::Success);
+	}
+
+	if (format == CliOutputFormat::Json) {
+		QJsonObject object = cliResultJson(commandName);
+		object.insert(QStringLiteral("catalogue"), entityDefinitionCatalogueJson(catalogue));
+		printJson(object);
+		return exitCodeValue(CliExitCode::Success);
+	}
+
+	std::cout << "Entity definitions\n";
+	for (const QString& source : catalogue.sourcePaths) {
+		std::cout << "- source: " << text(QDir::toNativeSeparators(source)) << "\n";
+	}
+	std::cout << text(QStringLiteral("Classes: %1 (%2 point, %3 brush, %4 base)\n")
+		.arg(catalogue.classes.size())
+		.arg(catalogue.pointClassCount)
+		.arg(catalogue.brushClassCount)
+		.arg(catalogue.baseClassCount));
+	for (const EntityClassDefinition& definition : catalogue.classes) {
+		if (definition.kind == EntityClassKind::Base) {
+			continue;
+		}
+		std::cout << text(QStringLiteral("  %1 [%2] %3 key(s), %4 flag(s)\n")
+			.arg(definition.className, entityClassKindId(definition.kind))
+			.arg(definition.keys.size())
+			.arg(definition.spawnflags.size()));
+	}
+	for (const QString& warning : catalogue.warnings) {
+		std::cout << "! " << text(warning) << "\n";
+	}
+	return exitCodeValue(CliExitCode::Success);
+}
+
+int runEntityValidateCommand(const QString& commandName, const QString& mapPath, const QStringList& tokens, const QStringList& args, CliOutputFormat format)
+{
+	const LevelMapLoadRequest request = levelMapLoadRequestFromArgs(mapPath, args);
+	if (request.path.trimmed().isEmpty()) {
+		return printCliError(commandName, CliExitCode::Usage,
+			QStringLiteral("%1 requires a Doom WAD or Quake-family .map path.").arg(commandName), format);
+	}
+	LevelMapDocument document;
+	QString error;
+	if (!loadLevelMap(request, &document, &error)) {
+		return printCliError(commandName, levelMapLoadFailureCode(request), QStringLiteral("Unable to load map: %1").arg(error), format);
+	}
+
+	const QStringList paths = entityDefinitionPathsFromArgs(args, tokens, 3);
+	if (paths.isEmpty()) {
+		return printCliError(commandName, CliExitCode::Usage,
+			QStringLiteral("%1 requires --definitions <path> one or more times, or --project-root <path>.").arg(commandName), format);
+	}
+	const EntityDefinitionCatalogue catalogue = loadEntityDefinitions(paths, !hasOption(args, QStringLiteral("--no-recursive")));
+	if (catalogue.isEmpty()) {
+		return printCliError(commandName, CliExitCode::NotFound,
+			catalogue.error.isEmpty() ? QStringLiteral("No entity definitions were loaded from the given paths.") : catalogue.error, format);
+	}
+
+	const EntityValidationReport report = validateLevelMapEntities(document, catalogue);
+	// An unknown classname is a warning, not an error: a map may legitimately
+	// use an entity a mod adds without shipping a definition for it. --strict
+	// is for the build script that wants to refuse that anyway.
+	const bool strict = hasOption(args, QStringLiteral("--strict"));
+	const CliExitCode code = (report.errorCount > 0 || (strict && report.warningCount > 0))
+		? CliExitCode::ValidationFailed
+		: CliExitCode::Success;
+	if (format == CliOutputFormat::Json) {
+		QJsonObject object = cliResultJson(commandName, code);
+		object.insert(QStringLiteral("entities"), entityValidationReportJson(report));
+		printJson(object);
+	} else {
+		std::cout << text(entityValidationText(report)) << "\n";
+	}
+	return exitCodeValue(code);
+}
+
+// ---------------------------------------------------------------------------
+// model geometry
+// ---------------------------------------------------------------------------
+
+bool loadModelMeshForCli(const QString& commandName, const QString& packagePath, const QString& entryPath, const QStringList& args,
+	CliOutputFormat format, ModelMesh* mesh, QString* resolvedSource, int* exitCode)
+{
+	const QString paletteId = optionValue(args, QStringLiteral("--palette"));
+	if (packagePath.trimmed().isEmpty()) {
+		*exitCode = printCliError(commandName, CliExitCode::Usage,
+			QStringLiteral("%1 requires a package path, or a model file path with --file.").arg(commandName), format);
+		return false;
+	}
+
+	// A bare file path is as useful as a package entry for a modeller, so both
+	// are accepted: a package plus an entry, or a single file on disk.
+	if (entryPath.trimmed().isEmpty()) {
+		QFile file(packagePath);
+		if (!file.open(QIODevice::ReadOnly)) {
+			*exitCode = printCliError(commandName, CliExitCode::NotFound,
+				QStringLiteral("Unable to read model file: %1").arg(QDir::toNativeSeparators(packagePath)), format);
+			return false;
+		}
+		const QByteArray bytes = file.readAll();
+		file.close();
+		const IdTechPalette palette = generatedIdTechPalette(paletteId);
+		*mesh = decodeModelMesh(packagePath, bytes, &palette);
+		*resolvedSource = QDir::toNativeSeparators(packagePath);
+		return true;
+	}
+
+	PackageArchive archive;
+	QString archiveError;
+	if (!archive.load(packagePath, &archiveError)) {
+		*exitCode = printCliError(commandName, CliExitCode::NotFound,
+			QStringLiteral("Unable to open package: %1").arg(archiveError), format);
+		return false;
+	}
+	*mesh = decodeModelMeshFromArchive(archive, entryPath, paletteId);
+	*resolvedSource = QStringLiteral("%1!%2").arg(QDir::toNativeSeparators(archive.sourcePath()), entryPath);
+	return true;
+}
+
+QJsonObject modelMeshJsonForCli(const ModelMesh& mesh)
+{
+	QJsonObject object;
+	object.insert(QStringLiteral("format"), mesh.formatId);
+	object.insert(QStringLiteral("formatName"), mesh.formatName);
+	object.insert(QStringLiteral("version"), mesh.version);
+	object.insert(QStringLiteral("geometryAvailable"), mesh.geometryAvailable);
+	object.insert(QStringLiteral("frames"), mesh.frameCount);
+	object.insert(QStringLiteral("surfaces"), mesh.surfaceCount);
+	object.insert(QStringLiteral("vertices"), mesh.vertexCount);
+	object.insert(QStringLiteral("triangles"), mesh.triangleCount);
+	object.insert(QStringLiteral("tags"), mesh.tagCount);
+	object.insert(QStringLiteral("skins"), mesh.skinCount);
+	object.insert(QStringLiteral("embeddedSkins"), static_cast<int>(mesh.embeddedSkins.size()));
+	object.insert(QStringLiteral("boundingRadius"), static_cast<double>(mesh.boundingRadius()));
+	object.insert(QStringLiteral("skinPaths"), QJsonArray::fromStringList(mesh.skinPaths));
+
+	QJsonArray animations;
+	for (const ModelAnimation& animation : mesh.animations) {
+		QJsonObject entry;
+		entry.insert(QStringLiteral("name"), animation.name);
+		entry.insert(QStringLiteral("firstFrame"), animation.firstFrame);
+		entry.insert(QStringLiteral("frameCount"), animation.frameCount);
+		animations.append(entry);
+	}
+	object.insert(QStringLiteral("animations"), animations);
+
+	QJsonArray surfaces;
+	for (const ModelSurface& surface : mesh.surfaces) {
+		QJsonObject entry;
+		entry.insert(QStringLiteral("index"), surface.index);
+		entry.insert(QStringLiteral("name"), surface.name);
+		entry.insert(QStringLiteral("vertices"), surface.vertexCount);
+		entry.insert(QStringLiteral("triangles"), static_cast<int>(surface.triangles.size()));
+		entry.insert(QStringLiteral("skinPaths"), QJsonArray::fromStringList(surface.skinPaths));
+		surfaces.append(entry);
+	}
+	object.insert(QStringLiteral("surfaceList"), surfaces);
+	object.insert(QStringLiteral("warnings"), QJsonArray::fromStringList(mesh.warnings));
+	if (!mesh.error.isEmpty()) {
+		object.insert(QStringLiteral("error"), mesh.error);
+	}
+	return object;
+}
+
+int runModelInspectCommand(const QString& commandName, const QString& packagePath, const QString& entryPath, const QStringList& args, CliOutputFormat format)
+{
+	ModelMesh mesh;
+	QString source;
+	int exitCode = exitCodeValue(CliExitCode::Failure);
+	if (!loadModelMeshForCli(commandName, packagePath, entryPath, args, format, &mesh, &source, &exitCode)) {
+		return exitCode;
+	}
+	if (!mesh.isValid()) {
+		return printCliError(commandName, CliExitCode::Unavailable,
+			mesh.error.isEmpty() ? QStringLiteral("Entry is not a recognized idTech model.") : mesh.error, format);
+	}
+
+	if (format == CliOutputFormat::Json) {
+		QJsonObject object = cliResultJson(commandName);
+		object.insert(QStringLiteral("source"), source);
+		object.insert(QStringLiteral("model"), modelMeshJsonForCli(mesh));
+		printJson(object);
+	} else {
+		std::cout << text(modelMeshSummaryText(mesh)) << "\n";
+	}
+	return exitCodeValue(CliExitCode::Success);
+}
+
+int runModelExportCommand(const QString& commandName, const QString& packagePath, const QString& entryPath, const QStringList& args, CliOutputFormat format)
+{
+	ModelMesh mesh;
+	QString source;
+	int exitCode = exitCodeValue(CliExitCode::Failure);
+	if (!loadModelMeshForCli(commandName, packagePath, entryPath, args, format, &mesh, &source, &exitCode)) {
+		return exitCode;
+	}
+	if (!mesh.geometryAvailable) {
+		return printCliError(commandName, CliExitCode::Unavailable,
+			mesh.error.isEmpty()
+				? QStringLiteral("Geometry decoding is not implemented for this model format, so it cannot be exported.")
+				: mesh.error,
+			format);
+	}
+
+	bool parsedFrame = false;
+	const int requestedFrame = optionValue(args, QStringLiteral("--frame")).toInt(&parsedFrame);
+	const int frameIndex = parsedFrame ? requestedFrame : 0;
+	if (frameIndex < 0 || frameIndex >= std::max(1, mesh.frameCount)) {
+		return printCliError(commandName, CliExitCode::Usage,
+			QStringLiteral("--frame must be between 0 and %1.").arg(std::max(0, mesh.frameCount - 1)), format);
+	}
+
+	const QString objText = exportModelFrameObj(mesh, frameIndex, optionValue(args, QStringLiteral("--material")));
+	if (objText.isEmpty()) {
+		return printCliError(commandName, CliExitCode::Unavailable,
+			QStringLiteral("Frame %1 produced no exportable geometry.").arg(frameIndex), format);
+	}
+
+	const QString outputPath = optionValue(args, QStringLiteral("--output"));
+	const bool dryRun = hasOption(args, QStringLiteral("--dry-run"));
+	if (outputPath.trimmed().isEmpty()) {
+		if (format == CliOutputFormat::Json) {
+			QJsonObject object = cliResultJson(commandName);
+			object.insert(QStringLiteral("source"), source);
+			object.insert(QStringLiteral("frame"), frameIndex);
+			object.insert(QStringLiteral("obj"), objText);
+			printJson(object);
+		} else {
+			std::cout << text(objText);
+		}
+		return exitCodeValue(CliExitCode::Success);
+	}
+
+	if (QFileInfo::exists(outputPath) && !hasOption(args, QStringLiteral("--overwrite"))) {
+		return printCliError(commandName, CliExitCode::Failure,
+			QStringLiteral("Output already exists. Pass --overwrite to replace it."), format);
+	}
+	bool written = false;
+	QString writeError;
+	if (!dryRun) {
+		QDir().mkpath(QFileInfo(outputPath).absolutePath());
+		QFile file(outputPath);
+		if (file.open(QIODevice::WriteOnly | QIODevice::Truncate)) {
+			file.write(objText.toUtf8());
+			file.close();
+			written = true;
+		} else {
+			writeError = QStringLiteral("The exported model could not be written.");
+		}
+	}
+
+	if (format == CliOutputFormat::Json) {
+		QJsonObject object = cliResultJson(commandName, writeError.isEmpty() ? CliExitCode::Success : CliExitCode::Failure);
+		object.insert(QStringLiteral("source"), source);
+		object.insert(QStringLiteral("frame"), frameIndex);
+		object.insert(QStringLiteral("outputPath"), outputPath);
+		object.insert(QStringLiteral("dryRun"), dryRun);
+		object.insert(QStringLiteral("written"), written);
+		if (!writeError.isEmpty()) {
+			object.insert(QStringLiteral("error"), writeError);
+		}
+		printJson(object);
+	} else {
+		std::cout << text(dryRun
+			? QStringLiteral("Dry run: would write frame %1 to %2\n").arg(frameIndex).arg(QDir::toNativeSeparators(outputPath))
+			: (written
+				? QStringLiteral("Wrote frame %1 to %2\n").arg(frameIndex).arg(QDir::toNativeSeparators(outputPath))
+				: QStringLiteral("Not written: %1\n").arg(writeError)));
+	}
+	return exitCodeValue(writeError.isEmpty() ? CliExitCode::Success : CliExitCode::Failure);
+}
+
+
+// ---------------------------------------------------------------------------
+// package compare
+// ---------------------------------------------------------------------------
+
+int runPackageCompareCommand(const QString& commandName, const QString& leftPath, const QString& rightPath, const QStringList& args, CliOutputFormat format)
+{
+	if (leftPath.trimmed().isEmpty() || rightPath.trimmed().isEmpty()) {
+		return printCliError(commandName, CliExitCode::Usage,
+			QStringLiteral("%1 requires two package paths to compare.").arg(commandName), format);
+	}
+
+	PackageArchive left;
+	QString error;
+	if (!left.load(leftPath, &error)) {
+		return printCliError(commandName, CliExitCode::NotFound,
+			QStringLiteral("Unable to open the first package: %1").arg(error), format);
+	}
+	PackageArchive right;
+	if (!right.load(rightPath, &error)) {
+		return printCliError(commandName, CliExitCode::NotFound,
+			QStringLiteral("Unable to open the second package: %1").arg(error), format);
+	}
+
+	PackageCompareRequest request;
+	request.metadataOnly = hasOption(args, QStringLiteral("--metadata-only"));
+	request.includeDirectories = hasOption(args, QStringLiteral("--include-directories"));
+	bool parsedBudget = false;
+	const qint64 budget = optionValue(args, QStringLiteral("--max-entry-bytes")).toLongLong(&parsedBudget);
+	if (parsedBudget && budget > 0) {
+		request.maxEntryBytes = budget;
+	}
+
+	const PackageCompareResult result = comparePackages(left, right, request);
+	// A difference is a finding, not a failure: report it with the validation
+	// exit code so a release script can gate on "these two packages match".
+	const CliExitCode code = result.identical() ? CliExitCode::Success : CliExitCode::ValidationFailed;
+
+	if (format == CliOutputFormat::Json) {
+		QJsonObject object = cliResultJson(commandName, code);
+		object.insert(QStringLiteral("comparison"), packageCompareJson(result));
+		printJson(object);
+	} else {
+		std::cout << text(packageCompareText(result)) << "\n";
+	}
+	return exitCodeValue(code);
+}
+
 int runSubcommand(const QStringList& args)
 {
 	const QStringList tokens = commandTokens(args);
@@ -6089,6 +6515,10 @@ int runSubcommand(const QStringList& args)
 		if (action == QStringLiteral("stage") || action == QStringLiteral("staging")) {
 			return runPackageStageCommand(QStringLiteral("package stage"), tokens.value(2), args, format);
 		}
+		if (action == QStringLiteral("compare") || action == QStringLiteral("diff")) {
+			const QString comparePath = hasOption(args, QStringLiteral("--against")) ? optionValue(args, QStringLiteral("--against")) : tokens.value(3);
+			return runPackageCompareCommand(QStringLiteral("package compare"), tokens.value(2), comparePath, args, format);
+		}
 		if (action == QStringLiteral("manifest")) {
 			const QString outputPath = hasOption(args, QStringLiteral("--output")) ? optionValue(args, QStringLiteral("--output")) : tokens.value(3);
 			return runPackageManifestCommand(QStringLiteral("package manifest"), tokens.value(2), outputPath, args, format);
@@ -6157,6 +6587,31 @@ int runSubcommand(const QStringList& args)
 		if (action == QStringLiteral("remove") || action == QStringLiteral("forget") || action == QStringLiteral("delete")) {
 			const QString id = hasOption(args, QStringLiteral("--installation")) ? optionValue(args, QStringLiteral("--installation")) : tokens.value(2);
 			return runInstallRemoveCommand(QStringLiteral("install remove"), id, args, format);
+		}
+	}
+
+	if (family == QStringLiteral("entity") || family == QStringLiteral("entities") || family == QStringLiteral("entitydef")) {
+		if (action == QStringLiteral("definitions") || action == QStringLiteral("classes") || action == QStringLiteral("list")) {
+			return runEntityDefinitionsCommand(QStringLiteral("entity definitions"), tokens, args, format);
+		}
+		if (action == QStringLiteral("validate") || action == QStringLiteral("check")) {
+			const QString entityMapPath = hasOption(args, QStringLiteral("--input")) ? optionValue(args, QStringLiteral("--input")) : tokens.value(2);
+			return runEntityValidateCommand(QStringLiteral("entity validate"), entityMapPath, tokens, args, format);
+		}
+	}
+
+	if (family == QStringLiteral("model") || family == QStringLiteral("models") || family == QStringLiteral("mesh")) {
+		const QString modelPackage = hasOption(args, QStringLiteral("--package"))
+			? optionValue(args, QStringLiteral("--package"))
+			: (hasOption(args, QStringLiteral("--file")) ? optionValue(args, QStringLiteral("--file")) : tokens.value(2));
+		const QString modelEntry = hasOption(args, QStringLiteral("--entry"))
+			? optionValue(args, QStringLiteral("--entry"))
+			: ((hasOption(args, QStringLiteral("--package")) || hasOption(args, QStringLiteral("--file"))) ? tokens.value(2) : tokens.value(3));
+		if (action == QStringLiteral("inspect") || action == QStringLiteral("info")) {
+			return runModelInspectCommand(QStringLiteral("model inspect"), modelPackage, modelEntry, args, format);
+		}
+		if (action == QStringLiteral("export") || action == QStringLiteral("obj")) {
+			return runModelExportCommand(QStringLiteral("model export"), modelPackage, modelEntry, args, format);
 		}
 	}
 

@@ -942,6 +942,35 @@ bool runDoomIwadSmoke(const QDir& root)
 	return ok;
 }
 
+bool runEmptyWadDirectorySmoke(const QDir& root)
+{
+	// A WAD header declaring zero lumps passes every bounds check: the directory
+	// offset is in range and offset + 0 * 16 never exceeds the file. The reader
+	// used to return an empty list without setting an error, so loadLevelMap
+	// failed with nothing at all to tell the user. Found by the parser fuzz
+	// harness on several seeds.
+	bool ok = true;
+	QByteArray wad("PWAD", 4);
+	const auto appendLe32 = [&wad](qint32 value) {
+		for (int shift = 0; shift < 32; shift += 8) {
+			wad.append(static_cast<char>((static_cast<quint32>(value) >> shift) & 0xffu));
+		}
+	};
+	appendLe32(0);   // lump count
+	appendLe32(12);  // directory offset, immediately after the header
+
+	const QString sourcePath = root.filePath(QStringLiteral("empty-directory.wad"));
+	ok &= expect(writeFile(sourcePath, wad), "Empty-directory WAD fixture should be written.");
+
+	LevelMapDocument document;
+	QString error;
+	ok &= expect(!loadLevelMap({sourcePath, QString(), QStringLiteral("idtech1")}, &document, &error),
+		"A WAD with no lumps should not load.");
+	ok &= expect(!error.trimmed().isEmpty(),
+		"A WAD with no lumps must fail with a reason, not silently.");
+	return ok;
+}
+
 bool runDoomMarkerSmoke(const QDir& root)
 {
 	bool ok = true;
@@ -1108,6 +1137,214 @@ bool runDoomValidationSmoke(const QDir& root)
 	return ok;
 }
 
+// Grid snapping is a core concern so that a viewport drag, an arrow-key nudge
+// and a CLI move all agree. Negative coordinates matter: Doom and Quake maps
+// straddle the origin.
+bool runGridSnapSmoke()
+{
+	bool ok = true;
+	ok &= expect(nearly(snapLevelMapCoordinate(0.0, 16.0), 0.0), "Zero should snap to zero.");
+	ok &= expect(nearly(snapLevelMapCoordinate(7.0, 16.0), 0.0), "Below half a grid step should snap down.");
+	ok &= expect(nearly(snapLevelMapCoordinate(9.0, 16.0), 16.0), "Above half a grid step should snap up.");
+	ok &= expect(nearly(snapLevelMapCoordinate(8.0, 16.0), 16.0), "A tie should snap away from zero.");
+	ok &= expect(nearly(snapLevelMapCoordinate(-8.0, 16.0), -16.0), "A negative tie should snap away from zero.");
+	ok &= expect(nearly(snapLevelMapCoordinate(-24.0, 16.0), -32.0), "Negative coordinates should mirror positive ones.");
+	ok &= expect(nearly(snapLevelMapCoordinate(24.0, 16.0), 32.0), "Positive coordinates should mirror negative ones.");
+	ok &= expect(nearly(snapLevelMapCoordinate(-7.0, 16.0), 0.0), "A small negative offset should snap to the origin.");
+	ok &= expect(nearly(snapLevelMapCoordinate(100.5, 1.0), 101.0), "A one-unit grid should round to whole units.");
+	ok &= expect(nearly(snapLevelMapCoordinate(33.0, 64.0), 64.0), "A coarse grid should still round to the nearest line.");
+	ok &= expect(nearly(snapLevelMapCoordinate(-33.0, 64.0), -64.0), "A coarse grid should round negatives symmetrically.");
+	ok &= expect(nearly(snapLevelMapCoordinate(-31.0, 64.0), 0.0), "Just under half a coarse step should snap to zero.");
+	ok &= expect(nearly(snapLevelMapCoordinate(129.0, 128.0), 128.0), "A 128-unit grid should snap 129 back to 128.");
+	ok &= expect(nearly(snapLevelMapCoordinate(37.0, 0.0), 37.0), "A zero grid should disable snapping.");
+	ok &= expect(nearly(snapLevelMapCoordinate(37.0, -16.0), 37.0), "A negative grid should disable snapping.");
+
+	const LevelMapVec3 position {-24.0, 9.0, -7.0, true};
+	const LevelMapVec3 snapped = snapLevelMapPosition(position, 16.0);
+	ok &= expect(snapped.valid, "Snapping a valid position should stay valid.");
+	ok &= expect(nearly(snapped.x, -32.0) && nearly(snapped.y, 16.0) && nearly(snapped.z, 0.0),
+		"Every component of a position should snap independently.");
+	const LevelMapVec3 delta = snapLevelMapDelta({40.0, -40.0, 0.0, true}, 32.0);
+	ok &= expect(nearly(delta.x, 32.0) && nearly(delta.y, -32.0) && nearly(delta.z, 0.0),
+		"A delta should snap the same way a position does.");
+	ok &= expect(!snapLevelMapPosition(LevelMapVec3(), 16.0).valid, "Snapping an invalid vector should keep it invalid.");
+	return ok;
+}
+
+bool runSelectionSetSmoke(const QDir& root)
+{
+	bool ok = true;
+	QString error;
+	const QString path = root.filePath(QStringLiteral("selection.map"));
+	ok &= expect(writeFile(path, quakeMapFixture()), "Selection fixture should be written.");
+
+	LevelMapDocument document;
+	ok &= expect(loadLevelMap({path, {}, QStringLiteral("idtech2")}, &document, &error), "Selection fixture should load.");
+	ok &= expect(levelMapSelectionCount(document) == 0, "A freshly loaded map should have an empty selection set.");
+
+	// Single selection still drives the set, and the set still drives the
+	// primary fields.
+	ok &= expect(selectLevelMapObject(&document, QStringLiteral("entity:1"), &error), "Selecting an entity should work.");
+	ok &= expect(levelMapSelectionCount(document) == 1, "A single selection should hold exactly one member.");
+	ok &= expect(levelMapSelectionContains(document, LevelMapSelectionKind::Entity, 1), "The selected entity should be in the set.");
+	ok &= expect(document.selectionKind == LevelMapSelectionKind::Entity && document.selectedObjectId == 1,
+		"The primary fields should mirror the single member.");
+
+	ok &= expect(addLevelMapSelection(&document, LevelMapSelectionKind::QuakeBrush, 0, &error), "Adding a brush should work.");
+	ok &= expect(levelMapSelectionCount(document) == 2, "Adding should grow the set.");
+	ok &= expect(document.selectionKind == LevelMapSelectionKind::QuakeBrush && document.selectedObjectId == 0,
+		"The newest member should become primary.");
+	ok &= expect(document.entities.at(1).selected && document.brushes.at(0).selected,
+		"Every member of the set should carry its selected flag.");
+
+	// Re-adding promotes instead of duplicating.
+	ok &= expect(addLevelMapSelection(&document, LevelMapSelectionKind::Entity, 1, &error), "Re-adding a member should work.");
+	ok &= expect(levelMapSelectionCount(document) == 2, "Re-adding a member should not duplicate it.");
+	ok &= expect(document.selectionKind == LevelMapSelectionKind::Entity && document.selectedObjectId == 1,
+		"Re-adding a member should promote it to primary.");
+
+	ok &= expect(toggleLevelMapSelection(&document, LevelMapSelectionKind::QuakeBrush, 0, &error), "Toggling off should work.");
+	ok &= expect(levelMapSelectionCount(document) == 1 && !document.brushes.at(0).selected,
+		"Toggling a member off should drop it and clear its flag.");
+	ok &= expect(document.selectionKind == LevelMapSelectionKind::Entity && document.selectedObjectId == 1,
+		"Dropping the primary should promote the remaining member.");
+	ok &= expect(toggleLevelMapSelection(&document, LevelMapSelectionKind::QuakeBrush, 0, &error), "Toggling on should work.");
+	ok &= expect(levelMapSelectionCount(document) == 2, "Toggling a missing member on should add it.");
+
+	ok &= expect(removeLevelMapSelection(&document, LevelMapSelectionKind::Entity, 1, &error), "Removing a member should work.");
+	ok &= expect(levelMapSelectionCount(document) == 1 && !document.entities.at(1).selected,
+		"Removing should shrink the set and clear the flag.");
+	ok &= expect(!removeLevelMapSelection(&document, LevelMapSelectionKind::Entity, 1, &error),
+		"Removing a member twice should fail.");
+	ok &= expect(!addLevelMapSelection(&document, LevelMapSelectionKind::QuakeBrush, 99, &error),
+		"Adding a missing object should fail.");
+	ok &= expect(levelMapSelectionCount(document) == 1, "A failed add should leave the set alone.");
+
+	clearLevelMapSelection(&document);
+	ok &= expect(levelMapSelectionCount(document) == 0, "Clearing should empty the set.");
+	ok &= expect(document.selectionKind == LevelMapSelectionKind::None && document.selectedObjectId == -1,
+		"Clearing should reset the primary fields.");
+	ok &= expect(!document.brushes.at(0).selected, "Clearing should clear every selected flag.");
+
+	// Duplicates collapse to the caller's last occurrence, which becomes primary.
+	const QVector<LevelMapSelectionRef> requested = {
+		{LevelMapSelectionKind::QuakeBrush, 0},
+		{LevelMapSelectionKind::Entity, 1},
+		{LevelMapSelectionKind::QuakeBrush, 0},
+	};
+	ok &= expect(setLevelMapSelection(&document, requested, &error), "Setting a whole selection should work.");
+	ok &= expect(levelMapSelectionCount(document) == 2, "Duplicates should collapse.");
+	ok &= expect(document.selectionKind == LevelMapSelectionKind::QuakeBrush && document.selectedObjectId == 0,
+		"The last occurrence should be primary.");
+	ok &= expect(levelMapSelectionSetLines(document).size() >= 2, "The selection set should report itself.");
+	ok &= expect(levelMapSelectionLines(document).join(QStringLiteral("\n")).contains(QStringLiteral("Selection set")),
+		"A multi-selection should be visible in the selection report.");
+
+	// A member that does not exist is skipped, and the call says so.
+	const QVector<LevelMapSelectionRef> partly = {
+		{LevelMapSelectionKind::Entity, 1},
+		{LevelMapSelectionKind::Entity, 42},
+	};
+	ok &= expect(!setLevelMapSelection(&document, partly, &error), "Setting a selection with a missing object should fail.");
+	ok &= expect(levelMapSelectionCount(document) == 1, "The members that do exist should still be selected.");
+
+	// Single selection collapses the set again, and a failed selection empties it.
+	ok &= expect(selectLevelMapObject(&document, QStringLiteral("brush:0"), &error), "Selecting a brush should work.");
+	ok &= expect(levelMapSelectionCount(document) == 1, "A single selection should replace the whole set.");
+	ok &= expect(!selectLevelMapObject(&document, QStringLiteral("brush:99"), &error), "Selecting a missing brush should fail.");
+	ok &= expect(levelMapSelectionCount(document) == 0 && document.selectionKind == LevelMapSelectionKind::None
+			&& document.selectedObjectId == -1,
+		"A failed selection should leave nothing selected.");
+	return ok;
+}
+
+bool runMultiMoveSmoke(const QDir& root)
+{
+	bool ok = true;
+	QString error;
+	const QString mapPath = root.filePath(QStringLiteral("multimove.map"));
+	ok &= expect(writeFile(mapPath, quakeMapFixture()), "Multi-move fixture should be written.");
+
+	LevelMapDocument document;
+	ok &= expect(loadLevelMap({mapPath, {}, QStringLiteral("idtech2")}, &document, &error), "Multi-move fixture should load.");
+	ok &= expect(!document.brushes.isEmpty() && !document.brushes.at(0).faces.isEmpty(), "The fixture should have a brush face.");
+	const double brushFaceX = document.brushes.at(0).faces.at(0).p0.x;
+
+	const QVector<LevelMapSelectionRef> both = {
+		{LevelMapSelectionKind::Entity, 1},
+		{LevelMapSelectionKind::QuakeBrush, 0},
+	};
+	ok &= expect(setLevelMapSelection(&document, both, &error), "Selecting an entity and a brush should work.");
+	ok &= expect(moveLevelMapSelection(&document, 64.0, 0.0, 0.0, &error), "Moving the selection should work.");
+	ok &= expect(document.undoStack.size() == 1, "A multi-object move should be a single undo command.");
+	ok &= expect(document.undoStack.back().commandKind == QStringLiteral("move-selection"),
+		"A multi-object move should record a compound command.");
+	ok &= expect(document.undoStack.back().moveSteps.size() == 2, "The compound command should carry one step per object.");
+	ok &= expect(propertyValueForTest(document, 1, QStringLiteral("origin")) == QStringLiteral("96 32 64"),
+		"The entity should have moved.");
+	ok &= expect(nearly(document.brushes.at(0).faces.at(0).p0.x, brushFaceX + 64.0), "The brush should have moved.");
+	ok &= expect(levelMapSelectionCount(document) == 2, "A move should keep the selection.");
+	ok &= expect(document.selectionKind == LevelMapSelectionKind::QuakeBrush && document.selectedObjectId == 0,
+		"A move should keep the primary member.");
+
+	ok &= expect(undoLevelMapEdit(&document, &error), "One undo should reverse the whole compound move.");
+	ok &= expect(document.undoStack.isEmpty() && document.redoStack.size() == 1,
+		"A compound move should undo as one command.");
+	ok &= expect(propertyValueForTest(document, 1, QStringLiteral("origin")) == QStringLiteral("32 32 64"),
+		"Undo should restore the entity.");
+	ok &= expect(nearly(document.brushes.at(0).faces.at(0).p0.x, brushFaceX), "Undo should restore the brush.");
+	ok &= expect(redoLevelMapEdit(&document, &error), "One redo should reapply the whole compound move.");
+	ok &= expect(propertyValueForTest(document, 1, QStringLiteral("origin")) == QStringLiteral("96 32 64"),
+		"Redo should reapply the entity move.");
+	ok &= expect(nearly(document.brushes.at(0).faces.at(0).p0.x, brushFaceX + 64.0), "Redo should reapply the brush move.");
+
+	// Doom vertices: a multi-move must mark the derived node lumps stale exactly
+	// the way a single vertex move already does.
+	const QString wadPath = root.filePath(QStringLiteral("multimove.wad"));
+	ok &= expect(writeFile(wadPath, wadFixture()), "Doom multi-move fixture should be written.");
+	LevelMapDocument wad;
+	ok &= expect(loadLevelMap({wadPath, QStringLiteral("MAP01"), QStringLiteral("idtech1")}, &wad, &error),
+		"Doom multi-move fixture should load.");
+	ok &= expect(wad.doomVertices.size() >= 2, "The Doom fixture should have vertices.");
+	wad.doomGeometryChanged = false;
+
+	const QVector<LevelMapSelectionRef> vertices = {
+		{LevelMapSelectionKind::DoomVertex, 0},
+		{LevelMapSelectionKind::DoomVertex, 1},
+	};
+	ok &= expect(setLevelMapSelection(&wad, vertices, &error), "Selecting two vertices should work.");
+	// 20 and -20 on a 16-unit grid round to 16 and -16.
+	ok &= expect(moveLevelMapSelectionSnapped(&wad, 20.0, -20.0, 0.0, 16.0, &error), "A snapped multi-move should work.");
+	ok &= expect(wad.undoStack.size() == 1, "A snapped multi-move should be a single undo command.");
+	ok &= expect(nearly(wad.doomVertices.at(0).x, 16.0) && nearly(wad.doomVertices.at(0).y, -16.0),
+		"The first vertex should move by the snapped delta.");
+	ok &= expect(nearly(wad.doomVertices.at(1).x, 144.0) && nearly(wad.doomVertices.at(1).y, -16.0),
+		"The second vertex should move by the same snapped delta.");
+	ok &= expect(wad.doomGeometryChanged, "Moving several vertices should mark the node lumps stale.");
+	ok &= expect(wad.selectionKind == LevelMapSelectionKind::DoomVertex && wad.selectedObjectId == 1,
+		"The primary member should survive a multi-move.");
+
+	ok &= expect(undoLevelMapEdit(&wad, &error), "One undo should put every vertex back.");
+	ok &= expect(nearly(wad.doomVertices.at(0).x, 0.0) && nearly(wad.doomVertices.at(0).y, 0.0),
+		"Undo should restore the first vertex.");
+	ok &= expect(nearly(wad.doomVertices.at(1).x, 128.0) && nearly(wad.doomVertices.at(1).y, 0.0),
+		"Undo should restore the second vertex.");
+	ok &= expect(wad.undoStack.isEmpty(), "Undo should drain the single compound command.");
+
+	// A delta that snaps to nothing is a no-op rather than an empty history entry.
+	ok &= expect(!moveLevelMapSelectionSnapped(&wad, 3.0, -2.0, 0.0, 64.0, &error), "A delta that snaps to zero should fail.");
+	ok &= expect(wad.undoStack.isEmpty(), "A rejected move should not push an undo command.");
+
+	// Sectors are selectable but have no position of their own.
+	ok &= expect(!wad.doomSectors.isEmpty(), "The Doom fixture should have a sector.");
+	ok &= expect(selectLevelMapObject(&wad, QStringLiteral("sector:0"), &error), "Selecting a sector should work.");
+	ok &= expect(!moveLevelMapSelection(&wad, 16.0, 0.0, 0.0, &error), "Moving a sector-only selection should fail.");
+	ok &= expect(wad.undoStack.isEmpty(), "A selection with nothing movable should not push an undo command.");
+	clearLevelMapSelection(&wad);
+	ok &= expect(!moveLevelMapSelection(&wad, 16.0, 0.0, 0.0, &error), "Moving an empty selection should fail.");
+	return ok;
+}
+
 } // namespace
 
 int main()
@@ -1126,8 +1363,12 @@ int main()
 	ok &= runRotatedBrushSmoke(root);
 	ok &= runTextSaveSmoke(root);
 	ok &= runUndoRedoSmoke(root);
+	ok &= runGridSnapSmoke();
+	ok &= runSelectionSetSmoke(root);
+	ok &= runMultiMoveSmoke(root);
 	ok &= runDoomMapSmoke(root);
 	ok &= runDoomIwadSmoke(root);
+	ok &= runEmptyWadDirectorySmoke(root);
 	ok &= runDoomMarkerSmoke(root);
 	ok &= runHexenSmoke(root);
 	ok &= runUdmfSmoke(root);

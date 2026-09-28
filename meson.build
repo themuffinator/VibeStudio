@@ -62,4 +62,9 @@ if python_for_tests.found()
     python_for_tests,
     args: [files('scripts/extract_translations.py'), '--check'],
   )
+  test(
+    'english-plurals-validation',
+    python_for_tests,
+    args: [files('scripts/english_plurals.py')],
+  )
 endif

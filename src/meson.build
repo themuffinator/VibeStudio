@@ -24,7 +24,9 @@ core_sources = files(
   'core/compiler_registry.cpp',
   'core/compiler_runner.cpp',
   'core/deflate.cpp',
+  'core/document_watch.cpp',
   'core/editor_profiles.cpp',
+  'core/entity_definitions.cpp',
   'core/ericw_map_preflight.cpp',
   'core/game_installation.cpp',
   'core/idtech_image.cpp',
@@ -33,10 +35,13 @@ core_sources = files(
   'core/map_assets.cpp',
   'core/map_geometry.cpp',
   'core/map_render.cpp',
+  'core/model_mesh.cpp',
   'core/operation_state.cpp',
   'core/package_archive.cpp',
+  'core/package_compare.cpp',
   'core/package_preview.cpp',
   'core/package_staging.cpp',
+  'core/parser_fuzz.cpp',
   'core/project_manifest.cpp',
   'core/studio_semantics.cpp',
   'core/studio_manifest.cpp',
@@ -57,16 +62,21 @@ vibestudio_core_dep = declare_dependency(
   link_with: [vibestudio_core],
 )
 
-install_headers(files('core/advanced_studio.h', 'core/ai_connectors.h', 'core/ai_workflows.h', 'core/asset_tools.h', 'core/bsp_inspect.h', 'core/build_pipeline.h', 'core/compiler_artifact_validation.h', 'core/compiler_known_issues.h', 'core/compiler_profiles.h', 'core/compiler_registry.h', 'core/compiler_runner.h', 'core/deflate.h', 'core/ericw_map_preflight.h', 'core/editor_profiles.h', 'core/game_installation.h', 'core/idtech_image.h', 'core/level_map.h', 'core/localization.h', 'core/map_assets.h', 'core/map_geometry.h', 'core/map_render.h', 'core/operation_state.h', 'core/package_archive.h', 'core/package_preview.h', 'core/package_staging.h', 'core/project_manifest.h', 'core/studio_semantics.h', 'core/studio_manifest.h', 'core/studio_settings.h'), subdir: 'vibestudio/core')
+install_headers(files('core/advanced_studio.h', 'core/ai_connectors.h', 'core/ai_workflows.h', 'core/asset_tools.h', 'core/bsp_inspect.h', 'core/build_pipeline.h', 'core/compiler_artifact_validation.h', 'core/compiler_known_issues.h', 'core/compiler_profiles.h', 'core/compiler_registry.h', 'core/compiler_runner.h', 'core/deflate.h', 'core/document_watch.h', 'core/ericw_map_preflight.h', 'core/editor_profiles.h', 'core/entity_definitions.h', 'core/game_installation.h', 'core/idtech_image.h', 'core/level_map.h', 'core/localization.h', 'core/map_assets.h', 'core/map_geometry.h', 'core/map_render.h', 'core/model_mesh.h', 'core/operation_state.h', 'core/package_archive.h', 'core/package_compare.h', 'core/package_preview.h', 'core/package_staging.h', 'core/parser_fuzz.h', 'core/project_manifest.h', 'core/studio_semantics.h', 'core/studio_manifest.h', 'core/studio_settings.h'), subdir: 'vibestudio/core')
 
 app_sources = files(
   'main.cpp',
   'app/application_shell.cpp',
   'app/asset_views.cpp',
+  'app/code_editor.cpp',
   'app/map_viewport.cpp',
+  'app/model_viewport.cpp',
   'app/studio_actions.cpp',
   'app/studio_charts.cpp',
+  'app/studio_icons.cpp',
+  'app/studio_layout.cpp',
   'app/studio_runtime.cpp',
+  'app/studio_theme.cpp',
   'app/syntax_highlight.cpp',
   'app/ui_primitives.cpp',
   'cli/cli.cpp',
@@ -76,8 +86,10 @@ app_moc_headers = files(
   'app/application_shell.h',
   'app/asset_views.h',
   'app/map_viewport.h',
+  'app/model_viewport.h',
   'app/studio_actions.h',
   'app/studio_charts.h',
+  'app/studio_layout.h',
   'app/syntax_highlight.h',
 )
 
@@ -392,5 +404,93 @@ endif
 test(
   'ui-primitives-smoke',
   ui_primitives_smoke_test,
+  env: ui_primitives_test_env,
+)
+
+document_watch_smoke_test = executable(
+  'document_watch_smoke_test',
+  ['tests/document_watch_smoke_test.cpp'],
+  include_directories: vibestudio_includes,
+  dependencies: [vibestudio_core_dep],
+  install: false,
+)
+
+test('document-watch-smoke', document_watch_smoke_test)
+
+entity_definitions_smoke_test = executable(
+  'entity_definitions_smoke_test',
+  ['tests/entity_definitions_smoke_test.cpp'],
+  include_directories: vibestudio_includes,
+  dependencies: [vibestudio_core_dep],
+  install: false,
+)
+
+test('entity-definitions-smoke', entity_definitions_smoke_test)
+
+model_mesh_smoke_test = executable(
+  'model_mesh_smoke_test',
+  ['tests/model_mesh_smoke_test.cpp'],
+  include_directories: vibestudio_includes,
+  dependencies: [vibestudio_core_dep],
+  install: false,
+)
+
+test('model-mesh-smoke', model_mesh_smoke_test)
+
+package_compare_smoke_test = executable(
+  'package_compare_smoke_test',
+  ['tests/package_compare_smoke_test.cpp'],
+  include_directories: vibestudio_includes,
+  dependencies: [vibestudio_core_dep],
+  install: false,
+)
+
+test('package-compare-smoke', package_compare_smoke_test)
+
+parser_fuzz_smoke_test = executable(
+  'parser_fuzz_smoke_test',
+  ['tests/parser_fuzz_smoke_test.cpp'],
+  include_directories: vibestudio_includes,
+  dependencies: [vibestudio_core_dep],
+  install: false,
+)
+
+test('parser-fuzz-smoke', parser_fuzz_smoke_test)
+
+corrupt_fixture_smoke_test = executable(
+  'corrupt_fixture_smoke_test',
+  ['tests/corrupt_fixture_smoke_test.cpp'],
+  include_directories: vibestudio_includes,
+  dependencies: [vibestudio_core_dep],
+  install: false,
+)
+
+test('corrupt-fixture-smoke', corrupt_fixture_smoke_test)
+
+studio_theme_smoke_test = executable(
+  'studio_theme_smoke_test',
+  ['tests/studio_theme_smoke_test.cpp', 'app/studio_theme.cpp', 'app/studio_icons.cpp'],
+  include_directories: vibestudio_includes,
+  dependencies: [qt6_dep, vibestudio_core_dep],
+  install: false,
+)
+
+test(
+  'studio-theme-smoke',
+  studio_theme_smoke_test,
+  env: ui_primitives_test_env,
+)
+
+studio_runtime_smoke_test = executable(
+  'studio_runtime_smoke_test',
+  ['tests/studio_runtime_smoke_test.cpp', 'app/studio_runtime.cpp'],
+  include_directories: vibestudio_includes,
+  dependencies: [qt6_dep, vibestudio_core_dep],
+  install: false,
+)
+
+test(
+  'studio-runtime-smoke',
+  studio_runtime_smoke_test,
   env: ui_primitives_test_env,
 )

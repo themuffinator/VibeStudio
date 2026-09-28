@@ -27,6 +27,9 @@ documented in [`docs/ACCESSIBILITY_LOCALIZATION.md`](ACCESSIBILITY_LOCALIZATION.
 - Durable recent activity history for terminal package, compiler, setup, and
   shell tasks shown in the workspace timeline after restart.
 - Notification and status system for inline feedback, toasts, task cards, warnings, and recoverable errors.
+- External-change watch that polls the open map, open package, and code-editor
+  file from a shell-owned one-second timer, then offers a reload, a reopen, or
+  an ignore for each substantive change.
 
 ### Project Core
 - Project manifest and settings with `.vibestudio/project.json` metadata,
@@ -51,6 +54,15 @@ documented in [`docs/ACCESSIBILITY_LOCALIZATION.md`](ACCESSIBILITY_LOCALIZATION.
   text, Quake III `.map` text, entity/brush/thing inspection, texture/material
   references, validation health, safe entity and movement edits, undo/redo, and
   non-destructive save-as.
+- Entity definition catalogues for Radiant `.def`/`.qc`, Valve `.fgd`, and
+  Quake III `.ent` sources, with base-class inheritance folding, conventional
+  project search paths, and map entity validation for classnames, key value
+  types, required keys, spawnflag bits, and target/targetname references.
+- Document watch service that fingerprints the files the studio holds open by
+  role, coalesces the burst a single save produces, and reports whether a path
+  was modified, touched, removed, replaced, or created. It is plain QtCore with
+  no `Q_OBJECT`, so the app layer drives its `poll()` instead of connecting to
+  signals.
 - Advanced Studio services for idTech3 shader script models, shader stage
   edits, sprite workflow planning, source tree indexing, extension manifests,
   and deterministic AI creation proposals.
@@ -68,6 +80,15 @@ documented in [`docs/ACCESSIBILITY_LOCALIZATION.md`](ACCESSIBILITY_LOCALIZATION.
   hex/metadata summaries used by both GUI and CLI surfaces.
 - Shared asset tooling service for image conversion queues, WAV export helpers,
   native idTech model metadata boundaries, and project text find/replace.
+- Shared idTech image decoding for Doom picture/flat/palette/colormap lumps,
+  Quake `.lmp` and WAD2/WAD3 miptex, Quake II `.wal`, `.m8`, and `.m32`, Quake
+  and Half-Life `.spr`, PCX, and Targa, with generated stand-in palettes rather
+  than shipped game palettes. Quake II `.sp2` is read as a frame table whose
+  images are resolved from the open package.
+- Shared idTech model geometry decoding for Quake MDL (IDPO 6), Quake II MD2
+  (IDP2 8), and Quake III MD3 (IDP3 15), with header-only reads for MDC, MDR,
+  and IQM, package-resolved skins, frame-name-inferred animations, and
+  single-frame Wavefront OBJ export.
 - Shared level-map parsing and save-as service for direct WAD map lump access
   and text-map round-tripping, keeping map edits independent from package entry
   sorting or archive browser presentation.
@@ -79,12 +100,36 @@ documented in [`docs/ACCESSIBILITY_LOCALIZATION.md`](ACCESSIBILITY_LOCALIZATION.
 - Fixture-backed support matrix.
 - Safe write-back model with staging, diffing, conflict handling, deterministic
   save-as writers, and reproducible manifests.
+- Package comparison that pairs entries by case-folded virtual path and
+  occurrence index, reporting added, removed, changed, identical, and case-only
+  results, with entry content decided by size, a stored CRC-32, or SHA-256.
+- Doom WAD write-back that keeps each map's lumps grouped under their own
+  marker and reads lump bytes by source directory ordinal, so a WAD holding
+  several maps with repeated lump names round-trips.
+- Verified in-place package replacement: the new archive is written to a
+  sibling temporary file and re-hashed before the original is moved aside to a
+  backup path.
+- DEFLATE encoder with `store`, `fast`, `default`, and `best` levels that
+  chooses stored, fixed-Huffman, or dynamic-Huffman blocks per chunk by
+  measured bit cost.
+- Deterministic fuzz corpus generation so the DEFLATE, image, BSP, package,
+  map, and model readers run against corrupted input as ordinary Meson tests.
 - Palette, material, shader, model, and map metadata services.
 
 ### Tool Surfaces
 - Level editor for Doom-family and Quake-family workflows.
 - Interaction profile registry with routed MVP presets for GtkRadiant 1.6.0-style, NetRadiant Custom-style, TrenchBroom-style, and QuArK-style layouts/controls.
+- Map viewport direct manipulation: rubber-band and modifier-based selection
+  shared with the objects list, plus drags and arrow-key nudges that snap to
+  whole grid steps by default, are previewed locally by the viewport, and are
+  committed by the shell as one compound undo command.
+- Entity inspector that resolves the selected entity against the loaded
+  definition catalogue, explains each key, marks spawnflag state as text rather
+  than colour, and folds entity findings into the map health view.
 - Texture, sprite, model, audio, and cinematic editors.
+- Software-rendered model viewport: QPainter, orthographic, painter's-algorithm
+  depth sort, and no OpenGL dependency, with wireframe/flat/textured modes,
+  inferred animation playback, and OBJ export of the displayed frame.
 - Code/script IDE, with an active source index, language-hook descriptors,
   diagnostics, symbol search, build task hints, and launch-profile summaries.
 - idTech3 shader graph with text round-tripping, stage previews, mounted
@@ -93,6 +138,9 @@ documented in [`docs/ACCESSIBILITY_LOCALIZATION.md`](ACCESSIBILITY_LOCALIZATION.
   palette previews, frame rotations, and package staging paths.
 - Extension surface for manifest inspection, trust/sandbox metadata, reviewed
   command plans, dry-run execution, and staged generated files.
+- Package comparison surface that diffs the open package against another
+  archive on disk and reports the per-entry result in the package detail
+  drawer.
 - Compiler pipeline editor.
 - Detail-on-demand inspectors for raw metadata, dependency graphs, manifests, logs, and format-specific internals.
 
@@ -131,9 +179,14 @@ documented in [`docs/ACCESSIBILITY_LOCALIZATION.md`](ACCESSIBILITY_LOCALIZATION.
 - Human-readable output by default, structured JSON output for automation.
 - Stable exit codes, command manifests, and scriptable operations.
 - Active lightweight router and command registry for `project`, `package`,
-  `install`, `asset`, `map`, `shader`, `sprite`, `code`, `extension`,
-  `compiler`, `ai`, `credits`, and `cli` subcommands, with flat legacy options
-  kept compatible.
+  `install`, `asset`, `map`, `entity`, `model`, `shader`, `sprite`, `code`,
+  `extension`, `compiler`, `ai`, `credits`, and `cli` subcommands, with flat
+  legacy options kept compatible.
+- `entity definitions`, `entity validate`, `model inspect`, `model export`, and
+  `package compare` run the same core services the shell uses. `package
+  compare` returns the validation-failed exit code when the two packages
+  differ, and `entity validate` returns it for entity errors, or for warnings
+  as well under `--strict`, so a release script can gate on either.
 - Global `--json`, `--quiet`, `--verbose`, `--dry-run`, `--watch`, and
   `--task-state` behavior for automation-friendly workflows where supported.
 
@@ -188,6 +241,9 @@ The current scaffold contains:
   delete, conflict reporting, before/after composition, manifest export,
   save-as guards, deterministic PAK/ZIP/PK3 writers, and a map-lump-tested PWAD
   writer.
+- `src/core/package_compare.*`: entry-by-entry package comparison, case-folded
+  occurrence pairing, added/removed/changed/identical/case-only results,
+  size/CRC-32/SHA-256 content decisions, and text and JSON reports.
 - `src/core/package_preview.*`: shared read-only preview model for package
   entry text/script samples, image dimensions/format/palette metadata, native
   model metadata, audio metadata/waveform summaries, and binary samples.
@@ -198,6 +254,21 @@ The current scaffold contains:
   Quake III `.map` parser, map statistics, texture/material references,
   validation/preflight health, selection/property views, undo/redo edit stack,
   safe movement/entity edits, save-as, and compiler-request handoff.
+- `src/core/entity_definitions.*`: Radiant `.def`/`.qc`, Valve `.fgd`, and
+  Quake III `.ent` parsers, `@include` resolution, inheritance folding, project
+  definition search paths, map entity validation, and inspector/JSON reports.
+- `src/core/model_mesh.*`: MDL/MD2/MD3 geometry decoding, MDC/MDR/IQM header
+  reads, package skin resolution, frame-name-inferred animations, summary
+  lines, and single-frame Wavefront OBJ export.
+- `src/core/document_watch.*`: role-tagged path registration, SHA-1 content
+  fingerprints that fall back to size and modification time above a size limit,
+  coalesced change events, and `poll()`/`pollAt()` entry points.
+  The class has no `Q_OBJECT` and no signals, so `src/core` stays a QtCore
+  static library with no moc step; the app layer owns the timer that calls
+  `poll()`.
+- `src/core/parser_fuzz.*`: seeded xorshift64* corpus generation, seven byte
+  mutations, truncation boundaries, and reproducible case ids for the parser
+  fuzz tests.
 - `src/core/advanced_studio.*`: idTech3 shader script parser/editor model,
   mounted package-reference validation, Doom/Quake sprite workflow planning,
   source workspace indexing, extension manifest/trust/sandbox command plans,
@@ -212,9 +283,33 @@ The current scaffold contains:
 - `src/cli`: diagnostics and automation entry points, including the active
   subcommand router, localization reports, diagnostic bundle export, JSON
   output envelopes, and stable exit-code contract.
-- `src/app`: Qt Widgets studio shell.
+- `src/app`: Qt Widgets studio shell, including the software-rendered map and
+  model viewports. The build's moc step covers app headers only.
+- `src/app/studio_theme.*`: design tokens for every theme, density, and text
+  scale; the application palette and generated stylesheet; Fusion plus a proxy
+  style for check and radio indicators. `studio-theme-smoke` holds each theme
+  to WCAG AA contrast.
+- `src/app/studio_icons.*`: the painted, theme-aware icon set behind every
+  menu, tool bar, rail, and page action.
+- `src/app/studio_layout.*`: shared work-surface parts: the mode rail, page
+  header, empty state, card, dock title bar, eliding label, panel tabs, and
+  icon scaling.
+- `src/app/code_editor.*`: the Code page's plain-text editor with a
+  line-number gutter and current-line band drawn from the theme.
+- `src/main.cpp` also accepts `--open <path>` (routed like a drop onto the
+  window) and `--ui-snapshot <dir>` with an optional `--ui-snapshot-size WxH`,
+  which renders every work surface to PNG and exits.
+- `src/app/studio_runtime.*`: session logging, crash-report capture and
+  parsing, session markers, and previous-session detection. `src/main.cpp`
+  installs session logging only, so crash capture is exercised by its smoke
+  test rather than by the shipping application.
 - `src/tests`: smoke tests for core services, package flows, compiler flows,
-  asset tooling, level maps, Advanced Studio services, and UI primitives.
+  asset tooling, level maps, entity definitions, model meshes, package
+  comparison, document watch, parser fuzz corpora, corrupt fixtures, studio
+  runtime, Advanced Studio services, UI primitives, and the studio theme and
+  icon set.
+- `scripts/english_plurals.py`: generates and checks the English plural forms
+  in `i18n/vibestudio_en.ts`, so `%n item(s)` reads as "1 item" and "5 items".
 - `scripts/package_portable.py`, `scripts/generate_offline_guide.py`,
   `scripts/validate_packaging.py`, and `scripts/validate_release_assets.py`:
   portable package staging, generated offline docs, license/checksum bundling,
@@ -223,6 +318,9 @@ The current scaffold contains:
 
 ## Design Principles
 - Keep project state central and shared across tools.
+- Keep `src/core` free of generated sources: core services stay plain QtCore
+  types that the app layer drives, so the core library builds without a moc
+  step and its state machines can be tested without an event loop.
 - Keep editor surfaces specialized, but not isolated.
 - Keep layout/control profiles adaptable without fragmenting the underlying editor model.
 - Think from the user's current uncertainty: show what VibeStudio is doing, why it is waiting, and what the next safe action is.
@@ -232,6 +330,9 @@ The current scaffold contains:
 - Treat localization as architecture: every user-visible string, layout, status, and setup step should be designed for translation and locale-aware formatting.
 - Treat initial setup as a tailoring workbench, not a tour.
 - Use graphical representations to communicate real structure and status, not as decoration.
+- Treat every parsed byte as hostile: bounds-checked reads, fixed limits on
+  counts and sizes, named fixtures for known corruption, and a deterministic
+  fuzz corpus in the test suite.
 - Treat packages as editable project containers, not just files to extract.
 - Make compiler runs reproducible and inspectable.
 - Make prompt-based and agentic AI actions auditable, reversible where practical, connector-neutral, and available through the same command services as manual workflows.

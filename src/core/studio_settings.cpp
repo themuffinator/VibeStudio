@@ -24,6 +24,8 @@ constexpr auto kSelectedModeKey = "shell/selectedMode";
 constexpr auto kShellGeometryKey = "shell/geometry";
 constexpr auto kShellWindowStateKey = "shell/windowState";
 constexpr auto kShellSplitterStateKey = "shell/splitterState";
+constexpr auto kShellModeRailCompactKey = "shell/modeRailCompact";
+constexpr auto kShellLayoutPrefix = "shell/layout/";
 constexpr auto kLocaleNameKey = "preferences/localeName";
 constexpr auto kTextScalePercentKey = "preferences/textScalePercent";
 constexpr auto kThemeKey = "preferences/theme";
@@ -1061,6 +1063,34 @@ QByteArray StudioSettings::shellSplitterState() const
 void StudioSettings::setShellSplitterState(const QByteArray& splitterState)
 {
 	writeValue(kShellSplitterStateKey, splitterState);
+}
+
+bool StudioSettings::shellModeRailCompact() const
+{
+	return m_settings->value(kShellModeRailCompactKey, false).toBool();
+}
+
+void StudioSettings::setShellModeRailCompact(bool compact)
+{
+	writeValue(kShellModeRailCompactKey, compact);
+}
+
+QByteArray StudioSettings::shellLayoutState(const QString& key) const
+{
+	const QString trimmed = key.trimmed();
+	if (trimmed.isEmpty()) {
+		return {};
+	}
+	return m_settings->value(QString::fromLatin1(kShellLayoutPrefix) + trimmed).toByteArray();
+}
+
+void StudioSettings::setShellLayoutState(const QString& key, const QByteArray& state)
+{
+	const QString trimmed = key.trimmed();
+	if (trimmed.isEmpty()) {
+		return;
+	}
+	writeValue(QString::fromLatin1(kShellLayoutPrefix) + trimmed, state);
 }
 
 void StudioSettings::ensureSchema()

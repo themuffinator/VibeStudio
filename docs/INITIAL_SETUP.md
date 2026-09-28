@@ -143,8 +143,13 @@ Profile areas:
 The current shell includes a persistent first-run setup panel backed by
 `QSettings`. It tracks not-started, in-progress, skipped, and completed states;
 stores the current setup step; exposes skip, resume, next, finish, and reset
-actions; and shows a summary with completed, pending, and warning items. The
-same state is available from the CLI through `--setup-report`,
+actions; and shows its summary as a stepper: every step once, in order, marked
+done with a check, current with an accent chevron, or pending with a dot and
+muted text, then any setup warnings with a warning glyph. The list is sized to
+show every step and warning without an inner scroll bar. Each step row is announced as, for
+example, "Step 2 of 8, current step: Workspace Profile". The list used to show
+the current step twice, once as "Current" and again among the pending items.
+The same state is available from the CLI through `--setup-report`,
 `--setup-start`, `--setup-step`, `--setup-next`, `--setup-skip`,
 `--setup-complete`, and `--setup-reset`.
 

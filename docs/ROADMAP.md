@@ -43,7 +43,9 @@ changes behavior, update or add a metric-backed test where practical.
 - [x] Primary shell supports dense studio workflows without modal-first navigation.
 - [x] Core actions have consistent icons, labels, tooltips, shortcuts, disabled states, and status feedback.
 - [ ] Text does not clip or overlap at 100%, 125%, 150%, and 200% scale on Windows, macOS, and Linux.
-- [ ] Dark theme is readable for long sessions, with accessible contrast for primary text and controls.
+- [x] Dark theme is readable for long sessions, with accessible contrast for primary text and controls:
+  neutral charcoal panels and an orange accent, with `studio-theme-smoke` holding text, selection, and
+  accent-button contrast to WCAG AA (4.5:1) and focus rings to 3:1.
 - [ ] Every main workflow has summary-first UI with detail-on-demand panels.
 - [x] Graphical status elements communicate real project/package/compiler/asset state rather than decoration.
 
@@ -271,7 +273,9 @@ editors arrive.
 - [x] Add package scan task card in activity center.
 - [x] Add preview pane for text.
 - [x] Add image preview pane with decoded idTech art: Doom patches/flats, Quake `.lmp`, WAD2/WAD3 miptex,
-  Quake II `.wal`, PCX, Targa, and Quake `.spr`, with palette, mip level, and frame selection.
+  Quake II `.wal`, `.m8`, and `.m32`, PCX, Targa, Quake and Half-Life `.spr`, and Quake II `.sp2`, with
+  palette, mip level, and frame selection. A `.sp2` carries no pixels of its own, so its frames are resolved
+  against the open package.
 - [x] Add metadata preview for unknown/binary entries.
 - [x] Add summary/detail split for entries: friendly overview first, raw metadata on demand.
 - [x] Add package composition graphic by type and size.
@@ -488,8 +492,8 @@ Goal: ship the smallest public version that proves the complete loop.
 - [ ] Add basic keyboard navigation audit. Partly done: every command carries a registry shortcut, conflicts
   are detected, and controls set accessible names and focus policies, but no end-to-end keyboard-path audit
   has been run.
-- [ ] Add high-visibility theme audit. Partly done: both high-contrast themes exist and are applied across the
-  shell, but no measured contrast audit exists.
+- [x] Add high-visibility theme audit: both high-contrast themes are applied across the shell, and
+  `studio-theme-smoke` measures their text, selection, accent, state, and focus contrast on every run.
 - [x] Add localization/pseudo-localization audit via the `localization report` command: pseudo-localization,
   right-to-left locales, expansion ratio, layout checks, and stale-catalog reporting.
 - [ ] Add OS-backed TTS smoke path. Not started: no speech engine is linked; only the preference is stored.
@@ -509,7 +513,9 @@ Goal: ship the smallest public version that proves the complete loop.
 - [ ] Verify first-run setup can be completed with keyboard-only navigation.
 - [x] Verify first-run setup offers high-visibility, scaling, language, TTS, AI-free, and skip/later paths.
 - [ ] Verify MVP shell at 100%, 125%, 150%, 175%, and 200% scale. Partly done: all five scales are selectable
-  and persist with clamping tests, but no layout/clipping verification has been done at each scale.
+  and persist with clamping tests, and `--ui-snapshot` renders every surface at a chosen scale; 100% and 200%
+  have been reviewed and their clipping fixed (rail labels, icon sizes, readouts, drawer headers), while 125%
+  to 175% have not been reviewed.
 - [x] Verify high-contrast dark and high-contrast light themes repaint the shell, charts, map viewport, asset
   views, and code highlighting.
 - [x] Verify pseudo-localization and right-to-left smoke flows.
@@ -537,21 +543,34 @@ Goal: make package edits practical without sacrificing trust.
 - [x] Add graphical staging summary by operation type and package location.
 - [x] Add before/after package composition view.
 - [x] Add "why cannot save" blocked-state messages.
-- [x] Add save-as before overwrite. Writing back over the open source package is explicitly blocked.
-- [ ] Add in-place package overwrite once staged save-as has proven itself.
-- [ ] Add package compare between two archives or between a package and its staged result.
+- [x] Add save-as before overwrite. Writing back over the open source package stays blocked unless the
+  in-place overwrite below is confirmed.
+- [x] Add in-place package overwrite once staged save-as has proven itself.
+  `PackageWriteRequest::allowInPlaceOverwrite` writes the new archive beside the destination, re-reads and
+  verifies the committed bytes, and only then moves the original to `backupPath` (default
+  `<destination>.bak`); a failed final rename restores the original. Only the shell's save-as sets the flag,
+  behind a "Replace Existing Package?" prompt that defaults to No. The CLI `package save-as` still writes to
+  a new path only.
+- [x] Add package compare between two archives or between a package and its staged result. `comparePackages`
+  backs the Packages "Compare" button and the `package compare` command, which reports added, removed,
+  changed, case-only, and identical entries and exits with the validation code on any difference so a
+  release script can gate on a match. `comparePackageToPlan` exists and is covered by
+  `package-compare-smoke`, but no GUI or CLI surface calls it yet.
 
 ### Package Writers
 - [x] Add PAK writer from PakFu lineage.
-- [x] Add ZIP/PK3 writer from PakFu lineage, with stored or fixed-Huffman deflate output.
-- [ ] Add a dynamic-Huffman deflate encoder; the writer currently emits stored or fixed-Huffman blocks only.
+- [x] Add ZIP/PK3 writer from PakFu lineage, choosing per entry between stored and deflated output.
+- [x] Add a dynamic-Huffman deflate encoder. `deflateRaw` measures the stored, fixed-Huffman, and
+  dynamic-Huffman encoding of every block and keeps the smallest, with length-limited code lengths built by
+  package-merge. `DeflateLevel` gained `best` beside `store`, `fast`, and `default`, and the level now only
+  controls how hard the LZ77 match search works. Nothing in the GUI or CLI selects a level yet, so ZIP/PK3
+  output always uses `default`.
 - [x] Add WAD writer only after map-lump tests exist, covering PWAD/IWAD and WAD2/WAD3 output.
-- [ ] Support multi-map WAD write-back. The staging model keys entries by
-  virtual path, so a WAD whose maps each repeat `THINGS`, `LINEDEFS` and the
-  rest cannot be represented; writing one is refused with a blocked message
-  instead of interleaving the lumps. Needs a stable per-lump source ordinal
-  threaded through `PackageEntry`, `PackageStagedEntry`, positional
-  `entryBytes`, and the staged plan's ordering.
+- [x] Support multi-map WAD write-back. `PackageStagedEntry::sourceOrdinal` records each lump's slot in the
+  source directory, `PackageStagingModel::entryBytes` reads WAD lumps by that ordinal instead of by name, and
+  the staged plan for a WAD keeps source order, so a WAD whose maps each repeat `THINGS`, `LINEDEFS` and the
+  rest round-trips with every lump under its own marker. A plan that has lost its source order, and a single
+  map holding one lump name twice, are still refused with a blocked message.
 - [x] Add package manifest export.
 - [x] Add reproducibility checks for deterministic outputs.
 
@@ -575,13 +594,19 @@ Goal: widen the workbench into a real asset studio.
 ### Model
 - [x] Port/adapt model metadata loader workflow concepts from PakFu.
 - [x] Define native idTech model loader boundary before adding optional Assimp import/export.
-- [ ] Add model preview viewport. Partly done: the Models surface shows a decoded skin image, a metadata
-  detail list, and a text "viewport summary"; no model geometry is rendered.
-- [ ] Add model geometry rendering: decode vertex/triangle data and draw the mesh rather than summarizing it.
+- [x] Add model preview viewport. `ModelViewport` is a software QPainter renderer with no OpenGL dependency:
+  orthographic projection, painter's-algorithm depth sorting, orbit/pan/zoom, frame stepping and timed
+  playback, hover read-out, and wireframe, flat-shaded, and textured modes.
+- [x] Add model geometry rendering: decode vertex/triangle data and draw the mesh rather than summarizing it.
+  `decodeModelMesh` decodes geometry for Quake MDL (IDPO 6), Quake II MD2 (IDP2 8), and Quake III MD3
+  (IDP3 15). MDC, MDR, and IQM stay header-only: they report their counts, warn that geometry decoding is
+  not implemented, and paint a no-geometry state in the viewport.
 - [x] Add skin/material dependency panel.
 - [x] Add model loading state and fallback metadata view.
-- [x] Add animation list where format supports it.
-- [x] Add export/conversion hooks.
+- [x] Add animation list where format supports it. Animations are inferred from frame-name stems, because
+  MDL, MD2, and MD3 store no animation table.
+- [x] Add export/conversion hooks. `exportModelFrameObj` writes one frame as Wavefront OBJ, from the Models
+  surface's "Export OBJ" button and from `model export`; no `.mtl` companion is written.
 
 ### Audio
 - [x] Add audio metadata preview.
@@ -622,7 +647,10 @@ full Radiant/Doom Builder replacement in one step.
 - [x] Show texture/material references.
 - [x] Show map statistics.
 - [x] Show validation problems.
-- [ ] Parse entity definitions (FGD, DEF, ENT) into a model; only syntax highlighting exists today.
+- [x] Parse entity definitions (FGD, DEF, ENT) into a model. `loadEntityDefinitions` reads Radiant
+  `/*QUAKED` blocks from `.def` and `.qc`, Valve `.fgd` including `@include` and `@BaseClass` inheritance,
+  and Quake III `.ent` entity lists into an `EntityDefinitionCatalogue` shared by the Levels "Entity" tab,
+  `validateLevelMapEntities`, and the `entity definitions` and `entity validate` commands.
 
 ### Visual MVP
 - [x] Add 2D map view for Doom-family maps: a painted, zoomable, selectable viewport with vertices, linedefs,
@@ -635,7 +663,10 @@ full Radiant/Doom Builder replacement in one step.
 - [x] Add map loading state and parse/validation progress.
 - [x] Add map health overlay for parse/validation issues, entity problems, leak point files, and compiler
   warnings when data is available.
-- [ ] Add missing-texture detection that resolves map texture references against mounted package textures.
+- [x] Add missing-texture detection that resolves map texture references against mounted package textures.
+  `auditLevelMapTextures` walks brush faces, patch shaders, and Doom sidedefs and sectors, never counts an
+  engine-handled name as missing, and the Levels health list reports what the open package does not provide,
+  with the paths it searched.
 - [x] Add map statistics summary with detail drawer.
 
 ### Editor Profile MVP
@@ -724,14 +755,24 @@ related area.
 - [ ] Add memory checks for large package previews.
 
 ### Robustness
-- [ ] Add fuzz target for PAK parser.
-- [ ] Add fuzz target for WAD parser.
-- [ ] Add fuzz target for ZIP/PK3 parser.
+- [x] Add fuzz target for PAK parser. The `PackageArchive::load` target in `parser-fuzz-smoke` seeds PAK,
+  Doom PWAD, Quake WAD2, and stored and deflated ZIP archives, and checks the entries it reports back.
+- [x] Add fuzz target for WAD parser.
+- [x] Add fuzz target for ZIP/PK3 parser.
 - [ ] Add fuzz targets for the new binary parsers: inflate, the idTech image decoders, and BSP/portal/leak
-  inspection.
+  inspection. Partly done: `parser-fuzz-smoke` runs a deterministic corpus, generated by a seeded xorshift
+  generator over seven mutations and re-runnable through `VIBESTUDIO_FUZZ_SEED`, through `inflateRaw`,
+  `inflateZlib`, `decodeIdTechImage`, `detectIdTechImageFormat`, `inspectBspBytes`, `PackageArchive::load`,
+  `loadLevelMap` for both `.map` and Doom WAD input, and `decodeModelMesh`. The portal (`.prt`) and leak
+  point (`.pts`/`.lin`) readers take a path rather than a buffer and are not fuzzed yet.
 - [x] Add fixture tests for every claimed format.
 - [x] Add session log capture: a Qt message handler mirrors warnings and above into a rotating session log.
-- [ ] Add crash-handler capture on top of the session log.
+- [ ] Add crash-handler capture on top of the session log. Partly done: `installCrashHandling` installs the
+  platform's unhandled-exception or signal handlers plus `std::set_terminate`, writes an async-signal-safe
+  plain-text report with a backtrace and the tail of the session log, recovers an unclean previous session
+  from a session marker, and prunes old reports; `studio-runtime-smoke` covers it and the report never leaves
+  the machine. `src/main.cpp` still installs only session logging, so the shipping app never arms it and
+  `reportPreviousSessionCrash` never fires.
 - [x] Add corrupted-file fixture suite: truncated, malformed, and hostile inputs across the archive, image,
   deflate, BSP, and preview readers.
 
@@ -739,9 +780,11 @@ related area.
 - [ ] Audit keyboard navigation.
 - [ ] Audit high-DPI scaling.
 - [ ] Audit app text/UI scaling at 100%, 125%, 150%, 175%, and 200%.
-- [ ] Audit color contrast for normal, high-contrast dark, and high-contrast light themes.
+- [x] Audit color contrast for normal, high-contrast dark, and high-contrast light themes
+  (`studio-theme-smoke`, WCAG 2.2 ratios for dark, light, and both high-contrast themes).
 - [ ] Add configurable font size.
-- [ ] Add high-visibility theme tests.
+- [x] Add high-visibility theme tests (`studio-theme-smoke`: contrast, 2px focus rings, a focus colour distinct
+  from selection).
 - [ ] Add color-blind-aware status palette tests.
 - [ ] Add reduced motion preference if animations are introduced.
 - [ ] Add OS-backed TTS smoke tests.
@@ -762,7 +805,9 @@ related area.
 
 ### User Awareness And Progressive Disclosure
 - [ ] Add UX checklist requiring state, progress, result, next action, and details for each workflow.
-- [ ] Add snapshot tests or scripted QA for loading/empty/error/success states.
+- [ ] Add snapshot tests or scripted QA for loading/empty/error/success states. Partly done: `--ui-snapshot`
+  renders every work surface and the Activity panel to PNG for scripted visual review, with `--open` to load
+  content first; there is no automated image comparison yet.
 - [x] Add "copy diagnostic bundle" workflow.
 - [ ] Add operation result summaries for package, compiler, validation, AI, and export tasks.
 - [ ] Add graphical views only when backed by real data and actionable drill-down.
@@ -818,20 +863,25 @@ Use this queue to get to MVP quickly.
 ## Post-RC Task Queue
 
 Work the release-candidate round exposed but did not finish. Each item has a
-matching unchecked entry in the milestone or backlog section above.
+matching entry in the milestone or backlog section above.
 
-- [ ] Render model geometry instead of summarizing it: decode vertex/triangle data for the idTech model
-  families and draw the mesh in the Models surface.
+- [x] Render model geometry instead of summarizing it: decode vertex/triangle data for the idTech model
+  families and draw the mesh in the Models surface. Done for MDL, MD2, and MD3; MDC, MDR, and IQM remain
+  header-only.
 - [ ] Link an audio playback backend and add transport, buffering, and playback state on top of the existing
   metadata and waveform preview.
-- [ ] Add a dynamic-Huffman deflate encoder so ZIP/PK3 output is not limited to stored and fixed-Huffman
-  blocks.
-- [ ] Parse entity definitions (FGD, DEF, ENT) into a model that the entity inspector, validation, and AI
-  tooling can share.
-- [ ] Detect missing textures by resolving map texture references against the textures in mounted packages,
+- [x] Add a dynamic-Huffman deflate encoder so ZIP/PK3 output is not limited to stored and fixed-Huffman
+  blocks. The encoder picks the cheapest of the three block types per block; no command exposes the new
+  `best` level yet.
+- [x] Parse entity definitions (FGD, DEF, ENT) into a model that the entity inspector, map validation, and
+  the CLI can share.
+- [x] Detect missing textures by resolving map texture references against the textures in mounted packages,
   and surface the result in the map health panel.
-- [ ] Add in-place package overwrite, guarded by backups and an explicit confirmation, now that staged save-as
-  is proven.
-- [ ] Add package compare between two archives, or between a package and its staged result.
+- [x] Add in-place package overwrite, guarded by backups and an explicit confirmation, now that staged save-as
+  is proven. Available from the shell's save-as; `package save-as` does not offer it.
+- [x] Add package compare between two archives, or between a package and its staged result. Archive against
+  archive is in the shell and in `package compare`; `comparePackageToPlan` is implemented and tested but not
+  yet reachable from either.
 - [ ] Add fuzz targets for the new binary parsers: inflate, the idTech image decoders, and BSP/portal/leak
-  inspection.
+  inspection. Inflate, the image decoders and detector, BSP lump inspection, the package readers, the map
+  loaders, and the model decoder are covered; the portal and leak point readers are not.

@@ -1,5 +1,7 @@
 #include "app/studio_actions.h"
 
+#include "app/studio_icons.h"
+
 #include "core/editor_profiles.h"
 
 #include <QAbstractItemView>
@@ -43,9 +45,20 @@ QString actionsText(const char* source)
 	return QCoreApplication::translate("VibeStudioStudioActions", source);
 }
 
+// Same rule as core/studio_semantics.cpp: "shell.commandPalette" and
+// "shell.command-palette" are one command.
 QString normalizedToken(const QString& value)
 {
-	QString normalized = value.trimmed().toLower();
+	const QString trimmed = value.trimmed();
+	QString normalized;
+	normalized.reserve(trimmed.size() + 8);
+	for (int index = 0; index < trimmed.size(); ++index) {
+		const QChar ch = trimmed.at(index);
+		if (ch.isUpper() && index > 0 && (trimmed.at(index - 1).isLower() || trimmed.at(index - 1).isDigit())) {
+			normalized += QLatin1Char('-');
+		}
+		normalized += ch.toLower();
+	}
 	normalized.replace('_', '-');
 	normalized.replace(' ', '-');
 	return normalized;
@@ -140,6 +153,20 @@ bool standardPixmapForIconName(const QString& iconName, QStyle::StandardPixmap* 
 		*out = it.value();
 	}
 	return true;
+}
+
+// "Open Project Folder (Ctrl+O)" on the first line, what it does beneath, so an
+// icon-only tool button explains itself and names its shortcut.
+QString commandToolTip(const QString& label, const QString& statusTip, const QString& shortcut)
+{
+	QString name = label;
+	name.remove(QLatin1Char('&'));
+	name.remove(QChar(0x2026));
+	name = name.trimmed();
+	if (!shortcut.isEmpty()) {
+		name = actionsText("%1 (%2)").arg(name, shortcut.section(QStringLiteral(", "), 0, 0));
+	}
+	return statusTip.isEmpty() ? name : QStringLiteral("%1\n%2").arg(name, statusTip);
 }
 
 const char* const kExplicitlyDisabledProperty = "vibestudioExplicitlyDisabled";
@@ -372,18 +399,24 @@ QAction* StudioCommandRegistry::registerCommand(const StudioCommandRegistration&
 	action->setObjectName(registration.commandId);
 	action->setData(registration.commandId);
 	action->setStatusTip(registration.statusTip);
-	action->setToolTip(registration.statusTip.isEmpty() ? registration.label : registration.statusTip);
+	action->setToolTip(commandToolTip(registration.label, registration.statusTip, QString()));
 	action->setCheckable(registration.checkable);
 	action->setProperty("commandId", registration.commandId);
 	action->setProperty("destructive", registration.destructive);
 	action->setProperty("requiresProject", registration.requiresProject);
 
-	QStyle::StandardPixmap pixmap = QStyle::SP_FileIcon;
-	if (!registration.iconName.trimmed().isEmpty() && standardPixmapForIconName(registration.iconName, &pixmap)) {
-		QStyle* style = m_host ? m_host->style() : QApplication::style();
-		if (style) {
-			action->setIcon(style->standardIcon(pixmap, nullptr, m_host));
+	// Studio glyphs follow the active theme; the platform's standard pixmaps are
+	// only a fallback for names the glyph set does not cover.
+	if (!registration.iconName.trimmed().isEmpty()) {
+		QIcon icon = studioIcon(registration.iconName);
+		QStyle::StandardPixmap pixmap = QStyle::SP_FileIcon;
+		if (icon.isNull() && standardPixmapForIconName(registration.iconName, &pixmap)) {
+			QStyle* style = m_host ? m_host->style() : QApplication::style();
+			if (style) {
+				icon = style->standardIcon(pixmap, nullptr, m_host);
+			}
 		}
+		action->setIcon(icon);
 	}
 
 	if (registration.handler) {
@@ -456,7 +489,7 @@ void StudioCommandRegistry::installShortcuts()
 				if (!binding.implemented) {
 					continue;
 				}
-				profileOverrides.insert(binding.commandId, binding.shortcut);
+				profileOverrides.insert(normalizedToken(binding.commandId), binding.shortcut);
 			}
 		}
 	}
@@ -470,7 +503,7 @@ void StudioCommandRegistry::installShortcuts()
 		action->setShortcuts({});
 
 		QStringList candidates;
-		const auto override = profileOverrides.constFind(registration.commandId);
+		const auto override = profileOverrides.constFind(normalizedToken(registration.commandId));
 		if (override != profileOverrides.constEnd()) {
 			candidates << override.value();
 		}
@@ -498,15 +531,17 @@ void StudioCommandRegistry::installShortcuts()
 				continue;
 			}
 			const QString key = normalizedSequenceKey(sequence);
+			// A profile binding that repeats the documented default is the same
+			// shortcut asked for twice, not a conflict with another command.
+			if (seenHere.contains(key)) {
+				continue;
+			}
 			const auto owner = owners.constFind(key);
 			if (owner != owners.constEnd()) {
 				// Sequences claimed by an earlier command win; a duplicate is
 				// recorded and skipped rather than silently shadowing its owner.
 				m_conflicts << actionsText("Shortcut %1 requested by %2 is already bound to %3; it was not installed.")
 					.arg(sequence.toString(QKeySequence::PortableText), registration.commandId, owner.value());
-				continue;
-			}
-			if (seenHere.contains(key)) {
 				continue;
 			}
 			seenHere.insert(key);
@@ -522,7 +557,7 @@ void StudioCommandRegistry::installShortcuts()
 		action->setShortcutContext(Qt::WindowShortcut);
 		const QString shortcutText = acceptedText.join(QStringLiteral(", "));
 		m_shortcuts.insert(registration.commandId, shortcutText);
-		action->setToolTip(actionsText("%1 (%2)").arg(registration.statusTip.isEmpty() ? registration.label : registration.statusTip, shortcutText));
+		action->setToolTip(commandToolTip(registration.label, registration.statusTip, shortcutText));
 	}
 }
 
@@ -742,8 +777,10 @@ void CommandPaletteDialog::showEvent(QShowEvent* event)
 		const int width = std::clamp(owner->width() * 3 / 5, 420, 900);
 		const int height = std::clamp(owner->height() * 3 / 5, 320, 640);
 		resize(width, height);
-		const QPoint centre = owner->mapToGlobal(owner->rect().center());
-		move(centre.x() - width / 2, centre.y() - height / 2);
+		// Anchored near the top like other editors' command launchers, so the
+		// list grows downward over the work surface rather than covering it.
+		const QPoint topCentre = owner->mapToGlobal(QPoint(owner->width() / 2, 0));
+		move(topCentre.x() - width / 2, topCentre.y() + std::min(96, owner->height() / 8));
 	}
 
 	m_selectedCommandId.clear();

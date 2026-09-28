@@ -6,6 +6,7 @@
 #include <QDir>
 #include <QFileInfo>
 #include <QProcess>
+#include <QStringDecoder>
 #include <QRegularExpression>
 #include <QStandardPaths>
 
@@ -161,6 +162,19 @@ QString firstUsefulProbeLine(const QString& text)
 // ericw-tools prints "---- <tool> / ericw-tools <version> ----" (common/settings.cc),
 // q3map2 prints its Q3MAP_VERSION lines (tools/quake3/q3map2/main.cpp), ZDBSP prints
 // "ZDBSP <version> (...)" and ZokumBSP prints "ZokumBSP Version: <version> ...".
+QString decodeProbeOutput(const QByteArray& bytes)
+{
+	if (bytes.isEmpty()) {
+		return {};
+	}
+	QStringDecoder utf8(QStringConverter::Utf8);
+	const QString decoded = utf8.decode(bytes);
+	if (utf8.hasError()) {
+		return QString::fromLocal8Bit(bytes);
+	}
+	return decoded;
+}
+
 QString versionBannerLine(const QString& text)
 {
 	static const QRegularExpression bannerPattern(QStringLiteral(R"regex((?:ericw-tools|zdbsp|zokumbsp|zennode|q3map|netradiant|version)\b)regex"), QRegularExpression::CaseInsensitiveOption);
@@ -206,7 +220,11 @@ void probeCompilerVersion(CompilerToolDiscovery* discovery, int startTimeoutMs, 
 	}
 
 	discovery->versionProbeExitCode = process.exitCode();
-	const QString output = QString::fromLocal8Bit(process.readAllStandardOutput());
+	// ericw-tools formats its banner with fmt and emits UTF-8; q3map2 echoes the
+	// narrow argv it was handed, which on Windows is the ANSI codepage. Decoding
+	// UTF-8 first with a local-8-bit fallback reads both correctly, and matches
+	// what the compiler runner does with streamed output.
+	const QString output = decodeProbeOutput(process.readAllStandardOutput());
 	if (process.exitStatus() != QProcess::NormalExit) {
 		discovery->versionProbeOutcome = CompilerVersionProbeOutcome::Failed;
 		discovery->warnings << registryText("Version probe crashed.");

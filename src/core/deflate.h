@@ -39,12 +39,20 @@ InflateResult inflateZlib(const QByteArray& input, qint64 expectedSize = -1);
 
 enum class DeflateLevel {
 	Store,        // stored (uncompressed) blocks only
-	Fast,         // fixed Huffman with a small match window
-	Default,      // fixed Huffman with a larger match window
+	Fast,         // greedy matching over a short hash chain
+	Default,      // lazy matching over a longer hash chain
+	Best,         // lazy matching over the longest hash chain
 };
 
 // Produces a raw DEFLATE stream. Output is deterministic for a given input and
 // level, which package writers rely on for reproducible archives.
+//
+// Every level except Store chooses per block between a stored block, a fixed
+// Huffman block and a dynamic Huffman block (RFC 1951 3.2.7) by measuring the
+// encoded size of all three and keeping the smallest, so a block is never
+// larger than simply storing its bytes would be. The levels differ only in how
+// hard the LZ77 match search works, which is what makes their cost/ratio
+// trade-off; they all emit dynamic blocks when that is the cheapest option.
 QByteArray deflateRaw(const QByteArray& input, DeflateLevel level = DeflateLevel::Default);
 
 quint32 crc32Bytes(const QByteArray& bytes, quint32 seed = 0);

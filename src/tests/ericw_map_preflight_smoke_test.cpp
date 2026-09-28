@@ -195,7 +195,7 @@ int main(int argc, char** argv)
 	};
 	for (const QString& code : expectedCodes) {
 		if (!hasCode(result, code)) {
-			std::cerr << "Missing warning code: " << code.toStdString() << "\n";
+			std::cerr << "Missing warning code: " << qUtf8Printable(code) << "\n";
 			return EXIT_FAILURE;
 		}
 	}

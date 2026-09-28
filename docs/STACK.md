@@ -16,8 +16,11 @@ rendering portability, source editing, media handling, search, or automation.
 | Primary language | C++20 | Active | Fits idTech-era native tooling, Qt, compilers, binary formats, and high-performance editors. |
 | Application framework | [Qt 6](https://doc.qt.io/qt-6/) | Active | Mature cross-platform desktop framework with UI, networking, settings, processes, models, threading, and deployment support. |
 | Primary UI | [Qt Widgets](https://doc.qt.io/qt-6/qtwidgets-index.html) | Active | Best fit for dense production tools, dockable panes, model/view data, custom inspectors, and native desktop behavior. |
-| Meta-object system | `Q_OBJECT` plus Meson's `qt6.preprocess` moc step for the app layer | Active | Enabled this round. `Q_OBJECT` gives every shell class its own `tr()` translation context and real signals/slots; both are required now that strings are translated at run time and custom widgets emit selection and activation signals. Core stays moc-free and translates through `QCoreApplication::translate` with explicit contexts. |
+| Meta-object system | `Q_OBJECT` plus Meson's `qt6.preprocess` moc step for the app layer | Active | `Q_OBJECT` gives every shell class its own `tr()` translation context and real signals/slots; both are required now that strings are translated at run time and custom widgets emit selection and activation signals. `app/model_viewport.h` joined `app_moc_headers` this round. Core stays moc-free, links Qt Core and Gui only, and translates through `QCoreApplication::translate` with explicit contexts; the five core modules added this round declare no `Q_OBJECT`. |
 | Shell UI primitives | Reusable Qt Widgets loading panes, detail drawers, and shared shell semantics | Active | Shared shell components now cover operation state, progress, reduced-motion loading placeholders, collapsible details for logs, metadata, manifests, raw diagnostics, non-color status chip semantics, shortcut metadata, and command-palette entries. |
+| Shell look and feel | Fusion style, an application `QPalette` and stylesheet generated from design tokens (`src/app/studio_theme.*`), and a small `QProxyStyle` for check and radio indicators | Active | Chosen over the platform styles, which ignore a custom palette differently on each OS, and over hand-written per-widget stylesheets. One token set per theme drives every widget, dialog, menu, and dock; the default dark theme takes its visual language from idStudio. No new dependency. |
+| Shell icons | Vector glyphs painted with `QPainter` through a custom `QIconEngine` (`src/app/studio_icons.*`) | Active | Chosen over image assets, which need a design pipeline and QtSvg for crisp scaling, and over the platform style's standard pixmaps, which were invisible on dark themes. Glyphs recolour with the theme at paint time and scale with the text-scale preference. |
+| Shell layout parts | `ModeRail`, `PageHeader`, `EmptyStateView`, `CardFrame`, `DockTitleBar`, `ElidedLabel`, and factory helpers in `src/app/studio_layout.*`; `QDockWidget` for the Activity and Inspector panels | Active | Every work surface is assembled from the same parts, so pages share one anatomy and one set of object names for the stylesheet. |
 | Rich animated surfaces | [Qt Quick/QML](https://doc.qt.io/qt-6/qtquick-index.html) | Planned, bounded | Use for contained high-value surfaces only, such as onboarding, visual status views, or graph-like experiences. Do not rewrite the shell around QML without a migration plan. |
 | Build system | [Meson](https://mesonbuild.com/) + [Ninja](https://ninja-build.org/) | Active | Fast, readable, cross-platform, and suitable for CI. |
 | Automation | Python scripts + GitHub Actions | Active | Good fit for validation, release helpers, documentation checks, and CI orchestration. |
@@ -30,9 +33,11 @@ rendering portability, source editing, media handling, search, or automation.
 | Asset index/search | [SQLite](https://sqlite.org/) through [Qt SQL](https://doc.qt.io/qt-6/qtsql-index.html), with [FTS5](https://sqlite.org/fts5.html) where available | Planned | Lightweight local database for project metadata, dependencies, search, diagnostics, and recent activity. |
 | CLI parser | Lightweight Qt `QStringList` router with in-process command registry; [CLI11](https://github.com/CLIUtils/CLI11) deferred | Active | Current router keeps project/package/install/asset/map/shader/sprite/code/extension/compiler/AI/credits subcommands dependency-free with JSON output, quiet/verbose/watch/task-state switches, stable exit codes, and testable command metadata through `cli commands`; CLI11 remains deferred until shell completion and broader validation justify the dependency. |
 | Task execution | Qt `QProcess`, threads, signals, and a VibeStudio task model | Active/planned | The reusable operation-state model, shell activity center, compiler process runner, captured logs, cancellation plumbing, and run manifests are active; broader thread-pool/future integration is planned. |
-| Package/archive layer | PakFu-derived C++ services plus focused format readers and deterministic writers | Active | Package/archive interfaces, virtual path safety, read-only folder/PAK/WAD/ZIP/PK3 entry readers, text/image/model/audio/script metadata previews, safe extraction reports, staged write-back, package manifests, and deterministic PAK/ZIP/PK3/WAD save-as writers are active. |
-| Compression codec | In-tree DEFLATE in `src/core/deflate.{h,cpp}`; zlib and miniz declined | Active | Chosen this round over adding a third-party codec. Reading real PK3s requires inflate, and writing them well requires deflate, but a bundled or system compression library costs a packaging story, a license entry, and a platform matrix on every target. The implementation follows RFC 1951, RFC 1950, and the ZIP appnote's CRC-32, is bounds-checked against hostile input, and is deterministic so archives reproduce. Trade-off stated plainly: the decoder handles stored, fixed-Huffman, and dynamic-Huffman blocks, but the *encoder* emits stored and fixed-Huffman blocks only, so a PK3 VibeStudio writes is larger than the same content packed by zlib. Entries that would not shrink are stored verbatim instead. |
+| External change detection | `QFileSystemWatcher` hints plus authoritative fingerprint polling in `src/core/document_watch.{h,cpp}` | Active | Added this round. The open map, package, and code-editor file are registered by role; a SHA-1 content fingerprint decides what actually changed, and filesystem notifications are treated only as a reason to re-check. The class declares no `Q_OBJECT`, so core still needs no moc, and the shell drives `poll()` from a timer it already owns. |
+| Package/archive layer | PakFu-derived C++ services plus focused format readers and deterministic writers | Active | Package/archive interfaces, virtual path safety, read-only folder/PAK/WAD/ZIP/PK3 entry readers, text/image/model/audio/script metadata previews, safe extraction reports, staged write-back, package manifests, and deterministic PAK/ZIP/PK3/WAD save-as writers are active. `src/core/package_compare.{h,cpp}` added entry-by-entry comparison of two packages, or of a package against a staged plan, this round. |
+| Compression codec | In-tree DEFLATE in `src/core/deflate.{h,cpp}`; zlib and miniz declined | Active | Chosen this round over adding a third-party codec. Reading real PK3s requires inflate, and writing them well requires deflate, but a bundled or system compression library costs a packaging story, a license entry, and a platform matrix on every target. The implementation follows RFC 1951, RFC 1950, and the ZIP appnote's CRC-32, is bounds-checked against hostile input, and is deterministic so archives reproduce. The encoder gained dynamic-Huffman blocks and a `DeflateLevel::Best` level this round: every level except `Store` now measures a stored, a fixed-Huffman, and a dynamic-Huffman encoding of each block and keeps the smallest, so a block is never larger than storing its bytes would be. Entries that would not shrink are stored verbatim instead. |
 | Level-map services | Native C++ parser/editor model over Doom WAD lumps and Quake-family `.map` text | Active | Provides shared GUI/CLI map inspection, entity/texture/statistics/validation surfaces, safe MVP edits, undo/redo, non-destructive save-as, and compiler profile handoff without adding a rendering dependency yet. |
+| Entity definitions | `src/core/entity_definitions.{h,cpp}` reading Radiant `.def`/`.qc`, Valve `.fgd`, and Quake III `.ent` text | Active | Added this round. A classname alone tells the studio nothing, so the catalogue supplies key types, defaults, spawnflag bit names, sizes, colours, and base-class inheritance, and `validateLevelMapEntities` checks a map against it. No game's definitions ship with VibeStudio; the parser reads whatever the user points it at. |
 | Advanced Studio services | Native C++ services for shader scripts, sprite workflow plans, code indexing, extension manifests, and staged AI creation proposals | Active | Provides shared GUI/CLI coverage for idTech3 shader graph data, stage edits, mounted texture validation, Doom/Quake sprite planning, source tree diagnostics, extension trust/sandbox command plans, and reviewable prompt-to-creation workflows without new dependencies. |
 | 2D editor rendering | Custom `QWidget` subclasses painted with `QPainter` | Active | Chosen this round over Qt Graphics View and over an early GPU backend. The map viewport, image and palette views, waveform view, and the composition/pipeline/timeline charts are all hand-painted widgets, so 2D rendering needs no Qt module beyond Widgets and no third-party renderer. |
 | Headless map rendering | Deterministic SVG generated as text by `src/core/map_render.cpp` | Active | Chosen this round so a map picture is available from the CLI, from generated documentation, and from CI without a display or a GUI session. It is pure string generation, shares `map_geometry` with the painted viewport, and produces byte-identical output for the same input. |
@@ -41,10 +46,11 @@ rendering portability, source editing, media handling, search, or automation.
 | Text editing | [`QSyntaxHighlighter`](https://doc.qt.io/qt-6/qsyntaxhighlighter.html) with data-driven language rules; [KSyntaxHighlighting](https://api.kde.org/frameworks/syntax-highlighting/html/index.html) and [Tree-sitter](https://tree-sitter.github.io/tree-sitter/) deferred | Active | Chosen this round. `StudioSyntaxHighlighter` builds its rules from `StudioLanguageDescriptor` records, so plain text, config, idTech3 shader scripts, QuakeC, `.map` source, entity definitions, INI-style key-value files, and JSON are described as data rather than as widget code, and a new language is a new descriptor. Colours come from the active studio theme so high-contrast stays readable. KSyntaxHighlighting and Tree-sitter remain deferred until packaging cost and incremental-parsing value justify the dependencies. |
 | Language services | LSP client architecture | Planned | Allows QuakeC, C/C++, shader/config helpers, and future language tools without hardwiring one parser model. |
 | Audio | Qt metadata/playback candidates first, [miniaudio](https://miniaud.io/) for low-level decode/playback/waveform gaps | Active/planned | WAV metadata, platform-codec playback candidacy, waveform summaries, and WAV export are active; miniaudio remains the planned portable fallback for compressed decoding and richer editing. |
-| Model formats | Native idTech loaders, optional [Assimp](https://www.assimp.org/) for adjacent import/export | Active/planned | Native MDL/MD2/MD3 metadata, skin/material dependency, animation-name, and fallback loader boundaries are active; Assimp remains optional for future adjacent import/export. |
+| Model formats | Native idTech loaders, optional [Assimp](https://www.assimp.org/) for adjacent import/export | Active/planned | `src/core/model_mesh.{h,cpp}` moved past metadata this round: it decodes Quake MDL (IDPO 6), Quake II MD2 (IDP2 8), and Quake III MD3 (IDP3 15) geometry, resolves skins out of the open package, and writes one frame as Wavefront OBJ through `exportModelFrameObj`. MDC, MDR, and IQM read their headers only. Skin/material dependency and animation-name boundaries stay active; Assimp remains optional for future adjacent import/export. |
+| Model preview widget | `ModelViewport` in `src/app/model_viewport.{h,cpp}`, painted with `QPainter` | Active | Added this round and deliberately not an OpenGL surface: orthographic projection, painter's-algorithm depth sort, and affine skin mapping that is exact because the projection is orthographic. Wireframe, flat-shaded, and textured modes, orbit/pan/zoom, frame and animation playback, and hover picking all run in Qt Widgets. |
 | AI connector layer | Provider-neutral connector/model metadata plus manifest-backed workflow experiments | Active experimental | Lets users route reasoning, coding, image, audio, voice, 3D, and agentic workflows through OpenAI, Claude, Gemini, ElevenLabs, Meshy, local/offline models, or future connectors while keeping credentials redacted and outputs staged. |
 | First AI provider | OpenAI connector scaffold, with future provider calls following [Responses](https://platform.openai.com/docs/api-reference/responses) and [tools/function calling](https://developers.openai.com/api/docs/guides/tools) patterns | Active experimental | OpenAI is implemented for configuration, credential discovery, model routing, safe tool descriptors, and no-write first experiments; network invocation remains opt-in future work. |
-| Tests | Meson tests, Qt Test, focused executable tests, parser fixtures, and later fuzzing | Active/planned | Scales from smoke tests to parser safety, CLI parity, package safety, and editor regression coverage. |
+| Tests | Meson tests, Qt Test, focused executable tests, parser fixtures, and deterministic parser fuzzing | Active/planned | Scales from smoke tests to parser safety, CLI parity, package safety, and editor regression coverage. Fuzzing landed this round: `src/core/parser_fuzz.{h,cpp}` generates the corpus and the `parser-fuzz-smoke` and `corrupt-fixture-smoke` tests run it. |
 | Packaging | PakFu-style scripts, Qt deployment tools, GitHub Actions artifacts | MVP package gate active, deployment planned | The active scripts stage Windows, macOS, and Linux portable release directories/zips with binary, docs, generated offline guide, checksums, samples, manifests, and license bundles; Qt deployment and signing remain planned. |
 
 ## Core Application Stack
@@ -62,18 +68,32 @@ clearly improve the user experience.
 
 The application layer now uses Qt's meta-object system. `src/meson.build` runs
 `qt6.preprocess` over the app headers, and `Q_OBJECT` is declared by
-`ApplicationShell`, `MapViewport`, the asset views, the studio charts, the
-command registry and palette, and the syntax highlighter. Two things drove
-that: `Q_OBJECT` gives each class its own `tr()` context, which is what makes
-per-class translation contexts work now that catalogs load at run time; and the
-custom widgets need real signals, because a painted viewport that reports a
-picked object has no Qt-provided notification to reuse.
+`ApplicationShell`, `MapViewport`, `ModelViewport`, the asset views, the studio
+charts, the command registry and palette, and the syntax highlighter. Two things
+drove that: `Q_OBJECT` gives each class its own `tr()` context, which is what
+makes per-class translation contexts work now that catalogs load at run time;
+and the custom widgets need real signals, because a painted viewport that
+reports a picked object, a dragged selection, or a hovered triangle has no
+Qt-provided notification to reuse.
 
-The core library stays moc-free. It links Qt Core and Gui only, declares no
-`Q_OBJECT`, and translates through `QCoreApplication::translate` with explicit
-context strings such as `VibeStudioIdTechImage`. Keeping the boundary there
-means core stays usable from the CLI and from tests without dragging in the
-widget stack.
+The core library stays moc-free. It links Qt Core and Gui only
+(`qt6_core_modules` in the top-level `meson.build`), declares no `Q_OBJECT`, and
+translates through `QCoreApplication::translate` with explicit context strings
+such as `VibeStudioIdTechImage`. Keeping the boundary there means core stays
+usable from the CLI and from tests without dragging in the widget stack.
+
+The five core modules added this round hold that line. `model_mesh`,
+`entity_definitions`, `package_compare`, `document_watch`, and `parser_fuzz` are
+all in `core_sources` and link nothing beyond Qt Core and Gui; they translate
+through `VibeStudioModelMesh`, `VibeStudioEntityDefinitions`,
+`VibeStudioPackageCompare`, and `VibeStudioDocumentWatch` contexts, except
+`parser_fuzz`, whose case ids are untranslated diagnostic tokens meant for a
+test log. Gui is what lets `model_mesh` hand back a decoded skin as a `QImage`,
+the same reason `idtech_image` needs it. `DocumentWatcher` is the interesting
+case: it wants `QFileSystemWatcher` notifications but has no `Q_OBJECT`, so it
+binds its lambdas to the watcher it owns as their context object. That keeps
+core out of the moc step and also lets a smoke test drive the whole state
+machine through `pollAt()` with no event loop and no real time passing.
 
 Meson and Ninja remain canonical. Do not add CMake as a parallel first-class
 build system for VibeStudio-owned code. External compiler projects may keep
@@ -91,6 +111,17 @@ project health, package composition, map health/statistics, and compiler
 pipeline readiness. The Advanced Studio workbench adds shader, sprite, code,
 AI, and extension summaries with detail-on-demand tabs while staying in Qt
 Widgets.
+
+Visual styling is centralized. `src/app/studio_theme.*` resolves the theme,
+density, and text-scale preferences into one token set, installs Fusion plus a
+small proxy style, and applies an application-wide palette and generated
+stylesheet, so no widget hard-codes a chrome colour. The default dark theme
+borrows idStudio's visual language (neutral charcoal panels, black viewports,
+an orange accent, bottom-edge panel tabs, a Key / Value property grid, and an
+asset browser with breadcrumbs and thumbnail tiles) as inspiration only; no
+idStudio code or assets are used. `src/app/studio_icons.*` paints the icon set,
+and `src/app/studio_layout.*` supplies the shared page parts. `--ui-snapshot`
+renders every surface offscreen for documentation and visual review.
 
 The UX stack must directly support the project philosophies:
 
@@ -127,7 +158,16 @@ Recommended progression:
    `QWidget` subclasses that paint in `paintEvent`. No Qt Graphics View scene,
    no GPU context, and no extra Qt module are involved.
 2. Early 3D previews: `QOpenGLWidget` through a thin `RenderBackend` interface.
-   Not started; `QOpenGLWidget` is not linked.
+   Not started; `QOpenGLWidget` is not linked. The model preview added this
+   round does not start it either: `ModelViewport` is another painted
+   `QWidget`. It projects orthographically, sorts triangles back to front with
+   a painter's algorithm, and maps skins affinely, which an orthographic
+   projection makes exact rather than approximate. The trade-off is the one
+   that choice implies and should be read as a known limit, not a defect:
+   there is no depth buffer, so interpenetrating triangles can sort wrongly.
+   idTech models run to hundreds or a few thousand triangles, which makes that
+   affordable, and it keeps the promise that no VibeStudio surface requires a
+   GPU context yet.
 3. Production 3D/editor viewports: bgfx backend once map/model previews need
    durable cross-platform rendering, batching, materials, and GPU portability.
    Still deferred, and deliberately not pulled forward by the 2D work.
@@ -224,6 +264,33 @@ PakFu's archive surface and credited in [`docs/CREDITS.md`](CREDITS.md); future
 package writers should build on it instead of duplicating path safety rules per
 format.
 
+`src/core/package_compare.{h,cpp}` answers the question a file list cannot:
+what actually differs between two packages. `comparePackages` pairs entries by
+case-folded virtual path and by occurrence index, so a Doom WAD's repeated lump
+names line up one map at a time, and reports each entry as identical, added,
+removed, changed, or case-only. Case-only is a category of its own because a
+path that differs only in case is a real portability bug: it resolves on
+Windows and fails on Linux. Content is decided by size first, then by a CRC-32
+both sides already store, then by SHA-256 over the bytes; `metadataOnly` skips
+content entirely. `comparePackageToPlan` takes a staged `PackageStagingModel` as
+the right-hand side, so a plan can be diffed before it is written. Results
+render as text or as schema-versioned JSON, and the ordering is a pure function
+of the two inputs.
+
+`src/core/document_watch.{h,cpp}` tracks the files the studio holds open.
+Paths are registered by `DocumentWatchRole` (the open map, the open package, the
+code-editor file, the project manifest) with a fingerprint taken at
+registration: size, modification time, and a SHA-1 over the content when the
+file is small enough to hash. `poll()` recomputes that fingerprint and is the
+authoritative check; `QFileSystemWatcher` notifications only mark a path as
+worth re-checking, because platforms disagree about how many events one save
+produces and the watcher stops reporting a path once it is deleted. Changes are
+classified as modified, touched, removed, replaced, or created, and a burst is
+coalesced into one event after the path has looked the same for a quiet period,
+so a write-temp-then-rename save reports once rather than three times. A
+`touched` result, meaning metadata moved but the bytes are provably identical,
+is not a change anyone needs to be asked about, which is why the kind exists.
+
 Compression is implemented in tree rather than taken from a library. Real PK3
 and ZIP content needs inflate to read and deflate to write, and the obvious
 answers were zlib or miniz. Both were declined. A bundled or system compression
@@ -241,14 +308,20 @@ with an error on malformed input rather than aborting. Output is deterministic
 for a given input and level, which is what lets the package writers produce
 reproducible archives.
 
-The trade-off is explicit and belongs in the record: the decoder handles stored,
+The encoder caught up with the decoder this round. Both now handle stored,
 fixed-Huffman, and dynamic-Huffman blocks, so VibeStudio reads anything a normal
-ZIP tool writes, but the encoder emits stored and fixed-Huffman blocks only. It
-does not build dynamic Huffman tables. PK3s VibeStudio writes are therefore
-larger than the same content packed by zlib. The writer stores an entry verbatim
-whenever deflating would not shrink it, so already-compressed assets are never
-made worse. If archive size becomes a real complaint, the answer is a dynamic
-Huffman encoder in the same file, not a new dependency.
+ZIP tool writes and no longer has to give up ratio to emit it. `deflateRaw`
+tokenizes each chunk once, then measures a stored, a fixed-Huffman, and a
+dynamic-Huffman encoding of it in bits and writes whichever is smallest, with
+ties going to stored, so a block is never larger than simply storing its bytes
+would be. Dynamic code lengths come from the package-merge algorithm, which
+gives an optimal length-limited code rather than an approximation. The four
+`DeflateLevel` values no longer imply a block type at all: `Store` skips LZ77
+entirely, and `Fast`, `Default`, and `Best` differ only in how hard the hash
+chain is searched and whether lazy matching is used. Every level except `Store`
+can emit a dynamic block. The writer still stores an entry verbatim whenever
+deflating would not shrink it, so already-compressed assets are never made
+worse.
 
 ## Accessibility, Localization, And Setup Stack
 
@@ -350,6 +423,17 @@ sprite names, rotations, palette actions, frame sequences, and package staging
 paths. These are native C++/Qt services; no new graphics, parser, or media
 library is required for the current milestone.
 
+Two more formats became first-class this round, and both were written from
+public specifications with no game data in the tree. `core/model_mesh.cpp`
+decodes MDL, MD2, and MD3 geometry (vertices, normals, texture coordinates,
+frames, MD3 tags, and embedded MDL skins) and resolves external skin paths
+against the open package. MDC, MDR, and IQM read their headers and say so
+explicitly rather than guessing at layouts the studio has not implemented.
+`core/entity_definitions.cpp` reads Radiant `.def`/`.qc`, Valve `.fgd`, and
+Quake III `.ent` text into one catalogue model, folds base classes into derived
+ones, and bounds every loop because definition files arrive from mod packages
+and the internet.
+
 Use optional helper libraries where they expand workflows without weakening
 format fidelity:
 
@@ -360,8 +444,9 @@ format fidelity:
   records platform codec candidacy without making codec availability mandatory.
 - miniaudio for small portable audio playback/decoding/waveform tasks where Qt
   backends are insufficient.
-- Native MDL, MD2, and MD3 metadata loaders for package preview and dependency
-  inspection before any generic model library is introduced.
+- Native MDL, MD2, and MD3 loaders for package preview, dependency inspection,
+  geometry decode, and single-frame Wavefront OBJ export before any generic
+  model library is introduced.
 - Assimp for adjacent model import/export, while keeping native MDL, MD2, MD3,
   MDC, MDR, IQM, and BSP-related loaders authoritative for game workflows.
 
@@ -435,8 +520,28 @@ manifest records through the shared core runner.
 Use Meson tests as the test runner entry point. Keep fast C++ executable tests
 for core services and parsers. Use Qt Test for Qt-specific behavior. Add fixture
 corpora for packages, maps, scripts, textures, audio, and models as support
-lands. Add fuzzing for untrusted binary/text parsers before write-back features
-become broad.
+lands.
+
+Fuzzing for untrusted binary parsers is now part of that runner rather than a
+future item. `src/core/parser_fuzz.{h,cpp}` turns a handful of valid seed
+buffers into a fixed corpus of corrupted ones through seven mutations, and the
+`parser-fuzz-smoke` test runs that corpus at the inflate, idTech image, BSP,
+package, level-map, and model readers. Determinism is the requirement that
+shaped it: the generator is the `xorshift64*` implemented in that file, never
+`QRandomGenerator` and never a clock, the seed is a compile-time constant with
+an environment override, and every case carries an id naming the seed input,
+the mutation, and the offset, so a CI failure is re-runnable from the log
+alone. `corrupt-fixture-smoke` is
+the readable counterpart, pinning the exact message each hand-built damaged
+fixture produces. Both test files assemble their fixtures from published format
+layouts; neither embeds or reads commercial game data.
+
+The other new core modules land in the same runner: `model-mesh-smoke`,
+`entity-definitions-smoke`, `package-compare-smoke`, and
+`document-watch-smoke`. The document-watch cases construct the watcher with
+filesystem notifications disabled and drive `pollAt()` with stepped
+millisecond values, so the coalescing state machine is tested without an event
+loop and without sleeping.
 
 The active sample-project slice keeps tiny license-clean Doom, Quake, and
 Quake III-family workspaces under `samples/projects`. `scripts/validate_samples.py`
@@ -501,6 +606,7 @@ license files, compiler/toolchain attribution, and a generated credits bundle.
 - [Qt OpenGL / QOpenGLWidget](https://doc.qt.io/qt-6/qopenglwidget.html)
 - [Qt Multimedia](https://doc.qt.io/qt-6/qtmultimedia-index.html)
 - [Qt Network](https://doc.qt.io/qt-6/qtnetwork-index.html)
+- [QFileSystemWatcher](https://doc.qt.io/qt-6/qfilesystemwatcher.html)
 - [Qt Accessibility](https://doc.qt.io/qt-6/accessible.html)
 - [Qt High DPI](https://doc.qt.io/qt-6/highdpi.html)
 - [Qt TextToSpeech](https://doc.qt.io/qt-6/qttexttospeech-index.html)
@@ -511,6 +617,10 @@ license files, compiler/toolchain attribution, and a generated credits bundle.
 - [RFC 1951, DEFLATE Compressed Data Format Specification version 1.3](https://www.rfc-editor.org/rfc/rfc1951)
 - [RFC 1950, ZLIB Compressed Data Format Specification version 3.3](https://www.rfc-editor.org/rfc/rfc1950)
 - [PKWARE .ZIP File Format Specification (APPNOTE.TXT)](https://pkware.cachefly.net/webdocs/casestudies/APPNOTE.TXT)
+- [Quake Specifications](https://www.gamers.org/dEngine/quake/spec/quake-spec34/)
+- [Inter-Quake Model specification](http://sauerbraten.org/iqm/)
+- [GtkRadiant, source of the `/*QUAKED` definition block](https://github.com/TTimo/GtkRadiant)
+- [Valve Forge Game Data (`.fgd`) format](https://developer.valvesoftware.com/wiki/FGD)
 - [Meson](https://mesonbuild.com/)
 - [Ninja](https://ninja-build.org/)
 - [bgfx](https://bkaradzic.github.io/bgfx/overview.html)

@@ -2,7 +2,10 @@
 
 #include <QCoreApplication>
 
+#include <algorithm>
 #include <array>
+#include <limits>
+#include <utility>
 #include <vector>
 
 namespace vibestudio {
@@ -22,6 +25,7 @@ QString deflateText(const char* source)
 // ---------------------------------------------------------------------------
 
 constexpr int kMaxCodeBits = 15;                        // RFC 1951 3.2.7
+constexpr int kMaxCodeLengthBits = 7;                   // RFC 1951 3.2.7
 constexpr int kEndOfBlockSymbol = 256;                  // RFC 1951 3.2.5
 constexpr int kLiteralAlphabetMax = 286;                // RFC 1951 3.2.5
 constexpr int kDistanceAlphabetMax = 30;                // RFC 1951 3.2.5
@@ -556,6 +560,10 @@ public:
 
 	void appendAlignedBytes(const char* bytes, qsizetype count) { out_.append(bytes, count); }
 
+	// Bits written so far. The block chooser needs this to know how much
+	// padding a stored block would cost at this point in the stream.
+	qint64 bitPosition() const { return static_cast<qint64>(out_.size()) * 8 + bitCount_; }
+
 	QByteArray finish()
 	{
 		alignToByte();
@@ -567,24 +575,6 @@ private:
 	quint32 bitBuffer_ = 0;
 	int bitCount_ = 0;
 };
-
-// RFC 1951 3.2.6, fixed literal/length code.
-void fixedLiteralCode(int symbol, quint32* code, int* bits)
-{
-	if (symbol < 144) {
-		*code = 0x30u + static_cast<quint32>(symbol);
-		*bits = 8;
-	} else if (symbol < 256) {
-		*code = 0x190u + static_cast<quint32>(symbol - 144);
-		*bits = 9;
-	} else if (symbol < 280) {
-		*code = static_cast<quint32>(symbol - 256);
-		*bits = 7;
-	} else {
-		*code = 0xc0u + static_cast<quint32>(symbol - 280);
-		*bits = 8;
-	}
-}
 
 int lengthCodeIndex(qsizetype length)
 {
@@ -607,23 +597,36 @@ int distanceCodeIndex(qsizetype distance)
 }
 
 struct Token {
-	quint16 literal = 0;   // literal byte, or the match length when distance > 0
+	quint16 literal = 0;      // literal byte when distance == 0
 	quint16 length = 0;
-	quint16 distance = 0;  // 0 means "literal"
+	quint16 distance = 0;     // 0 means "literal"
+	quint8 lengthCode = 0;    // index into kLengthBase / kLengthExtra
+	quint8 distanceCode = 0;  // index into kDistanceBase / kDistanceExtra
 };
 
 struct MatchConfig {
 	int maxChain = 0;
-	qsizetype niceLength = 0;
+	qsizetype niceLength = 0;  // stop searching once a match this long is found
+	qsizetype goodLength = 0;  // shorten the chain once a match this long is held
+	bool lazy = false;         // defer a match by one byte to look for a longer one
+	qsizetype lazyLimit = 0;   // skip the lazy look-ahead once the held match is this long
 };
 
 MatchConfig matchConfigFor(DeflateLevel level)
 {
-	// Fast walks a short hash chain and stops early; Default searches further.
-	if (level == DeflateLevel::Fast) {
-		return MatchConfig { 8, 32 };
+	// Fast walks a short hash chain greedily; Default and Best walk further and
+	// use lazy matching. Every field is a fixed constant so that the token
+	// stream depends only on the input bytes.
+	switch (level) {
+	case DeflateLevel::Store:
+	case DeflateLevel::Fast:
+		return MatchConfig { 8, 32, 0, false, 0 };
+	case DeflateLevel::Default:
+		return MatchConfig { 96, 128, 16, true, 128 };
+	case DeflateLevel::Best:
+		return MatchConfig { 512, kMaxMatch, 24, true, kMaxMatch };
 	}
-	return MatchConfig { 128, kMaxMatch };
+	return MatchConfig { 96, 128, 16, true, 128 };
 }
 
 // Hash-chain LZ77 matcher over three-byte keys. Deterministic by construction:
@@ -649,29 +652,47 @@ public:
 		head_[static_cast<size_t>(key)] = static_cast<qint32>(pos);
 	}
 
-	bool findMatch(qsizetype pos, qsizetype limit, qsizetype* bestLength, qsizetype* bestDistance) const
+	// `heldLength` is the length of a match the caller is already holding (the
+	// lazy-matching case). A good match in hand means the chain is walked less
+	// far, which bounds the work on inputs full of medium-length repeats.
+	bool findMatch(qsizetype pos, qsizetype limit, qsizetype heldLength, qsizetype* bestLength, qsizetype* bestDistance) const
 	{
 		if (limit < kMinMatch || pos + kMinMatch > size_) {
 			return false;
 		}
 		qint32 candidate = head_[static_cast<size_t>(hashAt(pos))];
 		int attempts = config_.maxChain;
+		if (config_.goodLength > 0 && heldLength >= config_.goodLength) {
+			attempts >>= 2;
+			if (attempts < 1) {
+				attempts = 1;
+			}
+		}
 		qsizetype best = 0;
 		qsizetype bestDist = 0;
 		while (candidate >= 0 && attempts-- > 0) {
+			if (best >= limit) {
+				break; // nothing left to gain
+			}
 			const qsizetype distance = pos - static_cast<qsizetype>(candidate);
 			if (distance <= 0 || distance > kWindowSize) {
 				break;
 			}
-			qsizetype length = 0;
-			while (length < limit && data_[static_cast<qsizetype>(candidate) + length] == data_[pos + length]) {
-				++length;
-			}
-			if (length > best) {
-				best = length;
-				bestDist = distance;
-				if (best >= config_.niceLength) {
-					break;
+			// A candidate can only beat the current best if the byte just past
+			// the current best matches, so check that before the full compare.
+			// Both indices stay in range: candidate < pos and best < limit
+			// <= size_ - pos.
+			if (best == 0 || data_[static_cast<qsizetype>(candidate) + best] == data_[pos + best]) {
+				qsizetype length = 0;
+				while (length < limit && data_[static_cast<qsizetype>(candidate) + length] == data_[pos + length]) {
+					++length;
+				}
+				if (length > best) {
+					best = length;
+					bestDist = distance;
+					if (best >= config_.niceLength) {
+						break;
+					}
 				}
 			}
 			const qint32 next = prev_[static_cast<size_t>(candidate & (kWindowSize - 1))];
@@ -724,34 +745,554 @@ void writeStoredBlock(BitWriter* writer, const char* bytes, qsizetype length, bo
 	}
 }
 
-void writeFixedBlock(BitWriter* writer, const std::vector<Token>& tokens, bool finalBlock)
+// ---------------------------------------------------------------------------
+// LZ77 tokenisation.
+// ---------------------------------------------------------------------------
+
+struct BlockTokens {
+	std::vector<Token> tokens;
+	std::array<quint32, kLiteralAlphabetMax> literalFrequencies {};
+	std::array<quint32, kDistanceAlphabetMax> distanceFrequencies {};
+	qint64 extraBits = 0; // length/distance extra bits, identical for every code
+};
+
+void appendLiteral(BlockTokens* block, quint8 value)
+{
+	Token token;
+	token.literal = value;
+	block->tokens.push_back(token);
+	++block->literalFrequencies[value];
+}
+
+void appendMatch(BlockTokens* block, qsizetype length, qsizetype distance)
+{
+	Token token;
+	token.length = static_cast<quint16>(length);
+	token.distance = static_cast<quint16>(distance);
+	token.lengthCode = static_cast<quint8>(lengthCodeIndex(length));
+	token.distanceCode = static_cast<quint8>(distanceCodeIndex(distance));
+	block->tokens.push_back(token);
+	++block->literalFrequencies[257 + token.lengthCode];
+	++block->distanceFrequencies[token.distanceCode];
+	block->extraBits += kLengthExtra[token.lengthCode] + kDistanceExtra[token.distanceCode];
+}
+
+// Turns [start, end) into literals and back references. The match finder keeps
+// its history across calls, so a block may reference data emitted by an earlier
+// block; that is legal because the 32 KiB window spans block boundaries
+// (RFC 1951 3.2.5).
+void tokenizeChunk(MatchFinder* finder,
+	const quint8* data,
+	qsizetype start,
+	qsizetype end,
+	const MatchConfig& config,
+	BlockTokens* block)
+{
+	block->tokens.clear();
+	block->literalFrequencies.fill(0);
+	block->distanceFrequencies.fill(0);
+	block->extraBits = 0;
+	block->literalFrequencies[kEndOfBlockSymbol] = 1;
+
+	qsizetype pos = start;
+	qsizetype heldLength = 0;
+	qsizetype heldDistance = 0;
+	bool held = false;
+	while (pos < end) {
+		const qsizetype limit = qMin(kMaxMatch, end - pos);
+		qsizetype length = 0;
+		qsizetype distance = 0;
+		if (!config.lazy || heldLength < config.lazyLimit) {
+			if (!finder->findMatch(pos, limit, heldLength, &length, &distance)) {
+				length = 0;
+				distance = 0;
+			}
+		}
+		finder->insert(pos);
+
+		if (!config.lazy) {
+			if (length >= kMinMatch) {
+				appendMatch(block, length, distance);
+				for (qsizetype i = 1; i < length; ++i) {
+					finder->insert(pos + i);
+				}
+				pos += length;
+			} else {
+				appendLiteral(block, data[pos]);
+				++pos;
+			}
+			continue;
+		}
+
+		// Lazy matching: a match found at pos - 1 is held for one byte to see
+		// whether pos starts a longer one. Emitting the extra literal usually
+		// costs less than the shorter match does.
+		if (held && heldLength >= kMinMatch && length <= heldLength) {
+			appendMatch(block, heldLength, heldDistance);
+			const qsizetype matchEnd = (pos - 1) + heldLength;
+			for (qsizetype p = pos + 1; p < matchEnd; ++p) {
+				finder->insert(p);
+			}
+			pos = matchEnd; // always > pos, so the loop makes progress
+			heldLength = 0;
+			heldDistance = 0;
+			held = false;
+			continue;
+		}
+		if (held) {
+			appendLiteral(block, data[pos - 1]);
+		}
+		heldLength = length;
+		heldDistance = distance;
+		held = true;
+		++pos;
+	}
+	if (held) {
+		// The last position can never hold a usable match: it was searched with
+		// a limit of one byte, which is below the minimum match length.
+		appendLiteral(block, data[pos - 1]);
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Huffman code construction for the encoder.
+//
+// Code lengths come from the package-merge algorithm (Larmore and Hirschberg,
+// "A Fast Algorithm for Optimal Length-Limited Huffman Codes", Journal of the
+// ACM 37(3), 1990, https://doi.org/10.1145/79147.79150), in the formulation
+// where each level of the coin-collector problem is a list built by merging the
+// sorted leaves with the packages of the level below. It produces an optimal
+// prefix code whose longest code respects a hard limit, which is exactly what
+// DEFLATE needs: 15 bits for the literal/length and distance alphabets and 7
+// bits for the code length alphabet (RFC 1951 3.2.7). Doing the limiting inside
+// the construction means a skewed block is coded optimally within the limit
+// instead of being rejected or repaired after the fact.
+// ---------------------------------------------------------------------------
+
+struct CodeTable {
+	std::vector<quint8> lengths;
+	std::vector<quint16> codes;
+};
+
+// One entry of a list in the package-merge construction. `leaves` is the number
+// of leaves in the prefix of the list that ends at this entry, which is all the
+// bookkeeping needed to recover the solution: the leaves chosen at a level are
+// always the lightest ones, so a prefix count identifies them.
+struct PackageEntry {
+	quint64 weight = 0;
+	qint32 leaves = 0;
+};
+
+// Fills lengths[0..count) with an optimal prefix code limited to `limit` bits.
+// Symbols with a zero frequency get length zero. Returns false when the
+// alphabet cannot be coded within the limit at all.
+bool buildLimitedLengths(const quint32* frequencies, int count, int limit, quint8* lengths)
+{
+	for (int i = 0; i < count; ++i) {
+		lengths[i] = 0;
+	}
+	if (limit < 1 || limit > kMaxCodeBits) {
+		return false;
+	}
+
+	// Leaves sorted by weight, ties broken by symbol: the encoder must be
+	// byte-identical from run to run.
+	std::vector<std::pair<quint64, int>> leaves;
+	leaves.reserve(static_cast<size_t>(count));
+	for (int i = 0; i < count; ++i) {
+		if (frequencies[i] != 0) {
+			leaves.emplace_back(static_cast<quint64>(frequencies[i]), i);
+		}
+	}
+	std::stable_sort(leaves.begin(), leaves.end(),
+		[](const std::pair<quint64, int>& a, const std::pair<quint64, int>& b) { return a.first < b.first; });
+
+	const int used = static_cast<int>(leaves.size());
+	if (used == 0) {
+		return true;
+	}
+	if (used == 1) {
+		lengths[leaves[0].second] = 1;
+		return true;
+	}
+	if (static_cast<qint64>(used) > (qint64(1) << limit)) {
+		return false; // more symbols than the limit can distinguish
+	}
+
+	// lists[0] holds the leaves alone; each further list merges the leaves with
+	// the packages formed from consecutive pairs of the list below it.
+	std::vector<std::vector<PackageEntry>> lists(static_cast<size_t>(limit));
+	lists[0].resize(static_cast<size_t>(used));
+	for (int i = 0; i < used; ++i) {
+		lists[0][static_cast<size_t>(i)] = PackageEntry { leaves[static_cast<size_t>(i)].first, i + 1 };
+	}
+	for (int level = 1; level < limit; ++level) {
+		const std::vector<PackageEntry>& previous = lists[static_cast<size_t>(level - 1)];
+		std::vector<PackageEntry>& current = lists[static_cast<size_t>(level)];
+		const size_t packages = previous.size() / 2;
+		current.reserve(static_cast<size_t>(used) + packages);
+		size_t leafIndex = 0;
+		size_t packageIndex = 0;
+		qint32 leafCount = 0;
+		while (leafIndex < static_cast<size_t>(used) || packageIndex < packages) {
+			bool takeLeaf = leafIndex < static_cast<size_t>(used);
+			quint64 packageWeight = 0;
+			if (packageIndex < packages) {
+				packageWeight = previous[2 * packageIndex].weight + previous[2 * packageIndex + 1].weight;
+				if (takeLeaf) {
+					// Leaves win ties, which keeps the construction stable.
+					takeLeaf = leaves[leafIndex].first <= packageWeight;
+				}
+			}
+			if (takeLeaf) {
+				++leafCount;
+				current.push_back(PackageEntry { leaves[leafIndex].first, leafCount });
+				++leafIndex;
+			} else {
+				current.push_back(PackageEntry { packageWeight, leafCount });
+				++packageIndex;
+			}
+		}
+	}
+
+	// The optimal solution is the cheapest 2n-2 entries of the top list. Walking
+	// back down, the packages inside a prefix identify the prefix of the list
+	// below that produced them.
+	std::vector<qint32> leavesUsed(static_cast<size_t>(limit), 0);
+	qint64 take = 2 * static_cast<qint64>(used) - 2;
+	for (int level = limit - 1; level >= 0; --level) {
+		const std::vector<PackageEntry>& list = lists[static_cast<size_t>(level)];
+		if (take <= 0) {
+			leavesUsed[static_cast<size_t>(level)] = 0;
+			take = 0;
+			continue;
+		}
+		if (take > static_cast<qint64>(list.size())) {
+			return false;
+		}
+		const qint32 chosenLeaves = list[static_cast<size_t>(take - 1)].leaves;
+		leavesUsed[static_cast<size_t>(level)] = chosenLeaves;
+		take = 2 * (take - chosenLeaves);
+	}
+
+	// A leaf's code length is the number of levels whose prefix reaches it.
+	for (int level = 0; level < limit; ++level) {
+		const qint32 reach = leavesUsed[static_cast<size_t>(level)];
+		for (qint32 rank = 0; rank < reach; ++rank) {
+			++lengths[leaves[static_cast<size_t>(rank)].second];
+		}
+	}
+	for (int i = 0; i < count; ++i) {
+		if (frequencies[i] != 0 && (lengths[i] == 0 || lengths[i] > limit)) {
+			return false;
+		}
+	}
+	return true;
+}
+
+// Assigns canonical codes to a length table (RFC 1951 3.2.2) and verifies that
+// the code is complete. A decoder is entitled to reject an under- or
+// over-subscribed literal/length or code length table, so an incomplete table
+// is treated as a construction failure rather than emitted.
+bool canonicaliseCodes(CodeTable* table, int limit)
+{
+	const int count = static_cast<int>(table->lengths.size());
+	table->codes.assign(static_cast<size_t>(count), 0);
+	std::vector<int> lengthCounts(static_cast<size_t>(limit) + 1, 0);
+	int used = 0;
+	for (int i = 0; i < count; ++i) {
+		const int length = table->lengths[static_cast<size_t>(i)];
+		if (length == 0) {
+			continue;
+		}
+		if (length > limit) {
+			return false;
+		}
+		++lengthCounts[static_cast<size_t>(length)];
+		++used;
+	}
+	if (used == 0) {
+		return false;
+	}
+	quint64 kraft = 0;
+	for (int length = 1; length <= limit; ++length) {
+		kraft += static_cast<quint64>(lengthCounts[static_cast<size_t>(length)]) << (limit - length);
+	}
+	if (kraft != (quint64(1) << limit)) {
+		return false;
+	}
+
+	quint32 code = 0;
+	std::vector<quint32> nextCode(static_cast<size_t>(limit) + 1, 0);
+	for (int length = 1; length <= limit; ++length) {
+		code = (code + static_cast<quint32>(lengthCounts[static_cast<size_t>(length - 1)])) << 1;
+		nextCode[static_cast<size_t>(length)] = code;
+	}
+	for (int i = 0; i < count; ++i) {
+		const int length = table->lengths[static_cast<size_t>(i)];
+		if (length != 0) {
+			table->codes[static_cast<size_t>(i)] = static_cast<quint16>(nextCode[static_cast<size_t>(length)]++);
+		}
+	}
+	return true;
+}
+
+// An alphabet with a single code cannot form a complete Huffman code, so give
+// the unused low symbols a nominal frequency instead. The cost is a handful of
+// bits in the table description.
+void ensureTwoSymbols(quint32* frequencies, int count)
+{
+	int used = 0;
+	for (int i = 0; i < count; ++i) {
+		if (frequencies[i] != 0) {
+			++used;
+		}
+	}
+	for (int i = 0; i < count && used < 2; ++i) {
+		if (frequencies[i] == 0) {
+			frequencies[i] = 1;
+			++used;
+		}
+	}
+}
+
+struct CodeLengthItem {
+	quint8 symbol = 0;
+	quint8 extraBits = 0;
+	quint16 extraValue = 0;
+};
+
+// RFC 1951 3.2.7: the two code length sequences are sent as one run-length
+// encoded list. Symbol 16 repeats the previous length 3-6 times, 17 repeats a
+// zero length 3-10 times and 18 repeats a zero length 11-138 times.
+std::vector<CodeLengthItem> runLengthEncodeLengths(const std::vector<quint8>& lengths)
+{
+	std::vector<CodeLengthItem> items;
+	const int count = static_cast<int>(lengths.size());
+	items.reserve(static_cast<size_t>(count));
+	int index = 0;
+	while (index < count) {
+		const int value = lengths[static_cast<size_t>(index)];
+		int run = 1;
+		while (index + run < count && lengths[static_cast<size_t>(index + run)] == value) {
+			++run;
+		}
+		index += run;
+		if (value == 0) {
+			while (run >= 11) {
+				const int take = qMin(run, 138);
+				items.push_back(CodeLengthItem { 18, 7, static_cast<quint16>(take - 11) });
+				run -= take;
+			}
+			while (run >= 3) {
+				const int take = qMin(run, 10);
+				items.push_back(CodeLengthItem { 17, 3, static_cast<quint16>(take - 3) });
+				run -= take;
+			}
+			while (run > 0) {
+				items.push_back(CodeLengthItem { 0, 0, 0 });
+				--run;
+			}
+			continue;
+		}
+		// Runs are maximal, so the length that symbol 16 copies always has to be
+		// written out literally first.
+		items.push_back(CodeLengthItem { static_cast<quint8>(value), 0, 0 });
+		--run;
+		while (run >= 3) {
+			const int take = qMin(run, 6);
+			items.push_back(CodeLengthItem { 16, 2, static_cast<quint16>(take - 3) });
+			run -= take;
+		}
+		while (run > 0) {
+			items.push_back(CodeLengthItem { static_cast<quint8>(value), 0, 0 });
+			--run;
+		}
+	}
+	return items;
+}
+
+struct DynamicTrees {
+	bool valid = false;
+	CodeTable literal;
+	CodeTable distance;
+	CodeTable codeLength;
+	std::vector<CodeLengthItem> items;
+	int hlit = 257;
+	int hdist = 1;
+	int hclen = 4;
+	qint64 headerBits = 0; // block header plus the whole table description
+};
+
+DynamicTrees buildDynamicTrees(const std::array<quint32, kLiteralAlphabetMax>& literalFrequencies,
+	const std::array<quint32, kDistanceAlphabetMax>& distanceFrequencies)
+{
+	DynamicTrees trees;
+	std::array<quint32, kLiteralAlphabetMax> literalCounts = literalFrequencies;
+	std::array<quint32, kDistanceAlphabetMax> distanceCounts = distanceFrequencies;
+	ensureTwoSymbols(literalCounts.data(), kLiteralAlphabetMax);
+	ensureTwoSymbols(distanceCounts.data(), kDistanceAlphabetMax);
+
+	trees.literal.lengths.assign(kLiteralAlphabetMax, 0);
+	trees.distance.lengths.assign(kDistanceAlphabetMax, 0);
+	if (!buildLimitedLengths(literalCounts.data(), kLiteralAlphabetMax, kMaxCodeBits, trees.literal.lengths.data())) {
+		return trees;
+	}
+	if (!buildLimitedLengths(distanceCounts.data(), kDistanceAlphabetMax, kMaxCodeBits, trees.distance.lengths.data())) {
+		return trees;
+	}
+	if (!canonicaliseCodes(&trees.literal, kMaxCodeBits) || !canonicaliseCodes(&trees.distance, kMaxCodeBits)) {
+		return trees;
+	}
+
+	// HLIT counts at least 257 literal/length codes and HDIST at least one
+	// distance code (RFC 1951 3.2.7).
+	trees.hlit = 257;
+	for (int i = kLiteralAlphabetMax - 1; i >= 257; --i) {
+		if (trees.literal.lengths[static_cast<size_t>(i)] != 0) {
+			trees.hlit = i + 1;
+			break;
+		}
+	}
+	trees.hdist = 1;
+	for (int i = kDistanceAlphabetMax - 1; i >= 0; --i) {
+		if (trees.distance.lengths[static_cast<size_t>(i)] != 0) {
+			trees.hdist = i + 1;
+			break;
+		}
+	}
+
+	std::vector<quint8> combined;
+	combined.reserve(static_cast<size_t>(trees.hlit + trees.hdist));
+	combined.insert(combined.end(), trees.literal.lengths.begin(), trees.literal.lengths.begin() + trees.hlit);
+	combined.insert(combined.end(), trees.distance.lengths.begin(), trees.distance.lengths.begin() + trees.hdist);
+	trees.items = runLengthEncodeLengths(combined);
+
+	std::array<quint32, kCodeLengthAlphabet> codeLengthCounts {};
+	codeLengthCounts.fill(0);
+	for (const CodeLengthItem& item : trees.items) {
+		++codeLengthCounts[item.symbol];
+	}
+	ensureTwoSymbols(codeLengthCounts.data(), kCodeLengthAlphabet);
+	trees.codeLength.lengths.assign(kCodeLengthAlphabet, 0);
+	if (!buildLimitedLengths(codeLengthCounts.data(), kCodeLengthAlphabet, kMaxCodeLengthBits, trees.codeLength.lengths.data())) {
+		return trees;
+	}
+	if (!canonicaliseCodes(&trees.codeLength, kMaxCodeLengthBits)) {
+		return trees;
+	}
+
+	trees.hclen = kCodeLengthAlphabet;
+	while (trees.hclen > 4 && trees.codeLength.lengths[kCodeLengthOrder[trees.hclen - 1]] == 0) {
+		--trees.hclen;
+	}
+
+	qint64 bits = 3 + 5 + 5 + 4 + 3 * static_cast<qint64>(trees.hclen);
+	for (const CodeLengthItem& item : trees.items) {
+		bits += trees.codeLength.lengths[item.symbol] + item.extraBits;
+	}
+	trees.headerBits = bits;
+	trees.valid = true;
+	return trees;
+}
+
+// RFC 1951 3.2.6, the fixed code as an ordinary canonical table. The literal
+// alphabet is defined over 288 symbols and the distance alphabet over 32, even
+// though the last few of each are never used.
+struct FixedEncoderTables {
+	CodeTable literal;
+	CodeTable distance;
+};
+
+FixedEncoderTables makeFixedEncoderTables()
+{
+	FixedEncoderTables tables;
+	tables.literal.lengths.assign(288, 8);
+	for (int i = 144; i < 256; ++i) {
+		tables.literal.lengths[static_cast<size_t>(i)] = 9;
+	}
+	for (int i = 256; i < 280; ++i) {
+		tables.literal.lengths[static_cast<size_t>(i)] = 7;
+	}
+	tables.distance.lengths.assign(32, 5);
+	canonicaliseCodes(&tables.literal, kMaxCodeBits);
+	canonicaliseCodes(&tables.distance, kMaxCodeBits);
+	return tables;
+}
+
+const FixedEncoderTables& fixedEncoderTables()
+{
+	static const FixedEncoderTables tables = makeFixedEncoderTables();
+	return tables;
+}
+
+// Bits the token stream costs under a given pair of code tables, including the
+// end-of-block symbol (which is counted in the literal frequencies).
+qint64 tokenBits(const BlockTokens& block, const CodeTable& literal, const CodeTable& distance)
+{
+	qint64 bits = block.extraBits;
+	for (int i = 0; i < kLiteralAlphabetMax; ++i) {
+		const quint32 frequency = block.literalFrequencies[static_cast<size_t>(i)];
+		if (frequency != 0) {
+			bits += static_cast<qint64>(frequency) * literal.lengths[static_cast<size_t>(i)];
+		}
+	}
+	for (int i = 0; i < kDistanceAlphabetMax; ++i) {
+		const quint32 frequency = block.distanceFrequencies[static_cast<size_t>(i)];
+		if (frequency != 0) {
+			bits += static_cast<qint64>(frequency) * distance.lengths[static_cast<size_t>(i)];
+		}
+	}
+	return bits;
+}
+
+void writeTokens(BitWriter* writer, const BlockTokens& block, const CodeTable& literal, const CodeTable& distance)
+{
+	for (const Token& token : block.tokens) {
+		if (token.distance == 0) {
+			writer->writeCode(literal.codes[token.literal], literal.lengths[token.literal]);
+			continue;
+		}
+		const int lengthCode = token.lengthCode;
+		const size_t lengthSymbol = static_cast<size_t>(257 + lengthCode);
+		writer->writeCode(literal.codes[lengthSymbol], literal.lengths[lengthSymbol]);
+		if (kLengthExtra[lengthCode] > 0) {
+			writer->writeBits(static_cast<quint32>(token.length - kLengthBase[lengthCode]), kLengthExtra[lengthCode]);
+		}
+		const int distanceCode = token.distanceCode;
+		writer->writeCode(distance.codes[static_cast<size_t>(distanceCode)], distance.lengths[static_cast<size_t>(distanceCode)]);
+		if (kDistanceExtra[distanceCode] > 0) {
+			writer->writeBits(static_cast<quint32>(token.distance - kDistanceBase[distanceCode]), kDistanceExtra[distanceCode]);
+		}
+	}
+	writer->writeCode(literal.codes[kEndOfBlockSymbol], literal.lengths[kEndOfBlockSymbol]);
+}
+
+void writeFixedBlock(BitWriter* writer, const BlockTokens& block, const FixedEncoderTables& fixed, bool finalBlock)
 {
 	writer->writeBits(finalBlock ? 1u : 0u, 1);
 	writer->writeBits(1u, 2);
-	for (const Token& token : tokens) {
-		quint32 code = 0;
-		int bits = 0;
-		if (token.distance == 0) {
-			fixedLiteralCode(static_cast<int>(token.literal), &code, &bits);
-			writer->writeCode(code, bits);
-			continue;
-		}
-		const int lengthIndex = lengthCodeIndex(token.length);
-		fixedLiteralCode(257 + lengthIndex, &code, &bits);
-		writer->writeCode(code, bits);
-		if (kLengthExtra[lengthIndex] > 0) {
-			writer->writeBits(static_cast<quint32>(token.length - kLengthBase[lengthIndex]), kLengthExtra[lengthIndex]);
-		}
-		const int distanceIndex = distanceCodeIndex(token.distance);
-		writer->writeCode(static_cast<quint32>(distanceIndex), 5);
-		if (kDistanceExtra[distanceIndex] > 0) {
-			writer->writeBits(static_cast<quint32>(token.distance - kDistanceBase[distanceIndex]), kDistanceExtra[distanceIndex]);
+	writeTokens(writer, block, fixed.literal, fixed.distance);
+}
+
+void writeDynamicBlock(BitWriter* writer, const BlockTokens& block, const DynamicTrees& trees, bool finalBlock)
+{
+	// RFC 1951 3.2.7.
+	writer->writeBits(finalBlock ? 1u : 0u, 1);
+	writer->writeBits(2u, 2);
+	writer->writeBits(static_cast<quint32>(trees.hlit - 257), 5);
+	writer->writeBits(static_cast<quint32>(trees.hdist - 1), 5);
+	writer->writeBits(static_cast<quint32>(trees.hclen - 4), 4);
+	for (int i = 0; i < trees.hclen; ++i) {
+		writer->writeBits(trees.codeLength.lengths[kCodeLengthOrder[i]], 3);
+	}
+	for (const CodeLengthItem& item : trees.items) {
+		writer->writeCode(trees.codeLength.codes[item.symbol], trees.codeLength.lengths[item.symbol]);
+		if (item.extraBits > 0) {
+			writer->writeBits(item.extraValue, item.extraBits);
 		}
 	}
-	quint32 endCode = 0;
-	int endBits = 0;
-	fixedLiteralCode(kEndOfBlockSymbol, &endCode, &endBits);
-	writer->writeCode(endCode, endBits);
+	writeTokens(writer, block, trees.literal, trees.distance);
 }
 
 // ---------------------------------------------------------------------------
@@ -861,55 +1402,36 @@ QByteArray deflateRaw(const QByteArray& input, DeflateLevel level)
 	}
 
 	const auto* data = reinterpret_cast<const quint8*>(bytes);
-	MatchFinder finder(data, size, matchConfigFor(level));
-	std::vector<Token> tokens;
+	const MatchConfig config = matchConfigFor(level);
+	MatchFinder finder(data, size, config);
+	const FixedEncoderTables& fixed = fixedEncoderTables();
+	BlockTokens block;
 	for (qsizetype chunk = 0; chunk < chunkCount; ++chunk) {
 		const qsizetype start = chunk * kMaxStoredBlock;
 		const qsizetype end = qMin(size, start + kMaxStoredBlock);
 		const bool finalBlock = chunk == chunkCount - 1;
 
-		tokens.clear();
-		qint64 codedBits = 3; // block header
-		qsizetype pos = start;
-		while (pos < end) {
-			const qsizetype limit = qMin(kMaxMatch, end - pos);
-			qsizetype matchLength = 0;
-			qsizetype matchDistance = 0;
-			if (finder.findMatch(pos, limit, &matchLength, &matchDistance)) {
-				Token token;
-				token.length = static_cast<quint16>(matchLength);
-				token.distance = static_cast<quint16>(matchDistance);
-				tokens.push_back(token);
-				const int lengthIndex = lengthCodeIndex(matchLength);
-				const int distanceIndex = distanceCodeIndex(matchDistance);
-				quint32 code = 0;
-				int bits = 0;
-				fixedLiteralCode(257 + lengthIndex, &code, &bits);
-				codedBits += bits + kLengthExtra[lengthIndex] + 5 + kDistanceExtra[distanceIndex];
-				for (qsizetype i = 0; i < matchLength; ++i) {
-					finder.insert(pos + i);
-				}
-				pos += matchLength;
-				continue;
-			}
-			Token token;
-			token.literal = static_cast<quint16>(data[pos]);
-			tokens.push_back(token);
-			quint32 code = 0;
-			int bits = 0;
-			fixedLiteralCode(static_cast<int>(data[pos]), &code, &bits);
-			codedBits += bits;
-			finder.insert(pos);
-			++pos;
-		}
-		codedBits += 7; // end-of-block symbol
+		tokenizeChunk(&finder, data, start, end, config, &block);
 
-		// Falling back to a stored block keeps incompressible data from growing.
-		const qint64 storedBits = 3 + 7 + 32 + 8 * static_cast<qint64>(end - start);
-		if (codedBits >= storedBits) {
+		// Measure all three block types and keep the smallest. A stored block
+		// has to pad to a byte boundary first, so its cost depends on where the
+		// stream currently stands.
+		const qint64 padding = (8 - ((writer.bitPosition() + 3) % 8)) % 8;
+		const qint64 storedBits = 3 + padding + 32 + 8 * static_cast<qint64>(end - start);
+		const qint64 fixedBits = 3 + tokenBits(block, fixed.literal, fixed.distance);
+		const DynamicTrees trees = buildDynamicTrees(block.literalFrequencies, block.distanceFrequencies);
+		const qint64 dynamicBits = trees.valid
+			? trees.headerBits + tokenBits(block, trees.literal, trees.distance)
+			: std::numeric_limits<qint64>::max();
+
+		// Ties go to the cheaper-to-decode block, and stored wins outright, so a
+		// block is never larger than storing its bytes would be.
+		if (storedBits <= fixedBits && storedBits <= dynamicBits) {
 			writeStoredBlock(&writer, bytes + start, end - start, finalBlock);
+		} else if (dynamicBits < fixedBits) {
+			writeDynamicBlock(&writer, block, trees, finalBlock);
 		} else {
-			writeFixedBlock(&writer, tokens, finalBlock);
+			writeFixedBlock(&writer, block, fixed, finalBlock);
 		}
 	}
 	return writer.finish();
@@ -961,6 +1483,8 @@ QString deflateLevelId(DeflateLevel level)
 		return QStringLiteral("fast");
 	case DeflateLevel::Default:
 		return QStringLiteral("default");
+	case DeflateLevel::Best:
+		return QStringLiteral("best");
 	}
 	return QStringLiteral("default");
 }
@@ -975,6 +1499,8 @@ bool deflateLevelFromId(const QString& id, DeflateLevel* out)
 		level = DeflateLevel::Fast;
 	} else if (normalized == QStringLiteral("default")) {
 		level = DeflateLevel::Default;
+	} else if (normalized == QStringLiteral("best")) {
+		level = DeflateLevel::Best;
 	} else {
 		return false;
 	}

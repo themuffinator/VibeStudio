@@ -3,6 +3,7 @@
 #include "core/compiler_profiles.h"
 
 #include <QMap>
+#include <QMetaType>
 #include <QString>
 #include <QStringList>
 #include <QVector>
@@ -47,6 +48,24 @@ enum class LevelMapSelectionKind {
 	QuakeBrush,
 	QuakePatch,
 };
+
+// One member of the selection set. `objectId` is the identifier inside `kind`,
+// so a reference serializes to the same `kind:id` selector `selectLevelMapObject`
+// accepts.
+struct LevelMapSelectionRef {
+	LevelMapSelectionKind kind = LevelMapSelectionKind::None;
+	int objectId = -1;
+};
+
+inline bool operator==(const LevelMapSelectionRef& left, const LevelMapSelectionRef& right)
+{
+	return left.kind == right.kind && left.objectId == right.objectId;
+}
+
+inline bool operator!=(const LevelMapSelectionRef& left, const LevelMapSelectionRef& right)
+{
+	return !(left == right);
+}
 
 struct LevelMapVec3 {
 	double x = 0.0;
@@ -249,6 +268,19 @@ struct LevelMapStatistics {
 	LevelMapVec3 maxs;
 };
 
+// One object inside a compound move. A compound command replays its steps in
+// order and undoes them in reverse, so several objects move as a single undo
+// step instead of one step per object.
+struct LevelMapMoveStep {
+	// "entity", "vertex", "linedef", "thing", "brush" or "patch".
+	QString objectKind;
+	int objectId = -1;
+	// Entity moves rewrite the `origin` key, so the before/after text is kept.
+	QString oldValue;
+	QString newValue;
+	bool originSynthesized = false;
+};
+
 struct LevelMapUndoCommand {
 	QString description;
 	QString undoDescription;
@@ -278,6 +310,9 @@ struct LevelMapUndoCommand {
 	bool hasSidedefSnapshot = false;
 	LevelMapDoomSidedef oldSidedef;
 	LevelMapDoomSidedef newSidedef;
+	// Steps of a compound move (`commandKind == "move-selection"`): one entry per
+	// moved object, all sharing `delta`. Empty for every other command kind.
+	QVector<LevelMapMoveStep> moveSteps;
 };
 
 struct LevelMapDocument {
@@ -301,8 +336,16 @@ struct LevelMapDocument {
 	QVector<LevelMapDoomSector> doomSectors;
 	QStringList textureReferences;
 	QVector<LevelMapIssue> issues;
+	// Primary selection. These two fields are the original single-selection API
+	// and stay authoritative for every existing reader; they always mirror the
+	// primary member of `selection` (its last element), or None/-1 when the set
+	// is empty.
 	LevelMapSelectionKind selectionKind = LevelMapSelectionKind::None;
 	int selectedObjectId = -1;
+	// Multi-selection set, in the order members were added. The last element is
+	// the primary member. Never contains duplicates and never contains a
+	// reference to an object that was missing when it was added.
+	QVector<LevelMapSelectionRef> selection;
 	QVector<LevelMapUndoCommand> undoStack;
 	QVector<LevelMapUndoCommand> redoStack;
 	int undoLimit = 200;
@@ -346,6 +389,24 @@ QString levelMapDoomFormatId(LevelMapDoomFormat format);
 QString levelMapDoomFormatDisplayName(LevelMapDoomFormat format);
 QString levelMapIssueSeverityId(LevelMapIssueSeverity severity);
 QString levelMapSelectionKindId(LevelMapSelectionKind kind);
+// Inverse of levelMapSelectionKindId. Unknown or unselectable ids (including
+// "sidedef" and "none") map back to LevelMapSelectionKind::None.
+LevelMapSelectionKind levelMapSelectionKindFromId(const QString& id);
+QString levelMapSelectionRefId(const LevelMapSelectionRef& ref);
+// False for kinds that carry no position of their own, currently only sectors,
+// which move by moving their vertices.
+bool levelMapSelectionKindIsMovable(LevelMapSelectionKind kind);
+
+// Grid snapping lives here rather than in the viewport so that a mouse drag, an
+// arrow-key nudge and a CLI move all land on the same coordinates.
+//
+// `gridSize` is in map units. A non-positive or non-finite grid, or a
+// non-finite value, returns the value unchanged. Rounding is half away from
+// zero, so the grid is symmetric about the origin and a negative coordinate
+// snaps exactly the way its positive mirror does.
+double snapLevelMapCoordinate(double value, double gridSize);
+LevelMapVec3 snapLevelMapPosition(const LevelMapVec3& position, double gridSize);
+LevelMapVec3 snapLevelMapDelta(const LevelMapVec3& delta, double gridSize);
 
 bool loadLevelMap(const LevelMapLoadRequest& request, LevelMapDocument* document, QString* error = nullptr);
 LevelMapStatistics levelMapStatistics(const LevelMapDocument& document);
@@ -362,12 +423,40 @@ QStringList levelMapPatchLines(const LevelMapDocument& document);
 QStringList levelMapUndoLines(const LevelMapDocument& document);
 QString levelMapReportText(const LevelMapDocument& document);
 
+// Replaces the whole selection with a single object, exactly as before. The
+// selector is `kind:id`.
 bool selectLevelMapObject(LevelMapDocument* document, const QString& selector, QString* error = nullptr);
+
+// Multi-selection. Every mutator keeps `selectionKind`, `selectedObjectId` and
+// each record's `selected` flag in step with the set, so single-selection
+// readers never see a stale primary.
+[[nodiscard]] int levelMapSelectionCount(const LevelMapDocument& document);
+[[nodiscard]] bool levelMapSelectionContains(const LevelMapDocument& document, LevelMapSelectionKind kind, int objectId);
+[[nodiscard]] LevelMapSelectionRef levelMapPrimarySelection(const LevelMapDocument& document);
+QStringList levelMapSelectionSetLines(const LevelMapDocument& document);
+// Adds a member and makes it primary. Re-adding a member that is already in the
+// set only promotes it. Fails when the object does not exist.
+bool addLevelMapSelection(LevelMapDocument* document, LevelMapSelectionKind kind, int objectId, QString* error = nullptr);
+bool removeLevelMapSelection(LevelMapDocument* document, LevelMapSelectionKind kind, int objectId, QString* error = nullptr);
+bool toggleLevelMapSelection(LevelMapDocument* document, LevelMapSelectionKind kind, int objectId, QString* error = nullptr);
+void clearLevelMapSelection(LevelMapDocument* document);
+// Replaces the set wholesale. Duplicates collapse to their last occurrence, so
+// the caller's final entry becomes the primary member.
+bool setLevelMapSelection(LevelMapDocument* document, const QVector<LevelMapSelectionRef>& selection, QString* error = nullptr);
 bool setLevelMapEntityProperty(LevelMapDocument* document, int entityId, const QString& key, const QString& value, QString* error = nullptr);
 bool removeLevelMapEntityProperty(LevelMapDocument* document, int entityId, const QString& key, QString* error = nullptr);
 bool setLevelMapSectorProperty(LevelMapDocument* document, int sectorId, const QString& key, const QString& value, QString* error = nullptr);
 bool setLevelMapSidedefProperty(LevelMapDocument* document, int sidedefId, const QString& key, const QString& value, QString* error = nullptr);
 bool moveLevelMapObject(LevelMapDocument* document, const QString& objectKind, int objectId, double dx, double dy, double dz, QString* error = nullptr);
+// Moves every movable member of the selection set and records the whole thing as
+// a single undo command, so one undo puts all of them back. Members that cannot
+// move (sectors) are skipped; the call fails only when nothing at all moved.
+// The selection set survives the move unchanged.
+bool moveLevelMapSelection(LevelMapDocument* document, double dx, double dy, double dz, QString* error = nullptr);
+// Snaps the delta to `gridSize` first (a non-positive grid disables snapping)
+// and then performs the same compound move. A delta that snaps to zero is a
+// no-op and fails rather than pushing an empty command.
+bool moveLevelMapSelectionSnapped(LevelMapDocument* document, double dx, double dy, double dz, double gridSize, QString* error = nullptr);
 bool undoLevelMapEdit(LevelMapDocument* document, QString* error = nullptr);
 bool redoLevelMapEdit(LevelMapDocument* document, QString* error = nullptr);
 // Records the current undo depth as the saved state so that later undo/redo can
@@ -378,3 +467,7 @@ QString levelMapSaveReportText(const LevelMapSaveReport& report);
 CompilerCommandRequest compilerRequestForLevelMap(const LevelMapDocument& document, const QString& profileId, const QString& outputPath = QString());
 
 } // namespace vibestudio
+
+// Registered so that a selection set can cross a queued signal connection, not
+// only a direct one.
+Q_DECLARE_METATYPE(vibestudio::LevelMapSelectionRef)

@@ -54,12 +54,22 @@ Required settings and behavior:
   reduced-saturation option as separate, selectable settings.
 - [x] Support UI density presets: comfortable, standard, compact.
 - [ ] Ensure toolbars, tabs, cards, inspectors, dialogs, and status chips do not
-  clip text at 100%, 125%, 150%, 175%, and 200% scale.
-- [ ] Use icons plus accessible labels/tooltips for key actions.
+  clip text at 100%, 125%, 150%, 175%, and 200% scale. Labels that hold paths or
+  live readouts now elide instead of widening the window, icons and the mode rail
+  grow with the text scale, and every work surface has been rendered at 200%
+  through `--ui-snapshot`; narrow side-panel tab strips still elide their labels
+  at that size.
+- [x] Use icons plus accessible labels/tooltips for key actions: the global tool
+  bar, page headers, page tool bars, and the mode rail pair a theme-aware glyph
+  with an accessible name and a tooltip, and icon-only tool buttons name their
+  shortcut in the tooltip.
 - [x] Pair color with a glyph, hatch, stroke, or text cue for status in the
   charts, status chips, and map viewport.
 - [ ] Audit every remaining surface for color-only state.
 - [ ] Provide visible focus states for keyboard and assistive-technology users.
+  Every focusable control now draws a focus ring in a colour reserved for focus
+  (2px in the high-visibility themes), distinct from the selection fill; the
+  audit of every surface is still outstanding.
 - [x] Provide a reduced-motion preference that is stored, applied at start-up,
   and settable from preferences and the CLI.
 - [ ] Apply reduced motion to animations, transitions, and timeline effects.
@@ -68,12 +78,32 @@ Required settings and behavior:
 
 ### High-Visibility Themes
 
-`StudioTheme` in `src/core/studio_settings.h` now carries `HighContrastDark` and
-`HighContrastLight` beside `System`, `Dark`, and `Light`. Selecting either one
-rebuilds the shell stylesheet from a black-on-white or white-on-black token set
-and propagates a `highContrast` flag into every painted widget: the map
-viewport, the image/palette/waveform asset views, the composition, pipeline, and
-timeline charts, and the code syntax highlighter.
+`StudioTheme` in `src/core/studio_settings.h` carries `HighContrastDark` and
+`HighContrastLight` beside `System`, `Dark`, and `Light`. Every theme resolves
+to one token set in `src/app/studio_theme.*`, which becomes both the
+application `QPalette` and the generated application stylesheet, so dialogs,
+menus, tooltips, and docks follow the theme as well as the main window. The
+high-visibility themes use pure black and white with a single saturated accent
+(yellow on black, blue on white), full-strength outlines on every panel, 2px
+borders and focus rings, and a focus colour distinct from the accent so focus
+never hides inside a selection. The `highContrast` flag also reaches every
+painted widget: the map viewport, the model viewport, the image/palette/waveform
+asset views, the composition, pipeline, and timeline charts, and the code
+syntax highlighter.
+
+`studio-theme-smoke` checks all four explicit themes against WCAG 2.2 contrast
+ratios on every run: body and secondary text against the frame, page, panel,
+and input backgrounds, selection text against the selection fill, and accent
+text against the accent fill at 4.5:1; focus rings and success, warning, and
+danger colours at 3:1. The default dark theme's list selection is a deeper
+burnt orange than its accent for that reason: white text on the bright accent
+would fall below 4.5:1. `System` follows the platform colour scheme through
+`QStyleHints::colorScheme()`.
+
+Check boxes and radio buttons are drawn by a proxy style over Fusion from the
+same tokens: an outlined box that is clearly visible on every panel, an accent
+fill when checked, and a contrasting mark, so a checked state reads from the
+mark itself.
 
 `studioStateColor()` in `src/app/studio_charts.*` keeps four tuned ramps — two
 high-contrast and two standard — and separates the eight operation states by
@@ -89,26 +119,70 @@ Status no longer depends on hue:
   (`patternForIndex()`), and every pipeline stage and timeline row is prefixed
   with a state glyph from `studioStateGlyph()` — a check mark, a cross, a
   warning triangle, and so on, written as explicit code points.
-- Status-bar chips render a bracketed text cue in front of the label
-  (`[Completed] Package`, `[No project] Project`), carry the same text in an
-  accessible description, and expose the state as a style property rather than
-  as a raw color.
+- Status-bar chips and page status strips show the state glyph from
+  `studioStateGlyph()` followed by words (a check mark before the package name,
+  a warning triangle before "Compilers 7/9", a middle dot before "No project"),
+  carry the same text in an accessible description, and expose the state as a
+  style property rather than as a raw color.
+- Activity, problem, timeline, and build-stage rows lead with the same glyph,
+  and their accessible text spells the state out ("Package Scan, Completed.
+  ..."), so a screen reader hears the word rather than the symbol.
 - The map viewport marks selection with a ring plus a crosshair and a text
   label, draws unsolved brushes with a dashed pen and a cross, and separates
   patches with a dash-dot stroke, so shape and stroke carry the meaning.
+- The entity inspector lists each declared spawnflag as a check box row in its
+  **Spawnflags** group, named for the flag and valued with its bit. The set
+  state is the check mark the proxy style draws, and it is exposed to assistive
+  technology as the row's checked state, so set and unset survive a color-blind
+  or high-contrast reading. Toggling the box rewrites the entity's summed
+  `spawnflags` value.
+- The entity section of the Levels **Health** tab is headed
+  `ENTITIES [<state>]`, with the state word from
+  `localizedOperationStateName()`, and prints each finding as its
+  `EntityValidationIssue::code` followed by the message
+  (`entity-unknown-class`, `entity-required-key-missing`, and so on).
+  `m_levelMapValidation` is not one of the lists `applyStateColor()` tints, so
+  no row in it depends on hue. Per-row severity is kept only as a data role: it
+  is neither painted nor written into the row text, so a reader learns which
+  check fired but not how severe that particular finding was.
+- The shader stage tree marks a texture missing from the open package with a
+  warning glyph and the words "missing from the open package", and one that was
+  found with the package it was found in. The model inspector marks the skin
+  it drew with a check glyph beside the path, and model warnings sit in their
+  own group with a warning glyph on every row.
+- The first-run setup stepper marks each step with a glyph (a check for done,
+  a chevron for the current step, and a dot for pending, whose text is also
+  muted), and each row's accessible text spells the state out: "Step 2 of 8,
+  current step: Workspace Profile".
 
 ### Reduced Motion
 
 The reduced-motion preference is stored, settable from preferences and from
-`--set-reduced-motion`, and read back at start-up. Its effect today is narrow
-because the shell has no animation framework at all — there is no
-`QPropertyAnimation`, `QVariantAnimation`, `QTimeLine`, or `QMovie` anywhere in
-the source tree. Two surfaces honor it:
+`--set-reduced-motion`, and read back at start-up. The shell still has no
+declarative animation framework — there is no `QPropertyAnimation`,
+`QVariantAnimation`, `QTimeLine`, or `QMovie` anywhere in the source tree — so
+the setting acts on the three surfaces that move on their own:
 
 - `LoadingPane` swaps its indeterminate (marquee) progress bar for a static
   determinate bar while a busy state is in progress.
 - The map viewport draws the selection ring solid instead of dashed, because
   fine dashes shimmer while panning.
+- The model viewport refuses to animate. `ModelViewport::setReducedMotion(true)`
+  drops out of playback if it was running and emits `playbackChanged`, `play()`
+  returns without starting, `advanceFrame()` returns early, and
+  `updatePlaybackTimer()` stops the `QTimer` that drives frame stepping.
+  Stepping by hand with Page Up and Page Down keeps working, because that is a
+  deliberate user action rather than motion the widget starts on its own, and
+  `statusLines()` says so: "Playback: disabled by reduced motion; step frames
+  with Page Up and Page Down". `accessibleSummary()` reports the same state as
+  "playback disabled by reduced motion".
+
+The shell pushes the preference into the model viewport wherever it pushes it
+into the map viewport, both when a model is shown and when preferences change.
+The model workbench's Play/Pause button, though, is enabled purely on
+`frameCount() > 1` in `refreshModelPlaybackControls()`, so under reduced motion
+it stays clickable and pressing it simply leaves the viewport paused; the
+readout under the viewport is the only place that explains why.
 
 Everything else in the shell is static, so there is nothing further for the
 setting to suppress yet.
@@ -124,9 +198,9 @@ Required behavior:
 - [ ] No keyboard traps in modals, dock widgets, editors, setup flow, or preview
   panes.
 - [ ] Consistent tab order in setup, preferences, inspectors, and task details.
-- [x] The charts, the map viewport, and the asset preview views expose
-  accessible names and keep an accessible description in sync with their
-  contents, so their data is readable as text.
+- [x] The charts, the map viewport, the model viewport, and the asset preview
+  views expose accessible names and keep an accessible description in sync with
+  their contents, so their data is readable as text.
 - [ ] Every other custom widget exposes accessible names, descriptions, roles,
   values, and state changes.
 - [ ] Task progress, warnings, failures, prompts, and completion states are
@@ -167,6 +241,49 @@ cards, and detail tabs. Visible shader, sprite, code, AI, and extension strings
 route through Qt translation APIs; shader directives, CLI flags, extension IDs,
 file paths, and format identifiers remain stable technical identifiers.
 
+The studio shell's navigation is keyboard-first. The mode rail is a single tab
+stop whose arrow keys, Home, and End move between modes; tool buttons, page
+buttons, and the rail take focus from Tab but not from a mouse click, so focus
+rings appear for keyboard users without lingering after a click; and the entity
+property grid edits the selected value on Enter. Keyboard focus starts on the
+work surface rather than on the first tool button. The model and audio
+property grids and the shader stage tree are ordinary tree views, so the arrow
+keys walk their rows and expand or collapse groups, and every row's tooltip
+holds its full, unelided value. The float and close buttons on each dock's
+title bar are named for their panel ("Float the Activity panel", "Close the
+Activity panel") and take focus from Tab.
+
+The format and UI round adds accessible names for every control it introduces:
+the Levels page **Entity** tab and its inspector list, the entity definition
+path field, its Browse and Load buttons and the summary label beneath them, the
+**Snap** checkbox on the map viewport control row, the package **Compare**
+button, and the model workbench's render-mode combo, animation combo,
+Play/Pause button, Frame Model button, Export OBJ button, viewport, and hover
+readout. The entity inspector, the entity definition path field, the model
+viewport, the model skin preview, and the model details list also carry
+accessible descriptions. All of these strings route through `tr()`; entity issue
+codes, spawnflag names read out of a definition file, format identifiers, and
+CLI flags stay untranslated as stable technical identifiers.
+
+`package.compare`, `model.export`, and `entity.definitions` are registered in
+the same shell command registry as everything else, so they appear in the menu
+bar and in the command palette. `core/studio_semantics.h` declares no shortcut
+for any of the three, so today they are menu- or palette-driven only.
+
+Two viewport details matter for keyboard users. The map viewport binds `Tab` and
+`Shift+Tab` to cycling the selection through object tiers, so `Tab` no longer
+leaves the widget; `Escape` is the documented way out, and it is staged — it
+first cancels an in-progress drag or rubber band and discards the preview, then
+clears the selection, and only then calls `focusNextChild()`. The model viewport
+takes `Qt::StrongFocus` and does not intercept `Tab`, so focus moves through it
+normally.
+
+`m_levelMapViewport`'s accessible description now covers every gesture:
+Shift-click to add, Ctrl-click to toggle, dragging from empty space to
+box-select, dragging a selected object to move it, arrow keys to nudge by one
+grid step, the wheel to zoom, Tab to cycle objects, and Escape to cancel and
+leave.
+
 ## MVP Release Audit Status
 
 Milestone 4 adds a release asset gate in
@@ -188,7 +305,9 @@ the documented smoke paths for:
   selectors. Level-map path, object, validation, preview, and compiler-profile
   controls are now part of the manual screen-reader spot-check scope. Advanced
   Studio shader, sprite, code, AI proposal, and extension controls are included
-  in the same manual spot-check scope.
+  in the same manual spot-check scope, as are the entity inspector and entity
+  definition controls, the model viewport and its playback controls, and the
+  package Compare button.
 
 CI additionally runs the shell itself under an offscreen platform plugin with
 `--self-test`, which builds every work surface once and pumps the event loop, so
@@ -250,15 +369,29 @@ Engineering requirements:
 ### Translation Context
 
 `ApplicationShell` now declares `Q_OBJECT` and is run through `moc`
-(`app_moc_headers` in `src/meson.build`), as are the map viewport, asset views,
-charts, syntax highlighter, and command palette. Before that the shell inherited
-`tr()` from `QMainWindow`, so its strings were extracted and looked up under the
-`QMainWindow` context and could never match a catalog entry written for the
-shell. Shell strings now resolve under their own class context. Core modules
-that are not `QObject`s use explicit
+(`app_moc_headers` in `src/meson.build`), as are the map viewport, the model
+viewport, asset views, charts, syntax highlighter, and command palette. Before
+that the shell inherited `tr()` from `QMainWindow`, so its strings were
+extracted and looked up under the `QMainWindow` context and could never match a
+catalog entry written for the shell. Shell strings now resolve under their own
+class context. Core modules that are not `QObject`s use explicit
 `QCoreApplication::translate("VibeStudio…", …)` contexts instead —
 `VibeStudioEditorProfiles`, `VibeStudioRuntime`, and siblings — so every string
-has a stable, intentional context.
+has a stable, intentional context. The modules added this round follow the same
+rule: `VibeStudioEntityDefinitions`, `VibeStudioModelMesh`,
+`VibeStudioPackageCompare`, and `VibeStudioDocumentWatch`.
+
+`ModelViewport` is listed in `app_moc_headers` alongside `MapViewport`, so the
+strings it paints and reports — status lines, the accessible summary, and its
+empty and no-geometry states — are extracted under their own class context
+rather than a base class's.
+
+Newer shell strings use Qt plural forms where a count is involved, for example
+`tr("%n difference(s) between the two packages.", nullptr, differences)` and the
+`ENTITIES [%1]` header on the Health tab. There are still no `//:` translator
+comments anywhere in `src/app` or `src/core`, so the pluralization checklist
+item above, which also covers translator comments for technical terms, stays
+unticked.
 
 This fixes the lookup, not the coverage. Strings are still added throughout the
 shell, so the first checklist item above stays unticked until an extraction run
@@ -279,9 +412,10 @@ VibeStudio translator, then searches these directories in order:
 
 Within each directory it tries `vibestudio_<requested>.qm`, then the normalized
 target id, then the base language, so `pt_BR` falls back to `pt`. The source
-language (`en` or an empty locale) installs no catalog at all. When a catalog
-loads, Qt's own `qtbase_<locale>.qm` is installed alongside it so standard
-dialogs and buttons are translated too. Failures are collected as warnings and
+language (`en` or an empty locale) installs `vibestudio_en.qm`, which holds only
+English plural forms (see below), and skips Qt's own catalogs. For any other
+language, Qt's `qtbase_<locale>.qm` is installed alongside the studio catalog so
+standard dialogs and buttons are translated too. Failures are collected as warnings and
 the application continues in the source language rather than refusing to start.
 
 `i18n/meson.build` compiles every checked-in `.ts` file with `lrelease` into
@@ -301,7 +435,18 @@ language-selection item above is still unticked.
 
 ### Catalog Contents
 
-**The shipped catalogs are stubs, not translations.** Each
+**English plural forms.** Source strings mark plurals the Qt way, for example
+`tr("%n item(s)", nullptr, count)`, and Qt only resolves `%n` into a singular or
+plural form through a translator. Without an English catalog the studio showed
+"1 item(s)". `scripts/english_plurals.py --write` asks `lupdate -pluralonly` for
+every plural message and writes English singular and plural forms into
+`i18n/vibestudio_en.ts`, derived from the markup between `%n` and the next
+`%1`..`%9` placeholder (`entr(y)(ies)`, `item(s)`, `match(es)`, and bare plurals
+such as "%n entries") plus a short list of sentences whose verb also changes.
+Without `--write` it checks that every plural message has finished forms, and
+that check runs in the gate as `english-plurals-validation`.
+
+**The other shipped catalogs are stubs, not translations.** Each other
 `i18n/vibestudio_*.ts` file currently holds a single message in the
 `VibeStudioLocalization` context, marked `type="unfinished"`. A compiled `.qm`
 built from one of them therefore resolves almost nothing, and the UI renders in

@@ -79,7 +79,19 @@ surface using the same core services as the GUI.
 - [x] `package extract`
 - [x] `package validate`
 - [x] `package manifest`
-- [ ] `package compare`
+- [x] `package compare` to diff two archives entry by entry, reporting
+  added, removed, changed, case-only, and identical members. Paths are
+  matched case-folded, and repeated Doom lump names are paired by source
+  order rather than collapsed, so one WAD's second map is compared against
+  the other WAD's second map. `--metadata-only` decides every status from
+  size alone and never reads entry contents, `--include-directories` brings
+  directory records into the comparison (off by default),
+  `--max-entry-bytes <n>` sets the per-entry read budget (default 256 MiB),
+  and `--against <path>` replaces the second positional path. An entry that
+  is unreadable or above the budget is reported as not compared, which is
+  not by itself a difference. Exit codes: `0` when the two packages are
+  identical, `4` when they differ, `3` when either package cannot be opened,
+  `2` when a path is missing.
 - [x] `package stage`
 - [x] `package save-as`
 
@@ -105,6 +117,78 @@ surface using the same core services as the GUI.
   names from the ones the engine supplies itself.
 - [x] JSON output for map statistics, entities, brushes, textures, validation,
   preview lines, selection, properties, and save reports.
+
+### Entity Definitions
+- [x] `entity definitions` to load Radiant `.def`, QuakeC `/*QUAKED` blocks,
+  Valve `.fgd` (including `@include` and `base()` inheritance) and Quake III
+  `.ent` catalogues, and list the classes they declare. `--class <classname>`
+  narrows the text output to that one class summary, and adds a `className`
+  field beside the catalogue in JSON.
+- [x] `entity validate` to check a map's entities against a catalogue: unknown
+  classnames, undeclared and mistyped keys, unknown spawnflag bits, point/brush
+  misuse, and the `target`/`targetname` graph in both directions.
+- [x] `--strict` on `entity validate` fails on warnings as well as errors.
+  Without it only errors fail, because an unknown classname is a warning: a
+  map may legitimately use an entity a mod ships no definition for, and
+  `--strict` is for the build script that refuses that anyway.
+- [x] `--no-recursive` keeps folder paths from being walked into subfolders.
+  A folder contributes the files whose suffix is `def`, `fgd`, `ent`, or `qc`.
+- [x] JSON output for the loaded catalogue and for the validation report.
+
+Both commands resolve definition paths the same way, accumulating from every
+source below before falling back:
+
+- Repeatable `--definitions <path>`, `--definition <path>`, `--path <path>`,
+  and `--paths <path>`.
+- `--definition-paths "<a;b;c>"`, split on semicolons.
+- Trailing positional paths: every token after the action for
+  `entity definitions`, every token after the map path for `entity validate`.
+- Only if all of those are empty, `--project-root <path>` falls back to the
+  conventional per-project folders, in this order: `.vibestudio/definitions`,
+  `definitions`, `defs`, `scripts`, `base/scripts`, `entities`. They are
+  probed, not required to exist.
+
+Each resolved path may be a definition file or a folder of them.
+
+| Command | Exit | Condition |
+| --- | --- | --- |
+| `entity definitions` | 0 | The catalogue loaded. |
+| `entity definitions` | 2 | No definition path resolved. |
+| `entity definitions` | 3 | The catalogue reported an error, or `--class` named a class it does not declare. |
+| `entity validate` | 0 | The report has no errors, and no warnings when `--strict` is passed. |
+| `entity validate` | 1 | The map path exists but the map could not be loaded. |
+| `entity validate` | 2 | No map path, or no definition path resolved. |
+| `entity validate` | 3 | The map path does not exist, or the catalogue declared no classes. |
+| `entity validate` | 4 | The report has errors, or `--strict` and the report has warnings. |
+
+### Models
+- [x] `model inspect` to decode MDL, MD2 and MD3 geometry and report surfaces,
+  frames, animations, tags and skins. MDC, MDR and IQM report their header
+  counts only; no geometry is decoded for them.
+- [x] `model export` to write one frame as a Wavefront OBJ for an external
+  modeller. `--frame <n>` is zero-based and defaults to 0, `--material <name>`
+  sets the OBJ `usemtl` name, and `--output <path>` names the file. Without
+  `--output` the OBJ text goes to stdout, or to the JSON `obj` field.
+  `--overwrite` is required to replace an existing output, and `--dry-run`
+  reports the path it would write without creating anything.
+- [x] Both commands accept either a package plus an entry (`--package <path>`
+  and `--entry <virtual/path>`, or the same two as positional tokens) or a
+  single model file on disk (`--file <path>`, or a lone positional path with
+  no entry after it).
+- [x] `--palette <id>` selects the palette used for the indexed skins MDL
+  embeds.
+
+| Command | Exit | Condition |
+| --- | --- | --- |
+| `model inspect` | 0 | The model decoded. |
+| `model inspect` | 2 | No package path and no model file path was given. |
+| `model inspect` | 3 | The model file or the package could not be opened. |
+| `model inspect` | 5 | The payload is not a recognized idTech model. |
+| `model export` | 0 | The OBJ was written, printed, or reported as a dry run. |
+| `model export` | 1 | `--output` exists and `--overwrite` was not passed, or the file could not be written. |
+| `model export` | 2 | No package path and no model file path, or `--frame` outside the model's frame range. |
+| `model export` | 3 | The model file or the package could not be opened. |
+| `model export` | 5 | The format decodes no geometry, or the frame produced none. |
 
 ### Compiled Artifacts
 - [x] `bsp inspect` for Quake, Quake II, and Quake III BSP lump tables, entity
@@ -223,12 +307,30 @@ surface using the same core services as the GUI.
 - [x] `--verbose` includes diagnostics and timing.
 - [x] `--manifest <path>` writes compiler command manifests.
 - [x] `--dry-run` shows planned package extraction writes, package save-as
-  writes, shader save reports, extension command plans, and compiler command
-  runs without touching files.
+  writes, model frame exports, shader save reports, extension command plans,
+  and compiler command runs without touching files.
 - [x] `--watch` streams compiler task log entries while long-running process-backed commands are active.
 - [x] `--task-state` adds automation-friendly task-state objects to JSON output where supported.
 - [x] Non-zero exit codes distinguish usage errors, not-found cases,
   validation failures, operation failures, and unavailable workflows.
+
+### Exit Codes
+
+`--exit-codes` and `cli exit-codes` print this contract from the same table
+the command handlers return.
+
+| Code | Id | Meaning |
+| --- | --- | --- |
+| 0 | `success` | The command completed successfully. |
+| 1 | `failure` | The command was understood but the operation failed. |
+| 2 | `usage-error` | Arguments were missing, malformed, or incompatible. |
+| 3 | `not-found` | A requested project, package, entry, installation, or tool was not found. |
+| 4 | `validation-failed` | Validation completed and found blocking problems. |
+| 5 | `unavailable` | The workflow is recognized but no capable implementation or tool is available yet. |
+
+A finding is reported with `4`, not `1`: `entity validate` and
+`package compare` both complete normally and exit `4` so a build script can
+gate on the result.
 
 ## UX Rules
 - [x] Every active destructive command must have a dry-run or staged mode.
@@ -247,6 +349,9 @@ vibestudio --cli package save-as ".\mod-folder" ".\build\mod.pk3" --format pk3 -
 vibestudio --cli map edit ".\maps\start.map" --entity 1 --set targetname=lift --output ".\maps\start-edited.map"
 vibestudio --cli shader set-stage ".\scripts\common.shader" --shader "textures/base/wall" --stage 1 --directive blendFunc --value "GL_ONE GL_ONE" --output ".\scripts\common-edited.shader" --json
 vibestudio --cli sprite plan --engine doom --name TROO --frames 2 --rotations 8 --palette doom --json
+vibestudio --cli entity validate ".\maps\start.map" --definitions ".\defs\quake.def" --strict --json
+vibestudio --cli model export ".\id1\pak0.pak" progs/player.mdl --frame 0 --output ".\out\player.obj" --dry-run
+vibestudio --cli package compare ".\release-1.pk3" ".\release-2.pk3" --json
 vibestudio --cli compiler run ericw-qbsp --input ".\maps\start.map" --watch --manifest ".\build\start.run.json"
 vibestudio --cli ui semantics --json
 vibestudio --cli localization report --locale ar --json
@@ -262,6 +367,8 @@ POSIX shells:
 vibestudio --cli package list './baseq3/pak0.pk3' --json
 vibestudio --cli package stage './mod-folder' --add-file './autoexec.cfg' --as 'scripts/autoexec.cfg' --json
 vibestudio --cli map inspect './maps/start.map' --select entity:0 --json
+vibestudio --cli entity definitions './defs' --json
+vibestudio --cli model inspect './id1/pak0.pak' progs/player.mdl --json
 vibestudio --cli shader inspect './scripts/common.shader' --package './baseq3' --json
 vibestudio --cli code index './mymod' --find monster --json
 vibestudio --cli compiler plan ericw-qbsp --input './maps/start.map' --dry-run

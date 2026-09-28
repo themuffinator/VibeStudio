@@ -6,6 +6,10 @@
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
+#include <QJsonArray>
+#include <QJsonDocument>
+#include <QJsonObject>
+#include <QJsonValue>
 #include <QStringList>
 #include <QTemporaryDir>
 
@@ -94,6 +98,7 @@ QString fixedLatin1String(const char* data, qsizetype maxSize)
 struct WadRecord {
 	QString name;
 	quint8 type = 0;
+	quint32 offset = 0;
 	quint32 size = 0;
 };
 
@@ -124,6 +129,7 @@ QVector<WadRecord> wadDirectory(const QString& path, QString* magicOut)
 		}
 		WadRecord entry;
 		entry.name = fixedLatin1String(bytes.constData() + record + nameOffset, nameLimit);
+		entry.offset = readLe32(bytes, record);
 		entry.size = readLe32(bytes, record + 4);
 		entry.type = textureWad ? static_cast<quint8>(bytes[record + 12]) : 0;
 		records.push_back(entry);
@@ -138,6 +144,65 @@ QStringList wadDirectoryNames(const QString& path)
 		names.push_back(record.name);
 	}
 	return names;
+}
+
+// Bytes of one lump by directory position, which is the only way to address a
+// repeated Doom lump name.
+QByteArray wadLumpBytesAt(const QString& path, int index)
+{
+	const QVector<WadRecord> records = wadDirectory(path, nullptr);
+	if (index < 0 || index >= records.size()) {
+		return {};
+	}
+	const WadRecord& record = records.at(index);
+	const QByteArray bytes = readFile(path);
+	if (static_cast<qsizetype>(record.offset) + record.size > bytes.size()) {
+		return {};
+	}
+	return bytes.mid(record.offset, record.size);
+}
+
+struct WadInput {
+	QString name;
+	QByteArray data;
+};
+
+// Minimal Doom IWAD/PWAD fixture writer: magic, int32 lumpCount,
+// int32 directoryOffset, the lump payloads, then 16-byte directory records of
+// int32 offset, int32 size, char name[8], per the Unofficial Doom Specs v1.666
+// (https://www.gamers.org/dhs/helpdocs/dmsp1666.html).
+bool buildDoomWad(const QString& path, const QByteArray& magic, const QVector<WadInput>& inputs)
+{
+	QByteArray payload;
+	QByteArray directory;
+	for (const WadInput& input : inputs) {
+		const quint32 offset = static_cast<quint32>(12 + payload.size());
+		payload.append(input.data);
+		appendLe32(&directory, offset);
+		appendLe32(&directory, static_cast<quint32>(input.data.size()));
+		const QByteArray name = input.name.toLatin1();
+		const qsizetype start = directory.size();
+		directory.append(name);
+		while (directory.size() - start < 8) {
+			directory.append('\0');
+		}
+	}
+	QByteArray bytes;
+	bytes.append(magic);
+	appendLe32(&bytes, static_cast<quint32>(inputs.size()));
+	appendLe32(&bytes, static_cast<quint32>(12 + payload.size()));
+	bytes.append(payload);
+	bytes.append(directory);
+	return writeFile(path, bytes);
+}
+
+QStringList plannedPaths(const PackageStagingModel& staging)
+{
+	QStringList paths;
+	for (const PackageStagedEntry& entry : staging.plannedEntries()) {
+		paths.push_back(entry.virtualPath);
+	}
+	return paths;
 }
 
 struct PakInput {
@@ -784,27 +849,211 @@ int main()
 	ok &= expect(wadStaging.writeArchive(iwadRequest).succeeded(), "IWAD save-as should succeed");
 	ok &= expect(readFile(iwadPath).left(4) == QByteArray("IWAD"), "requested IWAD magic should be written");
 
-	// Doom keeps a map's lumps in the run that follows its marker
-	// (https://doomwiki.org/wiki/WAD), and the staging plan addresses lumps by
-	// name only, so it cannot express two maps that both hold THINGS/LINEDEFS.
-	// Writing one anyway produced an interleaved, unreadable WAD, so the writer
-	// must block instead.
+	// A real multi-map PWAD must round-trip. Doom keeps a map's lumps in the
+	// run that follows its marker (https://doomwiki.org/wiki/WAD), so every map
+	// repeats THINGS/LINEDEFS/SECTORS and lump names are not keys: the plan has
+	// to carry each lump's source position, preserve it, and resolve bytes
+	// through it.
 	{
-		QDir multiMapSource(root.filePath(QStringLiteral("multimap-source")));
-		ok &= expect(root.mkpath(QStringLiteral("multimap-source")), "multi-map source directory should be created");
-		ok &= expect(writeFile(multiMapSource.filePath(QStringLiteral("MAP01")), QByteArray("one")), "MAP01 marker should be written");
-		ok &= expect(writeFile(multiMapSource.filePath(QStringLiteral("MAP02")), QByteArray("two")), "MAP02 marker should be written");
-		ok &= expect(writeFile(multiMapSource.filePath(QStringLiteral("THINGS")), QByteArray("things")), "THINGS lump should be written");
-		ok &= expect(writeFile(multiMapSource.filePath(QStringLiteral("LINEDEFS")), QByteArray("linedefs")), "LINEDEFS lump should be written");
+		const QString multiMapPath = root.filePath(QStringLiteral("multimap.wad"));
+		const QVector<WadInput> multiMapLumps = {
+			{QStringLiteral("MAP01"), QByteArray()},
+			{QStringLiteral("THINGS"), QByteArray("things-one")},
+			{QStringLiteral("LINEDEFS"), QByteArray("linedefs-one")},
+			{QStringLiteral("SECTORS"), QByteArray("sectors-one")},
+			{QStringLiteral("MAP02"), QByteArray()},
+			{QStringLiteral("THINGS"), QByteArray("things-two")},
+			{QStringLiteral("LINEDEFS"), QByteArray("linedefs-two")},
+			{QStringLiteral("SECTORS"), QByteArray("sectors-two")},
+			{QStringLiteral("PLAYPAL"), QByteArray("palette")},
+		};
+		ok &= expect(buildDoomWad(multiMapPath, QByteArray("PWAD"), multiMapLumps), "multi-map PWAD fixture should be written");
+
 		PackageArchive multiMapArchive;
-		ok &= expect(multiMapArchive.load(multiMapSource.path(), &error), "multi-map source folder should load");
+		ok &= expect(multiMapArchive.load(multiMapPath, &error), "multi-map PWAD should load");
 		PackageStagingModel multiMapStaging;
 		ok &= expect(multiMapStaging.loadBaseArchive(multiMapArchive, &error), "multi-map staging should load");
+		ok &= expect(multiMapStaging.summary().baseFileCount == static_cast<int>(multiMapLumps.size()), "every lump of both maps should be staged");
+		ok &= expect(multiMapStaging.sourceWadLumps().size() == multiMapLumps.size(), "the source WAD directory should be read in on-disk order");
 
-		const QString multiMapPath = root.filePath(QStringLiteral("multimap.wad"));
-		const PackageWriteReport multiMapReport = writePackage(multiMapStaging, multiMapPath, PackageArchiveFormat::Wad);
-		ok &= expect(!multiMapReport.succeeded() && !multiMapReport.blockedMessages.isEmpty(), "multi-map Doom WAD output should be blocked");
-		ok &= expect(!QFileInfo::exists(multiMapPath), "a blocked WAD write must not leave an output file behind");
+		QStringList sourceOrder;
+		for (const WadInput& lump : multiMapLumps) {
+			sourceOrder.push_back(lump.name);
+		}
+		ok &= expect(plannedPaths(multiMapStaging) == sourceOrder, "a WAD plan should keep the source lump order");
+
+		// Positional byte resolution: map 2's THINGS must not read map 1's.
+		const QVector<PackageStagedEntry> planned = multiMapStaging.plannedEntries();
+		QByteArray secondThings;
+		ok &= expect(planned.size() > 5 && planned.at(5).virtualPath == QStringLiteral("THINGS"), "the sixth planned entry should be map 2's THINGS");
+		ok &= expect(multiMapStaging.entryBytes(planned.at(5), &secondThings, &error), "map 2's THINGS should read");
+		ok &= expect(secondThings == QByteArray("things-two"), "map 2's THINGS must not resolve to map 1's bytes");
+
+		const QString multiMapOut = root.filePath(QStringLiteral("multimap-out.wad"));
+		const PackageWriteReport multiMapReport = writePackage(multiMapStaging, multiMapOut, PackageArchiveFormat::Wad);
+		ok &= expect(multiMapReport.succeeded(), "multi-map PWAD write-back should succeed");
+		ok &= expect(multiMapReport.entryCount == static_cast<int>(multiMapLumps.size()), "every lump should be written");
+		ok &= expect(wadDirectoryNames(multiMapOut) == sourceOrder, "each map's lumps should stay grouped under their own marker");
+		ok &= expect(wadLumpBytesAt(multiMapOut, 1) == QByteArray("things-one"), "map 1's THINGS bytes mismatch");
+		ok &= expect(wadLumpBytesAt(multiMapOut, 5) == QByteArray("things-two"), "map 2's THINGS bytes mismatch");
+		ok &= expect(wadLumpBytesAt(multiMapOut, 7) == QByteArray("sectors-two"), "map 2's SECTORS bytes mismatch");
+
+		// Reloading the written WAD and staging it again has to reproduce the
+		// same plan, which is what makes repeated saves safe.
+		PackageArchive multiMapRoundTrip;
+		ok &= expect(multiMapRoundTrip.load(multiMapOut, &error), "written multi-map PWAD should load");
+		PackageStagingModel roundTripStaging;
+		ok &= expect(roundTripStaging.loadBaseArchive(multiMapRoundTrip, &error), "written multi-map PWAD should stage");
+		ok &= expect(plannedPaths(roundTripStaging) == sourceOrder, "a reloaded multi-map PWAD should keep its lump order");
+
+		// The manifest hashes each lump on its own: two lumps that share a name
+		// must not share a digest.
+		const QJsonArray manifestEntries = QJsonDocument::fromJson(multiMapStaging.manifestJson())
+											   .object()
+											   .value(QStringLiteral("afterEntries"))
+											   .toArray();
+		QStringList thingsDigests;
+		for (const QJsonValue& value : manifestEntries) {
+			const QJsonObject object = value.toObject();
+			if (object.value(QStringLiteral("virtualPath")).toString() == QStringLiteral("THINGS")) {
+				thingsDigests.push_back(object.value(QStringLiteral("sha256")).toString());
+			}
+		}
+		ok &= expect(thingsDigests.size() == 2, "the manifest should list both THINGS lumps");
+		ok &= expect(thingsDigests.value(0) != thingsDigests.value(1) && !thingsDigests.value(0).isEmpty(), "each map's THINGS should hash to its own digest");
+
+		const QString multiMapOutB = root.filePath(QStringLiteral("multimap-out-b.wad"));
+		ok &= expect(writePackage(roundTripStaging, multiMapOutB, PackageArchiveFormat::Wad).succeeded(), "second multi-map write should succeed");
+		ok &= expect(readFile(multiMapOut) == readFile(multiMapOutB), "a multi-map PWAD should survive two round trips byte-for-byte");
+	}
+
+	// Two maps with no source order to read them in is genuinely ambiguous:
+	// nothing says which THINGS belongs to which marker, so the writer must
+	// refuse rather than emit an interleaved WAD no engine can read.
+	{
+		QDir ambiguousSource(root.filePath(QStringLiteral("multimap-source")));
+		ok &= expect(root.mkpath(QStringLiteral("multimap-source")), "multi-map source directory should be created");
+		ok &= expect(writeFile(ambiguousSource.filePath(QStringLiteral("MAP01")), QByteArray("one")), "MAP01 marker should be written");
+		ok &= expect(writeFile(ambiguousSource.filePath(QStringLiteral("MAP02")), QByteArray("two")), "MAP02 marker should be written");
+		ok &= expect(writeFile(ambiguousSource.filePath(QStringLiteral("THINGS")), QByteArray("things")), "THINGS lump should be written");
+		ok &= expect(writeFile(ambiguousSource.filePath(QStringLiteral("LINEDEFS")), QByteArray("linedefs")), "LINEDEFS lump should be written");
+		PackageArchive ambiguousArchive;
+		ok &= expect(ambiguousArchive.load(ambiguousSource.path(), &error), "multi-map source folder should load");
+		PackageStagingModel ambiguousStaging;
+		ok &= expect(ambiguousStaging.loadBaseArchive(ambiguousArchive, &error), "multi-map folder staging should load");
+
+		const QString ambiguousPath = root.filePath(QStringLiteral("multimap-ambiguous.wad"));
+		const PackageWriteReport ambiguousReport = writePackage(ambiguousStaging, ambiguousPath, PackageArchiveFormat::Wad);
+		ok &= expect(!ambiguousReport.succeeded() && !ambiguousReport.blockedMessages.isEmpty(), "an unordered multi-map Doom WAD should be blocked");
+		ok &= expect(!QFileInfo::exists(ambiguousPath), "a blocked WAD write must not leave an output file behind");
+	}
+
+	// Saving over the open package: the original is only replaced once the new
+	// file is written and verified, and the file it replaced is recoverable.
+	{
+		const QString inPlacePath = root.filePath(QStringLiteral("inplace.pak"));
+		ok &= expect(buildPak(inPlacePath, {
+							  {QStringLiteral("a.txt"), QByteArray("AAA")},
+							  {QStringLiteral("b.txt"), QByteArray("BBB")},
+						  }),
+			"in-place PAK fixture should be written");
+		const QByteArray inPlaceOriginal = readFile(inPlacePath);
+
+		PackageArchive inPlaceArchive;
+		ok &= expect(inPlaceArchive.load(inPlacePath, &error), "in-place PAK should load");
+		PackageStagingModel inPlaceStaging;
+		ok &= expect(inPlaceStaging.loadBaseArchive(inPlaceArchive, &error), "in-place staging should load");
+		ok &= expect(inPlaceStaging.addFile(root.filePath(QStringLiteral("new.cfg")), QStringLiteral("c.cfg"), &error), "in-place add should stage");
+
+		// Without the opt-in flag the old refusal, and its message, stay.
+		const PackageWriteReport refused = writePackage(inPlaceStaging, inPlacePath, PackageArchiveFormat::Pak);
+		ok &= expect(!refused.succeeded(), "saving over the source without the flag should still be blocked");
+		ok &= expect(refused.blockedMessages.join('\n').contains(QStringLiteral("Save-as destination must be different from the source package path")), "the existing refusal message should be unchanged");
+		ok &= expect(readFile(inPlacePath) == inPlaceOriginal, "a refused save must not touch the package");
+
+		PackageWriteRequest inPlaceRequest;
+		inPlaceRequest.destinationPath = inPlacePath;
+		inPlaceRequest.format = PackageArchiveFormat::Pak;
+		inPlaceRequest.allowInPlaceOverwrite = true;
+		const PackageWriteReport inPlaceReport = inPlaceStaging.writeArchive(inPlaceRequest);
+		ok &= expect(inPlaceReport.succeeded() && inPlaceReport.overwroteInPlace, "opt-in in-place overwrite should succeed");
+		ok &= expect(inPlaceReport.backupPath == QStringLiteral("%1.bak").arg(QFileInfo(inPlacePath).absoluteFilePath()), "the default backup should sit beside the package");
+		ok &= expect(QFileInfo::exists(inPlaceReport.backupPath), "the backup file should exist");
+		ok &= expect(readFile(inPlaceReport.backupPath) == inPlaceOriginal, "the backup must hold the original package byte-for-byte");
+		ok &= expect(readFile(inPlacePath) != inPlaceOriginal, "the package should have been replaced");
+		ok &= expect(packageWriteReportText(inPlaceReport).contains(inPlaceReport.backupPath), "the report text should name the backup");
+
+		PackageArchive inPlaceRoundTrip;
+		ok &= expect(inPlaceRoundTrip.load(inPlacePath, &error), "the replaced package should load");
+		ok &= expect(inPlaceRoundTrip.readEntryBytes(QStringLiteral("c.cfg"), &bytes, &error) && bytes == QByteArray("exec config\n"), "the replaced package should hold the added entry");
+		ok &= expect(inPlaceRoundTrip.readEntryBytes(QStringLiteral("a.txt"), &bytes, &error) && bytes == QByteArray("AAA"), "the replaced package should keep its original entries");
+
+		// The original is recoverable from the backup alone.
+		PackageArchive recovered;
+		ok &= expect(recovered.load(inPlaceReport.backupPath, &error), "the backup should load as a package");
+		ok &= expect(recovered.readEntryBytes(QStringLiteral("b.txt"), &bytes, &error) && bytes == QByteArray("BBB"), "the backup should still read the original entries");
+		ok &= expect(root.entryList(QStringList {QStringLiteral("inplace.pak.vibestudio-*")}, QDir::Files).isEmpty(), "a successful overwrite must not leave a temporary file behind");
+	}
+
+	// A caller-named backup path, and an in-place overwrite of a package that
+	// is not the one the model was loaded from.
+	{
+		const QString namedPath = root.filePath(QStringLiteral("named-backup.pak"));
+		ok &= expect(buildPak(namedPath, {{QStringLiteral("seed.txt"), QByteArray("seed")}}), "named-backup PAK fixture should be written");
+		const QByteArray namedOriginal = readFile(namedPath);
+
+		PackageArchive namedArchive;
+		ok &= expect(namedArchive.load(namedPath, &error), "named-backup PAK should load");
+		PackageStagingModel namedStaging;
+		ok &= expect(namedStaging.loadBaseArchive(namedArchive, &error), "named-backup staging should load");
+		ok &= expect(namedStaging.addFile(root.filePath(QStringLiteral("replacement.txt")), QStringLiteral("extra.txt"), &error), "named-backup add should stage");
+
+		PackageWriteRequest namedRequest;
+		namedRequest.destinationPath = namedPath;
+		namedRequest.format = PackageArchiveFormat::Pak;
+		namedRequest.allowInPlaceOverwrite = true;
+		namedRequest.backupPath = root.filePath(QStringLiteral("archive/named-backup.previous.pak"));
+		ok &= expect(root.mkpath(QStringLiteral("archive")), "backup directory should be created");
+		const PackageWriteReport namedReport = namedStaging.writeArchive(namedRequest);
+		ok &= expect(namedReport.succeeded() && namedReport.overwroteInPlace, "named-backup overwrite should succeed");
+		ok &= expect(namedReport.backupPath == QFileInfo(namedRequest.backupPath).absoluteFilePath(), "the caller-named backup path should be reported");
+		ok &= expect(readFile(namedReport.backupPath) == namedOriginal, "the caller-named backup should hold the original bytes");
+	}
+
+	// A failed overwrite must leave the original exactly as it was: no partial
+	// file, no backup, no temporary sibling.
+	{
+		const QString failPath = root.filePath(QStringLiteral("inplace-fail.pak"));
+		ok &= expect(buildPak(failPath, {{QStringLiteral("a.txt"), QByteArray("AAA")}}), "failing in-place PAK fixture should be written");
+		const QByteArray failOriginal = readFile(failPath);
+
+		PackageArchive failArchive;
+		ok &= expect(failArchive.load(failPath, &error), "failing in-place PAK should load");
+		PackageStagingModel failStaging;
+		ok &= expect(failStaging.loadBaseArchive(failArchive, &error), "failing in-place staging should load");
+
+		const QString vanishing = root.filePath(QStringLiteral("vanishing.bin"));
+		ok &= expect(writeFile(vanishing, QByteArray("temporary")), "vanishing staged source should be written");
+		ok &= expect(failStaging.addFile(vanishing, QStringLiteral("added.bin"), &error), "vanishing add should stage");
+		// The plan is computed and cached while the staged file still exists,
+		// then the file disappears: exactly the race the backup dance is for.
+		ok &= expect(failStaging.summary().canSave, "the plan should be saveable before the source vanishes");
+		ok &= expect(QFile::remove(vanishing), "the staged source file should be removable");
+
+		PackageWriteRequest failRequest;
+		failRequest.destinationPath = failPath;
+		failRequest.format = PackageArchiveFormat::Pak;
+		failRequest.allowInPlaceOverwrite = true;
+		const PackageWriteReport failReport = failStaging.writeArchive(failRequest);
+		ok &= expect(!failReport.succeeded() && !failReport.blockedMessages.isEmpty(), "an overwrite whose bytes cannot be read should fail");
+		ok &= expect(!failReport.overwroteInPlace && failReport.backupPath.isEmpty(), "a failed overwrite should not report a backup");
+		ok &= expect(readFile(failPath) == failOriginal, "a failed overwrite must leave the original package untouched");
+		ok &= expect(!QFileInfo::exists(QStringLiteral("%1.bak").arg(QFileInfo(failPath).absoluteFilePath())), "a failed overwrite must not create a backup");
+		ok &= expect(root.entryList(QStringList {QStringLiteral("inplace-fail.pak.*")}, QDir::Files).isEmpty(), "a failed overwrite must not leave a temporary file behind");
+
+		PackageArchive failRoundTrip;
+		ok &= expect(failRoundTrip.load(failPath, &error), "the untouched package should still load");
+		ok &= expect(failRoundTrip.readEntryBytes(QStringLiteral("a.txt"), &bytes, &error) && bytes == QByteArray("AAA"), "the untouched package should still read");
 	}
 
 	// PAK and WAD directory offsets and sizes are signed int32 in both formats

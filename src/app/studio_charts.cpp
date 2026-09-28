@@ -562,6 +562,34 @@ PipelineLayout computePipelineLayout(const QVector<PipelineStageNode>& stages,
 		firstInRow = false;
 	}
 
+	// A chain that fits on one row with room to spare spreads out instead of
+	// huddling at the left edge: boxes widen a little first, then the
+	// connectors lengthen. Both are capped so a wide panel does not produce
+	// sparse boxes joined by long lines.
+	if (row == 0 && boxes.size() > 1) {
+		constexpr qreal kComfortableBoxWidth = 168.0;
+		constexpr qreal kMaxExtraGap = 72.0;
+		qreal used = static_cast<qreal>(boxes.size() - 1) * kArrowWidth;
+		for (const PipelineBox& box : boxes) {
+			used += box.rect.width();
+		}
+		qreal spare = width - used;
+		if (spare > 0.0) {
+			const qreal grow = spare / static_cast<qreal>(boxes.size());
+			for (PipelineBox& box : boxes) {
+				const qreal widened = std::max(box.rect.width(), std::min(box.rect.width() + grow, kComfortableBoxWidth));
+				spare -= widened - box.rect.width();
+				box.rect.setWidth(widened);
+			}
+			const qreal gap = kArrowWidth + std::clamp(spare / static_cast<qreal>(boxes.size() - 1), 0.0, kMaxExtraGap);
+			qreal cursor = left;
+			for (PipelineBox& box : boxes) {
+				box.rect.moveLeft(cursor);
+				cursor += box.rect.width() + gap;
+			}
+		}
+	}
+
 	layout.boxes = boxes;
 	layout.requiredHeight = rowTop + boxHeight + kMargin - widgetRect.top();
 	return layout;

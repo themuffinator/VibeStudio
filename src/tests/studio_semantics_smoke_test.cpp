@@ -103,6 +103,18 @@ bool runShortcutSmoke()
 	// the default and Ctrl+K is the documented alternate.
 	vibestudio::ShortcutDescriptor palette;
 	ok &= expect(vibestudio::shortcutForCommandId(QStringLiteral("shell.command-palette"), &palette), "Expected a command palette shortcut.");
+	// The shell registers camelCase ids; they must resolve to the documented
+	// kebab-case entries or their shortcuts are never installed.
+	vibestudio::ShortcutDescriptor camelPalette;
+	ok &= expect(vibestudio::shortcutForCommandId(QStringLiteral("shell.commandPalette"), &camelPalette)
+			&& camelPalette.commandId == QStringLiteral("shell.command-palette"),
+		"Expected shell.commandPalette to resolve to the shell.command-palette shortcut.");
+	for (const QString& camelId : {QStringLiteral("shell.focusSearch"), QStringLiteral("package.openFolder"), QStringLiteral("package.saveAs"),
+			 QStringLiteral("package.extractSelected"), QStringLiteral("package.stageDelete"), QStringLiteral("project.initializeManifest"),
+			 QStringLiteral("map.saveAs")}) {
+		ok &= expect(vibestudio::shortcutForCommandId(camelId), "Expected a camelCase shell command id to resolve to its documented shortcut.");
+	}
+	ok &= expect(!vibestudio::shortcutForCommandId(QStringLiteral("shell.commandpalette")), "A run-together id must not match a hyphenated one.");
 	ok &= expect(palette.defaultSequence == QStringLiteral("Ctrl+Shift+P"), "Expected Ctrl+Shift+P as the command palette default.");
 	ok &= expect(palette.alternateSequences.contains(QStringLiteral("Ctrl+K")), "Expected Ctrl+K as the command palette alternate.");
 

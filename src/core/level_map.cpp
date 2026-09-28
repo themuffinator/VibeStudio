@@ -357,6 +357,15 @@ QVector<WadLump> readWadLumps(const QString& path, QString* magicOut, QString* e
 		}
 		return {};
 	}
+	// An empty directory is structurally legal but holds no map. Returning an
+	// empty list without an error left every caller failing with nothing to
+	// tell the user, because "no lumps" and "could not read" looked identical.
+	if (lumpCount == 0) {
+		if (error) {
+			*error = mapText("WAD directory is empty; this file holds no lumps.");
+		}
+		return {};
+	}
 
 	QVector<WadLump> lumps;
 	if (!file.seek(directoryOffset)) {
@@ -2438,6 +2447,44 @@ bool applyLevelMapCommand(LevelMapDocument* document, const LevelMapUndoCommand&
 		}
 		return applyMoveDelta(document, command.objectKind, command.objectId, sign * command.delta.x, sign * command.delta.y, sign * command.delta.z);
 	}
+	if (command.commandKind == QStringLiteral("move-selection")) {
+		// A compound move is one history entry holding one step per object.
+		// Redo replays the steps in recording order and undo reverses them, so a
+		// selection whose members overlap (a linedef and one of its own
+		// vertices, say) ends exactly where it started.
+		const int count = static_cast<int>(command.moveSteps.size());
+		const auto stepCommand = [&command](const LevelMapMoveStep& step) {
+			LevelMapUndoCommand child;
+			child.commandKind = QStringLiteral("move");
+			child.objectKind = step.objectKind;
+			child.objectId = step.objectId;
+			child.key = QStringLiteral("origin");
+			child.oldValue = step.oldValue;
+			child.newValue = step.newValue;
+			child.originSynthesized = step.originSynthesized;
+			child.delta = command.delta;
+			return child;
+		};
+		const auto stepAt = [&command, count, forward](int position) {
+			return command.moveSteps.at(forward ? position : count - 1 - position);
+		};
+		int applied = 0;
+		while (applied < count) {
+			if (!applyLevelMapCommand(document, stepCommand(stepAt(applied)), forward)) {
+				break;
+			}
+			++applied;
+		}
+		if (applied < count) {
+			// Roll the partial application back so a vanished target can never
+			// leave the map half moved.
+			for (int position = applied - 1; position >= 0; --position) {
+				applyLevelMapCommand(document, stepCommand(stepAt(position)), !forward);
+			}
+			return false;
+		}
+		return true;
+	}
 	return false;
 }
 
@@ -2467,6 +2514,181 @@ void clearSelectionFlags(LevelMapDocument* document)
 	for (LevelMapDoomSidedef& sidedef : document->doomSidedefs) {
 		sidedef.selected = false;
 	}
+}
+
+bool selectionObjectExists(LevelMapDocument* document, LevelMapSelectionKind kind, int objectId)
+{
+	if (!document || objectId < 0) {
+		return false;
+	}
+	switch (kind) {
+	case LevelMapSelectionKind::None:
+		return false;
+	case LevelMapSelectionKind::Entity:
+		return entityById(document, objectId) != nullptr;
+	case LevelMapSelectionKind::DoomVertex:
+		return vertexById(document, objectId) != nullptr;
+	case LevelMapSelectionKind::DoomLinedef:
+		return linedefById(document, objectId) != nullptr;
+	case LevelMapSelectionKind::DoomThing:
+		return thingById(document, objectId) != nullptr;
+	case LevelMapSelectionKind::DoomSector:
+		return sectorById(document, objectId) != nullptr;
+	case LevelMapSelectionKind::QuakeBrush:
+		return brushById(document, objectId) != nullptr;
+	case LevelMapSelectionKind::QuakePatch:
+		return patchById(document, objectId) != nullptr;
+	}
+	return false;
+}
+
+QString selectionNotFoundText(LevelMapSelectionKind kind)
+{
+	switch (kind) {
+	case LevelMapSelectionKind::None:
+		return mapText("Unknown selection kind.");
+	case LevelMapSelectionKind::Entity:
+		return mapText("Entity selection was not found.");
+	case LevelMapSelectionKind::DoomVertex:
+		return mapText("Vertex selection was not found.");
+	case LevelMapSelectionKind::DoomLinedef:
+		return mapText("Linedef selection was not found.");
+	case LevelMapSelectionKind::DoomThing:
+		return mapText("Thing selection was not found.");
+	case LevelMapSelectionKind::DoomSector:
+		return mapText("Sector selection was not found.");
+	case LevelMapSelectionKind::QuakeBrush:
+		return mapText("Brush selection was not found.");
+	case LevelMapSelectionKind::QuakePatch:
+		return mapText("Patch selection was not found.");
+	}
+	return mapText("Unknown selection kind.");
+}
+
+// Re-derives everything that hangs off the selection set: the per-record
+// `selected` flags and the primary single-selection fields. Every selection
+// mutator ends here, which is what keeps the old single-selection API honest.
+void applySelectionFlags(LevelMapDocument* document)
+{
+	if (!document) {
+		return;
+	}
+	clearSelectionFlags(document);
+	for (const LevelMapSelectionRef& ref : document->selection) {
+		switch (ref.kind) {
+		case LevelMapSelectionKind::None:
+			break;
+		case LevelMapSelectionKind::Entity:
+			if (LevelMapEntity* entity = entityById(document, ref.objectId)) {
+				entity->selected = true;
+			}
+			break;
+		case LevelMapSelectionKind::DoomVertex:
+			if (LevelMapDoomVertex* vertex = vertexById(document, ref.objectId)) {
+				vertex->selected = true;
+			}
+			break;
+		case LevelMapSelectionKind::DoomLinedef:
+			if (LevelMapDoomLinedef* linedef = linedefById(document, ref.objectId)) {
+				linedef->selected = true;
+			}
+			break;
+		case LevelMapSelectionKind::DoomThing:
+			if (LevelMapDoomThing* thing = thingById(document, ref.objectId)) {
+				thing->selected = true;
+			}
+			break;
+		case LevelMapSelectionKind::DoomSector:
+			if (LevelMapDoomSector* sector = sectorById(document, ref.objectId)) {
+				sector->selected = true;
+			}
+			break;
+		case LevelMapSelectionKind::QuakeBrush:
+			if (LevelMapBrush* brush = brushById(document, ref.objectId)) {
+				brush->selected = true;
+			}
+			break;
+		case LevelMapSelectionKind::QuakePatch:
+			if (LevelMapPatch* patch = patchById(document, ref.objectId)) {
+				patch->selected = true;
+			}
+			break;
+		}
+	}
+	if (document->selection.isEmpty()) {
+		document->selectionKind = LevelMapSelectionKind::None;
+		document->selectedObjectId = -1;
+		return;
+	}
+	const LevelMapSelectionRef primary = document->selection.back();
+	document->selectionKind = primary.kind;
+	document->selectedObjectId = primary.kind == LevelMapSelectionKind::None ? -1 : primary.objectId;
+}
+
+// Moves one object and fills in everything undo needs to reverse it, without
+// touching the undo stacks or the selection. The single-object move command and
+// the compound selection move both go through here, so they cannot drift apart.
+bool applyMoveToObject(LevelMapDocument* document, const QString& kind, int objectId, double dx, double dy, double dz,
+	LevelMapUndoCommand* command, QString* error)
+{
+	if (!document || !command) {
+		return false;
+	}
+	command->commandKind = QStringLiteral("move");
+	command->objectKind = kind;
+	command->objectId = objectId;
+	command->delta = {dx, dy, dz, true};
+
+	if (kind == QStringLiteral("entity")) {
+		LevelMapEntity* entity = entityById(document, objectId);
+		if (!entity) {
+			if (error) {
+				*error = mapText("Entity not found.");
+			}
+			return false;
+		}
+		const int index = propertyIndex(*entity, QStringLiteral("origin"));
+		command->originSynthesized = index < 0;
+		LevelMapVec3 origin = entity->origin.valid ? entity->origin : parseVec3(propertyValue(*entity, QStringLiteral("origin")));
+		if (!origin.valid) {
+			origin = {0.0, 0.0, 0.0, true};
+		}
+		command->oldValue = serializeVec3(origin);
+		origin.x += dx;
+		origin.y += dy;
+		origin.z += dz;
+		command->newValue = serializeVec3(origin);
+		command->key = QStringLiteral("origin");
+		if (index >= 0) {
+			entity->properties[index].value = command->newValue;
+		} else {
+			entity->properties.push_back({QStringLiteral("origin"), command->newValue, 0});
+		}
+		entity->origin = origin;
+		if (document->format == LevelMapFormat::DoomWad && objectId >= 0 && objectId < document->doomThings.size()) {
+			document->doomThings[objectId].x = origin.x;
+			document->doomThings[objectId].y = origin.y;
+			document->doomThings[objectId].z = origin.z;
+			syncDoomThingEntity(document, objectId);
+		}
+		return true;
+	}
+
+	if (kind == QStringLiteral("vertex") || kind == QStringLiteral("linedef") || kind == QStringLiteral("thing")
+		|| kind == QStringLiteral("brush") || kind == QStringLiteral("patch")) {
+		if (!applyMoveDelta(document, kind, objectId, dx, dy, dz)) {
+			if (error) {
+				*error = mapText("Move target was not found.");
+			}
+			return false;
+		}
+		return true;
+	}
+
+	if (error) {
+		*error = mapText("Move supports entity, vertex, linedef, thing, brush or patch.");
+	}
+	return false;
 }
 
 QStringList truncatedLines(const QStringList& source, int limit, const QString& label)
@@ -2576,6 +2798,74 @@ QString levelMapSelectionKindId(LevelMapSelectionKind kind)
 		return QStringLiteral("patch");
 	}
 	return QStringLiteral("none");
+}
+
+LevelMapSelectionKind levelMapSelectionKindFromId(const QString& id)
+{
+	const QString kind = normalizedId(id);
+	if (kind == QStringLiteral("entity")) {
+		return LevelMapSelectionKind::Entity;
+	}
+	if (kind == QStringLiteral("vertex")) {
+		return LevelMapSelectionKind::DoomVertex;
+	}
+	if (kind == QStringLiteral("linedef")) {
+		return LevelMapSelectionKind::DoomLinedef;
+	}
+	if (kind == QStringLiteral("thing")) {
+		return LevelMapSelectionKind::DoomThing;
+	}
+	if (kind == QStringLiteral("sector")) {
+		return LevelMapSelectionKind::DoomSector;
+	}
+	if (kind == QStringLiteral("brush")) {
+		return LevelMapSelectionKind::QuakeBrush;
+	}
+	if (kind == QStringLiteral("patch")) {
+		return LevelMapSelectionKind::QuakePatch;
+	}
+	return LevelMapSelectionKind::None;
+}
+
+QString levelMapSelectionRefId(const LevelMapSelectionRef& ref)
+{
+	return QStringLiteral("%1:%2").arg(levelMapSelectionKindId(ref.kind)).arg(ref.objectId);
+}
+
+bool levelMapSelectionKindIsMovable(LevelMapSelectionKind kind)
+{
+	// Sectors are defined by the linedefs around them and carry no position of
+	// their own, so they are selectable but not directly movable.
+	return kind != LevelMapSelectionKind::None && kind != LevelMapSelectionKind::DoomSector;
+}
+
+double snapLevelMapCoordinate(double value, double gridSize)
+{
+	if (!std::isfinite(value) || !std::isfinite(gridSize) || gridSize <= 0.0) {
+		return value;
+	}
+	// std::round breaks ties away from zero, which makes the grid symmetric
+	// about the origin: -24 and 24 on a 16-unit grid land on -32 and 32.
+	const double snapped = std::round(value / gridSize) * gridSize;
+	// Fold -0.0 back to 0.0 so serialized coordinates never read as "-0".
+	return snapped == 0.0 ? 0.0 : snapped;
+}
+
+LevelMapVec3 snapLevelMapPosition(const LevelMapVec3& position, double gridSize)
+{
+	if (!position.valid) {
+		return position;
+	}
+	LevelMapVec3 result = position;
+	result.x = snapLevelMapCoordinate(position.x, gridSize);
+	result.y = snapLevelMapCoordinate(position.y, gridSize);
+	result.z = snapLevelMapCoordinate(position.z, gridSize);
+	return result;
+}
+
+LevelMapVec3 snapLevelMapDelta(const LevelMapVec3& delta, double gridSize)
+{
+	return snapLevelMapPosition(delta, gridSize);
 }
 
 bool loadLevelMap(const LevelMapLoadRequest& request, LevelMapDocument* document, QString* error)
@@ -2864,6 +3154,11 @@ QStringList levelMapSelectionLines(const LevelMapDocument& document)
 	}
 	QStringList lines;
 	lines << mapText("Selection: %1:%2").arg(levelMapSelectionKindId(document.selectionKind)).arg(document.selectedObjectId);
+	// Single selection prints exactly what it always did; the extra lines only
+	// appear once a set is actually holding more than the primary member.
+	if (document.selection.size() > 1) {
+		lines << levelMapSelectionSetLines(document);
+	}
 	if (document.selectionKind == LevelMapSelectionKind::QuakeBrush) {
 		for (const LevelMapBrush& brush : document.brushes) {
 			if (brush.id != document.selectedObjectId) {
@@ -3062,86 +3357,158 @@ bool selectLevelMapObject(LevelMapDocument* document, const QString& selector, Q
 		}
 		return false;
 	}
-	clearSelectionFlags(document);
-
-	if (kind == QStringLiteral("entity")) {
-		LevelMapEntity* entity = entityById(document, id);
-		if (!entity) {
-			if (error) {
-				*error = mapText("Entity selection was not found.");
-			}
-			return false;
-		}
-		entity->selected = true;
-		document->selectionKind = LevelMapSelectionKind::Entity;
-	} else if (kind == QStringLiteral("vertex")) {
-		LevelMapDoomVertex* vertex = vertexById(document, id);
-		if (!vertex) {
-			if (error) {
-				*error = mapText("Vertex selection was not found.");
-			}
-			return false;
-		}
-		vertex->selected = true;
-		document->selectionKind = LevelMapSelectionKind::DoomVertex;
-	} else if (kind == QStringLiteral("linedef")) {
-		LevelMapDoomLinedef* linedef = linedefById(document, id);
-		if (!linedef) {
-			if (error) {
-				*error = mapText("Linedef selection was not found.");
-			}
-			return false;
-		}
-		linedef->selected = true;
-		document->selectionKind = LevelMapSelectionKind::DoomLinedef;
-	} else if (kind == QStringLiteral("thing")) {
-		LevelMapDoomThing* thing = thingById(document, id);
-		if (!thing) {
-			if (error) {
-				*error = mapText("Thing selection was not found.");
-			}
-			return false;
-		}
-		thing->selected = true;
-		document->selectionKind = LevelMapSelectionKind::DoomThing;
-	} else if (kind == QStringLiteral("sector")) {
-		LevelMapDoomSector* sector = sectorById(document, id);
-		if (!sector) {
-			if (error) {
-				*error = mapText("Sector selection was not found.");
-			}
-			return false;
-		}
-		sector->selected = true;
-		document->selectionKind = LevelMapSelectionKind::DoomSector;
-	} else if (kind == QStringLiteral("brush")) {
-		LevelMapBrush* brush = brushById(document, id);
-		if (!brush) {
-			if (error) {
-				*error = mapText("Brush selection was not found.");
-			}
-			return false;
-		}
-		brush->selected = true;
-		document->selectionKind = LevelMapSelectionKind::QuakeBrush;
-	} else if (kind == QStringLiteral("patch")) {
-		LevelMapPatch* patch = patchById(document, id);
-		if (!patch) {
-			if (error) {
-				*error = mapText("Patch selection was not found.");
-			}
-			return false;
-		}
-		patch->selected = true;
-		document->selectionKind = LevelMapSelectionKind::QuakePatch;
-	} else {
+	const LevelMapSelectionKind selectionKind = levelMapSelectionKindFromId(kind);
+	if (selectionKind == LevelMapSelectionKind::None || !selectionObjectExists(document, selectionKind, id)) {
+		// A failed selection leaves nothing selected, so the set, the per-record
+		// flags and the primary fields all agree on "none".
+		document->selection.clear();
+		applySelectionFlags(document);
 		if (error) {
-			*error = mapText("Unknown selection kind.");
+			*error = selectionKind == LevelMapSelectionKind::None ? mapText("Unknown selection kind.")
+									     : selectionNotFoundText(selectionKind);
 		}
 		return false;
 	}
-	document->selectedObjectId = id;
+	document->selection = {LevelMapSelectionRef {selectionKind, id}};
+	applySelectionFlags(document);
 	return true;
+}
+
+int levelMapSelectionCount(const LevelMapDocument& document)
+{
+	return static_cast<int>(document.selection.size());
+}
+
+bool levelMapSelectionContains(const LevelMapDocument& document, LevelMapSelectionKind kind, int objectId)
+{
+	return document.selection.contains(LevelMapSelectionRef {kind, objectId});
+}
+
+LevelMapSelectionRef levelMapPrimarySelection(const LevelMapDocument& document)
+{
+	if (document.selection.isEmpty()) {
+		return {};
+	}
+	return document.selection.back();
+}
+
+QStringList levelMapSelectionSetLines(const LevelMapDocument& document)
+{
+	if (document.selection.isEmpty()) {
+		return {mapText("Selection set: empty")};
+	}
+	QStringList ids;
+	ids.reserve(document.selection.size());
+	for (const LevelMapSelectionRef& ref : document.selection) {
+		ids << levelMapSelectionRefId(ref);
+	}
+	QStringList lines;
+	lines << mapText("Selection set: %1 objects").arg(document.selection.size());
+	lines << truncatedLines(ids, 24, mapText("selected objects"));
+	lines << mapText("Primary: %1").arg(levelMapSelectionRefId(levelMapPrimarySelection(document)));
+	return lines;
+}
+
+bool addLevelMapSelection(LevelMapDocument* document, LevelMapSelectionKind kind, int objectId, QString* error)
+{
+	if (error) {
+		error->clear();
+	}
+	if (!document) {
+		if (error) {
+			*error = mapText("Missing map document.");
+		}
+		return false;
+	}
+	if (kind == LevelMapSelectionKind::None || !selectionObjectExists(document, kind, objectId)) {
+		if (error) {
+			*error = selectionNotFoundText(kind);
+		}
+		return false;
+	}
+	const LevelMapSelectionRef ref {kind, objectId};
+	// Re-adding an existing member promotes it to primary rather than
+	// duplicating it, which is what a click on an already-selected object means.
+	document->selection.removeAll(ref);
+	document->selection.push_back(ref);
+	applySelectionFlags(document);
+	return true;
+}
+
+bool removeLevelMapSelection(LevelMapDocument* document, LevelMapSelectionKind kind, int objectId, QString* error)
+{
+	if (error) {
+		error->clear();
+	}
+	if (!document) {
+		if (error) {
+			*error = mapText("Missing map document.");
+		}
+		return false;
+	}
+	const qsizetype removed = document->selection.removeAll(LevelMapSelectionRef {kind, objectId});
+	if (removed <= 0) {
+		if (error) {
+			*error = mapText("That object is not in the selection.");
+		}
+		return false;
+	}
+	applySelectionFlags(document);
+	return true;
+}
+
+bool toggleLevelMapSelection(LevelMapDocument* document, LevelMapSelectionKind kind, int objectId, QString* error)
+{
+	if (!document) {
+		if (error) {
+			*error = mapText("Missing map document.");
+		}
+		return false;
+	}
+	if (levelMapSelectionContains(*document, kind, objectId)) {
+		return removeLevelMapSelection(document, kind, objectId, error);
+	}
+	return addLevelMapSelection(document, kind, objectId, error);
+}
+
+void clearLevelMapSelection(LevelMapDocument* document)
+{
+	if (!document) {
+		return;
+	}
+	document->selection.clear();
+	applySelectionFlags(document);
+}
+
+bool setLevelMapSelection(LevelMapDocument* document, const QVector<LevelMapSelectionRef>& selection, QString* error)
+{
+	if (error) {
+		error->clear();
+	}
+	if (!document) {
+		if (error) {
+			*error = mapText("Missing map document.");
+		}
+		return false;
+	}
+	QVector<LevelMapSelectionRef> resolved;
+	resolved.reserve(selection.size());
+	bool skipped = false;
+	for (const LevelMapSelectionRef& ref : selection) {
+		if (ref.kind == LevelMapSelectionKind::None || !selectionObjectExists(document, ref.kind, ref.objectId)) {
+			skipped = true;
+			continue;
+		}
+		// Keep the caller's last occurrence so their final entry is primary.
+		resolved.removeAll(ref);
+		resolved.push_back(ref);
+	}
+	document->selection = resolved;
+	applySelectionFlags(document);
+	if (skipped && error) {
+		*error = mapText("Some objects in the requested selection were not found.");
+	}
+	return !skipped;
 }
 
 bool setLevelMapEntityProperty(LevelMapDocument* document, int entityId, const QString& key, const QString& value, QString* error)
@@ -3464,78 +3831,100 @@ bool moveLevelMapObject(LevelMapDocument* document, const QString& objectKind, i
 	LevelMapUndoCommand command;
 	command.description = mapText("Move %1:%2 by %3,%4,%5").arg(kind).arg(objectId).arg(dx).arg(dy).arg(dz);
 	command.undoDescription = mapText("Move %1:%2 back").arg(kind).arg(objectId);
-	command.commandKind = QStringLiteral("move");
-	command.objectKind = kind;
-	command.objectId = objectId;
+	if (!applyMoveToObject(document, kind, objectId, dx, dy, dz, &command, error)) {
+		return false;
+	}
+	// Doom node, reject and blockmap lumps are derived from the linedef graph,
+	// so moving a vertex (directly, or through a linedef) invalidates them.
+	if (kind == QStringLiteral("vertex") || kind == QStringLiteral("linedef")) {
+		document->doomGeometryChanged = true;
+	}
+	pushUndo(document, command);
+	selectLevelMapObject(document, QStringLiteral("%1:%2").arg(kind).arg(objectId));
+	return true;
+}
+
+bool moveLevelMapSelection(LevelMapDocument* document, double dx, double dy, double dz, QString* error)
+{
+	if (error) {
+		error->clear();
+	}
+	if (!document) {
+		if (error) {
+			*error = mapText("Missing map document.");
+		}
+		return false;
+	}
+	if (document->selection.isEmpty()) {
+		if (error) {
+			*error = mapText("Nothing is selected.");
+		}
+		return false;
+	}
+
+	LevelMapUndoCommand command;
+	command.commandKind = QStringLiteral("move-selection");
+	command.objectKind = QStringLiteral("selection");
 	command.delta = {dx, dy, dz, true};
 
-	if (kind == QStringLiteral("entity")) {
-		LevelMapEntity* entity = entityById(document, objectId);
-		if (!entity) {
+	bool staleNodes = false;
+	for (const LevelMapSelectionRef& ref : document->selection) {
+		if (!levelMapSelectionKindIsMovable(ref.kind)) {
+			continue;
+		}
+		const QString kind = levelMapSelectionKindId(ref.kind);
+		LevelMapUndoCommand child;
+		QString childError;
+		if (!applyMoveToObject(document, kind, ref.objectId, dx, dy, dz, &child, &childError)) {
+			// Undo the members that already moved, so a stale selection entry
+			// cannot leave half of the map displaced.
+			applyLevelMapCommand(document, command, false);
 			if (error) {
-				*error = mapText("Entity not found.");
+				*error = childError;
 			}
 			return false;
 		}
-		const int index = propertyIndex(*entity, QStringLiteral("origin"));
-		command.originSynthesized = index < 0;
-		LevelMapVec3 origin = entity->origin.valid ? entity->origin : parseVec3(propertyValue(*entity, QStringLiteral("origin")));
-		if (!origin.valid) {
-			origin = {0.0, 0.0, 0.0, true};
-		}
-		command.oldValue = serializeVec3(origin);
-		origin.x += dx;
-		origin.y += dy;
-		origin.z += dz;
-		command.newValue = serializeVec3(origin);
-		command.key = QStringLiteral("origin");
-		if (index >= 0) {
-			entity->properties[index].value = command.newValue;
-		} else {
-			entity->properties.push_back({QStringLiteral("origin"), command.newValue, 0});
-		}
-		entity->origin = origin;
-		if (document->format == LevelMapFormat::DoomWad && objectId >= 0 && objectId < document->doomThings.size()) {
-			document->doomThings[objectId].x = origin.x;
-			document->doomThings[objectId].y = origin.y;
-			document->doomThings[objectId].z = origin.z;
-			syncDoomThingEntity(document, objectId);
-		}
-		pushUndo(document, command);
-		selectLevelMapObject(document, entityObjectId(objectId));
-		return true;
+		LevelMapMoveStep step;
+		step.objectKind = kind;
+		step.objectId = ref.objectId;
+		step.oldValue = child.oldValue;
+		step.newValue = child.newValue;
+		step.originSynthesized = child.originSynthesized;
+		command.moveSteps.push_back(step);
+		staleNodes = staleNodes || ref.kind == LevelMapSelectionKind::DoomVertex
+			|| ref.kind == LevelMapSelectionKind::DoomLinedef;
 	}
 
-	if (kind == QStringLiteral("vertex") || kind == QStringLiteral("linedef") || kind == QStringLiteral("thing")
-		|| kind == QStringLiteral("brush") || kind == QStringLiteral("patch")) {
-		if (!applyMoveDelta(document, kind, objectId, dx, dy, dz)) {
-			if (error) {
-				*error = mapText("Move target was not found.");
-			}
-			return false;
+	if (command.moveSteps.isEmpty()) {
+		if (error) {
+			*error = mapText("The selection contains nothing that can be moved.");
 		}
-		if (kind == QStringLiteral("vertex") || kind == QStringLiteral("linedef")) {
-			document->doomGeometryChanged = true;
-		}
-		pushUndo(document, command);
-		if (kind == QStringLiteral("vertex")) {
-			selectLevelMapObject(document, vertexObjectId(objectId));
-		} else if (kind == QStringLiteral("linedef")) {
-			selectLevelMapObject(document, linedefObjectId(objectId));
-		} else if (kind == QStringLiteral("thing")) {
-			selectLevelMapObject(document, thingObjectId(objectId));
-		} else if (kind == QStringLiteral("brush")) {
-			selectLevelMapObject(document, brushObjectId(objectId));
-		} else {
-			selectLevelMapObject(document, patchObjectId(objectId));
-		}
-		return true;
+		return false;
 	}
+	command.objectId = command.moveSteps.size() == 1 ? command.moveSteps.first().objectId : -1;
+	command.description = mapText("Move %1 objects by %2,%3,%4").arg(command.moveSteps.size()).arg(dx).arg(dy).arg(dz);
+	command.undoDescription = mapText("Move %1 objects back").arg(command.moveSteps.size());
+	if (staleNodes) {
+		document->doomGeometryChanged = true;
+	}
+	pushUndo(document, command);
+	// The selection survives the move: a drag leaves what you dragged selected.
+	applySelectionFlags(document);
+	return true;
+}
 
-	if (error) {
-		*error = mapText("Move supports entity, vertex, linedef, thing, brush or patch.");
+bool moveLevelMapSelectionSnapped(LevelMapDocument* document, double dx, double dy, double dz, double gridSize, QString* error)
+{
+	const double snappedX = snapLevelMapCoordinate(dx, gridSize);
+	const double snappedY = snapLevelMapCoordinate(dy, gridSize);
+	const double snappedZ = snapLevelMapCoordinate(dz, gridSize);
+	if (snappedX == 0.0 && snappedY == 0.0 && snappedZ == 0.0) {
+		if (error) {
+			*error = mapText("The snapped move is zero, so nothing changed.");
+		}
+		return false;
 	}
-	return false;
+	return moveLevelMapSelection(document, snappedX, snappedY, snappedZ, error);
 }
 
 bool undoLevelMapEdit(LevelMapDocument* document, QString* error)

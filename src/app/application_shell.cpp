@@ -1,19 +1,26 @@
 #include "app/application_shell.h"
 
 #include "app/asset_views.h"
+#include "app/code_editor.h"
 #include "app/map_viewport.h"
+#include "app/model_viewport.h"
 #include "app/studio_actions.h"
 #include "app/studio_charts.h"
+#include "app/studio_icons.h"
+#include "app/studio_layout.h"
 #include "app/studio_runtime.h"
+#include "app/studio_theme.h"
 #include "app/syntax_highlight.h"
 #include "app/ui_primitives.h"
 #include "core/advanced_studio.h"
 #include "core/asset_tools.h"
 #include "core/bsp_inspect.h"
 #include "core/build_pipeline.h"
+#include "core/entity_definitions.h"
 #include "core/idtech_image.h"
 #include "core/map_assets.h"
 #include "core/map_render.h"
+#include "core/model_mesh.h"
 #include "core/ai_connectors.h"
 #include "core/ai_workflows.h"
 #include "core/compiler_profiles.h"
@@ -25,13 +32,18 @@
 #include "core/project_manifest.h"
 #include "core/studio_manifest.h"
 #include <QAbstractItemView>
+#include <QItemSelectionModel>
+#include <QSet>
 #include <QAction>
 #include <QCloseEvent>
 #include <QDragEnterEvent>
+#include <QDockWidget>
 #include <QDropEvent>
 #include <QImage>
 #include <QMenu>
 #include <QMenuBar>
+#include <QPainter>
+#include <QPixmap>
 #include <QMessageBox>
 #include <QMimeData>
 #include <QPlainTextEdit>
@@ -41,6 +53,7 @@
 #include <QTextCursor>
 #include <QTimer>
 #include <QToolBar>
+#include <QToolButton>
 #include <QApplication>
 #include <QCheckBox>
 #include <QClipboard>
@@ -54,11 +67,16 @@
 #include <QEventLoop>
 #include <QFileDialog>
 #include <QFileInfo>
+#include <QFontDatabase>
+#include <QFontMetricsF>
 #include <QFormLayout>
 #include <QFrame>
 #include <QGridLayout>
+#include <QGroupBox>
 #include <QHash>
 #include <QHBoxLayout>
+#include <QHeaderView>
+#include <QKeyEvent>
 #include <QInputDialog>
 #include <QJsonDocument>
 #include <QLabel>
@@ -77,15 +95,18 @@
 #include <QStatusBar>
 #include <QStyle>
 #include <QStringList>
+#include <QStyledItemDelegate>
 #include <QTabWidget>
 #include <QTextEdit>
 #include <QThread>
 #include <QTreeWidget>
 #include <QTreeWidgetItem>
+#include <QTreeWidgetItemIterator>
 #include <QUrl>
 #include <QVBoxLayout>
 
 #include <algorithm>
+#include <cmath>
 #include <functional>
 #include <utility>
 
@@ -93,36 +114,8 @@ namespace vibestudio {
 
 namespace {
 
-QLabel* sectionLabel(const QString& text)
-{
-	auto* label = new QLabel(text);
-	label->setObjectName("sectionLabel");
-	return label;
-}
-
-QFrame* modulePanel(const StudioModule& module)
-{
-	auto* frame = new QFrame;
-	frame->setObjectName("modulePanel");
-	frame->setAccessibleName(module.name);
-	frame->setAccessibleDescription(module.description);
-	auto* layout = new QVBoxLayout(frame);
-	layout->setContentsMargins(14, 12, 14, 12);
-	layout->setSpacing(6);
-
-	auto* name = new QLabel(module.name);
-	name->setObjectName("moduleTitle");
-	auto* meta = new QLabel(module.category + " / " + module.maturity);
-	meta->setObjectName("moduleMeta");
-	auto* description = new QLabel(module.description);
-	description->setWordWrap(true);
-
-	layout->addWidget(name);
-	layout->addWidget(meta);
-	layout->addWidget(description);
-	layout->addStretch(1);
-	return frame;
-}
+// Defined with the command helpers further down.
+QString modeCommandId(StudioMode mode);
 
 QString nativePath(const QString& path)
 {
@@ -309,6 +302,95 @@ QString localizedPackageStageOperationName(PackageStageOperationType type)
 		return ApplicationShell::tr("Delete");
 	}
 	return ApplicationShell::tr("Stage");
+}
+
+// Glyph for a package entry, chosen from its kind and type hint so a list of
+// mixed content can be scanned by shape as well as by name.
+QString packageEntryIconName(const PackageEntry& entry)
+{
+	if (entry.kind == PackageEntryKind::Directory) {
+		return QStringLiteral("folder");
+	}
+	const QString hint = entry.typeHint.toLower();
+	if (hint.startsWith(QStringLiteral("image/")) || hint.contains(QStringLiteral("texture"))) {
+		return QStringLiteral("image");
+	}
+	if (hint.startsWith(QStringLiteral("audio/"))) {
+		return QStringLiteral("waveform");
+	}
+	if (hint.startsWith(QStringLiteral("model/"))) {
+		return QStringLiteral("cube");
+	}
+	if (hint == QStringLiteral("text/map") || hint.endsWith(QStringLiteral("/bsp"))) {
+		return QStringLiteral("map");
+	}
+	if (hint == QStringLiteral("text/shader")) {
+		return QStringLiteral("layers");
+	}
+	const QString suffix = QFileInfo(entry.virtualPath).suffix().toLower();
+	if (suffix == QStringLiteral("pak") || suffix == QStringLiteral("pk3") || suffix == QStringLiteral("wad") || suffix == QStringLiteral("zip")) {
+		return QStringLiteral("package");
+	}
+	return QStringLiteral("file");
+}
+
+// Keeps the user's place when a list is rebuilt: reselects the row whose
+// Qt::UserRole matches `previousKey`, or the first selectable row. Signals are
+// blocked so the caller decides when to refresh the dependent preview.
+void restoreListSelection(QListWidget* list, const QString& previousKey)
+{
+	if (!list) {
+		return;
+	}
+	QListWidgetItem* target = nullptr;
+	for (int index = 0; index < list->count(); ++index) {
+		QListWidgetItem* item = list->item(index);
+		if (!item || item->isHidden() || !item->flags().testFlag(Qt::ItemIsSelectable)) {
+			continue;
+		}
+		if (!target) {
+			target = item;
+		}
+		if (!previousKey.isEmpty() && item->data(Qt::UserRole).toString() == previousKey) {
+			target = item;
+			break;
+		}
+	}
+	if (target) {
+		const QSignalBlocker blocker(list);
+		list->setCurrentItem(target);
+	}
+}
+
+// Virtual folder that contains `virtualPath`, or the root ("") for top-level
+// entries.
+QString packageParentFolder(const QString& virtualPath)
+{
+	const int slash = virtualPath.lastIndexOf(QLatin1Char('/'));
+	return slash <= 0 ? QString() : virtualPath.left(slash);
+}
+
+// Square thumbnail for decoded idTech art. Small textures scale up with
+// nearest-neighbour so their pixels stay crisp; larger ones scale smoothly.
+QIcon textureThumbnailIcon(const QImage& image, int side, qreal devicePixelRatio)
+{
+	const int physical = std::max(1, static_cast<int>(side * devicePixelRatio));
+	QPixmap pixmap(physical, physical);
+	pixmap.fill(Qt::transparent);
+	if (!image.isNull()) {
+		const bool upscale = image.width() <= physical && image.height() <= physical;
+		const QImage scaled = image.scaled(physical, physical, Qt::KeepAspectRatio, upscale ? Qt::FastTransformation : Qt::SmoothTransformation);
+		QPainter painter(&pixmap);
+		painter.drawImage((physical - scaled.width()) / 2, (physical - scaled.height()) / 2, scaled);
+	}
+	pixmap.setDevicePixelRatio(devicePixelRatio);
+	return QIcon(pixmap);
+}
+
+QString currentItemKey(const QListWidget* list)
+{
+	const QListWidgetItem* item = list ? list->currentItem() : nullptr;
+	return item ? item->data(Qt::UserRole).toString() : QString();
 }
 
 QString byteSizeText(quint64 bytes)
@@ -747,9 +829,386 @@ ApplicationShell::~ApplicationShell()
 		m_buildPipelineThread->wait(15000);
 		m_buildPipelineThread = nullptr;
 	}
+	if (m_gitStatusProcess) {
+		m_gitStatusProcess->disconnect(this);
+		m_gitStatusProcess->kill();
+		m_gitStatusProcess->waitForFinished(1000);
+	}
 	saveShellState();
 	m_settings.sync();
 }
+
+namespace {
+
+// Assembles one work surface from the shared parts: header, an optional tool
+// bar, and a body that fills the rest of the page.
+QWidget* assembleStudioPage(PageHeader* header, QWidget* toolBar, QWidget* body)
+{
+	auto* page = new QWidget;
+	page->setObjectName(QStringLiteral("studioPage"));
+	page->setAttribute(Qt::WA_StyledBackground, true);
+	auto* layout = new QVBoxLayout(page);
+	layout->setContentsMargins(0, 0, 0, 0);
+	layout->setSpacing(0);
+	layout->addWidget(header);
+	if (toolBar) {
+		layout->addWidget(toolBar);
+	}
+	layout->addWidget(body, 1);
+	return page;
+}
+
+// Wraps a widget in a container with the standard page gutter.
+QWidget* padded(QWidget* content, int horizontal = 14, int top = 12, int bottom = 12)
+{
+	auto* container = new QWidget;
+	auto* layout = new QVBoxLayout(container);
+	layout->setContentsMargins(horizontal, top, horizontal, bottom);
+	layout->setSpacing(10);
+	layout->addWidget(content, 1);
+	return container;
+}
+
+// A captioned column for the sides of a workbench: a small heading, an
+// optional hint, and the panel content beneath.
+QWidget* captionedPanel(const QString& caption, QWidget* content, QWidget* accessory = nullptr)
+{
+	auto* panel = new QWidget;
+	auto* layout = new QVBoxLayout(panel);
+	layout->setContentsMargins(0, 0, 0, 0);
+	layout->setSpacing(6);
+	auto* header = new QHBoxLayout;
+	header->setContentsMargins(2, 0, 0, 0);
+	auto* label = new QLabel(caption);
+	label->setObjectName(QStringLiteral("sectionLabel"));
+	label->setBuddy(content);
+	header->addWidget(label);
+	header->addStretch(1);
+	if (accessory) {
+		header->addWidget(accessory);
+	}
+	layout->addLayout(header);
+	layout->addWidget(content, 1);
+	return panel;
+}
+
+// Only the Value column of a property row is editable.
+class PropertyValueDelegate final : public QStyledItemDelegate {
+public:
+	using QStyledItemDelegate::QStyledItemDelegate;
+
+	QWidget* createEditor(QWidget* parent, const QStyleOptionViewItem& option, const QModelIndex& index) const override
+	{
+		if (index.column() != 1) {
+			return nullptr;
+		}
+		return QStyledItemDelegate::createEditor(parent, option, index);
+	}
+};
+
+QTreeWidgetItem* propertyGroup(QTreeWidget* tree, const QString& title)
+{
+	auto* group = new QTreeWidgetItem(tree, {title});
+	group->setFirstColumnSpanned(true);
+	group->setFlags(Qt::ItemIsEnabled);
+	QFont font = group->font(0);
+	font.setBold(true);
+	group->setFont(0, font);
+	group->setExpanded(true);
+	return group;
+}
+
+QTreeWidgetItem* propertyRow(QTreeWidgetItem* group, const QString& key, const QString& value, const QString& toolTip = QString())
+{
+	auto* row = new QTreeWidgetItem(group, {key, value});
+	row->setFlags(Qt::ItemIsEnabled | Qt::ItemIsSelectable);
+	const QString tip = toolTip.isEmpty() ? QStringLiteral("%1: %2").arg(key, value) : toolTip;
+	row->setToolTip(0, tip);
+	row->setToolTip(1, tip);
+	return row;
+}
+
+// Read-only Property / Value grid in the same shape as the entity inspector,
+// for metadata panels that would otherwise be a list of "Key: value" lines.
+QTreeWidget* createPropertyGrid(const QString& accessibleName, const QString& accessibleDescription)
+{
+	auto* grid = new QTreeWidget;
+	grid->setObjectName(QStringLiteral("propertyGrid"));
+	grid->setAccessibleName(accessibleName);
+	grid->setAccessibleDescription(accessibleDescription);
+	grid->setColumnCount(2);
+	grid->setHeaderLabels({ApplicationShell::tr("Property"), ApplicationShell::tr("Value")});
+	grid->setRootIsDecorated(true);
+	grid->setIndentation(14);
+	grid->setUniformRowHeights(true);
+	grid->setAlternatingRowColors(true);
+	grid->setEditTriggers(QAbstractItemView::NoEditTriggers);
+	grid->setSelectionMode(QAbstractItemView::SingleSelection);
+	grid->setTextElideMode(Qt::ElideMiddle);
+	grid->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+	grid->header()->setStretchLastSection(true);
+	grid->header()->setSectionResizeMode(0, QHeaderView::Interactive);
+	grid->setColumnWidth(0, 124);
+	return grid;
+}
+
+// Adds core's "Key: value" report lines to a grid group. A line with no key
+// becomes a full-width note so nothing the report says is dropped.
+void addPropertyLines(QTreeWidgetItem* group, const QStringList& lines)
+{
+	for (const QString& raw : lines) {
+		const QString line = raw.trimmed();
+		if (line.isEmpty()) {
+			continue;
+		}
+		const int split = line.indexOf(QStringLiteral(": "));
+		if (split > 0 && split <= 40) {
+			propertyRow(group, line.left(split), line.mid(split + 2));
+			continue;
+		}
+		auto* note = new QTreeWidgetItem(group, {line});
+		note->setFirstColumnSpanned(true);
+		note->setFlags(Qt::ItemIsEnabled | Qt::ItemIsSelectable);
+		note->setToolTip(0, line);
+	}
+}
+
+void addPropertyNote(QTreeWidget* grid, const QString& text)
+{
+	auto* note = new QTreeWidgetItem(grid, {text});
+	note->setFirstColumnSpanned(true);
+	note->setFlags(Qt::NoItemFlags);
+}
+
+// Shortest faithful form of a model-space number: whole units stay whole.
+QString compactNumber(double value)
+{
+	QString text = QString::number(value, 'f', 2);
+	if (text.contains(QLatin1Char('.'))) {
+		while (text.endsWith(QLatin1Char('0'))) {
+			text.chop(1);
+		}
+		if (text.endsWith(QLatin1Char('.'))) {
+			text.chop(1);
+		}
+	}
+	return text == QStringLiteral("-0") ? QStringLiteral("0") : text;
+}
+
+QString compactVector(const ModelVec3& vector)
+{
+	return QStringLiteral("%1 %2 %3").arg(compactNumber(vector.x), compactNumber(vector.y), compactNumber(vector.z));
+}
+
+// The strip above the code editor names the document the way an editor tab
+// does: file name, language, and save state. The page header already carries
+// the full path, so the strip keeps it for its tooltip.
+QString codeDocumentLabel(const QString& path, const QString& state = QString())
+{
+	QStringList parts {QFileInfo(path).fileName(), studioLanguageDisplayName(studioLanguageForPath(path))};
+	if (!state.isEmpty()) {
+		parts << state;
+	}
+	return parts.join(QStringLiteral("  %1  ").arg(QChar(0x00b7)));
+}
+
+QString withoutExtension(const QString& path)
+{
+	const int dot = path.lastIndexOf(QLatin1Char('.'));
+	const int slash = std::max(path.lastIndexOf(QLatin1Char('/')), path.lastIndexOf(QLatin1Char('\\')));
+	return (dot > slash ? path.left(dot) : path).toLower();
+}
+
+void addWarningRows(QTreeWidgetItem* group, const QStringList& warnings)
+{
+	for (const QString& warning : warnings) {
+		auto* row = new QTreeWidgetItem(group, {warning});
+		row->setFirstColumnSpanned(true);
+		row->setFlags(Qt::ItemIsEnabled | Qt::ItemIsSelectable);
+		row->setIcon(0, studioIcon(QStringLiteral("warning"), StudioIconTone::Warning));
+		row->setToolTip(0, warning);
+	}
+}
+
+// Sizes a grid's key column to its longest key, counting each row's
+// indentation and icon. Group headings and notes span both columns, so they
+// are left out.
+void fitPropertyKeyColumn(QTreeWidget* grid)
+{
+	const QFontMetrics metrics(grid->font());
+	const int iconWidth = grid->iconSize().isValid() ? grid->iconSize().width()
+		: grid->style()->pixelMetric(QStyle::PM_SmallIconSize, nullptr, grid);
+	int widest = 0;
+	for (QTreeWidgetItemIterator it(grid); *it; ++it) {
+		const QTreeWidgetItem* item = *it;
+		if (item->isFirstColumnSpanned()) {
+			continue;
+		}
+		int depth = grid->rootIsDecorated() ? 1 : 0;
+		for (const QTreeWidgetItem* parent = item->parent(); parent; parent = parent->parent()) {
+			++depth;
+		}
+		const int icon = item->icon(0).isNull() ? 0 : iconWidth + 6;
+		widest = std::max(widest, depth * grid->indentation() + icon + metrics.horizontalAdvance(item->text(0)) + 20);
+	}
+	// Keys never take more than half of a laid-out grid, so values stay legible
+	// in a narrow inspector or at a large text scale.
+	const int available = grid->viewport()->width();
+	const int cap = available > 160 ? std::max(96, available / 2) : 260;
+	grid->setColumnWidth(0, std::clamp(widest, 96, cap));
+}
+
+// Model metadata as a property grid: warnings first when there are any, then
+// the counts that matter, then one group each for surfaces, animations, skins,
+// and whatever else the decoder reported.
+void populateModelDetails(QTreeWidget* grid, const ModelMesh& mesh, const QString& resolvedSkinPath)
+{
+	if (!grid) {
+		return;
+	}
+	grid->clear();
+	const QString formatName = mesh.formatName.isEmpty() ? modelMeshFormatDisplayName(mesh.format) : mesh.formatName;
+	if (!mesh.error.isEmpty()) {
+		QTreeWidgetItem* model = propertyGroup(grid, ApplicationShell::tr("Model"));
+		propertyRow(model, ApplicationShell::tr("Format"), formatName);
+		propertyRow(model, ApplicationShell::tr("Error"), mesh.error)->setIcon(0, studioIcon(QStringLiteral("error"), StudioIconTone::Danger));
+		return;
+	}
+	if (mesh.formatId.isEmpty() && mesh.frameCount == 0 && mesh.surfaceCount == 0) {
+		addPropertyNote(grid, ApplicationShell::tr("No model metadata could be read from this entry."));
+		return;
+	}
+
+	QStringList warnings;
+	for (const ModelSurface& surface : mesh.surfaces) {
+		for (const QString& warning : surface.warnings) {
+			warnings << ApplicationShell::tr("Surface %1: %2").arg(surface.index).arg(warning);
+		}
+	}
+	warnings += mesh.warnings;
+	if (!mesh.skinPaths.isEmpty() && resolvedSkinPath.isEmpty() && mesh.embeddedSkins.isEmpty()) {
+		warnings << ApplicationShell::tr("None of the skins this model names could be found in the package, so it draws flat shaded.");
+	}
+	if (!warnings.isEmpty()) {
+		addWarningRows(propertyGroup(grid, ApplicationShell::tr("Warnings (%1)").arg(warnings.size())), warnings);
+	}
+
+	const QString separator = QStringLiteral("  %1  ").arg(QChar(0x00b7));
+	QTreeWidgetItem* model = propertyGroup(grid, ApplicationShell::tr("Model"));
+	propertyRow(model, ApplicationShell::tr("Format"), mesh.version > 0
+			? ApplicationShell::tr("%1, version %2").arg(formatName).arg(mesh.version)
+			: formatName);
+	propertyRow(model, ApplicationShell::tr("Frames"), QString::number(mesh.frameCount));
+	propertyRow(model, ApplicationShell::tr("Surfaces"), QString::number(mesh.surfaceCount));
+	if (mesh.geometryAvailable) {
+		propertyRow(model, ApplicationShell::tr("Vertices"), QString::number(mesh.vertexCount));
+		propertyRow(model, ApplicationShell::tr("Triangles"), QString::number(mesh.triangleCount));
+		propertyRow(model, ApplicationShell::tr("Bounds"), ApplicationShell::tr("%1 to %2").arg(compactVector(mesh.mins), compactVector(mesh.maxs)));
+		propertyRow(model, ApplicationShell::tr("Radius"), compactNumber(mesh.boundingRadius()));
+	} else {
+		propertyRow(model, ApplicationShell::tr("Geometry"), ApplicationShell::tr("Header only; this format's geometry is not decoded yet."));
+	}
+	propertyRow(model, ApplicationShell::tr("Tags"), QString::number(mesh.tagCount));
+
+	if (!mesh.surfaces.isEmpty()) {
+		QTreeWidgetItem* surfaces = propertyGroup(grid, ApplicationShell::tr("Surfaces (%1)").arg(mesh.surfaces.size()));
+		for (const ModelSurface& surface : mesh.surfaces) {
+			propertyRow(surfaces, surface.name.isEmpty() ? ApplicationShell::tr("Surface %1").arg(surface.index) : surface.name,
+				QStringList {ApplicationShell::tr("%n vert(ex)(ices)", nullptr, surface.vertexCount),
+					ApplicationShell::tr("%n triangle(s)", nullptr, static_cast<int>(surface.triangles.size()))}
+					.join(separator));
+		}
+	}
+
+	if (!mesh.animations.isEmpty()) {
+		QTreeWidgetItem* animations = propertyGroup(grid, ApplicationShell::tr("Animations (%1)").arg(mesh.animations.size()));
+		for (const ModelAnimation& animation : mesh.animations) {
+			propertyRow(animations, animation.name, animation.frameCount > 1
+					? ApplicationShell::tr("Frames %1 to %2").arg(animation.firstFrame).arg(animation.firstFrame + animation.frameCount - 1)
+					: ApplicationShell::tr("Frame %1").arg(animation.firstFrame));
+		}
+	}
+
+	const int skinCount = static_cast<int>(mesh.embeddedSkins.size() + mesh.skinPaths.size());
+	if (skinCount > 0) {
+		QTreeWidgetItem* skins = propertyGroup(grid, ApplicationShell::tr("Skins (%1)").arg(skinCount));
+		for (const ModelEmbeddedSkin& skin : mesh.embeddedSkins) {
+			const QString size = ApplicationShell::tr("%1 x %2").arg(skin.image.width()).arg(skin.image.height());
+			propertyRow(skins, ApplicationShell::tr("Embedded %1").arg(skin.index), skin.groupFrameCount > 1
+					? ApplicationShell::tr("%1, group of %2").arg(size).arg(skin.groupFrameCount)
+					: size);
+		}
+		// The skin loader tries each idTech image extension, so the file it
+		// loaded can differ from the named path by its extension only.
+		bool marked = false;
+		for (int index = 0; index < mesh.skinPaths.size(); ++index) {
+			const QString& path = mesh.skinPaths.at(index);
+			QTreeWidgetItem* row = propertyRow(skins, ApplicationShell::tr("Skin %1").arg(index), path);
+			if (!marked && !resolvedSkinPath.isEmpty() && withoutExtension(path) == withoutExtension(resolvedSkinPath)) {
+				marked = true;
+				row->setIcon(0, studioIcon(QStringLiteral("check"), StudioIconTone::Success));
+				row->setToolTip(1, ApplicationShell::tr("Drawn in the viewport, loaded from %1").arg(resolvedSkinPath));
+			}
+		}
+	}
+
+	if (!mesh.detailLines.isEmpty()) {
+		addPropertyLines(propertyGroup(grid, ApplicationShell::tr("Header")), mesh.detailLines);
+	}
+	fitPropertyKeyColumn(grid);
+}
+
+// Audio metadata as a property grid. Core's report ends with a text sketch of
+// the waveform for the CLI; the page paints the real envelope instead.
+void populateAudioDetails(QTreeWidget* grid, const PackagePreview& preview)
+{
+	if (!grid) {
+		return;
+	}
+	grid->clear();
+	QStringList lines = preview.assetDetailLines;
+	if (!preview.audioWaveformLines.isEmpty()) {
+		const qsizetype start = lines.indexOf(preview.audioWaveformLines.first());
+		if (start >= 0) {
+			lines.remove(start, std::min(preview.audioWaveformLines.size(), lines.size() - start));
+			if (start > 0 && lines.at(start - 1).trimmed().endsWith(QLatin1Char(':'))) {
+				lines.removeAt(start - 1);
+			}
+		}
+	}
+	if (lines.isEmpty()) {
+		addPropertyNote(grid, ApplicationShell::tr("No audio metadata could be read from this entry."));
+		return;
+	}
+	addPropertyLines(grid->invisibleRootItem(), lines);
+	fitPropertyKeyColumn(grid);
+}
+
+void markFlat(QAbstractItemView* view)
+{
+	view->setProperty("flat", true);
+}
+
+// Default width for a side pane at the current text scale. Side panes hold
+// text, so they widen with it; the square root keeps 200% text from squeezing
+// the viewport or editor between them down to nothing.
+int scaledPane(int base)
+{
+	const double scale = std::clamp(currentStudioTheme().textScalePercent, 50, 400) / 100.0;
+	return static_cast<int>(base * std::sqrt(scale) + 0.5);
+}
+
+// Hosts a page's LoadingPane above its workbench. refreshSurfaceStates()
+// hides the host while the pane has nothing to report (idle or completed), so
+// the strip only takes space for progress, warnings, and failures.
+QWidget* statusStripHost(LoadingPane* pane)
+{
+	QWidget* host = padded(pane, 14, 10, 0);
+	host->setObjectName(QStringLiteral("statusStrip"));
+	return host;
+}
+
+} // namespace
 
 void ApplicationShell::buildUi()
 {
@@ -757,6 +1216,7 @@ void ApplicationShell::buildUi()
 	setWindowTitle(tr("VibeStudio"));
 	setAcceptDrops(true);
 	resize(1440, 900);
+	setDockOptions(QMainWindow::AnimatedDocks | QMainWindow::AllowTabbedDocks | QMainWindow::GroupedDragging);
 
 	buildCommands();
 	buildMenuBar();
@@ -764,32 +1224,29 @@ void ApplicationShell::buildUi()
 	buildStatusBar();
 
 	auto* root = new QWidget;
+	root->setObjectName(QStringLiteral("studioRoot"));
 	auto* rootLayout = new QHBoxLayout(root);
 	rootLayout->setContentsMargins(0, 0, 0, 0);
 	rootLayout->setSpacing(0);
 
-	m_modeRail = new QListWidget;
-	m_modeRail->setObjectName("modeRail");
-	m_modeRail->setAccessibleName(tr("Mode rail"));
-	m_modeRail->setAccessibleDescription(tr("Switches the studio between work surfaces. Each mode shows only the panels that belong to it."));
-	m_modeRail->setFixedWidth(196);
-	m_modeRail->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
-
+	m_modeRail = new ModeRail;
+	QVector<ModeRailEntry> railEntries;
 	for (const StudioModeDescriptor& descriptor : studioModeDescriptors()) {
-		auto* item = new QListWidgetItem(style()->standardIcon(descriptor.icon), descriptor.label);
-		item->setData(Qt::UserRole, static_cast<int>(descriptor.mode));
-		item->setToolTip(descriptor.hint);
-		item->setData(Qt::AccessibleTextRole, descriptor.label);
-		item->setData(Qt::AccessibleDescriptionRole, descriptor.hint);
-		m_modeRail->addItem(item);
+		ModeRailEntry entry;
+		entry.id = static_cast<int>(descriptor.mode);
+		entry.label = descriptor.label;
+		const QString shortcut = m_commands ? m_commands->shortcutForCommand(modeCommandId(descriptor.mode)) : QString();
+		entry.hint = shortcut.isEmpty() ? descriptor.hint : tr("%1 (%2)").arg(descriptor.hint, shortcut);
+		entry.iconName = descriptor.iconName;
+		// Dividers group the rail into home, content, assets and code, and
+		// shipping, while keeping Ctrl+1..9 in rail order.
+		entry.startsGroup = descriptor.mode == StudioMode::Levels || descriptor.mode == StudioMode::Packages || descriptor.mode == StudioMode::Build;
+		entry.pinnedToBottom = descriptor.mode == StudioMode::Settings;
+		railEntries.push_back(entry);
 	}
+	m_modeRail->setEntries(railEntries);
+	m_modeRail->setCompact(m_settings.shellModeRailCompact());
 	rootLayout->addWidget(m_modeRail);
-
-	m_mainSplitter = new QSplitter(Qt::Horizontal);
-	m_mainSplitter->setObjectName("mainSplitter");
-	m_mainSplitter->setAccessibleName(tr("Studio layout"));
-	m_mainSplitter->setChildrenCollapsible(false);
-	rootLayout->addWidget(m_mainSplitter, 1);
 
 	m_modeStack = new QStackedWidget;
 	m_modeStack->setObjectName("modeStack");
@@ -804,12 +1261,27 @@ void ApplicationShell::buildUi()
 	m_modeStack->addWidget(buildShadersPage());
 	m_modeStack->addWidget(buildBuildPage());
 	m_modeStack->addWidget(buildSettingsPage());
-	m_mainSplitter->addWidget(m_modeStack);
-	m_mainSplitter->addWidget(buildSidePanel());
-	m_mainSplitter->setStretchFactor(0, 4);
-	m_mainSplitter->setStretchFactor(1, 1);
+	rootLayout->addWidget(m_modeStack, 1);
 
 	setCentralWidget(root);
+	buildSidePanel();
+
+	// Lists of paths and names elide instead of scrolling sideways.
+	for (QListWidget* list : {m_recentProjects, m_gameInstallations, m_packageEntries, m_textureEntries, m_modelEntries,
+			 m_audioEntries, m_workspaceSearchResults, m_changedFiles, m_dependencyGraph, m_recentActivityTimeline,
+			 m_activityTasks, m_levelMapObjects, m_levelMapStatistics, m_levelMapView, m_advancedCodeTree, m_compilerPipeline}) {
+		useElidingRows(list);
+	}
+
+	// A view lays its rows out with the metrics it has when its first items
+	// arrive, and polishing it later does not redo that layout. Lists filled
+	// while their page was still unpolished (the Settings categories are
+	// filled once, at construction) would keep unpadded row positions under
+	// padded rows, so polish every view now and lay it out again.
+	for (QAbstractItemView* view : findChildren<QAbstractItemView*>()) {
+		view->ensurePolished();
+		view->doItemsLayout();
+	}
 
 	seedActivityCenter();
 	refreshWorkspaceDashboard();
@@ -821,21 +1293,50 @@ void ApplicationShell::buildUi()
 	refreshCompilerPipelineSummary();
 	refreshBuildSurface();
 	refreshLevelMapWorkbench();
+
+	// External change detection. One second is well under the time it takes a
+	// user to notice a file changed behind their back, and poll() only reads
+	// files whose metadata moved, so an idle studio costs a stat per open
+	// document per second.
+	m_documentWatchTimer = new QTimer(this);
+	m_documentWatchTimer->setInterval(1000);
+	m_documentWatchTimer->setTimerType(Qt::CoarseTimer);
+	connect(m_documentWatchTimer, &QTimer::timeout, this, &ApplicationShell::pollWatchedDocuments);
+	m_documentWatchTimer->start();
+	reportPreviousSessionCrash();
 	refreshAdvancedStudioSurface();
 	refreshCodeWorkspaceTree();
 	refreshPreferenceControls();
+	// Remember the built-in proportions before any saved state replaces them,
+	// so View > Reset Layout can return to them.
+	for (auto it = m_layoutSplitters.cbegin(); it != m_layoutSplitters.cend(); ++it) {
+		if (it.value()) {
+			m_defaultLayoutStates.insert(it.key(), it.value()->saveState());
+		}
+	}
 	loadShellState();
 	applyPreferencesToUi();
 	updateInspector();
 	refreshStatusChips();
 	refreshCommandEnablement();
-	statusBar()->showMessage(tr("Studio ready"));
+	refreshSurfaceStates();
+	statusBar()->showMessage(tr("Studio ready"), 4000);
+	// Park focus on the work surface so no control starts with a focus ring;
+	// Tab then reaches the rail, the page, and the panels in order.
+	QTimer::singleShot(0, this, [this]() {
+		if (m_modeStack) {
+			m_modeStack->setFocus(Qt::OtherFocusReason);
+		}
+	});
 
-	connect(m_modeRail, &QListWidget::currentRowChanged, this, [this](int row) {
-		if (row < 0 || m_buildingUi) {
+	connect(m_modeRail, &ModeRail::currentIdChanged, this, [this](int id) {
+		if (id < 0 || m_buildingUi) {
 			return;
 		}
-		setMode(static_cast<StudioMode>(row));
+		setMode(static_cast<StudioMode>(id));
+	});
+	connect(m_modeRail, &ModeRail::compactChanged, this, [this](bool compact) {
+		m_settings.setShellModeRailCompact(compact);
 	});
 
 	auto persistPreferenceChange = [this]() {
@@ -866,59 +1367,38 @@ void ApplicationShell::buildUi()
 
 QWidget* ApplicationShell::buildWorkspacePage()
 {
-	auto* page = new QWidget;
-	auto* pageLayout = new QVBoxLayout(page);
-	pageLayout->setContentsMargins(0, 0, 0, 0);
-	pageLayout->setSpacing(0);
+	auto* header = new PageHeader(QStringLiteral("home"), tr("Workspace"));
+	header->setAccessibleName(tr("Workspace header"));
+	m_pageHeaders.insert(static_cast<int>(StudioMode::Workspace), header);
 
-	auto* scroll = new QScrollArea;
-	scroll->setWidgetResizable(true);
-	scroll->setFrameShape(QFrame::NoFrame);
-	scroll->setAccessibleName(tr("Workspace scroll area"));
-
-	auto* center = new QWidget;
-	auto* centerLayout = new QVBoxLayout(center);
-	centerLayout->setContentsMargins(22, 18, 22, 18);
-	centerLayout->setSpacing(16);
-
-	auto* topRow = new QHBoxLayout;
-	auto* title = new QLabel(tr("VibeStudio"));
-	title->setObjectName("appTitle");
-	auto* subtitle = new QLabel(tr("Integrated development studio for idTech1-3 projects"));
-	subtitle->setObjectName("appSubtitle");
-	auto* titleStack = new QVBoxLayout;
-	titleStack->addWidget(title);
-	titleStack->addWidget(subtitle);
-	topRow->addLayout(titleStack, 1);
-
-	auto* openProject = new QPushButton(style()->standardIcon(QStyle::SP_DirOpenIcon), tr("Open Project"));
-	openProject->setAccessibleName(tr("Open project folder"));
-	openProject->setToolTip(tr("Choose a project folder and add it to recent projects."));
-	connect(openProject, &QPushButton::clicked, this, [this]() {
-		openProjectFolder();
-	});
-	topRow->addWidget(openProject);
-
-	auto* detectInstalls = new QPushButton(style()->standardIcon(QStyle::SP_FileDialogContentsView), tr("Detect Installs"));
+	auto* detectInstalls = createButton(tr("Detect Installs"), QStringLiteral("search"));
 	detectInstalls->setAccessibleName(tr("Detect game installations"));
 	detectInstalls->setToolTip(tr("Scan common Steam and GOG library roots for confirmable game installation candidates."));
 	connect(detectInstalls, &QPushButton::clicked, this, [this]() {
 		detectGameInstallationProfiles();
 	});
-	topRow->addWidget(detectInstalls);
-	centerLayout->addLayout(topRow);
+	header->addActionWidget(detectInstalls);
 
-	auto* workspaceHeader = new QHBoxLayout;
-	workspaceHeader->addWidget(sectionLabel(tr("Workspace Dashboard")));
-	auto* initManifest = new QPushButton(style()->standardIcon(QStyle::SP_FileDialogDetailedView), tr("Initialize Manifest"));
+	auto* initManifest = createButton(tr("Initialize Manifest"), QStringLiteral("file"));
 	initManifest->setAccessibleName(tr("Initialize project manifest"));
 	initManifest->setToolTip(tr("Create or refresh the .vibestudio/project.json manifest for the current project folder."));
 	connect(initManifest, &QPushButton::clicked, this, [this]() {
 		initializeCurrentProjectManifest();
 	});
-	workspaceHeader->addStretch(1);
-	workspaceHeader->addWidget(initManifest);
-	centerLayout->addLayout(workspaceHeader);
+	header->addActionWidget(initManifest);
+
+	auto* openProject = createButton(tr("Open Project"), QStringLiteral("folder-open"), QStringLiteral("primary"));
+	openProject->setAccessibleName(tr("Open project folder"));
+	openProject->setToolTip(tr("Choose a project folder and add it to recent projects."));
+	connect(openProject, &QPushButton::clicked, this, [this]() {
+		openProjectFolder();
+	});
+	header->addActionWidget(openProject);
+
+	auto* content = new QWidget;
+	auto* contentLayout = new QVBoxLayout(content);
+	contentLayout->setContentsMargins(18, 16, 18, 18);
+	contentLayout->setSpacing(14);
 
 	m_workspaceState = new LoadingPane;
 	m_workspaceState->setAccessibleName(tr("Workspace dashboard state"));
@@ -927,34 +1407,75 @@ QWidget* ApplicationShell::buildWorkspacePage()
 		tr("Project health"),
 		tr("Linked installation"),
 	});
-	centerLayout->addWidget(m_workspaceState);
+	contentLayout->addWidget(m_workspaceState);
 
-	m_workspaceDrawer = new DetailDrawer;
-	m_workspaceDrawer->setAccessibleName(tr("Workspace dashboard details"));
-	m_workspaceDrawer->setTitle(tr("Workspace Details"));
-	m_workspaceDrawer->setSubtitle(tr("Open a project folder to inspect manifest and health details."));
-	centerLayout->addWidget(m_workspaceDrawer);
+	// Jump tiles: one per work surface, so the dashboard doubles as a start page.
+	auto* tiles = new QGridLayout;
+	tiles->setHorizontalSpacing(10);
+	tiles->setVerticalSpacing(10);
+	int tileIndex = 0;
+	for (const StudioModeDescriptor& descriptor : studioModeDescriptors()) {
+		if (descriptor.mode == StudioMode::Workspace || descriptor.mode == StudioMode::Settings) {
+			continue;
+		}
+		auto* tile = new QToolButton;
+		tile->setObjectName(QStringLiteral("tileButton"));
+		tile->setIcon(studioIcon(descriptor.iconName, StudioIconTone::Accent, StudioIconAlignment::Leading));
+		setBaseIconSize(tile, QSize(32, 22));
+		tile->setText(descriptor.label);
+		tile->setToolTip(descriptor.hint);
+		tile->setAccessibleName(tr("Go to %1").arg(descriptor.label));
+		tile->setAccessibleDescription(descriptor.hint);
+		tile->setToolButtonStyle(Qt::ToolButtonTextBesideIcon);
+		tile->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
+		tile->setMinimumHeight(44);
+		tile->setFocusPolicy(Qt::TabFocus);
+		const StudioMode mode = descriptor.mode;
+		connect(tile, &QToolButton::clicked, this, [this, mode]() {
+			setMode(mode);
+		});
+		tiles->addWidget(tile, tileIndex / 4, tileIndex % 4);
+		++tileIndex;
+	}
+	contentLayout->addLayout(tiles);
 
-	auto* workspaceTabs = new QTabWidget;
+	// Two balanced rows of cards, each sized to its content: health beside the
+	// project lists, then details beside recent activity. The trailing stretch
+	// takes any spare height instead of the cards ballooning to fill it.
+	auto* grid = new QGridLayout;
+	grid->setHorizontalSpacing(14);
+	grid->setVerticalSpacing(14);
+	grid->setColumnStretch(0, 3);
+	grid->setColumnStretch(1, 2);
+	contentLayout->addLayout(grid);
+	auto* listsColumn = new QVBoxLayout;
+	listsColumn->setSpacing(14);
+
+	// Left column: project health and context, then the project detail drawer.
+	auto* contextCard = new CardFrame(tr("Project Health"));
+	auto* workspaceTabs = createPanelTabs(tr("Workspace context panels"));
 	workspaceTabs->setObjectName("workspaceContextTabs");
-	workspaceTabs->setAccessibleName(tr("Workspace context panels"));
 	workspaceTabs->setAccessibleDescription(tr("Problems, search, changed files, dependency graph, and recent activity for the active workspace."));
 
 	m_projectProblems = new QListWidget;
 	m_projectProblems->setObjectName("projectProblems");
 	m_projectProblems->setAccessibleName(tr("Project problems"));
 	m_projectProblems->setAccessibleDescription(tr("Project health warnings, blocking issues, and next actions."));
-	m_projectProblems->setMinimumHeight(118);
-	workspaceTabs->addTab(m_projectProblems, tr("Problems"));
+	m_projectProblems->setWordWrap(true);
+	markFlat(m_projectProblems);
+	workspaceTabs->addTab(m_projectProblems, studioIcon(QStringLiteral("warning")), tr("Problems"));
 
 	auto* searchPanel = new QWidget;
 	auto* searchLayout = new QVBoxLayout(searchPanel);
-	searchLayout->setContentsMargins(0, 0, 0, 0);
+	searchLayout->setContentsMargins(0, 8, 0, 0);
 	searchLayout->setSpacing(8);
 	m_workspaceSearch = new QLineEdit;
+	m_workspaceSearch->setObjectName("workspaceSearch");
 	m_workspaceSearch->setAccessibleName(tr("Workspace search"));
 	m_workspaceSearch->setAccessibleDescription(tr("Searches mounted package entries and project files by path."));
 	m_workspaceSearch->setPlaceholderText(tr("Search project files and mounted package entries"));
+	m_workspaceSearch->setClearButtonEnabled(true);
+	m_workspaceSearch->addAction(studioIcon(QStringLiteral("search"), StudioIconTone::Muted), QLineEdit::LeadingPosition);
 	connect(m_workspaceSearch, &QLineEdit::textChanged, this, [this]() {
 		scheduleWorkspaceSearch();
 	});
@@ -963,18 +1484,18 @@ QWidget* ApplicationShell::buildWorkspacePage()
 	m_workspaceSearchResults->setObjectName("workspaceSearchResults");
 	m_workspaceSearchResults->setAccessibleName(tr("Workspace search results"));
 	m_workspaceSearchResults->setAccessibleDescription(tr("Matching project file paths and mounted package virtual paths."));
-	m_workspaceSearchResults->setMinimumHeight(118);
-	searchLayout->addWidget(m_workspaceSearchResults);
+	markFlat(m_workspaceSearchResults);
+	searchLayout->addWidget(m_workspaceSearchResults, 1);
 	auto* searchActions = new QHBoxLayout;
 	searchActions->addStretch(1);
-	m_revealWorkspacePath = new QPushButton(style()->standardIcon(QStyle::SP_DirOpenIcon), tr("Reveal"));
+	m_revealWorkspacePath = createButton(tr("Reveal"), QStringLiteral("external"));
 	m_revealWorkspacePath->setAccessibleName(tr("Reveal selected workspace path"));
 	m_revealWorkspacePath->setToolTip(tr("Open the containing folder for the selected project file."));
 	connect(m_revealWorkspacePath, &QPushButton::clicked, this, [this]() {
 		revealSelectedWorkspacePath();
 	});
 	searchActions->addWidget(m_revealWorkspacePath);
-	m_copyWorkspaceVirtualPath = new QPushButton(style()->standardIcon(QStyle::SP_FileDialogDetailedView), tr("Copy Path"));
+	m_copyWorkspaceVirtualPath = createButton(tr("Copy Path"), QStringLiteral("copy"));
 	m_copyWorkspaceVirtualPath->setAccessibleName(tr("Copy selected virtual path"));
 	m_copyWorkspaceVirtualPath->setToolTip(tr("Copy the selected project-relative or package virtual path."));
 	connect(m_copyWorkspaceVirtualPath, &QPushButton::clicked, this, [this]() {
@@ -982,53 +1503,56 @@ QWidget* ApplicationShell::buildWorkspacePage()
 	});
 	searchActions->addWidget(m_copyWorkspaceVirtualPath);
 	searchLayout->addLayout(searchActions);
-	workspaceTabs->addTab(searchPanel, tr("Search"));
+	workspaceTabs->addTab(searchPanel, studioIcon(QStringLiteral("search")), tr("Search"));
 
 	m_changedFiles = new QListWidget;
 	m_changedFiles->setObjectName("changedFiles");
 	m_changedFiles->setAccessibleName(tr("Changed and staged files"));
 	m_changedFiles->setAccessibleDescription(tr("Git changed and staged files for the active project, when available."));
-	m_changedFiles->setMinimumHeight(118);
-	workspaceTabs->addTab(m_changedFiles, tr("Changes"));
+	markFlat(m_changedFiles);
+	workspaceTabs->addTab(m_changedFiles, studioIcon(QStringLiteral("edit")), tr("Changes"));
 
 	m_dependencyGraph = new QListWidget;
 	m_dependencyGraph->setObjectName("dependencyGraph");
 	m_dependencyGraph->setAccessibleName(tr("Project dependency graph"));
 	m_dependencyGraph->setAccessibleDescription(tr("Placeholder dependency graph nodes for project roots, installs, packages, and compilers."));
-	m_dependencyGraph->setMinimumHeight(118);
-	workspaceTabs->addTab(m_dependencyGraph, tr("Graph"));
+	markFlat(m_dependencyGraph);
+	workspaceTabs->addTab(m_dependencyGraph, studioIcon(QStringLiteral("tree")), tr("Graph"));
 
 	m_recentActivityTimeline = new QListWidget;
 	m_recentActivityTimeline->setObjectName("recentActivityTimeline");
 	m_recentActivityTimeline->setAccessibleName(tr("Recent activity timeline"));
 	m_recentActivityTimeline->setAccessibleDescription(tr("Recent project, package, setup, and task events."));
-	m_recentActivityTimeline->setMinimumHeight(118);
-	workspaceTabs->addTab(m_recentActivityTimeline, tr("Timeline"));
+	markFlat(m_recentActivityTimeline);
+	workspaceTabs->addTab(m_recentActivityTimeline, studioIcon(QStringLiteral("clock")), tr("Timeline"));
+	workspaceTabs->setMinimumHeight(300);
+	contextCard->bodyLayout()->addWidget(workspaceTabs, 1);
+	grid->addWidget(contextCard, 0, 0);
 
-	centerLayout->addWidget(workspaceTabs);
+	m_workspaceDrawer = new DetailDrawer;
+	m_workspaceDrawer->setAccessibleName(tr("Workspace dashboard details"));
+	m_workspaceDrawer->setTitle(tr("Workspace Details"));
+	m_workspaceDrawer->setSubtitle(tr("Open a project folder to inspect manifest and health details."));
+	m_workspaceDrawer->setMinimumHeight(280);
+	grid->addWidget(m_workspaceDrawer, 1, 0);
 
-	m_activityTimelineChart = new ActivityTimelineChart;
-	m_activityTimelineChart->setAccessibleName(tr("Recent activity chart"));
-	m_activityTimelineChart->setAccessibleDescription(tr("Recent package, compiler, and setup tasks with state glyphs and duration bars."));
-	m_activityTimelineChart->setEmptyText(tr("No recent activity yet. Open a package or run a build to populate the timeline."));
-	m_activityTimelineChart->setMinimumHeight(120);
-	centerLayout->addWidget(m_activityTimelineChart);
-
-	auto* recentHeader = new QHBoxLayout;
-	recentHeader->addWidget(sectionLabel(tr("Recent Projects")));
-	m_recentSummary = new QLabel;
-	m_recentSummary->setObjectName("panelMeta");
-	recentHeader->addWidget(m_recentSummary, 1, Qt::AlignRight);
-	centerLayout->addLayout(recentHeader);
-
+	// Right column: recent projects, installations, and recent activity.
+	auto* recentCard = new CardFrame(tr("Recent Projects"));
+	m_recentSummary = recentCard->metaLabel();
+	m_recentSummary->setVisible(true);
 	m_recentProjects = new QListWidget;
 	m_recentProjects->setObjectName("recentProjects");
 	m_recentProjects->setAccessibleName(tr("Recent projects"));
 	m_recentProjects->setAccessibleDescription(tr("Project folders remembered from previous sessions."));
 	m_recentProjects->setSelectionMode(QAbstractItemView::SingleSelection);
 	m_recentProjects->setUniformItemSizes(false);
-	m_recentProjects->setMinimumHeight(118);
+	m_recentProjects->setMinimumHeight(110);
+	m_recentProjects->setMaximumHeight(170);
+	markFlat(m_recentProjects);
 	connect(m_recentProjects, &QListWidget::itemDoubleClicked, this, [this](QListWidgetItem* item) {
+		activateRecentProject(item);
+	});
+	connect(m_recentProjects, &QListWidget::itemActivated, this, [this](QListWidgetItem* item) {
 		activateRecentProject(item);
 	});
 	connect(m_recentProjects, &QListWidget::itemSelectionChanged, this, [this]() {
@@ -1039,87 +1563,94 @@ QWidget* ApplicationShell::buildWorkspacePage()
 			updateInspector();
 		}
 	});
-	centerLayout->addWidget(m_recentProjects);
-
+	recentCard->bodyLayout()->addWidget(m_recentProjects, 1);
 	auto* recentActions = new QHBoxLayout;
 	recentActions->addStretch(1);
-	auto* removeRecent = new QPushButton(style()->standardIcon(QStyle::SP_DialogDiscardButton), tr("Remove"));
+	auto* removeRecent = createButton(tr("Remove"), QStringLiteral("minus"), QStringLiteral("ghost"));
 	removeRecent->setAccessibleName(tr("Remove selected recent project"));
 	removeRecent->setToolTip(tr("Remove the selected project from the recent list without touching its files."));
 	connect(removeRecent, &QPushButton::clicked, this, [this]() {
 		removeSelectedRecentProject();
 	});
 	recentActions->addWidget(removeRecent);
-
-	auto* clearRecent = new QPushButton(style()->standardIcon(QStyle::SP_TrashIcon), tr("Clear"));
+	auto* clearRecent = createButton(tr("Clear"), QStringLiteral("trash"), QStringLiteral("ghost"));
 	clearRecent->setAccessibleName(tr("Clear recent projects"));
 	clearRecent->setToolTip(tr("Clear the recent-project list without touching project files."));
 	connect(clearRecent, &QPushButton::clicked, this, [this]() {
 		clearRecentProjects();
 	});
 	recentActions->addWidget(clearRecent);
-	centerLayout->addLayout(recentActions);
+	recentCard->bodyLayout()->addLayout(recentActions);
+	listsColumn->addWidget(recentCard);
 
-	auto* installHeader = new QHBoxLayout;
-	installHeader->addWidget(sectionLabel(tr("Game Installations")));
-	m_installSummary = new QLabel;
-	m_installSummary->setObjectName("panelMeta");
+	auto* installCard = new CardFrame(tr("Game Installations"));
+	m_installSummary = installCard->metaLabel();
 	m_installSummary->setAccessibleName(tr("Game installation summary"));
-	installHeader->addWidget(m_installSummary, 1, Qt::AlignRight);
-	centerLayout->addLayout(installHeader);
-
+	m_installSummary->setVisible(true);
 	m_gameInstallations = new QListWidget;
 	m_gameInstallations->setObjectName("gameInstallations");
 	m_gameInstallations->setAccessibleName(tr("Game installations"));
 	m_gameInstallations->setAccessibleDescription(tr("Manual read-only game installation profiles used by projects, packages, compilers, and launch workflows."));
 	m_gameInstallations->setSelectionMode(QAbstractItemView::SingleSelection);
 	m_gameInstallations->setUniformItemSizes(false);
-	m_gameInstallations->setMinimumHeight(112);
+	m_gameInstallations->setMinimumHeight(96);
+	m_gameInstallations->setMaximumHeight(150);
+	markFlat(m_gameInstallations);
 	connect(m_gameInstallations, &QListWidget::itemSelectionChanged, this, [this]() {
 		if (m_importDetectedInstall) {
 			m_importDetectedInstall->setEnabled(selectedDetectedInstallationIndex() >= 0);
 		}
 		refreshInspectorDrawerForSettings();
 	});
-	centerLayout->addWidget(m_gameInstallations);
-
+	installCard->bodyLayout()->addWidget(m_gameInstallations, 1);
 	auto* installActions = new QHBoxLayout;
-	installActions->addStretch(1);
-	auto* addInstall = new QPushButton(style()->standardIcon(QStyle::SP_DirOpenIcon), tr("Add Install"));
+	installActions->setSpacing(6);
+	auto* addInstall = createButton(tr("Add"), QStringLiteral("plus"));
 	addInstall->setAccessibleName(tr("Add game installation"));
 	addInstall->setToolTip(tr("Create a manual, read-only installation profile from a selected folder."));
 	connect(addInstall, &QPushButton::clicked, this, [this]() {
 		addGameInstallationProfile();
 	});
 	installActions->addWidget(addInstall);
-
-	m_importDetectedInstall = new QPushButton(style()->standardIcon(QStyle::SP_DialogSaveButton), tr("Import Detected"));
+	m_importDetectedInstall = createButton(tr("Import Detected"), QStringLiteral("import"));
 	m_importDetectedInstall->setAccessibleName(tr("Import detected installation"));
 	m_importDetectedInstall->setToolTip(tr("Save the selected detected Steam or GOG candidate as a confirmable read-only profile."));
 	connect(m_importDetectedInstall, &QPushButton::clicked, this, [this]() {
 		importSelectedDetectedInstallation();
 	});
 	installActions->addWidget(m_importDetectedInstall);
-
-	auto* selectInstall = new QPushButton(style()->standardIcon(QStyle::SP_DialogApplyButton), tr("Select"));
+	installActions->addStretch(1);
+	auto* selectInstall = createButton(tr("Use"), QStringLiteral("check"));
 	selectInstall->setAccessibleName(tr("Select game installation"));
 	selectInstall->setToolTip(tr("Use the selected installation profile as the current default."));
 	connect(selectInstall, &QPushButton::clicked, this, [this]() {
 		selectCurrentGameInstallation();
 	});
 	installActions->addWidget(selectInstall);
-
-	auto* removeInstall = new QPushButton(style()->standardIcon(QStyle::SP_DialogDiscardButton), tr("Remove"));
+	auto* removeInstall = createButton(tr("Remove"), QStringLiteral("minus"), QStringLiteral("ghost"));
 	removeInstall->setAccessibleName(tr("Remove game installation"));
 	removeInstall->setToolTip(tr("Remove the selected installation profile without touching files."));
 	connect(removeInstall, &QPushButton::clicked, this, [this]() {
 		removeSelectedGameInstallation();
 	});
 	installActions->addWidget(removeInstall);
-	centerLayout->addLayout(installActions);
+	installCard->bodyLayout()->addLayout(installActions);
+	listsColumn->addWidget(installCard);
+	grid->addLayout(listsColumn, 0, 1);
 
-	centerLayout->addWidget(sectionLabel(tr("AI Proposals")));
+	auto* activityCard = new CardFrame(tr("Recent Activity"));
+	m_activityTimelineChart = new ActivityTimelineChart;
+	m_activityTimelineChart->setAccessibleName(tr("Recent activity chart"));
+	m_activityTimelineChart->setAccessibleDescription(tr("Recent package, compiler, and setup tasks with state glyphs and duration bars."));
+	m_activityTimelineChart->setEmptyText(tr("No recent activity yet. Open a package or run a build to populate the timeline."));
+	m_activityTimelineChart->setMinimumHeight(200);
+	activityCard->bodyLayout()->addWidget(m_activityTimelineChart, 1);
+	grid->addWidget(activityCard, 1, 1);
 
+	// Assistant proposals are local and staged, so they sit at the foot of the
+	// dashboard rather than competing with project state.
+	auto* aiCard = new CardFrame(tr("Assistant Proposals"));
+	aiCard->setMeta(tr("Drafted locally. Nothing is written until you review it."));
 	auto* aiControls = new QHBoxLayout;
 	aiControls->setSpacing(8);
 	m_advancedAiKind = new QComboBox;
@@ -1130,153 +1661,122 @@ QWidget* ApplicationShell::buildWorkspacePage()
 	m_advancedAiKind->addItem(tr("Batch Recipe"), QStringLiteral("batch"));
 	m_advancedAiKind->addItem(tr("CLI Command"), QStringLiteral("cli"));
 	aiControls->addWidget(m_advancedAiKind);
-
 	m_advancedAiPrompt = new QLineEdit;
 	m_advancedAiPrompt->setAccessibleName(tr("AI creation prompt"));
 	m_advancedAiPrompt->setAccessibleDescription(tr("Prompt for staged, reviewable local AI-assisted creation proposals."));
-	m_advancedAiPrompt->setPlaceholderText(tr("Describe what to draft. Nothing is written until you review it."));
+	m_advancedAiPrompt->setPlaceholderText(tr("Describe what to draft"));
 	connect(m_advancedAiPrompt, &QLineEdit::returnPressed, this, [this]() {
 		createAdvancedAiProposal();
 	});
 	aiControls->addWidget(m_advancedAiPrompt, 1);
-
-	m_advancedAiCreate = new QPushButton(style()->standardIcon(QStyle::SP_FileDialogDetailedView), tr("Create Proposal"));
+	m_advancedAiCreate = createButton(tr("Create Proposal"), QStringLiteral("sparkle"));
 	m_advancedAiCreate->setAccessibleName(tr("Create AI proposal"));
 	m_advancedAiCreate->setToolTip(tr("Draft a reviewable proposal locally. No files are written and no network request is made."));
 	connect(m_advancedAiCreate, &QPushButton::clicked, this, [this]() {
 		createAdvancedAiProposal();
 	});
 	aiControls->addWidget(m_advancedAiCreate);
-	centerLayout->addLayout(aiControls);
-
+	aiCard->bodyLayout()->addLayout(aiControls);
 	m_advancedAiProposalList = new QListWidget;
 	m_advancedAiProposalList->setAccessibleName(tr("AI proposal review"));
 	m_advancedAiProposalList->setAccessibleDescription(tr("Reviewable AI proposal summary, context, generated actions, and prompt/response log."));
-	m_advancedAiProposalList->setMinimumHeight(140);
-	centerLayout->addWidget(m_advancedAiProposalList);
+	m_advancedAiProposalList->setMinimumHeight(110);
+	m_advancedAiProposalList->setMaximumHeight(220);
+	m_advancedAiProposalList->setWordWrap(true);
+	markFlat(m_advancedAiProposalList);
+	aiCard->bodyLayout()->addWidget(m_advancedAiProposalList, 1);
+	contentLayout->addWidget(aiCard);
+	contentLayout->addStretch(1);
 
-	centerLayout->addWidget(sectionLabel(tr("Studio Surface")));
-
-	auto* grid = new QGridLayout;
-	grid->setSpacing(12);
-	const QVector<StudioModule> modules = plannedModules();
-	for (int index = 0; index < modules.size(); ++index) {
-		grid->addWidget(modulePanel(modules[index]), index / 2, index % 2);
-	}
-	centerLayout->addLayout(grid);
-	centerLayout->addStretch(1);
-	scroll->setWidget(center);
-	pageLayout->addWidget(scroll);
-	return page;
+	return assembleStudioPage(header, nullptr, createScrollSurface(content, tr("Workspace scroll area")));
 }
 
 QWidget* ApplicationShell::buildLevelsPage()
 {
-	auto* page = new QWidget;
-	auto* pageLayout = new QVBoxLayout(page);
-	pageLayout->setContentsMargins(0, 0, 0, 0);
-	pageLayout->setSpacing(0);
+	auto* header = new PageHeader(QStringLiteral("map"), tr("Levels"));
+	header->setAccessibleName(tr("Level editor header"));
+	m_pageHeaders.insert(static_cast<int>(StudioMode::Levels), header);
 
-	auto* scroll = new QScrollArea;
-	scroll->setWidgetResizable(true);
-	scroll->setFrameShape(QFrame::NoFrame);
-	scroll->setAccessibleName(tr("Level editor scroll area"));
+	m_levelMapSaveAs = createButton(tr("Save As"), QStringLiteral("save"));
+	m_levelMapSaveAs->setAccessibleName(tr("Save level map as"));
+	m_levelMapSaveAs->setToolTip(tr("Write the edited map to a new path without touching the source."));
+	connect(m_levelMapSaveAs, &QPushButton::clicked, this, [this]() {
+		saveLevelMapAsFromUi();
+	});
+	header->addActionWidget(m_levelMapSaveAs);
 
-	auto* center = new QWidget;
-	auto* centerLayout = new QVBoxLayout(center);
-	centerLayout->setContentsMargins(22, 18, 22, 18);
-	centerLayout->setSpacing(16);
-
-	auto* levelHeader = new QHBoxLayout;
-	levelHeader->addWidget(sectionLabel(tr("Level Editor")));
-	levelHeader->addStretch(1);
-	auto* openLevelMap = new QPushButton(style()->standardIcon(QStyle::SP_FileDialogContentsView), tr("Open Map"));
+	auto* openLevelMap = createButton(tr("Open Map"), QStringLiteral("folder-open"), QStringLiteral("primary"));
 	openLevelMap->setAccessibleName(tr("Open level map"));
 	openLevelMap->setToolTip(tr("Choose a Doom WAD map or Quake-family .map source to inspect."));
 	connect(openLevelMap, &QPushButton::clicked, this, [this]() {
 		openLevelMapFile();
 	});
-	levelHeader->addWidget(openLevelMap);
-	auto* inspectLevelMap = new QPushButton(style()->standardIcon(QStyle::SP_BrowserReload), tr("Inspect"));
-	inspectLevelMap->setAccessibleName(tr("Inspect level map"));
-	inspectLevelMap->setToolTip(tr("Load the selected level map and refresh entities, textures, validation, and preview state."));
-	connect(inspectLevelMap, &QPushButton::clicked, this, [this]() {
-		loadLevelMapPath(m_levelMapPath ? m_levelMapPath->text() : QString());
-	});
-	levelHeader->addWidget(inspectLevelMap);
-	centerLayout->addLayout(levelHeader);
+	header->addActionWidget(openLevelMap);
 
-	auto* levelControls = new QGridLayout;
-	levelControls->setHorizontalSpacing(8);
-	levelControls->setVerticalSpacing(8);
+	// Document bar: the source being edited and how to compile it.
+	auto* toolBar = createPageToolBar(tr("Level document tools"));
 	m_levelMapPath = new QLineEdit;
 	m_levelMapPath->setAccessibleName(tr("Level map path"));
 	m_levelMapPath->setAccessibleDescription(tr("Absolute or relative path to a Doom WAD map or Quake-family .map file."));
 	m_levelMapPath->setPlaceholderText(tr("Map source path"));
+	m_levelMapPath->setMinimumWidth(220);
+	m_levelMapPath->addAction(studioIcon(QStringLiteral("file"), StudioIconTone::Muted), QLineEdit::LeadingPosition);
 	connect(m_levelMapPath, &QLineEdit::returnPressed, this, [this]() {
 		loadLevelMapPath(m_levelMapPath->text());
 	});
-	levelControls->addWidget(m_levelMapPath, 0, 0, 1, 3);
+	toolBar->addWidget(m_levelMapPath);
 
 	m_levelMapName = new QLineEdit;
 	m_levelMapName->setAccessibleName(tr("Doom map marker"));
 	m_levelMapName->setAccessibleDescription(tr("Optional Doom map marker such as MAP01 or E1M1."));
 	m_levelMapName->setPlaceholderText(tr("MAP01 / E1M1"));
-	levelControls->addWidget(m_levelMapName, 0, 3);
+	m_levelMapName->setMaximumWidth(110);
+	toolBar->addWidget(m_levelMapName);
 
 	m_levelMapEngine = new QComboBox;
 	m_levelMapEngine->setAccessibleName(tr("Level map engine hint"));
 	m_levelMapEngine->setAccessibleDescription(tr("Optional parser hint for Doom, Quake, or Quake III map sources."));
+	m_levelMapEngine->setToolTip(tr("Engine family used to parse the map. Auto detects it from the file."));
 	m_levelMapEngine->addItem(tr("Auto"), QString());
 	m_levelMapEngine->addItem(tr("idTech1"), QStringLiteral("idtech1"));
 	m_levelMapEngine->addItem(tr("idTech2"), QStringLiteral("idtech2"));
 	m_levelMapEngine->addItem(tr("idTech3"), QStringLiteral("idtech3"));
-	levelControls->addWidget(m_levelMapEngine, 0, 4);
+	toolBar->addWidget(m_levelMapEngine);
+
+	auto* inspectLevelMap = createToolButton(QStringLiteral("refresh"), tr("Reload"), tr("Load the map at this path and refresh entities, textures, validation, and preview state."));
+	inspectLevelMap->setAccessibleName(tr("Inspect level map"));
+	connect(inspectLevelMap, &QToolButton::clicked, this, [this]() {
+		loadLevelMapPath(m_levelMapPath ? m_levelMapPath->text() : QString());
+	});
+	toolBar->addWidget(inspectLevelMap);
+	toolBar->addSeparator();
 
 	m_levelMapCompilerProfile = new QComboBox;
 	m_levelMapCompilerProfile->setAccessibleName(tr("Level compiler profile"));
 	m_levelMapCompilerProfile->setAccessibleDescription(tr("Compiler profile used for map compile-plan review."));
+	m_levelMapCompilerProfile->setToolTip(tr("Compiler profile used by Run Profile."));
 	for (const CompilerProfileDescriptor& profile : compilerProfileDescriptors()) {
 		m_levelMapCompilerProfile->addItem(profile.displayName, profile.id);
 	}
-	levelControls->addWidget(m_levelMapCompilerProfile, 1, 0);
+	m_levelMapCompilerProfile->setSizeAdjustPolicy(QComboBox::AdjustToMinimumContentsLengthWithIcon);
+	m_levelMapCompilerProfile->setMinimumContentsLength(14);
+	toolBar->addWidget(m_levelMapCompilerProfile);
 
-	m_levelMapEditProperty = new QPushButton(style()->standardIcon(QStyle::SP_FileDialogDetailedView), tr("Edit Key"));
-	m_levelMapEditProperty->setAccessibleName(tr("Edit selected entity key"));
-	connect(m_levelMapEditProperty, &QPushButton::clicked, this, [this]() {
-		editSelectedLevelMapProperty();
-	});
-	levelControls->addWidget(m_levelMapEditProperty, 1, 1);
-
-	m_levelMapMoveSelection = new QPushButton(style()->standardIcon(QStyle::SP_ArrowForward), tr("Move"));
-	m_levelMapMoveSelection->setAccessibleName(tr("Move selected map object"));
-	connect(m_levelMapMoveSelection, &QPushButton::clicked, this, [this]() {
-		moveSelectedLevelMapObject();
-	});
-	levelControls->addWidget(m_levelMapMoveSelection, 1, 2);
-
-	m_levelMapSaveAs = new QPushButton(style()->standardIcon(QStyle::SP_DialogSaveButton), tr("Save As"));
-	m_levelMapSaveAs->setAccessibleName(tr("Save level map as"));
-	connect(m_levelMapSaveAs, &QPushButton::clicked, this, [this]() {
-		saveLevelMapAsFromUi();
-	});
-	levelControls->addWidget(m_levelMapSaveAs, 1, 3);
-
-	m_levelMapPlanCompile = new QPushButton(style()->standardIcon(QStyle::SP_MediaPlay), tr("Run Profile"));
+	auto* runProfile = createToolButton(QStringLiteral("play"), tr("Run Profile"), tr("Build a reviewable compiler plan for the loaded map, then run it when the selected profile is runnable."));
+	m_levelMapPlanCompile = runProfile;
 	m_levelMapPlanCompile->setAccessibleName(tr("Run level map compiler profile"));
-	m_levelMapPlanCompile->setToolTip(tr("Build a reviewable compiler plan for the loaded map, then run it when the selected profile is runnable."));
-	connect(m_levelMapPlanCompile, &QPushButton::clicked, this, [this]() {
+	connect(runProfile, &QToolButton::clicked, this, [this]() {
 		planLevelMapCompile();
 	});
-	levelControls->addWidget(m_levelMapPlanCompile, 1, 4);
+	toolBar->addWidget(runProfile);
 
-	m_levelMapCopyCli = new QPushButton(style()->standardIcon(QStyle::SP_DialogSaveButton), tr("Copy CLI"));
+	auto* copyCli = createToolButton(QStringLiteral("terminal"), tr("Copy CLI"), tr("Copy the vibestudio --cli command that reproduces this compile."), false);
+	m_levelMapCopyCli = copyCli;
 	m_levelMapCopyCli->setAccessibleName(tr("Copy level map CLI command"));
-	connect(m_levelMapCopyCli, &QPushButton::clicked, this, [this]() {
+	connect(copyCli, &QToolButton::clicked, this, [this]() {
 		copyLevelMapCliEquivalent();
 	});
-	levelControls->addWidget(m_levelMapCopyCli, 1, 5);
-	centerLayout->addLayout(levelControls);
+	toolBar->addWidget(copyCli);
 
 	m_levelMapState = new LoadingPane;
 	m_levelMapState->setAccessibleName(tr("Level map loading state"));
@@ -1287,62 +1787,48 @@ QWidget* ApplicationShell::buildLevelsPage()
 		tr("Entity list"),
 		tr("Validation health"),
 	});
-	centerLayout->addWidget(m_levelMapState);
 
-	auto* levelSplit = new QSplitter(Qt::Horizontal);
-	levelSplit->setAccessibleName(tr("Level map workbench"));
-	auto* levelLeft = new QWidget;
-	auto* levelLeftLayout = new QVBoxLayout(levelLeft);
-	levelLeftLayout->setContentsMargins(0, 0, 0, 0);
-	levelLeftLayout->setSpacing(8);
-	levelLeftLayout->addWidget(sectionLabel(tr("Objects")));
+	// Left: outliner.
 	m_levelMapObjects = new QListWidget;
 	m_levelMapObjects->setAccessibleName(tr("Level map objects"));
 	m_levelMapObjects->setAccessibleDescription(tr("Parsed map entities, Doom things, vertices, linedefs, and Quake brushes."));
-	m_levelMapObjects->setMinimumHeight(138);
+	// Multi-selection here and in the viewport are the same set: Ctrl-click or
+	// Shift-click builds it in either place and a compound move applies to all
+	// of it as one undo command.
+	m_levelMapObjects->setSelectionMode(QAbstractItemView::ExtendedSelection);
 	connect(m_levelMapObjects, &QListWidget::itemSelectionChanged, this, [this]() {
 		refreshLevelMapSelection();
 	});
-	levelLeftLayout->addWidget(m_levelMapObjects);
-	levelLeftLayout->addWidget(sectionLabel(tr("Statistics")));
 	m_levelMapStatistics = new QListWidget;
 	m_levelMapStatistics->setAccessibleName(tr("Level map statistics"));
-	m_levelMapStatistics->setMinimumHeight(124);
-	levelLeftLayout->addWidget(m_levelMapStatistics);
-	levelSplit->addWidget(levelLeft);
+	auto* outlinerTabs = createPanelTabs(tr("Level outliner"), QTabWidget::South);
+	outlinerTabs->addTab(m_levelMapObjects, tr("Objects"));
+	outlinerTabs->addTab(m_levelMapStatistics, tr("Statistics"));
+	auto* leftPanel = padded(outlinerTabs, 10, 8, 10);
+	leftPanel->setMinimumWidth(220);
 
-	auto* levelRightTabs = new QTabWidget;
-	levelRightTabs->setAccessibleName(tr("Level map preview tabs"));
-	m_levelMapView = new QListWidget;
-	m_levelMapView->setAccessibleName(tr("Level map preview"));
-	m_levelMapView->setAccessibleDescription(tr("Textual 2D Doom or orthographic brush preview lines for the loaded map."));
-	levelRightTabs->addTab(m_levelMapView, tr("Preview"));
-	m_levelMapValidation = new QListWidget;
-	m_levelMapValidation->setAccessibleName(tr("Level map validation"));
-	m_levelMapValidation->setAccessibleDescription(tr("Validation, map health, texture, entity, leak, and compiler preflight issues."));
-	levelRightTabs->addTab(m_levelMapValidation, tr("Health"));
-	levelSplit->addWidget(levelRightTabs);
-	levelSplit->setStretchFactor(0, 2);
-	levelSplit->setStretchFactor(1, 3);
-	centerLayout->addWidget(levelSplit);
+	// Centre: viewport with its own view controls and a readout beneath.
+	auto* viewportBar = createPageToolBar(tr("Map viewport controls"));
+	viewportBar->setObjectName(QStringLiteral("viewportToolBar"));
+	auto* undo = createToolButton(QStringLiteral("undo"), tr("Undo"), tr("Undo the last map edit."), false);
+	connect(undo, &QToolButton::clicked, this, [this]() {
+		undoLevelMapEditFromUi();
+	});
+	viewportBar->addWidget(undo);
+	auto* redo = createToolButton(QStringLiteral("redo"), tr("Redo"), tr("Redo the last undone map edit."), false);
+	connect(redo, &QToolButton::clicked, this, [this]() {
+		redoLevelMapEditFromUi();
+	});
+	viewportBar->addWidget(redo);
+	viewportBar->addSeparator();
 
-	m_levelMapDrawer = new DetailDrawer;
-	m_levelMapDrawer->setAccessibleName(tr("Level map detail drawer"));
-	m_levelMapDrawer->setTitle(tr("Level Map Details"));
-	m_levelMapDrawer->setSubtitle(tr("Inspect map statistics, properties, textures, validation, and undo history."));
-	centerLayout->addWidget(m_levelMapDrawer);
-
-	centerLayout->addWidget(sectionLabel(tr("Map Viewport")));
-
-	auto* viewportControls = new QHBoxLayout;
-	viewportControls->setSpacing(8);
 	m_levelMapProjection = new QComboBox;
 	m_levelMapProjection->setAccessibleName(tr("Map projection"));
 	m_levelMapProjection->setToolTip(tr("Choose the orthographic plane the viewport draws."));
 	m_levelMapProjection->addItem(tr("Top (X/Y)"), 0);
 	m_levelMapProjection->addItem(tr("Front (X/Z)"), 1);
 	m_levelMapProjection->addItem(tr("Side (Z/Y)"), 2);
-	viewportControls->addWidget(m_levelMapProjection);
+	viewportBar->addWidget(m_levelMapProjection);
 
 	m_levelMapGrid = new QComboBox;
 	m_levelMapGrid->setAccessibleName(tr("Grid size"));
@@ -1351,54 +1837,206 @@ QWidget* ApplicationShell::buildLevelsPage()
 		m_levelMapGrid->addItem(tr("Grid %1").arg(gridSize), gridSize);
 	}
 	m_levelMapGrid->setCurrentIndex(6);
-	viewportControls->addWidget(m_levelMapGrid);
+	viewportBar->addWidget(m_levelMapGrid);
+
+	m_levelMapSnap = new QCheckBox(tr("Snap"));
+	m_levelMapSnap->setAccessibleName(tr("Snap drags and nudges to the grid"));
+	m_levelMapSnap->setToolTip(tr("Drags and arrow-key nudges move by whole grid steps. Turn it off to move by the raw pointer delta."));
+	m_levelMapSnap->setChecked(true);
+	viewportBar->addWidget(m_levelMapSnap);
 
 	m_levelMapShowThings = new QCheckBox(tr("Things"));
 	m_levelMapShowThings->setAccessibleName(tr("Show things and point entities"));
+	m_levelMapShowThings->setToolTip(tr("Draw Doom things and point entities."));
 	m_levelMapShowThings->setChecked(true);
-	viewportControls->addWidget(m_levelMapShowThings);
+	viewportBar->addWidget(m_levelMapShowThings);
 
 	m_levelMapShowSectors = new QCheckBox(tr("Sector fill"));
 	m_levelMapShowSectors->setAccessibleName(tr("Show Doom sector fills"));
+	m_levelMapShowSectors->setToolTip(tr("Shade Doom sectors by light level."));
 	m_levelMapShowSectors->setChecked(true);
-	viewportControls->addWidget(m_levelMapShowSectors);
+	viewportBar->addWidget(m_levelMapShowSectors);
+	viewportBar->addSeparator();
 
-	auto* zoomFit = new QPushButton(style()->standardIcon(QStyle::SP_FileDialogListView), tr("Zoom To Fit"));
+	auto* zoomFit = createToolButton(QStringLiteral("frame"), tr("Zoom to Fit"), tr("Frame the whole map in the viewport."), false);
 	zoomFit->setAccessibleName(tr("Zoom map viewport to fit"));
-	connect(zoomFit, &QPushButton::clicked, this, [this]() {
+	connect(zoomFit, &QToolButton::clicked, this, [this]() {
 		if (m_levelMapViewport) {
 			m_levelMapViewport->zoomToFit();
 		}
 	});
-	viewportControls->addWidget(zoomFit);
+	viewportBar->addWidget(zoomFit);
 
-	auto* exportImage = new QPushButton(style()->standardIcon(QStyle::SP_DialogSaveButton), tr("Export Image"));
+	auto* exportImage = createToolButton(QStringLiteral("image"), tr("Export Image"), tr("Write a deterministic SVG picture of the current map for review or documentation."), false);
 	exportImage->setAccessibleName(tr("Export map image"));
-	exportImage->setToolTip(tr("Write a deterministic SVG picture of the current map for review or documentation."));
-	connect(exportImage, &QPushButton::clicked, this, [this]() {
+	connect(exportImage, &QToolButton::clicked, this, [this]() {
 		exportLevelMapImage();
 	});
-	viewportControls->addWidget(exportImage);
-	viewportControls->addStretch(1);
-	centerLayout->addLayout(viewportControls);
+	viewportBar->addWidget(exportImage);
 
 	m_levelMapViewport = new MapViewport;
 	m_levelMapViewport->setAccessibleName(tr("Map viewport"));
-	m_levelMapViewport->setAccessibleDescription(tr("Interactive orthographic view of the loaded map. Click to select, drag to pan, wheel to zoom, Tab to cycle objects."));
-	m_levelMapViewport->setMinimumHeight(340);
+	m_levelMapViewport->setAccessibleDescription(tr("Interactive orthographic view of the loaded map. Click to select, Shift-click to add, Ctrl-click to toggle, drag from empty space to box-select, drag a selected object to move it, arrow keys to nudge by one grid step, wheel to zoom, Tab to cycle objects, Escape to cancel and leave."));
+	m_levelMapViewport->setMinimumSize(320, 260);
 	connect(m_levelMapViewport, &MapViewport::selectionChanged, this, &ApplicationShell::selectLevelMapObjectFromViewport);
+	connect(m_levelMapViewport, &MapViewport::selectionSetChanged, this, &ApplicationShell::syncLevelMapSelectionFromViewport);
+	connect(m_levelMapViewport, &MapViewport::moveRequested, this, &ApplicationShell::moveLevelMapSelectionFromViewport);
 	connect(m_levelMapViewport, &MapViewport::hoverChanged, this, [this](const QString& summary) {
 		if (m_levelMapHover) {
 			m_levelMapHover->setText(summary.isEmpty() ? tr("Move the cursor over the map to inspect geometry.") : summary);
 		}
 	});
-	centerLayout->addWidget(m_levelMapViewport, 1);
 
-	m_levelMapHover = new QLabel(tr("Move the cursor over the map to inspect geometry."));
-	m_levelMapHover->setObjectName("moduleMeta");
+	m_levelMapHover = new ElidedLabel(tr("Move the cursor over the map to inspect geometry."));
+	m_levelMapHover->setObjectName("viewportReadout");
 	m_levelMapHover->setAccessibleName(tr("Map viewport readout"));
-	m_levelMapHover->setWordWrap(true);
-	centerLayout->addWidget(m_levelMapHover);
+
+	auto* centre = new QWidget;
+	auto* centreLayout = new QVBoxLayout(centre);
+	centreLayout->setContentsMargins(0, 0, 0, 0);
+	centreLayout->setSpacing(0);
+	centreLayout->addWidget(viewportBar);
+	centreLayout->addWidget(m_levelMapViewport, 1);
+	centreLayout->addWidget(m_levelMapHover);
+
+	// Right: inspector tabs.
+	auto* entityPanel = new QWidget;
+	auto* entityLayout = new QVBoxLayout(entityPanel);
+	entityLayout->setContentsMargins(0, 8, 0, 0);
+	entityLayout->setSpacing(8);
+	auto* entityActions = new QHBoxLayout;
+	entityActions->setSpacing(6);
+	m_levelMapEditProperty = createButton(tr("Edit Key"), QStringLiteral("edit"));
+	m_levelMapEditProperty->setAccessibleName(tr("Edit selected entity key"));
+	m_levelMapEditProperty->setToolTip(tr("Change a key on the selected map object."));
+	connect(m_levelMapEditProperty, &QPushButton::clicked, this, [this]() {
+		editSelectedLevelMapProperty();
+	});
+	entityActions->addWidget(m_levelMapEditProperty);
+	m_levelMapMoveSelection = createButton(tr("Move"), QStringLiteral("move"));
+	m_levelMapMoveSelection->setAccessibleName(tr("Move selected map object"));
+	m_levelMapMoveSelection->setToolTip(tr("Translate the selected map object by a delta."));
+	connect(m_levelMapMoveSelection, &QPushButton::clicked, this, [this]() {
+		moveSelectedLevelMapObject();
+	});
+	entityActions->addWidget(m_levelMapMoveSelection);
+	entityActions->addStretch(1);
+	entityLayout->addLayout(entityActions);
+
+	// Property grid in the style of idStudio's entity inspector: grouped,
+	// collapsible Key / Value rows. Double-click or Enter edits a value in
+	// place; spawnflag check boxes toggle their bit.
+	m_entityInspector = new QTreeWidget;
+	m_entityInspector->setObjectName("entityInspector");
+	m_entityInspector->setAccessibleName(tr("Entity inspector"));
+	m_entityInspector->setAccessibleDescription(tr("The selected entity's class, keys with their documented meaning, and spawnflag bits. Double-click or press Enter on a value to edit it."));
+	m_entityInspector->setColumnCount(2);
+	m_entityInspector->setHeaderLabels({tr("Key"), tr("Value")});
+	m_entityInspector->setRootIsDecorated(true);
+	m_entityInspector->setIndentation(14);
+	m_entityInspector->setUniformRowHeights(true);
+	m_entityInspector->setAlternatingRowColors(true);
+	m_entityInspector->setEditTriggers(QAbstractItemView::NoEditTriggers);
+	m_entityInspector->setItemDelegate(new PropertyValueDelegate(m_entityInspector));
+	m_entityInspector->header()->setStretchLastSection(true);
+	m_entityInspector->header()->setSectionResizeMode(0, QHeaderView::Interactive);
+	m_entityInspector->setColumnWidth(0, 132);
+	m_entityInspector->installEventFilter(this);
+	connect(m_entityInspector, &QTreeWidget::itemDoubleClicked, this, [this](QTreeWidgetItem* item, int) {
+		if (item && item->flags().testFlag(Qt::ItemIsEditable)) {
+			m_entityInspector->editItem(item, 1);
+		}
+	});
+	connect(m_entityInspector, &QTreeWidget::itemChanged, this, [this](QTreeWidgetItem* item, int column) {
+		applyEntityInspectorEdit(item, column);
+	});
+	entityLayout->addWidget(m_entityInspector, 1);
+
+	auto* definitionLabel = new QLabel(tr("Entity definitions"));
+	definitionLabel->setObjectName("sectionLabel");
+	entityLayout->addWidget(definitionLabel);
+	auto* entityDefinitionRow = new QHBoxLayout;
+	entityDefinitionRow->setSpacing(6);
+	m_entityDefinitionPath = new QLineEdit;
+	m_entityDefinitionPath->setAccessibleName(tr("Entity definition path"));
+	m_entityDefinitionPath->setAccessibleDescription(tr("A Radiant .def, Valve .fgd, or Quake III .ent file, or a folder of them. Left empty, the project's conventional definition folders are searched."));
+	m_entityDefinitionPath->setPlaceholderText(tr("Definition file or folder"));
+	m_entityDefinitionPath->setToolTip(tr("Leave empty to search the project's conventional definition folders."));
+	connect(m_entityDefinitionPath, &QLineEdit::returnPressed, this, [this]() {
+		reloadEntityDefinitions();
+	});
+	entityDefinitionRow->addWidget(m_entityDefinitionPath, 1);
+	auto* browseDefinitions = createToolButton(QStringLiteral("folder-open"), tr("Browse"), tr("Choose a .def, .fgd, or .ent file."), false);
+	browseDefinitions->setAccessibleName(tr("Choose entity definition path"));
+	connect(browseDefinitions, &QToolButton::clicked, this, [this]() {
+		chooseEntityDefinitionPath();
+	});
+	entityDefinitionRow->addWidget(browseDefinitions);
+	auto* reloadDefinitions = createToolButton(QStringLiteral("refresh"), tr("Load"), tr("Parse the definitions and re-check this map's entities against them."), false);
+	reloadDefinitions->setAccessibleName(tr("Load entity definitions"));
+	connect(reloadDefinitions, &QToolButton::clicked, this, [this]() {
+		reloadEntityDefinitions();
+	});
+	entityDefinitionRow->addWidget(reloadDefinitions);
+	entityLayout->addLayout(entityDefinitionRow);
+	m_entityDefinitionSummary = new QLabel(tr("No entity definitions loaded. Without them a classname is just a string."));
+	m_entityDefinitionSummary->setObjectName("moduleMeta");
+	m_entityDefinitionSummary->setAccessibleName(tr("Entity definition summary"));
+	m_entityDefinitionSummary->setWordWrap(true);
+	entityLayout->addWidget(m_entityDefinitionSummary);
+
+	m_levelMapValidation = new QListWidget;
+	m_levelMapValidation->setAccessibleName(tr("Level map validation"));
+	m_levelMapValidation->setAccessibleDescription(tr("Validation, map health, texture, entity, leak, and compiler preflight issues."));
+	m_levelMapValidation->setWordWrap(true);
+
+	m_levelMapView = new QListWidget;
+	m_levelMapView->setAccessibleName(tr("Level map preview"));
+	m_levelMapView->setAccessibleDescription(tr("Textual 2D Doom or orthographic brush preview lines for the loaded map."));
+
+	m_levelMapDrawer = new DetailDrawer;
+	m_levelMapDrawer->setAccessibleName(tr("Level map detail drawer"));
+	m_levelMapDrawer->setTitle(tr("Level Map Details"));
+	m_levelMapDrawer->setSubtitle(tr("Inspect map statistics, properties, textures, validation, and undo history."));
+	m_levelMapDrawer->setEmbedded(true);
+
+	auto* inspectorTabs = createPanelTabs(tr("Level map preview tabs"), QTabWidget::South);
+	inspectorTabs->addTab(entityPanel, tr("Entity"));
+	inspectorTabs->addTab(m_levelMapValidation, tr("Health"));
+	inspectorTabs->addTab(m_levelMapDrawer, tr("Details"));
+	inspectorTabs->addTab(m_levelMapView, tr("Outline"));
+	auto* rightPanel = padded(inspectorTabs, 10, 8, 10);
+	rightPanel->setMinimumWidth(280);
+
+	auto* workbench = createSplitter(Qt::Horizontal, QStringLiteral("levelsWorkbench"), tr("Level map workbench"));
+	workbench->addWidget(leftPanel);
+	workbench->addWidget(centre);
+	workbench->addWidget(rightPanel);
+	workbench->setStretchFactor(0, 0);
+	workbench->setStretchFactor(1, 1);
+	workbench->setStretchFactor(2, 0);
+	workbench->setSizes({scaledPane(250), 760, scaledPane(330)});
+	m_layoutSplitters.insert(workbench->objectName(), workbench);
+
+	auto* body = new QWidget;
+	auto* bodyLayout = new QVBoxLayout(body);
+	bodyLayout->setContentsMargins(0, 0, 0, 0);
+	bodyLayout->setSpacing(0);
+	bodyLayout->addWidget(statusStripHost(m_levelMapState));
+	bodyLayout->addWidget(workbench, 1);
+
+	auto* empty = new EmptyStateView(QStringLiteral("map"), tr("No map open"),
+		tr("Open a Quake, Quake II, or Quake III .map, or a Doom WAD, to inspect its entities, brushes, and health in the viewport."));
+	QPushButton* emptyOpen = empty->addAction(tr("Open Map"), QStringLiteral("folder-open"), true);
+	connect(emptyOpen, &QPushButton::clicked, this, [this]() {
+		openLevelMapFile();
+	});
+
+	auto* stack = new QStackedWidget;
+	stack->addWidget(empty);
+	stack->addWidget(body);
+	m_surfaceStacks.insert(static_cast<int>(StudioMode::Levels), stack);
+	m_emptyStates.insert(static_cast<int>(StudioMode::Levels), empty);
 
 	connect(m_levelMapProjection, &QComboBox::currentIndexChanged, this, [this]() {
 		refreshLevelMapViewport();
@@ -1412,28 +2050,170 @@ QWidget* ApplicationShell::buildLevelsPage()
 	connect(m_levelMapShowSectors, &QCheckBox::toggled, this, [this]() {
 		refreshLevelMapViewport();
 	});
-	centerLayout->addStretch(1);
-	scroll->setWidget(center);
-	pageLayout->addWidget(scroll);
-	return page;
+	connect(m_levelMapSnap, &QCheckBox::toggled, this, [this]() {
+		refreshLevelMapViewport();
+	});
+	return assembleStudioPage(header, toolBar, stack);
 }
 
 QWidget* ApplicationShell::buildPackagesPage()
 {
-	auto* page = new QWidget;
-	auto* pageLayout = new QVBoxLayout(page);
-	pageLayout->setContentsMargins(0, 0, 0, 0);
-	pageLayout->setSpacing(0);
+	auto* header = new PageHeader(QStringLiteral("package"), tr("Packages"));
+	header->setAccessibleName(tr("Package manager header"));
+	m_pageHeaders.insert(static_cast<int>(StudioMode::Packages), header);
 
-	auto* scroll = new QScrollArea;
-	scroll->setWidgetResizable(true);
-	scroll->setFrameShape(QFrame::NoFrame);
-	scroll->setAccessibleName(tr("Package browser scroll area"));
+	m_packageCompare = createButton(tr("Compare"), QStringLiteral("compare"));
+	m_packageCompare->setAccessibleName(tr("Compare the open package with another"));
+	m_packageCompare->setToolTip(tr("Compare the open package entry by entry with another archive, including what the staged changes would write."));
+	connect(m_packageCompare, &QPushButton::clicked, this, [this]() {
+		comparePackageWithFile();
+	});
+	header->addActionWidget(m_packageCompare);
 
-	auto* center = new QWidget;
-	auto* centerLayout = new QVBoxLayout(center);
-	centerLayout->setContentsMargins(22, 18, 22, 18);
-	centerLayout->setSpacing(16);
+	auto* openFolderPackage = createButton(tr("Open Folder"), QStringLiteral("folder"));
+	openFolderPackage->setAccessibleName(tr("Open folder package"));
+	openFolderPackage->setToolTip(tr("Open a folder as a read-only package source."));
+	connect(openFolderPackage, &QPushButton::clicked, this, [this]() {
+		openPackageFolder();
+	});
+	header->addActionWidget(openFolderPackage);
+
+	auto* openPackage = createButton(tr("Open Package"), QStringLiteral("folder-open"), QStringLiteral("primary"));
+	openPackage->setAccessibleName(tr("Open package file"));
+	openPackage->setToolTip(tr("Open a PAK, WAD, ZIP, or PK3 package for read-only browsing."));
+	connect(openPackage, &QPushButton::clicked, this, [this]() {
+		openPackageFile();
+	});
+	header->addActionWidget(openPackage);
+
+	auto* toolBar = createPageToolBar(tr("Package tools"));
+	m_packageFilter = new QLineEdit;
+	m_packageFilter->setObjectName("packageFilter");
+	m_packageFilter->setAccessibleName(tr("Package entry filter"));
+	m_packageFilter->setAccessibleDescription(tr("Filters loaded package entries by path or type hint."));
+	m_packageFilter->setPlaceholderText(tr("Filter entries by path or type"));
+	m_packageFilter->setClearButtonEnabled(true);
+	m_packageFilter->setMinimumWidth(200);
+	m_packageFilter->addAction(studioIcon(QStringLiteral("filter"), StudioIconTone::Muted), QLineEdit::LeadingPosition);
+	connect(m_packageFilter, &QLineEdit::textChanged, this, [this]() {
+		filterPackageEntries();
+	});
+	toolBar->addWidget(m_packageFilter);
+	toolBar->addSeparator();
+
+	auto makePackageTool = [this, toolBar](QAbstractButton** slot, const QString& icon, const QString& text, const QString& accessibleName, const QString& tip, bool showText, std::function<void()> handler) {
+		QToolButton* button = createToolButton(icon, text, tip, showText);
+		button->setAccessibleName(accessibleName);
+		connect(button, &QToolButton::clicked, this, [handler]() {
+			handler();
+		});
+		toolBar->addWidget(button);
+		if (slot) {
+			*slot = button;
+		}
+		return button;
+	};
+	makePackageTool(&m_packageExtractSelected, QStringLiteral("import"), tr("Extract"), tr("Extract selected package entries"),
+		tr("Extract selected package entries to a chosen folder without overwriting existing files."), true, [this]() { extractSelectedPackageEntries(); });
+	makePackageTool(&m_packageExtractAll, QStringLiteral("package"), tr("Extract All"), tr("Extract all package entries"),
+		tr("Extract every readable package entry to a chosen folder without overwriting existing files."), false, [this]() { extractAllPackageEntries(); });
+	makePackageTool(&m_packageExtractCancel, QStringLiteral("cancel"), tr("Cancel Extract"), tr("Cancel package extraction"),
+		tr("Request cancellation after the current package entry finishes."), false, [this]() {
+			m_packageExtractionCancelRequested = true;
+			statusBar()->showMessage(tr("Package extraction cancellation requested"));
+		});
+	m_packageExtractCancel->setEnabled(false);
+	toolBar->addSeparator();
+
+	auto* stageLabel = new QLabel(tr("Stage"));
+	toolBar->addWidget(stageLabel);
+	makePackageTool(&m_packageStageAdd, QStringLiteral("plus"), tr("Add"), tr("Stage package add"),
+		tr("Stage a local file as a new virtual package entry."), false, [this]() { stagePackageAddFile(); });
+	makePackageTool(&m_packageStageReplace, QStringLiteral("refresh"), tr("Replace"), tr("Stage package replace"),
+		tr("Stage a local file to replace the selected package entry."), false, [this]() { stagePackageReplaceSelected(); });
+	makePackageTool(&m_packageStageRename, QStringLiteral("edit"), tr("Rename"), tr("Stage package rename"),
+		tr("Stage a rename for the selected package entry."), false, [this]() { stagePackageRenameSelected(); });
+	makePackageTool(&m_packageStageDelete, QStringLiteral("trash"), tr("Delete"), tr("Stage package delete"),
+		tr("Stage deletion for the selected package entries."), false, [this]() { stagePackageDeleteSelected(); });
+	toolBar->addSeparator();
+
+	m_packageCompression = new QComboBox;
+	m_packageCompression->setAccessibleName(tr("Package compression level"));
+	m_packageCompression->setToolTip(tr("DEFLATE effort for ZIP and PK3 output. Every level measures each block as stored, fixed, and dynamic Huffman and keeps the smallest, so the levels trade search time for size, never correctness. PAK and WAD output is always stored."));
+	m_packageCompression->addItem(tr("Store (no compression)"), QStringLiteral("store"));
+	m_packageCompression->addItem(tr("Fast"), QStringLiteral("fast"));
+	m_packageCompression->addItem(tr("Default"), QStringLiteral("default"));
+	m_packageCompression->addItem(tr("Best"), QStringLiteral("best"));
+	m_packageCompression->setCurrentIndex(2);
+	auto* compressionLabel = new QLabel(tr("Compression"));
+	compressionLabel->setBuddy(m_packageCompression);
+	toolBar->addWidget(compressionLabel);
+	toolBar->addWidget(m_packageCompression);
+	makePackageTool(&m_packageStageSaveAs, QStringLiteral("save"), tr("Save As"), tr("Save staged package as"),
+		tr("Write the staged package to a new PAK, ZIP, PK3, or tested PWAD path without overwriting by default."), true, [this]() { saveStagedPackageAs(); });
+
+	m_packageState = new LoadingPane;
+	m_packageState->setAccessibleName(tr("Package loading state"));
+	m_packageState->setPlaceholderRows({
+		tr("Package entries"),
+		tr("Directory tree"),
+		tr("Entry metadata"),
+	});
+	m_packageSummary = new QLabel;
+	m_packageSummary->setObjectName("panelMeta");
+	m_packageSummary->setAccessibleName(tr("Package summary"));
+
+	m_packageTree = new QTreeWidget;
+	m_packageTree->setObjectName("packageTree");
+	m_packageTree->setAccessibleName(tr("Package tree"));
+	m_packageTree->setAccessibleDescription(tr("Folders in the open package. Selecting one lists its contents."));
+	m_packageTree->setHeaderHidden(true);
+	m_packageTree->setMinimumWidth(180);
+	m_packageTree->setSelectionMode(QAbstractItemView::SingleSelection);
+	connect(m_packageTree, &QTreeWidget::itemSelectionChanged, this, [this]() {
+		const QTreeWidgetItem* item = m_packageTree->currentItem();
+		if (!item || !item->flags().testFlag(Qt::ItemIsSelectable)) {
+			return;
+		}
+		navigatePackageFolder(item->data(0, Qt::UserRole).toString());
+	});
+
+	m_packageEntries = new QListWidget;
+	m_packageEntries->setObjectName("packageEntries");
+	m_packageEntries->setAccessibleName(tr("Package entries"));
+	m_packageEntries->setAccessibleDescription(tr("Read-only entries from the loaded folder, PAK, WAD, ZIP, or PK3 package."));
+	m_packageEntries->setSelectionMode(QAbstractItemView::ExtendedSelection);
+	m_packageEntries->setContextMenuPolicy(Qt::CustomContextMenu);
+	connect(m_packageEntries, &QListWidget::customContextMenuRequested, this, [this](const QPoint& position) {
+		showPackageEntryContextMenu(position);
+	});
+	connect(m_packageEntries, &QListWidget::itemSelectionChanged, this, [this]() {
+		refreshPackageEntryDetails(selectedPackageEntryPath());
+		refreshPackageStagingSummary();
+	});
+	// Opening a folder row steps into it, like a file browser.
+	connect(m_packageEntries, &QListWidget::itemActivated, this, [this](QListWidgetItem* item) {
+		if (item && item->data(Qt::UserRole + 3).toBool()) {
+			navigatePackageFolder(item->data(Qt::UserRole).toString());
+		}
+	});
+
+	m_packageImagePreview = new ImagePreviewView;
+	m_packageImagePreview->setAccessibleName(tr("Package image preview"));
+	m_packageImagePreview->setAccessibleDescription(tr("Decoded pixels for the selected package entry when it is an image, sprite, or texture."));
+	m_packageImagePreview->setMinimumHeight(180);
+
+	m_packageDrawer = new DetailDrawer;
+	m_packageDrawer->setAccessibleName(tr("Package entry detail drawer"));
+	m_packageDrawer->setTitle(tr("Package Entry Details"));
+	m_packageDrawer->setSubtitle(tr("Open a package to inspect entry metadata."));
+	m_packageDrawer->setEmbedded(true);
+
+	m_packageStagingSummary = new QListWidget;
+	m_packageStagingSummary->setObjectName("packageStagingSummary");
+	m_packageStagingSummary->setAccessibleName(tr("Package staging summary"));
+	m_packageStagingSummary->setAccessibleDescription(tr("Staged add, replace, rename, delete, conflict, blocker, and before-after composition state for package save-as workflows."));
+	m_packageStagingSummary->setWordWrap(true);
 
 	m_packageCompositionChart = new CompositionChart;
 	m_packageCompositionChart->setAccessibleName(tr("Package composition chart"));
@@ -1446,311 +2226,168 @@ QWidget* ApplicationShell::buildPackagesPage()
 			m_packageFilter->setText(sliceId);
 		}
 	});
-	centerLayout->addWidget(m_packageCompositionChart);
-
-	auto* packageHeader = new QHBoxLayout;
-	packageHeader->addWidget(sectionLabel(tr("Package Browser")));
-	m_packageSummary = new QLabel;
-	m_packageSummary->setObjectName("panelMeta");
-	m_packageSummary->setAccessibleName(tr("Package summary"));
-	packageHeader->addWidget(m_packageSummary, 1, Qt::AlignRight);
-	centerLayout->addLayout(packageHeader);
-
-	m_packageState = new LoadingPane;
-	m_packageState->setAccessibleName(tr("Package loading state"));
-	m_packageState->setPlaceholderRows({
-		tr("Package entries"),
-		tr("Directory tree"),
-		tr("Entry metadata"),
-	});
-	centerLayout->addWidget(m_packageState);
-
 	m_packageComposition = new QListWidget;
 	m_packageComposition->setObjectName("packageComposition");
 	m_packageComposition->setAccessibleName(tr("Package composition summary"));
 	m_packageComposition->setAccessibleDescription(tr("Data-backed package composition bars grouped by entry type and byte size."));
-	m_packageComposition->setMinimumHeight(116);
-	centerLayout->addWidget(m_packageComposition);
+	auto* overview = new QWidget;
+	auto* overviewLayout = new QVBoxLayout(overview);
+	overviewLayout->setContentsMargins(0, 8, 0, 0);
+	overviewLayout->setSpacing(8);
+	overviewLayout->addWidget(m_packageCompositionChart);
+	overviewLayout->addWidget(m_packageComposition, 1);
 
-	centerLayout->addWidget(sectionLabel(tr("Package Staging")));
-	m_packageStagingSummary = new QListWidget;
-	m_packageStagingSummary->setObjectName("packageStagingSummary");
-	m_packageStagingSummary->setAccessibleName(tr("Package staging summary"));
-	m_packageStagingSummary->setAccessibleDescription(tr("Staged add, replace, rename, delete, conflict, blocker, and before-after composition state for package save-as workflows."));
-	m_packageStagingSummary->setMinimumHeight(142);
-	centerLayout->addWidget(m_packageStagingSummary);
+	auto* previewPanel = new QWidget;
+	auto* previewLayout = new QVBoxLayout(previewPanel);
+	previewLayout->setContentsMargins(0, 8, 0, 0);
+	previewLayout->setSpacing(8);
+	previewLayout->addWidget(m_packageImagePreview, 1);
 
-	m_packageFilter = new QLineEdit;
-	m_packageFilter->setObjectName("packageFilter");
-	m_packageFilter->setAccessibleName(tr("Package entry filter"));
-	m_packageFilter->setAccessibleDescription(tr("Filters loaded package entries by path or type hint."));
-	m_packageFilter->setPlaceholderText(tr("Filter package entries"));
-	connect(m_packageFilter, &QLineEdit::textChanged, this, [this]() {
-		filterPackageEntries();
+	auto* detailTabs = createPanelTabs(tr("Package entry inspector"), QTabWidget::South);
+	detailTabs->setMinimumWidth(250);
+	detailTabs->addTab(m_packageDrawer, tr("Details"));
+	detailTabs->addTab(previewPanel, tr("Preview"));
+	detailTabs->addTab(m_packageStagingSummary, tr("Staging"));
+	detailTabs->addTab(overview, tr("Overview"));
+
+	auto* workbench = createSplitter(Qt::Horizontal, QStringLiteral("packagesWorkbench"), tr("Package tree and entry list"));
+	workbench->addWidget(padded(captionedPanel(tr("Folders"), m_packageTree), 10, 8, 10));
+	// Entry column header: history and up buttons, then a clickable path.
+	auto* entriesPanel = new QWidget;
+	auto* entriesLayout = new QVBoxLayout(entriesPanel);
+	entriesLayout->setContentsMargins(0, 0, 0, 0);
+	entriesLayout->setSpacing(6);
+	auto* navigationRow = new QHBoxLayout;
+	navigationRow->setContentsMargins(0, 0, 0, 0);
+	navigationRow->setSpacing(2);
+	m_packageBack = createToolButton(QStringLiteral("chevron-left"), tr("Back"), tr("Go back to the previous folder."), false);
+	m_packageForward = createToolButton(QStringLiteral("chevron-right"), tr("Forward"), tr("Go forward to the next folder."), false);
+	m_packageUp = createToolButton(QStringLiteral("chevron-up"), tr("Up"), tr("Go to the containing folder."), false);
+	connect(m_packageBack, &QToolButton::clicked, this, [this]() {
+		stepPackageFolderHistory(-1);
 	});
-	centerLayout->addWidget(m_packageFilter);
-
-	auto* packageEntrySplit = new QSplitter(Qt::Horizontal);
-	packageEntrySplit->setAccessibleName(tr("Package tree and entry list"));
-	m_packageTree = new QTreeWidget;
-	m_packageTree->setObjectName("packageTree");
-	m_packageTree->setAccessibleName(tr("Package tree"));
-	m_packageTree->setAccessibleDescription(tr("Hierarchical read-only package or project tree grouped by virtual directories."));
-	m_packageTree->setHeaderLabel(tr("Package Tree"));
-	m_packageTree->setMinimumHeight(170);
-	m_packageTree->setSelectionMode(QAbstractItemView::SingleSelection);
-	connect(m_packageTree, &QTreeWidget::itemSelectionChanged, this, [this]() {
-		const QString path = selectedPackageTreeEntryPath();
-		if (!path.isEmpty()) {
-			selectPackageEntryPath(path);
-			refreshPackageEntryDetails(path);
+	connect(m_packageForward, &QToolButton::clicked, this, [this]() {
+		stepPackageFolderHistory(1);
+	});
+	connect(m_packageUp, &QToolButton::clicked, this, [this]() {
+		if (!m_packageBrowseFolder.isEmpty()) {
+			navigatePackageFolder(packageParentFolder(m_packageBrowseFolder), m_packageBrowseFolder);
 		}
-		refreshPackageStagingSummary();
 	});
-	packageEntrySplit->addWidget(m_packageTree);
+	navigationRow->addWidget(m_packageBack);
+	navigationRow->addWidget(m_packageForward);
+	navigationRow->addWidget(m_packageUp);
+	m_packageBreadcrumb = new QWidget;
+	m_packageBreadcrumb->setObjectName(QStringLiteral("breadcrumb"));
+	m_packageBreadcrumb->setAccessibleName(tr("Package folder path"));
+	auto* breadcrumbLayout = new QHBoxLayout(m_packageBreadcrumb);
+	breadcrumbLayout->setContentsMargins(6, 0, 0, 0);
+	breadcrumbLayout->setSpacing(0);
+	navigationRow->addWidget(m_packageBreadcrumb, 1);
+	navigationRow->addWidget(m_packageSummary);
+	entriesLayout->addLayout(navigationRow);
+	entriesLayout->addWidget(m_packageEntries, 1);
+	workbench->addWidget(padded(entriesPanel, 4, 6, 10));
+	workbench->addWidget(padded(detailTabs, 10, 8, 10));
+	workbench->setStretchFactor(0, 0);
+	workbench->setStretchFactor(1, 1);
+	workbench->setStretchFactor(2, 0);
+	workbench->setSizes({scaledPane(260), 640, scaledPane(380)});
+	m_layoutSplitters.insert(workbench->objectName(), workbench);
 
-	m_packageEntries = new QListWidget;
-	m_packageEntries->setObjectName("packageEntries");
-	m_packageEntries->setAccessibleName(tr("Package entries"));
-	m_packageEntries->setAccessibleDescription(tr("Read-only entries from the loaded folder, PAK, WAD, ZIP, or PK3 package."));
-	m_packageEntries->setSelectionMode(QAbstractItemView::ExtendedSelection);
-	m_packageEntries->setMinimumHeight(150);
-	connect(m_packageEntries, &QListWidget::itemSelectionChanged, this, [this]() {
-		const QString path = selectedPackageEntryPath();
-		selectPackageTreeEntryPath(path);
-		refreshPackageEntryDetails(path);
-		refreshPackageStagingSummary();
-	});
-	packageEntrySplit->addWidget(m_packageEntries);
-	packageEntrySplit->setStretchFactor(0, 1);
-	packageEntrySplit->setStretchFactor(1, 2);
-	centerLayout->addWidget(packageEntrySplit);
+	auto* body = new QWidget;
+	auto* bodyLayout = new QVBoxLayout(body);
+	bodyLayout->setContentsMargins(0, 0, 0, 0);
+	bodyLayout->setSpacing(0);
+	bodyLayout->addWidget(statusStripHost(m_packageState));
+	bodyLayout->addWidget(workbench, 1);
 
-	m_packageDrawer = new DetailDrawer;
-	m_packageDrawer->setAccessibleName(tr("Package entry detail drawer"));
-	m_packageDrawer->setTitle(tr("Package Entry Details"));
-	m_packageDrawer->setSubtitle(tr("Open a package to inspect entry metadata."));
-	centerLayout->addWidget(m_packageDrawer);
-
-	auto* packageActions = new QHBoxLayout;
-	packageActions->addStretch(1);
-
-	m_packageStageAdd = new QPushButton(style()->standardIcon(QStyle::SP_FileIcon), tr("Stage Add"));
-	m_packageStageAdd->setAccessibleName(tr("Stage package add"));
-	m_packageStageAdd->setToolTip(tr("Stage a local file as a new virtual package entry."));
-	connect(m_packageStageAdd, &QPushButton::clicked, this, [this]() {
-		stagePackageAddFile();
-	});
-	packageActions->addWidget(m_packageStageAdd);
-
-	m_packageStageReplace = new QPushButton(style()->standardIcon(QStyle::SP_BrowserReload), tr("Stage Replace"));
-	m_packageStageReplace->setAccessibleName(tr("Stage package replace"));
-	m_packageStageReplace->setToolTip(tr("Stage a local file to replace the selected package entry."));
-	connect(m_packageStageReplace, &QPushButton::clicked, this, [this]() {
-		stagePackageReplaceSelected();
-	});
-	packageActions->addWidget(m_packageStageReplace);
-
-	m_packageStageRename = new QPushButton(style()->standardIcon(QStyle::SP_FileDialogDetailedView), tr("Stage Rename"));
-	m_packageStageRename->setAccessibleName(tr("Stage package rename"));
-	m_packageStageRename->setToolTip(tr("Stage a rename for the selected package entry."));
-	connect(m_packageStageRename, &QPushButton::clicked, this, [this]() {
-		stagePackageRenameSelected();
-	});
-	packageActions->addWidget(m_packageStageRename);
-
-	m_packageStageDelete = new QPushButton(style()->standardIcon(QStyle::SP_DialogDiscardButton), tr("Stage Delete"));
-	m_packageStageDelete->setAccessibleName(tr("Stage package delete"));
-	m_packageStageDelete->setToolTip(tr("Stage deletion for the selected package entries."));
-	connect(m_packageStageDelete, &QPushButton::clicked, this, [this]() {
-		stagePackageDeleteSelected();
-	});
-	packageActions->addWidget(m_packageStageDelete);
-
-	m_packageStageSaveAs = new QPushButton(style()->standardIcon(QStyle::SP_DialogSaveButton), tr("Save As"));
-	m_packageStageSaveAs->setAccessibleName(tr("Save staged package as"));
-	m_packageStageSaveAs->setToolTip(tr("Write the staged package to a new PAK, ZIP, PK3, or tested PWAD path without overwriting by default."));
-	connect(m_packageStageSaveAs, &QPushButton::clicked, this, [this]() {
-		saveStagedPackageAs();
-	});
-	packageActions->addWidget(m_packageStageSaveAs);
-
-	m_packageExtractSelected = new QPushButton(style()->standardIcon(QStyle::SP_ArrowDown), tr("Extract Selected"));
-	m_packageExtractSelected->setAccessibleName(tr("Extract selected package entries"));
-	m_packageExtractSelected->setToolTip(tr("Extract selected package entries to a chosen folder without overwriting existing files."));
-	connect(m_packageExtractSelected, &QPushButton::clicked, this, [this]() {
-		extractSelectedPackageEntries();
-	});
-	packageActions->addWidget(m_packageExtractSelected);
-
-	m_packageExtractAll = new QPushButton(style()->standardIcon(QStyle::SP_DialogSaveButton), tr("Extract All"));
-	m_packageExtractAll->setAccessibleName(tr("Extract all package entries"));
-	m_packageExtractAll->setToolTip(tr("Extract every readable package entry to a chosen folder without overwriting existing files."));
-	connect(m_packageExtractAll, &QPushButton::clicked, this, [this]() {
-		extractAllPackageEntries();
-	});
-	packageActions->addWidget(m_packageExtractAll);
-
-	m_packageExtractCancel = new QPushButton(style()->standardIcon(QStyle::SP_DialogCancelButton), tr("Cancel Extract"));
-	m_packageExtractCancel->setAccessibleName(tr("Cancel package extraction"));
-	m_packageExtractCancel->setToolTip(tr("Request cancellation after the current package entry finishes."));
-	m_packageExtractCancel->setEnabled(false);
-	connect(m_packageExtractCancel, &QPushButton::clicked, this, [this]() {
-		m_packageExtractionCancelRequested = true;
-		statusBar()->showMessage(tr("Package extraction cancellation requested"));
-	});
-	packageActions->addWidget(m_packageExtractCancel);
-
-	auto* openPackage = new QPushButton(style()->standardIcon(QStyle::SP_DialogOpenButton), tr("Open Package"));
-	openPackage->setAccessibleName(tr("Open package file"));
-	openPackage->setToolTip(tr("Open a PAK, WAD, ZIP, or PK3 package for read-only browsing."));
-	connect(openPackage, &QPushButton::clicked, this, [this]() {
+	auto* empty = new EmptyStateView(QStringLiteral("package"), tr("No package open"),
+		tr("Open a PAK, WAD, ZIP, or PK3 archive, or a folder, to browse its entries, preview content, and stage changes for a new package."));
+	QPushButton* emptyOpen = empty->addAction(tr("Open Package"), QStringLiteral("folder-open"), true);
+	connect(emptyOpen, &QPushButton::clicked, this, [this]() {
 		openPackageFile();
 	});
-	packageActions->addWidget(openPackage);
-
-	auto* openFolderPackage = new QPushButton(style()->standardIcon(QStyle::SP_DirOpenIcon), tr("Open Folder"));
-	openFolderPackage->setAccessibleName(tr("Open folder package"));
-	openFolderPackage->setToolTip(tr("Open a folder as a read-only package source."));
-	connect(openFolderPackage, &QPushButton::clicked, this, [this]() {
+	QPushButton* emptyFolder = empty->addAction(tr("Open Folder"), QStringLiteral("folder"), false);
+	connect(emptyFolder, &QPushButton::clicked, this, [this]() {
 		openPackageFolder();
 	});
-	packageActions->addWidget(openFolderPackage);
-	centerLayout->addLayout(packageActions);
 
-	centerLayout->addWidget(sectionLabel(tr("Entry Preview")));
-
-	m_packageImagePreview = new ImagePreviewView;
-	m_packageImagePreview->setAccessibleName(tr("Package image preview"));
-	m_packageImagePreview->setAccessibleDescription(tr("Decoded pixels for the selected package entry when it is an image, sprite, or texture."));
-	m_packageImagePreview->setMinimumHeight(200);
-	centerLayout->addWidget(m_packageImagePreview);
-	centerLayout->addStretch(1);
-	scroll->setWidget(center);
-	pageLayout->addWidget(scroll);
-	return page;
+	auto* stack = new QStackedWidget;
+	stack->addWidget(empty);
+	stack->addWidget(body);
+	m_surfaceStacks.insert(static_cast<int>(StudioMode::Packages), stack);
+	m_emptyStates.insert(static_cast<int>(StudioMode::Packages), empty);
+	return assembleStudioPage(header, toolBar, stack);
 }
 
 QWidget* ApplicationShell::buildBuildPage()
 {
-	auto* page = new QWidget;
-	auto* pageLayout = new QVBoxLayout(page);
-	pageLayout->setContentsMargins(0, 0, 0, 0);
-	pageLayout->setSpacing(0);
+	auto* header = new PageHeader(QStringLiteral("hammer"), tr("Build"));
+	header->setAccessibleName(tr("Build header"));
+	m_pageHeaders.insert(static_cast<int>(StudioMode::Build), header);
 
-	auto* scroll = new QScrollArea;
-	scroll->setWidgetResizable(true);
-	scroll->setFrameShape(QFrame::NoFrame);
-	scroll->setAccessibleName(tr("Build scroll area"));
-
-	auto* center = new QWidget;
-	auto* centerLayout = new QVBoxLayout(center);
-	centerLayout->setContentsMargins(22, 18, 22, 18);
-	centerLayout->setSpacing(16);
-
-	centerLayout->addWidget(sectionLabel(tr("Compiler Pipeline Summary")));
-	m_compilerPipeline = new QListWidget;
-	m_compilerPipeline->setObjectName("compilerPipeline");
-	m_compilerPipeline->setAccessibleName(tr("Compiler pipeline summary"));
-	m_compilerPipeline->setAccessibleDescription(tr("Data-backed compiler profile readiness bars for map, node, and BSP workflows."));
-	m_compilerPipeline->setMinimumHeight(132);
-	centerLayout->addWidget(m_compilerPipeline);
-
-	auto* compilerActions = new QHBoxLayout;
-	compilerActions->setSpacing(8);
-	m_compilerRunSelected = new QPushButton(style()->standardIcon(QStyle::SP_MediaPlay), tr("Run"));
-	m_compilerRunSelected->setAccessibleName(tr("Run selected compiler profile"));
-	m_compilerRunSelected->setToolTip(tr("Run the selected compiler profile against the active project and register outputs when possible."));
-	connect(m_compilerRunSelected, &QPushButton::clicked, this, [this]() {
-		runSelectedCompilerProfile();
+	m_buildInspectArtifacts = createButton(tr("Inspect Artifacts"), QStringLiteral("info"));
+	m_buildInspectArtifacts->setAccessibleName(tr("Inspect compiled artifacts"));
+	m_buildInspectArtifacts->setToolTip(tr("Read the compiled BSP, its entity and texture lumps, and any leak or portal file beside it."));
+	connect(m_buildInspectArtifacts, &QPushButton::clicked, this, [this]() {
+		inspectCompiledArtifacts();
 	});
-	compilerActions->addWidget(m_compilerRunSelected);
+	header->addActionWidget(m_buildInspectArtifacts);
 
-	m_compilerCopyCli = new QPushButton(style()->standardIcon(QStyle::SP_FileDialogDetailedView), tr("Copy CLI"));
-	m_compilerCopyCli->setAccessibleName(tr("Copy compiler CLI equivalent"));
-	m_compilerCopyCli->setToolTip(tr("Copy a reproducible vibestudio --cli compiler run command for the selected profile."));
-	connect(m_compilerCopyCli, &QPushButton::clicked, this, [this]() {
-		copySelectedCompilerCliEquivalent();
+	m_buildPipelineCancel = createButton(tr("Cancel"), QStringLiteral("stop"));
+	m_buildPipelineCancel->setAccessibleName(tr("Cancel build pipeline"));
+	m_buildPipelineCancel->setToolTip(tr("Stop the running pipeline after the current stage."));
+	m_buildPipelineCancel->setEnabled(false);
+	connect(m_buildPipelineCancel, &QPushButton::clicked, this, [this]() {
+		cancelBuildPipeline();
 	});
-	compilerActions->addWidget(m_compilerCopyCli);
+	header->addActionWidget(m_buildPipelineCancel);
 
-	m_compilerCopyManifest = new QPushButton(style()->standardIcon(QStyle::SP_DialogSaveButton), tr("Copy Manifest"));
-	m_compilerCopyManifest->setAccessibleName(tr("Copy compiler manifest"));
-	m_compilerCopyManifest->setToolTip(tr("Copy the selected compiler profile's command manifest JSON."));
-	connect(m_compilerCopyManifest, &QPushButton::clicked, this, [this]() {
-		copySelectedCompilerManifest();
+	m_buildPipelineRun = createButton(tr("Run Pipeline"), QStringLiteral("play"), QStringLiteral("primary"));
+	m_buildPipelineRun->setAccessibleName(tr("Run build pipeline"));
+	m_buildPipelineRun->setToolTip(tr("Run every enabled stage in order, capturing logs, diagnostics, hashes, and command manifests."));
+	connect(m_buildPipelineRun, &QPushButton::clicked, this, [this]() {
+		runSelectedBuildPipeline();
 	});
-	compilerActions->addWidget(m_compilerCopyManifest);
-	compilerActions->addStretch(1);
-	centerLayout->addLayout(compilerActions);
+	header->addActionWidget(m_buildPipelineRun);
 
-	centerLayout->addWidget(sectionLabel(tr("Build Pipeline")));
-
-	m_compilerPipelineChart = new PipelineChart;
-	m_compilerPipelineChart->setAccessibleName(tr("Compiler pipeline chart"));
-	m_compilerPipelineChart->setAccessibleDescription(tr("Readiness of each compiler stage, from source map to compiled artifact."));
-	m_compilerPipelineChart->setTitle(tr("Toolchain Readiness"));
-	m_compilerPipelineChart->setEmptyText(tr("No compiler profiles are available yet."));
-	m_compilerPipelineChart->setMinimumHeight(110);
-	centerLayout->addWidget(m_compilerPipelineChart);
-
-	auto* pipelineControls = new QGridLayout;
-	pipelineControls->setHorizontalSpacing(8);
-	pipelineControls->setVerticalSpacing(8);
-
+	auto* toolBar = createPageToolBar(tr("Build pipeline settings"));
+	auto* pipelineLabel = new QLabel(tr("Pipeline"));
+	toolBar->addWidget(pipelineLabel);
 	m_buildPipelineChoice = new QComboBox;
 	m_buildPipelineChoice->setAccessibleName(tr("Build pipeline"));
 	m_buildPipelineChoice->setAccessibleDescription(tr("Chained compile stages run in order, each feeding the next stage's input."));
-	pipelineControls->addWidget(m_buildPipelineChoice, 0, 0, 1, 2);
-
+	m_buildPipelineChoice->setMinimumContentsLength(18);
+	m_buildPipelineChoice->setSizeAdjustPolicy(QComboBox::AdjustToMinimumContentsLengthWithIcon);
+	pipelineLabel->setBuddy(m_buildPipelineChoice);
+	toolBar->addWidget(m_buildPipelineChoice);
+	auto* inputLabel = new QLabel(tr("Input"));
+	toolBar->addWidget(inputLabel);
 	m_buildPipelineInput = new QLineEdit;
 	m_buildPipelineInput->setAccessibleName(tr("Build pipeline input"));
 	m_buildPipelineInput->setPlaceholderText(tr("Source map path"));
-	pipelineControls->addWidget(m_buildPipelineInput, 0, 2, 1, 2);
-
-	auto* browsePipelineInput = new QPushButton(style()->standardIcon(QStyle::SP_DialogOpenButton), tr("Browse"));
+	m_buildPipelineInput->setMinimumWidth(240);
+	inputLabel->setBuddy(m_buildPipelineInput);
+	toolBar->addWidget(m_buildPipelineInput);
+	auto* browsePipelineInput = createToolButton(QStringLiteral("folder-open"), tr("Browse"), tr("Choose the source map for the pipeline."), false);
 	browsePipelineInput->setAccessibleName(tr("Choose build pipeline input"));
-	connect(browsePipelineInput, &QPushButton::clicked, this, [this]() {
+	connect(browsePipelineInput, &QToolButton::clicked, this, [this]() {
 		const QString path = QFileDialog::getOpenFileName(this, tr("Choose Build Input"), QString(), tr("Maps (*.map *.wad);;All files (*.*)"));
 		if (!path.isEmpty() && m_buildPipelineInput) {
 			m_buildPipelineInput->setText(path);
 			refreshBuildSurface();
 		}
 	});
-	pipelineControls->addWidget(browsePipelineInput, 0, 4);
-
-	m_buildPipelineRun = new QPushButton(style()->standardIcon(QStyle::SP_MediaPlay), tr("Run Pipeline"));
-	m_buildPipelineRun->setAccessibleName(tr("Run build pipeline"));
-	m_buildPipelineRun->setToolTip(tr("Run every enabled stage in order, capturing logs, diagnostics, hashes, and command manifests."));
-	connect(m_buildPipelineRun, &QPushButton::clicked, this, [this]() {
-		runSelectedBuildPipeline();
-	});
-	pipelineControls->addWidget(m_buildPipelineRun, 1, 0);
-
-	m_buildPipelineCancel = new QPushButton(style()->standardIcon(QStyle::SP_DialogCancelButton), tr("Cancel"));
-	m_buildPipelineCancel->setAccessibleName(tr("Cancel build pipeline"));
-	m_buildPipelineCancel->setEnabled(false);
-	connect(m_buildPipelineCancel, &QPushButton::clicked, this, [this]() {
-		cancelBuildPipeline();
-	});
-	pipelineControls->addWidget(m_buildPipelineCancel, 1, 1);
-
-	m_buildPipelineCopy = new QPushButton(style()->standardIcon(QStyle::SP_FileDialogDetailedView), tr("Copy Commands"));
+	toolBar->addWidget(browsePipelineInput);
+	toolBar->addSeparator();
+	auto* copyCommands = createToolButton(QStringLiteral("terminal"), tr("Copy Commands"), tr("Copy every stage command line so the same build can be reproduced from a shell or CI."));
+	m_buildPipelineCopy = copyCommands;
 	m_buildPipelineCopy->setAccessibleName(tr("Copy build pipeline commands"));
-	m_buildPipelineCopy->setToolTip(tr("Copy every stage command line so the same build can be reproduced from a shell or CI."));
-	connect(m_buildPipelineCopy, &QPushButton::clicked, this, [this]() {
+	connect(copyCommands, &QToolButton::clicked, this, [this]() {
 		copyBuildPipelineCommands();
 	});
-	pipelineControls->addWidget(m_buildPipelineCopy, 1, 2);
-
-	m_buildInspectArtifacts = new QPushButton(style()->standardIcon(QStyle::SP_FileDialogInfoView), tr("Inspect Artifacts"));
-	m_buildInspectArtifacts->setAccessibleName(tr("Inspect compiled artifacts"));
-	m_buildInspectArtifacts->setToolTip(tr("Read the compiled BSP, its entity and texture lumps, and any leak or portal file beside it."));
-	connect(m_buildInspectArtifacts, &QPushButton::clicked, this, [this]() {
-		inspectCompiledArtifacts();
-	});
-	pipelineControls->addWidget(m_buildInspectArtifacts, 1, 3);
-	centerLayout->addLayout(pipelineControls);
+	toolBar->addWidget(copyCommands);
 
 	m_buildPipelineState = new LoadingPane;
 	m_buildPipelineState->setAccessibleName(tr("Build pipeline state"));
@@ -1761,7 +2398,6 @@ QWidget* ApplicationShell::buildBuildPage()
 		tr("Stage output"),
 		tr("Artifacts"),
 	});
-	centerLayout->addWidget(m_buildPipelineState);
 
 	m_buildPipelineChart = new PipelineChart;
 	m_buildPipelineChart->setAccessibleName(tr("Build pipeline stages"));
@@ -1769,50 +2405,122 @@ QWidget* ApplicationShell::buildBuildPage()
 	m_buildPipelineChart->setTitle(tr("Pipeline Stages"));
 	m_buildPipelineChart->setEmptyText(tr("Choose a pipeline and an input map to plan the stages."));
 	m_buildPipelineChart->setMinimumHeight(110);
-	centerLayout->addWidget(m_buildPipelineChart);
 
 	m_buildPipelineStages = new QListWidget;
 	m_buildPipelineStages->setObjectName("buildPipelineStages");
 	m_buildPipelineStages->setAccessibleName(tr("Build pipeline stage list"));
 	m_buildPipelineStages->setAccessibleDescription(tr("Stage order, resolved input and output paths, tool availability, and skip reasons."));
-	m_buildPipelineStages->setMinimumHeight(140);
-	centerLayout->addWidget(m_buildPipelineStages);
+	m_buildPipelineStages->setWordWrap(true);
 
 	m_buildPipelineDrawer = new DetailDrawer;
 	m_buildPipelineDrawer->setAccessibleName(tr("Build pipeline detail drawer"));
 	m_buildPipelineDrawer->setTitle(tr("Build Details"));
 	m_buildPipelineDrawer->setSubtitle(tr("Stage commands, captured output, diagnostics, artifacts, and manifests."));
-	centerLayout->addWidget(m_buildPipelineDrawer);
 
-	centerLayout->addWidget(sectionLabel(tr("Launch And Test")));
+	auto* stageSplit = createSplitter(Qt::Horizontal, QStringLiteral("buildStageSplit"), tr("Stage list and build details"));
+	stageSplit->addWidget(captionedPanel(tr("Stages"), m_buildPipelineStages));
+	stageSplit->addWidget(m_buildPipelineDrawer);
+	stageSplit->setStretchFactor(0, 2);
+	stageSplit->setStretchFactor(1, 3);
+	m_layoutSplitters.insert(stageSplit->objectName(), stageSplit);
 
-	auto* launchControls = new QHBoxLayout;
-	launchControls->setSpacing(8);
+	auto* pipelinePage = new QWidget;
+	auto* pipelineLayout = new QVBoxLayout(pipelinePage);
+	pipelineLayout->setContentsMargins(0, 10, 0, 0);
+	pipelineLayout->setSpacing(10);
+	pipelineLayout->addWidget(m_buildPipelineState);
+	pipelineLayout->addWidget(m_buildPipelineChart);
+	pipelineLayout->addWidget(stageSplit, 1);
+
+	// Toolchain: individual compiler profiles and their readiness.
+	m_compilerPipelineChart = new PipelineChart;
+	m_compilerPipelineChart->setAccessibleName(tr("Compiler pipeline chart"));
+	m_compilerPipelineChart->setAccessibleDescription(tr("Readiness of each compiler stage, from source map to compiled artifact."));
+	m_compilerPipelineChart->setTitle(tr("Toolchain Readiness"));
+	m_compilerPipelineChart->setEmptyText(tr("No compiler profiles are available yet."));
+	m_compilerPipelineChart->setMinimumHeight(110);
+
+	m_compilerPipeline = new QListWidget;
+	m_compilerPipeline->setObjectName("compilerPipeline");
+	m_compilerPipeline->setAccessibleName(tr("Compiler pipeline summary"));
+	m_compilerPipeline->setAccessibleDescription(tr("Data-backed compiler profile readiness bars for map, node, and BSP workflows."));
+
+	auto* compilerActions = new QHBoxLayout;
+	compilerActions->setSpacing(8);
+	m_compilerRunSelected = createButton(tr("Run Profile"), QStringLiteral("play"));
+	m_compilerRunSelected->setAccessibleName(tr("Run selected compiler profile"));
+	m_compilerRunSelected->setToolTip(tr("Run the selected compiler profile against the active project and register outputs when possible."));
+	connect(m_compilerRunSelected, &QPushButton::clicked, this, [this]() {
+		runSelectedCompilerProfile();
+	});
+	compilerActions->addWidget(m_compilerRunSelected);
+	m_compilerCopyCli = createButton(tr("Copy CLI"), QStringLiteral("terminal"));
+	m_compilerCopyCli->setAccessibleName(tr("Copy compiler CLI equivalent"));
+	m_compilerCopyCli->setToolTip(tr("Copy a reproducible vibestudio --cli compiler run command for the selected profile."));
+	connect(m_compilerCopyCli, &QPushButton::clicked, this, [this]() {
+		copySelectedCompilerCliEquivalent();
+	});
+	compilerActions->addWidget(m_compilerCopyCli);
+	m_compilerCopyManifest = createButton(tr("Copy Manifest"), QStringLiteral("copy"));
+	m_compilerCopyManifest->setAccessibleName(tr("Copy compiler manifest"));
+	m_compilerCopyManifest->setToolTip(tr("Copy the selected compiler profile's command manifest JSON."));
+	connect(m_compilerCopyManifest, &QPushButton::clicked, this, [this]() {
+		copySelectedCompilerManifest();
+	});
+	compilerActions->addWidget(m_compilerCopyManifest);
+	compilerActions->addStretch(1);
+
+	auto* toolchainPage = new QWidget;
+	auto* toolchainLayout = new QVBoxLayout(toolchainPage);
+	toolchainLayout->setContentsMargins(0, 10, 0, 0);
+	toolchainLayout->setSpacing(10);
+	toolchainLayout->addWidget(m_compilerPipelineChart);
+	toolchainLayout->addLayout(compilerActions);
+	toolchainLayout->addWidget(m_compilerPipeline, 1);
+
+	// Launch: run the compiled map in the configured game.
+	auto* launchPage = new QWidget;
+	auto* launchLayout = new QVBoxLayout(launchPage);
+	launchLayout->setContentsMargins(0, 10, 0, 0);
+	launchLayout->setSpacing(10);
+	auto* launchForm = new QFormLayout;
+	launchForm->setHorizontalSpacing(12);
+	launchForm->setVerticalSpacing(8);
+	launchForm->setFieldGrowthPolicy(QFormLayout::FieldsStayAtSizeHint);
 	m_launchProfileChoice = new QComboBox;
 	m_launchProfileChoice->setAccessibleName(tr("Launch profile"));
 	m_launchProfileChoice->setAccessibleDescription(tr("Engine command-line shape used to start the configured game installation."));
-	launchControls->addWidget(m_launchProfileChoice);
-
+	m_launchProfileChoice->setMinimumContentsLength(24);
+	m_launchProfileChoice->setSizeAdjustPolicy(QComboBox::AdjustToMinimumContentsLengthWithIcon);
+	launchForm->addRow(tr("Launch profile"), m_launchProfileChoice);
 	m_launchMapName = new QLineEdit;
 	m_launchMapName->setAccessibleName(tr("Launch map name"));
 	m_launchMapName->setPlaceholderText(tr("Map name to load, for example start"));
-	launchControls->addWidget(m_launchMapName, 1);
-
-	m_launchGame = new QPushButton(style()->standardIcon(QStyle::SP_MediaPlay), tr("Launch Game"));
+	m_launchMapName->setMinimumWidth(280);
+	launchForm->addRow(tr("Map"), m_launchMapName);
+	launchLayout->addLayout(launchForm);
+	auto* launchActions = new QHBoxLayout;
+	m_launchGame = createButton(tr("Launch Game"), QStringLiteral("gamepad"), QStringLiteral("primary"));
 	m_launchGame->setAccessibleName(tr("Launch configured game"));
 	m_launchGame->setToolTip(tr("Start the selected game installation with the planned command line. The command is shown for review first."));
 	connect(m_launchGame, &QPushButton::clicked, this, [this]() {
 		launchConfiguredGame();
 	});
-	launchControls->addWidget(m_launchGame);
-	centerLayout->addLayout(launchControls);
-
+	launchActions->addWidget(m_launchGame);
+	launchActions->addStretch(1);
+	launchLayout->addLayout(launchActions);
 	m_launchSummary = new QListWidget;
 	m_launchSummary->setObjectName("launchSummary");
 	m_launchSummary->setAccessibleName(tr("Launch plan"));
 	m_launchSummary->setAccessibleDescription(tr("Resolved executable, arguments, working directory, and any blocking problem."));
-	m_launchSummary->setMinimumHeight(110);
-	centerLayout->addWidget(m_launchSummary);
+	m_launchSummary->setWordWrap(true);
+	launchLayout->addWidget(captionedPanel(tr("Launch plan"), m_launchSummary), 1);
+
+	auto* sections = createPanelTabs(tr("Build sections"));
+	sections->setObjectName(QStringLiteral("buildSections"));
+	sections->addTab(pipelinePage, studioIcon(QStringLiteral("hammer")), tr("Pipeline"));
+	sections->addTab(toolchainPage, studioIcon(QStringLiteral("terminal")), tr("Toolchain"));
+	sections->addTab(launchPage, studioIcon(QStringLiteral("gamepad")), tr("Launch and Test"));
 
 	connect(m_buildPipelineChoice, &QComboBox::currentIndexChanged, this, [this]() {
 		refreshBuildSurface();
@@ -1826,39 +2534,52 @@ QWidget* ApplicationShell::buildBuildPage()
 	connect(m_launchMapName, &QLineEdit::editingFinished, this, [this]() {
 		refreshBuildSurface();
 	});
-	centerLayout->addStretch(1);
-	scroll->setWidget(center);
-	pageLayout->addWidget(scroll);
-	return page;
+	return assembleStudioPage(header, toolBar, padded(sections, 14, 8, 12));
 }
 
 QWidget* ApplicationShell::buildSettingsPage()
 {
-	auto* page = new QWidget;
-	auto* pageLayout = new QVBoxLayout(page);
-	pageLayout->setContentsMargins(0, 0, 0, 0);
-	pageLayout->setSpacing(0);
+	auto* header = new PageHeader(QStringLiteral("settings"), tr("Settings"));
+	header->setAccessibleName(tr("Settings header"));
+	header->setSubtitle(tr("Changes apply immediately and are saved automatically."));
+	m_pageHeaders.insert(static_cast<int>(StudioMode::Settings), header);
 
-	auto* scroll = new QScrollArea;
-	scroll->setWidgetResizable(true);
-	scroll->setFrameShape(QFrame::NoFrame);
-	scroll->setAccessibleName(tr("Settings scroll area"));
+	auto* categories = new QListWidget;
+	categories->setObjectName(QStringLiteral("settingsCategories"));
+	categories->setAccessibleName(tr("Settings categories"));
+	categories->setFixedWidth(220);
+	setBaseIconSize(categories, QSize(18, 18));
+	markFlat(categories);
 
-	auto* center = new QWidget;
-	auto* centerLayout = new QVBoxLayout(center);
-	centerLayout->setContentsMargins(22, 18, 22, 18);
-	centerLayout->setSpacing(16);
+	auto* pages = new QStackedWidget;
+	pages->setAccessibleName(tr("Settings category pages"));
 
-	centerLayout->addWidget(sectionLabel(tr("First-Run Setup")));
+	// Each category is a scrollable column capped at a readable width.
+	auto addCategory = [categories, pages](const QString& iconName, const QString& title, QWidget* content) {
+		auto* column = new QWidget;
+		auto* columnLayout = new QHBoxLayout(column);
+		columnLayout->setContentsMargins(22, 18, 22, 22);
+		content->setMaximumWidth(760);
+		columnLayout->addWidget(content, 1, Qt::AlignTop);
+		columnLayout->addStretch(0);
+		pages->addWidget(createScrollSurface(column, title));
+		auto* item = new QListWidgetItem(studioIcon(iconName), title);
+		item->setData(Qt::AccessibleTextRole, title);
+		categories->addItem(item);
+	};
 
+	// Getting started: first-run setup.
+	auto* setupContent = new QWidget;
+	auto* setupContentLayout = new QVBoxLayout(setupContent);
+	setupContentLayout->setContentsMargins(0, 0, 0, 0);
+	setupContentLayout->setSpacing(12);
 	auto* setupPanel = new QFrame;
 	setupPanel->setObjectName("setupPanel");
 	setupPanel->setAccessibleName(tr("First-run setup"));
 	setupPanel->setAccessibleDescription(tr("Setup status, current step, warnings, and actions."));
 	auto* setupLayout = new QVBoxLayout(setupPanel);
-	setupLayout->setContentsMargins(14, 12, 14, 12);
-	setupLayout->setSpacing(8);
-
+	setupLayout->setContentsMargins(16, 14, 16, 16);
+	setupLayout->setSpacing(10);
 	auto* setupHeader = new QHBoxLayout;
 	m_setupStatus = new QLabel;
 	m_setupStatus->setObjectName("moduleTitle");
@@ -1869,81 +2590,79 @@ QWidget* ApplicationShell::buildSettingsPage()
 	setupHeader->addWidget(m_setupStatus);
 	setupHeader->addWidget(m_setupStep, 1, Qt::AlignRight);
 	setupLayout->addLayout(setupHeader);
-
 	m_setupProgress = new QProgressBar;
 	m_setupProgress->setAccessibleName(tr("Setup progress"));
 	m_setupProgress->setTextVisible(true);
 	setupLayout->addWidget(m_setupProgress);
-
 	m_setupNextAction = new QLabel;
 	m_setupNextAction->setWordWrap(true);
 	m_setupNextAction->setAccessibleName(tr("Setup next action"));
 	setupLayout->addWidget(m_setupNextAction);
-
 	m_setupSummary = new QListWidget;
 	m_setupSummary->setObjectName("setupSummary");
 	m_setupSummary->setAccessibleName(tr("Setup summary"));
-	m_setupSummary->setAccessibleDescription(tr("Completed, pending, and warning items for first-run setup."));
-	m_setupSummary->setMinimumHeight(136);
-	setupLayout->addWidget(m_setupSummary);
-
+	m_setupSummary->setAccessibleDescription(tr("Every setup step in order with its state, followed by setup warnings."));
+	m_setupSummary->setMinimumHeight(320);
+	m_setupSummary->setWordWrap(true);
+	setBaseIconSize(m_setupSummary, QSize(16, 16));
+	setupLayout->addWidget(m_setupSummary, 1);
 	auto* setupActions = new QHBoxLayout;
-	setupActions->addStretch(1);
-	m_setupStartResume = new QPushButton(style()->standardIcon(QStyle::SP_MediaPlay), tr("Start"));
-	m_setupStartResume->setAccessibleName(tr("Start or resume setup"));
-	connect(m_setupStartResume, &QPushButton::clicked, this, [this]() {
-		startOrResumeSetup();
-	});
-	setupActions->addWidget(m_setupStartResume);
-
-	m_setupNext = new QPushButton(style()->standardIcon(QStyle::SP_ArrowForward), tr("Next"));
-	m_setupNext->setAccessibleName(tr("Advance setup step"));
-	connect(m_setupNext, &QPushButton::clicked, this, [this]() {
-		advanceSetup();
-	});
-	setupActions->addWidget(m_setupNext);
-
-	m_setupSkip = new QPushButton(style()->standardIcon(QStyle::SP_DialogCloseButton), tr("Skip"));
-	m_setupSkip->setAccessibleName(tr("Skip setup for now"));
-	connect(m_setupSkip, &QPushButton::clicked, this, [this]() {
-		skipSetup();
-	});
-	setupActions->addWidget(m_setupSkip);
-
-	m_setupComplete = new QPushButton(style()->standardIcon(QStyle::SP_DialogApplyButton), tr("Finish"));
-	m_setupComplete->setAccessibleName(tr("Finish setup"));
-	connect(m_setupComplete, &QPushButton::clicked, this, [this]() {
-		completeSetup();
-	});
-	setupActions->addWidget(m_setupComplete);
-
-	m_setupReset = new QPushButton(style()->standardIcon(QStyle::SP_BrowserReload), tr("Reset"));
+	setupActions->setSpacing(8);
+	m_setupReset = createButton(tr("Reset"), QStringLiteral("refresh"), QStringLiteral("ghost"));
 	m_setupReset->setAccessibleName(tr("Reset setup progress"));
 	connect(m_setupReset, &QPushButton::clicked, this, [this]() {
 		resetSetup();
 	});
 	setupActions->addWidget(m_setupReset);
+	setupActions->addStretch(1);
+	m_setupSkip = createButton(tr("Skip"), QStringLiteral("close"));
+	m_setupSkip->setAccessibleName(tr("Skip setup for now"));
+	connect(m_setupSkip, &QPushButton::clicked, this, [this]() {
+		skipSetup();
+	});
+	setupActions->addWidget(m_setupSkip);
+	m_setupComplete = createButton(tr("Finish"), QStringLiteral("check"));
+	m_setupComplete->setAccessibleName(tr("Finish setup"));
+	connect(m_setupComplete, &QPushButton::clicked, this, [this]() {
+		completeSetup();
+	});
+	setupActions->addWidget(m_setupComplete);
+	m_setupNext = createButton(tr("Next"), QStringLiteral("chevron-right"));
+	m_setupNext->setAccessibleName(tr("Advance setup step"));
+	connect(m_setupNext, &QPushButton::clicked, this, [this]() {
+		advanceSetup();
+	});
+	setupActions->addWidget(m_setupNext);
+	m_setupStartResume = createButton(tr("Start"), QStringLiteral("play"), QStringLiteral("primary"));
+	m_setupStartResume->setAccessibleName(tr("Start or resume setup"));
+	connect(m_setupStartResume, &QPushButton::clicked, this, [this]() {
+		startOrResumeSetup();
+	});
+	setupActions->addWidget(m_setupStartResume);
 	setupLayout->addLayout(setupActions);
+	setupContentLayout->addWidget(setupPanel);
+	addCategory(QStringLiteral("check"), tr("Getting Started"), setupContent);
 
-	centerLayout->addWidget(setupPanel);
+	// Appearance and accessibility.
+	auto* appearanceContent = new QWidget;
+	auto* appearanceLayout = new QVBoxLayout(appearanceContent);
+	appearanceLayout->setContentsMargins(0, 0, 0, 0);
+	appearanceLayout->setSpacing(12);
 
-	centerLayout->addWidget(sectionLabel(tr("Accessibility And Language")));
-
-	auto* preferencesPanel = new QFrame;
+	auto* preferencesPanel = new QGroupBox(tr("Appearance"));
 	preferencesPanel->setObjectName("preferencesPanel");
 	preferencesPanel->setAccessibleName(tr("Accessibility and language preferences"));
 	preferencesPanel->setAccessibleDescription(tr("Persistent preferences for language, theme, scaling, density, motion, and text to speech."));
 	auto* preferencesLayout = new QFormLayout(preferencesPanel);
-	preferencesLayout->setContentsMargins(14, 12, 14, 12);
-	preferencesLayout->setHorizontalSpacing(14);
-	preferencesLayout->setVerticalSpacing(8);
+	preferencesLayout->setHorizontalSpacing(16);
+	preferencesLayout->setVerticalSpacing(10);
+	preferencesLayout->setFieldGrowthPolicy(QFormLayout::FieldsStayAtSizeHint);
+	preferencesLayout->setLabelAlignment(Qt::AlignLeft | Qt::AlignVCenter);
 
-	m_localeCombo = new QComboBox;
-	m_localeCombo->setAccessibleName(tr("Language"));
-	for (const QString& localeName : supportedLocaleNames()) {
-		m_localeCombo->addItem(localeDisplayName(localeName), localeName);
-	}
-	preferencesLayout->addRow(tr("Language"), m_localeCombo);
+	auto sizeCombo = [](QComboBox* combo) {
+		combo->setMinimumContentsLength(22);
+		combo->setSizeAdjustPolicy(QComboBox::AdjustToMinimumContentsLengthWithIcon);
+	};
 
 	m_themeCombo = new QComboBox;
 	m_themeCombo->setAccessibleName(tr("Theme"));
@@ -1957,6 +2676,7 @@ QWidget* ApplicationShell::buildSettingsPage()
 	for (StudioTheme theme : themes) {
 		m_themeCombo->addItem(localizedThemeName(theme), themeId(theme));
 	}
+	sizeCombo(m_themeCombo);
 	preferencesLayout->addRow(tr("Theme"), m_themeCombo);
 
 	m_textScaleCombo = new QComboBox;
@@ -1964,6 +2684,7 @@ QWidget* ApplicationShell::buildSettingsPage()
 	for (int scale : {100, 125, 150, 175, 200}) {
 		m_textScaleCombo->addItem(tr("%1%").arg(scale), scale);
 	}
+	sizeCombo(m_textScaleCombo);
 	preferencesLayout->addRow(tr("Text scale"), m_textScaleCombo);
 
 	m_densityCombo = new QComboBox;
@@ -1976,143 +2697,191 @@ QWidget* ApplicationShell::buildSettingsPage()
 	for (UiDensity density : densities) {
 		m_densityCombo->addItem(localizedDensityName(density), densityId(density));
 	}
+	sizeCombo(m_densityCombo);
 	preferencesLayout->addRow(tr("Density"), m_densityCombo);
+
+	m_reducedMotion = new QCheckBox(tr("Reduce motion"));
+	m_reducedMotion->setAccessibleName(tr("Reduced motion"));
+	m_reducedMotion->setToolTip(tr("Replaces spinners and animated progress with static state text across setup, task, and editor surfaces."));
+	preferencesLayout->addRow(QString(), m_reducedMotion);
+
+	m_textToSpeech = new QCheckBox(tr("Read status changes aloud"));
+	m_textToSpeech->setAccessibleName(tr("Text to speech"));
+	m_textToSpeech->setToolTip(tr("Stores the OS-backed text-to-speech preference for the setup and task surfaces planned next."));
+	preferencesLayout->addRow(QString(), m_textToSpeech);
+	appearanceLayout->addWidget(preferencesPanel);
+
+	auto* languagePanel = new QGroupBox(tr("Language and Editing"));
+	auto* languageLayout = new QFormLayout(languagePanel);
+	languageLayout->setHorizontalSpacing(16);
+	languageLayout->setVerticalSpacing(10);
+	languageLayout->setFieldGrowthPolicy(QFormLayout::FieldsStayAtSizeHint);
+	m_localeCombo = new QComboBox;
+	m_localeCombo->setAccessibleName(tr("Language"));
+	for (const QString& localeName : supportedLocaleNames()) {
+		m_localeCombo->addItem(localeDisplayName(localeName), localeName);
+	}
+	sizeCombo(m_localeCombo);
+	languageLayout->addRow(tr("Language"), m_localeCombo);
 
 	m_editorProfileCombo = new QComboBox;
 	m_editorProfileCombo->setAccessibleName(tr("Editor profile"));
 	m_editorProfileCombo->setAccessibleDescription(tr("Selects the routed level-editor interaction profile used by map, package, compiler, and shell command surfaces."));
+	m_editorProfileCombo->setToolTip(tr("Keyboard shortcuts and terminology follow the editor you already know."));
 	for (const EditorProfileDescriptor& profile : editorProfileDescriptors()) {
 		m_editorProfileCombo->addItem(profile.displayName, profile.id);
 	}
-	preferencesLayout->addRow(tr("Editor profile"), m_editorProfileCombo);
+	sizeCombo(m_editorProfileCombo);
+	languageLayout->addRow(tr("Editor profile"), m_editorProfileCombo);
+	appearanceLayout->addWidget(languagePanel);
+	appearanceLayout->addStretch(1);
+	addCategory(QStringLiteral("palette"), tr("Appearance and Language"), appearanceContent);
 
-	m_reducedMotion = new QCheckBox(tr("Reduced motion"));
-	m_reducedMotion->setAccessibleName(tr("Reduced motion"));
-	m_reducedMotion->setToolTip(tr("Stores the preference for future animated setup, task, and editor surfaces."));
-	preferencesLayout->addRow(QString(), m_reducedMotion);
-
-	m_textToSpeech = new QCheckBox(tr("Text to speech"));
-	m_textToSpeech->setAccessibleName(tr("Text to speech"));
-	m_textToSpeech->setToolTip(tr("Stores the OS-backed text-to-speech preference for the setup and task surfaces planned next."));
-	preferencesLayout->addRow(QString(), m_textToSpeech);
-
+	// AI and automation.
+	auto* aiContent = new QWidget;
+	auto* aiLayout = new QVBoxLayout(aiContent);
+	aiLayout->setContentsMargins(0, 0, 0, 0);
+	aiLayout->setSpacing(12);
+	auto* aiModePanel = new QGroupBox(tr("AI Mode"));
+	auto* aiModeLayout = new QVBoxLayout(aiModePanel);
+	aiModeLayout->setSpacing(8);
 	m_aiFreeMode = new QCheckBox(tr("AI-free mode"));
 	m_aiFreeMode->setAccessibleName(tr("AI-free mode"));
 	m_aiFreeMode->setToolTip(tr("Keeps cloud and agentic AI workflows disabled for core editing, package, compiler, and CLI work."));
-	preferencesLayout->addRow(QString(), m_aiFreeMode);
-
-	m_aiCloudConnectors = new QCheckBox(tr("Cloud AI connectors"));
+	aiModeLayout->addWidget(m_aiFreeMode);
+	auto* aiFreeHint = new QLabel(tr("Every core workflow stays local and deterministic. Connectors below are remembered but not used."));
+	aiFreeHint->setObjectName(QStringLiteral("fieldHint"));
+	aiFreeHint->setWordWrap(true);
+	aiModeLayout->addWidget(aiFreeHint);
+	m_aiCloudConnectors = new QCheckBox(tr("Allow cloud AI connectors"));
 	m_aiCloudConnectors->setAccessibleName(tr("Cloud AI connectors"));
 	m_aiCloudConnectors->setToolTip(tr("Opt in to experimental provider-neutral cloud connector configuration. Secrets are read through redacted environment references, not shown in logs."));
-	preferencesLayout->addRow(QString(), m_aiCloudConnectors);
-
-	m_aiAgenticWorkflows = new QCheckBox(tr("Agentic workflows"));
+	aiModeLayout->addWidget(m_aiCloudConnectors);
+	m_aiAgenticWorkflows = new QCheckBox(tr("Allow agentic workflows"));
 	m_aiAgenticWorkflows->setAccessibleName(tr("Agentic workflows"));
 	m_aiAgenticWorkflows->setToolTip(tr("Opt in to future supervised plan, review, stage, validate, and summarize workflows."));
-	preferencesLayout->addRow(QString(), m_aiAgenticWorkflows);
+	aiModeLayout->addWidget(m_aiAgenticWorkflows);
+	aiLayout->addWidget(aiModePanel);
 
-	auto addAiConnectorCombo = [preferencesLayout](const QString& label, const QString& capabilityId, const QString& description) {
+	auto* connectorPanel = new QGroupBox(tr("Preferred Connectors"));
+	auto* connectorLayout = new QFormLayout(connectorPanel);
+	connectorLayout->setHorizontalSpacing(16);
+	connectorLayout->setVerticalSpacing(10);
+	connectorLayout->setFieldGrowthPolicy(QFormLayout::FieldsStayAtSizeHint);
+	auto addAiConnectorCombo = [connectorLayout, sizeCombo](const QString& label, const QString& capabilityId, const QString& description) {
 		auto* combo = new QComboBox;
 		combo->setAccessibleName(label);
 		combo->setAccessibleDescription(description);
+		combo->setToolTip(description);
 		combo->addItem(tr("Not selected"), QString());
 		for (const AiConnectorDescriptor& connector : aiConnectorDescriptors()) {
 			if (connector.capabilities.contains(capabilityId)) {
 				combo->addItem(connector.displayName, connector.id);
 			}
 		}
-		preferencesLayout->addRow(label, combo);
+		sizeCombo(combo);
+		connectorLayout->addRow(label, combo);
 		return combo;
 	};
-	m_aiReasoningConnectorCombo = addAiConnectorCombo(tr("Reasoning connector"), QStringLiteral("reasoning"), tr("Preferred provider-neutral reasoning connector for future AI-assisted planning, review, and explanation."));
-	m_aiCodingConnectorCombo = addAiConnectorCombo(tr("Coding connector"), QStringLiteral("coding"), tr("Preferred connector for future code, script, shader, and config assistance."));
-	m_aiVisionConnectorCombo = addAiConnectorCombo(tr("Vision connector"), QStringLiteral("vision"), tr("Preferred connector for future image, screenshot, and visual context understanding."));
-	m_aiImageConnectorCombo = addAiConnectorCombo(tr("Image connector"), QStringLiteral("image"), tr("Preferred connector for future image, sprite, and texture generation experiments."));
-	m_aiAudioConnectorCombo = addAiConnectorCombo(tr("Audio connector"), QStringLiteral("audio"), tr("Preferred connector for future generated sound, music, and audio ideation."));
-	m_aiVoiceConnectorCombo = addAiConnectorCombo(tr("Voice connector"), QStringLiteral("voice"), tr("Preferred connector for future narration, speech, and voice workflow experiments."));
-	m_aiThreeDConnectorCombo = addAiConnectorCombo(tr("3D connector"), QStringLiteral("three-d"), tr("Preferred connector for future model, texture, and concept-to-asset generation."));
-	m_aiEmbeddingsConnectorCombo = addAiConnectorCombo(tr("Embeddings connector"), QStringLiteral("embeddings"), tr("Preferred connector for future semantic search, retrieval, and context ranking."));
-	m_aiLocalConnectorCombo = addAiConnectorCombo(tr("Local connector"), QStringLiteral("local-offline"), tr("Preferred connector for future local/offline AI runtime use."));
+	m_aiReasoningConnectorCombo = addAiConnectorCombo(tr("Reasoning"), QStringLiteral("reasoning"), tr("Preferred provider-neutral reasoning connector for future AI-assisted planning, review, and explanation."));
+	m_aiCodingConnectorCombo = addAiConnectorCombo(tr("Coding"), QStringLiteral("coding"), tr("Preferred connector for future code, script, shader, and config assistance."));
+	m_aiVisionConnectorCombo = addAiConnectorCombo(tr("Vision"), QStringLiteral("vision"), tr("Preferred connector for future image, screenshot, and visual context understanding."));
+	m_aiImageConnectorCombo = addAiConnectorCombo(tr("Image"), QStringLiteral("image"), tr("Preferred connector for future image, sprite, and texture generation experiments."));
+	m_aiAudioConnectorCombo = addAiConnectorCombo(tr("Audio"), QStringLiteral("audio"), tr("Preferred connector for future generated sound, music, and audio ideation."));
+	m_aiVoiceConnectorCombo = addAiConnectorCombo(tr("Voice"), QStringLiteral("voice"), tr("Preferred connector for future narration, speech, and voice workflow experiments."));
+	m_aiThreeDConnectorCombo = addAiConnectorCombo(tr("3D"), QStringLiteral("three-d"), tr("Preferred connector for future model, texture, and concept-to-asset generation."));
+	m_aiEmbeddingsConnectorCombo = addAiConnectorCombo(tr("Embeddings"), QStringLiteral("embeddings"), tr("Preferred connector for future semantic search, retrieval, and context ranking."));
+	m_aiLocalConnectorCombo = addAiConnectorCombo(tr("Local"), QStringLiteral("local-offline"), tr("Preferred connector for future local/offline AI runtime use."));
+	aiLayout->addWidget(connectorPanel);
+	aiLayout->addStretch(1);
+	addCategory(QStringLiteral("sparkle"), tr("AI and Automation"), aiContent);
 
-	centerLayout->addWidget(preferencesPanel);
-
-	centerLayout->addWidget(sectionLabel(tr("Extensions")));
-
+	// Extensions.
+	auto* extensionContent = new QWidget;
+	auto* extensionLayout = new QVBoxLayout(extensionContent);
+	extensionLayout->setContentsMargins(0, 0, 0, 0);
+	extensionLayout->setSpacing(12);
+	auto* extensionPanel = new QGroupBox(tr("Extension Discovery"));
+	auto* extensionPanelLayout = new QVBoxLayout(extensionPanel);
+	extensionPanelLayout->setSpacing(10);
 	auto* extensionControls = new QHBoxLayout;
 	extensionControls->setSpacing(8);
 	m_advancedExtensionRoot = new QLineEdit;
 	m_advancedExtensionRoot->setAccessibleName(tr("Extension discovery root"));
 	m_advancedExtensionRoot->setAccessibleDescription(tr("Folder searched for vibestudio.extension.json manifests."));
-	m_advancedExtensionRoot->setPlaceholderText(tr("Extension root"));
+	m_advancedExtensionRoot->setPlaceholderText(tr("Folder containing vibestudio.extension.json manifests"));
 	extensionControls->addWidget(m_advancedExtensionRoot, 1);
-
-	m_advancedExtensionDiscover = new QPushButton(style()->standardIcon(QStyle::SP_FileDialogContentsView), tr("Discover Extensions"));
+	m_advancedExtensionDiscover = createButton(tr("Discover"), QStringLiteral("plugin"));
 	m_advancedExtensionDiscover->setAccessibleName(tr("Discover extensions"));
 	connect(m_advancedExtensionDiscover, &QPushButton::clicked, this, [this]() {
 		discoverAdvancedExtensions();
 	});
 	extensionControls->addWidget(m_advancedExtensionDiscover);
-	centerLayout->addLayout(extensionControls);
-
+	extensionPanelLayout->addLayout(extensionControls);
 	m_advancedExtensions = new QListWidget;
 	m_advancedExtensions->setAccessibleName(tr("Extensions"));
 	m_advancedExtensions->setAccessibleDescription(tr("Discovered extension manifests, trust model, sandbox model, commands, and staged generated files."));
-	m_advancedExtensions->setMinimumHeight(120);
-	centerLayout->addWidget(m_advancedExtensions);
-	centerLayout->addStretch(1);
-	scroll->setWidget(center);
-	pageLayout->addWidget(scroll);
-	return page;
+	m_advancedExtensions->setMinimumHeight(220);
+	m_advancedExtensions->setWordWrap(true);
+	extensionPanelLayout->addWidget(m_advancedExtensions, 1);
+	extensionLayout->addWidget(extensionPanel);
+	extensionLayout->addStretch(1);
+	addCategory(QStringLiteral("plugin"), tr("Extensions"), extensionContent);
+
+	connect(categories, &QListWidget::currentRowChanged, pages, &QStackedWidget::setCurrentIndex);
+	categories->setCurrentRow(0);
+
+	auto* categoryColumn = new QWidget;
+	categoryColumn->setObjectName(QStringLiteral("settingsNavigation"));
+	auto* categoryLayout = new QVBoxLayout(categoryColumn);
+	categoryLayout->setContentsMargins(12, 14, 0, 14);
+	categoryLayout->addWidget(categories);
+
+	auto* body = new QWidget;
+	auto* bodyLayout = new QHBoxLayout(body);
+	bodyLayout->setContentsMargins(0, 0, 0, 0);
+	bodyLayout->setSpacing(0);
+	bodyLayout->addWidget(categoryColumn);
+	bodyLayout->addWidget(pages, 1);
+	return assembleStudioPage(header, nullptr, body);
 }
 
 QWidget* ApplicationShell::buildShadersPage()
 {
-	auto* page = new QWidget;
-	auto* pageLayout = new QVBoxLayout(page);
-	pageLayout->setContentsMargins(0, 0, 0, 0);
-	pageLayout->setSpacing(0);
+	auto* header = new PageHeader(QStringLiteral("layers"), tr("Shaders"));
+	header->setAccessibleName(tr("Shader workbench header"));
+	m_pageHeaders.insert(static_cast<int>(StudioMode::Shaders), header);
 
-	auto* scroll = new QScrollArea;
-	scroll->setWidgetResizable(true);
-	scroll->setFrameShape(QFrame::NoFrame);
-	scroll->setAccessibleName(tr("Shader workbench scroll area"));
-
-	auto* center = new QWidget;
-	auto* centerLayout = new QVBoxLayout(center);
-	centerLayout->setContentsMargins(22, 18, 22, 18);
-	centerLayout->setSpacing(16);
-
-	centerLayout->addWidget(sectionLabel(tr("Shader Graph")));
-
-	auto* shaderControls = new QHBoxLayout;
-	shaderControls->setSpacing(8);
-	m_advancedShaderPath = new QLineEdit;
-	m_advancedShaderPath->setAccessibleName(tr("Shader script path"));
-	m_advancedShaderPath->setAccessibleDescription(tr("Path to an idTech3 shader script for graph parsing, preview, edits, and package validation."));
-	m_advancedShaderPath->setPlaceholderText(tr("Shader script path"));
-	connect(m_advancedShaderPath, &QLineEdit::returnPressed, this, [this]() {
-		inspectAdvancedShaderScript();
-	});
-	shaderControls->addWidget(m_advancedShaderPath, 1);
-
-	auto* browseShader = new QPushButton(style()->standardIcon(QStyle::SP_DialogOpenButton), tr("Open Shader"));
+	auto* browseShader = createButton(tr("Open Shader"), QStringLiteral("folder-open"), QStringLiteral("primary"));
 	browseShader->setAccessibleName(tr("Open shader script"));
-	connect(browseShader, &QPushButton::clicked, this, [this]() {
+	auto chooseShader = [this]() {
 		const QString path = QFileDialog::getOpenFileName(this, tr("Open Shader Script"), QString(), tr("Shader scripts (*.shader *.txt);;All files (*.*)"));
 		if (!path.isEmpty() && m_advancedShaderPath) {
 			m_advancedShaderPath->setText(path);
 			inspectAdvancedShaderScript();
 		}
-	});
-	shaderControls->addWidget(browseShader);
+	};
+	connect(browseShader, &QPushButton::clicked, this, chooseShader);
+	header->addActionWidget(browseShader);
 
-	m_advancedShaderInspect = new QPushButton(style()->standardIcon(QStyle::SP_BrowserReload), tr("Inspect"));
-	m_advancedShaderInspect->setAccessibleName(tr("Inspect shader script"));
-	connect(m_advancedShaderInspect, &QPushButton::clicked, this, [this]() {
+	auto* toolBar = createPageToolBar(tr("Shader tools"));
+	m_advancedShaderPath = new QLineEdit;
+	m_advancedShaderPath->setAccessibleName(tr("Shader script path"));
+	m_advancedShaderPath->setAccessibleDescription(tr("Path to an idTech3 shader script for graph parsing, preview, edits, and package validation."));
+	m_advancedShaderPath->setPlaceholderText(tr("Shader script path"));
+	m_advancedShaderPath->setMinimumWidth(320);
+	m_advancedShaderPath->addAction(studioIcon(QStringLiteral("file"), StudioIconTone::Muted), QLineEdit::LeadingPosition);
+	connect(m_advancedShaderPath, &QLineEdit::returnPressed, this, [this]() {
 		inspectAdvancedShaderScript();
 	});
-	shaderControls->addWidget(m_advancedShaderInspect);
-	centerLayout->addLayout(shaderControls);
+	toolBar->addWidget(m_advancedShaderPath);
+	auto* inspect = createToolButton(QStringLiteral("refresh"), tr("Inspect"), tr("Parse the shader script at this path."));
+	m_advancedShaderInspect = inspect;
+	m_advancedShaderInspect->setAccessibleName(tr("Inspect shader script"));
+	connect(inspect, &QToolButton::clicked, this, [this]() {
+		inspectAdvancedShaderScript();
+	});
+	toolBar->addWidget(inspect);
 
 	m_advancedStudioState = new LoadingPane;
 	m_advancedStudioState->setAccessibleName(tr("Advanced studio state"));
@@ -2125,81 +2894,138 @@ QWidget* ApplicationShell::buildShadersPage()
 		tr("AI proposal"),
 		tr("Extensions"),
 	});
-	centerLayout->addWidget(m_advancedStudioState);
 
-	m_advancedShaderGraph = new QListWidget;
+	// Shader > stage > texture tree. Selecting a shader or a stage shows its
+	// parsed fields and raw text in the details panel beside it.
+	m_advancedShaderGraph = new QTreeWidget;
+	m_advancedShaderGraph->setObjectName(QStringLiteral("shaderGraph"));
 	m_advancedShaderGraph->setAccessibleName(tr("Shader graph stages"));
-	m_advancedShaderGraph->setAccessibleDescription(tr("Parsed shader stages, blend modes, and texture dependency graph lines."));
-	m_advancedShaderGraph->setMinimumHeight(240);
-	centerLayout->addWidget(m_advancedShaderGraph, 1);
+	m_advancedShaderGraph->setAccessibleDescription(tr("Each shader with its stages, blend modes, and the textures they reference; textures missing from the open package are marked."));
+	m_advancedShaderGraph->setColumnCount(2);
+	m_advancedShaderGraph->setHeaderLabels({tr("Shader"), tr("Details")});
+	m_advancedShaderGraph->setUniformRowHeights(true);
+	m_advancedShaderGraph->setTextElideMode(Qt::ElideMiddle);
+	m_advancedShaderGraph->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+	m_advancedShaderGraph->header()->setStretchLastSection(true);
+	m_advancedShaderGraph->header()->setSectionResizeMode(0, QHeaderView::Interactive);
+	m_advancedShaderGraph->setIndentation(16);
+	m_advancedShaderGraph->setColumnWidth(0, 236);
+	setBaseIconSize(m_advancedShaderGraph, QSize(16, 16));
+	connect(m_advancedShaderGraph, &QTreeWidget::currentItemChanged, this, [this](QTreeWidgetItem* current) {
+		if (!current) {
+			return;
+		}
+		const QString shaderName = current->data(0, Qt::UserRole).toString();
+		if (!shaderName.isEmpty()) {
+			refreshShaderDetailSections(shaderName, current->data(0, Qt::UserRole + 1).toInt());
+		}
+	});
 
 	m_advancedStudioDrawer = new DetailDrawer;
 	m_advancedStudioDrawer->setAccessibleName(tr("Advanced studio detail drawer"));
 	m_advancedStudioDrawer->setTitle(tr("Advanced Studio Details"));
 	m_advancedStudioDrawer->setSubtitle(tr("Inspect shader, sprite, code, AI, and extension details."));
-	centerLayout->addWidget(m_advancedStudioDrawer);
-	centerLayout->addStretch(1);
-	scroll->setWidget(center);
-	pageLayout->addWidget(scroll);
-	return page;
+
+	auto* workbench = createSplitter(Qt::Horizontal, QStringLiteral("shadersWorkbench"), tr("Shader workbench"));
+	workbench->addWidget(captionedPanel(tr("Stage graph"), m_advancedShaderGraph));
+	workbench->addWidget(m_advancedStudioDrawer);
+	workbench->setStretchFactor(0, 3);
+	workbench->setStretchFactor(1, 2);
+	m_layoutSplitters.insert(workbench->objectName(), workbench);
+
+	auto* body = new QWidget;
+	auto* bodyLayout = new QVBoxLayout(body);
+	bodyLayout->setContentsMargins(0, 0, 0, 0);
+	bodyLayout->setSpacing(0);
+	bodyLayout->addWidget(statusStripHost(m_advancedStudioState));
+	bodyLayout->addWidget(padded(workbench, 14, 10, 12), 1);
+
+	auto* empty = new EmptyStateView(QStringLiteral("layers"), tr("No shader script loaded"),
+		tr("Open an idTech3 .shader script to see each shader's stages, blend modes, and the textures it references, checked against the open package."));
+	QPushButton* emptyOpen = empty->addAction(tr("Open Shader"), QStringLiteral("folder-open"), true);
+	connect(emptyOpen, &QPushButton::clicked, this, chooseShader);
+	auto* stack = new QStackedWidget;
+	stack->addWidget(empty);
+	stack->addWidget(body);
+	m_surfaceStacks.insert(static_cast<int>(StudioMode::Shaders), stack);
+	m_emptyStates.insert(static_cast<int>(StudioMode::Shaders), empty);
+	return assembleStudioPage(header, toolBar, stack);
 }
 
 QWidget* ApplicationShell::buildTexturesPage()
 {
-	auto* page = new QWidget;
-	auto* pageLayout = new QVBoxLayout(page);
-	pageLayout->setContentsMargins(0, 0, 0, 0);
-	pageLayout->setSpacing(0);
+	auto* header = new PageHeader(QStringLiteral("image"), tr("Textures"));
+	header->setAccessibleName(tr("Texture workbench header"));
+	m_pageHeaders.insert(static_cast<int>(StudioMode::Textures), header);
 
-	auto* scroll = new QScrollArea;
-	scroll->setWidgetResizable(true);
-	scroll->setFrameShape(QFrame::NoFrame);
-	scroll->setAccessibleName(tr("Texture workbench scroll area"));
-
-	auto* center = new QWidget;
-	auto* centerLayout = new QVBoxLayout(center);
-	centerLayout->setContentsMargins(22, 18, 22, 18);
-	centerLayout->setSpacing(16);
-
-	centerLayout->addWidget(sectionLabel(tr("Texture Browser")));
-
-	auto* textureControls = new QHBoxLayout;
-	textureControls->setSpacing(8);
-	m_textureFilter = new QLineEdit;
-	m_textureFilter->setAccessibleName(tr("Texture filter"));
-	m_textureFilter->setPlaceholderText(tr("Filter textures, sprites, and images by path"));
-	connect(m_textureFilter, &QLineEdit::textChanged, this, [this]() {
-		filterTextureEntries();
-	});
-	textureControls->addWidget(m_textureFilter, 1);
-
-	m_texturePaletteChoice = new QComboBox;
-	m_texturePaletteChoice->setAccessibleName(tr("Palette"));
-	m_texturePaletteChoice->setToolTip(tr("Palette used to decode indexed idTech art. Real palettes are read from the open package when it has one."));
-	connect(m_texturePaletteChoice, &QComboBox::currentIndexChanged, this, [this]() {
-		invalidatePaletteResolution();
-		showSelectedTexture();
-	});
-	textureControls->addWidget(m_texturePaletteChoice);
-
-	m_textureMipLevel = new QComboBox;
-	m_textureMipLevel->setAccessibleName(tr("Mip level"));
-	m_textureMipLevel->setToolTip(tr("idTech textures store several mip levels; choose which one to display."));
-	connect(m_textureMipLevel, &QComboBox::currentIndexChanged, this, [this](int index) {
-		if (m_texturePreview && index >= 0) {
-			m_texturePreview->setMipLevel(index);
-		}
-	});
-	textureControls->addWidget(m_textureMipLevel);
-
-	auto* exportTexture = new QPushButton(style()->standardIcon(QStyle::SP_DialogSaveButton), tr("Export"));
+	auto* exportTexture = createButton(tr("Export PNG"), QStringLiteral("export"));
 	exportTexture->setAccessibleName(tr("Export selected texture"));
 	exportTexture->setToolTip(tr("Write the decoded image to a PNG file."));
 	connect(exportTexture, &QPushButton::clicked, this, [this]() {
 		exportSelectedTexture();
 	});
-	textureControls->addWidget(exportTexture);
-	centerLayout->addLayout(textureControls);
+	header->addActionWidget(exportTexture);
+
+	auto* toolBar = createPageToolBar(tr("Texture tools"));
+	m_textureFilter = new QLineEdit;
+	m_textureFilter->setAccessibleName(tr("Texture filter"));
+	m_textureFilter->setPlaceholderText(tr("Filter textures, sprites, and images by path"));
+	m_textureFilter->setClearButtonEnabled(true);
+	m_textureFilter->setMinimumWidth(240);
+	m_textureFilter->addAction(studioIcon(QStringLiteral("filter"), StudioIconTone::Muted), QLineEdit::LeadingPosition);
+	connect(m_textureFilter, &QLineEdit::textChanged, this, [this]() {
+		filterTextureEntries();
+	});
+	toolBar->addWidget(m_textureFilter);
+	toolBar->addSeparator();
+	auto* paletteLabel = new QLabel(tr("Palette"));
+	toolBar->addWidget(paletteLabel);
+	m_texturePaletteChoice = new QComboBox;
+	m_texturePaletteChoice->setAccessibleName(tr("Palette"));
+	m_texturePaletteChoice->setToolTip(tr("Palette used to decode indexed idTech art. Real palettes are read from the open package when it has one."));
+	m_texturePaletteChoice->setMinimumContentsLength(16);
+	m_texturePaletteChoice->setSizeAdjustPolicy(QComboBox::AdjustToMinimumContentsLengthWithIcon);
+	paletteLabel->setBuddy(m_texturePaletteChoice);
+	connect(m_texturePaletteChoice, &QComboBox::currentIndexChanged, this, [this]() {
+		invalidatePaletteResolution();
+		showSelectedTexture();
+		// Indexed thumbnails were decoded with the old palette.
+		queueTextureThumbnails();
+	});
+	toolBar->addWidget(m_texturePaletteChoice);
+	auto* mipLabel = new QLabel(tr("Mip"));
+	toolBar->addWidget(mipLabel);
+	m_textureMipLevel = new QComboBox;
+	m_textureMipLevel->setAccessibleName(tr("Mip level"));
+	m_textureMipLevel->setToolTip(tr("idTech textures store several mip levels; choose which one to display."));
+	mipLabel->setBuddy(m_textureMipLevel);
+	connect(m_textureMipLevel, &QComboBox::currentIndexChanged, this, [this](int index) {
+		if (m_texturePreview && index >= 0) {
+			m_texturePreview->setMipLevel(index);
+		}
+	});
+	toolBar->addWidget(m_textureMipLevel);
+	toolBar->addSeparator();
+	m_textureTilesButton = createToolButton(QStringLiteral("grid"), tr("Tiles"), tr("Show decoded thumbnails."), false);
+	m_textureListButton = createToolButton(QStringLiteral("list"), tr("List"), tr("Show paths and sizes."), false);
+	for (QToolButton* button : {m_textureTilesButton, m_textureListButton}) {
+		button->setCheckable(true);
+		toolBar->addWidget(button);
+	}
+	m_textureTileMode = m_settings.shellLayoutState(QStringLiteral("textureViewMode")) != QByteArrayLiteral("list");
+	connect(m_textureTilesButton, &QToolButton::clicked, this, [this]() {
+		m_textureTileMode = true;
+		m_settings.setShellLayoutState(QStringLiteral("textureViewMode"), QByteArrayLiteral("tiles"));
+		applyTextureViewMode();
+	});
+	connect(m_textureListButton, &QToolButton::clicked, this, [this]() {
+		m_textureTileMode = false;
+		m_settings.setShellLayoutState(QStringLiteral("textureViewMode"), QByteArrayLiteral("list"));
+		applyTextureViewMode();
+	});
+	m_textureThumbnailTimer = new QTimer(this);
+	m_textureThumbnailTimer->setInterval(0);
+	connect(m_textureThumbnailTimer, &QTimer::timeout, this, &ApplicationShell::generateTextureThumbnailBatch);
 
 	m_textureState = new LoadingPane;
 	m_textureState->setAccessibleName(tr("Texture browser state"));
@@ -2210,123 +3036,139 @@ QWidget* ApplicationShell::buildTexturesPage()
 		tr("Decoded preview"),
 		tr("Palette"),
 	});
-	centerLayout->addWidget(m_textureState);
-
-	auto* textureSplit = new QSplitter(Qt::Horizontal);
-	textureSplit->setObjectName("textureSplit");
-	textureSplit->setAccessibleName(tr("Texture browser layout"));
-	textureSplit->setChildrenCollapsible(false);
 
 	m_textureEntries = new QListWidget;
 	m_textureEntries->setObjectName("textureEntries");
+	m_textureEntries->installEventFilter(this);
 	m_textureEntries->setAccessibleName(tr("Texture entries"));
 	m_textureEntries->setAccessibleDescription(tr("Image, texture, flat, and sprite entries in the open package."));
-	m_textureEntries->setMinimumWidth(240);
+	m_textureEntries->setMinimumWidth(190);
 	connect(m_textureEntries, &QListWidget::itemSelectionChanged, this, [this]() {
 		showSelectedTexture();
 	});
-	textureSplit->addWidget(m_textureEntries);
-
-	auto* texturePreviewPane = new QWidget;
-	auto* texturePreviewLayout = new QVBoxLayout(texturePreviewPane);
-	texturePreviewLayout->setContentsMargins(0, 0, 0, 0);
-	texturePreviewLayout->setSpacing(8);
 
 	m_texturePreview = new ImagePreviewView;
 	m_texturePreview->setAccessibleName(tr("Texture preview"));
 	m_texturePreview->setAccessibleDescription(tr("Decoded pixels for the selected entry. Scroll to zoom, drag to pan, hover for the palette index."));
-	m_texturePreview->setMinimumHeight(260);
-	texturePreviewLayout->addWidget(m_texturePreview, 1);
+	m_texturePreview->setMinimumSize(280, 240);
 
 	m_texturePaletteSource = new QLabel(tr("No palette resolved yet."));
-	m_texturePaletteSource->setObjectName("moduleMeta");
+	m_texturePaletteSource->setObjectName("viewportReadout");
 	m_texturePaletteSource->setAccessibleName(tr("Palette source"));
 	m_texturePaletteSource->setWordWrap(true);
-	texturePreviewLayout->addWidget(m_texturePaletteSource);
+
+	auto* centre = new QWidget;
+	auto* centreLayout = new QVBoxLayout(centre);
+	centreLayout->setContentsMargins(0, 0, 0, 0);
+	centreLayout->setSpacing(0);
+	centreLayout->addWidget(m_texturePreview, 1);
+	centreLayout->addWidget(m_texturePaletteSource);
 
 	m_texturePalette = new PaletteSwatchView;
 	m_texturePalette->setAccessibleName(tr("Palette swatches"));
 	m_texturePalette->setAccessibleDescription(tr("The 256 palette entries used to decode indexed art, with the transparent index marked."));
-	m_texturePalette->setMinimumHeight(140);
-	texturePreviewLayout->addWidget(m_texturePalette);
-
-	textureSplit->addWidget(texturePreviewPane);
-	textureSplit->setStretchFactor(0, 1);
-	textureSplit->setStretchFactor(1, 2);
-	centerLayout->addWidget(textureSplit, 1);
+	m_texturePalette->setMinimumHeight(180);
+	auto* palettePanel = new QWidget;
+	auto* palettePanelLayout = new QVBoxLayout(palettePanel);
+	palettePanelLayout->setContentsMargins(0, 8, 0, 0);
+	palettePanelLayout->addWidget(m_texturePalette);
+	palettePanelLayout->addStretch(1);
 
 	m_textureDrawer = new DetailDrawer;
 	m_textureDrawer->setAccessibleName(tr("Texture detail drawer"));
 	m_textureDrawer->setTitle(tr("Texture Details"));
 	m_textureDrawer->setSubtitle(tr("Format, dimensions, mip levels, palette source, flags, and raw metadata."));
-	centerLayout->addWidget(m_textureDrawer);
+	m_textureDrawer->setEmbedded(true);
 
-	centerLayout->addWidget(sectionLabel(tr("Sprite Creator")));
-
-	auto* spriteControls = new QHBoxLayout;
-	spriteControls->setSpacing(8);
+	// Sprite creator: frame naming and staging plans for Doom and Quake sprites.
+	auto* spritePanel = new QWidget;
+	auto* spriteLayout = new QVBoxLayout(spritePanel);
+	spriteLayout->setContentsMargins(0, 8, 0, 0);
+	spriteLayout->setSpacing(8);
+	auto* spriteForm = new QFormLayout;
+	spriteForm->setHorizontalSpacing(10);
+	spriteForm->setVerticalSpacing(6);
 	m_advancedSpriteEngine = new QComboBox;
 	m_advancedSpriteEngine->setAccessibleName(tr("Sprite engine"));
 	m_advancedSpriteEngine->addItem(tr("Doom"), QStringLiteral("doom"));
 	m_advancedSpriteEngine->addItem(tr("Quake"), QStringLiteral("quake"));
-	spriteControls->addWidget(m_advancedSpriteEngine);
-
+	spriteForm->addRow(tr("Engine"), m_advancedSpriteEngine);
 	m_advancedSpriteName = new QLineEdit;
 	m_advancedSpriteName->setAccessibleName(tr("Sprite name"));
 	m_advancedSpriteName->setPlaceholderText(tr("SPRT / torch"));
-	spriteControls->addWidget(m_advancedSpriteName, 1);
-
+	spriteForm->addRow(tr("Name"), m_advancedSpriteName);
 	m_advancedSpriteFrames = new QLineEdit;
 	m_advancedSpriteFrames->setAccessibleName(tr("Sprite frame count"));
 	m_advancedSpriteFrames->setPlaceholderText(tr("frames"));
 	m_advancedSpriteFrames->setText(QStringLiteral("4"));
-	m_advancedSpriteFrames->setMaximumWidth(90);
-	spriteControls->addWidget(m_advancedSpriteFrames);
-
+	spriteForm->addRow(tr("Frames"), m_advancedSpriteFrames);
 	m_advancedSpriteRotations = new QLineEdit;
 	m_advancedSpriteRotations->setAccessibleName(tr("Sprite rotations"));
 	m_advancedSpriteRotations->setPlaceholderText(tr("rotations"));
 	m_advancedSpriteRotations->setText(QStringLiteral("8"));
-	m_advancedSpriteRotations->setMaximumWidth(90);
-	spriteControls->addWidget(m_advancedSpriteRotations);
-
-	m_advancedSpritePlanButton = new QPushButton(style()->standardIcon(QStyle::SP_FileDialogDetailedView), tr("Sprite Plan"));
+	spriteForm->addRow(tr("Rotations"), m_advancedSpriteRotations);
+	spriteLayout->addLayout(spriteForm);
+	m_advancedSpritePlanButton = createButton(tr("Plan Sprite"), QStringLiteral("film"));
 	m_advancedSpritePlanButton->setAccessibleName(tr("Create sprite workflow plan"));
 	connect(m_advancedSpritePlanButton, &QPushButton::clicked, this, [this]() {
 		createAdvancedSpritePlan();
 	});
-	spriteControls->addWidget(m_advancedSpritePlanButton);
-	centerLayout->addLayout(spriteControls);
-
+	spriteLayout->addWidget(m_advancedSpritePlanButton, 0, Qt::AlignLeft);
 	m_advancedSpriteSequence = new QListWidget;
 	m_advancedSpriteSequence->setAccessibleName(tr("Sprite sequence"));
 	m_advancedSpriteSequence->setAccessibleDescription(tr("Doom and Quake sprite frame naming, palette, and package staging lines."));
-	m_advancedSpriteSequence->setMinimumHeight(130);
-	centerLayout->addWidget(m_advancedSpriteSequence);
-	centerLayout->addStretch(1);
-	scroll->setWidget(center);
-	pageLayout->addWidget(scroll);
-	return page;
+	spriteLayout->addWidget(m_advancedSpriteSequence, 1);
+
+	auto* inspectorTabs = createPanelTabs(tr("Texture inspector"), QTabWidget::South);
+	inspectorTabs->setMinimumWidth(250);
+	inspectorTabs->addTab(m_textureDrawer, tr("Details"));
+	inspectorTabs->addTab(palettePanel, tr("Palette"));
+	inspectorTabs->addTab(spritePanel, tr("Sprite Creator"));
+
+	auto* workbench = createSplitter(Qt::Horizontal, QStringLiteral("texturesWorkbench"), tr("Texture browser layout"));
+	workbench->addWidget(padded(captionedPanel(tr("Images"), m_textureEntries), 10, 8, 10));
+	workbench->addWidget(centre);
+	workbench->addWidget(padded(inspectorTabs, 10, 8, 10));
+	workbench->setStretchFactor(0, 0);
+	workbench->setStretchFactor(1, 1);
+	workbench->setStretchFactor(2, 0);
+	workbench->setSizes({scaledPane(400), 580, scaledPane(320)});
+	m_layoutSplitters.insert(workbench->objectName(), workbench);
+
+	auto* body = new QWidget;
+	auto* bodyLayout = new QVBoxLayout(body);
+	bodyLayout->setContentsMargins(0, 0, 0, 0);
+	bodyLayout->setSpacing(0);
+	bodyLayout->addWidget(statusStripHost(m_textureState));
+	bodyLayout->addWidget(workbench, 1);
+
+	auto* empty = new EmptyStateView(QStringLiteral("image"), tr("No textures to show"),
+		tr("Open a package with textures, flats, sprites, or images. Indexed art is decoded with the palette the package provides."));
+	QPushButton* emptyOpen = empty->addAction(tr("Open Package"), QStringLiteral("folder-open"), true);
+	connect(emptyOpen, &QPushButton::clicked, this, [this]() {
+		openPackageFile();
+	});
+	auto* stack = new QStackedWidget;
+	stack->addWidget(empty);
+	stack->addWidget(body);
+	m_surfaceStacks.insert(static_cast<int>(StudioMode::Textures), stack);
+	m_emptyStates.insert(static_cast<int>(StudioMode::Textures), empty);
+	return assembleStudioPage(header, toolBar, stack);
 }
 
 QWidget* ApplicationShell::buildModelsPage()
 {
-	auto* page = new QWidget;
-	auto* pageLayout = new QVBoxLayout(page);
-	pageLayout->setContentsMargins(0, 0, 0, 0);
-	pageLayout->setSpacing(0);
+	auto* header = new PageHeader(QStringLiteral("cube"), tr("Models"));
+	header->setAccessibleName(tr("Model workbench header"));
+	m_pageHeaders.insert(static_cast<int>(StudioMode::Models), header);
 
-	auto* scroll = new QScrollArea;
-	scroll->setWidgetResizable(true);
-	scroll->setFrameShape(QFrame::NoFrame);
-	scroll->setAccessibleName(tr("Model workbench scroll area"));
-
-	auto* center = new QWidget;
-	auto* centerLayout = new QVBoxLayout(center);
-	centerLayout->setContentsMargins(22, 18, 22, 18);
-	centerLayout->setSpacing(16);
-
-	centerLayout->addWidget(sectionLabel(tr("Model Browser")));
+	auto* modelExport = createButton(tr("Export OBJ"), QStringLiteral("export"));
+	modelExport->setAccessibleName(tr("Export the current model frame"));
+	modelExport->setToolTip(tr("Write the current frame as a Wavefront OBJ for an external modeller."));
+	connect(modelExport, &QPushButton::clicked, this, [this]() {
+		exportSelectedModel();
+	});
+	header->addActionWidget(modelExport);
 
 	m_modelState = new LoadingPane;
 	m_modelState->setAccessibleName(tr("Model browser state"));
@@ -2337,75 +3179,144 @@ QWidget* ApplicationShell::buildModelsPage()
 		tr("Frames and surfaces"),
 		tr("Skins"),
 	});
-	centerLayout->addWidget(m_modelState);
-
-	auto* modelSplit = new QSplitter(Qt::Horizontal);
-	modelSplit->setObjectName("modelSplit");
-	modelSplit->setAccessibleName(tr("Model browser layout"));
-	modelSplit->setChildrenCollapsible(false);
 
 	m_modelEntries = new QListWidget;
 	m_modelEntries->setObjectName("modelEntries");
 	m_modelEntries->setAccessibleName(tr("Model entries"));
 	m_modelEntries->setAccessibleDescription(tr("Model files in the open package."));
-	m_modelEntries->setMinimumWidth(240);
+	m_modelEntries->setMinimumWidth(190);
 	connect(m_modelEntries, &QListWidget::itemSelectionChanged, this, [this]() {
 		showSelectedModel();
 	});
-	modelSplit->addWidget(m_modelEntries);
 
-	auto* modelDetailPane = new QWidget;
-	auto* modelDetailLayout = new QVBoxLayout(modelDetailPane);
-	modelDetailLayout->setContentsMargins(0, 0, 0, 0);
-	modelDetailLayout->setSpacing(8);
+	auto* viewportBar = createPageToolBar(tr("Model viewport controls"));
+	viewportBar->setObjectName(QStringLiteral("viewportToolBar"));
+	m_modelRenderMode = new QComboBox;
+	m_modelRenderMode->setAccessibleName(tr("Model render mode"));
+	m_modelRenderMode->addItem(tr("Textured"), static_cast<int>(ModelViewportRenderMode::Textured));
+	m_modelRenderMode->addItem(tr("Flat shaded"), static_cast<int>(ModelViewportRenderMode::FlatShaded));
+	m_modelRenderMode->addItem(tr("Wireframe"), static_cast<int>(ModelViewportRenderMode::Wireframe));
+	connect(m_modelRenderMode, &QComboBox::currentIndexChanged, this, [this]() {
+		if (m_modelViewport && m_modelRenderMode) {
+			m_modelViewport->setRenderMode(static_cast<ModelViewportRenderMode>(m_modelRenderMode->currentData().toInt()));
+		}
+	});
+	viewportBar->addWidget(m_modelRenderMode);
+	m_modelAnimation = new QComboBox;
+	m_modelAnimation->setAccessibleName(tr("Model animation"));
+	m_modelAnimation->setToolTip(tr("Animations are inferred from frame names, which is how MDL and MD2 store them."));
+	m_modelAnimation->setMinimumContentsLength(14);
+	m_modelAnimation->setSizeAdjustPolicy(QComboBox::AdjustToMinimumContentsLengthWithIcon);
+	connect(m_modelAnimation, &QComboBox::currentIndexChanged, this, [this]() {
+		if (m_modelViewport && m_modelAnimation && m_modelAnimation->currentIndex() >= 0) {
+			m_modelViewport->setAnimation(m_modelAnimation->currentData().toString());
+		}
+	});
+	viewportBar->addWidget(m_modelAnimation);
+	auto* playPause = createToolButton(QStringLiteral("play"), tr("Play"), tr("Play or pause the model animation (Space)."));
+	m_modelPlayPause = playPause;
+	m_modelPlayPause->setAccessibleName(tr("Play or pause the model animation"));
+	connect(playPause, &QToolButton::clicked, this, [this]() {
+		if (m_modelViewport) {
+			m_modelViewport->togglePlayback();
+		}
+	});
+	viewportBar->addWidget(playPause);
+	viewportBar->addSeparator();
+	auto* modelFrameView = createToolButton(QStringLiteral("frame"), tr("Frame Model"), tr("Fit the model in the viewport."), false);
+	modelFrameView->setAccessibleName(tr("Fit the model in the viewport"));
+	connect(modelFrameView, &QToolButton::clicked, this, [this]() {
+		if (m_modelViewport) {
+			m_modelViewport->frameModel();
+		}
+	});
+	viewportBar->addWidget(modelFrameView);
 
+	m_modelViewport = new ModelViewport;
+	m_modelViewport->setAccessibleName(tr("Model viewport"));
+	m_modelViewport->setAccessibleDescription(tr("Software-rendered view of the selected model. Drag to orbit, wheel to zoom, Space to play, Page Up and Page Down to step frames."));
+	m_modelViewport->setMinimumSize(320, 260);
+	// The combo box opens on its first mode; the viewport must start there too
+	// rather than at its own default, or the two disagree until the user picks.
+	m_modelViewport->setRenderMode(static_cast<ModelViewportRenderMode>(m_modelRenderMode->currentData().toInt()));
+	connect(m_modelViewport, &ModelViewport::hoverChanged, this, [this](const QString& summary) {
+		if (m_modelHover) {
+			m_modelHover->setText(summary.isEmpty() ? m_modelViewport->playbackSummary() : summary);
+		}
+	});
+	connect(m_modelViewport, &ModelViewport::playbackChanged, this, [this]() {
+		refreshModelPlaybackControls();
+	});
+	connect(m_modelViewport, &ModelViewport::frameChanged, this, [this]() {
+		refreshModelPlaybackControls();
+	});
+	m_modelHover = new ElidedLabel(tr("Drag to orbit the model, wheel to zoom."));
+	m_modelHover->setObjectName("viewportReadout");
+	m_modelHover->setAccessibleName(tr("Model viewport readout"));
+
+	auto* centre = new QWidget;
+	auto* centreLayout = new QVBoxLayout(centre);
+	centreLayout->setContentsMargins(0, 0, 0, 0);
+	centreLayout->setSpacing(0);
+	centreLayout->addWidget(viewportBar);
+	centreLayout->addWidget(m_modelViewport, 1);
+	centreLayout->addWidget(m_modelHover);
+
+	m_modelDetails = createPropertyGrid(tr("Model details"),
+		tr("Frames, surfaces, tags, vertex and triangle counts, animations, and skin paths."));
+	m_modelDetails->setObjectName("modelDetails");
 	m_modelSkinPreview = new ImagePreviewView;
 	m_modelSkinPreview->setAccessibleName(tr("Model skin preview"));
 	m_modelSkinPreview->setAccessibleDescription(tr("First resolvable skin texture for the selected model, decoded from the package."));
-	m_modelSkinPreview->setMinimumHeight(220);
-	modelDetailLayout->addWidget(m_modelSkinPreview, 1);
-
-	m_modelDetails = new QListWidget;
-	m_modelDetails->setObjectName("modelDetails");
-	m_modelDetails->setAccessibleName(tr("Model details"));
-	m_modelDetails->setAccessibleDescription(tr("Frames, surfaces, tags, vertex and triangle counts, animations, and skin paths."));
-	m_modelDetails->setMinimumHeight(150);
-	modelDetailLayout->addWidget(m_modelDetails);
-
-	modelSplit->addWidget(modelDetailPane);
-	modelSplit->setStretchFactor(0, 1);
-	modelSplit->setStretchFactor(1, 2);
-	centerLayout->addWidget(modelSplit, 1);
-
+	m_modelSkinPreview->setMinimumHeight(160);
 	m_modelDrawer = new DetailDrawer;
 	m_modelDrawer->setAccessibleName(tr("Model detail drawer"));
 	m_modelDrawer->setTitle(tr("Model Details"));
 	m_modelDrawer->setSubtitle(tr("Header fields, skin and material dependencies, and raw metadata."));
-	centerLayout->addWidget(m_modelDrawer);
-	centerLayout->addStretch(1);
-	scroll->setWidget(center);
-	pageLayout->addWidget(scroll);
-	return page;
+	m_modelDrawer->setEmbedded(true);
+
+	auto* inspectorTabs = createPanelTabs(tr("Model inspector"), QTabWidget::South);
+	inspectorTabs->setMinimumWidth(250);
+	inspectorTabs->addTab(m_modelDetails, tr("Summary"));
+	inspectorTabs->addTab(m_modelSkinPreview, tr("Skin"));
+	inspectorTabs->addTab(m_modelDrawer, tr("Metadata"));
+
+	auto* workbench = createSplitter(Qt::Horizontal, QStringLiteral("modelsWorkbench"), tr("Model browser layout"));
+	workbench->addWidget(padded(captionedPanel(tr("Models"), m_modelEntries), 10, 8, 10));
+	workbench->addWidget(centre);
+	workbench->addWidget(padded(inspectorTabs, 10, 8, 10));
+	workbench->setStretchFactor(0, 0);
+	workbench->setStretchFactor(1, 1);
+	workbench->setStretchFactor(2, 0);
+	workbench->setSizes({scaledPane(250), 720, scaledPane(320)});
+	m_layoutSplitters.insert(workbench->objectName(), workbench);
+
+	auto* body = new QWidget;
+	auto* bodyLayout = new QVBoxLayout(body);
+	bodyLayout->setContentsMargins(0, 0, 0, 0);
+	bodyLayout->setSpacing(0);
+	bodyLayout->addWidget(statusStripHost(m_modelState));
+	bodyLayout->addWidget(workbench, 1);
+
+	auto* empty = new EmptyStateView(QStringLiteral("cube"), tr("No models to show"),
+		tr("Open a package that contains MDL, MD2, or MD3 models to orbit them, play their animations, and inspect skins."));
+	QPushButton* emptyOpen = empty->addAction(tr("Open Package"), QStringLiteral("folder-open"), true);
+	connect(emptyOpen, &QPushButton::clicked, this, [this]() {
+		openPackageFile();
+	});
+	auto* stack = new QStackedWidget;
+	stack->addWidget(empty);
+	stack->addWidget(body);
+	m_surfaceStacks.insert(static_cast<int>(StudioMode::Models), stack);
+	m_emptyStates.insert(static_cast<int>(StudioMode::Models), empty);
+	return assembleStudioPage(header, nullptr, stack);
 }
 
 QWidget* ApplicationShell::buildAudioPage()
 {
-	auto* page = new QWidget;
-	auto* pageLayout = new QVBoxLayout(page);
-	pageLayout->setContentsMargins(0, 0, 0, 0);
-	pageLayout->setSpacing(0);
-
-	auto* scroll = new QScrollArea;
-	scroll->setWidgetResizable(true);
-	scroll->setFrameShape(QFrame::NoFrame);
-	scroll->setAccessibleName(tr("Audio workbench scroll area"));
-
-	auto* center = new QWidget;
-	auto* centerLayout = new QVBoxLayout(center);
-	centerLayout->setContentsMargins(22, 18, 22, 18);
-	centerLayout->setSpacing(16);
-
-	centerLayout->addWidget(sectionLabel(tr("Audio Browser")));
+	auto* header = new PageHeader(QStringLiteral("waveform"), tr("Audio"));
+	header->setAccessibleName(tr("Audio workbench header"));
+	m_pageHeaders.insert(static_cast<int>(StudioMode::Audio), header);
 
 	m_audioState = new LoadingPane;
 	m_audioState->setAccessibleName(tr("Audio browser state"));
@@ -2416,175 +3327,175 @@ QWidget* ApplicationShell::buildAudioPage()
 		tr("Waveform"),
 		tr("Format details"),
 	});
-	centerLayout->addWidget(m_audioState);
-
-	auto* audioSplit = new QSplitter(Qt::Horizontal);
-	audioSplit->setObjectName("audioSplit");
-	audioSplit->setAccessibleName(tr("Audio browser layout"));
-	audioSplit->setChildrenCollapsible(false);
 
 	m_audioEntries = new QListWidget;
 	m_audioEntries->setObjectName("audioEntries");
 	m_audioEntries->setAccessibleName(tr("Audio entries"));
 	m_audioEntries->setAccessibleDescription(tr("Audio files in the open package."));
-	m_audioEntries->setMinimumWidth(240);
+	m_audioEntries->setMinimumWidth(190);
 	connect(m_audioEntries, &QListWidget::itemSelectionChanged, this, [this]() {
 		showSelectedAudioEntry();
 	});
-	audioSplit->addWidget(m_audioEntries);
-
-	auto* audioDetailPane = new QWidget;
-	auto* audioDetailLayout = new QVBoxLayout(audioDetailPane);
-	audioDetailLayout->setContentsMargins(0, 0, 0, 0);
-	audioDetailLayout->setSpacing(8);
 
 	m_audioWaveform = new WaveformView;
 	m_audioWaveform->setAccessibleName(tr("Audio waveform"));
 	m_audioWaveform->setAccessibleDescription(tr("Per-channel minimum and maximum envelope decoded from the selected entry."));
-	m_audioWaveform->setMinimumHeight(180);
-	audioDetailLayout->addWidget(m_audioWaveform, 1);
+	m_audioWaveform->setMinimumHeight(200);
 
-	m_audioDetails = new QListWidget;
+	m_audioDetails = createPropertyGrid(tr("Audio details"),
+		tr("Codec, channels, sample rate, bit depth, bitrate, and duration."));
 	m_audioDetails->setObjectName("audioDetails");
-	m_audioDetails->setAccessibleName(tr("Audio details"));
-	m_audioDetails->setAccessibleDescription(tr("Codec, channels, sample rate, bit depth, bitrate, and duration."));
-	m_audioDetails->setMinimumHeight(150);
-	audioDetailLayout->addWidget(m_audioDetails);
-
-	audioSplit->addWidget(audioDetailPane);
-	audioSplit->setStretchFactor(0, 1);
-	audioSplit->setStretchFactor(1, 2);
-	centerLayout->addWidget(audioSplit, 1);
+	m_audioDetails->setRootIsDecorated(false);
+	m_audioDetails->setColumnWidth(0, 150);
 
 	m_audioDrawer = new DetailDrawer;
 	m_audioDrawer->setAccessibleName(tr("Audio detail drawer"));
 	m_audioDrawer->setTitle(tr("Audio Details"));
 	m_audioDrawer->setSubtitle(tr("Format metadata, export support, and raw header details."));
-	centerLayout->addWidget(m_audioDrawer);
-	centerLayout->addStretch(1);
-	scroll->setWidget(center);
-	pageLayout->addWidget(scroll);
-	return page;
+	m_audioDrawer->setEmbedded(true);
+
+	auto* inspectorTabs = createPanelTabs(tr("Audio inspector"), QTabWidget::South);
+	inspectorTabs->addTab(m_audioDetails, tr("Format"));
+	inspectorTabs->addTab(m_audioDrawer, tr("Metadata"));
+
+	auto* detailSplit = createSplitter(Qt::Vertical, QStringLiteral("audioDetailSplit"), tr("Waveform and details"));
+	detailSplit->addWidget(padded(m_audioWaveform, 10, 8, 4));
+	detailSplit->addWidget(padded(inspectorTabs, 10, 4, 10));
+	detailSplit->setStretchFactor(0, 3);
+	detailSplit->setStretchFactor(1, 2);
+	m_layoutSplitters.insert(detailSplit->objectName(), detailSplit);
+
+	auto* workbench = createSplitter(Qt::Horizontal, QStringLiteral("audioWorkbench"), tr("Audio browser layout"));
+	workbench->addWidget(padded(captionedPanel(tr("Sounds"), m_audioEntries), 10, 8, 10));
+	workbench->addWidget(detailSplit);
+	workbench->setStretchFactor(0, 0);
+	workbench->setStretchFactor(1, 1);
+	workbench->setSizes({scaledPane(280), 900});
+	m_layoutSplitters.insert(workbench->objectName(), workbench);
+
+	auto* body = new QWidget;
+	auto* bodyLayout = new QVBoxLayout(body);
+	bodyLayout->setContentsMargins(0, 0, 0, 0);
+	bodyLayout->setSpacing(0);
+	bodyLayout->addWidget(statusStripHost(m_audioState));
+	bodyLayout->addWidget(workbench, 1);
+
+	auto* empty = new EmptyStateView(QStringLiteral("waveform"), tr("No sounds to show"),
+		tr("Open a package with WAV, Ogg, MP3, or FLAC files to inspect their format and see a decoded waveform."));
+	QPushButton* emptyOpen = empty->addAction(tr("Open Package"), QStringLiteral("folder-open"), true);
+	connect(emptyOpen, &QPushButton::clicked, this, [this]() {
+		openPackageFile();
+	});
+	auto* stack = new QStackedWidget;
+	stack->addWidget(empty);
+	stack->addWidget(body);
+	m_surfaceStacks.insert(static_cast<int>(StudioMode::Audio), stack);
+	m_emptyStates.insert(static_cast<int>(StudioMode::Audio), empty);
+	return assembleStudioPage(header, nullptr, stack);
 }
 
 QWidget* ApplicationShell::buildCodePage()
 {
-	auto* page = new QWidget;
-	auto* pageLayout = new QVBoxLayout(page);
-	pageLayout->setContentsMargins(0, 0, 0, 0);
-	pageLayout->setSpacing(0);
+	auto* header = new PageHeader(QStringLiteral("code"), tr("Code"));
+	header->setAccessibleName(tr("Code workbench header"));
+	m_pageHeaders.insert(static_cast<int>(StudioMode::Code), header);
 
-	auto* scroll = new QScrollArea;
-	scroll->setWidgetResizable(true);
-	scroll->setFrameShape(QFrame::NoFrame);
-	scroll->setAccessibleName(tr("Code workbench scroll area"));
-
-	auto* center = new QWidget;
-	auto* centerLayout = new QVBoxLayout(center);
-	centerLayout->setContentsMargins(22, 18, 22, 18);
-	centerLayout->setSpacing(16);
-
-	centerLayout->addWidget(sectionLabel(tr("Code And Scripts")));
-
-	auto* codeControls = new QHBoxLayout;
-	codeControls->setSpacing(8);
-	auto* refreshTree = new QPushButton(style()->standardIcon(QStyle::SP_BrowserReload), tr("Refresh Tree"));
-	refreshTree->setAccessibleName(tr("Refresh source tree"));
-	connect(refreshTree, &QPushButton::clicked, this, [this]() {
-		refreshCodeWorkspaceTree();
-	});
-	codeControls->addWidget(refreshTree);
-
-	auto* saveCode = new QPushButton(style()->standardIcon(QStyle::SP_DialogSaveButton), tr("Save File"));
-	saveCode->setAccessibleName(tr("Save edited file"));
-	connect(saveCode, &QPushButton::clicked, this, [this]() {
-		saveCodeFile();
-	});
-	codeControls->addWidget(saveCode);
-
-	m_advancedCodeIndexButton = new QPushButton(style()->standardIcon(QStyle::SP_DirIcon), tr("Index Code"));
+	m_advancedCodeIndexButton = createButton(tr("Index Code"), QStringLiteral("hash"));
 	m_advancedCodeIndexButton->setAccessibleName(tr("Index code workspace"));
 	m_advancedCodeIndexButton->setToolTip(tr("Scan the project for languages, symbols, build tasks, and launch profiles."));
 	connect(m_advancedCodeIndexButton, &QPushButton::clicked, this, [this]() {
 		indexAdvancedCodeWorkspace();
 	});
-	codeControls->addWidget(m_advancedCodeIndexButton);
+	header->addActionWidget(m_advancedCodeIndexButton);
 
-	m_codeStatus = new QLabel(tr("No file open."));
-	m_codeStatus->setObjectName("moduleMeta");
-	m_codeStatus->setAccessibleName(tr("Editor save state"));
-	codeControls->addWidget(m_codeStatus, 1);
-	centerLayout->addLayout(codeControls);
-
-	auto* codeSplit = new QSplitter(Qt::Horizontal);
-	codeSplit->setObjectName("codeSplit");
-	codeSplit->setAccessibleName(tr("Code workbench layout"));
-	codeSplit->setChildrenCollapsible(false);
+	auto* toolBar = createPageToolBar(tr("Code tools"));
+	auto* refreshTree = createToolButton(QStringLiteral("refresh"), tr("Refresh Tree"), tr("Rescan the project for editable files."), false);
+	refreshTree->setAccessibleName(tr("Refresh source tree"));
+	connect(refreshTree, &QToolButton::clicked, this, [this]() {
+		refreshCodeWorkspaceTree();
+	});
+	toolBar->addWidget(refreshTree);
+	auto* saveCode = createToolButton(QStringLiteral("save"), tr("Save"), tr("Save the file open in the editor."));
+	saveCode->setAccessibleName(tr("Save edited file"));
+	connect(saveCode, &QToolButton::clicked, this, [this]() {
+		saveCodeFile();
+	});
+	toolBar->addWidget(saveCode);
+	toolBar->addSeparator();
+	m_codeFind = new QLineEdit;
+	m_codeFind->setAccessibleName(tr("Find text"));
+	m_codeFind->setPlaceholderText(tr("Find in project"));
+	m_codeFind->setClearButtonEnabled(true);
+	m_codeFind->setMinimumWidth(200);
+	m_codeFind->addAction(studioIcon(QStringLiteral("search"), StudioIconTone::Muted), QLineEdit::LeadingPosition);
+	connect(m_codeFind, &QLineEdit::returnPressed, this, [this]() {
+		runCodeFindReplace();
+	});
+	toolBar->addWidget(m_codeFind);
+	m_codeReplace = new QLineEdit;
+	m_codeReplace->setAccessibleName(tr("Replace text"));
+	m_codeReplace->setPlaceholderText(tr("Replace with (optional)"));
+	m_codeReplace->setClearButtonEnabled(true);
+	m_codeReplace->setMinimumWidth(180);
+	toolBar->addWidget(m_codeReplace);
+	auto* runFind = createToolButton(QStringLiteral("search"), tr("Find / Replace"), tr("Search every project text file. Replacements are previewed before anything is written."));
+	runFind->setAccessibleName(tr("Run project find and replace"));
+	connect(runFind, &QToolButton::clicked, this, [this]() {
+		runCodeFindReplace();
+	});
+	toolBar->addWidget(runFind);
 
 	m_codeTree = new QTreeWidget;
 	m_codeTree->setObjectName("codeTree");
 	m_codeTree->setAccessibleName(tr("Project source tree"));
 	m_codeTree->setAccessibleDescription(tr("Editable text, script, config, and code files in the current project."));
-	m_codeTree->setHeaderLabel(tr("Project Files"));
-	m_codeTree->setMinimumWidth(240);
+	m_codeTree->setHeaderHidden(true);
+	m_codeTree->setMinimumWidth(190);
 	connect(m_codeTree, &QTreeWidget::itemActivated, this, [this](QTreeWidgetItem*, int) {
 		openSelectedCodeFile();
 	});
 	connect(m_codeTree, &QTreeWidget::itemSelectionChanged, this, [this]() {
 		openSelectedCodeFile();
 	});
-	codeSplit->addWidget(m_codeTree);
 
-	auto* editorPane = new QWidget;
-	auto* editorLayout = new QVBoxLayout(editorPane);
-	editorLayout->setContentsMargins(0, 0, 0, 0);
-	editorLayout->setSpacing(8);
+	m_codeStatus = new ElidedLabel(tr("No file open."));
+	m_codeStatus->setObjectName("viewportReadout");
+	m_codeStatus->setAccessibleName(tr("Editor save state"));
+	m_codeStatus->setElideMode(Qt::ElideMiddle);
 
-	m_codeEditor = new QPlainTextEdit;
+	// Line-number gutter and current-line band; highlighting stays separate.
+	m_codeEditor = new StudioCodeEditor;
 	m_codeEditor->setObjectName("codeEditor");
 	m_codeEditor->setAccessibleName(tr("Code editor"));
 	m_codeEditor->setAccessibleDescription(tr("Edits project scripts, configs, shaders, and QuakeC with syntax highlighting and compiler diagnostics."));
 	m_codeEditor->setLineWrapMode(QPlainTextEdit::NoWrap);
-	m_codeEditor->setTabStopDistance(32);
-	m_codeEditor->setMinimumHeight(280);
+	m_codeEditor->setFont(studioMonospaceFont());
+	m_codeEditor->setTabStopDistance(QFontMetricsF(m_codeEditor->font()).horizontalAdvance(QLatin1Char(' ')) * 4.0);
+	m_codeEditor->setMinimumHeight(200);
+	m_codeEditor->setPlaceholderText(tr("Choose a file under Project files to edit it here."));
 	m_codeHighlighter = new StudioSyntaxHighlighter(m_codeEditor->document());
 	connect(m_codeEditor, &QPlainTextEdit::textChanged, this, [this]() {
 		if (!m_codeDirty && !m_codeFilePath.isEmpty()) {
 			m_codeDirty = true;
 			if (m_codeStatus) {
-				m_codeStatus->setText(tr("Modified: %1").arg(QDir::toNativeSeparators(m_codeFilePath)));
+				m_codeStatus->setText(codeDocumentLabel(m_codeFilePath, tr("Modified")));
+				m_codeStatus->setToolTip(nativePath(m_codeFilePath));
 			}
 			refreshCommandEnablement();
 		}
 	});
+
+	auto* editorPane = new QWidget;
+	auto* editorLayout = new QVBoxLayout(editorPane);
+	editorLayout->setContentsMargins(0, 0, 0, 0);
+	editorLayout->setSpacing(0);
+	editorLayout->addWidget(m_codeStatus);
 	editorLayout->addWidget(m_codeEditor, 1);
-
-	auto* findRow = new QHBoxLayout;
-	findRow->setSpacing(8);
-	m_codeFind = new QLineEdit;
-	m_codeFind->setAccessibleName(tr("Find text"));
-	m_codeFind->setPlaceholderText(tr("Find across project text and script files"));
-	findRow->addWidget(m_codeFind, 1);
-
-	m_codeReplace = new QLineEdit;
-	m_codeReplace->setAccessibleName(tr("Replace text"));
-	m_codeReplace->setPlaceholderText(tr("Replace with (leave empty to only search)"));
-	findRow->addWidget(m_codeReplace, 1);
-
-	auto* runFind = new QPushButton(style()->standardIcon(QStyle::SP_FileDialogContentsView), tr("Find / Replace"));
-	runFind->setAccessibleName(tr("Run project find and replace"));
-	runFind->setToolTip(tr("Search every project text file. Replacements are previewed before anything is written."));
-	connect(runFind, &QPushButton::clicked, this, [this]() {
-		runCodeFindReplace();
-	});
-	findRow->addWidget(runFind);
-	editorLayout->addLayout(findRow);
 
 	m_codeDiagnostics = new QListWidget;
 	m_codeDiagnostics->setObjectName("codeDiagnostics");
 	m_codeDiagnostics->setAccessibleName(tr("Code diagnostics"));
 	m_codeDiagnostics->setAccessibleDescription(tr("Syntax and compiler diagnostics for the open file. Activate a row to jump to its line."));
-	m_codeDiagnostics->setMinimumHeight(120);
 	connect(m_codeDiagnostics, &QListWidget::itemActivated, this, [this](QListWidgetItem* item) {
 		if (!item || !m_codeEditor) {
 			return;
@@ -2598,29 +3509,109 @@ QWidget* ApplicationShell::buildCodePage()
 		m_codeEditor->centerCursor();
 		m_codeEditor->setFocus();
 	});
-	editorLayout->addWidget(m_codeDiagnostics);
-
-	codeSplit->addWidget(editorPane);
-	codeSplit->setStretchFactor(0, 1);
-	codeSplit->setStretchFactor(1, 3);
-	centerLayout->addWidget(codeSplit, 1);
 
 	m_advancedCodeTree = new QListWidget;
 	m_advancedCodeTree->setAccessibleName(tr("Code source index"));
 	m_advancedCodeTree->setAccessibleDescription(tr("Project source index, language hooks, symbol search, diagnostics, build tasks, and launch profiles."));
-	m_advancedCodeTree->setMinimumHeight(140);
-	centerLayout->addWidget(m_advancedCodeTree);
-	centerLayout->addStretch(1);
-	scroll->setWidget(center);
-	pageLayout->addWidget(scroll);
-	return page;
+
+	auto* bottomTabs = createPanelTabs(tr("Code output panels"), QTabWidget::South);
+	bottomTabs->addTab(m_codeDiagnostics, studioIcon(QStringLiteral("warning")), tr("Problems"));
+	bottomTabs->addTab(m_advancedCodeTree, studioIcon(QStringLiteral("hash")), tr("Index"));
+
+	auto* editorSplit = createSplitter(Qt::Vertical, QStringLiteral("codeEditorSplit"), tr("Editor and output"));
+	editorSplit->addWidget(editorPane);
+	editorSplit->addWidget(padded(bottomTabs, 10, 6, 8));
+	editorSplit->setStretchFactor(0, 3);
+	editorSplit->setStretchFactor(1, 1);
+	editorSplit->setSizes({560, 200});
+	m_layoutSplitters.insert(editorSplit->objectName(), editorSplit);
+
+	auto* workbench = createSplitter(Qt::Horizontal, QStringLiteral("codeWorkbench"), tr("Code workbench layout"));
+	workbench->addWidget(padded(captionedPanel(tr("Project files"), m_codeTree), 10, 8, 10));
+	workbench->addWidget(editorSplit);
+	workbench->setStretchFactor(0, 0);
+	workbench->setStretchFactor(1, 1);
+	workbench->setSizes({scaledPane(270), 1000});
+	m_layoutSplitters.insert(workbench->objectName(), workbench);
+
+	auto* empty = new EmptyStateView(QStringLiteral("code"), tr("No project open"),
+		tr("Open a project folder to browse and edit its scripts, configs, shaders, and QuakeC with highlighting and diagnostics."));
+	QPushButton* emptyOpen = empty->addAction(tr("Open Project"), QStringLiteral("folder-open"), true);
+	connect(emptyOpen, &QPushButton::clicked, this, [this]() {
+		openProjectFolder();
+	});
+	auto* stack = new QStackedWidget;
+	stack->addWidget(empty);
+	stack->addWidget(workbench);
+	m_surfaceStacks.insert(static_cast<int>(StudioMode::Code), stack);
+	m_emptyStates.insert(static_cast<int>(StudioMode::Code), empty);
+	return assembleStudioPage(header, toolBar, stack);
 }
 
 QWidget* ApplicationShell::buildSidePanel()
 {
+	// Activity: every queued, running, and finished task with its log.
+	auto* activity = new QWidget;
+	activity->setObjectName(QStringLiteral("dockBody"));
+	activity->setAttribute(Qt::WA_StyledBackground, true);
+	auto* activityLayout = new QVBoxLayout(activity);
+	activityLayout->setContentsMargins(10, 10, 10, 10);
+	activityLayout->setSpacing(8);
+	m_activitySummary = new QLabel;
+	m_activitySummary->setObjectName("cardMeta");
+	m_activitySummary->setAccessibleName(tr("Activity summary"));
+	m_activitySummary->setWordWrap(true);
+	activityLayout->addWidget(m_activitySummary);
+
+	m_activityTasks = new QListWidget;
+	m_activityTasks->setObjectName("activityTasks");
+	m_activityTasks->setAccessibleName(tr("Activity tasks"));
+	m_activityTasks->setAccessibleDescription(tr("Queued, running, warning, failed, cancelled, and completed tasks."));
+	m_activityTasks->setMinimumHeight(160);
+	connect(m_activityTasks, &QListWidget::itemSelectionChanged, this, [this]() {
+		refreshActivityDetails(selectedActivityTaskId());
+	});
+	activityLayout->addWidget(m_activityTasks, 2);
+
+	auto* activityActions = new QHBoxLayout;
+	activityActions->setSpacing(6);
+	m_activityCancel = createButton(tr("Cancel"), QStringLiteral("stop"));
+	m_activityCancel->setAccessibleName(tr("Cancel selected activity"));
+	connect(m_activityCancel, &QPushButton::clicked, this, [this]() {
+		cancelSelectedActivityTask();
+	});
+	activityActions->addWidget(m_activityCancel);
+	activityActions->addStretch(1);
+	m_activityClearFinished = createButton(tr("Clear Finished"), QStringLiteral("trash"), QStringLiteral("ghost"));
+	m_activityClearFinished->setAccessibleName(tr("Clear finished activities"));
+	connect(m_activityClearFinished, &QPushButton::clicked, this, [this]() {
+		clearFinishedActivityTasks();
+	});
+	activityActions->addWidget(m_activityClearFinished);
+	activityLayout->addLayout(activityActions);
+
+	m_activityState = new LoadingPane;
+	m_activityState->setAccessibleName(tr("Selected activity state"));
+	m_activityState->setPlaceholderRows({
+		tr("Task context"),
+		tr("Result summary"),
+		tr("Structured log"),
+	});
+	activityLayout->addWidget(m_activityState);
+
+	m_activityDrawer = new DetailDrawer;
+	m_activityDrawer->setAccessibleName(tr("Activity detail drawer"));
+	m_activityDrawer->setTitle(tr("Task Details"));
+	m_activityDrawer->setSubtitle(tr("Select an activity to inspect logs, warnings, timing, and raw task metadata."));
+	m_activityDrawer->setEmbedded(true);
+	activityLayout->addWidget(m_activityDrawer, 3);
+
+	// Inspector: settings, setup, and project diagnostics for support work.
 	auto* inspectorPage = new QWidget;
+	inspectorPage->setObjectName(QStringLiteral("dockBody"));
+	inspectorPage->setAttribute(Qt::WA_StyledBackground, true);
 	auto* inspectorLayout = new QVBoxLayout(inspectorPage);
-	inspectorLayout->setContentsMargins(12, 12, 12, 12);
+	inspectorLayout->setContentsMargins(10, 10, 10, 10);
 	inspectorLayout->setSpacing(8);
 
 	m_inspectorState = new LoadingPane;
@@ -2637,71 +3628,85 @@ QWidget* ApplicationShell::buildSidePanel()
 	m_inspector->setAccessibleName(tr("Inspector"));
 	m_inspector->setAccessibleDescription(tr("Shows settings, recent project, compiler, and project diagnostics."));
 	m_inspector->setReadOnly(true);
-	m_inspector->setMinimumHeight(150);
-	inspectorLayout->addWidget(m_inspector, 1);
+	m_inspector->setMinimumHeight(120);
+	m_inspector->setMaximumHeight(220);
+	inspectorLayout->addWidget(m_inspector);
 
 	m_inspectorDrawer = new DetailDrawer;
 	m_inspectorDrawer->setAccessibleName(tr("Inspector detail drawer"));
 	m_inspectorDrawer->setTitle(tr("Inspector Details"));
 	m_inspectorDrawer->setSubtitle(tr("Settings, setup, and raw diagnostics."));
-	inspectorLayout->addWidget(m_inspectorDrawer, 2);
+	m_inspectorDrawer->setEmbedded(true);
+	inspectorLayout->addWidget(m_inspectorDrawer, 1);
 
-	auto* activity = new QWidget;
-	auto* activityLayout = new QVBoxLayout(activity);
-	activityLayout->setContentsMargins(12, 12, 12, 12);
-	activityLayout->setSpacing(8);
-	m_activitySummary = new QLabel;
-	m_activitySummary->setObjectName("moduleTitle");
-	m_activitySummary->setAccessibleName(tr("Activity summary"));
-	activityLayout->addWidget(m_activitySummary);
+	m_activityDock = new QDockWidget(tr("Activity"), this);
+	m_activityDock->setObjectName(QStringLiteral("activityDock"));
+	m_activityDock->setAccessibleName(tr("Activity panel"));
+	m_activityDock->setAllowedAreas(Qt::LeftDockWidgetArea | Qt::RightDockWidgetArea | Qt::BottomDockWidgetArea);
+	m_activityDock->setWidget(activity);
+	m_activityDock->setTitleBarWidget(new DockTitleBar(m_activityDock));
+	m_activityDock->setMinimumWidth(300);
+	addDockWidget(Qt::RightDockWidgetArea, m_activityDock);
 
-	m_activityTasks = new QListWidget;
-	m_activityTasks->setObjectName("activityTasks");
-	m_activityTasks->setAccessibleName(tr("Activity tasks"));
-	m_activityTasks->setAccessibleDescription(tr("Queued, running, warning, failed, cancelled, and completed tasks."));
-	m_activityTasks->setMinimumHeight(190);
-	connect(m_activityTasks, &QListWidget::itemSelectionChanged, this, [this]() {
-		refreshActivityDetails(selectedActivityTaskId());
-	});
-	activityLayout->addWidget(m_activityTasks);
+	m_inspectorDock = new QDockWidget(tr("Inspector"), this);
+	m_inspectorDock->setObjectName(QStringLiteral("inspectorDock"));
+	m_inspectorDock->setAccessibleName(tr("Inspector panel"));
+	m_inspectorDock->setAllowedAreas(Qt::LeftDockWidgetArea | Qt::RightDockWidgetArea | Qt::BottomDockWidgetArea);
+	m_inspectorDock->setWidget(inspectorPage);
+	m_inspectorDock->setTitleBarWidget(new DockTitleBar(m_inspectorDock));
+	m_inspectorDock->setMinimumWidth(300);
+	addDockWidget(Qt::RightDockWidgetArea, m_inspectorDock);
+	tabifyDockWidget(m_activityDock, m_inspectorDock);
+	m_activityDock->raise();
 
-	m_activityState = new LoadingPane;
-	m_activityState->setAccessibleName(tr("Selected activity state"));
-	m_activityState->setPlaceholderRows({
-		tr("Task context"),
-		tr("Result summary"),
-		tr("Structured log"),
-	});
-	activityLayout->addWidget(m_activityState);
+	// Both panels start closed so every work surface gets the full width; the
+	// status bar and the View menu open them, and the window state remembers
+	// the user's arrangement from then on.
+	m_activityDock->hide();
+	m_inspectorDock->hide();
 
-	m_activityDrawer = new DetailDrawer;
-	m_activityDrawer->setAccessibleName(tr("Activity detail drawer"));
-	m_activityDrawer->setTitle(tr("Task Details"));
-	m_activityDrawer->setSubtitle(tr("Select an activity to inspect logs, warnings, timing, and raw task metadata."));
-	activityLayout->addWidget(m_activityDrawer, 1);
-
-	auto* activityActions = new QHBoxLayout;
-	activityActions->addStretch(1);
-	m_activityCancel = new QPushButton(style()->standardIcon(QStyle::SP_DialogCancelButton), tr("Cancel"));
-	m_activityCancel->setAccessibleName(tr("Cancel selected activity"));
-	connect(m_activityCancel, &QPushButton::clicked, this, [this]() {
-		cancelSelectedActivityTask();
-	});
-	activityActions->addWidget(m_activityCancel);
-
-	m_activityClearFinished = new QPushButton(style()->standardIcon(QStyle::SP_DialogDiscardButton), tr("Clear Finished"));
-	m_activityClearFinished->setAccessibleName(tr("Clear finished activities"));
-	connect(m_activityClearFinished, &QPushButton::clicked, this, [this]() {
-		clearFinishedActivityTasks();
-	});
-	activityActions->addWidget(m_activityClearFinished);
-	activityLayout->addLayout(activityActions);
-
-	auto* sideTabs = new QTabWidget;
-	sideTabs->setAccessibleName(tr("Inspector and activity center"));
-	sideTabs->addTab(inspectorPage, tr("Inspector"));
-	sideTabs->addTab(activity, tr("Activity"));
-	return sideTabs;
+	QAction* activityToggle = m_activityDock->toggleViewAction();
+	activityToggle->setText(tr("&Activity Panel"));
+	activityToggle->setIcon(studioIcon(QStringLiteral("activity")));
+	activityToggle->setStatusTip(tr("Show or hide the task list with progress, logs, warnings, and cancellation."));
+	QAction* inspectorToggle = m_inspectorDock->toggleViewAction();
+	inspectorToggle->setText(tr("&Inspector Panel"));
+	inspectorToggle->setIcon(studioIcon(QStringLiteral("sidebar-right")));
+	inspectorToggle->setStatusTip(tr("Show or hide settings, setup, and project diagnostics."));
+	if (QMenu* viewMenu = m_viewMenu) {
+		viewMenu->addSeparator();
+		viewMenu->addAction(activityToggle);
+		viewMenu->addAction(inspectorToggle);
+	}
+	if (m_activityToggle) {
+		connect(m_activityToggle, &QToolButton::clicked, this, [this]() {
+			const bool show = !m_activityDock->isVisible();
+			m_activityDock->setVisible(show);
+			if (show) {
+				m_activityDock->raise();
+			}
+		});
+		connect(m_activityDock, &QDockWidget::visibilityChanged, this, [this](bool) {
+			if (m_activityToggle) {
+				m_activityToggle->setChecked(m_activityDock->isVisible());
+			}
+		});
+	}
+	if (m_inspectorToggle) {
+		connect(m_inspectorToggle, &QToolButton::clicked, this, [this]() {
+			const bool show = !m_inspectorDock->isVisible();
+			m_inspectorDock->setVisible(show);
+			if (show) {
+				m_inspectorDock->raise();
+			}
+		});
+		connect(m_inspectorDock, &QDockWidget::visibilityChanged, this, [this](bool) {
+			if (m_inspectorToggle) {
+				m_inspectorToggle->setChecked(m_inspectorDock->isVisible());
+			}
+		});
+	}
+	return activity;
 }
 
 
@@ -2709,28 +3714,28 @@ void ApplicationShell::loadShellState()
 {
 	if (m_modeRail && m_modeRail->count() > 0) {
 		const int savedMode = std::clamp(m_settings.selectedMode(), 0, m_modeRail->count() - 1);
-		const QSignalBlocker blocker(m_modeRail);
-		m_modeRail->setCurrentRow(savedMode);
+		m_modeRail->setCurrentId(savedMode);
 		if (m_modeStack) {
 			m_modeStack->setCurrentIndex(savedMode);
 		}
 	}
-
 
 	const QByteArray geometry = m_settings.shellGeometry();
 	if (!geometry.isEmpty()) {
 		restoreGeometry(geometry);
 	}
 
+	// Dock visibility and placement come back through the window state; a
+	// state saved before the docks existed leaves them at their defaults.
 	const QByteArray windowState = m_settings.shellWindowState();
 	if (!windowState.isEmpty()) {
 		restoreState(windowState);
 	}
 
-	if (m_mainSplitter) {
-		const QByteArray splitterState = m_settings.shellSplitterState();
-		if (!splitterState.isEmpty()) {
-			m_mainSplitter->restoreState(splitterState);
+	for (auto it = m_layoutSplitters.cbegin(); it != m_layoutSplitters.cend(); ++it) {
+		const QByteArray splitterState = m_settings.shellLayoutState(it.key());
+		if (!splitterState.isEmpty() && it.value()) {
+			it.value()->restoreState(splitterState);
 		}
 	}
 }
@@ -2738,12 +3743,14 @@ void ApplicationShell::loadShellState()
 void ApplicationShell::saveShellState()
 {
 	if (m_modeRail) {
-		m_settings.setSelectedMode(m_modeRail->currentRow());
+		m_settings.setSelectedMode(m_modeRail->currentId());
 	}
 	m_settings.setShellGeometry(saveGeometry());
 	m_settings.setShellWindowState(saveState());
-	if (m_mainSplitter) {
-		m_settings.setShellSplitterState(m_mainSplitter->saveState());
+	for (auto it = m_layoutSplitters.cbegin(); it != m_layoutSplitters.cend(); ++it) {
+		if (it.value()) {
+			m_settings.setShellLayoutState(it.key(), it.value()->saveState());
+		}
 	}
 }
 
@@ -2775,6 +3782,9 @@ void ApplicationShell::refreshWorkspaceDashboard()
 		manifest = defaultProjectManifest(projectPath);
 		manifest.selectedInstallationId = m_settings.selectedGameInstallationId();
 	}
+	// Watch the manifest so a change made by another tool, or by hand, does not
+	// sit unnoticed behind the workspace panels built from it.
+	registerWatchedDocument(projectManifestPath(projectPath), DocumentWatchRole::ProjectManifest, QString(), false);
 	const ProjectHealthSummary health = buildProjectHealthSummary(manifest, m_settings.selectedGameInstallationId());
 	const OperationState state = health.overallState();
 	const QString effectiveInstallation = effectiveProjectInstallationId(manifest, m_settings.selectedGameInstallationId());
@@ -2888,15 +3898,24 @@ void ApplicationShell::refreshRecentProjects()
 	const QVector<RecentProject> projects = m_settings.recentProjects();
 	m_recentSummary->setText(tr("%n remembered", nullptr, projects.size()));
 
+	const QString separator = QStringLiteral("  %1  ").arg(QChar(0x00b7));
+	const QString currentPath = normalizedProjectPath(m_settings.currentProjectPath());
 	for (const RecentProject& project : projects) {
 		const QString state = project.exists ? tr("Ready") : tr("Missing");
 		const QString timestamp = QLocale::system().toString(project.lastOpenedUtc.toLocalTime(), QLocale::ShortFormat);
-		auto* item = new QListWidgetItem(QStringLiteral("%1 [%2]\n%3\n%4")
-			.arg(project.displayName, state, nativePath(project.path), timestamp));
-		item->setData(Qt::UserRole, project.path);
-		item->setToolTip(nativePath(project.path));
+		QString title = project.displayName;
 		if (!project.exists) {
-			item->setForeground(QColor("#ffcf70"));
+			title += separator + tr("missing");
+		} else if (!currentPath.isEmpty() && project.path == currentPath) {
+			title += separator + tr("open");
+		}
+		auto* item = new QListWidgetItem(studioIcon(project.exists ? QStringLiteral("folder") : QStringLiteral("warning"), project.exists ? StudioIconTone::Muted : StudioIconTone::Warning),
+			QStringLiteral("%1\n%2").arg(title, nativePath(project.path) + separator + timestamp));
+		item->setData(Qt::UserRole, project.path);
+		item->setToolTip(tr("%1\n%2\nLast opened %3. Double-click to open.").arg(project.displayName, nativePath(project.path), timestamp));
+		item->setData(Qt::AccessibleTextRole, tr("%1, %2, %3").arg(project.displayName, state, nativePath(project.path)));
+		if (!project.exists) {
+			item->setForeground(currentStudioTheme().colors.warning);
 		}
 		m_recentProjects->addItem(item);
 	}
@@ -2943,8 +3962,15 @@ void ApplicationShell::refreshGameInstallations()
 		const GameInstallationValidation validation = validateGameInstallationProfile(profile);
 		const bool selected = sameGameInstallationId(profile.id, selectedId);
 		const QString state = validation.isUsable() ? tr("Ready") : tr("Needs Review");
-		auto* item = new QListWidgetItem(QStringLiteral("%1%2 [%3]\n%4\n%5")
-			.arg(selected ? tr("* ") : QString(), profile.displayName, state, localizedGameEngineFamilyName(profile.engineFamily), nativePath(profile.rootPath)));
+		const QString separator = QStringLiteral("  %1  ").arg(QChar(0x00b7));
+		QString title = profile.displayName + separator + state;
+		if (selected) {
+			title += separator + tr("in use");
+		}
+		auto* item = new QListWidgetItem(studioIcon(QStringLiteral("gamepad"), selected ? StudioIconTone::Accent : StudioIconTone::Muted),
+			QStringLiteral("%1\n%2").arg(title, localizedGameEngineFamilyName(profile.engineFamily) + separator + nativePath(profile.rootPath)));
+		item->setData(Qt::AccessibleTextRole, tr("%1, %2%3, %4, %5").arg(profile.displayName, state, selected ? tr(", in use") : QString(),
+			localizedGameEngineFamilyName(profile.engineFamily), nativePath(profile.rootPath)));
 		item->setData(Qt::UserRole, profile.id);
 		item->setData(Qt::UserRole + 1, operationStateId(validation.isUsable() ? OperationState::Completed : OperationState::Warning));
 		item->setData(Qt::UserRole + 2, QStringLiteral("profile"));
@@ -2959,10 +3985,11 @@ void ApplicationShell::refreshGameInstallations()
 		m_gameInstallations->addItem(disabledListItem(tr("Detected candidates")));
 		for (int index = 0; index < m_detectedInstallationCandidates.size(); ++index) {
 			const GameInstallationDetectionCandidate& candidate = m_detectedInstallationCandidates[index];
-			auto* item = new QListWidgetItem(QStringLiteral("%1 [%2 / %3%]\n%4\n%5")
-				.arg(candidate.profile.displayName, candidate.sourceName)
-				.arg(candidate.confidencePercent)
-				.arg(localizedGameEngineFamilyName(candidate.profile.engineFamily), nativePath(candidate.profile.rootPath)));
+			const QString separator = QStringLiteral("  %1  ").arg(QChar(0x00b7));
+			auto* item = new QListWidgetItem(studioIcon(QStringLiteral("search"), StudioIconTone::Muted),
+				QStringLiteral("%1\n%2")
+					.arg(candidate.profile.displayName + separator + tr("%1, %2% match").arg(candidate.sourceName).arg(candidate.confidencePercent),
+						localizedGameEngineFamilyName(candidate.profile.engineFamily) + separator + nativePath(candidate.profile.rootPath)));
 			item->setData(Qt::UserRole, candidate.profile.id);
 			item->setData(Qt::UserRole + 1, operationStateId(candidate.confidencePercent >= 80 ? OperationState::Completed : OperationState::Warning));
 			item->setData(Qt::UserRole + 2, QStringLiteral("candidate"));
@@ -3225,6 +4252,15 @@ void ApplicationShell::loadPackagePath(const QString& path)
 	persistActivityTask(m_packageActivityId);
 
 	m_packageArchive = loadedPackage;
+	// A different package starts at its root; reloading the same one keeps the
+	// folder the user was in.
+	if (m_packageBrowseSource != absolutePath) {
+		m_packageBrowseSource = absolutePath;
+		m_packageBrowseFolder.clear();
+		m_packageFolderHistory = {QString()};
+		m_packageFolderHistoryIndex = 0;
+	}
+	registerWatchedDocument(absolutePath, DocumentWatchRole::Package);
 	refreshPackageBrowser();
 	refreshWorkspaceDashboard();
 	refreshActivityCenter(m_packageActivityId);
@@ -3307,7 +4343,9 @@ void ApplicationShell::refreshProjectProblemsPanel()
 	const QString projectPath = m_settings.currentProjectPath();
 	const CompilerRegistrySummary compilerRegistry = discoverCompilerTools(compilerRegistryOptionsForProject(projectPath, m_settings));
 	const auto addProblem = [this](const QString& title, const QString& detail, OperationState state, const QString& filePath = QString(), const QString& virtualPath = QString()) {
-		auto* item = new QListWidgetItem(QStringLiteral("%1 [%2]\n%3").arg(title, localizedOperationStateName(state), detail));
+		auto* item = new QListWidgetItem(QStringLiteral("%1  %2\n%3").arg(studioStateGlyph(state), title, detail));
+		item->setToolTip(QStringLiteral("%1 (%2)\n%3").arg(title, localizedOperationStateName(state), detail));
+		item->setData(Qt::AccessibleTextRole, QStringLiteral("%1, %2. %3").arg(title, localizedOperationStateName(state), detail));
 		item->setData(Qt::UserRole, filePath);
 		item->setData(Qt::UserRole + 1, virtualPath);
 		item->setData(Qt::UserRole + 2, operationStateId(state));
@@ -3436,29 +4474,69 @@ void ApplicationShell::refreshChangedFilesPanel()
 		return;
 	}
 
-	QProcess git;
-	git.start(QStringLiteral("git"), {QStringLiteral("-C"), gitRoot, QStringLiteral("status"), QStringLiteral("--short")});
-	if (!git.waitForStarted(1000) || !git.waitForFinished(2000) || git.exitStatus() != QProcess::NormalExit || git.exitCode() != 0) {
-		m_changedFiles->addItem(disabledListItem(tr("Git status is unavailable.")));
-		return;
+	// Git runs off the UI thread: a large repository can take seconds to report,
+	// and the panel must never freeze the studio while it does.
+	if (m_gitStatusProcess) {
+		m_gitStatusProcess->disconnect(this);
+		m_gitStatusProcess->kill();
+		// Reaping the killed process first keeps QProcess from warning that it
+		// was destroyed while running.
+		m_gitStatusProcess->waitForFinished(500);
+		m_gitStatusProcess->deleteLater();
+		m_gitStatusProcess = nullptr;
 	}
-
-	const QString output = QString::fromLocal8Bit(git.readAllStandardOutput());
-	const QStringList lines = output.split('\n', Qt::SkipEmptyParts);
-	if (lines.isEmpty()) {
-		m_changedFiles->addItem(disabledListItem(tr("No changed or staged files.")));
-		return;
-	}
-
-	for (const QString& line : lines) {
-		const QString relativePath = statusPathFromGitLine(line);
-		const QString absolutePath = QDir(gitRoot).absoluteFilePath(relativePath);
-		auto* item = new QListWidgetItem(QStringLiteral("%1\n%2").arg(line.left(2).trimmed().isEmpty() ? tr("modified") : line.left(2), relativePath));
-		item->setData(Qt::UserRole, absolutePath);
-		item->setData(Qt::UserRole + 1, workspaceVirtualPath(gitRoot, absolutePath));
-		item->setData(Qt::UserRole + 2, QStringLiteral("git"));
-		m_changedFiles->addItem(item);
-	}
+	m_changedFiles->addItem(disabledListItem(tr("Reading Git status...")));
+	auto* git = new QProcess(this);
+	m_gitStatusProcess = git;
+	const int generation = ++m_gitStatusGeneration;
+	auto finish = [this, git, generation, gitRoot](bool succeeded) {
+		git->deleteLater();
+		if (generation != m_gitStatusGeneration) {
+			return;
+		}
+		m_gitStatusProcess = nullptr;
+		if (!m_changedFiles) {
+			return;
+		}
+		m_changedFiles->clear();
+		if (!succeeded) {
+			m_changedFiles->addItem(disabledListItem(tr("Git status is unavailable.")));
+			return;
+		}
+		const QString output = QString::fromLocal8Bit(git->readAllStandardOutput());
+		const QStringList lines = output.split('\n', Qt::SkipEmptyParts);
+		if (lines.isEmpty()) {
+			m_changedFiles->addItem(disabledListItem(tr("No changed or staged files.")));
+			return;
+		}
+		for (const QString& line : lines) {
+			const QString relativePath = statusPathFromGitLine(line);
+			const QString absolutePath = QDir(gitRoot).absoluteFilePath(relativePath);
+			auto* item = new QListWidgetItem(QStringLiteral("%1\n%2").arg(line.left(2).trimmed().isEmpty() ? tr("modified") : line.left(2), relativePath));
+			item->setData(Qt::UserRole, absolutePath);
+			item->setData(Qt::UserRole + 1, workspaceVirtualPath(gitRoot, absolutePath));
+			item->setData(Qt::UserRole + 2, QStringLiteral("git"));
+			m_changedFiles->addItem(item);
+		}
+	};
+	connect(git, &QProcess::finished, this, [git, finish](int exitCode, QProcess::ExitStatus status) {
+		Q_UNUSED(git);
+		finish(status == QProcess::NormalExit && exitCode == 0);
+	});
+	connect(git, &QProcess::errorOccurred, this, [git, finish](QProcess::ProcessError error) {
+		// A crash or timeout also emits finished(); only a failed start is
+		// reported here, since nothing else will follow it.
+		if (error == QProcess::FailedToStart) {
+			Q_UNUSED(git);
+			finish(false);
+		}
+	});
+	QTimer::singleShot(15000, git, [git]() {
+		if (git->state() != QProcess::NotRunning) {
+			git->kill();
+		}
+	});
+	git->start(QStringLiteral("git"), {QStringLiteral("-C"), gitRoot, QStringLiteral("status"), QStringLiteral("--short")});
 }
 
 void ApplicationShell::refreshProjectDependencyGraph()
@@ -3557,7 +4635,9 @@ void ApplicationShell::refreshRecentActivityTimeline()
 		const ActivityTimelineEntry& task = tasks[index];
 		const QString timestamp = QLocale::system().toString(task.updatedUtc.toLocalTime(), QLocale::ShortFormat);
 		const QString detail = task.resultSummary.isEmpty() ? task.detail : task.resultSummary;
-		auto* item = new QListWidgetItem(QStringLiteral("%1 [%2]\n%3 / %4").arg(task.title, localizedOperationStateName(task.state), timestamp, detail));
+		auto* item = new QListWidgetItem(QStringLiteral("%1  %2\n%3").arg(studioStateGlyph(task.state), task.title, detail.isEmpty() ? timestamp : timestamp + QStringLiteral("  %1  ").arg(QChar(0x00b7)) + detail));
+		item->setToolTip(QStringLiteral("%1 (%2)\n%3\n%4").arg(task.title, localizedOperationStateName(task.state), timestamp, detail));
+		item->setData(Qt::AccessibleTextRole, QStringLiteral("%1, %2, %3. %4").arg(task.title, localizedOperationStateName(task.state), timestamp, detail));
 		item->setData(Qt::UserRole, task.detail);
 		item->setData(Qt::UserRole + 1, QString());
 		item->setData(Qt::UserRole + 2, task.id);
@@ -3645,6 +4725,7 @@ void ApplicationShell::loadLevelMapPath(const QString& path)
 			m_levelMapCompilerProfile->setCurrentIndex(index);
 		}
 	}
+	registerWatchedDocument(document.sourcePath, DocumentWatchRole::LevelMap, document.mapName);
 	recordActivity(tr("Level map inspected"), nativePath(document.sourcePath), QStringLiteral("level-map"), document.issues.isEmpty() ? OperationState::Completed : OperationState::Warning, tr("%1 issues").arg(document.issues.size()));
 	refreshLevelMapWorkbench();
 }
@@ -3652,10 +4733,17 @@ void ApplicationShell::loadLevelMapPath(const QString& path)
 void ApplicationShell::refreshLevelMapWorkbench()
 {
 	refreshLevelMapViewport();
+	refreshEntityInspector();
 	refreshCommandEnablement();
 	if (!m_levelMapState || !m_levelMapObjects || !m_levelMapStatistics || !m_levelMapView || !m_levelMapValidation || !m_levelMapDrawer) {
 		return;
 	}
+
+	// The document is the source of truth for the duration of a refresh. The
+	// list only drives the document from the user's own itemSelectionChanged.
+	const bool wasSyncing = m_syncingLevelMapSelection;
+	m_syncingLevelMapSelection = true;
+	const QSignalBlocker objectsBlocker(m_levelMapObjects);
 
 	m_levelMapObjects->clear();
 	m_levelMapStatistics->clear();
@@ -3689,12 +4777,23 @@ void ApplicationShell::refreshLevelMapWorkbench()
 		const QString selectedSelector = m_levelMapDocument.selectionKind == LevelMapSelectionKind::None
 			? QString()
 			: QStringLiteral("%1:%2").arg(levelMapSelectionKindId(m_levelMapDocument.selectionKind)).arg(m_levelMapDocument.selectedObjectId);
-		auto addObject = [this, &selectedSelector](const QString& selector, const QString& label, const QString& detail) {
+		QSet<QString> selectedSelectors;
+		selectedSelectors.reserve(m_levelMapDocument.selection.size());
+		for (const LevelMapSelectionRef& ref : m_levelMapDocument.selection) {
+			selectedSelectors.insert(QStringLiteral("%1:%2").arg(levelMapSelectionKindId(ref.kind)).arg(ref.objectId));
+		}
+		auto addObject = [this, &selectedSelector, &selectedSelectors](const QString& selector, const QString& label, const QString& detail) {
 			auto* item = new QListWidgetItem(QStringLiteral("%1\n%2").arg(label, detail));
 			item->setData(Qt::UserRole, selector);
 			m_levelMapObjects->addItem(item);
+			if (selectedSelectors.contains(selector)) {
+				item->setSelected(true);
+			}
 			if (!selectedSelector.isEmpty() && selector == selectedSelector) {
-				m_levelMapObjects->setCurrentItem(item);
+				// NoUpdate keeps the current item from clearing the rest of the
+				// set that was just restored above.
+				m_levelMapObjects->setCurrentItem(item, QItemSelectionModel::NoUpdate);
+				item->setSelected(true);
 			}
 		};
 		for (const LevelMapEntity& entity : m_levelMapDocument.entities) {
@@ -3763,6 +4862,44 @@ void ApplicationShell::refreshLevelMapWorkbench()
 			m_levelMapValidation->addItem(disabledListItem(
 				tr("Open the package that provides this map's textures to check for missing ones.")));
 		}
+
+		// Entity problems sit beside texture problems: both are things the map
+		// asks for that its surroundings may not provide.
+		if (!m_entityDefinitions.isEmpty()) {
+			m_entityValidation = validateLevelMapEntities(m_levelMapDocument, m_entityDefinitions);
+			if (m_entityValidation.issueCount > 0) {
+				auto* header = new QListWidgetItem(tr("ENTITIES [%1]\n%n issue(s) against %2 definition(s).",
+					nullptr, m_entityValidation.issueCount)
+					.arg(localizedOperationStateName(m_entityValidation.state()))
+					.arg(m_entityDefinitions.classes.size()));
+				header->setData(Qt::UserRole + 2, operationStateId(m_entityValidation.state()));
+				m_levelMapValidation->addItem(header);
+				int shown = 0;
+				for (const EntityValidationIssue& issue : m_entityValidation.issues) {
+					if (shown++ >= 40) {
+						m_levelMapValidation->addItem(disabledListItem(
+							tr("%n further entity issue(s) not listed.", nullptr, m_entityValidation.issueCount - shown + 1)));
+						break;
+					}
+					const OperationState state = issue.severity == EntityIssueSeverity::Error
+						? OperationState::Failed
+						: (issue.severity == EntityIssueSeverity::Warning ? OperationState::Warning : OperationState::Idle);
+					auto* item = new QListWidgetItem(tr("  %1 %2").arg(issue.code, issue.message));
+					if (issue.entityId >= 0) {
+						item->setData(Qt::UserRole, QStringLiteral("entity:%1").arg(issue.entityId));
+					}
+					item->setData(Qt::UserRole + 2, operationStateId(state));
+					m_levelMapValidation->addItem(item);
+				}
+			} else if (m_entityValidation.entityCount > 0) {
+				m_levelMapValidation->addItem(tr("ENTITIES [%1]\nAll %n entit(y)(ies) match the loaded definitions.",
+					nullptr, m_entityValidation.entityCount)
+					.arg(localizedOperationStateName(OperationState::Completed)));
+			}
+		} else if (!m_levelMapDocument.entities.isEmpty()) {
+			m_levelMapValidation->addItem(disabledListItem(
+				tr("Load entity definitions to check classnames, keys, spawnflags, and target references.")));
+		}
 	}
 
 	const bool canEdit = hasMap && m_levelMapDocument.selectionKind == LevelMapSelectionKind::Entity;
@@ -3783,6 +4920,7 @@ void ApplicationShell::refreshLevelMapWorkbench()
 		m_levelMapCopyCli->setEnabled(hasMap);
 	}
 	refreshLevelMapSelection();
+	m_syncingLevelMapSelection = wasSyncing;
 }
 
 void ApplicationShell::refreshLevelMapSelection()
@@ -3791,10 +4929,48 @@ void ApplicationShell::refreshLevelMapSelection()
 		return;
 	}
 	if (!m_syncingLevelMapSelection) {
-		const QString selector = selectedLevelMapObjectSelector();
-		if (!selector.isEmpty()) {
-			QString error;
-			selectLevelMapObject(&m_levelMapDocument, selector, &error);
+		// The list is the source of truth for this direction: replace the whole
+		// set so deselecting in the list clears it in the document and in the
+		// viewport, instead of leaving a stale primary behind.
+		QVector<LevelMapSelectionRef> selection;
+		const QList<QListWidgetItem*> chosen = m_levelMapObjects ? m_levelMapObjects->selectedItems() : QList<QListWidgetItem*>();
+		for (const QListWidgetItem* item : chosen) {
+			const QString selector = item->data(Qt::UserRole).toString();
+			const int separator = selector.indexOf(QLatin1Char(':'));
+			if (separator <= 0) {
+				continue;
+			}
+			LevelMapSelectionRef ref;
+			ref.kind = levelMapSelectionKindFromId(selector.left(separator));
+			bool parsed = false;
+			ref.objectId = selector.mid(separator + 1).toInt(&parsed);
+			if (!parsed || ref.kind == LevelMapSelectionKind::None) {
+				continue;
+			}
+			// The current item goes last so it stays the primary member, which
+			// is what the property drawer and the entity inspector read.
+			if (item == m_levelMapObjects->currentItem()) {
+				continue;
+			}
+			selection.append(ref);
+		}
+		const QString primary = selectedLevelMapObjectSelector();
+		const int primarySeparator = primary.indexOf(QLatin1Char(':'));
+		if (primarySeparator > 0 && m_levelMapObjects && m_levelMapObjects->currentItem()
+			&& m_levelMapObjects->currentItem()->isSelected()) {
+			LevelMapSelectionRef ref;
+			ref.kind = levelMapSelectionKindFromId(primary.left(primarySeparator));
+			bool parsed = false;
+			ref.objectId = primary.mid(primarySeparator + 1).toInt(&parsed);
+			if (parsed && ref.kind != LevelMapSelectionKind::None) {
+				selection.append(ref);
+			}
+		}
+		QString error;
+		setLevelMapSelection(&m_levelMapDocument, selection, &error);
+		if (m_levelMapViewport) {
+			const QSignalBlocker viewportBlocker(m_levelMapViewport);
+			m_levelMapViewport->setSelectionSet(m_levelMapDocument.selection);
 		}
 	}
 	const bool hasMap = !m_levelMapDocument.sourcePath.trimmed().isEmpty();
@@ -3807,6 +4983,7 @@ void ApplicationShell::refreshLevelMapSelection()
 		m_levelMapMoveSelection->setEnabled(canMove);
 	}
 	if (!hasMap) {
+		refreshEntityInspector();
 		return;
 	}
 
@@ -3821,6 +4998,8 @@ void ApplicationShell::refreshLevelMapSelection()
 		{QStringLiteral("undo"), tr("Undo"), tr("Edit state and undo history"), levelMapUndoLines(m_levelMapDocument).join('\n'), m_levelMapDocument.undoStack.isEmpty() ? OperationState::Idle : OperationState::Warning},
 	});
 	m_levelMapDrawer->showSection(QStringLiteral("properties"));
+	// The inspector follows the primary selection whichever surface set it.
+	refreshEntityInspector();
 }
 
 QString ApplicationShell::selectedLevelMapObjectSelector() const
@@ -3835,12 +5014,21 @@ void ApplicationShell::editSelectedLevelMapProperty()
 		statusBar()->showMessage(tr("Select an entity before editing a key."));
 		return;
 	}
+	// Start from the property row the user picked in the inspector, if any.
+	QString presetKey = QStringLiteral("targetname");
+	QString presetValue;
+	if (const QTreeWidgetItem* row = m_entityInspector ? m_entityInspector->currentItem() : nullptr) {
+		if (!row->data(0, Qt::UserRole).toString().isEmpty()) {
+			presetKey = row->data(0, Qt::UserRole).toString();
+			presetValue = row->data(1, Qt::UserRole).toString();
+		}
+	}
 	bool ok = false;
-	const QString key = QInputDialog::getText(this, tr("Edit Entity Key"), tr("Key"), QLineEdit::Normal, QStringLiteral("targetname"), &ok).trimmed();
+	const QString key = QInputDialog::getText(this, tr("Edit Entity Key"), tr("Key"), QLineEdit::Normal, presetKey, &ok).trimmed();
 	if (!ok || key.isEmpty()) {
 		return;
 	}
-	const QString value = QInputDialog::getText(this, tr("Edit Entity Value"), tr("Value"), QLineEdit::Normal, QString(), &ok);
+	const QString value = QInputDialog::getText(this, tr("Edit Entity Value"), tr("Value"), QLineEdit::Normal, key == presetKey ? presetValue : QString(), &ok);
 	if (!ok) {
 		return;
 	}
@@ -4040,18 +5228,81 @@ void ApplicationShell::refreshAdvancedStudioSurface()
 	const OperationState state = ready >= 5 ? OperationState::Completed : (ready > 0 ? OperationState::Warning : OperationState::Idle);
 	const QString projectPath = m_settings.currentProjectPath();
 
-	m_advancedStudioState->setTitle(tr("Advanced Studio"));
-	m_advancedStudioState->setDetail(tr("%1 of 5 surfaces populated / project: %2").arg(ready).arg(projectPath.isEmpty() ? tr("none") : nativePath(projectPath)));
-	m_advancedStudioState->setState(state, localizedOperationStateName(state));
-	m_advancedStudioState->setProgress({ready, 5});
+	// The Shaders page owns this pane, so it reports the shader script; the
+	// sprite, code, AI, and extension results show on their own surfaces.
+	Q_UNUSED(ready);
+	Q_UNUSED(state);
+	Q_UNUSED(projectPath);
+	const OperationState shaderState = !hasShader ? OperationState::Idle
+		: (m_advancedShaderValidationWarnings.isEmpty() ? OperationState::Completed : OperationState::Warning);
+	m_advancedStudioState->setTitle(tr("Shader Script"));
+	m_advancedStudioState->setDetail(hasShader
+			? tr("%1 shader(s), %2 texture reference(s), %3 warning(s)")
+				  .arg(m_advancedShaderDocument.shaders.size())
+				  .arg(m_advancedShaderValidation.size())
+				  .arg(m_advancedShaderValidationWarnings.size())
+			: tr("Open an idTech3 shader script to inspect its stages."));
+	m_advancedStudioState->setState(shaderState, localizedOperationStateName(shaderState));
+	m_advancedStudioState->setProgress({});
 
-	QStringList shaderLines;
-	if (hasShader) {
-		shaderLines = shaderGraphLines(m_advancedShaderDocument);
-	} else {
-		shaderLines = advancedStudioCapabilityLines().filter(QStringLiteral("Shader"));
+	if (m_advancedShaderGraph) {
+		const QSignalBlocker blocker(m_advancedShaderGraph);
+		m_advancedShaderGraph->clear();
+		if (!hasShader) {
+			auto* empty = new QTreeWidgetItem(m_advancedShaderGraph, {tr("No shader script inspected yet.")});
+			empty->setFirstColumnSpanned(true);
+			empty->setFlags(Qt::NoItemFlags);
+		}
+		QHash<QString, ShaderReferenceValidation> checks;
+		for (const ShaderReferenceValidation& check : m_advancedShaderValidation) {
+			checks.insert(check.textureReference.toLower(), check);
+		}
+		const QString separator = QStringLiteral("  %1  ").arg(QChar(0x00b7));
+		for (const ShaderDefinition& shader : m_advancedShaderDocument.shaders) {
+			auto* shaderItem = new QTreeWidgetItem(m_advancedShaderGraph, {shader.name,
+				QStringList {tr("%n stage(s)", nullptr, static_cast<int>(shader.stages.size())),
+					tr("%n texture(s)", nullptr, static_cast<int>(shader.textureReferences.size()))}
+					.join(separator)});
+			shaderItem->setIcon(0, studioIcon(QStringLiteral("layers")));
+			shaderItem->setData(0, Qt::UserRole, shader.name);
+			shaderItem->setData(0, Qt::UserRole + 1, -1);
+			shaderItem->setToolTip(0, shader.directives.isEmpty() ? shader.name : QStringLiteral("%1\n%2").arg(shader.name, shader.directives.join('\n')));
+			shaderItem->setToolTip(1, shaderItem->toolTip(0));
+			for (const ShaderStage& stage : shader.stages) {
+				const QStringList details {
+					stage.mapDirective.isEmpty() ? tr("no map") : stage.mapDirective,
+					tr("blend %1").arg(stage.blendFunc.isEmpty() ? tr("default") : stage.blendFunc),
+					tr("rgbGen %1").arg(stage.rgbGen.isEmpty() ? tr("identity") : stage.rgbGen),
+				};
+				auto* stageItem = new QTreeWidgetItem(shaderItem, {tr("Stage %1").arg(stage.id), details.join(separator)});
+				stageItem->setData(0, Qt::UserRole, shader.name);
+				stageItem->setData(0, Qt::UserRole + 1, stage.id);
+				stageItem->setToolTip(0, stage.rawText.trimmed());
+				stageItem->setToolTip(1, details.join('\n'));
+				for (const QString& reference : stage.textureReferences) {
+					const auto check = checks.constFind(reference.toLower());
+					const bool checked = check != checks.constEnd();
+					const bool missing = checked && !check->found;
+					QString status = tr("not checked");
+					if (checked) {
+						status = !check->found ? tr("missing from the open package")
+							: (check->foundInPackage.isEmpty() ? tr("found") : tr("found in %1").arg(QFileInfo(check->foundInPackage).fileName()));
+					}
+					auto* textureItem = new QTreeWidgetItem(stageItem, {reference, status});
+					textureItem->setIcon(0, studioIcon(missing ? QStringLiteral("warning") : QStringLiteral("image"),
+						missing ? StudioIconTone::Warning : StudioIconTone::Muted));
+					textureItem->setData(0, Qt::UserRole, shader.name);
+					textureItem->setData(0, Qt::UserRole + 1, stage.id);
+					const QString tip = checked && !check->candidatePaths.isEmpty()
+						? tr("%1\nLooked for: %2").arg(reference, check->candidatePaths.join(QStringLiteral(", ")))
+						: reference;
+					textureItem->setToolTip(0, tip);
+					textureItem->setToolTip(1, tip);
+				}
+			}
+		}
+		m_advancedShaderGraph->expandAll();
 	}
-	setListLines(m_advancedShaderGraph, shaderLines, tr("No shader script inspected yet."));
 
 	QStringList spriteLines;
 	if (hasSprite) {
@@ -4089,19 +5340,35 @@ void ApplicationShell::refreshAdvancedStudioSurface()
 	}
 	setListLines(m_advancedExtensions, extensionLines, tr("No extensions discovered yet."));
 
-	m_advancedStudioDrawer->setTitle(tr("Advanced Studio Details"));
-	m_advancedStudioDrawer->setSubtitle(tr("Shader, sprite, code, AI, and extension surfaces"));
-	m_advancedStudioDrawer->setSections({
-		{QStringLiteral("capabilities"), tr("Capabilities"), tr("Milestone 8 surfaces"), advancedStudioCapabilityLines().join('\n'), OperationState::Completed},
-		{QStringLiteral("shader"), tr("Shader Graph"), hasShader ? tr("%1 shader(s)").arg(m_advancedShaderDocument.shaders.size()) : tr("No shader"), hasShader ? shaderDocumentReportText(m_advancedShaderDocument, m_advancedShaderValidation, m_advancedShaderValidationWarnings) : tr("Open an idTech3 shader script to inspect graph stages and references."), hasShader ? OperationState::Completed : OperationState::Idle},
-		{QStringLiteral("sprite"), tr("Sprite Creator"), hasSprite ? tr("%1 frame(s)").arg(m_advancedSpritePlan.frames.size()) : tr("No sprite plan"), hasSprite ? spriteWorkflowPlanText(m_advancedSpritePlan) : tr("Create a Doom or Quake sprite plan to inspect naming, palette, sequencing, and package staging."), hasSprite ? m_advancedSpritePlan.state : OperationState::Idle},
-		{QStringLiteral("code"), tr("Code IDE"), hasCode ? tr("%1 file(s)").arg(m_advancedCodeIndex.files.size()) : tr("No index"), hasCode ? codeWorkspaceIndexText(m_advancedCodeIndex) : tr("Index the active project to inspect source files, symbols, diagnostics, build tasks, and launch profiles."), hasCode ? m_advancedCodeIndex.state : OperationState::Idle},
-		{QStringLiteral("ai"), tr("AI Proposal"), hasAi ? m_advancedAiProposal.title : tr("No proposal"), hasAi ? aiProposalReviewSurfaceText(m_advancedAiProposal) : tr("Generate a staged proposal to inspect summary, context, generated actions, and prompt/response log."), hasAi ? m_advancedAiProposal.manifest.state : OperationState::Idle},
-		{QStringLiteral("extensions"), tr("Extensions"), hasExtensions ? tr("%1 manifest(s)").arg(m_advancedExtensionDiscovery.manifests.size()) : tr("Trust model"), extensionLines.join('\n'), hasExtensions ? m_advancedExtensionDiscovery.state : OperationState::Idle},
-	});
-	if (m_advancedStudioDrawer->currentSectionId().isEmpty()) {
-		m_advancedStudioDrawer->showSection(QStringLiteral("capabilities"));
+	refreshShaderDetailSections();
+}
+
+void ApplicationShell::refreshShaderDetailSections(const QString& shaderName, int stageIndex)
+{
+	if (!m_advancedStudioDrawer) {
+		return;
 	}
+	const bool hasShader = !m_advancedShaderDocument.shaders.isEmpty();
+	m_advancedStudioDrawer->setTitle(tr("Shader Details"));
+	m_advancedStudioDrawer->setSubtitle(hasShader ? tr("Stages, blend modes, and texture references") : tr("No shader script loaded"));
+	QVector<DetailSection> shaderSections;
+	if (hasShader && !shaderName.isEmpty()) {
+		// The selected shader, or one of its stages, ahead of the whole report.
+		shaderSections.push_back({QStringLiteral("selection"),
+			stageIndex >= 0 ? tr("Stage %1").arg(stageIndex) : tr("Shader"),
+			shaderName,
+			shaderStagePreviewLines(m_advancedShaderDocument, shaderName, stageIndex).join('\n'),
+			OperationState::Completed});
+	}
+	if (hasShader) {
+		shaderSections.push_back({QStringLiteral("shader"), tr("Shader Report"), tr("%1 shader(s)").arg(m_advancedShaderDocument.shaders.size()),
+			shaderDocumentReportText(m_advancedShaderDocument, m_advancedShaderValidation, m_advancedShaderValidationWarnings),
+			m_advancedShaderValidationWarnings.isEmpty() ? OperationState::Completed : OperationState::Warning});
+	}
+	shaderSections.push_back({QStringLiteral("capabilities"), tr("Capabilities"), tr("What the shader tools cover"), advancedStudioCapabilityLines().join('\n'), OperationState::Completed});
+	m_advancedStudioDrawer->setSections(shaderSections);
+	m_advancedStudioDrawer->showSection(!shaderName.isEmpty() && hasShader ? QStringLiteral("selection")
+		: (hasShader ? QStringLiteral("shader") : QStringLiteral("capabilities")));
 }
 
 void ApplicationShell::inspectAdvancedShaderScript()
@@ -4286,18 +5553,22 @@ void ApplicationShell::refreshPackageTree()
 	const PackageArchiveSummary summary = m_packageArchive.summary();
 	const QString rootLabel = QFileInfo(summary.sourcePath).fileName().isEmpty() ? localizedPackageFormatName(summary.format) : QFileInfo(summary.sourcePath).fileName();
 	auto* root = new QTreeWidgetItem(QStringList {rootLabel});
+	root->setIcon(0, studioIcon(QStringLiteral("package"), StudioIconTone::Muted));
 	root->setData(0, Qt::UserRole, QString());
 	root->setData(0, Qt::UserRole + 1, summary.warningCount > 0 ? QStringLiteral("warning") : QStringLiteral("completed"));
 	root->setToolTip(0, tr("%1 entries from %2").arg(summary.entryCount).arg(nativePath(summary.sourcePath)));
 	m_packageTree->addTopLevelItem(root);
 
+	// Folders only: files are listed in the entry column for whichever folder
+	// is selected, the way a file browser splits its panes.
 	QHash<QString, QTreeWidgetItem*> nodes;
 	nodes.insert(QString(), root);
 	for (const PackageEntry& entry : m_packageArchive.entries()) {
 		const QStringList parts = entry.virtualPath.split('/', Qt::SkipEmptyParts);
 		QString currentPath;
 		QTreeWidgetItem* parent = root;
-		for (int index = 0; index < parts.size(); ++index) {
+		const int folderDepth = entry.kind == PackageEntryKind::Directory ? parts.size() : parts.size() - 1;
+		for (int index = 0; index < folderDepth; ++index) {
 			if (!currentPath.isEmpty()) {
 				currentPath += '/';
 			}
@@ -4305,6 +5576,7 @@ void ApplicationShell::refreshPackageTree()
 			QTreeWidgetItem* node = nodes.value(currentPath, nullptr);
 			if (!node) {
 				node = new QTreeWidgetItem(QStringList {parts.at(index)});
+				node->setIcon(0, studioIcon(QStringLiteral("folder"), StudioIconTone::Muted));
 				node->setData(0, Qt::UserRole, currentPath);
 				node->setData(0, Qt::UserRole + 1, QStringLiteral("completed"));
 				parent->addChild(node);
@@ -4313,18 +5585,25 @@ void ApplicationShell::refreshPackageTree()
 			parent = node;
 		}
 
-		QTreeWidgetItem* node = nodes.value(entry.virtualPath, nullptr);
-		if (node) {
-			node->setText(0, QStringLiteral("%1 [%2]").arg(packageVirtualPathFileName(entry.virtualPath).isEmpty() ? entry.virtualPath : packageVirtualPathFileName(entry.virtualPath), entry.kind == PackageEntryKind::Directory ? tr("directory") : entry.typeHint));
-			node->setData(0, Qt::UserRole, entry.virtualPath);
-			node->setData(0, Qt::UserRole + 1, entry.note.isEmpty() ? QStringLiteral("completed") : QStringLiteral("warning"));
-			node->setToolTip(0, tr("%1 / %2 / %3").arg(entry.virtualPath, localizedPackageEntryKindName(entry.kind), byteSizeText(entry.sizeBytes)));
+		if (entry.kind == PackageEntryKind::Directory) {
+			if (QTreeWidgetItem* node = nodes.value(entry.virtualPath, nullptr)) {
+				node->setData(0, Qt::UserRole + 1, entry.note.isEmpty() ? QStringLiteral("completed") : QStringLiteral("warning"));
+				node->setToolTip(0, entry.virtualPath);
+			}
 		}
 	}
+	m_packageTree->sortItems(0, Qt::AscendingOrder);
 
 	m_packageTree->expandItem(root);
 	m_packageTree->resizeColumnToContents(0);
-	selectPackageTreeEntryPath(selectedPath.isEmpty() ? selectedPackageEntryPath() : selectedPath);
+	Q_UNUSED(selectedPath);
+	if (m_packageBrowseFolder.isEmpty() || !nodes.contains(m_packageBrowseFolder)) {
+		m_packageBrowseFolder.clear();
+		const QSignalBlocker blocker(m_packageTree);
+		m_packageTree->setCurrentItem(root);
+	} else {
+		selectPackageTreeEntryPath(m_packageBrowseFolder);
+	}
 	scheduleThemeRefresh();
 }
 
@@ -4606,42 +5885,214 @@ void ApplicationShell::filterPackageEntries()
 		item->setFlags(Qt::NoItemFlags);
 		m_packageEntries->addItem(item);
 		refreshPackageEntryDetails(QString());
+		rebuildPackageBreadcrumb();
 		return;
 	}
 
-	int selectedRow = -1;
-	int visibleRow = 0;
-	for (const PackageEntry& entry : m_packageArchive.entries()) {
-		const QString haystack = QStringLiteral("%1 %2 %3").arg(entry.virtualPath, entry.typeHint, entry.storageMethod).toCaseFolded();
-		if (!filter.isEmpty() && !haystack.contains(filter)) {
-			continue;
+	// Without a filter the list shows the current folder, folders first; a
+	// filter searches the whole package and lists matches by full path.
+	const bool searching = !filter.isEmpty();
+	const QVector<PackageEntry> entries = m_packageArchive.entries();
+	QHash<QString, int> childCounts;
+	for (const PackageEntry& entry : entries) {
+		childCounts[packageParentFolder(entry.virtualPath)] += 1;
+	}
+	QVector<const PackageEntry*> shown;
+	for (const PackageEntry& entry : entries) {
+		if (searching) {
+			const QString haystack = QStringLiteral("%1 %2 %3").arg(entry.virtualPath, entry.typeHint, entry.storageMethod).toCaseFolded();
+			if (haystack.contains(filter)) {
+				shown.push_back(&entry);
+			}
+		} else if (packageParentFolder(entry.virtualPath) == m_packageBrowseFolder) {
+			shown.push_back(&entry);
 		}
-		auto* item = new QListWidgetItem(QStringLiteral("%1 [%2]\n%3 / %4 / %5")
-			.arg(entry.virtualPath,
-				localizedPackageEntryKindName(entry.kind),
-				byteSizeText(entry.sizeBytes),
-				entry.typeHint,
-				entry.storageMethod.isEmpty() ? tr("unknown") : entry.storageMethod));
+	}
+	if (!searching) {
+		std::stable_sort(shown.begin(), shown.end(), [](const PackageEntry* left, const PackageEntry* right) {
+			const bool leftFolder = left->kind == PackageEntryKind::Directory;
+			const bool rightFolder = right->kind == PackageEntryKind::Directory;
+			if (leftFolder != rightFolder) {
+				return leftFolder;
+			}
+			return QString::compare(left->virtualPath, right->virtualPath, Qt::CaseInsensitive) < 0;
+		});
+	}
+
+	const QString separator = QStringLiteral("  %1  ").arg(QChar(0x00b7));
+	int selectedRow = -1;
+	for (const PackageEntry* entryPointer : shown) {
+		const PackageEntry& entry = *entryPointer;
+		const bool folder = entry.kind == PackageEntryKind::Directory;
+		const QString name = searching ? entry.virtualPath
+			: (packageVirtualPathFileName(entry.virtualPath).isEmpty() ? entry.virtualPath : packageVirtualPathFileName(entry.virtualPath));
+		const QString meta = folder
+			? tr("%n item(s)", nullptr, childCounts.value(entry.virtualPath))
+			: QStringList {byteSizeText(entry.sizeBytes), entry.typeHint, entry.storageMethod.isEmpty() ? tr("unknown") : entry.storageMethod}.join(separator);
+		auto* item = new QListWidgetItem(studioIcon(packageEntryIconName(entry), folder ? StudioIconTone::Accent : StudioIconTone::Muted), QStringLiteral("%1\n%2").arg(name, meta));
+		item->setToolTip(QStringLiteral("%1\n%2").arg(entry.virtualPath, meta));
+		item->setData(Qt::AccessibleTextRole, QStringLiteral("%1, %2, %3").arg(entry.virtualPath, localizedPackageEntryKindName(entry.kind), meta));
 		item->setData(Qt::UserRole, entry.virtualPath);
 		item->setData(Qt::UserRole + 1, entry.note.isEmpty() ? QStringLiteral("completed") : QStringLiteral("warning"));
+		item->setData(Qt::UserRole + 3, folder);
 		m_packageEntries->addItem(item);
 		if (entry.virtualPath == selectedPath) {
-			selectedRow = visibleRow;
+			selectedRow = m_packageEntries->count() - 1;
 		}
-		++visibleRow;
 	}
 
 	if (m_packageEntries->count() == 0) {
-		auto* item = new QListWidgetItem(tr("No matching package entries"));
+		auto* item = new QListWidgetItem(searching ? tr("No entries match \u201c%1\u201d").arg(m_packageFilter->text().trimmed()) : tr("This folder is empty"));
 		item->setFlags(Qt::NoItemFlags);
 		m_packageEntries->addItem(item);
 		refreshPackageEntryDetails(QString());
+		rebuildPackageBreadcrumb();
 		return;
 	}
 
-	m_packageEntries->setCurrentRow(selectedRow >= 0 ? selectedRow : 0);
+	{
+		const QSignalBlocker blocker(m_packageEntries);
+		m_packageEntries->setCurrentRow(selectedRow >= 0 ? selectedRow : 0);
+	}
 	refreshPackageEntryDetails(selectedPackageEntryPath());
+	rebuildPackageBreadcrumb();
 	scheduleThemeRefresh();
+}
+
+void ApplicationShell::navigatePackageFolder(const QString& folder, const QString& selectPath, bool recordHistory)
+{
+	if (!m_packageArchive.isOpen()) {
+		return;
+	}
+	m_packageBrowseFolder = folder;
+	if (recordHistory) {
+		if (m_packageFolderHistoryIndex >= 0 && m_packageFolderHistoryIndex < m_packageFolderHistory.size()
+			&& m_packageFolderHistory.at(m_packageFolderHistoryIndex) == folder) {
+			// Re-selecting the current folder is not a new history step.
+		} else {
+			while (m_packageFolderHistory.size() > m_packageFolderHistoryIndex + 1) {
+				m_packageFolderHistory.removeLast();
+			}
+			m_packageFolderHistory.push_back(folder);
+			m_packageFolderHistoryIndex = static_cast<int>(m_packageFolderHistory.size()) - 1;
+		}
+	}
+	// Browsing a folder ends a search; the filter would otherwise hide it.
+	if (m_packageFilter && !m_packageFilter->text().isEmpty()) {
+		const QSignalBlocker blocker(m_packageFilter);
+		m_packageFilter->clear();
+	}
+	filterPackageEntries();
+	if (!selectPath.isEmpty()) {
+		for (int index = 0; index < m_packageEntries->count(); ++index) {
+			QListWidgetItem* item = m_packageEntries->item(index);
+			if (item && item->data(Qt::UserRole).toString() == selectPath) {
+				const QSignalBlocker blocker(m_packageEntries);
+				m_packageEntries->setCurrentItem(item);
+				break;
+			}
+		}
+		refreshPackageEntryDetails(selectedPackageEntryPath());
+	}
+	if (folder.isEmpty()) {
+		if (m_packageTree && m_packageTree->topLevelItemCount() > 0) {
+			const QSignalBlocker blocker(m_packageTree);
+			m_packageTree->setCurrentItem(m_packageTree->topLevelItem(0));
+		}
+	} else {
+		selectPackageTreeEntryPath(folder);
+	}
+	refreshPackageStagingSummary();
+}
+
+void ApplicationShell::stepPackageFolderHistory(int delta)
+{
+	const int target = m_packageFolderHistoryIndex + delta;
+	if (target < 0 || target >= m_packageFolderHistory.size()) {
+		return;
+	}
+	m_packageFolderHistoryIndex = target;
+	navigatePackageFolder(m_packageFolderHistory.at(target), QString(), false);
+}
+
+void ApplicationShell::rebuildPackageBreadcrumb()
+{
+	if (!m_packageBreadcrumb) {
+		return;
+	}
+	auto* layout = qobject_cast<QHBoxLayout*>(m_packageBreadcrumb->layout());
+	if (!layout) {
+		return;
+	}
+	while (QLayoutItem* child = layout->takeAt(0)) {
+		if (QWidget* widget = child->widget()) {
+			widget->deleteLater();
+		}
+		delete child;
+	}
+
+	const bool open = m_packageArchive.isOpen();
+	const bool searching = m_packageFilter && !m_packageFilter->text().trimmed().isEmpty();
+	if (m_packageBack) {
+		m_packageBack->setEnabled(open && m_packageFolderHistoryIndex > 0);
+	}
+	if (m_packageForward) {
+		m_packageForward->setEnabled(open && m_packageFolderHistoryIndex >= 0 && m_packageFolderHistoryIndex + 1 < m_packageFolderHistory.size());
+	}
+	if (m_packageUp) {
+		m_packageUp->setEnabled(open && !m_packageBrowseFolder.isEmpty());
+	}
+	if (!open) {
+		layout->addStretch(1);
+		return;
+	}
+
+	auto addCrumb = [this, layout](const QString& text, const QString& folder, bool current) {
+		auto* crumb = new QToolButton;
+		crumb->setObjectName(QStringLiteral("breadcrumbButton"));
+		crumb->setText(text);
+		crumb->setAutoRaise(true);
+		crumb->setFocusPolicy(Qt::TabFocus);
+		crumb->setProperty("current", current);
+		crumb->setAccessibleName(tr("Folder %1").arg(text));
+		crumb->setToolTip(folder.isEmpty() ? tr("Package root") : folder);
+		connect(crumb, &QToolButton::clicked, this, [this, folder]() {
+			navigatePackageFolder(folder);
+		});
+		layout->addWidget(crumb);
+	};
+	auto addSeparator = [layout]() {
+		auto* chevron = new QLabel(QString(QChar(0x203a)));
+		chevron->setObjectName(QStringLiteral("breadcrumbSeparator"));
+		chevron->setAccessibleName(QString());
+		layout->addWidget(chevron);
+	};
+
+	const QString rootName = QFileInfo(m_packageArchive.summary().sourcePath).fileName();
+	addCrumb(rootName.isEmpty() ? tr("Package") : rootName, QString(), m_packageBrowseFolder.isEmpty() && !searching);
+	QString path;
+	const QStringList parts = m_packageBrowseFolder.split(QLatin1Char('/'), Qt::SkipEmptyParts);
+	for (int index = 0; index < parts.size(); ++index) {
+		path = path.isEmpty() ? parts.at(index) : path + QLatin1Char('/') + parts.at(index);
+		addSeparator();
+		addCrumb(parts.at(index), path, index == parts.size() - 1 && !searching);
+	}
+	if (searching) {
+		addSeparator();
+		auto* results = new QLabel(tr("Search results"));
+		results->setObjectName(QStringLiteral("breadcrumbSeparator"));
+		layout->addWidget(results);
+	}
+	layout->addStretch(1);
+	if (m_packageSummary) {
+		int count = 0;
+		for (int index = 0; index < m_packageEntries->count(); ++index) {
+			if (m_packageEntries->item(index)->flags().testFlag(Qt::ItemIsSelectable)) {
+				++count;
+			}
+		}
+		m_packageSummary->setText(tr("%n item(s)", nullptr, count));
+	}
 }
 
 void ApplicationShell::refreshCompilerPipelineSummary()
@@ -4911,6 +6362,13 @@ QString ApplicationShell::selectedPackageTreeEntryPath() const
 void ApplicationShell::selectPackageEntryPath(const QString& virtualPath)
 {
 	if (!m_packageEntries || virtualPath.isEmpty()) {
+		return;
+	}
+
+	// An entry outside the listed folder is revealed by browsing to it first.
+	const bool searching = m_packageFilter && !m_packageFilter->text().trimmed().isEmpty();
+	if (!searching && packageParentFolder(virtualPath) != m_packageBrowseFolder) {
+		navigatePackageFolder(packageParentFolder(virtualPath), virtualPath);
 		return;
 	}
 
@@ -5264,6 +6722,87 @@ void ApplicationShell::stagePackageDeleteSelected()
 	}
 }
 
+void ApplicationShell::comparePackageWithFile()
+{
+	if (!m_packageArchive.isOpen()) {
+		statusBar()->showMessage(tr("Open a package before comparing it with another."));
+		return;
+	}
+
+	const QString otherPath = QFileDialog::getOpenFileName(
+		this,
+		tr("Compare With Package"),
+		QFileInfo(m_packageArchive.sourcePath()).absolutePath(),
+		tr("Package Archives (*.pak *.pk3 *.zip *.wad);;All Files (*)"));
+	if (otherPath.isEmpty()) {
+		return;
+	}
+
+	PackageArchive other;
+	QString error;
+	if (!other.load(otherPath, &error)) {
+		statusBar()->showMessage(tr("Unable to open %1: %2").arg(nativePath(otherPath), error));
+		return;
+	}
+
+	PackageCompareRequest request;
+	request.leftLabel = QFileInfo(m_packageArchive.sourcePath()).fileName();
+	request.rightLabel = QFileInfo(otherPath).fileName();
+
+	const QString detail = tr("%1 vs %2").arg(nativePath(m_packageArchive.sourcePath()), nativePath(otherPath));
+	const QString taskId = m_activity.createTask(tr("Package Compare"), detail, tr("package"), OperationState::Running, false);
+	refreshActivityCenter(taskId);
+
+	const PackageCompareResult result = comparePackages(m_packageArchive, other, request);
+	for (const QString& warning : result.warnings) {
+		m_activity.appendWarning(taskId, warning);
+	}
+
+	const int differences = result.summary.addedCount + result.summary.removedCount
+		+ result.summary.changedCount + result.summary.caseOnlyCount;
+	if (result.identical()) {
+		m_activity.completeTask(taskId, tr("The two packages hold the same %n entries.", nullptr, result.summary.leftCount));
+	} else {
+		// A difference is the answer to the question, not a failure of the
+		// command, so this completes with a warning rather than failing.
+		m_activity.completeTask(taskId, tr("%n difference(s) between the two packages.", nullptr, differences));
+	}
+	persistActivityTask(taskId);
+
+	QStringList summaryLines;
+	summaryLines << tr("Left: %1").arg(nativePath(result.leftSource));
+	summaryLines << tr("Right: %1").arg(nativePath(result.rightSource));
+	summaryLines << tr("Added: %1").arg(result.summary.addedCount);
+	summaryLines << tr("Removed: %1").arg(result.summary.removedCount);
+	summaryLines << tr("Changed: %1").arg(result.summary.changedCount);
+	summaryLines << tr("Case-only: %1").arg(result.summary.caseOnlyCount);
+	summaryLines << tr("Identical: %1").arg(result.summary.identicalCount);
+	summaryLines << tr("Not compared: %1").arg(result.summary.uncomparedCount);
+	summaryLines << tr("Size delta: %1").arg(byteSizeText(std::llabs(result.summary.sizeDelta)));
+
+	if (m_packageDrawer) {
+		m_packageDrawer->setTitle(tr("Package Comparison"));
+		m_packageDrawer->setSubtitle(detail);
+		m_packageDrawer->setSections({
+			{QStringLiteral("summary"), tr("Summary"), tr("Comparison totals"), summaryLines.join('\n'),
+				result.identical() ? OperationState::Completed : OperationState::Warning},
+			{QStringLiteral("entries"), tr("Entries"), tr("Per-entry comparison"), packageCompareLines(result).join('\n'),
+				result.identical() ? OperationState::Completed : OperationState::Warning},
+			{QStringLiteral("warnings"), tr("Warnings"), tr("Reader warnings raised while comparing"),
+				result.warnings.isEmpty() ? tr("No comparison warnings.") : result.warnings.join('\n'),
+				result.warnings.isEmpty() ? OperationState::Completed : OperationState::Warning},
+		});
+		m_packageDrawer->showSection(QStringLiteral("summary"));
+	}
+
+	recordActivity(tr("Packages compared"), detail, QStringLiteral("package"),
+		result.identical() ? OperationState::Completed : OperationState::Warning,
+		result.identical() ? tr("Identical") : tr("%n difference(s)", nullptr, differences));
+	statusBar()->showMessage(result.identical()
+		? tr("The two packages are identical.")
+		: tr("%n difference(s) between the two packages.", nullptr, differences));
+}
+
 void ApplicationShell::saveStagedPackageAs()
 {
 	if (!m_packageStaging.isLoaded()) {
@@ -5285,6 +6824,38 @@ void ApplicationShell::saveStagedPackageAs()
 	request.format = packageArchiveFormatFromFileName(outputPath);
 	request.allowOverwrite = false;
 	request.writeManifest = true;
+	if (m_packageCompression) {
+		DeflateLevel level = DeflateLevel::Default;
+		if (deflateLevelFromId(m_packageCompression->currentData().toString(), &level)) {
+			request.compression = level;
+		}
+	}
+
+	// Writing over a file the user already has is the one destructive thing this
+	// command can do, so it is never the default: the writer builds the archive
+	// beside the target and only swaps it in after the bytes verify, and the old
+	// file is kept as a backup rather than discarded.
+	if (QFileInfo::exists(outputPath)) {
+		const QString backupPath = outputPath + QStringLiteral(".bak");
+		const bool replacingSource = QFileInfo(outputPath).canonicalFilePath()
+			== QFileInfo(m_packageStaging.sourcePath()).canonicalFilePath();
+		const QMessageBox::StandardButton choice = QMessageBox::question(
+			this,
+			tr("Replace Existing Package?"),
+			replacingSource
+				? tr("%1 is the package that is open.\n\nThe new archive is written beside it and verified first; only then does the original move to %2. Replace it?")
+					.arg(nativePath(outputPath), nativePath(backupPath))
+				: tr("%1 already exists.\n\nThe new archive is written beside it and verified first; only then does the original move to %2. Replace it?")
+					.arg(nativePath(outputPath), nativePath(backupPath)),
+			QMessageBox::Yes | QMessageBox::No,
+			QMessageBox::No);
+		if (choice != QMessageBox::Yes) {
+			statusBar()->showMessage(tr("Package save-as cancelled; nothing was written."));
+			return;
+		}
+		request.allowInPlaceOverwrite = true;
+		request.backupPath = backupPath;
+	}
 	const QFileInfo outputInfo(outputPath);
 	request.manifestPath = QDir(outputInfo.absolutePath()).filePath(QStringLiteral("%1.manifest.json").arg(outputInfo.completeBaseName()));
 
@@ -5324,7 +6895,12 @@ void ApplicationShell::saveStagedPackageAs()
 	summaryLines << tr("Bytes written: %1").arg(byteSizeText(report.bytesWritten));
 	summaryLines << tr("SHA-256: %1").arg(report.sha256.isEmpty() ? tr("not written") : report.sha256);
 	summaryLines << tr("Deterministic writer: %1").arg(report.deterministic ? tr("yes") : tr("no"));
+	summaryLines << tr("Compression: %1").arg(deflateLevelId(request.compression));
 	summaryLines << tr("Manifest: %1").arg(report.wroteManifest ? nativePath(report.manifestPath) : tr("not written"));
+	if (report.overwroteInPlace) {
+		summaryLines << tr("Replaced in place: yes");
+		summaryLines << tr("Backup: %1").arg(report.backupPath.isEmpty() ? tr("not kept") : nativePath(report.backupPath));
+	}
 
 	QStringList warningLines = report.warnings;
 	if (warningLines.isEmpty()) {
@@ -5431,32 +7007,50 @@ void ApplicationShell::refreshSetupPanel()
 	const int currentValue = progress.completed ? steps.size() : setupStepProgressValue(progress.currentStep);
 
 	m_setupStatus->setText(tr("Setup: %1").arg(setupStatusDisplayName(summary.status)));
-	m_setupStep->setText(tr("%1 [%2]").arg(summary.currentStepName, summary.currentStepId));
+	m_setupStep->setText(tr("Current step: %1").arg(summary.currentStepName));
+	m_setupStep->setToolTip(summary.currentStepId);
 	m_setupProgress->setRange(0, steps.size());
 	m_setupProgress->setValue(currentValue);
 	m_setupProgress->setFormat(tr("%1 of %2").arg(currentValue).arg(steps.size()));
 	m_setupNextAction->setText(summary.nextAction);
 
+	// A stepper: each step once, in order, with its state, followed by any
+	// setup warnings. The step setup would resume at is marked current.
 	m_setupSummary->clear();
-	auto addSetupItem = [this](const QString& label, const QString& value, const QString& kind) {
-		auto* item = new QListWidgetItem(QStringLiteral("%1: %2").arg(label, value));
-		item->setData(Qt::UserRole, kind);
+	const int currentIndex = std::max(0, static_cast<int>(steps.indexOf(progress.currentStep)));
+	const bool counting = progress.started && !progress.skipped;
+	for (int index = 0; index < steps.size(); ++index) {
+		const SetupStep step = steps.at(index);
+		const bool done = progress.completed || (counting && index < currentIndex);
+		const bool current = !progress.completed && index == currentIndex;
+		const QString name = setupStepDisplayName(step);
+		auto* item = new QListWidgetItem(QStringLiteral("%1\n%2").arg(name, setupStepDescription(step)));
+		item->setIcon(done ? studioIcon(QStringLiteral("check"), StudioIconTone::Success)
+			: (current ? studioIcon(QStringLiteral("chevron-right"), StudioIconTone::Accent) : studioIcon(QStringLiteral("dot"), StudioIconTone::Muted)));
+		item->setData(Qt::UserRole, done ? QStringLiteral("done") : (current ? QStringLiteral("current") : QStringLiteral("pending")));
+		const QString state = done ? tr("done") : (current ? tr("current step") : tr("pending"));
+		item->setData(Qt::AccessibleTextRole, tr("Step %1 of %2, %3: %4").arg(index + 1).arg(steps.size()).arg(state, name));
+		item->setToolTip(tr("Step %1 of %2 (%3)").arg(index + 1).arg(steps.size()).arg(state));
+		if (!done && !current) {
+			// Steps still ahead recede; applyStateColors() re-tints them when
+			// the theme changes.
+			item->setForeground(currentStudioTheme().colors.textMuted);
+		}
 		m_setupSummary->addItem(item);
-	};
-
-	addSetupItem(tr("Current"), QStringLiteral("%1 - %2").arg(summary.currentStepName, summary.currentStepDescription), QStringLiteral("current"));
-	for (const QString& item : summary.completedItems) {
-		addSetupItem(tr("Done"), item, QStringLiteral("done"));
-	}
-	for (const QString& item : summary.pendingItems) {
-		addSetupItem(tr("Pending"), item, QStringLiteral("pending"));
 	}
 	for (const QString& warning : summary.warnings) {
-		addSetupItem(tr("Warning"), warning, QStringLiteral("warning"));
+		auto* item = new QListWidgetItem(studioIcon(QStringLiteral("warning"), StudioIconTone::Warning), warning);
+		item->setData(Qt::UserRole, QStringLiteral("warning"));
+		item->setData(Qt::AccessibleTextRole, tr("Warning: %1").arg(warning));
+		m_setupSummary->addItem(item);
 	}
-	if (summary.warnings.isEmpty()) {
-		addSetupItem(tr("Ready"), tr("No setup warnings."), QStringLiteral("ready"));
+	// Tall enough to show every step and warning without an inner scroll bar;
+	// the Settings page scrolls as a whole if the window is shorter.
+	int contentHeight = 2 * m_setupSummary->frameWidth() + 6;
+	for (int row = 0; row < m_setupSummary->count(); ++row) {
+		contentHeight += m_setupSummary->sizeHintForRow(row);
 	}
+	m_setupSummary->setMinimumHeight(std::clamp(contentHeight, 200, 720));
 
 	const bool complete = progress.completed;
 	const bool skipped = progress.skipped;
@@ -5644,7 +7238,17 @@ void ApplicationShell::refreshActivityCenter(const QString& preferredTaskId)
 	}
 
 	const QString selectedId = preferredTaskId.isEmpty() ? selectedActivityTaskId() : preferredTaskId;
-	m_activitySummary->setText(tr("Activity: %1").arg(m_activity.summaryText()));
+	m_activitySummary->setText(m_activity.summaryText());
+	if (m_activityToggle) {
+		int busy = 0;
+		for (const OperationTask& task : m_activity.tasks()) {
+			if (!operationStateIsTerminal(task.state) && task.state != OperationState::Idle) {
+				++busy;
+			}
+		}
+		m_activityToggle->setText(busy > 0 ? tr("Activity (%n running)", nullptr, busy) : tr("Activity"));
+		m_activityToggle->setAccessibleDescription(m_activity.summaryText());
+	}
 	m_activityTasks->clear();
 
 	int selectedRow = -1;
@@ -5652,8 +7256,10 @@ void ApplicationShell::refreshActivityCenter(const QString& preferredTaskId)
 	for (int index = 0; index < tasks.size(); ++index) {
 		const OperationTask& task = tasks[index];
 		const QString detail = task.detail.isEmpty() ? task.source : task.detail;
-		auto* item = new QListWidgetItem(QStringLiteral("%1 [%2]\n%3")
-			.arg(task.title, localizedOperationStateName(task.state), detail));
+		auto* item = new QListWidgetItem(QStringLiteral("%1  %2\n%3")
+			.arg(studioStateGlyph(task.state), task.title, detail));
+		item->setToolTip(QStringLiteral("%1 (%2)\n%3").arg(task.title, localizedOperationStateName(task.state), detail));
+		item->setData(Qt::AccessibleTextRole, QStringLiteral("%1, %2. %3").arg(task.title, localizedOperationStateName(task.state), detail));
 		item->setData(Qt::UserRole, task.id);
 		item->setData(Qt::UserRole + 1, operationStateId(task.state));
 		if (task.id == selectedId) {
@@ -6128,195 +7734,61 @@ void ApplicationShell::applyPreferencesToUi()
 	const AccessibilityPreferences preferences = m_settings.accessibilityPreferences();
 	QLocale::setDefault(QLocale(preferences.localeName));
 
-	StudioTheme effectiveTheme = preferences.theme;
-	if (effectiveTheme == StudioTheme::System) {
-		const QColor windowColor = QApplication::palette().color(QPalette::Window);
-		effectiveTheme = windowColor.lightness() > 127 ? StudioTheme::Light : StudioTheme::Dark;
-	}
-
-	const bool highContrast = effectiveTheme == StudioTheme::HighContrastDark || effectiveTheme == StudioTheme::HighContrastLight;
-	const bool light = effectiveTheme == StudioTheme::Light || effectiveTheme == StudioTheme::HighContrastLight;
-
-	const QString window = light ? QStringLiteral("#f7f8fb") : QStringLiteral("#17191c");
-	const QString rail = light ? QStringLiteral("#e9edf3") : QStringLiteral("#101215");
-	const QString panel = light ? QStringLiteral("#ffffff") : QStringLiteral("#20242a");
-	const QString panelBorder = highContrast ? (light ? QStringLiteral("#000000") : QStringLiteral("#ffffff")) : (light ? QStringLiteral("#c9d1dc") : QStringLiteral("#323943"));
-	const QString text = light ? QStringLiteral("#15191f") : QStringLiteral("#e8edf2");
-	const QString muted = highContrast ? (light ? QStringLiteral("#202020") : QStringLiteral("#f2f2f2")) : (light ? QStringLiteral("#4e5a67") : QStringLiteral("#9daab8"));
-	const QString section = light ? QStringLiteral("#111820") : QStringLiteral("#d6dde5");
-	const QString button = highContrast ? (light ? QStringLiteral("#0033cc") : QStringLiteral("#ffd800")) : (light ? QStringLiteral("#1f66a6") : QStringLiteral("#2d5f88"));
-	const QString buttonBorder = highContrast ? (light ? QStringLiteral("#000000") : QStringLiteral("#ffffff")) : (light ? QStringLiteral("#174c7d") : QStringLiteral("#447aa8"));
-	const QString buttonText = highContrast && !light ? QStringLiteral("#000000") : QStringLiteral("#ffffff");
-	const QString buttonHover = highContrast ? (light ? QStringLiteral("#002080") : QStringLiteral("#fff06a")) : (light ? QStringLiteral("#2d77bc") : QStringLiteral("#386f9c"));
-	const QString selection = highContrast ? (light ? QStringLiteral("#0033cc") : QStringLiteral("#ffd800")) : (light ? QStringLiteral("#cfe5ff") : QStringLiteral("#294f6f"));
-	const QString selectionText = highContrast && !light ? QStringLiteral("#000000") : (light ? QStringLiteral("#0b1520") : QStringLiteral("#ffffff"));
-	const QString warning = highContrast ? (light ? QStringLiteral("#8a0000") : QStringLiteral("#ffd800")) : QStringLiteral("#ffcf70");
-	const QString failure = highContrast ? (light ? QStringLiteral("#a00000") : QStringLiteral("#ff6b6b")) : QStringLiteral("#ff7a7a");
-	const QString success = highContrast ? (light ? QStringLiteral("#006000") : QStringLiteral("#95ff95")) : (light ? QStringLiteral("#216e3a") : QStringLiteral("#84d994"));
-	const QString running = highContrast ? (light ? QStringLiteral("#0033cc") : QStringLiteral("#6ab7ff")) : (light ? QStringLiteral("#1f66a6") : QStringLiteral("#8cc8ff"));
-	const QString skeleton = light ? QStringLiteral("#eef2f7") : QStringLiteral("#2a3038");
-	const QString skeletonBorder = light ? QStringLiteral("#d5dde7") : QStringLiteral("#3a4451");
-
-	int verticalPadding = 7;
-	int horizontalPadding = 12;
-	int itemPadding = 8;
-	if (preferences.density == UiDensity::Comfortable) {
-		verticalPadding = 10;
-		horizontalPadding = 14;
-		itemPadding = 11;
-	} else if (preferences.density == UiDensity::Compact) {
-		verticalPadding = 5;
-		horizontalPadding = 9;
-		itemPadding = 6;
-	}
-
-	const double scale = static_cast<double>(preferences.textScalePercent) / 100.0;
-	const QString baseFont = QString::number(10.5 * scale, 'f', 1);
-	const QString titleFont = QString::number(24.0 * scale, 'f', 1);
-	const QString sectionFont = QString::number(13.0 * scale, 'f', 1);
-	const QString moduleFont = QString::number(12.5 * scale, 'f', 1);
-
-	setStyleSheet(QStringLiteral(R"(
-		QMainWindow, QWidget {
-			background: %1;
-			color: %2;
-			font-size: %3pt;
-		}
-		QListWidget#modeRail {
-			background: %4;
-			border: 0;
-			padding: 12px 8px;
-		}
-		QListWidget#modeRail::item {
-			padding: %5px 10px;
-			border-radius: 4px;
-		}
-		QListWidget#modeRail::item:selected {
-			background: %6;
-			color: %7;
-		}
-		QLabel#appTitle {
-			font-size: %8pt;
-			font-weight: 700;
-		}
-		QLabel#appSubtitle, QLabel#moduleMeta, QLabel#panelMeta {
-			color: %9;
-		}
-		QLabel#sectionLabel {
-			color: %10;
-			font-size: %11pt;
-			font-weight: 600;
-		}
-		QFrame#modulePanel, QFrame#preferencesPanel, QFrame#loadingPane, QFrame#detailDrawer, QTextEdit#inspector, QTextEdit#detailContent, QListWidget#recentProjects, QListWidget#gameInstallations, QListWidget#projectProblems, QListWidget#workspaceSearchResults, QListWidget#changedFiles, QListWidget#dependencyGraph, QListWidget#recentActivityTimeline, QListWidget#packageComposition, QListWidget#packageStagingSummary, QTreeWidget#packageTree, QListWidget#packageEntries, QListWidget#compilerPipeline, QListWidget#activityTasks, QListWidget#detailSections, QLineEdit#packageFilter, QLineEdit#workspaceSearch {
-			background: %12;
-			border: 1px solid %13;
-			border-radius: 6px;
-		}
-		QFrame#setupPanel, QListWidget#setupSummary {
-			background: %12;
-			border: 1px solid %13;
-			border-radius: 6px;
-		}
-		QListWidget#recentProjects, QListWidget#gameInstallations, QListWidget#projectProblems, QListWidget#workspaceSearchResults, QListWidget#changedFiles, QListWidget#dependencyGraph, QListWidget#recentActivityTimeline, QListWidget#packageComposition, QListWidget#packageStagingSummary, QTreeWidget#packageTree, QListWidget#packageEntries, QListWidget#compilerPipeline, QListWidget#activityTasks, QListWidget#detailSections {
-			padding: 6px;
-		}
-		QListWidget#setupSummary {
-			padding: 6px;
-		}
-		QListWidget#recentProjects::item, QListWidget#gameInstallations::item, QListWidget#projectProblems::item, QListWidget#workspaceSearchResults::item, QListWidget#changedFiles::item, QListWidget#dependencyGraph::item, QListWidget#recentActivityTimeline::item, QListWidget#packageComposition::item, QListWidget#packageStagingSummary::item, QTreeWidget#packageTree::item, QListWidget#packageEntries::item, QListWidget#compilerPipeline::item, QListWidget#activityTasks::item, QListWidget#detailSections::item {
-			border-radius: 4px;
-			padding: %14px 10px;
-		}
-		QListWidget#setupSummary::item {
-			border-radius: 4px;
-			padding: %14px 10px;
-		}
-		QListWidget#recentProjects::item:selected, QListWidget#gameInstallations::item:selected, QListWidget#projectProblems::item:selected, QListWidget#workspaceSearchResults::item:selected, QListWidget#changedFiles::item:selected, QListWidget#dependencyGraph::item:selected, QListWidget#recentActivityTimeline::item:selected, QListWidget#packageComposition::item:selected, QListWidget#packageStagingSummary::item:selected, QTreeWidget#packageTree::item:selected, QListWidget#packageEntries::item:selected, QListWidget#compilerPipeline::item:selected, QListWidget#activityTasks::item:selected, QListWidget#detailSections::item:selected {
-			background: %6;
-			color: %7;
-		}
-		QTabWidget::pane {
-			border: 1px solid %13;
-			background: %1;
-		}
-		QTabBar::tab {
-			background: %12;
-			color: %2;
-			border: 1px solid %13;
-			padding: %19px %20px;
-		}
-		QTabBar::tab:selected {
-			background: %6;
-			color: %7;
-		}
-		QLabel#moduleTitle {
-			font-size: %15pt;
-			font-weight: 700;
-		}
-		QLabel#drawerTitle, QLabel#loadingTitle {
-			font-size: %15pt;
-			font-weight: 700;
-		}
-		QLabel#drawerSubtitle, QLabel#loadingDetail {
-			color: %9;
-		}
-		QLabel#statusChip {
-			background: %6;
-			color: %7;
-			border: 1px solid %13;
-			border-radius: 4px;
-			padding: 3px 8px;
-			font-weight: 600;
-		}
-		QLabel#skeletonRow {
-			background: %22;
-			border: 1px dashed %23;
-			border-radius: 4px;
-			color: %9;
-			padding: 5px 8px;
-		}
-		QPushButton, QComboBox {
-			background: %16;
-			border: 1px solid %17;
-			border-radius: 4px;
-			color: %18;
-			padding: %19px %20px;
-		}
-		QPushButton:hover, QComboBox:hover {
-			background: %21;
-		}
-		QCheckBox {
-			spacing: 8px;
-		}
-		QStatusBar {
-			background: %4;
-		}
-	)")
-		.arg(window, text, baseFont, rail)
-		.arg(itemPadding)
-		.arg(selection, selectionText, titleFont, muted, section, sectionFont, panel, panelBorder)
-		.arg(itemPadding)
-		.arg(moduleFont, button, buttonBorder, buttonText)
-		.arg(verticalPadding)
-		.arg(horizontalPadding)
-		.arg(buttonHover)
-		.arg(skeleton, skeletonBorder));
-
-	for (int index = 0; index < m_recentProjects->count(); ++index) {
-		QListWidgetItem* item = m_recentProjects->item(index);
-		if (item && !item->data(Qt::UserRole).toString().isEmpty() && !QFileInfo::exists(item->data(Qt::UserRole).toString())) {
-			item->setForeground(QColor(warning));
+	// The theme, density, and text scale resolve to one token set (see
+	// studio_theme.h). HighContrastDark and HighContrastLight get full-strength
+	// outlines, a distinct focus colour, and 2px focus rings; text scale runs
+	// from 100% to 200% through the application font and every sized role.
+	const StudioThemeTokens tokens = studioThemeTokens(preferences.theme, preferences.density, preferences.textScalePercent);
+	// Re-applying an application stylesheet repolishes every widget, so it only
+	// happens when a preference that feeds it actually changed.
+	if (!studioThemeIsApplied(tokens)) {
+		if (auto* app = qobject_cast<QApplication*>(QCoreApplication::instance())) {
+			applyStudioTheme(*app, tokens);
 		}
 	}
 
-	for (int index = 0; index < m_setupSummary->count(); ++index) {
-		QListWidgetItem* item = m_setupSummary->item(index);
-		if (item && item->data(Qt::UserRole).toString() == QStringLiteral("warning")) {
-			item->setForeground(QColor(warning));
+	applyStudioIconScale(this);
+	// The texture tiles size themselves from the text scale, which the generic
+	// icon pass above does not know about.
+	applyTextureViewMode();
+	queueTextureThumbnails();
+	applyStateColors();
+	// LoadingPane has no Q_OBJECT, so it is found through its QFrame base.
+	for (QFrame* frame : findChildren<QFrame*>(QStringLiteral("loadingPane"))) {
+		if (auto* pane = dynamic_cast<LoadingPane*>(frame)) {
+			pane->setReducedMotion(preferences.reducedMotion);
+		}
+	}
+	applyPreferencesToWidgets();
+}
+
+void ApplicationShell::applyStateColors()
+{
+	const StudioThemeTokens& tokens = currentStudioTheme();
+	const QColor warning = tokens.colors.warning;
+
+	if (m_recentProjects) {
+		for (int index = 0; index < m_recentProjects->count(); ++index) {
+			QListWidgetItem* item = m_recentProjects->item(index);
+			if (item && !item->data(Qt::UserRole).toString().isEmpty() && !QFileInfo::exists(item->data(Qt::UserRole).toString())) {
+				item->setForeground(warning);
+			}
 		}
 	}
 
-	auto applyStateColor = [&](QListWidget* list) {
+	if (m_setupSummary) {
+		for (int index = 0; index < m_setupSummary->count(); ++index) {
+			QListWidgetItem* item = m_setupSummary->item(index);
+			const QString kind = item ? item->data(Qt::UserRole).toString() : QString();
+			if (kind == QStringLiteral("warning")) {
+				item->setForeground(warning);
+			} else if (kind == QStringLiteral("pending")) {
+				item->setForeground(tokens.colors.textMuted);
+			}
+		}
+	}
+
+	auto applyStateColor = [&tokens](QListWidget* list, bool tintCompleted = true) {
 		if (!list) {
 			return;
 		}
@@ -6330,20 +7802,20 @@ void ApplicationShell::applyPreferencesToUi()
 			if (operationStateIds().contains(alternateState)) {
 				state = alternateState;
 			}
-			if (state == QStringLiteral("warning") || state == QStringLiteral("cancelled")) {
-				item->setForeground(QColor(warning));
-			} else if (state == QStringLiteral("failed")) {
-				item->setForeground(QColor(failure));
-			} else if (state == QStringLiteral("completed")) {
-				item->setForeground(QColor(success));
-			} else if (state == QStringLiteral("queued") || state == QStringLiteral("loading") || state == QStringLiteral("running")) {
-				item->setForeground(QColor(running));
+			if (!tintCompleted && state == QStringLiteral("completed")) {
+				continue;
+			}
+			const QColor color = studioThemeStateColor(tokens, state);
+			if (color.isValid()) {
+				item->setForeground(color);
 			}
 		}
 	};
 	applyStateColor(m_packageComposition);
 	applyStateColor(m_packageStagingSummary);
-	applyStateColor(m_packageEntries);
+	// Every readable entry is "completed"; tinting them all green would drown
+	// out the rows that actually need attention.
+	applyStateColor(m_packageEntries, false);
 	applyStateColor(m_compilerPipeline);
 	applyStateColor(m_gameInstallations);
 	applyStateColor(m_projectProblems);
@@ -6352,16 +7824,6 @@ void ApplicationShell::applyPreferencesToUi()
 	applyStateColor(m_dependencyGraph);
 	applyStateColor(m_recentActivityTimeline);
 	applyStateColor(m_activityTasks);
-	if (m_inspectorState) {
-		m_inspectorState->setReducedMotion(preferences.reducedMotion);
-	}
-	if (m_workspaceState) {
-		m_workspaceState->setReducedMotion(preferences.reducedMotion);
-	}
-	if (m_activityState) {
-		m_activityState->setReducedMotion(preferences.reducedMotion);
-	}
-	applyPreferencesToWidgets();
 }
 
 void ApplicationShell::updateInspector()
@@ -6376,7 +7838,7 @@ void ApplicationShell::updateInspector()
 	lines << tr("Storage: %1").arg(nativePath(m_settings.storageLocation()));
 	lines << tr("Schema: %1").arg(m_settings.schemaVersion());
 	lines << tr("Status: %1").arg(settingsStatusText(m_settings.status()));
-	lines << tr("Selected mode: %1").arg(m_modeRail && m_modeRail->currentItem() ? m_modeRail->currentItem()->text() : tr("Workspace"));
+	lines << tr("Selected mode: %1").arg(m_modeRail ? m_modeRail->label(m_modeRail->currentId()) : tr("Workspace"));
 	lines << tr("Recent projects: %1").arg(projects.size());
 	lines << tr("Locale: %1").arg(preferences.localeName);
 	lines << tr("Theme: %1").arg(localizedThemeName(preferences.theme));
@@ -6442,31 +7904,31 @@ void ApplicationShell::updateInspectorForProject(const QString& path)
 
 namespace {
 
-QStyle::StandardPixmap modeIcon(StudioMode mode)
+QString modeIcon(StudioMode mode)
 {
 	switch (mode) {
 	case StudioMode::Workspace:
-		return QStyle::SP_DirHomeIcon;
+		return QStringLiteral("home");
 	case StudioMode::Levels:
-		return QStyle::SP_FileDialogDetailedView;
+		return QStringLiteral("map");
 	case StudioMode::Models:
-		return QStyle::SP_FileDialogInfoView;
+		return QStringLiteral("cube");
 	case StudioMode::Textures:
-		return QStyle::SP_FileDialogContentsView;
+		return QStringLiteral("image");
 	case StudioMode::Audio:
-		return QStyle::SP_MediaVolume;
+		return QStringLiteral("waveform");
 	case StudioMode::Packages:
-		return QStyle::SP_DriveHDIcon;
+		return QStringLiteral("package");
 	case StudioMode::Code:
-		return QStyle::SP_FileIcon;
+		return QStringLiteral("code");
 	case StudioMode::Shaders:
-		return QStyle::SP_DesktopIcon;
+		return QStringLiteral("layers");
 	case StudioMode::Build:
-		return QStyle::SP_MediaPlay;
+		return QStringLiteral("hammer");
 	case StudioMode::Settings:
-		return QStyle::SP_FileDialogListView;
+		return QStringLiteral("settings");
 	}
-	return QStyle::SP_DirHomeIcon;
+	return QStringLiteral("home");
 }
 
 QString modeCommandId(StudioMode mode)
@@ -6604,10 +8066,10 @@ void ApplicationShell::buildCommands()
 		[this]() { close(); }, true);
 
 	add(QStringLiteral("map.undo"), StudioCommandGroup::Edit, tr("&Undo Map Edit"),
-		tr("Undo the last map edit."), QStringLiteral("undo"), true, false, false,
+		tr("Undo the last map edit."), QStringLiteral("undo"), false, false, false,
 		[this]() { undoLevelMapEditFromUi(); });
 	add(QStringLiteral("map.redo"), StudioCommandGroup::Edit, tr("&Redo Map Edit"),
-		tr("Redo the last undone map edit."), QStringLiteral("redo"), true, false, false,
+		tr("Redo the last undone map edit."), QStringLiteral("redo"), false, false, false,
 		[this]() { redoLevelMapEditFromUi(); });
 	add(QStringLiteral("map.editProperty"), StudioCommandGroup::Edit, tr("Edit Selected &Property…"),
 		tr("Change a key on the selected map object."), QStringLiteral("edit"), false, false, false,
@@ -6632,12 +8094,15 @@ void ApplicationShell::buildCommands()
 		});
 
 	add(QStringLiteral("shell.commandPalette"), StudioCommandGroup::View, tr("&Command Palette…"),
-		tr("Type to find any studio command."), QStringLiteral("command"), true, false, false,
+		tr("Type to find any studio command."), QStringLiteral("command"), false, false, false,
 		[this]() { showCommandPalette(); });
+	add(QStringLiteral("shell.resetLayout"), StudioCommandGroup::View, tr("Reset &Layout"),
+		tr("Restore every panel split to its default proportions and close the side panels."), QStringLiteral("grid"), false, false, false,
+		[this]() { resetLayout(); });
 	for (const StudioModeDescriptor& descriptor : studioModeDescriptors()) {
 		const StudioMode mode = descriptor.mode;
 		add(modeCommandId(mode), StudioCommandGroup::View, descriptor.label,
-			descriptor.hint, QStringLiteral("mode"), false, false, false,
+			descriptor.hint, descriptor.iconName, false, false, false,
 			[this, mode]() { setMode(mode); }, mode == StudioMode::Workspace);
 	}
 
@@ -6662,6 +8127,24 @@ void ApplicationShell::buildCommands()
 	add(QStringLiteral("package.stageDelete"), StudioCommandGroup::Project, tr("Stage &Delete"),
 		tr("Stage a deletion for the selected package entry."), QStringLiteral("delete"), false, false, true,
 		[this]() { stagePackageDeleteSelected(); });
+	add(QStringLiteral("package.compare"), StudioCommandGroup::Project, tr("&Compare With Package…"),
+		tr("Compare the open package with another archive entry by entry."), QStringLiteral("search"), false, false, false,
+		[this]() {
+			setMode(StudioMode::Packages);
+			comparePackageWithFile();
+		}, true);
+	add(QStringLiteral("model.export"), StudioCommandGroup::Project, tr("Export &Model Frame…"),
+		tr("Write the selected model's current frame to a Wavefront OBJ file."), QStringLiteral("export"), false, false, false,
+		[this]() {
+			setMode(StudioMode::Models);
+			exportSelectedModel();
+		});
+	add(QStringLiteral("entity.definitions"), StudioCommandGroup::Project, tr("Load &Entity Definitions…"),
+		tr("Choose a .def, .fgd, or .ent file to validate map entities against."), QStringLiteral("folder"), false, false, false,
+		[this]() {
+			setMode(StudioMode::Levels);
+			chooseEntityDefinitionPath();
+		});
 
 	add(QStringLiteral("build.run"), StudioCommandGroup::Build, tr("&Run Build Pipeline"),
 		tr("Run every enabled stage of the selected pipeline in order."), QStringLiteral("play"), true, false, false,
@@ -6745,6 +8228,7 @@ void ApplicationShell::buildMenuBar()
 	}
 	menuBar()->setAccessibleName(tr("Main menu"));
 	m_commands->populateMenuBar(menuBar());
+	m_viewMenu = menuBar()->findChild<QMenu*>(QStringLiteral("menu-view"));
 }
 
 void ApplicationShell::buildToolBar()
@@ -6756,71 +8240,114 @@ void ApplicationShell::buildToolBar()
 	m_toolBar->setObjectName("studioToolBar");
 	m_toolBar->setAccessibleName(tr("Studio toolbar"));
 	m_toolBar->setMovable(false);
-	m_toolBar->setToolButtonStyle(Qt::ToolButtonTextBesideIcon);
+	m_toolBar->setFloatable(false);
+	setBaseIconSize(m_toolBar, QSize(18, 18));
+	m_toolBar->setToolButtonStyle(Qt::ToolButtonIconOnly);
 	m_commands->populateToolBar(m_toolBar);
+
+	// Command tooltips already name the command and its shortcut (see
+	// commandToolTip() in studio_actions.cpp), so an icon-only bar stays
+	// discoverable.
+	for (QAction* action : m_toolBar->actions()) {
+		const QString commandId = action->property("commandId").toString();
+		if (commandId.isEmpty()) {
+			continue;
+		}
+		// The two commands that start real work carry a text label.
+		if (commandId == QStringLiteral("build.run") || commandId == QStringLiteral("game.launch")) {
+			if (auto* button = qobject_cast<QToolButton*>(m_toolBar->widgetForAction(action))) {
+				button->setToolButtonStyle(Qt::ToolButtonTextBesideIcon);
+				button->setIcon(studioIcon(commandId == QStringLiteral("build.run") ? QStringLiteral("hammer") : QStringLiteral("gamepad"), StudioIconTone::Normal, StudioIconAlignment::Leading));
+				setBaseIconSize(button, QSize(24, 18));
+			}
+		}
+	}
+
+	auto* spacer = new QWidget(m_toolBar);
+	spacer->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Preferred);
+	m_toolBar->addWidget(spacer);
+	if (QAction* palette = m_commands->action(QStringLiteral("shell.commandPalette"))) {
+		auto* paletteButton = new QToolButton(m_toolBar);
+		paletteButton->setDefaultAction(palette);
+		paletteButton->setToolButtonStyle(Qt::ToolButtonTextBesideIcon);
+		paletteButton->setIcon(studioIcon(QStringLiteral("search"), StudioIconTone::Muted, StudioIconAlignment::Leading));
+		setBaseIconSize(paletteButton, QSize(22, 16));
+		const QString shortcut = m_commands->shortcutForCommand(QStringLiteral("shell.commandPalette")).section(QStringLiteral(", "), 0, 0);
+		paletteButton->setText(shortcut.isEmpty() ? tr("Search commands") : tr("Search commands  %1").arg(shortcut));
+		paletteButton->setToolTip(tr("Type to find any studio command."));
+		paletteButton->setAccessibleName(tr("Search commands"));
+		paletteButton->setObjectName(QStringLiteral("commandSearchButton"));
+		paletteButton->setFocusPolicy(Qt::NoFocus);
+		m_toolBar->addWidget(paletteButton);
+	}
 }
 
 void ApplicationShell::buildStatusBar()
 {
-	auto makeChip = [this](const QString& objectName, const QString& accessibleName) {
-		auto* chip = new QLabel(this);
-		chip->setObjectName(objectName);
-		chip->setAccessibleName(accessibleName);
-		chip->setProperty("operationState", operationStateId(OperationState::Idle));
+	auto makeChip = [this](const QString& accessibleName) {
+		QLabel* chip = createStatusChip(accessibleName);
+		chip->setParent(this);
 		chip->setTextInteractionFlags(Qt::TextSelectableByMouse);
 		statusBar()->addPermanentWidget(chip);
 		return chip;
 	};
+	auto makePanelToggle = [this](const QString& iconName, const QString& text, const QString& toolTip) {
+		auto* button = new QToolButton(this);
+		button->setIcon(studioIcon(iconName));
+		setBaseIconSize(button, QSize(14, 14));
+		button->setText(text);
+		button->setToolTip(toolTip);
+		button->setAccessibleName(text);
+		button->setToolButtonStyle(Qt::ToolButtonTextBesideIcon);
+		button->setCheckable(true);
+		button->setAutoRaise(true);
+		statusBar()->addPermanentWidget(button);
+		return button;
+	};
 
 	statusBar()->setAccessibleName(tr("Status bar"));
-	m_projectChip = makeChip(QStringLiteral("statusChip"), tr("Project status"));
-	m_packageChip = makeChip(QStringLiteral("statusChip"), tr("Package status"));
-	m_installChip = makeChip(QStringLiteral("statusChip"), tr("Installation status"));
-	m_compilerChip = makeChip(QStringLiteral("statusChip"), tr("Compiler status"));
-	m_aiChip = makeChip(QStringLiteral("statusChip"), tr("AI status"));
+	statusBar()->setSizeGripEnabled(false);
+	m_activityToggle = makePanelToggle(QStringLiteral("activity"), tr("Activity"), tr("Show or hide the activity panel: every task with its progress, log, and result."));
+	m_inspectorToggle = makePanelToggle(QStringLiteral("sidebar-right"), tr("Inspector"), tr("Show or hide the inspector panel: settings, setup, and project diagnostics."));
+	auto* divider = createDivider(Qt::Vertical);
+	divider->setFixedHeight(16);
+	statusBar()->addPermanentWidget(divider);
+	m_projectChip = makeChip(tr("Project status"));
+	m_packageChip = makeChip(tr("Package status"));
+	m_installChip = makeChip(tr("Installation status"));
+	m_compilerChip = makeChip(tr("Compiler status"));
+	m_aiChip = makeChip(tr("AI status"));
 }
 
 void ApplicationShell::refreshStatusChips()
 {
-	auto applyChip = [](QLabel* chip, OperationState state, const QString& cue, const QString& text, const QString& tooltip) {
-		if (!chip) {
-			return;
-		}
-		// The cue is text, not colour, so state survives a colour-blind or
-		// high-contrast reading of the bar.
-		chip->setText(QStringLiteral("%1 %2").arg(cue, text));
-		chip->setToolTip(tooltip);
-		chip->setAccessibleDescription(tooltip);
-		chip->setProperty("operationState", operationStateId(state));
-		chip->style()->unpolish(chip);
-		chip->style()->polish(chip);
-	};
-
+	// Every chip names its state in words next to the glyph, so the bar reads
+	// the same in a high-visibility theme or without colour.
 	const QString projectPath = m_settings.currentProjectPath();
 	if (projectPath.isEmpty()) {
-		applyChip(m_projectChip, OperationState::Idle, tr("[No project]"), tr("Project"),
+		setStatusChip(m_projectChip, operationStateId(OperationState::Idle), tr("No project"),
 			tr("No project folder is open. Use File > Open Project Folder."));
 	} else {
 		ProjectManifest manifest;
 		const bool loaded = loadProjectManifest(projectPath, &manifest);
 		const ProjectHealthSummary health = buildProjectHealthSummary(manifest, m_settings.selectedGameInstallationId());
 		const OperationState state = loaded ? health.overallState() : OperationState::Warning;
-		applyChip(m_projectChip, state, QStringLiteral("[%1]").arg(localizedOperationStateName(state)),
-			QFileInfo(projectPath).fileName(),
-			loaded ? health.detail : tr("No project manifest yet: %1").arg(nativePath(projectPath)));
+		setStatusChip(m_projectChip, operationStateId(state), QFileInfo(projectPath).fileName(),
+			loaded ? tr("Project: %1\n%2").arg(localizedOperationStateName(state), health.detail)
+				   : tr("No project manifest yet: %1").arg(nativePath(projectPath)));
 	}
 
 	if (!m_packageArchive.isOpen()) {
-		applyChip(m_packageChip, OperationState::Idle, tr("[No package]"), tr("Package"),
+		setStatusChip(m_packageChip, operationStateId(OperationState::Idle), tr("No package"),
 			tr("No package is open. Use File > Open Package."));
 	} else {
 		const PackageArchiveSummary summary = m_packageArchive.summary();
 		const bool staged = m_packageStaging.operations().size() > 0;
 		const OperationState state = summary.warningCount > 0 ? OperationState::Warning
 			: (staged ? OperationState::Running : OperationState::Completed);
-		applyChip(m_packageChip, state,
-			staged ? tr("[Staged]") : QStringLiteral("[%1]").arg(localizedOperationStateName(state)),
-			QFileInfo(summary.sourcePath).fileName(),
+		const QString name = QFileInfo(summary.sourcePath).fileName();
+		setStatusChip(m_packageChip, operationStateId(state),
+			staged ? tr("%1 (staged)").arg(name) : name,
 			tr("%1 entries, %2, %3 loader warnings.")
 				.arg(summary.entryCount)
 				.arg(byteSizeText(summary.totalSizeBytes))
@@ -6829,7 +8356,7 @@ void ApplicationShell::refreshStatusChips()
 
 	const QVector<GameInstallationProfile> installations = m_settings.gameInstallations();
 	if (installations.isEmpty()) {
-		applyChip(m_installChip, OperationState::Idle, tr("[No install]"), tr("Game"),
+		setStatusChip(m_installChip, operationStateId(OperationState::Idle), tr("No game"),
 			tr("No game installation is configured. Use Project > Detect Game Installations."));
 	} else {
 		const QString selectedId = m_settings.selectedGameInstallationId();
@@ -6844,8 +8371,7 @@ void ApplicationShell::refreshStatusChips()
 		const OperationState state = validation.isUsable()
 			? (validation.warnings.isEmpty() ? OperationState::Completed : OperationState::Warning)
 			: OperationState::Failed;
-		applyChip(m_installChip, state, QStringLiteral("[%1]").arg(localizedOperationStateName(state)),
-			selected.displayName,
+		setStatusChip(m_installChip, operationStateId(state), selected.displayName,
 			validation.isUsable() ? nativePath(selected.rootPath)
 				: tr("Installation needs review: %1").arg(nativePath(selected.rootPath)));
 	}
@@ -6858,17 +8384,16 @@ void ApplicationShell::refreshStatusChips()
 		}
 	}
 	const OperationState compilerState = availableTools == 0 ? OperationState::Warning
-		: (availableTools < registry.tools.size() ? OperationState::Running : OperationState::Completed);
-	applyChip(m_compilerChip, compilerState,
-		availableTools == 0 ? tr("[None found]") : QStringLiteral("[%1/%2]").arg(availableTools).arg(registry.tools.size()),
-		tr("Compilers"),
+		: (availableTools < registry.tools.size() ? OperationState::Warning : OperationState::Completed);
+	setStatusChip(m_compilerChip, operationStateId(compilerState),
+		availableTools == 0 ? tr("No compilers") : tr("Compilers %1/%2").arg(availableTools).arg(registry.tools.size()),
 		availableTools == 0
 			? tr("No compiler executables were discovered. Set a path in Preferences or put the tools on PATH.")
 			: tr("%1 of %2 imported compiler tools were discovered.").arg(availableTools).arg(registry.tools.size()));
 
 	const AiAutomationPreferences ai = m_settings.aiAutomationPreferences();
-	applyChip(m_aiChip, ai.aiFreeMode ? OperationState::Completed : OperationState::Running,
-		ai.aiFreeMode ? tr("[AI-free]") : tr("[AI on]"), tr("AI"),
+	setStatusChip(m_aiChip, operationStateId(ai.aiFreeMode ? OperationState::Idle : OperationState::Running),
+		ai.aiFreeMode ? tr("AI-free") : tr("AI on"),
 		ai.aiFreeMode
 			? tr("AI-free mode is on. Every workflow stays local and deterministic.")
 			: tr("Optional AI workflows are enabled. Proposals are still staged for review before anything is written."));
@@ -6888,15 +8413,14 @@ void ApplicationShell::setMode(StudioMode mode)
 	if (m_modeStack && m_modeStack->currentIndex() != index) {
 		m_modeStack->setCurrentIndex(index);
 	}
-	if (m_modeRail && m_modeRail->currentRow() != index) {
-		const QSignalBlocker blocker(m_modeRail);
-		m_modeRail->setCurrentRow(index);
+	if (m_modeRail) {
+		m_modeRail->setCurrentId(index);
 	}
 	m_settings.setSelectedMode(index);
 	refreshModeAvailability();
 	refreshCommandEnablement();
 	if (m_modeRail && index < m_modeRail->count()) {
-		statusBar()->showMessage(tr("Mode: %1").arg(m_modeRail->item(index)->text()));
+		statusBar()->showMessage(tr("Mode: %1").arg(m_modeRail->label(index)), 3000);
 	}
 }
 
@@ -6922,6 +8446,251 @@ void ApplicationShell::refreshModeAvailability()
 		break;
 	default:
 		break;
+	}
+	refreshSurfaceStates();
+}
+
+void ApplicationShell::resetLayout()
+{
+	for (auto it = m_layoutSplitters.cbegin(); it != m_layoutSplitters.cend(); ++it) {
+		const QByteArray state = m_defaultLayoutStates.value(it.key());
+		if (it.value() && !state.isEmpty()) {
+			it.value()->restoreState(state);
+		}
+		m_settings.setShellLayoutState(it.key(), QByteArray());
+	}
+	if (m_activityDock) {
+		m_activityDock->setFloating(false);
+		addDockWidget(Qt::RightDockWidgetArea, m_activityDock);
+		m_activityDock->hide();
+	}
+	if (m_inspectorDock) {
+		m_inspectorDock->setFloating(false);
+		addDockWidget(Qt::RightDockWidgetArea, m_inspectorDock);
+		if (m_activityDock) {
+			tabifyDockWidget(m_activityDock, m_inspectorDock);
+		}
+		m_inspectorDock->hide();
+	}
+	if (m_modeRail) {
+		m_modeRail->setCompact(false);
+		m_settings.setShellModeRailCompact(false);
+	}
+	statusBar()->showMessage(tr("Layout reset to the default arrangement."), 4000);
+}
+
+void ApplicationShell::refreshSurfaceStates()
+{
+	if (!m_modeStack) {
+		return;
+	}
+	const QString separator = QStringLiteral("  %1  ").arg(QChar(0x00b7));
+	auto headerFor = [this](StudioMode mode) {
+		return m_pageHeaders.value(static_cast<int>(mode), nullptr);
+	};
+	auto emptyFor = [this](StudioMode mode) {
+		return m_emptyStates.value(static_cast<int>(mode), nullptr);
+	};
+	auto showContent = [this](StudioMode mode, bool hasContent) {
+		if (QStackedWidget* stack = m_surfaceStacks.value(static_cast<int>(mode), nullptr)) {
+			const int index = hasContent ? 1 : 0;
+			if (stack->currentIndex() != index) {
+				stack->setCurrentIndex(index);
+			}
+		}
+	};
+	auto selectableCount = [](const QListWidget* list) {
+		int count = 0;
+		if (!list) {
+			return count;
+		}
+		for (int index = 0; index < list->count(); ++index) {
+			if (list->item(index)->flags().testFlag(Qt::ItemIsSelectable)) {
+				++count;
+			}
+		}
+		return count;
+	};
+	auto failed = [](const LoadingPane* pane) {
+		return pane && pane->state() == OperationState::Failed;
+	};
+
+	const QString projectPath = m_settings.currentProjectPath();
+	const bool hasPackage = m_packageArchive.isOpen();
+	const PackageArchiveSummary packageSummary = hasPackage ? m_packageArchive.summary() : PackageArchiveSummary{};
+	const QString packageName = hasPackage ? QFileInfo(packageSummary.sourcePath).fileName() : QString();
+
+	if (PageHeader* header = headerFor(StudioMode::Workspace)) {
+		header->setSubtitle(projectPath.isEmpty()
+			? tr("No project open. Open a project folder to track its health, packages, and builds.")
+			: QFileInfo(projectPath).fileName() + separator + nativePath(projectPath));
+	}
+
+	// Levels: the viewport workbench only appears once a map is loaded; a
+	// failed load keeps the empty state but explains what went wrong.
+	const bool hasMap = m_levelMapDocument.format != LevelMapFormat::Unknown;
+	if (PageHeader* header = headerFor(StudioMode::Levels)) {
+		if (hasMap) {
+			QStringList parts;
+			const QString fileName = QFileInfo(m_levelMapDocument.sourcePath).fileName();
+			parts << fileName;
+			if (!m_levelMapDocument.mapName.isEmpty() && m_levelMapDocument.mapName.compare(fileName, Qt::CaseInsensitive) != 0
+				&& m_levelMapDocument.mapName.compare(QFileInfo(fileName).completeBaseName(), Qt::CaseInsensitive) != 0) {
+				parts << m_levelMapDocument.mapName;
+			}
+			if (!m_levelMapDocument.doomThings.isEmpty() || !m_levelMapDocument.doomLinedefs.isEmpty()) {
+				parts << tr("%n things", nullptr, static_cast<int>(m_levelMapDocument.doomThings.size()));
+				parts << tr("%n linedefs", nullptr, static_cast<int>(m_levelMapDocument.doomLinedefs.size()));
+			} else {
+				parts << tr("%n entities", nullptr, static_cast<int>(m_levelMapDocument.entities.size()));
+				parts << tr("%n brushes", nullptr, static_cast<int>(m_levelMapDocument.brushes.size()));
+			}
+			if (!m_levelMapDocument.undoStack.isEmpty() && m_levelMapDocument.savedUndoDepth != m_levelMapDocument.undoStack.size()) {
+				parts << tr("unsaved edits");
+			}
+			header->setSubtitle(parts.join(separator));
+		} else {
+			header->setSubtitle(tr("No map open"));
+		}
+	}
+	if (EmptyStateView* empty = emptyFor(StudioMode::Levels)) {
+		if (failed(m_levelMapState)) {
+			empty->setTitle(tr("The map could not be opened"));
+			empty->setBody(m_levelMapState->detail());
+		} else {
+			empty->setTitle(tr("No map open"));
+			empty->setBody(tr("Open a Quake, Quake II, or Quake III .map, or a Doom WAD, to inspect its entities, brushes, and health in the viewport."));
+		}
+	}
+	showContent(StudioMode::Levels, hasMap);
+
+	if (PageHeader* header = headerFor(StudioMode::Packages)) {
+		if (hasPackage) {
+			QStringList parts;
+			parts << packageName;
+			parts << localizedPackageFormatName(packageSummary.format);
+			parts << tr("%n entries", nullptr, packageSummary.entryCount);
+			parts << byteSizeText(packageSummary.totalSizeBytes);
+			const int staged = static_cast<int>(m_packageStaging.operations().size());
+			if (staged > 0) {
+				parts << tr("%n staged change(s)", nullptr, staged);
+			}
+			header->setSubtitle(parts.join(separator));
+		} else {
+			header->setSubtitle(tr("No package open"));
+		}
+	}
+	if (EmptyStateView* empty = emptyFor(StudioMode::Packages)) {
+		if (failed(m_packageState)) {
+			empty->setTitle(tr("The package could not be opened"));
+			empty->setBody(m_packageState->detail());
+		} else {
+			empty->setTitle(tr("No package open"));
+			empty->setBody(tr("Open a PAK, WAD, ZIP, or PK3 archive, or a folder, to browse its entries, preview content, and stage changes for a new package."));
+		}
+	}
+	showContent(StudioMode::Packages, hasPackage);
+
+	// Asset browsers read from the open package; with none open, or none of
+	// their kind inside it, the empty state says which.
+	struct AssetSurface {
+		StudioMode mode;
+		QListWidget* list;
+		QString noPackageTitle;
+		QString noPackageBody;
+		QString noneTitle;
+		QString noneBody;
+		QString countText;
+	};
+	const int textureCount = selectableCount(m_textureEntries);
+	const int modelCount = selectableCount(m_modelEntries);
+	const int audioCount = selectableCount(m_audioEntries);
+	const QVector<AssetSurface> assetSurfaces = {
+		{StudioMode::Textures, m_textureEntries,
+			tr("No textures to show"),
+			tr("Open a package with textures, flats, sprites, or images. Indexed art is decoded with the palette the package provides."),
+			tr("No images in %1").arg(packageName),
+			tr("This package has no textures, flats, sprites, or images. Open another package to browse its art."),
+			tr("%n image(s) in %1", nullptr, textureCount).arg(packageName)},
+		{StudioMode::Models, m_modelEntries,
+			tr("No models to show"),
+			tr("Open a package that contains MDL, MD2, or MD3 models to orbit them, play their animations, and inspect skins."),
+			tr("No models in %1").arg(packageName),
+			tr("This package has no MDL, MD2, or MD3 models. Open another package to browse its models."),
+			tr("%n model(s) in %1", nullptr, modelCount).arg(packageName)},
+		{StudioMode::Audio, m_audioEntries,
+			tr("No sounds to show"),
+			tr("Open a package with WAV, Ogg, MP3, or FLAC files to inspect their format and see a decoded waveform."),
+			tr("No sounds in %1").arg(packageName),
+			tr("This package has no WAV, Ogg, MP3, or FLAC files. Open another package to browse its audio."),
+			tr("%n sound(s) in %1", nullptr, audioCount).arg(packageName)},
+	};
+	for (const AssetSurface& surface : assetSurfaces) {
+		const int count = selectableCount(surface.list);
+		if (EmptyStateView* empty = emptyFor(surface.mode)) {
+			empty->setTitle(hasPackage ? surface.noneTitle : surface.noPackageTitle);
+			empty->setBody(hasPackage ? surface.noneBody : surface.noPackageBody);
+		}
+		if (PageHeader* header = headerFor(surface.mode)) {
+			header->setSubtitle(hasPackage ? surface.countText : tr("No package open"));
+		}
+		showContent(surface.mode, hasPackage && count > 0);
+	}
+
+	if (PageHeader* header = headerFor(StudioMode::Code)) {
+		if (!m_codeFilePath.isEmpty()) {
+			header->setSubtitle(nativePath(m_codeFilePath) + (m_codeDirty ? separator + tr("modified") : QString()));
+		} else if (!projectPath.isEmpty()) {
+			header->setSubtitle(QFileInfo(projectPath).fileName() + separator + tr("choose a file to edit"));
+		} else {
+			header->setSubtitle(tr("No project open"));
+		}
+	}
+	showContent(StudioMode::Code, !projectPath.isEmpty() || !m_codeFilePath.isEmpty());
+
+	const bool hasShader = !m_advancedShaderDocument.shaders.isEmpty();
+	if (PageHeader* header = headerFor(StudioMode::Shaders)) {
+		const QString shaderPath = m_advancedShaderPath ? m_advancedShaderPath->text().trimmed() : QString();
+		header->setSubtitle(!hasShader || shaderPath.isEmpty() ? tr("No shader script loaded")
+			: QFileInfo(shaderPath).fileName() + separator + tr("%n shader(s)", nullptr, static_cast<int>(m_advancedShaderDocument.shaders.size())));
+	}
+	showContent(StudioMode::Shaders, hasShader);
+
+	// Status strips only take space while they have something to say.
+	auto syncStrip = [](LoadingPane* pane) {
+		if (!pane) {
+			return;
+		}
+		const OperationState state = pane->state();
+		const bool show = state != OperationState::Idle && state != OperationState::Completed;
+		QWidget* host = pane->parentWidget();
+		if (host && host->objectName() == QStringLiteral("statusStrip")) {
+			host->setVisible(show);
+		} else {
+			pane->setVisible(show);
+		}
+	};
+	syncStrip(m_levelMapState);
+	syncStrip(m_packageState);
+	syncStrip(m_textureState);
+	syncStrip(m_modelState);
+	syncStrip(m_audioState);
+	syncStrip(m_advancedStudioState);
+	if (m_workspaceState) {
+		m_workspaceState->setVisible(!projectPath.isEmpty());
+	}
+
+	if (PageHeader* header = headerFor(StudioMode::Build)) {
+		QStringList parts;
+		if (m_buildPipelineChoice && m_buildPipelineChoice->currentIndex() >= 0) {
+			parts << m_buildPipelineChoice->currentText();
+		}
+		const QString input = m_buildPipelineInput ? m_buildPipelineInput->text().trimmed() : QString();
+		parts << (input.isEmpty() ? tr("no input map chosen") : QFileInfo(input).fileName());
+		if (m_buildPipelineThread) {
+			parts << tr("running");
+		}
+		header->setSubtitle(parts.join(separator));
 	}
 }
 
@@ -6974,6 +8743,8 @@ void ApplicationShell::refreshCommandEnablement()
 	m_commands->setEnabled(QStringLiteral("package.stageRename"), hasPackage && hasPackageSelection);
 	m_commands->setEnabled(QStringLiteral("package.stageDelete"), hasPackage && hasPackageSelection);
 	m_commands->setEnabled(QStringLiteral("package.saveAs"), hasPackage && hasStaged);
+	m_commands->setEnabled(QStringLiteral("package.compare"), hasPackage);
+	m_commands->setEnabled(QStringLiteral("model.export"), m_modelMesh.isValid());
 	m_commands->setEnabled(QStringLiteral("map.saveAs"), hasMap);
 	m_commands->setEnabled(QStringLiteral("map.exportImage"), hasMap);
 	m_commands->setEnabled(QStringLiteral("map.editProperty"), hasMap && hasSelection);
@@ -6984,6 +8755,7 @@ void ApplicationShell::refreshCommandEnablement()
 	m_commands->setEnabled(QStringLiteral("activity.cancel"), m_compilerRunThread != nullptr || m_buildPipelineThread != nullptr);
 	m_commands->setEnabled(QStringLiteral("build.run"), m_buildPipelineThread == nullptr);
 	m_commands->setEnabled(QStringLiteral("compiler.run"), m_compilerRunThread == nullptr);
+	refreshSurfaceStates();
 }
 
 // ---------------------------------------------------------------------------
@@ -7022,6 +8794,48 @@ void ApplicationShell::closeEvent(QCloseEvent* event)
 	saveShellState();
 	m_settings.sync();
 	QMainWindow::closeEvent(event);
+}
+
+bool ApplicationShell::eventFilter(QObject* watched, QEvent* event)
+{
+	// Enter on a property row edits its value, like a double-click. While an
+	// editor is open it has focus, so its own Enter never reaches this filter.
+	if (watched == m_entityInspector && event->type() == QEvent::KeyPress) {
+		const auto* keyEvent = static_cast<QKeyEvent*>(event);
+		if (keyEvent->key() == Qt::Key_Return || keyEvent->key() == Qt::Key_Enter) {
+			QTreeWidgetItem* item = m_entityInspector->currentItem();
+			if (item && item->flags().testFlag(Qt::ItemIsEditable)) {
+				m_entityInspector->editItem(item, 1);
+				return true;
+			}
+		}
+	}
+	if (watched == m_textureEntries && event->type() == QEvent::Resize) {
+		fitTextureGrid();
+	}
+	return QMainWindow::eventFilter(watched, event);
+}
+
+void ApplicationShell::fitTextureGrid()
+{
+	if (!m_textureEntries || !m_textureTileMode || m_textureEntries->viewMode() != QListView::IconMode) {
+		return;
+	}
+	// Tiles share the row evenly instead of leaving a ragged gap on the right.
+	// The scroll bar's width is reserved whether or not it shows, so it
+	// appearing can never change the column count that decides whether it
+	// appears.
+	const QSize tile = scaledIconSize(QSize(88, 88));
+	const int minimumCell = tile.width() + 20;
+	const int spacing = m_textureEntries->spacing();
+	const int available = m_textureEntries->width() - 2 * m_textureEntries->frameWidth()
+		- m_textureEntries->style()->pixelMetric(QStyle::PM_ScrollBarExtent, nullptr, m_textureEntries) - spacing;
+	const int columns = std::max(1, available / (minimumCell + spacing));
+	const QSize grid(std::max(minimumCell, available / columns - spacing),
+		tile.height() + m_textureEntries->fontMetrics().height() + 22);
+	if (m_textureEntries->gridSize() != grid) {
+		m_textureEntries->setGridSize(grid);
+	}
 }
 
 void ApplicationShell::dragEnterEvent(QDragEnterEvent* event)
@@ -7078,6 +8892,19 @@ void ApplicationShell::openDroppedPath(const QString& path)
 	if (pathLooksLikePackage(path)) {
 		loadPackagePath(path);
 		setMode(StudioMode::Packages);
+		return;
+	}
+	const QString suffix = info.suffix().toLower();
+	if ((suffix == QStringLiteral("def") || suffix == QStringLiteral("fgd") || suffix == QStringLiteral("ent")) && m_entityDefinitionPath) {
+		m_entityDefinitionPath->setText(path);
+		reloadEntityDefinitions();
+		setMode(StudioMode::Levels);
+		return;
+	}
+	if (info.suffix().compare(QStringLiteral("shader"), Qt::CaseInsensitive) == 0 && m_advancedShaderPath) {
+		m_advancedShaderPath->setText(path);
+		inspectAdvancedShaderScript();
+		setMode(StudioMode::Shaders);
 		return;
 	}
 	openCodeFile(path);
@@ -7168,7 +8995,8 @@ QVector<PackageEntry> packageEntriesOfKind(const PackageArchive& archive, AssetP
 
 QListWidgetItem* entryListItem(const PackageEntry& entry)
 {
-	auto* item = new QListWidgetItem(QStringLiteral("%1\n%2").arg(entry.virtualPath, byteSizeText(entry.sizeBytes)));
+	auto* item = new QListWidgetItem(studioIcon(packageEntryIconName(entry), StudioIconTone::Muted),
+		QStringLiteral("%1\n%2").arg(entry.virtualPath, byteSizeText(entry.sizeBytes)));
 	item->setData(Qt::UserRole, entry.virtualPath);
 	item->setToolTip(entry.virtualPath);
 	item->setData(Qt::AccessibleTextRole, entry.virtualPath);
@@ -7190,6 +9018,7 @@ void ApplicationShell::refreshTextureBrowser()
 		}
 	}
 
+	const QString previousTexture = currentItemKey(m_textureEntries);
 	m_textureEntries->clear();
 	if (!m_packageArchive.isOpen()) {
 		m_textureState->setState(OperationState::Idle, tr("No package open"));
@@ -7209,7 +9038,9 @@ void ApplicationShell::refreshTextureBrowser()
 
 	const QVector<PackageEntry> images = packageEntriesOfKind(m_packageArchive, AssetPreviewKind::Image);
 	for (const PackageEntry& entry : images) {
-		m_textureEntries->addItem(entryListItem(entry));
+		QListWidgetItem* item = entryListItem(entry);
+		item->setData(Qt::UserRole + 4, byteSizeText(entry.sizeBytes));
+		m_textureEntries->addItem(item);
 	}
 	if (images.isEmpty()) {
 		m_textureEntries->addItem(disabledListItem(tr("This package has no recognizable image entries.")));
@@ -7232,6 +9063,9 @@ void ApplicationShell::refreshTextureBrowser()
 			resolution.fromPackage ? QString() : tr(" (generated stand-in)")));
 
 	filterTextureEntries();
+	restoreListSelection(m_textureEntries, previousTexture);
+	applyTextureViewMode();
+	queueTextureThumbnails();
 	showSelectedTexture();
 }
 
@@ -7254,6 +9088,119 @@ void ApplicationShell::filterTextureEntries()
 	if (m_textureState && !filter.isEmpty()) {
 		m_textureState->setState(visible > 0 ? OperationState::Completed : OperationState::Warning,
 			tr("%n match(es) for the filter", nullptr, visible));
+	}
+}
+
+void ApplicationShell::applyTextureViewMode()
+{
+	if (!m_textureEntries) {
+		return;
+	}
+	if (m_textureTilesButton && m_textureListButton) {
+		m_textureTilesButton->setChecked(m_textureTileMode);
+		m_textureListButton->setChecked(!m_textureTileMode);
+	}
+	const QSize tile = scaledIconSize(QSize(88, 88));
+	if (m_textureTileMode) {
+		m_textureEntries->setViewMode(QListView::IconMode);
+		m_textureEntries->setFlow(QListView::LeftToRight);
+		m_textureEntries->setWrapping(true);
+		m_textureEntries->setResizeMode(QListView::Adjust);
+		m_textureEntries->setMovement(QListView::Static);
+		m_textureEntries->setUniformItemSizes(true);
+		m_textureEntries->setWordWrap(false);
+		m_textureEntries->setIconSize(tile);
+		m_textureEntries->setSpacing(4);
+		// Cells are wider than the thumbnail so typical texture names fit
+		// under it whole; longer ones elide in the middle.
+		fitTextureGrid();
+	} else {
+		m_textureEntries->setViewMode(QListView::ListMode);
+		m_textureEntries->setFlow(QListView::TopToBottom);
+		m_textureEntries->setWrapping(false);
+		m_textureEntries->setGridSize(QSize());
+		m_textureEntries->setSpacing(0);
+		m_textureEntries->setIconSize(scaledIconSize(QSize(32, 32)));
+	}
+	const QSize small = scaledIconSize(QSize(16, 16));
+	const QIcon placeholder = studioIcon(QStringLiteral("image"), StudioIconTone::Muted);
+	for (int index = 0; index < m_textureEntries->count(); ++index) {
+		QListWidgetItem* item = m_textureEntries->item(index);
+		const QString path = item ? item->data(Qt::UserRole).toString() : QString();
+		if (path.isEmpty()) {
+			continue;
+		}
+		const QString size = item->data(Qt::UserRole + 4).toString();
+		// Tiles carry just the file name; the full path stays in the tooltip.
+		item->setText(m_textureTileMode ? QFileInfo(path).fileName() : QStringLiteral("%1\n%2").arg(path, size));
+		item->setTextAlignment(m_textureTileMode ? Qt::AlignHCenter | Qt::AlignTop : Qt::AlignLeft | Qt::AlignVCenter);
+		const QIcon thumbnail = m_textureThumbnails.value(path);
+		item->setIcon(thumbnail.isNull() ? placeholder : thumbnail);
+	}
+	Q_UNUSED(small);
+}
+
+void ApplicationShell::queueTextureThumbnails()
+{
+	if (!m_textureEntries || !m_textureThumbnailTimer) {
+		return;
+	}
+	const QString key = QStringLiteral("%1|%2|%3").arg(m_packageArchive.isOpen() ? m_packageArchive.summary().sourcePath : QString(),
+		activePaletteId(), QString::number(scaledIconSize(QSize(88, 88)).width()));
+	if (key != m_textureThumbnailKey) {
+		m_textureThumbnails.clear();
+		m_textureThumbnailKey = key;
+	}
+	m_textureThumbnailQueue.clear();
+	for (int index = 0; index < m_textureEntries->count(); ++index) {
+		const QString path = m_textureEntries->item(index)->data(Qt::UserRole).toString();
+		if (!path.isEmpty() && !m_textureThumbnails.contains(path)) {
+			m_textureThumbnailQueue.push_back(path);
+		}
+	}
+	if (m_textureThumbnailQueue.isEmpty()) {
+		m_textureThumbnailTimer->stop();
+	} else {
+		m_textureThumbnailTimer->start();
+	}
+}
+
+void ApplicationShell::generateTextureThumbnailBatch()
+{
+	if (!m_packageArchive.isOpen() || m_textureThumbnailQueue.isEmpty()) {
+		m_textureThumbnailTimer->stop();
+		return;
+	}
+	// A handful per event-loop turn keeps typing and scrolling responsive even
+	// for WADs with thousands of textures.
+	const IdTechPaletteResolution resolution = activePaletteResolution();
+	IdTechImageDecodeContext context;
+	context.archive = &m_packageArchive;
+	const int side = scaledIconSize(QSize(88, 88)).width();
+	const qreal ratio = m_textureEntries ? m_textureEntries->devicePixelRatioF() : 1.0;
+	QHash<QString, QIcon> produced;
+	for (int count = 0; count < 6 && !m_textureThumbnailQueue.isEmpty(); ++count) {
+		const QString path = m_textureThumbnailQueue.takeFirst();
+		QByteArray bytes;
+		QString error;
+		QImage image;
+		if (m_packageArchive.readEntryBytes(path, &bytes, &error)) {
+			const IdTechImageDecodeResult decoded = decodeIdTechImage(path, bytes, resolution.palette, context);
+			image = decoded.decoded ? decoded.image : QImage();
+		}
+		const QIcon icon = image.isNull() ? studioIcon(QStringLiteral("warning"), StudioIconTone::Warning) : textureThumbnailIcon(image, side, ratio);
+		m_textureThumbnails.insert(path, icon);
+		produced.insert(path, icon);
+	}
+	for (int index = 0; index < m_textureEntries->count(); ++index) {
+		QListWidgetItem* item = m_textureEntries->item(index);
+		const auto it = produced.constFind(item->data(Qt::UserRole).toString());
+		if (it != produced.constEnd()) {
+			item->setIcon(it.value());
+		}
+	}
+	if (m_textureThumbnailQueue.isEmpty()) {
+		m_textureThumbnailTimer->stop();
 	}
 }
 
@@ -7284,7 +9231,11 @@ void ApplicationShell::showSelectedTexture()
 		return;
 	}
 
-	const IdTechImageDecodeResult decoded = decodeIdTechImage(virtualPath, bytes, resolution.palette);
+	// Quake II .sp2 sprites name their frame images instead of carrying pixels,
+	// so the decoder needs the package to resolve them from.
+	IdTechImageDecodeContext context;
+	context.archive = &m_packageArchive;
+	const IdTechImageDecodeResult decoded = decodeIdTechImage(virtualPath, bytes, resolution.palette, context);
 	m_texturePreview->setDecodeResult(decoded);
 
 	if (m_textureMipLevel) {
@@ -7361,6 +9312,7 @@ void ApplicationShell::refreshModelBrowser()
 	if (!m_modelEntries || !m_modelState) {
 		return;
 	}
+	const QString previousModel = currentItemKey(m_modelEntries);
 	m_modelEntries->clear();
 	if (!m_packageArchive.isOpen()) {
 		m_modelState->setState(OperationState::Idle, tr("No package open"));
@@ -7371,6 +9323,10 @@ void ApplicationShell::refreshModelBrowser()
 		}
 		if (m_modelSkinPreview) {
 			m_modelSkinPreview->clearImage();
+		}
+		m_modelMesh = ModelMesh();
+		if (m_modelViewport) {
+			m_modelViewport->clearMesh();
 		}
 		return;
 	}
@@ -7384,7 +9340,8 @@ void ApplicationShell::refreshModelBrowser()
 	}
 	m_modelState->setState(models.isEmpty() ? OperationState::Warning : OperationState::Completed,
 		tr("%n model(s)", nullptr, static_cast<int>(models.size())));
-	m_modelState->setDetail(tr("Model geometry rendering is not implemented yet; headers, skins, and animations are read."));
+	m_modelState->setDetail(tr("Geometry is software-rendered from the package. Skins decode with the package palette; animations come from frame names."));
+	restoreListSelection(m_modelEntries, previousModel);
 	showSelectedModel();
 }
 
@@ -7400,37 +9357,41 @@ void ApplicationShell::showSelectedModel()
 		if (m_modelSkinPreview) {
 			m_modelSkinPreview->clearImage();
 		}
+		m_modelMesh = ModelMesh();
+		if (m_modelViewport) {
+			m_modelViewport->clearMesh();
+		}
 		return;
 	}
 
 	const PackagePreview preview = buildPackageEntryPreview(m_packageArchive, virtualPath);
-	for (const QString& line : preview.assetDetailLines) {
-		m_modelDetails->addItem(line);
-	}
-	for (const QString& line : preview.modelMaterialLines) {
-		m_modelDetails->addItem(line);
-	}
-	if (m_modelDetails->count() == 0) {
-		m_modelDetails->addItem(disabledListItem(tr("No model metadata could be read from this entry.")));
-	}
 
-	// Show the first skin that resolves inside the same package.
+	// Geometry, not just header counts: this is what the viewport draws.
+	m_modelMesh = decodeModelMeshFromArchive(m_packageArchive, virtualPath, activePaletteId());
+	QString resolvedSkinPath;
+	const QImage skin = resolveModelSkin(m_packageArchive, m_modelMesh, activePaletteId(), &resolvedSkinPath);
+	populateModelDetails(m_modelDetails, m_modelMesh, resolvedSkinPath);
+	if (m_modelViewport) {
+		m_modelViewport->setMesh(m_modelMesh);
+		if (!skin.isNull()) {
+			m_modelViewport->setSkin(skin);
+		} else {
+			m_modelViewport->clearSkin();
+		}
+		const AccessibilityPreferences preferences = m_settings.accessibilityPreferences();
+		m_modelViewport->setHighContrast(preferences.theme == StudioTheme::HighContrastDark
+			|| preferences.theme == StudioTheme::HighContrastLight);
+		m_modelViewport->setReducedMotion(preferences.reducedMotion);
+		m_modelViewport->frameModel();
+	}
 	if (m_modelSkinPreview) {
-		m_modelSkinPreview->clearImage();
-		const IdTechPaletteResolution resolution = activePaletteResolution();
-		for (const QString& candidate : preview.modelMaterialLines) {
-			const QString trimmed = candidate.trimmed();
-			QByteArray bytes;
-			if (trimmed.isEmpty() || !m_packageArchive.readEntryBytes(trimmed, &bytes, nullptr)) {
-				continue;
-			}
-			const IdTechImageDecodeResult decoded = decodeIdTechImage(trimmed, bytes, resolution.palette);
-			if (decoded.decoded) {
-				m_modelSkinPreview->setDecodeResult(decoded);
-				break;
-			}
+		if (skin.isNull()) {
+			m_modelSkinPreview->clearImage();
+		} else {
+			m_modelSkinPreview->setImage(skin, resolvedSkinPath.isEmpty() ? virtualPath : resolvedSkinPath);
 		}
 	}
+	refreshModelPlaybackControls();
 
 	if (m_modelDrawer) {
 		QVector<DetailSection> sections;
@@ -7455,11 +9416,72 @@ void ApplicationShell::showSelectedModel()
 	}
 }
 
+void ApplicationShell::refreshModelPlaybackControls()
+{
+	if (!m_modelViewport) {
+		return;
+	}
+	if (m_modelAnimation) {
+		const QStringList names = m_modelViewport->animationNames();
+		const QString current = m_modelViewport->animation();
+		if (m_modelAnimation->count() != names.size() + 1) {
+			const QSignalBlocker blocker(m_modelAnimation);
+			m_modelAnimation->clear();
+			m_modelAnimation->addItem(tr("All frames"), QString());
+			for (const QString& name : names) {
+				m_modelAnimation->addItem(name, name);
+			}
+		}
+		const QSignalBlocker blocker(m_modelAnimation);
+		const int index = std::max(0, m_modelAnimation->findData(current));
+		m_modelAnimation->setCurrentIndex(index);
+		m_modelAnimation->setEnabled(!names.isEmpty());
+	}
+	if (m_modelPlayPause) {
+		const bool playing = m_modelViewport->isPlaying();
+		m_modelPlayPause->setText(playing ? tr("Pause") : tr("Play"));
+		m_modelPlayPause->setIcon(studioIcon(playing ? QStringLiteral("pause") : QStringLiteral("play")));
+		m_modelPlayPause->setEnabled(m_modelViewport->frameCount() > 1);
+	}
+	if (m_modelHover) {
+		m_modelHover->setText(m_modelViewport->playbackSummary());
+	}
+}
+
+void ApplicationShell::exportSelectedModel()
+{
+	if (!m_modelMesh.geometryAvailable) {
+		statusBar()->showMessage(tr("Select a model whose geometry VibeStudio can decode before exporting."));
+		return;
+	}
+	const QString target = QFileDialog::getSaveFileName(this, tr("Export Model Frame"), QString(), tr("Wavefront OBJ (*.obj)"));
+	if (target.isEmpty()) {
+		return;
+	}
+	const int frameIndex = m_modelViewport ? m_modelViewport->frame() : 0;
+	const QString objText = exportModelFrameObj(m_modelMesh, frameIndex);
+	if (objText.isEmpty()) {
+		QMessageBox::warning(this, tr("Export Failed"), tr("Frame %1 produced no exportable geometry.").arg(frameIndex));
+		return;
+	}
+	QFile file(target);
+	if (!file.open(QIODevice::WriteOnly | QIODevice::Truncate)) {
+		QMessageBox::warning(this, tr("Export Failed"), tr("%1 could not be written.").arg(nativePath(target)));
+		return;
+	}
+	file.write(objText.toUtf8());
+	file.close();
+	recordActivity(tr("Export Model"), nativePath(target), tr("asset"), OperationState::Completed,
+		tr("Wrote frame %1 of %2 to %3.").arg(frameIndex).arg(m_modelMesh.formatName, nativePath(target)));
+	statusBar()->showMessage(tr("Model frame written to %1").arg(nativePath(target)));
+}
+
 void ApplicationShell::refreshAudioBrowser()
 {
 	if (!m_audioEntries || !m_audioState) {
 		return;
 	}
+	const QString previousAudio = currentItemKey(m_audioEntries);
 	m_audioEntries->clear();
 	if (!m_packageArchive.isOpen()) {
 		m_audioState->setState(OperationState::Idle, tr("No package open"));
@@ -7484,6 +9506,7 @@ void ApplicationShell::refreshAudioBrowser()
 	m_audioState->setState(audio.isEmpty() ? OperationState::Warning : OperationState::Completed,
 		tr("%n audio entr(y)(ies)", nullptr, static_cast<int>(audio.size())));
 	m_audioState->setDetail(tr("Waveforms are decoded from PCM; compressed codecs report header metadata only."));
+	restoreListSelection(m_audioEntries, previousAudio);
 	showSelectedAudioEntry();
 }
 
@@ -7503,12 +9526,7 @@ void ApplicationShell::showSelectedAudioEntry()
 	}
 
 	const PackagePreview preview = buildPackageEntryPreview(m_packageArchive, virtualPath);
-	for (const QString& line : preview.assetDetailLines) {
-		m_audioDetails->addItem(line);
-	}
-	if (m_audioDetails->count() == 0) {
-		m_audioDetails->addItem(disabledListItem(tr("No audio metadata could be read from this entry.")));
-	}
+	populateAudioDetails(m_audioDetails, preview);
 
 	if (m_audioWaveform) {
 		if (preview.audioPeaks.valid) {
@@ -7621,6 +9639,181 @@ void ApplicationShell::openSelectedCodeFile()
 	openCodeFile(path);
 }
 
+void ApplicationShell::registerWatchedDocument(const QString& path, DocumentWatchRole role, const QString& documentId, bool adoptContents)
+{
+	const QString trimmed = path.trimmed();
+	if (trimmed.isEmpty()) {
+		m_documentWatcher.unregisterRole(role);
+		return;
+	}
+	// One path per role: opening a second map replaces the first, and the old
+	// file stops being watched rather than accumulating.
+	const QStringList previous = m_documentWatcher.pathsForRole(role);
+	const QString normalized = normalizeDocumentWatchPath(trimmed);
+	for (const QString& stale : previous) {
+		if (stale != normalized) {
+			m_documentWatcher.unregisterPath(stale);
+			m_ignoredExternalChanges.remove(stale);
+		}
+	}
+
+	// Registering takes a fresh baseline, which is right when the caller has
+	// just read the file - those bytes are what the studio is showing. A
+	// refresh that merely passes the same path through must NOT re-baseline, or
+	// the watch would reset faster than any change could ever be reported.
+	if (!adoptContents && m_documentWatcher.isWatching(normalized)) {
+		return;
+	}
+	m_ignoredExternalChanges.remove(normalized);
+	m_documentWatcher.registerPath(trimmed, role, documentId);
+}
+
+void ApplicationShell::pollWatchedDocuments()
+{
+	if (m_documentWatcher.watchedCount() == 0) {
+		return;
+	}
+	const QVector<DocumentChangeEvent> events = m_documentWatcher.poll();
+	for (const DocumentChangeEvent& event : events) {
+		handleExternalDocumentChange(event);
+	}
+}
+
+void ApplicationShell::handleExternalDocumentChange(const DocumentChangeEvent& event)
+{
+	// A touch is a metadata move with provably identical bytes. Saying anything
+	// about it would train the user to dismiss the prompt that matters.
+	if (!documentChangeKindIsSubstantive(event.kind)) {
+		return;
+	}
+	if (m_ignoredExternalChanges.contains(event.path)) {
+		return;
+	}
+
+	const QString display = nativePath(event.path);
+	const QString kindName = documentChangeKindDisplayName(event.kind);
+	recordActivity(tr("File changed outside the studio"), display, QStringLiteral("session"),
+		OperationState::Warning, kindName);
+
+	if (event.kind == DocumentChangeKind::Removed) {
+		// Nothing to reload, so this is a notice rather than a question.
+		m_ignoredExternalChanges.insert(event.path);
+		statusBar()->showMessage(tr("%1 was deleted outside the studio.").arg(display));
+		return;
+	}
+
+	switch (event.role) {
+	case DocumentWatchRole::LevelMap: {
+		const bool dirty = !m_levelMapDocument.undoStack.isEmpty();
+		const QMessageBox::StandardButton answer = QMessageBox::question(
+			this,
+			tr("Map Changed On Disk"),
+			dirty
+				? tr("%1 changed outside the studio and this map has unsaved edits.\n\nReloading discards those edits. Reload from disk?").arg(display)
+				: tr("%1 changed outside the studio.\n\nReload it?").arg(display),
+			QMessageBox::Yes | QMessageBox::No,
+			dirty ? QMessageBox::No : QMessageBox::Yes);
+		if (answer == QMessageBox::Yes) {
+			loadLevelMapPath(event.path);
+			return;
+		}
+		// Declining has to adopt the new bytes as the baseline, or the save path
+		// would keep treating this same change as unseen.
+		m_documentWatcher.refreshBaseline(event.path);
+		m_ignoredExternalChanges.insert(event.path);
+		statusBar()->showMessage(tr("Keeping the in-studio copy of %1.").arg(display));
+		break;
+	}
+	case DocumentWatchRole::Package: {
+		const bool staged = m_packageStaging.operations().size() > 0;
+		const QMessageBox::StandardButton answer = QMessageBox::question(
+			this,
+			tr("Package Changed On Disk"),
+			staged
+				? tr("%1 changed outside the studio and there are staged changes against it.\n\nReopening discards the staged changes. Reopen it?").arg(display)
+				: tr("%1 changed outside the studio.\n\nReopen it?").arg(display),
+			QMessageBox::Yes | QMessageBox::No,
+			staged ? QMessageBox::No : QMessageBox::Yes);
+		if (answer == QMessageBox::Yes) {
+			loadPackagePath(event.path);
+			return;
+		}
+		m_documentWatcher.refreshBaseline(event.path);
+		m_ignoredExternalChanges.insert(event.path);
+		statusBar()->showMessage(tr("Keeping the open copy of %1.").arg(display));
+		break;
+	}
+	case DocumentWatchRole::CodeEditor: {
+		if (!m_codeDirty) {
+			openCodeFile(event.path);
+			statusBar()->showMessage(tr("Reloaded %1 after an external change.").arg(display));
+			return;
+		}
+		const QMessageBox::StandardButton answer = QMessageBox::question(
+			this,
+			tr("File Changed On Disk"),
+			tr("%1 changed outside the studio and the editor has unsaved changes.\n\nReloading discards them. Reload?").arg(display),
+			QMessageBox::Yes | QMessageBox::No,
+			QMessageBox::No);
+		if (answer == QMessageBox::Yes) {
+			m_codeDirty = false;
+			openCodeFile(event.path);
+			return;
+		}
+		m_documentWatcher.refreshBaseline(event.path);
+		m_ignoredExternalChanges.insert(event.path);
+		statusBar()->showMessage(tr("Keeping the editor copy of %1.").arg(display));
+		break;
+	}
+	case DocumentWatchRole::ProjectManifest:
+		// Nothing the user typed lives only in these panels, so there is nothing
+		// to lose by rebuilding them and no reason to ask first.
+		m_documentWatcher.refreshBaseline(event.path);
+		refreshWorkspaceDashboard();
+		refreshWorkspaceContextPanels();
+		refreshSetupPanel();
+		statusBar()->showMessage(tr("Reloaded the project manifest after an external change."));
+		break;
+	default:
+		m_documentWatcher.refreshBaseline(event.path);
+		statusBar()->showMessage(tr("%1 changed outside the studio (%2).").arg(display, kindName));
+		break;
+	}
+}
+
+void ApplicationShell::reportPreviousSessionCrash()
+{
+	if (!previousSessionCrashed()) {
+		return;
+	}
+	const CrashReportInfo report = previousSessionCrashReport();
+
+	// The report is offered, never sent: it stays on this machine unless the
+	// user copies it somewhere themselves.
+	QMessageBox box(this);
+	box.setWindowTitle(tr("The Studio Closed Unexpectedly"));
+	box.setIcon(QMessageBox::Warning);
+	box.setText(report.path.isEmpty()
+		? tr("The previous session ended without shutting down. No crash report was written.")
+		: tr("The previous session ended unexpectedly. A crash report was written to this machine."));
+	box.setInformativeText(crashReportSummaryText(report));
+	QPushButton* openFolder = report.path.isEmpty()
+		? nullptr
+		: box.addButton(tr("Show Report"), QMessageBox::ActionRole);
+	box.addButton(tr("Dismiss"), QMessageBox::AcceptRole);
+	box.exec();
+	if (openFolder && box.clickedButton() == openFolder) {
+		QDesktopServices::openUrl(QUrl::fromLocalFile(QFileInfo(report.path).absolutePath()));
+	}
+
+	recordActivity(tr("Previous session crashed"),
+		report.reasonDetail.isEmpty() ? report.reasonId : report.reasonDetail,
+		QStringLiteral("session"), OperationState::Failed,
+		report.path.isEmpty() ? tr("No report written") : nativePath(report.path));
+	// Reported once: clearing the marker stops the next launch repeating it.
+	markSessionEndedCleanly();
+}
+
 void ApplicationShell::openCodeFile(const QString& path)
 {
 	if (!m_codeEditor) {
@@ -7649,6 +9842,13 @@ void ApplicationShell::openCodeFile(const QString& path)
 	const QByteArray bytes = file.read(4ll * 1024ll * 1024ll);
 	const bool truncated = file.bytesAvailable() > 0;
 	file.close();
+	// A truncated read is not the file, so watching it would offer to reload
+	// bytes the editor never showed.
+	if (!truncated) {
+		registerWatchedDocument(path, DocumentWatchRole::CodeEditor);
+	} else {
+		m_documentWatcher.unregisterRole(DocumentWatchRole::CodeEditor);
+	}
 
 	{
 		const QSignalBlocker blocker(m_codeEditor);
@@ -7667,9 +9867,8 @@ void ApplicationShell::openCodeFile(const QString& path)
 	}
 
 	if (m_codeStatus) {
-		m_codeStatus->setText(truncated
-			? tr("Open (read-only, truncated): %1").arg(nativePath(path))
-			: tr("Open: %1  [%2]").arg(nativePath(path), studioLanguageDisplayName(studioLanguageForPath(path))));
+		m_codeStatus->setText(codeDocumentLabel(path, truncated ? tr("Read-only, truncated") : QString()));
+		m_codeStatus->setToolTip(nativePath(path));
 	}
 	refreshCodeDiagnostics();
 	refreshCommandEnablement();
@@ -7694,7 +9893,8 @@ void ApplicationShell::saveCodeFile()
 	file.close();
 	m_codeDirty = false;
 	if (m_codeStatus) {
-		m_codeStatus->setText(tr("Saved: %1").arg(nativePath(m_codeFilePath)));
+		m_codeStatus->setText(codeDocumentLabel(m_codeFilePath, tr("Saved")));
+		m_codeStatus->setToolTip(nativePath(m_codeFilePath));
 	}
 	recordActivity(tr("Save File"), nativePath(m_codeFilePath), tr("code"), OperationState::Completed,
 		tr("Wrote %1.").arg(nativePath(m_codeFilePath)));
@@ -7825,6 +10025,9 @@ void ApplicationShell::refreshLevelMapViewport()
 	if (m_levelMapShowSectors) {
 		m_levelMapViewport->setShowSectorFill(m_levelMapShowSectors->isChecked());
 	}
+	if (m_levelMapSnap) {
+		m_levelMapViewport->setSnapToGrid(m_levelMapSnap->isChecked());
+	}
 
 	const AccessibilityPreferences preferences = m_settings.accessibilityPreferences();
 	m_levelMapViewport->setHighContrast(preferences.theme == StudioTheme::HighContrastDark
@@ -7838,10 +10041,278 @@ void ApplicationShell::refreshLevelMapViewport()
 		.arg(m_levelMapDocument.sourcePath, m_levelMapDocument.mapName, m_levelMapDocument.editState)
 		.append(QStringLiteral("|%1").arg(m_levelMapDocument.undoStack.size()));
 	if (documentKey != m_levelMapViewportKey) {
+		// An edit to the map already open keeps the camera; a different map or a
+		// different file refits, because the old pan and zoom mean nothing there.
+		const QString sourceKey = QStringLiteral("%1|%2").arg(m_levelMapDocument.sourcePath, m_levelMapDocument.mapName);
+		const bool sameSource = sourceKey == m_levelMapViewportSourceKey && m_levelMapViewport->hasDocument();
 		m_levelMapViewportKey = documentKey;
-		m_levelMapViewport->setDocument(m_levelMapDocument);
+		m_levelMapViewportSourceKey = sourceKey;
+		const QSignalBlocker blocker(m_levelMapViewport);
+		if (sameSource) {
+			m_levelMapViewport->updateDocument(m_levelMapDocument);
+		} else {
+			m_levelMapViewport->setDocument(m_levelMapDocument);
+		}
 	}
-	m_levelMapViewport->setSelection(m_levelMapDocument.selectionKind, m_levelMapDocument.selectedObjectId);
+	const QSignalBlocker selectionBlocker(m_levelMapViewport);
+	m_levelMapViewport->setSelectionSet(m_levelMapDocument.selection);
+}
+
+void ApplicationShell::chooseEntityDefinitionPath()
+{
+	const QString path = QFileDialog::getOpenFileName(
+		this,
+		tr("Choose Entity Definitions"),
+		m_settings.currentProjectPath(),
+		tr("Entity definitions (*.def *.fgd *.ent *.qc);;All files (*.*)"));
+	if (path.isEmpty()) {
+		return;
+	}
+	if (m_entityDefinitionPath) {
+		m_entityDefinitionPath->setText(path);
+	}
+	reloadEntityDefinitions();
+}
+
+void ApplicationShell::reloadEntityDefinitions()
+{
+	QStringList paths;
+	const QString requested = m_entityDefinitionPath ? m_entityDefinitionPath->text().trimmed() : QString();
+	if (!requested.isEmpty()) {
+		paths << requested;
+	} else {
+		// With nothing named, look where a project conventionally keeps them, so
+		// a configured project needs no extra step.
+		paths = entityDefinitionSearchPaths(m_settings.currentProjectPath());
+	}
+
+	m_entityDefinitions = vibestudio::loadEntityDefinitions(paths);
+	if (m_entityDefinitionSummary) {
+		if (m_entityDefinitions.isEmpty()) {
+			m_entityDefinitionSummary->setText(requested.isEmpty()
+				? tr("No entity definitions found in the project's conventional folders. Point at a .def, .fgd, or .ent file to enable entity checking.")
+				: tr("No entity definitions were loaded from %1.").arg(nativePath(requested)));
+		} else {
+			m_entityDefinitionSummary->setText(tr("%n class(es) loaded from %1 source(s): %2 point, %3 brush.",
+				nullptr, static_cast<int>(m_entityDefinitions.classes.size()))
+				.arg(m_entityDefinitions.sourcePaths.size())
+				.arg(m_entityDefinitions.pointClassCount)
+				.arg(m_entityDefinitions.brushClassCount));
+		}
+	}
+
+	recordActivity(tr("Entity Definitions"),
+		paths.join(QStringLiteral("; ")),
+		tr("level-map"),
+		m_entityDefinitions.isEmpty() ? OperationState::Warning : OperationState::Completed,
+		tr("%n entity class(es) loaded.", nullptr, static_cast<int>(m_entityDefinitions.classes.size())),
+		m_entityDefinitions.warnings);
+
+	refreshLevelMapWorkbench();
+}
+
+void ApplicationShell::refreshEntityInspector()
+{
+	if (!m_entityInspector) {
+		return;
+	}
+	const QSignalBlocker blocker(m_entityInspector);
+	m_refreshingEntityInspector = true;
+	const QString previousKey = m_entityInspector->currentItem() ? m_entityInspector->currentItem()->data(0, Qt::UserRole).toString() : QString();
+	m_entityInspector->clear();
+
+	auto placeholder = [this](const QString& text) {
+		auto* item = new QTreeWidgetItem(m_entityInspector, {text});
+		item->setFirstColumnSpanned(true);
+		item->setFlags(Qt::ItemIsEnabled);
+		item->setForeground(0, currentStudioTheme().colors.textMuted);
+	};
+
+	if (m_levelMapDocument.selectionKind != LevelMapSelectionKind::Entity || m_levelMapDocument.selectedObjectId < 0) {
+		placeholder(tr("Select an entity to inspect its class, keys, and spawnflags."));
+		m_refreshingEntityInspector = false;
+		return;
+	}
+
+	const LevelMapEntity* selected = nullptr;
+	for (const LevelMapEntity& entity : m_levelMapDocument.entities) {
+		if (entity.id == m_levelMapDocument.selectedObjectId) {
+			selected = &entity;
+			break;
+		}
+	}
+	if (!selected) {
+		placeholder(tr("The selected entity is no longer present in the map."));
+		m_refreshingEntityInspector = false;
+		return;
+	}
+
+	EntityClassDefinition definition;
+	const bool known = !m_entityDefinitions.isEmpty() && m_entityDefinitions.classForName(selected->className, &definition);
+	const QColor muted = currentStudioTheme().colors.textMuted;
+	const QColor warning = currentStudioTheme().colors.warning;
+
+	QTreeWidgetItem* classGroup = propertyGroup(m_entityInspector, tr("Entity"));
+	propertyRow(classGroup, tr("Class"), selected->className.isEmpty() ? tr("(no classname)") : selected->className);
+	propertyRow(classGroup, tr("Index"), QString::number(selected->id));
+	if (known) {
+		propertyRow(classGroup, tr("Kind"), entityClassKindId(definition.kind));
+		if (!definition.baseClasses.isEmpty()) {
+			propertyRow(classGroup, tr("Inherits"), definition.baseClasses.join(QStringLiteral(", ")));
+		}
+		if (!definition.description.isEmpty()) {
+			propertyRow(classGroup, tr("Description"), definition.description.simplified(), definition.description);
+		}
+		if (definition.hasSize) {
+			propertyRow(classGroup, tr("Size"), tr("%1 %2 %3 to %4 %5 %6")
+				.arg(definition.mins[0]).arg(definition.mins[1]).arg(definition.mins[2])
+				.arg(definition.maxs[0]).arg(definition.maxs[1]).arg(definition.maxs[2]));
+		}
+		if (!definition.modelHint.isEmpty()) {
+			propertyRow(classGroup, tr("Model"), definition.modelHint);
+		}
+		if (!definition.sourcePath.isEmpty()) {
+			propertyRow(classGroup, tr("Defined in"), QStringLiteral("%1:%2").arg(QFileInfo(definition.sourcePath).fileName()).arg(definition.sourceLine),
+				nativePath(definition.sourcePath));
+		}
+	} else {
+		QTreeWidgetItem* note = propertyRow(classGroup, tr("Definition"),
+			m_entityDefinitions.isEmpty() ? tr("Load entity definitions to see what keys mean") : tr("Not declared by the loaded definitions"));
+		note->setForeground(1, m_entityDefinitions.isEmpty() ? muted : warning);
+	}
+
+	// Keys set on the entity, editable in place.
+	QTreeWidgetItem* keyGroup = propertyGroup(m_entityInspector, tr("Keys (%1)").arg(selected->properties.size()));
+	QTreeWidgetItem* current = nullptr;
+	QSet<QString> setKeys;
+	for (const LevelMapProperty& property : selected->properties) {
+		setKeys.insert(property.key.toLower());
+		const QString help = known ? entityKeyHelpText(definition, property.key) : QString();
+		QTreeWidgetItem* row = propertyRow(keyGroup, property.key, property.value,
+			help.isEmpty() ? QStringLiteral("%1 = %2").arg(property.key, property.value) : QStringLiteral("%1 = %2\n%3").arg(property.key, property.value, help));
+		row->setFlags(row->flags() | Qt::ItemIsEditable);
+		row->setData(0, Qt::UserRole, property.key);
+		row->setData(1, Qt::UserRole, property.value);
+		if (property.key == previousKey) {
+			current = row;
+		}
+	}
+
+	// Keys the class declares but this entity leaves at their defaults; editing
+	// one sets it.
+	if (known) {
+		QVector<const EntityKeyDefinition*> available;
+		for (const EntityKeyDefinition& key : definition.keys) {
+			if (!setKeys.contains(key.key.toLower()) && key.key.compare(QStringLiteral("spawnflags"), Qt::CaseInsensitive) != 0) {
+				available.push_back(&key);
+			}
+		}
+		if (!available.isEmpty()) {
+			QTreeWidgetItem* defaultsGroup = propertyGroup(m_entityInspector, tr("Defaults (%1)").arg(available.size()));
+			defaultsGroup->setExpanded(false);
+			for (const EntityKeyDefinition* key : available) {
+				QTreeWidgetItem* row = propertyRow(defaultsGroup, key->key, key->defaultValue,
+					key->description.isEmpty() ? tr("%1 (%2), not set").arg(key->key, key->typeId) : tr("%1 (%2), not set\n%3").arg(key->key, key->typeId, key->description));
+				row->setFlags(row->flags() | Qt::ItemIsEditable);
+				row->setData(0, Qt::UserRole, key->key);
+				row->setData(1, Qt::UserRole, QString());
+				row->setForeground(0, muted);
+				row->setForeground(1, muted);
+				if (key->required) {
+					row->setText(0, tr("%1 (required)").arg(key->key));
+					row->setForeground(0, warning);
+				}
+			}
+		}
+	}
+
+	// Spawnflags as check boxes; toggling one rewrites the summed value.
+	if (known && !definition.spawnflags.isEmpty()) {
+		int spawnflags = 0;
+		for (const LevelMapProperty& property : selected->properties) {
+			if (property.key.compare(QStringLiteral("spawnflags"), Qt::CaseInsensitive) == 0) {
+				spawnflags = property.value.toInt();
+				break;
+			}
+		}
+		QTreeWidgetItem* flagGroup = propertyGroup(m_entityInspector, tr("Spawnflags (%1)").arg(spawnflags));
+		for (const EntitySpawnflagDefinition& flag : definition.spawnflags) {
+			const bool set = (spawnflags & (1 << flag.bit)) != 0;
+			QTreeWidgetItem* row = propertyRow(flagGroup, flag.name, tr("bit %1 (%2)").arg(flag.bit).arg(1 << flag.bit),
+				flag.description.isEmpty() ? flag.name : QStringLiteral("%1\n%2").arg(flag.name, flag.description));
+			row->setFlags(row->flags() | Qt::ItemIsUserCheckable);
+			// The check state is announced and drawn with a mark, so the flag
+			// never depends on colour.
+			row->setCheckState(0, set ? Qt::Checked : Qt::Unchecked);
+			row->setData(0, Qt::UserRole + 1, flag.bit);
+		}
+	}
+
+	m_entityInspector->expandItem(classGroup);
+	m_entityInspector->expandItem(keyGroup);
+	// Key names stay whole: size the key column to them within sane bounds.
+	m_entityInspector->resizeColumnToContents(0);
+	m_entityInspector->setColumnWidth(0, std::clamp(m_entityInspector->columnWidth(0) + 12, 110, 220));
+	if (current) {
+		m_entityInspector->setCurrentItem(current, 1);
+	}
+	m_refreshingEntityInspector = false;
+}
+
+void ApplicationShell::applyEntityInspectorEdit(QTreeWidgetItem* item, int column)
+{
+	if (m_refreshingEntityInspector || !item || m_levelMapDocument.selectionKind != LevelMapSelectionKind::Entity) {
+		return;
+	}
+	QString key;
+	QString value;
+	if (column == 0 && item->flags().testFlag(Qt::ItemIsUserCheckable)) {
+		// A spawnflag check box: recompute the summed value from the group.
+		QTreeWidgetItem* group = item->parent();
+		int spawnflags = 0;
+		for (const LevelMapEntity& entity : m_levelMapDocument.entities) {
+			if (entity.id == m_levelMapDocument.selectedObjectId) {
+				for (const LevelMapProperty& property : entity.properties) {
+					if (property.key.compare(QStringLiteral("spawnflags"), Qt::CaseInsensitive) == 0) {
+						spawnflags = property.value.toInt();
+					}
+				}
+			}
+		}
+		const int bit = item->data(0, Qt::UserRole + 1).toInt();
+		if (item->checkState(0) == Qt::Checked) {
+			spawnflags |= (1 << bit);
+		} else {
+			spawnflags &= ~(1 << bit);
+		}
+		Q_UNUSED(group);
+		key = QStringLiteral("spawnflags");
+		value = QString::number(spawnflags);
+	} else if (column == 1) {
+		key = item->data(0, Qt::UserRole).toString();
+		value = item->text(1);
+		if (key.isEmpty() || value == item->data(1, Qt::UserRole).toString()) {
+			return;
+		}
+	} else {
+		return;
+	}
+
+	QString error;
+	if (!setLevelMapEntityProperty(&m_levelMapDocument, m_levelMapDocument.selectedObjectId, key, value, &error)) {
+		statusBar()->showMessage(tr("Map edit failed: %1").arg(error));
+		QTimer::singleShot(0, this, [this]() {
+			refreshEntityInspector();
+		});
+		return;
+	}
+	recordActivity(tr("Level map entity edited"), key, QStringLiteral("level-map"), OperationState::Warning, tr("Unsaved map edit"));
+	statusBar()->showMessage(tr("%1 set to %2. Use Save As to write a non-destructive copy.").arg(key, value));
+	// Rebuilding the grid from inside its own itemChanged signal would delete
+	// the item that is still being edited, so the refresh waits a turn.
+	QTimer::singleShot(0, this, [this]() {
+		refreshLevelMapWorkbench();
+	});
 }
 
 void ApplicationShell::selectLevelMapObjectFromViewport(int selectionKind, int objectId)
@@ -7880,7 +10351,81 @@ void ApplicationShell::selectLevelMapObjectFromViewport(int selectionKind, int o
 	}
 	refreshLevelMapSelection();
 	m_syncingLevelMapSelection = false;
+	refreshEntityInspector();
 	refreshCommandEnablement();
+}
+
+void ApplicationShell::syncLevelMapSelectionFromViewport(const QVector<LevelMapSelectionRef>& selection)
+{
+	if (m_levelMapDocument.format == LevelMapFormat::Unknown || m_syncingLevelMapSelection) {
+		return;
+	}
+	QString error;
+	if (!setLevelMapSelection(&m_levelMapDocument, selection, &error) && !error.isEmpty()) {
+		statusBar()->showMessage(error);
+		return;
+	}
+
+	// Mirror the set into the Objects list without letting the list's own
+	// itemSelectionChanged handler write it straight back and fight the drag
+	// that produced it.
+	m_syncingLevelMapSelection = true;
+	if (m_levelMapObjects) {
+		const QSignalBlocker listBlocker(m_levelMapObjects);
+		QSet<QString> wanted;
+		wanted.reserve(m_levelMapDocument.selection.size());
+		for (const LevelMapSelectionRef& ref : m_levelMapDocument.selection) {
+			wanted.insert(QStringLiteral("%1:%2").arg(levelMapSelectionKindId(ref.kind)).arg(ref.objectId));
+		}
+		const LevelMapSelectionRef primary = levelMapPrimarySelection(m_levelMapDocument);
+		const QString primarySelector = primary.kind == LevelMapSelectionKind::None
+			? QString()
+			: QStringLiteral("%1:%2").arg(levelMapSelectionKindId(primary.kind)).arg(primary.objectId);
+		for (int index = 0; index < m_levelMapObjects->count(); ++index) {
+			QListWidgetItem* item = m_levelMapObjects->item(index);
+			const QString selector = item->data(Qt::UserRole).toString();
+			item->setSelected(wanted.contains(selector));
+			if (!primarySelector.isEmpty() && selector == primarySelector) {
+				m_levelMapObjects->setCurrentItem(item, QItemSelectionModel::NoUpdate);
+			}
+		}
+	}
+	refreshLevelMapSelection();
+	m_syncingLevelMapSelection = false;
+	refreshEntityInspector();
+	refreshCommandEnablement();
+	if (m_levelMapDocument.selection.size() > 1) {
+		statusBar()->showMessage(tr("%n object(s) selected.", nullptr, m_levelMapDocument.selection.size()));
+	}
+}
+
+void ApplicationShell::moveLevelMapSelectionFromViewport(double dx, double dy, double dz)
+{
+	if (m_levelMapDocument.format == LevelMapFormat::Unknown) {
+		return;
+	}
+	// The viewport already snapped the delta to its own grid; snapping again to
+	// the same grid is idempotent, and passing it keeps the two in step if the
+	// combo changes mid-drag.
+	const double gridSize = (m_levelMapSnap && m_levelMapSnap->isChecked() && m_levelMapGrid)
+		? std::max(1, m_levelMapGrid->currentData().toInt())
+		: 0.0;
+	QString error;
+	if (!moveLevelMapSelectionSnapped(&m_levelMapDocument, dx, dy, dz, gridSize, &error)) {
+		if (!error.isEmpty()) {
+			statusBar()->showMessage(tr("Move failed: %1").arg(error));
+		}
+		// The preview has to go back, otherwise the widget keeps showing a move
+		// the document never took.
+		refreshLevelMapViewport();
+		return;
+	}
+	recordActivity(tr("Level map selection moved"),
+		tr("%1, %2, %3").arg(dx).arg(dy).arg(dz),
+		QStringLiteral("level-map"), OperationState::Warning, tr("Unsaved map edit"));
+	refreshLevelMapWorkbench();
+	statusBar()->showMessage(tr("Moved %n object(s) by %1, %2, %3.", nullptr, m_levelMapDocument.selection.size())
+		.arg(dx).arg(dy).arg(dz));
 }
 
 void ApplicationShell::undoLevelMapEditFromUi()
@@ -7987,24 +10532,42 @@ void ApplicationShell::refreshBuildSurface()
 	request.executableOverrides = registryOptions.executableOverrides;
 
 	const BuildPipelineResult plan = planBuildPipeline(request);
+	// Without an input map the plan cannot resolve paths, which the planner
+	// reports as failures. Nothing has failed yet, so the surface shows the
+	// stages as waiting instead.
+	const bool awaitingInput = request.inputPath.isEmpty();
+	auto displayState = [awaitingInput](OperationState state) {
+		return awaitingInput ? OperationState::Idle : state;
+	};
 
 	if (m_buildPipelineStages) {
 		m_buildPipelineStages->clear();
 		for (const BuildPipelineStageResult& stage : plan.stages) {
+			const OperationState state = displayState(stage.state);
 			QStringList parts;
-			parts << tr("%1 [%2]").arg(stage.stage.displayName, localizedOperationStateName(stage.state));
+			parts << QStringLiteral("%1  %2").arg(studioStateGlyph(state), stage.stage.displayName);
+			QStringList toolTip {QStringLiteral("%1 (%2)").arg(stage.stage.displayName, localizedOperationStateName(state))};
 			if (stage.skipped) {
 				parts << tr("Skipped: %1").arg(stage.skipReason);
+			} else if (awaitingInput) {
+				parts << tr("Waiting for an input map");
 			} else {
-				parts << tr("in: %1").arg(stage.inputPath.isEmpty() ? tr("(none)") : nativePath(stage.inputPath));
-				parts << tr("out: %1").arg(stage.outputPath.isEmpty() ? tr("(tool default)") : nativePath(stage.outputPath));
-				if (!stage.plan.executableAvailable) {
-					parts << tr("Tool not found on this machine");
-				}
+				// File names keep the row readable; the tooltip and the details
+				// panel carry the full paths.
+				const QString input = stage.inputPath.isEmpty() ? tr("no input") : QFileInfo(stage.inputPath).fileName();
+				const QString output = stage.outputPath.isEmpty() ? tr("tool default") : QFileInfo(stage.outputPath).fileName();
+				parts << QStringLiteral("%1  %2  %3").arg(input, QChar(0x2192), output);
+				toolTip << tr("Input: %1").arg(stage.inputPath.isEmpty() ? tr("(none)") : nativePath(stage.inputPath));
+				toolTip << tr("Output: %1").arg(stage.outputPath.isEmpty() ? tr("(tool default)") : nativePath(stage.outputPath));
+			}
+			if (!stage.plan.executableAvailable) {
+				parts << tr("Tool not found on this machine");
 			}
 			auto* item = new QListWidgetItem(parts.join(QStringLiteral("\n")));
 			item->setData(Qt::UserRole, stage.stage.id);
-			item->setData(Qt::UserRole + 1, operationStateId(stage.state));
+			item->setData(Qt::UserRole + 1, operationStateId(state));
+			item->setToolTip(toolTip.join('\n'));
+			item->setData(Qt::AccessibleTextRole, QStringLiteral("%1, %2").arg(stage.stage.displayName, localizedOperationStateName(state)));
 			m_buildPipelineStages->addItem(item);
 		}
 		if (plan.stages.isEmpty()) {
@@ -8019,7 +10582,7 @@ void ApplicationShell::refreshBuildSurface()
 			node.id = stage.stage.id;
 			node.label = stage.stage.displayName;
 			node.detail = stage.skipped ? stage.skipReason : nativePath(stage.outputPath);
-			node.state = stage.state;
+			node.state = displayState(stage.state);
 			node.optional = stage.stage.optional;
 			node.badgeText = stage.plan.executableAvailable ? QString() : tr("no tool");
 			nodes.push_back(node);
@@ -8027,7 +10590,10 @@ void ApplicationShell::refreshBuildSurface()
 		m_buildPipelineChart->setStages(nodes);
 	}
 
-	if (m_buildPipelineState) {
+	if (m_buildPipelineState && awaitingInput) {
+		m_buildPipelineState->setState(OperationState::Idle, tr("Waiting for input"));
+		m_buildPipelineState->setDetail(tr("Choose the source map to compile. Opening a map in Levels fills this in for you."));
+	} else if (m_buildPipelineState) {
 		m_buildPipelineState->setState(plan.state, localizedOperationStateName(plan.state));
 		m_buildPipelineState->setDetail(plan.errors.isEmpty()
 			? tr("%n stage(s) planned. Output: %1", nullptr, plan.plannedStageCount)
@@ -8042,7 +10608,7 @@ void ApplicationShell::refreshBuildSurface()
 		planSection.title = tr("Stage Plan");
 		planSection.summary = tr("%n stage(s)", nullptr, plan.plannedStageCount);
 		planSection.content = buildPipelineResultText(plan);
-		planSection.state = plan.state;
+		planSection.state = displayState(plan.state);
 		sections.push_back(planSection);
 		m_buildPipelineDrawer->setSubtitle(plan.pipeline.displayName);
 		m_buildPipelineDrawer->setSections(sections);
@@ -8427,6 +10993,10 @@ void ApplicationShell::closePackage()
 	}
 	m_packageArchive.clear();
 	m_packageStaging.clear();
+	m_packageBrowseSource.clear();
+	m_packageBrowseFolder.clear();
+	m_packageFolderHistory.clear();
+	m_packageFolderHistoryIndex = -1;
 	invalidatePaletteResolution();
 	refreshPackageBrowser();
 	refreshTextureBrowser();
@@ -8501,16 +11071,16 @@ void ApplicationShell::showAboutDialog()
 
 void ApplicationShell::scheduleThemeRefresh()
 {
-	// applyPreferencesToUi() re-applies the whole window stylesheet, which
-	// unpolishes and repolishes every widget. Coalescing it keeps typing in a
-	// filter box from re-theming the studio on every keystroke.
+	// List refreshes only need their per-item state colours re-applied. That is
+	// cheap, but coalescing it still keeps a streamed log or a filter box from
+	// re-walking every list on each change.
 	if (m_themeRefreshScheduled) {
 		return;
 	}
 	m_themeRefreshScheduled = true;
 	QMetaObject::invokeMethod(this, [this]() {
 		m_themeRefreshScheduled = false;
-		applyPreferencesToUi();
+		applyStateColors();
 	}, Qt::QueuedConnection);
 }
 
@@ -8588,6 +11158,10 @@ void ApplicationShell::applyPreferencesToWidgets()
 	if (m_audioWaveform) {
 		m_audioWaveform->setHighContrast(highContrast);
 	}
+	if (m_modelViewport) {
+		m_modelViewport->setHighContrast(highContrast);
+		m_modelViewport->setReducedMotion(preferences.reducedMotion);
+	}
 	if (m_packageCompositionChart) {
 		m_packageCompositionChart->setHighContrast(highContrast);
 	}
@@ -8602,6 +11176,10 @@ void ApplicationShell::applyPreferencesToWidgets()
 	}
 	if (m_codeHighlighter) {
 		m_codeHighlighter->setTheme(studioSyntaxTheme(light, highContrast));
+	}
+	if (m_codeEditor) {
+		m_codeEditor->setFont(studioMonospaceFont());
+		m_codeEditor->setTabStopDistance(QFontMetricsF(m_codeEditor->font()).horizontalAdvance(QLatin1Char(' ')) * 4.0);
 	}
 }
 
@@ -8648,6 +11226,70 @@ void ApplicationShell::runSelfTest()
 
 	setMode(StudioMode::Workspace);
 	statusBar()->showMessage(tr("Self-test visited %n work surface(s).", nullptr, static_cast<int>(modes.size())));
+}
+
+void ApplicationShell::openPathFromCommandLine(const QString& path)
+{
+	openDroppedPath(QFileInfo(path).absoluteFilePath());
+}
+
+QStringList ApplicationShell::captureUiSnapshots(const QString& directory)
+{
+	QStringList written;
+	if (!QDir().mkpath(directory)) {
+		return written;
+	}
+	const StudioMode originalMode = currentMode();
+	// Documentation snapshots show the level inspector populated: with a map
+	// loaded and nothing selected, pick its first non-world entity.
+	if (m_levelMapObjects && m_levelMapDocument.format != LevelMapFormat::Unknown && m_levelMapObjects->selectedItems().isEmpty()) {
+		const int row = m_levelMapObjects->count() > 1 ? 1 : 0;
+		if (QListWidgetItem* item = m_levelMapObjects->item(row); item && item->flags().testFlag(Qt::ItemIsSelectable)) {
+			m_levelMapObjects->setCurrentItem(item);
+		}
+	}
+	// Likewise the shader details: open on the first stage, not the report.
+	if (m_advancedShaderGraph && !m_advancedShaderGraph->currentItem()) {
+		for (QTreeWidgetItemIterator it(m_advancedShaderGraph); *it; ++it) {
+			QTreeWidgetItem* item = *it;
+			const bool stageRow = item->parent() && !item->parent()->parent();
+			if (stageRow) {
+				m_advancedShaderGraph->setCurrentItem(item);
+				break;
+			}
+		}
+	}
+	const QVector<StudioModeDescriptor> descriptors = studioModeDescriptors();
+	for (int index = 0; index < descriptors.size(); ++index) {
+		setMode(descriptors[index].mode);
+		// Two passes: the first lays out the freshly shown page, the second lets
+		// any deferred refresh it queued paint before the grab.
+		QCoreApplication::processEvents(QEventLoop::ExcludeUserInputEvents, 50);
+		QCoreApplication::processEvents(QEventLoop::ExcludeUserInputEvents, 50);
+		const QString slug = modeCommandId(descriptors[index].mode).section(QLatin1Char('.'), -1);
+		const QString fileName = QStringLiteral("%1-%2.png").arg(index + 1, 2, 10, QLatin1Char('0')).arg(slug);
+		const QString filePath = QDir(directory).filePath(fileName);
+		if (grab().save(filePath)) {
+			written.push_back(filePath);
+		}
+	}
+	// One more frame with the Activity panel docked, so the panels are
+	// documented too; the panel is closed again afterwards.
+	if (m_activityDock) {
+		setMode(StudioMode::Workspace);
+		const bool wasVisible = m_activityDock->isVisible();
+		m_activityDock->show();
+		m_activityDock->raise();
+		QCoreApplication::processEvents(QEventLoop::ExcludeUserInputEvents, 50);
+		QCoreApplication::processEvents(QEventLoop::ExcludeUserInputEvents, 50);
+		const QString filePath = QDir(directory).filePath(QStringLiteral("%1-activity-panel.png").arg(descriptors.size() + 1, 2, 10, QLatin1Char('0')));
+		if (grab().save(filePath)) {
+			written.push_back(filePath);
+		}
+		m_activityDock->setVisible(wasVisible);
+	}
+	setMode(originalMode);
+	return written;
 }
 
 } // namespace vibestudio

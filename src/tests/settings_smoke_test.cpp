@@ -67,6 +67,9 @@ bool runPreferenceAndHistorySmoke(const QDir& root)
 	settings.setSelectedMode(5);
 	settings.setShellGeometry(QByteArray("geometry-bytes"));
 	settings.setShellWindowState(QByteArray("state-bytes"));
+	settings.setShellModeRailCompact(true);
+	settings.setShellLayoutState(QStringLiteral("levelsWorkbench"), QByteArray("splitter-bytes"));
+	settings.setShellLayoutState(QStringLiteral("  "), QByteArray("ignored"));
 
 	vibestudio::RecentActivityTask compilerActivity;
 	compilerActivity.id = QStringLiteral("compiler-ericw-qbsp");
@@ -129,6 +132,12 @@ bool runPreferenceAndHistorySmoke(const QDir& root)
 	ok &= expect(reloaded.selectedMode() == 5, "Expected selected shell mode to persist.");
 	ok &= expect(reloaded.shellGeometry() == QByteArray("geometry-bytes") && reloaded.shellWindowState() == QByteArray("state-bytes"),
 		"Expected shell geometry and state to persist.");
+	ok &= expect(reloaded.shellModeRailCompact(), "Expected the compact mode rail preference to persist.");
+	ok &= expect(reloaded.shellLayoutState(QStringLiteral("levelsWorkbench")) == QByteArray("splitter-bytes"),
+		"Expected a named work-surface layout to persist.");
+	ok &= expect(reloaded.shellLayoutState(QStringLiteral("packagesWorkbench")).isEmpty(),
+		"Expected an unknown layout key to read back empty.");
+	ok &= expect(reloaded.shellLayoutState(QStringLiteral("  ")).isEmpty(), "Expected a blank layout key to be ignored.");
 
 	const QVector<vibestudio::RecentActivityTask> activities = reloaded.recentActivityTasks();
 	ok &= expect(activities.size() == 1, "Expected recent activity task history to persist.");
