@@ -170,6 +170,14 @@ int runFakeCompiler(const QStringList& appArgs)
 		return EXIT_SUCCESS;
 	}
 
+	if (appArgs.contains(QStringLiteral("--fake-colored"))) {
+		// ericw-tools 2 colours its console output with ANSI escape sequences.
+		std::cout << "\x1b[0m\x1b[33mimg::ConvertTextures: WARNING: invalid size data for brick_wall\x1b[0m\n";
+		std::cout << "\x1b[33mWARNING: 34: microbrush\x1b[0m\n";
+		std::cout << "\x1b]0;qbsp\x07Processing hull 0...\n" << std::flush;
+		return EXIT_SUCCESS;
+	}
+
 	if (appArgs.contains(QStringLiteral("--fake-quiet"))) {
 		return EXIT_SUCCESS;
 	}
@@ -528,6 +536,23 @@ int main(int argc, char** argv)
 	if (diagnosticsResult.diagnostics.at(2).channel != QStringLiteral("stderr")
 		|| diagnosticsResult.diagnostics.at(0).channel != QStringLiteral("stdout")) {
 		return fail("Expected stdout and stderr diagnostics to stay distinguishable.");
+	}
+
+	// Colour escapes are taken out before a line is parsed or logged.
+	vibestudio::CompilerRunRequest coloredRequest = cleanRunRequest;
+	coloredRequest.command.extraArguments = {QStringLiteral("--fake-compiler"), QStringLiteral("--fake-colored")};
+	const vibestudio::CompilerRunResult coloredResult = vibestudio::runCompilerCommand(coloredRequest);
+	if (coloredResult.diagnostics.size() != 2
+		|| coloredResult.diagnostics.at(0).message != QStringLiteral("img::ConvertTextures: WARNING: invalid size data for brick_wall")
+		|| coloredResult.diagnostics.at(1).line != 34) {
+		return fail("Expected coloured compiler output to be parsed as if it were plain.");
+	}
+	QStringList coloredLog;
+	for (const vibestudio::CompilerTaskLogEntry& entry : coloredResult.manifest.taskLog) {
+		coloredLog << entry.message;
+	}
+	if (coloredLog.join(QLatin1Char('\n')).contains(QChar(0x1b)) || !coloredLog.contains(QStringLiteral("Processing hull 0..."))) {
+		return fail("Expected colour escapes to be taken out of the compiler log, and the text around them kept.");
 	}
 
 	vibestudio::CompilerRunRequest fatalRequest = cleanRunRequest;

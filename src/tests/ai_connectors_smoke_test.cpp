@@ -45,11 +45,12 @@ int main(int argc, char** argv)
 		if (connector.capabilities.isEmpty() || connector.authRequirement.isEmpty() || connector.privacyNote.isEmpty()) {
 			return fail("Expected connector capability, auth, and privacy metadata.");
 		}
-		if (connector.id == QStringLiteral("openai") && !connector.implemented) {
-			return fail("Expected OpenAI connector scaffold to be implemented first.");
-		}
-		if (connector.id != QStringLiteral("openai") && connector.implemented) {
-			return fail("Expected non-OpenAI connectors to remain design stubs.");
+		// The text connectors answer through core/ai_transport; audio, voice,
+		// and 3D generation remain design stubs.
+		const bool textConnector = connector.id == QStringLiteral("openai") || connector.id == QStringLiteral("claude")
+			|| connector.id == QStringLiteral("gemini") || connector.id == QStringLiteral("local-offline") || connector.id == QStringLiteral("custom-http");
+		if (textConnector != connector.implemented) {
+			return fail("Expected exactly the text connectors to be implemented.");
 		}
 	}
 

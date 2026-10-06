@@ -95,6 +95,14 @@ bool runShortcutSmoke()
 	QStringList conflicts;
 	ok &= expect(!vibestudio::shortcutRegistryHasConflicts(&conflicts) && conflicts.isEmpty(),
 		"Expected the shipped shortcut set to be conflict-free.");
+	// Two surface keys on different surfaces may share a sequence.
+	vibestudio::ShortcutDescriptor mapUndo;
+	vibestudio::ShortcutDescriptor unstageLast;
+	ok &= expect(vibestudio::shortcutForCommandId(QStringLiteral("map.undo"), &mapUndo)
+			&& vibestudio::shortcutForCommandId(QStringLiteral("package.unstage-last"), &unstageLast)
+			&& mapUndo.defaultSequence == unstageLast.defaultSequence && mapUndo.surfaceScoped && unstageLast.surfaceScoped
+			&& mapUndo.context != unstageLast.context,
+		"Expected map undo and Undo Staged Change to share Ctrl+Z on different surfaces.");
 	if (!conflicts.isEmpty()) {
 		std::cerr << qPrintable(conflicts.join(QStringLiteral("; "))) << "\n";
 	}
@@ -167,6 +175,12 @@ bool runShortcutSmoke()
 		ok &= expect(vibestudio::shortcutForCommandId(commandId), "Expected a keyboard shortcut for the routed shell command.");
 		ok &= expect(vibestudio::commandPaletteEntryForCommandId(commandId), "Expected a command palette entry for the routed shell command.");
 	}
+	for (const QString& commandId : vibestudio::shellCommandIds()) {
+		ok &= expect(vibestudio::shellCommandIdExists(commandId), "Expected every advertised command id to resolve.");
+	}
+	ok &= expect(vibestudio::shellCommandIdExists(QStringLiteral("  shell.commandPalette  "))
+			&& !vibestudio::shellCommandIdExists(QStringLiteral("  ")),
+		"Expected normalized command aliases and empty-id rejection.");
 	ok &= expect(!vibestudio::shellCommandIdExists(QStringLiteral("editor-command.editor.mode.face")),
 		"Expected editor-only command ids to stay outside the shell registry.");
 
@@ -186,6 +200,13 @@ bool runCommandPaletteSmoke()
 		"Expected diagnostics bundle command palette entry.");
 	ok &= expect(vibestudio::commandPaletteEntryForCommandId(QStringLiteral("package.save-as"), &entry) && entry.destructive && entry.stagedOrDryRun,
 		"Expected package save-as command to be marked staged.");
+
+	for (const auto* id : {"map.mergeBrushes", "map.alignSurfaces", "map.editPatch", "map.capPatch"}) {
+		ok &= expect(vibestudio::shellCommandIdExists(QString::fromLatin1(id))
+			&& vibestudio::commandPaletteEntryForCommandId(QString::fromLatin1(id), &entry)
+			&& entry.category == QStringLiteral("Levels") && !entry.summary.isEmpty(),
+			"Expected classic profile authoring actions to resolve through the shared command catalog.");
+	}
 
 	// Palette rows never spell their own sequence.
 	for (const vibestudio::CommandPaletteEntry& paletteEntry : vibestudio::commandPaletteEntries()) {
@@ -223,6 +244,9 @@ bool runTranslationSmoke()
 	vibestudio::CommandPaletteEntry entry;
 	ok &= expect(vibestudio::commandPaletteEntryForCommandId(QStringLiteral("shell.command-palette"), &entry) && entry.label == QStringLiteral("<<show command palette>>"),
 		"Expected command palette labels to go through QCoreApplication::translate.");
+	ok &= expect(vibestudio::shellCommandIdExists(QStringLiteral("shell.commandPalette"))
+			&& !vibestudio::shellCommandIdExists(QStringLiteral("unregistered.command")),
+		"Expected stable command identity after changing the translator.");
 
 	QCoreApplication::removeTranslator(&translator);
 	ok &= expect(vibestudio::shortcutForCommandId(QStringLiteral("shell.command-palette"), &palette) && palette.label == QStringLiteral("Command Palette"),

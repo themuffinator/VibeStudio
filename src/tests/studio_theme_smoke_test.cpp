@@ -76,6 +76,7 @@ int main(int argc, char** argv)
 		// Selected rows, primary buttons, and checked indicators carry text or a
 		// mark on a fill.
 		ok &= checkContrast(theme, "selection text", c.selectionText, c.selection, 4.5);
+		ok &= checkContrast(theme, "row selection text", c.selectionText, c.rowSelection, 4.5);
 		ok &= checkContrast(theme, "accent text", c.accentText, c.accent, 4.5);
 		// State colours are used as text in chips and list rows.
 		for (const QColor& state : {c.success, c.warning, c.danger}) {
@@ -83,12 +84,24 @@ int main(int argc, char** argv)
 		}
 		// Focus rings and control outlines are non-text UI components (3:1).
 		ok &= checkContrast(theme, "focus ring", c.focus, c.surface, 3.0);
-		ok &= expect(c.focus != c.selection, themeName(theme) + ": focus must stay distinguishable from the selection fill.");
+		ok &= expect(c.focus != c.selection && c.focus != c.rowSelection, themeName(theme) + ": focus must stay distinguishable from the selection fills.");
+		// A selected row must read as selected against the list it sits in.
+		ok &= expect(contrast(c.rowSelection, c.input) >= 1.35 || tokens.highContrast,
+			themeName(theme) + ": a selected row should stand apart from the list background.");
 
 		const QString sheet = studioStyleSheet(tokens);
 		ok &= expect(!sheet.contains(QLatin1Char('@')), themeName(theme) + ": every stylesheet token should be substituted.");
-		ok &= expect(sheet.contains(QStringLiteral("QToolButton#modeButton")) && sheet.contains(QStringLiteral("QLabel#statusChip")),
+		ok &= expect(sheet.contains(QStringLiteral("QToolButton#modeButton")) && sheet.contains(QStringLiteral("QToolButton#statusChip")),
 			themeName(theme) + ": the stylesheet should style the rail and the status chips.");
+		// Style sheet borders do not mirror, so state edges are painted on the
+		// leading side by the widgets themselves.
+		for (const QString& line : sheet.split(QLatin1Char('\n'))) {
+			if (line.contains(QStringLiteral("#noticeBar")) || line.contains(QStringLiteral("#loadingPane"))) {
+				ok &= expect(!line.contains(QStringLiteral("border-left")) && !line.contains(QStringLiteral("border-right")),
+					themeName(theme) + ": notice and loading strips should paint their state edge, not set a one-sided border: "
+						+ line.trimmed().toStdString());
+			}
+		}
 	}
 
 	const StudioThemeTokens hc = studioThemeTokens(StudioTheme::HighContrastDark, UiDensity::Standard, 100);

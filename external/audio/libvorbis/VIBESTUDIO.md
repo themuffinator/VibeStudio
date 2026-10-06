@@ -1,0 +1,7 @@
+# VibeStudio Xiph decoder integration
+
+Pinned from [vorbis](https://github.com/xiph/vorbis/tree/c2aa86b05e981c96bf381fc6aa11cdd03eccc2fb) at `c2aa86b05e981c96bf381fc6aa11cdd03eccc2fb`; reviewed 2026-10-04. BSD-3-Clause terms in COPYING are compatible with VibeStudio's GPLv3 licence. Original source and notices are unchanged.
+
+Meson compiles these C sources into a private static dependency of the C++ audio importer. VibeStudio's forced-include allocation header redirects the upstream `_ogg_*` allocation macros to a thread-local bounded allocation region. Allocation failure returns through a guarded C library call; remaining region allocations are released without traversing a partial decoder state. All application logic remains C++20. Ogg system integer types are configured by the VibeStudio Meson adapter. There is no external codec installation, runtime download or device access.
+
+The source hash manifest, this notice and COPYING ship in portable licence bundles. Test-only independent reference decoders are not shipped.

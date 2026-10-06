@@ -38,6 +38,13 @@ struct MapRenderOptions {
 	bool darkBackground = true;
 	LevelMapSelectionKind highlightKind = LevelMapSelectionKind::None;
 	int highlightObjectId = -1;
+	// A leak trail from a compiler point file, drawn over the map and included
+	// in the framing, as the viewport draws it. World coordinates, in order.
+	QVector<LevelMapVec3> leakTrail;
+	// Arrows from entities' target-style keys to the entities they name, as
+	// levelMapTargetLinks() finds them. Off by default so existing pictures
+	// stay byte-identical.
+	bool showTargetLinks = false;
 };
 
 struct MapRenderReport {
@@ -51,6 +58,8 @@ struct MapRenderReport {
 	int drawnPatchCount = 0;
 	int drawnEntityCount = 0;
 	int drawnSectorCount = 0;
+	int drawnLeakPointCount = 0;
+	int drawnTargetLinkCount = 0;
 	double unitsPerPixel = 0.0;
 	QStringList warnings;
 	QString error;

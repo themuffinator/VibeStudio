@@ -1,5 +1,6 @@
 #include "core/level_map.h"
 #include "core/map_geometry.h"
+#include "core/map_preview_mesh.h"
 
 #include <QPolygonF>
 #include <QRectF>
@@ -583,6 +584,64 @@ bool runSummarySmoke()
 
 } // namespace
 
+// The 3D preview mesh: one surface per texture, each face a fan of
+// triangles, Doom walls from sector heights, and a triangle limit.
+bool runPreviewMeshSmoke()
+{
+	bool ok = true;
+	LevelMapDocument box;
+	box.format = LevelMapFormat::QuakeMap;
+	LevelMapBrush brush;
+	brush.id = 0;
+	brush.faces = boxFaces(0.0, 0.0, 0.0, 64.0, 32.0, 16.0);
+	brush.faces[5].textureName = QStringLiteral("e1u1/floor1_3");
+	box.brushes = {brush};
+	const LevelMapPreviewMesh preview = buildLevelMapPreviewMesh(box);
+	ok &= expect(preview.brushFaces == 6 && preview.triangles == 12 && preview.mesh.triangleCount == 12 && !preview.truncated,
+		"A box brush should give six faces of two triangles each.");
+	ok &= expect(preview.mesh.surfaces.size() == 2 && preview.mesh.frameCount == 1 && preview.mesh.geometryAvailable,
+		"The box's two textures should make two surfaces with one frame.");
+	bool outward = true;
+	for (const ModelSurface& surface : preview.mesh.surfaces) {
+		const ModelFrameGeometry& frame = surface.frames.first();
+		outward = outward && frame.normals.size() == frame.positions.size();
+		for (int index = 0; outward && index < frame.positions.size(); ++index) {
+			// Every corner's normal points away from the box's middle.
+			const ModelVec3& position = frame.positions.at(index);
+			const ModelVec3& normal = frame.normals.at(index);
+			outward = (position.x - 32.0f) * normal.x + (position.y - 16.0f) * normal.y + (position.z - 8.0f) * normal.z > 0.0f;
+		}
+	}
+	ok &= expect(outward, "Every face's normal should point out of the box.");
+	ok &= expect(preview.owners.size() == 12
+			&& std::all_of(preview.owners.cbegin(), preview.owners.cend(),
+				[](const LevelMapSelectionRef& owner) { return owner.kind == LevelMapSelectionKind::QuakeBrush && owner.objectId == 0; }),
+		"Every triangle of the box should know it came from brush 0.");
+	QSet<int> facesSeen;
+	for (const int face : preview.ownerFaces) {
+		facesSeen.insert(face);
+	}
+	ok &= expect(preview.ownerFaces.size() == preview.owners.size() && facesSeen.size() == 6 && !facesSeen.contains(-1),
+		"Every triangle should know which of the box's six faces it lies on.");
+	ok &= expect(nearly(preview.mesh.mins.x, 0.0) && nearly(preview.mesh.maxs.x, 64.0) && nearly(preview.mesh.maxs.y, 32.0)
+			&& nearly(preview.mesh.maxs.z, 16.0),
+		"The preview's bounds should be the box's.");
+
+	const LevelMapPreviewMesh limited = buildLevelMapPreviewMesh(box, {5});
+	ok &= expect(limited.truncated && limited.triangles <= 5, "A triangle limit should stop the mesh short and say so.");
+
+	LevelMapDocument square;
+	square.format = LevelMapFormat::DoomWad;
+	square.doomVertices = {doomVertex(0, 0.0, 0.0), doomVertex(1, 64.0, 0.0), doomVertex(2, 64.0, 64.0), doomVertex(3, 0.0, 64.0)};
+	square.doomSidedefs = {doomSidedef(0, 0), doomSidedef(1, 0), doomSidedef(2, 0), doomSidedef(3, 0)};
+	square.doomSectors = {doomSector(0)};
+	square.doomLinedefs = {doomLinedef(0, 0, 1, 0), doomLinedef(1, 1, 2, 1), doomLinedef(2, 2, 3, 2), doomLinedef(3, 3, 0, 3)};
+	const LevelMapPreviewMesh room = buildLevelMapPreviewMesh(square);
+	ok &= expect(room.walls == 4 && room.floors == 1 && room.ceilings == 1 && room.triangles == 12 && nearly(room.mesh.mins.z, 0.0) && nearly(room.mesh.maxs.z, 128.0),
+		"A one-sector Doom room should have four walls, a floor and a ceiling.");
+	return ok;
+}
+
 int main()
 {
 	bool ok = true;
@@ -594,5 +653,6 @@ int main()
 	ok &= runDoomOutlineSmoke();
 	ok &= runPatchSmoke();
 	ok &= runSummarySmoke();
+	ok &= runPreviewMeshSmoke();
 	return ok ? EXIT_SUCCESS : EXIT_FAILURE;
 }

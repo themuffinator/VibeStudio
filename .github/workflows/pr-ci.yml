@@ -10,6 +10,9 @@ on:
 permissions:
   contents: read
 
+env:
+  PYTHONDONTWRITEBYTECODE: "1"
+
 concurrency:
   group: pr-ci-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
@@ -18,7 +21,7 @@ jobs:
   build-test:
     name: build-test-${{ matrix.os }}
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 45
+    timeout-minutes: 60
     strategy:
       fail-fast: false
       matrix:
@@ -50,16 +53,34 @@ jobs:
         with:
           arch: x64
 
+      # Qt Multimedia (audio playback) is an add-on module. Windows and macOS
+      # install it; the Linux job builds without it, which keeps the
+      # no-playback path compiling (see docs/DEPENDENCIES.md).
       - name: Install Qt
         uses: jurplel/install-qt-action@v4
         with:
           version: "6.10.1"
           arch: ${{ matrix.os == 'windows-latest' && 'win64_msvc2022_64' || matrix.os == 'macos-latest' && 'clang_64' || 'linux_gcc_64' }}
+          modules: ${{ matrix.os != 'ubuntu-latest' && 'qtmultimedia' || '' }}
 
       - name: Validate Translation Extraction
         run: python scripts/extract_translations.py --check --dry-run --require-tool
 
+      - name: Build Windows With Source Evidence
+        if: matrix.os == 'windows-latest'
+        shell: pwsh
+        run: >
+          python scripts/build_release.py
+          --build-dir builddir
+          --evidence artifacts/build-evidence
+          --buildtype debugoptimized
+          --audio-playback enabled
+          --qt-prefix "$env:QT_ROOT_DIR"
+          --github-repo "${{ github.repository }}"
+          --update-channel dev
+
       - name: Configure
+        if: matrix.os != 'windows-latest'
         shell: bash
         run: >
           meson setup builddir
@@ -67,8 +88,10 @@ jobs:
           --buildtype=debugoptimized
           -Dgithub_repo=${{ github.repository }}
           -Dupdate_channel=dev
+          -Daudio_duplex=${{ matrix.os == 'ubuntu-latest' && 'disabled' || 'enabled' }}
 
       - name: Build
+        if: matrix.os != 'windows-latest'
         run: meson compile -C builddir
 
       - name: Test
@@ -154,6 +177,7 @@ jobs:
         run: >
           python scripts/validate_packaging.py
           --binary "builddir/src/vibestudio.exe"
+          --compiled-translations "builddir/i18n"
 
       - name: Validate Portable Package Skeleton (Unix)
         if: matrix.os != 'windows-latest'
@@ -161,6 +185,7 @@ jobs:
         run: >
           python scripts/validate_packaging.py
           --binary "builddir/src/vibestudio"
+          --compiled-translations "builddir/i18n"
 
       - name: Validate Release Assets (Windows)
         if: matrix.os == 'windows-latest'
@@ -176,15 +201,15 @@ jobs:
           python scripts/validate_release_assets.py
           --binary "builddir/src/vibestudio"
 
-      - name: Stage Portable Artifact (Windows)
+      - name: Stage Verified Windows Binary And Source
         if: matrix.os == 'windows-latest'
         shell: pwsh
         run: >
-          python scripts/package_portable.py
-          --binary "builddir/src/vibestudio.exe"
-          --output "artifacts"
-          --archive
-          --target-platform current
+          python scripts/package_windows_release.py
+          --build-dir builddir
+          --build-evidence artifacts/build-evidence/build-evidence.json
+          --qt-prefix "$env:QT_ROOT_DIR"
+          --output artifacts/windows-release
 
       - name: Stage Portable Artifact (Unix)
         if: matrix.os != 'windows-latest'
@@ -192,14 +217,39 @@ jobs:
         run: >
           python scripts/package_portable.py
           --binary "builddir/src/vibestudio"
+          --compiled-translations "builddir/i18n"
           --output "artifacts"
           --archive
           --target-platform current
 
       - name: Upload Portable Artifact
+        if: matrix.os != 'windows-latest'
         uses: actions/upload-artifact@v4
         with:
           name: vibestudio-${{ matrix.os }}-${{ github.sha }}
           path: artifacts/**
           if-no-files-found: error
+          retention-days: 14
+
+      - name: Upload Verified Windows Binary And Source
+        if: matrix.os == 'windows-latest'
+        uses: actions/upload-artifact@v4
+        with:
+          name: vibestudio-windows-latest-${{ github.sha }}
+          path: artifacts/windows-release/publish/*
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Upload Windows Release Diagnostics
+        if: always() && matrix.os == 'windows-latest'
+        uses: actions/upload-artifact@v4
+        with:
+          name: vibestudio-windows-diagnostics-${{ github.sha }}
+          path: |
+            artifacts/build-evidence/*
+            artifacts/windows-release/runtime-checks/*.txt
+            artifacts/windows-release/runtime-checks/*.json
+            artifacts/windows-release/runtime-checks/*.wav
+            artifacts/windows-release/INCOMPLETE.txt
+          if-no-files-found: warn
           retention-days: 14

@@ -14,9 +14,10 @@ def repo_root() -> Path:
     return Path(__file__).resolve().parents[1]
 
 
-def run_cli_commands(binary: Path) -> list[dict]:
+def run_cli_commands(binary: Path, settings_file: Path) -> list[dict]:
     process = subprocess.run(
-        [str(binary), "--cli", "--json", "cli", "commands"],
+        [str(binary), "--cli", "--settings-file", str(settings_file), "--json", "cli", "commands"],
+        cwd=repo_root(),
         text=True,
         encoding="utf-8",
         errors="replace",
@@ -55,7 +56,8 @@ def main() -> int:
     readme = (root / "README.md").read_text(encoding="utf-8")
 
     errors: list[str] = []
-    commands = run_cli_commands(binary)
+    with tempfile.TemporaryDirectory(prefix="vibestudio-cli-registry-") as isolated:
+        commands = run_cli_commands(binary, Path(isolated) / "settings.ini")
     seen: set[str] = set()
     for command in commands:
         name = command_name(command)
@@ -87,6 +89,7 @@ def main() -> int:
                 continue
             process = subprocess.run(
                 [str(binary), "--cli", "--settings-file", str(settings_file), family, action],
+                cwd=root,
                 text=True,
                 encoding="utf-8",
                 errors="replace",

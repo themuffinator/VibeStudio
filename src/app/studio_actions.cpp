@@ -1,14 +1,19 @@
 #include "app/studio_actions.h"
 
 #include "app/studio_icons.h"
+#include "app/studio_layout.h"
 
 #include "core/editor_profiles.h"
 
 #include <QAbstractItemView>
+#include <QAbstractButton>
 #include <QApplication>
 #include <QColor>
 #include <QCoreApplication>
 #include <QEvent>
+#include <QElapsedTimer>
+#include <QHideEvent>
+#include <QHBoxLayout>
 #include <QFontMetrics>
 #include <QKeyEvent>
 #include <QKeySequence>
@@ -21,6 +26,8 @@
 #include <QPainter>
 #include <QPalette>
 #include <QPoint>
+#include <QProgressBar>
+#include <QPushButton>
 #include <QRect>
 #include <QSet>
 #include <QShowEvent>
@@ -28,6 +35,7 @@
 #include <QStyleOptionViewItem>
 #include <QStyledItemDelegate>
 #include <QToolBar>
+#include <QTimer>
 #include <QVBoxLayout>
 #include <QWidget>
 
@@ -36,14 +44,6 @@
 namespace vibestudio {
 
 namespace {
-
-// StudioCommandRegistry is not a QObject, and neither are the free helpers in
-// this file, so user-visible strings outside the palette dialog go through an
-// explicit translation context. CommandPaletteDialog has Q_OBJECT and uses tr().
-QString actionsText(const char* source)
-{
-	return QCoreApplication::translate("VibeStudioStudioActions", source);
-}
 
 // Same rule as core/studio_semantics.cpp: "shell.commandPalette" and
 // "shell.command-palette" are one command.
@@ -63,6 +63,15 @@ QString normalizedToken(const QString& value)
 	normalized.replace(' ', '-');
 	return normalized;
 }
+
+} // namespace
+
+QString studioCommandToken(const QString& commandId)
+{
+	return normalizedToken(commandId);
+}
+
+namespace {
 
 // Portable, canonical spelling of a key sequence so that "ctrl+o" and "Ctrl+O"
 // collide during conflict detection.
@@ -164,7 +173,7 @@ QString commandToolTip(const QString& label, const QString& statusTip, const QSt
 	name.remove(QChar(0x2026));
 	name = name.trimmed();
 	if (!shortcut.isEmpty()) {
-		name = actionsText("%1 (%2)").arg(name, shortcut.section(QStringLiteral(", "), 0, 0));
+		name = QCoreApplication::translate("VibeStudioStudioActions", "%1 (%2)").arg(name, shortcut.section(QStringLiteral(", "), 0, 0));
 	}
 	return statusTip.isEmpty() ? name : QStringLiteral("%1\n%2").arg(name, statusTip);
 }
@@ -183,7 +192,7 @@ constexpr int kRowEnabledRole = Qt::UserRole + 3;
 constexpr int kCommandIdRole = Qt::UserRole + 4;
 
 // Paints "label  category ............ shortcut" so the shortcut column stays
-// right-aligned regardless of the label width, and so unavailable rows can be
+// aligned at the trailing edge regardless of the label width, and so unavailable rows can be
 // dimmed without being removed from the list.
 class PaletteRowDelegate final : public QStyledItemDelegate {
 public:
@@ -192,8 +201,18 @@ public:
 	QSize sizeHint(const QStyleOptionViewItem& option, const QModelIndex& index) const override
 	{
 		QSize hint = QStyledItemDelegate::sizeHint(option, index);
-		hint.setHeight(std::max(hint.height(), option.fontMetrics.height() + 10));
+		hint.setHeight(std::max(hint.height(), option.fontMetrics.height() + 14));
 		return hint;
+	}
+
+	// Shortcuts are drawn as key caps a step smaller than the row's text.
+	static QFont keyFont(const QFont& font)
+	{
+		QFont small = font;
+		if (small.pointSizeF() > 0) {
+			small.setPointSizeF(small.pointSizeF() * 0.88);
+		}
+		return small;
 	}
 
 	void paint(QPainter* painter, const QStyleOptionViewItem& option, const QModelIndex& index) const override
@@ -228,34 +247,42 @@ public:
 		painter->save();
 		painter->setFont(opt.font);
 
-		int reserved = 0;
-		if (!shortcut.isEmpty()) {
-			reserved = metrics.horizontalAdvance(shortcut) + 16;
-			QRect shortcutRect = content;
-			shortcutRect.setLeft(std::max(content.left(), content.right() - reserved));
-			painter->setPen(secondary);
-			painter->drawText(shortcutRect, Qt::AlignRight | Qt::AlignVCenter, shortcut);
-		}
-
-		QRect textRect = content.adjusted(0, 0, -reserved, 0);
-		if (textRect.width() <= 0) {
-			painter->restore();
-			return;
-		}
-
-		const QString elidedLabel = metrics.elidedText(label, Qt::ElideRight, textRect.width());
-		painter->setPen(primary);
-		painter->drawText(textRect, Qt::AlignLeft | Qt::AlignVCenter, elidedLabel);
-
-		if (!category.isEmpty()) {
-			const int used = metrics.horizontalAdvance(elidedLabel) + 12;
-			QRect categoryRect = textRect.adjusted(used, 0, 0, 0);
-			if (categoryRect.width() > 24) {
+		// Allocate disjoint logical columns, then mirror their rectangles. Text
+		// alignment is absolute so Qt does not mirror those positions a second
+		// time in an RTL application. Each value is elided inside its own column.
+		painter->setClipRect(content, Qt::IntersectClip);
+		const bool rtl = opt.direction == Qt::RightToLeft;
+		const int leading = Qt::AlignVCenter | Qt::AlignAbsolute | Qt::TextSingleLine | (rtl ? Qt::AlignRight : Qt::AlignLeft);
+		const int trailing = Qt::AlignVCenter | Qt::AlignAbsolute | Qt::TextSingleLine | (rtl ? Qt::AlignLeft : Qt::AlignRight);
+		const int gap = std::max(8, metrics.horizontalAdvance(QLatin1Char(' ')) * 2);
+		// Key caps while they fit in a third of the row; plain text after that.
+		const QFont caps = keyFont(opt.font);
+		const int capsWidth = shortcut.isEmpty() ? 0 : keyCapsWidth(shortcut, caps);
+		const bool drawCaps = capsWidth > 0 && capsWidth <= content.width() / 3;
+		const int shortcutWidth = shortcut.isEmpty() ? 0 : (drawCaps ? capsWidth : std::min(metrics.horizontalAdvance(shortcut), content.width() / 3));
+		const int textWidth = std::max(0, content.width() - (shortcutWidth ? shortcutWidth + gap : 0));
+		if (shortcutWidth > 0) {
+			const QRect logical(content.right() - shortcutWidth + 1, content.top(), shortcutWidth, content.height());
+			const QRect visual = QStyle::visualRect(opt.direction, content, logical);
+			if (drawCaps) {
+				paintKeyCaps(painter, visual, shortcut, caps, opt.direction, rowEnabled, selected);
+				painter->setFont(opt.font);
+			} else {
 				painter->setPen(secondary);
-				painter->drawText(categoryRect,
-					Qt::AlignLeft | Qt::AlignVCenter,
-					metrics.elidedText(category, Qt::ElideRight, categoryRect.width()));
+				painter->drawText(visual, trailing, metrics.elidedText(shortcut, Qt::ElideRight, shortcutWidth));
 			}
+		}
+		const int labelWidth = std::min(metrics.horizontalAdvance(label), textWidth);
+		const QRect labelRect(content.left(), content.top(), labelWidth, content.height());
+		painter->setPen(primary);
+		painter->drawText(QStyle::visualRect(opt.direction, content, labelRect), leading,
+			metrics.elidedText(label, Qt::ElideRight, labelWidth));
+		const int categoryWidth = textWidth - labelWidth - gap;
+		if (!category.isEmpty() && categoryWidth > 0) {
+			const QRect categoryRect(content.left() + labelWidth + gap, content.top(), categoryWidth, content.height());
+			painter->setPen(secondary);
+			painter->drawText(QStyle::visualRect(opt.direction, content, categoryRect), leading,
+				metrics.elidedText(category, Qt::ElideRight, categoryWidth));
 		}
 
 		painter->restore();
@@ -319,25 +346,51 @@ QString studioCommandGroupId(StudioCommandGroup group)
 	return QStringLiteral("tools");
 }
 
+QString commandLabelWithoutMnemonic(const QString& label)
+{
+	QString text = label;
+	text.replace(QStringLiteral("&&"), QString(QChar(0x0001)));
+	text.remove(QLatin1Char('&'));
+	text.replace(QChar(0x0001), QLatin1Char('&'));
+	return text;
+}
+
+void bindCommandButton(QAbstractButton* button, QAction* action)
+{
+	if (!button || !action) { return; }
+	button->setProperty("commandId", action->objectName());
+	const auto sync = [button, action] {
+		button->setEnabled(action->isEnabled());
+		button->setStatusTip(action->statusTip());
+		button->setAccessibleDescription(action->statusTip());
+		button->setToolTip(action->toolTip());
+		if (button->property("tipBeforeFold").isValid()) { button->setProperty("tipBeforeFold", action->toolTip()); }
+	};
+	sync();
+	QObject::connect(action, &QAction::changed, button, sync);
+	QObject::connect(action, &QObject::destroyed, button, [button] { button->setEnabled(false); });
+	QObject::connect(button, &QAbstractButton::clicked, action, &QAction::trigger);
+}
+
 QString studioCommandGroupTitle(StudioCommandGroup group)
 {
 	switch (group) {
 	case StudioCommandGroup::File:
-		return actionsText("File");
+		return QCoreApplication::translate("VibeStudioStudioActions", "File");
 	case StudioCommandGroup::Edit:
-		return actionsText("Edit");
+		return QCoreApplication::translate("VibeStudioStudioActions", "Edit");
 	case StudioCommandGroup::View:
-		return actionsText("View");
+		return QCoreApplication::translate("VibeStudioStudioActions", "View");
 	case StudioCommandGroup::Project:
-		return actionsText("Project");
+		return QCoreApplication::translate("VibeStudioStudioActions", "Project");
 	case StudioCommandGroup::Build:
-		return actionsText("Build");
+		return QCoreApplication::translate("VibeStudioStudioActions", "Build");
 	case StudioCommandGroup::Tools:
-		return actionsText("Tools");
+		return QCoreApplication::translate("VibeStudioStudioActions", "Tools");
 	case StudioCommandGroup::Help:
-		return actionsText("Help");
+		return QCoreApplication::translate("VibeStudioStudioActions", "Help");
 	}
-	return actionsText("Tools");
+	return QCoreApplication::translate("VibeStudioStudioActions", "Tools");
 }
 
 namespace {
@@ -348,21 +401,21 @@ QString studioCommandGroupMenuTitle(StudioCommandGroup group)
 {
 	switch (group) {
 	case StudioCommandGroup::File:
-		return actionsText("&File");
+		return QCoreApplication::translate("VibeStudioStudioActions", "&File");
 	case StudioCommandGroup::Edit:
-		return actionsText("&Edit");
+		return QCoreApplication::translate("VibeStudioStudioActions", "&Edit");
 	case StudioCommandGroup::View:
-		return actionsText("&View");
+		return QCoreApplication::translate("VibeStudioStudioActions", "&View");
 	case StudioCommandGroup::Project:
-		return actionsText("&Project");
+		return QCoreApplication::translate("VibeStudioStudioActions", "&Project");
 	case StudioCommandGroup::Build:
-		return actionsText("&Build");
+		return QCoreApplication::translate("VibeStudioStudioActions", "&Build");
 	case StudioCommandGroup::Tools:
-		return actionsText("&Tools");
+		return QCoreApplication::translate("VibeStudioStudioActions", "&Tools");
 	case StudioCommandGroup::Help:
-		return actionsText("&Help");
+		return QCoreApplication::translate("VibeStudioStudioActions", "&Help");
 	}
-	return actionsText("&Tools");
+	return QCoreApplication::translate("VibeStudioStudioActions", "&Tools");
 }
 
 const QVector<StudioCommandGroup>& studioCommandGroupOrder()
@@ -377,6 +430,33 @@ const QVector<StudioCommandGroup>& studioCommandGroupOrder()
 		StudioCommandGroup::Help,
 	};
 	return order;
+}
+
+} // namespace
+
+namespace {
+
+// Two sets of surfaces a key could fire on meet when either is the whole
+// window, or when one surface is, or holds, the other: Qt finds both
+// shortcuts active there and runs neither.
+bool scopesOverlap(const QList<QPointer<QWidget>>& left, const QList<QPointer<QWidget>>& right)
+{
+	const auto live = [](const QList<QPointer<QWidget>>& scopes) {
+		return std::any_of(scopes.cbegin(), scopes.cend(), [](const QPointer<QWidget>& scope) {
+			return !scope.isNull();
+		});
+	};
+	if (!live(left) || !live(right)) {
+		return true;
+	}
+	for (const QPointer<QWidget>& a : left) {
+		for (const QPointer<QWidget>& b : right) {
+			if (a && b && (a == b || a->isAncestorOf(b) || b->isAncestorOf(a))) {
+				return true;
+			}
+		}
+	}
+	return false;
 }
 
 } // namespace
@@ -467,57 +547,162 @@ QVector<StudioCommandRegistration> StudioCommandRegistry::registrationsForGroup(
 	return filtered;
 }
 
-void StudioCommandRegistry::installShortcuts()
+QHash<QString, QStringList> StudioCommandRegistry::profileOverrides() const
 {
-	// Shortcuts are installed for the whole registry at once, in registration
-	// order, so conflict resolution does not depend on which command happened to
-	// be registered last and a profile switch can rebind everything cleanly.
-	m_conflicts.clear();
-	m_shortcuts.clear();
+	// A selected editor profile may prefer different keys for commands the
+	// shell already owns, or none where it needs a key for something else
+	// (TrenchBroom's W flies the camera). Anything the profile does not
+	// mention keeps the documented default from core/studio_semantics.h.
+	QHash<QString, QStringList> overrides;
+	EditorProfileDescriptor profile;
+	if (m_editorProfileId.trimmed().isEmpty() || !editorProfileForId(m_editorProfileId, &profile)) {
+		return overrides;
+	}
+	for (const EditorProfileBinding& binding : profile.bindings) {
+		if (binding.commandId.trimmed().isEmpty() || !binding.implemented) {
+			continue;
+		}
+		const QStringList keys = editorProfileBindingKeys(binding);
+		if (keys.isEmpty() && !binding.clearsKeys) {
+			continue;
+		}
+		overrides.insert(normalizedToken(binding.commandId), keys);
+	}
+	return overrides;
+}
 
-	// A selected editor profile may prefer different sequences for commands the
-	// shell already owns. Anything the profile does not mention keeps the
-	// documented default from core/studio_semantics.h.
-	QHash<QString, QString> profileOverrides;
-	if (!m_editorProfileId.trimmed().isEmpty()) {
-		EditorProfileDescriptor profile;
-		if (editorProfileForId(m_editorProfileId, &profile)) {
-			for (const EditorProfileBinding& binding : profile.bindings) {
-				if (binding.commandId.trimmed().isEmpty() || binding.shortcut.trimmed().isEmpty()) {
-					continue;
-				}
-				if (!binding.implemented) {
-					continue;
-				}
-				profileOverrides.insert(normalizedToken(binding.commandId), binding.shortcut);
+bool StudioCommandRegistry::documentedShortcut(const QString& commandId, ShortcutDescriptor* descriptor) const
+{
+	if (m_descriptors.isEmpty()) {
+		return shortcutForCommandId(commandId, descriptor);
+	}
+	const auto found = m_descriptors.constFind(normalizedToken(commandId));
+	if (found == m_descriptors.constEnd()) {
+		return false;
+	}
+	if (descriptor) {
+		*descriptor = found.value();
+	}
+	return true;
+}
+
+void StudioCommandRegistry::beginBatch()
+{
+	++m_batchDepth;
+}
+
+void StudioCommandRegistry::endBatch()
+{
+	if (m_batchDepth > 0 && --m_batchDepth == 0 && m_installPending) {
+		m_installPending = false;
+		installShortcuts();
+	}
+}
+
+QStringList StudioCommandRegistry::builtInCandidates(const QString& commandId, const QHash<QString, QStringList>& overrides) const
+{
+	// A profile's keys stand in for the command's own, so the familiar keys
+	// are the only ones: TrenchBroom's clip tool is C, not C and X.
+	const auto override = overrides.constFind(normalizedToken(commandId));
+	if (override != overrides.constEnd()) {
+		return override.value();
+	}
+	QStringList candidates;
+	ShortcutDescriptor descriptor;
+	if (documentedShortcut(commandId, &descriptor)) {
+		if (!descriptor.defaultSequence.trimmed().isEmpty()) {
+			candidates << descriptor.defaultSequence;
+		}
+		for (const QString& alternate : descriptor.alternateSequences) {
+			if (!alternate.trimmed().isEmpty()) {
+				candidates << alternate;
 			}
 		}
 	}
+	return candidates;
+}
 
-	QHash<QString, QString> owners;
-	for (const StudioCommandRegistration& registration : m_registrations) {
-		QAction* action = m_actions.value(registration.commandId, nullptr);
+void StudioCommandRegistry::installShortcuts()
+{
+	if (m_batchDepth > 0) {
+		m_installPending = true;
+		return;
+	}
+	// Shortcuts are installed for the whole registry at once, in registration
+	// order, so conflict resolution does not depend on which command happened to
+	// be registered last and a profile switch can rebind everything cleanly.
+	// The first documented shortcut for an id wins, as a lookup would find it.
+	m_descriptors.clear();
+	for (const ShortcutDescriptor& descriptor : shortcutDescriptors()) {
+		const QString id = normalizedToken(descriptor.commandId);
+		if (!m_descriptors.contains(id)) {
+			m_descriptors.insert(id, descriptor);
+		}
+	}
+	m_conflicts.clear();
+	m_shortcuts.clear();
+	m_sequences.clear();
+	const QHash<QString, QStringList> overrides = profileOverrides();
+
+	// A sequence belongs to one window-wide command, or is shared by commands
+	// scoped to separate surfaces, each firing only on its own.
+	// `preferred` marks keys the user or the editor profile chose: a
+	// built-in key they take from another command is simply theirs.
+	struct Owner {
+		QString commandId;
+		QList<QPointer<QWidget>> scopes;
+		bool preferred = false;
+	};
+	QHash<QString, QVector<Owner>> owners;
+	auto clashWith = [&owners](const QString& key, const QList<QPointer<QWidget>>& scopes) -> Owner {
+		for (const Owner& owner : owners.value(key)) {
+			if (scopesOverlap(owner.scopes, scopes)) {
+				return owner;
+			}
+		}
+		return {};
+	};
+	// Keys the studio relies on go first, so nothing can take them; then the
+	// user's own keys, so one they gave a command is taken from any command
+	// whose built-in key it was rather than refused; then the editor
+	// profile's, likewise; then everything else.
+	QVector<const StudioCommandRegistration*> order;
+	order.reserve(m_registrations.size());
+	const auto pass = [this, &overrides](const StudioCommandRegistration& registration) {
+		if (!shortcutRemappable(registration.commandId)) {
+			return 0;
+		}
+		if (m_userShortcuts.contains(normalizedToken(registration.commandId))) {
+			return 1;
+		}
+		return overrides.contains(normalizedToken(registration.commandId)) ? 2 : 3;
+	};
+	for (const int wanted : {0, 1, 2, 3}) {
+		for (const StudioCommandRegistration& registration : m_registrations) {
+			if (pass(registration) == wanted) {
+				order.push_back(&registration);
+			}
+		}
+	}
+	for (const StudioCommandRegistration* registration : std::as_const(order)) {
+		QAction* action = m_actions.value(registration->commandId, nullptr);
 		if (!action) {
 			continue;
 		}
 		action->setShortcuts({});
+		// A command that loses its keys must not keep naming them.
+		action->setToolTip(commandToolTip(registration->label, registration->statusTip, QString()));
+		QList<QPointer<QWidget>> scopes;
+		for (const QPointer<QWidget>& scope : m_shortcutScopes.value(normalizedToken(registration->commandId))) {
+			if (scope) {
+				scopes.push_back(scope);
+			}
+		}
 
-		QStringList candidates;
-		const auto override = profileOverrides.constFind(normalizedToken(registration.commandId));
-		if (override != profileOverrides.constEnd()) {
-			candidates << override.value();
-		}
-		ShortcutDescriptor descriptor;
-		if (shortcutForCommandId(registration.commandId, &descriptor)) {
-			if (!descriptor.defaultSequence.trimmed().isEmpty()) {
-				candidates << descriptor.defaultSequence;
-			}
-			for (const QString& alternate : descriptor.alternateSequences) {
-				if (!alternate.trimmed().isEmpty()) {
-					candidates << alternate;
-				}
-			}
-		}
+		const auto user = m_userShortcuts.constFind(normalizedToken(registration->commandId));
+		const bool userKeys = user != m_userShortcuts.constEnd() && shortcutRemappable(registration->commandId);
+		const bool preferredKeys = userKeys || (shortcutRemappable(registration->commandId) && overrides.contains(normalizedToken(registration->commandId)));
+		const QStringList candidates = userKeys ? user.value() : builtInCandidates(registration->commandId, overrides);
 		if (candidates.isEmpty()) {
 			continue;
 		}
@@ -536,16 +721,20 @@ void StudioCommandRegistry::installShortcuts()
 			if (seenHere.contains(key)) {
 				continue;
 			}
-			const auto owner = owners.constFind(key);
-			if (owner != owners.constEnd()) {
+			const Owner owner = clashWith(key, scopes);
+			if (!owner.commandId.isEmpty()) {
 				// Sequences claimed by an earlier command win; a duplicate is
 				// recorded and skipped rather than silently shadowing its owner.
-				m_conflicts << actionsText("Shortcut %1 requested by %2 is already bound to %3; it was not installed.")
-					.arg(sequence.toString(QKeySequence::PortableText), registration.commandId, owner.value());
+				// A built-in key the user or the profile gave another command is
+				// simply theirs.
+				if (!owner.preferred || preferredKeys) {
+					m_conflicts << QCoreApplication::translate("VibeStudioStudioActions", "Shortcut %1 requested by %2 is already bound to %3; it was not installed.")
+						.arg(sequence.toString(QKeySequence::PortableText), registration->commandId, owner.commandId);
+				}
 				continue;
 			}
 			seenHere.insert(key);
-			owners.insert(key, registration.commandId);
+			owners[key].push_back({registration->commandId, scopes, preferredKeys});
 			accepted << sequence;
 			acceptedText << sequence.toString(QKeySequence::PortableText);
 		}
@@ -554,11 +743,104 @@ void StudioCommandRegistry::installShortcuts()
 			continue;
 		}
 		action->setShortcuts(accepted);
-		action->setShortcutContext(Qt::WindowShortcut);
-		const QString shortcutText = acceptedText.join(QStringLiteral(", "));
-		m_shortcuts.insert(registration.commandId, shortcutText);
-		action->setToolTip(commandToolTip(registration.label, registration.statusTip, shortcutText));
+		// A scoped command's key only fires while focus is inside one of its
+		// surfaces. The action is added to each surface so Qt can match that
+		// context; being in a menu as well does not widen it.
+		for (const QPointer<QWidget>& scope : scopes) {
+			if (!scope->actions().contains(action)) {
+				scope->addAction(action);
+			}
+		}
+		action->setShortcutContext(scopes.isEmpty() ? Qt::WindowShortcut : Qt::WidgetWithChildrenShortcut);
+		// Qt's own list form: "; " between keys, so a chord ("Ctrl+K, Ctrl+P")
+		// never reads as two keys.
+		const QString shortcutText = QKeySequence::listToString(accepted, QKeySequence::PortableText);
+		m_shortcuts.insert(registration->commandId, shortcutText);
+		m_sequences.insert(registration->commandId, accepted);
+		action->setToolTip(commandToolTip(registration->label, registration->statusTip, shortcutText));
 	}
+}
+
+void StudioCommandRegistry::setUserShortcuts(const QHash<QString, QStringList>& shortcuts)
+{
+	m_userShortcuts.clear();
+	for (auto it = shortcuts.cbegin(); it != shortcuts.cend(); ++it) {
+		if (!it.key().trimmed().isEmpty()) {
+			m_userShortcuts.insert(normalizedToken(it.key()), it.value());
+		}
+	}
+	installShortcuts();
+}
+
+QHash<QString, QStringList> StudioCommandRegistry::userShortcuts() const
+{
+	QHash<QString, QStringList> shortcuts;
+	for (const StudioCommandRegistration& registration : m_registrations) {
+		const auto found = m_userShortcuts.constFind(normalizedToken(registration.commandId));
+		if (found != m_userShortcuts.constEnd()) {
+			shortcuts.insert(registration.commandId, found.value());
+		}
+	}
+	return shortcuts;
+}
+
+bool StudioCommandRegistry::hasUserShortcut(const QString& commandId) const
+{
+	return m_userShortcuts.contains(normalizedToken(commandId));
+}
+
+QStringList StudioCommandRegistry::builtInShortcuts(const QString& commandId) const
+{
+	QStringList sequences;
+	QSet<QString> seen;
+	for (const QString& candidate : builtInCandidates(commandId, profileOverrides())) {
+		const QKeySequence sequence = QKeySequence::fromString(candidate, QKeySequence::PortableText);
+		if (!sequence.isEmpty() && !seen.contains(normalizedSequenceKey(sequence))) {
+			seen.insert(normalizedSequenceKey(sequence));
+			sequences << sequence.toString(QKeySequence::PortableText);
+		}
+	}
+	return sequences;
+}
+
+QStringList StudioCommandRegistry::commandsUsingShortcut(const QString& sequenceText, const QString& commandId) const
+{
+	QStringList using_;
+	const QKeySequence sequence = QKeySequence::fromString(sequenceText, QKeySequence::PortableText);
+	if (sequence.isEmpty()) {
+		return using_;
+	}
+	const QString key = normalizedSequenceKey(sequence);
+	const QList<QPointer<QWidget>> mine = m_shortcutScopes.value(normalizedToken(commandId));
+	// What is installed now is what the key would collide with.
+	for (const StudioCommandRegistration& registration : m_registrations) {
+		if (normalizedToken(registration.commandId) == normalizedToken(commandId)) {
+			continue;
+		}
+		const QAction* action = m_actions.value(registration.commandId, nullptr);
+		if (!action) {
+			continue;
+		}
+		const QList<QKeySequence> installed = action->shortcuts();
+		const bool uses = std::any_of(installed.cbegin(), installed.cend(), [&key](const QKeySequence& candidate) {
+			return normalizedSequenceKey(candidate) == key;
+		});
+		if (uses && scopesOverlap(mine, m_shortcutScopes.value(normalizedToken(registration.commandId)))) {
+			using_ << registration.commandId;
+		}
+	}
+	return using_;
+}
+
+QList<QKeySequence> StudioCommandRegistry::shortcutSequences(const QString& commandId) const
+{
+	return m_sequences.value(commandId);
+}
+
+bool StudioCommandRegistry::shortcutRemappable(const QString& commandId) const
+{
+	ShortcutDescriptor descriptor;
+	return !documentedShortcut(commandId, &descriptor) || descriptor.userRemappable;
 }
 
 void StudioCommandRegistry::applyEditorProfile(const QString& editorProfileId)
@@ -593,6 +875,20 @@ void StudioCommandRegistry::setEnabled(const QString& commandId, bool enabled)
 		}
 	}
 	target->setEnabled(enabled && (!requiresProject || m_projectAvailable));
+}
+
+void StudioCommandRegistry::setShortcutScopes(const QString& commandId, const QList<QWidget*>& scopes)
+{
+	QList<QPointer<QWidget>> guarded;
+	for (QWidget* scope : scopes) {
+		if (scope) {
+			guarded.push_back(scope);
+		}
+	}
+	// Keyed like the registry so the documented kebab-case ids and the shell's
+	// camelCase ids name the same command.
+	m_shortcutScopes.insert(normalizedToken(commandId), guarded);
+	installShortcuts();
 }
 
 void StudioCommandRegistry::setChecked(const QString& commandId, bool checked)
@@ -646,17 +942,23 @@ void StudioCommandRegistry::populateMenuBar(QMenuBar* menuBar) const
 		}
 		QMenu* menu = menuBar->addMenu(studioCommandGroupMenuTitle(group));
 		menu->setObjectName(QStringLiteral("menu-%1").arg(studioCommandGroupId(group)));
-		bool addedAny = false;
+		QHash<QString, QMenu*> sections;
 		for (const StudioCommandRegistration& registration : groupRegistrations) {
 			QAction* target = m_actions.value(registration.commandId, nullptr);
 			if (!target) {
 				continue;
 			}
-			if (registration.separatorBefore && addedAny) {
-				menu->addSeparator();
+			QMenu* destination = menu;
+			if (!registration.menuSection.isEmpty()) {
+				if (!sections.contains(registration.menuSection)) {
+					sections.insert(registration.menuSection, menu->addMenu(registration.menuSection));
+				}
+				destination = sections.value(registration.menuSection);
 			}
-			menu->addAction(target);
-			addedAny = true;
+			if (registration.separatorBefore && !destination->actions().isEmpty()) {
+				destination->addSeparator();
+			}
+			destination->addAction(target);
 		}
 	}
 }
@@ -701,15 +1003,19 @@ CommandPaletteDialog::CommandPaletteDialog(const StudioCommandRegistry& registry
 	setWindowFlags(Qt::Dialog | Qt::FramelessWindowHint);
 	setAccessibleName(tr("Command palette"));
 	setAccessibleDescription(tr("Searchable list of studio commands. Type to filter, then press Enter to run the highlighted command."));
+	// A floating panel: rounded, with a soft shadow, where the window system
+	// can show one.
+	m_shadowMargin = prepareFloatingPanel(this);
 
 	auto* layout = new QVBoxLayout(this);
-	layout->setContentsMargins(12, 12, 12, 12);
+	layout->setContentsMargins(12 + m_shadowMargin, 12 + m_shadowMargin, 12 + m_shadowMargin, 10 + m_shadowMargin);
 	layout->setSpacing(8);
 
 	m_filter = new QLineEdit(this);
 	m_filter->setObjectName(QStringLiteral("commandPaletteFilter"));
 	m_filter->setPlaceholderText(tr("Type a command name, category, or description"));
 	m_filter->setClearButtonEnabled(true);
+	m_filter->addAction(studioIcon(QStringLiteral("search"), StudioIconTone::Muted), QLineEdit::LeadingPosition);
 	m_filter->setAccessibleName(tr("Command filter"));
 	m_filter->setAccessibleDescription(tr("Filters the command list. Matching is case-insensitive and characters may be skipped, so \"opk\" finds \"Open Package\"."));
 	m_filter->installEventFilter(this);
@@ -720,6 +1026,10 @@ CommandPaletteDialog::CommandPaletteDialog(const StudioCommandRegistry& registry
 	m_list->setUniformItemSizes(false);
 	m_list->setAlternatingRowColors(false);
 	m_list->setSelectionMode(QAbstractItemView::SingleSelection);
+	// Rows sit straight on the panel, each command with its glyph.
+	m_list->setProperty("flat", true);
+	setBaseIconSize(m_list, QSize(16, 16));
+	m_list->setIconSize(scaledIconSize(QSize(16, 16)));
 	m_list->setAccessibleName(tr("Matching commands"));
 	m_list->setAccessibleDescription(tr("Commands that match the filter. Unavailable commands stay listed and are shown dimmed."));
 	m_list->setItemDelegate(new PaletteRowDelegate(m_list));
@@ -755,6 +1065,12 @@ void CommandPaletteDialog::setExtraEntries(const QVector<CommandPaletteEntry>& e
 	applyFilter();
 }
 
+void CommandPaletteDialog::setRecentCommands(const QStringList& commandIds)
+{
+	m_recentCommands = commandIds;
+	applyFilter();
+}
+
 void CommandPaletteDialog::focusFilter()
 {
 	if (!m_filter) {
@@ -776,17 +1092,26 @@ void CommandPaletteDialog::showEvent(QShowEvent* event)
 	if (QWidget* owner = parentWidget()) {
 		const int width = std::clamp(owner->width() * 3 / 5, 420, 900);
 		const int height = std::clamp(owner->height() * 3 / 5, 320, 640);
-		resize(width, height);
+		resize(width + 2 * m_shadowMargin, height + 2 * m_shadowMargin);
 		// Anchored near the top like other editors' command launchers, so the
 		// list grows downward over the work surface rather than covering it.
 		const QPoint topCentre = owner->mapToGlobal(QPoint(owner->width() / 2, 0));
-		move(topCentre.x() - width / 2, topCentre.y() + std::min(96, owner->height() / 8));
+		move(topCentre.x() - width / 2 - m_shadowMargin, topCentre.y() + std::min(96, owner->height() / 8) - m_shadowMargin);
 	}
 
 	m_selectedCommandId.clear();
 	rebuildRows();
 	applyFilter();
 	focusFilter();
+}
+
+void CommandPaletteDialog::paintEvent(QPaintEvent* event)
+{
+	if (m_shadowMargin > 0) {
+		paintFloatingPanel(this, m_shadowMargin);
+		return;
+	}
+	QDialog::paintEvent(event);
 }
 
 bool CommandPaletteDialog::eventFilter(QObject* watched, QEvent* event)
@@ -840,10 +1165,11 @@ void CommandPaletteDialog::rebuildRows()
 		const QAction* target = m_registry.action(registration.commandId);
 		Row row;
 		row.commandId = registration.commandId;
-		row.label = registration.label;
-		row.category = studioCommandGroupTitle(registration.group);
+		row.label = commandLabelWithoutMnemonic(registration.label);
+		row.category = registration.menuSection.isEmpty() ? studioCommandGroupTitle(registration.group) : registration.menuSection;
 		row.summary = registration.statusTip;
 		row.shortcut = m_registry.shortcutForCommand(registration.commandId);
+		row.iconName = registration.iconName;
 		row.enabled = target ? target->isEnabled() : false;
 		row.destructive = registration.destructive;
 		m_rows.push_back(row);
@@ -889,7 +1215,11 @@ void CommandPaletteDialog::applyFilter()
 	for (int index = 0; index < m_rows.size(); ++index) {
 		const Row& row = m_rows.at(index);
 		int rank = 0;
-		if (!needle.isEmpty()) {
+		if (needle.isEmpty()) {
+			// Recently run commands lead an unfiltered list, newest first.
+			const qsizetype recent = m_recentCommands.indexOf(row.commandId);
+			rank = recent >= 0 ? static_cast<int>(recent) - static_cast<int>(m_recentCommands.size()) : 0;
+		} else {
 			const QString label = row.label.toLower();
 			const QString haystack = QStringLiteral("%1 %2 %3").arg(label, row.category.toLower(), row.summary.toLower());
 			if (label.startsWith(needle)) {
@@ -925,6 +1255,9 @@ void CommandPaletteDialog::applyFilter()
 		}
 
 		auto* item = new QListWidgetItem(label, m_list);
+		// Every row carries a glyph, so the names line up.
+		const QString glyph = studioIconExists(entry.row.iconName) ? entry.row.iconName : QStringLiteral("command");
+		item->setIcon(studioIcon(glyph, StudioIconTone::Muted));
 		item->setData(kCategoryRole, entry.row.category);
 		item->setData(kShortcutRole, entry.row.shortcut);
 		item->setData(kRowEnabledRole, entry.row.enabled);
@@ -947,6 +1280,328 @@ void CommandPaletteDialog::applyFilter()
 			m_hint->setText(tr("Up and Down move, Page Up and Page Down jump, Enter runs the highlighted command, Escape closes."));
 		}
 	}
+}
+
+QuickOpenDialog::QuickOpenDialog(QWidget* parent)
+	: QDialog(parent)
+{
+	setObjectName(QStringLiteral("quickOpen"));
+	setWindowTitle(tr("Go to File"));
+	setModal(true);
+	setWindowFlags(Qt::Dialog | Qt::FramelessWindowHint);
+	setAccessibleName(tr("Go to File"));
+	setAccessibleDescription(tr("Searchable list of project files and package entries. Type part of a name, then press Enter to open the highlighted file where it belongs."));
+	// The same floating panel as the command palette.
+	m_shadowMargin = prepareFloatingPanel(this);
+
+	auto* layout = new QVBoxLayout(this);
+	layout->setContentsMargins(12 + m_shadowMargin, 12 + m_shadowMargin, 12 + m_shadowMargin, 10 + m_shadowMargin);
+	layout->setSpacing(8);
+
+	m_filter = new QLineEdit(this);
+	m_filter->setObjectName(QStringLiteral("quickOpenFilter"));
+	m_filter->setPlaceholderText(tr("Type part of a file name or folder"));
+	m_filter->setClearButtonEnabled(true);
+	m_filter->addAction(studioIcon(QStringLiteral("search"), StudioIconTone::Muted), QLineEdit::LeadingPosition);
+	m_filter->setAccessibleName(tr("File filter"));
+	m_filter->setAccessibleDescription(tr("Filters the file list. Matching is case-insensitive and letters may be skipped, so \"bwall\" finds \"brick_wall.tga\"."));
+	m_filter->installEventFilter(this);
+	layout->addWidget(m_filter);
+
+	m_list = new QListWidget(this);
+	m_list->setObjectName(QStringLiteral("quickOpenList"));
+	m_list->setProperty("flat", true);
+	m_list->setUniformItemSizes(true);
+	m_list->setSelectionMode(QAbstractItemView::SingleSelection);
+	m_list->setAccessibleName(tr("Matching files"));
+	m_list->setAccessibleDescription(tr("Files that match the filter, with their folder and whether they come from the project or the open package."));
+	m_list->setItemDelegate(new PaletteRowDelegate(m_list));
+	layout->addWidget(m_list, 1);
+
+	m_hint = new QLabel(this);
+	m_hint->setObjectName(QStringLiteral("quickOpenHint"));
+	m_hint->setWordWrap(true);
+	m_hint->setAccessibleName(tr("Go to File keyboard help"));
+	m_hint->setTextFormat(Qt::PlainText);
+	layout->addWidget(m_hint);
+	m_scanStatus = new QLabel(this);
+	m_scanStatus->setObjectName(QStringLiteral("quickOpenStatus"));
+	m_scanStatus->setTextFormat(Qt::PlainText);
+	m_scanStatus->setWordWrap(true);
+	m_scanStatus->setAccessibleName(tr("File discovery status"));
+	m_scanStatus->hide();
+	layout->addWidget(m_scanStatus);
+	m_scanControls = new QWidget(this);
+	auto* controls = new QHBoxLayout(m_scanControls);
+	controls->setContentsMargins(0, 0, 0, 0);
+	m_scanProgress = new QProgressBar;
+	m_scanProgress->setRange(0, 0);
+	m_scanProgress->setTextVisible(false);
+	m_scanProgress->setAccessibleName(tr("Discovering files"));
+	controls->addWidget(m_scanProgress, 1);
+	m_cancelScan = new QPushButton(tr("Cancel Scan"));
+	m_cancelScan->setObjectName(QStringLiteral("quickOpenCancel"));
+	m_cancelScan->setAccessibleName(tr("Cancel file discovery"));
+	m_cancelScan->setAutoDefault(false);
+	controls->addWidget(m_cancelScan);
+	m_refreshScan = new QPushButton(tr("Refresh"));
+	m_refreshScan->setObjectName(QStringLiteral("quickOpenRefresh"));
+	m_refreshScan->setAccessibleName(tr("Refresh discovered files"));
+	m_refreshScan->setAutoDefault(false);
+	controls->addWidget(m_refreshScan);
+	m_scanControls->hide();
+	layout->addWidget(m_scanControls);
+	m_filterTimer = new QTimer(this);
+	m_filterTimer->setSingleShot(true);
+	connect(m_filterTimer, &QTimer::timeout, this, &QuickOpenDialog::filterBatch);
+	m_catalog = new QuickOpenCatalog(this);
+	m_catalog->progress = [this](int files, int entries) {
+		m_scanStatus->setText(tr("Scanning: %1 project file(s), %2 entries checked…").arg(files).arg(entries));
+		m_scanStatus->setAccessibleDescription(m_scanStatus->text());
+		if (catalogProgress) { catalogProgress(files, entries); }
+	};
+	m_catalog->completed = [this](const QuickOpenResult& result) {
+		setEntries(result.entries);
+		QString summary = tr("%1 file(s) available.").arg(result.entries.size());
+		if (result.state == OperationState::Cancelled) { summary = tr("Scan cancelled. %1 gathered file(s) remain available.").arg(result.entries.size()); }
+		else if (result.state == OperationState::Failed) { summary = tr("Project scan failed: %1").arg(result.error); }
+		else if (result.state == OperationState::Warning) { summary = tr("Partial list: %1 file(s). Filtering searches only gathered files; use a narrower project root to find more.").arg(result.entries.size()); }
+		finishCatalog(result.state, summary, result.warnings);
+	};
+	connect(m_cancelScan, &QPushButton::clicked, this, &QuickOpenDialog::cancelCatalog);
+	connect(m_refreshScan, &QPushButton::clicked, this, &QuickOpenDialog::refreshRequested);
+
+	QObject::connect(m_filter, &QLineEdit::textChanged, this, [this](const QString&) {
+		applyFilter();
+	});
+	QObject::connect(m_list, &QListWidget::itemActivated, this, [this](QListWidgetItem*) {
+		activateCurrentRow();
+	});
+}
+
+void QuickOpenDialog::setPurpose(const QuickOpenPurpose& purpose)
+{
+	m_purpose = purpose;
+	if (!purpose.title.isEmpty()) {
+		setWindowTitle(purpose.title);
+		setAccessibleName(purpose.title);
+	}
+	if (m_filter && !purpose.placeholder.isEmpty()) {
+		m_filter->setPlaceholderText(purpose.placeholder);
+	}
+	if (m_list && !purpose.listName.isEmpty()) {
+		m_list->setAccessibleName(purpose.listName);
+	}
+	applyFilter();
+}
+
+void QuickOpenDialog::setEntries(const QVector<QuickOpenEntry>& entries, const QString& note)
+{
+	m_entries = entries;
+	m_note = note;
+	applyFilter(true);
+}
+
+void QuickOpenDialog::startCatalog(QuickOpenRequest request)
+{
+	m_catalog->reset();
+	if (m_scanActive) { finishCatalog(OperationState::Cancelled, tr("File discovery superseded.")); }
+	m_scanActive = true;
+	m_scanStatus->setText(tr("Discovering files… Recent paths are being checked."));
+	m_scanStatus->setAccessibleDescription(m_scanStatus->text());
+	m_scanStatus->show();
+	m_scanControls->show();
+	m_scanProgress->show();
+	m_cancelScan->setEnabled(true);
+	m_refreshScan->setEnabled(false);
+	setEntries(quickOpenRecentEntries(request.recentPaths));
+	if (catalogStarted) { catalogStarted(); }
+	m_catalog->start(std::move(request));
+}
+
+void QuickOpenDialog::cancelCatalog()
+{
+	if (!m_scanActive) { return; }
+	m_cancelScan->setEnabled(false);
+	m_scanStatus->setText(tr("Cancelling file discovery…"));
+	m_scanStatus->setAccessibleDescription(m_scanStatus->text());
+	m_catalog->cancel();
+}
+
+void QuickOpenDialog::finishCatalog(OperationState state, const QString& summary, const QStringList& warnings)
+{
+	m_scanActive = false;
+	m_scanProgress->hide();
+	m_cancelScan->setEnabled(false);
+	m_refreshScan->setEnabled(true);
+	m_scanStatus->setText(summary);
+	m_scanStatus->setToolTip(warnings.join(QLatin1Char('\n')));
+	m_scanStatus->setAccessibleDescription(summary + QLatin1Char('\n') + warnings.join(QLatin1Char('\n')));
+	if (catalogFinished) { catalogFinished(state, summary, warnings); }
+}
+
+void QuickOpenDialog::hideEvent(QHideEvent* event)
+{
+	m_catalog->reset();
+	if (m_scanActive) { finishCatalog(OperationState::Cancelled, tr("File discovery stopped when the picker closed.")); }
+	m_filterTimer->stop();
+	m_filtering = false;
+	QDialog::hideEvent(event);
+}
+
+void QuickOpenDialog::focusFilter()
+{
+	if (m_filter) {
+		m_filter->setFocus(Qt::OtherFocusReason);
+		m_filter->selectAll();
+	}
+}
+
+void QuickOpenDialog::showEvent(QShowEvent* event)
+{
+	QDialog::showEvent(event);
+	if (QWidget* owner = parentWidget()) {
+		const int width = std::clamp(owner->width() * 3 / 5, 420, 900);
+		const int height = std::clamp(owner->height() * 3 / 5, 320, 640);
+		resize(width + 2 * m_shadowMargin, height + 2 * m_shadowMargin);
+		const QPoint topCentre = owner->mapToGlobal(QPoint(owner->width() / 2, 0));
+		move(topCentre.x() - width / 2 - m_shadowMargin, topCentre.y() + std::min(96, owner->height() / 8) - m_shadowMargin);
+	}
+	focusFilter();
+}
+
+void QuickOpenDialog::paintEvent(QPaintEvent* event)
+{
+	if (m_shadowMargin > 0) {
+		paintFloatingPanel(this, m_shadowMargin);
+		return;
+	}
+	QDialog::paintEvent(event);
+}
+
+bool QuickOpenDialog::eventFilter(QObject* watched, QEvent* event)
+{
+	if (watched == m_filter && event->type() == QEvent::KeyPress) {
+		auto* keyEvent = static_cast<QKeyEvent*>(event);
+		const int rowCount = m_list ? m_list->count() : 0;
+		switch (keyEvent->key()) {
+		case Qt::Key_Escape:
+			reject();
+			return true;
+		case Qt::Key_Return:
+		case Qt::Key_Enter:
+			activateCurrentRow();
+			return true;
+		case Qt::Key_Down:
+		case Qt::Key_Up:
+		case Qt::Key_PageDown:
+		case Qt::Key_PageUp: {
+			if (rowCount <= 0) {
+				return true;
+			}
+			int step = 1;
+			if (keyEvent->key() == Qt::Key_Up) {
+				step = -1;
+			} else if (keyEvent->key() == Qt::Key_PageDown) {
+				step = 10;
+			} else if (keyEvent->key() == Qt::Key_PageUp) {
+				step = -10;
+			}
+			m_list->setCurrentRow(std::clamp(std::max(0, m_list->currentRow()) + step, 0, rowCount - 1));
+			m_list->scrollToItem(m_list->currentItem());
+			return true;
+		}
+		default:
+			break;
+		}
+	}
+	return QDialog::eventFilter(watched, event);
+}
+
+void QuickOpenDialog::applyFilter(bool preserveSelection)
+{
+	if (!m_list) { return; }
+	m_filterTimer->stop();
+	m_retainedKey = preserveSelection && m_list->currentItem() ? m_list->currentItem()->data(kCommandIdRole).toString() : QString();
+	m_filterNeedle = m_filter ? m_filter->text().trimmed().toLower() : QString();
+	for (auto& bucket : m_ranked) { bucket.clear(); }
+	m_filterCursor = 0;
+	m_matchCount = 0;
+	m_filtering = true;
+	m_list->clear();
+	m_hint->setText(tr("Matching files…"));
+	// Small symbol/recent lists remain immediate. Large catalogs yield between
+	// batches, including while typing; a new query retires all old matches.
+	filterBatch();
+}
+
+void QuickOpenDialog::filterBatch()
+{
+	QElapsedTimer elapsed;
+	elapsed.start();
+	int processed = 0;
+	while (m_filterCursor < m_entries.size() && processed++ < 512 && elapsed.elapsed() < 4) {
+		const int index = m_filterCursor++;
+		const QuickOpenEntry& entry = m_entries.at(index);
+		int rank = 0;
+		if (!m_filterNeedle.isEmpty()) {
+			const QString name = entry.name.toLower();
+			if (name.startsWith(m_filterNeedle)) { rank = 0; }
+			else if (hasWordStart(name, m_filterNeedle)) { rank = 1; }
+			else if (isSubsequence(entry.folder.toLower() + QLatin1Char('/') + name, m_filterNeedle)) { rank = 2; }
+			else { continue; }
+		}
+		++m_matchCount;
+		if (m_ranked[rank].size() < kMaximumRows) { m_ranked[rank] << index; }
+	}
+	if (m_filterCursor < m_entries.size()) { m_filterTimer->start(0); }
+	else { finishFilter(); }
+}
+
+void QuickOpenDialog::finishFilter()
+{
+	m_filtering = false;
+	QListWidgetItem* retained = nullptr;
+	for (const auto& bucket : m_ranked) {
+		for (const int index : bucket) {
+			if (m_list->count() >= kMaximumRows) { break; }
+			const QuickOpenEntry& entry = m_entries.at(index);
+			auto* item = new QListWidgetItem(entry.name, m_list);
+			item->setData(kCategoryRole, entry.folder);
+			item->setData(kShortcutRole, entry.source);
+			item->setData(kRowEnabledRole, true);
+			item->setData(kCommandIdRole, entry.key);
+			item->setToolTip(entry.folder.isEmpty() ? entry.name : QStringLiteral("%1/%2").arg(entry.folder, entry.name));
+			item->setData(Qt::AccessibleTextRole, entry.folder.isEmpty()
+				? tr("%1, from %2").arg(entry.name, entry.source)
+				: tr("%1, in %2, from %3").arg(entry.name, entry.folder, entry.source));
+			if (entry.key == m_retainedKey) { retained = item; }
+		}
+	}
+	if (m_list->count() > 0) { m_list->setCurrentItem(retained ? retained : m_list->item(0)); }
+	QStringList hint;
+	const QString typed = m_filter ? m_filter->text().trimmed() : QString();
+	if (m_entries.isEmpty() && !m_scanActive) {
+		hint << (m_purpose.emptyHint.isEmpty() ? tr("Open a project or a package to find files in it.") : m_purpose.emptyHint);
+	} else if (!m_matchCount && !m_entries.isEmpty()) {
+		hint << (m_purpose.noMatchHint.isEmpty() ? tr("No file matches \"%1\".").arg(typed) : m_purpose.noMatchHint.arg(typed));
+	} else if (m_matchCount > m_list->count()) {
+		hint << tr("Showing the best %1 of %2 matches; type more to narrow them.").arg(m_list->count()).arg(m_matchCount);
+	}
+	if (!m_note.isEmpty()) { hint << m_note; }
+	hint << (m_purpose.keyHelp.isEmpty() ? tr("Enter opens the highlighted file where it belongs; Escape closes.") : m_purpose.keyHelp);
+	m_hint->setText(hint.join(QLatin1Char(' ')));
+}
+
+void QuickOpenDialog::activateCurrentRow()
+{
+	QListWidgetItem* item = m_list ? m_list->currentItem() : nullptr;
+	if (!item) {
+		return;
+	}
+	const QString key = item->data(kCommandIdRole).toString();
+	accept();
+	Q_EMIT entryChosen(key);
 }
 
 void CommandPaletteDialog::activateCurrentRow()

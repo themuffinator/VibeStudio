@@ -1,9 +1,13 @@
 #include "core/studio_settings.h"
 
+#include "core/ai_connectors.h"
+#include "core/project_manifest.h"
+
 #include <QCoreApplication>
 #include <QDateTime>
 #include <QDir>
 #include <QFileInfo>
+#include <QFile>
 #include <QSettings>
 #include <QTemporaryDir>
 #include <QTimeZone>
@@ -67,9 +71,96 @@ bool runPreferenceAndHistorySmoke(const QDir& root)
 	settings.setSelectedMode(5);
 	settings.setShellGeometry(QByteArray("geometry-bytes"));
 	settings.setShellWindowState(QByteArray("state-bytes"));
-	settings.setShellModeRailCompact(true);
+	ok &= expect(settings.shellModeRailBehaviour() == QStringLiteral("automatic"), "Expected the mode rail to fold to icons by default.");
+	settings.setShellModeRailBehaviour(QStringLiteral("Expanded"));
+	ok &= expect(settings.restoreSession() && settings.lastSession().isEmpty(), "Expected the session to reopen by default, with nothing to reopen yet.");
+	ok &= expect(settings.crashReports(), "Expected crash reports to be kept by default.");
+	settings.setCrashReports(false);
+	ok &= expect(!settings.crashReports(), "Expected crash reports to turn off.");
+	settings.setCrashReports(true);
+	ok &= expect(settings.codeRecoveryEnabled(), "Expected local Code recovery to be enabled by default.");
+	settings.setCodeRecoveryEnabled(false);
+	ok &= expect(settings.audioRecoveryEnabled() && settings.audioRecoveryNotifyAtStartup(),
+		"Audio checkpoints and startup discovery are enabled by default.");
+	settings.setAudioRecoveryEnabled(false);
+	settings.setAudioRecoveryNotifyAtStartup(false);
+	settings.sync();
+	vibestudio::StudioSettings audioReloaded(settingsPath);
+	ok &= expect(!audioReloaded.audioRecoveryEnabled() && !audioReloaded.audioRecoveryNotifyAtStartup(),
+		"Audio checkpoint and notification preferences persist independently.");
+	settings.setAudioRecoveryNotifyAtStartup(true);
+	ok &= expect(!settings.audioRecoveryEnabled() && settings.audioRecoveryNotifyAtStartup(),
+		"Existing audio copies can still be offered when checkpointing is disabled.");
+	settings.setAudioRecoveryEnabled(true);
+	ok &= expect(settings.textureRecoveryEnabled() && settings.textureRecoveryIntervalSeconds() == 30, "Expected local texture recovery every 30 seconds by default.");
+	settings.setTextureRecoveryEnabled(false); settings.setTextureRecoveryIntervalSeconds(1);
+	ok &= expect(!settings.textureRecoveryEnabled() && settings.textureRecoveryIntervalSeconds() == 5, "Texture recovery can be disabled and its interval has a lower bound.");
+	settings.setTextureRecoveryIntervalSeconds(9999);
+	ok &= expect(settings.textureRecoveryIntervalSeconds() == 600, "Texture recovery interval has an upper bound.");
+	settings.setTextureRecoveryEnabled(true); settings.setTextureRecoveryIntervalSeconds(30);
+	settings.sync();
+	ok &= expect(!vibestudio::StudioSettings(settingsPath).codeRecoveryEnabled(), "Expected the Code recovery preference to persist across settings instances.");
+	settings.setCodeRecoveryEnabled(true);
+	ok &= expect(settings.codeZoomPercent() == 100, "Expected the code editor to start at 100% zoom.");
+	ok &= expect(settings.userShortcuts().isEmpty(), "Expected no keys of the user's own at first.");
+	settings.setUserShortcuts({{QStringLiteral("code.zoomReset"), {QStringLiteral("Ctrl+Shift+G"), QStringLiteral("Ctrl+K, Ctrl+Z")}},
+		{QStringLiteral("map.undo"), {}}});
+	const QHash<QString, QStringList> keys = settings.userShortcuts();
+	ok &= expect(keys.size() == 2 && keys.value(QStringLiteral("code.zoomReset")) == QStringList {QStringLiteral("Ctrl+Shift+G"), QStringLiteral("Ctrl+K, Ctrl+Z")}
+			&& keys.contains(QStringLiteral("map.undo")) && keys.value(QStringLiteral("map.undo")).isEmpty(),
+		"Expected the user's keys to come back as set, a chord kept whole and a command left without keys kept.");
+	settings.setUserShortcuts({});
+	ok &= expect(settings.userShortcuts().isEmpty(), "Expected setting no keys to forget them all.");
+	settings.setCodeZoomPercent(900);
+	ok &= expect(settings.codeZoomPercent() == 300, "Expected the code editor zoom to stop at 300%.");
+	settings.setCodeZoomPercent(100);
+	ok &= expect(settings.recentFilterQueries(QStringLiteral("levelObjects")).isEmpty(), "Expected no recent filter queries at first.");
+	settings.recordFilterQuery(QStringLiteral("levelObjects"), QStringLiteral("tag=3"));
+	settings.recordFilterQuery(QStringLiteral("levelObjects"), QStringLiteral("class=light"));
+	settings.recordFilterQuery(QStringLiteral("levelObjects"), QStringLiteral("TAG=3"));
+	ok &= expect(settings.recentFilterQueries(QStringLiteral("levelObjects")) == QStringList {QStringLiteral("TAG=3"), QStringLiteral("class=light")},
+		"Expected recent queries most recent first, each once whatever its case.");
+	ok &= expect(settings.recentFilterQueries(QStringLiteral("packageEntries")).isEmpty(), "Expected each filter to keep its own queries.");
+	ok &= expect(settings.codeStickyHeaders(), "Expected the code editor's sticky headers to start on.");
+	settings.setCodeStickyHeaders(false);
+	ok &= expect(!settings.codeStickyHeaders(), "Expected sticky headers to turn off.");
+	settings.setCodeStickyHeaders(true);
+	vibestudio::StudioSession left;
+	left.codeFiles = {QStringLiteral("a.cfg")};
+	vibestudio::StudioSession right = left;
+	ok &= expect(left == right, "Expected equal sessions to compare equal.");
+	right.currentCodeFile = QStringLiteral("a.cfg");
+	ok &= expect(!(left == right), "Expected sessions differing in the file in front to differ.");
+	vibestudio::StudioSession session;
+	session.packagePath = QStringLiteral("C:/games/quake/id1/pak0.pak");
+	session.mapPath = QStringLiteral("C:/maps/rooms.wad");
+	session.mapName = QStringLiteral("MAP02");
+	session.codeFiles = {QStringLiteral("C:/src/a.qc"), QStringLiteral("C:/src/b.cfg")};
+	session.currentCodeFile = QStringLiteral("C:/src/b.cfg");
+	settings.setLastSession(session);
+	settings.setRestoreSession(false);
 	settings.setShellLayoutState(QStringLiteral("levelsWorkbench"), QByteArray("splitter-bytes"));
 	settings.setShellLayoutState(QStringLiteral("  "), QByteArray("ignored"));
+	for (int index = 0; index < vibestudio::StudioSettings::kMaximumRecentFiles + 3; ++index) {
+		settings.recordRecentFile(QStringLiteral("map"), QStringLiteral("C:/maps/map%1.map").arg(index));
+	}
+	settings.recordRecentFile(QStringLiteral("map"), QStringLiteral("C:/maps/map5.map"));
+	settings.recordRecentFile(QStringLiteral("package"), QStringLiteral("C:/paks/pak0.pk3"));
+	settings.recordRecentFile(QStringLiteral("code"), QStringLiteral("C:/scripts/autoexec.cfg"));
+	settings.removeRecentFile(QStringLiteral("code"), QStringLiteral("C:/scripts/autoexec.cfg"));
+	settings.recordRecentFile(QStringLiteral("relative"), QStringLiteral("sources/texture.cfg"));
+	settings.removeRecentFile(QStringLiteral("relative"), QStringLiteral("./sources/texture.cfg"));
+	ok &= expect(settings.recentFiles(QStringLiteral("relative")).isEmpty(), "Expected equivalent relative paths to remove the recorded absolute recent file.");
+	settings.recordRecentFile(QStringLiteral("  "), QStringLiteral("C:/ignored.txt"));
+	settings.setLaunchGameDirectory(QStringLiteral("quake-1234"), QStringLiteral(" mymod "));
+	settings.setLaunchGameDirectory(QStringLiteral("quake3-5678"), QStringLiteral("baseq3"));
+	settings.setLaunchGameDirectory(QStringLiteral("quake3-5678"), QString());
+	settings.setLaunchGameDirectory(QStringLiteral("  "), QStringLiteral("ignored"));
+	for (int index = 0; index < vibestudio::StudioSettings::kMaximumRecentCommands + 2; ++index) {
+		settings.recordRecentCommand(QStringLiteral("command.%1").arg(index));
+	}
+	settings.recordRecentCommand(QStringLiteral("command.3"));
+	settings.recordRecentCommand(QStringLiteral("  "));
 
 	vibestudio::RecentActivityTask compilerActivity;
 	compilerActivity.id = QStringLiteral("compiler-ericw-qbsp");
@@ -118,7 +209,13 @@ bool runPreferenceAndHistorySmoke(const QDir& root)
 	aiPreferences.preferredLocalConnectorId = QStringLiteral("local-offline");
 	aiPreferences.preferredTextModelId = QStringLiteral("openai-text-default");
 	aiPreferences.meshyCredentialEnvironmentVariable = QStringLiteral("VIBESTUDIO_TEST_MESHY_KEY");
+	aiPreferences.connectorModels.insert(QStringLiteral("Local-Offline"), QStringLiteral(" llama-test "));
+	aiPreferences.connectorEndpoints.insert(QStringLiteral("local-offline"), QStringLiteral("http://localhost:1234/v1"));
+	aiPreferences.connectorModels.insert(QStringLiteral("no-such-connector"), QStringLiteral("x"));
 	settings.setAiAutomationPreferences(aiPreferences);
+	settings.setAiContextConsentGiven(alphaProject, QStringLiteral("Claude@API.anthropic.com"), true);
+	settings.setAiContextConsentGiven(alphaProject, QStringLiteral("gemini@generativelanguage.googleapis.com"), true);
+	settings.setAiContextConsentGiven(alphaProject, QStringLiteral("gemini@generativelanguage.googleapis.com"), false);
 	settings.sync();
 
 	vibestudio::StudioSettings reloaded(settingsPath);
@@ -132,12 +229,40 @@ bool runPreferenceAndHistorySmoke(const QDir& root)
 	ok &= expect(reloaded.selectedMode() == 5, "Expected selected shell mode to persist.");
 	ok &= expect(reloaded.shellGeometry() == QByteArray("geometry-bytes") && reloaded.shellWindowState() == QByteArray("state-bytes"),
 		"Expected shell geometry and state to persist.");
-	ok &= expect(reloaded.shellModeRailCompact(), "Expected the compact mode rail preference to persist.");
+	ok &= expect(reloaded.shellModeRailBehaviour() == QStringLiteral("expanded"), "Expected the pinned mode rail preference to persist.");
+	reloaded.setShellModeRailBehaviour(QStringLiteral("sideways"));
+	ok &= expect(reloaded.shellModeRailBehaviour() == QStringLiteral("automatic"), "Expected an unknown rail behaviour to read back as automatic.");
+	reloaded.setShellModeRailBehaviour(QStringLiteral("expanded"));
+	{
+		const vibestudio::StudioSession restored = reloaded.lastSession();
+		ok &= expect(!reloaded.restoreSession() && restored.packagePath == QStringLiteral("C:/games/quake/id1/pak0.pak")
+				&& restored.mapPath == QStringLiteral("C:/maps/rooms.wad") && restored.mapName == QStringLiteral("MAP02")
+				&& restored.codeFiles == QStringList {QStringLiteral("C:/src/a.qc"), QStringLiteral("C:/src/b.cfg")}
+				&& restored.currentCodeFile == QStringLiteral("C:/src/b.cfg"),
+			"Expected the last session and the reopen preference to persist.");
+	}
 	ok &= expect(reloaded.shellLayoutState(QStringLiteral("levelsWorkbench")) == QByteArray("splitter-bytes"),
 		"Expected a named work-surface layout to persist.");
 	ok &= expect(reloaded.shellLayoutState(QStringLiteral("packagesWorkbench")).isEmpty(),
 		"Expected an unknown layout key to read back empty.");
 	ok &= expect(reloaded.shellLayoutState(QStringLiteral("  ")).isEmpty(), "Expected a blank layout key to be ignored.");
+	const QStringList recentMaps = reloaded.recentFiles(QStringLiteral("map"));
+	ok &= expect(recentMaps.size() == vibestudio::StudioSettings::kMaximumRecentFiles, "Expected recent maps to stop at the limit.");
+	ok &= expect(!recentMaps.isEmpty() && recentMaps.first().endsWith(QStringLiteral("map5.map")), "Expected a reopened map to move to the top.");
+	ok &= expect(recentMaps.filter(QStringLiteral("map5.map")).size() == 1, "Expected a reopened map to appear once.");
+	ok &= expect(reloaded.recentFiles(QStringLiteral("package")).size() == 1, "Expected recent packages to persist separately.");
+	ok &= expect(reloaded.recentFiles(QStringLiteral("code")).isEmpty(), "Expected a removed recent file to stay removed.");
+	ok &= expect(reloaded.recentFiles(QStringLiteral("  ")).isEmpty(), "Expected a blank recent-file kind to be ignored.");
+	ok &= expect(reloaded.launchGameDirectory(QStringLiteral("quake-1234")) == QStringLiteral("mymod"), "Expected the launch game folder to persist per installation.");
+	ok &= expect(reloaded.launchGameDirectory(QStringLiteral("quake3-5678")).isEmpty(), "Expected clearing a launch game folder to forget it.");
+	ok &= expect(reloaded.launchGameDirectory(QStringLiteral("  ")).isEmpty(), "Expected a blank installation id to be ignored.");
+	const QStringList recentCommands = reloaded.recentCommands();
+	ok &= expect(recentCommands.size() == vibestudio::StudioSettings::kMaximumRecentCommands, "Expected recent commands to stop at the limit.");
+	ok &= expect(recentCommands.value(0) == QStringLiteral("command.3") && recentCommands.count(QStringLiteral("command.3")) == 1,
+		"Expected a command run again to move to the front once.");
+	reloaded.clearRecentFiles();
+	ok &= expect(reloaded.recentFiles(QStringLiteral("map")).isEmpty() && reloaded.recentFiles(QStringLiteral("package")).isEmpty(),
+		"Expected clearing recent files to clear every kind.");
 
 	const QVector<vibestudio::RecentActivityTask> activities = reloaded.recentActivityTasks();
 	ok &= expect(activities.size() == 1, "Expected recent activity task history to persist.");
@@ -174,6 +299,23 @@ bool runPreferenceAndHistorySmoke(const QDir& root)
 			&& reloadedAiPreferences.preferredTextModelId == QStringLiteral("openai-text-default")
 			&& reloadedAiPreferences.meshyCredentialEnvironmentVariable == QStringLiteral("VIBESTUDIO_TEST_MESHY_KEY"),
 		"Expected AI opt-in preferences to persist.");
+	ok &= expect(reloadedAiPreferences.connectorModels.value(QStringLiteral("local-offline")) == QStringLiteral("llama-test")
+			&& reloadedAiPreferences.connectorEndpoints.value(QStringLiteral("local-offline")) == QStringLiteral("http://localhost:1234/v1")
+			&& !reloadedAiPreferences.connectorModels.contains(QStringLiteral("no-such-connector")),
+		"Expected per-connector models and endpoints to persist, trimmed, for known connectors only.");
+	ok &= expect(reloaded.aiContextConsentGiven(alphaProject, QStringLiteral("claude@api.anthropic.com"))
+			&& !reloaded.aiContextConsentGiven(alphaProject, QStringLiteral("gemini@generativelanguage.googleapis.com"))
+			&& !reloaded.aiContextConsentGiven(QString(), QStringLiteral("claude@api.anthropic.com")),
+		"Expected consent to send context to persist per project and destination.");
+	{
+		vibestudio::AiAutomationPreferences cleared = reloaded.aiAutomationPreferences();
+		cleared.connectorEndpoints.clear();
+		reloaded.setAiAutomationPreferences(cleared);
+		ok &= expect(reloaded.aiAutomationPreferences().connectorEndpoints.isEmpty() && !reloaded.aiAutomationPreferences().connectorModels.isEmpty(),
+			"Expected clearing a connector's endpoint to forget it and keep its model.");
+		reloaded.clearAiContextConsent();
+		ok &= expect(!reloaded.aiContextConsentGiven(alphaProject, QStringLiteral("claude@api.anthropic.com")), "Expected consent to clear.");
+	}
 
 	vibestudio::SetupProgress reloadedSetup = reloaded.setupProgress();
 	ok &= expect(reloadedSetup.started && reloadedSetup.skipped && !reloadedSetup.completed && reloadedSetup.currentStep == vibestudio::SetupStep::ProjectsPackages,
@@ -189,6 +331,15 @@ bool runPreferenceAndHistorySmoke(const QDir& root)
 	reloaded.resetSetup();
 	ok &= expect(!reloaded.setupProgress().started && reloaded.setupSummary().status == QStringLiteral("not-started"), "Expected reset setup state.");
 	ok &= expect(vibestudio::setupStepFromId(QStringLiteral("AI_AUTOMATION")) == vibestudio::SetupStep::AiAutomation, "Expected setup step id normalization.");
+	// Step names are title case as the Settings pages write it: joining words
+	// stay lower case ("Welcome and Access", not "Welcome And Access").
+	for (vibestudio::SetupStep step : vibestudio::setupSteps()) {
+		const QString name = vibestudio::setupStepDisplayName(step);
+		ok &= expect(!name.isEmpty() && !name.contains(QStringLiteral(" And ")) && !name.contains(QStringLiteral(" Or ")),
+			"Expected setup step names to keep joining words lower case.");
+	}
+	ok &= expect(vibestudio::setupStepDisplayName(vibestudio::SetupStep::AiAutomation) == QStringLiteral("AI and Automation"),
+		"Expected the AI step to read \"AI and Automation\".");
 
 	const vibestudio::AccessibilityPreferences reloadedPreferences = reloaded.accessibilityPreferences();
 	ok &= expect(reloadedPreferences.localeName == QStringLiteral("pt-BR") && reloadedPreferences.textScalePercent == 175 && reloadedPreferences.theme == vibestudio::StudioTheme::HighContrastLight && reloadedPreferences.density == vibestudio::UiDensity::Compact && reloadedPreferences.reducedMotion && reloadedPreferences.textToSpeechEnabled,
@@ -350,7 +501,7 @@ bool runSortThenTruncateSmoke(const QDir& root)
 			oversized.setArrayIndex(index);
 			oversized.setValue(QStringLiteral("path"), root.filePath(QStringLiteral("Ordered Project %1").arg(index)));
 			oversized.setValue(QStringLiteral("displayName"), QStringLiteral("Ordered Project %1").arg(index));
-			oversized.setValue(QStringLiteral("lastOpenedUtc"), QDateTime(QDate(2026, 1, 1), QTime(0, 0), QTimeZone::UTC).addDays(index));
+			oversized.setValue(QStringLiteral("lastOpenedUtc"), QDateTime(QDate(2026, 1, 1), QTime(0, 0), QTimeZone::utc()).addDays(index));
 		}
 		oversized.endArray();
 
@@ -361,7 +512,7 @@ bool runSortThenTruncateSmoke(const QDir& root)
 			oversized.setValue(QStringLiteral("title"), QStringLiteral("Ordered Task %1").arg(index));
 			oversized.setValue(QStringLiteral("source"), QStringLiteral("package"));
 			oversized.setValue(QStringLiteral("state"), QStringLiteral("completed"));
-			oversized.setValue(QStringLiteral("updatedUtc"), QDateTime(QDate(2026, 1, 1), QTime(0, 0), QTimeZone::UTC).addDays(index));
+			oversized.setValue(QStringLiteral("updatedUtc"), QDateTime(QDate(2026, 1, 1), QTime(0, 0), QTimeZone::utc()).addDays(index));
 		}
 		oversized.endArray();
 		oversized.sync();
@@ -476,6 +627,76 @@ bool runActivityLogTruncationSmoke(const QDir& root)
 	return ok;
 }
 
+bool runReadOnlyInspectionSmoke(const QDir& root)
+{
+	using Settings = vibestudio::StudioSettings;
+	const auto path = root.filePath(QStringLiteral("read-only.ini")); bool ok = true;
+	{
+		Settings inspected(path, Settings::AccessMode::ReadOnly);
+		ok &= expect(inspected.isReadOnly() && inspected.packageImportMaximumMiB() == 8192
+			&& inspected.discardedWriteCount() == 0, "Read-only inspection returns defaults without attempting schema writes.");
+		inspected.setPackageImportMaximumMiB(128); inspected.sync();
+		ok &= expect(inspected.discardedWriteCount() == 1, "Explicit read-only mode rejects mutation.");
+	}
+	ok &= expect(!QFileInfo::exists(path), "Reading defaults and refusing a write creates no settings file.");
+	{
+		QSettings legacy(path, QSettings::IniFormat);
+		legacy.setValue(QStringLiteral("packages/importMaximumMiB"), 256);
+		legacy.setValue(QStringLiteral("packages/importMaximumFiles"), 12);
+		legacy.setValue(QStringLiteral("preferences/highContrast"), true);
+	}
+	QFile file(path); if (!file.open(QIODevice::ReadOnly)) { return false; }
+	const auto before = file.readAll(); file.close(); const auto modified = QFileInfo(path).lastModified();
+	{
+		Settings inspected(path, Settings::AccessMode::ReadOnly);
+		ok &= expect(inspected.packageImportMaximumMiB() == 256 && inspected.packageImportMaximumFiles() == 12
+			&& !inspected.migrationNotes().isEmpty(), "Read-only legacy inspection respects limits and reports skipped migration.");
+		inspected.sync();
+	}
+	if (!file.open(QIODevice::ReadOnly)) { return false; }
+	ok &= expect(file.readAll() == before && QFileInfo(path).lastModified() == modified, "Read-only inspection preserves legacy settings bytes and timestamp.");
+	return ok;
+}
+
+// A project's manifest can turn AI off for itself, never on, and its override
+// is read with the settings without ever being saved into them.
+bool runProjectAiPolicySmoke(const QDir& root)
+{
+	bool ok = true;
+	const QString projectPath = root.filePath(QStringLiteral("ai-free-project"));
+	QDir().mkpath(projectPath);
+	vibestudio::ProjectManifest manifest = vibestudio::defaultProjectManifest(projectPath);
+	manifest.settingsOverrides.aiFreeModeSet = true;
+	manifest.settingsOverrides.aiFreeMode = true;
+	QString error;
+	ok &= expect(vibestudio::saveProjectManifest(manifest, &error), "Expected the AI-free project manifest to save.");
+	vibestudio::StudioSettings settings(root.filePath(QStringLiteral("project-ai.ini")));
+	vibestudio::AiAutomationPreferences preferences = settings.aiAutomationPreferences();
+	preferences.aiFreeMode = false;
+	preferences.cloudConnectorsEnabled = true;
+	settings.setAiAutomationPreferences(preferences);
+	ok &= expect(!settings.aiAutomationPreferences().projectAiFree, "Expected no project override with no project open.");
+	settings.setCurrentProjectPath(projectPath);
+	const vibestudio::AiAutomationPreferences effective = settings.aiAutomationPreferences();
+	ok &= expect(effective.projectAiFree && !effective.aiFreeMode && effective.cloudConnectorsEnabled,
+		"Expected the project's manifest to turn AI off without changing the studio's own AI settings.");
+	settings.setAiAutomationPreferences(effective);
+	settings.setCurrentProjectPath(QString());
+	const vibestudio::AiAutomationPreferences after = settings.aiAutomationPreferences();
+	ok &= expect(!after.aiFreeMode && after.cloudConnectorsEnabled && !after.projectAiFree,
+		"Expected saving while the project is open to leave its override out of the studio settings.");
+
+	// A project that asks for AI does not get it while the studio is AI-free.
+	manifest.settingsOverrides.aiFreeMode = false;
+	ok &= expect(vibestudio::saveProjectManifest(manifest, &error), "Expected the AI-allowing manifest to save.");
+	preferences.aiFreeMode = true;
+	settings.setAiAutomationPreferences(preferences);
+	settings.setCurrentProjectPath(projectPath);
+	const vibestudio::AiAutomationPreferences strict = settings.aiAutomationPreferences();
+	ok &= expect(strict.aiFreeMode && !strict.projectAiFree, "Expected a project never to switch AI on against AI-free mode.");
+	return ok;
+}
+
 } // namespace
 
 int main(int argc, char** argv)
@@ -494,6 +715,8 @@ int main(int argc, char** argv)
 	ok &= runSortThenTruncateSmoke(root);
 	ok &= runOverrideSmoke(root);
 	ok &= runActivityLogTruncationSmoke(root);
+	ok &= runReadOnlyInspectionSmoke(root);
+	ok &= runProjectAiPolicySmoke(root);
 	if (!ok) {
 		return fail("studio_settings smoke test failed.");
 	}

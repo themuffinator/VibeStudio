@@ -37,7 +37,9 @@ public:
 	[[nodiscard]] int frameCount() const;
 
 	void setShowCheckerboard(bool show);
+	[[nodiscard]] bool showCheckerboard() const;
 	void setShowPixelGrid(bool show);
+	[[nodiscard]] bool showPixelGrid() const;
 	void setHighContrast(bool enabled);
 	void zoomToFit();
 	void zoomToActualSize();
@@ -136,20 +138,54 @@ public:
 	void setPeaks(const QVector<float>& peaks, int channels, int sampleRate, qint64 durationMs);
 	void clearPeaks();
 	[[nodiscard]] bool hasPeaks() const;
+	[[nodiscard]] qint64 durationMs() const;
 	void setHighContrast(bool enabled);
 	[[nodiscard]] QString accessibleSummary() const;
+
+	// The playhead, in milliseconds from the start, drawn as a line across the
+	// lanes. It is clamped to the duration; new peaks put it back at 0.
+	void setPlayhead(qint64 positionMs);
+	[[nodiscard]] qint64 playhead() const;
+	// The x coordinate a time is drawn at, for tests and hit checks.
+	[[nodiscard]] double xForTime(qint64 positionMs) const;
+	// Selection is opt-in so the package browser retains its seek behavior.
+	void setSelectionEnabled(bool enabled);
+	void setSelection(qint64 firstMs, qint64 endMs);
+	[[nodiscard]] qint64 selectionStart() const { return m_selectionStartMs; }
+	[[nodiscard]] qint64 selectionEnd() const { return m_selectionEndMs; }
 
 	[[nodiscard]] QSize sizeHint() const override;
 	[[nodiscard]] QSize minimumSizeHint() const override;
 
+signals:
+	// The user moved the playhead: a click or drag in the lanes, or Left and
+	// Right (a fiftieth of the sound), Page Up and Page Down (a tenth), Home and
+	// End while the waveform has focus.
+	void seekRequested(qint64 positionMs);
+	void selectionChanged(qint64 firstMs, qint64 endMs);
+
 protected:
 	void paintEvent(QPaintEvent* event) override;
+	void mousePressEvent(QMouseEvent* event) override;
+	void mouseMoveEvent(QMouseEvent* event) override;
+	void keyPressEvent(QKeyEvent* event) override;
+	void focusInEvent(QFocusEvent* event) override;
+	void focusOutEvent(QFocusEvent* event) override;
 
 private:
+	[[nodiscard]] QRect laneArea() const;
+	[[nodiscard]] qint64 timeForX(double x) const;
+	void seekTo(qint64 positionMs);
+
 	QVector<float> m_peaks;
 	int m_channels = 0;
 	int m_sampleRate = 0;
 	qint64 m_durationMs = 0;
+	qint64 m_playheadMs = 0;
+	qint64 m_selectionStartMs = 0;
+	qint64 m_selectionEndMs = 0;
+	qint64 m_selectionAnchorMs = 0;
+	bool m_selectionEnabled = false;
 	bool m_highContrast = false;
 };
 

@@ -15,11 +15,6 @@ namespace vibestudio {
 
 namespace {
 
-QString compareText(const char* source)
-{
-	return QCoreApplication::translate("VibeStudioPackageCompare", source);
-}
-
 QString normalizedId(QString value)
 {
 	return value.trimmed().toLower().replace('_', '-');
@@ -65,11 +60,6 @@ qint64 signedDelta(quint64 left, quint64 right)
 		: -static_cast<qint64>(delta);
 }
 
-QString crcHex(quint32 crc)
-{
-	return QStringLiteral("%1").arg(crc, 8, 16, QLatin1Char('0'));
-}
-
 // One side of the comparison, flattened so both an archive and a staged plan
 // look the same to the pairing loop.
 struct CompareSideEntry {
@@ -77,8 +67,6 @@ struct CompareSideEntry {
 	QString key;
 	PackageEntryKind kind = PackageEntryKind::File;
 	quint64 sizeBytes = 0;
-	quint32 crc32 = 0;
-	bool hasCrc32 = false;
 	bool readable = true;
 	// Repetition of `key` within this side, zero-based.
 	int occurrence = 0;
@@ -87,13 +75,45 @@ struct CompareSideEntry {
 	int index = 0;
 };
 
-using SideByteReader = std::function<bool(const CompareSideEntry&, QByteArray*, QString*)>;
+using SideHashReader = std::function<bool(const CompareSideEntry&, QString*, QString*, const PackageReadControl&)>;
+
+using CompareStreamer = std::function<bool(const std::function<bool(QByteArrayView)>&)>;
+
+bool hashEntryStream(const CompareSideEntry& entry, const CompareStreamer& read, QString* digest,
+	QString* error, const PackageReadControl& control)
+{
+	QCryptographicHash hash(QCryptographicHash::Sha256);
+	quint64 received = 0;
+	const auto cancelled = [&]() { return control.isCancelled && control.isCancelled(); };
+	if (control.progress) control.progress(entry.path, 0, static_cast<qint64>(entry.sizeBytes));
+	if (cancelled()) return false;
+	bool wrongSize = false;
+	const bool succeeded = read([&](QByteArrayView chunk) {
+		if (static_cast<quint64>(chunk.size()) > entry.sizeBytes - received) { wrongSize = true; return false; }
+		while (!chunk.isEmpty()) {
+			if (cancelled()) return false;
+			const qsizetype count = qMin<qsizetype>(65536, chunk.size());
+			hash.addData(chunk.first(count));
+			received += static_cast<quint64>(count);
+			chunk = chunk.sliced(count);
+			if (control.progress) control.progress(entry.path, static_cast<qint64>(received), static_cast<qint64>(entry.sizeBytes));
+		}
+		return !cancelled();
+	});
+	if (wrongSize || (succeeded && received != entry.sizeBytes)) {
+		if (error) *error = QCoreApplication::translate("VibeStudioPackageCompare", "Entry size changed while comparing it.");
+		return false;
+	}
+	if (!succeeded || cancelled()) return false;
+	*digest = QString::fromLatin1(hash.result().toHex());
+	return true;
+}
 
 struct CompareSide {
 	QString sourcePath;
 	PackageArchiveFormat format = PackageArchiveFormat::Unknown;
 	QVector<CompareSideEntry> entries;
-	SideByteReader read;
+	SideHashReader hash;
 };
 
 void assignOccurrences(QVector<CompareSideEntry>* entries)
@@ -114,7 +134,10 @@ CompareSide sideFromArchive(const PackageArchiveReader& archive, bool includeDir
 	CompareSide side;
 	side.sourcePath = archive.sourcePath();
 	side.format = archive.format();
-	for (const PackageEntry& entry : archive.entries()) {
+	const auto listed = archive.entries();
+	QVector<qsizetype> indices;
+	for (qsizetype index = 0; index < listed.size(); ++index) {
+		const PackageEntry& entry = listed.at(index);
 		const bool directory = entry.kind == PackageEntryKind::Directory;
 		if (directory && !includeDirectories) {
 			continue;
@@ -132,18 +155,16 @@ CompareSide sideFromArchive(const PackageArchiveReader& archive, bool includeDir
 		}
 		flat.kind = entry.kind;
 		flat.sizeBytes = directory ? 0 : entry.sizeBytes;
-		flat.crc32 = entry.crc32;
-		flat.hasCrc32 = !directory && entry.hasCrc32;
 		flat.readable = !directory && entry.readable;
 		side.entries.push_back(flat);
+		indices.append(index);
 	}
 	assignOccurrences(&side.entries);
 
-	side.read = [&archive](const CompareSideEntry& entry, QByteArray* out, QString* error) {
-		// A reader addresses entries by path only, so a repeated path (Doom
-		// WAD lump names repeat once per map) cannot be resolved here. The
-		// caller checks `occurrence` before asking.
-		return archive.readEntryBytes(entry.path, out, error, -1);
+	side.hash = [&archive, indices](const CompareSideEntry& entry, QString* digest, QString* error, const PackageReadControl& control) {
+		return hashEntryStream(entry, [&](const auto& consume) {
+			return archive.streamEntryAt(indices.at(entry.index), consume, error, control.isCancelled);
+		}, digest, error, control);
 	};
 	return side;
 }
@@ -174,16 +195,15 @@ CompareSide sideFromPlan(const PackageStagingModel& plan, bool includeDirectorie
 	}
 	assignOccurrences(&side.entries);
 
-	side.read = [&plan, kept](const CompareSideEntry& entry, QByteArray* out, QString* error) {
-		if (entry.index < 0 || entry.index >= static_cast<int>(kept.size())) {
-			if (error) {
-				*error = compareText("Planned entry is out of range.");
-			}
+	side.hash = [&plan, kept](const CompareSideEntry& entry, QString* digest, QString* error, const PackageReadControl& control) {
+		if (entry.index < 0 || entry.index >= kept.size()) {
+			if (error) *error = QCoreApplication::translate("VibeStudioPackageCompare", "Planned entry is out of range.");
 			return false;
 		}
-		// The plan resolves its own entries positionally, so a repeated path
-		// reads the right bytes here.
-		return plan.entryBytes(kept.at(entry.index), out, error);
+		return hashEntryStream(entry, [&](const auto& consume) {
+			PackageReadControl readControl; readControl.isCancelled = control.isCancelled;
+			return plan.streamEntry(kept.at(entry.index), consume, error, readControl);
+		}, digest, error, control);
 	};
 	return side;
 }
@@ -213,47 +233,38 @@ ContentOutcome compareContent(const CompareSide& left, const CompareSideEntry& l
 		outcome.noteId = QStringLiteral("metadata-only");
 		return outcome;
 	}
-	if (leftEntry.hasCrc32 && rightEntry.hasCrc32) {
-		// Both sides already store a CRC-32, so the bytes never have to be
-		// read. Equal sizes have been established above, which is what makes a
-		// 32-bit check meaningful rather than a coin flip.
-		outcome.content = PackageCompareContent::Crc32;
-		outcome.changed = leftEntry.crc32 != rightEntry.crc32;
-		outcome.leftHash = crcHex(leftEntry.crc32);
-		outcome.rightHash = crcHex(rightEntry.crc32);
-		return outcome;
-	}
 	if (!leftEntry.readable || !rightEntry.readable) {
 		outcome.noteId = leftEntry.readable ? QStringLiteral("unreadable-right") : QStringLiteral("unreadable-left");
 		return outcome;
 	}
-	if (leftEntry.occurrence > 0 || rightEntry.occurrence > 0) {
-		outcome.noteId = QStringLiteral("duplicate-path");
-		return outcome;
-	}
-	if (static_cast<qint64>(leftEntry.sizeBytes) > maxEntryBytes) {
+	if (leftEntry.sizeBytes > static_cast<quint64>(maxEntryBytes)) {
 		outcome.noteId = QStringLiteral("entry-too-large");
 		return outcome;
 	}
 
-	QByteArray leftBytes;
+	PackageReadControl control;
+	control.isCancelled = request.isCancelled;
+	const auto progress = [&](PackageCompareSource source) {
+		return [&, source](const QString& path, qint64 done, qint64 total) {
+			if (request.byteProgress) request.byteProgress(source, path, static_cast<quint64>(done), static_cast<quint64>(total));
+		};
+	};
+	control.progress = progress(PackageCompareSource::Left);
 	QString leftError;
-	if (!left.read || !left.read(leftEntry, &leftBytes, &leftError)) {
+	if (!left.hash || !left.hash(leftEntry, &outcome.leftHash, &leftError, control)) {
 		outcome.noteId = QStringLiteral("unreadable-left");
-		outcome.warning = QCoreApplication::translate("VibeStudioPackageCompare", "Unable to read %1 from the left package: %2").arg(leftEntry.path, leftError.isEmpty() ? compareText("unknown error") : leftError);
+		outcome.warning = QCoreApplication::translate("VibeStudioPackageCompare", "Unable to read %1 from the left package: %2").arg(leftEntry.path, leftError.isEmpty() ? QCoreApplication::translate("VibeStudioPackageCompare", "unknown error") : leftError);
 		return outcome;
 	}
-	QByteArray rightBytes;
+	control.progress = progress(PackageCompareSource::Right);
 	QString rightError;
-	if (!right.read || !right.read(rightEntry, &rightBytes, &rightError)) {
+	if (!right.hash || !right.hash(rightEntry, &outcome.rightHash, &rightError, control)) {
 		outcome.noteId = QStringLiteral("unreadable-right");
-		outcome.warning = QCoreApplication::translate("VibeStudioPackageCompare", "Unable to read %1 from the right package: %2").arg(rightEntry.path, rightError.isEmpty() ? compareText("unknown error") : rightError);
+		outcome.warning = QCoreApplication::translate("VibeStudioPackageCompare", "Unable to read %1 from the right package: %2").arg(rightEntry.path, rightError.isEmpty() ? QCoreApplication::translate("VibeStudioPackageCompare", "unknown error") : rightError);
 		return outcome;
 	}
 
 	outcome.content = PackageCompareContent::Sha256;
-	outcome.leftHash = QString::fromLatin1(QCryptographicHash::hash(leftBytes, QCryptographicHash::Sha256).toHex());
-	outcome.rightHash = QString::fromLatin1(QCryptographicHash::hash(rightBytes, QCryptographicHash::Sha256).toHex());
 	outcome.changed = outcome.leftHash != outcome.rightHash;
 	return outcome;
 }
@@ -302,12 +313,23 @@ PackageCompareResult compareSides(const CompareSide& left, const CompareSide& ri
 	// the JSON are then a pure function of the two inputs, whatever order the
 	// readers happened to list their entries in.
 	std::sort(keys.begin(), keys.end());
+	int total = 0;
+	for (const QString& key : keys) {
+		total += static_cast<int>(std::max(leftByKey.value(key).size(), rightByKey.value(key).size()));
+	}
+	if (request.progress) { request.progress(0, total); }
 
 	for (const QString& key : keys) {
 		const QVector<int> leftSlots = leftByKey.value(key);
 		const QVector<int> rightSlots = rightByKey.value(key);
 		const int pairCount = static_cast<int>(std::max(leftSlots.size(), rightSlots.size()));
 		for (int occurrence = 0; occurrence < pairCount; ++occurrence) {
+			if (request.progress) { request.progress(static_cast<int>(result.entries.size()), total); }
+			if (request.isCancelled && request.isCancelled()) {
+				result.cancelled = true;
+				result.summary.sizeDelta = signedDelta(result.summary.leftBytes, result.summary.rightBytes);
+				return result;
+			}
 			PackageCompareEntry compared;
 			compared.key = key;
 			compared.occurrence = occurrence;
@@ -357,6 +379,14 @@ PackageCompareResult compareSides(const CompareSide& left, const CompareSide& ri
 			}
 
 			const ContentOutcome outcome = compareContent(left, leftEntry, right, rightEntry, request, maxEntryBytes);
+			if (request.isCancelled && request.isCancelled()) {
+				// Only completed rows belong in a partial result's counters.
+				result.summary.leftBytes -= compared.leftBytes;
+				result.summary.rightBytes -= compared.rightBytes;
+				result.summary.sizeDelta = signedDelta(result.summary.leftBytes, result.summary.rightBytes);
+				result.cancelled = true;
+				return result;
+			}
 			compared.content = outcome.content;
 			compared.contentChanged = outcome.changed;
 			compared.leftHash = outcome.leftHash;
@@ -365,7 +395,7 @@ PackageCompareResult compareSides(const CompareSide& left, const CompareSide& ri
 			if (!outcome.warning.isEmpty()) {
 				result.warnings.push_back(outcome.warning);
 			}
-			if (outcome.content == PackageCompareContent::NotCompared) {
+			if (outcome.content == PackageCompareContent::NotCompared && compared.kind != PackageEntryKind::Directory) {
 				++result.summary.uncomparedCount;
 			}
 
@@ -379,6 +409,8 @@ PackageCompareResult compareSides(const CompareSide& left, const CompareSide& ri
 			} else if (outcome.changed) {
 				compared.status = PackageCompareStatus::Changed;
 				++result.summary.changedCount;
+			} else if (!request.metadataOnly && outcome.content == PackageCompareContent::NotCompared && compared.kind != PackageEntryKind::Directory) {
+				compared.status = PackageCompareStatus::Uncompared;
 			} else {
 				compared.status = PackageCompareStatus::Identical;
 				++result.summary.identicalCount;
@@ -388,6 +420,9 @@ PackageCompareResult compareSides(const CompareSide& left, const CompareSide& ri
 	}
 
 	result.summary.sizeDelta = signedDelta(result.summary.leftBytes, result.summary.rightBytes);
+	result.cancelled = request.isCancelled && request.isCancelled();
+	result.completed = !result.cancelled;
+	if (request.progress) { request.progress(static_cast<int>(result.entries.size()), total); }
 	return result;
 }
 
@@ -408,11 +443,21 @@ QJsonObject summaryJson(const PackageCompareSummary& summary)
 	return object;
 }
 
+void appendReaderWarnings(PackageCompareResult* result, const PackageArchiveReader& reader)
+{
+	if (const auto* archive = dynamic_cast<const PackageArchive*>(&reader)) {
+		for (const auto& warning : archive->warnings()) {
+			result->warnings << QStringLiteral("%1: %2: %3").arg(reader.sourcePath(), warning.virtualPath, warning.message);
+		}
+	}
+}
+
 } // namespace
 
 bool PackageCompareResult::identical() const
 {
-	return summary.addedCount == 0 && summary.removedCount == 0 && summary.changedCount == 0 && summary.caseOnlyCount == 0;
+	return completed && !cancelled && warnings.isEmpty() && (metadataOnly || summary.uncomparedCount == 0)
+		&& summary.addedCount == 0 && summary.removedCount == 0 && summary.changedCount == 0 && summary.caseOnlyCount == 0;
 }
 
 QString packageCompareStatusId(PackageCompareStatus status)
@@ -428,6 +473,8 @@ QString packageCompareStatusId(PackageCompareStatus status)
 		return QStringLiteral("changed");
 	case PackageCompareStatus::CaseOnly:
 		return QStringLiteral("case-only");
+	case PackageCompareStatus::Uncompared:
+		return QStringLiteral("uncompared");
 	}
 	return QStringLiteral("identical");
 }
@@ -436,17 +483,19 @@ QString packageCompareStatusDisplayName(PackageCompareStatus status)
 {
 	switch (status) {
 	case PackageCompareStatus::Identical:
-		return compareText("Identical");
+		return QCoreApplication::translate("VibeStudioPackageCompare", "Identical");
 	case PackageCompareStatus::Added:
-		return compareText("Added");
+		return QCoreApplication::translate("VibeStudioPackageCompare", "Added");
 	case PackageCompareStatus::Removed:
-		return compareText("Removed");
+		return QCoreApplication::translate("VibeStudioPackageCompare", "Removed");
 	case PackageCompareStatus::Changed:
-		return compareText("Changed");
+		return QCoreApplication::translate("VibeStudioPackageCompare", "Changed");
 	case PackageCompareStatus::CaseOnly:
-		return compareText("Case-only path difference");
+		return QCoreApplication::translate("VibeStudioPackageCompare", "Case-only path difference");
+	case PackageCompareStatus::Uncompared:
+		return QCoreApplication::translate("VibeStudioPackageCompare", "Not compared");
 	}
-	return compareText("Identical");
+	return QCoreApplication::translate("VibeStudioPackageCompare", "Identical");
 }
 
 PackageCompareStatus packageCompareStatusFromId(const QString& id)
@@ -464,6 +513,7 @@ PackageCompareStatus packageCompareStatusFromId(const QString& id)
 	if (normalized == QStringLiteral("case-only") || normalized == QStringLiteral("caseonly")) {
 		return PackageCompareStatus::CaseOnly;
 	}
+	if (normalized == QStringLiteral("uncompared")) { return PackageCompareStatus::Uncompared; }
 	return PackageCompareStatus::Identical;
 }
 
@@ -486,15 +536,15 @@ QString packageCompareContentDisplayName(PackageCompareContent content)
 {
 	switch (content) {
 	case PackageCompareContent::NotCompared:
-		return compareText("Not compared");
+		return QCoreApplication::translate("VibeStudioPackageCompare", "Not compared");
 	case PackageCompareContent::SizeOnly:
-		return compareText("Size");
+		return QCoreApplication::translate("VibeStudioPackageCompare", "Size");
 	case PackageCompareContent::Crc32:
-		return compareText("Stored CRC-32");
+		return QCoreApplication::translate("VibeStudioPackageCompare", "Stored CRC-32");
 	case PackageCompareContent::Sha256:
-		return compareText("SHA-256 of contents");
+		return QCoreApplication::translate("VibeStudioPackageCompare", "SHA-256 of contents");
 	}
-	return compareText("Not compared");
+	return QCoreApplication::translate("VibeStudioPackageCompare", "Not compared");
 }
 
 PackageCompareResult comparePackages(const PackageArchiveReader& left, const PackageArchiveReader& right, const PackageCompareRequest& request)
@@ -506,12 +556,16 @@ PackageCompareResult comparePackages(const PackageArchiveReader& left, const Pac
 		result.leftLabel = request.leftLabel.trimmed().isEmpty() ? QStringLiteral("left") : request.leftLabel.trimmed();
 		result.rightLabel = request.rightLabel.trimmed().isEmpty() ? QStringLiteral("right") : request.rightLabel.trimmed();
 		result.metadataOnly = request.metadataOnly;
-		result.warnings.push_back(compareText("Both packages must be open to compare them."));
+		result.warnings.push_back(QCoreApplication::translate("VibeStudioPackageCompare", "Both packages must be open to compare them."));
+		for (const auto* reader : {&left, &right}) { if (!reader->isOpen() && !reader->errorString().isEmpty()) { result.warnings << reader->errorString(); } }
 		return result;
 	}
 	const CompareSide leftSide = sideFromArchive(left, request.includeDirectories);
 	const CompareSide rightSide = sideFromArchive(right, request.includeDirectories);
-	return compareSides(leftSide, rightSide, request);
+	result = compareSides(leftSide, rightSide, request);
+	appendReaderWarnings(&result, left);
+	appendReaderWarnings(&result, right);
+	return result;
 }
 
 PackageCompareResult comparePackageToPlan(const PackageArchiveReader& left, const PackageStagingModel& plan, const PackageCompareRequest& request)
@@ -523,21 +577,34 @@ PackageCompareResult comparePackageToPlan(const PackageArchiveReader& left, cons
 		result.leftLabel = request.leftLabel.trimmed().isEmpty() ? QStringLiteral("left") : request.leftLabel.trimmed();
 		result.rightLabel = request.rightLabel.trimmed().isEmpty() ? QStringLiteral("right") : request.rightLabel.trimmed();
 		result.metadataOnly = request.metadataOnly;
-		result.warnings.push_back(compareText("The package must be open and the plan must be loaded to compare them."));
+		result.warnings.push_back(QCoreApplication::translate("VibeStudioPackageCompare", "The package must be open and the plan must be loaded to compare them."));
+		if (!left.isOpen() && !left.errorString().isEmpty()) { result.warnings << left.errorString(); }
 		return result;
 	}
 	const CompareSide leftSide = sideFromArchive(left, request.includeDirectories);
 	const CompareSide rightSide = sideFromPlan(plan, request.includeDirectories);
-	return compareSides(leftSide, rightSide, request);
+	result = compareSides(leftSide, rightSide, request);
+	appendReaderWarnings(&result, left);
+	for (const auto& conflict : plan.conflicts()) {
+		if (conflict.blocking) {
+			result.completed = false;
+			result.warnings << conflict.message;
+		}
+	}
+	return result;
 }
 
 QStringList packageCompareLines(const PackageCompareResult& result)
 {
 	QStringList lines;
-	lines << compareText("Package compare");
-	lines << QCoreApplication::translate("VibeStudioPackageCompare", "%1: %2").arg(result.leftLabel, result.leftSource.isEmpty() ? compareText("not available") : result.leftSource);
-	lines << QCoreApplication::translate("VibeStudioPackageCompare", "%1: %2").arg(result.rightLabel, result.rightSource.isEmpty() ? compareText("not available") : result.rightSource);
-	lines << QCoreApplication::translate("VibeStudioPackageCompare", "Mode: %1").arg(result.metadataOnly ? compareText("metadata only") : compareText("contents"));
+	lines << QCoreApplication::translate("VibeStudioPackageCompare", "Package compare");
+	if (!result.completed) {
+		lines << (result.cancelled ? QCoreApplication::translate("VibeStudioPackageCompare", "Comparison cancelled; results are incomplete.")
+			: QCoreApplication::translate("VibeStudioPackageCompare", "Comparison could not be completed."));
+	}
+	lines << QCoreApplication::translate("VibeStudioPackageCompare", "%1: %2").arg(result.leftLabel, result.leftSource.isEmpty() ? QCoreApplication::translate("VibeStudioPackageCompare", "not available") : result.leftSource);
+	lines << QCoreApplication::translate("VibeStudioPackageCompare", "%1: %2").arg(result.rightLabel, result.rightSource.isEmpty() ? QCoreApplication::translate("VibeStudioPackageCompare", "not available") : result.rightSource);
+	lines << QCoreApplication::translate("VibeStudioPackageCompare", "Mode: %1").arg(result.metadataOnly ? QCoreApplication::translate("VibeStudioPackageCompare", "metadata only") : QCoreApplication::translate("VibeStudioPackageCompare", "contents"));
 	lines << QCoreApplication::translate("VibeStudioPackageCompare", "Entries: %1 -> %2").arg(result.summary.leftCount).arg(result.summary.rightCount);
 	lines << QCoreApplication::translate("VibeStudioPackageCompare", "Added: %1").arg(result.summary.addedCount);
 	lines << QCoreApplication::translate("VibeStudioPackageCompare", "Removed: %1").arg(result.summary.removedCount);
@@ -561,10 +628,11 @@ QStringList packageCompareLines(const PackageCompareResult& result)
 		if (entry.sizeDelta != 0) {
 			line += QStringLiteral(" %1%2").arg(entry.sizeDelta > 0 ? QStringLiteral("+") : QString()).arg(entry.sizeDelta);
 		}
+		if (!entry.noteId.isEmpty()) { line += QStringLiteral(" (%1)").arg(entry.noteId); }
 		lines << line;
 	}
 	if (!result.warnings.isEmpty()) {
-		lines << compareText("Warnings:");
+		lines << QCoreApplication::translate("VibeStudioPackageCompare", "Warnings:");
 		for (const QString& warning : result.warnings) {
 			lines << QStringLiteral("- %1").arg(warning);
 		}
@@ -616,6 +684,8 @@ QJsonObject packageCompareJson(const PackageCompareResult& result)
 	root.insert(QStringLiteral("rightFormat"), packageArchiveFormatId(result.rightFormat));
 	root.insert(QStringLiteral("metadataOnly"), result.metadataOnly);
 	root.insert(QStringLiteral("includedDirectories"), result.includedDirectories);
+	root.insert(QStringLiteral("completed"), result.completed);
+	root.insert(QStringLiteral("cancelled"), result.cancelled);
 	root.insert(QStringLiteral("identical"), result.identical());
 	root.insert(QStringLiteral("summary"), summaryJson(result.summary));
 	root.insert(QStringLiteral("entries"), entries);

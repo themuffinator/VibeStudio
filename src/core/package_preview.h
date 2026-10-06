@@ -30,8 +30,11 @@ struct PackagePreview {
 	QStringList detailLines;
 	QStringList rawLines;
 	bool truncated = false;
+	bool cancelled = false;
 	qint64 bytesRead = 0;
-	qint64 totalBytes = 0;
+	// Archive metadata may use the entire unsigned ZIP64 range.
+	quint64 totalBytes = 0;
+	bool totalBytesKnown = false;
 	QString error;
 	QString assetKindId;
 	QStringList assetDetailLines;
@@ -68,6 +71,8 @@ struct PackagePreview {
 	qint64 audioDurationMs = 0;
 	AssetAudioPeaks audioPeaks;
 	QStringList audioWaveformLines;
+	// Whether a player could be handed this sound (see assetAudioPlaybackSource).
+	bool audioPlaybackCandidate = false;
 	QString textLanguageId;
 	QString textLanguageName;
 	QStringList textHighlightLines;
@@ -81,6 +86,13 @@ QString packagePreviewKindDisplayName(PackagePreviewKind kind);
 // `byteLimit` caps how much of an entry is sampled. Image entries are read up
 // to `imageByteLimit` instead, because a decoder needs the whole payload; pass
 // 0 to keep images on `byteLimit` as well.
-PackagePreview buildPackageEntryPreview(const PackageArchive& archive, const QString& virtualPath, qint64 byteLimit = 65536, qint64 imageByteLimit = 64ll * 1024ll * 1024ll);
+// Sampling streams bounded chunks. Full samples must pass final size/checksum
+// validation; partial samples deliberately do not verify the unread tail.
+// Read/progress callbacks run on the calling thread. Codec analysis is bounded
+// by the sample limit, with cancellation checked before and after analysis.
+PackagePreview buildPackageEntryPreview(const PackageArchiveReader& archive, const QString& virtualPath, qint64 byteLimit = 65536, qint64 imageByteLimit = 64ll * 1024ll * 1024ll, const PackageReadControl& control = {});
+// Uses the exact row in the supplied immutable reader, including repeated WAD
+// names. Path-based previews refuse ambiguity rather than choosing a lump.
+PackagePreview buildPackageEntryPreviewAt(const PackageArchiveReader& archive, qsizetype entryIndex, qint64 byteLimit = 65536, qint64 imageByteLimit = 64ll * 1024ll * 1024ll, const PackageReadControl& control = {});
 
 } // namespace vibestudio

@@ -1,0 +1,16 @@
+{
+  "upstream": "https://github.com/jiixyj/libebur128",
+  "revision": "67b33abe1558160ed76ada1322329b0e9e058b02",
+  "version": "1.2.6",
+  "reviewed": "2026-10-04",
+  "licenseReview": "MIT library and R128Scan notices; BSD-3-Clause internal queue. Permissive terms are compatible with VibeStudio GPLv3. Copyright and full permission/disclaimer notices preserved.",
+  "files": {
+    "COPYING": "d6b4754bb67bdd08b97d5d11b2d7434997a371585a78fe77007149df3af8d09c",
+    "README.md": "dcb11dc65a197aa981cc0d0bb6f2e7c0982ae8a21649dc244b45fc64d66fdd0d",
+    "doc/license/R128Scan.txt": "58dbf3729fc6e48fff1125c7e86a5a004105ef8628d2373bba0ea01f044d5335",
+    "doc/license/queue.txt": "70cf9b4c1aabf50c12a0bba3d352459d05fb379a047dac5ecc6a9f74e38ed5ef",
+    "ebur128/ebur128.c": "c2fc562f1088cacab4d21250b6e04996ef36c7694ea901e08cc4d64eb542b78d",
+    "ebur128/ebur128.h": "a988fa03828bcdd6258e6c52300d709a58727272a9ce6cd3fbf351f090517111",
+    "ebur128/queue/sys/queue.h": "8b284031772b1ba2035d9b05b24f2cb9b23e7bd324bcccb5e3fcc57d34aafa48"
+  }
+}

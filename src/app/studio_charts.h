@@ -44,6 +44,8 @@ public:
 	[[nodiscard]] QString accessibleSummary() const;
 	[[nodiscard]] QStringList summaryLines() const;
 
+	[[nodiscard]] bool hasHeightForWidth() const override;
+	[[nodiscard]] int heightForWidth(int width) const override;
 	[[nodiscard]] QSize sizeHint() const override;
 	[[nodiscard]] QSize minimumSizeHint() const override;
 
@@ -52,6 +54,7 @@ Q_SIGNALS:
 	void hoverChanged(const QString& summary);
 
 protected:
+	void changeEvent(QEvent* event) override;
 	void paintEvent(QPaintEvent* event) override;
 	void mousePressEvent(QMouseEvent* event) override;
 	void mouseMoveEvent(QMouseEvent* event) override;
@@ -64,7 +67,6 @@ private:
 	QString m_title;
 	QString m_emptyText;
 	QVector<StudioChartSlice> m_slices;
-	QVector<QRectF> m_sliceRects;
 	int m_hoverIndex = -1;
 	bool m_highContrast = false;
 };

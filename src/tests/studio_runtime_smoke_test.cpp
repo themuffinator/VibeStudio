@@ -55,8 +55,8 @@ CrashReportInfo sampleReport()
 	info.updateChannel = QStringLiteral("dev");
 	info.sessionId = QStringLiteral("0123456789abcdef0123456789abcdef");
 	info.processId = 4321;
-	info.sessionStarted = QDateTime::fromSecsSinceEpoch(1'700'000'000, QTimeZone::UTC);
-	info.crashedAt = QDateTime::fromSecsSinceEpoch(1'700'000'500, QTimeZone::UTC);
+	info.sessionStarted = QDateTime::fromSecsSinceEpoch(1'700'000'000, QTimeZone::utc());
+	info.crashedAt = QDateTime::fromSecsSinceEpoch(1'700'000'500, QTimeZone::utc());
 	info.sessionLogPath = QStringLiteral("/tmp/vibestudio/logs/vibestudio-20260101.log");
 	info.reasonId = QStringLiteral("signal");
 	info.reasonDetail = QStringLiteral("SIGSEGV");

@@ -2,6 +2,8 @@
 #include "app/studio_runtime.h"
 #include "app/studio_theme.h"
 #include "cli/cli.h"
+#include "core/package_import_store.h"
+#include "core/package_copy_store.h"
 #include "core/studio_manifest.h"
 #include "core/studio_settings.h"
 
@@ -12,7 +14,11 @@
 #include <QGuiApplication>
 #include <QString>
 #include <QStringList>
+#include <QDir>
+#include <QFileInfo>
 #include <QTimer>
+#include <QScopeGuard>
+#include <QThreadPool>
 
 namespace {
 
@@ -84,6 +90,11 @@ int main(int argc, char** argv)
 
 	if (args.contains(QStringLiteral("--cli"))) {
 		QCoreApplication app(argc, argv);
+		const auto imports = qScopeGuard([] {
+			QThreadPool::globalInstance()->waitForDone();
+			vibestudio::waitForPackageImportCleanup();
+			vibestudio::waitForPackageCopyCleanup();
+		});
 		configureApplicationMetadata(app);
 		return vibestudio::cli::run(app.arguments());
 	}
@@ -91,6 +102,13 @@ int main(int argc, char** argv)
 	vibestudio::configureHighDpiBehavior();
 
 	QApplication app(argc, argv);
+	// Declared before the shell: first release document/worker ownership, then
+	// finish queued import deletion and unlock, while Qt is still available.
+	const auto imports = qScopeGuard([] {
+		QThreadPool::globalInstance()->waitForDone();
+		vibestudio::waitForPackageImportCleanup();
+		vibestudio::waitForPackageCopyCleanup();
+	});
 	configureApplicationMetadata(app);
 	QApplication::setWindowIcon(vibestudio::studioApplicationIcon());
 	vibestudio::installSessionLogging();
@@ -108,6 +126,11 @@ int main(int argc, char** argv)
 		}
 	}
 
+	// A self-test or a snapshot run is not a working session: it starts clean,
+	// records nothing, and neither arms crash capture nor consumes the marker a
+	// real session that crashed left behind.
+	const bool interactive = !args.contains(QStringLiteral("--self-test")) && flagValue(args, QStringLiteral("--ui-snapshot")).isEmpty();
+
 	{
 		vibestudio::StudioSettings settings;
 		const vibestudio::AccessibilityPreferences preferences = settings.accessibilityPreferences();
@@ -116,13 +139,36 @@ int main(int argc, char** argv)
 		// Theme before the first widget exists, so nothing is built with the
 		// platform style and then repolished.
 		vibestudio::applyStudioTheme(app, vibestudio::studioThemeTokens(preferences.theme, preferences.density, preferences.textScalePercent));
+		// Before the shell exists, so it can tell whether the last session
+		// crashed. Turned off in Preferences, nothing is written, though a
+		// crash from before is still offered once.
+		if (interactive) {
+			vibestudio::CrashHandlerOptions crashOptions;
+			crashOptions.enabled = settings.crashReports();
+			// A run with its own settings file is a scripted or isolated one: its
+			// markers and reports stay beside that file, never the user's.
+			if (!settingsOverride.isEmpty()) {
+				crashOptions.directory = QFileInfo(settingsOverride).absoluteDir().filePath(QStringLiteral("crash-reports"));
+			}
+			vibestudio::installCrashHandling(crashOptions);
+		}
 	}
 
 	vibestudio::ApplicationShell shell;
 	shell.show();
 
-	for (const QString& path : pathsToOpen(args)) {
+	const QStringList paths = pathsToOpen(args);
+	for (const QString& path : paths) {
 		shell.openPathFromCommandLine(path);
+	}
+	// Once the window is up the session begins: a crash last time is offered
+	// back; otherwise the last session reopens, unless a path given on the
+	// command line already says what the user wants.
+	if (interactive) {
+		const bool reopenLast = paths.isEmpty();
+		QTimer::singleShot(0, &shell, [&shell, reopenLast]() {
+			shell.beginSession(reopenLast);
+		});
 	}
 
 	// `--ui-snapshot <dir>` renders every work surface to PNG and exits. Run it

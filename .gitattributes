@@ -1,2 +1,10 @@
 # Auto detect text files and perform LF normalization
 * text=auto
+# Pinned third-party files retain their exact upstream bytes for hash verification.
+external/audio/r8brain-free-src/** -text
+external/audio/dr_libs/** -text
+external/audio/libogg/** -text
+external/audio/libvorbis/** -text
+external/audio/portaudio/** -text
+external/modelling/xatlas/** -text
+src/tests/fixtures/audio_decode/*.f32 -text

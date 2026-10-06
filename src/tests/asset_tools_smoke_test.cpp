@@ -7,12 +7,14 @@
 #include <QFileInfo>
 #include <QImage>
 #include <QTemporaryDir>
+#include <QPair>
 #include <QVector>
 
 #include <algorithm>
 #include <cmath>
 #include <cstring>
 #include <iostream>
+#include <limits>
 
 using namespace vibestudio;
 
@@ -440,6 +442,54 @@ bool linesContain(const QStringList& lines, const QString& needle)
 
 } // namespace
 
+// A Doom DMX sound lump: format 3, the rate, a count that takes in the 16 pad
+// bytes at each end, then 8-bit unsigned samples.
+QByteArray dmxSoundFixture(quint16 rate, const QByteArray& samples, bool padded = true)
+{
+	QByteArray data;
+	appendLe16(&data, 3);
+	appendLe16(&data, rate);
+	appendLe32(&data, static_cast<quint32>(samples.size() + (padded ? 32 : 0)));
+	if (padded) {
+		data.append(QByteArray(16, static_cast<char>(0x80)));
+	}
+	data.append(samples);
+	if (padded) {
+		data.append(QByteArray(16, static_cast<char>(0x80)));
+	}
+	return data;
+}
+
+// A PC speaker sound: format 0, a count, then that many tone bytes.
+QByteArray pcSpeakerFixture(const QByteArray& tones)
+{
+	QByteArray data;
+	appendLe16(&data, 0);
+	appendLe16(&data, static_cast<quint16>(tones.size()));
+	data.append(tones);
+	return data;
+}
+
+QByteArray pwadFixture(const QVector<QPair<QByteArray, QByteArray>>& lumps)
+{
+	QByteArray body;
+	QByteArray directory;
+	quint32 offset = 12;
+	for (const auto& lump : lumps) {
+		appendLe32(&directory, offset);
+		appendLe32(&directory, static_cast<quint32>(lump.second.size()));
+		appendFixed(&directory, lump.first, 8);
+		body.append(lump.second);
+		offset += static_cast<quint32>(lump.second.size());
+	}
+	QByteArray wad("PWAD");
+	appendLe32(&wad, static_cast<quint32>(lumps.size()));
+	appendLe32(&wad, offset);
+	wad.append(body);
+	wad.append(directory);
+	return wad;
+}
+
 int main()
 {
 	bool ok = true;
@@ -680,8 +730,8 @@ int main()
 	ok &= expect(exported.frameCount == 8, "exported WAV frame count mismatch");
 
 	const AssetAudioExportReport oggReport = exportPackageAudioToWav(audioArchive, QStringLiteral("sound/music.ogg"), root.filePath(QStringLiteral("music.wav")), false, false);
-	ok &= expect(!oggReport.succeeded(), "compressed audio should not be exported as WAV");
-	ok &= expect(oggReport.error.contains(QStringLiteral("decoder"), Qt::CaseInsensitive), "compressed export should explain the missing decoder backend");
+	ok &= expect(!oggReport.succeeded() && !QFileInfo::exists(root.filePath(QStringLiteral("music.wav"))), "header-only Ogg fixture must not produce output");
+	ok &= expect(!oggReport.error.isEmpty(), "incomplete compressed input explains its validation failure");
 
 	// ---- compressed audio headers -------------------------------------------
 
@@ -729,6 +779,25 @@ int main()
 	ok &= expect(mp3Analysis.audioBitrateBitsPerSecond == 128000, "MP3 bitrate mismatch");
 	ok &= expect(mp3Analysis.audioDurationMs == (3 * 417) * 8 / 128, "MP3 duration estimate mismatch");
 	ok &= expect(linesContain(mp3Analysis.detailLines, QStringLiteral("ID3v2")), "MP3 report should mention the skipped ID3v2 tag");
+
+	const quint64 hugeSize = std::numeric_limits<quint64>::max();
+	const AssetAnalysis hugeOgg = analyzeAssetSample(QStringLiteral("sound/huge.ogg"), oggVorbisFixture(2, 44100, 44100), hugeSize);
+	ok &= expect(hugeOgg.audioFormat == QStringLiteral("OGG") && hugeOgg.audioDurationMs == 0 && hugeOgg.audioFrameCount == 0
+		&& linesContain(hugeOgg.detailLines, QString::number(hugeSize)) && linesContain(hugeOgg.detailLines, QStringLiteral("Sampled:")),
+		"an EOS page inside a bounded prefix cannot establish the length of an unsigned-size entry");
+	const AssetAnalysis hugeMp3 = analyzeAssetSample(QStringLiteral("sound/huge.mp3"), mp3Bytes, hugeSize);
+	ok &= expect(hugeMp3.audioDurationMs == static_cast<qint64>((hugeSize - 10) / 16) && hugeMp3.audioFrameCount == 0
+		&& linesContain(hugeMp3.detailLines, QString::number(hugeSize)),
+		"MP3 duration division avoids intermediate overflow and an unrepresentable frame count stays unknown");
+	const AssetAnalysis signedMp3 = analyzeAssetBytes(QStringLiteral("sound/signed.mp3"), mp3Bytes, std::numeric_limits<qint64>::max());
+	ok &= expect(signedMp3.audioDurationMs == (std::numeric_limits<qint64>::max() - 10) / 16 && signedMp3.audioFrameCount == 0,
+		"legacy signed-size analysis also avoids duration and frame-count overflow");
+	const AssetAnalysis hugeWav = analyzeAssetSample(QStringLiteral("sound/huge.wav"), wavFixture(), hugeSize);
+	ok &= expect(hugeWav.kind == AssetPreviewKind::Audio && linesContain(hugeWav.detailLines, QString::number(hugeSize)),
+		"uncompressed asset metadata preserves the exact unsigned size");
+	const AssetAnalysis hugeModel = analyzeAssetSample(QStringLiteral("huge.obj"), QByteArray("v 0 0 0\nv 1 0 0\nv 0 1 0\nf 1 2 3\n"), hugeSize);
+	ok &= expect(hugeModel.kind == AssetPreviewKind::Model && hugeModel.modelCountsPartial,
+		"a huge model declaration keeps sampled model counts partial");
 
 	const AssetAnalysis flacAnalysis = analyzeAssetBytes(QStringLiteral("sound/ambient.flac"), flacFixture(44100, 2, 16, 88200), -1);
 	ok &= expect(flacAnalysis.kind == AssetPreviewKind::Audio, "FLAC should analyse as audio");
@@ -813,6 +882,103 @@ int main()
 	ok &= expect(linesContain(quakeCAnalysis.textHighlightLines, QStringLiteral("void")), "QuakeC highlights should report void");
 	ok &= expect(linesContain(quakeCAnalysis.textHighlightLines, QStringLiteral("local")), "QuakeC highlights should report local");
 	ok &= expect(linesContain(quakeCAnalysis.textHighlightLines, QStringLiteral("return")), "QuakeC highlights should report return");
+
+	// ---- Doom DMX sounds ------------------------------------------------------
+
+	// A sound with a loud peak, silence, and a trough, padded as DMX writes it.
+	QByteArray dmxSamples(100, static_cast<char>(0x80));
+	dmxSamples[10] = static_cast<char>(0xff);
+	dmxSamples[90] = static_cast<char>(0x00);
+	const QByteArray dmxBytes = dmxSoundFixture(11025, dmxSamples);
+	const AssetAnalysis dmxAnalysis = analyzeAssetBytes(QStringLiteral("DSTEST"), dmxBytes, dmxBytes.size());
+	ok &= expect(dmxAnalysis.kind == AssetPreviewKind::Audio && dmxAnalysis.audioFormat == QStringLiteral("DMX"), "a DMX lump should analyse as DMX audio");
+	ok &= expect(dmxAnalysis.audioSampleRate == 11025 && dmxAnalysis.audioChannels == 1 && dmxAnalysis.audioBitsPerSample == 8,
+		"DMX rate, channels and depth mismatch");
+	ok &= expect(dmxAnalysis.audioFrameCount == 100, "the DMX pad bytes must not count as samples");
+	ok &= expect(dmxAnalysis.audioDurationMs == 9, "DMX duration mismatch");
+	ok &= expect(dmxAnalysis.audioPeaks.valid && dmxAnalysis.audioPeaks.frameCount == 100, "a DMX lump should have a waveform");
+	{
+		float highest = -1.0f;
+		float lowest = 1.0f;
+		for (qsizetype index = 0; index + 1 < dmxAnalysis.audioPeaks.peaks.size(); index += 2) {
+			lowest = std::min(lowest, dmxAnalysis.audioPeaks.peaks.at(index));
+			highest = std::max(highest, dmxAnalysis.audioPeaks.peaks.at(index + 1));
+		}
+		ok &= expect(highest > 0.98f && lowest < -0.99f, "the DMX envelope should reach the peak and the trough");
+	}
+	ok &= expect(dmxAnalysis.audioQtPlaybackCandidate && dmxAnalysis.audioWavExportSupported, "a DMX sound should play and export");
+	ok &= expect(linesContain(dmxAnalysis.detailLines, QStringLiteral("16 pad bytes")), "the DMX details should explain the pad bytes");
+
+	// A sampled read still checks the header against the whole lump.
+	const AssetAnalysis dmxSampled = analyzeAssetBytes(QStringLiteral("DSTEST"), dmxBytes.left(40), dmxBytes.size());
+	ok &= expect(dmxSampled.audioFormat == QStringLiteral("DMX") && dmxSampled.audioFrameCount == 100
+			&& dmxSampled.audioPeaks.frameCount == 16 && linesContain(dmxSampled.detailLines, QStringLiteral("Sampled")),
+		"a sampled DMX lump should keep its real length and say it was sampled");
+	// DMX refuses 48 samples or fewer; the details warn.
+	const QByteArray shortDmx = dmxSoundFixture(11025, QByteArray(10, static_cast<char>(0x90)));
+	ok &= expect(linesContain(analyzeAssetBytes(QStringLiteral("DSSHORT"), shortDmx, shortDmx.size()).detailLines, QStringLiteral("48 samples")),
+		"a DMX sound too short for the DMX library should be flagged");
+	// A count that runs past the lump is not a DMX sound.
+	QByteArray overlong = dmxBytes;
+	overlong[4] = static_cast<char>(0xff);
+	ok &= expect(analyzeAssetBytes(QStringLiteral("DSBAD"), overlong, overlong.size()).audioFormat != QStringLiteral("DMX"),
+		"a DMX count past the end of the lump should be refused");
+
+	// PC speaker sounds need their DP name: two zero bytes open many lumps.
+	const QByteArray speakerBytes = pcSpeakerFixture(QByteArray("\x01\x00\x40\x40\x20", 5));
+	const AssetAnalysis speaker = analyzeAssetBytes(QStringLiteral("DPTEST"), speakerBytes, speakerBytes.size());
+	ok &= expect(speaker.kind == AssetPreviewKind::Audio && speaker.audioCodec == QStringLiteral("PC speaker tones") && speaker.audioDurationMs == 35,
+		"a DP lump should analyse as a PC speaker sound of five 1/140 s tones");
+	ok &= expect(!speaker.audioQtPlaybackCandidate && !speaker.audioPeaks.valid, "a PC speaker sound has no samples to play or draw");
+	ok &= expect(analyzeAssetBytes(QStringLiteral("NOTASND"), speakerBytes, speakerBytes.size()).audioFormat != QStringLiteral("DMX"),
+		"the same bytes under another name should not be taken for a PC speaker sound");
+
+	// Entries: WAD lumps by their DS/DP names, PK3 sounds by their folder.
+	ok &= expect(assetPreviewKindForEntry(QStringLiteral("DSPISTOL"), QStringLiteral("wad-lump")) == AssetPreviewKind::Audio
+			&& assetPreviewKindForEntry(QStringLiteral("DPPISTOL"), QStringLiteral("wad-lump")) == AssetPreviewKind::Audio,
+		"DS and DP lumps in a WAD should be listed as audio");
+	ok &= expect(assetPreviewKindForEntry(QStringLiteral("DSPISTOL")) == AssetPreviewKind::Unknown
+			&& assetPreviewKindForEntry(QStringLiteral("DOOR2"), QStringLiteral("wad-lump")) == AssetPreviewKind::Unknown,
+		"a DS name outside a WAD, or another lump, should not be listed as audio");
+	ok &= expect(assetPreviewKindForEntry(QStringLiteral("sounds/dspistol.lmp")) == AssetPreviewKind::Audio
+			&& assetPreviewKindForEntry(QStringLiteral("sounds/pistol")) == AssetPreviewKind::Audio
+			&& assetPreviewKindForEntry(QStringLiteral("gfx/menu.lmp")) == AssetPreviewKind::Image,
+		"a PK3's sounds/ lumps should be audio, and other .lmp files images");
+
+	// Playback: a DMX sound becomes a 16-bit WAV, sample for sample.
+	const AssetAudioPlaybackSource dmxPlayback = assetAudioPlaybackSource(QStringLiteral("DSTEST"), dmxBytes);
+	ok &= expect(dmxPlayback.playable() && dmxPlayback.fileName == QStringLiteral("DSTEST.wav") && dmxPlayback.format == QStringLiteral("DMX"),
+		"a DMX sound should play as a WAV");
+	const AssetAudioPeaks playbackPeaks = extractWavePeaks(dmxPlayback.bytes, 4);
+	ok &= expect(!assetAudioPlaybackSource(QStringLiteral("DSTEST"), dmxBytes, 243).playable(),
+		"DMX output growth must be checked before allocation");
+	ok &= expect(playbackPeaks.valid && playbackPeaks.bitsPerSample == 16 && playbackPeaks.sampleRate == 11025 && playbackPeaks.frameCount == 100,
+		"the DMX playback WAV should be 16-bit, 11025 Hz and 100 frames long");
+	ok &= expect(dmxPlayback.bytes.size() == 44 + 200 && dmxPlayback.bytes.mid(44 + 20, 2) == QByteArray("\x00\x7f", 2)
+			&& dmxPlayback.bytes.mid(44 + 180, 2) == QByteArray("\x00\x80", 2) && dmxPlayback.bytes.mid(44, 2) == QByteArray("\x00\x00", 2),
+		"8-bit samples should widen by a byte shift: 0xff to 0x7f00, 0x00 to 0x8000, 0x80 to 0");
+	ok &= expect(!assetAudioPlaybackSource(QStringLiteral("DPTEST"), speakerBytes).playable(), "a PC speaker sound should not be offered to a player");
+	const AssetAudioPlaybackSource wavPlayback = assetAudioPlaybackSource(QStringLiteral("sound/pickup.wav"), wavFixture());
+	ok &= expect(wavPlayback.playable() && wavPlayback.bytes == wavFixture() && wavPlayback.fileName == QStringLiteral("pickup.wav"),
+		"a 16-bit PCM WAV should go to the player unchanged");
+	const AssetAudioPlaybackSource floatPlayback = assetAudioPlaybackSource(QStringLiteral("sound/float.wav"), stereoFullScaleWav(0x0003, 32, 8, false));
+	ok &= expect(floatPlayback.playable() && floatPlayback.bytes == stereoFullScaleWav(0x0003, 32, 8, false), "audition must preserve float WAV bytes without quantization");
+	const AssetAudioPlaybackSource oggPlayback = assetAudioPlaybackSource(QStringLiteral("music/track.ogg"), oggVorbisFixture(2, 44100, 44100));
+	ok &= expect(oggPlayback.playable() && oggPlayback.fileName == QStringLiteral("track.ogg"), "an Ogg stream should pass through for the host codec");
+	ok &= expect(!assetAudioPlaybackSource(QStringLiteral("readme.txt"), QByteArray("hello")).playable(), "text should not be offered to a player");
+
+	// A WAD's sounds preview and export like any other package audio.
+	const QString wadPath = root.filePath(QStringLiteral("sounds.wad"));
+	ok &= expect(writeFile(wadPath, pwadFixture({{QByteArray("DSTEST"), dmxBytes}, {QByteArray("DPTEST"), speakerBytes}})), "the sound WAD should be written");
+	PackageArchive wadArchive;
+	QString wadError;
+	ok &= expect(wadArchive.load(wadPath, &wadError), "the sound WAD should load");
+	const QString dmxOutput = root.filePath(QStringLiteral("dstest.wav"));
+	const AssetAudioExportReport dmxExport = exportPackageAudioToWav(wadArchive, QStringLiteral("DSTEST"), dmxOutput, false, false);
+	ok &= expect(dmxExport.succeeded() && dmxExport.converted && dmxExport.sourceFormat == QStringLiteral("DMX") && readFile(dmxOutput) == dmxPlayback.bytes,
+		"a DMX lump should export as the same 16-bit WAV it plays as");
+	const AssetAudioExportReport speakerExport = exportPackageAudioToWav(wadArchive, QStringLiteral("DPTEST"), root.filePath(QStringLiteral("dptest.wav")), false, false);
+	ok &= expect(!speakerExport.succeeded() && speakerExport.error.contains(QStringLiteral("PC speaker")), "a PC speaker sound should refuse WAV export, saying why");
 
 	// ---- project text search -------------------------------------------------
 

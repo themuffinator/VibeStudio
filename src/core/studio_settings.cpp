@@ -1,8 +1,14 @@
 #include "core/studio_settings.h"
 
 #include "core/editor_profiles.h"
+#include "core/level_navigation.h"
 #include "core/localization.h"
+#include "core/package_draft_storage.h"
+#include "core/package_copy_budget.h"
+#include "core/project_manifest.h"
 
+#include <QCoreApplication>
+#include <QCryptographicHash>
 #include <QDir>
 #include <QFileInfo>
 #include <QJsonArray>
@@ -24,8 +30,22 @@ constexpr auto kSelectedModeKey = "shell/selectedMode";
 constexpr auto kShellGeometryKey = "shell/geometry";
 constexpr auto kShellWindowStateKey = "shell/windowState";
 constexpr auto kShellSplitterStateKey = "shell/splitterState";
-constexpr auto kShellModeRailCompactKey = "shell/modeRailCompact";
+constexpr auto kShellModeRailBehaviourKey = "shell/modeRailBehaviour";
 constexpr auto kShellLayoutPrefix = "shell/layout/";
+constexpr auto kRestoreSessionKey = "session/restore";
+constexpr auto kCrashReportsKey = "diagnostics/crashReports";
+constexpr auto kCodeZoomPercentKey = "code/zoomPercent";
+constexpr auto kCodeStickyHeadersKey = "code/stickyHeaders";
+constexpr auto kUserShortcutsGroup = "shortcuts";
+constexpr auto kSessionPackageKey = "session/package";
+constexpr auto kSessionMapKey = "session/map";
+constexpr auto kSessionMapNameKey = "session/mapName";
+constexpr auto kSessionCodeFilesKey = "session/codeFiles";
+constexpr auto kSessionCurrentCodeFileKey = "session/currentCodeFile";
+constexpr auto kSessionOwnerKey = "session/owner";
+constexpr auto kRecentFilesPrefix = "recentFiles/";
+constexpr auto kLaunchGameDirectoryPrefix = "launchGameDirectory/";
+constexpr auto kRecentCommandsKey = "recentCommands";
 constexpr auto kLocaleNameKey = "preferences/localeName";
 constexpr auto kTextScalePercentKey = "preferences/textScalePercent";
 constexpr auto kThemeKey = "preferences/theme";
@@ -57,6 +77,9 @@ constexpr auto kAiOpenAiCredentialEnvironmentKey = "ai/openAiCredentialEnvironme
 constexpr auto kAiElevenLabsCredentialEnvironmentKey = "ai/elevenLabsCredentialEnvironment";
 constexpr auto kAiMeshyCredentialEnvironmentKey = "ai/meshyCredentialEnvironment";
 constexpr auto kAiCustomHttpCredentialEnvironmentKey = "ai/customHttpCredentialEnvironment";
+// ai/connectors/<connector id>/model and .../endpoint
+constexpr auto kAiConnectorsGroup = "ai/connectors";
+constexpr auto kAiConsentGroup = "ai/consent";
 constexpr auto kSetupStartedKey = "setup/started";
 constexpr auto kSetupSkippedKey = "setup/skipped";
 constexpr auto kSetupCompletedKey = "setup/completed";
@@ -260,16 +283,16 @@ int setupStepIndex(SetupStep step)
 
 } // namespace
 
-StudioSettings::StudioSettings()
+StudioSettings::StudioSettings(AccessMode access)
 	: m_settings(overrideFilePath().isEmpty()
 		? std::make_unique<QSettings>()
-		: std::make_unique<QSettings>(overrideFilePath(), QSettings::IniFormat))
+		: std::make_unique<QSettings>(overrideFilePath(), QSettings::IniFormat)), m_readOnly(access == AccessMode::ReadOnly)
 {
 	ensureSchema();
 }
 
-StudioSettings::StudioSettings(const QString& filePath)
-	: m_settings(std::make_unique<QSettings>(filePath, QSettings::IniFormat))
+StudioSettings::StudioSettings(const QString& filePath, AccessMode access)
+	: m_settings(std::make_unique<QSettings>(filePath, QSettings::IniFormat)), m_readOnly(access == AccessMode::ReadOnly)
 {
 	ensureSchema();
 }
@@ -429,6 +452,147 @@ void StudioSettings::removeRecentProject(const QString& path)
 void StudioSettings::clearRecentProjects()
 {
 	removeKey(kRecentProjectsArray);
+}
+
+QStringList StudioSettings::recentFiles(const QString& kind) const
+{
+	const QString trimmed = kind.trimmed();
+	if (trimmed.isEmpty()) {
+		return {};
+	}
+	QStringList unique;
+	for (const QString& stored : m_settings->value(QString::fromLatin1(kRecentFilesPrefix) + trimmed).toStringList()) {
+		const QString path = QDir::cleanPath(stored.trimmed());
+		if (path.isEmpty() || path == QStringLiteral(".")) {
+			continue;
+		}
+		bool seen = false;
+		for (const QString& existing : std::as_const(unique)) {
+			seen = seen || sameProjectPath(existing, path);
+		}
+		if (!seen) {
+			unique.push_back(path);
+		}
+		if (unique.size() >= kMaximumRecentFiles) {
+			break;
+		}
+	}
+	return unique;
+}
+
+QString StudioSettings::launchGameDirectory(const QString& installationId) const
+{
+	const QString id = installationId.trimmed();
+	if (id.isEmpty()) {
+		return {};
+	}
+	return m_settings->value(QString::fromLatin1(kLaunchGameDirectoryPrefix) + id).toString().trimmed();
+}
+
+void StudioSettings::setLaunchGameDirectory(const QString& installationId, const QString& folder)
+{
+	const QString id = installationId.trimmed();
+	if (id.isEmpty()) {
+		return;
+	}
+	const QString key = QString::fromLatin1(kLaunchGameDirectoryPrefix) + id;
+	if (folder.trimmed().isEmpty()) {
+		removeKey(key);
+	} else {
+		writeValue(key, folder.trimmed());
+	}
+}
+
+QStringList StudioSettings::recentCommands() const
+{
+	QStringList commands;
+	for (const QString& stored : m_settings->value(QString::fromLatin1(kRecentCommandsKey)).toStringList()) {
+		const QString id = stored.trimmed();
+		if (!id.isEmpty() && !commands.contains(id) && commands.size() < kMaximumRecentCommands) {
+			commands.push_back(id);
+		}
+	}
+	return commands;
+}
+
+void StudioSettings::recordRecentCommand(const QString& commandId)
+{
+	const QString id = commandId.trimmed();
+	if (id.isEmpty()) {
+		return;
+	}
+	QStringList commands = recentCommands();
+	commands.removeAll(id);
+	commands.prepend(id);
+	while (commands.size() > kMaximumRecentCommands) {
+		commands.removeLast();
+	}
+	writeValue(QString::fromLatin1(kRecentCommandsKey), commands);
+}
+
+QStringList StudioSettings::recentFilterQueries(const QString& filterId) const
+{
+	const QString id = filterId.trimmed();
+	if (id.isEmpty()) {
+		return {};
+	}
+	return m_settings->value(QStringLiteral("filterQueries/%1").arg(id)).toStringList();
+}
+
+void StudioSettings::recordFilterQuery(const QString& filterId, const QString& query)
+{
+	constexpr int kMaximumRecentQueries = 12;
+	const QString id = filterId.trimmed();
+	const QString text = query.trimmed();
+	if (id.isEmpty() || text.isEmpty()) {
+		return;
+	}
+	QStringList queries = recentFilterQueries(id);
+	queries.erase(std::remove_if(queries.begin(), queries.end(), [&text](const QString& stored) {
+		return stored.compare(text, Qt::CaseInsensitive) == 0;
+	}), queries.end());
+	queries.prepend(text);
+	while (queries.size() > kMaximumRecentQueries) {
+		queries.removeLast();
+	}
+	writeValue(QStringLiteral("filterQueries/%1").arg(id), queries);
+}
+
+void StudioSettings::recordRecentFile(const QString& kind, const QString& path)
+{
+	const QString trimmed = kind.trimmed();
+	const QString cleaned = QDir::cleanPath(QFileInfo(path.trimmed()).absoluteFilePath());
+	if (trimmed.isEmpty() || path.trimmed().isEmpty()) {
+		return;
+	}
+	QStringList files = recentFiles(trimmed);
+	files.erase(std::remove_if(files.begin(), files.end(), [&cleaned](const QString& existing) {
+		return sameProjectPath(existing, cleaned);
+	}), files.end());
+	files.prepend(cleaned);
+	while (files.size() > kMaximumRecentFiles) {
+		files.removeLast();
+	}
+	writeValue(QString::fromLatin1(kRecentFilesPrefix) + trimmed, files);
+}
+
+void StudioSettings::removeRecentFile(const QString& kind, const QString& path)
+{
+	const QString trimmed = kind.trimmed();
+	if (trimmed.isEmpty() || path.trimmed().isEmpty()) {
+		return;
+	}
+	QStringList files = recentFiles(trimmed);
+	const QString cleaned = QDir::cleanPath(QFileInfo(path.trimmed()).absoluteFilePath());
+	files.erase(std::remove_if(files.begin(), files.end(), [&cleaned](const QString& existing) {
+		return sameProjectPath(existing, cleaned);
+	}), files.end());
+	writeValue(QString::fromLatin1(kRecentFilesPrefix) + trimmed, files);
+}
+
+void StudioSettings::clearRecentFiles()
+{
+	removeKey(QString::fromLatin1(kRecentFilesPrefix).chopped(1));
 }
 
 QVector<RecentActivityTask> StudioSettings::recentActivityTasks() const
@@ -868,6 +1032,39 @@ AiAutomationPreferences StudioSettings::aiAutomationPreferences() const
 	preferences.elevenLabsCredentialEnvironmentVariable = m_settings->value(kAiElevenLabsCredentialEnvironmentKey, preferences.elevenLabsCredentialEnvironmentVariable).toString();
 	preferences.meshyCredentialEnvironmentVariable = m_settings->value(kAiMeshyCredentialEnvironmentKey, preferences.meshyCredentialEnvironmentVariable).toString();
 	preferences.customHttpCredentialEnvironmentVariable = m_settings->value(kAiCustomHttpCredentialEnvironmentKey, preferences.customHttpCredentialEnvironmentVariable).toString();
+	for (const QString& connectorId : aiConnectorIds()) {
+		const QString base = QStringLiteral("%1/%2/").arg(QLatin1String(kAiConnectorsGroup), connectorId);
+		const QString model = m_settings->value(base + QStringLiteral("model")).toString();
+		const QString endpoint = m_settings->value(base + QStringLiteral("endpoint")).toString();
+		if (!model.trimmed().isEmpty()) {
+			preferences.connectorModels.insert(connectorId, model);
+		}
+		if (!endpoint.trimmed().isEmpty()) {
+			preferences.connectorEndpoints.insert(connectorId, endpoint);
+		}
+		const QString imageModel = m_settings->value(base + QStringLiteral("imageModel")).toString();
+		const QString imageEndpoint = m_settings->value(base + QStringLiteral("imageEndpoint")).toString();
+		if (!imageModel.trimmed().isEmpty()) {
+			preferences.connectorImageModels.insert(connectorId, imageModel);
+		}
+		if (!imageEndpoint.trimmed().isEmpty()) {
+			preferences.connectorImageEndpoints.insert(connectorId, imageEndpoint);
+		}
+		const QString audioModel = m_settings->value(base + QStringLiteral("audioModel")).toString();
+		const QString audioEndpoint = m_settings->value(base + QStringLiteral("audioEndpoint")).toString();
+		if (!audioModel.trimmed().isEmpty()) {
+			preferences.connectorAudioModels.insert(connectorId, audioModel);
+		}
+		if (!audioEndpoint.trimmed().isEmpty()) {
+			preferences.connectorAudioEndpoints.insert(connectorId, audioEndpoint);
+		}
+	}
+	// The open project may turn AI off for itself; it cannot turn it on.
+	const QString project = currentProjectPath();
+	ProjectManifest manifest;
+	if (!project.isEmpty() && QFileInfo::exists(projectManifestPath(project)) && loadProjectManifest(project, &manifest)) {
+		preferences.projectAiFree = manifest.settingsOverrides.aiFreeModeSet && manifest.settingsOverrides.aiFreeMode;
+	}
 	return normalizedAiAutomationPreferences(preferences);
 }
 
@@ -898,6 +1095,61 @@ void StudioSettings::setAiAutomationPreferences(const AiAutomationPreferences& p
 	writeValue(kAiElevenLabsCredentialEnvironmentKey, normalized.elevenLabsCredentialEnvironmentVariable);
 	writeValue(kAiMeshyCredentialEnvironmentKey, normalized.meshyCredentialEnvironmentVariable);
 	writeValue(kAiCustomHttpCredentialEnvironmentKey, normalized.customHttpCredentialEnvironmentVariable);
+	for (const QString& connectorId : aiConnectorIds()) {
+		const QString base = QStringLiteral("%1/%2/").arg(QLatin1String(kAiConnectorsGroup), connectorId);
+		const QString model = normalized.connectorModels.value(connectorId);
+		const QString endpoint = normalized.connectorEndpoints.value(connectorId);
+		model.isEmpty() ? removeKey(base + QStringLiteral("model")) : writeValue(base + QStringLiteral("model"), model);
+		endpoint.isEmpty() ? removeKey(base + QStringLiteral("endpoint")) : writeValue(base + QStringLiteral("endpoint"), endpoint);
+		const QString imageModel = normalized.connectorImageModels.value(connectorId);
+		const QString imageEndpoint = normalized.connectorImageEndpoints.value(connectorId);
+		imageModel.isEmpty() ? removeKey(base + QStringLiteral("imageModel")) : writeValue(base + QStringLiteral("imageModel"), imageModel);
+		imageEndpoint.isEmpty() ? removeKey(base + QStringLiteral("imageEndpoint")) : writeValue(base + QStringLiteral("imageEndpoint"), imageEndpoint);
+		const QString audioModel = normalized.connectorAudioModels.value(connectorId);
+		const QString audioEndpoint = normalized.connectorAudioEndpoints.value(connectorId);
+		audioModel.isEmpty() ? removeKey(base + QStringLiteral("audioModel")) : writeValue(base + QStringLiteral("audioModel"), audioModel);
+		audioEndpoint.isEmpty() ? removeKey(base + QStringLiteral("audioEndpoint")) : writeValue(base + QStringLiteral("audioEndpoint"), audioEndpoint);
+	}
+}
+
+namespace {
+
+// Consent is filed under a digest of the project folder: a path is no key.
+QString aiConsentKey(const QString& projectPath)
+{
+	QString folder = projectPath.trimmed();
+	if (!folder.isEmpty()) {
+		folder = QDir::cleanPath(QFileInfo(folder).absoluteFilePath());
+#ifdef Q_OS_WIN
+		folder = folder.toLower();
+#endif
+	}
+	const QByteArray digest = QCryptographicHash::hash(folder.toUtf8(), QCryptographicHash::Sha1).toHex().left(16);
+	return QStringLiteral("%1/%2").arg(QLatin1String(kAiConsentGroup), QString::fromLatin1(digest));
+}
+
+} // namespace
+
+bool StudioSettings::aiContextConsentGiven(const QString& projectPath, const QString& destination) const
+{
+	return m_settings->value(aiConsentKey(projectPath)).toStringList().contains(destination.trimmed().toLower());
+}
+
+void StudioSettings::setAiContextConsentGiven(const QString& projectPath, const QString& destination, bool given)
+{
+	const QString key = aiConsentKey(projectPath);
+	QStringList destinations = m_settings->value(key).toStringList();
+	const QString entry = destination.trimmed().toLower();
+	destinations.removeAll(entry);
+	if (given && !entry.isEmpty()) {
+		destinations << entry;
+	}
+	destinations.isEmpty() ? removeKey(key) : writeValue(key, destinations);
+}
+
+void StudioSettings::clearAiContextConsent()
+{
+	removeKey(QLatin1String(kAiConsentGroup));
 }
 
 SetupProgress StudioSettings::setupProgress() const
@@ -1065,14 +1317,378 @@ void StudioSettings::setShellSplitterState(const QByteArray& splitterState)
 	writeValue(kShellSplitterStateKey, splitterState);
 }
 
-bool StudioSettings::shellModeRailCompact() const
+bool StudioSession::isEmpty() const
 {
-	return m_settings->value(kShellModeRailCompactKey, false).toBool();
+	return packagePath.isEmpty() && mapPath.isEmpty() && codeFiles.isEmpty();
 }
 
-void StudioSettings::setShellModeRailCompact(bool compact)
+bool StudioSettings::restoreSession() const
 {
-	writeValue(kShellModeRailCompactKey, compact);
+	return m_settings->value(kRestoreSessionKey, true).toBool();
+}
+
+void StudioSettings::setRestoreSession(bool enabled)
+{
+	writeValue(kRestoreSessionKey, enabled);
+}
+
+bool StudioSettings::crashReports() const
+{
+	return m_settings->value(kCrashReportsKey, true).toBool();
+}
+
+bool StudioSettings::levelRecoveryEnabled() const
+{
+	return m_settings->value(QStringLiteral("levels/recoveryEnabled"), true).toBool();
+}
+
+QString StudioSettings::levelViewLayoutPreference() const
+{
+	const QString value = m_settings->value(QStringLiteral("levels/viewLayout"), QStringLiteral("profile")).toString();
+	return levelViewLayoutForId(value, nullptr) ? value : QStringLiteral("profile");
+}
+
+bool StudioSettings::setLevelViewLayoutPreference(const QString& id)
+{
+	if (id != QStringLiteral("profile") && !levelViewLayoutForId(id, nullptr)) { return false; }
+	writeValue(QStringLiteral("levels/viewLayout"), id);
+	return !isReadOnly();
+}
+
+LevelViewLinks StudioSettings::levelViewLinks() const
+{
+	const auto values = m_settings->value(QStringLiteral("levels/viewLinks")).toMap();
+	return {values.value(QStringLiteral("centers"), false).toBool(), values.value(QStringLiteral("zoom"), false).toBool(),
+		values.value(QStringLiteral("followCamera"), false).toBool()};
+}
+
+bool StudioSettings::setLevelViewLinks(const LevelViewLinks& links)
+{
+	if (isReadOnly()) { return false; }
+	writeValue(QStringLiteral("levels/viewLinks"), QVariantMap {{QStringLiteral("centers"), links.centers},
+		{QStringLiteral("zoom"), links.zoom}, {QStringLiteral("followCamera"), links.followCamera}});
+	sync();
+	return status() == QSettings::NoError;
+}
+
+bool StudioSettings::levelTextureLock() const
+{
+	return m_settings->value(QStringLiteral("levels/textureLock"), true).toBool();
+}
+
+void StudioSettings::setLevelTextureLock(bool enabled)
+{
+	writeValue(QStringLiteral("levels/textureLock"), enabled);
+}
+
+bool StudioSettings::levelTextureScaleLock() const
+{
+	return m_settings->value(QStringLiteral("levels/textureScaleLock"), false).toBool();
+}
+
+void StudioSettings::setLevelTextureScaleLock(bool enabled)
+{
+	writeValue(QStringLiteral("levels/textureScaleLock"), enabled);
+}
+
+bool StudioSettings::levelAllowValve220() const
+{
+	return m_settings->value(QStringLiteral("levels/allowValve220"), false).toBool();
+}
+
+void StudioSettings::setLevelAllowValve220(bool enabled)
+{
+	writeValue(QStringLiteral("levels/allowValve220"), enabled);
+}
+
+void StudioSettings::setLevelRecoveryEnabled(bool enabled)
+{
+	writeValue(QStringLiteral("levels/recoveryEnabled"), enabled);
+}
+
+bool StudioSettings::codeRecoveryEnabled() const
+{
+	return m_settings->value(QStringLiteral("code/recoveryEnabled"), true).toBool();
+}
+
+QJsonObject StudioSettings::languageServerPreferences() const
+{
+	return QJsonDocument::fromJson(m_settings->value(QStringLiteral("code/languageServer")).toByteArray()).object();
+}
+
+void StudioSettings::setLanguageServerPreferences(const QJsonObject& preferences)
+{
+	writeValue(QStringLiteral("code/languageServer"), QJsonDocument(preferences).toJson(QJsonDocument::Compact));
+}
+
+bool StudioSettings::audioRecoveryEnabled() const
+{
+	return m_settings->value(QStringLiteral("audio/recoveryEnabled"), true).toBool();
+}
+
+void StudioSettings::setAudioRecoveryEnabled(bool enabled)
+{
+	writeValue(QStringLiteral("audio/recoveryEnabled"), enabled);
+}
+
+bool StudioSettings::audioRecoveryNotifyAtStartup() const
+{
+	return m_settings->value(QStringLiteral("audio/recoveryNotifyAtStartup"), true).toBool();
+}
+
+void StudioSettings::setAudioRecoveryNotifyAtStartup(bool enabled)
+{
+	writeValue(QStringLiteral("audio/recoveryNotifyAtStartup"), enabled);
+}
+
+void StudioSettings::setCodeRecoveryEnabled(bool enabled)
+{
+	writeValue(QStringLiteral("code/recoveryEnabled"), enabled);
+}
+
+bool StudioSettings::modelRecoveryEnabled() const
+{
+	return m_settings->value(QStringLiteral("model/recoveryEnabled"), true).toBool();
+}
+
+void StudioSettings::setModelRecoveryEnabled(bool enabled)
+{
+	writeValue(QStringLiteral("model/recoveryEnabled"), enabled);
+}
+
+QStringList StudioSettings::packagePublicationDirectories() const
+{
+	QStringList paths;
+	for (const auto& path : m_settings->value(QStringLiteral("packages/publicationDirectories")).toStringList()) {
+		if (!QDir::isAbsolutePath(path)) { continue; }
+		const QString cleaned = QDir::cleanPath(path);
+		if (std::none_of(paths.begin(), paths.end(), [&](const auto& existing) { return sameProjectPath(existing, cleaned); })) { paths << cleaned; }
+		if (paths.size() == 16) { break; }
+	}
+	return paths;
+}
+
+void StudioSettings::rememberPackagePublicationDirectory(const QString& path)
+{
+	if (path.trimmed().isEmpty()) { return; }
+	const QString cleaned = QDir::cleanPath(QFileInfo(path).absoluteFilePath());
+	auto paths = packagePublicationDirectories();
+	paths.erase(std::remove_if(paths.begin(), paths.end(), [&](const auto& existing) { return sameProjectPath(existing, cleaned); }), paths.end());
+	paths.prepend(cleaned); while (paths.size() > 16) { paths.removeLast(); }
+	writeValue(QStringLiteral("packages/publicationDirectories"), paths);
+	// Flush before starting a save so crash recovery can find a new output folder.
+	sync();
+}
+
+bool StudioSettings::packageRecoveryEnabled() const
+{
+	return m_settings->value(QStringLiteral("packages/recoveryEnabled"), true).toBool();
+}
+
+void StudioSettings::setPackageRecoveryEnabled(bool enabled)
+{
+	writeValue(QStringLiteral("packages/recoveryEnabled"), enabled);
+}
+
+int StudioSettings::packageRecoveryIntervalSeconds() const
+{
+	return std::clamp(m_settings->value(QStringLiteral("packages/recoveryIntervalSeconds"), 30).toInt(), 5, 600);
+}
+
+void StudioSettings::setPackageRecoveryIntervalSeconds(int seconds)
+{
+	writeValue(QStringLiteral("packages/recoveryIntervalSeconds"), std::clamp(seconds, 5, 600));
+}
+
+int StudioSettings::packageRecoveryMaximumMiB() const
+{
+	return std::clamp(m_settings->value(QStringLiteral("packages/recoveryMaximumMiB"), 8192).toInt(), 128, 131072);
+}
+
+void StudioSettings::setPackageRecoveryMaximumMiB(int mib)
+{
+	writeValue(QStringLiteral("packages/recoveryMaximumMiB"), std::clamp(mib, 128, 131072));
+}
+
+int StudioSettings::packageRecoveryMaximumCopies() const
+{
+	return std::clamp(m_settings->value(QStringLiteral("packages/recoveryMaximumCopies"), 32).toInt(), 1, 128);
+}
+
+void StudioSettings::setPackageRecoveryMaximumCopies(int copies)
+{
+	writeValue(QStringLiteral("packages/recoveryMaximumCopies"), std::clamp(copies, 1, 128));
+}
+
+int StudioSettings::packageImportMaximumMiB() const
+{
+	return std::clamp(m_settings->value(QStringLiteral("packages/importMaximumMiB"), 8192).toInt(), 128, 131072);
+}
+
+void StudioSettings::setPackageImportMaximumMiB(int mib)
+{
+	writeValue(QStringLiteral("packages/importMaximumMiB"), std::clamp(mib, 128, 131072));
+}
+
+int StudioSettings::packageImportMaximumFiles() const
+{
+	return std::clamp(m_settings->value(QStringLiteral("packages/importMaximumFiles"), 50000).toInt(), 1, 100000);
+}
+
+void StudioSettings::setPackageImportMaximumFiles(int files)
+{
+	writeValue(QStringLiteral("packages/importMaximumFiles"), std::clamp(files, 1, 100000));
+}
+
+int StudioSettings::packageDraftMaximumMiB() const
+{
+	return std::clamp(m_settings->value(QStringLiteral("packages/draftMaximumMiB"), 32768).toInt(), 128, 131072);
+}
+
+void StudioSettings::setPackageDraftMaximumMiB(int mib)
+{
+	writeValue(QStringLiteral("packages/draftMaximumMiB"), std::clamp(mib, 128, 131072));
+}
+
+int StudioSettings::packageDraftMaximumFiles() const
+{
+	return std::clamp(m_settings->value(QStringLiteral("packages/draftMaximumFiles"), 200000).toInt(), 1, PackageStorageEntryLimit);
+}
+
+void StudioSettings::setPackageDraftMaximumFiles(int files)
+{
+	writeValue(QStringLiteral("packages/draftMaximumFiles"), std::clamp(files, 1, PackageStorageEntryLimit));
+}
+
+PackageDraftSaveLimits StudioSettings::packageDraftSaveLimits() const
+{
+	return {static_cast<qint64>(packageDraftMaximumMiB()) * 1024 * 1024, packageDraftMaximumFiles()};
+}
+
+PackageCopyLimits StudioSettings::packageCopyLimits() const
+{
+	return {static_cast<quint64>(std::clamp(m_settings->value(QStringLiteral("packages/copyMaximumMiB"), 2048).toInt(), 1, PackageCopyMaximumMiB)) * 1024 * 1024,
+		std::clamp<qsizetype>(m_settings->value(QStringLiteral("packages/copyMaximumFiles"), 8000).toLongLong(), 1, PackageCopyMaximumFiles),
+		std::clamp<qsizetype>(m_settings->value(QStringLiteral("packages/copyMaximumEntries"), 40000).toLongLong(), 1, PackageCopyMaximumEntries),
+		std::clamp(m_settings->value(QStringLiteral("packages/copyMaximumBatches"), 64).toInt(), 1, PackageCopyMaximumBatches)};
+}
+
+void StudioSettings::setPackageCopyLimits(const PackageCopyLimits& limits)
+{
+	writeValue(QStringLiteral("packages/copyMaximumMiB"), static_cast<int>(std::clamp<quint64>(limits.maximumBytes / (1024 * 1024), 1, PackageCopyMaximumMiB)));
+	writeValue(QStringLiteral("packages/copyMaximumFiles"), static_cast<qint64>(std::clamp<qsizetype>(limits.maximumFiles, 1, PackageCopyMaximumFiles)));
+	writeValue(QStringLiteral("packages/copyMaximumEntries"), static_cast<qint64>(std::clamp<qsizetype>(limits.maximumEntries, 1, PackageCopyMaximumEntries)));
+	writeValue(QStringLiteral("packages/copyMaximumBatches"), std::clamp(limits.maximumBatches, 1, PackageCopyMaximumBatches));
+}
+
+bool StudioSettings::textureRecoveryEnabled() const
+{
+	return m_settings->value(QStringLiteral("textures/recoveryEnabled"), true).toBool();
+}
+
+void StudioSettings::setTextureRecoveryEnabled(bool enabled)
+{
+	writeValue(QStringLiteral("textures/recoveryEnabled"), enabled);
+}
+
+int StudioSettings::textureRecoveryIntervalSeconds() const
+{
+	return std::clamp(m_settings->value(QStringLiteral("textures/recoveryIntervalSeconds"), 30).toInt(), 5, 600);
+}
+
+void StudioSettings::setTextureRecoveryIntervalSeconds(int seconds)
+{
+	writeValue(QStringLiteral("textures/recoveryIntervalSeconds"), std::clamp(seconds, 5, 600));
+}
+
+void StudioSettings::setCrashReports(bool enabled)
+{
+	writeValue(kCrashReportsKey, enabled);
+}
+
+int StudioSettings::codeZoomPercent() const
+{
+	return std::clamp(m_settings->value(kCodeZoomPercentKey, 100).toInt(), 50, 300);
+}
+
+void StudioSettings::setCodeZoomPercent(int percent)
+{
+	writeValue(kCodeZoomPercentKey, std::clamp(percent, 50, 300));
+}
+
+bool StudioSettings::codeStickyHeaders() const
+{
+	return m_settings->value(kCodeStickyHeadersKey, true).toBool();
+}
+
+void StudioSettings::setCodeStickyHeaders(bool enabled)
+{
+	writeValue(kCodeStickyHeadersKey, enabled);
+}
+
+QHash<QString, QStringList> StudioSettings::userShortcuts() const
+{
+	QHash<QString, QStringList> shortcuts;
+	m_settings->beginGroup(QString::fromLatin1(kUserShortcutsGroup));
+	const QStringList commandIds = m_settings->childKeys();
+	for (const QString& commandId : commandIds) {
+		// One sequence per line: portable key text never holds a line break,
+		// and an empty value is a command left without keys.
+		shortcuts.insert(commandId, m_settings->value(commandId).toString().split(QLatin1Char('\n'), Qt::SkipEmptyParts));
+	}
+	m_settings->endGroup();
+	return shortcuts;
+}
+
+void StudioSettings::setUserShortcuts(const QHash<QString, QStringList>& shortcuts)
+{
+	removeKey(QString::fromLatin1(kUserShortcutsGroup));
+	for (auto it = shortcuts.cbegin(); it != shortcuts.cend(); ++it) {
+		if (!it.key().trimmed().isEmpty()) {
+			writeValue(QStringLiteral("%1/%2").arg(QString::fromLatin1(kUserShortcutsGroup), it.key()), it.value().join(QLatin1Char('\n')));
+		}
+	}
+}
+
+StudioSession StudioSettings::lastSession() const
+{
+	StudioSession session;
+	session.packagePath = m_settings->value(kSessionPackageKey).toString();
+	session.mapPath = m_settings->value(kSessionMapKey).toString();
+	session.mapName = m_settings->value(kSessionMapNameKey).toString();
+	session.codeFiles = m_settings->value(kSessionCodeFilesKey).toStringList();
+	session.currentCodeFile = m_settings->value(kSessionCurrentCodeFileKey).toString();
+	session.ownerProcessId = m_settings->value(kSessionOwnerKey, 0).toLongLong();
+	return session;
+}
+
+void StudioSettings::setLastSession(const StudioSession& session)
+{
+	writeValue(kSessionPackageKey, session.packagePath);
+	writeValue(kSessionMapKey, session.mapPath);
+	writeValue(kSessionMapNameKey, session.mapName);
+	writeValue(kSessionCodeFilesKey, session.codeFiles);
+	writeValue(kSessionCurrentCodeFileKey, session.currentCodeFile);
+	writeValue(kSessionOwnerKey, session.ownerProcessId);
+}
+
+QString StudioSettings::shellModeRailBehaviour() const
+{
+	// The rail folds to icons unless the user pinned it open or chose icons
+	// only. The old show-or-fold switch (shell/modeRailCompact) is left
+	// behind: either of its answers meant "not pinned open".
+	const QString stored = m_settings->value(kShellModeRailBehaviourKey).toString().trimmed().toLower();
+	if (stored == QLatin1String("expanded") || stored == QLatin1String("compact")) {
+		return stored;
+	}
+	return QStringLiteral("automatic");
+}
+
+void StudioSettings::setShellModeRailBehaviour(const QString& behaviour)
+{
+	const QString normalized = behaviour.trimmed().toLower();
+	writeValue(kShellModeRailBehaviourKey,
+		normalized == QLatin1String("expanded") || normalized == QLatin1String("compact") ? normalized : QStringLiteral("automatic"));
 }
 
 QByteArray StudioSettings::shellLayoutState(const QString& key) const
@@ -1109,7 +1725,7 @@ void StudioSettings::ensureSchema()
 		storedVersion = 1;
 		m_migrationNotes.push_back(QStringLiteral("No schema version stored; assuming version 1."));
 	} else {
-		writeValue(kSchemaVersionKey, kSchemaVersion);
+		if (!m_readOnly) { writeValue(kSchemaVersionKey, kSchemaVersion); }
 		return;
 	}
 
@@ -1129,7 +1745,8 @@ void StudioSettings::ensureSchema()
 	}
 
 	if (storedVersion < kSchemaVersion) {
-		runMigrations(storedVersion);
+		if (!m_readOnly) { runMigrations(storedVersion); }
+		else { m_migrationNotes.push_back(QCoreApplication::translate("StudioSettings", "Settings schema %1 inspected read-only; migration to %2 was skipped.").arg(storedVersion).arg(kSchemaVersion)); }
 	}
 }
 
@@ -1558,48 +2175,49 @@ QString setupStepId(SetupStep step)
 
 QString setupStepDisplayName(SetupStep step)
 {
+	// Title case as the Settings pages write it: short words stay lower case.
 	switch (step) {
 	case SetupStep::WelcomeAccess:
-		return QStringLiteral("Welcome And Access");
+		return QCoreApplication::translate("VibeStudioSetup", "Welcome and Access");
 	case SetupStep::WorkspaceProfile:
-		return QStringLiteral("Workspace Profile");
+		return QCoreApplication::translate("VibeStudioSetup", "Workspace and Editor Profile");
 	case SetupStep::ProjectsPackages:
-		return QStringLiteral("Projects And Packages");
+		return QCoreApplication::translate("VibeStudioSetup", "Projects and Packages");
 	case SetupStep::GameInstallations:
-		return QStringLiteral("Game Installations");
+		return QCoreApplication::translate("VibeStudioSetup", "Game Installations");
 	case SetupStep::Toolchains:
-		return QStringLiteral("Toolchains");
+		return QCoreApplication::translate("VibeStudioSetup", "Toolchains");
 	case SetupStep::AiAutomation:
-		return QStringLiteral("AI And Automation");
+		return QCoreApplication::translate("VibeStudioSetup", "AI and Automation");
 	case SetupStep::CliIntegration:
-		return QStringLiteral("CLI Integration");
+		return QCoreApplication::translate("VibeStudioSetup", "CLI Integration");
 	case SetupStep::ReviewFinish:
-		return QStringLiteral("Review And Finish");
+		return QCoreApplication::translate("VibeStudioSetup", "Review and Finish");
 	}
-	return QStringLiteral("Welcome And Access");
+	return QCoreApplication::translate("VibeStudioSetup", "Welcome and Access");
 }
 
 QString setupStepDescription(SetupStep step)
 {
 	switch (step) {
 	case SetupStep::WelcomeAccess:
-		return QStringLiteral("Review language, visibility, scale, density, motion, and TTS preferences.");
+		return QCoreApplication::translate("VibeStudioSetup", "Review language, visibility, scale, density, motion, and TTS preferences.");
 	case SetupStep::WorkspaceProfile:
-		return QStringLiteral("Choose role and editor-profile direction before deeper editor surfaces arrive.");
+		return QCoreApplication::translate("VibeStudioSetup", "Choose your role and the level editor profile whose keys and mouse controls feel familiar.");
 	case SetupStep::ProjectsPackages:
-		return QStringLiteral("Open a project folder, initialize a manifest, or defer project/package setup.");
+		return QCoreApplication::translate("VibeStudioSetup", "Open a project folder, initialize a manifest, or defer project/package setup.");
 	case SetupStep::GameInstallations:
-		return QStringLiteral("Add, detect, select, skip, or revisit game installation profiles without modifying game files.");
+		return QCoreApplication::translate("VibeStudioSetup", "Add, detect, select, skip, or revisit game installation profiles without modifying game files.");
 	case SetupStep::Toolchains:
-		return QStringLiteral("Prepare for compiler detection and command manifests.");
+		return QCoreApplication::translate("VibeStudioSetup", "Prepare for compiler detection and command manifests.");
 	case SetupStep::AiAutomation:
-		return QStringLiteral("Keep AI disabled by default or plan connector setup later.");
+		return QCoreApplication::translate("VibeStudioSetup", "Keep AI disabled by default or plan connector setup later.");
 	case SetupStep::CliIntegration:
-		return QStringLiteral("Review CLI availability and scriptable settings reports.");
+		return QCoreApplication::translate("VibeStudioSetup", "Review CLI availability and scriptable settings reports.");
 	case SetupStep::ReviewFinish:
-		return QStringLiteral("Inspect skipped, complete, pending, and warning states before entering the workspace.");
+		return QCoreApplication::translate("VibeStudioSetup", "Inspect skipped, complete, pending, and warning states before entering the workspace.");
 	}
-	return QStringLiteral("Review language, visibility, scale, density, motion, and TTS preferences.");
+	return QCoreApplication::translate("VibeStudioSetup", "Review language, visibility, scale, density, motion, and TTS preferences.");
 }
 
 SetupStep setupStepFromId(const QString& id)

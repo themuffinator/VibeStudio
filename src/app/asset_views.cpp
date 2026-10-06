@@ -1,7 +1,10 @@
 #include "app/asset_views.h"
 
+#include <QAccessible>
+#include <QAccessibleWidget>
 #include <QCoreApplication>
 #include <QEvent>
+#include <QFocusEvent>
 #include <QFontMetrics>
 #include <QKeyEvent>
 #include <QMouseEvent>
@@ -9,6 +12,7 @@
 #include <QPainter>
 #include <QPalette>
 #include <QPen>
+#include <QPolygonF>
 #include <QWheelEvent>
 
 #include <algorithm>
@@ -17,6 +21,19 @@
 namespace vibestudio {
 
 namespace {
+
+void installImageAccessibility()
+{
+	static const bool installed = []() {
+		QAccessible::installFactory([](const QString&, QObject* object) -> QAccessibleInterface* {
+			if (auto* image = qobject_cast<ImagePreviewView*>(object)) { return new QAccessibleWidget(image, QAccessible::Graphic); }
+			if (auto* palette = qobject_cast<PaletteSwatchView*>(object)) { return new QAccessibleWidget(palette, QAccessible::ColorChooser); }
+			return nullptr;
+		});
+		return true;
+	}();
+	Q_UNUSED(installed);
+}
 
 // Zoom limits: below 5% even a 4096 texture is unreadable, above 64x a single
 // texel already covers a large block of the viewport.
@@ -30,11 +47,6 @@ constexpr double kInitialFitCap = 8.0;
 constexpr int kPaletteColumns = 16;
 constexpr int kPaletteRows = 16;
 constexpr int kPaletteEntryCount = kPaletteColumns * kPaletteRows;
-
-QString viewText(const char* source)
-{
-	return QCoreApplication::translate("VibeStudioAssetViews", source);
-}
 
 struct PreviewColors {
 	QColor background;
@@ -114,9 +126,9 @@ QString formatSeconds(double seconds)
 			.arg(totalSeconds % 60, 2, 10, QLatin1Char('0'));
 	}
 	if (seconds >= 10.0) {
-		return viewText("%1 s").arg(seconds, 0, 'f', 1);
+		return QCoreApplication::translate("VibeStudioAssetViews", "%1 s").arg(seconds, 0, 'f', 1);
 	}
-	return viewText("%1 s").arg(seconds, 0, 'f', 2);
+	return QCoreApplication::translate("VibeStudioAssetViews", "%1 s").arg(seconds, 0, 'f', 2);
 }
 
 // 1 / 2 / 5 x 10^n tick step so the time axis lands on readable numbers.
@@ -165,11 +177,12 @@ void drawEmptyState(QPainter& painter, const QRect& area, const PreviewColors& c
 ImagePreviewView::ImagePreviewView(QWidget* parent)
 	: QWidget(parent)
 {
+	installImageAccessibility();
 	setObjectName("imagePreviewView");
 	setFocusPolicy(Qt::StrongFocus);
 	setMouseTracking(true);
 	setAttribute(Qt::WA_OpaquePaintEvent, false);
-	setAccessibleName(viewText("Image preview"));
+	setAccessibleName(QCoreApplication::translate("VibeStudioAssetViews", "Image preview"));
 	setAccessibleDescription(accessibleSummary());
 }
 
@@ -315,6 +328,11 @@ void ImagePreviewView::setShowCheckerboard(bool show)
 	update();
 }
 
+bool ImagePreviewView::showCheckerboard() const
+{
+	return m_showCheckerboard;
+}
+
 void ImagePreviewView::setShowPixelGrid(bool show)
 {
 	if (m_showPixelGrid == show) {
@@ -322,6 +340,11 @@ void ImagePreviewView::setShowPixelGrid(bool show)
 	}
 	m_showPixelGrid = show;
 	update();
+}
+
+bool ImagePreviewView::showPixelGrid() const
+{
+	return m_showPixelGrid;
 }
 
 void ImagePreviewView::setHighContrast(bool enabled)
@@ -405,43 +428,43 @@ QStringList ImagePreviewView::statusLines() const
 	QStringList lines;
 	const QImage active = activeImage();
 	if (active.isNull()) {
-		lines << viewText("No image loaded.");
+		lines << QCoreApplication::translate("VibeStudioAssetViews", "No image loaded.");
 		return lines;
 	}
 
 	if (!m_title.isEmpty()) {
-		lines << viewText("Name: %1").arg(m_title);
+		lines << QCoreApplication::translate("VibeStudioAssetViews", "Name: %1").arg(m_title);
 	}
 	if (!m_result.formatName.isEmpty()) {
-		lines << viewText("Format: %1").arg(m_result.formatName);
+		lines << QCoreApplication::translate("VibeStudioAssetViews", "Format: %1").arg(m_result.formatName);
 	}
-	lines << viewText("Dimensions: %1 x %2 px").arg(active.width()).arg(active.height());
-	lines << viewText("Zoom: %1%").arg(QString::number(m_zoom * 100.0, 'f', m_zoom < 1.0 ? 1 : 0));
+	lines << QCoreApplication::translate("VibeStudioAssetViews", "Dimensions: %1 x %2 px").arg(active.width()).arg(active.height());
+	lines << QCoreApplication::translate("VibeStudioAssetViews", "Zoom: %1%").arg(QString::number(m_zoom * 100.0, 'f', m_zoom < 1.0 ? 1 : 0));
 	if (mipLevelCount() > 1) {
-		lines << viewText("Mip level: %1 of %2").arg(m_mipLevel + 1).arg(mipLevelCount());
+		lines << QCoreApplication::translate("VibeStudioAssetViews", "Mip level: %1 of %2").arg(m_mipLevel + 1).arg(mipLevelCount());
 	}
 	if (frameCount() > 1) {
 		const QString label = m_result.frames.at(std::clamp(m_frameIndex, 0, frameCount() - 1)).label;
 		if (label.isEmpty()) {
-			lines << viewText("Frame: %1 of %2").arg(m_frameIndex + 1).arg(frameCount());
+			lines << QCoreApplication::translate("VibeStudioAssetViews", "Frame: %1 of %2").arg(m_frameIndex + 1).arg(frameCount());
 		} else {
-			lines << viewText("Frame: %1 of %2 (%3)").arg(m_frameIndex + 1).arg(frameCount()).arg(label);
+			lines << QCoreApplication::translate("VibeStudioAssetViews", "Frame: %1 of %2 (%3)").arg(m_frameIndex + 1).arg(frameCount()).arg(label);
 		}
 	}
 	if (m_result.leftOffset != 0 || m_result.topOffset != 0) {
-		lines << viewText("Offset: %1, %2").arg(m_result.leftOffset).arg(m_result.topOffset);
+		lines << QCoreApplication::translate("VibeStudioAssetViews", "Offset: %1, %2").arg(m_result.leftOffset).arg(m_result.topOffset);
 	}
 	if (!m_result.paletteId.isEmpty()) {
 		lines << (m_result.paletteGenerated
-			? viewText("Palette: %1 (generated stand-in)").arg(m_result.paletteId)
-			: viewText("Palette: %1").arg(m_result.paletteId));
+			? QCoreApplication::translate("VibeStudioAssetViews", "Palette: %1 (generated stand-in)").arg(m_result.paletteId)
+			: QCoreApplication::translate("VibeStudioAssetViews", "Palette: %1").arg(m_result.paletteId));
 	}
 	if (!m_result.paletteSourceVirtualPath.isEmpty()) {
-		lines << viewText("Palette source: %1").arg(m_result.paletteSourceVirtualPath);
+		lines << QCoreApplication::translate("VibeStudioAssetViews", "Palette source: %1").arg(m_result.paletteSourceVirtualPath);
 	}
 	lines << (m_result.hasTransparency || active.hasAlphaChannel()
-		? viewText("Transparency: yes")
-		: viewText("Transparency: no"));
+		? QCoreApplication::translate("VibeStudioAssetViews", "Transparency: yes")
+		: QCoreApplication::translate("VibeStudioAssetViews", "Transparency: no"));
 	if (!m_hoverSummary.isEmpty()) {
 		lines << m_hoverSummary;
 	}
@@ -452,44 +475,44 @@ QString ImagePreviewView::accessibleSummary() const
 {
 	const QImage active = activeImage();
 	if (active.isNull()) {
-		return viewText("Image preview, empty. No image is loaded.");
+		return QCoreApplication::translate("VibeStudioAssetViews", "Image preview, empty. No image is loaded.");
 	}
 
 	QStringList parts;
 	const QString formatName = m_result.formatName.isEmpty()
-		? viewText("image")
+		? QCoreApplication::translate("VibeStudioAssetViews", "image")
 		: m_result.formatName;
 	if (m_title.isEmpty()) {
-		parts << viewText("%1, %2 by %3 pixels").arg(formatName).arg(active.width()).arg(active.height());
+		parts << QCoreApplication::translate("VibeStudioAssetViews", "%1, %2 by %3 pixels").arg(formatName).arg(active.width()).arg(active.height());
 	} else {
-		parts << viewText("%1, %2, %3 by %4 pixels").arg(m_title, formatName).arg(active.width()).arg(active.height());
+		parts << QCoreApplication::translate("VibeStudioAssetViews", "%1, %2, %3 by %4 pixels").arg(m_title, formatName).arg(active.width()).arg(active.height());
 	}
 
 	if (m_result.paletteId.isEmpty()) {
 		parts << (active.format() == QImage::Format_Indexed8
-			? viewText("indexed colour")
-			: viewText("direct colour"));
+			? QCoreApplication::translate("VibeStudioAssetViews", "indexed colour")
+			: QCoreApplication::translate("VibeStudioAssetViews", "direct colour"));
 	} else {
 		parts << (m_result.paletteGenerated
-			? viewText("palette %1, generated stand-in").arg(m_result.paletteId)
-			: viewText("palette %1").arg(m_result.paletteId));
+			? QCoreApplication::translate("VibeStudioAssetViews", "palette %1, generated stand-in").arg(m_result.paletteId)
+			: QCoreApplication::translate("VibeStudioAssetViews", "palette %1").arg(m_result.paletteId));
 	}
 	if (!m_result.paletteSourceVirtualPath.isEmpty()) {
-		parts << viewText("palette read from %1").arg(m_result.paletteSourceVirtualPath);
+		parts << QCoreApplication::translate("VibeStudioAssetViews", "palette read from %1").arg(m_result.paletteSourceVirtualPath);
 	}
 
 	parts << (m_result.hasTransparency || active.hasAlphaChannel()
-		? viewText("has transparency")
-		: viewText("fully opaque"));
+		? QCoreApplication::translate("VibeStudioAssetViews", "has transparency")
+		: QCoreApplication::translate("VibeStudioAssetViews", "fully opaque"));
 
 	if (mipLevelCount() > 1) {
-		parts << viewText("mip level %1 of %2").arg(m_mipLevel + 1).arg(mipLevelCount());
+		parts << QCoreApplication::translate("VibeStudioAssetViews", "mip level %1 of %2").arg(m_mipLevel + 1).arg(mipLevelCount());
 	}
 	if (frameCount() > 1) {
-		parts << viewText("frame %1 of %2").arg(m_frameIndex + 1).arg(frameCount());
+		parts << QCoreApplication::translate("VibeStudioAssetViews", "frame %1 of %2").arg(m_frameIndex + 1).arg(frameCount());
 	}
-	parts << viewText("zoom %1 percent").arg(QString::number(m_zoom * 100.0, 'f', 0));
-	return parts.join(viewText(", "));
+	parts << QCoreApplication::translate("VibeStudioAssetViews", "zoom %1 percent").arg(QString::number(m_zoom * 100.0, 'f', 0));
+	return parts.join(QCoreApplication::translate("VibeStudioAssetViews", ", "));
 }
 
 QSize ImagePreviewView::sizeHint() const
@@ -512,7 +535,7 @@ void ImagePreviewView::paintEvent(QPaintEvent* event)
 	const QImage active = activeImage();
 	if (active.isNull()) {
 		drawEmptyState(painter, area, colors,
-			viewText("No image to preview.\nSelect a texture, sprite, flat, or picture asset."));
+			QCoreApplication::translate("VibeStudioAssetViews", "No image to preview.\nSelect a texture, sprite, flat, or picture asset."));
 		if (hasFocus()) {
 			drawFocusRing(painter, area, colors);
 		}
@@ -618,19 +641,19 @@ void ImagePreviewView::mouseMoveEvent(QMouseEvent* event)
 				texel = QPoint(x, y);
 				const QRgb color = active.pixel(x, y);
 				if (active.format() == QImage::Format_Indexed8) {
-					summary = viewText("Texel %1, %2 — palette index %3, %4")
+					summary = QCoreApplication::translate("VibeStudioAssetViews", "Texel %1, %2 — palette index %3, %4")
 						.arg(x)
 						.arg(y)
 						.arg(active.pixelIndex(x, y))
 						.arg(rgbHex(color));
 				} else if (active.hasAlphaChannel()) {
-					summary = viewText("Texel %1, %2 — %3, alpha %4")
+					summary = QCoreApplication::translate("VibeStudioAssetViews", "Texel %1, %2 — %3, alpha %4")
 						.arg(x)
 						.arg(y)
 						.arg(rgbHex(color))
 						.arg(qAlpha(color));
 				} else {
-					summary = viewText("Texel %1, %2 — %3").arg(x).arg(y).arg(rgbHex(color));
+					summary = QCoreApplication::translate("VibeStudioAssetViews", "Texel %1, %2 — %3").arg(x).arg(y).arg(rgbHex(color));
 				}
 			}
 		}
@@ -825,10 +848,11 @@ void ImagePreviewView::clampOffset()
 PaletteSwatchView::PaletteSwatchView(QWidget* parent)
 	: QWidget(parent)
 {
+	installImageAccessibility();
 	setObjectName("paletteSwatchView");
 	setFocusPolicy(Qt::StrongFocus);
 	setMouseTracking(true);
-	setAccessibleName(viewText("Palette swatches"));
+	setAccessibleName(QCoreApplication::translate("VibeStudioAssetViews", "Palette swatches"));
 	setAccessibleDescription(accessibleSummary());
 }
 
@@ -891,30 +915,30 @@ QString PaletteSwatchView::hoverSummary() const
 QString PaletteSwatchView::accessibleSummary() const
 {
 	if (!hasPalette()) {
-		return viewText("Palette swatches, empty. No palette is loaded.");
+		return QCoreApplication::translate("VibeStudioAssetViews", "Palette swatches, empty. No palette is loaded.");
 	}
 
 	QStringList parts;
 	const QString name = m_palette.displayName.isEmpty() ? m_palette.id : m_palette.displayName;
-	parts << viewText("Palette %1, %2 entries in a 16 by 16 grid").arg(name).arg(m_palette.colors.size());
+	parts << QCoreApplication::translate("VibeStudioAssetViews", "Palette %1, %2 entries in a 16 by 16 grid").arg(name).arg(m_palette.colors.size());
 	if (!m_palette.sourceDescription.isEmpty()) {
 		parts << m_palette.sourceDescription;
 	}
 	if (m_palette.generated) {
-		parts << viewText("generated stand-in, not a shipped game palette");
+		parts << QCoreApplication::translate("VibeStudioAssetViews", "generated stand-in, not a shipped game palette");
 	}
 	if (m_palette.transparentIndex >= 0) {
-		parts << viewText("transparent index %1, drawn with a hatch pattern").arg(m_palette.transparentIndex);
+		parts << QCoreApplication::translate("VibeStudioAssetViews", "transparent index %1, drawn with a hatch pattern").arg(m_palette.transparentIndex);
 	}
 	if (m_palette.fullbrightStartIndex >= 0) {
-		parts << viewText("fullbright range starts at index %1, marked with a dashed edge").arg(m_palette.fullbrightStartIndex);
+		parts << QCoreApplication::translate("VibeStudioAssetViews", "fullbright range starts at index %1, marked with a dashed edge").arg(m_palette.fullbrightStartIndex);
 	}
 	if (m_selectedIndex >= 0 && m_selectedIndex < m_palette.colors.size()) {
-		parts << viewText("selected index %1, %2").arg(m_selectedIndex).arg(rgbHex(m_palette.colors.at(m_selectedIndex)));
+		parts << QCoreApplication::translate("VibeStudioAssetViews", "selected index %1, %2").arg(m_selectedIndex).arg(rgbHex(m_palette.colors.at(m_selectedIndex)));
 	} else {
-		parts << viewText("no index selected");
+		parts << QCoreApplication::translate("VibeStudioAssetViews", "no index selected");
 	}
-	return parts.join(viewText(", "));
+	return parts.join(QCoreApplication::translate("VibeStudioAssetViews", ", "));
 }
 
 QSize PaletteSwatchView::sizeHint() const
@@ -935,7 +959,7 @@ void PaletteSwatchView::paintEvent(QPaintEvent* event)
 
 	if (!hasPalette()) {
 		drawEmptyState(painter, rect(), colors,
-			viewText("No palette to preview.\nSelect a PLAYPAL, palette.lmp, or colormap asset."));
+			QCoreApplication::translate("VibeStudioAssetViews", "No palette to preview.\nSelect a PLAYPAL, palette.lmp, or colormap asset."));
 		if (hasFocus()) {
 			drawFocusRing(painter, rect(), colors);
 		}
@@ -1053,11 +1077,11 @@ void PaletteSwatchView::mouseMoveEvent(QMouseEvent* event)
 	if (index >= 0 && index < m_palette.colors.size()) {
 		const QRgb color = m_palette.colors.at(index);
 		if (index == m_palette.transparentIndex) {
-			summary = viewText("Index %1 — %2 (transparent index)").arg(index).arg(rgbHex(color));
+			summary = QCoreApplication::translate("VibeStudioAssetViews", "Index %1 — %2 (transparent index)").arg(index).arg(rgbHex(color));
 		} else if (m_palette.fullbrightStartIndex >= 0 && index >= m_palette.fullbrightStartIndex) {
-			summary = viewText("Index %1 — %2 (fullbright)").arg(index).arg(rgbHex(color));
+			summary = QCoreApplication::translate("VibeStudioAssetViews", "Index %1 — %2 (fullbright)").arg(index).arg(rgbHex(color));
 		} else {
-			summary = viewText("Index %1 — %2").arg(index).arg(rgbHex(color));
+			summary = QCoreApplication::translate("VibeStudioAssetViews", "Index %1 — %2").arg(index).arg(rgbHex(color));
 		}
 	}
 
@@ -1153,8 +1177,9 @@ WaveformView::WaveformView(QWidget* parent)
 	: QWidget(parent)
 {
 	setObjectName("waveformView");
-	setFocusPolicy(Qt::NoFocus);
-	setAccessibleName(viewText("Audio waveform"));
+	// Focusable, so the playhead can be moved from the keyboard.
+	setFocusPolicy(Qt::StrongFocus);
+	setAccessibleName(QCoreApplication::translate("VibeStudioAssetViews", "Audio waveform"));
 	setAccessibleDescription(accessibleSummary());
 }
 
@@ -1164,6 +1189,8 @@ void WaveformView::setPeaks(const QVector<float>& peaks, int channels, int sampl
 	m_channels = std::max(0, channels);
 	m_sampleRate = std::max(0, sampleRate);
 	m_durationMs = std::max<qint64>(0, durationMs);
+	m_playheadMs = 0;
+	m_selectionStartMs = m_selectionEndMs = m_selectionAnchorMs = 0;
 	if (m_channels <= 0 || m_peaks.size() < 2) {
 		m_peaks.clear();
 		m_channels = 0;
@@ -1178,6 +1205,8 @@ void WaveformView::clearPeaks()
 	m_channels = 0;
 	m_sampleRate = 0;
 	m_durationMs = 0;
+	m_playheadMs = 0;
+	m_selectionStartMs = m_selectionEndMs = m_selectionAnchorMs = 0;
 	setAccessibleDescription(accessibleSummary());
 	update();
 }
@@ -1185,6 +1214,156 @@ void WaveformView::clearPeaks()
 bool WaveformView::hasPeaks() const
 {
 	return m_channels > 0 && m_peaks.size() >= 2 * m_channels;
+}
+
+qint64 WaveformView::durationMs() const
+{
+	return m_durationMs;
+}
+
+void WaveformView::setPlayhead(qint64 positionMs)
+{
+	const qint64 clamped = std::clamp<qint64>(positionMs, 0, m_durationMs);
+	if (clamped == m_playheadMs) {
+		return;
+	}
+	m_playheadMs = clamped;
+	setAccessibleDescription(accessibleSummary());
+	update();
+}
+
+qint64 WaveformView::playhead() const
+{
+	return m_playheadMs;
+}
+
+// The lanes' rectangle, as paintEvent lays it out.
+QRect WaveformView::laneArea() const
+{
+	const int axisHeight = fontMetrics().height() + 8;
+	return rect().adjusted(8, 8, -8, -(axisHeight + 4));
+}
+
+double WaveformView::xForTime(qint64 positionMs) const
+{
+	const QRect lanes = laneArea();
+	if (m_durationMs <= 0) {
+		return lanes.left();
+	}
+	return lanes.left() + static_cast<double>(std::clamp<qint64>(positionMs, 0, m_durationMs)) * lanes.width() / static_cast<double>(m_durationMs);
+}
+
+qint64 WaveformView::timeForX(double x) const
+{
+	const QRect lanes = laneArea();
+	if (m_durationMs <= 0 || lanes.width() <= 0) {
+		return 0;
+	}
+	const double ratio = std::clamp((x - lanes.left()) / static_cast<double>(lanes.width()), 0.0, 1.0);
+	return static_cast<qint64>(std::llround(ratio * static_cast<double>(m_durationMs)));
+}
+
+void WaveformView::seekTo(qint64 positionMs)
+{
+	setPlayhead(positionMs);
+	emit seekRequested(m_playheadMs);
+}
+
+void WaveformView::setSelectionEnabled(bool enabled)
+{
+	m_selectionEnabled = enabled;
+	if (!enabled) { setSelection(0, 0); }
+	setAccessibleDescription(accessibleSummary());
+}
+
+void WaveformView::setSelection(qint64 firstMs, qint64 endMs)
+{
+	m_selectionStartMs = std::clamp<qint64>(std::min(firstMs, endMs), 0, m_durationMs);
+	m_selectionEndMs = std::clamp<qint64>(std::max(firstMs, endMs), 0, m_durationMs);
+	setAccessibleDescription(accessibleSummary());
+	update();
+}
+
+void WaveformView::mousePressEvent(QMouseEvent* event)
+{
+	if (event->button() != Qt::LeftButton || !hasPeaks() || m_durationMs <= 0) {
+		QWidget::mousePressEvent(event);
+		return;
+	}
+	setFocus(Qt::MouseFocusReason);
+	if (m_selectionEnabled) {
+		if (!(event->modifiers() & Qt::ShiftModifier)) { m_selectionAnchorMs = timeForX(event->position().x()); }
+		setSelection(m_selectionAnchorMs, timeForX(event->position().x()));
+		emit selectionChanged(m_selectionStartMs, m_selectionEndMs);
+	}
+	seekTo(timeForX(event->position().x()));
+	event->accept();
+}
+
+void WaveformView::mouseMoveEvent(QMouseEvent* event)
+{
+	if (!(event->buttons() & Qt::LeftButton) || !hasPeaks() || m_durationMs <= 0) {
+		QWidget::mouseMoveEvent(event);
+		return;
+	}
+	if (m_selectionEnabled) {
+		setSelection(m_selectionAnchorMs, timeForX(event->position().x()));
+		emit selectionChanged(m_selectionStartMs, m_selectionEndMs);
+	}
+	seekTo(timeForX(event->position().x()));
+	event->accept();
+}
+
+void WaveformView::keyPressEvent(QKeyEvent* event)
+{
+	if (!hasPeaks() || m_durationMs <= 0) {
+		QWidget::keyPressEvent(event);
+		return;
+	}
+	const qint64 fine = std::max<qint64>(10, m_durationMs / 50);
+	const qint64 coarse = std::max<qint64>(10, m_durationMs / 10);
+	if (m_selectionEnabled && !(event->modifiers() & Qt::ShiftModifier)) { m_selectionAnchorMs = m_playheadMs; }
+	switch (event->key()) {
+	case Qt::Key_Left:
+		seekTo(m_playheadMs - fine);
+		break;
+	case Qt::Key_Right:
+		seekTo(m_playheadMs + fine);
+		break;
+	case Qt::Key_PageUp:
+		seekTo(m_playheadMs - coarse);
+		break;
+	case Qt::Key_PageDown:
+		seekTo(m_playheadMs + coarse);
+		break;
+	case Qt::Key_Home:
+		seekTo(0);
+		break;
+	case Qt::Key_End:
+		seekTo(m_durationMs);
+		break;
+	default:
+		QWidget::keyPressEvent(event);
+		return;
+	}
+	if (m_selectionEnabled) {
+		if (event->modifiers() & Qt::ShiftModifier) { setSelection(m_selectionAnchorMs, m_playheadMs); }
+		else { m_selectionAnchorMs = m_playheadMs; setSelection(m_playheadMs, m_playheadMs); }
+		emit selectionChanged(m_selectionStartMs, m_selectionEndMs);
+	}
+	event->accept();
+}
+
+void WaveformView::focusInEvent(QFocusEvent* event)
+{
+	QWidget::focusInEvent(event);
+	update();
+}
+
+void WaveformView::focusOutEvent(QFocusEvent* event)
+{
+	QWidget::focusOutEvent(event);
+	update();
 }
 
 void WaveformView::setHighContrast(bool enabled)
@@ -1199,7 +1378,7 @@ void WaveformView::setHighContrast(bool enabled)
 QString WaveformView::accessibleSummary() const
 {
 	if (!hasPeaks()) {
-		return viewText("Audio waveform, empty. No decoded audio is loaded.");
+		return QCoreApplication::translate("VibeStudioAssetViews", "Audio waveform, empty. No decoded audio is loaded.");
 	}
 
 	float peak = 0.0f;
@@ -1209,20 +1388,25 @@ QString WaveformView::accessibleSummary() const
 
 	QStringList parts;
 	parts << (m_channels == 1
-		? viewText("Waveform, mono")
-		: (m_channels == 2 ? viewText("Waveform, stereo") : viewText("Waveform, %1 channels").arg(m_channels)));
+		? QCoreApplication::translate("VibeStudioAssetViews", "Waveform, mono")
+		: (m_channels == 2 ? QCoreApplication::translate("VibeStudioAssetViews", "Waveform, stereo") : QCoreApplication::translate("VibeStudioAssetViews", "Waveform, %1 channels").arg(m_channels)));
 	if (m_sampleRate > 0) {
-		parts << viewText("%1 Hz").arg(m_sampleRate);
+		parts << QCoreApplication::translate("VibeStudioAssetViews", "%1 Hz").arg(m_sampleRate);
 	}
-	parts << viewText("duration %1").arg(formatSeconds(static_cast<double>(m_durationMs) / 1000.0));
+	parts << QCoreApplication::translate("VibeStudioAssetViews", "duration %1").arg(formatSeconds(static_cast<double>(m_durationMs) / 1000.0));
+	parts << QCoreApplication::translate("VibeStudioAssetViews", "playhead at %1").arg(formatSeconds(static_cast<double>(m_playheadMs) / 1000.0));
+	if (m_selectionEnabled) {
+		parts << QCoreApplication::translate("VibeStudioAssetViews", "selection from %1 to %2 milliseconds; Shift with navigation keys extends the selection")
+			.arg(m_selectionStartMs).arg(m_selectionEndMs);
+	}
 	if (peak <= 0.0f) {
-		parts << viewText("silent");
+		parts << QCoreApplication::translate("VibeStudioAssetViews", "silent");
 	} else {
 		const double peakLevel = static_cast<double>(peak);
-		parts << viewText("peak level %1 percent, %2 dBFS")
+		parts << QCoreApplication::translate("VibeStudioAssetViews", "peak level %1 percent, %2 dBFS")
 			.arg(QString::number(peakLevel * 100.0, 'f', 1), QString::number(20.0 * std::log10(peakLevel), 'f', 1));
 	}
-	return parts.join(viewText(", "));
+	return parts.join(QCoreApplication::translate("VibeStudioAssetViews", ", "));
 }
 
 QSize WaveformView::sizeHint() const
@@ -1243,19 +1427,19 @@ void WaveformView::paintEvent(QPaintEvent* event)
 
 	if (!hasPeaks()) {
 		drawEmptyState(painter, rect(), colors,
-			viewText("No waveform to preview.\nSelect a WAV asset, or the audio could not be decoded."));
+			QCoreApplication::translate("VibeStudioAssetViews", "No waveform to preview.\nSelect a WAV asset, or the audio could not be decoded."));
 		return;
 	}
 
 	const int pairsPerChannel = static_cast<int>(m_peaks.size()) / (2 * m_channels);
 	if (pairsPerChannel <= 0) {
-		drawEmptyState(painter, rect(), colors, viewText("Decoded audio contains no peak data."));
+		drawEmptyState(painter, rect(), colors, QCoreApplication::translate("VibeStudioAssetViews", "Decoded audio contains no peak data."));
 		return;
 	}
 
 	const QFontMetrics metrics(painter.font());
 	const int axisHeight = metrics.height() + 8;
-	const QRect content = rect().adjusted(8, 8, -8, -(axisHeight + 4));
+	const QRect content = laneArea();
 	if (content.width() <= 2 || content.height() <= 2) {
 		return;
 	}
@@ -1302,11 +1486,25 @@ void WaveformView::paintEvent(QPaintEvent* event)
 			painter.drawLine(QPointF(px, std::min(top, bottom)), QPointF(px, std::max(top, bottom) + 1.0));
 		}
 
-		painter.setPen(labelPen);
 		const QString laneLabel = m_channels == 1
-			? viewText("Mono")
-			: (m_channels == 2 ? (channel == 0 ? viewText("Left") : viewText("Right")) : viewText("Ch %1").arg(channel + 1));
-		painter.drawText(lane.adjusted(4, 2, -4, 0), Qt::AlignLeft | Qt::AlignTop, laneLabel);
+			? QCoreApplication::translate("VibeStudioAssetViews", "Mono")
+			: (m_channels == 2 ? (channel == 0 ? QCoreApplication::translate("VibeStudioAssetViews", "Left") : QCoreApplication::translate("VibeStudioAssetViews", "Right")) : QCoreApplication::translate("VibeStudioAssetViews", "Ch %1").arg(channel + 1));
+		// On a chip of the background, so the label reads over a loud envelope.
+		const QRect chip(lane.left() + 2, lane.top() + 2, metrics.horizontalAdvance(laneLabel) + 8, metrics.height() + 2);
+		painter.fillRect(chip, colors.background);
+		painter.setPen(labelPen);
+		painter.drawText(chip, Qt::AlignCenter, laneLabel);
+	}
+
+	if (m_selectionEnabled && m_selectionEndMs > m_selectionStartMs) {
+		const QRectF selection(xForTime(m_selectionStartMs), content.top(),
+			xForTime(m_selectionEndMs) - xForTime(m_selectionStartMs), content.height());
+		QColor fill = colors.accent;
+		fill.setAlpha(m_highContrast ? 85 : 45);
+		painter.fillRect(selection, fill);
+		painter.setPen(QPen(colors.text, 1.0, Qt::DashLine));
+		painter.setBrush(Qt::NoBrush);
+		painter.drawRect(selection);
 	}
 
 	// Time ticks along the bottom, derived from the reported duration.
@@ -1316,7 +1514,8 @@ void WaveformView::paintEvent(QPaintEvent* event)
 	painter.drawLine(axis.left(), axis.top(), axis.right(), axis.top());
 
 	if (totalSeconds > 0.0) {
-		const int targetTicks = std::clamp(axis.width() / 90, 2, 10);
+		const int tickSpacing = std::max(90, 2 * metrics.horizontalAdvance(formatSeconds(totalSeconds)) + 16);
+		const int targetTicks = std::clamp(axis.width() / tickSpacing, 2, 10);
 		const double step = niceTickStep(totalSeconds / targetTicks);
 		painter.setPen(labelPen);
 		for (double t = 0.0; t <= totalSeconds + step * 0.001; t += step) {
@@ -1330,11 +1529,29 @@ void WaveformView::paintEvent(QPaintEvent* event)
 			double labelLeft = x - labelWidth / 2.0;
 			labelLeft = std::clamp(labelLeft, static_cast<double>(axis.left()), static_cast<double>(axis.right() - labelWidth));
 			painter.drawText(QRectF(labelLeft, axis.top() + 4.0, labelWidth, axis.height() - 4.0),
-				Qt::AlignHCenter | Qt::AlignVCenter, label);
+				Qt::AlignHCenter | Qt::AlignVCenter | Qt::TextForceLeftToRight, label);
 		}
 	} else {
 		painter.setPen(labelPen);
-		painter.drawText(axis, Qt::AlignLeft | Qt::AlignVCenter, viewText("Duration unavailable"));
+		painter.drawText(axis, Qt::AlignLeft | Qt::AlignVCenter, QCoreApplication::translate("VibeStudioAssetViews", "Duration unavailable"));
+	}
+
+	// The playhead: a text-coloured line over the envelope, with a notch on the
+	// axis so it reads without colour.
+	if (m_durationMs > 0) {
+		const double x = std::round(xForTime(m_playheadMs)) + 0.5;
+		painter.setPen(QPen(colors.text, 2.0));
+		painter.drawLine(QPointF(x, content.top()), QPointF(x, content.bottom() + 2.0));
+		QPolygonF notch;
+		notch << QPointF(x - 5.0, content.bottom() + 2.0) << QPointF(x + 5.0, content.bottom() + 2.0) << QPointF(x, content.bottom() + 8.0);
+		painter.setBrush(colors.text);
+		painter.setPen(Qt::NoPen);
+		painter.drawPolygon(notch);
+	}
+	if (hasFocus()) {
+		painter.setPen(QPen(colors.accent, 2.0));
+		painter.setBrush(Qt::NoBrush);
+		painter.drawRect(QRectF(rect()).adjusted(1.0, 1.0, -1.0, -1.0));
 	}
 }
 

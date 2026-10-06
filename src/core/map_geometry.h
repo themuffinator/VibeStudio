@@ -48,6 +48,7 @@ struct MapBrushGeometry {
 	int brushId = -1;
 	int entityId = -1;
 	bool solved = false;
+	bool cancelled = false;
 	LevelMapVec3 mins;
 	LevelMapVec3 maxs;
 	QVector<MapFacePolygon> faces;
@@ -79,13 +80,18 @@ struct MapGeometrySummary {
 	QStringList warnings;
 };
 
-MapPlane planeFromPoints(const LevelMapVec3& a, const LevelMapVec3& b, const LevelMapVec3& c);
+// Coverage proofs must not snap near-integer distances or polygon vertices:
+// cleanup useful for compiler-style previews can otherwise hide a small gap.
+enum class MapGeometryPrecision { CompilerCompatible, PreserveCoordinates };
+MapPlane planeFromPoints(const LevelMapVec3& a, const LevelMapVec3& b, const LevelMapVec3& c,
+	MapGeometryPrecision precision = MapGeometryPrecision::CompilerCompatible);
 double planeDistanceToPoint(const MapPlane& plane, const LevelMapVec3& point);
 
 // Solves one brush from its face planes. Faces whose polygon is fully clipped
 // away are reported as empty polygons rather than dropped, so face indices stay
 // aligned with the source brush.
-MapBrushGeometry solveBrushGeometry(const QVector<LevelMapBrushFace>& faces, int brushId = -1, int entityId = -1);
+MapBrushGeometry solveBrushGeometry(const QVector<LevelMapBrushFace>& faces, int brushId = -1, int entityId = -1,
+	MapGeometryPrecision precision = MapGeometryPrecision::CompilerCompatible, const std::function<bool()>& isCancelled = {});
 
 QVector<MapBrushGeometry> buildLevelMapBrushGeometry(const LevelMapDocument& document);
 QVector<DoomSectorOutline> buildDoomSectorOutlines(const LevelMapDocument& document);
@@ -95,5 +101,6 @@ QStringList mapGeometrySummaryLines(const MapGeometrySummary& summary);
 // Tessellates a quadratic Bezier patch mesh (Quake III patchDef2/patchDef3)
 // into a point grid at the requested subdivision level.
 QVector<QVector<LevelMapVec3>> tessellatePatchMesh(const LevelMapPatch& patch, int subdivisions = 4);
+QVector<QVector<QPointF>> tessellatePatchTexCoords(const LevelMapPatch& patch, int subdivisions = 4);
 
 } // namespace vibestudio

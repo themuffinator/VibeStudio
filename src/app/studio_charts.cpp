@@ -24,17 +24,13 @@ namespace vibestudio {
 
 namespace {
 
-QString chartText(const char* source)
-{
-	return QCoreApplication::translate("VibeStudioCharts", source);
-}
-
 // ---------------------------------------------------------------------------
 // Shared metrics
 // ---------------------------------------------------------------------------
 
 constexpr int kMargin = 8;
-constexpr int kBarHeight = 22;
+constexpr int kMinBarHeight = 22;
+constexpr int kBarTextPadding = 3;
 constexpr int kBarGap = 8;
 constexpr int kTitleGap = 4;
 constexpr int kSwatchWidth = 16;
@@ -69,23 +65,23 @@ QString stateName(OperationState state)
 {
 	switch (state) {
 	case OperationState::Idle:
-		return chartText("Idle");
+		return QCoreApplication::translate("VibeStudioCharts", "Idle");
 	case OperationState::Queued:
-		return chartText("Queued");
+		return QCoreApplication::translate("VibeStudioCharts", "Queued");
 	case OperationState::Loading:
-		return chartText("Loading");
+		return QCoreApplication::translate("VibeStudioCharts", "Loading");
 	case OperationState::Running:
-		return chartText("Running");
+		return QCoreApplication::translate("VibeStudioCharts", "Running");
 	case OperationState::Warning:
-		return chartText("Warning");
+		return QCoreApplication::translate("VibeStudioCharts", "Warning");
 	case OperationState::Failed:
-		return chartText("Failed");
+		return QCoreApplication::translate("VibeStudioCharts", "Failed");
 	case OperationState::Cancelled:
-		return chartText("Cancelled");
+		return QCoreApplication::translate("VibeStudioCharts", "Cancelled");
 	case OperationState::Completed:
-		return chartText("Completed");
+		return QCoreApplication::translate("VibeStudioCharts", "Completed");
 	}
-	return chartText("Idle");
+	return QCoreApplication::translate("VibeStudioCharts", "Idle");
 }
 
 bool paletteIsLight(const QPalette& palette)
@@ -164,11 +160,6 @@ QColor patternInk(const QColor& base)
 	return ink;
 }
 
-QColor readableTextOn(const QColor& base)
-{
-	return base.lightness() > 140 ? QColor(16, 16, 16) : QColor(245, 245, 245);
-}
-
 // Durations and relative times share one formatter so the timeline never mixes
 // two spellings of the same quantity. `coarse` drops the trailing unit, which
 // is what relative stamps ("2 min ago") want.
@@ -177,47 +168,55 @@ QString formatDurationText(qint64 milliseconds, bool coarse)
 	const qint64 ms = milliseconds < 0 ? 0 : milliseconds;
 	if (ms < 1000) {
 		if (coarse) {
-			return chartText("under 1 s");
+			return QCoreApplication::translate("VibeStudioCharts", "under 1 s");
 		}
-		return chartText("%1 ms").arg(ms);
+		return QCoreApplication::translate("VibeStudioCharts", "%1 ms").arg(ms);
 	}
 	if (ms < 60000) {
 		if (coarse) {
-			return chartText("%1 s").arg(ms / 1000);
+			return QCoreApplication::translate("VibeStudioCharts", "%1 s").arg(ms / 1000);
 		}
 		const double seconds = static_cast<double>(ms) / 1000.0;
-		return chartText("%1 s").arg(QString::number(seconds, 'f', 1));
+		return QCoreApplication::translate("VibeStudioCharts", "%1 s").arg(QString::number(seconds, 'f', 1));
 	}
 	if (ms < 3600000) {
 		const qint64 minutes = ms / 60000;
 		const qint64 seconds = (ms % 60000) / 1000;
 		if (coarse || seconds == 0) {
-			return chartText("%1 min").arg(minutes);
+			return QCoreApplication::translate("VibeStudioCharts", "%1 min").arg(minutes);
 		}
-		return chartText("%1 min %2 s").arg(minutes).arg(seconds);
+		return QCoreApplication::translate("VibeStudioCharts", "%1 min %2 s").arg(minutes).arg(seconds);
 	}
 	const qint64 hours = ms / 3600000;
 	const qint64 minutes = (ms % 3600000) / 60000;
 	if (coarse || minutes == 0) {
-		return chartText("%1 h").arg(hours);
+		return QCoreApplication::translate("VibeStudioCharts", "%1 h").arg(hours);
 	}
-	return chartText("%1 h %2 min").arg(hours).arg(minutes);
+	return QCoreApplication::translate("VibeStudioCharts", "%1 h %2 min").arg(hours).arg(minutes);
 }
 
 QString formatRelativeText(qint64 deltaMs)
 {
 	if (deltaMs <= 1500) {
-		return chartText("just now");
+		return QCoreApplication::translate("VibeStudioCharts", "just now");
 	}
-	return chartText("%1 ago").arg(formatDurationText(deltaMs, true));
+	return QCoreApplication::translate("VibeStudioCharts", "%1 ago").arg(formatDurationText(deltaMs, true));
 }
 
 QString formatShareText(double share)
 {
 	if (share > 0.0 && share < 1.0) {
-		return chartText("<1%");
+		return QCoreApplication::translate("VibeStudioCharts", "<1%");
 	}
-	return chartText("%1%").arg(QString::number(share, 'f', share < 10.0 ? 1 : 0));
+	return QCoreApplication::translate("VibeStudioCharts", "%1%").arg(QString::number(share, 'f', share < 10.0 ? 1 : 0));
+}
+
+// Keeps a translated or technical label, including its ellipsis, and a number
+// with its unit ("0 ms") in its own first-strong direction inside an RTL or
+// LTR chart. Display text only: accessible summaries stay unmarked.
+QString isolatedText(const QString& text)
+{
+	return QChar(0x2068) + text + QChar(0x2069);
 }
 
 void drawPatternedRect(QPainter& painter, const QRectF& rect, const QColor& color, int patternIndex, qreal radius)
@@ -286,6 +285,11 @@ void drawDashedStub(QPainter& painter, const QPointF& from, const QPointF& to, c
 // ---------------------------------------------------------------------------
 // Composition layout
 // ---------------------------------------------------------------------------
+
+int compositionBarHeight(const QFontMetrics& metrics)
+{
+	return std::max(kMinBarHeight, metrics.height() + 2 * kBarTextPadding);
+}
 
 struct CompositionLayout {
 	QRectF titleRect;
@@ -415,8 +419,9 @@ CompositionLayout computeCompositionLayout(const QVector<StudioChartSlice>& slic
 		y += titleMetrics.height() + kTitleGap;
 	}
 
-	layout.barRect = QRectF(left, y, width, kBarHeight);
-	y += kBarHeight + kBarGap;
+	const int barHeight = compositionBarHeight(bodyMetrics);
+	layout.barRect = QRectF(left, y, width, barHeight);
+	y += barHeight + kBarGap;
 
 	layout.shares = sliceShares(slices);
 	layout.sliceRects = distributeSlices(layout.shares, layout.barRect);
@@ -479,9 +484,9 @@ QString pipelineBadgeLine(const PipelineBox& box)
 	QString badge = box.badge;
 	if (box.optional) {
 		if (badge.isEmpty()) {
-			badge = chartText("optional");
+			badge = QCoreApplication::translate("VibeStudioCharts", "optional");
 		} else {
-			badge += QStringLiteral(" ") + chartText("optional");
+			badge += QStringLiteral(" ") + QCoreApplication::translate("VibeStudioCharts", "optional");
 		}
 	}
 	return badge;
@@ -622,6 +627,33 @@ QVector<QRectF> computeTimelineRows(int count, const QRect& widgetRect, const QF
 	return rows;
 }
 
+// Wide enough for the widest state glyph at the current text size, with a gap
+// before the title, and never narrower than kGlyphColumn.
+qreal timelineGlyphColumn(const QFont& glyphFont)
+{
+	static const OperationState kStates[] = {OperationState::Idle, OperationState::Queued, OperationState::Loading,
+		OperationState::Running, OperationState::Warning, OperationState::Failed, OperationState::Cancelled,
+		OperationState::Completed};
+	const QFontMetricsF metrics(glyphFont);
+	qreal widest = 0.0;
+	for (const OperationState state : kStates) {
+		widest = std::max(widest, metrics.horizontalAdvance(studioStateGlyph(state)));
+	}
+	return std::max(static_cast<qreal>(kGlyphColumn), std::ceil(widest) + 6.0);
+}
+
+// QStyle::visualRect() for fractional geometry: a rectangle laid out left to
+// right comes back mirrored about `bounds` in a right-to-left layout.
+QRectF visualRectF(Qt::LayoutDirection direction, const QRectF& bounds, const QRectF& logical)
+{
+	if (direction != Qt::RightToLeft) {
+		return logical;
+	}
+	QRectF mirrored = logical;
+	mirrored.moveLeft(bounds.left() + bounds.right() - logical.right());
+	return mirrored;
+}
+
 } // namespace
 
 // ---------------------------------------------------------------------------
@@ -756,10 +788,13 @@ CompositionChart::CompositionChart(QWidget* parent)
 {
 	setFocusPolicy(Qt::StrongFocus);
 	setMouseTracking(true);
-	setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Minimum);
+	QSizePolicy policy(QSizePolicy::Expanding, QSizePolicy::Minimum);
+	policy.setHeightForWidth(true);
+	setSizePolicy(policy);
 	m_emptyText = tr("No composition data yet.");
 	setAccessibleName(tr("Composition chart"));
 	setAccessibleDescription(accessibleSummary());
+	setToolTip(accessibleSummary());
 }
 
 void CompositionChart::setTitle(const QString& title)
@@ -770,6 +805,7 @@ void CompositionChart::setTitle(const QString& title)
 	m_title = title;
 	setAccessibleName(title.isEmpty() ? tr("Composition chart") : title);
 	setAccessibleDescription(accessibleSummary());
+	setToolTip(accessibleSummary());
 	updateGeometry();
 	update();
 }
@@ -777,9 +813,9 @@ void CompositionChart::setTitle(const QString& title)
 void CompositionChart::setSlices(const QVector<StudioChartSlice>& slices)
 {
 	m_slices = slices;
-	m_sliceRects.clear();
 	m_hoverIndex = -1;
 	setAccessibleDescription(accessibleSummary());
+	setToolTip(accessibleSummary());
 	updateGeometry();
 	update();
 }
@@ -792,6 +828,7 @@ void CompositionChart::setEmptyText(const QString& text)
 	m_emptyText = text;
 	if (m_slices.isEmpty()) {
 		setAccessibleDescription(accessibleSummary());
+		setToolTip(accessibleSummary());
 		update();
 	}
 }
@@ -847,31 +884,46 @@ QStringList CompositionChart::summaryLines() const
 	return lines;
 }
 
+bool CompositionChart::hasHeightForWidth() const
+{
+	return true;
+}
+
+int CompositionChart::heightForWidth(int width) const
+{
+	QFont titleFont = font();
+	titleFont.setBold(true);
+	return computeCompositionLayout(m_slices, QRect(0, 0, std::max(1, width), 0),
+		QFontMetrics(titleFont), fontMetrics(), !m_title.isEmpty()).requiredHeight;
+}
+
 QSize CompositionChart::sizeHint() const
 {
-	// Wrapping content means the height depends on the width; without a
-	// heightForWidth hook we measure at the width we currently have and fall
-	// back to a sensible default before the first layout pass.
-	const int preferredWidth = width() > 0 ? width() : 320;
-	const QFont bodyFont = font();
-	QFont titleFont = bodyFont;
-	titleFont.setBold(true);
-	const CompositionLayout layout = computeCompositionLayout(m_slices,
-		QRect(0, 0, preferredWidth, 1000),
-		QFontMetrics(titleFont),
-		QFontMetrics(bodyFont),
-		!m_title.isEmpty());
-	return QSize(std::max(preferredWidth, 320), std::max(layout.requiredHeight, minimumSizeHint().height()));
+	// A stable preferred width lets layouts negotiate narrower panels without
+	// retaining the dimensions from a previous, wider inspector.
+	return QSize(320, heightForWidth(320));
 }
 
 QSize CompositionChart::minimumSizeHint() const
 {
 	const QFontMetrics metrics(font());
-	int height = 2 * kMargin + kBarHeight + kBarGap + metrics.height() + kLegendRowPad;
+	int height = 2 * kMargin + compositionBarHeight(metrics) + kBarGap;
+	if (!m_slices.isEmpty()) { height += std::max(metrics.height(), kSwatchHeight) + kLegendRowPad; }
 	if (!m_title.isEmpty()) {
-		height += metrics.height() + kTitleGap;
+		QFont titleFont = font(); titleFont.setBold(true);
+		height += QFontMetrics(titleFont).height() + kTitleGap;
 	}
 	return QSize(180, height);
+}
+
+void CompositionChart::changeEvent(QEvent* event)
+{
+	QWidget::changeEvent(event);
+	if (event->type() == QEvent::FontChange || event->type() == QEvent::ApplicationFontChange
+		|| event->type() == QEvent::StyleChange) {
+		updateGeometry();
+		update();
+	}
 }
 
 void CompositionChart::paintEvent(QPaintEvent* event)
@@ -896,7 +948,6 @@ void CompositionChart::paintEvent(QPaintEvent* event)
 	const QFontMetrics titleMetrics(titleFont);
 
 	const CompositionLayout layout = computeCompositionLayout(m_slices, rect(), titleMetrics, bodyMetrics, !m_title.isEmpty());
-	m_sliceRects = layout.sliceRects;
 
 	if (!m_title.isEmpty()) {
 		painter.setFont(titleFont);
@@ -930,11 +981,17 @@ void CompositionChart::paintEvent(QPaintEvent* event)
 		}
 		drawPatternedRect(painter, sliceRect, color, slice.patternIndex, 0.0);
 
-		if (sliceRect.width() >= 36.0) {
-			painter.setPen(readableTextOn(color));
-			const double share = index < layout.shares.size() ? layout.shares.at(index) : 0.0;
-			painter.drawText(sliceRect, Qt::AlignCenter,
-				bodyMetrics.elidedText(formatShareText(share), Qt::ElideRight, static_cast<int>(sliceRect.width()) - 4));
+		const double share = index < layout.shares.size() ? layout.shares.at(index) : 0.0;
+		const QString shareText = formatShareText(share);
+		if (bodyMetrics.horizontalAdvance(shareText) + 2 * kBarTextPadding <= sliceRect.width()) {
+			// A solid theme surface keeps text legible over every hatch and
+			// category color, including bright high-contrast success green.
+			QRectF labelRect(0.0, 0.0, bodyMetrics.horizontalAdvance(shareText) + 2 * kBarTextPadding,
+				bodyMetrics.height());
+			labelRect.moveCenter(sliceRect.center());
+			painter.fillRect(labelRect, surface);
+			painter.setPen(foreground);
+			painter.drawText(labelRect, Qt::AlignCenter, shareText);
 		}
 
 		if (index == m_hoverIndex) {
@@ -968,7 +1025,7 @@ void CompositionChart::paintEvent(QPaintEvent* event)
 		painter.setPen(index == m_hoverIndex ? foreground : muted);
 		const QString text = index < layout.legendTexts.size() ? layout.legendTexts.at(index) : slice.label;
 		painter.drawText(textRect, Qt::AlignLeft | Qt::AlignVCenter,
-			bodyMetrics.elidedText(text, Qt::ElideRight, static_cast<int>(textRect.width())));
+			isolatedText(bodyMetrics.elidedText(text, Qt::ElideRight, static_cast<int>(textRect.width()))));
 	}
 
 	if (hasFocus() && m_hoverIndex >= 0 && m_hoverIndex < layout.sliceRects.size()) {
@@ -1089,13 +1146,7 @@ int CompositionChart::sliceAt(const QPoint& point) const
 	if (m_slices.isEmpty()) {
 		return -1;
 	}
-	if (m_sliceRects.size() == m_slices.size()) {
-		for (int index = 0; index < m_sliceRects.size(); ++index) {
-			if (m_sliceRects.at(index).contains(point)) {
-				return index;
-			}
-		}
-	}
+	// Use current geometry even between a font/width change and the next paint.
 	const QFont bodyFont = font();
 	QFont titleFont = bodyFont;
 	titleFont.setBold(true);
@@ -1238,7 +1289,7 @@ QStringList PipelineChart::summaryLines() const
 
 QSize PipelineChart::sizeHint() const
 {
-	// Same reasoning as CompositionChart::sizeHint(): measure the wrapped rows
+	// Measure the wrapped rows
 	// at the width we have, not at an assumed one.
 	const int preferredWidth = width() > 0 ? width() : 420;
 	const QFont bodyFont = font();
@@ -1637,6 +1688,10 @@ void ActivityTimelineChart::paintEvent(QPaintEvent* event)
 	QPainter painter(this);
 	painter.setRenderHint(QPainter::Antialiasing, true);
 	painter.setRenderHint(QPainter::TextAntialiasing, true);
+	// Leading and trailing text alignment follow this widget's direction,
+	// which need not be the application's.
+	const Qt::LayoutDirection direction = layoutDirection();
+	painter.setLayoutDirection(direction);
 
 	const QPalette pal = palette();
 	const bool lightTheme = paletteIsLight(pal);
@@ -1659,7 +1714,7 @@ void ActivityTimelineChart::paintEvent(QPaintEvent* event)
 		painter.drawRoundedRect(box, 6.0, 6.0);
 		painter.setPen(muted);
 		painter.drawText(box, Qt::AlignCenter,
-			metrics.elidedText(m_emptyText, Qt::ElideRight, static_cast<int>(box.width()) - 8));
+			isolatedText(metrics.elidedText(m_emptyText, Qt::ElideRight, static_cast<int>(box.width()) - 8)));
 		return;
 	}
 
@@ -1671,6 +1726,16 @@ void ActivityTimelineChart::paintEvent(QPaintEvent* event)
 	}
 	const qint64 reference = m_events.first().startedMsSinceEpoch;
 	const qreal lineHeight = static_cast<qreal>(metrics.height());
+	const qreal glyphColumn = timelineGlyphColumn(glyphFont);
+
+	// Each row is laid out left to right and drawn through visual(), so in a
+	// right-to-left layout the glyph and the title lead from the right, the
+	// time and the duration trail on the left, and a duration bar grows from
+	// the right end of its track.
+	const QRectF bounds(rect());
+	const auto visual = [direction, &bounds](const QRectF& logical) {
+		return visualRectF(direction, bounds, logical);
+	};
 
 	for (int index = 0; index < m_events.size() && index < m_eventRects.size(); ++index) {
 		const TimelineEvent& item = m_events.at(index);
@@ -1692,28 +1757,31 @@ void ActivityTimelineChart::paintEvent(QPaintEvent* event)
 
 		painter.setFont(glyphFont);
 		painter.setPen(accent);
-		painter.drawText(QRectF(inner.left(), inner.top(), kGlyphColumn, lineHeight),
-			Qt::AlignLeft | Qt::AlignVCenter, studioStateGlyph(item.state));
+		painter.drawText(visual(QRectF(inner.left(), inner.top(), glyphColumn, lineHeight)),
+			Qt::AlignLeading | Qt::AlignVCenter, studioStateGlyph(item.state));
 
+		// Every text is isolated, so an untranslated title keeps its ellipsis
+		// at its end and a duration reads "0 ms", never "ms 0", in either
+		// direction.
 		painter.setFont(bodyFont);
-		const QRectF labelRect(inner.left() + kGlyphColumn, inner.top(),
-			std::max(0.0, inner.width() - kGlyphColumn - relativeWidth), lineHeight);
+		const QRectF labelRect(inner.left() + glyphColumn, inner.top(),
+			std::max(0.0, inner.width() - glyphColumn - relativeWidth), lineHeight);
 		painter.setPen(foreground);
-		painter.drawText(labelRect, Qt::AlignLeft | Qt::AlignVCenter,
-			metrics.elidedText(item.label, Qt::ElideRight, static_cast<int>(labelRect.width())));
+		painter.drawText(visual(labelRect), Qt::AlignLeading | Qt::AlignVCenter,
+			isolatedText(metrics.elidedText(item.label, Qt::ElideRight, static_cast<int>(labelRect.width()))));
 
 		painter.setPen(muted);
-		painter.drawText(QRectF(inner.right() - relativeWidth, inner.top(), static_cast<qreal>(relativeWidth), lineHeight),
-			Qt::AlignRight | Qt::AlignVCenter, relative);
+		painter.drawText(visual(QRectF(inner.right() - relativeWidth, inner.top(), static_cast<qreal>(relativeWidth), lineHeight)),
+			Qt::AlignTrailing | Qt::AlignVCenter, isolatedText(relative));
 
 		const qreal secondTop = inner.top() + lineHeight;
 		const QString durationText = formatDurationText(item.durationMs, false);
 		const int durationWidth = metrics.horizontalAdvance(durationText) + 6;
 		const qreal sourceWidth = std::max(0.0, inner.width() * 0.38);
+		const QRectF sourceRect(inner.left() + glyphColumn, secondTop, std::max(0.0, sourceWidth - glyphColumn), lineHeight);
 		painter.setPen(muted);
-		painter.drawText(QRectF(inner.left() + kGlyphColumn, secondTop, std::max(0.0, sourceWidth - kGlyphColumn), lineHeight),
-			Qt::AlignLeft | Qt::AlignVCenter,
-			metrics.elidedText(item.source, Qt::ElideRight, static_cast<int>(std::max(0.0, sourceWidth - kGlyphColumn))));
+		painter.drawText(visual(sourceRect), Qt::AlignLeading | Qt::AlignVCenter,
+			isolatedText(metrics.elidedText(item.source, Qt::ElideRight, static_cast<int>(sourceRect.width()))));
 
 		const qreal trackLeft = inner.left() + sourceWidth + 6.0;
 		const qreal trackRight = inner.right() - durationWidth;
@@ -1723,7 +1791,7 @@ void ActivityTimelineChart::paintEvent(QPaintEvent* event)
 		if (track.width() > 2.0) {
 			painter.setPen(QPen(outline, 1.0));
 			painter.setBrush(Qt::NoBrush);
-			painter.drawRoundedRect(track.adjusted(0.5, 0.5, -0.5, -0.5), 2.0, 2.0);
+			painter.drawRoundedRect(visual(track).adjusted(0.5, 0.5, -0.5, -0.5), 2.0, 2.0);
 
 			// Zero-duration and single-event sets never divide: an empty or
 			// unknown duration is drawn as a minimal tick instead.
@@ -1734,12 +1802,12 @@ void ActivityTimelineChart::paintEvent(QPaintEvent* event)
 			}
 			fillWidth = std::min(fillWidth, track.width());
 			const QRectF fill(track.left(), track.top(), fillWidth, track.height());
-			drawPatternedRect(painter, fill, accent, index, 2.0);
+			drawPatternedRect(painter, visual(fill), accent, index, 2.0);
 		}
 
 		painter.setPen(muted);
-		painter.drawText(QRectF(inner.right() - durationWidth, secondTop, static_cast<qreal>(durationWidth), lineHeight),
-			Qt::AlignRight | Qt::AlignVCenter, durationText);
+		painter.drawText(visual(QRectF(inner.right() - durationWidth, secondTop, static_cast<qreal>(durationWidth), lineHeight)),
+			Qt::AlignTrailing | Qt::AlignVCenter, isolatedText(durationText));
 	}
 
 	if (hasFocus() && m_hoverIndex >= 0 && m_hoverIndex < m_eventRects.size()) {

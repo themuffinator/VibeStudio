@@ -16,9 +16,14 @@
 // fail with an error instead of aborting.
 
 #include <QByteArray>
+#include <QByteArrayView>
 #include <QString>
 
 #include <cstdint>
+#include <functional>
+#include <memory>
+
+class QIODevice;
 
 namespace vibestudio {
 
@@ -34,8 +39,23 @@ struct InflateResult {
 // exceed.
 InflateResult inflateRaw(const QByteArray& input, qint64 expectedSize = -1);
 
+struct InflateStreamResult {
+	bool ok = false;
+	bool cancelled = false;
+	qint64 bytesConsumed = 0;
+	qint64 bytesWritten = 0;
+	QString error;
+};
+
+// Reads at most inputBytes from the device's current position. The decoder
+// keeps only its history window and bounded input/output buffers. A sink must
+// consume the view before returning; false aborts the operation. expectedSize
+// is a required nonnegative output cap, not an allocation request.
+InflateStreamResult inflateRawToSink(QIODevice& input, qint64 inputBytes, qint64 expectedSize,
+	const std::function<bool(QByteArrayView)>& sink, const std::function<bool()>& isCancelled = {});
+
 // zlib-wrapped DEFLATE (RFC 1950): 2-byte header, raw deflate, Adler-32 tail.
-InflateResult inflateZlib(const QByteArray& input, qint64 expectedSize = -1);
+InflateResult inflateZlib(const QByteArray& input, qint64 expectedSize = -1, const std::function<bool()>& isCancelled = {});
 
 enum class DeflateLevel {
 	Store,        // stored (uncompressed) blocks only
@@ -55,6 +75,35 @@ enum class DeflateLevel {
 // trade-off; they all emit dynamic blocks when that is the cheapest option.
 QByteArray deflateRaw(const QByteArray& input, DeflateLevel level = DeflateLevel::Default);
 
+struct DeflateStreamResult {
+	bool ok = false;
+	bool cancelled = false;
+	qint64 bytesConsumed = 0;
+	qint64 bytesWritten = 0;
+	QString error;
+};
+
+// Push encoder with one 65535-byte block and a 32 KiB history window. Input
+// partitioning does not affect the output. The sink consumes each view before
+// returning; false aborts permanently. finish() requires exactly inputBytes,
+// flushes the last partial byte and is idempotent. A failed encoder cannot resume.
+class DeflateStreamEncoder {
+public:
+	DeflateStreamEncoder(qint64 inputBytes, DeflateLevel level,
+		std::function<bool(QByteArrayView)> sink, std::function<bool()> isCancelled = {});
+	~DeflateStreamEncoder();
+	DeflateStreamEncoder(const DeflateStreamEncoder&) = delete;
+	DeflateStreamEncoder& operator=(const DeflateStreamEncoder&) = delete;
+	bool append(QByteArrayView bytes);
+	DeflateStreamResult finish();
+	DeflateStreamResult result() const;
+
+private:
+	struct State;
+	std::unique_ptr<State> m_state;
+};
+
+quint32 crc32View(QByteArrayView bytes, quint32 seed = 0);
 quint32 crc32Bytes(const QByteArray& bytes, quint32 seed = 0);
 quint32 adler32Bytes(const QByteArray& bytes, quint32 seed = 1);
 

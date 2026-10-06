@@ -58,6 +58,7 @@ QByteArray catalogFixture(const QString& language, bool complete)
 // "plural forms verified".
 class PluralTranslator final : public QTranslator {
 public:
+	bool isEmpty() const override { return false; }
 	QString translate(const char* context, const char* sourceText, const char* disambiguation = nullptr, int n = -1) const override
 	{
 		Q_UNUSED(disambiguation);
@@ -212,7 +213,39 @@ bool runCatalogRootSmoke(const QDir& root)
 	ok &= expect(sourcePresent == 2, "Expected the two fixture source catalogs to be found.");
 	ok &= expect(compiledPresent == 1, "Expected exactly one compiled fixture catalog.");
 
+	// Catalogs outside the shape lupdate writes are read by the XML parser
+	// instead of the byte scan: a comment must not change the counts, and a
+	// truncated file must read as invalid.
+	QByteArray commented = catalogFixture(QStringLiteral("fr"), true);
+	commented.replace("<context>", "<!-- <message> kept in a comment -->\n<context>");
+	QByteArray truncated = catalogFixture(QStringLiteral("es"), true);
+	truncated.truncate(truncated.indexOf("</message>"));
+	if (!writeFile(QDir(catalogDir).filePath(QStringLiteral("vibestudio_fr.ts")), commented)
+		|| !writeFile(QDir(catalogDir).filePath(QStringLiteral("vibestudio_es.ts")), truncated)) {
+		return expect(false, "Expected the parser fixtures to be written.");
+	}
+
 	const vibestudio::LocalizationSmokeReport report = vibestudio::buildLocalizationSmokeReport(QStringLiteral("ar"));
+	const auto catalogFor = [&report](const QString& localeName) -> const vibestudio::TranslationCatalogStatus* {
+		for (const vibestudio::TranslationCatalogStatus& catalog : report.catalogs) {
+			if (catalog.localeName == localeName) {
+				return &catalog;
+			}
+		}
+		return nullptr;
+	};
+	const vibestudio::TranslationCatalogStatus* english = catalogFor(QStringLiteral("en"));
+	const vibestudio::TranslationCatalogStatus* german = catalogFor(QStringLiteral("de"));
+	const vibestudio::TranslationCatalogStatus* french = catalogFor(QStringLiteral("fr"));
+	const vibestudio::TranslationCatalogStatus* spanish = catalogFor(QStringLiteral("es"));
+	ok &= expect(english && english->status == QStringLiteral("complete") && english->messageCount == 2 && english->translatedCount == 2,
+		"Expected the complete fixture catalog to count two translated messages.");
+	ok &= expect(german && german->status == QStringLiteral("needs-translation") && german->messageCount == 2 && german->unfinishedCount == 1,
+		"Expected the fixture catalog with an unfinished message to need translation.");
+	ok &= expect(french && french->status == QStringLiteral("complete") && french->messageCount == 2 && french->translatedCount == 2,
+		"Expected a catalog with a comment to be parsed as XML with the same counts.");
+	ok &= expect(spanish && spanish->status == QStringLiteral("invalid") && spanish->stale,
+		"Expected a truncated catalog to be reported as invalid.");
 	ok &= expect(QDir(report.catalogRoot.rootPath) == QDir(catalogDir) && report.catalogRoot.source == QStringLiteral("environment"),
 		"Expected the report to use the resolved catalog root.");
 	ok &= expect(report.compiledCatalogCount == 1, "Expected the report to count compiled catalogs.");

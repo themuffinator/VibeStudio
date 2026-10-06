@@ -2,6 +2,7 @@
 
 #include "core/idtech_image.h"
 #include "core/package_archive.h"
+#include "core/project_text_search.h"
 
 #include <QImage>
 #include <QRect>
@@ -9,6 +10,7 @@
 #include <QString>
 #include <QStringList>
 #include <QVector>
+#include <functional>
 
 namespace vibestudio {
 
@@ -177,55 +179,46 @@ struct AssetAudioExportReport {
 	QString message;
 	QString error;
 	QStringList detailLines;
-
-	[[nodiscard]] bool succeeded() const;
-};
-
-struct AssetTextMatch {
-	QString filePath;
-	int line = 0;
-	int column = 0;
-	QString lineText;
-};
-
-struct AssetTextSearchRequest {
-	QString rootPath;
-	QString findText;
-	QString replaceText;
-	QStringList extensions;
-	bool replace = false;
-	bool dryRun = true;
-	bool caseSensitive = false;
-};
-
-struct AssetTextSearchReport {
-	QString rootPath;
-	QString findText;
-	QString replaceText;
-	bool replace = false;
-	bool dryRun = true;
-	int filesScanned = 0;
-	int filesWithMatches = 0;
-	int matchCount = 0;
-	int replacementCount = 0;
-	QString saveState = QStringLiteral("clean");
-	QVector<AssetTextMatch> matches;
-	QStringList warnings;
+	bool cancelled = false;
 
 	[[nodiscard]] bool succeeded() const;
 };
 
 QString assetPreviewKindId(AssetPreviewKind kind);
 AssetPreviewKind assetPreviewKindForPath(const QString& virtualPath);
+// Like assetPreviewKindForPath, and also names what a WAD's extensionless
+// lumps are: WAD2/WAD3 lumps and a Doom WAD's flats, sprites, and patches
+// (from their namespace type hints) and its well-known global graphics are
+// images; DS* and DP* lumps are sounds, as are bare or .lmp entries under a
+// PK3's sounds/ directory.
+AssetPreviewKind assetPreviewKindForEntry(const QString& virtualPath, const QString& typeHint = {});
+// The path an image decoder should be given for a package entry. A WAD flat
+// keeps its lump name but is decoded as if it sat under flats/, because its
+// namespace marker, not its bytes, is what says it is a flat.
+QString assetDetectionPath(const QString& virtualPath, const QString& typeHint);
+
+// Something a media player can open for an audio entry: original WAV bytes,
+// a Doom DMX sound widened to PCM16 WAV, and original compressed streams
+// passed through for the host's codecs. `fileName` carries the suffix a
+// player sniffs the format from.
+struct AssetAudioPlaybackSource {
+	QByteArray bytes;
+	QString fileName;
+	QString format;
+	QString error;
+
+	[[nodiscard]] bool playable() const;
+};
+AssetAudioPlaybackSource assetAudioPlaybackSource(const QString& virtualPath, const QByteArray& bytes, qint64 maxBytes = 128ll * 1024 * 1024);
 
 // `palette` is used when the payload turns out to be a paletted idTech image.
 // When it is null a generated, license-clean palette is chosen from the
 // detected format.
+// A negative total retains the historical unknown-size behavior.
 AssetAnalysis analyzeAssetBytes(const QString& virtualPath, const QByteArray& bytes, qint64 totalBytes = -1, const IdTechPalette* palette = nullptr);
-
-// Palette id a paletted idTech format defaults to, so callers can resolve a
-// real game palette out of the package before analysing.
-QString defaultIdTechPaletteIdForFormat(IdTechImageFormat format);
+// Analyze a bounded sample with a known unsigned archive size. A prefix remains
+// partial even when the declared total exceeds the signed file-offset range.
+AssetAnalysis analyzeAssetSample(const QString& virtualPath, const QByteArray& bytes, quint64 totalBytes, const IdTechPalette* palette = nullptr);
 
 // Extracts a min/max envelope from a RIFF/WAVE payload. Supports 8-bit
 // unsigned, 16/24/32-bit signed PCM and 32-bit float, including
@@ -238,10 +231,10 @@ QStringList assetWaveformLines(const AssetAudioPeaks& peaks, int buckets = 32, i
 AssetImageConversionReport convertPackageImages(const PackageArchive& archive, const AssetImageConversionRequest& request);
 QString assetImageConversionReportText(const AssetImageConversionReport& report);
 
-AssetAudioExportReport exportPackageAudioToWav(const PackageArchive& archive, const QString& virtualPath, const QString& outputPath, bool dryRun = false, bool overwriteExisting = false);
+AssetAudioExportReport exportPackageAudioToWav(const PackageArchive& archive, const QString& virtualPath, const QString& outputPath, bool dryRun = false, bool overwriteExisting = false, const std::function<bool()>& cancelled = {});
+// Exact immutable reader occurrence, including repeated WAD sound names.
+AssetAudioExportReport exportPackageAudioToWavAt(const PackageArchive& archive, qsizetype entryIndex, const QString& outputPath, bool dryRun = false, bool overwriteExisting = false, const std::function<bool()>& cancelled = {});
 QString assetAudioExportReportText(const AssetAudioExportReport& report);
 
-AssetTextSearchReport findReplaceProjectText(const AssetTextSearchRequest& request);
-QString assetTextSearchReportText(const AssetTextSearchReport& report);
 
 } // namespace vibestudio

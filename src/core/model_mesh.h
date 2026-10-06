@@ -22,8 +22,12 @@
 // mathematical constant of the format rather than game content.
 
 #include "core/idtech_image.h"
+#include "core/model_work.h"
 
 #include <QImage>
+#include <QPair>
+#include <QSet>
+#include <QSize>
 #include <QString>
 #include <QStringList>
 #include <QVector>
@@ -40,6 +44,7 @@ enum class ModelMeshFormat {
 	Mdc,            // header only
 	Mdr,            // header only
 	Iqm,            // header only
+	WavefrontObj,   // bounded polygonal interchange
 };
 
 struct ModelVec3 {
@@ -50,6 +55,8 @@ struct ModelVec3 {
 
 struct ModelTriangle {
 	// Indices into the surface's vertex list for the current frame.
+	// Counter-clockwise front faces: cross(b-a, c-a) points outward. Native
+	// MDL/MD2/MD3 clockwise order is converted only at import/export boundaries.
 	int a = 0;
 	int b = 0;
 	int c = 0;
@@ -77,6 +84,10 @@ struct ModelSurface {
 	QVector<ModelFrameGeometry> frames;
 	QStringList skinPaths;
 	QStringList warnings;
+	// Authoring seam marks partition UV charts before their coordinates diverge.
+	// Canonical indexed edge pairs; native game files retain the resulting UVs,
+	// while these editable-source marks remain in .mesh.json.
+	QSet<QPair<int, int>> uvSeams{};
 };
 
 struct ModelFrameInfo {
@@ -94,6 +105,8 @@ struct ModelAnimation {
 	QString name;
 	int firstFrame = 0;
 	int frameCount = 0;
+	// Zero leaves playback timing unspecified. Positive rates persist in mesh v6.
+	double framesPerSecond = 0;
 };
 
 struct ModelTag {
@@ -104,6 +117,26 @@ struct ModelTag {
 	float axis[9] = {1.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f, 1.0f};
 };
 
+struct ModelCollisionPose {
+	ModelVec3 centre;
+	ModelVec3 size{16, 16, 16};
+	ModelVec3 rotation;
+};
+
+// Source-only collision boxes. Rotation is in model axes,
+// X then Y then Z, matching the shared transform service. Game mesh formats do
+// not carry these volumes; explicit map handoff turns them into clip brushes.
+struct ModelCollisionBox {
+	QString name;
+	ModelVec3 centre;
+	ModelVec3 size{16, 16, 16};
+	ModelVec3 rotation;
+	// Empty for a static box; otherwise exactly one pose per mesh frame.
+	// The scalar fields mirror frame zero for compatibility. Use
+	// setModelCollisionFrames to replace a track and maintain that invariant.
+	QVector<ModelCollisionPose> framePoses{};
+};
+
 // A skin stored inside the model itself. MDL carries indexed pixels that need a
 // palette; MD2 and MD3 reference external files instead.
 struct ModelEmbeddedSkin {
@@ -111,6 +144,33 @@ struct ModelEmbeddedSkin {
 	QString name;
 	QImage image;
 	int groupFrameCount = 0;
+	// MDL pixels retain their original palette indices, including fullbright and
+	// player-colour ranges. image is a derived preview of the first member only.
+	QVector<QByteArray> indexedFrames{};
+	// Empty for a single skin; otherwise strictly increasing cumulative seconds.
+	QVector<float> intervals{};
+};
+
+struct ModelMdlFrameGroup {
+	int firstFrame = 0;
+	// Empty denotes one native single frame. A nonempty array denotes a native
+	// group, including a group of one, and gives each pose's cumulative end time.
+	QVector<float> intervals{};
+	[[nodiscard]] int frameCount() const { return intervals.isEmpty() ? 1 : int(intervals.size()); }
+};
+
+struct ModelMdlSettings {
+	bool enabled = false;
+	QSize skinSize{256, 256};
+	// The file carries indices, not colours. These RGB triplets are retained for
+	// source/preview fidelity; exporting MDL does not embed or replace a palette.
+	QByteArray palette{};
+	bool paletteGenerated = false;
+	ModelVec3 eyePosition{};
+	quint32 flags = 0;
+	int syncType = 0;
+	float size = 0;
+	QVector<ModelMdlFrameGroup> frameGroups{};
 };
 
 struct ModelMesh {
@@ -137,11 +197,23 @@ struct ModelMesh {
 	QStringList detailLines;
 	QStringList warnings;
 	QString error;
+	// MD2 ST coordinates are measured in pixels of this skin. Retained on import
+	// and in editable sources; other formats and older sources start at 256x256.
+	QSize md2SkinSize{256, 256};
+	ModelMdlSettings mdl{};
+	QVector<ModelCollisionBox> collisionBoxes{};
 
 	[[nodiscard]] bool isValid() const;
 	// Bounds across every frame, used to frame the model in a viewport.
 	[[nodiscard]] float boundingRadius() const;
 };
+
+// Nearest direction in the shared 162-entry MDL/MD2 normal table.
+int modelAliasNormalIndex(const ModelVec3& normal);
+ModelVec3 modelAliasNormal(int index);
+// Consistency audit for the two MD2 render streams. Decode retains failures as
+// surface warnings, so every editable adoption route refuses lossy data.
+bool validateModelMd2Commands(const QByteArray& bytes, QString* error = nullptr, const ModelWorkControl& control = {});
 
 QString modelMeshFormatId(ModelMeshFormat format);
 QString modelMeshFormatDisplayName(ModelMeshFormat format);
@@ -149,11 +221,14 @@ ModelMeshFormat detectModelMeshFormat(const QString& virtualPath, const QByteArr
 
 // `palette` colours MDL's embedded indexed skins. Pass a resolved package
 // palette; a null pointer falls back to the generated Quake ramp.
-ModelMesh decodeModelMesh(const QString& virtualPath, const QByteArray& bytes, const IdTechPalette* palette = nullptr);
-ModelMesh decodeModelMeshFromArchive(const PackageArchiveReader& archive, const QString& virtualPath, const QString& paletteId = QString());
+ModelMesh decodeModelMesh(const QString& virtualPath, const QByteArray& bytes, const IdTechPalette* palette = nullptr,
+	const ModelWorkControl& control = {});
+ModelMesh decodeModelMeshFromArchive(const PackageArchiveReader& archive, const QString& virtualPath, const QString& paletteId = QString(),
+	const ModelWorkControl& control = {});
 
 // Resolves each `skinPaths` entry against the archive, trying the idTech image
 // extensions, and returns the first that decodes. Empty when none resolve.
+QStringList modelSkinCandidatePaths(const QString& skinPath);
 QImage resolveModelSkin(const PackageArchiveReader& archive, const ModelMesh& mesh, const QString& paletteId = QString(), QString* resolvedPathOut = nullptr);
 
 QStringList modelMeshSummaryLines(const ModelMesh& mesh);
@@ -161,6 +236,7 @@ QString modelMeshSummaryText(const ModelMesh& mesh);
 
 // Wavefront OBJ export of one frame, so a model can leave the studio for an
 // external modeller. Returns an empty string when the frame has no geometry.
-QString exportModelFrameObj(const ModelMesh& mesh, int frameIndex, const QString& materialName = QString());
+QString exportModelFrameObj(const ModelMesh& mesh, int frameIndex, const QString& materialName = QString(),
+	const ModelWorkControl& control = {}, QString* error = nullptr);
 
 } // namespace vibestudio

@@ -1,5 +1,8 @@
 #include "core/model_mesh.h"
+#include "core/model_archive.h"
 
+#include "core/model_mdl.h"
+#include "core/model_obj.h"
 #include "core/package_archive.h"
 
 #include <QCoreApplication>
@@ -9,6 +12,7 @@
 #include <QtEndian>
 
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <cstring>
 #include <limits>
@@ -47,11 +51,6 @@ namespace {
 // is embedded.
 // ---------------------------------------------------------------------------
 
-QString modelText(const char* source)
-{
-	return QCoreApplication::translate("VibeStudioModelMesh", source);
-}
-
 // Sanity caps. A malformed or hostile file must fail cleanly instead of
 // allocating gigabytes or looping forever.
 constexpr int kMaxFrames = 8192;
@@ -73,7 +72,9 @@ constexpr double kTwoPi = 6.28318530717958647692;
 // Software's published `anorms.h` table: a fixed mathematical constant of the
 // two formats (the byte stored per vertex is an index into it), not game
 // content. Source: the released Quake II tools source
-// https://github.com/id-Software/Quake-2/blob/master/qcommon/anorms.h
+// https://github.com/id-Software/Quake-2/blob/master/ref_gl/anorms.h
+// Copyright (C) 1997-2001 Id Software, Inc. GPL-2.0-or-later; reviewed
+// 2026-10-04. The original table is also used for MD2 export normal matching.
 constexpr float kAliasNormals[162][3] = {
 	{-0.525731f, 0.000000f, 0.850651f},
 	{-0.442863f, 0.238856f, 0.864188f},
@@ -439,10 +440,11 @@ QString animationStem(const QString& name)
 
 // MDL and MD2 encode animations as consecutive frames sharing a name stem with
 // a trailing number ("stand1".."stand5").
-QVector<ModelAnimation> inferAnimations(const QVector<ModelFrameInfo>& frames)
+QVector<ModelAnimation> inferAnimations(const QVector<ModelFrameInfo>& frames, ModelWorkProgress& work)
 {
 	QVector<ModelAnimation> animations;
 	for (int index = 0; index < frames.size(); ++index) {
+		if (!work.step()) { return {}; }
 		QString stem = animationStem(frames.at(index).name);
 		if (stem.isEmpty()) {
 			stem = QStringLiteral("frame");
@@ -461,15 +463,18 @@ QVector<ModelAnimation> inferAnimations(const QVector<ModelFrameInfo>& frames)
 	return animations;
 }
 
-void finalizeMesh(ModelMesh* mesh)
+void finalizeMesh(ModelMesh* mesh, const ModelWorkControl& control)
 {
+	ModelWorkProgress work(control, ModelWorkPhase::Validating, &mesh->error);
+	if (!work.check()) { return; }
 	mesh->frameCount = mesh->frames.size();
 	mesh->surfaceCount = mesh->surfaces.size();
 	mesh->tagCount = 0;
-	QStringList tagNames;
+	QSet<QString> tagNames;
 	for (const ModelTag& tag : mesh->tags) {
+		if (!work.step()) { return; }
 		if (!tagNames.contains(tag.name)) {
-			tagNames.append(tag.name);
+			tagNames.insert(tag.name);
 		}
 	}
 	mesh->tagCount = tagNames.size();
@@ -480,10 +485,13 @@ void finalizeMesh(ModelMesh* mesh)
 	ModelVec3 mins = makeVec3(0.0f, 0.0f, 0.0f);
 	ModelVec3 maxs = makeVec3(0.0f, 0.0f, 0.0f);
 	for (const ModelSurface& surface : mesh->surfaces) {
+		if (!work.step()) { return; }
 		mesh->vertexCount += surface.vertexCount;
 		mesh->triangleCount += surface.triangles.size();
 		for (const ModelFrameGeometry& geometry : surface.frames) {
+			if (!work.step()) { return; }
 			for (const ModelVec3& position : geometry.positions) {
+				if (!work.step()) { return; }
 				if (!isFinite(position)) {
 					continue;
 				}
@@ -504,6 +512,7 @@ void finalizeMesh(ModelMesh* mesh)
 	}
 	if (!haveBounds) {
 		for (const ModelFrameInfo& frame : mesh->frames) {
+			if (!work.step()) { return; }
 			if (!isFinite(frame.mins) || !isFinite(frame.maxs)) {
 				continue;
 			}
@@ -535,7 +544,7 @@ constexpr qint64 kMdlTriangleBytes = 16;
 constexpr qint64 kMdlVertexBytes = 4;
 constexpr qint64 kMdlFrameNameBytes = 16;
 
-QImage decodeIndexedSkin(const QByteArray& bytes, qint64 offset, int width, int height, const IdTechPalette& palette)
+QImage decodeIndexedSkin(const QByteArray& bytes, qint64 offset, int width, int height, const IdTechPalette& palette, ModelWorkProgress& work)
 {
 	if (width <= 0 || height <= 0) {
 		return {};
@@ -553,6 +562,7 @@ QImage decodeIndexedSkin(const QByteArray& bytes, qint64 offset, int width, int 
 		QRgb* row = reinterpret_cast<QRgb*>(image.scanLine(y));
 		const uchar* sourceRow = source + (static_cast<qint64>(y) * width);
 		for (int x = 0; x < width; ++x) {
+			if (!work.step()) { return {}; }
 			const QRgb color = palette.colorAt(static_cast<int>(sourceRow[x]));
 			row[x] = qRgb(qRed(color), qGreen(color), qBlue(color));
 		}
@@ -567,15 +577,17 @@ struct MdlPose {
 	ModelVec3 maxs;
 };
 
-void decodeQuakeMdl(const QByteArray& bytes, const IdTechPalette& palette, ModelMesh* mesh)
+void decodeQuakeMdl(const QByteArray& bytes, const IdTechPalette& palette, ModelMesh* mesh, const ModelWorkControl& control)
 {
+	ModelWorkProgress work(control, ModelWorkPhase::Validating, &mesh->error);
+	if (!work.check()) { return; }
 	if (!rangeOk(bytes, 0, kMdlHeaderBytes)) {
-		mesh->error = modelText("The MDL header is truncated.");
+		mesh->error = QCoreApplication::translate("VibeStudioModelMesh", "The MDL header is truncated.");
 		return;
 	}
 	mesh->version = readI32(bytes, 4);
 	if (mesh->version != 6) {
-		mesh->error = modelText("Unsupported MDL version %1; only IDPO version 6 is decoded.").arg(mesh->version);
+		mesh->error = QCoreApplication::translate("VibeStudioModelMesh", "Unsupported MDL version %1; only IDPO version 6 is decoded.").arg(mesh->version);
 		return;
 	}
 
@@ -597,81 +609,119 @@ void decodeQuakeMdl(const QByteArray& bytes, const IdTechPalette& palette, Model
 	const float declaredSize = readF32(bytes, 80);
 
 	if (!isFinite(scale) || !isFinite(translate)) {
-		mesh->error = modelText("The MDL header has a non-finite scale or translation.");
+		mesh->error = QCoreApplication::translate("VibeStudioModelMesh", "The MDL header has a non-finite scale or translation.");
 		return;
 	}
 	if (skinCount < 0 || skinCount > kMaxSkins
 		|| vertexCount <= 0 || vertexCount > kMaxSurfaceVertices
 		|| triangleCount <= 0 || triangleCount > kMaxSurfaceTriangles
 		|| frameGroupCount <= 0 || frameGroupCount > kMaxFrames) {
-		mesh->error = modelText("The MDL header declares counts outside the supported range.");
+		mesh->error = QCoreApplication::translate("VibeStudioModelMesh", "The MDL header declares counts outside the supported range.");
 		return;
 	}
 	if (skinCount > 0 && (skinWidth <= 0 || skinHeight <= 0 || skinWidth > kMaxSkinDimension || skinHeight > kMaxSkinDimension)) {
-		mesh->error = modelText("The MDL skin size is outside the supported range.");
+		mesh->error = QCoreApplication::translate("VibeStudioModelMesh", "The MDL skin size is outside the supported range.");
 		return;
 	}
 	const qint64 skinPixels = static_cast<qint64>(std::max(0, skinWidth)) * static_cast<qint64>(std::max(0, skinHeight));
 	if (skinCount > 0 && skinPixels > kMaxSkinPixels) {
-		mesh->error = modelText("The MDL skin size is outside the supported range.");
+		mesh->error = QCoreApplication::translate("VibeStudioModelMesh", "The MDL skin size is outside the supported range.");
 		return;
 	}
 	if (static_cast<qint64>(vertexCount) * static_cast<qint64>(frameGroupCount) > kMaxVertexSlots) {
-		mesh->error = modelText("The MDL declares more frame vertices than can be decoded.");
+		mesh->error = QCoreApplication::translate("VibeStudioModelMesh", "The MDL declares more frame vertices than can be decoded.");
 		return;
 	}
 
 	mesh->skinCount = skinCount;
-	mesh->detailLines << modelText("Skin size: %1 x %2").arg(skinWidth).arg(skinHeight);
-	mesh->detailLines << modelText("Scale: %1").arg(formatVector(scale));
-	mesh->detailLines << modelText("Translation: %1").arg(formatVector(translate));
-	mesh->detailLines << modelText("Eye position: %1").arg(formatVector(eyePosition));
-	mesh->detailLines << modelText("Declared bounding radius: %1").arg(formatCoordinate(declaredRadius));
-	mesh->detailLines << modelText("Declared size: %1").arg(formatCoordinate(declaredSize));
-	mesh->detailLines << modelText("Sync type: %1").arg(syncType);
-	mesh->detailLines << modelText("Flags: 0x%1").arg(QString::number(static_cast<uint>(flags), 16));
+	mesh->detailLines << QCoreApplication::translate("VibeStudioModelMesh", "Skin size: %1 x %2").arg(skinWidth).arg(skinHeight);
+	mesh->detailLines << QCoreApplication::translate("VibeStudioModelMesh", "Scale: %1").arg(formatVector(scale));
+	mesh->detailLines << QCoreApplication::translate("VibeStudioModelMesh", "Translation: %1").arg(formatVector(translate));
+	mesh->detailLines << QCoreApplication::translate("VibeStudioModelMesh", "Eye position: %1").arg(formatVector(eyePosition));
+	mesh->detailLines << QCoreApplication::translate("VibeStudioModelMesh", "Declared bounding radius: %1").arg(formatCoordinate(declaredRadius));
+	mesh->detailLines << QCoreApplication::translate("VibeStudioModelMesh", "Declared size: %1").arg(formatCoordinate(declaredSize));
+	mesh->detailLines << QCoreApplication::translate("VibeStudioModelMesh", "Sync type: %1").arg(syncType);
+	mesh->detailLines << QCoreApplication::translate("VibeStudioModelMesh", "Flags: 0x%1").arg(QString::number(static_cast<uint>(flags), 16));
+	// Preserve native groups, exact indices and header semantics alongside the
+	// flattened geometry. Layout: id Software Quake/WinQuake/modelgen.h and
+	// model.c, master reviewed 2026-10-04, GPL-2.0-or-later; compatible with GPL-3.0.
+	mesh->mdl.enabled = true;
+	mesh->mdl.skinSize = {skinWidth, skinHeight};
+	mesh->mdl.palette = modelMdlPaletteBytes(palette);
+	mesh->mdl.paletteGenerated = palette.generated;
+	mesh->mdl.eyePosition = eyePosition;
+	mesh->mdl.flags = static_cast<quint32>(flags);
+	mesh->mdl.syncType = syncType;
+	mesh->mdl.size = declaredSize;
 
 	qint64 offset = kMdlHeaderBytes;
+	qint64 totalSkinPixels = 0;
 
 	// Skins. A group skin stores a count, one interval per member, then the
 	// member pixel blocks back to back.
 	for (int index = 0; index < skinCount; ++index) {
+		if (!work.step()) { return; }
 		if (!rangeOk(bytes, offset, 4)) {
-			mesh->error = modelText("The MDL skin data is truncated.");
+			mesh->error = QCoreApplication::translate("VibeStudioModelMesh", "The MDL skin data is truncated.");
 			return;
 		}
 		const int group = readI32(bytes, offset);
 		offset += 4;
+		if (group != 0 && group != 1) {
+			mesh->error = QCoreApplication::translate("VibeStudioModelMesh", "The MDL skin type is neither a single image nor a group.");
+			return;
+		}
 		int groupFrames = 1;
+		ModelEmbeddedSkin skin;
 		if (group != 0) {
 			if (!rangeOk(bytes, offset, 4)) {
-				mesh->error = modelText("The MDL skin data is truncated.");
+				mesh->error = QCoreApplication::translate("VibeStudioModelMesh", "The MDL skin data is truncated.");
 				return;
 			}
 			groupFrames = readI32(bytes, offset);
 			offset += 4;
 			if (groupFrames <= 0 || groupFrames > kMaxSkinGroupFrames) {
-				mesh->error = modelText("An MDL skin group declares an unsupported frame count.");
+				mesh->error = QCoreApplication::translate("VibeStudioModelMesh", "An MDL skin group declares an unsupported frame count.");
 				return;
 			}
 			if (!rangeOk(bytes, offset, static_cast<qint64>(groupFrames) * 4)) {
-				mesh->error = modelText("The MDL skin data is truncated.");
+				mesh->error = QCoreApplication::translate("VibeStudioModelMesh", "The MDL skin data is truncated.");
 				return;
+			}
+			float previous = 0;
+			for (int member = 0; member < groupFrames; ++member) {
+				if (!work.step()) { return; }
+				const float interval = readF32(bytes, offset + member * 4);
+				if (!std::isfinite(interval) || interval <= previous) {
+					mesh->error = QCoreApplication::translate("VibeStudioModelMesh", "MDL skin group end times must be finite, positive and strictly increasing.");
+					return;
+				}
+				skin.intervals.append(interval);
+				previous = interval;
 			}
 			offset += static_cast<qint64>(groupFrames) * 4;
 		}
 		const qint64 block = skinPixels * static_cast<qint64>(groupFrames);
 		if (!rangeOk(bytes, offset, block)) {
-			mesh->error = modelText("The MDL skin data is truncated.");
+			mesh->error = QCoreApplication::translate("VibeStudioModelMesh", "The MDL skin data is truncated.");
 			return;
 		}
-		ModelEmbeddedSkin skin;
+		if (block > kMaxSkinPixels - totalSkinPixels) {
+			mesh->error = QCoreApplication::translate("VibeStudioModelMesh", "MDL skin members exceed the 64-megapixel preview limit.");
+			return;
+		}
+		totalSkinPixels += block;
 		skin.index = index;
 		skin.name = QStringLiteral("skin%1").arg(index);
 		skin.groupFrameCount = groupFrames;
-		skin.image = decodeIndexedSkin(bytes, offset, skinWidth, skinHeight, palette);
+		for (int member = 0; member < groupFrames; ++member) {
+			if (!work.step()) { return; }
+			skin.indexedFrames.append(bytes.mid(offset + member * skinPixels, skinPixels));
+		}
+		skin.image = decodeIndexedSkin(bytes, offset, skinWidth, skinHeight, palette, work);
+		if (!mesh->error.isEmpty()) { return; }
 		if (skin.image.isNull()) {
-			mesh->warnings << modelText("Embedded skin %1 could not be decoded.").arg(index);
+			mesh->warnings << QCoreApplication::translate("VibeStudioModelMesh", "Embedded skin %1 could not be decoded.").arg(index);
 		}
 		mesh->embeddedSkins.append(skin);
 		offset += block;
@@ -679,13 +729,14 @@ void decodeQuakeMdl(const QByteArray& bytes, const IdTechPalette& palette, Model
 
 	// Texture coordinates.
 	if (!rangeOk(bytes, offset, static_cast<qint64>(vertexCount) * kMdlStVertBytes)) {
-		mesh->error = modelText("The MDL texture coordinates are truncated.");
+		mesh->error = QCoreApplication::translate("VibeStudioModelMesh", "The MDL texture coordinates are truncated.");
 		return;
 	}
 	QVector<int> seamFlags(vertexCount, 0);
 	QVector<int> sCoords(vertexCount, 0);
 	QVector<int> tCoords(vertexCount, 0);
 	for (int index = 0; index < vertexCount; ++index) {
+		if (!work.step()) { return; }
 		const qint64 base = offset + (static_cast<qint64>(index) * kMdlStVertBytes);
 		// `onseam` carries ALIAS_ONSEAM (0x0020) from modelgen.h; treat any
 		// non-zero value as "on the seam".
@@ -697,7 +748,7 @@ void decodeQuakeMdl(const QByteArray& bytes, const IdTechPalette& palette, Model
 
 	// Triangles.
 	if (!rangeOk(bytes, offset, static_cast<qint64>(triangleCount) * kMdlTriangleBytes)) {
-		mesh->error = modelText("The MDL triangle list is truncated.");
+		mesh->error = QCoreApplication::translate("VibeStudioModelMesh", "The MDL triangle list is truncated.");
 		return;
 	}
 
@@ -716,6 +767,7 @@ void decodeQuakeMdl(const QByteArray& bytes, const IdTechPalette& palette, Model
 	baseForCombined.reserve(vertexCount);
 	backForCombined.reserve(vertexCount);
 	for (int index = 0; index < vertexCount; ++index) {
+		if (!work.step()) { return; }
 		baseForCombined.append(index);
 		backForCombined.append(0);
 	}
@@ -723,11 +775,13 @@ void decodeQuakeMdl(const QByteArray& bytes, const IdTechPalette& palette, Model
 
 	int skippedTriangles = 0;
 	for (int index = 0; index < triangleCount; ++index) {
+		if (!work.step()) { return; }
 		const qint64 base = offset + (static_cast<qint64>(index) * kMdlTriangleBytes);
 		const bool facesFront = readI32(bytes, base) != 0;
 		int corners[3] = {0, 0, 0};
 		bool valid = true;
 		for (int corner = 0; corner < 3; ++corner) {
+			if (!work.step()) { return; }
 			const int vertexIndex = readI32(bytes, base + 4 + (corner * 4));
 			if (vertexIndex < 0 || vertexIndex >= vertexCount) {
 				valid = false;
@@ -758,13 +812,13 @@ void decodeQuakeMdl(const QByteArray& bytes, const IdTechPalette& palette, Model
 		surface.triangles.append(triangle);
 	}
 	if (skippedTriangles > 0) {
-		surface.warnings << modelText("%1 triangle(s) referenced vertices outside the model and were dropped.").arg(skippedTriangles);
+		surface.warnings << QCoreApplication::translate("VibeStudioModelMesh", "%1 triangle(s) referenced vertices outside the model and were dropped.").arg(skippedTriangles);
 	}
 	offset += static_cast<qint64>(triangleCount) * kMdlTriangleBytes;
 
 	const int combinedCount = baseForCombined.size();
 	if (static_cast<qint64>(combinedCount) * static_cast<qint64>(frameGroupCount) > kMaxVertexSlots) {
-		mesh->error = modelText("The MDL declares more frame vertices than can be decoded.");
+		mesh->error = QCoreApplication::translate("VibeStudioModelMesh", "The MDL declares more frame vertices than can be decoded.");
 		return;
 	}
 	surface.vertexCount = combinedCount;
@@ -772,6 +826,7 @@ void decodeQuakeMdl(const QByteArray& bytes, const IdTechPalette& palette, Model
 	const float skinWidthF = skinWidth > 0 ? static_cast<float>(skinWidth) : 1.0f;
 	const float skinHeightF = skinHeight > 0 ? static_cast<float>(skinHeight) : 1.0f;
 	for (int index = 0; index < combinedCount; ++index) {
+		if (!work.step()) { return; }
 		const int base = baseForCombined.at(index);
 		// GLQuake samples texel centres, and adds half the skin width for the
 		// back-facing copy of an on-seam vertex.
@@ -788,35 +843,56 @@ void decodeQuakeMdl(const QByteArray& bytes, const IdTechPalette& palette, Model
 	// Frames. A group frame expands into one pose per member.
 	QVector<MdlPose> poses;
 	for (int group = 0; group < frameGroupCount; ++group) {
+		if (!work.step()) { return; }
 		if (!rangeOk(bytes, offset, 4)) {
-			mesh->error = modelText("The MDL frame data is truncated.");
+			mesh->error = QCoreApplication::translate("VibeStudioModelMesh", "The MDL frame data is truncated.");
 			return;
 		}
 		const int type = readI32(bytes, offset);
 		offset += 4;
+		if (type != 0 && type != 1) {
+			mesh->error = QCoreApplication::translate("VibeStudioModelMesh", "The MDL frame type is neither a single pose nor a group.");
+			return;
+		}
+		ModelMdlFrameGroup nativeGroup;
+		nativeGroup.firstFrame = poses.size();
 		int memberCount = 1;
 		if (type != 0) {
 			if (!rangeOk(bytes, offset, 4)) {
-				mesh->error = modelText("The MDL frame data is truncated.");
+				mesh->error = QCoreApplication::translate("VibeStudioModelMesh", "The MDL frame data is truncated.");
 				return;
 			}
 			memberCount = readI32(bytes, offset);
 			offset += 4;
 			if (memberCount <= 0 || memberCount > kMaxFrames || poses.size() + memberCount > kMaxFrames) {
-				mesh->error = modelText("An MDL frame group declares an unsupported frame count.");
+				mesh->error = QCoreApplication::translate("VibeStudioModelMesh", "An MDL frame group declares an unsupported frame count.");
 				return;
 			}
 			// Group bounding box followed by one interval per member.
 			if (!rangeOk(bytes, offset, 8 + (static_cast<qint64>(memberCount) * 4))) {
-				mesh->error = modelText("The MDL frame data is truncated.");
+				mesh->error = QCoreApplication::translate("VibeStudioModelMesh", "The MDL frame data is truncated.");
 				return;
 			}
-			offset += 8 + (static_cast<qint64>(memberCount) * 4);
+			offset += 8;
+			float previous = 0;
+			for (int member = 0; member < memberCount; ++member) {
+				if (!work.step()) { return; }
+				const float interval = readF32(bytes, offset + member * 4);
+				if (!std::isfinite(interval) || interval <= previous) {
+					mesh->error = QCoreApplication::translate("VibeStudioModelMesh", "MDL frame group end times must be finite, positive and strictly increasing.");
+					return;
+				}
+				nativeGroup.intervals.append(interval);
+				previous = interval;
+			}
+			offset += static_cast<qint64>(memberCount) * 4;
 		}
+		mesh->mdl.frameGroups.append(nativeGroup);
 		for (int member = 0; member < memberCount; ++member) {
+			if (!work.step()) { return; }
 			const qint64 poseBytes = 8 + kMdlFrameNameBytes + (static_cast<qint64>(vertexCount) * kMdlVertexBytes);
 			if (!rangeOk(bytes, offset, poseBytes)) {
-				mesh->error = modelText("The MDL frame data is truncated.");
+				mesh->error = QCoreApplication::translate("VibeStudioModelMesh", "The MDL frame data is truncated.");
 				return;
 			}
 			MdlPose pose;
@@ -831,26 +907,36 @@ void decodeQuakeMdl(const QByteArray& bytes, const IdTechPalette& palette, Model
 			poses.append(pose);
 			offset += poseBytes;
 			if (poses.size() > kMaxFrames) {
-				mesh->error = modelText("The MDL declares more frames than can be decoded.");
+				mesh->error = QCoreApplication::translate("VibeStudioModelMesh", "The MDL declares more frames than can be decoded.");
 				return;
 			}
 		}
 	}
 
+	if (qint64(combinedCount) * poses.size() > kMaxVertexSlots) {
+		mesh->error = QCoreApplication::translate("VibeStudioModelMesh", "The MDL declares more frame vertices than can be decoded.");
+		return;
+	}
+
+	int invalidNormals = 0;
 	surface.frames.reserve(poses.size());
 	for (int poseIndex = 0; poseIndex < poses.size(); ++poseIndex) {
+		if (!work.step()) { return; }
 		const MdlPose& pose = poses.at(poseIndex);
 		ModelFrameGeometry geometry;
 		geometry.positions.resize(combinedCount);
 		geometry.normals.resize(combinedCount);
 		for (int index = 0; index < combinedCount; ++index) {
+			if (!work.step()) { return; }
 			const qint64 vertex = pose.vertexOffset + (static_cast<qint64>(baseForCombined.at(index)) * kMdlVertexBytes);
 			// Packed byte positions are decompressed with the header scale and
 			// translation: position = scale * raw + translate.
 			geometry.positions[index] = makeVec3((scale.x * static_cast<float>(readU8(bytes, vertex))) + translate.x,
 				(scale.y * static_cast<float>(readU8(bytes, vertex + 1))) + translate.y,
 				(scale.z * static_cast<float>(readU8(bytes, vertex + 2))) + translate.z);
-			geometry.normals[index] = aliasNormal(static_cast<int>(readU8(bytes, vertex + 3)));
+			const int normalIndex = readU8(bytes, vertex + 3);
+			if (normalIndex >= 162) { ++invalidNormals; }
+			geometry.normals[index] = aliasNormal(normalIndex);
 		}
 		surface.frames.append(geometry);
 
@@ -864,8 +950,11 @@ void decodeQuakeMdl(const QByteArray& bytes, const IdTechPalette& palette, Model
 		mesh->frames.append(info);
 	}
 
+	if (invalidNormals > 0) {
+		mesh->warnings << QCoreApplication::translate("VibeStudioModelMesh", "The MDL contains invalid normal indices; preview uses fallback normals.");
+	}
 	mesh->surfaces.append(surface);
-	mesh->animations = inferAnimations(mesh->frames);
+	mesh->animations = inferAnimations(mesh->frames, work);
 	mesh->geometryAvailable = true;
 }
 
@@ -881,20 +970,23 @@ constexpr qint64 kMd2FrameHeaderBytes = 40;
 constexpr qint64 kMd2FrameNameBytes = 16;
 constexpr qint64 kMd2VertexBytes = 4;
 
-void decodeQuake2Md2(const QByteArray& bytes, ModelMesh* mesh)
+void decodeQuake2Md2(const QByteArray& bytes, ModelMesh* mesh, const ModelWorkControl& control)
 {
+	ModelWorkProgress work(control, ModelWorkPhase::Validating, &mesh->error);
+	if (!work.check()) { return; }
 	if (!rangeOk(bytes, 0, kMd2HeaderBytes)) {
-		mesh->error = modelText("The MD2 header is truncated.");
+		mesh->error = QCoreApplication::translate("VibeStudioModelMesh", "The MD2 header is truncated.");
 		return;
 	}
 	mesh->version = readI32(bytes, 4);
 	if (mesh->version != 8) {
-		mesh->error = modelText("Unsupported MD2 version %1; only IDP2 version 8 is decoded.").arg(mesh->version);
+		mesh->error = QCoreApplication::translate("VibeStudioModelMesh", "Unsupported MD2 version %1; only IDP2 version 8 is decoded.").arg(mesh->version);
 		return;
 	}
 
 	const int skinWidth = readI32(bytes, 8);
 	const int skinHeight = readI32(bytes, 12);
+	mesh->md2SkinSize = {skinWidth, skinHeight};
 	const int frameSize = readI32(bytes, 16);
 	const int skinCount = readI32(bytes, 20);
 	const int positionCount = readI32(bytes, 24);
@@ -912,37 +1004,38 @@ void decodeQuake2Md2(const QByteArray& bytes, ModelMesh* mesh)
 		|| stCount <= 0 || stCount > kMaxSurfaceVertices
 		|| triangleCount <= 0 || triangleCount > kMaxSurfaceTriangles
 		|| frameCount <= 0 || frameCount > kMaxFrames) {
-		mesh->error = modelText("The MD2 header declares counts outside the supported range.");
+		mesh->error = QCoreApplication::translate("VibeStudioModelMesh", "The MD2 header declares counts outside the supported range.");
 		return;
 	}
 	if (static_cast<qint64>(positionCount) * static_cast<qint64>(frameCount) > kMaxVertexSlots) {
-		mesh->error = modelText("The MD2 declares more frame vertices than can be decoded.");
+		mesh->error = QCoreApplication::translate("VibeStudioModelMesh", "The MD2 declares more frame vertices than can be decoded.");
 		return;
 	}
 	const qint64 minimumFrameBytes = kMd2FrameHeaderBytes + (static_cast<qint64>(positionCount) * kMd2VertexBytes);
 	if (frameSize < minimumFrameBytes || frameSize > (minimumFrameBytes + 4096)) {
-		mesh->error = modelText("The MD2 frame size does not match the declared vertex count.");
+		mesh->error = QCoreApplication::translate("VibeStudioModelMesh", "The MD2 frame size does not match the declared vertex count.");
 		return;
 	}
 	if (!rangeOk(bytes, skinOffset, static_cast<qint64>(skinCount) * kMd2SkinNameBytes)
 		|| !rangeOk(bytes, stOffset, static_cast<qint64>(stCount) * kMd2StBytes)
 		|| !rangeOk(bytes, triangleOffset, static_cast<qint64>(triangleCount) * kMd2TriangleBytes)
 		|| !rangeOk(bytes, frameOffset, static_cast<qint64>(frameCount) * static_cast<qint64>(frameSize))) {
-		mesh->error = modelText("An MD2 data block lies outside the file.");
+		mesh->error = QCoreApplication::translate("VibeStudioModelMesh", "An MD2 data block lies outside the file.");
 		return;
 	}
 
 	mesh->skinCount = skinCount;
-	mesh->detailLines << modelText("Skin size: %1 x %2").arg(skinWidth).arg(skinHeight);
-	mesh->detailLines << modelText("Positions: %1").arg(positionCount);
-	mesh->detailLines << modelText("Texture coordinates: %1").arg(stCount);
-	mesh->detailLines << modelText("GL commands: %1").arg(glCommandCount);
+	mesh->detailLines << QCoreApplication::translate("VibeStudioModelMesh", "Skin size: %1 x %2").arg(skinWidth).arg(skinHeight);
+	mesh->detailLines << QCoreApplication::translate("VibeStudioModelMesh", "Positions: %1").arg(positionCount);
+	mesh->detailLines << QCoreApplication::translate("VibeStudioModelMesh", "Texture coordinates: %1").arg(stCount);
+	mesh->detailLines << QCoreApplication::translate("VibeStudioModelMesh", "GL commands: %1").arg(glCommandCount);
 
 	for (int index = 0; index < skinCount; ++index) {
+		if (!work.step()) { return; }
 		const QString skin = readFixedName(bytes, skinOffset + (static_cast<qint64>(index) * kMd2SkinNameBytes), kMd2SkinNameBytes);
-		if (!skin.isEmpty() && !mesh->skinPaths.contains(skin)) {
-			mesh->skinPaths.append(skin);
-		}
+		// Skin slots are indexed by the engine. Preserve duplicates and empty
+		// slots so authoring validation can refuse invalid paths without shifting slots.
+		mesh->skinPaths.append(skin);
 	}
 
 	ModelSurface surface;
@@ -956,7 +1049,7 @@ void decodeQuake2Md2(const QByteArray& bytes, ModelMesh* mesh)
 	const float skinWidthF = skinWidth > 0 ? static_cast<float>(skinWidth) : 1.0f;
 	const float skinHeightF = skinHeight > 0 ? static_cast<float>(skinHeight) : 1.0f;
 	if (skinWidth <= 0 || skinHeight <= 0) {
-		surface.warnings << modelText("The MD2 skin size is zero; texture coordinates are left unscaled.");
+		surface.warnings << QCoreApplication::translate("VibeStudioModelMesh", "The MD2 skin size is zero; texture coordinates are left unscaled.");
 	}
 
 	// MD2 indexes positions and texture coordinates separately, so a combined
@@ -966,10 +1059,12 @@ void decodeQuake2Md2(const QByteArray& bytes, ModelMesh* mesh)
 	QHash<qint64, int> combinedForPair;
 	int skippedTriangles = 0;
 	for (int index = 0; index < triangleCount; ++index) {
+		if (!work.step()) { return; }
 		const qint64 base = triangleOffset + (static_cast<qint64>(index) * kMd2TriangleBytes);
 		int corners[3] = {0, 0, 0};
 		bool valid = true;
 		for (int corner = 0; corner < 3; ++corner) {
+			if (!work.step()) { return; }
 			const int positionIndex = static_cast<int>(readU16(bytes, base + (corner * 2)));
 			const int stIndex = static_cast<int>(readU16(bytes, base + 6 + (corner * 2)));
 			if (positionIndex < 0 || positionIndex >= positionCount || stIndex < 0 || stIndex >= stCount) {
@@ -986,8 +1081,9 @@ void decodeQuake2Md2(const QByteArray& bytes, ModelMesh* mesh)
 				positionForCombined.append(positionIndex);
 				combinedForPair.insert(key, combined);
 				ModelTexCoord coord;
-				coord.u = static_cast<float>(readI16(bytes, stOffset + (static_cast<qint64>(stIndex) * kMd2StBytes))) / skinWidthF;
-				coord.v = static_cast<float>(readI16(bytes, stOffset + (static_cast<qint64>(stIndex) * kMd2StBytes) + 2)) / skinHeightF;
+				// MD2's GL command convention samples the centre of each ST texel.
+				coord.u = (static_cast<float>(readI16(bytes, stOffset + (static_cast<qint64>(stIndex) * kMd2StBytes))) + 0.5f) / skinWidthF;
+				coord.v = (static_cast<float>(readI16(bytes, stOffset + (static_cast<qint64>(stIndex) * kMd2StBytes) + 2)) + 0.5f) / skinHeightF;
 				surface.texCoords.append(coord);
 			}
 			corners[corner] = combined;
@@ -1003,29 +1099,31 @@ void decodeQuake2Md2(const QByteArray& bytes, ModelMesh* mesh)
 		surface.triangles.append(triangle);
 	}
 	if (skippedTriangles > 0) {
-		surface.warnings << modelText("%1 triangle(s) referenced out-of-range indices and were dropped.").arg(skippedTriangles);
+		surface.warnings << QCoreApplication::translate("VibeStudioModelMesh", "%1 triangle(s) referenced out-of-range indices and were dropped.").arg(skippedTriangles);
 	}
 
 	const int combinedCount = positionForCombined.size();
 	if (combinedCount <= 0) {
-		mesh->error = modelText("The MD2 contains no usable triangles.");
+		mesh->error = QCoreApplication::translate("VibeStudioModelMesh", "The MD2 contains no usable triangles.");
 		return;
 	}
 	if (static_cast<qint64>(combinedCount) * static_cast<qint64>(frameCount) > kMaxVertexSlots) {
-		mesh->error = modelText("The MD2 declares more frame vertices than can be decoded.");
+		mesh->error = QCoreApplication::translate("VibeStudioModelMesh", "The MD2 declares more frame vertices than can be decoded.");
 		return;
 	}
 	surface.vertexCount = combinedCount;
 
 	surface.frames.reserve(frameCount);
+	int invalidNormalIndices = 0;
 	for (int frameIndex = 0; frameIndex < frameCount; ++frameIndex) {
+		if (!work.step()) { return; }
 		const qint64 base = frameOffset + (static_cast<qint64>(frameIndex) * static_cast<qint64>(frameSize));
 		ModelVec3 scale;
 		ModelVec3 translate;
 		readVec3(bytes, base, &scale);
 		readVec3(bytes, base + 12, &translate);
 		if (!isFinite(scale) || !isFinite(translate)) {
-			mesh->error = modelText("An MD2 frame has a non-finite scale or translation.");
+			mesh->error = QCoreApplication::translate("VibeStudioModelMesh", "An MD2 frame has a non-finite scale or translation.");
 			return;
 		}
 		const QString name = readFixedName(bytes, base + 24, kMd2FrameNameBytes);
@@ -1035,11 +1133,14 @@ void decodeQuake2Md2(const QByteArray& bytes, ModelMesh* mesh)
 		geometry.positions.resize(combinedCount);
 		geometry.normals.resize(combinedCount);
 		for (int index = 0; index < combinedCount; ++index) {
+			if (!work.step()) { return; }
 			const qint64 vertex = vertexBase + (static_cast<qint64>(positionForCombined.at(index)) * kMd2VertexBytes);
 			geometry.positions[index] = makeVec3((scale.x * static_cast<float>(readU8(bytes, vertex))) + translate.x,
 				(scale.y * static_cast<float>(readU8(bytes, vertex + 1))) + translate.y,
 				(scale.z * static_cast<float>(readU8(bytes, vertex + 2))) + translate.z);
-			geometry.normals[index] = aliasNormal(static_cast<int>(readU8(bytes, vertex + 3)));
+			const int normalIndex = static_cast<int>(readU8(bytes, vertex + 3));
+			invalidNormalIndices += normalIndex >= 162;
+			geometry.normals[index] = aliasNormal(normalIndex);
 		}
 		surface.frames.append(geometry);
 
@@ -1052,8 +1153,13 @@ void decodeQuake2Md2(const QByteArray& bytes, ModelMesh* mesh)
 		mesh->frames.append(info);
 	}
 
+	if (invalidNormalIndices > 0) {
+		surface.warnings << QCoreApplication::translate("VibeStudioModelMesh", "The MD2 has %1 invalid normal indices; preview substitutes +Z. Editable import requires valid normals.").arg(invalidNormalIndices);
+	}
+	QString commandError;
+	if (!validateModelMd2Commands(bytes, &commandError, control)) { surface.warnings << commandError; }
 	mesh->surfaces.append(surface);
-	mesh->animations = inferAnimations(mesh->frames);
+	mesh->animations = inferAnimations(mesh->frames, work);
 	mesh->geometryAvailable = true;
 }
 
@@ -1072,15 +1178,17 @@ constexpr qint64 kMd3VertexBytes = 8;
 constexpr qint64 kMd3NameBytes = 64;
 constexpr float kMd3XyzScale = 1.0f / 64.0f;
 
-void decodeQuake3Md3(const QByteArray& bytes, ModelMesh* mesh)
+void decodeQuake3Md3(const QByteArray& bytes, ModelMesh* mesh, const ModelWorkControl& control)
 {
+	ModelWorkProgress work(control, ModelWorkPhase::Validating, &mesh->error);
+	if (!work.check()) { return; }
 	if (!rangeOk(bytes, 0, kMd3HeaderBytes)) {
-		mesh->error = modelText("The MD3 header is truncated.");
+		mesh->error = QCoreApplication::translate("VibeStudioModelMesh", "The MD3 header is truncated.");
 		return;
 	}
 	mesh->version = readI32(bytes, 4);
 	if (mesh->version != 15) {
-		mesh->error = modelText("Unsupported MD3 version %1; only IDP3 version 15 is decoded.").arg(mesh->version);
+		mesh->error = QCoreApplication::translate("VibeStudioModelMesh", "Unsupported MD3 version %1; only IDP3 version 15 is decoded.").arg(mesh->version);
 		return;
 	}
 
@@ -1099,32 +1207,33 @@ void decodeQuake3Md3(const QByteArray& bytes, ModelMesh* mesh)
 		|| tagCount < 0 || tagCount > kMaxTags
 		|| surfaceCount < 0 || surfaceCount > kMaxSurfaces
 		|| skinCount < 0 || skinCount > kMaxSkins) {
-		mesh->error = modelText("The MD3 header declares counts outside the supported range.");
+		mesh->error = QCoreApplication::translate("VibeStudioModelMesh", "The MD3 header declares counts outside the supported range.");
 		return;
 	}
 	if (static_cast<qint64>(tagCount) * static_cast<qint64>(frameCount) > static_cast<qint64>(kMaxTags) * 16LL) {
-		mesh->error = modelText("The MD3 declares more tags than can be decoded.");
+		mesh->error = QCoreApplication::translate("VibeStudioModelMesh", "The MD3 declares more tags than can be decoded.");
 		return;
 	}
 	if (!rangeOk(bytes, frameOffset, static_cast<qint64>(frameCount) * kMd3FrameBytes)) {
-		mesh->error = modelText("The MD3 frame block lies outside the file.");
+		mesh->error = QCoreApplication::translate("VibeStudioModelMesh", "The MD3 frame block lies outside the file.");
 		return;
 	}
 	if (tagCount > 0 && !rangeOk(bytes, tagOffset, static_cast<qint64>(tagCount) * static_cast<qint64>(frameCount) * kMd3TagBytes)) {
-		mesh->error = modelText("The MD3 tag block lies outside the file.");
+		mesh->error = QCoreApplication::translate("VibeStudioModelMesh", "The MD3 tag block lies outside the file.");
 		return;
 	}
 
 	if (!internalName.isEmpty()) {
-		mesh->detailLines << modelText("Internal name: %1").arg(internalName);
+		mesh->detailLines << QCoreApplication::translate("VibeStudioModelMesh", "Internal name: %1").arg(internalName);
 	}
-	mesh->detailLines << modelText("Flags: 0x%1").arg(QString::number(static_cast<uint>(flags), 16));
-	mesh->detailLines << modelText("Declared skins: %1").arg(skinCount);
+	mesh->detailLines << QCoreApplication::translate("VibeStudioModelMesh", "Flags: 0x%1").arg(QString::number(static_cast<uint>(flags), 16));
+	mesh->detailLines << QCoreApplication::translate("VibeStudioModelMesh", "Declared skins: %1").arg(skinCount);
 	if (endOffset > 0 && endOffset != bytes.size()) {
-		mesh->warnings << modelText("The MD3 end offset (%1) does not match the file size (%2).").arg(endOffset).arg(bytes.size());
+		mesh->warnings << QCoreApplication::translate("VibeStudioModelMesh", "The MD3 end offset (%1) does not match the file size (%2).").arg(endOffset).arg(bytes.size());
 	}
 
 	for (int index = 0; index < frameCount; ++index) {
+		if (!work.step()) { return; }
 		const qint64 base = frameOffset + (static_cast<qint64>(index) * kMd3FrameBytes);
 		ModelFrameInfo info;
 		info.index = index;
@@ -1137,14 +1246,18 @@ void decodeQuake3Md3(const QByteArray& bytes, ModelMesh* mesh)
 	}
 
 	for (int frameIndex = 0; frameIndex < frameCount; ++frameIndex) {
+		if (!work.step()) { return; }
 		for (int index = 0; index < tagCount; ++index) {
+			if (!work.step()) { return; }
 			const qint64 base = tagOffset + ((static_cast<qint64>(frameIndex) * static_cast<qint64>(tagCount) + static_cast<qint64>(index)) * kMd3TagBytes);
 			ModelTag tag;
 			tag.name = readFixedName(bytes, base, kMd3NameBytes);
 			tag.frameIndex = frameIndex;
 			readVec3(bytes, base + kMd3NameBytes, &tag.origin);
 			for (int row = 0; row < 3; ++row) {
+				if (!work.step()) { return; }
 				for (int column = 0; column < 3; ++column) {
+					if (!work.step()) { return; }
 					tag.axis[(row * 3) + column] = readF32(bytes, base + kMd3NameBytes + 12 + (static_cast<qint64>((row * 3) + column) * 4));
 				}
 			}
@@ -1157,13 +1270,16 @@ void decodeQuake3Md3(const QByteArray& bytes, ModelMesh* mesh)
 	// past the buffer.
 	qint64 offset = surfaceOffset;
 	int walked = 0;
+	qint64 totalVertexSlots = 0;
+	QSet<QString> skinNames;
 	for (; walked < surfaceCount; ++walked) {
+		if (!work.step()) { return; }
 		if (!rangeOk(bytes, offset, kMd3SurfaceHeaderBytes)) {
-			mesh->warnings << modelText("Surface %1 lies outside the file; the surface chain stops here.").arg(walked);
+			mesh->warnings << QCoreApplication::translate("VibeStudioModelMesh", "Surface %1 lies outside the file; the surface chain stops here.").arg(walked);
 			break;
 		}
 		if (bytes.mid(static_cast<qsizetype>(offset), 4) != QByteArrayLiteral("IDP3")) {
-			mesh->warnings << modelText("Surface %1 has an unexpected identifier; the surface chain stops here.").arg(walked);
+			mesh->warnings << QCoreApplication::translate("VibeStudioModelMesh", "Surface %1 has an unexpected identifier; the surface chain stops here.").arg(walked);
 			break;
 		}
 
@@ -1180,20 +1296,20 @@ void decodeQuake3Md3(const QByteArray& bytes, ModelMesh* mesh)
 		const int surfaceEnd = readI32(bytes, offset + 104);
 
 		if (surfaceEnd < kMd3SurfaceHeaderBytes || !rangeOk(bytes, offset, surfaceEnd)) {
-			mesh->warnings << modelText("Surface %1 declares an end offset outside the file; the surface chain stops here.").arg(walked);
+			mesh->warnings << QCoreApplication::translate("VibeStudioModelMesh", "Surface %1 declares an end offset outside the file; the surface chain stops here.").arg(walked);
 			break;
 		}
 		if (surfaceFrameCount <= 0 || surfaceFrameCount > kMaxFrames
 			|| shaderCount < 0 || shaderCount > kMaxSkins
 			|| vertexCount <= 0 || vertexCount > kMaxSurfaceVertices
 			|| triangleCount < 0 || triangleCount > kMaxSurfaceTriangles) {
-			mesh->warnings << modelText("Surface %1 declares counts outside the supported range and was skipped.").arg(walked);
+			mesh->warnings << QCoreApplication::translate("VibeStudioModelMesh", "Surface %1 declares counts outside the supported range and was skipped.").arg(walked);
 			offset += surfaceEnd;
 			continue;
 		}
 		const int usableFrames = std::min(surfaceFrameCount, frameCount);
 		if (static_cast<qint64>(vertexCount) * static_cast<qint64>(usableFrames) > kMaxVertexSlots) {
-			mesh->warnings << modelText("Surface %1 declares more frame vertices than can be decoded and was skipped.").arg(walked);
+			mesh->warnings << QCoreApplication::translate("VibeStudioModelMesh", "Surface %1 declares more frame vertices than can be decoded and was skipped.").arg(walked);
 			offset += surfaceEnd;
 			continue;
 		}
@@ -1214,35 +1330,45 @@ void decodeQuake3Md3(const QByteArray& bytes, ModelMesh* mesh)
 		};
 		if (!blockOk(shaderOffset, shaderBytes) || !blockOk(triangleOffset, triangleBytes)
 			|| !blockOk(stOffset, stBytes) || !blockOk(vertexOffset, vertexBytes)) {
-			mesh->warnings << modelText("Surface %1 has a data block outside the surface record and was skipped.").arg(walked);
+			mesh->warnings << QCoreApplication::translate("VibeStudioModelMesh", "Surface %1 has a data block outside the surface record and was skipped.").arg(walked);
 			offset += surfaceEnd;
 			continue;
 		}
+
+		const qint64 surfaceVertexSlots = qint64(vertexCount) * frameCount;
+		if (surfaceVertexSlots > kMaxVertexSlots - totalVertexSlots) {
+			mesh->error = QCoreApplication::translate("VibeStudioModelMesh", "The MD3 declares more total frame vertices than can be decoded.");
+			return;
+		}
+		totalVertexSlots += surfaceVertexSlots;
 
 		ModelSurface surface;
 		surface.index = mesh->surfaces.size();
 		surface.name = name.isEmpty() ? QStringLiteral("surface%1").arg(surface.index) : name;
 		surface.vertexCount = vertexCount;
 		if (surfaceFlags != 0) {
-			surface.warnings << modelText("Surface flags: 0x%1").arg(QString::number(static_cast<uint>(surfaceFlags), 16));
+			surface.warnings << QCoreApplication::translate("VibeStudioModelMesh", "Surface flags: 0x%1").arg(QString::number(static_cast<uint>(surfaceFlags), 16));
 		}
 		if (surfaceFrameCount != frameCount) {
-			surface.warnings << modelText("The surface declares %1 frame(s) while the model declares %2.").arg(surfaceFrameCount).arg(frameCount);
+			surface.warnings << QCoreApplication::translate("VibeStudioModelMesh", "The surface declares %1 frame(s) while the model declares %2.").arg(surfaceFrameCount).arg(frameCount);
 		}
 
 		for (int index = 0; index < shaderCount; ++index) {
+			if (!work.step()) { return; }
 			const QString shader = readFixedName(bytes, offset + shaderOffset + (static_cast<qint64>(index) * kMd3ShaderBytes), kMd3NameBytes);
 			if (shader.isEmpty()) {
 				continue;
 			}
 			surface.skinPaths.append(shader);
-			if (!mesh->skinPaths.contains(shader)) {
+			if (!skinNames.contains(shader)) {
+				skinNames.insert(shader);
 				mesh->skinPaths.append(shader);
 			}
 		}
 
 		surface.texCoords.reserve(vertexCount);
 		for (int index = 0; index < vertexCount; ++index) {
+			if (!work.step()) { return; }
 			const qint64 base = offset + stOffset + (static_cast<qint64>(index) * kMd3StBytes);
 			ModelTexCoord coord;
 			coord.u = readF32(bytes, base);
@@ -1253,6 +1379,7 @@ void decodeQuake3Md3(const QByteArray& bytes, ModelMesh* mesh)
 		int skippedTriangles = 0;
 		surface.triangles.reserve(triangleCount);
 		for (int index = 0; index < triangleCount; ++index) {
+			if (!work.step()) { return; }
 			const qint64 base = offset + triangleOffset + (static_cast<qint64>(index) * kMd3TriangleBytes);
 			const int a = readI32(bytes, base);
 			const int b = readI32(bytes, base + 4);
@@ -1268,15 +1395,17 @@ void decodeQuake3Md3(const QByteArray& bytes, ModelMesh* mesh)
 			surface.triangles.append(triangle);
 		}
 		if (skippedTriangles > 0) {
-			surface.warnings << modelText("%1 triangle(s) referenced out-of-range indices and were dropped.").arg(skippedTriangles);
+			surface.warnings << QCoreApplication::translate("VibeStudioModelMesh", "%1 triangle(s) referenced out-of-range indices and were dropped.").arg(skippedTriangles);
 		}
 
 		surface.frames.reserve(frameCount);
 		for (int frameIndex = 0; frameIndex < usableFrames; ++frameIndex) {
+			if (!work.step()) { return; }
 			ModelFrameGeometry geometry;
 			geometry.positions.resize(vertexCount);
 			geometry.normals.resize(vertexCount);
 			for (int index = 0; index < vertexCount; ++index) {
+				if (!work.step()) { return; }
 				const qint64 base = offset + vertexOffset
 					+ (((static_cast<qint64>(frameIndex) * static_cast<qint64>(vertexCount)) + static_cast<qint64>(index)) * kMd3VertexBytes);
 				// int16 positions are stored in 1/64 unit steps.
@@ -1288,6 +1417,7 @@ void decodeQuake3Md3(const QByteArray& bytes, ModelMesh* mesh)
 			surface.frames.append(geometry);
 		}
 		while (surface.frames.size() < frameCount && !surface.frames.isEmpty()) {
+			if (!work.step()) { return; }
 			// Keep the surface parallel with the model frame list.
 			surface.frames.append(surface.frames.last());
 		}
@@ -1296,14 +1426,14 @@ void decodeQuake3Md3(const QByteArray& bytes, ModelMesh* mesh)
 		offset += surfaceEnd;
 	}
 	if (walked < surfaceCount) {
-		mesh->warnings << modelText("Only %1 of %2 surface(s) could be read.").arg(walked).arg(surfaceCount);
+		mesh->warnings << QCoreApplication::translate("VibeStudioModelMesh", "Only %1 of %2 surface(s) could be read.").arg(walked).arg(surfaceCount);
 	}
 
 	mesh->skinCount = std::max(skinCount, static_cast<int>(mesh->skinPaths.size()));
-	mesh->animations = inferAnimations(mesh->frames);
+	mesh->animations = inferAnimations(mesh->frames, work);
 	mesh->geometryAvailable = !mesh->surfaces.isEmpty();
 	if (!mesh->geometryAvailable) {
-		mesh->warnings << modelText("No MD3 surface could be decoded.");
+		mesh->warnings << QCoreApplication::translate("VibeStudioModelMesh", "No MD3 surface could be decoded.");
 	}
 }
 
@@ -1316,7 +1446,7 @@ void decodeMdcHeader(const QByteArray& bytes, ModelMesh* mesh)
 	// mdcHeader_t: ident, version, name[64], flags, numFrames, numTags,
 	// numSurfaces, numSkins, then the block offsets.
 	if (!rangeOk(bytes, 0, 108)) {
-		mesh->error = modelText("The MDC header is truncated.");
+		mesh->error = QCoreApplication::translate("VibeStudioModelMesh", "The MDC header is truncated.");
 		return;
 	}
 	mesh->version = readI32(bytes, 4);
@@ -1326,14 +1456,14 @@ void decodeMdcHeader(const QByteArray& bytes, ModelMesh* mesh)
 	mesh->surfaceCount = std::max(0, readI32(bytes, 84));
 	mesh->skinCount = std::max(0, readI32(bytes, 88));
 	if (!internalName.isEmpty()) {
-		mesh->detailLines << modelText("Internal name: %1").arg(internalName);
+		mesh->detailLines << QCoreApplication::translate("VibeStudioModelMesh", "Internal name: %1").arg(internalName);
 	}
-	mesh->detailLines << modelText("Flags: 0x%1").arg(QString::number(static_cast<uint>(readI32(bytes, 72)), 16));
-	mesh->detailLines << modelText("Frames: %1").arg(mesh->frameCount);
-	mesh->detailLines << modelText("Tags: %1").arg(mesh->tagCount);
-	mesh->detailLines << modelText("Surfaces: %1").arg(mesh->surfaceCount);
-	mesh->detailLines << modelText("Skins: %1").arg(mesh->skinCount);
-	mesh->warnings << modelText("Geometry decoding is not implemented for MDC; only the header was read.");
+	mesh->detailLines << QCoreApplication::translate("VibeStudioModelMesh", "Flags: 0x%1").arg(QString::number(static_cast<uint>(readI32(bytes, 72)), 16));
+	mesh->detailLines << QCoreApplication::translate("VibeStudioModelMesh", "Frames: %1").arg(mesh->frameCount);
+	mesh->detailLines << QCoreApplication::translate("VibeStudioModelMesh", "Tags: %1").arg(mesh->tagCount);
+	mesh->detailLines << QCoreApplication::translate("VibeStudioModelMesh", "Surfaces: %1").arg(mesh->surfaceCount);
+	mesh->detailLines << QCoreApplication::translate("VibeStudioModelMesh", "Skins: %1").arg(mesh->skinCount);
+	mesh->warnings << QCoreApplication::translate("VibeStudioModelMesh", "Geometry decoding is not implemented for MDC; only the header was read.");
 }
 
 void decodeMdrHeader(const QByteArray& bytes, ModelMesh* mesh)
@@ -1341,7 +1471,7 @@ void decodeMdrHeader(const QByteArray& bytes, ModelMesh* mesh)
 	// mdrHeader_t: ident, version, name[64], numFrames, numBones, ofsFrames,
 	// numLODs, ofsLODs, numTags, ofsTags, ofsEnd.
 	if (!rangeOk(bytes, 0, 104)) {
-		mesh->error = modelText("The MDR header is truncated.");
+		mesh->error = QCoreApplication::translate("VibeStudioModelMesh", "The MDR header is truncated.");
 		return;
 	}
 	mesh->version = readI32(bytes, 4);
@@ -1351,13 +1481,13 @@ void decodeMdrHeader(const QByteArray& bytes, ModelMesh* mesh)
 	const int lodCount = std::max(0, readI32(bytes, 84));
 	mesh->tagCount = std::max(0, readI32(bytes, 92));
 	if (!internalName.isEmpty()) {
-		mesh->detailLines << modelText("Internal name: %1").arg(internalName);
+		mesh->detailLines << QCoreApplication::translate("VibeStudioModelMesh", "Internal name: %1").arg(internalName);
 	}
-	mesh->detailLines << modelText("Frames: %1").arg(mesh->frameCount);
-	mesh->detailLines << modelText("Bones: %1").arg(boneCount);
-	mesh->detailLines << modelText("Levels of detail: %1").arg(lodCount);
-	mesh->detailLines << modelText("Tags: %1").arg(mesh->tagCount);
-	mesh->warnings << modelText("Geometry decoding is not implemented for MDR; only the header was read.");
+	mesh->detailLines << QCoreApplication::translate("VibeStudioModelMesh", "Frames: %1").arg(mesh->frameCount);
+	mesh->detailLines << QCoreApplication::translate("VibeStudioModelMesh", "Bones: %1").arg(boneCount);
+	mesh->detailLines << QCoreApplication::translate("VibeStudioModelMesh", "Levels of detail: %1").arg(lodCount);
+	mesh->detailLines << QCoreApplication::translate("VibeStudioModelMesh", "Tags: %1").arg(mesh->tagCount);
+	mesh->warnings << QCoreApplication::translate("VibeStudioModelMesh", "Geometry decoding is not implemented for MDR; only the header was read.");
 }
 
 void decodeIqmHeader(const QByteArray& bytes, ModelMesh* mesh)
@@ -1365,7 +1495,7 @@ void decodeIqmHeader(const QByteArray& bytes, ModelMesh* mesh)
 	// iqmheader: magic[16], version, filesize, flags, then paired count/offset
 	// fields. See http://sauerbraten.org/iqm/.
 	if (!rangeOk(bytes, 0, 124)) {
-		mesh->error = modelText("The IQM header is truncated.");
+		mesh->error = QCoreApplication::translate("VibeStudioModelMesh", "The IQM header is truncated.");
 		return;
 	}
 	mesh->version = static_cast<int>(readU32(bytes, 16));
@@ -1376,17 +1506,17 @@ void decodeIqmHeader(const QByteArray& bytes, ModelMesh* mesh)
 	const int jointCount = static_cast<int>(std::min<quint32>(readU32(bytes, 68), static_cast<quint32>(std::numeric_limits<int>::max())));
 	const int animationCount = static_cast<int>(std::min<quint32>(readU32(bytes, 84), static_cast<quint32>(std::numeric_limits<int>::max())));
 	mesh->frameCount = static_cast<int>(std::min<quint32>(readU32(bytes, 92), static_cast<quint32>(std::numeric_limits<int>::max())));
-	mesh->detailLines << modelText("Declared file size: %1 byte(s)").arg(fileSize);
-	mesh->detailLines << modelText("Meshes: %1").arg(mesh->surfaceCount);
-	mesh->detailLines << modelText("Vertices: %1").arg(mesh->vertexCount);
-	mesh->detailLines << modelText("Triangles: %1").arg(mesh->triangleCount);
-	mesh->detailLines << modelText("Joints: %1").arg(jointCount);
-	mesh->detailLines << modelText("Animations: %1").arg(animationCount);
-	mesh->detailLines << modelText("Frames: %1").arg(mesh->frameCount);
+	mesh->detailLines << QCoreApplication::translate("VibeStudioModelMesh", "Declared file size: %1 byte(s)").arg(fileSize);
+	mesh->detailLines << QCoreApplication::translate("VibeStudioModelMesh", "Meshes: %1").arg(mesh->surfaceCount);
+	mesh->detailLines << QCoreApplication::translate("VibeStudioModelMesh", "Vertices: %1").arg(mesh->vertexCount);
+	mesh->detailLines << QCoreApplication::translate("VibeStudioModelMesh", "Triangles: %1").arg(mesh->triangleCount);
+	mesh->detailLines << QCoreApplication::translate("VibeStudioModelMesh", "Joints: %1").arg(jointCount);
+	mesh->detailLines << QCoreApplication::translate("VibeStudioModelMesh", "Animations: %1").arg(animationCount);
+	mesh->detailLines << QCoreApplication::translate("VibeStudioModelMesh", "Frames: %1").arg(mesh->frameCount);
 	if (fileSize > 0 && fileSize != bytes.size()) {
-		mesh->warnings << modelText("The IQM file size field (%1) does not match the file size (%2).").arg(fileSize).arg(bytes.size());
+		mesh->warnings << QCoreApplication::translate("VibeStudioModelMesh", "The IQM file size field (%1) does not match the file size (%2).").arg(fileSize).arg(bytes.size());
 	}
-	mesh->warnings << modelText("Geometry decoding is not implemented for IQM; only the header was read.");
+	mesh->warnings << QCoreApplication::translate("VibeStudioModelMesh", "Geometry decoding is not implemented for IQM; only the header was read.");
 }
 
 // ---------------------------------------------------------------------------
@@ -1449,6 +1579,208 @@ QStringList skinCandidatePaths(const QString& skinPath)
 
 } // namespace
 
+QStringList modelSkinCandidatePaths(const QString& skinPath) { return skinCandidatePaths(skinPath); }
+
+// Original consistency audit of the MD2 streams defined in Quake II's
+// qcommon/qfiles.h and consumed by ref_gl/gl_mesh.c (GPL-2.0-or-later,
+// master reviewed 2026-10-04). The preview decoder reads indexed triangles;
+// refuse authoring if adopting them would discard different GL geometry/UVs.
+bool validateModelMd2Commands(const QByteArray &bytes, QString *error, const ModelWorkControl &control)
+{
+	if (error)
+	{
+		error->clear();
+	}
+	ModelWorkProgress work(control, ModelWorkPhase::Validating, error);
+	const auto invalid = [&]
+	{
+		if (error)
+		{
+			*error = QCoreApplication::translate(
+				"VibeStudioModelMesh",
+				"MD2 GL commands are malformed, exceed the authoring audit limit, or differ from the indexed triangles/UVs. Editable "
+				"import would lose renderer-specific data; use the original file for preview.");
+		}
+		return false;
+	};
+	if (bytes.size() < 68)
+	{
+		return invalid();
+	}
+	const auto integer = [&](qint64 offset) { return qFromLittleEndian<qint32>(bytes.constData() + offset); };
+	const auto number = [&](qint64 offset)
+	{
+		quint32 bits = qFromLittleEndian<quint32>(bytes.constData() + offset);
+		float value;
+		std::memcpy(&value, &bits, 4);
+		return value;
+	};
+	const auto range = [&](qint64 start, qint64 count)
+	{ return start >= 68 && count >= 0 && start <= bytes.size() && count <= bytes.size() - start; };
+	const int words = integer(36), width = integer(8), height = integer(12), positions = integer(24), sts = integer(28),
+			  triangles = integer(32);
+	const qint64 commands = integer(60), stOffset = integer(48), triangleOffset = integer(52);
+	if (words == 0)
+	{
+		return work.check();
+	} // Software-only MD2; no second representation to lose.
+	if (words < 0 || width <= 0 || height <= 0 || triangles <= 0 || triangles > 131072 || sts <= 0 || !range(commands, qint64(words) * 4) ||
+		!range(stOffset, qint64(sts) * 4) || !range(triangleOffset, qint64(triangles) * 12))
+	{
+		return invalid();
+	}
+	using Corner = std::array<int, 3>; // XYZ index and integer ST coordinate.
+	const auto key = [](std::array<Corner, 3> corners)
+	{
+		int first = 0;
+		for (int i = 1; i < 3; ++i)
+		{
+			if (corners[i] < corners[first])
+			{
+				first = i;
+			}
+		}
+		QByteArray result(36, '\0');
+		for (int c = 0; c < 3; ++c)
+		{
+			for (int j = 0; j < 3; ++j)
+			{
+				qToLittleEndian(qint32(corners[(first + c) % 3][j]), result.data() + c * 12 + j * 4);
+			}
+		}
+		return result;
+	};
+	QHash<QByteArray, int> faces;
+	for (int t = 0; t < triangles; ++t)
+	{
+		if (!work.step())
+		{
+			return false;
+		}
+		std::array<Corner, 3> corners;
+		for (int c = 0; c < 3; ++c)
+		{
+			const int p = qFromLittleEndian<quint16>(bytes.constData() + triangleOffset + t * 12 + c * 2);
+			const int st = qFromLittleEndian<quint16>(bytes.constData() + triangleOffset + t * 12 + 6 + c * 2);
+			if (p >= positions || st >= sts)
+			{
+				return invalid();
+			}
+			corners[c] = {p, qFromLittleEndian<qint16>(bytes.constData() + stOffset + st * 4),
+						  qFromLittleEndian<qint16>(bytes.constData() + stOffset + st * 4 + 2)};
+		}
+		++faces[key(corners)];
+	}
+	int cursor = 0;
+	bool terminated = false;
+	while (cursor < words)
+	{
+		if (!work.step())
+		{
+			return false;
+		}
+		const int command = integer(commands + qint64(cursor++) * 4);
+		if (!command)
+		{
+			terminated = true;
+			break;
+		}
+		const qint64 count = std::abs(qint64(command));
+		if (count < 3 || count > (words - cursor) / 3)
+		{
+			return invalid();
+		}
+		Corner first{}, previous{}, beforePrevious{};
+		for (int v = 0; v < count; ++v)
+		{
+			if (!work.step())
+			{
+				return false;
+			}
+			const auto offset = commands + qint64(cursor) * 4;
+			const double u = number(offset), textureV = number(offset + 4);
+			const double s = u * width - 0.5, t = textureV * height - 0.5;
+			const int position = integer(offset + 8);
+			if (!std::isfinite(s) || !std::isfinite(t) || s < -32768.01 || s > 32767.01 || t < -32768.01 || t > 32767.01 || position < 0 ||
+				position >= positions)
+			{
+				return invalid();
+			}
+			const int si = int(std::lround(s)), ti = int(std::lround(t));
+			if (std::abs(u - (si + 0.5f) / width) > 1e-6 || std::abs(textureV - (ti + 0.5f) / height) > 1e-6)
+			{
+				return invalid();
+			}
+			const Corner current{position, si, ti};
+			if (v == 0)
+			{
+				first = current;
+			}
+			if (v >= 2)
+			{
+				std::array<Corner, 3> triangle = command < 0 ? std::array<Corner, 3>{first, previous, current}
+															 : (v % 2 ? std::array<Corner, 3>{previous, beforePrevious, current}
+																	  : std::array<Corner, 3>{beforePrevious, previous, current});
+				// Degenerate connectors in strips emit no rendered triangle.
+				if (triangle[0][0] != triangle[1][0] && triangle[1][0] != triangle[2][0] && triangle[2][0] != triangle[0][0])
+				{
+					auto found = faces.find(key(triangle));
+					if (found == faces.end())
+					{
+						return invalid();
+					}
+					if (--found.value() == 0)
+					{
+						faces.erase(found);
+					}
+				}
+			}
+			beforePrevious = previous;
+			previous = current;
+			cursor += 3;
+		}
+	}
+	if (!terminated || !faces.isEmpty())
+	{
+		return invalid();
+	}
+	while (cursor < words)
+	{
+		if (!work.step())
+		{
+			return false;
+		}
+		if (integer(commands + qint64(cursor++) * 4))
+		{
+			return invalid();
+		}
+	}
+	return work.check();
+}
+
+int modelAliasNormalIndex(const ModelVec3& normal)
+{
+	static const auto directions = [] {
+		std::array<std::array<double, 3>, 162> result{};
+		for (int i = 0; i < 162; ++i) {
+			const auto& n = kAliasNormals[i];
+			const double length = std::sqrt(double(n[0]) * n[0] + double(n[1]) * n[1] + double(n[2]) * n[2]);
+			result[i] = {n[0] / length, n[1] / length, n[2] / length};
+		}
+		return result;
+	}();
+	int best = 0;
+	double bestDot = -std::numeric_limits<double>::infinity();
+	for (int i = 0; i < 162; ++i) {
+		const auto& n = directions[i];
+		const double dot = double(normal.x) * n[0] + double(normal.y) * n[1] + double(normal.z) * n[2];
+		if (dot > bestDot) { bestDot = dot; best = i; }
+	}
+	return best;
+}
+
+ModelVec3 modelAliasNormal(int index) { return aliasNormal(index); }
+
 // ---------------------------------------------------------------------------
 // Public API
 // ---------------------------------------------------------------------------
@@ -1494,6 +1826,8 @@ float ModelMesh::boundingRadius() const
 QString modelMeshFormatId(ModelMeshFormat format)
 {
 	switch (format) {
+	case ModelMeshFormat::WavefrontObj:
+		return QStringLiteral("obj");
 	case ModelMeshFormat::QuakeMdl:
 		return QStringLiteral("mdl");
 	case ModelMeshFormat::Quake2Md2:
@@ -1515,6 +1849,8 @@ QString modelMeshFormatId(ModelMeshFormat format)
 QString modelMeshFormatDisplayName(ModelMeshFormat format)
 {
 	switch (format) {
+	case ModelMeshFormat::WavefrontObj:
+		return QStringLiteral("Wavefront OBJ");
 	case ModelMeshFormat::QuakeMdl:
 		return QStringLiteral("Quake MDL");
 	case ModelMeshFormat::Quake2Md2:
@@ -1530,11 +1866,14 @@ QString modelMeshFormatDisplayName(ModelMeshFormat format)
 	case ModelMeshFormat::Unknown:
 		break;
 	}
-	return modelText("Unknown model");
+	return QCoreApplication::translate("VibeStudioModelMesh", "Unknown model");
 }
 
 ModelMeshFormat detectModelMeshFormat(const QString& virtualPath, const QByteArray& bytes)
 {
+	if (virtualPath.endsWith(QStringLiteral(".obj"), Qt::CaseInsensitive)) {
+		return ModelMeshFormat::WavefrontObj;
+	}
 	if (bytes.size() >= 16 && bytes.startsWith(QByteArrayLiteral("INTERQUAKEMODEL"))) {
 		return ModelMeshFormat::Iqm;
 	}
@@ -1580,19 +1919,20 @@ ModelMeshFormat detectModelMeshFormat(const QString& virtualPath, const QByteArr
 	return ModelMeshFormat::Unknown;
 }
 
-ModelMesh decodeModelMesh(const QString& virtualPath, const QByteArray& bytes, const IdTechPalette* palette)
+ModelMesh decodeModelMesh(const QString& virtualPath, const QByteArray& bytes, const IdTechPalette* palette, const ModelWorkControl& control)
 {
 	ModelMesh mesh;
 	mesh.sourcePath = virtualPath;
 	mesh.format = detectModelMeshFormat(virtualPath, bytes);
 	mesh.formatId = modelMeshFormatId(mesh.format);
 	mesh.formatName = modelMeshFormatDisplayName(mesh.format);
+	if (!modelWorkCheckpoint(control, ModelWorkPhase::Validating, 0, 0, &mesh.error)) { return mesh; }
 	if (mesh.format == ModelMeshFormat::Unknown) {
-		mesh.error = modelText("The file is not a recognised idTech model.");
+		mesh.error = QCoreApplication::translate("VibeStudioModelMesh", "The file is not a recognised idTech model.");
 		return mesh;
 	}
 	if (bytes.isEmpty()) {
-		mesh.error = modelText("The model file is empty.");
+		mesh.error = QCoreApplication::translate("VibeStudioModelMesh", "The model file is empty.");
 		return mesh;
 	}
 
@@ -1604,14 +1944,16 @@ ModelMesh decodeModelMesh(const QString& virtualPath, const QByteArray& bytes, c
 	}
 
 	switch (mesh.format) {
+	case ModelMeshFormat::WavefrontObj:
+		return decodeModelObj(virtualPath, bytes, control);
 	case ModelMeshFormat::QuakeMdl:
-		decodeQuakeMdl(bytes, effectivePalette, &mesh);
+		decodeQuakeMdl(bytes, effectivePalette, &mesh, control);
 		break;
 	case ModelMeshFormat::Quake2Md2:
-		decodeQuake2Md2(bytes, &mesh);
+		decodeQuake2Md2(bytes, &mesh, control);
 		break;
 	case ModelMeshFormat::Quake3Md3:
-		decodeQuake3Md3(bytes, &mesh);
+		decodeQuake3Md3(bytes, &mesh, control);
 		break;
 	case ModelMeshFormat::Mdc:
 		decodeMdcHeader(bytes, &mesh);
@@ -1626,43 +1968,63 @@ ModelMesh decodeModelMesh(const QString& virtualPath, const QByteArray& bytes, c
 		break;
 	}
 
-	if (!mesh.error.isEmpty()) {
-		mesh.geometryAvailable = false;
-		mesh.surfaces.clear();
-		return mesh;
+	if (mesh.error.isEmpty() && mesh.geometryAvailable) {
+		// MDL/MD2/MD3 use clockwise front faces. The editable mesh and OBJ use
+		// cross(b-a, c-a) for outward normals. Convert after the native MD2
+		// command-stream audit, retaining every corner's UV/normal identity.
+		// Original id renderers use GL_FRONT culling; see docs/CREDITS.md.
+		ModelWorkProgress winding(control, ModelWorkPhase::Validating, &mesh.error);
+		for (auto &surface : mesh.surfaces) {
+			for (auto &triangle : surface.triangles) {
+				if (!winding.step()) { break; }
+				std::swap(triangle.b, triangle.c);
+			}
+			if (!winding.check()) { break; }
+		}
 	}
-	if (mesh.geometryAvailable || !mesh.frames.isEmpty()) {
-		// Frames still count even when no surface survived the walk.
-		finalizeMesh(&mesh);
+	if (mesh.error.isEmpty() && (mesh.geometryAvailable || !mesh.frames.isEmpty())) {
+		finalizeMesh(&mesh, control);
+	}
+	modelWorkCheckpoint(control, ModelWorkPhase::Validating, 0, 0, &mesh.error);
+	if (!mesh.error.isEmpty()) {
+		// Never publish partially decoded geometry, animation or embedded skins.
+		ModelMesh failed;
+		failed.sourcePath = mesh.sourcePath;
+		failed.format = mesh.format;
+		failed.formatId = mesh.formatId;
+		failed.formatName = mesh.formatName;
+		failed.version = mesh.version;
+		failed.error = mesh.error;
+		return failed;
 	}
 	return mesh;
 }
 
-ModelMesh decodeModelMeshFromArchive(const PackageArchiveReader& archive, const QString& virtualPath, const QString& paletteId)
+ModelMesh decodeModelMeshFromArchive(const PackageArchiveReader& archive, const QString& virtualPath, const QString& paletteId,
+	const ModelWorkControl& control)
 {
-	// Resolve a real package palette first so MDL's embedded indexed skins get
-	// the colours the package actually ships.
-	const IdTechPaletteResolution resolution = resolveIdTechPalette(archive, paletteId.isEmpty() ? QStringLiteral("quake") : paletteId);
-
+	const ModelArchiveReader reader(archive, control);
 	QByteArray bytes;
 	QString error;
-	if (!archive.readEntryBytes(virtualPath, &bytes, &error)) {
+	if (!reader.readEntryBytes(virtualPath, &bytes, &error)) {
 		ModelMesh mesh;
 		mesh.sourcePath = virtualPath;
-		mesh.format = ModelMeshFormat::Unknown;
-		mesh.formatId = modelMeshFormatId(mesh.format);
-		mesh.formatName = modelMeshFormatDisplayName(mesh.format);
-		mesh.error = error.isEmpty() ? modelText("Unable to read the package entry.") : error;
+		mesh.error = error;
 		return mesh;
 	}
-
-	ModelMesh mesh = decodeModelMesh(virtualPath, bytes, &resolution.palette);
+	// Only MDL embeds palette indices. Palette reads use the same verified,
+	// bounded snapshot as geometry and check cancellation while streaming.
+	IdTechPaletteResolution resolution;
+	if (detectModelMeshFormat(virtualPath, bytes) == ModelMeshFormat::QuakeMdl) {
+		resolution = resolveIdTechPalette(reader, paletteId.isEmpty() ? QStringLiteral("quake") : paletteId);
+	}
+	ModelMesh mesh = decodeModelMesh(virtualPath, bytes, &resolution.palette, control);
 	if (!mesh.embeddedSkins.isEmpty()) {
 		mesh.warnings += resolution.warnings;
 		if (resolution.fromPackage && !resolution.sourceVirtualPath.isEmpty()) {
-			mesh.detailLines << modelText("Skin palette: %1").arg(resolution.sourceVirtualPath);
+			mesh.detailLines << QCoreApplication::translate("VibeStudioModelMesh", "Skin palette: %1").arg(resolution.sourceVirtualPath);
 		} else if (resolution.palette.generated) {
-			mesh.detailLines << modelText("Skin palette: generated stand-in (no package palette was found).");
+			mesh.detailLines << QCoreApplication::translate("VibeStudioModelMesh", "Skin palette: generated stand-in (no package palette was found).");
 		}
 	}
 	return mesh;
@@ -1722,60 +2084,60 @@ QStringList modelMeshSummaryLines(const ModelMesh& mesh)
 	QStringList lines;
 	const QString formatName = mesh.formatName.isEmpty() ? modelMeshFormatDisplayName(mesh.format) : mesh.formatName;
 	if (!mesh.error.isEmpty()) {
-		lines << modelText("%1: could not be decoded.").arg(formatName);
-		lines << modelText("Error: %1").arg(mesh.error);
+		lines << QCoreApplication::translate("VibeStudioModelMesh", "%1: could not be decoded.").arg(formatName);
+		lines << QCoreApplication::translate("VibeStudioModelMesh", "Error: %1").arg(mesh.error);
 		return lines;
 	}
 	if (!mesh.geometryAvailable) {
-		lines << modelText("%1: header only, %2 frame(s), %3 surface(s).").arg(formatName).arg(mesh.frameCount).arg(mesh.surfaceCount);
+		lines << QCoreApplication::translate("VibeStudioModelMesh", "%1: header only, %2 frame(s), %3 surface(s).").arg(formatName).arg(mesh.frameCount).arg(mesh.surfaceCount);
 	} else {
-		lines << modelText("%1: %2 surface(s), %3 frame(s), %4 vertices, %5 triangles.")
+		lines << QCoreApplication::translate("VibeStudioModelMesh", "%1: %2 surface(s), %3 frame(s), %4 vertices, %5 triangles.")
 			.arg(formatName)
 			.arg(mesh.surfaceCount)
 			.arg(mesh.frameCount)
 			.arg(mesh.vertexCount)
 			.arg(mesh.triangleCount);
 	}
-	lines << modelText("Format: %1 (version %2)").arg(mesh.formatId, QString::number(mesh.version));
-	lines << modelText("Frames: %1").arg(mesh.frameCount);
-	lines << modelText("Surfaces: %1").arg(mesh.surfaceCount);
-	lines << modelText("Tags: %1").arg(mesh.tagCount);
-	lines << modelText("Skins: %1").arg(mesh.skinCount);
+	lines << QCoreApplication::translate("VibeStudioModelMesh", "Format: %1 (version %2)").arg(mesh.formatId, QString::number(mesh.version));
+	lines << QCoreApplication::translate("VibeStudioModelMesh", "Frames: %1").arg(mesh.frameCount);
+	lines << QCoreApplication::translate("VibeStudioModelMesh", "Surfaces: %1").arg(mesh.surfaceCount);
+	lines << QCoreApplication::translate("VibeStudioModelMesh", "Tags: %1").arg(mesh.tagCount);
+	lines << QCoreApplication::translate("VibeStudioModelMesh", "Skins: %1").arg(mesh.skinCount);
 	if (mesh.geometryAvailable) {
-		lines << modelText("Bounds: %1 to %2").arg(formatVector(mesh.mins), formatVector(mesh.maxs));
-		lines << modelText("Bounding radius: %1").arg(formatCoordinate(mesh.boundingRadius()));
+		lines << QCoreApplication::translate("VibeStudioModelMesh", "Bounds: %1 to %2").arg(formatVector(mesh.mins), formatVector(mesh.maxs));
+		lines << QCoreApplication::translate("VibeStudioModelMesh", "Bounding radius: %1").arg(formatCoordinate(mesh.boundingRadius()));
 	}
 	for (const ModelSurface& surface : mesh.surfaces) {
-		lines << modelText("Surface %1 \"%2\": %3 vertices, %4 triangles")
+		lines << QCoreApplication::translate("VibeStudioModelMesh", "Surface %1 \"%2\": %3 vertices, %4 triangles")
 			.arg(surface.index)
 			.arg(surface.name)
 			.arg(surface.vertexCount)
 			.arg(surface.triangles.size());
 	}
 	for (const ModelAnimation& animation : mesh.animations) {
-		lines << modelText("Animation \"%1\": frames %2-%3")
+		lines << QCoreApplication::translate("VibeStudioModelMesh", "Animation \"%1\": frames %2-%3")
 			.arg(animation.name)
 			.arg(animation.firstFrame)
 			.arg(animation.firstFrame + animation.frameCount - 1);
 	}
 	for (const ModelEmbeddedSkin& skin : mesh.embeddedSkins) {
-		lines << modelText("Embedded skin %1: %2 x %3%4")
+		lines << QCoreApplication::translate("VibeStudioModelMesh", "Embedded skin %1: %2 x %3%4")
 			.arg(skin.index)
 			.arg(skin.image.width())
 			.arg(skin.image.height())
-			.arg(skin.groupFrameCount > 1 ? modelText(" (group of %1)").arg(skin.groupFrameCount) : QString());
+			.arg(skin.groupFrameCount > 1 ? QCoreApplication::translate("VibeStudioModelMesh", " (group of %1)").arg(skin.groupFrameCount) : QString());
 	}
 	for (const QString& skin : mesh.skinPaths) {
-		lines << modelText("Skin path: %1").arg(skin);
+		lines << QCoreApplication::translate("VibeStudioModelMesh", "Skin path: %1").arg(skin);
 	}
 	lines += mesh.detailLines;
 	for (const ModelSurface& surface : mesh.surfaces) {
 		for (const QString& warning : surface.warnings) {
-			lines << modelText("Surface %1: %2").arg(surface.index).arg(warning);
+			lines << QCoreApplication::translate("VibeStudioModelMesh", "Surface %1: %2").arg(surface.index).arg(warning);
 		}
 	}
 	for (const QString& warning : mesh.warnings) {
-		lines << modelText("Warning: %1").arg(warning);
+		lines << QCoreApplication::translate("VibeStudioModelMesh", "Warning: %1").arg(warning);
 	}
 	return lines;
 }
@@ -1785,8 +2147,11 @@ QString modelMeshSummaryText(const ModelMesh& mesh)
 	return modelMeshSummaryLines(mesh).join(QLatin1Char('\n'));
 }
 
-QString exportModelFrameObj(const ModelMesh& mesh, int frameIndex, const QString& materialName)
+QString exportModelFrameObj(const ModelMesh& mesh, int frameIndex, const QString& materialName, const ModelWorkControl& control, QString* error)
 {
+	if (error) { error->clear(); }
+	ModelWorkProgress work(control, ModelWorkPhase::Serializing, error);
+	if (!work.check()) { return {}; }
 	if (!mesh.geometryAvailable || mesh.surfaces.isEmpty()) {
 		return {};
 	}
@@ -1797,7 +2162,7 @@ QString exportModelFrameObj(const ModelMesh& mesh, int frameIndex, const QString
 	QStringList lines;
 	lines << QStringLiteral("# Wavefront OBJ exported by VibeStudio");
 	if (!mesh.sourcePath.isEmpty()) {
-		lines << QStringLiteral("# source %1").arg(mesh.sourcePath);
+		lines << QStringLiteral("# source %1").arg(sanitizedName(mesh.sourcePath));
 	}
 	const QString frameName = mesh.frames.at(frameIndex).name;
 	lines << QStringLiteral("# frame %1%2").arg(QString::number(frameIndex), frameName.isEmpty() ? QString() : QStringLiteral(" %1").arg(sanitizedName(frameName)));
@@ -1805,6 +2170,7 @@ QString exportModelFrameObj(const ModelMesh& mesh, int frameIndex, const QString
 	int emitted = 0;
 	QStringList faceLines;
 	for (const ModelSurface& surface : mesh.surfaces) {
+		if (!work.step()) { return {}; }
 		if (frameIndex >= surface.frames.size()) {
 			continue;
 		}
@@ -1822,20 +2188,24 @@ QString exportModelFrameObj(const ModelMesh& mesh, int frameIndex, const QString
 			lines << QStringLiteral("usemtl %1").arg(sanitizedName(materialName));
 		}
 		for (int index = 0; index < count; ++index) {
+			if (!work.step()) { return {}; }
 			const ModelVec3& position = geometry.positions.at(index);
 			lines << QStringLiteral("v %1 %2 %3").arg(formatNumber(position.x), formatNumber(position.y), formatNumber(position.z));
 		}
 		for (int index = 0; index < count; ++index) {
+			if (!work.step()) { return {}; }
 			// OBJ measures V from the bottom of the image, idTech from the top.
 			const ModelTexCoord coord = index < surface.texCoords.size() ? surface.texCoords.at(index) : ModelTexCoord();
 			lines << QStringLiteral("vt %1 %2").arg(formatNumber(coord.u), formatNumber(1.0f - coord.v));
 		}
 		for (int index = 0; index < count; ++index) {
+			if (!work.step()) { return {}; }
 			const ModelVec3 normal = index < geometry.normals.size() ? geometry.normals.at(index) : makeVec3(0.0f, 0.0f, 1.0f);
 			lines << QStringLiteral("vn %1 %2 %3").arg(formatNumber(normal.x), formatNumber(normal.y), formatNumber(normal.z));
 		}
 		faceLines.clear();
 		for (const ModelTriangle& triangle : surface.triangles) {
+			if (!work.step()) { return {}; }
 			if (triangle.a < 0 || triangle.a >= count || triangle.b < 0 || triangle.b >= count || triangle.c < 0 || triangle.c >= count) {
 				continue;
 			}
@@ -1853,7 +2223,9 @@ QString exportModelFrameObj(const ModelMesh& mesh, int frameIndex, const QString
 		return {};
 	}
 	lines << QString();
-	return lines.join(QLatin1Char('\n'));
+	const auto result = lines.join(QLatin1Char('\n'));
+	if (!work.check()) { return {}; }
+	return result;
 }
 
 } // namespace vibestudio

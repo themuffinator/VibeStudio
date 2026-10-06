@@ -1,4 +1,5 @@
 #include "core/map_geometry.h"
+#include "core/level_patch.h"
 
 #include <QCoreApplication>
 #include <QHash>
@@ -11,12 +12,6 @@
 namespace vibestudio {
 
 namespace {
-
-
-QString geometryText(const char* source)
-{
-	return QCoreApplication::translate("VibeStudioMapGeometry", source);
-}
 
 // Tolerances follow the conventions used by the released idTech qbsp sources
 // (see `ON_EPSILON` / `DIST_EPSILON` in ericw-tools,
@@ -131,10 +126,12 @@ QVector<LevelMapVec3> baseWindingForPlane(const MapPlane& plane)
 }
 
 // Sutherland-Hodgman clip keeping the half-space behind `plane` (the brush
-// interior, because map brush face normals point outward). Points within
-// `kOnPlaneEpsilon` of the plane are treated as lying on it and are kept.
+// interior, because map brush face normals point outward). Use numerical
+// precision here, not the larger diagnostic tolerance: keeping a point 0.01
+// off a shallow plane can separate adjacent face windings by several units.
 QVector<LevelMapVec3> clipWinding(const QVector<LevelMapVec3>& winding, const MapPlane& plane)
 {
+	constexpr double clipEpsilon = 1e-7;
 	if (winding.size() < 3) {
 		return {};
 	}
@@ -144,7 +141,7 @@ QVector<LevelMapVec3> clipWinding(const QVector<LevelMapVec3>& winding, const Ma
 	for (const LevelMapVec3& point : winding) {
 		const double distance = planeDistanceToPoint(plane, point);
 		distances.append(distance);
-		if (distance > kOnPlaneEpsilon) {
+		if (distance > clipEpsilon) {
 			anyOutside = true;
 		}
 	}
@@ -160,16 +157,16 @@ QVector<LevelMapVec3> clipWinding(const QVector<LevelMapVec3>& winding, const Ma
 		const LevelMapVec3& next = winding.at(nextIndex);
 		const double currentDistance = distances.at(index);
 		const double nextDistance = distances.at(nextIndex);
-		if (currentDistance <= kOnPlaneEpsilon) {
+		const bool currentInside = currentDistance <= clipEpsilon;
+		const bool nextInside = nextDistance <= clipEpsilon;
+		if (currentInside) {
 			result.append(current);
 		}
-		const bool crossesOut = currentDistance < -kOnPlaneEpsilon && nextDistance > kOnPlaneEpsilon;
-		const bool crossesIn = currentDistance > kOnPlaneEpsilon && nextDistance < -kOnPlaneEpsilon;
-		if (!crossesOut && !crossesIn) {
+		if (currentInside == nextInside) {
 			continue;
 		}
 		const double denominator = currentDistance - nextDistance;
-		if (std::abs(denominator) < kNormalEpsilon) {
+		if (std::abs(denominator) < 1e-12) {
 			continue;
 		}
 		const double fraction = currentDistance / denominator;
@@ -183,23 +180,25 @@ bool pointsAreClose(const LevelMapVec3& a, const LevelMapVec3& b, double epsilon
 	return std::abs(a.x - b.x) <= epsilon && std::abs(a.y - b.y) <= epsilon && std::abs(a.z - b.z) <= epsilon;
 }
 
-QVector<LevelMapVec3> tidyWinding(const QVector<LevelMapVec3>& winding)
+QVector<LevelMapVec3> tidyWinding(const QVector<LevelMapVec3>& winding, MapGeometryPrecision precision)
 {
 	QVector<LevelMapVec3> result;
+	const bool preserve = precision == MapGeometryPrecision::PreserveCoordinates;
+	const double duplicateEpsilon = preserve ? 1e-7 : kOnPlaneEpsilon;
 	result.reserve(winding.size());
 	for (const LevelMapVec3& point : winding) {
 		if (!vecIsFinite(point)) {
 			return {};
 		}
-		const LevelMapVec3 snapped = makeVec3(snapToInteger(point.x, kPointSnapEpsilon),
+		const LevelMapVec3 snapped = preserve ? point : makeVec3(snapToInteger(point.x, kPointSnapEpsilon),
 			snapToInteger(point.y, kPointSnapEpsilon),
 			snapToInteger(point.z, kPointSnapEpsilon));
-		if (!result.isEmpty() && pointsAreClose(result.last(), snapped, kOnPlaneEpsilon)) {
+		if (!result.isEmpty() && pointsAreClose(result.last(), snapped, duplicateEpsilon)) {
 			continue;
 		}
 		result.append(snapped);
 	}
-	while (result.size() >= 2 && pointsAreClose(result.first(), result.last(), kOnPlaneEpsilon)) {
+	while (result.size() >= 2 && pointsAreClose(result.first(), result.last(), duplicateEpsilon)) {
 		result.removeLast();
 	}
 	if (result.size() < 3) {
@@ -296,7 +295,7 @@ QRectF rectFromPoints(const QVector<QPointF>& points)
 QString vectorText(const LevelMapVec3& value)
 {
 	if (!value.valid) {
-		return geometryText("unknown");
+		return QCoreApplication::translate("VibeStudioMapGeometry", "unknown");
 	}
 	return QStringLiteral("%1, %2, %3").arg(value.x, 0, 'f', 1).arg(value.y, 0, 'f', 1).arg(value.z, 0, 'f', 1);
 }
@@ -372,7 +371,7 @@ QVector<QPolygonF> MapBrushGeometry::footprintPolygons() const
 	return polygons;
 }
 
-MapPlane planeFromPoints(const LevelMapVec3& a, const LevelMapVec3& b, const LevelMapVec3& c)
+MapPlane planeFromPoints(const LevelMapVec3& a, const LevelMapVec3& b, const LevelMapVec3& c, MapGeometryPrecision precision)
 {
 	// idTech convention, matching `PlaneFromPoints` in the released qbsp sources
 	// (ericw-tools, https://github.com/ericwa/ericw-tools, imported under
@@ -392,6 +391,9 @@ MapPlane planeFromPoints(const LevelMapVec3& a, const LevelMapVec3& b, const Lev
 	double nx = normal.x / length;
 	double ny = normal.y / length;
 	double nz = normal.z / length;
+	if (precision == MapGeometryPrecision::PreserveCoordinates) {
+		return {nx, ny, nz, (a.x * nx) + (a.y * ny) + (a.z * nz), true};
+	}
 	// Axis snapping, as qbsp does, so axis-aligned brushes stay exact.
 	if (std::abs(nx) < kNormalEpsilon) {
 		nx = 0.0;
@@ -432,23 +434,32 @@ double planeDistanceToPoint(const MapPlane& plane, const LevelMapVec3& point)
 	return (plane.normalX * point.x) + (plane.normalY * point.y) + (plane.normalZ * point.z) - plane.distance;
 }
 
-MapBrushGeometry solveBrushGeometry(const QVector<LevelMapBrushFace>& faces, int brushId, int entityId)
+MapBrushGeometry solveBrushGeometry(const QVector<LevelMapBrushFace>& faces, int brushId, int entityId, MapGeometryPrecision precision,
+	const std::function<bool()>& isCancelled)
 {
 	MapBrushGeometry geometry;
 	geometry.brushId = brushId;
 	geometry.entityId = entityId;
+	const auto cancelled = [&] {
+		if (!isCancelled || !isCancelled()) { return false; }
+		geometry.cancelled = true; geometry.solved = false; geometry.faces.clear();
+		geometry.mins = {}; geometry.maxs = {}; geometry.warnings.clear();
+		return true;
+	};
+	if (cancelled()) { return geometry; }
 	geometry.faces.reserve(faces.size());
 
 	QVector<MapPlane> planes;
 	planes.reserve(faces.size());
 	int validPlaneCount = 0;
 	for (int index = 0; index < faces.size(); ++index) {
+		if ((index & 63) == 0 && cancelled()) { return geometry; }
 		const LevelMapBrushFace& face = faces.at(index);
-		const MapPlane plane = planeFromPoints(face.p0, face.p1, face.p2);
+		const MapPlane plane = planeFromPoints(face.p0, face.p1, face.p2, precision);
 		if (plane.valid) {
 			++validPlaneCount;
 		} else {
-			geometry.warnings << geometryText("Face %1 has a degenerate plane; its three points are collinear or identical.").arg(index);
+			geometry.warnings << QCoreApplication::translate("VibeStudioMapGeometry", "Face %1 has a degenerate plane; its three points are collinear or identical.").arg(index);
 		}
 		planes.append(plane);
 
@@ -460,32 +471,37 @@ MapBrushGeometry solveBrushGeometry(const QVector<LevelMapBrushFace>& faces, int
 	}
 
 	bool duplicateReported = false;
+	const bool preserve = precision == MapGeometryPrecision::PreserveCoordinates;
+	const double duplicateNormal = preserve ? 1e-9 : kDuplicatePlaneNormalEpsilon;
+	const double duplicateDistance = preserve ? 1e-7 : kDuplicatePlaneDistanceEpsilon;
 	for (int i = 0; i < planes.size() && !duplicateReported; ++i) {
+		if (cancelled()) { return geometry; }
 		if (!planes.at(i).valid) {
 			continue;
 		}
 		for (int j = i + 1; j < planes.size(); ++j) {
+			if ((j & 63) == 0 && cancelled()) { return geometry; }
 			const MapPlane& first = planes.at(i);
 			const MapPlane& second = planes.at(j);
 			if (!second.valid) {
 				continue;
 			}
-			if (std::abs(first.normalX - second.normalX) > kDuplicatePlaneNormalEpsilon
-				|| std::abs(first.normalY - second.normalY) > kDuplicatePlaneNormalEpsilon
-				|| std::abs(first.normalZ - second.normalZ) > kDuplicatePlaneNormalEpsilon) {
+			if (std::abs(first.normalX - second.normalX) > duplicateNormal
+				|| std::abs(first.normalY - second.normalY) > duplicateNormal
+				|| std::abs(first.normalZ - second.normalZ) > duplicateNormal) {
 				continue;
 			}
-			if (std::abs(first.distance - second.distance) > kDuplicatePlaneDistanceEpsilon) {
+			if (std::abs(first.distance - second.distance) > duplicateDistance) {
 				continue;
 			}
-			geometry.warnings << geometryText("Faces %1 and %2 are duplicate planes.").arg(i).arg(j);
+			geometry.warnings << QCoreApplication::translate("VibeStudioMapGeometry", "Faces %1 and %2 are duplicate planes.").arg(i).arg(j);
 			duplicateReported = true;
 			break;
 		}
 	}
 
 	if (faces.size() < 4) {
-		geometry.warnings << geometryText("Brush has fewer than four planes and cannot enclose a volume.");
+		geometry.warnings << QCoreApplication::translate("VibeStudioMapGeometry", "Brush has fewer than four planes and cannot enclose a volume.");
 	}
 
 	int solvedFaceCount = 0;
@@ -499,17 +515,19 @@ MapBrushGeometry solveBrushGeometry(const QVector<LevelMapBrushFace>& faces, int
 
 	if (validPlaneCount >= 4) {
 		for (int index = 0; index < planes.size(); ++index) {
+			if (cancelled()) { return geometry; }
 			if (!planes.at(index).valid) {
 				continue;
 			}
 			QVector<LevelMapVec3> winding = baseWindingForPlane(planes.at(index));
 			for (int other = 0; other < planes.size() && !winding.isEmpty(); ++other) {
+				if ((other & 31) == 0 && cancelled()) { return geometry; }
 				if (other == index || !planes.at(other).valid) {
 					continue;
 				}
 				winding = clipWinding(winding, planes.at(other));
 			}
-			winding = tidyWinding(winding);
+			winding = tidyWinding(winding, precision);
 			if (winding.isEmpty()) {
 				continue;
 			}
@@ -538,7 +556,7 @@ MapBrushGeometry solveBrushGeometry(const QVector<LevelMapBrushFace>& faces, int
 		for (MapFacePolygon& face : geometry.faces) {
 			face.points.clear();
 		}
-		geometry.warnings << geometryText("Brush is open on at least one side and encloses no volume.");
+		geometry.warnings << QCoreApplication::translate("VibeStudioMapGeometry", "Brush is open on at least one side and encloses no volume.");
 	} else if (solvedFaceCount >= 4) {
 		const bool finite = std::isfinite(minX) && std::isfinite(minY) && std::isfinite(minZ)
 			&& std::isfinite(maxX) && std::isfinite(maxY) && std::isfinite(maxZ);
@@ -547,24 +565,25 @@ MapBrushGeometry solveBrushGeometry(const QVector<LevelMapBrushFace>& faces, int
 			&& (maxY - minY) > kOnPlaneEpsilon
 			&& (maxZ - minZ) > kOnPlaneEpsilon;
 		if (!finite) {
-			geometry.warnings << geometryText("Brush bounds are not finite; the brush encloses no volume.");
+			geometry.warnings << QCoreApplication::translate("VibeStudioMapGeometry", "Brush bounds are not finite; the brush encloses no volume.");
 		} else if (!nonDegenerate) {
 			geometry.mins = makeVec3(minX, minY, minZ);
 			geometry.maxs = makeVec3(maxX, maxY, maxZ);
-			geometry.warnings << geometryText("Brush is flat on at least one axis and encloses no volume.");
+			geometry.warnings << QCoreApplication::translate("VibeStudioMapGeometry", "Brush is flat on at least one axis and encloses no volume.");
 		} else {
 			geometry.mins = makeVec3(minX, minY, minZ);
 			geometry.maxs = makeVec3(maxX, maxY, maxZ);
 			geometry.solved = true;
 		}
 	} else if (validPlaneCount >= 4) {
-		geometry.warnings << geometryText("Brush encloses no volume; only %1 of %2 planes produced a face.")
+		geometry.warnings << QCoreApplication::translate("VibeStudioMapGeometry", "Brush encloses no volume; only %1 of %2 planes produced a face.")
 			.arg(solvedFaceCount)
 			.arg(validPlaneCount);
 	} else if (faces.size() >= 4) {
-		geometry.warnings << geometryText("Brush encloses no volume; fewer than four usable planes remain.");
+		geometry.warnings << QCoreApplication::translate("VibeStudioMapGeometry", "Brush encloses no volume; fewer than four usable planes remain.");
 	}
 
+	if (cancelled()) { return geometry; }
 	return geometry;
 }
 
@@ -812,18 +831,19 @@ QVector<QVector<LevelMapVec3>> tessellatePatchMesh(const LevelMapPatch& patch, i
 	QVector<QVector<LevelMapVec3>> result;
 	const int width = patch.width;
 	const int height = patch.height;
-	if (width < 3 || height < 3 || (width % 2) == 0 || (height % 2) == 0) {
+	if (width < 3 || height < 3 || width > kLevelPatchMaxDimension || height > kLevelPatchMaxDimension || (width % 2) == 0 || (height % 2) == 0) {
 		return result;
 	}
 	if (patch.controlPoints.size() != static_cast<qsizetype>(width) * static_cast<qsizetype>(height)) {
 		return result;
 	}
 
-	const int steps = std::clamp(subdivisions, 1, 32);
+	const int stepsX = patch.fixedSubdivisions ? std::clamp(patch.subdivisionsX, 1, 64) : std::clamp(subdivisions, 1, 32);
+	const int stepsY = patch.fixedSubdivisions ? std::clamp(patch.subdivisionsY, 1, 64) : std::clamp(subdivisions, 1, 32);
 	const int columnPatches = (width - 1) / 2;
 	const int rowPatches = (height - 1) / 2;
-	const int outputColumns = (columnPatches * steps) + 1;
-	const int outputRows = (rowPatches * steps) + 1;
+	const int outputColumns = (columnPatches * stepsX) + 1;
+	const int outputRows = (rowPatches * stepsY) + 1;
 
 	result.resize(outputRows);
 	for (int row = 0; row < outputRows; ++row) {
@@ -838,10 +858,10 @@ QVector<QVector<LevelMapVec3>> tessellatePatchMesh(const LevelMapPatch& patch, i
 		for (int patchColumn = 0; patchColumn < columnPatches; ++patchColumn) {
 			const int baseRow = patchRow * 2;
 			const int baseColumn = patchColumn * 2;
-			for (int stepV = 0; stepV <= steps; ++stepV) {
-				const double v = static_cast<double>(stepV) / static_cast<double>(steps);
-				for (int stepU = 0; stepU <= steps; ++stepU) {
-					const double u = static_cast<double>(stepU) / static_cast<double>(steps);
+			for (int stepV = 0; stepV <= stepsY; ++stepV) {
+				const double v = static_cast<double>(stepV) / static_cast<double>(stepsY);
+				for (int stepU = 0; stepU <= stepsX; ++stepU) {
+					const double u = static_cast<double>(stepU) / static_cast<double>(stepsX);
 					LevelMapVec3 rowPoints[3];
 					for (int offset = 0; offset < 3; ++offset) {
 						rowPoints[offset] = evaluateQuadraticBezier(control(baseRow + offset, baseColumn),
@@ -850,14 +870,33 @@ QVector<QVector<LevelMapVec3>> tessellatePatchMesh(const LevelMapPatch& patch, i
 							u);
 					}
 					const LevelMapVec3 point = evaluateQuadraticBezier(rowPoints[0], rowPoints[1], rowPoints[2], v);
-					const int outRow = (patchRow * steps) + stepV;
-					const int outColumn = (patchColumn * steps) + stepU;
+					const int outRow = (patchRow * stepsY) + stepV;
+					const int outColumn = (patchColumn * stepsX) + stepU;
 					result[outRow][outColumn] = point;
 				}
 			}
 		}
 	}
 
+	return result;
+}
+
+QVector<QVector<QPointF>> tessellatePatchTexCoords(const LevelMapPatch& patch, int subdivisions)
+{
+	if (patch.controlU.size() != patch.controlPoints.size() || patch.controlV.size() != patch.controlPoints.size()) { return {}; }
+	LevelMapPatch uv = patch;
+	for (int i = 0; i < uv.controlPoints.size(); ++i) {
+		uv.controlPoints[i] = {patch.controlU.at(i), patch.controlV.at(i), 0.0, true};
+	}
+	const auto grid = tessellatePatchMesh(uv, subdivisions);
+	QVector<QVector<QPointF>> result;
+	result.reserve(grid.size());
+	for (const auto& row : grid) {
+		QVector<QPointF> points;
+		points.reserve(row.size());
+		for (const auto& p : row) { points << QPointF(p.x, p.y); }
+		result << points;
+	}
 	return result;
 }
 
@@ -904,7 +943,7 @@ MapGeometrySummary summarizeLevelMapGeometry(const LevelMapDocument& document)
 				break;
 			}
 			++reportedWarnings;
-			summary.warnings << geometryText("Brush %1: %2").arg(brush.brushId).arg(warning);
+			summary.warnings << QCoreApplication::translate("VibeStudioMapGeometry", "Brush %1: %2").arg(brush.brushId).arg(warning);
 		}
 	}
 
@@ -918,7 +957,7 @@ MapGeometrySummary summarizeLevelMapGeometry(const LevelMapDocument& document)
 			++summary.openSectorCount;
 			if (reportedWarnings < 16) {
 				++reportedWarnings;
-				summary.warnings << geometryText("Sector %1 has %2 unclosed boundary edges.")
+				summary.warnings << QCoreApplication::translate("VibeStudioMapGeometry", "Sector %1 has %2 unclosed boundary edges.")
 					.arg(outline.sectorId)
 					.arg(outline.openEdgeCount);
 			}
@@ -951,17 +990,17 @@ MapGeometrySummary summarizeLevelMapGeometry(const LevelMapDocument& document)
 QStringList mapGeometrySummaryLines(const MapGeometrySummary& summary)
 {
 	QStringList lines;
-	lines << geometryText("Brushes solved: %1 / %2").arg(summary.solvedBrushCount).arg(summary.brushCount);
-	lines << geometryText("Unsolved brushes: %1").arg(summary.degenerateBrushCount);
-	lines << geometryText("Face polygons: %1 (%2 points)").arg(summary.faceCount).arg(summary.polygonPointCount);
-	lines << geometryText("Patch meshes: %1").arg(summary.patchCount);
-	lines << geometryText("Sector outlines: %1 (%2 with open edges)").arg(summary.sectorOutlineCount).arg(summary.openSectorCount);
-	lines << geometryText("Geometry bounds min: %1").arg(vectorText(summary.mins));
-	lines << geometryText("Geometry bounds max: %1").arg(vectorText(summary.maxs));
+	lines << QCoreApplication::translate("VibeStudioMapGeometry", "Brushes solved: %1 / %2").arg(summary.solvedBrushCount).arg(summary.brushCount);
+	lines << QCoreApplication::translate("VibeStudioMapGeometry", "Unsolved brushes: %1").arg(summary.degenerateBrushCount);
+	lines << QCoreApplication::translate("VibeStudioMapGeometry", "Face polygons: %1 (%2 points)").arg(summary.faceCount).arg(summary.polygonPointCount);
+	lines << QCoreApplication::translate("VibeStudioMapGeometry", "Patch meshes: %1").arg(summary.patchCount);
+	lines << QCoreApplication::translate("VibeStudioMapGeometry", "Sector outlines: %1 (%2 with open edges)").arg(summary.sectorOutlineCount).arg(summary.openSectorCount);
+	lines << QCoreApplication::translate("VibeStudioMapGeometry", "Geometry bounds min: %1").arg(vectorText(summary.mins));
+	lines << QCoreApplication::translate("VibeStudioMapGeometry", "Geometry bounds max: %1").arg(vectorText(summary.maxs));
 	if (summary.warnings.isEmpty()) {
-		lines << geometryText("Geometry warnings: none");
+		lines << QCoreApplication::translate("VibeStudioMapGeometry", "Geometry warnings: none");
 	} else {
-		lines << geometryText("Geometry warnings: %1").arg(summary.warnings.size());
+		lines << QCoreApplication::translate("VibeStudioMapGeometry", "Geometry warnings: %1").arg(summary.warnings.size());
 		for (const QString& warning : summary.warnings) {
 			lines << warning;
 		}

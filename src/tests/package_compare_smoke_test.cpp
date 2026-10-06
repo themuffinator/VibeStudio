@@ -1,6 +1,7 @@
 #include "core/deflate.h"
 #include "core/package_archive.h"
 #include "core/package_compare.h"
+#include "core/package_import_store.h"
 #include "core/package_staging.h"
 
 #include <QByteArray>
@@ -9,8 +10,10 @@
 #include <QFileInfo>
 #include <QJsonArray>
 #include <QJsonObject>
+#include <QScopeGuard>
 #include <QStringList>
 #include <QTemporaryDir>
+#include <QThreadPool>
 
 #include <iostream>
 
@@ -55,9 +58,8 @@ struct ZipInput {
 };
 
 // Minimal stored-only ZIP fixture writer (PKWARE APPNOTE.TXT sections 4.3.7,
-// 4.3.12 and 4.3.16), used here because a ZIP central directory is the one
-// package format in this repo that stores a per-entry CRC-32, which is the
-// comparison path that must run without reading any entry bytes.
+// 4.3.12 and 4.3.16). Comparison must read and verify the payload even when
+// two central directories carry matching CRC-32 values.
 // https://pkware.cachefly.net/webdocs/casestudies/APPNOTE.TXT
 bool buildStoredZip(const QString& path, const QVector<ZipInput>& inputs)
 {
@@ -142,12 +144,106 @@ QStringList entryKeys(const PackageCompareResult& result)
 	return keys;
 }
 
+class StreamOnlyReader final : public PackageArchiveReader {
+public:
+	qint64 declared = 200003;
+	qint64 actual = declared;
+	bool supported = true;
+	mutable int bufferedReads = 0;
+	mutable int streamedReads = 0;
+	PackageArchiveFormat format() const override { return PackageArchiveFormat::Pak; }
+	QString sourcePath() const override { return QStringLiteral("synthetic-stream"); }
+	bool isOpen() const override { return true; }
+	QVector<PackageEntry> entries() const override {
+		PackageEntry directory; directory.virtualPath = QStringLiteral("synthetic");
+		directory.kind = PackageEntryKind::Directory; directory.storageMethod = QStringLiteral("synthetic");
+		PackageEntry file; file.virtualPath = QStringLiteral("PAYLOAD"); file.kind = PackageEntryKind::File;
+		file.readable = true; file.sizeBytes = static_cast<quint64>(declared);
+		return {directory, file};
+	}
+	bool readEntryBytes(const QString&, QByteArray*, QString* error, qint64 = -1) const override {
+		++bufferedReads; if (error) *error = QStringLiteral("Unexpected whole-entry read"); return false;
+	}
+	bool streamEntryAt(qsizetype index, const std::function<bool(QByteArrayView)>& sink, QString* error,
+		const std::function<bool()>& isCancelled = {}) const override {
+		++streamedReads;
+		if (!supported) return PackageArchiveReader::streamEntryAt(index, sink, error, isCancelled);
+		if (index != 1) { if (error) *error = QStringLiteral("Wrong positional index"); return false; }
+		const QByteArray block(65536, 'a');
+		for (qint64 pos = 0; pos < actual; pos += block.size()) {
+			if ((isCancelled && isCancelled()) || !sink(QByteArrayView(block).first(qMin<qint64>(block.size(), actual - pos)))) return false;
+		}
+		return true;
+	}
+};
+
+bool streamingComparisonSmoke(const QDir& root)
+{
+	bool ok = true;
+	StreamOnlyReader first, second;
+	ok &= expect(comparePackages(first, second).identical() && first.bufferedReads == 0 && second.bufferedReads == 0
+		&& first.streamedReads == 1 && second.streamedReads == 1, "all reader types must use the positional streaming contract");
+	for (const int difference : {-1, 1}) {
+		second.actual = second.declared + difference;
+		const auto result = comparePackages(first, second);
+		ok &= expect(!result.identical() && result.summary.uncomparedCount == 1 && !result.warnings.isEmpty()
+			&& result.entries.first().rightHash.isEmpty(), "short or excessive streamed data must never acquire a valid digest");
+	}
+	second.supported = false;
+	const auto unsupported = comparePackages(first, second);
+	ok &= expect(!unsupported.identical() && unsupported.summary.uncomparedCount == 1 && second.bufferedReads == 0,
+		"unsupported streaming must remain explicitly unchecked without buffering fallback");
+	QString error;
+	const QByteArray payload(2 * 1024 * 1024 + 7, 'a');
+	const QString folder = root.filePath(QStringLiteral("stream-comparison"));
+	ok &= expect(QDir().mkpath(folder) && writeFile(QDir(folder).filePath(QStringLiteral("AAA")), QByteArray("x"))
+		&& writeFile(QDir(folder).filePath(QStringLiteral("PAYLOAD")), payload), "prepare comparison source");
+	PackageArchive source;
+	PackageStagingModel plan;
+	ok &= expect(source.load(folder, &error) && plan.createEmpty(PackageArchiveFormat::Pak, {}, &error)
+		&& plan.addBytes(QByteArray("x"), QStringLiteral("AAA"), &error)
+		&& plan.addBytes(payload, QStringLiteral("PAYLOAD"), &error), "prepare generated planned comparison");
+	PackageStagingArchive planned(plan);
+	for (const bool throughReader : {false, true}) {
+		PackageCompareRequest request;
+		quint64 previous = 0;
+		int partialNotifications = 0;
+		request.byteProgress = [&](PackageCompareSource, const QString& path, quint64 done, quint64 total) {
+			if (done == 0) previous = 0;
+			ok &= expect(done >= previous && done - previous <= 65536 && done <= total, "progress must reflect bounded verified input chunks");
+			previous = done;
+			if (path == QStringLiteral("PAYLOAD") && done > 0 && done < total) ++partialNotifications;
+		};
+		const auto compare = [&]() { return throughReader ? comparePackages(source, planned, request) : comparePackageToPlan(source, plan, request); };
+		ok &= expect(compare().identical() && partialNotifications > 2, "generated plans and staged readers must compare in bounded chunks");
+		request.maxEntryBytes = 1024;
+		partialNotifications = 0;
+		ok &= expect(compare().summary.uncomparedCount == 1 && partialNotifications == 0, "the I/O budget must skip an oversized entry before reading it");
+		request.maxEntryBytes = kPackageCompareDefaultMaxEntryBytes;
+		for (const auto side : {PackageCompareSource::Left, PackageCompareSource::Right}) {
+			bool cancel = false;
+			quint64 last = 0;
+			request.isCancelled = [&]() { return cancel; };
+			request.byteProgress = [&](PackageCompareSource reading, const QString& path, quint64 done, quint64 total) {
+				if (reading == side && path == QStringLiteral("PAYLOAD") && done > 0 && done < total) { last = done; cancel = true; }
+			};
+			const auto stopped = compare();
+			ok &= expect(stopped.cancelled && !stopped.completed && !stopped.identical() && last == 65536
+				&& stopped.entries.size() == 1 && stopped.summary.identicalCount == 1
+				&& stopped.summary.leftBytes == 1 && stopped.summary.rightBytes == 1 && stopped.warnings.isEmpty(),
+				"cancellation on either side must retain only finished rows and accurate partial counters");
+		}
+	}
+	return ok;
+}
+
 } // namespace
 
 int main()
 {
 	bool ok = true;
 	QTemporaryDir tempDir;
+	const auto drainCleanup = qScopeGuard([] { QThreadPool::globalInstance()->waitForDone(); waitForPackageImportCleanup(); });
 	ok &= expect(tempDir.isValid(), "temporary directory should be valid");
 	QDir root(tempDir.path());
 	QString error;
@@ -252,8 +348,7 @@ int main()
 		ok &= expect(packageCompareStatusFromId(packageCompareStatusId(PackageCompareStatus::CaseOnly)) == PackageCompareStatus::CaseOnly, "status ids should round-trip");
 	}
 
-	// A package compared against itself is identical, and the ZIP path uses the
-	// stored CRC-32 instead of reading any bytes.
+	// A package compared against itself is identical after payload verification.
 	{
 		const QString zipA = root.filePath(QStringLiteral("a.pk3"));
 		const QString zipB = root.filePath(QStringLiteral("b.pk3"));
@@ -272,8 +367,8 @@ int main()
 		ok &= expect(same.identical(), "two identical PK3s should compare as identical");
 		ok &= expect(same.summary.identicalCount == 2, "both members should be identical");
 		const PackageCompareEntry* shader = findByKey(same, QStringLiteral("scripts/common.shader"));
-		ok &= expect(shader && shader->content == PackageCompareContent::Crc32, "a stored CRC-32 should be preferred over reading the bytes");
-		ok &= expect(shader && shader->leftHash.size() == 8 && shader->leftHash == shader->rightHash, "matching CRC-32 values should be reported as eight hex digits");
+		ok &= expect(shader && shader->content == PackageCompareContent::Sha256, "ZIP payloads must be read and verified before declaring equality");
+		ok &= expect(shader && shader->leftHash.size() == 64 && shader->leftHash == shader->rightHash, "matching SHA-256 values should be reported");
 
 		// One byte different, same length: the CRC has to notice.
 		QVector<ZipInput> mutated = members;
@@ -290,10 +385,15 @@ int main()
 	// Comparing a package against what a staging plan would write.
 	{
 		PackageStagingModel plan;
+		PackageReadControl importControl;
+		auto importOptions = std::make_shared<PackageImportOptions>();
+		importOptions->directory = root.filePath(QStringLiteral("comparison-imports"));
+		importControl.importOptions = importOptions;
 		ok &= expect(plan.loadBaseArchive(leftArchive, &error), "the plan should load the left package");
-		ok &= expect(plan.addFile(root.filePath(QStringLiteral("right/added.txt")), QStringLiteral("added.txt"), &error), "the plan should stage an addition");
+		ok &= expect(plan.addFile(root.filePath(QStringLiteral("right/added.txt")), QStringLiteral("added.txt"), &error,
+			PackageStageConflictResolution::Block, importControl), "the plan should stage an addition");
 		ok &= expect(plan.deleteEntry(QStringLiteral("removed.txt"), &error), "the plan should stage a deletion");
-		ok &= expect(plan.replaceFile(QStringLiteral("trap.bin"), root.filePath(QStringLiteral("right/trap.bin")), &error), "the plan should stage a replacement");
+		ok &= expect(plan.replaceFile(QStringLiteral("trap.bin"), root.filePath(QStringLiteral("right/trap.bin")), &error, importControl), "the plan should stage a replacement");
 
 		PackageCompareRequest planRequest;
 		planRequest.leftLabel = QStringLiteral("package");
@@ -316,7 +416,31 @@ int main()
 		PackageArchive closed;
 		const PackageCompareResult closedResult = comparePackages(leftArchive, closed);
 		ok &= expect(closedResult.entries.isEmpty() && !closedResult.warnings.isEmpty(), "comparing against a closed package should warn");
+		ok &= expect(!closedResult.completed && !closedResult.identical(), "a failed comparison must never report a match");
 	}
 
+	{
+		PackageCompareRequest limited;
+		limited.maxEntryBytes = 1;
+		const auto result = comparePackages(leftArchive, leftArchive, limited);
+		ok &= expect(result.completed && !result.identical() && result.summary.uncomparedCount > 0,
+			"over-budget content must prevent an identical verdict");
+		ok &= expect(hasStatus(result, QStringLiteral("same.txt"), PackageCompareStatus::Uncompared),
+			"unchecked content must have its own status rather than identical");
+		limited.metadataOnly = true;
+		ok &= expect(comparePackages(leftArchive, leftArchive, limited).identical(), "explicit metadata comparisons can match without reading contents");
+	}
+	{
+		PackageCompareRequest cancellable;
+		int progressed = 0;
+		cancellable.progress = [&](int current, int) { progressed = current; };
+		cancellable.isCancelled = [&]() { return progressed > 0; };
+		const auto result = comparePackages(leftArchive, leftArchive, cancellable);
+		ok &= expect(result.cancelled && !result.completed && !result.identical(), "cancellation must never report a complete match");
+		ok &= expect(result.entries.size() < leftArchive.entries().size(), "cancellation must stop between entries");
+		ok &= expect(packageCompareJson(result).value(QStringLiteral("cancelled")).toBool(), "JSON must mark partial comparisons");
+	}
+
+	ok &= streamingComparisonSmoke(root);
 	return ok ? 0 : 1;
 }

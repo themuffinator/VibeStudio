@@ -424,8 +424,10 @@ bool runZipCrcMismatch(const QDir& root)
 
 	// The deflated path reports the same problem differently: there the stream
 	// inflates cleanly and only the checksum disagrees, so the message names
-	// both values. Patching the central directory CRC keeps the stream intact.
+	// both values. Keep local and central CRC fields consistent so this fixture
+	// reaches payload verification instead of the header-consistency check.
 	QByteArray deflated = buildZip(files, true);
+	patchLe32(&deflated, 14, 0xdeadbeefu);
 	patchLe32(&deflated, firstCentralRecordOffset(deflated) + 16, 0xdeadbeefu);
 
 	const QString deflatedPath = root.filePath(QStringLiteral("crc-deflated.zip"));

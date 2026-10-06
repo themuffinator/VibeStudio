@@ -409,14 +409,15 @@ bool runQuake3AuditSmoke(const PackageArchive& archive)
 	ok &= expect(audit.referenceCount == 7, "The Quake III fixture records seven use sites.");
 	ok &= expect(audit.uniqueCount == 6, "The Quake III fixture uses six unique names.");
 	ok &= expect(audit.shaderNameCount >= 2, "The package's shader scripts should be parsed.");
+	ok &= expect(!audit.complete, "The malformed companion shader prevents a complete-audit claim.");
 	ok &= expect(audit.missingCount == 1, "Only the absent shader should be missing.");
 	ok &= expect(audit.engineHandledCount == 2, "The common family and noshader are engine-handled.");
 
 	const MapTextureReference* tga = findReference(audit, "textures/base_wall/tgaonly");
 	ok &= expect(tga != nullptr, "The TGA-backed shader should be recorded.");
 	if (tga) {
-		ok &= expect(tga->resolved && tga->resolution == MapTextureResolution::ResolvedEntry, "An image file should win over the shader declaration.");
-		ok &= expect(tga->resolvedPath == QStringLiteral("textures/base_wall/tgaonly.tga"), "Extension probing should find the .tga file.");
+		ok &= expect(tga->resolved && tga->resolution == MapTextureResolution::ResolvedByShader, "The shader declaration takes precedence, matching dependency export.");
+		ok &= expect(tga->resolvedPath == QStringLiteral("scripts/base.shader"), "The declaring script is retained when a same-named image also exists.");
 	}
 
 	const MapTextureReference* jpg = findReference(audit, "textures/base_wall/jpgonly");
@@ -452,6 +453,25 @@ bool runQuake3AuditSmoke(const PackageArchive& archive)
 	const QByteArray second = QJsonDocument(mapTextureAuditJson(repeat)).toJson(QJsonDocument::Compact);
 	ok &= expect(first == second, "Two audits of the same inputs must produce identical JSON.");
 	ok &= expect(mapTextureAuditText(audit) == mapTextureAuditText(repeat), "Two audits of the same inputs must produce identical text.");
+	LevelMapDocument compilerTokens = quake3Document();
+	for (auto& brush : compilerTokens.brushes) {
+		for (auto& item : brush.faces) {
+			if (item.textureName.startsWith(QStringLiteral("textures/"), Qt::CaseInsensitive)) { item.textureName.remove(0, 9); }
+		}
+	}
+	for (auto& patch : compilerTokens.patches) {
+		if (patch.textureName.startsWith(QStringLiteral("textures/"), Qt::CaseInsensitive)) { patch.textureName.remove(0, 9); }
+	}
+	const auto tokenAudit = auditLevelMapTextures(compilerTokens, archive, false);
+	const auto* shortShader = findReference(tokenAudit, "base_wall/shaderonly");
+	const auto* shortImage = findReference(tokenAudit, "base_wall/jpgonly");
+	ok &= expect(tokenAudit.resolvedCount == audit.resolvedCount && tokenAudit.missingCount == audit.missingCount
+		&& tokenAudit.engineHandledCount == audit.engineHandledCount,
+		"Compiler map tokens and full material paths must resolve the same package assets.");
+	ok &= expect(shortShader && shortShader->resolution == MapTextureResolution::ResolvedByShader
+		&& shortShader->resolvedPath == QStringLiteral("scripts/base.shader"), "Unprefixed map tokens must find shader declarations.");
+	ok &= expect(shortImage && shortImage->resolvedPath == QStringLiteral("textures/base_wall/jpgonly.jpg"),
+		"Unprefixed map tokens must find images under textures/.");
 	return ok;
 }
 
@@ -474,6 +494,37 @@ bool runDirectoryAuditSmoke(const QString& root)
 	const MapTextureAudit noRoots = auditLevelMapTexturesInDirectories(doomDocument(), QStringList(), false);
 	ok &= expect(!noRoots.warnings.isEmpty(), "An empty root list should warn.");
 	ok &= expect(noRoots.missingCount == 3, "With no roots, every real reference is unresolved.");
+	PackageArchiveSession indexed;
+	QString error;
+	ok &= expect(indexed.openPrimaryArchive(root, &error), "Measure one asset-root index.");
+	PackageIndexLimits limits;
+	limits.maximumEntries = indexed.indexUsage().entries;
+	const auto one = auditLevelMapTexturesInDirectories(doomDocument(), {root}, false, limits);
+	const auto exceeded = auditLevelMapTexturesInDirectories(doomDocument(), {root, root}, false, limits);
+	ok &= expect(one.sourceIndexComplete && one.resolvedCount == audit.resolvedCount, "One root fits its exact index allowance.");
+	ok &= expect(!exceeded.sourceIndexComplete && exceeded.resolvedCount == 0 && exceeded.missingCount == 3
+		&& !exceeded.warnings.isEmpty(), "Overriding roots remain charged and over-limit lookup publishes no partial catalog.");
+	limits = {}; limits.maximumFingerprintBytes = indexed.indexUsage().fingerprintBytes;
+	const auto hashes = auditLevelMapTexturesInDirectories(doomDocument(), {root, root}, false, limits);
+	ok &= expect(!hashes.sourceIndexComplete && hashes.resolvedCount == 0, "Asset roots share fingerprint admission.");
+	QStringList manyRoots;
+	for (int index = 0; index <= PackageArchiveSession::layerCeiling; ++index) { manyRoots.append(root); }
+	LevelMapDocument empty; empty.format = LevelMapFormat::QuakeMap;
+	const auto tooMany = auditLevelMapTexturesInDirectories(empty, manyRoots, false);
+	ok &= expect(!tooMany.sourceIndexComplete && tooMany.state() == OperationState::Warning
+		&& !mapTextureAuditJson(tooMany).value(QStringLiteral("sourceIndexComplete")).toBool(),
+		"Rejected folder admission remains visible even when the map has no texture references.");
+	ok &= expect(!withMissingRoot.sourceIndexComplete, "An unavailable requested folder marks the source audit incomplete.");
+	const QString overrideRoot = root + QStringLiteral("-override");
+	ok &= expect(writePackageFile(overrideRoot, QStringLiteral("flats/FLOOR4_8"), QByteArrayLiteral("broken")), "Create a later folder override with distinct payload metadata.");
+	const auto overridden = auditLevelMapTexturesInDirectories(doomDocument(), {root, overrideRoot}, true);
+	const auto* overriddenFlat = findReference(overridden, "floor4_8");
+	ok &= expect(overridden.sourceIndexComplete && overriddenFlat && overriddenFlat->resolved && !overriddenFlat->decoded
+		&& overriddenFlat->sourceLayer == QFileInfo(overrideRoot).fileName(), "Later root metadata and bytes must both come from its override.");
+	const auto reversed = auditLevelMapTexturesInDirectories(doomDocument(), {overrideRoot, root}, true);
+	const auto* restoredFlat = findReference(reversed, "floor4_8");
+	ok &= expect(reversed.sourceIndexComplete && restoredFlat && restoredFlat->decoded && restoredFlat->width == 64
+		&& restoredFlat->sourceLayer == QFileInfo(root).fileName(), "Reversing root priority restores the original flat metadata and bytes.");
 	return ok;
 }
 

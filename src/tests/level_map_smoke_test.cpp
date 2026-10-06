@@ -1,5 +1,6 @@
 #include "core/compiler_profiles.h"
 #include "core/level_map.h"
+#include "core/map_geometry.h"
 
 #include <QByteArray>
 #include <QDir>
@@ -8,9 +9,12 @@
 #include <QPoint>
 #include <QTemporaryDir>
 
+#include <algorithm>
+#include <chrono>
 #include <cmath>
 #include <cstdlib>
 #include <iostream>
+#include <thread>
 
 using namespace vibestudio;
 
@@ -80,6 +84,20 @@ QByteArray readFile(const QString& path)
 		return {};
 	}
 	return file.readAll();
+}
+
+// Saves over a file the test wrote a moment ago. On Windows the replace can
+// fail while something, such as a virus scan, still has the old file open,
+// so a failed save is tried again after a short wait.
+bool saveMapOverwriting(const LevelMapDocument& document, const QString& path)
+{
+	for (int attempt = 0; attempt < 5; ++attempt) {
+		if (saveLevelMapAs(document, path, false, true).succeeded()) {
+			return true;
+		}
+		std::this_thread::sleep_for(std::chrono::milliseconds(100));
+	}
+	return false;
 }
 
 struct Lump {
@@ -515,6 +533,63 @@ bool runQuakeMapSmoke(const QDir& root)
 	return ok;
 }
 
+// Object queries: key=value, key:value, key!=value, numeric comparisons, and
+// bare words, over a Quake map's entities and brushes and a Doom map's things,
+// linedefs, sectors, and vertices.
+bool runQuerySmoke(const QDir& root)
+{
+	bool ok = true;
+	QString error;
+	const QString quakePath = root.filePath(QStringLiteral("query.map"));
+	ok &= expect(writeFile(quakePath, quakeMapFixture()), "Query map fixture should be written.");
+	LevelMapDocument quake;
+	ok &= expect(loadLevelMap({quakePath, {}, QStringLiteral("idtech2")}, &quake, &error), "Query map should load.");
+	ok &= expect(levelMapObjectsMatchingQuery(quake, QStringLiteral("class=light")) == QStringList {QStringLiteral("entity:1")},
+		"class=light should find the light entity.");
+	ok &= expect(levelMapObjectsMatchingQuery(quake, QStringLiteral("targetname:LAM")) == QStringList {QStringLiteral("entity:1")},
+		"key:value should find a value containing the text, ignoring case.");
+	ok &= expect(levelMapObjectsMatchingQuery(quake, QStringLiteral("texture=ceil1")) == QStringList {QStringLiteral("brush:0")},
+		"texture= should test each of a brush's face textures.");
+	ok &= expect(levelMapObjectsMatchingQuery(quake, QStringLiteral("class!=light")) == QStringList {QStringLiteral("entity:0"), QStringLiteral("brush:0")},
+		"key!=value should hold for objects with no such value, and for objects without the key.");
+	ok &= expect(levelMapObjectsMatchingQuery(quake, QStringLiteral("lamp")) == QStringList {QStringLiteral("entity:1")}, "A bare word should match a property value.");
+	ok &= expect(levelMapObjectsMatchingQuery(quake, QStringLiteral("entity:1")) == QStringList {QStringLiteral("entity:1")}
+			&& levelMapObjectsMatchingQuery(quake, QStringLiteral("brush:0")) == QStringList {QStringLiteral("brush:0")}
+			&& levelMapObjectsMatchingQuery(quake, QStringLiteral("entity=0")) == QStringList {QStringLiteral("brush:0")},
+		"A selector as map find prints it should name that object; entity=0 should still find worldspawn's brush.");
+	ok &= expect(levelMapObjectsMatchingQuery(quake, QStringLiteral("kind=entity")) == QStringList {QStringLiteral("entity:0"), QStringLiteral("entity:1")},
+		"kind= should keep the objects of one kind.");
+	ok &= expect(levelMapObjectsMatchingQuery(quake, QStringLiteral("class=ligh")).isEmpty()
+			&& levelMapObjectsMatchingQuery(quake, QStringLiteral("class:ligh")) == QStringList {QStringLiteral("entity:1")},
+		"key=value should match whole values only, where key:value matches part of one.");
+	ok &= expect(levelMapObjectsMatchingQuery(quake, QStringLiteral("class=light targetname=other")).isEmpty(), "Every term should have to hold.");
+	ok &= expect(levelMapObjectsMatchingQuery(quake, QStringLiteral("origin:\"32 32\"")) == QStringList {QStringLiteral("entity:1")},
+		"A quoted value should keep its spaces.");
+	const LevelMapQuery words = parseLevelMapQuery(QStringLiteral("brick wall"));
+	const LevelMapQuery mixed = parseLevelMapQuery(QStringLiteral("tag>=3 brick"));
+	ok &= expect(!words.testsProperties() && words.terms.size() == 2 && mixed.testsProperties() && mixed.terms.value(0).op == QStringLiteral(">=")
+			&& mixed.terms.value(0).key == QStringLiteral("tag") && mixed.terms.value(0).value == QStringLiteral("3"),
+		"Words and property terms should parse apart, with two-character operators read whole.");
+
+	const QString wadPath = root.filePath(QStringLiteral("query.wad"));
+	ok &= expect(writeFile(wadPath, wadFixture()), "Query WAD fixture should be written.");
+	LevelMapDocument doom;
+	ok &= expect(loadLevelMap({wadPath, QStringLiteral("MAP01"), {}}, &doom, &error), "Query WAD should load.");
+	ok &= expect(levelMapObjectsMatchingQuery(doom, QStringLiteral("type=1")) == QStringList {QStringLiteral("thing:0")}, "type=1 should find the player start.");
+	ok &= expect(levelMapObjectsMatchingQuery(doom, QStringLiteral("name:player")) == QStringList {QStringLiteral("thing:0")},
+		"name: should find a thing by what its type places.");
+	ok &= expect(levelMapObjectsMatchingQuery(doom, QStringLiteral("light>100 ceiling<=128")) == QStringList {QStringLiteral("sector:0")},
+		"Numeric comparisons should find the sector.");
+	ok &= expect(levelMapObjectsMatchingQuery(doom, QStringLiteral("light>200")).isEmpty(), "A comparison that fails should find nothing.");
+	ok &= expect(levelMapObjectsMatchingQuery(doom, QStringLiteral("ceiling<128")).isEmpty() && levelMapObjectsMatchingQuery(doom, QStringLiteral("ceiling>128")).isEmpty(),
+		"Strict comparisons should leave out an equal number.");
+	ok &= expect(levelMapObjectsMatchingQuery(doom, QStringLiteral("texture=wallmid")).size() == 4, "texture= should find every linedef whose side shows it.");
+	ok &= expect(levelMapObjectsMatchingQuery(doom, QStringLiteral("x>=128 y=0")) == QStringList {QStringLiteral("vertex:1")},
+		"Vertices should answer to x and y.");
+	ok &= expect(levelMapObjectsMatchingQuery(doom, QStringLiteral("tag>abc")).isEmpty(), "A comparison with a word for a number should find nothing.");
+	return ok;
+}
+
 bool runTokenizerSmoke(const QDir& root)
 {
 	bool ok = true;
@@ -770,6 +845,2445 @@ bool runTextSaveSmoke(const QDir& root)
 	return ok;
 }
 
+// Radiant-style comments head each object. The last entity shares its opening
+// brace's line with a key, so it must be refused for deletion.
+QByteArray editableMapFixture()
+{
+	return R"MAP(// Game: Quake
+// entity 0
+{
+"classname" "worldspawn"
+// brush 0
+{
+( 0 0 0 ) ( 128 0 0 ) ( 128 128 0 ) WALL1 0 0 0 1 1
+( 0 0 16 ) ( 128 128 16 ) ( 128 0 16 ) CEIL1 0 0 0 1 1
+}
+// brush 1
+{
+( 0 0 32 ) ( 128 0 32 ) ( 128 128 32 ) WALL2 0 0 0 1 1
+( 0 0 48 ) ( 128 128 48 ) ( 128 0 48 ) CEIL1 0 0 0 1 1
+}
+}
+// entity 1
+{
+"classname" "light"
+"origin" "32 32 64"
+}
+// entity 2
+{
+"classname" "func_door"
+"targetname" "gate"
+// brush 0
+{
+( 0 0 64 ) ( 64 0 64 ) ( 64 64 64 ) DOOR1 0 0 0 1 1
+( 0 0 96 ) ( 64 64 96 ) ( 64 0 96 ) DOOR1 0 0 0 1 1
+}
+}
+{ "classname" "info_null"
+"origin" "0 0 0"
+}
+)MAP";
+}
+
+bool runAddDeleteSmoke(const QDir& root)
+{
+	bool ok = true;
+	QString error;
+	const QString path = root.filePath(QStringLiteral("editable.map"));
+	ok &= expect(writeFile(path, editableMapFixture()), "Editable fixture should be written.");
+	LevelMapDocument document;
+	ok &= expect(loadLevelMap({path, {}, QStringLiteral("idtech2")}, &document, &error), "Editable map should load.");
+	const QString original = document.originalText;
+	const int entityCount = static_cast<int>(document.entities.size());
+	const int brushCount = static_cast<int>(document.brushes.size());
+	ok &= expect(entityCount == 4 && brushCount == 3, "Editable map should hold four entities and three brushes.");
+
+	// Adding: a new id past the last, selected, with its extra keys.
+	int added = -1;
+	ok &= expect(addLevelMapEntity(&document, QStringLiteral("info_player_deathmatch"), {64.0, 0.0, 24.0, true},
+		{{QStringLiteral("angle"), QStringLiteral("90"), 0}, {QStringLiteral("origin"), QStringLiteral("9 9 9"), 0}}, &added, &error),
+		"Adding a point entity should work.");
+	ok &= expect(added == 4 && document.selectionKind == LevelMapSelectionKind::Entity && document.selectedObjectId == 4,
+		"The new entity should take the next id and become the selection.");
+	ok &= expect(propertyValueForTest(document, 4, QStringLiteral("origin")) == QStringLiteral("64 0 24")
+			&& propertyValueForTest(document, 4, QStringLiteral("angle")) == QStringLiteral("90"),
+		"The origin argument should win over an origin key, and extra keys should be kept.");
+	ok &= expect(!addLevelMapEntity(&document, QStringLiteral("light\"x"), {0.0, 0.0, 0.0, true}, {}, nullptr, &error),
+		"A class name holding a double quote should be refused.");
+	ok &= expect(!setLevelMapEntityProperty(&document, 1, QStringLiteral("message"), QStringLiteral("say \"hi\""), &error),
+		"A value holding a double quote should be refused for a text map.");
+
+	// Deleting: worldspawn is refused; an entity takes its brushes; a lone brush
+	// goes by itself; a brace sharing a line with a key is refused.
+	ok &= expect(!deleteLevelMapObjects(&document, {{LevelMapSelectionKind::Entity, 0}}, &error), "worldspawn should never be deleted.");
+	ok &= expect(!deleteLevelMapObjects(&document, {{LevelMapSelectionKind::Entity, 3}}, &error) && error.contains(QStringLiteral("shares")),
+		"An entity whose brace shares a line should be refused.");
+	ok &= expect(document.undoStack.size() == 1, "Refused deletions should not push undo commands.");
+	ok &= expect(selectLevelMapObject(&document, QStringLiteral("entity:1"), &error), "The light should be selectable.");
+	ok &= expect(levelMapSelectionIsDeletable(document), "A selected light should be deletable.");
+	ok &= expect(deleteLevelMapSelection(&document, &error), "Deleting the selected light should work.");
+	ok &= expect(document.selection.isEmpty() && document.selectionKind == LevelMapSelectionKind::None,
+		"Deleting the selection should clear it.");
+	ok &= expect(deleteLevelMapObjects(&document, {{LevelMapSelectionKind::Entity, 2}, {LevelMapSelectionKind::QuakeBrush, 1}}, &error),
+		"Deleting the door and a worldspawn brush together should work.");
+	ok &= expect(document.entities.size() == entityCount - 1 && document.brushes.size() == brushCount - 2,
+		"The door should take its brush with it.");
+	ok &= expect(document.undoStack.last().description == QStringLiteral("Delete 2 objects"), "A multi-object delete should be one undo step.");
+
+	const QString deletedPath = root.filePath(QStringLiteral("editable-deleted.map"));
+	ok &= expect(saveLevelMapAs(document, deletedPath).succeeded(), "Saving after deletions should work.");
+	const QString deletedText = QString::fromUtf8(readFile(deletedPath));
+	ok &= expect(!deletedText.contains(QStringLiteral("\"light\"")) && !deletedText.contains(QStringLiteral("func_door"))
+			&& !deletedText.contains(QStringLiteral("WALL2")) && !deletedText.contains(QStringLiteral("DOOR1")),
+		"Deleted objects should not be written back.");
+	ok &= expect(!deletedText.contains(QStringLiteral("// entity 1")) && !deletedText.contains(QStringLiteral("// brush 1"))
+			&& deletedText.contains(QStringLiteral("// brush 0")),
+		"A deleted object's heading comment should go with it, and others should stay.");
+	ok &= expect(deletedText.endsWith(QStringLiteral("\"angle\" \"90\"\n}\n")), "The added entity should close the file, before its final line break.");
+	LevelMapDocument reloaded;
+	ok &= expect(loadLevelMap({deletedPath, {}, QStringLiteral("idtech2")}, &reloaded, &error), "The saved map should load again.");
+	ok &= expect(reloaded.entities.size() == 3 && reloaded.brushes.size() == 1 && !hasIssueCode(reloaded, QStringLiteral("unexpected-token")),
+		"The saved map should hold worldspawn, info_null, and the added entity, with one brush and no stray tokens.");
+	ok &= expect(deletedText.contains(QStringLiteral("{ \"classname\" \"info_null\"")), "A compact line should keep its brace when saved.");
+	ok &= expect(reloaded.entities.size() == 3 && reloaded.entities.last().className == QStringLiteral("info_player_deathmatch"),
+		"The added entity should be read back last.");
+
+	// Removing the key that shares the compact line leaves the brace behind.
+	ok &= expect(removeLevelMapEntityProperty(&document, 3, QStringLiteral("classname"), &error), "Removing a compact line's key should work.");
+	const QString compactPath = root.filePath(QStringLiteral("editable-compact.map"));
+	ok &= expect(saveLevelMapAs(document, compactPath).succeeded(), "Saving after removing a compact key should work.");
+	const QString compactText = QString::fromUtf8(readFile(compactPath));
+	ok &= expect(compactText.contains(QStringLiteral("}\n{\n\"origin\" \"0 0 0\"\n}")), "The brace on a removed key's line should stay.");
+
+	// Undo everything: the save is byte-identical to the source.
+	while (!document.undoStack.isEmpty()) {
+		ok &= expect(undoLevelMapEdit(&document, &error), "Each add or delete should undo.");
+	}
+	ok &= expect(document.entities.size() == entityCount && document.brushes.size() == brushCount && document.deletedLineRanges.isEmpty(),
+		"Undo should restore every object and drop every deleted range.");
+	const QString restoredPath = root.filePath(QStringLiteral("editable-restored.map"));
+	ok &= expect(saveLevelMapAs(document, restoredPath).succeeded(), "Saving after undo should work.");
+	ok &= expect(QString::fromUtf8(readFile(restoredPath)) == original, "After undoing every edit the save should match the source exactly.");
+	bool inOrder = true;
+	for (int index = 0; index < document.entities.size(); ++index) {
+		inOrder = inOrder && document.entities.at(index).id == index;
+	}
+	ok &= expect(inOrder, "Undo should put entities back in their original order.");
+
+	// Redo replays the same edits.
+	ok &= expect(redoLevelMapEdit(&document, &error) && redoLevelMapEdit(&document, &error) && redoLevelMapEdit(&document, &error)
+			&& redoLevelMapEdit(&document, &error),
+		"Add, deletes, and the key removal should redo.");
+	ok &= expect(document.entities.size() == entityCount - 1 && document.brushes.size() == brushCount - 2, "Redo should delete the same objects.");
+
+	// A Doom vertex between two linedefs dissolves, joining them; entities
+	// are refused.
+	LevelMapDocument doom;
+	const QString wadPath = root.filePath(QStringLiteral("delete.wad"));
+	ok &= expect(writeFile(wadPath, wadFixture()), "Doom fixture should be written.");
+	ok &= expect(loadLevelMap({wadPath, QStringLiteral("MAP01"), {}}, &doom, &error), "Doom fixture should load.");
+	ok &= expect(deleteLevelMapObjects(&doom, {{LevelMapSelectionKind::DoomVertex, 0}}, &error) && doom.doomVertices.size() == 3
+			&& doom.doomLinedefs.size() == 3,
+		"Deleting a Doom vertex between two linedefs should join them into one.");
+	ok &= expect(!addLevelMapEntity(&doom, QStringLiteral("light"), {0.0, 0.0, 0.0, true}, {}, nullptr, &error), "Doom maps should not take entities.");
+	return ok;
+}
+
+// A trigger fires a door; a relay lights a lamp and removes the door; one key
+// names nothing, and one entity names itself.
+QByteArray linkedMapFixture()
+{
+	return R"MAP({
+"classname" "worldspawn"
+}
+{
+"classname" "trigger_once"
+"target" "door1"
+{
+( 0 0 0 ) ( 0 1 0 ) ( 0 0 1 ) TRIGGER 0 0 0 1 1
+( 64 0 0 ) ( 64 0 1 ) ( 64 1 0 ) TRIGGER 0 0 0 1 1
+( 0 0 0 ) ( 0 0 1 ) ( 1 0 0 ) TRIGGER 0 0 0 1 1
+( 0 64 0 ) ( 1 64 0 ) ( 0 64 1 ) TRIGGER 0 0 0 1 1
+( 0 0 0 ) ( 1 0 0 ) ( 0 1 0 ) TRIGGER 0 0 0 1 1
+( 0 0 64 ) ( 0 1 64 ) ( 1 0 64 ) TRIGGER 0 0 0 1 1
+}
+}
+{
+"classname" "func_door"
+"targetname" "door1"
+{
+( 128 0 0 ) ( 128 1 0 ) ( 128 0 1 ) DOOR 0 0 0 1 1
+( 192 0 0 ) ( 192 0 1 ) ( 192 1 0 ) DOOR 0 0 0 1 1
+( 128 0 0 ) ( 128 0 1 ) ( 129 0 0 ) DOOR 0 0 0 1 1
+( 128 64 0 ) ( 129 64 0 ) ( 128 64 1 ) DOOR 0 0 0 1 1
+( 128 0 0 ) ( 129 0 0 ) ( 128 1 0 ) DOOR 0 0 0 1 1
+( 128 0 128 ) ( 128 1 128 ) ( 129 0 128 ) DOOR 0 0 0 1 1
+}
+}
+{
+"classname" "light"
+"origin" "256 256 64"
+"targetname" "lamp"
+}
+{
+"classname" "trigger_relay"
+"origin" "256 0 16"
+"target" "lamp"
+"killtarget" "door1"
+"pathtarget" "nowhere"
+}
+{
+"classname" "info_notnull"
+"origin" "-64 -64 0"
+"targetname" "self"
+"target" "self"
+}
+)MAP";
+}
+
+bool runTargetLinksSmoke(const QDir& root)
+{
+	bool ok = true;
+	QString error;
+	const QString path = root.filePath(QStringLiteral("linked.map"));
+	ok &= expect(writeFile(path, linkedMapFixture()), "Linked fixture should be written.");
+	LevelMapDocument document;
+	ok &= expect(loadLevelMap({path, {}, QStringLiteral("idtech2")}, &document, &error), "Linked map should load.");
+
+	LevelMapVec3 door;
+	ok &= expect(levelMapEntityAnchor(document, 2, &door) && nearly(door.x, 160.0) && nearly(door.y, 32.0) && nearly(door.z, 64.0),
+		"A brush entity should be anchored at the centre of its brushes.");
+	ok &= expect(!levelMapEntityAnchor(document, 0), "worldspawn with no brushes has no anchor.");
+
+	const QVector<LevelMapTargetLink> links = levelMapTargetLinks(document);
+	ok &= expect(links.size() == 3, "Expected three links: trigger to door, relay to lamp, relay kills door.");
+	ok &= expect(levelMapStatisticsLines(document).contains(QStringLiteral("Target links: 3")), "Statistics should count the target links.");
+	if (links.size() == 3) {
+		ok &= expect(links.at(0).sourceEntityId == 1 && links.at(0).targetEntityId == 2 && links.at(0).key == QStringLiteral("target"),
+			"The trigger should link to the door.");
+		ok &= expect(links.at(1).sourceEntityId == 4 && links.at(1).targetEntityId == 3 && nearly(links.at(1).to.x, 256.0),
+			"The relay should link to the lamp at its origin.");
+		ok &= expect(links.at(2).key == QStringLiteral("killtarget") && links.at(2).targetEntityId == 2 && links.at(2).name == QStringLiteral("door1"),
+			"The relay's killtarget should link to the door.");
+	}
+
+	// Links follow edits: renaming the lamp breaks the relay's link.
+	ok &= expect(setLevelMapEntityProperty(&document, 3, QStringLiteral("targetname"), QStringLiteral("lamp2"), &error), "Renaming should work.");
+	ok &= expect(levelMapTargetLinks(document).size() == 2, "A renamed target should drop its link.");
+
+	LevelMapDocument doom;
+	const QString wadPath = root.filePath(QStringLiteral("links.wad"));
+	ok &= expect(writeFile(wadPath, wadFixture()), "Doom fixture should be written.");
+	ok &= expect(loadLevelMap({wadPath, QStringLiteral("MAP01"), {}}, &doom, &error), "Doom fixture should load.");
+	ok &= expect(levelMapTargetLinks(doom).isEmpty(), "Doom maps have no target links.");
+	return ok;
+}
+
+bool runDuplicateSmoke(const QDir& root)
+{
+	bool ok = true;
+	QString error;
+	const QString path = root.filePath(QStringLiteral("duplicate.map"));
+	// Preserve the old source-line assertions, but close the fixture's slabs:
+	// placement now validates the resulting solids through the move service.
+	auto fixture = editableMapFixture();
+	const auto sides = [](int width) {
+		return QStringLiteral("( %1 1 0 ) ( %1 0 0 ) ( %1 0 1 ) SIDE 0 0 0 1 1\n"
+			"( 0 0 1 ) ( 0 0 0 ) ( 0 1 0 ) SIDE 0 0 0 1 1\n"
+			"( 0 %1 1 ) ( 0 %1 0 ) ( 1 %1 0 ) SIDE 0 0 0 1 1\n"
+			"( 1 0 0 ) ( 0 0 0 ) ( 0 0 1 ) SIDE 0 0 0 1 1\n").arg(width).toUtf8();
+	};
+	fixture.replace("CEIL1 0 0 0 1 1\n}", QByteArray("CEIL1 0 0 0 1 1\n") + sides(128) + "}");
+	const QByteArray doorTop("( 0 0 96 ) ( 64 64 96 ) ( 64 0 96 ) DOOR1 0 0 0 1 1\n");
+	fixture.replace(doorTop + "}", doorTop + sides(64) + "}");
+	ok &= expect(writeFile(path, fixture), "Duplicate fixture should be written.");
+	LevelMapDocument document;
+	ok &= expect(loadLevelMap({path, {}, QStringLiteral("idtech2")}, &document, &error), "Duplicate fixture should load.");
+	const QString original = document.originalText;
+
+	// A light, a worldspawn brush, and a door with its brush, in one step.
+	ok &= expect(duplicateLevelMapObjects(&document,
+				 {{LevelMapSelectionKind::Entity, 1}, {LevelMapSelectionKind::QuakeBrush, 1}, {LevelMapSelectionKind::Entity, 2}},
+				 64.0, 0.0, 0.0, &error),
+		"Duplicating a light, a brush, and a door should work.");
+	ok &= expect(document.entities.size() == 6 && document.brushes.size() == 5 && document.undoStack.size() == 1,
+		"The copies should add two entities and two brushes as one undo step.");
+	ok &= expect(document.selection.size() == 3 && document.selectionKind == LevelMapSelectionKind::QuakeBrush,
+		"The copies should become the selection.");
+	ok &= expect(propertyValueForTest(document, 4, QStringLiteral("origin")) == QStringLiteral("96 32 64"), "The light's copy should move by the delta.");
+	ok &= expect(!duplicateLevelMapObjects(&document, {{LevelMapSelectionKind::Entity, 0}}, 0.0, 0.0, 0.0, &error),
+		"worldspawn should never be copied.");
+
+	const QString copiedPath = root.filePath(QStringLiteral("duplicate-copied.map"));
+	ok &= expect(saveLevelMapAs(document, copiedPath).succeeded(), "Saving copies should work.");
+	const QString copiedText = QString::fromUtf8(readFile(copiedPath));
+	const qsizetype brushCopy = copiedText.indexOf(QStringLiteral("( 64 0 32 ) ( 192 0 32 ) ( 192 128 32 ) WALL2"));
+	ok &= expect(brushCopy > 0 && brushCopy < copiedText.indexOf(QStringLiteral("// entity 1")),
+		"A copied worldspawn brush should be written inside worldspawn.");
+	ok &= expect(copiedText.contains(QStringLiteral("( 0 0 32 ) ( 128 0 32 ) ( 128 128 32 ) WALL2")), "The original brush should stay.");
+	ok &= expect(copiedText.contains(QStringLiteral("{\n\"classname\" \"light\"\n\"origin\" \"96 32 64\"\n}")),
+		"The light's copy should be appended with its moved origin.");
+	ok &= expect(copiedText.contains(QStringLiteral("\"targetname\" \"gate\"\n{\n( 64 0 64 ) ( 128 0 64 ) ( 128 64 64 ) DOOR1")),
+		"The door's copy should carry its own moved brush.");
+	LevelMapDocument reloaded;
+	ok &= expect(loadLevelMap({copiedPath, {}, QStringLiteral("idtech2")}, &reloaded, &error), "The saved copies should load.");
+	ok &= expect(reloaded.entities.size() == 6 && reloaded.brushes.size() == 5 && !hasIssueCode(reloaded, QStringLiteral("unexpected-token")),
+		"The saved copies should read back as whole entities and brushes.");
+
+	// Moving a copy rewrites the copy, never the brush it came from; a copy of
+	// a copy starts from where the first copy is now.
+	ok &= expect(selectLevelMapObject(&document, QStringLiteral("brush:3"), &error), "The brush copy should be selectable.");
+	ok &= expect(moveLevelMapSelection(&document, 0.0, 0.0, 16.0, &error), "Moving the brush copy should work.");
+	ok &= expect(duplicateLevelMapSelection(&document, 64.0, 0.0, 0.0, &error), "Copying the copy should work.");
+	const QString movedPath = root.filePath(QStringLiteral("duplicate-moved.map"));
+	ok &= expect(saveLevelMapAs(document, movedPath).succeeded(), "Saving moved copies should work.");
+	const QString movedText = QString::fromUtf8(readFile(movedPath));
+	ok &= expect(movedText.contains(QStringLiteral("( 64 0 48 ) ( 192 0 48 ) ( 192 128 48 ) WALL2"))
+			&& movedText.contains(QStringLiteral("( 128 0 48 ) ( 256 0 48 ) ( 256 128 48 ) WALL2"))
+			&& movedText.contains(QStringLiteral("( 0 0 32 ) ( 128 0 32 ) ( 128 128 32 ) WALL2")),
+		"Moves should land on the copies alone.");
+
+	while (!document.undoStack.isEmpty()) {
+		ok &= expect(undoLevelMapEdit(&document, &error), "Each duplicate and move should undo.");
+	}
+	const QString restoredPath = root.filePath(QStringLiteral("duplicate-restored.map"));
+	ok &= expect(saveLevelMapAs(document, restoredPath).succeeded(), "Saving after undo should work.");
+	ok &= expect(QString::fromUtf8(readFile(restoredPath)) == original, "Undoing the copies should restore the source exactly.");
+	return ok;
+}
+
+bool runDoomLinedefEditSmoke(const QDir& root)
+{
+	bool ok = true;
+	QString error;
+	int count = 0;
+	const QString wadPath = root.filePath(QStringLiteral("lines.wad"));
+	ok &= expect(writeFile(wadPath, wadFixture()), "Linedef fixture should be written.");
+	LevelMapDocument doom;
+	ok &= expect(loadLevelMap({wadPath, QStringLiteral("MAP01"), {}}, &doom, &error), "Linedef fixture should load.");
+
+	// Splitting the bottom edge of the square puts a vertex at (64, 0), ends
+	// the linedef there, and adds its second half with its own copy of the
+	// side the four edges share.
+	ok &= expect(selectLevelMapObject(&doom, QStringLiteral("linedef:0"), &error) && splitLevelMapLinedefs(&doom, &count, &error) && count == 1,
+		"Splitting linedef 0 should work.");
+	ok &= expect(doom.doomVertices.size() == 5 && doom.doomVertices.last().x == 64.0 && doom.doomVertices.last().y == 0.0
+			&& doom.doomLinedefs.size() == 5 && doom.doomLinedefs.first().endVertex == 4 && doom.doomLinedefs.last().startVertex == 4
+			&& doom.doomLinedefs.last().endVertex == 1 && doom.doomSidedefs.size() == 2 && doom.doomLinedefs.last().frontSidedef == 1
+			&& doom.doomSidedefs.last().sector == 0 && doom.selection.size() == 2,
+		"The split should add the middle vertex, the second half, and its own side, both halves selected.");
+	ok &= expect(doom.doomSidedefs.at(1).offsetX == 4 + 64, "The second half's side should carry the texture on from the first half.");
+	ok &= expect(doom.textureReferences.size() == 8, "The new side's textures should join the map's texture list.");
+	ok &= expect(doom.doomGeometryChanged, "A split should mark the node lumps stale.");
+	ok &= expect(doom.undoStack.last().description == QStringLiteral("Split linedef:0"), "The history should name the split linedef.");
+	const QString splitPath = root.filePath(QStringLiteral("lines-split.wad"));
+	LevelMapDocument reloaded;
+	ok &= expect(saveLevelMapAs(doom, splitPath).succeeded() && loadLevelMap({splitPath, QStringLiteral("MAP01"), {}}, &reloaded, &error)
+			&& reloaded.doomVertices.size() == 5 && reloaded.doomLinedefs.size() == 5 && reloaded.doomSidedefs.size() == 2,
+		"The split map should be written and read back with its new records.");
+	const QVector<DoomSectorOutline> outlines = buildDoomSectorOutlines(reloaded);
+	ok &= expect(!outlines.isEmpty() && outlines.first().openEdgeCount == 0, "The sector should still close after the split.");
+
+	// Undo takes the new records off again.
+	ok &= expect(undoLevelMapEdit(&doom, &error) && doom.doomVertices.size() == 4 && doom.doomLinedefs.size() == 4 && doom.doomSidedefs.size() == 1
+			&& doom.doomLinedefs.first().endVertex == 1,
+		"Undo should join the linedef again.");
+	ok &= expect(!doom.doomGeometryChanged && doom.textureReferences.size() == 5,
+		"Undoing the split should leave the node lumps current and the texture list as loaded.");
+	ok &= expect(redoLevelMapEdit(&doom, &error) && doom.doomLinedefs.size() == 5 && undoLevelMapEdit(&doom, &error), "Redo should split it again.");
+
+	// Flipping swaps the ends of a one-sided line and keeps its only side.
+	ok &= expect(selectLevelMapObject(&doom, QStringLiteral("linedef:2"), &error) && flipLevelMapLinedefs(&doom, &count, &error)
+			&& doom.doomLinedefs.at(2).startVertex == 3 && doom.doomLinedefs.at(2).endVertex == 2 && doom.doomLinedefs.at(2).frontSidedef == 0
+			&& doom.doomLinedefs.at(2).backSidedef == -1,
+		"Flipping linedef 2 should swap its ends and keep its side in front.");
+	ok &= expect(undoLevelMapEdit(&doom, &error) && doom.doomLinedefs.at(2).startVertex == 2, "The flip should undo.");
+
+	// Things are not linedefs.
+	ok &= expect(selectLevelMapObject(&doom, QStringLiteral("thing:0"), &error) && !splitLevelMapLinedefs(&doom, &count, &error)
+			&& error.contains(QStringLiteral("linedefs")),
+		"Splitting with no linedef selected should say what to select.");
+	return ok;
+}
+
+bool runDoomThingEditSmoke(const QDir& root)
+{
+	bool ok = true;
+	QString error;
+	const QString path = root.filePath(QStringLiteral("things.wad"));
+	ok &= expect(writeFile(path, wadFixture()), "Doom fixture should be written.");
+	LevelMapDocument document;
+	ok &= expect(loadLevelMap({path, QStringLiteral("MAP01"), {}}, &document, &error), "Doom fixture should load.");
+	ok &= expect(document.doomThings.size() == 1 && document.doomThings.first().type == 1, "The fixture should hold one player start.");
+	ok &= expect(!levelMapDoomThingTypes(LevelMapDoomFormat::Doom).isEmpty()
+			&& levelMapDoomThingTypes(LevelMapDoomFormat::Hexen).size() < levelMapDoomThingTypes(LevelMapDoomFormat::Doom).size(),
+		"Doom should offer more thing types than the ones every format shares.");
+
+	// Adding: a new id, all skills, selected, mirrored for the inspector.
+	int added = -1;
+	ok &= expect(addLevelMapDoomThing(&document, 3004, 64.4, 96.0, 450, &added, &error), "Adding a Zombieman should work.");
+	ok &= expect(added == 1 && document.selectionKind == LevelMapSelectionKind::DoomThing && document.selectedObjectId == 1,
+		"The new thing should take the next id and become the selection.");
+	ok &= expect(document.doomThings.size() == 2 && document.doomThings.last().x == 64.0 && document.doomThings.last().angle == 90
+			&& document.doomThings.last().flags == 7,
+		"The new thing should sit on whole units, face a normalized angle, and appear on every skill.");
+	ok &= expect(propertyValueForTest(document, 1, QStringLiteral("type")) == QStringLiteral("3004"), "The new thing should be mirrored as an entity.");
+	ok &= expect(!addLevelMapDoomThing(&document, 3004, 40000.0, 0.0, 0, nullptr, &error), "A thing outside the 16-bit range should be refused.");
+	ok &= expect(!addLevelMapDoomThing(&document, 0, 0.0, 0.0, 0, nullptr, &error), "Type 0 should be refused.");
+
+	// Duplicating and deleting, then editing a thing whose id is past the
+	// vector's end: ids are not positions once things come and go.
+	ok &= expect(duplicateLevelMapSelection(&document, 32.0, 0.0, 0.0, &error), "Duplicating the new thing should work.");
+	ok &= expect(document.doomThings.size() == 3 && document.selectedObjectId == 2 && document.doomThings.last().x == 96.0,
+		"The copy should be offset and selected.");
+	ok &= expect(deleteLevelMapObjects(&document, {{LevelMapSelectionKind::DoomThing, 0}}, &error), "Deleting the player start should work.");
+	ok &= expect(document.doomThings.size() == 2 && document.entities.size() == 2, "A deleted thing should take its mirror with it.");
+	ok &= expect(setLevelMapEntityProperty(&document, 2, QStringLiteral("angle"), QStringLiteral("180"), &error)
+			&& document.doomThings.last().angle == 180,
+		"Editing a thing by id should reach the right record after a deletion.");
+	ok &= expect(moveLevelMapObject(&document, QStringLiteral("entity"), 2, 0.0, 32.0, 0.0, &error) && document.doomThings.last().y == 128.0,
+		"Moving a thing's mirror should move the right record after a deletion.");
+
+	const QString savedPath = root.filePath(QStringLiteral("things-edited.wad"));
+	ok &= expect(saveLevelMapAs(document, savedPath).succeeded(), "Saving the edited things should work.");
+	LevelMapDocument reloaded;
+	ok &= expect(loadLevelMap({savedPath, QStringLiteral("MAP01"), {}}, &reloaded, &error), "The edited WAD should load.");
+	ok &= expect(reloaded.doomThings.size() == 2 && reloaded.doomThings.at(0).type == 3004 && reloaded.doomThings.at(1).angle == 180
+			&& reloaded.doomThings.at(1).y == 128.0,
+		"The saved THINGS lump should hold the added and copied Zombiemen with their edits.");
+
+	while (!document.undoStack.isEmpty()) {
+		ok &= expect(undoLevelMapEdit(&document, &error), "Each thing edit should undo.");
+	}
+	ok &= expect(document.doomThings.size() == 1 && document.doomThings.first().type == 1 && document.doomThings.first().id == 0,
+		"Undo should bring back the player start alone.");
+	return ok;
+}
+
+bool runSnapToGridSmoke(const QDir& root)
+{
+	bool ok = true;
+	QString error;
+	const QString path = root.filePath(QStringLiteral("snap.map"));
+	ok &= expect(writeFile(path, editableMapFixture()), "Snap fixture should be written.");
+	LevelMapDocument document;
+	ok &= expect(loadLevelMap({path, {}, QStringLiteral("idtech2")}, &document, &error), "Snap fixture should load.");
+	int alignedBrush = -1;
+	ok &= expect(addLevelMapBoxBrush(&document, {0,0,0,true}, {32,32,32,true}, QStringLiteral("WALL1"), &alignedBrush, &error),
+		"Snapping requires an actual closed brush.");
+	ok &= expect(setLevelMapEntityProperty(&document, 1, QStringLiteral("origin"), QStringLiteral("35 29 20"), &error), "Moving the light off the grid should work.");
+	ok &= expect(setLevelMapSelection(&document, {{LevelMapSelectionKind::QuakeBrush, alignedBrush}, {LevelMapSelectionKind::Entity, 1}}, &error),
+		"Selecting a brush and the light should work.");
+	const int before = static_cast<int>(document.undoStack.size());
+
+	// Each object snaps by its own amount: the light to the nearest grid
+	// point, the brush, already on the grid, not at all.
+	ok &= expect(snapLevelMapSelectionToGrid(&document, 16.0, &error), "Snapping to the grid should work.");
+	ok &= expect(propertyValueForTest(document, 1, QStringLiteral("origin")) == QStringLiteral("32 32 16"), "The light should land on the grid.");
+	ok &= expect(document.undoStack.size() == before + 1 && document.undoStack.last().moveSteps.size() == 1,
+		"Only the light should move, as one undo step.");
+	ok &= expect(document.selection.size() == 2, "Snapping should keep the selection.");
+	ok &= expect(!snapLevelMapSelectionToGrid(&document, 16.0, &error) && error.contains(QStringLiteral("already")),
+		"Snapping again should say the selection is already on the grid.");
+	LevelMapDocument brushEntity = document;
+	ok &= expect(setLevelMapSelection(&brushEntity, {{LevelMapSelectionKind::Entity, 2}}, &error)
+			&& !snapLevelMapSelectionToGrid(&brushEntity, 16.0, &error) && error.contains(QStringLiteral("solved bounds")),
+		"The old open-plane brush-entity fixture cannot be snapped without solved bounds.");
+	ok &= expect(undoLevelMapEdit(&document, &error) && propertyValueForTest(document, 1, QStringLiteral("origin")) == QStringLiteral("35 29 20"),
+		"Undo should put the light back off the grid.");
+	ok &= expect(redoLevelMapEdit(&document, &error) && propertyValueForTest(document, 1, QStringLiteral("origin")) == QStringLiteral("32 32 16"),
+		"Redo should snap it again by its own amount.");
+	return ok;
+}
+
+bool runClipboardSmoke(const QDir& root)
+{
+	bool ok = true;
+	QString error;
+	const QString sourcePath = root.filePath(QStringLiteral("clip-source.map"));
+	const QString targetPath = root.filePath(QStringLiteral("clip-target.map"));
+	ok &= expect(writeFile(sourcePath, editableMapFixture()) && writeFile(targetPath, quakeMapFixture()), "Clipboard fixtures should be written.");
+	LevelMapDocument source;
+	LevelMapDocument target;
+	ok &= expect(loadLevelMap({sourcePath, {}, QStringLiteral("idtech2")}, &source, &error)
+			&& loadLevelMap({targetPath, {}, QStringLiteral("idtech2")}, &target, &error),
+		"Clipboard fixtures should load.");
+	const QString targetOriginal = target.originalText;
+	const int targetEntities = static_cast<int>(target.entities.size());
+	const int targetBrushes = static_cast<int>(target.brushes.size());
+
+	// Copy: a worldspawn brush bare, and the door whole with its brush.
+	ok &= expect(setLevelMapSelection(&source, {{LevelMapSelectionKind::QuakeBrush, 1}, {LevelMapSelectionKind::Entity, 2}}, &error),
+		"Selecting a brush and the door should work.");
+	const QString copied = levelMapSelectionText(source);
+	ok &= expect(copied.startsWith(QStringLiteral("{\n( 0 0 32 ) ( 128 0 32 ) ( 128 128 32 ) WALL2")),
+		"A worldspawn brush should be copied as a bare block, in its source format.");
+	ok &= expect(copied.contains(QStringLiteral("{\n\"classname\" \"func_door\"\n\"targetname\" \"gate\"\n{\n( 0 0 64 )")),
+		"The door should be copied whole, with its keys and brush.");
+
+	// Paste into another map: the bare brush joins worldspawn, the door comes
+	// in as a new entity, and both are selected.
+	ok &= expect(pasteLevelMapText(&target, copied, &error), "Pasting into another map should work.");
+	ok &= expect(target.entities.size() == targetEntities + 1 && target.brushes.size() == targetBrushes + 2 && target.selection.size() == 2
+			&& target.undoStack.size() == 1,
+		"Paste should add the door and two brushes, select them, and make one undo step.");
+	const QString pastedPath = root.filePath(QStringLiteral("clip-pasted.map"));
+	ok &= expect(saveLevelMapAs(target, pastedPath).succeeded(), "Saving the pasted map should work.");
+	const QString pastedText = QString::fromUtf8(readFile(pastedPath));
+	const qsizetype pastedBrush = pastedText.indexOf(QStringLiteral("( 0 0 32 ) ( 128 0 32 ) ( 128 128 32 ) WALL2"));
+	ok &= expect(pastedBrush > 0 && pastedBrush < pastedText.indexOf(QStringLiteral("\"classname\" \"light\"")),
+		"The bare brush should land inside the target's worldspawn.");
+	LevelMapDocument reloaded;
+	ok &= expect(loadLevelMap({pastedPath, {}, QStringLiteral("idtech2")}, &reloaded, &error)
+			&& reloaded.entities.size() == targetEntities + 1 && reloaded.brushes.size() == targetBrushes + 2,
+		"The pasted map should read back whole.");
+
+	// TrenchBroom puts worldspawn brushes on the clipboard bare, with comments.
+	ok &= expect(pasteLevelMapText(&target,
+				 QStringLiteral("// brush 0\n{\n( 0 0 0 ) ( 64 0 0 ) ( 64 64 0 ) TB_TEX 0 0 0 1 1\n( 0 0 8 ) ( 64 64 8 ) ( 64 0 8 ) TB_TEX 0 0 0 1 1\n}\n"), &error)
+			&& target.brushes.size() == targetBrushes + 3 && target.selectionKind == LevelMapSelectionKind::QuakeBrush,
+		"A TrenchBroom-style bare brush should paste into worldspawn.");
+	ok &= expect(!pasteLevelMapText(&target, QStringLiteral("hello world"), &error), "Text that is not a map should be refused.");
+	ok &= expect(!pasteLevelMapText(&target, QStringLiteral("{\n\"classname\" \"light\"\n"), &error), "An unclosed block should be refused.");
+
+	while (!target.undoStack.isEmpty()) {
+		ok &= expect(undoLevelMapEdit(&target, &error), "Each paste should undo.");
+	}
+	const QString restoredPath = root.filePath(QStringLiteral("clip-restored.map"));
+	ok &= expect(saveLevelMapAs(target, restoredPath).succeeded() && QString::fromUtf8(readFile(restoredPath)) == targetOriginal,
+		"Undoing the pastes should restore the map exactly.");
+	return ok;
+}
+
+bool runReplaceTextureSmoke(const QDir& root)
+{
+	bool ok = true;
+	QString error;
+	int replaced = 0;
+
+	// Classic faces: across the map, then only in the selection.
+	const QString path = root.filePath(QStringLiteral("textures.map"));
+	ok &= expect(writeFile(path, editableMapFixture()), "Texture fixture should be written.");
+	LevelMapDocument document;
+	ok &= expect(loadLevelMap({path, {}, QStringLiteral("idtech2")}, &document, &error), "Texture fixture should load.");
+	const QString original = document.originalText;
+	const QVector<LevelMapTextureUse> usage = levelMapTextureUsage(document);
+	int ceilings = 0;
+	for (const LevelMapTextureUse& use : usage) {
+		ceilings += use.name == QStringLiteral("CEIL1") ? use.count : 0;
+	}
+	ok &= expect(ceilings == 2, "CEIL1 should be counted on both worldspawn brushes.");
+	ok &= expect(replaceLevelMapTexture(&document, QStringLiteral("ceil1"), QStringLiteral("SKY1"), false, &replaced, &error) && replaced == 2,
+		"Replacing CEIL1, whatever its case, should change both faces.");
+	ok &= expect(selectLevelMapObject(&document, QStringLiteral("brush:1"), &error), "The second brush should be selectable.");
+	ok &= expect(!replaceLevelMapTexture(&document, QStringLiteral("DOOR1"), QStringLiteral("METAL"), true, &replaced, &error),
+		"The selection does not use DOOR1, so nothing should change.");
+	ok &= expect(replaceLevelMapTexture(&document, QStringLiteral("WALL2"), QStringLiteral("METAL"), true, &replaced, &error) && replaced == 1,
+		"Replacing within the selection should change its one face.");
+	ok &= expect(!replaceLevelMapTexture(&document, QStringLiteral("WALL1"), QStringLiteral("bad name"), false, &replaced, &error),
+		"A texture name with a space should be refused.");
+	ok &= expect(document.undoStack.size() == 2, "Each replacement should be one undo step.");
+	const QString savedPath = root.filePath(QStringLiteral("textures-replaced.map"));
+	ok &= expect(saveLevelMapAs(document, savedPath).succeeded(), "Saving replaced textures should work.");
+	const QString savedText = QString::fromUtf8(readFile(savedPath));
+	ok &= expect(!savedText.contains(QStringLiteral("CEIL1")) && savedText.contains(QStringLiteral("( 0 0 16 ) ( 128 128 16 ) ( 128 0 16 ) SKY1 0 0 0 1 1"))
+			&& savedText.contains(QStringLiteral("( 0 0 32 ) ( 128 0 32 ) ( 128 128 32 ) METAL 0 0 0 1 1")),
+		"Replaced names should be written in place, the rest of each face line untouched.");
+	while (!document.undoStack.isEmpty()) {
+		ok &= expect(undoLevelMapEdit(&document, &error), "Each replacement should undo.");
+	}
+	const QString restoredPath = root.filePath(QStringLiteral("textures-restored.map"));
+	ok &= expect(saveLevelMapAs(document, restoredPath).succeeded() && QString::fromUtf8(readFile(restoredPath)) == original,
+		"Undoing the replacements should restore the map exactly.");
+
+	// Applying a texture puts it on every face of the selection, as one undo
+	// step, and leaves other brushes alone.
+	int applied = 0;
+	ok &= expect(setLevelMapSelection(&document, {{LevelMapSelectionKind::Entity, 2}}, &error)
+			&& applyLevelMapTexture(&document, QStringLiteral("METAL1"), &applied, &error) && applied == 2,
+		"Applying METAL1 to the door should change both of its faces.");
+	ok &= expect(levelMapObjectsUsingTexture(document, QStringLiteral("METAL1")).size() == 1
+			&& levelMapObjectsUsingTexture(document, QStringLiteral("DOOR1")).isEmpty(),
+		"Only the door should use METAL1 now.");
+	ok &= expect(!applyLevelMapTexture(&document, QStringLiteral("METAL1"), &applied, &error) && error.contains(QStringLiteral("already")),
+		"Applying the texture the selection already uses should change nothing.");
+	ok &= expect(undoLevelMapEdit(&document, &error) && levelMapObjectsUsingTexture(document, QStringLiteral("DOOR1")).size() == 1,
+		"Undo should put the door's own texture back.");
+
+	// Objects using a texture: both worldspawn brushes use CEIL1; only the
+	// door uses DOOR1.
+	const QVector<LevelMapSelectionRef> ceilingBrushes = levelMapObjectsUsingTexture(document, QStringLiteral("ceil1"));
+	ok &= expect(ceilingBrushes.size() == 2 && ceilingBrushes.first().kind == LevelMapSelectionKind::QuakeBrush,
+		"Both brushes using CEIL1 should be found, whatever the case.");
+	ok &= expect(levelMapObjectsUsingTexture(document, QStringLiteral("DOOR1")).size() == 1, "Only the door brush uses DOOR1.");
+
+	// Quake III: a brushDef face after its texture matrix, a quoted brushDef3
+	// name, and a patch's shader line.
+	const QString q3Path = root.filePath(QStringLiteral("textures-q3.map"));
+	ok &= expect(writeFile(q3Path, quake3MapFixture()), "Quake III fixture should be written.");
+	LevelMapDocument q3;
+	ok &= expect(loadLevelMap({q3Path, {}, QStringLiteral("idtech3")}, &q3, &error), "Quake III fixture should load.");
+	ok &= expect(replaceLevelMapTexture(&q3, QStringLiteral("textures/common/caulk"), QStringLiteral("textures/common/nodraw"), false, &replaced, &error)
+			&& replaced == 7,
+		"caulk should be replaced on the brushDef face and all six brushDef3 faces.");
+	ok &= expect(replaceLevelMapTexture(&q3, QStringLiteral("textures/base_wall/curve"), QStringLiteral("textures/base_wall/pipe"), false, &replaced, &error)
+			&& replaced == 1,
+		"The patch's shader should be replaceable.");
+	const QString q3Saved = root.filePath(QStringLiteral("textures-q3-saved.map"));
+	ok &= expect(saveLevelMapAs(q3, q3Saved).succeeded(), "Saving the Quake III map should work.");
+	const QString q3Text = QString::fromUtf8(readFile(q3Saved));
+	ok &= expect(q3Text.contains(QStringLiteral("( ( 0.0078125 0 0 ) ( 0 0.0078125 0.25 ) ) textures/common/nodraw 0 4 0"))
+			&& q3Text.contains(QStringLiteral("( 0 0 1 -64 ) ( ( 0.03125 0 0 ) ( 0 0.03125 0 ) ) \"textures/common/nodraw\" 0 0 0"))
+			&& q3Text.contains(QStringLiteral("\ntextures/base_wall/pipe\n( 3 3 0 0 0 )")) && !q3Text.contains(QStringLiteral("caulk")),
+		"Quake III names should be replaced after the texture matrix, inside their quotes, and on the patch's shader line.");
+	LevelMapDocument q3Reloaded;
+	ok &= expect(loadLevelMap({q3Saved, {}, QStringLiteral("idtech3")}, &q3Reloaded, &error) && q3Reloaded.patches.size() == 1
+			&& q3Reloaded.patches.first().textureName == QStringLiteral("textures/base_wall/pipe"),
+		"The replaced patch shader should read back.");
+
+	// Doom: flats and wall textures in the binary records, eight characters at most.
+	const QString wadPath = root.filePath(QStringLiteral("textures.wad"));
+	ok &= expect(writeFile(wadPath, wadFixture()), "Doom fixture should be written.");
+	LevelMapDocument doom;
+	ok &= expect(loadLevelMap({wadPath, QStringLiteral("MAP01"), {}}, &doom, &error), "Doom fixture should load.");
+	ok &= expect(!applyLevelMapTexture(&doom, QStringLiteral("FLAT5"), nullptr, &error) && error.contains(QStringLiteral("Replace Texture")),
+		"Applying a texture should point a Doom map at Replace Texture.");
+	// Every fixture linedef faces sidedef 0, whose middle texture is WALLMID.
+	ok &= expect(levelMapObjectsUsingTexture(doom, QStringLiteral("WALLMID")).size() == 4
+			&& levelMapObjectsUsingTexture(doom, QStringLiteral("FLOOR1")).first().kind == LevelMapSelectionKind::DoomSector,
+		"A Doom wall texture should find the linedefs whose sides use it, and a flat its sector.");
+	ok &= expect(replaceLevelMapTexture(&doom, QStringLiteral("FLOOR1"), QStringLiteral("FLAT5"), false, &replaced, &error) && replaced == 1
+			&& replaceLevelMapTexture(&doom, QStringLiteral("WALLMID"), QStringLiteral("STARTAN2"), false, &replaced, &error) && replaced == 1,
+		"A Doom flat and a wall texture should be replaceable.");
+	ok &= expect(!replaceLevelMapTexture(&doom, QStringLiteral("CEIL1"), QStringLiteral("TOOLONGNAME"), false, &replaced, &error),
+		"A Doom texture name longer than eight characters should be refused.");
+	const QString wadSaved = root.filePath(QStringLiteral("textures-saved.wad"));
+	ok &= expect(saveLevelMapAs(doom, wadSaved).succeeded(), "Saving the Doom map should work.");
+	LevelMapDocument doomReloaded;
+	ok &= expect(loadLevelMap({wadSaved, QStringLiteral("MAP01"), {}}, &doomReloaded, &error)
+			&& doomReloaded.doomSectors.first().floorTexture == QStringLiteral("FLAT5")
+			&& doomReloaded.doomSidedefs.first().middleTexture == QStringLiteral("STARTAN2"),
+		"The replaced Doom textures should read back.");
+	return ok;
+}
+
+bool runRotateSmoke(const QDir& root)
+{
+	bool ok = true;
+	QString error;
+
+	// A brush entity turns about its own centre; a light turns its angle.
+	const QString path = root.filePath(QStringLiteral("rotate.map"));
+	ok &= expect(writeFile(path, linkedMapFixture()), "Rotation fixture should be written.");
+	LevelMapDocument document;
+	ok &= expect(loadLevelMap({path, {}, QStringLiteral("idtech2")}, &document, &error), "Rotation fixture should load.");
+	const QString original = document.originalText;
+	ok &= expect(setLevelMapSelection(&document, {{LevelMapSelectionKind::Entity, 2}}, &error)
+			&& rotateLevelMapSelection(&document, 2, 1, &error),
+		"Turning the door a quarter turn should work.");
+	const QString doorPath = root.filePath(QStringLiteral("rotate-door.map"));
+	ok &= expect(saveLevelMapAs(document, doorPath).succeeded(), "Saving the turned door should work.");
+	const QString doorText = QString::fromUtf8(readFile(doorPath));
+	ok &= expect(doorText.contains(QStringLiteral("( 192 0 0 ) ( 191 0 0 ) ( 192 0 1 ) DOOR ")),
+		"The door's face points should turn about the door's centre.");
+	ok &= expect(undoLevelMapEdit(&document, &error), "The turn should undo.");
+	ok &= expect(setLevelMapEntityProperty(&document, 3, QStringLiteral("angle"), QStringLiteral("45"), &error), "Giving the light an angle should work.");
+	ok &= expect(setLevelMapSelection(&document, {{LevelMapSelectionKind::Entity, 3}}, &error)
+			&& rotateLevelMapSelection(&document, 2, -1, &error)
+			&& propertyValueForTest(document, 3, QStringLiteral("angle")) == QStringLiteral("315")
+			&& propertyValueForTest(document, 3, QStringLiteral("origin")) == QStringLiteral("256 256 64"),
+		"A clockwise quarter turn should take 45 to 315 and keep a lone light in place.");
+	ok &= expect(undoLevelMapEdit(&document, &error) && undoLevelMapEdit(&document, &error), "The angle edits should undo.");
+
+	// Four quarter turns of the door and the light together give back the
+	// very same file: quarter turns are exact.
+	ok &= expect(setLevelMapSelection(&document, {{LevelMapSelectionKind::Entity, 2}, {LevelMapSelectionKind::Entity, 3}}, &error),
+		"Selecting the door and the light should work.");
+	for (int turn = 0; turn < 4; ++turn) {
+		ok &= expect(rotateLevelMapSelection(&document, 2, 1, &error), "Each quarter turn should work.");
+	}
+	ok &= expect(document.undoStack.size() == 4, "Each turn should be one undo step.");
+	const QString roundPath = root.filePath(QStringLiteral("rotate-round.map"));
+	ok &= expect(saveLevelMapAs(document, roundPath).succeeded() && QString::fromUtf8(readFile(roundPath)) == original,
+		"Four quarter turns should write the source back exactly.");
+
+	// Valve 220 texture axes turn with their faces.
+	const QString valvePath = root.filePath(QStringLiteral("rotate-valve.map"));
+	ok &= expect(writeFile(valvePath, valve220MapFixture()), "Valve fixture should be written.");
+	LevelMapDocument valve;
+	ok &= expect(loadLevelMap({valvePath, {}, QStringLiteral("idtech2")}, &valve, &error), "Valve fixture should load.");
+	ok &= expect(setLevelMapSelection(&valve, {{LevelMapSelectionKind::QuakeBrush, 0}}, &error) && rotateLevelMapSelection(&valve, 2, 1, &error),
+		"Turning the Valve brush should work.");
+	const QString valveSaved = root.filePath(QStringLiteral("rotate-valve-saved.map"));
+	ok &= expect(saveLevelMapAs(valve, valveSaved).succeeded()
+			&& QString::fromUtf8(readFile(valveSaved)).contains(QStringLiteral("( 63 64 0 ) ( 64 64 0 ) ( 64 64 1 ) EASTTEX [ -1 0 0 64 ] [ 0 0 -1 0 ] 0 1 1")),
+		"A Valve face should turn its points and its texture axes, and shift its offset so the texture stays put.");
+	for (int turn = 0; turn < 3; ++turn) {
+		ok &= expect(rotateLevelMapSelection(&valve, 2, 1, &error), "Each further Valve turn should work.");
+	}
+	const QString valveRound = root.filePath(QStringLiteral("rotate-valve-round.map"));
+	ok &= expect(saveLevelMapAs(valve, valveRound).succeeded() && QString::fromUtf8(readFile(valveRound)) == QString::fromUtf8(valve220MapFixture()),
+		"Four Valve turns should give back the same axes and offsets.");
+
+	// A brushDef3 plane turns its normal and keeps its distance to the brush.
+	const QString q3Path = root.filePath(QStringLiteral("rotate-q3.map"));
+	ok &= expect(writeFile(q3Path, quake3MapFixture()), "Quake III fixture should be written.");
+	LevelMapDocument q3;
+	ok &= expect(loadLevelMap({q3Path, {}, QStringLiteral("idtech3")}, &q3, &error), "Quake III fixture should load.");
+	ok &= expect(setLevelMapSelection(&q3, {{LevelMapSelectionKind::QuakeBrush, 1}}, &error) && rotateLevelMapSelection(&q3, 2, 1, &error),
+		"Turning the brushDef3 brush should work.");
+	const QString q3Saved = root.filePath(QStringLiteral("rotate-q3-saved.map"));
+	ok &= expect(saveLevelMapAs(q3, q3Saved).succeeded()
+			&& QString::fromUtf8(readFile(q3Saved)).contains(QStringLiteral("( 0 1 0 -64 ) ( (")),
+		"The east plane should face north after a quarter turn about the brush's centre.");
+
+	// Doom things turn their angle, about z only.
+	const QString wadPath = root.filePath(QStringLiteral("rotate.wad"));
+	ok &= expect(writeFile(wadPath, wadFixture()), "Doom fixture should be written.");
+	LevelMapDocument doom;
+	ok &= expect(loadLevelMap({wadPath, QStringLiteral("MAP01"), {}}, &doom, &error), "Doom fixture should load.");
+	ok &= expect(selectLevelMapObject(&doom, QStringLiteral("thing:0"), &error) && !rotateLevelMapSelection(&doom, 0, 1, &error),
+		"A Doom thing should not turn about x.");
+	ok &= expect(rotateLevelMapSelection(&doom, 2, 1, &error) && doom.doomThings.first().angle == 180
+			&& propertyValueForTest(doom, 0, QStringLiteral("angle")) == QStringLiteral("180"),
+		"A Doom thing should turn its angle, its mirror included.");
+	return ok;
+}
+
+bool runFlipSmoke(const QDir& root)
+{
+	bool ok = true;
+	QString error;
+	const QString path = root.filePath(QStringLiteral("flip.map"));
+	ok &= expect(writeFile(path, linkedMapFixture()), "Flip fixture should be written.");
+	LevelMapDocument document;
+	ok &= expect(loadLevelMap({path, {}, QStringLiteral("idtech2")}, &document, &error), "Flip fixture should load.");
+	const QString original = document.originalText;
+
+	// Mirroring x about the door's centre swaps two points of each face, so
+	// the brush still closes when it is read back.
+	ok &= expect(setLevelMapSelection(&document, {{LevelMapSelectionKind::Entity, 2}}, &error) && flipLevelMapSelection(&document, 0, &error),
+		"Flipping the door along x should work.");
+	const QString flippedPath = root.filePath(QStringLiteral("flip-door.map"));
+	ok &= expect(saveLevelMapAs(document, flippedPath).succeeded(), "Saving the flipped door should work.");
+	ok &= expect(QString::fromUtf8(readFile(flippedPath)).contains(QStringLiteral("( 192 0 0 ) ( 192 0 1 ) ( 192 1 0 ) DOOR 0 0 0 1 1")),
+		"A flipped face should mirror its points and swap the last two.");
+	LevelMapDocument reloaded;
+	ok &= expect(loadLevelMap({flippedPath, {}, QStringLiteral("idtech2")}, &reloaded, &error) && !hasIssueCode(reloaded, QStringLiteral("brush-degenerate"))
+			&& reloaded.brushes.size() == document.brushes.size() && reloaded.brushes.at(1).boundsSolved,
+		"The flipped door should still be a closed brush.");
+	ok &= expect(flipLevelMapSelection(&document, 0, &error), "Flipping back should work.");
+	const QString backPath = root.filePath(QStringLiteral("flip-back.map"));
+	ok &= expect(saveLevelMapAs(document, backPath).succeeded() && QString::fromUtf8(readFile(backPath)) == original,
+		"Two flips should write the source back exactly.");
+
+	// Headings mirror: x reflects about north, y about east.
+	ok &= expect(setLevelMapEntityProperty(&document, 3, QStringLiteral("angle"), QStringLiteral("45"), &error)
+			&& setLevelMapSelection(&document, {{LevelMapSelectionKind::Entity, 3}}, &error)
+			&& flipLevelMapSelection(&document, 0, &error) && propertyValueForTest(document, 3, QStringLiteral("angle")) == QStringLiteral("135")
+			&& flipLevelMapSelection(&document, 1, &error) && propertyValueForTest(document, 3, QStringLiteral("angle")) == QStringLiteral("225"),
+		"Flipping x should take 45 to 135, and flipping y then 135 to 225.");
+
+	// A Quake III brushDef3 brush and a patch still read back whole.
+	const QString q3Path = root.filePath(QStringLiteral("flip-q3.map"));
+	ok &= expect(writeFile(q3Path, quake3MapFixture()), "Quake III fixture should be written.");
+	LevelMapDocument q3;
+	ok &= expect(loadLevelMap({q3Path, {}, QStringLiteral("idtech3")}, &q3, &error), "Quake III fixture should load.");
+	ok &= expect(setLevelMapSelection(&q3, {{LevelMapSelectionKind::QuakeBrush, 1}, {LevelMapSelectionKind::QuakePatch, 0}}, &error)
+			&& flipLevelMapSelection(&q3, 0, &error),
+		"Flipping the brushDef3 brush and the patch should work.");
+	const QString q3Saved = root.filePath(QStringLiteral("flip-q3-saved.map"));
+	LevelMapDocument q3Reloaded;
+	ok &= expect(saveLevelMapAs(q3, q3Saved).succeeded() && loadLevelMap({q3Saved, {}, QStringLiteral("idtech3")}, &q3Reloaded, &error)
+			&& q3Reloaded.brushes.size() == 2 && q3Reloaded.brushes.at(1).boundsSolved && q3Reloaded.patches.size() == 1
+			&& q3Reloaded.patches.first().controlGridNormalized,
+		"The flipped brushDef3 brush should still close and the patch should keep its grid.");
+
+	// Doom things flip their heading, and never along z.
+	const QString wadPath = root.filePath(QStringLiteral("flip.wad"));
+	ok &= expect(writeFile(wadPath, wadFixture()), "Doom fixture should be written.");
+	LevelMapDocument doom;
+	ok &= expect(loadLevelMap({wadPath, QStringLiteral("MAP01"), {}}, &doom, &error), "Doom fixture should load.");
+	ok &= expect(selectLevelMapObject(&doom, QStringLiteral("thing:0"), &error) && !flipLevelMapSelection(&doom, 2, &error),
+		"A Doom thing should not flip along z.");
+	ok &= expect(flipLevelMapSelection(&doom, 1, &error) && doom.doomThings.first().angle == 270, "Flipping y should turn north into south.");
+	return ok;
+}
+
+bool runResizeSmoke(const QDir& root)
+{
+	bool ok = true;
+	QString error;
+	const QString path = root.filePath(QStringLiteral("resize.map"));
+	ok &= expect(writeFile(path, linkedMapFixture()), "Resize fixture should be written.");
+	LevelMapDocument document;
+	ok &= expect(loadLevelMap({path, {}, QStringLiteral("idtech2")}, &document, &error), "Resize fixture should load.");
+	const QString original = document.originalText;
+
+	// The door spans 128-192 by 0-64 by 0-128; stretching it to 256 along x
+	// moves its east face and keeps its west face.
+	LevelMapVec3 mins;
+	LevelMapVec3 maxs;
+	ok &= expect(setLevelMapSelection(&document, {{LevelMapSelectionKind::Entity, 2}}, &error)
+			&& levelMapSelectionBounds(document, &mins, &maxs) && mins.x == 128.0 && maxs.x == 192.0 && maxs.z == 128.0,
+		"The door's bounds should be those of its brush.");
+	ok &= expect(!resizeLevelMapSelection(&document, {128.0, 0.0, 0.0, true}, {128.0, 64.0, 128.0, true}, &error)
+			&& error.contains(QStringLiteral("along x")),
+		"A resize that flattens the door should be refused, naming the axis.");
+	ok &= expect(!resizeLevelMapSelection(&document, mins, maxs, &error), "A resize to the same bounds should change nothing.");
+	ok &= expect(resizeLevelMapSelection(&document, {128.0, 0.0, 0.0, true}, {256.0, 64.0, 128.0, true}, &error),
+		"Stretching the door along x should work.");
+	ok &= expect(document.undoStack.last().description == QStringLiteral("Resize entity:2 to 128 x 64 x 128"),
+		"A one-object resize should name the object and its new size in the history.");
+	const QString stretchedPath = root.filePath(QStringLiteral("resize-door.map"));
+	ok &= expect(saveLevelMapAs(document, stretchedPath).succeeded(), "Saving the stretched door should work.");
+	const QString stretched = QString::fromUtf8(readFile(stretchedPath));
+	ok &= expect(stretched.contains(QStringLiteral("( 256 0 0 ) ( 256 0 1 ) ( 256 1 0 ) DOOR 0 0 0 1 1"))
+			&& stretched.contains(QStringLiteral("( 128 0 0 ) ( 128 1 0 ) ( 128 0 1 ) DOOR 0 0 0 1 1")),
+		"The east face should move out to 256 and the west face stay at 128.");
+	LevelMapDocument reloaded;
+	ok &= expect(loadLevelMap({stretchedPath, {}, QStringLiteral("idtech2")}, &reloaded, &error) && reloaded.brushes.at(1).boundsSolved
+			&& reloaded.brushes.at(1).maxs.x == 256.0 && !hasIssueCode(reloaded, QStringLiteral("brush-degenerate")),
+		"The stretched door should read back as a closed brush reaching 256.");
+	ok &= expect(undoLevelMapEdit(&document, &error), "The resize should undo.");
+	const QString undonePath = root.filePath(QStringLiteral("resize-undone.map"));
+	ok &= expect(saveLevelMapAs(document, undonePath).succeeded() && QString::fromUtf8(readFile(undonePath)) == original,
+		"Undoing the resize should write the source back exactly.");
+
+	// A key a transform leaves as it was keeps its text: resizing does not
+	// turn anything, so an unusual `angles` spacing survives.
+	ok &= expect(setLevelMapEntityProperty(&document, 3, QStringLiteral("angles"), QStringLiteral("0  90 0"), &error)
+			&& setLevelMapSelection(&document, {{LevelMapSelectionKind::Entity, 2}, {LevelMapSelectionKind::Entity, 3}}, &error)
+			&& resizeLevelMapSelection(&document, {128.0, 0.0, 0.0, true}, {384.0, 256.0, 128.0, true}, &error)
+			&& propertyValueForTest(document, 3, QStringLiteral("angles")) == QStringLiteral("0  90 0"),
+		"Resizing should leave an angles key it does not turn exactly as written.");
+	ok &= expect(undoLevelMapEdit(&document, &error) && undoLevelMapEdit(&document, &error), "The resize and the key should undo.");
+
+	// A point entity in the selection keeps its place relative to the rest.
+	ok &= expect(setLevelMapSelection(&document, {{LevelMapSelectionKind::Entity, 2}, {LevelMapSelectionKind::Entity, 3}}, &error)
+			&& resizeLevelMapSelection(&document, {128.0, 0.0, 0.0, true}, {384.0, 256.0, 128.0, true}, &error)
+			&& propertyValueForTest(document, 3, QStringLiteral("origin")) == QStringLiteral("384 256 64"),
+		"The light at the far corner should move with the far corner.");
+
+	// Valve 220 textures stay put in the world: the axes and offsets keep
+	// their text, and only the points move.
+	const QString valvePath = root.filePath(QStringLiteral("resize-valve.map"));
+	ok &= expect(writeFile(valvePath, valve220MapFixture()), "Valve fixture should be written.");
+	LevelMapDocument valve;
+	ok &= expect(loadLevelMap({valvePath, {}, QStringLiteral("idtech2")}, &valve, &error), "Valve fixture should load.");
+	ok &= expect(setLevelMapSelection(&valve, {{LevelMapSelectionKind::QuakeBrush, 0}}, &error)
+			&& resizeLevelMapSelection(&valve, {0.0, 0.0, 0.0, true}, {128.0, 64.0, 64.0, true}, &error),
+		"Stretching the Valve brush should work.");
+	const QString valveSaved = root.filePath(QStringLiteral("resize-valve-saved.map"));
+	const QString valveText = saveLevelMapAs(valve, valveSaved).succeeded() ? QString::fromUtf8(readFile(valveSaved)) : QString();
+	ok &= expect(valveText.contains(QStringLiteral("( 128 1 0 ) ( 128 0 0 ) ( 128 0 1 ) EASTTEX [ 0 1 0 0 ] [ 0 0 -1 0 ] 0 1 1"))
+			&& valveText.contains(QStringLiteral("( 2 0 64 ) ( 0 0 64 ) ( 0 1 64 ) TOPTEX [ 1 0 0 16 ] [ 0 -1 0 -8 ] 0 1 1")),
+		"A stretched Valve face should move its points and keep its texture axes and offsets.");
+
+	// A brushDef3 plane keeps its normal and moves its distance; a patch
+	// stretches its control points.
+	const QString q3Path = root.filePath(QStringLiteral("resize-q3.map"));
+	ok &= expect(writeFile(q3Path, quake3MapFixture()), "Quake III fixture should be written.");
+	LevelMapDocument q3;
+	ok &= expect(loadLevelMap({q3Path, {}, QStringLiteral("idtech3")}, &q3, &error), "Quake III fixture should load.");
+	ok &= expect(setLevelMapSelection(&q3, {{LevelMapSelectionKind::QuakeBrush, 1}}, &error)
+			&& resizeLevelMapSelection(&q3, {0.0, 0.0, 0.0, true}, {128.0, 64.0, 64.0, true}, &error),
+		"Stretching the brushDef3 brush should work.");
+	ok &= expect(setLevelMapSelection(&q3, {{LevelMapSelectionKind::QuakePatch, 0}}, &error)
+			&& resizeLevelMapSelection(&q3, {0.0, 0.0, -8.0, true}, {64.0, 32.0, 8.0, true}, &error),
+		"Stretching the patch should work.");
+	const QString q3Saved = root.filePath(QStringLiteral("resize-q3-saved.map"));
+	LevelMapDocument q3Reloaded;
+	ok &= expect(saveLevelMapAs(q3, q3Saved).succeeded() && QString::fromUtf8(readFile(q3Saved)).contains(QStringLiteral("( 1 0 0 -128 ) ( ( 0.03125 0 0 )"))
+			&& loadLevelMap({q3Saved, {}, QStringLiteral("idtech3")}, &q3Reloaded, &error) && q3Reloaded.brushes.at(1).boundsSolved
+			&& q3Reloaded.brushes.at(1).maxs.x == 128.0 && q3Reloaded.patches.size() == 1 && q3Reloaded.patches.first().controlGridNormalized
+			&& q3Reloaded.patches.first().maxs.x == 64.0,
+		"The east plane should move to 128 and the patch should reach 64.");
+
+	// A lone Doom thing has no size, so a resize only moves it.
+	const QString wadPath = root.filePath(QStringLiteral("resize.wad"));
+	ok &= expect(writeFile(wadPath, wadFixture()), "Doom fixture should be written.");
+	LevelMapDocument doom;
+	ok &= expect(loadLevelMap({wadPath, QStringLiteral("MAP01"), {}}, &doom, &error), "Doom fixture should load.");
+	LevelMapVec3 thingMins;
+	LevelMapVec3 thingMaxs;
+	ok &= expect(selectLevelMapObject(&doom, QStringLiteral("thing:0"), &error) && levelMapSelectionBounds(doom, &thingMins, &thingMaxs),
+		"A selected thing should have bounds.");
+	const LevelMapVec3 shifted {thingMins.x + 32.0, thingMins.y, 0.0, true};
+	ok &= expect(resizeLevelMapSelection(&doom, shifted, shifted, &error) && doom.doomThings.first().x == thingMins.x + 32.0,
+		"A resize of a lone thing should move it.");
+	return ok;
+}
+
+// Three points on the plane `axis` = `at` whose normal points up that axis.
+void axisPlanePoints(int axis, double at, LevelMapVec3* a, LevelMapVec3* b, LevelMapVec3* c)
+{
+	switch (axis) {
+	case 0:
+		*a = {at, 0.0, 0.0, true};
+		*b = {at, 1.0, 0.0, true};
+		*c = {at, 0.0, 1.0, true};
+		break;
+	case 1:
+		*a = {0.0, at, 0.0, true};
+		*b = {0.0, at, 1.0, true};
+		*c = {1.0, at, 0.0, true};
+		break;
+	default:
+		*a = {0.0, 0.0, at, true};
+		*b = {1.0, 0.0, at, true};
+		*c = {0.0, 1.0, at, true};
+		break;
+	}
+}
+
+bool runClipSmoke(const QDir& root)
+{
+	bool ok = true;
+	QString error;
+	int clipped = 0;
+	LevelMapVec3 a;
+	LevelMapVec3 b;
+	LevelMapVec3 c;
+	const QString path = root.filePath(QStringLiteral("clip.map"));
+	ok &= expect(writeFile(path, linkedMapFixture()), "Clip fixture should be written.");
+	LevelMapDocument document;
+	ok &= expect(loadLevelMap({path, {}, QStringLiteral("idtech2")}, &document, &error), "Clip fixture should load.");
+	const QString original = document.originalText;
+
+	// The door, x 128-192, cut at x 160 keeping the back: the new face sits on
+	// the plane facing +x, and the east face, left without an edge, goes.
+	axisPlanePoints(0, 160.0, &a, &b, &c);
+	ok &= expect(setLevelMapSelection(&document, {{LevelMapSelectionKind::Entity, 2}}, &error)
+			&& clipLevelMapSelection(&document, a, b, c, LevelMapClipKeep::Back, &clipped, &error) && clipped == 1,
+		"Clipping the door's brush at x 160 should work.");
+	ok &= expect(document.brushes.size() == 2 && document.brushes.last().id == 2 && document.brushes.last().entityId == 2
+			&& document.brushes.last().maxs.x == 160.0 && document.selection.size() == 1 && document.selection.first().objectId == 2,
+		"The door should keep one brush, 128 to 160 wide, selected.");
+	ok &= expect(document.undoStack.last().description == QStringLiteral("Clip brush:1"), "The history should name the clipped brush.");
+	const QString clippedPath = root.filePath(QStringLiteral("clip-door.map"));
+	ok &= expect(saveLevelMapAs(document, clippedPath).succeeded(), "Saving the clipped door should work.");
+	const QString clippedText = QString::fromUtf8(readFile(clippedPath));
+	ok &= expect(clippedText.contains(QStringLiteral("( 160 1 0 ) ( 160 0 0 ) ( 160 0 1 ) DOOR 0 0 0 1 1"))
+			&& !clippedText.contains(QStringLiteral("( 192 0 0 ) ( 192 0 1 ) ( 192 1 0 ) DOOR")),
+		"The clipped door should gain a face on the plane and lose its east face.");
+	LevelMapDocument reloaded;
+	ok &= expect(loadLevelMap({clippedPath, {}, QStringLiteral("idtech2")}, &reloaded, &error) && reloaded.brushes.size() == 2
+			&& reloaded.brushes.at(1).boundsSolved && reloaded.brushes.at(1).maxs.x == 160.0 && !hasIssueCode(reloaded, QStringLiteral("brush-degenerate")),
+		"The clipped door should read back as a closed brush inside the door entity.");
+	ok &= expect(undoLevelMapEdit(&document, &error) && document.brushes.size() == 2 && document.brushes.at(1).id == 1,
+		"Undo should put the door's brush back whole.");
+	const QString undonePath = root.filePath(QStringLiteral("clip-undone.map"));
+	ok &= expect(saveLevelMapAs(document, undonePath).succeeded() && QString::fromUtf8(readFile(undonePath)) == original,
+		"Undoing the clip should write the source back exactly.");
+	ok &= expect(redoLevelMapEdit(&document, &error) && document.brushes.last().id == 2 && document.brushes.last().maxs.x == 160.0,
+		"Redo should cut the door again.");
+	ok &= expect(undoLevelMapEdit(&document, &error), "Undoing again should work.");
+
+	// Both parts: two brushes meeting at the plane, both selected.
+	ok &= expect(setLevelMapSelection(&document, {{LevelMapSelectionKind::QuakeBrush, 1}}, &error)
+			&& clipLevelMapSelection(&document, a, b, c, LevelMapClipKeep::Both, &clipped, &error) && document.brushes.size() == 3
+			&& document.selection.size() == 2 && document.brushes.at(1).maxs.x == 160.0 && document.brushes.at(2).mins.x == 160.0
+			&& document.undoStack.last().description == QStringLiteral("Split brush:1 in two"),
+		"Splitting the door should make two brushes meeting at x 160.");
+	ok &= expect(undoLevelMapEdit(&document, &error), "The split should undo.");
+
+	// A plane that misses every selected brush changes nothing.
+	axisPlanePoints(0, 500.0, &a, &b, &c);
+	ok &= expect(setLevelMapSelection(&document, {{LevelMapSelectionKind::QuakeBrush, 1}}, &error)
+			&& !clipLevelMapSelection(&document, a, b, c, LevelMapClipKeep::Back, &clipped, &error) && error.contains(QStringLiteral("does not pass")),
+		"A plane beside the brush should be refused.");
+
+	// Valve 220: the new face gets paraxial axes; the texture comes from the
+	// first of the most used faces.
+	const QString valvePath = root.filePath(QStringLiteral("clip-valve.map"));
+	ok &= expect(writeFile(valvePath, valve220MapFixture()), "Valve fixture should be written.");
+	LevelMapDocument valve;
+	ok &= expect(loadLevelMap({valvePath, {}, QStringLiteral("idtech2")}, &valve, &error), "Valve fixture should load.");
+	axisPlanePoints(2, 32.0, &a, &b, &c);
+	ok &= expect(setLevelMapSelection(&valve, {{LevelMapSelectionKind::QuakeBrush, 0}}, &error)
+			&& clipLevelMapSelection(&valve, a, b, c, LevelMapClipKeep::Back, &clipped, &error),
+		"Clipping the Valve brush at z 32 should work.");
+	const QString valveSaved = root.filePath(QStringLiteral("clip-valve-saved.map"));
+	const QString valveText = saveLevelMapAs(valve, valveSaved).succeeded() ? QString::fromUtf8(readFile(valveSaved)) : QString();
+	ok &= expect(valveText.contains(QStringLiteral("( 1 0 32 ) ( 0 0 32 ) ( 0 1 32 ) TOPTEX [ 1 0 0 0 ] [ 0 -1 0 0 ] 0 1 1"))
+			&& !valveText.contains(QStringLiteral("( 1 0 64 ) ( 0 0 64 )")),
+		"The Valve brush should gain a Valve face at z 32 and lose its top.");
+
+	// brushDef3: the new face is a plane, keeping the front of the cut.
+	const QString q3Path = root.filePath(QStringLiteral("clip-q3.map"));
+	ok &= expect(writeFile(q3Path, quake3MapFixture()), "Quake III fixture should be written.");
+	LevelMapDocument q3;
+	ok &= expect(loadLevelMap({q3Path, {}, QStringLiteral("idtech3")}, &q3, &error), "Quake III fixture should load.");
+	axisPlanePoints(0, 32.0, &a, &b, &c);
+	ok &= expect(setLevelMapSelection(&q3, {{LevelMapSelectionKind::QuakeBrush, 1}}, &error)
+			&& clipLevelMapSelection(&q3, a, b, c, LevelMapClipKeep::Front, &clipped, &error),
+		"Clipping the brushDef3 brush at x 32 should work.");
+	const QString q3Saved = root.filePath(QStringLiteral("clip-q3-saved.map"));
+	LevelMapDocument q3Reloaded;
+	ok &= expect(saveLevelMapAs(q3, q3Saved).succeeded()
+			&& QString::fromUtf8(readFile(q3Saved)).contains(QStringLiteral("( -1 0 0 32 ) ( ( 0.0078125 0 0 ) ( 0 0.0078125 0 ) ) \"textures/common/caulk\" 0 0 0"))
+			&& loadLevelMap({q3Saved, {}, QStringLiteral("idtech3")}, &q3Reloaded, &error) && q3Reloaded.brushes.size() == 2
+			&& q3Reloaded.brushes.last().boundsSolved && q3Reloaded.brushes.last().mins.x == 32.0,
+		"The brushDef3 brush should keep 32 to 64, closed by a plane facing -x.");
+
+	// With a clean brush and one on shared lines selected together, the clean
+	// one is cut and the other is left whole, with its reason reported.
+	const QString mixedPath = root.filePath(QStringLiteral("clip-mixed.map"));
+	ok &= expect(writeFile(mixedPath, QByteArrayLiteral("{\n\"classname\" \"worldspawn\"\n{\n"
+				"( 1 0 64 ) ( 0 0 64 ) ( 0 1 64 ) TOP 0 0 0 1 1\n( 0 1 0 ) ( 0 0 0 ) ( 1 0 0 ) BOTTOM 0 0 0 1 1\n"
+				"( 64 1 0 ) ( 64 0 0 ) ( 64 0 1 ) EAST 0 0 0 1 1\n( 0 0 1 ) ( 0 0 0 ) ( 0 1 0 ) WEST 0 0 0 1 1\n"
+				"( 0 64 1 ) ( 0 64 0 ) ( 1 64 0 ) NORTH 0 0 0 1 1\n( 1 0 0 ) ( 0 0 0 ) ( 0 0 1 ) SOUTH 0 0 0 1 1\n}\n"
+				"{ ( 1 0 64 ) ( 0 0 64 ) ( 0 1 64 ) TOP 0 0 0 1 1\n( 0 1 0 ) ( 0 0 0 ) ( 1 0 0 ) BOTTOM 0 0 0 1 1\n"
+				"( 64 1 0 ) ( 64 0 0 ) ( 64 0 1 ) EAST 0 0 0 1 1\n( 0 0 1 ) ( 0 0 0 ) ( 0 1 0 ) WEST 0 0 0 1 1\n"
+				"( 0 64 1 ) ( 0 64 0 ) ( 1 64 0 ) NORTH 0 0 0 1 1\n( 1 0 0 ) ( 0 0 0 ) ( 0 0 1 ) SOUTH 0 0 0 1 1 }\n}\n")),
+		"Mixed clip fixture should be written.");
+	LevelMapDocument mixed;
+	QStringList skipped;
+	axisPlanePoints(0, 32.0, &a, &b, &c);
+	ok &= expect(loadLevelMap({mixedPath, {}, QStringLiteral("idtech2")}, &mixed, &error)
+			&& setLevelMapSelection(&mixed, {{LevelMapSelectionKind::QuakeBrush, 0}, {LevelMapSelectionKind::QuakeBrush, 1}}, &error)
+			&& clipLevelMapSelection(&mixed, a, b, c, LevelMapClipKeep::Back, &clipped, &error, &skipped) && clipped == 1
+			&& skipped.size() == 1 && skipped.first().contains(QStringLiteral("Brush 1")),
+		"Clipping a clean brush beside one on shared lines should cut the first and report the second.");
+
+	// A brush written on shared lines is left alone, with a reason.
+	const QString compactPath = root.filePath(QStringLiteral("clip-compact.map"));
+	ok &= expect(writeFile(compactPath, compactMapFixture()), "Compact fixture should be written.");
+	LevelMapDocument compact;
+	ok &= expect(loadLevelMap({compactPath, {}, QStringLiteral("idtech2")}, &compact, &error), "Compact fixture should load.");
+	axisPlanePoints(0, 32.0, &a, &b, &c);
+	ok &= expect(setLevelMapSelection(&compact, {{LevelMapSelectionKind::QuakeBrush, 0}}, &error)
+			&& !clipLevelMapSelection(&compact, a, b, c, LevelMapClipKeep::Back, &clipped, &error) && error.contains(QStringLiteral("shared")),
+		"A brush on shared lines should be refused rather than rewritten.");
+	return ok;
+}
+
+bool runHollowSmoke(const QDir& root)
+{
+	bool ok = true;
+	QString error;
+	int hollowed = 0;
+	const QString path = root.filePath(QStringLiteral("hollow.map"));
+	ok &= expect(writeFile(path, valve220MapFixture()), "Hollow fixture should be written.");
+	LevelMapDocument document;
+	ok &= expect(loadLevelMap({path, {}, QStringLiteral("idtech2")}, &document, &error), "Hollow fixture should load.");
+	const QString original = document.originalText;
+
+	// Walls thicker than half the cube cannot fit.
+	ok &= expect(setLevelMapSelection(&document, {{LevelMapSelectionKind::QuakeBrush, 0}}, &error)
+			&& !hollowLevelMapSelection(&document, 40.0, &hollowed, &error) && error.contains(QStringLiteral("too thin")),
+		"Walls 40 units thick should not fit in a 64-unit cube.");
+
+	// The 64-unit cube becomes six walls 8 units thick, one per face.
+	ok &= expect(hollowLevelMapSelection(&document, 8.0, &hollowed, &error) && hollowed == 1 && document.brushes.size() == 6
+			&& document.selection.size() == 6,
+		"Hollowing the cube should make six selected walls.");
+	ok &= expect(document.undoStack.last().description == QStringLiteral("Hollow brush:0 into 6 walls"), "The history should name the hollowed brush.");
+	const QString savedPath = root.filePath(QStringLiteral("hollow-saved.map"));
+	LevelMapDocument reloaded;
+	ok &= expect(saveLevelMapAs(document, savedPath).succeeded() && loadLevelMap({savedPath, {}, QStringLiteral("idtech2")}, &reloaded, &error)
+			&& reloaded.brushes.size() == 6 && !hasIssueCode(reloaded, QStringLiteral("brush-degenerate")),
+		"The walls should read back as six closed brushes.");
+	bool top = false;
+	bool west = false;
+	for (const LevelMapBrush& wall : reloaded.brushes) {
+		top = top || (wall.mins.z == 56.0 && wall.maxs.z == 64.0 && wall.mins.x == 0.0 && wall.maxs.x == 64.0);
+		west = west || (wall.mins.x == 0.0 && wall.maxs.x == 8.0 && wall.maxs.z == 64.0);
+	}
+	ok &= expect(top && west, "The top wall should span z 56-64 and the west wall x 0-8.");
+	const QString savedText = QString::fromUtf8(readFile(savedPath));
+	ok &= expect(savedText.contains(QStringLiteral(" 56 ) TOPTEX [ 1 0 0 0 ] [ 0 -1 0 0 ] 0 1 1"))
+			&& savedText.contains(QStringLiteral("( 1 0 64 ) ( 0 0 64 ) ( 0 1 64 ) TOPTEX [ 1 0 0 16 ] [ 0 -1 0 -8 ] 0 1 1")),
+		"The top wall should keep its outer face as written and face its inside with the same texture.");
+	ok &= expect(undoLevelMapEdit(&document, &error) && document.brushes.size() == 1, "Undo should fill the cube back in.");
+	const QString undonePath = root.filePath(QStringLiteral("hollow-undone.map"));
+	ok &= expect(saveLevelMapAs(document, undonePath).succeeded() && QString::fromUtf8(readFile(undonePath)) == original,
+		"Undoing the hollow should write the source back exactly.");
+
+	// A brush entity hollows its brush and keeps the walls.
+	const QString doorPath = root.filePath(QStringLiteral("hollow-door.map"));
+	ok &= expect(writeFile(doorPath, linkedMapFixture()), "Door fixture should be written.");
+	LevelMapDocument doors;
+	ok &= expect(loadLevelMap({doorPath, {}, QStringLiteral("idtech2")}, &doors, &error), "Door fixture should load.");
+	ok &= expect(setLevelMapSelection(&doors, {{LevelMapSelectionKind::Entity, 2}}, &error)
+			&& hollowLevelMapSelection(&doors, 16.0, &hollowed, &error) && doors.brushes.size() == 7
+			&& std::all_of(doors.brushes.cbegin() + 1, doors.brushes.cend(), [](const LevelMapBrush& wall) { return wall.entityId == 2; }),
+		"The door's brush should become six walls that stay in the door.");
+	return ok;
+}
+
+bool runCarveSmoke(const QDir& root)
+{
+	bool ok = true;
+	QString error;
+	int carved = 0;
+
+	// A 256-unit wall, a doorway brush through it from the floor, and a small
+	// brush wholly inside the doorway, written by Add Brush and read back so
+	// all three come from the file.
+	const QString emptyPath = root.filePath(QStringLiteral("carve-empty.map"));
+	ok &= expect(writeFile(emptyPath, QByteArrayLiteral("{\n\"classname\" \"worldspawn\"\n}\n")), "Carve fixture should be written.");
+	LevelMapDocument building;
+	ok &= expect(loadLevelMap({emptyPath, {}, QStringLiteral("idtech2")}, &building, &error)
+			&& addLevelMapBoxBrush(&building, {0.0, 0.0, 0.0, true}, {256.0, 16.0, 128.0, true}, QStringLiteral("WALL"), nullptr, &error)
+			&& addLevelMapBoxBrush(&building, {96.0, -8.0, 0.0, true}, {160.0, 24.0, 96.0, true}, QStringLiteral("DOORCUT"), nullptr, &error)
+			&& addLevelMapBoxBrush(&building, {100.0, 4.0, 8.0, true}, {120.0, 12.0, 24.0, true}, QStringLiteral("INNER"), nullptr, &error)
+			&& addLevelMapBoxBrush(&building, {1000.0, 0.0, 0.0, true}, {1016.0, 16.0, 16.0, true}, QStringLiteral("FAR"), nullptr, &error),
+		"The wall, doorway, inner, and far brushes should be added.");
+	const QString path = root.filePath(QStringLiteral("carve.map"));
+	ok &= expect(saveLevelMapAs(building, path).succeeded(), "The carve fixture should be saved.");
+	const QString original = QString::fromUtf8(readFile(path));
+	LevelMapDocument document;
+	ok &= expect(loadLevelMap({path, {}, QStringLiteral("idtech2")}, &document, &error) && document.brushes.size() == 4,
+		"The carve fixture should read back with four brushes.");
+
+	// A carver that touches nothing is refused.
+	ok &= expect(setLevelMapSelection(&document, {{LevelMapSelectionKind::QuakeBrush, 3}}, &error)
+			&& !carveLevelMapSelection(&document, &carved, &error) && error.contains(QStringLiteral("overlap")),
+		"A carver away from every brush should be refused.");
+
+	// Carving with the doorway leaves the wall's two sides and lintel, drops
+	// the brush inside it, and keeps the doorway selected.
+	ok &= expect(setLevelMapSelection(&document, {{LevelMapSelectionKind::QuakeBrush, 1}}, &error)
+			&& carveLevelMapSelection(&document, &carved, &error) && carved == 2,
+		"Carving with the doorway should cut the wall and the brush inside it.");
+	ok &= expect(document.selection.size() == 1 && document.selection.first().objectId == 1 && document.brushes.size() == 5,
+		"The doorway should stay, selected, beside three pieces of wall.");
+	double volume = 0.0;
+	bool clear = true;
+	for (const LevelMapBrush& brush : document.brushes) {
+		if (brush.id == 1 || brush.id == 3) {
+			continue;
+		}
+		volume += (brush.maxs.x - brush.mins.x) * (brush.maxs.y - brush.mins.y) * (brush.maxs.z - brush.mins.z);
+		const double overlapX = std::min(brush.maxs.x, 160.0) - std::max(brush.mins.x, 96.0);
+		const double overlapY = std::min(brush.maxs.y, 16.0) - std::max(brush.mins.y, 0.0);
+		const double overlapZ = std::min(brush.maxs.z, 96.0) - std::max(brush.mins.z, 0.0);
+		clear = clear && !(overlapX > 0.01 && overlapY > 0.01 && overlapZ > 0.01);
+	}
+	ok &= expect(volume == 256.0 * 16.0 * 128.0 - 64.0 * 16.0 * 96.0 && clear,
+		"The pieces should be the whole wall less the doorway, with nothing left in the opening.");
+	const QString carvedPath = root.filePath(QStringLiteral("carve-saved.map"));
+	LevelMapDocument reloaded;
+	ok &= expect(saveLevelMapAs(document, carvedPath).succeeded() && loadLevelMap({carvedPath, {}, QStringLiteral("idtech2")}, &reloaded, &error)
+			&& reloaded.brushes.size() == 5 && !hasIssueCode(reloaded, QStringLiteral("brush-degenerate")),
+		"The carved wall should read back as closed brushes.");
+	// Five new faces: three facing into the opening, and two where the sides
+	// meet the lintel, hidden between pieces as Radiant's subtract leaves them.
+	ok &= expect(QString::fromUtf8(readFile(carvedPath)).count(QStringLiteral("DOORCUT")) == 6 + 5,
+		"The faces the carve made should take the doorway's texture, beside its own six.");
+	ok &= expect(undoLevelMapEdit(&document, &error), "The carve should undo.");
+	const QString undonePath = root.filePath(QStringLiteral("carve-undone.map"));
+	ok &= expect(saveLevelMapAs(document, undonePath).succeeded() && QString::fromUtf8(readFile(undonePath)) == original,
+		"Undoing the carve should write the file back exactly.");
+	return ok;
+}
+
+// A classic-format box brush, each face naming three points ordered so the
+// face looks out, the way the parser's planeFromPoints reads them.
+QString testBoxBrush(double x0, double y0, double z0, double x1, double y1, double z1, const QString& texture)
+{
+	const auto n = [](double value) {
+		return QString::number(value);
+	};
+	QStringList lines;
+	lines << QStringLiteral("{");
+	lines << QStringLiteral("( 1 0 %1 ) ( 0 0 %1 ) ( 0 1 %1 ) %2 0 0 0 1 1").arg(n(z1), texture);
+	lines << QStringLiteral("( 0 1 %1 ) ( 0 0 %1 ) ( 1 0 %1 ) %2 0 0 0 1 1").arg(n(z0), texture);
+	lines << QStringLiteral("( %1 1 0 ) ( %1 0 0 ) ( %1 0 1 ) %2 0 0 0 1 1").arg(n(x1), texture);
+	lines << QStringLiteral("( %1 0 1 ) ( %1 0 0 ) ( %1 1 0 ) %2 0 0 0 1 1").arg(n(x0), texture);
+	lines << QStringLiteral("( 0 %1 1 ) ( 0 %1 0 ) ( 1 %1 0 ) %2 0 0 0 1 1").arg(n(y1), texture);
+	lines << QStringLiteral("( 1 %1 0 ) ( 0 %1 0 ) ( 0 %1 1 ) %2 0 0 0 1 1").arg(n(y0), texture);
+	lines << QStringLiteral("}");
+	return lines.join(QLatin1Char('\n')) + QLatin1Char('\n');
+}
+
+// A four-cornered brush, each face ordered to look away from the corner it
+// leaves out.
+QString testTetraBrush(const QVector<LevelMapVec3>& corners, const QString& texture)
+{
+	const auto minus = [](const LevelMapVec3& left, const LevelMapVec3& right) {
+		return LevelMapVec3 {left.x - right.x, left.y - right.y, left.z - right.z, true};
+	};
+	QStringList lines {QStringLiteral("{")};
+	for (int skip = 0; skip < 4; ++skip) {
+		QVector<LevelMapVec3> face;
+		for (int index = 0; index < 4; ++index) {
+			if (index != skip) {
+				face.push_back(corners.at(index));
+			}
+		}
+		const LevelMapVec3 u = minus(face.at(0), face.at(1));
+		const LevelMapVec3 v = minus(face.at(2), face.at(1));
+		const LevelMapVec3 normal {u.y * v.z - u.z * v.y, u.z * v.x - u.x * v.z, u.x * v.y - u.y * v.x, true};
+		const LevelMapVec3 away = minus(corners.at(skip), face.at(1));
+		if (normal.x * away.x + normal.y * away.y + normal.z * away.z > 0.0) {
+			std::swap(face[0], face[2]);
+		}
+		QStringList points;
+		for (const LevelMapVec3& point : face) {
+			points << QStringLiteral("( %1 %2 %3 )").arg(point.x).arg(point.y).arg(point.z);
+		}
+		lines << points.join(QLatin1Char(' ')) + QStringLiteral(" %1 0 0 0 1 1").arg(texture);
+	}
+	lines << QStringLiteral("}");
+	return lines.join(QLatin1Char('\n')) + QLatin1Char('\n');
+}
+
+// Doom records for a WAD a test writes: a linedef names its vertices and
+// sides by index, and a side its sector.
+struct TestDoomLine {
+	int start = 0;
+	int end = 0;
+	int flags = 0;
+	int front = -1;
+	int back = -1;
+	int special = 0;
+};
+
+struct TestDoomSide {
+	int sector = 0;
+	int offsetX = 0;
+	QByteArray middle = "-";
+};
+
+QByteArray doomWadOf(const QVector<QPoint>& vertices, const QVector<TestDoomLine>& lines, const QVector<TestDoomSide>& sides, int sectors)
+{
+	QByteArray vertexBytes;
+	for (const QPoint& point : vertices) {
+		appendLe16(&vertexBytes, static_cast<qint16>(point.x()));
+		appendLe16(&vertexBytes, static_cast<qint16>(point.y()));
+	}
+	QByteArray lineBytes;
+	for (const TestDoomLine& line : lines) {
+		for (const int value : {line.start, line.end, line.flags, line.special, 0, line.front, line.back}) {
+			appendLe16(&lineBytes, static_cast<qint16>(value));
+		}
+	}
+	QByteArray sideBytes;
+	for (const TestDoomSide& side : sides) {
+		appendLe16(&sideBytes, static_cast<qint16>(side.offsetX));
+		appendLe16(&sideBytes, 0);
+		sideBytes.append(fixedName("WALLUP", 8));
+		sideBytes.append(fixedName("WALLLOW", 8));
+		sideBytes.append(fixedName(side.middle, 8));
+		appendLe16(&sideBytes, static_cast<qint16>(side.sector));
+	}
+	QByteArray sectorBytes;
+	for (int sector = 0; sector < sectors; ++sector) {
+		appendLe16(&sectorBytes, 0);
+		appendLe16(&sectorBytes, 128);
+		sectorBytes.append(fixedName("FLOOR1", 8));
+		sectorBytes.append(fixedName("CEIL1", 8));
+		appendLe16(&sectorBytes, 160);
+		appendLe16(&sectorBytes, 0);
+		appendLe16(&sectorBytes, 0);
+	}
+	return buildWad("PWAD", {{"MAP01", {}}, {"THINGS", doomThings()}, {"LINEDEFS", lineBytes}, {"SIDEDEFS", sideBytes},
+		{"VERTEXES", vertexBytes}, {"SECTORS", sectorBytes}});
+}
+
+// Two 128-unit rooms side by side, joined by a two-sided linedef from
+// (128, 128) down to (128, 0): room 0 on its front (offset 7), room 1 on its
+// back (offset 9). `packed` shares that back side with room 1's bottom wall,
+// the way sidedef packing leaves maps.
+QByteArray twoRoomWad(bool packed)
+{
+	const QVector<QPoint> vertices {{0, 0}, {128, 0}, {128, 128}, {0, 128}, {256, 0}, {256, 128}};
+	const QVector<TestDoomLine> lines {
+		{0, 3, 1, 0, -1},
+		{3, 2, 1, 1, -1},
+		{2, 1, 4, 3, 4},
+		{1, 0, 1, 2, -1},
+		{2, 5, 1, 5, -1},
+		{5, 4, 1, 6, -1},
+		{4, 1, 1, packed ? 4 : 7, -1},
+	};
+	const QVector<TestDoomSide> sides {
+		{0, 0, "WALL0"},
+		{0, 0, "WALL0"},
+		{0, 0, "WALL0"},
+		{0, 7, "-"},
+		{1, 9, "-"},
+		{1, 0, "WALL1"},
+		{1, 0, "WALL1"},
+		{1, 0, "WALL1"},
+	};
+	return doomWadOf(vertices, lines, sides, 2);
+}
+
+// Drawing, deleting, and merging Doom geometry. A room drawn beside another
+// shares its wall, one drawn inside a room sits within it, a corner on a wall
+// splits it, a room drawn around others surrounds them, and every edit undoes
+// to the map byte for byte.
+bool runDoomTopologySmoke(const QDir& root)
+{
+	bool ok = true;
+	QString error;
+	int count = 0;
+	int sector = -1;
+	const QString path = root.filePath(QStringLiteral("topology.wad"));
+	LevelMapDocument doom;
+	ok &= expect(writeFile(path, twoRoomWad(false)) && loadLevelMap({path, QStringLiteral("MAP01"), {}}, &doom, &error),
+		"The topology fixture should load.");
+	const auto corners = [](const QVector<QPoint>& points) {
+		QVector<LevelMapVec3> list;
+		for (const QPoint& point : points) {
+			list.push_back({static_cast<double>(point.x()), static_cast<double>(point.y()), 0.0, true});
+		}
+		return list;
+	};
+	const auto closed = [](const LevelMapDocument& document) {
+		const QVector<DoomSectorOutline> outlines = buildDoomSectorOutlines(document);
+		return !outlines.isEmpty() && std::all_of(outlines.cbegin(), outlines.cend(), [](const DoomSectorOutline& outline) {
+			return outline.openEdgeCount == 0;
+		});
+	};
+	const auto bytes = [&root](const LevelMapDocument& document, const QString& name) {
+		const QString written = root.filePath(name);
+		return saveMapOverwriting(document, written) ? readFile(written) : QByteArray();
+	};
+	const QByteArray original = bytes(doom, QStringLiteral("topology-original.wad"));
+	// Each check writes a file of its own: replacing the one just written can
+	// fail on Windows while something, such as a virus scan, still has it open.
+	int undoneChecks = 0;
+	const auto undoesToOriginal = [&](const char* message) {
+		while (!doom.undoStack.isEmpty()) {
+			if (!undoLevelMapEdit(&doom, &error)) {
+				break;
+			}
+		}
+		const QString name = QStringLiteral("topology-undone-%1.wad").arg(++undoneChecks);
+		ok &= expect(!original.isEmpty() && bytes(doom, name) == original && !doom.doomGeometryChanged, message);
+	};
+
+	// Beside room 1, in the void: the new room shares room 1's right wall,
+	// which opens onto it, and its other three edges are new walls.
+	ok &= expect(drawLevelMapDoomSector(&doom, corners({{256, 0}, {256, 128}, {384, 128}, {384, 0}}), &sector, &error) && sector == 2,
+		"Drawing a room beside room 1 should work.");
+	ok &= expect(doom.doomSectors.size() == 3 && doom.doomVertices.size() == 8 && doom.doomLinedefs.size() == 10 && doom.doomSidedefs.size() == 12,
+		"The new room should add a sector, two vertices, three walls, and four sides.");
+	const LevelMapDoomLinedef opened = doom.doomLinedefs.at(5);
+	ok &= expect(opened.backSidedef >= 0 && (opened.flags & 0x0004) != 0 && (opened.flags & 0x0001) == 0
+			&& doom.doomSidedefs.at(opened.backSidedef).sector == 2 && doom.doomSidedefs.at(opened.backSidedef).upperTexture == QStringLiteral("WALL1")
+			&& doom.doomSidedefs.at(opened.frontSidedef).middleTexture == QStringLiteral("-"),
+		"The shared wall should open onto the new room, its texture taken above and below.");
+	ok &= expect(doom.doomSectors.at(2).floorTexture == QStringLiteral("FLOOR1") && doom.doomSectors.at(2).ceilingHeight == 128,
+		"The new room should copy the room beside it.");
+	ok &= expect(closed(doom), "Every sector should close after the drawing.");
+	ok &= expect(doom.selection.size() == 1 && doom.selectionKind == LevelMapSelectionKind::DoomSector && doom.selectedObjectId == 2
+			&& doom.doomGeometryChanged && doom.undoStack.last().description == QStringLiteral("Draw sector:2 with 3 new linedefs"),
+		"The new sector should be selected, the node lumps marked stale, and the history name it.");
+	LevelMapDocument reloaded;
+	ok &= expect(!bytes(doom, QStringLiteral("topology-drawn.wad")).isEmpty()
+			&& loadLevelMap({root.filePath(QStringLiteral("topology-drawn.wad")), QStringLiteral("MAP01"), {}}, &reloaded, &error)
+			&& reloaded.doomSectors.size() == 3 && reloaded.doomLinedefs.size() == 10 && closed(reloaded),
+		"The drawn room should be written and read back closed.");
+
+	// Deleting the new sector takes its walls, vertices, and sides, and turns
+	// the shared line back into a wall.
+	ok &= expect(setLevelMapSelection(&doom, {{LevelMapSelectionKind::DoomSector, 2}}, &error) && deleteLevelMapSelection(&doom, &error)
+			&& doom.doomSectors.size() == 2 && doom.doomLinedefs.size() == 7 && doom.doomVertices.size() == 6 && doom.doomSidedefs.size() == 8,
+		"Deleting the new sector should take what only it used.");
+	ok &= expect(doom.doomLinedefs.at(5).backSidedef < 0 && (doom.doomLinedefs.at(5).flags & 0x0001) != 0
+			&& doom.doomSidedefs.at(doom.doomLinedefs.at(5).frontSidedef).middleTexture != QStringLiteral("-") && closed(doom),
+		"The shared line should be a wall again, with a texture.");
+	ok &= expect(undoLevelMapEdit(&doom, &error) && doom.doomSectors.size() == 3 && doom.selectedObjectId == 2 && closed(doom),
+		"Undoing the delete should bring the room back, selected.");
+	undoesToOriginal("Undoing the drawing should give back the map byte for byte.");
+
+	// Inside room 0, drawn anticlockwise: a room within it, joined by
+	// two-sided lines that face it in front and room 0 behind.
+	ok &= expect(drawLevelMapDoomSector(&doom, corners({{32, 32}, {96, 32}, {96, 96}, {32, 96}}), &sector, &error) && sector == 2,
+		"Drawing inside room 0 should work.");
+	bool inner = doom.doomLinedefs.size() == 11;
+	for (int index = 7; inner && index < doom.doomLinedefs.size(); ++index) {
+		const LevelMapDoomLinedef& linedef = doom.doomLinedefs.at(index);
+		inner = linedef.backSidedef >= 0 && doom.doomSidedefs.at(linedef.frontSidedef).sector == 2 && doom.doomSidedefs.at(linedef.backSidedef).sector == 0
+			&& (linedef.flags & 0x0004) != 0;
+	}
+	ok &= expect(inner && closed(doom), "The inner room's four lines should face it in front and room 0 behind, both rooms closed.");
+	undoesToOriginal("Undoing the inner room should give back the map.");
+
+	// Against room 0's left wall: two corners on the wall split it, and the
+	// piece between them turns to face the new room.
+	ok &= expect(drawLevelMapDoomSector(&doom, corners({{0, 32}, {0, 96}, {64, 96}, {64, 32}}), &sector, &error) && sector == 2,
+		"Drawing against room 0's wall should work.");
+	int piece = -1;
+	for (int index = 0; index < doom.doomLinedefs.size(); ++index) {
+		const LevelMapDoomLinedef& linedef = doom.doomLinedefs.at(index);
+		if (doom.doomVertices.at(linedef.startVertex).y == 32.0 && doom.doomVertices.at(linedef.endVertex).y == 96.0
+			&& doom.doomVertices.at(linedef.startVertex).x == 0.0 && doom.doomVertices.at(linedef.endVertex).x == 0.0) {
+			piece = index;
+		}
+	}
+	ok &= expect(doom.doomVertices.size() == 10 && doom.doomLinedefs.size() == 12 && piece >= 0
+			&& doom.doomSidedefs.at(doom.doomLinedefs.at(piece).frontSidedef).sector == 2 && closed(doom),
+		"The wall should split twice, its middle piece facing the new room, three lines drawn, and both rooms closed.");
+	undoesToOriginal("Undoing the wall room should give back the map.");
+
+	// Around both rooms, in the void: their outer walls open onto the new
+	// sector, which surrounds them.
+	ok &= expect(drawLevelMapDoomSector(&doom, corners({{-64, -64}, {-64, 192}, {320, 192}, {320, -64}}), &sector, &error) && sector == 2,
+		"Drawing around both rooms should work.");
+	int surrounded = 0;
+	for (int index = 0; index < 7; ++index) {
+		const LevelMapDoomLinedef& linedef = doom.doomLinedefs.at(index);
+		surrounded += index != 2 && linedef.backSidedef >= 0 && doom.doomSidedefs.at(linedef.backSidedef).sector == 2 ? 1 : 0;
+	}
+	ok &= expect(surrounded == 6 && closed(doom), "Every outer wall of the two rooms should open onto the sector around them.");
+	undoesToOriginal("Undoing the surrounding sector should give back the map.");
+
+	// Shapes that cannot be a sector are refused, and leave no history.
+	ok &= expect(!drawLevelMapDoomSector(&doom, corners({{100, 32}, {100, 96}, {160, 96}, {160, 32}}), &sector, &error)
+			&& error.contains(QStringLiteral("crosses linedef 2")),
+		"A shape across the rooms' shared line should be refused, naming it.");
+	ok &= expect(!drawLevelMapDoomSector(&doom, corners({{300, 0}, {400, 100}, {400, 0}, {300, 100}}), &sector, &error)
+			&& error.contains(QStringLiteral("crosses itself")),
+		"A shape that crosses itself should be refused.");
+	ok &= expect(!drawLevelMapDoomSector(&doom, corners({{300, 0}, {400, 0}}), &sector, &error) && error.contains(QStringLiteral("three corners")),
+		"Two corners should be refused.");
+	ok &= expect(!drawLevelMapDoomSector(&doom, corners({{300, 0}, {350, 0}, {400, 0}}), &sector, &error) && doom.undoStack.isEmpty(),
+		"A flat shape should be refused, and refusals should leave no history.");
+
+	// A vertex between two lines dissolves into one line; room 0 closes as a
+	// triangle.
+	ok &= expect(setLevelMapSelection(&doom, {{LevelMapSelectionKind::DoomVertex, 3}}, &error) && deleteLevelMapSelection(&doom, &error)
+			&& doom.doomVertices.size() == 5 && doom.doomLinedefs.size() == 6 && doom.doomLinedefs.at(0).endVertex == 2 && closed(doom),
+		"Deleting a vertex between two lines should join them.");
+	undoesToOriginal("Undoing the vertex delete should give back the map.");
+
+	// A linedef, and a thing with it, go in one step.
+	ok &= expect(setLevelMapSelection(&doom, {{LevelMapSelectionKind::DoomLinedef, 6}, {LevelMapSelectionKind::DoomThing, 0}}, &error)
+			&& deleteLevelMapSelection(&doom, &error) && doom.doomLinedefs.size() == 6 && doom.doomSidedefs.size() == 7 && doom.doomVertices.size() == 6
+			&& doom.doomThings.isEmpty() && doom.entities.isEmpty() && doom.undoStack.size() == 1,
+		"Deleting a linedef and a thing should be one step.");
+	ok &= expect(undoLevelMapEdit(&doom, &error) && doom.doomThings.size() == 1 && doom.entities.size() == 1, "Undo should bring the thing back.");
+	undoesToOriginal("Undoing the linedef delete should give back the map.");
+
+	// Merging a vertex into another drops the line between them.
+	ok &= expect(setLevelMapSelection(&doom, {{LevelMapSelectionKind::DoomVertex, 5}, {LevelMapSelectionKind::DoomVertex, 2}}, &error)
+			&& mergeLevelMapVertices(&doom, &count, &error) && count == 1 && doom.doomVertices.size() == 5 && doom.doomLinedefs.size() == 6
+			&& doom.selection.size() == 1 && doom.selectedObjectId == 2,
+		"Merging vertex 5 into vertex 2 should drop the line between them and select vertex 2.");
+	undoesToOriginal("Undoing the merge should give back the map.");
+
+	// Joining the two rooms makes them one sector with the line between them
+	// kept, two-sided; merging takes that line away and the rooms are one room.
+	ok &= expect(setLevelMapSelection(&doom, {{LevelMapSelectionKind::DoomSector, 1}, {LevelMapSelectionKind::DoomSector, 0}}, &error)
+			&& joinLevelMapSectors(&doom, false, &count, &error) && count == 1 && doom.doomSectors.size() == 1 && doom.doomLinedefs.size() == 7
+			&& doom.doomSidedefs.at(doom.doomLinedefs.at(2).backSidedef).sector == 0 && doom.selectedObjectId == 0 && closed(doom),
+		"Joining room 1 into room 0 should leave one sector with the line between them.");
+	undoesToOriginal("Undoing the join should give back the map.");
+	ok &= expect(setLevelMapSelection(&doom, {{LevelMapSelectionKind::DoomSector, 0}, {LevelMapSelectionKind::DoomSector, 1}}, &error)
+			&& joinLevelMapSectors(&doom, true, &count, &error) && doom.doomSectors.size() == 1 && doom.doomLinedefs.size() == 6
+			&& doom.doomVertices.size() == 6 && doom.undoStack.last().description == QStringLiteral("Merge 2 sectors into sector:0") && closed(doom),
+		"Merging the rooms should take away the line between them and keep the rest.");
+	undoesToOriginal("Undoing the merge should give back the map.");
+	ok &= expect(setLevelMapSelection(&doom, {{LevelMapSelectionKind::DoomSector, 0}}, &error) && !joinLevelMapSectors(&doom, false, &count, &error)
+			&& error.contains(QStringLiteral("two or more")),
+		"Joining a single sector should be refused.");
+
+	// Two rooms drawn apart, each with its own vertices along x = 128: merging
+	// those stitches their walls into one two-sided line.
+	const QString apartPath = root.filePath(QStringLiteral("topology-apart.wad"));
+	LevelMapDocument apart;
+	const QVector<QPoint> apartVertices {{0, 0}, {128, 0}, {128, 128}, {0, 128}, {128, 0}, {128, 128}, {256, 0}, {256, 128}};
+	const QVector<TestDoomLine> apartLines {
+		{0, 3, 1, 0, -1},
+		{3, 2, 1, 0, -1},
+		{2, 1, 1, 0, -1},
+		{1, 0, 1, 0, -1},
+		{4, 5, 1, 1, -1},
+		{5, 7, 1, 1, -1},
+		{7, 6, 1, 1, -1},
+		{6, 4, 1, 1, -1},
+	};
+	ok &= expect(writeFile(apartPath, doomWadOf(apartVertices, apartLines, {{0, 0, "WALL0"}, {1, 0, "WALL1"}}, 2))
+			&& loadLevelMap({apartPath, QStringLiteral("MAP01"), {}}, &apart, &error),
+		"The rooms-apart fixture should load.");
+	ok &= expect(setLevelMapSelection(&apart, {{LevelMapSelectionKind::DoomVertex, 4}, {LevelMapSelectionKind::DoomVertex, 1}}, &error)
+			&& mergeLevelMapVertices(&apart, &count, &error)
+			&& setLevelMapSelection(&apart, {{LevelMapSelectionKind::DoomVertex, 4}, {LevelMapSelectionKind::DoomVertex, 2}}, &error)
+			&& mergeLevelMapVertices(&apart, &count, &error),
+		"Merging the rooms' vertices along x = 128 should work.");
+	const LevelMapDoomLinedef stitched = apart.doomLinedefs.at(2);
+	ok &= expect(apart.doomVertices.size() == 6 && apart.doomLinedefs.size() == 7 && stitched.backSidedef >= 0 && (stitched.flags & 0x0004) != 0
+			&& apart.doomSidedefs.at(stitched.backSidedef).sector == 1 && closed(apart),
+		"The two walls on x = 128 should become one two-sided line between the rooms.");
+	return ok;
+}
+
+// Editing a Doom linedef's fields and its sides' fields: each a single undo
+// step; a side other lines share is copied first, so only the line edited
+// changes; and only a new sector marks the node lumps stale.
+bool runDoomFieldsSmoke(const QDir& root)
+{
+	bool ok = true;
+	QString error;
+	const QString path = root.filePath(QStringLiteral("fields.wad"));
+	LevelMapDocument doom;
+	ok &= expect(writeFile(path, twoRoomWad(true)) && loadLevelMap({path, QStringLiteral("MAP01"), {}}, &doom, &error),
+		"The packed two-room fixture should load.");
+
+	// Linedef fields.
+	ok &= expect(setLevelMapLinedefProperty(&doom, 2, QStringLiteral("special"), QStringLiteral("1"), &error) && doom.doomLinedefs.at(2).special == 1
+			&& setLevelMapLinedefProperty(&doom, 2, QStringLiteral("tag"), QStringLiteral("7"), &error) && doom.doomLinedefs.at(2).tag == 7
+			&& setLevelMapLinedefProperty(&doom, 2, QStringLiteral("flags"), QStringLiteral("68"), &error) && doom.doomLinedefs.at(2).flags == 68,
+		"A linedef's special, tag, and flags should be settable.");
+	ok &= expect(doom.undoStack.size() == 3 && doom.undoStack.last().description == QStringLiteral("Set linedef:2 flags to 68") && !doom.doomGeometryChanged,
+		"Each field should be one step, and none should stale the node lumps.");
+	ok &= expect(setLevelMapLinedefProperty(&doom, 2, QStringLiteral("special"), QStringLiteral("1"), &error) && doom.undoStack.size() == 3,
+		"Setting a value the line already has should record nothing.");
+	ok &= expect(!setLevelMapLinedefProperty(&doom, 2, QStringLiteral("special"), QStringLiteral("door"), &error)
+			&& !setLevelMapLinedefProperty(&doom, 2, QStringLiteral("arg0"), QStringLiteral("1"), &error) && error.contains(QStringLiteral("tag")),
+		"A word for a number, or a Hexen argument on a Doom map, should be refused.");
+	ok &= expect(undoLevelMapEdit(&doom, &error) && doom.doomLinedefs.at(2).flags == 4, "Undo should put the flags back.");
+
+	// A side of its own changes in place; a shared one is copied first.
+	const int sides = static_cast<int>(doom.doomSidedefs.size());
+	ok &= expect(setLevelMapLinedefSideProperty(&doom, 2, true, QStringLiteral("middle"), QStringLiteral("grate"), &error)
+			&& doom.doomSidedefs.size() == sides && doom.doomSidedefs.at(doom.doomLinedefs.at(2).frontSidedef).middleTexture == QStringLiteral("GRATE"),
+		"A side only this line uses should change in place, its texture name in capitals.");
+	ok &= expect(setLevelMapLinedefProperty(&doom, 2, QStringLiteral("back.offsetx"), QStringLiteral("32"), &error) && doom.doomSidedefs.size() == sides + 1
+			&& doom.doomLinedefs.at(2).backSidedef == sides && doom.doomSidedefs.at(sides).offsetX == 32 && doom.doomSidedefs.at(4).offsetX == 9
+			&& doom.doomLinedefs.at(6).frontSidedef == 4,
+		"A back side the bottom wall shares should be copied for this line, the wall keeping its own.");
+	ok &= expect(!doom.doomGeometryChanged, "Texture and offset edits should leave the node lumps current.");
+	ok &= expect(setLevelMapLinedefSideProperty(&doom, 2, false, QStringLiteral("sector"), QStringLiteral("0"), &error) && doom.doomGeometryChanged,
+		"A side facing another sector should stale the node lumps.");
+	ok &= expect(!setLevelMapLinedefSideProperty(&doom, 0, false, QStringLiteral("middle"), QStringLiteral("WALL1"), &error)
+			&& error.contains(QStringLiteral("one-sided")),
+		"A one-sided line's back should be refused, saying why.");
+	ok &= expect(!setLevelMapLinedefSideProperty(&doom, 2, true, QStringLiteral("upper"), QStringLiteral("NINECHARS"), &error),
+		"A texture name longer than eight characters should be refused.");
+	ok &= expect(setLevelMapLinedefSideProperty(&doom, 2, true, QStringLiteral("upper"), QString(), &error)
+			&& doom.doomSidedefs.at(doom.doomLinedefs.at(2).frontSidedef).upperTexture == QStringLiteral("-"),
+		"An empty texture should be written as -.");
+	while (!doom.undoStack.isEmpty()) {
+		undoLevelMapEdit(&doom, &error);
+	}
+	ok &= expect(doom.doomSidedefs.size() == sides && doom.doomLinedefs.at(2).backSidedef == 4 && !doom.doomGeometryChanged
+			&& doom.doomSidedefs.at(3).middleTexture == QStringLiteral("-"),
+		"Undoing every field edit should give back the sides as loaded.");
+
+	// Hexen lines take five arguments instead of a tag.
+	LevelMapDocument hexen;
+	const QString hexenPath = root.filePath(QStringLiteral("fields-hexen.wad"));
+	ok &= expect(writeFile(hexenPath, hexenWadFixture()) && loadLevelMap({hexenPath, QStringLiteral("MAP02"), {}}, &hexen, &error)
+			&& hexen.doomFormat == LevelMapDoomFormat::Hexen,
+		"The Hexen fixture should load.");
+	ok &= expect(setLevelMapLinedefProperty(&hexen, 0, QStringLiteral("arg2"), QStringLiteral("200"), &error) && hexen.doomLinedefs.at(0).args.at(2) == 200
+			&& !setLevelMapLinedefProperty(&hexen, 0, QStringLiteral("arg2"), QStringLiteral("300"), &error)
+			&& !setLevelMapLinedefProperty(&hexen, 0, QStringLiteral("tag"), QStringLiteral("1"), &error),
+		"A Hexen line should take arguments from 0 to 255, and no tag.");
+	return ok;
+}
+
+// Editing a brush face's texture and alignment: each field rewritten on the
+// face's own line and nowhere else, one undo step each, and undo giving the
+// file back byte for byte.
+bool runFaceFieldsSmoke(const QDir& root)
+{
+	bool ok = true;
+	QString error;
+	const auto load = [&root, &error](const QString& name, const QByteArray& text, LevelMapDocument* document,
+				  const QString& engine = QStringLiteral("idtech2")) {
+		const QString path = root.filePath(name);
+		return writeFile(path, text) && loadLevelMap({path, {}, engine}, document, &error);
+	};
+	const auto saved = [&root](const LevelMapDocument& document, const QString& name) {
+		const QString path = root.filePath(name);
+		return saveMapOverwriting(document, path) ? QString::fromUtf8(readFile(path)) : QString();
+	};
+
+	// Classic faces: the first face's line takes every edit, the other none.
+	LevelMapDocument classic;
+	ok &= expect(load(QStringLiteral("faces-classic.map"), quakeMapFixture(), &classic), "The classic face fixture should load.");
+	const QString original = saved(classic, QStringLiteral("faces-classic-original.map"));
+	ok &= expect(setLevelMapBrushFaceProperty(&classic, 0, 0, QStringLiteral("shiftx"), QStringLiteral("16"), &error)
+			&& setLevelMapBrushFaceProperty(&classic, 0, 0, QStringLiteral("scalex"), QStringLiteral("0.5"), &error)
+			&& setLevelMapBrushFaceProperty(&classic, 0, 0, QStringLiteral("rotation"), QStringLiteral("90"), &error)
+			&& setLevelMapBrushFaceProperty(&classic, 0, 0, QStringLiteral("texture"), QStringLiteral("METAL"), &error),
+		"Editing the first face's fields should work.");
+	const QString edited = saved(classic, QStringLiteral("faces-classic-edited.map"));
+	ok &= expect(edited.contains(QStringLiteral("( 0 0 0 ) ( 128 0 0 ) ( 128 128 0 ) METAL 16 0 90 0.5 1\n")) && edited.contains(QStringLiteral("CEIL1 0 0 0 1 1\n")),
+		"The first face's line should carry its new texture and numbers, and the other face stay as written.");
+	ok &= expect(classic.undoStack.size() == 4 && classic.undoStack.last().description == QStringLiteral("Set brush:0 face 1 texture to METAL"),
+		"Each field should be one step, named for its face.");
+	ok &= expect(setLevelMapBrushFaceProperty(&classic, 0, 0, QStringLiteral("shiftx"), QStringLiteral("16"), &error) && classic.undoStack.size() == 4,
+		"A value the face already has should record nothing.");
+	ok &= expect(!setLevelMapBrushFaceProperty(&classic, 0, 0, QStringLiteral("scaley"), QStringLiteral("0"), &error)
+			&& !setLevelMapBrushFaceProperty(&classic, 0, 5, QStringLiteral("shiftx"), QStringLiteral("1"), &error)
+			&& !setLevelMapBrushFaceProperty(&classic, 0, 0, QStringLiteral("tilt"), QStringLiteral("1"), &error),
+		"A zero scale, a face the brush lacks, and an unknown field should be refused.");
+	while (!classic.undoStack.isEmpty()) {
+		undoLevelMapEdit(&classic, &error);
+	}
+	ok &= expect(saved(classic, QStringLiteral("faces-classic-undone.map")) == original, "Undoing every face edit should give the file back byte for byte.");
+
+	// Compact lines: a face ending in a comment, and one ending in the brush's
+	// and its entity's closing braces, keep them.
+	LevelMapDocument compact;
+	ok &= expect(load(QStringLiteral("faces-compact.map"), compactMapFixture(), &compact), "The compact face fixture should load.");
+	ok &= expect(setLevelMapBrushFaceProperty(&compact, 0, 1, QStringLiteral("shifty"), QStringLiteral("8"), &error)
+			&& setLevelMapBrushFaceProperty(&compact, 0, 5, QStringLiteral("shiftx"), QStringLiteral("4"), &error),
+		"Editing faces on compact lines should work.");
+	const QString compactText = saved(compact, QStringLiteral("faces-compact-edited.map"));
+	ok &= expect(compactText.contains(QStringLiteral("BOTTOM 0 8 0 1 1 // trailing comment\n")) && compactText.contains(QStringLiteral("SOUTH 4 0 0 1 1 } }\n")),
+		"A trailing comment and closing braces on a face's line should survive its edit.");
+
+	// Valve 220: a shift moves the axis offset, and a turn turns the axes about
+	// the face, as TrenchBroom does.
+	LevelMapDocument valve;
+	ok &= expect(load(QStringLiteral("faces-valve.map"), valve220MapFixture(), &valve), "The Valve 220 face fixture should load.");
+	ok &= expect(setLevelMapBrushFaceProperty(&valve, 0, 0, QStringLiteral("shiftx"), QStringLiteral("32"), &error)
+			&& setLevelMapBrushFaceProperty(&valve, 0, 0, QStringLiteral("rotation"), QStringLiteral("90"), &error),
+		"Shifting and turning a Valve 220 face should work.");
+	const QString valveText = saved(valve, QStringLiteral("faces-valve-edited.map"));
+	ok &= expect(valveText.contains(QStringLiteral("TOPTEX [ 0 -1 0 32 ] [ -1 0 0 -8 ] 90 1 1\n")) && valveText.contains(QStringLiteral("BOTTOMTEX [ 1 0 0 0 ] [ 0 -1 0 0 ] 0 1 1\n")),
+		"The top face's axes should turn a quarter about it with their offsets, and the bottom face stay as written.");
+	LevelMapDocument reread;
+	ok &= expect(load(QStringLiteral("faces-valve-reread.map"), valveText.toUtf8(), &reread) && reread.brushes.first().faces.first().rotation == 90.0
+			&& reread.brushes.first().faces.first().uOffset == 32.0,
+		"The turned face should read back with its rotation and offset.");
+
+	// A line holding two faces cannot be rewritten for one of them, and a
+	// brushDef face uses explicit matrix fields rather than classic texel fields.
+	QString sharedText = QStringLiteral("{\n\"classname\" \"worldspawn\"\n") + testBoxBrush(0, 0, 0, 64, 64, 64, QStringLiteral("LINED")) + QStringLiteral("}\n");
+	sharedText.replace(QStringLiteral("LINED 0 0 0 1 1\n( 0 1 0 )"), QStringLiteral("LINED 0 0 0 1 1 ( 0 1 0 )"));
+	LevelMapDocument shared;
+	ok &= expect(load(QStringLiteral("faces-shared.map"), sharedText.toUtf8(), &shared)
+			&& !setLevelMapBrushFaceProperty(&shared, 0, 0, QStringLiteral("shiftx"), QStringLiteral("1"), &error)
+			&& error.contains(QStringLiteral("more than one face on a line")),
+		"A face sharing its line with another should be refused, saying why.");
+	LevelMapDocument primitives;
+	ok &= expect(load(QStringLiteral("faces-q3.map"), quake3MapFixture(), &primitives, QStringLiteral("idtech3"))
+			&& !setLevelMapBrushFaceProperty(&primitives, 0, 0, QStringLiteral("shiftx"), QStringLiteral("1"), &error)
+			&& error.contains(QStringLiteral("matrix00"))
+			&& setLevelMapBrushFaceProperty(&primitives, 0, 0, QStringLiteral("matrix02"), QStringLiteral("0.5"), &error)
+			&& primitives.brushes.first().faces.first().textureMatrix[2] == 0.5
+			&& setLevelMapBrushFaceProperty(&primitives, 0, 0, QStringLiteral("texture"), QStringLiteral("textures/base_wall/metal"), &error),
+		"A brushDef face should edit its matrix and texture while refusing classic shift fields.");
+	return ok;
+}
+
+// Regressions from review 5: shapes over more than one area, vertices only
+// node builders use, corners on vertices off the whole-unit grid, merging
+// that reached past its vertex, unused sides left naming no sector, redraws
+// that dropped a sector's tag, drawn-line counts, the edit revision, and
+// undo steps that kept whole copies of the map.
+bool runReview5Smoke(const QDir& root)
+{
+	bool ok = true;
+	QString error;
+	int count = 0;
+	int sector = -1;
+	const auto corners = [](const QVector<QPointF>& points) {
+		QVector<LevelMapVec3> list;
+		for (const QPointF& point : points) {
+			list.push_back({point.x(), point.y(), 0.0, true});
+		}
+		return list;
+	};
+	const auto closed = [](const LevelMapDocument& document) {
+		const QVector<DoomSectorOutline> outlines = buildDoomSectorOutlines(document);
+		return !outlines.isEmpty() && std::all_of(outlines.cbegin(), outlines.cend(), [](const DoomSectorOutline& outline) {
+			return outline.openEdgeCount == 0;
+		});
+	};
+	const auto load = [&root, &error](const QString& name, const QByteArray& bytes, LevelMapDocument* document) {
+		const QString path = root.filePath(name);
+		return writeFile(path, bytes) && loadLevelMap({path, QStringLiteral("MAP01"), {}}, document, &error);
+	};
+
+	// A shape whose edges look into different areas is refused: around both
+	// rooms along room 0's wall, over both rooms, and through the wall's
+	// corners half in the void.
+	LevelMapDocument rooms;
+	ok &= expect(load(QStringLiteral("r5-rooms.wad"), twoRoomWad(false), &rooms), "The two-room fixture should load.");
+	ok &= expect(!drawLevelMapDoomSector(&rooms, corners({{0, -64}, {0, 192}, {320, 192}, {320, -64}}), &sector, &error)
+			&& error.contains(QStringLiteral("more than one area")),
+		"A shape around both rooms that runs along room 0's wall should be refused.");
+	ok &= expect(!drawLevelMapDoomSector(&rooms, corners({{0, 0}, {0, 128}, {256, 128}, {256, 0}}), &sector, &error)
+			&& error.contains(QStringLiteral("sector 0")) && error.contains(QStringLiteral("sector 1")),
+		"A shape over both rooms should be refused, naming both.");
+	ok &= expect(!drawLevelMapDoomSector(&rooms, corners({{-64, 32}, {0, 32}, {64, 32}, {64, 96}, {0, 96}, {-64, 96}}), &sector, &error)
+			&& error.contains(QStringLiteral("more than one area")) && rooms.undoStack.isEmpty(),
+		"A shape through the wall's corners, half in the void, should be refused and leave no history.");
+	ok &= expect(drawLevelMapDoomSector(&rooms, corners({{-1, -64}, {-1, 192}, {320, 192}, {320, -64}}), &sector, &error) && closed(rooms),
+		"The same ring clear of the wall should be drawn, every sector closed.");
+
+	// Vertices no linedef uses, as node builders leave on walls, neither stop
+	// an edge along the wall nor take a corner.
+	const QVector<QPoint> seams {{0, 0}, {128, 0}, {128, 128}, {0, 128}, {256, 0}, {256, 128}, {0, 64}, {0, 96}};
+	const QVector<TestDoomLine> lines {{0, 3, 1, 0, -1}, {3, 2, 1, 1, -1}, {2, 1, 4, 3, 4}, {1, 0, 1, 2, -1}, {2, 5, 1, 5, -1}, {5, 4, 1, 6, -1}, {4, 1, 1, 7, -1}};
+	const QVector<TestDoomSide> sides {{0, 0, "WALL0"}, {0, 0, "WALL0"}, {0, 0, "WALL0"}, {0, 7, "-"}, {1, 9, "-"}, {1, 0, "WALL1"}, {1, 0, "WALL1"},
+		{1, 0, "WALL1"}};
+	LevelMapDocument seamed;
+	ok &= expect(load(QStringLiteral("r5-seams.wad"), doomWadOf(seams, lines, sides, 2), &seamed), "The fixture with unused wall vertices should load.");
+	int drawn = 0;
+	ok &= expect(drawLevelMapDoomSector(&seamed, corners({{0, 32}, {0, 96}, {-64, 96}, {-64, 32}}), &sector, &error, &drawn) && drawn == 3
+			&& closed(seamed),
+		"A room drawn against a wall with an unused vertex on it should share the wall, drawing three lines.");
+	int wallPieces = 0;
+	for (const LevelMapDoomLinedef& linedef : seamed.doomLinedefs) {
+		const LevelMapDoomVertex& start = seamed.doomVertices.at(linedef.startVertex);
+		const LevelMapDoomVertex& end = seamed.doomVertices.at(linedef.endVertex);
+		wallPieces += start.x == 0.0 && end.x == 0.0 ? 1 : 0;
+	}
+	ok &= expect(wallPieces == 3, "The wall should be split at the corners only, into three pieces, not at the unused vertices.");
+
+	// A corner on a vertex off the whole-unit grid joins it.
+	LevelMapDocument shifted;
+	ok &= expect(load(QStringLiteral("r5-shifted.wad"), twoRoomWad(false), &shifted)
+			&& moveLevelMapObject(&shifted, QStringLiteral("vertex"), 4, 0.486, 0.0, 0.0, &error),
+		"Moving a vertex off the whole-unit grid should work.");
+	ok &= expect(drawLevelMapDoomSector(&shifted, corners({{256.486, 0.0}, {256, 128}, {384, 128}, {384, 0}}), &sector, &error)
+			&& shifted.doomVertices.size() == 8 && shifted.doomLinedefs.size() == 10 && closed(shifted),
+		"A corner on the moved vertex should join it, sharing the wall rather than splitting it beside the vertex.");
+
+	// Merging reaches only the lines at the vertex merged into.
+	QVector<TestDoomLine> doubled = lines;
+	doubled.push_back({5, 4, 1, 6, -1, 11});
+	LevelMapDocument merging;
+	ok &= expect(load(QStringLiteral("r5-merge.wad"), doomWadOf(seams, doubled, sides, 2), &merging)
+			&& setLevelMapSelection(&merging, {{LevelMapSelectionKind::DoomVertex, 3}, {LevelMapSelectionKind::DoomVertex, 0}}, &error)
+			&& mergeLevelMapVertices(&merging, &count, &error),
+		"Merging room 0's top-left corner into its bottom-left should work.");
+	ok &= expect(merging.doomLinedefs.size() == 7 && std::any_of(merging.doomLinedefs.cbegin(), merging.doomLinedefs.cend(), [](const LevelMapDoomLinedef& linedef) {
+		return linedef.special == 11;
+	}),
+		"Only the line whose ends met should go; the line with a special over room 1's wall stays.");
+
+	// Deleting a sector drops unused sides that name it, and no side is left
+	// naming a sector that is gone.
+	LevelMapDocument packed;
+	ok &= expect(load(QStringLiteral("r5-packed.wad"), twoRoomWad(true), &packed)
+			&& setLevelMapSelection(&packed, {{LevelMapSelectionKind::DoomSector, 1}}, &error) && deleteLevelMapSelection(&packed, &error),
+		"Deleting room 1 of the packed fixture should work.");
+	ok &= expect(std::all_of(packed.doomSidedefs.cbegin(), packed.doomSidedefs.cend(), [&packed](const LevelMapDoomSidedef& side) {
+		return side.sector >= 0 && side.sector < packed.doomSectors.size();
+	}),
+		"Every side left should name a sector the map has.");
+
+	// Drawn exactly over a sector, the new one keeps its tag and special.
+	LevelMapDocument tagged;
+	ok &= expect(load(QStringLiteral("r5-tagged.wad"), twoRoomWad(false), &tagged)
+			&& setLevelMapSectorProperty(&tagged, 1, QStringLiteral("tag"), QStringLiteral("7"), &error)
+			&& setLevelMapSectorProperty(&tagged, 1, QStringLiteral("special"), QStringLiteral("9"), &error)
+			&& drawLevelMapDoomSector(&tagged, corners({{128, 0}, {128, 128}, {256, 128}, {256, 0}}), &sector, &error),
+		"Redrawing room 1 exactly should work.");
+	ok &= expect(tagged.doomSectors.size() == 2 && tagged.doomSectors.at(sector).tag == 7 && tagged.doomSectors.at(sector).special == 9,
+		"The sector drawn over room 1 should take its place, tag and special included.");
+
+	// A map that held only things keeps the sector drawn in it when saved:
+	// the geometry lumps it lacked are written too.
+	LevelMapDocument bare;
+	const QString barePath = root.filePath(QStringLiteral("r5-bare-drawn.wad"));
+	LevelMapDocument bareReloaded;
+	ok &= expect(load(QStringLiteral("r5-bare.wad"), buildWad("PWAD", {{"MAP01", {}}, {"THINGS", doomThings()}}), &bare)
+			&& drawLevelMapDoomSector(&bare, corners({{0, 0}, {0, 128}, {128, 128}, {128, 0}}), &sector, &error)
+			&& saveLevelMapAs(bare, barePath).succeeded() && loadLevelMap({barePath, QStringLiteral("MAP01"), {}}, &bareReloaded, &error)
+			&& bareReloaded.doomSectors.size() == 1 && bareReloaded.doomLinedefs.size() == 4 && bareReloaded.doomThings.size() == 1,
+		"A sector drawn in a map with only things should be written and read back.");
+
+	// Every edit, undo, and redo moves the revision on, and a topology step
+	// keeps a delta the size of the edit, not copies of the map.
+	LevelMapDocument counted;
+	ok &= expect(load(QStringLiteral("r5-counted.wad"), twoRoomWad(false), &counted), "The revision fixture should load.");
+	const quint64 start = counted.revision;
+	ok &= expect(drawLevelMapDoomSector(&counted, corners({{256, 0}, {256, 128}, {384, 128}, {384, 0}}), &sector, &error)
+			&& counted.revision == start + 1 && undoLevelMapEdit(&counted, &error) && counted.revision == start + 2
+			&& redoLevelMapEdit(&counted, &error) && counted.revision == start + 3,
+		"Each edit, undo, and redo should move the revision on.");
+	const LevelMapUndoCommand& step = counted.undoStack.last();
+	ok &= expect(step.commandKind == QStringLiteral("doom-topology") && step.sidedefDelta.appended.size() == 4 && step.linedefDelta.appended.size() == 3
+			&& step.linedefDelta.changedIndexes.size() == 1 && step.vertexSnapshots.isEmpty() && step.sidedefSnapshots.isEmpty(),
+		"The drawing's undo step should hold only what it changed and added.");
+	return ok;
+}
+
+// Connect Entities links as Radiant does: each selected entity but the last
+// targets the last, whose targetname is kept or made up as t<N>, in one undo
+// step; Select Targets and Sources follow the links either way.
+bool runConnectEntitiesSmoke(const QDir& root)
+{
+	bool ok = true;
+	QString error;
+	QString name;
+	const QString path = root.filePath(QStringLiteral("connect.map"));
+	LevelMapDocument document;
+	int added = -1;
+	ok &= expect(writeFile(path, quakeMapFixture()) && loadLevelMap({path, {}, QStringLiteral("idtech2")}, &document, &error)
+			&& addLevelMapEntity(&document, QStringLiteral("info_null"), {64.0, 64.0, 0.0, true}, {}, &added, &error) && added == 2,
+		"The connect fixture should load and take an info_null.");
+	const auto saved = [&root](const LevelMapDocument& map, const QString& file) {
+		const QString written = root.filePath(file);
+		return saveMapOverwriting(map, written) ? QString::fromUtf8(readFile(written)) : QString();
+	};
+	const QString before = saved(document, QStringLiteral("connect-before.map"));
+
+	// The light is named lamp already: the info_null targets it by that name.
+	ok &= expect(setLevelMapSelection(&document, {{LevelMapSelectionKind::Entity, 2}, {LevelMapSelectionKind::Entity, 1}}, &error)
+			&& connectLevelMapEntities(&document, &name, &error) && name == QStringLiteral("lamp")
+			&& propertyValueForTest(document, 2, QStringLiteral("target")) == QStringLiteral("lamp") && document.undoStack.size() == 2
+			&& levelMapTargetLinks(document).size() == 1,
+		"Connecting the info_null to the light should target lamp, as one step.");
+	ok &= expect(setLevelMapSelection(&document, {{LevelMapSelectionKind::Entity, 2}}, &error)
+			&& levelMapLinkedEntities(document, true) == QVector<LevelMapSelectionRef> {{LevelMapSelectionKind::Entity, 1}}
+			&& setLevelMapSelection(&document, {{LevelMapSelectionKind::Entity, 1}}, &error)
+			&& levelMapLinkedEntities(document, false) == QVector<LevelMapSelectionRef> {{LevelMapSelectionKind::Entity, 2}},
+		"Select Targets and Select Sources should follow the link either way.");
+
+	// The other way round the info_null has no name, so it is given t1.
+	ok &= expect(setLevelMapSelection(&document, {{LevelMapSelectionKind::Entity, 1}, {LevelMapSelectionKind::Entity, 2}}, &error)
+			&& connectLevelMapEntities(&document, &name, &error) && name == QStringLiteral("t1")
+			&& propertyValueForTest(document, 2, QStringLiteral("targetname")) == QStringLiteral("t1")
+			&& propertyValueForTest(document, 1, QStringLiteral("target")) == QStringLiteral("t1")
+			&& document.undoStack.last().description == QStringLiteral("Connect entity:1 to entity:2 as t1"),
+		"Connecting the light to the unnamed info_null should name it t1.");
+	const QString linked = saved(document, QStringLiteral("connect-linked.map"));
+	ok &= expect(linked.contains(QStringLiteral("\"targetname\" \"t1\"")) && linked.contains(QStringLiteral("\"target\" \"t1\"")),
+		"The saved map should carry the new name and target.");
+	ok &= expect(undoLevelMapEdit(&document, &error) && undoLevelMapEdit(&document, &error) && saved(document, QStringLiteral("connect-undone.map")) == before,
+		"Undoing both connections should give the file back byte for byte.");
+	ok &= expect(setLevelMapSelection(&document, {{LevelMapSelectionKind::Entity, 0}, {LevelMapSelectionKind::Entity, 1}}, &error)
+			&& !connectLevelMapEntities(&document, &name, &error) && error.contains(QStringLiteral("worldspawn")),
+		"Worldspawn and one entity should be refused, saying why.");
+	return ok;
+}
+
+// Regressions from review 6: a brush writing two faces on one line, face
+// numbers the rewrite cannot find or the file cannot hold, a Hexen line's tag
+// following arg0, Connect keeping a source's target, and thing fields the WAD
+// cannot hold.
+bool runReview6Smoke(const QDir& root)
+{
+	bool ok = true;
+	QString error;
+	const auto load = [&root](const QString& file, const QString& text, LevelMapDocument* document) {
+		const QString path = root.filePath(file);
+		QString loadError;
+		return writeFile(path, text.toUtf8()) && loadLevelMap({path, {}, QStringLiteral("idtech2")}, document, &loadError);
+	};
+	const auto saved = [&root](const LevelMapDocument& map, const QString& file) {
+		const QString written = root.filePath(file);
+		return saveMapOverwriting(map, written) ? QString::fromUtf8(readFile(written)) : QString();
+	};
+
+	// Faces 1 and 2 share a line. Setting face 3's texture leaves that line
+	// alone, and undo gives the file back byte for byte.
+	const QString sharedLine = QStringLiteral("( 1 0 64 ) ( 0 0 64 ) ( 0 1 64 ) TOPTEX 0 0 0 1 1 ( 0 1 0 ) ( 0 0 0 ) ( 1 0 0 ) BOTTEX 0 0 0 1 1");
+	const QString shared = QStringLiteral("{\n\"classname\" \"worldspawn\"\n{\n") + sharedLine + QStringLiteral("\n"
+		"( 64 1 0 ) ( 64 0 0 ) ( 64 0 1 ) SIDE 0 0 0 1 1\n( 0 0 1 ) ( 0 0 0 ) ( 0 1 0 ) SIDE 0 0 0 1 1\n"
+		"( 0 64 1 ) ( 0 64 0 ) ( 1 64 0 ) SIDE 0 0 0 1 1\n( 1 0 0 ) ( 0 0 0 ) ( 0 0 1 ) SIDE 0 0 0 1 1\n}\n}\n");
+	LevelMapDocument sharedMap;
+	ok &= expect(load(QStringLiteral("shared.map"), shared, &sharedMap) && sharedMap.brushes.size() == 1 && sharedMap.brushes.first().faces.size() == 6,
+		"The shared-line brush should load with six faces.");
+	const QString sharedBefore = saved(sharedMap, QStringLiteral("shared-before.map"));
+	ok &= expect(setLevelMapBrushFaceProperty(&sharedMap, 0, 2, QStringLiteral("texture"), QStringLiteral("NEWTEX"), &error), "Face 3 has a line of its own, so its texture can change.");
+	const QString sharedAfter = saved(sharedMap, QStringLiteral("shared-after.map"));
+	ok &= expect(sharedAfter.contains(sharedLine) && sharedAfter.contains(QStringLiteral("( 64 1 0 ) ( 64 0 0 ) ( 64 0 1 ) NEWTEX 0 0 0 1 1")),
+		"Saving should rewrite face 3 alone and leave the shared line as written.");
+	ok &= expect(undoLevelMapEdit(&sharedMap, &error) && saved(sharedMap, QStringLiteral("shared-undone.map")) == sharedBefore,
+		"Undoing the texture should give the file back byte for byte.");
+	const int depth = static_cast<int>(sharedMap.undoStack.size());
+	ok &= expect(setLevelMapSelection(&sharedMap, {{LevelMapSelectionKind::QuakeBrush, 0}}, &error)
+			&& !rotateLevelMapSelection(&sharedMap, 2, 1, &error) && error.contains(QStringLiteral("two faces on one line")),
+		"Turning a brush that writes two faces on one line should be refused, saying why.");
+	ok &= expect(!moveLevelMapSelection(&sharedMap, 16.0, 0.0, 0.0, &error) && error.contains(QStringLiteral("two faces on one line"))
+			&& !duplicateLevelMapSelection(&sharedMap, 16.0, 0.0, 0.0, &error) && error.contains(QStringLiteral("two faces on one line"))
+			&& sharedMap.undoStack.size() == depth && saved(sharedMap, QStringLiteral("shared-refused.map")) == sharedBefore,
+		"Moving or duplicating it should be refused too, leaving the map as it was.");
+
+	// Face numbers: a comment glued on or between them is stepped over; too
+	// few, or on the next line, and the edit is refused rather than dropped.
+	const QString numbered = QStringLiteral("{\n\"classname\" \"worldspawn\"\n{\n"
+		"( 1 0 64 ) ( 0 0 64 ) ( 0 1 64 ) TOP 0 0 0 1 1// hi\n"
+		"( 0 1 0 ) ( 0 0 0 ) ( 1 0 0 ) BOT /* c */ 0 0 0 1 1\n"
+		"( 64 1 0 ) ( 64 0 0 ) ( 64 0 1 ) FEW 0 0 0\n"
+		"( 0 0 1 ) ( 0 0 0 ) ( 0 1 0 ) NEXT\n0 0 0 1 1\n"
+		"( 0 64 1 ) ( 0 64 0 ) ( 1 64 0 ) SIDE 0 0 0 1 1\n( 1 0 0 ) ( 0 0 0 ) ( 0 0 1 ) SIDE 0 0 0 1 1\n}\n}\n");
+	LevelMapDocument numbers;
+	ok &= expect(load(QStringLiteral("numbers.map"), numbered, &numbers) && numbers.brushes.size() == 1, "The face-number fixture should load.");
+	ok &= expect(setLevelMapBrushFaceProperty(&numbers, 0, 0, QStringLiteral("scaley"), QStringLiteral("2"), &error)
+			&& setLevelMapBrushFaceProperty(&numbers, 0, 1, QStringLiteral("shiftx"), QStringLiteral("8"), &error),
+		"Faces with comments by their numbers should take new numbers.");
+	const QString rewritten = saved(numbers, QStringLiteral("numbers-after.map"));
+	ok &= expect(rewritten.contains(QStringLiteral("TOP 0 0 0 1 2// hi")) && rewritten.contains(QStringLiteral("BOT /* c */ 8 0 0 1 1")),
+		"The numbers should be rewritten around the comments.");
+	ok &= expect(!setLevelMapBrushFaceProperty(&numbers, 0, 2, QStringLiteral("shiftx"), QStringLiteral("16"), &error)
+			&& error.contains(QStringLiteral("does not write all of its texture numbers"))
+			&& !setLevelMapBrushFaceProperty(&numbers, 0, 3, QStringLiteral("scalex"), QStringLiteral("2"), &error),
+		"Too few numbers, or numbers on the next line, should be refused, not lost on save.");
+	ok &= expect(!setLevelMapBrushFaceProperty(&numbers, 0, 4, QStringLiteral("scalex"), QStringLiteral("0.0000004"), &error) && error.contains(QStringLiteral("too small"))
+			&& !setLevelMapBrushFaceProperty(&numbers, 0, 4, QStringLiteral("rotation"), QStringLiteral("1e300"), &error) && error.contains(QStringLiteral("too large"))
+			&& setLevelMapBrushFaceProperty(&numbers, 0, 4, QStringLiteral("rotation"), QStringLiteral("0.1234567"), &error)
+			&& saved(numbers, QStringLiteral("numbers-rotation.map")).contains(QStringLiteral("SIDE 0 0 0.123457 1 1")),
+		"Numbers the file cannot hold as typed should be refused; others written to six places.");
+
+	// A Hexen line's tag follows its first argument, and undo takes both back.
+	LevelMapDocument hexen;
+	const QString hexenPath = root.filePath(QStringLiteral("review6-hexen.wad"));
+	ok &= expect(writeFile(hexenPath, hexenWadFixture()) && loadLevelMap({hexenPath, QStringLiteral("MAP02"), {}}, &hexen, &error), "The Hexen fixture should load.");
+	const int tagBefore = hexen.doomLinedefs.isEmpty() ? -1 : hexen.doomLinedefs.first().tag;
+	ok &= expect(setLevelMapLinedefProperty(&hexen, 0, QStringLiteral("arg0"), QStringLiteral("9"), &error) && hexen.doomLinedefs.first().tag == 9
+			&& undoLevelMapEdit(&hexen, &error) && hexen.doomLinedefs.first().tag == tagBefore,
+		"Setting a Hexen line's arg0 should set its tag, and undo should restore both.");
+
+	// Connect keeps the link a source already has: the target takes its name.
+	const QString wired = QStringLiteral("{\n\"classname\" \"worldspawn\"\n}\n"
+		"{\n\"classname\" \"trigger_once\"\n\"target\" \"door1\"\n\"origin\" \"0 0 0\"\n}\n"
+		"{\n\"classname\" \"func_door\"\n\"targetname\" \"door1\"\n\"origin\" \"64 0 0\"\n}\n"
+		"{\n\"classname\" \"light\"\n\"origin\" \"128 0 0\"\n}\n");
+	LevelMapDocument links;
+	QString name;
+	ok &= expect(load(QStringLiteral("wired.map"), wired, &links) && setLevelMapSelection(&links, {{LevelMapSelectionKind::Entity, 1}, {LevelMapSelectionKind::Entity, 3}}, &error)
+			&& connectLevelMapEntities(&links, &name, &error) && name == QStringLiteral("door1")
+			&& propertyValueForTest(links, 1, QStringLiteral("target")) == QStringLiteral("door1")
+			&& propertyValueForTest(links, 3, QStringLiteral("targetname")) == QStringLiteral("door1"),
+		"Connecting a trigger that fires door1 to an unnamed light should name the light door1, keeping the door firing.");
+
+	// Thing fields hold what the WAD can: whole numbers in their ranges.
+	LevelMapDocument things;
+	const QString thingsPath = root.filePath(QStringLiteral("review6-things.wad"));
+	ok &= expect(writeFile(thingsPath, twoRoomWad(false)) && loadLevelMap({thingsPath, QStringLiteral("MAP01"), {}}, &things, &error), "The two-room WAD should load.");
+	int thing = -1;
+	ok &= expect(addLevelMapDoomThing(&things, 3001, 64.0, 64.0, 90, &thing, &error) && thing >= 0, "An imp should go in.");
+	const int thingDepth = static_cast<int>(things.undoStack.size());
+	ok &= expect(!setLevelMapEntityProperty(&things, thing, QStringLiteral("flags"), QStringLiteral("7.5"), &error)
+			&& !setLevelMapEntityProperty(&things, thing, QStringLiteral("type"), QStringLiteral("70000"), &error)
+			&& !setLevelMapEntityProperty(&things, thing, QStringLiteral("x"), QStringLiteral("12.5"), &error)
+			&& !setLevelMapEntityProperty(&things, thing, QStringLiteral("targetname"), QStringLiteral("door1"), &error)
+			&& !setLevelMapEntityProperty(&things, thing, QStringLiteral("tid"), QStringLiteral("3"), &error)
+			&& things.undoStack.size() == thingDepth,
+		"A fractional flag or position, a type past 65535, a key a thing has not got, or a Hexen field on a Doom map should be refused.");
+	ok &= expect(setLevelMapEntityProperty(&things, thing, QStringLiteral("type"), QStringLiteral("3004"), &error)
+			&& setLevelMapEntityProperty(&things, thing, QStringLiteral("x"), QStringLiteral("-96"), &error),
+		"Whole numbers in range should be taken.");
+	return ok;
+}
+
+// Make Door, as Doom Builder's: the ceiling comes down to the floor, a line to
+// another room faces out with special 1 and the door texture above it, the
+// door's own walls become lower-unpegged tracks, a packed side is copied
+// before it changes, and undo gives the WAD back byte for byte. On a Hexen map
+// the line takes Door_Raise, repeatable on use.
+bool runMakeDoorSmoke(const QDir& root)
+{
+	bool ok = true;
+	QString error;
+	const QString path = root.filePath(QStringLiteral("door.wad"));
+	LevelMapDocument map;
+	ok &= expect(writeFile(path, twoRoomWad(true)) && loadLevelMap({path, QStringLiteral("MAP01"), {}}, &map, &error), "The packed two-room WAD should load.");
+	const auto saved = [&root](const LevelMapDocument& document, const QString& file) {
+		const QString written = root.filePath(file);
+		return saveMapOverwriting(document, written) ? readFile(written) : QByteArray();
+	};
+	const auto side = [&map](int id) {
+		return map.doomSidedefs.value(id);
+	};
+	const QByteArray before = saved(map, QStringLiteral("door-before.wad"));
+	int doors = 0;
+	ok &= expect(!makeLevelMapDoors(&map, {}, &doors, &error) && error.contains(QStringLiteral("Select")), "Make Door with no sector selected should say what to select.");
+
+	// The right room: the line between the rooms already faces out of it.
+	ok &= expect(setLevelMapSelection(&map, {{LevelMapSelectionKind::DoomSector, 1}}, &error) && makeLevelMapDoors(&map, {}, &doors, &error) && doors == 1
+			&& map.undoStack.last().description == QStringLiteral("Make sector:1 a door"),
+		"The right room should become a door in one step.");
+	ok &= expect(map.doomSectors.at(1).ceilingHeight == map.doomSectors.at(1).floorHeight, "The door's ceiling should come down to its floor.");
+	const LevelMapDoomLinedef shared = map.doomLinedefs.at(2);
+	ok &= expect(shared.special == 1 && side(shared.frontSidedef).sector == 0 && side(shared.frontSidedef).upperTexture == QStringLiteral("BIGDOOR2")
+			&& side(shared.frontSidedef).offsetX == 0 && (shared.flags & 0x0018) == 0 && (shared.flags & 0x0004) != 0,
+		"The line between the rooms should open the door from outside, BIGDOOR2 above it, offsets reset, unpegged bits cleared.");
+	bool tracks = true;
+	for (const int line : {4, 5, 6}) {
+		const LevelMapDoomLinedef& wall = map.doomLinedefs.at(line);
+		tracks = tracks && side(wall.frontSidedef).middleTexture == QStringLiteral("DOORTRAK") && (wall.flags & 0x0010) != 0 && (wall.flags & 0x0008) == 0;
+	}
+	ok &= expect(tracks, "The door's own walls should be DOORTRAK tracks, lower unpegged.");
+	ok &= expect(map.doomLinedefs.at(6).frontSidedef != shared.backSidedef && side(shared.backSidedef).middleTexture != QStringLiteral("DOORTRAK"),
+		"A sidedef packed between the door's inside and a wall should be copied, not turned into a track for both.");
+	ok &= expect(undoLevelMapEdit(&map, &error) && saved(map, QStringLiteral("door-undone.wad")) == before, "Undo should give the WAD back byte for byte.");
+
+	// The left room: the line faces into it, so it is flipped to face out.
+	ok &= expect(setLevelMapSelection(&map, {{LevelMapSelectionKind::DoomSector, 0}}, &error) && makeLevelMapDoors(&map, {}, &doors, &error),
+		"The left room should become a door.");
+	const LevelMapDoomLinedef flipped = map.doomLinedefs.at(2);
+	ok &= expect(flipped.startVertex == 1 && flipped.endVertex == 2 && side(flipped.frontSidedef).sector == 1 && flipped.special == 1
+			&& side(flipped.frontSidedef).upperTexture == QStringLiteral("BIGDOOR2"),
+		"A line facing into the door should be flipped, so it opens the door from outside.");
+	ok &= expect(undoLevelMapEdit(&map, &error), "Undo should take the left door back.");
+
+	// Chosen textures, kept offsets, and a new ceiling flat; bad names refused.
+	LevelMapDoorOptions options;
+	options.doorTexture = QStringLiteral("door3");
+	options.trackTexture = QStringLiteral("lite5");
+	options.ceilingFlat = QStringLiteral("flat20");
+	options.resetOffsets = false;
+	ok &= expect(setLevelMapSelection(&map, {{LevelMapSelectionKind::DoomSector, 1}}, &error) && makeLevelMapDoors(&map, options, &doors, &error)
+			&& side(map.doomLinedefs.at(2).frontSidedef).upperTexture == QStringLiteral("DOOR3") && side(map.doomLinedefs.at(2).frontSidedef).offsetX == 7
+			&& side(map.doomLinedefs.at(4).frontSidedef).middleTexture == QStringLiteral("LITE5") && map.doomSectors.at(1).ceilingTexture == QStringLiteral("FLAT20"),
+		"Chosen textures and flat should go on, upper-cased, with the offsets kept.");
+	ok &= expect(undoLevelMapEdit(&map, &error), "Undo should take that door back too.");
+	options.doorTexture = QStringLiteral("NINECHARS");
+	ok &= expect(!makeLevelMapDoors(&map, options, &doors, &error) && error.contains(QStringLiteral("1 to 8 characters")), "A texture name past eight characters should be refused.");
+
+	// Hexen: Door_Raise(0, 16, 150), on use and repeatable.
+	map.doomFormat = LevelMapDoomFormat::Hexen;
+	ok &= expect(makeLevelMapDoors(&map, {}, &doors, &error), "A Hexen-format map should take a door too.");
+	const LevelMapDoomLinedef hexenLine = map.doomLinedefs.at(2);
+	ok &= expect(hexenLine.special == 12 && hexenLine.args == std::array<int, 5> {{0, 16, 150, 0, 0}} && hexenLine.tag == 0
+			&& (hexenLine.flags & 0x1c00) == 0x0400 && (hexenLine.flags & 0x0200) != 0,
+		"On a Hexen map the line should take Door_Raise with speed 16 and delay 150, on use and repeatable.");
+	return ok;
+}
+
+// Doom Builder's quick sector actions: raise and lower within the lumps'
+// ranges, and gradients from the first sector picked to the last. Neither
+// moves a line, so the nodes stay current.
+bool runSectorFieldsSmoke(const QDir& root)
+{
+	bool ok = true;
+	QString error;
+	const QString path = root.filePath(QStringLiteral("sector-fields.wad"));
+	LevelMapDocument map;
+	ok &= expect(writeFile(path, twoRoomWad(false)) && loadLevelMap({path, QStringLiteral("MAP01"), {}}, &map, &error), "The two-room WAD should load.");
+	int changed = 0;
+	ok &= expect(setLevelMapSelection(&map, {{LevelMapSelectionKind::DoomSector, 0}, {LevelMapSelectionKind::DoomSector, 1}}, &error)
+			&& shiftLevelMapSectors(&map, LevelMapSectorField::Floor, 8, &changed, &error) && changed == 2
+			&& map.doomSectors.at(0).floorHeight == 8 && map.doomSectors.at(1).floorHeight == 8
+			&& map.undoStack.last().description == QStringLiteral("Raise 2 floors by 8") && !map.doomGeometryChanged,
+		"Raising two floors by 8 should be one step that leaves the nodes current.");
+	ok &= expect(undoLevelMapEdit(&map, &error) && map.doomSectors.at(0).floorHeight == 0, "Undo should put the floors back.");
+	const int light = map.doomSectors.at(0).lightLevel;
+	ok &= expect(shiftLevelMapSectors(&map, LevelMapSectorField::Light, 300, &changed, &error) && map.doomSectors.at(0).lightLevel == 255
+			&& !shiftLevelMapSectors(&map, LevelMapSectorField::Light, 16, &changed, &error) && error.contains(QStringLiteral("limit")),
+		"Light should stop at 255, and a raise past it be refused, saying why.");
+	ok &= expect(undoLevelMapEdit(&map, &error) && map.doomSectors.at(0).lightLevel == light, "Undo should put the light back.");
+	ok &= expect(shiftLevelMapSectors(&map, LevelMapSectorField::Ceiling, -40000, &changed, &error) && map.doomSectors.at(1).ceilingHeight == -32768,
+		"A ceiling lowered past the lump's range should stop at -32768.");
+	ok &= expect(undoLevelMapEdit(&map, &error), "Undo should put the ceilings back.");
+
+	// A gradient needs three sectors; a third is added beside the lumps' two.
+	ok &= expect(!gradientLevelMapSectors(&map, LevelMapSectorField::Light, &changed, &error) && error.contains(QStringLiteral("three or more")),
+		"A gradient over two sectors should be refused.");
+	LevelMapDoomSector third = map.doomSectors.at(1);
+	third.id = 2;
+	map.doomSectors.push_back(third);
+	map.doomSectors[0].lightLevel = 100;
+	map.doomSectors[1].lightLevel = 0;
+	map.doomSectors[2].lightLevel = 200;
+	ok &= expect(setLevelMapSelection(&map, {{LevelMapSelectionKind::DoomSector, 0}, {LevelMapSelectionKind::DoomSector, 1}, {LevelMapSelectionKind::DoomSector, 2}}, &error)
+			&& gradientLevelMapSectors(&map, LevelMapSectorField::Light, &changed, &error) && changed == 1 && map.doomSectors.at(1).lightLevel == 150
+			&& map.undoStack.last().description == QStringLiteral("Grade the light levels of 3 sectors from 100 to 200"),
+		"A gradient should run evenly from the first sector picked to the last.");
+	ok &= expect(undoLevelMapEdit(&map, &error) && map.doomSectors.at(1).lightLevel == 0, "Undo should take the gradient back.");
+	return ok;
+}
+
+// Regressions from review 7: a face sharing its line with another brush's,
+// and Doom things put where the WAD cannot hold them through their origin, a
+// move, or a turn.
+bool runReview7Smoke(const QDir& root)
+{
+	bool ok = true;
+	QString error;
+	// Brush 0's last face and brush 1's first face share a line.
+	const QString text = QStringLiteral("{\n\"classname\" \"worldspawn\"\n{\n"
+		"( -64 -64 -16 ) ( -64 -63 -16 ) ( -64 -64 -15 ) AAA 0 0 0 1 1\n( 64 -64 -16 ) ( 64 -64 -15 ) ( 64 -63 -16 ) AAA 0 0 0 1 1\n"
+		"( -64 -64 -16 ) ( -64 -64 -15 ) ( -63 -64 -16 ) AAA 0 0 0 1 1\n( -64 64 -16 ) ( -63 64 -16 ) ( -64 64 -15 ) AAA 0 0 0 1 1\n"
+		"( -64 -64 -16 ) ( -63 -64 -16 ) ( -64 -63 -16 ) AAA 0 0 0 1 1\n"
+		"( -64 -64 0 ) ( -64 -63 0 ) ( -63 -64 0 ) AAA 0 0 0 1 1 } { ( 128 -64 -16 ) ( 128 -63 -16 ) ( 128 -64 -15 ) BBB 0 0 0 1 1\n"
+		"( 256 -64 -16 ) ( 256 -64 -15 ) ( 256 -63 -16 ) BBB 0 0 0 1 1\n( 128 -64 -16 ) ( 128 -64 -15 ) ( 129 -64 -16 ) BBB 0 0 0 1 1\n"
+		"( 128 64 -16 ) ( 129 64 -16 ) ( 128 64 -15 ) BBB 0 0 0 1 1\n( 128 -64 -16 ) ( 129 -64 -16 ) ( 128 -63 -16 ) BBB 0 0 0 1 1\n"
+		"( 128 -64 0 ) ( 128 -63 0 ) ( 129 -64 0 ) BBB 0 0 0 1 1\n}\n}\n");
+	const QString path = root.filePath(QStringLiteral("review7-shared.map"));
+	LevelMapDocument shared;
+	ok &= expect(writeFile(path, text.toUtf8()) && loadLevelMap({path, {}, QStringLiteral("idtech2")}, &shared, &error) && shared.brushes.size() == 2,
+		"The two brushes sharing a line should load.");
+	ok &= expect(!setLevelMapBrushFaceProperty(&shared, 1, 0, QStringLiteral("texture"), QStringLiteral("CCC"), &error) && error.contains(QStringLiteral("brush 0"))
+			&& !setLevelMapBrushFaceProperty(&shared, 1, 0, QStringLiteral("shiftx"), QStringLiteral("16"), &error)
+			&& !setLevelMapBrushFaceProperty(&shared, 0, 5, QStringLiteral("texture"), QStringLiteral("CCC"), &error) && shared.undoStack.isEmpty(),
+		"A face on a line another brush's face shares should refuse texture and number edits, naming the other brush.");
+	ok &= expect(setLevelMapBrushFaceProperty(&shared, 1, 1, QStringLiteral("texture"), QStringLiteral("CCC"), &error),
+		"A face with a line of its own on the same brush should still take a texture.");
+
+	// Things stay on whole units within 16 bits: through origin, a move, or a turn.
+	LevelMapDocument things;
+	const QString wadPath = root.filePath(QStringLiteral("review7-things.wad"));
+	ok &= expect(writeFile(wadPath, twoRoomWad(false)) && loadLevelMap({wadPath, QStringLiteral("MAP01"), {}}, &things, &error), "The two-room WAD should load.");
+	int first = -1;
+	int second = -1;
+	ok &= expect(addLevelMapDoomThing(&things, 3001, 32.0, 32.0, 0, &first, &error) && addLevelMapDoomThing(&things, 3001, 33.0, 32.0, 0, &second, &error),
+		"Two imps a unit apart should go in.");
+	const int depth = static_cast<int>(things.undoStack.size());
+	ok &= expect(!setLevelMapEntityProperty(&things, first, QStringLiteral("origin"), QStringLiteral("0.5 700 0"), &error)
+			&& !setLevelMapEntityProperty(&things, first, QStringLiteral("origin"), QStringLiteral("0 40000 0"), &error)
+			&& !setLevelMapEntityProperty(&things, first, QStringLiteral("origin"), QStringLiteral("0 0 99999"), &error) && error.contains(QStringLiteral("no height"))
+			&& !moveLevelMapObject(&things, QStringLiteral("thing"), first, 40000.0, 0.0, 0.0, &error) && things.undoStack.size() == depth,
+		"An origin off whole units, past 16 bits, or with a height on a Doom map, and a move past 16 bits, should be refused.");
+	ok &= expect(setLevelMapEntityProperty(&things, first, QStringLiteral("origin"), QStringLiteral("64 96 0"), &error),
+		"A whole origin in range should be taken.");
+	ok &= expect(undoLevelMapEdit(&things, &error), "Undo should put the imp back.");
+	ok &= expect(setLevelMapSelection(&things, {{LevelMapSelectionKind::DoomThing, first}, {LevelMapSelectionKind::DoomThing, second}}, &error)
+			&& rotateLevelMapSelection(&things, 2, 1, &error),
+		"Turning the two imps a quarter should work.");
+	const auto whole = [](double value) {
+		return value == std::round(value);
+	};
+	bool onUnits = true;
+	for (const LevelMapDoomThing& thing : things.doomThings) {
+		onUnits = onUnits && whole(thing.x) && whole(thing.y);
+	}
+	ok &= expect(onUnits, "A turn should land things on whole units, as the WAD will store them.");
+	return ok;
+}
+
+// Doom tag links: a line with a special and a tag acts on the sectors that
+// carry the tag; Select Targets and Sources follow them either way. Hexen
+// lines are left out.
+bool runTagLinksSmoke(const QDir& root)
+{
+	bool ok = true;
+	QString error;
+	const QString path = root.filePath(QStringLiteral("tag-links.wad"));
+	LevelMapDocument map;
+	ok &= expect(writeFile(path, twoRoomWad(false)) && loadLevelMap({path, QStringLiteral("MAP01"), {}}, &map, &error) && levelMapTagLinks(map).isEmpty(),
+		"The two-room WAD should load with no tag links.");
+	ok &= expect(setLevelMapSectorProperty(&map, 1, QStringLiteral("tag"), QStringLiteral("5"), &error)
+			&& setLevelMapLinedefProperty(&map, 0, QStringLiteral("tag"), QStringLiteral("5"), &error),
+		"A tag on the right room and on a line of the left should be set.");
+	ok &= expect(levelMapTagLinks(map).isEmpty(), "A tagged line with no special acts on nothing.");
+	ok &= expect(setLevelMapLinedefProperty(&map, 0, QStringLiteral("special"), QStringLiteral("62"), &error), "The line should take a lift special.");
+	const QVector<LevelMapTagLink> links = levelMapTagLinks(map);
+	ok &= expect(links.size() == 1 && links.first().linedefId == 0 && links.first().sectorId == 1 && links.first().tag == 5,
+		"The line should link to the sector with its tag.");
+	ok &= expect(setLevelMapSelection(&map, {{LevelMapSelectionKind::DoomLinedef, 0}}, &error)
+			&& levelMapLinkedEntities(map, true) == QVector<LevelMapSelectionRef> {{LevelMapSelectionKind::DoomSector, 1}}
+			&& setLevelMapSelection(&map, {{LevelMapSelectionKind::DoomSector, 1}}, &error)
+			&& levelMapLinkedEntities(map, false) == QVector<LevelMapSelectionRef> {{LevelMapSelectionKind::DoomLinedef, 0}},
+		"Select Targets from the line should find the sector, and Select Sources from the sector the line.");
+	// A door used by hand acts on the sector behind its line, whatever tag the
+	// line carries: vanilla's DR and D1 doors, and Boom's generalized ones.
+	ok &= expect(setLevelMapLinedefProperty(&map, 0, QStringLiteral("special"), QStringLiteral("1"), &error) && levelMapTagLinks(map).isEmpty()
+			&& setLevelMapSelection(&map, {{LevelMapSelectionKind::DoomLinedef, 0}}, &error) && levelMapLinkedEntities(map, true).isEmpty(),
+		"A manual door's tag should link to nothing, and Select Targets on it should find nothing.");
+	ok &= expect(setLevelMapLinedefProperty(&map, 0, QStringLiteral("special"), QString::number(0x3C07), &error) && levelMapTagLinks(map).isEmpty()
+			&& setLevelMapLinedefProperty(&map, 0, QStringLiteral("special"), QString::number(0x3C01), &error) && levelMapTagLinks(map).size() == 1,
+		"A Boom generalized door used by hand (DR) should link to nothing, one walked over (WR) to its tagged sector.");
+	// Make Door leaves its lines untagged: a door used by hand has no tag.
+	int doors = 0;
+	ok &= expect(setLevelMapLinedefProperty(&map, 2, QStringLiteral("tag"), QStringLiteral("9"), &error)
+			&& setLevelMapSelection(&map, {{LevelMapSelectionKind::DoomSector, 1}}, &error) && makeLevelMapDoors(&map, {}, &doors, &error)
+			&& map.doomLinedefs.at(2).special == 1 && map.doomLinedefs.at(2).tag == 0,
+		"Make Door should clear the tag its door lines carried.");
+	map.doomFormat = LevelMapDoomFormat::Hexen;
+	ok &= expect(levelMapTagLinks(map).isEmpty(), "Hexen lines should not be read as tag links.");
+	return ok;
+}
+
+// Regressions from review 4: carving and deleting brush entities' brushes,
+// moving brush entities, Select All with brush entities, a patch shader
+// sharing its line, split offsets, and the stale-node flag across undo.
+bool runReview4Smoke(const QDir& root)
+{
+	bool ok = true;
+	QString error;
+	int count = 0;
+	QStringList skipped;
+	const auto load = [&root, &error](const QString& name, const QString& text, LevelMapDocument* document,
+				  const QString& engine = QStringLiteral("idtech2")) {
+		const QString path = root.filePath(name);
+		return writeFile(path, text.toUtf8()) && loadLevelMap({path, {}, engine}, document, &error);
+	};
+	const auto savedText = [&root](const LevelMapDocument& document, const QString& name) {
+		const QString path = root.filePath(name);
+		return saveMapOverwriting(document, path) ? QString::fromUtf8(readFile(path)) : QString();
+	};
+	const QString world = QStringLiteral("{\n\"classname\" \"worldspawn\"\n");
+
+	// A brush carved away whole, whose closing brace shares a line with its
+	// entity's, is refused rather than cut out with that line.
+	{
+		QString text = world + testBoxBrush(-16, -16, -16, 80, 80, 80, QStringLiteral("CARVER"))
+			+ testBoxBrush(0, 0, 0, 64, 64, 64, QStringLiteral("INNER")) + QStringLiteral("}\n");
+		text.replace(QStringLiteral("INNER 0 0 0 1 1\n}\n}\n"), QStringLiteral("INNER 0 0 0 1 1 } }\n"));
+		LevelMapDocument document;
+		ok &= expect(load(QStringLiteral("r4-shared-close.map"), text, &document) && document.brushes.size() == 2,
+			"The shared-close fixture should load.");
+		ok &= expect(setLevelMapSelection(&document, {{LevelMapSelectionKind::QuakeBrush, 0}}, &error)
+				&& !carveLevelMapSelection(&document, &count, &error, &skipped) && error.contains(QStringLiteral("shares a source line"))
+				&& document.brushes.size() == 2 && document.undoStack.isEmpty(),
+			"Carving away a brush that closes on its entity's line should be refused.");
+	}
+
+	// A brush that meets the carver only across an edge-to-edge gap stays
+	// whole: no face of either brush separates them, the edges' cross does.
+	{
+		const QVector<LevelMapVec3> corners {{32.0, -10.0, 60.0, true}, {32.0, 10.0, 80.0, true}, {52.0, 0.0, 90.0, true}, {12.0, 0.0, 90.0, true}};
+		const QString text = world + testBoxBrush(0, 0, 0, 64, 64, 64, QStringLiteral("CARVER")) + testTetraBrush(corners, QStringLiteral("TETRA"))
+			+ QStringLiteral("}\n");
+		LevelMapDocument document;
+		ok &= expect(load(QStringLiteral("r4-edge.map"), text, &document) && document.brushes.size() == 2 && document.brushes.at(1).boundsSolved,
+			"The edge fixture should load with a closed tetrahedron.");
+		ok &= expect(setLevelMapSelection(&document, {{LevelMapSelectionKind::QuakeBrush, 0}}, &error)
+				&& !carveLevelMapSelection(&document, &count, &error) && error.contains(QStringLiteral("overlap")) && document.brushes.size() == 2,
+			"A brush clear of the carver should be left whole, not cut into pieces.");
+	}
+
+	// A brush entity: carving or deleting its only brush takes it too, moving
+	// it moves its brush once without adding an origin, and Select All picks
+	// it through its brush.
+	{
+		const QString text = world + testBoxBrush(-16, -16, -16, 80, 80, 80, QStringLiteral("CARVER"))
+			+ QStringLiteral("}\n{\n\"classname\" \"func_door\"\n\"targetname\" \"gate\"\n") + testBoxBrush(0, 0, 0, 64, 64, 64, QStringLiteral("DOOR"))
+			+ QStringLiteral("}\n");
+		LevelMapDocument document;
+		ok &= expect(load(QStringLiteral("r4-door.map"), text, &document) && document.entities.size() == 2 && document.brushes.size() == 2,
+			"The door fixture should load.");
+		ok &= expect(setLevelMapSelection(&document, {{LevelMapSelectionKind::QuakeBrush, 0}}, &error)
+				&& carveLevelMapSelection(&document, &count, &error) && count == 1 && document.entities.size() == 1 && document.brushes.size() == 1,
+			"Carving away the door's only brush should take the door entity with it.");
+		ok &= expect(!savedText(document, QStringLiteral("r4-door-carved.map")).contains(QStringLiteral("func_door")),
+			"The carved map should have no empty door left in it.");
+		ok &= expect(undoLevelMapEdit(&document, &error) && document.entities.size() == 2
+				&& savedText(document, QStringLiteral("r4-door-uncarved.map")) == text,
+			"Undoing the carve should bring the door back exactly.");
+
+		ok &= expect(setLevelMapSelection(&document, {{LevelMapSelectionKind::QuakeBrush, 1}}, &error) && deleteLevelMapSelection(&document, &error)
+				&& document.entities.size() == 1 && document.brushes.size() == 1
+				&& document.undoStack.last().description == QStringLiteral("Delete brush:1"),
+			"Deleting the door's only brush should delete the door too, named by the brush.");
+		ok &= expect(undoLevelMapEdit(&document, &error) && savedText(document, QStringLiteral("r4-door-undeleted.map")) == text,
+			"Undoing the delete should bring the door back exactly.");
+
+		const QVector<QVector<LevelMapSelectionRef>> selections {
+			{{LevelMapSelectionKind::Entity, 1}},
+			{{LevelMapSelectionKind::Entity, 1}, {LevelMapSelectionKind::QuakeBrush, 1}},
+		};
+		for (const QVector<LevelMapSelectionRef>& selection : selections) {
+			ok &= expect(setLevelMapSelection(&document, selection, &error) && moveLevelMapSelection(&document, 16.0, 0.0, 0.0, &error)
+					&& nearly(document.brushes.at(1).mins.x, 16.0) && propertyValueForTest(document, 1, QStringLiteral("origin")).isEmpty(),
+				"Moving the door should move its brush once and give it no origin.");
+			ok &= expect(undoLevelMapEdit(&document, &error) && nearly(document.brushes.at(1).mins.x, 0.0), "The door move should undo.");
+		}
+		ok &= expect(moveLevelMapObject(&document, QStringLiteral("entity"), 1, 0.0, 32.0, 0.0, &error) && nearly(document.brushes.at(1).mins.y, 32.0)
+				&& propertyValueForTest(document, 1, QStringLiteral("origin")).isEmpty() && document.selectedObjectId == 1
+				&& document.undoStack.last().description == QStringLiteral("Move entity:1 by 0,32,0"),
+			"Moving the door by its entity should move its brush and name the door.");
+		ok &= expect(undoLevelMapEdit(&document, &error), "The door's entity move should undo.");
+		ok &= expect(setLevelMapEntityProperty(&document, 1, QStringLiteral("origin"), QStringLiteral("32 32 32"), &error)
+				&& setLevelMapSelection(&document, {{LevelMapSelectionKind::Entity, 1}}, &error) && moveLevelMapSelection(&document, 16.0, 0.0, 0.0, &error)
+				&& propertyValueForTest(document, 1, QStringLiteral("origin")) == QStringLiteral("48 32 32") && nearly(document.brushes.at(1).mins.x, 16.0),
+			"A door that has an origin should move it along with its brush.");
+		ok &= expect(undoLevelMapEdit(&document, &error) && undoLevelMapEdit(&document, &error), "The origin edits should undo.");
+
+		const QVector<LevelMapSelectionRef> all = levelMapSelectAllObjects(document, false);
+		ok &= expect(all.size() == 2 && all.contains(LevelMapSelectionRef {LevelMapSelectionKind::QuakeBrush, 1})
+				&& !all.contains(LevelMapSelectionRef {LevelMapSelectionKind::Entity, 1}),
+			"Select All should pick the door through its brush, not as an entity.");
+		const QVector<LevelMapSelectionRef> otherBrush {{LevelMapSelectionKind::QuakeBrush, 0}};
+		ok &= expect(setLevelMapSelection(&document, {{LevelMapSelectionKind::QuakeBrush, 1}}, &error)
+				&& levelMapSelectAllObjects(document, true) == otherBrush,
+			"Inverting from the door's brush should pick only the other brush, not the door.");
+		ok &= expect(setLevelMapSelection(&document, {{LevelMapSelectionKind::Entity, 1}}, &error) && levelMapSelectAllObjects(document, true) == otherBrush,
+			"Inverting from the door entity should leave the door's brush out.");
+		ok &= expect(levelMapSelectAllObjects(document, false, [](const LevelMapSelectionRef& ref) {
+			return ref.objectId != 0;
+		}).size() == 1,
+			"Select All should leave out what the view hides.");
+	}
+
+	// Carving leaves spared (hidden) brushes alone, and names the entity when
+	// it is the entity's closing line that is shared.
+	{
+		const QString text = world + testBoxBrush(0, 0, 0, 64, 64, 64, QStringLiteral("CARVER")) + testBoxBrush(32, 0, 0, 96, 64, 64, QStringLiteral("NEXT"))
+			+ QStringLiteral("}\n{\n\"classname\" \"func_wall\"\n") + testBoxBrush(-32, 0, 0, 32, 64, 64, QStringLiteral("WALL")) + QStringLiteral("} // the wall\n");
+		LevelMapDocument document;
+		ok &= expect(load(QStringLiteral("r4-spared.map"), text, &document) && document.brushes.size() == 3, "The spared fixture should load.");
+		ok &= expect(setLevelMapSelection(&document, {{LevelMapSelectionKind::QuakeBrush, 0}}, &error)
+				&& !carveLevelMapSelection(&document, &count, &error, &skipped, {1}) && error.contains(QStringLiteral("Entity 1 closes on a line shared"))
+				&& document.brushes.size() == 3,
+			"With the brush beside it spared, the carve should cut nothing and name the entity whose line is shared.");
+		ok &= expect(carveLevelMapSelection(&document, &count, &error, &skipped) && count == 1 && skipped.size() == 1
+				&& skipped.first().contains(QStringLiteral("Entity 1")),
+			"With nothing spared, the carve should cut the brush beside it and report the wall left whole.");
+	}
+
+	// A patch whose shader sits on the patchDef2 line takes a new texture
+	// in place.
+	{
+		const QString text = world
+			+ QStringLiteral("{\npatchDef2 { base/patch\n( 3 3 0 0 0 )\n(\n"
+					 "( ( 0 0 0 0 0 ) ( 0 32 0 0 0.5 ) ( 0 64 0 0 1 ) )\n"
+					 "( ( 32 0 0 0.5 0 ) ( 32 32 0 0.5 0.5 ) ( 32 64 0 0.5 1 ) )\n"
+					 "( ( 64 0 0 1 0 ) ( 64 32 0 1 0.5 ) ( 64 64 0 1 1 ) )\n)\n}\n}\n}\n");
+		LevelMapDocument document;
+		ok &= expect(load(QStringLiteral("r4-patch.map"), text, &document, QStringLiteral("idtech3")) && document.patches.size() == 1
+				&& document.patches.first().textureName == QStringLiteral("base/patch"),
+			"The patch fixture should load.");
+		ok &= expect(setLevelMapSelection(&document, {{LevelMapSelectionKind::QuakePatch, 0}}, &error)
+				&& applyLevelMapTexture(&document, QStringLiteral("base/new"), &count, &error) && count == 1,
+			"Applying a texture to the patch should work.");
+		const QString saved = savedText(document, QStringLiteral("r4-patch-saved.map"));
+		LevelMapDocument reloaded;
+		ok &= expect(saved.contains(QStringLiteral("patchDef2 { base/new\n")) && !saved.contains(QStringLiteral("base/patch"))
+				&& load(QStringLiteral("r4-patch-reloaded.map"), saved, &reloaded, QStringLiteral("idtech3")) && reloaded.patches.size() == 1
+				&& reloaded.patches.first().textureName == QStringLiteral("base/new"),
+			"The new shader should replace the old one beside patchDef2, and the patch read back whole.");
+	}
+
+	// Texture offsets carry on across a split on both sides of a two-sided
+	// line; a back side another line shares is copied instead of changed.
+	for (const bool packed : {false, true}) {
+		const QString path = root.filePath(packed ? QStringLiteral("r4-rooms-packed.wad") : QStringLiteral("r4-rooms.wad"));
+		LevelMapDocument doom;
+		ok &= expect(writeFile(path, twoRoomWad(packed)) && loadLevelMap({path, QStringLiteral("MAP01"), {}}, &doom, &error)
+				&& doom.doomLinedefs.size() == 7,
+			"The two-room fixture should load.");
+		const int sides = static_cast<int>(doom.doomSidedefs.size());
+		ok &= expect(setLevelMapSelection(&doom, {{LevelMapSelectionKind::DoomLinedef, 2}}, &error) && splitLevelMapLinedefs(&doom, &count, &error),
+			"Splitting the shared line should work.");
+		const LevelMapDoomLinedef first = doom.doomLinedefs.at(2);
+		const LevelMapDoomLinedef second = doom.doomLinedefs.last();
+		ok &= expect(doom.doomSidedefs.at(second.frontSidedef).offsetX == 71 && doom.doomSidedefs.at(second.backSidedef).offsetX == 9
+				&& doom.doomSidedefs.at(first.frontSidedef).offsetX == 7 && doom.doomSidedefs.at(first.backSidedef).offsetX == 73,
+			"Each half should show the part of its textures it showed before the split.");
+		ok &= expect(packed ? (first.backSidedef != 4 && doom.doomSidedefs.at(4).offsetX == 9 && doom.doomSidedefs.size() == sides + 3)
+				    : (first.backSidedef == 4 && doom.doomSidedefs.size() == sides + 2),
+			"A back side the bottom wall shares should be copied, and one of the line's own changed in place.");
+		ok &= expect(doom.doomGeometryChanged, "A split should mark the node lumps stale.");
+		ok &= expect(undoLevelMapEdit(&doom, &error) && doom.doomSidedefs.size() == sides && doom.doomSidedefs.at(4).offsetX == 9
+				&& !doom.doomGeometryChanged,
+			"Undo should restore the sides and leave the node lumps current again.");
+	}
+	return ok;
+}
+
+// Regressions from review: compact lines, keys sharing a line, and copies of
+// brushes whose braces share lines.
+bool runEditFidelitySmoke(const QDir& root)
+{
+	bool ok = true;
+	QString error;
+	int replaced = 0;
+
+	// Replacing a texture on a face line that opens with a brace keeps the brace.
+	const QString compactPath = root.filePath(QStringLiteral("fidelity-compact.map"));
+	ok &= expect(writeFile(compactPath, compactMapFixture()), "Compact fixture should be written.");
+	LevelMapDocument compact;
+	ok &= expect(loadLevelMap({compactPath, {}, QStringLiteral("idtech2")}, &compact, &error), "Compact fixture should load.");
+	ok &= expect(replaceLevelMapTexture(&compact, QStringLiteral("TOP"), QStringLiteral("SKY1"), false, &replaced, &error) && replaced == 1,
+		"Replacing the compact brush's top texture should work.");
+	const QString compactSaved = root.filePath(QStringLiteral("fidelity-compact-saved.map"));
+	ok &= expect(saveLevelMapAs(compact, compactSaved).succeeded(), "Saving the compact map should work.");
+	const QString compactText = QString::fromUtf8(readFile(compactSaved));
+	ok &= expect(compactText.contains(QStringLiteral("{ ( 1 0 6.4e1 ) ( 0 0 6.4e1 ) ( 0 1 6.4e1 ) SKY1 0 0 0 1 1"))
+			&& compactText.contains(QStringLiteral("( 0 1 0 ) ( 0 0 0 ) ( 1 0 0 ) BOTTOM 0 0 0 1 1 // trailing comment")),
+		"Only the replaced name should change: the brace stays, and untouched faces keep their lines.");
+	LevelMapDocument compactReloaded;
+	ok &= expect(loadLevelMap({compactSaved, {}, QStringLiteral("idtech2")}, &compactReloaded, &error) && compactReloaded.brushes.size() == 1
+			&& !hasIssueCode(compactReloaded, QStringLiteral("unexpected-token")),
+		"The compact map should read back with its brush.");
+	ok &= expect(!replaceLevelMapTexture(&compact, QStringLiteral("EAST"), QStringLiteral("{grate"), false, &replaced, &error),
+		"A name the map tokenizer would split should be refused.");
+
+	// Two keys removed from one line stay removed when only one comes back.
+	const QString pairPath = root.filePath(QStringLiteral("fidelity-pairs.map"));
+	ok &= expect(writeFile(pairPath, QByteArrayLiteral("{\n\"classname\" \"worldspawn\"\n}\n{\n\"classname\" \"trigger_relay\"\n\"origin\" \"0 0 0\"\n\"target\" \"t1\" \"killtarget\" \"k1\"\n}\n")),
+		"Pair fixture should be written.");
+	LevelMapDocument pairs;
+	ok &= expect(loadLevelMap({pairPath, {}, QStringLiteral("idtech2")}, &pairs, &error), "Pair fixture should load.");
+	ok &= expect(removeLevelMapEntityProperty(&pairs, 1, QStringLiteral("target"), &error)
+			&& removeLevelMapEntityProperty(&pairs, 1, QStringLiteral("killtarget"), &error) && undoLevelMapEdit(&pairs, &error),
+		"Removing both keys and undoing the second should work.");
+	const QString pairSaved = root.filePath(QStringLiteral("fidelity-pairs-saved.map"));
+	ok &= expect(saveLevelMapAs(pairs, pairSaved).succeeded(), "Saving the pair map should work.");
+	const QString pairText = QString::fromUtf8(readFile(pairSaved));
+	ok &= expect(pairText.contains(QStringLiteral("\"killtarget\" \"k1\"")) && !pairText.contains(QStringLiteral("\"target\" \"t1\"")),
+		"The key still removed should stay out of the file.");
+
+	// A brush entity whose last brace shares a line cannot be copied as text.
+	const QString wallPath = root.filePath(QStringLiteral("fidelity-wall.map"));
+	ok &= expect(writeFile(wallPath, QByteArrayLiteral(
+				 "{\n\"classname\" \"worldspawn\"\n}\n{\n\"classname\" \"func_wall\"\n{\n"
+				 "( 0 0 0 ) ( 0 1 0 ) ( 0 0 1 ) W 0 0 0 1 1\n( 64 0 0 ) ( 64 0 1 ) ( 64 1 0 ) W 0 0 0 1 1\n"
+				 "( 0 0 0 ) ( 0 0 1 ) ( 1 0 0 ) W 0 0 0 1 1\n( 0 64 0 ) ( 1 64 0 ) ( 0 64 1 ) W 0 0 0 1 1\n"
+				 "( 0 0 0 ) ( 1 0 0 ) ( 0 1 0 ) W 0 0 0 1 1\n( 0 0 64 ) ( 0 1 64 ) ( 1 0 64 ) W 0 0 0 1 1 } }\n")),
+		"Wall fixture should be written.");
+	LevelMapDocument wall;
+	ok &= expect(loadLevelMap({wallPath, {}, QStringLiteral("idtech2")}, &wall, &error), "Wall fixture should load.");
+	ok &= expect(!duplicateLevelMapObjects(&wall, {{LevelMapSelectionKind::Entity, 1}}, 64.0, 0.0, 0.0, &error) && error.contains(QStringLiteral("shares")),
+		"Duplicating a brush whose brace shares a line should be refused.");
+	ok &= expect(setLevelMapSelection(&wall, {{LevelMapSelectionKind::Entity, 1}}, &error) && levelMapSelectionText(wall, &error).isEmpty()
+			&& error.contains(QStringLiteral("shares")),
+		"Copying it as text should be refused with the reason.");
+	ok &= expect(!pasteLevelMapText(&wall, QString::fromUtf8(readFile(wallPath)).section(QStringLiteral("}\n"), 1), &error),
+		"Pasting text whose brush brace shares a line should be refused.");
+	return ok;
+}
+
+bool runAddBrushSmoke(const QDir& root)
+{
+	bool ok = true;
+	QString error;
+	// Each map style gets a box in its own face format that reads back as a
+	// closed brush with the bounds asked for.
+	struct Case {
+		const char* file;
+		QByteArray text;
+		const char* hint;
+		const char* marker;
+	};
+	const QVector<Case> cases {
+		{"brush-classic.map", editableMapFixture(), "idtech2", "( 1 0 64 ) ( 0 0 64 ) ( 0 1 64 ) NEWTEX 0 0 0 1 1"},
+		{"brush-valve.map", valve220MapFixture(), "idtech2", "( 1 0 64 ) ( 0 0 64 ) ( 0 1 64 ) NEWTEX [ 1 0 0 0 ] [ 0 -1 0 0 ] 0 1 1"},
+		{"brush-q3.map", quake3MapFixture(), "idtech3", "( 1 0 64 ) ( 0 0 64 ) ( 0 1 64 ) ( ( 0.0078125 0 0 ) ( 0 0.0078125 0 ) ) NEWTEX 0 0 0"},
+	};
+	for (const Case& entry : cases) {
+		const QString path = root.filePath(QString::fromLatin1(entry.file));
+		ok &= expect(writeFile(path, entry.text), "Brush fixture should be written.");
+		LevelMapDocument document;
+		ok &= expect(loadLevelMap({path, {}, QString::fromLatin1(entry.hint)}, &document, &error), "Brush fixture should load.");
+		const QString original = document.originalText;
+		const int brushes = static_cast<int>(document.brushes.size());
+		int added = -1;
+		ok &= expect(addLevelMapBoxBrush(&document, {0.0, 0.0, 0.0, true}, {64.0, 32.0, 64.0, true}, QStringLiteral("NEWTEX"), &added, &error),
+			"Adding a box brush should work.");
+		ok &= expect(document.selectionKind == LevelMapSelectionKind::QuakeBrush && document.selectedObjectId == added,
+			"The new brush should be selected.");
+		const QString savedPath = root.filePath(QString::fromLatin1(entry.file) + QStringLiteral(".saved.map"));
+		ok &= expect(saveLevelMapAs(document, savedPath).succeeded(), "Saving the new brush should work.");
+		const QString savedText = QString::fromUtf8(readFile(savedPath));
+		ok &= expect(savedText.contains(QString::fromLatin1(entry.marker)), "The new brush should be written in the map's own face format.");
+		LevelMapDocument reloaded;
+		ok &= expect(loadLevelMap({savedPath, {}, QString::fromLatin1(entry.hint)}, &reloaded, &error) && reloaded.brushes.size() == brushes + 1,
+			"The saved map should hold the new brush.");
+		// The new brush joins worldspawn, so it is found by its texture rather
+		// than by its place in the file.
+		const auto found = std::find_if(reloaded.brushes.cbegin(), reloaded.brushes.cend(), [](const LevelMapBrush& brush) {
+			return brush.textureNames.contains(QStringLiteral("NEWTEX"));
+		});
+		ok &= expect(found != reloaded.brushes.cend() && found->boundsSolved && nearly(found->mins.x, 0.0) && nearly(found->maxs.x, 64.0)
+				&& nearly(found->maxs.y, 32.0) && nearly(found->maxs.z, 64.0),
+			"The new brush should close into the box asked for.");
+		ok &= expect(undoLevelMapEdit(&document, &error), "Adding the brush should undo.");
+		const QString restoredPath = root.filePath(QString::fromLatin1(entry.file) + QStringLiteral(".restored.map"));
+		ok &= expect(saveLevelMapAs(document, restoredPath).succeeded() && QString::fromUtf8(readFile(restoredPath)) == original,
+			"Undo should give back the map exactly.");
+	}
+	LevelMapDocument flat;
+	const QString flatPath = root.filePath(QStringLiteral("brush-flat.map"));
+	ok &= expect(writeFile(flatPath, editableMapFixture()) && loadLevelMap({flatPath, {}, QStringLiteral("idtech2")}, &flat, &error),
+		"Flat-brush fixture should load.");
+	ok &= expect(!addLevelMapBoxBrush(&flat, {0.0, 0.0, 0.0, true}, {64.0, 64.0, 0.0, true}, QStringLiteral("NEWTEX"), nullptr, &error),
+		"A brush with no height should be refused.");
+	return ok;
+}
+
 bool runUndoRedoSmoke(const QDir& root)
 {
 	bool ok = true;
@@ -809,12 +3323,20 @@ bool runUndoRedoSmoke(const QDir& root)
 	}
 	ok &= expect(!hasWait, "Undo of a previously-absent key should remove the key entirely.");
 
-	// Defect 4: a move on an entity without an origin key must not leave one behind.
+	// Defect 4: a move on an entity without an origin key must not leave one
+	// behind. A brush entity, worldspawn here, moves through its brushes and
+	// gains no origin at all; a point entity gains one, which undo removes.
+	const double worldX = document.brushes.first().faces.first().p0.x;
 	ok &= expect(moveLevelMapObject(&document, QStringLiteral("entity"), 0, 4.0, 4.0, 4.0, &error), "Move on worldspawn should work.");
-	ok &= expect(propertyValueForTest(document, 0, QStringLiteral("origin")) == QStringLiteral("4 4 4"), "Move should synthesize an origin.");
+	ok &= expect(propertyValueForTest(document, 0, QStringLiteral("origin")).isEmpty() && nearly(document.brushes.first().faces.first().p0.x, worldX + 4.0),
+		"Moving worldspawn should move its brush and give it no origin.");
+	ok &= expect(undoLevelMapEdit(&document, &error) && nearly(document.brushes.first().faces.first().p0.x, worldX), "The worldspawn move should undo.");
+	ok &= expect(removeLevelMapEntityProperty(&document, 1, QStringLiteral("origin"), &error), "Removing the light's origin should work.");
+	ok &= expect(moveLevelMapObject(&document, QStringLiteral("entity"), 1, 4.0, 4.0, 4.0, &error), "Move on a point entity without an origin should work.");
+	ok &= expect(propertyValueForTest(document, 1, QStringLiteral("origin")) == QStringLiteral("4 4 4"), "Move should synthesize an origin.");
 	ok &= expect(undoLevelMapEdit(&document, &error), "Undo of a synthesizing move should work.");
-	ok &= expect(propertyValueForTest(document, 0, QStringLiteral("origin")).isEmpty(), "Undo should remove a synthesized origin key.");
-	ok &= expect(!document.entities.at(0).origin.valid, "Undo should clear the synthesized origin vector.");
+	ok &= expect(propertyValueForTest(document, 1, QStringLiteral("origin")).isEmpty(), "Undo should remove a synthesized origin key.");
+	ok &= expect(!document.entities.at(1).origin.valid, "Undo should clear the synthesized origin vector.");
 
 	// Defect 5: clean / modified / saved across save-then-undo-then-redo.
 	ok &= expect(document.editState == QStringLiteral("modified"), "Pending edits should read as modified.");
@@ -933,6 +3455,19 @@ bool runDoomIwadSmoke(const QDir& root)
 	ok &= expect(loadLevelMap({sourcePath, QString(), QStringLiteral("idtech1")}, &document, &error), "IWAD map should load.");
 	ok &= expect(document.mapName == QStringLiteral("E1M10"), "E1M10 should be recognised as a map marker.");
 	ok &= expect(document.doomWadMagic == QStringLiteral("IWAD"), "The source WAD magic should be recorded.");
+
+	// The map list skips lumps that are not maps and keeps directory order.
+	const QString listPath = root.filePath(QStringLiteral("episode.wad"));
+	QVector<Lump> episode = {{"PLAYPAL", "palette"}};
+	episode += classicMapLumps("E1M2");
+	episode += classicMapLumps("E1M1");
+	episode += classicMapLumps("HUB01");
+	ok &= expect(writeFile(listPath, buildWad("PWAD", episode)), "Episode fixture should be written.");
+	ok &= expect(levelMapNamesInWad(listPath) == QStringList({QStringLiteral("E1M2"), QStringLiteral("E1M1"), QStringLiteral("HUB01")}),
+		"levelMapNamesInWad should list every map marker in directory order.");
+	QString listError;
+	ok &= expect(levelMapNamesInWad(root.filePath(QStringLiteral("absent.wad")), &listError).isEmpty() && !listError.isEmpty(),
+		"Listing a missing WAD should report an error.");
 	ok &= expect(moveLevelMapObject(&document, QStringLiteral("thing"), 0, 8.0, 0.0, 0.0, &error), "Thing move should work.");
 
 	const QString outputPath = root.filePath(QStringLiteral("base-edited.wad"));
@@ -1041,8 +3576,8 @@ bool runUdmfSmoke(const QDir& root)
 	LevelMapDocument document;
 	ok &= expect(loadLevelMap({path, QStringLiteral("MAP03"), QStringLiteral("idtech1")}, &document, &error), "UDMF map should be detected without failing the load.");
 	ok &= expect(document.doomFormat == LevelMapDoomFormat::Udmf, "TEXTMAP should select the UDMF format.");
-	ok &= expect(hasIssueCode(document, QStringLiteral("udmf-unsupported")), "UDMF should report a specific unsupported-format issue.");
-	ok &= expect(document.doomLinedefs.isEmpty() && document.doomVertices.isEmpty(), "UDMF must not produce a broken Doom parse.");
+	ok &= expect(!hasIssueCode(document, QStringLiteral("udmf-unsupported")), "UDMF should load into the authoring document.");
+	ok &= expect(document.doomLinedefs.isEmpty() && document.doomVertices.size() == 1, "UDMF should project the declared vertex.");
 	ok &= expect(document.doomLumps.contains(QStringLiteral("TEXTMAP")), "TEXTMAP should survive for save-back.");
 	ok &= expect(document.doomLumps.contains(QStringLiteral("ENDMAP")), "ENDMAP should survive for save-back.");
 	ok &= expect(document.doomLumps.contains(QStringLiteral("ZNODES")), "ZNODES should survive for save-back.");
@@ -1236,6 +3771,10 @@ bool runSelectionSetSmoke(const QDir& root)
 	ok &= expect(levelMapSelectionCount(document) == 2, "Duplicates should collapse.");
 	ok &= expect(document.selectionKind == LevelMapSelectionKind::QuakeBrush && document.selectedObjectId == 0,
 		"The last occurrence should be primary.");
+	ok &= expect(document.selection == QVector<LevelMapSelectionRef> {{LevelMapSelectionKind::Entity, 1}, {LevelMapSelectionKind::QuakeBrush, 0}},
+		"Members should keep the order of their last occurrences.");
+	ok &= expect(document.entities.at(1).selected && document.brushes.at(0).selected && !document.entities.at(0).selected,
+		"Exactly the members should carry the selected flag.");
 	ok &= expect(levelMapSelectionSetLines(document).size() >= 2, "The selection set should report itself.");
 	ok &= expect(levelMapSelectionLines(document).join(QStringLiteral("\n")).contains(QStringLiteral("Selection set")),
 		"A multi-selection should be visible in the selection report.");
@@ -1247,6 +3786,9 @@ bool runSelectionSetSmoke(const QDir& root)
 	};
 	ok &= expect(!setLevelMapSelection(&document, partly, &error), "Setting a selection with a missing object should fail.");
 	ok &= expect(levelMapSelectionCount(document) == 1, "The members that do exist should still be selected.");
+	ok &= expect(!setLevelMapSelection(&document, {{LevelMapSelectionKind::None, 0}, {LevelMapSelectionKind::Entity, -1}}, &error)
+			&& levelMapSelectionCount(document) == 0,
+		"References to no object should be skipped, and the call say so.");
 
 	// Single selection collapses the set again, and a failed selection empties it.
 	ok &= expect(selectLevelMapObject(&document, QStringLiteral("brush:0"), &error), "Selecting a brush should work.");
@@ -1255,6 +3797,108 @@ bool runSelectionSetSmoke(const QDir& root)
 	ok &= expect(levelMapSelectionCount(document) == 0 && document.selectionKind == LevelMapSelectionKind::None
 			&& document.selectedObjectId == -1,
 		"A failed selection should leave nothing selected.");
+	return ok;
+}
+
+// A key set on several entities at once is one undo step, all or nothing,
+// and saves as each entity's own edit would.
+bool runMultiPropertySmoke(const QDir& root)
+{
+	bool ok = true;
+	QString error;
+	const QString path = root.filePath(QStringLiteral("multi-keys.map"));
+	ok &= expect(writeFile(path, editableMapFixture()), "Multi-key fixture should be written.");
+	LevelMapDocument document;
+	ok &= expect(loadLevelMap({path, {}, QStringLiteral("idtech2")}, &document, &error), "Multi-key fixture should load.");
+	const auto keyOf = [&document](int entityId, const QString& key) {
+		for (const LevelMapEntity& entity : document.entities) {
+			if (entity.id != entityId) {
+				continue;
+			}
+			for (const LevelMapProperty& property : entity.properties) {
+				if (property.key == key) {
+					return property.value;
+				}
+			}
+		}
+		return QStringLiteral("(none)");
+	};
+	const auto saved = [&document, &root](const QString& name) {
+		const QString output = root.filePath(name);
+		QFile::remove(output);
+		saveLevelMapAs(document, output);
+		QFile file(output);
+		return file.open(QIODevice::ReadOnly) ? file.readAll() : QByteArray();
+	};
+	const QByteArray original = saved(QStringLiteral("multi-keys-original.map"));
+	ok &= expect(setLevelMapSelection(&document, {{LevelMapSelectionKind::Entity, 1}, {LevelMapSelectionKind::Entity, 2}}, &error),
+		"Selecting the light and the door should work.");
+	const int depth = static_cast<int>(document.undoStack.size());
+
+	// One value for all: a key new to both entities, as one undo step.
+	ok &= expect(setLevelMapEntitiesProperty(&document, {1, 2}, QStringLiteral("light"), {QStringLiteral("300")}, &error),
+		"Setting light on two entities should work.");
+	ok &= expect(keyOf(1, QStringLiteral("light")) == QStringLiteral("300") && keyOf(2, QStringLiteral("light")) == QStringLiteral("300")
+			&& document.undoStack.size() == depth + 1 && document.undoStack.last().description == QStringLiteral("Set light on 2 entities"),
+		"Both entities should hold the key, as one undo step named for both.");
+	ok &= expect(document.selection.size() == 2, "Setting a key on several entities should keep the selection.");
+	ok &= expect(saved(QStringLiteral("multi-keys-set.map")).count("\"light\" \"300\"") == 2, "Both keys should be saved.");
+	ok &= expect(undoLevelMapEdit(&document, &error) && keyOf(1, QStringLiteral("light")) == QStringLiteral("(none)")
+			&& keyOf(2, QStringLiteral("light")) == QStringLiteral("(none)") && saved(QStringLiteral("multi-keys-undone.map")) == original,
+		"Undo should take the key off both again and leave the file as it was.");
+	ok &= expect(redoLevelMapEdit(&document, &error) && keyOf(2, QStringLiteral("light")) == QStringLiteral("300"), "Redo should set both again.");
+	ok &= expect(undoLevelMapEdit(&document, &error), "Undo should work again.");
+
+	// A value for each: the door's name changes in place, the light gains one.
+	ok &= expect(setLevelMapEntitiesProperty(&document, {1, 2}, QStringLiteral("targetname"), {QStringLiteral("lamp"), QStringLiteral("hatch")}, &error)
+			&& keyOf(1, QStringLiteral("targetname")) == QStringLiteral("lamp") && keyOf(2, QStringLiteral("targetname")) == QStringLiteral("hatch"),
+		"Each entity should take its own value.");
+	ok &= expect(undoLevelMapEdit(&document, &error) && keyOf(2, QStringLiteral("targetname")) == QStringLiteral("gate")
+			&& keyOf(1, QStringLiteral("targetname")) == QStringLiteral("(none)"),
+		"Undo should restore each entity's own value.");
+
+	// All or nothing, and nothing to do is no step.
+	const int before = static_cast<int>(document.undoStack.size());
+	ok &= expect(!setLevelMapEntitiesProperty(&document, {1, 99}, QStringLiteral("light"), {QStringLiteral("200")}, &error)
+			&& error.contains(QStringLiteral("99")) && keyOf(1, QStringLiteral("light")) == QStringLiteral("(none)") && document.undoStack.size() == before,
+		"A missing entity should refuse the whole edit and say which.");
+	ok &= expect(!setLevelMapEntitiesProperty(&document, {1, 2}, QStringLiteral("message"), {QStringLiteral("say \"hi\"")}, &error)
+			&& document.undoStack.size() == before,
+		"A value with a double quote should be refused for all of them.");
+	ok &= expect(setLevelMapEntitiesProperty(&document, {1, 2}, QStringLiteral("classname"), {QStringLiteral("light"), QStringLiteral("func_door")}, &error)
+			&& document.undoStack.size() == before,
+		"Values the entities already hold should leave no undo step.");
+
+	// Removing from several: only those that have it, back on their lines on undo.
+	ok &= expect(removeLevelMapEntitiesProperty(&document, {1, 2, 3}, QStringLiteral("origin"), &error)
+			&& keyOf(1, QStringLiteral("origin")) == QStringLiteral("(none)") && keyOf(3, QStringLiteral("origin")) == QStringLiteral("(none)")
+			&& document.undoStack.last().description == QStringLiteral("Remove origin from 2 entities"),
+		"Removing a key should take it off every entity that has it, as one step.");
+	ok &= expect(undoLevelMapEdit(&document, &error) && keyOf(1, QStringLiteral("origin")) == QStringLiteral("32 32 64")
+			&& saved(QStringLiteral("multi-keys-restored.map")) == original,
+		"Undo should put each removed key back on its own line.");
+	ok &= expect(!removeLevelMapEntitiesProperty(&document, {1, 2}, QStringLiteral("no_such_key"), &error), "Removing a key none has should fail.");
+	// A key above others comes back above them, where it was.
+	ok &= expect(removeLevelMapEntitiesProperty(&document, {1, 2}, QStringLiteral("classname"), &error) && undoLevelMapEdit(&document, &error)
+			&& saved(QStringLiteral("multi-keys-classes.map")) == original,
+		"Undo should put a removed first key back on its own line, above the rest.");
+
+	// Doom things change through their mirrors, records and all.
+	const QString wadPath = root.filePath(QStringLiteral("multi-things.wad"));
+	ok &= expect(writeFile(wadPath, wadFixture()), "Doom fixture should be written.");
+	LevelMapDocument doom;
+	ok &= expect(loadLevelMap({wadPath, QStringLiteral("MAP01"), {}}, &doom, &error), "Doom fixture should load.");
+	int added = -1;
+	ok &= expect(addLevelMapDoomThing(&doom, 3004, 64.0, 96.0, 90, &added, &error), "Adding a second thing should work.");
+	const int firstAngle = doom.doomThings.first().angle;
+	ok &= expect(setLevelMapEntitiesProperty(&doom, {0, added}, QStringLiteral("angle"), {QStringLiteral("180")}, &error)
+			&& doom.doomThings.first().angle == 180 && doom.doomThings.last().angle == 180,
+		"Setting angle on two things should turn both.");
+	ok &= expect(undoLevelMapEdit(&doom, &error) && doom.doomThings.first().angle == firstAngle && doom.doomThings.last().angle == 90,
+		"Undo should turn each thing back.");
+	ok &= expect(!setLevelMapEntitiesProperty(&doom, {0, added}, QStringLiteral("angle"), {QStringLiteral("north")}, &error)
+			&& doom.doomThings.first().angle == firstAngle,
+		"A value a thing cannot hold should refuse the whole edit.");
 	return ok;
 }
 
@@ -1355,23 +3999,59 @@ int main()
 	}
 	const QDir root(tempDir.path());
 	bool ok = true;
-	ok &= runQuakeMapSmoke(root);
-	ok &= runTokenizerSmoke(root);
-	ok &= runValve220Smoke(root);
-	ok &= runQuake3Smoke(root);
-	ok &= runNonSquarePatchSmoke(root);
-	ok &= runRotatedBrushSmoke(root);
-	ok &= runTextSaveSmoke(root);
-	ok &= runUndoRedoSmoke(root);
-	ok &= runGridSnapSmoke();
-	ok &= runSelectionSetSmoke(root);
-	ok &= runMultiMoveSmoke(root);
-	ok &= runDoomMapSmoke(root);
-	ok &= runDoomIwadSmoke(root);
-	ok &= runEmptyWadDirectorySmoke(root);
-	ok &= runDoomMarkerSmoke(root);
-	ok &= runHexenSmoke(root);
-	ok &= runUdmfSmoke(root);
-	ok &= runDoomValidationSmoke(root);
+	auto run = [&ok](const char* name, const auto& test) {
+		const auto started = std::chrono::steady_clock::now();
+		std::cerr << name << " started" << std::endl;
+		ok &= test();
+		std::cerr << name << ": " << std::chrono::duration_cast<std::chrono::milliseconds>(
+			std::chrono::steady_clock::now() - started).count() << " ms" << std::endl;
+	};
+	run("runQuakeMapSmoke", [&]() { return runQuakeMapSmoke(root); });
+	run("runTokenizerSmoke", [&]() { return runTokenizerSmoke(root); });
+	run("runValve220Smoke", [&]() { return runValve220Smoke(root); });
+	run("runQuake3Smoke", [&]() { return runQuake3Smoke(root); });
+	run("runNonSquarePatchSmoke", [&]() { return runNonSquarePatchSmoke(root); });
+	run("runRotatedBrushSmoke", [&]() { return runRotatedBrushSmoke(root); });
+	run("runTextSaveSmoke", [&]() { return runTextSaveSmoke(root); });
+	run("runUndoRedoSmoke", [&]() { return runUndoRedoSmoke(root); });
+	run("runAddDeleteSmoke", [&]() { return runAddDeleteSmoke(root); });
+	run("runTargetLinksSmoke", [&]() { return runTargetLinksSmoke(root); });
+	run("runDuplicateSmoke", [&]() { return runDuplicateSmoke(root); });
+	run("runDoomThingEditSmoke", [&]() { return runDoomThingEditSmoke(root); });
+	run("runDoomLinedefEditSmoke", [&]() { return runDoomLinedefEditSmoke(root); });
+	run("runSnapToGridSmoke", [&]() { return runSnapToGridSmoke(root); });
+	run("runClipboardSmoke", [&]() { return runClipboardSmoke(root); });
+	run("runReplaceTextureSmoke", [&]() { return runReplaceTextureSmoke(root); });
+	run("runRotateSmoke", [&]() { return runRotateSmoke(root); });
+	run("runFlipSmoke", [&]() { return runFlipSmoke(root); });
+	run("runResizeSmoke", [&]() { return runResizeSmoke(root); });
+	run("runClipSmoke", [&]() { return runClipSmoke(root); });
+	run("runHollowSmoke", [&]() { return runHollowSmoke(root); });
+	run("runCarveSmoke", [&]() { return runCarveSmoke(root); });
+	run("runReview4Smoke", [&]() { return runReview4Smoke(root); });
+	run("runDoomTopologySmoke", [&]() { return runDoomTopologySmoke(root); });
+	run("runDoomFieldsSmoke", [&]() { return runDoomFieldsSmoke(root); });
+	run("runFaceFieldsSmoke", [&]() { return runFaceFieldsSmoke(root); });
+	run("runReview5Smoke", [&]() { return runReview5Smoke(root); });
+	run("runConnectEntitiesSmoke", [&]() { return runConnectEntitiesSmoke(root); });
+	run("runReview6Smoke", [&]() { return runReview6Smoke(root); });
+	run("runMakeDoorSmoke", [&]() { return runMakeDoorSmoke(root); });
+	run("runSectorFieldsSmoke", [&]() { return runSectorFieldsSmoke(root); });
+	run("runReview7Smoke", [&]() { return runReview7Smoke(root); });
+	run("runTagLinksSmoke", [&]() { return runTagLinksSmoke(root); });
+	run("runEditFidelitySmoke", [&]() { return runEditFidelitySmoke(root); });
+	run("runAddBrushSmoke", [&]() { return runAddBrushSmoke(root); });
+	run("runGridSnapSmoke", [&]() { return runGridSnapSmoke(); });
+	run("runSelectionSetSmoke", [&]() { return runSelectionSetSmoke(root); });
+	run("runMultiPropertySmoke", [&]() { return runMultiPropertySmoke(root); });
+	run("runMultiMoveSmoke", [&]() { return runMultiMoveSmoke(root); });
+	run("runDoomMapSmoke", [&]() { return runDoomMapSmoke(root); });
+	run("runDoomIwadSmoke", [&]() { return runDoomIwadSmoke(root); });
+	run("runEmptyWadDirectorySmoke", [&]() { return runEmptyWadDirectorySmoke(root); });
+	run("runDoomMarkerSmoke", [&]() { return runDoomMarkerSmoke(root); });
+	run("runHexenSmoke", [&]() { return runHexenSmoke(root); });
+	run("runUdmfSmoke", [&]() { return runUdmfSmoke(root); });
+	run("runDoomValidationSmoke", [&]() { return runDoomValidationSmoke(root); });
+	run("runQuerySmoke", [&]() { return runQuerySmoke(root); });
 	return ok ? EXIT_SUCCESS : EXIT_FAILURE;
 }

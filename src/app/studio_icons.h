@@ -24,6 +24,11 @@ enum class StudioIconTone {
 	Success,
 	Warning,
 	Danger,
+	// Navigation entries: drawn as Normal, and in the accent while the entry
+	// is the current one (a checked button paints its icon's On state). The
+	// high-visibility themes fill the current entry with the accent itself, so
+	// there the glyph takes the selection text colour instead.
+	Navigation,
 };
 
 // Where the glyph sits when the icon is drawn into a wider-than-tall rect.

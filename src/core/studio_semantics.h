@@ -66,6 +66,11 @@ struct ShortcutDescriptor {
 	QStringList alternateSequences;
 	QString description;
 	bool userRemappable = true;
+	// The key fires only while focus is inside its context's surface (the
+	// Packages page for "package", Levels for "map", Code for "code", Build and
+	// the Activity panel for "activity"). Two such keys on different surfaces
+	// may share a sequence; see shortcutRegistryHasConflicts().
+	bool surfaceScoped = false;
 };
 
 struct CommandPaletteEntry {

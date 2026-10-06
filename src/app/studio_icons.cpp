@@ -280,6 +280,14 @@ const QHash<QString, GlyphFunction>& glyphs()
 			p.rect(6.5, 5.0, 10.0, 19.0, 1.0, true);
 			p.rect(14.0, 5.0, 17.5, 19.0, 1.0, true);
 		});
+		g.insert(QStringLiteral("repeat"), [](GlyphPainter& p) {
+			// Two arrows chasing each other round a loop, as players draw repeat.
+			p.polyline({{5.0, 13.0}, {5.0, 9.5}, {7.5, 7.0}, {18.0, 7.0}});
+			p.polyline({{15.0, 4.0}, {18.0, 7.0}, {15.0, 10.0}});
+			p.polyline({{19.0, 11.0}, {19.0, 14.5}, {16.5, 17.0}, {6.0, 17.0}});
+			p.polyline({{9.0, 14.0}, {6.0, 17.0}, {9.0, 20.0}});
+		});
+
 		g.insert(QStringLiteral("search"), [](GlyphPainter& p) {
 			p.circle(10.5, 10.5, 6.0);
 			p.line(15.0, 15.0, 20.5, 20.5);
@@ -354,6 +362,7 @@ const QHash<QString, GlyphFunction>& glyphs()
 			};
 			p.polyline({tip - rotated(direction, 40.0) * 4.0, tip, tip - rotated(direction, -40.0) * 4.0});
 		});
+		g.insert(QStringLiteral("rotate"), g.value(QStringLiteral("refresh")));
 		g.insert(QStringLiteral("filter"), [](GlyphPainter& p) {
 			p.polygon({{3.5, 5.0}, {20.5, 5.0}, {14.0, 12.5}, {14.0, 19.0}, {10.0, 21.0}, {10.0, 12.5}});
 		});
@@ -426,6 +435,21 @@ const QHash<QString, GlyphFunction>& glyphs()
 			p.polyline({{9.0, 20.0}, {4.0, 20.0}, {4.0, 15.0}});
 			p.rect(9.0, 9.0, 15.0, 15.0, 1.0);
 		});
+		g.insert(QStringLiteral("clip"), [](GlyphPainter& p) {
+			// Scissors: two finger rings and the blades crossing above them.
+			p.circle(7.0, 17.5, 3.0);
+			p.circle(17.0, 17.5, 3.0);
+			p.line(8.8, 15.0, 17.5, 3.5);
+			p.line(15.2, 15.0, 6.5, 3.5);
+		});
+		g.insert(QStringLiteral("resize"), [](GlyphPainter& p) {
+			// A box, and the corner it is being dragged out to.
+			p.rect(4.0, 11.0, 13.0, 20.0, 1.0);
+			p.line(11.5, 12.5, 19.5, 4.5);
+			p.polyline({{14.0, 4.5}, {19.5, 4.5}, {19.5, 10.0}});
+			p.polyline({{4.0, 7.5}, {4.0, 4.0}, {7.5, 4.0}});
+			p.polyline({{16.5, 20.0}, {20.0, 20.0}, {20.0, 16.5}});
+		});
 		g.insert(QStringLiteral("move"), [](GlyphPainter& p) {
 			p.line(12.0, 3.0, 12.0, 21.0);
 			p.line(3.0, 12.0, 21.0, 12.0);
@@ -494,6 +518,12 @@ const QHash<QString, GlyphFunction>& glyphs()
 		g.insert(QStringLiteral("sidebar-left"), [](GlyphPainter& p) {
 			p.rect(3.0, 4.0, 21.0, 20.0, 2.0);
 			p.line(9.0, 4.0, 9.0, 20.0);
+		});
+		// A push pin: keep something open where it is.
+		g.insert(QStringLiteral("pin"), [](GlyphPainter& p) {
+			p.line(8.0, 3.5, 16.0, 3.5);
+			p.polyline({{10.0, 3.5}, {10.0, 9.5}, {6.5, 13.5}, {17.5, 13.5}, {14.0, 9.5}, {14.0, 3.5}});
+			p.line(12.0, 13.5, 12.0, 21.0);
 		});
 		g.insert(QStringLiteral("panel-bottom"), [](GlyphPainter& p) {
 			p.rect(3.0, 4.0, 21.0, 20.0, 2.0);
@@ -657,6 +687,7 @@ QString canonicalIconName(const QString& name)
 		{QStringLiteral("extension"), QStringLiteral("plugin")},
 		{QStringLiteral("zoom-fit"), QStringLiteral("frame")},
 		{QStringLiteral("fit"), QStringLiteral("frame")},
+		{QStringLiteral("scale"), QStringLiteral("resize")},
 		{QStringLiteral("sprite"), QStringLiteral("film")},
 		{QStringLiteral("index"), QStringLiteral("hash")},
 		{QStringLiteral("history"), QStringLiteral("clock")},
@@ -666,7 +697,7 @@ QString canonicalIconName(const QString& name)
 	return aliases.value(normalized, normalized);
 }
 
-QColor toneColor(StudioIconTone tone, QIcon::Mode mode)
+QColor toneColor(StudioIconTone tone, QIcon::Mode mode, QIcon::State state = QIcon::Off)
 {
 	const StudioThemeTokens& theme = currentStudioTheme();
 	const StudioThemeColors& c = theme.colors;
@@ -675,6 +706,9 @@ QColor toneColor(StudioIconTone tone, QIcon::Mode mode)
 	}
 	if (mode == QIcon::Selected && tone != StudioIconTone::OnAccent) {
 		return c.selectionText;
+	}
+	if (tone == StudioIconTone::Navigation && state == QIcon::On) {
+		return theme.highContrast ? c.selectionText : c.accent;
 	}
 	switch (tone) {
 	case StudioIconTone::Muted:
@@ -690,6 +724,7 @@ QColor toneColor(StudioIconTone tone, QIcon::Mode mode)
 	case StudioIconTone::Danger:
 		return c.danger;
 	case StudioIconTone::Normal:
+	case StudioIconTone::Navigation:
 		break;
 	}
 	if (mode == QIcon::Active || theme.highContrast) {
@@ -725,7 +760,7 @@ public:
 	{
 	}
 
-	void paint(QPainter* painter, const QRect& rect, QIcon::Mode mode, QIcon::State) override
+	void paint(QPainter* painter, const QRect& rect, QIcon::Mode mode, QIcon::State state) override
 	{
 		if (!painter) {
 			return;
@@ -736,7 +771,7 @@ public:
 			x = QGuiApplication::layoutDirection() == Qt::RightToLeft ? rect.right() + 1 - side : rect.x();
 		}
 		const QRectF square(x, rect.y() + (rect.height() - side) / 2.0, side, side);
-		paintGlyph(*painter, m_name, square, toneColor(m_tone, mode));
+		paintGlyph(*painter, m_name, square, toneColor(m_tone, mode, state));
 	}
 
 	QPixmap pixmap(const QSize& size, QIcon::Mode mode, QIcon::State state) override

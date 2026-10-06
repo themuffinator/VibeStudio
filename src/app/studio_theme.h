@@ -37,8 +37,9 @@ struct StudioThemeColors {
 	QColor accentPressed;
 	QColor accentText;      // Text drawn on an accent fill.
 	QColor accentSubtle;    // Checked tool buttons and the current mode.
-	QColor selection;       // Selected rows and highlighted menu items.
-	QColor selectionText;   // Text on the selection fill.
+	QColor selection;       // The palette's Highlight: what canvases mark as selected, and progress fills.
+	QColor selectionText;   // Text on the selection and row selection fills.
+	QColor rowSelection;    // Selected rows in lists, trees, and menus: quieter than selection.
 	QColor focus;           // Keyboard focus ring.
 	QColor success;
 	QColor warning;
@@ -47,8 +48,8 @@ struct StudioThemeColors {
 };
 
 struct StudioThemeMetrics {
-	double baseFontPoints = 10.0;
-	double smallFontPoints = 9.0;
+	double baseFontPoints = 10.5;
+	double smallFontPoints = 9.5;
 	double headingFontPoints = 11.5;
 	double titleFontPoints = 15.0;
 	double displayFontPoints = 21.0;
@@ -57,8 +58,8 @@ struct StudioThemeMetrics {
 	int itemPaddingVertical = 5;
 	int itemPaddingHorizontal = 8;
 	int spacing = 8;
-	int radius = 6;
-	int radiusSmall = 4;
+	int radius = 8;
+	int radiusSmall = 5;
 	int borderWidth = 1;
 	int focusWidth = 1;
 	int controlHeight = 28;
@@ -86,7 +87,9 @@ struct StudioThemeTokens {
 // Installs the Fusion style (the only built-in style that honours a custom
 // palette identically on Windows, macOS, and Linux), the palette, the base
 // font size, and the stylesheet on the whole application, then records the
-// tokens so icons and custom-painted widgets can read them.
+// tokens so icons and custom-painted widgets can read them. An identical sheet
+// is retained; a changed sheet is detached before replacement to avoid repeated
+// recursive restyling of nested widgets.
 void applyStudioTheme(QApplication& app, const StudioThemeTokens& tokens);
 
 // The tokens most recently applied. Defaults to the dark theme before the

@@ -30,6 +30,26 @@ and reproducibility intact.
 
 These are implemented, not planned. Each names the code that does the work.
 
+### Shared Asset Workbench Commands
+
+`src/app/asset_workbench_actions.cpp`, `src/app/studio_actions.*`
+
+Textures, Models and Audio expose their authoring, selected-asset editing and
+export actions through the same command registry used by menus, search and
+custom shortcuts. Tools groups these commands by module; the command palette
+shows the module beside each result. Empty browsers offer Texture Editor,
+Mesh Editor or Open Audio directly, with Open Package as the secondary action.
+Content toolbars appear when there is content to browse.
+
+Each asset header identifies the selected package path. Its Package menu returns
+to the selected source entry, reviews staged changes or saves the current draft.
+Audio handoffs preserve repeated WAD entry identity. Paths with ambiguous
+occurrences in the other browsers require choosing the exact entry in Packages.
+No project switching or extra package opening is needed for this handoff.
+Selection-dependent editing and export commands follow loading, selection and
+filter state; compressed audio remains editable when only a header preview is
+available. Asset edits still use the existing editor and staging services.
+
 ### Debounced Workspace Search
 
 `src/app/application_shell.*`
@@ -44,25 +64,25 @@ character.
 
 ### Stylesheet Re-Application
 
-`src/app/application_shell.*`
+`src/app/application_shell.*`, `src/app/studio_theme.cpp`
 
-`applyPreferencesToUi()` rebuilds the entire window stylesheet and then
-unpolishes and repolishes every widget, so calling it repeatedly is expensive.
-A coalescing helper, `scheduleThemeRefresh()`, guards on
-`m_themeRefreshScheduled` and defers the rebuild to a single queued invocation
-per event-loop turn.
+`applyPreferencesToUi()` changes the application theme only when the resolved
+theme, density or text scale changes. Ordinary package and activity refreshes
+use `scheduleThemeRefresh()` to coalesce per-item state colours once per event
+loop turn; they do not rebuild the application stylesheet.
 
-The call sites that fire repeatedly now go through it: `refreshPackageTree()`,
-`refreshPackageStagingSummary()`, `filterPackageEntries()`, and
-`refreshActivityCenter()`. That last one matters most, because the activity
-centre refreshes on every streamed compiler log line — before this, a noisy
-compile re-themed the entire window once per line of output. Typing in the
-package filter is now one stylesheet rebuild for a burst of keystrokes rather
-than one per character.
+`applyStudioTheme()` also compares the generated stylesheet with the current
+one. Identical styles skip replacement. For a changed style it detaches the old
+application sheet, restores the requested palette and font, and installs the new
+sheet through public Qt APIs. This avoids repeatedly restyling the descendants
+of each cached widget in Qt's existing-sheet update path. The change applies to
+all studio surfaces and retains widget-local styles and document contents.
 
-The one-shot sites — a preference change, opening or switching a project, and
-the start-up path — still call `applyPreferencesToUi()` directly, because there
-the user has just asked for a visual change and should see it on the same turn.
+`ui-primitives-smoke` checks bounded style-change delivery through 25 nested
+widgets, dark/light/high-contrast transitions, retained text/selection and
+fixed-pitch detail scaling. Package browser workflow checks also exercise live
+100%/200% transitions. Timing observations are recorded in the package-manager
+release audit; native platform and whole-studio performance acceptance remain.
 
 ### Package Staging: Cached Plan, Lazy Bytes, Streamed Writes
 
@@ -123,6 +143,34 @@ report start, finish, and log lines. Every stage still goes through the shared
 compiler runner, so logs, diagnostics, hashes, and command manifests are
 identical to a single-profile run. Launch plans in the same module carry the
 result into the configured source port.
+
+### The Edit, Build, Fix Loop Without Retyping
+
+`src/app/application_shell.*`
+
+The Build page no longer has to be told what to build. Its input follows the
+map open in Levels, a map for another game brings that game's pipeline with it,
+and the launch form's map name defaults to what the build produces, so opening
+a map and pressing F5 (Build and Launch) needs no typing: the build runs, the
+map is copied into the game folder it loads from, and the game starts on it,
+with one confirmation. After a run, the
+**Problems** tab turns each compiler warning into a jump: activating one selects
+the brush, patch, or entity written on that line of the map (the entities and
+brushes already know their source lines), so the step from "WARNING: 6: ..." to
+the object costs one key instead of a search through the file. Copy Commands,
+the launch preview, and the run itself share one request builder, so none of
+them can drift from what actually runs.
+
+### Coalesced Status Chip Refresh
+
+`src/app/application_shell.*`
+
+The status chips used to be recomputed on every state change, and the compiler
+chip walked every search path for every tool each time. Refreshes are now
+coalesced into one per event-loop pass, and compiler discovery for the chip is
+reused for five seconds unless the project, search paths, or overrides change;
+a path chosen on the Toolchain tab resets that cache so the chip updates at
+once.
 
 ### Per-Block DEFLATE Block Type Selection
 
@@ -224,26 +272,92 @@ and `setDocument()`, which refits, only for a different map or file.
 `compareContent()` is ordered cheapest test first and stops at whichever one
 settles the question. A directory pair is not compared at all. Differing sizes
 end it immediately as `SizeOnly`, with no digest taken. A request that set
-`metadataOnly` (the CLI's `--metadata-only`) stops here by choice. When both
-sides carry a stored CRC-32 — which the ZIP family does, because
-`loadZipFamily()` fills `PackageEntry::crc32` from the central directory — that
-32-bit check decides it without reading a byte, and it is meaningful rather
-than a coin flip because the sizes have already matched. An
-unreadable side, and a repeated path the path-addressed reader cannot resolve
-(`duplicate-path`), both stop before any read as well. A PAK or WAD entry
-carries no stored CRC-32, so it falls through to the read.
+`metadataOnly` (the CLI's `--metadata-only`) stops here by choice. An unreadable
+side stops with an explicit unchecked result. Other equal-size files are read
+and hashed with SHA-256, including ZIP/PK3 files: matching stored checksums do
+not prove that the current payload is intact. Repeated WAD names resolve by
+position, so each map's own lump bytes are compared.
 
 Only what survives all of that is read and hashed with SHA-256, and that read is
 bounded by `PackageCompareRequest::maxEntryBytes`, which falls back to
 `kPackageCompareDefaultMaxEntryBytes` (256 MiB) when it is not positive and is
 set from `--max-entry-bytes` on `vibestudio --cli package compare`. An entry
-over the budget is skipped with the `entry-too-large` note instead of being
-pulled into memory, so a package holding one enormous member cannot turn a
-comparison into an out-of-memory failure. The cost of that budget is worth
-knowing: a skipped entry counts into `uncomparedCount` and is reported as
-`Identical` with content `NotCompared`, and `PackageCompareResult::identical()`
-— which is what the command's exit code gates on — does not look at
-`uncomparedCount`.
+over the budget is skipped with the `entry-too-large` note and `Uncompared`
+status, increments `uncomparedCount`, and prevents `identical()` from returning
+true for a content comparison. Source archive reads stream through bounded
+buffers and can cancel during a file; staged inputs still have per-file memory
+cost. `package validate` shares the streaming reader, checks every payload by
+default and offers an optional work budget. Its pass result also requires no
+failed or unchecked entries and no reader warnings.
+
+### Shell Start-Up: One Shortcut Install, Pages Built In Place
+
+`src/app/studio_actions.*`, `ApplicationShell::buildUi()`
+
+Building the shell once took about 100 seconds in the debug build, and nearly
+all of it was shortcut wiring. `installShortcuts()` rebinds every command's
+keys at once, so that conflicts never depend on registration order. It ran
+after each of the roughly 350 `registerCommand()` calls, and again after each
+`setShortcutScopes()`. Each run looked up the documented shortcut several
+times per command through `shortcutForCommandId()`, which builds the whole
+translated descriptor list on every call. The work was therefore quadratic in
+the number of commands, times the cost of translating about 150 labels.
+
+Two changes fixed it. First, the registry now reads the descriptor list once
+per install into an index keyed by normalized command id. Second,
+`beginBatch()` and `endBatch()` hold installation back while `buildCommands()`
+registers commands and `installShortcutScopes()` sets scopes, then install
+once. Queries made inside a batch answer with the keys installed before it,
+and nothing in either function asks.
+
+The rest was reparenting. The ten pages were built, added to the page stack,
+which was added to the work area, which was added to the root widget, which
+became the central widget. Each of those moves made Qt resolve the style
+sheet, fonts, and palettes for every widget in the tree again. The window now
+holds the empty stack before any page is built, so each page joins its final
+parent once. The shell now builds in about 7 seconds in the debug build, most
+of it style sheet polish.
+
+### Selecting Many Rows At Once
+
+`selectListRows()` in `src/app/application_shell.cpp`
+
+Enter in the Levels Objects filter and in the Packages filter selects every row
+the filter keeps. Selecting them one `setSelected()` at a time made the
+selection model merge ranges on each call. That took about 7.5 seconds for
+10,000 rows. The rows are now gathered first and selected in one
+`QItemSelectionModel::select()` call, with each run of neighbouring rows as one
+range. The same 10,000 rows now take about a tenth of a second. The Textures
+filter likewise works out once per pass whether the open map names its
+textures with their `textures/` folder, instead of once per row over every
+brush face. A filter on what decoding finds runs again a quarter of a second
+after thumbnails arrive, not after every batch of six.
+
+The Levels Objects list is filled again whenever the map or its selection
+changes, and it used to select each selected row as the row was added. A row
+selected while the list still had new rows to lay out made it lay all of them
+out again, so **Select All** on a map of 500 brushes took ten seconds and on one
+of 10,000 did not finish in a quarter of an hour. The rows now go in first and
+the selection follows in one call, as above: 500 brushes take a quarter of a
+second and 10,000 about five, in a debug build. A selection made in the view
+reaches the list the same way. In the map document, `setLevelMapSelection()`
+searched the map for each object selected, and `applySelectionFlags()` searched
+it again. Each kind's ids are now gathered once, which took selecting 10,000
+brushes from half a second to a few milliseconds. The map view kept its own copy
+of the selection by the same one-at-a-time removal of repeats, and now builds it
+in one pass too.
+
+### Highlighting Only What Changed
+
+`StudioSyntaxHighlighter::setDiagnostics()` in `src/app/syntax_highlight.cpp`
+
+The code editor looks for problems again a moment after typing stops. Marking
+them used to highlight the whole file again whenever a problem moved to another
+line, and in a 24,000-line file that stalled the editor for about four seconds
+after each pause. Only the lines that gain or lose a mark are highlighted again
+now. The Code Files filter likewise works out each file's size and language
+once per scan of the tree, and again for a file when it is saved, instead of on
+every keystroke of a query.
 
 ## Modern Acceleration Techniques
 
@@ -282,6 +396,20 @@ AI-free mode requirements:
 - Manual equivalents must exist for important AI-assisted workflows.
 
 ## Efficiency Metrics
+
+Set `QT_LOGGING_RULES=vibestudio.startup.info=true` to log shell construction
+phases and cumulative/phase elapsed milliseconds. On Windows, also set
+`QT_FORCE_STDERR_LOGGING=1` when collecting these logs through standard error.
+Logging is off by default and records fixed phase names without project paths.
+`QT_LOGGING_RULES=vibestudio.ui.refresh.info=true` also traces package detail,
+listing, tree, composition and document refreshes, including the package-only
+command update, plus shared command, surface,
+workspace and status updates. It records function names and elapsed milliseconds,
+without entry names or paths. Combine categories with semicolons in this
+environment variable. Refresh timings include nested calls; do not add them as
+independent CPU costs.
+Compare optimized builds under comparable load; a debug whole-shell test is
+not a measurement of release interaction latency.
 
 Track these alongside the roadmap:
 

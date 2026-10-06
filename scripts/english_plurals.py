@@ -9,6 +9,11 @@ studio shows "1 item(s)". This script asks lupdate for every plural message
 source text, and writes them into the English catalog, keeping any other
 messages the catalog already holds.
 
+The forms are filled in where lupdate put each message, so its message order
+and relative source locations survive, and lconvert from the same Qt bin
+directory writes the file back in lupdate's own format. Running
+scripts/extract_translations.py --write afterwards then leaves the file alone.
+
 Derivation rules, applied only to the words between %n and the next %1..%9
 placeholder, so "%n class(es) loaded from %1 source(s)" changes "class(es)"
 and leaves "source(s)" to its own number:
@@ -25,6 +30,7 @@ from __future__ import annotations
 
 import argparse
 import re
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -177,37 +183,93 @@ def catalog_forms(catalog: Path) -> dict[tuple[str, str], list[str]]:
     return forms
 
 
-def write_catalog(catalog: Path, messages: list[tuple[str, str]]) -> None:
-    # Keep every non-plural message the catalog already holds; plural entries
-    # are regenerated from source so they never go stale.
-    kept: dict[str, list[ET.Element]] = {}
-    if catalog.exists():
-        for context in ET.parse(catalog).getroot().findall("context"):
-            name = context.findtext("name") or ""
-            for message in context.findall("message"):
-                if message.get("numerus") != "yes":
-                    kept.setdefault(name, []).append(message)
+def find_lconvert(lupdate: Path) -> Path | None:
+    for name in ("lconvert", "lconvert6", "lconvert.exe", "lconvert6.exe"):
+        tool = lupdate.parent / name
+        if tool.is_file():
+            return tool
+    found = shutil.which("lconvert") or shutil.which("lconvert6")
+    return Path(found) if found else None
 
-    root = ET.Element("TS", {"version": "2.1", "language": "en"})
-    by_context: dict[str, list[str]] = {}
+
+def make_locations_absolute(root: ET.Element) -> None:
+    # A relative <location> names its file only when that differs from the
+    # previous location's, and counts its line from the previous line in that
+    # file, so it is only right in lupdate's exact message order. Absolute ones
+    # stay right while plural messages are dropped or added around them.
+    current_file = ""
+    last_line: dict[str, int] = {}
+    for location in root.iter("location"):
+        current_file = location.get("filename") or current_file
+        location.set("filename", current_file)
+        line = location.get("line") or ""
+        if line[:1] in ("+", "-"):
+            last_line[current_file] = last_line.get(current_file, 0) + int(line)
+            location.set("line", str(last_line[current_file]))
+
+
+def fill_plural_forms(message: ET.Element, source: str) -> None:
+    translation = message.find("translation")
+    if translation is None:
+        translation = ET.SubElement(message, "translation")
+    translation.clear()
+    singular, plural = english_forms(source)
+    ET.SubElement(translation, "numerusform").text = singular
+    ET.SubElement(translation, "numerusform").text = plural
+
+
+def write_catalog(catalog: Path, messages: list[tuple[str, str]], lconvert: Path | None) -> None:
+    # Plural entries are regenerated from source so they never go stale; every
+    # other message is kept as it is, where lupdate put it.
+    wanted: dict[str, list[str]] = {}
     for name, source in messages:
-        if source not in by_context.setdefault(name, []):
-            by_context[name].append(source)
-    for name in sorted(set(by_context) | set(kept)):
-        context = ET.SubElement(root, "context")
-        ET.SubElement(context, "name").text = name
-        for message in kept.get(name, []):
-            context.append(message)
-        for source in by_context.get(name, []):
+        wanted.setdefault(name, []).append(source)
+
+    root = ET.parse(catalog).getroot() if catalog.exists() else ET.Element("TS", {"version": "2.1", "language": "en"})
+    make_locations_absolute(root)
+    contexts = {context.findtext("name") or "": context for context in root.findall("context")}
+    for name, context in contexts.items():
+        pending = wanted.get(name, [])
+        for message in context.findall("message"):
+            if message.get("numerus") != "yes":
+                continue
+            source = message.findtext("source") or ""
+            if source in pending:
+                fill_plural_forms(message, source)
+                pending.remove(source)
+            else:
+                context.remove(message)
+    # Plurals lupdate has not put in the catalog yet go at the end of their
+    # context; the next lupdate run moves them into source order.
+    for name, sources in wanted.items():
+        for source in dict.fromkeys(sources):
+            context = contexts.get(name)
+            if context is None:
+                context = contexts[name] = ET.SubElement(root, "context")
+                ET.SubElement(context, "name").text = name
             message = ET.SubElement(context, "message", {"numerus": "yes"})
             ET.SubElement(message, "source").text = source
-            translation = ET.SubElement(message, "translation")
-            singular, plural = english_forms(source)
-            ET.SubElement(translation, "numerusform").text = singular
-            ET.SubElement(translation, "numerusform").text = plural
+            fill_plural_forms(message, source)
+    for context in contexts.values():
+        if context.find("message") is None:
+            root.remove(context)
+
     ET.indent(root, space="    ")
-    body = ET.tostring(root, encoding="unicode")
-    catalog.write_text('<?xml version="1.0" encoding="utf-8"?>\n<!DOCTYPE TS>\n' + body + "\n", encoding="utf-8")
+    text = '<?xml version="1.0" encoding="utf-8"?>\n<!DOCTYPE TS>\n' + ET.tostring(root, encoding="unicode") + "\n"
+    if lconvert is None:
+        catalog.write_text(text, encoding="utf-8")
+        return
+    # lconvert writes TS files exactly as lupdate does. The staging file sits
+    # next to the catalog so the relative source paths resolve the same way.
+    with tempfile.NamedTemporaryFile("w", encoding="utf-8", suffix=".ts", dir=catalog.parent, delete=False) as staging:
+        staging.write(text)
+    try:
+        command = [str(lconvert), "-i", staging.name, "-o", str(catalog), "-locations", "relative", "-sort-contexts"]
+        result = subprocess.run(command, text=True, encoding="utf-8", errors="replace", capture_output=True, check=False)
+        if result.returncode != 0:
+            raise RuntimeError(f"lconvert failed with {result.returncode}\n{result.stdout}\n{result.stderr}")
+    finally:
+        Path(staging.name).unlink(missing_ok=True)
 
 
 def main() -> int:
@@ -228,7 +290,7 @@ def main() -> int:
 
     messages = plural_messages(lupdate, root)
     if args.write:
-        write_catalog(catalog, messages)
+        write_catalog(catalog, messages, find_lconvert(lupdate))
         print(f"Wrote {len(messages)} English plural message(s) to {catalog.relative_to(root)}.")
         return 0
 

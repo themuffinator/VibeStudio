@@ -63,11 +63,6 @@ namespace vibestudio {
 
 namespace {
 
-QString runtimeText(const char* source)
-{
-	return QCoreApplication::translate("VibeStudioRuntime", source);
-}
-
 QTranslator*& studioTranslator()
 {
 	static QTranslator* translator = nullptr;
@@ -296,7 +291,7 @@ TranslationLoadResult installStudioTranslations(QCoreApplication& app, const QSt
 					break;
 				}
 				result.warnings.push_back(
-					runtimeText("Translation catalog could not be loaded: %1").arg(QDir::cleanPath(path)));
+					QCoreApplication::translate("VibeStudioRuntime", "Translation catalog could not be loaded: %1").arg(QDir::cleanPath(path)));
 			}
 			if (loaded) {
 				break;
@@ -310,7 +305,7 @@ TranslationLoadResult installStudioTranslations(QCoreApplication& app, const QSt
 			delete candidate;
 			if (!loaded && !sourceLanguage) {
 				result.warnings.push_back(
-					runtimeText("No compiled translation catalog (.qm) was found for %1; using the source language.")
+					QCoreApplication::translate("VibeStudioRuntime", "No compiled translation catalog (.qm) was found for %1; using the source language.")
 						.arg(result.resolvedLocale));
 			}
 		}
@@ -1115,7 +1110,7 @@ CrashReportInfo parseReportBytes(const QByteArray& text, const QString& path, co
 			bool parsed = false;
 			const qint64 seconds = value.toLongLong(&parsed);
 			if (parsed && seconds > 0) {
-				info.crashedAt = QDateTime::fromSecsSinceEpoch(seconds, QTimeZone::UTC);
+				info.crashedAt = QDateTime::fromSecsSinceEpoch(seconds, QTimeZone::utc());
 			}
 		}
 	}
@@ -1313,7 +1308,7 @@ CrashHandlerStatus installCrashHandling(const CrashHandlerOptions& options)
 			state.previousReport = stale;
 			state.previousReport.path.clear();
 			state.previousReport.reasonId = QStringLiteral("unclean-exit");
-			state.previousReport.reasonDetail = runtimeText("The previous session ended without writing a crash report.");
+			state.previousReport.reasonDetail = QCoreApplication::translate("VibeStudioRuntime", "The previous session ended without writing a crash report.");
 		}
 	}
 
@@ -1407,6 +1402,11 @@ void markSessionEndedCleanly()
 		QFile::remove(state.markerPath);
 	}
 	removeSessionMarkerLowLevel();
+}
+
+bool studioProcessIsRunning(qint64 processId)
+{
+	return processIsRunning(processId);
 }
 
 bool previousSessionCrashed()
@@ -1514,39 +1514,39 @@ QStringList crashReportSummaryLines(const CrashReportInfo& info)
 {
 	QStringList lines;
 	if (!info.valid) {
-		lines << runtimeText("No crash report is available for the previous session.");
+		lines << QCoreApplication::translate("VibeStudioRuntime", "No crash report is available for the previous session.");
 		return lines;
 	}
 
-	lines << runtimeText("VibeStudio %1 closed unexpectedly.").arg(info.version.isEmpty() ? runtimeText("(unknown build)") : info.version);
+	lines << QCoreApplication::translate("VibeStudioRuntime", "VibeStudio %1 closed unexpectedly.").arg(info.version.isEmpty() ? QCoreApplication::translate("VibeStudioRuntime", "(unknown build)") : info.version);
 	if (info.crashedAt.isValid()) {
-		lines << runtimeText("Time: %1").arg(info.crashedAt.toUTC().toString(Qt::ISODate));
+		lines << QCoreApplication::translate("VibeStudioRuntime", "Time: %1").arg(info.crashedAt.toUTC().toString(Qt::ISODate));
 	}
 	if (!info.reasonDetail.isEmpty()) {
-		lines << runtimeText("Reason: %1").arg(info.reasonDetail);
+		lines << QCoreApplication::translate("VibeStudioRuntime", "Reason: %1").arg(info.reasonDetail);
 	} else if (!info.reasonId.isEmpty()) {
-		lines << runtimeText("Reason: %1").arg(info.reasonId);
+		lines << QCoreApplication::translate("VibeStudioRuntime", "Reason: %1").arg(info.reasonId);
 	}
 	if (!info.platform.isEmpty()) {
-		lines << runtimeText("Platform: %1").arg(info.platform);
+		lines << QCoreApplication::translate("VibeStudioRuntime", "Platform: %1").arg(info.platform);
 	}
 	if (!info.qtVersion.isEmpty()) {
-		lines << runtimeText("Qt: %1").arg(info.qtVersion);
+		lines << QCoreApplication::translate("VibeStudioRuntime", "Qt: %1").arg(info.qtVersion);
 	}
 	if (!info.updateChannel.isEmpty()) {
-		lines << runtimeText("Update channel: %1").arg(info.updateChannel);
+		lines << QCoreApplication::translate("VibeStudioRuntime", "Update channel: %1").arg(info.updateChannel);
 	}
 	if (!info.path.isEmpty()) {
-		lines << runtimeText("Report: %1").arg(info.path);
+		lines << QCoreApplication::translate("VibeStudioRuntime", "Report: %1").arg(info.path);
 	}
 	if (!info.sessionLogPath.isEmpty()) {
-		lines << runtimeText("Session log: %1").arg(info.sessionLogPath);
+		lines << QCoreApplication::translate("VibeStudioRuntime", "Session log: %1").arg(info.sessionLogPath);
 	}
 	if (!info.backtrace.isEmpty()) {
-		lines << runtimeText("Captured %1 stack frame(s).").arg(QString::number(info.backtrace.size()));
+		lines << QCoreApplication::translate("VibeStudioRuntime", "Captured %1 stack frame(s).").arg(QString::number(info.backtrace.size()));
 	}
 	if (!info.logLines.isEmpty()) {
-		lines << runtimeText("Captured %1 log line(s) from the crashed session.").arg(QString::number(info.logLines.size()));
+		lines << QCoreApplication::translate("VibeStudioRuntime", "Captured %1 log line(s) from the crashed session.").arg(QString::number(info.logLines.size()));
 	}
 	return lines;
 }

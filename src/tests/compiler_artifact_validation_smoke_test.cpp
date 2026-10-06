@@ -35,7 +35,7 @@ QByteArray minimalQuakeBsp()
 
 QByteArray minimalQuake3Bsp()
 {
-	QByteArray bytes(8 + 18 * 8, '\0');
+	QByteArray bytes(8 + 17 * 8, '\0');
 	bytes[0] = 'I';
 	bytes[1] = 'B';
 	bytes[2] = 'S';
@@ -119,6 +119,16 @@ int main(int argc, char** argv)
 	if (q3Report.hasErrors()) {
 		return fail("Expected minimal Quake III BSP header to validate for q3map2 profile.");
 	}
+	// A v46 payload begins after 17 lumps, not after the Quake Live extension.
+	QByteArray q3Entities = minimalQuake3Bsp();
+	const QByteArray entities = QByteArray("{\n\"classname\" \"worldspawn\"\n}\n") + '\0';
+	qToLittleEndian<qint32>(q3Entities.size(), reinterpret_cast<uchar*>(q3Entities.data() + 8));
+	qToLittleEndian<qint32>(entities.size(), reinterpret_cast<uchar*>(q3Entities.data() + 12));
+	q3Entities += entities;
+	if (!writeFile(q3Path, q3Entities) ||
+		vibestudio::validateCompilerArtifacts(manifestForOutput(q3Path, QStringLiteral("q3map2-bsp"))).hasErrors()) {
+		return fail("Expected Quake III entity bytes immediately after its 17-lump header to validate.");
+	}
 	const vibestudio::CompilerArtifactValidationReport wrongProfileReport = vibestudio::validateCompilerArtifacts(manifestForOutput(q3Path, QStringLiteral("ericw-qbsp")));
 	if (!containsText(wrongProfileReport.warnings, QStringLiteral("#278"))) {
 		return fail("Expected rough BSP family mismatch warning for ericw profile.");
@@ -139,6 +149,29 @@ int main(int argc, char** argv)
 	vibestudio::CompilerCommandManifest qbismWithoutFlagManifest = manifestForOutput(qbismPath);
 	if (!containsText(vibestudio::validateCompilerArtifacts(qbismWithoutFlagManifest).warnings, QStringLiteral("does not match the selected compiler profile"))) {
 		return fail("Expected Qbism output without a Quake II target flag to still be flagged.");
+	}
+	const QString q2Path = root.filePath(QStringLiteral("maps/q2.bsp"));
+	QByteArray q2 = minimalQbismBsp();
+	q2.replace(0, 4, "IBSP");
+	if (!writeFile(q2Path, q2)) {
+		return fail("Expected Quake II BSP fixture.");
+	}
+	for (const auto& tool : QStringList{QStringLiteral("ericw-vis"), QStringLiteral("ericw-light")}) {
+		for (const auto& path : QStringList{q2Path, qbismPath}) {
+			const auto report = vibestudio::validateCompilerArtifacts(manifestForOutput(path, tool));
+			if (report.hasErrors() || !report.warnings.isEmpty()) {
+				return fail("Expected ericw VIS/LIGHT to preserve Quake II and Qbism without QBSP target flags.");
+			}
+		}
+		if (!containsText(vibestudio::validateCompilerArtifacts(manifestForOutput(q3Path, tool)).warnings,
+						  QStringLiteral("does not match the selected compiler profile"))) {
+			return fail("Expected ericw VIS/LIGHT to still reject Quake III profile expectations.");
+		}
+	}
+	qToLittleEndian<qint32>(999, reinterpret_cast<uchar*>(q2.data() + 4));
+	if (!writeFile(q2Path, q2) ||
+		!vibestudio::validateCompilerArtifacts(manifestForOutput(q2Path, QStringLiteral("ericw-light"))).hasErrors()) {
+		return fail("Expected an unknown IBSP version to fail instead of being treated as Quake II.");
 	}
 
 	// "-convert quake2" is a conversion value, not a Quake II target flag.

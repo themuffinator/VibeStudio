@@ -1,0 +1,33 @@
+{
+  "schemaVersion": 1,
+  "name": "pillar",
+  "parts": [
+    {
+      "name": "base",
+      "primitive": "box",
+      "size": [80, 80, 16],
+      "origin": [0, 0, 8],
+      "yaw": 0,
+      "segments": 12,
+      "material": "textures/props/stone"
+    },
+    {
+      "name": "shaft",
+      "primitive": "cylinder",
+      "size": [48, 48, 128],
+      "origin": [0, 0, 80],
+      "yaw": 0,
+      "segments": 12,
+      "material": "textures/props/stone"
+    },
+    {
+      "name": "capital",
+      "primitive": "box",
+      "size": [80, 80, 16],
+      "origin": [0, 0, 152],
+      "yaw": 0,
+      "segments": 12,
+      "material": "textures/props/stone"
+    }
+  ]
+}

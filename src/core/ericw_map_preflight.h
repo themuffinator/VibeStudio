@@ -3,6 +3,7 @@
 #include <QString>
 #include <QStringList>
 #include <QVector>
+#include <functional>
 
 namespace vibestudio {
 
@@ -33,6 +34,10 @@ struct EricwMapPreflightOptions {
 	QString mapPath;
 	bool regionCompile = false;
 	int longValueWarningThreshold = 1024;
+	// Callbacks run on the caller's thread. Cancelled reports contain no
+	// partial diagnostics; inspect cancelled/parseComplete before using them.
+	std::function<bool()> isCancelled {};
+	std::function<void(qint64 completed, qint64 total)> progress {};
 };
 
 struct EricwMapPreflightWarning {
@@ -53,6 +58,7 @@ struct EricwMapPreflightResult {
 	int entityCount = 0;
 	int brushEntityCount = 0;
 	bool parseComplete = true;
+	bool cancelled = false;
 };
 
 QString ericwMapPreflightSeverityId(EricwMapPreflightSeverity severity);

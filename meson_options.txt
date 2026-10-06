@@ -19,3 +19,17 @@ option(
   value: 'disabled',
   description: 'Reserved for building bundled external compiler toolchains from submodules.'
 )
+
+option(
+  'audio_playback',
+  type: 'feature',
+  value: 'auto',
+  description: 'Play sounds in the Audio browser through Qt Multimedia. Without it the browser still decodes waveforms and exports WAV.'
+)
+
+option(
+  'audio_duplex',
+  type: 'feature',
+  value: 'auto',
+  description: 'Native synchronized recording backend: WASAPI, CoreAudio or ALSA. Disable for device-free builds.'
+)

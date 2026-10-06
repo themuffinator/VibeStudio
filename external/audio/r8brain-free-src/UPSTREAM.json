@@ -1,0 +1,26 @@
+{
+  "upstream": "https://github.com/avaneev/r8brain-free-src",
+  "revision": "cb2abb9977efe2471979b380ed95daa56ab4fdb9",
+  "reviewed": "2026-10-04",
+  "version": "7.5",
+  "backend": "Ooura",
+  "files": {
+    "CDSPBlockConvolver.h": "634f36b35a03ac3655c2e0b423d92559db681c6a396a8ff31f6423e577599c38",
+    "CDSPFIRFilter.h": "afa7195a01fa63c55db5f22c0d2b9e813f9c8613ed6c83da82bd25fec0acd3b9",
+    "CDSPFracInterpolator.h": "e1ca87b42c1cc949c7bab4781c92c215794e57d4a31661c5446c0bb6f91f51eb",
+    "CDSPHBDownsampler.h": "fb2fc1afb2e4e57fb755428e609000201c3fb405d30309300b3d82b7227a3c8d",
+    "CDSPHBDownsampler.inc": "c9983c315b5ad45c448f941e4c6d39c498a935e12234e3388c22cd1db501798d",
+    "CDSPHBUpsampler.h": "ecf4de5e40cd91f380d08d2069f65f24b333d65202c31c0b1a4d55e96c47b18b",
+    "CDSPHBUpsampler.inc": "c0bf41fe273a58ee9826cbd6a278a3a5717d332efdcbf437c6713fa176513dcd",
+    "CDSPProcessor.h": "f7d7b57001bd34d79179a03477225669405f2889e8a20e53da732def724e9eea",
+    "CDSPRealFFT.h": "23d0e1a5cf04289574570c49efabd3384b61ebe3be5d34a26aa10614a08eba72",
+    "CDSPResampler.h": "4298ae7bd965f56cbfa554f33ecc8615c6453bbccf92b001d0e74858a3ba0064",
+    "CDSPSincFilterGen.h": "c5ee2159220cfeead04154aa56323fa0bd912aca10a6f71c42451510bbaa2a74",
+    "LICENSE": "5b2fca0def6e5c93d42f2cb226f4731cfbb6eb30bf12226ad6a9ff299d333c2a",
+    "README.md": "9bcbb9652a5d406b478f25a5987820ce9909c684bf51e9ef499c7694c5c86194",
+    "fft/fft4g.h": "272d8dc846718e0c4adf3c8a46090e0328c9a2c7b458fcf24e221ed873dec578",
+    "r8bbase.h": "8e4182d4eb914a3ff1c6adf016798506d1996fbac6fdedbcaa704b89f56ab6ca",
+    "r8bconf.h": "229f3c43c734b14dd40b23b4ec56a3b707563427fb8bf470f1ed074210817318",
+    "r8butil.h": "de7b790cd0ae8fa466f1526888b945b643a7b2bdbaf594fb7c077b7a9683b5ee"
+  }
+}

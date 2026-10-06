@@ -1,0 +1,144 @@
+{
+  "schemaVersion": 1,
+  "id": "qt-6.10.1-msvc-x64",
+  "reviewedOn": "2026-10-05",
+  "targetPlatform": "windows",
+  "targetArchitecture": "x86_64",
+  "qtVersion": "6.10.1",
+  "qtModules": {
+    "qtbase": "90b845d15ffb97693dba527385db83510ebd121a",
+    "qtmultimedia": "685218d33d81de62e11328faabd060c4e634ddf0",
+    "qtsvg": "4b1a183d3592f497bc3fd3a2c7130f228175b899",
+    "qtimageformats": "f24f9588d904294b77368f5dab7114934f9336ae",
+    "qttranslations": "0ef9d13d31a44a999281c589cff2b19979885176"
+  },
+  "ffmpegVersion": "7.1.2",
+  "ffmpegConfiguration": "--prefix=/c/FFmpeg-n7.1.2/build/msvc/installed --disable-programs --disable-doc --disable-debug --enable-network --disable-lzma --enable-pic --disable-vulkan --disable-v4l2-m2m --disable-decoder=truemotion1 --enable-zlib --extra-cflags='-IC:/zlib-1.3.1/build/amd64' --extra-ldflags='-LIBPATH:C:/zlib-1.3.1/build/amd64' --toolchain=msvc --enable-shared --disable-static",
+  "archives": [
+    {
+      "component": "qtbase",
+      "file": "qtbase-everywhere-src-6.10.1.tar.xz",
+      "archiveRoot": "qtbase-everywhere-src-6.10.1",
+      "url": "https://download.qt.io/official_releases/qt/6.10/6.10.1/submodules/qtbase-everywhere-src-6.10.1.tar.xz",
+      "bytes": 50234516,
+      "sha256": "5a6226f7e23db51fdc3223121eba53f3f5447cf0cc4d6cb82a3a2df7a65d265d",
+      "revision": "v6.10.1",
+      "hashAuthority": "https://download.qt.io/official_releases/qt/6.10/6.10.1/submodules/qtbase-everywhere-src-6.10.1.tar.xz.meta4",
+      "commit": "90b845d15ffb97693dba527385db83510ebd121a"
+    },
+    {
+      "component": "qtmultimedia",
+      "file": "qtmultimedia-everywhere-src-6.10.1.tar.xz",
+      "archiveRoot": "qtmultimedia-everywhere-src-6.10.1",
+      "url": "https://download.qt.io/official_releases/qt/6.10/6.10.1/submodules/qtmultimedia-everywhere-src-6.10.1.tar.xz",
+      "bytes": 9923496,
+      "sha256": "f7a4f9bc2840d4f0f9f7329f0dcb3d3500c54177b8e368091a3727c7320e67b8",
+      "revision": "v6.10.1",
+      "hashAuthority": "https://download.qt.io/official_releases/qt/6.10/6.10.1/submodules/qtmultimedia-everywhere-src-6.10.1.tar.xz.meta4",
+      "commit": "685218d33d81de62e11328faabd060c4e634ddf0"
+    },
+    {
+      "component": "qtsvg",
+      "file": "qtsvg-everywhere-src-6.10.1.tar.xz",
+      "archiveRoot": "qtsvg-everywhere-src-6.10.1",
+      "url": "https://download.qt.io/official_releases/qt/6.10/6.10.1/submodules/qtsvg-everywhere-src-6.10.1.tar.xz",
+      "bytes": 2613980,
+      "sha256": "c02f355a58f3bbcf404a628bf488b6aeb2d84a94c269afdb86f6e529343ab01f",
+      "revision": "v6.10.1",
+      "hashAuthority": "https://download.qt.io/official_releases/qt/6.10/6.10.1/submodules/qtsvg-everywhere-src-6.10.1.tar.xz.meta4",
+      "commit": "4b1a183d3592f497bc3fd3a2c7130f228175b899"
+    },
+    {
+      "component": "qtimageformats",
+      "file": "qtimageformats-everywhere-src-6.10.1.tar.xz",
+      "archiveRoot": "qtimageformats-everywhere-src-6.10.1",
+      "url": "https://download.qt.io/official_releases/qt/6.10/6.10.1/submodules/qtimageformats-everywhere-src-6.10.1.tar.xz",
+      "bytes": 2032448,
+      "sha256": "498eabdf2381db96f808942b3e3c765f6360fe6c0e9961f0a45ff7a4c68d7a72",
+      "revision": "v6.10.1",
+      "hashAuthority": "https://download.qt.io/official_releases/qt/6.10/6.10.1/submodules/qtimageformats-everywhere-src-6.10.1.tar.xz.meta4",
+      "commit": "f24f9588d904294b77368f5dab7114934f9336ae"
+    },
+    {
+      "component": "qttranslations",
+      "file": "qttranslations-everywhere-src-6.10.1.tar.xz",
+      "archiveRoot": "qttranslations-everywhere-src-6.10.1",
+      "url": "https://download.qt.io/official_releases/qt/6.10/6.10.1/submodules/qttranslations-everywhere-src-6.10.1.tar.xz",
+      "bytes": 1626252,
+      "sha256": "8e49a2df88a12c376a479ae7bd272a91cf57ebb4e7c0cf7341b3565df99d2314",
+      "revision": "v6.10.1",
+      "hashAuthority": "https://download.qt.io/official_releases/qt/6.10/6.10.1/submodules/qttranslations-everywhere-src-6.10.1.tar.xz.meta4",
+      "commit": "0ef9d13d31a44a999281c589cff2b19979885176"
+    },
+    {
+      "component": "qt5-build-recipes",
+      "file": "qt5-v6.10.1.tar.gz",
+      "archiveRoot": "qt5-6.10.1",
+      "url": "https://github.com/qt/qt5/archive/refs/tags/v6.10.1.tar.gz",
+      "bytes": 573729,
+      "sha256": "9509373b57abf1d9c024d5450867e72eb6904d9645ea6e33a2002a0ba3a69701",
+      "revision": "v6.10.1",
+      "hashAuthority": "Archive SHA-256 is an observed checksum; all regular files are checked against the pinned upstream Git tree.",
+      "commit": "56657e036f579ae0b858ae8c9659a0f7b7a53407"
+    },
+    {
+      "component": "FFmpeg",
+      "file": "FFmpeg-n7.1.2.tar.gz",
+      "archiveRoot": "FFmpeg-n7.1.2",
+      "url": "https://github.com/FFmpeg/FFmpeg/archive/refs/tags/n7.1.2.tar.gz",
+      "bytes": 15907335,
+      "sha256": "8cb1bb8cfa9aeae13279b4da42ae8307ae6777456d4270f2e603c95aa08ca8ef",
+      "revision": "n7.1.2",
+      "hashAuthority": "https://github.com/qt/qt5/blob/56657e036f579ae0b858ae8c9659a0f7b7a53407/coin/provisioning/common/windows/install-ffmpeg.ps1",
+      "commit": "f893221c8d89cb798b829bebe71d55e1a3f242fd"
+    },
+    {
+      "component": "zlib",
+      "file": "zlib-1.3.1.tar.gz",
+      "archiveRoot": "zlib-1.3.1",
+      "url": "https://github.com/madler/zlib/releases/download/v1.3.1/zlib-1.3.1.tar.gz",
+      "bytes": 1512791,
+      "sha256": "9a93b2b7dfdac77ceba5a558a580e74667dd6fede4585b91eefb60f03b72df23",
+      "revision": "v1.3.1",
+      "hashAuthority": "https://github.com/qt/qt5/blob/56657e036f579ae0b858ae8c9659a0f7b7a53407/coin/provisioning/common/windows/zlib.ps1"
+    },
+    {
+      "component": "qttools",
+      "file": "qttools-everywhere-src-6.10.1.tar.xz",
+      "archiveRoot": "qttools-everywhere-src-6.10.1",
+      "url": "https://download.qt.io/official_releases/qt/6.10/6.10.1/submodules/qttools-everywhere-src-6.10.1.tar.xz",
+      "bytes": 10047008,
+      "sha256": "8148408380ffea03101a26305c812b612ea30dbc07121e58707601522404d49b",
+      "revision": "v6.10.1",
+      "commit": "9e0030f889168f7a0ec1bb47a7d7138a497b3c96",
+      "hashAuthority": "https://download.qt.io/official_releases/qt/6.10/6.10.1/submodules/qttools-everywhere-src-6.10.1.tar.xz.meta4",
+      "role": "Build-tool sources for Linguist/shader compilation; no new application runtime dependency."
+    },
+    {
+      "component": "qtshadertools",
+      "file": "qtshadertools-everywhere-src-6.10.1.tar.xz",
+      "archiveRoot": "qtshadertools-everywhere-src-6.10.1",
+      "url": "https://download.qt.io/official_releases/qt/6.10/6.10.1/submodules/qtshadertools-everywhere-src-6.10.1.tar.xz",
+      "bytes": 1152220,
+      "sha256": "b67894a63352b53dad0d46f5300c62b8cd6783db575492d6b25d4fdc9af55bb6",
+      "revision": "v6.10.1",
+      "commit": "86c4b079a05c2dbe5fdb6f46ad9df8ef297487a9",
+      "hashAuthority": "https://download.qt.io/official_releases/qt/6.10/6.10.1/submodules/qtshadertools-everywhere-src-6.10.1.tar.xz.meta4",
+      "role": "Build-tool sources for Linguist/shader compilation; no new application runtime dependency."
+    }
+  ],
+  "qt5RecipeGitBlobs": {
+    "coin/provisioning/common/windows/install-ffmpeg.ps1": "68abf336a83ea390d427fee605d74cbebbf2c44b",
+    "coin/provisioning/common/windows/zlib.ps1": "87c59690e6411f45403361720ee1c39a99fcb689",
+    "coin/provisioning/common/windows/zlib-helpers.ps1": "ea3a9ba64be19a33c7cb353db8de5010e936d38d",
+    "coin/provisioning/common/windows/helpers.ps1": "35583b3b31a5184143badf4fd534ac9190be132b",
+    "coin/provisioning/common/shared/ffmpeg_config_options.txt": "52f79c14beb9719537058009cb3b5299be9eebe9"
+  },
+  "zlibRecipeAdjustments": [
+    "Remove the unistd.h include line from zconf.h in each architecture build copy.",
+    "Remove the -base:0x... linker option from win32/Makefile.msc in each architecture build copy."
+  ],
+  "licenceReview": "Qt libraries/recipes offer LGPL-3.0 or GPL-3.0; lrelease/qsb offer GPL-3.0 with Qt-GPL-exception-1.0. FFmpeg uses the recorded LGPL-2.1-or-later/permissive profile and zlib the zlib licence. Compatible with the GPL-3.0 application. Original archives retain all component notices; tools sources add no linked dependency.",
+  "verification": "Qt archive SHA-256 values are published in official metalink metadata. Qt5 archive members match its pinned Git tree apart from declared export metadata; FFmpeg and zlib match the archive checksums pinned by the Qt build recipes. Their SHA-256 values are additionally recorded here. Four runtime-module SDK source-SPDX inventories were compared, accounting only for line endings and Git export metadata.",
+  "scope": "Reviewed Qt 6.10.1 MSVC x64 Widgets/Audio source profile. It does not infer support for another SDK, FFmpeg configuration or native platform."
+}

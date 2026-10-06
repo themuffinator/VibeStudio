@@ -1,11 +1,15 @@
 #include "core/idtech_image.h"
+#include "core/extra_image.h"
+#include <QHash>
 
 #include "core/package_archive.h"
 
 #include <QCoreApplication>
+#include <QBuffer>
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
+#include <QImageReader>
 #include <QPainter>
 #include <QSet>
 
@@ -17,17 +21,46 @@ namespace vibestudio {
 
 namespace {
 
-QString imageText(const char* source)
-{
-	return QCoreApplication::translate("VibeStudioIdTechImage", source);
-}
-
-// Every decoder here renders into a 32-bit QImage, so the cost of accepting a
-// header is set by its pixel count, not by the size of the packed stream it was
-// read from: run-length formats reach enormous images from a few kilobytes of
-// input. Bound the decode target itself at 4096x4096 (64 MiB of ARGB32), which
-// is already far above anything idTech1/2/3 content ships.
+// Packed streams and overlapping frame/mip offsets do not bound decoded storage.
+// Charge every allocated surface, even when several refer to the same payload.
 constexpr qsizetype kMaxDecodedPixels = 4096 * 4096;
+constexpr qint64 kMaxTotalDecodedPixels = 32 * 1024 * 1024;
+constexpr qint64 kMaxImagePayloadBytes = 64 * 1024 * 1024;
+constexpr int kMaxStoredSpriteFrames = 4096;
+
+struct DecodeBudget {
+	IdTechImageDecodeContext limits;
+	qint64 used = 0;
+	bool cancelled = false;
+
+	bool checkpoint()
+	{
+		cancelled = cancelled || (limits.isCancelled && limits.isCancelled());
+		return !cancelled;
+	}
+
+	bool validSize(int width, int height, QString* error) const
+	{
+		if (width <= 0 || height <= 0 || width > limits.maximumDimension || height > limits.maximumDimension ||
+			qint64(width) * height > limits.maximumImagePixels) {
+			*error = QCoreApplication::translate("VibeStudioIdTechImage", "Image dimensions exceed the decode limit.");
+			return false;
+		}
+		return true;
+	}
+	bool consume(int width, int height, QString* error)
+	{
+		if (!checkpoint()) { return false; }
+		if (!validSize(width, height, error)) { return false; }
+		const qint64 pixels = qint64(width) * height;
+		if (pixels > limits.maximumTotalPixels - used) {
+			*error = QCoreApplication::translate("VibeStudioIdTechImage", "Images, mip levels, and sprite frames exceed the aggregate decode limit.");
+			return false;
+		}
+		used += pixels;
+		return true;
+	}
+};
 
 // ---------------------------------------------------------------------------
 // Little-endian readers. Every idTech container covered by this module stores
@@ -44,11 +77,13 @@ quint8 readU8(const QByteArray& data, qsizetype offset)
 
 quint16 readLe16(const QByteArray& data, qsizetype offset)
 {
-	if (offset < 0 || offset + 2 > data.size()) {
+	if (offset < 0 || data.size() < 2 || offset > data.size() - 2) {
 		return 0;
 	}
-	const auto* bytes = reinterpret_cast<const uchar*>(data.constData() + offset);
-	return static_cast<quint16>(bytes[0] | (bytes[1] << 8));
+	// at() avoids GCC 13's false array-bounds inference through Qt 6.4's
+	// constData() empty-array sentinel after the checked, nonempty range above.
+	return static_cast<quint16>(static_cast<quint8>(data.at(offset)) |
+		(static_cast<quint8>(data.at(offset + 1)) << 8));
 }
 
 qint16 readLe16Signed(const QByteArray& data, qsizetype offset)
@@ -277,7 +312,7 @@ QVector<QRgb> paletteColorTable(const IdTechPalette& palette, bool applyTranspar
 	return table;
 }
 
-QImage makeIndexedImage(const uchar* pixels, qsizetype available, int width, int height, const QVector<QRgb>& table)
+QImage makeIndexedImage(const uchar* pixels, qsizetype available, int width, int height, const QVector<QRgb>& table, DecodeBudget& budget)
 {
 	if (width <= 0 || height <= 0) {
 		return {};
@@ -291,18 +326,20 @@ QImage makeIndexedImage(const uchar* pixels, qsizetype available, int width, int
 	}
 	image.setColorTable(table);
 	for (int y = 0; y < height; ++y) {
+		if (!budget.checkpoint()) { return {}; }
 		uchar* line = image.scanLine(y);
 		std::memcpy(line, pixels + static_cast<qsizetype>(y) * width, static_cast<size_t>(width));
 	}
 	return image;
 }
 
-bool indexedImageUsesIndex(const QImage& image, int index)
+bool indexedImageUsesIndex(const QImage& image, int index, DecodeBudget& budget)
 {
 	if (image.isNull() || index < 0 || image.format() != QImage::Format_Indexed8) {
 		return false;
 	}
 	for (int y = 0; y < image.height(); ++y) {
+		if (!budget.checkpoint()) { return false; }
 		const uchar* line = image.constScanLine(y);
 		for (int x = 0; x < image.width(); ++x) {
 			if (line[x] == static_cast<uchar>(index)) {
@@ -322,7 +359,8 @@ bool indexedImageUsesIndex(const QImage& image, int index)
 // ---------------------------------------------------------------------------
 
 constexpr int kDoomPatchMaxDimension = 4096;
-constexpr int kDoomPatchMaxPosts = 512;
+// Up to one one-pixel post per row plus bounded tall-post origin advances.
+constexpr int kDoomPatchMaxPosts = kDoomPatchMaxDimension * 2;
 
 bool walkDoomPatchColumn(const QByteArray& bytes, qsizetype start, int* postCountOut)
 {
@@ -736,20 +774,25 @@ bool pcxHasTailPalette(const QByteArray& bytes, const PcxHeader& header)
 	return readU8(bytes, bytes.size() - 769) == 0x0c;
 }
 
-bool decodePcxScanlines(const QByteArray& bytes, qsizetype dataEnd, bool rle, qsizetype rowBytes, int height, QByteArray* out)
+bool decodePcxScanlines(const QByteArray& bytes, qsizetype dataEnd, bool rle, qsizetype rowBytes, int height, QByteArray* out, DecodeBudget& budget)
 {
 	if (rowBytes <= 0 || height <= 0) {
 		return false;
 	}
-	const qsizetype total = rowBytes * height;
-	if (total <= 0 || total > (1 << 28)) {
+	const qint64 total = qint64(rowBytes) * height;
+	if (total <= 0 || total > kMaxImagePayloadBytes) {
 		return false;
 	}
 	out->resize(total);
 	auto* destination = reinterpret_cast<uchar*>(out->data());
 	qsizetype written = 0;
 	qsizetype cursor = kPcxHeaderSize;
+	qsizetype nextCheckpoint = 0;
 	while (written < total) {
+		if (written >= nextCheckpoint) {
+			if (!budget.checkpoint()) { return false; }
+			nextCheckpoint = written + 16384;
+		}
 		if (cursor >= dataEnd) {
 			return false;
 		}
@@ -893,7 +936,7 @@ bool targaLooksValid(const QByteArray& bytes, TargaHeader* out = nullptr)
 	return true;
 }
 
-bool decodeTargaPixelStream(const QByteArray& bytes, const TargaHeader& header, QByteArray* out)
+bool decodeTargaPixelStream(const QByteArray& bytes, const TargaHeader& header, QByteArray* out, DecodeBudget& budget)
 {
 	const int bytesPerPixel = (header.pixelDepth + 7) / 8;
 	const qsizetype pixelCount = static_cast<qsizetype>(header.width) * header.height;
@@ -914,7 +957,12 @@ bool decodeTargaPixelStream(const QByteArray& bytes, const TargaHeader& header, 
 	}
 
 	qsizetype written = 0;
+	qsizetype nextCheckpoint = 0;
 	while (written < total) {
+		if (written >= nextCheckpoint) {
+			if (!budget.checkpoint()) { return false; }
+			nextCheckpoint = written + 16384;
+		}
 		if (cursor >= size) {
 			return false;
 		}
@@ -1158,14 +1206,15 @@ void applyPaletteLabels(IdTechImageDecodeResult* result, const IdTechPalette& pa
 	result->paletteGenerated = palette.generated;
 }
 
-bool decodeDoomPatch(const QByteArray& bytes, const IdTechPalette& palette, IdTechImageDecodeResult* result)
+bool decodeDoomPatch(const QByteArray& bytes, const IdTechPalette& palette, IdTechImageDecodeResult* result, DecodeBudget& budget)
 {
 	if (!doomPatchLooksValid(bytes)) {
-		result->error = imageText("Doom picture header does not validate.");
+		result->error = QCoreApplication::translate("VibeStudioIdTechImage", "Doom picture header does not validate.");
 		return false;
 	}
 	const int width = readLe16Signed(bytes, 0);
 	const int height = readLe16Signed(bytes, 2);
+	if (!budget.consume(width, height, &result->error)) { return false; }
 	result->width = width;
 	result->height = height;
 	result->leftOffset = readLe16Signed(bytes, 4);
@@ -1173,7 +1222,7 @@ bool decodeDoomPatch(const QByteArray& bytes, const IdTechPalette& palette, IdTe
 
 	QImage image(width, height, QImage::Format_ARGB32);
 	if (image.isNull()) {
-		result->error = imageText("Unable to allocate the decoded picture.");
+		result->error = QCoreApplication::translate("VibeStudioIdTechImage", "Unable to allocate the decoded picture.");
 		return false;
 	}
 	image.fill(Qt::transparent);
@@ -1182,13 +1231,18 @@ bool decodeDoomPatch(const QByteArray& bytes, const IdTechPalette& palette, IdTe
 	const qsizetype size = bytes.size();
 	bool sawTransparency = false;
 	bool clamped = false;
+	qint64 workBytes = 0;
 	for (int column = 0; column < width; ++column) {
+		if (!budget.checkpoint()) { return false; }
 		qsizetype cursor = static_cast<qsizetype>(readLe32(bytes, 8 + static_cast<qsizetype>(column) * 4));
 		int lastTopDelta = -1;
 		int posts = 0;
+		bool terminated = false;
 		while (cursor >= 0 && cursor < size) {
+			if ((posts % 64) == 0 && !budget.checkpoint()) { return false; }
 			const int topDelta = static_cast<int>(readU8(bytes, cursor));
 			if (topDelta == 0xff) {
+				terminated = true;
 				break;
 			}
 			if (cursor + 4 > size) {
@@ -1196,6 +1250,11 @@ bool decodeDoomPatch(const QByteArray& bytes, const IdTechPalette& palette, IdTe
 				break;
 			}
 			const int length = static_cast<int>(readU8(bytes, cursor + 1));
+			workBytes += length + 4;
+			if (workBytes > kMaxImagePayloadBytes) {
+				result->error = QCoreApplication::translate("VibeStudioIdTechImage", "Doom picture column references exceed the 64 MiB decode work limit.");
+				return false;
+			}
 			// "DeepSea" tall-patch convention: a topdelta that does not advance
 			// is treated as relative to the previous post's start.
 			int top = topDelta;
@@ -1208,12 +1267,9 @@ bool decodeDoomPatch(const QByteArray& bytes, const IdTechPalette& palette, IdTe
 				clamped = true;
 				break;
 			}
-			for (int row = 0; row < length; ++row) {
+			if (top < 0 || top + length > height) { clamped = true; }
+			for (int row = std::max(0, -top); row < std::min(length, height - top); ++row) {
 				const int y = top + row;
-				if (y < 0 || y >= height) {
-					clamped = true;
-					continue;
-				}
 				const quint8 index = readU8(bytes, cursor + row);
 				auto* line = reinterpret_cast<QRgb*>(image.scanLine(y));
 				line[column] = table.at(index) | 0xff000000u;
@@ -1224,9 +1280,14 @@ bool decodeDoomPatch(const QByteArray& bytes, const IdTechPalette& palette, IdTe
 				break;
 			}
 		}
+		if (!terminated) {
+			result->error = QCoreApplication::translate("VibeStudioIdTechImage", "A Doom picture column is truncated or exceeds the post limit.");
+			return false;
+		}
 	}
 
 	for (int y = 0; y < height && !sawTransparency; ++y) {
+		if (!budget.checkpoint()) { return false; }
 		const auto* line = reinterpret_cast<const QRgb*>(image.constScanLine(y));
 		for (int x = 0; x < width; ++x) {
 			if (qAlpha(line[x]) == 0) {
@@ -1239,16 +1300,16 @@ bool decodeDoomPatch(const QByteArray& bytes, const IdTechPalette& palette, IdTe
 	result->image = image;
 	result->hasTransparency = sawTransparency;
 	applyPaletteLabels(result, palette);
-	result->detailLines << imageText("Doom picture format (column posts with transparent gaps).");
-	result->detailLines << imageText("Offsets: left %1, top %2").arg(result->leftOffset).arg(result->topOffset);
+	result->detailLines << QCoreApplication::translate("VibeStudioIdTechImage", "Doom picture format (column posts with transparent gaps).");
+	result->detailLines << QCoreApplication::translate("VibeStudioIdTechImage", "Offsets: left %1, top %2").arg(result->leftOffset).arg(result->topOffset);
 	if (clamped) {
-		result->warnings << imageText("Some picture posts fell outside the declared bounds and were clipped.");
+		result->warnings << QCoreApplication::translate("VibeStudioIdTechImage", "Some picture posts fell outside the declared bounds and were clipped.");
 	}
 	result->decoded = true;
 	return true;
 }
 
-bool decodeDoomFlat(const QByteArray& bytes, const IdTechPalette& palette, IdTechImageDecodeResult* result)
+bool decodeDoomFlat(const QByteArray& bytes, const IdTechPalette& palette, IdTechImageDecodeResult* result, DecodeBudget& budget)
 {
 	int width = 0;
 	int height = 0;
@@ -1266,44 +1327,46 @@ bool decodeDoomFlat(const QByteArray& bytes, const IdTechPalette& palette, IdTec
 		height = 128;
 		break;
 	default:
-		result->error = imageText("Flat lumps must be exactly 4096, 4160, or 16384 bytes.");
+		result->error = QCoreApplication::translate("VibeStudioIdTechImage", "Flat lumps must be exactly 4096, 4160, or 16384 bytes.");
 		return false;
 	}
 
 	const QVector<QRgb> table = paletteColorTable(palette, false);
-	const QImage image = makeIndexedImage(reinterpret_cast<const uchar*>(bytes.constData()), bytes.size(), width, height, table);
+	if (!budget.consume(width, height, &result->error)) { return false; }
+	const QImage image = makeIndexedImage(reinterpret_cast<const uchar*>(bytes.constData()), bytes.size(), width, height, table, budget);
 	if (image.isNull()) {
-		result->error = imageText("Unable to allocate the decoded flat.");
+		result->error = QCoreApplication::translate("VibeStudioIdTechImage", "Unable to allocate the decoded flat.");
 		return false;
 	}
 	result->image = image;
 	result->width = width;
 	result->height = height;
 	applyPaletteLabels(result, palette);
-	result->detailLines << imageText("Raw indexed flat, %1x%2.").arg(width).arg(height);
+	result->detailLines << QCoreApplication::translate("VibeStudioIdTechImage", "Raw indexed flat, %1x%2.").arg(width).arg(height);
 	result->decoded = true;
 	return true;
 }
 
-bool decodeQuakeLump(const QByteArray& bytes, const IdTechPalette& palette, IdTechImageDecodeResult* result)
+bool decodeQuakeLump(const QByteArray& bytes, const IdTechPalette& palette, IdTechImageDecodeResult* result, DecodeBudget& budget)
 {
 	int width = 0;
 	int height = 0;
 	if (!quakeLumpLooksValid(bytes, &width, &height)) {
-		result->error = imageText("Quake .lmp header does not match the payload size.");
+		result->error = QCoreApplication::translate("VibeStudioIdTechImage", "Quake .lmp header does not match the payload size.");
 		return false;
 	}
 	const QVector<QRgb> table = paletteColorTable(palette, false);
-	const QImage image = makeIndexedImage(reinterpret_cast<const uchar*>(bytes.constData()) + 8, bytes.size() - 8, width, height, table);
+	if (!budget.consume(width, height, &result->error)) { return false; }
+	const QImage image = makeIndexedImage(reinterpret_cast<const uchar*>(bytes.constData()) + 8, bytes.size() - 8, width, height, table, budget);
 	if (image.isNull()) {
-		result->error = imageText("Unable to allocate the decoded lump.");
+		result->error = QCoreApplication::translate("VibeStudioIdTechImage", "Unable to allocate the decoded lump.");
 		return false;
 	}
 	result->image = image;
 	result->width = width;
 	result->height = height;
 	applyPaletteLabels(result, palette);
-	result->detailLines << imageText("Quake .lmp picture, %1x%2.").arg(width).arg(height);
+	result->detailLines << QCoreApplication::translate("VibeStudioIdTechImage", "Quake .lmp picture, %1x%2.").arg(width).arg(height);
 	result->decoded = true;
 	return true;
 }
@@ -1337,11 +1400,11 @@ bool parseEmbeddedWad3Palette(const QByteArray& bytes, const MipHeader& header, 
 	return false;
 }
 
-bool decodeMipTexture(const QString& virtualPath, const QByteArray& bytes, const IdTechPalette& palette, IdTechImageDecodeResult* result)
+bool decodeMipTexture(const QString& virtualPath, const QByteArray& bytes, const IdTechPalette& palette, IdTechImageDecodeResult* result, DecodeBudget& budget)
 {
 	MipHeader header;
 	if (!mipTextureLooksValid(bytes, &header)) {
-		result->error = imageText("WAD2/WAD3 miptex header does not validate.");
+		result->error = QCoreApplication::translate("VibeStudioIdTechImage", "WAD2/WAD3 miptex header does not validate.");
 		return false;
 	}
 	QString name = fixedLatin1(bytes, 0, 16);
@@ -1355,8 +1418,8 @@ bool decodeMipTexture(const QString& virtualPath, const QByteArray& bytes, const
 	if (parseEmbeddedWad3Palette(bytes, header, &candidate)) {
 		effective = candidate;
 		effective.id = QStringLiteral("wad3-embedded");
-		effective.displayName = imageText("Embedded WAD3 palette");
-		effective.sourceDescription = imageText("256-entry palette stored in the texture lump");
+		effective.displayName = QCoreApplication::translate("VibeStudioIdTechImage", "Embedded WAD3 palette");
+		effective.sourceDescription = QCoreApplication::translate("VibeStudioIdTechImage", "256-entry palette stored in the texture lump");
 		effective.generated = false;
 		// Quake/Half-Life "fence" textures mark index 255 as the cut-out colour;
 		// those textures are named with a leading '{'.
@@ -1373,9 +1436,10 @@ bool decodeMipTexture(const QString& virtualPath, const QByteArray& bytes, const
 		const int levelWidth = header.width >> level;
 		const int levelHeight = header.height >> level;
 		const qsizetype start = static_cast<qsizetype>(header.offsets[level]);
-		const QImage mip = makeIndexedImage(data + start, bytes.size() - start, levelWidth, levelHeight, table);
+		if (!budget.consume(levelWidth, levelHeight, &result->error)) { return false; }
+		const QImage mip = makeIndexedImage(data + start, bytes.size() - start, levelWidth, levelHeight, table, budget);
 		if (mip.isNull()) {
-			result->error = imageText("Unable to allocate a miptex mip level.");
+			result->error = QCoreApplication::translate("VibeStudioIdTechImage", "Unable to allocate a miptex mip level.");
 			return false;
 		}
 		result->mipLevels.push_back(mip);
@@ -1386,21 +1450,21 @@ bool decodeMipTexture(const QString& virtualPath, const QByteArray& bytes, const
 	result->height = header.height;
 	result->textureName = name;
 	applyPaletteLabels(result, effective);
-	result->hasTransparency = applyTransparent && indexedImageUsesIndex(result->image, effective.transparentIndex);
-	result->detailLines << imageText("Texture name: %1").arg(name);
-	result->detailLines << imageText("Mip levels: 4 (full, 1/2, 1/4, 1/8)");
+	result->hasTransparency = applyTransparent && indexedImageUsesIndex(result->image, effective.transparentIndex, budget);
+	result->detailLines << QCoreApplication::translate("VibeStudioIdTechImage", "Texture name: %1").arg(name);
+	result->detailLines << QCoreApplication::translate("VibeStudioIdTechImage", "Mip levels: 4 (full, 1/2, 1/4, 1/8)");
 	result->detailLines << (embedded
-		? imageText("Palette: embedded WAD3 palette (256 entries).")
-		: imageText("Palette: external WAD2 palette."));
+		? QCoreApplication::translate("VibeStudioIdTechImage", "Palette: embedded WAD3 palette (256 entries).")
+		: QCoreApplication::translate("VibeStudioIdTechImage", "Palette: external WAD2 palette."));
 	result->decoded = true;
 	return true;
 }
 
-bool decodeQuake2Wal(const QString& virtualPath, const QByteArray& bytes, const IdTechPalette& palette, IdTechImageDecodeResult* result)
+bool decodeQuake2Wal(const QString& virtualPath, const QByteArray& bytes, const IdTechPalette& palette, IdTechImageDecodeResult* result, DecodeBudget& budget)
 {
 	MipHeader header;
 	if (!walLooksValid(bytes, &header)) {
-		result->error = imageText("Quake II .wal header does not validate.");
+		result->error = QCoreApplication::translate("VibeStudioIdTechImage", "Quake II .wal header does not validate.");
 		return false;
 	}
 	QString name = fixedLatin1(bytes, 0, 32);
@@ -1419,9 +1483,10 @@ bool decodeQuake2Wal(const QString& virtualPath, const QByteArray& bytes, const 
 		const int levelWidth = header.width >> level;
 		const int levelHeight = header.height >> level;
 		const qsizetype start = static_cast<qsizetype>(header.offsets[level]);
-		const QImage mip = makeIndexedImage(data + start, bytes.size() - start, levelWidth, levelHeight, table);
+		if (!budget.consume(levelWidth, levelHeight, &result->error)) { return false; }
+		const QImage mip = makeIndexedImage(data + start, bytes.size() - start, levelWidth, levelHeight, table, budget);
 		if (mip.isNull()) {
-			result->error = imageText("Unable to allocate a .wal mip level.");
+			result->error = QCoreApplication::translate("VibeStudioIdTechImage", "Unable to allocate a .wal mip level.");
 			return false;
 		}
 		result->mipLevels.push_back(mip);
@@ -1431,27 +1496,27 @@ bool decodeQuake2Wal(const QString& virtualPath, const QByteArray& bytes, const 
 	result->width = header.width;
 	result->height = header.height;
 	applyPaletteLabels(result, palette);
-	result->detailLines << imageText("Texture name: %1").arg(name);
+	result->detailLines << QCoreApplication::translate("VibeStudioIdTechImage", "Texture name: %1").arg(name);
 	if (!result->animationNextName.isEmpty()) {
-		result->detailLines << imageText("Next animation frame: %1").arg(result->animationNextName);
+		result->detailLines << QCoreApplication::translate("VibeStudioIdTechImage", "Next animation frame: %1").arg(result->animationNextName);
 	}
-	result->detailLines << imageText("Surface flags: 0x%1").arg(result->surfaceFlags, 8, 16, QLatin1Char('0'));
-	result->detailLines << imageText("Content flags: 0x%1").arg(result->contentFlags, 8, 16, QLatin1Char('0'));
-	result->detailLines << imageText("Surface value: %1").arg(result->surfaceValue);
+	result->detailLines << QCoreApplication::translate("VibeStudioIdTechImage", "Surface flags: 0x%1").arg(result->surfaceFlags, 8, 16, QLatin1Char('0'));
+	result->detailLines << QCoreApplication::translate("VibeStudioIdTechImage", "Content flags: 0x%1").arg(result->contentFlags, 8, 16, QLatin1Char('0'));
+	result->detailLines << QCoreApplication::translate("VibeStudioIdTechImage", "Surface value: %1").arg(result->surfaceValue);
 	result->decoded = true;
 	return true;
 }
 
-bool decodeQuake2M8(const QString& virtualPath, const QByteArray& bytes, const IdTechPalette& palette, IdTechImageDecodeResult* result)
+bool decodeQuake2M8(const QString& virtualPath, const QByteArray& bytes, const IdTechPalette& palette, IdTechImageDecodeResult* result, DecodeBudget& budget)
 {
 	ExtendedMipHeader header;
 	if (!m8LooksValid(bytes, &header)) {
 		if (bytes.size() >= 4 && bytes.size() < kM8HeaderSize) {
-			result->error = imageText("Quake II .m8 header is truncated.");
+			result->error = QCoreApplication::translate("VibeStudioIdTechImage", "Quake II .m8 header is truncated.");
 		} else if (bytes.size() >= 4 && readLe32(bytes, 0) != kM8Version) {
-			result->error = imageText("Quake II .m8 version %1 is not supported (expected 2).").arg(readLe32(bytes, 0));
+			result->error = QCoreApplication::translate("VibeStudioIdTechImage", "Quake II .m8 version %1 is not supported (expected 2).").arg(readLe32(bytes, 0));
 		} else {
-			result->error = imageText("Quake II .m8 mip table does not validate.");
+			result->error = QCoreApplication::translate("VibeStudioIdTechImage", "Quake II .m8 mip table does not validate.");
 		}
 		return false;
 	}
@@ -1483,22 +1548,23 @@ bool decodeQuake2M8(const QString& virtualPath, const QByteArray& bytes, const I
 	if (embedded) {
 		effective.colors = colors;
 		effective.id = QStringLiteral("m8-embedded");
-		effective.displayName = imageText("Embedded .m8 palette");
-		effective.sourceDescription = imageText("256-entry palette stored in the .m8 header");
+		effective.displayName = QCoreApplication::translate("VibeStudioIdTechImage", "Embedded .m8 palette");
+		effective.sourceDescription = QCoreApplication::translate("VibeStudioIdTechImage", "256-entry palette stored in the .m8 header");
 		effective.generated = false;
 		effective.transparentIndex = -1;
 		effective.fullbrightStartIndex = -1;
 	} else {
-		result->warnings << imageText("The embedded .m8 palette is empty; the supplied palette was used instead.");
+		result->warnings << QCoreApplication::translate("VibeStudioIdTechImage", "The embedded .m8 palette is empty; the supplied palette was used instead.");
 	}
 
 	const QVector<QRgb> table = paletteColorTable(effective, false);
 	const auto* data = reinterpret_cast<const uchar*>(bytes.constData());
 	for (int level = 0; level < header.levelCount; ++level) {
 		const qsizetype start = static_cast<qsizetype>(header.offsets[level]);
-		const QImage mip = makeIndexedImage(data + start, bytes.size() - start, header.widths[level], header.heights[level], table);
+		if (!budget.consume(header.widths[level], header.heights[level], &result->error)) { return false; }
+		const QImage mip = makeIndexedImage(data + start, bytes.size() - start, header.widths[level], header.heights[level], table, budget);
 		if (mip.isNull()) {
-			result->error = imageText("Unable to allocate a .m8 mip level.");
+			result->error = QCoreApplication::translate("VibeStudioIdTechImage", "Unable to allocate a .m8 mip level.");
 			return false;
 		}
 		result->mipLevels.push_back(mip);
@@ -1508,31 +1574,31 @@ bool decodeQuake2M8(const QString& virtualPath, const QByteArray& bytes, const I
 	result->width = header.widths[0];
 	result->height = header.heights[0];
 	applyPaletteLabels(result, effective);
-	result->detailLines << imageText("Texture name: %1").arg(name);
+	result->detailLines << QCoreApplication::translate("VibeStudioIdTechImage", "Texture name: %1").arg(name);
 	if (!result->animationNextName.isEmpty()) {
-		result->detailLines << imageText("Next animation frame: %1").arg(result->animationNextName);
+		result->detailLines << QCoreApplication::translate("VibeStudioIdTechImage", "Next animation frame: %1").arg(result->animationNextName);
 	}
-	result->detailLines << imageText("Mip levels: %1 of 16 stored.").arg(header.levelCount);
+	result->detailLines << QCoreApplication::translate("VibeStudioIdTechImage", "Mip levels: %1 of 16 stored.").arg(header.levelCount);
 	result->detailLines << (embedded
-		? imageText("Palette: embedded 256-entry .m8 palette.")
-		: imageText("Palette: external (the embedded palette is empty)."));
-	result->detailLines << imageText("Surface flags: 0x%1").arg(result->surfaceFlags, 8, 16, QLatin1Char('0'));
-	result->detailLines << imageText("Content flags: 0x%1").arg(result->contentFlags, 8, 16, QLatin1Char('0'));
-	result->detailLines << imageText("Surface value: %1").arg(result->surfaceValue);
+		? QCoreApplication::translate("VibeStudioIdTechImage", "Palette: embedded 256-entry .m8 palette.")
+		: QCoreApplication::translate("VibeStudioIdTechImage", "Palette: external (the embedded palette is empty)."));
+	result->detailLines << QCoreApplication::translate("VibeStudioIdTechImage", "Surface flags: 0x%1").arg(result->surfaceFlags, 8, 16, QLatin1Char('0'));
+	result->detailLines << QCoreApplication::translate("VibeStudioIdTechImage", "Content flags: 0x%1").arg(result->contentFlags, 8, 16, QLatin1Char('0'));
+	result->detailLines << QCoreApplication::translate("VibeStudioIdTechImage", "Surface value: %1").arg(result->surfaceValue);
 	result->decoded = true;
 	return true;
 }
 
-bool decodeQuake2M32(const QString& virtualPath, const QByteArray& bytes, IdTechImageDecodeResult* result)
+bool decodeQuake2M32(const QString& virtualPath, const QByteArray& bytes, IdTechImageDecodeResult* result, DecodeBudget& budget)
 {
 	ExtendedMipHeader header;
 	if (!m32LooksValid(bytes, &header)) {
 		if (bytes.size() >= 4 && bytes.size() < kM32HeaderSize) {
-			result->error = imageText("Quake II .m32 header is truncated.");
+			result->error = QCoreApplication::translate("VibeStudioIdTechImage", "Quake II .m32 header is truncated.");
 		} else if (bytes.size() >= 4 && readLe32(bytes, 0) != kM32Version) {
-			result->error = imageText("Quake II .m32 version %1 is not supported (expected 4).").arg(readLe32(bytes, 0));
+			result->error = QCoreApplication::translate("VibeStudioIdTechImage", "Quake II .m32 version %1 is not supported (expected 4).").arg(readLe32(bytes, 0));
 		} else {
-			result->error = imageText("Quake II .m32 mip table does not validate.");
+			result->error = QCoreApplication::translate("VibeStudioIdTechImage", "Quake II .m32 mip table does not validate.");
 		}
 		return false;
 	}
@@ -1557,13 +1623,15 @@ bool decodeQuake2M32(const QString& virtualPath, const QByteArray& bytes, IdTech
 	for (int level = 0; level < header.levelCount; ++level) {
 		const int levelWidth = header.widths[level];
 		const int levelHeight = header.heights[level];
+		if (!budget.consume(levelWidth, levelHeight, &result->error)) { return false; }
 		QImage mip(levelWidth, levelHeight, QImage::Format_ARGB32);
 		if (mip.isNull()) {
-			result->error = imageText("Unable to allocate a .m32 mip level.");
+			result->error = QCoreApplication::translate("VibeStudioIdTechImage", "Unable to allocate a .m32 mip level.");
 			return false;
 		}
 		const qsizetype start = static_cast<qsizetype>(header.offsets[level]);
 		for (int y = 0; y < levelHeight; ++y) {
+			if (!budget.checkpoint()) { return false; }
 			const uchar* row = data + start + static_cast<qsizetype>(y) * levelWidth * 4;
 			auto* line = reinterpret_cast<QRgb*>(mip.scanLine(y));
 			for (int x = 0; x < levelWidth; ++x) {
@@ -1581,48 +1649,49 @@ bool decodeQuake2M32(const QString& virtualPath, const QByteArray& bytes, IdTech
 	result->width = header.widths[0];
 	result->height = header.heights[0];
 	result->hasTransparency = sawTransparency;
-	result->detailLines << imageText("Texture name: %1").arg(name);
+	result->detailLines << QCoreApplication::translate("VibeStudioIdTechImage", "Texture name: %1").arg(name);
 	if (!altName.isEmpty()) {
-		result->detailLines << imageText("Substitute texture: %1").arg(altName);
+		result->detailLines << QCoreApplication::translate("VibeStudioIdTechImage", "Substitute texture: %1").arg(altName);
 	}
 	if (!result->animationNextName.isEmpty()) {
-		result->detailLines << imageText("Next animation frame: %1").arg(result->animationNextName);
+		result->detailLines << QCoreApplication::translate("VibeStudioIdTechImage", "Next animation frame: %1").arg(result->animationNextName);
 	}
 	if (!damageName.isEmpty()) {
-		result->detailLines << imageText("Damaged texture: %1").arg(damageName);
+		result->detailLines << QCoreApplication::translate("VibeStudioIdTechImage", "Damaged texture: %1").arg(damageName);
 	}
-	result->detailLines << imageText("Truecolour RGBA texture, %1 of 16 mip levels stored.").arg(header.levelCount);
-	result->detailLines << imageText("Texture scale: %1 x %2, mip scale %3")
+	result->detailLines << QCoreApplication::translate("VibeStudioIdTechImage", "Truecolour RGBA texture, %1 of 16 mip levels stored.").arg(header.levelCount);
+	result->detailLines << QCoreApplication::translate("VibeStudioIdTechImage", "Texture scale: %1 x %2, mip scale %3")
 		.arg(static_cast<double>(scaleX), 0, 'f', 3)
 		.arg(static_cast<double>(scaleY), 0, 'f', 3)
 		.arg(mipScale);
-	result->detailLines << imageText("Surface flags: 0x%1").arg(result->surfaceFlags, 8, 16, QLatin1Char('0'));
-	result->detailLines << imageText("Content flags: 0x%1").arg(result->contentFlags, 8, 16, QLatin1Char('0'));
-	result->detailLines << imageText("Surface value: %1").arg(result->surfaceValue);
+	result->detailLines << QCoreApplication::translate("VibeStudioIdTechImage", "Surface flags: 0x%1").arg(result->surfaceFlags, 8, 16, QLatin1Char('0'));
+	result->detailLines << QCoreApplication::translate("VibeStudioIdTechImage", "Content flags: 0x%1").arg(result->contentFlags, 8, 16, QLatin1Char('0'));
+	result->detailLines << QCoreApplication::translate("VibeStudioIdTechImage", "Surface value: %1").arg(result->surfaceValue);
 	result->decoded = true;
 	return true;
 }
 
-bool decodePcx(const QByteArray& bytes, const IdTechPalette& palette, IdTechImageDecodeResult* result)
+bool decodePcx(const QByteArray& bytes, const IdTechPalette& palette, IdTechImageDecodeResult* result, DecodeBudget& budget)
 {
 	PcxHeader header;
 	if (!parsePcxHeader(bytes, &header)) {
-		result->error = imageText("PCX header does not validate.");
+		result->error = QCoreApplication::translate("VibeStudioIdTechImage", "PCX header does not validate.");
 		return false;
 	}
 	const bool tailPalette = pcxHasTailPalette(bytes, header);
+	if (!budget.consume(header.width, header.height, &result->error)) { return false; }
 	const qsizetype dataEnd = tailPalette ? bytes.size() - 769 : bytes.size();
 	const qsizetype rowBytes = static_cast<qsizetype>(header.bytesPerLine) * header.planes;
 	QByteArray scanlines;
-	if (!decodePcxScanlines(bytes, dataEnd, header.encoding == 1, rowBytes, header.height, &scanlines)) {
-		result->error = imageText("PCX pixel data is truncated or malformed.");
+	if (!decodePcxScanlines(bytes, dataEnd, header.encoding == 1, rowBytes, header.height, &scanlines, budget)) {
+		result->error = QCoreApplication::translate("VibeStudioIdTechImage", "PCX pixel data is truncated or malformed.");
 		return false;
 	}
 	const auto* rows = reinterpret_cast<const uchar*>(scanlines.constData());
 
 	result->width = header.width;
 	result->height = header.height;
-	result->detailLines << imageText("PCX version %1, %2 bit, %3 plane(s), %4 bytes per line.")
+	result->detailLines << QCoreApplication::translate("VibeStudioIdTechImage", "PCX version %1, %2 bit, %3 plane(s), %4 bytes per line.")
 		.arg(header.version)
 		.arg(header.bitsPerPixel)
 		.arg(header.planes)
@@ -1640,23 +1709,24 @@ bool decodePcx(const QByteArray& bytes, const IdTechPalette& palette, IdTechImag
 			}
 			effective.colors = colors;
 			effective.id = QStringLiteral("pcx-embedded");
-			effective.displayName = imageText("Embedded PCX palette");
-			effective.sourceDescription = imageText("256-entry palette stored in the PCX tail");
+			effective.displayName = QCoreApplication::translate("VibeStudioIdTechImage", "Embedded PCX palette");
+			effective.sourceDescription = QCoreApplication::translate("VibeStudioIdTechImage", "256-entry palette stored in the PCX tail");
 			effective.generated = false;
 			effective.transparentIndex = -1;
 			effective.fullbrightStartIndex = -1;
-			result->detailLines << imageText("Palette: embedded 256-entry tail palette.");
+			result->detailLines << QCoreApplication::translate("VibeStudioIdTechImage", "Palette: embedded 256-entry tail palette.");
 		} else {
-			result->detailLines << imageText("Palette: external (no tail palette present).");
+			result->detailLines << QCoreApplication::translate("VibeStudioIdTechImage", "Palette: external (no tail palette present).");
 		}
 
 		QImage image(header.width, header.height, QImage::Format_Indexed8);
 		if (image.isNull()) {
-			result->error = imageText("Unable to allocate the decoded PCX.");
+			result->error = QCoreApplication::translate("VibeStudioIdTechImage", "Unable to allocate the decoded PCX.");
 			return false;
 		}
 		image.setColorTable(paletteColorTable(effective, false));
 		for (int y = 0; y < header.height; ++y) {
+			if (!budget.checkpoint()) { return false; }
 			uchar* line = image.scanLine(y);
 			std::memcpy(line, rows + static_cast<qsizetype>(y) * rowBytes, static_cast<size_t>(header.width));
 		}
@@ -1669,11 +1739,12 @@ bool decodePcx(const QByteArray& bytes, const IdTechPalette& palette, IdTechImag
 	if (header.bitsPerPixel == 8 && (header.planes == 3 || header.planes == 4)) {
 		QImage image(header.width, header.height, QImage::Format_ARGB32);
 		if (image.isNull()) {
-			result->error = imageText("Unable to allocate the decoded PCX.");
+			result->error = QCoreApplication::translate("VibeStudioIdTechImage", "Unable to allocate the decoded PCX.");
 			return false;
 		}
 		bool sawTransparency = false;
 		for (int y = 0; y < header.height; ++y) {
+			if (!budget.checkpoint()) { return false; }
 			const uchar* row = rows + static_cast<qsizetype>(y) * rowBytes;
 			auto* line = reinterpret_cast<QRgb*>(image.scanLine(y));
 			for (int x = 0; x < header.width; ++x) {
@@ -1689,25 +1760,26 @@ bool decodePcx(const QByteArray& bytes, const IdTechPalette& palette, IdTechImag
 		}
 		result->image = image;
 		result->hasTransparency = sawTransparency;
-		result->detailLines << imageText("Truecolour PCX (%1 planes).").arg(header.planes);
+		result->detailLines << QCoreApplication::translate("VibeStudioIdTechImage", "Truecolour PCX (%1 planes).").arg(header.planes);
 		result->decoded = true;
 		return true;
 	}
 
-	result->error = imageText("Only 8-bit single-plane and 8-bit 3/4-plane PCX images are supported.");
+	result->error = QCoreApplication::translate("VibeStudioIdTechImage", "Only 8-bit single-plane and 8-bit 3/4-plane PCX images are supported.");
 	return false;
 }
 
-bool decodeTarga(const QByteArray& bytes, IdTechImageDecodeResult* result)
+bool decodeTarga(const QByteArray& bytes, IdTechImageDecodeResult* result, DecodeBudget& budget)
 {
 	TargaHeader header;
 	if (!targaLooksValid(bytes, &header)) {
-		result->error = imageText("Targa header does not validate.");
+		result->error = QCoreApplication::translate("VibeStudioIdTechImage", "Targa header does not validate.");
 		return false;
 	}
+	if (!budget.consume(header.width, header.height, &result->error)) { return false; }
 	QByteArray stream;
-	if (!decodeTargaPixelStream(bytes, header, &stream)) {
-		result->error = imageText("Targa pixel data is truncated or malformed.");
+	if (!decodeTargaPixelStream(bytes, header, &stream, budget)) {
+		result->error = QCoreApplication::translate("VibeStudioIdTechImage", "Targa pixel data is truncated or malformed.");
 		return false;
 	}
 
@@ -1732,12 +1804,13 @@ bool decodeTarga(const QByteArray& bytes, IdTechImageDecodeResult* result)
 
 	QImage image(header.width, header.height, QImage::Format_ARGB32);
 	if (image.isNull()) {
-		result->error = imageText("Unable to allocate the decoded Targa.");
+		result->error = QCoreApplication::translate("VibeStudioIdTechImage", "Unable to allocate the decoded Targa.");
 		return false;
 	}
 	const auto* source = reinterpret_cast<const uchar*>(stream.constData());
 	bool anyAlpha = false;
 	for (int y = 0; y < header.height; ++y) {
+		if (!budget.checkpoint()) { return false; }
 		// The image descriptor origin bits decide the storage order.
 		const int destinationY = header.topToBottom ? y : (header.height - 1 - y);
 		auto* line = reinterpret_cast<QRgb*>(image.scanLine(destinationY));
@@ -1765,20 +1838,22 @@ bool decodeTarga(const QByteArray& bytes, IdTechImageDecodeResult* result)
 		}
 	}
 
-	// Many tools write 32-bit Targas with a zeroed alpha channel; treating that
-	// literally would produce a fully invisible image.
-	if (!anyAlpha) {
+	// Undeclared legacy alpha may be a zero-filled spare byte. Explicit alpha
+	// remains authoritative, including an intentionally fully transparent image.
+	if (!anyAlpha && !honourAlpha) {
 		for (int y = 0; y < header.height; ++y) {
+			if (!budget.checkpoint()) { return false; }
 			auto* line = reinterpret_cast<QRgb*>(image.scanLine(y));
 			for (int x = 0; x < header.width; ++x) {
 				line[x] |= 0xff000000u;
 			}
 		}
-		result->warnings << imageText("Targa alpha channel was entirely zero and was treated as opaque.");
+		result->warnings << QCoreApplication::translate("VibeStudioIdTechImage", "Targa alpha channel was entirely zero and was treated as opaque.");
 	}
 
 	bool sawTransparency = false;
 	for (int y = 0; y < header.height && !sawTransparency; ++y) {
+		if (!budget.checkpoint()) { return false; }
 		const auto* line = reinterpret_cast<const QRgb*>(image.constScanLine(y));
 		for (int x = 0; x < header.width; ++x) {
 			if (qAlpha(line[x]) != 255) {
@@ -1793,22 +1868,22 @@ bool decodeTarga(const QByteArray& bytes, IdTechImageDecodeResult* result)
 	result->height = header.height;
 	result->hasTransparency = sawTransparency;
 	result->paletted = colorMapped;
-	result->detailLines << imageText("Targa type %1, %2 bit, %3.")
+	result->detailLines << QCoreApplication::translate("VibeStudioIdTechImage", "Targa type %1, %2 bit, %3.")
 		.arg(header.imageType)
 		.arg(header.pixelDepth)
-		.arg(header.rle ? imageText("run-length encoded") : imageText("uncompressed"));
-	result->detailLines << imageText("Origin: %1, %2")
-		.arg(header.topToBottom ? imageText("top") : imageText("bottom"),
-			header.rightToLeft ? imageText("right") : imageText("left"));
+		.arg(header.rle ? QCoreApplication::translate("VibeStudioIdTechImage", "run-length encoded") : QCoreApplication::translate("VibeStudioIdTechImage", "uncompressed"));
+	result->detailLines << QCoreApplication::translate("VibeStudioIdTechImage", "Origin: %1, %2")
+		.arg(header.topToBottom ? QCoreApplication::translate("VibeStudioIdTechImage", "top") : QCoreApplication::translate("VibeStudioIdTechImage", "bottom"),
+			header.rightToLeft ? QCoreApplication::translate("VibeStudioIdTechImage", "right") : QCoreApplication::translate("VibeStudioIdTechImage", "left"));
 	result->decoded = true;
 	return true;
 }
 
-bool decodeSprite(const QByteArray& bytes, const IdTechPalette& palette, IdTechImageDecodeResult* result)
+bool decodeSprite(const QByteArray& bytes, const IdTechPalette& palette, IdTechImageDecodeResult* result, DecodeBudget& budget)
 {
 	SpriteHeader header;
 	if (!spriteLooksValid(bytes, &header)) {
-		result->error = imageText("IDSP sprite header does not validate.");
+		result->error = QCoreApplication::translate("VibeStudioIdTechImage", "IDSP sprite header does not validate.");
 		return false;
 	}
 	const bool halfLife = header.version == 2;
@@ -1825,8 +1900,8 @@ bool decodeSprite(const QByteArray& bytes, const IdTechPalette& palette, IdTechI
 		}
 		effective.colors = colors;
 		effective.id = QStringLiteral("spr-embedded");
-		effective.displayName = imageText("Embedded sprite palette");
-		effective.sourceDescription = imageText("Palette stored in the Half-Life sprite header");
+		effective.displayName = QCoreApplication::translate("VibeStudioIdTechImage", "Embedded sprite palette");
+		effective.sourceDescription = QCoreApplication::translate("VibeStudioIdTechImage", "Palette stored in the Half-Life sprite header");
 		effective.generated = false;
 		// Only SPR_ALPHTEST masks a palette index. SPR_INDEXALPHA is decoded
 		// straight to ARGB below, and the other texture formats are opaque.
@@ -1847,13 +1922,14 @@ bool decodeSprite(const QByteArray& bytes, const IdTechPalette& palette, IdTechI
 
 	auto makeFrameImage = [&](qsizetype at, int width, int height) -> QImage {
 		if (!indexAlpha) {
-			return makeIndexedImage(data + at, size - at, width, height, table);
+			return makeIndexedImage(data + at, size - at, width, height, table, budget);
 		}
 		QImage image(width, height, QImage::Format_ARGB32);
 		if (image.isNull()) {
 			return {};
 		}
 		for (int y = 0; y < height; ++y) {
+			if (!budget.checkpoint()) { return {}; }
 			const uchar* row = data + at + static_cast<qsizetype>(y) * width;
 			auto* line = reinterpret_cast<QRgb*>(image.scanLine(y));
 			for (int x = 0; x < width; ++x) {
@@ -1871,7 +1947,7 @@ bool decodeSprite(const QByteArray& bytes, const IdTechPalette& palette, IdTechI
 	int groupCount = 0;
 	auto readFrame = [&](int label, int groupLabel, float intervalSeconds) -> bool {
 		if (cursor + 16 > size) {
-			result->error = imageText("Sprite frame header is truncated.");
+			result->error = QCoreApplication::translate("VibeStudioIdTechImage", "Sprite frame header is truncated.");
 			return false;
 		}
 		const int originX = readLe32Signed(bytes, cursor);
@@ -1880,30 +1956,39 @@ bool decodeSprite(const QByteArray& bytes, const IdTechPalette& palette, IdTechI
 		const qint32 frameHeight = readLe32Signed(bytes, cursor + 12);
 		cursor += 16;
 		if (frameWidth <= 0 || frameHeight <= 0 || frameWidth > 8192 || frameHeight > 8192) {
-			result->error = imageText("Sprite frame has implausible dimensions.");
+			result->error = QCoreApplication::translate("VibeStudioIdTechImage", "Sprite frame has implausible dimensions.");
 			return false;
 		}
 		const qsizetype pixelBytes = static_cast<qsizetype>(frameWidth) * frameHeight;
 		if (pixelBytes > kMaxDecodedPixels) {
-			result->error = imageText("Sprite frame exceeds the decoded pixel limit.");
+			result->error = QCoreApplication::translate("VibeStudioIdTechImage", "Sprite frame exceeds the decoded pixel limit.");
 			return false;
 		}
 		if (cursor + pixelBytes > size) {
-			result->error = imageText("Sprite frame pixel data is truncated.");
+			result->error = QCoreApplication::translate("VibeStudioIdTechImage", "Sprite frame pixel data is truncated.");
 			return false;
 		}
 		IdTechImageFrame frame;
+		if (result->frames.size() >= kMaxStoredSpriteFrames) {
+			result->error = QCoreApplication::translate("VibeStudioIdTechImage", "A sprite supports at most 4,096 stored frames across all groups.");
+			return false;
+		}
+		if (!budget.consume(frameWidth, frameHeight, &result->error)) { return false; }
 		frame.image = makeFrameImage(cursor, frameWidth, frameHeight);
 		if (frame.image.isNull()) {
-			result->error = imageText("Unable to allocate a sprite frame.");
+			result->error = QCoreApplication::translate("VibeStudioIdTechImage", "Unable to allocate a sprite frame.");
 			return false;
 		}
 		frame.originX = originX;
 		frame.originY = originY;
-		frame.durationMs = intervalSeconds > 0.0f ? static_cast<int>(std::lround(intervalSeconds * 1000.0f)) : 0;
+		if (!std::isfinite(intervalSeconds) || intervalSeconds < 0.0f || intervalSeconds > 86400.0f) {
+			result->error = QCoreApplication::translate("VibeStudioIdTechImage", "Sprite frame intervals must be finite and between zero and one day.");
+			return false;
+		}
+		frame.durationMs = static_cast<int>(std::lround(double(intervalSeconds) * 1000.0));
 		frame.label = groupLabel >= 0
-			? imageText("Group %1 frame %2").arg(groupLabel + 1).arg(label + 1)
-			: imageText("Frame %1").arg(label + 1);
+			? QCoreApplication::translate("VibeStudioIdTechImage", "Group %1 frame %2").arg(groupLabel + 1).arg(label + 1)
+			: QCoreApplication::translate("VibeStudioIdTechImage", "Frame %1").arg(label + 1);
 		cursor += pixelBytes;
 		result->frames.push_back(frame);
 		return true;
@@ -1911,7 +1996,7 @@ bool decodeSprite(const QByteArray& bytes, const IdTechPalette& palette, IdTechI
 
 	for (int index = 0; index < header.frameCount; ++index) {
 		if (cursor + 4 > size) {
-			result->error = imageText("Sprite frame table is truncated.");
+			result->error = QCoreApplication::translate("VibeStudioIdTechImage", "Sprite frame table is truncated.");
 			return false;
 		}
 		const qint32 group = readLe32Signed(bytes, cursor);
@@ -1923,21 +2008,21 @@ bool decodeSprite(const QByteArray& bytes, const IdTechPalette& palette, IdTechI
 			continue;
 		}
 		if (group != 1) {
-			result->error = imageText("Unsupported sprite frame group type.");
+			result->error = QCoreApplication::translate("VibeStudioIdTechImage", "Unsupported sprite frame group type.");
 			return false;
 		}
 		if (cursor + 4 > size) {
-			result->error = imageText("Sprite frame group header is truncated.");
+			result->error = QCoreApplication::translate("VibeStudioIdTechImage", "Sprite frame group header is truncated.");
 			return false;
 		}
 		const qint32 subFrameCount = readLe32Signed(bytes, cursor);
 		cursor += 4;
 		if (subFrameCount <= 0 || subFrameCount > 4096) {
-			result->error = imageText("Sprite frame group count is implausible.");
+			result->error = QCoreApplication::translate("VibeStudioIdTechImage", "Sprite frame group count is implausible.");
 			return false;
 		}
 		if (cursor + static_cast<qsizetype>(subFrameCount) * 4 > size) {
-			result->error = imageText("Sprite frame group interval list is truncated.");
+			result->error = QCoreApplication::translate("VibeStudioIdTechImage", "Sprite frame group interval list is truncated.");
 			return false;
 		}
 		QVector<float> intervals;
@@ -1959,7 +2044,7 @@ bool decodeSprite(const QByteArray& bytes, const IdTechPalette& palette, IdTechI
 	}
 
 	if (result->frames.isEmpty()) {
-		result->error = imageText("Sprite contains no frames.");
+		result->error = QCoreApplication::translate("VibeStudioIdTechImage", "Sprite contains no frames.");
 		return false;
 	}
 	result->image = result->frames.at(0).image;
@@ -1972,120 +2057,152 @@ bool decodeSprite(const QByteArray& bytes, const IdTechPalette& palette, IdTechI
 		result->hasTransparency = sawAlpha;
 	} else if (applyTransparent) {
 		for (const IdTechImageFrame& frame : result->frames) {
-			if (indexedImageUsesIndex(frame.image, effective.transparentIndex)) {
+			if (indexedImageUsesIndex(frame.image, effective.transparentIndex, budget)) {
 				result->hasTransparency = true;
 				break;
 			}
 		}
 	}
 	result->detailLines << (halfLife
-		? imageText("Half-Life sprite (IDSP version 2), %1 frame entries, %2 stored frames.").arg(header.frameCount).arg(result->frames.size())
-		: imageText("Quake sprite, %1 frame entries, %2 stored frames.").arg(header.frameCount).arg(result->frames.size()));
-	result->detailLines << imageText("Sprite orientation type: %1").arg(header.type);
+		? QCoreApplication::translate("VibeStudioIdTechImage", "Half-Life sprite (IDSP version 2), %1 frame entries, %2 stored frames.").arg(header.frameCount).arg(result->frames.size())
+		: QCoreApplication::translate("VibeStudioIdTechImage", "Quake sprite, %1 frame entries, %2 stored frames.").arg(header.frameCount).arg(result->frames.size()));
+	result->detailLines << QCoreApplication::translate("VibeStudioIdTechImage", "Sprite orientation type: %1").arg(header.type);
 	if (halfLife) {
 		QString textureFormat;
 		switch (header.texFormat) {
 		case kSprAdditive:
-			textureFormat = imageText("additive");
+			textureFormat = QCoreApplication::translate("VibeStudioIdTechImage", "additive");
 			break;
 		case kSprIndexAlpha:
-			textureFormat = imageText("index alpha");
+			textureFormat = QCoreApplication::translate("VibeStudioIdTechImage", "index alpha");
 			break;
 		case kSprAlphaTest:
-			textureFormat = imageText("alpha test (index 255 masked)");
+			textureFormat = QCoreApplication::translate("VibeStudioIdTechImage", "alpha test (index 255 masked)");
 			break;
 		default:
-			textureFormat = imageText("normal");
+			textureFormat = QCoreApplication::translate("VibeStudioIdTechImage", "normal");
 			break;
 		}
-		result->detailLines << imageText("Texture format: %1 (%2)").arg(textureFormat).arg(header.texFormat);
-		result->detailLines << imageText("Palette: embedded %1-entry sprite palette.").arg(header.paletteCount);
+		result->detailLines << QCoreApplication::translate("VibeStudioIdTechImage", "Texture format: %1 (%2)").arg(textureFormat).arg(header.texFormat);
+		result->detailLines << QCoreApplication::translate("VibeStudioIdTechImage", "Palette: embedded %1-entry sprite palette.").arg(header.paletteCount);
 	}
-	result->detailLines << imageText("Max frame size: %1x%2").arg(header.maxWidth).arg(header.maxHeight);
-	result->detailLines << imageText("Bounding radius: %1").arg(static_cast<double>(header.boundingRadius), 0, 'f', 3);
-	result->detailLines << imageText("Beam length: %1").arg(static_cast<double>(header.beamLength), 0, 'f', 3);
-	result->detailLines << imageText("Sync type: %1").arg(header.syncType);
+	result->detailLines << QCoreApplication::translate("VibeStudioIdTechImage", "Max frame size: %1x%2").arg(header.maxWidth).arg(header.maxHeight);
+	result->detailLines << QCoreApplication::translate("VibeStudioIdTechImage", "Bounding radius: %1").arg(static_cast<double>(header.boundingRadius), 0, 'f', 3);
+	result->detailLines << QCoreApplication::translate("VibeStudioIdTechImage", "Beam length: %1").arg(static_cast<double>(header.beamLength), 0, 'f', 3);
+	result->detailLines << QCoreApplication::translate("VibeStudioIdTechImage", "Sync type: %1").arg(header.syncType);
 	result->decoded = true;
 	return true;
 }
 
-bool decodeDoomPaletteLump(const QByteArray& bytes, IdTechImageDecodeResult* result)
+bool decodeDoomPaletteLump(const QByteArray& bytes, IdTechImageDecodeResult* result, DecodeBudget& budget)
 {
 	IdTechPalette palette;
 	QString error;
 	if (!parseIdTechPaletteBytes(bytes, QStringLiteral("doom"), &palette, &error)) {
-		result->error = error.isEmpty() ? imageText("Palette lump does not validate.") : error;
+		result->error = error.isEmpty() ? QCoreApplication::translate("VibeStudioIdTechImage", "Palette lump does not validate.") : error;
 		return false;
 	}
 	const int banks = static_cast<int>(bytes.size() / 768);
+	if (!budget.consume(192, 192, &result->error)) { return false; }
 	result->image = renderIdTechPaletteSwatch(palette, 12);
 	result->width = result->image.width();
 	result->height = result->image.height();
 	applyPaletteLabels(result, palette);
-	result->detailLines << imageText("Palette lump with %1 bank(s) of 256 RGB triplets.").arg(banks);
-	result->detailLines << imageText("Rendered as a 16x16 swatch grid of the first bank.");
+	result->detailLines << QCoreApplication::translate("VibeStudioIdTechImage", "Palette lump with %1 bank(s) of 256 RGB triplets.").arg(banks);
+	result->detailLines << QCoreApplication::translate("VibeStudioIdTechImage", "Rendered as a 16x16 swatch grid of the first bank.");
 	result->decoded = true;
 	return true;
 }
 
-bool decodeDoomColormapLump(const QByteArray& bytes, const IdTechPalette& palette, IdTechImageDecodeResult* result)
+bool decodeDoomColormapLump(const QByteArray& bytes, const IdTechPalette& palette, IdTechImageDecodeResult* result, DecodeBudget& budget)
 {
 	// COLORMAP: 34 tables of 256 palette indices (32 light levels, the
 	// invulnerability map, and one unused table).
 	if (bytes.size() != 34 * 256) {
-		result->error = imageText("Colormap lumps must be exactly 8704 bytes.");
+		result->error = QCoreApplication::translate("VibeStudioIdTechImage", "Colormap lumps must be exactly 8704 bytes.");
 		return false;
 	}
 	const QVector<QRgb> table = paletteColorTable(palette, false);
-	const QImage image = makeIndexedImage(reinterpret_cast<const uchar*>(bytes.constData()), bytes.size(), 256, 34, table);
+	if (!budget.consume(256, 34, &result->error)) { return false; }
+	const QImage image = makeIndexedImage(reinterpret_cast<const uchar*>(bytes.constData()), bytes.size(), 256, 34, table, budget);
 	if (image.isNull()) {
-		result->error = imageText("Unable to allocate the decoded colormap.");
+		result->error = QCoreApplication::translate("VibeStudioIdTechImage", "Unable to allocate the decoded colormap.");
 		return false;
 	}
 	result->image = image;
 	result->width = 256;
 	result->height = 34;
 	applyPaletteLabels(result, palette);
-	result->detailLines << imageText("Colormap: 34 tables of 256 palette indices.");
-	result->detailLines << imageText("Rendered one table per row.");
+	result->detailLines << QCoreApplication::translate("VibeStudioIdTechImage", "Colormap: 34 tables of 256 palette indices.");
+	result->detailLines << QCoreApplication::translate("VibeStudioIdTechImage", "Rendered one table per row.");
 	result->decoded = true;
 	return true;
 }
 
-bool decodeRawIndexed(const QByteArray& bytes, const IdTechPalette& palette, IdTechImageDecodeResult* result)
+bool decodeRawIndexed(const QByteArray& bytes, const IdTechPalette& palette, IdTechImageDecodeResult* result, DecodeBudget& budget)
 {
+	// Heretic's and Hexen's full-screen pictures (TITLE, CREDIT, HELP1...) are
+	// a bare 320x200 VGA screen; anything else square is guessed.
+	const bool fullscreen = bytes.size() == 320 * 200;
 	const auto side = static_cast<int>(std::lround(std::sqrt(static_cast<double>(bytes.size()))));
-	if (side <= 0 || static_cast<qsizetype>(side) * side != bytes.size()) {
-		result->error = imageText("Raw indexed data needs known dimensions; only square payloads are guessed.");
+	if (!fullscreen && (side <= 0 || static_cast<qsizetype>(side) * side != bytes.size())) {
+		result->error = QCoreApplication::translate("VibeStudioIdTechImage", "Raw indexed data needs known dimensions; only square payloads are guessed.");
 		return false;
 	}
+	const int width = fullscreen ? 320 : side;
+	const int height = fullscreen ? 200 : side;
+	if (!budget.consume(width, height, &result->error)) { return false; }
 	const QVector<QRgb> table = paletteColorTable(palette, false);
-	const QImage image = makeIndexedImage(reinterpret_cast<const uchar*>(bytes.constData()), bytes.size(), side, side, table);
+	const QImage image = makeIndexedImage(reinterpret_cast<const uchar*>(bytes.constData()), bytes.size(), width, height, table, budget);
 	if (image.isNull()) {
-		result->error = imageText("Unable to allocate the decoded raw image.");
+		result->error = QCoreApplication::translate("VibeStudioIdTechImage", "Unable to allocate the decoded raw image.");
 		return false;
 	}
 	result->image = image;
-	result->width = side;
-	result->height = side;
+	result->width = width;
+	result->height = height;
 	applyPaletteLabels(result, palette);
-	result->warnings << imageText("Dimensions were guessed from the payload size.");
+	if (fullscreen) {
+		result->detailLines << QCoreApplication::translate("VibeStudioIdTechImage", "Raw 320x200 full-screen picture, as Heretic and Hexen store them.");
+	} else {
+		result->warnings << QCoreApplication::translate("VibeStudioIdTechImage", "Dimensions were guessed from the payload size.");
+	}
 	result->decoded = true;
 	return true;
 }
 
-bool decodeQtNative(const QByteArray& bytes, IdTechImageDecodeResult* result)
+bool decodeQtNative(const QByteArray& bytes, IdTechImageDecodeResult* result, DecodeBudget& budget)
 {
-	QImage image;
-	if (!image.loadFromData(bytes)) {
-		result->error = imageText("Qt could not decode this image payload.");
+	QBuffer buffer;
+	buffer.setData(bytes); buffer.open(QIODevice::ReadOnly);
+	QImageReader reader(&buffer);
+	const QSize size = reader.size();
+	if (!budget.consume(size.width(), size.height(), &result->error)) { return false; }
+	// High-depth plugins may need more than four bytes per pixel before the
+	// editor converts to RGBA8. Keep this temporary allocation bounded as well.
+	const int reportedDepth = QImage::toPixelFormat(reader.imageFormat()).bitsPerPixel();
+	const int depth = reportedDepth > 0 ? reportedDepth : 128;
+	const qint64 rowBytes = ((qint64(size.width()) * depth + 31) / 32) * 4;
+	if (rowBytes * size.height() > 128 * 1024 * 1024) {
+		result->error = QCoreApplication::translate("VibeStudioIdTechImage", "The source image exceeds the 128 MiB decode buffer limit.");
+		return false;
+	}
+	QImage image = reader.read();
+	if (image.isNull() || image.size() != size) {
+		result->error = QCoreApplication::translate("VibeStudioIdTechImage", "Qt could not decode this image payload.");
+		return false;
+	}
+	const bool hasAlpha = image.hasAlphaChannel();
+	if (image.depth() > 32) { image = image.convertToFormat(QImage::Format_ARGB32); }
+	if (image.isNull()) {
+		result->error = QCoreApplication::translate("VibeStudioIdTechImage", "Unable to allocate the decoded picture.");
 		return false;
 	}
 	result->image = image;
 	result->width = image.width();
 	result->height = image.height();
-	result->hasTransparency = image.hasAlphaChannel();
-	result->detailLines << imageText("Decoded by the Qt image plugins, not by an idTech decoder.");
+	result->hasTransparency = hasAlpha;
+	result->detailLines << QCoreApplication::translate("VibeStudioIdTechImage", "Decoded by the Qt image plugins, not by an idTech decoder.");
 	result->decoded = true;
 	return true;
 }
@@ -2145,15 +2262,15 @@ bool findArchiveEntry(const PackageArchiveReader& archive, const QString& candid
 // reader was supplied to resolve those names.
 constexpr int kSp2MaxResolvedFrames = 256;
 
-bool decodeQuake2Sprite(const QString& virtualPath, const QByteArray& bytes, const IdTechPalette& palette, const IdTechImageDecodeContext& context, IdTechImageDecodeResult* result)
+bool decodeQuake2Sprite(const QString& virtualPath, const QByteArray& bytes, const IdTechPalette& palette, const IdTechImageDecodeContext& context, IdTechImageDecodeResult* result, DecodeBudget& budget)
 {
 	int frameCount = 0;
 	if (!sp2LooksValid(bytes, &frameCount)) {
-		result->error = imageText("Quake II .sp2 header does not validate.");
+		result->error = QCoreApplication::translate("VibeStudioIdTechImage", "Quake II .sp2 header does not validate.");
 		return false;
 	}
 	if (frameCount == 0) {
-		result->error = imageText("Quake II .sp2 sprite contains no frames.");
+		result->error = QCoreApplication::translate("VibeStudioIdTechImage", "Quake II .sp2 sprite contains no frames.");
 		return false;
 	}
 
@@ -2163,25 +2280,29 @@ bool decodeQuake2Sprite(const QString& virtualPath, const QByteArray& bytes, con
 	int attempted = 0;
 	int maxWidth = 0;
 	int maxHeight = 0;
+	qint64 externalBytes = 0;
+	const auto entries = context.archive ? context.archive->entries() : QVector<PackageEntry>{};
 	for (int index = 0; index < frameCount; ++index) {
+		if (!budget.checkpoint()) { return false; }
 		const qsizetype base = kSp2HeaderSize + static_cast<qsizetype>(index) * kSp2FrameSize;
 		const qint32 frameWidth = readLe32Signed(bytes, base);
 		const qint32 frameHeight = readLe32Signed(bytes, base + 4);
 		if (frameWidth <= 0 || frameHeight <= 0 || frameWidth > 8192 || frameHeight > 8192) {
-			result->error = imageText("Quake II .sp2 frame %1 has implausible dimensions.").arg(index + 1);
+			result->error = QCoreApplication::translate("VibeStudioIdTechImage", "Quake II .sp2 frame %1 has implausible dimensions.").arg(index + 1);
 			return false;
 		}
 		if (static_cast<qsizetype>(frameWidth) * frameHeight > kMaxDecodedPixels) {
-			result->error = imageText("Quake II .sp2 frame %1 exceeds the decoded pixel limit.").arg(index + 1);
+			result->error = QCoreApplication::translate("VibeStudioIdTechImage", "Quake II .sp2 frame %1 exceeds the decoded pixel limit.").arg(index + 1);
 			return false;
 		}
+		if (!budget.validSize(frameWidth, frameHeight, &result->error)) { return false; }
 		IdTechImageFrame frame;
 		frame.originX = readLe32Signed(bytes, base + 8);
 		frame.originY = readLe32Signed(bytes, base + 12);
 		frame.sourceName = fixedLatin1(bytes, base + 16, kSp2NameSize);
 		frame.label = frame.sourceName.isEmpty()
-			? imageText("Frame %1").arg(index + 1)
-			: imageText("Frame %1: %2").arg(index + 1).arg(frame.sourceName);
+			? QCoreApplication::translate("VibeStudioIdTechImage", "Frame %1").arg(index + 1)
+			: QCoreApplication::translate("VibeStudioIdTechImage", "Frame %1: %2").arg(index + 1).arg(frame.sourceName);
 		maxWidth = std::max(maxWidth, static_cast<int>(frameWidth));
 		maxHeight = std::max(maxHeight, static_cast<int>(frameHeight));
 
@@ -2193,28 +2314,49 @@ bool decodeQuake2Sprite(const QString& virtualPath, const QByteArray& bytes, con
 				candidates << directory + frame.sourceName;
 			}
 			for (const QString& candidate : candidates) {
+				if (!budget.checkpoint()) { return false; }
 				QString entryPath;
 				QByteArray entryBytes;
 				QString readError;
 				if (!findArchiveEntry(*context.archive, candidate, &entryPath)) {
 					continue;
 				}
-				if (!context.archive->readEntryBytes(entryPath, &entryBytes, &readError)) {
-					continue;
+				qint64 readWork = 0;
+				for (const auto& entry : entries) {
+					if (entry.virtualPath == entryPath) {
+						// Clamp before converting a potentially hostile unsigned directory size.
+						readWork = qint64(std::min<quint64>(std::max(entry.sizeBytes, entry.compressedSizeBytes), kMaxImagePayloadBytes + 1));
+						break;
+					}
 				}
+				if (readWork > context.maximumExternalBytes - externalBytes) {
+					result->error = QCoreApplication::translate("VibeStudioIdTechImage", "Sprite frame reads exceed the aggregate external-image byte limit.");
+					return false;
+				}
+				externalBytes += readWork;
+				if (!readIdTechImageEntry(*context.archive, entryPath, &entryBytes, &readError)) {
+					result->error = QCoreApplication::translate("VibeStudioIdTechImage", "Sprite frame %1 could not be read: %2").arg(entryPath, readError);
+					return false;
+				}
+				if (!budget.checkpoint()) { return false; }
 				// An empty context stops a hostile chain of sprites referring to
 				// each other from recursing.
-				const IdTechImageDecodeResult frameResult = decodeIdTechImage(entryPath, entryBytes, palette, {});
+				auto frameContext = budget.limits;
+				frameContext.archive = nullptr;
+				frameContext.maximumTotalPixels -= budget.used;
+				const IdTechImageDecodeResult frameResult = decodeIdTechImage(entryPath, entryBytes, palette, frameContext);
 				if (!frameResult.decoded || frameResult.image.isNull()) {
-					continue;
+					result->error = QCoreApplication::translate("VibeStudioIdTechImage", "Sprite frame %1 could not be decoded: %2").arg(entryPath, frameResult.error);
+					return false;
 				}
+				if (!budget.consume(frameResult.image.width(), frameResult.image.height(), &result->error)) { return false; }
 				frame.image = frameResult.image;
 				frame.sourceVirtualPath = entryPath;
 				++resolved;
 				break;
 			}
 			if (frame.image.isNull()) {
-				result->warnings << imageText("Sprite frame image was not found in the package: %1").arg(frame.sourceName);
+				result->warnings << QCoreApplication::translate("VibeStudioIdTechImage", "Sprite frame image was not found in the package: %1").arg(frame.sourceName);
 			}
 		}
 		result->frames.push_back(frame);
@@ -2231,15 +2373,15 @@ bool decodeQuake2Sprite(const QString& virtualPath, const QByteArray& bytes, con
 	}
 	result->width = maxWidth;
 	result->height = maxHeight;
-	result->detailLines << imageText("Quake II sprite sheet, %1 frame(s) referencing external images.").arg(frameCount);
-	result->detailLines << imageText("Largest declared frame: %1x%2").arg(maxWidth).arg(maxHeight);
+	result->detailLines << QCoreApplication::translate("VibeStudioIdTechImage", "Quake II sprite sheet, %1 frame(s) referencing external images.").arg(frameCount);
+	result->detailLines << QCoreApplication::translate("VibeStudioIdTechImage", "Largest declared frame: %1x%2").arg(maxWidth).arg(maxHeight);
 	if (context.archive != nullptr) {
-		result->detailLines << imageText("Frame images resolved from the package: %1 of %2.").arg(resolved).arg(frameCount);
+		result->detailLines << QCoreApplication::translate("VibeStudioIdTechImage", "Frame images resolved from the package: %1 of %2.").arg(resolved).arg(frameCount);
 		if (attempted < frameCount) {
-			result->warnings << imageText("Only the first %1 sprite frames were resolved.").arg(kSp2MaxResolvedFrames);
+			result->warnings << QCoreApplication::translate("VibeStudioIdTechImage", "Only the first %1 sprite frames were resolved.").arg(kSp2MaxResolvedFrames);
 		}
 	} else {
-		result->detailLines << imageText("No package was available, so the frame images were not resolved.");
+		result->detailLines << QCoreApplication::translate("VibeStudioIdTechImage", "No package was available, so the frame images were not resolved.");
 	}
 	// Long sprite sheets would swamp the summary, so only the first entries are
 	// listed individually.
@@ -2247,14 +2389,14 @@ bool decodeQuake2Sprite(const QString& virtualPath, const QByteArray& bytes, con
 	const int listed = std::min(static_cast<int>(result->frames.size()), kListedFrames);
 	for (int index = 0; index < listed; ++index) {
 		const IdTechImageFrame& frame = result->frames.at(index);
-		result->detailLines << imageText("Frame %1: %2 (origin %3, %4)")
+		result->detailLines << QCoreApplication::translate("VibeStudioIdTechImage", "Frame %1: %2 (origin %3, %4)")
 			.arg(index + 1)
-			.arg(frame.sourceName.isEmpty() ? imageText("(unnamed)") : frame.sourceName)
+			.arg(frame.sourceName.isEmpty() ? QCoreApplication::translate("VibeStudioIdTechImage", "(unnamed)") : frame.sourceName)
 			.arg(frame.originX)
 			.arg(frame.originY);
 	}
 	if (listed < result->frames.size()) {
-		result->detailLines << imageText("... and %1 further frame(s).").arg(result->frames.size() - listed);
+		result->detailLines << QCoreApplication::translate("VibeStudioIdTechImage", "... and %1 further frame(s).").arg(result->frames.size() - listed);
 	}
 	result->decoded = true;
 	return true;
@@ -2302,7 +2444,7 @@ IdTechPaletteResolution makeGeneratedResolution(const QString& paletteId, const 
 	resolution.fromPackage = false;
 	resolution.searchedPaths = searched;
 	resolution.warnings = warnings;
-	resolution.warnings << imageText("No game palette was found; previews use the generated stand-in palette.");
+	resolution.warnings << QCoreApplication::translate("VibeStudioIdTechImage", "No game palette was found; previews use the generated stand-in palette.");
 	return resolution;
 }
 
@@ -2336,6 +2478,9 @@ QString idTechImageFormatId(IdTechImageFormat format)
 		return QStringLiteral("qt-native");
 	case IdTechImageFormat::Targa:
 		return QStringLiteral("targa");
+	case IdTechImageFormat::Dds: return QStringLiteral("dds");
+	case IdTechImageFormat::Ftx: return QStringLiteral("ftx");
+	case IdTechImageFormat::SinSwl: return QStringLiteral("sin-swl");
 	case IdTechImageFormat::Pcx:
 		return QStringLiteral("pcx");
 	case IdTechImageFormat::QuakeLump:
@@ -2373,42 +2518,45 @@ QString idTechImageFormatId(IdTechImageFormat format)
 QString idTechImageFormatDisplayName(IdTechImageFormat format)
 {
 	switch (format) {
+	case IdTechImageFormat::Dds: return QStringLiteral("DDS");
+	case IdTechImageFormat::Ftx: return QStringLiteral("FTX");
+	case IdTechImageFormat::SinSwl: return QStringLiteral("SiN SWL");
 	case IdTechImageFormat::QtNative:
-		return imageText("Standard image (Qt decoder)");
+		return QCoreApplication::translate("VibeStudioIdTechImage", "Standard image (Qt decoder)");
 	case IdTechImageFormat::Targa:
-		return imageText("Targa image");
+		return QCoreApplication::translate("VibeStudioIdTechImage", "Targa image");
 	case IdTechImageFormat::Pcx:
-		return imageText("ZSoft PCX image");
+		return QCoreApplication::translate("VibeStudioIdTechImage", "ZSoft PCX image");
 	case IdTechImageFormat::QuakeLump:
-		return imageText("Quake .lmp picture");
+		return QCoreApplication::translate("VibeStudioIdTechImage", "Quake .lmp picture");
 	case IdTechImageFormat::QuakeMipTexture:
-		return imageText("Quake WAD2/WAD3 miptex");
+		return QCoreApplication::translate("VibeStudioIdTechImage", "Quake WAD2/WAD3 miptex");
 	case IdTechImageFormat::Quake2Wal:
-		return imageText("Quake II .wal texture");
+		return QCoreApplication::translate("VibeStudioIdTechImage", "Quake II .wal texture");
 	case IdTechImageFormat::Quake2M8:
-		return imageText("Quake II .m8 texture");
+		return QCoreApplication::translate("VibeStudioIdTechImage", "Quake II .m8 texture");
 	case IdTechImageFormat::Quake2M32:
-		return imageText("Quake II .m32 texture");
+		return QCoreApplication::translate("VibeStudioIdTechImage", "Quake II .m32 texture");
 	case IdTechImageFormat::QuakeSprite:
-		return imageText("Quake sprite");
+		return QCoreApplication::translate("VibeStudioIdTechImage", "Quake sprite");
 	case IdTechImageFormat::HalfLifeSprite:
-		return imageText("Half-Life sprite");
+		return QCoreApplication::translate("VibeStudioIdTechImage", "Half-Life sprite");
 	case IdTechImageFormat::Quake2Sprite:
-		return imageText("Quake II .sp2 sprite");
+		return QCoreApplication::translate("VibeStudioIdTechImage", "Quake II .sp2 sprite");
 	case IdTechImageFormat::DoomPatch:
-		return imageText("Doom picture (patch)");
+		return QCoreApplication::translate("VibeStudioIdTechImage", "Doom picture (patch)");
 	case IdTechImageFormat::DoomFlat:
-		return imageText("Doom flat");
+		return QCoreApplication::translate("VibeStudioIdTechImage", "Doom flat");
 	case IdTechImageFormat::DoomPalette:
-		return imageText("Doom palette lump");
+		return QCoreApplication::translate("VibeStudioIdTechImage", "Doom palette lump");
 	case IdTechImageFormat::DoomColormap:
-		return imageText("Doom colormap lump");
+		return QCoreApplication::translate("VibeStudioIdTechImage", "Doom colormap lump");
 	case IdTechImageFormat::Raw:
-		return imageText("Raw indexed data");
+		return QCoreApplication::translate("VibeStudioIdTechImage", "Raw indexed data");
 	case IdTechImageFormat::Unknown:
 		break;
 	}
-	return imageText("Unknown image format");
+	return QCoreApplication::translate("VibeStudioIdTechImage", "Unknown image format");
 }
 
 bool idTechImageFormatIsPaletted(IdTechImageFormat format)
@@ -2484,7 +2632,7 @@ IdTechPalette generatedIdTechPalette(const QString& paletteId)
 	IdTechPalette palette;
 	palette.id = QString::fromLatin1(recipe.id);
 	palette.displayName = QCoreApplication::translate("VibeStudioIdTechImage", recipe.displayName);
-	palette.sourceDescription = imageText("Procedurally generated ramp palette (not a game palette)");
+	palette.sourceDescription = QCoreApplication::translate("VibeStudioIdTechImage", "Procedurally generated ramp palette (not a game palette)");
 	palette.transparentIndex = recipe.transparentIndex;
 	palette.fullbrightStartIndex = recipe.fullbrightStartIndex;
 	palette.generated = true;
@@ -2539,7 +2687,7 @@ bool parseIdTechPaletteBytes(const QByteArray& bytes, const QString& paletteId, 
 	}
 	if (!palette) {
 		if (error) {
-			*error = imageText("No palette output was provided.");
+			*error = QCoreApplication::translate("VibeStudioIdTechImage", "No palette output was provided.");
 		}
 		return false;
 	}
@@ -2547,7 +2695,7 @@ bool parseIdTechPaletteBytes(const QByteArray& bytes, const QString& paletteId, 
 	// stores exactly one. Only the first bank is the base palette.
 	if (bytes.size() < 768 || (bytes.size() % 768) != 0) {
 		if (error) {
-			*error = imageText("Palette payloads must be a whole number of 768-byte RGB banks.");
+			*error = QCoreApplication::translate("VibeStudioIdTechImage", "Palette payloads must be a whole number of 768-byte RGB banks.");
 		}
 		return false;
 	}
@@ -2558,7 +2706,7 @@ bool parseIdTechPaletteBytes(const QByteArray& bytes, const QString& paletteId, 
 	IdTechPalette parsed;
 	parsed.id = known ? descriptor.id : normalizedPaletteId(paletteId);
 	parsed.displayName = known ? descriptor.displayName : parsed.id;
-	parsed.sourceDescription = imageText("768-byte RGB triplet palette");
+	parsed.sourceDescription = QCoreApplication::translate("VibeStudioIdTechImage", "768-byte RGB triplet palette");
 	parsed.transparentIndex = known ? descriptor.transparentIndex : -1;
 	parsed.fullbrightStartIndex = known ? descriptor.fullbrightStartIndex : -1;
 	parsed.generated = false;
@@ -2582,20 +2730,20 @@ bool parsePcxPalette(const QByteArray& bytes, const QString& paletteId, IdTechPa
 	}
 	if (!palette) {
 		if (error) {
-			*error = imageText("No palette output was provided.");
+			*error = QCoreApplication::translate("VibeStudioIdTechImage", "No palette output was provided.");
 		}
 		return false;
 	}
 	PcxHeader header;
 	if (!parsePcxHeader(bytes, &header)) {
 		if (error) {
-			*error = imageText("Not a valid PCX payload.");
+			*error = QCoreApplication::translate("VibeStudioIdTechImage", "Not a valid PCX payload.");
 		}
 		return false;
 	}
 	if (!pcxHasTailPalette(bytes, header)) {
 		if (error) {
-			*error = imageText("PCX payload has no 0x0C tail palette.");
+			*error = QCoreApplication::translate("VibeStudioIdTechImage", "PCX payload has no 0x0C tail palette.");
 		}
 		return false;
 	}
@@ -2603,7 +2751,7 @@ bool parsePcxPalette(const QByteArray& bytes, const QString& paletteId, IdTechPa
 	if (!parseIdTechPaletteBytes(tail, paletteId, palette, error)) {
 		return false;
 	}
-	palette->sourceDescription = imageText("256-entry palette stored in the PCX tail");
+	palette->sourceDescription = QCoreApplication::translate("VibeStudioIdTechImage", "256-entry palette stored in the PCX tail");
 	return true;
 }
 
@@ -2622,12 +2770,73 @@ QStringList idTechPaletteCandidatePaths(const QString& paletteId)
 	return {QStringLiteral("gfx/palette.lmp"), QStringLiteral("palette.lmp"), QStringLiteral("PLAYPAL"), QStringLiteral("pics/colormap.pcx")};
 }
 
+namespace {
+
+// The first of `candidates` that names a known palette, else the first known.
+QString firstKnownPaletteId(const QStringList& candidates)
+{
+	for (const QString& candidate : candidates) {
+		if (!candidate.isEmpty() && idTechPaletteDescriptorForId(candidate)) {
+			return candidate;
+		}
+	}
+	const QStringList known = idTechPaletteIds();
+	return known.isEmpty() ? QString() : known.front();
+}
+
+} // namespace
+
+QString defaultIdTechPaletteIdForFormat(IdTechImageFormat format)
+{
+	switch (format) {
+	case IdTechImageFormat::DoomPatch:
+	case IdTechImageFormat::DoomFlat:
+	case IdTechImageFormat::DoomPalette:
+	case IdTechImageFormat::DoomColormap:
+		return firstKnownPaletteId({QStringLiteral("doom"), QStringLiteral("idtech1"), QStringLiteral("doom-playpal")});
+	case IdTechImageFormat::Quake2Wal:
+		return firstKnownPaletteId({QStringLiteral("quake2"), QStringLiteral("quake-ii"), QStringLiteral("idtech2-quake2")});
+	case IdTechImageFormat::Pcx:
+		return firstKnownPaletteId({QStringLiteral("quake2"), QStringLiteral("quake-ii"), QStringLiteral("quake")});
+	case IdTechImageFormat::QuakeLump:
+	case IdTechImageFormat::QuakeMipTexture:
+	case IdTechImageFormat::QuakeSprite:
+		return firstKnownPaletteId({QStringLiteral("quake"), QStringLiteral("idtech2"), QStringLiteral("quake1")});
+	default:
+		return firstKnownPaletteId({QStringLiteral("quake"), QStringLiteral("doom")});
+	}
+}
+
+QString defaultIdTechPaletteIdForImage(IdTechImageFormat format, qsizetype byteCount)
+{
+	if (format == IdTechImageFormat::Raw && byteCount == 320 * 200) {
+		return defaultIdTechPaletteIdForFormat(IdTechImageFormat::DoomFlat);
+	}
+	return defaultIdTechPaletteIdForFormat(format);
+}
+
+QString idTechPaletteIdInPackage(const PackageArchiveReader& archive)
+{
+	if (!archive.isOpen()) {
+		return {};
+	}
+	for (const QString& id : {QStringLiteral("doom"), QStringLiteral("quake"), QStringLiteral("quake2")}) {
+		for (const QString& candidate : idTechPaletteCandidatePaths(id)) {
+			QString found;
+			if (findArchiveEntry(archive, candidate, &found)) {
+				return id;
+			}
+		}
+	}
+	return {};
+}
+
 IdTechPaletteResolution resolveIdTechPalette(const PackageArchiveReader& archive, const QString& paletteId)
 {
 	const QStringList candidates = idTechPaletteCandidatePaths(paletteId);
 	QStringList warnings;
 	if (!archive.isOpen()) {
-		warnings << imageText("The package is not open; no palette lookup was attempted.");
+		warnings << QCoreApplication::translate("VibeStudioIdTechImage", "The package is not open; no palette lookup was attempted.");
 		return makeGeneratedResolution(paletteId, candidates, warnings);
 	}
 
@@ -2638,14 +2847,14 @@ IdTechPaletteResolution resolveIdTechPalette(const PackageArchiveReader& archive
 		}
 		QByteArray bytes;
 		QString readError;
-		if (!archive.readEntryBytes(actualPath, &bytes, &readError)) {
-			warnings << imageText("Unable to read %1: %2").arg(actualPath, readError);
+		if (!readIdTechImageEntry(archive, actualPath, &bytes, &readError)) {
+			warnings << QCoreApplication::translate("VibeStudioIdTechImage", "Unable to read %1: %2").arg(actualPath, readError);
 			continue;
 		}
 		IdTechPalette palette;
 		QString parseError;
 		if (!parsePaletteCandidateBytes(bytes, paletteId, actualPath, &palette, &parseError)) {
-			warnings << imageText("Ignored %1: %2").arg(actualPath, parseError);
+			warnings << QCoreApplication::translate("VibeStudioIdTechImage", "Ignored %1: %2").arg(actualPath, parseError);
 			continue;
 		}
 		IdTechPaletteResolution resolution;
@@ -2667,7 +2876,7 @@ IdTechPaletteResolution resolveIdTechPaletteFromDirectory(const QString& directo
 	QStringList warnings;
 	const QFileInfo rootInfo(directoryPath);
 	if (directoryPath.isEmpty() || !rootInfo.isDir()) {
-		warnings << imageText("The palette search directory does not exist.");
+		warnings << QCoreApplication::translate("VibeStudioIdTechImage", "The palette search directory does not exist.");
 		return makeGeneratedResolution(paletteId, candidates, warnings);
 	}
 
@@ -2678,7 +2887,7 @@ IdTechPaletteResolution resolveIdTechPaletteFromDirectory(const QString& directo
 		}
 		QFile file(resolvedPath);
 		if (!file.open(QIODevice::ReadOnly)) {
-			warnings << imageText("Unable to read %1: %2").arg(resolvedPath, file.errorString());
+			warnings << QCoreApplication::translate("VibeStudioIdTechImage", "Unable to read %1: %2").arg(resolvedPath, file.errorString());
 			continue;
 		}
 		const QByteArray bytes = file.read(16 * 1024 * 1024);
@@ -2686,7 +2895,7 @@ IdTechPaletteResolution resolveIdTechPaletteFromDirectory(const QString& directo
 		IdTechPalette palette;
 		QString parseError;
 		if (!parsePaletteCandidateBytes(bytes, paletteId, resolvedPath, &palette, &parseError)) {
-			warnings << imageText("Ignored %1: %2").arg(resolvedPath, parseError);
+			warnings << QCoreApplication::translate("VibeStudioIdTechImage", "Ignored %1: %2").arg(resolvedPath, parseError);
 			continue;
 		}
 		IdTechPaletteResolution resolution;
@@ -2706,12 +2915,61 @@ IdTechPaletteResolution resolveIdTechPaletteFromDirectory(const QString& directo
 // Detection
 // ---------------------------------------------------------------------------
 
+bool readIdTechImageEntryAt(const PackageArchiveReader& archive, qsizetype index, QByteArray* bytes, QString* error)
+{
+	if (bytes) { bytes->clear(); }
+	const auto entries = archive.entries();
+	if (!bytes || index < 0 || index >= entries.size()) {
+		if (error) { *error = QCoreApplication::translate("VibeStudioIdTechImage", "Image entry is unavailable."); }
+		return false;
+	}
+	const auto& entry = entries[index];
+	if (!entry.readable || entry.kind != PackageEntryKind::File || entry.sizeBytes > quint64(kMaxImagePayloadBytes) ||
+		entry.compressedSizeBytes > quint64(kMaxImagePayloadBytes)) {
+		if (error) { *error = QCoreApplication::translate("VibeStudioIdTechImage", "Image entry is unreadable or exceeds the 64 MiB import limit."); }
+		return false;
+	}
+	QByteArray payload;
+	// Probe at most one byte beyond the captured size. A loose source growing
+	// during a sprite read must not consume the whole per-file allowance.
+	if (!archive.readEntryAt(index, &payload, error, qint64(entry.sizeBytes) + 1)) { return false; }
+	if (payload.size() > kMaxImagePayloadBytes || quint64(payload.size()) != entry.sizeBytes) {
+		if (error) { *error = QCoreApplication::translate("VibeStudioIdTechImage", "Image entry size changed or its complete payload could not be read."); }
+		return false;
+	}
+	*bytes = std::move(payload); return true;
+}
+
+bool readIdTechImageEntry(const PackageArchiveReader& archive, const QString& virtualPath, QByteArray* bytes, QString* error)
+{
+	const auto entries = archive.entries();
+	for (auto sensitivity : {Qt::CaseSensitive, Qt::CaseInsensitive}) {
+		qsizetype found = -1;
+		for (qsizetype i = 0; i < entries.size(); ++i) {
+			if (entries[i].virtualPath.compare(virtualPath, sensitivity) != 0) { continue; }
+			if (found >= 0) {
+				if (bytes) { bytes->clear(); }
+				if (error) { *error = QCoreApplication::translate("VibeStudioIdTechImage", "Image entry name is ambiguous. Select its package occurrence."); }
+				return false;
+			}
+			found = i;
+		}
+		if (found >= 0) { return readIdTechImageEntryAt(archive, found, bytes, error); }
+	}
+	return readIdTechImageEntryAt(archive, -1, bytes, error);
+}
+
 IdTechImageFormat detectIdTechImageFormat(const QString& virtualPath, const QByteArray& bytes)
 {
 	if (bytes.isEmpty()) {
 		return IdTechImageFormat::Unknown;
 	}
 
+	if (bytes.startsWith("DDS ")) { return IdTechImageFormat::Dds; }
+	// These formats have no magic. The suffix selects a strict bounded decoder.
+	if (pathSuffix(virtualPath) == QStringLiteral("dds")) { return IdTechImageFormat::Dds; }
+	if (pathSuffix(virtualPath) == QStringLiteral("ftx")) { return IdTechImageFormat::Ftx; }
+	if (pathSuffix(virtualPath) == QStringLiteral("swl")) { return IdTechImageFormat::SinSwl; }
 	// Content sniffing first: every candidate below must have a self-consistent
 	// header. The virtual path is consulted only to break ties.
 	if (qtNativeMagic(bytes)) {
@@ -2782,12 +3040,19 @@ IdTechImageFormat detectIdTechImageFormat(const QString& virtualPath, const QByt
 	if (flatOk) {
 		return IdTechImageFormat::DoomFlat;
 	}
+	// A bare 320x200 screen, Heretic's and Hexen's full-screen picture format,
+	// when nothing with a header claimed the bytes.
+	if (bytes.size() == 320 * 200 && !patchOk && pathSuffix(virtualPath).isEmpty()) {
+		return IdTechImageFormat::Raw;
+	}
 	if (targaHeaderOk) {
 		return IdTechImageFormat::Targa;
 	}
 
-	QImage probe;
-	if (probe.loadFromData(bytes)) {
+	QBuffer buffer;
+	buffer.setData(bytes); buffer.open(QIODevice::ReadOnly);
+	QImageReader probe(&buffer);
+	if (probe.canRead()) {
 		return IdTechImageFormat::QtNative;
 	}
 	return IdTechImageFormat::Unknown;
@@ -2800,11 +3065,26 @@ IdTechImageFormat detectIdTechImageFormat(const QString& virtualPath, const QByt
 IdTechImageDecodeResult decodeIdTechImage(const QString& virtualPath, const QByteArray& bytes, const IdTechPalette& palette, const IdTechImageDecodeContext& context)
 {
 	IdTechImageDecodeResult result;
+	if (bytes.size() > kMaxImagePayloadBytes) {
+		result.error = QCoreApplication::translate("VibeStudioIdTechImage", "The image payload exceeds the 64 MiB import limit.");
+		return result;
+	}
+	if (context.maximumDimension < 1 || context.maximumDimension > 65535 || context.maximumImagePixels < 1 ||
+		context.maximumImagePixels > kMaxDecodedPixels || context.maximumTotalPixels < 1 || context.maximumTotalPixels > kMaxTotalDecodedPixels ||
+		context.maximumExternalBytes < 0 || context.maximumExternalBytes > kMaxImagePayloadBytes) {
+		result.error = QCoreApplication::translate("VibeStudioIdTechImage", "Invalid image decode limits.");
+		return result;
+	}
+	DecodeBudget budget{context};
+	if (!budget.checkpoint()) {
+		result.error = QCoreApplication::translate("VibeStudioIdTechImage", "Image decoding cancelled.");
+		return result;
+	}
 	result.format = detectIdTechImageFormat(virtualPath, bytes);
 	applyFormatLabels(&result);
 
 	if (bytes.isEmpty()) {
-		result.error = imageText("The payload is empty.");
+		result.error = QCoreApplication::translate("VibeStudioIdTechImage", "The payload is empty.");
 		return result;
 	}
 
@@ -2812,65 +3092,75 @@ IdTechImageDecodeResult decodeIdTechImage(const QString& virtualPath, const QByt
 	if (!effective.isValid()) {
 		effective = generatedIdTechPalette(QStringLiteral("generic"));
 		if (idTechImageFormatIsPaletted(result.format)) {
-			result.warnings << imageText("No valid palette was supplied; the generated stand-in palette was used.");
+			result.warnings << QCoreApplication::translate("VibeStudioIdTechImage", "No valid palette was supplied; the generated stand-in palette was used.");
 		}
 	}
 
 	switch (result.format) {
 	case IdTechImageFormat::QtNative:
-		decodeQtNative(bytes, &result);
+		decodeQtNative(bytes, &result, budget);
+		break;
+	case IdTechImageFormat::Dds:
+	case IdTechImageFormat::Ftx:
+	case IdTechImageFormat::SinSwl:
+		result = decodeExtraImage(result.format, bytes, context);
 		break;
 	case IdTechImageFormat::Targa:
-		decodeTarga(bytes, &result);
+		decodeTarga(bytes, &result, budget);
 		break;
 	case IdTechImageFormat::Pcx:
-		decodePcx(bytes, effective, &result);
+		decodePcx(bytes, effective, &result, budget);
 		break;
 	case IdTechImageFormat::QuakeLump:
-		decodeQuakeLump(bytes, effective, &result);
+		decodeQuakeLump(bytes, effective, &result, budget);
 		break;
 	case IdTechImageFormat::QuakeMipTexture:
-		decodeMipTexture(virtualPath, bytes, effective, &result);
+		decodeMipTexture(virtualPath, bytes, effective, &result, budget);
 		break;
 	case IdTechImageFormat::Quake2Wal:
-		decodeQuake2Wal(virtualPath, bytes, effective, &result);
+		decodeQuake2Wal(virtualPath, bytes, effective, &result, budget);
 		break;
 	case IdTechImageFormat::Quake2M8:
-		decodeQuake2M8(virtualPath, bytes, effective, &result);
+		decodeQuake2M8(virtualPath, bytes, effective, &result, budget);
 		break;
 	case IdTechImageFormat::Quake2M32:
-		decodeQuake2M32(virtualPath, bytes, &result);
+		decodeQuake2M32(virtualPath, bytes, &result, budget);
 		break;
 	case IdTechImageFormat::QuakeSprite:
 	case IdTechImageFormat::HalfLifeSprite:
-		decodeSprite(bytes, effective, &result);
+		decodeSprite(bytes, effective, &result, budget);
 		break;
 	case IdTechImageFormat::Quake2Sprite:
-		decodeQuake2Sprite(virtualPath, bytes, effective, context, &result);
+		decodeQuake2Sprite(virtualPath, bytes, effective, context, &result, budget);
 		break;
 	case IdTechImageFormat::DoomPatch:
-		decodeDoomPatch(bytes, effective, &result);
+		decodeDoomPatch(bytes, effective, &result, budget);
 		break;
 	case IdTechImageFormat::DoomFlat:
-		decodeDoomFlat(bytes, effective, &result);
+		decodeDoomFlat(bytes, effective, &result, budget);
 		break;
 	case IdTechImageFormat::DoomPalette:
-		decodeDoomPaletteLump(bytes, &result);
+		decodeDoomPaletteLump(bytes, &result, budget);
 		break;
 	case IdTechImageFormat::DoomColormap:
-		decodeDoomColormapLump(bytes, effective, &result);
+		decodeDoomColormapLump(bytes, effective, &result, budget);
 		break;
 	case IdTechImageFormat::Raw:
-		decodeRawIndexed(bytes, effective, &result);
+		decodeRawIndexed(bytes, effective, &result, budget);
 		break;
 	case IdTechImageFormat::Unknown:
-		result.error = imageText("No idTech image decoder recognised this payload.");
+		result.error = QCoreApplication::translate("VibeStudioIdTechImage", "No idTech image decoder recognised this payload.");
 		break;
 	}
 
-	if (!result.decoded && result.error.isEmpty()) {
-		result.error = imageText("Decoding failed.");
+	if (!budget.checkpoint()) {
+		result.decoded = false;
+		result.error = QCoreApplication::translate("VibeStudioIdTechImage", "Image decoding cancelled.");
 	}
+	if (!result.decoded && result.error.isEmpty()) {
+		result.error = QCoreApplication::translate("VibeStudioIdTechImage", "Decoding failed.");
+	}
+	if (!result.decoded) { result.image = {}; result.mipLevels.clear(); result.frames.clear(); }
 	if (result.decoded && result.paletted && result.paletteSourceVirtualPath.isEmpty() && !effective.generated) {
 		result.paletteSourceVirtualPath = effective.sourceDescription;
 	}
@@ -2879,26 +3169,39 @@ IdTechImageDecodeResult decodeIdTechImage(const QString& virtualPath, const QByt
 
 IdTechImageDecodeResult decodeIdTechImageFromArchive(const PackageArchiveReader& archive, const QString& virtualPath, const QString& paletteId, IdTechPaletteResolution* resolutionOut)
 {
-	const IdTechPaletteResolution resolution = resolveIdTechPalette(archive, paletteId);
-	if (resolutionOut) {
-		*resolutionOut = resolution;
-	}
-
 	QByteArray bytes;
 	QString error;
-	if (!archive.readEntryBytes(virtualPath, &bytes, &error)) {
+	if (!readIdTechImageEntry(archive, virtualPath, &bytes, &error)) {
 		IdTechImageDecodeResult result;
 		result.format = IdTechImageFormat::Unknown;
 		applyFormatLabels(&result);
-		result.error = error.isEmpty() ? imageText("Unable to read the package entry.") : error;
+		result.error = error.isEmpty() ? QCoreApplication::translate("VibeStudioIdTechImage", "Unable to read the package entry.") : error;
+		if (resolutionOut) {
+			*resolutionOut = resolveIdTechPalette(archive, paletteId);
+		}
 		return result;
+	}
+	// A WAD flat is a flat because of its namespace marker, not its bytes.
+	QString decodePath = virtualPath;
+	for (const PackageEntry& entry : archive.entries()) {
+		if (entry.typeHint == QStringLiteral("wad-flat") && entry.virtualPath.compare(virtualPath, Qt::CaseInsensitive) == 0) {
+			decodePath = QStringLiteral("flats/") + virtualPath;
+			break;
+		}
+	}
+	// With no palette asked for, the one the entry's format implies, read out
+	// of the package when it ships one: what the package preview shows.
+	const QString resolvedId = paletteId.trimmed().isEmpty() ? defaultIdTechPaletteIdForImage(detectIdTechImageFormat(decodePath, bytes), bytes.size()) : paletteId;
+	const IdTechPaletteResolution resolution = resolveIdTechPalette(archive, resolvedId);
+	if (resolutionOut) {
+		*resolutionOut = resolution;
 	}
 
 	// The archive doubles as the source for formats that reference other
 	// entries, such as the external frame images named by a .sp2 sprite.
 	IdTechImageDecodeContext context;
 	context.archive = &archive;
-	IdTechImageDecodeResult result = decodeIdTechImage(virtualPath, bytes, resolution.palette, context);
+	IdTechImageDecodeResult result = decodeIdTechImage(decodePath, bytes, resolution.palette, context);
 	if (result.paletted) {
 		result.paletteSourceVirtualPath = resolution.fromPackage ? resolution.sourceVirtualPath : QString();
 		result.paletteGenerated = resolution.palette.generated;
@@ -2911,7 +3214,7 @@ IdTechImageDecodeResult decodeIdTechImageFromArchive(const PackageArchiveReader&
 // Quantization and swatches
 // ---------------------------------------------------------------------------
 
-QImage quantizeToIdTechPalette(const QImage& source, const IdTechPalette& palette, bool dither)
+QImage quantizeToIdTechPalette(const QImage& source, const IdTechPalette& palette, bool dither, const std::function<bool(int, int)>& progress)
 {
 	if (source.isNull() || !palette.isValid()) {
 		return {};
@@ -2953,13 +3256,18 @@ QImage quantizeToIdTechPalette(const QImage& source, const IdTechPalette& palett
 			if (bestDistance < 0.0 || distance < bestDistance) {
 				bestDistance = distance;
 				best = index;
+				if (distance == 0.0) { break; }
 			}
 		}
 		return best;
 	};
 
 	if (!dither) {
+		// Repeated texels are common in game art. Bound the exact-color cache so
+		// photographs cannot grow it to one entry per pixel.
+		QHash<QRgb, uchar> matches;
 		for (int y = 0; y < height; ++y) {
+			if (progress && !progress(y, height)) { return {}; }
 			const auto* line = reinterpret_cast<const QRgb*>(rgb.constScanLine(y));
 			uchar* destination = output.scanLine(y);
 			for (int x = 0; x < width; ++x) {
@@ -2968,9 +3276,15 @@ QImage quantizeToIdTechPalette(const QImage& source, const IdTechPalette& palett
 					destination[x] = static_cast<uchar>(transparentIndex);
 					continue;
 				}
-				destination[x] = static_cast<uchar>(nearestIndex(qRed(color), qGreen(color), qBlue(color)));
+				const QRgb rgbKey = color & 0x00ffffffu;
+				const auto found = matches.constFind(rgbKey);
+				if (found != matches.constEnd()) { destination[x] = found.value(); continue; }
+				const auto index = static_cast<uchar>(nearestIndex(qRed(color), qGreen(color), qBlue(color)));
+				destination[x] = index;
+				if (matches.size() < 65536) { matches.insert(rgbKey, index); }
 			}
 		}
+		if (progress && !progress(height, height)) { return {}; }
 		return output;
 	}
 
@@ -2978,6 +3292,7 @@ QImage quantizeToIdTechPalette(const QImage& source, const IdTechPalette& palett
 	QVector<double> currentError(static_cast<qsizetype>(width) * 3, 0.0);
 	QVector<double> nextError(static_cast<qsizetype>(width) * 3, 0.0);
 	for (int y = 0; y < height; ++y) {
+		if (progress && !progress(y, height)) { return {}; }
 		const auto* line = reinterpret_cast<const QRgb*>(rgb.constScanLine(y));
 		uchar* destination = output.scanLine(y);
 		std::fill(nextError.begin(), nextError.end(), 0.0);
@@ -3012,6 +3327,7 @@ QImage quantizeToIdTechPalette(const QImage& source, const IdTechPalette& palett
 		}
 		currentError = nextError;
 	}
+	if (progress && !progress(height, height)) { return {}; }
 	return output;
 }
 
@@ -3046,25 +3362,27 @@ QStringList idTechPaletteSummaryLines(const IdTechPaletteResolution& resolution)
 {
 	QStringList lines;
 	const IdTechPalette& palette = resolution.palette;
-	lines << imageText("Palette: %1").arg(palette.displayName.isEmpty() ? palette.id : palette.displayName);
-	lines << imageText("Palette id: %1").arg(palette.id);
-	if (resolution.fromPackage && !resolution.sourceVirtualPath.isEmpty()) {
-		lines << imageText("Source: %1").arg(resolution.sourceVirtualPath);
+	lines << QCoreApplication::translate("VibeStudioIdTechImage", "Palette: %1").arg(palette.displayName.isEmpty() ? palette.id : palette.displayName);
+	lines << QCoreApplication::translate("VibeStudioIdTechImage", "Palette id: %1").arg(palette.id);
+	if (!palette.generated && !resolution.sourceVirtualPath.isEmpty()) {
+		lines << QCoreApplication::translate("VibeStudioIdTechImage", "Source: %1").arg(resolution.sourceVirtualPath);
+	} else if (palette.generated) {
+		lines << QCoreApplication::translate("VibeStudioIdTechImage", "Source: generated stand-in (no game palette found)");
 	} else {
-		lines << imageText("Source: generated stand-in (no game palette found)");
+		lines << QCoreApplication::translate("VibeStudioIdTechImage", "Source: %1").arg(palette.sourceDescription.isEmpty() ? QCoreApplication::translate("VibeStudioIdTechImage", "embedded or supplied palette") : palette.sourceDescription);
 	}
-	lines << imageText("Entries: %1").arg(palette.colors.size());
+	lines << QCoreApplication::translate("VibeStudioIdTechImage", "Entries: %1").arg(palette.colors.size());
 	lines << (palette.transparentIndex >= 0
-		? imageText("Transparent index: %1").arg(palette.transparentIndex)
-		: imageText("Transparent index: none"));
+		? QCoreApplication::translate("VibeStudioIdTechImage", "Transparent index: %1").arg(palette.transparentIndex)
+		: QCoreApplication::translate("VibeStudioIdTechImage", "Transparent index: none"));
 	lines << (palette.fullbrightStartIndex >= 0
-		? imageText("Fullbright range starts at index %1").arg(palette.fullbrightStartIndex)
-		: imageText("Fullbright range: none"));
+		? QCoreApplication::translate("VibeStudioIdTechImage", "Fullbright range starts at index %1").arg(palette.fullbrightStartIndex)
+		: QCoreApplication::translate("VibeStudioIdTechImage", "Fullbright range: none"));
 	if (!resolution.searchedPaths.isEmpty()) {
-		lines << imageText("Searched: %1").arg(resolution.searchedPaths.join(QStringLiteral(", ")));
+		lines << QCoreApplication::translate("VibeStudioIdTechImage", "Searched: %1").arg(resolution.searchedPaths.join(QStringLiteral(", ")));
 	}
 	for (const QString& warning : resolution.warnings) {
-		lines << imageText("Warning: %1").arg(warning);
+		lines << QCoreApplication::translate("VibeStudioIdTechImage", "Warning: %1").arg(warning);
 	}
 	return lines;
 }
@@ -3072,43 +3390,43 @@ QStringList idTechPaletteSummaryLines(const IdTechPaletteResolution& resolution)
 QStringList idTechImageSummaryLines(const IdTechImageDecodeResult& result)
 {
 	QStringList lines;
-	lines << imageText("Format: %1 [%2]").arg(result.formatName.isEmpty() ? idTechImageFormatDisplayName(result.format) : result.formatName,
+	lines << QCoreApplication::translate("VibeStudioIdTechImage", "Format: %1 [%2]").arg(result.formatName.isEmpty() ? idTechImageFormatDisplayName(result.format) : result.formatName,
 		result.formatId.isEmpty() ? idTechImageFormatId(result.format) : result.formatId);
 	if (!result.decoded) {
-		lines << imageText("Decoded: no");
+		lines << QCoreApplication::translate("VibeStudioIdTechImage", "Decoded: no");
 		if (!result.error.isEmpty()) {
-			lines << imageText("Error: %1").arg(result.error);
+			lines << QCoreApplication::translate("VibeStudioIdTechImage", "Error: %1").arg(result.error);
 		}
 		for (const QString& warning : result.warnings) {
-			lines << imageText("Warning: %1").arg(warning);
+			lines << QCoreApplication::translate("VibeStudioIdTechImage", "Warning: %1").arg(warning);
 		}
 		return lines;
 	}
 
-	lines << imageText("Dimensions: %1x%2").arg(result.width).arg(result.height);
+	lines << QCoreApplication::translate("VibeStudioIdTechImage", "Dimensions: %1x%2").arg(result.width).arg(result.height);
 	if (result.leftOffset != 0 || result.topOffset != 0) {
-		lines << imageText("Offsets: %1, %2").arg(result.leftOffset).arg(result.topOffset);
+		lines << QCoreApplication::translate("VibeStudioIdTechImage", "Offsets: %1, %2").arg(result.leftOffset).arg(result.topOffset);
 	}
 	if (!result.textureName.isEmpty()) {
-		lines << imageText("Texture name: %1").arg(result.textureName);
+		lines << QCoreApplication::translate("VibeStudioIdTechImage", "Texture name: %1").arg(result.textureName);
 	}
 	if (!result.animationNextName.isEmpty()) {
-		lines << imageText("Animation next: %1").arg(result.animationNextName);
+		lines << QCoreApplication::translate("VibeStudioIdTechImage", "Animation next: %1").arg(result.animationNextName);
 	}
 	if (result.paletted) {
-		lines << imageText("Palette: %1%2")
-			.arg(result.paletteId.isEmpty() ? imageText("unknown") : result.paletteId,
-				result.paletteGenerated ? imageText(" (generated stand-in)") : QString());
+		lines << QCoreApplication::translate("VibeStudioIdTechImage", "Palette: %1%2")
+			.arg(result.paletteId.isEmpty() ? QCoreApplication::translate("VibeStudioIdTechImage", "unknown") : result.paletteId,
+				result.paletteGenerated ? QCoreApplication::translate("VibeStudioIdTechImage", " (generated stand-in)") : QString());
 		if (!result.paletteSourceVirtualPath.isEmpty()) {
-			lines << imageText("Palette source: %1").arg(result.paletteSourceVirtualPath);
+			lines << QCoreApplication::translate("VibeStudioIdTechImage", "Palette source: %1").arg(result.paletteSourceVirtualPath);
 		}
 	}
-	lines << (result.hasTransparency ? imageText("Transparency: yes") : imageText("Transparency: no"));
+	lines << (result.hasTransparency ? QCoreApplication::translate("VibeStudioIdTechImage", "Transparency: yes") : QCoreApplication::translate("VibeStudioIdTechImage", "Transparency: no"));
 	if (!result.mipLevels.isEmpty()) {
-		lines << imageText("Mip levels: %1").arg(result.mipLevels.size());
+		lines << QCoreApplication::translate("VibeStudioIdTechImage", "Mip levels: %1").arg(result.mipLevels.size());
 	}
 	if (!result.frames.isEmpty()) {
-		lines << imageText("Frames: %1").arg(result.frames.size());
+		lines << QCoreApplication::translate("VibeStudioIdTechImage", "Frames: %1").arg(result.frames.size());
 	}
 	if (result.externalFrames) {
 		int resolved = 0;
@@ -3117,16 +3435,16 @@ QStringList idTechImageSummaryLines(const IdTechImageDecodeResult& result)
 				++resolved;
 			}
 		}
-		lines << imageText("Frame images: external, %1 of %2 resolved").arg(resolved).arg(result.frames.size());
+		lines << QCoreApplication::translate("VibeStudioIdTechImage", "Frame images: external, %1 of %2 resolved").arg(resolved).arg(result.frames.size());
 	}
 	if (result.surfaceFlags != 0 || result.contentFlags != 0 || result.surfaceValue != 0) {
-		lines << imageText("Surface flags: 0x%1").arg(result.surfaceFlags, 8, 16, QLatin1Char('0'));
-		lines << imageText("Content flags: 0x%1").arg(result.contentFlags, 8, 16, QLatin1Char('0'));
-		lines << imageText("Surface value: %1").arg(result.surfaceValue);
+		lines << QCoreApplication::translate("VibeStudioIdTechImage", "Surface flags: 0x%1").arg(result.surfaceFlags, 8, 16, QLatin1Char('0'));
+		lines << QCoreApplication::translate("VibeStudioIdTechImage", "Content flags: 0x%1").arg(result.contentFlags, 8, 16, QLatin1Char('0'));
+		lines << QCoreApplication::translate("VibeStudioIdTechImage", "Surface value: %1").arg(result.surfaceValue);
 	}
 	lines += result.detailLines;
 	for (const QString& warning : result.warnings) {
-		lines << imageText("Warning: %1").arg(warning);
+		lines << QCoreApplication::translate("VibeStudioIdTechImage", "Warning: %1").arg(warning);
 	}
 	return lines;
 }

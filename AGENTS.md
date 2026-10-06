@@ -16,6 +16,7 @@ credits list.
 
 ## Product Direction
 - Build toward an all-in-one studio: level editor, modeller, texture editor, audio editor, package manager, coding IDE, script editor, sprite creator, shader graph, and compiler pipeline.
+- Always consider how all modules can work in harmony. For every feature or change, assess its effects on the other studio surfaces and connect related workflows through shared project context, asset paths, services, validation, undo/staging, diagnostics, and CLI behavior. Preserve a clear handoff between authoring, level placement, dependency review, compilation, packaging, and testing; document any integration gaps instead of creating isolated workflows.
 - Borrow workflow lessons from modern idStudio-style production tooling while staying appropriate for Quake, Doom, and Quake III-era assets.
 - Treat editor adaptability as a core feature: the level editor must support interaction/layout profiles inspired by GtkRadiant 1.6.0, NetRadiant Custom, TrenchBroom, and QuArK so users can work from familiar controls.
 - Treat efficiency as a core product feature: streamline setup, editing, compiling, packaging, validation, and launch/testing so common development loops are as quick and easy as possible.

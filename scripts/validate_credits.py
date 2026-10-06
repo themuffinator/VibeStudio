@@ -2,6 +2,8 @@
 from __future__ import annotations
 
 import configparser
+import hashlib
+import json
 import re
 import subprocess
 import sys
@@ -23,6 +25,12 @@ CREDIT_TOKENS = [
     "Gemini",
     "ElevenLabs",
     "Meshy",
+    "r8brain-free-src",
+    "dr_mp3",
+    "libvorbis",
+    "libogg",
+    "libebur128",
+    "xatlas",
 ]
 
 
@@ -157,6 +165,53 @@ def main() -> int:
     readme_credits = markdown_section(readme, "## Credits")
     if not readme_credits:
         errors.append("README.md is missing a Credits section.")
+
+    audio_root = root / "external" / "audio" / "r8brain-free-src"
+    try:
+        audio_pin = json.loads(read_text(audio_root / "UPSTREAM.json"))
+        for path, digest in audio_pin["files"].items():
+            source = (audio_root / path).resolve()
+            if not source.is_relative_to(audio_root.resolve()) or hashlib.sha256(source.read_bytes()).hexdigest() != digest:
+                errors.append(f"r8brain pinned source hash mismatch: {path}")
+        for notice in ("LICENSE", "LICENSE-OOURA.txt", "VIBESTUDIO.md"):
+            if not (audio_root / notice).is_file():
+                errors.append(f"r8brain attribution file missing: {notice}")
+        if audio_pin["revision"] not in readme_credits or audio_pin["revision"] not in credits:
+            errors.append("r8brain pinned revision is missing from repository credits.")
+    except (OSError, ValueError, KeyError) as error:
+        errors.append(f"Unable to verify r8brain attribution: {error}")
+
+    for component in ("dr_libs", "libogg", "libvorbis", "libebur128", "portaudio"):
+        decoder_root = root / "external" / "audio" / component
+        try:
+            pin = json.loads(read_text(decoder_root / "UPSTREAM.json"))
+            for path, digest in pin["files"].items():
+                source = (decoder_root / path).resolve()
+                if not source.is_relative_to(decoder_root.resolve()) or hashlib.sha256(source.read_bytes()).hexdigest() != digest:
+                    errors.append(f"{component} pinned source hash mismatch: {path}")
+            license_name = {"dr_libs": "LICENSE", "portaudio": "LICENSE.txt"}.get(component, "COPYING")
+            for notice in (license_name, "VIBESTUDIO.md"):
+                if not (decoder_root / notice).is_file():
+                    errors.append(f"{component} attribution file missing: {notice}")
+            if pin["revision"] not in readme_credits or pin["revision"] not in credits:
+                errors.append(f"{component} pinned revision is missing from repository credits.")
+        except (OSError, ValueError, KeyError) as error:
+            errors.append(f"Unable to verify {component} attribution: {error}")
+
+    atlas_root = root / "external" / "modelling" / "xatlas"
+    try:
+        pin = json.loads(read_text(atlas_root / "UPSTREAM.json"))
+        for path, digest in pin["files"].items():
+            source = (atlas_root / path).resolve()
+            if not source.is_relative_to(atlas_root.resolve()) or hashlib.sha256(source.read_bytes()).hexdigest() != digest:
+                errors.append(f"xatlas pinned source hash mismatch: {path}")
+        for notice in ("LICENSE", "LICENSE-THIRD-PARTY.txt", "VIBESTUDIO.md"):
+            if not (atlas_root / notice).is_file():
+                errors.append(f"xatlas attribution file missing: {notice}")
+        if pin["revision"] not in readme_credits or pin["revision"] not in credits:
+            errors.append("xatlas pinned revision is missing from repository credits.")
+    except (OSError, ValueError, KeyError) as error:
+        errors.append(f"Unable to verify xatlas attribution: {error}")
 
     for token in CREDIT_TOKENS:
         if token not in readme_credits:

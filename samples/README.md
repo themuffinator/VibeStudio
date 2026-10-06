@@ -16,3 +16,10 @@ Run the smoke checks with a built VibeStudio CLI:
 ```sh
 python scripts/validate_samples.py --binary builddir/src/vibestudio
 ```
+
+Standalone model designs are in [`models/`](models/):
+[`pillar.model.json`](models/pillar.model.json) exercises the original schema,
+and [`angled-panel.model.json`](models/angled-panel.model.json) demonstrates
+schema-2 3D rotations, UV tiling, mirroring, and rotation. Open these in
+**Models > Design Prop** or build them with `model build`. The material paths
+are placeholders; see [Model Design](../docs/MODEL_DESIGN.md) for the workflow.

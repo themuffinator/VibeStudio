@@ -3,3 +3,7 @@
 #define VIBESTUDIO_VERSION "@VIBESTUDIO_VERSION@"
 #define VIBESTUDIO_GITHUB_REPO "@VIBESTUDIO_GITHUB_REPO@"
 #define VIBESTUDIO_UPDATE_CHANNEL "@VIBESTUDIO_UPDATE_CHANNEL@"
+// 1 when the build links Qt Multimedia and the Audio browser can play sounds.
+#define VIBESTUDIO_HAVE_AUDIO_PLAYBACK @VIBESTUDIO_HAVE_AUDIO_PLAYBACK@
+// Native duplex devices are separate from optional Qt playback/capture.
+#define VIBESTUDIO_HAVE_AUDIO_DUPLEX @VIBESTUDIO_HAVE_AUDIO_DUPLEX@

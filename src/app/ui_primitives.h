@@ -18,6 +18,8 @@ class QWidget;
 
 namespace vibestudio {
 
+class ElidedLabel;
+
 struct UiPrimitiveDescriptor {
 	QString id;
 	QString title;
@@ -60,6 +62,11 @@ public:
 	OperationProgress progress() const;
 	QStringList placeholderRows() const;
 	bool reducedMotion() const;
+
+protected:
+	// Paints the state's colour along the strip's leading edge (the right
+	// edge in a right-to-left layout), which a style sheet cannot mirror.
+	void paintEvent(QPaintEvent* event) override;
 
 private:
 	void refresh();
@@ -112,7 +119,7 @@ private:
 	const DetailSection* findSection(const QString& sectionId) const;
 
 	QLabel* m_titleLabel = nullptr;
-	QLabel* m_subtitleLabel = nullptr;
+	ElidedLabel* m_subtitleLabel = nullptr;
 	QPushButton* m_toggleButton = nullptr;
 	QPushButton* m_copyButton = nullptr;
 	QWidget* m_body = nullptr;
@@ -123,6 +130,8 @@ private:
 	QString m_subtitle;
 	QVector<DetailSection> m_sections;
 	QString m_currentSectionId;
+	QString m_displayedSectionId;
+	QString m_displayedContent;
 	bool m_expanded = true;
 };
 

@@ -1,5 +1,6 @@
 #pragma once
 
+#include <QHash>
 #include <QString>
 #include <QStringList>
 #include <QVector>
@@ -45,6 +46,10 @@ struct AiCredentialStatus {
 
 struct AiAutomationPreferences {
 	bool aiFreeMode = true;
+	// The open project's manifest turns AI off for it. Read with the
+	// settings and never saved: a project can only make AI stricter, never
+	// switch it on against the studio's own AI-free mode.
+	bool projectAiFree = false;
 	bool cloudConnectorsEnabled = false;
 	bool agenticWorkflowsEnabled = false;
 	QString preferredReasoningConnectorId;
@@ -68,6 +73,19 @@ struct AiAutomationPreferences {
 	QString elevenLabsCredentialEnvironmentVariable = QStringLiteral("ELEVENLABS_API_KEY");
 	QString meshyCredentialEnvironmentVariable = QStringLiteral("MESHY_API_KEY");
 	QString customHttpCredentialEnvironmentVariable;
+	// The provider's own model name and base URL for each text connector, as
+	// the user set them, keyed by connector id. Empty takes the connector's
+	// suggested model and default endpoint (core/ai_transport.h).
+	QHash<QString, QString> connectorModels;
+	QHash<QString, QString> connectorEndpoints;
+	// The same for each connector's image API (core/ai_image_transport.h),
+	// which often lives elsewhere: a local Stable Diffusion web UI beside a
+	// local text runtime, say.
+	QHash<QString, QString> connectorImageModels;
+	QHash<QString, QString> connectorImageEndpoints;
+	// And for each connector's sound API (core/ai_audio_transport.h).
+	QHash<QString, QString> connectorAudioModels;
+	QHash<QString, QString> connectorAudioEndpoints;
 };
 
 QVector<AiCapabilityDescriptor> aiCapabilityDescriptors();

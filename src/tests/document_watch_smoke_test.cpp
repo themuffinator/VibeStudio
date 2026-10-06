@@ -496,7 +496,7 @@ bool runVocabularySmoke()
 	DocumentFingerprint present;
 	present.exists = true;
 	present.size = 10;
-	present.modified = QDateTime::fromSecsSinceEpoch(1'000'000, QTimeZone::UTC);
+	present.modified = QDateTime::fromSecsSinceEpoch(1'000'000, QTimeZone::utc());
 	present.contentHash = QByteArrayLiteral("aaaa");
 	present.hashed = true;
 

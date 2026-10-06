@@ -1,4 +1,7 @@
 #include "app/ui_primitives.h"
+#include "app/studio_layout.h"
+#include "app/studio_theme.h"
+#include "app/wrapping_action_button.h"
 
 #include <QApplication>
 #include <QClipboard>
@@ -11,6 +14,8 @@
 #include <QLabel>
 #include <QListWidget>
 #include <QListWidgetItem>
+#include <QPainter>
+#include <QPainterPath>
 #include <QProgressBar>
 #include <QPushButton>
 #include <QSignalBlocker>
@@ -24,10 +29,82 @@ namespace vibestudio {
 
 namespace {
 
-QString uiText(const char* source)
-{
-	return QCoreApplication::translate("VibeStudioUiPrimitives", source);
-}
+// A width-dependent header keeps ordinary panes compact and gives long
+// translations their own action rows. Qt still owns each widget's focus,
+// accessibility and height-for-width sizing.
+class DetailHeaderLayout final : public QLayout {
+public:
+	DetailHeaderLayout() { setContentsMargins(0, 0, 0, 0); setSpacing(6); }
+	~DetailHeaderLayout() override { while (auto* item = takeAt(0)) { delete item; } }
+	void addItem(QLayoutItem* item) override { m_items.append(item); }
+	int count() const override { return m_items.size(); }
+	QLayoutItem* itemAt(int index) const override { return index >= 0 && index < count() ? m_items.at(index) : nullptr; }
+	QLayoutItem* takeAt(int index) override { return index >= 0 && index < count() ? m_items.takeAt(index) : nullptr; }
+	bool hasHeightForWidth() const override { return true; }
+	int heightForWidth(int width) const override { return arrange(QRect(0, 0, qMax(1, width), 0), false); }
+	QSize minimumSize() const override
+	{
+		int width = 0, height = 0;
+		for (const auto* item : m_items) {
+			if (item->isEmpty()) { continue; }
+			width = qMax(width, item->minimumSize().width()); height = qMax(height, item->minimumSize().height());
+		}
+		return {width, height};
+	}
+	QSize sizeHint() const override { const int width = qMax(400, minimumSize().width()); return {width, heightForWidth(width)}; }
+	void setGeometry(const QRect& rect) override { QLayout::setGeometry(rect); arrange(rect, true); }
+private:
+	int arrange(const QRect& rect, bool place) const
+	{
+		if (m_items.size() < 2) { return 0; }
+		const int width = qMax(1, rect.width()), gap = spacing();
+		QVector<QLayoutItem*> actions; int actionWidth = 0;
+		for (int i = 2; i < m_items.size(); ++i) {
+			if (m_items.at(i)->isEmpty()) { continue; }
+			actions.append(m_items.at(i)); actionWidth += m_items.at(i)->sizeHint().width();
+		}
+		actionWidth += qMax(0, int(actions.size()) - 1) * gap;
+		const bool inlineActions = actions.isEmpty() || m_items.at(0)->sizeHint().width() + gap + actionWidth <= width;
+		const int titleWidth = inlineActions && !actions.isEmpty() ? qMax(1, width - actionWidth - gap) : width;
+		const auto height = [](QLayoutItem* item, int available) {
+			return item->hasHeightForWidth() ? qMax(item->minimumSize().height(), item->heightForWidth(available)) : item->sizeHint().height();
+		};
+		const auto position = [&](QLayoutItem* item, int x, int y, int w, int h) {
+			if (place) { item->setGeometry(QStyle::visualRect(parentWidget()->layoutDirection(), rect, QRect(rect.x() + x, rect.y() + y, w, h))); }
+		};
+		const int titleHeight = height(m_items.at(0), titleWidth);
+		const int subtitleHeight = height(m_items.at(1), titleWidth);
+		position(m_items.at(0), 0, 0, titleWidth, titleHeight);
+		position(m_items.at(1), 0, titleHeight + 1, titleWidth, subtitleHeight);
+		const int textHeight = titleHeight + 1 + subtitleHeight;
+		if (actions.isEmpty()) { return textHeight; }
+		const bool actionRow = inlineActions || actionWidth <= width;
+		int x = inlineActions ? width - actionWidth : 0, y = inlineActions ? 0 : textHeight + gap, rowHeight = 0;
+		for (auto* item : actions) {
+			const int w = actionRow ? item->sizeHint().width() : width, h = height(item, w);
+			position(item, x, y, w, h); rowHeight = qMax(rowHeight, h);
+			if (actionRow) { x += w + gap; } else { y += h + gap; }
+		}
+		return inlineActions ? qMax(textHeight, rowHeight) : actionRow ? y + rowHeight : y - gap;
+	}
+	QVector<QLayoutItem*> m_items;
+};
+
+class DetailTextView final : public QTextEdit {
+public:
+	using QTextEdit::QTextEdit;
+
+protected:
+	void changeEvent(QEvent* event) override
+	{
+		QTextEdit::changeEvent(event);
+		if (event->type() == QEvent::FontChange || event->type() == QEvent::ApplicationFontChange || event->type() == QEvent::StyleChange) {
+			// Restyling the parent can precede the child's stylesheet font reset.
+			// Apply the fixed-pitch face and current scale to the text view itself.
+			if (font() != studioMonospaceFont()) { applyMonospaceContentFont(this); }
+		}
+	}
+};
 
 QString normalizedSectionId(const QString& value)
 {
@@ -41,31 +118,31 @@ QString localizedStateName(OperationState state)
 {
 	switch (state) {
 	case OperationState::Idle:
-		return uiText("Idle");
+		return QCoreApplication::translate("VibeStudioUiPrimitives", "Idle");
 	case OperationState::Queued:
-		return uiText("Queued");
+		return QCoreApplication::translate("VibeStudioUiPrimitives", "Queued");
 	case OperationState::Loading:
-		return uiText("Loading");
+		return QCoreApplication::translate("VibeStudioUiPrimitives", "Loading");
 	case OperationState::Running:
-		return uiText("Running");
+		return QCoreApplication::translate("VibeStudioUiPrimitives", "Running");
 	case OperationState::Warning:
-		return uiText("Warning");
+		return QCoreApplication::translate("VibeStudioUiPrimitives", "Warning");
 	case OperationState::Failed:
-		return uiText("Failed");
+		return QCoreApplication::translate("VibeStudioUiPrimitives", "Failed");
 	case OperationState::Cancelled:
-		return uiText("Cancelled");
+		return QCoreApplication::translate("VibeStudioUiPrimitives", "Cancelled");
 	case OperationState::Completed:
-		return uiText("Completed");
+		return QCoreApplication::translate("VibeStudioUiPrimitives", "Completed");
 	}
-	return uiText("Idle");
+	return QCoreApplication::translate("VibeStudioUiPrimitives", "Idle");
 }
 
 QStringList defaultPlaceholderRows()
 {
 	return {
-		uiText("Summary"),
-		uiText("Metadata"),
-		uiText("Diagnostics"),
+		QCoreApplication::translate("VibeStudioUiPrimitives", "Summary"),
+		QCoreApplication::translate("VibeStudioUiPrimitives", "Metadata"),
+		QCoreApplication::translate("VibeStudioUiPrimitives", "Diagnostics"),
 	};
 }
 
@@ -152,57 +229,57 @@ QVector<UiPrimitiveDescriptor> uiPrimitiveDescriptors()
 	return {
 		{
 			QStringLiteral("loading-pane"),
-			uiText("Loading pane"),
-			uiText("Reusable pane and preview loading surface with state text, progress, reduced-motion behavior, and context-specific skeleton rows."),
+			QCoreApplication::translate("VibeStudioUiPrimitives", "Loading pane"),
+			QCoreApplication::translate("VibeStudioUiPrimitives", "Reusable pane and preview loading surface with state text, progress, reduced-motion behavior, and context-specific skeleton rows."),
 			{
-				uiText("package loading"),
-				uiText("preview generation"),
-				uiText("compiler stages"),
-				uiText("AI requests"),
+				QCoreApplication::translate("VibeStudioUiPrimitives", "package loading"),
+				QCoreApplication::translate("VibeStudioUiPrimitives", "preview generation"),
+				QCoreApplication::translate("VibeStudioUiPrimitives", "compiler stages"),
+				QCoreApplication::translate("VibeStudioUiPrimitives", "AI requests"),
 			},
 		},
 		{
 			QStringLiteral("detail-drawer"),
-			uiText("Detail drawer"),
-			uiText("Reusable collapsible drawer for summary-first logs, metadata, manifests, raw diagnostics, and support-copy text."),
+			QCoreApplication::translate("VibeStudioUiPrimitives", "Detail drawer"),
+			QCoreApplication::translate("VibeStudioUiPrimitives", "Reusable collapsible drawer for summary-first logs, metadata, manifests, raw diagnostics, and support-copy text."),
 			{
-				uiText("task logs"),
-				uiText("package metadata"),
-				uiText("compiler manifests"),
-				uiText("raw diagnostics"),
+				QCoreApplication::translate("VibeStudioUiPrimitives", "task logs"),
+				QCoreApplication::translate("VibeStudioUiPrimitives", "package metadata"),
+				QCoreApplication::translate("VibeStudioUiPrimitives", "compiler manifests"),
+				QCoreApplication::translate("VibeStudioUiPrimitives", "raw diagnostics"),
 			},
 		},
 		{
 			QStringLiteral("status-chip"),
-			uiText("Status chip"),
-			uiText("Compact non-color-only status indicator for project, package, compiler, installation, AI, validation, setup, and localization state."),
+			QCoreApplication::translate("VibeStudioUiPrimitives", "Status chip"),
+			QCoreApplication::translate("VibeStudioUiPrimitives", "Compact non-color-only status indicator for project, package, compiler, installation, AI, validation, setup, and localization state."),
 			{
-				uiText("project health"),
-				uiText("package staging"),
-				uiText("compiler readiness"),
-				uiText("AI-free mode"),
+				QCoreApplication::translate("VibeStudioUiPrimitives", "project health"),
+				QCoreApplication::translate("VibeStudioUiPrimitives", "package staging"),
+				QCoreApplication::translate("VibeStudioUiPrimitives", "compiler readiness"),
+				QCoreApplication::translate("VibeStudioUiPrimitives", "AI-free mode"),
 			},
 		},
 		{
 			QStringLiteral("shortcut-registry"),
-			uiText("Shortcut registry"),
-			uiText("Shared keyboard shortcut metadata for command surfaces, conflict checks, accessible labels, and future user remapping."),
+			QCoreApplication::translate("VibeStudioUiPrimitives", "Shortcut registry"),
+			QCoreApplication::translate("VibeStudioUiPrimitives", "Shared keyboard shortcut metadata for command surfaces, conflict checks, accessible labels, and future user remapping."),
 			{
-				uiText("global commands"),
-				uiText("package commands"),
-				uiText("compiler commands"),
-				uiText("activity commands"),
+				QCoreApplication::translate("VibeStudioUiPrimitives", "global commands"),
+				QCoreApplication::translate("VibeStudioUiPrimitives", "package commands"),
+				QCoreApplication::translate("VibeStudioUiPrimitives", "compiler commands"),
+				QCoreApplication::translate("VibeStudioUiPrimitives", "activity commands"),
 			},
 		},
 		{
 			QStringLiteral("command-palette"),
-			uiText("Command palette shell"),
-			uiText("Searchable command metadata shell with categories, summaries, shortcut hints, and staged/destructive flags."),
+			QCoreApplication::translate("VibeStudioUiPrimitives", "Command palette shell"),
+			QCoreApplication::translate("VibeStudioUiPrimitives", "Searchable command metadata shell with categories, summaries, shortcut hints, and staged/destructive flags."),
 			{
-				uiText("workspace commands"),
-				uiText("support commands"),
-				uiText("QA commands"),
-				uiText("AI review commands"),
+				QCoreApplication::translate("VibeStudioUiPrimitives", "workspace commands"),
+				QCoreApplication::translate("VibeStudioUiPrimitives", "support commands"),
+				QCoreApplication::translate("VibeStudioUiPrimitives", "QA commands"),
+				QCoreApplication::translate("VibeStudioUiPrimitives", "AI review commands"),
 			},
 		},
 	};
@@ -212,44 +289,41 @@ LoadingPane::LoadingPane(QWidget* parent)
 	: QFrame(parent)
 {
 	setObjectName("loadingPane");
-	setAccessibleName(uiText("Loading pane"));
-	setAccessibleDescription(uiText("Shows operation state, progress, and placeholder rows while pane content is loading."));
+	setAccessibleName(QCoreApplication::translate("VibeStudioUiPrimitives", "Loading pane"));
+	setAccessibleDescription(QCoreApplication::translate("VibeStudioUiPrimitives", "Shows operation state, progress, and placeholder rows while pane content is loading."));
 
-	// One compact status row: state chip, title, detail, and a progress bar
-	// that only appears while work is queued or running. Skeleton rows appear
-	// beneath it for the same busy states.
+	// One slim status line: the state in words (its edge carries its colour),
+	// the title, the detail beside it, and a progress bar that only appears
+	// while work is queued or running. The detail wraps onto more lines only
+	// when it has to. Skeleton rows appear beneath it for the same busy states.
 	auto* root = new QVBoxLayout(this);
-	root->setContentsMargins(12, 8, 12, 8);
+	root->setContentsMargins(12, 6, 10, 6);
 	root->setSpacing(6);
 
 	auto* header = new QHBoxLayout;
 	header->setSpacing(10);
 	m_stateLabel = new QLabel;
 	m_stateLabel->setObjectName("statusChip");
-	m_stateLabel->setAccessibleName(uiText("Loading pane state"));
-	m_stateLabel->setAlignment(Qt::AlignCenter);
+	m_stateLabel->setAccessibleName(QCoreApplication::translate("VibeStudioUiPrimitives", "Loading pane state"));
+	m_stateLabel->setAlignment(Qt::AlignLeading | Qt::AlignVCenter);
 	header->addWidget(m_stateLabel, 0, Qt::AlignTop);
 
-	auto* text = new QVBoxLayout;
-	text->setSpacing(1);
 	m_titleLabel = new QLabel;
 	m_titleLabel->setObjectName("loadingTitle");
-	m_titleLabel->setAccessibleName(uiText("Loading pane title"));
+	m_titleLabel->setAccessibleName(QCoreApplication::translate("VibeStudioUiPrimitives", "Loading pane title"));
 	m_titleLabel->setTextInteractionFlags(Qt::TextSelectableByMouse);
-	m_titleLabel->setWordWrap(true);
-	text->addWidget(m_titleLabel);
+	header->addWidget(m_titleLabel, 0, Qt::AlignTop);
 
 	m_detailLabel = new QLabel;
 	m_detailLabel->setObjectName("loadingDetail");
-	m_detailLabel->setAccessibleName(uiText("Loading pane detail"));
+	m_detailLabel->setAccessibleName(QCoreApplication::translate("VibeStudioUiPrimitives", "Loading pane detail"));
 	m_detailLabel->setWordWrap(true);
 	m_detailLabel->setTextInteractionFlags(Qt::TextSelectableByMouse);
-	text->addWidget(m_detailLabel);
-	header->addLayout(text, 1);
+	header->addWidget(m_detailLabel, 1, Qt::AlignTop);
 
 	m_progress = new QProgressBar;
 	m_progress->setObjectName("loadingProgress");
-	m_progress->setAccessibleName(uiText("Loading pane progress"));
+	m_progress->setAccessibleName(QCoreApplication::translate("VibeStudioUiPrimitives", "Loading pane progress"));
 	m_progress->setTextVisible(true);
 	m_progress->setFixedWidth(190);
 	header->addWidget(m_progress, 0, Qt::AlignVCenter);
@@ -257,16 +331,16 @@ LoadingPane::LoadingPane(QWidget* parent)
 
 	m_placeholderHost = new QWidget;
 	m_placeholderHost->setObjectName("skeletonHost");
-	m_placeholderHost->setAccessibleName(uiText("Loading placeholders"));
-	m_placeholderHost->setAccessibleDescription(uiText("Context-specific placeholder rows for loading or pending pane content."));
+	m_placeholderHost->setAccessibleName(QCoreApplication::translate("VibeStudioUiPrimitives", "Loading placeholders"));
+	m_placeholderHost->setAccessibleDescription(QCoreApplication::translate("VibeStudioUiPrimitives", "Context-specific placeholder rows for loading or pending pane content."));
 	m_placeholderLayout = new QVBoxLayout(m_placeholderHost);
 	m_placeholderLayout->setContentsMargins(0, 0, 0, 0);
 	m_placeholderLayout->setSpacing(6);
 	m_placeholderLayout->addStretch(1);
 	root->addWidget(m_placeholderHost);
 
-	setTitle(uiText("Loading"));
-	setDetail(uiText("Preparing content."));
+	setTitle(QCoreApplication::translate("VibeStudioUiPrimitives", "Loading"));
+	setDetail(QCoreApplication::translate("VibeStudioUiPrimitives", "Preparing content."));
 	setPlaceholderRows(defaultPlaceholderRows());
 	refresh();
 }
@@ -353,7 +427,7 @@ void LoadingPane::refresh()
 	}
 
 	const QString stateName = m_statusText.isEmpty() ? localizedStateName(m_state) : m_statusText;
-	const QString titleText = m_title.isEmpty() ? uiText("Loading") : m_title;
+	const QString titleText = m_title.isEmpty() ? QCoreApplication::translate("VibeStudioUiPrimitives", "Loading") : m_title;
 	m_titleLabel->setText(titleText);
 	m_stateLabel->setText(QStringLiteral("%1 %2").arg(stateGlyph(m_state), stateName));
 	m_stateLabel->setToolTip(stateName);
@@ -362,14 +436,19 @@ void LoadingPane::refresh()
 		m_stateLabel->setProperty("operationState", stateId);
 		repolish(m_stateLabel);
 	}
+	// The strip's leading edge takes the state's colour (see paintEvent()).
+	if (property("operationState").toString() != stateId) {
+		setProperty("operationState", stateId);
+		update();
+	}
 
-	m_detailLabel->setText(m_detail.isEmpty() ? uiText("Preparing content.") : m_detail);
+	m_detailLabel->setText(m_detail.isEmpty() ? QCoreApplication::translate("VibeStudioUiPrimitives", "Preparing content.") : m_detail);
 
 	const bool busy = isBusyState(m_state);
 	if (m_progressValue.total > 0) {
 		m_progress->setRange(0, m_progressValue.total);
 		m_progress->setValue(m_progressValue.current);
-		m_progress->setFormat(uiText("%1%").arg(operationProgressPercent(m_progressValue)));
+		m_progress->setFormat(QCoreApplication::translate("VibeStudioUiPrimitives", "%1%").arg(operationProgressPercent(m_progressValue)));
 	} else if (busy && !m_reducedMotion) {
 		m_progress->setRange(0, 0);
 		m_progress->setFormat(stateName);
@@ -382,6 +461,27 @@ void LoadingPane::refresh()
 	// space while work is queued or running.
 	m_progress->setVisible(busy);
 	m_placeholderHost->setVisible(busy);
+}
+
+void LoadingPane::paintEvent(QPaintEvent* event)
+{
+	QFrame::paintEvent(event);
+	const StudioThemeTokens& theme = currentStudioTheme();
+	QColor edge = studioThemeStateColor(theme, operationStateId(m_state));
+	if (!edge.isValid()) {
+		edge = theme.colors.borderStrong;
+	}
+	QPainter painter(this);
+	painter.setRenderHint(QPainter::Antialiasing, true);
+	// Clipped to the strip's own rounded outline, so the edge follows its
+	// corners on the leading side.
+	QPainterPath outline;
+	const qreal radius = theme.metrics.radiusSmall;
+	outline.addRoundedRect(QRectF(rect()).adjusted(0.5, 0.5, -0.5, -0.5), radius, radius);
+	painter.setClipPath(outline);
+	const qreal width = 3.0;
+	const bool mirrored = layoutDirection() == Qt::RightToLeft;
+	painter.fillRect(QRectF(mirrored ? rect().width() - width : 0.0, 0.0, width, rect().height()), edge);
 }
 
 void LoadingPane::rebuildPlaceholders()
@@ -404,8 +504,8 @@ void LoadingPane::rebuildPlaceholders()
 		const bool active = index < rows.size();
 		if (active) {
 			const QString& row = rows[index];
-			label->setText(uiText("%1 loading placeholder").arg(row));
-			label->setAccessibleName(uiText("%1 placeholder").arg(row));
+			label->setText(QCoreApplication::translate("VibeStudioUiPrimitives", "%1 loading placeholder").arg(row));
+			label->setAccessibleName(QCoreApplication::translate("VibeStudioUiPrimitives", "%1 placeholder").arg(row));
 		}
 		label->setVisible(active);
 	}
@@ -415,45 +515,43 @@ DetailDrawer::DetailDrawer(QWidget* parent)
 	: QFrame(parent)
 {
 	setObjectName("detailDrawer");
-	setAccessibleName(uiText("Detail drawer"));
-	setAccessibleDescription(uiText("Collapsible details for logs, metadata, manifests, and raw diagnostics."));
+	setAccessibleName(QCoreApplication::translate("VibeStudioUiPrimitives", "Detail drawer"));
+	setAccessibleDescription(QCoreApplication::translate("VibeStudioUiPrimitives", "Collapsible details for logs, metadata, manifests, and raw diagnostics."));
 
 	auto* root = new QVBoxLayout(this);
 	root->setContentsMargins(12, 10, 12, 10);
 	root->setSpacing(8);
 
-	auto* header = new QHBoxLayout;
-	header->setSpacing(6);
-	auto* titleStack = new QVBoxLayout;
-	titleStack->setSpacing(1);
+	auto* header = new DetailHeaderLayout;
 	m_titleLabel = new QLabel;
 	m_titleLabel->setObjectName("drawerTitle");
-	m_titleLabel->setAccessibleName(uiText("Detail drawer title"));
+	m_titleLabel->setAccessibleName(QCoreApplication::translate("VibeStudioUiPrimitives", "Detail drawer title"));
 	m_titleLabel->setWordWrap(true);
-	m_subtitleLabel = new QLabel;
+	m_titleLabel->setTextFormat(Qt::PlainText);
+	m_subtitleLabel = new ElidedLabel;
 	m_subtitleLabel->setObjectName("drawerSubtitle");
-	m_subtitleLabel->setAccessibleName(uiText("Detail drawer subtitle"));
-	m_subtitleLabel->setWordWrap(true);
-	titleStack->addWidget(m_titleLabel);
-	titleStack->addWidget(m_subtitleLabel);
-	header->addLayout(titleStack, 1);
+	m_subtitleLabel->setAccessibleName(QCoreApplication::translate("VibeStudioUiPrimitives", "Detail drawer subtitle"));
+	m_subtitleLabel->setTextFormat(Qt::PlainText);
+	m_subtitleLabel->setElideMode(Qt::ElideMiddle);
+	header->addWidget(m_titleLabel);
+	header->addWidget(m_subtitleLabel);
 
-	m_copyButton = new QPushButton(uiText("Copy"));
-	m_copyButton->setAccessibleName(uiText("Copy selected detail text"));
-	m_copyButton->setToolTip(uiText("Copy the selected section to the clipboard."));
+	m_copyButton = new WrappingActionButton(QCoreApplication::translate("VibeStudioUiPrimitives", "Copy"), 0);
+	m_copyButton->setAccessibleName(QCoreApplication::translate("VibeStudioUiPrimitives", "Copy selected detail text"));
+	m_copyButton->setToolTip(QCoreApplication::translate("VibeStudioUiPrimitives", "Copy the selected section to the clipboard."));
 	m_copyButton->setProperty("variant", QStringLiteral("ghost"));
 	connect(m_copyButton, &QPushButton::clicked, this, [this]() {
 		copyCurrentSection();
 	});
-	header->addWidget(m_copyButton, 0, Qt::AlignTop);
+	header->addWidget(m_copyButton);
 
-	m_toggleButton = new QPushButton(uiText("Hide Details"));
-	m_toggleButton->setAccessibleName(uiText("Show or hide detail drawer"));
+	m_toggleButton = new WrappingActionButton(QCoreApplication::translate("VibeStudioUiPrimitives", "Hide Details"), 0);
+	m_toggleButton->setAccessibleName(QCoreApplication::translate("VibeStudioUiPrimitives", "Show or hide detail drawer"));
 	m_toggleButton->setProperty("variant", QStringLiteral("ghost"));
 	connect(m_toggleButton, &QPushButton::clicked, this, [this]() {
 		setExpanded(!m_expanded);
 	});
-	header->addWidget(m_toggleButton, 0, Qt::AlignTop);
+	header->addWidget(m_toggleButton);
 	root->addLayout(header);
 
 	m_body = new QWidget;
@@ -461,17 +559,17 @@ DetailDrawer::DetailDrawer(QWidget* parent)
 	bodyLayout->setContentsMargins(0, 0, 0, 0);
 	bodyLayout->setSpacing(8);
 
-	m_emptyLabel = new QLabel(uiText("No details yet."));
+	m_emptyLabel = new QLabel(QCoreApplication::translate("VibeStudioUiPrimitives", "No details yet."));
 	m_emptyLabel->setObjectName("drawerEmpty");
-	m_emptyLabel->setAccessibleName(uiText("Detail drawer empty state"));
+	m_emptyLabel->setAccessibleName(QCoreApplication::translate("VibeStudioUiPrimitives", "Detail drawer empty state"));
 	m_emptyLabel->setWordWrap(true);
 	m_emptyLabel->setAlignment(Qt::AlignLeft | Qt::AlignTop);
 	bodyLayout->addWidget(m_emptyLabel);
 
 	m_sectionsList = new QListWidget;
 	m_sectionsList->setObjectName("detailSections");
-	m_sectionsList->setAccessibleName(uiText("Detail sections"));
-	m_sectionsList->setAccessibleDescription(uiText("Available summary, log, metadata, manifest, and raw diagnostic sections."));
+	m_sectionsList->setAccessibleName(QCoreApplication::translate("VibeStudioUiPrimitives", "Detail sections"));
+	m_sectionsList->setAccessibleDescription(QCoreApplication::translate("VibeStudioUiPrimitives", "Available summary, log, metadata, manifest, and raw diagnostic sections."));
 	m_sectionsList->setMaximumHeight(132);
 	m_sectionsList->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
 	m_sectionsList->setTextElideMode(Qt::ElideRight);
@@ -480,10 +578,10 @@ DetailDrawer::DetailDrawer(QWidget* parent)
 	});
 	bodyLayout->addWidget(m_sectionsList);
 
-	m_content = new QTextEdit;
+	m_content = new DetailTextView;
 	m_content->setObjectName("detailContent");
-	m_content->setAccessibleName(uiText("Detail content"));
-	m_content->setAccessibleDescription(uiText("Selected detail content ready for copying into support notes or diagnostics."));
+	m_content->setAccessibleName(QCoreApplication::translate("VibeStudioUiPrimitives", "Detail content"));
+	m_content->setAccessibleDescription(QCoreApplication::translate("VibeStudioUiPrimitives", "Selected detail content ready for copying into support notes or diagnostics."));
 	m_content->setReadOnly(true);
 	m_content->setLineWrapMode(QTextEdit::WidgetWidth);
 	// Logs, manifests, and command lines line up in a fixed-pitch font, with
@@ -493,8 +591,8 @@ DetailDrawer::DetailDrawer(QWidget* parent)
 
 	root->addWidget(m_body, 1);
 
-	setTitle(uiText("Details"));
-	setSubtitle(uiText("Select a section for deeper context."));
+	setTitle(QCoreApplication::translate("VibeStudioUiPrimitives", "Details"));
+	setSubtitle(QCoreApplication::translate("VibeStudioUiPrimitives", "Select a section for deeper context."));
 	setSections({});
 }
 
@@ -559,8 +657,16 @@ void DetailDrawer::showSection(const QString& sectionId)
 	if (!findSection(normalized)) {
 		return;
 	}
+	if (m_currentSectionId == normalized) { return; }
 	m_currentSectionId = normalized;
-	refreshSections();
+	// Navigation changes the current row, not the section catalogue. Keep
+	// persistent indexes, list scroll position and accessibility rows intact.
+	const QSignalBlocker blocker(m_sectionsList);
+	for (int row = 0; row < m_sectionsList->count(); ++row) {
+		if (m_sectionsList->item(row)->data(Qt::UserRole).toString() == normalized) {
+			m_sectionsList->setCurrentRow(row); break;
+		}
+	}
 	refreshCurrentSection();
 }
 
@@ -571,7 +677,7 @@ void DetailDrawer::setExpanded(bool expanded)
 		m_body->setVisible(m_expanded);
 	}
 	if (m_toggleButton) {
-		m_toggleButton->setText(m_expanded ? uiText("Hide Details") : uiText("Show Details"));
+		m_toggleButton->setText(m_expanded ? QCoreApplication::translate("VibeStudioUiPrimitives", "Hide Details") : QCoreApplication::translate("VibeStudioUiPrimitives", "Show Details"));
 	}
 }
 
@@ -611,8 +717,8 @@ void DetailDrawer::refreshHeader()
 	if (!m_titleLabel) {
 		return;
 	}
-	m_titleLabel->setText(m_title.isEmpty() ? uiText("Details") : m_title);
-	m_subtitleLabel->setText(m_subtitle.isEmpty() ? uiText("Select a section for deeper context.") : m_subtitle);
+	m_titleLabel->setText(m_title.isEmpty() ? QCoreApplication::translate("VibeStudioUiPrimitives", "Details") : m_title);
+	m_subtitleLabel->setText(m_subtitle.isEmpty() ? QCoreApplication::translate("VibeStudioUiPrimitives", "Select a section for deeper context.") : m_subtitle);
 }
 
 void DetailDrawer::refreshSections()
@@ -622,7 +728,11 @@ void DetailDrawer::refreshSections()
 	}
 
 	QSignalBlocker blocker(m_sectionsList);
-	m_sectionsList->clear();
+	bool sameRows = m_sectionsList->count() == m_sections.size();
+	for (int row = 0; sameRows && row < m_sections.size(); ++row) {
+		sameRows = m_sectionsList->item(row)->data(Qt::UserRole).toString() == m_sections.at(row).id;
+	}
+	if (!sameRows) { m_sectionsList->clear(); }
 	const bool empty = m_sections.isEmpty();
 	// With nothing to show, one quiet line replaces the section list and the
 	// content box instead of two empty frames.
@@ -638,16 +748,18 @@ void DetailDrawer::refreshSections()
 	// A single section needs no chooser.
 	m_sectionsList->setVisible(m_sections.size() > 1);
 
-	for (const DetailSection& section : m_sections) {
+	for (int row = 0; row < m_sections.size(); ++row) {
+		const auto& section = m_sections.at(row);
 		const QString label = section.summary.isEmpty()
 			? QStringLiteral("%1 %2").arg(stateGlyph(section.state), section.title)
 			: QStringLiteral("%1 %2  %3  %4").arg(stateGlyph(section.state), section.title, QString(QChar(0x2014)), section.summary);
-		auto* item = new QListWidgetItem(label);
+		auto* item = sameRows ? m_sectionsList->item(row) : new QListWidgetItem;
+		item->setText(label);
 		item->setToolTip(QStringLiteral("%1 (%2)\n%3").arg(section.title, localizedStateName(section.state), section.summary));
 		item->setData(Qt::AccessibleTextRole, QStringLiteral("%1, %2. %3").arg(section.title, localizedStateName(section.state), section.summary));
 		item->setData(Qt::UserRole, section.id);
 		item->setData(Qt::UserRole + 1, operationStateId(section.state));
-		m_sectionsList->addItem(item);
+		if (!sameRows) { m_sectionsList->addItem(item); }
 		if (section.id == m_currentSectionId) {
 			m_sectionsList->setCurrentItem(item);
 		}
@@ -670,11 +782,14 @@ void DetailDrawer::refreshCurrentSection()
 	}
 
 	const DetailSection* section = findSection(m_currentSectionId);
-	if (!section) {
-		m_content->setPlainText(uiText("No details available."));
-		return;
-	}
-	m_content->setPlainText(section->content.isEmpty() ? uiText("No details available.") : section->content);
+	const QString text = !section || section->content.isEmpty()
+		? QCoreApplication::translate("VibeStudioUiPrimitives", "No details available.") : section->content;
+	// A repeated context refresh must not erase a reader's text selection or
+	// scroll position, or relayout a large unchanged log/manifest.
+	if (m_displayedSectionId == m_currentSectionId && m_displayedContent == text) { return; }
+	m_displayedSectionId = m_currentSectionId;
+	m_displayedContent = text;
+	m_content->setPlainText(text);
 }
 
 void DetailDrawer::copyCurrentSection()

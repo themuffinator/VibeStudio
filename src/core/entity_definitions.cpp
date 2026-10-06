@@ -18,11 +18,6 @@ namespace vibestudio {
 
 namespace {
 
-QString definitionText(const char* source)
-{
-	return QCoreApplication::translate("VibeStudioEntityDefinitions", source);
-}
-
 // ---------------------------------------------------------------------------
 // Limits
 //
@@ -375,10 +370,10 @@ void insertParsedClass(EntityDefinitionCatalogue& catalogue, QHash<QString, int>
 			mergeKeysInto(previous, definition);
 			return;
 		}
-		catalogue.warnings << definitionText("Duplicate entity class \"%1\": the definition in %2 replaces the one from %3.")
+		catalogue.warnings << QCoreApplication::translate("VibeStudioEntityDefinitions", "Duplicate entity class \"%1\": the definition in %2 replaces the one from %3.")
 								  .arg(definition.className,
-									  definition.sourcePath.isEmpty() ? definitionText("(unnamed source)") : definition.sourcePath,
-									  previous.sourcePath.isEmpty() ? definitionText("(unnamed source)") : previous.sourcePath);
+									  definition.sourcePath.isEmpty() ? QCoreApplication::translate("VibeStudioEntityDefinitions", "(unnamed source)") : definition.sourcePath,
+									  previous.sourcePath.isEmpty() ? QCoreApplication::translate("VibeStudioEntityDefinitions", "(unnamed source)") : previous.sourcePath);
 		catalogue.classes[existing] = definition;
 		return;
 	}
@@ -527,7 +522,7 @@ void parseRadiantBlock(const QString& header, const QString& body, const QString
 	EntityClassDefinition definition;
 	definition.className = nextWhitespaceToken(header, cursor);
 	if (definition.className.isEmpty()) {
-		catalogue.warnings << definitionText("%1:%2: a /*QUAKED block has no classname.").arg(path).arg(line);
+		catalogue.warnings << QCoreApplication::translate("VibeStudioEntityDefinitions", "%1:%2: a /*QUAKED block has no classname.").arg(path).arg(line);
 		return;
 	}
 	definition.sourcePath = path;
@@ -659,7 +654,7 @@ void parseRadiantDefinitions(const QString& text, const QString& path, EntityDef
 		const qsizetype contentStart = start + marker.size();
 		const qsizetype end = text.indexOf(QStringLiteral("*/"), contentStart);
 		if (end < 0) {
-			catalogue.warnings << definitionText("%1:%2: a /*QUAKED block is never closed.").arg(path).arg(lineNumber);
+			catalogue.warnings << QCoreApplication::translate("VibeStudioEntityDefinitions", "%1:%2: a /*QUAKED block is never closed.").arg(path).arg(lineNumber);
 			break;
 		}
 		const QString block = text.mid(contentStart, end - contentStart);
@@ -669,13 +664,13 @@ void parseRadiantDefinitions(const QString& text, const QString& path, EntityDef
 		parseRadiantBlock(header, body, path, lineNumber, catalogue, index);
 		++blockCount;
 		if (blockCount >= kMaxRadiantBlocks) {
-			catalogue.warnings << definitionText("%1: stopped after %2 entity definitions in one file.").arg(path).arg(kMaxRadiantBlocks);
+			catalogue.warnings << QCoreApplication::translate("VibeStudioEntityDefinitions", "%1: stopped after %2 entity definitions in one file.").arg(path).arg(kMaxRadiantBlocks);
 			break;
 		}
 		cursor = end + 2;
 	}
 	if (blockCount == 0) {
-		catalogue.warnings << definitionText("%1: no /*QUAKED blocks were found.").arg(path);
+		catalogue.warnings << QCoreApplication::translate("VibeStudioEntityDefinitions", "%1: no /*QUAKED blocks were found.").arg(path);
 	}
 }
 
@@ -978,14 +973,14 @@ void parseFgdRowBlock(FgdLexer& lexer, EntityKeyDefinition& key, EntityClassDefi
 		}
 		++rows;
 		if (rows > kMaxChoicesPerKey) {
-			catalogue.warnings << definitionText("%1: stopped after %2 rows in one choices/flags block.").arg(path).arg(kMaxChoicesPerKey);
+			catalogue.warnings << QCoreApplication::translate("VibeStudioEntityDefinitions", "%1: stopped after %2 rows in one choices/flags block.").arg(path).arg(kMaxChoicesPerKey);
 			break;
 		}
 		if (flagsBlock) {
 			bool ok = false;
 			const int bit = spawnflagBitForFgdValue(valueToken.text.toDouble(), &ok);
 			if (!ok) {
-				catalogue.warnings << definitionText("%1:%2: spawnflag value \"%3\" is not a usable bit.").arg(path).arg(valueToken.line).arg(valueToken.text);
+				catalogue.warnings << QCoreApplication::translate("VibeStudioEntityDefinitions", "%1:%2: spawnflag value \"%3\" is not a usable bit.").arg(path).arg(valueToken.line).arg(valueToken.text);
 				continue;
 			}
 			EntitySpawnflagDefinition flag;
@@ -1185,11 +1180,11 @@ void handleFgdInclude(FgdLexer& lexer, EntityDefinitionCatalogue& catalogue, QHa
 {
 	const QString relative = takeValue(lexer);
 	if (relative.isEmpty()) {
-		catalogue.warnings << definitionText("%1: an @include has no file name.").arg(path);
+		catalogue.warnings << QCoreApplication::translate("VibeStudioEntityDefinitions", "%1: an @include has no file name.").arg(path);
 		return;
 	}
 	if (context.depth >= kMaxIncludeDepth) {
-		catalogue.warnings << definitionText("%1: @include \"%2\" was skipped; the include depth limit of %3 was reached.")
+		catalogue.warnings << QCoreApplication::translate("VibeStudioEntityDefinitions", "%1: @include \"%2\" was skipped; the include depth limit of %3 was reached.")
 								  .arg(path, relative)
 								  .arg(kMaxIncludeDepth);
 		return;
@@ -1198,28 +1193,28 @@ void handleFgdInclude(FgdLexer& lexer, EntityDefinitionCatalogue& catalogue, QHa
 	const QString resolved = QDir(parent.absolutePath()).absoluteFilePath(relative);
 	const QFileInfo info(resolved);
 	if (!info.exists() || !info.isFile()) {
-		catalogue.warnings << definitionText("%1: @include \"%2\" was not found.").arg(path, relative);
+		catalogue.warnings << QCoreApplication::translate("VibeStudioEntityDefinitions", "%1: @include \"%2\" was not found.").arg(path, relative);
 		return;
 	}
 	const QString canonical = info.canonicalFilePath().isEmpty() ? info.absoluteFilePath() : info.canonicalFilePath();
 	if (context.visitedFiles.contains(canonical)) {
-		catalogue.warnings << definitionText("%1: @include \"%2\" was already loaded; the cycle was broken.").arg(path, relative);
+		catalogue.warnings << QCoreApplication::translate("VibeStudioEntityDefinitions", "%1: @include \"%2\" was already loaded; the cycle was broken.").arg(path, relative);
 		return;
 	}
 	if (context.fileBudget <= 0) {
 		if (!context.budgetWarned) {
 			context.budgetWarned = true;
-			catalogue.warnings << definitionText("Stopped after %1 definition files.").arg(kMaxDefinitionFiles);
+			catalogue.warnings << QCoreApplication::translate("VibeStudioEntityDefinitions", "Stopped after %1 definition files.").arg(kMaxDefinitionFiles);
 		}
 		return;
 	}
 	QFile file(info.absoluteFilePath());
 	if (!file.open(QIODevice::ReadOnly)) {
-		catalogue.warnings << definitionText("%1: @include \"%2\" could not be opened.").arg(path, relative);
+		catalogue.warnings << QCoreApplication::translate("VibeStudioEntityDefinitions", "%1: @include \"%2\" could not be opened.").arg(path, relative);
 		return;
 	}
 	if (file.size() > kMaxDefinitionFileBytes) {
-		catalogue.warnings << definitionText("%1: @include \"%2\" is larger than the %3 byte limit.").arg(path, relative).arg(kMaxDefinitionFileBytes);
+		catalogue.warnings << QCoreApplication::translate("VibeStudioEntityDefinitions", "%1: @include \"%2\" is larger than the %3 byte limit.").arg(path, relative).arg(kMaxDefinitionFileBytes);
 		return;
 	}
 	const QByteArray includedBytes = file.read(kMaxDefinitionFileBytes);
@@ -1279,13 +1274,13 @@ void parseFgdDefinitions(const QString& text, const QString& path, EntityDefinit
 		}
 
 		if (!takeSymbol(lexer, u'=')) {
-			catalogue.warnings << definitionText("%1:%2: an entity class has no \"= classname\" tail.").arg(path).arg(classToken.line);
+			catalogue.warnings << QCoreApplication::translate("VibeStudioEntityDefinitions", "%1:%2: an entity class has no \"= classname\" tail.").arg(path).arg(classToken.line);
 			skipStatement(lexer);
 			continue;
 		}
 		const FgdToken& nameProbe = lexer.peek();
 		if (nameProbe.kind != FgdTokenKind::Identifier && nameProbe.kind != FgdTokenKind::String) {
-			catalogue.warnings << definitionText("%1:%2: an entity class name is missing.").arg(path).arg(classToken.line);
+			catalogue.warnings << QCoreApplication::translate("VibeStudioEntityDefinitions", "%1:%2: an entity class name is missing.").arg(path).arg(classToken.line);
 			skipStatement(lexer);
 			continue;
 		}
@@ -1318,18 +1313,18 @@ void parseFgdDefinitions(const QString& text, const QString& path, EntityDefinit
 		insertParsedClass(catalogue, index, definition, false);
 		++classCount;
 		if (classCount >= kMaxClasses) {
-			catalogue.warnings << definitionText("%1: stopped after %2 entity classes in one file.").arg(path).arg(kMaxClasses);
+			catalogue.warnings << QCoreApplication::translate("VibeStudioEntityDefinitions", "%1: stopped after %2 entity classes in one file.").arg(path).arg(kMaxClasses);
 			break;
 		}
 	}
 	if (lexer.overflowed()) {
-		catalogue.warnings << definitionText("%1: stopped after %2 tokens.").arg(path).arg(kMaxFgdTokens);
+		catalogue.warnings << QCoreApplication::translate("VibeStudioEntityDefinitions", "%1: stopped after %2 tokens.").arg(path).arg(kMaxFgdTokens);
 	}
 	if (lexer.unterminatedString()) {
-		catalogue.warnings << definitionText("%1: a quoted string is never closed.").arg(path);
+		catalogue.warnings << QCoreApplication::translate("VibeStudioEntityDefinitions", "%1: a quoted string is never closed.").arg(path);
 	}
 	if (classCount == 0) {
-		catalogue.warnings << definitionText("%1: no entity classes were found.").arg(path);
+		catalogue.warnings << QCoreApplication::translate("VibeStudioEntityDefinitions", "%1: no entity classes were found.").arg(path);
 	}
 }
 
@@ -1466,17 +1461,17 @@ void parseEntDefinitions(const QString& text, const QString& path, EntityDefinit
 		insertParsedClass(catalogue, index, definition, true);
 		++recovered;
 		if (blocks >= kMaxEntBlocks) {
-			catalogue.warnings << definitionText("%1: stopped after %2 entity blocks.").arg(path).arg(kMaxEntBlocks);
+			catalogue.warnings << QCoreApplication::translate("VibeStudioEntityDefinitions", "%1: stopped after %2 entity blocks.").arg(path).arg(kMaxEntBlocks);
 			break;
 		}
 	}
 	if (unterminatedString) {
-		catalogue.warnings << definitionText("%1: a quoted string is never closed.").arg(path);
+		catalogue.warnings << QCoreApplication::translate("VibeStudioEntityDefinitions", "%1: a quoted string is never closed.").arg(path);
 	}
 	if (recovered == 0) {
-		catalogue.warnings << definitionText("%1: no classnames were found.").arg(path);
+		catalogue.warnings << QCoreApplication::translate("VibeStudioEntityDefinitions", "%1: no classnames were found.").arg(path);
 	} else {
-		catalogue.warnings << definitionText("%1: .ent files list placed entities, so key types, defaults, descriptions and spawnflag names are unavailable.").arg(path);
+		catalogue.warnings << QCoreApplication::translate("VibeStudioEntityDefinitions", "%1: .ent files list placed entities, so key types, defaults, descriptions and spawnflag names are unavailable.").arg(path);
 	}
 }
 
@@ -1487,7 +1482,7 @@ void parseEntDefinitions(const QString& text, const QString& path, EntityDefinit
 void parseFileInto(EntityDefinitionCatalogue& catalogue, QHash<QString, int>& index, const QString& path, const QByteArray& bytes, EntityDefinitionFormat format, DefinitionLoadContext& context)
 {
 	if (bytes.size() > kMaxDefinitionFileBytes) {
-		catalogue.warnings << definitionText("%1 is larger than the %2 byte limit and was skipped.").arg(path).arg(kMaxDefinitionFileBytes);
+		catalogue.warnings << QCoreApplication::translate("VibeStudioEntityDefinitions", "%1 is larger than the %2 byte limit and was skipped.").arg(path).arg(kMaxDefinitionFileBytes);
 		return;
 	}
 	EntityDefinitionFormat resolved = format;
@@ -1495,7 +1490,7 @@ void parseFileInto(EntityDefinitionCatalogue& catalogue, QHash<QString, int>& in
 		resolved = detectEntityDefinitionFormat(path, bytes);
 	}
 	if (resolved == EntityDefinitionFormat::Unknown) {
-		catalogue.warnings << definitionText("%1 is not a recognized entity definition file.").arg(path);
+		catalogue.warnings << QCoreApplication::translate("VibeStudioEntityDefinitions", "%1 is not a recognized entity definition file.").arg(path);
 		return;
 	}
 	catalogue.sourcePaths.append(path);
@@ -1558,12 +1553,12 @@ void resolveClassInheritance(EntityDefinitionCatalogue& catalogue, QHash<QString
 	if (states.at(classIndex) == ResolveState::Active) {
 		QStringList cycle = chain;
 		cycle.append(catalogue.classes.at(classIndex).className);
-		catalogue.warnings << definitionText("Entity class inheritance cycle: %1.").arg(cycle.join(QStringLiteral(" -> ")));
+		catalogue.warnings << QCoreApplication::translate("VibeStudioEntityDefinitions", "Entity class inheritance cycle: %1.").arg(cycle.join(QStringLiteral(" -> ")));
 		states[classIndex] = ResolveState::Cyclic;
 		return;
 	}
 	if (chain.size() >= kMaxIncludeDepth * 4) {
-		catalogue.warnings << definitionText("Entity class \"%1\" inherits too deeply; the chain was cut.").arg(catalogue.classes.at(classIndex).className);
+		catalogue.warnings << QCoreApplication::translate("VibeStudioEntityDefinitions", "Entity class \"%1\" inherits too deeply; the chain was cut.").arg(catalogue.classes.at(classIndex).className);
 		states[classIndex] = ResolveState::Done;
 		return;
 	}
@@ -1585,11 +1580,11 @@ void resolveClassInheritance(EntityDefinitionCatalogue& catalogue, QHash<QString
 	for (const QString& base : bases) {
 		const int baseIndex = index.value(base.toLower(), -1);
 		if (baseIndex < 0) {
-			catalogue.warnings << definitionText("Entity class \"%1\" inherits unknown base class \"%2\".").arg(catalogue.classes.at(classIndex).className, base);
+			catalogue.warnings << QCoreApplication::translate("VibeStudioEntityDefinitions", "Entity class \"%1\" inherits unknown base class \"%2\".").arg(catalogue.classes.at(classIndex).className, base);
 			continue;
 		}
 		if (baseIndex == classIndex) {
-			catalogue.warnings << definitionText("Entity class inheritance cycle: %1.").arg(catalogue.classes.at(classIndex).className);
+			catalogue.warnings << QCoreApplication::translate("VibeStudioEntityDefinitions", "Entity class inheritance cycle: %1.").arg(catalogue.classes.at(classIndex).className);
 			continue;
 		}
 		resolveClassInheritance(catalogue, index, states, chain, baseIndex);
@@ -1788,19 +1783,19 @@ QString describeValueProblem(const EntityKeyDefinition& key, const QString& valu
 	case EntityKeyType::Flags: {
 		qint64 parsed = 0;
 		if (!parseIntegerValue(trimmed, &parsed)) {
-			return definitionText("expected a whole number");
+			return QCoreApplication::translate("VibeStudioEntityDefinitions", "expected a whole number");
 		}
 		return QString();
 	}
 	case EntityKeyType::Real:
-		return parseRealValue(trimmed) ? QString() : definitionText("expected a number");
+		return parseRealValue(trimmed) ? QString() : QCoreApplication::translate("VibeStudioEntityDefinitions", "expected a number");
 	case EntityKeyType::Boolean:
-		return parseBooleanValue(trimmed) ? QString() : definitionText("expected 0 or 1");
+		return parseBooleanValue(trimmed) ? QString() : QCoreApplication::translate("VibeStudioEntityDefinitions", "expected 0 or 1");
 	case EntityKeyType::Vector: {
 		bool clean = false;
 		const QVector<double> numbers = numbersIn(trimmed, &clean);
 		if (!clean || numbers.size() != 3) {
-			return definitionText("expected three numbers");
+			return QCoreApplication::translate("VibeStudioEntityDefinitions", "expected three numbers");
 		}
 		return QString();
 	}
@@ -1808,7 +1803,7 @@ QString describeValueProblem(const EntityKeyDefinition& key, const QString& valu
 		bool clean = false;
 		const QVector<double> numbers = numbersIn(trimmed, &clean);
 		if (!clean || (numbers.size() != 3 && numbers.size() != 4)) {
-			return definitionText("expected three or four numbers");
+			return QCoreApplication::translate("VibeStudioEntityDefinitions", "expected three or four numbers");
 		}
 		return QString();
 	}
@@ -1816,7 +1811,7 @@ QString describeValueProblem(const EntityKeyDefinition& key, const QString& valu
 		bool clean = false;
 		const QVector<double> numbers = numbersIn(trimmed, &clean);
 		if (!clean || (numbers.size() != 1 && numbers.size() != 3)) {
-			return definitionText("expected one angle or three angles");
+			return QCoreApplication::translate("VibeStudioEntityDefinitions", "expected one angle or three angles");
 		}
 		return QString();
 	}
@@ -1829,7 +1824,7 @@ QString describeValueProblem(const EntityKeyDefinition& key, const QString& valu
 				return QString();
 			}
 		}
-		return definitionText("not one of the declared choices");
+		return QCoreApplication::translate("VibeStudioEntityDefinitions", "not one of the declared choices");
 	}
 	case EntityKeyType::String:
 	case EntityKeyType::TargetSource:
@@ -1951,15 +1946,15 @@ QString entityDefinitionFormatDisplayName(EntityDefinitionFormat format)
 {
 	switch (format) {
 	case EntityDefinitionFormat::RadiantDef:
-		return definitionText("Radiant definitions (.def/.qc)");
+		return QCoreApplication::translate("VibeStudioEntityDefinitions", "Radiant definitions (.def/.qc)");
 	case EntityDefinitionFormat::ValveFgd:
-		return definitionText("Forge game data (.fgd)");
+		return QCoreApplication::translate("VibeStudioEntityDefinitions", "Forge game data (.fgd)");
 	case EntityDefinitionFormat::Quake3Ent:
-		return definitionText("Quake III entity list (.ent)");
+		return QCoreApplication::translate("VibeStudioEntityDefinitions", "Quake III entity list (.ent)");
 	case EntityDefinitionFormat::Unknown:
 		break;
 	}
-	return definitionText("Unknown");
+	return QCoreApplication::translate("VibeStudioEntityDefinitions", "Unknown");
 }
 
 QString entityClassKindId(EntityClassKind kind)
@@ -2103,11 +2098,11 @@ EntityDefinitionCatalogue parseEntityDefinitions(const QString& path, const QByt
 {
 	EntityDefinitionCatalogue catalogue;
 	if (bytes.isEmpty()) {
-		catalogue.error = definitionText("The entity definition file is empty.");
+		catalogue.error = QCoreApplication::translate("VibeStudioEntityDefinitions", "The entity definition file is empty.");
 		return catalogue;
 	}
 	if (bytes.size() > kMaxDefinitionFileBytes) {
-		catalogue.error = definitionText("The entity definition file is larger than the %1 byte limit.").arg(kMaxDefinitionFileBytes);
+		catalogue.error = QCoreApplication::translate("VibeStudioEntityDefinitions", "The entity definition file is larger than the %1 byte limit.").arg(kMaxDefinitionFileBytes);
 		return catalogue;
 	}
 	EntityDefinitionFormat resolved = format;
@@ -2115,7 +2110,7 @@ EntityDefinitionCatalogue parseEntityDefinitions(const QString& path, const QByt
 		resolved = detectEntityDefinitionFormat(path, bytes);
 	}
 	if (resolved == EntityDefinitionFormat::Unknown) {
-		catalogue.error = definitionText("The entity definition format could not be recognized.");
+		catalogue.error = QCoreApplication::translate("VibeStudioEntityDefinitions", "The entity definition format could not be recognized.");
 		return catalogue;
 	}
 
@@ -2153,7 +2148,7 @@ EntityDefinitionCatalogue loadEntityDefinitions(const QStringList& paths, bool r
 		sawAnyPath = true;
 		const QFileInfo info(trimmed);
 		if (!info.exists()) {
-			catalogue.warnings << definitionText("Definition path not found: %1").arg(QDir::toNativeSeparators(trimmed));
+			catalogue.warnings << QCoreApplication::translate("VibeStudioEntityDefinitions", "Definition path not found: %1").arg(QDir::toNativeSeparators(trimmed));
 			continue;
 		}
 		if (info.isFile()) {
@@ -2170,7 +2165,7 @@ EntityDefinitionCatalogue loadEntityDefinitions(const QStringList& paths, bool r
 		while (iterator.hasNext()) {
 			const QString candidate = iterator.next();
 			if (++seen > kMaxDirectoryEntries) {
-				catalogue.warnings << definitionText("Stopped after %1 files while scanning %2.")
+				catalogue.warnings << QCoreApplication::translate("VibeStudioEntityDefinitions", "Stopped after %1 files while scanning %2.")
 										  .arg(kMaxDirectoryEntries)
 										  .arg(QDir::toNativeSeparators(info.absoluteFilePath()));
 				break;
@@ -2188,7 +2183,7 @@ EntityDefinitionCatalogue loadEntityDefinitions(const QStringList& paths, bool r
 	}
 
 	if (!sawAnyPath) {
-		catalogue.error = definitionText("No definition path was supplied.");
+		catalogue.error = QCoreApplication::translate("VibeStudioEntityDefinitions", "No definition path was supplied.");
 		return catalogue;
 	}
 
@@ -2197,7 +2192,7 @@ EntityDefinitionCatalogue loadEntityDefinitions(const QStringList& paths, bool r
 		if (context.fileBudget <= 0) {
 			if (!context.budgetWarned) {
 				context.budgetWarned = true;
-				catalogue.warnings << definitionText("Stopped after %1 definition files.").arg(kMaxDefinitionFiles);
+				catalogue.warnings << QCoreApplication::translate("VibeStudioEntityDefinitions", "Stopped after %1 definition files.").arg(kMaxDefinitionFiles);
 			}
 			break;
 		}
@@ -2208,11 +2203,11 @@ EntityDefinitionCatalogue loadEntityDefinitions(const QStringList& paths, bool r
 		}
 		QFile handle(file);
 		if (!handle.open(QIODevice::ReadOnly)) {
-			catalogue.warnings << definitionText("Unable to read %1.").arg(QDir::toNativeSeparators(file));
+			catalogue.warnings << QCoreApplication::translate("VibeStudioEntityDefinitions", "Unable to read %1.").arg(QDir::toNativeSeparators(file));
 			continue;
 		}
 		if (handle.size() > kMaxDefinitionFileBytes) {
-			catalogue.warnings << definitionText("%1 is larger than the %2 byte limit and was skipped.").arg(QDir::toNativeSeparators(file)).arg(kMaxDefinitionFileBytes);
+			catalogue.warnings << QCoreApplication::translate("VibeStudioEntityDefinitions", "%1 is larger than the %2 byte limit and was skipped.").arg(QDir::toNativeSeparators(file)).arg(kMaxDefinitionFileBytes);
 			handle.close();
 			continue;
 		}
@@ -2223,13 +2218,13 @@ EntityDefinitionCatalogue loadEntityDefinitions(const QStringList& paths, bool r
 		++loaded;
 		parseFileInto(catalogue, index, file, bytes, EntityDefinitionFormat::Unknown, context);
 		if (catalogue.classes.size() >= kMaxClasses) {
-			catalogue.warnings << definitionText("Stopped after %1 entity classes.").arg(kMaxClasses);
+			catalogue.warnings << QCoreApplication::translate("VibeStudioEntityDefinitions", "Stopped after %1 entity classes.").arg(kMaxClasses);
 			break;
 		}
 	}
 
 	if (loaded == 0 && catalogue.classes.isEmpty()) {
-		catalogue.error = definitionText("No entity definition files were found.");
+		catalogue.error = QCoreApplication::translate("VibeStudioEntityDefinitions", "No entity definition files were found.");
 		return catalogue;
 	}
 
@@ -2299,7 +2294,7 @@ EntityValidationReport validateLevelMapEntities(const LevelMapDocument& document
 		if (report.issues.size() >= kMaxValidationIssues) {
 			if (!truncated) {
 				truncated = true;
-				report.warnings << definitionText("Stopped after %1 entity issues.").arg(kMaxValidationIssues);
+				report.warnings << QCoreApplication::translate("VibeStudioEntityDefinitions", "Stopped after %1 entity issues.").arg(kMaxValidationIssues);
 			}
 			return;
 		}
@@ -2369,7 +2364,7 @@ EntityValidationReport validateLevelMapEntities(const LevelMapDocument& document
 		}
 		if (className.isEmpty()) {
 			addIssue(EntityIssueSeverity::Error, QStringLiteral("entity-missing-classname"),
-				definitionText("Entity %1 has no classname.").arg(entity.id), entity.id, QString(), QStringLiteral("classname"), entity.startLine);
+				QCoreApplication::translate("VibeStudioEntityDefinitions", "Entity %1 has no classname.").arg(entity.id), entity.id, QString(), QStringLiteral("classname"), entity.startLine);
 		} else if (index < 0) {
 			if (doomThing) {
 				// Doom things are mirrored into entities as `thing:<type>`.
@@ -2382,7 +2377,7 @@ EntityValidationReport validateLevelMapEntities(const LevelMapDocument& document
 					report.unknownClassNames.append(className);
 				}
 				addIssue(EntityIssueSeverity::Warning, QStringLiteral("entity-unknown-class"),
-					definitionText("Entity %1 uses classname \"%2\", which no loaded definition declares.").arg(entity.id).arg(className),
+					QCoreApplication::translate("VibeStudioEntityDefinitions", "Entity %1 uses classname \"%2\", which no loaded definition declares.").arg(entity.id).arg(className),
 					entity.id, className, QStringLiteral("classname"), entity.startLine);
 			}
 		} else if (!knownSeen.contains(className.toLower())) {
@@ -2395,15 +2390,15 @@ EntityValidationReport validateLevelMapEntities(const LevelMapDocument& document
 
 			if (!doomDocument && definition.kind == EntityClassKind::Base) {
 				addIssue(EntityIssueSeverity::Warning, QStringLiteral("entity-base-class-used"),
-					definitionText("Entity %1 uses \"%2\", which is a base class and is never placed in a map.").arg(entity.id).arg(className),
+					QCoreApplication::translate("VibeStudioEntityDefinitions", "Entity %1 uses \"%2\", which is a base class and is never placed in a map.").arg(entity.id).arg(className),
 					entity.id, className, QStringLiteral("classname"), entity.startLine);
 			} else if (!doomDocument && definition.kind == EntityClassKind::Point && entitiesWithGeometry.contains(entity.id)) {
 				addIssue(EntityIssueSeverity::Warning, QStringLiteral("entity-class-kind-mismatch"),
-					definitionText("Entity %1 is a point class (\"%2\") but owns brushes.").arg(entity.id).arg(className),
+					QCoreApplication::translate("VibeStudioEntityDefinitions", "Entity %1 is a point class (\"%2\") but owns brushes.").arg(entity.id).arg(className),
 					entity.id, className, QString(), entity.startLine);
 			} else if (!doomDocument && definition.kind == EntityClassKind::Brush && !entitiesWithGeometry.contains(entity.id)) {
 				addIssue(EntityIssueSeverity::Warning, QStringLiteral("entity-class-kind-mismatch"),
-					definitionText("Entity %1 is a brush class (\"%2\") but owns no brushes.").arg(entity.id).arg(className),
+					QCoreApplication::translate("VibeStudioEntityDefinitions", "Entity %1 is a brush class (\"%2\") but owns no brushes.").arg(entity.id).arg(className),
 					entity.id, className, QString(), entity.startLine);
 			}
 
@@ -2418,7 +2413,7 @@ EntityValidationReport validateLevelMapEntities(const LevelMapDocument& document
 					// record, not authored keys, so they are never reported.
 					if (!doomThing && !isUniversalEntityKey(property.key)) {
 						addIssue(EntityIssueSeverity::Warning, QStringLiteral("entity-undeclared-key"),
-							definitionText("Entity %1 (\"%2\") sets \"%3\", which the class does not declare. Maps legitimately carry extra keys, so this is informational.")
+							QCoreApplication::translate("VibeStudioEntityDefinitions", "Entity %1 (\"%2\") sets \"%3\", which the class does not declare. Maps legitimately carry extra keys, so this is informational.")
 								.arg(entity.id)
 								.arg(className, property.key),
 							entity.id, className, property.key, property.line);
@@ -2431,7 +2426,7 @@ EntityValidationReport validateLevelMapEntities(const LevelMapDocument& document
 				const QString problem = describeValueProblem(definitionKey, property.value);
 				if (!problem.isEmpty()) {
 					addIssue(EntityIssueSeverity::Error, QStringLiteral("entity-key-value-invalid"),
-						definitionText("Entity %1 (\"%2\") sets \"%3\" to \"%4\": %5 for type %6.")
+						QCoreApplication::translate("VibeStudioEntityDefinitions", "Entity %1 (\"%2\") sets \"%3\" to \"%4\": %5 for type %6.")
 							.arg(entity.id)
 							.arg(className, property.key, property.value.trimmed(), problem, entityKeyTypeId(definitionKey.type)),
 						entity.id, className, property.key, property.line);
@@ -2452,7 +2447,7 @@ EntityValidationReport validateLevelMapEntities(const LevelMapDocument& document
 					}
 					if (!present) {
 						addIssue(EntityIssueSeverity::Error, QStringLiteral("entity-required-key-missing"),
-							definitionText("Entity %1 (\"%2\") is missing required key \"%3\".").arg(entity.id).arg(className, definitionKey.key),
+							QCoreApplication::translate("VibeStudioEntityDefinitions", "Entity %1 (\"%2\") is missing required key \"%3\".").arg(entity.id).arg(className, definitionKey.key),
 							entity.id, className, definitionKey.key, entity.startLine);
 					}
 				}
@@ -2469,7 +2464,7 @@ EntityValidationReport validateLevelMapEntities(const LevelMapDocument& document
 				qint64 parsed = 0;
 				if (!parseIntegerValue(trimmed, &parsed) || parsed < 0 || parsed > 0xFFFFFFFFLL) {
 					addIssue(EntityIssueSeverity::Error, QStringLiteral("entity-key-value-invalid"),
-						definitionText("Entity %1 (\"%2\") sets \"spawnflags\" to \"%3\", which is not a 32-bit flag value.").arg(entity.id).arg(className, trimmed),
+						QCoreApplication::translate("VibeStudioEntityDefinitions", "Entity %1 (\"%2\") sets \"spawnflags\" to \"%3\", which is not a 32-bit flag value.").arg(entity.id).arg(className, trimmed),
 						entity.id, className, QStringLiteral("spawnflags"), property.line);
 					break;
 				}
@@ -2489,7 +2484,7 @@ EntityValidationReport validateLevelMapEntities(const LevelMapDocument& document
 					}
 					if (!declared) {
 						addIssue(EntityIssueSeverity::Warning, QStringLiteral("entity-unknown-spawnflag-bit"),
-							definitionText("Entity %1 (\"%2\") sets spawnflag bit %3 (value %4), which the class does not define.")
+							QCoreApplication::translate("VibeStudioEntityDefinitions", "Entity %1 (\"%2\") sets spawnflag bit %3 (value %4), which the class does not define.")
 								.arg(entity.id)
 								.arg(className)
 								.arg(bit)
@@ -2522,7 +2517,7 @@ EntityValidationReport validateLevelMapEntities(const LevelMapDocument& document
 					report.danglingTargets.append(value);
 				}
 				addIssue(EntityIssueSeverity::Warning, QStringLiteral("entity-dangling-target"),
-					definitionText("Entity %1 targets \"%2\", but no entity in the map carries that targetname.").arg(entity.id).arg(value),
+					QCoreApplication::translate("VibeStudioEntityDefinitions", "Entity %1 targets \"%2\", but no entity in the map carries that targetname.").arg(entity.id).arg(value),
 					entity.id, className, property.key, property.line);
 			}
 			if (isTargetName) {
@@ -2540,16 +2535,16 @@ EntityValidationReport validateLevelMapEntities(const LevelMapDocument& document
 		reportedUnreachable.insert(lower);
 		report.unreachableTargetNames.append(provided.second);
 		addIssue(EntityIssueSeverity::Info, QStringLiteral("entity-unreachable-targetname"),
-			definitionText("Entity %1 carries targetname \"%2\", which nothing in the map targets.").arg(provided.first).arg(provided.second),
+			QCoreApplication::translate("VibeStudioEntityDefinitions", "Entity %1 carries targetname \"%2\", which nothing in the map targets.").arg(provided.first).arg(provided.second),
 			provided.first, QString(), QStringLiteral("targetname"), 0);
 	}
 
 	if (doomThingsWithoutDefinition > 0) {
-		report.warnings << definitionText("%1 Doom thing(s) were not checked: the loaded definitions declare no \"thing:<type>\" classes.")
+		report.warnings << QCoreApplication::translate("VibeStudioEntityDefinitions", "%1 Doom thing(s) were not checked: the loaded definitions declare no \"thing:<type>\" classes.")
 							   .arg(doomThingsWithoutDefinition);
 	}
 	if (catalogue.isEmpty()) {
-		report.warnings << definitionText("No entity definitions are loaded, so classnames and keys were not checked.");
+		report.warnings << QCoreApplication::translate("VibeStudioEntityDefinitions", "No entity definitions are loaded, so classnames and keys were not checked.");
 	}
 
 	std::sort(report.unknownClassNames.begin(), report.unknownClassNames.end());
@@ -2576,24 +2571,24 @@ QString entityKeyHelpText(const EntityClassDefinition& definition, const QString
 {
 	EntityKeyDefinition entry;
 	if (!definition.keyForName(key, &entry)) {
-		return definitionText("\"%1\" is not declared by %2.").arg(key, definition.className);
+		return QCoreApplication::translate("VibeStudioEntityDefinitions", "\"%1\" is not declared by %2.").arg(key, definition.className);
 	}
 	QStringList lines;
-	lines << definitionText("%1 (%2)").arg(entry.displayName.isEmpty() ? entry.key : entry.displayName, entityKeyTypeId(entry.type));
-	lines << definitionText("Key: %1").arg(entry.key);
+	lines << QCoreApplication::translate("VibeStudioEntityDefinitions", "%1 (%2)").arg(entry.displayName.isEmpty() ? entry.key : entry.displayName, entityKeyTypeId(entry.type));
+	lines << QCoreApplication::translate("VibeStudioEntityDefinitions", "Key: %1").arg(entry.key);
 	if (entry.required) {
-		lines << definitionText("Required: yes");
+		lines << QCoreApplication::translate("VibeStudioEntityDefinitions", "Required: yes");
 	}
 	if (!entry.defaultValue.isEmpty()) {
-		lines << definitionText("Default: %1").arg(entry.defaultValue);
+		lines << QCoreApplication::translate("VibeStudioEntityDefinitions", "Default: %1").arg(entry.defaultValue);
 	}
 	if (!entry.description.isEmpty()) {
 		lines << entry.description;
 	}
 	if (!entry.choices.isEmpty()) {
-		lines << definitionText("Choices:");
+		lines << QCoreApplication::translate("VibeStudioEntityDefinitions", "Choices:");
 		for (const EntityKeyChoice& choice : entry.choices) {
-			lines << definitionText("  %1 - %2").arg(choice.value, choice.label.isEmpty() ? choice.value : choice.label);
+			lines << QCoreApplication::translate("VibeStudioEntityDefinitions", "  %1 - %2").arg(choice.value, choice.label.isEmpty() ? choice.value : choice.label);
 		}
 	}
 	return lines.join(QStringLiteral("\n"));
@@ -2602,16 +2597,16 @@ QString entityKeyHelpText(const EntityClassDefinition& definition, const QString
 QStringList entityClassSummaryLines(const EntityClassDefinition& definition)
 {
 	QStringList lines;
-	lines << definitionText("Class: %1").arg(definition.className);
-	lines << definitionText("Kind: %1").arg(entityClassKindId(definition.kind));
+	lines << QCoreApplication::translate("VibeStudioEntityDefinitions", "Class: %1").arg(definition.className);
+	lines << QCoreApplication::translate("VibeStudioEntityDefinitions", "Kind: %1").arg(entityClassKindId(definition.kind));
 	if (!definition.baseClasses.isEmpty()) {
-		lines << definitionText("Inherits: %1").arg(definition.baseClasses.join(QStringLiteral(", ")));
+		lines << QCoreApplication::translate("VibeStudioEntityDefinitions", "Inherits: %1").arg(definition.baseClasses.join(QStringLiteral(", ")));
 	}
 	if (!definition.description.isEmpty()) {
 		lines << definition.description;
 	}
 	if (definition.hasSize) {
-		lines << definitionText("Size: %1 %2 %3 to %4 %5 %6")
+		lines << QCoreApplication::translate("VibeStudioEntityDefinitions", "Size: %1 %2 %3 to %4 %5 %6")
 					 .arg(definition.mins[0])
 					 .arg(definition.mins[1])
 					 .arg(definition.mins[2])
@@ -2620,29 +2615,29 @@ QStringList entityClassSummaryLines(const EntityClassDefinition& definition)
 					 .arg(definition.maxs[2]);
 	}
 	if (definition.hasColor) {
-		lines << definitionText("Colour: %1 %2 %3").arg(definition.color[0]).arg(definition.color[1]).arg(definition.color[2]);
+		lines << QCoreApplication::translate("VibeStudioEntityDefinitions", "Colour: %1 %2 %3").arg(definition.color[0]).arg(definition.color[1]).arg(definition.color[2]);
 	}
 	if (!definition.modelHint.isEmpty()) {
-		lines << definitionText("Model: %1").arg(definition.modelHint);
+		lines << QCoreApplication::translate("VibeStudioEntityDefinitions", "Model: %1").arg(definition.modelHint);
 	}
 	if (!definition.sourcePath.isEmpty()) {
-		lines << definitionText("Source: %1:%2").arg(definition.sourcePath).arg(definition.sourceLine);
+		lines << QCoreApplication::translate("VibeStudioEntityDefinitions", "Source: %1:%2").arg(definition.sourcePath).arg(definition.sourceLine);
 	}
 	if (!definition.keys.isEmpty()) {
-		lines << definitionText("Keys (%1)").arg(definition.keys.size());
+		lines << QCoreApplication::translate("VibeStudioEntityDefinitions", "Keys (%1)").arg(definition.keys.size());
 		for (const EntityKeyDefinition& key : definition.keys) {
 			QString line = QStringLiteral("  %1 (%2)").arg(key.key, entityKeyTypeId(key.type));
 			if (key.required) {
-				line += definitionText(" [required]");
+				line += QCoreApplication::translate("VibeStudioEntityDefinitions", " [required]");
 			}
 			if (!key.defaultValue.isEmpty()) {
-				line += definitionText(" default=%1").arg(key.defaultValue);
+				line += QCoreApplication::translate("VibeStudioEntityDefinitions", " default=%1").arg(key.defaultValue);
 			}
 			lines << line;
 		}
 	}
 	if (!definition.spawnflags.isEmpty()) {
-		lines << definitionText("Spawnflags (%1)").arg(definition.spawnflags.size());
+		lines << QCoreApplication::translate("VibeStudioEntityDefinitions", "Spawnflags (%1)").arg(definition.spawnflags.size());
 		for (const EntitySpawnflagDefinition& flag : definition.spawnflags) {
 			lines << QStringLiteral("  %1 = %2 (%3)").arg(flag.name).arg(1LL << flag.bit).arg(flag.bit);
 		}
@@ -2653,45 +2648,45 @@ QStringList entityClassSummaryLines(const EntityClassDefinition& definition)
 QStringList entityValidationLines(const EntityValidationReport& report)
 {
 	QStringList lines;
-	lines << definitionText("Entity validation: %1").arg(report.mapName.isEmpty() ? definitionText("(unnamed map)") : report.mapName);
-	lines << definitionText("State: %1").arg(operationStateDisplayName(report.state()));
-	lines << definitionText("Entities: %1  Known classes: %2  Unknown classes: %3")
+	lines << QCoreApplication::translate("VibeStudioEntityDefinitions", "Entity validation: %1").arg(report.mapName.isEmpty() ? QCoreApplication::translate("VibeStudioEntityDefinitions", "(unnamed map)") : report.mapName);
+	lines << QCoreApplication::translate("VibeStudioEntityDefinitions", "State: %1").arg(operationStateDisplayName(report.state()));
+	lines << QCoreApplication::translate("VibeStudioEntityDefinitions", "Entities: %1  Known classes: %2  Unknown classes: %3")
 				 .arg(report.entityCount)
 				 .arg(report.knownClassCount)
 				 .arg(report.unknownClassCount);
-	lines << definitionText("Issues: %1  Warnings: %2  Errors: %3").arg(report.issueCount).arg(report.warningCount).arg(report.errorCount);
+	lines << QCoreApplication::translate("VibeStudioEntityDefinitions", "Issues: %1  Warnings: %2  Errors: %3").arg(report.issueCount).arg(report.warningCount).arg(report.errorCount);
 
 	if (!report.unknownClassNames.isEmpty()) {
 		lines << QString();
-		lines << definitionText("Unknown classnames");
+		lines << QCoreApplication::translate("VibeStudioEntityDefinitions", "Unknown classnames");
 		for (const QString& name : report.unknownClassNames) {
 			lines << QStringLiteral("  ") + name;
 		}
 	}
 	if (!report.danglingTargets.isEmpty()) {
 		lines << QString();
-		lines << definitionText("Targets with no matching targetname");
+		lines << QCoreApplication::translate("VibeStudioEntityDefinitions", "Targets with no matching targetname");
 		for (const QString& name : report.danglingTargets) {
 			lines << QStringLiteral("  ") + name;
 		}
 	}
 	if (!report.unreachableTargetNames.isEmpty()) {
 		lines << QString();
-		lines << definitionText("Targetnames nothing targets");
+		lines << QCoreApplication::translate("VibeStudioEntityDefinitions", "Targetnames nothing targets");
 		for (const QString& name : report.unreachableTargetNames) {
 			lines << QStringLiteral("  ") + name;
 		}
 	}
 	if (!report.issues.isEmpty()) {
 		lines << QString();
-		lines << definitionText("Issues");
+		lines << QCoreApplication::translate("VibeStudioEntityDefinitions", "Issues");
 		for (const EntityValidationIssue& issue : report.issues) {
 			lines << QStringLiteral("  [%1] %2").arg(issue.code, issue.message);
 		}
 	}
 	if (!report.warnings.isEmpty()) {
 		lines << QString();
-		lines << definitionText("Warnings");
+		lines << QCoreApplication::translate("VibeStudioEntityDefinitions", "Warnings");
 		for (const QString& warning : report.warnings) {
 			lines << QStringLiteral("  ") + warning;
 		}

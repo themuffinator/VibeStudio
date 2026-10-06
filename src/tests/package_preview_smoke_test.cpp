@@ -2,6 +2,7 @@
 #include "core/idtech_image.h"
 #include "core/package_archive.h"
 #include "core/package_preview.h"
+#include "core/package_staging.h"
 
 #include <QDir>
 #include <QFile>
@@ -278,5 +279,39 @@ int main()
 	ok &= expect(missingPreview.kind == PackagePreviewKind::Unavailable, "missing preview should be unavailable");
 	ok &= expect(!missingPreview.error.isEmpty(), "missing preview error should be populated");
 
+	{
+		PackageStagingModel plan;
+		QString error;
+		ok &= expect(plan.loadBaseArchive(archive, &error), "load planned preview source");
+		plan.beginOperationGroup(QStringLiteral("Planned browser edits"));
+		ok &= plan.addBytes("planned text\n", QStringLiteral("new/deep/added.txt"), &error);
+		ok &= plan.renameEntry(QStringLiteral("binary.dat"), QStringLiteral("new/renamed.bin"), &error);
+		ok &= plan.deleteEntry(QStringLiteral("models/player.md2"), &error);
+		plan.endOperationGroup();
+		const PackageArchive snapshot = packagePlannedArchive(plan);
+		ok &= expect(buildPackageEntryPreview(snapshot, QStringLiteral("new/deep/added.txt")).body == QStringLiteral("planned text\n")
+			&& buildPackageEntryPreview(snapshot, QStringLiteral("new/deep")).kind == PackagePreviewKind::Directory
+			&& buildPackageEntryPreview(snapshot, QStringLiteral("new")).kind == PackagePreviewKind::Directory,
+			"planned preview includes generated text and synthesized parent folders");
+		ok &= expect(buildPackageEntryPreview(snapshot, QStringLiteral("binary.dat")).kind == PackagePreviewKind::Unavailable
+			&& buildPackageEntryPreview(snapshot, QStringLiteral("models/player.md2")).kind == PackagePreviewKind::Unavailable
+			&& buildPackageEntryPreview(snapshot, QStringLiteral("new/renamed.bin")).body == binaryPreview.body,
+			"renamed and deleted paths agree with the planned bytes");
+		ok &= expect(plan.undo() && buildPackageEntryPreview(packagePlannedArchive(plan), QStringLiteral("new/deep/added.txt")).kind == PackagePreviewKind::Unavailable
+			&& buildPackageEntryPreview(snapshot, QStringLiteral("new/deep/added.txt")).body == QStringLiteral("planned text\n"),
+			"history changes do not mutate a previously captured preview snapshot");
+		ok &= plan.redo();
+		ok &= plan.renameEntry(QStringLiteral("new/deep/added.txt"), QStringLiteral("../unsafe.txt"), &error);
+		const auto blocked = packagePlannedArchive(plan);
+		ok &= expect(blocked.isOpen() && !blocked.warnings().isEmpty() && !PackageStagingArchive(plan).isOpen()
+			&& buildPackageEntryPreview(blocked, QStringLiteral("new/deep/added.txt")).body == QStringLiteral("planned text\n"),
+			"a blocked edit remains inspectable without exposing an exportable plan");
+		PackageStagingModel exportPlan;
+		ok &= expect(!exportPlan.loadBaseArchive(blocked, &error), "an inspection view cannot bypass staging blockers when rebased");
+		PackageExtractionRequest extraction;
+		extraction.extractAll = true; extraction.targetDirectory = QDir(root.path()).filePath(QStringLiteral("blocked-extraction"));
+		ok &= expect(!extractPackageEntries(blocked, extraction).succeeded() && !QFileInfo::exists(extraction.targetDirectory),
+			"blocked planned extraction fails before creating output");
+	}
 	return ok ? 0 : 1;
 }

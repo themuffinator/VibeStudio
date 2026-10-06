@@ -426,8 +426,8 @@ bool runMdlSeamSmoke()
 	if (surface.triangles.size() != 2 || surface.vertexCount != 5) {
 		return false;
 	}
-	ok &= expect(surface.triangles.at(0).a == 0 && surface.triangles.at(0).b == 1 && surface.triangles.at(0).c == 2, "The front-facing triangle should keep the base vertices.");
-	ok &= expect(surface.triangles.at(1).a == 4 && surface.triangles.at(1).b == 3 && surface.triangles.at(1).c == 0, "The back-facing triangle should use the duplicated vertex.");
+	ok &= expect(surface.triangles.at(0).a == 0 && surface.triangles.at(0).b == 2 && surface.triangles.at(0).c == 1, "The front-skin triangle converts native winding and keeps the base vertices.");
+	ok &= expect(surface.triangles.at(1).a == 4 && surface.triangles.at(1).b == 0 && surface.triangles.at(1).c == 3, "The back-skin triangle converts native winding and uses the duplicated vertex.");
 	// s = 16, skinwidth / 2 = 16, plus the half-texel centre offset.
 	ok &= expect(nearly(surface.texCoords.at(2).u, 16.5f / 32.0f), "The original seam vertex keeps its S coordinate.");
 	ok &= expect(nearly(surface.texCoords.at(4).u, 32.5f / 32.0f), "The duplicated seam vertex should carry the shifted S coordinate.");
@@ -496,10 +496,10 @@ bool runMd2GeometrySmoke()
 	if (surface.triangles.size() != 2 || surface.vertexCount != 4) {
 		return false;
 	}
-	ok &= expect(surface.triangles.at(0).a == 0 && surface.triangles.at(0).b == 1 && surface.triangles.at(0).c == 2, "The first triangle should use the first three combined vertices.");
-	ok &= expect(surface.triangles.at(1).a == 3 && surface.triangles.at(1).b == 1 && surface.triangles.at(1).c == 2, "The second triangle should reuse the shared corners and the new pair.");
-	ok &= expect(nearly(surface.texCoords.at(0).u, 0.0f) && nearly(surface.texCoords.at(1).u, 0.5f), "MD2 st coordinates are scaled by the skin size.");
-	ok &= expect(nearly(surface.texCoords.at(3).u, 0.25f) && nearly(surface.texCoords.at(3).v, 0.25f), "The duplicated position should carry the second st entry.");
+	ok &= expect(surface.triangles.at(0).a == 0 && surface.triangles.at(0).b == 2 && surface.triangles.at(0).c == 1, "The first triangle converts native winding and uses the first three combined vertices.");
+	ok &= expect(surface.triangles.at(1).a == 3 && surface.triangles.at(1).b == 2 && surface.triangles.at(1).c == 1, "The second triangle converts native winding and reuses the shared corners and new pair.");
+	ok &= expect(nearly(surface.texCoords.at(0).u, 0.5f / kMd2SkinWidth) && nearly(surface.texCoords.at(1).u, 0.5f + 0.5f / kMd2SkinWidth), "MD2 st coordinates sample texel centres at the skin size.");
+	ok &= expect(nearly(surface.texCoords.at(3).u, 0.25f + 0.5f / kMd2SkinWidth) && nearly(surface.texCoords.at(3).v, 0.25f + 0.5f / kMd2SkinHeight), "The duplicated position should carry the second st entry at its texel centre.");
 	const ModelFrameGeometry& geometry = surface.frames.first();
 	ok &= expect(geometry.positions.size() == 4, "The frame should hold one position per combined vertex.");
 	ok &= expect(nearly(geometry.positions.at(0).x, 10.0f) && nearly(geometry.positions.at(0).y, 20.0f) && nearly(geometry.positions.at(0).z, 30.0f), "MD2 positions use the per-frame scale and translation.");

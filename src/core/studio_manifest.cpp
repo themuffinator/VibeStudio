@@ -151,7 +151,7 @@ QString updateChannel()
 
 QString projectLicenseSummary()
 {
-	return QStringLiteral("VibeStudio-owned code is distributed under GPLv3. External compiler submodules and future third-party components retain their own licenses.");
+	return QStringLiteral("VibeStudio-owned code is distributed under GPLv3. r8brain-free-src (MIT), its Ooura FFT, external compiler submodules, and other third-party components retain their own licenses; see docs/CREDITS.md and the bundled license notices.");
 }
 
 QString aboutSurfaceText()

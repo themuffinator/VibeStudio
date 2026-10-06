@@ -21,6 +21,10 @@ struct GameDefinition {
 	QStringList expectedBasePackages;
 	QString defaultPaletteId;
 	QString defaultCompilerProfileId;
+	// The folder under the installation root the engine loads the base game
+	// from ("id1" for Quake), which is also where a test map goes when no mod
+	// folder is named. Empty for games that load maps from WAD files.
+	QString baseGameDirectory;
 };
 
 struct GameInstallationProfile {
@@ -70,6 +74,9 @@ QStringList gameEngineFamilyIds();
 QVector<GameDefinition> knownGameDefinitions();
 QStringList knownGameKeys();
 GameDefinition gameDefinitionForKey(const QString& gameKey);
+// The base game folder of the installation's game; empty when the game key does
+// not name one (Doom-family games, custom installations).
+QString defaultGameDirectory(const GameInstallationProfile& profile);
 
 QString normalizedGameKey(const QString& gameKey);
 QString normalizedInstallationPath(const QString& path, const QString& rootPath = QString());

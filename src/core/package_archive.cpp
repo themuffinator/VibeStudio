@@ -1,15 +1,20 @@
 #include "core/package_archive.h"
 
 #include "core/deflate.h"
+#include "core/package_snapshot_p.h"
+#include "core/package_protection_p.h"
+#include "core/package_index_p.h"
+#include "core/package_zip_p.h"
 
 #include <QChar>
 #include <QCoreApplication>
+#include <QCryptographicHash>
 #include <QDir>
 #include <QDirIterator>
 #include <QFile>
 #include <QFileInfo>
 #include <QSet>
-#include <QSaveFile>
+#include <QScopeGuard>
 #include <QTimeZone>
 
 #include <algorithm>
@@ -18,11 +23,6 @@
 namespace vibestudio {
 
 namespace {
-
-QString packageText(const char* source)
-{
-	return QCoreApplication::translate("VibeStudioPackageArchive", source);
-}
 
 constexpr int kMaximumPackageVirtualPathLength = 4096;
 constexpr quint32 kPakSignature = 0x4b434150; // PACK
@@ -34,14 +34,28 @@ constexpr quint32 kZipEndOfCentralDirectorySignature = 0x06054b50;
 constexpr quint32 kZipLocalFileSignature = 0x04034b50;
 constexpr quint32 kZipDataDescriptorSignature = 0x08074b50;
 constexpr quint32 kZip64EndOfCentralDirectorySignature = 0x06064b50;
-constexpr quint32 kZip64EndOfCentralDirectoryLocatorSignature = 0x07064b50;
-constexpr quint16 kZip64ExtraHeaderId = 0x0001;
-constexpr quint32 kZip32Sentinel = 0xffffffffu;
-constexpr quint16 kZip16Sentinel = 0xffffu;
 
 // Hard ceiling on a single inflate so a hostile central directory cannot ask
 // the reader to materialise an absurd buffer.
 constexpr qint64 kMaximumInflateBytes = 1024ll * 1024ll * 1024ll;
+
+bool collectPackageSummary(const QVector<PackageEntry>& entries, PackageArchiveSummary* summary,
+	const PackageReadControl& control, QString* error)
+{
+	const auto cancelled = [&] {
+		if (!control.isCancelled || !control.isCancelled()) { return false; }
+		if (error) { *error = QCoreApplication::translate("VibeStudioPackageArchive", "Package opening cancelled."); }
+		return true;
+	};
+	summary->entryCount = static_cast<int>(entries.size());
+	for (const auto& entry : entries) {
+		if (cancelled()) { return false; }
+		if (entry.kind == PackageEntryKind::Directory) { ++summary->directoryCount; }
+		else { ++summary->fileCount; accumulatePackageBytes(entry.sizeBytes, &summary->totalSizeBytes, &summary->totalSizeOverflow); }
+		if (entry.nestedArchiveCandidate) { ++summary->nestedArchiveCount; }
+	}
+	return !cancelled();
+}
 
 QString normalizedId(QString value)
 {
@@ -76,7 +90,7 @@ PackageArchiveFormat formatFromExtension(const QString& fileName)
 	if (ext == QStringLiteral("pk3")) {
 		return PackageArchiveFormat::Pk3;
 	}
-	if (ext == QStringLiteral("zip")) {
+	if (ext == QStringLiteral("zip") || ext == QStringLiteral("pk4") || ext == QStringLiteral("pkz")) {
 		return PackageArchiveFormat::Zip;
 	}
 	return PackageArchiveFormat::Unknown;
@@ -111,16 +125,6 @@ quint32 readLe32(const QByteArray& data, qsizetype offset)
 	return static_cast<quint32>(bytes[0] | (bytes[1] << 8) | (bytes[2] << 16) | (bytes[3] << 24));
 }
 
-quint64 readLe64(const QByteArray& data, qsizetype offset)
-{
-	if (offset < 0 || offset + 8 > data.size()) {
-		return 0;
-	}
-	const quint64 low = readLe32(data, offset);
-	const quint64 high = readLe32(data, offset + 4);
-	return low | (high << 32);
-}
-
 qint32 readSignedLe32(const QByteArray& data, qsizetype offset)
 {
 	return static_cast<qint32>(readLe32(data, offset));
@@ -153,7 +157,7 @@ QString entryTypeHint(const QString& virtualPath, PackageEntryKind kind)
 
 	static const QStringList kTextExtensions = {
 		QStringLiteral("txt"), QStringLiteral("cfg"), QStringLiteral("shader"), QStringLiteral("map"),
-		QStringLiteral("def"), QStringLiteral("json"), QStringLiteral("xml"), QStringLiteral("log"),
+		QStringLiteral("def"), QStringLiteral("json"), QStringLiteral("xml"), QStringLiteral("log"), QStringLiteral("vprefab"),
 	};
 	static const QStringList kImageExtensions = {
 		QStringLiteral("png"), QStringLiteral("jpg"), QStringLiteral("jpeg"), QStringLiteral("tga"),
@@ -163,6 +167,7 @@ QString entryTypeHint(const QString& virtualPath, PackageEntryKind kind)
 		QStringLiteral("wav"), QStringLiteral("ogg"), QStringLiteral("mp3"),
 	};
 	static const QStringList kModelExtensions = {
+		QStringLiteral("obj"),
 		QStringLiteral("mdl"), QStringLiteral("md2"), QStringLiteral("md3"), QStringLiteral("mdc"),
 		QStringLiteral("mdr"), QStringLiteral("iqm"),
 	};
@@ -220,10 +225,10 @@ QDateTime dosDateTimeUtc(quint16 date, quint16 time)
 	if (!qdate.isValid() || !qtime.isValid()) {
 		return {};
 	}
-	return QDateTime(qdate, qtime, QTimeZone::UTC);
+	return QDateTime(qdate, qtime, QTimeZone::utc());
 }
 
-bool readAt(QFile& file, qint64 offset, qint64 size, QByteArray* out)
+bool readAt(QIODevice& file, qint64 offset, qint64 size, QByteArray* out)
 {
 	if (!out || offset < 0 || size < 0) {
 		return false;
@@ -243,117 +248,9 @@ bool entryPathLess(const PackageEntry& left, const PackageEntry& right)
 	return left.virtualPath.compare(right.virtualPath, Qt::CaseInsensitive) < 0;
 }
 
-bool entryPathEquals(const QString& left, const QString& right)
-{
-	return left.compare(right, Qt::CaseInsensitive) == 0;
-}
-
 QString duplicateKey(const QString& path)
 {
 	return path.toCaseFolded();
-}
-
-void addExtractionResult(PackageExtractionReport* report, const PackageExtractionEntryResult& result)
-{
-	if (!report) {
-		return;
-	}
-
-	report->entries.push_back(result);
-	if (result.error.isEmpty()) {
-		++report->processedCount;
-	} else {
-		++report->errorCount;
-		report->warnings.push_back(result.virtualPath.isEmpty() ? result.error : QStringLiteral("%1: %2").arg(result.virtualPath, result.error));
-	}
-	if (result.kind == PackageEntryKind::Directory) {
-		++report->directoryCount;
-	}
-	if (result.written) {
-		++report->writtenCount;
-		report->totalBytes += result.bytes;
-	}
-	if (result.skipped) {
-		++report->skippedCount;
-		if (!result.message.isEmpty()) {
-			report->warnings.push_back(QStringLiteral("%1: %2").arg(result.virtualPath, result.message));
-		}
-	}
-}
-
-QVector<PackageEntry> selectedEntriesForExtraction(const QVector<PackageEntry>& entries, const QStringList& requestedPaths, PackageExtractionReport* report)
-{
-	QVector<PackageEntry> selected;
-	QSet<QString> selectedKeys;
-
-	for (const QString& requestedPath : requestedPaths) {
-		const PackageVirtualPath normalized = normalizePackageVirtualPath(requestedPath, false);
-		if (!normalized.isSafe()) {
-			PackageExtractionEntryResult result;
-			result.virtualPath = requestedPath;
-			result.error = packageText("Unsafe package path: %1").arg(packagePathIssueDisplayName(normalized.issue));
-			addExtractionResult(report, result);
-			continue;
-		}
-
-		bool found = false;
-		const QString prefix = normalized.normalizedPath + '/';
-		for (const PackageEntry& entry : entries) {
-			if (!entryPathEquals(entry.virtualPath, normalized.normalizedPath) && !entry.virtualPath.startsWith(prefix, Qt::CaseInsensitive)) {
-				continue;
-			}
-			found = true;
-			const QString key = duplicateKey(entry.virtualPath);
-			if (!selectedKeys.contains(key)) {
-				selectedKeys.insert(key);
-				selected.push_back(entry);
-			}
-		}
-
-		if (!found) {
-			PackageExtractionEntryResult result;
-			result.virtualPath = normalized.normalizedPath;
-			result.error = packageText("Package entry not found.");
-			addExtractionResult(report, result);
-		}
-	}
-
-	std::sort(selected.begin(), selected.end(), entryPathLess);
-	return selected;
-}
-
-void addSyntheticDirectories(QVector<PackageEntry>* entries, const QString& sourceArchiveId)
-{
-	if (!entries) {
-		return;
-	}
-
-	QSet<QString> seen;
-	for (const PackageEntry& entry : *entries) {
-		seen.insert(duplicateKey(entry.virtualPath));
-	}
-
-	QVector<PackageEntry> directories;
-	for (const PackageEntry& entry : *entries) {
-		QString parent = packageVirtualPathParent(entry.virtualPath);
-		while (!parent.isEmpty()) {
-			const QString key = duplicateKey(parent);
-			if (!seen.contains(key)) {
-				seen.insert(key);
-				PackageEntry directory;
-				directory.virtualPath = parent;
-				directory.kind = PackageEntryKind::Directory;
-				directory.typeHint = entryTypeHint(parent, PackageEntryKind::Directory);
-				directory.sourceArchiveId = sourceArchiveId;
-				directory.storageMethod = QStringLiteral("synthetic");
-				directory.readable = false;
-				directories.push_back(directory);
-			}
-			parent = packageVirtualPathParent(parent);
-		}
-	}
-
-	*entries += directories;
 }
 
 QString stripTrailingSlashes(QString value)
@@ -369,10 +266,11 @@ QString stripTrailingSlashes(QString value)
 // though a junction redirects a directory just as effectively, so junctions are
 // resolved segment by segment there. The loop is bounded so a junction cycle
 // cannot hang the reader.
-QString resolveExistingPath(const QString& existingPath)
+QString resolveExistingPath(const QString& existingPath, const PackageReadControl& control = {})
 {
 	QString current = existingPath;
 	for (int depth = 0; depth < 40; ++depth) {
+		if (control.isCancelled && control.isCancelled()) { return {}; }
 		const QFileInfo info(current.endsWith(':') ? current + QLatin1Char('/') : current);
 		QString canonical = info.canonicalFilePath();
 		if (canonical.isEmpty()) {
@@ -387,6 +285,7 @@ QString resolveExistingPath(const QString& existingPath)
 		QString accumulated;
 		bool redirected = false;
 		for (qsizetype index = 0; index < segments.size(); ++index) {
+			if (control.isCancelled && control.isCancelled()) { return {}; }
 			accumulated = index == 0 ? segments.at(0) : accumulated + QLatin1Char('/') + segments.at(index);
 			if (accumulated.isEmpty()) {
 				continue;
@@ -403,6 +302,7 @@ QString resolveExistingPath(const QString& existingPath)
 			resolved.replace('\\', '/');
 			resolved = stripTrailingSlashes(resolved);
 			for (qsizetype rest = index + 1; rest < segments.size(); ++rest) {
+				if (control.isCancelled && control.isCancelled()) { return {}; }
 				resolved += QLatin1Char('/') + segments.at(rest);
 			}
 			current = resolved;
@@ -415,14 +315,14 @@ QString resolveExistingPath(const QString& existingPath)
 #endif
 		return canonical;
 	}
-	return current;
+	return {}; // No resolved path after the bounded junction traversal.
 }
 
 // Resolves the longest existing prefix of `path` so symlinks and junctions
 // inside the tree cannot be used to make a path look contained when the real
 // target is elsewhere. Segments that do not exist yet (extraction creates them)
 // are appended unresolved.
-QString canonicalizedAbsolutePath(const QString& path)
+QString canonicalizedAbsolutePath(const QString& path, const PackageReadControl& control = {})
 {
 	if (path.trimmed().isEmpty()) {
 		return {};
@@ -435,14 +335,17 @@ QString canonicalizedAbsolutePath(const QString& path)
 	QStringList pending;
 	QString probe = normalized;
 	while (!probe.isEmpty()) {
+		if (control.isCancelled && control.isCancelled()) { return {}; }
 		QString probePath = probe;
 		if (probePath.endsWith(':')) {
 			probePath += '/';
 		}
 		const QFileInfo info(probePath);
 		if (info.exists()) {
-			QString canonical = resolveExistingPath(probe);
+			QString canonical = resolveExistingPath(probe, control);
+			if (canonical.isEmpty()) { return {}; }
 			for (const QString& segment : pending) {
+				if (control.isCancelled && control.isCancelled()) { return {}; }
 				if (segment.isEmpty()) {
 					continue;
 				}
@@ -518,42 +421,166 @@ QString normalizedLayerMountPath(const QString& mountPath, QString* error)
 	PackageVirtualPath normalized = normalizePackageVirtualPath(trimmed, false);
 	if (!normalized.isSafe()) {
 		if (error) {
-			*error = packageText("Unsafe package mount path: %1").arg(packagePathIssueDisplayName(normalized.issue));
+			*error = QCoreApplication::translate("VibeStudioPackageArchive", "Unsafe package mount path: %1").arg(packagePathIssueDisplayName(normalized.issue));
 		}
 		return {};
 	}
 	return normalized.normalizedPath;
 }
 
+bool indexCancelled(const PackageReadControl& control, QString* error)
+{
+	if (!control.isCancelled || !control.isCancelled()) { return false; }
+	if (error) { *error = QCoreApplication::translate("VibeStudioPackageArchive", "Package opening cancelled."); }
+	return true;
+}
+
+bool chargeLayerUsage(PackageIndexUsage* usage, const PackageIndexUsage& addition, const PackageIndexLimits& limits, QString* error)
+{
+	if (addition.entries < 0 || addition.entries > limits.maximumEntries - usage->entries
+		|| addition.metadataBytes < 0 || addition.metadataBytes > limits.maximumMetadataBytes - usage->metadataBytes
+		|| addition.fingerprintBytes < 0 || addition.fingerprintBytes > limits.maximumFingerprintBytes - usage->fingerprintBytes) {
+		if (error) { *error = QCoreApplication::translate("VibeStudioPackageArchive", "Package layers exceed the limits of %1 records, %2 metadata bytes or %3 fingerprint bytes. Unmount a layer or use smaller sources.")
+			.arg(limits.maximumEntries).arg(limits.maximumMetadataBytes).arg(limits.maximumFingerprintBytes); }
+		return false;
+	}
+	usage->entries += addition.entries; usage->metadataBytes += addition.metadataBytes; usage->fingerprintBytes += addition.fingerprintBytes;
+	return true;
+}
+
 } // namespace
+
+bool dmxSoundHeaderLooksValid(const QByteArray& head, qint64 size, const QString& lumpName)
+{
+	static const QStringList mapLumps {
+		QStringLiteral("THINGS"), QStringLiteral("LINEDEFS"), QStringLiteral("SIDEDEFS"), QStringLiteral("VERTEXES"), QStringLiteral("SEGS"),
+		QStringLiteral("SSECTORS"), QStringLiteral("NODES"), QStringLiteral("SECTORS"), QStringLiteral("REJECT"), QStringLiteral("BLOCKMAP"),
+		QStringLiteral("BEHAVIOR"), QStringLiteral("SCRIPTS"), QStringLiteral("TEXTMAP"), QStringLiteral("ZNODES"), QStringLiteral("ENDMAP"),
+		QStringLiteral("DIALOGUE"),
+	};
+	const QString upper = lumpName.trimmed().toUpper();
+	if (!upper.isEmpty() && (mapLumps.contains(upper) || upper.startsWith(QStringLiteral("GL_")))) {
+		return false;
+	}
+	if (head.size() < 8) {
+		return false;
+	}
+	const auto* data = reinterpret_cast<const uchar*>(head.constData());
+	const quint16 format = static_cast<quint16>(data[0] | (data[1] << 8));
+	const quint16 rate = static_cast<quint16>(data[2] | (data[3] << 8));
+	const quint32 count = static_cast<quint32>(data[4]) | (static_cast<quint32>(data[5]) << 8) | (static_cast<quint32>(data[6]) << 16)
+		| (static_cast<quint32>(data[7]) << 24);
+	const qint64 room = size - 8;
+	return format == 3 && rate >= 4000 && rate <= 48000 && count > 0 && static_cast<qint64>(count) <= room && room - static_cast<qint64>(count) <= 32;
+}
+
+// The namespace a Doom marker lump opens or closes: flats (F_, FF_, F1_ to
+// F3_), sprites (S_, SS_), wall patches (P_, PP_, P1_ to P3_), or ZDoom's
+// textures (TX_), with `opens` set for _START. Anything else returns empty.
+QString doomNamespaceMarker(const QString& lumpName, bool* opens)
+{
+	static const QHash<QString, QString> namespaces {
+		{QStringLiteral("F"), QStringLiteral("flat")}, {QStringLiteral("FF"), QStringLiteral("flat")},
+		{QStringLiteral("F1"), QStringLiteral("flat")}, {QStringLiteral("F2"), QStringLiteral("flat")}, {QStringLiteral("F3"), QStringLiteral("flat")},
+		{QStringLiteral("S"), QStringLiteral("sprite")}, {QStringLiteral("SS"), QStringLiteral("sprite")},
+		{QStringLiteral("P"), QStringLiteral("patch")}, {QStringLiteral("PP"), QStringLiteral("patch")},
+		{QStringLiteral("P1"), QStringLiteral("patch")}, {QStringLiteral("P2"), QStringLiteral("patch")}, {QStringLiteral("P3"), QStringLiteral("patch")},
+		{QStringLiteral("TX"), QStringLiteral("texture")},
+	};
+	const QString upper = lumpName.toUpper();
+	for (const QString& suffix : {QStringLiteral("_START"), QStringLiteral("_END")}) {
+		if (upper.endsWith(suffix)) {
+			const QString found = namespaces.value(upper.left(upper.size() - suffix.size()));
+			if (!found.isEmpty() && opens) {
+				*opens = suffix == QStringLiteral("_START");
+			}
+			return found;
+		}
+	}
+	return {};
+}
 
 bool PackageVirtualPath::isSafe() const
 {
 	return issue == PackagePathIssue::None && !normalizedPath.isEmpty();
 }
 
-bool PackageArchive::load(const QString& path, QString* error)
+bool PackageArchiveReader::readEntryAt(qsizetype index, QByteArray* out, QString* error, qint64 maxBytes) const
 {
-	if (error) {
-		error->clear();
+	if (out) { out->clear(); }
+	if (error) { error->clear(); }
+	const auto listed = entries();
+	if (index < 0 || index >= listed.size()) {
+		if (error) { *error = QCoreApplication::translate("VibeStudioPackageArchive", "Package entry index is out of range."); }
+		return false;
 	}
+	const auto& entry = listed.at(index);
+	int matches = 0;
+	for (const auto& candidate : listed) {
+		if (candidate.virtualPath.compare(entry.virtualPath, Qt::CaseInsensitive) == 0) { ++matches; }
+	}
+	if (matches != 1) {
+		if (error) { *error = QCoreApplication::translate("VibeStudioPackageArchive", "This reader cannot resolve repeated entry names by position."); }
+		return false;
+	}
+	return readEntryBytes(entry.virtualPath, out, error, maxBytes);
+}
+
+bool PackageArchiveReader::streamEntryAt(qsizetype, const std::function<bool(QByteArrayView)>&, QString* error,
+	const std::function<bool()>&) const
+{
+	if (error) { *error = QCoreApplication::translate("VibeStudioPackageArchive", "This reader does not support bounded package streaming."); }
+	return false;
+}
+
+bool PackageArchiveReader::visitProtectedInputPaths(const std::function<bool(const QString&)>& visitor,
+	QString* error, const PackageReadControl& control) const
+{
+	if (indexCancelled(control, error) || !visitor) { return false; }
+	const auto source = sourcePath();
+	return (source.isEmpty() || visitor(source)) && !indexCancelled(control, error);
+}
+
+bool PackageArchiveReader::protectsInputPath(const QString& path) const
+{
+	QString error;
+	PackageInputProtectionSet inputs(PackageInputProtectionSet::pathCeiling, PackageInputProtectionSet::byteCeiling, &error);
+	return !visitProtectedInputPaths([&](const QString& input) { return inputs.add(input); }, &error)
+		|| !inputs.finish() || inputs.protects(path);
+}
+
+bool PackageArchive::load(const QString& path, QString* error, const PackageReadControl& control, const PackageIndexLimits& limits)
+{
+	QString localError; if (!error) { error = &localError; } error->clear();
 	clear();
+	const auto rememberFailure = qScopeGuard([&] { if (!m_open) { m_error = *error; } });
+	if (!validPackageIndexLimits(limits, error)) { return false; }
+	const auto cancelled = [&]() {
+		if (!control.isCancelled || !control.isCancelled()) { return false; }
+		clear();
+		if (error) { *error = QCoreApplication::translate("VibeStudioPackageArchive", "Package opening cancelled."); }
+		return true;
+	};
+	if (cancelled()) { return false; }
 
 	const QFileInfo info(path);
 	if (!info.exists()) {
 		if (error) {
-			*error = packageText("Package path does not exist.");
+			*error = QCoreApplication::translate("VibeStudioPackageArchive", "Package path does not exist.");
 		}
 		return false;
 	}
 
 	const QString absolutePath = info.absoluteFilePath();
 	if (info.isDir()) {
+		m_loadControl = control; m_indexLimits = limits;
 		if (!loadFolder(absolutePath, error)) {
 			clear();
 			return false;
 		}
-		finalizeEntries();
+		if (!finalizeEntries(error)) { clear(); return false; }
+		if (cancelled()) { return false; }
+		m_loadControl = {};
 		m_open = true;
 		return true;
 	}
@@ -582,12 +609,17 @@ bool PackageArchive::load(const QString& path, QString* error)
 	addCandidate(PackageArchiveFormat::Wad);
 	addCandidate(PackageArchiveFormat::Zip);
 
+	const auto identity = capturePackageFileIdentity(absolutePath, error, control, limits.maximumFingerprintBytes);
+	if (!identity) { return false; }
+
 	QString firstError;
 	for (PackageArchiveFormat candidate : candidates) {
 		// Every attempt starts from a clean reader: the loaders publish entries
 		// as they parse, so a truncated file must not leave a half-populated,
 		// mixed-format listing behind for the next attempt (or for the caller).
 		clear();
+		m_fileIdentity = identity;
+		m_loadControl = control; m_indexLimits = limits; m_indexFingerprintBytes = identity->chunkHashes.size();
 		QString attemptError;
 		bool attempted = false;
 		switch (candidate) {
@@ -606,9 +638,18 @@ bool PackageArchive::load(const QString& path, QString* error)
 			break;
 		}
 		if (attempted) {
-			finalizeEntries();
+			if (!finalizeEntries(error)) { clear(); return false; }
+			if (cancelled()) { return false; }
+			m_sourceSizeBytes = identity->size;
+			m_sourceModifiedUtc = identity->modifiedUtc;
+			m_loadControl = {};
 			m_open = true;
 			return true;
+		}
+		if (control.isCancelled && control.isCancelled()) {
+			clear();
+			if (error) { *error = QCoreApplication::translate("VibeStudioPackageArchive", "Package opening cancelled."); }
+			return false;
 		}
 		if (firstError.isEmpty()) {
 			firstError = attemptError;
@@ -617,7 +658,7 @@ bool PackageArchive::load(const QString& path, QString* error)
 
 	clear();
 	if (error) {
-		*error = firstError.isEmpty() ? packageText("Unsupported package format.") : firstError;
+		*error = firstError.isEmpty() ? QCoreApplication::translate("VibeStudioPackageArchive", "Unsupported package format.") : firstError;
 	}
 	return false;
 }
@@ -625,10 +666,100 @@ bool PackageArchive::load(const QString& path, QString* error)
 void PackageArchive::clear()
 {
 	m_format = PackageArchiveFormat::Unknown;
-	m_sourcePath.clear();
+	m_sourcePath.clear(); m_error.clear();
 	m_open = false;
 	m_entries.clear();
-	m_warnings.clear();
+	m_warnings.clear(); m_summary = {};
+	m_sourceSizeBytes = -1;
+	m_sourceModifiedUtc = {};
+	m_wadMagic.clear();
+	m_fileIdentity.reset();
+	m_folderIdentities.clear();
+	m_resolvedRoot.clear();
+	m_loadControl = {}; m_indexLimits = {}; m_indexEntries = 0; m_indexMetadataBytes = 0; m_indexFingerprintBytes = 0;
+	m_snapshotReader.reset();
+}
+
+bool PackageArchive::loadSnapshot(std::shared_ptr<const PackageArchiveReader> reader, QString* error,
+	const QVector<PackageLoadWarning>& warnings, const PackageReadControl& control, const PackageIndexLimits& limits)
+{
+	QString localError; if (!error) { error = &localError; } error->clear();
+	const auto rememberFailure = qScopeGuard([&] { if (!error->isEmpty()) { m_error = *error; } });
+	if (!validPackageIndexLimits(limits, error) || indexCancelled(control, error)) { return false; }
+	if (!reader || !reader->isOpen()) {
+		*error = reader && !reader->errorString().isEmpty() ? reader->errorString()
+			: QCoreApplication::translate("VibeStudioPackageArchive", "The package document snapshot is not available.");
+		return false;
+	}
+	PackageIndexUsage backing;
+	auto owner = reader;
+	QSet<const PackageArchiveReader*> seen;
+	for (;;) {
+		if (indexCancelled(control, error)) { return false; }
+		if (owner.get() == this || seen.contains(owner.get()) || seen.size() >= 64) {
+			*error = QCoreApplication::translate("VibeStudioPackageArchive", "The package snapshot has a cyclic or excessively nested reader chain."); return false;
+		}
+		seen.insert(owner.get());
+		const auto* archive = dynamic_cast<const PackageArchive*>(owner.get());
+		if (!archive) { break; }
+		const auto retained = archive->indexUsage();
+		backing.entries = qMax(backing.entries, retained.entries);
+		backing.metadataBytes = qMax(backing.metadataBytes, retained.metadataBytes);
+		backing.fingerprintBytes = qMax(backing.fingerprintBytes, retained.fingerprintBytes);
+		if (backing.entries > limits.maximumEntries || backing.metadataBytes > limits.maximumMetadataBytes || backing.fingerprintBytes > limits.maximumFingerprintBytes) {
+			*error = QCoreApplication::translate("VibeStudioPackageArchive", "The snapshot's backing package exceeds the selected index limits."); return false;
+		}
+		if (archive->snapshotReader()) { owner = archive->snapshotReader(); }
+		else { owner = std::make_shared<PackageArchive>(*archive); break; }
+	}
+	PackageArchive candidate;
+	candidate.m_format = reader->format(); candidate.m_sourcePath = reader->sourcePath(); candidate.m_entries = reader->entries();
+	if (candidate.m_format == PackageArchiveFormat::Wad) {
+		const auto magic = reader->wadMagic();
+		if (!magic.isEmpty() && magic != QStringLiteral("PWAD") && magic != QStringLiteral("IWAD")
+			&& magic != QStringLiteral("WAD2") && magic != QStringLiteral("WAD3")) {
+			*error = QCoreApplication::translate("VibeStudioPackageArchive", "The package snapshot has an unsupported WAD layout."); return false;
+		}
+		candidate.m_wadMagic = QString(magic.constData(), magic.size());
+	}
+	candidate.m_warnings = warnings;
+	if (warnings.isEmpty()) {
+		if (const auto* archive = dynamic_cast<const PackageArchive*>(reader.get())) { candidate.m_warnings = archive->warnings(); }
+	}
+	PackageIndexUsage usage;
+	if (!admitPackageSnapshot(candidate.m_sourcePath, candidate.m_entries, candidate.m_warnings, limits, control, &usage, nullptr, error)) { return false; }
+	// Own raw-backed text only after its length has been admitted. Check the
+	// owned values again: cancellation callbacks may have changed caller memory.
+	const auto own = [](QString& value) { value = QString(value.constData(), value.size()); };
+	own(candidate.m_sourcePath);
+	for (auto& entry : candidate.m_entries) {
+		if (indexCancelled(control, error)) { return false; }
+		for (auto* value : {&entry.virtualPath, &entry.typeHint, &entry.storageMethod, &entry.sourceArchiveId, &entry.layerId, &entry.note}) { own(*value); }
+	}
+	for (auto& warning : candidate.m_warnings) { if (indexCancelled(control, error)) { return false; } own(warning.virtualPath); own(warning.message); }
+	if (!admitPackageSnapshot(candidate.m_sourcePath, candidate.m_entries, candidate.m_warnings, limits, control, &usage, nullptr, error)) { return false; }
+	candidate.m_indexLimits = limits;
+	candidate.m_indexEntries = qMax(usage.entries, backing.entries);
+	candidate.m_indexMetadataBytes = qMax(usage.metadataBytes, backing.metadataBytes);
+	candidate.m_indexFingerprintBytes = backing.fingerprintBytes;
+	candidate.m_summary.sourcePath = candidate.m_sourcePath; candidate.m_summary.format = candidate.m_format;
+	candidate.m_summary.warningCount = static_cast<int>(candidate.m_warnings.size());
+	if (!collectPackageSummary(candidate.m_entries, &candidate.m_summary, control, error)) { return false; }
+	candidate.m_snapshotReader = std::move(owner); candidate.m_open = true;
+	*this = std::move(candidate); return true;
+}
+
+QString PackageArchive::wadMagic() const { return m_wadMagic; }
+std::shared_ptr<const PackageArchiveReader> PackageArchive::snapshotReader() const { return m_snapshotReader; }
+PackageIndexUsage PackageArchive::indexUsage() const { return {m_indexEntries, m_indexMetadataBytes, m_indexFingerprintBytes}; }
+
+bool PackageArchive::visitProtectedInputPaths(const std::function<bool(const QString&)>& visitor,
+	QString* error, const PackageReadControl& control) const
+{
+	if (!PackageArchiveReader::visitProtectedInputPaths(visitor, error, control)) { return false; }
+	if (m_fileIdentity && !m_fileIdentity->resolvedPath.isEmpty() && !visitor(m_fileIdentity->resolvedPath)) { return false; }
+	if (!m_resolvedRoot.isEmpty() && !visitor(m_resolvedRoot)) { return false; }
+	return (!m_snapshotReader || m_snapshotReader->visitProtectedInputPaths(visitor, error, control)) && !indexCancelled(control, error);
 }
 
 PackageArchiveFormat PackageArchive::format() const
@@ -658,27 +789,12 @@ QVector<PackageLoadWarning> PackageArchive::warnings() const
 
 PackageArchiveSummary PackageArchive::summary() const
 {
-	PackageArchiveSummary summary;
-	summary.sourcePath = m_sourcePath;
-	summary.format = m_format;
-	summary.entryCount = m_entries.size();
-	summary.warningCount = m_warnings.size();
-	for (const PackageEntry& entry : m_entries) {
-		if (entry.kind == PackageEntryKind::Directory) {
-			++summary.directoryCount;
-		} else {
-			++summary.fileCount;
-			summary.totalSizeBytes += entry.sizeBytes;
-		}
-		if (entry.nestedArchiveCandidate) {
-			++summary.nestedArchiveCount;
-		}
-	}
-	return summary;
+	return m_summary;
 }
 
 bool PackageArchive::readEntryBytes(const QString& virtualPath, QByteArray* out, QString* error, qint64 maxBytes) const
 {
+	if (m_snapshotReader) { return m_snapshotReader->readEntryBytes(virtualPath, out, error, maxBytes); }
 	if (error) {
 		error->clear();
 	}
@@ -687,7 +803,7 @@ bool PackageArchive::readEntryBytes(const QString& virtualPath, QByteArray* out,
 	}
 	if (!m_open) {
 		if (error) {
-			*error = packageText("No package is open.");
+			*error = m_error.isEmpty() ? QCoreApplication::translate("VibeStudioPackageArchive", "No package is open.") : m_error;
 		}
 		return false;
 	}
@@ -695,27 +811,144 @@ bool PackageArchive::readEntryBytes(const QString& virtualPath, QByteArray* out,
 	const PackageEntry* entry = findEntry(virtualPath);
 	if (!entry) {
 		if (error) {
-			*error = packageText("Package entry not found.");
+			*error = QCoreApplication::translate("VibeStudioPackageArchive", "Package entry not found.");
 		}
 		return false;
 	}
-	if (entry->kind == PackageEntryKind::Directory) {
+	return readEntry(*entry, out, error, maxBytes);
+}
+
+bool PackageArchive::readEntryAt(qsizetype index, QByteArray* out, QString* error, qint64 maxBytes) const
+{
+	if (m_snapshotReader) { return m_snapshotReader->readEntryAt(index, out, error, maxBytes); }
+	if (out) { out->clear(); }
+	if (error) { error->clear(); }
+	if (!m_open || index < 0 || index >= m_entries.size()) {
+		if (error) { *error = !m_open && !m_error.isEmpty() ? m_error : QCoreApplication::translate("VibeStudioPackageArchive", "Package entry index is out of range or no package is open."); }
+		return false;
+	}
+	return readEntry(m_entries.at(index), out, error, maxBytes);
+}
+
+bool PackageArchive::sourceMatchesSnapshot() const
+{
+	if (m_format == PackageArchiveFormat::Folder) {
+		const QFileInfo root(m_sourcePath);
+		return root.isDir() && root.canonicalFilePath() == m_resolvedRoot;
+	}
+	return m_fileIdentity && m_fileIdentity->matchesMetadata();
+}
+
+PackageFileIdentityPtr PackageArchive::fileIdentity(const QString& virtualPath) const
+{
+	return m_format == PackageArchiveFormat::Folder ? m_folderIdentities.value(virtualPath) : m_fileIdentity;
+}
+
+QByteArray PackageArchive::contentId() const
+{
+	// A document has no single encoded archive identity until it is exported.
+	if (m_snapshotReader) { return {}; }
+	if (!m_open) { return {}; }
+	if (m_fileIdentity) { return m_fileIdentity->sha256; }
+	QCryptographicHash hash(QCryptographicHash::Sha256);
+	hash.addData(QByteArrayView("VibeStudio folder identity v2\0"));
+	QStringList paths = m_folderIdentities.keys();
+	paths.sort(Qt::CaseSensitive);
+	for (const auto& path : paths) {
+		const auto& identity = m_folderIdentities[path];
+		hash.addData(path.toUtf8()); hash.addData(QByteArrayView("\0", 1));
+		hash.addData(QByteArray::number(identity->size)); hash.addData(QByteArrayView("\0", 1));
+		hash.addData(identity->sha256);
+		hash.addData(QByteArray::number(identity->modifiedUtc.toMSecsSinceEpoch())); hash.addData(QByteArrayView("\0", 1));
+	}
+	QStringList directories;
+	for (const auto& entry : m_entries) { if (entry.kind == PackageEntryKind::Directory) { directories << entry.virtualPath; } }
+	directories.sort(Qt::CaseSensitive);
+	for (const auto& path : directories) { hash.addData(QByteArrayView("directory\0", 10)); hash.addData(path.toUtf8()); hash.addData(QByteArrayView("\0", 1)); }
+	return hash.result();
+}
+
+bool PackageArchive::verifySourceIdentity(QString* error, const PackageReadControl& control) const
+{
+	if (error) { error->clear(); }
+	const auto fail = [&](const QString& message) { if (error) { *error = message; } return false; };
+	if (control.isCancelled && control.isCancelled()) { return fail(QCoreApplication::translate("VibeStudioPackageArchive", "Package source verification cancelled.")); }
+	if (m_snapshotReader) {
+		bool cancelled = false;
+		const auto stopped = [&] {
+			cancelled = cancelled || (control.isCancelled && control.isCancelled());
+			if (cancelled) { fail(QCoreApplication::translate("VibeStudioPackageArchive", "Package source verification cancelled.")); }
+			return cancelled;
+		};
+		for (qsizetype index = 0; index < m_entries.size(); ++index) {
+			if (stopped()) { return false; }
+			const auto& entry = m_entries.at(index);
+			if (entry.kind != PackageEntryKind::File || !entry.readable) { continue; }
+			quint64 read = 0; bool sizeChanged = false;
+			const bool verified = m_snapshotReader->streamEntryAt(index, [&](QByteArrayView bytes) {
+				if (stopped()) { return false; }
+				if (quint64(bytes.size()) > entry.sizeBytes - read) { sizeChanged = true; return false; }
+				read += quint64(bytes.size());
+				if (control.progress) { control.progress(entry.virtualPath, qint64(qMin<quint64>(read, std::numeric_limits<qint64>::max())),
+					qint64(qMin<quint64>(entry.sizeBytes, std::numeric_limits<qint64>::max()))); }
+				return !stopped();
+			}, error, stopped);
+			if (stopped()) { return false; }
+			if (sizeChanged || (verified && read != entry.sizeBytes)) {
+				return fail(QCoreApplication::translate("VibeStudioPackageArchive", "The source snapshot entry changed size: %1").arg(entry.virtualPath));
+			}
+			if (!verified) { return false; }
+		}
+		return !stopped();
+	}
+	if (!m_open || !sourceMatchesSnapshot()) {
+		return fail(QCoreApplication::translate("VibeStudioPackageArchive", "The source package changed or is not open. Reopen it before continuing."));
+	}
+	if (m_format != PackageArchiveFormat::Folder) { return verifyPackageFileIdentity(m_fileIdentity, error, control); }
+	QSet<QString> found, foundDirectories, expectedDirectories;
+	for (const auto& entry : m_entries) { if (entry.kind == PackageEntryKind::Directory) { expectedDirectories.insert(entry.virtualPath); } }
+	const QDir root(m_sourcePath);
+	QDirIterator iterator(m_sourcePath, QDir::Files | QDir::Dirs | QDir::NoDotAndDotDot, QDirIterator::Subdirectories);
+	while (iterator.hasNext()) {
+		if (control.isCancelled && control.isCancelled()) { return fail(QCoreApplication::translate("VibeStudioPackageArchive", "Package source verification cancelled.")); }
+		iterator.next();
+		const auto path = normalizePackageVirtualPath(root.relativeFilePath(iterator.filePath()), false);
+		if (!path.isSafe() || !packagePathIsInsideDirectory(m_sourcePath, iterator.filePath()) || (iterator.fileInfo().isDir() ? !expectedDirectories.contains(path.normalizedPath) : !m_folderIdentities.contains(path.normalizedPath))) {
+			return fail(QCoreApplication::translate("VibeStudioPackageArchive", "The folder package listing changed. Refresh it before continuing."));
+		}
+		if (iterator.fileInfo().isDir()) { foundDirectories.insert(path.normalizedPath); continue; }
+		found.insert(path.normalizedPath);
+		if (!verifyPackageFileIdentity(m_folderIdentities.value(path.normalizedPath), error, control)) { return false; }
+	}
+	if (found.size() != m_folderIdentities.size() || foundDirectories != expectedDirectories) {
+		return fail(QCoreApplication::translate("VibeStudioPackageArchive", "Files or folders disappeared from the folder package. Refresh it before continuing."));
+	}
+	return true;
+}
+
+bool PackageArchive::readEntry(const PackageEntry& entry, QByteArray* out, QString* error, qint64 maxBytes) const
+{
+	if (!sourceMatchesSnapshot()) {
+		if (error) { *error = QCoreApplication::translate("VibeStudioPackageArchive", "The source package changed after it was opened. Reopen it before reading entries."); }
+		return false;
+	}
+	if (entry.kind == PackageEntryKind::Directory) {
 		if (error) {
-			*error = packageText("Package entry is a directory.");
+			*error = QCoreApplication::translate("VibeStudioPackageArchive", "Package entry is a directory.");
 		}
 		return false;
 	}
-	if (!entry->readable) {
+	if (!entry.readable) {
 		if (error) {
-			*error = entry->note.isEmpty() ? packageText("Package entry is not readable by the current reader.") : entry->note;
+			*error = entry.note.isEmpty() ? QCoreApplication::translate("VibeStudioPackageArchive", "Package entry is not readable by the current reader.") : entry.note;
 		}
 		return false;
 	}
 
 	if (m_format == PackageArchiveFormat::Folder) {
-		return readFileEntryBytes(*entry, out, error, maxBytes);
+		return readFileEntryBytes(entry, out, error, maxBytes);
 	}
-	return readOffsetEntryBytes(*entry, out, error, maxBytes);
+	return readOffsetEntryBytes(entry, out, error, maxBytes);
 }
 
 bool PackageArchive::loadFolder(const QString& path, QString* error)
@@ -727,42 +960,78 @@ bool PackageArchive::loadFolder(const QString& path, QString* error)
 	const QFileInfo rootInfo(path);
 	if (!rootInfo.exists() || !rootInfo.isDir()) {
 		if (error) {
-			*error = packageText("Folder package not found.");
+			*error = QCoreApplication::translate("VibeStudioPackageArchive", "Folder package not found.");
 		}
 		return false;
 	}
 
 	m_format = PackageArchiveFormat::Folder;
 	m_sourcePath = rootInfo.absoluteFilePath();
+	m_resolvedRoot = rootInfo.canonicalFilePath();
 	const QDir root(m_sourcePath);
 	const QString sourceId = rootInfo.fileName();
 
-	QDirIterator it(m_sourcePath, QDir::Files | QDir::NoDotAndDotDot, QDirIterator::Subdirectories);
+	QDirIterator it(m_sourcePath, QDir::Files | QDir::Dirs | QDir::NoDotAndDotDot, QDirIterator::Subdirectories);
 	while (it.hasNext()) {
+		if (m_loadControl.isCancelled && m_loadControl.isCancelled()) {
+			if (error) { *error = QCoreApplication::translate("VibeStudioPackageArchive", "Package source verification cancelled."); }
+			return false;
+		}
 		it.next();
 		const QFileInfo fileInfo = it.fileInfo();
 		QString relative = root.relativeFilePath(fileInfo.absoluteFilePath());
+		if (m_loadControl.progress && m_indexEntries % 64 == 0) { m_loadControl.progress(QCoreApplication::translate("VibeStudioPackageArchive", "Indexing %1").arg(path), 0, 0); }
+		if (!accountIndex(1, 0, error) || !accountIndexPath(relative, error)) { return false; }
 		const PackageVirtualPath normalized = normalizePackageVirtualPath(relative, false);
 		if (!normalized.isSafe()) {
-			addWarning(relative, packageText("Skipped unsafe folder entry: %1").arg(packagePathIssueDisplayName(normalized.issue)));
+			if (!addWarning(relative, QCoreApplication::translate("VibeStudioPackageArchive", "Skipped unsafe folder entry: %1").arg(packagePathIssueDisplayName(normalized.issue)), true, error)) { return false; }
 			continue;
 		}
 		if (!packagePathIsInsideDirectory(m_sourcePath, fileInfo.absoluteFilePath())) {
-			addWarning(relative, packageText("Skipped folder entry outside the package root."));
+			if (!addWarning(relative, QCoreApplication::translate("VibeStudioPackageArchive", "Skipped folder entry outside the package root."), true, error)) { return false; }
 			continue;
 		}
 
 		PackageEntry entry;
 		entry.virtualPath = normalized.normalizedPath;
-		entry.kind = PackageEntryKind::File;
+		entry.kind = fileInfo.isDir() ? PackageEntryKind::Directory : PackageEntryKind::File;
 		entry.sizeBytes = static_cast<quint64>(std::max<qint64>(0, fileInfo.size()));
 		entry.compressedSizeBytes = entry.sizeBytes;
 		entry.modifiedUtc = fileInfo.lastModified().toUTC();
 		entry.typeHint = entryTypeHint(entry.virtualPath, entry.kind);
 		entry.storageMethod = QStringLiteral("file");
 		entry.sourceArchiveId = sourceId;
+		if (entry.kind == PackageEntryKind::Directory) {
+			entry.sizeBytes = 0; entry.compressedSizeBytes = 0; entry.readable = false;
+			entry.storageMethod = QStringLiteral("directory");
+			m_entries.push_back(entry);
+			continue;
+		}
 		entry.nestedArchiveCandidate = packageEntryLooksNestedArchive(entry.virtualPath);
-		entry.readable = true;
+		QString identityError;
+		const qint64 remainingHashes = m_indexLimits.maximumFingerprintBytes - m_indexFingerprintBytes;
+		const qint64 chunks = fileInfo.size() / PackageFileIdentity::chunkBytes + (fileInfo.size() % PackageFileIdentity::chunkBytes != 0);
+		if (chunks > remainingHashes / 32) {
+			if (error) { *error = QCoreApplication::translate("VibeStudioPackageArchive", "Folder source fingerprints exceed the %1-byte indexing limit.").arg(m_indexLimits.maximumFingerprintBytes); }
+			return false;
+		}
+		if (!accountIndex(0, (fileInfo.absoluteFilePath().size() + fileInfo.canonicalFilePath().size()) * qint64(sizeof(QChar)), error)) { return false; }
+		const auto identity = capturePackageFileIdentity(fileInfo.absoluteFilePath(), &identityError, m_loadControl, remainingHashes);
+		if (m_loadControl.isCancelled && m_loadControl.isCancelled()) {
+			if (error) { *error = identityError; }
+			return false;
+		}
+		entry.readable = static_cast<bool>(identity);
+		if (identity) {
+			m_indexFingerprintBytes += identity->chunkHashes.size();
+			m_folderIdentities.insert(entry.virtualPath, identity);
+			entry.sizeBytes = static_cast<quint64>(identity->size);
+			entry.compressedSizeBytes = entry.sizeBytes;
+			entry.modifiedUtc = identity->modifiedUtc;
+		} else {
+			entry.note = identityError;
+			if (!addWarning(entry.virtualPath, identityError, true, error)) { return false; }
+		}
 		m_entries.push_back(entry);
 	}
 	return true;
@@ -778,10 +1047,10 @@ bool PackageArchive::loadPak(const QString& path, QString* error)
 		error->clear();
 	}
 
-	QFile file(path);
+	PackageContentDevice file(m_fileIdentity, m_loadControl);
 	if (!file.open(QIODevice::ReadOnly)) {
 		if (error) {
-			*error = packageText("Unable to open PAK file.");
+			*error = QCoreApplication::translate("VibeStudioPackageArchive", "Unable to open PAK file.");
 		}
 		return false;
 	}
@@ -789,7 +1058,7 @@ bool PackageArchive::loadPak(const QString& path, QString* error)
 	const QByteArray header = file.read(12);
 	if (header.size() != 12 || readLe32(header, 0) != kPakSignature) {
 		if (error) {
-			*error = packageText("Invalid PAK header.");
+			*error = QCoreApplication::translate("VibeStudioPackageArchive", "Invalid PAK header.");
 		}
 		return false;
 	}
@@ -798,14 +1067,14 @@ bool PackageArchive::loadPak(const QString& path, QString* error)
 	const qint32 directoryLength = readSignedLe32(header, 8);
 	if (directoryOffset < 12 || directoryLength < 0 || directoryLength % 64 != 0 || static_cast<qint64>(directoryOffset) + directoryLength > file.size()) {
 		if (error) {
-			*error = packageText("Invalid PAK directory.");
+			*error = QCoreApplication::translate("VibeStudioPackageArchive", "Invalid PAK directory.");
 		}
 		return false;
 	}
 
 	if (!file.seek(directoryOffset)) {
 		if (error) {
-			*error = packageText("Unable to seek to PAK directory.");
+			*error = QCoreApplication::translate("VibeStudioPackageArchive", "Unable to seek to PAK directory.");
 		}
 		return false;
 	}
@@ -813,28 +1082,31 @@ bool PackageArchive::loadPak(const QString& path, QString* error)
 	// Parse into a local list so a truncated directory cannot publish a partial
 	// entry set under a PAK format tag.
 	QVector<PackageEntry> parsed;
-	QVector<PackageLoadWarning> parsedWarnings;
 	const int count = directoryLength / 64;
+	if (!accountIndex(count, directoryLength, error)) { return false; }
 	for (int index = 0; index < count; ++index) {
+		if (m_loadControl.progress && index % 64 == 0) { m_loadControl.progress(QCoreApplication::translate("VibeStudioPackageArchive", "Indexing %1").arg(path), qint64(index) * 64, directoryLength); }
+		if (!accountIndex(0, 0, error)) { return false; }
 		const QByteArray record = file.read(64);
 		if (record.size() != 64) {
 			if (error) {
-				*error = packageText("Unable to read PAK directory record.");
+				*error = QCoreApplication::translate("VibeStudioPackageArchive", "Unable to read PAK directory record.");
 			}
 			return false;
 		}
 
 		const QString rawName = fixedLatin1String(record.constData(), 56);
+		if (!accountIndexPath(rawName, error)) { return false; }
 		const PackageVirtualPath normalized = normalizePackageVirtualPath(rawName, false);
 		if (!normalized.isSafe()) {
-			parsedWarnings.push_back({rawName.trimmed(), packageText("Skipped unsafe PAK entry: %1").arg(packagePathIssueDisplayName(normalized.issue))});
+			if (!addWarning(rawName.trimmed(), QCoreApplication::translate("VibeStudioPackageArchive", "Skipped unsafe PAK entry: %1").arg(packagePathIssueDisplayName(normalized.issue)), true, error)) { return false; }
 			continue;
 		}
 
 		const qint32 dataOffset = readSignedLe32(record, 56);
 		const qint32 dataSize = readSignedLe32(record, 60);
 		if (dataOffset < 0 || dataSize < 0 || static_cast<qint64>(dataOffset) + dataSize > file.size()) {
-			parsedWarnings.push_back({normalized.normalizedPath, packageText("Skipped PAK entry with invalid offset or size.")});
+			if (!addWarning(normalized.normalizedPath, QCoreApplication::translate("VibeStudioPackageArchive", "Skipped PAK entry with invalid offset or size."), true, error)) { return false; }
 			continue;
 		}
 
@@ -842,6 +1114,7 @@ bool PackageArchive::loadPak(const QString& path, QString* error)
 		entry.virtualPath = normalized.normalizedPath;
 		entry.kind = PackageEntryKind::File;
 		entry.sizeBytes = static_cast<quint64>(dataSize);
+		entry.sourceOrdinal = index;
 		entry.compressedSizeBytes = entry.sizeBytes;
 		entry.dataOffset = dataOffset;
 		entry.typeHint = entryTypeHint(entry.virtualPath, entry.kind);
@@ -858,7 +1131,6 @@ bool PackageArchive::loadPak(const QString& path, QString* error)
 		entry.sourceArchiveId = sourceId;
 	}
 	m_entries = parsed;
-	m_warnings += parsedWarnings;
 	return true;
 }
 
@@ -871,10 +1143,10 @@ bool PackageArchive::loadWad(const QString& path, QString* error)
 		error->clear();
 	}
 
-	QFile file(path);
+	PackageContentDevice file(m_fileIdentity, m_loadControl);
 	if (!file.open(QIODevice::ReadOnly)) {
 		if (error) {
-			*error = packageText("Unable to open WAD file.");
+			*error = QCoreApplication::translate("VibeStudioPackageArchive", "Unable to open WAD file.");
 		}
 		return false;
 	}
@@ -883,7 +1155,7 @@ bool PackageArchive::loadWad(const QString& path, QString* error)
 	const QString magic = QString::fromLatin1(header.constData(), std::min<qsizetype>(4, header.size()));
 	if (header.size() != 12 || !(magic == QStringLiteral("IWAD") || magic == QStringLiteral("PWAD") || magic == QStringLiteral("WAD2") || magic == QStringLiteral("WAD3"))) {
 		if (error) {
-			*error = packageText("Invalid WAD header.");
+			*error = QCoreApplication::translate("VibeStudioPackageArchive", "Invalid WAD header.");
 		}
 		return false;
 	}
@@ -894,25 +1166,31 @@ bool PackageArchive::loadWad(const QString& path, QString* error)
 	const int recordSize = textureWad ? 32 : 16;
 	if (lumpCount < 0 || directoryOffset < 12 || static_cast<qint64>(directoryOffset) + (static_cast<qint64>(lumpCount) * recordSize) > file.size()) {
 		if (error) {
-			*error = packageText("Invalid WAD directory.");
+			*error = QCoreApplication::translate("VibeStudioPackageArchive", "Invalid WAD directory.");
 		}
 		return false;
 	}
 
 	if (!file.seek(directoryOffset)) {
 		if (error) {
-			*error = packageText("Unable to seek to WAD directory.");
+			*error = QCoreApplication::translate("VibeStudioPackageArchive", "Unable to seek to WAD directory.");
 		}
 		return false;
 	}
 
 	QVector<PackageEntry> parsed;
-	QVector<PackageLoadWarning> parsedWarnings;
+	// A Doom WAD's namespace markers say what the lumps between them are:
+	// X_START opens a namespace and X_END closes it, the doubled XX_ forms being
+	// what a PWAD uses to add to an IWAD's (the Doom Wiki's "WAD" article).
+	QStringList doomNamespaces;
+	if (!accountIndex(lumpCount, qint64(lumpCount) * recordSize, error)) { return false; }
 	for (int index = 0; index < lumpCount; ++index) {
+		if (m_loadControl.progress && index % 64 == 0) { m_loadControl.progress(QCoreApplication::translate("VibeStudioPackageArchive", "Indexing %1").arg(path), qint64(index) * recordSize, qint64(lumpCount) * recordSize); }
+		if (!accountIndex(0, 0, error)) { return false; }
 		const QByteArray record = file.read(recordSize);
 		if (record.size() != recordSize) {
 			if (error) {
-				*error = packageText("Unable to read WAD directory record.");
+				*error = QCoreApplication::translate("VibeStudioPackageArchive", "Unable to read WAD directory record.");
 			}
 			return false;
 		}
@@ -923,13 +1201,14 @@ bool PackageArchive::loadWad(const QString& path, QString* error)
 		const quint8 compression = textureWad ? static_cast<quint8>(record[13]) : 0;
 		const QString rawName = fixedLatin1String(record.constData() + (textureWad ? 16 : 8), textureWad ? 16 : 8);
 		const QString displayName = rawName.isEmpty() ? QStringLiteral("lump-%1").arg(index, 4, 10, QLatin1Char('0')) : rawName;
+		if (!accountIndexPath(displayName, error)) { return false; }
 		const PackageVirtualPath normalized = normalizePackageVirtualPath(displayName, false);
 		if (!normalized.isSafe()) {
-			parsedWarnings.push_back({displayName.trimmed(), packageText("Skipped unsafe WAD entry: %1").arg(packagePathIssueDisplayName(normalized.issue))});
+			if (!addWarning(displayName.trimmed(), QCoreApplication::translate("VibeStudioPackageArchive", "Skipped unsafe WAD entry: %1").arg(packagePathIssueDisplayName(normalized.issue)), true, error)) { return false; }
 			continue;
 		}
 		if (dataOffset < 0 || diskSize < 0 || logicalSize < 0 || static_cast<qint64>(dataOffset) + diskSize > file.size()) {
-			parsedWarnings.push_back({normalized.normalizedPath, packageText("Skipped WAD entry with invalid offset or size.")});
+			if (!addWarning(normalized.normalizedPath, QCoreApplication::translate("VibeStudioPackageArchive", "Skipped WAD entry with invalid offset or size."), true, error)) { return false; }
 			continue;
 		}
 
@@ -937,308 +1216,166 @@ bool PackageArchive::loadWad(const QString& path, QString* error)
 		entry.virtualPath = normalized.normalizedPath;
 		entry.kind = PackageEntryKind::File;
 		entry.sizeBytes = static_cast<quint64>(logicalSize);
+		entry.sourceOrdinal = index;
 		entry.compressedSizeBytes = static_cast<quint64>(diskSize);
 		entry.dataOffset = dataOffset;
 		entry.typeHint = textureWad ? QStringLiteral("wad-texture") : QStringLiteral("wad-lump");
+		entry.wadLumpType = textureWad ? static_cast<quint8>(record[12]) : 0;
+		if (!textureWad) {
+			// Namespaces nest (F1_ inside F_, a stray F_ inside S_), so an
+			// _END closes the innermost open one of its kind, and the lumps
+			// after it are back in the one around it.
+			bool opens = false;
+			const QString marked = doomNamespaceMarker(displayName, &opens);
+			if (!marked.isEmpty()) {
+				if (opens) {
+					doomNamespaces.push_back(marked);
+				} else if (const qsizetype open = doomNamespaces.lastIndexOf(marked); open >= 0) {
+					doomNamespaces.removeAt(open);
+				}
+				entry.typeHint = QStringLiteral("wad-marker");
+			} else if (!doomNamespaces.isEmpty()) {
+				entry.typeHint = QStringLiteral("wad-%1").arg(doomNamespaces.last());
+			}
+		}
 		entry.storageMethod = compression == 0 ? QStringLiteral("stored") : QStringLiteral("compressed-%1").arg(compression);
 		entry.readable = compression == 0;
-		entry.note = entry.readable ? QString() : packageText("WAD2/WAD3 compressed lumps are listed but not decoded.");
+		entry.note = entry.readable ? QString() : QCoreApplication::translate("VibeStudioPackageArchive", "WAD2/WAD3 compressed lumps are listed but not decoded.");
 		parsed.push_back(entry);
+	}
+
+	// A lump outside the namespaces that opens with a DMX sound header is a
+	// sound, whatever its name: Heretic's and Hexen's have no DS prefix. Only
+	// the first 8 bytes of each are read.
+	if (!textureWad) {
+		for (PackageEntry& entry : parsed) {
+			if (!accountIndex(0, 0, error)) { return false; }
+			if (entry.typeHint != QStringLiteral("wad-lump") || entry.sizeBytes < 8 || !file.seek(entry.dataOffset)) {
+				continue;
+			}
+			if (dmxSoundHeaderLooksValid(file.read(8), static_cast<qint64>(entry.sizeBytes), entry.virtualPath)) {
+				entry.typeHint = QStringLiteral("wad-sound");
+			}
+		}
 	}
 
 	m_format = PackageArchiveFormat::Wad;
+	m_wadMagic = magic;
 	m_sourcePath = QFileInfo(path).absoluteFilePath();
 	const QString sourceId = QFileInfo(m_sourcePath).fileName();
 	for (PackageEntry& entry : parsed) {
 		entry.sourceArchiveId = sourceId;
 	}
 	m_entries = parsed;
-	m_warnings += parsedWarnings;
 	return true;
 }
 
-// ZIP/PK3 central directory reader, implemented from the PKWARE .ZIP File
-// Format Specification (APPNOTE.TXT):
-// - 4.3.16 end of central directory record
-// - 4.3.14 / 4.3.15 ZIP64 end of central directory record and locator
-// - 4.3.12 central directory file header
-// - 4.5.3 ZIP64 extended information extra field (header id 0x0001)
+// ZIP/PK3 admission streams one central record at a time. Structural, ZIP64,
+// descriptor and encoding checks share the bounded helpers in package_zip.cpp.
 bool PackageArchive::loadZipFamily(const QString& path, PackageArchiveFormat format, QString* error)
 {
-	if (error) {
-		error->clear();
-	}
-
-	QFile file(path);
+	if (error) { error->clear(); }
+	PackageContentDevice file(m_fileIdentity, m_loadControl);
 	if (!file.open(QIODevice::ReadOnly)) {
-		if (error) {
-			*error = packageText("Unable to open ZIP/PK3 file.");
-		}
+		if (error) { *error = file.errorString(); }
 		return false;
 	}
-
-	const qint64 fileSize = file.size();
-	if (fileSize < 22) {
-		if (error) {
-			*error = packageText("ZIP end directory not found.");
-		}
+	ZipDirectoryMetadata directory;
+	if (!readZipDirectoryMetadata(file, m_indexLimits.maximumMetadataBytes, &directory, error)) { return false; }
+	if (directory.entries > quint64(m_indexLimits.maximumEntries)
+		|| directory.size > quint64(m_indexLimits.maximumMetadataBytes)
+		|| quint64(directory.additionalMetadataBytes) > quint64(m_indexLimits.maximumMetadataBytes) - directory.size) {
+		if (error) { *error = QCoreApplication::translate("VibeStudioPackageArchive", "ZIP directory exceeds the indexing limits of %1 entries or %2 metadata bytes.").arg(m_indexLimits.maximumEntries).arg(m_indexLimits.maximumMetadataBytes); }
 		return false;
 	}
-
-	// 64 KiB comment window plus the 22-byte record.
-	const qint64 scanSize = std::min<qint64>(fileSize, 66000);
-	const qint64 tailStart = fileSize - scanSize;
-	QByteArray tail;
-	if (!readAt(file, tailStart, scanSize, &tail)) {
-		if (error) {
-			*error = packageText("Unable to read ZIP end directory.");
-		}
+	if (!accountIndex(qsizetype(directory.entries), qint64(directory.size) + directory.additionalMetadataBytes, error)) { return false; }
+	PackageContentDevice directoryFile(m_fileIdentity, m_loadControl);
+	if (!directoryFile.open(QIODevice::ReadOnly)) {
+		if (error) { *error = directoryFile.errorString(); }
 		return false;
 	}
-
-	qsizetype eocdOffsetInTail = -1;
-	for (qsizetype offset = tail.size() - 22; offset >= 0; --offset) {
-		if (readLe32(tail, offset) == kZipEndOfCentralDirectorySignature) {
-			eocdOffsetInTail = offset;
-			break;
-		}
-	}
-	if (eocdOffsetInTail < 0) {
-		if (error) {
-			*error = packageText("ZIP end directory not found.");
-		}
-		return false;
-	}
-
-	const qint64 eocdAbsoluteOffset = tailStart + eocdOffsetInTail;
-	quint32 diskNumber = readLe16(tail, eocdOffsetInTail + 4);
-	quint32 centralDirectoryDisk = readLe16(tail, eocdOffsetInTail + 6);
-	quint64 totalEntries = readLe16(tail, eocdOffsetInTail + 10);
-	quint64 centralDirectorySize = readLe32(tail, eocdOffsetInTail + 12);
-	quint64 centralDirectoryOffset = readLe32(tail, eocdOffsetInTail + 16);
-
-	bool zip64 = false;
-	const qint64 locatorOffset = eocdAbsoluteOffset - 20;
-	if (locatorOffset >= 0) {
-		QByteArray locator;
-		if (readAt(file, locatorOffset, 20, &locator) && readLe32(locator, 0) == kZip64EndOfCentralDirectoryLocatorSignature) {
-			const quint64 zip64RecordOffset = readLe64(locator, 8);
-			if (zip64RecordOffset + 56 > static_cast<quint64>(fileSize)) {
-				if (error) {
-					*error = packageText("ZIP64 end of central directory record is out of range.");
-				}
-				return false;
-			}
-			QByteArray zip64Record;
-			if (!readAt(file, static_cast<qint64>(zip64RecordOffset), 56, &zip64Record) || readLe32(zip64Record, 0) != kZip64EndOfCentralDirectorySignature) {
-				if (error) {
-					*error = packageText("Invalid ZIP64 end of central directory record.");
-				}
-				return false;
-			}
-			zip64 = true;
-			diskNumber = readLe32(zip64Record, 16);
-			centralDirectoryDisk = readLe32(zip64Record, 20);
-			totalEntries = readLe64(zip64Record, 32);
-			centralDirectorySize = readLe64(zip64Record, 40);
-			centralDirectoryOffset = readLe64(zip64Record, 48);
-		}
-	}
-
-	if (!zip64 && (centralDirectoryOffset == kZip32Sentinel || centralDirectorySize == kZip32Sentinel || totalEntries == kZip16Sentinel)) {
-		if (error) {
-			*error = packageText("ZIP archive uses ZIP64 values but has no ZIP64 end of central directory record.");
-		}
-		return false;
-	}
-	if (centralDirectorySize > static_cast<quint64>(std::numeric_limits<qsizetype>::max())
-		|| centralDirectoryOffset > static_cast<quint64>(fileSize)
-		|| centralDirectoryOffset + centralDirectorySize > static_cast<quint64>(fileSize)) {
-		if (error) {
-			*error = packageText("ZIP central directory is out of range.");
-		}
-		return false;
-	}
-
-	QByteArray centralDirectory;
-	if (!readAt(file, static_cast<qint64>(centralDirectoryOffset), static_cast<qint64>(centralDirectorySize), &centralDirectory)) {
-		if (error) {
-			*error = packageText("Unable to read ZIP central directory.");
-		}
-		return false;
-	}
-
 	QVector<PackageEntry> parsed;
-	QVector<PackageLoadWarning> parsedWarnings;
-	if (diskNumber != 0 || centralDirectoryDisk != 0) {
-		parsedWarnings.push_back({QString(), packageText("Multi-disk ZIP archives are not supported; only the current file is read.")});
-	}
-
-	qsizetype cursor = 0;
-	quint64 index = 0;
-	for (; index < totalEntries; ++index) {
-		if (cursor + 46 > centralDirectory.size() || readLe32(centralDirectory, cursor) != kZipCentralDirectorySignature) {
-			if (error) {
-				*error = packageText("Invalid ZIP central directory record.");
-			}
+	quint64 consumed = 0;
+	for (quint64 index = 0; index < directory.entries; ++index) {
+		if (m_loadControl.progress && index % 64 == 0) { m_loadControl.progress(QCoreApplication::translate("VibeStudioPackageArchive", "Indexing %1").arg(path), consumed, directory.size); }
+		if (m_loadControl.isCancelled && m_loadControl.isCancelled()) {
+			if (error) { *error = QCoreApplication::translate("VibeStudioPackageArchive", "Package opening cancelled."); }
 			return false;
 		}
-
-		const quint16 flags = readLe16(centralDirectory, cursor + 8);
-		const quint16 method = readLe16(centralDirectory, cursor + 10);
-		const quint16 modifiedTime = readLe16(centralDirectory, cursor + 12);
-		const quint16 modifiedDate = readLe16(centralDirectory, cursor + 14);
-		const quint32 crc = readLe32(centralDirectory, cursor + 16);
-		const quint32 compressedSize32 = readLe32(centralDirectory, cursor + 20);
-		const quint32 uncompressedSize32 = readLe32(centralDirectory, cursor + 24);
-		const quint16 nameLength = readLe16(centralDirectory, cursor + 28);
-		const quint16 extraLength = readLe16(centralDirectory, cursor + 30);
-		const quint16 commentLength = readLe16(centralDirectory, cursor + 32);
-		const quint16 diskStart16 = readLe16(centralDirectory, cursor + 34);
-		const quint32 localHeaderOffset32 = readLe32(centralDirectory, cursor + 42);
-		const qsizetype recordSize = 46 + static_cast<qsizetype>(nameLength) + extraLength + commentLength;
-		if (cursor + recordSize > centralDirectory.size()) {
-			if (error) {
-				*error = packageText("Invalid ZIP central directory name length.");
-			}
+		QByteArray central;
+		if (directory.size - consumed < 46
+			|| !readAt(directoryFile, qint64(directory.offset + consumed), 46, &central)
+			|| readLe32(central, 0) != kZipCentralDirectorySignature) {
+			if (error) { *error = QCoreApplication::translate("VibeStudioPackageArchive", "Invalid ZIP central directory record."); }
 			return false;
 		}
-
-		quint64 compressedSize = compressedSize32;
-		quint64 uncompressedSize = uncompressedSize32;
-		quint64 localHeaderOffset = localHeaderOffset32;
-		quint32 diskStart = diskStart16;
-
-		// APPNOTE.TXT 4.5.3: the ZIP64 extended information field carries only
-		// those values whose 32/16-bit counterpart holds the sentinel, in this
-		// fixed order.
-		const bool needsZip64Size = uncompressedSize32 == kZip32Sentinel;
-		const bool needsZip64Compressed = compressedSize32 == kZip32Sentinel;
-		const bool needsZip64Offset = localHeaderOffset32 == kZip32Sentinel;
-		const bool needsZip64Disk = diskStart16 == kZip16Sentinel;
-		bool zip64FieldComplete = !(needsZip64Size || needsZip64Compressed || needsZip64Offset || needsZip64Disk);
-		if (!zip64FieldComplete) {
-			qsizetype extraCursor = cursor + 46 + nameLength;
-			const qsizetype extraEnd = extraCursor + extraLength;
-			while (extraCursor + 4 <= extraEnd) {
-				const quint16 headerId = readLe16(centralDirectory, extraCursor);
-				const quint16 dataSize = readLe16(centralDirectory, extraCursor + 2);
-				const qsizetype dataStart = extraCursor + 4;
-				const qsizetype dataEnd = dataStart + dataSize;
-				if (dataEnd > extraEnd) {
-					break;
-				}
-				if (headerId == kZip64ExtraHeaderId) {
-					qsizetype field = dataStart;
-					bool complete = true;
-					if (needsZip64Size) {
-						if (field + 8 > dataEnd) {
-							complete = false;
-						} else {
-							uncompressedSize = readLe64(centralDirectory, field);
-							field += 8;
-						}
-					}
-					if (complete && needsZip64Compressed) {
-						if (field + 8 > dataEnd) {
-							complete = false;
-						} else {
-							compressedSize = readLe64(centralDirectory, field);
-							field += 8;
-						}
-					}
-					if (complete && needsZip64Offset) {
-						if (field + 8 > dataEnd) {
-							complete = false;
-						} else {
-							localHeaderOffset = readLe64(centralDirectory, field);
-							field += 8;
-						}
-					}
-					if (complete && needsZip64Disk) {
-						if (field + 4 > dataEnd) {
-							complete = false;
-						} else {
-							diskStart = readLe32(centralDirectory, field);
-							field += 4;
-						}
-					}
-					zip64FieldComplete = complete;
-					break;
-				}
-				extraCursor = dataEnd;
-			}
+		const quint16 nameLength = readLe16(central, 28);
+		const qsizetype recordSize = 46 + qsizetype(nameLength) + readLe16(central, 30) + readLe16(central, 32);
+		QByteArray tail;
+		if (quint64(recordSize) > directory.size - consumed
+			|| !readAt(directoryFile, qint64(directory.offset + consumed + 46), recordSize - 46, &tail)) {
+			if (error) { *error = QCoreApplication::translate("VibeStudioPackageArchive", "Invalid ZIP central directory name length."); }
+			return false;
 		}
-
-		const QString rawName = QString::fromUtf8(centralDirectory.constData() + cursor + 46, nameLength);
-		const bool directoryEntry = rawName.endsWith('/');
-		const PackageVirtualPath normalized = normalizePackageVirtualPath(rawName, directoryEntry);
+		central += tail;
+		consumed += recordSize;
+		ZipEntryMetadata metadata;
+		QString issue;
+		if (!readZipEntryMetadata(central, &metadata, &issue)) {
+			if (!addWarning({}, QCoreApplication::translate("VibeStudioPackageArchive", "Skipped ZIP entry %1: %2").arg(index + 1).arg(issue), true, error)) { return false; }
+			continue;
+		}
+		if (!accountIndexPath(metadata.name, error)) { return false; }
+		const bool directoryEntry = metadata.name.endsWith('/');
+		const PackageVirtualPath normalized = normalizePackageVirtualPath(metadata.name, false);
 		if (!normalized.isSafe()) {
-			parsedWarnings.push_back({rawName.trimmed(), packageText("Skipped unsafe ZIP entry: %1").arg(packagePathIssueDisplayName(normalized.issue))});
-			cursor += recordSize;
+			if (!addWarning(metadata.name.trimmed(), QCoreApplication::translate("VibeStudioPackageArchive", "Skipped unsafe ZIP entry: %1").arg(packagePathIssueDisplayName(normalized.issue)), true, error)) { return false; }
 			continue;
 		}
-		if (!zip64FieldComplete) {
-			parsedWarnings.push_back({normalized.normalizedPath, packageText("Skipped ZIP entry with an incomplete ZIP64 extended information field.")});
-			cursor += recordSize;
+		if (metadata.disk != 0) {
+			if (!addWarning(normalized.normalizedPath, QCoreApplication::translate("VibeStudioPackageArchive", "Skipped ZIP entry stored on another disk of a multi-disk archive."), true, error)) { return false; }
 			continue;
 		}
-		if (diskStart != 0) {
-			parsedWarnings.push_back({normalized.normalizedPath, packageText("Skipped ZIP entry stored on another disk of a multi-disk archive.")});
-			cursor += recordSize;
-			continue;
-		}
-
 		qint64 dataOffset = -1;
-		if (!directoryEntry && localHeaderOffset + 30 <= static_cast<quint64>(fileSize)) {
-			QByteArray localHeader;
-			if (readAt(file, static_cast<qint64>(localHeaderOffset), 30, &localHeader) && readLe32(localHeader, 0) == kZipLocalFileSignature) {
-				const quint16 localNameLength = readLe16(localHeader, 26);
-				const quint16 localExtraLength = readLe16(localHeader, 28);
-				const quint64 candidate = localHeaderOffset + 30 + localNameLength + localExtraLength;
-				if (candidate + compressedSize <= static_cast<quint64>(fileSize)) {
-					dataOffset = static_cast<qint64>(candidate);
-				}
-			}
-		}
-
+		QString headerIssue;
+		readZipLocalMetadata(file, directory.offset, metadata, QByteArrayView(central).sliced(46, nameLength), &dataOffset, &headerIssue);
+		const bool encrypted = (metadata.flags & 0x2041) != 0;
+		const bool supportedFlags = (metadata.flags & ~quint16(0x080f)) == 0;
+		const bool supportedMethod = metadata.method == 0 || metadata.method == 8;
 		PackageEntry entry;
 		entry.virtualPath = normalized.normalizedPath;
 		entry.kind = directoryEntry ? PackageEntryKind::Directory : PackageEntryKind::File;
-		entry.sizeBytes = uncompressedSize;
-		entry.compressedSizeBytes = compressedSize;
+		entry.sizeBytes = metadata.size;
+		entry.sourceOrdinal = qint64(index);
+		entry.compressedSizeBytes = metadata.compressedSize;
 		entry.dataOffset = dataOffset;
-		entry.modifiedUtc = dosDateTimeUtc(modifiedDate, modifiedTime);
+		entry.modifiedUtc = dosDateTimeUtc(readLe16(central, 14), readLe16(central, 12));
 		entry.typeHint = entryTypeHint(entry.virtualPath, entry.kind);
-		entry.storageMethod = zipMethodName(method);
-		entry.crc32 = crc;
-		entry.hasCrc32 = entry.kind == PackageEntryKind::File;
+		entry.storageMethod = zipMethodName(metadata.method);
+		entry.crc32 = metadata.crc;
+		entry.hasCrc32 = !directoryEntry;
 		entry.nestedArchiveCandidate = packageEntryLooksNestedArchive(entry.virtualPath);
-
-		const bool encrypted = (flags & 0x1) != 0;
-		const bool supportedMethod = method == 0 || method == 8;
-		entry.readable = entry.kind == PackageEntryKind::File && supportedMethod && !encrypted && dataOffset >= 0;
-		if (entry.kind == PackageEntryKind::Directory) {
-			entry.readable = false;
-		} else if (encrypted) {
-			entry.note = packageText("Encrypted ZIP entries are not readable; this reader does not implement ZIP decryption.");
+		entry.readable = !directoryEntry && supportedMethod && supportedFlags && !encrypted && dataOffset >= 0;
+		if (encrypted) {
+			entry.note = QCoreApplication::translate("VibeStudioPackageArchive", "Encrypted ZIP entries are not readable; this reader does not implement ZIP decryption.");
+		} else if (!supportedFlags) {
+			entry.note = QCoreApplication::translate("VibeStudioPackageArchive", "ZIP entry requires unsupported processing flags; listing only.");
 		} else if (!supportedMethod) {
-			entry.note = packageText("ZIP entry uses %1 compression, which this reader does not decode; listing only.").arg(entry.storageMethod);
-		} else if (dataOffset < 0) {
-			entry.note = packageText("ZIP local file header could not be located for this entry.");
+			entry.note = QCoreApplication::translate("VibeStudioPackageArchive", "ZIP entry uses %1 compression, which this reader does not decode; listing only.").arg(entry.storageMethod);
+		} else if (!headerIssue.isEmpty()) {
+			entry.note = headerIssue;
 		}
+		// Directories do not stream a payload during validation. Their header
+		// failures must therefore be exposed as saving-blocking diagnostics.
+		if (directoryEntry && !entry.note.isEmpty() && !addWarning(entry.virtualPath, entry.note, true, error)) { return false; }
 		parsed.push_back(entry);
-		cursor += recordSize;
 	}
-
+	if (!finishZipDirectory(directoryFile, directory, consumed, error)) { return false; }
 	m_format = format;
 	m_sourcePath = QFileInfo(path).absoluteFilePath();
 	const QString sourceId = QFileInfo(m_sourcePath).fileName();
-	for (PackageEntry& entry : parsed) {
-		entry.sourceArchiveId = sourceId;
-	}
+	for (PackageEntry& entry : parsed) { entry.sourceArchiveId = sourceId; }
 	m_entries = parsed;
-	m_warnings += parsedWarnings;
 	return true;
 }
 
@@ -1249,15 +1386,21 @@ bool PackageArchive::readFileEntryBytes(const PackageEntry& entry, QByteArray* o
 	const QString filePath = QDir(m_sourcePath).filePath(nativeRelative);
 	if (!packagePathIsInsideDirectory(m_sourcePath, filePath)) {
 		if (error) {
-			*error = packageText("Folder entry escapes the package root.");
+			*error = QCoreApplication::translate("VibeStudioPackageArchive", "Folder entry escapes the package root.");
 		}
 		return false;
 	}
+	const QFileInfo before(filePath);
+	if (!before.isFile() || before.size() < 0 || static_cast<quint64>(before.size()) != entry.sizeBytes
+		|| before.lastModified().toUTC() != entry.modifiedUtc) {
+		if (error) { *error = QCoreApplication::translate("VibeStudioPackageArchive", "The folder entry changed after it was listed. Refresh the package before reading it."); }
+		return false;
+	}
 
-	QFile file(filePath);
+	PackageContentDevice file(fileIdentity(entry.virtualPath));
 	if (!file.open(QIODevice::ReadOnly)) {
 		if (error) {
-			*error = packageText("Unable to open folder entry.");
+			*error = QCoreApplication::translate("VibeStudioPackageArchive", "Unable to open folder entry.");
 		}
 		return false;
 	}
@@ -1265,12 +1408,103 @@ bool PackageArchive::readFileEntryBytes(const PackageEntry& entry, QByteArray* o
 	const qint64 toRead = maxBytes >= 0 ? std::min(maxBytes, available) : available;
 	if (out) {
 		*out = file.read(toRead);
-		if (out->size() != toRead) {
+		const QFileInfo after(filePath);
+		if (out->size() != toRead || file.failed() || before.size() != after.size() || before.lastModified() != after.lastModified()) {
 			if (error) {
-				*error = packageText("Unable to read folder entry.");
+				*error = QCoreApplication::translate("VibeStudioPackageArchive", "Unable to read folder entry.");
 			}
+			out->clear();
 			return false;
 		}
+	}
+	return true;
+}
+
+bool PackageArchive::streamEntryAt(qsizetype index, const std::function<bool(QByteArrayView)>& sink,
+	QString* error, const std::function<bool()>& isCancelled) const
+{
+	if (m_snapshotReader) { return m_snapshotReader->streamEntryAt(index, sink, error, isCancelled); }
+	if (error) { error->clear(); }
+	const auto fail = [error](const QString& message) {
+		if (error) { *error = message; }
+		return false;
+	};
+	const auto cancelled = [&]() { return isCancelled && isCancelled(); };
+	if (!m_open || index < 0 || index >= m_entries.size() || !sink) {
+		return fail(QCoreApplication::translate("VibeStudioPackageArchive", "Invalid package entry streaming request."));
+	}
+	const auto& entry = m_entries.at(index);
+	if (entry.kind != PackageEntryKind::File || !entry.readable) {
+		return fail(entry.note.isEmpty() ? QCoreApplication::translate("VibeStudioPackageArchive", "Package entry is not a readable file.") : entry.note);
+	}
+	if (cancelled()) { return fail(QCoreApplication::translate("VibeStudioPackageArchive", "Package read cancelled.")); }
+	if (!sourceMatchesSnapshot()) {
+		return fail(QCoreApplication::translate("VibeStudioPackageArchive", "The source package changed after it was opened. Reopen it before reading entries."));
+	}
+	QString filePath = m_sourcePath;
+	const bool folder = m_format == PackageArchiveFormat::Folder;
+	const bool deflated = !folder && isDeflatedStorage(entry.storageMethod);
+	if (folder) {
+		filePath = QDir(m_sourcePath).filePath(entry.virtualPath);
+		if (!packagePathIsInsideDirectory(m_sourcePath, filePath)) {
+			return fail(QCoreApplication::translate("VibeStudioPackageArchive", "Folder entry escapes the package root."));
+		}
+	}
+	const QFileInfo before(filePath);
+	if (folder && (!before.isFile() || before.size() < 0 || static_cast<quint64>(before.size()) != entry.sizeBytes
+		|| before.lastModified().toUTC() != entry.modifiedUtc)) {
+		return fail(QCoreApplication::translate("VibeStudioPackageArchive", "The folder entry changed after it was listed. Refresh the package before reading it."));
+	}
+	PackageReadControl control; control.isCancelled = isCancelled;
+	PackageContentDevice file(fileIdentity(folder ? entry.virtualPath : QString()), control);
+	if (!file.open(QIODevice::ReadOnly)) { return fail(file.errorString()); }
+	const quint64 storedSize = folder ? entry.sizeBytes : entry.compressedSizeBytes;
+	const qint64 offset = folder ? 0 : entry.dataOffset;
+	if (offset < 0 || offset > file.size() || storedSize > static_cast<quint64>(file.size() - offset)
+		|| entry.sizeBytes > static_cast<quint64>(std::numeric_limits<qint64>::max())) {
+		return fail(QCoreApplication::translate("VibeStudioPackageArchive", "Package entry extends beyond the file."));
+	}
+	if (!deflated && storedSize != entry.sizeBytes) {
+		return fail(QCoreApplication::translate("VibeStudioPackageArchive", "Stored package entry sizes do not match."));
+	}
+	if (!file.seek(offset)) { return fail(file.errorString()); }
+	quint32 crc = 0;
+	quint64 received = 0;
+	bool sinkFailed = false;
+	const auto accept = [&](QByteArrayView chunk) {
+		if (cancelled()) { return false; }
+		crc = crc32Bytes(QByteArray::fromRawData(chunk.data(), chunk.size()), crc);
+		received += static_cast<quint64>(chunk.size());
+		if (!sink(chunk)) { sinkFailed = true; return false; }
+		return true;
+	};
+	if (deflated) {
+		const auto inflated = inflateRawToSink(file, static_cast<qint64>(storedSize), static_cast<qint64>(entry.sizeBytes), accept, isCancelled);
+		if (!inflated.ok) {
+			return fail(cancelled() ? QCoreApplication::translate("VibeStudioPackageArchive", "Package read cancelled.")
+				: sinkFailed ? QCoreApplication::translate("VibeStudioPackageArchive", "The package byte consumer stopped the read.") : inflated.error);
+		}
+		if (static_cast<quint64>(inflated.bytesConsumed) != storedSize) {
+			return fail(QCoreApplication::translate("VibeStudioPackageArchive", "Compressed package entry contains bytes after its DEFLATE stream."));
+		}
+	} else {
+		while (received < storedSize) {
+			if (cancelled()) { return fail(QCoreApplication::translate("VibeStudioPackageArchive", "Package read cancelled.")); }
+			const qint64 count = static_cast<qint64>(qMin<quint64>(65536, storedSize - received));
+			const QByteArray chunk = file.read(count);
+			if (chunk.size() != count) { return fail(QCoreApplication::translate("VibeStudioPackageArchive", "Unable to read the complete package entry.")); }
+			if (!accept(QByteArrayView(chunk))) { return fail(QCoreApplication::translate("VibeStudioPackageArchive", "The package byte consumer stopped the read.")); }
+		}
+	}
+	if (cancelled()) { return fail(QCoreApplication::translate("VibeStudioPackageArchive", "Package read cancelled.")); }
+	if (received != entry.sizeBytes) { return fail(QCoreApplication::translate("VibeStudioPackageArchive", "Package entry size does not match its directory record.")); }
+	if (entry.hasCrc32 && crc != entry.crc32) {
+		return fail(QCoreApplication::translate("VibeStudioPackageArchive", "Package entry failed its CRC check; the archive is damaged."));
+	}
+	const QFileInfo after(filePath);
+	if (file.failed()) { return fail(file.errorString()); }
+	if (!sourceMatchesSnapshot() || before.size() != after.size() || before.lastModified() != after.lastModified()) {
+		return fail(QCoreApplication::translate("VibeStudioPackageArchive", "The package source changed while reading an entry."));
 	}
 	return true;
 }
@@ -1283,33 +1517,33 @@ bool PackageArchive::readOffsetEntryBytes(const PackageEntry& entry, QByteArray*
 		: (entry.compressedSizeBytes > 0 ? entry.compressedSizeBytes : entry.sizeBytes);
 	if (entry.dataOffset < 0 || storedSize > static_cast<quint64>(std::numeric_limits<qint64>::max())) {
 		if (error) {
-			*error = packageText("Invalid package entry offset or size.");
+			*error = QCoreApplication::translate("VibeStudioPackageArchive", "Invalid package entry offset or size.");
 		}
 		return false;
 	}
 	if (deflated && entry.sizeBytes > static_cast<quint64>(kMaximumInflateBytes)) {
 		if (error) {
-			*error = packageText("Compressed package entry is too large to inflate in memory.");
+			*error = QCoreApplication::translate("VibeStudioPackageArchive", "Compressed package entry is too large to inflate in memory.");
 		}
 		return false;
 	}
 
-	QFile file(m_sourcePath);
+	PackageContentDevice file(m_fileIdentity);
 	if (!file.open(QIODevice::ReadOnly)) {
 		if (error) {
-			*error = packageText("Unable to open package file.");
+			*error = QCoreApplication::translate("VibeStudioPackageArchive", "Unable to open package file.");
 		}
 		return false;
 	}
-	if (entry.dataOffset + static_cast<qint64>(storedSize) > file.size()) {
+	if (entry.dataOffset > file.size() || storedSize > static_cast<quint64>(file.size() - entry.dataOffset)) {
 		if (error) {
-			*error = packageText("Package entry extends beyond the file.");
+			*error = QCoreApplication::translate("VibeStudioPackageArchive", "Package entry extends beyond the file.");
 		}
 		return false;
 	}
 	if (!file.seek(entry.dataOffset)) {
 		if (error) {
-			*error = packageText("Unable to seek to package entry.");
+			*error = QCoreApplication::translate("VibeStudioPackageArchive", "Unable to seek to package entry.");
 		}
 		return false;
 	}
@@ -1318,9 +1552,10 @@ bool PackageArchive::readOffsetEntryBytes(const PackageEntry& entry, QByteArray*
 		const qint64 toRead = maxBytes >= 0 ? std::min(maxBytes, static_cast<qint64>(storedSize)) : static_cast<qint64>(storedSize);
 		if (out) {
 			*out = file.read(toRead);
-			if (out->size() != toRead) {
+			if (out->size() != toRead || file.failed()) {
+				out->clear();
 				if (error) {
-					*error = packageText("Unable to read package entry.");
+					*error = QCoreApplication::translate("VibeStudioPackageArchive", "Unable to read package entry.");
 				}
 				return false;
 			}
@@ -1331,7 +1566,7 @@ bool PackageArchive::readOffsetEntryBytes(const PackageEntry& entry, QByteArray*
 			const bool readWholeEntry = toRead == static_cast<qint64>(storedSize);
 			if (entry.hasCrc32 && readWholeEntry && crc32Bytes(*out) != entry.crc32) {
 				if (error) {
-					*error = packageText("Package entry failed its CRC check; the archive is damaged.");
+					*error = QCoreApplication::translate("VibeStudioPackageArchive", "Package entry failed its CRC check; the archive is damaged.");
 				}
 				// Hand back nothing rather than the damaged bytes: a caller that
 				// checks only for non-empty output must not be able to use them.
@@ -1342,14 +1577,35 @@ bool PackageArchive::readOffsetEntryBytes(const PackageEntry& entry, QByteArray*
 		return true;
 	}
 
-	// The DEFLATE stream has to be inflated as a whole: it is not seekable and
-	// the CRC-32 only covers the complete payload. `expectedSize` caps the
-	// decoder's output so a lying central directory cannot drive unbounded
-	// growth, and `maxBytes` then truncates the preview.
+	// Prefix previews stop the streaming inflater once the requested bytes are
+	// available. They cannot verify the unseen tail's size or CRC. Whole-entry
+	// consumers (including texture imports) still use the checked path below.
+	if (maxBytes >= 0 && quint64(maxBytes) < entry.sizeBytes) {
+		QByteArray prefix;
+		bool complete = maxBytes == 0;
+		if (!complete) {
+			const auto streamed = inflateRawToSink(file, static_cast<qint64>(storedSize), static_cast<qint64>(entry.sizeBytes), [&](QByteArrayView chunk) {
+				const auto count = std::min<qint64>(chunk.size(), maxBytes - prefix.size());
+				prefix.append(chunk.data(), count);
+				complete = prefix.size() == maxBytes;
+				return !complete;
+			});
+			if (!complete) {
+				if (error) { *error = streamed.error.isEmpty() ? QCoreApplication::translate("VibeStudioPackageArchive", "Unable to read the requested compressed entry prefix.") : streamed.error; }
+				return false;
+			}
+		}
+		if (file.failed()) { if (error) { *error = file.errorString(); } return false; }
+		if (out) { *out = std::move(prefix); }
+		return true;
+	}
+
+	// Whole streams verify the declared output size and CRC. expectedSize caps
+	// allocation even when the central directory lies about the decoded length.
 	const QByteArray compressed = file.read(static_cast<qint64>(storedSize));
-	if (compressed.size() != static_cast<qsizetype>(storedSize)) {
+	if (compressed.size() != static_cast<qsizetype>(storedSize) || file.failed()) {
 		if (error) {
-			*error = packageText("Unable to read compressed package entry.");
+			*error = QCoreApplication::translate("VibeStudioPackageArchive", "Unable to read compressed package entry.");
 		}
 		return false;
 	}
@@ -1358,14 +1614,14 @@ bool PackageArchive::readOffsetEntryBytes(const PackageEntry& entry, QByteArray*
 	if (!inflated.ok) {
 		if (error) {
 			*error = inflated.error.isEmpty()
-				? packageText("Unable to inflate the compressed package entry.")
-				: packageText("Unable to inflate the compressed package entry: %1").arg(inflated.error);
+				? QCoreApplication::translate("VibeStudioPackageArchive", "Unable to inflate the compressed package entry.")
+				: QCoreApplication::translate("VibeStudioPackageArchive", "Unable to inflate the compressed package entry: %1").arg(inflated.error);
 		}
 		return false;
 	}
 	if (static_cast<quint64>(inflated.data.size()) != entry.sizeBytes) {
 		if (error) {
-			*error = packageText("Inflated package entry size does not match the central directory (%1 of %2 bytes).")
+			*error = QCoreApplication::translate("VibeStudioPackageArchive", "Inflated package entry size does not match the central directory (%1 of %2 bytes).")
 				.arg(QString::number(inflated.data.size()), QString::number(entry.sizeBytes));
 		}
 		return false;
@@ -1376,7 +1632,7 @@ bool PackageArchive::readOffsetEntryBytes(const PackageEntry& entry, QByteArray*
 		const quint32 actual = crc32Bytes(inflated.data);
 		if (actual != entry.crc32) {
 			if (error) {
-				*error = packageText("CRC-32 mismatch for package entry (expected %1, got %2); the archive is corrupt.")
+				*error = QCoreApplication::translate("VibeStudioPackageArchive", "CRC-32 mismatch for package entry (expected %1, got %2); the archive is corrupt.")
 					.arg(QString::number(entry.crc32, 16), QString::number(actual, 16));
 			}
 			return false;
@@ -1403,19 +1659,29 @@ const PackageEntry* PackageArchive::findEntry(const QString& virtualPath) const
 	return nullptr;
 }
 
-void PackageArchive::finalizeEntries()
+bool PackageArchive::finalizeEntries(QString* error)
 {
+	if (m_loadControl.progress) { m_loadControl.progress(QCoreApplication::translate("VibeStudioPackageArchive", "Preparing package index…"), 0, 0); }
+	for (qsizetype index = 0; index < m_entries.size(); ++index) {
+		if (!accountIndex(0, 0, error)) { return false; }
+		// Loaders set a physical ordinal where records may have been skipped.
+		if (m_entries[index].sourceOrdinal < 0) { m_entries[index].sourceOrdinal = index; }
+	}
 	const QString sourceId = QFileInfo(m_sourcePath).fileName();
-	addSyntheticDirectories(&m_entries, sourceId);
+	if (!addPackageIndexDirectories(&m_entries, sourceId,
+		[&](const QString& path) { return accountIndex(1, 0, error) && accountIndexPath(path, error); },
+		[&] { return !accountIndex(0, 0, error); })) { return false; }
 
 	QSet<QString> seen;
 	for (PackageEntry& entry : m_entries) {
+		if (!accountIndex(0, 0, error)) { return false; }
+		if (!accountIndex(0, entry.note.size() * qint64(sizeof(QChar)), error)) { return false; }
 		entry.typeHint = entry.typeHint.isEmpty() ? entryTypeHint(entry.virtualPath, entry.kind) : entry.typeHint;
 		entry.sourceArchiveId = entry.sourceArchiveId.isEmpty() ? sourceId : entry.sourceArchiveId;
 		entry.nestedArchiveCandidate = entry.nestedArchiveCandidate || packageEntryLooksNestedArchive(entry.virtualPath);
 		const QString key = duplicateKey(entry.virtualPath);
-		if (seen.contains(key)) {
-			addWarning(entry.virtualPath, packageText("Duplicate package entry path; first match will be used for byte reads."));
+		if (seen.contains(key) && m_format != PackageArchiveFormat::Wad) {
+			if (!addWarning(entry.virtualPath, packageIndexDuplicateWarning(), false, error)) { return false; }
 		} else {
 			seen.insert(key);
 		}
@@ -1429,27 +1695,111 @@ void PackageArchive::finalizeEntries()
 	// that it is the archive-order first, so the tie has to be broken by the
 	// on-disk order that the loop above walked.
 	std::stable_sort(m_entries.begin(), m_entries.end(), entryPathLess);
+	PackageArchiveSummary summary; summary.sourcePath = m_sourcePath; summary.format = m_format;
+	summary.warningCount = static_cast<int>(m_warnings.size());
+	if (!collectPackageSummary(m_entries, &summary, m_loadControl, error) || !accountIndex(0, 0, error)) { return false; }
+	m_summary = std::move(summary); return true;
 }
 
-void PackageArchive::addWarning(const QString& virtualPath, const QString& message)
+bool PackageArchive::accountIndex(qsizetype entries, qint64 metadataBytes, QString* error)
 {
-	if (message.trimmed().isEmpty()) {
-		return;
+	if (indexCancelled(m_loadControl, error)) { return false; }
+	PackageIndexUsage usage = indexUsage();
+	if (!admitPackageIndex(&usage, m_indexLimits, entries, metadataBytes, error)) { return false; }
+	m_indexEntries = usage.entries; m_indexMetadataBytes = usage.metadataBytes;
+	return true;
+}
+bool PackageArchive::accountIndexPath(const QString& path, QString* error)
+{
+	if (indexCancelled(m_loadControl, error)) { return false; }
+	PackageIndexUsage usage = indexUsage();
+	if (!admitPackageIndexPath(&usage, m_indexLimits, path, error)) { return false; }
+	m_indexMetadataBytes = usage.metadataBytes;
+	return true;
+}
+bool PackageArchive::addWarning(const QString& virtualPath, const QString& message, bool blocksSaving, QString* error)
+{
+	if (message.trimmed().isEmpty()) { return true; }
+	if (!accountIndex(0, (virtualPath.size() + message.size()) * qint64(sizeof(QChar)), error)) { return false; }
+	m_warnings.push_back({virtualPath.trimmed(), message.trimmed(), blocksSaving});
+	return true;
+}
+
+PackageArchiveSession::PackageArchiveSession(const PackageIndexLimits& limits) : m_limits(limits) {}
+PackageIndexUsage PackageArchiveSession::indexUsage() const { return m_usage; }
+
+void PackageArchiveSession::updateUsage()
+{
+	m_usage = {};
+	const auto add = [this](const LayerState& state) {
+		m_usage.entries += state.usage.entries; m_usage.metadataBytes += state.usage.metadataBytes;
+		m_usage.fingerprintBytes += state.usage.fingerprintBytes;
+	};
+	if (m_hasPrimaryLayer) { add(m_primary); }
+	for (const auto& state : m_mountedLayers) { add(state); }
+}
+
+bool PackageArchiveSession::admitLayer(const PackageMountLayer& layer, const std::shared_ptr<PackageArchive>& archive,
+	PackageIndexUsage* usage, QString* error, const PackageReadControl& control) const
+{
+	if (!validPackageIndexLimits(m_limits, error) || indexCancelled(control, error)) { return false; }
+	if (depth() >= layerCeiling) {
+		if (error) { *error = QCoreApplication::translate("VibeStudioPackageArchive", "A package session supports at most %1 layers. Unmount a layer before adding another.").arg(layerCeiling); }
+		return false;
 	}
-	m_warnings.push_back({virtualPath.trimmed(), message.trimmed()});
+	PackageIndexUsage total = m_usage;
+	const auto charge = [&](const PackageIndexUsage& addition) { return chargeLayerUsage(&total, addition, m_limits, error); };
+	if (!charge({0, (layer.id.size() + layer.displayName.size() + layer.sourcePath.size() + layer.mountPath.size()) * qint64(sizeof(QChar)), 0})) { return false; }
+	const qsizetype mountDepth = layer.mountPath.isEmpty() ? 0 : layer.mountPath.count(QLatin1Char('/')) + 1;
+	if (mountDepth > m_limits.maximumPathDepth) {
+		if (error) { *error = QCoreApplication::translate("VibeStudioPackageArchive", "Mounted entry paths exceed the indexing depth limit of %1 components.").arg(m_limits.maximumPathDepth); }
+		return false;
+	}
+	if (!archive) {
+		if (!charge({layer.entryCount, 0, 0})) { return false; }
+	} else {
+		if (!charge(archive->indexUsage())) { return false; }
+		const auto entries = archive->entries();
+		if (!layer.mountPath.isEmpty() && !entries.isEmpty()) {
+			// Reserve every prefix even when another layer currently provides it.
+			// Popping an override can reveal these directories again.
+			for (QString parent = layer.mountPath; !parent.isEmpty(); parent = packageVirtualPathParent(parent)) {
+				if (!charge({1, parent.size() * qint64(sizeof(QChar)), 0})) { return false; }
+			}
+			for (const auto& entry : entries) {
+				if (indexCancelled(control, error)) { return false; }
+				const qsizetype depth = entry.virtualPath.count(QLatin1Char('/')) + 1 - entry.virtualPath.endsWith(QLatin1Char('/'));
+				if (depth + mountDepth > m_limits.maximumPathDepth) {
+					if (error) { *error = QCoreApplication::translate("VibeStudioPackageArchive", "Mounted entry paths exceed the indexing depth limit of %1 components.").arg(m_limits.maximumPathDepth); }
+					return false;
+				}
+				const qsizetype relocatedLength = layer.mountPath.size() + 1 + entry.virtualPath.size();
+				if (relocatedLength > kMaximumPackageVirtualPathLength) {
+					if (error) { *error = QCoreApplication::translate("VibeStudioPackageArchive", "Mounted entry paths exceed the length limit of %1 characters.").arg(kMaximumPackageVirtualPathLength); }
+					return false;
+				}
+				if (!charge({0, relocatedLength * qint64(sizeof(QChar)), 0})) { return false; }
+			}
+		}
+		const qint64 warningPrefix = (layer.id.size() + 2) * qint64(sizeof(QChar));
+		for (const auto& warning : archive->warnings()) {
+			Q_UNUSED(warning);
+			if (indexCancelled(control, error) || !charge({0, warningPrefix, 0})) { return false; }
+		}
+	}
+	*usage = {total.entries - m_usage.entries, total.metadataBytes - m_usage.metadataBytes, total.fingerprintBytes - m_usage.fingerprintBytes};
+	return true;
 }
 
 bool PackageArchiveSession::setPrimaryLayer(const PackageMountLayer& layer, QString* error)
 {
+	PackageArchiveSession candidate(m_limits);
 	PackageMountLayer normalized = layer;
-	if (!normalizeLayer(&normalized, error)) {
-		return false;
-	}
-	m_primary.layer = normalized;
-	m_primary.archive.reset();
-	m_hasPrimaryLayer = true;
-	m_mountedLayers.clear();
-	m_indexDirty = true;
+	PackageIndexUsage usage;
+	if (!candidate.normalizeLayer(&normalized, error) || !candidate.admitLayer(normalized, {}, &usage, error)) { return false; }
+	candidate.m_primary = {normalized, {}, usage}; candidate.m_hasPrimaryLayer = true;
+	candidate.updateUsage();
+	*this = std::move(candidate);
 	return true;
 }
 
@@ -1466,10 +1816,9 @@ PackageMountLayer PackageArchiveSession::primaryLayer() const
 bool PackageArchiveSession::pushMountedLayer(const PackageMountLayer& layer, QString* error)
 {
 	PackageMountLayer normalized = layer;
-	if (!normalizeLayer(&normalized, error)) {
-		return false;
-	}
-	m_mountedLayers.push_back({normalized, {}});
+	PackageIndexUsage usage;
+	if (!normalizeLayer(&normalized, error) || !admitLayer(normalized, {}, &usage, error)) { return false; }
+	m_mountedLayers.push_back({normalized, {}, usage}); updateUsage();
 	m_indexDirty = true;
 	return true;
 }
@@ -1480,6 +1829,7 @@ bool PackageArchiveSession::popMountedLayer()
 		return false;
 	}
 	m_mountedLayers.pop_back();
+	updateUsage();
 	m_indexDirty = true;
 	return true;
 }
@@ -1487,6 +1837,7 @@ bool PackageArchiveSession::popMountedLayer()
 void PackageArchiveSession::clearMountedLayers()
 {
 	m_mountedLayers.clear();
+	updateUsage();
 	m_indexDirty = true;
 }
 
@@ -1520,69 +1871,50 @@ int PackageArchiveSession::depth() const
 
 void PackageArchiveSession::clear()
 {
+	m_usage = {};
 	m_primary = LayerState {};
 	m_hasPrimaryLayer = false;
 	m_mountedLayers.clear();
 	m_indexDirty = true;
-	m_mergedEntries.clear();
+	m_mergedEntries.clear(); m_summary = {};
 	m_entryOwner.clear();
 }
 
-bool PackageArchiveSession::openPrimaryArchive(const QString& path, QString* error)
+bool PackageArchiveSession::openPrimaryArchive(const QString& path, QString* error, const PackageReadControl& control)
 {
-	if (error) {
-		error->clear();
-	}
-
-	auto archive = std::make_shared<PackageArchive>();
-	if (!archive->load(path, error)) {
-		return false;
-	}
-
-	PackageMountLayer layer;
-	layer.sourcePath = archive->sourcePath();
-	layer.format = archive->format();
-	layer.entryCount = static_cast<int>(archive->entries().size());
-	layer.id = QFileInfo(layer.sourcePath).fileName();
-	layer.displayName = layer.id;
-	layer.readOnly = true;
-	if (!normalizeLayer(&layer, error)) {
-		return false;
-	}
-
-	m_mountedLayers.clear();
-	m_primary.layer = layer;
-	m_primary.archive = archive;
-	m_hasPrimaryLayer = true;
-	m_indexDirty = true;
-	return true;
+	return openLayer(path, {}, true, error, control);
 }
 
-bool PackageArchiveSession::mountArchive(const QString& path, const QString& mountPath, QString* error)
+bool PackageArchiveSession::mountArchive(const QString& path, const QString& mountPath, QString* error, const PackageReadControl& control)
 {
-	if (error) {
-		error->clear();
-	}
+	return openLayer(path, mountPath, false, error, control);
+}
 
-	auto archive = std::make_shared<PackageArchive>();
-	if (!archive->load(path, error)) {
-		return false;
-	}
-
+bool PackageArchiveSession::openLayer(const QString& path, const QString& mountPath, bool primary, QString* error, const PackageReadControl& control)
+{
+	if (error) { error->clear(); }
+	PackageArchiveSession candidate = primary ? PackageArchiveSession(m_limits) : *this;
 	PackageMountLayer layer;
-	layer.sourcePath = archive->sourcePath();
-	layer.mountPath = mountPath;
-	layer.format = archive->format();
+	layer.sourcePath = QFileInfo(path).absoluteFilePath(); layer.mountPath = mountPath;
+	layer.id = candidate.uniqueLayerId(QFileInfo(layer.sourcePath).fileName());
+	layer.displayName = QFileInfo(layer.sourcePath).fileName(); layer.readOnly = true;
+	PackageIndexUsage preliminary;
+	if (!candidate.normalizeLayer(&layer, error) || !candidate.admitLayer(layer, {}, &preliminary, error, control)) { return false; }
+	PackageIndexLimits remaining = m_limits;
+	remaining.maximumEntries -= candidate.m_usage.entries + preliminary.entries;
+	remaining.maximumMetadataBytes -= candidate.m_usage.metadataBytes + preliminary.metadataBytes;
+	remaining.maximumFingerprintBytes -= candidate.m_usage.fingerprintBytes;
+	auto archive = std::make_shared<PackageArchive>();
+	if (!archive->load(layer.sourcePath, error, control, remaining)) { return false; }
+	layer.sourcePath = archive->sourcePath(); layer.format = archive->format();
 	layer.entryCount = static_cast<int>(archive->entries().size());
-	layer.id = uniqueLayerId(QFileInfo(layer.sourcePath).fileName());
-	layer.displayName = QFileInfo(layer.sourcePath).fileName();
-	layer.readOnly = true;
-	if (!normalizeLayer(&layer, error)) {
-		return false;
-	}
-
-	m_mountedLayers.push_back({layer, archive});
-	m_indexDirty = true;
+	PackageIndexUsage usage;
+	if (!candidate.admitLayer(layer, archive, &usage, error, control)) { return false; }
+	if (primary) { candidate.m_primary = {layer, archive, usage}; candidate.m_hasPrimaryLayer = true; }
+	else { candidate.m_mountedLayers.push_back({layer, archive, usage}); }
+	candidate.updateUsage(); candidate.m_indexDirty = true;
+	if (!candidate.rebuildIndex(error, control) || indexCancelled(control, error)) { return false; }
+	*this = std::move(candidate);
 	return true;
 }
 
@@ -1616,7 +1948,7 @@ QVector<PackageLoadWarning> PackageArchiveSession::warnings() const
 			return;
 		}
 		for (const PackageLoadWarning& warning : state.archive->warnings()) {
-			merged.push_back({warning.virtualPath, QStringLiteral("%1: %2").arg(state.layer.id, warning.message)});
+			merged.push_back({warning.virtualPath, QStringLiteral("%1: %2").arg(state.layer.id, warning.message), warning.blocksSaving});
 		}
 	};
 	if (m_hasPrimaryLayer) {
@@ -1631,24 +1963,7 @@ QVector<PackageLoadWarning> PackageArchiveSession::warnings() const
 PackageArchiveSummary PackageArchiveSession::summary() const
 {
 	rebuildIndex();
-
-	PackageArchiveSummary summary;
-	summary.sourcePath = m_hasPrimaryLayer ? m_primary.layer.sourcePath : QString();
-	summary.format = m_hasPrimaryLayer ? m_primary.layer.format : PackageArchiveFormat::Unknown;
-	summary.entryCount = static_cast<int>(m_mergedEntries.size());
-	summary.warningCount = static_cast<int>(warnings().size());
-	for (const PackageEntry& entry : m_mergedEntries) {
-		if (entry.kind == PackageEntryKind::Directory) {
-			++summary.directoryCount;
-		} else {
-			++summary.fileCount;
-			summary.totalSizeBytes += entry.sizeBytes;
-		}
-		if (entry.nestedArchiveCandidate) {
-			++summary.nestedArchiveCount;
-		}
-	}
-	return summary;
+	return m_summary;
 }
 
 bool PackageArchiveSession::readEntryBytes(const QString& virtualPath, QByteArray* out, QString* error, qint64 maxBytes) const
@@ -1661,7 +1976,7 @@ bool PackageArchiveSession::readEntryBytes(const QString& virtualPath, QByteArra
 	}
 	if (!hasOpenArchive()) {
 		if (error) {
-			*error = packageText("No package layer is open in this session.");
+			*error = QCoreApplication::translate("VibeStudioPackageArchive", "No package layer is open in this session.");
 		}
 		return false;
 	}
@@ -1669,7 +1984,7 @@ bool PackageArchiveSession::readEntryBytes(const QString& virtualPath, QByteArra
 	const PackageVirtualPath normalized = normalizePackageVirtualPath(virtualPath, false);
 	if (!normalized.isSafe()) {
 		if (error) {
-			*error = packageText("Unsafe package path: %1").arg(packagePathIssueDisplayName(normalized.issue));
+			*error = QCoreApplication::translate("VibeStudioPackageArchive", "Unsafe package path: %1").arg(packagePathIssueDisplayName(normalized.issue));
 		}
 		return false;
 	}
@@ -1678,7 +1993,7 @@ bool PackageArchiveSession::readEntryBytes(const QString& virtualPath, QByteArra
 	const auto owner = m_entryOwner.constFind(duplicateKey(normalized.normalizedPath));
 	if (owner == m_entryOwner.constEnd()) {
 		if (error) {
-			*error = packageText("Package entry not found.");
+			*error = QCoreApplication::translate("VibeStudioPackageArchive", "Package entry not found.");
 		}
 		return false;
 	}
@@ -1686,7 +2001,7 @@ bool PackageArchiveSession::readEntryBytes(const QString& virtualPath, QByteArra
 	const LayerState* state = layerStateAt(owner.value());
 	if (!state || !state->archive) {
 		if (error) {
-			*error = packageText("Package entry not found.");
+			*error = QCoreApplication::translate("VibeStudioPackageArchive", "Package entry not found.");
 		}
 		return false;
 	}
@@ -1770,48 +2085,50 @@ QString PackageArchiveSession::uniqueLayerId(const QString& candidate) const
 
 // idTech pk3 semantics: layers are searched from the top of the stack down, so
 // a file in a later layer completely shadows the same path in an earlier one.
-void PackageArchiveSession::rebuildIndex() const
+bool PackageArchiveSession::rebuildIndex(QString* error, const PackageReadControl& control) const
 {
-	if (!m_indexDirty) {
-		return;
-	}
-	m_indexDirty = false;
-	m_mergedEntries.clear();
-	m_entryOwner.clear();
-
+	if (!m_indexDirty) { return !indexCancelled(control, error); }
+	if (control.progress) { control.progress(QCoreApplication::translate("VibeStudioPackageArchive", "Combining package layers…"), 0, 0); }
+	if (indexCancelled(control, error)) { return false; }
 	QHash<QString, PackageEntry> byKey;
-	const auto mergeLayer = [&byKey, this](int layerIndex) {
+	QHash<QString, int> owners;
+	const auto mergeLayer = [&](int layerIndex) {
 		const LayerState* state = layerStateAt(layerIndex);
-		if (!state || !state->archive) {
-			return;
-		}
-		const QString mount = state->layer.mountPath;
-		const QVector<PackageEntry> layerEntries = state->archive->entries();
+		if (!state || !state->archive) { return true; }
+		const auto layerEntries = state->archive->entries();
+		QSet<QString> layerPaths;
 		for (PackageEntry entry : layerEntries) {
-			if (!mount.isEmpty()) {
-				entry.virtualPath = mount + QLatin1Char('/') + entry.virtualPath;
-			}
-			entry.layerId = state->layer.id;
-			entry.sourceArchiveId = state->layer.id;
+			if (indexCancelled(control, error)) { return false; }
+			if (!state->layer.mountPath.isEmpty()) { entry.virtualPath = state->layer.mountPath + QLatin1Char('/') + entry.virtualPath; }
+			entry.layerId = state->layer.id; entry.sourceArchiveId = state->layer.id;
 			const QString key = duplicateKey(entry.virtualPath);
-			byKey.insert(key, entry);
-			m_entryOwner.insert(key, layerIndex);
+			// The owning reader resolves the first physical duplicate. Match its
+			// metadata instead of advertising the last record's size/offset.
+			if (layerPaths.contains(key)) { continue; }
+			layerPaths.insert(key); byKey.insert(key, entry); owners.insert(key, layerIndex);
 		}
+		return true;
 	};
-
-	mergeLayer(0);
-	for (int index = 0; index < m_mountedLayers.size(); ++index) {
-		mergeLayer(index + 1);
-	}
-
-	m_mergedEntries.reserve(byKey.size());
+	if (!mergeLayer(0)) { return false; }
+	for (int index = 0; index < m_mountedLayers.size(); ++index) { if (!mergeLayer(index + 1)) { return false; } }
+	QVector<PackageEntry> merged;
+	merged.reserve(byKey.size());
 	for (auto it = byKey.cbegin(); it != byKey.cend(); ++it) {
-		m_mergedEntries.push_back(it.value());
+		if (indexCancelled(control, error)) { return false; }
+		merged.push_back(it.value());
 	}
-
 	const QString sessionId = m_hasPrimaryLayer ? m_primary.layer.id : QStringLiteral("session");
-	addSyntheticDirectories(&m_mergedEntries, sessionId);
-	std::sort(m_mergedEntries.begin(), m_mergedEntries.end(), entryPathLess);
+	if (!addPackageIndexDirectories(&merged, sessionId, {}, [&] { return indexCancelled(control, error); })) { return false; }
+	std::sort(merged.begin(), merged.end(), entryPathLess);
+	if (indexCancelled(control, error)) { return false; }
+	PackageArchiveSummary summary;
+	summary.sourcePath = m_hasPrimaryLayer ? m_primary.layer.sourcePath : QString();
+	summary.format = m_hasPrimaryLayer ? m_primary.layer.format : PackageArchiveFormat::Unknown;
+	summary.warningCount = static_cast<int>(warnings().size());
+	if (!collectPackageSummary(merged, &summary, control, error)) { return false; }
+	m_summary = std::move(summary);
+	m_mergedEntries = std::move(merged); m_entryOwner = std::move(owners); m_indexDirty = false;
+	return true;
 }
 
 bool PackageArchiveSession::normalizeLayer(PackageMountLayer* layer, QString* error) const
@@ -1821,7 +2138,7 @@ bool PackageArchiveSession::normalizeLayer(PackageMountLayer* layer, QString* er
 	}
 	if (!layer) {
 		if (error) {
-			*error = packageText("Package layer is missing.");
+			*error = QCoreApplication::translate("VibeStudioPackageArchive", "Package layer is missing.");
 		}
 		return false;
 	}
@@ -1872,7 +2189,7 @@ QString packageArchiveFormatDisplayName(PackageArchiveFormat format)
 {
 	switch (format) {
 	case PackageArchiveFormat::Folder:
-		return packageText("Folder");
+		return QCoreApplication::translate("VibeStudioPackageArchive", "Folder");
 	case PackageArchiveFormat::Pak:
 		return QStringLiteral("PAK");
 	case PackageArchiveFormat::Wad:
@@ -1884,7 +2201,7 @@ QString packageArchiveFormatDisplayName(PackageArchiveFormat format)
 	case PackageArchiveFormat::Unknown:
 		break;
 	}
-	return packageText("Unknown");
+	return QCoreApplication::translate("VibeStudioPackageArchive", "Unknown");
 }
 
 PackageArchiveFormat packageArchiveFormatFromId(const QString& id)
@@ -1958,42 +2275,42 @@ QVector<PackageArchiveFormatDescriptor> packageArchiveFormatDescriptors()
 		{
 			PackageArchiveFormat::Folder,
 			QStringLiteral("folder"),
-			packageText("Folder"),
+			QCoreApplication::translate("VibeStudioPackageArchive", "Folder"),
 			{},
 			{QStringLiteral("list"), QStringLiteral("read"), QStringLiteral("extract-source"), QStringLiteral("nested-mount")},
-			packageText("Directory tree browsed as a read-only package: recursive listing, byte reads, and extraction as a copy source."),
+			QCoreApplication::translate("VibeStudioPackageArchive", "Directory tree browsed as a read-only package: recursive listing, byte reads, and extraction as a copy source."),
 		},
 		{
 			PackageArchiveFormat::Pak,
 			QStringLiteral("pak"),
-			packageText("Quake PAK"),
+			QCoreApplication::translate("VibeStudioPackageArchive", "Quake PAK"),
 			{QStringLiteral("pak")},
 			{QStringLiteral("list"), QStringLiteral("read"), QStringLiteral("extract"), QStringLiteral("nested-mount")},
-			packageText("idTech2 PACK archive: lists, reads, and extracts entries. PAK stores every entry uncompressed, so all entries are readable."),
+			QCoreApplication::translate("VibeStudioPackageArchive", "idTech2 PACK archive: lists, reads, and extracts entries. PAK stores every entry uncompressed, so all entries are readable."),
 		},
 		{
 			PackageArchiveFormat::Wad,
 			QStringLiteral("wad"),
-			packageText("Doom/Quake WAD"),
+			QCoreApplication::translate("VibeStudioPackageArchive", "Doom/Quake WAD"),
 			{QStringLiteral("wad"), QStringLiteral("wad2"), QStringLiteral("wad3")},
 			{QStringLiteral("list"), QStringLiteral("read"), QStringLiteral("extract"), QStringLiteral("nested-mount")},
-			packageText("Doom IWAD/PWAD lumps and Quake/Half-Life WAD2/WAD3 texture lumps: lists, reads, and extracts uncompressed lumps. WAD2/WAD3 compressed lumps are listed but not decoded."),
+			QCoreApplication::translate("VibeStudioPackageArchive", "Doom IWAD/PWAD lumps and Quake/Half-Life WAD2/WAD3 texture lumps: lists, reads, and extracts uncompressed lumps. WAD2/WAD3 compressed lumps are listed but not decoded."),
 		},
 		{
 			PackageArchiveFormat::Zip,
 			QStringLiteral("zip"),
 			QStringLiteral("ZIP"),
-			{QStringLiteral("zip")},
+			{QStringLiteral("zip"), QStringLiteral("pk4"), QStringLiteral("pkz")},
 			{QStringLiteral("list"), QStringLiteral("read"), QStringLiteral("extract"), QStringLiteral("deflate"), QStringLiteral("zip64"), QStringLiteral("nested-mount")},
-			packageText("ZIP archive with stored and DEFLATE entries, ZIP64 central directories, and CRC-32 verified reads. Encrypted entries and other compression methods are listed but not decoded."),
+			QCoreApplication::translate("VibeStudioPackageArchive", "ZIP archive with stored and DEFLATE entries, ZIP64 central directories, and CRC-32 verified reads. Encrypted entries and other compression methods are listed but not decoded."),
 		},
 		{
 			PackageArchiveFormat::Pk3,
 			QStringLiteral("pk3"),
-			packageText("Quake III PK3"),
+			QCoreApplication::translate("VibeStudioPackageArchive", "Quake III PK3"),
 			{QStringLiteral("pk3")},
 			{QStringLiteral("list"), QStringLiteral("read"), QStringLiteral("extract"), QStringLiteral("deflate"), QStringLiteral("zip64"), QStringLiteral("nested-mount")},
-			packageText("idTech3 PK3 archive over the ZIP container: stored and DEFLATE entries, ZIP64, CRC-32 verified reads, and pk3 shadowing when several layers are mounted in one session."),
+			QCoreApplication::translate("VibeStudioPackageArchive", "idTech3 PK3 archive over the ZIP container: stored and DEFLATE entries, ZIP64, CRC-32 verified reads, and pk3 shadowing when several layers are mounted in one session."),
 		},
 	};
 }
@@ -2013,11 +2330,11 @@ QString packageEntryKindDisplayName(PackageEntryKind kind)
 {
 	switch (kind) {
 	case PackageEntryKind::File:
-		return packageText("File");
+		return QCoreApplication::translate("VibeStudioPackageArchive", "File");
 	case PackageEntryKind::Directory:
-		return packageText("Directory");
+		return QCoreApplication::translate("VibeStudioPackageArchive", "Directory");
 	}
-	return packageText("File");
+	return QCoreApplication::translate("VibeStudioPackageArchive", "File");
 }
 
 QString packagePathIssueId(PackagePathIssue issue)
@@ -2053,29 +2370,29 @@ QString packagePathIssueDisplayName(PackagePathIssue issue)
 {
 	switch (issue) {
 	case PackagePathIssue::None:
-		return packageText("safe");
+		return QCoreApplication::translate("VibeStudioPackageArchive", "safe");
 	case PackagePathIssue::Empty:
-		return packageText("empty path");
+		return QCoreApplication::translate("VibeStudioPackageArchive", "empty path");
 	case PackagePathIssue::AbsolutePath:
-		return packageText("absolute paths are not allowed inside packages");
+		return QCoreApplication::translate("VibeStudioPackageArchive", "absolute paths are not allowed inside packages");
 	case PackagePathIssue::DriveQualifiedPath:
-		return packageText("drive-qualified paths are not allowed inside packages");
+		return QCoreApplication::translate("VibeStudioPackageArchive", "drive-qualified paths are not allowed inside packages");
 	case PackagePathIssue::TraversalSegment:
-		return packageText("parent-directory traversal is not allowed inside packages");
+		return QCoreApplication::translate("VibeStudioPackageArchive", "parent-directory traversal is not allowed inside packages");
 	case PackagePathIssue::CurrentDirectorySegment:
-		return packageText("current-directory segments are not allowed inside packages");
+		return QCoreApplication::translate("VibeStudioPackageArchive", "current-directory segments are not allowed inside packages");
 	case PackagePathIssue::Colon:
-		return packageText("colon characters are not allowed inside package paths");
+		return QCoreApplication::translate("VibeStudioPackageArchive", "colon characters are not allowed inside package paths");
 	case PackagePathIssue::ControlCharacter:
-		return packageText("control characters are not allowed inside package paths");
+		return QCoreApplication::translate("VibeStudioPackageArchive", "control characters are not allowed inside package paths");
 	case PackagePathIssue::TooLong:
-		return packageText("package path is too long");
+		return QCoreApplication::translate("VibeStudioPackageArchive", "package path is too long");
 	case PackagePathIssue::ReservedDeviceName:
-		return packageText("the path contains a reserved device name (CON, PRN, AUX, NUL, COM1-9, LPT1-9)");
+		return QCoreApplication::translate("VibeStudioPackageArchive", "the path contains a reserved device name (CON, PRN, AUX, NUL, COM1-9, LPT1-9)");
 	case PackagePathIssue::TrailingDotOrSpace:
-		return packageText("path segments may not end with a dot or a space");
+		return QCoreApplication::translate("VibeStudioPackageArchive", "path segments may not end with a dot or a space");
 	}
-	return packageText("unknown package path issue");
+	return QCoreApplication::translate("VibeStudioPackageArchive", "unknown package path issue");
 }
 
 // Derived from PakFu's archive/path_safety.h rules at commit
@@ -2170,6 +2487,31 @@ QString packageVirtualPathFileName(const QString& path)
 	return slash < 0 ? normalized.normalizedPath : normalized.normalizedPath.mid(slash + 1);
 }
 
+StudioQueryProperties packageEntryQueryProperties(const PackageEntry& entry)
+{
+	StudioQueryProperties properties;
+	const QString name = packageVirtualPathFileName(entry.virtualPath);
+	properties.insert(QStringLiteral("path"), entry.virtualPath);
+	properties.insert(QStringLiteral("name"), name);
+	const qsizetype dot = name.lastIndexOf(QLatin1Char('.'));
+	if (dot > 0 && entry.kind != PackageEntryKind::Directory) {
+		properties.insert(QStringLiteral("ext"), name.mid(dot + 1).toLower());
+	}
+	properties.insert(QStringLiteral("folder"), packageVirtualPathParent(entry.virtualPath));
+	if (!entry.typeHint.isEmpty()) {
+		properties.insert(QStringLiteral("type"), entry.typeHint);
+	}
+	if (!entry.storageMethod.isEmpty()) {
+		properties.insert(QStringLiteral("storage"), entry.storageMethod);
+	}
+	properties.insert(QStringLiteral("kind"), packageEntryKindId(entry.kind));
+	if (entry.kind != PackageEntryKind::Directory) {
+		properties.insert(QStringLiteral("size"), QString::number(entry.sizeBytes));
+		properties.insert(QStringLiteral("packed"), QString::number(entry.compressedSizeBytes));
+	}
+	return properties;
+}
+
 QString packageVirtualPathParent(const QString& path)
 {
 	const PackageVirtualPath normalized = normalizePackageVirtualPath(path, false);
@@ -2212,6 +2554,15 @@ PackagePathIssue packageFilesystemPathIssue(const QString& virtualPath)
 	return PackagePathIssue::None;
 }
 
+QString packageResolvedAbsolutePath(const QString& path, const PackageReadControl& control)
+{
+	QString resolved = canonicalizedAbsolutePath(path, control);
+#ifdef Q_OS_WIN
+	if (resolved.size() == 2 && resolved.at(1) == ':') { resolved += '/'; }
+#endif
+	return resolved;
+}
+
 bool packagePathIsInsideDirectory(const QString& rootDirectory, const QString& candidatePath)
 {
 	const QString root = comparableDirectoryPath(rootDirectory);
@@ -2235,7 +2586,7 @@ QString safePackageOutputPath(const QString& rootDirectory, const QString& virtu
 	const QString root = canonicalizedAbsolutePath(rootDirectory);
 	if (root.isEmpty()) {
 		if (error) {
-			*error = packageText("Output root is empty.");
+			*error = QCoreApplication::translate("VibeStudioPackageArchive", "Output root is empty.");
 		}
 		return {};
 	}
@@ -2243,7 +2594,7 @@ QString safePackageOutputPath(const QString& rootDirectory, const QString& virtu
 	const PackageVirtualPath normalized = normalizePackageVirtualPath(virtualPath, false);
 	if (!normalized.isSafe()) {
 		if (error) {
-			*error = packageText("Unsafe package path: %1").arg(packagePathIssueDisplayName(normalized.issue));
+			*error = QCoreApplication::translate("VibeStudioPackageArchive", "Unsafe package path: %1").arg(packagePathIssueDisplayName(normalized.issue));
 		}
 		return {};
 	}
@@ -2251,7 +2602,7 @@ QString safePackageOutputPath(const QString& rootDirectory, const QString& virtu
 	const PackagePathIssue filesystemIssue = packageFilesystemPathIssue(normalized.normalizedPath);
 	if (filesystemIssue != PackagePathIssue::None) {
 		if (error) {
-			*error = packageText("Unsafe package path: %1").arg(packagePathIssueDisplayName(filesystemIssue));
+			*error = QCoreApplication::translate("VibeStudioPackageArchive", "Unsafe package path: %1").arg(packagePathIssueDisplayName(filesystemIssue));
 		}
 		return {};
 	}
@@ -2261,192 +2612,60 @@ QString safePackageOutputPath(const QString& rootDirectory, const QString& virtu
 	const QString candidate = QDir(root).filePath(nativeRelative);
 	if (!packagePathIsInsideDirectory(root, candidate)) {
 		if (error) {
-			*error = packageText("Output path escapes the selected root.");
+			*error = QCoreApplication::translate("VibeStudioPackageArchive", "Output path escapes the selected root.");
 		}
 		return {};
 	}
 	return QDir::cleanPath(candidate);
 }
 
-PackageExtractionReport extractPackageEntries(const PackageArchive& archive, const PackageExtractionRequest& request, PackageExtractionProgressCallback progress)
-{
-	PackageExtractionReport report;
-	report.sourcePath = archive.sourcePath();
-	report.targetDirectory = QDir::cleanPath(QFileInfo(request.targetDirectory).absoluteFilePath());
-	report.extractAll = request.extractAll;
-	report.dryRun = request.dryRun;
-	report.overwriteExisting = request.overwriteExisting;
-
-	auto failBeforeEntries = [&report](const QString& message) {
-		PackageExtractionEntryResult result;
-		result.outputPath = report.targetDirectory;
-		result.error = message;
-		addExtractionResult(&report, result);
-	};
-
-	if (!archive.isOpen()) {
-		failBeforeEntries(packageText("No package is open."));
-		return report;
-	}
-	// An empty selection is never an implicit "extract everything": that turned a
-	// caller's empty list into a full-archive write.
-	if (!request.extractAll && request.virtualPaths.isEmpty()) {
-		report.warnings.push_back(packageText("No package entries were selected; nothing was extracted. Request extract-all to write the whole archive."));
-		return report;
-	}
-	if (request.targetDirectory.trimmed().isEmpty()) {
-		failBeforeEntries(packageText("Output directory is required."));
-		return report;
-	}
-
-	const QFileInfo targetInfo(report.targetDirectory);
-	if (targetInfo.exists() && !targetInfo.isDir()) {
-		failBeforeEntries(packageText("Output path exists but is not a directory."));
-		return report;
-	}
-	if (!request.dryRun && !QDir().mkpath(report.targetDirectory)) {
-		failBeforeEntries(packageText("Unable to create output directory."));
-		return report;
-	}
-
-	const QVector<PackageEntry> archiveEntries = archive.entries();
-	QVector<PackageEntry> selectedEntries;
-	if (request.extractAll) {
-		selectedEntries = archiveEntries;
-		// Duplicate virtual paths (WAD lump names repeated across maps) are
-		// equivalent under entryPathLess and share one output path, so a stable
-		// sort keeps "the last archive-order duplicate wins on disk" instead of
-		// leaving it to the standard library's introsort.
-		std::stable_sort(selectedEntries.begin(), selectedEntries.end(), entryPathLess);
-	} else {
-		selectedEntries = selectedEntriesForExtraction(archiveEntries, request.virtualPaths, &report);
-	}
-	report.requestedCount = static_cast<int>(selectedEntries.size()) + report.errorCount;
-
-	for (const PackageEntry& entry : selectedEntries) {
-		PackageExtractionEntryResult result;
-		result.virtualPath = entry.virtualPath;
-		result.kind = entry.kind;
-		result.bytes = entry.sizeBytes;
-		result.dryRun = request.dryRun;
-
-		QString pathError;
-		result.outputPath = safePackageOutputPath(report.targetDirectory, entry.virtualPath, &pathError);
-		if (!pathError.isEmpty()) {
-			result.error = pathError;
-			addExtractionResult(&report, result);
-		} else if (entry.kind == PackageEntryKind::Directory) {
-			const QFileInfo outputInfo(result.outputPath);
-			if (outputInfo.exists() && !outputInfo.isDir()) {
-				result.error = packageText("Cannot create directory because a file already exists at the output path.");
-			} else if (request.dryRun) {
-				result.message = packageText("Would create directory.");
-			} else if (!QDir().mkpath(result.outputPath)) {
-				result.error = packageText("Unable to create output directory.");
-			} else {
-				result.written = true;
-				result.message = packageText("Created directory.");
-			}
-			addExtractionResult(&report, result);
-		} else if (!entry.readable) {
-			result.error = entry.note.isEmpty() ? packageText("Package entry is not readable by the current reader.") : entry.note;
-			addExtractionResult(&report, result);
-		} else {
-			const QFileInfo outputInfo(result.outputPath);
-			if (outputInfo.exists() && outputInfo.isDir()) {
-				result.error = packageText("Cannot write file because a directory already exists at the output path.");
-			} else if (outputInfo.exists() && !request.overwriteExisting) {
-				result.skipped = true;
-				result.message = packageText("Output exists; pass overwrite to replace it.");
-			} else if (request.dryRun) {
-				result.message = outputInfo.exists() ? packageText("Would overwrite file.") : packageText("Would write file.");
-			} else {
-				QByteArray bytes;
-				QString readError;
-				if (!archive.readEntryBytes(entry.virtualPath, &bytes, &readError)) {
-					result.error = readError.isEmpty() ? packageText("Unable to read package entry.") : readError;
-				} else {
-					const QString parentPath = QFileInfo(result.outputPath).absolutePath();
-					if (!QDir().mkpath(parentPath)) {
-						result.error = packageText("Unable to create output parent directory.");
-					} else if (!packagePathIsInsideDirectory(report.targetDirectory, result.outputPath)) {
-						// Re-checked after the parent directories exist: a symlink or
-						// junction already present in the target tree can only be
-						// resolved once the path is real.
-						result.error = packageText("Output path escapes the selected root.");
-					} else {
-						QSaveFile file(result.outputPath);
-						if (!file.open(QIODevice::WriteOnly)) {
-							result.error = packageText("Unable to open output file for writing.");
-						} else if (file.write(bytes) != bytes.size()) {
-							result.error = packageText("Unable to write all output bytes.");
-							file.cancelWriting();
-						} else if (!file.commit()) {
-							result.error = packageText("Unable to commit output file.");
-						} else {
-							result.bytes = static_cast<quint64>(std::max<qsizetype>(0, bytes.size()));
-							result.written = true;
-							result.message = outputInfo.exists() ? packageText("Overwrote file.") : packageText("Wrote file.");
-						}
-					}
-				}
-			}
-			addExtractionResult(&report, result);
-		}
-
-		if (progress && !progress(report.entries.back(), report)) {
-			report.cancelled = true;
-			report.warnings.push_back(packageText("Package extraction cancelled."));
-			break;
-		}
-	}
-
-	return report;
-}
-
 QString packageExtractionReportText(const PackageExtractionReport& report)
 {
 	QStringList lines;
-	lines << packageText("Package extraction");
-	lines << packageText("Source: %1").arg(QDir::toNativeSeparators(report.sourcePath));
-	lines << packageText("Target: %1").arg(QDir::toNativeSeparators(report.targetDirectory));
-	lines << packageText("Mode: %1").arg(report.dryRun ? packageText("dry-run") : packageText("write"));
-	lines << packageText("Overwrite: %1").arg(report.overwriteExisting ? packageText("yes") : packageText("no"));
-	lines << packageText("State: %1").arg(report.cancelled ? packageText("cancelled") : (report.succeeded() ? packageText("completed") : packageText("failed")));
-	lines << packageText("Requested entries: %1").arg(report.requestedCount);
-	lines << packageText("Processed entries: %1").arg(report.processedCount);
-	lines << packageText("Written entries: %1").arg(report.writtenCount);
-	lines << packageText("Created directories: %1").arg(report.directoryCount);
-	lines << packageText("Skipped entries: %1").arg(report.skippedCount);
-	lines << packageText("Errors: %1").arg(report.errorCount);
-	lines << packageText("Bytes written: %1").arg(report.totalBytes);
-	lines << packageText("Output paths");
+	lines << QCoreApplication::translate("VibeStudioPackageArchive", "Package extraction");
+	lines << QCoreApplication::translate("VibeStudioPackageArchive", "Source: %1").arg(QDir::toNativeSeparators(report.sourcePath));
+	lines << QCoreApplication::translate("VibeStudioPackageArchive", "Target: %1").arg(QDir::toNativeSeparators(report.targetDirectory));
+	lines << QCoreApplication::translate("VibeStudioPackageArchive", "Mode: %1").arg(report.dryRun ? QCoreApplication::translate("VibeStudioPackageArchive", "dry-run") : QCoreApplication::translate("VibeStudioPackageArchive", "write"));
+	lines << QCoreApplication::translate("VibeStudioPackageArchive", "Overwrite: %1").arg(report.overwriteExisting ? QCoreApplication::translate("VibeStudioPackageArchive", "yes") : QCoreApplication::translate("VibeStudioPackageArchive", "no"));
+	lines << QCoreApplication::translate("VibeStudioPackageArchive", "State: %1").arg(report.cancelled ? QCoreApplication::translate("VibeStudioPackageArchive", "cancelled") : (report.succeeded() ? QCoreApplication::translate("VibeStudioPackageArchive", "completed") : QCoreApplication::translate("VibeStudioPackageArchive", "failed")));
+	lines << QCoreApplication::translate("VibeStudioPackageArchive", "Requested entries: %1").arg(report.requestedCount);
+	lines << QCoreApplication::translate("VibeStudioPackageArchive", "Processed entries: %1").arg(report.processedCount);
+	lines << QCoreApplication::translate("VibeStudioPackageArchive", "Written entries: %1").arg(report.writtenCount);
+	lines << QCoreApplication::translate("VibeStudioPackageArchive", "Created directories: %1").arg(report.directoryCount);
+	lines << QCoreApplication::translate("VibeStudioPackageArchive", "Skipped entries: %1").arg(report.skippedCount);
+	lines << QCoreApplication::translate("VibeStudioPackageArchive", "Errors: %1").arg(report.errorCount);
+	lines << QCoreApplication::translate("VibeStudioPackageArchive", "Bytes written: %1").arg(report.totalBytes);
+	lines << QCoreApplication::translate("VibeStudioPackageArchive", "Payload bytes read: %1").arg(report.bytesRead);
+	lines << QCoreApplication::translate("VibeStudioPackageArchive", "Output paths");
 	for (const PackageExtractionEntryResult& result : report.entries) {
-		QString state = packageText("planned");
+		QString state = QCoreApplication::translate("VibeStudioPackageArchive", "planned");
 		if (!result.error.isEmpty()) {
-			state = packageText("failed");
+			state = QCoreApplication::translate("VibeStudioPackageArchive", "failed");
 		} else if (result.skipped) {
-			state = packageText("skipped");
+			state = QCoreApplication::translate("VibeStudioPackageArchive", "skipped");
 		} else if (result.dryRun) {
-			state = result.kind == PackageEntryKind::Directory ? packageText("would create") : packageText("would write");
+			state = result.kind == PackageEntryKind::Directory ? QCoreApplication::translate("VibeStudioPackageArchive", "would create") : QCoreApplication::translate("VibeStudioPackageArchive", "would write");
 		} else if (result.kind == PackageEntryKind::Directory && result.written) {
-			state = packageText("created");
+			state = QCoreApplication::translate("VibeStudioPackageArchive", "created");
 		} else if (result.written) {
-			state = packageText("wrote");
+			state = QCoreApplication::translate("VibeStudioPackageArchive", "wrote");
 		}
 		lines << QStringLiteral("- %1: %2 -> %3")
 			.arg(state,
-				result.virtualPath.isEmpty() ? packageText("(package)") : result.virtualPath,
-				result.outputPath.isEmpty() ? packageText("(no output path)") : QDir::toNativeSeparators(result.outputPath));
+				result.virtualPath.isEmpty() ? QCoreApplication::translate("VibeStudioPackageArchive", "(package)") : result.virtualPath,
+				result.outputPath.isEmpty() ? QCoreApplication::translate("VibeStudioPackageArchive", "(no output path)") : QDir::toNativeSeparators(result.outputPath));
+		if (result.entryIndex >= 0) {
+			lines << QCoreApplication::translate("VibeStudioPackageArchive", "  Entry index: %1; source ordinal: %2").arg(result.entryIndex).arg(result.sourceOrdinal);
+		}
 		if (!result.message.isEmpty()) {
 			lines << QStringLiteral("  %1").arg(result.message);
 		}
 		if (!result.error.isEmpty()) {
-			lines << packageText("  Error: %1").arg(result.error);
+			lines << QCoreApplication::translate("VibeStudioPackageArchive", "  Error: %1").arg(result.error);
 		}
 	}
 	if (!report.warnings.isEmpty()) {
-		lines << packageText("Warnings");
+		lines << QCoreApplication::translate("VibeStudioPackageArchive", "Warnings");
 		for (const QString& warning : report.warnings) {
 			lines << QStringLiteral("- %1").arg(warning);
 		}

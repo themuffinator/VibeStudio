@@ -5,7 +5,121 @@ The first integration step is orchestration: build or locate compiler
 executables, run them through a structured wrapper, capture diagnostics, and
 feed outputs back into the project/package graph.
 
+## Prepared Quake-family Workspaces
+
+`build prepare` / **Prepare Build Workspace** serialize the current map and copy
+the complete package reader, including draft overrides, into a new
+`game/id1`, `game/baseq2` or `game/baseq3` directory. `build-inputs.json` records relative paths, byte counts
+and SHA-256 hashes. The service defaults to 4 GiB, caps requests at 1 TiB and
+100,000 asset files, and refuses existing/protected destinations, unsafe names,
+links, collisions and root PAK/PK3/DPK mounts. Dry preparation reads/hashes without
+writing a workspace. GUI work is asynchronous; cancellation discards private
+copies before the publication boundary. Blocking filesystem calls and map
+serialization remain cooperative-cancellation latency limits.
+Windows retries a transient final directory-rename failure with five bounded
+delays totalling 310 ms, rechecking cancellation, links and destination absence.
+Other platforms retain a single Qt directory rename. Fixture tests hold a
+Windows directory handle and verify release, destination-collision and
+cancellation behavior without touching installed content.
+
+Quake and Quake II use `quake-full`, `quake-fast` or `quake-bsp-only`.
+The target is recorded in schema-2 input manifests (existing Quake III schema-1
+manifests remain supported). ericw-tools stages receive `-nodefaultpaths`,
+`-path <assets>` and a captured-map-specific `-logfile`. QBSP receives the maps
+folder as `-wadpath`; Quake II adds `-q2bsp`. Extra arguments are restricted to
+supported scalar options with checked argument counts; bare positional numbers
+and missing values are rejected. External definitions, conversion, target/path
+overrides and response files cannot bypass capture. The bounded shared texture service
+reads WAD2 from package bytes and builds a deterministic compiler WAD; the private
+Quake map references that WAD. WAL decoding and animation traversal reuse the
+image/dependency services. See the Level Editor limits and format boundaries.
+Artifact validation recognizes that ericw VIS/LIGHT preserve Quake II/Qbism
+formats without QBSP target flags, while retaining Quake III mismatch warnings
+and rejecting unknown IBSP/QBSP versions. Planning warnings about not-yet-produced
+BSP/PRT inputs may still be retained after a successful pipeline; they remain
+available in package review's bounded **Details** view.
+
+For Quake III, `build run-prepared` verifies those inputs and runs `quake3-full` or
+`quake3-bsp-only` through the normal runner. Each stage receives `-game quake3`,
+`-fs_basepath <workspace>/game`, `-fs_homepath <workspace>/home`, `-fs_game baseq3`
+and `-fs_basegame baseq3`. User filesystem/game overrides and `-lightmapdir`,
+`-tempname`, `-rename` output redirects are rejected. Stage manifests live in
+`<workspace>/manifests`; runtime outputs stay in the captured asset tree.
+A post-run verification failure prevents successful output registration in the
+studio. The inventory is a reproducibility check, not an authentication signature
+or a lock against external processes. Compiler output and manifest files remain reviewable on
+failure. See [Level Editor](LEVEL_EDITOR.md#prepared-builds-with-current-assets)
+for supported output companions and remaining layout/deployment limitations.
+
+`build-outputs.json` records a run UUID, pipeline, captured-input fingerprint,
+state and bounded output inventory. Standard BSP, generated map shaders and
+numbered external TGA lightmaps are runtime outputs; compiler companions such
+as portal/leak files stay diagnostic. A full BSP run retains previous outputs
+under `history/<new-run-id>/` outside search paths before execution. There is no
+automatic history pruning. Incremental runs that disable BSP require a previous
+verified successful record. A workspace lock excludes simultaneous studio build
+and publication writes; failed/cancelled/changed outputs cannot publish.
+
+`build artifacts` / **Publish Prepared Build** verify current inputs and outputs.
+`build publish-prepared` uses the existing deterministic PAK/PK3 writer, per-chunk
+input identity checks and atomic backup publication. The GUI binds its review
+to the receipt hash; CLI can do so with `--expected-output-sha256`. Captured assets
+and runtime outputs publish together, diagnostics stay in the workspace, and
+`--include-source` optionally includes the map and generated Quake texture WAD. **Deploy Prepared Build** and
+`build deploy-plan` / `build deploy-prepared` reuse that publisher for complete
+installation PAKs/PK3s, binding both the output receipt and existing destination hash.
+Read-only permission is per operation. Build and Launch reviews deployment after
+successful compilation; optional launch follows verified publication and uses
+the matching Quake-family profile with explicit base/game paths and windowed
+mode (Quake III also pins home lookup). Quake/Quake II use the shared numbered
+PAK planner and map-slot receipts; CLI `--pak-slot` and
+`--expected-deployment-sha256` expose the same review as the GUI. The existing
+single-map deploy path remains for ordinary saved-file builds.
+Classic IBSP v46 validation accepts its standard
+17-lump header independently of the extended Quake Live v47 header.
+
+The optional generated-assets proofs run without a game or input control:
+
+For the Quake/Quake II proof, add
+`--recorder builddir/src/level_classic_deployment_smoke_test` to
+`level_build_engines_compiler_workflow.py` (use `.exe` on Windows) to verify
+numbered installation PAK deployment and launch ordering with a recorder.
+
+```sh
+python src/tests/level_build_engines_compiler_workflow.py --binary builddir/src/vibestudio --qbsp /path/to/qbsp --vis /path/to/vis --light /path/to/light --output-root .agents/tmp/quake-build-proof
+python src/tests/level_build_workspace_compiler_workflow.py --binary builddir/src/vibestudio --compiler /path/to/q3map2 --output-root .agents/tmp/prepared-build-proof
+python src/tests/level_build_artifacts_compiler_workflow.py --binary builddir/src/vibestudio --compiler /path/to/q3map2 --output-root .agents/tmp/build-output-proof
+python src/tests/level_build_deployment_compiler_workflow.py --binary builddir/src/vibestudio --compiler /path/to/q3map2 --recorder builddir/src/level_build_deployment_smoke_test --output-root .agents/tmp/build-deployment-proof
+```
+
+The artifacts proof reuses the generated model/draft fixture, adds lightmapped
+materials, and checks external lightmaps plus generated shaders against BSP
+references and PK3 payloads. It verifies overwrite backups, altered-output and
+stale-review rejection, then a clean rebuild back to internal lightmaps without
+shipping stale outputs. Windows q3map2 evidence from 2026-10-05 is retained in
+`.agents/tmp/level-build-artifacts/compiler-proof/` (15 steps plus the 9-step
+baseline fixture); native game rendering and other platforms remain unverified.
+
+The Quake-family proof passed 25 Windows steps on 2026-10-05 using installed
+ericw-tools 2.0.0-alpha8. It independently verifies embedded Quake miptex pixels,
+Quake II texture names, published `.lit`/`.lux`, MD2/PCX and sound bytes, PAK
+determinism/backups and stale-input rejection. Final evidence is in
+`.agents/tmp/level-build-engines/compiler proof final/`. The same round reran
+all 24 q3map2 artifact-proof steps. The installed `qbsp -help` separately reports
+`number is too big` partway through option formatting; compile execution succeeds.
+
 ## Imported Sources
+
+Numeric rotation verifies texture alignment through both the source service and
+the compiler output. On 2026-10-04 an original synthetic room with a brush
+rotated 31.75° passed the installed q3map2 BSP/VIS/LIGHT pipeline. Required Valve
+220 conversion covered all 42 classic faces. All 24 checked BSP vertices retained
+their original UV mapping within `3.55e-7` texture repeats, allowing equivalent
+whole-repeat offsets. Dependency export and the resulting level PK3 passed
+payload validation. Commands, compiler logs, source/assets and the report are
+under `.agents/tmp/level-rotation/compiler/`. No game was launched. This is one
+compiler acceptance fixture; other compilers and native platforms still need
+verification before general compatibility claims.
 
 | Tool | Local path | Main role |
 |---|---|---|
@@ -87,13 +201,36 @@ Current implementation:
   CLI equivalent and JSON manifest. The Build surface adds a pipeline chooser,
   a stage list, and Run / Cancel / Copy Commands actions; pipelines run on a
   worker thread and report stage start/finish and every log line back into the
-  activity center.
+  activity center. The pipeline input follows the map open in Levels, and a
+  finished run lists its parsed diagnostics in a **Problems** tab: a diagnostic
+  whose line (a bare `WARNING: <line>:` included, attributed to the stage's
+  `.map` input) falls inside a brush, patch, or entity of the open map selects
+  that object, and one in another text file opens the Code editor at the line.
+  The **Toolchain** tab lists every registry tool with its resolved executable
+  and where the path came from; **Locate…** and **Use Automatic** write and
+  remove the same user override as `compiler set-path` and `compiler
+  clear-path`, and a project manifest override still wins while its project is
+  open. Launch Game copies the built map into the game folder first when the
+  engine loads maps only from there (`planGameMapDeploy()` and
+  `deployGameMap()` in `build_pipeline.*`), after asking once whether the
+  installation may be written to, and **Build and Launch** (F5) chains the build
+  and that launch.
 - `scripts/validate_credits.py` and CLI `credits validate` compare imported
   compiler pins across `src/core/studio_manifest.cpp`, `.gitmodules`,
   `README.md`, [`docs/CREDITS.md`](CREDITS.md), and the checked-out submodule
   revisions.
 
 ## Wrapper Profiles
+
+ZDBSP and ZokumBSP WAD outputs now pass shared node validation before output
+registration. Missing or malformed node records fail the run even if the tool
+exits zero. ZDBSP `-m`/`--map` selectors and ZokumBSP positional map lists limit
+validation to those maps; otherwise all groups are inspected. Extended and
+compressed native/GL records are supported, including GL data in SSECTORS.
+UDMF, DeePBSP and separate GL caches warn that validation is unavailable.
+Validation is cancellable and uses the same service as Map Health and Doom
+launch plans. See [node readiness](LEVEL_EDITOR.md#doom-node-readiness).
+
 A profile is the wrapper layer's unit of work: one tool, one stage, one command
 shape. `CompilerProfileDescriptor` in `src/core/compiler_profiles.h` carries the
 stage token, the input extensions, how the tool accepts an output path, where it
@@ -226,7 +363,10 @@ load in the editor. Independently, `inspectCompiledMapArtifacts()` in
 `src/core/bsp_inspect.*` scans the output folder for `.pts`, `.lin`, and
 `.leak*` files beside a BSP, parses their coordinate triples into a leak line
 with bounds, and warns that visibility and lighting results cannot be trusted.
-CLI `bsp inspect` exposes that report.
+CLI `bsp inspect` exposes that report. The Build page lists a leak first among
+its problems, and a leaking build of the map open in Levels draws the point
+file over it as a trail (`MapViewport::setLeakTrail()`); `map render --leak`
+draws the same trail into the headless SVG.
 
 ### The `.prt` Requirement For Visibility
 Both `ericw-vis` and `q3map2-vis` declare `.prt` in
@@ -295,6 +435,7 @@ vibestudio --cli build run quake-full --input maps/start.map --manifest build/ma
 vibestudio --cli build run quake-fast --input maps/start.map --disable-stage light
 vibestudio --cli bsp inspect build/start.bsp --json
 vibestudio --cli launch plan --map start --json
+vibestudio --cli launch run --bsp maps/start.bsp --deploy --allow-test-maps
 ```
 
 ## License Boundary
@@ -414,3 +555,21 @@ Upstream-only items VibeStudio should not claim to resolve:
   released and documented.
 - Native ericw-tools build, packaging, logging, or launcher changes unless
   VibeStudio intentionally creates and documents a fork.
+
+## MD3 Instance Appearance Contract
+
+Levels and dependency review follow the pinned NRC q3map2 MD3 material contract
+through `core/level_model_appearance`: implicit importer default skins, derived
+entity skin filenames, omitted surfaces and ordered suffix remaps. See
+[Placed Model Appearances](LEVEL_MODEL_APPEARANCE.md) for supported input grammar
+and the studio's stricter failures instead of compiler fallback/truncation.
+
+The bundled Assimp `MD3Loader.cpp` at NRC `68ecbed` validates `configFrameID`
+but leaves `pcVertices` at frame zero. A real local NRC `449778b` compiler with
+its installed Assimp runtime reproduced that mismatch. Nonzero frame requests
+therefore fail appearance/dependency review. A separate Assembly pose bake was
+verified against BSP vertex positions; original animated sources remain intact.
+The optional `level_model_appearance_compiler_workflow.py` exercises ten synthetic
+cases. Compiler executable/runtime identities and exact commands are retained
+under `.agents/tmp/modeller-rc/evidence/level-model-appearance/`. Other compiler
+variants, patched frame support and native macOS/Linux acceptance remain open.

@@ -1,0 +1,34 @@
+{
+  "schemaVersion": 2,
+  "name": "angled_panel",
+  "parts": [
+    {
+      "name": "base",
+      "primitive": "box",
+      "size": [96, 64, 12],
+      "origin": [0, 0, 6],
+      "roll": 0,
+      "pitch": 0,
+      "yaw": 0,
+      "uvScale": [2, 1],
+      "uvOffset": [0, 0],
+      "uvRotation": 0,
+      "segments": 12,
+      "material": "textures/props/metal"
+    },
+    {
+      "name": "panel",
+      "primitive": "box",
+      "size": [80, 48, 8],
+      "origin": [0, 0, 44],
+      "roll": 30,
+      "pitch": 15,
+      "yaw": 20,
+      "uvScale": [2, -1],
+      "uvOffset": [0.25, 0],
+      "uvRotation": 45,
+      "segments": 12,
+      "material": "textures/props/panel"
+    }
+  ]
+}

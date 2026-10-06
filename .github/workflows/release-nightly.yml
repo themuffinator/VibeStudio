@@ -8,6 +8,9 @@ on:
 permissions:
   contents: read
 
+env:
+  PYTHONDONTWRITEBYTECODE: "1"
+
 concurrency:
   group: release-nightly-${{ github.ref }}
   cancel-in-progress: false
@@ -16,7 +19,7 @@ jobs:
   package:
     name: package-${{ matrix.os }}
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 60
+    timeout-minutes: 90
     strategy:
       fail-fast: false
       matrix:
@@ -45,16 +48,34 @@ jobs:
         with:
           arch: x64
 
+      # Qt Multimedia (audio playback) is an add-on module. Windows and macOS
+      # install it; the Linux job builds without it, which keeps the
+      # no-playback path compiling (see docs/DEPENDENCIES.md).
       - name: Install Qt
         uses: jurplel/install-qt-action@v4
         with:
           version: "6.10.1"
           arch: ${{ matrix.os == 'windows-latest' && 'win64_msvc2022_64' || matrix.os == 'macos-latest' && 'clang_64' || 'linux_gcc_64' }}
+          modules: ${{ matrix.os != 'ubuntu-latest' && 'qtmultimedia' || '' }}
 
       - name: Validate Translation Extraction
         run: python scripts/extract_translations.py --check --dry-run --require-tool
 
+      - name: Build Windows With Source Evidence
+        if: matrix.os == 'windows-latest'
+        shell: pwsh
+        run: >
+          python scripts/build_release.py
+          --build-dir builddir
+          --evidence artifacts/build-evidence
+          --buildtype release
+          --audio-playback enabled
+          --qt-prefix "$env:QT_ROOT_DIR"
+          --github-repo "${{ github.repository }}"
+          --update-channel beta
+
       - name: Configure
+        if: matrix.os != 'windows-latest'
         shell: bash
         run: >
           meson setup builddir
@@ -64,23 +85,40 @@ jobs:
           -Dupdate_channel=beta
 
       - name: Build
+        if: matrix.os != 'windows-latest'
         run: meson compile -C builddir
 
       - name: Test
         run: meson test -C builddir --print-errorlogs
 
-      - name: Validate And Package (Windows)
+      - name: Validate Windows Release
         if: matrix.os == 'windows-latest'
         shell: pwsh
         run: |
           python scripts/validate_build.py --binary "builddir/src/vibestudio.exe" --expected-version "$((Get-Content VERSION -Raw).Trim())"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           python scripts/validate_cli_docs.py --binary "builddir/src/vibestudio.exe"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           python scripts/validate_credits.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           python scripts/extract_translations.py --check --dry-run --require-tool
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           python scripts/validate_samples.py --binary "builddir/src/vibestudio.exe"
-          python scripts/validate_packaging.py --binary "builddir/src/vibestudio.exe"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python scripts/validate_packaging.py --binary "builddir/src/vibestudio.exe" --compiled-translations "builddir/i18n"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           python scripts/validate_release_assets.py --binary "builddir/src/vibestudio.exe"
-          python scripts/package_portable.py --binary "builddir/src/vibestudio.exe" --output "nightly-artifacts" --archive --target-platform current
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Stage Verified Windows Binary And Source
+        if: matrix.os == 'windows-latest'
+        shell: pwsh
+        run: >
+          python scripts/package_windows_release.py
+          --build-dir builddir
+          --build-evidence artifacts/build-evidence/build-evidence.json
+          --qt-prefix "$env:QT_ROOT_DIR"
+          --output nightly-artifacts/windows-release
 
       - name: Validate And Package (Unix)
         if: matrix.os != 'windows-latest'
@@ -91,14 +129,38 @@ jobs:
           python scripts/validate_credits.py
           python scripts/extract_translations.py --check --dry-run --require-tool
           python scripts/validate_samples.py --binary "builddir/src/vibestudio"
-          python scripts/validate_packaging.py --binary "builddir/src/vibestudio"
+          python scripts/validate_packaging.py --binary "builddir/src/vibestudio" --compiled-translations "builddir/i18n"
           python scripts/validate_release_assets.py --binary "builddir/src/vibestudio"
-          python scripts/package_portable.py --binary "builddir/src/vibestudio" --output "nightly-artifacts" --archive --target-platform current
+          python scripts/package_portable.py --binary "builddir/src/vibestudio" --compiled-translations "builddir/i18n" --output "nightly-artifacts" --archive --target-platform current
 
       - name: Upload Nightly Portable Artifact
+        if: matrix.os != 'windows-latest'
         uses: actions/upload-artifact@v4
         with:
           name: vibestudio-nightly-${{ matrix.os }}-${{ github.run_number }}
           path: nightly-artifacts/**
           if-no-files-found: error
+          retention-days: 30
+
+      - name: Upload Verified Windows Binary And Source
+        if: matrix.os == 'windows-latest'
+        uses: actions/upload-artifact@v4
+        with:
+          name: vibestudio-nightly-windows-latest-${{ github.run_number }}
+          path: nightly-artifacts/windows-release/publish/*
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Upload Windows Release Diagnostics
+        if: always() && matrix.os == 'windows-latest'
+        uses: actions/upload-artifact@v4
+        with:
+          name: vibestudio-nightly-windows-diagnostics-${{ github.run_number }}
+          path: |
+            artifacts/build-evidence/*
+            nightly-artifacts/windows-release/runtime-checks/*.txt
+            nightly-artifacts/windows-release/runtime-checks/*.json
+            nightly-artifacts/windows-release/runtime-checks/*.wav
+            nightly-artifacts/windows-release/INCOMPLETE.txt
+          if-no-files-found: warn
           retention-days: 30

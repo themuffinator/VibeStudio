@@ -107,6 +107,23 @@ int main(int argc, char** argv)
 	ok &= expect(!codeIndex.buildTaskLines.isEmpty(), "build task integration should be described");
 	ok &= expect(!codeIndex.launchProfileLines.isEmpty(), "launch profiles should be described");
 
+	// One file's symbols, for Go to Symbol: QuakeC functions, C functions,
+	// shader names, and entity classes from .def and .fgd files.
+	const QVector<CodeSymbol> quakeC = codeSymbolsInText(QStringLiteral("progs/ai.qc"),
+		QStringLiteral("float() visible = { return 1; };\nvoid(entity targ) ai_face = {\n};\n.float health;\n"));
+	ok &= expect(quakeC.size() == 2 && quakeC.at(0).name == QStringLiteral("visible") && quakeC.at(1).name == QStringLiteral("ai_face")
+			&& quakeC.at(1).line == 2 && quakeC.at(1).kind == QStringLiteral("function"),
+		"QuakeC function definitions should be found by the name after their signature");
+	const QVector<CodeSymbol> def = codeSymbolsInText(QStringLiteral("defs/quake.def"),
+		QStringLiteral("/*QUAKED light (0 1 0) (-8 -8 -8) (8 8 8) START_OFF\nA light.\n*/\n"));
+	ok &= expect(def.size() == 1 && def.first().name == QStringLiteral("light") && def.first().kind == QStringLiteral("entity class"),
+		"A QUAKED comment should read as an entity class");
+	const QVector<CodeSymbol> fgd = codeSymbolsInText(QStringLiteral("defs/game.fgd"),
+		QStringLiteral("@BaseClass = Targetname [ targetname(target_source) ]\n@PointClass base(Targetname) size(-16 -16 -24, 16 16 32) = info_player_start : \"Player start\" []\n"));
+	ok &= expect(fgd.size() == 2 && fgd.at(1).name == QStringLiteral("info_player_start"), "FGD classes should be found by name");
+	const QVector<CodeSymbol> shaders = codeSymbolsInText(QStringLiteral("scripts/local.shader"), shaderText);
+	ok &= expect(!shaders.isEmpty() && shaders.first().kind == QStringLiteral("shader"), "Shader names should be symbols of a .shader file");
+
 	const QString extensionRoot = QDir(temp.path()).filePath(QStringLiteral("extensions/sample"));
 	const QString manifestPath = QDir(extensionRoot).filePath(QStringLiteral("vibestudio.extension.json"));
 	const QString manifestText = QStringLiteral(

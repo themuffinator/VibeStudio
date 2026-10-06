@@ -6,10 +6,20 @@
 #include <QMap>
 #include <QRegularExpression>
 #include <QSet>
+#include <algorithm>
 
 namespace vibestudio {
 
 namespace {
+
+struct PreflightCancelled {};
+void preflightCheckpoint(const EricwMapPreflightOptions* options, qint64 completed = -1, qint64 total = 0)
+{
+	if (!options) { return; }
+	if (options->isCancelled && options->isCancelled()) { throw PreflightCancelled {}; }
+	if (completed >= 0 && options->progress) { options->progress(completed, total); }
+	if (options->isCancelled && options->isCancelled()) { throw PreflightCancelled {}; }
+}
 
 struct MapKeyValue {
 	QString key;
@@ -34,11 +44,6 @@ struct LightGroupState {
 	bool sawStartOn = false;
 	int firstLine = 0;
 };
-
-QString preflightText(const char* source)
-{
-	return QCoreApplication::translate("VibeStudioEricwMapPreflight", source);
-}
 
 QString issueId(int number)
 {
@@ -147,11 +152,13 @@ bool valueHasParserSensitiveBackslash(const QString& value)
 	return parserSensitive.match(value).hasMatch();
 }
 
-bool lineHasNonIntegerBrushCoordinate(const QString& line)
+bool lineHasNonIntegerBrushCoordinate(const QString& line, const EricwMapPreflightOptions* options)
 {
 	static const QRegularExpression pointPattern(QStringLiteral(R"(\(\s*([-+]?\d+(?:\.\d+)?)\s+([-+]?\d+(?:\.\d+)?)\s+([-+]?\d+(?:\.\d+)?)\s*\))"));
 	QRegularExpressionMatchIterator matches = pointPattern.globalMatch(line);
+	int checked = 0;
 	while (matches.hasNext()) {
+		if ((checked++ & 63) == 0) { preflightCheckpoint(options); }
 		const QRegularExpressionMatch match = matches.next();
 		if (match.captured(1).contains('.') || match.captured(2).contains('.') || match.captured(3).contains('.')) {
 			return true;
@@ -287,11 +294,11 @@ QString entityLocationHint(const MapEntity& entity)
 {
 	const QString origin = firstValue(entity, QStringLiteral("origin")).trimmed();
 	if (!origin.isEmpty()) {
-		return preflightText(" Entity origin: %1.").arg(origin);
+		return QCoreApplication::translate("VibeStudioEricwMapPreflight", " Entity origin: %1.").arg(origin);
 	}
 	const QString mangle = firstValue(entity, QStringLiteral("mangle")).trimmed();
 	if (!mangle.isEmpty()) {
-		return preflightText(" Entity mangle: %1.").arg(mangle);
+		return QCoreApplication::translate("VibeStudioEricwMapPreflight", " Entity mangle: %1.").arg(mangle);
 	}
 	return {};
 }
@@ -358,7 +365,7 @@ void addIssue(
 	issue.issueId = issueId(number);
 	issue.clusterId = clusterId;
 	issue.severity = QStringLiteral("warning");
-	issue.message = preflightText(message);
+	issue.message = QCoreApplication::translate("VibeStudioEricwMapPreflight", message);
 	issue.entityClassName = cleanClassName(entity);
 	issue.key = key;
 	issue.line = line > 0 ? line : entity.startLine;
@@ -388,7 +395,7 @@ void addIssueText(
 	report->issues.push_back(issue);
 }
 
-QVector<MapEntity> parseMapEntities(const QString& mapText)
+QVector<MapEntity> parseMapEntities(const QString& mapText, const EricwMapPreflightOptions* options = nullptr)
 {
 	QVector<MapEntity> entities;
 	MapEntity current;
@@ -397,7 +404,12 @@ QVector<MapEntity> parseMapEntities(const QString& mapText)
 	int lineNumber = 0;
 	static const QRegularExpression keyValuePattern(QStringLiteral(R"vs(^\s*"([^"]+)"\s+"([^"]*)")vs"));
 
-	for (const QString& line : mapText.split('\n')) {
+	preflightCheckpoint(options, 0, mapText.size());
+	for (qsizetype position = 0; position <= mapText.size();) {
+		const auto end = mapText.indexOf(QLatin1Char('\n'), position);
+		const QString line = end < 0 ? mapText.mid(position) : mapText.mid(position, end - position);
+		position = end < 0 ? mapText.size() + 1 : end + 1;
+		if ((lineNumber & 127) == 0) { preflightCheckpoint(options, std::min(position, mapText.size()), mapText.size()); }
 		++lineNumber;
 		const QString trimmed = line.trimmed();
 
@@ -418,7 +430,7 @@ QVector<MapEntity> parseMapEntities(const QString& mapText)
 					current.values.push_back({keyMatch.captured(1), keyMatch.captured(2), lineNumber});
 				}
 			}
-			if (braceDepth >= 2 && lineHasNonIntegerBrushCoordinate(line)) {
+			if (braceDepth >= 2 && lineHasNonIntegerBrushCoordinate(line, options)) {
 				current.hasNonIntegerBrushCoordinate = true;
 			}
 			if (braceDepth >= 2) {
@@ -442,6 +454,7 @@ QVector<MapEntity> parseMapEntities(const QString& mapText)
 		int closes = 0;
 		bool inQuote = false;
 		for (int index = 0; index < line.size(); ++index) {
+			if ((index & 4095) == 0) { preflightCheckpoint(options); }
 			const QChar ch = line.at(index);
 			if (ch == '"' && (index == 0 || line.at(index - 1) != '\\')) {
 				inQuote = !inQuote;
@@ -473,178 +486,180 @@ QVector<MapEntity> parseMapEntities(const QString& mapText)
 	return entities;
 }
 
-void inspectEntityValues(const MapEntity& entity, EricwMapPreflightReport* report)
+void inspectEntityValues(const MapEntity& entity, EricwMapPreflightReport* report, const EricwMapPreflightOptions* options = nullptr)
 {
 	const QString className = cleanClassName(entity);
 	QMap<QString, QString> seenKeysByLowercase;
 	for (const MapKeyValue& item : entity.values) {
+		preflightCheckpoint(options);
 		const QString normalizedKey = item.key.toLower();
 		const QString previousKey = seenKeysByLowercase.value(normalizedKey);
 		if (!previousKey.isEmpty() && previousKey != item.key) {
-			addIssueText(report, 121, QString(), preflightText("Entity contains keys that differ only by case; normalize the key spelling before compiling so editor and compiler behavior agree."), entity, item.key, item.line);
+			addIssueText(report, 121, QString(), QCoreApplication::translate("VibeStudioEricwMapPreflight", "Entity contains keys that differ only by case; normalize the key spelling before compiling so editor and compiler behavior agree."), entity, item.key, item.line);
 		} else if (previousKey.isEmpty()) {
 			seenKeysByLowercase.insert(normalizedKey, item.key);
 		}
 		if (numericValueLooksInvalid(item.key, item.value)) {
-			addIssueText(report, 135, QStringLiteral("D04"), preflightText("Entity key has an invalid numeric value; inspect the source line before compiling.") + entityLocationHint(entity), entity, item.key, item.line);
+			addIssueText(report, 135, QStringLiteral("D04"), QCoreApplication::translate("VibeStudioEricwMapPreflight", "Entity key has an invalid numeric value; inspect the source line before compiling.") + entityLocationHint(entity), entity, item.key, item.line);
 		}
 		if (item.value.size() > 512) {
-			addIssueText(report, 245, QStringLiteral("D04"), preflightText("Entity key value is longer than 512 characters; shorten it or move bulky metadata outside the BSP entity lump."), entity, item.key, item.line);
+			addIssueText(report, 245, QStringLiteral("D04"), QCoreApplication::translate("VibeStudioEricwMapPreflight", "Entity key value is longer than 512 characters; shorten it or move bulky metadata outside the BSP entity lump."), entity, item.key, item.line);
 		}
 		if (item.key.compare(QStringLiteral("wad"), Qt::CaseInsensitive) == 0) {
 			const QStringList paths = item.value.split(';', Qt::SkipEmptyParts);
 			bool absolutePathWarningAdded = false;
 			for (const QString& path : paths) {
 				if (isAbsoluteOrPrivatePath(path) && !absolutePathWarningAdded) {
-					addIssueText(report, 293, QStringLiteral("D04"), preflightText("WAD key contains an absolute or private path; use project-relative mounts to avoid leaking local paths into compiled BSPs."), entity, item.key, item.line);
+					addIssueText(report, 293, QStringLiteral("D04"), QCoreApplication::translate("VibeStudioEricwMapPreflight", "WAD key contains an absolute or private path; use project-relative mounts to avoid leaking local paths into compiled BSPs."), entity, item.key, item.line);
 					absolutePathWarningAdded = true;
 				}
 				if (hasPathDirectoryComponent(path) && !isAbsoluteOrPrivatePath(path)) {
-					addIssueText(report, 201, QStringLiteral("D08"), preflightText("WAD key uses a directory component; prefer compiler profile search paths or -waddir style mounts over process-current-directory assumptions."), entity, item.key, item.line);
+					addIssueText(report, 201, QStringLiteral("D08"), QCoreApplication::translate("VibeStudioEricwMapPreflight", "WAD key uses a directory component; prefer compiler profile search paths or -waddir style mounts over process-current-directory assumptions."), entity, item.key, item.line);
 				}
 			}
 			continue;
 		}
 		if (valueHasSuspiciousBackslash(item.value)) {
-			addIssueText(report, 288, QStringLiteral("D04"), preflightText("Entity value contains a backslash escape that Quake-family parsers may reinterpret; prefer forward slashes or escaped text."), entity, item.key, item.line);
-			addIssueText(report, 87, QStringLiteral("D04"), preflightText("Backslash and quote escaping differs across engines and qbsp versions; verify this value before compiling."), entity, item.key, item.line);
+			addIssueText(report, 288, QStringLiteral("D04"), QCoreApplication::translate("VibeStudioEricwMapPreflight", "Entity value contains a backslash escape that Quake-family parsers may reinterpret; prefer forward slashes or escaped text."), entity, item.key, item.line);
+			addIssueText(report, 87, QStringLiteral("D04"), QCoreApplication::translate("VibeStudioEricwMapPreflight", "Backslash and quote escaping differs across engines and qbsp versions; verify this value before compiling."), entity, item.key, item.line);
 		}
 		if (valueHasParserSensitiveBackslash(item.value)) {
-			addIssueText(report, 129, QString(), preflightText("Entity value contains a C-style backslash escape such as \\b or \\n; verify qbsp and light parse the same text."), entity, item.key, item.line);
+			addIssueText(report, 129, QString(), QCoreApplication::translate("VibeStudioEricwMapPreflight", "Entity value contains a C-style backslash escape such as \\b or \\n; verify qbsp and light parse the same text."), entity, item.key, item.line);
 		}
 	}
 
 	if (classUsuallyNeedsBrushes(className) && !entity.hasBrush) {
-		addIssue(report, 233, QString(), "Brush-style entity has no parsed brushes; add valid brushes or convert it to a point entity before compiling.", entity, QStringLiteral("classname"));
+		addIssue(report, 233, QString(), QT_TRANSLATE_NOOP("VibeStudioEricwMapPreflight", "Brush-style entity has no parsed brushes; add valid brushes or convert it to a point entity before compiling."), entity, QStringLiteral("classname"));
 	}
 	if (entity.hasEmptyTextureName) {
-		addIssue(report, 342, QString(), "A brush face appears to have an empty texture name; assign a concrete texture before decompile or texture extraction workflows.", entity);
+		addIssue(report, 342, QString(), QT_TRANSLATE_NOOP("VibeStudioEricwMapPreflight", "A brush face appears to have an empty texture name; assign a concrete texture before decompile or texture extraction workflows."), entity);
 	}
 	if (hasAnyKey(entity, {QStringLiteral("_minlight"), QStringLiteral("minlight")})) {
-		addIssue(report, 470, QStringLiteral("D12"), "This entity uses minlight; confirm whether the target format expects integer or normalized float scale.", entity, QStringLiteral("_minlight"));
+		addIssue(report, 470, QStringLiteral("D12"), QT_TRANSLATE_NOOP("VibeStudioEricwMapPreflight", "This entity uses minlight; confirm whether the target format expects integer or normalized float scale."), entity, QStringLiteral("_minlight"));
 	}
 	if (hasKey(entity, QStringLiteral("mangle")) && hasKey(entity, QStringLiteral("angle"))) {
-		addIssue(report, 310, QString(), "This entity has both angle and mangle; Quake 2 light workflows have an upstream angle/mangle conflict.", entity, QStringLiteral("mangle"));
+		addIssue(report, 310, QString(), QT_TRANSLATE_NOOP("VibeStudioEricwMapPreflight", "This entity has both angle and mangle; Quake 2 light workflows have an upstream angle/mangle conflict."), entity, QStringLiteral("mangle"));
 	}
 	if (isBrushEntity(entity) && hasKey(entity, QStringLiteral("origin"))) {
-		addIssue(report, 308, QString(), "Brush entity has an origin key; upstream qbsp can treat this as a leak participant.", entity, QStringLiteral("origin"));
+		addIssue(report, 308, QString(), QT_TRANSLATE_NOOP("VibeStudioEricwMapPreflight", "Brush entity has an origin key; upstream qbsp can treat this as a leak participant."), entity, QStringLiteral("origin"));
 	}
 	if (isBrushEntity(entity) && className.compare(QStringLiteral("func_door_rotating"), Qt::CaseInsensitive) == 0 && (hasKey(entity, QStringLiteral("origin")) || entity.hasOriginBrush)) {
-		addIssue(report, 417, QStringLiteral("D06"), "Rotating door with origin data is risky in region+ compiles; compile the full map or remove the partial region for validation.", entity, hasKey(entity, QStringLiteral("origin")) ? QStringLiteral("origin") : QStringLiteral("ORIGIN"));
+		addIssue(report, 417, QStringLiteral("D06"), QT_TRANSLATE_NOOP("VibeStudioEricwMapPreflight", "Rotating door with origin data is risky in region+ compiles; compile the full map or remove the partial region for validation."), entity, hasKey(entity, QStringLiteral("origin")) ? QStringLiteral("origin") : QStringLiteral("ORIGIN"));
 	}
 	if (entity.hasNonIntegerBrushCoordinate) {
-		addIssue(report, 257, QString(), "Brush coordinates include non-integer vertices; snap or inspect this brush before qbsp to avoid missing faces.", entity);
+		addIssue(report, 257, QString(), QT_TRANSLATE_NOOP("VibeStudioEricwMapPreflight", "Brush coordinates include non-integer vertices; snap or inspect this brush before qbsp to avoid missing faces."), entity);
 	}
 	if (isBrushEntity(entity) && (hasKey(entity, QStringLiteral("_phong")) || hasKey(entity, QStringLiteral("phong")) || hasKey(entity, QStringLiteral("phong_angle")))) {
-		addIssue(report, 405, QStringLiteral("D07"), "Phong smoothing on brush entities can produce edge light bleed; inspect the compiled lightmap before release.", entity, QStringLiteral("_phong"));
+		addIssue(report, 405, QStringLiteral("D07"), QT_TRANSLATE_NOOP("VibeStudioEricwMapPreflight", "Phong smoothing on brush entities can produce edge light bleed; inspect the compiled lightmap before release."), entity, QStringLiteral("_phong"));
 	}
 	if (isBrushEntity(entity) && hasAnyKey(entity, {QStringLiteral("_dirt"), QStringLiteral("_dirtmode"), QStringLiteral("_dirtdepth"), QStringLiteral("_dirtscale"), QStringLiteral("_dirtangle"), QStringLiteral("_dirtgain")})) {
-		addIssue(report, 140, QStringLiteral("D07"), "Brush-model dirt keys are not consistently supported upstream; prefer worldspawn dirt defaults or verify this bmodel in a lighting test.", entity, QStringLiteral("_dirt"));
-		addIssue(report, 349, QStringLiteral("D07"), "Dirt keys on bmodels have known upstream behavior gaps; inspect ambient occlusion on the compiled model.", entity, QStringLiteral("_dirt"));
+		addIssue(report, 140, QStringLiteral("D07"), QT_TRANSLATE_NOOP("VibeStudioEricwMapPreflight", "Brush-model dirt keys are not consistently supported upstream; prefer worldspawn dirt defaults or verify this bmodel in a lighting test."), entity, QStringLiteral("_dirt"));
+		addIssue(report, 349, QStringLiteral("D07"), QT_TRANSLATE_NOOP("VibeStudioEricwMapPreflight", "Dirt keys on bmodels have known upstream behavior gaps; inspect ambient occlusion on the compiled model."), entity, QStringLiteral("_dirt"));
 	}
 	if (isBrushEntity(entity) && hasAnyKey(entity, {QStringLiteral("_light"), QStringLiteral("light")})) {
-		addIssue(report, 241, QString(), "Brush entity carries light-emission keys; brush-as-light authoring remains an upstream feature request, so verify qbsp/light treatment before release.", entity, QStringLiteral("_light"));
+		addIssue(report, 241, QString(), QT_TRANSLATE_NOOP("VibeStudioEricwMapPreflight", "Brush entity carries light-emission keys; brush-as-light authoring remains an upstream feature request, so verify qbsp/light treatment before release."), entity, QStringLiteral("_light"));
 	}
 	if (hasAnyKey(entity, {QStringLiteral("_mirrorinside"), QStringLiteral("mirrorinside")})) {
-		addIssue(report, 262, QStringLiteral("D07"), "_mirrorinside is present; shadow output has version-specific regressions, so compare against the intended ericw-tools build.", entity, QStringLiteral("_mirrorinside"));
+		addIssue(report, 262, QStringLiteral("D07"), QT_TRANSLATE_NOOP("VibeStudioEricwMapPreflight", "_mirrorinside is present; shadow output has version-specific regressions, so compare against the intended ericw-tools build."), entity, QStringLiteral("_mirrorinside"));
 	}
 	if (hasAnyKey(entity, {QStringLiteral("_shadowself"), QStringLiteral("_selfshadow"), QStringLiteral("shadowself"), QStringLiteral("selfshadow")})) {
-		addIssue(report, 268, QStringLiteral("D07"), "Self-shadow keys are present; verify shadow/deviance behavior with the selected light compiler before release.", entity, QStringLiteral("_shadowself"));
+		addIssue(report, 268, QStringLiteral("D07"), QT_TRANSLATE_NOOP("VibeStudioEricwMapPreflight", "Self-shadow keys are present; verify shadow/deviance behavior with the selected light compiler before release."), entity, QStringLiteral("_shadowself"));
 	}
 	if (hasAnyKey(entity, {QStringLiteral("_switchableshadow"), QStringLiteral("_switchable_shadow"), QStringLiteral("switchableshadow"), QStringLiteral("switchable_shadow")})) {
 		if (entity.hasSkipTexture) {
-			addIssue(report, 255, QStringLiteral("D07"), "Switchable shadow bmodel uses a skip-textured face; this combination has known upstream lighting risk.", entity, QStringLiteral("_switchableshadow"));
+			addIssue(report, 255, QStringLiteral("D07"), QT_TRANSLATE_NOOP("VibeStudioEricwMapPreflight", "Switchable shadow bmodel uses a skip-textured face; this combination has known upstream lighting risk."), entity, QStringLiteral("_switchableshadow"));
 		}
 		if (!keyValueEquals(entity, QStringLiteral("_shadow"), QStringLiteral("1")) && !keyValueEquals(entity, QStringLiteral("shadow"), QStringLiteral("1"))) {
-			addIssue(report, 256, QStringLiteral("D07"), "Switchable shadow is set without an explicit _shadow 1; set the shadow key deliberately so the compiler intent is unambiguous.", entity, QStringLiteral("_switchableshadow"));
+			addIssue(report, 256, QStringLiteral("D07"), QT_TRANSLATE_NOOP("VibeStudioEricwMapPreflight", "Switchable shadow is set without an explicit _shadow 1; set the shadow key deliberately so the compiler intent is unambiguous."), entity, QStringLiteral("_switchableshadow"));
 		}
 	}
 	if (className.compare(QStringLiteral("func_illusionary_visblocker"), Qt::CaseInsensitive) == 0 || className.compare(QStringLiteral("func_detail_illusionary"), Qt::CaseInsensitive) == 0) {
-		addIssue(report, 456, QStringLiteral("D07"), "Illusionary/detail visblocking entities have known shadow/rendering regressions in ericw-tools; verify the affected compiler version.", entity, QStringLiteral("classname"));
+		addIssue(report, 456, QStringLiteral("D07"), QT_TRANSLATE_NOOP("VibeStudioEricwMapPreflight", "Illusionary/detail visblocking entities have known shadow/rendering regressions in ericw-tools; verify the affected compiler version."), entity, QStringLiteral("classname"));
 		if (className.compare(QStringLiteral("func_illusionary_visblocker"), Qt::CaseInsensitive) == 0) {
-			addIssue(report, 441, QStringLiteral("D07"), "func_illusionary_visblocker behavior differs between ericw-tools versions; inspect visibility from both sides.", entity, QStringLiteral("classname"));
+			addIssue(report, 441, QStringLiteral("D07"), QT_TRANSLATE_NOOP("VibeStudioEricwMapPreflight", "func_illusionary_visblocker behavior differs between ericw-tools versions; inspect visibility from both sides."), entity, QStringLiteral("classname"));
 		}
 	}
 	if (className.compare(QStringLiteral("func_detail_null"), Qt::CaseInsensitive) == 0) {
-		addIssue(report, 455, QString(), "func_detail_null is an upstream feature request; keep this marker out of release compiles unless the selected compiler explicitly supports it.", entity, QStringLiteral("classname"));
+		addIssue(report, 455, QString(), QT_TRANSLATE_NOOP("VibeStudioEricwMapPreflight", "func_detail_null is an upstream feature request; keep this marker out of release compiles unless the selected compiler explicitly supports it."), entity, QStringLiteral("classname"));
 	}
 	if (className.compare(QStringLiteral("misc_external_map"), Qt::CaseInsensitive) == 0 || hasKey(entity, QStringLiteral("_external_map"))) {
 		const QString externalMap = firstValue(entity, QStringLiteral("_external_map"));
 		const QString externalMapClassname = firstValue(entity, QStringLiteral("_external_map_classname"));
 		if (!hasKey(entity, QStringLiteral("_external_map_classname"))) {
-			addIssue(report, 194, QStringLiteral("D05"), "misc_external_map is missing _external_map_classname; set it explicitly, commonly to func_detail, before qbsp.", entity, QStringLiteral("_external_map_classname"));
+			addIssue(report, 194, QStringLiteral("D05"), QT_TRANSLATE_NOOP("VibeStudioEricwMapPreflight", "misc_external_map is missing _external_map_classname; set it explicitly, commonly to func_detail, before qbsp."), entity, QStringLiteral("_external_map_classname"));
 		}
 		if (externalMap.trimmed().isEmpty()) {
-			addIssue(report, 199, QStringLiteral("D05"), "misc_external_map is missing _external_map; set a portable map-relative prefab path before qbsp.", entity, QStringLiteral("_external_map"));
+			addIssue(report, 199, QStringLiteral("D05"), QT_TRANSLATE_NOOP("VibeStudioEricwMapPreflight", "misc_external_map is missing _external_map; set a portable map-relative prefab path before qbsp."), entity, QStringLiteral("_external_map"));
 		} else if (isAbsoluteOrPrivatePath(externalMap) || externalMap.contains('\\') || externalMap.contains(QStringLiteral(".."))) {
-			addIssue(report, 199, QStringLiteral("D05"), "External map path is absolute or platform-specific; prefer map/project-relative paths for portable prefab compiles.", entity, QStringLiteral("_external_map"));
+			addIssue(report, 199, QStringLiteral("D05"), QT_TRANSLATE_NOOP("VibeStudioEricwMapPreflight", "External map path is absolute or platform-specific; prefer map/project-relative paths for portable prefab compiles."), entity, QStringLiteral("_external_map"));
 		}
 		if (externalMapClassname.compare(QStringLiteral("func_group"), Qt::CaseInsensitive) == 0) {
-			addIssue(report, 207, QStringLiteral("D05"), "External map target classname is func_group; all-group prefab imports have known corruption risk upstream.", entity, QStringLiteral("_external_map_classname"));
+			addIssue(report, 207, QStringLiteral("D05"), QT_TRANSLATE_NOOP("VibeStudioEricwMapPreflight", "External map target classname is func_group; all-group prefab imports have known corruption risk upstream."), entity, QStringLiteral("_external_map_classname"));
 		}
 		if (hasAnyKey(entity, {QStringLiteral("_phong"), QStringLiteral("phong"), QStringLiteral("phong_angle"), QStringLiteral("_shadow"), QStringLiteral("_dirt"), QStringLiteral("_minlight")})) {
-			addIssue(report, 231, QStringLiteral("D05"), "Lighting keys on misc_external_map can be ignored; move lighting keys into the external map geometry when possible.", entity, QStringLiteral("_phong"));
+			addIssue(report, 231, QStringLiteral("D05"), QT_TRANSLATE_NOOP("VibeStudioEricwMapPreflight", "Lighting keys on misc_external_map can be ignored; move lighting keys into the external map geometry when possible."), entity, QStringLiteral("_phong"));
 		}
 		if (firstValue(entity, QStringLiteral("mangle")).contains(QStringLiteral("360")) || firstValue(entity, QStringLiteral("angles")).contains(QStringLiteral("360"))) {
-			addIssue(report, 193, QStringLiteral("D05"), "External map rotation contains 360 degrees; normalize rotations to avoid prefab lighting surprises.", entity, QStringLiteral("mangle"));
+			addIssue(report, 193, QStringLiteral("D05"), QT_TRANSLATE_NOOP("VibeStudioEricwMapPreflight", "External map rotation contains 360 degrees; normalize rotations to avoid prefab lighting surprises."), entity, QStringLiteral("mangle"));
 		}
 		if (!externalMap.isEmpty()) {
-			addIssue(report, 333, QStringLiteral("D05"), "External map prefabs import limited content; entities inside external maps may not be handled as expected by upstream qbsp.", entity, QStringLiteral("_external_map"));
+			addIssue(report, 333, QStringLiteral("D05"), QT_TRANSLATE_NOOP("VibeStudioEricwMapPreflight", "External map prefabs import limited content; entities inside external maps may not be handled as expected by upstream qbsp."), entity, QStringLiteral("_external_map"));
 		}
 	}
 	if (className.compare(QStringLiteral("misc_model"), Qt::CaseInsensitive) == 0 && hasAnyKey(entity, {QStringLiteral("_shadow"), QStringLiteral("shadow"), QStringLiteral("_shadowself"), QStringLiteral("_selfshadow")})) {
-		addIssue(report, 247, QStringLiteral("D07"), "misc_model shadow keys express an expectation that upstream light support may not satisfy; verify model shadows in the compiled map.", entity, QStringLiteral("_shadow"));
+		addIssue(report, 247, QStringLiteral("D07"), QT_TRANSLATE_NOOP("VibeStudioEricwMapPreflight", "misc_model shadow keys express an expectation that upstream light support may not satisfy; verify model shadows in the compiled map."), entity, QStringLiteral("_shadow"));
 	}
 	if (className.startsWith(QStringLiteral("monster_"), Qt::CaseInsensitive) && vectorZEquals(firstValue(entity, QStringLiteral("origin")), 24.0)) {
-		addIssue(report, 270, QString(), "Monster origin is exactly 24 units above the map Z origin; verify outside-fill behavior and floor contact before qbsp.", entity, QStringLiteral("origin"));
+		addIssue(report, 270, QString(), QT_TRANSLATE_NOOP("VibeStudioEricwMapPreflight", "Monster origin is exactly 24 units above the map Z origin; verify outside-fill behavior and floor contact before qbsp."), entity, QStringLiteral("origin"));
 	}
 	if (isLightEntity(entity)) {
 		if (hasKey(entity, QStringLiteral("style")) && hasKey(entity, QStringLiteral("targetname"))) {
-			addIssue(report, 173, QStringLiteral("D02"), "Toggled light has an explicit style; upstream may overwrite it, so preserve intent in a separate key or script.", entity, QStringLiteral("style"));
-			addIssue(report, 475, QStringLiteral("D02"), "Toggled light style preservation is not guaranteed upstream; check grouped lights before compiling.", entity, QStringLiteral("style"));
+			addIssue(report, 173, QStringLiteral("D02"), QT_TRANSLATE_NOOP("VibeStudioEricwMapPreflight", "Toggled light has an explicit style; upstream may overwrite it, so preserve intent in a separate key or script."), entity, QStringLiteral("style"));
+			addIssue(report, 475, QStringLiteral("D02"), QT_TRANSLATE_NOOP("VibeStudioEricwMapPreflight", "Toggled light style preservation is not guaranteed upstream; check grouped lights before compiling."), entity, QStringLiteral("style"));
 		}
 		for (const MapKeyValue& surface : valuesForKey(entity, QStringLiteral("_surface"))) {
+			preflightCheckpoint(options);
 			const QString normalizedSurface = surface.value.trimmed().toLower();
 			if (surface.value.startsWith('*') || normalizedSurface.contains(QStringLiteral("water")) || normalizedSurface.contains(QStringLiteral("slime")) || normalizedSurface.contains(QStringLiteral("lava"))) {
-				addIssue(report, 217, QStringLiteral("D07"), "Surface light targets a liquid-like texture; liquid _surface settings can collide or be ignored upstream, so verify emitted light.", entity, surface.key, surface.line);
-				addIssue(report, 389, QStringLiteral("D07"), "Q2/liquid surface-light behavior has upstream regressions; inspect surface light output before release.", entity, surface.key, surface.line);
+				addIssue(report, 217, QStringLiteral("D07"), QT_TRANSLATE_NOOP("VibeStudioEricwMapPreflight", "Surface light targets a liquid-like texture; liquid _surface settings can collide or be ignored upstream, so verify emitted light."), entity, surface.key, surface.line);
+				addIssue(report, 389, QStringLiteral("D07"), QT_TRANSLATE_NOOP("VibeStudioEricwMapPreflight", "Q2/liquid surface-light behavior has upstream regressions; inspect surface light output before release."), entity, surface.key, surface.line);
 			}
 		}
 		if (hasKey(entity, QStringLiteral("_surface")) && hasKey(entity, QStringLiteral("_project_texture"))) {
-			addIssue(report, 209, QString(), "_project_texture is set on a _surface light; projected textures on surface lights are a known upstream risk.", entity, QStringLiteral("_project_texture"));
+			addIssue(report, 209, QString(), QT_TRANSLATE_NOOP("VibeStudioEricwMapPreflight", "_project_texture is set on a _surface light; projected textures on surface lights are a known upstream risk."), entity, QStringLiteral("_project_texture"));
 		}
 		if (className.compare(QStringLiteral("light_spot"), Qt::CaseInsensitive) == 0 && hasAnyKey(entity, {QStringLiteral("_phong"), QStringLiteral("phong"), QStringLiteral("phong_angle")})) {
-			addIssue(report, 172, QStringLiteral("D07"), "Spotlight entity also carries Phong keys; move Phong settings to geometry and verify spotlight output on smoothed models.", entity, QStringLiteral("_phong"));
+			addIssue(report, 172, QStringLiteral("D07"), QT_TRANSLATE_NOOP("VibeStudioEricwMapPreflight", "Spotlight entity also carries Phong keys; move Phong settings to geometry and verify spotlight output on smoothed models."), entity, QStringLiteral("_phong"));
 		}
 		if (keyValueEquals(entity, QStringLiteral("_sun"), QStringLiteral("1")) && hasAnyKey(entity, {QStringLiteral("_deviance"), QStringLiteral("deviance"), QStringLiteral("_penumbra"), QStringLiteral("penumbra")})) {
-			addIssue(report, 268, QStringLiteral("D07"), "_sun 1 light uses deviance or penumbra keys; this combination has known upstream behavior risk.", entity, QStringLiteral("_sun"));
-			addIssue(report, 291, QStringLiteral("D07"), "Sky/sun light entity uses deviance or penumbra keys; validate sky lighting softness with the selected compiler.", entity, QStringLiteral("_sun"));
+			addIssue(report, 268, QStringLiteral("D07"), QT_TRANSLATE_NOOP("VibeStudioEricwMapPreflight", "_sun 1 light uses deviance or penumbra keys; this combination has known upstream behavior risk."), entity, QStringLiteral("_sun"));
+			addIssue(report, 291, QStringLiteral("D07"), QT_TRANSLATE_NOOP("VibeStudioEricwMapPreflight", "Sky/sun light entity uses deviance or penumbra keys; validate sky lighting softness with the selected compiler."), entity, QStringLiteral("_sun"));
 		}
 	}
 	if (hasAnyKey(entity, {QStringLiteral("_deviance"), QStringLiteral("deviance"), QStringLiteral("_penumbra"), QStringLiteral("penumbra")})
 		&& (vectorPitchLooksVertical(firstValue(entity, QStringLiteral("_sunlight_mangle"))) || vectorPitchLooksVertical(firstValue(entity, QStringLiteral("mangle"))))) {
-		addIssue(report, 238, QStringLiteral("D07"), "Sunlight deviance or penumbra is used with a near-vertical mangle; compare pitch/yaw softness before release.", entity, QStringLiteral("_sunlight_mangle"));
+		addIssue(report, 238, QStringLiteral("D07"), QT_TRANSLATE_NOOP("VibeStudioEricwMapPreflight", "Sunlight deviance or penumbra is used with a near-vertical mangle; compare pitch/yaw softness before release."), entity, QStringLiteral("_sunlight_mangle"));
 	}
 	if (hasAnyKey(entity, {QStringLiteral("_bounce"), QStringLiteral("bounce"), QStringLiteral("_bouncescale"), QStringLiteral("bouncescale")})
 		&& hasAnyKey(entity, {QStringLiteral("_soft"), QStringLiteral("soft")})
 		&& hasAnyKey(entity, {QStringLiteral("_extra"), QStringLiteral("extra"), QStringLiteral("_extra4"), QStringLiteral("extra4")})) {
-		addIssue(report, 190, QStringLiteral("D07"), "Bounce, soft, and extra lighting hints are combined in map keys; run a comparison compile before trusting final lighting.", entity, QStringLiteral("_bounce"));
+		addIssue(report, 190, QStringLiteral("D07"), QT_TRANSLATE_NOOP("VibeStudioEricwMapPreflight", "Bounce, soft, and extra lighting hints are combined in map keys; run a comparison compile before trusting final lighting."), entity, QStringLiteral("_bounce"));
 	}
 	if (hasKey(entity, QStringLiteral("_sunlight2"))) {
-		addIssue(report, 484, QStringLiteral("D07"), "_sunlight2 can produce BSPX LIGHTINGDIR artifacts in Q2 workflows; verify directional lighting output.", entity, QStringLiteral("_sunlight2"));
+		addIssue(report, 484, QStringLiteral("D07"), QT_TRANSLATE_NOOP("VibeStudioEricwMapPreflight", "_sunlight2 can produce BSPX LIGHTINGDIR artifacts in Q2 workflows; verify directional lighting output."), entity, QStringLiteral("_sunlight2"));
 	}
 	if (hasAnyKey(entity, {QStringLiteral("world_units_per_luxel"), QStringLiteral("_world_units_per_luxel")})) {
-		addIssue(report, 485, QStringLiteral("D11"), "world_units_per_luxel is set per entity; upstream does not yet expose a stable force-override flag.", entity, QStringLiteral("world_units_per_luxel"));
+		addIssue(report, 485, QStringLiteral("D11"), QT_TRANSLATE_NOOP("VibeStudioEricwMapPreflight", "world_units_per_luxel is set per entity; upstream does not yet expose a stable force-override flag."), entity, QStringLiteral("world_units_per_luxel"));
 	}
 	if (hasAnyKey(entity, {QStringLiteral("_compile_condition"), QStringLiteral("_compile_if"), QStringLiteral("_compile_ifnot"), QStringLiteral("_if"), QStringLiteral("_ifnot"), QStringLiteral("_ifdef"), QStringLiteral("_ifndef")})) {
-		addIssue(report, 343, QStringLiteral("D12"), "Conditional compile entity keys are present; route variants through explicit VibeStudio build profiles because upstream conditional entity compilation is not guaranteed.", entity, QStringLiteral("_compile_if"));
+		addIssue(report, 343, QStringLiteral("D12"), QT_TRANSLATE_NOOP("VibeStudioEricwMapPreflight", "Conditional compile entity keys are present; route variants through explicit VibeStudio build profiles because upstream conditional entity compilation is not guaranteed."), entity, QStringLiteral("_compile_if"));
 	}
 	if (hasAnyKey(entity, {QStringLiteral("_modelindex"), QStringLiteral("_model_order"), QStringLiteral("modelindex")}) || firstValue(entity, QStringLiteral("model")).trimmed().startsWith('*')) {
-		addIssue(report, 443, QString(), "Map-hack model ordering keys or *n model references are present; verify final entity order before relying on custom model indices.", entity, QStringLiteral("model"));
+		addIssue(report, 443, QString(), QT_TRANSLATE_NOOP("VibeStudioEricwMapPreflight", "Map-hack model ordering keys or *n model references are present; verify final entity order before relying on custom model indices."), entity, QStringLiteral("model"));
 	}
 	const QString entityText = entity.rawText.toLower();
 	if (entityText.contains(QStringLiteral("forcegoodtree")) && (entityText.contains(QStringLiteral("hexen2")) || entityText.contains(QStringLiteral("bsp2")))) {
-		addIssue(report, 254, QString(), "Hexen2/BSP2 forcegoodtree markers are present in map data; avoid this risky compiler combination unless a known-good tool version is selected.", entity, QStringLiteral("forcegoodtree"));
+		addIssue(report, 254, QString(), QT_TRANSLATE_NOOP("VibeStudioEricwMapPreflight", "Hexen2/BSP2 forcegoodtree markers are present in map data; avoid this risky compiler combination unless a known-good tool version is selected."), entity, QStringLiteral("forcegoodtree"));
 	}
 }
 
@@ -657,11 +672,11 @@ void inspectMapPath(const QString& mapPath, EricwMapPreflightReport* report)
 	if (info.completeBaseName().contains('.')) {
 		MapEntity entity;
 		entity.startLine = 1;
-		addIssueText(report, 230, QString(), preflightText("Map filename has multiple dots; verify compiler output naming because some ericw-tools paths have handled dotted names incorrectly."), entity);
+		addIssueText(report, 230, QString(), QCoreApplication::translate("VibeStudioEricwMapPreflight", "Map filename has multiple dots; verify compiler output naming because some ericw-tools paths have handled dotted names incorrectly."), entity);
 	}
 }
 
-void inspectEntityGroups(const QVector<MapEntity>& entities, EricwMapPreflightReport* report)
+void inspectEntityGroups(const QVector<MapEntity>& entities, EricwMapPreflightReport* report, const EricwMapPreflightOptions* options = nullptr)
 {
 	int regionCount = 0;
 	int totalBrushCount = 0;
@@ -674,6 +689,7 @@ void inspectEntityGroups(const QVector<MapEntity>& entities, EricwMapPreflightRe
 	QMap<QString, int> externalMapMergeTargets;
 
 	for (const MapEntity& entity : entities) {
+		preflightCheckpoint(options);
 		const QString className = cleanClassName(entity);
 		totalBrushCount += entity.brushCount;
 		if (className.contains(QStringLiteral("detail"), Qt::CaseInsensitive) || className.compare(QStringLiteral("func_group"), Qt::CaseInsensitive) == 0) {
@@ -713,31 +729,31 @@ void inspectEntityGroups(const QVector<MapEntity>& entities, EricwMapPreflightRe
 
 	if (totalBrushCount >= 4096 || detailBrushCount >= 512) {
 		const MapEntity entity = entities.isEmpty() ? MapEntity{} : entities.front();
-		addIssueText(report, 136, QString(), preflightText("Map has a high brush/detail-brush count; watch clipnode and marksurface totals and consider simplifying detail geometry before qbsp."), entity);
+		addIssueText(report, 136, QString(), QCoreApplication::translate("VibeStudioEricwMapPreflight", "Map has a high brush/detail-brush count; watch clipnode and marksurface totals and consider simplifying detail geometry before qbsp."), entity);
 	}
 	if (regionCount > 1) {
 		const MapEntity entity = entities.isEmpty() ? MapEntity{} : entities.front();
-		addIssueText(report, 390, QStringLiteral("D06"), preflightText("Multiple region markers were detected; upstream qbsp supports limited region workflows, so use one explicit region or validate with a full compile."), entity);
+		addIssueText(report, 390, QStringLiteral("D06"), QCoreApplication::translate("VibeStudioEricwMapPreflight", "Multiple region markers were detected; upstream qbsp supports limited region workflows, so use one explicit region or validate with a full compile."), entity);
 	}
 	if (hasRegion && hasAreaportal) {
 		const MapEntity entity = entities.isEmpty() ? MapEntity{} : entities.front();
-		addIssueText(report, 444, QStringLiteral("D06"), preflightText("Region or antiregion markers appear alongside areaportals; Quake 2 areaportal behavior may be invalid in partial compiles."), entity);
+		addIssueText(report, 444, QStringLiteral("D06"), QCoreApplication::translate("VibeStudioEricwMapPreflight", "Region or antiregion markers appear alongside areaportals; Quake 2 areaportal behavior may be invalid in partial compiles."), entity);
 	}
 	if (hasRegion) {
 		const MapEntity entity = entities.isEmpty() ? MapEntity{} : entities.front();
-		addIssueText(report, 422, QStringLiteral("D06"), preflightText("Region compiles may leave brush entities outside the intended slice; verify entity targets and run a full compile before release."), entity);
+		addIssueText(report, 422, QStringLiteral("D06"), QCoreApplication::translate("VibeStudioEricwMapPreflight", "Region compiles may leave brush entities outside the intended slice; verify entity targets and run a full compile before release."), entity);
 	}
 
 	if (hasSpotlight && hasPhongModelOrBrush) {
 		const MapEntity entity = entities.isEmpty() ? MapEntity{} : entities.front();
-		addIssueText(report, 172, QStringLiteral("D07"), preflightText("Map combines spotlights with Phong-smoothed models or brush entities; validate spotlight output on smoothed geometry."), entity, QStringLiteral("_phong"));
+		addIssueText(report, 172, QStringLiteral("D07"), QCoreApplication::translate("VibeStudioEricwMapPreflight", "Map combines spotlights with Phong-smoothed models or brush entities; validate spotlight output on smoothed geometry."), entity, QStringLiteral("_phong"));
 	}
 	for (auto it = externalMapMergeTargets.cbegin(); it != externalMapMergeTargets.cend(); ++it) {
 		if (it.value() > 1) {
 			MapEntity entity;
 			entity.startLine = 1;
 			entity.values.push_back({QStringLiteral("classname"), QStringLiteral("misc_external_map"), 1});
-			addIssueText(report, 327, QStringLiteral("D05"), preflightText("Multiple misc_external_map entities target the same merge key; upstream merged-target behavior is not guaranteed, so verify the generated entity structure."), entity, QStringLiteral("_external_map_target"));
+			addIssueText(report, 327, QStringLiteral("D05"), QCoreApplication::translate("VibeStudioEricwMapPreflight", "Multiple misc_external_map entities target the same merge key; upstream merged-target behavior is not guaranteed, so verify the generated entity structure."), entity, QStringLiteral("_external_map_target"));
 			break;
 		}
 	}
@@ -747,7 +763,7 @@ void inspectEntityGroups(const QVector<MapEntity>& entities, EricwMapPreflightRe
 			MapEntity entity;
 			entity.startLine = it.value().firstLine;
 			entity.values.push_back({QStringLiteral("classname"), QStringLiteral("light"), it.value().firstLine});
-			addIssueText(report, 122, QStringLiteral("D02"), preflightText("Lights sharing a targetname mix START_OFF and always-on spawnflags; make the group consistent before compiling."), entity, QStringLiteral("spawnflags"));
+			addIssueText(report, 122, QStringLiteral("D02"), QCoreApplication::translate("VibeStudioEricwMapPreflight", "Lights sharing a targetname mix START_OFF and always-on spawnflags; make the group consistent before compiling."), entity, QStringLiteral("spawnflags"));
 		}
 	}
 }
@@ -766,7 +782,7 @@ QStringList EricwMapPreflightReport::warningMessages() const
 	for (const EricwMapPreflightIssue& issue : issues) {
 		QString location;
 		if (issue.line > 0) {
-			location = preflightText("line %1").arg(issue.line);
+			location = QCoreApplication::translate("VibeStudioEricwMapPreflight", "line %1").arg(issue.line);
 		}
 		QString prefix = issue.issueId;
 		if (!issue.clusterId.isEmpty()) {
@@ -776,10 +792,10 @@ QStringList EricwMapPreflightReport::warningMessages() const
 			? QStringLiteral("%1: %2").arg(prefix, issue.message)
 			: QStringLiteral("%1 at %2: %3").arg(prefix, location, issue.message);
 		if (!issue.entityClassName.isEmpty()) {
-			message += preflightText(" Entity: %1.").arg(issue.entityClassName);
+			message += QCoreApplication::translate("VibeStudioEricwMapPreflight", " Entity: %1.").arg(issue.entityClassName);
 		}
 		if (!issue.key.isEmpty()) {
-			message += preflightText(" Key: %1.").arg(issue.key);
+			message += QCoreApplication::translate("VibeStudioEricwMapPreflight", " Key: %1.").arg(issue.key);
 		}
 		if (!seen.contains(message)) {
 			seen.insert(message);
@@ -804,158 +820,169 @@ QString ericwMapPreflightSeverityId(EricwMapPreflightSeverity severity)
 
 EricwMapPreflightResult validateEricwMapPreflightText(const QString& mapText, const EricwMapPreflightOptions& options)
 {
-	EricwMapPreflightResult result;
-	const QVector<MapEntity> entities = parseMapEntities(mapText);
-	result.entityCount = entities.size();
-	for (const MapEntity& entity : entities) {
-		if (isBrushEntity(entity)) {
-			++result.brushEntityCount;
-		}
-	}
-
-	EricwMapPreflightReport report;
-	inspectMapPath(options.mapPath, &report);
-	for (const MapEntity& entity : entities) {
-		inspectEntityValues(entity, &report);
-	}
-	inspectEntityGroups(entities, &report);
-
-	for (const EricwMapPreflightIssue& issue : report.issues) {
-		EricwMapPreflightWarning warning;
-		warning.severity = EricwMapPreflightSeverity::Warning;
-		warning.upstreamIssue = issue.issueId;
-		warning.message = issue.message;
-		warning.filePath = options.mapPath;
-		warning.line = issue.line;
-		warning.entityIndex = -1;
-		warning.classname = issue.entityClassName;
-		warning.key = issue.key;
-		if (issue.issueId.endsWith(QStringLiteral("#293"))) {
-			warning.code = QStringLiteral("wad-absolute-path");
-		} else if (issue.issueId.endsWith(QStringLiteral("#121"))) {
-			warning.code = QStringLiteral("entity-key-case-collision");
-		} else if (issue.issueId.endsWith(QStringLiteral("#129"))) {
-			warning.code = QStringLiteral("parser-sensitive-backslash");
-		} else if (issue.issueId.endsWith(QStringLiteral("#136"))) {
-			warning.code = QStringLiteral("high-brush-count-clipnode-risk");
-		} else if (issue.issueId.endsWith(QStringLiteral("#140")) || issue.issueId.endsWith(QStringLiteral("#349"))) {
-			warning.code = QStringLiteral("bmodel-dirt-key-risk");
-		} else if (issue.issueId.endsWith(QStringLiteral("#172"))) {
-			warning.code = QStringLiteral("spotlight-phong-risk");
-		} else if (issue.issueId.endsWith(QStringLiteral("#190"))) {
-			warning.code = QStringLiteral("bounce-soft-extra-risk");
-		} else if (issue.issueId.endsWith(QStringLiteral("#209"))) {
-			warning.code = QStringLiteral("surface-project-texture-risk");
-		} else if (issue.issueId.endsWith(QStringLiteral("#217"))) {
-			warning.code = QStringLiteral("liquid-surface-light-risk");
-		} else if (issue.issueId.endsWith(QStringLiteral("#233"))) {
-			warning.code = QStringLiteral("empty-brush-entity");
-		} else if (issue.issueId.endsWith(QStringLiteral("#238"))) {
-			warning.code = QStringLiteral("vertical-sunlight-penumbra-risk");
-		} else if (issue.issueId.endsWith(QStringLiteral("#241"))) {
-			warning.code = QStringLiteral("brush-as-light-marker");
-		} else if (issue.issueId.endsWith(QStringLiteral("#247"))) {
-			warning.code = QStringLiteral("misc-model-shadow-expectation");
-		} else if (issue.issueId.endsWith(QStringLiteral("#254"))) {
-			warning.code = QStringLiteral("hexen2-bsp2-forcegoodtree-risk");
-		} else if (issue.issueId.endsWith(QStringLiteral("#255"))) {
-			warning.code = QStringLiteral("switchable-shadow-skip-risk");
-		} else if (issue.issueId.endsWith(QStringLiteral("#256"))) {
-			warning.code = QStringLiteral("switchable-shadow-missing-shadow-key");
-		} else if (issue.issueId.endsWith(QStringLiteral("#262"))) {
-			warning.code = QStringLiteral("mirrorinside-shadow-risk");
-		} else if (issue.issueId.endsWith(QStringLiteral("#268"))) {
-			warning.code = QStringLiteral("sun-or-self-shadow-risk");
-		} else if (issue.issueId.endsWith(QStringLiteral("#270"))) {
-			warning.code = QStringLiteral("monster-outside-fill-origin-risk");
-		} else if (issue.issueId.endsWith(QStringLiteral("#291"))) {
-			warning.code = QStringLiteral("sky-light-penumbra-risk");
-		} else if (issue.issueId.endsWith(QStringLiteral("#327"))) {
-			warning.code = QStringLiteral("external-map-merge-target-risk");
-		} else if (issue.issueId.endsWith(QStringLiteral("#342"))) {
-			warning.code = QStringLiteral("empty-texture-name");
-		} else if (issue.issueId.endsWith(QStringLiteral("#343"))) {
-			warning.code = QStringLiteral("conditional-compile-entity-key");
-		} else if (issue.issueId.endsWith(QStringLiteral("#443"))) {
-			warning.code = QStringLiteral("maphack-model-ordering-key");
-		} else if (issue.issueId.endsWith(QStringLiteral("#455"))) {
-			warning.code = QStringLiteral("func-detail-null-marker");
-		} else if (issue.issueId.endsWith(QStringLiteral("#245"))) {
-			warning.code = QStringLiteral("long-key-value");
-		} else if (issue.issueId.endsWith(QStringLiteral("#288")) || issue.issueId.endsWith(QStringLiteral("#87"))) {
-			warning.code = QStringLiteral("escape-backslash");
-		} else if (issue.issueId.endsWith(QStringLiteral("#194"))) {
-			warning.code = QStringLiteral("external-map-missing-classname");
-		} else if (issue.issueId.endsWith(QStringLiteral("#199"))) {
-			warning.code = QStringLiteral("external-map-path-portability");
-		} else if (issue.issueId.endsWith(QStringLiteral("#173")) || issue.issueId.endsWith(QStringLiteral("#475"))) {
-			warning.code = QStringLiteral("light-style-conflict");
-		} else if (issue.issueId.endsWith(QStringLiteral("#122"))) {
-			warning.code = QStringLiteral("light-start-off-conflict");
-		} else if (issue.issueId.endsWith(QStringLiteral("#310"))) {
-			warning.code = QStringLiteral("q2-angle-mangle");
-		} else if (issue.issueId.endsWith(QStringLiteral("#308"))) {
-			warning.code = QStringLiteral("brush-entity-origin-key");
-		} else if (issue.issueId.endsWith(QStringLiteral("#135"))) {
-			warning.code = QStringLiteral("invalid-numeric-key-value");
-		} else if (issue.issueId.endsWith(QStringLiteral("#201"))) {
-			warning.code = QStringLiteral("wad-search-path-needed");
-		} else if (issue.issueId.endsWith(QStringLiteral("#207"))) {
-			warning.code = QStringLiteral("external-map-func-group-risk");
-		} else if (issue.issueId.endsWith(QStringLiteral("#230"))) {
-			warning.code = QStringLiteral("dotted-map-filename");
-		} else if (issue.issueId.endsWith(QStringLiteral("#231"))) {
-			warning.code = QStringLiteral("external-map-lighting-key-risk");
-		} else if (issue.issueId.endsWith(QStringLiteral("#257"))) {
-			warning.code = QStringLiteral("non-integer-brush-coordinate");
-		} else if (issue.issueId.endsWith(QStringLiteral("#417"))) {
-			warning.code = QStringLiteral("region-origin-brush-risk");
-		} else if (issue.issueId.endsWith(QStringLiteral("#333"))) {
-			warning.code = QStringLiteral("external-map-entity-import-risk");
-		} else if (issue.issueId.endsWith(QStringLiteral("#390"))) {
-			warning.code = QStringLiteral("multiple-region-markers");
-		} else if (issue.issueId.endsWith(QStringLiteral("#405"))) {
-			warning.code = QStringLiteral("phong-bmodel-risk");
-		} else if (issue.issueId.endsWith(QStringLiteral("#422"))) {
-			warning.code = QStringLiteral("region-brush-entity-cull-risk");
-		} else if (issue.issueId.endsWith(QStringLiteral("#444"))) {
-			warning.code = QStringLiteral("region-areaportal-risk");
-		} else if (issue.issueId.endsWith(QStringLiteral("#470"))) {
-			warning.code = QStringLiteral("minlight-scale-ambiguity");
-		} else if (issue.issueId.endsWith(QStringLiteral("#484"))) {
-			warning.code = QStringLiteral("q2-sunlight2-lightingdir-risk");
-		} else if (issue.issueId.endsWith(QStringLiteral("#485"))) {
-			warning.code = QStringLiteral("world-units-per-luxel-override-risk");
-		} else {
-			warning.code = issue.issueId.toLower().replace(QStringLiteral("ericw-tools #"), QStringLiteral("ericw-issue-"));
-		}
-		result.warnings.push_back(warning);
-	}
-
-	if (options.regionCompile) {
+	try {
+		EricwMapPreflightResult result;
+		const QVector<MapEntity> entities = parseMapEntities(mapText, &options);
+		result.entityCount = entities.size();
 		for (const MapEntity& entity : entities) {
-			if (cleanClassName(entity).compare(QStringLiteral("func_door_rotating"), Qt::CaseInsensitive) == 0 && (hasKey(entity, QStringLiteral("origin")) || entity.hasOriginBrush)) {
-				bool alreadyPresent = false;
-				for (const EricwMapPreflightWarning& warning : result.warnings) {
-					alreadyPresent = alreadyPresent || warning.code == QStringLiteral("region-origin-brush-risk");
-				}
-				if (!alreadyPresent) {
-					EricwMapPreflightWarning warning;
-					warning.severity = EricwMapPreflightSeverity::Warning;
-					warning.code = QStringLiteral("region-origin-brush-risk");
-					warning.upstreamIssue = issueId(417);
-					warning.message = preflightText("Region compile requested with a rotating origin brush; validate with a full compile before release.");
-					warning.filePath = options.mapPath;
-					warning.line = entity.startLine;
-					warning.classname = cleanClassName(entity);
-					warning.key = hasKey(entity, QStringLiteral("origin")) ? QStringLiteral("origin") : QStringLiteral("ORIGIN");
-					result.warnings.push_back(warning);
+			preflightCheckpoint(&options);
+			if (isBrushEntity(entity)) {
+				++result.brushEntityCount;
+			}
+		}
+
+		EricwMapPreflightReport report;
+		inspectMapPath(options.mapPath, &report);
+		for (const MapEntity& entity : entities) {
+			preflightCheckpoint(&options);
+			inspectEntityValues(entity, &report, &options);
+		}
+		inspectEntityGroups(entities, &report, &options);
+
+		for (const EricwMapPreflightIssue& issue : report.issues) {
+			preflightCheckpoint(&options);
+			EricwMapPreflightWarning warning;
+			warning.severity = EricwMapPreflightSeverity::Warning;
+			warning.upstreamIssue = issue.issueId;
+			warning.message = issue.message;
+			warning.filePath = options.mapPath;
+			warning.line = issue.line;
+			warning.entityIndex = -1;
+			warning.classname = issue.entityClassName;
+			warning.key = issue.key;
+			if (issue.issueId.endsWith(QStringLiteral("#293"))) {
+				warning.code = QStringLiteral("wad-absolute-path");
+			} else if (issue.issueId.endsWith(QStringLiteral("#121"))) {
+				warning.code = QStringLiteral("entity-key-case-collision");
+			} else if (issue.issueId.endsWith(QStringLiteral("#129"))) {
+				warning.code = QStringLiteral("parser-sensitive-backslash");
+			} else if (issue.issueId.endsWith(QStringLiteral("#136"))) {
+				warning.code = QStringLiteral("high-brush-count-clipnode-risk");
+			} else if (issue.issueId.endsWith(QStringLiteral("#140")) || issue.issueId.endsWith(QStringLiteral("#349"))) {
+				warning.code = QStringLiteral("bmodel-dirt-key-risk");
+			} else if (issue.issueId.endsWith(QStringLiteral("#172"))) {
+				warning.code = QStringLiteral("spotlight-phong-risk");
+			} else if (issue.issueId.endsWith(QStringLiteral("#190"))) {
+				warning.code = QStringLiteral("bounce-soft-extra-risk");
+			} else if (issue.issueId.endsWith(QStringLiteral("#209"))) {
+				warning.code = QStringLiteral("surface-project-texture-risk");
+			} else if (issue.issueId.endsWith(QStringLiteral("#217"))) {
+				warning.code = QStringLiteral("liquid-surface-light-risk");
+			} else if (issue.issueId.endsWith(QStringLiteral("#233"))) {
+				warning.code = QStringLiteral("empty-brush-entity");
+			} else if (issue.issueId.endsWith(QStringLiteral("#238"))) {
+				warning.code = QStringLiteral("vertical-sunlight-penumbra-risk");
+			} else if (issue.issueId.endsWith(QStringLiteral("#241"))) {
+				warning.code = QStringLiteral("brush-as-light-marker");
+			} else if (issue.issueId.endsWith(QStringLiteral("#247"))) {
+				warning.code = QStringLiteral("misc-model-shadow-expectation");
+			} else if (issue.issueId.endsWith(QStringLiteral("#254"))) {
+				warning.code = QStringLiteral("hexen2-bsp2-forcegoodtree-risk");
+			} else if (issue.issueId.endsWith(QStringLiteral("#255"))) {
+				warning.code = QStringLiteral("switchable-shadow-skip-risk");
+			} else if (issue.issueId.endsWith(QStringLiteral("#256"))) {
+				warning.code = QStringLiteral("switchable-shadow-missing-shadow-key");
+			} else if (issue.issueId.endsWith(QStringLiteral("#262"))) {
+				warning.code = QStringLiteral("mirrorinside-shadow-risk");
+			} else if (issue.issueId.endsWith(QStringLiteral("#268"))) {
+				warning.code = QStringLiteral("sun-or-self-shadow-risk");
+			} else if (issue.issueId.endsWith(QStringLiteral("#270"))) {
+				warning.code = QStringLiteral("monster-outside-fill-origin-risk");
+			} else if (issue.issueId.endsWith(QStringLiteral("#291"))) {
+				warning.code = QStringLiteral("sky-light-penumbra-risk");
+			} else if (issue.issueId.endsWith(QStringLiteral("#327"))) {
+				warning.code = QStringLiteral("external-map-merge-target-risk");
+			} else if (issue.issueId.endsWith(QStringLiteral("#342"))) {
+				warning.code = QStringLiteral("empty-texture-name");
+			} else if (issue.issueId.endsWith(QStringLiteral("#343"))) {
+				warning.code = QStringLiteral("conditional-compile-entity-key");
+			} else if (issue.issueId.endsWith(QStringLiteral("#443"))) {
+				warning.code = QStringLiteral("maphack-model-ordering-key");
+			} else if (issue.issueId.endsWith(QStringLiteral("#455"))) {
+				warning.code = QStringLiteral("func-detail-null-marker");
+			} else if (issue.issueId.endsWith(QStringLiteral("#245"))) {
+				warning.code = QStringLiteral("long-key-value");
+			} else if (issue.issueId.endsWith(QStringLiteral("#288")) || issue.issueId.endsWith(QStringLiteral("#87"))) {
+				warning.code = QStringLiteral("escape-backslash");
+			} else if (issue.issueId.endsWith(QStringLiteral("#194"))) {
+				warning.code = QStringLiteral("external-map-missing-classname");
+			} else if (issue.issueId.endsWith(QStringLiteral("#199"))) {
+				warning.code = QStringLiteral("external-map-path-portability");
+			} else if (issue.issueId.endsWith(QStringLiteral("#173")) || issue.issueId.endsWith(QStringLiteral("#475"))) {
+				warning.code = QStringLiteral("light-style-conflict");
+			} else if (issue.issueId.endsWith(QStringLiteral("#122"))) {
+				warning.code = QStringLiteral("light-start-off-conflict");
+			} else if (issue.issueId.endsWith(QStringLiteral("#310"))) {
+				warning.code = QStringLiteral("q2-angle-mangle");
+			} else if (issue.issueId.endsWith(QStringLiteral("#308"))) {
+				warning.code = QStringLiteral("brush-entity-origin-key");
+			} else if (issue.issueId.endsWith(QStringLiteral("#135"))) {
+				warning.code = QStringLiteral("invalid-numeric-key-value");
+			} else if (issue.issueId.endsWith(QStringLiteral("#201"))) {
+				warning.code = QStringLiteral("wad-search-path-needed");
+			} else if (issue.issueId.endsWith(QStringLiteral("#207"))) {
+				warning.code = QStringLiteral("external-map-func-group-risk");
+			} else if (issue.issueId.endsWith(QStringLiteral("#230"))) {
+				warning.code = QStringLiteral("dotted-map-filename");
+			} else if (issue.issueId.endsWith(QStringLiteral("#231"))) {
+				warning.code = QStringLiteral("external-map-lighting-key-risk");
+			} else if (issue.issueId.endsWith(QStringLiteral("#257"))) {
+				warning.code = QStringLiteral("non-integer-brush-coordinate");
+			} else if (issue.issueId.endsWith(QStringLiteral("#417"))) {
+				warning.code = QStringLiteral("region-origin-brush-risk");
+			} else if (issue.issueId.endsWith(QStringLiteral("#333"))) {
+				warning.code = QStringLiteral("external-map-entity-import-risk");
+			} else if (issue.issueId.endsWith(QStringLiteral("#390"))) {
+				warning.code = QStringLiteral("multiple-region-markers");
+			} else if (issue.issueId.endsWith(QStringLiteral("#405"))) {
+				warning.code = QStringLiteral("phong-bmodel-risk");
+			} else if (issue.issueId.endsWith(QStringLiteral("#422"))) {
+				warning.code = QStringLiteral("region-brush-entity-cull-risk");
+			} else if (issue.issueId.endsWith(QStringLiteral("#444"))) {
+				warning.code = QStringLiteral("region-areaportal-risk");
+			} else if (issue.issueId.endsWith(QStringLiteral("#470"))) {
+				warning.code = QStringLiteral("minlight-scale-ambiguity");
+			} else if (issue.issueId.endsWith(QStringLiteral("#484"))) {
+				warning.code = QStringLiteral("q2-sunlight2-lightingdir-risk");
+			} else if (issue.issueId.endsWith(QStringLiteral("#485"))) {
+				warning.code = QStringLiteral("world-units-per-luxel-override-risk");
+			} else {
+				warning.code = issue.issueId.toLower().replace(QStringLiteral("ericw-tools #"), QStringLiteral("ericw-issue-"));
+			}
+			result.warnings.push_back(warning);
+		}
+
+		if (options.regionCompile) {
+			for (const MapEntity& entity : entities) {
+				preflightCheckpoint(&options);
+				if (cleanClassName(entity).compare(QStringLiteral("func_door_rotating"), Qt::CaseInsensitive) == 0 && (hasKey(entity, QStringLiteral("origin")) || entity.hasOriginBrush)) {
+					bool alreadyPresent = false;
+					for (const EricwMapPreflightWarning& warning : result.warnings) {
+						preflightCheckpoint(&options);
+						alreadyPresent = alreadyPresent || warning.code == QStringLiteral("region-origin-brush-risk");
+					}
+					if (!alreadyPresent) {
+						EricwMapPreflightWarning warning;
+						warning.severity = EricwMapPreflightSeverity::Warning;
+						warning.code = QStringLiteral("region-origin-brush-risk");
+						warning.upstreamIssue = issueId(417);
+						warning.message = QCoreApplication::translate("VibeStudioEricwMapPreflight", "Region compile requested with a rotating origin brush; validate with a full compile before release.");
+						warning.filePath = options.mapPath;
+						warning.line = entity.startLine;
+						warning.classname = cleanClassName(entity);
+						warning.key = hasKey(entity, QStringLiteral("origin")) ? QStringLiteral("origin") : QStringLiteral("ORIGIN");
+						result.warnings.push_back(warning);
+					}
 				}
 			}
 		}
-	}
 
-	return result;
+		preflightCheckpoint(&options);
+		return result;
+	} catch (const PreflightCancelled&) {
+		EricwMapPreflightResult result; result.parseComplete = false; result.cancelled = true;
+		return result;
+	}
 }
 
 EricwMapPreflightResult validateEricwMapPreflightFile(const QString& mapPath, const EricwMapPreflightOptions& options)
@@ -969,12 +996,35 @@ EricwMapPreflightResult validateEricwMapPreflightFile(const QString& mapPath, co
 		EricwMapPreflightWarning warning;
 		warning.severity = EricwMapPreflightSeverity::Error;
 		warning.code = QStringLiteral("map-read-failed");
-		warning.message = preflightText("Unable to read map file for ericw-tools preflight.");
+		warning.message = QCoreApplication::translate("VibeStudioEricwMapPreflight", "Unable to read map file for ericw-tools preflight.");
 		warning.filePath = mapPath;
 		result.warnings.push_back(warning);
 		return result;
 	}
-	return validateEricwMapPreflightText(QString::fromUtf8(file.readAll()), fileOptions);
+	try {
+		QByteArray bytes;
+		while (!file.atEnd()) {
+			preflightCheckpoint(&fileOptions);
+			const auto chunk = file.read(1024 * 1024);
+			if (file.error() != QFileDevice::NoError) {
+				result.parseComplete = false;
+				EricwMapPreflightWarning warning;
+				warning.severity = EricwMapPreflightSeverity::Error;
+				warning.code = QStringLiteral("map-read-failed");
+				warning.message = QCoreApplication::translate("VibeStudioEricwMapPreflight", "Unable to read map file for ericw-tools preflight.");
+				warning.filePath = mapPath;
+				result.warnings.push_back(warning);
+				return result;
+			}
+			if (chunk.isEmpty()) { break; }
+			bytes.append(chunk);
+		}
+		preflightCheckpoint(&fileOptions);
+		return validateEricwMapPreflightText(QString::fromUtf8(bytes), fileOptions);
+	} catch (const PreflightCancelled&) {
+		result.parseComplete = false; result.cancelled = true;
+		return result;
+	}
 }
 
 EricwMapPreflightReport inspectEricwMapPreflightText(const QString& mapText, const QString& mapPath)
@@ -998,7 +1048,7 @@ EricwMapPreflightReport inspectEricwMapPreflightFile(const QString& mapPath, QSt
 	QFile file(mapPath);
 	if (!file.open(QIODevice::ReadOnly | QIODevice::Text)) {
 		if (error) {
-			*error = preflightText("Unable to read map file for ericw-tools preflight: %1").arg(QFileInfo(mapPath).fileName());
+			*error = QCoreApplication::translate("VibeStudioEricwMapPreflight", "Unable to read map file for ericw-tools preflight: %1").arg(QFileInfo(mapPath).fileName());
 		}
 		return report;
 	}

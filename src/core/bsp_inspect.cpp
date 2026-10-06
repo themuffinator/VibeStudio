@@ -63,11 +63,6 @@ constexpr int kQuakeMaxFaces = 32767;
 constexpr int kQuakeMaxVertices = 65535;
 constexpr int kQuakeMaxLeafs = 32767;
 
-QString bspText(const char* source)
-{
-	return QCoreApplication::translate("VibeStudioBspInspect", source);
-}
-
 QString nativePath(const QString& path)
 {
 	return QDir::toNativeSeparators(QDir::cleanPath(path));
@@ -379,40 +374,40 @@ bool detectLayout(const QByteArray& bytes, FamilyLayout* layout)
 	if (ident == "IBSP" && bytes.size() >= 8) {
 		const qint32 version = readI32(bytes, 4);
 		if (version == 46) {
-			*layout = makeQuake3Layout(QStringLiteral("ibsp46"), bspText("Quake III IBSP v46"), QStringLiteral("IBSP"), version);
+			*layout = makeQuake3Layout(QStringLiteral("ibsp46"), QCoreApplication::translate("VibeStudioBspInspect", "Quake III IBSP v46"), QStringLiteral("IBSP"), version);
 			return true;
 		}
 		if (version == 47) {
-			*layout = makeQuake3Layout(QStringLiteral("ibsp47"), bspText("Quake Live IBSP v47"), QStringLiteral("IBSP"), version);
+			*layout = makeQuake3Layout(QStringLiteral("ibsp47"), QCoreApplication::translate("VibeStudioBspInspect", "Quake Live IBSP v47"), QStringLiteral("IBSP"), version);
 			return true;
 		}
-		*layout = makeQuake2Layout(QStringLiteral("ibsp%1").arg(version), bspText("Quake II IBSP v%1").arg(version), QStringLiteral("IBSP"), version);
+		*layout = makeQuake2Layout(QStringLiteral("ibsp%1").arg(version), QCoreApplication::translate("VibeStudioBspInspect", "Quake II IBSP v%1").arg(version), QStringLiteral("IBSP"), version);
 		return true;
 	}
 	if (ident == "RBSP" && bytes.size() >= 8) {
 		const qint32 version = readI32(bytes, 4);
-		*layout = makeQuake3Layout(QStringLiteral("rbsp1"), bspText("Raven RBSP v%1").arg(version), QStringLiteral("RBSP"), version);
+		*layout = makeQuake3Layout(QStringLiteral("rbsp1"), QCoreApplication::translate("VibeStudioBspInspect", "Raven RBSP v%1").arg(version), QStringLiteral("RBSP"), version);
 		return true;
 	}
 	if (ident == "QBSP" && bytes.size() >= 8) {
 		const qint32 version = readI32(bytes, 4);
-		*layout = makeQuake2Layout(QStringLiteral("qbism"), bspText("Qbism extended Quake II BSP v%1").arg(version), QStringLiteral("QBSP"), version);
+		*layout = makeQuake2Layout(QStringLiteral("qbism"), QCoreApplication::translate("VibeStudioBspInspect", "Qbism extended Quake II BSP v%1").arg(version), QStringLiteral("QBSP"), version);
 		return true;
 	}
 	if (ident == "BSP2") {
-		*layout = makeQuakeLayout(QStringLiteral("bsp2"), bspText("Quake BSP2"), QStringLiteral("BSP2"), 0);
+		*layout = makeQuakeLayout(QStringLiteral("bsp2"), QCoreApplication::translate("VibeStudioBspInspect", "Quake BSP2"), QStringLiteral("BSP2"), 0);
 		return true;
 	}
 	if (ident == "2PSB") {
-		*layout = makeQuakeLayout(QStringLiteral("bsp2rmq"), bspText("Quake BSP2-RMQ (2PSB)"), QStringLiteral("2PSB"), 0);
+		*layout = makeQuakeLayout(QStringLiteral("bsp2rmq"), QCoreApplication::translate("VibeStudioBspInspect", "Quake BSP2-RMQ (2PSB)"), QStringLiteral("2PSB"), 0);
 		return true;
 	}
 	if (firstWord == 29) {
-		*layout = makeQuakeLayout(QStringLiteral("bsp29"), bspText("Quake BSP v29"), QStringLiteral("BSP"), 29);
+		*layout = makeQuakeLayout(QStringLiteral("bsp29"), QCoreApplication::translate("VibeStudioBspInspect", "Quake BSP v29"), QStringLiteral("BSP"), 29);
 		return true;
 	}
 	if (firstWord == 30) {
-		*layout = makeQuakeLayout(QStringLiteral("bsp30"), bspText("Half-Life BSP v30"), QStringLiteral("BSP"), 30);
+		*layout = makeQuakeLayout(QStringLiteral("bsp30"), QCoreApplication::translate("VibeStudioBspInspect", "Half-Life BSP v30"), QStringLiteral("BSP"), 30);
 		return true;
 	}
 	return false;
@@ -557,10 +552,10 @@ QVector<BspEntitySummary> parseEntityLump(const QByteArray& raw, QString* worlds
 
 	if (warnings) {
 		if (truncatedBlock) {
-			warnings->push_back(bspText("Entity lump ends inside an unterminated entity block; the lump may be truncated."));
+			warnings->push_back(QCoreApplication::translate("VibeStudioBspInspect", "Entity lump ends inside an unterminated entity block; the lump may be truncated."));
 		}
 		if (!entities.isEmpty() && !sawWorldspawn) {
-			warnings->push_back(bspText("Entity lump contains no worldspawn entity; most engines refuse to load this map."));
+			warnings->push_back(QCoreApplication::translate("VibeStudioBspInspect", "Entity lump contains no worldspawn entity; most engines refuse to load this map."));
 		}
 	}
 	return entities;
@@ -598,14 +593,14 @@ QVector<BspTextureSummary> decodeQuakeTextures(const QByteArray& bytes, const Bs
 	const qint32 count = readI32(bytes, base);
 	if (count <= 0 || count > kMaxTextureEntries) {
 		if (warnings && count != 0) {
-			warnings->push_back(bspText("Texture lump declares an implausible miptex count (%1); textures were not decoded.").arg(count));
+			warnings->push_back(QCoreApplication::translate("VibeStudioBspInspect", "Texture lump declares an implausible miptex count (%1); textures were not decoded.").arg(count));
 		}
 		return textures;
 	}
 	const qsizetype directoryBytes = 4 + static_cast<qsizetype>(count) * 4;
 	if (directoryBytes > static_cast<qsizetype>(lump.length)) {
 		if (warnings) {
-			warnings->push_back(bspText("Texture lump directory extends past the lump; textures were not decoded."));
+			warnings->push_back(QCoreApplication::translate("VibeStudioBspInspect", "Texture lump directory extends past the lump; textures were not decoded."));
 		}
 		return textures;
 	}
@@ -655,7 +650,7 @@ QVector<BspTextureSummary> decodeQuakeTextures(const QByteArray& bytes, const Bs
 		textures.push_back(texture);
 	}
 	if (missingEntries > 0 && warnings) {
-		warnings->push_back(bspText("%1 miptex entries are missing or point outside the texture lump.").arg(missingEntries));
+		warnings->push_back(QCoreApplication::translate("VibeStudioBspInspect", "%1 miptex entries are missing or point outside the texture lump.").arg(missingEntries));
 	}
 	sortTextures(&textures);
 	return textures;
@@ -846,7 +841,7 @@ void appendLimitWarning(BspInspection* inspection, int value, int limit, const Q
 	if (!inspection || value <= limit) {
 		return;
 	}
-	inspection->warnings.push_back(bspText("%1 count %2 exceeds the classic engine limit of %3; vanilla engines and tools may reject this map.").arg(label).arg(value).arg(limit));
+	inspection->warnings.push_back(QCoreApplication::translate("VibeStudioBspInspect", "%1 count %2 exceeds the classic engine limit of %3; vanilla engines and tools may reject this map.").arg(label).arg(value).arg(limit));
 }
 
 void buildDetailLines(BspInspection* inspection, const QString& variantName)
@@ -855,23 +850,23 @@ void buildDetailLines(BspInspection* inspection, const QString& variantName)
 		return;
 	}
 	QStringList details;
-	details << bspText("Format: %1").arg(variantName.isEmpty() ? bspFamilyDisplayName(inspection->family) : variantName);
-	details << bspText("Ident: %1").arg(inspection->magic.isEmpty() ? bspText("none") : inspection->magic);
-	details << bspText("Version: %1").arg(inspection->version);
-	details << bspText("File size: %1 bytes").arg(inspection->fileSizeBytes);
-	details << bspText("Lumps: %1").arg(inspection->lumps.size());
-	details << bspText("Entities: %1").arg(inspection->entityCount);
+	details << QCoreApplication::translate("VibeStudioBspInspect", "Format: %1").arg(variantName.isEmpty() ? bspFamilyDisplayName(inspection->family) : variantName);
+	details << QCoreApplication::translate("VibeStudioBspInspect", "Ident: %1").arg(inspection->magic.isEmpty() ? QCoreApplication::translate("VibeStudioBspInspect", "none") : inspection->magic);
+	details << QCoreApplication::translate("VibeStudioBspInspect", "Version: %1").arg(inspection->version);
+	details << QCoreApplication::translate("VibeStudioBspInspect", "File size: %1 bytes").arg(inspection->fileSizeBytes);
+	details << QCoreApplication::translate("VibeStudioBspInspect", "Lumps: %1").arg(inspection->lumps.size());
+	details << QCoreApplication::translate("VibeStudioBspInspect", "Entities: %1").arg(inspection->entityCount);
 	if (!inspection->worldspawnMessage.isEmpty()) {
-		details << bspText("Worldspawn message: %1").arg(inspection->worldspawnMessage);
+		details << QCoreApplication::translate("VibeStudioBspInspect", "Worldspawn message: %1").arg(inspection->worldspawnMessage);
 	}
-	details << bspText("Geometry: %1 models, %2 faces, %3 vertices").arg(inspection->modelCount).arg(inspection->faceCount).arg(inspection->vertexCount);
-	details << bspText("Tree: %1 nodes, %2 leafs, %3 planes").arg(inspection->nodeCount).arg(inspection->leafCount).arg(inspection->planeCount);
-	details << bspText("Brushes: %1").arg(inspection->brushCount);
-	details << bspText("Textures: %1").arg(inspection->textures.size());
-	details << bspText("Lightmaps: %1").arg(inspection->lightmapCount);
-	details << bspText("Bounds: %1 to %2").arg(formatVector(inspection->mins), formatVector(inspection->maxs));
-	details << bspText("Visibility data: %1").arg(inspection->hasVisData ? bspText("present") : bspText("absent"));
-	details << bspText("Light data: %1").arg(inspection->hasLightData ? bspText("present") : bspText("absent"));
+	details << QCoreApplication::translate("VibeStudioBspInspect", "Geometry: %1 models, %2 faces, %3 vertices").arg(inspection->modelCount).arg(inspection->faceCount).arg(inspection->vertexCount);
+	details << QCoreApplication::translate("VibeStudioBspInspect", "Tree: %1 nodes, %2 leafs, %3 planes").arg(inspection->nodeCount).arg(inspection->leafCount).arg(inspection->planeCount);
+	details << QCoreApplication::translate("VibeStudioBspInspect", "Brushes: %1").arg(inspection->brushCount);
+	details << QCoreApplication::translate("VibeStudioBspInspect", "Textures: %1").arg(inspection->textures.size());
+	details << QCoreApplication::translate("VibeStudioBspInspect", "Lightmaps: %1").arg(inspection->lightmapCount);
+	details << QCoreApplication::translate("VibeStudioBspInspect", "Bounds: %1 to %2").arg(formatVector(inspection->mins), formatVector(inspection->maxs));
+	details << QCoreApplication::translate("VibeStudioBspInspect", "Visibility data: %1").arg(inspection->hasVisData ? QCoreApplication::translate("VibeStudioBspInspect", "present") : QCoreApplication::translate("VibeStudioBspInspect", "absent"));
+	details << QCoreApplication::translate("VibeStudioBspInspect", "Light data: %1").arg(inspection->hasLightData ? QCoreApplication::translate("VibeStudioBspInspect", "present") : QCoreApplication::translate("VibeStudioBspInspect", "absent"));
 	inspection->detailLines = details;
 }
 
@@ -975,15 +970,15 @@ QString bspFamilyDisplayName(BspFamily family)
 {
 	switch (family) {
 	case BspFamily::Quake:
-		return bspText("Quake (BSP29/BSP2)");
+		return QCoreApplication::translate("VibeStudioBspInspect", "Quake (BSP29/BSP2)");
 	case BspFamily::Quake2:
-		return bspText("Quake II (IBSP 38)");
+		return QCoreApplication::translate("VibeStudioBspInspect", "Quake II (IBSP 38)");
 	case BspFamily::Quake3:
-		return bspText("Quake III (IBSP 46/RBSP)");
+		return QCoreApplication::translate("VibeStudioBspInspect", "Quake III (IBSP 46/RBSP)");
 	case BspFamily::Unknown:
 		break;
 	}
-	return bspText("Unknown BSP family");
+	return QCoreApplication::translate("VibeStudioBspInspect", "Unknown BSP family");
 }
 
 BspInspection inspectBspBytes(const QString& sourcePath, const QByteArray& bytes)
@@ -995,7 +990,7 @@ BspInspection inspectBspBytes(const QString& sourcePath, const QByteArray& bytes
 
 	FamilyLayout layout;
 	if (!detectLayout(bytes, &layout)) {
-		inspection.error = bspText("%1 does not start with a recognized idTech BSP header.").arg(nativePath(inspection.sourcePath));
+		inspection.error = QCoreApplication::translate("VibeStudioBspInspect", "%1 does not start with a recognized idTech BSP header.").arg(nativePath(inspection.sourcePath));
 		inspection.errors.push_back(inspection.error);
 		buildDetailLines(&inspection, QString());
 		return inspection;
@@ -1007,7 +1002,7 @@ BspInspection inspectBspBytes(const QString& sourcePath, const QByteArray& bytes
 	inspection.version = layout.version;
 
 	if (bytes.size() < layout.headerBytes) {
-		inspection.error = bspText("%1 is truncated: %2 bytes cannot hold the %3 byte lump table.")
+		inspection.error = QCoreApplication::translate("VibeStudioBspInspect", "%1 is truncated: %2 bytes cannot hold the %3 byte lump table.")
 			.arg(nativePath(inspection.sourcePath))
 			.arg(bytes.size())
 			.arg(layout.headerBytes);
@@ -1035,21 +1030,21 @@ BspInspection inspectBspBytes(const QString& sourcePath, const QByteArray& bytes
 		info.entryCount = entry.entrySize > 0 ? static_cast<int>(info.length / static_cast<quint32>(entry.entrySize)) : 0;
 
 		if (!info.withinFile) {
-			inspection.errors.push_back(bspText("Lump %1 (%2) spans bytes %3..%4, which is outside the %5 byte file; it was not read.")
+			inspection.errors.push_back(QCoreApplication::translate("VibeStudioBspInspect", "Lump %1 (%2) spans bytes %3..%4, which is outside the %5 byte file; it was not read.")
 				.arg(info.index)
 				.arg(entry.name)
 				.arg(info.offset)
 				.arg(end)
 				.arg(bytes.size()));
 		} else if (!info.aligned) {
-			inspection.warnings.push_back(bspText("Lump %1 (%2) has length %3, which is not a multiple of its %4 byte record size.")
+			inspection.warnings.push_back(QCoreApplication::translate("VibeStudioBspInspect", "Lump %1 (%2) has length %3, which is not a multiple of its %4 byte record size.")
 				.arg(info.index)
 				.arg(entry.name)
 				.arg(info.length)
 				.arg(entry.entrySize));
 		}
 		if (entry.required && info.withinFile && info.length == 0) {
-			inspection.warnings.push_back(bspText("Required lump %1 (%2) is empty.").arg(info.index).arg(entry.name));
+			inspection.warnings.push_back(QCoreApplication::translate("VibeStudioBspInspect", "Required lump %1 (%2) is empty.").arg(info.index).arg(entry.name));
 		}
 		inspection.lumps.push_back(info);
 	}
@@ -1096,11 +1091,11 @@ BspInspection inspectBspBytes(const QString& sourcePath, const QByteArray& bytes
 	computeBounds(bytes, layout, &inspection);
 
 	if (layout.checkQuakeLimits) {
-		appendLimitWarning(&inspection, lumpEntryCount(inspection, layout.marksurfacesLump), kQuakeMaxMarksurfaces, bspText("Marksurface"));
-		appendLimitWarning(&inspection, lumpEntryCount(inspection, layout.clipnodesLump), kQuakeMaxClipnodes, bspText("Clipnode"));
-		appendLimitWarning(&inspection, inspection.faceCount, kQuakeMaxFaces, bspText("Face"));
-		appendLimitWarning(&inspection, inspection.vertexCount, kQuakeMaxVertices, bspText("Vertex"));
-		appendLimitWarning(&inspection, inspection.leafCount, kQuakeMaxLeafs, bspText("Leaf"));
+		appendLimitWarning(&inspection, lumpEntryCount(inspection, layout.marksurfacesLump), kQuakeMaxMarksurfaces, QCoreApplication::translate("VibeStudioBspInspect", "Marksurface"));
+		appendLimitWarning(&inspection, lumpEntryCount(inspection, layout.clipnodesLump), kQuakeMaxClipnodes, QCoreApplication::translate("VibeStudioBspInspect", "Clipnode"));
+		appendLimitWarning(&inspection, inspection.faceCount, kQuakeMaxFaces, QCoreApplication::translate("VibeStudioBspInspect", "Face"));
+		appendLimitWarning(&inspection, inspection.vertexCount, kQuakeMaxVertices, QCoreApplication::translate("VibeStudioBspInspect", "Vertex"));
+		appendLimitWarning(&inspection, inspection.leafCount, kQuakeMaxLeafs, QCoreApplication::translate("VibeStudioBspInspect", "Leaf"));
 	}
 
 	inspection.valid = inspection.errors.isEmpty();
@@ -1121,14 +1116,14 @@ BspInspection inspectBspFile(const QString& path)
 
 	const QFileInfo info(inspection.sourcePath);
 	if (!info.exists() || !info.isFile()) {
-		inspection.error = bspText("BSP file does not exist: %1").arg(nativePath(inspection.sourcePath));
+		inspection.error = QCoreApplication::translate("VibeStudioBspInspect", "BSP file does not exist: %1").arg(nativePath(inspection.sourcePath));
 		inspection.errors.push_back(inspection.error);
 		buildDetailLines(&inspection, QString());
 		return inspection;
 	}
 	QFile file(inspection.sourcePath);
 	if (!file.open(QIODevice::ReadOnly)) {
-		inspection.error = bspText("BSP file cannot be opened for reading: %1").arg(nativePath(inspection.sourcePath));
+		inspection.error = QCoreApplication::translate("VibeStudioBspInspect", "BSP file cannot be opened for reading: %1").arg(nativePath(inspection.sourcePath));
 		inspection.errors.push_back(inspection.error);
 		inspection.fileSizeBytes = info.size();
 		buildDetailLines(&inspection, QString());
@@ -1146,11 +1141,11 @@ LeakPointFile loadLeakPointFile(const QString& path)
 
 	QFile file(leak.sourcePath);
 	if (!file.exists()) {
-		leak.error = bspText("Leak point file does not exist: %1").arg(nativePath(leak.sourcePath));
+		leak.error = QCoreApplication::translate("VibeStudioBspInspect", "Leak point file does not exist: %1").arg(nativePath(leak.sourcePath));
 		return leak;
 	}
 	if (!file.open(QIODevice::ReadOnly)) {
-		leak.error = bspText("Leak point file cannot be opened for reading: %1").arg(nativePath(leak.sourcePath));
+		leak.error = QCoreApplication::translate("VibeStudioBspInspect", "Leak point file cannot be opened for reading: %1").arg(nativePath(leak.sourcePath));
 		return leak;
 	}
 	const QByteArray raw = file.readAll();
@@ -1187,7 +1182,7 @@ LeakPointFile loadLeakPointFile(const QString& path)
 
 	leak.pointCount = static_cast<int>(leak.pointsXyz.size() / 3);
 	if (leak.pointCount == 0) {
-		leak.error = bspText("Leak point file contains no readable coordinate triples: %1").arg(nativePath(leak.sourcePath));
+		leak.error = QCoreApplication::translate("VibeStudioBspInspect", "Leak point file contains no readable coordinate triples: %1").arg(nativePath(leak.sourcePath));
 		return leak;
 	}
 	for (int axis = 0; axis < 3; ++axis) {
@@ -1205,11 +1200,11 @@ PortalFileSummary inspectPortalFile(const QString& path)
 
 	QFile file(summary.sourcePath);
 	if (!file.exists()) {
-		summary.error = bspText("Portal file does not exist: %1").arg(nativePath(summary.sourcePath));
+		summary.error = QCoreApplication::translate("VibeStudioBspInspect", "Portal file does not exist: %1").arg(nativePath(summary.sourcePath));
 		return summary;
 	}
 	if (!file.open(QIODevice::ReadOnly)) {
-		summary.error = bspText("Portal file cannot be opened for reading: %1").arg(nativePath(summary.sourcePath));
+		summary.error = QCoreApplication::translate("VibeStudioBspInspect", "Portal file cannot be opened for reading: %1").arg(nativePath(summary.sourcePath));
 		return summary;
 	}
 	const QByteArray raw = file.readAll();
@@ -1228,7 +1223,7 @@ PortalFileSummary inspectPortalFile(const QString& path)
 		++cursor;
 	}
 	if (cursor >= lines.size()) {
-		summary.error = bspText("Portal file is empty: %1").arg(nativePath(summary.sourcePath));
+		summary.error = QCoreApplication::translate("VibeStudioBspInspect", "Portal file is empty: %1").arg(nativePath(summary.sourcePath));
 		return summary;
 	}
 
@@ -1242,7 +1237,7 @@ PortalFileSummary inspectPortalFile(const QString& path)
 		|| summary.magic == QStringLiteral("PRT1")
 		|| summary.magic == QStringLiteral("PORTALFILE");
 	if (!knownMagic) {
-		summary.error = bspText("Portal file does not begin with a known qbsp portal magic (found \"%1\"): %2")
+		summary.error = QCoreApplication::translate("VibeStudioBspInspect", "Portal file does not begin with a known qbsp portal magic (found \"%1\"): %2")
 			.arg(summary.magic, nativePath(summary.sourcePath));
 		return summary;
 	}
@@ -1257,14 +1252,14 @@ PortalFileSummary inspectPortalFile(const QString& path)
 		}
 		int value = 0;
 		if (!parseCount(line, &value)) {
-			summary.error = bspText("Portal file header is malformed; expected a count but found \"%1\": %2")
+			summary.error = QCoreApplication::translate("VibeStudioBspInspect", "Portal file header is malformed; expected a count but found \"%1\": %2")
 				.arg(line.trimmed(), nativePath(summary.sourcePath));
 			return summary;
 		}
 		counts.push_back(value);
 	}
 	if (counts.size() < expectedCountLines) {
-		summary.error = bspText("Portal file header is incomplete; expected %1 count lines after \"%2\": %3")
+		summary.error = QCoreApplication::translate("VibeStudioBspInspect", "Portal file header is incomplete; expected %1 count lines after \"%2\": %3")
 			.arg(expectedCountLines)
 			.arg(summary.magic, nativePath(summary.sourcePath));
 		return summary;
@@ -1280,7 +1275,7 @@ PortalFileSummary inspectPortalFile(const QString& path)
 	}
 
 	if (summary.leafCount < 0 || summary.clusterCount < 0 || summary.portalCount < 0) {
-		summary.error = bspText("Portal file declares a negative leaf, cluster or portal count: %1").arg(nativePath(summary.sourcePath));
+		summary.error = QCoreApplication::translate("VibeStudioBspInspect", "Portal file declares a negative leaf, cluster or portal count: %1").arg(nativePath(summary.sourcePath));
 		return summary;
 	}
 
@@ -1293,15 +1288,15 @@ PortalFileSummary inspectPortalFile(const QString& path)
 		}
 	}
 	if (remainingLines < summary.portalCount) {
-		summary.warnings.push_back(bspText("Portal file declares %1 portals but only %2 data lines follow the header; the file looks truncated.")
+		summary.warnings.push_back(QCoreApplication::translate("VibeStudioBspInspect", "Portal file declares %1 portals but only %2 data lines follow the header; the file looks truncated.")
 			.arg(summary.portalCount)
 			.arg(remainingLines));
 	}
 	if (summary.portalCount == 0) {
-		summary.warnings.push_back(bspText("Portal file declares zero portals; visibility data cannot be computed from it."));
+		summary.warnings.push_back(QCoreApplication::translate("VibeStudioBspInspect", "Portal file declares zero portals; visibility data cannot be computed from it."));
 	}
 	if (summary.leafCount == 0) {
-		summary.warnings.push_back(bspText("Portal file declares zero leafs."));
+		summary.warnings.push_back(QCoreApplication::translate("VibeStudioBspInspect", "Portal file declares zero leafs."));
 	}
 	summary.valid = true;
 	return summary;
@@ -1357,10 +1352,10 @@ CompiledMapArtifacts inspectCompiledMapArtifacts(const QString& bspPath)
 		artifacts.leak = loadLeakPointFile(leakPath);
 		// A leaked compile still exits 0, so the presence of this file is the
 		// only reliable signal that the map is not sealed.
-		artifacts.warnings.push_back(bspText("Leak file present: %1. The compile leaked - the map is not sealed, so visibility and lighting results cannot be trusted.")
+		artifacts.warnings.push_back(QCoreApplication::translate("VibeStudioBspInspect", "Leak file present: %1. The compile leaked - the map is not sealed, so visibility and lighting results cannot be trusted.")
 			.arg(nativePath(leakPath)));
 		if (artifacts.leak.valid) {
-			artifacts.warnings.push_back(bspText("Leak line has %1 points from %2 to %3.")
+			artifacts.warnings.push_back(QCoreApplication::translate("VibeStudioBspInspect", "Leak line has %1 points from %2 to %3.")
 				.arg(artifacts.leak.pointCount)
 				.arg(formatVector(artifacts.leak.mins), formatVector(artifacts.leak.maxs)));
 		} else if (!artifacts.leak.error.isEmpty()) {
@@ -1387,20 +1382,20 @@ CompiledMapArtifacts inspectCompiledMapArtifacts(const QString& bspPath)
 QStringList bspInspectionLines(const BspInspection& inspection)
 {
 	QStringList lines;
-	lines << bspText("BSP inspection: %1").arg(nativePath(inspection.sourcePath));
-	lines << bspText("Family: %1").arg(bspFamilyDisplayName(inspection.family));
+	lines << QCoreApplication::translate("VibeStudioBspInspect", "BSP inspection: %1").arg(nativePath(inspection.sourcePath));
+	lines << QCoreApplication::translate("VibeStudioBspInspect", "Family: %1").arg(bspFamilyDisplayName(inspection.family));
 	lines += inspection.detailLines;
 
 	if (!inspection.lumps.isEmpty()) {
-		lines << bspText("Lump table:");
+		lines << QCoreApplication::translate("VibeStudioBspInspect", "Lump table:");
 		for (const BspLumpInfo& lump : inspection.lumps) {
 			QString status;
 			if (!lump.withinFile) {
-				status = bspText(" [outside file]");
+				status = QCoreApplication::translate("VibeStudioBspInspect", " [outside file]");
 			} else if (!lump.aligned) {
-				status = bspText(" [misaligned]");
+				status = QCoreApplication::translate("VibeStudioBspInspect", " [misaligned]");
 			}
-			lines << bspText("  %1 %2: offset %3, length %4, record %5, entries %6%7")
+			lines << QCoreApplication::translate("VibeStudioBspInspect", "  %1 %2: offset %3, length %4, record %5, entries %6%7")
 				.arg(lump.index, 2)
 				.arg(lump.name)
 				.arg(lump.offset)
@@ -1412,29 +1407,29 @@ QStringList bspInspectionLines(const BspInspection& inspection)
 	}
 
 	if (!inspection.textures.isEmpty()) {
-		lines << bspText("Textures:");
+		lines << QCoreApplication::translate("VibeStudioBspInspect", "Textures:");
 		for (const BspTextureSummary& texture : inspection.textures) {
 			if (texture.width > 0 && texture.height > 0) {
-				lines << bspText("  %1 (%2x%3, %4 references, %5)")
+				lines << QCoreApplication::translate("VibeStudioBspInspect", "  %1 (%2x%3, %4 references, %5)")
 					.arg(texture.name)
 					.arg(texture.width)
 					.arg(texture.height)
 					.arg(texture.referenceCount)
-					.arg(texture.embedded ? bspText("embedded") : bspText("external"));
+					.arg(texture.embedded ? QCoreApplication::translate("VibeStudioBspInspect", "embedded") : QCoreApplication::translate("VibeStudioBspInspect", "external"));
 			} else {
-				lines << bspText("  %1 (%2 references, %3)")
+				lines << QCoreApplication::translate("VibeStudioBspInspect", "  %1 (%2 references, %3)")
 					.arg(texture.name)
 					.arg(texture.referenceCount)
-					.arg(texture.embedded ? bspText("embedded") : bspText("external"));
+					.arg(texture.embedded ? QCoreApplication::translate("VibeStudioBspInspect", "embedded") : QCoreApplication::translate("VibeStudioBspInspect", "external"));
 			}
 		}
 	}
 
 	for (const QString& warning : inspection.warnings) {
-		lines << bspText("Warning: %1").arg(warning);
+		lines << QCoreApplication::translate("VibeStudioBspInspect", "Warning: %1").arg(warning);
 	}
 	for (const QString& error : inspection.errors) {
-		lines << bspText("Error: %1").arg(error);
+		lines << QCoreApplication::translate("VibeStudioBspInspect", "Error: %1").arg(error);
 	}
 	return lines;
 }
@@ -1579,35 +1574,35 @@ QJsonObject compiledMapArtifactsJson(const CompiledMapArtifacts& artifacts)
 QString compiledMapArtifactsText(const CompiledMapArtifacts& artifacts)
 {
 	QStringList lines;
-	lines << bspText("Compiled map artifacts: %1").arg(nativePath(artifacts.bspPath));
+	lines << QCoreApplication::translate("VibeStudioBspInspect", "Compiled map artifacts: %1").arg(nativePath(artifacts.bspPath));
 	lines += bspInspectionLines(artifacts.bsp);
 
 	if (!artifacts.relatedPaths.isEmpty()) {
-		lines << bspText("Related files:");
+		lines << QCoreApplication::translate("VibeStudioBspInspect", "Related files:");
 		for (const QString& path : artifacts.relatedPaths) {
-			lines << bspText("  %1").arg(nativePath(path));
+			lines << QCoreApplication::translate("VibeStudioBspInspect", "  %1").arg(nativePath(path));
 		}
 	}
 
 	if (artifacts.hasLeakFile) {
-		lines << bspText("Leak file: %1").arg(nativePath(artifacts.leak.sourcePath));
+		lines << QCoreApplication::translate("VibeStudioBspInspect", "Leak file: %1").arg(nativePath(artifacts.leak.sourcePath));
 		if (artifacts.leak.valid) {
-			lines << bspText("  Leak line points: %1").arg(artifacts.leak.pointCount);
-			lines << bspText("  Leak line bounds: %1 to %2").arg(formatVector(artifacts.leak.mins), formatVector(artifacts.leak.maxs));
+			lines << QCoreApplication::translate("VibeStudioBspInspect", "  Leak line points: %1").arg(artifacts.leak.pointCount);
+			lines << QCoreApplication::translate("VibeStudioBspInspect", "  Leak line bounds: %1 to %2").arg(formatVector(artifacts.leak.mins), formatVector(artifacts.leak.maxs));
 		}
 	}
 
 	if (artifacts.hasPortalFile) {
-		lines << bspText("Portal file: %1").arg(nativePath(artifacts.portals.sourcePath));
-		lines << bspText("  Magic: %1").arg(artifacts.portals.magic);
-		lines << bspText("  Leafs: %1, clusters: %2, portals: %3")
+		lines << QCoreApplication::translate("VibeStudioBspInspect", "Portal file: %1").arg(nativePath(artifacts.portals.sourcePath));
+		lines << QCoreApplication::translate("VibeStudioBspInspect", "  Magic: %1").arg(artifacts.portals.magic);
+		lines << QCoreApplication::translate("VibeStudioBspInspect", "  Leafs: %1, clusters: %2, portals: %3")
 			.arg(artifacts.portals.leafCount)
 			.arg(artifacts.portals.clusterCount)
 			.arg(artifacts.portals.portalCount);
 	}
 
 	for (const QString& warning : artifacts.warnings) {
-		lines << bspText("Warning: %1").arg(warning);
+		lines << QCoreApplication::translate("VibeStudioBspInspect", "Warning: %1").arg(warning);
 	}
 	return lines.join(QLatin1Char('\n'));
 }

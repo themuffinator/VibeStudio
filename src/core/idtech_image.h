@@ -37,6 +37,7 @@
 #include <QString>
 #include <QStringList>
 #include <QVector>
+#include <functional>
 
 namespace vibestudio {
 
@@ -46,6 +47,9 @@ enum class IdTechImageFormat {
 	Unknown,
 	QtNative,
 	Targa,
+	Dds,
+	Ftx,
+	SinSwl,
 	Pcx,
 	QuakeLump,
 	QuakeMipTexture,
@@ -91,6 +95,9 @@ struct IdTechPaletteResolution {
 	IdTechPalette palette;
 	QString requestedPaletteId;
 	QString sourceVirtualPath;
+	// The package file the palette was read from, when it was not the one
+	// open: a game installation's IWAD or pak0, say.
+	QString sourcePackagePath;
 	bool fromPackage = false;
 	QStringList searchedPaths;
 	QStringList warnings;
@@ -162,6 +169,19 @@ bool parsePcxPalette(const QByteArray& bytes, const QString& paletteId, IdTechPa
 // given palette id.
 QStringList idTechPaletteCandidatePaths(const QString& paletteId);
 
+// Palette id a paletted idTech format defaults to, so callers can resolve a
+// real game palette out of the package before decoding.
+QString defaultIdTechPaletteIdForFormat(IdTechImageFormat format);
+// The same for one image, whose size can settle what the format cannot: a bare
+// 320x200 screen is a Doom-engine picture (Heretic's and Hexen's TITLE and
+// the like), while other raw payloads keep the format's default.
+QString defaultIdTechPaletteIdForImage(IdTechImageFormat format, qsizetype byteCount);
+
+// The palette id whose real palette the package ships: Doom's PLAYPAL, then
+// Quake's gfx/palette.lmp, then Quake II's pics/colormap.pcx. Empty when the
+// package holds none of them.
+QString idTechPaletteIdInPackage(const PackageArchiveReader& archive);
+
 // Reads a real palette out of a mounted package when one is present, otherwise
 // returns the generated fallback. Never fails; check `fromPackage`.
 IdTechPaletteResolution resolveIdTechPalette(const PackageArchiveReader& archive, const QString& paletteId);
@@ -169,12 +189,26 @@ IdTechPaletteResolution resolveIdTechPaletteFromDirectory(const QString& directo
 
 IdTechImageFormat detectIdTechImageFormat(const QString& virtualPath, const QByteArray& bytes);
 
-// Everything a decoder may need beyond the payload itself. Only Quake II .sp2
-// sprites use it today: they name external frame images that have to be read
-// back out of the package the sprite came from. Decoding without a reader is
-// still valid and simply leaves the frame images empty.
+// Reject oversized directory records before a package reader inflates an entry.
+// A byte-prefix preview is not a complete image or a verified texture import.
+bool readIdTechImageEntryAt(const PackageArchiveReader& archive, qsizetype index, QByteArray* bytes, QString* error = nullptr);
+bool readIdTechImageEntry(const PackageArchiveReader& archive, const QString& virtualPath, QByteArray* bytes, QString* error = nullptr);
+
+// Quake II .sp2 sprites can resolve external frames through the source package.
+// Callers may lower the shared allocation limits, for example to the texture
+// editor's canvas size. Limits apply before allocating pixels, including every
+// mip or sprite frame; a failed decode never returns partial images.
 struct IdTechImageDecodeContext {
 	const PackageArchiveReader* archive = nullptr;
+	int maximumDimension = 65535;
+	qint64 maximumImagePixels = 16 * 1024 * 1024;
+	qint64 maximumTotalPixels = 32 * 1024 * 1024;
+	// Sum of max(stored bytes, decoded payload bytes) for external SP2 reads,
+	// including repeated references. A caller may only lower this limit.
+	qint64 maximumExternalBytes = 64 * 1024 * 1024;
+	// Called on the decoding thread between native rows/blocks and frame reads.
+	// Opaque Qt codecs and one bounded archive read finish before cancellation.
+	std::function<bool()> isCancelled;
 };
 
 IdTechImageDecodeResult decodeIdTechImage(const QString& virtualPath, const QByteArray& bytes, const IdTechPalette& palette, const IdTechImageDecodeContext& context = {});
@@ -184,7 +218,9 @@ IdTechImageDecodeResult decodeIdTechImageFromArchive(const PackageArchiveReader&
 
 // Maps an RGB image onto an indexed palette. Used by palette conversion and by
 // sprite/texture authoring previews.
-QImage quantizeToIdTechPalette(const QImage& source, const IdTechPalette& palette, bool dither = false);
+// Progress is reported between rows; false cancels without returning a partial image.
+QImage quantizeToIdTechPalette(const QImage& source, const IdTechPalette& palette, bool dither = false,
+	const std::function<bool(int, int)>& progress = {});
 
 // Renders a palette as a 16x16 swatch grid for preview surfaces.
 QImage renderIdTechPaletteSwatch(const IdTechPalette& palette, int cellSize = 12);

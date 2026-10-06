@@ -4,8 +4,10 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import os
 import platform
 import shutil
+import stat
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
@@ -97,11 +99,27 @@ def copy_path(source: Path, destination: Path) -> None:
     shutil.copy2(source, destination)
 
 
+def reject_output_link(path: Path) -> None:
+    try:
+        info = path.lstat()
+    except FileNotFoundError:
+        return
+    if stat.S_ISLNK(info.st_mode) or getattr(info, "st_file_attributes", 0) & getattr(stat, "FILE_ATTRIBUTE_REPARSE_POINT", 0):
+        raise ValueError(f"Package output must not contain a link or reparse point: {path}")
+
+
 def safe_package_dir(output_root: Path, package_name: str) -> Path:
+    if Path(package_name).name != package_name or "\\" in package_name:
+        raise ValueError(f"Package name must be a single path component: {package_name}")
     resolved_output = output_root.resolve()
-    package_dir = (resolved_output / package_name).resolve()
+    package_dir = resolved_output / package_name
+    reject_output_link(package_dir)
     if resolved_output == package_dir or resolved_output not in package_dir.parents:
         raise ValueError(f"Package directory escapes output root: {package_dir}")
+    # Inspect before replacing old generated contents, without following directory links.
+    for parent, directories, files in os.walk(package_dir, followlinks=False):
+        for name in directories + files:
+            reject_output_link(Path(parent) / name)
     return package_dir
 
 
@@ -131,6 +149,22 @@ def staged_license_files(package_dir: Path) -> list[str]:
     return sorted(relative_path(path, package_dir) for path in license_dir.rglob("*") if path.is_file())
 
 
+def compiled_catalogs(root: Path, binary: Path, explicit_directory: Path | None) -> tuple[dict, list[Path]]:
+    directory = (explicit_directory if explicit_directory is not None else binary.parent.parent / "i18n").resolve()
+    expected = sorted(path.with_suffix(".qm").name for path in (root / "i18n").glob("vibestudio_*.ts"))
+    available = [directory / name for name in expected if (directory / name).is_file()]
+    missing = [name for name in expected if not (directory / name).is_file()]
+    if explicit_directory is not None and (not directory.is_dir() or missing):
+        raise ValueError(f"Compiled translation directory must contain every application catalog: {directory}; missing: {', '.join(missing)}")
+    return {
+        "status": "complete" if expected and not missing else "partial" if available else "unavailable",
+        "sourceDirectory": str(directory),
+        "required": explicit_directory is not None,
+        "catalogs": [f"i18n/{path.name}" for path in available],
+        "missingCatalogs": [f"i18n/{name}" for name in missing],
+    }, available
+
+
 def write_platform_readme(package_dir: Path, target_platform: str, target_architecture: str, binary_name: str) -> str:
     target = TARGETS[target_platform]
     readme = package_dir / "platform" / "README.txt"
@@ -152,6 +186,7 @@ def write_platform_readme(package_dir: Path, target_platform: str, target_archit
             "- Run `vibestudio --cli localization report --locale ar --json`.",
             "- Open the GUI, complete or skip first-run setup, and verify the Activity Center is visible.",
             "- Confirm docs/OFFLINE_USER_GUIDE.md, i18n/vibestudio_en.ts, and licenses/THIRD_PARTY_LICENSES.md are present.",
+            "- Check compiledLocalization in package-manifest.json; runtime translations require the listed .qm catalogs, not just .ts sources.",
         ]
     )
     readme.write_text("\n".join(lines) + "\n", encoding="utf-8")
@@ -185,6 +220,47 @@ def write_license_bundle(root: Path, package_dir: Path) -> tuple[str, list[str]]
         copied_sources.append(relative_path(destination, package_dir))
         compiler_rows.append(f"| {name} | `{relative}` | `{relative_path(destination, package_dir)}` |")
 
+    audio_rows: list[str] = []
+    for name in ("LICENSE", "LICENSE-OOURA.txt", "VIBESTUDIO.md", "UPSTREAM.json"):
+        relative = f"external/audio/r8brain-free-src/{name}"
+        destination = license_dir / relative
+        copy_path(root / relative, destination)
+        copied_sources.append(relative_path(destination, package_dir))
+        audio_rows.append(f"- `{relative_path(destination, package_dir)}`")
+
+    decoder_rows: list[str] = []
+    for component in ("dr_libs", "libogg", "libvorbis"):
+        for name in ("LICENSE" if component == "dr_libs" else "COPYING", "VIBESTUDIO.md", "UPSTREAM.json"):
+            relative = f"external/audio/{component}/{name}"
+            destination = license_dir / relative
+            copy_path(root / relative, destination)
+            copied_sources.append(relative_path(destination, package_dir))
+            decoder_rows.append(f"- `{relative_path(destination, package_dir)}`")
+
+    meter_rows: list[str] = []
+    for name in ("COPYING", "VIBESTUDIO.md", "UPSTREAM.json", "doc/license/R128Scan.txt", "doc/license/queue.txt"):
+        relative = f"external/audio/libebur128/{name}"
+        destination = license_dir / relative
+        copy_path(root / relative, destination)
+        copied_sources.append(relative_path(destination, package_dir))
+        meter_rows.append(f"- `{relative_path(destination, package_dir)}`")
+
+    duplex_rows: list[str] = []
+    for name in ("LICENSE.txt", "VIBESTUDIO.md", "UPSTREAM.json"):
+        relative = f"external/audio/portaudio/{name}"
+        destination = license_dir / relative
+        copy_path(root / relative, destination)
+        copied_sources.append(relative_path(destination, package_dir))
+        duplex_rows.append(f"- `{relative_path(destination, package_dir)}`")
+
+    atlas_rows: list[str] = []
+    for name in ("LICENSE", "LICENSE-THIRD-PARTY.txt", "VIBESTUDIO.md", "UPSTREAM.json"):
+        relative = f"external/modelling/xatlas/{name}"
+        destination = license_dir / relative
+        copy_path(root / relative, destination)
+        copied_sources.append(relative_path(destination, package_dir))
+        atlas_rows.append(f"- `{relative_path(destination, package_dir)}`")
+
     third_party = license_dir / "THIRD_PARTY_LICENSES.md"
     third_party.write_text(
         "\n".join(
@@ -200,6 +276,31 @@ def write_license_bundle(root: Path, package_dir: Path) -> tuple[str, list[str]]
                 "- Credits: `licenses/docs/CREDITS.md`.",
                 "- Dependency notes: `licenses/docs/DEPENDENCIES.md`.",
                 "- Packaging notes: `licenses/docs/PACKAGING.md`.",
+                "",
+                "## Audio Sample Rate Conversion",
+                "",
+                "Sample rate converter designed by Aleksey Vaneev of Voxengo.",
+                "r8brain-free-src 7.5 (MIT), including Takuya Ooura's permissively licensed FFT.",
+                *audio_rows,
+                "",
+                "## Compressed Audio Decoding",
+                "",
+                "David Reid's dr_mp3/dr_flac (MIT-0), including public-domain minimp3 ancestry, and Xiph.Org's libogg/libvorbis (BSD-3-Clause).",
+                *decoder_rows,
+                "",
+                "## Audio Loudness Metering",
+                "",
+                "Jan Kokemüller's libebur128 1.2.6 (MIT), including Chris Moeller's MIT R128Scan notice and a BSD-3-Clause internal queue.",
+                *meter_rows,
+                "",
+                "PortAudio (MIT-style permissive), pinned WASAPI/CoreAudio/ALSA sources with reviewed private host patches.",
+                "",
+                *duplex_rows,
+                "",
+                "## Mesh UV Atlas Generation",
+                "",
+                "Jonathan Young's xatlas (MIT), with thekla_atlas/NVIDIA and Fast-BVH ancestry, and Bruno Levy's OpenNL (BSD-3-Clause).",
+                *atlas_rows,
                 "",
                 "## Imported Compiler Source Licenses",
                 "",
@@ -240,6 +341,7 @@ def build_manifest(
     license_bundle: str,
     license_files: list[str],
     checksums_path: str,
+    compiled_localization: dict,
 ) -> dict:
     included_docs = [relative for relative in CANONICAL_DOCS if (root / relative).exists()]
     localization_root = root / "i18n"
@@ -269,6 +371,7 @@ def build_manifest(
         "includedDocs": included_docs,
         "localizationCatalogRoot": "i18n" if localization_root.exists() else "",
         "includedLocalizationCatalogs": included_localization_catalogs,
+        "compiledLocalization": compiled_localization,
         "offlineUserGuide": "docs/OFFLINE_USER_GUIDE.md" if (root / "docs/OFFLINE_USER_GUIDE.md").exists() else "",
         "platformReadme": platform_readme,
         "includedSamples": included_samples,
@@ -293,16 +396,26 @@ def create_package(
     archive: bool,
     target_platform: str,
     target_architecture: str,
+    compiled_translations: Path | None = None,
+    source_root: Path | None = None,
 ) -> tuple[Path, Path | None]:
-    root = repo_root()
+    root = source_root if source_root is not None else repo_root()
     binary = binary.resolve()
     if not binary.exists():
         raise FileNotFoundError(f"Binary not found: {binary}")
     if target_platform not in TARGETS:
         raise ValueError(f"Unsupported target platform: {target_platform}")
 
+    compiled_localization, catalogs = compiled_catalogs(root, binary, compiled_translations)
+
     package_name = f"vibestudio-{version}-{TARGETS[target_platform]['archiveName']}-{target_architecture}"
     package_dir = safe_package_dir(output_root, package_name)
+    archive_path = package_dir.parent / f"{package_dir.name}.zip" if archive else None
+    if archive_path is not None:
+        reject_output_link(archive_path)
+    for source in [binary, *catalogs]:
+        if source.resolve().is_relative_to(package_dir):
+            raise ValueError(f"Package output would replace a required input: {source}")
     if package_dir.exists():
         shutil.rmtree(package_dir)
     package_dir.mkdir(parents=True)
@@ -312,13 +425,15 @@ def create_package(
         copy_path(root / relative, package_dir / relative)
     copy_path(root / "docs", package_dir / "docs")
     if (root / "i18n").exists():
-        copy_path(root / "i18n", package_dir / "i18n")
+        shutil.copytree(root / "i18n", package_dir / "i18n",
+                        ignore=shutil.ignore_patterns("__pycache__", "*.pyc", "*.qm"))
+    for catalog in catalogs:
+        copy_path(catalog, package_dir / "i18n" / catalog.name)
     if include_samples:
         copy_path(root / "samples", package_dir / "samples")
 
     platform_readme = write_platform_readme(package_dir, target_platform, target_architecture, binary.name)
     license_bundle, license_files = write_license_bundle(root, package_dir)
-    archive_path = package_dir.parent / f"{package_dir.name}.zip" if archive else None
 
     manifest_path = package_dir / "package-manifest.json"
     manifest_path.write_text(
@@ -337,6 +452,7 @@ def create_package(
                 license_bundle,
                 license_files,
                 "CHECKSUMS.sha256",
+                compiled_localization,
             ),
             indent=2,
         )
@@ -370,6 +486,7 @@ def main() -> int:
     parser.add_argument("--archive", action="store_true", help="Create zip archives next to staged directories.")
     parser.add_argument("--target-platform", choices=["current", "all", *TARGETS.keys()], default="current", help="Portable target platform to stage.")
     parser.add_argument("--target-architecture", default=host_architecture(), help="Target architecture label for the package name and manifest.")
+    parser.add_argument("--compiled-translations", type=Path, help="Require and copy all application .qm catalogs from this directory. By default, discover available catalogs beside the Meson binary at ../i18n.")
     args = parser.parse_args()
 
     try:
@@ -382,6 +499,7 @@ def main() -> int:
                 archive=args.archive,
                 target_platform=target,
                 target_architecture=args.target_architecture,
+                compiled_translations=args.compiled_translations,
             )
             for target in requested_targets(args.target_platform)
         ]

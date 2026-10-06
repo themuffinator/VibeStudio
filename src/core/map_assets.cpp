@@ -16,9 +16,19 @@ namespace vibestudio {
 
 namespace {
 
-QString assetText(const char* source)
+bool auditCancelled(const PackageReadControl& control)
 {
-	return QCoreApplication::translate("VibeStudioMapAssets", source);
+	return control.isCancelled && control.isCancelled();
+}
+
+void appendAuditWarning(QStringList* warnings, const QString& message)
+{
+	if (!warnings) { return; }
+	constexpr qsizetype maximum = 128;
+	if (warnings->size() < maximum) { warnings->append(message); }
+	else if (warnings->size() == maximum) {
+		warnings->append(QCoreApplication::translate("VibeStudioMapAssets", "Further texture-audit diagnostics were truncated."));
+	}
 }
 
 // ---------------------------------------------------------------------------
@@ -32,6 +42,7 @@ constexpr int kMaxUniqueTextures = 65536;
 constexpr int kMaxShaderScripts = 4096;
 constexpr int kMaxShaderNames = 200000;
 constexpr qint64 kMaxShaderScriptBytes = 16LL * 1024LL * 1024LL;
+constexpr quint64 kMaxShaderAuditBytes = 64ULL * 1024ULL * 1024ULL;
 constexpr qint64 kMaxDecodeBytes = 64LL * 1024LL * 1024LL;
 constexpr qsizetype kMaxShaderTokens = 4000000;
 // Vanilla Doom lump names are eight characters; see
@@ -121,10 +132,10 @@ QString engineHandledReason(const QString& textureName, TextureFamily family)
 
 	if (family == TextureFamily::Quake3) {
 		const QString lower = value.toLower();
-		if (lower.startsWith(QStringLiteral("textures/common/"))) {
+		if (lower.startsWith(QStringLiteral("textures/common/")) || lower.startsWith(QStringLiteral("common/"))) {
 			return QStringLiteral("quake3-common-family");
 		}
-		if (lower.startsWith(QStringLiteral("textures/editor/"))) {
+		if (lower.startsWith(QStringLiteral("textures/editor/")) || lower.startsWith(QStringLiteral("editor/"))) {
 			return QStringLiteral("quake3-editor-family");
 		}
 		if (lower == QStringLiteral("noshader")) {
@@ -220,9 +231,10 @@ void addReferenceUse(ReferenceCollection* collection, const QString& textureName
 	reference.uses.append(use);
 }
 
-int worldspawnEntityId(const LevelMapDocument& document)
+int worldspawnEntityId(const LevelMapDocument& document, const PackageReadControl& control)
 {
 	for (const LevelMapEntity& entity : document.entities) {
+		if (auditCancelled(control)) { return 0; }
 		if (entity.className.compare(QStringLiteral("worldspawn"), Qt::CaseInsensitive) == 0) {
 			return entity.id;
 		}
@@ -232,15 +244,17 @@ int worldspawnEntityId(const LevelMapDocument& document)
 
 // Walks the document's own objects rather than the flat `textureReferences`
 // list, because only the objects know where each name is written.
-ReferenceCollection collectReferences(const LevelMapDocument& document, TextureFamily family)
+ReferenceCollection collectReferences(const LevelMapDocument& document, TextureFamily family, const PackageReadControl& control)
 {
 	ReferenceCollection collection;
-	const int worldspawnId = worldspawnEntityId(document);
+	const int worldspawnId = worldspawnEntityId(document, control);
 
 	for (const LevelMapBrush& brush : document.brushes) {
+		if (auditCancelled(control)) { return collection; }
 		const MapTextureUseKind kind = brush.entityId == worldspawnId ? MapTextureUseKind::WorldspawnFace : MapTextureUseKind::BrushEntityFace;
 		if (!brush.faces.isEmpty()) {
 			for (qsizetype faceIndex = 0; faceIndex < brush.faces.size(); ++faceIndex) {
+				if (auditCancelled(control)) { return collection; }
 				const LevelMapBrushFace& face = brush.faces.at(faceIndex);
 				addReferenceUse(&collection, face.textureName, family, kind, brush.id, brush.entityId,
 					static_cast<int>(faceIndex), face.line);
@@ -250,23 +264,27 @@ ReferenceCollection collectReferences(const LevelMapDocument& document, TextureF
 		// A brush parsed without per-face records still carries its texture
 		// names; attribute them to the brush itself so nothing is lost.
 		for (qsizetype nameIndex = 0; nameIndex < brush.textureNames.size(); ++nameIndex) {
+			if (auditCancelled(control)) { return collection; }
 			addReferenceUse(&collection, brush.textureNames.at(nameIndex), family, kind, brush.id, brush.entityId,
 				static_cast<int>(nameIndex), brush.startLine);
 		}
 	}
 
 	for (const LevelMapPatch& patch : document.patches) {
+		if (auditCancelled(control)) { return collection; }
 		addReferenceUse(&collection, patch.textureName, family, MapTextureUseKind::PatchShader, patch.id, patch.entityId, -1, patch.startLine);
 	}
 
 	// Binary Doom map lumps have no source line, so use sites record 0.
 	for (const LevelMapDoomSidedef& sidedef : document.doomSidedefs) {
+		if (auditCancelled(control)) { return collection; }
 		addReferenceUse(&collection, sidedef.upperTexture, family, MapTextureUseKind::DoomSidedefUpper, sidedef.id, -1, -1, 0);
 		addReferenceUse(&collection, sidedef.lowerTexture, family, MapTextureUseKind::DoomSidedefLower, sidedef.id, -1, -1, 0);
 		addReferenceUse(&collection, sidedef.middleTexture, family, MapTextureUseKind::DoomSidedefMiddle, sidedef.id, -1, -1, 0);
 	}
 
 	for (const LevelMapDoomSector& sector : document.doomSectors) {
+		if (auditCancelled(control)) { return collection; }
 		addReferenceUse(&collection, sector.floorTexture, family, MapTextureUseKind::DoomSectorFloor, sector.id, -1, -1, 0);
 		addReferenceUse(&collection, sector.ceilingTexture, family, MapTextureUseKind::DoomSectorCeiling, sector.id, -1, -1, 0);
 	}
@@ -279,19 +297,23 @@ struct ArchiveIndex {
 	QHash<QString, QString> pathByKey;
 	QHash<QString, QString> layerByKey;
 	QStringList shaderScriptPaths;
+	QHash<QString, qsizetype> positionByKey;
 };
 
-ArchiveIndex buildArchiveIndex(const PackageArchiveReader& archive)
+ArchiveIndex buildArchiveIndex(const PackageArchiveReader& archive, const PackageReadControl& control)
 {
 	ArchiveIndex index;
 	const QVector<PackageEntry> entries = archive.entries();
 	index.pathByKey.reserve(static_cast<int>(entries.size()));
-	for (const PackageEntry& entry : entries) {
+	for (qsizetype at = 0; at < entries.size(); ++at) {
+		if (auditCancelled(control)) { return index; }
+		const auto& entry = entries.at(at);
 		if (entry.kind != PackageEntryKind::File || entry.virtualPath.isEmpty()) {
 			continue;
 		}
 		const QString key = entry.virtualPath.toLower();
 		// Later entries shadow earlier ones, matching pk3 mount semantics.
+		index.positionByKey.insert(key, at);
 		index.pathByKey.insert(key, entry.virtualPath);
 		index.layerByKey.insert(key, entry.layerId.isEmpty() ? entry.sourceArchiveId : entry.layerId);
 		if (key.startsWith(QStringLiteral("scripts/")) && key.endsWith(QStringLiteral(".shader"))) {
@@ -299,43 +321,90 @@ ArchiveIndex buildArchiveIndex(const PackageArchiveReader& archive)
 		}
 	}
 	std::sort(index.shaderScriptPaths.begin(), index.shaderScriptPaths.end());
+	index.shaderScriptPaths.removeDuplicates();
 	return index;
+}
+
+// Read the exact indexed occurrence, with bounded buffering and cancellation
+// inside native streaming readers. Default callers retain generic-reader support.
+bool readAuditBytes(const PackageArchiveReader& archive, const ArchiveIndex& index, const QString& path,
+	QByteArray* bytes, QString* error, qint64 limit, const PackageReadControl& control)
+{
+	const auto at = index.positionByKey.value(path.toLower(), -1);
+	const auto entries = archive.entries();
+	if (at < 0 || at >= entries.size() || !entries.at(at).readable || entries.at(at).sizeBytes > quint64(limit)) {
+		if (error) { *error = QCoreApplication::translate("VibeStudioMapAssets", "The audit input is unavailable or exceeds its byte limit."); }
+		return false;
+	}
+	if (auditCancelled(control)) { return false; }
+	if (!control.isCancelled && !control.progress) {
+		QByteArray complete;
+		if (!archive.readEntryAt(at, &complete, error, limit)) { return false; }
+		if (quint64(complete.size()) != entries.at(at).sizeBytes) {
+			if (error) { *error = QCoreApplication::translate("VibeStudioMapAssets", "The audit input does not match its declared size."); }
+			return false;
+		}
+		*bytes = std::move(complete); return true;
+	}
+	QByteArray buffered;
+	const qint64 total = qint64(entries.at(at).sizeBytes);
+	if (control.progress) { control.progress(path, 0, total); }
+	const bool read = archive.streamEntryAt(at, [&](QByteArrayView chunk) {
+		if (auditCancelled(control) || chunk.size() > limit - buffered.size()) { return false; }
+		buffered.append(chunk.data(), chunk.size());
+		if (control.progress) { control.progress(path, buffered.size(), total); }
+		return !auditCancelled(control);
+	}, error, control.isCancelled);
+	if (!read || auditCancelled(control) || buffered.size() != total) { return false; }
+	*bytes = std::move(buffered); return true;
 }
 
 // Collects `scripts/*.shader` declarations so a Quake III name backed only by a
 // shader definition is not reported as a missing image.
-QHash<QString, QString> collectShaderDeclarations(const PackageArchiveReader& archive, const ArchiveIndex& index, QStringList* warnings)
+QHash<QString, QString> collectShaderDeclarations(const PackageArchiveReader& archive, const ArchiveIndex& index, QStringList* warnings, const PackageReadControl& control)
 {
 	QHash<QString, QString> owners;
-	int scriptCount = 0;
+	int scriptCount = 0; quint64 admittedBytes = 0;
+	const auto entries = archive.entries();
 	for (const QString& scriptPath : index.shaderScriptPaths) {
+		if (auditCancelled(control)) { return owners; }
 		if (scriptCount >= kMaxShaderScripts) {
 			if (warnings) {
-				*warnings << assetText("Stopped after %1 shader scripts; the package declares more than the audit reads.").arg(kMaxShaderScripts);
+				appendAuditWarning(warnings, QCoreApplication::translate("VibeStudioMapAssets", "Stopped after %1 shader scripts; the package declares more than the audit reads.").arg(kMaxShaderScripts));
 			}
 			break;
 		}
 		++scriptCount;
+		const auto position = index.positionByKey.value(scriptPath.toLower(), -1);
+		if (position < 0 || position >= entries.size()) { continue; }
+		const auto size = entries.at(position).sizeBytes;
+		if (size > kMaxShaderAuditBytes - admittedBytes) {
+			appendAuditWarning(warnings, QCoreApplication::translate("VibeStudioMapAssets", "Shader scripts exceed the audit's aggregate byte limit."));
+			break;
+		}
+		admittedBytes += size;
 
 		QByteArray bytes;
 		QString error;
-		if (!archive.readEntryBytes(scriptPath, &bytes, &error, kMaxShaderScriptBytes)) {
+		if (!readAuditBytes(archive, index, scriptPath, &bytes, &error, kMaxShaderScriptBytes, control)) {
 			if (warnings) {
-				*warnings << assetText("Unable to read shader script %1: %2").arg(scriptPath, error.isEmpty() ? assetText("unknown error") : error);
+				appendAuditWarning(warnings, QCoreApplication::translate("VibeStudioMapAssets", "Unable to read shader script %1: %2").arg(scriptPath, error.isEmpty() ? QCoreApplication::translate("VibeStudioMapAssets", "unknown error") : error));
 			}
 			continue;
 		}
 
 		QStringList scriptWarnings;
-		const QStringList names = collectShaderScriptNames(bytes, &scriptWarnings);
+		const QStringList names = collectShaderScriptNames(bytes, &scriptWarnings, control);
 		for (const QString& scriptWarning : scriptWarnings) {
 			if (warnings) {
-				*warnings << assetText("%1: %2").arg(scriptPath, scriptWarning);
+				appendAuditWarning(warnings, QCoreApplication::translate("VibeStudioMapAssets", "%1: %2").arg(scriptPath, scriptWarning));
 			}
 		}
 		for (const QString& name : names) {
+			if (auditCancelled(control)) { return owners; }
 			if (owners.size() >= kMaxShaderNames) {
-				break;
+				if (warnings) { appendAuditWarning(warnings, QCoreApplication::translate("VibeStudioMapAssets", "The audit reached its shader-name limit.")); }
+				return owners;
 			}
 			const QString key = name.toLower();
 			if (!owners.contains(key)) {
@@ -367,7 +436,7 @@ QString describeUse(const MapTextureUse& use)
 }
 
 // Shared core so the archive audit and the loose-folder audit cannot drift.
-MapTextureAudit runAudit(const LevelMapDocument& document, const PackageArchiveReader& archive, bool decodeSizes, const QStringList& seedWarnings)
+MapTextureAudit runAudit(const LevelMapDocument& document, const PackageArchiveReader& archive, bool decodeSizes, const QStringList& seedWarnings, const PackageReadControl& control = {})
 {
 	MapTextureAudit audit;
 	audit.mapName = document.mapName;
@@ -376,45 +445,51 @@ MapTextureAudit runAudit(const LevelMapDocument& document, const PackageArchiveR
 	audit.format = document.format;
 	audit.packageSource = archive.sourcePath();
 	audit.decodeRequested = decodeSizes;
+	audit.sourceIndexComplete = archive.isOpen();
+	audit.complete = archive.isOpen();
 	audit.warnings = seedWarnings;
 
 	const TextureFamily family = textureFamilyFor(document.format, document.engineFamily);
 	audit.paletteId = paletteIdForFamily(family);
 
-	ReferenceCollection collection = collectReferences(document, family);
+	ReferenceCollection collection = collectReferences(document, family, control);
 	audit.referenceCount = collection.totalUses;
 	audit.uniqueCount = static_cast<int>(collection.references.size());
 	if (collection.truncated) {
-		audit.warnings << assetText("Stopped after %1 unique texture names; the map references more.").arg(kMaxUniqueTextures);
+		audit.complete = false;
+		appendAuditWarning(&audit.warnings, QCoreApplication::translate("VibeStudioMapAssets", "Stopped after %1 unique texture names; the map references more.").arg(kMaxUniqueTextures));
 	}
 	if (collection.references.isEmpty()) {
 		if (!archive.isOpen()) {
-			audit.warnings << assetText("The package is not open; no texture lookup was attempted.");
+			appendAuditWarning(&audit.warnings, QCoreApplication::translate("VibeStudioMapAssets", "The package is not open; no texture lookup was attempted."));
 		}
 		return audit;
 	}
 
 	if (!archive.isOpen()) {
-		audit.warnings << assetText("The package is not open; every texture is reported as unresolved.");
+		appendAuditWarning(&audit.warnings, QCoreApplication::translate("VibeStudioMapAssets", "The package is not open; every texture is reported as unresolved."));
 	}
 
-	const ArchiveIndex index = archive.isOpen() ? buildArchiveIndex(archive) : ArchiveIndex();
+	const ArchiveIndex index = archive.isOpen() ? buildArchiveIndex(archive, control) : ArchiveIndex();
 	QHash<QString, QString> shaderOwners;
 	if (family == TextureFamily::Quake3 && archive.isOpen() && !index.shaderScriptPaths.isEmpty()) {
-		shaderOwners = collectShaderDeclarations(archive, index, &audit.warnings);
+		shaderOwners = collectShaderDeclarations(archive, index, &audit.warnings, control);
 	}
 	audit.shaderNameCount = static_cast<int>(shaderOwners.size());
+	if (!audit.warnings.isEmpty()) { audit.complete = false; }
 
 	// Sort before resolving so the reference list, the warnings and the JSON all
 	// come out in the same order on every run.
 	std::sort(collection.references.begin(), collection.references.end(),
 		[](const CollectedReference& a, const CollectedReference& b) { return a.lookupKey < b.lookupKey; });
 
+	const auto metadata = archive.entries();
 	bool paletteLoaded = false;
 	IdTechPalette palette;
 
 	audit.references.reserve(static_cast<int>(collection.references.size()));
 	for (const CollectedReference& collected : collection.references) {
+		if (auditCancelled(control)) { break; }
 		MapTextureReference reference;
 		reference.textureName = collected.textureName;
 		reference.lookupKey = collected.lookupKey;
@@ -426,6 +501,15 @@ MapTextureAudit runAudit(const LevelMapDocument& document, const PackageArchiveR
 		reference.engineHandled = !reference.noteId.isEmpty();
 
 		QString resolvedKey;
+		QString shaderKey;
+		if (family == TextureFamily::Quake3) {
+			for (const QString& material : mapTextureMaterialCandidates(collected.textureName, document.format, document.engineFamily)) {
+				if (shaderOwners.contains(material.toLower())) {
+					shaderKey = material.toLower();
+					break;
+				}
+			}
+		}
 		for (const QString& candidate : reference.candidatePaths) {
 			const QString key = candidate.toLower();
 			if (index.pathByKey.contains(key)) {
@@ -434,18 +518,25 @@ MapTextureAudit runAudit(const LevelMapDocument& document, const PackageArchiveR
 			}
 		}
 
-		if (!resolvedKey.isEmpty()) {
-			reference.resolved = true;
-			reference.resolution = MapTextureResolution::ResolvedEntry;
-			reference.resolvedPath = index.pathByKey.value(resolvedKey);
-			reference.sourceLayer = index.layerByKey.value(resolvedKey);
-		} else if (family == TextureFamily::Quake3 && shaderOwners.contains(collected.lookupKey)) {
+		// The declaring shader takes precedence over a same-named image, as it
+		// does in the shared dependency resolver. Unreadable winning image rows
+		// cannot be treated as resolved merely because their names remain.
+		if (!shaderKey.isEmpty()) {
 			reference.resolved = true;
 			reference.resolution = MapTextureResolution::ResolvedByShader;
-			reference.resolvedPath = shaderOwners.value(collected.lookupKey);
+			reference.resolvedPath = shaderOwners.value(shaderKey);
 			reference.sourceLayer = index.layerByKey.value(reference.resolvedPath.toLower());
-			if (reference.noteId.isEmpty()) {
-				reference.noteId = QStringLiteral("quake3-shader-script");
+			if (reference.noteId.isEmpty()) { reference.noteId = QStringLiteral("quake3-shader-script"); }
+		} else if (!resolvedKey.isEmpty()) {
+			const auto position = index.positionByKey.value(resolvedKey, -1);
+			if (position < 0 || position >= metadata.size() || !metadata.at(position).readable) {
+				audit.complete = false; reference.noteId = QStringLiteral("unreadable-package-entry");
+				appendAuditWarning(&audit.warnings, QCoreApplication::translate("VibeStudioMapAssets", "Texture entry %1 is unavailable: %2")
+					.arg(index.pathByKey.value(resolvedKey), position >= 0 && position < metadata.size() ? metadata.at(position).note : QString()));
+			} else {
+				reference.resolved = true; reference.resolution = MapTextureResolution::ResolvedEntry;
+				reference.resolvedPath = index.pathByKey.value(resolvedKey);
+				reference.sourceLayer = index.layerByKey.value(resolvedKey);
 			}
 		} else if (reference.engineHandled) {
 			reference.resolution = MapTextureResolution::EngineHandled;
@@ -462,11 +553,11 @@ MapTextureAudit runAudit(const LevelMapDocument& document, const PackageArchiveR
 			}
 			QByteArray bytes;
 			QString error;
-			if (!archive.readEntryBytes(reference.resolvedPath, &bytes, &error, kMaxDecodeBytes)) {
-				++audit.undecodableCount;
-				audit.warnings << assetText("Unable to read %1 for %2: %3")
+			if (!readAuditBytes(archive, index, reference.resolvedPath, &bytes, &error, kMaxDecodeBytes, control)) {
+				++audit.undecodableCount; audit.complete = false;
+				appendAuditWarning(&audit.warnings, QCoreApplication::translate("VibeStudioMapAssets", "Unable to read %1 for %2: %3")
 									  .arg(reference.resolvedPath, reference.textureName,
-										  error.isEmpty() ? assetText("unknown error") : error);
+										  error.isEmpty() ? QCoreApplication::translate("VibeStudioMapAssets", "unknown error") : error));
 			} else {
 				const IdTechImageDecodeResult decoded = decodeIdTechImage(reference.resolvedPath, bytes, palette);
 				if (decoded.decoded && decoded.width > 0 && decoded.height > 0) {
@@ -475,10 +566,10 @@ MapTextureAudit runAudit(const LevelMapDocument& document, const PackageArchiveR
 					reference.height = decoded.height;
 					reference.formatId = decoded.formatId.isEmpty() ? idTechImageFormatId(decoded.format) : decoded.formatId;
 				} else {
-					++audit.undecodableCount;
-					audit.warnings << assetText("Resolved %1 for %2 but could not decode it: %3")
+					++audit.undecodableCount; audit.complete = false;
+					appendAuditWarning(&audit.warnings, QCoreApplication::translate("VibeStudioMapAssets", "Resolved %1 for %2 but could not decode it: %3")
 										  .arg(reference.resolvedPath, reference.textureName,
-											  decoded.error.isEmpty() ? assetText("unsupported image data") : decoded.error);
+											  decoded.error.isEmpty() ? QCoreApplication::translate("VibeStudioMapAssets", "unsupported image data") : decoded.error));
 				}
 			}
 		}
@@ -503,10 +594,13 @@ MapTextureAudit runAudit(const LevelMapDocument& document, const PackageArchiveR
 // ones, matching the mount order used by PackageArchiveSession.
 class DirectoryReader final : public PackageArchiveReader {
 public:
-	DirectoryReader(const QStringList& roots, QStringList* warnings)
+	DirectoryReader(const QStringList& roots, QStringList* warnings, const PackageIndexLimits& limits) : m_session(limits)
 	{
+		if (roots.size() > PackageArchiveSession::layerCeiling) {
+			if (warnings) { appendAuditWarning(warnings, QCoreApplication::translate("VibeStudioMapAssets", "Asset lookup supports at most %1 folder roots. Choose fewer roots before retrying.").arg(PackageArchiveSession::layerCeiling)); }
+			return;
+		}
 		QStringList sources;
-		QHash<QString, int> entryIndexByKey;
 		for (const QString& root : roots) {
 			const QString trimmed = root.trimmed();
 			if (trimmed.isEmpty()) {
@@ -514,73 +608,56 @@ public:
 			}
 			const QFileInfo info(trimmed);
 			if (!info.exists() || !info.isDir()) {
+				m_complete = false;
 				if (warnings) {
-					*warnings << assetText("Asset folder not found: %1").arg(QDir::toNativeSeparators(trimmed));
+					appendAuditWarning(warnings, QCoreApplication::translate("VibeStudioMapAssets", "Asset folder not found: %1").arg(QDir::toNativeSeparators(trimmed)));
 				}
 				continue;
 			}
 
-			auto archive = std::make_shared<PackageArchive>();
+			const int archiveIndex = m_session.depth();
 			QString error;
-			if (!archive->load(info.absoluteFilePath(), &error)) {
+			const bool opened = archiveIndex == 0 ? m_session.openPrimaryArchive(info.absoluteFilePath(), &error)
+				: m_session.mountArchive(info.absoluteFilePath(), {}, &error);
+			if (!opened) {
 				if (warnings) {
-					*warnings << assetText("Unable to read asset folder %1: %2")
+					appendAuditWarning(warnings, QCoreApplication::translate("VibeStudioMapAssets", "Unable to read asset folder %1: %2")
 									 .arg(QDir::toNativeSeparators(info.absoluteFilePath()),
-										 error.isEmpty() ? assetText("unknown error") : error);
+										 error.isEmpty() ? QCoreApplication::translate("VibeStudioMapAssets", "unknown error") : error));
 				}
-				continue;
+				// A rejected source can override earlier roots. Do not publish a
+				// partial catalog that quietly resolves to the wrong asset.
+				m_session.clear();
+				return;
 			}
-
-			const int archiveIndex = static_cast<int>(m_archives.size());
-			m_archives.append(archive);
 			sources.append(QDir::toNativeSeparators(info.absoluteFilePath()));
-			const QString layerId = info.fileName().isEmpty() ? info.absoluteFilePath() : info.fileName();
-
-			const QVector<PackageEntry> entries = archive->entries();
-			for (const PackageEntry& entry : entries) {
-				if (entry.kind != PackageEntryKind::File || entry.virtualPath.isEmpty()) {
-					continue;
-				}
-				PackageEntry copy = entry;
-				copy.layerId = layerId;
-				const QString key = entry.virtualPath.toLower();
-				m_ownerByKey.insert(key, archiveIndex);
-				const int existing = entryIndexByKey.value(key, -1);
-				if (existing >= 0) {
-					m_entries[existing] = copy;
-					continue;
-				}
-				m_entries.append(copy);
-				entryIndexByKey.insert(key, static_cast<int>(m_entries.size()) - 1);
-			}
+		}
+		// Use the same winning records for metadata and payload reads, including
+		// case-folded duplicate paths within a source on case-sensitive systems.
+		for (const auto& entry : m_session.entries()) {
+			if (entry.kind == PackageEntryKind::File && !entry.virtualPath.isEmpty()) { m_entries.append(entry); }
 		}
 		m_sourcePath = sources.join(QStringLiteral("; "));
-		m_open = !m_archives.isEmpty();
+		m_open = m_session.hasOpenArchive();
 	}
 
 	[[nodiscard]] PackageArchiveFormat format() const override { return PackageArchiveFormat::Folder; }
 	[[nodiscard]] QString sourcePath() const override { return m_sourcePath; }
 	[[nodiscard]] bool isOpen() const override { return m_open; }
+	[[nodiscard]] bool sourceIndexComplete() const { return m_open && m_complete; }
 	[[nodiscard]] QVector<PackageEntry> entries() const override { return m_entries; }
 
 	bool readEntryBytes(const QString& virtualPath, QByteArray* out, QString* error, qint64 maxBytes = -1) const override
 	{
-		const int owner = m_ownerByKey.value(virtualPath.toLower(), -1);
-		if (owner < 0 || owner >= static_cast<int>(m_archives.size())) {
-			if (error) {
-				*error = assetText("No asset folder provides this entry.");
-			}
-			return false;
-		}
-		return m_archives.at(owner)->readEntryBytes(virtualPath, out, error, maxBytes);
+		return m_session.readEntryBytes(virtualPath, out, error, maxBytes);
 	}
 
 private:
-	QVector<std::shared_ptr<PackageArchive>> m_archives;
+	PackageArchiveSession m_session;
 	QVector<PackageEntry> m_entries;
-	QHash<QString, int> m_ownerByKey;
 	QString m_sourcePath;
 	bool m_open = false;
+	bool m_complete = true;
 };
 
 QJsonArray useArray(const QVector<MapTextureUse>& uses)
@@ -616,6 +693,8 @@ bool MapTextureReference::isMissing() const
 
 OperationState MapTextureAudit::state() const
 {
+	if (cancelled) { return OperationState::Cancelled; }
+	if (!sourceIndexComplete || !complete || !warnings.isEmpty()) { return OperationState::Warning; }
 	if (references.isEmpty()) {
 		return OperationState::Idle;
 	}
@@ -656,23 +735,23 @@ QString mapTextureUseKindDisplayName(MapTextureUseKind kind)
 	case MapTextureUseKind::Unknown:
 		break;
 	case MapTextureUseKind::WorldspawnFace:
-		return assetText("Worldspawn brush face");
+		return QCoreApplication::translate("VibeStudioMapAssets", "Worldspawn brush face");
 	case MapTextureUseKind::BrushEntityFace:
-		return assetText("Brush entity face");
+		return QCoreApplication::translate("VibeStudioMapAssets", "Brush entity face");
 	case MapTextureUseKind::PatchShader:
-		return assetText("Patch shader");
+		return QCoreApplication::translate("VibeStudioMapAssets", "Patch shader");
 	case MapTextureUseKind::DoomSidedefUpper:
-		return assetText("Sidedef upper");
+		return QCoreApplication::translate("VibeStudioMapAssets", "Sidedef upper");
 	case MapTextureUseKind::DoomSidedefLower:
-		return assetText("Sidedef lower");
+		return QCoreApplication::translate("VibeStudioMapAssets", "Sidedef lower");
 	case MapTextureUseKind::DoomSidedefMiddle:
-		return assetText("Sidedef middle");
+		return QCoreApplication::translate("VibeStudioMapAssets", "Sidedef middle");
 	case MapTextureUseKind::DoomSectorFloor:
-		return assetText("Sector floor");
+		return QCoreApplication::translate("VibeStudioMapAssets", "Sector floor");
 	case MapTextureUseKind::DoomSectorCeiling:
-		return assetText("Sector ceiling");
+		return QCoreApplication::translate("VibeStudioMapAssets", "Sector ceiling");
 	}
-	return assetText("Unknown use");
+	return QCoreApplication::translate("VibeStudioMapAssets", "Unknown use");
 }
 
 QString mapTextureResolutionId(MapTextureResolution resolution)
@@ -694,15 +773,15 @@ QString mapTextureResolutionDisplayName(MapTextureResolution resolution)
 {
 	switch (resolution) {
 	case MapTextureResolution::Missing:
-		return assetText("Missing");
+		return QCoreApplication::translate("VibeStudioMapAssets", "Missing");
 	case MapTextureResolution::ResolvedEntry:
-		return assetText("Resolved");
+		return QCoreApplication::translate("VibeStudioMapAssets", "Resolved");
 	case MapTextureResolution::ResolvedByShader:
-		return assetText("Resolved by shader script");
+		return QCoreApplication::translate("VibeStudioMapAssets", "Resolved by shader script");
 	case MapTextureResolution::EngineHandled:
-		return assetText("Engine-handled");
+		return QCoreApplication::translate("VibeStudioMapAssets", "Engine-handled");
 	}
-	return assetText("Missing");
+	return QCoreApplication::translate("VibeStudioMapAssets", "Missing");
 }
 
 QString normalizeMapTextureKey(const QString& textureName, LevelMapFormat format)
@@ -726,6 +805,24 @@ bool isMapTexturePlaceholder(const QString& textureName, LevelMapFormat format)
 bool isEngineHandledMapTexture(const QString& textureName, LevelMapFormat format, const QString& engineFamily)
 {
 	return !engineHandledReason(textureName, textureFamilyFor(format, engineFamily)).isEmpty();
+}
+
+QStringList mapTextureMaterialCandidates(const QString& textureName, LevelMapFormat format, const QString& engineFamily)
+{
+	QStringList names;
+	const QString cleaned = cleanTextureName(textureName);
+	if (isMapTexturePlaceholder(cleaned, format)) {
+		return names;
+	}
+	// Verified against NetRadiant Custom q3map2 ParsePatch / ParseRawBrush,
+	// revision 68ecbed6 (GPL-2.0-or-later); source links are in docs/CREDITS.md.
+	// Preserve the raw map token and apply this only to package lookups.
+	if (textureFamilyFor(format, engineFamily) == TextureFamily::Quake3
+		&& !cleaned.startsWith(QStringLiteral("textures/"), Qt::CaseInsensitive)) {
+		names << QStringLiteral("textures/") + cleaned;
+	}
+	addCandidate(&names, cleaned);
+	return names;
 }
 
 QStringList mapTextureCandidatePaths(const QString& textureName, LevelMapFormat format, const QString& engineFamily)
@@ -766,14 +863,15 @@ QStringList mapTextureCandidatePaths(const QString& textureName, LevelMapFormat 
 		break;
 	}
 	case TextureFamily::Quake3: {
-		// Quake III shader names are already virtual paths; a name with no shader
-		// definition falls back to an image file of the same name.
-		const QString lower = cleaned.toLower();
-		addCandidate(&paths, lower);
-		addCandidate(&paths, lower + QStringLiteral(".tga"));
-		addCandidate(&paths, lower + QStringLiteral(".jpg"));
-		addCandidate(&paths, lower + QStringLiteral(".jpeg"));
-		addCandidate(&paths, lower + QStringLiteral(".png"));
+		// Without a shader definition, use an image under the same material path.
+		for (const QString& material : mapTextureMaterialCandidates(cleaned, format, engineFamily)) {
+			const QString lower = material.toLower();
+			addCandidate(&paths, lower);
+			addCandidate(&paths, lower + QStringLiteral(".tga"));
+			addCandidate(&paths, lower + QStringLiteral(".jpg"));
+			addCandidate(&paths, lower + QStringLiteral(".jpeg"));
+			addCandidate(&paths, lower + QStringLiteral(".png"));
+		}
 		break;
 	}
 	case TextureFamily::Unknown: {
@@ -788,7 +886,7 @@ QStringList mapTextureCandidatePaths(const QString& textureName, LevelMapFormat 
 	return paths;
 }
 
-QStringList collectShaderScriptNames(const QByteArray& bytes, QStringList* warnings)
+QStringList collectShaderScriptNames(const QByteArray& bytes, QStringList* warnings, const PackageReadControl& control)
 {
 	QStringList names;
 	if (bytes.isEmpty()) {
@@ -807,6 +905,7 @@ QStringList collectShaderScriptNames(const QByteArray& bytes, QStringList* warni
 	bool unterminatedComment = false;
 
 	while (position < length) {
+		if ((position & 4095) == 0 && auditCancelled(control)) { return {}; }
 		const QChar current = text.at(position);
 		if (current.isSpace()) {
 			++position;
@@ -816,6 +915,7 @@ QStringList collectShaderScriptNames(const QByteArray& bytes, QStringList* warni
 			const QChar next = text.at(position + 1);
 			if (next == QLatin1Char('/')) {
 				while (position < length && text.at(position) != QLatin1Char('\n')) {
+					if ((position & 4095) == 0 && auditCancelled(control)) { return {}; }
 					++position;
 				}
 				continue;
@@ -834,7 +934,7 @@ QStringList collectShaderScriptNames(const QByteArray& bytes, QStringList* warni
 
 		if (++tokenCount > kMaxShaderTokens) {
 			if (warnings) {
-				*warnings << assetText("Stopped reading the shader script after %1 tokens.").arg(kMaxShaderTokens);
+				appendAuditWarning(warnings, QCoreApplication::translate("VibeStudioMapAssets", "Stopped reading the shader script after %1 tokens.").arg(kMaxShaderTokens));
 			}
 			break;
 		}
@@ -855,7 +955,7 @@ QStringList collectShaderScriptNames(const QByteArray& bytes, QStringList* warni
 		if (current == QLatin1Char('}')) {
 			if (depth <= 0) {
 				if (warnings) {
-					*warnings << assetText("Ignored an unmatched closing brace in the shader script.");
+					appendAuditWarning(warnings, QCoreApplication::translate("VibeStudioMapAssets", "Ignored an unmatched closing brace in the shader script."));
 				}
 				depth = 0;
 			} else {
@@ -869,6 +969,7 @@ QStringList collectShaderScriptNames(const QByteArray& bytes, QStringList* warni
 			const qsizetype start = position + 1;
 			qsizetype end = start;
 			while (end < length && text.at(end) != QLatin1Char('"') && text.at(end) != QLatin1Char('\n')) {
+				if ((end & 4095) == 0 && auditCancelled(control)) { return {}; }
 				++end;
 			}
 			if (depth == 0) {
@@ -880,6 +981,7 @@ QStringList collectShaderScriptNames(const QByteArray& bytes, QStringList* warni
 
 		const qsizetype start = position;
 		while (position < length) {
+			if ((position & 4095) == 0 && auditCancelled(control)) { return {}; }
 			const QChar wordChar = text.at(position);
 			if (wordChar.isSpace() || wordChar == QLatin1Char('{') || wordChar == QLatin1Char('}')) {
 				break;
@@ -901,43 +1003,50 @@ QStringList collectShaderScriptNames(const QByteArray& bytes, QStringList* warni
 	}
 
 	if (unterminatedComment && warnings) {
-		*warnings << assetText("The shader script ends inside a block comment.");
+		appendAuditWarning(warnings, QCoreApplication::translate("VibeStudioMapAssets", "The shader script ends inside a block comment."));
 	}
 	if (depth != 0 && warnings) {
-		*warnings << assetText("The shader script ends with %1 unclosed brace(s).").arg(depth);
+		appendAuditWarning(warnings, QCoreApplication::translate("VibeStudioMapAssets", "The shader script ends with %1 unclosed brace(s).").arg(depth));
 	}
 	if (names.size() >= kMaxShaderNames && warnings) {
-		*warnings << assetText("Stopped after %1 shader names in one script.").arg(kMaxShaderNames);
+		appendAuditWarning(warnings, QCoreApplication::translate("VibeStudioMapAssets", "Stopped after %1 shader names in one script.").arg(kMaxShaderNames));
 	}
 	return names;
 }
 
-MapTextureAudit auditLevelMapTextures(const LevelMapDocument& document, const PackageArchiveReader& archive, bool decodeSizes)
+MapTextureAudit auditLevelMapTextures(const LevelMapDocument& document, const PackageArchiveReader& archive, bool decodeSizes, const PackageReadControl& control)
 {
-	return runAudit(document, archive, decodeSizes, QStringList());
+	auto audit = runAudit(document, archive, decodeSizes, QStringList(), control);
+	audit.cancelled = auditCancelled(control);
+	if (audit.cancelled) { audit.complete = false; }
+	return audit;
 }
 
-MapTextureAudit auditLevelMapTexturesInDirectories(const LevelMapDocument& document, const QStringList& roots, bool decodeSizes)
+MapTextureAudit auditLevelMapTexturesInDirectories(const LevelMapDocument& document, const QStringList& roots, bool decodeSizes, const PackageIndexLimits& limits)
 {
 	QStringList warnings;
-	const DirectoryReader reader(roots, &warnings);
+	const DirectoryReader reader(roots, &warnings, limits);
 	if (!reader.isOpen()) {
-		warnings << assetText("No readable asset folder was supplied.");
+		warnings << QCoreApplication::translate("VibeStudioMapAssets", "No readable asset folder was supplied.");
 	}
-	return runAudit(document, reader, decodeSizes, warnings);
+	auto audit = runAudit(document, reader, decodeSizes, warnings);
+	audit.sourceIndexComplete = reader.sourceIndexComplete();
+	audit.complete &= audit.sourceIndexComplete;
+	return audit;
 }
 
 QStringList mapTextureAuditLines(const MapTextureAudit& audit)
 {
 	QStringList lines;
 	lines << QCoreApplication::translate("VibeStudioMapAssets", "Texture audit: %1")
-				 .arg(audit.mapName.isEmpty() ? assetText("(unnamed map)") : audit.mapName);
+				 .arg(audit.mapName.isEmpty() ? QCoreApplication::translate("VibeStudioMapAssets", "(unnamed map)") : audit.mapName);
 	lines << QCoreApplication::translate("VibeStudioMapAssets", "State: %1").arg(operationStateDisplayName(audit.state()));
+	if (!audit.complete) { lines << QCoreApplication::translate("VibeStudioMapAssets", "Texture audit incomplete; partial counts do not prove that every reference resolves."); }
 	lines << QCoreApplication::translate("VibeStudioMapAssets", "Format: %1").arg(levelMapFormatDisplayName(audit.format));
 	lines << QCoreApplication::translate("VibeStudioMapAssets", "Engine: %1")
-				 .arg(audit.engineFamily.isEmpty() ? assetText("unknown") : audit.engineFamily);
+				 .arg(audit.engineFamily.isEmpty() ? QCoreApplication::translate("VibeStudioMapAssets", "unknown") : audit.engineFamily);
 	lines << QCoreApplication::translate("VibeStudioMapAssets", "Package: %1")
-				 .arg(audit.packageSource.isEmpty() ? assetText("none") : audit.packageSource);
+				 .arg(audit.packageSource.isEmpty() ? QCoreApplication::translate("VibeStudioMapAssets", "none") : audit.packageSource);
 	lines << QCoreApplication::translate("VibeStudioMapAssets", "References: %1 across %2 unique name(s)")
 				 .arg(audit.referenceCount)
 				 .arg(audit.uniqueCount);
@@ -952,7 +1061,7 @@ QStringList mapTextureAuditLines(const MapTextureAudit& audit)
 
 	if (audit.missingCount > 0) {
 		lines << QString();
-		lines << assetText("Missing textures");
+		lines << QCoreApplication::translate("VibeStudioMapAssets", "Missing textures");
 		for (const MapTextureReference& reference : audit.references) {
 			if (!reference.isMissing()) {
 				continue;
@@ -967,7 +1076,7 @@ QStringList mapTextureAuditLines(const MapTextureAudit& audit)
 
 	if (audit.engineHandledCount > 0) {
 		lines << QString();
-		lines << assetText("Engine-handled names");
+		lines << QCoreApplication::translate("VibeStudioMapAssets", "Engine-handled names");
 		for (const MapTextureReference& reference : audit.references) {
 			if (!reference.engineHandled) {
 				continue;
@@ -981,7 +1090,7 @@ QStringList mapTextureAuditLines(const MapTextureAudit& audit)
 
 	if (!audit.references.isEmpty()) {
 		lines << QString();
-		lines << assetText("All references");
+		lines << QCoreApplication::translate("VibeStudioMapAssets", "All references");
 		for (const MapTextureReference& reference : audit.references) {
 			QString line = QCoreApplication::translate("VibeStudioMapAssets", "  %1 - %2")
 							   .arg(reference.textureName, mapTextureResolutionDisplayName(reference.resolution));
@@ -1000,7 +1109,7 @@ QStringList mapTextureAuditLines(const MapTextureAudit& audit)
 
 	if (!audit.warnings.isEmpty()) {
 		lines << QString();
-		lines << assetText("Warnings");
+		lines << QCoreApplication::translate("VibeStudioMapAssets", "Warnings");
 		for (const QString& warning : audit.warnings) {
 			lines << QStringLiteral("  ") + warning;
 		}
@@ -1023,6 +1132,9 @@ QJsonObject mapTextureAuditJson(const MapTextureAudit& audit)
 	object.insert(QStringLiteral("package"), audit.packageSource);
 	object.insert(QStringLiteral("paletteId"), audit.paletteId);
 	object.insert(QStringLiteral("decodeRequested"), audit.decodeRequested);
+	object.insert(QStringLiteral("sourceIndexComplete"), audit.sourceIndexComplete);
+	object.insert(QStringLiteral("complete"), audit.complete);
+	object.insert(QStringLiteral("cancelled"), audit.cancelled);
 	object.insert(QStringLiteral("state"), operationStateId(audit.state()));
 
 	QJsonObject totals;

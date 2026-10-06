@@ -1,14 +1,18 @@
+#include "core/asset_tools.h"
 #include "core/deflate.h"
+#include "core/idtech_image.h"
 #include "core/package_archive.h"
 
 #include <QByteArray>
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
+#include <QHash>
 #include <QPair>
 #include <QProcess>
 #include <QTemporaryDir>
 #include <QVector>
+#include <QtEndian>
 
 #include <iostream>
 
@@ -142,6 +146,12 @@ QByteArray pakFixture()
 	return data;
 }
 
+void appendLe16Archive(QByteArray* data, quint16 value)
+{
+	data->append(static_cast<char>(value & 0xff));
+	data->append(static_cast<char>((value >> 8) & 0xff));
+}
+
 QByteArray wadFixture()
 {
 	const QByteArray first = "MAPDATA";
@@ -168,6 +178,42 @@ QByteArray wadFixture()
 	};
 	appendRecord("MAP01", firstOffset, static_cast<quint32>(first.size()));
 	appendRecord("PLAYPAL", secondOffset, static_cast<quint32>(second.size()));
+	return data;
+}
+
+// A PWAD laid out like a Doom resource WAD: PLAYPAL, flats and sprites between
+// their namespace markers, a sound, a menu graphic, Hexen's STARTUP screen, and
+// a map marker, so type hints and asset kinds can be checked per lump.
+QByteArray doomResourceWadFixture()
+{
+	const QVector<QPair<QByteArray, QByteArray>> lumps {
+		{"PLAYPAL", QByteArray(768 * 14, '\0')},
+		{"F_START", QByteArray()},
+		{"FLOOR0", QByteArray(4096, '\x10')},
+		{"F_END", QByteArray()},
+		{"SS_START", QByteArray()},
+		{"TROOA1", QByteArray("patch")},
+		{"SS_END", QByteArray()},
+		{"DSPISTOL", QByteArray("sound")},
+		{"M_DOOM", QByteArray("menu")},
+		{"STARTUP", QByteArray("planar")},
+		{"MAP01", QByteArray()},
+	};
+	QByteArray body;
+	QByteArray directory;
+	for (const auto& lump : lumps) {
+		appendLe32(&directory, static_cast<quint32>(12 + body.size()));
+		appendLe32(&directory, static_cast<quint32>(lump.second.size()));
+		QByteArray name = lump.first.left(8);
+		name.append(QByteArray(8 - name.size(), '\0'));
+		directory.append(name);
+		body.append(lump.second);
+	}
+	QByteArray data("PWAD");
+	appendLe32(&data, static_cast<quint32>(lumps.size()));
+	appendLe32(&data, static_cast<quint32>(12 + body.size()));
+	data.append(body);
+	data.append(directory);
 	return data;
 }
 
@@ -569,6 +615,34 @@ int main()
 	ok &= expect(descriptorFor(PackageArchiveFormat::Pk3).capabilities.contains(QStringLiteral("zip64")), "PK3 should advertise zip64 support");
 	ok &= expect(descriptorFor(PackageArchiveFormat::Zip).capabilities.contains(QStringLiteral("deflate")), "ZIP should advertise deflate support");
 
+	// Entry queries (core/studio_query.h): sizes take suffixes counted in 1024s.
+	{
+		PackageEntry sound;
+		sound.virtualPath = QStringLiteral("sound/ambience/hum.wav");
+		sound.sizeBytes = 3 * 1024 * 1024;
+		sound.compressedSizeBytes = 1024 * 1024;
+		sound.typeHint = QStringLiteral("sound");
+		sound.storageMethod = QStringLiteral("deflate");
+		PackageEntry image;
+		image.virtualPath = QStringLiteral("textures/base/wall.tga");
+		image.sizeBytes = 64 * 1024;
+		const auto matches = [](const PackageEntry& entry, const QString& query) {
+			return studioQueryMatches(parseStudioQuery(query), packageEntryQueryProperties(entry), entry.virtualPath);
+		};
+		double parsed = 0.0;
+		ok &= expect(parseStudioQueryNumber(QStringLiteral("2mb"), &parsed) && parsed == 2.0 * 1024 * 1024
+				&& parseStudioQueryNumber(QStringLiteral("1.5K"), &parsed) && parsed == 1.5 * 1024 && !parseStudioQueryNumber(QStringLiteral("mb"), &parsed),
+			"query numbers should read size suffixes counted in 1024s");
+		ok &= expect(matches(sound, QStringLiteral("ext=wav size>2mb")) && !matches(image, QStringLiteral("ext=wav size>2mb")),
+			"ext= and size> should find the large sound only");
+		ok &= expect(matches(image, QStringLiteral("folder=textures/base name:wall size<=64kb")) && !matches(image, QStringLiteral("size<64kb")),
+			"folder, name and size bounds should read an entry's own values");
+		ok &= expect(matches(sound, QStringLiteral("packed<2m storage=deflate hum")), "packed size, storage and a plain word should all hold");
+		ok &= expect(studioQueryUnknownKeys(parseStudioQuery(QStringLiteral("ext=wav sise>1 sise<9 word")), {QStringLiteral("ext"), QStringLiteral("size")})
+				== QStringList {QStringLiteral("sise")},
+			"unknown keys should be named once each, and words and known keys left out");
+	}
+
 	PackageVirtualPath safe = normalizePackageVirtualPath(QStringLiteral("textures\\stone//wall01.tga"));
 	ok &= expect(safe.isSafe(), "backslash path should normalize safely");
 	ok &= expect(safe.normalizedPath == QStringLiteral("textures/stone/wall01.tga"), "normalized path mismatch");
@@ -779,7 +853,7 @@ int main()
 				break;
 			}
 		}
-		ok &= expect(duplicateWarned, "duplicate lump names should be reported as a load warning");
+		ok &= expect(!duplicateWarned, "valid repeated WAD lump names must not be treated as damage");
 
 		ok &= expect(archive.readEntryBytes(QStringLiteral("THINGS"), &bytes, &error), "duplicated THINGS lump should read");
 		ok &= expect(bytes == expectedThings, "duplicated lump reads must return the first archive-order match");
@@ -794,6 +868,112 @@ int main()
 			}
 		}
 		ok &= expect(firstListedThings == expectedThings, "the first listed duplicate must be the first archive-order one");
+		PackageExtractionRequest repeated;
+		repeated.targetDirectory = packageDir.filePath(QStringLiteral("repeated-output"));
+		repeated.virtualPaths = {QStringLiteral("THINGS")};
+		repeated.overwriteExisting = true;
+		const auto refused = extractPackageEntries(archive, repeated);
+		ok &= expect(!refused.succeeded() && refused.errorCount == multiMapCount && !QFileInfo::exists(repeated.targetDirectory),
+			"extracting repeated WAD lump names must report every occurrence and refuse before writing");
+	}
+
+	// Namespace markers become type hints, and the hints say which lumps are
+	// images; well-known global graphics and sounds are found by name.
+	{
+		const QString resourcePath = packageDir.filePath(QStringLiteral("resource.wad"));
+		ok &= expect(writeFile(resourcePath, doomResourceWadFixture()), "resource WAD fixture should be written");
+		ok &= expect(archive.load(resourcePath, &error), "resource WAD fixture should load");
+		QHash<QString, QString> hints;
+		for (const PackageEntry& entry : archive.entries()) {
+			hints.insert(entry.virtualPath, entry.typeHint);
+		}
+		ok &= expect(hints.value(QStringLiteral("F_START")) == QStringLiteral("wad-marker") && hints.value(QStringLiteral("SS_END")) == QStringLiteral("wad-marker"),
+			"namespace markers should be typed as markers");
+		ok &= expect(hints.value(QStringLiteral("FLOOR0")) == QStringLiteral("wad-flat") && hints.value(QStringLiteral("TROOA1")) == QStringLiteral("wad-sprite"),
+			"lumps between F_ and SS_ markers should be flats and sprites");
+		ok &= expect(hints.value(QStringLiteral("DSPISTOL")) == QStringLiteral("wad-lump") && hints.value(QStringLiteral("PLAYPAL")) == QStringLiteral("wad-lump"),
+			"lumps outside a namespace, including after one closes, should stay plain lumps");
+		const auto kind = [&hints](const char* name) {
+			return assetPreviewKindForEntry(QString::fromLatin1(name), hints.value(QString::fromLatin1(name)));
+		};
+		ok &= expect(kind("FLOOR0") == AssetPreviewKind::Image && kind("TROOA1") == AssetPreviewKind::Image && kind("PLAYPAL") == AssetPreviewKind::Image
+				&& kind("M_DOOM") == AssetPreviewKind::Image,
+			"flats, sprites, PLAYPAL, and menu graphics should be images");
+		ok &= expect(kind("DSPISTOL") == AssetPreviewKind::Audio && kind("F_START") == AssetPreviewKind::Unknown && kind("STARTUP") == AssetPreviewKind::Unknown
+				&& kind("MAP01") == AssetPreviewKind::Unknown,
+			"a sound should be audio, and markers, STARTUP, and map markers nothing");
+		ok &= expect(assetPreviewKindForEntry(QStringLiteral("+0BUTTON"), QStringLiteral("wad-texture")) == AssetPreviewKind::Image,
+			"a WAD2 or WAD3 lump should be an image");
+		ok &= expect(assetDetectionPath(QStringLiteral("FLOOR0"), QStringLiteral("wad-flat")) == QStringLiteral("flats/FLOOR0")
+				&& assetDetectionPath(QStringLiteral("TROOA1"), QStringLiteral("wad-sprite")) == QStringLiteral("TROOA1"),
+			"a flat should be decoded as if it sat under flats/");
+		ok &= expect(idTechPaletteIdInPackage(archive) == QStringLiteral("doom"), "a WAD with PLAYPAL ships the Doom palette");
+		ok &= expect(archive.load(wadPath, &error) && idTechPaletteIdInPackage(archive) == QStringLiteral("doom"), "the small PWAD's PLAYPAL counts too");
+		PackageArchive closed;
+		ok &= expect(idTechPaletteIdInPackage(closed).isEmpty(), "a closed package ships no palette");
+	}
+
+	// Namespaces nest; a lump with a DMX header is a sound whatever its name;
+	// a map lump is never taken for one; a bare 320x200 lump is a picture.
+	{
+		QByteArray dmx;
+		appendLe16Archive(&dmx, 3);
+		appendLe16Archive(&dmx, 11025);
+		appendLe32(&dmx, 40);
+		dmx.append(QByteArray(40, static_cast<char>(0x80)));
+		QByteArray vertexes;
+		for (const int value : {3, -64, 100, 0}) {
+			appendLe16Archive(&vertexes, static_cast<quint16>(static_cast<qint16>(value)));
+		}
+		const QVector<QPair<QByteArray, QByteArray>> lumps {
+			{"F_START", {}}, {"F1_START", {}}, {"FLATA", QByteArray(4096, '\x11')}, {"F1_END", {}}, {"FLATB", QByteArray(4096, '\x22')}, {"F_END", {}},
+			{"S_START", {}}, {"SPRA1", QByteArray("a")}, {"F_START", {}}, {"FLATC", QByteArray(4096, '\x33')}, {"F_END", {}}, {"SPRB1", QByteArray("b")}, {"S_END", {}},
+			{"STFHIT", dmx}, {"WIND", dmx}, {"CREDIT", QByteArray(64000, '\x05')}, {"MAP01", {}}, {"VERTEXES", vertexes},
+		};
+		QByteArray body;
+		QByteArray directory;
+		for (const auto& lump : lumps) {
+			appendLe32(&directory, static_cast<quint32>(12 + body.size()));
+			appendLe32(&directory, static_cast<quint32>(lump.second.size()));
+			QByteArray name = lump.first.left(8);
+			name.append(QByteArray(8 - name.size(), '\0'));
+			directory.append(name);
+			body.append(lump.second);
+		}
+		QByteArray wad("PWAD");
+		appendLe32(&wad, static_cast<quint32>(lumps.size()));
+		appendLe32(&wad, static_cast<quint32>(12 + body.size()));
+		wad.append(body);
+		wad.append(directory);
+		const QString nestedPath = packageDir.filePath(QStringLiteral("nested.wad"));
+		ok &= expect(writeFile(nestedPath, wad) && archive.load(nestedPath, &error), "The nested-namespace WAD should load.");
+		QHash<QString, QString> hints;
+		for (const PackageEntry& entry : archive.entries()) {
+			if (!hints.contains(entry.virtualPath)) {
+				hints.insert(entry.virtualPath, entry.typeHint);
+			}
+		}
+		ok &= expect(hints.value(QStringLiteral("FLATA")) == QStringLiteral("wad-flat") && hints.value(QStringLiteral("FLATB")) == QStringLiteral("wad-flat"),
+			"A flat after a nested F1_END should still be a flat.");
+		ok &= expect(hints.value(QStringLiteral("SPRB1")) == QStringLiteral("wad-sprite") && hints.value(QStringLiteral("FLATC")) == QStringLiteral("wad-flat"),
+			"A sprite after a stray F_ namespace inside S_ should still be a sprite.");
+		ok &= expect(hints.value(QStringLiteral("STFHIT")) == QStringLiteral("wad-sound") && hints.value(QStringLiteral("WIND")) == QStringLiteral("wad-sound")
+				&& assetPreviewKindForEntry(QStringLiteral("STFHIT"), hints.value(QStringLiteral("STFHIT"))) == AssetPreviewKind::Audio
+				&& assetPreviewKindForEntry(QStringLiteral("WIND"), hints.value(QStringLiteral("WIND"))) == AssetPreviewKind::Audio,
+			"Heretic-style sounds with no DS prefix should be typed as sounds by their header, not listed as images by their names.");
+		ok &= expect(hints.value(QStringLiteral("VERTEXES")) == QStringLiteral("wad-lump") && !dmxSoundHeaderLooksValid(vertexes, vertexes.size(), QStringLiteral("VERTEXES"))
+				&& analyzeAssetBytes(QStringLiteral("VERTEXES"), vertexes, vertexes.size()).audioFormat != QStringLiteral("DMX"),
+			"A map lump whose numbers look like a DMX header should not be taken for a sound.");
+		IdTechPaletteResolution resolution;
+		const IdTechImageDecodeResult credit = decodeIdTechImageFromArchive(archive, QStringLiteral("CREDIT"), QString(), &resolution);
+		ok &= expect(credit.decoded && credit.image.size() == QSize(320, 200), "A bare 64000-byte CREDIT should decode as a 320x200 picture.");
+		ok &= expect(resolution.requestedPaletteId == QStringLiteral("doom")
+				&& defaultIdTechPaletteIdForImage(IdTechImageFormat::Raw, 64000) == QStringLiteral("doom")
+				&& defaultIdTechPaletteIdForImage(IdTechImageFormat::Raw, 128 * 128) == defaultIdTechPaletteIdForFormat(IdTechImageFormat::Raw),
+			"A Heretic-style full-screen picture should take Doom's palette, other raw payloads the format's default.");
+		const IdTechImageDecodeResult flat = decodeIdTechImageFromArchive(archive, QStringLiteral("FLATA"), QString(), &resolution);
+		ok &= expect(flat.decoded && flat.image.size() == QSize(64, 64) && resolution.requestedPaletteId == QStringLiteral("doom"),
+			"With no palette asked for, a WAD flat should decode as a flat with Doom's palette, as the package preview does.");
 	}
 
 	const QString pk3Path = packageDir.filePath(QStringLiteral("tiny.pk3"));
@@ -860,6 +1040,19 @@ int main()
 	ok &= expect(bytes == payload, "deflated entry should read back byte-identical");
 	ok &= expect(archive.readEntryBytes(QStringLiteral("scripts/big.cfg"), &bytes, &error, 24), "deflated entry preview should read");
 	ok &= expect(bytes == payload.left(24), "deflated entry preview should be truncated to maxBytes");
+	{
+		// The directory advertises an oversized tail. Prefix previews do not
+		// need to allocate or validate that unseen tail; image imports do.
+		QByteArray prefixOnly = deflatedZipFixture(QByteArray(256 * 1024, 'p'), false);
+		const auto central = prefixOnly.indexOf(QByteArray::fromHex("504b0102"));
+		qToLittleEndian<quint32>(64 * 1024 * 1024 + 1, prefixOnly.data() + 22);
+		qToLittleEndian<quint32>(64 * 1024 * 1024 + 1, prefixOnly.data() + central + 24);
+		const auto prefixPath = packageDir.filePath(QStringLiteral("bounded-prefix.pk3"));
+		PackageArchive prefixArchive;
+		ok &= expect(writeFile(prefixPath, prefixOnly) && prefixArchive.load(prefixPath, &error), "oversized directory fixture should list");
+		ok &= expect(prefixArchive.readEntryBytes(QStringLiteral("scripts/big.cfg"), &bytes, &error, 24) && bytes == QByteArray(24, 'p'), "compressed previews stop before inflating or validating an unseen oversized tail");
+		ok &= expect(!readIdTechImageEntry(prefixArchive, QStringLiteral("scripts/big.cfg"), &bytes, &error) && bytes.isEmpty(), "whole-image imports reject oversized directory records before decompression");
+	}
 	ok &= expect(archive.readEntryBytes(QStringLiteral("readme.txt"), &bytes, &error), "stored sibling entry should read");
 	ok &= expect(bytes == QByteArray("stored alongside\n"), "stored sibling entry bytes mismatch");
 

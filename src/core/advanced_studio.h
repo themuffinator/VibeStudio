@@ -9,6 +9,8 @@
 #include <QStringList>
 #include <QVector>
 
+#include <functional>
+
 namespace vibestudio {
 
 struct AdvancedStudioIssue {
@@ -115,6 +117,7 @@ struct CodeSourceFile {
 	QString languageId;
 	qint64 bytes = 0;
 	int lineCount = 0;
+	bool fromBuffer = false;
 };
 
 struct CodeSymbol {
@@ -145,15 +148,37 @@ struct CodeDiagnostic {
 	int column = 0;
 };
 
+struct CodeSourceBuffer {
+	QString filePath;
+	QString text;
+	// An unavailable live buffer suppresses its stale saved counterpart.
+	QString error;
+};
+
 struct CodeWorkspaceIndexRequest {
 	QString rootPath;
 	QStringList extensions;
 	QString symbolQuery;
-	int maxFiles = 512;
+	int maxFiles = 4096;
+	int maxEntries = 100000;
+	qint64 maxFileBytes = 4ll * 1024 * 1024;
+	qint64 maxTotalBytes = 64ll * 1024 * 1024;
+	int maxSymbols = 20000;
+	int maxDiagnostics = 10000;
+	// Immutable editor snapshots override the matching saved files. Paths
+	// must stay inside the root; untitled documents do not join the index.
+	QVector<CodeSourceBuffer> buffers;
+	std::function<bool()> isCancelled;
+	std::function<void(int files, int symbols)> progress;
 };
 
 struct CodeWorkspaceIndex {
 	QString rootPath;
+	bool complete = true;
+	bool cancelled = false;
+	int filesSkipped = 0;
+	int entriesVisited = 0;
+	qint64 bytesRead = 0;
 	QVector<CodeSourceFile> files;
 	QVector<CodeSymbol> symbols;
 	QVector<LanguageServiceHook> languageHooks;
@@ -252,6 +277,10 @@ QString spriteWorkflowPlanText(const SpriteWorkflowPlan& plan);
 
 QVector<LanguageServiceHook> defaultLanguageServiceHooks();
 CodeWorkspaceIndex indexCodeWorkspace(const CodeWorkspaceIndexRequest& request);
+// The symbols of one file's text, in line order: functions (C-style and
+// QuakeC), shader names in a .shader, and entity classes in .def and .fgd
+// definitions. Used by the code editor's Go to Symbol.
+QVector<CodeSymbol> codeSymbolsInText(const QString& filePath, const QString& text);
 QString codeWorkspaceIndexText(const CodeWorkspaceIndex& index);
 
 QStringList extensionTrustModelLines();

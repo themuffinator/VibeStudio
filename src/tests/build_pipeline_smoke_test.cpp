@@ -1,4 +1,5 @@
 #include "core/build_pipeline.h"
+#include "tests/level_doom_nodes_test_helpers.h"
 #include "core/compiler_profiles.h"
 #include "core/game_installation.h"
 
@@ -406,7 +407,7 @@ bool runLaunchSmoke(const QDir& root)
 	const QString quakeExe = root.filePath(QStringLiteral("quakespasm.exe"));
 	const QString bspPath = root.filePath(QStringLiteral("launch.bsp"));
 	const QString wadPath = root.filePath(QStringLiteral("launch.wad"));
-	if (!writeFile(quakeExe, QByteArrayLiteral("fixture")) || !writeFile(bspPath, QByteArrayLiteral("fixture")) || !writeFile(wadPath, QByteArrayLiteral("fixture"))) {
+	if (!writeFile(quakeExe, QByteArrayLiteral("fixture")) || !writeFile(bspPath, QByteArrayLiteral("fixture")) || !writeFile(wadPath, tests::doomNodes::fixture())) {
 		return expect(false, "Failed to write the launch fixtures.");
 	}
 
@@ -443,7 +444,7 @@ bool runLaunchSmoke(const QDir& root)
 	noModRequest.modDirectory.clear();
 	const GameLaunchPlan noModPlan = buildGameLaunchPlan(noModRequest, installation);
 	ok &= expect(!noModPlan.arguments.contains(QStringLiteral("-game")), "An argument template with an unresolved token should be dropped.");
-	ok &= expect(!noModPlan.warnings.isEmpty(), "Dropping an argument template should warn.");
+	ok &= expect(noModPlan.warnings.isEmpty(), "No mod folder means the base game, so dropping -game should not warn.");
 	ok &= expect(noModPlan.runnable, "A dropped optional argument should not block the launch.");
 
 	GameLaunchRequest quake2Request;
@@ -452,6 +453,10 @@ bool runLaunchSmoke(const QDir& root)
 	quake2Request.modDirectory = QStringLiteral("baseq2");
 	const GameLaunchPlan quake2Plan = buildGameLaunchPlan(quake2Request, installation);
 	ok &= expect(quake2Plan.runnable, "A complete Quake II launch plan should be runnable.");
+	ok &= expect(!quake2Plan.arguments.contains(QStringLiteral("-basedir")) &&
+		quake2Plan.arguments.value(quake2Plan.arguments.indexOf(QStringLiteral("basedir")) - 1) == QStringLiteral("+set") &&
+		quake2Plan.arguments.value(quake2Plan.arguments.indexOf(QStringLiteral("basedir")) + 1) == root.path(),
+		"Quake II initializes the basedir cvar from an early +set command.");
 	ok &= expect(quake2Plan.arguments.indexOf(QStringLiteral("+set")) >= 0 && quake2Plan.arguments.contains(QStringLiteral("game")) && quake2Plan.arguments.contains(QStringLiteral("baseq2")), "Quake II should pass +set game <mod>.");
 	ok &= expect(quake2Plan.arguments.contains(QStringLiteral("+map")) && quake2Plan.arguments.contains(QStringLiteral("base1")), "Quake II should pass the map name.");
 
@@ -467,16 +472,37 @@ bool runLaunchSmoke(const QDir& root)
 	ok &= expect(quake3Plan.runnable, "A complete Quake III launch plan should be runnable.");
 
 	GameInstallationProfile doomInstallation = installation;
+	doomInstallation.gameKey = QStringLiteral("doom");
 	doomInstallation.engineFamily = GameEngineFamily::IdTech1;
+	// -iwad takes the IWAD file, found in the folder whatever its case.
+	const QString iwad = root.filePath(QStringLiteral("DOOM2.WAD"));
+	writeFile(iwad, QByteArrayLiteral("IWAD fixture"));
 	GameLaunchRequest doomRequest;
 	doomRequest.mapName = QStringLiteral("MAP01");
 	doomRequest.bspPath = wadPath;
 	const GameLaunchPlan doomPlan = buildGameLaunchPlan(doomRequest, doomInstallation);
 	ok &= expect(doomPlan.profile.id == QStringLiteral("doom-source-port"), "idTech1 installs should default to the Doom profile.");
-	ok &= expect(doomPlan.arguments.contains(QStringLiteral("-iwad")), "The Doom plan should pass -iwad.");
+	const qsizetype iwadArgument = doomPlan.arguments.indexOf(QStringLiteral("-iwad"));
+	ok &= expect(iwadArgument >= 0 && samePath(doomPlan.arguments.value(iwadArgument + 1), iwad), "The Doom plan should pass the IWAD file to -iwad, not the folder.");
+	ok &= expect(samePath(doomIwadPath(doomInstallation, iwad), iwad), "A base directory that names a file should be the IWAD itself.");
 	ok &= expect(doomPlan.arguments.contains(QStringLiteral("-file")) && doomPlan.arguments.contains(wadPath), "The Doom plan should pass the built PWAD.");
-	ok &= expect(doomPlan.arguments.contains(QStringLiteral("-warp")) && doomPlan.arguments.contains(QStringLiteral("MAP01")), "The Doom plan should warp to the requested map.");
+	const qsizetype warp = doomPlan.arguments.indexOf(QStringLiteral("-warp"));
+	ok &= expect(warp >= 0 && doomPlan.arguments.value(warp + 1) == QStringLiteral("01"), "MAP01 should warp as -warp 01, the number Doom ports read.");
+	GameLaunchRequest episodeRequest = doomRequest;
+	episodeRequest.mapName = QStringLiteral("e2m3");
+	const GameLaunchPlan episodePlan = buildGameLaunchPlan(episodeRequest, doomInstallation);
+	const qsizetype episodeWarp = episodePlan.arguments.indexOf(QStringLiteral("-warp"));
+	ok &= expect(episodeWarp >= 0 && episodePlan.arguments.value(episodeWarp + 1) == QStringLiteral("2")
+			&& episodePlan.arguments.value(episodeWarp + 2) == QStringLiteral("3"),
+		"E2M3 should warp as two arguments, -warp 2 3.");
+	ok &= expect(doomWarpArguments(QStringLiteral("MAP32")) == QStringLiteral("32") && doomWarpArguments(QStringLiteral("7")) == QStringLiteral("7"),
+		"A map number or a MAPxx name should become the -warp number.");
 	ok &= expect(doomPlan.runnable, "A complete Doom launch plan should be runnable.");
+	GameLaunchRequest unbuiltDoomRequest = doomRequest;
+	unbuiltDoomRequest.bspPath.clear();
+	const GameLaunchPlan unbuiltDoomPlan = buildGameLaunchPlan(unbuiltDoomRequest, doomInstallation);
+	ok &= expect(!unbuiltDoomPlan.arguments.contains(QStringLiteral("-file")) && !unbuiltDoomPlan.warnings.isEmpty(),
+		"Dropping an argument whose value is missing, such as -file without a built PWAD, should warn.");
 
 	GameLaunchRequest customRequest;
 	customRequest.launchProfileId = QStringLiteral("custom");
@@ -526,6 +552,90 @@ bool runLaunchSmoke(const QDir& root)
 	return ok;
 }
 
+QByteArray readAll(const QString& path)
+{
+	QFile file(path);
+	return file.open(QIODevice::ReadOnly) ? file.readAll() : QByteArray();
+}
+
+bool runDeploySmoke(const QDir& root)
+{
+	bool ok = true;
+	const QString gameRoot = root.filePath(QStringLiteral("deploy-game"));
+	const QString buildDir = root.filePath(QStringLiteral("deploy-build"));
+	QDir().mkpath(QDir(gameRoot).filePath(QStringLiteral("id1")));
+	QDir().mkpath(buildDir);
+	const QString bsp = QDir(buildDir).filePath(QStringLiteral("arena.bsp"));
+	const QString lit = QDir(buildDir).filePath(QStringLiteral("arena.lit"));
+	if (!writeFile(bsp, QByteArrayLiteral("BSP29 fixture")) || !writeFile(lit, QByteArrayLiteral("QLIT fixture"))) {
+		return expect(false, "Failed to write the deploy fixtures.");
+	}
+
+	GameInstallationProfile quake;
+	quake.id = QStringLiteral("deploy-fixture");
+	quake.gameKey = QStringLiteral("quake");
+	quake.engineFamily = GameEngineFamily::IdTech2;
+	quake.rootPath = gameRoot;
+	ok &= expect(defaultGameDirectory(quake) == QStringLiteral("id1"), "Quake's base game folder should be id1.");
+
+	// Installation profiles are read-only until the user allows writes.
+	const GameMapDeployPlan readOnlyPlan = planGameMapDeploy(quake, QString(), bsp);
+	ok &= expect(readOnlyPlan.required && !readOnlyPlan.allowed && !readOnlyPlan.runnable(), "A read-only installation should refuse the copy.");
+	ok &= expect(!readOnlyPlan.errors.isEmpty(), "A refused copy should say why.");
+	ok &= expect(readOnlyPlan.targetDirectory == QDir::cleanPath(QDir(gameRoot).filePath(QStringLiteral("id1/maps"))), "A refused copy should still name where the map would go.");
+	QString refusal;
+	ok &= expect(!deployGameMap(readOnlyPlan, nullptr, &refusal) && !refusal.isEmpty(), "Deploying a refused plan should fail with a message.");
+	ok &= expect(!QFileInfo::exists(QDir(gameRoot).filePath(QStringLiteral("id1/maps/arena.bsp"))), "A refused plan must not write anything.");
+
+	quake.readOnly = false;
+	const GameMapDeployPlan plan = planGameMapDeploy(quake, QString(), bsp);
+	ok &= expect(plan.runnable() && !plan.upToDate(), "A writable installation should accept a new map.");
+	ok &= expect(plan.files.size() == 2, "The .lit beside the BSP should travel with it.");
+	QStringList written;
+	QString error;
+	ok &= expect(deployGameMap(plan, &written, &error), "The copy should succeed.");
+	ok &= expect(written.size() == 2, "Both files should be written.");
+	const QString deployedBsp = QDir(gameRoot).filePath(QStringLiteral("id1/maps/arena.bsp"));
+	ok &= expect(readAll(deployedBsp) == QByteArrayLiteral("BSP29 fixture"), "The copied BSP should match the build.");
+	ok &= expect(readAll(QDir(gameRoot).filePath(QStringLiteral("id1/maps/arena.lit"))) == QByteArrayLiteral("QLIT fixture"), "The copied .lit should match the build.");
+
+	const GameMapDeployPlan again = planGameMapDeploy(quake, QString(), bsp);
+	ok &= expect(again.upToDate(), "A second plan should see the copied files as up to date.");
+	writeFile(bsp, QByteArrayLiteral("BSP29 rebuilt"));
+	const GameMapDeployPlan rebuilt = planGameMapDeploy(quake, QString(), bsp);
+	ok &= expect(!rebuilt.upToDate() && rebuilt.files.first().replacesExisting, "A rebuilt map should replace the copied one.");
+	ok &= expect(deployGameMap(rebuilt) && readAll(deployedBsp) == QByteArrayLiteral("BSP29 rebuilt"), "Deploying again should replace the old copy.");
+
+	// A mod folder is a single name inside the installation, never a path.
+	const GameMapDeployPlan modPlan = planGameMapDeploy(quake, QStringLiteral("mymod"), bsp);
+	ok &= expect(modPlan.runnable() && modPlan.targetDirectory.endsWith(QStringLiteral("/mymod/maps")), "A mod folder should receive the map.");
+	ok &= expect(!modPlan.warnings.isEmpty(), "A mod folder that does not exist yet should be mentioned.");
+	for (const QString& escape : {QStringLiteral("../outside"), QStringLiteral("a/b"), QStringLiteral("..")}) {
+		const GameMapDeployPlan escaped = planGameMapDeploy(quake, escape, bsp);
+		ok &= expect(!escaped.runnable() && escaped.targetDirectory.isEmpty(), "A game folder that is a path should be refused.");
+	}
+
+	GameInstallationProfile custom = quake;
+	custom.gameKey = QStringLiteral("custom");
+	const GameMapDeployPlan unnamed = planGameMapDeploy(custom, QString(), bsp);
+	ok &= expect(!unnamed.runnable() && !unnamed.errors.isEmpty(), "A custom installation needs a named game folder.");
+
+	GameInstallationProfile doom = quake;
+	doom.gameKey = QStringLiteral("doom");
+	doom.engineFamily = GameEngineFamily::IdTech1;
+	const GameMapDeployPlan doomPlan = planGameMapDeploy(doom, QString(), bsp);
+	ok &= expect(!doomPlan.required && !doomPlan.runnable() && doomPlan.files.isEmpty(), "Doom ports load the PWAD in place, so nothing is copied.");
+
+	const GameMapDeployPlan missing = planGameMapDeploy(quake, QString(), QDir(buildDir).filePath(QStringLiteral("absent.bsp")));
+	ok &= expect(!missing.runnable() && !missing.errors.isEmpty(), "A map that was not built yet cannot be copied.");
+
+	const QJsonObject json = gameMapDeployPlanJson(plan);
+	ok &= expect(json.value(QStringLiteral("files")).toArray().size() == 2 && json.value(QStringLiteral("gameDirectory")).toString() == QStringLiteral("id1"),
+		"The copy plan JSON should carry the files and the game folder.");
+	ok &= expect(gameMapDeployPlanText(plan).contains(QStringLiteral("arena.bsp")), "The copy plan text should name the map.");
+	return ok;
+}
+
 } // namespace
 
 int main(int argc, char** argv)
@@ -547,5 +657,6 @@ int main(int argc, char** argv)
 	ok &= runDryRunSmoke(root);
 	ok &= runNonFatalStageErrorSmoke(root);
 	ok &= runLaunchSmoke(root);
+	ok &= runDeploySmoke(root);
 	return ok ? EXIT_SUCCESS : EXIT_FAILURE;
 }

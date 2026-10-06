@@ -14,15 +14,6 @@
 
 namespace vibestudio {
 
-namespace {
-
-QString watchText(const char* source)
-{
-	return QCoreApplication::translate("VibeStudioDocumentWatch", source);
-}
-
-} // namespace
-
 // ---------------------------------------------------------------------------
 // Fingerprints
 // ---------------------------------------------------------------------------
@@ -64,17 +55,17 @@ bool DocumentFingerprint::contentMatches(const DocumentFingerprint& other) const
 QString DocumentFingerprint::describe() const
 {
 	if (!exists) {
-		return watchText("missing");
+		return QCoreApplication::translate("VibeStudioDocumentWatch", "missing");
 	}
-	QString text = watchText("%1 bytes, modified %2")
+	QString text = QCoreApplication::translate("VibeStudioDocumentWatch", "%1 bytes, modified %2")
 		.arg(QString::number(size), modified.toUTC().toString(Qt::ISODate));
 	if (hashed && !contentHash.isEmpty()) {
 		text += QStringLiteral(" [%1]").arg(QString::fromLatin1(contentHash.left(6).toHex()));
 	} else if (hashSkipped) {
-		text += QLatin1Char(' ') + watchText("(too large to hash)");
+		text += QLatin1Char(' ') + QCoreApplication::translate("VibeStudioDocumentWatch", "(too large to hash)");
 	}
 	if (!errorId.isEmpty()) {
-		text += QLatin1Char(' ') + watchText("(unreadable)");
+		text += QLatin1Char(' ') + QCoreApplication::translate("VibeStudioDocumentWatch", "(unreadable)");
 	}
 	return text;
 }
@@ -214,19 +205,19 @@ QString documentWatchRoleDisplayName(DocumentWatchRole role)
 {
 	switch (role) {
 	case DocumentWatchRole::LevelMap:
-		return watchText("Open map");
+		return QCoreApplication::translate("VibeStudioDocumentWatch", "Open map");
 	case DocumentWatchRole::Package:
-		return watchText("Open package");
+		return QCoreApplication::translate("VibeStudioDocumentWatch", "Open package");
 	case DocumentWatchRole::CodeEditor:
-		return watchText("Code editor file");
+		return QCoreApplication::translate("VibeStudioDocumentWatch", "Code editor file");
 	case DocumentWatchRole::ProjectManifest:
-		return watchText("Project manifest");
+		return QCoreApplication::translate("VibeStudioDocumentWatch", "Project manifest");
 	case DocumentWatchRole::Auxiliary:
-		return watchText("Supporting file");
+		return QCoreApplication::translate("VibeStudioDocumentWatch", "Supporting file");
 	case DocumentWatchRole::Unknown:
 		break;
 	}
-	return watchText("Watched file");
+	return QCoreApplication::translate("VibeStudioDocumentWatch", "Watched file");
 }
 
 DocumentWatchRole documentWatchRoleFromId(const QString& id)
@@ -273,19 +264,19 @@ QString documentChangeKindDisplayName(DocumentChangeKind kind)
 {
 	switch (kind) {
 	case DocumentChangeKind::Modified:
-		return watchText("Changed on disk");
+		return QCoreApplication::translate("VibeStudioDocumentWatch", "Changed on disk");
 	case DocumentChangeKind::Touched:
-		return watchText("Touched (content unchanged)");
+		return QCoreApplication::translate("VibeStudioDocumentWatch", "Touched (content unchanged)");
 	case DocumentChangeKind::Removed:
-		return watchText("Removed from disk");
+		return QCoreApplication::translate("VibeStudioDocumentWatch", "Removed from disk");
 	case DocumentChangeKind::Replaced:
-		return watchText("Replaced on disk");
+		return QCoreApplication::translate("VibeStudioDocumentWatch", "Replaced on disk");
 	case DocumentChangeKind::Created:
-		return watchText("Created on disk");
+		return QCoreApplication::translate("VibeStudioDocumentWatch", "Created on disk");
 	case DocumentChangeKind::None:
 		break;
 	}
-	return watchText("Unchanged");
+	return QCoreApplication::translate("VibeStudioDocumentWatch", "Unchanged");
 }
 
 DocumentChangeKind documentChangeKindFromId(const QString& id)
@@ -326,11 +317,11 @@ bool documentChangeKindIsSubstantive(DocumentChangeKind kind)
 
 QString DocumentChangeEvent::describe() const
 {
-	QString text = watchText("%1: %2 (%3)")
+	QString text = QCoreApplication::translate("VibeStudioDocumentWatch", "%1: %2 (%3)")
 		.arg(documentWatchRoleDisplayName(role), documentChangeKindDisplayName(kind), path);
 	if (coalescedNotifications > 1) {
 		text += QLatin1Char(' ')
-			+ watchText("[%1 notifications coalesced]").arg(QString::number(coalescedNotifications));
+			+ QCoreApplication::translate("VibeStudioDocumentWatch", "[%1 notifications coalesced]").arg(QString::number(coalescedNotifications));
 	}
 	return text;
 }
@@ -358,14 +349,14 @@ QStringList documentChangeEventLines(const QVector<DocumentChangeEvent>& events)
 {
 	QStringList lines;
 	if (events.isEmpty()) {
-		lines << watchText("No external changes detected.");
+		lines << QCoreApplication::translate("VibeStudioDocumentWatch", "No external changes detected.");
 		return lines;
 	}
-	lines << watchText("%1 external change(s) detected:").arg(QString::number(events.size()));
+	lines << QCoreApplication::translate("VibeStudioDocumentWatch", "%1 external change(s) detected:").arg(QString::number(events.size()));
 	for (const DocumentChangeEvent& event : events) {
 		lines << QStringLiteral("- ") + event.describe();
-		lines << QStringLiteral("    ") + watchText("was %1").arg(event.previous.describe());
-		lines << QStringLiteral("    ") + watchText("now %1").arg(event.current.describe());
+		lines << QStringLiteral("    ") + QCoreApplication::translate("VibeStudioDocumentWatch", "was %1").arg(event.previous.describe());
+		lines << QStringLiteral("    ") + QCoreApplication::translate("VibeStudioDocumentWatch", "now %1").arg(event.current.describe());
 	}
 	return lines;
 }

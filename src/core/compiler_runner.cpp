@@ -23,11 +23,6 @@ namespace vibestudio {
 
 namespace {
 
-QString runnerText(const char* source)
-{
-	return QCoreApplication::translate("VibeStudioCompilerRunner", source);
-}
-
 CompilerTaskLogEntry logEntry(const QString& level, const QString& message)
 {
 	return {QDateTime::currentDateTimeUtc(), level, message};
@@ -91,6 +86,20 @@ QString stripTrailingCarriageReturn(const QString& line)
 		stripped.chop(1);
 	}
 	return stripped;
+}
+
+// Tools that colour their console output, as ericw-tools 2 does, wrap their
+// messages in ECMA-48 escape sequences: "ESC [ ... final byte" (CSI), "ESC ]
+// ... BEL" (OSC), or a two-byte escape. Left in, they show as stray
+// characters in the Problems list and the logs, and hide a leading level from
+// the diagnostic parser.
+QString stripTerminalEscapes(const QString& line)
+{
+	if (!line.contains(QChar(0x1b))) {
+		return line;
+	}
+	static const QRegularExpression escapes(QStringLiteral(R"re(\x1B(?:\[[0-?]*[ -/]*[@-~]|\][^\x07\x1B]*(?:\x07|\x1B\\)|[@-_]))re"));
+	return QString(line).remove(escapes);
 }
 
 // Both ericw-tools (common/log.cc, exit_on_exception) and q3map2
@@ -332,24 +341,24 @@ void surfacePreflightFindings(CompilerRunResult* result, const CompilerRunCallba
 		return;
 	}
 	for (const QString& note : result->manifest.knownIssueNotes) {
-		appendLog(&result->manifest, callbacks, QStringLiteral("info"), runnerText("Known issue note: %1").arg(note));
+		appendLog(&result->manifest, callbacks, QStringLiteral("info"), QCoreApplication::translate("VibeStudioCompilerRunner", "Known issue note: %1").arg(note));
 	}
 	QStringList categorizedWarnings;
 	for (const QString& warning : result->manifest.knownIssueWarnings) {
 		categorizedWarnings.push_back(warning.trimmed());
-		appendLog(&result->manifest, callbacks, QStringLiteral("warning"), runnerText("Known issue warning: %1").arg(warning));
+		appendLog(&result->manifest, callbacks, QStringLiteral("warning"), QCoreApplication::translate("VibeStudioCompilerRunner", "Known issue warning: %1").arg(warning));
 	}
 	for (const QString& warning : result->manifest.preflightWarnings) {
 		categorizedWarnings.push_back(warning.trimmed());
-		appendLog(&result->manifest, callbacks, QStringLiteral("warning"), runnerText("Preflight warning: %1").arg(warning));
+		appendLog(&result->manifest, callbacks, QStringLiteral("warning"), QCoreApplication::translate("VibeStudioCompilerRunner", "Preflight warning: %1").arg(warning));
 	}
 	for (const QString& warning : result->manifest.warnings) {
 		if (!containsTrimmed(categorizedWarnings, warning)) {
-			appendLog(&result->manifest, callbacks, QStringLiteral("warning"), runnerText("Plan warning: %1").arg(warning));
+			appendLog(&result->manifest, callbacks, QStringLiteral("warning"), QCoreApplication::translate("VibeStudioCompilerRunner", "Plan warning: %1").arg(warning));
 		}
 	}
 	for (const QString& error : result->manifest.errors) {
-		appendLog(&result->manifest, callbacks, QStringLiteral("error"), runnerText("Preflight error: %1").arg(error));
+		appendLog(&result->manifest, callbacks, QStringLiteral("error"), QCoreApplication::translate("VibeStudioCompilerRunner", "Preflight error: %1").arg(error));
 	}
 }
 
@@ -376,7 +385,7 @@ void enrichWithKnownIssues(CompilerRunResult* result, const CompilerRunCallbacks
 		return;
 	}
 	for (const CompilerKnownIssueMatch& match : matchCompilerKnownIssues(output, result->manifest.toolId, result->manifest.profileId)) {
-		const QString text = runnerText("Compiler output matches upstream issue #%1 (keyword \"%2\"): %3 Action: %4")
+		const QString text = QCoreApplication::translate("VibeStudioCompilerRunner", "Compiler output matches upstream issue #%1 (keyword \"%2\"): %3 Action: %4")
 			.arg(match.issue.issueId, match.matchedKeyword, match.issue.warningText, match.issue.actionText);
 		if (match.issue.highValue) {
 			if (!containsTrimmed(result->manifest.knownIssueWarnings, text)) {
@@ -522,31 +531,31 @@ void detectLeak(CompilerRunResult* result, const LeakFileSnapshot& preRunLeakFil
 	if (!result->leakDetected) {
 		if (!staleLeakFilePath.isEmpty()) {
 			appendLog(&result->manifest, callbacks, QStringLiteral("info"),
-				runnerText("A leak point file (%1) is present but predates this run; it was left by an earlier compile.")
+				QCoreApplication::translate("VibeStudioCompilerRunner", "A leak point file (%1) is present but predates this run; it was left by an earlier compile.")
 					.arg(QDir::toNativeSeparators(staleLeakFilePath)));
 		}
 		return;
 	}
 
-	QString message = runnerText("LEAK: the map is not sealed, so visibility and lighting data will be wrong.");
+	QString message = QCoreApplication::translate("VibeStudioCompilerRunner", "LEAK: the map is not sealed, so visibility and lighting data will be wrong.");
 	if (!result->leakOccupantClassname.isEmpty()) {
 		message += QLatin1Char(' ');
 		message += result->leakPointText.isEmpty()
-			? runnerText("The compiler reached the entity \"%1\" from the void.").arg(result->leakOccupantClassname)
-			: runnerText("The compiler reached the entity \"%1\" at (%2) from the void.").arg(result->leakOccupantClassname, result->leakPointText);
+			? QCoreApplication::translate("VibeStudioCompilerRunner", "The compiler reached the entity \"%1\" from the void.").arg(result->leakOccupantClassname)
+			: QCoreApplication::translate("VibeStudioCompilerRunner", "The compiler reached the entity \"%1\" at (%2) from the void.").arg(result->leakOccupantClassname, result->leakPointText);
 	} else if (q3LeakEntity.hasMatch()) {
 		message += QLatin1Char(' ');
-		message += runnerText("The compiler reached map entity %1 from the void.").arg(q3LeakEntity.captured(1));
+		message += QCoreApplication::translate("VibeStudioCompilerRunner", "The compiler reached map entity %1 from the void.").arg(q3LeakEntity.captured(1));
 	}
 	if (!result->leakPointFilePath.isEmpty()) {
 		message += QLatin1Char(' ');
-		message += runnerText("Load the leak point file %1 in the editor to follow the leak line.").arg(QDir::toNativeSeparators(result->leakPointFilePath));
+		message += QCoreApplication::translate("VibeStudioCompilerRunner", "Load the leak point file %1 in the editor to follow the leak line.").arg(QDir::toNativeSeparators(result->leakPointFilePath));
 	}
 	// -leaktest makes qbsp print this and exit 1 on purpose, after the leak files are written
 	// (external/compilers/ericw-tools/qbsp/outside.cc).
 	if (result->exitCode != 0 && output.contains(QStringLiteral("Aborting because -leaktest was used"))) {
 		message += QLatin1Char(' ');
-		message += runnerText("The non-zero exit code is the expected -leaktest behaviour rather than a separate compile error.");
+		message += QCoreApplication::translate("VibeStudioCompilerRunner", "The non-zero exit code is the expected -leaktest behaviour rather than a separate compile error.");
 	}
 	appendWarning(result, callbacks, message);
 }
@@ -587,21 +596,21 @@ void addManifestProvenanceWarnings(CompilerRunResult* result, const CompilerRunC
 		return;
 	}
 	if (result->manifest.schemaVersion != CompilerCommandManifest::kSchemaVersion) {
-		appendWarning(result, callbacks, runnerText("Manifest schema version differs from the current compiler manifest schema."));
+		appendWarning(result, callbacks, QCoreApplication::translate("VibeStudioCompilerRunner", "Manifest schema version differs from the current compiler manifest schema."));
 	}
 	if (result->manifest.createdUtc.isValid() == false) {
-		appendWarning(result, callbacks, runnerText("Manifest creation timestamp is missing or invalid."));
+		appendWarning(result, callbacks, QCoreApplication::translate("VibeStudioCompilerRunner", "Manifest creation timestamp is missing or invalid."));
 	}
 	if (result->manifest.profileId.trimmed().isEmpty()) {
-		appendWarning(result, callbacks, runnerText("Manifest profile provenance is missing."));
+		appendWarning(result, callbacks, QCoreApplication::translate("VibeStudioCompilerRunner", "Manifest profile provenance is missing."));
 	} else if (!result->plan.profileFound) {
-		appendWarning(result, callbacks, runnerText("Manifest profile is no longer registered in this build."));
+		appendWarning(result, callbacks, QCoreApplication::translate("VibeStudioCompilerRunner", "Manifest profile is no longer registered in this build."));
 	}
 	if (result->manifest.toolId.trimmed().isEmpty()) {
-		appendWarning(result, callbacks, runnerText("Manifest tool provenance is missing."));
+		appendWarning(result, callbacks, QCoreApplication::translate("VibeStudioCompilerRunner", "Manifest tool provenance is missing."));
 	}
 	if (result->manifest.commandLine.trimmed().isEmpty() && !result->manifest.program.trimmed().isEmpty()) {
-		appendWarning(result, callbacks, runnerText("Manifest command line was reconstructed from program and arguments."));
+		appendWarning(result, callbacks, QCoreApplication::translate("VibeStudioCompilerRunner", "Manifest command line was reconstructed from program and arguments."));
 	}
 }
 
@@ -631,8 +640,8 @@ CompilerArtifactValidationReport validateCompletedArtifacts(CompilerRunResult* r
 	if (!result) {
 		return {};
 	}
-	appendLog(&result->manifest, callbacks, QStringLiteral("info"), runnerText("Validating compiler output artifacts."));
-	const CompilerArtifactValidationReport report = validateCompilerArtifacts(result->manifest);
+	appendLog(&result->manifest, callbacks, QStringLiteral("info"), QCoreApplication::translate("VibeStudioCompilerRunner", "Validating compiler output artifacts."));
+	const CompilerArtifactValidationReport report = validateCompilerArtifacts(result->manifest, callbacks.cancellationRequested);
 	for (const QString& warning : report.warnings) {
 		appendWarning(result, callbacks, warning);
 	}
@@ -645,28 +654,28 @@ CompilerArtifactValidationReport validateCompletedArtifacts(CompilerRunResult* r
 CompilerRunResult runResolvedCommand(CompilerRunResult result, const CompilerRunRequest& request, const CompilerRunCallbacks& callbacks)
 {
 	result.manifest.startedUtc = QDateTime::currentDateTimeUtc();
-	appendLog(&result.manifest, callbacks, QStringLiteral("info"), runnerText("Compiler task started."));
+	appendLog(&result.manifest, callbacks, QStringLiteral("info"), QCoreApplication::translate("VibeStudioCompilerRunner", "Compiler task started."));
 	surfacePreflightFindings(&result, callbacks);
 
 	if (callbacks.cancellationRequested && callbacks.cancellationRequested()) {
 		result.cancelled = true;
 		result.durationMs = 0;
-		appendLog(&result.manifest, callbacks, QStringLiteral("warning"), runnerText("Compiler task cancelled before process start."));
+		appendLog(&result.manifest, callbacks, QStringLiteral("warning"), QCoreApplication::translate("VibeStudioCompilerRunner", "Compiler task cancelled before process start."));
 		finishResult(&result, OperationState::Cancelled);
 		return result;
 	}
 
 	if (request.dryRun) {
 		result.durationMs = 0;
-		appendLog(&result.manifest, callbacks, QStringLiteral("info"), runnerText("Dry run requested; compiler process was not started."));
+		appendLog(&result.manifest, callbacks, QStringLiteral("info"), QCoreApplication::translate("VibeStudioCompilerRunner", "Dry run requested; compiler process was not started."));
 		finishResult(&result, result.plan.isRunnable() ? successfulRunState(result.manifest) : result.plan.state());
 		return result;
 	}
 
 	if (!result.plan.isRunnable()) {
 		result.durationMs = 0;
-		appendLog(&result.manifest, callbacks, QStringLiteral("error"), runnerText("Compiler command is not runnable."));
-		finishResult(&result, result.plan.state(), runnerText("Compiler command is not runnable."));
+		appendLog(&result.manifest, callbacks, QStringLiteral("error"), QCoreApplication::translate("VibeStudioCompilerRunner", "Compiler command is not runnable."));
+		finishResult(&result, result.plan.state(), QCoreApplication::translate("VibeStudioCompilerRunner", "Compiler command is not runnable."));
 		return result;
 	}
 
@@ -674,8 +683,8 @@ CompilerRunResult runResolvedCommand(CompilerRunResult result, const CompilerRun
 	if (workingDirectory.isEmpty() || !QFileInfo(workingDirectory).isDir()) {
 		result.durationMs = 0;
 		const QString error = workingDirectory.isEmpty()
-			? runnerText("Compiler working directory is required before process start.")
-			: runnerText("Compiler working directory does not exist: %1").arg(QDir::toNativeSeparators(workingDirectory));
+			? QCoreApplication::translate("VibeStudioCompilerRunner", "Compiler working directory is required before process start.")
+			: QCoreApplication::translate("VibeStudioCompilerRunner", "Compiler working directory does not exist: %1").arg(QDir::toNativeSeparators(workingDirectory));
 		appendLog(&result.manifest, callbacks, QStringLiteral("error"), error);
 		finishResult(&result, OperationState::Failed, error);
 		return result;
@@ -686,7 +695,7 @@ CompilerRunResult runResolvedCommand(CompilerRunResult result, const CompilerRun
 	QTemporaryDir isolatedTempDir(compilerTempTemplatePath());
 	if (!isolatedTempDir.isValid()) {
 		result.durationMs = 0;
-		const QString error = runnerText("Failed to create an isolated compiler temporary directory.");
+		const QString error = QCoreApplication::translate("VibeStudioCompilerRunner", "Failed to create an isolated compiler temporary directory.");
 		appendLog(&result.manifest, callbacks, QStringLiteral("error"), error);
 		finishResult(&result, OperationState::Failed, error);
 		return result;
@@ -697,7 +706,7 @@ CompilerRunResult runResolvedCommand(CompilerRunResult result, const CompilerRun
 	process.setArguments(result.plan.arguments);
 	process.setWorkingDirectory(result.plan.workingDirectory);
 	applyIsolatedTempEnvironment(&process, &result.manifest, isolatedTempDir.path());
-	appendLog(&result.manifest, callbacks, QStringLiteral("info"), runnerText("Using isolated compiler temporary directory: %1").arg(QDir::toNativeSeparators(isolatedTempDir.path())));
+	appendLog(&result.manifest, callbacks, QStringLiteral("info"), QCoreApplication::translate("VibeStudioCompilerRunner", "Using isolated compiler temporary directory: %1").arg(QDir::toNativeSeparators(isolatedTempDir.path())));
 
 	const LeakFileSnapshot preRunLeakFiles = captureLeakFileSnapshot(result.manifest);
 
@@ -706,13 +715,13 @@ CompilerRunResult runResolvedCommand(CompilerRunResult result, const CompilerRun
 	process.start();
 	if (!process.waitForStarted(5000)) {
 		result.durationMs = timer.elapsed();
-		appendLog(&result.manifest, callbacks, QStringLiteral("error"), runnerText("Compiler process could not start."));
+		appendLog(&result.manifest, callbacks, QStringLiteral("error"), QCoreApplication::translate("VibeStudioCompilerRunner", "Compiler process could not start."));
 		finishResult(&result, OperationState::Failed, process.errorString());
 		return result;
 	}
 
 	result.started = true;
-	appendLog(&result.manifest, callbacks, QStringLiteral("info"), runnerText("Process started: %1").arg(result.plan.commandLine));
+	appendLog(&result.manifest, callbacks, QStringLiteral("info"), QCoreApplication::translate("VibeStudioCompilerRunner", "Process started: %1").arg(result.plan.commandLine));
 
 	CompilerDiagnosticParser diagnosticParser;
 	QByteArray stdoutBytes;
@@ -723,7 +732,7 @@ CompilerRunResult runResolvedCommand(CompilerRunResult result, const CompilerRun
 	// Emit one log entry per complete line as it arrives so watchers see progress live, and parse
 	// diagnostics incrementally instead of only after the process has exited.
 	const auto handleLine = [&](const QString& rawLine, const QString& channel) {
-		const QString line = stripTrailingCarriageReturn(rawLine);
+		const QString line = stripTerminalEscapes(stripTrailingCarriageReturn(rawLine));
 		if (line.trimmed().isEmpty()) {
 			return;
 		}
@@ -773,14 +782,14 @@ CompilerRunResult runResolvedCommand(CompilerRunResult result, const CompilerRun
 			result.cancelled = true;
 			process.kill();
 			process.waitForFinished(1000);
-			appendLog(&result.manifest, callbacks, QStringLiteral("warning"), runnerText("Cancellation requested; compiler process was stopped."));
+			appendLog(&result.manifest, callbacks, QStringLiteral("warning"), QCoreApplication::translate("VibeStudioCompilerRunner", "Cancellation requested; compiler process was stopped."));
 			break;
 		}
 		if (timer.elapsed() > timeoutMs) {
 			result.timedOut = true;
 			process.kill();
 			process.waitForFinished(1000);
-			appendLog(&result.manifest, callbacks, QStringLiteral("error"), runnerText("Compiler process timed out after %1 ms.").arg(timeoutMs));
+			appendLog(&result.manifest, callbacks, QStringLiteral("error"), QCoreApplication::translate("VibeStudioCompilerRunner", "Compiler process timed out after %1 ms.").arg(timeoutMs));
 			break;
 		}
 	}
@@ -804,10 +813,10 @@ CompilerRunResult runResolvedCommand(CompilerRunResult result, const CompilerRun
 		appendLog(&result.manifest, callbacks, diagnostic.level, diagnostic.rawLine);
 	}
 	if (!result.stdoutText.trimmed().isEmpty()) {
-		appendLog(&result.manifest, callbacks, QStringLiteral("info"), runnerText("Captured stdout (%1 bytes).").arg(stdoutBytes.size()));
+		appendLog(&result.manifest, callbacks, QStringLiteral("info"), QCoreApplication::translate("VibeStudioCompilerRunner", "Captured stdout (%1 bytes).").arg(stdoutBytes.size()));
 	}
 	if (!result.stderrText.trimmed().isEmpty()) {
-		appendLog(&result.manifest, callbacks, QStringLiteral("info"), runnerText("Captured stderr (%1 bytes).").arg(stderrBytes.size()));
+		appendLog(&result.manifest, callbacks, QStringLiteral("info"), QCoreApplication::translate("VibeStudioCompilerRunner", "Captured stderr (%1 bytes).").arg(stderrBytes.size()));
 	}
 	enrichWithKnownIssues(&result, callbacks);
 
@@ -821,26 +830,31 @@ CompilerRunResult runResolvedCommand(CompilerRunResult result, const CompilerRun
 		return result;
 	}
 	if (result.timedOut) {
-		finishResult(&result, OperationState::Failed, runnerText("Compiler process timed out."));
+		finishResult(&result, OperationState::Failed, QCoreApplication::translate("VibeStudioCompilerRunner", "Compiler process timed out."));
 		return result;
 	}
 	if (process.exitStatus() != QProcess::NormalExit || result.exitCode != 0) {
-		appendLog(&result.manifest, callbacks, QStringLiteral("error"), runnerText("Compiler process finished with exit code %1.").arg(result.exitCode));
+		appendLog(&result.manifest, callbacks, QStringLiteral("error"), QCoreApplication::translate("VibeStudioCompilerRunner", "Compiler process finished with exit code %1.").arg(result.exitCode));
 		finishResult(&result, OperationState::Failed);
 		return result;
 	}
 
 	const CompilerArtifactValidationReport artifactReport = validateCompletedArtifacts(&result, callbacks);
+	if (artifactReport.cancelled) {
+		result.cancelled = true;
+		finishResult(&result, OperationState::Cancelled);
+		return result;
+	}
 	if (artifactReport.hasErrors()) {
-		finishResult(&result, OperationState::Failed, runnerText("Compiler output artifact validation failed."));
+		finishResult(&result, OperationState::Failed, QCoreApplication::translate("VibeStudioCompilerRunner", "Compiler output artifact validation failed."));
 		return result;
 	}
 
 	result.registeredOutputPaths = request.registerOutputs ? existingOutputs(result.manifest.expectedOutputPaths + result.manifest.optionalOutputPaths) : QStringList();
 	for (const QString& output : result.registeredOutputPaths) {
-		appendLog(&result.manifest, callbacks, QStringLiteral("info"), runnerText("Registered output: %1").arg(output));
+		appendLog(&result.manifest, callbacks, QStringLiteral("info"), QCoreApplication::translate("VibeStudioCompilerRunner", "Registered output: %1").arg(output));
 	}
-	appendLog(&result.manifest, callbacks, QStringLiteral("info"), runnerText("Compiler process completed in %1 ms.").arg(result.durationMs));
+	appendLog(&result.manifest, callbacks, QStringLiteral("info"), QCoreApplication::translate("VibeStudioCompilerRunner", "Compiler process completed in %1 ms.").arg(result.durationMs));
 	finishResult(&result, successfulRunState(result.manifest));
 	return result;
 }
@@ -912,7 +926,7 @@ CompilerRunResult rerunCompilerCommandManifest(const CompilerCommandManifest& ma
 	result.plan.inputPath = manifest.inputPaths.value(0);
 	result.plan.expectedOutputPath = manifest.expectedOutputPaths.value(0);
 	if (!result.plan.executableAvailable) {
-		result.plan.errors << runnerText("Manifest program no longer exists.");
+		result.plan.errors << QCoreApplication::translate("VibeStudioCompilerRunner", "Manifest program no longer exists.");
 	}
 	addManifestProvenanceWarnings(&result, callbacks);
 
@@ -938,32 +952,32 @@ CompilerRunResult rerunCompilerCommandManifest(const CompilerCommandManifest& ma
 QString compilerRunResultText(const CompilerRunResult& result)
 {
 	QStringList lines;
-	lines << runnerText("Compiler run result");
-	lines << runnerText("State: %1").arg(operationStateId(result.state));
-	lines << runnerText("Started: %1").arg(result.started ? runnerText("yes") : runnerText("no"));
-	lines << runnerText("Exit code: %1").arg(result.exitCode >= 0 ? QString::number(result.exitCode) : runnerText("not run"));
-	lines << runnerText("Duration: %1 ms").arg(result.durationMs >= 0 ? QString::number(result.durationMs) : runnerText("not run"));
-	lines << runnerText("Command line: %1").arg(result.manifest.commandLine);
+	lines << QCoreApplication::translate("VibeStudioCompilerRunner", "Compiler run result");
+	lines << QCoreApplication::translate("VibeStudioCompilerRunner", "State: %1").arg(operationStateId(result.state));
+	lines << QCoreApplication::translate("VibeStudioCompilerRunner", "Started: %1").arg(result.started ? QCoreApplication::translate("VibeStudioCompilerRunner", "yes") : QCoreApplication::translate("VibeStudioCompilerRunner", "no"));
+	lines << QCoreApplication::translate("VibeStudioCompilerRunner", "Exit code: %1").arg(result.exitCode >= 0 ? QString::number(result.exitCode) : QCoreApplication::translate("VibeStudioCompilerRunner", "not run"));
+	lines << QCoreApplication::translate("VibeStudioCompilerRunner", "Duration: %1 ms").arg(result.durationMs >= 0 ? QString::number(result.durationMs) : QCoreApplication::translate("VibeStudioCompilerRunner", "not run"));
+	lines << QCoreApplication::translate("VibeStudioCompilerRunner", "Command line: %1").arg(result.manifest.commandLine);
 	if (!result.registeredOutputPaths.isEmpty()) {
-		lines << runnerText("Registered outputs");
+		lines << QCoreApplication::translate("VibeStudioCompilerRunner", "Registered outputs");
 		for (const QString& output : result.registeredOutputPaths) {
 			lines << QStringLiteral("- %1").arg(QDir::toNativeSeparators(output));
 		}
 	}
 	if (result.leakDetected) {
-		lines << runnerText("Leak: yes");
+		lines << QCoreApplication::translate("VibeStudioCompilerRunner", "Leak: yes");
 		if (!result.leakOccupantClassname.isEmpty()) {
-			lines << runnerText("Leaked entity: %1").arg(result.leakOccupantClassname);
+			lines << QCoreApplication::translate("VibeStudioCompilerRunner", "Leaked entity: %1").arg(result.leakOccupantClassname);
 		}
 		if (!result.leakPointText.isEmpty()) {
-			lines << runnerText("Leak position: %1").arg(result.leakPointText);
+			lines << QCoreApplication::translate("VibeStudioCompilerRunner", "Leak position: %1").arg(result.leakPointText);
 		}
 		if (!result.leakPointFilePath.isEmpty()) {
-			lines << runnerText("Leak point file: %1").arg(QDir::toNativeSeparators(result.leakPointFilePath));
+			lines << QCoreApplication::translate("VibeStudioCompilerRunner", "Leak point file: %1").arg(QDir::toNativeSeparators(result.leakPointFilePath));
 		}
 	}
 	if (!result.error.isEmpty()) {
-		lines << runnerText("Error: %1").arg(result.error);
+		lines << QCoreApplication::translate("VibeStudioCompilerRunner", "Error: %1").arg(result.error);
 	}
 	lines << QString();
 	lines << compilerCommandManifestText(result.manifest);

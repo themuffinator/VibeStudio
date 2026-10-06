@@ -1,20 +1,26 @@
+#include "core/package_import_store.h"
 #include "core/deflate.h"
 #include "core/package_archive.h"
 #include "core/package_staging.h"
 
 #include <QByteArray>
+#include <QCryptographicHash>
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
+#include <QElapsedTimer>
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QJsonValue>
+#include <QScopeGuard>
 #include <QStringList>
 #include <QTemporaryDir>
+#include <QThreadPool>
 
 #include <iostream>
 #include <limits>
+#include <memory>
 
 using namespace vibestudio;
 
@@ -522,12 +528,138 @@ PackageWriteReport writePackage(const PackageStagingModel& staging, const QStrin
 	return staging.writeArchive(request);
 }
 
+bool manifestStreamingSmoke()
+{
+	bool ok = true;
+	QString error;
+	PackageStagingModel plan;
+	const QByteArray bytes(2 * 1024 * 1024 + 3, 'a');
+	ok &= expect(plan.createEmpty(PackageArchiveFormat::Pak, {}, &error)
+		&& plan.addBytes(bytes, QStringLiteral("removed.bin"), &error)
+		&& plan.deleteEntry(QStringLiteral("removed.bin"), &error), "prepare a large generated operation absent from the final entries");
+	bool cancel = false;
+	quint64 stoppedAt = 0;
+	PackageReadControl control;
+	control.isCancelled = [&]() { return cancel; };
+	control.progress = [&](const QString& path, qint64 done, qint64 total) {
+		if (path == QStringLiteral("removed.bin") && done >= 65536 && done < total) { stoppedAt = done; cancel = true; }
+	};
+	ok &= expect(plan.manifestJson(&error, control).isEmpty() && cancel && stoppedAt == 65536 && !error.isEmpty(),
+		"hashing generated operation metadata must cancel within a chunk even when no planned entries remain");
+	const QString digest = QString::fromLatin1(QCryptographicHash::hash(bytes, QCryptographicHash::Sha256).toHex());
+	const auto original = plan.manifestJson(&error);
+	const auto operations = QJsonDocument::fromJson(original).object().value(QStringLiteral("operations")).toArray();
+	ok &= expect(error.isEmpty() && operations.size() == 2 && operations.first().toObject().value(QStringLiteral("sha256")) == digest,
+		"retry must return the complete generated-operation digest without changing the plan");
+	ok &= expect(plan.undo() && plan.addBytes(bytes, QStringLiteral("copy.bin"), &error)
+		&& plan.addBytes(QByteArray(bytes.size(), 'b'), QStringLiteral("different.bin"), &error), "prepare shared and distinct generated buffers");
+	PackageStagingArchive reader(plan);
+	PackageStagingModel rebased;
+	ok &= expect(rebased.loadBaseArchive(reader, &error) && rebased.operations().isEmpty(), "prepare generated base content without operation records");
+	const auto json = rebased.manifestJson(&error);
+	const auto entries = QJsonDocument::fromJson(json).object().value(QStringLiteral("afterEntries")).toArray();
+	for (const auto& value : entries) {
+		const auto entry = value.toObject();
+		const bool different = entry.value(QStringLiteral("virtualPath")) == QStringLiteral("different.bin");
+		ok &= expect((entry.value(QStringLiteral("sha256")).toString() == digest) != different,
+			"manifest cache must distinguish different generated buffers and preserve shared content hashes");
+	}
+	ok &= expect(entries.size() == 3 && json == rebased.manifestJson(&error) && !json.contains("generated:"),
+		"cache identity must remain private and reports deterministic");
+	cancel = false; stoppedAt = 0;
+	control.progress = [&](const QString&, qint64 done, qint64 total) {
+		if (done >= 65536 && done < total) { stoppedAt = done; cancel = true; }
+	};
+	ok &= expect(rebased.manifestJson(&error, control).isEmpty() && stoppedAt == 65536,
+		"generated base-entry hashing must also cancel within one chunk");
+	return ok;
+}
+
+bool streamingSaveSmoke(const QDir& root)
+{
+	bool ok = true;
+	QString error;
+	const QByteArray payload(1048579, 'a');
+	const QString input = root.filePath(QStringLiteral("stream-input.bin"));
+	ok &= expect(writeFile(input, payload), "create a multi-block input");
+	const QString digest = QString::fromLatin1(QCryptographicHash::hash(payload, QCryptographicHash::Sha256).toHex());
+	for (const QString& kind : {QStringLiteral("pak"), QStringLiteral("zip"), QStringLiteral("pk3"), QStringLiteral("PWAD"), QStringLiteral("IWAD"), QStringLiteral("WAD2"), QStringLiteral("WAD3")}) {
+		const bool wad = kind != QStringLiteral("pak") && kind != QStringLiteral("zip") && kind != QStringLiteral("pk3");
+		const auto format = wad ? PackageArchiveFormat::Wad : packageArchiveFormatFromFileName(QStringLiteral("file.") + kind);
+		PackageStagingModel plan;
+		ok &= expect(plan.createEmpty(format, wad ? kind : QString(), &error)
+			&& plan.addFile(input, QStringLiteral("PAYLOAD"), &error), "stage a large entry");
+		PackageWriteRequest request;
+		request.destinationPath = root.filePath(QStringLiteral("stream-%1.%2").arg(kind, wad ? QStringLiteral("wad") : kind));
+		request.format = format;
+		request.writeManifest = true;
+		request.verifyDeterminism = true;
+		bool intermediate = false;
+		request.byteProgress = [&](PackageWritePhase phase, const QString&, quint64 done, quint64 total) {
+			if (phase == PackageWritePhase::Write && done > 0 && done < total) intermediate = true;
+		};
+		request.dryRun = true;
+		const auto dry = plan.writeArchive(request);
+		ok &= expect(dry.succeeded() && dry.determinismVerified && intermediate && !QFile::exists(request.destinationPath), "dry run must stream with progress and verified determinism without output");
+		request.dryRun = false;
+		const auto report = plan.writeArchive(request);
+		ok &= expect(report.succeeded() && report.outputCommitted && report.wroteManifest && report.sha256 == dry.sha256, "all archive families must publish the same bytes measured by dry run");
+		PackageArchive archive;
+		QByteArray bytes;
+		ok &= expect(archive.load(request.destinationPath, &error) && archive.readEntryBytes(QStringLiteral("PAYLOAD"), &bytes, &error) && bytes == payload, "streamed archive payload must round trip");
+		const auto after = QJsonDocument::fromJson(readFile(report.manifestPath)).object().value(QStringLiteral("afterEntries")).toArray();
+		ok &= expect(after.size() == 1 && after.first().toObject().value(QStringLiteral("sha256")).toString() == digest, "manifest must hash the complete stream");
+		// Exercise decompression-to-compression as well as retained loose input.
+		PackageStagingModel rebased;
+		ok &= expect(rebased.loadBaseArchive(archive, &error), "load emitted source for a streaming rewrite");
+		request.dryRun = true;
+		request.allowInPlaceOverwrite = true;
+		ok &= expect(rebased.writeArchive(request).sha256 == report.sha256, "archive-backed stream rewrite must preserve deterministic bytes");
+		for (const auto stopPhase : {PackageWritePhase::Write, PackageWritePhase::VerifyDeterminism, PackageWritePhase::Manifest}) {
+			request.dryRun = false;
+			bool cancel = false;
+			quint64 stoppedAt = 0;
+			request.isCancelled = [&]() { return cancel; };
+			request.byteProgress = [&](PackageWritePhase phase, const QString&, quint64 done, quint64 total) {
+				if (phase == stopPhase && done >= 65536 && done < total) { stoppedAt = done; cancel = true; }
+			};
+			const QByteArray previous = readFile(request.destinationPath);
+			const auto cancelled = rebased.writeArchive(request);
+			ok &= expect(cancelled.cancelled && !cancelled.outputCommitted && stoppedAt == 65536
+				&& readFile(request.destinationPath) == previous && !QFile::exists(request.destinationPath + QStringLiteral(".bak")), "mid-file cancellation must preserve the original and stop at the first chunk");
+		}
+	}
+	// A mutation after measurement must never publish a new ZIP, even when its
+	// timestamp and length are restored to fool a metadata-only check.
+	PackageStagingModel changing;
+	ok &= expect(changing.createEmpty(PackageArchiveFormat::Zip, {}, &error)
+		&& changing.addFile(input, QStringLiteral("PAYLOAD"), &error, PackageStageConflictResolution::Block, {}, PackageFileImportMode::VerifyOnly), "stage a verified mutable source");
+	const auto stamp = QFileInfo(input).lastModified();
+	PackageWriteRequest request;
+	request.destinationPath = root.filePath(QStringLiteral("stream-changed.zip"));
+	bool changed = false;
+	request.byteProgress = [&](PackageWritePhase phase, const QString&, quint64 done, quint64) {
+		if (phase != PackageWritePhase::Write || done != 0 || changed) return;
+		changed = true;
+		QFile file(input);
+		ok &= expect(file.open(QIODevice::ReadWrite) && file.write("b", 1) == 1 && file.setFileTime(stamp, QFileDevice::FileModificationTime), "mutate verified input at the write boundary");
+	};
+	const auto changedReport = changing.writeArchive(request);
+	ok &= expect(changed && !changedReport.succeeded() && !changedReport.outputCommitted && !QFile::exists(request.destinationPath), "same-size source mutation between ZIP passes must abort publication");
+	request.byteProgress = {};
+	ok &= expect(changing.manifestJson(&error).isEmpty() && !error.isEmpty(), "unverifiable manifest content must fail instead of reporting empty digests");
+	return ok;
+}
+
 } // namespace
 
 int main()
 {
+	QElapsedTimer timing; timing.start();
+	const auto checkpoint = [&](const char* phase) { std::cout << phase << ": " << timing.restart() << " ms" << std::endl; };
 	bool ok = true;
 	QTemporaryDir tempDir;
+	const auto drainCleanup = qScopeGuard([] { QThreadPool::globalInstance()->waitForDone(); waitForPackageImportCleanup(); });
 	ok &= expect(tempDir.isValid(), "temporary directory should be valid");
 	QDir root(tempDir.path());
 	ok &= expect(root.mkpath(QStringLiteral("source/maps")), "source maps directory should be created");
@@ -975,11 +1107,22 @@ int main()
 		inPlaceRequest.destinationPath = inPlacePath;
 		inPlaceRequest.format = PackageArchiveFormat::Pak;
 		inPlaceRequest.allowInPlaceOverwrite = true;
+		inPlaceRequest.writeManifest = true;
+		const QByteArray expectedManifest = inPlaceStaging.manifestJson();
+		const QString previousBackup = inPlacePath + QStringLiteral(".bak");
+		ok &= expect(writeFile(previousBackup, QByteArray("older backup")), "create an earlier backup");
+		PackageWriteRequest dryRunRequest = inPlaceRequest;
+		dryRunRequest.dryRun = true;
+		ok &= expect(inPlaceStaging.writeArchive(dryRunRequest).succeeded(), "in-place dry run needs no separate overwrite flag");
+		ok &= expect(readFile(inPlacePath) == inPlaceOriginal && readFile(previousBackup) == QByteArray("older backup"), "dry run must preserve the source and previous backup");
 		const PackageWriteReport inPlaceReport = inPlaceStaging.writeArchive(inPlaceRequest);
 		ok &= expect(inPlaceReport.succeeded() && inPlaceReport.overwroteInPlace, "opt-in in-place overwrite should succeed");
+		ok &= expect(inPlaceReport.wroteManifest && readFile(inPlaceReport.manifestPath) == expectedManifest,
+			"in-place manifest must describe original and planned entries before source replacement");
 		ok &= expect(inPlaceReport.backupPath == QStringLiteral("%1.bak").arg(QFileInfo(inPlacePath).absoluteFilePath()), "the default backup should sit beside the package");
 		ok &= expect(QFileInfo::exists(inPlaceReport.backupPath), "the backup file should exist");
 		ok &= expect(readFile(inPlaceReport.backupPath) == inPlaceOriginal, "the backup must hold the original package byte-for-byte");
+		ok &= expect(inPlaceReport.recoveryPaths.isEmpty(), "a successful backup rotation should leave no recovery files");
 		ok &= expect(readFile(inPlacePath) != inPlaceOriginal, "the package should have been replaced");
 		ok &= expect(packageWriteReportText(inPlaceReport).contains(inPlaceReport.backupPath), "the report text should name the backup");
 
@@ -1035,10 +1178,10 @@ int main()
 		const QString vanishing = root.filePath(QStringLiteral("vanishing.bin"));
 		ok &= expect(writeFile(vanishing, QByteArray("temporary")), "vanishing staged source should be written");
 		ok &= expect(failStaging.addFile(vanishing, QStringLiteral("added.bin"), &error), "vanishing add should stage");
-		// The plan is computed and cached while the staged file still exists,
-		// then the file disappears: exactly the race the backup dance is for.
+		// A broken working snapshot must fail before publication even when the
+		// planned directory was cached while its bytes were still available.
 		ok &= expect(failStaging.summary().canSave, "the plan should be saveable before the source vanishes");
-		ok &= expect(QFile::remove(vanishing), "the staged source file should be removable");
+		ok &= expect(QFile::remove(failStaging.operations().last().sourceIdentity->path), "the disposable retained snapshot can be removed for this failure fixture");
 
 		PackageWriteRequest failRequest;
 		failRequest.destinationPath = failPath;
@@ -1064,7 +1207,8 @@ int main()
 		ok &= expect(root.mkpath(QStringLiteral("oversized-source")), "oversized source directory should be created");
 
 		const quint64 overSignedLimit = static_cast<quint64>(std::numeric_limits<qint32>::max()) + 1;
-		OversizedEntryReader pakReader(oversizedSource.path(), QStringLiteral("huge.bin"), overSignedLimit);
+		PackageArchive pakReader;
+		ok &= expect(pakReader.loadSnapshot(std::make_shared<OversizedEntryReader>(oversizedSource.path(), QStringLiteral("huge.bin"), overSignedLimit), &error), "oversized virtual PAK provider should be owned");
 		PackageStagingModel oversizedPakStaging;
 		ok &= expect(oversizedPakStaging.loadBaseArchive(pakReader, &error), "oversized PAK staging should load");
 		const PackageWriteReport oversizedPakReport = writePackage(oversizedPakStaging, root.filePath(QStringLiteral("oversized.pak")), PackageArchiveFormat::Pak);
@@ -1073,7 +1217,8 @@ int main()
 		// but only later and for the wrong reason (the bytes cannot be read).
 		ok &= expect(oversizedPakReport.blockedMessages.join('\n').contains(QStringLiteral("PAK entry size exceeds the signed 32-bit limit")), "a PAK entry above INT32_MAX should be blocked by the size bound");
 
-		OversizedEntryReader wadReader(oversizedSource.path(), QStringLiteral("HUGELUMP"), overSignedLimit);
+		PackageArchive wadReader;
+		ok &= expect(wadReader.loadSnapshot(std::make_shared<OversizedEntryReader>(oversizedSource.path(), QStringLiteral("HUGELUMP"), overSignedLimit), &error), "oversized virtual WAD provider should be owned");
 		PackageStagingModel oversizedWadStaging;
 		ok &= expect(oversizedWadStaging.loadBaseArchive(wadReader, &error), "oversized WAD staging should load");
 		const PackageWriteReport oversizedWadReport = writePackage(oversizedWadStaging, root.filePath(QStringLiteral("oversized.wad")), PackageArchiveFormat::Wad);
@@ -1147,5 +1292,10 @@ int main()
 		ok &= expect(bytes == QByteArray("seed"), "boundary archive seed bytes mismatch");
 	}
 
+	checkpoint("Staging, publication and ZIP64 boundary fixtures");
+	ok &= streamingSaveSmoke(root);
+	checkpoint("Streaming save and cancellation across seven formats");
+	ok &= manifestStreamingSmoke();
+	checkpoint("Manifest streaming");
 	return ok ? 0 : 1;
 }

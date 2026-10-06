@@ -1,5 +1,13 @@
 # VibeStudio 0.1.0-rc1
 
+This document records the foundation cut. Its included features and known gaps
+are a historical snapshot, not the current editor acceptance report. The active
+modeller release requirements and evidence are tracked in
+[Modeller Release Candidate Gate](MODELLER_RELEASE.md), and the current texture
+acceptance is tracked in the [texture editor audit](plans/texture-editor-release-candidate.md).
+Audio requirements, optimized regression results and remaining platform/manual
+acceptance are tracked in the [audio editor audit](plans/audio-editor-release-candidate.md).
+
 This is the first MVP release-candidate cut for the foundation scaffold. It is
 not a production-ready editor suite; it is a validated baseline for the
 project, package, compiler, settings, sample, packaging, credits, and CLI
@@ -33,7 +41,10 @@ surfaces that later editor work can build on.
   from decoded PCM peaks.
 - Dependency-free DEFLATE codec implemented from RFC 1951/1950, with CRC-32 and
   Adler-32. ZIP/PK3 reading handles stored and deflated entries and ZIP64;
-  ZIP/PK3 writing emits stored or fixed-Huffman deflate.
+  ZIP/PK3 writing selects stored, fixed-Huffman or dynamic-Huffman blocks.
+- Shared package integrity validation streams complete payloads with bounded
+  buffers, CRC/size checks, SHA-256 reports and within-file cancellation. The
+  GUI and CLI share positional WAD reads, archive comparison and staged review.
 - idTech image decoders for Doom patches, flats, PLAYPAL and COLORMAP, Quake
   `.lmp`, WAD2/WAD3 miptex, Quake II `.wal`, PCX, Targa, and Quake `.spr`, with
   the palette resolved out of the open package and a generated, license-clean
@@ -63,7 +74,14 @@ surfaces that later editor work can build on.
 - Safe package write-back with staged add/import, replace, rename, delete,
   conflict/blocker reporting, package manifests, before/after composition, and
   deterministic save-as writers for PAK, ZIP/PK3, and WAD (PWAD/IWAD and
-  WAD2/WAD3) outputs. Writing back over the open source package is blocked.
+  WAD2/WAD3) outputs. Writing over the open source requires explicit in-place
+  replacement and preserves a backup. Atomic publication keeps the original in
+  place until commit; verified recovery copies and journals survive process
+  interruption. `package recover` inspects retained files and can finish backup
+  publication for an already-installed replacement. Interrupted Saves in the GUI
+  and `package interrupted-saves` discover bounded folder metadata; selected saves
+  are verified before reviewed completion. Pre-commit/changed-output decisions,
+  power-loss durability and external-writer races remain open in the package audit.
 - Syntax highlighting for configs, shader scripts, QuakeC, and entity
   definition text, themed from the active studio theme.
 - Five themes including high-contrast dark and high-contrast light, applied
@@ -90,17 +108,47 @@ surfaces that later editor work can build on.
 
 ## Known Gaps
 
-- No production level, model, texture, audio, sprite, shader, code, or script
+- No production level, model, audio, sprite, shader, code, or script
   editor yet. The map viewport is inspect-and-select with save-as edits, not a
   full editor.
-- No model geometry rendering. The Models surface decodes header metadata,
-  skins, and frame/surface counts and shows a skin image plus a text viewport
-  summary; no mesh is drawn.
-- No audio playback. Audio previews stop at parsed headers (WAV, Ogg, MP3,
-  FLAC) and a waveform envelope; no audio backend is linked, so the analysis
-  only flags whether an entry would be a playback candidate. Convert-to-WAV
-  handles PCM sources and refuses compressed ones with a missing-decoder
-  message.
+- Texture authoring includes bounded layers, `.vtexture` projects, guarded saves,
+  recovery, pixel/selection/seam tools, nine export profiles, native package
+  staging and shared CLI services. Browser decoding, thumbnail caching, palette
+  refresh and PNG publication use bounded background work. Project save preparation
+  and large-file reads/checksums are cancellable before guarded publication.
+  Cross-editor/native/compiler handoffs have generated-asset acceptance evidence.
+  The current audit has passing results for all 42 relevant suites on Windows
+  and Linux/WSL, enlarged/RTL accessibility metadata/layout checks, and a local
+  Qt-deployed Windows package launch. A 22-step generated-asset workflow verifies
+  Quake, Quake II and Quake III compiler/package handoffs. Physical input,
+  screen readers, native windows, macOS/ARM, clean-machine deployment and game
+  rendering remain unverified; see the
+  [texture editor audit](plans/texture-editor-release-candidate.md).
+- Models renders OBJ, MDL, MD2 and MD3 geometry with material, skin and frame
+  inspection. Mesh authoring, UVs, animation, tags, collision, assemblies and
+  package/level handoffs use shared GUI/CLI services. Professional modeller
+  release acceptance remains open in the [modeller gate](MODELLER_RELEASE.md),
+  including the complete platform, performance and physical accessibility audit.
+  MDC, MDR and IQM still provide header metadata only.
+- Audio playback depends on the build. With Qt Multimedia linked, the Audio
+  page plays WAV, Doom DMX, and whatever compressed formats Qt's decoders
+  handle; without it, previews stop at parsed headers and a waveform envelope.
+  Browser preview and audition preparation run on bounded workers and share the
+  editor's transport, source identity checks, cancellation and retryable device
+  errors. WAV audition preserves precision; DMX uses PCM16 wrapping. Browser
+  WAV export also accepts the documented MP3, native FLAC and Ogg Vorbis imports.
+- Audio authoring now includes bounded PCM effects, undo, edited auditioning,
+  package staging, lossless `.vsaudio` projects, atomic conflict-aware saves,
+  local recovery, frame/sample navigation, a shared float clipboard, high-quality
+  resampling, integer/float WAV precision, optional dither, Doom DMX/game sound
+  delivery presets, per-channel/selection peak/RMS/DC and over-range analysis,
+  true peak and integrated loudness with reviewed surround speaker roles,
+  loop/cue authoring, bounded compressed import, startup recovery discovery and
+  inventory, Quake II/III level sound handoff, and shared CLI operations.
+  Professional audio release acceptance
+  remains open in the [audio editor audit](plans/audio-editor-release-candidate.md),
+  including final current-source regression, broader performance, physical
+  device/accessibility acceptance and native cross-platform evidence.
 - No text-to-speech. The TTS preference is stored and reported by the CLI and
   setup summary, but no speech engine is wired up.
 - No perspective 3D view. Map previews are orthographic only.
@@ -108,11 +156,11 @@ surfaces that later editor work can build on.
   highlighted but not loaded into an entity model.
 - No missing-texture detection. Map texture references are listed but not
   resolved against the textures in mounted packages.
-- No in-place package overwrite workflow and no package compare tooling; the
-  staged save-as path is the only write route.
-- The deflate encoder emits stored or fixed-Huffman blocks only; there is no
-  dynamic-Huffman encoder, so PK3 output is larger than a `zlib`-produced
-  archive.
+- Package-manager release acceptance is still open: persistent staging,
+  undo/redo, a consistent staged browser, asynchronous open/preview/extraction,
+  save recovery hardening and native cross-platform evidence remain in the
+  [package-manager audit](plans/package-manager-release-candidate.md). Confirmed
+  in-place saves and background comparison/review are implemented.
 - WAD2/WAD3 compressed lumps are listed but not decoded.
 - No fuzz targets. The binary parsers are fixture-tested, including truncated,
   malformed, and hostile inputs, but nothing is fuzzed.
@@ -125,9 +173,11 @@ surfaces that later editor work can build on.
 - No source-port installation detection yet.
 - AI provider network calls remain opt-in future work; current AI workflows are
   safe, no-write, manifest-backed experiments and connector configuration.
-- Portable packages still require platform Qt deployment, signing,
-  notarization, and published artifact promotion before they become production
-  release downloads.
+- Windows packaging now verifies the selected Qt runtime and matching source
+  companion; hosted CI execution of the paired-artifact workflow remains to be
+  verified. macOS/Linux still require native Qt deployment. Signing,
+  notarization, vendor-runtime source reconstruction, clean-machine acceptance
+  and durable binary/source publication remain open before production release.
 
 ## Verification
 

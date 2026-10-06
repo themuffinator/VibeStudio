@@ -2,14 +2,19 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import subprocess
 import sys
 import tempfile
+import zipfile
 from pathlib import Path
 
 
 REQUIRED_PACKAGE_FILES = [
+    "licenses/external/audio/portaudio/LICENSE.txt",
+    "licenses/external/audio/portaudio/VIBESTUDIO.md",
+    "licenses/external/audio/portaudio/UPSTREAM.json",
     "README.md",
     "VERSION",
     "docs/CREDITS.md",
@@ -17,6 +22,24 @@ REQUIRED_PACKAGE_FILES = [
     "docs/PACKAGING.md",
     "licenses/THIRD_PARTY_LICENSES.md",
     "licenses/docs/CREDITS.md",
+    "licenses/external/audio/r8brain-free-src/LICENSE",
+    "licenses/external/audio/r8brain-free-src/LICENSE-OOURA.txt",
+    "licenses/external/audio/r8brain-free-src/VIBESTUDIO.md",
+    "licenses/external/audio/r8brain-free-src/UPSTREAM.json",
+    "licenses/external/audio/libebur128/COPYING",
+    "licenses/external/audio/libebur128/VIBESTUDIO.md",
+    "licenses/external/audio/libebur128/UPSTREAM.json",
+    "licenses/external/audio/libebur128/doc/license/R128Scan.txt",
+    "licenses/external/audio/libebur128/doc/license/queue.txt",
+    "licenses/external/audio/dr_libs/LICENSE",
+    "licenses/external/audio/dr_libs/VIBESTUDIO.md",
+    "licenses/external/audio/dr_libs/UPSTREAM.json",
+    "licenses/external/audio/libogg/COPYING",
+    "licenses/external/audio/libogg/VIBESTUDIO.md",
+    "licenses/external/audio/libogg/UPSTREAM.json",
+    "licenses/external/audio/libvorbis/COPYING",
+    "licenses/external/audio/libvorbis/VIBESTUDIO.md",
+    "licenses/external/audio/libvorbis/UPSTREAM.json",
     "licenses/external/compilers/ericw-tools/COPYING",
     "licenses/external/compilers/q3map2-nrc/LICENSE",
     "licenses/external/compilers/ZDBSP/COPYING",
@@ -46,6 +69,7 @@ def host_target() -> str:
 def main() -> int:
     parser = argparse.ArgumentParser(description="Smoke-test a current-platform portable package.")
     parser.add_argument("--binary", required=True, help="Built vibestudio executable to package.")
+    parser.add_argument("--compiled-translations", type=Path, help="Require compiled application catalogs from this directory.")
     args = parser.parse_args()
 
     repo_root = Path(__file__).resolve().parents[1]
@@ -65,6 +89,8 @@ def main() -> int:
             "--target-platform",
             "current",
         ]
+        if args.compiled_translations is not None:
+            command += ["--compiled-translations", str(args.compiled_translations.resolve())]
         process = subprocess.run(command, text=True, capture_output=True, check=False)
         if process.returncode != 0:
             print(process.stdout, file=sys.stderr)
@@ -108,6 +134,24 @@ def main() -> int:
             return fail("Expected package manifest to be covered by CHECKSUMS.sha256")
         if "i18n/vibestudio_en.ts" not in checksums:
             return fail("Expected localization catalogs to be covered by CHECKSUMS.sha256")
+        compiled = manifest.get("compiledLocalization", {})
+        directory = (args.compiled_translations if args.compiled_translations is not None else binary.parent.parent / "i18n").resolve()
+        expected = {f"i18n/{source.stem}.qm": directory / f"{source.stem}.qm"
+                    for source in (repo_root / "i18n").glob("vibestudio_*.ts")
+                    if (directory / f"{source.stem}.qm").is_file()}
+        if set(compiled.get("catalogs", [])) != set(expected):
+            return fail("Packaged compiled catalog inventory does not match the selected build")
+        if args.compiled_translations is not None and compiled.get("status") != "complete":
+            return fail("Required compiled translation set is incomplete")
+        with zipfile.ZipFile(archives[0]) as archive:
+            for relative, source in expected.items():
+                wanted = hashlib.sha256(source.read_bytes()).hexdigest()
+                if hashlib.sha256((package_dir / relative).read_bytes()).hexdigest() != wanted:
+                    return fail(f"Packaged compiled catalog differs: {relative}")
+                if f"{wanted}  {relative}" not in checksums:
+                    return fail(f"Compiled catalog is missing from checksums: {relative}")
+                if hashlib.sha256(archive.read(f"{package_dir.name}/{relative}")).hexdigest() != wanted:
+                    return fail(f"Archived compiled catalog differs: {relative}")
 
     print("Portable packaging validated.")
     return 0

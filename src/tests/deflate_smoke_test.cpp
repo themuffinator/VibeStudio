@@ -1,6 +1,7 @@
 #include "core/deflate.h"
 
 #include <QByteArray>
+#include <QBuffer>
 #include <QString>
 #include <QTemporaryDir>
 
@@ -663,6 +664,93 @@ bool runHostileInputSmoke()
 	return ok;
 }
 
+bool runStreamingEncoderSmoke()
+{
+	bool ok = true;
+	for (const auto level : {DeflateLevel::Store, DeflateLevel::Fast, DeflateLevel::Default, DeflateLevel::Best}) {
+		for (const int size : {0, 1, 2, 3, 32767, 32768, 65534, 65535, 65536, 131070, 200003}) {
+			for (const bool noise : {false, true}) {
+				QByteArray input = noise ? pseudoRandom(size, 71) : mixedPayload(size);
+				// Repeated random history makes cross-block back references
+				// useful, including hashes which straddle the block boundary.
+				if (size > 131070 && noise) input.replace(65520, 32768, input.mid(32752, 32768));
+				const QByteArray baseline = deflateRaw(input, level);
+				for (const int stride : {1, 8191, 65536, 300000}) {
+					QByteArray output;
+					qsizetype largest = 0;
+					DeflateStreamEncoder encoder(size, level, [&](QByteArrayView bytes) {
+						largest = qMax(largest, bytes.size());
+						output.append(bytes.data(), bytes.size()); return true;
+					});
+					for (qsizetype pos = 0; pos < input.size(); pos += stride) {
+						ok &= expect(encoder.append(QByteArrayView(input).sliced(pos, qMin(qsizetype(stride), input.size() - pos))), "Streaming encoder must accept bounded input chunks.");
+					}
+					const auto result = encoder.finish();
+					ok &= expect(result.ok && result.bytesConsumed == input.size() && result.bytesWritten == output.size(), "Streaming encoder must report exact counts.");
+					ok &= expect(output == baseline, "Streamed compression must match legacy bytes independently of input partitioning.");
+					ok &= expect(largest <= 65541 && encoder.finish().ok, "Encoder output must stay block-bounded and finish must be idempotent.");
+					ok &= expect(inflateRaw(output, size).data == input, "Streamed compression must round trip.");
+				}
+			}
+		}
+	}
+	const QByteArray input = pseudoRandom(200000, 17);
+	int checks = 0;
+	int writes = 0;
+	DeflateStreamEncoder cancelled(input.size(), DeflateLevel::Best,
+		[&](QByteArrayView) { ++writes; return true; }, [&]() { return ++checks >= 20; });
+	ok &= expect(!cancelled.append(input) && cancelled.result().cancelled && writes == 0,
+		"Cancellation must interrupt tokenization before the first output block.");
+	ok &= expect(!cancelled.finish().ok && !cancelled.append(input), "Cancelled encoding cannot resume.");
+	DeflateStreamEncoder consumerFailure(input.size(), DeflateLevel::Default,
+		[&](QByteArrayView) { ++writes; return false; });
+	ok &= expect(!consumerFailure.append(input) && !consumerFailure.finish().error.isEmpty() && writes == 1,
+		"Consumer failure must abort without subsequent output.");
+	DeflateStreamEncoder shortInput(3, DeflateLevel::Default, [](QByteArrayView) { return true; });
+	ok &= expect(shortInput.append(QByteArrayView("ab", 2)) && !shortInput.finish().ok && !shortInput.append(QByteArrayView("c", 1)), "An incomplete input must fail permanently.");
+	DeflateStreamEncoder longInput(1, DeflateLevel::Store, [](QByteArrayView) { return true; });
+	ok &= expect(!longInput.append(input) && longInput.result().bytesConsumed == 0, "Oversized input must be refused before consumption.");
+	DeflateStreamEncoder invalid(-1, DeflateLevel::Store, {});
+	ok &= expect(!invalid.finish().ok && !invalid.result().error.isEmpty(), "Invalid stream requests must fail cleanly.");
+	DeflateStreamEncoder complete(0, DeflateLevel::Default, [](QByteArrayView) { return true; });
+	ok &= expect(complete.finish().ok && !complete.append(QByteArrayView()) && !complete.finish().ok, "Appending after finish must be rejected.");
+	const quint32 checksum = crc32View(QByteArrayView(input).sliced(32768), crc32View(QByteArrayView(input).first(32768)));
+	ok &= expect(checksum == crc32Bytes(input), "View CRC must chain across input boundaries.");
+	return ok;
+}
+
+bool runStreamingSmoke()
+{
+	bool ok = true;
+	const QByteArray original = mixedPayload(600000);
+	for (const auto level : {DeflateLevel::Store, DeflateLevel::Fast, DeflateLevel::Default}) {
+		QByteArray compressed = deflateRaw(original, level);
+		QBuffer source(&compressed);
+		source.open(QIODevice::ReadOnly);
+		QByteArray output;
+		qsizetype largestChunk = 0;
+		const auto decoded = inflateRawToSink(source, compressed.size(), original.size(), [&](QByteArrayView chunk) {
+			largestChunk = qMax(largestChunk, chunk.size()); output.append(chunk.data(), chunk.size()); return true;
+		});
+		ok &= expect(decoded.ok && output == original && decoded.bytesConsumed == compressed.size() && decoded.bytesWritten == original.size(), "Streaming decode must preserve matches across buffer and history-window boundaries.");
+		ok &= expect(largestChunk <= 65536, "Streaming output chunks must stay bounded.");
+		source.seek(0);
+		qint64 received = 0;
+		const auto cancelled = inflateRawToSink(source, compressed.size(), original.size(), [&](QByteArrayView chunk) {
+			received += chunk.size(); return true;
+		}, [&]() { return received >= 65536; });
+		ok &= expect(!cancelled.ok && cancelled.cancelled && received == 65536, "Cancellation must stop within a large compressed member.");
+		source.seek(0);
+		const auto shortInput = inflateRawToSink(source, compressed.size() - 1, original.size(), [](QByteArrayView) { return true; });
+		ok &= expect(!shortInput.ok && !shortInput.error.isEmpty(), "A bounded truncated stream must fail even when the device contains more bytes.");
+		source.seek(0);
+		ok &= expect(!inflateRawToSink(source, compressed.size(), 4, [](QByteArrayView) { return true; }).ok, "Streaming output must obey its declared size cap.");
+		source.seek(0);
+		ok &= expect(!inflateRawToSink(source, compressed.size(), original.size(), [](QByteArrayView) { return false; }).ok, "Consumer failure must stop the stream.");
+	}
+	return ok;
+}
+
 } // namespace
 
 int main()
@@ -680,5 +768,7 @@ int main()
 	ok &= runKnownStreamSmoke();
 	ok &= runZlibSmoke();
 	ok &= runHostileInputSmoke();
+	ok &= runStreamingSmoke();
+	ok &= runStreamingEncoderSmoke();
 	return ok ? EXIT_SUCCESS : EXIT_FAILURE;
 }

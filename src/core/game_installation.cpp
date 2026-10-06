@@ -16,11 +16,6 @@ namespace vibestudio {
 
 namespace {
 
-QString installText(const char* source)
-{
-	return QCoreApplication::translate("VibeStudioGameInstallation", source);
-}
-
 QString normalizedId(const QString& id)
 {
 	QString normalized = id.trimmed().toLower();
@@ -260,10 +255,10 @@ QVector<GameInstallationDetectionCandidate> candidatesForDirectory(const QString
 		candidate.confidencePercent = packages.isEmpty() ? 62 : (folderMatch ? 96 : 84);
 		candidate.matchedPaths = packages;
 		if (packages.isEmpty()) {
-			candidate.warnings << installText("Folder name matched, but no expected base package was found.");
+			candidate.warnings << QCoreApplication::translate("VibeStudioGameInstallation", "Folder name matched, but no expected base package was found.");
 		}
 		if (profile.executablePath.isEmpty()) {
-			candidate.warnings << installText("Executable was not found in the detected folder.");
+			candidate.warnings << QCoreApplication::translate("VibeStudioGameInstallation", "Executable was not found in the detected folder.");
 		}
 		candidates.push_back(candidate);
 	}
@@ -379,15 +374,15 @@ QString gameEngineFamilyDisplayName(GameEngineFamily family)
 {
 	switch (family) {
 	case GameEngineFamily::IdTech1:
-		return installText("idTech1 / Doom-family");
+		return QCoreApplication::translate("VibeStudioGameInstallation", "idTech1 / Doom-family");
 	case GameEngineFamily::IdTech2:
-		return installText("idTech2 / Quake-family");
+		return QCoreApplication::translate("VibeStudioGameInstallation", "idTech2 / Quake-family");
 	case GameEngineFamily::IdTech3:
-		return installText("idTech3 / Quake III-family");
+		return QCoreApplication::translate("VibeStudioGameInstallation", "idTech3 / Quake III-family");
 	case GameEngineFamily::Unknown:
 		break;
 	}
-	return installText("Unknown");
+	return QCoreApplication::translate("VibeStudioGameInstallation", "Unknown");
 }
 
 GameEngineFamily gameEngineFamilyFromId(const QString& id)
@@ -422,15 +417,16 @@ QVector<GameDefinition> knownGameDefinitions()
 	return {
 		{
 			QStringLiteral("custom"),
-			installText("Custom / Unknown"),
+			QCoreApplication::translate("VibeStudioGameInstallation", "Custom / Unknown"),
 			GameEngineFamily::Unknown,
+			{},
 			{},
 			{},
 			{},
 		},
 		{
 			QStringLiteral("doom"),
-			installText("Doom-family"),
+			QCoreApplication::translate("VibeStudioGameInstallation", "Doom-family"),
 			GameEngineFamily::IdTech1,
 			{
 				QStringLiteral("doom.wad"),
@@ -440,10 +436,11 @@ QVector<GameDefinition> knownGameDefinitions()
 			},
 			QStringLiteral("doom"),
 			QStringLiteral("zdbsp"),
+			{},
 		},
 		{
 			QStringLiteral("heretic-hexen"),
-			installText("Heretic / Hexen-family"),
+			QCoreApplication::translate("VibeStudioGameInstallation", "Heretic / Hexen-family"),
 			GameEngineFamily::IdTech1,
 			{
 				QStringLiteral("heretic.wad"),
@@ -451,36 +448,40 @@ QVector<GameDefinition> knownGameDefinitions()
 			},
 			QStringLiteral("doom"),
 			QStringLiteral("zdbsp"),
+			{},
 		},
 		{
 			QStringLiteral("quake"),
-			installText("Quake"),
+			QCoreApplication::translate("VibeStudioGameInstallation", "Quake"),
 			GameEngineFamily::IdTech2,
 			{
 				QStringLiteral("id1/pak0.pak"),
 			},
 			QStringLiteral("quake"),
 			QStringLiteral("ericw-tools"),
+			QStringLiteral("id1"),
 		},
 		{
 			QStringLiteral("quake2"),
-			installText("Quake II"),
+			QCoreApplication::translate("VibeStudioGameInstallation", "Quake II"),
 			GameEngineFamily::IdTech2,
 			{
 				QStringLiteral("baseq2/pak0.pak"),
 			},
 			QStringLiteral("quake2"),
 			QStringLiteral("ericw-tools"),
+			QStringLiteral("baseq2"),
 		},
 		{
 			QStringLiteral("quake3"),
-			installText("Quake III Arena"),
+			QCoreApplication::translate("VibeStudioGameInstallation", "Quake III Arena"),
 			GameEngineFamily::IdTech3,
 			{
 				QStringLiteral("baseq3/pak0.pk3"),
 			},
 			QStringLiteral("quake3"),
 			QStringLiteral("q3map2"),
+			QStringLiteral("baseq3"),
 		},
 	};
 }
@@ -492,6 +493,11 @@ QStringList knownGameKeys()
 		keys.push_back(definition.gameKey);
 	}
 	return keys;
+}
+
+QString defaultGameDirectory(const GameInstallationProfile& profile)
+{
+	return gameDefinitionForKey(profile.gameKey).baseGameDirectory;
 }
 
 GameDefinition gameDefinitionForKey(const QString& gameKey)
@@ -598,7 +604,7 @@ GameInstallationValidation validateGameInstallationProfile(const GameInstallatio
 	GameInstallationValidation validation;
 
 	if (normalized.rootPath.isEmpty()) {
-		validation.errors << installText("Installation root is empty.");
+		validation.errors << QCoreApplication::translate("VibeStudioGameInstallation", "Installation root is empty.");
 		return validation;
 	}
 
@@ -606,9 +612,9 @@ GameInstallationValidation validateGameInstallationProfile(const GameInstallatio
 	validation.rootExists = rootInfo.exists();
 	validation.rootIsDirectory = rootInfo.isDir();
 	if (!validation.rootExists) {
-		validation.errors << installText("Installation root does not exist.");
+		validation.errors << QCoreApplication::translate("VibeStudioGameInstallation", "Installation root does not exist.");
 	} else if (!validation.rootIsDirectory) {
-		validation.errors << installText("Installation root is not a directory.");
+		validation.errors << QCoreApplication::translate("VibeStudioGameInstallation", "Installation root is not a directory.");
 	}
 
 	if (!normalized.executablePath.isEmpty()) {
@@ -616,15 +622,15 @@ GameInstallationValidation validateGameInstallationProfile(const GameInstallatio
 		validation.executableExists = executableInfo.exists();
 		validation.executableIsFile = executableInfo.isFile();
 		if (!validation.executableExists) {
-			validation.warnings << installText("Executable path does not exist yet.");
+			validation.warnings << QCoreApplication::translate("VibeStudioGameInstallation", "Executable path does not exist yet.");
 		} else if (!validation.executableIsFile) {
-			validation.warnings << installText("Executable path is not a file.");
+			validation.warnings << QCoreApplication::translate("VibeStudioGameInstallation", "Executable path is not a file.");
 		}
 	}
 
 	for (const QString& packagePath : normalized.basePackagePaths + normalized.modPackagePaths) {
 		if (!QFileInfo::exists(packagePath)) {
-			validation.warnings << installText("Package path is missing: %1").arg(QDir::toNativeSeparators(packagePath));
+			validation.warnings << QCoreApplication::translate("VibeStudioGameInstallation", "Package path is missing: %1").arg(QDir::toNativeSeparators(packagePath));
 		}
 	}
 
@@ -638,12 +644,12 @@ GameInstallationValidation validateGameInstallationProfile(const GameInstallatio
 			}
 		}
 		if (!foundExpectedPackage) {
-			validation.warnings << installText("No expected base package was found for %1.").arg(definition.displayName);
+			validation.warnings << QCoreApplication::translate("VibeStudioGameInstallation", "No expected base package was found for %1.").arg(definition.displayName);
 		}
 	}
 
 	if (normalized.engineFamily == GameEngineFamily::Unknown) {
-		validation.warnings << installText("Engine family is unknown; compiler and validation defaults will stay generic.");
+		validation.warnings << QCoreApplication::translate("VibeStudioGameInstallation", "Engine family is unknown; compiler and validation defaults will stay generic.");
 	}
 
 	return validation;
@@ -715,7 +721,7 @@ QVector<GameInstallationDetectionCandidate> detectSteamGameInstallations(const Q
 
 	QVector<GameInstallationDetectionCandidate> candidates;
 	for (const QString& directory : oneLevelCandidateDirectories(roots)) {
-		candidates += candidatesForDirectory(directory, QStringLiteral("steam"), installText("Steam"));
+		candidates += candidatesForDirectory(directory, QStringLiteral("steam"), QCoreApplication::translate("VibeStudioGameInstallation", "Steam"));
 	}
 	return deduplicateCandidates(candidates);
 }
@@ -727,7 +733,7 @@ QVector<GameInstallationDetectionCandidate> detectGogGameInstallations(const QSt
 
 	QVector<GameInstallationDetectionCandidate> candidates;
 	for (const QString& directory : oneLevelCandidateDirectories(roots)) {
-		candidates += candidatesForDirectory(directory, QStringLiteral("gog"), installText("GOG"));
+		candidates += candidatesForDirectory(directory, QStringLiteral("gog"), QCoreApplication::translate("VibeStudioGameInstallation", "GOG"));
 	}
 	return deduplicateCandidates(candidates);
 }

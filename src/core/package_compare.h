@@ -19,12 +19,8 @@
 // its own result is the only way to both pair the entries up and keep the bug
 // visible.
 //
-// Content comparison prefers a CRC-32 that both sides already store (ZIP/PK3
-// central directories carry one per entry, PKWARE APPNOTE.TXT section 4.3.12,
-// https://pkware.cachefly.net/webdocs/casestudies/APPNOTE.TXT) and otherwise
-// reads the bytes and hashes them with SHA-256. A CRC-32 is a corruption check,
-// not a digest, so it is only ever used to decide "same" when both sides agree
-// on the size as well, and the result records which of the two was used.
+// Content comparison reads and verifies the payloads and hashes them with
+// SHA-256. Equal CRC metadata alone cannot establish that the bytes are intact.
 // `metadataOnly` skips content entirely for a fast pass over packages that are
 // too large, or too remote, to read.
 
@@ -46,6 +42,7 @@ enum class PackageCompareStatus {
 	Removed,
 	Changed,
 	CaseOnly,
+	Uncompared,
 };
 
 // Which comparison actually decided `PackageCompareStatus` for one entry.
@@ -55,17 +52,18 @@ enum class PackageCompareContent {
 	NotCompared,
 	// The sizes differ, so no digest was needed.
 	SizeOnly,
-	// Both sides carried a stored CRC-32 and the sizes matched.
+	// Legacy report value, retained for readers of earlier saved reports.
 	Crc32,
 	// The bytes were read from both sides and hashed.
 	Sha256,
 };
 
-// Default ceiling on the bytes read for one entry during a content comparison.
-// Above it the entry falls back to a size comparison and says so, so a package
-// holding a multi-gigabyte member cannot turn a compare into an out-of-memory
-// failure.
+// Default I/O budget for one entry during a content comparison. Equal-sized
+// entries above it remain unchecked with a reason. Payload memory is bounded
+// independently of this budget, including archive-backed and generated plans.
 inline constexpr qint64 kPackageCompareDefaultMaxEntryBytes = 256LL * 1024LL * 1024LL;
+
+enum class PackageCompareSource { Left, Right };
 
 struct PackageCompareRequest {
 	// Never reads entry contents. Status then comes from size alone, and
@@ -81,6 +79,13 @@ struct PackageCompareRequest {
 	// renderers. Empty falls back to "left"/"right".
 	QString leftLabel;
 	QString rightLabel;
+	// Called on the caller's thread, within reads and between entries. Cancellation returns a
+	// partial result that can never be reported as identical.
+	std::function<bool()> isCancelled;
+	std::function<void(int completed, int total)> progress;
+	// Current entry's verified bytes, restarting on each side/entry. Runs on
+	// the caller's thread; callbacks must not manipulate GUI controls directly.
+	std::function<void(PackageCompareSource source, const QString& path, quint64 completed, quint64 total)> byteProgress;
 };
 
 struct PackageCompareEntry {
@@ -142,13 +147,16 @@ struct PackageCompareResult {
 	PackageArchiveFormat rightFormat = PackageArchiveFormat::Unknown;
 	bool metadataOnly = false;
 	bool includedDirectories = false;
+	bool completed = false;
+	bool cancelled = false;
 	PackageCompareSummary summary;
 	// Sorted by `key` then `occurrence`, so two runs over the same inputs
 	// produce the same vector and the same JSON.
 	QVector<PackageCompareEntry> entries;
 	QStringList warnings;
 
-	// True when nothing was added, removed, changed, or re-cased.
+	// True only after a complete comparison with no differences or unreadable
+	// content. Metadata-only mode deliberately compares names and sizes only.
 	[[nodiscard]] bool identical() const;
 };
 

@@ -1,4 +1,5 @@
 #include "app/syntax_highlight.h"
+#include "core/code_files.h"
 
 #include <QCoreApplication>
 #include <QFileInfo>
@@ -12,11 +13,6 @@
 namespace vibestudio {
 
 namespace {
-
-QString syntaxText(const char* source)
-{
-	return QCoreApplication::translate("VibeStudioSyntaxHighlight", source);
-}
 
 // Shared regular expression fragments.
 //
@@ -150,7 +146,7 @@ StudioLanguageDescriptor makeConfigDescriptor()
 	StudioLanguageDescriptor descriptor;
 	descriptor.language = StudioLanguage::Config;
 	descriptor.id = QStringLiteral("config");
-	descriptor.displayName = syntaxText("Console Config");
+	descriptor.displayName = QCoreApplication::translate("VibeStudioSyntaxHighlight", "Console Config");
 	descriptor.extensions = {
 		QStringLiteral(".cfg"),
 		QStringLiteral(".rc"),
@@ -186,7 +182,7 @@ StudioLanguageDescriptor makeShaderDescriptor()
 	StudioLanguageDescriptor descriptor;
 	descriptor.language = StudioLanguage::ShaderScript;
 	descriptor.id = QStringLiteral("shader");
-	descriptor.displayName = syntaxText("idTech3 Shader");
+	descriptor.displayName = QCoreApplication::translate("VibeStudioSyntaxHighlight", "idTech3 Shader");
 	descriptor.extensions = { QStringLiteral(".shader") };
 	descriptor.lineCommentTokens = { QStringLiteral("//") };
 	descriptor.keywords = {
@@ -230,7 +226,7 @@ StudioLanguageDescriptor makeQuakeCDescriptor()
 	StudioLanguageDescriptor descriptor;
 	descriptor.language = StudioLanguage::QuakeC;
 	descriptor.id = QStringLiteral("quakec");
-	descriptor.displayName = syntaxText("QuakeC");
+	descriptor.displayName = QCoreApplication::translate("VibeStudioSyntaxHighlight", "QuakeC");
 	descriptor.extensions = { QStringLiteral(".qc"), QStringLiteral("progs.src") };
 	descriptor.lineCommentTokens = { QStringLiteral("//") };
 	descriptor.blockCommentStart = QStringLiteral("/*");
@@ -266,7 +262,7 @@ StudioLanguageDescriptor makeMapSourceDescriptor()
 	StudioLanguageDescriptor descriptor;
 	descriptor.language = StudioLanguage::MapSource;
 	descriptor.id = QStringLiteral("map-source");
-	descriptor.displayName = syntaxText("Map Source");
+	descriptor.displayName = QCoreApplication::translate("VibeStudioSyntaxHighlight", "Map Source");
 	descriptor.extensions = { QStringLiteral(".map") };
 	descriptor.lineCommentTokens = { QStringLiteral("//") };
 	descriptor.keywords = {
@@ -289,7 +285,7 @@ StudioLanguageDescriptor makeEntityDefDescriptor()
 	StudioLanguageDescriptor descriptor;
 	descriptor.language = StudioLanguage::EntityDef;
 	descriptor.id = QStringLiteral("entity-def");
-	descriptor.displayName = syntaxText("Entity Definitions");
+	descriptor.displayName = QCoreApplication::translate("VibeStudioSyntaxHighlight", "Entity Definitions");
 	descriptor.extensions = { QStringLiteral(".def"), QStringLiteral(".fgd"), QStringLiteral(".ent") };
 	descriptor.lineCommentTokens = { QStringLiteral("//") };
 	descriptor.keywords = {
@@ -315,7 +311,7 @@ StudioLanguageDescriptor makeIniDescriptor()
 	StudioLanguageDescriptor descriptor;
 	descriptor.language = StudioLanguage::Ini;
 	descriptor.id = QStringLiteral("ini");
-	descriptor.displayName = syntaxText("Key/Value Script");
+	descriptor.displayName = QCoreApplication::translate("VibeStudioSyntaxHighlight", "Key/Value Script");
 	descriptor.extensions = {
 		QStringLiteral(".ini"), QStringLiteral(".arena"), QStringLiteral(".menu"),
 		QStringLiteral(".bot"), QStringLiteral(".conf"),
@@ -334,7 +330,7 @@ StudioLanguageDescriptor makeJsonDescriptor()
 	StudioLanguageDescriptor descriptor;
 	descriptor.language = StudioLanguage::Json;
 	descriptor.id = QStringLiteral("json");
-	descriptor.displayName = syntaxText("JSON");
+	descriptor.displayName = QCoreApplication::translate("VibeStudioSyntaxHighlight", "JSON");
 	descriptor.extensions = { QStringLiteral(".json"), QStringLiteral(".vsproj"), QStringLiteral(".vsmanifest") };
 	descriptor.keywords = { QStringLiteral("true"), QStringLiteral("false"), QStringLiteral("null") };
 	descriptor.caseSensitiveKeywords = true;
@@ -346,7 +342,7 @@ StudioLanguageDescriptor makePlainTextDescriptor()
 	StudioLanguageDescriptor descriptor;
 	descriptor.language = StudioLanguage::PlainText;
 	descriptor.id = QStringLiteral("plain-text");
-	descriptor.displayName = syntaxText("Plain Text");
+	descriptor.displayName = QCoreApplication::translate("VibeStudioSyntaxHighlight", "Plain Text");
 	descriptor.extensions = { QStringLiteral(".txt"), QStringLiteral(".log"), QStringLiteral(".md") };
 	return descriptor;
 }
@@ -392,44 +388,7 @@ bool studioLanguageDescriptorFor(StudioLanguage language, StudioLanguageDescript
 
 StudioLanguage studioLanguageForPath(const QString& path)
 {
-	const QFileInfo info(path.trimmed());
-	const QString fileName = info.fileName().toLower();
-	if (fileName.isEmpty()) {
-		return StudioLanguage::PlainText;
-	}
-
-	const QVector<StudioLanguageDescriptor> descriptors = buildDescriptors();
-
-	// Exact, well-known bare filenames win over the extension so that files such
-	// as "progs.src" or "autoexec.cfg" land on the right language.
-	for (const StudioLanguageDescriptor& descriptor : descriptors) {
-		for (const QString& entry : descriptor.extensions) {
-			if (!entry.startsWith(QLatin1Char('.')) && entry.toLower() == fileName) {
-				return descriptor.language;
-			}
-		}
-	}
-
-	const QString suffix = QLatin1Char('.') + info.suffix().toLower();
-	if (suffix.size() > 1) {
-		for (const StudioLanguageDescriptor& descriptor : descriptors) {
-			if (descriptor.language == StudioLanguage::PlainText) {
-				continue;
-			}
-			for (const QString& entry : descriptor.extensions) {
-				if (entry.startsWith(QLatin1Char('.')) && entry.toLower() == suffix) {
-					return descriptor.language;
-				}
-			}
-		}
-		for (const QString& entry : makePlainTextDescriptor().extensions) {
-			if (entry.toLower() == suffix) {
-				return StudioLanguage::PlainText;
-			}
-		}
-	}
-
-	return StudioLanguage::PlainText;
+	return studioLanguageFromId(codeFileLanguageId(path));
 }
 
 StudioLanguage studioLanguageFromId(const QString& id)
@@ -588,7 +547,7 @@ void StudioSyntaxHighlighter::setDiagnostics(const QVector<StudioDiagnosticMarke
 		return;
 	}
 	m_diagnostics = diagnostics;
-	rehighlight();
+	rehighlightMarkedLines();
 }
 
 void StudioSyntaxHighlighter::clearDiagnostics()
@@ -597,7 +556,41 @@ void StudioSyntaxHighlighter::clearDiagnostics()
 		return;
 	}
 	m_diagnostics.clear();
-	rehighlight();
+	rehighlightMarkedLines();
+}
+
+void StudioSyntaxHighlighter::rehighlightMarkedLines()
+{
+	// Only the lines that gain or lose a mark: highlighting the whole document
+	// again took seconds in a large file each time a problem moved a line. A
+	// line marked before is found by its cursor, not its number, since an edit
+	// above it moves it without highlighting it again.
+	QTextDocument* text = document();
+	if (!text) {
+		m_markedLines.clear();
+		return;
+	}
+	QVector<QTextBlock> blocks;
+	for (const QTextCursor& cursor : std::as_const(m_markedLines)) {
+		if (!cursor.isNull() && cursor.document() == text) {
+			blocks << cursor.block();
+		}
+	}
+	m_markedLines.clear();
+	for (const StudioDiagnosticMarker& marker : std::as_const(m_diagnostics)) {
+		const QTextBlock block = text->findBlockByNumber(marker.line - 1);
+		if (block.isValid()) {
+			blocks << block;
+			m_markedLines << QTextCursor(block);
+		}
+	}
+	QSet<int> done;
+	for (const QTextBlock& block : std::as_const(blocks)) {
+		if (block.isValid() && !done.contains(block.blockNumber())) {
+			done.insert(block.blockNumber());
+			rehighlightBlock(block);
+		}
+	}
 }
 
 QVector<StudioDiagnosticMarker> StudioSyntaxHighlighter::diagnostics() const

@@ -13,11 +13,6 @@ namespace vibestudio {
 
 namespace {
 
-QString manifestText(const char* source)
-{
-	return QCoreApplication::translate("VibeStudioProjectManifest", source);
-}
-
 QString shortPathHash(const QString& path)
 {
 #if defined(Q_OS_WIN)
@@ -237,7 +232,7 @@ ProjectManifest defaultProjectManifest(const QString& projectRootPath, const QSt
 
 	ProjectManifest manifest;
 	manifest.projectId = defaultProjectId(rootPath);
-	manifest.displayName = displayName.trimmed().isEmpty() ? (rootInfo.fileName().isEmpty() ? manifestText("Untitled Project") : rootInfo.fileName()) : displayName.trimmed();
+	manifest.displayName = displayName.trimmed().isEmpty() ? (rootInfo.fileName().isEmpty() ? QCoreApplication::translate("VibeStudioProjectManifest", "Untitled Project") : rootInfo.fileName()) : displayName.trimmed();
 	manifest.rootPath = rootPath;
 	manifest.sourceFolders = {QStringLiteral(".")};
 	manifest.packageFolders = {};
@@ -260,7 +255,7 @@ bool loadProjectManifest(const QString& projectRootPath, ProjectManifest* manife
 	const QString manifestPath = projectManifestPath(projectRootPath);
 	if (manifestPath.isEmpty()) {
 		if (error) {
-			*error = manifestText("Project root path is empty.");
+			*error = QCoreApplication::translate("VibeStudioProjectManifest", "Project root path is empty.");
 		}
 		return false;
 	}
@@ -268,13 +263,13 @@ bool loadProjectManifest(const QString& projectRootPath, ProjectManifest* manife
 	QFile file(manifestPath);
 	if (!file.exists()) {
 		if (error) {
-			*error = manifestText("Project manifest does not exist.");
+			*error = QCoreApplication::translate("VibeStudioProjectManifest", "Project manifest does not exist.");
 		}
 		return false;
 	}
 	if (!file.open(QIODevice::ReadOnly)) {
 		if (error) {
-			*error = manifestText("Unable to open project manifest.");
+			*error = QCoreApplication::translate("VibeStudioProjectManifest", "Unable to open project manifest.");
 		}
 		return false;
 	}
@@ -283,7 +278,7 @@ bool loadProjectManifest(const QString& projectRootPath, ProjectManifest* manife
 	const QJsonDocument document = QJsonDocument::fromJson(file.readAll(), &parseError);
 	if (parseError.error != QJsonParseError::NoError || !document.isObject()) {
 		if (error) {
-			*error = manifestText("Project manifest JSON is invalid: %1").arg(parseError.errorString());
+			*error = QCoreApplication::translate("VibeStudioProjectManifest", "Project manifest JSON is invalid: %1").arg(parseError.errorString());
 		}
 		return false;
 	}
@@ -343,7 +338,7 @@ bool saveProjectManifest(const ProjectManifest& manifest, QString* error)
 	normalized.rootPath = normalizedProjectRootPath(manifest.rootPath);
 	if (normalized.rootPath.isEmpty()) {
 		if (error) {
-			*error = manifestText("Project root path is empty.");
+			*error = QCoreApplication::translate("VibeStudioProjectManifest", "Project root path is empty.");
 		}
 		return false;
 	}
@@ -398,13 +393,13 @@ bool saveProjectManifest(const ProjectManifest& manifest, QString* error)
 	QDir rootDir(normalized.rootPath);
 	if (!rootDir.exists()) {
 		if (error) {
-			*error = manifestText("Project root does not exist.");
+			*error = QCoreApplication::translate("VibeStudioProjectManifest", "Project root does not exist.");
 		}
 		return false;
 	}
 	if (!rootDir.mkpath(projectManifestDirectoryName())) {
 		if (error) {
-			*error = manifestText("Unable to create project metadata directory.");
+			*error = QCoreApplication::translate("VibeStudioProjectManifest", "Unable to create project metadata directory.");
 		}
 		return false;
 	}
@@ -428,7 +423,7 @@ bool saveProjectManifest(const ProjectManifest& manifest, QString* error)
 	QFile file(projectManifestPath(normalized.rootPath));
 	if (!file.open(QIODevice::WriteOnly | QIODevice::Truncate)) {
 		if (error) {
-			*error = manifestText("Unable to write project manifest.");
+			*error = QCoreApplication::translate("VibeStudioProjectManifest", "Unable to write project manifest.");
 		}
 		return false;
 	}
@@ -539,65 +534,65 @@ int registerProjectOutputPaths(ProjectManifest* manifest, const QStringList& out
 ProjectHealthSummary buildProjectHealthSummary(const ProjectManifest& manifest, const QString& fallbackInstallationId)
 {
 	ProjectHealthSummary summary;
-	summary.title = manifest.displayName.isEmpty() ? manifestText("Project") : manifest.displayName;
+	summary.title = manifest.displayName.isEmpty() ? QCoreApplication::translate("VibeStudioProjectManifest", "Project") : manifest.displayName;
 	summary.detail = manifest.rootPath;
 
 	const QFileInfo rootInfo(manifest.rootPath);
-	addCheck(&summary, QStringLiteral("root"), manifestText("Project Root"), manifest.rootPath, rootInfo.exists() && rootInfo.isDir() ? OperationState::Completed : OperationState::Failed);
-	addCheck(&summary, QStringLiteral("manifest"), manifestText("Project Manifest"), projectManifestPath(manifest.rootPath), QFileInfo::exists(projectManifestPath(manifest.rootPath)) ? OperationState::Completed : OperationState::Warning);
-	addCheck(&summary, QStringLiteral("schema-version"), manifestText("Project Schema"), manifestText("Version %1").arg(manifest.schemaVersion), manifest.schemaVersion <= ProjectManifest::kSchemaVersion ? OperationState::Completed : OperationState::Warning);
+	addCheck(&summary, QStringLiteral("root"), QCoreApplication::translate("VibeStudioProjectManifest", "Project Root"), manifest.rootPath, rootInfo.exists() && rootInfo.isDir() ? OperationState::Completed : OperationState::Failed);
+	addCheck(&summary, QStringLiteral("manifest"), QCoreApplication::translate("VibeStudioProjectManifest", "Project Manifest"), projectManifestPath(manifest.rootPath), QFileInfo::exists(projectManifestPath(manifest.rootPath)) ? OperationState::Completed : OperationState::Warning);
+	addCheck(&summary, QStringLiteral("schema-version"), QCoreApplication::translate("VibeStudioProjectManifest", "Project Schema"), QCoreApplication::translate("VibeStudioProjectManifest", "Version %1").arg(manifest.schemaVersion), manifest.schemaVersion <= ProjectManifest::kSchemaVersion ? OperationState::Completed : OperationState::Warning);
 
 	for (const QString& sourceFolder : manifest.sourceFolders) {
 		const QString path = normalizedChildPath(sourceFolder, manifest.rootPath);
-		addCheck(&summary, QStringLiteral("source-folder"), manifestText("Source Folder"), relativeOrNativePath(path, manifest.rootPath), QFileInfo::exists(path) ? OperationState::Completed : OperationState::Warning);
+		addCheck(&summary, QStringLiteral("source-folder"), QCoreApplication::translate("VibeStudioProjectManifest", "Source Folder"), relativeOrNativePath(path, manifest.rootPath), QFileInfo::exists(path) ? OperationState::Completed : OperationState::Warning);
 	}
 	if (manifest.packageFolders.isEmpty()) {
-		addCheck(&summary, QStringLiteral("package-folders"), manifestText("Package Folders"), manifestText("No package folders configured yet."), OperationState::Warning);
+		addCheck(&summary, QStringLiteral("package-folders"), QCoreApplication::translate("VibeStudioProjectManifest", "Package Folders"), QCoreApplication::translate("VibeStudioProjectManifest", "No package folders configured yet."), OperationState::Warning);
 	} else {
 		for (const QString& packageFolder : manifest.packageFolders) {
 			const QString path = normalizedChildPath(packageFolder, manifest.rootPath);
-			addCheck(&summary, QStringLiteral("package-folder"), manifestText("Package Folder"), relativeOrNativePath(path, manifest.rootPath), QFileInfo::exists(path) ? OperationState::Completed : OperationState::Warning);
+			addCheck(&summary, QStringLiteral("package-folder"), QCoreApplication::translate("VibeStudioProjectManifest", "Package Folder"), relativeOrNativePath(path, manifest.rootPath), QFileInfo::exists(path) ? OperationState::Completed : OperationState::Warning);
 		}
 	}
 
 	const QString outputPath = normalizedChildPath(manifest.outputFolder, manifest.rootPath);
-	addCheck(&summary, QStringLiteral("output-folder"), manifestText("Output Folder"), relativeOrNativePath(outputPath, manifest.rootPath), QFileInfo::exists(outputPath) ? OperationState::Completed : OperationState::Warning);
+	addCheck(&summary, QStringLiteral("output-folder"), QCoreApplication::translate("VibeStudioProjectManifest", "Output Folder"), relativeOrNativePath(outputPath, manifest.rootPath), QFileInfo::exists(outputPath) ? OperationState::Completed : OperationState::Warning);
 	const QString tempPath = normalizedChildPath(manifest.tempFolder, manifest.rootPath);
-	addCheck(&summary, QStringLiteral("temp-folder"), manifestText("Temp Folder"), relativeOrNativePath(tempPath, manifest.rootPath), QFileInfo::exists(tempPath) ? OperationState::Completed : OperationState::Warning);
+	addCheck(&summary, QStringLiteral("temp-folder"), QCoreApplication::translate("VibeStudioProjectManifest", "Temp Folder"), relativeOrNativePath(tempPath, manifest.rootPath), QFileInfo::exists(tempPath) ? OperationState::Completed : OperationState::Warning);
 
 	const QString effectiveInstallation = effectiveProjectInstallationId(manifest, fallbackInstallationId);
-	addCheck(&summary, QStringLiteral("installation"), manifestText("Game Installation"), effectiveInstallation.isEmpty() ? manifestText("No installation profile linked yet.") : effectiveInstallation, effectiveInstallation.isEmpty() ? OperationState::Warning : OperationState::Completed);
-	addCheck(&summary, QStringLiteral("compiler-overrides"), manifestText("Compiler Overrides"), manifest.compilerToolOverrides.isEmpty() ? manifestText("No project-local compiler executable overrides configured.") : manifestText("Compiler executable overrides configured: %1").arg(manifest.compilerToolOverrides.size()), manifest.compilerToolOverrides.isEmpty() ? OperationState::Idle : OperationState::Completed);
-	addCheck(&summary, QStringLiteral("registered-outputs"), manifestText("Registered Outputs"), manifest.registeredOutputPaths.isEmpty() ? manifestText("No compiler outputs registered yet.") : manifestText("Compiler outputs registered: %1").arg(manifest.registeredOutputPaths.size()), manifest.registeredOutputPaths.isEmpty() ? OperationState::Idle : OperationState::Completed);
-	addCheck(&summary, QStringLiteral("settings-overrides"), manifestText("Project Settings Overrides"), manifest.settingsOverrides.isEmpty() ? manifestText("No project-local overrides configured.") : manifestText("Project-local overrides are active."), manifest.settingsOverrides.isEmpty() ? OperationState::Idle : OperationState::Completed);
+	addCheck(&summary, QStringLiteral("installation"), QCoreApplication::translate("VibeStudioProjectManifest", "Game Installation"), effectiveInstallation.isEmpty() ? QCoreApplication::translate("VibeStudioProjectManifest", "No installation profile linked yet.") : effectiveInstallation, effectiveInstallation.isEmpty() ? OperationState::Warning : OperationState::Completed);
+	addCheck(&summary, QStringLiteral("compiler-overrides"), QCoreApplication::translate("VibeStudioProjectManifest", "Compiler Overrides"), manifest.compilerToolOverrides.isEmpty() ? QCoreApplication::translate("VibeStudioProjectManifest", "No project-local compiler executable overrides configured.") : QCoreApplication::translate("VibeStudioProjectManifest", "Compiler executable overrides configured: %1").arg(manifest.compilerToolOverrides.size()), manifest.compilerToolOverrides.isEmpty() ? OperationState::Idle : OperationState::Completed);
+	addCheck(&summary, QStringLiteral("registered-outputs"), QCoreApplication::translate("VibeStudioProjectManifest", "Registered Outputs"), manifest.registeredOutputPaths.isEmpty() ? QCoreApplication::translate("VibeStudioProjectManifest", "No compiler outputs registered yet.") : QCoreApplication::translate("VibeStudioProjectManifest", "Compiler outputs registered: %1").arg(manifest.registeredOutputPaths.size()), manifest.registeredOutputPaths.isEmpty() ? OperationState::Idle : OperationState::Completed);
+	addCheck(&summary, QStringLiteral("settings-overrides"), QCoreApplication::translate("VibeStudioProjectManifest", "Project Settings Overrides"), manifest.settingsOverrides.isEmpty() ? QCoreApplication::translate("VibeStudioProjectManifest", "No project-local overrides configured.") : QCoreApplication::translate("VibeStudioProjectManifest", "Project-local overrides are active."), manifest.settingsOverrides.isEmpty() ? OperationState::Idle : OperationState::Completed);
 	return summary;
 }
 
 QString projectManifestToText(const ProjectManifest& manifest)
 {
 	QStringList lines;
-	lines << manifestText("Project ID: %1").arg(manifest.projectId);
-	lines << manifestText("Name: %1").arg(manifest.displayName);
-	lines << manifestText("Root: %1").arg(QDir::toNativeSeparators(manifest.rootPath));
-	lines << manifestText("Schema: %1").arg(manifest.schemaVersion);
-	lines << manifestText("Source folders: %1").arg(manifest.sourceFolders.join(QStringLiteral("; ")));
-	lines << manifestText("Package folders: %1").arg(manifest.packageFolders.isEmpty() ? manifestText("none") : manifest.packageFolders.join(QStringLiteral("; ")));
-	lines << manifestText("Output folder: %1").arg(manifest.outputFolder);
-	lines << manifestText("Temp folder: %1").arg(manifest.tempFolder);
-	lines << manifestText("Installation: %1").arg(manifest.selectedInstallationId.isEmpty() ? manifestText("none") : manifest.selectedInstallationId);
-	lines << manifestText("Compiler search paths: %1").arg(manifest.compilerSearchPaths.isEmpty() ? manifestText("none") : manifest.compilerSearchPaths.join(QStringLiteral("; ")));
-	lines << manifestText("Compiler executable overrides: %1").arg(manifest.compilerToolOverrides.isEmpty() ? manifestText("none") : QString::number(manifest.compilerToolOverrides.size()));
+	lines << QCoreApplication::translate("VibeStudioProjectManifest", "Project ID: %1").arg(manifest.projectId);
+	lines << QCoreApplication::translate("VibeStudioProjectManifest", "Name: %1").arg(manifest.displayName);
+	lines << QCoreApplication::translate("VibeStudioProjectManifest", "Root: %1").arg(QDir::toNativeSeparators(manifest.rootPath));
+	lines << QCoreApplication::translate("VibeStudioProjectManifest", "Schema: %1").arg(manifest.schemaVersion);
+	lines << QCoreApplication::translate("VibeStudioProjectManifest", "Source folders: %1").arg(manifest.sourceFolders.join(QStringLiteral("; ")));
+	lines << QCoreApplication::translate("VibeStudioProjectManifest", "Package folders: %1").arg(manifest.packageFolders.isEmpty() ? QCoreApplication::translate("VibeStudioProjectManifest", "none") : manifest.packageFolders.join(QStringLiteral("; ")));
+	lines << QCoreApplication::translate("VibeStudioProjectManifest", "Output folder: %1").arg(manifest.outputFolder);
+	lines << QCoreApplication::translate("VibeStudioProjectManifest", "Temp folder: %1").arg(manifest.tempFolder);
+	lines << QCoreApplication::translate("VibeStudioProjectManifest", "Installation: %1").arg(manifest.selectedInstallationId.isEmpty() ? QCoreApplication::translate("VibeStudioProjectManifest", "none") : manifest.selectedInstallationId);
+	lines << QCoreApplication::translate("VibeStudioProjectManifest", "Compiler search paths: %1").arg(manifest.compilerSearchPaths.isEmpty() ? QCoreApplication::translate("VibeStudioProjectManifest", "none") : manifest.compilerSearchPaths.join(QStringLiteral("; ")));
+	lines << QCoreApplication::translate("VibeStudioProjectManifest", "Compiler executable overrides: %1").arg(manifest.compilerToolOverrides.isEmpty() ? QCoreApplication::translate("VibeStudioProjectManifest", "none") : QString::number(manifest.compilerToolOverrides.size()));
 	for (const CompilerToolPathOverride& override : manifest.compilerToolOverrides) {
-		lines << manifestText("  %1: %2").arg(override.toolId, QDir::toNativeSeparators(override.executablePath));
+		lines << QCoreApplication::translate("VibeStudioProjectManifest", "  %1: %2").arg(override.toolId, QDir::toNativeSeparators(override.executablePath));
 	}
-	lines << manifestText("Registered compiler outputs: %1").arg(manifest.registeredOutputPaths.isEmpty() ? manifestText("none") : manifest.registeredOutputPaths.join(QStringLiteral("; ")));
-	lines << manifestText("Override installation: %1").arg(manifest.settingsOverrides.selectedInstallationId.isEmpty() ? manifestText("none") : manifest.settingsOverrides.selectedInstallationId);
-	lines << manifestText("Override editor profile: %1").arg(manifest.settingsOverrides.editorProfileId.isEmpty() ? manifestText("none") : manifest.settingsOverrides.editorProfileId);
-	lines << manifestText("Override palette: %1").arg(manifest.settingsOverrides.paletteId.isEmpty() ? manifestText("none") : manifest.settingsOverrides.paletteId);
-	lines << manifestText("Override compiler profile: %1").arg(manifest.settingsOverrides.compilerProfileId.isEmpty() ? manifestText("none") : manifest.settingsOverrides.compilerProfileId);
-	lines << manifestText("Override AI-free mode: %1").arg(manifest.settingsOverrides.aiFreeModeSet ? (manifest.settingsOverrides.aiFreeMode ? manifestText("enabled") : manifestText("disabled")) : manifestText("global default"));
-	lines << manifestText("Created UTC: %1").arg(manifest.createdUtc.toUTC().toString(Qt::ISODate));
-	lines << manifestText("Updated UTC: %1").arg(manifest.updatedUtc.toUTC().toString(Qt::ISODate));
+	lines << QCoreApplication::translate("VibeStudioProjectManifest", "Registered compiler outputs: %1").arg(manifest.registeredOutputPaths.isEmpty() ? QCoreApplication::translate("VibeStudioProjectManifest", "none") : manifest.registeredOutputPaths.join(QStringLiteral("; ")));
+	lines << QCoreApplication::translate("VibeStudioProjectManifest", "Override installation: %1").arg(manifest.settingsOverrides.selectedInstallationId.isEmpty() ? QCoreApplication::translate("VibeStudioProjectManifest", "none") : manifest.settingsOverrides.selectedInstallationId);
+	lines << QCoreApplication::translate("VibeStudioProjectManifest", "Override editor profile: %1").arg(manifest.settingsOverrides.editorProfileId.isEmpty() ? QCoreApplication::translate("VibeStudioProjectManifest", "none") : manifest.settingsOverrides.editorProfileId);
+	lines << QCoreApplication::translate("VibeStudioProjectManifest", "Override palette: %1").arg(manifest.settingsOverrides.paletteId.isEmpty() ? QCoreApplication::translate("VibeStudioProjectManifest", "none") : manifest.settingsOverrides.paletteId);
+	lines << QCoreApplication::translate("VibeStudioProjectManifest", "Override compiler profile: %1").arg(manifest.settingsOverrides.compilerProfileId.isEmpty() ? QCoreApplication::translate("VibeStudioProjectManifest", "none") : manifest.settingsOverrides.compilerProfileId);
+	lines << QCoreApplication::translate("VibeStudioProjectManifest", "Override AI-free mode: %1").arg(manifest.settingsOverrides.aiFreeModeSet ? (manifest.settingsOverrides.aiFreeMode ? QCoreApplication::translate("VibeStudioProjectManifest", "enabled") : QCoreApplication::translate("VibeStudioProjectManifest", "disabled")) : QCoreApplication::translate("VibeStudioProjectManifest", "global default"));
+	lines << QCoreApplication::translate("VibeStudioProjectManifest", "Created UTC: %1").arg(manifest.createdUtc.toUTC().toString(Qt::ISODate));
+	lines << QCoreApplication::translate("VibeStudioProjectManifest", "Updated UTC: %1").arg(manifest.updatedUtc.toUTC().toString(Qt::ISODate));
 	return lines.join('\n');
 }
 

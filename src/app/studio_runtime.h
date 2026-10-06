@@ -158,6 +158,8 @@ void markSessionEndedCleanly();
 // True when a previous session left a session marker behind and the process
 // that owned it is no longer running.
 bool previousSessionCrashed();
+// Whether a process of that id is running, as the session marker check asks.
+bool studioProcessIsRunning(qint64 processId);
 // The report for that session. `path` is empty when the session died without
 // managing to write one (a kill, or a power loss).
 CrashReportInfo previousSessionCrashReport();

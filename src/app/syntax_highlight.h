@@ -12,6 +12,7 @@
 #include <QStringList>
 #include <QSyntaxHighlighter>
 #include <QTextCharFormat>
+#include <QTextCursor>
 #include <QVector>
 
 class QTextDocument;
@@ -107,6 +108,13 @@ private:
 	QRegularExpression m_blockCommentStart;
 	QRegularExpression m_blockCommentEnd;
 	QTextCharFormat m_commentFormat;
+	// Highlights again the lines that held a mark before, wherever edits have
+	// moved them since, and the lines that hold one now.
+	void rehighlightMarkedLines();
+	// One cursor at the start of each line marked last; the document moves
+	// cursors with its edits, so they find the lines after lines move.
+	QVector<QTextCursor> m_markedLines;
+
 	QVector<StudioDiagnosticMarker> m_diagnostics;
 	bool m_hasBlockComments = false;
 };

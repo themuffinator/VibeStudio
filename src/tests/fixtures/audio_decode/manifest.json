@@ -1,0 +1,170 @@
+{
+  "source": "VibeStudio-generated synthetic tones and transient; no external media",
+  "encoder": "ffmpeg version 7.1-essentials_build-www.gyan.dev Copyright (c) 2000-2024 the FFmpeg developers",
+  "oracles": {
+    "mp3/flac": "ffmpeg version 7.1-essentials_build-www.gyan.dev Copyright (c) 2000-2024 the FFmpeg developers",
+    "vorbis": "libsndfile 1.2.2 via python-soundfile 0.14.0"
+  },
+  "cases": [
+    {
+      "file": "flac-mono16.flac",
+      "oracle": "flac-mono16.f32",
+      "channels": 1,
+      "sampleRate": 22050,
+      "frames": 8192,
+      "tolerance": 0,
+      "sha256": "d0773b8fda1795ef254209c114680bcc10e05a54eb4cae063653181797b149f2",
+      "oracleSha256": "d076996f171530275f38ea604ba7167acd4469b2a71797333751d7478758feee"
+    },
+    {
+      "file": "flac-stereo24.flac",
+      "oracle": "flac-stereo24.f32",
+      "channels": 2,
+      "sampleRate": 48000,
+      "frames": 8192,
+      "tolerance": 0,
+      "sha256": "453d19a5aca6954af1c0ae1cae0a66bce1f2922f0988e9a22ad4cc49c88f34e1",
+      "oracleSha256": "b9ec62cac413c3cb5c6567fd170dadc395c9a7a95c49afd7aa1ee405083176ff"
+    },
+    {
+      "file": "flac-surround24.flac",
+      "oracle": "flac-surround24.f32",
+      "channels": 8,
+      "sampleRate": 44100,
+      "frames": 8192,
+      "tolerance": 0,
+      "sha256": "4888183d821ee06cac02f4b65dae6c5fa37ff8160ed2843d5c9eadd96469e70c",
+      "oracleSha256": "9e21883f7e015fc375e6eecd49dee3f6a7e88461ccd7dfe1b9aeca7bbc2443fd"
+    },
+    {
+      "file": "mp3-cbr.mp3",
+      "oracle": "mp3-cbr.f32",
+      "channels": 2,
+      "sampleRate": 44100,
+      "frames": 8192,
+      "tolerance": 2e-05,
+      "sha256": "0b11fa218613a141b0af9bb391d88e66fab400021546d18090932c38a7cbd87c",
+      "oracleSha256": "077e7bdbf8b514fce46d706d883677d4e3df0203851f01a964993857bd7e90b1"
+    },
+    {
+      "file": "mp3-vbr.mp3",
+      "oracle": "mp3-vbr.f32",
+      "channels": 2,
+      "sampleRate": 48000,
+      "frames": 8192,
+      "tolerance": 2e-05,
+      "sha256": "51f38c000769c6dccd9edd8e9633ce58653c643a554751ad9b83848e75be2fe7",
+      "oracleSha256": "8f56268b9bdf13e7a29e6e20fac81fcabcdc4b0507ece24447e732264daa0241"
+    },
+    {
+      "file": "mp3-mpeg2.mp3",
+      "oracle": "mp3-mpeg2.f32",
+      "channels": 1,
+      "sampleRate": 22050,
+      "frames": 8192,
+      "tolerance": 2e-05,
+      "sha256": "f2b68077a5c68e91dd8f8d8c982edd5b775823bbc813fb8fc346908eb4fdc75a",
+      "oracleSha256": "73f6b7a478433baa21c813d8341a50848cb45934086f5ce12a03fb545c010bba"
+    },
+    {
+      "file": "mp3-mpeg25.mp3",
+      "oracle": "mp3-mpeg25.f32",
+      "channels": 1,
+      "sampleRate": 8000,
+      "frames": 8192,
+      "tolerance": 2e-05,
+      "sha256": "566f47dacd5186b93d5b64c56719a5e57d3627ea94e7e4c7f377aea410658c34",
+      "oracleSha256": "73a19aaa37d7df2c2f5461b8210a14fd07ca26d669867094dca11a9b523feafd"
+    },
+    {
+      "file": "mp3-no-xing.mp3",
+      "oracle": "mp3-no-xing.f32",
+      "channels": 2,
+      "sampleRate": 44100,
+      "frames": 10368,
+      "tolerance": 2e-05,
+      "sha256": "d6aba7ef515ad2bb0f731ac43909256ad1d308339dd68d0df8b0c1b6d049fd42",
+      "oracleSha256": "b80ef0001dee09e72057b6368de02a1f1e0a82f70c026e6dc2dbe3c80f0e0629"
+    },
+    {
+      "file": "vorbis-1ch.ogg",
+      "oracle": "vorbis-1ch.f32",
+      "channels": 1,
+      "sampleRate": 48000,
+      "frames": 8192,
+      "tolerance": 2e-05,
+      "sha256": "cf07f35986a7125009e782c166b988025bbefc3c441f14a96147f7090c0286be",
+      "oracleSha256": "829a6ef62eb3027e41c40c945742549a0c888a47bd58544d85650ca86cd8e994"
+    },
+    {
+      "file": "vorbis-2ch.ogg",
+      "oracle": "vorbis-2ch.f32",
+      "channels": 2,
+      "sampleRate": 48000,
+      "frames": 8192,
+      "tolerance": 2e-05,
+      "sha256": "992a1872cbf307651f1e1447532bc5309bcf8cfecd6681ba7aa98f288cf6f899",
+      "oracleSha256": "cd12fbaefc9905b08fba98bb299460006d6672ceb639527e013ebefa6013a122"
+    },
+    {
+      "file": "vorbis-3ch.ogg",
+      "oracle": "vorbis-3ch.f32",
+      "channels": 3,
+      "sampleRate": 48000,
+      "frames": 8192,
+      "tolerance": 2e-05,
+      "sha256": "07c76aeb47785e43351057bb6c4b71f3fb5c4ea00a53c2ebeb7f9f83801f1302",
+      "oracleSha256": "f6b5d951bd6b56e45dddea0272bbaf8fdcb575868e158d1ad9f245eae3cdd85a"
+    },
+    {
+      "file": "vorbis-4ch.ogg",
+      "oracle": "vorbis-4ch.f32",
+      "channels": 4,
+      "sampleRate": 48000,
+      "frames": 8192,
+      "tolerance": 2e-05,
+      "sha256": "022150a11e1f4e28fcfaf387fa003728ac92f815e7bda549acb6ebba027e85b1",
+      "oracleSha256": "b2152564b1912f19ae4902c46a9cafd4ecd7d1d9db04b2bdde22ef7abb16505f"
+    },
+    {
+      "file": "vorbis-5ch.ogg",
+      "oracle": "vorbis-5ch.f32",
+      "channels": 5,
+      "sampleRate": 48000,
+      "frames": 8192,
+      "tolerance": 2e-05,
+      "sha256": "cbf20f60b69c2a0c774ddb24b87819ac812a7bf0ad8219b3ae2ba3c6560b40b1",
+      "oracleSha256": "cddfe784bb009f8c12ee08d14cfee2269116e4f8dcae37b4bc67403aa451b1f8"
+    },
+    {
+      "file": "vorbis-6ch.ogg",
+      "oracle": "vorbis-6ch.f32",
+      "channels": 6,
+      "sampleRate": 48000,
+      "frames": 8192,
+      "tolerance": 2e-05,
+      "sha256": "5ee65bc2ffb31920e6086c43ccb7bf3a25a715c27b10e872d53fd9c9f5dd2276",
+      "oracleSha256": "b8534a8011c63ef8982385fad4bc31b5230b88b18569fe6e0f477d62e1865b55"
+    },
+    {
+      "file": "vorbis-7ch.ogg",
+      "oracle": "vorbis-7ch.f32",
+      "channels": 7,
+      "sampleRate": 48000,
+      "frames": 8192,
+      "tolerance": 2e-05,
+      "sha256": "d4718c3a7ac927d29648764cb6988260b93cdc7cc29d8a36877c205d3db6f36f",
+      "oracleSha256": "c8f989c89b399b996d830b3c2074f32408744d3de38e37c23a90e648fb2261d7"
+    },
+    {
+      "file": "vorbis-8ch.ogg",
+      "oracle": "vorbis-8ch.f32",
+      "channels": 8,
+      "sampleRate": 48000,
+      "frames": 8192,
+      "tolerance": 2e-05,
+      "sha256": "44fe1c7d4006b90f340792fa0d41d727aaaf5cee0b1081f91afba9d987c81056",
+      "oracleSha256": "af8966fc22398ed86f5e86e7f6e9e490360d5a04dcb63c6c0abe1bcd69a395f5"
+    }
+  ]
+}

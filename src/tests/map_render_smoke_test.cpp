@@ -342,6 +342,46 @@ bool runQuakeRenderSmoke()
 	const QString highlightedSvg = renderLevelMapSvg(document, highlighted, &highlightReport);
 	ok &= expect(highlightedSvg.contains(QStringLiteral("id=\"vs-highlight\"")), "Expected a highlight overlay for the brush.");
 
+	// A leak trail is drawn over the map and widens the framing to reach it.
+	MapRenderOptions leaking = options;
+	for (const double y : {0.0, 400.0, 900.0}) {
+		LevelMapVec3 point;
+		point.x = 0.0;
+		point.y = y;
+		point.z = 24.0;
+		point.valid = true;
+		leaking.leakTrail.push_back(point);
+	}
+	MapRenderReport leakReport;
+	const QString leakSvg = renderLevelMapSvg(document, leaking, &leakReport);
+	ok &= expect(leakSvg.contains(QStringLiteral("id=\"vs-leak\"")) && leakReport.drawnLeakPointCount == 3, "Expected a three-point leak trail layer.");
+	ok &= expect(leakReport.unitsPerPixel > report.unitsPerPixel, "Expected the framing to widen to include the leak trail.");
+	ok &= expect(mapRenderReportText(leakReport).contains(QStringLiteral("Leak trail points: 3")), "Expected the report to count the leak trail.");
+
+	// Target links are opt-in, so pictures made before them stay identical.
+	ok &= expect(!svg.contains(QStringLiteral("id=\"vs-links\"")) && report.drawnTargetLinkCount == 0, "Expected no link layer by default.");
+	LevelMapDocument linked = document;
+	LevelMapEntity lamp;
+	lamp.id = 7;
+	lamp.className = QStringLiteral("light");
+	lamp.origin = {200.0, 200.0, 24.0, true};
+	lamp.properties = {{QStringLiteral("classname"), QStringLiteral("light"), 0}, {QStringLiteral("targetname"), QStringLiteral("lamp"), 0}};
+	linked.entities.push_back(lamp);
+	for (LevelMapEntity& entity : linked.entities) {
+		if (entity.id != lamp.id) {
+			entity.properties.push_back({QStringLiteral("killtarget"), QStringLiteral("lamp"), 0});
+		}
+	}
+	MapRenderOptions withLinks = options;
+	withLinks.showTargetLinks = true;
+	MapRenderReport linkReport;
+	const QString linkSvg = renderLevelMapSvg(linked, withLinks, &linkReport);
+	ok &= expect(linkSvg.contains(QStringLiteral("id=\"vs-links\"")) && linkReport.drawnTargetLinkCount >= 1, "Expected a link layer when links are on.");
+	ok &= expect(linkSvg.indexOf(QStringLiteral("id=\"vs-links\"")) < linkSvg.indexOf(QStringLiteral("id=\"vs-entities\"")),
+		"Expected links under the entity markers.");
+	ok &= expect(linkSvg.contains(QStringLiteral("stroke-dasharray")), "Expected a killtarget link to be dashed.");
+	ok &= expect(mapRenderReportText(linkReport).contains(QStringLiteral("Target links:")), "Expected the report to count links.");
+
 	// Dark and light colour sets must differ, and the background must always be
 	// explicit.
 	MapRenderOptions light = options;

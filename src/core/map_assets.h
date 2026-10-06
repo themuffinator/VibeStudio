@@ -31,6 +31,7 @@
 
 #include "core/level_map.h"
 #include "core/operation_state.h"
+#include "core/package_archive.h"
 
 #include <QJsonObject>
 #include <QString>
@@ -125,6 +126,11 @@ struct MapTextureAudit {
 	QString packageSource;
 	QString paletteId;
 	bool decodeRequested = false;
+	// False means source admission failed or a requested folder was unavailable.
+	bool sourceIndexComplete = true;
+	// False when collection, reads/decoding, shader parsing or cancellation prevent a full audit.
+	bool complete = true;
+	bool cancelled = false;
 	// Total use sites across the whole document.
 	int referenceCount = 0;
 	int uniqueCount = 0;
@@ -158,16 +164,21 @@ bool isMapTexturePlaceholder(const QString& textureName, LevelMapFormat format);
 // missing even when no package holds them.
 bool isEngineHandledMapTexture(const QString& textureName, LevelMapFormat format, const QString& engineFamily);
 
+// Material names for package lookup. Quake III map tokens omit the textures/
+// prefix that q3map2 supplies. Full paths from existing maps remain accepted.
+QStringList mapTextureMaterialCandidates(const QString& textureName, LevelMapFormat format, const QString& engineFamily);
+
 // Ordered virtual paths to try for one texture name. Empty for placeholders.
 QStringList mapTextureCandidatePaths(const QString& textureName, LevelMapFormat format, const QString& engineFamily);
 
 // Collects the shader names declared by a Quake III `.shader` script: a name at
 // brace depth 0 followed by a `{` block. Line and block comments and nested
 // braces are skipped. Malformed scripts warn instead of failing.
-QStringList collectShaderScriptNames(const QByteArray& bytes, QStringList* warnings = nullptr);
+QStringList collectShaderScriptNames(const QByteArray& bytes, QStringList* warnings = nullptr, const PackageReadControl& control = {});
 
-MapTextureAudit auditLevelMapTextures(const LevelMapDocument& document, const PackageArchiveReader& archive, bool decodeSizes = true);
-MapTextureAudit auditLevelMapTexturesInDirectories(const LevelMapDocument& document, const QStringList& roots, bool decodeSizes = true);
+MapTextureAudit auditLevelMapTextures(const LevelMapDocument& document, const PackageArchiveReader& archive, bool decodeSizes = true, const PackageReadControl& control = {});
+MapTextureAudit auditLevelMapTexturesInDirectories(const LevelMapDocument& document, const QStringList& roots, bool decodeSizes = true,
+	const PackageIndexLimits& limits = {});
 
 QStringList mapTextureAuditLines(const MapTextureAudit& audit);
 QString mapTextureAuditText(const MapTextureAudit& audit);
