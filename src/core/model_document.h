@@ -2,6 +2,7 @@
 
 #include "core/model_file_io.h"
 #include "core/model_mdl.h"
+#include "core/model_mesh_tools.h"
 #include "core/model_mesh.h"
 #include "core/model_topology.h"
 #include "core/model_transform.h"
@@ -112,6 +113,30 @@ enum class ModelEditKind
 	AnimateCollisionBox,
 	FreezeCollisionBox,
 	FitAnimatedCollisionBox,
+	// Edit-mode mesh tools (core/model_mesh_tools.h).
+	RotateEdges,
+	MergeVertices,
+	DissolveVertices,
+	DissolveFaces,
+	PokeFaces,
+	BeautifyFaces,
+	MakeFace,
+	ExtrudeEdges,
+	InsetFaces,
+	ShrinkFatten,
+	SmoothVertices,
+	WeightedTransform,
+	ShadeFlat,
+	ShadeSmooth,
+	ShadeAutoSmooth,
+	Bisect,
+	Symmetrize,
+	LoopCut,
+	AddPrimitive,
+	Decimate,
+	BevelVertices,
+	Solidify,
+	ProjectUvMapping,
 };
 
 struct ModelEdit
@@ -175,6 +200,8 @@ struct ModelEdit
 	ModelVec3 axisRotation;
 	// -1 uses the edited frame, or pivotFrame for an all-frame operation.
 	int axesFrame = -1;
+	// Edit-mode tool settings; only mesh tools accept non-default values.
+	ModelMeshToolOptions tool{};
 };
 
 struct ModelExportReport
@@ -198,6 +225,8 @@ bool applyModelEdit(ModelMesh *mesh, const ModelEdit &edit, ModelSelection *resu
 					const ModelWorkControl &control = {});
 QByteArray exportEditableModel(const ModelMesh &mesh, const QString &format, int frame = 0, QString *error = nullptr,
 							   const ModelWorkControl &control = {}, ModelExportReport *report = nullptr);
+// The format ids exportEditableModel writes, in menu order.
+[[nodiscard]] QStringList modelExportFormatIds();
 
 // Selection-aware history, bounded by count and estimated geometry/selection size. The
 // source fingerprint guards saves against an external writer; imported game

@@ -15,7 +15,8 @@ independent of render mesh transforms, follows frame copy/insertion/deletion,
 and exports a selected stored pose to a separate static map; see
 [Model Collision](MODEL_COLLISION.md) for authoring and level/CLI handoff.
 
-**Models > Mesh Editor** opens the selected OBJ/MDL/MD2/MD3 model as an editable copy, or
+**Models > Mesh Editor** opens the selected model, in any format listed in
+[Native Model Formats](MODEL_FORMATS.md), as an editable copy, or
 starts with a cube when no model is selected. **Design Prop > Edit as Mesh**
 bakes the current primitive geometry into this editor. The primitive design
 remains a separate parametric source. An already open mesh document is kept
@@ -28,8 +29,9 @@ and **Bake Animation…** creates a sampled sequence with saved clip timing.
 See [Model Assemblies](MODEL_ASSEMBLY.md) for source protection,
 package context and current limits.
 
-The Models browser loads OBJ, MDL, MD2 and MD3 geometry on a cancellable worker.
-MDC, MDR and IQM use the same loading flow but provide header metadata only.
+The Models browser loads every decoded format on a cancellable worker.
+Animation-only MDX, GLA and `.md5anim` files provide a skeleton and frames
+without geometry.
 **Cancel Preview** stops the current request; select the model again to retry.
 Changing the selection or staged package revision retires the old result.
 Returning to Models or invoking a model command keeps the selected preview's
@@ -58,6 +60,10 @@ materials/surfaces, full editor-to-package handoff and cross-platform performanc
 remain open; see the [release evidence](MODELLER_RELEASE.md).
 
 ## Editing
+
+Blender-style edit mode (menus, modal G/R/S/E/I tools, region and loop
+selection, the 3D cursor, inset, loop cut, merge, symmetrize, decimate and
+more) is described in [Mesh Tools](MODEL_TOOLS.md).
 
 **Repair Import…** prepares a reviewed copy of a damaged `.mesh.json`, MDL, MD2
 or MD3 before normal editable-model admission. The original Open / Import path
@@ -753,7 +759,10 @@ file checksums; internal revisions are not interchangeable with file hashes.
 Save writes an atomic `.mesh.json` authoring document. It stores every surface's
 triangles, UVs, positions and normals for every frame, material references,
 frame names and origins, animation ranges, and attachment tags. Schema identifier
-is `vibestudio.mesh`. Animated collision tracks use version `7`. Otherwise,
+is `vibestudio.mesh`. Sources with a skeleton use version `8`, which adds a
+`skeleton` object: joints with their bind matrices, per-surface skinning, clips
+of model-space joint matrices and skeletal tags (see
+[skeletons](MODEL_FORMATS.md#skeletons)). Animated collision tracks use version `7`. Otherwise,
 sources with a positive saved clip FPS use version `6`, with
 optional MDL and collision fields. Clip entries optionally contain a numeric
 `framesPerSecond` from 0.001 to 1,000; absence means unspecified. That field is
@@ -800,7 +809,10 @@ smaller selection even when later compaction would reduce its final vertex count
 
 MDL, MD2 and MD3 geometry import uses the shared native decoders. MDL retains
 every indexed skin member, native frame grouping, cumulative group times, flags,
-sync type, eye position and size hint. MDC/MDR/IQM geometry import remains open work.
+sync type, eye position and size hint. Every other decoded format imports through
+the same decoders. Skeletal models keep their skeleton and are re-baked to at
+most 1,024 frames when their animation is longer; see
+[Native Model Formats](MODEL_FORMATS.md).
 
 ### OBJ polygon interchange
 

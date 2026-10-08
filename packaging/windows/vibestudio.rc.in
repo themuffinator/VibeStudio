@@ -1,0 +1,35 @@
+// Windows resources for vibestudio.exe: the brand icon and version details.
+// src/meson.build configures this from VERSION. Numeric constants stand in for
+// the winver.h names so rc.exe and llvm-rc both compile it without SDK headers.
+#pragma code_page(65001)
+
+1 ICON "vibestudio.ico"
+
+1 VERSIONINFO
+FILEVERSION @VERSION_MAJOR@,@VERSION_MINOR@,@VERSION_PATCH@,0
+PRODUCTVERSION @VERSION_MAJOR@,@VERSION_MINOR@,@VERSION_PATCH@,0
+FILEFLAGSMASK 0x3FL
+FILEFLAGS @FILE_FLAGS@
+FILEOS 0x40004L
+FILETYPE 0x1L
+FILESUBTYPE 0x0L
+BEGIN
+	BLOCK "StringFileInfo"
+	BEGIN
+		BLOCK "040904B0"
+		BEGIN
+			VALUE "CompanyName", "DarkMatter Productions"
+			VALUE "FileDescription", "VibeStudio"
+			VALUE "FileVersion", "@VERSION@"
+			VALUE "InternalName", "vibestudio"
+			VALUE "LegalCopyright", "Copyright (C) themuffinator and VibeStudio contributors. GPL-3.0-or-later."
+			VALUE "OriginalFilename", "vibestudio.exe"
+			VALUE "ProductName", "VibeStudio"
+			VALUE "ProductVersion", "@VERSION@"
+		END
+	END
+	BLOCK "VarFileInfo"
+	BEGIN
+		VALUE "Translation", 0x409, 1200
+	END
+END

@@ -1,4 +1,11 @@
 #include "app/application_shell.h"
+#include "app/level_palette_tree.h"
+#include "app/studio_sidebar.h"
+#include "app/editor_profile_dialog.h"
+#include "app/wrapping_action_button.h"
+#include "app/studio_accessibility.h"
+#include "app/studio_sound_cues.h"
+#include "app/studio_speech.h"
 #include "app/level_surface_worker.h"
 #include "app/level_texture_audit_panel.h"
 #include "core/level_placement.h"
@@ -33,6 +40,7 @@
 #include "app/package_preview_worker.h"
 #include "app/texture_png_export_dialog.h"
 #include "app/texture_canvas.h"
+#include "app/material_workbench.h"
 #include "core/package_selection.h"
 
 #include "app/asset_views.h"
@@ -45,6 +53,7 @@
 #include "app/model_viewport.h"
 #include "app/studio_actions.h"
 #include "app/studio_charts.h"
+#include "app/studio_docks.h"
 #include "app/studio_icons.h"
 #include "app/studio_layout.h"
 #include "app/studio_runtime.h"
@@ -57,6 +66,8 @@
 #include "core/asset_formats.h"
 #include "core/bsp_inspect.h"
 #include "core/build_pipeline.h"
+#include "core/entity_builtin_catalogue.h"
+#include "core/portal_file.h"
 #include "core/entity_definitions.h"
 #include "core/doom_preview_geometry.h"
 #include "core/idtech_image.h"
@@ -111,6 +122,7 @@
 #include <QApplication>
 #include <QCheckBox>
 #include <QClipboard>
+#include <QCollator>
 #include <QColorDialog>
 #include <QCompleter>
 #include <QStringListModel>
@@ -157,6 +169,10 @@
 #include <QScrollArea>
 #include <QSignalBlocker>
 #include <QSlider>
+#include <QStyleHints>
+#if QT_VERSION >= QT_VERSION_CHECK(6, 10, 0)
+#include <QAccessibilityHints>
+#endif
 #include <QDoubleSpinBox>
 #include <QSpinBox>
 #include <QSplitter>
@@ -210,14 +226,21 @@ QString settingsStatusText(QSettings::Status status)
 	return ApplicationShell::tr("unknown");
 }
 
+// A language as the Language list shows it: its name in the interface
+// language, then its own name, so a reader who cannot read the current
+// interface still finds theirs. The native name is wrapped in Unicode
+// first-strong isolates, so a right-to-left name keeps its order in a
+// left-to-right row and the reverse.
 QString localeDisplayName(const QString& localeName)
 {
-	const QLocale locale(localeName);
-	QString nativeLanguage = locale.nativeLanguageName();
-	if (nativeLanguage.isEmpty() || nativeLanguage == QStringLiteral("C")) {
-		nativeLanguage = localeName;
+	LocalizationTarget target;
+	if (!localizationTargetForId(localeName, &target)) {
+		return localeName;
 	}
-	return QStringLiteral("%1 [%2]").arg(nativeLanguage, localeName);
+	if (target.nativeName.compare(target.englishName, Qt::CaseInsensitive) == 0) {
+		return target.englishName;
+	}
+	return ApplicationShell::tr("%1 — %2").arg(target.englishName, QChar(0x2068) + target.nativeName + QChar(0x2069));
 }
 
 QString localizedThemeName(StudioTheme theme)
@@ -907,6 +930,14 @@ ApplicationShell::ApplicationShell(QWidget* parent, std::unique_ptr<AudioPlaybac
 	if (!listLevelMapRecoveries(levelMapRecoveryDirectory()).isEmpty()) {
 		QTimer::singleShot(0, this, [this]() { statusBar()->showMessage(tr("Map recovery checkpoints are available in File > Recover Maps.")); });
 	}
+	// Start-up's own tasks and messages settle before anything is spoken or
+	// announced; what finishes after that is the user's work.
+	QTimer::singleShot(2000, this, [this]() {
+		for (const OperationTask& task : m_activity.tasks()) {
+			noteTaskOutcome(task);
+		}
+		m_accessibilityAnnouncementsReady = true;
+	});
 	timing.mark("ready");
 }
 
@@ -1400,39 +1431,6 @@ bool applyTreeFilterTo(QTreeWidgetItem* item, const QString& needle)
 	return matches || childMatches;
 }
 
-// The Levels palette: entity classes or Doom thing types whose rows drag out
-// as what they place, for the map viewport to take.
-class MapPaletteTree final : public QTreeWidget {
-public:
-	using QTreeWidget::QTreeWidget;
-
-protected:
-	// Only ever a copy: a move that the viewport accepted, with Shift held,
-	// would have the view take the row out of the palette.
-	void startDrag(Qt::DropActions supportedActions) override
-	{
-		QTreeWidget::startDrag(supportedActions & Qt::CopyAction);
-	}
-
-	[[nodiscard]] QStringList mimeTypes() const override
-	{
-		return {QString::fromLatin1(kMapPaletteMimeType)};
-	}
-
-	[[nodiscard]] QMimeData* mimeData(const QList<QTreeWidgetItem*>& items) const override
-	{
-		auto* data = new QMimeData;
-		for (const QTreeWidgetItem* item : items) {
-			const QString payload = item->data(0, Qt::UserRole).toString();
-			if (!payload.isEmpty()) {
-				data->setData(QString::fromLatin1(kMapPaletteMimeType), payload.toUtf8());
-				break;
-			}
-		}
-		return data;
-	}
-};
-
 void applyTreeFilter(QTreeWidget* tree, const QLineEdit* filter)
 {
 	if (!tree || !filter) {
@@ -1923,6 +1921,91 @@ void ApplicationShell::buildUi()
 	connect(m_aiThreeDConnectorCombo, &QComboBox::currentIndexChanged, this, persistPreferenceChange);
 	connect(m_aiEmbeddingsConnectorCombo, &QComboBox::currentIndexChanged, this, persistPreferenceChange);
 	connect(m_aiLocalConnectorCombo, &QComboBox::currentIndexChanged, this, persistPreferenceChange);
+	connect(m_regionCombo, &QComboBox::currentIndexChanged, this, persistPreferenceChange);
+	connect(m_fontCombo, &QComboBox::currentIndexChanged, this, persistPreferenceChange);
+	connect(m_wideTextSpacing, &QCheckBox::toggled, this, persistPreferenceChange);
+	connect(m_colorVisionCombo, &QComboBox::currentIndexChanged, this, persistPreferenceChange);
+	connect(m_reducedSaturation, &QCheckBox::toggled, this, persistPreferenceChange);
+	connect(m_thickFocusIndicator, &QCheckBox::toggled, this, persistPreferenceChange);
+	connect(m_thickTextCursor, &QCheckBox::toggled, this, persistPreferenceChange);
+	connect(m_steadyTextCursor, &QCheckBox::toggled, this, persistPreferenceChange);
+	connect(m_messageDurationCombo, &QComboBox::currentIndexChanged, this, persistPreferenceChange);
+	connect(m_visualAlerts, &QCheckBox::toggled, this, persistPreferenceChange);
+	connect(m_screenReaderAnnouncements, &QCheckBox::toggled, this, persistPreferenceChange);
+	// Speech settings change nothing on screen, so they skip the full
+	// re-application of the theme and layout.
+	auto persistSpeechChange = [this]() {
+		AccessibilityPreferences preferences = m_settings.accessibilityPreferences();
+		preferences.speechVoice = m_speechVoiceCombo->currentData().toString();
+		preferences.speechRate = m_speechRate->value();
+		preferences.speechPitch = m_speechPitch->value();
+		preferences.speechVolume = m_speechVolume->value();
+		QStringList events;
+		for (auto it = m_speechEventBoxes.cbegin(); it != m_speechEventBoxes.cend(); ++it) {
+			if (it.value()->isChecked()) {
+				events << it.key();
+			}
+		}
+		preferences.speechEvents = normalizedSpeechEvents(events);
+		m_settings.setAccessibilityPreferences(preferences);
+		m_settings.sync();
+		applySpeechPreferences();
+		refreshSpeechControls();
+	};
+	connect(m_speechVoiceCombo, &QComboBox::currentIndexChanged, this, persistSpeechChange);
+	for (QSlider* slider : {m_speechRate, m_speechPitch, m_speechVolume}) {
+		// A drag saves once, on release; keys save each step.
+		connect(slider, &QSlider::valueChanged, this, [slider, persistSpeechChange]() {
+			if (!slider->isSliderDown()) {
+				persistSpeechChange();
+			}
+		});
+		connect(slider, &QSlider::sliderReleased, this, persistSpeechChange);
+	}
+	for (QCheckBox* box : std::as_const(m_speechEventBoxes)) {
+		connect(box, &QCheckBox::toggled, this, persistSpeechChange);
+	}
+	// Sound cues change nothing on screen either.
+	auto persistSoundCueChange = [this]() {
+		AccessibilityPreferences preferences = m_settings.accessibilityPreferences();
+		preferences.soundCues = m_soundCues->isChecked();
+		preferences.soundCueVolume = m_soundCueVolume->value();
+		m_settings.setAccessibilityPreferences(preferences);
+		m_settings.sync();
+		m_soundCueVolume->setEnabled(preferences.soundCues);
+		m_soundCueTest->setEnabled(preferences.soundCues);
+	};
+	connect(m_soundCues, &QCheckBox::toggled, this, persistSoundCueChange);
+	connect(m_soundCueVolume, &QSlider::valueChanged, this, [this, persistSoundCueChange]() {
+		if (!m_soundCueVolume->isSliderDown()) {
+			persistSoundCueChange();
+		}
+	});
+	connect(m_soundCueVolume, &QSlider::sliderReleased, this, persistSoundCueChange);
+	// The voice list fills when Accessibility is first shown, not at start.
+	connect(m_settingsCategories, &QListWidget::currentRowChanged, this, [this](int row) {
+		if (row >= 0 && m_settingsCategories->item(row)->data(Qt::UserRole).toString() == QStringLiteral("accessibility")) {
+			QTimer::singleShot(0, this, [this]() { refreshSpeechControls(); });
+		}
+	});
+	// Status messages last as long as the user asked, and reach the screen
+	// reader and the voice when those are on.
+	connect(statusBar(), &QStatusBar::messageChanged, this, &ApplicationShell::handleStatusMessage);
+	// The System theme follows the desktop as it changes: light or dark, and
+	// its high-contrast mode.
+	if (QStyleHints* hints = QGuiApplication::styleHints()) {
+		const auto followDesktop = [this]() {
+			if (m_settings.accessibilityPreferences().theme == StudioTheme::System) {
+				applyPreferencesToUi();
+			}
+		};
+		connect(hints, &QStyleHints::colorSchemeChanged, this, followDesktop);
+#if QT_VERSION >= QT_VERSION_CHECK(6, 10, 0)
+		if (const QAccessibilityHints* accessibility = hints->accessibility()) {
+			connect(accessibility, &QAccessibilityHints::contrastPreferenceChanged, this, followDesktop);
+		}
+#endif
+	}
 
 	m_buildingUi = false;
 }
@@ -2481,7 +2564,10 @@ QWidget* ApplicationShell::buildLevelsPage()
 	m_levelMapStatistics = new QListWidget;
 	m_levelMapStatistics->setObjectName(QStringLiteral("levelMapStatistics"));
 	m_levelMapStatistics->setAccessibleName(tr("Level map statistics"));
-	auto* outlinerTabs = createPanelTabs(tr("Level outliner"), QTabWidget::South);
+	// The panels made here go onto the sidebars, on whichever side the editor
+	// profile puts their tabs; see buildLevelSidebars().
+	LevelSidebarContent sidebarContent;
+	sidebarContent.statistics = m_levelMapStatistics;
 	m_levelObjectFilter = createFilterField(tr("Filter objects or key=value"), tr("Map object filter"));
 	m_levelObjectFilter->setObjectName(QStringLiteral("levelObjectFilter"));
 	m_levelObjectFilter->setToolTip(tr("Words narrow the list by name. key=value, key:text, key!=value, key<n, and key>n test each object's "
@@ -2497,11 +2583,10 @@ QWidget* ApplicationShell::buildLevelsPage()
 		}
 		if (m_selectMatchingWhenReady) { m_selectMatchingWhenReady = false; selectMatchingLevelMapObjects(); }
 	});
-	m_levelOutlinerTabs = outlinerTabs;
 	m_levelObjectsPanel = withFilter(m_levelObjectFilter, m_levelMapObjects);
-	outlinerTabs->addTab(m_levelObjectsPanel, studioIcon(QStringLiteral("list")), tr("Objects"));
+	sidebarContent.objects = m_levelObjectsPanel;
 	m_levelScenePanel = new LevelScenePanel(&m_levelMapDocument);
-	outlinerTabs->addTab(m_levelScenePanel, studioIcon(QStringLiteral("list")), tr("Scene"));
+	sidebarContent.scene = m_levelScenePanel;
 	connect(m_levelScenePanel, &LevelScenePanel::sceneChanged, this, &ApplicationShell::refreshLevelMapWorkbench);
 	connect(m_levelScenePanel, &LevelScenePanel::selectionChanged, this, [this] { refreshLevelMapWorkbench(); frameLevelMapSelection(); });
 	// Create: what the map can place, to put in the middle of the view or drag
@@ -2527,7 +2612,8 @@ QWidget* ApplicationShell::buildLevelsPage()
 	connect(m_levelMapPaletteFilter, &QLineEdit::textChanged, this, [this]() {
 		applyTreeFilter(m_levelMapPalette, m_levelMapPaletteFilter);
 	});
-	outlinerTabs->addTab(withFilter(m_levelMapPaletteFilter, m_levelMapPalette), studioIcon(QStringLiteral("add")), tr("Create"));
+	sidebarContent.palette = withFilter(m_levelMapPaletteFilter, m_levelMapPalette);
+	sidebarContent.placement = buildLevelCameraPlacementTools();
 	// Textures: what the map shows, the ones applied lately first, to put on
 	// the selection in one step, the way an editor's texture browser works.
 	m_levelMapTextures = new QListWidget;
@@ -2570,10 +2656,7 @@ QWidget* ApplicationShell::buildLevelsPage()
 		applyListFilter(m_levelMapTextures, m_levelMapTextureFilter);
 		scheduleTextureThumbnails();
 	});
-	outlinerTabs->addTab(withFilter(m_levelMapTextureFilter, m_levelMapTextures), studioIcon(QStringLiteral("texture")), tr("Textures"));
-	outlinerTabs->addTab(m_levelMapStatistics, studioIcon(QStringLiteral("report")), tr("Statistics"));
-	auto* leftPanel = padded(outlinerTabs, 10, 8, 10);
-	leftPanel->setMinimumWidth(220);
+	sidebarContent.textures = withFilter(m_levelMapTextureFilter, m_levelMapTextures);
 
 	// Centre: viewport with its own view controls and a readout beneath.
 	auto* viewportBar = createPageToolBar(tr("Map viewport controls"));
@@ -2596,7 +2679,7 @@ QWidget* ApplicationShell::buildLevelsPage()
 	m_levelMapProjection->setToolTip(tr("Choose the orthographic plane the viewport draws."));
 	m_levelMapProjection->addItem(tr("Top (X/Y)"), 0);
 	m_levelMapProjection->addItem(tr("Front (X/Z)"), 1);
-	m_levelMapProjection->addItem(tr("Side (Z/Y)"), 2);
+	m_levelMapProjection->addItem(tr("Side (Y/Z)"), 2);
 	viewportBar->addWidget(m_levelMapProjection);
 
 	m_levelMapGrid = new QComboBox;
@@ -2692,6 +2775,14 @@ QWidget* ApplicationShell::buildLevelsPage()
 		menu->setObjectName(QStringLiteral("levelControlsMenu"));
 		auto* choices = new QActionGroup(menu);
 		choices->setExclusive(true);
+		auto* browse = menu->addAction(studioIcon(QStringLiteral("search")), tr("Browse Editor Profiles…"));
+		browse->setObjectName(QStringLiteral("levelBrowseProfiles"));
+		connect(browse, &QAction::triggered, this, [this] {
+			EditorProfileDialog dialog(m_settings.selectedEditorProfileId(), this);
+			if (dialog.exec() != QDialog::Accepted || dialog.selectedProfileId().isEmpty() || !m_editorProfileCombo) { return; }
+			const int index = m_editorProfileCombo->findData(dialog.selectedProfileId());
+			if (index >= 0) { m_editorProfileCombo->setCurrentIndex(index); }
+		});
 		menu->addSection(tr("Controls like"));
 		for (const EditorProfileDescriptor& profile : editorProfileDescriptors()) {
 			QAction* choice = menu->addAction(profile.placeholder ? tr("%1 (keys only)").arg(profile.displayName) : profile.displayName);
@@ -2721,7 +2812,7 @@ QWidget* ApplicationShell::buildLevelsPage()
 	m_levelViewLayoutButton->setAccessibleName(tr("Level view layout"));
 	m_levelViewLayoutButton->setPopupMode(QToolButton::InstantPopup);
 	auto* layouts = new QMenu(m_levelViewLayoutButton);
-	for (const auto& id : {QStringLiteral("profile"), QStringLiteral("single-2d"), QStringLiteral("single-3d"), QStringLiteral("camera-and-plan"), QStringLiteral("four-views")}) {
+	for (const auto& id : {QStringLiteral("profile"), QStringLiteral("single-2d"), QStringLiteral("single-3d"), QStringLiteral("camera-and-plan"), QStringLiteral("four-views"), QStringLiteral("camera-above-plans"), QStringLiteral("camera-beside-plans")}) {
 		LevelViewLayout layout = LevelViewLayout::Single2D;
 		levelViewLayoutForId(id, &layout);
 		auto* choice = layouts->addAction(id == QStringLiteral("profile") ? tr("Follow Editor Profile") : levelViewLayoutDisplayName(layout));
@@ -2795,9 +2886,7 @@ QWidget* ApplicationShell::buildLevelsPage()
 		const int face = m_levelMap3DFaces.value(triangle, -1);
 		if (owner.kind == LevelMapSelectionKind::QuakeBrush && face >= 0) {
 			m_inspectorFocus = QStringLiteral("face:%1:%2").arg(owner.objectId).arg(face);
-			if (m_levelMapInspectorTabs && m_levelMapInspectorPanel) {
-				m_levelMapInspectorTabs->setCurrentWidget(m_levelMapInspectorPanel);
-			}
+			showLevelSidebarPage(QStringLiteral("inspector"));
 		}
 		refreshLevelMapWorkbench();
 		statusBar()->showMessage(face >= 0 && owner.kind == LevelMapSelectionKind::QuakeBrush
@@ -2829,34 +2918,18 @@ QWidget* ApplicationShell::buildLevelsPage()
 	centreLayout->setContentsMargins(0, 0, 0, 0);
 	centreLayout->setSpacing(0);
 	centreLayout->addWidget(viewportBar);
+	centreLayout->addWidget(buildLevelAuthoringBar());
 	centreLayout->addWidget(buildLevelPreviewStatus());
 	centreLayout->addWidget(buildLevelMaterialTools());
 	centreLayout->addWidget(m_levelMapViews, 1);
 	centreLayout->addWidget(m_levelMapHover);
 
-	// Right: inspector tabs.
+	// The inspector: the selection's keys and fields, edited in place. Its Edit
+	// Key and Move actions sit on its section's header (buildLevelSidebars()).
 	auto* entityPanel = new QWidget;
 	auto* entityLayout = new QVBoxLayout(entityPanel);
-	entityLayout->setContentsMargins(0, 8, 0, 0);
-	entityLayout->setSpacing(8);
-	auto* entityActions = new QHBoxLayout;
-	entityActions->setSpacing(6);
-	m_levelMapEditProperty = createButton(tr("Edit Key"), QStringLiteral("edit"));
-	m_levelMapEditProperty->setAccessibleName(tr("Edit selected entity key"));
-	m_levelMapEditProperty->setToolTip(tr("Change a key on the selected map object."));
-	connect(m_levelMapEditProperty, &QPushButton::clicked, this, [this]() {
-		editSelectedLevelMapProperty();
-	});
-	entityActions->addWidget(m_levelMapEditProperty);
-	m_levelMapMoveSelection = createButton(tr("Move"), QStringLiteral("move"));
-	m_levelMapMoveSelection->setAccessibleName(tr("Move selected map object"));
-	m_levelMapMoveSelection->setToolTip(tr("Translate the selected map object by a delta."));
-	connect(m_levelMapMoveSelection, &QPushButton::clicked, this, [this]() {
-		moveSelectedLevelMapObject();
-	});
-	entityActions->addWidget(m_levelMapMoveSelection);
-	entityActions->addStretch(1);
-	entityLayout->addLayout(entityActions);
+	entityLayout->setContentsMargins(0, 0, 0, 0);
+	entityLayout->setSpacing(6);
 
 	// Property grid in the style of idStudio's entity inspector: grouped,
 	// collapsible Key / Value rows. Double-click or Enter edits a value in
@@ -2932,9 +3005,11 @@ QWidget* ApplicationShell::buildLevelsPage()
 	});
 	entityLayout->addWidget(m_entityInspector, 1);
 
-	auto* definitionLabel = new QLabel(tr("Entity definitions"));
-	definitionLabel->setObjectName("sectionLabel");
-	entityLayout->addWidget(definitionLabel);
+	// Where the classes come from, shown with the map's other settings.
+	auto* definitionsPanel = new QWidget;
+	auto* definitionsLayout = new QVBoxLayout(definitionsPanel);
+	definitionsLayout->setContentsMargins(0, 0, 0, 0);
+	definitionsLayout->setSpacing(6);
 	auto* entityDefinitionRow = new QHBoxLayout;
 	entityDefinitionRow->setSpacing(6);
 	m_entityDefinitionPath = new QLineEdit;
@@ -2958,18 +3033,22 @@ QWidget* ApplicationShell::buildLevelsPage()
 		reloadEntityDefinitions();
 	});
 	entityDefinitionRow->addWidget(reloadDefinitions);
-	entityLayout->addLayout(entityDefinitionRow);
+	definitionsLayout->addLayout(entityDefinitionRow);
 	m_entityDefinitionSummary = new QLabel(tr("No entity definitions loaded. Without them a classname is just a string."));
 	m_entityDefinitionSummary->setObjectName("moduleMeta");
 	m_entityDefinitionSummary->setAccessibleName(tr("Entity definition summary"));
 	m_entityDefinitionSummary->setWordWrap(true);
-	entityLayout->addWidget(m_entityDefinitionSummary);
+	definitionsLayout->addWidget(m_entityDefinitionSummary);
 
 	m_levelMapValidation = new QListWidget;
 	m_levelMapValidation->setObjectName(QStringLiteral("levelMapHealth"));
 	m_levelMapValidation->setAccessibleName(tr("Level map validation"));
 	m_levelMapValidation->setAccessibleDescription(tr("Validation, map health, texture, entity, leak, and compiler preflight issues."));
 	m_levelMapValidation->setWordWrap(true);
+	// Rows wrap to the sidebar's width rather than scrolling sideways.
+	m_levelMapValidation->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+	m_levelMapValidation->setResizeMode(QListView::Adjust);
+	m_levelMapValidation->setTextElideMode(Qt::ElideNone);
 	// An entity issue selects the entity it is about.
 	connect(m_levelMapValidation, &QListWidget::itemActivated, this, [this](QListWidgetItem* item) {
 		const QString selector = item ? item->data(Qt::UserRole).toString() : QString();
@@ -3006,10 +3085,9 @@ QWidget* ApplicationShell::buildLevelsPage()
 		}
 	});
 
-	auto* inspectorTabs = createPanelTabs(tr("Level map preview tabs"), QTabWidget::South);
-	inspectorTabs->addTab(entityPanel, studioIcon(QStringLiteral("inspector")), tr("Inspector"));
-	inspectorTabs->addTab(buildLevelSurfaceTools(), studioIcon(QStringLiteral("image")), tr("Surfaces"));
-	m_levelMapInspectorTabs = inspectorTabs;
+	sidebarContent.inspector = entityPanel;
+	sidebarContent.definitions = definitionsPanel;
+	sidebarContent.surfaces = buildLevelSurfaceTools();
 	m_levelMapInspectorPanel = entityPanel;
 	auto* healthPanel = new QWidget;
 	healthPanel->setObjectName(QStringLiteral("levelMapHealthPanel"));
@@ -3018,21 +3096,25 @@ QWidget* ApplicationShell::buildLevelsPage()
 	m_levelTextureAudit->changed = [this] { applyLevelTextureAudit(); };
 	healthLayout->addWidget(m_levelTextureAudit);
 	healthLayout->addWidget(m_levelMapValidation, 1);
-	inspectorTabs->addTab(healthPanel, studioIcon(QStringLiteral("validate")), tr("Health"));
-	inspectorTabs->addTab(m_levelMapDrawer, studioIcon(QStringLiteral("details")), tr("Details"));
-	inspectorTabs->addTab(m_levelMapView, studioIcon(QStringLiteral("tree")), tr("Outline"));
-	inspectorTabs->addTab(m_levelMapHistory, studioIcon(QStringLiteral("history")), tr("History"));
-	auto* rightPanel = padded(inspectorTabs, 10, 8, 10);
-	rightPanel->setMinimumWidth(280);
+	sidebarContent.health = healthPanel;
+	sidebarContent.details = m_levelMapDrawer;
+	sidebarContent.outline = m_levelMapView;
+	sidebarContent.history = m_levelMapHistory;
+	buildLevelSidebars(sidebarContent);
 
+	// Browsers, the views, and properties, the way Blender's sidebars frame its
+	// 3D view; each sidebar folds down to its tab column.
 	auto* workbench = createSplitter(Qt::Horizontal, QStringLiteral("levelsWorkbench"), tr("Level map workbench"));
-	workbench->addWidget(leftPanel);
+	workbench->addWidget(m_levelLeadingSidebar);
 	workbench->addWidget(centre);
-	workbench->addWidget(rightPanel);
+	workbench->addWidget(m_levelTrailingSidebar);
 	workbench->setStretchFactor(0, 0);
 	workbench->setStretchFactor(1, 1);
 	workbench->setStretchFactor(2, 0);
-	workbench->setSizes({scaledPane(250), 760, scaledPane(330)});
+	// Each sidebar's pages get the width the old side columns had; the tab
+	// column and the page margins come on top.
+	workbench->setSizes({scaledPane(310) + m_levelLeadingSidebar->foldedWidth() + 16, 760,
+		scaledPane(340) + m_levelTrailingSidebar->foldedWidth() + 16});
 	m_layoutSplitters.insert(workbench->objectName(), workbench);
 
 	auto* body = new QWidget;
@@ -3081,7 +3163,7 @@ QWidget* ApplicationShell::buildLevelsPage()
 	m_emptyStates.insert(static_cast<int>(StudioMode::Levels), empty);
 
 	connect(m_levelMapProjection, &QComboBox::currentIndexChanged, this, [this]() {
-		if (m_levelViewLayout == LevelViewLayout::FourViews) {
+		if (levelViewLayoutHasThreePlans(m_levelViewLayout)) {
 			activateLevelPlanViewport(m_levelPlanViews.value(m_levelMapProjection->currentIndex()));
 			m_levelMapViewport->setFocus(Qt::OtherFocusReason);
 		}
@@ -4066,7 +4148,7 @@ QWidget* ApplicationShell::buildSettingsPage()
 	m_settingsPages = pages;
 
 	// Each category is a scrollable column capped at a readable width.
-	auto addCategory = [categories, pages](const QString& iconName, const QString& title, QWidget* content) {
+	auto addCategory = [categories, pages](const QString& categoryId, const QString& iconName, const QString& title, QWidget* content) {
 		auto* column = new QWidget;
 		auto* columnLayout = new QHBoxLayout(column);
 		columnLayout->setContentsMargins(22, 18, 22, 22);
@@ -4076,6 +4158,7 @@ QWidget* ApplicationShell::buildSettingsPage()
 		pages->addWidget(createScrollSurface(column, title));
 		auto* item = new QListWidgetItem(studioIcon(iconName), title);
 		item->setData(Qt::AccessibleTextRole, title);
+		item->setData(Qt::UserRole, categoryId);
 		categories->addItem(item);
 	};
 
@@ -4126,6 +4209,14 @@ QWidget* ApplicationShell::buildSettingsPage()
 	});
 	setupActions->addWidget(m_setupReset);
 	setupActions->addStretch(1);
+	// The current step's own settings, one click away: Accessibility for
+	// Welcome and Access, the editor profile for Workspace, and so on.
+	m_setupOpenStep = createButton(tr("Open Step Settings"), QStringLiteral("settings"));
+	m_setupOpenStep->setObjectName(QStringLiteral("setupOpenStep"));
+	connect(m_setupOpenStep, &QPushButton::clicked, this, [this]() {
+		openCurrentSetupStepSettings();
+	});
+	setupActions->addWidget(m_setupOpenStep);
 	m_setupSkip = createButton(tr("Skip"), QStringLiteral("close"));
 	m_setupSkip->setAccessibleName(tr("Skip setup for now"));
 	connect(m_setupSkip, &QPushButton::clicked, this, [this]() {
@@ -4153,9 +4244,9 @@ QWidget* ApplicationShell::buildSettingsPage()
 	setupLayout->addLayout(setupActions);
 	setupContentLayout->addWidget(setupPanel);
 	setupContentLayout->addWidget(buildAudioRecoveryPreferences());
-	addCategory(QStringLiteral("check"), tr("Getting Started"), setupContent);
+	addCategory(QStringLiteral("getting-started"), QStringLiteral("check"), tr("Getting Started"), setupContent);
 
-	// Appearance and accessibility.
+	// Appearance, language and region, editing, and startup.
 	auto* appearanceContent = new QWidget;
 	auto* appearanceLayout = new QVBoxLayout(appearanceContent);
 	appearanceLayout->setContentsMargins(0, 0, 0, 0);
@@ -4163,8 +4254,8 @@ QWidget* ApplicationShell::buildSettingsPage()
 
 	auto* preferencesPanel = new QGroupBox(tr("Appearance"));
 	preferencesPanel->setObjectName("preferencesPanel");
-	preferencesPanel->setAccessibleName(tr("Accessibility and language preferences"));
-	preferencesPanel->setAccessibleDescription(tr("Persistent preferences for language, theme, scaling, density, motion, and text to speech."));
+	preferencesPanel->setAccessibleName(tr("Appearance preferences"));
+	preferencesPanel->setAccessibleDescription(tr("Persistent preferences for theme, text scale, density, typeface, spacing, and the navigation rail."));
 	auto* preferencesLayout = new QFormLayout(preferencesPanel);
 	preferencesLayout->setHorizontalSpacing(16);
 	preferencesLayout->setVerticalSpacing(10);
@@ -4178,6 +4269,7 @@ QWidget* ApplicationShell::buildSettingsPage()
 
 	m_themeCombo = new QComboBox;
 	m_themeCombo->setAccessibleName(tr("Theme"));
+	m_themeCombo->setToolTip(tr("System follows the desktop: its light or dark colours, and its high-contrast mode when that is on."));
 	const QVector<StudioTheme> themes = {
 		StudioTheme::System,
 		StudioTheme::Dark,
@@ -4212,6 +4304,25 @@ QWidget* ApplicationShell::buildSettingsPage()
 	sizeCombo(m_densityCombo);
 	preferencesLayout->addRow(tr("Density"), m_densityCombo);
 
+	m_fontCombo = new QComboBox;
+	m_fontCombo->setObjectName(QStringLiteral("uiFontCombo"));
+	m_fontCombo->setAccessibleName(tr("Interface typeface"));
+	m_fontCombo->setToolTip(tr("The typeface menus, labels, and messages are written in. Any installed font can be chosen, including ones made for easier reading such as Atkinson Hyperlegible, Lexend, or OpenDyslexic. Code keeps its fixed-width font."));
+	m_fontCombo->addItem(tr("System typeface"), QString());
+	for (const QString& family : QFontDatabase::families()) {
+		if (!QFontDatabase::isPrivateFamily(family)) {
+			m_fontCombo->addItem(family, family);
+		}
+	}
+	sizeCombo(m_fontCombo);
+	preferencesLayout->addRow(tr("Typeface"), m_fontCombo);
+
+	m_wideTextSpacing = new QCheckBox(tr("Wider letter and word spacing"));
+	m_wideTextSpacing->setObjectName(QStringLiteral("wideTextSpacing"));
+	m_wideTextSpacing->setAccessibleName(tr("Wider letter and word spacing"));
+	m_wideTextSpacing->setToolTip(tr("Sets letters 0.12 and words 0.16 of the text size further apart, the spacing WCAG 2.2 asks layouts to withstand. Many readers with dyslexia find spaced text easier to follow."));
+	preferencesLayout->addRow(QString(), m_wideTextSpacing);
+
 	m_railBehaviourCombo = new QComboBox;
 	m_railBehaviourCombo->setObjectName(QStringLiteral("railBehaviourCombo"));
 	m_railBehaviourCombo->setAccessibleName(tr("Navigation rail"));
@@ -4222,31 +4333,67 @@ QWidget* ApplicationShell::buildSettingsPage()
 	m_railBehaviourCombo->setCurrentIndex(std::max(0, m_railBehaviourCombo->findData(m_settings.shellModeRailBehaviour())));
 	sizeCombo(m_railBehaviourCombo);
 	preferencesLayout->addRow(tr("Navigation"), m_railBehaviourCombo);
-
-	m_reducedMotion = new QCheckBox(tr("Reduce motion"));
-	m_reducedMotion->setAccessibleName(tr("Reduced motion"));
-	m_reducedMotion->setToolTip(tr("Replaces spinners and animated progress with static state text across setup, task, and editor surfaces."));
-	preferencesLayout->addRow(QString(), m_reducedMotion);
-
-	m_textToSpeech = new QCheckBox(tr("Read status changes aloud"));
-	m_textToSpeech->setAccessibleName(tr("Text to speech"));
-	m_textToSpeech->setToolTip(tr("Stores the OS-backed text-to-speech preference for the setup and task surfaces planned next."));
-	preferencesLayout->addRow(QString(), m_textToSpeech);
 	appearanceLayout->addWidget(preferencesPanel);
 
-	auto* languagePanel = new QGroupBox(tr("Language and Editing"));
+	auto* languagePanel = new QGroupBox(tr("Language and Region"));
+	languagePanel->setObjectName(QStringLiteral("languagePanel"));
+	languagePanel->setAccessibleName(tr("Language and region preferences"));
 	auto* languageLayout = new QFormLayout(languagePanel);
 	languageLayout->setHorizontalSpacing(16);
 	languageLayout->setVerticalSpacing(10);
 	languageLayout->setFieldGrowthPolicy(QFormLayout::FieldsStayAtSizeHint);
 	m_localeCombo = new QComboBox;
+	m_localeCombo->setObjectName(QStringLiteral("localeCombo"));
 	m_localeCombo->setAccessibleName(tr("Language"));
-	for (const QString& localeName : supportedLocaleNames()) {
-		m_localeCombo->addItem(localeDisplayName(localeName), localeName);
+	m_localeCombo->setToolTip(tr("The language of menus, labels, and messages. System language follows the operating system whenever VibeStudio has that language. A new language shows after a restart."));
+	// The system choice first, then every language by its name in the
+	// interface language, so the list reads in the order its reader expects.
+	m_localeCombo->addItem(tr("System language: %1").arg(localeDisplayName(systemLocalizationTargetId())), systemLocalizationPreferenceId());
+	{
+		QVector<QPair<QString, QString>> languages;
+		for (const QString& localeName : supportedLocaleNames()) {
+			languages.push_back({localeDisplayName(localeName), localeName});
+		}
+		QCollator collator;
+		collator.setCaseSensitivity(Qt::CaseInsensitive);
+		std::sort(languages.begin(), languages.end(), [&collator](const QPair<QString, QString>& left, const QPair<QString, QString>& right) {
+			return collator.compare(left.first, right.first) < 0;
+		});
+		for (const QPair<QString, QString>& language : std::as_const(languages)) {
+			m_localeCombo->addItem(language.first, language.second);
+		}
 	}
 	sizeCombo(m_localeCombo);
 	languageLayout->addRow(tr("Language"), m_localeCombo);
+	m_languageRestartNotice = new NoticeBar;
+	m_languageRestartNotice->setAccessibleName(tr("Language restart notice"));
+	m_languageRestartNotice->hide();
+	languageLayout->addRow(m_languageRestartNotice);
 
+	m_regionCombo = new QComboBox;
+	m_regionCombo->setObjectName(QStringLiteral("regionCombo"));
+	m_regionCombo->setAccessibleName(tr("Region formats"));
+	m_regionCombo->setToolTip(tr("How numbers, dates, times, and sizes are written, chosen apart from the language: English menus can show German dates, for example. Type a region's name to jump to it."));
+	m_regionCombo->addItem(tr("System regional settings"), systemRegionFormatId());
+	m_regionCombo->addItem(tr("Match the interface language"), languageRegionFormatId());
+	for (const RegionFormatChoice& choice : regionFormatChoices()) {
+		m_regionCombo->addItem(choice.displayName, choice.localeName);
+	}
+	sizeCombo(m_regionCombo);
+	languageLayout->addRow(tr("Region formats"), m_regionCombo);
+	m_regionSample = new QLabel;
+	m_regionSample->setObjectName(QStringLiteral("fieldHint"));
+	m_regionSample->setTextInteractionFlags(Qt::TextSelectableByMouse);
+	m_regionSample->setAccessibleName(tr("Region format sample"));
+	languageLayout->addRow(QString(), m_regionSample);
+	appearanceLayout->addWidget(languagePanel);
+
+	auto* editingPanel = new QGroupBox(tr("Editing"));
+	editingPanel->setObjectName(QStringLiteral("editingPanel"));
+	auto* editingLayout = new QFormLayout(editingPanel);
+	editingLayout->setHorizontalSpacing(16);
+	editingLayout->setVerticalSpacing(10);
+	editingLayout->setFieldGrowthPolicy(QFormLayout::FieldsStayAtSizeHint);
 	m_editorProfileCombo = new QComboBox;
 	m_editorProfileCombo->setObjectName(QStringLiteral("editorProfileCombo"));
 	m_editorProfileCombo->setAccessibleName(tr("Editor profile"));
@@ -4256,13 +4403,13 @@ QWidget* ApplicationShell::buildSettingsPage()
 		m_editorProfileCombo->addItem(profile.displayName, profile.id);
 	}
 	sizeCombo(m_editorProfileCombo);
-	languageLayout->addRow(tr("Editor profile"), m_editorProfileCombo);
+	editingLayout->addRow(tr("Editor profile"), m_editorProfileCombo);
 	auto* gestures = new QPushButton(tr("Customize Gestures…"));
 	gestures->setObjectName(QStringLiteral("settingsEditorGestures"));
 	gestures->setAccessibleName(tr("Customize editor gestures"));
 	connect(gestures, &QPushButton::clicked, this, &ApplicationShell::showLevelGesturePreferences);
-	languageLayout->addRow(gestures);
-	appearanceLayout->addWidget(languagePanel);
+	editingLayout->addRow(gestures);
+	appearanceLayout->addWidget(editingPanel);
 
 	auto* startupPanel = new QGroupBox(tr("Startup and Recovery"));
 	auto* startupLayout = new QFormLayout(startupPanel);
@@ -4280,7 +4427,8 @@ QWidget* ApplicationShell::buildSettingsPage()
 	startupLayout->addRow(QString(), m_crashReports);
 	appearanceLayout->addWidget(startupPanel);
 	appearanceLayout->addStretch(1);
-	addCategory(QStringLiteral("palette"), tr("Appearance and Language"), appearanceContent);
+	addCategory(QStringLiteral("appearance"), QStringLiteral("palette"), tr("Appearance and Language"), appearanceContent);
+	addCategory(QStringLiteral("accessibility"), QStringLiteral("accessibility"), tr("Accessibility"), buildAccessibilitySettings());
 
 	// AI and automation.
 	auto* aiContent = new QWidget;
@@ -4413,7 +4561,7 @@ QWidget* ApplicationShell::buildSettingsPage()
 	aiLayout->addWidget(buildAiImageSettingsGroup());
 	aiLayout->addWidget(buildAiSoundSettingsGroup());
 	aiLayout->addStretch(1);
-	addCategory(QStringLiteral("sparkle"), tr("AI and Automation"), aiContent);
+	addCategory(QStringLiteral("ai"), QStringLiteral("sparkle"), tr("AI and Automation"), aiContent);
 
 	// Extensions.
 	auto* extensionContent = new QWidget;
@@ -4445,7 +4593,7 @@ QWidget* ApplicationShell::buildSettingsPage()
 	extensionPanelLayout->addWidget(m_advancedExtensions, 1);
 	extensionLayout->addWidget(extensionPanel);
 	extensionLayout->addStretch(1);
-	addCategory(QStringLiteral("plugin"), tr("Extensions"), extensionContent);
+	addCategory(QStringLiteral("extensions"), QStringLiteral("plugin"), tr("Extensions"), extensionContent);
 
 	connect(categories, &QListWidget::currentRowChanged, pages, &QStackedWidget::setCurrentIndex);
 	categories->setCurrentRow(0);
@@ -4510,15 +4658,19 @@ QWidget* ApplicationShell::buildSettingsPage()
 
 QWidget* ApplicationShell::buildShadersPage()
 {
-	auto* header = new PageHeader(QStringLiteral("layers"), tr("Shaders"));
-	header->setAccessibleName(tr("Shader workbench header"));
+	auto* header = new PageHeader(QStringLiteral("layers"), tr("Materials"));
+	header->setAccessibleName(tr("Materials workbench header"));
 	m_pageHeaders.insert(static_cast<int>(StudioMode::Shaders), header);
 
-	auto* browseShader = createButton(tr("Open Shader"), QStringLiteral("folder-open"), QStringLiteral("primary"));
-	browseShader->setAccessibleName(tr("Open shader script"));
+	auto* browseShader = createButton(tr("Open Script"), QStringLiteral("folder-open"), QStringLiteral("primary"));
+	browseShader->setAccessibleName(tr("Open material script"));
+	browseShader->setToolTip(tr("Open a Quake III .shader or Doom 3 .mtr script."));
 	auto chooseShader = [this]() {
-		const QString path = QFileDialog::getOpenFileName(this, tr("Open Shader Script"), QString(), tr("Shader scripts (*.shader *.txt);;All files (*.*)"));
-		if (!path.isEmpty() && m_advancedShaderPath) {
+		const QString path = QFileDialog::getOpenFileName(this, tr("Open Material Script"), QString(),
+			tr("Material scripts (*.shader *.mtr *.txt);;All files (*.*)"));
+		if (!path.isEmpty() && QFileInfo(path).suffix().compare(QStringLiteral("mtr"), Qt::CaseInsensitive) == 0) {
+			openMaterialScript(path);
+		} else if (!path.isEmpty() && m_advancedShaderPath) {
 			m_advancedShaderPath->setText(path);
 			inspectAdvancedShaderScript();
 		}
@@ -4611,16 +4763,24 @@ QWidget* ApplicationShell::buildShadersPage()
 	workbench->setStretchFactor(1, 2);
 	m_layoutSplitters.insert(workbench->objectName(), workbench);
 
+	// Materials first: every texture, shader and material of the open package
+	// with its live preview and editors; the script outline is the parsed
+	// tree of one shader script.
+	m_shaderPageTabs = createPanelTabs(tr("Materials views"));
+	m_shaderPageTabs->setObjectName(QStringLiteral("shaderPageTabs"));
+	m_shaderPageTabs->addTab(buildMaterialWorkbench(), studioIcon(QStringLiteral("shaders")), tr("Materials"));
+	m_shaderPageTabs->addTab(workbench, studioIcon(QStringLiteral("tree")), tr("Script Outline"));
+
 	auto* body = new QWidget;
 	auto* bodyLayout = new QVBoxLayout(body);
 	bodyLayout->setContentsMargins(0, 0, 0, 0);
 	bodyLayout->setSpacing(0);
 	bodyLayout->addWidget(statusStripHost(m_advancedStudioState));
-	bodyLayout->addWidget(padded(workbench, 14, 10, 12), 1);
+	bodyLayout->addWidget(padded(m_shaderPageTabs, 14, 10, 12), 1);
 
-	auto* empty = new EmptyStateView(QStringLiteral("layers"), tr("No shader script loaded"),
-		tr("Open an idTech3 .shader script to see each shader's stages, blend modes, and the textures it references, checked against the open package."));
-	QPushButton* emptyOpen = empty->addAction(tr("Open Shader"), QStringLiteral("folder-open"), true);
+	auto* empty = new EmptyStateView(QStringLiteral("layers"), tr("No materials yet"),
+		tr("Open a package, folder or WAD to browse its textures, shaders and materials with a live preview, or open a .shader or .mtr script."));
+	QPushButton* emptyOpen = empty->addAction(tr("Open Script"), QStringLiteral("folder-open"), true);
 	connect(emptyOpen, &QPushButton::clicked, this, chooseShader);
 	auto* stack = new QStackedWidget;
 	stack->addWidget(empty);
@@ -5170,12 +5330,6 @@ QWidget* ApplicationShell::buildModelsPage()
 	m_modelDrawer->setSubtitle(tr("Header fields, skin and material dependencies, and raw metadata."));
 	m_modelDrawer->setEmbedded(true);
 
-	auto* inspectorTabs = createPanelTabs(tr("Model inspector"), QTabWidget::South);
-	inspectorTabs->setMinimumWidth(250);
-	inspectorTabs->addTab(m_modelDetails, studioIcon(QStringLiteral("info")), tr("Summary"));
-	inspectorTabs->addTab(createModelAppearancePanel(), studioIcon(QStringLiteral("image")), tr("Skin"));
-	inspectorTabs->addTab(m_modelDrawer, studioIcon(QStringLiteral("details")), tr("Metadata"));
-
 	auto* workbench = createSplitter(Qt::Horizontal, QStringLiteral("modelsWorkbench"), tr("Model browser layout"));
 	m_modelFilter = createFilterField(tr("Filter models"), tr("Model filter"));
 	m_modelFilter->setObjectName(QStringLiteral("modelFilter"));
@@ -5185,13 +5339,10 @@ QWidget* ApplicationShell::buildModelsPage()
 	connect(m_modelFilter, &QLineEdit::textChanged, this, [this]() {
 		filterEntryList(m_modelEntries, m_modelFilter);
 	});
-	workbench->addWidget(padded(captionedPanel(tr("Models"), withFilter(m_modelFilter, m_modelEntries)), 10, 8, 10));
-	workbench->addWidget(centre);
-	workbench->addWidget(padded(inspectorTabs, 10, 8, 10));
-	workbench->setStretchFactor(0, 0);
-	workbench->setStretchFactor(1, 1);
-	workbench->setStretchFactor(2, 0);
-	workbench->setSizes({scaledPane(250), 720, scaledPane(320)});
+	// Modeller: the model list, summary, skin, metadata and skeleton sit on
+	// studio sidebars as on the Levels page (model_page.cpp).
+	buildModelSidebars(workbench, padded(withFilter(m_modelFilter, m_modelEntries), 6, 6, 6), centre, createModelAppearancePanel());
+	workbench->setSizes({scaledPane(260), 720, scaledPane(330)});
 	m_layoutSplitters.insert(workbench->objectName(), workbench);
 
 	auto* body = new QWidget;
@@ -5864,8 +6015,13 @@ QWidget* ApplicationShell::buildSidePanel()
 	m_activityDock->setAllowedAreas(Qt::LeftDockWidgetArea | Qt::RightDockWidgetArea | Qt::BottomDockWidgetArea);
 	m_activityDock->setWidget(activity);
 	m_activityDock->setTitleBarWidget(new DockTitleBar(m_activityDock));
-	m_activityDock->setMinimumWidth(300);
-	addDockWidget(Qt::RightDockWidgetArea, m_activityDock);
+	// Constrain the contents, not the dock. QDockWidget's layout updates its
+	// minimum on activation; an explicit dock minimum makes a transient wider
+	// hint stick even after the contents shrink (notably on session restore).
+	activity->setMinimumWidth(300);
+	// The panels open on the trailing side, across the page from the rail:
+	// the right in a left-to-right layout, the left in a right-to-left one.
+	addDockWidget(trailingDockArea(layoutDirection()), m_activityDock);
 
 	m_inspectorDock = new QDockWidget(tr("Inspector"), this);
 	m_inspectorDock->setObjectName(QStringLiteral("inspectorDock"));
@@ -5873,8 +6029,8 @@ QWidget* ApplicationShell::buildSidePanel()
 	m_inspectorDock->setAllowedAreas(Qt::LeftDockWidgetArea | Qt::RightDockWidgetArea | Qt::BottomDockWidgetArea);
 	m_inspectorDock->setWidget(inspectorPage);
 	m_inspectorDock->setTitleBarWidget(new DockTitleBar(m_inspectorDock));
-	m_inspectorDock->setMinimumWidth(300);
-	addDockWidget(Qt::RightDockWidgetArea, m_inspectorDock);
+	inspectorPage->setMinimumWidth(300);
+	addDockWidget(trailingDockArea(layoutDirection()), m_inspectorDock);
 	tabifyDockWidget(m_activityDock, m_inspectorDock);
 	m_activityDock->raise();
 
@@ -5890,7 +6046,7 @@ QWidget* ApplicationShell::buildSidePanel()
 	activityToggle->setStatusTip(tr("Show or hide the task list with progress, logs, warnings, and cancellation."));
 	QAction* inspectorToggle = m_inspectorDock->toggleViewAction();
 	inspectorToggle->setText(tr("&Inspector Panel"));
-	inspectorToggle->setIcon(studioIcon(QStringLiteral("sidebar-right")));
+	inspectorToggle->setIcon(studioIcon(trailingPanelGlyph(layoutDirection())));
 	inspectorToggle->setStatusTip(tr("Show or hide settings, setup, and project diagnostics."));
 	if (QMenu* viewMenu = m_viewMenu) {
 		viewMenu->addSeparator();
@@ -5948,9 +6104,14 @@ void ApplicationShell::loadShellState()
 
 	// Dock visibility and placement come back through the window state; a
 	// state saved before the docks existed leaves them at their defaults.
+	// The settings keep it as a left-to-right window lays it out, and a
+	// right-to-left session mirrors it, so a panel keeps its side relative to
+	// the reading direction whichever language the state was saved in. Older
+	// builds docked the panels on the right in every language, so their
+	// states read the same way.
 	const QByteArray windowState = m_settings.shellWindowState();
 	if (!windowState.isEmpty()) {
-		restoreState(windowState);
+		restoreState(windowStateForDirection(windowState, layoutDirection()));
 	}
 
 	for (auto it = m_layoutSplitters.cbegin(); it != m_layoutSplitters.cend(); ++it) {
@@ -5959,6 +6120,7 @@ void ApplicationShell::loadShellState()
 			it.value()->restoreState(splitterState);
 		}
 	}
+	restoreLevelSidebarState();
 }
 
 void ApplicationShell::saveShellState()
@@ -5967,10 +6129,34 @@ void ApplicationShell::saveShellState()
 		m_settings.setSelectedMode(m_modeRail->currentId());
 	}
 	m_settings.setShellGeometry(saveGeometry());
-	m_settings.setShellWindowState(saveState());
+	// In left-to-right terms, as loadShellState() reads it.
+	m_settings.setShellWindowState(windowStateForDirection(saveState(), layoutDirection()));
 	for (auto it = m_layoutSplitters.cbegin(); it != m_layoutSplitters.cend(); ++it) {
 		if (it.value()) {
 			m_settings.setShellLayoutState(it.key(), it.value()->saveState());
+		}
+	}
+}
+
+void ApplicationShell::changeEvent(QEvent* event)
+{
+	QMainWindow::changeEvent(event);
+	// Everything inside the window has already mirrored by the time this
+	// arrives; the dock areas stay put, so the panels cross over here, keeping
+	// their sizes, tabs, and visibility. The language only changes on a
+	// restart, which loadShellState() covers, but the direction can change
+	// under a running window too.
+	if (event->type() == QEvent::LayoutDirectionChange) {
+		if (const std::optional<QByteArray> mirrored = mirroredWindowState(saveState())) {
+			restoreState(*mirrored);
+		}
+		// The Inspector's glyph shows the side the panels open on.
+		const QIcon panelIcon = studioIcon(trailingPanelGlyph(layoutDirection()));
+		if (m_inspectorToggle) {
+			m_inspectorToggle->setIcon(panelIcon);
+		}
+		if (m_inspectorDock) {
+			m_inspectorDock->toggleViewAction()->setIcon(panelIcon);
 		}
 	}
 }
@@ -6588,6 +6774,7 @@ void ApplicationShell::refreshPackageBrowser()
 	m_packageSummary->setToolTip({}); m_packageSummary->setAccessibleDescription({});
 	invalidatePaletteResolution();
 	m_packageBrowserKey = packageViewKey();
+	syncMaterialWorkbench();
 
 	if (!m_packageArchive.isOpen()) {
 		m_packageSummary->setText(tr("No package loaded"));
@@ -7171,12 +7358,12 @@ void ApplicationShell::filterLevelMapObjects()
 
 void ApplicationShell::updateLevelObjectFilterState()
 {
-	if (!m_levelMapObjects || !m_levelOutlinerTabs || !m_levelObjectsPanel || !m_levelObjectFilter) { return; }
+	if (!m_levelMapObjects || !m_levelObjectsSection || !m_levelObjectFilter) { return; }
 	const bool filtering = !m_levelObjectFilter->text().trimmed().isEmpty();
 	const QString title = m_levelMapObjects->isFiltering() ? tr("Objects (filtering…)")
 		: filtering ? tr("Objects (%1 of %2)").arg(m_levelMapObjects->matchingCount()).arg(m_levelMapObjects->objectModel()->objectCount())
 		: tr("Objects");
-	setPanelTabText(m_levelOutlinerTabs, m_levelOutlinerTabs->indexOf(m_levelObjectsPanel), title);
+	m_levelObjectsSection->setTitle(title);
 }
 
 QString ApplicationShell::inspectorRowQuery(const QTreeWidgetItem* item) const
@@ -7244,9 +7431,7 @@ void ApplicationShell::findLevelMapObjectsLike(const QString& query)
 	if (!m_levelObjectFilter || query.isEmpty()) {
 		return;
 	}
-	if (m_levelOutlinerTabs && m_levelObjectsPanel) {
-		m_levelOutlinerTabs->setCurrentWidget(m_levelObjectsPanel);
-	}
+	showLevelSidebarPage(QStringLiteral("outliner"), QStringLiteral("outliner.objects"));
 	m_levelObjectFilter->setText(query);
 	// After the menu this came from has handed focus back, not before.
 	QTimer::singleShot(0, m_levelObjectFilter, [filter = m_levelObjectFilter]() {
@@ -7485,6 +7670,7 @@ void ApplicationShell::showLevelSelectionMessage(const QString& message)
 
 void ApplicationShell::refreshLevelMapWorkbench()
 {
+	refreshBuiltinEntityDefinitions();
 	// These values belong only to this refresh; edits, undo, reloads and
 	// package updates always reach the controls through the current document.
 	const auto summary = levelMapInspectionSummary(m_levelMapDocument);
@@ -7496,6 +7682,16 @@ void ApplicationShell::refreshLevelMapWorkbench()
 	refreshLevelMapViewport();
 	refreshLevelMapPalette();
 	refreshLevelMapTextures(&textureUses);
+	refreshLevelSidebarTitles();
+	refreshLevelMapSettings();
+	refreshLevelViewFilters();
+	refreshLevelEntityClassInfo();
+	refreshLevelAssetBrowsers();
+	refreshLevelShapesPanel();
+	refreshLevelRegionPanel();
+	refreshLevelToolsPage();
+	refreshLevelToolShelf();
+	refreshLevelSidebarBadges();
 	if (levelMap3DShowing()) {
 		refreshLevelMap3D();
 	}
@@ -7581,10 +7777,16 @@ void ApplicationShell::refreshLevelMapWorkbench()
 		if (!m_entityDefinitions.isEmpty()) {
 			m_entityValidation = validateLevelMapEntities(m_levelMapDocument, m_entityDefinitions);
 			if (m_entityValidation.issueCount > 0) {
-				auto* header = new QListWidgetItem(tr("ENTITIES [%1]\n%n issue(s) against %2 definition(s).",
-					nullptr, m_entityValidation.issueCount)
-					.arg(localizedOperationStateName(m_entityValidation.state()))
-					.arg(m_entityDefinitions.classes.size()));
+				BuiltinEntityGame builtinGame = BuiltinEntityGame::Quake;
+				const bool builtin = m_entityDefinitionsBuiltin && builtinEntityGameFromId(m_entityDefinitionsBuiltinGame, &builtinGame);
+				// Against the stock classes, a mod's own read as unknown: say so.
+				auto* header = new QListWidgetItem(builtin
+						? tr("ENTITIES [%1]\n%n issue(s) against the built-in %2 classes. A mod's own classes need its definitions, loaded in the Map tab.",
+							nullptr, m_entityValidation.issueCount)
+							  .arg(localizedOperationStateName(m_entityValidation.state()), builtinEntityGameDisplayName(builtinGame))
+						: tr("ENTITIES [%1]\n%n issue(s) against %2 definition(s).", nullptr, m_entityValidation.issueCount)
+							  .arg(localizedOperationStateName(m_entityValidation.state()))
+							  .arg(m_entityDefinitions.classes.size()));
 				header->setData(Qt::UserRole + 2, operationStateId(m_entityValidation.state()));
 				m_levelMapValidation->addItem(header);
 				int shown = 0;
@@ -7689,6 +7891,8 @@ void ApplicationShell::refreshLevelMapSelection(const LevelMapInspectionSummary*
 	if (m_levelMapMoveSelection) {
 		m_levelMapMoveSelection->setEnabled(canMove);
 	}
+	// Give to Selection on the Models and Sounds tabs wants a selected entity.
+	refreshLevelAssetButtons();
 	if (!hasMap) {
 		refreshEntityInspector();
 		refreshCommandEnablement();
@@ -7715,6 +7919,7 @@ void ApplicationShell::refreshLevelMapSelection(const LevelMapInspectionSummary*
 	// The inspector follows the primary selection whichever surface set it,
 	// and so do the commands that act on it (Delete, Duplicate, Snap...).
 	refreshEntityInspector(&summary.textureNames);
+	refreshLevelTransformPanel();
 	refreshCommandEnablement();
 }
 
@@ -7873,7 +8078,7 @@ void ApplicationShell::editSelectedLevelMapProperty()
 		}
 		recordActivity(tr("Level map entities edited"), key, QStringLiteral("level-map"), OperationState::Warning, tr("Unsaved map edit"));
 		refreshLevelMapWorkbench();
-		statusBar()->showMessage(tr("%1 set to %2 on %n entit(y)(ies). Use Save As to write a non-destructive copy.", nullptr, static_cast<int>(several.size())).arg(key, value));
+		statusBar()->showMessage(tr("%1 set to %2 on %n entit(y)(ies). Use Save Map to update the file after a change check and backup.", nullptr, static_cast<int>(several.size())).arg(key, value));
 		return;
 	}
 	if (!setLevelMapEntityProperty(&m_levelMapDocument, m_levelMapDocument.selectedObjectId, key, value, &error)) {
@@ -7882,7 +8087,7 @@ void ApplicationShell::editSelectedLevelMapProperty()
 	}
 	recordActivity(tr("Level map entity edited"), key, QStringLiteral("level-map"), OperationState::Warning, tr("Unsaved map edit"));
 	refreshLevelMapWorkbench();
-	statusBar()->showMessage(tr("Entity key edited; use Save As to write a non-destructive copy."));
+	statusBar()->showMessage(tr("Entity key edited; use Save Map to update the file after a change check and backup."));
 }
 
 void ApplicationShell::moveSelectedLevelMapObject()
@@ -7928,7 +8133,7 @@ void ApplicationShell::moveSelectedLevelMapObject()
 	recordActivity(tr("Level map selection moved"), tr("%1, %2, %3").arg(dx).arg(dy).arg(dz), QStringLiteral("level-map"),
 		OperationState::Warning, tr("Unsaved map edit"));
 	refreshLevelMapWorkbench();
-	statusBar()->showMessage(tr("Moved %n object(s) by %1, %2, %3. Use Save As to write a non-destructive copy.", nullptr, count)
+	statusBar()->showMessage(tr("Moved %n object(s) by %1, %2, %3. Use Save Map to update the file after a change check and backup.", nullptr, count)
 		.arg(dx).arg(dy).arg(dz));
 }
 
@@ -8015,10 +8220,13 @@ void ApplicationShell::placeLevelMapEntity(const QString& className, const QPoin
 		return;
 	}
 	m_lastAddedEntityClass = className;
+	// The new entity is selected, as a placed model, sound or brush entity is,
+	// so its keys are in the Inspector at once.
+	setLevelMapSelection(&m_levelMapDocument, {{LevelMapSelectionKind::Entity, entityId}});
 	recordActivity(tr("Level map entity added"), QStringLiteral("entity:%1 %2").arg(entityId).arg(className), QStringLiteral("level-map"),
 		OperationState::Warning, tr("Unsaved map edit"));
 	refreshLevelMapWorkbench();
-	statusBar()->showMessage(tr("Added %1 as entity:%2 at %3 %4 %5. Use Save As to write a non-destructive copy.")
+	statusBar()->showMessage(tr("Added %1 as entity:%2 at %3 %4 %5. Use Save Map to update the file after a change check and backup.")
 		.arg(className).arg(entityId).arg(origin.x).arg(origin.y).arg(origin.z));
 }
 
@@ -8073,7 +8281,7 @@ void ApplicationShell::placeLevelMapThing(int type, const QPointF& viewPoint)
 	recordActivity(tr("Level map thing added"), QStringLiteral("thing:%1 type %2").arg(thingId).arg(type), QStringLiteral("level-map"),
 		OperationState::Warning, tr("Unsaved map edit"));
 	refreshLevelMapWorkbench();
-	statusBar()->showMessage(tr("Added type %1 as thing:%2 at %3 %4. Use Save As to write a non-destructive copy.")
+	statusBar()->showMessage(tr("Added type %1 as thing:%2 at %3 %4. Use Save Map to update the file after a change check and backup.")
 		.arg(type).arg(thingId).arg(position.x).arg(position.y));
 }
 
@@ -8083,6 +8291,10 @@ void ApplicationShell::placeFromLevelMapPalette(const QString& payload, const QP
 		placeLevelMapThing(payload.mid(6).toInt(), viewPoint);
 	} else if (payload.startsWith(QStringLiteral("entity:"))) {
 		placeLevelMapEntity(payload.mid(7), viewPoint);
+	} else if (payload.startsWith(QStringLiteral("model:")) || payload.startsWith(QStringLiteral("sound:"))) {
+		placeLevelAsset(payload, viewPoint);
+	} else if (payload.startsWith(QStringLiteral("brush-entity:"))) {
+		placeLevelBrushEntity(payload.mid(13), viewPoint);
 	}
 }
 
@@ -8122,6 +8334,30 @@ void ApplicationShell::refreshLevelMapPalette()
 		item->setData(0, Qt::UserRole, payload);
 		item->setToolTip(0, tip);
 		item->setFlags(Qt::ItemIsEnabled | Qt::ItemIsSelectable | Qt::ItemIsDragEnabled);
+		return item;
+	};
+	// Each class is marked with its editor colour, as the views draw it.
+	QHash<QRgb, QIcon> swatches;
+	const qreal ratio = m_levelMapPalette->devicePixelRatioF();
+	const auto swatch = [&swatches, ratio](const QColor& color) {
+		if (!color.isValid()) {
+			return QIcon();
+		}
+		QIcon& icon = swatches[color.rgb()];
+		if (icon.isNull()) {
+			const int side = scaledIconSize(QSize(16, 16)).width();
+			QPixmap pixmap(QSize(side, side) * ratio);
+			pixmap.setDevicePixelRatio(ratio);
+			pixmap.fill(Qt::transparent);
+			QPainter painter(&pixmap);
+			painter.setRenderHint(QPainter::Antialiasing, true);
+			painter.setPen(QPen(currentStudioTheme().colors.border, 1.0));
+			painter.setBrush(color);
+			const qreal inset = side * 0.2;
+			painter.drawRoundedRect(QRectF(inset, inset, side - 2 * inset, side - 2 * inset), 2.0, 2.0);
+			icon = QIcon(pixmap);
+		}
+		return icon;
 	};
 	const QString how = tr("Enter or a double-click places it in the middle of the view; drag it onto the map to place it where it drops.");
 	if (m_levelMapDocument.format == LevelMapFormat::DoomWad && m_levelMapDocument.doomFormat != LevelMapDoomFormat::Udmf) {
@@ -8130,24 +8366,47 @@ void ApplicationShell::refreshLevelMapPalette()
 				tr("%1, DoomEd number %2.\n%3").arg(type.name).arg(type.type).arg(how));
 		}
 	} else if (m_levelMapDocument.format == LevelMapFormat::QuakeMap || m_levelMapDocument.format == LevelMapFormat::Quake3Map) {
-		// Point classes from the loaded definitions, filed by their prefix, or a
-		// few every Quake-family game knows.
-		QVector<QPair<QString, QString>> classes;
+		// Point classes from the definitions (the project's, or the game's
+		// built-in ones), filed by their prefix; brush classes follow in a group
+		// of their own, to make the selected brushes into or to drop as a brush.
+		struct PaletteClass {
+			QString name;
+			QString description;
+			QColor color;
+			bool brush = false;
+		};
+		QVector<PaletteClass> classes;
 		for (const EntityClassDefinition& definition : m_entityDefinitions.classes) {
-			if (definition.kind == EntityClassKind::Point) {
-				classes.push_back({definition.className, definition.description.simplified()});
+			const bool brush = definition.kind == EntityClassKind::Brush && definition.className.compare(QStringLiteral("worldspawn"), Qt::CaseInsensitive) != 0;
+			if (definition.kind == EntityClassKind::Point || brush) {
+				classes.push_back({definition.className, definition.description.simplified(),
+					definition.hasColor ? QColor(definition.color[0], definition.color[1], definition.color[2]) : QColor(), brush});
 			}
 		}
 		if (classes.isEmpty()) {
 			for (const QString& name : {QStringLiteral("info_player_start"), QStringLiteral("info_player_deathmatch"), QStringLiteral("info_null"), QStringLiteral("light")}) {
-				classes.push_back({name, QString()});
+				classes.push_back({name, QString(), QColor(), false});
 			}
 		}
-		std::sort(classes.begin(), classes.end());
-		for (const auto& [name, description] : classes) {
-			const QString prefix = name.contains(QLatin1Char('_')) ? name.section(QLatin1Char('_'), 0, 0) + QLatin1Char('_') : name;
-			entry(groupFor(prefix), name, QStringLiteral("entity:%1").arg(name),
-				description.isEmpty() ? tr("%1\n%2").arg(name, how) : tr("%1: %2\n%3").arg(name, description.left(240), how));
+		std::sort(classes.begin(), classes.end(), [](const PaletteClass& left, const PaletteClass& right) { return left.name < right.name; });
+		for (const PaletteClass& entity : std::as_const(classes)) {
+			if (entity.brush) {
+				continue;
+			}
+			const QString prefix = entity.name.contains(QLatin1Char('_')) ? entity.name.section(QLatin1Char('_'), 0, 0) + QLatin1Char('_') : entity.name;
+			QTreeWidgetItem* item = entry(groupFor(prefix), entity.name, QStringLiteral("entity:%1").arg(entity.name),
+				entity.description.isEmpty() ? tr("%1\n%2").arg(entity.name, how) : tr("%1: %2\n%3").arg(entity.name, entity.description.left(240), how));
+			item->setIcon(0, swatch(entity.color));
+		}
+		const QString brushHow = tr("Enter or a double-click makes the selected brushes into one; drag it onto a view to place a new brush of it.");
+		for (const PaletteClass& entity : std::as_const(classes)) {
+			if (!entity.brush) {
+				continue;
+			}
+			QTreeWidgetItem* item = entry(groupFor(tr("Brush entities")), entity.name, QStringLiteral("brush-entity:%1").arg(entity.name),
+				entity.description.isEmpty() ? tr("%1\n%2").arg(entity.name, brushHow)
+										  : tr("%1: %2\n%3").arg(entity.name, entity.description.left(240), brushHow));
+			item->setIcon(0, swatch(entity.color));
 		}
 	} else {
 		const bool udmf = m_levelMapDocument.format == LevelMapFormat::DoomWad;
@@ -8173,7 +8432,7 @@ void ApplicationShell::deleteLevelMapSelectionFromUi()
 	const QString what = selection.size() == 1 ? levelMapSelectionRefId(selection.first()) : tr("%n objects", nullptr, static_cast<int>(selection.size()));
 	recordActivity(tr("Level map objects deleted"), what, QStringLiteral("level-map"), OperationState::Warning, tr("Unsaved map edit"));
 	refreshLevelMapWorkbench();
-	statusBar()->showMessage(tr("Deleted %1. Undo restores it; Save As writes a non-destructive copy.").arg(what));
+	statusBar()->showMessage(tr("Deleted %1. Undo restores it. Use Save Map to update the file after a change check and backup.").arg(what));
 }
 
 void ApplicationShell::showKeyboardShortcuts()
@@ -8626,6 +8885,16 @@ void ApplicationShell::refreshLevelMapTextures(const QVector<LevelMapTextureUse>
 			names << use.name;
 		}
 	}
+	// With Package Textures on, everything else the package offers follows,
+	// so a texture can be put on the map before anything uses it.
+	if (m_levelTexturesAll && !doom) {
+		for (const QString& name : levelPackageTextureNames()) {
+			if (const auto key = name.toCaseFolded(); !listedNames.contains(key)) {
+				listedNames.insert(key);
+				names << name;
+			}
+		}
+	}
 	// Cells wider than the tile, so typical names fit under it whole.
 	const QSize tile = m_levelMapTextures->iconSize();
 	const QSize grid(tile.width() + 28, tile.height() + m_levelMapTextures->fontMetrics().height() * (doom ? 2 : 1) + 14);
@@ -8647,7 +8916,7 @@ void ApplicationShell::refreshLevelMapTextures(const QVector<LevelMapTextureUse>
 				}
 			}
 		}
-		if (!named) { references << TileReference {name, name.trimmed().toCaseFolded(), name}; }
+		if (!named) { references << TileReference {name, name.trimmed().toCaseFolded(), name.section(QLatin1Char('/'), -1)}; }
 	}
 	for (const auto& reference : std::as_const(references)) {
 		const auto& name = reference.name;
@@ -8697,8 +8966,8 @@ void ApplicationShell::refreshLevelMapTextures(const QVector<LevelMapTextureUse>
 		} else if (path.isEmpty()) {
 			facts << (m_packageArchive.isOpen() ? tr("not in the open package") : tr("no package open for its picture"));
 		}
-		item->setToolTip(tr("%1\n%2").arg(reference.label, facts.join(tr(", "))));
-		item->setData(Qt::AccessibleTextRole, tr("%1, %2").arg(reference.label, facts.join(tr(", "))));
+		item->setToolTip(tr("%1\n%2").arg(name, facts.join(tr(", "))));
+		item->setData(Qt::AccessibleTextRole, tr("%1, %2").arg(name, facts.join(tr(", "))));
 	}
 	if (names.isEmpty()) {
 		m_levelMapTextures->addItem(disabledListItem(tr("This map names no textures.")));
@@ -8733,6 +9002,8 @@ void ApplicationShell::showLevelMapTextureMenu(const QPoint& position)
 	menu.addSeparator();
 	QAction* show = menu.addAction(studioIcon(doom ? QStringLiteral("packages") : QStringLiteral("textures")), doom ? tr("Show in Package") : tr("Show in Textures"));
 	show->setEnabled(!sourcePath.isEmpty());
+	QAction* showMaterial = menu.addAction(studioIcon(QStringLiteral("shaders")), tr("Show in Materials"));
+	showMaterial->setToolTip(tr("Preview this texture or shader the way the game draws it, and edit it."));
 	QAction* inputs = doom ? menu.addAction(tr("Show Material Inputs…")) : nullptr;
 	QAction* chosen = menu.exec(m_levelMapTextures->viewport()->mapToGlobal(position));
 	if (chosen == apply) {
@@ -8747,6 +9018,8 @@ void ApplicationShell::showLevelMapTextureMenu(const QPoint& position)
 	} else if (chosen == show) {
 		if (doom) { revealPackageEntry(sourcePath, sourceOrdinal); }
 		else { showTextureReference(texture); }
+	} else if (chosen == showMaterial) {
+		showMaterialNamed(texture);
 	} else if (inputs && chosen == inputs) {
 		showLevelMaterialDetails();
 	}
@@ -9538,7 +9811,7 @@ void ApplicationShell::setLevelMap3D(bool enabled)
 	}
 	// A single view swaps between 3D and 2D; beside the camera (Radiant's
 	// layout) the 2D view stays and only the camera comes and goes.
-	const bool show2D = !enabled || m_levelViewLayout == LevelViewLayout::CameraAndPlan || m_levelViewLayout == LevelViewLayout::FourViews;
+	const bool show2D = !enabled || m_levelViewLayout == LevelViewLayout::CameraAndPlan || levelViewLayoutHasThreePlans(m_levelViewLayout);
 	if (!show2D && m_levelMapViewport) {
 		// Whatever the 2D view was in the middle of stops, its tools with it.
 		m_levelMapViewport->cancelInteraction();
@@ -9548,15 +9821,21 @@ void ApplicationShell::setLevelMap3D(bool enabled)
 	m_levelMap3D->setVisible(enabled);
 	if (m_levelPreviewStatus) { m_levelPreviewStatus->setVisible(enabled); }
 	m_levelMapViewport->setVisible(show2D);
-	if (m_levelViewLayout == LevelViewLayout::FourViews) {
+	if (levelViewLayoutHasThreePlans(m_levelViewLayout)) {
 		for (auto* view : m_levelPlanViews) { view->show(); }
 	}
-	// The 2D view's own controls have nothing to act on without it.
-	for (QWidget* control : std::initializer_list<QWidget*> {m_levelMapProjection, m_levelMapGrid, m_levelMapSnap,
-		     findChild<QToolButton*>(QStringLiteral("levelMapShowButton")), findChild<QToolButton*>(QStringLiteral("levelMapZoomSelection"))}) {
+	if (m_levelViewLayout == LevelViewLayout::CameraAbovePlans || m_levelViewLayout == LevelViewLayout::CameraBesidePlans) { m_levelMapUpperViews->setVisible(enabled); }
+	// Projection and display flags belong to plans; grid, snap and framing
+	// also drive camera authoring, including a maximized camera pane.
+	for (QWidget* control : std::initializer_list<QWidget*> {m_levelMapProjection,
+		     findChild<QToolButton*>(QStringLiteral("levelMapShowButton"))}) {
 		if (control) {
 			control->setEnabled(show2D);
 		}
+	}
+	for (QWidget* control : std::initializer_list<QWidget*> {m_levelMapGrid, m_levelMapSnap,
+		findChild<QToolButton*>(QStringLiteral("levelMapZoomSelection"))}) {
+		if (control) { control->setEnabled(m_levelMapDocument.format != LevelMapFormat::Unknown); }
 	}
 	if (enabled) {
 		// The same map keeps its camera, so stepping between views never
@@ -9654,6 +9933,7 @@ void ApplicationShell::applyLevelEditorProfile(bool profileChanged, bool preserv
 		}
 	}
 	refreshLevelCameraMarker();
+	applyLevelSidebarProfile();
 	if (!gestureError.isEmpty()) {
 		statusBar()->showMessage(tr("Gesture preferences could not be applied: %1. Profile defaults are in use.").arg(gestureError), 12000);
 	}
@@ -9715,7 +9995,7 @@ void ApplicationShell::showLevelMapProjection(int index)
 		return;
 	}
 	m_levelMapProjection->setCurrentIndex(index);
-	if (m_levelViewLayout == LevelViewLayout::FourViews) {
+	if (levelViewLayoutHasThreePlans(m_levelViewLayout)) {
 		activateLevelPlanViewport(m_levelPlanViews.value(index));
 		m_levelMapViewport->setFocus(Qt::OtherFocusReason);
 	}
@@ -9812,9 +10092,22 @@ QString ApplicationShell::levelBrushMaterial() const
 	return texture;
 }
 
-void ApplicationShell::drawLevelMapBrushFromViewport(const LevelMapVec3& mins, const LevelMapVec3& maxs)
+void ApplicationShell::drawLevelMapBrushFromViewport(const LevelMapVec3& mins, const LevelMapVec3& maxs, int depthAxis)
 {
+	// On a Doom map the box drawn in shape drawing is the sector shape's.
+	if (m_levelMapDocument.format == LevelMapFormat::DoomWad) {
+		if (m_levelMapViewport && m_levelMapViewport->shapeDrawMode()) {
+			addLevelSectorShape(mins.x, mins.y, maxs.x, maxs.y);
+		}
+		return;
+	}
 	if (m_levelMapDocument.format != LevelMapFormat::QuakeMap && m_levelMapDocument.format != LevelMapFormat::Quake3Map) { return; }
+	// The shape chosen in the Shapes tab fills the box drawn, as the block
+	// tool in Hammer makes the object bar's primitive.
+	if (m_levelShape != QLatin1String("box")) {
+		addLevelShapeFromUi(mins, maxs, depthAxis >= 0 ? depthAxis : levelShapeViewAxis(), true);
+		return;
+	}
 	const QString texture = levelBrushMaterial();
 	LevelPlacementRequest request;
 	request.operation = LevelPlacementOperation::AddBrush;
@@ -9887,9 +10180,7 @@ void ApplicationShell::pickLevelMap3D(int triangle, int pick)
 	const bool picksFace = (mode == ModelViewportPick::Face || mode == ModelViewportPick::FaceToggle) && owner.kind == LevelMapSelectionKind::QuakeBrush && face >= 0;
 	if (picksFace && (mode == ModelViewportPick::Face || !wasSelected)) {
 		m_inspectorFocus = QStringLiteral("face:%1:%2").arg(owner.objectId).arg(face);
-		if (m_levelMapInspectorTabs && m_levelMapInspectorPanel) {
-			m_levelMapInspectorTabs->setCurrentWidget(m_levelMapInspectorPanel);
-		}
+		showLevelSidebarPage(QStringLiteral("inspector"));
 	}
 	refreshLevelMapWorkbench();
 	if (picksFace) {
@@ -10737,8 +11028,13 @@ void ApplicationShell::planLevelMapCompile()
 			tr("Compile Saved File"))) {
 		return;
 	}
+	runLevelMapCompile(m_levelMapDocument);
+}
+
+void ApplicationShell::runLevelMapCompile(const LevelMapDocument& document)
+{
 	const QString profileId = m_levelMapCompilerProfile ? m_levelMapCompilerProfile->currentData().toString() : QString();
-	CompilerCommandRequest request = compilerRequestForLevelMap(m_levelMapDocument, profileId);
+	CompilerCommandRequest request = compilerRequestForLevelMap(document, profileId);
 	request.workspaceRootPath = m_settings.currentProjectPath();
 	ProjectManifest manifest;
 	if (!request.workspaceRootPath.trimmed().isEmpty() && loadProjectManifest(request.workspaceRootPath, &manifest)) {
@@ -10750,7 +11046,7 @@ void ApplicationShell::planLevelMapCompile()
 	const CompilerCommandPlan plan = buildCompilerCommandPlan(request);
 	m_levelMapDrawer->setSections({
 		{QStringLiteral("compile-plan"), tr("Compile Plan"), tr("Reviewable compiler command"), compilerCommandPlanText(plan), plan.state()},
-		{QStringLiteral("map-health"), tr("Map Health"), tr("Validation before compile"), levelMapValidationLines(m_levelMapDocument).join('\n'), levelMapStatistics(m_levelMapDocument).errorCount > 0 ? OperationState::Failed : OperationState::Warning},
+		{QStringLiteral("map-health"), tr("Map Health"), tr("Validation before compile"), levelMapValidationLines(document).join('\n'), levelMapStatistics(document).errorCount > 0 ? OperationState::Failed : OperationState::Warning},
 	});
 	m_levelMapDrawer->showSection(QStringLiteral("compile-plan"));
 	if (!plan.isRunnable()) {
@@ -11020,6 +11316,7 @@ void ApplicationShell::inspectAdvancedShaderScript()
 		statusBar()->showMessage(tr("Choose a shader script before inspecting."));
 		return;
 	}
+	openMaterialScript(path);
 	QString error;
 	if (!loadShaderScript(path, &m_advancedShaderDocument, &error)) {
 		statusBar()->showMessage(tr("Shader inspect failed: %1").arg(error));
@@ -11292,6 +11589,7 @@ void ApplicationShell::refreshPackageStagingSummary()
 		if (m_textureEntries) { refreshTextureBrowser(); }
 		if (m_audioEntries) { refreshAudioBrowser(); }
 		if (m_modelEntries) { refreshModelBrowser(); }
+		refreshLevelAssetBrowsers();
 	}
 	if (m_textureEditorDialog) { m_textureEditorDialog->refreshContext(); }
 	if (m_modelEditorDialog) { m_modelEditorDialog->refreshContext(); }
@@ -12918,6 +13216,34 @@ void ApplicationShell::refreshSetupPanel()
 	const bool skipped = progress.skipped;
 	const bool started = progress.started && !skipped && !complete;
 	m_setupStartResume->setText(complete ? tr("Review") : (skipped ? tr("Resume") : (started ? tr("Resume") : tr("Start"))));
+	if (m_setupOpenStep) {
+		QString openStep;
+		switch (progress.currentStep) {
+		case SetupStep::WelcomeAccess:
+			openStep = tr("Open Accessibility Settings");
+			break;
+		case SetupStep::WorkspaceProfile:
+			openStep = tr("Choose Editor Profile");
+			break;
+		case SetupStep::ProjectsPackages:
+		case SetupStep::GameInstallations:
+			openStep = tr("Open Workspace");
+			break;
+		case SetupStep::Toolchains:
+			openStep = tr("Open Build Toolchains");
+			break;
+		case SetupStep::AiAutomation:
+			openStep = tr("Open AI Settings");
+			break;
+		case SetupStep::CliIntegration:
+		case SetupStep::ReviewFinish:
+			openStep = tr("Open Step Settings");
+			break;
+		}
+		m_setupOpenStep->setText(openStep);
+		m_setupOpenStep->setAccessibleName(tr("%1, for the setup step %2").arg(openStep, setupStepDisplayName(progress.currentStep)));
+		m_setupOpenStep->setVisible(!complete && progress.currentStep != SetupStep::CliIntegration && progress.currentStep != SetupStep::ReviewFinish);
+	}
 	m_setupNext->setEnabled(started);
 	m_setupSkip->setEnabled(!complete && !skipped);
 	m_setupComplete->setEnabled(started || skipped);
@@ -13115,6 +13441,11 @@ void ApplicationShell::refreshActivityCenter(const QString& preferredTaskId)
 
 	int selectedRow = -1;
 	const QVector<OperationTask> tasks = m_activity.tasks();
+	// Every refresh follows a task change, so this is where finished work is
+	// spoken, announced to the screen reader, or flashed, each outcome once.
+	for (const OperationTask& task : tasks) {
+		noteTaskOutcome(task);
+	}
 	for (int index = 0; index < tasks.size(); ++index) {
 		const OperationTask& task = tasks[index];
 		const QString detail = task.detail.isEmpty() ? task.source : task.detail;
@@ -13361,6 +13692,19 @@ void ApplicationShell::refreshInspectorDrawerForSettings()
 	preferenceLines << tr("Editor profile: %1").arg(selectedEditorProfile.displayName);
 	preferenceLines << tr("Reduced motion: %1").arg(preferences.reducedMotion ? tr("enabled") : tr("disabled"));
 	preferenceLines << tr("Text to speech: %1").arg(preferences.textToSpeechEnabled ? tr("enabled") : tr("disabled"));
+	preferenceLines << tr("Interface language: %1 (running in %2)").arg(normalizedLocalizationTargetId(preferences.localeName), activeInterfaceLanguage());
+	preferenceLines << tr("Region formats: %1").arg(preferences.formatLocaleName);
+	preferenceLines << tr("Colour vision: %1").arg(localizedColorVisionName(preferences.colorVision));
+	preferenceLines << tr("Reduced saturation: %1").arg(preferences.reducedSaturation ? tr("enabled") : tr("disabled"));
+	preferenceLines << tr("Thick focus outline: %1").arg(preferences.thickFocusIndicator ? tr("enabled") : tr("disabled"));
+	preferenceLines << tr("Thick text cursor: %1").arg(preferences.thickTextCursor ? tr("enabled") : tr("disabled"));
+	preferenceLines << tr("Steady text cursor: %1").arg(preferences.steadyTextCursor ? tr("enabled") : tr("disabled"));
+	preferenceLines << tr("Typeface: %1").arg(preferences.uiFontFamily.isEmpty() ? tr("system") : preferences.uiFontFamily);
+	preferenceLines << tr("Wide text spacing: %1").arg(preferences.wideTextSpacing ? tr("enabled") : tr("disabled"));
+	preferenceLines << tr("Status messages stay: %1").arg(localizedMessageDurationName(preferences.messageDuration));
+	preferenceLines << tr("Screen reader announcements: %1").arg(preferences.screenReaderAnnouncements ? tr("enabled") : tr("disabled"));
+	preferenceLines << tr("Visual alerts: %1").arg(preferences.visualAlerts ? tr("enabled") : tr("disabled"));
+	preferenceLines << tr("Sound cues: %1").arg(preferences.soundCues ? tr("enabled, volume %1").arg(preferences.soundCueVolume) : tr("disabled"));
 	preferenceLines << tr("AI cloud connectors: %1").arg(aiPreferences.cloudConnectorsEnabled ? tr("enabled") : tr("disabled"));
 	preferenceLines << tr("AI agentic workflows: %1").arg(aiPreferences.agenticWorkflowsEnabled ? tr("enabled") : tr("disabled"));
 
@@ -13561,6 +13905,19 @@ void ApplicationShell::refreshPreferenceControls()
 	QSignalBlocker editorProfileBlocker(m_editorProfileCombo);
 	QSignalBlocker motionBlocker(m_reducedMotion);
 	QSignalBlocker speechBlocker(m_textToSpeech);
+	QSignalBlocker regionBlocker(m_regionCombo);
+	QSignalBlocker fontBlocker(m_fontCombo);
+	QSignalBlocker spacingBlocker(m_wideTextSpacing);
+	QSignalBlocker colorVisionBlocker(m_colorVisionCombo);
+	QSignalBlocker saturationBlocker(m_reducedSaturation);
+	QSignalBlocker focusBlocker(m_thickFocusIndicator);
+	QSignalBlocker cursorBlocker(m_thickTextCursor);
+	QSignalBlocker steadyBlocker(m_steadyTextCursor);
+	QSignalBlocker durationBlocker(m_messageDurationCombo);
+	QSignalBlocker alertsBlocker(m_visualAlerts);
+	QSignalBlocker soundCuesBlocker(m_soundCues);
+	QSignalBlocker soundCueVolumeBlocker(m_soundCueVolume);
+	QSignalBlocker announcementsBlocker(m_screenReaderAnnouncements);
 	QSignalBlocker aiFreeBlocker(m_aiFreeMode);
 	QSignalBlocker aiCloudBlocker(m_aiCloudConnectors);
 	QSignalBlocker aiAgenticBlocker(m_aiAgenticWorkflows);
@@ -13589,6 +13946,26 @@ void ApplicationShell::refreshPreferenceControls()
 		m_crashReports->setChecked(m_settings.crashReports());
 	}
 	m_textToSpeech->setChecked(preferences.textToSpeechEnabled);
+	m_regionCombo->setCurrentIndex(std::max(0, m_regionCombo->findData(preferences.formatLocaleName)));
+	m_regionSample->setText(tr("Written like this: %1").arg(regionFormatSample(regionFormatLocale(preferences.formatLocaleName, preferences.localeName))));
+	m_fontCombo->setCurrentIndex(std::max(0, m_fontCombo->findData(preferences.uiFontFamily)));
+	m_wideTextSpacing->setChecked(preferences.wideTextSpacing);
+	m_colorVisionCombo->setCurrentIndex(std::max(0, m_colorVisionCombo->findData(colorVisionId(preferences.colorVision))));
+	m_reducedSaturation->setChecked(preferences.reducedSaturation);
+	// Monochrome already removes every colour, so saturation has nothing left.
+	m_reducedSaturation->setEnabled(preferences.colorVision != ColorVision::Monochrome);
+	m_thickFocusIndicator->setChecked(preferences.thickFocusIndicator);
+	m_thickTextCursor->setChecked(preferences.thickTextCursor);
+	m_steadyTextCursor->setChecked(preferences.steadyTextCursor);
+	m_messageDurationCombo->setCurrentIndex(std::max(0, m_messageDurationCombo->findData(messageDurationId(preferences.messageDuration))));
+	m_visualAlerts->setChecked(preferences.visualAlerts);
+	m_soundCues->setChecked(preferences.soundCues);
+	m_soundCueVolume->setValue(preferences.soundCueVolume);
+	m_soundCueVolume->setEnabled(preferences.soundCues);
+	m_soundCueTest->setEnabled(preferences.soundCues);
+	m_screenReaderAnnouncements->setChecked(preferences.screenReaderAnnouncements);
+	refreshSpeechControls();
+	refreshLanguageRestartNotice();
 	m_aiFreeMode->setChecked(aiPreferences.aiFreeMode);
 	m_aiCloudConnectors->setChecked(aiPreferences.cloudConnectorsEnabled);
 	m_aiAgenticWorkflows->setChecked(aiPreferences.agenticWorkflowsEnabled);
@@ -13620,13 +13997,26 @@ void ApplicationShell::refreshPreferenceControls()
 
 void ApplicationShell::savePreferenceControls()
 {
-	AccessibilityPreferences preferences;
+	// Start from what is stored, so preferences this form saves elsewhere
+	// (the speech voice and events, the sound cues) are kept.
+	AccessibilityPreferences preferences = m_settings.accessibilityPreferences();
 	preferences.localeName = m_localeCombo->currentData().toString();
 	preferences.theme = themeFromId(m_themeCombo->currentData().toString());
 	preferences.textScalePercent = m_textScaleCombo->currentData().toInt();
 	preferences.density = densityFromId(m_densityCombo->currentData().toString());
 	preferences.reducedMotion = m_reducedMotion->isChecked();
 	preferences.textToSpeechEnabled = m_textToSpeech->isChecked();
+	preferences.formatLocaleName = m_regionCombo->currentData().toString();
+	preferences.uiFontFamily = m_fontCombo->currentData().toString();
+	preferences.wideTextSpacing = m_wideTextSpacing->isChecked();
+	preferences.colorVision = colorVisionFromId(m_colorVisionCombo->currentData().toString());
+	preferences.reducedSaturation = m_reducedSaturation->isChecked();
+	preferences.thickFocusIndicator = m_thickFocusIndicator->isChecked();
+	preferences.thickTextCursor = m_thickTextCursor->isChecked();
+	preferences.steadyTextCursor = m_steadyTextCursor->isChecked();
+	preferences.messageDuration = messageDurationFromId(m_messageDurationCombo->currentData().toString());
+	preferences.visualAlerts = m_visualAlerts->isChecked();
+	preferences.screenReaderAnnouncements = m_screenReaderAnnouncements->isChecked();
 
 	m_settings.setAccessibilityPreferences(preferences);
 	m_settings.setSelectedEditorProfileId(m_editorProfileCombo->currentData().toString());
@@ -13666,7 +14056,7 @@ void ApplicationShell::savePreferenceControls()
 	m_settings.setAiAutomationPreferences(aiPreferences);
 	m_settings.sync();
 	refreshAssistant();
-	QLocale::setDefault(QLocale(preferences.localeName));
+	QLocale::setDefault(regionFormatLocale(preferences.formatLocaleName, preferences.localeName));
 	recordActivity(tr("Preferences Saved"), tr("Accessibility and language preferences"), tr("settings"), OperationState::Completed, tr("Preferences saved."));
 	refreshPreferenceControls();
 	refreshSetupPanel();
@@ -13679,13 +14069,17 @@ void ApplicationShell::savePreferenceControls()
 void ApplicationShell::applyPreferencesToUi()
 {
 	const AccessibilityPreferences preferences = m_settings.accessibilityPreferences();
-	QLocale::setDefault(QLocale(preferences.localeName));
+	QLocale::setDefault(regionFormatLocale(preferences.formatLocaleName, preferences.localeName));
+	m_messageDuration = preferences.messageDuration;
+	applySpeechPreferences();
 
-	// The theme, density, and text scale resolve to one token set (see
-	// studio_theme.h). HighContrastDark and HighContrastLight get full-strength
-	// outlines, a distinct focus colour, and 2px focus rings; text scale runs
-	// from 100% to 200% through the application font and every sized role.
-	const StudioThemeTokens tokens = studioThemeTokens(preferences.theme, preferences.density, preferences.textScalePercent);
+	// The theme, density, text scale, and the accessibility choices resolve to
+	// one token set (see studio_theme.h). HighContrastDark and HighContrastLight
+	// get full-strength outlines, a distinct focus colour, and 2px focus rings;
+	// text scale runs from 100% to 200% through the application font and every
+	// sized role; colour vision, saturation, focus, cursor, typeface, and
+	// spacing are folded in the same way.
+	const StudioThemeTokens tokens = studioThemeTokens(preferences);
 	// Re-applying an application stylesheet repolishes every widget, so it only
 	// happens when a preference that feeds it actually changed.
 	if (!studioThemeIsApplied(tokens)) {
@@ -14012,8 +14406,8 @@ QVector<StudioModeDescriptor> studioModeDescriptors()
 		{StudioMode::Code, ApplicationShell::tr("Code"),
 			ApplicationShell::tr("Edit project scripts and code with syntax highlighting and project-wide search."),
 			modeIcon(StudioMode::Code)},
-		{StudioMode::Shaders, ApplicationShell::tr("Shaders"),
-			ApplicationShell::tr("Parse, inspect, and round-trip idTech3 shader scripts."),
+		{StudioMode::Shaders, ApplicationShell::tr("Materials"),
+			ApplicationShell::tr("Browse, preview and edit the textures, shaders and materials of idTech 1 to 4, as text or as nodes."),
 			modeIcon(StudioMode::Shaders)},
 		{StudioMode::Build, ApplicationShell::tr("Build"),
 			ApplicationShell::tr("Run chained compiler pipelines, inspect artifacts, and launch the game."),
@@ -14234,6 +14628,9 @@ void ApplicationShell::buildCommands()
 		tr("Drag a brush footprint on a construction plane; adjust depth with the wheel."), QStringLiteral("cube"), false, false, false,
 		[this]() { setMode(StudioMode::Levels); setLevelMaterialTool(m_levelMap3D && m_levelMap3D->brushDrawTool() ? 0 : 3); });
 	if (auto* draw = m_commands->action(QStringLiteral("map.drawBrush"))) { draw->setCheckable(true); }
+	add(QStringLiteral("map.placeAtCamera"), StudioCommandGroup::Edit, tr("Place at Camera Surface"),
+		tr("Place the selected Create class at the surface under the camera centre."), QStringLiteral("plus"), false, false, false,
+		[this]() { placeLevelMapPaletteAtCamera(); });
 	add(QStringLiteral("map.exportPrefab"), StudioCommandGroup::Edit, tr("Export Selection as Prefab…"),
 		tr("Capture reusable geometry, entities and asset references with an anchor."), QStringLiteral("save"), false, false, false,
 		[this]() { showLevelPrefab(true); });
@@ -14253,6 +14650,8 @@ void ApplicationShell::buildCommands()
 		tr("Shift, scale, rotate, fit and align selected brush faces using package material dimensions."), QStringLiteral("image"), false, false, false,
 		[this]() { editLevelMapSurfacesFromUi(); });
 	registerLevelSurfaceCommands();
+	registerLevelSidebarCommands();
+	registerLevelEditingCommands();
 	add(QStringLiteral("map.editPatch"), StudioCommandGroup::Edit, tr("Edit Patch Control Points…"),
 		tr("Reshape, subdivide and texture the selected patch."), QStringLiteral("edit"), false, false, false,
 		[this]() { editLevelMapPatchFromUi(false); });
@@ -14460,7 +14859,7 @@ void ApplicationShell::buildCommands()
 	if (QAction* toggle = m_commands->action(QStringLiteral("map.toggle3D"))) {
 		toggle->setCheckable(true);
 	}
-	for (const auto& id : {QStringLiteral("profile"), QStringLiteral("single-2d"), QStringLiteral("single-3d"), QStringLiteral("camera-and-plan"), QStringLiteral("four-views")}) {
+	for (const auto& id : {QStringLiteral("profile"), QStringLiteral("single-2d"), QStringLiteral("single-3d"), QStringLiteral("camera-and-plan"), QStringLiteral("four-views"), QStringLiteral("camera-above-plans"), QStringLiteral("camera-beside-plans")}) {
 		LevelViewLayout layout = LevelViewLayout::Single2D;
 		levelViewLayoutForId(id, &layout);
 		const auto command = QStringLiteral("map.layout.") + id;
@@ -14854,6 +15253,11 @@ void ApplicationShell::buildCommands()
 	add(QStringLiteral("map.clearLeakTrail"), StudioCommandGroup::Build, tr("Clear Leak T&rail"),
 		tr("Remove the leak trail from the map view."), QStringLiteral("close"), false, false, false,
 		[this]() { clearLeakTrailFromUi(); });
+	add(QStringLiteral("map.loadPortals"), StudioCommandGroup::Build, tr("Load &Portal File…"),
+		tr("Outline a compiler's vis portals (.prt) over the open map, to see where visibility is cut."), QStringLiteral("grid"), false, false,
+		false, [this]() { loadPortalFileFromUi(); });
+	add(QStringLiteral("map.clearPortals"), StudioCommandGroup::Build, tr("Clear Portals"), tr("Remove the portal outlines from the map view."),
+		QStringLiteral("close"), false, false, false, [this]() { clearPortalsFromUi(); });
 	add(QStringLiteral("game.launch"), StudioCommandGroup::Build, tr("&Launch Game"),
 		tr("Start the configured game installation with the planned command line."), QStringLiteral("play"), true, false, false,
 		[this]() {
@@ -14885,10 +15289,21 @@ void ApplicationShell::buildCommands()
 			setMode(StudioMode::Shaders);
 			inspectAdvancedShaderScript();
 		});
+	add(QStringLiteral("material.new"), StudioCommandGroup::Tools, tr("New &Material…"),
+		tr("Start a Quake III shader or Doom 3 material from a template on the Materials page."), QStringLiteral("plus"), false, false, false,
+		[this]() {
+			setMode(StudioMode::Shaders);
+			if (m_shaderPageTabs) {
+				m_shaderPageTabs->setCurrentIndex(0);
+			}
+			if (m_materialWorkbench) {
+				m_materialWorkbench->showNewMaterialDialog();
+			}
+		});
 	add(QStringLiteral("extension.discover"), StudioCommandGroup::Tools, tr("Discover &Extensions"),
 		tr("Load vibestudio.extension.json manifests and report their trust metadata."), QStringLiteral("plugin"), false, false, false,
 		[this]() {
-			showSettingsCategory(3);
+			showSettingsCategory(QStringLiteral("extensions"));
 			discoverAdvancedExtensions();
 		});
 	add(QStringLiteral("localization.report"), StudioCommandGroup::Tools, tr("&Localization Report"),
@@ -14911,8 +15326,56 @@ void ApplicationShell::buildCommands()
 		[this]() { copyDiagnosticBundle(); }, true);
 	add(QStringLiteral("app.preferences"), StudioCommandGroup::Tools, tr("&Preferences"),
 		tr("Language, theme, scaling, density, motion, text to speech, and AI connectors."), QStringLiteral("settings"), false, false, false,
-		[this]() { showSettingsCategory(1); }, true);
+		[this]() { showSettingsCategory(QStringLiteral("appearance")); }, true);
+	add(QStringLiteral("accessibility.settings"), StudioCommandGroup::Tools, tr("Accessi&bility Settings"),
+		tr("Colour vision, focus and cursor, motion, status message timing, screen reader announcements, and speech."), QStringLiteral("accessibility"), false, false, false,
+		[this]() { showSettingsCategory(QStringLiteral("accessibility")); });
+	add(QStringLiteral("accessibility.readAloud"), StudioCommandGroup::Tools, tr("Read &Aloud"),
+		tr("Read the selected text, the focused item, or the latest status message aloud with this computer's voice; again to stop."), QStringLiteral("waveform"), false, false, false,
+		[this]() {
+			if (m_speech && m_speech->isSpeaking()) {
+				stopSpeaking();
+				return;
+			}
+			readAloud();
+		});
+	add(QStringLiteral("accessibility.stopSpeaking"), StudioCommandGroup::Tools, tr("Stop Reading Aloud"),
+		tr("Stop what is being read aloud."), QStringLiteral("stop"), false, false, false,
+		[this]() { stopSpeaking(); });
+	add(QStringLiteral("view.textLarger"), StudioCommandGroup::View, tr("Larger Text"),
+		tr("Raise the text scale one step, up to 200%."), QStringLiteral("plus"), false, false, false,
+		[this]() { stepTextScale(1); }, true);
+	add(QStringLiteral("view.textSmaller"), StudioCommandGroup::View, tr("Smaller Text"),
+		tr("Lower the text scale one step, down to 100%."), QStringLiteral("minus"), false, false, false,
+		[this]() { stepTextScale(-1); });
+	add(QStringLiteral("view.textReset"), StudioCommandGroup::View, tr("Reset Text Size"),
+		tr("Return the text scale to 100%."), QStringLiteral("refresh"), false, false, false,
+		[this]() { stepTextScale(0); });
+	add(QStringLiteral("view.highContrast"), StudioCommandGroup::View, tr("Toggle High Contrast"),
+		tr("Switch between the high-contrast theme and the standard theme of the same lightness."), QStringLiteral("eye"), false, false, false,
+		[this]() { toggleHighContrastTheme(); });
 
+	add(QStringLiteral("help.documentation"), StudioCommandGroup::Help, tr("&Documentation"),
+		tr("Open the bundled user manual, or the online manual if no local copy is available."), QStringLiteral("book"), false, false, false,
+		[this]() {
+			const QDir binaryDirectory(QCoreApplication::applicationDirPath());
+			const QStringList manualPaths {
+				QStringLiteral("../docs/html/index.html"),
+				QStringLiteral("../Resources/docs/html/index.html"),
+				QStringLiteral("../share/doc/vibestudio/html/index.html"),
+			};
+			QUrl url(QStringLiteral("https://github.com/themuffinator/VibeStudio/blob/main/docs/manual/index.md"));
+			for (const QString& relativePath : manualPaths) {
+				const QFileInfo manual(binaryDirectory.filePath(relativePath));
+				if (manual.isFile() && manual.isReadable()) {
+					url = QUrl::fromLocalFile(manual.absoluteFilePath());
+					break;
+				}
+			}
+			if (!QDesktopServices::openUrl(url)) {
+				statusBar()->showMessage(tr("Unable to open the documentation: %1").arg(url.toDisplayString()));
+			}
+		});
 	add(QStringLiteral("help.keyboardShortcuts"), StudioCommandGroup::Help, tr("&Keyboard Shortcuts"),
 		tr("Every command's keys, and the surface each key works on."), QStringLiteral("key"), false, false, false,
 		[this]() { showKeyboardShortcuts(); });
@@ -15143,7 +15606,7 @@ void ApplicationShell::buildAssistantDock()
 	m_assistantSettingsButton->setObjectName(QStringLiteral("assistantSettings"));
 	m_assistantSettingsButton->setAccessibleName(tr("Assistant connection settings"));
 	connect(m_assistantSettingsButton, &QToolButton::clicked, this, [this]() {
-		showSettingsCategory(2);
+		showSettingsCategory(QStringLiteral("ai"));
 	});
 	connectionRow->addWidget(m_assistantSettingsButton, 0, Qt::AlignTop);
 	layout->addLayout(connectionRow);
@@ -15256,8 +15719,8 @@ void ApplicationShell::buildAssistantDock()
 	m_assistantDock->setAllowedAreas(Qt::LeftDockWidgetArea | Qt::RightDockWidgetArea | Qt::BottomDockWidgetArea);
 	m_assistantDock->setWidget(body);
 	m_assistantDock->setTitleBarWidget(new DockTitleBar(m_assistantDock));
-	m_assistantDock->setMinimumWidth(320);
-	addDockWidget(Qt::RightDockWidgetArea, m_assistantDock);
+	body->setMinimumWidth(320);
+	addDockWidget(trailingDockArea(layoutDirection()), m_assistantDock);
 	m_assistantDock->hide();
 	connect(m_assistantDock, &QDockWidget::visibilityChanged, this, [this](bool visible) {
 		if (visible) {
@@ -15938,7 +16401,7 @@ void ApplicationShell::buildStatusBar()
 	statusBar()->setAccessibleName(tr("Status bar"));
 	statusBar()->setSizeGripEnabled(false);
 	m_activityToggle = makePanelToggle(QStringLiteral("activity"), tr("Activity"), tr("Show or hide the activity panel: every task with its progress, log, and result."));
-	m_inspectorToggle = makePanelToggle(QStringLiteral("sidebar-right"), tr("Inspector"), tr("Show or hide the inspector panel: settings, setup, and project diagnostics."));
+	m_inspectorToggle = makePanelToggle(trailingPanelGlyph(layoutDirection()), tr("Inspector"), tr("Show or hide the inspector panel: settings, setup, and project diagnostics."));
 	auto* divider = createDivider(Qt::Vertical);
 	divider->setFixedHeight(16);
 	statusBar()->addPermanentWidget(divider);
@@ -16312,6 +16775,9 @@ void ApplicationShell::refreshModeAvailability()
 	case StudioMode::Audio:
 		refreshAudioBrowser();
 		break;
+	case StudioMode::Levels:
+		refreshLevelAssetBrowsers();
+		break;
 	case StudioMode::Code:
 		refreshCodeWorkspaceTree();
 		break;
@@ -16333,14 +16799,23 @@ void ApplicationShell::resetLayout()
 		}
 		m_settings.setShellLayoutState(it.key(), QByteArray());
 	}
+	// The Levels sidebars open again at the widths the layout gives them.
+	for (StudioSidebar* sidebar : {m_levelLeadingSidebar, m_levelTrailingSidebar}) {
+		if (sidebar) {
+			sidebar->setExpandedWidth(0);
+			sidebar->setFolded(false);
+		}
+	}
+	// Every panel goes back to the trailing side, wherever it was moved.
+	const Qt::DockWidgetArea panelArea = trailingDockArea(layoutDirection());
 	if (m_activityDock) {
 		m_activityDock->setFloating(false);
-		addDockWidget(Qt::RightDockWidgetArea, m_activityDock);
+		addDockWidget(panelArea, m_activityDock);
 		m_activityDock->hide();
 	}
 	if (m_inspectorDock) {
 		m_inspectorDock->setFloating(false);
-		addDockWidget(Qt::RightDockWidgetArea, m_inspectorDock);
+		addDockWidget(panelArea, m_inspectorDock);
 		if (m_activityDock) {
 			tabifyDockWidget(m_activityDock, m_inspectorDock);
 		}
@@ -16348,7 +16823,7 @@ void ApplicationShell::resetLayout()
 	}
 	if (m_assistantDock) {
 		m_assistantDock->setFloating(false);
-		addDockWidget(Qt::RightDockWidgetArea, m_assistantDock);
+		addDockWidget(panelArea, m_assistantDock);
 		if (m_inspectorDock) {
 			tabifyDockWidget(m_inspectorDock, m_assistantDock);
 		}
@@ -16547,12 +17022,17 @@ void ApplicationShell::refreshSurfaceStates()
 	showContent(StudioMode::Code, !projectPath.isEmpty() || hasCodeDocument());
 
 	const bool hasShader = !m_advancedShaderDocument.shaders.isEmpty();
+	const bool hasMaterials = m_materialWorkbench && m_materialWorkbench->hasContent();
 	if (PageHeader* header = headerFor(StudioMode::Shaders)) {
 		const QString shaderPath = m_advancedShaderPath ? m_advancedShaderPath->text().trimmed() : QString();
-		header->setSubtitle(!hasShader || shaderPath.isEmpty() ? tr("No shader script loaded")
-			: QFileInfo(shaderPath).fileName() + separator + tr("%n shader(s)", nullptr, static_cast<int>(m_advancedShaderDocument.shaders.size())));
+		if (hasMaterials) {
+			header->setSubtitle(m_materialWorkbench->summary());
+		} else {
+			header->setSubtitle(!hasShader || shaderPath.isEmpty() ? tr("No materials yet")
+				: QFileInfo(shaderPath).fileName() + separator + tr("%n shader(s)", nullptr, static_cast<int>(m_advancedShaderDocument.shaders.size())));
+		}
 	}
-	showContent(StudioMode::Shaders, hasShader);
+	showContent(StudioMode::Shaders, hasShader || hasMaterials);
 
 	// Status strips only take space while they have something to say.
 	syncStatusStrip(m_levelMapState);
@@ -17079,6 +17559,527 @@ void ApplicationShell::showSettingsCategory(int index)
 	}
 }
 
+void ApplicationShell::showSettingsCategory(const QString& categoryId)
+{
+	if (m_settingsCategories) {
+		for (int row = 0; row < m_settingsCategories->count(); ++row) {
+			if (m_settingsCategories->item(row)->data(Qt::UserRole).toString() == categoryId) {
+				showSettingsCategory(row);
+				return;
+			}
+		}
+	}
+	setMode(StudioMode::Settings);
+}
+
+void ApplicationShell::openCurrentSetupStepSettings()
+{
+	switch (m_settings.setupProgress().currentStep) {
+	case SetupStep::WelcomeAccess:
+		showSettingsCategory(QStringLiteral("accessibility"));
+		return;
+	case SetupStep::WorkspaceProfile:
+		showSettingsCategory(QStringLiteral("appearance"));
+		if (m_editorProfileCombo) {
+			m_editorProfileCombo->setFocus(Qt::OtherFocusReason);
+		}
+		return;
+	case SetupStep::ProjectsPackages:
+	case SetupStep::GameInstallations:
+		setMode(StudioMode::Workspace);
+		return;
+	case SetupStep::Toolchains:
+		setMode(StudioMode::Build);
+		return;
+	case SetupStep::AiAutomation:
+		showSettingsCategory(QStringLiteral("ai"));
+		return;
+	case SetupStep::CliIntegration:
+	case SetupStep::ReviewFinish:
+		showSettingsCategory(QStringLiteral("getting-started"));
+		return;
+	}
+}
+
+QWidget* ApplicationShell::buildAccessibilitySettings()
+{
+	auto* content = new QWidget;
+	content->setObjectName(QStringLiteral("accessibilitySettings"));
+	auto* layout = new QVBoxLayout(content);
+	layout->setContentsMargins(0, 0, 0, 0);
+	layout->setSpacing(12);
+	const auto formFor = [](QGroupBox* group) {
+		auto* form = new QFormLayout(group);
+		form->setHorizontalSpacing(16);
+		form->setVerticalSpacing(10);
+		form->setFieldGrowthPolicy(QFormLayout::FieldsStayAtSizeHint);
+		form->setLabelAlignment(Qt::AlignLeft | Qt::AlignVCenter);
+		return form;
+	};
+	const auto sizeCombo = [](QComboBox* combo) {
+		combo->setMinimumContentsLength(22);
+		combo->setSizeAdjustPolicy(QComboBox::AdjustToMinimumContentsLengthWithIcon);
+	};
+	const auto checkBox = [](const QString& objectName, const QString& text, const QString& accessibleName, const QString& toolTip) {
+		auto* box = new QCheckBox(text);
+		box->setObjectName(objectName);
+		box->setAccessibleName(accessibleName);
+		box->setToolTip(toolTip);
+		return box;
+	};
+
+	// Vision: colour, contrast with the surroundings, and where focus is.
+	auto* vision = new QGroupBox(tr("Vision", "accessibility settings group about seeing the screen, not computer vision"));
+	vision->setObjectName(QStringLiteral("visionPanel"));
+	auto* visionForm = formFor(vision);
+	m_colorVisionCombo = new QComboBox;
+	m_colorVisionCombo->setObjectName(QStringLiteral("colorVisionCombo"));
+	m_colorVisionCombo->setAccessibleName(tr("Colour vision"));
+	m_colorVisionCombo->setToolTip(tr("Status colours chosen so the states you can tell apart are the ones that differ. Every state also keeps its glyph and its words."));
+	for (ColorVision choice : {ColorVision::Typical, ColorVision::RedGreen, ColorVision::BlueYellow, ColorVision::Monochrome}) {
+		m_colorVisionCombo->addItem(localizedColorVisionName(choice), colorVisionId(choice));
+	}
+	sizeCombo(m_colorVisionCombo);
+	visionForm->addRow(tr("Colour vision"), m_colorVisionCombo);
+	m_reducedSaturation = checkBox(QStringLiteral("reducedSaturation"), tr("Reduce colour saturation"), tr("Reduced colour saturation"),
+		tr("Softens the accent, selection, and status colours toward grey without changing their contrast, for a calmer screen."));
+	visionForm->addRow(QString(), m_reducedSaturation);
+	m_thickFocusIndicator = checkBox(QStringLiteral("thickFocusIndicator"), tr("Thick focus outline"), tr("Thick focus outline"),
+		tr("Draws the keyboard focus outline three pixels wide around every control, so the focused one is easy to find."));
+	visionForm->addRow(QString(), m_thickFocusIndicator);
+	m_thickTextCursor = checkBox(QStringLiteral("thickTextCursor"), tr("Thick text cursor"), tr("Thick text cursor"),
+		tr("Draws the text cursor in fields and editors three pixels wide, growing with the text scale."));
+	visionForm->addRow(QString(), m_thickTextCursor);
+	layout->addWidget(vision);
+
+	// Motion and timing: what moves by itself, and how long text stays.
+	auto* timing = new QGroupBox(tr("Motion and Timing"));
+	timing->setObjectName(QStringLiteral("motionPanel"));
+	auto* timingForm = formFor(timing);
+	m_reducedMotion = new QCheckBox(tr("Reduce motion"));
+	m_reducedMotion->setObjectName(QStringLiteral("reducedMotion"));
+	m_reducedMotion->setAccessibleName(tr("Reduced motion"));
+	m_reducedMotion->setToolTip(tr("Replaces spinners and animated progress with static state text, opens the navigation rail without sliding, and switches pages without fading."));
+	timingForm->addRow(QString(), m_reducedMotion);
+	m_steadyTextCursor = checkBox(QStringLiteral("steadyTextCursor"), tr("Stop the text cursor blinking"), tr("Steady text cursor"),
+		tr("Keeps the text cursor shown without blinking, in every field and editor."));
+	timingForm->addRow(QString(), m_steadyTextCursor);
+	m_messageDurationCombo = new QComboBox;
+	m_messageDurationCombo->setObjectName(QStringLiteral("messageDurationCombo"));
+	m_messageDurationCombo->setAccessibleName(tr("Status message duration"));
+	m_messageDurationCombo->setToolTip(tr("How long a status bar message that clears itself stays readable."));
+	for (MessageDuration duration : {MessageDuration::Standard, MessageDuration::Longer, MessageDuration::UntilReplaced}) {
+		m_messageDurationCombo->addItem(localizedMessageDurationName(duration), messageDurationId(duration));
+	}
+	sizeCombo(m_messageDurationCombo);
+	timingForm->addRow(tr("Status messages stay"), m_messageDurationCombo);
+	layout->addWidget(timing);
+
+	// Alerts and screen readers: results that reach the user without sight
+	// or sound, and the keyboard route to every command.
+	auto* alerts = new QGroupBox(tr("Alerts and Screen Readers"));
+	alerts->setObjectName(QStringLiteral("alertsPanel"));
+	auto* alertsForm = formFor(alerts);
+	m_screenReaderAnnouncements = checkBox(QStringLiteral("screenReaderAnnouncements"), tr("Announce results to screen readers"), tr("Screen reader announcements"),
+		tr("Asks the running screen reader (Narrator, NVDA, JAWS, VoiceOver, or Orca) to say when long tasks finish or fail, and what the status bar reports, without moving focus."));
+	alertsForm->addRow(QString(), m_screenReaderAnnouncements);
+	m_visualAlerts = checkBox(QStringLiteral("visualAlerts"), tr("Flash the taskbar when background work finishes"), tr("Visual alerts"),
+		tr("When a long task finishes or fails while another window is in front, the studio's taskbar or dock button flashes, so the result is seen without a sound."));
+	alertsForm->addRow(QString(), m_visualAlerts);
+	m_soundCues = checkBox(QStringLiteral("soundCues"), tr("Play sound cues for task results"), tr("Sound cues"),
+		tr("Plays a short tone when a long task ends: rising when it finishes, level for a warning or a cancellation, falling for a failure. The words still appear in the status bar and the Activity list."));
+	alertsForm->addRow(QString(), m_soundCues);
+	m_soundCueVolume = new QSlider(Qt::Horizontal);
+	m_soundCueVolume->setObjectName(QStringLiteral("soundCueVolume"));
+	m_soundCueVolume->setAccessibleName(tr("Sound cue volume"));
+	m_soundCueVolume->setRange(0, 100);
+	m_soundCueVolume->setPageStep(25);
+	m_soundCueVolume->setTickInterval(25);
+	m_soundCueVolume->setTickPosition(QSlider::TicksBelow);
+	m_soundCueVolume->setFocusPolicy(Qt::StrongFocus);
+	m_soundCueVolume->setMinimumWidth(200);
+	alertsForm->addRow(tr("Cue volume"), m_soundCueVolume);
+	m_soundCueTest = createButton(tr("Play Cues"), QStringLiteral("play"));
+	m_soundCueTest->setObjectName(QStringLiteral("soundCueTest"));
+	m_soundCueTest->setAccessibleName(tr("Play the three sound cues"));
+	m_soundCueTest->setToolTip(tr("Plays the finished, warning, and failed cues in turn, at the volume above."));
+	connect(m_soundCueTest, &QAbstractButton::clicked, this, [this]() { testSoundCues(); });
+	alertsForm->addRow(QString(), m_soundCueTest);
+	auto* keyboard = createButton(tr("Keyboard Shortcuts…"), QStringLiteral("key"));
+	keyboard->setObjectName(QStringLiteral("accessibilityKeyboardShortcuts"));
+	keyboard->setAccessibleName(tr("Keyboard shortcuts"));
+	keyboard->setToolTip(tr("Every command's keys, which can be changed, and the page each key works on. Every command can also be run from command search."));
+	connect(keyboard, &QPushButton::clicked, this, [this]() { showKeyboardShortcuts(); });
+	alertsForm->addRow(QString(), keyboard);
+	layout->addWidget(alerts);
+
+	// Speech: this computer's own voices, never a cloud service.
+	auto* speechPanel = new QGroupBox(tr("Text to Speech"));
+	speechPanel->setObjectName(QStringLiteral("speechPanel"));
+	auto* speechForm = formFor(speechPanel);
+	m_textToSpeech = new QCheckBox(tr("Read status changes aloud"));
+	m_textToSpeech->setObjectName(QStringLiteral("textToSpeech"));
+	m_textToSpeech->setAccessibleName(tr("Text to speech"));
+	m_textToSpeech->setToolTip(tr("Speaks the events chosen below with this computer's own voices (OS-backed TTS). Every spoken message also appears in the status bar or the Activity list, and nothing is sent to a cloud voice service."));
+	speechForm->addRow(QString(), m_textToSpeech);
+	auto* events = new QWidget;
+	auto* eventsLayout = new QVBoxLayout(events);
+	eventsLayout->setContentsMargins(0, 0, 0, 0);
+	eventsLayout->setSpacing(4);
+	for (const QString& eventId : speechEventIds()) {
+		auto* box = new QCheckBox(localizedSpeechEventName(eventId));
+		box->setObjectName(QStringLiteral("speechEvent-%1").arg(eventId));
+		box->setAccessibleName(tr("Read aloud: %1").arg(localizedSpeechEventName(eventId)));
+		eventsLayout->addWidget(box);
+		m_speechEventBoxes.insert(eventId, box);
+	}
+	speechForm->addRow(tr("Read aloud"), events);
+	m_speechVoiceCombo = new QComboBox;
+	m_speechVoiceCombo->setObjectName(QStringLiteral("speechVoiceCombo"));
+	m_speechVoiceCombo->setAccessibleName(tr("Voice"));
+	m_speechVoiceCombo->addItem(tr("System voice"), QString());
+	sizeCombo(m_speechVoiceCombo);
+	speechForm->addRow(tr("Voice"), m_speechVoiceCombo);
+	const auto slider = [](const QString& objectName, const QString& accessibleName, int minimum, int maximum, int tickInterval) {
+		auto* control = new QSlider(Qt::Horizontal);
+		control->setObjectName(objectName);
+		control->setAccessibleName(accessibleName);
+		control->setRange(minimum, maximum);
+		control->setPageStep(tickInterval);
+		control->setTickInterval(tickInterval);
+		control->setTickPosition(QSlider::TicksBelow);
+		control->setFocusPolicy(Qt::StrongFocus);
+		control->setMinimumWidth(200);
+		return control;
+	};
+	m_speechRate = slider(QStringLiteral("speechRate"), tr("Speaking rate"), -10, 10, 5);
+	speechForm->addRow(tr("Rate"), m_speechRate);
+	m_speechPitch = slider(QStringLiteral("speechPitch"), tr("Pitch"), -10, 10, 5);
+	speechForm->addRow(tr("Pitch"), m_speechPitch);
+	m_speechVolume = slider(QStringLiteral("speechVolume"), tr("Volume"), 0, 100, 25);
+	speechForm->addRow(tr("Volume"), m_speechVolume);
+	auto* testRow = new QHBoxLayout;
+	testRow->setContentsMargins(0, 0, 0, 0);
+	m_speechTest = createButton(tr("Say Test Phrase"), QStringLiteral("play"));
+	m_speechTest->setObjectName(QStringLiteral("speechTest"));
+	m_speechTest->setAccessibleName(tr("Say the TTS test phrase"));
+	m_speechTest->setToolTip(tr("Speaks a short test phrase with the voice, rate, pitch, and volume above."));
+	connect(m_speechTest, &QAbstractButton::clicked, this, [this]() { testSpeech(); });
+	testRow->addWidget(m_speechTest);
+	testRow->addStretch(1);
+	speechForm->addRow(QString(), testRow);
+	m_speechStatus = new QLabel;
+	m_speechStatus->setObjectName(QStringLiteral("fieldHint"));
+	m_speechStatus->setWordWrap(true);
+	m_speechStatus->setAccessibleName(tr("Speech engine"));
+	speechForm->addRow(QString(), m_speechStatus);
+	layout->addWidget(speechPanel);
+	layout->addStretch(1);
+	return content;
+}
+
+StudioSpeech& ApplicationShell::speech()
+{
+	if (!m_speech) {
+		m_speech = std::make_unique<StudioSpeech>();
+		applySpeechPreferences();
+	}
+	return *m_speech;
+}
+
+void ApplicationShell::applySpeechPreferences()
+{
+	if (!m_speech) {
+		return;
+	}
+	const AccessibilityPreferences preferences = m_settings.accessibilityPreferences();
+	SpeechSettings settings;
+	settings.voiceId = preferences.speechVoice;
+	settings.rate = preferences.speechRate;
+	settings.pitch = preferences.speechPitch;
+	settings.volume = preferences.speechVolume;
+	m_speech->setSettings(settings);
+}
+
+void ApplicationShell::refreshSpeechControls()
+{
+	if (!m_speechVoiceCombo) {
+		return;
+	}
+	const AccessibilityPreferences preferences = m_settings.accessibilityPreferences();
+	// The engine starts only once someone looks at Speech or uses it, so a
+	// session that never speaks never pays for it.
+	const bool load = m_speech || m_speechVoiceCombo->isVisible() || preferences.textToSpeechEnabled;
+	const QSignalBlocker voiceBlocker(m_speechVoiceCombo);
+	if (load) {
+		StudioSpeech& engine = speech();
+		const SpeechCapabilities capabilities = engine.capabilities();
+		if (m_speechVoiceCombo->count() <= 1 && engine.available()) {
+			for (const SpeechVoice& voice : engine.voices()) {
+				m_speechVoiceCombo->addItem(voice.language.isEmpty() ? voice.name : tr("%1 (%2)").arg(voice.name, voice.language), voice.id);
+			}
+		}
+		m_speechVoiceCombo->setEnabled(engine.available() && capabilities.voices);
+		m_speechRate->setEnabled(engine.available() && capabilities.rate);
+		m_speechPitch->setEnabled(engine.available() && capabilities.pitch);
+		m_speechVolume->setEnabled(engine.available() && capabilities.volume);
+		m_speechTest->setEnabled(engine.available());
+		QString status = engine.available()
+			? tr("Speaks with %1, on this computer.").arg(engine.engineName())
+			: tr("Nothing can be read aloud: %1").arg(engine.unavailableReason());
+		if (engine.available() && (!capabilities.pitch || !capabilities.volume)) {
+			status += QLatin1Char(' ') + tr("Pitch and volume follow the system's voice settings with this engine.");
+		}
+		m_speechStatus->setText(status);
+	} else {
+		m_speechStatus->setText(tr("The speech engine starts when speech is turned on or tested."));
+	}
+	const int voiceIndex = m_speechVoiceCombo->findData(preferences.speechVoice);
+	m_speechVoiceCombo->setCurrentIndex(std::max(0, voiceIndex));
+	for (auto it = m_speechEventBoxes.cbegin(); it != m_speechEventBoxes.cend(); ++it) {
+		const QSignalBlocker blocker(it.value());
+		it.value()->setChecked(preferences.speechEvents.contains(it.key()));
+		it.value()->setEnabled(preferences.textToSpeechEnabled);
+	}
+	for (QSlider* slider : {m_speechRate, m_speechPitch, m_speechVolume}) {
+		const QSignalBlocker blocker(slider);
+		slider->setValue(slider == m_speechRate ? preferences.speechRate : (slider == m_speechPitch ? preferences.speechPitch : preferences.speechVolume));
+		slider->setToolTip(tr("%1: %2").arg(slider->accessibleName()).arg(slider->value()));
+	}
+}
+
+void ApplicationShell::speakEvent(const QString& eventId, const QString& text)
+{
+	if (text.trimmed().isEmpty()) {
+		return;
+	}
+	const AccessibilityPreferences preferences = m_settings.accessibilityPreferences();
+	if (!preferences.textToSpeechEnabled || !preferences.speechEvents.contains(eventId)) {
+		return;
+	}
+	speech().say(text);
+}
+
+void ApplicationShell::noteTaskOutcome(const OperationTask& task)
+{
+	if (task.id.isEmpty() || !operationStateIsTerminal(task.state)) {
+		return;
+	}
+	const QString key = QStringLiteral("%1/%2").arg(task.id, operationStateId(task.state));
+	if (m_reportedTaskOutcomes.contains(key)) {
+		return;
+	}
+	m_reportedTaskOutcomes.insert(key);
+	if (!m_accessibilityAnnouncementsReady) {
+		return;
+	}
+	// Worth telling: anything that went wrong, and work that took long enough
+	// for the user to have turned to something else. Instant confirmations
+	// already show in the status bar.
+	const bool problem = task.state == OperationState::Failed || task.state == OperationState::Warning || task.state == OperationState::Cancelled;
+	if (!problem && operationTaskElapsedMs(task) < 1500) {
+		return;
+	}
+	const QString summary = (task.resultSummary.trimmed().isEmpty() ? task.detail : task.resultSummary).simplified();
+	const QString message = summary.isEmpty()
+		? tr("%1: %2").arg(task.title, localizedOperationStateName(task.state))
+		: tr("%1, %2: %3").arg(task.title, localizedOperationStateName(task.state), summary);
+	const AccessibilityPreferences preferences = m_settings.accessibilityPreferences();
+	if (preferences.screenReaderAnnouncements) {
+		announceToScreenReader(this, message, task.state == OperationState::Failed);
+	}
+	speakEvent(problem ? QStringLiteral("task-problems") : QStringLiteral("task-results"), message);
+	if (preferences.soundCues) {
+		playSoundCue(task.state == OperationState::Failed ? SoundCue::Failure : problem ? SoundCue::Warning : SoundCue::Success);
+	}
+	if (preferences.visualAlerts && !isActiveWindow()) {
+		QApplication::alert(this);
+	}
+}
+
+void ApplicationShell::playSoundCue(SoundCue cue)
+{
+	if (!m_soundCuePlayer) {
+		m_soundCuePlayer = new StudioSoundCues(this);
+	}
+	m_soundCuePlayer->play(cue, m_settings.accessibilityPreferences().soundCueVolume);
+}
+
+void ApplicationShell::testSoundCues()
+{
+	// In turn, far enough apart to tell each from the next.
+	playSoundCue(SoundCue::Success);
+	QTimer::singleShot(700, this, [this]() { playSoundCue(SoundCue::Warning); });
+	QTimer::singleShot(1400, this, [this]() { playSoundCue(SoundCue::Failure); });
+}
+
+void ApplicationShell::handleStatusMessage(const QString& text)
+{
+	if (text.isEmpty()) {
+		return;
+	}
+	applyStatusMessageDuration(statusBar(), m_messageDuration);
+	if (!m_accessibilityAnnouncementsReady) {
+		return;
+	}
+	// A burst of messages (a drag, a scan) settles first: only the last of it
+	// is read, and never the same words twice running.
+	m_pendingStatusAnnouncement = text;
+	if (!m_statusAnnouncementTimer) {
+		m_statusAnnouncementTimer = new QTimer(this);
+		m_statusAnnouncementTimer->setSingleShot(true);
+		m_statusAnnouncementTimer->setInterval(450);
+		connect(m_statusAnnouncementTimer, &QTimer::timeout, this, [this]() {
+			const QString message = m_pendingStatusAnnouncement;
+			if (message.isEmpty() || message == m_lastStatusAnnouncement || statusBar()->currentMessage() != message) {
+				return;
+			}
+			m_lastStatusAnnouncement = message;
+			if (m_settings.accessibilityPreferences().screenReaderAnnouncements) {
+				announceToScreenReader(statusBar(), message);
+			}
+			speakEvent(QStringLiteral("status-messages"), message);
+		});
+	}
+	m_statusAnnouncementTimer->start();
+}
+
+void ApplicationShell::readAloud()
+{
+	QString text;
+	QWidget* focus = QApplication::focusWidget();
+	if (auto* plain = qobject_cast<QPlainTextEdit*>(focus)) {
+		const QTextCursor cursor = plain->textCursor();
+		text = cursor.hasSelection() ? cursor.selectedText() : cursor.block().text();
+	} else if (auto* rich = qobject_cast<QTextEdit*>(focus)) {
+		const QTextCursor cursor = rich->textCursor();
+		text = cursor.hasSelection() ? cursor.selectedText() : cursor.block().text();
+	} else if (auto* line = qobject_cast<QLineEdit*>(focus)) {
+		// A password or key field is never read out.
+		if (line->echoMode() == QLineEdit::Normal) {
+			text = line->hasSelectedText() ? line->selectedText() : line->text();
+		}
+	} else if (auto* view = qobject_cast<QAbstractItemView*>(focus)) {
+		const QModelIndex index = view->currentIndex();
+		text = index.data(Qt::AccessibleTextRole).toString();
+		if (text.isEmpty()) {
+			text = index.data(Qt::DisplayRole).toString();
+		}
+	} else if (focus) {
+		text = focus->accessibleName();
+		if (auto* button = qobject_cast<QAbstractButton*>(focus); button && text.isEmpty()) {
+			text = button->text().remove(QLatin1Char('&'));
+		}
+		if (!focus->accessibleDescription().isEmpty()) {
+			text = tr("%1. %2").arg(text, focus->accessibleDescription());
+		}
+	}
+	if (text.trimmed().isEmpty()) {
+		text = statusBar()->currentMessage();
+	}
+	// A text selection separates paragraphs with U+2029.
+	text.replace(QChar::ParagraphSeparator, QLatin1Char('\n'));
+	if (text.trimmed().isEmpty()) {
+		statusBar()->showMessage(tr("Nothing to read aloud: select text, or move focus to what should be read."));
+		return;
+	}
+	StudioSpeech& engine = speech();
+	if (!engine.say(text.left(5000))) {
+		statusBar()->showMessage(tr("Nothing can be read aloud: %1").arg(engine.unavailableReason()));
+	}
+}
+
+void ApplicationShell::stopSpeaking()
+{
+	if (m_speech) {
+		m_speech->stop();
+	}
+}
+
+void ApplicationShell::testSpeech()
+{
+	StudioSpeech& engine = speech();
+	applySpeechPreferences();
+	// No status message on success: reading it out would cut the phrase off.
+	if (!engine.say(speechTestPhrase())) {
+		statusBar()->showMessage(tr("The test phrase could not be spoken: %1").arg(engine.unavailableReason()));
+	}
+	refreshSpeechControls();
+}
+
+void ApplicationShell::stepTextScale(int direction)
+{
+	static constexpr int kScales[] = {100, 125, 150, 175, 200};
+	AccessibilityPreferences preferences = m_settings.accessibilityPreferences();
+	int index = 0;
+	for (int candidate = 0; candidate < static_cast<int>(std::size(kScales)); ++candidate) {
+		if (kScales[candidate] <= preferences.textScalePercent) {
+			index = candidate;
+		}
+	}
+	const int next = direction == 0 ? 100 : kScales[std::clamp(index + (direction > 0 ? 1 : -1), 0, static_cast<int>(std::size(kScales)) - 1)];
+	if (next == preferences.textScalePercent) {
+		statusBar()->showMessage(direction > 0 ? tr("Text is at its largest scale, 200%.") : (direction < 0 ? tr("Text is at its smallest scale, 100%.") : tr("Text scale: %1%").arg(next)));
+		return;
+	}
+	preferences.textScalePercent = next;
+	m_settings.setAccessibilityPreferences(preferences);
+	m_settings.sync();
+	refreshPreferenceControls();
+	applyPreferencesToUi();
+	statusBar()->showMessage(tr("Text scale: %1%").arg(next));
+}
+
+void ApplicationShell::toggleHighContrastTheme()
+{
+	AccessibilityPreferences preferences = m_settings.accessibilityPreferences();
+	const StudioTheme effective = effectiveStudioTheme(preferences.theme);
+	const bool highContrast = effective == StudioTheme::HighContrastDark || effective == StudioTheme::HighContrastLight;
+	const bool light = effective == StudioTheme::Light || effective == StudioTheme::HighContrastLight;
+	preferences.theme = highContrast ? (light ? StudioTheme::Light : StudioTheme::Dark) : (light ? StudioTheme::HighContrastLight : StudioTheme::HighContrastDark);
+	m_settings.setAccessibilityPreferences(preferences);
+	m_settings.sync();
+	refreshPreferenceControls();
+	applyPreferencesToUi();
+	statusBar()->showMessage(tr("Theme: %1").arg(localizedThemeName(preferences.theme)));
+}
+
+void ApplicationShell::refreshLanguageRestartNotice()
+{
+	if (!m_languageRestartNotice) {
+		return;
+	}
+	const QString wanted = normalizedLocalizationTargetId(m_settings.accessibilityPreferences().localeName);
+	if (wanted == activeInterfaceLanguage()) {
+		m_languageRestartNotice->hide();
+		return;
+	}
+	m_languageRestartNotice->showNotice(QStringLiteral("queued"), tr("Restart to change the language"),
+		tr("The interface will be in %1 after a restart. Unsaved work is offered for saving first, and the session reopens.").arg(localeDisplayName(wanted)));
+	QPushButton* restart = m_languageRestartNotice->addAction(tr("Restart Now"), QStringLiteral("refresh"), true);
+	restart->setObjectName(QStringLiteral("languageRestartNow"));
+	connect(restart, &QPushButton::clicked, this, &ApplicationShell::restartToApplyLanguage);
+}
+
+void ApplicationShell::restartToApplyLanguage()
+{
+	QStringList arguments;
+	const QString settingsFile = StudioSettings::overrideFilePath();
+	if (!settingsFile.isEmpty()) {
+		arguments << QStringLiteral("--settings-file") << settingsFile;
+	}
+	// The window closes through its usual save prompts; cancelling one keeps
+	// the studio open and nothing restarts.
+	m_restartPending = true;
+	if (!close()) {
+		m_restartPending = false;
+		statusBar()->showMessage(tr("Restart cancelled: the studio stays open in its current language."));
+		return;
+	}
+	requestStudioRestart(arguments);
+	QTimer::singleShot(0, qApp, []() { QCoreApplication::quit(); });
+}
+
 void ApplicationShell::activateStatusChip(QAbstractButton* chip)
 {
 	if (!chip) {
@@ -17126,7 +18127,10 @@ void ApplicationShell::showAssetContextMenu(QListWidget* list, StudioMode mode, 
 	QAction* applyToSelection = nullptr;
 	QAction* useForPainting = nullptr;
 	QAction* selectInMap = nullptr;
+	QAction* showInMaterials = nullptr;
 	if (mode == StudioMode::Textures) {
+		showInMaterials = menu.addAction(studioIcon(QStringLiteral("shaders")), tr("Show in Materials"));
+		showInMaterials->setToolTip(tr("Show the shaders and materials that read this image, drawn the way the game draws them."));
 		const bool quakeFamilyMap = m_levelMapDocument.format == LevelMapFormat::QuakeMap || m_levelMapDocument.format == LevelMapFormat::Quake3Map;
 		selectInMap = menu.addAction(studioIcon(QStringLiteral("filter")), tr("Select in Open Map"));
 		selectInMap->setToolTip(tr("Select what uses this texture in the map open in Levels."));
@@ -17161,6 +18165,8 @@ void ApplicationShell::showAssetContextMenu(QListWidget* list, StudioMode mode, 
 	} else if (chosen == copyPath) {
 		QGuiApplication::clipboard()->setText(virtualPath);
 		statusBar()->showMessage(tr("Path copied: %1").arg(virtualPath));
+	} else if (chosen && chosen == showInMaterials) {
+		showMaterialsForImage(virtualPath);
 	} else if (chosen && chosen == selectInMap) {
 		setMode(StudioMode::Levels);
 		selectLevelMapObjectsByTexture(mapTextureNameForEntry(virtualPath));
@@ -17482,6 +18488,7 @@ void ApplicationShell::refreshCommandEnablement()
 	m_commands->setEnabled(QStringLiteral("map.hollowSelection"), quakeFamilyMap && levelMapSelectionClippable());
 	m_commands->setEnabled(QStringLiteral("map.carve"), quakeFamilyMap && levelMapSelectionClippable());
 	m_commands->setEnabled(QStringLiteral("map.mergeBrushes"), quakeFamilyMap && levelMapSelectionClippable());
+	refreshLevelEditingCommands();
 	m_commands->setEnabled(QStringLiteral("map.drawSector"), levelMapDoomEditable());
 	if (QAction* tool = m_commands->action(QStringLiteral("map.drawSector"))) {
 		tool->setChecked(m_levelMapViewport && m_levelMapViewport->drawMode());
@@ -17520,6 +18527,9 @@ void ApplicationShell::refreshCommandEnablement()
 	m_commands->setEnabled(QStringLiteral("map.loadLeakTrail"), m_levelMapDocument.format == LevelMapFormat::QuakeMap
 		|| m_levelMapDocument.format == LevelMapFormat::Quake3Map);
 	m_commands->setEnabled(QStringLiteral("map.clearLeakTrail"), !m_leakTrailPath.isEmpty());
+	m_commands->setEnabled(QStringLiteral("map.loadPortals"), m_levelMapDocument.format == LevelMapFormat::QuakeMap
+		|| m_levelMapDocument.format == LevelMapFormat::Quake3Map);
+	m_commands->setEnabled(QStringLiteral("map.clearPortals"), !m_levelPortalPath.isEmpty());
 	m_commands->setEnabled(QStringLiteral("code.save"), hasCodeDocument() && (m_codeDirty || m_codeFilePath.isEmpty()) && m_codeEditor && !m_codeEditor->isReadOnly());
 	m_commands->setEnabled(QStringLiteral("code.saveAs"), hasCodeDocument() && m_codeTabs.at(m_codeTab).source.editable());
 	m_commands->setEnabled(QStringLiteral("code.goToLine"), hasCodeDocument());
@@ -17554,6 +18564,7 @@ void ApplicationShell::refreshCommandEnablement()
 	m_commands->setEnabled(QStringLiteral("build.deployPrepared"), preparedLevelBuildWorkspaceActive() && !m_buildPipelineThread && preparedLevelBuildCanLaunch());
 	if (auto* button = findChild<QToolButton*>(QStringLiteral("buildPrepareWorkspace"))) { button->setEnabled(canPrepareBuild); }
 	m_commands->setEnabled(QStringLiteral("compiler.run"), m_compilerRunThread == nullptr);
+	refreshLevelCameraPlacementTools();
 	refreshSurfaceStates();
 	scheduleStatusChipRefresh();
 }
@@ -17618,7 +18629,16 @@ void ApplicationShell::closeEvent(QCloseEvent* event)
 	// session records one, and not while a crashed one is still on offer or
 	// another studio owns the record.
 	if (m_recordingSession && !m_sessionOfferPending && !m_secondaryInstance) {
-		m_settings.setLastSession(currentSession());
+		StudioSession session = currentSession();
+		// A restart to change the language hands the session to the studio it
+		// starts, which looks before this process has finished exiting.
+		if (m_restartPending) {
+			session.ownerProcessId = 0;
+		}
+		m_settings.setLastSession(session);
+	}
+	if (m_restartPending) {
+		m_settings.sync();
 	}
 	retireLevelRecovery();
 	m_packageRecoveryClosing = true;
@@ -17740,6 +18760,9 @@ void ApplicationShell::reopenSession(const StudioSession& session, const std::fu
 
 bool ApplicationShell::eventFilter(QObject* watched, QEvent* event)
 {
+	if (watched == m_levelMap3D && m_levelTextureDragMode && handleLevelTextureDragEvent(event)) {
+		return true;
+	}
 	if (event->type() == QEvent::FocusIn || event->type() == QEvent::MouseButtonPress) {
 		if (watched == m_levelMap3D && !m_applyingLevelViewLayout) { m_levelLastFocusedView = m_levelMap3D; }
 		for (auto* view : m_levelPlanViews) {
@@ -18146,6 +19169,11 @@ void ApplicationShell::openDroppedPath(const QString& path)
 	if (info.suffix().compare(QStringLiteral("shader"), Qt::CaseInsensitive) == 0 && m_advancedShaderPath) {
 		m_advancedShaderPath->setText(path);
 		inspectAdvancedShaderScript();
+		setMode(StudioMode::Shaders);
+		return;
+	}
+	if (info.suffix().compare(QStringLiteral("mtr"), Qt::CaseInsensitive) == 0 && m_materialWorkbench) {
+		openMaterialScript(path);
 		setMode(StudioMode::Shaders);
 		return;
 	}
@@ -19016,6 +20044,8 @@ void ApplicationShell::showModelEditor(const ModelMesh* initial)
 	// Register before preparation services UI events, so shell close/reentry can
 	// find the active document and cancel without destroying it.
 	m_modelEditorDialog = editor;
+	// Modeller: the Models preview navigates like the editor's chosen profile.
+	editor->profileChanged = [this]() { applyModelViewportProfile(); };
 	const ModelMesh* selected = initial ? initial : m_modelMesh.geometryAvailable ? &m_modelMesh : nullptr;
 	QString error;
 	if (selected && !editor->setMesh(*selected, &error)) {
@@ -19135,6 +20165,7 @@ void ApplicationShell::showSelectedModel()
 				if (material.ready() && !material.imagePath.isEmpty()) { resolvedSkinPaths << material.imagePath; }
 			}
 			populateModelDetails(m_modelDetails, m_modelMesh, resolvedSkinPaths);
+			refreshModelSkeletonPanel(); // Modeller: joints and clips of skeletal models.
 			if (m_modelViewport) {
 				const bool newGeometry = !m_modelViewport->hasMesh();
 				if (newGeometry) { m_modelViewport->setMesh(m_modelMesh); }
@@ -21373,7 +22404,7 @@ void ApplicationShell::refreshLevelMapViewport()
 	}
 
 	const int projection = m_levelMapProjection ? m_levelMapProjection->currentData().toInt() : 0;
-	if (m_levelViewLayout != LevelViewLayout::FourViews) {
+	if (!levelViewLayoutHasThreePlans(m_levelViewLayout)) {
 		m_levelMapViewport->setProjection(static_cast<MapViewportProjection>(std::clamp(projection, 0, 2)));
 	}
 	if (m_levelMapGrid) {
@@ -21447,6 +22478,9 @@ void ApplicationShell::refreshLevelMapViewport()
 			// is brought up to date by hand rather than left on the last map.
 			m_levelMapHover->setText(m_levelMapViewport->hoverSummary());
 		}
+		// The View tab's filters follow the map: an edit can add a light or a
+		// clip brush they hide.
+		applyLevelViewFilters();
 	}
 	const QSignalBlocker selectionBlocker(m_levelMapViewport);
 	m_levelMapViewport->setSelectionSet(m_levelMapDocument.selection);
@@ -21483,6 +22517,8 @@ void ApplicationShell::reloadEntityDefinitions()
 	}
 
 	m_entityDefinitions = vibestudio::loadEntityDefinitions(paths);
+	m_entityDefinitionsBuiltin = false;
+	m_entityDefinitionsBuiltinGame.clear();
 	if (m_entityDefinitionSummary) {
 		if (m_entityDefinitions.isEmpty()) {
 			m_entityDefinitionSummary->setText(requested.isEmpty()
@@ -21887,7 +22923,7 @@ void ApplicationShell::applyDoomInspectorEdit(QTreeWidgetItem* item, int column,
 		return;
 	}
 	recordActivity(tr("Level map edited"), what, QStringLiteral("level-map"), OperationState::Warning, tr("Unsaved map edit"));
-	statusBar()->showMessage(tr("%1. Use Save As to write a non-destructive copy.").arg(what));
+	statusBar()->showMessage(tr("%1. Use Save Map to update the file after a change check and backup.").arg(what));
 	// As for entity keys: the grid rebuilds once its own signal has returned.
 	QTimer::singleShot(0, this, [this]() {
 		refreshLevelMapWorkbench();
@@ -22487,9 +23523,9 @@ void ApplicationShell::applyEntityInspectorEdit(QTreeWidgetItem* item, int colum
 		}
 		recordActivity(tr("Level map entities edited"), key, QStringLiteral("level-map"), OperationState::Warning, tr("Unsaved map edit"));
 		statusBar()->showMessage(key == QStringLiteral("spawnflags") && column == 0
-				? tr("%1 %2 on %n entit(y)(ies). Use Save As to write a non-destructive copy.", nullptr, static_cast<int>(several.size()))
+				? tr("%1 %2 on %n entit(y)(ies). Use Save Map to update the file after a change check and backup.", nullptr, static_cast<int>(several.size()))
 					  .arg(item->text(0), item->checkState(0) == Qt::Checked ? tr("set") : tr("cleared"))
-				: tr("%1 set to %2 on %n entit(y)(ies). Use Save As to write a non-destructive copy.", nullptr, static_cast<int>(several.size())).arg(key, values.first()));
+				: tr("%1 set to %2 on %n entit(y)(ies). Use Save Map to update the file after a change check and backup.", nullptr, static_cast<int>(several.size())).arg(key, values.first()));
 		// Rebuilding the grid from inside its own itemChanged signal would
 		// delete the item still being edited, so the refresh waits a turn.
 		QTimer::singleShot(0, this, [this]() {
@@ -22540,7 +23576,7 @@ void ApplicationShell::applyEntityInspectorEdit(QTreeWidgetItem* item, int colum
 		return;
 	}
 	recordActivity(tr("Level map entity edited"), key, QStringLiteral("level-map"), OperationState::Warning, tr("Unsaved map edit"));
-	statusBar()->showMessage(tr("%1 set to %2. Use Save As to write a non-destructive copy.").arg(key, value));
+	statusBar()->showMessage(tr("%1 set to %2. Use Save Map to update the file after a change check and backup.").arg(key, value));
 	// Rebuilding the grid from inside its own itemChanged signal would delete
 	// the item that is still being edited, so the refresh waits a turn.
 	QTimer::singleShot(0, this, [this]() {
@@ -22657,6 +23693,24 @@ void ApplicationShell::showLevelMapContextMenu(const QPoint& globalPosition, boo
 	QAction* selectTexture = menu.addAction(studioIcon(QStringLiteral("image")),
 		selectedTexture.isEmpty() ? tr("Select All Using This Texture") : tr("Select All Using %1").arg(selectedTexture));
 	selectTexture->setEnabled(!selectedTexture.isEmpty());
+	// Radiant's region selections use the selection's bounds.
+	QMenu* region = menu.addMenu(studioIcon(QStringLiteral("select-box")), tr("Select by Region"));
+	region->setObjectName(QStringLiteral("levelRegionMenu"));
+	for (const auto& id : {QStringLiteral("map.selectInside"), QStringLiteral("map.selectTouching"), QStringLiteral("map.selectCompleteTall"),
+			 QStringLiteral("map.selectPartialTall")}) {
+		if (QAction* action = m_commands->action(id)) {
+			region->addAction(action);
+		}
+	}
+	region->menuAction()->setEnabled(hasSelection);
+	// A right-click on brushes makes a brush entity of them, as in Radiant.
+	if (textMap) {
+		QMenu* brushEntity = buildLevelBrushEntityMenu(&menu);
+		const QAction* tie = m_commands->action(QStringLiteral("map.tieToEntity"));
+		const QAction* world = m_commands->action(QStringLiteral("map.moveToWorld"));
+		brushEntity->menuAction()->setEnabled((tie && tie->isEnabled()) || (world && world->isEnabled()));
+		menu.addMenu(brushEntity);
+	}
 	menu.addSeparator();
 
 	// Transforms share a submenu so the list stays short.
@@ -22674,6 +23728,14 @@ void ApplicationShell::showLevelMapContextMenu(const QPoint& globalPosition, boo
 	carve->setToolTip(tr("Carve the selected brushes out of every brush they overlap."));
 	carve->setEnabled(textMap && levelMapSelectionClippable());
 	if (auto* merge = m_commands->action(QStringLiteral("map.mergeBrushes"))) { transform->addAction(merge); }
+	if (textMap) {
+		for (const auto& id : {QStringLiteral("map.intersect"), QStringLiteral("map.makeDetail"), QStringLiteral("map.makeStructural"),
+				 QStringLiteral("map.dropToFloor")}) {
+			if (QAction* action = m_commands->action(id)) {
+				transform->addAction(action);
+			}
+		}
+	}
 	QAction* snap = transform->addAction(studioIcon(QStringLiteral("grid")), tr("Snap to Grid"));
 	QAction* rotateLeft = transform->addAction(studioIcon(QStringLiteral("undo")), tr("Rotate 90° Left"));
 	QAction* rotatePrecisely = transform->addAction(studioIcon(QStringLiteral("rotate")), tr("Rotate Selection…"));
@@ -24185,6 +25247,95 @@ void ApplicationShell::clearLeakTrailFromUi()
 	statusBar()->showMessage(tr("Leak trail cleared."));
 }
 
+void ApplicationShell::loadPortalFileFromUi()
+{
+	if (m_levelMapDocument.format != LevelMapFormat::QuakeMap && m_levelMapDocument.format != LevelMapFormat::Quake3Map) {
+		statusBar()->showMessage(tr("Open a Quake-family map before loading its portal file."));
+		return;
+	}
+	const QFileInfo build(openLevelMapBuildPath());
+	const QString guess = build.absoluteDir().filePath(build.completeBaseName() + QStringLiteral(".prt"));
+	const QString path = QFileDialog::getOpenFileName(this, tr("Load Portal File"), QFileInfo::exists(guess) ? guess : build.absolutePath(),
+		tr("Portal files (*.prt);;All files (*)"));
+	if (!path.isEmpty()) {
+		showPortalFile(path);
+	}
+}
+
+bool ApplicationShell::showPortalFile(const QString& path)
+{
+	const PortalFile portals = loadPortalFile(path);
+	if (!portals.valid) {
+		statusBar()->showMessage(tr("Could not load the portals: %1").arg(portals.error), 6000);
+		return false;
+	}
+	m_levelPortalPath = QDir::cleanPath(path);
+	m_levelPortals = portals.portals;
+	for (auto* view : m_levelPlanViews) {
+		view->setPortals(portals.portals);
+	}
+	if (m_levelMap3D) {
+		m_levelMap3D->update();
+	}
+	refreshCommandEnablement();
+	recordActivity(tr("Portal file loaded"), nativePath(path), QStringLiteral("level-map"), OperationState::Completed,
+		tr("%n portal(s) between %1 leaves.", nullptr, static_cast<int>(portals.portals.size())).arg(portals.leafCount));
+	statusBar()->showMessage(tr("Showing %n portal(s) from %1. Build > Clear Portals removes them.", nullptr, static_cast<int>(portals.portals.size()))
+			.arg(QFileInfo(path).fileName()),
+		6000);
+	return true;
+}
+
+void ApplicationShell::clearPortalsFromUi()
+{
+	m_levelPortalPath.clear();
+	m_levelPortals.clear();
+	for (auto* view : m_levelPlanViews) {
+		view->setPortals({});
+	}
+	if (m_levelMap3D) {
+		m_levelMap3D->update();
+	}
+	refreshCommandEnablement();
+}
+
+void ApplicationShell::paintLevelCameraPortals(QPainter& painter)
+{
+	if (m_levelPortals.isEmpty() || !m_levelMap3D || m_levelMap3D->isRendering()) {
+		return;
+	}
+	// The same outlines as the 2D views, through the camera; a portal with
+	// a corner behind the camera is left out rather than drawn torn.
+	const StudioThemeTokens& theme = currentStudioTheme();
+	const bool highContrast = theme.highContrast;
+	QColor edge = highContrast ? theme.colors.text : QColor(255, 112, 72);
+	edge.setAlpha(highContrast ? 230 : 170);
+	QColor fill = edge;
+	fill.setAlpha(highContrast ? 0 : 20);
+	painter.save();
+	painter.setRenderHint(QPainter::Antialiasing, true);
+	painter.setPen(QPen(edge, highContrast ? 1.5 : 1.0));
+	painter.setBrush(fill);
+	const QRectF visible = QRectF(m_levelMap3D->rect()).adjusted(-4, -4, 4, 4);
+	QPolygonF polygon;
+	for (const QVector<LevelMapVec3>& portal : std::as_const(m_levelPortals)) {
+		polygon.clear();
+		bool whole = true;
+		for (const LevelMapVec3& point : portal) {
+			QPointF screen;
+			if (!m_levelMap3D->projectToView(ModelVec3 {static_cast<float>(point.x), static_cast<float>(point.y), static_cast<float>(point.z)}, &screen)) {
+				whole = false;
+				break;
+			}
+			polygon << screen;
+		}
+		if (whole && polygon.boundingRect().intersects(visible)) {
+			painter.drawPolygon(polygon);
+		}
+	}
+	painter.restore();
+}
+
 void ApplicationShell::loadLeakTrailFromFile()
 {
 	if (m_levelMapDocument.format == LevelMapFormat::Unknown) {
@@ -24367,6 +25518,7 @@ void ApplicationShell::closePackage()
 	refreshTextureBrowser();
 	refreshModelBrowser();
 	refreshAudioBrowser();
+	refreshLevelAssetBrowsers();
 	refreshStatusChips();
 	refreshCommandEnablement();
 	statusBar()->showMessage(tr("Package closed."));
@@ -24733,6 +25885,33 @@ QStringList ApplicationShell::captureUiSnapshots(const QString& directory)
 			written.push_back(filePath);
 		}
 	}
+	// With VIBESTUDIO_SNAPSHOT_LEVEL_TABS set, one frame per Levels sidebar
+	// tab as well, for the manual's sidebar pages.
+	if (qEnvironmentVariableIsSet("VIBESTUDIO_SNAPSHOT_LEVEL_TABS") && m_levelLeadingSidebar && m_levelTrailingSidebar) {
+		setMode(StudioMode::Levels);
+		const QString leadingCurrent = m_levelLeadingSidebar->currentPageId();
+		const QString trailingCurrent = m_levelTrailingSidebar->currentPageId();
+		const QStringList leadingIds = m_levelLeadingSidebar->pageIds();
+		const QStringList trailingIds = m_levelTrailingSidebar->pageIds();
+		const int count = static_cast<int>(std::max(leadingIds.size(), trailingIds.size()));
+		for (int index = 0; index < count; ++index) {
+			QStringList shown;
+			for (const QStringList* ids : {&leadingIds, &trailingIds}) {
+				if (index < ids->size()) {
+					showLevelSidebarPage(ids->at(index));
+					shown << ids->at(index);
+				}
+			}
+			QCoreApplication::processEvents(QEventLoop::ExcludeUserInputEvents, 50);
+			QCoreApplication::processEvents(QEventLoop::ExcludeUserInputEvents, 50);
+			const QString filePath = QDir(directory).filePath(QStringLiteral("levels-tabs-%1.png").arg(shown.join(QLatin1Char('-'))));
+			if (grab().save(filePath)) {
+				written.push_back(filePath);
+			}
+		}
+		showLevelSidebarPage(leadingCurrent);
+		showLevelSidebarPage(trailingCurrent);
+	}
 	// One more frame with the Activity panel docked, so the panels are
 	// documented too; the panel is closed again afterwards.
 	if (m_activityDock) {
@@ -24794,6 +25973,20 @@ QStringList ApplicationShell::captureUiSnapshots(const QString& directory)
 		const QString filePath = QDir(directory).filePath(QStringLiteral("%1-command-palette.png").arg(descriptors.size() + 4, 2, 10, QLatin1Char('0')));
 		if (frame.save(filePath)) {
 			written.push_back(filePath);
+		}
+	}
+	// The Settings pages people change first: appearance and language, and
+	// accessibility, each from its top.
+	if (m_settingsCategories) {
+		int number = static_cast<int>(descriptors.size()) + 5;
+		for (const QString& category : {QStringLiteral("appearance"), QStringLiteral("accessibility")}) {
+			showSettingsCategory(category);
+			QCoreApplication::processEvents(QEventLoop::ExcludeUserInputEvents, 50);
+			QCoreApplication::processEvents(QEventLoop::ExcludeUserInputEvents, 50);
+			const QString filePath = QDir(directory).filePath(QStringLiteral("%1-settings-%2.png").arg(number++, 2, 10, QLatin1Char('0')).arg(category));
+			if (grab().save(filePath)) {
+				written.push_back(filePath);
+			}
 		}
 	}
 	setMode(originalMode);

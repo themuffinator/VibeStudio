@@ -110,7 +110,7 @@ int main(int argc, char **argv)
 			if (tabs->widget(i)->isAncestorOf(inspect))
 			{
 				tabs->setCurrentIndex(i);
-				page = qobject_cast<QScrollArea *>(tabs->widget(i));
+				page = tests::pageScroll(tabs->widget(i));
 			}
 		ok &= expect(scope->currentIndex() == 0 && !first->isEnabled() && !second->isEnabled(), "default all-pose scan requires a report");
 		const auto beforeSelection = editor.document().selection();
@@ -161,6 +161,9 @@ int main(int argc, char **argv)
 		ok &= expect(preview->animationIndex() == 1, "choose a preview clip outside the reported pose");
 		first->click();
 		preview->frameModel();
+		// Offscreen windows lose activation when another top-level opens.
+		editor.activateWindow();
+		app.processEvents();
 		first->setFocus(Qt::OtherFocusReason);
 		ok &= expect(editor.document().selection().surface == 0 && editor.document().selection().faces == QSet<int>{0} &&
 						 preview->frame() == 1 && !preview->isPlaying() && detail->text().contains("floor") &&

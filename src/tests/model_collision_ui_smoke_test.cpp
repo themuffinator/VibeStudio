@@ -295,7 +295,7 @@ int main(int argc, char **argv)
 			if (tabs->widget(i)->isAncestorOf(boxes))
 			{
 				tabs->setCurrentIndex(i);
-				scroll = qobject_cast<QScrollArea *>(tabs->widget(i));
+				scroll = tests::pageScroll(tabs->widget(i));
 				break;
 			}
 		}

@@ -376,6 +376,10 @@ LevelEditorControls gtkRadiantLevelControls()
 QString levelViewLayoutId(LevelViewLayout layout)
 {
 	switch (layout) {
+	case LevelViewLayout::CameraBesidePlans:
+		return QStringLiteral("camera-beside-plans");
+	case LevelViewLayout::CameraAbovePlans:
+		return QStringLiteral("camera-above-plans");
 	case LevelViewLayout::FourViews:
 		return QStringLiteral("four-views");
 	case LevelViewLayout::Single3D:
@@ -388,9 +392,15 @@ QString levelViewLayoutId(LevelViewLayout layout)
 	return QStringLiteral("single-2d");
 }
 
+bool levelViewLayoutHasThreePlans(LevelViewLayout layout)
+{
+	return layout == LevelViewLayout::FourViews || layout == LevelViewLayout::CameraAbovePlans
+		|| layout == LevelViewLayout::CameraBesidePlans;
+}
+
 bool levelViewLayoutForId(const QString& id, LevelViewLayout* layout)
 {
-	for (const auto candidate : {LevelViewLayout::Single2D, LevelViewLayout::Single3D, LevelViewLayout::CameraAndPlan, LevelViewLayout::FourViews}) {
+	for (const auto candidate : {LevelViewLayout::Single2D, LevelViewLayout::Single3D, LevelViewLayout::CameraAndPlan, LevelViewLayout::FourViews, LevelViewLayout::CameraAbovePlans, LevelViewLayout::CameraBesidePlans}) {
 		if (id == levelViewLayoutId(candidate)) {
 			if (layout) { *layout = candidate; }
 			return true;
@@ -402,6 +412,10 @@ bool levelViewLayoutForId(const QString& id, LevelViewLayout* layout)
 QString levelViewLayoutDisplayName(LevelViewLayout layout)
 {
 	switch (layout) {
+	case LevelViewLayout::CameraBesidePlans:
+		return QCoreApplication::translate("VibeStudioLevelControls", "Camera Beside Plans");
+	case LevelViewLayout::CameraAbovePlans:
+		return QCoreApplication::translate("VibeStudioLevelControls", "Camera Above Plans");
 	case LevelViewLayout::FourViews:
 		return QCoreApplication::translate("VibeStudioLevelControls", "Four views: camera, top, front and side");
 	case LevelViewLayout::Single3D:
@@ -612,8 +626,15 @@ QVector<LevelEditorControlRow> levelEditorControlRows(const LevelEditorControls&
 		row(camera, QCoreApplication::translate("VibeStudioLevelControls", "Zoom the field of view"), QCoreApplication::translate("VibeStudioLevelControls", "%1Wheel").arg(modifierPrefix(c.fieldOfViewWheelModifiers)));
 	}
 	if (!c.flyKeys.isEmpty()) {
+		QStringList speedNotes;
+		if (c.fastModifiers != Qt::NoModifier) {
+			speedNotes << QCoreApplication::translate("VibeStudioLevelControls", "%1 faster").arg(modifierPrefix(c.fastModifiers).chopped(1));
+		}
+		if (c.slowModifiers != Qt::NoModifier) {
+			speedNotes << QCoreApplication::translate("VibeStudioLevelControls", "%1 slower").arg(modifierPrefix(c.slowModifiers).chopped(1));
+		}
 		row(camera, c.flyNeedsLook ? QCoreApplication::translate("VibeStudioLevelControls", "Fly while looking") : QCoreApplication::translate("VibeStudioLevelControls", "Fly"),
-			QCoreApplication::translate("VibeStudioLevelControls", "%1 (%2 faster, %3 slower)").arg(keysText(c.flyKeys), modifierPrefix(c.fastModifiers).chopped(1), modifierPrefix(c.slowModifiers).chopped(1)));
+			speedNotes.isEmpty() ? keysText(c.flyKeys) : QCoreApplication::translate("VibeStudioLevelControls", "%1 (%2)").arg(keysText(c.flyKeys), speedNotes.join(QStringLiteral(", "))));
 	}
 	if (!c.driveKeys.isEmpty()) {
 		row(camera, QCoreApplication::translate("VibeStudioLevelControls", "Drive"), keysText(c.driveKeys));

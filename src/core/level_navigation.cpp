@@ -156,13 +156,13 @@ bool validateCameraViewState(const CameraViewState& state, QString* error)
 }
 bool validateLevelViewState(const LevelViewState& state, QString* error)
 {
-	if (state.layout < LevelViewLayout::Single2D || state.layout > LevelViewLayout::FourViews || state.activePlan < 0 || state.activePlan > 2) {
+	if (state.layout < LevelViewLayout::Single2D || state.layout > LevelViewLayout::CameraBesidePlans || state.activePlan < 0 || state.activePlan > 2) {
 		return fail(error, QCoreApplication::translate("LevelNavigation", "The saved view has an invalid layout or active pane."));
 	}
 	for (int i = 0; i < 3; ++i) {
 		if (!validatePlanViewState(state.plans[i], error)) { return false; }
-		if (state.layout == LevelViewLayout::FourViews && state.plans[i].projection != i) {
-			return fail(error, QCoreApplication::translate("LevelNavigation", "Four-view bookmarks require top, front and side panes in order."));
+		if (levelViewLayoutHasThreePlans(state.layout) && state.plans[i].projection != i) {
+			return fail(error, QCoreApplication::translate("LevelNavigation", "Multi-plan bookmarks require top, front and side panes in order."));
 		}
 	}
 	return validateCameraViewState(state.camera, error);

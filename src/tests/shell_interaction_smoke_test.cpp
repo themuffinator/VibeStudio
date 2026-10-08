@@ -9,6 +9,8 @@ using vibestudio::tests::setObjectSelected;
 // no game data is involved.
 
 #include "app/application_shell.h"
+#include "app/studio_sound_cues.h"
+#include "app/studio_speech.h"
 #include "app/level_ai_edit_dialog.h"
 #include "app/level_generation_dialog.h"
 #include "app/sound_generation_dialog.h"
@@ -19,6 +21,7 @@ using vibestudio::tests::setObjectSelected;
 #include "app/studio_charts.h"
 #include "app/map_viewport.h"
 #include "app/studio_layout.h"
+#include "app/studio_sidebar.h"
 #include "app/studio_icons.h"
 #include "app/syntax_highlight.h"
 #include "app/studio_runtime.h"
@@ -801,9 +804,12 @@ void checkCodeZoom(ApplicationShell& shell, const Fixtures& fixtures);
 void checkCodeTabFixes(ApplicationShell& shell, const Fixtures& fixtures);
 void checkCodeTreeFollowsTab(ApplicationShell& shell, const Fixtures& fixtures);
 void checkNavigationRail(ApplicationShell& shell);
+void checkDockMirroring(ApplicationShell& shell);
+void checkRestoredDockWidths(const Fixtures& fixtures);
 void checkEditorProfiles(ApplicationShell& shell, const Fixtures& fixtures);
 void checkAssistant(ApplicationShell& shell, const Fixtures& fixtures);
 void checkCameraDepth(ApplicationShell& shell, const Fixtures& fixtures);
+void checkAccessibility(ApplicationShell& shell);
 void checkExternalChanges(ApplicationShell& shell, const Fixtures& fixtures);
 void checkInstallationPalette(ApplicationShell& shell, const Fixtures& fixtures);
 void checkDoomTagLinks(const Fixtures& fixtures);
@@ -1239,7 +1245,9 @@ void checkNavigation(ApplicationShell& shell, const Fixtures& fixtures)
 			settle();
 		}
 		auto* categories = child<QListWidget>(shell, "settingsCategories");
-		check(currentPage(shell) == Settings && categories && categories->currentRow() == 2, "The Assistant's Connection button should open the AI settings.");
+		check(currentPage(shell) == Settings && categories && categories->currentItem()
+				&& categories->currentItem()->data(Qt::UserRole).toString() == QStringLiteral("ai"),
+			"The Assistant's Connection button should open the AI settings.");
 		snapshot(shell, "tour-settings");
 		if (assistant) {
 			assistant->hide();
@@ -1929,16 +1937,10 @@ void checkTargetLinks(ApplicationShell& shell)
 	auto* history = child<QListWidget>(shell, "levelMapHistory");
 	check(history && history->count() == 3 && history->currentRow() == 2, "History should list the opened map and both key edits, the last current.");
 	if (history && history->count() == 3) {
-		QTabWidget* inspectorTabs = nullptr;
-		for (QWidget* widget = history; widget && !inspectorTabs; widget = widget->parentWidget()) {
-			inspectorTabs = qobject_cast<QTabWidget*>(widget);
-		}
-		if (inspectorTabs) {
-			inspectorTabs->setCurrentWidget(history);
-			settle();
-			snapshot(shell, "levels-history");
-			inspectorTabs->setCurrentIndex(0);
-		}
+		check(shell.showLevelSidebarTab(QStringLiteral("history")) && history->isVisible(), "The History sidebar tab should show the edit history.");
+		settle();
+		snapshot(shell, "levels-history");
+		shell.showLevelSidebarTab(QStringLiteral("inspector"));
 		activateRow(history, 0);
 		check(map->targetLinkCount() == 0 && history->currentRow() == 0, "Going back to the opened map should undo both edits.");
 		activateRow(history, 2);
@@ -4327,6 +4329,134 @@ void answerNextQuestionNo(const std::shared_ptr<QString>& title)
 // A nearer face hides what is behind it in the camera: a selected brush
 // behind a wall leaves no highlight or hatch on the wall, and with edges
 // shown, its edges stay hidden too.
+// Settings > Accessibility: each choice applies at once and is kept, timed
+// status messages last as long as asked, status messages reach the voice
+// (the silent log engine here), the setup step opens its settings, and a new
+// interface language offers a restart instead of half-translating the window.
+void checkAccessibility(ApplicationShell& shell)
+{
+	ensureActive(shell, "checkAccessibility");
+	trigger(shell, "accessibility.settings");
+	settle();
+	auto* categories = child<QListWidget>(shell, "settingsCategories");
+	check(currentPage(shell) == Settings && categories && categories->currentItem()
+			&& categories->currentItem()->data(Qt::UserRole).toString() == QStringLiteral("accessibility"),
+		"Accessibility Settings should open the Accessibility category.");
+	auto* thickFocus = child<QCheckBox>(shell, "thickFocusIndicator");
+	auto* colorVision = child<QComboBox>(shell, "colorVisionCombo");
+	auto* duration = child<QComboBox>(shell, "messageDurationCombo");
+	auto* speech = child<QCheckBox>(shell, "textToSpeech");
+	auto* statusEvent = child<QCheckBox>(shell, "speechEvent-status-messages");
+	auto* voices = child<QComboBox>(shell, "speechVoiceCombo");
+	auto* locale = child<QComboBox>(shell, "localeCombo");
+	check(thickFocus && colorVision && duration && speech && statusEvent && voices && locale, "The Accessibility and Language pages should hold their controls.");
+	if (!thickFocus || !colorVision || !duration || !speech || !statusEvent || !voices || !locale) {
+		return;
+	}
+	for (QWidget* control : std::initializer_list<QWidget*> {thickFocus, colorVision, duration, speech, statusEvent, voices}) {
+		check(!control->accessibleName().isEmpty() && control->focusPolicy() != Qt::NoFocus, "Every accessibility control should be named and reachable by keyboard.");
+	}
+	// Showing the page starts the (silent) engine and lists its voices.
+	wait(100);
+	check(voices->count() == 3, "The voice list should hold the system voice and the engine's voices.");
+
+	thickFocus->click();
+	settle();
+	check(currentStudioTheme().thickFocusIndicator && currentStudioTheme().metrics.focusWidth == 3 && StudioSettings().accessibilityPreferences().thickFocusIndicator,
+		"A thick focus outline should apply at once and be kept.");
+	colorVision->setCurrentIndex(colorVision->findData(QStringLiteral("red-green")));
+	settle();
+	const QColor success = currentStudioTheme().colors.success;
+	check(success.blue() > success.red() && success.blue() > success.green() && StudioSettings().accessibilityPreferences().colorVision == ColorVision::RedGreen,
+		"The red-green palette should mark success in blue, and be kept.");
+
+	duration->setCurrentIndex(duration->findData(QStringLiteral("until-replaced")));
+	settle();
+	shell.statusBar()->showMessage(QStringLiteral("Accessibility check message"), 150);
+	wait(450);
+	check(shell.statusBar()->currentMessage() == QStringLiteral("Accessibility check message"), "Until replaced should keep a timed status message.");
+
+	clearLoggedSpeechForTesting();
+	speech->click();
+	settle();
+	check(statusEvent->isEnabled(), "Choosing what is read should open once speech is on.");
+	if (!statusEvent->isChecked()) {
+		statusEvent->click();
+		settle();
+	}
+	shell.statusBar()->showMessage(QStringLiteral("Spoken status check"));
+	wait(800);
+	check(loggedSpeechForTesting().contains(QStringLiteral("Spoken status check")), "A status message should be read aloud when status messages are chosen.");
+	const int spoken = loggedSpeechForTesting().size();
+	shell.statusBar()->showMessage(QStringLiteral("Spoken status check"));
+	wait(800);
+	check(loggedSpeechForTesting().size() == spoken, "The same status message should not be read twice running.");
+
+	// Sound cues start off with their volume and test shut; on, the test
+	// plays the three cues in turn.
+	auto* cues = child<QCheckBox>(shell, "soundCues");
+	auto* cueVolume = child<QSlider>(shell, "soundCueVolume");
+	auto* cueTest = child<QAbstractButton>(shell, "soundCueTest");
+	check(cues && cueVolume && cueTest && !cues->accessibleName().isEmpty() && !cueVolume->accessibleName().isEmpty() && !cueTest->accessibleName().isEmpty(),
+		"The sound cue controls should exist and be named.");
+	if (cues && cueVolume && cueTest) {
+		check(!cues->isChecked() && !cueVolume->isEnabled() && !cueTest->isEnabled(), "Sound cues should start off, with their volume and test shut.");
+		clearLoggedSoundCuesForTesting();
+		cues->click();
+		settle();
+		check(cueVolume->isEnabled() && cueTest->isEnabled() && StudioSettings().accessibilityPreferences().soundCues,
+			"Turning sound cues on should open their volume and test, and be kept.");
+		cueTest->click();
+		wait(1700);
+		check(loggedSoundCuesForTesting() == QStringList({QStringLiteral("success"), QStringLiteral("warning"), QStringLiteral("failure")}),
+			"The test should play the finished, warning, and failed cues in turn.");
+		cues->click();
+		settle();
+		check(!StudioSettings().accessibilityPreferences().soundCues, "Turning sound cues off should be kept.");
+	}
+
+	// The setup step's own settings.
+	trigger(shell, "shell.mode.settings");
+	for (int row = 0; row < categories->count(); ++row) {
+		if (categories->item(row)->data(Qt::UserRole).toString() == QStringLiteral("getting-started")) {
+			categories->setCurrentRow(row);
+		}
+	}
+	settle();
+	if (auto* openStep = child<QPushButton>(shell, "setupOpenStep"); openStep && openStep->isVisible()) {
+		openStep->click();
+		settle();
+		check(categories->currentItem() && categories->currentItem()->data(Qt::UserRole).toString() == QStringLiteral("accessibility"),
+			"The Welcome and Access step should open the Accessibility settings.");
+	}
+
+	// A new language waits for a restart, and says so where the language is
+	// chosen.
+	for (int row = 0; row < categories->count(); ++row) {
+		if (categories->item(row)->data(Qt::UserRole).toString() == QStringLiteral("appearance")) {
+			categories->setCurrentRow(row);
+		}
+	}
+	settle();
+	locale->setCurrentIndex(locale->findData(QStringLiteral("de")));
+	settle();
+	auto* restart = child<QPushButton>(shell, "languageRestartNow");
+	check(restart && restart->isVisible(), "Choosing another interface language should offer a restart.");
+	locale->setCurrentIndex(locale->findData(QStringLiteral("system")));
+	settle();
+	check(!child<QPushButton>(shell, "languageRestartNow") || !child<QPushButton>(shell, "languageRestartNow")->isVisible(),
+		"Returning to the running language should withdraw the restart offer.");
+
+	// Put everything back for the checks that follow.
+	speech->click();
+	thickFocus->click();
+	colorVision->setCurrentIndex(colorVision->findData(QStringLiteral("typical")));
+	duration->setCurrentIndex(duration->findData(QStringLiteral("standard")));
+	settle();
+	check(!currentStudioTheme().thickFocusIndicator && currentStudioTheme().colorVision == ColorVision::Typical && !StudioSettings().accessibilityPreferences().textToSpeechEnabled,
+		"The accessibility choices should return to their defaults.");
+}
+
 void checkCameraDepth(ApplicationShell& shell, const Fixtures& fixtures)
 {
 	ensureActive(shell, "checkCameraDepth");
@@ -5228,6 +5358,197 @@ void checkNavigationRail(ApplicationShell& shell)
 	rail->setOpen(false);
 	check(folded(), "With motion reduced the rail should fold without sliding.");
 	rail->setReducedMotion(false);
+}
+
+// The panels open on the trailing side, across the page from the rail: the
+// right here, the left in a right-to-left layout, where the rail moves to the
+// window's right edge. A change of direction mirrors the panels wherever they
+// are, so one the user moved to the rail's side stays there, and Reset Layout
+// brings every panel back to the trailing side.
+void checkDockMirroring(ApplicationShell& shell)
+{
+	ensureActive(shell, "checkDockMirroring");
+	auto* activity = child<QDockWidget>(shell, "activityDock");
+	auto* inspector = child<QDockWidget>(shell, "inspectorDock");
+	auto* assistant = child<QDockWidget>(shell, "assistantDock");
+	auto* rail = shell.findChild<ModeRail*>(QStringLiteral("modeRail"));
+	QWidget* central = shell.centralWidget();
+	check(activity && inspector && assistant && rail && central, "The shell should have its rail and its Activity, Inspector, and Assistant panels.");
+	if (!activity || !inspector || !assistant || !rail || !central) {
+		return;
+	}
+	const auto allIn = [&shell, activity, inspector, assistant](Qt::DockWidgetArea area) {
+		return shell.dockWidgetArea(activity) == area && shell.dockWidgetArea(inspector) == area && shell.dockWidgetArea(assistant) == area;
+	};
+	const auto railAtWindowEdge = [&shell, rail]() {
+		const QRect bounds(rail->mapTo(&shell, QPoint(0, 0)), rail->size());
+		return shell.isRightToLeft() ? bounds.right() == shell.width() - 1 : bounds.left() == 0;
+	};
+	const auto activityAcrossFromRail = [&shell, central, activity]() {
+		if (shell.isRightToLeft()) {
+			return activity->geometry().right() < central->geometry().left();
+		}
+		return activity->geometry().left() > central->geometry().right();
+	};
+	const auto closed = [activity, inspector, assistant]() {
+		return activity->isHidden() && inspector->isHidden() && assistant->isHidden();
+	};
+	// The status bar's Inspector toggle and the View menu's both show the side
+	// the panels open on, compared as rendered.
+	QToolButton* inspectorToggle = nullptr;
+	for (QToolButton* button : shell.statusBar()->findChildren<QToolButton*>()) {
+		if (button->accessibleName() == QStringLiteral("Inspector")) {
+			inspectorToggle = button;
+		}
+	}
+	const auto inspectorGlyph = [inspectorToggle, inspector](const char* glyph) {
+		const QSize size(16, 16);
+		const QImage expected = studioIcon(QString::fromLatin1(glyph)).pixmap(size).toImage();
+		return inspectorToggle && inspectorToggle->icon().pixmap(size).toImage() == expected
+			&& inspector->toggleViewAction()->icon().pixmap(size).toImage() == expected;
+	};
+
+	trigger(shell, "shell.mode.workspace");
+	trigger(shell, "shell.resetLayout");
+	check(allIn(Qt::RightDockWidgetArea) && closed() && inspectorGlyph("sidebar-right"),
+		"Left to right, the panels should start closed on the right, as the Inspector's toggles show.");
+	activity->show();
+	inspector->show();
+	activity->raise();
+	check(waitFor([&]() { return activityAcrossFromRail() && railAtWindowEdge(); }, 3000) && shell.tabifiedDockWidgets(activity).contains(inspector),
+		"Opened, Activity and Inspector should share one panel on the right, with the rail at the window's left edge.");
+	const int width = activity->width();
+
+	// The direction an Arabic or Urdu session starts in.
+	QGuiApplication::setLayoutDirection(Qt::RightToLeft);
+	check(waitFor([&]() { return allIn(Qt::LeftDockWidgetArea) && activityAcrossFromRail() && railAtWindowEdge(); }, 3000),
+		"Right to left, the panels should move to the left, leaving the rail at the window's right edge.");
+	check(shell.tabifiedDockWidgets(activity).contains(inspector) && !activity->isHidden() && !inspector->isHidden() && assistant->isHidden()
+			&& activity->width() == width && activity->geometry().right() >= 0 && inspector->geometry().right() < 0,
+		"Mirrored, the panels should keep their tabs, the one in front, their width, and which of them are open.");
+	check(inspectorGlyph("sidebar-left"), "Right to left, the Inspector's toggles should show a panel on the left.");
+	snapshot(shell, "panels-right-to-left");
+	trigger(shell, "shell.resetLayout");
+	check(allIn(Qt::LeftDockWidgetArea) && closed(), "Right to left, Reset Layout should close the panels on the left.");
+
+	// The user drags the Inspector across to the rail's side; turning the
+	// window back keeps it there.
+	activity->show();
+	inspector->show();
+	shell.addDockWidget(Qt::RightDockWidgetArea, inspector);
+	settle();
+	QGuiApplication::setLayoutDirection(Qt::LeftToRight);
+	check(waitFor([&]() {
+		return shell.dockWidgetArea(inspector) == Qt::LeftDockWidgetArea && shell.dockWidgetArea(activity) == Qt::RightDockWidgetArea
+			&& activityAcrossFromRail() && inspector->geometry().right() < central->geometry().left();
+	}, 3000), "Turned back, a panel moved to the rail's side should stay beside the rail, and the rest across the page from it.");
+
+	trigger(shell, "shell.resetLayout");
+	check(allIn(Qt::RightDockWidgetArea) && closed() && !shell.isRightToLeft() && inspectorGlyph("sidebar-right"),
+		"Reset Layout should close every panel on the right again, and the Inspector's toggles show it there.");
+}
+
+// A panel opened by restoreState() must behave like one opened later: its
+// content can shrink again after the first layout, and its saved width wins.
+void checkRestoredDockWidths(const Fixtures& fixtures)
+{
+	const QString previousSettings = StudioSettings::overrideFilePath();
+	const Qt::LayoutDirection previousDirection = QGuiApplication::layoutDirection();
+	QTemporaryDir directory(QFileInfo(previousSettings).absoluteDir().filePath(QStringLiteral("dock-width-XXXXXX")));
+	check(directory.isValid(), "The restored panel check should have isolated settings.");
+	if (!directory.isValid()) {
+		return;
+	}
+	const auto finishProjectScan = [](ApplicationShell& window) {
+		auto* rows = child<QListWidget>(window, "activityTasks");
+		check(waitFor([rows]() {
+			for (int row = 0; row < rows->count(); ++row) {
+				if (rows->item(row)->text().contains(QStringLiteral("Scan Project Files"))) {
+					return rows->item(row)->data(Qt::UserRole + 1) == QStringLiteral("completed");
+				}
+			}
+			return false;
+		}), "The project file scan should finish before measuring the panel.");
+		settle();
+	};
+	for (const Qt::LayoutDirection direction : {Qt::LeftToRight, Qt::RightToLeft}) {
+		QGuiApplication::setLayoutDirection(direction);
+		for (const bool split : {false, true}) {
+			StudioSettings::setOverrideFilePath(directory.filePath(QStringLiteral("%1-%2.ini").arg(direction).arg(split)));
+			QList<int> savedWidths;
+			{
+				ApplicationShell source;
+				source.resize(1600, 1000);
+				source.show();
+				settle();
+				source.openPathFromCommandLine(fixtures.project);
+				finishProjectScan(source);
+				auto* activity = child<QDockWidget>(source, "activityDock");
+				auto* inspector = child<QDockWidget>(source, "inspectorDock");
+				auto* assistant = child<QDockWidget>(source, "assistantDock");
+				activity->show();
+				inspector->show();
+				assistant->show();
+				activity->raise();
+				if (split) {
+					source.addDockWidget(direction == Qt::LeftToRight ? Qt::LeftDockWidgetArea : Qt::RightDockWidgetArea, inspector);
+				}
+				settle();
+				source.resizeDocks({activity, inspector}, {535, split ? 420 : 535}, Qt::Horizontal);
+				settle();
+				for (QDockWidget* dock : {activity, inspector, assistant}) {
+					savedWidths.append(dock->width());
+				}
+				check(activity->width() == 535, "The source Activity panel should be saved at 535 pixels.");
+				source.close();
+			}
+			// Offscreen's small virtual screen clamps restoreGeometry(). Keep
+			// the saved dock state, with the same available space as its source.
+			{
+				StudioSettings settings;
+				check(!settings.shellWindowState().isEmpty(), "Closing the source should save the open panels.");
+				settings.setShellGeometry({});
+				settings.sync();
+			}
+			{
+				ApplicationShell restored;
+				restored.resize(1600, 1000);
+				restored.show();
+				settle();
+				const QList<QDockWidget*> docks = {child<QDockWidget>(restored, "activityDock"),
+					child<QDockWidget>(restored, "inspectorDock"), child<QDockWidget>(restored, "assistantDock")};
+				const auto verify = [&]() {
+					check(restored.size() == QSize(1600, 1000), "Restored panels must not force the window wider.");
+					for (int index = 0; index < docks.size(); ++index) {
+						QDockWidget* dock = docks[index];
+						std::cout << "Restored " << (direction == Qt::RightToLeft ? "RTL " : "LTR ") << (split ? "split " : "tabbed ")
+							<< dock->objectName().toStdString() << ": saved=" << savedWidths[index] << " width=" << dock->width()
+							<< " minimum=" << dock->minimumWidth() << " content=" << dock->widget()->minimumSizeHint().width() << '\n';
+						check(!dock->isHidden(), "Every saved open panel should reopen.");
+						// Qt parks inactive tabs offscreen at their own sizes until
+						// raised; only the front panel represents the saved area.
+						if (index == 0 || (split && index == 1)) {
+							check(dock->width() == savedWidths[index], "A restored panel should keep its saved width, including after a project opens.");
+						}
+						const int contentMinimum = std::max(dock->widget()->minimumWidth(), dock->widget()->minimumSizeHint().width());
+						const int titleMinimum = dock->titleBarWidget()->minimumSizeHint().width();
+						check(dock->minimumWidth() <= std::max({index == 2 ? 320 : 300, contentMinimum, titleMinimum}),
+							"A panel's minimum should follow its current content, without retaining a transient start-up width.");
+					}
+				};
+				verify();
+				restored.openPathFromCommandLine(fixtures.project);
+				finishProjectScan(restored);
+				verify();
+				auto* rows = child<QListWidget>(restored, "activityTasks");
+				check(rows->horizontalScrollBarPolicy() == Qt::ScrollBarAlwaysOff && rows->textElideMode() != Qt::ElideNone,
+					"Activity paths should elide within the restored panel.");
+				restored.close();
+			}
+		}
+	}
+	StudioSettings::setOverrideFilePath(previousSettings);
+	QGuiApplication::setLayoutDirection(previousDirection);
 }
 
 // The Files tree marks the file in the editor, whichever way the tab changes;
@@ -7354,20 +7675,18 @@ void checkObjectQuery(ApplicationShell& shell, const Fixtures& fixtures)
 	};
 	query(QStringLiteral("class=light"));
 	check(kept(false) == QStringList {QStringLiteral("entity:2")}, "class=light should keep only the light.");
-	// The Objects tab counts what the filter keeps.
+	// The Objects section of the Outliner counts what the filter keeps.
+	SidebarSection* section = nullptr;
+	for (QWidget* parent = objects->parentWidget(); parent && !section; parent = parent->parentWidget()) {
+		section = qobject_cast<SidebarSection*>(parent);
+	}
+	const auto objectsTabText = [section]() { return section ? section->title() : QString(); };
+	// The sidebar whose Outliner tab holds the objects.
 	QTabWidget* outliner = nullptr;
 	for (QWidget* parent = objects->parentWidget(); parent && !outliner; parent = parent->parentWidget()) {
 		outliner = qobject_cast<QTabWidget*>(parent);
 	}
-	const auto objectsTabText = [outliner, objects]() {
-		for (int index = 0; outliner && index < outliner->count(); ++index) {
-			if (outliner->widget(index)->isAncestorOf(objects)) {
-				return outliner->tabBar()->tabData(index).toMap().value(QStringLiteral("text"), outliner->tabText(index)).toString();
-			}
-		}
-		return QString();
-	};
-	check(objectsTabText() == QStringLiteral("Objects (1 of 5)"), "The Objects tab should count what the filter keeps.");
+	check(objectsTabText() == QStringLiteral("Objects (1 of 5)"), "The Objects section should count what the filter keeps.");
 	query(QStringLiteral("origin:24"));
 	check(kept(false) == QStringList {QStringLiteral("entity:1"), QStringLiteral("entity:3")}, "origin:24 should keep the two objects standing at 24.");
 	query(QStringLiteral("light>200"));
@@ -7444,13 +7763,13 @@ void checkObjectQuery(ApplicationShell& shell, const Fixtures& fixtures)
 				menu->close();
 			}
 		});
-		// From another outliner tab: Find brings the Objects tab forward.
+		// From another tab of the sidebar: Find brings the Outliner forward.
 		if (outliner) {
 			outliner->setCurrentIndex((outliner->indexOf(outliner->currentWidget()) + 1) % outliner->count());
 		}
 		emit inspector->customContextMenuRequested(inspector->visualItemRect(lightRow).center());
 		settle();
-		check(outliner && outliner->currentWidget()->isAncestorOf(objects), "Find Objects With This Value should bring the Objects tab forward.");
+		check(outliner && outliner->currentWidget()->isAncestorOf(objects), "Find Objects With This Value should bring the Outliner tab forward.");
 		// Offscreen, the window may not be active again once the menu has gone;
 		// the focus asked for arrives when it is.
 		shell.activateWindow();
@@ -7541,7 +7860,7 @@ void checkObjectQuery(ApplicationShell& shell, const Fixtures& fixtures)
 	filter->clear();
 	settle();
 	check(kept(false).size() == objects->model()->rowCount() && objectsTabText() == QStringLiteral("Objects"),
-		"Clearing the filter should bring every object back, and the tab its plain name.");
+		"Clearing the filter should bring every object back, and the section its plain name.");
 }
 
 // A page header folds its actions to their glyphs when its row runs short of
@@ -8620,6 +8939,9 @@ int main(int argc, char** argv)
 		return 1;
 	}
 	StudioSettings::setOverrideFilePath(settingsDir.filePath(QStringLiteral("settings.ini")));
+	// Speech and sound cues go to silent logs, so no check is ever heard.
+	qputenv("VIBESTUDIO_SPEECH_ENGINE", "log");
+	qputenv("VIBESTUDIO_SOUND_CUES", "log");
 
 	// Invisible on every platform: no window flashes up during a test run, and
 	// nothing depends on a desktop session. The offscreen plugin has no system
@@ -8738,12 +9060,15 @@ int main(int argc, char** argv)
 	RUN_CHECK(checkLargeSelection, shell, fixtures);
 	RUN_CHECK(checkDiagnosticHighlightCost);
 	RUN_CHECK(checkNavigationRail, shell);
+	RUN_CHECK(checkDockMirroring, shell);
+	RUN_CHECK(checkRestoredDockWidths, fixtures);
 	RUN_CHECK(checkEditorProfiles, shell, fixtures);
 	RUN_CHECK(checkAssistant, shell, fixtures);
 	RUN_CHECK(checkGenerators, shell, fixtures);
 	RUN_CHECK(checkMapAiEdit, shell, fixtures);
 	RUN_CHECK(checkSoundGenerator, shell, fixtures);
 	RUN_CHECK(checkCameraDepth, shell, fixtures);
+	RUN_CHECK(checkAccessibility, shell);
 	// Last: these start session recording, which earlier checks do not expect.
 	RUN_CHECK(checkSecondaryInstance, shell, fixtures);
 	RUN_CHECK(checkCrashRecovery, shell, fixtures);

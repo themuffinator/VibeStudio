@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024" role="img" aria-label="VibeStudio">
+<title>VibeStudio</title>
+<defs><linearGradient id="g1" gradientUnits="userSpaceOnUse" x1="0" y1="100" x2="0" y2="924"><stop offset="0" stop-color="#F7A040"/><stop offset="1" stop-color="#D66A0E"/></linearGradient><filter id="s1" x="-20%" y="-20%" width="140%" height="140%" color-interpolation-filters="sRGB"><feDropShadow dx="0" dy="11.04" stdDeviation="12.88" flood-color="#000000" flood-opacity="0.32"/></filter></defs>
+<path d="M298.64 100L725.36 100C835.06 100 924 188.94 924 298.64L924 725.36C924 835.06 835.06 924 725.36 924L298.64 924C188.94 924 100 835.06 100 725.36L100 298.64C100 188.94 188.94 100 298.64 100Z" fill="url(#g1)" filter="url(#s1)"/>
+<path d="M264.33 420.49L426.19 746.04C440.66 775.15 475.99 787.01 505.1 772.54C534.2 758.07 546.07 722.74 531.6 693.64L369.74 368.08C355.27 338.98 319.94 327.11 290.83 341.58C261.73 356.05 249.86 391.38 264.33 420.49Z" fill="#FFFFFF"/>
+<path d="M531.6 746.04L693.45 420.49C707.92 391.38 696.06 356.05 666.95 341.58C637.85 327.11 602.52 338.98 588.05 368.08L426.19 693.64C411.72 722.74 423.58 758.07 452.69 772.54C481.8 787.01 517.12 775.15 531.6 746.04Z" fill="#FFFFFF"/>
+<path d="M662.82 250.82L729.04 250.82L729.04 317.04L662.82 317.04Z" fill="#FFFFFF"/>
+<path d="M709.72 181.85L759.38 181.85L759.38 231.51L709.72 231.51Z" fill="#FFFFFF" fill-opacity="0.8"/>
+<path d="M746.51 128.51L781.46 128.51L781.46 163.46L746.51 163.46Z" fill="#FFFFFF" fill-opacity="0.55"/>
+</svg>

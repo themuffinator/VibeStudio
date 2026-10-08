@@ -117,6 +117,7 @@ QWidget* ApplicationShell::buildLevelMaterialTools()
 	connect(m_levelMap3D, &ModelViewport::surfaceToolChanged, this, [this] {
 		const QSignalBlocker blocker(m_levelMaterialTool);
 		m_levelMaterialTool->setCurrentIndex(static_cast<int>(m_levelMap3D->surfaceTool()));
+		refreshLevelToolShelf();
 	});
 	connect(m_levelMap3D, &ModelViewport::surfaceSampleRequested, this, [this](int triangle) {
 		if (triangle < 0 || triangle >= m_levelPreviewMaterialTargets.size()) { return; }
@@ -219,6 +220,9 @@ void ApplicationShell::refreshLevelMaterialTools(const QVector<LevelMapTextureUs
 {
 	if (!m_levelMaterialTools) { return; }
 	const bool editable = m_levelMapDocument.format == LevelMapFormat::QuakeMap || m_levelMapDocument.format == LevelMapFormat::Quake3Map || levelMapDoomEditable();
+	// The row stays up while the map is editable: showing it only for some
+	// tools would resize the camera on every tool change and cancel a held
+	// gesture, as a changing status line would.
 	m_levelMaterialTools->setVisible(editable);
 	m_levelMap3D->setMaterialGesturesEnabled(editable);
 	if (m_levelPaintContextSerial != m_levelMapLoadSerial) {

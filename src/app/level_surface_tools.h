@@ -13,8 +13,12 @@ class QProgressBar;
 class QToolButton;
 
 namespace vibestudio {
+class SidebarSection;
 class StudioCommandRegistry;
 
+// The Surfaces tab: what to adjust (Target), the steps and buttons that
+// adjust it (Adjust), and the surface clipboard (Copy and Paste), each a
+// sidebar section.
 class LevelSurfaceTools final : public QScrollArea {
 	Q_DECLARE_TR_FUNCTIONS(LevelSurfaceTools)
 public:
@@ -22,6 +26,8 @@ public:
 	static QStringList commandIds();
 	LevelSurfaceRequest request(const QString& command) const;
 	bool singleFace() const;
+	// Target, Adjust and Copy and Paste, for the page to remember.
+	[[nodiscard]] QVector<SidebarSection*> sections() const { return m_sections; }
 	void bindCommands(StudioCommandRegistry& commands);
 	void setTargetSummary(int faces, LevelSurfaceFace inspected, int patches = 0);
 	void setStatus(const QString& text, bool busy);
@@ -43,5 +49,6 @@ private:
 	QToolButton* m_cancel = nullptr;
 	QHash<QString, QToolButton*> m_buttons;
 	QVector<QBoxLayout*> m_rows;
+	QVector<SidebarSection*> m_sections;
 };
 } // namespace vibestudio

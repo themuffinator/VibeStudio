@@ -117,7 +117,7 @@ int main(int argc, char **argv)
 		{
 			return EXIT_FAILURE;
 		}
-		inspector->setCurrentIndex(1);
+		editor.showSidebarPage(QStringLiteral("surface"));
 		for (auto *tabs : editor.findChildren<QTabWidget *>())
 		{
 			for (int i = 0; i < tabs->count(); ++i)

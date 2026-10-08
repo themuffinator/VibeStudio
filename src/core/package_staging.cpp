@@ -167,7 +167,9 @@ QString typeBucket(const QString& virtualPath)
 	if (QStringList {QStringLiteral("wav"), QStringLiteral("ogg"), QStringLiteral("mp3")}.contains(suffix)) {
 		return QStringLiteral("audio");
 	}
-	if (QStringList {QStringLiteral("mdl"), QStringLiteral("md2"), QStringLiteral("md3"), QStringLiteral("mdc"), QStringLiteral("mdr"), QStringLiteral("iqm")}.contains(suffix)) {
+	if (QStringList {QStringLiteral("mdl"), QStringLiteral("md2"), QStringLiteral("md3"), QStringLiteral("mdc"), QStringLiteral("mdr"), QStringLiteral("iqm"),
+			QStringLiteral("md5mesh"), QStringLiteral("md5anim"), QStringLiteral("mds"), QStringLiteral("mdm"), QStringLiteral("mdx"), QStringLiteral("glm"),
+			QStringLiteral("gla"), QStringLiteral("lwo"), QStringLiteral("ase"), QStringLiteral("fm"), QStringLiteral("kvx")}.contains(suffix)) {
 		return QStringLiteral("model");
 	}
 	return suffix;

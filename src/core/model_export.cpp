@@ -1,3 +1,7 @@
+#include "core/model_ase.h"
+#include "core/model_iqm.h"
+#include "core/model_md5.h"
+#include "core/model_skeleton.h"
 #include "core/model_document.h"
 #include "core/model_collision.h"
 #include "core/model_mdl.h"
@@ -612,6 +616,12 @@ QByteArray md3(const ModelMesh &mesh, QString *error, const ModelWorkControl &co
 }
 } // namespace
 
+QStringList modelExportFormatIds()
+{
+	return {QStringLiteral("mdl"), QStringLiteral("md2"), QStringLiteral("md3"), QStringLiteral("obj"), QStringLiteral("md5mesh"),
+			QStringLiteral("md5anim"), QStringLiteral("iqm"), QStringLiteral("ase")};
+}
+
 QByteArray exportEditableModel(const ModelMesh &mesh, const QString &format, int frame, QString *error, const ModelWorkControl &control,
 							   ModelExportReport *report)
 {
@@ -631,6 +641,59 @@ QByteArray exportEditableModel(const ModelMesh &mesh, const QString &format, int
 	if (!errors.isEmpty())
 	{
 		return failure(error, errors.join(QLatin1Char('\n')));
+	}
+	if (format.compare(QStringLiteral("md5mesh"), Qt::CaseInsensitive) == 0 || format.compare(QStringLiteral("md5anim"), Qt::CaseInsensitive) == 0 ||
+		format.compare(QStringLiteral("iqm"), Qt::CaseInsensitive) == 0)
+	{
+		// Skeletal exports pose the edited bind pose: vertices moved there are
+		// rebound to their joints first, and untouched ones keep their offsets.
+		ModelMesh prepared = mesh;
+		const int bindFrame = modelBindPoseFrame(prepared);
+		if (!prepared.skeleton.isEmpty() && bindFrame >= 0)
+		{
+			rebindModelSkinning(&prepared, bindFrame);
+		}
+		if (format.compare(QStringLiteral("md5mesh"), Qt::CaseInsensitive) == 0)
+		{
+			auto result = exportModelMd5Mesh(prepared, {}, error, control);
+			if (!result.isEmpty() && report && prepared.skeleton.isEmpty())
+			{
+				report->notes << QCoreApplication::translate("VibeStudioModelDocument",
+															 "The model has no joints, so the md5mesh binds every vertex to one origin joint.");
+			}
+			return result;
+		}
+		if (format.compare(QStringLiteral("md5anim"), Qt::CaseInsensitive) == 0)
+		{
+			if (prepared.skeleton.isEmpty() || prepared.skeleton.clips.isEmpty())
+			{
+				return failure(error, QCoreApplication::translate("VibeStudioModelDocument",
+																  "An md5anim needs a skeletal clip; this model animates by frames."));
+			}
+			// For md5anim the frame argument names the clip.
+			return exportModelMd5Anim(prepared, std::clamp(frame, 0, int(prepared.skeleton.clips.size()) - 1), {}, error, control);
+		}
+		auto result = exportModelIqm(prepared, error, control);
+		if (!result.isEmpty() && report && prepared.skeleton.isEmpty() && prepared.frames.size() > 1)
+		{
+			report->notes << QCoreApplication::translate("VibeStudioModelDocument",
+														 "IQM animates through joints; this model has none, so the first frame is written as a static mesh.");
+		}
+		return result;
+	}
+	if (format.compare(QStringLiteral("ase"), Qt::CaseInsensitive) == 0)
+	{
+		if (frame < 0 || frame >= mesh.frames.size())
+		{
+			return failure(error, QCoreApplication::translate("VibeStudioModelDocument", "Select a valid frame for ASE export."));
+		}
+		auto result = exportModelAse(mesh, frame, error, control);
+		if (!result.isEmpty() && report && mesh.frames.size() > 1)
+		{
+			report->notes << QCoreApplication::translate("VibeStudioModelDocument",
+														 "ASE holds one static frame; Doom 3, Quake 4 and q3map2 misc_model read it as a static model.");
+		}
+		return result;
 	}
 	if (format.compare(QStringLiteral("md3"), Qt::CaseInsensitive) == 0)
 	{

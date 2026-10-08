@@ -1,9 +1,9 @@
 # Level Scene Organization
 
 Levels has a Scene tab for named layers, nested groups, object assignment,
-selection, inherited visibility and editing locks. GUI and CLI share the map document, undo
-history and native-map persistence. The broader editor acceptance matrix remains
-in `LEVEL_EDITOR.md`; linked instances remain an open gate.
+selection, inherited visibility, editing locks and linked copies of groups. GUI and CLI share
+the map document, undo history and native-map persistence. The broader editor acceptance
+matrix remains in `LEVEL_EDITOR.md`.
 
 ## Authoring
 
@@ -64,8 +64,52 @@ map records, not the pixels/audio/model bytes of a shared asset: restaging an
 asset with an unchanged map reference remains available.
 
 Prefab templates currently carry geometry and asset references, not their source
-scene hierarchy. A placement joins Create in; reusable linked groups remain a
-separate acceptance gate.
+scene hierarchy. A placement joins Create in.
+
+## Linked groups
+
+Linked copy (**Create Linked Copy** for the selection's group) copies a group
+beside itself, along x by its width rounded up to 16 units, as a sibling named
+after it ("Pillar 2"), and links the two: the groups share a link id. An edit to
+the content of one copy is then made to every copy, each keeping its own place
+and frame, while moving, turning or mirroring a whole copy changes only that
+copy. A copy's frame is a number of quarter turns about the vertical after an
+optional mirror across x (`linkTurn`, `linkMirror`). This follows TrenchBroom's linked
+groups; the implementation is VibeStudio's own (`core/level_linked_groups.*`).
+
+Every map edit passes through the document's undo stack, and
+`syncLevelLinkedGroups` runs after each one there, so studio and CLI edits behave
+alike. Each linked node keeps, in memory only, the centre and size of its
+content's bounds and three digests of its content relative to that centre:
+where things are (points, planes, origins, keys, texture names and flags), that
+with texture scales, turns and axes, and the texture offsets. The centre moves,
+turns and mirrors with the content. After an edit:
+
+- A copy whose shape is unchanged but whose centre moved was moved whole; only
+  its centre follows. Texture lock may change its offsets as it moves.
+- A copy whose content, turned back about its centre by one of the seven other
+  quarter-turn and mirror frames, is where its things were was turned or
+  mirrored whole: only its frame changes. Checking where things are, not
+  texture turns, recognises it with texture lock on or off.
+- The one copy whose content changed is copied over the other unlocked copies
+  of its link: their content is deleted and replaced with its content, placed
+  by the difference between their centres and its centre before the edit and
+  turned from its frame into theirs, with texture lock. The copies join their
+  groups.
+- Copies changed in different ways by one edit are left as they are; **Update
+  Linked Copies** makes the others match a chosen one.
+- A copy emptied of everything leaves its link instead of emptying the others;
+  a link left with one copy is no link.
+
+The propagation is folded into the edit's own undo step as follow-up commands
+(`LevelMapUndoCommand::followers`, `foldLevelMapFollowUpEdits`), so the step keeps
+the edit's description and details and one Undo restores every copy. Copies are
+rebuilt, so their records get new identities. Turns other than quarter turns
+about the vertical, and turns about other axes, reach every copy.
+A linked group holds brushes, patches and entities, not other layers or groups;
+only Quake-family maps link groups. A locked copy is left as it is and catches
+up with the next edit after it is unlocked. **Separate Linked Copy** unlinks a
+copy, keeping its content; **Select Linked Copies** selects every copy.
 
 Scene visibility does not change compilation, dependency inspection, native saves,
 recovery, or package publication. Hidden placed models retain their asset paths and
@@ -90,8 +134,13 @@ source conflict checks and independent backups apply.
 | `lock` | `--id <UUID> --locked true\|false` |
 | `remove` | `--id <UUID>` |
 | `reset` | Discard all scene organization, retaining geometry |
+| `link` | `--id <UUID> [--offset x,y,z]`: a linked copy of the group, by default beside it along x |
+| `update-links` | `--id <UUID>`: make the group's other unlocked copies match it |
+| `unlink` | `--id <UUID>`: separate the group from its copies |
 
-Creation returns `createdId`. Doom `entity:<id>` selectors canonicalize to
+Creation and `link` return `createdId`; `update-links` reports `updated`. Ordinary
+`map` editing commands keep linked copies in step exactly as the studio does. Doom
+`entity:<id>` selectors canonicalize to
 `thing:<id>`; `worldspawn` itself cannot be assigned. CLI operations reject unknown,
 repeated, irrelevant or missing options before writing. Group selection in the GUI
 is explicit through Select members; ordinary object editing does not automatically
@@ -103,8 +152,12 @@ locks and do not write an output when the edit is refused.
 ## Storage
 
 Version 2 stores bounded base64 JSON with `version`, `sha256` and `nodes`. Each node
-contains `id`, `name`, `parent`, `kind`, `visible`, `locked` and `objects`. Version 1
-is read with every node unlocked; later saves use version 2. UUIDs persist across
+contains `id`, `name`, `parent`, `kind`, `visible`, `locked` and `objects`. Version 3
+adds `link` (the link id or an empty string), `turn` (0 to 3 quarter turns) and
+`mirror` to every node, and is written only when a group is linked; a scene
+without links is still written as version 2. Anchors and
+digests are not saved: they are worked out again when the map opens. Version 1
+is read with every node unlocked. UUIDs persist across
 saves. Bounds are 1,000 nodes, 100,000 explicit members, 32 nested nodes, 128 UTF-16
 code units per name, and a 4 MiB encoded payload. Unrepresentable metadata refuses
 serialization rather than dropping membership.
@@ -177,8 +230,9 @@ No game launch, mouse/keyboard injection or OS capture is authorized by this pla
 ## Implementation status
 
 Production services, native persistence, GUI/CLI controls, structural-edit
-reconciliation and shared preview filtering are implemented. `level-scene-smoke`,
-`level-scene-ui-smoke`, `level-scene-locks-smoke` and `level-scene-cli-smoke` cover these paths, including
+reconciliation, shared preview filtering and linked groups are implemented. `level-scene-smoke`,
+`level-scene-ui-smoke`, `level-scene-locks-smoke`, `level-scene-cli-smoke` and
+`level-linked-groups-smoke` cover these paths, including
 recovery, deterministic PK3 publication and WAD map-group expansion. UI tests use
 semantic Qt controls and `QWidget::render` at 100% and 200% text with high contrast,
 expanded labels and RTL. They inspect native accessible tree metadata and focus
@@ -200,7 +254,8 @@ same cases averaged 5 ms and 23 ms. Typed identity sets and shared-array semanti
 comparisons avoid serializing every unchanged record. Dense Doom protection
 still needs production profiling before claiming interactive performance.
 
-Remaining gates: optional group-aware ordinary picking; reusable linked groups; large production-scene
-latency/memory measurements; native accessibility and macOS/Linux execution.
+Remaining gates: optional group-aware ordinary picking; linked copies turned by other than
+quarter turns about the vertical; large production-scene latency/memory measurements;
+native accessibility and macOS/Linux execution.
 The current UI rebuilds at most 1,000 node rows and stores explicit memberships in
 undo snapshots. Large metadata may therefore require further memory work.

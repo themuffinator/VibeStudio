@@ -1,4 +1,5 @@
 #include "cli/level_scene.h"
+#include "core/level_linked_groups.h"
 #include "core/level_scene.h"
 #include "core/level_scene_locks.h"
 
@@ -11,7 +12,7 @@ LevelSceneCliResult runLevelScene(const QStringList& arguments) {
 	const auto failure = [](int code, const QString& message) { return LevelSceneCliResult{code, message, {}, {}}; };
 	const QSet<QString> globals{"--settings-file", "--locale", "--catalog-root"};
 	const QSet<QString> switches{"--cli", "--json", "--quiet", "--verbose", "--overwrite", "--dry-run"};
-	const QSet<QString> options{"--map-name", "--output", "--id", "--name", "--parent", "--objects", "--kind", "--visible", "--locked"};
+	const QSet<QString> options{"--map-name", "--output", "--id", "--name", "--parent", "--objects", "--kind", "--visible", "--locked", "--offset"};
 	QSet<QString> seen;
 	QHash<QString, QString> values;
 	QStringList positional;
@@ -48,7 +49,8 @@ LevelSceneCliResult runLevelScene(const QStringList& arguments) {
 		return failure(2,
 					   QCoreApplication::translate(
 						   "LevelSceneCli",
-						   "Expected editor scene list|create|rename|move|assign|visibility|lock|remove|reset <map> with operation options."));
+						   "Expected editor scene list|create|rename|move|assign|visibility|lock|remove|reset|link|update-links|unlink <map> with "
+						   "operation options."));
 	}
 	const auto action = positional[2];
 	const auto map = positional[3];
@@ -77,8 +79,11 @@ LevelSceneCliResult runLevelScene(const QStringList& arguments) {
 	} else if (action == QStringLiteral("lock")) {
 		allowed << "--id" << "--locked";
 		required << "--id" << "--locked";
-	} else if (action == QStringLiteral("remove")) {
+	} else if (action == QStringLiteral("remove") || action == QStringLiteral("update-links") || action == QStringLiteral("unlink")) {
 		allowed << "--id";
+		required << "--id";
+	} else if (action == QStringLiteral("link")) {
+		allowed << "--id" << "--offset";
 		required << "--id";
 	} else if (action != QStringLiteral("list") && action != QStringLiteral("reset")) {
 		return failure(2, QCoreApplication::translate("LevelSceneCli", "Unknown scene operation: %1.").arg(action));
@@ -106,6 +111,7 @@ LevelSceneCliResult runLevelScene(const QStringList& arguments) {
 	const auto node = [](QString value) { return value == QStringLiteral("default") ? QString() : value; };
 	const auto id = node(values.value(QStringLiteral("--id")));
 	bool applied = true;
+	int updated = -1;
 	if (action == QStringLiteral("create")) {
 		const auto kind = values.value(QStringLiteral("--kind"));
 		if (kind != QStringLiteral("layer") && kind != QStringLiteral("group")) {
@@ -140,6 +146,25 @@ LevelSceneCliResult runLevelScene(const QStringList& arguments) {
 		applied = removeLevelSceneNode(&document, id, &error);
 	} else if (action == QStringLiteral("reset")) {
 		applied = resetLevelScene(&document, &error);
+	} else if (action == QStringLiteral("link")) {
+		LevelMapVec3 offset = levelLinkedCopyOffset(document, id);
+		if (values.contains(QStringLiteral("--offset"))) {
+			const auto parts = values.value(QStringLiteral("--offset")).split(QLatin1Char(','));
+			bool valid = parts.size() == 3;
+			double xyz[3] = {0.0, 0.0, 0.0};
+			for (int axis = 0; valid && axis < 3; ++axis) {
+				xyz[axis] = parts.at(axis).trimmed().toDouble(&valid);
+			}
+			if (!valid) {
+				return failure(2, QCoreApplication::translate("LevelSceneCli", "The offset must be three numbers: x,y,z."));
+			}
+			offset = {xyz[0], xyz[1], xyz[2], true};
+		}
+		applied = createLinkedLevelGroup(&document, id, offset, &created, &error);
+	} else if (action == QStringLiteral("update-links")) {
+		applied = updateLinkedLevelGroups(&document, id, &updated, &error);
+	} else if (action == QStringLiteral("unlink")) {
+		applied = unlinkLevelGroup(&document, id, &error);
 	}
 	if (!applied) {
 		return failure(4, error);
@@ -151,6 +176,9 @@ LevelSceneCliResult runLevelScene(const QStringList& arguments) {
 					  {QStringLiteral("scene"), levelSceneJson(document)}};
 	if (!created.isEmpty()) {
 		result.payload.insert(QStringLiteral("createdId"), created);
+	}
+	if (updated >= 0) {
+		result.payload.insert(QStringLiteral("updated"), updated);
 	}
 	if (writing) {
 		const auto report = saveLevelMapAs(document, values.value(QStringLiteral("--output")), seen.contains(QStringLiteral("--dry-run")),
@@ -170,12 +198,16 @@ LevelSceneCliResult runLevelScene(const QStringList& arguments) {
 	}
 	const auto lockedNodes = levelSceneLockedNodes(document.scene);
 	for (const auto& item : document.scene.nodes) {
-		result.lines << QStringLiteral("%1  %2  %3  %4")
-							.arg(item.id, item.name,
-								 item.visible ? QCoreApplication::translate("LevelSceneCli", "Visible")
-											  : QCoreApplication::translate("LevelSceneCli", "Hidden"),
-								 lockedNodes.contains(item.id) ? QCoreApplication::translate("LevelSceneCli", "Locked")
-																 : QCoreApplication::translate("LevelSceneCli", "Editable"));
+		QString line = QStringLiteral("%1  %2  %3  %4")
+						   .arg(item.id, item.name,
+								item.visible ? QCoreApplication::translate("LevelSceneCli", "Visible")
+											 : QCoreApplication::translate("LevelSceneCli", "Hidden"),
+								lockedNodes.contains(item.id) ? QCoreApplication::translate("LevelSceneCli", "Locked")
+																: QCoreApplication::translate("LevelSceneCli", "Editable"));
+		if (!item.linkId.isEmpty()) {
+			line += QStringLiteral("  ") + QCoreApplication::translate("LevelSceneCli", "Linked %1").arg(item.linkId);
+		}
+		result.lines << line;
 	}
 	return result;
 }

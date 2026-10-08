@@ -113,20 +113,50 @@
     {
       "label": "VibeStudio: test",
       "type": "shell",
-      "command": "meson",
+      "command": "pwsh",
       "args": [
-        "test",
-        "-C",
+        "-NoProfile",
+        "-ExecutionPolicy",
+        "Bypass",
+        "-File",
+        "${workspaceFolder}/scripts/meson_build.ps1",
+        "-BuildDir",
         "${workspaceFolder}/builddir",
-        "--print-errorlogs"
+        "-Backend",
+        "ninja",
+        "-SkipValidation"
+      ],
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "group": {
+        "kind": "test",
+        "isDefault": true
+      },
+      "problemMatcher": [
+        "$gcc",
+        "$msCompile"
+      ],
+      "detail": "Compile, then run the Meson tests with Qt on PATH (skips repository validation)."
+    },
+    {
+      "label": "VibeStudio: build and launch app",
+      "type": "shell",
+      "command": "pwsh",
+      "args": [
+        "-NoProfile",
+        "-ExecutionPolicy",
+        "Bypass",
+        "-File",
+        "${workspaceFolder}/.vscode/launch-vibestudio.ps1"
       ],
       "dependsOn": "VibeStudio: compile",
       "dependsOrder": "sequence",
       "options": {
         "cwd": "${workspaceFolder}"
       },
-      "group": "test",
-      "problemMatcher": []
+      "problemMatcher": [],
+      "detail": "Compile, then launch the app with Qt on PATH."
     },
     {
       "label": "VibeStudio: launch app (no build)",
@@ -162,6 +192,48 @@
       },
       "problemMatcher": [],
       "detail": "Launch the already-built CLI help. This task never configures, compiles, or tests."
+    },
+    {
+      "label": "VibeStudio: build docs site",
+      "type": "shell",
+      "command": "python",
+      "args": [
+        "${workspaceFolder}/scripts/build_docs_site.py",
+        "--output",
+        "${workspaceFolder}/build/docs-site"
+      ],
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "problemMatcher": [],
+      "detail": "Render docs/manual as the HTML documentation in build/docs-site (fails on broken links)."
+    },
+    {
+      "label": "VibeStudio: regenerate branding",
+      "type": "shell",
+      "command": "python",
+      "args": [
+        "${workspaceFolder}/scripts/generate_branding.py"
+      ],
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "problemMatcher": [],
+      "detail": "Rebuild every logo, icon and installer image under assets/branding (docs/BRANDING.md)."
+    },
+    {
+      "label": "VibeStudio: check changelog and version",
+      "type": "shell",
+      "command": "python",
+      "args": [
+        "${workspaceFolder}/scripts/changelog.py",
+        "check"
+      ],
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "problemMatcher": [],
+      "detail": "Validate CHANGELOG.md (docs/RELEASING.md)."
     }
   ]
 }

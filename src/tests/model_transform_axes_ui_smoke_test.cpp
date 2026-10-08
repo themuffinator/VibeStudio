@@ -204,6 +204,8 @@ int main(int argc, char **argv)
 			auto *accessible = QAccessible::queryAccessibleInterface(control);
 			ok &= expect(accessible && !accessible->text(QAccessible::Name).isEmpty() && !accessible->text(QAccessible::Description).isEmpty() && control->focusPolicy() != Qt::NoFocus, "axes controls expose help, names and keyboard focus");
 		}
+		editor.activateWindow();
+		app.processEvents();
 		angles[0]->setFocus(Qt::OtherFocusReason);
 		ok &= expect(angles[0]->hasFocus() && angles[0]->layoutDirection() == Qt::LeftToRight, "custom angle field retains numeric direction and focus in RTL");
 		for (auto *scroll : editor.findChildren<QScrollArea *>())

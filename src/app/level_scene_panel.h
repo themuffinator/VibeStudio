@@ -44,5 +44,10 @@ class LevelScenePanel final : public QWidget {
 	QPushButton* m_remove = nullptr;
 	QPushButton* m_assign = nullptr;
 	QPushButton* m_reset = nullptr;
+	// Linked copies of the chosen group (core/level_linked_groups.h).
+	QPushButton* m_linkCopy = nullptr;
+	QPushButton* m_unlink = nullptr;
+	QPushButton* m_updateLinks = nullptr;
+	QPushButton* m_selectLinks = nullptr;
 };
 } // namespace vibestudio

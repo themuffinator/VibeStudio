@@ -8,6 +8,7 @@
 namespace vibestudio {
 namespace {
 ModelVec3 modelPoint(BoxResizePoint point) { return {float(point[0]),float(point[1]),float(point[2])}; }
+BoxResizePoint coordinates(ModelVec3 point) { return {point.x,point.y,point.z}; }
 bool finite(QPointF point) { return std::isfinite(point.x()) && std::isfinite(point.y()); }
 bool held(Qt::KeyboardModifiers current, Qt::KeyboardModifiers required)
 {
@@ -39,15 +40,54 @@ void ModelViewport::setBrushDrawTool(bool enabled)
 	Q_EMIT brushDrawToolChanged();
 }
 
-bool ModelViewport::setBrushDrawPlane(int axis, double base, double depth, Qt::KeyboardModifiers square, Qt::KeyboardModifiers cube)
+bool ModelViewport::setBrushDrawPlane(int axis, double base, double depth, Qt::KeyboardModifiers square, Qt::KeyboardModifiers cube, int direction)
 {
-	if (axis < 0 || axis > 2 || !std::isfinite(base) || !std::isfinite(depth) || base < -32768 || depth < 1 || base+depth > 32768) { return false; }
+	if (axis < 0 || axis > 2 || (direction != 1 && direction != -1) || !std::isfinite(base) || !std::isfinite(depth)
+		|| std::abs(base) > 32768 || depth < 1 || std::abs(base+direction*depth) > 32768) { return false; }
 	if (axis == m_brushDraw.axis && base == m_brushDraw.base && depth == m_brushDraw.depth
-		&& square == m_brushSquareModifiers && cube == m_brushCubeModifiers) { return true; }
+		&& square == m_brushSquareModifiers && cube == m_brushCubeModifiers && direction == m_brushDraw.direction) { return true; }
 	finishBrushDraw(false);
-	m_brushDraw.axis = axis; m_brushDraw.base = base; m_brushDraw.depth = depth;
+	m_brushDraw.axis = axis; m_brushDraw.base = base; m_brushDraw.depth = depth; m_brushDraw.direction = direction;
 	m_brushSquareModifiers = square; m_brushCubeModifiers = cube;
 	setAccessibleDescription(accessibleSummary()); update(); return true;
+}
+
+bool ModelViewport::setBrushDrawPlaneFromSurface(const QPointF& point)
+{
+	if (!isEnabled() || !m_brushDrawTool || m_brushDrawing || m_looking || isMovingSelection()
+		|| isResizingSelection() || m_editMoveActive || m_surfaceStrokeActive || !finite(point)) { return false; }
+	const auto hit = hitAt(point);
+	if (!hit.valid) {
+		Q_EMIT hoverChanged(isRendering() ? tr("The camera is still rendering. Try Use Camera Surface again when it finishes.")
+			: tr("No surface at the centre of the camera. Aim at a floor or wall, then use Camera Surface."));
+		return false;
+	}
+	const auto triangle = m_meshTriangles.at(hit.triangle);
+	const std::array<BoxResizePoint,3> vertices{coordinates(editVertexPosition(triangle.surface,triangle.a)),
+		coordinates(editVertexPosition(triangle.surface,triangle.b)),coordinates(editVertexPosition(triangle.surface,triangle.c))};
+	BoxDrawDrag plane;
+	if (!boxDrawPlaneFromSurface(selectionResizeRay(point),vertices,m_brushDraw.depth,m_moveGrid,&plane)) {
+		Q_EMIT hoverChanged(tr("Cannot construct on this surface from the current view. Aim more directly at it or choose a numeric plane."));
+		return false;
+	}
+	if (!setBrushDrawPlane(plane.axis,plane.base,plane.depth,m_brushSquareModifiers,m_brushCubeModifiers,plane.direction)) { return false; }
+	Q_EMIT hoverChanged(tr("Construction plane set from the camera surface. Sloped faces use the nearest axis plane."));
+	return true;
+}
+
+bool ModelViewport::surfacePointAt(const QPointF& point, CameraSurfacePoint* surface, int* triangleIndex)
+{
+	if (!surface || !isEnabled() || !finite(point) || !QRectF(rect()).contains(point) || m_brushDrawing || m_looking
+		|| isMovingSelection() || isResizingSelection() || m_editMoveActive || m_surfaceStrokeActive
+		|| materialStrokeActive() || isPlaying()) { return false; }
+	const auto hit = hitAt(point);
+	if (!hit.valid || hit.triangle < 0 || hit.triangle >= m_meshTriangles.size()) { return false; }
+	const auto triangle = m_meshTriangles.at(hit.triangle);
+	const std::array<BoxResizePoint,3> vertices{coordinates(editVertexPosition(triangle.surface,triangle.a)),
+		coordinates(editVertexPosition(triangle.surface,triangle.b)),coordinates(editVertexPosition(triangle.surface,triangle.c))};
+	if (!cameraSurfacePoint(selectionResizeRay(point),vertices,surface)) { return false; }
+	if (triangleIndex) { *triangleIndex = hit.triangle; }
+	return true;
 }
 
 bool ModelViewport::beginBrushDraw(const QPointF& point, Qt::KeyboardModifiers modifiers)
@@ -55,7 +95,7 @@ bool ModelViewport::beginBrushDraw(const QPointF& point, Qt::KeyboardModifiers m
 	if (!m_brushDrawTool || !isEnabled() || m_looking || m_brushDrawing || m_pressButton != Qt::NoButton || !finite(point)) { return false; }
 	ensureProjection();
 	BoxDrawDrag next;
-	if (!beginBoxDraw(selectionResizeRay(point),m_brushDraw.axis,m_brushDraw.base,m_brushDraw.depth,m_moveGrid,&next)) {
+	if (!beginBoxDraw(selectionResizeRay(point),m_brushDraw.axis,m_brushDraw.base,m_brushDraw.depth,m_moveGrid,&next,m_brushDraw.direction)) {
 		Q_EMIT hoverChanged(tr("Cannot reach the construction plane here. Reposition the camera or choose another plane.")); return false;
 	}
 	m_brushDraw = next; m_brushDrawing = true; m_brushDrawValid = false; m_brushWheelRemainder = 0;
@@ -98,7 +138,9 @@ QString ModelViewport::brushDrawSummary(bool describeControls) const
 {
 	if (!m_brushDrawTool) { return {}; }
 	const auto plane = QString(QChar(0x2066)) + planeName(m_brushDraw.axis) + QChar(0x2069);
-	QString summary = tr("Draw Brush · %1 at %2 · Depth %3").arg(plane).arg(m_brushDraw.base,0,'g',8).arg(m_brushDraw.depth,0,'g',8);
+	const auto direction = QString(QLatin1Char("XYZ"[m_brushDraw.axis])) + (m_brushDraw.direction > 0 ? QStringLiteral("+") : QStringLiteral("−"));
+	QString summary = tr("Draw Brush · %1 at %2 · Depth %3 · %4").arg(plane).arg(m_brushDraw.base,0,'g',8).arg(m_brushDraw.depth,0,'g',8)
+		.arg(QString(QChar(0x2066))+direction+QChar(0x2069));
 	if (m_brushDrawing) {
 		summary = m_brushDrawValid ? tr("New brush · %1 × %2 × %3 units")
 			.arg(m_brushDrawBox.maxs[0]-m_brushDrawBox.mins[0],0,'g',8)
@@ -122,6 +164,12 @@ void ModelViewport::paintBrushDraw(QPainter& painter)
 	const double spacing = std::max({16.0,m_moveGrid,std::pow(2.0,std::ceil(std::log2(std::max(1.0,m_focusDistance/24))))});
 	BoxResizePoint centre{m_center.x,m_center.y,m_center.z};
 	if (m_brushDrawing) { centre = m_brushDraw.start; }
+	else {
+		BoxDrawDrag focus;
+		if (beginBoxDraw(selectionResizeRay({width()*0.5,height()*0.5}),axis,m_brushDraw.base,m_brushDraw.depth,m_moveGrid,&focus,m_brushDraw.direction)) {
+			centre = focus.start;
+		}
+	}
 	for (int a : {u,v}) { centre[a] = std::round(centre[a]/spacing)*spacing; }
 	centre[axis] = m_brushDraw.base;
 	for (int i = -16; i <= 16; ++i) {
@@ -145,6 +193,13 @@ void ModelViewport::paintBrushDraw(QPainter& painter)
 				if (projectSegment(modelPoint(from),modelPoint(to),&p,&q)) { painter.drawLine(p,q); }
 			}
 		}
+	}
+	if (!m_brushDrawing) {
+		const QPointF aim(width()*0.5,height()*0.5);
+		painter.setPen(QPen(m_highContrast ? QColor(Qt::black) : QColor(20,24,29),4));
+		painter.drawLine(aim-QPointF(8,0),aim+QPointF(8,0)); painter.drawLine(aim-QPointF(0,8),aim+QPointF(0,8));
+		painter.setPen(QPen(color,2));
+		painter.drawLine(aim-QPointF(8,0),aim+QPointF(8,0)); painter.drawLine(aim-QPointF(0,8),aim+QPointF(0,8));
 	}
 	painter.restore();
 }

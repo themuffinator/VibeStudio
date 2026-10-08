@@ -15,6 +15,11 @@ must describe the tested build and its limits; untested platforms remain open.
   projection, island transforms, and predictable material assignment.
 - [ ] Author frame animation, attachment tags, and collision geometry, with
   clear target format limits and working idTech1/2/3 export workflows.
+- [ ] Read the native model formats of idTech 1 to idTech 4 games, keep
+  skeletal data through edits, and write MD5 and IQM back, verified against
+  real game files and the original engines.
+- [ ] Offer familiar controls (Blender, 3ds Max, MilkShape 3D) with matching
+  layouts, reviewed by users of those editors.
 - [ ] Use orthographic and perspective views with correct occlusion, accurate
   picking, framing, snapping, and measurable interaction performance.
 - [ ] Recover from failed edits, cancelled imports/exports, external source
@@ -2147,3 +2152,27 @@ worker described above. MDC, MDR, and IQM
 geometry remains unsupported. The foundation release notes in
 `RELEASE_CANDIDATE.md` describe an older product snapshot and must not be used as
 evidence for the modeller gate above.
+
+## Native Formats, Skeletons And Profiles (2026-10-08)
+
+This milestone adds decoders for Hexen II MDL, Heretic II FM, MDC, MDS,
+MDM/MDX, MDR, Ghoul 2 GLM/GLA, IQM, MD5 mesh and animation, LightWave LWO, ASE,
+Half-Life MDL and KVX, with companion-file lookup, a shared skeleton model and
+MD5, IQM and ASE writers; `.mesh.json` version 8 keeps skeletons. The Mesh
+Editor gains the level editor's sidebar layout, one or four views, and
+VibeStudio, Blender, 3ds Max and MilkShape 3D controls profiles with
+customisation, sharing and CLI parity. See [Native Model Formats](MODEL_FORMATS.md)
+and [Modeller Profiles](MODELLER_PROFILES.md).
+
+Evidence: on the Windows clang-cl debug build, `model-skeleton-smoke`,
+`model-editor-controls-smoke` and the five `model-format-*-smoke` suites cover
+every decoder against fixtures the tests build, malformed input, the companion
+budget, skeletal baking and re-binding, export round trips and every profile's
+conflict check. The existing modeller suites pass with the new layout,
+including 200% text, RTL, expanded translations and both high-contrast themes.
+
+Still open: no decoder has been run against real game files; no MD5, IQM or ASE
+export has been loaded in Doom 3, Quake 4, ioquake3 or q3map2; joints and
+weights cannot be edited; levels of detail beyond the first, game animation
+scripts and run-time blending are not read; and the profiles have not been
+reviewed by users of the editors they follow.

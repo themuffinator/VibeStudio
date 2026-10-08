@@ -398,10 +398,30 @@ static QVector<EditorProfileDescriptor> buildEditorProfileDescriptors()
 		const char* aliases;
 	};
 	static const FamiliarProfile catalog[] = {
+		{"gtkradiant-1-4", QT_TRANSLATE_NOOP("VibeStudioEditorProfiles", "GtkRadiant 1.4 Style"), "GtkRadiant 1.4",
+			QT_TRANSLATE_NOOP("VibeStudioEditorProfiles", "Classic GtkRadiant brush workflow: camera beside plan, 8-unit grid, Shift selection, Alt area selection, Shift+right plan zoom and right-click free look."),
+			QT_TRANSLATE_NOOP("VibeStudioEditorProfiles", "Based on the 1.4.0-era ZeroRadiant source: fixed arrow/comma/period/D/C camera steps, A/Z pitch, Space cloning, Backspace deletion and Shift+B texture fitting. Surface keys use the studio target and step settings. Native component modes, floor stepping, Z-checker, preference import and selected-set texture application are not emulated."),
+			"https://github.com/TTimo/GtkRadiant/tree/5fc27697b313ddb925e57605c9983f5727a3c19f", "gtkradiant-1.4|gtkradiant-1.4.0|gtkradiant-1-4-0|gtk-radiant-1-4|gtk14"},
+		{"gtkradiant-1-5", QT_TRANSLATE_NOOP("VibeStudioEditorProfiles", "GtkRadiant 1.5 Style"), "GtkRadiant 1.5",
+			QT_TRANSLATE_NOOP("VibeStudioEditorProfiles", "GtkRadiant 1.5 selection workflow: Shift area selection, Shift+Alt selection cycling, right-click free look with arrow-key flight, 8-unit grid and Shift+B texture fitting."),
+			QT_TRANSLATE_NOOP("VibeStudioEditorProfiles", "Camera steps outside free look include A/Z pitch; free-look arrows translate. Middle samples a surface and Ctrl+Shift+middle pastes its definition onto the hit face. Area selection adds to the selection rather than toggling its members. Native manipulators, replacement-area selection, fractional grids and Doom 3 authoring are not added by this profile."),
+			"https://github.com/TTimo/GtkRadiant/tree/017673373699174b574c92a262496826a6b409e9", "gtkradiant-1.5|gtkradiant-1.5.0|gtkradiant-1-5-0|gtk-radiant-1-5|gtk15"},
+		{"qeradiant", QT_TRANSLATE_NOOP("VibeStudioEditorProfiles", "QeRadiant Style"), "QeRadiant",
+			QT_TRANSLATE_NOOP("VibeStudioEditorProfiles", "Classic Quake II Radiant workflow: right-button camera steering, Ctrl+right pan, Shift selection, Space cloning, Backspace deletion and Shift+5 or Ctrl+F texture fitting."),
+			QT_TRANSLATE_NOOP("VibeStudioEditorProfiles", "Uses the shared classic Radiant camera and brush services. Q3-only patch, hide/show and texture-lock keys are unassigned. Ctrl+F fits the Surfaces target while a map view has focus. Whole-entity selection mode, animated entity previews, Alt+right texture dragging, Z-checker and native preference import are not emulated."),
+			"https://icculus.org/gtkradiant/documentation/q3radiant_manual/appndx/sskey_dl.htm", "qe-radiant|qer|qe|quake2-radiant|quake-ii-radiant"},
 		{"q3radiant", QT_TRANSLATE_NOOP("VibeStudioEditorProfiles", "Q3Radiant Style"), "Q3Radiant",
 			QT_TRANSLATE_NOOP("VibeStudioEditorProfiles", "Classic id Software Radiant: camera beside plan, 8-unit grid, right-button position steering, Ctrl+right pan, fixed arrow/comma/period/D/C movement and A/Z pitch steps."),
 			QT_TRANSLATE_NOOP("VibeStudioEditorProfiles", "Space clones, Backspace deletes, Insert/Delete zoom, S opens Surface Alignment, Shift+S edits patches and Ctrl+U merges brushes. Shift+arrows shift texture U/V, Shift+Page Up/Down rotate and Shift+5 fits using the Surfaces target and studio steps. Rotation is centre-anchored; native camera-relative UV shifts and additive scale keys are not emulated. Native preference import, Z-checker, floor stepping, End camera levelling, terrain, bend/rotation modes and UV-copying texture gestures remain unsupported. Pan speed and vertical field-of-view sizing follow the studio camera."),
 			"https://github.com/id-Software/Quake-III-Arena/tree/dbe4ddb10315479fc00086f08e25d968b4b43c49/q3radiant", "q3-radiant|quake3-radiant|quake-iii-radiant"},
+		{"doomedit", QT_TRANSLATE_NOOP("VibeStudioEditorProfiles", "DoomEdit Style"), "DoomEdit",
+			QT_TRANSLATE_NOOP("VibeStudioEditorProfiles", "Classic camera steering with right drag, Ctrl+right pan and Ctrl+Shift+right mouse look. Shift+M merges brushes, Ctrl+Shift+H isolates and Home or Ctrl+Tab cycles the plan projection."),
+			QT_TRANSLATE_NOOP("VibeStudioEditorProfiles", "Adapts the Doom 3 GPL editor controls to supported idTech1/2/3 maps. Uses the shared 8-unit grid, brush/patch tools and fixed camera steps. Doom 3 render mode, lights, materials, fractional grids, axial texture tools, floor stepping and native texture gestures are not emulated. Ctrl+U and Shift+U are not assigned brush operations; I remains unbound. This profile adds no Doom 3 or idStudio format support."),
+			"https://github.com/id-Software/DOOM-3/tree/a9c49da5afb18201d31e3f0a429a037e56ce2b9a/neo/tools/radiant", "doom-edit|doom3-radiant|doom3-edit|doom-3-editor|d3radiant"},
+		{"bsp", QT_TRANSLATE_NOOP("VibeStudioEditorProfiles", "BSP Quake Editor Style"), "BSP",
+			QT_TRANSLATE_NOOP("VibeStudioEditorProfiles", "BSP 0.97 camera controls: WASD movement, R/F elevation, Q/E turning, middle-drag look, Shift+middle pan and right-click material sampling. Ctrl+Space clones, Ctrl+X deletes and Z opens surface alignment."),
+			QT_TRANSLATE_NOOP("VibeStudioEditorProfiles", "Uses four shared panes and a 16-unit grid. Shift selects in the plan; right drag pans. Plain camera clicks replace selection and Ctrl toggles it. Shift selection adds rather than cycling on hold; camera relocation, native texture drags and apply gestures, alternate mouse configurations, region bounds, clip-point modes and BSP settings import are not emulated. Ctrl+Shift+Y frames the focused view; Alt+R reveals shared hidden objects. Delete pitches the camera down; use Ctrl+X or keypad minus to delete."),
+			"https://www.bspquakeeditor.com/", "bsp-editor|bsp-quake-editor|bsp-0.97|bsp97"},
 		{"netradiant", QT_TRANSLATE_NOOP("VibeStudioEditorProfiles", "NetRadiant Style"), "NetRadiant",
 			QT_TRANSLATE_NOOP("VibeStudioEditorProfiles", "Standalone Xonotic NetRadiant controls: camera beside plan, 8-unit grid, 110-degree camera, Alt+right plan zoom, Delete/Insert zoom and Space cloning."),
 			QT_TRANSLATE_NOOP("VibeStudioEditorProfiles", "Distinct from NetRadiant Custom: Backspace or Z deletes, Escape or C deselects, Shift+A selects similar and Ctrl+Y redoes. Backtick or Ctrl+Shift+Tab frames the focused view. Camera Tab focus, discrete movement, floor stepping, right-button selection painting and unique cloning are not emulated; Tab keeps keyboard focus navigation."),
@@ -412,7 +432,7 @@ static QVector<EditorProfileDescriptor> buildEditorProfileDescriptors()
 			"https://github.com/LogicAndTrick/sledge/tree/8762a6de07a9fa486d51aff0913cdc0306fd775c", "sledge-editor|sledge2|sledge-2"},
 		{"hammer", QT_TRANSLATE_NOOP("VibeStudioEditorProfiles", "Hammer / Worldcraft Style"), "Hammer",
 			QT_TRANSLATE_NOOP("VibeStudioEditorProfiles", "Four views, Z mouse look, WASD flight, bracket grid steps and F9 build/test for Worldcraft, Hammer and Hammer++ users."),
-			QT_TRANSLATE_NOOP("VibeStudioEditorProfiles", "Classic Hammer uses Ctrl+H to hollow, Shift+Z to maximize/restore the focused pane and Ctrl+A to equalize views. Middle drag looks; right drag pans the camera; middle drag pans the plan. Space-drag, duplicate-on-drag, displacement tools, Source 2 modes and VMF/RMF support are not emulated. Use the shared Duplicate and Select All commands."),
+			QT_TRANSLATE_NOOP("VibeStudioEditorProfiles", "Classic Hammer uses Ctrl+H to hollow, Shift+Z to maximize/restore the focused pane and Ctrl+A to equalize views. Middle drag looks; right drag pans the camera; middle drag pans the plan. Hammer++ aliases select these classic controls and do not emulate its extensions. Space-drag, duplicate-on-drag, displacement tools, Source 2 modes and VMF/RMF support are not emulated. Use the shared Duplicate and Select All commands."),
 			"https://developer.valvesoftware.com/wiki/Hammer_Hotkey_Reference", "worldcraft|valve-hammer|hammer++|hammer-plus-plus"},
 		{"jack", QT_TRANSLATE_NOOP("VibeStudioEditorProfiles", "J.A.C.K. Style"), "J.A.C.K.",
 			QT_TRANSLATE_NOOP("VibeStudioEditorProfiles", "Hammer-family four-view brush workflow, clipping, carving, hollowing and the shared build/test pipeline."),
@@ -468,7 +488,19 @@ static QVector<EditorProfileDescriptor> buildEditorProfileDescriptors()
 		profiles.push_back(descriptor);
 	}
 	for (auto& descriptor : profiles) {
-		if (descriptor.id == QLatin1String("gtkradiant-1-6") || descriptor.id == QLatin1String("q3radiant")) {
+		if (descriptor.id == QLatin1String("gtkradiant-1-6")) {
+			descriptor.aliases = {QStringLiteral("gtkradiant"), QStringLiteral("gtk-radiant"), QStringLiteral("gtk16"),
+				QStringLiteral("gtkradiant-1.6"), QStringLiteral("gtkradiant-1.6.0"), QStringLiteral("gtkradiant-1-6-0")};
+			descriptor.referenceUrl = QStringLiteral("https://github.com/TTimo/GtkRadiant/tree/270af88f3c2471f6773bded0b5760a3115b52965");
+		} else if (descriptor.id == QLatin1String("netradiant-custom")) {
+			descriptor.aliases = {QStringLiteral("nrc"), QStringLiteral("netradiantcustom"), QStringLiteral("net-radiant-custom")};
+			descriptor.referenceUrl = QStringLiteral("https://github.com/Garux/netradiant-custom");
+		} else if (descriptor.id == QLatin1String("trenchbroom")) {
+			descriptor.aliases = {QStringLiteral("tb"), QStringLiteral("trench-broom"), QStringLiteral("trenchbroom-2")};
+			descriptor.referenceUrl = QStringLiteral("https://trenchbroom.github.io/");
+		}
+		if (descriptor.id == QLatin1String("gtkradiant-1-6") || descriptor.id == QLatin1String("gtkradiant-1-4")
+			|| descriptor.id == QLatin1String("q3radiant") || descriptor.id == QLatin1String("qeradiant")) {
 			descriptor.adaptations.append(QCoreApplication::translate("VibeStudioEditorProfiles", "Middle click samples the material and copies a brush face's mapping and flags. Shift+middle paints one material while preserving alignment; Ctrl+middle pastes the copied definition onto the hit brush, Ctrl+Shift+middle onto the hit face. Paste keeps the copied material even if the picker changes and requires matching mapping formats; World projection and Seamless wrap are explicit Surfaces options. Tool and selection remain unchanged. Native selected-set application, brush-depth and light-color sampling remain unsupported."));
 		} else if (descriptor.id == QLatin1String("netradiant")) {
 			descriptor.adaptations.append(QCoreApplication::translate("VibeStudioEditorProfiles", "Middle click samples a brush face's material, mapping and flags. Shift+middle pastes these values onto the hit face while keeping tool and selection. The copied material stays fixed when the picker changes. Native Ctrl and Ctrl+Shift paste aliases are unbound; choose a preferred chord in Gesture Preferences. World projection and Seamless wrap are available in Surfaces. Patch mapping, brush-depth and light-color sampling remain unsupported."));

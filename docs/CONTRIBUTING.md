@@ -43,6 +43,22 @@ python scripts/validate_packaging.py --binary builddir/src/vibestudio
 python scripts/validate_release_assets.py --binary builddir/src/vibestudio
 ```
 
+## Changelog And Documentation
+
+- Every change a user could notice adds one line under `## [Unreleased]` in
+  `CHANGELOG.md`, in the same pull request:
+  `python scripts/changelog.py add fixed "**Packages:** ..."`. CI runs
+  `python scripts/changelog.py check`. [Releasing](RELEASING.md) explains how
+  entries become releases.
+- User-facing behaviour belongs in the [user manual](manual/index.md). Follow
+  the writing style and conventions in [Branding](BRANDING.md#writing-style):
+  task-first headings, honest status labels, UI labels in bold.
+- Design records (`docs/*.md`) hold engineering detail; keep them in step, but
+  don't make users read them to get started.
+- `python scripts/build_docs_site.py` builds the HTML manual and fails on broken
+  links; `python scripts/generate_offline_guide.py` refreshes the single-file
+  guide after manual edits.
+
 ## Accessibility And Localization
 
 - Keep user-visible strings translatable.

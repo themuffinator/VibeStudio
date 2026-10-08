@@ -202,7 +202,7 @@ int main(int argc, char **argv)
 			return 1;
 		ok &= expect(previewSlot->layoutDirection() == Qt::LeftToRight && material->layoutDirection() == Qt::LeftToRight,
 					 "preview indices and path editing retain left-to-right technical order");
-		editor.findChild<QTabWidget *>("meshInspector")->setCurrentIndex(1);
+		editor.showSidebarPage(QStringLiteral("surface"));
 		editor.findChild<QComboBox *>("meshRenderMode")->setCurrentIndex(3);
 		ok &= expect(settle(editor) && colourPixels(uv->pixmap().toImage(), false) > 100, "primary red material reaches the UV view");
 		const auto before = surfaceBytes(editor.document().mesh());

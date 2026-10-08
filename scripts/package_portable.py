@@ -45,6 +45,8 @@ TARGETS: dict[str, dict[str, object]] = {
 
 CANONICAL_DOCS = [
     "README.md",
+    "CHANGELOG.md",
+    "docs/manual/index.md",
     "docs/OFFLINE_USER_GUIDE.md",
     "docs/RELEASE_CANDIDATE.md",
     "docs/PACKAGING.md",
@@ -342,6 +344,7 @@ def build_manifest(
     license_files: list[str],
     checksums_path: str,
     compiled_localization: dict,
+    html_documentation: bool = False,
 ) -> dict:
     included_docs = [relative for relative in CANONICAL_DOCS if (root / relative).exists()]
     localization_root = root / "i18n"
@@ -373,6 +376,7 @@ def build_manifest(
         "includedLocalizationCatalogs": included_localization_catalogs,
         "compiledLocalization": compiled_localization,
         "offlineUserGuide": "docs/OFFLINE_USER_GUIDE.md" if (root / "docs/OFFLINE_USER_GUIDE.md").exists() else "",
+        "htmlDocumentation": "docs/html/index.html" if html_documentation else "",
         "platformReadme": platform_readme,
         "includedSamples": included_samples,
         "licenseBundle": license_bundle,
@@ -398,6 +402,8 @@ def create_package(
     target_architecture: str,
     compiled_translations: Path | None = None,
     source_root: Path | None = None,
+    *,
+    docs_site: Path | None = None,
 ) -> tuple[Path, Path | None]:
     root = source_root if source_root is not None else repo_root()
     binary = binary.resolve()
@@ -421,9 +427,15 @@ def create_package(
     package_dir.mkdir(parents=True)
 
     copy_path(binary, package_dir / "bin" / binary.name)
-    for relative in ("README.md", "VERSION"):
-        copy_path(root / relative, package_dir / relative)
+    for relative in ("README.md", "VERSION", "CHANGELOG.md"):
+        if (root / relative).exists():
+            copy_path(root / relative, package_dir / relative)
     copy_path(root / "docs", package_dir / "docs")
+    if docs_site is not None:
+        # The rendered manual (scripts/build_docs_site.py), opened from docs/html/index.html.
+        if not (docs_site / "index.html").is_file():
+            raise FileNotFoundError(f"HTML documentation has no index.html: {docs_site}")
+        copy_path(docs_site, package_dir / "docs" / "html")
     if (root / "i18n").exists():
         shutil.copytree(root / "i18n", package_dir / "i18n",
                         ignore=shutil.ignore_patterns("__pycache__", "*.pyc", "*.qm"))
@@ -453,6 +465,7 @@ def create_package(
                 license_files,
                 "CHECKSUMS.sha256",
                 compiled_localization,
+                html_documentation=docs_site is not None,
             ),
             indent=2,
         )
@@ -487,6 +500,7 @@ def main() -> int:
     parser.add_argument("--target-platform", choices=["current", "all", *TARGETS.keys()], default="current", help="Portable target platform to stage.")
     parser.add_argument("--target-architecture", default=host_architecture(), help="Target architecture label for the package name and manifest.")
     parser.add_argument("--compiled-translations", type=Path, help="Require and copy all application .qm catalogs from this directory. By default, discover available catalogs beside the Meson binary at ../i18n.")
+    parser.add_argument("--docs-site", type=Path, help="Rendered HTML documentation (scripts/build_docs_site.py) to include as docs/html.")
     args = parser.parse_args()
 
     try:
@@ -500,6 +514,7 @@ def main() -> int:
                 target_platform=target,
                 target_architecture=args.target_architecture,
                 compiled_translations=args.compiled_translations,
+                docs_site=args.docs_site,
             )
             for target in requested_targets(args.target_platform)
         ]

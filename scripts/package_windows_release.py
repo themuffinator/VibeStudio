@@ -107,7 +107,7 @@ def runtime_smoke(package: Path, directory: Path) -> list[dict]:
 
 def package_release(source: Path, build_dir: Path, evidence: Path, sdk: Path, output: Path, *,
                     profile_path: Path = DEFAULT_PROFILE, license_texts: Path | None = None,
-                    runtime_sources: Path | None = None) -> dict:
+                    runtime_sources: Path | None = None, docs_site: Path | None = None) -> dict:
     if sys.platform != 'win32':
         raise ValueError('Windows runtime packaging requires native Windows.')
     for path in [source, build_dir, evidence, sdk, profile_path]:
@@ -134,7 +134,7 @@ def package_release(source: Path, build_dir: Path, evidence: Path, sdk: Path, ou
     print('Staging the application and verified Qt runtime.', file=sys.stderr, flush=True)
     package, _ = create_package(build_dir / 'src/vibestudio.exe', output / 'binary', read_version(source),
                                 include_samples=True, archive=False, target_platform='windows', target_architecture='x86_64',
-                                compiled_translations=build_dir / 'i18n', source_root=source)
+                                compiled_translations=build_dir / 'i18n', source_root=source, docs_site=docs_site)
     deploy(package, sdk, license_texts, archive=False, offscreen=True)
     checks = runtime_smoke(package, output / 'runtime-checks')
     companion = assemble(source, evidence, package, runtime_sources, output / 'source' / (package.name + '-source'),
@@ -182,10 +182,12 @@ def main() -> int:
     parser.add_argument('--profile', type=Path, default=DEFAULT_PROFILE)
     parser.add_argument('--license-texts', type=Path, help='Optional previously collected, verified licence texts.')
     parser.add_argument('--runtime-sources', type=Path, help='Optional previously collected, verified source archives.')
+    parser.add_argument('--docs-site', type=Path, help='Rendered HTML documentation to include as docs/html.')
     args = parser.parse_args()
     try:
         result = package_release(args.source_root, args.build_dir, args.build_evidence, args.qt_prefix, args.output,
-                                 profile_path=args.profile, license_texts=args.license_texts, runtime_sources=args.runtime_sources)
+                                 profile_path=args.profile, license_texts=args.license_texts, runtime_sources=args.runtime_sources,
+                                 docs_site=args.docs_site)
     except (OSError, ValueError, KeyError, subprocess.SubprocessError) as error:
         print(f'Windows release packaging failed: {error}', file=sys.stderr)
         return 1

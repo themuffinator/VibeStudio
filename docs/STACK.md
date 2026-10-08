@@ -246,7 +246,7 @@ library or new dependency was introduced. See [Level Editor](LEVEL_EDITOR.md).
 | Shell UI primitives | Reusable Qt Widgets loading panes, detail drawers, and shared shell semantics | Active | Shared shell components now cover operation state, progress, reduced-motion loading placeholders, collapsible details for logs, metadata, manifests, raw diagnostics, non-color status chip semantics, shortcut metadata, and command-palette entries. |
 | Shell look and feel | Fusion style, an application `QPalette` and stylesheet generated from design tokens (`src/app/studio_theme.*`), and a small `QProxyStyle` for check and radio indicators | Active | Chosen over the platform styles, which ignore a custom palette differently on each OS, and over hand-written per-widget stylesheets. One token set per theme drives every widget, dialog, menu, and dock; the default dark theme takes its visual language from idStudio. No new dependency. |
 | Shell icons | Vector glyphs painted with `QPainter` through a custom `QIconEngine` (`src/app/studio_icons.*`) | Active | Chosen over image assets, which need a design pipeline and QtSvg for crisp scaling, and over the platform style's standard pixmaps, which were invisible on dark themes. Glyphs recolour with the theme at paint time and scale with the text-scale preference. |
-| Shell layout parts | `ModeRail`, `PageHeader`, `EmptyStateView`, `CardFrame`, `DockTitleBar`, `ElidedLabel`, and factory helpers in `src/app/studio_layout.*`; `QDockWidget` for the Activity and Inspector panels | Active | Every work surface is assembled from the same parts, so pages share one anatomy and one set of object names for the stylesheet. |
+| Shell layout parts | `ModeRail`, `PageHeader`, `EmptyStateView`, `CardFrame`, `DockTitleBar`, `ElidedLabel`, and factory helpers in `src/app/studio_layout.*`; `QDockWidget` for the Activity, Inspector, and Assistant panels, docked on the trailing side by `src/app/studio_docks.*` | Active | Every work surface is assembled from the same parts, so pages share one anatomy and one set of object names for the stylesheet. `QMainWindow` keeps dock areas by side in every layout direction, so the saved window state is stored in left-to-right terms and mirrored for right-to-left sessions by swapping the left and right dock area records in the bytes `QMainWindow::saveState()` writes. That format is Qt's own and undocumented, read as Qt 6.10.1 writes it; bytes it cannot read are restored as they are, so a future change in Qt costs the mirroring, never the saved arrangement. |
 | Rich animated surfaces | [Qt Quick/QML](https://doc.qt.io/qt-6/qtquick-index.html) | Planned, bounded | Use for contained high-value surfaces only, such as onboarding, visual status views, or graph-like experiences. Do not rewrite the shell around QML without a migration plan. |
 | Build system | [Meson](https://mesonbuild.com/) + [Ninja](https://ninja-build.org/) | Active | Fast, readable, cross-platform, and suitable for CI. |
 | Automation | Python scripts + GitHub Actions | Active | Good fit for validation, release helpers, documentation checks, and CI orchestration. |
@@ -254,7 +254,7 @@ library or new dependency was introduced. See [Level Editor](LEVEL_EDITOR.md).
 | User settings | Qt `QSettings` plus project overrides | Active | Application shell settings, recent projects, recent terminal activity, editor profile selection, accessibility/language preferences, installation profiles, and project-local overrides are active. |
 | Accessibility | [Qt Accessibility](https://doc.qt.io/qt-6/accessible.html), OS accessibility settings, accessible custom widgets | Active/planned | Shell preference storage and accessible control metadata are active; deeper workflow audits and custom-widget coverage are planned. |
 | Scaling | [Qt High DPI](https://doc.qt.io/qt-6/highdpi.html), layout-driven UI, app text scale preferences | Active/planned | Shell text scale presets are active; broader high-DPI and layout smoke coverage is planned. |
-| Text to speech | [Qt TextToSpeech](https://doc.qt.io/qt-6/qttexttospeech-index.html) | Planned optional module | TTS enablement preference is active; native OS speech playback for task summaries, diagnostics, setup guidance, and warnings is planned. |
+| Text to speech | Platform speech engines: Windows Speech API (SAPI 5 through COM), macOS `say`, Speech Dispatcher or eSpeak NG | Active | `app/studio_speech` speaks task outcomes, status messages, Read Aloud, and the test phrase with the engine the OS provides; nothing is linked beyond `ole32` on Windows, and Unix engines run as separate programs. [Qt TextToSpeech](https://doc.qt.io/qt-6/qttexttospeech-index.html) remains a candidate backend but is not used, since it is not part of every Qt install and could not be verified here. |
 | Localization | [Qt internationalization](https://doc.qt.io/qt-6/internationalization.html), Qt Linguist, `lrelease` at build time, `QTranslator` at run time, `QLocale` | Active | Runtime loading landed this round: `i18n/meson.build` compiles each checked-in `.ts` catalog to a `.qm` with `lrelease`, and `installStudioTranslations` resolves and installs the catalog with `QTranslator`, falling back from the exact locale to the base language to the source language and applying layout direction per locale. `lrelease` is optional, so a toolchain without it still builds and simply runs in the source language. Locale preference storage, pseudo-localization, RTL smoke, `QLocale` formatting, pluralization and expansion samples, stale/untranslated reporting, and dry-run `lupdate` validation remain active; finished translations are still seed catalogs. |
 | Asset index/search | [SQLite](https://sqlite.org/) through [Qt SQL](https://doc.qt.io/qt-6/qtsql-index.html), with [FTS5](https://sqlite.org/fts5.html) where available | Planned | Lightweight local database for project metadata, dependencies, search, diagnostics, and recent activity. |
 | CLI parser | Lightweight Qt `QStringList` router with in-process command registry; [CLI11](https://github.com/CLIUtils/CLI11) deferred | Active | Current router keeps project/package/install/asset/map/shader/sprite/code/extension/compiler/AI/credits subcommands dependency-free with JSON output, quiet/verbose/watch/task-state switches, stable exit codes, and testable command metadata through `cli commands`; CLI11 remains deferred until shell completion and broader validation justify the dependency. |
@@ -275,11 +275,12 @@ library or new dependency was introduced. See [Level Editor](LEVEL_EDITOR.md).
 | Texture authoring/export | Bounded native C++ document/profile services and Qt Widgets | Active | Layers, checksummed projects/recovery, CPU paint/transforms and nine GUI/CLI output profiles share validation and guarded publication. Original native encoders generate previewable indexed mips; explicit indexed PNG uses existing Qt compression/core CRC. Optional external Pillow verifies raster fixtures; it is not bundled or required. No new runtime library or rendering backend. WAD2/Doom namespace staging, CLI package drafts, level/model material handoffs and external compiler acceptance use existing services. Project preparation is cancellable; final publication rechecks destination identity. Release evidence and limits are tracked in [Texture Editor](TEXTURE_EDITOR.md). |
 | Headless map rendering | Deterministic SVG generated as text by `src/core/map_render.cpp` | Active | Chosen this round so a map picture is available from the CLI, from generated documentation, and from CI without a display or a GUI session. It is pure string generation, shares `map_geometry` with the painted viewport, and produces byte-identical output for the same input. |
 | Early 3D preview | Qt `QOpenGLWidget` behind a renderer interface | Planned | Acceptable for MVP preview work while keeping the future backend replaceable. |
+| Material previews | Native C++ CPU renderer per engine (`core/material_render*`), drawing into `QImage` | Active | Chosen 2026-10-08. Each engine's surface rules (Quake III stages and waves, Doom 3 interactions, Doom colormap lighting, Quake and Quake II warps, skies and light styles) are reimplemented on a small rasteriser with perspective-correct sampling, so the GUI, the CLI and tests render identically on every platform with no GPU dependency. Frames run on a worker and shrink to keep animation near 30 frames a second. A GPU path can replace it behind the same API later. |
 | Long-term 3D rendering | [bgfx](https://bkaradzic.github.io/bgfx/overview.html) behind a renderer abstraction | Deferred | Still the intended backend for 3D editor viewports, and still not linked. The 2D work this round deliberately did not pull it in: nothing in the map, texture, audio, or chart surfaces needs a GPU abstraction yet, and adding one would cost packaging and platform work for no current user-visible gain. |
 | Text editing | [`QSyntaxHighlighter`](https://doc.qt.io/qt-6/qsyntaxhighlighter.html) with data-driven language rules; [KSyntaxHighlighting](https://api.kde.org/frameworks/syntax-highlighting/html/index.html) and [Tree-sitter](https://tree-sitter.github.io/tree-sitter/) deferred | Active | Chosen this round. `StudioSyntaxHighlighter` builds its rules from `StudioLanguageDescriptor` records, so plain text, config, idTech3 shader scripts, QuakeC, `.map` source, entity definitions, INI-style key-value files, and JSON are described as data rather than as widget code, and a new language is a new descriptor. Colours come from the active studio theme so high-contrast stays readable. KSyntaxHighlighting and Tree-sitter remain deferred until packaging cost and incremental-parsing value justify the dependencies. |
 | Language services | Native C++/Qt Core stdio LSP client using `QProcess` | Active, bounded | Explicit local connections provide live synchronization, diagnostics, formatting, semantic completion, Quick Info, Parameter Hints, definitions, references, reviewed symbol rename and code actions through shared GUI/CLI services. UTF-16 positions, bounded parsing, version checks, cancellation and shutdown are enforced. Rename and code actions share Search Results and the project replacement writer, preserve open-document Undo and guard CLI writes with the whole plan's hash. Completion resolves deferred metadata/imports before acceptance; completion/formatting share document undo and save. Quick Info and signature documentation share resource-isolated Qt rendering; hints use native inline overload controls. No added library or bundled server. Code actions include lazy edit resolution; server commands remain unsupported. See [Local Language Services](LANGUAGE_SERVICES.md). |
 | Audio | Native WAV/DMX, pinned dr_libs/Xiph compressed decoding, optional [Qt Multimedia](https://doc.qt.io/qt-6/qtmultimedia-index.html) playback | Active, release verification in progress | The [Audio Editor](AUDIO_EDITOR.md), `asset audio-edit`, and `asset audio-export` share bounded float processing, MP3/FLAC/Vorbis import, integer/float WAV precision, optional dither, markers and Doom/Quake-family delivery. Doom DMX joins WAD staging. Direct decoder APIs preserve native rate/channels without miniaudio's unused device/mixer layers; no runtime codec install is needed for editing. Compressed browser audition still uses Qt. Pinned r8brain-free-src 7.5 provides anti-aliased resampling. Standalone capture and Record Tracks are available; the optional pinned PortAudio backend supports explicit duplex devices, punch capture, monitoring and grouped review/import. Physical platform acceptance remains open. |
-| Model formats | Native idTech and polygonal OBJ loaders, optional [Assimp](https://www.assimp.org/) for broader interchange | Active/planned | `src/core/model_mesh.{h,cpp}` decodes Quake MDL (IDPO 6), Quake II MD2 (IDP2 8), and Quake III MD3 (IDP3 15) geometry, resolves skins out of the open package, and writes one frame as Wavefront OBJ. Original `core/model_obj` adds bounded polygon import with independent UV/normal corners and smoothing groups; MTL conversion remains open. Package OBJ geometry and material previews use a cancellable worker. MDC, MDR, and IQM read their headers only. Level dependency audits follow decoded MD2/MD3 material paths through shader scripts and images; original `core/model_skin_bindings` supports explicit Quake III `.skin` authoring import through the shared document transaction and GUI/CLI, including exact staged-package occurrences. Automatic runtime `.skin` selection in browser/level previews remains unsupported. Assimp remains optional for future adjacent import/export. |
+| Model formats | Native idTech and polygonal OBJ loaders, optional [Assimp](https://www.assimp.org/) for broader interchange | Active/planned | `src/core/model_mesh.{h,cpp}` decodes Quake MDL (IDPO 6), Quake II MD2 (IDP2 8), and Quake III MD3 (IDP3 15) geometry, resolves skins out of the open package, and writes one frame as Wavefront OBJ. Since 2026-10-08, in-house decoders in `src/core/model_format_*.cpp` also read Hexen II and Half-Life MDL, Heretic II FM, MDC, MDS, MDM/MDX, MDR, Ghoul 2, IQM, MD5, LWO, ASE and KVX, with skeletons in `core/model_skeleton` and MD5/IQM/ASE writers; no model library is linked (see [Native Model Formats](MODEL_FORMATS.md)). Original `core/model_obj` adds bounded polygon import with independent UV/normal corners and smoothing groups; MTL conversion remains open. Package OBJ geometry and material previews use a cancellable worker. Level dependency audits follow decoded MD2/MD3 material paths through shader scripts and images; original `core/model_skin_bindings` supports explicit Quake III `.skin` authoring import through the shared document transaction and GUI/CLI, including exact staged-package occurrences. Automatic runtime `.skin` selection in browser/level previews remains unsupported. Assimp remains optional for future adjacent import/export. |
 | Static prop authoring | Native C++ geometry and JSON designs in `src/core/model_design.{h,cpp}`, Qt Widgets property editor | Active | Boxes, cylinders, and planes support X/Y/Z rotations and per-part UV transforms, producing deterministic static MD3 or OBJ without new dependencies. Schema-2 sources retain schema-1 read compatibility; a generated checker previews UVs. Generated bytes join the normal package staging plan; immutable plan readers connect model authoring to dependency audits and subset exports. Quake III placement uses the map's undo service. Designs can bake into the editable mesh document; GPU rendering and automatic compiler asset staging remain deferred. |
 | Mesh authoring | `core/model_document`, `core/model_topology`, `core/model_transform`, `core/model_uv`, `core/model_export`, Qt Widgets mesh editor | Active, incomplete | Shared candidate validation, precise vertex and indexed edge selection, conforming splits, bounded all-frame distance welding with seam protection, move/rotate/scale previews with one-step undo, shared GUI/CLI origin/selection/custom pivots and translation/angle/scale snapping, UV edits, bounded history, fingerprint-checked JSON source saves, polygonal OBJ and MDL/MD2/MD3 import, and animated MD2/MD3 plus frame OBJ output. MD2 targets original-renderer limits with persistent skin dimensions, all-pose quantization checks and diagnostics; mesh handoff serializes on the cancellable document worker. GUI and CLI use the same services and package/map handoff. Uses Qt/Core/Gui and the software viewport with per-surface images. Pinned MIT/BSD xatlas supplies automatic UV charts and packing through `core/model_uv_atlas`; the private C++ library runs on the existing worker with bounded allocation, indexed-seam preservation and shape-preserving packing. Material images share the level resolver, load from immutable staged-package snapshots on a separate worker, and refresh on material/package/palette changes; `model materials` exposes matching CLI diagnostics. Checksummed local recovery uses background checkpoints and a cancellable draft chooser, with shared CLI verification. Import/edit/save/export use value-only document workers with progress and cancellation; geometry/serialization poll in batches and native decoders/codecs have bounded-call checkpoints. Worst-case responsiveness, further native formats, and full production interaction remain release gates in [Modeller Release](MODELLER_RELEASE.md). |
 | Attachment authoring | `core/model_tags`, mesh document/recovery, Qt Widgets and software viewport overlays | Active, bounded | Named identity edits span all frames. Rigid pose edits, fixed pivots and snapping share GUI/CLI validation and history; imported basis handedness is retained. Table/origin selection, local-axis overlays, origin/reset/copy controls and MD3 package handoff use existing services. MD2 refuses tags and OBJ frame output reports omitted attachments. Smooth playback shares rigid interpolation with generated poses. The separate linked-assembly workflow below consumes these tags. No new library, mesh-source schema or rendering backend. |
@@ -718,13 +719,19 @@ Use layout-driven UI, OS font/scaling defaults, app-level text scale settings,
 and high-visibility themes. Scaling and localization must be treated as layout
 requirements, not post-release bug categories.
 
-Use Qt TextToSpeech for optional OS-backed TTS. TTS should read selected
+Use the platform's own speech engine for optional OS-backed TTS
+(`src/app/studio_speech.*`: SAPI 5 on Windows, `say` on macOS, Speech
+Dispatcher or eSpeak NG elsewhere), so no voice data ships and nothing leaves
+the machine; Qt TextToSpeech remains a candidate backend. TTS should read selected
 summaries, compiler errors, task outcomes, AI proposals, and setup guidance
 without becoming the only way to receive that information.
 
 Use Qt Linguist, `QTranslator`, and `QLocale` from the beginning. The active
-localization slice defines a shared 20-language target set, seed `.ts`
-catalogs, pseudo-localization, Arabic/Urdu right-to-left smoke coverage,
+localization slice defines a shared 47-language target set (see
+[Supported Languages And Regions](ACCESSIBILITY_LOCALIZATION.md#supported-languages-and-regions)),
+48 `.ts` catalogs, system-language defaults with regional resolution, separate
+region formats, pseudo-localization, Arabic/Urdu/Persian/Hebrew right-to-left
+smoke coverage,
 locale formatting samples, pluralization samples, expansion stress samples,
 representative layout-budget checks, stale/untranslated catalog status reports,
 dry-run `lupdate` extraction validation, and a source scan that fails on
@@ -969,8 +976,10 @@ Two more formats became first-class this round, and both were written from
 public specifications with no game data in the tree. `core/model_mesh.cpp`
 decodes MDL, MD2, and MD3 geometry (vertices, normals, texture coordinates,
 frames, MD3 tags, and embedded MDL skins) and resolves external skin paths
-against the open package. MDC, MDR, and IQM read their headers and say so
-explicitly rather than guessing at layouts the studio has not implemented.
+against the open package. The other idTech 1-4 formats (MDC, MDS, MDM/MDX,
+MDR, Ghoul 2, IQM, MD5, LWO, ASE, Half-Life and Hexen II MDL, FM and KVX) have
+their own in-house decoders written from public source releases and
+specifications; see [Native Model Formats](MODEL_FORMATS.md).
 `core/entity_definitions.cpp` reads Radiant `.def`/`.qc`, Valve `.fgd`, and
 Quake III `.ent` text into one catalogue model, folds base classes into derived
 ones, and bounds every loop because definition files arrive from mod packages
@@ -1007,8 +1016,9 @@ format fidelity:
   timing sampling. Selected skin images prepare on a worker; native elapsed-time
   transport shares immutable textures with model/UV raster work. Indexed image import reuses the
   existing decoder; no library, renderer or cloud dependency is added.
-- Assimp for adjacent model import/export, while keeping native MDL, MD2, MD3,
-  MDC, MDR, IQM, and BSP-related loaders authoritative for game workflows.
+- Assimp for adjacent model import/export (glTF, FBX and the like), while
+  keeping the native idTech 1-4 model loaders and BSP-related loaders
+  authoritative for game workflows.
 
 ## AI Automation Stack
 
@@ -1136,9 +1146,33 @@ pins. `scripts/build_release.py` and `scripts/package_windows_release.py` add
 fresh-build evidence, Windows Qt deployment, runtime checks and matching source
 archives using the runtime/source helpers. PR/nightly Windows jobs are configured
 to upload the pair together; hosted execution must be verified independently.
-These tools do not bundle external compiler executables, sign artifacts or
-publish durable release downloads. macOS/Linux packages still need native Qt
-deployment.
+These tools do not bundle external compiler executables or sign artifacts.
+
+**Release pipeline (2026-10-07).** `VERSION` (Semantic Versioning 2.0) and
+`CHANGELOG.md` (Keep a Changelog 1.1.0) are the release inputs;
+`scripts/release_meta.py` derives the tag, title and every download name from
+them, `scripts/version.py` and `scripts/changelog.py` maintain them, and
+`scripts/release.py` resolves CI metadata, stages assets with `SHA256SUMS.txt`
+and writes release notes. `.github/workflows/release.yml` builds and tests every
+platform, then publishes on a `v<VERSION>` tag or a dispatched run. Native
+packaging per platform: an Inno Setup 6 installer plus the verified portable ZIP
+on Windows (`scripts/package_windows_installer.py`), a `macdeployqt`-deployed,
+ad-hoc-signed `VibeStudio.app` in a create-dmg disk image on macOS
+(`scripts/package_macos_app.py`), and a linuxdeploy AppImage built from
+`meson install --destdir` on Linux (`scripts/package_appimage.py`, using the
+desktop integration in `packaging/`). Decisions: keep Meson as the only build
+system (no CPack), keep packaging logic in Python scripts that run the same way
+locally and in CI, build the AppImage on the oldest supported runner, and ship
+unsigned builds with documented first-launch steps until certificates exist.
+See [Releasing](RELEASING.md).
+
+**Documentation and brand assets.** The user manual is Markdown in
+`docs/manual`, rendered on GitHub and by `scripts/build_docs_site.py`
+(Python-Markdown and Pygments, build-time only) into a static HTML site that
+ships in every package and works from `file://`. Brand artwork is generated by
+`scripts/generate_branding.py` (fontTools, Pillow) from one geometry description
+and the vendored Manrope typeface; the app icon is compiled in as a Qt resource
+and a Windows icon resource. See [Branding](BRANDING.md).
 
 The active About/Credits/license surface is backed by structured metadata in
 `src/core/studio_manifest.*`, exposed through the GUI inspector and CLI

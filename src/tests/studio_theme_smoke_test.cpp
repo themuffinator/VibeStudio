@@ -9,6 +9,7 @@
 #include <QStringList>
 
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <iostream>
 
@@ -53,6 +54,107 @@ bool checkContrast(StudioTheme theme, const char* what, const QColor& foreground
 	const double ratio = contrast(foreground, background);
 	return expect(ratio + 1e-6 >= minimum,
 		themeName(theme) + ": " + what + " contrast " + std::to_string(ratio) + " is below " + std::to_string(minimum));
+}
+
+// Colour-vision deficiency simulation: the severity 1.0 matrices of Machado,
+// Oliveira and Fernandes, "A Physiologically-based Model for Simulation of
+// Color Vision Deficiency" (IEEE TVCG 15(6), 2009), applied in linear RGB.
+// Numbers only; no code is taken from the paper's materials.
+enum class Deficiency { Protanopia, Deuteranopia, Tritanopia };
+
+std::array<double, 3> simulated(const QColor& color, Deficiency deficiency)
+{
+	static const double protan[3][3] = {{0.152286, 1.052583, -0.204868}, {0.114503, 0.786281, 0.099216}, {-0.003882, -0.048116, 1.051998}};
+	static const double deutan[3][3] = {{0.367322, 0.860646, -0.227968}, {0.280085, 0.672501, 0.047413}, {-0.011820, 0.042940, 0.968881}};
+	static const double tritan[3][3] = {{1.255528, -0.076749, -0.178779}, {-0.078411, 0.930809, 0.147602}, {0.004733, 0.691367, 0.303900}};
+	const auto& m = deficiency == Deficiency::Protanopia ? protan : (deficiency == Deficiency::Deuteranopia ? deutan : tritan);
+	const double rgb[3] = {channel(color.redF()), channel(color.greenF()), channel(color.blueF())};
+	std::array<double, 3> out {};
+	for (int row = 0; row < 3; ++row) {
+		out[row] = std::clamp(m[row][0] * rgb[0] + m[row][1] * rgb[1] + m[row][2] * rgb[2], 0.0, 1.0);
+	}
+	return out;
+}
+
+// CIE76 colour difference between two linear-RGB colours (D65).
+double deltaE(const std::array<double, 3>& a, const std::array<double, 3>& b)
+{
+	const auto lab = [](const std::array<double, 3>& c) {
+		const double x = (0.4124 * c[0] + 0.3576 * c[1] + 0.1805 * c[2]) / 0.95047;
+		const double y = 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2];
+		const double z = (0.0193 * c[0] + 0.1192 * c[1] + 0.9505 * c[2]) / 1.08883;
+		const auto f = [](double t) { return t > 0.008856 ? std::cbrt(t) : 7.787 * t + 16.0 / 116.0; };
+		return std::array<double, 3> {116.0 * f(y) - 16.0, 500.0 * (f(x) - f(y)), 200.0 * (f(y) - f(z))};
+	};
+	const std::array<double, 3> p = lab(a);
+	const std::array<double, 3> q = lab(b);
+	return std::sqrt((p[0] - q[0]) * (p[0] - q[0]) + (p[1] - q[1]) * (p[1] - q[1]) + (p[2] - q[2]) * (p[2] - q[2]));
+}
+
+// The colour-vision palettes keep success, warning, and danger apart for the
+// readers they are for, keep 3:1 on every background, and reduced
+// saturation and monochrome keep every contrast ratio as it was.
+bool checkColorVision()
+{
+	bool ok = true;
+	const QVector<StudioTheme> themes = {StudioTheme::Dark, StudioTheme::Light, StudioTheme::HighContrastDark, StudioTheme::HighContrastLight};
+	for (const StudioTheme theme : themes) {
+		AccessibilityPreferences preferences;
+		preferences.theme = theme;
+		const StudioThemeTokens typical = studioThemeTokens(preferences);
+		for (const ColorVision vision : {ColorVision::RedGreen, ColorVision::BlueYellow}) {
+			preferences.colorVision = vision;
+			const StudioThemeTokens tokens = studioThemeTokens(preferences);
+			const StudioThemeColors& c = tokens.colors;
+			const std::string name = themeName(theme) + "/" + colorVisionId(vision).toStdString();
+			for (const QColor& surface : {c.appBackground, c.surface, c.panel, c.panelRaised, c.input}) {
+				for (const QColor& state : {c.success, c.warning, c.danger, c.info}) {
+					ok &= expect(contrast(state, surface) + 1e-6 >= 3.0, name + ": a state colour falls below 3:1 on a background.");
+				}
+			}
+			const QVector<Deficiency> deficiencies = vision == ColorVision::RedGreen
+				? QVector<Deficiency> {Deficiency::Protanopia, Deficiency::Deuteranopia}
+				: QVector<Deficiency> {Deficiency::Tritanopia};
+			for (const Deficiency deficiency : deficiencies) {
+				const auto success = simulated(c.success, deficiency);
+				const auto warning = simulated(c.warning, deficiency);
+				const auto danger = simulated(c.danger, deficiency);
+				ok &= expect(deltaE(success, danger) >= 20.0 && deltaE(warning, danger) >= 20.0 && deltaE(success, warning) >= 20.0,
+					name + ": success, warning, and danger should stay apart (CIE76 20 or more) for the vision the palette is for.");
+			}
+			ok &= expect(c.text == typical.colors.text && c.accent == typical.colors.accent && c.focus == typical.colors.focus,
+				name + ": colour vision should change state colours only.");
+		}
+		for (const ColorVision vision : {ColorVision::Typical, ColorVision::Monochrome}) {
+			for (const bool reduced : {false, true}) {
+				preferences.colorVision = vision;
+				preferences.reducedSaturation = reduced;
+				const StudioThemeTokens tokens = studioThemeTokens(preferences);
+				const StudioThemeColors& c = tokens.colors;
+				const std::string name = themeName(theme) + "/" + colorVisionId(vision).toStdString() + (reduced ? "/reduced" : "");
+				ok &= checkContrast(theme, (name + " selection text").c_str(), c.selectionText, c.selection, 4.5);
+				ok &= checkContrast(theme, (name + " accent text").c_str(), c.accentText, c.accent, 4.5);
+				for (const QColor& state : {c.success, c.warning, c.danger}) {
+					ok &= checkContrast(theme, (name + " state").c_str(), state, c.panel, 3.0);
+				}
+				ok &= expect(std::abs(luminance(c.accent) - luminance(typical.colors.accent)) < 0.003,
+					name + ": desaturation should keep the accent's luminance.");
+				if (vision == ColorVision::Monochrome) {
+					ok &= expect(c.accent.hsvSaturation() <= 3 && c.danger.hsvSaturation() <= 3, name + ": monochrome should leave no colour.");
+				}
+			}
+		}
+		preferences = AccessibilityPreferences {};
+		preferences.theme = theme;
+		preferences.thickFocusIndicator = true;
+		const StudioThemeTokens thick = studioThemeTokens(preferences);
+		ok &= expect(thick.metrics.focusWidth == 3 && thick.thickFocusIndicator, themeName(theme) + ": a thick focus ring is 3px.");
+		ok &= expect(studioStyleSheet(thick).contains(QStringLiteral("padding:")), themeName(theme) + ": a thick ring takes its width out of the padding.");
+		ok &= expect(!studioStyleSheet(typical).contains(QStringLiteral("solid @")), themeName(theme) + ": every token is substituted.");
+	}
+	ok &= expect(colorVisionFromId(QStringLiteral("deuteranopia")) == ColorVision::RedGreen && colorVisionFromId(QStringLiteral("tritanopia")) == ColorVision::BlueYellow,
+		"The deficiency names should select their palettes.");
+	return ok;
 }
 
 } // namespace
@@ -113,6 +215,7 @@ int main(int argc, char** argv)
 			< studioThemeTokens(StudioTheme::Dark, UiDensity::Comfortable, 100).metrics.controlHeight,
 		"Compact density should be tighter than comfortable.");
 	ok &= expect(effectiveStudioTheme(StudioTheme::System) != StudioTheme::System, "System should resolve to a concrete theme.");
+	ok &= checkColorVision();
 
 	// Every glyph the shell and command registry name must exist, so no action
 	// silently loses its icon.
@@ -128,7 +231,8 @@ int main(int argc, char** argv)
 		QStringLiteral("chevron-up"), QStringLiteral("frame"), QStringLiteral("filter"), QStringLiteral("refresh"), QStringLiteral("compare"),
 		QStringLiteral("trash"), QStringLiteral("check"), QStringLiteral("warning"), QStringLiteral("list"), QStringLiteral("tree"),
 		QStringLiteral("clock"), QStringLiteral("sparkle"), QStringLiteral("palette"), QStringLiteral("film"), QStringLiteral("hash"),
-		QStringLiteral("external"), QStringLiteral("minus"), QStringLiteral("plus"),
+		QStringLiteral("external"), QStringLiteral("minus"), QStringLiteral("plus"), QStringLiteral("accessibility"), QStringLiteral("eye"),
+		QStringLiteral("key"),
 	};
 	for (const QString& name : names) {
 		ok &= expect(studioIconExists(name), "Missing studio glyph: " + name.toStdString());

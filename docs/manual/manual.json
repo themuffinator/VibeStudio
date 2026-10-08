@@ -1,0 +1,46 @@
+{
+  "title": "VibeStudio Documentation",
+  "sections": [
+    {
+      "title": "Get started",
+      "pages": [
+        "index",
+        "status",
+        "install",
+        "first-run",
+        "tour"
+      ]
+    },
+    {
+      "title": "Use the studio",
+      "pages": [
+        "projects",
+        "levels",
+        "editor-profiles",
+        "packages",
+        "textures",
+        "materials",
+        "models",
+        "audio",
+        "code",
+        "build-and-launch",
+        "ai"
+      ]
+    },
+    {
+      "title": "Reference",
+      "pages": [
+        "accessibility",
+        "cli",
+        "troubleshooting",
+        "building-from-source"
+      ]
+    },
+    {
+      "title": "Project",
+      "pages": [
+        "changelog"
+      ]
+    }
+  ]
+}

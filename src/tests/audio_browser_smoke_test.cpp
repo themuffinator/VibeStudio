@@ -239,7 +239,7 @@ bool shellWorkflow(QApplication& app, const QString& root, int scale)
 	auto* play = shell.findChild<QToolButton*>(QStringLiteral("audioPlay"))->defaultAction();
 	auto* stop = shell.findChild<QToolButton*>(QStringLiteral("audioStop"))->defaultAction();
 	auto* transport = shell.findChild<AudioPlayback*>(QStringLiteral("audioBrowserPlayback"));
-	auto* waveform = shell.findChild<WaveformView*>();
+	auto* waveform = shell.findChild<WaveformView*>(QStringLiteral("waveformView"));
 	ok &= expect(waitUntil([&] { return list->count() == 2 && play->isEnabled(); }), "asynchronous browser preview becomes playable");
 	if (!play->isEnabled()) { return false; }
 	auto* previewState = dynamic_cast<LoadingPane*>(shell.findChild<QFrame*>(QStringLiteral("audioBrowserState")));

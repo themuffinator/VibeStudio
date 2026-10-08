@@ -71,15 +71,43 @@ struct StudioThemeTokens {
 	int textScalePercent = 100;
 	bool light = false;
 	bool highContrast = false;
+	// Accessibility adjustments, already folded into colors and metrics.
+	ColorVision colorVision = ColorVision::Typical;
+	bool reducedSaturation = false;
+	bool thickFocusIndicator = false;
+	bool thickTextCursor = false;
+	bool steadyTextCursor = false;
+	QString fontFamily;      // empty: the system's interface typeface
+	bool wideTextSpacing = false;
 	StudioThemeColors colors;
 	StudioThemeMetrics metrics;
 };
 
-// Resolves StudioTheme::System to Light or Dark from the platform colour
-// scheme, and passes every other theme through unchanged.
+// How far reduced saturation moves chromatic colours toward grey.
+inline constexpr double kReducedSaturationAmount = 0.6;
+
+// The padding around the mode rail's pin on every side. The style sheet pads
+// the pin with it, and right to left the pin places its own glyph from it.
+inline constexpr int kRailPinPadding = 6;
+
+// Resolves StudioTheme::System from the platform: a high-contrast desktop
+// gives the matching high-visibility theme (Qt 6.10's contrast preference),
+// otherwise the light or dark colour scheme. Every other theme passes
+// through unchanged.
 [[nodiscard]] StudioTheme effectiveStudioTheme(StudioTheme preference);
 
+// Theme, density, and text scale alone, with no accessibility adjustments.
 [[nodiscard]] StudioThemeTokens studioThemeTokens(StudioTheme preference, UiDensity density, int textScalePercent);
+// Everything the preferences ask for: colour vision, reduced saturation,
+// focus and cursor thickness, typeface, and spacing as well.
+[[nodiscard]] StudioThemeTokens studioThemeTokens(const AccessibilityPreferences& preferences);
+
+// Moves a colour toward the grey of the same relative luminance; 1 is fully
+// grey. Contrast ratios are unchanged, since luminance is.
+[[nodiscard]] QColor studioDesaturatedColor(const QColor& color, double amount);
+// A state colour a widget chose itself, passed through the current theme's
+// monochrome or reduced-saturation setting.
+[[nodiscard]] QColor studioAdjustedStateColor(const QColor& color);
 
 [[nodiscard]] QPalette studioPalette(const StudioThemeTokens& tokens);
 [[nodiscard]] QString studioStyleSheet(const StudioThemeTokens& tokens);

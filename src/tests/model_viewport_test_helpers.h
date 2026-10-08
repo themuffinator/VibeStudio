@@ -5,6 +5,7 @@
 #include <QElapsedTimer>
 #include <QEventLoop>
 #include <QImage>
+#include <QScrollArea>
 #include <QTimer>
 #include <algorithm>
 
@@ -35,6 +36,17 @@ inline bool settleModelViewport(ModelViewport &viewport, int timeoutMs = 20000)
 		events.exec();
 	}
 	return false;
+}
+
+// The scroll area of an editor sidebar page, which scrolls inside its
+// SidebarPage, or the widget itself when it is a scroll area.
+inline QScrollArea *pageScroll(QWidget *page)
+{
+	if (auto *scroll = qobject_cast<QScrollArea *>(page))
+	{
+		return scroll;
+	}
+	return page ? page->findChild<QScrollArea *>(QStringLiteral("sidebarPageScroll")) : nullptr;
 }
 
 } // namespace vibestudio::tests

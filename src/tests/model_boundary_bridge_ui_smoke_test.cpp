@@ -150,6 +150,9 @@ int main(int argc, char **argv)
 					"bridge action and twist fit together at expanded text and RTL");
 			}
 		}
+		// The refused bridge ran a worker; offscreen, that can leave no active window.
+		editor.activateWindow();
+		app.processEvents();
 		twist->setFocus(Qt::OtherFocusReason);
 		ok &= expect(twist->hasFocus() && twist->layoutDirection() == Qt::LeftToRight, "twist has visible focus and stable numeric direction");
 		if (qEnvironmentVariable("QT_SCALE_FACTOR") == "2")

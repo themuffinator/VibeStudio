@@ -182,6 +182,8 @@ int main(int argc, char **argv)
 		{
 			if (!scroll->isAncestorOf(width))
 				continue;
+			// Let the sidebar page finish laying out at the new text size first.
+			app.processEvents();
 			const int first = width->mapTo(scroll->widget(), QPoint()).y(),
 					  last = pack->mapTo(scroll->widget(), pack->rect().bottomLeft()).y();
 			scroll->verticalScrollBar()->setValue((first + last - scroll->viewport()->height()) / 2);

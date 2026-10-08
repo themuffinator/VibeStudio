@@ -273,11 +273,15 @@ int main(int argc, char **argv)
 					 write(path("assets/models/fixture.mdl"), mdl) && write(path("assets/gfx/palette.lmp"), palette) &&
 					 red.save(path("assets/models/red.png")) && blue.save(path("assets/models/blue.png")),
 				 "write native geometry and independent palette/material fixtures");
-	QByteArray mdc(108, '\0');
+	// A valid MDC that holds frames but no surfaces: metadata without geometry.
+	// mdcHeader_t is 112 bytes, then seven 56-byte md3Frame_t records.
+	QByteArray mdc(112 + 7 * 56, '\0');
 	mdc.replace(0, 4, "IDPC");
 	integer(mdc, 4, 2);
 	integer(mdc, 76, 7);
-	integer(mdc, 84, 2);
+	integer(mdc, 92, 112);
+	for (int offset : {96, 100, 104, 108})
+		integer(mdc, offset, mdc.size());
 	ok &= expect(write(path("assets/models/header.mdc"), mdc), "write metadata-only fixture");
 	auto archive = std::make_shared<PackageArchive>();
 	ok &= expect(archive->load(path("assets"), &error), "load immutable native snapshot");
@@ -307,7 +311,7 @@ int main(int argc, char **argv)
 			}
 			else if (suffix == "mdc")
 			{
-				ok &= expect(!r.mesh.geometryAvailable && r.mesh.frameCount == 7 && r.mesh.surfaceCount == 2 && !r.mesh.warnings.isEmpty(),
+				ok &= expect(!r.mesh.geometryAvailable && r.mesh.frameCount == 7 && r.mesh.surfaceCount == 0 && !r.mesh.warnings.isEmpty(),
 							 "metadata-only files keep declared counts without pretending geometry is available");
 			}
 			else

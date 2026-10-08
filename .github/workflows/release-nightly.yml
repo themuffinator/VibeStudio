@@ -37,7 +37,7 @@ jobs:
           python-version: "3.x"
 
       - name: Install Meson + Ninja
-        run: python -m pip install --upgrade pip meson ninja
+        run: python -m pip install --upgrade pip meson ninja fonttools -r scripts/requirements-docs.txt
 
       - name: Validate Credits And Compiler Pins
         run: python scripts/validate_credits.py

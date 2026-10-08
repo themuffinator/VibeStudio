@@ -1,6 +1,7 @@
 #include "app/studio_layout.h"
 
 #include "app/studio_charts.h"
+#include "app/studio_docks.h"
 #include "app/studio_icons.h"
 #include "app/studio_theme.h"
 #include "core/operation_state.h"
@@ -226,6 +227,49 @@ QString localizedRailBehaviourName(RailBehaviour behaviour)
 	return QCoreApplication::translate("VibeStudioLayout", "Collapse to icons automatically");
 }
 
+namespace {
+
+// The rail's pin. A tool button centres its icon by rounding an odd spare
+// pixel to the left, the leading side only left to right, so an unsqueezed pin
+// (in an open rail, or at a larger text size) would sit a pixel off its mirror
+// image. Right to left this one paints its frame as the style does and its
+// icon where the style puts it left to right, mirrored.
+class RailPin final : public QToolButton {
+public:
+	using QToolButton::QToolButton;
+
+protected:
+	void paintEvent(QPaintEvent* event) override
+	{
+		if (layoutDirection() != Qt::RightToLeft) {
+			QToolButton::paintEvent(event);
+			return;
+		}
+		QStylePainter painter(this);
+		QStyleOptionToolButton option;
+		initStyleOption(&option);
+		const QIcon icon = option.icon;
+		option.icon = QIcon();
+		painter.drawComplexControl(QStyle::CC_ToolButton, option);
+		// The style centres the icon in the contents, inside the padding and
+		// the border (which a focus ring may widen), shrunk to fit them.
+		const int inset = kRailPinPadding + style()->pixelMetric(QStyle::PM_DefaultFrameWidth, &option, this);
+		const QSize size = rect().adjusted(inset, inset, -inset, -inset).size().boundedTo(option.iconSize);
+		const int fromLeft = width() / 2 - size.width() / 2;
+		QIcon::Mode mode = QIcon::Normal;
+		if (!option.state.testFlag(QStyle::State_Enabled)) {
+			mode = QIcon::Disabled;
+		} else if (option.state.testFlag(QStyle::State_MouseOver) && option.state.testFlag(QStyle::State_AutoRaise)) {
+			mode = QIcon::Active;
+		}
+		const QIcon::State state = option.state.testFlag(QStyle::State_On) ? QIcon::On : QIcon::Off;
+		painter.drawPixmap(width() - fromLeft - size.width(), height() / 2 - size.height() / 2,
+			icon.pixmap(size, painter.device()->devicePixelRatio(), mode, state));
+	}
+};
+
+} // namespace
+
 ModeRail::ModeRail(QWidget* parent)
 	: QWidget(parent)
 {
@@ -252,9 +296,9 @@ ModeRail::ModeRail(QWidget* parent)
 	root->addWidget(createDivider());
 
 	// The pin sits where the icons do, so it stays put as the rail opens.
-	auto* toggleRow = new QHBoxLayout;
-	toggleRow->setContentsMargins(12, 2, 8, 0);
-	m_toggle = new QToolButton;
+	m_toggleRow = new QHBoxLayout;
+	refreshMargins();
+	m_toggle = new RailPin;
 	m_toggle->setObjectName(QStringLiteral("railToggle"));
 	m_toggle->setCheckable(true);
 	m_toggle->setIconSize(QSize(16, 16));
@@ -267,9 +311,9 @@ ModeRail::ModeRail(QWidget* parent)
 		setBehaviour(next);
 		emit behaviourChanged(next);
 	});
-	toggleRow->addWidget(m_toggle);
-	toggleRow->addStretch(1);
-	root->addLayout(toggleRow);
+	m_toggleRow->addWidget(m_toggle);
+	m_toggleRow->addStretch(1);
+	root->addLayout(m_toggleRow);
 
 	m_group = new QButtonGroup(this);
 	m_group->setExclusive(true);
@@ -576,6 +620,14 @@ void ModeRail::refreshToggle()
 			: tr("Keep navigation open, labels and all, beside the page."));
 }
 
+void ModeRail::refreshMargins()
+{
+	// Layout margins do not mirror, so the wide one follows the rail's outer
+	// edge.
+	const bool mirrored = layoutDirection() == Qt::RightToLeft;
+	m_toggleRow->setContentsMargins(mirrored ? 8 : 12, 2, mirrored ? 12 : 8, 0);
+}
+
 void ModeRail::showLabels(bool shown)
 {
 	if (m_labelsShown == shown) {
@@ -734,12 +786,21 @@ void ModeRail::changeEvent(QEvent* event)
 	if (event->type() == QEvent::FontChange || event->type() == QEvent::StyleChange) {
 		refreshPresentation();
 	}
+	if (event->type() == QEvent::LayoutDirectionChange) {
+		refreshMargins();
+	}
 	QWidget::changeEvent(event);
 }
 
 void ModeRail::paintEvent(QPaintEvent* event)
 {
 	QWidget::paintEvent(event);
+	// The divider beside the page, on the trailing edge. It is painted, as
+	// NoticeBar paints its state edge, because a style sheet border-right
+	// would stay on the right, the window's edge, in a right-to-left layout.
+	const bool mirrored = layoutDirection() == Qt::RightToLeft;
+	QPainter painter(this);
+	painter.fillRect(QRect(mirrored ? 0 : width() - 1, 0, 1, height()), currentStudioTheme().colors.borderSubtle);
 	const QAbstractButton* current = m_group ? m_group->checkedButton() : nullptr;
 	if (!current || !current->isVisible()) {
 		return;
@@ -749,9 +810,7 @@ void ModeRail::paintEvent(QPaintEvent* event)
 	const QRect row = current->geometry();
 	const int barHeight = std::max(10, row.height() - 18);
 	const int barWidth = 3;
-	const bool mirrored = layoutDirection() == Qt::RightToLeft;
 	const QRectF bar(mirrored ? width() - barWidth - 1 : 1, row.center().y() - barHeight / 2.0 + 0.5, barWidth, barHeight);
-	QPainter painter(this);
 	painter.setRenderHint(QPainter::Antialiasing, true);
 	painter.setPen(Qt::NoPen);
 	painter.setBrush(currentStudioTheme().colors.accent);
@@ -1707,6 +1766,15 @@ QVBoxLayout* CardFrame::bodyLayout() const
 // DockTitleBar
 // ---------------------------------------------------------------------------
 
+namespace {
+
+// The title keeps the wider margin; the buttons sit nearer their edge.
+constexpr int kDockTitleLeadingMargin = 10;
+constexpr int kDockTitleTrailingMargin = 4;
+constexpr int kDockTitleVerticalMargin = 2;
+
+} // namespace
+
 DockTitleBar::DockTitleBar(QDockWidget* dock)
 	: QWidget(dock)
 	, m_dock(dock)
@@ -1714,8 +1782,8 @@ DockTitleBar::DockTitleBar(QDockWidget* dock)
 	setObjectName(QStringLiteral("dockTitleBar"));
 	setAttribute(Qt::WA_StyledBackground, true);
 	auto* layout = new QHBoxLayout(this);
-	layout->setContentsMargins(10, 2, 4, 2);
 	layout->setSpacing(2);
+	refreshMargins();
 	m_title = new ElidedLabel;
 	m_title->setObjectName(QStringLiteral("dockTitle"));
 	layout->addWidget(m_title, 1);
@@ -1754,6 +1822,22 @@ void DockTitleBar::changeEvent(QEvent* event)
 	if (event->type() == QEvent::LanguageChange) {
 		refresh();
 	}
+	if (event->type() == QEvent::LayoutDirectionChange) {
+		refreshMargins();
+		refresh();
+	}
+}
+
+void DockTitleBar::refreshMargins()
+{
+	// Layout margins do not mirror, so the wide one follows the title.
+	QLayout* box = layout();
+	if (!box) {
+		return;
+	}
+	const bool mirrored = layoutDirection() == Qt::RightToLeft;
+	box->setContentsMargins(mirrored ? kDockTitleTrailingMargin : kDockTitleLeadingMargin, kDockTitleVerticalMargin,
+		mirrored ? kDockTitleLeadingMargin : kDockTitleTrailingMargin, kDockTitleVerticalMargin);
 }
 
 void DockTitleBar::refresh()
@@ -1767,7 +1851,7 @@ void DockTitleBar::refresh()
 	m_float->setVisible(features.testFlag(QDockWidget::DockWidgetFloatable));
 	m_close->setVisible(features.testFlag(QDockWidget::DockWidgetClosable));
 	const bool floating = m_dock->isFloating();
-	m_float->setIcon(studioIcon(floating ? QStringLiteral("sidebar-right") : QStringLiteral("external")));
+	m_float->setIcon(studioIcon(floating ? trailingPanelGlyph(layoutDirection()) : QStringLiteral("external")));
 	const QString floatText = floating ? tr("Dock the %1 panel").arg(title) : tr("Float the %1 panel").arg(title);
 	m_float->setToolTip(floatText);
 	m_float->setAccessibleName(floatText);

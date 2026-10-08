@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import argparse
 import bisect
+import copy
 import json
 import os
 import re
@@ -587,6 +588,106 @@ def message_count(ts_path: Path) -> int:
     return len(tree.findall(".//message"))
 
 
+def catalog_messages(tree: ET.ElementTree) -> dict[tuple[str, str, str, str, str], ET.Element]:
+    messages = {}
+    for context in tree.getroot().findall("context"):
+        for message in context.findall("message"):
+            key = (context.findtext("name", ""), message.get("id", ""),
+                   message.findtext("source", ""), message.findtext("comment", ""),
+                   message.get("numerus", "no"))
+            if key in messages:
+                raise RuntimeError(f"Cannot safely merge duplicate TS message: {key!r}")
+            messages[key] = message
+    return messages
+
+
+def rebase_catalog_locations(tree: ET.ElementTree, source_dir: Path, target_dir: Path) -> None:
+    for location in tree.iter("location"):
+        filename = location.get("filename")
+        if filename and not Path(filename).is_absolute():
+            location.set("filename", Path(os.path.relpath(source_dir / filename, target_dir)).as_posix())
+
+
+def merge_unsupported_catalog(lupdate: Path, root: Path, catalog: Path) -> None:
+    """Refresh sources without asking Qt to interpret an unsupported locale's translations."""
+    original_bytes = catalog.read_bytes()
+    original = ET.ElementTree(ET.fromstring(original_bytes))
+    original_messages = catalog_messages(original)
+    with tempfile.TemporaryDirectory(prefix="vibestudio-lupdate-merge-") as temporary:
+        target = Path(temporary) / catalog.name
+        source_only = copy.deepcopy(original)
+        for translation in source_only.iter("translation"):
+            translation.clear()
+            translation.set("type", "unfinished")
+        rebase_catalog_locations(source_only, catalog.parent, target.parent)
+        source_only.write(target, encoding="utf-8", xml_declaration=True)
+        result = subprocess.run(
+            [str(lupdate), str(root / "src"), "-extensions", "cpp,h", "-locations", "relative",
+             "-no-obsolete", "-ts", str(target)],
+            cwd=root, text=True, encoding="utf-8", errors="replace", capture_output=True, check=False,
+        )
+        if result.returncode != 0 or "won't be updated" in f"{result.stdout}\n{result.stderr}":
+            raise RuntimeError(f"Source-only lupdate failed for {catalog.name}\n{result.stdout}\n{result.stderr}")
+        extracted = ET.parse(target)
+        if extracted.getroot().attrib != original.getroot().attrib:
+            raise RuntimeError(f"Source-only lupdate changed language or TS metadata for {catalog.name}")
+        extracted_messages = catalog_messages(extracted)
+        if not extracted_messages:
+            raise RuntimeError(f"Source-only lupdate extracted no messages for {catalog.name}")
+        rebase_catalog_locations(extracted, target.parent, catalog.parent)
+        for key, message in extracted_messages.items():
+            saved = original_messages.get(key)
+            # No fuzzy matching: a changed source, disambiguation or plural flag
+            # must not silently inherit a translation for a different message.
+            for tag in ("translatorcomment", "translation"):
+                for entry in message.findall(tag):
+                    message.remove(entry)
+                if saved is not None:
+                    for entry in saved.findall(tag):
+                        message.append(copy.deepcopy(entry))
+            if message.find("translation") is None:
+                ET.SubElement(message, "translation", {"type": "unfinished"})
+        contexts = {context.findtext("name", ""): context for context in extracted.getroot().findall("context")}
+        for key, message in original_messages.items():
+            translation = message.find("translation")
+            has_translation = translation is not None and (
+                any(text.strip() for text in translation.itertext()) or bool(list(translation)))
+            if key in extracted_messages or not (has_translation or message.find("translatorcomment") is not None):
+                continue
+            retained = copy.deepcopy(message)
+            if (retained_translation := retained.find("translation")) is not None:
+                retained_translation.set("type", "vanished")
+            else:
+                ET.SubElement(retained, "translation", {"type": "vanished"})
+            # Removed entries have no current source locations. Keeping old
+            # relative line deltas would corrupt locations after the new merge.
+            for location in retained.findall("location"):
+                retained.remove(location)
+            if key[0] not in contexts:
+                context = ET.SubElement(extracted.getroot(), "context")
+                ET.SubElement(context, "name").text = key[0]
+                contexts[key[0]] = context
+            contexts[key[0]].append(retained)
+        # Serialize and validate before publishing. os.replace is atomic for a
+        # same-directory temporary file; failed extraction never touches the TS.
+        data = b'<?xml version="1.0" encoding="utf-8"?>\n<!DOCTYPE TS>\n' + ET.tostring(extracted.getroot(), encoding="utf-8") + b"\n"
+        ET.fromstring(data)
+        if catalog.read_bytes() != original_bytes:
+            raise RuntimeError(f"Catalog changed during extraction; refusing to overwrite {catalog.name}")
+        pending: Path | None = None
+        try:
+            with tempfile.NamedTemporaryFile(dir=catalog.parent, prefix=f".{catalog.name}.", suffix=".tmp", delete=False) as stream:
+                pending = Path(stream.name)
+                stream.write(data)
+            shutil.copymode(catalog, pending)
+            if catalog.read_bytes() != original_bytes:
+                raise RuntimeError(f"Catalog changed during extraction; refusing to overwrite {catalog.name}")
+            os.replace(pending, catalog)
+        finally:
+            if pending is not None and pending.exists():
+                pending.unlink()
+
+
 def run_lupdate(lupdate: Path, root: Path, catalogs: list[Path], write: bool) -> dict:
     if write:
         target_paths = catalogs
@@ -597,6 +698,19 @@ def run_lupdate(lupdate: Path, root: Path, catalogs: list[Path], write: bool) ->
         target_paths = [temp_root / catalog.name for catalog in catalogs]
 
     try:
+        if not write:
+            # Seed the source entries. Starting every catalog empty makes
+            # Qt 6.10's appendSorted() repeatedly scan all extracted messages
+            # for every new entry, multiplying the cost across all locales.
+            for catalog, target in zip(catalogs, target_paths):
+                tree = ET.parse(catalog)
+                # Dry runs check extraction, not existing translations. Keep
+                # these empty as before, including for locales Qt cannot merge
+                # translated text for (such as pcm).
+                for translation in tree.iter("translation"):
+                    translation.clear()
+                    translation.set("type", "unfinished")
+                tree.write(target, encoding="utf-8", xml_declaration=True)
         command = [
             str(lupdate),
             str(root / "src"),
@@ -621,10 +735,23 @@ def run_lupdate(lupdate: Path, root: Path, catalogs: list[Path], write: bool) ->
             raise RuntimeError(
                 f"lupdate failed with {result.returncode}\n{result.stdout}\n{result.stderr}"
             )
-        counts = {path.name: message_count(path) for path in target_paths if path.exists()}
         # lupdate exits 0 when it refuses a catalog, for example one whose
         # language it has no plural rules for.
         skipped = [line.strip() for line in f"{result.stdout}\n{result.stderr}".splitlines() if "won't be updated" in line]
+        merged_unsupported = []
+        if write:
+            for refusal in list(skipped):
+                match = re.fullmatch(r"File (.+) won't be updated: .*target language is not recognized", refusal)
+                if match is None:
+                    continue
+                refused_path = Path(match.group(1)).resolve()
+                catalog = next((path for path in catalogs if path.resolve() == refused_path), None)
+                if catalog is None:
+                    continue
+                merge_unsupported_catalog(lupdate, root, catalog)
+                skipped.remove(refusal)
+                merged_unsupported.append(catalog.name)
+        counts = {path.name: message_count(path) for path in target_paths if path.exists()}
         return {
             "command": command,
             "stdout": result.stdout.strip(),
@@ -632,6 +759,7 @@ def run_lupdate(lupdate: Path, root: Path, catalogs: list[Path], write: bool) ->
             "messageCounts": counts,
             "minimumMessageCount": min(counts.values()) if counts else 0,
             "skippedCatalogs": skipped,
+            "sourceOnlyMergedCatalogs": merged_unsupported,
         }
     finally:
         if temp_dir is not None:
@@ -654,8 +782,8 @@ def main() -> int:
     call_count = translatable_call_count(sources)
     errors: list[str] = []
 
-    if len(catalogs) < 21:
-        errors.append("Expected 20 target catalogs plus pseudo-localization catalog in i18n/.")
+    if len(catalogs) < 48:
+        errors.append("Expected 47 target catalogs plus the pseudo-localization catalog in i18n/.")
     if not any(catalog.name == "vibestudio_pseudo.ts" for catalog in catalogs):
         errors.append("Expected i18n/vibestudio_pseudo.ts.")
     if len(sources) < 20:
@@ -717,7 +845,9 @@ def main() -> int:
             f"{len(helpers)} translation helpers with marked call sites)."
         )
         if lupdate_report:
-            print(f"lupdate dry-run minimum messages: {lupdate_report['minimumMessageCount']}")
+            print(f"lupdate {'write' if args.write else 'dry-run'} minimum messages: {lupdate_report['minimumMessageCount']}")
+            for catalog in lupdate_report["sourceOnlyMergedCatalogs"]:
+                print(f"{catalog}: sources refreshed; saved translations retained without Qt plural-rule conversion.")
 
     return 0 if not errors else 1
 

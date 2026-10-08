@@ -28,7 +28,7 @@ const QVector<AssetFormatDescriptor>& assetFormats()
 		add("audio-project", "vsaudio", "audio", K::Binary, "document", "vsaudio");
 		add("audio-session", "vssession", "audio", K::Binary, "document", "vssession,wav");
 		add("audio-take", "vstake", "audio", K::Binary, "document", "vsaudio,wav");
-		add("mesh-project", "mesh.json", "models", K::Text, "document", "mesh.json,mdl,md2,md3,obj");
+		add("mesh-project", "mesh.json", "models", K::Text, "document", "mesh.json,mdl,md2,md3,obj,md5mesh,md5anim,iqm,ase");
 		add("model-design", "model.json", "models", K::Text, "document", "model.json,md3,obj");
 		add("model-assembly", "assembly.json", "models", K::Text, "document", "assembly.json,md3,obj");
 		add("prefab", "vprefab", "levels", K::Text, "document", "vprefab");
@@ -75,9 +75,28 @@ const QVector<AssetFormatDescriptor>& assetFormats()
 		add("mdl", "mdl", "models", K::Model, "geometry", "mdl,obj");
 		add("md2", "md2", "models", K::Model, "geometry", "md2,obj");
 		add("md3", "md3", "models", K::Model, "geometry", "md3,obj");
-		for (const auto* id : {"mdc", "mdr", "iqm"}) {
-			add(id, id, "models", K::Model, "metadata", "",
-				QT_TRANSLATE_NOOP("VibeStudioFormats", "Header inspection only; geometry editing and export are unavailable."));
+		add("iqm", "iqm", "models", K::Model, "geometry", "iqm,obj",
+			QT_TRANSLATE_NOOP("VibeStudioFormats", "Joints, weights and animations; tangents, colours and extensions are not kept."));
+		add("md5mesh", "md5mesh", "models", K::Model, "geometry", "md5mesh,iqm,obj",
+			QT_TRANSLATE_NOOP("VibeStudioFormats", "Reads the md5anim files beside the mesh and those a Doom 3 .def names."));
+		add("md5anim", "md5anim", "models", K::Model, "animation", "md5anim",
+			QT_TRANSLATE_NOOP("VibeStudioFormats", "A skeleton and one clip, without geometry."));
+		add("ase", "ase", "models", K::Model, "geometry", "ase,obj",
+			QT_TRANSLATE_NOOP("VibeStudioFormats", "The first mesh of each object; later animation samples are not kept."));
+		// Read-only formats: edit them as a mesh source and export a format the game loads.
+		add("mdc", "mdc", "models", K::Model, "geometry", "",
+			QT_TRANSLATE_NOOP("VibeStudioFormats", "Read only; edit as a mesh source and export MD3, which RTCW and ET load."));
+		for (const auto* id : {"mdr", "mds", "mdm", "glm"}) {
+			add(id, id, "models", K::Model, "geometry", "",
+				QT_TRANSLATE_NOOP("VibeStudioFormats", "Skeletal, read only; edit as a mesh source and export MD3, MD5 or IQM."));
+		}
+		for (const auto* id : {"mdx", "gla"}) {
+			add(id, id, "models", K::Model, "animation", "",
+				QT_TRANSLATE_NOOP("VibeStudioFormats", "Bones and frames without geometry; read only."));
+		}
+		for (const auto* id : {"lwo", "fm", "kvx"}) {
+			add(id, id, "models", K::Model, "geometry", "",
+				QT_TRANSLATE_NOOP("VibeStudioFormats", "Read only; edit as a mesh source and export a format the game loads."));
 		}
 		add("wav", "wav", "audio", K::Audio, "samples", "wav,dmx,vsaudio");
 		add("dmx", "dmx", "audio", K::Audio, "samples", "wav,dmx,vsaudio",

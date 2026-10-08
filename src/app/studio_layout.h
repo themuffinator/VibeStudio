@@ -166,6 +166,7 @@ private:
 	void rebuild();
 	void refreshPresentation(bool animate = false);
 	void refreshToggle();
+	void refreshMargins();
 	void showLabels(bool shown);
 	void animateTo(int width);
 	void closeUnlessHeld();
@@ -177,6 +178,7 @@ private:
 	QButtonGroup* m_group = nullptr;
 	QVBoxLayout* m_topLayout = nullptr;
 	QVBoxLayout* m_bottomLayout = nullptr;
+	QHBoxLayout* m_toggleRow = nullptr;
 	QToolButton* m_toggle = nullptr;
 	RailBehaviour m_behaviour = RailBehaviour::Automatic;
 	// What the toggle returns to when the labels are unpinned: Automatic,
@@ -388,6 +390,7 @@ protected:
 
 private:
 	void refresh();
+	void refreshMargins();
 
 	QDockWidget* m_dock = nullptr;
 	ElidedLabel* m_title = nullptr;

@@ -238,7 +238,9 @@ background that keeps the text clear over colored hatching. The legend, full
 summary tooltip, accessible description and adjacent composition list retain
 the category values. Long legend labels may elide; their complete text remains
 in the summary. Theme, scale and panel-width changes keep the same category
-identities and update the chart layout.
+identities and update the chart layout. In a right-to-left layout the bar fills
+from the right and the legend flows from the right, each swatch leading its
+label; clicks and the Left and Right keys follow that order.
 
 Archive and mounted-session summaries are prepared with their metadata index.
 Staging prepares file/folder counts, operation/conflict counts, before/after byte

@@ -1,10 +1,23 @@
 # Packaging
 
-VibeStudio's MVP packaging support creates portable release directories and zip
-archives for Windows, macOS, and Linux targets. These packages are suitable for
-release-candidate validation and handoff. The explicit Windows runtime step
-below adds Qt/Audio dependencies and their notices; signing, notarization,
-installers, source distribution and clean-machine acceptance remain separate.
+VibeStudio packages start as portable release directories (this page), which
+the release workflow turns into native downloads. [Releasing](RELEASING.md)
+covers versions, the changelog and publishing; this page covers what goes
+inside a package.
+
+| Download | Built by | Contents |
+| --- | --- | --- |
+| `VibeStudio-<v>-windows-x64-setup.exe` | `scripts/package_windows_installer.py` (Inno Setup 6) | The verified Windows package below, installed per user by default, with Start menu entries for the studio and its documentation |
+| `VibeStudio-<v>-windows-x64-portable.zip` | `scripts/package_windows_release.py` | The verified Windows package: binary, Qt and audio runtime, notices |
+| `VibeStudio-<v>-windows-x64-runtime-source.zip` | `scripts/package_windows_release.py` | Source companion for the bundled runtime |
+| `VibeStudio-<v>-macos-arm64.dmg` | `scripts/package_macos_app.py` | `VibeStudio.app` (macdeployqt, ad-hoc signed) with the portable layout under `Contents/Resources` |
+| `VibeStudio-<v>-linux-x86_64.AppImage` | `scripts/package_appimage.py` (linuxdeploy) | `meson install` layout plus docs, samples and notices under `usr/share` |
+| `VibeStudio-<v>-docs.zip` | `scripts/build_docs_site.py` | The HTML user manual on its own |
+| `VibeStudio-<v>-source.tar.gz` | `scripts/package_source_tarball.py` | Every tracked file, compiler submodules included |
+
+Every package contains the HTML manual at `docs/html/index.html` (pass
+`--docs-site` to the packaging scripts). Builds are not code-signed or
+notarised yet, and clean-machine acceptance of the installers remains open.
 
 ## Portable Package Script
 

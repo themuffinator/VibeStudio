@@ -374,6 +374,14 @@ const QHash<QString, GlyphFunction>& glyphs()
 			p.path(shape);
 			p.circle(12.0, 12.0, 3.0);
 		});
+		// The universal access figure: a person with open arms in a circle.
+		g.insert(QStringLiteral("accessibility"), [](GlyphPainter& p) {
+			p.circle(12.0, 12.0, 9.5);
+			p.dot(12.0, 7.0, 1.6);
+			p.line(6.8, 10.2, 17.2, 10.2);
+			p.line(12.0, 10.2, 12.0, 14.0);
+			p.polyline({{9.0, 18.4}, {12.0, 14.0}, {15.0, 18.4}});
+		});
 		g.insert(QStringLiteral("compare"), [](GlyphPainter& p) {
 			p.rect(3.0, 4.0, 10.0, 20.0, 1.5);
 			p.rect(14.0, 4.0, 21.0, 20.0, 1.5);
@@ -625,6 +633,256 @@ const QHash<QString, GlyphFunction>& glyphs()
 			p.line(10.5, 18.0, 10.5, 21.0);
 			p.line(13.5, 18.0, 13.5, 21.0);
 		});
+		// Modeller tools (Mesh Editor header, tool shelf and menus).
+		g.insert(QStringLiteral("select-box"), [](GlyphPainter& p) {
+			p.polyline({{3.5, 8.0}, {3.5, 3.5}, {8.0, 3.5}});
+			p.polyline({{12.5, 3.5}, {17.0, 3.5}, {17.0, 8.0}});
+			p.polyline({{3.5, 12.5}, {3.5, 17.0}, {8.0, 17.0}});
+			p.polygon({{12.0, 12.0}, {21.0, 15.5}, {17.0, 17.0}, {15.5, 21.0}}, true);
+		});
+		g.insert(QStringLiteral("vertex-mode"), [](GlyphPainter& p) {
+			p.polygon({{12.0, 3.5}, {19.5, 7.5}, {19.5, 16.5}, {12.0, 20.5}, {4.5, 16.5}, {4.5, 7.5}});
+			p.polyline({{4.5, 7.5}, {12.0, 11.5}, {19.5, 7.5}});
+			p.line(12.0, 11.5, 12.0, 20.5);
+			p.dot(12.0, 11.5, 2.4);
+			p.dot(19.5, 7.5, 2.0);
+			p.dot(4.5, 16.5, 2.0);
+		});
+		g.insert(QStringLiteral("edge-mode"), [](GlyphPainter& p) {
+			p.polygon({{12.0, 3.5}, {19.5, 7.5}, {19.5, 16.5}, {12.0, 20.5}, {4.5, 16.5}, {4.5, 7.5}});
+			p.polyline({{4.5, 7.5}, {12.0, 11.5}, {19.5, 7.5}});
+			p.widerPen(3.2);
+			p.line(12.0, 11.5, 12.0, 20.5);
+		});
+		g.insert(QStringLiteral("face-mode"), [](GlyphPainter& p) {
+			p.polygon({{12.0, 3.5}, {19.5, 7.5}, {19.5, 16.5}, {12.0, 20.5}, {4.5, 16.5}, {4.5, 7.5}});
+			p.polygon({{4.5, 7.5}, {12.0, 11.5}, {12.0, 20.5}, {4.5, 16.5}}, true);
+			p.polyline({{12.0, 11.5}, {19.5, 7.5}});
+		});
+		g.insert(QStringLiteral("extrude"), [](GlyphPainter& p) {
+			p.polygon({{3.5, 15.0}, {12.0, 19.5}, {20.5, 15.0}, {12.0, 10.5}});
+			p.line(12.0, 15.0, 12.0, 3.5);
+			p.polyline({{8.5, 7.0}, {12.0, 3.5}, {15.5, 7.0}});
+		});
+		g.insert(QStringLiteral("inset"), [](GlyphPainter& p) {
+			p.rect(3.5, 3.5, 20.5, 20.5, 1.5);
+			p.rect(8.0, 8.0, 16.0, 16.0, 1.0, true);
+			p.line(3.5, 3.5, 8.0, 8.0);
+			p.line(20.5, 3.5, 16.0, 8.0);
+			p.line(3.5, 20.5, 8.0, 16.0);
+			p.line(20.5, 20.5, 16.0, 16.0);
+		});
+		g.insert(QStringLiteral("loop-cut"), [](GlyphPainter& p) {
+			p.rect(3.5, 5.0, 20.5, 19.0, 1.5);
+			p.widerPen(2.6);
+			p.line(12.0, 2.5, 12.0, 21.5);
+		});
+		g.insert(QStringLiteral("smooth"), [](GlyphPainter& p) {
+			QPainterPath wave;
+			wave.moveTo(3.0, 15.0);
+			wave.cubicTo(7.0, 7.0, 11.0, 7.0, 12.0, 12.0);
+			wave.cubicTo(13.0, 17.0, 17.0, 17.0, 21.0, 9.0);
+			p.path(wave);
+			p.line(3.0, 20.0, 21.0, 20.0);
+		});
+		g.insert(QStringLiteral("shrink-fatten"), [](GlyphPainter& p) {
+			p.circle(12.0, 12.0, 4.5);
+			p.line(12.0, 6.0, 12.0, 2.5);
+			p.line(12.0, 18.0, 12.0, 21.5);
+			p.line(6.0, 12.0, 2.5, 12.0);
+			p.line(18.0, 12.0, 21.5, 12.0);
+		});
+		g.insert(QStringLiteral("proportional"), [](GlyphPainter& p) {
+			p.circle(12.0, 12.0, 8.5);
+			p.circle(12.0, 12.0, 4.5);
+			p.dot(12.0, 12.0, 1.6);
+		});
+		g.insert(QStringLiteral("mirror"), [](GlyphPainter& p) {
+			p.polygon({{10.0, 5.0}, {10.0, 19.0}, {3.0, 19.0}});
+			p.polygon({{14.0, 5.0}, {14.0, 19.0}, {21.0, 19.0}}, true);
+			p.line(12.0, 2.5, 12.0, 4.0);
+			p.line(12.0, 20.0, 12.0, 21.5);
+		});
+		g.insert(QStringLiteral("merge"), [](GlyphPainter& p) {
+			p.line(3.5, 4.5, 10.0, 11.0);
+			p.line(20.5, 4.5, 14.0, 11.0);
+			p.polyline({{6.5, 11.5}, {10.0, 11.0}, {10.5, 7.5}});
+			p.polyline({{17.5, 11.5}, {14.0, 11.0}, {13.5, 7.5}});
+			p.dot(12.0, 17.5, 2.6);
+		});
+		// A map pin: something placed at a point, as an entity is.
+		g.insert(QStringLiteral("entity"), [](GlyphPainter& p) {
+			QPainterPath pin;
+			pin.moveTo(12.0, 21.0);
+			pin.cubicTo(7.5, 16.0, 5.5, 12.75, 5.5, 9.5);
+			pin.arcTo(QRectF(5.5, 3.0, 13.0, 13.0), 180.0, -180.0);
+			pin.cubicTo(18.5, 12.75, 16.5, 16.0, 12.0, 21.0);
+			p.path(pin);
+			p.circle(12.0, 9.5, 2.2);
+		});
+		g.insert(QStringLiteral("speaker"), [](GlyphPainter& p) {
+			p.polygon({{3.5, 9.0}, {7.5, 9.0}, {12.0, 5.0}, {12.0, 19.0}, {7.5, 15.0}, {3.5, 15.0}});
+			p.arc(13.0, 12.0, 3.75, -50.0, 100.0);
+			p.arc(13.0, 12.0, 7.5, -50.0, 100.0);
+		});
+		// Blocks built into one piece.
+		g.insert(QStringLiteral("prefab"), [](GlyphPainter& p) {
+			p.rect(3.5, 13.0, 11.0, 20.5, 1.25);
+			p.rect(13.0, 13.0, 20.5, 20.5, 1.25);
+			p.rect(8.25, 3.5, 15.75, 11.0, 1.25);
+		});
+		g.insert(QStringLiteral("properties"), [](GlyphPainter& p) {
+			p.line(3.5, 6.5, 6.75, 6.5);
+			p.circle(9.25, 6.5, 2.25);
+			p.line(11.75, 6.5, 20.5, 6.5);
+			p.line(3.5, 12.0, 12.25, 12.0);
+			p.circle(14.75, 12.0, 2.25);
+			p.line(17.25, 12.0, 20.5, 12.0);
+			p.line(3.5, 17.5, 5.25, 17.5);
+			p.circle(7.75, 17.5, 2.25);
+			p.line(10.25, 17.5, 20.5, 17.5);
+		});
+		// A paint roller: material laid onto surfaces.
+		g.insert(QStringLiteral("paint"), [](GlyphPainter& p) {
+			p.rect(3.5, 3.5, 17.0, 9.0, 1.5);
+			p.polyline({{17.0, 6.25}, {20.5, 6.25}, {20.5, 12.5}, {12.0, 12.5}, {12.0, 15.0}});
+			p.rect(10.25, 15.0, 13.75, 21.0, 1.0);
+		});
+		g.insert(QStringLiteral("eyedropper"), [](GlyphPainter& p) {
+			p.line(4.0, 20.0, 12.75, 11.25);
+			p.line(4.0, 20.0, 5.5, 18.5);
+			p.line(10.25, 8.75, 15.25, 13.75);
+			p.circle(16.75, 7.25, 3.4);
+		});
+		// A drawn outline with its corners: a sector traced in plan.
+		g.insert(QStringLiteral("polygon"), [](GlyphPainter& p) {
+			p.polygon({{12.0, 3.75}, {20.25, 9.75}, {17.0, 20.25}, {7.0, 20.25}, {3.75, 9.75}});
+			p.dot(12.0, 3.75, 1.7);
+			p.dot(20.25, 9.75, 1.7);
+			p.dot(17.0, 20.25, 1.7);
+			p.dot(7.0, 20.25, 1.7);
+			p.dot(3.75, 9.75, 1.7);
+		});
+		// A checkered face: a texture laid on a surface.
+		g.insert(QStringLiteral("uv"), [](GlyphPainter& p) {
+			p.rect(3.5, 3.5, 20.5, 20.5, 2.0);
+			p.rect(3.5, 3.5, 12.0, 12.0, 0.0, true);
+			p.rect(12.0, 12.0, 20.5, 20.5, 0.0, true);
+		});
+		// A square and a circle: shapes to build from.
+		g.insert(QStringLiteral("shapes"), [](GlyphPainter& p) {
+			p.rect(3.5, 9.5, 14.5, 20.5, 1.5);
+			p.circle(15.0, 9.0, 5.5);
+		});
+		// A ramp seen from its corner.
+		g.insert(QStringLiteral("shape-wedge"), [](GlyphPainter& p) {
+			p.polygon({{3.5, 20.0}, {15.5, 20.0}, {15.5, 8.0}});
+			p.polyline({{15.5, 8.0}, {20.5, 4.0}, {20.5, 16.0}, {15.5, 20.0}});
+			p.line(3.5, 20.0, 8.5, 16.0);
+			p.line(8.5, 16.0, 20.5, 4.0);
+		});
+		g.insert(QStringLiteral("shape-cylinder"), [](GlyphPainter& p) {
+			QPainterPath top;
+			top.addEllipse(QRectF(5.0, 3.5, 14.0, 5.0));
+			p.path(top);
+			p.line(5.0, 6.0, 5.0, 18.0);
+			p.line(19.0, 6.0, 19.0, 18.0);
+			QPainterPath bottom;
+			bottom.arcMoveTo(QRectF(5.0, 15.5, 14.0, 5.0), 180.0);
+			bottom.arcTo(QRectF(5.0, 15.5, 14.0, 5.0), 180.0, 180.0);
+			p.path(bottom);
+		});
+		g.insert(QStringLiteral("shape-cone"), [](GlyphPainter& p) {
+			QPainterPath base;
+			base.addEllipse(QRectF(4.5, 15.5, 15.0, 5.0));
+			p.path(base);
+			p.line(12.0, 3.5, 4.5, 18.0);
+			p.line(12.0, 3.5, 19.5, 18.0);
+		});
+		g.insert(QStringLiteral("shape-sphere"), [](GlyphPainter& p) {
+			p.circle(12.0, 12.0, 8.5);
+			QPainterPath equator;
+			equator.arcMoveTo(QRectF(3.5, 9.5, 17.0, 5.0), 180.0);
+			equator.arcTo(QRectF(3.5, 9.5, 17.0, 5.0), 180.0, 180.0);
+			p.path(equator);
+		});
+		// A doorway arch.
+		g.insert(QStringLiteral("shape-arch"), [](GlyphPainter& p) {
+			QPainterPath arch;
+			arch.moveTo(3.5, 20.5);
+			arch.lineTo(3.5, 12.0);
+			arch.arcTo(QRectF(3.5, 3.5, 17.0, 17.0), 180.0, -180.0);
+			arch.lineTo(20.5, 20.5);
+			arch.lineTo(16.0, 20.5);
+			arch.lineTo(16.0, 12.0);
+			arch.arcTo(QRectF(8.0, 8.0, 8.0, 8.0), 0.0, 180.0);
+			arch.lineTo(8.0, 20.5);
+			arch.closeSubpath();
+			p.path(arch);
+		});
+		// A ring of wall segments.
+		g.insert(QStringLiteral("shape-ring"), [](GlyphPainter& p) {
+			p.circle(12.0, 12.0, 8.5);
+			p.circle(12.0, 12.0, 4.5);
+			for (const qreal angle : {45.0, 135.0, 225.0, 315.0}) {
+				const QPointF inner = polar(12.0, 12.0, 4.5, angle);
+				const QPointF outer = polar(12.0, 12.0, 8.5, angle);
+				p.line(inner.x(), inner.y(), outer.x(), outer.y());
+			}
+		});
+		g.insert(QStringLiteral("shape-stairs"), [](GlyphPainter& p) {
+			p.polygon({{3.5, 20.5}, {3.5, 16.25}, {7.75, 16.25}, {7.75, 12.0}, {12.0, 12.0}, {12.0, 7.75}, {16.25, 7.75}, {16.25, 3.5}, {20.5, 3.5},
+				{20.5, 20.5}});
+		});
+		// Walls around a hollow inside, seen from above.
+		g.insert(QStringLiteral("shape-room"), [](GlyphPainter& p) {
+			p.rect(3.5, 3.5, 20.5, 20.5, 1.5);
+			p.rect(7.5, 7.5, 16.5, 16.5, 0.5);
+		});
+		// Level view layouts: the panes as they sit, the camera's filled and
+		// the plans' outlined. They mirror with the panes in right-to-left
+		// layouts (paintGlyph).
+		g.insert(QStringLiteral("layout-profile"), [](GlyphPainter& p) {
+			p.rect(3.5, 4.5, 20.5, 19.5, 1.5);
+			p.circle(12.0, 10.0, 2.25);
+			QPainterPath shoulders;
+			shoulders.moveTo(7.5, 17.0);
+			shoulders.cubicTo(8.0, 13.5, 16.0, 13.5, 16.5, 17.0);
+			p.path(shoulders);
+		});
+		g.insert(QStringLiteral("layout-single-2d"), [](GlyphPainter& p) {
+			p.rect(3.5, 4.5, 20.5, 19.5, 1.5);
+			p.widerPen(1.0);
+			p.line(9.25, 4.5, 9.25, 19.5);
+			p.line(14.75, 4.5, 14.75, 19.5);
+			p.line(3.5, 9.5, 20.5, 9.5);
+			p.line(3.5, 14.5, 20.5, 14.5);
+		});
+		g.insert(QStringLiteral("layout-single-3d"), [](GlyphPainter& p) {
+			p.rect(3.5, 4.5, 20.5, 19.5, 1.5, true);
+		});
+		g.insert(QStringLiteral("layout-camera-and-plan"), [](GlyphPainter& p) {
+			p.rect(3.5, 4.5, 11.25, 19.5, 1.0, true);
+			p.rect(12.75, 4.5, 20.5, 19.5, 1.0);
+		});
+		g.insert(QStringLiteral("layout-four-views"), [](GlyphPainter& p) {
+			p.rect(3.5, 4.5, 11.25, 11.25, 1.0, true);
+			p.rect(12.75, 4.5, 20.5, 11.25, 1.0);
+			p.rect(3.5, 12.75, 11.25, 19.5, 1.0);
+			p.rect(12.75, 12.75, 20.5, 19.5, 1.0);
+		});
+		g.insert(QStringLiteral("layout-camera-above-plans"), [](GlyphPainter& p) {
+			p.rect(3.5, 4.5, 20.5, 11.25, 1.0, true);
+			p.rect(3.5, 12.75, 8.5, 19.5, 1.0);
+			p.rect(9.5, 12.75, 14.5, 19.5, 1.0);
+			p.rect(15.5, 12.75, 20.5, 19.5, 1.0);
+		});
+		g.insert(QStringLiteral("layout-camera-beside-plans"), [](GlyphPainter& p) {
+			p.rect(3.5, 4.5, 13.0, 19.5, 1.0, true);
+			p.rect(14.5, 4.5, 20.5, 8.75, 1.0);
+			p.rect(14.5, 9.75, 20.5, 14.25, 1.0);
+			p.rect(14.5, 15.25, 20.5, 19.5, 1.0);
+		});
 		return g;
 	}();
 	return table;
@@ -746,6 +1004,11 @@ void paintGlyph(QPainter& painter, const QString& canonicalName, const QRectF& t
 	painter.setRenderHint(QPainter::Antialiasing, true);
 	painter.translate(target.topLeft());
 	painter.scale(target.width() / kGrid, target.height() / kGrid);
+	// A layout diagram pictures panes that swap sides right to left.
+	if (canonicalName.startsWith(QLatin1String("layout-")) && QGuiApplication::layoutDirection() == Qt::RightToLeft) {
+		painter.translate(kGrid, 0.0);
+		painter.scale(-1.0, 1.0);
+	}
 	GlyphPainter glyph(painter, color);
 	it.value()(glyph);
 	painter.restore();

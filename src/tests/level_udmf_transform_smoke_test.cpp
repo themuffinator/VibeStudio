@@ -93,6 +93,143 @@ void verifyHistoryAndArchive(const LevelMapDocument& source, LevelMapDocument ma
 		   "undo restores exact original text and node products", error);
 	expect(redoLevelMapEdit(&map, &error) && serializeLevelMap(map).bytes == after.bytes, "redo restores exact transformed archive", error);
 }
+void verifyThingDuplication(const LevelMapDocument& original) {
+	QString error;
+	auto source = original;
+	selectLevelMapObject(&source, "thing:0");
+	const auto before = serializeLevelMap(source).bytes;
+	expect(levelMapSelectionIsDuplicable(source), "UDMF things enable common duplicate actions");
+	LevelPlacementRequest request;
+	request.operation = LevelPlacementOperation::Duplicate;
+	request.offset = {.375, -.125, .25, true};
+	request.copies = 3;
+	auto result = prepareLevelPlacement(source, request);
+	if (expect(result.succeeded, "fractional UDMF thing array", result.error)) {
+		auto map = result.document;
+		expect(map.doomThings.size() == 4 && map.entities.size() == 4 && map.selection.size() == 3 && map.undoStack.size() == 1,
+			"array publishes native records, entity mirrors and selection as one undo step");
+		for (int i = 0; i < map.doomThings.size(); ++i) {
+			const auto& thing = map.doomThings[i];
+			expect(thing.x == 64.25 + i * .375 && thing.y == 64.25 - i * .125 && thing.z == .5 + i * .25 && thing.angle == 90 && thing.type == 1,
+				"copies derive fractional XYZ from the source and retain heading and type");
+			expect(map.entities[i].origin.x == thing.x && map.entities[i].origin.z == thing.z, "mirrors reflect native fractional placement");
+		}
+		expect(map.doomUdmf->source.startsWith(source.doomUdmf->source)
+			&& map.doomUdmf->source.count("user_note = \"untouched\";") == 4
+			&& map.doomUdmf->source.count("extension { version = 9007199254740993;") == 1,
+			"original bytes and unknown thing fields retained, global extension blocks not copied");
+		expect(inspectLevelDoomNodes(map).state == LevelDoomNodeState::Present, "ordinary thing arrays preserve built nodes");
+		const auto after = serializeLevelMap(map);
+		const auto oldLumps = d::lumps(before), newLumps = d::lumps(after.bytes);
+		expect(after.errors.isEmpty() && oldLumps.size() == newLumps.size(), "array WAD remains serializable", after.errors.join(';'));
+		for (int i = 0; i < oldLumps.size() && i < newLumps.size(); ++i) {
+			expect(oldLumps[i].name == newLumps[i].name && (i == 1 || oldLumps[i].bytes == newLumps[i].bytes),
+				"array preserves other map, duplicate resource, sidecar and node lumps");
+		}
+		LevelMapDocument reopened;
+		expect(loadLevelMapBytes({"array.wad", "MAP01", {}}, after.bytes, &reopened, &error)
+			&& reopened.doomThings.size() == 4 && reopened.doomUdmf->source == map.doomUdmf->source, "array save/reopen exact", error);
+		expect(undoLevelMapEdit(&map, &error) && serializeLevelMap(map).bytes == before && map.selection == source.selection,
+			"array undo restores exact bytes and source selection", error);
+		expect(redoLevelMapEdit(&map, &error) && serializeLevelMap(map).bytes == after.bytes && map.selection == result.document.selection,
+			"array redo restores exact bytes and copy selection", error);
+	}
+	auto direct = source;
+	expect(duplicateLevelMapObjects(&direct, {{LevelMapSelectionKind::DoomThing, 0}, {LevelMapSelectionKind::Entity, 0}}, 0, 0, 0, &error)
+		&& direct.doomThings.size() == 2 && direct.doomUdmf->source.count("x = 64.25; y = 64.25; height = 0.5;") == 2,
+		"overlapping thing and entity selectors copy once and zero offset preserves lexical content", error);
+	auto grouped = source;
+	QString group;
+	expect(createLevelSceneNode(&grouped, LevelSceneNodeKind::Group, "Thing array", {}, &group, &error)
+		&& assignLevelSceneObjects(&grouped, group, {"thing:0"}, &error), "array scene setup", error);
+	const auto sceneBefore = grouped.scene;
+	auto groupedResult = prepareLevelPlacement(grouped, request);
+	if (expect(groupedResult.succeeded, "array copies inherit source scene group", groupedResult.error)) {
+		auto map = groupedResult.document;
+		expect(levelSceneNode(map.scene, group)->objects.size() == 4 && validateLevelScene(map, map.scene, &error), "array scene metadata valid", error);
+		expect(undoLevelMapEdit(&map, &error) && map.scene == sceneBefore && map.selection == grouped.selection, "array scene undo exact", error);
+		expect(redoLevelMapEdit(&map, &error) && map.scene == groupedResult.document.scene, "array scene redo exact", error);
+	}
+	expect(setLevelSceneLocked(&grouped, group, true, &error), "lock array source", error);
+	const auto lockedBefore = serializeLevelMap(grouped).bytes;
+	auto denied = prepareLevelPlacement(grouped, request);
+	expect(!denied.succeeded && denied.error.contains("Unlock") && serializeLevelMap(grouped).bytes == lockedBefore,
+		"array cannot add members to a protected source group", denied.error);
+	auto optionalText = f::textmap();
+	optionalText.replace("height = 0.5; ", "/* keep block comment */ ");
+	LevelMapDocument optional;
+	expect(loadLevelMapBytes({"optional.wad", "MAP01", {}}, f::fixture(optionalText), &optional, &error), "copy optional height fixture", error);
+	selectLevelMapObject(&optional, "thing:0");
+	expect(duplicateLevelMapSelection(&optional, .5, 0, .125, &error) && optional.doomThings.last().z == .125
+		&& optional.doomUdmf->source.startsWith(optionalText) && optional.doomUdmf->source.count("/* keep block comment */") == 2,
+		"copy inserts missing height while retaining comments", error);
+	for (int type : {3000, 9303}) {
+		auto polyText = f::textmap();
+		polyText.replace("type = 1; angle = 90;", QStringLiteral("type = %1; angle = 721;").arg(type).toUtf8());
+		LevelMapDocument poly;
+		expect(loadLevelMapBytes({"poly.wad", "MAP01", {}}, f::fixture(polyText), &poly, &error), "polyobject copy fixture", error);
+		selectLevelMapObject(&poly, "thing:0");
+		expect(duplicateLevelMapSelection(&poly, 0, 0, 0, &error) && poly.doomGeometryChanged && poly.doomThings.last().angle == 721,
+			"adding polyobject controls invalidates nodes even at zero offset and preserves the polyobject ID", error);
+		expect(undoLevelMapEdit(&poly, &error) && !poly.doomGeometryChanged, "polyobject copy undo restores nodes", error);
+	}
+	for (auto phase : {LevelPlacementPhase::Preparing, LevelPlacementPhase::Arraying, LevelPlacementPhase::Finalizing, LevelPlacementPhase::Complete}) {
+		bool stopped = false;
+		LevelPlacementControl control;
+		control.progress = [&](const auto& p) { stopped |= p.phase == phase; };
+		control.isCancelled = [&] { return stopped; };
+		const auto cancelled = prepareLevelPlacement(source, request, control);
+		expect(stopped && cancelled.cancelled && !cancelled.succeeded && cancelled.document.format == LevelMapFormat::Unknown
+			&& serializeLevelMap(source).bytes == before, "array cancellation never publishes partial copies", cancelled.error);
+	}
+	request.offset = {4000000, 0, 0, true}; // Two fit, the third would exceed the native range.
+	const auto overflow = prepareLevelPlacement(source, request);
+	expect(!overflow.succeeded && serializeLevelMap(source).bytes == before && source.undoStack.isEmpty(), "late array overflow is atomic", overflow.error);
+	auto ambiguousText = f::textmap();
+	ambiguousText.replace("thing { x = 64.25;", "thing { x = 1; x = 64.25;");
+	LevelMapDocument ambiguous;
+	expect(loadLevelMapBytes({"ambiguous.wad", "MAP01", {}}, f::fixture(ambiguousText), &ambiguous, &error), "ambiguous thing fixture", error);
+	selectLevelMapObject(&ambiguous, "thing:0");
+	expect(!duplicateLevelMapSelection(&ambiguous, 1, 0, 0, &error) && error.contains("ambiguous")
+		&& ambiguous.doomUdmf->source == ambiguousText && ambiguous.undoStack.isEmpty(), "ambiguous changed coordinate refuses the entire copy", error);
+	auto manyText = f::textmap() + '\n';
+	for (int i = 0; i < 64; ++i) { manyText += "thing { x = 1; y = 2; type = 1; }\n"; }
+	LevelMapDocument many;
+	expect(loadLevelMapBytes({"many.wad", "MAP01", {}}, f::fixture(manyText), &many, &error), "record budget fixture", error);
+	QVector<LevelMapSelectionRef> manySelected;
+	for (const auto& thing : many.doomThings) { manySelected << LevelMapSelectionRef{LevelMapSelectionKind::DoomThing, thing.id}; }
+	setLevelMapSelection(&many, manySelected);
+	request.offset = {1, 0, 0, true}; request.copies = 256;
+	const auto tooMany = prepareLevelPlacement(many, request);
+	expect(!tooMany.succeeded && tooMany.error.contains("32768") && many.doomUdmf->source == manyText && many.undoStack.isEmpty(),
+		"UDMF arrays include entity mirrors in the bounded native-record budget", tooMany.error);
+	// An oversized selection must remain cancellable while it is validated,
+	// before the copy-count budget is reached. This also exercises indexed
+	// identities over a large source rather than repeated full-map searches.
+	auto largeText = f::textmap() + '\n';
+	for (int i = 0; i < 12000; ++i) { largeText += "thing { x = 1; y = 2; type = 1; }\n"; }
+	LevelMapDocument large;
+	expect(loadLevelMapBytes({"large-things.wad", "MAP01", {}}, f::fixture(largeText), &large, &error), "large thing selection fixture", error);
+	QVector<LevelMapSelectionRef> largeSelected;
+	for (const auto& thing : large.doomThings) { largeSelected << LevelMapSelectionRef{LevelMapSelectionKind::DoomThing, thing.id}; }
+	setLevelMapSelection(&large, largeSelected);
+	for (int cancelAfter : {200, 12500}) {
+		int checks = 0;
+		LevelPlacementControl duringValidation;
+		duringValidation.isCancelled = [&] { return ++checks > cancelAfter; };
+		QElapsedTimer validationTimer;
+		validationTimer.start();
+		const auto validationCancelled = prepareLevelPlacement(large, request, duringValidation);
+		expect(validationCancelled.cancelled && !validationCancelled.succeeded && checks > cancelAfter && validationTimer.elapsed() < 3000
+			&& validationCancelled.document.format == LevelMapFormat::Unknown && large.doomUdmf->source == largeText
+			&& large.undoStack.isEmpty() && large.selection == largeSelected,
+			"large thing selection cancels during identity indexing or selection validation without publishing any state", validationCancelled.error);
+	}
+	auto mixed = source;
+	setLevelMapSelection(&mixed, {{LevelMapSelectionKind::DoomThing, 0}, {LevelMapSelectionKind::DoomSector, 0}});
+	expect(!levelMapSelectionIsDuplicable(mixed) && !duplicateLevelMapSelection(&mixed, 1, 0, 0, &error)
+		&& serializeLevelMap(mixed).bytes == before, "mixed UDMF geometry selection cannot partially duplicate", error);
+}
 } // namespace
 int main(int argc, char** argv) {
 	QCoreApplication app(argc, argv);
@@ -101,6 +238,7 @@ int main(int argc, char** argv) {
 	if (!expect(loadLevelMapBytes({"source.wad", "MAP01", {}}, f::fixture(), &source, &error), "load generated UDMF", error)) {
 		return 1;
 	}
+	verifyThingDuplication(source);
 	// Overlapping selections must move each shared boundary vertex exactly once.
 	expect(setLevelMapSelection(
 			   &source,

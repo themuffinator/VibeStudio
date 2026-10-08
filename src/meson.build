@@ -65,6 +65,7 @@ install_headers('core/language_workspace_edit.h', 'core/language_code_actions.h'
 
 install_headers('core/box_resize.h', subdir: 'vibestudio/core')
 install_headers('core/box_draw.h', subdir: 'vibestudio/core')
+install_headers('core/camera_surface_placement.h', subdir: 'vibestudio/core')
 install_headers('core/level_navigation.h', subdir: 'vibestudio/core')
 install_headers('core/level_placement.h', subdir: 'vibestudio/core')
 install_headers('core/level_build_workspace.h', subdir: 'vibestudio/core')
@@ -78,7 +79,13 @@ install_headers('core/level_udmf.h', subdir: 'vibestudio/core')
 install_headers('core/package_index_p.h', subdir: 'vibestudio/core')
 install_headers('core/package_protection_p.h', subdir: 'vibestudio/core')
 install_headers('core/level_build_pak_deployment.h', subdir: 'vibestudio/core')
-install_headers('core/level_scene.h', 'core/level_scene_types.h', 'core/level_scene_locks.h', subdir: 'vibestudio/core')
+install_headers('core/level_scene.h', 'core/level_scene_types.h', 'core/level_scene_locks.h', 'core/level_linked_groups.h', subdir: 'vibestudio/core')
+install_headers('core/level_sidebar.h', subdir: 'vibestudio/core')
+install_headers('core/level_view_filters.h', subdir: 'vibestudio/core')
+install_headers('core/level_shapes.h', subdir: 'vibestudio/core')
+install_headers('core/portal_file.h', subdir: 'vibestudio/core')
+install_headers('core/level_doom_shapes.h', 'core/level_doom_align.h', subdir: 'vibestudio/core')
+install_headers('core/entity_builtin_catalogue.h', subdir: 'vibestudio/core')
 install_headers('core/map_geometry_cache.h', subdir: 'vibestudio/core')
 install_headers('core/level_material_paint.h', subdir: 'vibestudio/core')
 install_headers('core/level_surface_clipboard.h', subdir: 'vibestudio/core')
@@ -87,11 +94,18 @@ install_headers('core/doom_preview_geometry.h', 'core/doom_preview_materials.h',
 install_headers('core/extra_image.h', subdir: 'vibestudio/core')
 
 install_headers('core/asset_formats.h', 'core/workspace_document.h', subdir: 'vibestudio/core')
+install_headers('core/material_model.h', 'core/material_script.h', subdir: 'vibestudio/core')
+install_headers('core/material_classic.h', subdir: 'vibestudio/core')
+install_headers('core/material_eval.h', 'core/material_images.h', subdir: 'vibestudio/core')
+install_headers('core/material_render.h', 'core/material_render_p.h', subdir: 'vibestudio/core')
+install_headers('core/material_library.h', subdir: 'vibestudio/core')
+install_headers('core/material_graph.h', subdir: 'vibestudio/core')
 
 core_sources = files(
   'core/level_gestures.cpp',
   'core/level_camera_keys.cpp',
   'core/studio_settings_gestures.cpp',
+  'core/studio_settings_modeller.cpp',
   'core/asset_formats.cpp',
   'core/workspace_document.cpp',
   'core/extra_image.cpp',
@@ -109,6 +123,14 @@ core_sources = files(
   'core/level_placement_control_p.h',
   'core/level_scene.cpp',
   'core/level_scene_locks.cpp',
+  'core/level_linked_groups.cpp',
+  'core/level_doom_align.cpp',
+  'core/level_sidebar.cpp',
+  'core/level_view_filters.cpp',
+  'core/level_shapes.cpp',
+  'core/portal_file.cpp',
+  'core/level_doom_shapes.cpp',
+  'core/entity_builtin_catalogue.cpp',
   'core/doom_preview_geometry.cpp',
   'core/doom_preview_materials.cpp',
   'core/level_material_paint.cpp',
@@ -127,6 +149,16 @@ core_sources = files(
   'core/language_references.cpp',
   'core/code_files.cpp',
   'core/advanced_studio.cpp',
+  'core/material_model.cpp',
+  'core/material_script.cpp',
+  'core/material_classic.cpp',
+  'core/material_eval.cpp',
+  'core/material_images.cpp',
+  'core/material_render.cpp',
+  'core/material_render_classic.cpp',
+  'core/material_render_doom3.cpp',
+  'core/material_library.cpp',
+  'core/material_graph.cpp',
   'core/ai_connectors.cpp',
   'core/ai_transport.cpp',
   'core/ai_image_transport.cpp',
@@ -258,6 +290,17 @@ core_sources = files(
   'core/model_boundary_helpers.h',
   'core/model_surfaces.cpp',
   'core/model_surface_selection.cpp',
+  'core/model_geometric_topology.cpp',
+  'core/model_mesh_tools.cpp',
+  'core/model_mesh_tools_shape.cpp',
+  'core/model_mesh_tools_cut.cpp',
+  'core/model_mesh_tools_build.cpp',
+  'core/model_mesh_tools_uv.cpp',
+  'core/model_mesh_decimate.cpp',
+  # Tool helpers remain private to the mesh tool implementation.
+  'core/model_mesh_tools_p.h',
+  'core/model_selection_tools.cpp',
+  'core/model_lod.cpp',
   'core/model_material_slots.cpp',
   'core/model_animation.cpp',
   'core/model_pose.cpp',
@@ -265,6 +308,7 @@ core_sources = files(
   'core/model_trackball.cpp',
   'core/box_resize.cpp',
   'core/box_draw.cpp',
+  'core/camera_surface_placement.cpp',
   'core/model_transform_axes.cpp',
   'core/model_tags.cpp',
   'core/model_uv.cpp',
@@ -277,6 +321,25 @@ core_sources = files(
   'core/model_work.cpp',
   'core/model_export.cpp',
   'core/model_recovery.cpp',
+  # Skeletal models and the format decoders that live in their own files.
+  'core/model_skeleton.cpp',
+  'core/model_formats.cpp',
+  'core/model_formats_p.h',
+  'core/model_format_mdc.cpp',
+  'core/model_format_mdr.cpp',
+  'core/model_format_iqm.cpp',
+  'core/model_format_md5.cpp',
+  'core/model_format_mds.cpp',
+  'core/model_format_ghoul2.cpp',
+  'core/model_format_studio.cpp',
+  'core/model_format_hexen2.cpp',
+  'core/model_format_lwo.cpp',
+  'core/model_format_ase.cpp',
+  'core/model_format_fm.cpp',
+  'core/model_format_kvx.cpp',
+  # Modeller profiles (Blender, 3ds Max, MilkShape 3D) and sidebars, as data.
+  'core/model_editor_controls.cpp',
+  'core/model_sidebar.cpp',
   'core/operation_state.cpp',
   'core/package_archive.cpp',
   'core/package_zip.cpp',
@@ -362,7 +425,10 @@ install_headers('core/model_intersections.h', 'core/model_triangle_contact.h', s
 install_headers('core/model_import_repair.h', subdir: 'vibestudio/core')
 install_headers('core/model_boundary_bridge.h', subdir: 'vibestudio/core')
 install_headers('core/model_surfaces.h', subdir: 'vibestudio/core')
+install_headers('core/model_skeleton.h', 'core/model_md5.h', 'core/model_ase.h', 'core/model_iqm.h', subdir: 'vibestudio/core')
+install_headers('core/model_editor_controls.h', 'core/model_sidebar.h', subdir: 'vibestudio/core')
 install_headers('core/model_surface_selection.h', subdir: 'vibestudio/core')
+install_headers('core/model_geometric_topology.h', 'core/model_mesh_tools.h', 'core/model_selection_tools.h', 'core/model_lod.h', subdir: 'vibestudio/core')
 install_headers('core/model_material_slots.h', subdir: 'vibestudio/core')
 install_headers('core/model_animation.h', subdir: 'vibestudio/core')
 install_headers('core/model_pose.h', subdir: 'vibestudio/core')
@@ -450,6 +516,14 @@ app_sources = files(
   'app/audio_recovery_dialog.cpp',
   'app/audio_waveform_view.cpp',
   'app/texture_canvas.cpp',
+  'app/material_tasks.cpp',
+  'app/material_preview_view.cpp',
+  'app/material_graph_view.cpp',
+  'app/material_property_panel.cpp',
+  'app/material_script_highlighter.cpp',
+  'app/material_library_model.cpp',
+  'app/material_workbench.cpp',
+  'app/material_actions.cpp',
   'app/texture_editor_dialog.cpp',
   'app/texture_preview_worker.cpp',
   'app/texture_png_export_dialog.cpp',
@@ -485,6 +559,8 @@ app_sources = files(
   'app/level_document_dialog.cpp',
   'app/level_document_actions.cpp',
   'app/level_view_actions.cpp',
+  'app/level_camera_placement_actions.cpp',
+  'app/editor_profile_dialog.cpp',
   'app/level_bookmark_actions.cpp',
   'app/level_bookmarks_dialog.cpp',
   'app/level_build_workspace_dialog.cpp',
@@ -576,6 +652,16 @@ app_sources = files(
   'app/level_camera_resize_actions.cpp',
   'app/model_viewport_collision.cpp',
   'app/model_viewport_edit.cpp',
+  'app/model_viewport_tools.cpp',
+  'app/model_editor_tools.cpp',
+  'app/model_editor_modal.cpp',
+  # Modeller profiles, sidebars, four-view panes and the skeleton panel.
+  'app/model_editor_profiles.cpp',
+  'app/model_editor_layout.cpp',
+  'app/model_editor_skeleton.cpp',
+  'app/model_controls_dialog.cpp',
+  'app/model_viewport_mirror.cpp',
+  'app/model_page.cpp',
   'app/model_viewport_animation.cpp',
   'app/model_viewport_surface.cpp',
   'app/model_viewport_drive.cpp',
@@ -601,11 +687,23 @@ app_sources = files(
   'app/model_uv_fill.cpp',
   'app/model_rasterizer.cpp',
   'app/model_vertex_overlay.cpp',
+  'app/studio_accessibility.cpp',
   'app/studio_actions.cpp',
   'app/studio_charts.cpp',
+  'app/studio_docks.cpp',
   'app/studio_icons.cpp',
   'app/studio_layout.cpp',
   'app/studio_runtime.cpp',
+  'app/studio_sidebar.cpp',
+  'app/tile_grid.cpp',
+  'app/level_sidebar_actions.cpp',
+  'app/level_sidebar_panels.cpp',
+  'app/level_asset_browsers.cpp',
+  'app/level_shapes_panel.cpp',
+  'app/level_tools_page.cpp',
+  'app/level_editing_actions.cpp',
+  'app/studio_sound_cues.cpp',
+  'app/studio_speech.cpp',
   'app/studio_theme.cpp',
   'app/syntax_highlight.cpp',
   'app/ui_primitives.cpp',
@@ -613,6 +711,7 @@ app_sources = files(
 )
 
 app_moc_headers = files(
+  'app/editor_profile_dialog.h',
   'app/level_gestures_dialog.h',
   'app/package_entry_view.h',
   'app/package_staging_view.h',
@@ -627,6 +726,12 @@ app_moc_headers = files(
   'app/brush_editor_dialog.h',
   'app/patch_editor_dialog.h',
   'app/texture_canvas.h',
+  'app/material_preview_view.h',
+  'app/material_graph_view.h',
+  'app/material_property_panel.h',
+  'app/material_script_highlighter.h',
+  'app/material_library_model.h',
+  'app/material_workbench.h',
   'app/texture_editor_dialog.h',
   'app/application_shell.h',
   'app/project_search_panel.h',
@@ -663,7 +768,10 @@ app_moc_headers = files(
   'app/studio_actions.h',
   'app/studio_charts.h',
   'app/studio_layout.h',
+  'app/studio_sidebar.h',
+  'app/studio_sound_cues.h',
   'app/syntax_highlight.h',
+  'app/tile_grid.h',
 )
 
 app_moc_sources = qt6.preprocess(
@@ -678,10 +786,18 @@ audio_capture_platform_dep = dependency('', required: false)
 if host_machine.system() == 'darwin'
   audio_capture_platform_dep = dependency('appleframeworks', modules: ['CoreFoundation'])
 endif
+# The application icon at every size Qt asks for (assets/branding, generated by
+# scripts/generate_branding.py). studioApplicationIcon() initialises it.
+branding_resources = qt6.compile_resources(
+  name: 'vibestudio_branding',
+  sources: files('../assets/branding/vibestudio.qrc'),
+)
+
 vibestudio_app = static_library(
   'vibestudio_app',
   app_sources,
   app_moc_sources,
+  branding_resources,
   include_directories: vibestudio_includes,
   dependencies: [qt6_dep, qt6_multimedia_dep, audio_capture_platform_dep, audio_duplex_dep, vibestudio_core_dep],
   install: false,
@@ -693,15 +809,36 @@ vibestudio_app_dep = declare_dependency(
   link_with: [vibestudio_app],
 )
 
+# Windows: the brand icon and version details on vibestudio.exe
+# (packaging/windows/vibestudio.rc.in, filled in from VERSION).
+vibestudio_platform_sources = []
+if host_machine.system() == 'windows' and find_program('rc', 'llvm-rc', required: false).found()
+  windows = import('windows')
+  version_core = meson.project_version().split('+')[0].split('-')[0].split('.')
+  rc_config = configuration_data()
+  rc_config.set('VERSION', meson.project_version())
+  rc_config.set('VERSION_MAJOR', version_core[0])
+  rc_config.set('VERSION_MINOR', version_core.length() > 1 ? version_core[1] : '0')
+  rc_config.set('VERSION_PATCH', version_core.length() > 2 ? version_core[2] : '0')
+  rc_config.set('FILE_FLAGS', meson.project_version().split('+')[0].contains('-') ? '0x2L' : '0x0L')
+  vibestudio_platform_sources += windows.compile_resources(
+    configure_file(input: '../packaging/windows/vibestudio.rc.in', output: 'vibestudio.rc', configuration: rc_config),
+    include_directories: include_directories('../assets/branding/icons'),
+    depend_files: files('../assets/branding/icons/vibestudio.ico'),
+  )
+endif
+
 vibestudio = executable(
   'vibestudio',
+  vibestudio_platform_sources,
   files('cli/audio_take.cpp'),
   files('cli/audio_recording.cpp'),
   files('cli/audio_session.cpp'),
   files('cli/level_gestures.cpp'),
   files('cli/model_import_repair.cpp'),
+  files('cli/model_controls.cpp'),
   files('cli/ai_generation.cpp'),
-  ['main.cpp', 'cli/cli.cpp', 'cli/audio_session.cpp', 'cli/level_scene.cpp', 'cli/level_bookmarks.cpp', 'cli/workspace.cpp', 'cli/level_build_workspace.cpp', 'cli/level_build_artifacts.cpp', 'cli/level_build_deployment.cpp', 'cli/level_material_paint.cpp', 'cli/level_surface_clipboard.cpp', 'cli/model_mdl.cpp', 'cli/model_appearance.cpp', 'cli/model_assembly.cpp', 'cli/model_collision.cpp', 'cli/model_skin_bindings.cpp', 'cli/model_surfaces.cpp', 'cli/model_material_slots.cpp', 'cli/model_intersections.cpp', 'cli/package_copy_limits.cpp', 'cli/package_copy_store_limits.cpp', 'cli/package_copy_sessions.cpp'],
+  ['main.cpp', 'cli/cli.cpp', 'cli/audio_session.cpp', 'cli/level_scene.cpp', 'cli/level_bookmarks.cpp', 'cli/workspace.cpp', 'cli/level_build_workspace.cpp', 'cli/level_build_artifacts.cpp', 'cli/level_build_deployment.cpp', 'cli/level_material_paint.cpp', 'cli/level_surface_clipboard.cpp', 'cli/model_mdl.cpp', 'cli/model_appearance.cpp', 'cli/model_assembly.cpp', 'cli/model_collision.cpp', 'cli/model_skin_bindings.cpp', 'cli/model_surfaces.cpp', 'cli/model_tools.cpp', 'cli/materials.cpp', 'cli/model_material_slots.cpp', 'cli/model_intersections.cpp', 'cli/package_copy_limits.cpp', 'cli/package_copy_store_limits.cpp', 'cli/package_copy_sessions.cpp'],
   include_directories: vibestudio_includes,
   dependencies: [vibestudio_app_dep],
   install: true,
@@ -753,6 +890,45 @@ texture_transform_smoke_test = executable(
   install: false,
 )
 test('texture-transform-smoke', texture_transform_smoke_test, timeout: 90)
+
+material_smoke_test = executable(
+  'material_smoke_test',
+  ['tests/material_smoke_test.cpp'],
+  include_directories: vibestudio_includes,
+  dependencies: [vibestudio_core_dep],
+  install: false,
+)
+test('material-smoke', material_smoke_test, timeout: 180)
+
+material_graph_smoke_test = executable(
+  'material_graph_smoke_test',
+  ['tests/material_graph_smoke_test.cpp'],
+  include_directories: vibestudio_includes,
+  dependencies: [vibestudio_core_dep],
+  install: false,
+)
+test('material-graph-smoke', material_graph_smoke_test, timeout: 120)
+
+material_cli_smoke_test = executable(
+  'material_cli_smoke_test',
+  ['tests/material_cli_smoke_test.cpp'],
+  include_directories: vibestudio_includes,
+  dependencies: [vibestudio_core_dep],
+  install: false,
+)
+test('material-cli-smoke', material_cli_smoke_test, args: [vibestudio], timeout: 240)
+
+# The Materials workbench as a widget, driven with Qt Test.
+if qt6_test_dep.found()
+  material_workbench_ui_smoke_test = executable(
+    'material_workbench_ui_smoke_test',
+    ['tests/material_workbench_ui_smoke_test.cpp'],
+    include_directories: vibestudio_includes,
+    dependencies: [vibestudio_app_dep, qt6_test_dep],
+    install: false,
+  )
+  test('material-workbench-ui-smoke', material_workbench_ui_smoke_test, timeout: 300)
+endif
 
 texture_resource_smoke_test = executable(
   'texture_resource_smoke_test',
@@ -1027,6 +1203,26 @@ level_scene_locks_smoke_test = executable('level_scene_locks_smoke_test', ['test
   include_directories: vibestudio_includes, dependencies: [vibestudio_core_dep], install: false)
 test('level-scene-locks-smoke', level_scene_locks_smoke_test, timeout: 120)
 
+level_sidebar_smoke_test = executable('level_sidebar_smoke_test', ['tests/level_sidebar_smoke_test.cpp'],
+  include_directories: vibestudio_includes, dependencies: [vibestudio_core_dep], install: false)
+test('level-sidebar-smoke', level_sidebar_smoke_test)
+
+level_map_tools_smoke_test = executable('level_map_tools_smoke_test', ['tests/level_map_tools_smoke_test.cpp'],
+  include_directories: vibestudio_includes, dependencies: [vibestudio_core_dep], install: false)
+test('level-map-tools-smoke', level_map_tools_smoke_test, timeout: 120)
+
+level_shapes_smoke_test = executable('level_shapes_smoke_test', ['tests/level_shapes_smoke_test.cpp'],
+  include_directories: vibestudio_includes, dependencies: [vibestudio_core_dep], install: false)
+test('level-shapes-smoke', level_shapes_smoke_test)
+
+portal_file_smoke_test = executable('portal_file_smoke_test', ['tests/portal_file_smoke_test.cpp'],
+  include_directories: vibestudio_includes, dependencies: [vibestudio_core_dep], install: false)
+test('portal-file-smoke', portal_file_smoke_test)
+
+entity_builtin_catalogue_smoke_test = executable('entity_builtin_catalogue_smoke_test', ['tests/entity_builtin_catalogue_smoke_test.cpp'],
+  include_directories: vibestudio_includes, dependencies: [vibestudio_core_dep], install: false)
+test('entity-builtin-catalogue-smoke', entity_builtin_catalogue_smoke_test)
+
 level_scene_locks_benchmark = executable('level_scene_locks_benchmark', ['tests/level_scene_locks_benchmark.cpp'],
   include_directories: vibestudio_includes, dependencies: [vibestudio_core_dep], install: false)
 
@@ -1037,6 +1233,10 @@ test('level-scene-ui-smoke', level_scene_ui_smoke_test, timeout: 120)
 level_scene_cli_smoke_test = executable('level_scene_cli_smoke_test', ['tests/level_scene_cli_smoke_test.cpp'],
   include_directories: vibestudio_includes, dependencies: [vibestudio_core_dep], install: false)
 test('level-scene-cli-smoke', level_scene_cli_smoke_test, args: [vibestudio], timeout: 120)
+
+level_linked_groups_smoke_test = executable('level_linked_groups_smoke_test', ['tests/level_linked_groups_smoke_test.cpp'],
+  include_directories: vibestudio_includes, dependencies: [vibestudio_core_dep], install: false)
+test('level-linked-groups-smoke', level_linked_groups_smoke_test, args: [vibestudio], timeout: 120)
 
 level_map_load_ui_smoke_test = executable('level_map_load_ui_smoke_test', ['tests/level_map_load_ui_smoke_test.cpp'],
   include_directories: vibestudio_includes, dependencies: [vibestudio_app_dep], install: false)
@@ -1318,6 +1518,18 @@ test('level-views-ui-smoke', level_views_ui_smoke_test, args: [vibestudio], time
 level_view_workspace_ui_smoke_test = executable('level_view_workspace_ui_smoke_test', ['tests/level_view_workspace_ui_smoke_test.cpp'],
   include_directories: vibestudio_includes, dependencies: [vibestudio_app_dep], install: false)
 test('level-view-workspace-ui-smoke', level_view_workspace_ui_smoke_test, timeout: 240)
+
+camera_surface_placement_smoke_test = executable('camera_surface_placement_smoke_test', ['tests/camera_surface_placement_smoke_test.cpp'],
+  include_directories: vibestudio_includes, dependencies: [vibestudio_core_dep], install: false)
+test('camera-surface-placement-smoke', camera_surface_placement_smoke_test, timeout: 120)
+
+level_camera_placement_ui_smoke_test = executable('level_camera_placement_ui_smoke_test', ['tests/level_camera_placement_ui_smoke_test.cpp'],
+  include_directories: vibestudio_includes, dependencies: [vibestudio_app_dep], install: false)
+test('level-camera-placement-ui-smoke', level_camera_placement_ui_smoke_test, timeout: 150)
+
+level_sidebar_ui_smoke_test = executable('level_sidebar_ui_smoke_test', ['tests/level_sidebar_ui_smoke_test.cpp'],
+  include_directories: vibestudio_includes, dependencies: [vibestudio_app_dep], install: false)
+test('level-sidebar-ui-smoke', level_sidebar_ui_smoke_test, timeout: 180)
 
 viewport_hud_smoke_test = executable('viewport_hud_smoke_test', ['tests/viewport_hud_smoke_test.cpp', 'app/viewport_hud.cpp'],
   include_directories: vibestudio_includes, dependencies: [qt6_dep], install: false)
@@ -2104,6 +2316,10 @@ test(
   env: ui_primitives_test_env,
 )
 
+studio_sidebar_smoke_test = executable('studio_sidebar_smoke_test', ['tests/studio_sidebar_smoke_test.cpp'],
+  include_directories: vibestudio_includes, dependencies: [vibestudio_app_dep], install: false)
+test('studio-sidebar-smoke', studio_sidebar_smoke_test, env: ui_primitives_test_env, timeout: 90)
+
 document_watch_smoke_test = executable(
   'document_watch_smoke_test',
   ['tests/document_watch_smoke_test.cpp'],
@@ -2300,6 +2516,56 @@ model_topology_smoke_test = executable(
 )
 test('model-topology-smoke', model_topology_smoke_test, args: [vibestudio.full_path()], depends: vibestudio, env: model_document_test_env, timeout: 90)
 
+model_mesh_tools_smoke_test = executable(
+  'model_mesh_tools_smoke_test', ['tests/model_mesh_tools_smoke_test.cpp'],
+  include_directories: vibestudio_includes, dependencies: [vibestudio_core_dep], install: false,
+)
+test('model-mesh-tools-smoke', model_mesh_tools_smoke_test, args: [vibestudio.full_path()], depends: vibestudio, env: model_document_test_env, timeout: 180)
+
+# Skeletal models and the format decoders in core/model_format_*.cpp.
+model_skeleton_smoke_test = executable(
+  'model_skeleton_smoke_test', ['tests/model_skeleton_smoke_test.cpp'],
+  include_directories: vibestudio_includes, dependencies: [vibestudio_core_dep], install: false,
+)
+test('model-skeleton-smoke', model_skeleton_smoke_test, timeout: 120)
+
+model_editor_controls_smoke_test = executable(
+  'model_editor_controls_smoke_test', ['tests/model_editor_controls_smoke_test.cpp'],
+  include_directories: vibestudio_includes, dependencies: [vibestudio_core_dep], install: false,
+)
+test('model-editor-controls-smoke', model_editor_controls_smoke_test, args: [vibestudio.full_path()], depends: vibestudio, timeout: 180)
+
+model_format_mdc_mdr_iqm_smoke_test = executable(
+  'model_format_mdc_mdr_iqm_smoke_test', ['tests/model_format_mdc_mdr_iqm_smoke_test.cpp'],
+  include_directories: vibestudio_includes, dependencies: [vibestudio_core_dep], install: false,
+)
+test('model-format-mdc-mdr-iqm-smoke', model_format_mdc_mdr_iqm_smoke_test, timeout: 120)
+
+model_format_md5_smoke_test = executable(
+  'model_format_md5_smoke_test', ['tests/model_format_md5_smoke_test.cpp'],
+  include_directories: vibestudio_includes, dependencies: [vibestudio_core_dep], install: false,
+)
+test('model-format-md5-smoke', model_format_md5_smoke_test, timeout: 120)
+
+model_format_mds_ghoul2_smoke_test = executable(
+  'model_format_mds_ghoul2_smoke_test', ['tests/model_format_mds_ghoul2_smoke_test.cpp'],
+  include_directories: vibestudio_includes, dependencies: [vibestudio_core_dep], install: false,
+)
+test('model-format-mds-ghoul2-smoke', model_format_mds_ghoul2_smoke_test, timeout: 120)
+
+model_format_static_smoke_test = executable(
+  'model_format_static_smoke_test', ['tests/model_format_static_smoke_test.cpp'],
+  include_directories: vibestudio_includes, dependencies: [vibestudio_core_dep], install: false,
+)
+test('model-format-static-smoke', model_format_static_smoke_test, timeout: 120)
+
+model_format_studio_hexen2_fm_smoke_test = executable(
+  'model_format_studio_hexen2_fm_smoke_test', ['tests/model_format_studio_hexen2_fm_smoke_test.cpp'],
+  include_directories: vibestudio_includes, dependencies: [vibestudio_core_dep], install: false,
+)
+test('model-format-studio-hexen2-fm-smoke', model_format_studio_hexen2_fm_smoke_test, timeout: 120)
+
+
 model_health_smoke_test = executable(
   'model_health_smoke_test', ['tests/model_health_smoke_test.cpp'],
   include_directories: vibestudio_includes, dependencies: [vibestudio_core_dep], install: false,
@@ -2443,6 +2709,18 @@ model_tags_ui_smoke_test = executable(
   include_directories: vibestudio_includes, dependencies: [vibestudio_app_dep], install: false,
 )
 test('model-tags-ui-smoke', model_tags_ui_smoke_test, env: model_document_test_env, timeout: 90)
+
+model_editor_tools_ui_smoke_test = executable(
+  'model_editor_tools_ui_smoke_test', ['tests/model_editor_tools_ui_smoke_test.cpp'],
+  include_directories: vibestudio_includes, dependencies: [vibestudio_app_dep], install: false,
+)
+test('model-editor-tools-ui-smoke', model_editor_tools_ui_smoke_test, env: model_document_test_env, timeout: 180)
+
+model_profiles_ui_smoke_test = executable(
+  'model_profiles_ui_smoke_test', ['tests/model_profiles_ui_smoke_test.cpp'],
+  include_directories: vibestudio_includes, dependencies: [vibestudio_app_dep], install: false,
+)
+test('model-profiles-ui-smoke', model_profiles_ui_smoke_test, env: model_document_test_env, timeout: 180)
 
 model_animation_smoke_test = executable(
   'model_animation_smoke_test', ['tests/model_animation_smoke_test.cpp'],
@@ -3572,6 +3850,26 @@ test(
   studio_runtime_smoke_test,
   env: ui_primitives_test_env,
 )
+
+studio_speech_smoke_test = executable(
+  'studio_speech_smoke_test',
+  ['tests/studio_speech_smoke_test.cpp', 'app/studio_speech.cpp', 'app/studio_accessibility.cpp'],
+  include_directories: vibestudio_includes,
+  dependencies: [qt6_dep, vibestudio_core_dep],
+  install: false,
+)
+
+test('studio-speech-smoke', studio_speech_smoke_test, timeout: 60)
+
+studio_sound_cues_smoke_test = executable(
+  'studio_sound_cues_smoke_test',
+  ['tests/studio_sound_cues_smoke_test.cpp'],
+  include_directories: vibestudio_includes,
+  dependencies: [vibestudio_app_dep],
+  install: false,
+)
+
+test('studio-sound-cues-smoke', studio_sound_cues_smoke_test, timeout: 60)
 
 # Builds the real window from the app library and drives it with Qt Test:
 # fixtures open, rows get selected, keys get pressed, and the checks assert

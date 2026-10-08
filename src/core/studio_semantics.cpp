@@ -391,6 +391,13 @@ QVector<ShortcutDescriptor> shortcutDescriptors()
 			QStringLiteral("Ctrl+,"),
 			QCoreApplication::translate("VibeStudioSemantics", "Open language, accessibility, theme, density, editor profile, and automation preferences.")),
 		shortcut(
+			QStringLiteral("read-aloud"),
+			QStringLiteral("accessibility.read-aloud"),
+			QCoreApplication::translate("VibeStudioSemantics", "Read Aloud"),
+			QStringLiteral("global"),
+			QStringLiteral("Ctrl+Shift+U"),
+			QCoreApplication::translate("VibeStudioSemantics", "Read the selected text, the focused item, or the latest status message aloud with this computer's voice; press again to stop.")),
+		shortcut(
 			QStringLiteral("about"),
 			QStringLiteral("app.about"),
 			QCoreApplication::translate("VibeStudioSemantics", "About VibeStudio"),
@@ -1047,10 +1054,10 @@ QVector<ShortcutDescriptor> shortcutDescriptors()
 		shortcut(
 			QStringLiteral("mode-shaders"),
 			QStringLiteral("shell.mode.shaders"),
-			QCoreApplication::translate("VibeStudioSemantics", "Shaders Mode"),
+			QCoreApplication::translate("VibeStudioSemantics", "Materials Mode"),
 			QStringLiteral("shell"),
 			QStringLiteral("Ctrl+8"),
-			QCoreApplication::translate("VibeStudioSemantics", "Show the shader and material surface.")),
+			QCoreApplication::translate("VibeStudioSemantics", "Show the textures, shaders and materials surface.")),
 		shortcut(
 			QStringLiteral("mode-build"),
 			QStringLiteral("shell.mode.build"),
@@ -1434,6 +1441,8 @@ QVector<CommandPaletteEntry> commandPaletteEntries()
 			QT_TRANSLATE_NOOP("VibeStudioSemantics", "Paint individual map surfaces in the camera with one undo step per stroke.")},
 		{"map-draw-brush", "map.draw-brush", QT_TRANSLATE_NOOP("VibeStudioSemantics", "Draw Brush in Camera"),
 			QT_TRANSLATE_NOOP("VibeStudioSemantics", "Drag a brush footprint on a construction plane; adjust depth with the wheel.")},
+		{"map-place-at-camera", "map.place-at-camera", QT_TRANSLATE_NOOP("VibeStudioSemantics", "Place at Camera Surface"),
+			QT_TRANSLATE_NOOP("VibeStudioSemantics", "Place the selected Create class at the surface under the camera centre.")},
 		{"map-sample-material", "map.sample-material", QT_TRANSLATE_NOOP("VibeStudioSemantics", "Sample Map Material"),
 			QT_TRANSLATE_NOOP("VibeStudioSemantics", "Choose the material of a camera surface without changing the map.")},
 		{"map-manage-views", "map.manage-views", QT_TRANSLATE_NOOP("VibeStudioSemantics", "Saved Level Views"),

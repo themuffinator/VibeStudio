@@ -93,7 +93,7 @@ void ApplicationShell::registerLevelSurfaceCommands()
 		command.handler = [this, id = ids[i]] {
 			if (!m_levelSurfaceTools) { return; }
 			setMode(StudioMode::Levels);
-			if (m_levelMapInspectorTabs) { m_levelMapInspectorTabs->setCurrentWidget(m_levelSurfaceTools); }
+			showLevelSidebarPage(QStringLiteral("surfaces"));
 			QString error;
 			if (!queueLevelSurfaceEdit(m_levelSurfaceTools->request(id), &error)) {
 				m_levelSurfaceTools->setStatus(error, levelSurfaceEditsPending()); statusBar()->showMessage(error, 6000);
@@ -109,7 +109,7 @@ void ApplicationShell::registerLevelSurfaceCommands()
 		command.statusTip = paste ? tr("Paste the copied material, mapping and flags onto the Surfaces target.") : tr("Copy the inspected brush face's material, mapping and flags.");
 		command.handler = [this, paste] {
 			if (!m_levelSurfaceTools) { return; }
-			setMode(StudioMode::Levels); if (m_levelMapInspectorTabs) { m_levelMapInspectorTabs->setCurrentWidget(m_levelSurfaceTools); }
+			setMode(StudioMode::Levels); showLevelSidebarPage(QStringLiteral("surfaces"));
 			QString error; bool done = false;
 			if (paste) {
 				auto targets = levelSurfacePasteSelectionTargets(m_levelMapDocument);
@@ -294,7 +294,7 @@ bool ApplicationShell::pasteLevelSurfaceTargets(const QVector<LevelMaterialTarge
 	work.clipboardFormat = m_levelSurfaceClipboardFormat;
 	work.token = ++m_levelSurfaceToken; m_levelSurfaceCurrent = levelSurfaceContextGuard(); m_levelSurfacePasting = true;
 	if (!m_levelSurfaceWorker->start(std::move(work))) { cancelLevelSurfaceEdits(); return fail(tr("The surface worker is still finishing a previous operation.")); }
-	if (m_levelMapInspectorTabs) { m_levelMapInspectorTabs->setCurrentWidget(m_levelSurfaceTools); }
+	showLevelSidebarPage(QStringLiteral("surfaces"));
 	refreshLevelSurfaceTools();
 	const auto message = options.includeSelection ? tr("Preparing surface paste for the hit and selected objects…")
 		: tr("Preparing paste for %n surface(s)…", nullptr, static_cast<int>(targets.size()));

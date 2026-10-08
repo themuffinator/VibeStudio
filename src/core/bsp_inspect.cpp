@@ -1266,7 +1266,13 @@ PortalFileSummary inspectPortalFile(const QString& path)
 	}
 
 	summary.leafCount = counts.at(0);
-	if (hasClusters) {
+	if (summary.magic == QStringLiteral("PRT1-AM")) {
+		// PRT1-AM orders its counts clusters, portals, leaves, as
+		// ericw-tools' common/prtfile.cc reads them.
+		summary.clusterCount = counts.at(0);
+		summary.portalCount = counts.at(1);
+		summary.leafCount = counts.at(2);
+	} else if (hasClusters) {
 		summary.clusterCount = counts.at(1);
 		summary.portalCount = counts.at(2);
 	} else {

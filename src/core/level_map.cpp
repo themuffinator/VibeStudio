@@ -4,6 +4,7 @@
 #include "core/level_udmf.h"
 #include "core/level_scene.h"
 #include "core/level_scene_locks.h"
+#include "core/level_linked_groups.h"
 #include "core/level_patch.h"
 #include "core/level_brush.h"
 #include "core/level_document.h"
@@ -26,6 +27,7 @@
 #include <QFile>
 #include <QFileInfo>
 #include <QHash>
+#include <QPointF>
 #include <QRegularExpression>
 #include <QSaveFile>
 #include <QSet>
@@ -36,6 +38,7 @@
 #include <functional>
 #include <limits>
 #include <numeric>
+#include <numbers>
 #include <optional>
 
 namespace vibestudio {
@@ -1216,6 +1219,7 @@ void readOptionalFlags(const QVector<MapToken>& tokens, int* index, int limit, L
 	}
 	if (extras.size() >= 3) {
 		face->surfaceValue = static_cast<qint64>(std::llround(extras.at(2)));
+		face->flagsWritten = true;
 	}
 }
 
@@ -3196,9 +3200,12 @@ void refreshEditState(LevelMapDocument* document)
 // things leave those lumps as good as they were.
 bool commandChangesDoomGeometry(const LevelMapUndoCommand& command)
 {
+	if (command.commandKind == QStringLiteral("batch")) {
+		return std::any_of(command.children.cbegin(), command.children.cend(), [](const LevelMapUndoCommand& child) { return commandChangesDoomGeometry(child); });
+	}
 	// Extension fields can influence the builder in namespace-specific ways.
 	if (command.commandKind == QStringLiteral("udmf-properties")) { return true; }
-	if (command.commandKind == QStringLiteral("udmf-transform")) {
+	if (command.commandKind == QStringLiteral("udmf-transform") || command.commandKind == QStringLiteral("udmf-add-things")) {
 		return command.udmfNodeInputsChanged;
 	}
 	// A topology step that only changed sector fields (heights, light) moves
@@ -3289,6 +3296,9 @@ void pushUndo(LevelMapDocument* document, LevelMapUndoCommand command)
 		}
 	}
 	refreshEditState(document);
+	// Every edit passes here, from the studio and the CLI alike: the linked
+	// copies of whatever it changed take it on, inside this same undo step.
+	syncLevelLinkedGroups(document);
 }
 
 void translateBrush(LevelMapBrush* brush, double dx, double dy, double dz)
@@ -3751,8 +3761,13 @@ bool applyLevelMapGeometryCommand(LevelMapDocument* document, const LevelMapUndo
 	if (!document) {
 		return false;
 	}
-	if (command.commandKind == QStringLiteral("udmf-properties") || command.commandKind == QStringLiteral("udmf-transform")) {
-		return adoptUdmfText(document, forward ? command.udmfAfter : command.udmfBefore);
+	if (command.commandKind == QStringLiteral("udmf-properties") || command.commandKind == QStringLiteral("udmf-transform")
+		|| command.commandKind == QStringLiteral("udmf-add-things")) {
+		if (!adoptUdmfText(document, forward ? command.udmfAfter : command.udmfBefore)) { return false; }
+		if (command.commandKind == QStringLiteral("udmf-add-things")) {
+			setLevelMapSelection(document, forward ? command.selectionResult : command.selectionSnapshot);
+		}
+		return true;
 	}
 	if (command.commandKind == QStringLiteral("transform-objects") || command.commandKind == QStringLiteral("edit-patch")
 		|| command.commandKind == QStringLiteral("edit-brush")) {
@@ -4144,15 +4159,65 @@ bool applyLevelMapGeometryCommand(LevelMapDocument* document, const LevelMapUndo
 	return false;
 }
 
-bool applyLevelMapCommand(LevelMapDocument* document, const LevelMapUndoCommand& command, bool forward)
+bool applyLevelMapCommandItself(LevelMapDocument* document, const LevelMapUndoCommand& command, bool forward)
 {
 	if (!document) { return false; }
+	// A batch replays its commands in order, and undoes them in reverse; one
+	// that cannot replay takes back those this batch already replayed.
+	if (command.commandKind == QStringLiteral("batch")) {
+		const auto count = static_cast<qsizetype>(command.children.size());
+		const auto child = [&command, count, forward](qsizetype step) -> const LevelMapUndoCommand& {
+			return command.children.at(static_cast<size_t>(forward ? step : count - 1 - step));
+		};
+		for (qsizetype step = 0; step < count; ++step) {
+			if (!applyLevelMapCommand(document, child(step), forward)) {
+				for (qsizetype back = step - 1; back >= 0; --back) {
+					applyLevelMapCommand(document, child(back), !forward);
+				}
+				return false;
+			}
+		}
+		return true;
+	}
 	if (command.commandKind != QStringLiteral("scene") && !applyLevelMapGeometryCommand(document, command, forward)) { return false; }
 	if (command.hasSceneSnapshot) { document->scene = forward ? command.sceneAfter : command.sceneBefore; }
 	if (command.commandKind == QStringLiteral("scene")) {
 		setLevelMapSelection(document, forward ? command.selectionResult : command.selectionSnapshot);
 		document->issues.removeIf([](const LevelMapIssue& issue) { return issue.code == QStringLiteral("scene-metadata"); });
 		if (!document->scene.problem.isEmpty()) { addIssue(document, LevelMapIssueSeverity::Warning, QStringLiteral("scene-metadata"), document->scene.problem); }
+	}
+	return true;
+}
+
+// A command's follow-up edits (foldLevelMapFollowUpEdits) are done after it
+// and undone before it; one that cannot be replayed takes the rest back.
+bool applyLevelMapCommand(LevelMapDocument* document, const LevelMapUndoCommand& command, bool forward)
+{
+	if (command.followers.empty()) {
+		return applyLevelMapCommandItself(document, command, forward);
+	}
+	const auto count = static_cast<qsizetype>(command.followers.size());
+	const auto follower = [&command](qsizetype step) -> const LevelMapUndoCommand& { return command.followers.at(static_cast<size_t>(step)); };
+	if (forward) {
+		if (!applyLevelMapCommandItself(document, command, true)) { return false; }
+		for (qsizetype step = 0; step < count; ++step) {
+			if (!applyLevelMapCommand(document, follower(step), true)) {
+				for (qsizetype back = step - 1; back >= 0; --back) { applyLevelMapCommand(document, follower(back), false); }
+				applyLevelMapCommandItself(document, command, false);
+				return false;
+			}
+		}
+		return true;
+	}
+	for (qsizetype step = count - 1; step >= 0; --step) {
+		if (!applyLevelMapCommand(document, follower(step), false)) {
+			for (qsizetype back = step + 1; back < count; ++back) { applyLevelMapCommand(document, follower(back), true); }
+			return false;
+		}
+	}
+	if (!applyLevelMapCommandItself(document, command, false)) {
+		for (qsizetype step = 0; step < count; ++step) { applyLevelMapCommand(document, follower(step), true); }
+		return false;
 	}
 	return true;
 }
@@ -5662,6 +5727,14 @@ bool commitUdmfBytes(LevelMapDocument* document, const QByteArray& bytes, LevelM
 	if (bytes == document->doomUdmf->source) { return true; }
 	auto candidate = *document;
 	if (!adoptUdmfText(&candidate, bytes, error, cancel)) { return false; }
+	if (command.commandKind == QStringLiteral("udmf-add-things") && !document->scene.nodes.isEmpty()) {
+		command.sceneBefore = document->scene;
+		command.sceneAfter = reconcileLevelScene(candidate, command);
+		command.hasSceneSnapshot = command.sceneBefore != command.sceneAfter;
+		if (command.sceneAfter.opaqueMetadata.isEmpty() && command.sceneAfter.problem.isEmpty()
+			&& !validateLevelScene(candidate, command.sceneAfter, error)) { return false; }
+		candidate.scene = command.sceneAfter;
+	}
 	QSet<QString> existingErrors;
 	for (const auto& issue : document->issues) {
 		if (issue.severity == LevelMapIssueSeverity::Error) { existingErrors.insert(issue.code + '/' + issue.objectId); }
@@ -6597,8 +6670,15 @@ bool fitsDoomThingCoordinate(double value)
 // names the first member that is not a thing.
 bool selectedDoomThings(LevelMapDocument* document, const QVector<LevelMapSelectionRef>& objects, QSet<int>* thingIds, QString* error)
 {
+	QSet<int> existing;
+	existing.reserve(document->doomThings.size());
+	for (const auto& thing : document->doomThings) {
+		detail::placementCancellationCheckpoint();
+		existing.insert(thing.id);
+	}
 	for (const LevelMapSelectionRef& ref : objects) {
-		if ((ref.kind == LevelMapSelectionKind::DoomThing || ref.kind == LevelMapSelectionKind::Entity) && thingById(document, ref.objectId)) {
+		detail::placementCancellationCheckpoint();
+		if ((ref.kind == LevelMapSelectionKind::DoomThing || ref.kind == LevelMapSelectionKind::Entity) && existing.contains(ref.objectId)) {
 			thingIds->insert(ref.objectId);
 			continue;
 		}
@@ -6683,18 +6763,79 @@ int nextDoomThingId(const LevelMapDocument& document)
 	return next;
 }
 
-bool duplicateDoomThings(LevelMapDocument* document, const QVector<LevelMapSelectionRef>& objects, double dx, double dy, double dz, QString* error)
+bool udmfPolyobjectControl(const LevelMapDocument& document, int thingType);
+
+bool duplicateUdmfThings(LevelMapDocument* document, const QVector<LevelMapSelectionRef>& objects,
+	const LevelMapVec3& offset, int copies, QString* error)
 {
-	if (document->doomFormat == LevelMapDoomFormat::Udmf) {
-		if (error) {
-			*error = QCoreApplication::translate("VibeStudioLevelMap", "Use UDMF Properties to edit this map; this native editing operation is not supported yet.");
-		}
+	if (!document->doomUdmf) {
+		if (error) { *error = QCoreApplication::translate("LevelUdmf", "Reload the UDMF map before transforming its geometry."); }
 		return false;
 	}
 	QSet<int> thingIds;
-	if (!selectedDoomThings(document, objects, &thingIds, error)) {
+	if (!selectedDoomThings(document, objects, &thingIds, error)) { return false; }
+	if (thingIds.isEmpty()) {
+		if (error) { *error = QCoreApplication::translate("VibeStudioLevelMap", "Nothing is selected."); }
 		return false;
 	}
+	if (2LL * thingIds.size() * copies > kLevelMapMaxArrayRecords) {
+		if (error) {
+			*error = QCoreApplication::translate("VibeStudioLevelMap",
+				"This array exceeds the limit of %1 added records or %2 brush faces and patch points. Reduce the selection or copy count.")
+				.arg(kLevelMapMaxArrayRecords).arg(kLevelMapMaxArrayComponents);
+		}
+		return false;
+	}
+	LevelMapUndoCommand command;
+	command.commandKind = QStringLiteral("udmf-add-things");
+	command.objectKind = QStringLiteral("selection");
+	command.selectionSnapshot = document->selection;
+	QVector<LevelMapDoomThing> sourceCopies;
+	QVector<const LevelMapDoomThing*> originals;
+	for (const auto& thing : document->doomThings) {
+		detail::placementCancellationCheckpoint();
+		if (thingIds.contains(thing.id)) { originals << &thing; }
+	}
+	int next = static_cast<int>(document->doomThings.size());
+	for (int copy = 1; copy <= copies; ++copy) {
+		detail::placementCheckpoint(LevelPlacementPhase::Arraying, copy - 1, copies);
+		for (const auto* original : originals) {
+			detail::placementCancellationCheckpoint();
+			const auto& thing = *original;
+			auto placed = thing;
+			placed.selected = false;
+			placed.x += offset.x * copy;
+			placed.y += offset.y * copy;
+			placed.z += offset.z * copy;
+			sourceCopies << placed;
+			placed.id = next++;
+			command.thingSnapshots << placed;
+			command.sceneAddedObjects << thingObjectId(placed.id);
+			command.sceneObjectOrigins.insert(thingObjectId(placed.id), thingObjectId(thing.id));
+			command.selectionResult << LevelMapSelectionRef{LevelMapSelectionKind::DoomThing, placed.id};
+			command.udmfNodeInputsChanged |= udmfPolyobjectControl(*document, thing.type);
+		}
+	}
+	const auto cancel = [] { detail::placementCancellationCheckpoint(); return false; };
+	const auto bytes = prepareLevelUdmfThingCopies(*document->doomUdmf, sourceCopies, error, cancel);
+	if (bytes.isEmpty()) { return false; }
+	const int count = static_cast<int>(sourceCopies.size());
+	command.description = copies > 1
+		? QCoreApplication::translate("VibeStudioLevelMap", "Create array of %1 copies (%2 objects)").arg(copies).arg(count)
+		: QCoreApplication::translate("VibeStudioLevelMap", "Duplicate %1 objects").arg(count);
+	command.undoDescription = QCoreApplication::translate("VibeStudioLevelMap", "Remove %1 copies").arg(count);
+	if (!commitUdmfBytes(document, bytes, command, error, cancel)) { return false; }
+	setLevelMapSelection(document, command.selectionResult);
+	return true;
+}
+
+bool duplicateDoomThings(LevelMapDocument* document, const QVector<LevelMapSelectionRef>& objects, double dx, double dy, double dz, QString* error)
+{
+	if (document->doomFormat == LevelMapDoomFormat::Udmf) {
+		return duplicateUdmfThings(document, objects, {dx, dy, dz, true}, 1, error);
+	}
+	QSet<int> thingIds;
+	if (!selectedDoomThings(document, objects, &thingIds, error)) { return false; }
 	const bool hexen = document->doomFormat == LevelMapDoomFormat::Hexen;
 	int next = nextDoomThingId(*document);
 	LevelMapUndoCommand command;
@@ -7543,6 +7684,126 @@ bool addLevelMapBrushPrimitive(LevelMapDocument* document, const LevelBrushPrimi
 	return true;
 }
 
+bool addLevelMapBrushHulls(LevelMapDocument* document, const QVector<QVector<LevelMapVec3>>& hulls, const QString& texture,
+	const QString& description, const QString& undoDescription, QVector<int>* brushIds, QString* error)
+{
+	QVector<int> sceneResult_brushIds = brushIds ? *brushIds : QVector<int>{};
+	if (const auto guarded = guardLevelSceneEdit(document, error, [&](LevelMapDocument* candidate) {
+		return addLevelMapBrushHulls(candidate, hulls, texture, description, undoDescription, brushIds ? &sceneResult_brushIds : nullptr, error);
+	}); guarded.has_value()) {
+		if (*guarded && brushIds) { *brushIds = std::move(sceneResult_brushIds); }
+		return *guarded;
+	}
+
+	if (error) {
+		error->clear();
+	}
+	const auto fail = [error](const QString& message) {
+		if (error) {
+			*error = message;
+		}
+		return false;
+	};
+	if (!document || !isTextMapFormat(document->format)) {
+		return fail(QCoreApplication::translate("VibeStudioLevelMap", "Brushes can be added to Quake-family .map files only."));
+	}
+	if (hulls.isEmpty() || hulls.size() > 256) {
+		return fail(QCoreApplication::translate("VibeStudioLevelMap", "Add between one and 256 brushes at a time."));
+	}
+	int worldspawnId = -1;
+	for (const LevelMapEntity& entity : document->entities) {
+		if (isWorldspawnEntity(entity)) {
+			worldspawnId = entity.id;
+			break;
+		}
+	}
+	if (worldspawnId < 0) {
+		return fail(QCoreApplication::translate("VibeStudioLevelMap", "The map has no worldspawn to hold a new brush."));
+	}
+	if (!entityAcceptsCopies(document, worldspawnId)) {
+		return fail(QCoreApplication::translate("VibeStudioLevelMap", "worldspawn closes on a line shared with other map text, so a brush cannot be added to it."));
+	}
+	// The faces are written in the style of the map's first brush, as a
+	// single added primitive's are.
+	QString kind = document->format == LevelMapFormat::Quake3Map ? QStringLiteral("classic-flags") : QStringLiteral("classic");
+	for (const LevelMapBrush& brush : document->brushes) {
+		if (brush.faces.isEmpty()) {
+			continue;
+		}
+		const auto lines = brushTextNow(*document, brush);
+		const int firstLine = brush.startLine > 0 ? brush.startLine : brush.sourceFirstLine;
+		kind = brushFaceStyle(brush, lines.value(brush.faces.first().line - firstLine));
+		break;
+	}
+	const QString name = texture.trimmed();
+	int nextId = 0;
+	for (const LevelMapBrush& existing : document->brushes) {
+		nextId = std::max(nextId, existing.id + 1);
+	}
+
+	LevelMapUndoCommand command;
+	command.commandKind = QStringLiteral("add-objects");
+	command.objectKind = QStringLiteral("brush");
+	QVector<LevelMapSelectionRef> selection;
+	QVector<int> ids;
+	detail::placementCheckpoint(LevelPlacementPhase::Building);
+	for (const QVector<LevelMapVec3>& points : hulls) {
+		detail::placementCancellationCheckpoint();
+		LevelMapBrush draft;
+		if (!createLevelBrushHull(points, name, &draft, error)) {
+			return false;
+		}
+		QStringList lines {QStringLiteral("{")};
+		if (kind == QStringLiteral("brushDef") || kind == QStringLiteral("brushDef3")) {
+			lines << kind << QStringLiteral("{");
+		}
+		for (const auto& face : draft.faces) {
+			const auto plane = planeFromPoints(face.p0, face.p1, face.p2);
+			lines << brushFaceLine(kind, NewBrushFace {face.p0, face.p1, face.p2, {plane.normalX, plane.normalY, plane.normalZ, true}, name});
+		}
+		if (kind == QStringLiteral("brushDef") || kind == QStringLiteral("brushDef3")) {
+			lines << QStringLiteral("}");
+		}
+		lines << QStringLiteral("}");
+		const std::optional<LevelMapBrush> built = parsedNewBrush(*document, lines);
+		if (!built) {
+			return fail(QCoreApplication::translate("VibeStudioLevelMap", "One of the new brushes could not be built."));
+		}
+		LevelMapBrush brush = *built;
+		LevelBrushTopology topology;
+		if (!levelBrushTopology(brush, &topology, error)) {
+			return false;
+		}
+		const auto close = [](const LevelMapVec3& a, const LevelMapVec3& b) {
+			return std::max({std::abs(a.x - b.x), std::abs(a.y - b.y), std::abs(a.z - b.z)}) < 0.05;
+		};
+		if (!close(brush.mins, draft.mins) || !close(brush.maxs, draft.maxs)) {
+			return fail(QCoreApplication::translate("VibeStudioLevelMap", "A new brush cannot be saved accurately in this face dialect. Reduce detail or move it closer to the origin."));
+		}
+		brush.entityId = worldspawnId;
+		brush.id = nextId++;
+		command.objectId = brush.id;
+		command.brushIndexes.push_back(static_cast<int>(document->brushes.size() + command.brushSnapshots.size()));
+		command.brushSnapshots.push_back(brush);
+		selection.push_back({LevelMapSelectionKind::QuakeBrush, brush.id});
+		ids.push_back(brush.id);
+	}
+	command.description = description;
+	command.undoDescription = undoDescription;
+	command.selectionSnapshot = document->selection;
+	command.selectionResult = selection;
+	detail::placementCheckpoint(LevelPlacementPhase::Inserting);
+	if (!applyLevelMapCommand(document, command, true)) {
+		return fail(QCoreApplication::translate("VibeStudioLevelMap", "The new brushes could not be added."));
+	}
+	pushUndo(document, command);
+	setLevelMapSelection(document, selection);
+	if (brushIds) {
+		*brushIds = ids;
+	}
+	return true;
+}
+
 bool addLevelMapPatch(LevelMapDocument* document, const LevelMapPatch& source, int* patchId, QString* error)
 {
 	int sceneResult_patchId = -1;
@@ -8043,6 +8304,114 @@ bool duplicateLevelMapSelection(LevelMapDocument* document, double dx, double dy
 	return duplicateLevelMapObjects(document, selection, dx, dy, dz, textures, error);
 }
 
+bool arrayLevelMapSelection(LevelMapDocument* document, const LevelMapVec3& offset, int copies,
+	const LevelMapTextureLockOptions& textures, QString* error)
+{
+	if (const auto guarded = guardLevelSceneEdit(document, error, [&](LevelMapDocument* candidate) {
+		return arrayLevelMapSelection(candidate, offset, copies, textures, error);
+	}); guarded.has_value()) {
+		return *guarded;
+	}
+	if (error) { error->clear(); }
+	const auto fail = [error](const QString& message) {
+		if (error) { *error = message; }
+		return false;
+	};
+	if (!document) { return fail(QCoreApplication::translate("VibeStudioLevelMap", "Missing map document.")); }
+	if (copies < 1 || copies > kLevelMapMaxArrayCopies) {
+		return fail(QCoreApplication::translate("VibeStudioLevelMap", "Choose between 1 and %1 array copies.").arg(kLevelMapMaxArrayCopies));
+	}
+	if (!std::isfinite(offset.x) || !std::isfinite(offset.y) || !std::isfinite(offset.z) ||
+		!std::isfinite(offset.x * copies) || !std::isfinite(offset.y * copies) || !std::isfinite(offset.z * copies)) {
+		return fail(QCoreApplication::translate("VibeStudioLevelMap", "Placement needs a finite offset on each axis."));
+	}
+	if (copies == 1) { return duplicateLevelMapSelection(document, offset.x, offset.y, offset.z, textures, error); }
+	if (document->format == LevelMapFormat::DoomWad && document->doomFormat == LevelMapDoomFormat::Udmf) {
+		return duplicateUdmfThings(document, document->selection, offset, copies, error);
+	}
+	const auto selection = document->selection;
+	QSet<int> entityIds, brushIds, patchIds, thingIds;
+	for (const auto& ref : selection) {
+		detail::placementCancellationCheckpoint();
+		if (ref.kind == LevelMapSelectionKind::Entity) { entityIds.insert(ref.objectId); }
+		if (ref.kind == LevelMapSelectionKind::QuakeBrush) { brushIds.insert(ref.objectId); }
+		if (ref.kind == LevelMapSelectionKind::QuakePatch) { patchIds.insert(ref.objectId); }
+		if (ref.kind == LevelMapSelectionKind::DoomThing) { thingIds.insert(ref.objectId); }
+	}
+	qint64 records = 0, components = 0;
+	if (document->format == LevelMapFormat::DoomWad) {
+		thingIds.unite(entityIds);
+		records = 2LL * thingIds.size(); // Native things and their entity mirrors.
+	} else {
+		records = entityIds.size();
+		for (const auto& brush : document->brushes) {
+			detail::placementCancellationCheckpoint();
+			if (brushIds.contains(brush.id) || entityIds.contains(brush.entityId)) { ++records; components += brush.faces.size(); }
+		}
+		for (const auto& patch : document->patches) {
+			detail::placementCancellationCheckpoint();
+			if (patchIds.contains(patch.id) || entityIds.contains(patch.entityId)) { ++records; components += patch.controlPoints.size(); }
+		}
+	}
+	if (records * copies > kLevelMapMaxArrayRecords || components * copies > kLevelMapMaxArrayComponents) {
+		return fail(QCoreApplication::translate("VibeStudioLevelMap",
+			"This array exceeds the limit of %1 added records or %2 brush faces and patch points. Reduce the selection or copy count.")
+			.arg(kLevelMapMaxArrayRecords).arg(kLevelMapMaxArrayComponents));
+	}
+	// Run ordinary duplicate validation on a disposable document and combine
+	// its native insertion records. No intermediate history or rounded copy is
+	// used as the next source, and no source mutation happens until all pass.
+	auto working = *document;
+	working.undoStack.clear();
+	working.redoStack.clear();
+	working.undoLimit = 1;
+	working.savedUndoDepth = -1;
+	LevelMapUndoCommand command;
+	command.commandKind = QStringLiteral("add-objects");
+	command.objectKind = QStringLiteral("selection");
+	command.selectionSnapshot = selection;
+	for (int copy = 1; copy <= copies; ++copy) {
+		detail::placementCheckpoint(LevelPlacementPhase::Arraying, copy - 1, copies);
+		if (!duplicateLevelMapObjects(&working, selection, offset.x * copy, offset.y * copy, offset.z * copy, textures, error)) {
+			return false;
+		}
+		const auto& step = working.undoStack.last();
+		command.entitySnapshots += step.entitySnapshots;
+		command.entityIndexes += step.entityIndexes;
+		command.brushSnapshots += step.brushSnapshots;
+		command.brushIndexes += step.brushIndexes;
+		command.patchSnapshots += step.patchSnapshots;
+		command.patchIndexes += step.patchIndexes;
+		command.thingSnapshots += step.thingSnapshots;
+		command.thingIndexes += step.thingIndexes;
+		command.selectionResult += step.selectionResult;
+		command.sceneObjectOrigins.insert(step.sceneObjectOrigins);
+	}
+	detail::placementCheckpoint(LevelPlacementPhase::Arraying, copies, copies);
+	// Bulk insertion can exceed the scene's independent membership budget even
+	// when the geometry budget fits. Reject before making an unsaveable edit.
+	// Opaque metadata remains preserved under the existing duplicate policy.
+	if (!working.scene.nodes.isEmpty() && working.scene.opaqueMetadata.isEmpty() && working.scene.problem.isEmpty() &&
+		!validateLevelScene(working, working.scene, error)) {
+		return false;
+	}
+	command.description = QCoreApplication::translate("VibeStudioLevelMap", "Create array of %1 copies (%2 objects)")
+		.arg(copies).arg(command.selectionResult.size());
+	command.undoDescription = QCoreApplication::translate("VibeStudioLevelMap", "Remove array of %1 objects").arg(command.selectionResult.size());
+	const auto before = *document;
+	try {
+		if (!applyLevelMapCommand(document, command, true)) {
+			return fail(QCoreApplication::translate("VibeStudioLevelMap", "The array copies could not be added."));
+		}
+		pushUndo(document, command);
+		setLevelMapSelection(document, command.selectionResult);
+	} catch (...) {
+		*document = before;
+		throw;
+	}
+	return true;
+}
+
 bool levelMapObjectExists(const LevelMapDocument& document, const LevelMapSelectionRef& ref)
 {
 	switch (ref.kind) {
@@ -8134,7 +8503,7 @@ QVector<LevelMapSelectionRef> levelMapSelectAllObjects(const LevelMapDocument& d
 bool levelMapSelectionIsDuplicable(const LevelMapDocument& document)
 {
 	if (document.format == LevelMapFormat::DoomWad) {
-		return document.doomFormat != LevelMapDoomFormat::Udmf && !document.selection.isEmpty()
+		return !document.selection.isEmpty()
 			&& std::all_of(document.selection.cbegin(), document.selection.cend(), [](const LevelMapSelectionRef& ref) {
 				   return ref.kind == LevelMapSelectionKind::DoomThing;
 			   });
@@ -12484,6 +12853,240 @@ bool drawLevelMapDoomSector(LevelMapDocument* document, const QVector<LevelMapVe
 	return true;
 }
 
+bool makeLevelMapDoomSectorAt(LevelMapDocument* document, double x, double y, int* sectorId, QString* error)
+{
+	int staged = -1;
+	if (const auto guarded = guardLevelSceneEdit(document, error, [&](LevelMapDocument* candidate) {
+		return makeLevelMapDoomSectorAt(candidate, x, y, sectorId ? &staged : nullptr, error);
+	}); guarded.has_value()) {
+		if (*guarded && sectorId) { *sectorId = staged; }
+		return *guarded;
+	}
+
+	if (error) {
+		error->clear();
+	}
+	if (sectorId) {
+		*sectorId = -1;
+	}
+	const auto fail = [error](const QString& message) {
+		if (error) {
+			*error = message;
+		}
+		return false;
+	};
+	if (!document) {
+		return fail(QCoreApplication::translate("VibeStudioLevelMap", "Missing map document."));
+	}
+	if (document->format != LevelMapFormat::DoomWad) {
+		return fail(QCoreApplication::translate("VibeStudioLevelMap", "Sectors belong to Doom and Hexen maps."));
+	}
+	if (document->doomFormat == LevelMapDoomFormat::Udmf) {
+		return fail(QCoreApplication::translate("VibeStudioLevelMap", "Use UDMF Properties to edit this map; this native editing operation is not supported yet."));
+	}
+	if (!std::isfinite(x) || !std::isfinite(y)) {
+		return fail(QCoreApplication::translate("VibeStudioLevelMap", "Choose a point inside a closed shape of lines."));
+	}
+	DoomTopology topology(*document);
+	const QString wall = defaultDoomWallTexture(document->doomSidedefs, document->doomFormat);
+
+	// The faces the lines enclose, traced as a planar map: each linedef is a
+	// pair of half-edges, one each way, with a face on its left. Leaving a
+	// vertex, a face goes on along the half-edge just clockwise of the way
+	// back, so it keeps to its left. Counter-clockwise cycles bound areas;
+	// clockwise ones are islands inside them, or the outside of the map.
+	struct Half {
+		int line = -1;
+		bool forward = true;
+		int from = -1;
+		int to = -1;
+		double angle = 0.0;
+	};
+	QVector<Half> halves;
+	for (int index = 0; index < topology.linedefs.size(); ++index) {
+		if (!topology.linedefLive(index)) {
+			continue;
+		}
+		const LevelMapDoomLinedef& linedef = topology.linedefs.at(index);
+		const QPointF a = topology.point(linedef.startVertex);
+		const QPointF b = topology.point(linedef.endVertex);
+		if (linedef.startVertex == linedef.endVertex || a == b) {
+			continue;
+		}
+		halves.push_back({index, true, linedef.startVertex, linedef.endVertex, std::atan2(b.y() - a.y(), b.x() - a.x())});
+		halves.push_back({index, false, linedef.endVertex, linedef.startVertex, std::atan2(a.y() - b.y(), a.x() - b.x())});
+	}
+	QHash<int, QVector<int>> leaving;
+	for (int half = 0; half < halves.size(); ++half) {
+		leaving[halves.at(half).from].push_back(half);
+	}
+	for (QVector<int>& out : leaving) {
+		std::sort(out.begin(), out.end(), [&halves](int a, int b) { return halves.at(a).angle < halves.at(b).angle; });
+	}
+	const auto next = [&halves, &leaving](int half) {
+		const QVector<int>& out = leaving[halves.at(half).to];
+		const int twin = half ^ 1;
+		const qsizetype at = out.indexOf(twin);
+		return at < 0 ? twin : out.at((at - 1 + out.size()) % out.size());
+	};
+	struct Cycle {
+		QVector<int> halves;
+		QPolygonF polygon;
+		double area = 0.0;
+	};
+	QVector<Cycle> cycles;
+	QVector<int> cycleOf(halves.size(), -1);
+	for (int first = 0; first < halves.size(); ++first) {
+		if (cycleOf.at(first) >= 0) {
+			continue;
+		}
+		Cycle cycle;
+		int half = first;
+		for (int guard = 0; guard <= halves.size() && cycleOf.at(half) < 0; ++guard) {
+			cycleOf[half] = static_cast<int>(cycles.size());
+			cycle.halves.push_back(half);
+			cycle.polygon << topology.point(halves.at(half).from);
+			half = next(half);
+		}
+		double twice = 0.0;
+		for (qsizetype corner = 0; corner < cycle.polygon.size(); ++corner) {
+			const QPointF& p = cycle.polygon.at(corner);
+			const QPointF& q = cycle.polygon.at((corner + 1) % cycle.polygon.size());
+			twice += p.x() * q.y() - q.x() * p.y();
+		}
+		cycle.area = twice / 2.0;
+		cycles.push_back(cycle);
+	}
+	// The smallest area around a point.
+	const auto faceAround = [&cycles](const QPointF& point) {
+		int best = -1;
+		for (int index = 0; index < cycles.size(); ++index) {
+			const Cycle& cycle = cycles.at(index);
+			if (cycle.area > 1e-9 && cycle.polygon.containsPoint(point, Qt::OddEvenFill)
+				&& (best < 0 || cycle.area < cycles.at(best).area)) {
+				best = index;
+			}
+		}
+		return best;
+	};
+	const QPointF at(x, y);
+	const int face = faceAround(at);
+	if (face < 0) {
+		return fail(QCoreApplication::translate("VibeStudioLevelMap", "No closed shape of lines surrounds %1, %2; draw the lines first, or click inside them.")
+				.arg(x, 0, 'g', 8)
+				.arg(y, 0, 'g', 8));
+	}
+	// The area's own outline, and the islands and loose lines inside it: those
+	// whose left side, just off their first half-edge, lies in this area.
+	QVector<int> claimed = cycles.at(face).halves;
+	for (int index = 0; index < cycles.size(); ++index) {
+		const Cycle& cycle = cycles.at(index);
+		if (index == face || cycle.area > 1e-9 || cycle.halves.isEmpty()) {
+			continue;
+		}
+		const Half& half = halves.at(cycle.halves.first());
+		const QPointF a = topology.point(half.from);
+		const QPointF b = topology.point(half.to);
+		const double length = std::hypot(b.x() - a.x(), b.y() - a.y());
+		const QPointF left = (a + b) / 2.0 + QPointF(-(b.y() - a.y()) / length, (b.x() - a.x()) / length) * 0.25;
+		if (faceAround(left) == face) {
+			claimed += cycle.halves;
+		}
+	}
+
+	// Which sector the area was, if any: the one most of its sides faced.
+	QHash<int, int> before;
+	QHash<int, int> beside;
+	for (const int index : std::as_const(claimed)) {
+		const Half& half = halves.at(index);
+		const LevelMapDoomLinedef& linedef = topology.linedefs.at(half.line);
+		const int inside = half.forward ? linedef.backSidedef : linedef.frontSidedef;
+		const int outside = half.forward ? linedef.frontSidedef : linedef.backSidedef;
+		if (inside >= 0 && inside < topology.sidedefs.size()) {
+			++before[topology.sidedefs.at(inside).sector];
+		}
+		if (outside >= 0 && outside < topology.sidedefs.size()) {
+			++beside[topology.sidedefs.at(outside).sector];
+		}
+	}
+	const auto most = [&topology](const QHash<int, int>& counts) {
+		int best = -1;
+		for (auto it = counts.cbegin(); it != counts.cend(); ++it) {
+			if (it.key() >= 0 && it.key() < topology.sectors.size() && (best < 0 || it.value() > counts.value(best))) {
+				best = it.key();
+			}
+		}
+		return best;
+	};
+	const int replaced = most(before);
+	const int neighbour = most(beside);
+	LevelMapDoomSector sector = replaced >= 0 ? topology.sectors.at(replaced)
+		: (neighbour >= 0 ? topology.sectors.at(neighbour) : defaultDoomSector(topology.sectors));
+	sector.special = 0;
+	sector.tag = 0;
+	const int newSector = topology.addSector(sector);
+
+	QSet<int> lines;
+	for (const int index : std::as_const(claimed)) {
+		const Half& half = halves.at(index);
+		lines.insert(half.line);
+		// The side to the half-edge's left: a linedef's front is on its right.
+		const bool front = !half.forward;
+		if (LevelMapDoomSidedef* side = topology.ownSide(half.line, front)) {
+			side->sector = newSector;
+			continue;
+		}
+		// The line faced nothing here: it opens onto the new sector, which
+		// takes the wall's texture above and below.
+		const LevelMapDoomLinedef& linedef = topology.linedefs.at(half.line);
+		const int other = front ? linedef.backSidedef : linedef.frontSidedef;
+		const QString texture = other >= 0 && other < topology.sidedefs.size() && !isEmptyTextureName(topology.sidedefs.at(other).middleTexture)
+			? topology.sidedefs.at(other).middleTexture
+			: wall;
+		LevelMapDoomSidedef side;
+		side.sector = newSector;
+		side.upperTexture = texture;
+		side.lowerTexture = texture;
+		side.middleTexture = QStringLiteral("-");
+		const int sideId = topology.addSidedef(side);
+		topology.setSide(half.line, front, sideId);
+		if (topology.linedefs.at(half.line).frontSidedef >= 0 && topology.linedefs.at(half.line).backSidedef >= 0) {
+			openDoomLinedef(&topology, half.line);
+		} else {
+			closeDoomLinedef(&topology, half.line, wall);
+		}
+	}
+	// Taking over the whole of an old sector, the new one keeps its tag and
+	// special, so lines that find it by tag still do.
+	if (replaced >= 0) {
+		bool stays = false;
+		for (int index = 0; index < topology.linedefs.size() && !stays; ++index) {
+			if (!topology.linedefLive(index)) {
+				continue;
+			}
+			for (const int side : {topology.linedefs.at(index).frontSidedef, topology.linedefs.at(index).backSidedef}) {
+				stays = stays || (side >= 0 && side < topology.sidedefs.size() && topology.sidedefs.at(side).sector == replaced);
+			}
+		}
+		if (!stays) {
+			topology.sectors[newSector].tag = topology.sectors.at(replaced).tag;
+			topology.sectors[newSector].special = topology.sectors.at(replaced).special;
+		}
+	}
+	const DoomRenumbering renumbering = compactDoomTopology(&topology, *document);
+	const int sectorNow = renumbering.sectors.value(newSector, -1);
+	const int count = static_cast<int>(lines.size());
+	if (!recordDoomTopology(document, topology, renumbering, {{LevelMapSelectionKind::DoomSector, newSector}}, QStringLiteral("sector"),
+		    QCoreApplication::translate("VibeStudioLevelMap", "Make sector:%1 from %n linedef(s)", nullptr, count).arg(sectorNow),
+		    QCoreApplication::translate("VibeStudioLevelMap", "Take sector:%1 back out").arg(sectorNow))) {
+		return fail(QCoreApplication::translate("VibeStudioLevelMap", "The map changed under the new sector."));
+	}
+	if (sectorId) {
+		*sectorId = sectorNow;
+	}
+	return true;
+}
+
 bool mergeLevelMapVertices(LevelMapDocument* document, int* merged, QString* error)
 {
 	int sceneResult_merged = 0;
@@ -13741,6 +14344,1594 @@ CompilerCommandRequest compilerRequestForLevelMap(const LevelMapDocument& docume
 	request.workingDirectory = QFileInfo(request.inputPath).absolutePath();
 	request.workspaceRootPath = request.workingDirectory;
 	return request;
+}
+
+// ---------------------------------------------------------------------------
+// Tools the other editors have: folded undo steps, brush entities, region
+// selection, detail, drop to floor and intersection.
+// ---------------------------------------------------------------------------
+
+namespace {
+
+constexpr qint64 kDetailContents = 0x8000000;
+
+QString classNameProblem(const QString& name)
+{
+	if (name.isEmpty() || name.contains(QLatin1Char('"')) || std::any_of(name.cbegin(), name.cend(), [](QChar c) { return c.isSpace(); })) {
+		return QCoreApplication::translate("VibeStudioLevelMap", "A class name needs letters and no spaces or quotes.");
+	}
+	return QString();
+}
+
+// Runs `steps` (each records its own undo command) and folds what they
+// recorded into one step. A failed step takes back the ones before it.
+bool runAsOneStep(LevelMapDocument* document, const QString& description, const QString& undoDescription,
+	const QVector<std::function<bool(QString*)>>& steps, QString* error)
+{
+	const quint64 revision = document->revision;
+	int done = 0;
+	for (const auto& step : steps) {
+		const quint64 before = document->revision;
+		QString stepError;
+		if (!step(&stepError)) {
+			for (int back = 0; back < done; ++back) {
+				QString ignored;
+				if (undoLevelMapEdit(document, &ignored) && !document->redoStack.isEmpty()) {
+					document->redoStack.removeLast();
+				}
+			}
+			if (error) {
+				*error = stepError;
+			}
+			return false;
+		}
+		done += document->revision != before ? 1 : 0;
+	}
+	const int recorded = static_cast<int>(std::min<quint64>(document->revision - revision, static_cast<quint64>(document->undoStack.size())));
+	return recorded == 0 || collapseLevelMapUndoSteps(document, recorded, description, undoDescription, error);
+}
+
+// The axis-aligned bounds of one object, false when it has none.
+bool objectBounds(const LevelMapDocument& document, const LevelMapSelectionRef& ref, LevelMapVec3* mins, LevelMapVec3* maxs)
+{
+	switch (ref.kind) {
+	case LevelMapSelectionKind::QuakeBrush:
+		if (const LevelMapBrush* brush = brushById(&document, ref.objectId); brush && brush->boundsSolved && brush->mins.valid && brush->maxs.valid) {
+			*mins = brush->mins;
+			*maxs = brush->maxs;
+			return true;
+		}
+		return false;
+	case LevelMapSelectionKind::QuakePatch:
+		for (const LevelMapPatch& patch : document.patches) {
+			if (patch.id == ref.objectId && patch.mins.valid && patch.maxs.valid) {
+				*mins = patch.mins;
+				*maxs = patch.maxs;
+				return true;
+			}
+		}
+		return false;
+	case LevelMapSelectionKind::Entity:
+		if (const LevelMapEntity* entity = entityById(&document, ref.objectId); entity && entity->origin.valid) {
+			*mins = entity->origin;
+			*maxs = entity->origin;
+			return true;
+		}
+		return false;
+	case LevelMapSelectionKind::DoomThing:
+		for (const LevelMapDoomThing& thing : document.doomThings) {
+			if (thing.id == ref.objectId) {
+				*mins = {thing.x, thing.y, 0.0, true};
+				*maxs = *mins;
+				return true;
+			}
+		}
+		return false;
+	default:
+		return false;
+	}
+}
+
+// The top of a convex brush where the vertical line through (x, y) crosses
+// it, or nullopt when the line misses it. Faces facing up bound it from
+// above, faces facing down from below, and the walls must hold the line.
+std::optional<double> brushTopAt(const LevelMapBrush& brush, double x, double y)
+{
+	double top = std::numeric_limits<double>::infinity();
+	double bottom = -std::numeric_limits<double>::infinity();
+	for (const LevelMapBrushFace& face : brush.faces) {
+		MapPlane plane;
+		if (face.explicitPlane && face.planeNormal.valid) {
+			// brushDef3 stores n.p + d = 0.
+			plane = {face.planeNormal.x, face.planeNormal.y, face.planeNormal.z, -face.planeDistance, true};
+		} else {
+			plane = planeFromPoints(face.p0, face.p1, face.p2);
+		}
+		if (!plane.valid) {
+			continue;
+		}
+		const double horizontal = plane.normalX * x + plane.normalY * y;
+		if (plane.normalZ > 1e-9) {
+			top = std::min(top, (plane.distance - horizontal) / plane.normalZ);
+		} else if (plane.normalZ < -1e-9) {
+			bottom = std::max(bottom, (plane.distance - horizontal) / plane.normalZ);
+		} else if (horizontal > plane.distance + 1e-6) {
+			return std::nullopt;
+		}
+	}
+	if (!std::isfinite(top) || top < bottom - 1e-6) {
+		return std::nullopt;
+	}
+	return top;
+}
+
+} // namespace
+
+bool foldLevelMapFollowUpEdits(LevelMapDocument* document, int count, QString* error)
+{
+	if (error) {
+		error->clear();
+	}
+	if (!document || count < 0 || document->undoStack.size() < count + 1) {
+		if (error) {
+			*error = QCoreApplication::translate("VibeStudioLevelMap", "There is no edit for these steps to follow.");
+		}
+		return false;
+	}
+	if (count == 0) {
+		return true;
+	}
+	const qsizetype first = document->undoStack.size() - count;
+	LevelMapUndoCommand& lead = document->undoStack[first - 1];
+	for (qsizetype index = first; index < document->undoStack.size(); ++index) {
+		lead.followers.push_back(document->undoStack.at(index));
+	}
+	document->undoStack.remove(first, count);
+	// A save between the lead edit and its follow-ups is no longer reachable.
+	if (document->savedUndoDepth >= first && document->savedUndoDepth < first + count) {
+		document->savedUndoDepth = -1;
+	} else if (document->savedUndoDepth >= first + count) {
+		document->savedUndoDepth -= count;
+	}
+	refreshEditState(document);
+	return true;
+}
+
+bool collapseLevelMapUndoSteps(LevelMapDocument* document, int count, const QString& description, const QString& undoDescription, QString* error)
+{
+	if (error) {
+		error->clear();
+	}
+	if (!document || count < 1 || document->undoStack.size() < count) {
+		if (error) {
+			*error = QCoreApplication::translate("VibeStudioLevelMap", "There are not enough edits to fold into one step.");
+		}
+		return false;
+	}
+	if (count == 1) {
+		document->undoStack.last().description = description;
+		document->undoStack.last().undoDescription = undoDescription;
+		return true;
+	}
+	const qsizetype first = document->undoStack.size() - count;
+	LevelMapUndoCommand batch;
+	batch.commandKind = QStringLiteral("batch");
+	batch.description = description;
+	batch.undoDescription = undoDescription;
+	batch.children.reserve(static_cast<size_t>(count));
+	for (qsizetype index = first; index < document->undoStack.size(); ++index) {
+		batch.children.push_back(document->undoStack.at(index));
+	}
+	document->undoStack.remove(first, count);
+	document->undoStack.push_back(batch);
+	// A save between the folded steps is no longer a place undo can reach.
+	if (document->savedUndoDepth > first && document->savedUndoDepth < first + count) {
+		document->savedUndoDepth = -1;
+	} else if (document->savedUndoDepth >= first + count) {
+		document->savedUndoDepth -= count - 1;
+	}
+	refreshEditState(document);
+	return true;
+}
+
+bool tieLevelMapSelectionToEntity(LevelMapDocument* document, const QString& className, const QVector<LevelMapProperty>& properties, int* entityId,
+	QString* error)
+{
+	int stagedEntity = -1;
+	if (const auto guarded = guardLevelSceneEdit(document, error, [&](LevelMapDocument* candidate) {
+			return tieLevelMapSelectionToEntity(candidate, className, properties, entityId ? &stagedEntity : nullptr, error);
+		});
+		guarded.has_value()) {
+		if (*guarded && entityId) {
+			*entityId = stagedEntity;
+		}
+		return *guarded;
+	}
+	if (error) {
+		error->clear();
+	}
+	const auto fail = [error](const QString& message) {
+		if (error) {
+			*error = message;
+		}
+		return false;
+	};
+	if (!document || !isTextMapFormat(document->format)) {
+		return fail(QCoreApplication::translate("VibeStudioLevelMap", "Brush entities are made in Quake-family .map files."));
+	}
+	const QString name = className.trimmed();
+	if (const QString problem = classNameProblem(name); !problem.isEmpty()) {
+		return fail(problem);
+	}
+	if (name.compare(QStringLiteral("worldspawn"), Qt::CaseInsensitive) == 0) {
+		return fail(QCoreApplication::translate("VibeStudioLevelMap", "Brushes go back to worldspawn with Move to World."));
+	}
+	QSet<int> entityIds;
+	QSet<int> brushIds;
+	QSet<int> patchIds;
+	for (const LevelMapSelectionRef& ref : document->selection) {
+		if (ref.kind == LevelMapSelectionKind::Entity) {
+			entityIds.insert(ref.objectId);
+		} else if (ref.kind == LevelMapSelectionKind::QuakeBrush) {
+			brushIds.insert(ref.objectId);
+		} else if (ref.kind == LevelMapSelectionKind::QuakePatch) {
+			patchIds.insert(ref.objectId);
+		}
+	}
+	// A selected brush entity brings all of its brushes; worldspawn brings none.
+	for (const LevelMapEntity& entity : document->entities) {
+		if (!entityIds.contains(entity.id) || isWorldspawnEntity(entity)) {
+			continue;
+		}
+		for (const LevelMapBrush& brush : document->brushes) {
+			if (brush.entityId == entity.id) {
+				brushIds.insert(brush.id);
+			}
+		}
+		for (const LevelMapPatch& patch : document->patches) {
+			if (patch.entityId == entity.id) {
+				patchIds.insert(patch.id);
+			}
+		}
+	}
+	QVector<LevelMapSelectionRef> primitives;
+	QStringList body;
+	for (const LevelMapBrush& brush : document->brushes) {
+		if (!brushIds.contains(brush.id)) {
+			continue;
+		}
+		if (brush.startLine > 0 && !objectOwnsItsLines(*document, brush.startLine, brush.endLine)) {
+			return fail(QCoreApplication::translate("VibeStudioLevelMap", "Brush %1 shares a source line with other map text, so it cannot be moved into an entity.").arg(brush.id));
+		}
+		primitives.push_back({LevelMapSelectionKind::QuakeBrush, brush.id});
+		body << brushTextNow(*document, brush);
+	}
+	for (const LevelMapPatch& patch : document->patches) {
+		if (!patchIds.contains(patch.id)) {
+			continue;
+		}
+		if (patch.startLine > 0 && !objectOwnsItsLines(*document, patch.startLine, patch.endLine)) {
+			return fail(QCoreApplication::translate("VibeStudioLevelMap", "Patch %1 shares a source line with other map text, so it cannot be moved into an entity.").arg(patch.id));
+		}
+		primitives.push_back({LevelMapSelectionKind::QuakePatch, patch.id});
+		body << patchTextNow(*document, patch);
+	}
+	if (primitives.isEmpty()) {
+		return fail(QCoreApplication::translate("VibeStudioLevelMap", "Select brushes or patches to make a brush entity of."));
+	}
+	QStringList lines {QStringLiteral("{"), formatKeyLine(QString(), QStringLiteral("classname"), name)};
+	for (const LevelMapProperty& property : properties) {
+		const QString key = property.key.trimmed();
+		if (!key.isEmpty() && key.compare(QStringLiteral("classname"), Qt::CaseInsensitive) != 0) {
+			lines << formatKeyLine(QString(), key, property.value);
+		}
+	}
+	lines << body << QStringLiteral("}");
+	const QString text = lines.join(QLatin1Char('\n')) + QLatin1Char('\n');
+	QSet<int> before;
+	for (const LevelMapEntity& entity : document->entities) {
+		before.insert(entity.id);
+	}
+	const int count = static_cast<int>(primitives.size());
+	if (!runAsOneStep(document,
+			QCoreApplication::translate("VibeStudioLevelMap", "Make %1 from %n object(s)", nullptr, count).arg(name),
+			QCoreApplication::translate("VibeStudioLevelMap", "Take %n object(s) back out of %1", nullptr, count).arg(name),
+			{[&](QString* stepError) { return deleteLevelMapObjects(document, primitives, stepError); },
+				[&](QString* stepError) { return pasteLevelMapText(document, text, stepError); }},
+			error)) {
+		return false;
+	}
+	int made = -1;
+	for (const LevelMapEntity& entity : document->entities) {
+		if (!before.contains(entity.id) && entity.className.compare(name, Qt::CaseInsensitive) == 0) {
+			made = entity.id;
+		}
+	}
+	if (made >= 0) {
+		setLevelMapSelection(document, {{LevelMapSelectionKind::Entity, made}});
+	}
+	if (entityId) {
+		*entityId = made;
+	}
+	return true;
+}
+
+bool moveLevelMapSelectionToWorld(LevelMapDocument* document, int* moved, QString* error)
+{
+	int stagedMoved = 0;
+	if (const auto guarded = guardLevelSceneEdit(document, error, [&](LevelMapDocument* candidate) {
+			return moveLevelMapSelectionToWorld(candidate, moved ? &stagedMoved : nullptr, error);
+		});
+		guarded.has_value()) {
+		if (*guarded && moved) {
+			*moved = stagedMoved;
+		}
+		return *guarded;
+	}
+	if (error) {
+		error->clear();
+	}
+	const auto fail = [error](const QString& message) {
+		if (error) {
+			*error = message;
+		}
+		return false;
+	};
+	if (!document || !isTextMapFormat(document->format)) {
+		return fail(QCoreApplication::translate("VibeStudioLevelMap", "Brush entities are part of Quake-family .map files."));
+	}
+	QSet<int> owners;
+	for (const LevelMapSelectionRef& ref : document->selection) {
+		if (ref.kind == LevelMapSelectionKind::Entity) {
+			owners.insert(ref.objectId);
+		} else if (ref.kind == LevelMapSelectionKind::QuakeBrush) {
+			if (const LevelMapBrush* brush = brushById(document, ref.objectId)) {
+				owners.insert(brush->entityId);
+			}
+		} else if (ref.kind == LevelMapSelectionKind::QuakePatch) {
+			for (const LevelMapPatch& patch : document->patches) {
+				if (patch.id == ref.objectId) {
+					owners.insert(patch.entityId);
+				}
+			}
+		}
+	}
+	for (const LevelMapEntity& entity : document->entities) {
+		if (isWorldspawnEntity(entity)) {
+			owners.remove(entity.id);
+		}
+	}
+	QStringList body;
+	QSet<int> withGeometry;
+	int count = 0;
+	for (const LevelMapBrush& brush : document->brushes) {
+		if (!owners.contains(brush.entityId)) {
+			continue;
+		}
+		if (brush.startLine > 0 && !objectOwnsItsLines(*document, brush.startLine, brush.endLine)) {
+			return fail(QCoreApplication::translate("VibeStudioLevelMap", "Brush %1 shares a source line with other map text, so it cannot be moved to the world.").arg(brush.id));
+		}
+		body << brushTextNow(*document, brush);
+		withGeometry.insert(brush.entityId);
+		++count;
+	}
+	for (const LevelMapPatch& patch : document->patches) {
+		if (!owners.contains(patch.entityId)) {
+			continue;
+		}
+		if (patch.startLine > 0 && !objectOwnsItsLines(*document, patch.startLine, patch.endLine)) {
+			return fail(QCoreApplication::translate("VibeStudioLevelMap", "Patch %1 shares a source line with other map text, so it cannot be moved to the world.").arg(patch.id));
+		}
+		body << patchTextNow(*document, patch);
+		withGeometry.insert(patch.entityId);
+		++count;
+	}
+	if (withGeometry.isEmpty()) {
+		return fail(QCoreApplication::translate("VibeStudioLevelMap", "Select brush entities, or brushes of one, to move them to the world."));
+	}
+	QVector<LevelMapSelectionRef> entities;
+	for (const int id : std::as_const(withGeometry)) {
+		entities.push_back({LevelMapSelectionKind::Entity, id});
+	}
+	const QString text = body.join(QLatin1Char('\n')) + QLatin1Char('\n');
+	if (!runAsOneStep(document,
+			QCoreApplication::translate("VibeStudioLevelMap", "Move %n brush entit(y)(ies) to the world", nullptr, static_cast<int>(entities.size())),
+			QCoreApplication::translate("VibeStudioLevelMap", "Put %n brush entit(y)(ies) back", nullptr, static_cast<int>(entities.size())),
+			{[&](QString* stepError) { return deleteLevelMapObjects(document, entities, stepError); },
+				[&](QString* stepError) { return pasteLevelMapText(document, text, stepError); }},
+			error)) {
+		return false;
+	}
+	if (moved) {
+		*moved = count;
+	}
+	return true;
+}
+
+QVector<LevelMapSelectionRef> levelMapRegionSelection(const LevelMapDocument& document, LevelMapRegionSelection mode, int axis, QString* error)
+{
+	if (error) {
+		error->clear();
+	}
+	LevelMapVec3 low;
+	LevelMapVec3 high;
+	if (!levelMapSelectionBounds(document, &low, &high)) {
+		if (error) {
+			*error = QCoreApplication::translate("VibeStudioLevelMap", "Select a brush, or anything with a size, to use as the region.");
+		}
+		return {};
+	}
+	const bool tall = mode == LevelMapRegionSelection::CompleteTall || mode == LevelMapRegionSelection::PartialTall;
+	const bool whole = mode == LevelMapRegionSelection::Inside || mode == LevelMapRegionSelection::CompleteTall;
+	const int skip = std::clamp(axis, 0, 2);
+	constexpr double epsilon = 1e-6;
+	const auto component = [](const LevelMapVec3& point, int index) { return index == 0 ? point.x : (index == 1 ? point.y : point.z); };
+	const auto fits = [&](const LevelMapVec3& mins, const LevelMapVec3& maxs) {
+		for (int index = 0; index < 3; ++index) {
+			if (tall && index == skip) {
+				continue;
+			}
+			const double lo = component(low, index);
+			const double hi = component(high, index);
+			const bool ok = whole ? component(mins, index) >= lo - epsilon && component(maxs, index) <= hi + epsilon
+								  : component(mins, index) <= hi + epsilon && component(maxs, index) >= lo - epsilon;
+			if (!ok) {
+				return false;
+			}
+		}
+		return true;
+	};
+	QSet<QPair<int, int>> selected;
+	for (const LevelMapSelectionRef& ref : document.selection) {
+		selected.insert({static_cast<int>(ref.kind), ref.objectId});
+	}
+	QSet<int> owners;
+	for (const LevelMapBrush& brush : document.brushes) {
+		owners.insert(brush.entityId);
+	}
+	for (const LevelMapPatch& patch : document.patches) {
+		owners.insert(patch.entityId);
+	}
+	QVector<LevelMapSelectionRef> candidates;
+	if (document.format == LevelMapFormat::DoomWad) {
+		for (const LevelMapDoomThing& thing : document.doomThings) {
+			candidates.push_back({LevelMapSelectionKind::DoomThing, thing.id});
+		}
+	} else {
+		for (const LevelMapBrush& brush : document.brushes) {
+			candidates.push_back({LevelMapSelectionKind::QuakeBrush, brush.id});
+		}
+		for (const LevelMapPatch& patch : document.patches) {
+			candidates.push_back({LevelMapSelectionKind::QuakePatch, patch.id});
+		}
+		// Brush entities are found through their brushes.
+		for (const LevelMapEntity& entity : document.entities) {
+			if (!isWorldspawnEntity(entity) && !owners.contains(entity.id)) {
+				candidates.push_back({LevelMapSelectionKind::Entity, entity.id});
+			}
+		}
+	}
+	QVector<LevelMapSelectionRef> found;
+	for (const LevelMapSelectionRef& ref : std::as_const(candidates)) {
+		if (selected.contains({static_cast<int>(ref.kind), ref.objectId})) {
+			continue;
+		}
+		LevelMapVec3 mins;
+		LevelMapVec3 maxs;
+		if (objectBounds(document, ref, &mins, &maxs) && fits(mins, maxs)) {
+			found.push_back(ref);
+		}
+	}
+	return found;
+}
+
+bool levelMapUsesFaceFlags(const LevelMapDocument& document)
+{
+	if (document.format == LevelMapFormat::Quake3Map) {
+		return true;
+	}
+	if (document.format != LevelMapFormat::QuakeMap) {
+		return false;
+	}
+	if (document.originalText.section(QLatin1Char('\n'), 0, 0).trimmed() == QString::fromLatin1(kQuake2MapTargetHeader).trimmed()) {
+		return true;
+	}
+	for (const LevelMapBrush& brush : document.brushes) {
+		for (const LevelMapBrushFace& face : brush.faces) {
+			if (face.flagsWritten) {
+				return true;
+			}
+		}
+	}
+	return false;
+}
+
+bool setLevelMapSelectionDetail(LevelMapDocument* document, bool detail, int* changed, QString* error)
+{
+	int stagedChanged = 0;
+	if (const auto guarded = guardLevelSceneEdit(document, error, [&](LevelMapDocument* candidate) {
+			return setLevelMapSelectionDetail(candidate, detail, changed ? &stagedChanged : nullptr, error);
+		});
+		guarded.has_value()) {
+		if (*guarded && changed) {
+			*changed = stagedChanged;
+		}
+		return *guarded;
+	}
+	if (error) {
+		error->clear();
+	}
+	const auto fail = [error](const QString& message) {
+		if (error) {
+			*error = message;
+		}
+		return false;
+	};
+	if (!document || !isTextMapFormat(document->format)) {
+		return fail(QCoreApplication::translate("VibeStudioLevelMap", "Detail brushes are part of Quake-family .map files."));
+	}
+	const QSet<int> brushIds = selectedBrushIds(*document);
+	if (brushIds.isEmpty()) {
+		return fail(QCoreApplication::translate("VibeStudioLevelMap", "Select brushes to make them detail or structural."));
+	}
+	if (!levelMapUsesFaceFlags(*document)) {
+		// Quake's compilers read detail from func_detail entities.
+		QVector<LevelMapSelectionRef> pick;
+		for (const LevelMapBrush& brush : document->brushes) {
+			if (!brushIds.contains(brush.id)) {
+				continue;
+			}
+			const LevelMapEntity* owner = entityById(document, brush.entityId);
+			const bool isDetail = owner && owner->className.startsWith(QStringLiteral("func_detail"), Qt::CaseInsensitive);
+			if (isDetail != detail) {
+				pick.push_back({LevelMapSelectionKind::QuakeBrush, brush.id});
+			}
+		}
+		if (pick.isEmpty()) {
+			return fail(detail ? QCoreApplication::translate("VibeStudioLevelMap", "The selected brushes are already detail.")
+							   : QCoreApplication::translate("VibeStudioLevelMap", "The selected brushes are already structural."));
+		}
+		const QVector<LevelMapSelectionRef> previous = document->selection;
+		setLevelMapSelection(document, pick);
+		const bool ok = detail ? tieLevelMapSelectionToEntity(document, QStringLiteral("func_detail"), {}, nullptr, error)
+							   : moveLevelMapSelectionToWorld(document, nullptr, error);
+		if (!ok) {
+			setLevelMapSelection(document, previous);
+			return false;
+		}
+		if (changed) {
+			*changed = static_cast<int>(pick.size());
+		}
+		return true;
+	}
+	LevelMapUndoCommand command;
+	command.commandKind = QStringLiteral("transform-objects");
+	command.objectKind = QStringLiteral("brush");
+	QStringList refused;
+	for (const LevelMapBrush& brush : document->brushes) {
+		if (!brushIds.contains(brush.id)) {
+			continue;
+		}
+		LevelMapBrush after = brush;
+		bool any = false;
+		bool readable = true;
+		for (LevelMapBrushFace& face : after.faces) {
+			const qint64 flags = detail ? (face.contentFlags | kDetailContents) : (face.contentFlags & ~kDetailContents);
+			if (flags == face.contentFlags) {
+				continue;
+			}
+			LevelMapBrushFace probe = face;
+			probe.contentFlags = flags;
+			probe.textureParametersDirty = true;
+			const QString line = brush.startLine > 0 ? document->textLines.value(face.line - 1) : brush.sourceLines.value(face.line - brush.sourceFirstLine);
+			bool rewritable = false;
+			replaceFaceTextureParameters(line, probe, &rewritable, true);
+			if (!rewritable) {
+				readable = false;
+				break;
+			}
+			face.contentFlags = flags;
+			face.textureParametersDirty = true;
+			any = true;
+		}
+		if (!readable) {
+			refused << QString::number(brush.id);
+			continue;
+		}
+		if (any) {
+			after.textureParametersDirty = true;
+			LevelMapBrush snapshot = brush;
+			command.brushSnapshots.push_back(snapshot);
+			command.brushResults.push_back(after);
+		}
+	}
+	if (command.brushResults.isEmpty()) {
+		if (!refused.isEmpty()) {
+			return fail(QCoreApplication::translate("VibeStudioLevelMap", "Brushes %1 write their face numbers in a way that cannot be rewritten in place.").arg(refused.join(QStringLiteral(", "))));
+		}
+		return fail(detail ? QCoreApplication::translate("VibeStudioLevelMap", "The selected brushes are already detail.")
+						   : QCoreApplication::translate("VibeStudioLevelMap", "The selected brushes are already structural."));
+	}
+	const int count = static_cast<int>(command.brushResults.size());
+	command.objectId = command.brushResults.first().id;
+	command.description = detail ? QCoreApplication::translate("VibeStudioLevelMap", "Make %n brush(es) detail", nullptr, count)
+								 : QCoreApplication::translate("VibeStudioLevelMap", "Make %n brush(es) structural", nullptr, count);
+	command.undoDescription = detail ? QCoreApplication::translate("VibeStudioLevelMap", "Make %n brush(es) structural again", nullptr, count)
+									 : QCoreApplication::translate("VibeStudioLevelMap", "Make %n brush(es) detail again", nullptr, count);
+	if (!applyLevelMapCommand(document, command, true)) {
+		return fail(selectionNotFoundText(LevelMapSelectionKind::QuakeBrush));
+	}
+	pushUndo(document, command);
+	if (changed) {
+		*changed = count;
+	}
+	return true;
+}
+
+bool dropLevelMapSelectionToFloor(LevelMapDocument* document,
+	const std::function<bool(const QString& className, LevelMapVec3* mins, LevelMapVec3* maxs)>& bounds, int* dropped, QString* error)
+{
+	int stagedDropped = 0;
+	if (const auto guarded = guardLevelSceneEdit(document, error, [&](LevelMapDocument* candidate) {
+			return dropLevelMapSelectionToFloor(candidate, bounds, dropped ? &stagedDropped : nullptr, error);
+		});
+		guarded.has_value()) {
+		if (*guarded && dropped) {
+			*dropped = stagedDropped;
+		}
+		return *guarded;
+	}
+	if (error) {
+		error->clear();
+	}
+	const auto fail = [error](const QString& message) {
+		if (error) {
+			*error = message;
+		}
+		return false;
+	};
+	if (!document || !isTextMapFormat(document->format)) {
+		return fail(QCoreApplication::translate("VibeStudioLevelMap", "Drop to Floor moves entities in Quake-family .map files; Doom things already stand on their sector's floor."));
+	}
+	QSet<int> owners;
+	for (const LevelMapBrush& brush : document->brushes) {
+		owners.insert(brush.entityId);
+	}
+	for (const LevelMapPatch& patch : document->patches) {
+		owners.insert(patch.entityId);
+	}
+	struct Drop {
+		int entityId = -1;
+		double dz = 0.0;
+	};
+	QVector<Drop> drops;
+	bool anyPoint = false;
+	for (const LevelMapSelectionRef& ref : document->selection) {
+		if (ref.kind != LevelMapSelectionKind::Entity || owners.contains(ref.objectId)) {
+			continue;
+		}
+		const LevelMapEntity* entity = entityById(document, ref.objectId);
+		if (!entity || isWorldspawnEntity(*entity) || !entity->origin.valid) {
+			continue;
+		}
+		anyPoint = true;
+		LevelMapVec3 mins {0.0, 0.0, 0.0, true};
+		LevelMapVec3 maxs {0.0, 0.0, 0.0, true};
+		if (bounds) {
+			LevelMapVec3 declaredMins;
+			LevelMapVec3 declaredMaxs;
+			if (bounds(entity->className, &declaredMins, &declaredMaxs) && declaredMins.valid) {
+				mins = declaredMins;
+				maxs = declaredMaxs;
+			}
+		}
+		const double x = entity->origin.x;
+		const double y = entity->origin.y;
+		const double base = entity->origin.z + mins.z;
+		double floor = -std::numeric_limits<double>::infinity();
+		for (const LevelMapBrush& brush : document->brushes) {
+			if (!brush.boundsSolved || x < brush.mins.x - 1e-6 || x > brush.maxs.x + 1e-6 || y < brush.mins.y - 1e-6 || y > brush.maxs.y + 1e-6) {
+				continue;
+			}
+			if (const std::optional<double> top = brushTopAt(brush, x, y); top && *top <= base + 0.01 && *top > floor) {
+				floor = *top;
+			}
+		}
+		for (const LevelMapPatch& patch : document->patches) {
+			// A patch is taken as its box: close enough for terrain and floors.
+			if (patch.mins.valid && patch.maxs.valid && x >= patch.mins.x && x <= patch.maxs.x && y >= patch.mins.y && y <= patch.maxs.y
+				&& patch.maxs.z <= base + 0.01 && patch.maxs.z > floor) {
+				floor = patch.maxs.z;
+			}
+		}
+		if (!std::isfinite(floor)) {
+			continue;
+		}
+		const double dz = floor - base;
+		if (std::abs(dz) > 1e-6) {
+			drops.push_back({entity->id, dz});
+		}
+	}
+	if (!anyPoint) {
+		return fail(QCoreApplication::translate("VibeStudioLevelMap", "Select point entities to drop them to the floor."));
+	}
+	if (drops.isEmpty()) {
+		return fail(QCoreApplication::translate("VibeStudioLevelMap", "The selected entities already rest on the floor, or have nothing beneath them."));
+	}
+	QVector<std::function<bool(QString*)>> steps;
+	for (const Drop& drop : std::as_const(drops)) {
+		steps.push_back([document, drop](QString* stepError) {
+			return moveLevelMapObject(document, QStringLiteral("entity"), drop.entityId, 0.0, 0.0, drop.dz, stepError);
+		});
+	}
+	const QVector<LevelMapSelectionRef> selection = document->selection;
+	const int count = static_cast<int>(drops.size());
+	if (!runAsOneStep(document, QCoreApplication::translate("VibeStudioLevelMap", "Drop %n entit(y)(ies) to the floor", nullptr, count),
+			QCoreApplication::translate("VibeStudioLevelMap", "Lift %n entit(y)(ies) back", nullptr, count), steps, error)) {
+		return false;
+	}
+	setLevelMapSelection(document, selection);
+	if (dropped) {
+		*dropped = count;
+	}
+	return true;
+}
+
+bool intersectLevelMapSelection(LevelMapDocument* document, QString* error)
+{
+	if (const auto guarded = guardLevelSceneEdit(document, error, [&](LevelMapDocument* candidate) {
+			return intersectLevelMapSelection(candidate, error);
+		});
+		guarded.has_value()) {
+		return *guarded;
+	}
+	if (error) {
+		error->clear();
+	}
+	const auto fail = [error](const QString& message) {
+		if (error) {
+			*error = message;
+		}
+		return false;
+	};
+	if (!document || !isTextMapFormat(document->format)) {
+		return fail(QCoreApplication::translate("VibeStudioLevelMap", "Open a Quake-family map to intersect brushes."));
+	}
+	const QSet<int> ids = selectedBrushIds(*document);
+	QVector<int> order;
+	for (int index = 0; index < document->brushes.size(); ++index) {
+		if (ids.contains(document->brushes.at(index).id)) {
+			order.push_back(index);
+		}
+	}
+	if (order.size() < 2) {
+		return fail(QCoreApplication::translate("VibeStudioLevelMap", "Select two or more overlapping brushes to intersect."));
+	}
+	const int entityId = document->brushes.at(order.first()).entityId;
+	for (const int index : std::as_const(order)) {
+		if (document->brushes.at(index).entityId != entityId) {
+			return fail(QCoreApplication::translate("VibeStudioLevelMap", "Intersect brushes of one entity at a time."));
+		}
+	}
+	LevelMapBrush current = document->brushes.at(order.first());
+	int nextId = 0;
+	for (const LevelMapBrush& brush : document->brushes) {
+		nextId = std::max(nextId, brush.id + 1);
+	}
+	for (int step = 1; step < order.size(); ++step) {
+		const LevelMapBrush& other = document->brushes.at(order.at(step));
+		const MapBrushGeometry cutter = solveBrushGeometry(other.faces, other.id, other.entityId);
+		if (!cutter.solved) {
+			return fail(QCoreApplication::translate("VibeStudioLevelMap", "Brush %1 is not a closed brush.").arg(other.id));
+		}
+		for (const MapFacePolygon& polygon : cutter.faces) {
+			if (!polygon.isValid() || polygon.faceIndex < 0 || polygon.faceIndex >= other.faces.size()) {
+				continue;
+			}
+			const MapBrushGeometry shape = solveBrushGeometry(current.faces, current.id, current.entityId);
+			if (!shape.solved) {
+				return fail(QCoreApplication::translate("VibeStudioLevelMap", "The selected brushes do not overlap."));
+			}
+			// Corners beyond the cutting plane decide: none means it does not cut,
+			// all means nothing is left.
+			int outside = 0;
+			int total = 0;
+			for (const MapFacePolygon& face : shape.faces) {
+				for (const LevelMapVec3& point : face.points) {
+					++total;
+					outside += planeDistanceToPoint(polygon.plane, point) > 1e-4 ? 1 : 0;
+				}
+			}
+			if (outside == 0) {
+				continue;
+			}
+			if (outside == total) {
+				return fail(QCoreApplication::translate("VibeStudioLevelMap", "The selected brushes do not overlap."));
+			}
+			BrushPieceText text;
+			const BrushPieceProblem problem = brushPieceText(document, current, &text);
+			if (problem != BrushPieceProblem::None) {
+				return fail(QCoreApplication::translate("VibeStudioLevelMap", "Brush %1 writes its faces on lines shared with other text, so it cannot be cut.").arg(current.id));
+			}
+			const LevelMapVec3 outward {polygon.plane.normalX, polygon.plane.normalY, polygon.plane.normalZ, true};
+			std::optional<LevelMapBrush> cut = brushWithAddedFace(*document, current, text, faceOnPolygon(polygon, outward, other.faces.at(polygon.faceIndex)));
+			if (!cut) {
+				return fail(QCoreApplication::translate("VibeStudioLevelMap", "The overlap of the selected brushes is not a closed brush."));
+			}
+			cut->id = nextId++;
+			cut->entityId = entityId;
+			current = *cut;
+		}
+	}
+	LevelMapUndoCommand command;
+	command.commandKind = QStringLiteral("replace-objects");
+	command.objectKind = QStringLiteral("brush");
+	command.objectId = document->brushes.at(order.first()).id;
+	for (int step = 0; step < order.size(); ++step) {
+		const int index = order.at(step);
+		replaceBrushInCommand(*document, &command, document->brushes.at(index), index, step == 0 ? QVector<LevelMapBrush> {current} : QVector<LevelMapBrush> {});
+	}
+	command.description = QCoreApplication::translate("VibeStudioLevelMap", "Intersect %n brush(es)", nullptr, static_cast<int>(order.size()));
+	command.undoDescription = QCoreApplication::translate("VibeStudioLevelMap", "Put %n intersected brush(es) back", nullptr, static_cast<int>(order.size()));
+	if (!commitBrushReplacement(document, &command)) {
+		return fail(QCoreApplication::translate("VibeStudioLevelMap", "The brushes to intersect are no longer in the map."));
+	}
+	return true;
+}
+
+namespace {
+
+// An object's bounds for aligning and regions: a brush entity spans its
+// brushes and patches, a point entity is its origin.
+bool spanOf(const LevelMapDocument& document, const LevelMapSelectionRef& ref, LevelMapVec3* mins, LevelMapVec3* maxs)
+{
+	if (ref.kind == LevelMapSelectionKind::Entity) {
+		bool any = false;
+		const auto take = [&](const LevelMapVec3& low, const LevelMapVec3& high) {
+			if (!low.valid || !high.valid) {
+				return;
+			}
+			if (!any) {
+				*mins = low;
+				*maxs = high;
+				any = true;
+				return;
+			}
+			*mins = {std::min(mins->x, low.x), std::min(mins->y, low.y), std::min(mins->z, low.z), true};
+			*maxs = {std::max(maxs->x, high.x), std::max(maxs->y, high.y), std::max(maxs->z, high.z), true};
+		};
+		for (const LevelMapBrush& brush : document.brushes) {
+			if (brush.entityId == ref.objectId && brush.boundsSolved) {
+				take(brush.mins, brush.maxs);
+			}
+		}
+		for (const LevelMapPatch& patch : document.patches) {
+			if (patch.entityId == ref.objectId) {
+				take(patch.mins, patch.maxs);
+			}
+		}
+		if (any) {
+			return true;
+		}
+	}
+	return objectBounds(document, ref, mins, maxs);
+}
+
+double coordinateOf(const LevelMapVec3& point, int axis)
+{
+	return axis == 0 ? point.x : (axis == 1 ? point.y : point.z);
+}
+
+bool touches(const LevelMapVec3& mins, const LevelMapVec3& maxs, const LevelMapVec3& low, const LevelMapVec3& high)
+{
+	return mins.x <= high.x && maxs.x >= low.x && mins.y <= high.y && maxs.y >= low.y && mins.z <= high.z && maxs.z >= low.z;
+}
+
+bool contains(const LevelMapVec3& low, const LevelMapVec3& high, const LevelMapVec3& point)
+{
+	return point.x >= low.x && point.x <= high.x && point.y >= low.y && point.y <= high.y && point.z >= low.z && point.z <= high.z;
+}
+
+} // namespace
+
+bool alignLevelMapSelection(LevelMapDocument* document, int axis, LevelMapAlignEdge edge, int* moved, QString* error)
+{
+	if (error) {
+		error->clear();
+	}
+	const auto fail = [error](const char* message) {
+		if (error) {
+			*error = QCoreApplication::translate("VibeStudioLevelMap", message);
+		}
+		return false;
+	};
+	if (!document || document->format == LevelMapFormat::Unknown) {
+		return fail(QT_TRANSLATE_NOOP("VibeStudioLevelMap", "Open a map to align objects."));
+	}
+	if (axis < 0 || axis > 2) {
+		return fail(QT_TRANSLATE_NOOP("VibeStudioLevelMap", "Align along X, Y or Z."));
+	}
+	const bool doom = document->format == LevelMapFormat::DoomWad;
+	if (doom && axis == 2) {
+		return fail(QT_TRANSLATE_NOOP("VibeStudioLevelMap", "Doom things have no height to align."));
+	}
+	struct Item {
+		LevelMapSelectionRef ref;
+		QString kind;
+		LevelMapVec3 mins;
+		LevelMapVec3 maxs;
+	};
+	QSet<int> entities;
+	for (const LevelMapSelectionRef& ref : std::as_const(document->selection)) {
+		if (ref.kind == LevelMapSelectionKind::Entity) {
+			entities.insert(ref.objectId);
+		}
+	}
+	int worldspawn = -1;
+	for (const LevelMapEntity& entity : std::as_const(document->entities)) {
+		if (isWorldspawnEntity(entity)) {
+			worldspawn = entity.id;
+			break;
+		}
+	}
+	QVector<Item> items;
+	for (const LevelMapSelectionRef& ref : std::as_const(document->selection)) {
+		Item item {ref, QString(), {}, {}};
+		if (ref.kind == LevelMapSelectionKind::Entity && !doom && ref.objectId != worldspawn) {
+			item.kind = QStringLiteral("entity");
+		} else if (ref.kind == LevelMapSelectionKind::QuakeBrush) {
+			const LevelMapBrush* brush = brushById(document, ref.objectId);
+			// A brush moves with its entity when that is selected too.
+			if (!brush || entities.contains(brush->entityId)) {
+				continue;
+			}
+			item.kind = QStringLiteral("brush");
+		} else if (ref.kind == LevelMapSelectionKind::QuakePatch) {
+			const auto patch = std::find_if(document->patches.cbegin(), document->patches.cend(), [&ref](const LevelMapPatch& candidate) {
+				return candidate.id == ref.objectId;
+			});
+			if (patch == document->patches.cend() || entities.contains(patch->entityId)) {
+				continue;
+			}
+			item.kind = QStringLiteral("patch");
+		} else if (ref.kind == LevelMapSelectionKind::DoomThing) {
+			item.kind = QStringLiteral("thing");
+		} else {
+			continue;
+		}
+		if (spanOf(*document, ref, &item.mins, &item.maxs)) {
+			items.push_back(item);
+		}
+	}
+	if (items.size() < 2) {
+		return fail(QT_TRANSLATE_NOOP("VibeStudioLevelMap", "Select two or more objects to align."));
+	}
+	double low = std::numeric_limits<double>::infinity();
+	double high = -std::numeric_limits<double>::infinity();
+	for (const Item& item : std::as_const(items)) {
+		low = std::min(low, coordinateOf(item.mins, axis));
+		high = std::max(high, coordinateOf(item.maxs, axis));
+	}
+	const double target = edge == LevelMapAlignEdge::Minimum ? low : (edge == LevelMapAlignEdge::Maximum ? high : (low + high) / 2.0);
+	QVector<std::function<bool(QString*)>> steps;
+	int count = 0;
+	for (const Item& item : std::as_const(items)) {
+		const double current = edge == LevelMapAlignEdge::Minimum
+			? coordinateOf(item.mins, axis)
+			: (edge == LevelMapAlignEdge::Maximum ? coordinateOf(item.maxs, axis) : (coordinateOf(item.mins, axis) + coordinateOf(item.maxs, axis)) / 2.0);
+		// Doom keeps whole units.
+		const double delta = doom ? std::round(target - current) : target - current;
+		if (std::abs(delta) < 1e-9) {
+			continue;
+		}
+		++count;
+		steps.push_back([document, item, axis, delta](QString* stepError) {
+			return moveLevelMapObject(document, item.kind, item.ref.objectId, axis == 0 ? delta : 0.0, axis == 1 ? delta : 0.0, axis == 2 ? delta : 0.0,
+				stepError);
+		});
+	}
+	const QVector<LevelMapSelectionRef> selection = document->selection;
+	if (count > 0
+		&& !runAsOneStep(document, QCoreApplication::translate("VibeStudioLevelMap", "Align %n object(s)", nullptr, count),
+			QCoreApplication::translate("VibeStudioLevelMap", "Put %n aligned object(s) back", nullptr, count), steps, error)) {
+		document->selection = selection;
+		return false;
+	}
+	setLevelMapSelection(document, selection);
+	if (moved) {
+		*moved = count;
+	}
+	return true;
+}
+
+QVector<LevelMapSelectionRef> levelMapRegionObjects(const LevelMapDocument& document, const LevelMapVec3& mins, const LevelMapVec3& maxs)
+{
+	QVector<LevelMapSelectionRef> kept;
+	int worldspawn = -1;
+	for (const LevelMapEntity& entity : document.entities) {
+		if (isWorldspawnEntity(entity)) {
+			worldspawn = entity.id;
+			break;
+		}
+	}
+	QSet<int> brushEntities;
+	for (const LevelMapBrush& brush : document.brushes) {
+		if (brush.entityId != worldspawn) {
+			brushEntities.insert(brush.entityId);
+		}
+	}
+	for (const LevelMapPatch& patch : document.patches) {
+		if (patch.entityId != worldspawn) {
+			brushEntities.insert(patch.entityId);
+		}
+	}
+	for (const LevelMapEntity& entity : document.entities) {
+		if (entity.id == worldspawn) {
+			continue;
+		}
+		LevelMapVec3 low;
+		LevelMapVec3 high;
+		const LevelMapSelectionRef ref {LevelMapSelectionKind::Entity, entity.id};
+		if (brushEntities.contains(entity.id) ? spanOf(document, ref, &low, &high) && touches(low, high, mins, maxs)
+											   : entity.origin.valid && contains(mins, maxs, entity.origin)) {
+			kept.push_back(ref);
+		}
+	}
+	for (const LevelMapBrush& brush : document.brushes) {
+		if (brush.entityId == worldspawn && brush.boundsSolved && touches(brush.mins, brush.maxs, mins, maxs)) {
+			kept.push_back({LevelMapSelectionKind::QuakeBrush, brush.id});
+		}
+	}
+	for (const LevelMapPatch& patch : document.patches) {
+		if (patch.entityId == worldspawn && patch.mins.valid && touches(patch.mins, patch.maxs, mins, maxs)) {
+			kept.push_back({LevelMapSelectionKind::QuakePatch, patch.id});
+		}
+	}
+	return kept;
+}
+
+QVector<LevelMapSelectionRef> levelMapOutsideRegionObjects(const LevelMapDocument& document, const LevelMapVec3& mins, const LevelMapVec3& maxs)
+{
+	QSet<QString> kept;
+	for (const LevelMapSelectionRef& ref : levelMapRegionObjects(document, mins, maxs)) {
+		kept.insert(levelMapSelectionRefId(ref));
+	}
+	int worldspawn = -1;
+	for (const LevelMapEntity& entity : document.entities) {
+		if (isWorldspawnEntity(entity)) {
+			worldspawn = entity.id;
+			break;
+		}
+	}
+	QVector<LevelMapSelectionRef> outside;
+	const auto leave = [&kept, &outside](const LevelMapSelectionRef& ref) {
+		if (!kept.contains(levelMapSelectionRefId(ref))) {
+			outside.push_back(ref);
+		}
+	};
+	for (const LevelMapEntity& entity : document.entities) {
+		if (entity.id != worldspawn) {
+			leave({LevelMapSelectionKind::Entity, entity.id});
+		}
+	}
+	for (const LevelMapBrush& brush : document.brushes) {
+		if (brush.entityId == worldspawn) {
+			leave({LevelMapSelectionKind::QuakeBrush, brush.id});
+		}
+	}
+	for (const LevelMapPatch& patch : document.patches) {
+		if (patch.entityId == worldspawn) {
+			leave({LevelMapSelectionKind::QuakePatch, patch.id});
+		}
+	}
+	return outside;
+}
+
+bool levelMapRegionDocument(const LevelMapDocument& source, const LevelMapVec3& mins, const LevelMapVec3& maxs, const LevelMapVec3& start,
+	const QString& sealTexture, LevelMapDocument* region, LevelMapRegionReport* report, QString* error)
+{
+	if (error) {
+		error->clear();
+	}
+	const auto fail = [error](const char* message) {
+		if (error) {
+			*error = QCoreApplication::translate("VibeStudioLevelMap", message);
+		}
+		return false;
+	};
+	if (!region) {
+		return false;
+	}
+	if (source.format != LevelMapFormat::QuakeMap && source.format != LevelMapFormat::Quake3Map) {
+		return fail(QT_TRANSLATE_NOOP("VibeStudioLevelMap", "Regions are for Quake-family maps."));
+	}
+	const auto finite = [](const LevelMapVec3& p) {
+		return p.valid && std::isfinite(p.x) && std::isfinite(p.y) && std::isfinite(p.z) && std::max({std::abs(p.x), std::abs(p.y), std::abs(p.z)}) <= 32000;
+	};
+	if (!finite(mins) || !finite(maxs) || maxs.x - mins.x < 1 || maxs.y - mins.y < 1 || maxs.z - mins.z < 1) {
+		return fail(QT_TRANSLATE_NOOP("VibeStudioLevelMap", "A region needs finite bounds within ±32000 units, at least a unit across on every axis."));
+	}
+	LevelMapDocument candidate = source;
+	candidate.selection.clear();
+	const QVector<LevelMapSelectionRef> kept = levelMapRegionObjects(source, mins, maxs);
+	const QVector<LevelMapSelectionRef> removed = levelMapOutsideRegionObjects(source, mins, maxs);
+	if (!removed.isEmpty() && !deleteLevelMapObjects(&candidate, removed, error)) {
+		return false;
+	}
+	// Six walls just outside the region, rounded out to whole units, the
+	// floor and ceiling spanning the walls' corners.
+	const double wall = 16.0;
+	const LevelMapVec3 low {std::floor(mins.x), std::floor(mins.y), std::floor(mins.z), true};
+	const LevelMapVec3 high {std::ceil(maxs.x), std::ceil(maxs.y), std::ceil(maxs.z), true};
+	const QVector<std::pair<LevelMapVec3, LevelMapVec3>> walls {
+		{{low.x - wall, low.y - wall, low.z - wall, true}, {high.x + wall, high.y + wall, low.z, true}},
+		{{low.x - wall, low.y - wall, high.z, true}, {high.x + wall, high.y + wall, high.z + wall, true}},
+		{{low.x - wall, low.y - wall, low.z, true}, {low.x, high.y + wall, high.z, true}},
+		{{high.x, low.y - wall, low.z, true}, {high.x + wall, high.y + wall, high.z, true}},
+		{{low.x, low.y - wall, low.z, true}, {high.x, low.y, high.z, true}},
+		{{low.x, high.y, low.z, true}, {high.x, high.y + wall, high.z, true}},
+	};
+	const QString texture = sealTexture.trimmed().isEmpty() ? QStringLiteral("common/caulk") : sealTexture.trimmed();
+	for (const auto& [wallMins, wallMaxs] : walls) {
+		if (!addLevelMapBoxBrush(&candidate, wallMins, wallMaxs, texture, nullptr, error)) {
+			return false;
+		}
+	}
+	bool hasStart = false;
+	for (const LevelMapSelectionRef& ref : kept) {
+		if (const LevelMapEntity* entity = ref.kind == LevelMapSelectionKind::Entity ? entityById(&source, ref.objectId) : nullptr) {
+			hasStart = hasStart || entity->className.startsWith(QStringLiteral("info_player_"), Qt::CaseInsensitive);
+		}
+	}
+	bool added = false;
+	if (!hasStart) {
+		LevelMapVec3 at = start.valid && contains(low, high, start)
+			? start
+			: LevelMapVec3 {(low.x + high.x) / 2.0, (low.y + high.y) / 2.0, low.z + std::min(32.0, (high.z - low.z) / 2.0), true};
+		at = {std::round(at.x), std::round(at.y), std::round(at.z), true};
+		if (!addLevelMapEntity(&candidate, QStringLiteral("info_player_start"), at, {}, nullptr, error)) {
+			return false;
+		}
+		added = true;
+	}
+	candidate.selection.clear();
+	*region = std::move(candidate);
+	if (report) {
+		report->kept = static_cast<int>(kept.size());
+		report->removed = static_cast<int>(removed.size());
+		report->sealBrushes = static_cast<int>(walls.size());
+		report->playerStartAdded = added;
+	}
+	return true;
+}
+
+namespace {
+
+bool shearSelection(LevelMapDocument* document, int axis, int along, double factor, std::optional<double> anchor,
+	const LevelMapTextureLockOptions& textures, QString* error)
+{
+	if (const auto guarded = guardLevelSceneEdit(document, error, [&](LevelMapDocument* candidate) {
+		return shearSelection(candidate, axis, along, factor, anchor, textures, error);
+	}); guarded.has_value()) {
+		return *guarded;
+	}
+	if (error) {
+		error->clear();
+	}
+	const auto fail = [error](const char* message) {
+		if (error) {
+			*error = QCoreApplication::translate("VibeStudioLevelMap", message);
+		}
+		return false;
+	};
+	if (!document || document->selection.isEmpty()) {
+		return fail(QT_TRANSLATE_NOOP("VibeStudioLevelMap", "Select objects to shear."));
+	}
+	if (axis < 0 || axis > 2 || along < 0 || along > 2 || axis == along) {
+		return fail(QT_TRANSLATE_NOOP("VibeStudioLevelMap", "Shear along one axis by the distance along another."));
+	}
+	if (!std::isfinite(factor) || std::abs(factor) < 1e-9 || std::abs(factor) > 16.0) {
+		return fail(QT_TRANSLATE_NOOP("VibeStudioLevelMap", "The shear factor must be finite, not zero, and at most 16."));
+	}
+	if (anchor && !std::isfinite(*anchor)) {
+		return fail(QT_TRANSLATE_NOOP("VibeStudioLevelMap", "The line a shear turns about must be a finite distance."));
+	}
+	const auto component = [](LevelMapVec3& vector, int which) -> double& { return which == 0 ? vector.x : (which == 1 ? vector.y : vector.z); };
+	SelectionTransform transform;
+	// About the selection's centre, or the line at `anchor` along `along`,
+	// which stays where it is, as the edge opposite a dragged one does.
+	transform.point = [axis, along, factor, anchor, component](const LevelMapVec3& point, const LevelMapVec3& centre) {
+		LevelMapVec3 result = point;
+		LevelMapVec3 from = point;
+		LevelMapVec3 middle = centre;
+		const double origin = anchor ? *anchor : component(middle, along);
+		component(result, axis) += factor * (component(from, along) - origin);
+		return result;
+	};
+	transform.direction = [axis, along, factor, component](const LevelMapVec3& direction) {
+		LevelMapVec3 result = direction;
+		LevelMapVec3 source = direction;
+		component(result, axis) += factor * component(source, along);
+		return result;
+	};
+	// A shear S = I + f a b^T takes a plane's normal n to S^-T n = n - f b (a.n).
+	transform.normal = [axis, along, factor, component](const LevelMapVec3& normal) {
+		LevelMapVec3 result = normal;
+		LevelMapVec3 source = normal;
+		component(result, along) -= factor * component(source, axis);
+		const double length = std::sqrt(result.x * result.x + result.y * result.y + result.z * result.z);
+		if (length > 0.0) {
+			result.x /= length;
+			result.y /= length;
+			result.z /= length;
+		}
+		return result;
+	};
+	transform.yaw = [](double) -> std::optional<double> { return std::nullopt; };
+	transform.textures = textures;
+	const int count = static_cast<int>(document->selection.size());
+	transform.description = QCoreApplication::translate("VibeStudioLevelMap", "Shear %n object(s)", nullptr, count);
+	transform.undoDescription = QCoreApplication::translate("VibeStudioLevelMap", "Straighten %n sheared object(s)", nullptr, count);
+	return transformLevelMapSelection(document, transform, axis != 2 && along != 2, error);
+}
+
+} // namespace
+
+bool shearLevelMapSelection(LevelMapDocument* document, int axis, int along, double factor, const LevelMapTextureLockOptions& textures, QString* error)
+{
+	return shearSelection(document, axis, along, factor, std::nullopt, textures, error);
+}
+
+bool shearLevelMapSelectionAbout(LevelMapDocument* document, int axis, int along, double factor, double anchor,
+	const LevelMapTextureLockOptions& textures, QString* error)
+{
+	return shearSelection(document, axis, along, factor, anchor, textures, error);
+}
+
+bool turnLevelMapSelection(LevelMapDocument* document, int quarterTurns, bool mirror, const LevelMapVec3& pivot,
+	const LevelMapTextureLockOptions& textures, QString* error)
+{
+	if (error) {
+		error->clear();
+	}
+	const int turns = ((quarterTurns % 4) + 4) % 4;
+	if (turns == 0 && !mirror) {
+		return true;
+	}
+	if (const auto guarded = guardLevelSceneEdit(document, error, [&](LevelMapDocument* candidate) {
+		return turnLevelMapSelection(candidate, quarterTurns, mirror, pivot, textures, error);
+	}); guarded.has_value()) {
+		return *guarded;
+	}
+	if (!document || document->selection.isEmpty()) {
+		if (error) {
+			*error = QCoreApplication::translate("VibeStudioLevelMap", "Select objects to turn.");
+		}
+		return false;
+	}
+	if (!std::isfinite(pivot.x) || !std::isfinite(pivot.y) || !std::isfinite(pivot.z)) {
+		if (error) {
+			*error = QCoreApplication::translate("VibeStudioLevelMap", "The point to turn about must be a finite position.");
+		}
+		return false;
+	}
+	// The plan matrix: a quarter turn is (x, y) -> (-y, x); the mirror is
+	// (x, y) -> (x, -y), done first. Whole numbers keep turns exact.
+	int m00 = 1;
+	int m01 = 0;
+	int m10 = 0;
+	int m11 = mirror ? -1 : 1;
+	for (int turn = 0; turn < turns; ++turn) {
+		const int a = -m10;
+		const int b = -m11;
+		m10 = m00;
+		m11 = m01;
+		m00 = a;
+		m01 = b;
+	}
+	const auto apply = [m00, m01, m10, m11](double x, double y) { return QPointF(m00 * x + m01 * y, m10 * x + m11 * y); };
+	SelectionTransform transform;
+	transform.point = [apply, pivot](const LevelMapVec3& point, const LevelMapVec3&) {
+		const QPointF turned = apply(point.x - pivot.x, point.y - pivot.y);
+		return LevelMapVec3 {pivot.x + turned.x(), pivot.y + turned.y(), point.z, point.valid};
+	};
+	transform.direction = [apply](const LevelMapVec3& direction) {
+		const QPointF turned = apply(direction.x, direction.y);
+		return LevelMapVec3 {turned.x(), turned.y(), direction.z, direction.valid};
+	};
+	// An orthogonal matrix turns normals as it turns directions.
+	transform.normal = transform.direction;
+	transform.yaw = [apply](double yaw) -> std::optional<double> {
+		const double radians = yaw * std::numbers::pi / 180.0;
+		const QPointF turned = apply(std::cos(radians), std::sin(radians));
+		double degrees = std::atan2(turned.y(), turned.x()) * 180.0 / std::numbers::pi;
+		degrees = std::round(degrees * 1000.0) / 1000.0;
+		return degrees < 0.0 ? degrees + 360.0 : degrees;
+	};
+	transform.mirror = mirror;
+	transform.textures = textures;
+	const int count = static_cast<int>(document->selection.size());
+	transform.description = QCoreApplication::translate("VibeStudioLevelMap", "Turn %n object(s)", nullptr, count);
+	transform.undoDescription = QCoreApplication::translate("VibeStudioLevelMap", "Turn %n object(s) back", nullptr, count);
+	return transformLevelMapSelection(document, transform, false, error);
+}
+
+bool curveLevelMapLinedefs(LevelMapDocument* document, int segments, double bulge, int* curved, QString* error)
+{
+	int sceneResult_curved = 0;
+	if (const auto guarded = guardLevelSceneEdit(document, error, [&](LevelMapDocument* candidate) {
+		return curveLevelMapLinedefs(candidate, segments, bulge, curved ? &sceneResult_curved : nullptr, error);
+	}); guarded.has_value()) {
+		if (*guarded && curved) { *curved = std::move(sceneResult_curved); }
+		return *guarded;
+	}
+	if (error) {
+		error->clear();
+	}
+	if (curved) {
+		*curved = 0;
+	}
+	const auto fail = [error](const QString& message) {
+		if (error) {
+			*error = message;
+		}
+		return false;
+	};
+	if (!document) {
+		return fail(QCoreApplication::translate("VibeStudioLevelMap", "Missing map document."));
+	}
+	if (segments < 2 || segments > 64) {
+		return fail(QCoreApplication::translate("VibeStudioLevelMap", "A curve has 2 to 64 segments."));
+	}
+	if (!std::isfinite(bulge) || std::abs(bulge) > 16384) {
+		return fail(QCoreApplication::translate("VibeStudioLevelMap", "The bulge must be finite and within 16384 units."));
+	}
+	QVector<int> linedefIds;
+	QString why;
+	if (!selectedDoomLinedefs(*document, &linedefIds, &why)) {
+		return fail(why);
+	}
+	LevelMapUndoCommand command;
+	command.commandKind = QStringLiteral("doom-geometry");
+	command.objectKind = QStringLiteral("linedef");
+	int nextVertex = static_cast<int>(document->doomVertices.size());
+	int nextLinedef = static_cast<int>(document->doomLinedefs.size());
+	int nextSidedef = static_cast<int>(document->doomSidedefs.size());
+	QVector<LevelMapSelectionRef> pieces;
+	for (const int linedefId : std::as_const(linedefIds)) {
+		const int index = indexOfObjectId(document->doomLinedefs, linedefId);
+		if (index < 0) {
+			return fail(selectionNotFoundText(LevelMapSelectionKind::DoomLinedef));
+		}
+		const LevelMapDoomLinedef& linedef = document->doomLinedefs.at(index);
+		const int start = indexOfObjectId(document->doomVertices, linedef.startVertex);
+		const int end = indexOfObjectId(document->doomVertices, linedef.endVertex);
+		if (start < 0 || end < 0) {
+			return fail(QCoreApplication::translate("VibeStudioLevelMap", "Linedef %1 refers to a vertex the map does not have.").arg(linedef.id));
+		}
+		const LevelMapDoomVertex& from = document->doomVertices.at(start);
+		const LevelMapDoomVertex& to = document->doomVertices.at(end);
+		const double dx = to.x - from.x;
+		const double dy = to.y - from.y;
+		const double chord = std::hypot(dx, dy);
+		if (chord < segments) {
+			return fail(QCoreApplication::translate("VibeStudioLevelMap", "Linedef %1 is too short for that many segments.").arg(linedef.id));
+		}
+		// The front side is on the right walking from start to end.
+		const double rightX = dy / chord;
+		const double rightY = -dx / chord;
+		QVector<QPointF> points {QPointF(from.x, from.y)};
+		if (std::abs(bulge) < 0.5) {
+			for (int step = 1; step < segments; ++step) {
+				points << QPointF(from.x + dx * step / segments, from.y + dy * step / segments);
+			}
+		} else {
+			// The circle through both ends and the point `bulge` out from the
+			// middle; its centre lies the other way from the bulge.
+			const double sagitta = std::abs(bulge);
+			const double side = bulge > 0 ? 1.0 : -1.0;
+			const double radius = (chord * chord / 4.0 + sagitta * sagitta) / (2.0 * sagitta);
+			const QPointF middle((from.x + to.x) / 2.0, (from.y + to.y) / 2.0);
+			const QPointF centre(middle.x() - side * (radius - sagitta) * rightX, middle.y() - side * (radius - sagitta) * rightY);
+			const double startAngle = std::atan2(from.y - centre.y(), from.x - centre.x());
+			double sweep = std::remainder(std::atan2(to.y - centre.y(), to.x - centre.x()) - startAngle, 2.0 * std::numbers::pi);
+			// Take the way round that passes through the bulge.
+			const QPointF top(middle.x() + side * sagitta * rightX, middle.y() + side * sagitta * rightY);
+			double topAngle = std::remainder(std::atan2(top.y() - centre.y(), top.x() - centre.x()) - startAngle, 2.0 * std::numbers::pi);
+			const auto within = [](double angle, double span) { return span >= 0 ? (angle >= 0 && angle <= span) : (angle <= 0 && angle >= span); };
+			if (!within(topAngle, sweep)) {
+				sweep += sweep > 0 ? -2.0 * std::numbers::pi : 2.0 * std::numbers::pi;
+			}
+			for (int step = 1; step < segments; ++step) {
+				const double angle = startAngle + sweep * step / segments;
+				points << QPointF(centre.x() + radius * std::cos(angle), centre.y() + radius * std::sin(angle));
+			}
+		}
+		points << QPointF(to.x, to.y);
+		QVector<LevelMapDoomVertex> vertices;
+		for (int step = 1; step < segments; ++step) {
+			LevelMapDoomVertex vertex;
+			vertex.id = nextVertex++;
+			vertex.x = static_cast<double>(std::lround(points.at(step).x()));
+			vertex.y = static_cast<double>(std::lround(points.at(step).y()));
+			vertices << vertex;
+		}
+		// Whole-unit corners, end to end: none may fall on the one before.
+		QVector<QPointF> corners {QPointF(from.x, from.y)};
+		for (const LevelMapDoomVertex& vertex : std::as_const(vertices)) {
+			corners << QPointF(vertex.x, vertex.y);
+		}
+		corners << QPointF(to.x, to.y);
+		QVector<int> lengths;
+		for (int piece = 0; piece < segments; ++piece) {
+			if (corners.at(piece) == corners.at(piece + 1)) {
+				return fail(QCoreApplication::translate("VibeStudioLevelMap", "Linedef %1 is too short for that many segments.").arg(linedef.id));
+			}
+			lengths << static_cast<int>(std::lround(std::hypot(corners.at(piece + 1).x() - corners.at(piece).x(), corners.at(piece + 1).y() - corners.at(piece).y())));
+		}
+		const auto lengthBefore = [&lengths](int piece) {
+			int total = 0;
+			for (int earlier = 0; earlier < piece; ++earlier) {
+				total += lengths.at(earlier);
+			}
+			return total;
+		};
+		const auto lengthAfter = [&lengths, segments](int piece) {
+			int total = 0;
+			for (int later = piece + 1; later < segments; ++later) {
+				total += lengths.at(later);
+			}
+			return total;
+		};
+		// The first piece keeps the line's id and front side; its back side,
+		// which runs from the far end, moves on by the pieces after it.
+		LevelMapDoomLinedef first = linedef;
+		first.endVertex = vertices.first().id;
+		first.selected = false;
+		const int backIndex = first.backSidedef >= 0 ? indexOfObjectId(document->doomSidedefs, first.backSidedef) : -1;
+		if (backIndex >= 0) {
+			const LevelMapDoomSidedef& back = document->doomSidedefs.at(backIndex);
+			int users = 0;
+			for (const LevelMapDoomLinedef& other : document->doomLinedefs) {
+				users += (other.frontSidedef == back.id ? 1 : 0) + (other.backSidedef == back.id ? 1 : 0);
+			}
+			LevelMapDoomSidedef shifted = back;
+			shifted.selected = false;
+			shifted.offsetX += lengthAfter(0);
+			if (users > 1) {
+				shifted.id = nextSidedef++;
+				first.backSidedef = shifted.id;
+			} else {
+				command.sidedefSnapshots.push_back(back);
+			}
+			command.sidedefResults.push_back(shifted);
+		}
+		command.linedefSnapshots.push_back(linedef);
+		command.linedefResults.push_back(first);
+		pieces.push_back({LevelMapSelectionKind::DoomLinedef, linedef.id});
+		for (int piece = 1; piece < segments; ++piece) {
+			LevelMapDoomLinedef next = linedef;
+			next.id = nextLinedef++;
+			next.startVertex = vertices.at(piece - 1).id;
+			next.endVertex = piece + 1 < segments ? vertices.at(piece).id : linedef.endVertex;
+			next.selected = false;
+			for (int* side : {&next.frontSidedef, &next.backSidedef}) {
+				const int sideIndex = *side >= 0 ? indexOfObjectId(document->doomSidedefs, *side) : -1;
+				if (sideIndex < 0) {
+					*side = -1;
+					continue;
+				}
+				LevelMapDoomSidedef copy = document->doomSidedefs.at(sideIndex);
+				copy.id = nextSidedef++;
+				copy.selected = false;
+				copy.offsetX += side == &next.frontSidedef ? lengthBefore(piece) : lengthAfter(piece);
+				command.sidedefResults.push_back(copy);
+				*side = copy.id;
+			}
+			command.linedefResults.push_back(next);
+			command.sceneObjectOrigins.insert(linedefObjectId(next.id), linedefObjectId(linedef.id));
+			pieces.push_back({LevelMapSelectionKind::DoomLinedef, next.id});
+		}
+		for (const LevelMapDoomVertex& vertex : std::as_const(vertices)) {
+			command.vertexResults.push_back(vertex);
+			command.sceneObjectOrigins.insert(vertexObjectId(vertex.id), linedefObjectId(linedef.id));
+		}
+	}
+	const int count = static_cast<int>(linedefIds.size());
+	command.description = QCoreApplication::translate("VibeStudioLevelMap", "Curve %n linedef(s)", nullptr, count);
+	command.undoDescription = QCoreApplication::translate("VibeStudioLevelMap", "Straighten %n curved linedef(s)", nullptr, count);
+	if (!applyLevelMapCommand(document, command, true)) {
+		return fail(QCoreApplication::translate("VibeStudioLevelMap", "The linedefs to curve are no longer in the map."));
+	}
+	pushUndo(document, command);
+	setLevelMapSelection(document, pieces);
+	if (curved) {
+		*curved = count;
+	}
+	return true;
+}
+
+QVector<int> levelMapEntitiesWithValue(const LevelMapDocument& document, const QString& key, const QString& find, bool wholeValue, bool selectionOnly)
+{
+	QVector<int> matching;
+	if (key.trimmed().isEmpty() || (!wholeValue && find.isEmpty())) {
+		return matching;
+	}
+	QSet<int> selected;
+	for (const LevelMapSelectionRef& ref : document.selection) {
+		if (ref.kind == LevelMapSelectionKind::Entity) {
+			selected.insert(ref.objectId);
+		}
+	}
+	for (const LevelMapEntity& entity : document.entities) {
+		if (selectionOnly && !selected.contains(entity.id)) {
+			continue;
+		}
+		for (const LevelMapProperty& property : entity.properties) {
+			if (property.key.compare(key.trimmed(), Qt::CaseInsensitive) == 0 && (wholeValue ? property.value == find : property.value.contains(find))) {
+				matching.push_back(entity.id);
+				break;
+			}
+		}
+	}
+	return matching;
+}
+
+bool replaceLevelMapEntityValues(LevelMapDocument* document, const QString& key, const QString& find, const QString& replacement, bool wholeValue,
+	bool selectionOnly, int* replaced, QString* error)
+{
+	if (error) {
+		error->clear();
+	}
+	if (replaced) {
+		*replaced = 0;
+	}
+	const auto fail = [error](const char* message) {
+		if (error) {
+			*error = QCoreApplication::translate("VibeStudioLevelMap", message);
+		}
+		return false;
+	};
+	if (!document || (document->format != LevelMapFormat::QuakeMap && document->format != LevelMapFormat::Quake3Map)) {
+		return fail(QT_TRANSLATE_NOOP("VibeStudioLevelMap", "Key replacement is for Quake-family maps."));
+	}
+	if (key.trimmed().isEmpty()) {
+		return fail(QT_TRANSLATE_NOOP("VibeStudioLevelMap", "Name the key whose values to replace."));
+	}
+	if (!wholeValue && find.isEmpty()) {
+		return fail(QT_TRANSLATE_NOOP("VibeStudioLevelMap", "Give the text to find within the values."));
+	}
+	const QVector<int> matching = levelMapEntitiesWithValue(*document, key, find, wholeValue, selectionOnly);
+	if (matching.isEmpty()) {
+		return fail(QT_TRANSLATE_NOOP("VibeStudioLevelMap", "No entity has that value for that key."));
+	}
+	QStringList values;
+	for (const int id : matching) {
+		const LevelMapEntity* entity = entityById(document, id);
+		QString value;
+		for (const LevelMapProperty& property : entity->properties) {
+			if (property.key.compare(key.trimmed(), Qt::CaseInsensitive) == 0) {
+				value = property.value;
+				break;
+			}
+		}
+		values << (wholeValue ? replacement : QString(value).replace(find, replacement));
+	}
+	// The key keeps the spelling the first match uses.
+	QString spelled = key.trimmed();
+	for (const LevelMapProperty& property : entityById(document, matching.first())->properties) {
+		if (property.key.compare(spelled, Qt::CaseInsensitive) == 0) {
+			spelled = property.key;
+			break;
+		}
+	}
+	if (!setLevelMapEntitiesProperty(document, matching, spelled, values, error)) {
+		return false;
+	}
+	if (replaced) {
+		*replaced = static_cast<int>(matching.size());
+	}
+	return true;
 }
 
 } // namespace vibestudio

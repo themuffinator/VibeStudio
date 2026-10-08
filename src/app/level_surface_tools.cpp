@@ -1,5 +1,6 @@
 #include "app/level_surface_tools.h"
 #include "app/studio_actions.h"
+#include "app/studio_sidebar.h"
 #include <QComboBox>
 #include <QCheckBox>
 #include <QAccessible>
@@ -27,8 +28,17 @@ LevelSurfaceTools::LevelSurfaceTools(QWidget* parent) : QScrollArea(parent)
 	setAccessibleName(tr("Surface tools"));
 	setWidgetResizable(true); setFrameShape(QFrame::NoFrame);
 	auto* body = new QWidget;
-	auto* layout = new QVBoxLayout(body);
-	layout->setContentsMargins(6, 6, 6, 6);
+	auto* sections = new QVBoxLayout(body);
+	sections->setContentsMargins(0, 0, 0, 0); sections->setSpacing(6);
+	// Each section's controls, laid out on a body widget of its own.
+	const auto sectionLayout = [] {
+		auto* inner = new QVBoxLayout(new QWidget);
+		inner->setContentsMargins(0, 0, 0, 0); inner->setSpacing(6);
+		return inner;
+	};
+	QVBoxLayout* const target = sectionLayout();
+	QVBoxLayout* const adjust = sectionLayout();
+	QVBoxLayout* const clipboard = sectionLayout();
 	m_target = new QComboBox;
 	m_target->setObjectName(QStringLiteral("surfaceQuickTarget"));
 	m_target->setAccessibleName(tr("Surface edit target"));
@@ -37,56 +47,67 @@ LevelSurfaceTools::LevelSurfaceTools(QWidget* parent) : QScrollArea(parent)
 	m_target->setMinimumContentsLength(12);
 	m_target->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Fixed);
 	m_target->setToolTip(tr("Selection includes faces and patches in selected brushes, patches and entities. Quick adjustments affect brush faces; parameter paste changes patch materials while preserving their UVs. Face uses the current face in the Inspector."));
-	layout->addWidget(m_target);
+	target->addWidget(m_target);
+	m_summary = new QLabel; m_summary->setObjectName(QStringLiteral("surfaceQuickSummary"));
+	m_summary->setWordWrap(true); m_summary->setTextFormat(Qt::PlainText);
+	m_summary->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Preferred);
+	m_summary->setAccessibleName(tr("Surfaces affected by quick edits")); target->addWidget(m_summary);
+	m_status = new QLabel(tr("Select brush surfaces to adjust their texture mapping."));
+	m_status->setObjectName(QStringLiteral("surfaceQuickStatus")); m_status->setWordWrap(true);
+	m_status->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Preferred);
+	m_status->setTextFormat(Qt::PlainText); m_status->setAccessibleName(tr("Surface edit status")); target->addWidget(m_status);
+	m_progress = new QProgressBar; m_progress->setRange(0, 0);
+	m_progress->setAccessibleName(tr("Preparing surface edits")); target->addWidget(m_progress); m_progress->hide();
+	m_cancel = new QToolButton; m_cancel->setObjectName(QStringLiteral("surfaceQuickCancel"));
+	m_cancel->setText(tr("Cancel")); m_cancel->setAccessibleName(tr("Cancel pending surface edits"));
+	m_cancel->setToolTip(tr("Cancel pending adjustments or paste. Completed batches remain in map undo history."));
+	m_cancel->setEnabled(false); target->addWidget(m_cancel);
+
 	m_clipboard = new QLabel(tr("No copied surface"));
 	m_clipboard->setObjectName(QStringLiteral("surfaceClipboardSummary"));
 	m_clipboard->setAccessibleName(tr("Copied surface")); m_clipboard->setWordWrap(true);
 	m_clipboard->setTextFormat(Qt::PlainText); m_clipboard->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Preferred);
-	layout->addWidget(m_clipboard);
+	clipboard->addWidget(m_clipboard);
 	auto* clipboardRow = new QHBoxLayout; m_rows << clipboardRow;
 	for (const auto& id : {QStringLiteral("map.copySurface"), QStringLiteral("map.pasteSurface")}) {
 		auto* button = new QToolButton; button->setObjectName(id);
 		button->setText(id == QLatin1String("map.copySurface") ? tr("Copy") : tr("Paste"));
 		button->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed); m_buttons.insert(id, button); clipboardRow->addWidget(button);
 	}
-	layout->addLayout(clipboardRow);
+	clipboard->addLayout(clipboardRow);
 	m_pasteMode = new QComboBox; m_pasteMode->setObjectName(QStringLiteral("surfacePasteMode"));
 	m_pasteMode->setAccessibleName(tr("Surface paste mapping"));
 	m_pasteMode->addItems({tr("Matching-format parameters"), tr("World projection"), tr("Seamless wrap"), tr("Radiant values"), tr("Radiant projection")});
 	m_pasteMode->setSizeAdjustPolicy(QComboBox::AdjustToMinimumContentsLengthWithIcon); m_pasteMode->setMinimumContentsLength(12);
 	m_pasteMode->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Fixed);
 	m_pasteMode->setToolTip(tr("Parameters reuse native values; Radiant values retains each Valve face's axes. Radiant projection copies classic/Valve parameters, projects primitive matrices and patch UVs, and can leave perpendicular faces edge-on. World projection keeps world UVs in any brush format. Seamless wrap turns mapping around the shared edge; a single wrapped face becomes the next source."));
-	layout->addWidget(m_pasteMode);
+	clipboard->addWidget(m_pasteMode);
 	m_mappingOnly = new QCheckBox; m_mappingOnly->setObjectName(QStringLiteral("surfacePasteMappingOnly"));
 	m_mappingOnly->setAccessibleName(tr("Keep target materials and flags"));
 	m_mappingOnly->setToolTip(tr("Transfer only mapping. Primitive mappings retain texel density using the source and target image dimensions. Radiant values keeps Valve axes and leaves patches unchanged. Radiant projection changes patch UVs while retaining materials."));
 	auto* mappingLabel = new QLabel(tr("&Keep materials and flags")); mappingLabel->setWordWrap(true); mappingLabel->setBuddy(m_mappingOnly);
 	mappingLabel->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Preferred);
-	auto* mappingRow = new QHBoxLayout; mappingRow->addWidget(m_mappingOnly); mappingRow->addWidget(mappingLabel, 1); layout->addLayout(mappingRow);
+	auto* mappingRow = new QHBoxLayout; mappingRow->addWidget(m_mappingOnly); mappingRow->addWidget(mappingLabel, 1); clipboard->addLayout(mappingRow);
 	m_allowValve = new QCheckBox; m_allowValve->setObjectName(QStringLiteral("surfacePasteAllowValve"));
 	m_allowValve->setAccessibleName(tr("Allow map-wide Valve 220 conversion for surface paste"));
 	m_allowValve->setToolTip(tr("If projected or wrapped mapping requires explicit axes, convert all classic faces in this map in the same undo step. Unpasted materials and UVs stay unchanged; locked faces block conversion. Verify support in your game's compiler."));
 	m_allowValve->setEnabled(false);
 	auto* conversionLabel = new QLabel(tr("&Allow map-wide Valve 220 conversion")); conversionLabel->setWordWrap(true); conversionLabel->setBuddy(m_allowValve);
 	conversionLabel->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Preferred); conversionLabel->setEnabled(false);
-	auto* conversionRow = new QHBoxLayout; conversionRow->addWidget(m_allowValve); conversionRow->addWidget(conversionLabel, 1); layout->addLayout(conversionRow);
+	auto* conversionRow = new QHBoxLayout; conversionRow->addWidget(m_allowValve); conversionRow->addWidget(conversionLabel, 1); clipboard->addLayout(conversionRow);
 	connect(m_pasteMode, &QComboBox::currentIndexChanged, this, [this, conversionLabel] {
 		const bool convertible = m_pasteMode->currentIndex() == 1 || m_pasteMode->currentIndex() == 2;
 		m_allowValve->setEnabled(convertible); conversionLabel->setEnabled(convertible);
 	});
-	m_summary = new QLabel; m_summary->setObjectName(QStringLiteral("surfaceQuickSummary"));
-	m_summary->setWordWrap(true); m_summary->setTextFormat(Qt::PlainText);
-	m_summary->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Preferred);
-	m_summary->setAccessibleName(tr("Surfaces affected by quick edits")); layout->addWidget(m_summary);
 	const auto step = [&](const QString& title, const QString& id, double value, double maximum, const QString& suffix) {
-		auto* label = new QLabel(title); label->setWordWrap(true); layout->addWidget(label);
+		auto* label = new QLabel(title); label->setWordWrap(true); adjust->addWidget(label);
 		auto* control = new QDoubleSpinBox;
 		control->setObjectName(id); control->setAccessibleName(title);
 		control->setAccessibleDescription(tr("Amount used by the surface buttons and their keyboard shortcuts."));
 		control->setLayoutDirection(Qt::LeftToRight); control->setRange(0.001, maximum);
 		control->setDecimals(3); control->setValue(value); control->setSuffix(suffix);
 		control->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Fixed);
-		control->setKeyboardTracking(false); label->setBuddy(control); layout->addWidget(control); return control;
+		control->setKeyboardTracking(false); label->setBuddy(control); adjust->addWidget(control); return control;
 	};
 	const auto pair = [&](int first, const QString& left, const QString& right) {
 		auto* row = new QHBoxLayout;
@@ -98,7 +119,7 @@ LevelSurfaceTools::LevelSurfaceTools(QWidget* parent) : QScrollArea(parent)
 			button->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
 			m_buttons.insert(ids[first + i], button); row->addWidget(button);
 		}
-		layout->addLayout(row);
+		adjust->addLayout(row);
 	};
 	m_shift = step(tr("Shift step (texels)"), QStringLiteral("surfaceQuickShift"), 8, 4096, {});
 	pair(0, tr("U −"), tr("U +")); pair(2, tr("V −"), tr("V +"));
@@ -108,17 +129,18 @@ LevelSurfaceTools::LevelSurfaceTools(QWidget* parent) : QScrollArea(parent)
 	m_scale->setToolTip(tr("Grow multiplies texture size by 1 + percent / 100; shrink divides by that factor. Rotation and scaling keep the face centre fixed."));
 	pair(6, tr("U ÷"), tr("U ×")); pair(8, tr("V ÷"), tr("V ×"));
 	pair(10, tr("Fit 1 × 1"), tr("Centre"));
-	m_status = new QLabel(tr("Select brush surfaces to adjust their texture mapping."));
-	m_status->setObjectName(QStringLiteral("surfaceQuickStatus")); m_status->setWordWrap(true);
-	m_status->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Preferred);
-	m_status->setTextFormat(Qt::PlainText); m_status->setAccessibleName(tr("Surface edit status")); layout->insertWidget(1, m_status);
-	m_progress = new QProgressBar; m_progress->setRange(0, 0);
-	m_progress->setAccessibleName(tr("Preparing surface edits")); layout->insertWidget(2, m_progress); m_progress->hide();
-	m_cancel = new QToolButton; m_cancel->setObjectName(QStringLiteral("surfaceQuickCancel"));
-	m_cancel->setText(tr("Cancel")); m_cancel->setAccessibleName(tr("Cancel pending surface edits"));
-	m_cancel->setToolTip(tr("Cancel pending adjustments or paste. Completed batches remain in map undo history."));
-	m_cancel->setEnabled(false); layout->insertWidget(3, m_cancel);
-	layout->addStretch(); setWidget(body);
+	// Bordered like the sidebar's other buttons, so they read as buttons
+	// rather than as the flat tool buttons of a tool bar.
+	for (QToolButton* button : std::as_const(m_buttons)) { button->setProperty("sidebarButton", true); }
+	m_cancel->setProperty("sidebarButton", true);
+	const std::pair<QString, QString> titles[] = {{QStringLiteral("surfaces.target"), tr("Target")},
+		{QStringLiteral("surfaces.adjust"), tr("Adjust")}, {QStringLiteral("surfaces.clipboard"), tr("Copy and Paste")}};
+	const QVBoxLayout* contents[] = {target, adjust, clipboard};
+	for (int index = 0; index < 3; ++index) {
+		auto* section = new SidebarSection(titles[index].first, titles[index].second, contents[index]->parentWidget());
+		section->setStretch(0); m_sections << section; sections->addWidget(section);
+	}
+	sections->addStretch(); setWidget(body);
 	viewport()->installEventFilter(this); body->installEventFilter(this);
 	connect(m_target, &QComboBox::currentIndexChanged, this, [this] { if (targetChanged) { targetChanged(); } });
 	connect(m_cancel, &QToolButton::clicked, this, [this] { if (cancelRequested) { cancelRequested(); } });
@@ -130,7 +152,8 @@ bool LevelSurfaceTools::eventFilter(QObject* watched, QEvent* event)
 }
 void LevelSurfaceTools::updateRows()
 {
-	const int width = viewport()->width() - 12;
+	// The rows sit in sections, inset by each section's frame and margins.
+	const int width = viewport()->width() - 18;
 	for (auto* row : m_rows) {
 		const int pairWidth = row->itemAt(0)->widget()->sizeHint().width() + row->itemAt(1)->widget()->sizeHint().width() + row->spacing();
 		const auto direction = pairWidth > width ? QBoxLayout::TopToBottom : QBoxLayout::LeftToRight;

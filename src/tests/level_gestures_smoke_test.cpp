@@ -61,14 +61,21 @@ int main(int argc, char** argv)
 		&& migratedImport == changes, "legacy portable import records disabled material default", error);
 	for (const auto& profile : editorProfileDescriptors()) {
 		const auto& camera = profile.controls.camera;
-		const bool samples = QStringList{"q3radiant", "gtkradiant-1-6", "netradiant", "netradiant-custom"}.contains(profile.id);
-		const bool paints = profile.id == "q3radiant" || profile.id == "gtkradiant-1-6";
+		// Source-audited families, not a blanket Radiant-name match: 1.5 keeps
+		// sampling and Ctrl+Shift face paste, but has no Shift/Ctrl middle role.
+		const bool samples = QStringList{"qeradiant", "q3radiant", "gtkradiant-1-4", "gtkradiant-1-5",
+			"gtkradiant-1-6", "netradiant", "netradiant-custom"}.contains(profile.id);
+		const bool paints = QStringList{"qeradiant", "q3radiant", "gtkradiant-1-4", "gtkradiant-1-6"}.contains(profile.id);
+		const bool pastesFace = paints || profile.id == "gtkradiant-1-5";
+		const auto shiftRole = paints ? CameraMaterialGesture::Paint
+			: profile.id == "netradiant" ? CameraMaterialGesture::PasteFace
+			: profile.id == "netradiant-custom" ? CameraMaterialGesture::ValuesSelection : CameraMaterialGesture::None;
 		ok &= expect((cameraMaterialGesture(camera, Qt::MiddleButton, Qt::NoModifier) == CameraMaterialGesture::Sample) == samples
-			&& (cameraMaterialGesture(camera, Qt::MiddleButton, Qt::ShiftModifier) == CameraMaterialGesture::Paint) == paints,
+			&& cameraMaterialGesture(camera, Qt::MiddleButton, Qt::ShiftModifier) == shiftRole,
 			"audited material defaults are independent from other profiles", profile.id);
 		ok &= expect(cameraMaterialGesture(camera, Qt::NoButton, Qt::NoModifier) == CameraMaterialGesture::None
 			&& cameraMaterialGesture(camera, Qt::MiddleButton, Qt::ControlModifier) == (paints ? CameraMaterialGesture::PasteBrush : profile.id == "netradiant-custom" ? CameraMaterialGesture::WrapFace : CameraMaterialGesture::None)
-			&& cameraMaterialGesture(camera, Qt::MiddleButton, Qt::ShiftModifier | Qt::ControlModifier) == (paints ? CameraMaterialGesture::PasteFace : profile.id == "netradiant-custom" ? CameraMaterialGesture::ProjectSelection : CameraMaterialGesture::None),
+			&& cameraMaterialGesture(camera, Qt::MiddleButton, Qt::ShiftModifier | Qt::ControlModifier) == (pastesFace ? CameraMaterialGesture::PasteFace : profile.id == "netradiant-custom" ? CameraMaterialGesture::ProjectSelection : CameraMaterialGesture::None),
 			"surface-paste defaults are confined to their audited profiles", profile.id);
 		const bool custom = profile.id == "netradiant-custom";
 		ok &= expect(cameraMaterialGesture(camera, Qt::MiddleButton, Qt::AltModifier | Qt::ShiftModifier) == (custom ? CameraMaterialGesture::ValuesSelectionOnly : CameraMaterialGesture::None)

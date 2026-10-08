@@ -1,0 +1,12 @@
+<!DOCTYPE RCC>
+<RCC version="1.0">
+<qresource prefix="/branding">
+	<file alias="vibestudio-16.png">icons/png/vibestudio-16.png</file>
+	<file alias="vibestudio-24.png">icons/png/vibestudio-24.png</file>
+	<file alias="vibestudio-32.png">icons/png/vibestudio-32.png</file>
+	<file alias="vibestudio-48.png">icons/png/vibestudio-48.png</file>
+	<file alias="vibestudio-64.png">icons/png/vibestudio-64.png</file>
+	<file alias="vibestudio-128.png">icons/png/vibestudio-128.png</file>
+	<file alias="vibestudio-256.png">icons/png/vibestudio-256.png</file>
+</qresource>
+</RCC>

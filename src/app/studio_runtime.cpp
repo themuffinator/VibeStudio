@@ -8,6 +8,7 @@
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
+#include <QFontDatabase>
 #include <QGuiApplication>
 #include <QLibraryInfo>
 #include <QLocale>
@@ -18,6 +19,8 @@
 #include <QPen>
 #include <QPixmap>
 #include <QPolygonF>
+#include <QProcess>
+#include <QSet>
 #include <QStandardPaths>
 #include <QTextStream>
 #include <QTranslator>
@@ -73,6 +76,69 @@ QTranslator*& qtBaseTranslator()
 {
 	static QTranslator* translator = nullptr;
 	return translator;
+}
+
+// A reviewer's aid, on when VIBESTUDIO_UNTRANSLATED_LOG names a file: every
+// studio message the interface asks for that the active catalog cannot
+// translate is appended to it once, as `context<TAB>source<TAB>comment`, so
+// what a screen still shows in English can be found by using the screen.
+// Installed last, it is asked first, and it always answers with nothing, so
+// the lookup continues to the real catalog.
+class UntranslatedMessageLog final : public QTranslator {
+public:
+	UntranslatedMessageLog(const QString& path, QObject* parent)
+		: QTranslator(parent)
+		, m_file(path)
+	{
+		// A file that cannot be opened leaves the log closed, and nothing is
+		// recorded.
+		if (!m_file.open(QIODevice::WriteOnly | QIODevice::Append | QIODevice::Text)) {
+			return;
+		}
+	}
+
+	bool isEmpty() const override
+	{
+		return false;
+	}
+
+	QString translate(const char* context, const char* sourceText, const char* disambiguation, int n) const override
+	{
+		if (!context || !sourceText || !*sourceText || !m_file.isOpen()) {
+			return {};
+		}
+		// Qt's own contexts belong to Qt's catalogs.
+		const QByteArray contextName(context);
+		if (!contextName.startsWith("VibeStudio") && !contextName.startsWith("vibestudio::")) {
+			return {};
+		}
+		const QTranslator* catalog = studioTranslator();
+		if (catalog && !catalog->translate(context, sourceText, disambiguation, n).isEmpty()) {
+			return {};
+		}
+		const auto field = [](const char* text) {
+			return QByteArray(text ? text : "").replace('\\', "\\\\").replace('\t', "\\t").replace('\n', "\\n");
+		};
+		const QByteArray line = field(context) + '\t' + field(sourceText) + '\t' + field(disambiguation) + '\n';
+		QMutexLocker locker(&m_mutex);
+		if (!m_seen.contains(line)) {
+			m_seen.insert(line);
+			m_file.write(line);
+			m_file.flush();
+		}
+		return {};
+	}
+
+private:
+	mutable QFile m_file;
+	mutable QMutex m_mutex;
+	mutable QSet<QByteArray> m_seen;
+};
+
+UntranslatedMessageLog*& untranslatedMessageLog()
+{
+	static UntranslatedMessageLog* log = nullptr;
+	return log;
 }
 
 struct SessionLogState {
@@ -185,10 +251,11 @@ void appendUniqueExistingDirectory(QStringList* paths, const QString& candidate)
 QStringList qmCandidateFileNames(const QString& localeName)
 {
 	QStringList names;
-	const QString normalized = normalizedLocalizationTargetId(localeName);
-	const QString requested = localeName.trimmed();
-
-	auto addName = [&names](const QString& locale) {
+	// Target ids use hyphens (pt-BR); catalog files use underscores
+	// (vibestudio_pt_BR.qm), the Qt convention. Looking for the hyphenated
+	// name left every regional catalog unloaded before 2026-10.
+	auto addName = [&names](QString locale) {
+		locale = locale.trimmed().replace(QLatin1Char('-'), QLatin1Char('_'));
 		if (locale.isEmpty()) {
 			return;
 		}
@@ -198,18 +265,99 @@ QStringList qmCandidateFileNames(const QString& localeName)
 		}
 	};
 
-	addName(requested);
+	// "system", regional, and legacy ids all resolve to a target first.
+	const QString normalized = normalizedLocalizationTargetId(localeName);
 	addName(normalized);
+	// A regional target falls back to its base language: es-419 -> es.
+	const qsizetype separator = normalized.indexOf(QLatin1Char('-'));
+	if (separator > 0) {
+		addName(normalized.left(separator));
+	}
+	return names;
+}
 
-	// A regional locale falls back to its base language: pt_BR -> pt.
-	for (const QString& locale : {requested, normalized}) {
-		const qsizetype separator = locale.indexOf(QLatin1Char('_'));
-		if (separator > 0) {
-			addName(locale.left(separator));
+QString& activeInterfaceLanguageStorage()
+{
+	static QString language = QStringLiteral("en");
+	return language;
+}
+
+// Each language's own interface fonts on Windows, macOS, and common Linux
+// distributions, most preferred first.
+QStringList interfaceLanguageFontCandidates(const QString& languageId)
+{
+	if (languageId == QStringLiteral("ja")) {
+		return {QStringLiteral("Yu Gothic UI"), QStringLiteral("Meiryo UI"), QStringLiteral("Meiryo"), QStringLiteral("MS UI Gothic"),
+			QStringLiteral("Hiragino Sans"), QStringLiteral("Hiragino Kaku Gothic ProN"), QStringLiteral("Noto Sans CJK JP"),
+			QStringLiteral("Noto Sans JP"), QStringLiteral("Source Han Sans JP"), QStringLiteral("IPAexGothic"), QStringLiteral("IPAGothic")};
+	}
+	if (languageId == QStringLiteral("zh-Hans")) {
+		return {QStringLiteral("Microsoft YaHei UI"), QStringLiteral("Microsoft YaHei"), QStringLiteral("PingFang SC"),
+			QStringLiteral("Hiragino Sans GB"), QStringLiteral("Noto Sans CJK SC"), QStringLiteral("Noto Sans SC"),
+			QStringLiteral("Source Han Sans SC"), QStringLiteral("WenQuanYi Micro Hei")};
+	}
+	if (languageId == QStringLiteral("zh-Hant")) {
+		return {QStringLiteral("Microsoft JhengHei UI"), QStringLiteral("Microsoft JhengHei"), QStringLiteral("PingFang TC"),
+			QStringLiteral("Noto Sans CJK TC"), QStringLiteral("Noto Sans TC"), QStringLiteral("Source Han Sans TC")};
+	}
+	if (languageId == QStringLiteral("ko")) {
+		return {QStringLiteral("Malgun Gothic"), QStringLiteral("Apple SD Gothic Neo"), QStringLiteral("Noto Sans CJK KR"),
+			QStringLiteral("Noto Sans KR"), QStringLiteral("Source Han Sans KR"), QStringLiteral("NanumGothic")};
+	}
+	return {};
+}
+
+QVector<QChar::Script> interfaceLanguageScripts(const QString& languageId)
+{
+	if (languageId == QStringLiteral("ja")) {
+		return {QChar::Script_Han, QChar::Script_Hiragana, QChar::Script_Katakana};
+	}
+	if (languageId == QStringLiteral("zh-Hans")) {
+		return {QChar::Script_Han};
+	}
+	if (languageId == QStringLiteral("zh-Hant")) {
+		return {QChar::Script_Han, QChar::Script_Bopomofo};
+	}
+	if (languageId == QStringLiteral("ko")) {
+		return {QChar::Script_Han, QChar::Script_Hangul};
+	}
+	return {};
+}
+
+// Without this, a Japanese interface on a system set to another language can
+// take its kanji from a Chinese or Korean font: the wrong forms, or empty boxes
+// where that font has no glyph.
+void applyInterfaceLanguageFonts(const QString& languageId)
+{
+#if QT_VERSION >= QT_VERSION_CHECK(6, 8, 0)
+	static QVector<std::pair<QChar::Script, QString>> added;
+	for (const auto& [script, family] : std::as_const(added)) {
+		QFontDatabase::removeApplicationFallbackFontFamily(script, family);
+	}
+	added.clear();
+	const QStringList families = interfaceLanguageFontFamilies(languageId);
+	const QVector<QChar::Script> scripts = interfaceLanguageScripts(languageId);
+	// The family added last is tried first, so the preferred one goes last.
+	for (auto family = families.crbegin(); family != families.crend(); ++family) {
+		for (QChar::Script script : scripts) {
+			QFontDatabase::addApplicationFallbackFontFamily(script, *family);
+			added.push_back({script, *family});
 		}
 	}
+#else
+	Q_UNUSED(languageId);
+#endif
+}
 
-	return names;
+struct RestartRequest {
+	bool requested = false;
+	QStringList arguments;
+};
+
+RestartRequest& restartRequest()
+{
+	static RestartRequest request;
+	return request;
 }
 
 } // namespace
@@ -239,6 +387,8 @@ QStringList translationSearchPaths()
 		appendUniqueExistingDirectory(&paths, applicationDir + QStringLiteral("/../i18n"));
 		// Installed layout: prefix/bin/vibestudio -> prefix/share/vibestudio/i18n.
 		appendUniqueExistingDirectory(&paths, applicationDir + QStringLiteral("/../share/vibestudio/i18n"));
+		// macOS bundle: VibeStudio.app/Contents/MacOS/vibestudio -> Contents/Resources/i18n.
+		appendUniqueExistingDirectory(&paths, applicationDir + QStringLiteral("/../Resources/i18n"));
 		// Portable package layout.
 		appendUniqueExistingDirectory(&paths, applicationDir + QStringLiteral("/../../i18n"));
 	}
@@ -255,6 +405,10 @@ TranslationLoadResult installStudioTranslations(QCoreApplication& app, const QSt
 	result.resolvedLocale = normalizedLocalizationTargetId(result.requestedLocale);
 	result.rightToLeft = isRightToLeftLocale(result.resolvedLocale);
 	result.searchedPaths = translationSearchPaths();
+	activeInterfaceLanguageStorage() = result.resolvedLocale;
+	if (qobject_cast<QGuiApplication*>(&app)) {
+		applyInterfaceLanguageFonts(result.resolvedLocale);
+	}
 
 	QTranslator*& translator = studioTranslator();
 	if (translator) {
@@ -324,7 +478,62 @@ TranslationLoadResult installStudioTranslations(QCoreApplication& app, const QSt
 		}
 	}
 
+	// Installed again after the catalogs, so it stays the first one asked.
+	UntranslatedMessageLog*& untranslated = untranslatedMessageLog();
+	if (untranslated) {
+		app.removeTranslator(untranslated);
+		delete untranslated;
+		untranslated = nullptr;
+	}
+	const QString untranslatedLogPath = qEnvironmentVariable("VIBESTUDIO_UNTRANSLATED_LOG");
+	if (!sourceLanguage && !untranslatedLogPath.isEmpty()) {
+		untranslated = new UntranslatedMessageLog(untranslatedLogPath, &app);
+		app.installTranslator(untranslated);
+	}
+
 	return result;
+}
+
+QString activeInterfaceLanguage()
+{
+	return activeInterfaceLanguageStorage();
+}
+
+QStringList interfaceLanguageFontFamilies(const QString& languageId)
+{
+	QStringList families;
+	for (const QString& family : interfaceLanguageFontCandidates(normalizedLocalizationTargetId(languageId))) {
+		if (QFontDatabase::hasFamily(family)) {
+			families.push_back(family);
+		}
+	}
+	return families;
+}
+
+void requestStudioRestart(const QStringList& arguments)
+{
+	restartRequest().requested = true;
+	restartRequest().arguments = arguments;
+}
+
+bool studioRestartRequested()
+{
+	return restartRequest().requested;
+}
+
+QStringList studioRestartArguments()
+{
+	return restartRequest().arguments;
+}
+
+bool startRequestedStudioRestart()
+{
+	if (!restartRequest().requested) {
+		return false;
+	}
+	restartRequest().requested = false;
+	const QString program = QCoreApplication::applicationFilePath();
+	return !program.isEmpty() && QProcess::startDetached(program, restartRequest().arguments);
 }
 
 bool applyLayoutDirectionForLocale(const QString& localeName)
@@ -341,7 +550,22 @@ bool applyLayoutDirectionForLocale(const QString& localeName)
 QIcon studioApplicationIcon()
 {
 	static QIcon icon = []() {
+		// The brand artwork (assets/branding/icons/png), with hand-tuned pixel
+		// glyphs at the smallest sizes. main() initialises the resource; tests
+		// that link without it get the painted fallback below.
 		QIcon built;
+		for (const int size : {16, 24, 32, 48, 64, 128, 256}) {
+			const QString path = QStringLiteral(":/branding/vibestudio-%1.png").arg(size);
+			if (QFile::exists(path)) {
+				built.addFile(path, QSize(size, size));
+			}
+		}
+		if (!built.isNull()) {
+			return built;
+		}
+
+		// Fallback when the resource is missing: the same mark drawn directly,
+		// an orange tile with a white V (docs/BRANDING.md).
 		for (const int size : {16, 24, 32, 48, 64, 128, 256}) {
 			QPixmap pixmap(size, size);
 			pixmap.fill(Qt::transparent);
@@ -349,30 +573,25 @@ QIcon studioApplicationIcon()
 			QPainter painter(&pixmap);
 			painter.setRenderHint(QPainter::Antialiasing, true);
 
-			const qreal inset = size * 0.06;
-			const QRectF plate(inset, inset, size - inset * 2.0, size - inset * 2.0);
-			const qreal radius = size * 0.22;
-
-			QLinearGradient gradient(plate.topLeft(), plate.bottomRight());
-			gradient.setColorAt(0.0, QColor(0x27, 0x5d, 0x86));
-			gradient.setColorAt(1.0, QColor(0x14, 0x1a, 0x21));
+			const qreal unit = size / 1024.0;
+			const QRectF plate(64 * unit, 64 * unit, 896 * unit, 896 * unit);
+			QLinearGradient gradient(plate.topLeft(), plate.bottomLeft());
+			gradient.setColorAt(0.0, QColor(0xf7, 0xa0, 0x40));
+			gradient.setColorAt(1.0, QColor(0xd6, 0x6a, 0x0e));
 			painter.setPen(Qt::NoPen);
 			painter.setBrush(gradient);
-			painter.drawRoundedRect(plate, radius, radius);
+			painter.drawRoundedRect(plate, 216 * unit, 216 * unit);
 
-			// A chevron reading as both a "V" and a build-stage arrow.
-			QPen stroke(QColor(0xe8, 0xed, 0xf2));
-			stroke.setWidthF(std::max(1.0, size * 0.11));
+			QPen stroke(Qt::white);
+			stroke.setWidthF(std::max(1.0, 128 * unit));
 			stroke.setCapStyle(Qt::RoundCap);
-			stroke.setJoinStyle(Qt::MiterJoin);
+			stroke.setJoinStyle(Qt::RoundJoin);
 			painter.setPen(stroke);
 			painter.setBrush(Qt::NoBrush);
-
-			QPolygonF chevron;
-			chevron << QPointF(plate.left() + plate.width() * 0.26, plate.top() + plate.height() * 0.30)
-				<< QPointF(plate.center().x(), plate.top() + plate.height() * 0.72)
-				<< QPointF(plate.left() + plate.width() * 0.74, plate.top() + plate.height() * 0.30);
-			painter.drawPolyline(chevron);
+			QPolygonF glyph;
+			glyph << QPointF(300 * unit, 384 * unit) << QPointF(476 * unit, 738 * unit)
+				<< QPointF(652 * unit, 384 * unit);
+			painter.drawPolyline(glyph);
 
 			painter.end();
 			built.addPixmap(pixmap);

@@ -1,4 +1,5 @@
 #include "app/level_scene_panel.h"
+#include "core/level_linked_groups.h"
 #include "core/level_scene.h"
 #include "core/level_scene_locks.h"
 
@@ -91,6 +92,15 @@ LevelScenePanel::LevelScenePanel(LevelMapDocument* document, QWidget* parent) : 
 	m_assign = button(tr("Assign selection"), "levelSceneAssign", 2, 0);
 	m_remove = button(tr("Remove node"), "levelSceneRemove", 2, 1);
 	m_remove->setToolTip(tr("Move members and child groups to the parent. Undo restores the node."));
+	m_linkCopy = button(tr("Linked copy"), "levelSceneLinkCopy", 3, 0);
+	m_linkCopy->setToolTip(tr("Copy this group beside itself and link the copies: an edit inside one is made to every copy, "
+							  "while moving a whole copy moves only that one."));
+	m_unlink = button(tr("Unlink"), "levelSceneUnlink", 3, 1);
+	m_unlink->setToolTip(tr("Separate this copy from the others; it keeps its content."));
+	m_updateLinks = button(tr("Update copies"), "levelSceneUpdateLinks", 4, 0);
+	m_updateLinks->setToolTip(tr("Make every other unlocked copy match this one now, for copies changed in different ways at once."));
+	m_selectLinks = button(tr("Select copies"), "levelSceneSelectLinks", 4, 1);
+	m_selectLinks->setToolTip(tr("Select the visible members of every copy linked with this group."));
 	form->addRow(actions);
 	m_creation = new QComboBox(this);
 	m_creation->setObjectName(QStringLiteral("levelSceneCreation"));
@@ -140,6 +150,32 @@ LevelScenePanel::LevelScenePanel(LevelMapDocument* document, QWidget* parent) : 
 		});
 	});
 	connect(m_reset, &QPushButton::clicked, this, [this] { edit([&](QString* error) { return resetLevelScene(m_document, error); }); });
+	connect(m_linkCopy, &QPushButton::clicked, this, [this] {
+		edit([&](QString* error) {
+			const QString id = currentId();
+			return createLinkedLevelGroup(m_document, id, levelLinkedCopyOffset(*m_document, id), nullptr, error);
+		});
+	});
+	connect(m_unlink, &QPushButton::clicked, this, [this] { edit([&](QString* error) { return unlinkLevelGroup(m_document, currentId(), error); }); });
+	connect(m_updateLinks, &QPushButton::clicked, this, [this] {
+		edit([&](QString* error) { return updateLinkedLevelGroups(m_document, currentId(), nullptr, error); });
+	});
+	connect(m_selectLinks, &QPushButton::clicked, this, [this] {
+		if (!current()) {
+			refresh();
+			return;
+		}
+		QVector<LevelMapSelectionRef> members;
+		for (const QString& id : levelLinkedGroupNodes(m_document->scene, currentId())) {
+			members += levelSceneSelection(*m_document, id);
+		}
+		QString error;
+		if (!setLevelMapSelection(m_document, members, &error)) {
+			m_status->setText(error);
+			return;
+		}
+		Q_EMIT selectionChanged();
+	});
 	connect(m_tree, &QTreeWidget::currentItemChanged, this, [this] { updateControls(); });
 	connect(m_tree, &QTreeWidget::itemChanged, this, [this](QTreeWidgetItem* item, int column) {
 		if (m_refreshing || column != 0 || item->data(0, Qt::UserRole).toString().isEmpty()) {
@@ -209,6 +245,14 @@ void LevelScenePanel::updateControls() {
 	m_move->setEnabled(node && node->kind == LevelSceneNodeKind::Group && !locked.contains(node->id));
 	m_remove->setEnabled(node && !locked.contains(node->id));
 	m_assign->setEnabled(!m_document->selection.isEmpty() && !locked.contains(currentId()));
+	const bool linked = node && !node->linkId.isEmpty();
+	const bool quake = m_document->format == LevelMapFormat::QuakeMap || m_document->format == LevelMapFormat::Quake3Map;
+	const bool parent = node && std::any_of(m_document->scene.nodes.cbegin(), m_document->scene.nodes.cend(),
+									[node](const LevelSceneNode& other) { return other.parentId == node->id; });
+	m_linkCopy->setEnabled(quake && node && node->kind == LevelSceneNodeKind::Group && !node->objects.isEmpty() && !parent);
+	m_unlink->setEnabled(linked);
+	m_updateLinks->setEnabled(linked && !locked.contains(node->id));
+	m_selectLinks->setEnabled(linked);
 	if (node) {
 		m_name->setText(node->name);
 		m_parent->setCurrentIndex(m_parent->findData(node->parentId));
@@ -268,11 +312,20 @@ void LevelScenePanel::refresh() {
 		if (lockedNodes.contains(node.id)) {
 			kind += tr(" · Locked");
 		}
+		if (!node.linkId.isEmpty()) {
+			kind += tr(" · Linked");
+		}
 		auto* item = new QTreeWidgetItem({node.name, kind, QString::number(node.objects.size())});
 		item->setData(0, Qt::UserRole, node.id);
 		item->setFlags(Qt::ItemIsEnabled | Qt::ItemIsSelectable | (editable ? Qt::ItemIsUserCheckable : Qt::NoItemFlags));
 		item->setCheckState(0, node.visible ? Qt::Checked : Qt::Unchecked);
-		item->setToolTip(0, tr("%1\nID: %2\nDirect members: %3").arg(node.name, node.id).arg(node.objects.size()));
+		item->setToolTip(0, tr("%1\nID: %2\nDirect members: %3").arg(node.name, node.id).arg(node.objects.size())
+								+ (node.linkId.isEmpty() ? QString()
+														 : QLatin1Char('\n')
+											 + tr("Linked with %n other copies", nullptr,
+												 static_cast<int>(levelLinkedGroupNodes(state, node.id).size()) - 1)
+											 + (node.linkTurn != 0 ? QLatin1Char('\n') + tr("Turned %1 degrees").arg(node.linkTurn * 90) : QString())
+											 + (node.linkMirror ? QLatin1Char('\n') + tr("Mirrored") : QString())));
 		item->setData(0, Qt::AccessibleDescriptionRole, tr("%1; %2; Direct members: %3").arg(node.name, kind).arg(node.objects.size()));
 		items.insert(node.id, item);
 		QStringList path{node.name};

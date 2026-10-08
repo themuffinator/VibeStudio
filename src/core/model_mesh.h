@@ -14,8 +14,9 @@
 // - Quake II MD2 (IDP2 8): the released Quake II source `qfiles.h`, and the
 //   normal-index table from `anorms.h`.
 // - Quake III MD3 (IDP3 15): the released Quake III Arena source `md3.h`.
-// - MDC, MDR and IQM headers: the Return to Castle Wolfenstein, Elite Force and
-//   Inter-Quake Model public format documentation.
+// - The formats decoded in model_format_*.cpp (MDC, MDR, IQM, MD5, MDS,
+//   MDM/MDX, Ghoul 2, Half-Life MDL, Hexen II, Heretic II FM, LightWave, ASE
+//   and KVX) name their sources in their own files and in docs/CREDITS.md.
 //
 // No commercial model, skin, or animation data is embedded here. Vertex normals
 // for MDL and MD2 are reconstructed from the published normal table, which is a
@@ -24,6 +25,7 @@
 #include "core/idtech_image.h"
 #include "core/model_work.h"
 
+#include <QByteArray>
 #include <QImage>
 #include <QPair>
 #include <QSet>
@@ -31,6 +33,8 @@
 #include <QString>
 #include <QStringList>
 #include <QVector>
+
+#include <functional>
 
 namespace vibestudio {
 
@@ -41,16 +45,130 @@ enum class ModelMeshFormat {
 	QuakeMdl,       // IDPO version 6
 	Quake2Md2,      // IDP2 version 8
 	Quake3Md3,      // IDP3 version 15
-	Mdc,            // header only
-	Mdr,            // header only
-	Iqm,            // header only
+	Mdc,            // IDPC version 2: RTCW / Wolfenstein: Enemy Territory compressed MD3
+	Mdr,            // RDM5 version 2: skeletal, ioquake3 and Elite Force
+	Iqm,            // INTERQUAKEMODEL version 2: skeletal, ioquake3 and later ports
 	WavefrontObj,   // bounded polygonal interchange
+	Md5Mesh,        // MD5Version 10 text mesh: Doom 3, Quake 4, Prey, ET: Quake Wars
+	Md5Anim,        // MD5Version 10 text animation: a skeleton and one clip, no geometry
+	Mds,            // MDSW version 4: RTCW skeletal
+	Mdm,            // MDMW version 3: Enemy Territory skeletal mesh (bones in an MDX)
+	Mdx,            // MDXW version 2: Enemy Territory bones and frames, no geometry
+	Glm,            // 2LGM version 6: Ghoul 2 mesh (Jedi Outcast, Jedi Academy, SoF II)
+	Gla,            // 2LGA version 6: Ghoul 2 animation, no geometry
+	HalfLifeMdl,    // IDST version 10: GoldSrc studio model
+	Hexen2Mdl,      // RAPO version 50: Hexen II mission-pack alias model
+	LightWave,      // FORM LWO2 / LWOB: LightWave static models (Doom 3, Quake 4)
+	Ase,            // *3DSMAX_ASCIIEXPORT: ASCII scene export (Doom 3, q3map2 misc_model)
+	HereticFm,      // Heretic II flexible model (chunked "header" + "frames")
+	Kvx,            // Build-engine voxel model, used by ZDoom-family Doom ports
 };
 
 struct ModelVec3 {
 	float x = 0.0f;
 	float y = 0.0f;
 	float z = 0.0f;
+};
+
+// ---------------------------------------------------------------------------
+// Skeletons
+//
+// The skeletal formats of idTech3 and idTech4 games (MD5, MDS, MDM/MDX, MDR,
+// IQM, Ghoul 2) and GoldSrc studio models all reduce to one representation: a
+// joint hierarchy with a model-space bind pose, per-vertex joint influences,
+// and clips of model-space joint matrices. Every vertex is the weighted sum of
+// its influences, each an offset in its joint's bind space carried by that
+// joint's matrix:
+//
+//     position = sum(weight * (M[joint] * offset))
+//
+// Formats that store bind-pose vertices with inverse bind matrices (IQM,
+// Half-Life, Ghoul 2) are converted on import by expressing each vertex in
+// its joint's bind space. Decoders also bake the bind pose and every clip into
+// ordinary frames (see core/model_skeleton.h), so the viewport, mesh tools and
+// vertex-animation exports (MD3, MD2, MDL) work on skeletal models unchanged,
+// and skeletal exports (MD5) read the joints and influences kept here.
+// ---------------------------------------------------------------------------
+
+struct ModelQuat {
+	float x = 0.0f;
+	float y = 0.0f;
+	float z = 0.0f;
+	float w = 1.0f;
+};
+
+// An affine transform, row-major 3x4: rotation and scale in the left 3x3,
+// translation in the last column. Points are column vectors: p' = M * p.
+struct ModelJointMatrix {
+	float m[12] = {1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f};
+};
+
+struct ModelJoint {
+	QString name;
+	// An earlier joint, or -1 for a root.
+	int parent = -1;
+	// The bind pose in model space.
+	ModelJointMatrix bind;
+	// Format-specific bits kept for round trips (MD5 anim component flags,
+	// MDS/MDM bone flags, Ghoul 2 bone flags).
+	quint32 flags = 0;
+};
+
+struct ModelJointInfluence {
+	int joint = 0;
+	float weight = 0.0f;
+	// The vertex position in the joint's bind space.
+	ModelVec3 offset;
+	// The vertex normal in the joint's bind space; zero when the format stores
+	// none, in which case baked normals are rebuilt from the faces.
+	ModelVec3 normalOffset;
+};
+
+// Parallel to a surface's vertices: vertex v's influences are
+// influences[first[v]] .. influences[first[v] + count[v] - 1]. Empty for a
+// surface that does not follow the skeleton.
+struct ModelSurfaceSkinning {
+	QVector<int> first;
+	QVector<int> count;
+	QVector<ModelJointInfluence> influences;
+	[[nodiscard]] bool isEmpty() const { return first.isEmpty(); }
+};
+
+// An attachment point that follows a joint: MDS/MDM/MDR/Ghoul 2 tags and
+// Doom 3 joints used as attachments. Baked into ModelMesh::tags per frame.
+struct ModelSkeletalTag {
+	QString name;
+	int joint = 0;
+	// The tag's transform relative to its joint.
+	ModelJointMatrix offset;
+};
+
+struct ModelSkeletalClip {
+	QString name;
+	// The file the clip came from when it is not the mesh file (an md5anim,
+	// an MDX or a GLA); empty when it is.
+	QString sourcePath;
+	// Zero leaves playback timing unspecified.
+	double framesPerSecond = 0.0;
+	bool loops = true;
+	// One entry per frame, each holding one model-space matrix per joint.
+	QVector<QVector<ModelJointMatrix>> frames;
+	// Optional per-frame bounds from the file, parallel to `frames`.
+	QVector<ModelVec3> frameMins;
+	QVector<ModelVec3> frameMaxs;
+};
+
+struct ModelSkeleton {
+	QVector<ModelJoint> joints;
+	QVector<ModelSkeletalClip> clips;
+	QVector<ModelSkeletalTag> tags;
+	// The format family the skeleton came from: "md5", "mds", "mdm", "mdr",
+	// "iqm", "ghoul2" or "studio".
+	QString sourceFormat;
+	// Which baked frame range belongs to which clip; -1 for the bind pose.
+	// Filled by bakeModelSkeleton (core/model_skeleton.h).
+	QVector<int> bakedClipForFrame;
+	[[nodiscard]] bool isEmpty() const { return joints.isEmpty(); }
 };
 
 struct ModelTriangle {
@@ -88,6 +206,8 @@ struct ModelSurface {
 	// Canonical indexed edge pairs; native game files retain the resulting UVs,
 	// while these editable-source marks remain in .mesh.json.
 	QSet<QPair<int, int>> uvSeams{};
+	// Joint influences for skeletal models, parallel to the vertices.
+	ModelSurfaceSkinning skinning{};
 };
 
 struct ModelFrameInfo {
@@ -202,6 +322,12 @@ struct ModelMesh {
 	QSize md2SkinSize{256, 256};
 	ModelMdlSettings mdl{};
 	QVector<ModelCollisionBox> collisionBoxes{};
+	// Skeletal models keep their joints, clips and joint-following tags here;
+	// the frames above hold the baked bind pose and clips.
+	ModelSkeleton skeleton{};
+	// Companion files the decode read besides the model itself (md5anim, MDX,
+	// GLA, Half-Life texture or sequence files), in the order read.
+	QStringList companionPaths{};
 
 	[[nodiscard]] bool isValid() const;
 	// Bounds across every frame, used to frame the model in a viewport.
@@ -219,12 +345,77 @@ QString modelMeshFormatId(ModelMeshFormat format);
 QString modelMeshFormatDisplayName(ModelMeshFormat format);
 ModelMeshFormat detectModelMeshFormat(const QString& virtualPath, const QByteArray& bytes);
 
+// Files a model refers to besides itself: the animations beside an MD5 mesh,
+// the MDX an MDM's bones live in, the GLA a Ghoul 2 mesh names, a Half-Life
+// model's texture and sequence files. Paths use '/'. A path the model names
+// relative to the game folder ("models/players/_humanoid/_humanoid.gla") is
+// tried as given; the file-system source also tries it against every folder
+// above the model. Either function may be empty, which disables that lookup.
+struct ModelCompanionSource {
+	// Reads one file; false when it does not exist or cannot be read.
+	std::function<bool(const QString& path, QByteArray* bytes, QString* error)> read;
+	// The files directly inside `directory` whose lower-case suffix is one of
+	// `suffixes` (without the dot), as full paths in the source's terms, sorted.
+	std::function<QStringList(const QString& directory, const QStringList& suffixes)> list;
+	// What one decode may read besides the model itself.
+	int maxFiles = 128;
+	qint64 maxBytes = 256LL * 1024LL * 1024LL;
+};
+
+// Companions from inside a package, by virtual path.
+[[nodiscard]] ModelCompanionSource modelCompanionsFromArchive(const PackageArchiveReader& archive, const ModelWorkControl& control = {});
+// Companions on disk around a loose model file.
+[[nodiscard]] ModelCompanionSource modelCompanionsFromFileSystem(const QString& modelPath);
+
 // `palette` colours MDL's embedded indexed skins. Pass a resolved package
 // palette; a null pointer falls back to the generated Quake ramp.
 ModelMesh decodeModelMesh(const QString& virtualPath, const QByteArray& bytes, const IdTechPalette* palette = nullptr,
 	const ModelWorkControl& control = {});
+// The same, reading companion files (animations, bones, textures) through
+// `companions`. Formats that need none ignore it.
+ModelMesh decodeModelMesh(const QString& virtualPath, const QByteArray& bytes, const IdTechPalette* palette,
+	const ModelWorkControl& control, const ModelCompanionSource& companions);
+// Decodes a loose file on disk with its companions.
+ModelMesh decodeModelMeshFile(const QString& path, const IdTechPalette* palette = nullptr, const ModelWorkControl& control = {});
 ModelMesh decodeModelMeshFromArchive(const PackageArchiveReader& archive, const QString& virtualPath, const QString& paletteId = QString(),
 	const ModelWorkControl& control = {});
+
+// True when the format stores joints (whether or not this file holds
+// geometry), so a skeleton panel and skeletal exports apply.
+[[nodiscard]] bool modelMeshFormatIsSkeletal(ModelMeshFormat format);
+// True when the file holds only animation (md5anim, MDX, GLA): it decodes to
+// a skeleton and clips with no surfaces.
+[[nodiscard]] bool modelMeshFormatIsAnimationOnly(ModelMeshFormat format);
+// The lower-case file suffixes (without the dot) the studio reads as models.
+[[nodiscard]] QStringList modelMeshFileSuffixes();
+
+// The embedded skin a surface shows: the one named by its first skin path
+// (Half-Life textures, KVX palettes), else the model's first. Null when the
+// model embeds none.
+[[nodiscard]] const ModelEmbeddedSkin* modelEmbeddedSkinForSurface(const ModelMesh& mesh, int surface);
+
+// What the studio knows about one format, for `model formats`, the format
+// pickers and the docs.
+struct ModelFormatCapability {
+	ModelMeshFormat format = ModelMeshFormat::Unknown;
+	QString id;
+	QString name;
+	QStringList suffixes;
+	// "idtech1" (through Doom source ports), "idtech2", "idtech3", "idtech4",
+	// "goldsrc" or "interchange".
+	QStringList engines;
+	// Untranslated game and port names.
+	QStringList games;
+	bool skeletal = false;
+	bool animationOnly = false;
+	// What the decoder reads besides the file, as suffixes or patterns.
+	QStringList companions;
+	// The studio writes this format too (see modelExportFormatIds).
+	bool writes = false;
+	// Translated: what is kept and what is not.
+	QString notes;
+};
+[[nodiscard]] QVector<ModelFormatCapability> modelFormatCapabilities();
 
 // Resolves each `skinPaths` entry against the archive, trying the idTech image
 // extensions, and returns the first that decodes. Empty when none resolve.

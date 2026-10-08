@@ -1,0 +1,13 @@
+{
+  "C_Cpp.default.compileCommands": "${workspaceFolder}/builddir/compile_commands.json",
+  "C_Cpp.default.cppStandard": "c++20",
+  "mesonbuild.buildFolder": "builddir",
+  "mesonbuild.configureOnOpen": false,
+  "files.exclude": {
+    "**/__pycache__": true
+  },
+  "search.exclude": {
+    "builddir*/**": true,
+    "external/compilers/**": true
+  }
+}

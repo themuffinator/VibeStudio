@@ -1,0 +1,516 @@
+name: release
+
+# Builds every platform's downloads, tests them, and publishes a GitHub release.
+#
+#  - Push a tag v<VERSION> (for example v0.1.0-alpha.1) to build and publish.
+#  - Or run this workflow by hand from a branch: with "publish" off it is a dry
+#    run that keeps the downloads as workflow artifacts for 14 days; with
+#    "publish" on it creates the v<VERSION> tag on that commit and publishes.
+#
+# VERSION and CHANGELOG.md drive everything; docs/RELEASING.md walks through a
+# release. Versions with a pre-release label (-alpha, -beta, -rc) are published
+# as GitHub pre-releases.
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      publish:
+        description: "Publish a GitHub release (creates the v<VERSION> tag on this commit)"
+        type: boolean
+        default: false
+      draft:
+        description: "Create the release as a draft for review"
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  PYTHONDONTWRITEBYTECODE: "1"
+  QT_VERSION: "6.10.1"
+
+jobs:
+  prepare:
+    name: Prepare release
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.meta.outputs.version }}
+      label: ${{ steps.meta.outputs.label }}
+      file_label: ${{ steps.meta.outputs.file_label }}
+      tag: ${{ steps.meta.outputs.tag }}
+      title: ${{ steps.meta.outputs.title }}
+      prerelease: ${{ steps.meta.outputs.prerelease }}
+      publish: ${{ steps.meta.outputs.publish }}
+      commit: ${{ steps.meta.outputs.commit }}
+      update_channel: ${{ steps.meta.outputs.update_channel }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Setup Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.x"
+
+      - name: Resolve version and channel
+        id: meta
+        run: |
+          python scripts/release.py metadata \
+            --event "${{ github.event_name }}" \
+            --ref "${{ github.ref }}" \
+            --publish "${{ github.event_name == 'push' || inputs.publish }}" \
+            --sha "${{ github.sha }}" | tee -a "$GITHUB_OUTPUT"
+
+      - name: Refuse to publish a version twice
+        if: steps.meta.outputs.publish == 'true' && github.event_name == 'workflow_dispatch'
+        run: |
+          if git ls-remote --exit-code --tags origin "refs/tags/${{ steps.meta.outputs.tag }}" >/dev/null; then
+            echo "::error::${{ steps.meta.outputs.tag }} already exists. Bump VERSION (python scripts/version.py bump ...) first."
+            exit 1
+          fi
+
+      - name: Check the changelog
+        run: |
+          if [ "${{ steps.meta.outputs.publish }}" = "true" ]; then
+            python scripts/changelog.py check --release "${{ steps.meta.outputs.version }}"
+          else
+            python scripts/changelog.py check
+          fi
+
+      - name: Check version references and branding
+        run: |
+          python scripts/sync_doc_versions.py --check
+          python -m pip install --quiet pillow fonttools numpy
+          python scripts/generate_branding.py --check
+
+      - name: Summary
+        run: |
+          {
+            echo "### ${{ steps.meta.outputs.title }}"
+            echo ""
+            echo "- Label: \`${{ steps.meta.outputs.label }}\`"
+            echo "- Publish: ${{ steps.meta.outputs.publish }} (pre-release: ${{ steps.meta.outputs.prerelease }})"
+            echo "- Commit: \`${{ steps.meta.outputs.commit }}\`"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  docs:
+    name: HTML documentation
+    needs: prepare
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.x"
+
+      - name: Install documentation tools
+        run: python -m pip install -r scripts/requirements-docs.txt
+
+      # The build fails on any broken page link or heading anchor.
+      - name: Build the documentation site
+        run: >
+          python scripts/build_docs_site.py
+          --output build/docs-site
+          --version "${{ needs.prepare.outputs.label }}"
+          --zip "dist/VibeStudio-${{ needs.prepare.outputs.file_label }}-docs.zip"
+
+      - name: Upload documentation site
+        uses: actions/upload-artifact@v4
+        with:
+          name: docs-site
+          path: build/docs-site
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Upload documentation archive
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-docs
+          path: dist/*-docs.zip
+          if-no-files-found: error
+          retention-days: 14
+
+  windows:
+    name: Windows (x64)
+    needs: [prepare, docs]
+    runs-on: windows-latest
+    timeout-minutes: 120
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          submodules: recursive
+
+      - name: Setup Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.x"
+
+      - name: Install Meson, Ninja and Pillow
+        run: python -m pip install --upgrade pip meson ninja pillow
+
+      - name: Setup MSVC
+        uses: TheMrMilchmann/setup-msvc-dev@v4
+        with:
+          arch: x64
+
+      - name: Install Qt
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: ${{ env.QT_VERSION }}
+          arch: win64_msvc2022_64
+          modules: qtmultimedia
+
+      - name: Install Inno Setup
+        run: choco install innosetup --no-progress -y
+
+      - name: Download documentation site
+        uses: actions/download-artifact@v4
+        with:
+          name: docs-site
+          path: build/docs-site
+
+      - name: Build with source evidence
+        shell: pwsh
+        run: >
+          python scripts/build_release.py
+          --build-dir builddir
+          --evidence artifacts/build-evidence
+          --buildtype release
+          --audio-playback enabled
+          --qt-prefix "$env:QT_ROOT_DIR"
+          --github-repo "${{ github.repository }}"
+          --update-channel ${{ needs.prepare.outputs.update_channel }}
+
+      - name: Test
+        run: meson test -C builddir --print-errorlogs
+
+      - name: Validate
+        shell: pwsh
+        run: |
+          $binary = "builddir/src/vibestudio.exe"
+          python scripts/validate_build.py --binary $binary --expected-version "$((Get-Content VERSION -Raw).Trim())"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python scripts/validate_cli_docs.py --binary $binary
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python scripts/validate_packaging.py --binary $binary --compiled-translations "builddir/i18n"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python scripts/validate_release_assets.py --binary $binary
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Stage verified package and runtime sources
+        shell: pwsh
+        run: >
+          python scripts/package_windows_release.py
+          --build-dir builddir
+          --build-evidence artifacts/build-evidence/build-evidence.json
+          --qt-prefix "$env:QT_ROOT_DIR"
+          --docs-site build/docs-site
+          --output artifacts/windows-release
+
+      - name: Build installer
+        shell: pwsh
+        run: |
+          $package = Get-ChildItem artifacts/windows-release/binary -Directory | Select-Object -First 1
+          python scripts/package_windows_installer.py --package-dir $package.FullName --output artifacts/windows-installer
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Smoke-test the installer
+        shell: pwsh
+        run: |
+          $installer = Get-ChildItem artifacts/windows-installer/*-setup.exe | Select-Object -First 1
+          $target = Join-Path $env:RUNNER_TEMP "vibestudio-install"
+          Start-Process -FilePath $installer.FullName -ArgumentList "/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART", "/CURRENTUSER", "/DIR=$target" -Wait
+          & "$target\bin\vibestudio.exe" --settings-file "$env:RUNNER_TEMP\installed.ini" --cli --version
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          if (-not (Test-Path "$target\docs\html\index.html")) { Write-Error "Installed documentation is missing"; exit 1 }
+
+      - name: Upload Windows downloads
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-windows
+          path: |
+            artifacts/windows-installer/*-setup.exe
+            artifacts/windows-release/publish/*.zip
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Upload Windows build evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-build-evidence
+          path: |
+            artifacts/build-evidence/*
+            artifacts/windows-release/publish/*.json
+            artifacts/windows-release/runtime-checks/*.txt
+            artifacts/windows-release/runtime-checks/*.json
+          if-no-files-found: warn
+          retention-days: 14
+
+  macos:
+    name: macOS (Apple silicon)
+    needs: [prepare, docs]
+    runs-on: macos-latest
+    timeout-minutes: 120
+    env:
+      MACOSX_DEPLOYMENT_TARGET: "13.0"
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          submodules: recursive
+
+      - name: Setup Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.x"
+
+      - name: Install Meson and Ninja
+        run: python -m pip install --upgrade pip meson ninja
+
+      - name: Install Qt
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: ${{ env.QT_VERSION }}
+          arch: clang_64
+          modules: qtmultimedia
+
+      - name: Install create-dmg
+        run: brew install create-dmg
+
+      - name: Download documentation site
+        uses: actions/download-artifact@v4
+        with:
+          name: docs-site
+          path: build/docs-site
+
+      - name: Configure
+        run: >
+          meson setup builddir --backend ninja --buildtype=release
+          -Dgithub_repo=${{ github.repository }}
+          -Dupdate_channel=${{ needs.prepare.outputs.update_channel }}
+          -Daudio_playback=enabled
+
+      - name: Build
+        run: meson compile -C builddir
+
+      - name: Test
+        run: meson test -C builddir --print-errorlogs
+
+      - name: Validate
+        run: |
+          python scripts/validate_build.py --binary builddir/src/vibestudio --expected-version "$(cat VERSION)"
+          python scripts/validate_cli_docs.py --binary builddir/src/vibestudio
+          python scripts/validate_packaging.py --binary builddir/src/vibestudio --compiled-translations builddir/i18n
+
+      - name: Build app bundle and disk image
+        run: >
+          python scripts/package_macos_app.py
+          --binary builddir/src/vibestudio
+          --compiled-translations builddir/i18n
+          --docs-site build/docs-site
+          --qt-prefix "$QT_ROOT_DIR"
+          --output dist
+
+      - name: Smoke-test the app bundle
+        run: |
+          dist/VibeStudio.app/Contents/MacOS/vibestudio --settings-file "$RUNNER_TEMP/bundle.ini" --cli --version
+          hdiutil verify dist/*.dmg
+
+      - name: Upload macOS download
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-macos
+          path: dist/*.dmg
+          if-no-files-found: error
+          retention-days: 14
+
+  linux:
+    name: Linux (x86_64 AppImage)
+    needs: [prepare, docs]
+    # The oldest supported runner, so the AppImage runs on older distributions.
+    runs-on: ubuntu-22.04
+    timeout-minutes: 120
+    env:
+      LINUXDEPLOY_URL: https://github.com/linuxdeploy/linuxdeploy/releases/download/continuous/linuxdeploy-x86_64.AppImage
+      LINUXDEPLOY_QT_URL: https://github.com/linuxdeploy/linuxdeploy-plugin-qt/releases/download/continuous/linuxdeploy-plugin-qt-x86_64.AppImage
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          submodules: recursive
+
+      - name: Setup Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.x"
+
+      - name: Install build tools
+        run: |
+          python -m pip install --upgrade pip meson ninja
+          sudo apt-get update
+          sudo apt-get install -y libgl1-mesa-dev libxkbcommon-x11-0 libxcb-cursor0 libxcb-icccm4 \
+            libxcb-image0 libxcb-keysyms1 libxcb-randr0 libxcb-render-util0 libxcb-shape0 libxcb-xinerama0 \
+            libfuse2 file desktop-file-utils appstream
+
+      - name: Install Qt
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: ${{ env.QT_VERSION }}
+          arch: linux_gcc_64
+
+      - name: Download documentation site
+        uses: actions/download-artifact@v4
+        with:
+          name: docs-site
+          path: build/docs-site
+
+      - name: Configure
+        run: >
+          meson setup builddir --backend ninja --buildtype=release --prefix=/usr
+          -Dgithub_repo=${{ github.repository }}
+          -Dupdate_channel=${{ needs.prepare.outputs.update_channel }}
+          -Daudio_duplex=disabled
+
+      - name: Build
+        run: meson compile -C builddir
+
+      - name: Test
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: meson test -C builddir --print-errorlogs
+
+      - name: Validate
+        run: |
+          python scripts/validate_build.py --binary builddir/src/vibestudio --expected-version "$(cat VERSION)"
+          python scripts/validate_cli_docs.py --binary builddir/src/vibestudio
+          python scripts/validate_packaging.py --binary builddir/src/vibestudio --compiled-translations builddir/i18n
+          desktop-file-validate packaging/linux/io.github.themuffinator.VibeStudio.desktop
+          appstreamcli validate --no-net --pedantic packaging/linux/io.github.themuffinator.VibeStudio.metainfo.xml || appstreamcli validate --no-net packaging/linux/io.github.themuffinator.VibeStudio.metainfo.xml
+
+      - name: Fetch linuxdeploy
+        run: |
+          mkdir -p tools
+          curl -fsSL -o tools/linuxdeploy-x86_64.AppImage "$LINUXDEPLOY_URL"
+          curl -fsSL -o tools/linuxdeploy-plugin-qt-x86_64.AppImage "$LINUXDEPLOY_QT_URL"
+          chmod +x tools/*.AppImage
+          sha256sum tools/*.AppImage | tee -a "$GITHUB_STEP_SUMMARY"
+
+      - name: Build AppImage
+        run: >
+          python scripts/package_appimage.py
+          --build-dir builddir
+          --docs-site build/docs-site
+          --linuxdeploy tools/linuxdeploy-x86_64.AppImage
+          --qmake "$QT_ROOT_DIR/bin/qmake"
+          --output dist
+
+      - name: Smoke-test the AppImage
+        run: |
+          appimage=$(ls dist/*.AppImage | head -n 1)
+          "$appimage" --appimage-extract-and-run --settings-file "$RUNNER_TEMP/appimage.ini" --cli --version
+
+      - name: Upload Linux download
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-linux
+          path: dist/*.AppImage
+          if-no-files-found: error
+          retention-days: 14
+
+  source:
+    name: Source archive
+    needs: prepare
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          submodules: recursive
+
+      - name: Setup Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.x"
+
+      - name: Build the source archive
+        run: python scripts/package_source_tarball.py --output dist --label "${{ needs.prepare.outputs.file_label }}"
+
+      - name: Upload source archive
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-source
+          path: dist/*-source.tar.gz
+          if-no-files-found: error
+          retention-days: 14
+
+  publish:
+    name: Publish release
+    needs: [prepare, docs, windows, macos, linux, source]
+    if: needs.prepare.outputs.publish == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Setup Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.x"
+
+      - name: Download every platform's downloads
+        uses: actions/download-artifact@v4
+        with:
+          pattern: release-*
+          path: artifacts
+
+      - name: Stage downloads under their published names
+        run: python scripts/release.py stage --artifacts artifacts --output dist/release --label "${{ needs.prepare.outputs.version }}"
+
+      - name: Write release notes
+        run: >
+          python scripts/release.py notes
+          --label "${{ needs.prepare.outputs.version }}"
+          --commit "${{ needs.prepare.outputs.commit }}"
+          --manifest dist/release/release-manifest.json
+          --output dist/release-notes.md
+
+      - name: Create GitHub release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          flags=()
+          if [ "${{ needs.prepare.outputs.prerelease }}" = "true" ]; then flags+=(--prerelease); fi
+          if [ "${{ inputs.draft }}" = "true" ]; then flags+=(--draft); fi
+          if [ "${{ github.event_name }}" = "push" ]; then flags+=(--verify-tag); fi
+          gh release create "${{ needs.prepare.outputs.tag }}" dist/release/* \
+            --target "${{ needs.prepare.outputs.commit }}" \
+            --title "${{ needs.prepare.outputs.title }}" \
+            --notes-file dist/release-notes.md \
+            "${flags[@]}"
+
+      - name: Summary
+        run: |
+          {
+            echo "### Published ${{ needs.prepare.outputs.title }}"
+            echo ""
+            echo "${{ github.server_url }}/${{ github.repository }}/releases/tag/${{ needs.prepare.outputs.tag }}"
+          } >> "$GITHUB_STEP_SUMMARY"

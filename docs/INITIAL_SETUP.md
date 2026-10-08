@@ -1,5 +1,9 @@
 # Initial Setup Flow
 
+**Help** > **Documentation**, also available in the Command Palette, opens the
+bundled HTML manual without setup. Release packages support offline reading;
+development builds or installations without the manual open the online manual.
+
 **Multitrack → Record Tracks…** requests microphone permission only on Record.
 Choose current input/output devices, a new `.vsrecord` folder, timing and up to
 eight armed tracks. Monitoring starts off; no device or arming choices are
@@ -122,13 +126,20 @@ header's Package menu returns to its source entry, reviews pending changes or sa
 the package draft. Save each authoring document separately and use Save Workspace
 As to preserve project and module references for the next session.
 
-The editor-profile step and Settings expose 19 familiar editing schemes,
-including Q3Radiant, standalone NetRadiant, Hammer/Worldcraft, J.A.C.K., Sledge, DarkRadiant, Doom Builder variants, SLADE,
-Eureka and modern scene editors. The Levels Controls menu changes the same
+The editor-profile step and Settings expose 24 familiar editing schemes,
+including GtkRadiant 1.4, 1.5 and 1.6, QeRadiant, Q3Radiant, standalone NetRadiant,
+NetRadiant Custom, TrenchBroom, QuArK, Hammer/Worldcraft, J.A.C.K., Sledge, DarkRadiant, Doom Builder variants, SLADE,
+Eureka, DoomEdit, BSP and modern scene editors. **Browse Editor Profiles…** in
+the Levels Controls menu searches names, aliases and engine families and previews
+default controls and adaptations before **Use Profile** applies a choice.
+The Levels Controls menu changes the same
 setting immediately. Controls help lists supported gestures and searchable
 adaptations; choosing a scheme does not change the game target, map format,
-installation permissions or explicit layout preference. CLI aliases such as
-`editor select hammer++` and `editor select udb` persist a canonical profile ID.
+installation permissions or explicit layout preference. It does arrange and
+name the Levels sidebar tabs the way that editor family does, keeping any tabs
+you have moved for that family; **Reset Sidebars** returns to its defaults. CLI aliases such as
+`editor select hammer++`, `editor select udb`, `editor select NRC`, `editor select TB`
+and `editor select "GtkRadiant 1.5.0"` persist a canonical profile ID.
 See [Editor Profiles](EDITOR_PROFILES.md).
 
 After choosing a profile, **Customize Gestures…** in the same Settings category
@@ -137,6 +148,12 @@ Changes apply only to that profile. Defaults, conflict feedback and portable
 import/export are available in the dialog; Keyboard settings continue to manage
 command shortcuts. Possible camera/command overlaps have expandable details.
 Applying gesture preferences preserves the current workspace.
+
+The modeller has its own controls profiles (VibeStudio, Blender, 3ds Max and
+MilkShape 3D). Until one is chosen on the Mesh Editor's **View** page or with
+`model controls --select`, it follows the editor profile picked here: the
+Blender level profile gives the Blender modeller profile and every other
+profile gives VibeStudio's own. See [Modeller Profiles](MODELLER_PROFILES.md).
 Q3Radiant is separate from GtkRadiant and NetRadiant. Its classic position
 steering, fixed camera steps and independent preferences need no additional
 setup. The same gesture dialog can remap or disable steering and fixed steps.
@@ -145,6 +162,11 @@ previous navigation mode. Hold keys, camera pitch and arrow behavior are
 customizable in the same dialog. Selecting standalone NetRadiant keeps its
 preferences separate from NetRadiant Custom. Both expose their differences
 in Controls help without another installation or setup requirement.
+GtkRadiant 1.4 and 1.5 retain separate gesture preferences: 1.4 uses Alt area
+selection, while 1.5 uses Shift. Both provide discrete camera steps with A/Z
+pitch outside free look. QeRadiant provides its classic texture-fit keys without
+Q3 patch shortcuts. Each preset describes its adaptations; no upstream native
+preferences, component modes or extra map formats are imported.
 
 The Levels Layout menu can temporarily maximize the focused view and restore
 its previous pane sizes. This needs no setup and does not change the chosen
@@ -182,9 +204,12 @@ to unmoved boundaries. Things remain independently selected. This works offline
 without additional setup. Save the WAD and rebuild nodes using a configured node
 builder before testing; native wall offsets are retained. Existing UDMF maps
 offer **Edit → UDMF Properties…**, common-field previews, scene organization and
-standard move/rotate/mirror/snap/resize without extra setup. Save and rebuild
+standard move/rotate/mirror/snap/resize and thing duplication without extra setup.
+**Duplicate with Offset…** supports fractional XYZ offsets and repeated copies.
+Save and rebuild
 nodes after geometry or raw property edits; ordinary-thing transforms retain
-valid nodes. UDMF topology creation/deletion and advanced effects remain open.
+valid nodes. Copying polyobject control things also requires a rebuild. UDMF
+geometry duplication, topology creation/deletion and advanced effects remain open.
 See [Level Editor](LEVEL_EDITOR.md).
 
 Levels scene organization needs no game installation, compiler, account or AI
@@ -215,9 +240,11 @@ images through the offline material resolver shared by Models and Textures.
 Choose Paint or Sample in Levels, or Use for Map Painting in Textures. Explicit
 Targets support keyboard editing and Doom flats. No additional settings,
 service or dependency is required. Radiant-family profiles also offer middle-click
-material-name sampling; Q3Radiant/GtkRadiant use Shift+middle for one-surface
+material-name sampling; QeRadiant, Q3Radiant and GtkRadiant 1.4/1.6 use Shift+middle for one-surface
 painting. Brush sampling also copies mapping and flags. Ctrl+middle pastes onto
-the hit brush and Ctrl+Shift+middle onto the hit face in these two profiles.
+the hit brush and Ctrl+Shift+middle onto the hit face in these profiles.
+GtkRadiant 1.5 keeps middle sampling and Ctrl+Shift+middle hit-face paste,
+with Shift+middle and Ctrl+middle unbound.
 Gesture Preferences can reassign or disable all four actions. Existing navigation
 and explicit sample/paint choices retain priority over new paste defaults.
 Native upstream preference-file import remains separate work. See
@@ -247,6 +274,14 @@ for material/model preview and dependency review. A package draft is required
 for **Stage Selection as Prefab**. Placement inherits the editor's texture-lock
 preference; it never silently converts brush dialects. Save the map and publish
 required assets before compiling. See [Reusable Prefabs](LEVEL_EDITOR.md#reusable-prefabs).
+
+Camera entity placement needs no setup or provider. Select a class in **Create**,
+show the camera and choose **Place at Camera Surface** while aiming at geometry.
+Loaded entity definitions supply placement bounds; the fallback marker is
+8 units in each direction. **Clearance** is a session-only extra gap. The current
+grid and **Create in** layer apply. Doom/Hexen things require a sector floor and
+ignore clearance; UDMF creation remains planned. See
+[camera surface placement](LEVEL_EDITOR.md#camera-surface-placement).
 
 Camera brush creation needs no setup or provider. Open or create a Quake-family
 map, choose **Draw Brush**, a construction plane and a material. The current
@@ -733,21 +768,45 @@ and Redo. An unavailable plan reports its blocking reason.
 
 ### 1. Welcome and Access
 
-- [x] Choose language.
-- [ ] Choose UI scale and font size.
+The step's **Open Accessibility Settings** button opens Settings >
+Accessibility; the language, region, theme, scale, typeface, and spacing
+choices sit on Settings > Appearance and Language beside it.
+
+- [x] Choose language. The default, **System language**, follows the operating
+  system's language whenever VibeStudio has it (47 languages; see
+  [Supported Languages And Regions](ACCESSIBILITY_LOCALIZATION.md#supported-languages-and-regions)),
+  and a different choice offers **Restart Now**. After a restart into a
+  right-to-left language the whole window mirrors, panels included: they open
+  on the left, and a panel moved beside the mode rail stays beside it. The
+  **Run Build Pipeline** and **Launch Game** buttons keep their leading spacing
+  in either direction.
+- [x] Choose region formats: the system's regional settings, the interface
+  language's, or any regional locale, with a live sample.
+- [x] Choose UI scale and font size: text scale 100% to 200%, and the interface
+  typeface (any installed family) with optional WCAG 1.4.12 text spacing.
   The shell uses the native UI typeface with a 10.5-point body text baseline;
   the text scale applies to this baseline throughout setup and the workbench.
-- [ ] Choose theme: system, dark, light, high-contrast dark, high-contrast
+- [x] Choose theme: system, dark, light, high-contrast dark, high-contrast
   light.
-  System follows the platform colour scheme with Qt 6.5 or later; earlier Qt
-  versions use dark. Explicit light/dark and high-contrast choices work on both.
+  System follows the platform colour scheme with Qt 6.5 or later, and the
+  platform's high-contrast mode with Qt 6.10 or later; earlier Qt versions use
+  dark. Explicit light/dark and high-contrast choices work on both.
   Live theme changes retain open content, text selection and local widget styles.
   Reapplying the same style skips a full restyle; changed styles use bounded
   refresh delivery through nested controls. No additional setup is required.
-- [ ] Choose reduced motion.
-- [ ] Enable or skip OS-backed TTS.
-- [ ] Test TTS output if enabled.
+- [x] Choose colour vision (standard, red-green safe, blue-yellow safe,
+  monochrome), reduced saturation, a thick focus outline, and a thick text
+  cursor.
+- [x] Choose reduced motion and a steady text cursor.
+- [x] Choose how long status messages stay, screen reader announcements, and
+  taskbar alerts for finished work.
+- [x] Enable or skip OS-backed TTS, and choose its events, voice, rate, pitch,
+  and volume.
+- [x] Test TTS output if enabled: **Say Test Phrase**, or
+  `vibestudio --cli accessibility speak --test`.
 - [ ] Show keyboard navigation help and allow keyboard-only completion.
+  **Keyboard Shortcuts…** on the Accessibility page opens the key reference;
+  the guided keyboard-only walkthrough is still planned.
 
 ### 2. Workflow Role
 
@@ -759,11 +818,11 @@ and Redo. An unavailable plan reports its blocking reason.
 
 ### 3. Editor Familiarity
 
-- [x] Choose level-editor profile: VibeStudio default, GtkRadiant 1.6.0-style,
-  NetRadiant Custom-style, TrenchBroom-style, QuArK-style, or decide later. The
-  TrenchBroom, NetRadiant Custom, and GtkRadiant profiles bring those editors'
-  own layout, 3D camera, mouse gestures, grid, and keys to the Levels page (see
-  [`EDITOR_PROFILES.md`](EDITOR_PROFILES.md)); QuArK changes keys only for now.
+- [x] Choose among 24 level-editor profiles, including VibeStudio Default,
+  GtkRadiant 1.4/1.5/1.6, QeRadiant/Q3Radiant, NetRadiant Custom, TrenchBroom,
+  QuArK and Hammer, or decide later. Profiles adapt layout, 3D camera, mouse
+  gestures, grid and keys through shared studio services. See
+  [`EDITOR_PROFILES.md`](EDITOR_PROFILES.md) for the explicit coverage and gaps.
 - [x] Preview key differences: layout, camera, grid, selection, clipping,
   shortcuts, and terminology.
 - [ ] Import or skip shortcut/profile files where supported later.
@@ -1252,15 +1311,16 @@ The same state is available from the CLI through `--setup-report`,
 
 The full guided setup flow remains planned. Steam/GOG game installation
 detection, manual install profiles, editor profile selection, language/theme/
-scale/density/reduced-motion/TTS preferences, AI connector preference storage,
-CLI setup reports, localization target metadata, and setup summaries are active
-scaffold slices. The GUI loads compiled translation catalogs at startup; changing
-the saved language still requires a restart. Portable release packages require
+scale/density/reduced-motion/TTS preferences, the full accessibility page,
+AI connector preference storage, CLI setup reports, localization target
+metadata, and setup summaries are active slices. The GUI loads compiled
+translation catalogs at startup; a changed language takes effect after the
+restart Settings offers. Portable release packages require
 the compiled application catalogs and deploy Qt's own standard-dialog catalogs
 through the platform runtime step; see [Packaging](PACKAGING.md). No extra
 language download or setup preference is introduced. Most target-language messages
 remain untranslated; see [Accessibility and Localization](ACCESSIBILITY_LOCALIZATION.md).
-Source-port detection, live TTS playback, deeper project/package mounting, and richer toolchain probes remain
+Source-port detection, deeper project/package mounting, and richer toolchain probes remain
 represented as setup steps, preferences, release smoke checks, or warnings
 until their dedicated roadmap slices land.
 

@@ -17,6 +17,7 @@
 #include <QPushButton>
 #include <QScrollArea>
 #include <QSplitter>
+#include <QSpinBox>
 #include <QThread>
 #include <QTimer>
 #include <QVBoxLayout>
@@ -56,14 +57,29 @@ LevelPlacementDialog::LevelPlacementDialog(const LevelMapDocument& source, Level
 	auto* form = new QFormLayout;
 	form->setRowWrapPolicy(QFormLayout::WrapLongRows);
 	column->addLayout(form);
+	if (mode == LevelPlacementMode::Duplicate) {
+		m_copies = new QSpinBox(m_controls);
+		m_copies->setObjectName(QStringLiteral("placementCopies"));
+		m_copies->setRange(1, kLevelMapMaxArrayCopies);
+		m_copies->setValue(1);
+		m_copies->setAccessibleName(tr("Copies"));
+		m_copies->setAccessibleDescription(tr("Additional copies of the selection. Each copy advances by the offset below. All copies form one undo step."));
+		m_copies->setToolTip(m_copies->accessibleDescription());
+		m_copies->setLayoutDirection(Qt::LeftToRight);
+		form->addRow(tr("&Copies"), m_copies);
+		connect(m_copies, &QSpinBox::valueChanged, this, [this] { schedule(); });
+	}
 	for (int axis = 0; axis < 3; ++axis) {
 		auto* value = new QDoubleSpinBox(m_controls);
 		value->setObjectName(QStringLiteral("placementOffset%1").arg(axis));
 		value->setAccessibleName(tr("Offset %1").arg(QString(QLatin1Char("XYZ"[axis]))));
-		value->setAccessibleDescription(
-			tr("Translation in map units relative to the source objects. All inserted objects share this offset."));
-		value->setRange(-65536, 65536);
-		value->setDecimals(source.format == LevelMapFormat::DoomWad ? 0 : 6);
+		value->setAccessibleDescription(mode == LevelPlacementMode::Duplicate
+			? tr("Offset per copy in map units. Copy 1 uses this offset; copy 2 uses twice the offset, and so on.")
+			: tr("Translation in map units relative to the source objects. All inserted objects share this offset."));
+		value->setToolTip(value->accessibleDescription());
+		const bool udmf = source.doomFormat == LevelMapDoomFormat::Udmf;
+		value->setRange(udmf ? -1e7 : -65536, udmf ? 1e7 : 65536);
+		value->setDecimals(source.format == LevelMapFormat::DoomWad && !udmf ? 0 : 6);
 		value->setSingleStep(16);
 		value->setLayoutDirection(Qt::LeftToRight);
 		form->addRow(value->accessibleName(), value);
@@ -79,7 +95,7 @@ LevelPlacementDialog::LevelPlacementDialog(const LevelMapDocument& source, Level
 	connect(m_lock, &QCheckBox::toggled, this, [this] { schedule(); });
 	if (source.format == LevelMapFormat::DoomWad) {
 		m_lock->setVisible(false);
-		m_offset[2]->setEnabled(source.doomFormat == LevelMapDoomFormat::Hexen);
+		m_offset[2]->setEnabled(source.doomFormat == LevelMapDoomFormat::Hexen || source.doomFormat == LevelMapDoomFormat::Udmf);
 	}
 	m_status = new QLabel(m_controls);
 	m_status->setObjectName(QStringLiteral("placementStatus"));
@@ -173,6 +189,8 @@ void LevelPlacementDialog::setOffset(const LevelMapVec3& offset) {
 	schedule();
 }
 void LevelPlacementDialog::setTextureLock(bool enabled) { m_lock->setChecked(enabled); }
+void LevelPlacementDialog::setCopies(int count) { if (m_copies) { m_copies->setValue(count); } }
+int LevelPlacementDialog::copies() const { return m_copies ? m_copies->value() : 1; }
 void LevelPlacementDialog::updateControlWidth() {
 	if (m_scroll && m_controls) {
 		m_scroll->setMinimumWidth(std::max(280, m_controls->minimumSizeHint().width() + 28));
@@ -210,11 +228,12 @@ void LevelPlacementDialog::startPreview() {
 	m_work = work;
 	const auto mode = m_mode;
 	const auto delta = offset();
+	const auto copyCount = copies();
 	const auto text = m_text;
 	const auto archive = m_archive;
 	const auto palette = m_palette;
 	const LevelMapTextureLockOptions textures{m_lock->isChecked(), false};
-	m_thread = QThread::create([work, mode, delta, text, textures, archive, palette] {
+	m_thread = QThread::create([work, mode, delta, copyCount, text, textures, archive, palette] {
 		const auto cancelled = [work] { return work->cancelled.load(); };
 		const auto progress = [work](const QString& label, qint64 done = 0, qint64 total = 0) {
 			QMutexLocker lock(&work->progressMutex);
@@ -228,6 +247,7 @@ void LevelPlacementDialog::startPreview() {
 		LevelPlacementRequest request;
 		request.operation = mode == LevelPlacementMode::Duplicate ? LevelPlacementOperation::Duplicate : LevelPlacementOperation::Paste;
 		request.offset = delta;
+		request.copies = copyCount;
 		request.text = text;
 		request.textures = textures;
 		LevelPlacementControl control;

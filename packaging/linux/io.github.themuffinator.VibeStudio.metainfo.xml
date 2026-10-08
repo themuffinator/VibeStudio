@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- AppStream metadata for software centres and AppImage tooling. -->
+<component type="desktop-application">
+  <id>io.github.themuffinator.VibeStudio</id>
+  <name>VibeStudio</name>
+  <summary>The all-in-one development studio for classic idTech games</summary>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>GPL-3.0-or-later</project_license>
+  <developer id="io.github.themuffinator">
+    <name>themuffinator</name>
+  </developer>
+  <description>
+    <p>
+      VibeStudio brings level editing, models, textures, audio, packages, code,
+      compiler orchestration and game launching for Doom, Quake, Quake II and
+      Quake III-era projects into one studio, with a command line that shares the
+      same services.
+    </p>
+    <p>
+      VibeStudio is pre-alpha and largely untested in real projects. Keep backups
+      of your work while you try it.
+    </p>
+  </description>
+  <launchable type="desktop-id">io.github.themuffinator.VibeStudio.desktop</launchable>
+  <provides>
+    <binary>vibestudio</binary>
+  </provides>
+  <url type="homepage">https://github.com/themuffinator/VibeStudio</url>
+  <url type="bugtracker">https://github.com/themuffinator/VibeStudio/issues</url>
+  <url type="vcs-browser">https://github.com/themuffinator/VibeStudio</url>
+  <categories>
+    <category>Development</category>
+    <category>IDE</category>
+    <category>Graphics</category>
+  </categories>
+  <content_rating type="oars-1.1"/>
+</component>

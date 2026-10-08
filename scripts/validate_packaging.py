@@ -121,7 +121,7 @@ def main() -> int:
             return fail("Expected third-party license bundle to be recorded in the manifest")
         if manifest.get("localizationCatalogRoot") != "i18n":
             return fail("Expected localization catalog root to be recorded in the manifest")
-        if len(manifest.get("includedLocalizationCatalogs", [])) < 21:
+        if len(manifest.get("includedLocalizationCatalogs", [])) < 48:
             return fail("Expected 20 localization target catalogs plus pseudo catalog in the manifest")
         staged_binary = package_dir / "bin" / binary.name
         if not staged_binary.exists():

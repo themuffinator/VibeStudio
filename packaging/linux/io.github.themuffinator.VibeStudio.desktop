@@ -1,0 +1,12 @@
+[Desktop Entry]
+Type=Application
+Name=VibeStudio
+GenericName=Game Development Studio
+Comment=The all-in-one development studio for classic idTech games
+Exec=vibestudio %F
+Icon=io.github.themuffinator.VibeStudio
+Terminal=false
+Categories=Development;IDE;Graphics;
+Keywords=idTech;Doom;Quake;level editor;map editor;modding;PK3;WAD;
+StartupNotify=true
+StartupWMClass=VibeStudio

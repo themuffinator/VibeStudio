@@ -119,7 +119,7 @@ bool scenario(QApplication &app, const QString &directory, int variant)
 		if (tabs->widget(i)->isAncestorOf(boxes))
 		{
 			tabs->setCurrentIndex(i);
-			scroll = qobject_cast<QScrollArea *>(tabs->widget(i));
+			scroll = tests::pageScroll(tabs->widget(i));
 			break;
 		}
 	boxes->setCurrentIndex(boxes->findData("body"));

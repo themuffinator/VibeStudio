@@ -23,6 +23,9 @@
 #include "cli/model_transform_options.h"
 #include "cli/model_skin_bindings.h"
 #include "cli/model_surfaces.h"
+#include "cli/materials.h"
+#include "cli/model_tools.h"
+#include "cli/model_controls.h"
 #include "cli/model_material_slots.h"
 #include "cli/model_appearance.h"
 #include "cli/model_intersections.h"
@@ -30,6 +33,7 @@
 #include "core/model_material_slots.h"
 
 #include "app/studio_runtime.h"
+#include "app/studio_speech.h"
 #include "app/ui_primitives.h"
 #include "core/advanced_studio.h"
 #include "core/code_files.h"
@@ -57,6 +61,7 @@
 #include "core/compiler_registry.h"
 #include "core/compiler_runner.h"
 #include "core/editor_profiles.h"
+#include "core/entity_builtin_catalogue.h"
 #include "core/entity_definitions.h"
 #include "core/idtech_image.h"
 #include "core/level_map.h"
@@ -72,6 +77,9 @@
 #include "core/level_materials.h"
 #include "core/level_surface.h"
 #include "core/level_primitive.h"
+#include "core/level_doom_align.h"
+#include "core/level_doom_shapes.h"
+#include "core/level_shapes.h"
 #include "core/level_prefab.h"
 #include "core/level_merge.h"
 #include "core/localization.h"
@@ -128,7 +136,9 @@
 #include <QStringDecoder>
 
 #include <algorithm>
+#include <tuple>
 #include <cmath>
+#include <numbers>
 #include <cstddef>
 #include <iostream>
 #include <streambuf>
@@ -327,17 +337,43 @@ QVector<CliCommandDescriptor> cliCommandDescriptors()
 		{QStringLiteral("map"), QStringLiteral("merge-sectors"), QStringLiteral("Join sectors of a Doom or Hexen map into the last one given and take away the lines between them, and save to a new WAD."), {QStringLiteral("vibestudio --cli map merge-sectors ./maps/e1.wad --map E1M1 --object sector:4 --object sector:2 --output ./maps/e1-merged.wad")}, true, true, true},
 		{QStringLiteral("map"), QStringLiteral("merge-vertices"), QStringLiteral("Join vertices of a Doom or Hexen map into the last one given, stitching lines left over each other, and save to a new WAD."), {QStringLiteral("vibestudio --cli map merge-vertices ./maps/e1.wad --map E1M1 --object vertex:12 --object vertex:40 --output ./maps/e1-joined.wad")}, true, true, true},
 		{QStringLiteral("map"), QStringLiteral("flip-linedef"), QStringLiteral("Turn linedefs of a Doom or Hexen map around, sides and all, and save to a new WAD."), {QStringLiteral("vibestudio --cli map flip-linedef ./maps/e1.wad --map E1M1 --object linedef:12 --output ./maps/e1-flipped.wad")}, true, true, true},
+		{QStringLiteral("map"), QStringLiteral("tie-entity"), QStringLiteral("Make the given brushes of a Quake-family .map into a brush entity of a class, and save to a new path."), {QStringLiteral("vibestudio --cli map tie-entity ./maps/start.map --object brush:12 --class func_door --key speed=100 --output ./maps/start-door.map")}, true, true, true},
+		{QStringLiteral("map"), QStringLiteral("move-to-world"), QStringLiteral("Give the given brush entities' brushes back to worldspawn, and save to a new path."), {QStringLiteral("vibestudio --cli map move-to-world ./maps/start.map --object entity:4 --output ./maps/start-world.map")}, true, true, true},
+		{QStringLiteral("map"), QStringLiteral("select-region"), QStringLiteral("List the objects inside, touching, or standing within the bounds of the given objects."), {QStringLiteral("vibestudio --cli map select-region ./maps/start.map --object brush:12 --mode complete-tall --json")}, true, true, false},
+		{QStringLiteral("map"), QStringLiteral("detail"), QStringLiteral("Make the given brushes detail, or structural with --structural, and save to a new path."), {QStringLiteral("vibestudio --cli map detail ./maps/base.map --object brush:3 --output ./maps/base-detail.map")}, true, true, true},
+		{QStringLiteral("map"), QStringLiteral("drop-to-floor"), QStringLiteral("Drop the given point entities onto the surface beneath them, and save to a new path."), {QStringLiteral("vibestudio --cli map drop-to-floor ./maps/start.map --object entity:7 --definitions ./defs --output ./maps/start-dropped.map")}, true, true, true},
+		{QStringLiteral("map"), QStringLiteral("add-shape"), QStringLiteral("Add a shape fitted to a box, or replace --object brushes with one filling their bounds: the box, wedge, cylinder, cone and sphere primitives, or an arch, ring, stairs or room of several brushes, as one undo step in the map's face format."), {QStringLiteral("vibestudio --cli map add-shape ./maps/start.map --shape arch --axis y --sides 8 --thickness 16 --mins -64,-16,0 --maxs 64,16,96 --texture base/stone --output ./maps/start-arch.map"), QStringLiteral("vibestudio --cli map add-shape ./maps/start.map --shape stairs --steps 8 --rise +x --object brush:12 --texture base/step --output ./maps/start-stairs.map --json")}, true, true, true},
+		{QStringLiteral("map"), QStringLiteral("shear"), QStringLiteral("Slant the --object items: points slide along --axis by --factor (or the tangent of --angle) times their distance from the selection's centre along --along, or from --about, the coordinate along --along that stays put, as TrenchBroom's shear tool does; --texture-lock off leaves textures where they are."), {QStringLiteral("vibestudio --cli map shear ./maps/start.map --object brush:3 --axis x --along z --angle 30 --about 0 --output ./maps/start-sheared.map")}, true, true, true},
+		{QStringLiteral("map"), QStringLiteral("make-sector"), QStringLiteral("Make a sector on a Doom or Hexen map of the existing lines around --at x,y, islands of lines inside included, as Doom Builder's Make Sectors mode does, and save to a new WAD; the nodes need rebuilding afterwards."), {QStringLiteral("vibestudio --cli map make-sector ./maps/doom.wad --map-name MAP01 --at 64,64 --output ./maps/doom-sector.wad")}, true, true, true},
+		{QStringLiteral("map"), QStringLiteral("align-walls"), QStringLiteral("Align Doom wall textures from --sidedef N along the walls joined to it that show the same texture in the same --part (middle, upper or lower), as Doom Builder's auto-align does: X offsets run on across each join and Y offsets keep the rows level (--axes x, y or xy). --width W keeps X offsets within the texture's width; --object linedef:N keeps the walk to those linedefs."), {QStringLiteral("vibestudio --cli map align-walls ./maps/doom.wad --map-name MAP01 --sidedef 4 --part middle --width 64 --output ./maps/doom-aligned.wad")}, true, true, true},
+		{QStringLiteral("map"), QStringLiteral("curve-linedefs"), QStringLiteral("Bend Doom --object linedefs into --segments pieces along an arc bulging --bulge units towards their front sides (negative towards the back), as Doom Builder's curve mode does; the nodes need rebuilding afterwards."), {QStringLiteral("vibestudio --cli map curve-linedefs ./maps/doom.wad --map-name MAP01 --object linedef:4 --segments 8 --bulge 64 --output ./maps/doom-curved.wad")}, true, true, true},
+		{QStringLiteral("map"), QStringLiteral("draw-stairs"), QStringLiteral("Draw a row of Doom step sectors across the --from/--to footprint, each floor --step-height above the last, climbing towards --rise auto|+x|-x|+y|-y, as Doom Builder's stair builder does; one undo step."), {QStringLiteral("vibestudio --cli map draw-stairs ./maps/doom.wad --map-name MAP01 --from -128,-64 --to 128,64 --steps 8 --step-height 8 --rise +x --output ./maps/doom-stairs.wad")}, true, true, true},
+		{QStringLiteral("map"), QStringLiteral("draw-grid"), QStringLiteral("Cut the --from/--to footprint of a Doom map into --columns by --rows sectors, as Doom Builder's grid drawing does; one undo step."), {QStringLiteral("vibestudio --cli map draw-grid ./maps/doom.wad --map-name MAP01 --from 512,0 --to 1024,512 --columns 4 --rows 4 --output ./maps/doom-grid.wad")}, true, true, true},
+		{QStringLiteral("map"), QStringLiteral("replace-key"), QStringLiteral("Replace a key's value on every entity (or the --object ones) whose value is --find, or with --partial every occurrence of --find within it, by --replace, as one undo step."), {QStringLiteral("vibestudio --cli map replace-key ./maps/start.map --key targetname --find door_ --replace gate_ --partial --output ./maps/start-renamed.map")}, true, true, true},
+		{QStringLiteral("map"), QStringLiteral("align"), QStringLiteral("Line the --object items up along one axis on the minimum, centre or maximum of their combined bounds, as Hammer's Align Objects does, as one undo step."), {QStringLiteral("vibestudio --cli map align ./maps/start.map --object brush:3 --object brush:4 --axis x --edge min --output ./maps/start-aligned.map")}, true, true, true},
+		{QStringLiteral("map"), QStringLiteral("region"), QStringLiteral("Write a region of a Quake-family map as a map of its own for a quick compile, as Radiant's regions and Hammer's cordon do: what lies outside --mins/--maxs (or the --object bounds) removed, the box sealed by six brushes, and a player start added if it has none."), {QStringLiteral("vibestudio --cli map region ./maps/start.map --mins -512,-512,-64 --maxs 512,512,256 --start 0,0,32 --output ./maps/start-region.map --json")}, true, true, true},
+		{QStringLiteral("map"), QStringLiteral("intersect"), QStringLiteral("Replace the given overlapping brushes with the brush where they all overlap, and save to a new path."), {QStringLiteral("vibestudio --cli map intersect ./maps/start.map --object brush:12 --object brush:13 --output ./maps/start-overlap.map")}, true, true, true},
 		{QStringLiteral("map"), QStringLiteral("carve"), QStringLiteral("Carve the given brushes of a Quake-family .map out of every brush they overlap, and save to a new path."), {QStringLiteral("vibestudio --cli map carve ./maps/start.map --object brush:12 --output ./maps/start-doorway.map")}, true, true, true},
 		{QStringLiteral("map"), QStringLiteral("hollow"), QStringLiteral("Turn brushes of a Quake-family .map into walls of a thickness, one per face, and save to a new path."), {QStringLiteral("vibestudio --cli map hollow ./maps/start.map --object brush:12 --thickness 8 --output ./maps/start-room.map")}, true, true, true},
 		{QStringLiteral("map"), QStringLiteral("merge-brushes"), QStringLiteral("Merge an exact convex union of brushes, with explicit choices for conflicting surfaces, and save to a new path."), {QStringLiteral("vibestudio --cli map merge-brushes ./maps/start.map --object brush:0 --object brush:1 --output ./maps/merged.map --dry-run --json")}, true, true, true},
 		{QStringLiteral("map"), QStringLiteral("clip"), QStringLiteral("Cut brushes of a Quake-family .map with a plane, keeping one side or both, and save to a new path."), {QStringLiteral("vibestudio --cli map clip ./maps/start.map --object brush:12 --axis x --at 64 --keep below --output ./maps/start-clipped.map"), QStringLiteral("vibestudio --cli map clip ./maps/start.map --object entity:3 --points \"0,0,0 64,64,0 0,0,64\" --keep both --output ./maps/start-split.map")}, true, true, true},
 		{QStringLiteral("map"), QStringLiteral("resize"), QStringLiteral("Resize map objects to new bounds or a size; --texture-lock on stretches brush textures (default off). --allow-valve220 permits required conversion."), {QStringLiteral("vibestudio --cli map resize ./maps/start.map --object brush:12 --size 128,64,32 --output ./maps/start-wider.map"), QStringLiteral("vibestudio --cli map resize ./maps/start.map --object entity:3 --mins 0,0,0 --maxs 256,128,64 --output ./maps/start-resized.map")}, true, true, true},
 		{QStringLiteral("map"), QStringLiteral("snap"), QStringLiteral("Snap objects independently, preserving owner assemblies and shared Doom vertices. Brush textures lock by default; --texture-lock off keeps source parameters."), {QStringLiteral("vibestudio --cli map snap ./maps/start.map --object entity:3 --object brush:12 --grid 16 --output ./maps/start-snapped.map")}, true, true, true},
-		{QStringLiteral("map"), QStringLiteral("duplicate"), QStringLiteral("Copy Quake-family objects or Doom/Hexen things with an optional delta. Brush textures lock by default; --texture-lock off keeps source parameters."), {QStringLiteral("vibestudio --cli map duplicate ./maps/start.map --object entity:3 --object brush:12 --delta 64,0,0 --output ./maps/start-more.map")}, true, true, true},
+		{QStringLiteral("map"), QStringLiteral("duplicate"), QStringLiteral("Copy Quake-family objects or Doom/Hexen/UDMF things with an optional delta. UDMF retains fractional XYZ coordinates, comments and unknown thing properties. --copies 1..256 creates a linear array at successive multiples of --delta, in one atomic edit. Arrays are limited to 32768 added native records and 262144 brush faces/patch points. Brush textures lock by default; --texture-lock off keeps source parameters."), {QStringLiteral("vibestudio --cli map duplicate ./maps/start.map --object entity:3 --object brush:12 --delta 64,0,0 --copies 8 --output ./maps/start-more.map")}, true, true, true},
 		{QStringLiteral("map"), QStringLiteral("paste"), QStringLiteral("Insert UTF-8 map text from --from with an optional --delta. Brush textures lock by default; --texture-lock off keeps source parameters. Input limit: 8 MiB / 4 million UTF-16 characters."), {QStringLiteral("vibestudio --cli map paste ./maps/start.map --from ./assembly.map --delta 128,0,0 --output ./maps/placed.map --dry-run --json")}, true, true, true},
 		{QStringLiteral("map"), QStringLiteral("compile-plan"), QStringLiteral("Build a compiler command plan from the inspected map and selected compiler profile."), {QStringLiteral("vibestudio --cli map compile-plan ./maps/start.map --profile ericw-qbsp --json")}, true, true, true},
 		{QStringLiteral("shader"), QStringLiteral("inspect"), QStringLiteral("Parse idTech3 shader scripts into an editable graph model and validate texture references."), {QStringLiteral("vibestudio --cli shader inspect ./scripts/common.shader --package ./baseq3 --json")}},
 		{QStringLiteral("shader"), QStringLiteral("set-stage"), QStringLiteral("Edit a shader stage directive and write a round-tripped shader script to a save-as path."), {QStringLiteral("vibestudio --cli shader set-stage ./scripts/common.shader --shader textures/base/wall --stage 1 --directive blendFunc --value \"GL_ONE GL_ONE\" --output ./scripts/common-edited.shader")}, true, true, true},
+		{QStringLiteral("material"), QStringLiteral("list"), QStringLiteral("List every material a package, folder, WAD or script defines across Doom, Quake, Quake II, Quake III and Doom 3, with --where filters and the definitions the game shadows."), {QStringLiteral("vibestudio --cli material list ./baseq3 --where \"engine=quake3 animated=yes\" --json")}},
+		{QStringLiteral("material"), QStringLiteral("inspect"), QStringLiteral("Show one material's stages, images and how they resolve, diagnostics, node graph and source text."), {QStringLiteral("vibestudio --cli material inspect ./baseq3 --material textures/liquids/lavahell --show-source")}},
+		{QStringLiteral("material"), QStringLiteral("validate"), QStringLiteral("Check materials the way each engine loads them: syntax, keywords it rejects, missing images and shadowed definitions. Exits 4 on errors, or on warnings with --strict."), {QStringLiteral("vibestudio --cli material validate ./mymod --base ./baseq3 --json")}},
+		{QStringLiteral("material"), QStringLiteral("render"), QStringLiteral("Render a material the way its engine draws it, on a wall, floor, cube, sphere, cylinder or room, at one moment or as an animation sheet."), {QStringLiteral("vibestudio --cli material render ./baseq3 --material textures/sfx/fire_ctfblue --frames 8 --fps 10 --size 256x256 --output fire.png")}, true, true, true},
+		{QStringLiteral("material"), QStringLiteral("graph"), QStringLiteral("Print a material's node graph, or apply graph edits from JSON and write the edited text."), {QStringLiteral("vibestudio --cli material graph ./scripts/mymod.shader --material textures/mymod/glow --edits graph-edits.json --output ./scripts/mymod.shader --overwrite")}, true, true, true},
+		{QStringLiteral("material"), QStringLiteral("edit"), QStringLiteral("Apply directive and stage edits from JSON to a Quake III shader or Doom 3 material script."), {QStringLiteral("vibestudio --cli material edit ./materials/mymod.mtr --edits edits.json --output ./materials/mymod.mtr --overwrite")}, true, true, true},
+		{QStringLiteral("material"), QStringLiteral("templates"), QStringLiteral("List the starting points material new can write, by engine."), {QStringLiteral("vibestudio --cli material templates --engine doom3")}},
+		{QStringLiteral("material"), QStringLiteral("new"), QStringLiteral("Write a new material from a template to the console, a new script, or the end of an existing one."), {QStringLiteral("vibestudio --cli material new --template q3-glow --name textures/mymod/lamp --output ./scripts/mymod.shader --append")}, true, true, true},
+		{QStringLiteral("material"), QStringLiteral("doom-tables"), QStringLiteral("Show a Doom package's animation and switch tables, and compile Boom ANIMATED and SWITCHES lumps from them or from SWANTBLS text."), {QStringLiteral("vibestudio --cli material doom-tables ./SWANTBLS.txt --output-dir ./lumps")}, true, true, true},
+		{QStringLiteral("material"), QStringLiteral("wal"), QStringLiteral("Show a Quake II WAL header as ericw-tools .wal_json, or rewrite its flags, value and next frame from one."), {QStringLiteral("vibestudio --cli material wal ./textures/e1u1/floor1_3.wal --metadata floor1_3.wal_json --output ./floor1_3.wal")}, true, true, true},
 		{QStringLiteral("sprite"), QStringLiteral("plan"), QStringLiteral("Create Doom or Quake sprite frame, palette, sequencing, and package staging plans."), {QStringLiteral("vibestudio --cli sprite plan --engine doom --name TROO --frames 2 --rotations 8 --palette doom --json")}, true, true, true},
 		{QStringLiteral("code"), QStringLiteral("language-server"), QStringLiteral("Run a local stdio server for diagnostics, --line/--column definitions, --hover, --signature-help, --completion (with optional --resolve-completion <index>) or --references. Preview --rename <name>, or list --code-actions and preview --action-index <n>; their --write requires --expected-plan-sha256. Preview --format-document or --format-range with --end-line/--end-column, --tab-size and --insert-spaces; formatting --write requires --expected-sha256. Code actions accept optional range endpoints. --server is absolute."), {QStringLiteral("vibestudio --cli code language-server ./main.cpp --server /absolute/path/clangd --root . --language cpp --json")}},
 		{QStringLiteral("code"), QStringLiteral("index"), QStringLiteral("Index a project source tree with language hooks, diagnostics, symbols, build tasks, and launch profiles."), {QStringLiteral("vibestudio --cli code index ./mymod --find monster --json")}},
@@ -350,6 +386,9 @@ QVector<CliCommandDescriptor> cliCommandDescriptors()
 		{QStringLiteral("code"), QStringLiteral("text-save-as"), QStringLiteral("Preview a format-preserving copy to --output, optionally using edited --input; writing over an existing destination requires its --expected-sha256."), {QStringLiteral("vibestudio --cli code text-save-as ./scripts/game.qc --output ./scripts/copy.qc --dry-run --json")}, true, true, true},
 		{QStringLiteral("localization"), QStringLiteral("report"), QStringLiteral("Print localization targets, pseudo-localization, RTL smoke coverage, locale formatting, and catalog status."), {QStringLiteral("vibestudio --cli localization report --locale ar --json")}},
 		{QStringLiteral("localization"), QStringLiteral("targets"), QStringLiteral("List the documented localization target set."), {QStringLiteral("vibestudio --cli localization targets")}},
+		{QStringLiteral("accessibility"), QStringLiteral("report"), QStringLiteral("Print every accessibility preference, the speech engine and how many voices it has, and the languages the system asks for."), {QStringLiteral("vibestudio --cli accessibility report --json")}},
+		{QStringLiteral("accessibility"), QStringLiteral("voices"), QStringLiteral("List the voices this computer's speech engine offers for reading status changes aloud."), {QStringLiteral("vibestudio --cli accessibility voices --json")}},
+		{QStringLiteral("accessibility"), QStringLiteral("speak"), QStringLiteral("Speak text, or --test for the TTS test phrase, with the saved voice, rate, pitch, and volume, or --voice, --rate, --pitch, and --volume."), {QStringLiteral("vibestudio --cli accessibility speak --test"), QStringLiteral("vibestudio --cli accessibility speak \"Build finished\" --rate 2")}, true, true},
 		{QStringLiteral("diagnostics"), QStringLiteral("bundle"), QStringLiteral("Export a redacted diagnostic bundle for support, QA, and reproducibility."), {QStringLiteral("vibestudio --cli diagnostics bundle --output ./diagnostics")}, true},
 		{QStringLiteral("diagnostics"), QStringLiteral("crashes"), QStringLiteral("List the crash reports kept on this machine, newest first, with each one's time, reason, and report path."), {QStringLiteral("vibestudio --cli diagnostics crashes --json")}},
 		{QStringLiteral("extension"), QStringLiteral("discover"), QStringLiteral("Discover VibeStudio extension manifests and report trust and sandbox metadata."), {QStringLiteral("vibestudio --cli extension discover ./extensions --json")}},
@@ -394,7 +433,7 @@ QVector<CliCommandDescriptor> cliCommandDescriptors()
 		{QStringLiteral("editor"), QStringLiteral("current"), QStringLiteral("Print the selected editor interaction profile."), {QStringLiteral("vibestudio --cli editor current")}},
 		{QStringLiteral("editor"), QStringLiteral("select"), QStringLiteral("Select an editor interaction profile."), {QStringLiteral("vibestudio --cli editor select trenchbroom")}},
 		{QStringLiteral("editor"), QStringLiteral("gestures"), QStringLiteral("Inspect, customize, reset, import or export per-profile pointer gestures and camera keys with validation."), {QStringLiteral("vibestudio --cli editor gestures hammer --json"), QStringLiteral("vibestudio --cli editor gestures hammer --set plan.panButtons=right+middle --dry-run --json")}},
-		{QStringLiteral("editor"), QStringLiteral("layout"), QStringLiteral("Read or choose the level view layout: profile, single-2d, single-3d, camera-and-plan or four-views."), {QStringLiteral("vibestudio --cli editor layout four-views --json"), QStringLiteral("vibestudio --cli editor layout profile")}},
+		{QStringLiteral("editor"), QStringLiteral("layout"), QStringLiteral("Read or choose the level view layout: profile, single-2d, single-3d, camera-and-plan, four-views, camera-above-plans or camera-beside-plans."), {QStringLiteral("vibestudio --cli editor layout four-views --json"), QStringLiteral("vibestudio --cli editor layout profile")}},
 		{QStringLiteral("editor"), QStringLiteral("controls"), QStringLiteral("Print how the Levels views answer the mouse and keys under an editor profile: layout, 2D view, 3D camera, and keys."), {QStringLiteral("vibestudio --cli editor controls trenchbroom"), QStringLiteral("vibestudio --cli editor controls netradiant-custom --json")}},
 		{QStringLiteral("editor"), QStringLiteral("keys"), QStringLiteral("List the keys the user gave commands in place of their defaults; --reset puts every default back."), {QStringLiteral("vibestudio --cli editor keys --json"), QStringLiteral("vibestudio --cli editor keys --reset")}},
 		{QStringLiteral("compiler"), QStringLiteral("set-path"), QStringLiteral("Store a user compiler executable override."), {QStringLiteral("vibestudio --cli compiler set-path ericw-qbsp --executable /opt/ericw-tools/bin/qbsp")}},
@@ -412,6 +451,12 @@ QVector<CliCommandDescriptor> cliCommandDescriptors()
 		{QStringLiteral("model"), QStringLiteral("materials"), QCoreApplication::translate("ModelMaterialSlotsCli", "Inspect model preview appearances using an archive, folder or portable draft with bounded image and shader lookup. Requires --package. Pair --surface N with --material-slot N for an external surface, use --skin N and --member N for an embedded MDL skin member, or use --entry PATH and/or --entry-index N for exact package .skin bindings. Appearance modes are separate. JSON includes selected surfaces and verified skin inputs. This read-only command does not change authored bindings."), {QStringLiteral("vibestudio --cli model materials ./models/prop.mesh.json --package ./assets --surface 0 --material-slot 1 --json")}},
 		{QStringLiteral("model"), QStringLiteral("slots"), QCoreApplication::translate("ModelMaterialSlotsCli", "List ordered external material slots, optionally with --surface N. Edits require --surface N and --output .mesh.json. Use --operation set|insert with --slot N --material PATH, remove with --slot N, move with --slot N --to N (final index), replace with repeated --material PATH, or clear. Slot zero is primary. Insert permits the slot count to append. --dry-run validates; --overwrite permits replacing an existing output."), {QStringLiteral("vibestudio --cli model slots ./models/prop.mesh.json --json"), QStringLiteral("vibestudio --cli model slots ./models/prop.mesh.json --surface 0 --operation move --slot 1 --to 0 --output ./models/variant.mesh.json --dry-run --json")}, true, true, true},
 		{QStringLiteral("model"), QStringLiteral("surfaces"), QCoreApplication::translate("ModelSurfacesCli", "List or edit model surfaces across every animation pose. Use --operation rename|separate|move|duplicate|delete|join, --surface N for a source, --name for a new name, --faces all or comma-separated indices for separate/move, and --surfaces indices with --target-surface N for join. Move also requires --target-surface. Different material slots require --adopt-target-materials. Edits require --output .mesh.json; --dry-run validates and --overwrite permits replacing an existing output."), {QStringLiteral("vibestudio --cli model surfaces ./models/prop.mesh.json --json"), QStringLiteral("vibestudio --cli model surfaces ./models/prop.mesh.json --operation separate --surface 0 --faces 0,1 --name panel --output ./models/parts.mesh.json --dry-run --json")}, true, true, true},
+		{QStringLiteral("model"), QStringLiteral("tool"), QCoreApplication::translate("ModelToolsCli", "Run one edit-mode mesh tool on an editable .mesh.json source through the shared document service: --tool rotate-edges|merge|dissolve-vertices|dissolve-faces|poke|beautify|make-face|extrude-edges|inset|shrink-fatten|smooth|transform|shade-flat|shade-smooth|auto-smooth|bisect|symmetrize|loop-cut|add|decimate|bevel-vertices|solidify|uv-cube|uv-view|uv-cylinder|uv-sphere. Select components with --surface N and --faces, --vertices or --edges (all or comma lists; edges as a:b pairs). Topology tools cover every animation pose; --reference-frame N (default 0) chooses the pose for geometric decisions, and shrink-fatten, smooth and transform accept --frame all|N. Tool values: --merge centre|point|collapse with --point x,y,z; --thickness, --depth, --individual and --no-even for inset; --distance for shrink-fatten and poke; --factor, --iterations and --pin-boundary for smooth; --offset/--rotate/--scale with --pivot-mode, --proportional-radius, --falloff, --connected and --mirror x|y|z for transform; --angle for beautify, loop-cut quad pairing and auto-smooth; --plane-point, --plane-normal and --keep both|front|back for bisect; --axis, --direction positive|negative and --threshold for symmetrize; --cuts and --slide for loop-cut; --primitive plane|cube|circle|grid|cylinder|cone|uv-sphere|ico-sphere|torus with --at, --size, --segments, --rings and --up for add; --ratio, --target-triangles and --allow-boundary for decimate; --width for bevel-vertices; --thickness and --no-even for solidify; --fit for every UV projection, --tile-size (units per texture repeat, default 64) for uv-cube and uv-view, --u-axis/--v-axis for uv-view, and --axis for uv-cylinder and uv-sphere (default z). Requires --output .mesh.json; --dry-run validates without writing and --overwrite replaces an existing output. JSON reports the surface counts and the resulting selection."), {QStringLiteral("vibestudio --cli model tool ./models/prop.mesh.json --tool inset --faces 0,1 --thickness 2 --depth 1 --output ./models/inset.mesh.json --dry-run --json"), QStringLiteral("vibestudio --cli model tool ./models/prop.mesh.json --tool loop-cut --edges 4:5 --cuts 2 --output ./models/cut.mesh.json --json"), QStringLiteral("vibestudio --cli model tool ./models/prop.mesh.json --tool add --primitive cylinder --at 0,0,16 --size 16,16,32 --segments 12 --output ./models/added.mesh.json --json")}, true, true, true},
+		{QStringLiteral("model"), QStringLiteral("select"), QCoreApplication::translate("ModelToolsCli", "Run a read-only selection operator and print component indices for chaining into model tool or model edit: --select all|none|invert|linked|more|less|loop|ring|path|similar|non-manifold|loose|boundary|sharp|random|checker|side|facing|mirror with --mode faces|vertices|edges (default faces). Give the current selection with --faces, --vertices or --edges, a loop or ring seed with --edge a:b, path endpoints with --from and --to, similarity with --similar normal|area|coplanar|length|direction|face-angle|seam|valence and --threshold, random with --ratio and --seed, checker with --nth and --offset, and side, facing or mirror with --axis x|y|z and --negative. --delimit-seams keeps linked selection on one UV island; --extend adds to the given selection; --frame N chooses the pose."), {QStringLiteral("vibestudio --cli model select ./models/prop.mesh.json --select loop --mode edges --edge 4:5 --json"), QStringLiteral("vibestudio --cli model select ./models/prop.mesh.json --select similar --faces 3 --similar normal --threshold 5 --json")}, true, true, false},
+		{QStringLiteral("model"), QStringLiteral("lod"), QCoreApplication::translate("ModelToolsCli", "Write Quake III detail levels: the editable source (or an MDL, MD2, MD3 or OBJ) as --output name.md3 plus name_1.md3, name_2.md3 and so on, each a quadric decimation of the previous level that keeps UV seams and every animation pose. --levels 1-3 (default 2) and --ratio 0.05-0.95 (default 0.5, the share of triangles each level keeps). --dry-run validates every file without writing; existing outputs need --overwrite."), {QStringLiteral("vibestudio --cli model lod ./models/prop.mesh.json --output ./out/prop.md3 --levels 2 --ratio 0.5 --json")}, true, true, true},
+		{QStringLiteral("model"), QStringLiteral("profiles"), QStringLiteral("List the modeller's controls profiles: the studio's Blender-style controls, Blender, 3ds Max and MilkShape 3D. Each lists its layout (one view or four), transform style (modal or tool), sidebar family and selection-mode names, what it changes and where it differs from the reference editor. The current profile is marked."), {QStringLiteral("vibestudio --cli model profiles"), QStringLiteral("vibestudio --cli model profiles --json")}, true, true, false},
+		{QStringLiteral("model"), QStringLiteral("controls"), QStringLiteral("Print every navigation gesture, selection gesture, transform rule, layout choice and key of a modeller profile (--profile studio|blender|3ds-max|milkshape-3d, default the current one), with your saved changes unless --defaults. --section navigation|selection|transform|layout|keys narrows the list; --check exits 4 when two gestures or keys collide. --export <file> writes a shareable controls file (existing files need --overwrite); --import <file> saves its changes for its profile; --select makes the profile current; --reset drops your changes. Use --settings-file to work on a separate settings store."), {QStringLiteral("vibestudio --cli model controls --profile 3ds-max --section keys"), QStringLiteral("vibestudio --cli model controls --profile blender --check --json"), QStringLiteral("vibestudio --cli model controls --profile milkshape-3d --export ./milkshape-controls.json")}, true, true, false},
+		{QStringLiteral("model"), QStringLiteral("formats"), QStringLiteral("List every model format the studio reads, with its file suffixes, engines (idtech1 through Doom ports, idtech2, idtech3, idtech4, goldsrc), games, whether it is skeletal or animation only, the companion files it reads (md5anim, MDX, GLA, Half-Life texture and sequence files), whether the studio also writes it, and what the decoder keeps."), {QStringLiteral("vibestudio --cli model formats"), QStringLiteral("vibestudio --cli model formats --json")}, true, true, false},
 		{QStringLiteral("model"), QStringLiteral("skin"), QCoreApplication::translate("ModelSkinBindingsCli", "Apply Quake III .skin assignments to every surface's primary material in an editable model. Choose --file or --package with --entry/--entry-index; package drafts are supported. Requires --output .mesh.json; --dry-run validates without writing and existing outputs require --overwrite. Unused bindings and tag markers are reported."), {QStringLiteral("vibestudio --cli model skin ./models/prop.mesh.json --file ./models/prop.skin --output ./models/skinned.mesh.json --dry-run --json")}, true, true, true},
 		{QStringLiteral("model"), QStringLiteral("topology"), QStringLiteral("Inspect indexed edges, duplicates, unused vertices, disconnected fans, winding, and boundaries on one model surface."), {QStringLiteral("vibestudio --cli model topology ./models/prop.mesh.json --surface 0 --json")}},
 		{QStringLiteral("model"), QStringLiteral("repair-import"), QCoreApplication::translate("ModelImportRepairCli", "Review a repair for .mesh.json, MDL, MD2 or MD3. Remove unusable faces across all poses, rebuild unusable normals and remove orphaned seams while retaining other data. Without --output this is read-only. --output requires a new .mesh.json; --dry-run validates without writing. Existing files and changed inputs are protected."), {QStringLiteral("vibestudio --cli model repair-import ./models/damaged.mesh.json --json"), QStringLiteral("vibestudio --cli model repair-import ./models/damaged.md3 --output ./models/repaired.mesh.json --dry-run --json")}, true, true, true},
@@ -424,7 +469,7 @@ QVector<CliCommandDescriptor> cliCommandDescriptors()
 		{QStringLiteral("model"), QStringLiteral("mdl"), QStringLiteral("Inspect or edit native MDL indexed skins, frame groups, timing, palette and header settings. Skin sources use --image or --package with one --entry or --entry-index, including saved drafts; --palette selects package palette paths. Use --time <seconds> with --native-frame, --skin, --timing stored|glquake and --sync-phase for read-only playback sampling."), {QStringLiteral("vibestudio --cli model mdl ./models/prop.mesh.json --json"), QStringLiteral("vibestudio --cli model mdl ./models/prop.mesh.json --operation add-skin --image ./skins/prop.pcx --output ./out/prop.mesh.json --dry-run --json"), QStringLiteral("vibestudio --cli model mdl ./models/prop.mesh.json --operation add-skin --package ./textures.vibepackage --entry textures/prop.png --output ./out/prop.mesh.json --dry-run --json")}, true, true, true},
 		{QStringLiteral("model"), QStringLiteral("recoveries"), QStringLiteral("List local mesh recovery headers; --directory selects a recovery folder."), {QStringLiteral("vibestudio --cli model recoveries --json")}},
 		{QStringLiteral("model"), QStringLiteral("recover"), QStringLiteral("Verify a mesh recovery copy and write a new editable source; existing files are protected."), {QStringLiteral("vibestudio --cli model recover ./copy.vsmeshrecovery --output ./out/recovered.mesh.json --dry-run --json")}, true, true, true},
-		{QStringLiteral("model"), QStringLiteral("build"), QStringLiteral("Build MDL, MD2, MD3 or an OBJ frame from an editable mesh; primitive designs support MD2, MD3 and OBJ."), {QStringLiteral("vibestudio --cli model build ./samples/models/pillar.model.json --output ./out/pillar.md3 --dry-run --json")}, true, true, true},
+		{QStringLiteral("model"), QStringLiteral("build"), QStringLiteral("Build MDL, MD2, MD3, MD5 mesh or animation, IQM, ASE or an OBJ frame from an editable mesh; primitive designs support MD2, MD3 and OBJ."), {QStringLiteral("vibestudio --cli model build ./samples/models/pillar.model.json --output ./out/pillar.md3 --dry-run --json")}, true, true, true},
 		{QStringLiteral("model"), QStringLiteral("import"), QStringLiteral("Import polygonal OBJ, MDL, MD2, MD3, or bake a primitive design into an editable mesh source. OBJ retains UV/normal seams and direct material paths; material libraries and non-polygon data require conversion in the source modeller."), {QStringLiteral("vibestudio --cli model import ./samples/models/pillar.model.json --output ./out/pillar.mesh.json --dry-run --json")}, true, true, true},
 		{QStringLiteral("model"), QStringLiteral("edit"), QCoreApplication::translate("ModelSurfaceSelection", "Apply a validated mesh, UV, material, animation-frame, or attachment-tag edit. Transforms support --transform-space world|selection|custom (default world), custom --axis-rotation X,Y,Z and selection --axes-frame N. Axes also apply to face extrusion and duplication. One reference pose fixes selection axes across affected frames; default is the edited frame or pivot reference pose. Pivots remain in model coordinates. Transforms support snapping, explicit pivots, and --surfaces all or unique comma-separated indices for whole surfaces sharing one pivot. Do not mix --surfaces with component selectors. Boundary operations fill-boundary-loops and bridge-boundary-loops require --edges and cover all frames; --source-frame chooses a reference pose (default 0). Bridging joins exactly two loops, supports unequal counts and accepts --bridge-twist -1023 to 1023 (default 0). UV atlas operations accept --uv-atlas-size N or WIDTHxHEIGHT and --uv-padding pixels. uv-pack-around packs complete islands around fixed unselected and shared-material regions in the 0–1 tile; --uv-pack-scale fit|preserve chooses uniform fit (default) or unchanged UV scale. Clip timing: set-clip-fps requires --clip and --clip-fps; add-clip optionally accepts --clip-fps. Zero leaves timing unspecified, otherwise use 0.001–1000 FPS."), {QStringLiteral("vibestudio --cli model edit ./out/pillar.mesh.json --operation transform --faces all --offset 0,0,8 --snap-grid 1 --output ./out/raised.mesh.json --dry-run --json")}, true, true, true},
 		{QStringLiteral("map"), QStringLiteral("place-model"), QStringLiteral("Place a package MD3 in a Quake III map as a misc_model entity."), {QStringLiteral("vibestudio --cli map place-model ./maps/arena.map --engine idTech3 --package ./assets --entry models/props/pillar.md3 --origin 64,0,0 --output ./out/arena.map")}, true, true, true},
@@ -553,6 +598,7 @@ QStringList commandTokens(const QStringList& args)
 	// the project path.
 	static const QSet<QString> booleanFlags = {
 			QStringLiteral("--invert"),
+			QStringLiteral("--test"),
 			QStringLiteral("--cli"),
 			QStringLiteral("--json"),
 			QStringLiteral("--quiet"),
@@ -614,6 +660,7 @@ QStringList commandTokens(const QStringList& args)
 			QStringLiteral("--project"), QStringLiteral("--package"), QStringLiteral("--map"), QStringLiteral("--code"),
 			QStringLiteral("--current-code"), QStringLiteral("--active-module"), QStringLiteral("--module"),
 			QStringLiteral("--prefab"),
+			QStringLiteral("--copies"),
 			QStringLiteral("--description"),
 			QStringLiteral("--anchor"),
 			QStringLiteral("--position"),
@@ -902,6 +949,10 @@ QStringList commandTokens(const QStringList& args)
 			QStringLiteral("--max-entry-bytes"),
 			QStringLiteral("--max-mib"), QStringLiteral("--max-files"), QStringLiteral("--max-entries"), QStringLiteral("--max-batches"), QStringLiteral("--expected-policy-sha256"),
 			QStringLiteral("--backup"),
+			// accessibility speak
+			QStringLiteral("--voice"), QStringLiteral("--rate"), QStringLiteral("--pitch"), QStringLiteral("--volume"),
+			// material
+			QStringLiteral("--base"), QStringLiteral("--limit"), QStringLiteral("--sky"), QStringLiteral("--fps"), QStringLiteral("--yaw"), QStringLiteral("--zoom"), QStringLiteral("--fov"), QStringLiteral("--tiling"), QStringLiteral("--context"), QStringLiteral("--lightmap"), QStringLiteral("--doom-light"), QStringLiteral("--doom-extralight"), QStringLiteral("--quake-renderer"), QStringLiteral("--quake-style"), QStringLiteral("--quake-lightmap"), QStringLiteral("--quake2-intensity"), QStringLiteral("--light-color"), QStringLiteral("--light-angle"), QStringLiteral("--doom3-shading"), QStringLiteral("--ambient"), QStringLiteral("--parms"), QStringLiteral("--sound"), QStringLiteral("--filter"), QStringLiteral("--background"), QStringLiteral("--text-kind"), QStringLiteral("--edits"), QStringLiteral("--script"), QStringLiteral("--template"), QStringLiteral("--output-dir"), QStringLiteral("--metadata"),
 	};
 
 	QStringList tokens;
@@ -1062,7 +1113,7 @@ void printHelp()
 	std::cout << "                      Print accessibility and language preferences.\n";
 	std::cout << "  --localization-report\n";
 	std::cout << "                      Print localization target, pseudo-localization, RTL, formatting, and catalog status.\n";
-	std::cout << "  --set-locale <code> Set the preferred UI locale. Supported: " << text(supportedLocaleNames().join(", ")) << "\n";
+	std::cout << "  --set-locale <code> Set the interface language, or system to follow the OS. Supported: " << text(supportedLocaleNames().join(", ")) << "\n";
 	std::cout << "  --set-theme <id>    Set theme: " << text(themeIds().join(", ")) << "\n";
 	std::cout << "  --set-text-scale <percent>\n";
 	std::cout << "                      Set text scale from 100 to 200.\n";
@@ -1096,7 +1147,30 @@ void printHelp()
 	std::cout << "                      A sound connector's model and base URL; empty restores the default.\n";
 	std::cout << "  --set-reduced-motion <on|off>\n";
 	std::cout << "                      Store the reduced-motion preference.\n";
-	std::cout << "  --set-tts <on|off>  Store the OS-backed text-to-speech preference.\n";
+	std::cout << "  --set-tts <on|off>  Read status changes aloud with the OS speech engine.\n";
+	std::cout << "  --set-region <system|language|locale>\n";
+	std::cout << "                      How numbers and dates are written, such as en-GB.\n";
+	std::cout << "  --set-color-vision <id>\n";
+	std::cout << "                      Status colours: " << text(colorVisionIds().join(", ")) << "\n";
+	std::cout << "  --set-reduced-saturation <on|off>\n";
+	std::cout << "  --set-thick-focus <on|off>\n";
+	std::cout << "  --set-thick-cursor <on|off>\n";
+	std::cout << "  --set-steady-cursor <on|off>\n";
+	std::cout << "                      Softer colours, a 3px focus outline, a 3px text cursor, no cursor blinking.\n";
+	std::cout << "  --set-font <family|system>\n";
+	std::cout << "                      The interface typeface.\n";
+	std::cout << "  --set-text-spacing <standard|wide>\n";
+	std::cout << "  --set-message-duration <id>\n";
+	std::cout << "                      How long status messages stay: " << text(messageDurationIds().join(", ")) << "\n";
+	std::cout << "  --set-visual-alerts <on|off>\n";
+	std::cout << "  --set-announcements <on|off>\n";
+	std::cout << "                      Taskbar flashes and screen reader announcements for finished work.\n";
+	std::cout << "  --set-sound-cues <on|off>  --set-sound-cue-volume <0..100>\n";
+	std::cout << "                      Tones for task results: rising when finished, level for a warning, falling for a failure.\n";
+	std::cout << "  --set-tts-voice <id|default>\n";
+	std::cout << "  --set-tts-rate <-10..10>  --set-tts-pitch <-10..10>  --set-tts-volume <0..100>\n";
+	std::cout << "  --set-tts-events <list|none>\n";
+	std::cout << "                      Events read aloud: " << text(speechEventIds().join(", ")) << "\n";
 	std::cout << "  --installations-report\n";
 	std::cout << "                      Print saved manual game installation profiles.\n";
 	std::cout << "  --detect-installations\n";
@@ -2158,6 +2232,7 @@ QJsonObject localizationTargetJson(const LocalizationTarget& target)
 	object.insert(QStringLiteral("localeName"), target.localeName);
 	object.insert(QStringLiteral("englishName"), target.englishName);
 	object.insert(QStringLiteral("nativeName"), target.nativeName);
+	object.insert(QStringLiteral("script"), target.script);
 	object.insert(QStringLiteral("rightToLeft"), target.rightToLeft);
 	return object;
 }
@@ -2225,6 +2300,7 @@ QJsonObject translationCatalogStatusJson(const TranslationCatalogStatus& status)
 	object.insert(QStringLiteral("messageCount"), status.messageCount);
 	object.insert(QStringLiteral("translatedCount"), status.translatedCount);
 	object.insert(QStringLiteral("unfinishedCount"), status.unfinishedCount);
+	object.insert(QStringLiteral("draftedCount"), status.draftedCount);
 	object.insert(QStringLiteral("obsoleteCount"), status.obsoleteCount);
 	object.insert(QStringLiteral("vanishedCount"), status.vanishedCount);
 	object.insert(QStringLiteral("status"), status.status);
@@ -2247,6 +2323,9 @@ QJsonObject localizationSmokeReportJson(const LocalizationSmokeReport& report)
 	object.insert(QStringLiteral("expansionLayoutSmokeOk"), report.expansionLayoutSmokeOk);
 	object.insert(QStringLiteral("pluralizationSmokeOk"), report.pluralizationSmokeOk);
 	object.insert(QStringLiteral("rightToLeftLocales"), stringArrayJson(report.rightToLeftLocales));
+	object.insert(QStringLiteral("systemLanguages"), stringArrayJson(report.systemLanguages));
+	object.insert(QStringLiteral("systemTargetName"), report.systemTargetName);
+	object.insert(QStringLiteral("draftedMessageCount"), report.draftedMessageCount);
 	object.insert(QStringLiteral("formatting"), localeFormattingSampleJson(report.formatting));
 	QJsonArray pluralization;
 	for (const PluralizationSmokeSample& sample : report.pluralization) {
@@ -3815,13 +3894,32 @@ void printRecentProjects(const StudioSettings& settings)
 void printPreferences(const AccessibilityPreferences& preferences, const QString& editorProfileId = defaultEditorProfileId())
 {
 	std::cout << "Accessibility and language preferences\n";
-	std::cout << "Locale: " << text(preferences.localeName) << "\n";
+	std::cout << "Locale: " << text(preferences.localeName);
+	if (isSystemLocalizationPreference(preferences.localeName)) {
+		std::cout << " (follows " << text(systemLocalizationTargetId()) << ")";
+	}
+	std::cout << "\n";
+	std::cout << "Region formats: " << text(preferences.formatLocaleName) << " (" << text(regionFormatLocale(preferences.formatLocaleName, preferences.localeName).bcp47Name()) << ")\n";
 	std::cout << "Theme: " << text(themeId(preferences.theme)) << " (" << text(themeDisplayName(preferences.theme)) << ")\n";
 	std::cout << "Text scale: " << preferences.textScalePercent << "%\n";
 	std::cout << "Density: " << text(densityId(preferences.density)) << " (" << text(densityDisplayName(preferences.density)) << ")\n";
 	std::cout << "Editor profile: " << text(editorProfileDisplayNameForId(editorProfileId)) << " [" << text(editorProfileForId(editorProfileId) ? normalizedEditorProfileId(editorProfileId) : defaultEditorProfileId()) << "]\n";
 	std::cout << "Reduced motion: " << (preferences.reducedMotion ? "enabled" : "disabled") << "\n";
 	std::cout << "Text to speech: " << (preferences.textToSpeechEnabled ? "enabled" : "disabled") << "\n";
+	std::cout << "Colour vision: " << text(colorVisionId(preferences.colorVision)) << "\n";
+	std::cout << "Reduced saturation: " << (preferences.reducedSaturation ? "enabled" : "disabled") << "\n";
+	std::cout << "Thick focus outline: " << (preferences.thickFocusIndicator ? "enabled" : "disabled") << "\n";
+	std::cout << "Thick text cursor: " << (preferences.thickTextCursor ? "enabled" : "disabled") << "\n";
+	std::cout << "Steady text cursor: " << (preferences.steadyTextCursor ? "enabled" : "disabled") << "\n";
+	std::cout << "Typeface: " << (preferences.uiFontFamily.isEmpty() ? std::string("system") : text(preferences.uiFontFamily)) << "\n";
+	std::cout << "Text spacing: " << (preferences.wideTextSpacing ? "wide" : "standard") << "\n";
+	std::cout << "Status messages: " << text(messageDurationId(preferences.messageDuration)) << "\n";
+	std::cout << "Visual alerts: " << (preferences.visualAlerts ? "enabled" : "disabled") << "\n";
+	std::cout << "Sound cues: " << (preferences.soundCues ? "enabled" : "disabled") << ", volume " << preferences.soundCueVolume << "\n";
+	std::cout << "Screen reader announcements: " << (preferences.screenReaderAnnouncements ? "enabled" : "disabled") << "\n";
+	std::cout << "Speech events: " << (preferences.speechEvents.isEmpty() ? std::string("none") : text(preferences.speechEvents.join(QStringLiteral(", ")))) << "\n";
+	std::cout << "Speech voice: " << (preferences.speechVoice.isEmpty() ? std::string("system default") : text(preferences.speechVoice)) << "\n";
+	std::cout << "Speech rate, pitch, volume: " << preferences.speechRate << ", " << preferences.speechPitch << ", " << preferences.speechVolume << "\n";
 }
 
 void printSetupSummary(const SetupSummary& summary)
@@ -4178,7 +4276,7 @@ int runEditorLayoutCommand(const QStringList& args, CliOutputFormat format)
 	if (positional.size() == 3) {
 		const QString id = positional.last();
 		if (id != QStringLiteral("profile") && !levelViewLayoutForId(id, nullptr)) {
-			return usage(QStringLiteral("Expected profile, single-2d, single-3d, camera-and-plan or four-views."));
+			return usage(QStringLiteral("Expected profile, single-2d, single-3d, camera-and-plan, four-views, camera-above-plans or camera-beside-plans."));
 		}
 		if (!settings.setLevelViewLayoutPreference(id)) {
 			return printCliError(command, CliExitCode::Failure, QStringLiteral("The settings store is read-only."), format);
@@ -4416,6 +4514,166 @@ int runEditorKeysCommand(const QString& commandName, const QStringList& args, Cl
 	return exitCodeValue(CliExitCode::Success);
 }
 
+QJsonObject accessibilityPreferencesJson(const AccessibilityPreferences& preferences)
+{
+	QJsonObject object;
+	object.insert(QStringLiteral("localeName"), preferences.localeName);
+	object.insert(QStringLiteral("interfaceLanguage"), normalizedLocalizationTargetId(preferences.localeName));
+	object.insert(QStringLiteral("formatLocale"), preferences.formatLocaleName);
+	object.insert(QStringLiteral("formatLocaleResolved"), regionFormatLocale(preferences.formatLocaleName, preferences.localeName).bcp47Name());
+	object.insert(QStringLiteral("theme"), themeId(preferences.theme));
+	object.insert(QStringLiteral("textScalePercent"), preferences.textScalePercent);
+	object.insert(QStringLiteral("density"), densityId(preferences.density));
+	object.insert(QStringLiteral("reducedMotion"), preferences.reducedMotion);
+	object.insert(QStringLiteral("colorVision"), colorVisionId(preferences.colorVision));
+	object.insert(QStringLiteral("reducedSaturation"), preferences.reducedSaturation);
+	object.insert(QStringLiteral("thickFocusIndicator"), preferences.thickFocusIndicator);
+	object.insert(QStringLiteral("thickTextCursor"), preferences.thickTextCursor);
+	object.insert(QStringLiteral("steadyTextCursor"), preferences.steadyTextCursor);
+	object.insert(QStringLiteral("uiFontFamily"), preferences.uiFontFamily);
+	object.insert(QStringLiteral("wideTextSpacing"), preferences.wideTextSpacing);
+	object.insert(QStringLiteral("messageDuration"), messageDurationId(preferences.messageDuration));
+	object.insert(QStringLiteral("visualAlerts"), preferences.visualAlerts);
+	object.insert(QStringLiteral("soundCues"), preferences.soundCues);
+	object.insert(QStringLiteral("soundCueVolume"), preferences.soundCueVolume);
+	object.insert(QStringLiteral("screenReaderAnnouncements"), preferences.screenReaderAnnouncements);
+	object.insert(QStringLiteral("textToSpeechEnabled"), preferences.textToSpeechEnabled);
+	object.insert(QStringLiteral("speechEvents"), stringArrayJson(preferences.speechEvents));
+	object.insert(QStringLiteral("speechVoice"), preferences.speechVoice);
+	object.insert(QStringLiteral("speechRate"), preferences.speechRate);
+	object.insert(QStringLiteral("speechPitch"), preferences.speechPitch);
+	object.insert(QStringLiteral("speechVolume"), preferences.speechVolume);
+	return object;
+}
+
+QJsonObject speechEngineJson(const StudioSpeech& speech)
+{
+	QJsonObject object;
+	object.insert(QStringLiteral("available"), speech.available());
+	object.insert(QStringLiteral("engine"), speech.engineName());
+	object.insert(QStringLiteral("unavailableReason"), speech.unavailableReason());
+	const SpeechCapabilities capabilities = speech.capabilities();
+	object.insert(QStringLiteral("voices"), capabilities.voices);
+	object.insert(QStringLiteral("rate"), capabilities.rate);
+	object.insert(QStringLiteral("pitch"), capabilities.pitch);
+	object.insert(QStringLiteral("volume"), capabilities.volume);
+	return object;
+}
+
+int runAccessibilityReportCommand(const QString& commandName, CliOutputFormat format)
+{
+	const StudioSettings settings(StudioSettings::AccessMode::ReadOnly);
+	const AccessibilityPreferences preferences = settings.accessibilityPreferences();
+	const StudioSpeech speech;
+	const QVector<SpeechVoice> voices = speech.voices();
+	if (format == CliOutputFormat::Json) {
+		QJsonObject object = cliResultJson(commandName);
+		object.insert(QStringLiteral("preferences"), accessibilityPreferencesJson(preferences));
+		QJsonObject engine = speechEngineJson(speech);
+		engine.insert(QStringLiteral("voiceCount"), voices.size());
+		object.insert(QStringLiteral("speech"), engine);
+		object.insert(QStringLiteral("systemLanguages"), stringArrayJson(systemLanguageTags()));
+		object.insert(QStringLiteral("systemInterfaceLanguage"), systemLocalizationTargetId());
+		object.insert(QStringLiteral("setupWarnings"), stringArrayJson(settings.setupSummary().warnings));
+		printJson(object);
+		return exitCodeValue(CliExitCode::Success);
+	}
+	printPreferences(preferences, settings.selectedEditorProfileId());
+	std::cout << "System languages: " << text(systemLanguageTags().join(QStringLiteral(", "))) << " (interface follows " << text(systemLocalizationTargetId()) << ")\n";
+	if (speech.available()) {
+		std::cout << "Speech engine: " << text(speech.engineName()) << " (" << voices.size() << " voices)\n";
+	} else {
+		std::cout << "Speech engine: unavailable (" << text(speech.unavailableReason()) << ")\n";
+	}
+	return exitCodeValue(CliExitCode::Success);
+}
+
+int runAccessibilityVoicesCommand(const QString& commandName, CliOutputFormat format)
+{
+	const StudioSpeech speech;
+	if (!speech.available()) {
+		return printCliError(commandName, CliExitCode::Unavailable, QStringLiteral("No speech engine is available: %1").arg(speech.unavailableReason()), format);
+	}
+	const QVector<SpeechVoice> voices = speech.voices();
+	if (format == CliOutputFormat::Json) {
+		QJsonObject object = cliResultJson(commandName);
+		object.insert(QStringLiteral("speech"), speechEngineJson(speech));
+		QJsonArray array;
+		for (const SpeechVoice& voice : voices) {
+			QJsonObject entry;
+			entry.insert(QStringLiteral("id"), voice.id);
+			entry.insert(QStringLiteral("name"), voice.name);
+			entry.insert(QStringLiteral("language"), voice.language);
+			array.append(entry);
+		}
+		object.insert(QStringLiteral("voices"), array);
+		printJson(object);
+		return exitCodeValue(CliExitCode::Success);
+	}
+	std::cout << "Voices of " << text(speech.engineName()) << ": " << voices.size() << "\n";
+	for (const SpeechVoice& voice : voices) {
+		std::cout << "- " << text(voice.name) << (voice.language.isEmpty() ? std::string() : " [" + text(voice.language) + "]") << "\n";
+		std::cout << "  id: " << text(voice.id) << "\n";
+	}
+	return exitCodeValue(CliExitCode::Success);
+}
+
+int runAccessibilitySpeakCommand(const QString& commandName, const QStringList& args, CliOutputFormat format)
+{
+	QString phrase;
+	if (hasOption(args, QStringLiteral("--test"))) {
+		phrase = speechTestPhrase();
+	} else {
+		const QStringList tokens = commandTokens(args);
+		QStringList words;
+		for (int index = 2; index < tokens.size(); ++index) {
+			if (!tokens.at(index).startsWith(QStringLiteral("--"))) {
+				words << tokens.at(index);
+			}
+		}
+		phrase = words.join(QLatin1Char(' ')).trimmed();
+	}
+	if (phrase.isEmpty()) {
+		return printCliError(commandName, CliExitCode::Usage, QStringLiteral("Give the text to speak, or --test for the test phrase."), format);
+	}
+	const StudioSettings settings(StudioSettings::AccessMode::ReadOnly);
+	const AccessibilityPreferences preferences = settings.accessibilityPreferences();
+	SpeechSettings speechSettings;
+	speechSettings.voiceId = hasOption(args, QStringLiteral("--voice")) ? optionValue(args, QStringLiteral("--voice")) : preferences.speechVoice;
+	bool ok = true;
+	speechSettings.rate = hasOption(args, QStringLiteral("--rate")) ? optionValue(args, QStringLiteral("--rate")).toInt(&ok) : preferences.speechRate;
+	if (ok) {
+		speechSettings.pitch = hasOption(args, QStringLiteral("--pitch")) ? optionValue(args, QStringLiteral("--pitch")).toInt(&ok) : preferences.speechPitch;
+	}
+	if (ok) {
+		speechSettings.volume = hasOption(args, QStringLiteral("--volume")) ? optionValue(args, QStringLiteral("--volume")).toInt(&ok) : preferences.speechVolume;
+	}
+	if (!ok) {
+		return printCliError(commandName, CliExitCode::Usage, QStringLiteral("--rate and --pitch take -10 to 10, and --volume 0 to 100."), format);
+	}
+	StudioSpeech speech;
+	if (!speech.available()) {
+		return printCliError(commandName, CliExitCode::Unavailable, QStringLiteral("No speech engine is available: %1").arg(speech.unavailableReason()), format);
+	}
+	speech.setSettings(speechSettings);
+	const bool finished = speech.sayAndWait(phrase, 120000);
+	const CliExitCode code = finished ? CliExitCode::Success : CliExitCode::Failure;
+	if (format == CliOutputFormat::Json) {
+		QJsonObject object = cliResultJson(commandName, code);
+		object.insert(QStringLiteral("speech"), speechEngineJson(speech));
+		object.insert(QStringLiteral("text"), phrase);
+		object.insert(QStringLiteral("finished"), finished);
+		printJson(object);
+		return exitCodeValue(code);
+	}
+	if (finished) {
+		std::cout << "Spoke " << phrase.size() << " characters with " << text(speech.engineName()) << ".\n";
+	} else {
+		std::cerr << "The speech engine did not finish speaking.\n";
+	}
+	return exitCodeValue(code);
+}
+
 int runLocalizationReportCommand(const QString& commandName, const QStringList& args, CliOutputFormat format, bool targetsOnly)
 {
 	const QString localeName = hasOption(args, QStringLiteral("--locale")) ? optionValue(args, QStringLiteral("--locale")) : QStringLiteral("en");
@@ -4441,7 +4699,7 @@ int runLocalizationReportCommand(const QString& commandName, const QStringList& 
 	if (targetsOnly) {
 		std::cout << "Localization targets\n";
 		for (const LocalizationTarget& target : localizationTargets()) {
-			std::cout << "- " << text(target.localeName) << ": " << text(target.englishName) << " / " << text(target.nativeName) << (target.rightToLeft ? " [RTL]" : "") << "\n";
+			std::cout << "- " << text(target.localeName) << ": " << text(target.englishName) << " / " << text(target.nativeName) << " (" << text(target.script) << ")" << (target.rightToLeft ? " [RTL]" : "") << "\n";
 		}
 	} else {
 		std::cout << text(localizationSmokeReportText(report)) << "\n";
@@ -8807,6 +9065,728 @@ int runMapCarveCommand(const QString& commandName, const QString& path, const QS
 	return printLevelMapSaveResult(commandName, document, report, format, extra);
 }
 
+// Loads a map and selects the --object selectors, for the commands below.
+// Returns 0 and fills `document`, or the exit code already printed.
+int loadMapWithObjects(const QString& commandName, const QString& path, const QStringList& args, CliOutputFormat format, LevelMapDocument* document,
+	QVector<LevelMapSelectionRef>* objects, bool requireOutput)
+{
+	const LevelMapLoadRequest request = levelMapLoadRequestFromArgs(path, args);
+	if (request.path.trimmed().isEmpty()) {
+		return printCliError(commandName, CliExitCode::Usage, QStringLiteral("%1 requires a map path.").arg(commandName), format);
+	}
+	QString badSelector;
+	if (!levelMapObjectsFromArgs(args, objects, &badSelector)) {
+		return printCliError(commandName, CliExitCode::Usage, QStringLiteral("Unknown map object selector: %1").arg(badSelector), format);
+	}
+	if (objects->isEmpty()) {
+		return printCliError(commandName, CliExitCode::Usage, QStringLiteral("%1 requires --object kind:id, repeatable.").arg(commandName), format);
+	}
+	if (requireOutput && optionValue(args, QStringLiteral("--output")).trimmed().isEmpty()) {
+		return printCliError(commandName, CliExitCode::Usage, QStringLiteral("%1 requires --output <save-as path>.").arg(commandName), format);
+	}
+	QString error;
+	if (!loadLevelMap(request, document, &error)) {
+		return printCliError(commandName, levelMapLoadFailureCode(request), QStringLiteral("Unable to load map: %1").arg(error), format);
+	}
+	if (!setLevelMapSelection(document, *objects, &error)) {
+		return printCliError(commandName, CliExitCode::Usage, QStringLiteral("Unable to select map objects: %1").arg(error), format);
+	}
+	return 0;
+}
+
+int saveMapToolResult(const QString& commandName, const LevelMapDocument& document, const QStringList& args, CliOutputFormat format, const QString& message,
+	const QJsonObject& extra)
+{
+	const LevelMapSaveReport report = saveLevelMapAs(document, optionValue(args, QStringLiteral("--output")), hasOption(args, QStringLiteral("--dry-run")),
+		hasOption(args, QStringLiteral("--overwrite")));
+	if (format != CliOutputFormat::Json) {
+		std::cout << text(message) << "\n";
+	}
+	return printLevelMapSaveResult(commandName, document, report, format, extra);
+}
+
+int runMapTieEntityCommand(const QString& path, const QStringList& args, CliOutputFormat format)
+{
+	const QString commandName = QStringLiteral("map tie-entity");
+	const QString className = optionValue(args, QStringLiteral("--class")).trimmed();
+	if (className.isEmpty()) {
+		return printCliError(commandName, CliExitCode::Usage, QStringLiteral("map tie-entity requires --class <classname>, such as func_door."), format);
+	}
+	QVector<LevelMapProperty> properties;
+	for (const QString& pair : optionValues(args, QStringLiteral("--key"))) {
+		const qsizetype equals = pair.indexOf(QLatin1Char('='));
+		if (equals <= 0) {
+			return printCliError(commandName, CliExitCode::Usage, QStringLiteral("Each --key must be key=value: %1").arg(pair), format);
+		}
+		properties.push_back({pair.left(equals).trimmed(), pair.mid(equals + 1), 0});
+	}
+	LevelMapDocument document;
+	QVector<LevelMapSelectionRef> objects;
+	if (const int code = loadMapWithObjects(commandName, path, args, format, &document, &objects, true); code != 0) {
+		return code;
+	}
+	int entityId = -1;
+	QString error;
+	if (!tieLevelMapSelectionToEntity(&document, className, properties, &entityId, &error)) {
+		return printCliError(commandName, CliExitCode::Failure, QStringLiteral("Unable to make the brush entity: %1").arg(error), format);
+	}
+	QJsonObject extra;
+	extra.insert(QStringLiteral("entity"), QStringLiteral("entity:%1").arg(entityId));
+	extra.insert(QStringLiteral("className"), className);
+	return saveMapToolResult(commandName, document, args, format, QStringLiteral("Made %1 as entity:%2").arg(className).arg(entityId), extra);
+}
+
+int runMapMoveToWorldCommand(const QString& path, const QStringList& args, CliOutputFormat format)
+{
+	const QString commandName = QStringLiteral("map move-to-world");
+	LevelMapDocument document;
+	QVector<LevelMapSelectionRef> objects;
+	if (const int code = loadMapWithObjects(commandName, path, args, format, &document, &objects, true); code != 0) {
+		return code;
+	}
+	int moved = 0;
+	QString error;
+	if (!moveLevelMapSelectionToWorld(&document, &moved, &error)) {
+		return printCliError(commandName, CliExitCode::Failure, QStringLiteral("Unable to move to the world: %1").arg(error), format);
+	}
+	QJsonObject extra;
+	extra.insert(QStringLiteral("moved"), moved);
+	return saveMapToolResult(commandName, document, args, format, QStringLiteral("Moved %1 brush(es) and patch(es) to the world").arg(moved), extra);
+}
+
+int runMapSelectRegionCommand(const QString& path, const QStringList& args, CliOutputFormat format)
+{
+	const QString commandName = QStringLiteral("map select-region");
+	const QString modeText = optionValue(args, QStringLiteral("--mode")).trimmed().toLower();
+	LevelMapRegionSelection mode = LevelMapRegionSelection::Inside;
+	if (modeText.isEmpty() || modeText == QStringLiteral("inside")) {
+		mode = LevelMapRegionSelection::Inside;
+	} else if (modeText == QStringLiteral("touching")) {
+		mode = LevelMapRegionSelection::Touching;
+	} else if (modeText == QStringLiteral("complete-tall")) {
+		mode = LevelMapRegionSelection::CompleteTall;
+	} else if (modeText == QStringLiteral("partial-tall")) {
+		mode = LevelMapRegionSelection::PartialTall;
+	} else {
+		return printCliError(commandName, CliExitCode::Usage, QStringLiteral("--mode is inside, touching, complete-tall or partial-tall."), format);
+	}
+	const QString axisText = optionValue(args, QStringLiteral("--axis")).trimmed().toLower();
+	const int axis = axisText == QStringLiteral("x") ? 0 : (axisText == QStringLiteral("y") ? 1 : 2);
+	LevelMapDocument document;
+	QVector<LevelMapSelectionRef> objects;
+	if (const int code = loadMapWithObjects(commandName, path, args, format, &document, &objects, false); code != 0) {
+		return code;
+	}
+	QString error;
+	const QVector<LevelMapSelectionRef> found = levelMapRegionSelection(document, mode, axis, &error);
+	if (!error.isEmpty()) {
+		return printCliError(commandName, CliExitCode::Failure, error, format);
+	}
+	QStringList selectors;
+	for (const LevelMapSelectionRef& ref : found) {
+		selectors << levelMapSelectionRefId(ref);
+	}
+	if (format == CliOutputFormat::Json) {
+		QJsonObject result = cliResultJson(commandName, CliExitCode::Success);
+		result.insert(QStringLiteral("mode"), modeText.isEmpty() ? QStringLiteral("inside") : modeText);
+		result.insert(QStringLiteral("objects"), QJsonArray::fromStringList(selectors));
+		printJson(result);
+	} else {
+		std::cout << text(QStringLiteral("%1 object(s) found").arg(selectors.size())) << "\n";
+		for (const QString& selector : std::as_const(selectors)) {
+			std::cout << text(selector) << "\n";
+		}
+	}
+	return static_cast<int>(CliExitCode::Success);
+}
+
+int runMapDetailCommand(const QString& path, const QStringList& args, CliOutputFormat format)
+{
+	const bool structural = hasOption(args, QStringLiteral("--structural"));
+	const QString commandName = QStringLiteral("map detail");
+	LevelMapDocument document;
+	QVector<LevelMapSelectionRef> objects;
+	if (const int code = loadMapWithObjects(commandName, path, args, format, &document, &objects, true); code != 0) {
+		return code;
+	}
+	int changed = 0;
+	QString error;
+	if (!setLevelMapSelectionDetail(&document, !structural, &changed, &error)) {
+		return printCliError(commandName, CliExitCode::Failure, error, format);
+	}
+	QJsonObject extra;
+	extra.insert(QStringLiteral("changed"), changed);
+	extra.insert(QStringLiteral("detail"), !structural);
+	extra.insert(QStringLiteral("faceFlags"), levelMapUsesFaceFlags(document));
+	return saveMapToolResult(commandName, document, args, format,
+		structural ? QStringLiteral("Made %1 brush(es) structural").arg(changed) : QStringLiteral("Made %1 brush(es) detail").arg(changed), extra);
+}
+
+int runMapDropToFloorCommand(const QString& path, const QStringList& args, CliOutputFormat format)
+{
+	const QString commandName = QStringLiteral("map drop-to-floor");
+	LevelMapDocument document;
+	QVector<LevelMapSelectionRef> objects;
+	if (const int code = loadMapWithObjects(commandName, path, args, format, &document, &objects, true); code != 0) {
+		return code;
+	}
+	// Class sizes come from --definitions, else from the built-in catalogue of
+	// the map's game, so a player start stands rather than sinks.
+	const QString definitionsPath = optionValue(args, QStringLiteral("--definitions"));
+	EntityDefinitionCatalogue catalogue = definitionsPath.trimmed().isEmpty() ? builtinEntityDefinitions(builtinEntityGameForMap(document))
+																			  : loadEntityDefinitions({definitionsPath});
+	const auto bounds = [&catalogue](const QString& className, LevelMapVec3* mins, LevelMapVec3* maxs) {
+		EntityClassDefinition definition;
+		if (!catalogue.classForName(className, &definition) || !definition.hasSize) {
+			return false;
+		}
+		*mins = {definition.mins[0], definition.mins[1], definition.mins[2], true};
+		*maxs = {definition.maxs[0], definition.maxs[1], definition.maxs[2], true};
+		return true;
+	};
+	int dropped = 0;
+	QString error;
+	if (!dropLevelMapSelectionToFloor(&document, bounds, &dropped, &error)) {
+		return printCliError(commandName, CliExitCode::Failure, error, format);
+	}
+	QJsonObject extra;
+	extra.insert(QStringLiteral("dropped"), dropped);
+	return saveMapToolResult(commandName, document, args, format, QStringLiteral("Dropped %1 entit(y)(ies) to the floor").arg(dropped), extra);
+}
+
+int runMapAddShapeCommand(const QString& path, const QStringList& args, CliOutputFormat format)
+{
+	const QString commandName = QStringLiteral("map add-shape");
+	const auto usage = [&](const QString& message) { return printCliError(commandName, CliExitCode::Usage, message, format); };
+	LevelShapeRequest request;
+	request.shape = optionValue(args, QStringLiteral("--shape")).trimmed().toLower();
+	if (!isLevelShape(request.shape)) {
+		return usage(QStringLiteral("--shape is one of %1.").arg(levelShapeIds().join(QStringLiteral(", "))));
+	}
+	// Each setting belongs to the shapes that read it.
+	const QStringList parameters = levelShapeParameters(request.shape);
+	const QList<std::pair<QString, QString>> settings {{QStringLiteral("--axis"), QStringLiteral("axis")}, {QStringLiteral("--sides"), QStringLiteral("sides")},
+		{QStringLiteral("--bands"), QStringLiteral("bands")}, {QStringLiteral("--thickness"), QStringLiteral("thickness")},
+		{QStringLiteral("--arc"), QStringLiteral("arc")}, {QStringLiteral("--start"), QStringLiteral("start")}, {QStringLiteral("--steps"), QStringLiteral("steps")},
+		{QStringLiteral("--rise"), QStringLiteral("rise")}};
+	for (const auto& [option, parameter] : settings) {
+		if (hasOption(args, option) && !parameters.contains(parameter)) {
+			return usage(QStringLiteral("%1 does not apply to a %2.").arg(option, request.shape));
+		}
+	}
+	if (hasOption(args, QStringLiteral("--axis"))) {
+		request.axis = QStringList {QStringLiteral("x"), QStringLiteral("y"), QStringLiteral("z")}.indexOf(optionValue(args, QStringLiteral("--axis")).toLower());
+		if (request.axis < 0) {
+			return usage(QStringLiteral("--axis takes x, y or z."));
+		}
+	}
+	for (const auto& [option, target] : {std::pair {QStringLiteral("--sides"), &request.sides}, std::pair {QStringLiteral("--bands"), &request.bands},
+			 std::pair {QStringLiteral("--steps"), &request.steps}}) {
+		if (hasOption(args, option)) {
+			bool valid = false;
+			*target = optionValue(args, option).toInt(&valid);
+			if (!valid) {
+				return usage(QStringLiteral("%1 takes a whole number.").arg(option));
+			}
+		}
+	}
+	for (const auto& [option, target] : {std::pair {QStringLiteral("--thickness"), &request.thickness}, std::pair {QStringLiteral("--arc"), &request.arc},
+			 std::pair {QStringLiteral("--start"), &request.startAngle}}) {
+		if (hasOption(args, option)) {
+			bool valid = false;
+			*target = optionValue(args, option).toDouble(&valid);
+			if (!valid) {
+				return usage(QStringLiteral("%1 takes a number.").arg(option));
+			}
+		}
+	}
+	if (hasOption(args, QStringLiteral("--rise"))) {
+		request.rise = optionValue(args, QStringLiteral("--rise")).trimmed().toLower();
+	}
+	request.texture = optionValue(args, QStringLiteral("--texture")).trimmed();
+	if (request.texture.isEmpty()) {
+		return usage(QStringLiteral("map add-shape requires --texture <name>."));
+	}
+	if (optionValue(args, QStringLiteral("--output")).trimmed().isEmpty()) {
+		return usage(QStringLiteral("map add-shape requires --output <save-as path>."));
+	}
+	// Either a box to fill, or the brushes the shape replaces.
+	QVector<LevelMapSelectionRef> objects;
+	QString badSelector;
+	if (!levelMapObjectsFromArgs(args, &objects, &badSelector)) {
+		return usage(QStringLiteral("Unknown map object selector: %1").arg(badSelector));
+	}
+	QVector<int> replaced;
+	for (const LevelMapSelectionRef& ref : std::as_const(objects)) {
+		if (ref.kind != LevelMapSelectionKind::QuakeBrush) {
+			return usage(QStringLiteral("--object names the brushes the shape replaces, as brush:N."));
+		}
+		replaced.push_back(ref.objectId);
+	}
+	const bool bounded = hasOption(args, QStringLiteral("--mins")) || hasOption(args, QStringLiteral("--maxs"));
+	if (replaced.isEmpty() == !bounded) {
+		return usage(QStringLiteral("map add-shape takes either --mins x,y,z and --maxs x,y,z, or --object brush:N for the brushes it replaces."));
+	}
+	if (bounded
+		&& (!parseLevelMapDelta(optionValue(args, QStringLiteral("--mins")), &request.mins.x, &request.mins.y, &request.mins.z)
+			|| !parseLevelMapDelta(optionValue(args, QStringLiteral("--maxs")), &request.maxs.x, &request.maxs.y, &request.maxs.z))) {
+		return usage(QStringLiteral("--mins and --maxs take x,y,z."));
+	}
+	const LevelMapLoadRequest load = levelMapLoadRequestFromArgs(path, args);
+	if (load.path.trimmed().isEmpty()) {
+		return usage(QStringLiteral("map add-shape requires a Quake-family .map path."));
+	}
+	LevelMapDocument document;
+	QString error;
+	if (!loadLevelMap(load, &document, &error)) {
+		return printCliError(commandName, levelMapLoadFailureCode(load), QStringLiteral("Unable to load map: %1").arg(error), format);
+	}
+	QVector<int> added;
+	const bool built = replaced.isEmpty() ? addLevelMapShape(&document, request, &added, &error)
+										  : replaceLevelMapBrushesWithShape(&document, replaced, request, &added, &error);
+	if (!built) {
+		return printCliError(commandName, CliExitCode::Failure, QStringLiteral("Unable to add the shape: %1").arg(error), format);
+	}
+	QStringList ids;
+	for (const int id : std::as_const(added)) {
+		ids << QStringLiteral("brush:%1").arg(id);
+	}
+	QStringList removed;
+	for (const int id : std::as_const(replaced)) {
+		removed << QStringLiteral("brush:%1").arg(id);
+	}
+	QJsonObject extra;
+	extra.insert(QStringLiteral("shape"), request.shape);
+	extra.insert(QStringLiteral("brushes"), QJsonArray::fromStringList(ids));
+	extra.insert(QStringLiteral("replaced"), QJsonArray::fromStringList(removed));
+	return saveMapToolResult(commandName, document, args, format, QStringLiteral("Added %1: %2").arg(request.shape, ids.join(QStringLiteral(", "))), extra);
+}
+
+int runMapAlignCommand(const QString& path, const QStringList& args, CliOutputFormat format)
+{
+	const QString commandName = QStringLiteral("map align");
+	const auto usage = [&](const QString& message) { return printCliError(commandName, CliExitCode::Usage, message, format); };
+	const int axis = QStringList {QStringLiteral("x"), QStringLiteral("y"), QStringLiteral("z")}.indexOf(optionValue(args, QStringLiteral("--axis")).trimmed().toLower());
+	if (axis < 0) {
+		return usage(QStringLiteral("map align requires --axis x, y or z."));
+	}
+	const QString edgeText = optionValue(args, QStringLiteral("--edge")).trimmed().toLower();
+	LevelMapAlignEdge edge = LevelMapAlignEdge::Minimum;
+	if (edgeText == QStringLiteral("max")) {
+		edge = LevelMapAlignEdge::Maximum;
+	} else if (edgeText == QStringLiteral("centre") || edgeText == QStringLiteral("center")) {
+		edge = LevelMapAlignEdge::Centre;
+	} else if (edgeText != QStringLiteral("min")) {
+		return usage(QStringLiteral("map align requires --edge min, centre or max."));
+	}
+	LevelMapDocument document;
+	QVector<LevelMapSelectionRef> objects;
+	if (const int code = loadMapWithObjects(commandName, path, args, format, &document, &objects, true); code != 0) {
+		return code;
+	}
+	int moved = 0;
+	QString error;
+	if (!alignLevelMapSelection(&document, axis, edge, &moved, &error)) {
+		return printCliError(commandName, CliExitCode::Failure, error, format);
+	}
+	QJsonObject extra;
+	extra.insert(QStringLiteral("moved"), moved);
+	extra.insert(QStringLiteral("axis"), QStringList {QStringLiteral("x"), QStringLiteral("y"), QStringLiteral("z")}.at(axis));
+	extra.insert(QStringLiteral("edge"), edge == LevelMapAlignEdge::Minimum ? QStringLiteral("min") : (edge == LevelMapAlignEdge::Maximum ? QStringLiteral("max") : QStringLiteral("centre")));
+	return saveMapToolResult(commandName, document, args, format, QStringLiteral("Aligned %1 object(s)").arg(moved), extra);
+}
+
+int runMapRegionCommand(const QString& path, const QStringList& args, CliOutputFormat format)
+{
+	const QString commandName = QStringLiteral("map region");
+	const auto usage = [&](const QString& message) { return printCliError(commandName, CliExitCode::Usage, message, format); };
+	const QString output = optionValue(args, QStringLiteral("--output"));
+	if (output.trimmed().isEmpty()) {
+		return usage(QStringLiteral("map region requires --output <region map path>."));
+	}
+	QVector<LevelMapSelectionRef> objects;
+	QString badSelector;
+	if (!levelMapObjectsFromArgs(args, &objects, &badSelector)) {
+		return usage(QStringLiteral("Unknown map object selector: %1").arg(badSelector));
+	}
+	const bool bounded = hasOption(args, QStringLiteral("--mins")) || hasOption(args, QStringLiteral("--maxs"));
+	if (objects.isEmpty() == !bounded) {
+		return usage(QStringLiteral("map region takes either --mins x,y,z and --maxs x,y,z, or --object selectors whose bounds make the region."));
+	}
+	LevelMapVec3 mins {0, 0, 0, true};
+	LevelMapVec3 maxs {0, 0, 0, true};
+	if (bounded
+		&& (!parseLevelMapDelta(optionValue(args, QStringLiteral("--mins")), &mins.x, &mins.y, &mins.z)
+			|| !parseLevelMapDelta(optionValue(args, QStringLiteral("--maxs")), &maxs.x, &maxs.y, &maxs.z))) {
+		return usage(QStringLiteral("--mins and --maxs take x,y,z."));
+	}
+	LevelMapVec3 start;
+	if (hasOption(args, QStringLiteral("--start"))) {
+		start.valid = parseLevelMapDelta(optionValue(args, QStringLiteral("--start")), &start.x, &start.y, &start.z);
+		if (!start.valid) {
+			return usage(QStringLiteral("--start takes x,y,z."));
+		}
+	}
+	const LevelMapLoadRequest load = levelMapLoadRequestFromArgs(path, args);
+	if (load.path.trimmed().isEmpty()) {
+		return usage(QStringLiteral("map region requires a Quake-family .map path."));
+	}
+	LevelMapDocument document;
+	QString error;
+	if (!loadLevelMap(load, &document, &error)) {
+		return printCliError(commandName, levelMapLoadFailureCode(load), QStringLiteral("Unable to load map: %1").arg(error), format);
+	}
+	if (!objects.isEmpty()) {
+		if (!setLevelMapSelection(&document, objects, &error) || !levelMapSelectionBounds(document, &mins, &maxs)) {
+			return usage(QStringLiteral("The --object selection has no bounds to make a region of: %1").arg(error));
+		}
+	}
+	const QString texture = hasOption(args, QStringLiteral("--texture")) ? optionValue(args, QStringLiteral("--texture")).trimmed() : QStringLiteral("common/caulk");
+	LevelMapDocument region;
+	LevelMapRegionReport report;
+	if (!levelMapRegionDocument(document, mins, maxs, start, texture, &region, &report, &error)) {
+		return printCliError(commandName, CliExitCode::Failure, QStringLiteral("Unable to make the region: %1").arg(error), format);
+	}
+	QJsonObject extra;
+	extra.insert(QStringLiteral("kept"), report.kept);
+	extra.insert(QStringLiteral("removed"), report.removed);
+	extra.insert(QStringLiteral("sealBrushes"), report.sealBrushes);
+	extra.insert(QStringLiteral("playerStartAdded"), report.playerStartAdded);
+	extra.insert(QStringLiteral("mins"), QJsonArray {mins.x, mins.y, mins.z});
+	extra.insert(QStringLiteral("maxs"), QJsonArray {maxs.x, maxs.y, maxs.z});
+	return saveMapToolResult(commandName, region, args, format,
+		QStringLiteral("Region keeps %1 object(s), removes %2, sealed by %3 brushes%4").arg(report.kept).arg(report.removed).arg(report.sealBrushes)
+			.arg(report.playerStartAdded ? QStringLiteral(", with a player start added") : QString()),
+		extra);
+}
+
+int runMapShearCommand(const QString& path, const QStringList& args, CliOutputFormat format)
+{
+	const QString commandName = QStringLiteral("map shear");
+	const auto usage = [&](const QString& message) { return printCliError(commandName, CliExitCode::Usage, message, format); };
+	const QStringList axes {QStringLiteral("x"), QStringLiteral("y"), QStringLiteral("z")};
+	const int axis = axes.indexOf(optionValue(args, QStringLiteral("--axis")).trimmed().toLower());
+	const int along = axes.indexOf(optionValue(args, QStringLiteral("--along")).trimmed().toLower());
+	if (axis < 0 || along < 0) {
+		return usage(QStringLiteral("map shear requires --axis and --along, each x, y or z."));
+	}
+	double factor = 0.0;
+	bool valid = false;
+	if (hasOption(args, QStringLiteral("--factor")) == hasOption(args, QStringLiteral("--angle"))) {
+		return usage(QStringLiteral("map shear takes either --factor or --angle (degrees)."));
+	}
+	if (hasOption(args, QStringLiteral("--factor"))) {
+		factor = optionValue(args, QStringLiteral("--factor")).toDouble(&valid);
+	} else {
+		const double degrees = optionValue(args, QStringLiteral("--angle")).toDouble(&valid);
+		valid = valid && std::abs(degrees) < 89.0;
+		factor = std::tan(degrees * std::numbers::pi / 180.0);
+	}
+	if (!valid) {
+		return usage(QStringLiteral("--factor takes a number; --angle takes degrees between -89 and 89."));
+	}
+	const QString lock = optionValue(args, QStringLiteral("--texture-lock")).trimmed().toLower();
+	const LevelMapTextureLockOptions textures {lock != QStringLiteral("off"), hasOption(args, QStringLiteral("--allow-valve220"))};
+	LevelMapDocument document;
+	QVector<LevelMapSelectionRef> objects;
+	if (const int code = loadMapWithObjects(commandName, path, args, format, &document, &objects, true); code != 0) {
+		return code;
+	}
+	QString error;
+	// --about: the line along --along that stays put, as a dragged side's opposite side does.
+	bool aboutValid = true;
+	const bool about = hasOption(args, QStringLiteral("--about"));
+	const double anchor = about ? optionValue(args, QStringLiteral("--about")).toDouble(&aboutValid) : 0.0;
+	if (!aboutValid) {
+		return usage(QStringLiteral("--about takes the coordinate along --along that stays where it is."));
+	}
+	if (!(about ? shearLevelMapSelectionAbout(&document, axis, along, factor, anchor, textures, &error)
+				: shearLevelMapSelection(&document, axis, along, factor, textures, &error))) {
+		return printCliError(commandName, CliExitCode::Failure, error, format);
+	}
+	QJsonObject extra;
+	extra.insert(QStringLiteral("axis"), axes.at(axis));
+	extra.insert(QStringLiteral("along"), axes.at(along));
+	extra.insert(QStringLiteral("factor"), factor);
+	if (about) {
+		extra.insert(QStringLiteral("about"), anchor);
+	}
+	return saveMapToolResult(commandName, document, args, format, QStringLiteral("Sheared %1 object(s)").arg(objects.size()), extra);
+}
+
+int runMapMakeSectorCommand(const QString& path, const QStringList& args, CliOutputFormat format)
+{
+	const QString commandName = QStringLiteral("map make-sector");
+	const auto usage = [&](const QString& message) { return printCliError(commandName, CliExitCode::Usage, message, format); };
+	const QStringList at = optionValue(args, QStringLiteral("--at")).split(QLatin1Char(','));
+	bool xValid = false;
+	bool yValid = false;
+	const double x = at.value(0).trimmed().toDouble(&xValid);
+	const double y = at.value(1).trimmed().toDouble(&yValid);
+	if (at.size() != 2 || !xValid || !yValid) {
+		return usage(QStringLiteral("map make-sector requires --at x,y, a point inside the lines."));
+	}
+	if (optionValue(args, QStringLiteral("--output")).trimmed().isEmpty()) {
+		return usage(QStringLiteral("map make-sector requires --output <save-as path>."));
+	}
+	const LevelMapLoadRequest load = levelMapLoadRequestFromArgs(path, args);
+	LevelMapDocument document;
+	QString error;
+	if (!loadLevelMap(load, &document, &error)) {
+		return printCliError(commandName, levelMapLoadFailureCode(load), QStringLiteral("Unable to load map: %1").arg(error), format);
+	}
+	int sector = -1;
+	if (!makeLevelMapDoomSectorAt(&document, x, y, &sector, &error)) {
+		return printCliError(commandName, CliExitCode::Failure, error, format);
+	}
+	QJsonObject extra;
+	extra.insert(QStringLiteral("sector"), sector);
+	return saveMapToolResult(commandName, document, args, format, QStringLiteral("Made sector:%1").arg(sector), extra);
+}
+
+int runMapAlignWallsCommand(const QString& path, const QStringList& args, CliOutputFormat format)
+{
+	const QString commandName = QStringLiteral("map align-walls");
+	const auto usage = [&](const QString& message) { return printCliError(commandName, CliExitCode::Usage, message, format); };
+	LevelDoomAlignRequest request;
+	bool sideValid = false;
+	request.sidedef = optionValue(args, QStringLiteral("--sidedef")).toInt(&sideValid);
+	if (!sideValid) {
+		return usage(QStringLiteral("map align-walls requires --sidedef N, the side to align from."));
+	}
+	const QString axes = optionValue(args, QStringLiteral("--axes")).trimmed().toLower();
+	if (!axes.isEmpty() && axes != QStringLiteral("x") && axes != QStringLiteral("y") && axes != QStringLiteral("xy")) {
+		return usage(QStringLiteral("map align-walls --axes must be x, y or xy."));
+	}
+	request.alignX = axes.isEmpty() || axes.contains(QLatin1Char('x'));
+	request.alignY = axes.isEmpty() || axes.contains(QLatin1Char('y'));
+	if (optionValue(args, QStringLiteral("--output")).trimmed().isEmpty()) {
+		return usage(QStringLiteral("map align-walls requires --output <save-as path>."));
+	}
+	const LevelMapLoadRequest load = levelMapLoadRequestFromArgs(path, args);
+	LevelMapDocument document;
+	QString error;
+	if (!loadLevelMap(load, &document, &error)) {
+		return printCliError(commandName, levelMapLoadFailureCode(load), QStringLiteral("Unable to load map: %1").arg(error), format);
+	}
+	const QString part = optionValue(args, QStringLiteral("--part")).trimmed().toLower();
+	if (part.isEmpty()) {
+		if (!levelDoomSideTexturedPart(document, request.sidedef, &request.part)) {
+			return printCliError(commandName, CliExitCode::Failure, QStringLiteral("Sidedef %1 shows no texture.").arg(request.sidedef), format);
+		}
+	} else if (part == QStringLiteral("upper")) {
+		request.part = LevelDoomWallPart::Upper;
+	} else if (part == QStringLiteral("lower")) {
+		request.part = LevelDoomWallPart::Lower;
+	} else if (part != QStringLiteral("middle")) {
+		return usage(QStringLiteral("map align-walls --part must be upper, middle or lower."));
+	}
+	QVector<LevelMapSelectionRef> objects;
+	QString badSelector;
+	if (!levelMapObjectsFromArgs(args, &objects, &badSelector)) {
+		return usage(QStringLiteral("Unknown map object selector: %1").arg(badSelector));
+	}
+	for (const LevelMapSelectionRef& ref : std::as_const(objects)) {
+		if (ref.kind != LevelMapSelectionKind::DoomLinedef) {
+			return usage(QStringLiteral("map align-walls keeps the walk to --object linedef:N selectors only."));
+		}
+		request.within.insert(ref.objectId);
+	}
+	if (const QString width = optionValue(args, QStringLiteral("--width")).trimmed(); !width.isEmpty()) {
+		bool widthValid = false;
+		const int texels = width.toInt(&widthValid);
+		if (!widthValid || texels <= 0) {
+			return usage(QStringLiteral("map align-walls --width must be a positive number of texels."));
+		}
+		for (const LevelMapDoomSidedef& side : document.doomSidedefs) {
+			if (side.id == request.sidedef) {
+				const QString name = request.part == LevelDoomWallPart::Upper
+					? side.upperTexture
+					: (request.part == LevelDoomWallPart::Lower ? side.lowerTexture : side.middleTexture);
+				request.widths.insert(name.trimmed().toUpper(), texels);
+			}
+		}
+	}
+	int aligned = 0;
+	if (!alignLevelMapDoomWallTextures(&document, request, &aligned, &error)) {
+		return printCliError(commandName, CliExitCode::Failure, error, format);
+	}
+	QJsonObject extra;
+	extra.insert(QStringLiteral("aligned"), aligned);
+	extra.insert(QStringLiteral("sidedef"), request.sidedef);
+	return saveMapToolResult(commandName, document, args, format, QStringLiteral("Aligned %1 wall(s)").arg(aligned), extra);
+}
+
+int runMapCurveLinedefsCommand(const QString& path, const QStringList& args, CliOutputFormat format)
+{
+	const QString commandName = QStringLiteral("map curve-linedefs");
+	const auto usage = [&](const QString& message) { return printCliError(commandName, CliExitCode::Usage, message, format); };
+	bool segmentsValid = false;
+	bool bulgeValid = false;
+	const int segments = optionValue(args, QStringLiteral("--segments")).toInt(&segmentsValid);
+	const double bulge = optionValue(args, QStringLiteral("--bulge")).toDouble(&bulgeValid);
+	if (!segmentsValid || !bulgeValid) {
+		return usage(QStringLiteral("map curve-linedefs requires --segments N and --bulge units."));
+	}
+	LevelMapDocument document;
+	QVector<LevelMapSelectionRef> objects;
+	if (const int code = loadMapWithObjects(commandName, path, args, format, &document, &objects, true); code != 0) {
+		return code;
+	}
+	int curved = 0;
+	QString error;
+	if (!curveLevelMapLinedefs(&document, segments, bulge, &curved, &error)) {
+		return printCliError(commandName, CliExitCode::Failure, error, format);
+	}
+	QStringList pieces;
+	for (const LevelMapSelectionRef& ref : std::as_const(document.selection)) {
+		pieces << levelMapSelectionRefId(ref);
+	}
+	QJsonObject extra;
+	extra.insert(QStringLiteral("curved"), curved);
+	extra.insert(QStringLiteral("pieces"), QJsonArray::fromStringList(pieces));
+	return saveMapToolResult(commandName, document, args, format, QStringLiteral("Curved %1 linedef(s) into %2 pieces").arg(curved).arg(pieces.size()),
+		extra);
+}
+
+// "x,y" for the Doom sector shape commands.
+bool parsePlanPoint(const QString& text, double* x, double* y)
+{
+	const QStringList parts = text.split(QLatin1Char(','));
+	bool okX = false;
+	bool okY = false;
+	if (parts.size() != 2) {
+		return false;
+	}
+	*x = parts.at(0).trimmed().toDouble(&okX);
+	*y = parts.at(1).trimmed().toDouble(&okY);
+	return okX && okY;
+}
+
+int runMapDrawSectorShapeCommand(const QString& commandName, const QString& path, const QStringList& args, CliOutputFormat format, bool stairs)
+{
+	const auto usage = [&](const QString& message) { return printCliError(commandName, CliExitCode::Usage, message, format); };
+	double minX = 0;
+	double minY = 0;
+	double maxX = 0;
+	double maxY = 0;
+	if (!parsePlanPoint(optionValue(args, QStringLiteral("--from")), &minX, &minY) || !parsePlanPoint(optionValue(args, QStringLiteral("--to")), &maxX, &maxY)) {
+		return usage(QStringLiteral("%1 requires --from x,y and --to x,y for the footprint's corners.").arg(commandName));
+	}
+	if (optionValue(args, QStringLiteral("--output")).trimmed().isEmpty()) {
+		return usage(QStringLiteral("%1 requires --output <path>.").arg(commandName));
+	}
+	const auto whole = [&](const QString& option, int fallback, int* value) {
+		if (!hasOption(args, option)) {
+			*value = fallback;
+			return true;
+		}
+		bool ok = false;
+		*value = optionValue(args, option).toInt(&ok);
+		return ok;
+	};
+	LevelMapLoadRequest load = levelMapLoadRequestFromArgs(path, args);
+	if (load.path.trimmed().isEmpty()) {
+		return usage(QStringLiteral("%1 requires a Doom or Hexen WAD path.").arg(commandName));
+	}
+	LevelMapDocument document;
+	QString error;
+	if (!loadLevelMap(load, &document, &error)) {
+		return printCliError(commandName, levelMapLoadFailureCode(load), QStringLiteral("Unable to load map: %1").arg(error), format);
+	}
+	QVector<int> ids;
+	bool drawn = false;
+	if (stairs) {
+		LevelDoomStairsRequest request;
+		request.minX = std::min(minX, maxX);
+		request.minY = std::min(minY, maxY);
+		request.maxX = std::max(minX, maxX);
+		request.maxY = std::max(minY, maxY);
+		if (!whole(QStringLiteral("--steps"), 8, &request.steps) || !whole(QStringLiteral("--step-height"), 8, &request.stepHeight)) {
+			return usage(QStringLiteral("--steps and --step-height take whole numbers."));
+		}
+		if (hasOption(args, QStringLiteral("--rise"))) {
+			request.rise = optionValue(args, QStringLiteral("--rise")).trimmed().toLower();
+		}
+		drawn = drawLevelMapDoomStairs(&document, request, &ids, &error);
+	} else {
+		int columns = 0;
+		int rows = 0;
+		if (!whole(QStringLiteral("--columns"), 2, &columns) || !whole(QStringLiteral("--rows"), 2, &rows)) {
+			return usage(QStringLiteral("--columns and --rows take whole numbers."));
+		}
+		drawn = drawLevelMapDoomGrid(&document, std::min(minX, maxX), std::min(minY, maxY), std::max(minX, maxX), std::max(minY, maxY), columns, rows, &ids,
+			&error);
+	}
+	if (!drawn) {
+		return printCliError(commandName, CliExitCode::Failure, error, format);
+	}
+	QStringList sectors;
+	for (const int id : std::as_const(ids)) {
+		sectors << QStringLiteral("sector:%1").arg(id);
+	}
+	QJsonObject extra;
+	extra.insert(QStringLiteral("sectors"), QJsonArray::fromStringList(sectors));
+	return saveMapToolResult(commandName, document, args, format, QStringLiteral("Drew %1 sector(s)").arg(ids.size()), extra);
+}
+
+int runMapReplaceKeyCommand(const QString& path, const QStringList& args, CliOutputFormat format)
+{
+	const QString commandName = QStringLiteral("map replace-key");
+	const auto usage = [&](const QString& message) { return printCliError(commandName, CliExitCode::Usage, message, format); };
+	const QString key = optionValue(args, QStringLiteral("--key")).trimmed();
+	if (key.isEmpty() || !hasOption(args, QStringLiteral("--find")) || !hasOption(args, QStringLiteral("--replace"))) {
+		return usage(QStringLiteral("map replace-key requires --key, --find and --replace."));
+	}
+	if (optionValue(args, QStringLiteral("--output")).trimmed().isEmpty()) {
+		return usage(QStringLiteral("map replace-key requires --output <path>."));
+	}
+	QVector<LevelMapSelectionRef> objects;
+	QString badSelector;
+	if (!levelMapObjectsFromArgs(args, &objects, &badSelector)) {
+		return usage(QStringLiteral("Unknown map object selector: %1").arg(badSelector));
+	}
+	const LevelMapLoadRequest load = levelMapLoadRequestFromArgs(path, args);
+	LevelMapDocument document;
+	QString error;
+	if (load.path.trimmed().isEmpty() || !loadLevelMap(load, &document, &error)) {
+		return printCliError(commandName, levelMapLoadFailureCode(load), QStringLiteral("Unable to load map: %1").arg(error), format);
+	}
+	if (!objects.isEmpty() && !setLevelMapSelection(&document, objects, &error)) {
+		return usage(QStringLiteral("Unable to select map objects: %1").arg(error));
+	}
+	int replaced = 0;
+	if (!replaceLevelMapEntityValues(&document, key, optionValue(args, QStringLiteral("--find")), optionValue(args, QStringLiteral("--replace")),
+			!hasOption(args, QStringLiteral("--partial")), !objects.isEmpty(), &replaced, &error)) {
+		return printCliError(commandName, CliExitCode::Failure, error, format);
+	}
+	QJsonObject extra;
+	extra.insert(QStringLiteral("key"), key);
+	extra.insert(QStringLiteral("replaced"), replaced);
+	return saveMapToolResult(commandName, document, args, format, QStringLiteral("Replaced %1 on %2 entit(y)(ies)").arg(key).arg(replaced), extra);
+}
+
+int runMapIntersectCommand(const QString& path, const QStringList& args, CliOutputFormat format)
+{
+	const QString commandName = QStringLiteral("map intersect");
+	LevelMapDocument document;
+	QVector<LevelMapSelectionRef> objects;
+	if (const int code = loadMapWithObjects(commandName, path, args, format, &document, &objects, true); code != 0) {
+		return code;
+	}
+	QString error;
+	if (!intersectLevelMapSelection(&document, &error)) {
+		return printCliError(commandName, CliExitCode::Failure, error, format);
+	}
+	QStringList pieces;
+	for (const LevelMapSelectionRef& ref : document.selection) {
+		pieces << levelMapSelectionRefId(ref);
+	}
+	QJsonObject extra;
+	extra.insert(QStringLiteral("result"), QJsonArray::fromStringList(pieces));
+	return saveMapToolResult(commandName, document, args, format, QStringLiteral("Intersected into %1").arg(pieces.join(QStringLiteral(", "))), extra);
+}
+
 int runMapMergeBrushesCommand(const QString& path, const QStringList& args, CliOutputFormat format)
 {
 	const QString command = QStringLiteral("map merge-brushes");
@@ -9170,6 +10150,15 @@ int runMapSnapCommand(const QString& commandName, const QString& path, const QSt
 
 int runMapDuplicateCommand(const QString& commandName, const QString& path, const QStringList& args, CliOutputFormat format)
 {
+	int copyCount = 1;
+	if (hasOption(args, QStringLiteral("--copies"))) {
+		bool valid = false;
+		copyCount = optionValue(args, QStringLiteral("--copies")).toInt(&valid);
+		if (!valid || copyCount < 1 || copyCount > kLevelMapMaxArrayCopies || optionValues(args, QStringLiteral("--copies")).size() != 1) {
+			return printCliError(commandName, CliExitCode::Usage,
+				QStringLiteral("--copies requires one integer between 1 and %1.").arg(kLevelMapMaxArrayCopies), format);
+		}
+	}
 	LevelMapTextureLockOptions textures;
 	QString textureError;
 	if (!mapTextureLockFromArgs(args, true, &textures, &textureError)) {
@@ -9206,7 +10195,7 @@ int runMapDuplicateCommand(const QString& commandName, const QString& path, cons
 	}
 	document.selection = objects;
 	LevelPlacementRequest placement;
-	placement.offset = {dx, dy, dz, true}; placement.textures = textures;
+	placement.offset = {dx, dy, dz, true}; placement.textures = textures; placement.copies = copyCount;
 	auto prepared = prepareLevelPlacement(document, placement);
 	if (!prepared.succeeded) {
 		return printCliError(commandName, CliExitCode::Failure, QStringLiteral("Unable to duplicate map objects: %1").arg(prepared.error), format);
@@ -9226,6 +10215,7 @@ int runMapDuplicateCommand(const QString& commandName, const QString& path, cons
 	}
 	QJsonObject extra;
 	extra.insert(QStringLiteral("copies"), copies);
+	extra.insert(QStringLiteral("copyCount"), copyCount);
 	extra.insert(QStringLiteral("delta"), levelMapVec3Json({dx, dy, dz, true}));
 	extra.insert(QStringLiteral("textureLockPolicy"), textures.enabled ? QStringLiteral("locked") : QStringLiteral("source-parameters"));
 	return printLevelMapSaveResult(commandName, document, report, format, extra);
@@ -12694,7 +13684,7 @@ int runModelSourceCommand(const QString& action, const QString& path, const QStr
 int runModelBuildCommand(const QString& path, const QStringList& args, CliOutputFormat format)
 {
 	const QString command = QStringLiteral("model build"), output = optionValue(args, QStringLiteral("--output"));
-	if (path.isEmpty() || output.isEmpty()) { return printCliError(command, CliExitCode::Usage, QStringLiteral("model build requires a design or editable mesh JSON path and --output <model.mdl|model.md2|model.md3|model.obj>."), format); }
+	if (path.isEmpty() || output.isEmpty()) { return printCliError(command, CliExitCode::Usage, QStringLiteral("model build requires a design or editable mesh JSON path and --output <model.mdl|model.md2|model.md3|model.md5mesh|model.md5anim|model.iqm|model.ase|model.obj>."), format); }
 	ModelDesign design; ModelMesh mesh; QString error;
 	const bool editableMesh = path.endsWith(QStringLiteral(".mesh.json"), Qt::CaseInsensitive);
 	if (editableMesh) {
@@ -13271,6 +14261,22 @@ int runSubcommand(const QStringList& args)
 		if (action == QStringLiteral("merge-vertices") || action == QStringLiteral("merge-vertex")) {
 			return runMapMergeVerticesCommand(QStringLiteral("map merge-vertices"), mapPath, args, format);
 		}
+		if (action == QStringLiteral("tie-entity") || action == QStringLiteral("tie-to-entity")) { return runMapTieEntityCommand(mapPath, args, format); }
+		if (action == QStringLiteral("move-to-world") || action == QStringLiteral("ungroup-entity")) { return runMapMoveToWorldCommand(mapPath, args, format); }
+		if (action == QStringLiteral("select-region")) { return runMapSelectRegionCommand(mapPath, args, format); }
+		if (action == QStringLiteral("detail") || action == QStringLiteral("make-detail")) { return runMapDetailCommand(mapPath, args, format); }
+		if (action == QStringLiteral("drop-to-floor")) { return runMapDropToFloorCommand(mapPath, args, format); }
+		if (action == QStringLiteral("intersect")) { return runMapIntersectCommand(mapPath, args, format); }
+		if (action == QStringLiteral("add-shape")) { return runMapAddShapeCommand(mapPath, args, format); }
+		if (action == QStringLiteral("align")) { return runMapAlignCommand(mapPath, args, format); }
+		if (action == QStringLiteral("replace-key")) { return runMapReplaceKeyCommand(mapPath, args, format); }
+		if (action == QStringLiteral("shear")) { return runMapShearCommand(mapPath, args, format); }
+		if (action == QStringLiteral("curve-linedefs")) { return runMapCurveLinedefsCommand(mapPath, args, format); }
+		if (action == QStringLiteral("align-walls")) { return runMapAlignWallsCommand(mapPath, args, format); }
+		if (action == QStringLiteral("make-sector")) { return runMapMakeSectorCommand(mapPath, args, format); }
+		if (action == QStringLiteral("draw-stairs")) { return runMapDrawSectorShapeCommand(QStringLiteral("map draw-stairs"), mapPath, args, format, true); }
+		if (action == QStringLiteral("draw-grid")) { return runMapDrawSectorShapeCommand(QStringLiteral("map draw-grid"), mapPath, args, format, false); }
+		if (action == QStringLiteral("region") || action == QStringLiteral("cordon")) { return runMapRegionCommand(mapPath, args, format); }
 		if (action == QStringLiteral("carve") || action == QStringLiteral("subtract")) {
 			return runMapCarveCommand(QStringLiteral("map carve"), mapPath, args, format);
 		}
@@ -13379,6 +14385,66 @@ int runSubcommand(const QStringList& args)
 			if (result.exitCode != 0) { return printCliError(QStringLiteral("model slots"), static_cast<CliExitCode>(result.exitCode), result.error, format); }
 			if (format == CliOutputFormat::Json) {
 				auto output = cliResultJson(QStringLiteral("model slots"));
+				for (auto it = result.payload.begin(); it != result.payload.end(); ++it) { output.insert(it.key(), it.value()); }
+				printJson(output);
+			} else { std::cout << text(result.lines.join(QLatin1Char('\n'))) << '\n'; }
+			return 0;
+		}
+		if (action == QStringLiteral("tool")) {
+			const auto result = runModelTool(args);
+			if (result.exitCode != 0) { return printCliError(QStringLiteral("model tool"), static_cast<CliExitCode>(result.exitCode), result.error, format); }
+			if (format == CliOutputFormat::Json) {
+				auto output = cliResultJson(QStringLiteral("model tool"));
+				for (auto it = result.payload.begin(); it != result.payload.end(); ++it) { output.insert(it.key(), it.value()); }
+				printJson(output);
+			} else { std::cout << text(result.lines.join(QLatin1Char('\n'))) << '\n'; }
+			return 0;
+		}
+		if (action == QStringLiteral("lod")) {
+			const auto result = runModelLod(args);
+			if (result.exitCode != 0) { return printCliError(QStringLiteral("model lod"), static_cast<CliExitCode>(result.exitCode), result.error, format); }
+			if (format == CliOutputFormat::Json) {
+				auto output = cliResultJson(QStringLiteral("model lod"));
+				for (auto it = result.payload.begin(); it != result.payload.end(); ++it) { output.insert(it.key(), it.value()); }
+				printJson(output);
+			} else { std::cout << text(result.lines.join(QLatin1Char('\n'))) << '\n'; }
+			return 0;
+		}
+		if (action == QStringLiteral("profiles")) {
+			const auto result = runModelProfiles(args);
+			if (result.exitCode != 0) { return printCliError(QStringLiteral("model profiles"), static_cast<CliExitCode>(result.exitCode), result.error, format); }
+			if (format == CliOutputFormat::Json) {
+				auto output = cliResultJson(QStringLiteral("model profiles"));
+				for (auto it = result.payload.begin(); it != result.payload.end(); ++it) { output.insert(it.key(), it.value()); }
+				printJson(output);
+			} else { std::cout << text(result.lines.join(QLatin1Char('\n'))) << '\n'; }
+			return 0;
+		}
+		if (action == QStringLiteral("controls")) {
+			const auto result = runModelControls(args);
+			if (result.exitCode != 0) { return printCliError(QStringLiteral("model controls"), static_cast<CliExitCode>(result.exitCode), result.error, format); }
+			if (format == CliOutputFormat::Json) {
+				auto output = cliResultJson(QStringLiteral("model controls"));
+				for (auto it = result.payload.begin(); it != result.payload.end(); ++it) { output.insert(it.key(), it.value()); }
+				printJson(output);
+			} else { std::cout << text(result.lines.join(QLatin1Char('\n'))) << '\n'; }
+			return 0;
+		}
+		if (action == QStringLiteral("formats")) {
+			const auto result = runModelFormats(args);
+			if (result.exitCode != 0) { return printCliError(QStringLiteral("model formats"), static_cast<CliExitCode>(result.exitCode), result.error, format); }
+			if (format == CliOutputFormat::Json) {
+				auto output = cliResultJson(QStringLiteral("model formats"));
+				for (auto it = result.payload.begin(); it != result.payload.end(); ++it) { output.insert(it.key(), it.value()); }
+				printJson(output);
+			} else { std::cout << text(result.lines.join(QLatin1Char('\n'))) << '\n'; }
+			return 0;
+		}
+		if (action == QStringLiteral("select")) {
+			const auto result = runModelSelect(args);
+			if (result.exitCode != 0) { return printCliError(QStringLiteral("model select"), static_cast<CliExitCode>(result.exitCode), result.error, format); }
+			if (format == CliOutputFormat::Json) {
+				auto output = cliResultJson(QStringLiteral("model select"));
 				for (auto it = result.payload.begin(); it != result.payload.end(); ++it) { output.insert(it.key(), it.value()); }
 				printJson(output);
 			} else { std::cout << text(result.lines.join(QLatin1Char('\n'))) << '\n'; }
@@ -13528,6 +14594,28 @@ int runSubcommand(const QStringList& args)
 		}
 	}
 
+	if (family == QStringLiteral("material") || family == QStringLiteral("materials")) {
+		const QString materialCommand = action.isEmpty() ? QStringLiteral("material") : QStringLiteral("material %1").arg(action);
+		const auto result = runMaterialCommand(action, args);
+		if (result.exitCode != 0) {
+			if (format == CliOutputFormat::Json && !result.payload.isEmpty()) {
+				auto output = cliResultJson(materialCommand, static_cast<CliExitCode>(result.exitCode));
+				for (auto it = result.payload.begin(); it != result.payload.end(); ++it) { output.insert(it.key(), it.value()); }
+				output.insert(QStringLiteral("message"), result.error);
+				printJson(output);
+				return result.exitCode;
+			}
+			if (format == CliOutputFormat::Text && !result.lines.isEmpty()) { std::cout << text(result.lines.join(QLatin1Char('\n'))) << '\n'; }
+			return printCliError(materialCommand, static_cast<CliExitCode>(result.exitCode), result.error, format);
+		}
+		if (format == CliOutputFormat::Json) {
+			auto output = cliResultJson(materialCommand);
+			for (auto it = result.payload.begin(); it != result.payload.end(); ++it) { output.insert(it.key(), it.value()); }
+			printJson(output);
+		} else if (!result.lines.isEmpty()) { std::cout << text(result.lines.join(QLatin1Char('\n'))) << '\n'; }
+		return 0;
+	}
+
 	if (family == QStringLiteral("shader") || family == QStringLiteral("shaders")) {
 		const QString shaderPath = hasOption(args, QStringLiteral("--input")) ? optionValue(args, QStringLiteral("--input")) : tokens.value(2);
 		if (action == QStringLiteral("inspect") || action == QStringLiteral("info") || action == QStringLiteral("validate")) {
@@ -13565,6 +14653,18 @@ int runSubcommand(const QStringList& args)
 		}
 		if (action == QStringLiteral("report") || action == QStringLiteral("smoke") || action == QStringLiteral("audit")) {
 			return runLocalizationReportCommand(QStringLiteral("localization report"), args, format, false);
+		}
+	}
+
+	if (family == QStringLiteral("accessibility") || family == QStringLiteral("a11y")) {
+		if (action == QStringLiteral("report") || action == QStringLiteral("status")) {
+			return runAccessibilityReportCommand(QStringLiteral("accessibility report"), format);
+		}
+		if (action == QStringLiteral("voices")) {
+			return runAccessibilityVoicesCommand(QStringLiteral("accessibility voices"), format);
+		}
+		if (action == QStringLiteral("speak") || action == QStringLiteral("say")) {
+			return runAccessibilitySpeakCommand(QStringLiteral("accessibility speak"), args, format);
 		}
 	}
 
@@ -13881,7 +14981,16 @@ int runImpl(const QStringList& args)
 		printSetupSummary(settings.setupSummary());
 		return 0;
 	}
-	if (hasOption(args, "--set-locale") || hasOption(args, "--set-theme") || hasOption(args, "--set-text-scale") || hasOption(args, "--set-density") || hasOption(args, "--set-editor-profile") || hasOption(args, "--set-reduced-motion") || hasOption(args, "--set-tts")) {
+	const QStringList accessibilityFlags = {
+		QStringLiteral("--set-region"), QStringLiteral("--set-color-vision"), QStringLiteral("--set-reduced-saturation"),
+		QStringLiteral("--set-thick-focus"), QStringLiteral("--set-thick-cursor"), QStringLiteral("--set-steady-cursor"),
+		QStringLiteral("--set-font"), QStringLiteral("--set-text-spacing"), QStringLiteral("--set-message-duration"),
+		QStringLiteral("--set-visual-alerts"), QStringLiteral("--set-announcements"), QStringLiteral("--set-tts-voice"),
+		QStringLiteral("--set-tts-rate"), QStringLiteral("--set-tts-pitch"), QStringLiteral("--set-tts-volume"), QStringLiteral("--set-tts-events"),
+		QStringLiteral("--set-sound-cues"), QStringLiteral("--set-sound-cue-volume"),
+	};
+	const bool setsAccessibility = std::any_of(accessibilityFlags.cbegin(), accessibilityFlags.cend(), [&args](const QString& flag) { return hasOption(args, flag); });
+	if (setsAccessibility || hasOption(args, "--set-locale") || hasOption(args, "--set-theme") || hasOption(args, "--set-text-scale") || hasOption(args, "--set-density") || hasOption(args, "--set-editor-profile") || hasOption(args, "--set-reduced-motion") || hasOption(args, "--set-tts")) {
 		StudioSettings settings;
 		AccessibilityPreferences preferences = settings.accessibilityPreferences();
 		QString editorProfileId = settings.selectedEditorProfileId();
@@ -13889,7 +14998,7 @@ int runImpl(const QStringList& args)
 		if (hasOption(args, "--set-locale")) {
 			const QString value = optionValue(args, "--set-locale");
 			if (!localeOptionIsSupported(value)) {
-				std::cerr << "--set-locale requires one of: " << text(supportedLocaleNames().join(", ")) << "\n";
+				std::cerr << "--set-locale requires system or one of: " << text(supportedLocaleNames().join(", ")) << "\n";
 				return 2;
 			}
 			preferences.localeName = normalizedLocaleName(value);
@@ -13942,6 +15051,101 @@ int runImpl(const QStringList& args)
 				return 2;
 			}
 			preferences.textToSpeechEnabled = value;
+		}
+		if (hasOption(args, "--set-region")) {
+			const QString value = optionValue(args, "--set-region").trimmed();
+			const QString normalized = normalizedFormatLocaleName(value);
+			if (value.isEmpty() || (normalized == systemRegionFormatId() && value.compare(systemRegionFormatId(), Qt::CaseInsensitive) != 0)) {
+				std::cerr << "--set-region requires system, language, or a locale such as en-GB or de-CH.\n";
+				return 2;
+			}
+			preferences.formatLocaleName = normalized;
+		}
+		if (hasOption(args, "--set-color-vision")) {
+			const QString value = normalizedOptionId(optionValue(args, "--set-color-vision"));
+			const ColorVision vision = colorVisionFromId(value);
+			if (vision == ColorVision::Typical && value != colorVisionId(ColorVision::Typical)) {
+				std::cerr << "--set-color-vision requires one of: " << text(colorVisionIds().join(", ")) << "\n";
+				return 2;
+			}
+			preferences.colorVision = vision;
+		}
+		// The on/off accessibility switches share one parser.
+		const QVector<QPair<const char*, bool*>> switches = {
+			{"--set-reduced-saturation", &preferences.reducedSaturation},
+			{"--set-thick-focus", &preferences.thickFocusIndicator},
+			{"--set-thick-cursor", &preferences.thickTextCursor},
+			{"--set-steady-cursor", &preferences.steadyTextCursor},
+			{"--set-visual-alerts", &preferences.visualAlerts},
+			{"--set-announcements", &preferences.screenReaderAnnouncements},
+			{"--set-sound-cues", &preferences.soundCues},
+		};
+		for (const auto& [flag, target] : switches) {
+			if (!hasOption(args, flag)) {
+				continue;
+			}
+			bool value = false;
+			if (!boolOptionValue(optionValue(args, flag), &value)) {
+				std::cerr << flag << " requires on or off.\n";
+				return 2;
+			}
+			*target = value;
+		}
+		if (hasOption(args, "--set-font")) {
+			const QString value = optionValue(args, "--set-font").trimmed();
+			preferences.uiFontFamily = value.compare(QStringLiteral("system"), Qt::CaseInsensitive) == 0 ? QString() : value;
+		}
+		if (hasOption(args, "--set-text-spacing")) {
+			const QString value = normalizedOptionId(optionValue(args, "--set-text-spacing"));
+			if (value != QStringLiteral("standard") && value != QStringLiteral("wide")) {
+				std::cerr << "--set-text-spacing requires standard or wide.\n";
+				return 2;
+			}
+			preferences.wideTextSpacing = value == QStringLiteral("wide");
+		}
+		if (hasOption(args, "--set-message-duration")) {
+			const QString value = normalizedOptionId(optionValue(args, "--set-message-duration"));
+			if (!messageDurationIds().contains(value) && value != QStringLiteral("long")) {
+				std::cerr << "--set-message-duration requires one of: " << text(messageDurationIds().join(", ")) << "\n";
+				return 2;
+			}
+			preferences.messageDuration = messageDurationFromId(value);
+		}
+		if (hasOption(args, "--set-tts-voice")) {
+			const QString value = optionValue(args, "--set-tts-voice").trimmed();
+			preferences.speechVoice = value.compare(QStringLiteral("default"), Qt::CaseInsensitive) == 0 ? QString() : value;
+		}
+		const QVector<std::tuple<const char*, int*, int, int>> numbers = {
+			{"--set-tts-rate", &preferences.speechRate, -10, 10},
+			{"--set-tts-pitch", &preferences.speechPitch, -10, 10},
+			{"--set-tts-volume", &preferences.speechVolume, 0, 100},
+			{"--set-sound-cue-volume", &preferences.soundCueVolume, 0, 100},
+		};
+		for (const auto& [flag, target, minimum, maximum] : numbers) {
+			if (!hasOption(args, flag)) {
+				continue;
+			}
+			bool ok = false;
+			const int value = optionValue(args, flag).toInt(&ok);
+			if (!ok || value < minimum || value > maximum) {
+				std::cerr << flag << " requires a whole number from " << minimum << " to " << maximum << ".\n";
+				return 2;
+			}
+			*target = value;
+		}
+		if (hasOption(args, "--set-tts-events")) {
+			const QString value = optionValue(args, "--set-tts-events").trimmed();
+			QStringList events;
+			if (value.compare(QStringLiteral("none"), Qt::CaseInsensitive) != 0) {
+				events = value.split(QRegularExpression(QStringLiteral("[,;\\s]+")), Qt::SkipEmptyParts);
+				for (const QString& event : std::as_const(events)) {
+					if (!speechEventIds().contains(normalizedOptionId(event))) {
+						std::cerr << "--set-tts-events takes none or a list of: " << text(speechEventIds().join(", ")) << "\n";
+						return 2;
+					}
+				}
+			}
+			preferences.speechEvents = normalizedSpeechEvents(events);
 		}
 
 		settings.setAccessibilityPreferences(preferences);

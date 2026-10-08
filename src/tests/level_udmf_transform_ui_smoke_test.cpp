@@ -1,5 +1,6 @@
 #include "app/application_shell.h"
 #include "app/level_rotation_dialog.h"
+#include "app/level_placement_dialog.h"
 #include "app/map_viewport.h"
 #include "app/model_viewport.h"
 #include "app/studio_theme.h"
@@ -215,6 +216,34 @@ int main(int argc, char** argv) {
 			   !noOp.findChild<QDialogButtonBox*>()->button(QDialogButtonBox::Ok)->isEnabled() &&
 			   noOp.findChild<QLabel*>("rotationStatus")->text().contains("unchanged"), "no-op preview gives actionable feedback");
 		noOp.reject();
+		// UDMF thing placement uses the same preview and numeric surface as
+		// brush arrays, including fractional height and accessible controls.
+		plan->selectionSetChanged({{LevelMapSelectionKind::DoomThing, 0}});
+		for (const auto& id : {"map.duplicateSelection", "map.duplicateWithOffset"}) {
+			auto* action = shell.findChild<QAction*>(id);
+			expect(action && action->isEnabled(), "UDMF thing duplicate action enabled", id);
+		}
+		const auto thingsBefore = serializeLevelMap(shell.levelDocument()).bytes;
+		shell.findChild<QAction*>("map.duplicateSelection")->trigger();
+		expect(shell.levelDocument().doomThings.size() == 2, "shell quick duplicate publishes UDMF thing");
+		undo->trigger();
+		expect(serializeLevelMap(shell.levelDocument()).bytes == thingsBefore && shell.levelDocument().selection.size() == 1
+			&& shell.levelDocument().selection.first().objectId == 0, "shell duplicate undo restores source selection and bytes");
+		LevelPlacementDialog placement(shell.levelDocument(), LevelPlacementMode::Duplicate);
+		placement.resize(scale == 100 ? 1100 : 1900, scale == 100 ? 750 : 1200);
+		placement.setOffset({.375, -.125, .25, true});
+		placement.setCopies(3);
+		placement.show();
+		expect(until([&] { return placement.isReady(); }) && placement.previewValid(), "UDMF array numeric preview",
+			placement.findChild<QLabel*>("placementStatus")->text());
+		auto* height = placement.findChild<QDoubleSpinBox*>("placementOffset2");
+		expect(height && height->isEnabled() && height->decimals() >= 3 && height->value() == .25
+			&& height->focusPolicy() != Qt::NoFocus && !height->accessibleDescription().isEmpty()
+			&& QAccessible::queryAccessibleInterface(height)->role() == QAccessible::SpinBox, "accessible fractional UDMF height control");
+		expect(placement.previewDocument().doomThings.size() == 4 && placement.previewDocument().doomThings.last().z == .75 + .5,
+			"UDMF array preview retains fractional height");
+		expect(serializeLevelMap(shell.levelDocument()).bytes == thingsBefore, "UDMF preview does not mutate live document");
+		placement.reject();
 		shell.close();
 		if (scale == 200) {
 			app.removeTranslator(&expansion);

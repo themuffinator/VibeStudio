@@ -15,6 +15,7 @@
 #include <QPaintEvent>
 #include <QFontMetricsF>
 #include <QPainter>
+#include <QPainterPath>
 #include <QPen>
 #include <QPolygonF>
 #include <QResizeEvent>
@@ -726,6 +727,7 @@ void MapViewport::clearDocument()
 	m_sourceIndex = {};
 	m_hidden.clear();
 	m_sceneHidden.clear();
+	m_filtered.clear();
 	m_leakTrail.clear();
 	m_targetLinks.clear();
 	m_tagLinks.clear();
@@ -795,6 +797,7 @@ void MapViewport::synchronizeSceneFrom(const MapViewport& source, bool frame)
 		m_sectorOutlines = source.m_sectorOutlines;
 		m_hidden = source.m_hidden;
 		m_sceneHidden = source.m_sceneHidden;
+		m_filtered = source.m_filtered;
 		m_targetLinks = source.m_targetLinks;
 		m_tagLinks = source.m_tagLinks;
 		m_topologyRevision = source.m_topologyRevision;
@@ -802,6 +805,7 @@ void MapViewport::synchronizeSceneFrom(const MapViewport& source, bool frame)
 		updateWorldBounds();
 	}
 	m_leakTrail = source.m_leakTrail;
+	m_portals = source.m_portals;
 	m_selection = source.m_selection;
 	syncPrimaryFromSelection();
 	if (m_projection == source.m_projection) {
@@ -812,6 +816,8 @@ void MapViewport::synchronizeSceneFrom(const MapViewport& source, bool frame)
 	m_hasWorkZone = source.m_hasWorkZone;
 	m_workMins = source.m_workMins;
 	m_workMaxs = source.m_workMaxs;
+	m_hasRegion = source.m_hasRegion;
+	m_regionBox = source.m_regionBox;
 	if (frame) {
 		setClipMode(false);
 		setDrawMode(false);
@@ -1204,6 +1210,29 @@ const LevelMapDocument& MapViewport::displayDocument() const
 	return m_document;
 }
 
+void MapViewport::setFilteredObjects(const QVector<LevelMapSelectionRef>& objects)
+{
+	QSet<QPair<int, int>> filtered;
+	for (const LevelMapSelectionRef& ref : objects) {
+		filtered.insert({static_cast<int>(ref.kind), ref.objectId});
+	}
+	if (filtered == m_filtered) {
+		return;
+	}
+	m_filtered = filtered;
+	// The document keeps the selection; the drawn copy leaves out what the
+	// filters hide (applyHiddenFilter), so it is neither drawn nor picked.
+	m_hover = MapViewportHit();
+	refilterHidden();
+	setAccessibleDescription(accessibleSummary());
+	update();
+}
+
+int MapViewport::filteredCount() const
+{
+	return static_cast<int>(m_filtered.size());
+}
+
 int MapViewport::hiddenCount() const
 {
 	int count = static_cast<int>(m_sceneHidden.size());
@@ -1216,19 +1245,20 @@ int MapViewport::hiddenCount() const
 bool MapViewport::isHidden(LevelMapSelectionKind kind, int objectId) const
 {
 	if (!m_sceneHidden.isEmpty() && m_sceneHidden.contains(levelSceneCanonicalObject(m_sourceDocument, levelMapSelectionRefId({kind, objectId})))) { return true; }
-	if (m_hidden.isEmpty()) { return false; }
-	if (m_hidden.contains({static_cast<int>(kind), objectId})) {
+	if (m_hidden.isEmpty() && m_filtered.isEmpty()) { return false; }
+	const auto held = [this](const QPair<int, int>& key) { return m_hidden.contains(key) || m_filtered.contains(key); };
+	if (held({static_cast<int>(kind), objectId})) {
 		return true;
 	}
 	// A brush or patch is hidden with its entity.
 	const int entity = static_cast<int>(LevelMapSelectionKind::Entity);
 	if (kind == LevelMapSelectionKind::QuakeBrush) {
 		const LevelMapBrush* brush = m_sourceIndex.object(m_sourceDocument.brushes, kind, objectId);
-		return brush && m_hidden.contains({entity, brush->entityId});
+		return brush && held({entity, brush->entityId});
 	}
 	if (kind == LevelMapSelectionKind::QuakePatch) {
 		const LevelMapPatch* patch = m_sourceIndex.object(m_sourceDocument.patches, kind, objectId);
-		return patch && m_hidden.contains({entity, patch->entityId});
+		return patch && held({entity, patch->entityId});
 	}
 	return false;
 }
@@ -1270,7 +1300,7 @@ void MapViewport::applyHiddenFilter()
 {
 	m_document = m_sourceDocument;
 	m_sceneHidden = levelSceneHiddenObjects(m_sourceDocument);
-	if (m_hidden.isEmpty() && m_sceneHidden.isEmpty()) {
+	if (m_hidden.isEmpty() && m_sceneHidden.isEmpty() && m_filtered.isEmpty()) {
 		return;
 	}
 	const auto hidden = [this](LevelMapSelectionKind kind, int id) {
@@ -1396,6 +1426,39 @@ void MapViewport::setLeakTrail(const QVector<LevelMapVec3>& points)
 	m_leakTrail = points;
 	setAccessibleDescription(accessibleSummary());
 	update();
+}
+
+void MapViewport::setPortals(const QVector<QVector<LevelMapVec3>>& portals)
+{
+	m_portals = portals;
+	update();
+}
+
+void MapViewport::paintPortals(QPainter& painter, const Palette& palette) const
+{
+	if (m_portals.isEmpty()) {
+		return;
+	}
+	painter.save();
+	QColor edge = m_highContrast ? palette.text : palette.leak;
+	edge.setAlpha(m_highContrast ? 220 : 150);
+	QColor fill = edge;
+	fill.setAlpha(m_highContrast ? 0 : 24);
+	painter.setPen(QPen(edge, m_highContrast ? 1.5 : 1.0));
+	painter.setBrush(fill);
+	const QRectF visible = QRectF(rect()).adjusted(-2, -2, 2, 2);
+	QPolygonF polygon;
+	for (const QVector<LevelMapVec3>& portal : m_portals) {
+		polygon.clear();
+		for (const LevelMapVec3& point : portal) {
+			const QPointF world = projectPoint(point);
+			polygon << worldToView(world.x(), world.y());
+		}
+		if (polygon.boundingRect().intersects(visible)) {
+			painter.drawPolygon(polygon);
+		}
+	}
+	painter.restore();
 }
 
 void MapViewport::clearLeakTrail()
@@ -2468,6 +2531,146 @@ MapViewportHit MapViewport::hitOrSectorAt(const QPointF& viewPoint) const
 	return hit;
 }
 
+void MapViewport::setMakeSectorMode(bool enabled)
+{
+	if (m_makeSectorMode == enabled) {
+		return;
+	}
+	cancelInteraction();
+	m_makeSectorMode = enabled;
+	if (enabled) {
+		setCursor(Qt::PointingHandCursor);
+	} else {
+		unsetCursor();
+	}
+	Q_EMIT makeSectorModeChanged(enabled);
+}
+
+bool MapViewport::makeSectorMode() const
+{
+	return m_makeSectorMode;
+}
+
+void MapViewport::setShearMode(bool enabled)
+{
+	if (m_shearMode == enabled) {
+		return;
+	}
+	cancelInteraction();
+	m_shearMode = enabled;
+	m_shearing = false;
+	update();
+	Q_EMIT hoverChanged(hoverSummary());
+	Q_EMIT shearModeChanged(enabled);
+}
+
+bool MapViewport::shearMode() const
+{
+	return m_shearMode;
+}
+
+bool MapViewport::isShearing() const
+{
+	return m_shearing;
+}
+
+double MapViewport::shearTravel() const
+{
+	// Top and bottom sides slide across, left and right ones up and down.
+	const bool across = (m_shearEdge & (ResizeMinVertical | ResizeMaxVertical)) != 0;
+	const double travel = across ? m_shearCurrentPlane.x() - m_shearPressPlane.x() : m_shearCurrentPlane.y() - m_shearPressPlane.y();
+	const double grid = m_gridSize > 0 ? static_cast<double>(m_gridSize) : 1.0;
+	return m_snapToGrid ? snapLevelMapCoordinate(travel, grid) : travel;
+}
+
+QString MapViewport::shearSummary() const
+{
+	const bool across = (m_shearEdge & (ResizeMinVertical | ResizeMaxVertical)) != 0;
+	return tr("Shearing %n object(s): the side slides %1 along %2", nullptr, static_cast<int>(m_selection.size()))
+		.arg(shearTravel(), 0, 'g', 8)
+		.arg(planeAxisLetters(m_projection, !across));
+}
+
+void MapViewport::commitShear()
+{
+	m_shearing = false;
+	const double travel = shearTravel();
+	const QRectF box = m_shearFromPlane;
+	const int edge = m_shearEdge;
+	m_shearEdge = 0;
+	update();
+	Q_EMIT hoverChanged(hoverSummary());
+	if (std::abs(travel) < 1e-9 || box.width() <= 0.0 || box.height() <= 0.0) {
+		return;
+	}
+	// The view's across and up axes, as world axes.
+	int planeX = 0;
+	int planeY = 1;
+	if (m_projection == MapViewportProjection::FrontXZ) {
+		planeY = 2;
+	} else if (m_projection == MapViewportProjection::SideZY) {
+		planeX = 1;
+		planeY = 2;
+	}
+	// The side opposite the dragged one stays where it is.
+	if ((edge & (ResizeMinVertical | ResizeMaxVertical)) != 0) {
+		const bool high = (edge & ResizeMaxVertical) != 0;
+		Q_EMIT shearRequested(planeX, planeY, (high ? travel : -travel) / box.height(), high ? box.top() : box.bottom());
+	} else {
+		const bool high = (edge & ResizeMaxHorizontal) != 0;
+		Q_EMIT shearRequested(planeY, planeX, (high ? travel : -travel) / box.width(), high ? box.left() : box.right());
+	}
+}
+
+void MapViewport::paintShearPreview(QPainter& painter, const Palette& palette) const
+{
+	if (!m_shearing) {
+		return;
+	}
+	const QRectF& box = m_shearFromPlane;
+	const double travel = shearTravel();
+	const bool across = (m_shearEdge & (ResizeMinVertical | ResizeMaxVertical)) != 0;
+	const bool high = (m_shearEdge & (ResizeMaxVertical | ResizeMaxHorizontal)) != 0;
+	// The box's corners, the dragged side's slid along it.
+	QPointF corners[4] = {box.topLeft(), box.topRight(), box.bottomRight(), box.bottomLeft()};
+	for (QPointF& corner : corners) {
+		if (across && (high ? corner.y() == box.bottom() : corner.y() == box.top())) {
+			corner.rx() += travel;
+		} else if (!across && (high ? corner.x() == box.right() : corner.x() == box.left())) {
+			corner.ry() += travel;
+		}
+	}
+	QPen ghostPen(palette.hover, m_highContrast ? 2.0 : 1.4, Qt::DashLine, Qt::RoundCap, Qt::RoundJoin);
+	ghostPen.setDashPattern({4.0, 3.0});
+	painter.setPen(ghostPen);
+	painter.setBrush(Qt::NoBrush);
+	QPolygonF outline;
+	for (const QPointF& corner : corners) {
+		outline << worldToView(corner.x(), corner.y());
+	}
+	painter.drawPolygon(outline);
+}
+
+void MapViewport::setShapeDrawMode(bool enabled)
+{
+	if (m_shapeDrawMode == enabled) {
+		return;
+	}
+	cancelInteraction();
+	m_shapeDrawMode = enabled;
+	if (enabled) {
+		setCursor(Qt::CrossCursor);
+	} else {
+		unsetCursor();
+	}
+	Q_EMIT shapeDrawModeChanged(enabled);
+}
+
+bool MapViewport::shapeDrawMode() const
+{
+	return m_shapeDrawMode;
+}
+
 void MapViewport::setDrawMode(bool enabled)
 {
 	if (m_drawMode == enabled) {
@@ -2709,9 +2912,10 @@ bool MapViewport::resizeBox(QRectF* plane, LevelMapVec3* mins, LevelMapVec3* max
 	if (!m_hasDocument || m_selection.isEmpty()) {
 		return false;
 	}
-	if (documentIsDoom(m_document) && !m_document.doomUdmf) {
+	if (documentIsDoom(m_document) && !m_document.doomUdmf && !m_shearMode) {
 		// Only things take part in a binary Doom resize, so a box drawn around
-		// linedefs or sectors would promise what the edit cannot do.
+		// linedefs or sectors would promise what the edit cannot do. A shear
+		// moves vertices too.
 		for (const LevelMapSelectionRef& ref : m_selection) {
 			if (ref.kind != LevelMapSelectionKind::DoomThing) {
 				return false;
@@ -2747,7 +2951,7 @@ bool MapViewport::handlesBox(QRectF* box) const
 		*box = resizedPlaneBox();
 		return true;
 	}
-	if (m_clipMode || m_dragging || m_banding || !resizeBox(box)) {
+	if (m_shearing || m_clipMode || m_dragging || m_banding || !resizeBox(box)) {
 		return false;
 	}
 	const QRectF view = QRectF(worldToView(box->left(), box->bottom()), worldToView(box->right(), box->top())).normalized();
@@ -2796,6 +3000,10 @@ int MapViewport::resizeHandleAt(const QPointF& viewPoint) const
 		ResizeMaxVertical,
 	};
 	for (const int edges : kHandles) {
+		const bool corner = (edges & (ResizeMinHorizontal | ResizeMaxHorizontal)) != 0 && (edges & (ResizeMinVertical | ResizeMaxVertical)) != 0;
+		if (m_shearMode && corner) {
+			continue;
+		}
 		const QPointF handle = handleViewPosition(box, edges);
 		if (std::abs(handle.x() - viewPoint.x()) <= kResizeHandleGrab && std::abs(handle.y() - viewPoint.y()) <= kResizeHandleGrab) {
 			return edges;
@@ -2918,6 +3126,9 @@ QString MapViewport::resizeHandleSummary(int edges) const
 {
 	const bool horizontal = (edges & (ResizeMinHorizontal | ResizeMaxHorizontal)) != 0;
 	const bool vertical = (edges & (ResizeMinVertical | ResizeMaxVertical)) != 0;
+	if (m_shearMode) {
+		return tr("Shear handle: drag to slant the selection, sliding this side along %1").arg(planeAxisLetters(m_projection, horizontal));
+	}
 	if (horizontal && vertical) {
 		return tr("Resize handle: drag to resize the selection along %1 and %2")
 			.arg(planeAxisLetters(m_projection, false), planeAxisLetters(m_projection, true));
@@ -2948,7 +3159,8 @@ void MapViewport::updateResizeCursor(int edges)
 		setCursor(falling ? Qt::SizeFDiagCursor : Qt::SizeBDiagCursor);
 		return;
 	}
-	setCursor(horizontal ? Qt::SizeHorCursor : Qt::SizeVerCursor);
+	// A shear handle slides along its side, across the way a resize goes.
+	setCursor(horizontal != m_shearMode ? Qt::SizeHorCursor : Qt::SizeVerCursor);
 }
 
 void MapViewport::paintResizeHandles(QPainter& painter, const Palette& palette) const
@@ -2974,6 +3186,10 @@ void MapViewport::paintResizeHandles(QPainter& painter, const Palette& palette) 
 	painter.setPen(QPen(palette.background, 1.2));
 	painter.setBrush(QBrush(palette.selection));
 	for (const int edges : kHandles) {
+		const bool corner = (edges & (ResizeMinHorizontal | ResizeMaxHorizontal)) != 0 && (edges & (ResizeMinVertical | ResizeMaxVertical)) != 0;
+		if (m_shearMode && corner) {
+			continue;
+		}
 		const QPointF handle = handleViewPosition(box, edges);
 		const bool active = m_resizing ? (edges == m_resizeEdges) : (edges == m_hoverHandle);
 		const double side = active ? size + 3.0 : size;
@@ -3450,10 +3666,12 @@ void MapViewport::paintOverlay(QPainter& painter, const Palette& palette) const
 		if (m_resizing) {
 			paintResizePreview(painter, palette);
 		}
+		paintShearPreview(painter, palette);
 		paintResizeHandles(painter, palette);
 		paintClip(painter, palette);
 		paintDraw(painter, palette);
 		paintBrushDraw(painter, palette);
+		paintRegion(painter, palette);
 		paintCameraMarker(painter, palette);
 	}
 	if (m_banding) {
@@ -3648,6 +3866,7 @@ void MapViewport::paintEvent(QPaintEvent*)
 			paintQuake(painter, palette);
 		}
 	}
+	paintPortals(painter, palette);
 	paintLeakTrail(painter, palette);
 	paintOverlay(painter, palette);
 }
@@ -3939,9 +4158,24 @@ void MapViewport::mousePressEvent(QMouseEvent* event)
 	}
 
 	// A handle outranks whatever lies under it; with Shift or Ctrl held the
-	// press edits the selection instead.
+	// press edits the selection instead. In shear mode the side handles
+	// shear, and the corners do nothing.
 	if (keys == Qt::NoModifier) {
 		if (const int edges = resizeHandleAt(event->position()); edges != 0) {
+			if (m_shearMode) {
+				const bool side = (edges & (ResizeMinHorizontal | ResizeMaxHorizontal)) == 0
+					|| (edges & (ResizeMinVertical | ResizeMaxVertical)) == 0;
+				if (side && resizeBox(&m_shearFromPlane)) {
+					m_shearing = true;
+					m_shearEdge = edges;
+					m_shearPressPlane = viewToWorld(event->position());
+					m_shearCurrentPlane = m_shearPressPlane;
+					Q_EMIT hoverChanged(shearSummary());
+					update();
+				}
+				event->accept();
+				return;
+			}
 			beginResize(edges, event->position());
 			event->accept();
 			return;
@@ -3952,6 +4186,25 @@ void MapViewport::mousePressEvent(QMouseEvent* event)
 	m_pressViewPoint = event->position();
 	const bool onSelection = hit.kind != LevelMapSelectionKind::None && selectionContains(hit.kind, hit.objectId);
 	const PlanEmptyDrag emptyDrag = m_selection.isEmpty() ? m_controls.emptyDrag : m_controls.emptyDragWithSelection;
+	// Make Sector mode: a click makes a sector of the lines around it.
+	if (m_makeSectorMode && keys == Qt::NoModifier && m_projection == MapViewportProjection::TopXY) {
+		Q_EMIT sectorMakeRequested(viewToWorld(event->position()));
+		event->accept();
+		return;
+	}
+	// Shape drawing: a drag from anywhere draws the box, as Doom Builder's
+	// rectangle and ellipse modes do; a click alone does nothing.
+	if (m_shapeDrawMode && keys == Qt::NoModifier && m_projection == MapViewportProjection::TopXY) {
+		m_clickArmed = true;
+		m_clickBands = false;
+		m_clickSelects = false;
+		m_clickModifiers = event->modifiers();
+		m_brushArmed = true;
+		m_brushFromPlane = snappedPlanePoint(event->position());
+		m_brushToPlane = m_brushFromPlane;
+		event->accept();
+		return;
+	}
 
 	// Radiant's area selection: with the band keys held, a drag draws a
 	// rubber band wherever it starts, and a click toggles the object under
@@ -4157,6 +4410,14 @@ void MapViewport::mouseMoveEvent(QMouseEvent* event)
 		return;
 	}
 
+	if (m_shearing) {
+		m_shearCurrentPlane = viewToWorld(position);
+		Q_EMIT hoverChanged(shearSummary());
+		update();
+		event->accept();
+		return;
+	}
+
 	if (m_clipDrawing) {
 		const QPointF to = snappedPlanePoint(position);
 		if (to != m_clipTo) {
@@ -4272,6 +4533,11 @@ void MapViewport::mouseReleaseEvent(QMouseEvent* event)
 	}
 	if (m_resizing) {
 		commitResize();
+		event->accept();
+		return;
+	}
+	if (m_shearing) {
+		commitShear();
 		event->accept();
 		return;
 	}
@@ -4475,6 +4741,34 @@ void MapViewport::keyPressEvent(QKeyEvent* event)
 				cancelInteraction();
 			} else {
 				setClipMode(false);
+			}
+			event->accept();
+			return;
+		}
+		if (m_makeSectorMode) {
+			setMakeSectorMode(false);
+			event->accept();
+			return;
+		}
+		if (m_shearMode) {
+			// Escape drops a shear being dragged, then leaves the mode.
+			if (m_shearing) {
+				m_shearing = false;
+				m_shearEdge = 0;
+				update();
+				Q_EMIT hoverChanged(hoverSummary());
+			} else {
+				setShearMode(false);
+			}
+			event->accept();
+			return;
+		}
+		if (m_shapeDrawMode) {
+			// Escape drops a box being drawn, then leaves the mode.
+			if (m_brushDrawing || m_clickArmed) {
+				cancelInteraction();
+			} else {
+				setShapeDrawMode(false);
 			}
 			event->accept();
 			return;
@@ -5105,6 +5399,41 @@ void MapViewport::setCameraBrushDraft(const LevelMapVec3& mins, const LevelMapVe
 	if (valid == m_hasCameraBrushDraft && (!valid || box == m_cameraBrushDraft)) { return; }
 	m_hasCameraBrushDraft = valid; m_cameraBrushDraft = box;
 	setAccessibleDescription(accessibleSummary()); update();
+}
+
+void MapViewport::setRegionBox(const LevelMapVec3& mins, const LevelMapVec3& maxs)
+{
+	const std::array<double, 6> box {mins.x, mins.y, mins.z, maxs.x, maxs.y, maxs.z};
+	const bool valid = mins.valid && maxs.valid && std::all_of(box.begin(), box.end(), [](double value) { return std::isfinite(value); })
+		&& maxs.x > mins.x && maxs.y > mins.y && maxs.z > mins.z;
+	if (valid == m_hasRegion && (!valid || box == m_regionBox)) {
+		return;
+	}
+	m_hasRegion = valid;
+	m_regionBox = box;
+	update();
+}
+
+void MapViewport::paintRegion(QPainter& painter, const Palette& palette) const
+{
+	if (!m_hasRegion) {
+		return;
+	}
+	const QRectF box = QRectF(projectPoint({m_regionBox[0], m_regionBox[1], m_regionBox[2], true}),
+		projectPoint({m_regionBox[3], m_regionBox[4], m_regionBox[5], true})).normalized();
+	const QRectF view = QRectF(worldToView(box.left(), box.bottom()), worldToView(box.right(), box.top())).normalized();
+	// Shade everything outside the region, then outline it.
+	QPainterPath outside;
+	outside.setFillRule(Qt::OddEvenFill);
+	outside.addRect(QRectF(rect()));
+	outside.addRect(view);
+	QColor shade = palette.background;
+	shade.setAlpha(m_highContrast ? 170 : 120);
+	painter.fillPath(outside, shade);
+	const QColor edge = m_highContrast ? palette.text : palette.selection;
+	painter.setBrush(Qt::NoBrush);
+	painter.setPen(QPen(edge, m_highContrast ? 2.5 : 1.5, Qt::DashDotLine));
+	painter.drawRect(view);
 }
 
 void MapViewport::paintBrushDraw(QPainter& painter, const Palette& palette) const

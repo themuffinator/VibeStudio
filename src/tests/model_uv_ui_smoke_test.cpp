@@ -299,7 +299,7 @@ int main(int argc, char **argv)
 			}
 		}
 	}
-	inspector->setCurrentIndex(1);
+	editor.showSidebarPage(QStringLiteral("surface"));
 	app.processEvents();
 	ok &= tests::settleModelUv(*view);
 	view->componentPicked(0, 0, -1, false);
@@ -379,7 +379,7 @@ int main(int argc, char **argv)
 				}
 			}
 		}
-		expanded.findChild<QTabWidget *>("meshInspector")->setCurrentIndex(1);
+		expanded.showSidebarPage(QStringLiteral("surface"));
 		app.processEvents();
 		ok &= expect(tests::settleModelUv(*uv) && uv->width() >= 200 && uv->height() >= 180,
 					 "expanded RTL high-contrast UV view remains usable");

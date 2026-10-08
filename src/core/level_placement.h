@@ -5,8 +5,8 @@
 #include <functional>
 
 namespace vibestudio {
-enum class LevelPlacementOperation { Snap, Duplicate, Paste, Mirror, SelectConnectedDoom, Move, Rotate, Resize, AddBrush };
-enum class LevelPlacementPhase { Preparing, Parsing, Transforming, Inserting, Finalizing, Complete, Building };
+enum class LevelPlacementOperation { Snap, Duplicate, Paste, Mirror, SelectConnectedDoom, Move, Rotate, Resize, AddBrush, AddEntity, AddThing };
+enum class LevelPlacementPhase { Preparing, Parsing, Transforming, Inserting, Finalizing, Complete, Building, Arraying };
 
 struct LevelPlacementRequest {
 	LevelPlacementOperation operation = LevelPlacementOperation::Duplicate;
@@ -14,12 +14,17 @@ struct LevelPlacementRequest {
 	double grid = 16;
 	QString text;
 	LevelMapTextureLockOptions textures;
+	// Additional copies, with cumulative offsets from the original selection.
+	int copies = 1;
 	int axis = 0;
 	bool connectedGeometry = false;
 	LevelMapRotationRequest rotation;
 	LevelMapVec3 mins, maxs;
 	bool snapMoveDelta = false;
 	LevelBrushPrimitiveRequest primitive;
+	QString className;
+	QVector<LevelMapProperty> properties;
+	int thingType = 0, thingAngle = 0;
 };
 struct LevelPlacementProgress {
 	LevelPlacementPhase phase = LevelPlacementPhase::Preparing;

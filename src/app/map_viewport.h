@@ -143,6 +143,10 @@ public:
 	// the map in every projection until cleared or another map is loaded.
 	// World coordinates, in the order the file lists them.
 	void setLeakTrail(const QVector<LevelMapVec3>& points);
+	// A compiler's vis portals, outlined over the map as TrenchBroom's
+	// and Radiant's portal viewers draw them. Empty clears them.
+	void setPortals(const QVector<QVector<LevelMapVec3>>& portals);
+	[[nodiscard]] int portalCount() const { return static_cast<int>(m_portals.size()); }
 	void clearLeakTrail();
 	[[nodiscard]] bool hasLeakTrail() const;
 	// Frames the whole trail, like zoomToSelection() does for objects.
@@ -176,6 +180,10 @@ public:
 	// Transient camera construction overlay; it never enters the document,
 	// selection, spatial index, undo history or geometry workers.
 	void setCameraBrushDraft(const LevelMapVec3& mins = {}, const LevelMapVec3& maxs = {});
+	// The region box, outlined with everything outside it shaded, as
+	// Radiant greys out what lies outside its region. Invalid clears it.
+	void setRegionBox(const LevelMapVec3& mins = {}, const LevelMapVec3& maxs = {});
+	[[nodiscard]] bool hasRegionBox() const { return m_hasRegion; }
 	[[nodiscard]] bool hasCameraBrushDraft() const { return m_hasCameraBrushDraft; }
 	// Everything under a point of the view, the nearest the viewer first:
 	// the stack a Radiant-style click steps down.
@@ -233,6 +241,23 @@ public:
 	// mode. Clicks draw rather than select until then.
 	void setDrawMode(bool enabled);
 	[[nodiscard]] bool drawMode() const;
+	// Shape drawing, for the Shapes tab's sector shapes on Doom maps: in the
+	// Top view a drag anywhere, over sectors too, draws the box the shape fills
+	// and asks for it through brushDrawRequested(). Escape leaves the mode.
+	void setShapeDrawMode(bool enabled);
+	[[nodiscard]] bool shapeDrawMode() const;
+	// Shear mode, after TrenchBroom's shear tool: the handles in the middle of
+	// the selection box's sides slide those sides along themselves, slanting
+	// the selection about the opposite side, asked for through
+	// shearRequested(). Corner handles do nothing. Escape leaves the mode.
+	void setShearMode(bool enabled);
+	[[nodiscard]] bool shearMode() const;
+	// Make Sector mode, after Doom Builder's Make Sectors mode: in the Top view
+	// a click asks for a sector made of the lines around the point, through
+	// sectorMakeRequested(). Escape leaves the mode.
+	void setMakeSectorMode(bool enabled);
+	[[nodiscard]] bool makeSectorMode() const;
+	[[nodiscard]] bool isShearing() const;
 	// The corners put down so far, in map units.
 	[[nodiscard]] QVector<QPointF> drawCorners() const;
 	void clearDrawCorners();
@@ -245,6 +270,11 @@ public:
 	int hideSelection();
 	void showAllHidden();
 	[[nodiscard]] int hiddenCount() const;
+	// Objects the display filters hide (core/level_view_filters.h), on top of
+	// the ones hidden by hand; Show All leaves them hidden. An entity takes its
+	// brushes and patches with it, as when it is hidden by hand.
+	void setFilteredObjects(const QVector<LevelMapSelectionRef>& objects);
+	[[nodiscard]] int filteredCount() const;
 	// The map as this view draws it: the document without the hidden objects,
 	// ids unchanged. The 3D view is built from it, so hiding hides there too.
 	[[nodiscard]] const LevelMapDocument& displayDocument() const;
@@ -287,6 +317,15 @@ Q_SIGNALS:
 	void resizeRequested(const vibestudio::LevelMapVec3& mins, const vibestudio::LevelMapVec3& maxs);
 	void clipModeChanged(bool enabled);
 	void drawModeChanged(bool enabled);
+	void shapeDrawModeChanged(bool enabled);
+	void shearModeChanged(bool enabled);
+	void makeSectorModeChanged(bool enabled);
+	// A point in map units, to make a sector of the lines around.
+	void sectorMakeRequested(const QPointF& point);
+	// Slide every point along world axis `axis` (0 x, 1 y, 2 z) by `factor`
+	// times its distance along world axis `along` from `anchor`; expected to
+	// be one undo command, for example with shearLevelMapSelectionAbout().
+	void shearRequested(int axis, int along, double factor, double anchor);
 	// A class or thing type from the palette dropped on the view, and where.
 	void paletteDropped(const QString& payload, const QPointF& viewPoint);
 	// A shape closed in Draw Sector mode: its corners, in order, in map units.
@@ -397,6 +436,8 @@ private:
 	void updateWorkZone();
 	void cycleSelectionAt(const QPointF& viewPoint);
 	void paintBrushDraw(QPainter& painter, const Palette& palette) const;
+	void paintRegion(QPainter& painter, const Palette& palette) const;
+	void paintPortals(QPainter& painter, const Palette& palette) const;
 	void paintCameraMarker(QPainter& painter, const Palette& palette) const;
 	void adoptDocumentSelection();
 	void syncPrimaryFromSelection();
@@ -536,6 +577,8 @@ private:
 	bool m_hasWorkZone = false;
 	bool m_hasCameraBrushDraft = false;
 	std::array<double,6> m_cameraBrushDraft{};
+	bool m_hasRegion = false;
+	std::array<double, 6> m_regionBox {};
 	LevelMapVec3 m_workMins;
 	LevelMapVec3 m_workMaxs;
 	bool m_cameraMarkerVisible = false;
@@ -555,12 +598,14 @@ private:
 	bool m_showVertices = false;
 	bool m_showLabels = false;
 	QVector<LevelMapVec3> m_leakTrail;
+	QVector<QVector<LevelMapVec3>> m_portals;
 	QVector<LevelMapTargetLink> m_targetLinks;
 	QVector<LevelMapTagLink> m_tagLinks;
 	LevelMapDocument m_sourceDocument;
 	// (kind, id) of each hidden object.
 	QSet<QPair<int, int>> m_hidden;
 	QSet<QString> m_sceneHidden;
+	QSet<QPair<int, int>> m_filtered;
 	bool m_showTargetLinks = true;
 	bool m_highContrast = false;
 	bool m_reducedMotion = false;
@@ -599,6 +644,19 @@ private:
 	bool m_dropActive = false;
 	QPointF m_dropPoint;
 	bool m_drawMode = false;
+	bool m_shapeDrawMode = false;
+	bool m_shearMode = false;
+	bool m_makeSectorMode = false;
+	bool m_shearing = false;
+	int m_shearEdge = 0;
+	QRectF m_shearFromPlane;
+	QPointF m_shearPressPlane;
+	QPointF m_shearCurrentPlane;
+	// How far the dragged side has slid, snapped while snapping is on.
+	[[nodiscard]] double shearTravel() const;
+	void commitShear();
+	void paintShearPreview(QPainter& painter, const Palette& palette) const;
+	[[nodiscard]] QString shearSummary() const;
 	QVector<QPointF> m_drawCorners;
 	// Where the next corner would go, under the pointer.
 	QPointF m_drawHover;

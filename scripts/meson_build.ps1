@@ -81,7 +81,16 @@ function BuildDirUsesCompiler {
     if (!$compilerExe) {
       return $false
     }
-    return [System.IO.Path]::GetFileNameWithoutExtension($compilerExe) -eq $CompilerName
+    if ([System.IO.Path]::GetFileNameWithoutExtension($compilerExe) -ne $CompilerName) {
+      return $false
+    }
+    # external/audio adds C; a build dir configured from a Developer Prompt
+    # caches MSVC cl for it, which a plain shell cannot reconfigure.
+    $cCompilerExe = $compilerInfo.host.c.exelist | Select-Object -First 1
+    if ($cCompilerExe -and [System.IO.Path]::GetFileNameWithoutExtension($cCompilerExe) -ne $CompilerName) {
+      return $false
+    }
+    return $true
   } catch {
     return $false
   }

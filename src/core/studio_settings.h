@@ -3,6 +3,7 @@
 #include "core/ai_connectors.h"
 #include "core/compiler_registry.h"
 #include "core/game_installation.h"
+#include "core/model_editor_controls.h"
 #include "core/operation_state.h"
 
 #include <QByteArray>
@@ -48,13 +49,61 @@ enum class SetupStep {
 	ReviewFinish,
 };
 
+// Which colour differences state colours can rely on. Every state also has a
+// glyph, hatch, or word, so colour is never the only cue in any of these.
+enum class ColorVision {
+	Typical,
+	RedGreen,    // protanopia and deuteranopia: no red against green
+	BlueYellow,  // tritanopia: no blue against green or yellow
+	Monochrome,  // achromatopsia: lightness only
+};
+
+// How long a timed status bar message stays.
+enum class MessageDuration {
+	Standard,
+	Longer,         // three times as long
+	UntilReplaced,  // until the next message
+};
+
 struct AccessibilityPreferences {
-	QString localeName = QStringLiteral("en");
+	// A target id from core/localization, or "system" to follow the
+	// operating system's language (the default).
+	QString localeName = QStringLiteral("system");
+	// How numbers, dates, and sizes are written: "system" (the operating
+	// system's regional settings, the default), "language" (the interface
+	// language's conventions), or a BCP 47 locale such as "en-GB".
+	QString formatLocaleName = QStringLiteral("system");
 	int textScalePercent = 100;
 	StudioTheme theme = StudioTheme::Dark;
 	UiDensity density = UiDensity::Standard;
 	bool reducedMotion = false;
+	// Vision.
+	ColorVision colorVision = ColorVision::Typical;
+	bool reducedSaturation = false;
+	bool thickFocusIndicator = false;
+	bool thickTextCursor = false;
+	bool steadyTextCursor = false;
+	// The interface typeface; empty keeps the system's.
+	QString uiFontFamily;
+	bool wideTextSpacing = false;
+	// Timing and alerts.
+	MessageDuration messageDuration = MessageDuration::Standard;
+	bool visualAlerts = true;
+	// Short tones for task results: rising when one finishes, level for a
+	// warning or a cancellation, falling for a failure.
+	bool soundCues = false;
+	int soundCueVolume = 60;  // 0 to 100
+	// Screen readers and speech.
+	bool screenReaderAnnouncements = true;
 	bool textToSpeechEnabled = false;
+	// Which events are read aloud: "task-results", "task-problems",
+	// "status-messages".
+	QStringList speechEvents = {QStringLiteral("task-results"), QStringLiteral("task-problems")};
+	// A voice id from the speech engine; empty is its default voice.
+	QString speechVoice;
+	int speechRate = 0;    // -10 to 10
+	int speechPitch = 0;   // -10 to 10
+	int speechVolume = 100;  // 0 to 100
 };
 
 struct SetupProgress {
@@ -232,6 +281,16 @@ public:
 	QJsonObject editorGestureOverrides(const QString& profile, QString* error = nullptr) const;
 	LevelEditorControls effectiveLevelEditorControls(const QString& profile, QString* error = nullptr) const;
 	bool setEditorGestureOverrides(const QString& profile, const QJsonObject& overrides, QString* error = nullptr);
+	// Modeller: the controls profile, its overrides and the sidebar state per
+	// profile family (studio_settings_modeller.cpp). An unset profile follows
+	// the level editor's: Blender Style there starts the modeller as Blender.
+	QString modelEditorProfileId() const;
+	void setModelEditorProfileId(const QString& id);
+	QJsonObject modelEditorControlOverrides(const QString& profile) const;
+	bool setModelEditorControlOverrides(const QString& profile, const QJsonObject& overrides, QString* error = nullptr);
+	ModelEditorControls effectiveModelEditorControls(const QString& profile, QStringList* warnings = nullptr) const;
+	QJsonObject modelSidebarState(const QString& family) const;
+	void setModelSidebarState(const QString& family, const QJsonObject& state);
 	QVector<CompilerToolPathOverride> compilerToolPathOverrides() const;
 	void upsertCompilerToolPathOverride(const CompilerToolPathOverride& override);
 	void removeCompilerToolPathOverride(const QString& toolId);
@@ -384,6 +443,18 @@ QString densityId(UiDensity density);
 QString densityDisplayName(UiDensity density);
 UiDensity densityFromId(const QString& id);
 QStringList densityIds();
+QString colorVisionId(ColorVision vision);
+ColorVision colorVisionFromId(const QString& id);
+QStringList colorVisionIds();
+QString messageDurationId(MessageDuration duration);
+MessageDuration messageDurationFromId(const QString& id);
+QStringList messageDurationIds();
+// The events speech can follow, in the order Settings lists them.
+QStringList speechEventIds();
+// Known event ids only, each once, in speechEventIds() order.
+QStringList normalizedSpeechEvents(const QStringList& events);
+// The preference's value, or "system", spelled the way it is stored.
+QString normalizedFormatLocaleName(const QString& formatLocaleName);
 int normalizedTextScalePercent(int textScalePercent);
 QString setupStepId(SetupStep step);
 QString setupStepDisplayName(SetupStep step);

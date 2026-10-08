@@ -643,6 +643,82 @@ QByteArray prepareLevelUdmfTransform(const LevelUdmfDocument& source, const Leve
 		return {};
 	}
 }
+QByteArray prepareLevelUdmfThingCopies(const LevelUdmfDocument& source, const QVector<LevelMapDoomThing>& copies,
+	QString* error, const std::function<bool()>& cancel) {
+	if (error) { error->clear(); }
+	try {
+		if (source.blocks.size() + copies.size() > maximumBlocks) {
+			throw Problem{text(QT_TRANSLATE_NOOP("LevelUdmf", "TEXTMAP exceeds 250,000 blocks."))};
+		}
+		QHash<int, const LevelUdmfBlock*> things;
+		qsizetype properties = source.globals.size();
+		for (const auto& block : source.blocks) {
+			checkpoint(cancel);
+			properties += block.properties.size();
+			if (block.type == "thing") { things.insert(block.index, &block); }
+		}
+		QByteArray result = source.source;
+		const QByteArray newline = source.source.contains("\r\n") ? "\r\n" : "\n";
+		for (const auto& copy : copies) {
+			checkpoint(cancel);
+			const auto* original = things.value(copy.id);
+			if (!original) {
+				throw Problem{text(QT_TRANSLATE_NOOP("LevelUdmf", "UDMF object '%1' was not found.")).arg(QStringLiteral("thing:%1").arg(copy.id))};
+			}
+			if (original->begin < 0 || original->end < original->begin || original->end > source.source.size()) {
+				throw Problem{text(QT_TRANSLATE_NOOP("LevelUdmf", "UDMF source spans overlap."))};
+			}
+			if (result.size() + original->end - original->begin + 2 * newline.size() > maximumTextBytes) {
+				throw Problem{text(QT_TRANSLATE_NOOP("LevelUdmf", "TEXTMAP exceeds the 64 MiB editor limit."))};
+			}
+			LevelUdmfDocument fragment;
+			fragment.source = source.source.mid(original->begin, original->end - original->begin);
+			auto block = *original;
+			block.begin = 0;
+			block.close -= original->begin;
+			block.end -= original->begin;
+			for (auto& property : block.properties) {
+				checkpoint(cancel);
+				property.begin -= original->begin;
+				property.valueBegin -= original->begin;
+				property.valueEnd -= original->begin;
+				property.end -= original->begin;
+			}
+			fragment.blocks << block;
+			const auto originalFields = fields(block.properties);
+			QVector<LevelUdmfPropertyEdit> edits;
+			const auto coordinate = [&](const QString& key, double value, bool required) {
+				if (!std::isfinite(value) || value < -1e7 || value > 1e7) {
+					throw Problem{text(QT_TRANSLATE_NOOP("LevelUdmf", "Thing %1 would leave the finite UDMF editor coordinate range.")).arg(copy.id)};
+				}
+				if (numeric(originalFields, key, 0, required) != value) {
+					edits << LevelUdmfPropertyEdit{block.selector(), key, QString::number(value, 'g', 17)};
+					if (!originalFields.contains(key)) { ++properties; }
+				}
+			};
+			coordinate("x", copy.x, true);
+			coordinate("y", copy.y, true);
+			coordinate("height", copy.z, false);
+			properties += block.properties.size();
+			if (properties > maximumProperties) {
+				throw Problem{text(QT_TRANSLATE_NOOP("LevelUdmf", "TEXTMAP exceeds one million properties."))};
+			}
+			QString problem;
+			const auto bytes = prepareUdmfEdits(fragment, edits, &problem, cancel, 3);
+			if (!problem.isEmpty()) { throw Problem{problem}; }
+			if (result.size() + bytes.size() + 2 * newline.size() > maximumTextBytes) {
+				throw Problem{text(QT_TRANSLATE_NOOP("LevelUdmf", "TEXTMAP exceeds the 64 MiB editor limit."))};
+			}
+			// A leading newline closes any trailing line comment in the source.
+			result += newline + bytes + newline;
+		}
+		checkpoint(cancel);
+		return result;
+	} catch (const Problem& problem) {
+		if (error) { *error = problem.message; }
+		return {};
+	}
+}
 QJsonObject levelUdmfDocumentJson(const LevelUdmfDocument& document) {
 	const auto props = [](const auto& properties) {
 		QJsonArray result;

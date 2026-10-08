@@ -317,6 +317,15 @@ dependency was added. Native macOS/Linux execution remains a release gate.
     reviewed 2026-10-06 under the same GPL-3.0/LGPL-3.0 alternatives. Public palette
     roles preserve contrasting text on the filled and empty regions. The token
     adjustment and pixel regression are original; no Qt implementation was copied.
+  - Right-to-left panel placement reads the window state layout that Qt 6.10.1's
+    [QMainWindow::saveState()](https://github.com/qt/qtbase/blob/v6.10.1/src/widgets/widgets/qmainwindow.cpp),
+    [QMainWindowLayoutState::saveState()](https://github.com/qt/qtbase/blob/v6.10.1/src/widgets/widgets/qmainwindowlayout.cpp),
+    and [QDockAreaLayout/QDockAreaLayoutInfo::saveState()](https://github.com/qt/qtbase/blob/v6.10.1/src/widgets/widgets/qdockarealayout.cpp)
+    write, with the section markers from their private headers, reviewed
+    2026-10-07 under the same GPL-3.0/LGPL-3.0 alternatives. Only the byte layout
+    is used: `src/app/studio_docks.cpp` is an original reader and writer that
+    swaps the left and right dock areas, and its tests are original. No Qt code
+    or documentation prose was copied.
   - The public [QRegularExpression non-path glob contract](https://doc.qt.io/qt-6/qregularexpression.html#WildcardConversionOption-enum)
     informs the original Qt 6.0–6.5 compatibility adapter in
     `core/project_text_search.cpp`. Reviewed 2026-10-04 against Qt 6.4.2 and
@@ -415,6 +424,66 @@ identifies the OS prerequisite. Qt's
 (BSD-3-Clause) was inspected to classify the Windows compiler link probe;
 no CMake source was copied. See [packaging](PACKAGING.md#windows-qt-and-audio-runtime).
 
+## Branding, Documentation And Release Tooling (2026-10-07)
+
+**Typeface.** The wordmark, banners, social preview and installer captions use
+[Manrope](https://github.com/sharanda/manrope) 4.504 by Mikhail Sharanda,
+copyright The Manrope Project Authors, under the
+[SIL Open Font License 1.1](../assets/branding/fonts/OFL.txt). The ExtraBold and
+SemiBold files are vendored unchanged in `assets/branding/fonts/` (SHA-256
+`effbf6efd56d3bc969fcfa43097932e1a858b6cd0ff6564425e0cc48554ad463` and
+`9cb6bdf00c2c6b64d4bc77087aadf88207a577f32dae410745e4d55582355d3c`) with the
+licence beside them. `scripts/generate_branding.py` converts their outlines to
+SVG paths for the artwork and subsets them to Latin WOFF2 files for the HTML
+documentation; both are documents or derivatives the OFL permits, and the
+licence travels with the fonts. Reviewed 2026-10-07.
+
+**Artwork.** The VibeStudio mark, wordmark, lockups, icons at every size,
+social preview, installer art and documentation theme are original, generated
+by `scripts/generate_branding.py` from one geometry description. Vibe Orange is
+the studio's own dark-theme accent (`src/app/studio_theme.cpp`). See
+[Branding](BRANDING.md).
+
+**Release flow.** The changelog queue, curated-notes precedence, release-notes
+layout (highlights, build details, collapsed commit list) and metadata helper
+that prints GitHub outputs follow the pattern of
+[FnQL](https://github.com/themuffinator/FnQL/tree/e24b4dfd319f55e094e8e446d6e2b4e864d6f848)'s
+`scripts/changelog.py`, `scripts/manual_release.py`, `scripts/version.py` and
+`.github/workflows/release.yml` (GPL-2.0, same author, revision `e24b4df`,
+2026-09-24, reviewed 2026-10-07). Pattern only: VibeStudio's
+`scripts/release_meta.py`, `version.py`, `changelog.py` and `release.py` are
+original implementations, and no FnQL code was copied. The changelog follows
+[Keep a Changelog 1.1.0](https://keepachangelog.com/en/1.1.0/) (Olivier Lacan,
+MIT) and versions follow [Semantic Versioning 2.0.0](https://semver.org/spec/v2.0.0.html)
+(Tom Preston-Werner, CC BY 3.0), whose precedence rules
+`release_meta.Version.sort_key` implements independently. Manual callouts use
+GitHub's documented [alert syntax](https://docs.github.com/en/get-started/writing-on-github/getting-started-with-writing-and-formatting-on-github/basic-writing-and-formatting-syntax#alerts).
+
+**Build and packaging tools** (run by the release workflow; not linked into
+VibeStudio):
+
+- [Inno Setup 6](https://jrsoftware.org/isinfo.php) (Jordan Russell and Martijn
+  Laan, Inno Setup License) builds the Windows installer from
+  `packaging/windows/vibestudio.iss`; the installer carries Inno Setup's setup
+  runtime, which its licence allows redistributing.
+- [linuxdeploy](https://github.com/linuxdeploy/linuxdeploy) and
+  [linuxdeploy-plugin-qt](https://github.com/linuxdeploy/linuxdeploy-plugin-qt)
+  (MIT) assemble the AppImage, which embeds the
+  [AppImage type 2 runtime](https://github.com/AppImage/type2-runtime) (MIT).
+- [create-dmg](https://github.com/create-dmg/create-dmg) (MIT) lays out the
+  macOS disk image; Qt's `macdeployqt` and `windeployqt` copy the Qt runtime
+  (see Runtime Distribution above).
+- [Python-Markdown](https://github.com/Python-Markdown/markdown) (BSD-3-Clause)
+  and [Pygments](https://github.com/pygments/pygments) (BSD-2-Clause) render the
+  HTML documentation; Pygments' `default` and `github-dark` styles colour its
+  code blocks.
+- [fontTools](https://github.com/fonttools/fonttools) (MIT),
+  [Pillow](https://github.com/python-pillow/Pillow) (MIT-CMU),
+  [NumPy](https://github.com/numpy/numpy) (BSD-3-Clause) and
+  [Brotli](https://github.com/google/brotli) (MIT) generate the artwork, icons
+  and web fonts.
+- README badges are served by [Shields.io](https://shields.io/) (CC0-1.0).
+
 ## Audio duplex device backend
 
 The optional private device backend incorporates selected common, WASAPI,
@@ -501,6 +570,72 @@ describe the build adaptations that preserve indexed seams and chart shape,
 the independent width/height packing adaptation reviewed 2026-10-06, and the
 bounded VibeStudio worker wrapper. Original vendored source and header bytes
 remain unchanged; generated copies retain all upstream notices.
+
+## Blender-Style Mesh Editing (2026-10-07)
+
+The Mesh Editor's edit-mode workflow follows [Blender](https://www.blender.org/)
+(GPL-2.0-or-later application; manual CC-BY-SA-4.0). These behaviours were
+reviewed on 2026-10-07 in the [mesh editing manual](https://docs.blender.org/manual/en/latest/modeling/meshes/index.html)
+and the [default keymap](https://github.com/blender/blender/blob/main/scripts/presets/keyconfig/keymap_data/blender_default.py)
+(`main`):
+
+- operator names and results: inset, loop cut, merge at center/cursor/collapse,
+  dissolve, poke, beautify, make face, rotate edge, shrink/fatten, smooth,
+  bisect, symmetrize and decimate;
+- select operators: linked, more/less, loop, ring, shortest path, similar,
+  non-manifold, boundary loop, sharp, random, checker deselect and mirror;
+- the edit-mode keymap: G/R/S, E, I, Ctrl+R, select modes 1/2/3, numpad views,
+  Shift+right-click for the 3D cursor, Shift+S snap, F3 search, F9 Adjust Last
+  Operation and Shift+R repeat;
+- modal transforms: X/Y/Z constraints, a second press for local axes, Shift for
+  planes, typed values, Ctrl to snap and Shift for precision;
+- proportional editing's falloff curves (Smooth, Sphere, Root, Inverse Square,
+  Sharp, Linear, Constant);
+- the navigation gizmo;
+- Triangles to Quads pairing defaults (40 degree face and shape limits).
+
+Behaviour only; no Blender code, icons or assets are used. The implementation
+in `src/core/model_geometric_topology.*`, `src/core/model_mesh_tools*.*`,
+`src/core/model_mesh_decimate.cpp`, `src/core/model_selection_tools.*`,
+`src/cli/model_tools.*`, `src/app/model_editor_tools.*` and
+`src/app/model_editor_modal.cpp` is VibeStudio's own.
+
+Decimation implements the quadric error metric published by Michael Garland and
+Paul S. Heckbert, ["Surface Simplification Using Quadric Error Metrics"](https://doi.org/10.1145/258734.258849)
+(SIGGRAPH 1997), as half-edge collapses with quadrics summed over sampled
+animation poses. Polygon filling uses ear clipping after G. H. Meisters,
+"Polygons Have Ears" (American Mathematical Monthly 82, 1975). Both are
+published algorithms; no third-party code is used.
+
+## Materials, Shaders And Textures (2026-10-08)
+
+The materials module (`src/core/material_*`, `src/cli/materials.*`,
+`src/app/material_*`) reimplements how each engine parses, looks up, animates
+and draws surfaces. The rules were read in these GPL source releases and
+documents, at their default branches, between 2026-10-07 and 2026-10-08. No
+code, shader, texture, palette or other game data was copied; the tests build
+their own fixtures.
+
+| Upstream | Files read | What the module follows | Licence |
+| --- | --- | --- | --- |
+| [Quake III Arena](https://github.com/id-Software/Quake-III-Arena) (id Software) | `code/renderer/tr_shader.c`, `tr_shade.c`, `tr_shade_calc.c`, `tr_init.c`, `tr_noise.c`, `tr_sky.c`, `tr_image.c` | Shader parsing and the keywords that drop a shader, the default shader and default `rgbGen`, sort, depth-write and alpha-function rules, the 1024-entry wave tables, `EvalWaveForm`, seeded noise, every tcMod, tcGen, colour generator and deform, sky boxes and cloud layers, fog factors, overbright and image lookup (`.tga` then `.jpg`) | GPL-2.0-or-later |
+| [ioquake3](https://github.com/ioquake/ioq3) | `code/renderergl1/tr_shader.c`, `tr_image.c` | Scripts read in reverse order (the alphabetically last wins), the first definition in a file wins, and the extra image extensions | GPL-2.0-or-later |
+| [Wolfenstein: Enemy Territory](https://github.com/id-Software/Enemy-Territory) (id Software) | `src/renderer/tr_shader.c` (`ParseShader`, `SetImplicitShaderStages`, `R_FindShader`) | `implicitMap`, `implicitMask` and `implicitBlend` stages, cull and image naming, and the derivative general keywords read with a warning (`fogvars`, `skyfogvars`, `waterfogvars`, `sunshader`, `lightgridmulamb`, `lightgridmuldir`, `nofog`, `allowcompress`, `nocompress`, `distancecull`) | GPL-3.0-or-later with id's additional terms |
+| [Doom 3](https://github.com/id-Software/DOOM-3) (id Software) | `neo/renderer/Material.cpp`, `Image_program.cpp`, `Image_init.cpp`, `tr_render.cpp`, `draw_arb2.cpp`, `neo/idlib/Lexer.cpp`, `neo/framework/DeclManager.cpp` | The material grammar and its right-associative expressions, tables, defaulted materials, coverage and sort, implicit `_flat` and `_white` stages, texture matrices, image programs, built-in images, interaction pairing, the specular table and the ARB2 interaction's inputs, and the first decl winning | GPL-3.0-or-later with id's additional terms |
+| [Doom 3 BFG Edition](https://github.com/id-Software/DOOM-3-BFG) (id Software) | `base/renderprogs/interaction.pixel` | The BFG interaction's specular term | GPL-3.0-or-later with id's additional terms |
+| [Doom](https://github.com/id-Software/DOOM) `linuxdoom-1.10` (id Software) | `p_spec.c`, `p_switch.c`, `r_data.c`, `r_main.c`, `r_plane.c`, `r_sky.c` | The animation table (22 ranges at 8 tics), the switch list (40 pairs), wall composition, colormap light tables for walls and flats, fake contrast, sky mapping and row wrapping | GPL-2.0-or-later (1999 relicence) |
+| [SMMU](https://github.com/fragglet/smmu) (Boom lineage) | `utils/defswani.dat` | Boom's SWANTBLS input columns (`speed last first`, `episode texture1 texture2`) | GPL-2.0-or-later |
+| [Doom Wiki](https://doomwiki.org/wiki/ANIMATED) ([SWITCHES](https://doomwiki.org/wiki/SWITCHES)) | `ANIMATED`, `SWITCHES` | Boom's 23-byte animation and 20-byte switch records | Facts from CC BY-SA text |
+| [ZDoom wiki: ANIMDEFS](https://zdoom.org/wiki/ANIMDEFS) and [GZDoom](https://github.com/ZDoom/gzdoom) | `ANIMDEFS` grammar; the warp and warp2 texture effects | Hexen/ZDoom animation entries and warp speeds | Facts from GFDL text; GZDoom GPL-3.0-or-later |
+| [Quake](https://github.com/id-Software/Quake) (id Software) | `WinQuake/gl_model.c`, `gl_rsurf.c`, `gl_warp.c`, `r_light.c`, `r_surf.c`, `d_sky.c` | `+0` to `+9` and `+a` to `+j` frames at 0.2 s, liquid warps (GL and software), two-layer skies, light styles at 10 Hz and the GLQuake lightmap scale | GPL-2.0-or-later |
+| [Quake re-release QuakeC](https://github.com/id-Software/quake-rerelease-qc) (id Software) | `quakec/world.qc` | Light style patterns 0 to 11 | GPL-2.0 |
+| [Quake II](https://github.com/id-Software/Quake-2) (id Software) | `qcommon/qfiles.h`, `game/q_shared.h`, `ref_gl/gl_warp.c`, `gl_rsurf.c`, `gl_image.c` | The WAL header and its next-frame chain at 2 Hz, surface and content flags, warping and flowing, `trans33`/`trans66`, `intensity` and env sky boxes | GPL-2.0-or-later |
+| [Quake II re-release game DLL](https://github.com/id-Software/quake2-rerelease-dll) (id Software) | `rerelease/game.h` | The added surface flag bits (alpha test and the N64 scrolling bits) | GPL-2.0 |
+| [ericw-tools](https://github.com/ericwa/ericw-tools) | `.wal_json` handling and documentation | The sidecar's fields (`width`, `height`, `flags`, `contents`, `value`, `animation`, `color`) | GPL-2.0-or-later |
+| [QuakeSpasm](https://github.com/sezero/quakespasm), [DarkPlaces](https://github.com/DarkPlacesEngine/darkplaces), [FTEQW](https://github.com/fte-team/fteqw) | Lightmap overbright, fullbright and companion-image loading | The modern-port lightmap scale and the `_norm`, `_gloss`, `_glow`, `_luma`, `_pants`, `_shirt` and `_reflect` companions | GPL-2.0-or-later |
+
+The node graph, its layout, the text edits that keep a script's layout, the
+renderer, the library scan and every user interface are VibeStudio's own.
 
 ## Audio Sample Rate Conversion
 
@@ -884,10 +1019,10 @@ All rows below are implemented in `src/core/bsp_inspect.h` and
 Quake Specifications and released id Software sources listed above.
 
 ### idTech Model Formats
-All rows below are implemented in `src/core/model_mesh.h` and
-`src/core/model_mesh.cpp`, which decodes geometry rather than headers alone.
-Only Quake MDL version 6, Quake II MD2 version 8, and Quake III MD3 version 15
-are decoded to vertices; the MDC, MDR, and IQM rows cover header fields only.
+The rows below cover the original Quake MDL, Quake II MD2 and Quake III MD3
+decoders in `src/core/model_mesh.cpp`. The formats added on 8 October 2026,
+MDC, MDR and IQM among them, are credited in
+[Native Model Formats And Modeller Profiles](#native-model-formats-and-modeller-profiles-2026-10-08).
 No commercial model, skin, or animation data is embedded in this repository.
 
 | Specification | Reference | What it covers | Revision / date |
@@ -897,8 +1032,8 @@ No commercial model, skin, or animation data is embedded in this repository.
 | Released id Software Quake II sources, `qcommon/qfiles.h` | [`qcommon/qfiles.h`](https://github.com/id-Software/Quake-2/blob/master/qcommon/qfiles.h) | Quake II MD2 (`IDP2` version 8): `dmdl_t`, `dstvert_t`, `dtriangle_t`, `daliasframe_t` and `dtrivertx_t`, the separate position and texture-coordinate indexing that `decodeQuake2Md2()` recombines, the 64-byte external skin names, and the GL command block counted by preview and audited against indexed triangles/UVs during editable import | GPL source release |
 | id Software `anorms.h` vertex normal table | [`ref_gl/anorms.h`](https://github.com/id-Software/Quake-2/blob/master/ref_gl/anorms.h) | The 162 vertex normals that MDL and MD2 index with one byte per vertex, transcribed as `kAliasNormals` in `src/core/model_mesh.cpp`. It is a fixed mathematical constant of the two formats rather than game content | GPL source release |
 | Released id Software Quake III Arena sources, `md3.h` | [`code/qcommon/qfiles.h`](https://github.com/id-Software/Quake-III-Arena/blob/master/code/qcommon/qfiles.h) and `code/renderer/tr_types.h` | Quake III MD3 (`IDP3` version 15): `md3Header_t`, `md3Frame_t`, `md3Tag_t`, `md3Surface_t`, `md3Shader_t`, `md3Triangle_t`, `md3St_t` and `md3XyzNormal_t`, the `MD3_XYZ_SCALE` 1/64 unit step, the per-surface `IDP3` chain walked by each surface's own `ofsEnd`, and the packed latitude/longitude normal pair reconstructed by `md3Normal()` | GPL source release |
-| Return to Castle Wolfenstein and Elite Force / ioquake3 `qfiles.h` | The `mdcHeader_t` and `mdrHeader_t` layouts published in those source releases | MDC and MDR header fields only - version, internal name, and the frame, tag, surface, skin, bone and LOD counts. Their geometry layouts are deliberately not guessed at, so `decodeMdcHeader()` and `decodeMdrHeader()` leave `geometryAvailable` false and warn that geometry decoding is not implemented | Public source releases; no pinned revision |
-| Inter-Quake Model specification | [sauerbraten.org/iqm](http://sauerbraten.org/iqm/) | The `iqmheader` fields only - version, file size, and the mesh, vertex, triangle, joint, animation and frame counts read by `decodeIqmHeader()`. IQM geometry and skeletal data are not decoded | Inter-Quake Model public specification |
+| Return to Castle Wolfenstein and Elite Force / ioquake3 `qfiles.h` | The `mdcHeader_t` and `mdrHeader_t` layouts published in those source releases | MDC and MDR, now decoded in full by `src/core/model_format_mdc.cpp` and `model_format_mdr.cpp`; see [Native Model Formats And Modeller Profiles](#native-model-formats-and-modeller-profiles-2026-10-08) for the pinned revisions | Public source releases |
+| Inter-Quake Model specification | [sauerbraten.org/iqm](http://sauerbraten.org/iqm/) | IQM, now read and written in full by `src/core/model_format_iqm.cpp`; see [Native Model Formats And Modeller Profiles](#native-model-formats-and-modeller-profiles-2026-10-08) | Inter-Quake Model public specification (MIT) |
 
 ### Wavefront OBJ Polygon Interchange
 
@@ -1056,6 +1191,30 @@ reviewed 2026-10-04. No Pyright code was incorporated or distributed with the ID
 
 ## Editor Workflow Inspirations
 
+The GtkRadiant version and QeRadiant profile expansion was audited on 2026-10-07:
+
+- [GtkRadiant's 1.4.0-era ZeroRadiant source](https://github.com/TTimo/GtkRadiant/tree/5fc27697b313ddb925e57605c9983f5727a3c19f),
+  revision `5fc27697b313ddb925e57605c9983f5727a3c19f` (2008-08-24),
+  identifies 1.4.0 in `include/version.default`. The `radiant/mainframe.cpp`,
+  `camwindow.cpp`, `preferences.cpp`, `drag.cpp` and `qe3.cpp` files informed
+  command keys, discrete camera defaults, selection/material gestures and grid.
+- [GtkRadiant 1.5](https://github.com/TTimo/GtkRadiant/tree/017673373699174b574c92a262496826a6b409e9),
+  revision `017673373699174b574c92a262496826a6b409e9`, informed its separate
+  preset through `radiant/mainframe.cpp`, `camwindow.cpp`, `xywindow.cpp`,
+  `selection.cpp`, `surfacedialog.cpp`, `brushmanip.cpp` and `grid.cpp`.
+  The reviewed source headers in both trees permit GPL-2.0-or-later,
+  compatible with this GPL-3.0 repository. No upstream implementation is copied.
+- [Eutectic's QeRadiant/Q3Radiant shortcut and mouse reference](https://icculus.org/gtkradiant/documentation/q3radiant_manual/appndx/sskey_dl.htm),
+  hosted by the GtkRadiant project, informed the QeRadiant-specific fit keys,
+  shared camera gestures and removal of Q3-only shortcuts. The manual credits
+  Eutectic and is reproduced upstream by permission; its prose is not imported.
+  Only behavioural facts inform the original VibeStudio preset. Classic camera
+  services retain the compatible Q3Radiant attribution below.
+
+Version presets use VibeStudio's shared geometry, surface, camera, undo and
+CLI services. [Adaptations and unsupported behaviours](EDITOR_PROFILES.md#gtkradiant-14-and-15)
+remain visible in the profile reference. No upstream assets or game data are imported.
+
 Classic Q3Radiant behavior was audited on 2026-10-06 against
 [id Software's source](https://github.com/id-Software/Quake-III-Arena/tree/dbe4ddb10315479fc00086f08e25d968b4b43c49/q3radiant),
 revision `dbe4ddb10315479fc00086f08e25d968b4b43c49`:
@@ -1112,6 +1271,25 @@ only command facts informed the original Qt visibility/snapshot implementation
 in `src/app/level_view_actions.cpp`. VibeStudio targets the focused pane and
 keeps the studio's inspector and asset context visible.
 
+The DoomEdit and BSP profile additions were reviewed on 7 October 2026.
+[Doom 3 `MainFrm.cpp`](https://github.com/id-Software/DOOM-3/blob/a9c49da5afb18201d31e3f0a429a037e56ce2b9a/neo/tools/radiant/MainFrm.cpp),
+[`CamWnd.cpp`](https://github.com/id-Software/DOOM-3/blob/a9c49da5afb18201d31e3f0a429a037e56ce2b9a/neo/tools/radiant/CamWnd.cpp)
+and [`XYWnd.cpp`](https://github.com/id-Software/DOOM-3/blob/a9c49da5afb18201d31e3f0a429a037e56ce2b9a/neo/tools/radiant/XYWnd.cpp)
+at `a9c49da5afb18201d31e3f0a429a037e56ce2b9a` supply command and gesture facts.
+Their [GPL-3.0-or-later licence with additional terms](https://github.com/id-Software/DOOM-3/blob/a9c49da5afb18201d31e3f0a429a037e56ce2b9a/COPYING.txt)
+was read before implementation; no upstream code is incorporated or linked.
+The independently written C++ profile remains under VibeStudio's GPLv3 licence.
+
+[BSP Quake Editor 0.97q7](https://www.bspquakeeditor.com/downloads.php),
+specifically `Settings/bspmouse.cfg`, `Settings/bspmou3d.cfg` and
+`Settings/keyboard.cfg`, and the author's [release notes](https://www.bspquakeeditor.com/)
+and [mouse documentation](https://www.bspquakeeditor.com/doc/mousexy.htm),
+inform the BSP familiarity profile. These are proprietary reference material;
+no compatible code-reuse licence was established, so only binding facts were
+used. No configuration text, implementation, documentation prose, binaries or
+game assets were copied into the repository. Differences are listed in
+[Editor Profiles](EDITOR_PROFILES.md#doomedit-and-bsp-quake-editor).
+
 The October 5, 2026 familiarity expansion is an independent implementation of
 documented interaction behavior. No upstream code, documentation prose, assets
 or proprietary SDKs were incorporated, and no new library is linked. VibeStudio
@@ -1148,6 +1326,91 @@ research should credit:
 - [Ultimate Doom Builder](https://github.com/UltimateDoomBuilder/UltimateDoomBuilder) (GPL-3.0), and the Doom Builder line it continues, for how Doom map editing behaves: drawing, deleting, merging, and joining sectors, and Make Door (`Source/Plugins/BuilderModes/ClassicModes/SectorsMode.cs`, `MakeDoor`), whose rules VibeStudio's `makeLevelMapDoors` follows: ceiling to floor, lines facing out with the door action, door and track textures, lower-unpegged tracks. Behaviour only; no Doom Builder code is used, and the implementation in `src/core/level_map.cpp` is VibeStudio's own. Reference as of the `master` branch, September 2026.
 - [idStudio](https://idstudio.idsoftware.com/), id Software's editor for DOOM Eternal (public beta, August 2024), for the visual language of the studio shell: neutral charcoal panels with an orange accent, black-backed viewports with corner readouts, dense panel groups with bottom-edge tabs, a grouped Key / Value entity property grid, and an asset browser with a folder tree, breadcrumb path, and thumbnail tiles. Inspiration only: idStudio is proprietary, and no idStudio code, icons, assets, or content are used. The corresponding implementation is VibeStudio's own, in `src/app/studio_theme.*`, `src/app/studio_icons.*`, `src/app/studio_layout.*`, and `src/app/application_shell.cpp`.
 - [Visual Studio Code](https://github.com/microsoft/vscode) (MIT), for the arrangement of the studio bar adopted in October 2026: the menus, the history buttons, and a command search centred on the window share one row, as VS Code's title bar does with its Command Center (the `window.commandCenter` setting), and command shortcuts read as key caps. Pattern only, reviewed 2026-10-06: no VS Code code, icons, or assets are used, and the implementation (`CommandSearchButton`, `keepCentredInToolBar()`, and `paintKeyCaps()` in `src/app/studio_layout.*`, and `buildToolBar()` in `src/app/application_shell.cpp`) is VibeStudio's own.
+
+## Level Editor Sidebars, Shapes And Tools (2026-10-08)
+
+The Levels page's tabbed sidebars, Shapes tab, region selections, brush-entity
+tools, CSG intersect, detail tools, drop to floor, display filters, built-in
+entity catalogues and linked groups were added on 8 October 2026. They are
+original VibeStudio code (`src/app/studio_sidebar.*`, `src/app/tile_grid.*`,
+`src/app/level_sidebar_actions.cpp`, `src/app/level_sidebar_panels.cpp`,
+`src/app/level_asset_browsers.cpp`, `src/app/level_editing_actions.cpp`,
+`src/app/level_shapes_panel.cpp`, `src/app/level_scene_panel.cpp`,
+`src/core/level_sidebar.*`, `src/core/level_shapes.*`,
+`src/core/level_view_filters.*`, `src/core/entity_builtin_catalogue.*`,
+`src/core/level_linked_groups.*` and the tools in `src/core/level_map.cpp`). No upstream code, artwork or game data is
+copied; the references below supplied patterns and behavioural facts.
+
+| Reference | What it informed | Revision | Licence / use |
+|---|---|---|---|
+| [VibeRadiant](https://github.com/themuffinator/VibeRadiant) [`radiant/assetbrowser.cpp`](https://github.com/themuffinator/VibeRadiant/blob/f2fb5340333099dc8767c8d08f7e4757b8d23a02/radiant/assetbrowser.cpp) | One tabbed browser for entities, materials, surfaces, sounds and models, and its Globals tab's worldspawn editor and checklist, which the Map tab's **Worldspawn** and **Checklist** follow | `f2fb5340333099dc8767c8d08f7e4757b8d23a02` (2026-08-26), read 2026-10-08 | GPL-2.0 (GtkRadiant licence); pattern only |
+| [Blender's sidebar and panels](https://docs.blender.org/manual/en/latest/interface/window_system/regions.html#sidebar) | Tabs down a side region, collapsible panels, folding to the tab column, and the Item panel's numeric transform | Current manual | GPL software, CC-BY-SA-4.0 manual; pattern only |
+| [NetRadiant Custom](https://github.com/Garux/netradiant-custom) [`radiant/select.cpp`](https://github.com/Garux/netradiant-custom/blob/68ecbed64b7be78741878c730279b5471d978c7c/radiant/select.cpp) and [`radiant/brushmanip.cpp`](https://github.com/Garux/netradiant-custom/blob/68ecbed64b7be78741878c730279b5471d978c7c/radiant/brushmanip.cpp) | Select Inside and Select Touching; Make Detail and Make Structural; the Prism, Cone and Sphere commands that replace the selected brush with a shape filling its bounds | `68ecbed64b7be78741878c730279b5471d978c7c`, the q3map2 submodule's revision, read 2026-10-08 | GPL-2.0-or-later; behaviour only |
+| [id Software's Q3Radiant `SELECT.CPP`](https://github.com/id-Software/Quake-III-Arena/blob/dbe4ddb10315479fc00086f08e25d968b4b43c49/q3radiant/SELECT.CPP) | Select Complete Tall and Select Partial Tall, looking along the view's depth | `dbe4ddb10315479fc00086f08e25d968b4b43c49`, read 2026-10-08 | GPL-2.0-or-later; behaviour only |
+| [TrenchBroom](https://trenchbroom.github.io/) | CSG Intersect; the shear tool; linked groups, copies that take on each other's edits while each keeps its place; one inspector of Map, Entity and Face tabs; bundled definitions standing in when a game has none | The release credited under Editor Workflow Inspirations (`90de03c`) | GPL-3.0; behaviour only, no code or `_tb_` keys |
+| Hammer and [J.A.C.K.](https://valvedev.info/tools/jack/jack_manual.pdf) | Tie to Entity and Move to World; the object bar's block, wedge, cylinder, spike, sphere, arch and torus fitted to a drawn box; the Properties, Face Edit and Primitives names | J.A.C.K. manual 1.1 (November 2016), credited above | Proprietary software and documentation; behaviour only |
+| [Sledge](https://github.com/LogicAndTrick/sledge/tree/8762a6de07a9fa486d51aff0913cdc0306fd775c) | Arch and pipe shapes with segment, wall and sweep settings | `8762a6de07a9fa486d51aff0913cdc0306fd775c` | BSD-3-Clause; behaviour only |
+| [Ultimate Doom Builder](https://github.com/UltimateDoomBuilder/UltimateDoomBuilder) | Rectangle and ellipse sector drawing, offered as the Shapes tab's sector shapes; visual mode's texture auto-align along joined walls; Make Sectors mode | `6d9f6038db30adfee0edd74221b74b2de4837f6f` | GPL-3.0; behaviour only |
+| [linuxdoom-1.10 `r_segs.c`](https://github.com/id-Software/DOOM/blob/a77dfb96cb91780ca334d0d4cfd86957558007e0/linuxdoom-1.10/r_segs.c) | How upper, middle and lower textures are pegged to floors and ceilings, which wall auto-align's Y offsets follow | `a77dfb96cb91780ca334d0d4cfd86957558007e0` | GPL-2.0 source release; facts only |
+| [Unreal Editor](https://dev.epicgames.com/documentation/en-us/unreal-engine/viewport-controls-in-unreal-engine) | Snapping the selection to the floor beneath it, as Drop to Floor does | Current documentation | Proprietary documentation; behaviour only |
+
+The built-in entity catalogues record facts (class names, keys and their
+defaults, spawnflag bits, editor sizes and colours) from id Software's GPL
+releases, each checked against the code where comments and code disagree; every
+description is VibeStudio's own wording:
+
+- Quake: the [QuakeC v1.01 release in Quake-Tools](https://github.com/id-Software/Quake-Tools/tree/c0d1b91c74eb654365ac7755bc837e497caaca73/qcc/v101qc),
+  checked against the [1.06 progs](https://github.com/maddes-b/QuakeC-releases) at
+  `2811c02`, with compiler keys from the same Quake-Tools revision's
+  `qutils/QBSP/WRITEBSP.C` and `qutils/LIGHT/`.
+- Quake II: the [game DLL](https://github.com/id-Software/Quake-2/tree/372afde46e7defc9dd2d719a1732b8ace1fa096e/game)
+  and the [qrad3 light compiler](https://github.com/id-Software/Quake-2-Tools/blob/707e849167cb520a5592aa2181308ab947f2a2fd/bsp/qrad3/lightmap.c).
+- Quake III Arena: the [game module](https://github.com/id-Software/Quake-III-Arena/tree/dbe4ddb10315479fc00086f08e25d968b4b43c49/code/game),
+  q3map's `light.c` and `misc_model.c`, and the bot library's `be_ai_goal.c` at
+  the same revision; compiler keys id's q3map does not read follow q3map2 from
+  NetRadiant Custom at `68ecbed`.
+- Quake compiler classes (`func_group`, `func_detail` and its `_illusionary`,
+  `_wall` and `_fence` variants) follow the
+  [ericw-tools qbsp documentation](https://github.com/ericwa/ericw-tools/blob/f80b1e216a415581aea7475cb52b16b8c4859084/docs/qbsp.rst)
+  at `f80b1e2`.
+
+All are GPL-2.0-or-later, compatible with this GPL-3.0 repository; the source
+comment at the top of `src/core/entity_builtin_catalogue.cpp` names them too.
+
+## Native Model Formats And Modeller Profiles (2026-10-08)
+
+The model decoders and writers added on 8 October 2026
+(`src/core/model_format_*.cpp`, `src/core/model_formats_p.h`,
+`src/core/model_skeleton.*`, `src/core/model_md5.h`, `src/core/model_iqm.h`,
+`src/core/model_ase.h`) and the modeller's controls profiles and layout
+(`src/core/model_editor_controls.*`, `src/core/model_sidebar.*`,
+`src/app/model_editor_layout.cpp`, `src/app/model_editor_profiles.cpp`,
+`src/app/model_controls_dialog.*`, `src/cli/model_controls.*`) are original
+VibeStudio code. The sources below supplied byte layouts, conventions and
+behaviour; each decoder's header comment names the files and functions it was
+checked against. No upstream code is copied, apart from format constants
+(magics, versions, limits and scale factors) that a reader must match. No game
+models, skins, skeletons or animations are included; every test fixture is
+built by the tests.
+
+| Reference | What it informed | Revision | Licence / use |
+|---|---|---|---|
+| [Doom 3 GPL source](https://github.com/id-Software/DOOM-3/tree/a9c49da5afb18201d31e3f0a429a037e56ce2b9a) (`neo/renderer/Model_md5.cpp`, `Model_lwo.cpp`, `Model_ase.cpp`, `Model.cpp`, `neo/game/anim/Anim.cpp`, `Anim_Blend.cpp`, `neo/idlib/math/`) | MD5 mesh and animation layouts, joint quaternions and matrices, `.def` model declarations; LightWave and ASE loading, axes, winding and material naming | `a9c49da5afb18201d31e3f0a429a037e56ce2b9a` (2012-02-01), read 2026-10-08 | GPL-3.0 with id's additional terms; layout and behaviour only |
+| [Return to Castle Wolfenstein GPL source](https://github.com/id-Software/RTCW-SP/tree/70951bc71b730efe6bcb07db7ae76ef0c4ae7c14) (`src/qcommon/qfiles.h`, `src/renderer/tr_model.c`, `tr_animation.c`, `tr_surface.c`) | MDC compressed frames and tags; MDS bones, weights and tags | `70951bc71b730efe6bcb07db7ae76ef0c4ae7c14` (2012-01-31), read 2026-10-08 | GPL-3.0 with id's additional terms; layout and behaviour only. The MDC 256-direction normal table is rebuilt from its rule, not copied |
+| [Wolfenstein: Enemy Territory GPL source](https://github.com/id-Software/Enemy-Territory/tree/40342a9e3690cb5b627a433d4d5cbf30e3c57698) (`src/qcommon/qfiles.h`, `src/renderer/tr_animation_mdm.c`) | MDM meshes, MDX bones and frames, MDM tags | `40342a9e3690cb5b627a433d4d5cbf30e3c57698` (2012-01-31), read 2026-10-08 | GPL-3.0 with id's additional terms; layout and behaviour only |
+| [ioquake3](https://github.com/ioquake/ioq3/tree/83a776283bdb958f82db25554b5ed0966aaf6e49) (`code/qcommon/qfiles.h`, `code/renderergl1/tr_model.c`, `tr_animation.c`, `tr_model_iqm.c`) | MDR layout, compressed bones and tags; how IQM is drawn | `83a776283bdb958f82db25554b5ed0966aaf6e49` (2026-09-17), read 2026-10-08 | GPL-2.0-or-later; layout and behaviour only |
+| [Inter-Quake Model](https://github.com/lsalzman/iqm/tree/1077b9c195a7f76f9b26266562f6e36bb4d5dac9) by Lee Salzman (`iqm.txt`, `iqm.h`) | IQM version 2 layout, joints, poses and animations, for reading and writing | `1077b9c195a7f76f9b26266562f6e36bb4d5dac9` (2026-08-15), read 2026-10-08 | MIT; specification only |
+| [OpenJK](https://github.com/JACoders/OpenJK/tree/260c59c2907187af555a676fe0cc798893bf7757) (`codemp/rd-common/mdx_format.h`, `codemp/rd-vanilla/tr_ghoul2.cpp`, `codemp/qcommon/matcomp.cpp`) | Ghoul 2 GLM and GLA layouts, compressed bones, the root matrix, weights and bolts | `260c59c2907187af555a676fe0cc798893bf7757` (2026-09-29), read 2026-10-08 | GPL-2.0 only, which is not compatible with this GPL-3.0 repository: layouts and behaviour were reimplemented and nothing is copied. Jedi Academy's bone remap table for Jedi Outcast meshes is deliberately left out for this reason |
+| [Xash3D FWGS](https://github.com/FWGS/xash3d-fwgs/tree/9137964147d8) (`public/xash3d_mathlib.c`, `ref/gl/gl_studio.c`, `engine/common/mod_studio.c`) | Half-Life studio model animation values, Euler order, triangle commands, texture coordinates and companion file names | `9137964147d8`, read 2026-10-08 | GPL-3.0; behaviour only |
+| [Half-Life SDK](https://github.com/ValveSoftware/halflife/tree/b1b5cf5892918535619b2937bb927e46cb097ba1) (`engine/studio.h`) | Studio model structure layout | `b1b5cf5892918535619b2937bb927e46cb097ba1` (2024-10-02), read 2026-10-08 | Half-Life SDK licence, not GPL-compatible: used only as a description of the byte layout; no SDK code is copied |
+| [uHexen2](https://github.com/sezero/uhexen2/tree/475c048b1c8b) (`common/genmodel.h`, `engine/h2shared/gl_model.c`, `gl_mesh.c`, `gl_draw.c`) | Hexen II mission-pack MDL (`RAPO`) layout, texture coordinates and flags | `475c048b1c8b`, read 2026-10-08 | GPL-2.0-or-later; layout and behaviour only |
+| [GtkRadiant `qdata_heretic2`](https://github.com/TTimo/GtkRadiant/tree/270af88f3c24/tools/quake2/qdata_heretic2) (`qcommon/fmodel.h`, `qcommon/flex.h`, `fmodels.c`) | Heretic II FM chunks, frames, mesh nodes and GL commands | 1.6-release at `270af88f3c24`, read 2026-10-08 | GPL-2.0-or-later; layout only |
+| [Heretic2R](https://github.com/m-x-d/Heretic2R/tree/4d677156a458) (`src/ref_gl1/src/gl1_FlexModel.c`) | How FM models are loaded | `4d677156a458`, read 2026-10-08 | GPL-3.0; behaviour only |
+| [GZDoom](https://github.com/ZDoom/gzdoom/tree/c26ce2e6ca2a0c770f140cb25dde0d30073ca8f7) (`src/common/models/voxels.cpp`, `models_voxel.cpp`) and Ken Silverman's `slab6.txt` | KVX layout, slab meshing, VOXELDEF placement and palette colours | `c26ce2e6ca2a0c770f140cb25dde0d30073ca8f7` (2026-08-10), read 2026-10-08 | `voxels.cpp` BSD-3-Clause, GZDoom GPL-3.0; layout and behaviour only |
+| picomodel and q3map2 in [NetRadiant Custom](https://github.com/Garux/netradiant-custom/tree/68ecbed64b7be78741878c730279b5471d978c7c) (`libs/picomodel/pm_ase.c`, `pm_lwo.c`, `tools/quake3/q3map2/model.cpp`) | How q3map2 reads ASE and LWO for `misc_model`: sub-materials, winding, texture paths | `68ecbed64b7be78741878c730279b5471d978c7c` (the q3map2 submodule), read 2026-10-08 | picomodel BSD-style, q3map2 GPL-2.0-or-later; behaviour only |
+| [Blender keymap](https://docs.blender.org/manual/en/latest/interface/keymap/blender_default.html) and [3D viewport navigation](https://docs.blender.org/manual/en/latest/editors/3dview/navigate/index.html) | The Blender and VibeStudio profiles' navigation, selection, modal transforms and keys; the Blender sidebar names | Blender 4 manual, read 2026-10-08 | Manual CC-BY-SA-4.0; behaviour only |
+| [Autodesk 3ds Max keyboard shortcuts](https://help.autodesk.com/view/3DSMAX/2024/ENU/?guid=GUID-A73E1B09-7BFE-4A22-8153-1D3D2237B8E9) | The 3ds Max profile's views, navigation, selection, tools, sub-object levels and keys; command panel names | 3ds Max 2024 help, read 2026-10-08 | Proprietary documentation; behaviour only |
+| [MilkShape 3D](https://chumbalum.swissquake.ch/) by chUmbaLum sOft | The MilkShape 3D profile's four views, navigation, tools, keys and tab names | MilkShape 3D 1.8 documentation, read 2026-10-08 | Proprietary software and documentation; behaviour only |
 
 ## AI Integration References
 - [OpenAI API documentation](https://platform.openai.com/docs/quickstart), planned as the first optional general-purpose provider reference for prompt-based and agentic automation experiments.
@@ -1198,8 +1461,13 @@ research should credit:
   delivery are VibeStudio's own; no sfxr code was copied.
 
 ## Accessibility And Localization References
-- [WCAG 2.2](https://www.w3.org/TR/WCAG22/), planned as the baseline accessibility reference where web-oriented guidance applies to desktop UI.
-- [Ethnologue 200](https://www.ethnologue.com/insights/ethnologue200/), used as one reference point for reviewing the initial 20-language localization target set.
+- [WCAG 2.2](https://www.w3.org/TR/WCAG22/), the baseline accessibility reference where web-oriented guidance applies to desktop UI. The wide text spacing preference uses success criterion 1.4.12's letter (0.12em) and word (0.16em) spacing, and the status message durations answer 2.2.1 (Timing Adjustable).
+- [Ethnologue 200](https://www.ethnologue.com/insights/ethnologue200/) (2025 figures) and the [Steam supported languages](https://partner.steamgames.com/doc/store/localization/languages) list, the references the 47-language target set was reviewed against on 2026-10-07.
+- [Unicode CLDR](https://cldr.unicode.org/) parent locales and likely subtags, read through Qt's `QLocale`, for resolving regional tags (`es-MX` to `es-419`, `zh-HK` to Traditional Chinese). Data only, through Qt.
+- [Primer Primitives](https://github.com/primer/primitives) (GitHub's design tokens, MIT), whose protanopia/deuteranopia and tritanopia themes mark success in blue: the pattern behind the red-green safe palette. Pattern only, reviewed 2026-10-07; VibeStudio's colours were chosen and contrast-checked independently.
+- Gustavo M. Machado, Manuel M. Oliveira, and Leandro A. F. Fernandes, "A Physiologically-based Model for Simulation of Color Vision Deficiency", IEEE Transactions on Visualization and Computer Graphics 15(6), 2009: the severity 1.0 protanopia, deuteranopia, and tritanopia matrices `src/tests/studio_theme_smoke_test.cpp` uses to check that each colour-vision palette keeps success, warning, and danger apart. Published coefficients only; no code from the authors' materials.
+- Microsoft Edge's Read Aloud shortcut (Ctrl+Shift+U), adopted as the default key of VibeStudio's Read Aloud command. Key choice only.
+- Speech engines driven but not shipped: the Windows Speech API (SAPI 5, part of Windows; `sapi.h` from the Windows SDK), macOS `say`, [Speech Dispatcher](https://freebsoft.org/speechd) (`spd-say`, GPL-2.0-or-later), and [eSpeak NG](https://github.com/espeak-ng/espeak-ng) (GPL-3.0-or-later). The Unix engines run as separate programs; no code from any of them is included.
 
 ## Community Thanks
 - The idTech mapping, modding, speedrunning, source-port, and preservation communities who kept these workflows usable and documented across decades.

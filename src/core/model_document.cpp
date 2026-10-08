@@ -1,4 +1,5 @@
 #include "core/model_document.h"
+#include "core/model_skeleton.h"
 #include "core/model_source_decode.h"
 #include "core/model_geometry_helpers.h"
 #include "core/model_surface_selection.h"
@@ -707,10 +708,24 @@ bool importEditableModel(const QString &virtualPath, const QByteArray &bytes, Mo
 		*mesh = std::move(candidate);
 		return true;
 	}
-	auto result = decodeModelMesh(virtualPath, bytes, palette, control);
+	// A file on disk reads its companions (animations, bones, textures) from
+	// the folders around it; a package path has no such neighbours here.
+	const QFileInfo looseFile(virtualPath);
+	auto result = looseFile.isAbsolute() && looseFile.isFile()
+					  ? decodeModelMesh(virtualPath, bytes, palette, control, modelCompanionsFromFileSystem(virtualPath))
+					  : decodeModelMesh(virtualPath, bytes, palette, control);
 	if (!result.error.isEmpty())
 	{
 		return fail(error, result.error);
+	}
+	if (!result.skeleton.isEmpty() && result.frames.size() > modelDocumentMaxFrames)
+	{
+		// The skeleton keeps every clip; only the frames to edit are limited.
+		QString bakeError;
+		if (!rebakeModelSkeleton(&result, &bakeError, control, modelDocumentMaxFrames))
+		{
+			return fail(error, bakeError);
+		}
 	}
 	const auto errors = validateEditableModel(result, control);
 	if (!errors.isEmpty())
@@ -879,7 +894,7 @@ QJsonObject editableModelJson(const ModelMesh &mesh, QString *error, const Model
 	const bool timed = std::any_of(mesh.animations.cbegin(), mesh.animations.cend(), [](const auto &clip) { return clip.framesPerSecond > 0; });
 	const bool collisionAnimation = std::any_of(mesh.collisionBoxes.cbegin(), mesh.collisionBoxes.cend(), [](const auto &box) { return !box.framePoses.isEmpty(); });
 	QJsonObject result{{QStringLiteral("schema"), QStringLiteral("vibestudio.mesh")},
-					   {QStringLiteral("version"), collisionAnimation ? 7 : timed ? 6 : !mesh.collisionBoxes.isEmpty() ? 5 : mesh.mdl.enabled ? 4 : 3},
+					   {QStringLiteral("version"), !mesh.skeleton.isEmpty() ? 8 : collisionAnimation ? 7 : timed ? 6 : !mesh.collisionBoxes.isEmpty() ? 5 : mesh.mdl.enabled ? 4 : 3},
 					   {QStringLiteral("md2SkinSize"), QJsonArray{mesh.md2SkinSize.width(), mesh.md2SkinSize.height()}},
 					   {QStringLiteral("source"), mesh.sourcePath},
 					   {QStringLiteral("surfaces"), surfaces},
@@ -896,6 +911,10 @@ QJsonObject editableModelJson(const ModelMesh &mesh, QString *error, const Model
 		const auto boxes = modelCollisionJson(mesh, error, control);
 		if (boxes.size() != mesh.collisionBoxes.size()) return {};
 		result.insert(QStringLiteral("collisionBoxes"), boxes);
+	}
+	if (!mesh.skeleton.isEmpty())
+	{
+		result.insert(QStringLiteral("skeleton"), modelSkeletonJson(mesh));
 	}
 	return work.check() ? result : QJsonObject{};
 }
@@ -932,7 +951,7 @@ bool decodeEditableModelSource(const QByteArray &bytes, ModelMesh *mesh, QString
 		(root.value(QStringLiteral("version")) != QJsonValue(1) && root.value(QStringLiteral("version")) != QJsonValue(2) &&
 		 root.value(QStringLiteral("version")) != QJsonValue(3) && root.value(QStringLiteral("version")) != QJsonValue(4) &&
 		 root.value(QStringLiteral("version")) != QJsonValue(5) && root.value(QStringLiteral("version")) != QJsonValue(6) &&
-		 root.value(QStringLiteral("version")) != QJsonValue(7)) ||
+		 root.value(QStringLiteral("version")) != QJsonValue(7) && root.value(QStringLiteral("version")) != QJsonValue(8)) ||
 		!root.value(QStringLiteral("source")).isString())
 	{
 		return malformed();
@@ -1004,7 +1023,7 @@ bool decodeEditableModelSource(const QByteArray &bytes, ModelMesh *mesh, QString
 		frame.name = object.value(QStringLiteral("name")).toString();
 		result.frames << frame;
 	}
-	if (result.version == 5 || result.version == 7 || (result.version == 6 && root.contains(QStringLiteral("collisionBoxes"))))
+	if (result.version == 5 || result.version == 7 || ((result.version == 6 || result.version == 8) && root.contains(QStringLiteral("collisionBoxes"))))
 	{
 		if (!parseModelCollision(root.value(QStringLiteral("collisionBoxes")), &result, error, control)) return false;
 	}
@@ -1269,6 +1288,18 @@ bool decodeEditableModelSource(const QByteArray &bytes, ModelMesh *mesh, QString
 		}
 		result.embeddedSkins << skin;
 	}
+	if (result.version >= 8)
+	{
+		if (!root.value(QStringLiteral("skeleton")).isObject())
+		{
+			return malformed();
+		}
+		QString skeletonError;
+		if (!modelSkeletonFromJson(root.value(QStringLiteral("skeleton")).toObject(), &result, &skeletonError))
+		{
+			return fail(error, skeletonError);
+		}
+	}
 	updateEditableModelMetadata(&result);
 	if (!work.check())
 	{
@@ -1292,8 +1323,35 @@ bool parseEditableModel(const QByteArray &bytes, ModelMesh *mesh, QString *error
 	return true;
 }
 
+namespace
+{
+bool applyModelEditUnreconciled(ModelMesh *mesh, const ModelEdit &edit, ModelSelection *resultingSelection, QString *error,
+								const ModelWorkControl &control);
+}
+
 bool applyModelEdit(ModelMesh *mesh, const ModelEdit &edit, ModelSelection *resultingSelection, QString *error,
 					const ModelWorkControl &control)
+{
+	// Skeletal models keep their joints and influences through every edit:
+	// vertices an edit creates take the weights of the nearest original one.
+	if (!mesh || mesh->skeleton.isEmpty())
+		return applyModelEditUnreconciled(mesh, edit, resultingSelection, error, control);
+	const ModelMesh before = *mesh;
+	if (!applyModelEditUnreconciled(mesh, edit, resultingSelection, error, control))
+		return false;
+	QString problem;
+	if (!reconcileModelSkinning(before, mesh, &problem))
+	{
+		*mesh = before;
+		return fail(error, QCoreApplication::translate("VibeStudioModelDocument", "The edit would leave the skeleton inconsistent: %1").arg(problem));
+	}
+	return true;
+}
+
+namespace
+{
+bool applyModelEditUnreconciled(ModelMesh *mesh, const ModelEdit &edit, ModelSelection *resultingSelection, QString *error,
+								const ModelWorkControl &control)
 {
 	if (error)
 	{
@@ -1315,6 +1373,8 @@ bool applyModelEdit(ModelMesh *mesh, const ModelEdit &edit, ModelSelection *resu
 	}
 	if (!validModelTransformAxesOptions(edit, error))
 		return false;
+	if (!isModelMeshToolEdit(edit.kind) && !(edit.tool == ModelMeshToolOptions{}))
+		return fail(error, QCoreApplication::translate("ModelMeshTools", "Mesh tool settings apply only to mesh tools."));
 	if (edit.kind != ModelEditKind::UpdateCollisionBox && edit.collisionFields != 7)
 		return fail(error, QCoreApplication::translate("VibeStudioModelDocument", "Collision field masks apply only to box updates."));
 	const bool frameOperation = edit.kind == ModelEditKind::DuplicateFrame || edit.kind == ModelEditKind::DeleteFrame ||
@@ -1349,6 +1409,7 @@ bool applyModelEdit(ModelMesh *mesh, const ModelEdit &edit, ModelSelection *resu
 		return fail(error, QCoreApplication::translate("ModelUvTransform", "Individual island pivots apply only to UV transforms and projection."));
 	}
 	if (edit.kind != ModelEditKind::Transform && edit.kind != ModelEditKind::TransformTag && edit.kind != ModelEditKind::TransformCollisionBox &&
+		edit.kind != ModelEditKind::WeightedTransform &&
 		(edit.translationGrid != 0 || edit.rotationGrid != 0 || edit.scaleGrid != 0))
 	{
 		return fail(error, QCoreApplication::translate("VibeStudioModelDocument", "Grid snapping applies only to position transforms."));
@@ -1441,9 +1502,11 @@ bool applyModelEdit(ModelMesh *mesh, const ModelEdit &edit, ModelSelection *resu
 	auto candidate = *mesh;
 	auto selection = edit.selection;
 	const bool surfaceTransform = edit.kind == ModelEditKind::Transform && !selection.surfaces.isEmpty();
-	if (surfaceTransform || isModelSurfaceEdit(edit.kind) || isModelTagEdit(edit.kind) || isModelAnimationEdit(edit.kind) || isModelMdlEdit(edit.kind) || isModelCollisionEdit(edit.kind))
+	if (surfaceTransform || isModelSurfaceEdit(edit.kind) || isModelTagEdit(edit.kind) || isModelAnimationEdit(edit.kind) || isModelMdlEdit(edit.kind) || isModelCollisionEdit(edit.kind) ||
+		isModelMeshToolEdit(edit.kind))
 	{
 		if (!(surfaceTransform ? applyModelSurfaceTransform(&candidate, edit, error, control)
+			  : isModelMeshToolEdit(edit.kind) ? applyModelMeshToolEdit(&candidate, edit, &selection, error, control)
 			  : isModelSurfaceEdit(edit.kind) ? applyModelSurfaceEdit(&candidate, edit, &selection, error, control)
 			  : isModelCollisionEdit(edit.kind) ? applyModelCollisionEdit(&candidate, edit, &selection, error, control)
 			  : isModelTagEdit(edit.kind) ? applyModelTagEdit(&candidate, edit, &selection, error, control)
@@ -2522,6 +2585,7 @@ bool applyModelEdit(ModelMesh *mesh, const ModelEdit &edit, ModelSelection *resu
 	}
 	return true;
 }
+} // namespace
 
 qint64 ModelDocument::State::estimatedBytes() const
 {

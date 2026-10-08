@@ -1,3 +1,4 @@
+#include "app/studio_sidebar.h"
 #include "app/model_editor_dialog.h"
 #include "app/model_viewport.h"
 #include "app/studio_theme.h"
@@ -279,9 +280,8 @@ int main(int argc, char **argv)
 			const auto topologyEvidence = qEnvironmentVariable("VIBESTUDIO_MODELLER_EVIDENCE");
 			if (!topologyEvidence.isEmpty())
 			{
-				auto *inspector = editor->findChild<QTabWidget *>(QStringLiteral("meshInspector"));
-				auto *geometry = qobject_cast<QScrollArea *>(inspector->widget(0));
-				inspector->setCurrentIndex(0);
+				auto *geometry = tests::pageScroll(editor->sidebarPage(QStringLiteral("item")));
+				editor->showSidebarPage(QStringLiteral("item"));
 				geometry->ensureWidgetVisible(editor->findChild<QPushButton *>(QStringLiteral("weldMeshVertices")));
 				app.processEvents();
 				QImage evidenceImage(editor->size(), QImage::Format_ARGB32_Premultiplied);
@@ -357,7 +357,7 @@ int main(int argc, char **argv)
 		{
 			tabs->setCurrentIndex(tab);
 			app.processEvents();
-			auto *scroll = qobject_cast<QScrollArea *>(tabs->widget(tab));
+			auto *scroll = tests::pageScroll(tabs->widget(tab));
 			ok &= expect(scroll && scroll->widgetResizable(), "all inspector pages support scalable scrolling");
 			if (!evidence.isEmpty())
 			{

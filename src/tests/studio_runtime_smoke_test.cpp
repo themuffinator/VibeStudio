@@ -1,6 +1,7 @@
 // Crash capture is tested through the pieces that can be called directly:
 // report formatting, report parsing, and the previous-session bookkeeping.
-// Nothing here crashes the process on purpose.
+// Nothing here crashes the process on purpose. The interface language's
+// fonts and the untranslated-message log are tested here too.
 
 #include "app/studio_runtime.h"
 
@@ -9,6 +10,8 @@
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
+#include <QFontDatabase>
+#include <QGuiApplication>
 #include <QJsonArray>
 #include <QJsonObject>
 #include <QString>
@@ -274,19 +277,72 @@ bool runPreviousSessionSmoke(const QString& directory)
 	return ok;
 }
 
+// Han-script interfaces put their own fonts first; every other language
+// leaves the platform's fallback alone.
+bool runInterfaceFontSmoke()
+{
+	bool ok = true;
+	ok &= expect(interfaceLanguageFontFamilies(QStringLiteral("de")).isEmpty(), "A Latin-script interface should add no fonts.");
+	ok &= expect(interfaceLanguageFontFamilies(QStringLiteral("ar")).isEmpty(), "An Arabic interface should add no fonts.");
+	for (const QString& language : {QStringLiteral("ja"), QStringLiteral("zh-Hans"), QStringLiteral("zh-Hant"), QStringLiteral("ko")}) {
+		QStringList families = interfaceLanguageFontFamilies(language);
+		for (const QString& family : std::as_const(families)) {
+			ok &= expect(QFontDatabase::hasFamily(family), "Only installed families should be offered.");
+		}
+		ok &= expect(families.removeDuplicates() == 0, "Each family should be offered once.");
+	}
+	ok &= expect(interfaceLanguageFontFamilies(QStringLiteral("zh-TW")) == interfaceLanguageFontFamilies(QStringLiteral("zh-Hant")),
+		"A regional tag should get its target's fonts.");
+	return ok;
+}
+
+// The reviewer's untranslated-message log: each studio message without a
+// translation once, escaped, and nothing from Qt's own contexts or from the
+// source language.
+bool runUntranslatedLogSmoke(QCoreApplication& app, const QString& directory)
+{
+	bool ok = true;
+	const QString logPath = QDir(directory).filePath(QStringLiteral("untranslated.tsv"));
+	qputenv("VIBESTUDIO_UNTRANSLATED_LOG", QFile::encodeName(logPath));
+	const TranslationLoadResult german = installStudioTranslations(app, QStringLiteral("de"));
+	const QString germanName = QCoreApplication::translate("VibeStudioLocalization", "German");
+	QCoreApplication::translate("VibeStudioRuntimeTest", "Not in any catalog");
+	QCoreApplication::translate("VibeStudioRuntimeTest", "Not in any catalog");
+	QCoreApplication::translate("vibestudio::RuntimeTest", "Two\nlines");
+	QCoreApplication::translate("QDialogButtonBox", "Not ours");
+	installStudioTranslations(app, QStringLiteral("en"));
+	QCoreApplication::translate("VibeStudioRuntimeTest", "Asked in English");
+	qunsetenv("VIBESTUDIO_UNTRANSLATED_LOG");
+
+	QFile file(logPath);
+	ok &= expect(file.open(QIODevice::ReadOnly | QIODevice::Text), "The untranslated log should be written.");
+	const QList<QByteArray> lines = file.readAll().split('\n');
+	ok &= expect(lines.count(QByteArray("VibeStudioRuntimeTest\tNot in any catalog\t")) == 1, "An untranslated message should be logged once.");
+	ok &= expect(lines.contains(QByteArray("vibestudio::RuntimeTest\tTwo\\nlines\t")), "A line break should be logged escaped.");
+	ok &= expect(!lines.contains(QByteArray("QDialogButtonBox\tNot ours\t")), "Qt's own contexts should not be logged.");
+	ok &= expect(!lines.contains(QByteArray("VibeStudioRuntimeTest\tAsked in English\t")), "The source language should log nothing.");
+	if (german.installed && germanName != QStringLiteral("German")) {
+		ok &= expect(!lines.contains(QByteArray("VibeStudioLocalization\tGerman\t")), "A translated message should not be logged.");
+	}
+	return ok;
+}
+
 } // namespace
 
-int main()
+int main(int argc, char** argv)
 {
+	QGuiApplication app(argc, argv);
 	bool ok = true;
 	ok &= runFormatRoundTripSmoke();
 	ok &= runParseRobustnessSmoke();
 	ok &= runSummarySmoke();
+	ok &= runInterfaceFontSmoke();
 
 	QTemporaryDir temporary;
 	ok &= expect(temporary.isValid(), "Crash bookkeeping needs a temporary directory.");
 	if (temporary.isValid()) {
 		ok &= runPreviousSessionSmoke(temporary.path());
+		ok &= runUntranslatedLogSmoke(app, temporary.path());
 	}
 	return ok ? EXIT_SUCCESS : EXIT_FAILURE;
 }

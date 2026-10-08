@@ -141,6 +141,10 @@ public:
 	[[nodiscard]] qint64 durationMs() const;
 	void setHighContrast(bool enabled);
 	[[nodiscard]] QString accessibleSummary() const;
+	// What the view says while it has no peaks, in place of its general hint;
+	// an empty text brings the general hint back.
+	void setEmptyText(const QString& text);
+	[[nodiscard]] QString emptyText() const { return m_emptyText; }
 
 	// The playhead, in milliseconds from the start, drawn as a line across the
 	// lanes. It is clamped to the duration; new peaks put it back at 0.
@@ -187,6 +191,7 @@ private:
 	qint64 m_selectionAnchorMs = 0;
 	bool m_selectionEnabled = false;
 	bool m_highContrast = false;
+	QString m_emptyText;
 };
 
 } // namespace vibestudio

@@ -1,5 +1,7 @@
 #include "app/studio_charts.h"
 
+#include "app/studio_theme.h"
+
 #include <QBrush>
 #include <QCoreApplication>
 #include <QEvent>
@@ -60,6 +62,11 @@ QString codePointGlyph(char16_t code)
 {
 	return QString(QChar(code));
 }
+
+// The pipeline's endpoints: a square with orthogonal fill for the source, and
+// a white square containing a black square for the artifact.
+constexpr char16_t kSourceGlyph = 0x25a6;
+constexpr char16_t kArtifactGlyph = 0x25a3;
 
 QString stateName(OperationState state)
 {
@@ -219,6 +226,27 @@ QString isolatedText(const QString& text)
 	return QChar(0x2068) + text + QChar(0x2069);
 }
 
+// QStyle::visualRect() for fractional geometry: a rectangle laid out left to
+// right comes back mirrored about `bounds` in a right-to-left layout.
+QRectF visualRectF(Qt::LayoutDirection direction, const QRectF& bounds, const QRectF& logical)
+{
+	if (direction != Qt::RightToLeft) {
+		return logical;
+	}
+	QRectF mirrored = logical;
+	mirrored.moveLeft(bounds.left() + bounds.right() - logical.right());
+	return mirrored;
+}
+
+// visualRectF() for a point, such as a connector's end.
+QPointF visualPointF(Qt::LayoutDirection direction, const QRectF& bounds, const QPointF& logical)
+{
+	if (direction != Qt::RightToLeft) {
+		return logical;
+	}
+	return QPointF(bounds.left() + bounds.right() - logical.x(), logical.y());
+}
+
 void drawPatternedRect(QPainter& painter, const QRectF& rect, const QColor& color, int patternIndex, qreal radius)
 {
 	if (rect.width() <= 0.0 || rect.height() <= 0.0) {
@@ -265,8 +293,10 @@ void drawArrow(QPainter& painter, const QPointF& from, const QPointF& to, const 
 	painter.save();
 	painter.setPen(QPen(color, 1.4));
 	painter.drawLine(from, to);
+	// The head points along the line, so a mirrored connector points left.
+	const qreal back = to.x() < from.x() ? 5.0 : -5.0;
 	QPolygonF head;
-	head << to << QPointF(to.x() - 5.0, to.y() - 3.5) << QPointF(to.x() - 5.0, to.y() + 3.5);
+	head << to << QPointF(to.x() + back, to.y() - 3.5) << QPointF(to.x() + back, to.y() + 3.5);
 	painter.setPen(Qt::NoPen);
 	painter.setBrush(color);
 	painter.drawPolygon(head);
@@ -280,6 +310,19 @@ void drawDashedStub(QPainter& painter, const QPointF& from, const QPointF& to, c
 	painter.setPen(pen);
 	painter.drawLine(from, to);
 	painter.restore();
+}
+
+// The arrow keys move through a chart's items as they are drawn, so in a
+// right-to-left layout Left steps forward, as Right does left to right.
+int logicalArrowKey(int key, Qt::LayoutDirection direction)
+{
+	if (direction == Qt::RightToLeft && key == Qt::Key_Left) {
+		return Qt::Key_Right;
+	}
+	if (direction == Qt::RightToLeft && key == Qt::Key_Right) {
+		return Qt::Key_Left;
+	}
+	return key;
 }
 
 // ---------------------------------------------------------------------------
@@ -496,6 +539,7 @@ PipelineLayout computePipelineLayout(const QVector<PipelineStageNode>& stages,
 	const QRect& widgetRect,
 	const QFontMetrics& titleMetrics,
 	const QFontMetrics& bodyMetrics,
+	qreal glyphColumn,
 	bool hasTitle,
 	const QString& sourceLabel,
 	const QString& artifactLabel)
@@ -516,7 +560,7 @@ PipelineLayout computePipelineLayout(const QVector<PipelineStageNode>& stages,
 
 	PipelineBox source;
 	source.label = sourceLabel;
-	source.glyph = codePointGlyph(0x25a6); // square with orthogonal fill
+	source.glyph = codePointGlyph(kSourceGlyph);
 	source.endpoint = true;
 	boxes.push_back(source);
 
@@ -535,7 +579,7 @@ PipelineLayout computePipelineLayout(const QVector<PipelineStageNode>& stages,
 
 	PipelineBox artifact;
 	artifact.label = artifactLabel;
-	artifact.glyph = codePointGlyph(0x25a3); // white square containing black square
+	artifact.glyph = codePointGlyph(kArtifactGlyph);
 	artifact.endpoint = true;
 	boxes.push_back(artifact);
 
@@ -547,7 +591,14 @@ PipelineLayout computePipelineLayout(const QVector<PipelineStageNode>& stages,
 	for (PipelineBox& box : boxes) {
 		const QString labelLine = box.glyph + QStringLiteral(" ") + box.label;
 		const QString badgeLine = pipelineBadgeLine(box);
-		int boxWidth = std::max(bodyMetrics.horizontalAdvance(labelLine), bodyMetrics.horizontalAdvance(badgeLine)) + 2 * kBoxPadding;
+		// The glyph and a space stand in for a glyph column at its base width,
+		// as they always have; a column widened for larger text reserves its
+		// full width, so the label keeps its room beside it.
+		int labelWidth = bodyMetrics.horizontalAdvance(labelLine);
+		if (glyphColumn > kGlyphColumn) {
+			labelWidth = std::max(labelWidth, static_cast<int>(std::ceil(glyphColumn)) + bodyMetrics.horizontalAdvance(box.label));
+		}
+		int boxWidth = std::max(labelWidth, bodyMetrics.horizontalAdvance(badgeLine)) + 2 * kBoxPadding;
 		boxWidth = std::max(boxWidth, kMinBoxWidth);
 		boxWidth = std::min(boxWidth, kMaxBoxWidth);
 		boxWidth = std::min(boxWidth, width);
@@ -627,31 +678,42 @@ QVector<QRectF> computeTimelineRows(int count, const QRect& widgetRect, const QF
 	return rows;
 }
 
-// Wide enough for the widest state glyph at the current text size, with a gap
-// before the title, and never narrower than kGlyphColumn.
-qreal timelineGlyphColumn(const QFont& glyphFont)
+// Wide enough for the widest of `glyphs` at the current text size, with a gap
+// before the text beside it, and never narrower than kGlyphColumn. drawText()
+// clips to its rectangle, so a fixed column would clip large glyphs.
+qreal glyphColumnWidth(const QFont& glyphFont, const QStringList& glyphs)
 {
-	static const OperationState kStates[] = {OperationState::Idle, OperationState::Queued, OperationState::Loading,
-		OperationState::Running, OperationState::Warning, OperationState::Failed, OperationState::Cancelled,
-		OperationState::Completed};
 	const QFontMetricsF metrics(glyphFont);
 	qreal widest = 0.0;
-	for (const OperationState state : kStates) {
-		widest = std::max(widest, metrics.horizontalAdvance(studioStateGlyph(state)));
+	for (const QString& glyph : glyphs) {
+		widest = std::max(widest, metrics.horizontalAdvance(glyph));
 	}
 	return std::max(static_cast<qreal>(kGlyphColumn), std::ceil(widest) + 6.0);
 }
 
-// QStyle::visualRect() for fractional geometry: a rectangle laid out left to
-// right comes back mirrored about `bounds` in a right-to-left layout.
-QRectF visualRectF(Qt::LayoutDirection direction, const QRectF& bounds, const QRectF& logical)
+QStringList stateGlyphs()
 {
-	if (direction != Qt::RightToLeft) {
-		return logical;
+	static const OperationState kStates[] = {OperationState::Idle, OperationState::Queued, OperationState::Loading,
+		OperationState::Running, OperationState::Warning, OperationState::Failed, OperationState::Cancelled,
+		OperationState::Completed};
+	QStringList glyphs;
+	for (const OperationState state : kStates) {
+		glyphs << studioStateGlyph(state);
 	}
-	QRectF mirrored = logical;
-	mirrored.moveLeft(bounds.left() + bounds.right() - logical.right());
-	return mirrored;
+	return glyphs;
+}
+
+// The timeline's glyph column fits every state glyph before the title.
+qreal timelineGlyphColumn(const QFont& glyphFont)
+{
+	return glyphColumnWidth(glyphFont, stateGlyphs());
+}
+
+// The pipeline's also fits the endpoint glyphs, so every box in a chain sets
+// its label at the same inset whatever its state.
+qreal pipelineGlyphColumn(const QFont& glyphFont)
+{
+	return glyphColumnWidth(glyphFont, stateGlyphs() << codePointGlyph(kSourceGlyph) << codePointGlyph(kArtifactGlyph));
 }
 
 } // namespace
@@ -660,7 +722,9 @@ QRectF visualRectF(Qt::LayoutDirection direction, const QRectF& bounds, const QR
 // Shared tokens
 // ---------------------------------------------------------------------------
 
-QColor studioStateColor(OperationState state, bool highContrast, bool lightTheme)
+namespace {
+
+QColor tunedStateColor(OperationState state, bool highContrast, bool lightTheme)
 {
 	// Four tuned ramps: the two high-contrast ramps assume a pure black or pure
 	// white background and stay saturated; the two standard ramps sit on the
@@ -751,6 +815,48 @@ QColor studioStateColor(OperationState state, bool highContrast, bool lightTheme
 		return QColor(0x4f, 0xbf, 0x7b);
 	}
 	return QColor(0x9a, 0xa4, 0xb2);
+}
+
+// With a colour-vision palette chosen, results take the theme's state
+// colours (already tuned to be told apart for that vision, see
+// studio_theme.cpp) and work in progress takes greys of different lightness,
+// so no two hues the reader confuses ever have to be told apart. The glyphs
+// and hatches still name each state.
+QColor colorVisionStateColor(OperationState state, const StudioThemeColors& colors)
+{
+	switch (state) {
+	case OperationState::Completed:
+		return colors.success;
+	case OperationState::Failed:
+		return colors.danger;
+	case OperationState::Warning:
+		return colors.warning;
+	case OperationState::Cancelled:
+		return studioDesaturatedColor(colors.warning, 0.65);
+	case OperationState::Running:
+		return colors.info;
+	case OperationState::Loading:
+		return colors.text;
+	case OperationState::Queued:
+		// Between running and idle in lightness.
+		return QColor::fromRgbF((colors.info.redF() + colors.textFaint.redF()) / 2.0f, (colors.info.greenF() + colors.textFaint.greenF()) / 2.0f,
+			(colors.info.blueF() + colors.textFaint.blueF()) / 2.0f);
+	case OperationState::Idle:
+		return colors.textFaint;
+	}
+	return colors.textMuted;
+}
+
+} // namespace
+
+QColor studioStateColor(OperationState state, bool highContrast, bool lightTheme)
+{
+	const StudioThemeTokens& theme = currentStudioTheme();
+	if ((theme.colorVision == ColorVision::RedGreen || theme.colorVision == ColorVision::BlueYellow)
+		&& theme.highContrast == highContrast && theme.light == lightTheme) {
+		return colorVisionStateColor(state, theme.colors);
+	}
+	return studioAdjustedStateColor(tunedStateColor(state, highContrast, lightTheme));
 }
 
 QString studioStateGlyph(OperationState state)
@@ -933,6 +1039,10 @@ void CompositionChart::paintEvent(QPaintEvent* event)
 	QPainter painter(this);
 	painter.setRenderHint(QPainter::Antialiasing, true);
 	painter.setRenderHint(QPainter::TextAntialiasing, true);
+	// Leading and trailing text alignment follow this widget's direction,
+	// which need not be the application's.
+	const Qt::LayoutDirection direction = layoutDirection();
+	painter.setLayoutDirection(direction);
 
 	const QPalette pal = palette();
 	const bool lightTheme = paletteIsLight(pal);
@@ -949,28 +1059,38 @@ void CompositionChart::paintEvent(QPaintEvent* event)
 
 	const CompositionLayout layout = computeCompositionLayout(m_slices, rect(), titleMetrics, bodyMetrics, !m_title.isEmpty());
 
+	// The bar and the legend are laid out left to right and drawn through
+	// visual(), so in a right-to-left layout the first slice fills the bar from
+	// the right and the legend flows from the right, each swatch leading its
+	// label.
+	const QRectF bounds(rect());
+	const auto visual = [direction, &bounds](const QRectF& logical) {
+		return visualRectF(direction, bounds, logical);
+	};
+
 	if (!m_title.isEmpty()) {
 		painter.setFont(titleFont);
 		painter.setPen(foreground);
-		painter.drawText(layout.titleRect, Qt::AlignLeft | Qt::AlignVCenter,
-			titleMetrics.elidedText(m_title, Qt::ElideRight, static_cast<int>(layout.titleRect.width())));
+		painter.drawText(visual(layout.titleRect), Qt::AlignLeading | Qt::AlignVCenter,
+			isolatedText(titleMetrics.elidedText(m_title, Qt::ElideRight, static_cast<int>(layout.titleRect.width()))));
 	}
 
 	painter.setFont(bodyFont);
+	const QRectF barRect = visual(layout.barRect);
 
 	if (m_slices.isEmpty()) {
 		painter.setPen(QPen(outline, 1.0, Qt::DashLine));
 		painter.setBrush(surface);
-		painter.drawRoundedRect(layout.barRect, 4.0, 4.0);
+		painter.drawRoundedRect(barRect, 4.0, 4.0);
 		painter.setPen(muted);
-		painter.drawText(layout.barRect, Qt::AlignCenter,
-			bodyMetrics.elidedText(m_emptyText, Qt::ElideRight, static_cast<int>(layout.barRect.width()) - 8));
+		painter.drawText(barRect, Qt::AlignCenter,
+			isolatedText(bodyMetrics.elidedText(m_emptyText, Qt::ElideRight, static_cast<int>(barRect.width()) - 8)));
 		return;
 	}
 
 	for (int index = 0; index < m_slices.size() && index < layout.sliceRects.size(); ++index) {
 		const StudioChartSlice& slice = m_slices.at(index);
-		const QRectF sliceRect = layout.sliceRects.at(index);
+		const QRectF sliceRect = visual(layout.sliceRects.at(index));
 		QColor color = studioStateColor(slice.state, m_highContrast, lightTheme);
 		// Spread the slice colours away from the state ramp so neighbouring
 		// slices with the same state stay separable.
@@ -991,7 +1111,7 @@ void CompositionChart::paintEvent(QPaintEvent* event)
 			labelRect.moveCenter(sliceRect.center());
 			painter.fillRect(labelRect, surface);
 			painter.setPen(foreground);
-			painter.drawText(labelRect, Qt::AlignCenter, shareText);
+			painter.drawText(labelRect, Qt::AlignCenter, isolatedText(shareText));
 		}
 
 		if (index == m_hoverIndex) {
@@ -1003,7 +1123,7 @@ void CompositionChart::paintEvent(QPaintEvent* event)
 
 	painter.setPen(QPen(outline, 1.0));
 	painter.setBrush(Qt::NoBrush);
-	painter.drawRect(layout.barRect.adjusted(0.5, 0.5, -0.5, -0.5));
+	painter.drawRect(barRect.adjusted(0.5, 0.5, -0.5, -0.5));
 
 	for (int index = 0; index < m_slices.size() && index < layout.legendRects.size(); ++index) {
 		const StudioChartSlice& slice = m_slices.at(index);
@@ -1014,7 +1134,7 @@ void CompositionChart::paintEvent(QPaintEvent* event)
 		} else if (index % 3 == 2) {
 			color = color.darker(lightTheme ? 112 : 118);
 		}
-		const QRectF swatch(entry.left(), entry.top() + (entry.height() - kSwatchHeight) / 2.0, kSwatchWidth, kSwatchHeight);
+		const QRectF swatch = visual(QRectF(entry.left(), entry.top() + (entry.height() - kSwatchHeight) / 2.0, kSwatchWidth, kSwatchHeight));
 		drawPatternedRect(painter, swatch, color, slice.patternIndex, 2.0);
 		painter.setPen(QPen(outline, 1.0));
 		painter.setBrush(Qt::NoBrush);
@@ -1024,12 +1144,12 @@ void CompositionChart::paintEvent(QPaintEvent* event)
 			std::max(0.0, entry.width() - kSwatchWidth - kSwatchGap), entry.height());
 		painter.setPen(index == m_hoverIndex ? foreground : muted);
 		const QString text = index < layout.legendTexts.size() ? layout.legendTexts.at(index) : slice.label;
-		painter.drawText(textRect, Qt::AlignLeft | Qt::AlignVCenter,
+		painter.drawText(visual(textRect), Qt::AlignLeading | Qt::AlignVCenter,
 			isolatedText(bodyMetrics.elidedText(text, Qt::ElideRight, static_cast<int>(textRect.width()))));
 	}
 
 	if (hasFocus() && m_hoverIndex >= 0 && m_hoverIndex < layout.sliceRects.size()) {
-		drawFocusRing(painter, layout.sliceRects.at(m_hoverIndex), foreground, 0.0);
+		drawFocusRing(painter, visual(layout.sliceRects.at(m_hoverIndex)), foreground, 0.0);
 	}
 }
 
@@ -1076,7 +1196,7 @@ void CompositionChart::keyPressEvent(QKeyEvent* event)
 
 	const int last = static_cast<int>(m_slices.size()) - 1;
 	int next = m_hoverIndex;
-	switch (event->key()) {
+	switch (logicalArrowKey(event->key(), layoutDirection())) {
 	case Qt::Key_Right:
 	case Qt::Key_Down:
 		next = m_hoverIndex < 0 ? 0 : std::min(last, m_hoverIndex + 1);
@@ -1151,13 +1271,16 @@ int CompositionChart::sliceAt(const QPoint& point) const
 	QFont titleFont = bodyFont;
 	titleFont.setBold(true);
 	const CompositionLayout layout = computeCompositionLayout(m_slices, rect(), QFontMetrics(titleFont), QFontMetrics(bodyFont), !m_title.isEmpty());
+	// Mirrored as paintEvent() draws them.
+	const Qt::LayoutDirection direction = layoutDirection();
+	const QRectF bounds(rect());
 	for (int index = 0; index < layout.sliceRects.size(); ++index) {
-		if (layout.sliceRects.at(index).contains(point)) {
+		if (visualRectF(direction, bounds, layout.sliceRects.at(index)).contains(point)) {
 			return index;
 		}
 	}
 	for (int index = 0; index < layout.legendRects.size(); ++index) {
-		if (layout.legendRects.at(index).contains(point)) {
+		if (visualRectF(direction, bounds, layout.legendRects.at(index)).contains(point)) {
 			return index;
 		}
 	}
@@ -1295,10 +1418,12 @@ QSize PipelineChart::sizeHint() const
 	const QFont bodyFont = font();
 	QFont titleFont = bodyFont;
 	titleFont.setBold(true);
+	// State glyphs are drawn in the title's bold face.
 	const PipelineLayout layout = computePipelineLayout(m_stages,
 		QRect(0, 0, preferredWidth, 2000),
 		QFontMetrics(titleFont),
 		QFontMetrics(bodyFont),
+		pipelineGlyphColumn(titleFont),
 		!m_title.isEmpty(),
 		tr("Source"),
 		tr("Artifact"));
@@ -1322,6 +1447,10 @@ void PipelineChart::paintEvent(QPaintEvent* event)
 	QPainter painter(this);
 	painter.setRenderHint(QPainter::Antialiasing, true);
 	painter.setRenderHint(QPainter::TextAntialiasing, true);
+	// Leading and trailing text alignment follow this widget's direction,
+	// which need not be the application's.
+	const Qt::LayoutDirection direction = layoutDirection();
+	painter.setLayoutDirection(direction);
 
 	const QPalette pal = palette();
 	const bool lightTheme = paletteIsLight(pal);
@@ -1337,15 +1466,28 @@ void PipelineChart::paintEvent(QPaintEvent* event)
 	glyphFont.setBold(true);
 	const QFontMetrics bodyMetrics(bodyFont);
 	const QFontMetrics titleMetrics(titleFont);
+	const qreal glyphColumn = pipelineGlyphColumn(glyphFont);
 
-	const PipelineLayout layout = computePipelineLayout(m_stages, rect(), titleMetrics, bodyMetrics,
+	const PipelineLayout layout = computePipelineLayout(m_stages, rect(), titleMetrics, bodyMetrics, glyphColumn,
 		!m_title.isEmpty(), tr("Source"), tr("Artifact"));
+
+	// The chain is laid out left to right and drawn through visual(), so in a
+	// right-to-left layout it runs from the right: boxes, arrows, and wrap
+	// stubs mirror, and each box's glyph, label, badge, and active marker lead
+	// from its right edge.
+	const QRectF bounds(rect());
+	const auto visual = [direction, &bounds](const QRectF& logical) {
+		return visualRectF(direction, bounds, logical);
+	};
+	const auto visualPoint = [direction, &bounds](const QPointF& logical) {
+		return visualPointF(direction, bounds, logical);
+	};
 
 	if (!m_title.isEmpty()) {
 		painter.setFont(titleFont);
 		painter.setPen(foreground);
-		painter.drawText(layout.titleRect, Qt::AlignLeft | Qt::AlignVCenter,
-			titleMetrics.elidedText(m_title, Qt::ElideRight, static_cast<int>(layout.titleRect.width())));
+		painter.drawText(visual(layout.titleRect), Qt::AlignLeading | Qt::AlignVCenter,
+			isolatedText(titleMetrics.elidedText(m_title, Qt::ElideRight, static_cast<int>(layout.titleRect.width()))));
 	}
 
 	painter.setFont(bodyFont);
@@ -1354,12 +1496,13 @@ void PipelineChart::paintEvent(QPaintEvent* event)
 		m_stageRects.clear();
 		QRectF box = layout.boxes.isEmpty() ? QRectF(rect().adjusted(kMargin, kMargin, -kMargin, -kMargin)) : layout.boxes.first().rect;
 		box.setRight(rect().right() - kMargin);
+		box = visual(box);
 		painter.setPen(QPen(outline, 1.0, Qt::DashLine));
 		painter.setBrush(surface);
 		painter.drawRoundedRect(box, 6.0, 6.0);
 		painter.setPen(muted);
 		painter.drawText(box, Qt::AlignCenter,
-			bodyMetrics.elidedText(m_emptyText, Qt::ElideRight, static_cast<int>(box.width()) - 8));
+			isolatedText(bodyMetrics.elidedText(m_emptyText, Qt::ElideRight, static_cast<int>(box.width()) - 8)));
 		return;
 	}
 
@@ -1371,14 +1514,14 @@ void PipelineChart::paintEvent(QPaintEvent* event)
 		const PipelineBox& current = layout.boxes.at(index);
 		if (previous.row == current.row) {
 			const qreal y = previous.rect.center().y();
-			drawArrow(painter, QPointF(previous.rect.right() + 3.0, y), QPointF(current.rect.left() - 2.0, y), muted);
+			drawArrow(painter, visualPoint(QPointF(previous.rect.right() + 3.0, y)), visualPoint(QPointF(current.rect.left() - 2.0, y)), muted);
 		} else {
 			// Wrapped rows: a dashed stub leaves the old row and re-enters the
 			// new one, so the chain still reads without an off-screen arrow.
-			drawDashedStub(painter, QPointF(previous.rect.right() + 3.0, previous.rect.center().y()),
-				QPointF(rect().right() - kMargin / 2.0, previous.rect.center().y()), muted);
-			drawDashedStub(painter, QPointF(rect().left() + kMargin / 2.0, current.rect.center().y()),
-				QPointF(current.rect.left() - 2.0, current.rect.center().y()), muted);
+			drawDashedStub(painter, visualPoint(QPointF(previous.rect.right() + 3.0, previous.rect.center().y())),
+				visualPoint(QPointF(rect().right() - kMargin / 2.0, previous.rect.center().y())), muted);
+			drawDashedStub(painter, visualPoint(QPointF(rect().left() + kMargin / 2.0, current.rect.center().y())),
+				visualPoint(QPointF(current.rect.left() - 2.0, current.rect.center().y())), muted);
 		}
 	}
 
@@ -1386,8 +1529,9 @@ void PipelineChart::paintEvent(QPaintEvent* event)
 		const bool isStage = box.stageIndex >= 0;
 		const bool isActive = isStage && m_stages.at(box.stageIndex).id == m_activeStageId && !m_activeStageId.isEmpty();
 		const bool isHovered = isStage && box.stageIndex == m_hoverIndex;
+		const QRectF boxRect = visual(box.rect);
 		if (isStage) {
-			m_stageRects[box.stageIndex] = box.rect;
+			m_stageRects[box.stageIndex] = boxRect;
 		}
 
 		QColor accent = box.endpoint ? muted : studioStateColor(box.state, m_highContrast, lightTheme);
@@ -1408,35 +1552,35 @@ void PipelineChart::paintEvent(QPaintEvent* event)
 			style = Qt::DashLine; // Non-colour cue for endpoints and optional stages.
 		}
 		painter.setPen(QPen(isActive ? accent : outline, isActive ? 2.0 : 1.0, style));
-		painter.drawRoundedRect(box.rect.adjusted(0.5, 0.5, -0.5, -0.5), 6.0, 6.0);
+		painter.drawRoundedRect(boxRect.adjusted(0.5, 0.5, -0.5, -0.5), 6.0, 6.0);
 
 		const QRectF inner = box.rect.adjusted(kBoxPadding, 4.0, -kBoxPadding, -4.0);
 		const qreal lineHeight = inner.height() / 2.0;
 
-		const QRectF glyphRect(inner.left(), inner.top(), kGlyphColumn, lineHeight);
+		const QRectF glyphRect(inner.left(), inner.top(), glyphColumn, lineHeight);
 		painter.setFont(glyphFont);
 		painter.setPen(accent);
-		painter.drawText(glyphRect, Qt::AlignLeft | Qt::AlignVCenter, box.glyph);
+		painter.drawText(visual(glyphRect), Qt::AlignLeading | Qt::AlignVCenter, box.glyph);
 
 		painter.setFont(bodyFont);
-		const QRectF labelRect(inner.left() + kGlyphColumn, inner.top(),
-			std::max(0.0, inner.width() - kGlyphColumn), lineHeight);
+		const QRectF labelRect(inner.left() + glyphColumn, inner.top(),
+			std::max(0.0, inner.width() - glyphColumn), lineHeight);
 		painter.setPen(isActive || isHovered ? foreground : (box.endpoint ? muted : foreground));
-		painter.drawText(labelRect, Qt::AlignLeft | Qt::AlignVCenter,
-			bodyMetrics.elidedText(box.label, Qt::ElideRight, static_cast<int>(labelRect.width())));
+		painter.drawText(visual(labelRect), Qt::AlignLeading | Qt::AlignVCenter,
+			isolatedText(bodyMetrics.elidedText(box.label, Qt::ElideRight, static_cast<int>(labelRect.width()))));
 
 		const QString badge = pipelineBadgeLine(box);
 		if (!badge.isEmpty()) {
 			const QRectF badgeRect(inner.left(), inner.top() + lineHeight, inner.width(), lineHeight);
 			painter.setPen(muted);
-			painter.drawText(badgeRect, Qt::AlignLeft | Qt::AlignVCenter,
-				bodyMetrics.elidedText(badge, Qt::ElideRight, static_cast<int>(badgeRect.width())));
+			painter.drawText(visual(badgeRect), Qt::AlignLeading | Qt::AlignVCenter,
+				isolatedText(bodyMetrics.elidedText(badge, Qt::ElideRight, static_cast<int>(badgeRect.width()))));
 		}
 
 		if (isActive) {
 			painter.setPen(Qt::NoPen);
 			painter.setBrush(accent);
-			painter.drawRoundedRect(QRectF(box.rect.left() + 2.0, box.rect.top() + 6.0, 3.0, box.rect.height() - 12.0), 1.5, 1.5);
+			painter.drawRoundedRect(visual(QRectF(box.rect.left() + 2.0, box.rect.top() + 6.0, 3.0, box.rect.height() - 12.0)), 1.5, 1.5);
 		}
 	}
 
@@ -1488,7 +1632,7 @@ void PipelineChart::keyPressEvent(QKeyEvent* event)
 
 	const int last = static_cast<int>(m_stages.size()) - 1;
 	int next = m_hoverIndex;
-	switch (event->key()) {
+	switch (logicalArrowKey(event->key(), layoutDirection())) {
 	case Qt::Key_Right:
 	case Qt::Key_Down:
 		next = m_hoverIndex < 0 ? 0 : std::min(last, m_hoverIndex + 1);
@@ -1567,10 +1711,14 @@ int PipelineChart::stageAt(const QPoint& point) const
 	const QFont bodyFont = font();
 	QFont titleFont = bodyFont;
 	titleFont.setBold(true);
+	// State glyphs are drawn in the title's bold face.
 	const PipelineLayout layout = computePipelineLayout(m_stages, rect(), QFontMetrics(titleFont), QFontMetrics(bodyFont),
-		!m_title.isEmpty(), tr("Source"), tr("Artifact"));
+		pipelineGlyphColumn(titleFont), !m_title.isEmpty(), tr("Source"), tr("Artifact"));
+	// Mirrored as paintEvent() draws them.
+	const Qt::LayoutDirection direction = layoutDirection();
+	const QRectF bounds(rect());
 	for (const PipelineBox& box : layout.boxes) {
-		if (box.stageIndex >= 0 && box.rect.contains(point)) {
+		if (box.stageIndex >= 0 && visualRectF(direction, bounds, box.rect).contains(point)) {
 			return box.stageIndex;
 		}
 	}

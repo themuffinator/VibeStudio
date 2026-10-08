@@ -29,6 +29,10 @@ enum class LevelViewLayout {
 	CameraAndPlan,
 	// Camera, top, front and side share one document and selection.
 	FourViews,
+	// A wide camera above three linked orthographic views.
+	CameraAbovePlans,
+	// A large camera beside three vertically stacked orthographic views.
+	CameraBesidePlans,
 };
 
 // What a left drag that starts over empty space in a 2D view does.
@@ -250,6 +254,7 @@ enum class CameraFreeLookMotion { Look, Pan, Dolly };
 	Qt::MouseButton pressedButton = Qt::NoButton, Qt::KeyboardModifiers pressModifiers = Qt::NoModifier);
 
 [[nodiscard]] QString levelViewLayoutId(LevelViewLayout layout);
+[[nodiscard]] bool levelViewLayoutHasThreePlans(LevelViewLayout layout);
 bool levelViewLayoutForId(const QString& id, LevelViewLayout* layout);
 [[nodiscard]] QString levelViewLayoutDisplayName(LevelViewLayout layout);
 [[nodiscard]] QString planEmptyDragId(PlanEmptyDrag drag);

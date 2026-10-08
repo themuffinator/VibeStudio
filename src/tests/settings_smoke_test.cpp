@@ -53,8 +53,17 @@ bool runPreferenceAndHistorySmoke(const QDir& root)
 	ok &= expect(!settings.storedSchemaIsNewer() && !settings.isReadOnly(), "Expected a fresh store to be writable.");
 	ok &= expect(settings.recentProjects().isEmpty(), "Expected no recent projects in a fresh settings file.");
 	const vibestudio::AccessibilityPreferences defaultPreferences = settings.accessibilityPreferences();
-	ok &= expect(defaultPreferences.localeName == QStringLiteral("en") && defaultPreferences.textScalePercent == 100 && defaultPreferences.theme == vibestudio::StudioTheme::Dark && defaultPreferences.density == vibestudio::UiDensity::Standard,
+	ok &= expect(defaultPreferences.localeName == QStringLiteral("system") && defaultPreferences.textScalePercent == 100 && defaultPreferences.theme == vibestudio::StudioTheme::Dark && defaultPreferences.density == vibestudio::UiDensity::Standard,
 		"Expected default accessibility and language preferences.");
+	ok &= expect(defaultPreferences.formatLocaleName == QStringLiteral("system") && defaultPreferences.colorVision == vibestudio::ColorVision::Typical
+			&& !defaultPreferences.reducedSaturation && !defaultPreferences.thickFocusIndicator && !defaultPreferences.thickTextCursor
+			&& !defaultPreferences.steadyTextCursor && defaultPreferences.uiFontFamily.isEmpty() && !defaultPreferences.wideTextSpacing
+			&& defaultPreferences.messageDuration == vibestudio::MessageDuration::Standard && defaultPreferences.visualAlerts
+			&& !defaultPreferences.soundCues && defaultPreferences.soundCueVolume == 60
+			&& defaultPreferences.screenReaderAnnouncements && !defaultPreferences.textToSpeechEnabled
+			&& defaultPreferences.speechEvents == QStringList({QStringLiteral("task-results"), QStringLiteral("task-problems")})
+			&& defaultPreferences.speechVoice.isEmpty() && defaultPreferences.speechRate == 0 && defaultPreferences.speechPitch == 0 && defaultPreferences.speechVolume == 100,
+		"Expected default region, vision, timing, alert, and speech preferences.");
 	ok &= expect(settings.selectedEditorProfileId() == QStringLiteral("vibestudio-default"), "Expected default editor profile selection.");
 	const vibestudio::AiAutomationPreferences defaultAiPreferences = settings.aiAutomationPreferences();
 	ok &= expect(defaultAiPreferences.aiFreeMode && !defaultAiPreferences.cloudConnectorsEnabled && !defaultAiPreferences.agenticWorkflowsEnabled,
@@ -198,6 +207,24 @@ bool runPreferenceAndHistorySmoke(const QDir& root)
 	preferences.density = vibestudio::UiDensity::Compact;
 	preferences.reducedMotion = true;
 	preferences.textToSpeechEnabled = true;
+	preferences.formatLocaleName = QStringLiteral("de_CH");
+	preferences.colorVision = vibestudio::colorVisionFromId(QStringLiteral("deuteranopia"));
+	preferences.reducedSaturation = true;
+	preferences.thickFocusIndicator = true;
+	preferences.thickTextCursor = true;
+	preferences.steadyTextCursor = true;
+	preferences.uiFontFamily = QStringLiteral("  Atkinson Hyperlegible ");
+	preferences.wideTextSpacing = true;
+	preferences.messageDuration = vibestudio::messageDurationFromId(QStringLiteral("until_replaced"));
+	preferences.visualAlerts = false;
+	preferences.soundCues = true;
+	preferences.soundCueVolume = 140;
+	preferences.screenReaderAnnouncements = false;
+	preferences.speechEvents = {QStringLiteral("status-messages"), QStringLiteral("unknown-event"), QStringLiteral("TASK_PROBLEMS")};
+	preferences.speechVoice = QStringLiteral("voice-id");
+	preferences.speechRate = 25;
+	preferences.speechPitch = -4;
+	preferences.speechVolume = 60;
 	settings.setAccessibilityPreferences(preferences);
 	settings.setSelectedEditorProfileId(QStringLiteral("TrenchBroom"));
 	settings.upsertCompilerToolPathOverride({QStringLiteral("ericw-qbsp"), root.filePath(QStringLiteral("qbsp-test"))});
@@ -344,6 +371,25 @@ bool runPreferenceAndHistorySmoke(const QDir& root)
 	const vibestudio::AccessibilityPreferences reloadedPreferences = reloaded.accessibilityPreferences();
 	ok &= expect(reloadedPreferences.localeName == QStringLiteral("pt-BR") && reloadedPreferences.textScalePercent == 175 && reloadedPreferences.theme == vibestudio::StudioTheme::HighContrastLight && reloadedPreferences.density == vibestudio::UiDensity::Compact && reloadedPreferences.reducedMotion && reloadedPreferences.textToSpeechEnabled,
 		"Expected accessibility and language preferences to persist.");
+	ok &= expect(reloadedPreferences.formatLocaleName == QStringLiteral("de-CH") && reloadedPreferences.colorVision == vibestudio::ColorVision::RedGreen
+			&& reloadedPreferences.reducedSaturation && reloadedPreferences.thickFocusIndicator && reloadedPreferences.thickTextCursor
+			&& reloadedPreferences.steadyTextCursor && reloadedPreferences.uiFontFamily == QStringLiteral("Atkinson Hyperlegible") && reloadedPreferences.wideTextSpacing
+			&& reloadedPreferences.messageDuration == vibestudio::MessageDuration::UntilReplaced && !reloadedPreferences.visualAlerts
+			&& reloadedPreferences.soundCues && reloadedPreferences.soundCueVolume == 100
+			&& !reloadedPreferences.screenReaderAnnouncements,
+		"Expected region, vision, timing, and alert preferences to persist normalized, the cue volume clamped.");
+	ok &= expect(reloadedPreferences.speechEvents == QStringList({QStringLiteral("task-problems"), QStringLiteral("status-messages")})
+			&& reloadedPreferences.speechVoice == QStringLiteral("voice-id") && reloadedPreferences.speechRate == 10
+			&& reloadedPreferences.speechPitch == -4 && reloadedPreferences.speechVolume == 60,
+		"Expected speech preferences to persist with known events only and the rate clamped.");
+	{
+		// Every speech event switched off stays off; it is not the default.
+		vibestudio::AccessibilityPreferences silent = reloadedPreferences;
+		silent.speechEvents.clear();
+		reloaded.setAccessibilityPreferences(silent);
+		ok &= expect(reloaded.accessibilityPreferences().speechEvents.isEmpty(), "Expected an empty speech event list to persist as empty.");
+		reloaded.setAccessibilityPreferences(reloadedPreferences);
+	}
 
 	reloaded.setLocaleName(QStringLiteral("zz"));
 	reloaded.setTextScalePercent(999);

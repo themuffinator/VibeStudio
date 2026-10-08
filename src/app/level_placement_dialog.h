@@ -13,6 +13,7 @@ class QLabel;
 class QProgressBar;
 class QPushButton;
 class QScrollArea;
+class QSpinBox;
 class QThread;
 class QTimer;
 
@@ -29,6 +30,8 @@ class LevelPlacementDialog final : public QDialog {
 	void setOffset(const LevelMapVec3& offset);
 	LevelMapVec3 offset() const;
 	void setTextureLock(bool enabled);
+	void setCopies(int copies);
+	int copies() const;
 	bool isReady() const { return m_ready; }
 	bool previewValid() const { return m_valid; }
 	const LevelMapDocument& previewDocument() const { return m_candidate; }
@@ -50,6 +53,7 @@ class LevelPlacementDialog final : public QDialog {
 	std::shared_ptr<const PackageArchiveReader> m_archive;
 	std::array<QDoubleSpinBox*, 3> m_offset{};
 	QCheckBox* m_lock = nullptr;
+	QSpinBox* m_copies = nullptr;
 	QWidget* m_controls = nullptr;
 	QScrollArea* m_scroll = nullptr;
 	QLabel* m_status = nullptr;

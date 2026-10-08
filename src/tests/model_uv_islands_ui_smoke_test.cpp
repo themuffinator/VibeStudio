@@ -117,7 +117,7 @@ int main(int argc, char **argv)
 			for (int index = 0; index < tabs->count(); ++index)
 				if (tabs->widget(index)->isAncestorOf(uv))
 					tabs->setCurrentIndex(index);
-		editor.findChild<QTabWidget *>("meshInspector")->setCurrentIndex(1);
+		editor.showSidebarPage(QStringLiteral("surface"));
 		ok &= expect(settleModelUv(*uv), "initial UV analysis and render finish");
 		pivot->setCurrentIndex(int(ModelUvPivot::IndividualIslands));
 		ok &= expect(pivot->count() == 4 && !editor.findChild<QDoubleSpinBox *>("meshUvPivot0")->isEnabled() &&

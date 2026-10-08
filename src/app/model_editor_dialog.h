@@ -5,6 +5,7 @@
 #include "app/model_material_worker.h"
 #include "core/model_document.h"
 #include "core/model_collision.h"
+#include "core/model_editor_controls.h"
 #include "core/model_skin_source.h"
 #include "core/model_skin_bindings.h"
 #include "core/model_topology_health.h"
@@ -12,11 +13,16 @@
 
 #include <QDialog>
 #include <QHash>
+#include <QPointer>
 
 #include <functional>
 
 class QAction;
 class QCheckBox;
+class QGridLayout;
+class QFrame;
+class QToolButton;
+class QTreeWidget;
 class QComboBox;
 class QDoubleSpinBox;
 class QFormLayout;
@@ -33,10 +39,13 @@ class QSpinBox;
 namespace vibestudio
 {
 class ModelComponentTable;
+class ModelEditorTools;
 class ModelIntersectionList;
 class ModelViewport;
 class ModelUvView;
 class ModelRecoveryWriter;
+class SidebarPage;
+class StudioSidebar;
 
 struct ModelCollisionDestination
 {
@@ -46,6 +55,9 @@ struct ModelCollisionDestination
 
 class ModelEditorDialog final : public QDialog
 {
+	// The Blender-style interaction layer drives the editor's own controls.
+	friend class ModelEditorTools;
+
   public:
 	explicit ModelEditorDialog(QWidget *parent = nullptr);
 	~ModelEditorDialog() override;
@@ -68,6 +80,9 @@ class ModelEditorDialog final : public QDialog
 	std::function<ModelDesignContext()> context;
 	std::function<bool(const QByteArray &, const QString &, bool, const LevelMapVec3 &, bool, QString *)> handoff;
 	std::function<void(const QString &)> showMaterial;
+	// Runs after the user picks another controls profile, so other views
+	// (the Models page preview) can follow it.
+	std::function<void()> profileChanged;
 	void setMaterialSource(ModelMaterialSource source);
 	void reloadMaterials();
 	[[nodiscard]] bool materialLoading() const;
@@ -81,13 +96,43 @@ class ModelEditorDialog final : public QDialog
 	// The optional continuation runs once after an accepted deferred close.
 	// Capture the caller with a lifetime guard when it is a QObject.
 	bool requestClose(std::function<void()> afterDeferredClose = {});
+	[[nodiscard]] ModelEditorTools *tools() const { return m_tools; }
+
+	// Layout and controls profiles (model_editor_layout.cpp). The editor's
+	// panels live on two tabbed sidebars arranged by the profile's family, as
+	// the Levels page arranges its own; the views are one or four panes.
+	void applyProfile(const QString &profileId, bool save = true);
+	[[nodiscard]] QString profileId() const { return m_controls.profileId; }
+	[[nodiscard]] const ModelEditorControls &controls() const { return m_controls; }
+	// Applies controls that may carry the user's overrides for the profile.
+	void applyControls(const ModelEditorControls &controls);
+	[[nodiscard]] StudioSidebar *leadingSidebar() const { return m_leadingSidebar; }
+	[[nodiscard]] StudioSidebar *trailingSidebar() const { return m_trailingSidebar; }
+	[[nodiscard]] SidebarPage *sidebarPage(const QString &pageId) const { return m_sidebarPages.value(pageId); }
+	// Shows the page on whichever sidebar holds it, opening a folded sidebar.
+	bool showSidebarPage(const QString &pageId);
+	void setViewLayout(ModelViewLayout layout);
+	[[nodiscard]] ModelViewLayout viewLayout() const { return m_viewLayout; }
+	void toggleFourViews();
+	void toggleMaximisedView();
+	void toggleSidebars();
+	// Every view pane in reading order; the interactive one is the preview.
+	[[nodiscard]] QVector<ModelViewport *> panes() const;
+	[[nodiscard]] ModelPaneView paneView(int quadrant) const { return m_paneViews.value(quadrant); }
+	// Makes the pane in `quadrant` the interactive one, as a click does.
+	void activatePane(int quadrant);
+	[[nodiscard]] int activePane() const { return m_activePane; }
+	// Copies what the preview shows into the other panes.
+	void syncPanes();
 
   protected:
 	void closeEvent(QCloseEvent *event) override;
 	void reject() override;
+	bool eventFilter(QObject *watched, QEvent *event) override;
 
   private:
 	ModelDocument m_document;
+	ModelEditorTools *m_tools = nullptr;
 	QByteArray m_presentedMeshRevision;
 	ModelSelection m_presentedSelection, m_highlightedSelection;
 	QByteArray m_highlightedRevision;
@@ -241,6 +286,48 @@ class ModelEditorDialog final : public QDialog
 	QByteArray m_recoverySourceHash;
 	quint64 m_recoveryRevision = 1, m_recoveryRequestedRevision = 0;
 	bool m_recoveryActive = false, m_approvedClose = false;
+	// Layout (model_editor_layout.cpp).
+	ModelEditorControls m_controls = modelEditorControlsForProfile(defaultModelEditorProfileId());
+	StudioSidebar *m_leadingSidebar = nullptr, *m_trailingSidebar = nullptr;
+	QHash<QString, SidebarPage *> m_sidebarPages;
+	QToolButton *m_profileButton = nullptr;
+	QComboBox *m_profileCombo = nullptr, *m_layoutCombo = nullptr;
+	QComboBox *m_paneCombos[4]{};
+	QWidget *m_paneGrid = nullptr;
+	QGridLayout *m_paneLayout = nullptr;
+	QFrame *m_paneFrames[4]{};
+	QVector<ModelViewport *> m_mirrors;
+	QVector<ModelPaneView> m_paneViews;
+	// Which quadrant the preview sits in, and each quadrant's camera.
+	int m_activePane = 3;
+	ModelViewLayout m_viewLayout = ModelViewLayout::Single;
+	bool m_maximised = false;
+	bool m_sidebarsHidden = false;
+	bool m_forwardingPress = false;
+	QPointer<ModelViewport> m_pressForwardSource;
+	QTimer *m_paneSync = nullptr;
+	QTreeWidget *m_skeletonTree = nullptr;
+	QLabel *m_skeletonSummary = nullptr;
+	QPushButton *m_exportMd5 = nullptr, *m_exportIqm = nullptr;
+	SidebarPage *createSidebarPage(const QString &pageId);
+	QFormLayout *addSidebarForm(const QString &pageId, StudioSidebar *sidebar);
+	void buildSidebarPages();
+	void buildToolPages();
+	void buildPaneGrid(QWidget *viewport);
+	void arrangeSidebars();
+	// Each sidebar page is at least as wide as its widest control, so the
+	// sidebars never clip a form, whichever side the profile puts them on.
+	void fitSidebarPages();
+	void saveSidebarState();
+	void refreshProfileControls();
+	void placePanes();
+	void configurePane(ModelViewport *pane, ModelPaneView view, bool frame);
+	void addSkeletonControls(QFormLayout *form);
+	void refreshSkeleton();
+	void showControlsReference();
+	void customiseControls();
+	void exportControls();
+	void importControls();
 	bool performWork(const QString &title, ModelDocumentJob job, QString *error, bool durableWrite = false);
 	void chooseRecovery();
 	void retireRecovery(const QString &preservedId = {});

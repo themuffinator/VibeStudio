@@ -375,13 +375,18 @@ their own admission limits and expose no paths after partial failure; ordinary
 CLI extraction retains its documented per-file completion report.
 
 
-`editor scene list|create|rename|move|assign|visibility|lock|remove|reset <map>` shares
+`editor scene list|create|rename|move|assign|visibility|lock|remove|reset|link|update-links|unlink <map>` shares
 the map document's scene, validation and serialization services. Mutation output
 is explicit (`--output`), supports `--dry-run`, and requires `--overwrite` for an
 existing destination. WAD operations require `--map-name`. JSON includes stable
-node UUIDs, memberships, visibility, local/inherited locks and preserved-metadata diagnostics.
+node UUIDs, memberships, visibility, local/inherited locks, links with each copy's
+turn and mirror, and preserved-metadata diagnostics.
 `lock --id <UUID> --locked true|false` changes protection; ordinary map edits use
-the same lock boundary and refuse output publication on a protected edit. See
+the same lock boundary and refuse output publication on a protected edit.
+`link --id <UUID> [--offset x,y,z]` makes a linked copy of a group and reports
+`createdId`; `update-links` makes the group's other unlocked copies match it and
+reports `updated`; `unlink` separates it. Ordinary `map` edits keep linked copies in
+step through the same service as the studio. See
 [Level scene organization](LEVEL_SCENE.md#cli) for operation options.
 
 `package groups <wad-or-draft>` inspects semantic WAD groups and emits a schema-1
@@ -459,7 +464,7 @@ Rename/remove take `--id`; rename also requires `--name`. WADs require `--map-na
 The CLI never changes map bytes or an open GUI camera. See
 [Saved Level Views](LEVEL_EDITOR.md#saved-level-views) for schema, limits and errors.
 
-`editor layout [profile|single-2d|single-3d|camera-and-plan|four-views]` reads or
+`editor layout [profile|single-2d|single-3d|camera-and-plan|four-views|camera-above-plans|camera-beside-plans]` reads or
 sets the level editor layout independently of its controls. JSON includes
 `preference`, `effectiveLayout` and `profileId`; omitted preference is read-only.
 Unknown/duplicate options, unknown IDs and extra positionals return 2, settings
@@ -778,7 +783,7 @@ destination checks and retain the original source or recovery copy.
 - [x] Lightweight in-process router for early subcommand families.
 - [x] Global `--json` output mode for router-backed project, package,
   installation, asset, map, shader, sprite, code, extension, compiler,
-  localization, diagnostics, AI, and exit-code commands.
+  localization, accessibility, diagnostics, AI, and exit-code commands.
 - [x] Stable exit-code contract exposed through `--exit-codes` and
   `cli exit-codes`.
 - [x] Schema-versioned command manifest writer for compiler command plans.
@@ -1240,6 +1245,19 @@ bounds, encoding behavior, batch cancellation, and concurrency limits.
   Hexen map `map duplicate` and `map delete` take `thing:N` selectors.
   Duplication locks brush textures by default; `--texture-lock off` retains the
   source frame. Doom/Hexen copy coordinates round to native whole units.
+  `--copies N` (1–256, default 1) creates additional copies at `delta`,
+  `2*delta`, through `N*delta` from the original objects, avoiding cumulative
+  rounding drift. JSON reports `copyCount` and every new selector in `copies`.
+  Arrays use one atomic edit and undo command; a failed copy preserves the
+  source and output. Multiple-copy arrays are limited to 32,768 added native
+  records (including Doom entity mirrors), 262,144 brush faces/patch points,
+  and the scene membership budget. Owners, scene memberships and entity target
+  names retain ordinary duplicate behaviour; use prefabs for independent
+  target-name remapping. UDMF things support the same command and arrays with
+  fractional XYZ positions. Copies retain native block comments, unknown
+  properties, IDs and action arguments; originals remain byte-for-byte intact.
+  Ordinary things retain valid nodes; copied polyobject controls require a
+  rebuild. UDMF geometry duplication and thing deletion remain unsupported.
   Snap, duplicate and paste share the GUI's isolated placement preparation
   service before the CLI's guarded save or dry run. CLI invocation remains
   synchronous; no terminal cancellation or progress-stream option is added.
@@ -1347,6 +1365,85 @@ bounds, encoding behavior, batch cancellation, and concurrency limits.
 - [x] `map carve` to carve the `--object` brushes out of every other brush they
   overlap, as CSG subtraction does; the carving brushes stay, and the number of
   brushes cut is reported as `carved`.
+- [x] `map add-shape <map> --shape box|wedge|cylinder|cone|sphere|arch|ring|stairs|room
+  --texture <name> --output <path>` adds a shape filling `--mins x,y,z` and
+  `--maxs x,y,z`, or replaces the `--object brush:N` world brushes with one
+  filling their bounds, as the Levels Shapes tab does. Each shape reads only its
+  own settings: `--axis x|y|z`, `--sides`, `--bands`, `--thickness`, `--arc`,
+  `--start`, `--steps` and `--rise auto|+x|-x|+y|-y`; any other is a usage
+  error. Arches, rings, stairs and rooms are several brushes, one undo step in
+  the editor. JSON reports `shape`, the new `brushes` and the `replaced` ones.
+- [x] `map align <map> --object brush:3 --object brush:4 --axis x|y|z --edge
+  min|centre|max --output <path>` lines the objects up on the minimum, centre or
+  maximum of their combined bounds, as Hammer's Align Objects does: entities
+  with their brushes, world brushes and patches, and Doom things (no Z). One
+  undo step in the editor; reports `moved`.
+- [x] `map replace-key <map> --key name --find value --replace value [--partial]
+  [--object entity:N ...] --output <path>` replaces a key's value on every
+  entity whose value matches `--find` (the whole value, or with `--partial`
+  every occurrence within it), or only on the `--object` entities, as one undo
+  step; the key matches in any case. Reports `replaced`.
+- [x] `map shear <map> --object brush:3 --axis x|y|z --along x|y|z (--factor f |
+  --angle degrees) [--about value] [--texture-lock on|off] [--allow-valve220] --output <path>`
+  slants the objects about their centre, or with `--about value` about the line at
+  that coordinate along `--along`, as TrenchBroom's shear tool does:
+  points slide along `--axis` by the factor times their distance along
+  `--along`. Doom maps shear in X and Y only.
+- [x] `map curve-linedefs <map> [--map-name MAP01] --object linedef:4 --segments N
+  --bulge units --output <path>` bends Doom linedefs into N pieces along an arc
+  bulging towards their front sides (negative: the back), as Doom Builder's
+  curve mode does; texture offsets carry on along the pieces. Reports `curved`
+  and the new `pieces`; rebuild the nodes before playing.
+- [x] `map make-sector <wad> [--map-name MAP01] --at x,y --output <path>` makes a
+  sector of the existing lines around the point, islands of lines inside it
+  included, as Doom Builder's Make Sectors mode does; a point outside every
+  closed shape of lines is refused. Reports `sector`; rebuild the nodes before
+  playing.
+- [x] `map align-walls <wad> [--map-name MAP01] --sidedef N [--part upper|middle|lower]
+  [--axes x|y|xy] [--width texels] [--object linedef:N ...] --output <path>` lines
+  up the textures of the walls joined to a side that show the same texture, as
+  Doom Builder's auto-align does: X offsets run on by each wall's length (within
+  `--width` when given) and Y offsets follow the Doom renderer's pegging, so rows
+  stay level as floors and ceilings change. `--object` keeps the walk to those
+  linedefs. Reports `aligned`. Binary Doom and Hexen maps.
+- [x] `map draw-stairs <wad> [--map-name MAP01] --from x,y --to x,y [--steps N]
+  [--step-height units] [--rise auto|+x|-x|+y|-y] --output <path>` draws a row
+  of step sectors across the footprint, each floor higher than the last, and
+  `map draw-grid <wad> --from x,y --to x,y --columns N --rows N --output <path>`
+  cuts it into a grid of sectors, as Doom Builder's stair builder and grid
+  drawing do, through Draw Sector's service. Both report the new `sectors`.
+- [x] `map region <map> (--mins x,y,z --maxs x,y,z | --object ...) [--start
+  x,y,z] [--texture name] --output <path>` writes a region of a Quake-family map
+  as a map of its own, as Radiant's regions and Hammer's cordon do: world
+  brushes and patches touching the box, point entities inside it and brush
+  entities touching it stay; the box is sealed by six brushes (default
+  `common/caulk`) and gets an `info_player_start` at `--start` (or its middle)
+  when it has none. `map cordon` is an alias. Reports `kept`, `removed`,
+  `sealBrushes` and `playerStartAdded`.
+- [x] `map intersect` to replace the `--object` brushes (two or more, of one
+  entity) with the one brush where they all overlap, as TrenchBroom's CSG
+  Intersect does; each face takes the texture of the face it came from. Brushes
+  that do not overlap fail and write nothing; the result is reported as
+  `result`.
+- [x] `map tie-entity <map> --object brush:12 --class func_door [--key k=v]...
+  --output <path>` makes brushes and patches (or the brushes of selected brush
+  entities) into a new brush entity, the way Radiant's entity menu and Hammer's
+  Tie to Entity do; an entity left without brushes goes. `map move-to-world`
+  gives the `--object` brush entities' brushes back to worldspawn. Both are one
+  undo step in the editor and report `entity` or `moved`.
+- [x] `map select-region <map> --object brush:12 --mode
+  inside|touching|complete-tall|partial-tall [--axis x|y|z]` lists, without
+  writing anything, the objects Radiant's region selections would select with
+  those objects' bounds as the region; `--axis` is the axis the tall modes look
+  along (z by default, as in the Top view).
+- [x] `map detail <map> --object brush:3 [--structural] --output <path>`: with
+  Quake II or Quake III face flags, sets or clears the detail content bit on
+  every face; in Quake maps, ties the brushes to `func_detail` or moves
+  `func_detail` brushes back to the world. Reports `changed` and `faceFlags`.
+- [x] `map drop-to-floor <map> --object entity:7 [--definitions <path>]
+  --output <path>` moves point entities straight down onto the highest brush or
+  patch top beneath them, keeping each class's definition height above the
+  floor (from `--definitions`, else the built-in catalogue of the map's game).
 - [x] `map merge-brushes <map> --object brush:0 --object brush:1 --output <path>`
   joins an exact convex union using shared GUI/core validation and undo.
   Gaps, cavities, concavity, mixed owners and mixed dialects fail. Conflicting
@@ -1630,6 +1727,27 @@ Each resolved path may be a definition file or a folder of them.
   or Join. Edits use `.mesh.json` output, `--dry-run` and normal overwrite/source
   protection. [Surface Authoring](MODEL_SURFACES.md) documents exact selectors,
   partition semantics, selection remapping, limits and exit codes.
+- [x] `model tool <source.mesh.json> --tool <name> --output <new.mesh.json>` runs one
+  edit-mode mesh tool through the same document service as the Mesh Editor:
+  rotate-edges, merge, dissolve-vertices, dissolve-faces, poke, beautify,
+  make-face, extrude-edges, inset, shrink-fatten, smooth, transform
+  (proportional and mirrored), shade-flat, shade-smooth, auto-smooth, bisect,
+  symmetrize, loop-cut, add (primitives), decimate, bevel-vertices, solidify
+  and the UV projections uv-cube, uv-view, uv-cylinder and uv-sphere. Components use
+  `--surface`, `--faces`, `--vertices` and `--edges`; each tool refuses options
+  it does not take. `--dry-run`, `--overwrite`, text/JSON results and exit
+  codes (2 usage, 1 read/write, 4 invalid edit, 0 success) match `model edit`.
+  JSON includes the resulting selection for chaining. See
+  [Mesh Tools](MODEL_TOOLS.md).
+- [x] `model select <source> --select <operator>` is read-only: all, none,
+  invert, linked, more, less, loop, ring, path, similar, non-manifold, loose,
+  boundary, sharp, random, checker, side, facing and mirror, in face, vertex
+  or edge mode. It prints the selected indices as ready-to-use `--faces`,
+  `--vertices` or `--edges` values. See [Mesh Tools](MODEL_TOOLS.md#selection).
+- [x] `model lod <source> --output <name.md3>` writes the base MD3 and Quake III
+  detail levels `name_1.md3`, `name_2.md3` beside it (`--levels 1-3`, `--ratio`),
+  each a quadric decimation of the previous level that keeps UV seams and every
+  pose. See [Mesh Tools](MODEL_TOOLS.md#quake-iii-detail-levels).
 - [x] `model skin <source.mesh.json> --file <file.skin> --output <source.mesh.json>`
   applies complete Quake III surface-to-shader assignments through the shared
   document transaction. Package/folder/draft imports use `--package` with
@@ -1774,6 +1892,29 @@ package, and level CLI example and the editable JSON schema.
   `model build <source.mesh.json> --output <model.mdl>` applies original Quake
   limits and reports stored vertices, native frame/skin counts, precision errors
   and compatibility notes. It does not embed the source palette into the MDL.
+- [x] `model formats` lists every model format the studio reads: suffixes,
+  engine families (`idtech1` to `idtech4`, `goldsrc`, `interchange`), games,
+  whether it is skeletal or animation only, the companion files it reads, whether
+  it is also written, and what the decoder keeps. `--json` adds `exportFormats`,
+  the identifiers `model build` accepts. See [Native Model Formats](MODEL_FORMATS.md).
+- [x] `model build <source.mesh.json> --output <model.md5mesh|model.md5anim|model.iqm|model.ase>`
+  writes skeletal and idTech 4 formats through the same export service as the
+  Mesh Editor. Skeletal output re-binds vertices moved in the bind pose first; for
+  `.md5anim`, `--frame` picks the skeletal clip by index, and a model without one
+  exits 4. A model without joints writes a one-joint MD5 mesh or a static IQM,
+  with a note.
+- [x] `model profiles` lists the modeller's controls profiles (`studio`,
+  `blender`, `3ds-max`, `milkshape-3d`) with layout, transform style, sidebar
+  family, selection-mode names, what each changes and where it differs from the
+  editor it follows. The current profile is marked.
+- [x] `model controls [--profile ID]` prints a profile's navigation, selection,
+  transform, layout and key bindings, with saved changes unless `--defaults`.
+  `--section navigation|selection|transform|layout|keys` narrows the output;
+  `--check` exits 4 when two gestures or keys collide; `--export <file>` (with
+  `--overwrite` for an existing file) writes a `vibestudio.modeller-controls`
+  file; `--import <file>` saves its changes for the profile it names; `--select`
+  makes the profile current; `--reset` drops saved changes; `--settings-file`
+  works on a separate settings store. See [Modeller Profiles](MODELLER_PROFILES.md).
 
 | Command | Exit | Condition |
 | --- | --- | --- |
@@ -1787,6 +1928,10 @@ package, and level CLI example and the editable JSON schema.
 | `model export` | 2 | Missing input, invalid `--frame`, or an explicitly blank `--output`. |
 | `model export` | 3 | The model file or the package could not be opened. |
 | `model export` | 5 | The input decodes no exportable geometry. |
+| `model controls` | 0 | The controls were printed, checked without problems, exported, imported, selected or reset. |
+| `model controls` | 1 | A controls file could not be read or written, or the settings store refused the change. |
+| `model controls` | 2 | An unknown profile, section or option, an existing `--export` file without `--overwrite`, or a controls file for a different `--profile`. |
+| `model controls` | 4 | `--check` found colliding gestures or keys, or an imported controls file is malformed. |
 
 ### Compiled Artifacts
 
@@ -1924,6 +2069,77 @@ package, and level CLI example and the editable JSON schema.
 - [x] `shader set-stage` for non-destructive stage directive edits with
   `--output`, `--dry-run`, `--overwrite`, and JSON save reports.
 
+### Materials
+One family for every idTech material, shared with the **Materials** page
+(`core/material_*`; design in `docs/MATERIALS.md`). A source is a package,
+folder or WAD, or a loose `.shader` or `.mtr` script; a loose script's images
+and Doom 3 tables come from the folder above its `scripts/` or `materials/`
+folder, or from `--package`. `--base` adds the game's own package or folder
+for images a mod borrows. `--material` names the material (it may be left
+out when the source defines only one), `--engine doom|quake|quake2|quake3|doom3`
+narrows or overrides the engine, and `--palette` picks the palette for
+paletted images when the package has none.
+- [x] `material list` prints every material with its engine, kind, stages,
+  traits and source line, including Quake III implicit shaders, Doom walls and
+  flats, Quake WAD textures and Quake II WALs. `--where` takes the studio query
+  language over `name`, `engine`, `kind`, `source`, `stages`, `images`,
+  `image`, `frames`, `blend`, `sort`, `cull`, `errors` and `warnings`, the
+  yes/no traits `animated`, `sky`, `light`, `fog`, `translucent`, `rejected`
+  and `shadowed`, and each surface parameter, keyword flag or Quake II flag
+  (`slick=yes`, `surfaceparm=nolightmap`); `--limit` caps the rows and
+  `--no-implicit` leaves out images no script names.
+- [x] `material inspect` shows one material: its summary, every image and
+  where it resolved (or that it is missing), diagnostics, why the engine would
+  drop it, its node graph and, with `--show-source`, its text.
+- [x] `material validate` checks materials the way each engine loads them:
+  script syntax, keywords the engine rejects (Quake III drops the shader,
+  Doom 3 defaults the material), missing images, definitions another one
+  shadows, and Doom lump problems. It exits 4 on errors, or on warnings with
+  `--strict`; `--no-images` skips image lookups and `--where` narrows the set.
+- [x] `material render` draws a material the way its engine draws it with the
+  shared CPU renderer and writes a PNG to `--output` (or reports with
+  `--dry-run`). `--shape wall|floor|cube|sphere|cylinder|room`, `--size WxH`,
+  `--time`, `--yaw`, `--pitch`, `--zoom`, `--fov`, `--orthographic`, `--tiling`
+  and `--swatch` frame it; `--frames N --fps F --columns C` writes an animation
+  sheet. Lighting follows the engine: `--lightmap`, `--flat-lightmap`,
+  `--no-overbright` and `--context world|model|2d` (Quake III);
+  `--doom-light`, `--doom-extralight`, `--no-doom-distance`,
+  `--no-fake-contrast`, `--boom-wrapping` and `--sky` (Doom);
+  `--quake-renderer glquake|modern|software`, `--quake-style`,
+  `--quake-lightmap` and `--alternate` (Quake); `--quake2-intensity` and
+  `--sky` (Quake II); `--light-color`, `--light-angle`, `--ambient`,
+  `--no-specular`, `--doom3-shading vanilla|bfg`, `--parms 0=1,4=2` and
+  `--sound` (Doom 3). `--filter`, `--background`, `--no-checker`,
+  `--editor-image`, `--ignore-rejection` (draw the stages even where the
+  engine draws its fallback) and `--developer-default` complete it.
+- [x] `material graph` prints the material's node graph (nodes, properties
+  and links) and the nodes that can be added. With `--edits <json>` it applies
+  graph edits (`set`, `add`, `remove`, `move`, `wrap`, `unwrap`, `expand`) to
+  the material's text, checks the result by parsing it again, and writes it to
+  `--output` (or shows it with `--dry-run`). `--text-kind` picks the text for
+  classic materials: `swantbls`, `animdefs` or `wal-json`; a `wal-json` edit
+  written to a `.wal` file rewrites that WAL's header.
+- [x] `material edit` applies text edits from `--edits <json>` (`set`, `add`,
+  `remove`, `add-stage`, `remove-stage`, `move-stage`, `move`,
+  `replace-definition`, `add-definition`, `remove-definition`, `rename`) to a
+  Quake III shader or Doom 3 material script: the loose script, `--script` in a
+  package, or the script that defines `--material`. It writes `--output` with
+  `--overwrite` for the same file, or reports with `--dry-run`; `--strict`
+  refuses to write a script with errors.
+- [x] `material templates` lists the starting points for `material new`, by
+  engine.
+- [x] `material new --template <id> --name <material>` writes a new material,
+  with `--image` for its main image, to the console, to a new `--output`
+  script, or to the end of an existing one with `--append`.
+- [x] `material doom-tables` prints a Doom package's animation and switch
+  tables (Boom `ANIMATED`/`SWITCHES` or the vanilla tables) as SWANTBLS text,
+  or reads SWANTBLS text, and with `--output-dir` writes `ANIMATED.lmp`,
+  `SWITCHES.lmp` and `SWANTBLS.txt`.
+- [x] `material wal` shows a Quake II WAL header (a `.wal` file, or
+  `--material` in a package) as ericw-tools `.wal_json`; `--output` writes that
+  sidecar, and `--metadata <wal_json> --output <wal>` rewrites the header's
+  flags, contents, value and next frame without touching the pixels.
+
 ### Sprites
 - [x] `sprite plan` for Doom lump naming, Quake `.spr` sequencing, palette
   preview notes, frame rotations, and package staging paths.
@@ -2034,7 +2250,7 @@ format or engine support. See [Editor Profiles](EDITOR_PROFILES.md).
   defaults; `--centers on|off`, `--zoom on|off` and `--follow-camera on|off`
   update them. `--json` reports the resulting values and `--settings-file`
   isolates automation settings.
-- [x] `editor layout [profile|single-2d|single-3d|camera-and-plan|four-views]`
+- [x] `editor layout [profile|single-2d|single-3d|camera-and-plan|four-views|camera-above-plans|camera-beside-plans]`
   reads the current level-view layout, or saves the supplied preference. `profile`
   follows the selected interaction profile's default. JSON returns `preference`,
   `effectiveLayout` and `profileId`; `--settings-file` isolates automation settings.
@@ -2052,6 +2268,15 @@ format or engine support. See [Editor Profiles](EDITOR_PROFILES.md).
 - [x] `--localization-report`
 - [x] `localization targets`
 - [x] `localization report`
+- [x] `accessibility report`: every accessibility preference, the speech engine
+  and how many voices it has, the system's languages and the target they
+  resolve to, and the setup review's warnings; reads the store without
+  writing (`--json` for the same fields).
+- [x] `accessibility voices`: the speech engine's voices, with the ids
+  `--set-tts-voice` takes; exits 5 (unavailable) without an engine.
+- [x] `accessibility speak <text>` / `accessibility speak --test`: speaks and
+  waits, with the saved voice, rate, pitch, and volume, or `--voice`, `--rate`,
+  `--pitch`, and `--volume`; no text exits 2 and no engine exits 5.
 - [x] `diagnostics bundle`
 - [x] `diagnostics crashes`
 - [x] `editor keys`
@@ -2180,7 +2405,7 @@ vibestudio --cli map edit ".\maps\start.map" --entity 1 --set targetname=lift --
 vibestudio --cli map edit ".\maps\start.map" --where class=light --set light=300 --output ".\maps\start-bright.map"
 vibestudio --cli map add-entity ".\maps\start.map" --class light --origin 64,0,96 --set light=300 --output ".\maps\start-lit.map"
 vibestudio --cli map delete ".\maps\start-lit.map" --object entity:3 --object brush:12 --output ".\maps\start-trimmed.map"
-vibestudio --cli map duplicate ".\maps\start.map" --object brush:12 --delta 128,0,0 --output ".\maps\start-more.map"
+vibestudio --cli map duplicate ".\maps\start.map" --object brush:12 --delta 128,0,0 --copies 4 --output ".\maps\start-more.map"
 vibestudio --cli shader set-stage ".\scripts\common.shader" --shader "textures/base/wall" --stage 1 --directive blendFunc --value "GL_ONE GL_ONE" --output ".\scripts\common-edited.shader" --json
 vibestudio --cli sprite plan --engine doom --name TROO --frames 2 --rotations 8 --palette doom --json
 vibestudio --cli entity validate ".\maps\start.map" --definitions ".\defs\quake.def" --strict --json
@@ -2219,6 +2444,8 @@ vibestudio --cli code index './mymod' --find monster --json
 vibestudio --cli compiler plan ericw-qbsp --input './maps/start.map' --dry-run
 vibestudio --cli ui semantics
 vibestudio --cli localization targets
+vibestudio --cli accessibility report --json
+vibestudio --cli accessibility speak --test --rate 2
 vibestudio --cli diagnostics bundle --output './diagnostics'
 vibestudio --cli extension run './extensions/sample/vibestudio.extension.json' make-file --dry-run --json
 vibestudio --cli ai propose-command --prompt 'build quake map maps/start.map with qbsp'

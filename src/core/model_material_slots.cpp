@@ -90,9 +90,11 @@ bool modelMaterialPreviewSnapshot(const ModelMesh &mesh, const QHash<int, int> &
 	ModelMesh snapshot;
 	snapshot.sourcePath = mesh.sourcePath;
 	snapshot.format = mesh.format;
-	if (!mesh.embeddedSkins.isEmpty())
+	// Every embedded skin travels with its name, so surfaces that name theirs
+	// (Half-Life textures) find it; MDL's indexed members stay behind.
+	for (const auto &skin : mesh.embeddedSkins)
 	{
-		snapshot.embeddedSkins.append(mesh.embeddedSkins.first());
+		snapshot.embeddedSkins.append(skin);
 		snapshot.embeddedSkins.last().indexedFrames.clear();
 		snapshot.embeddedSkins.last().intervals.clear();
 	}

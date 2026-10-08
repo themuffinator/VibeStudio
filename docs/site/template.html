@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="en" data-theme="auto">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>$page_title · VibeStudio Documentation</title>
+<meta name="description" content="$description">
+<meta name="generator" content="scripts/build_docs_site.py">
+<meta name="color-scheme" content="light dark">
+<link rel="icon" href="${root}assets/img/favicon.svg" type="image/svg+xml">
+<link rel="icon" href="${root}assets/img/favicon-32.png" sizes="32x32" type="image/png">
+<link rel="apple-touch-icon" href="${root}assets/img/apple-touch-icon.png">
+<link rel="stylesheet" href="${root}assets/style.css">
+<script>try{var t=localStorage.getItem("vibestudio-docs-theme");if(t==="light"||t==="dark")document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body class="$body_class">
+<a class="skip-link" href="#content">Skip to content</a>
+<header class="topbar">
+  <button class="nav-toggle" type="button" aria-controls="sidebar" aria-expanded="false" aria-label="Show navigation">
+    <span class="nav-toggle-bars" aria-hidden="true"></span>
+  </button>
+  <a class="brand" href="${root}index.html" aria-label="VibeStudio Documentation home">
+    <span class="brand-logo brand-logo-light" aria-hidden="true">$logo_on_light</span>
+    <span class="brand-logo brand-logo-dark" aria-hidden="true">$logo_on_dark</span>
+    <span class="brand-docs">Docs</span>
+  </a>
+  <span class="version-chip" title="Documentation for this release">$version</span>
+  <div class="search" role="search">
+    <label class="visually-hidden" for="search-input">Search the documentation</label>
+    <input id="search-input" class="search-input" type="search" autocomplete="off" spellcheck="false"
+      placeholder="Search the docs" aria-describedby="search-hint"
+      role="combobox" aria-expanded="false" aria-controls="search-results" aria-autocomplete="list">
+    <kbd class="search-key" id="search-hint" aria-label="Press slash to search">/</kbd>
+    <ul id="search-results" class="search-results" role="listbox" aria-label="Search results" hidden></ul>
+  </div>
+  <div class="topbar-actions">
+    <button class="theme-toggle" type="button" aria-label="Colour theme: automatic" title="Colour theme">
+      <span class="theme-icon" aria-hidden="true"></span>
+    </button>
+    <a class="topbar-link" href="https://github.com/themuffinator/VibeStudio" rel="noopener">GitHub</a>
+  </div>
+</header>
+<div class="layout">
+  <nav id="sidebar" class="sidebar" aria-label="Documentation">
+$nav
+  </nav>
+  <main id="content" class="content" tabindex="-1">
+$hero
+    <article class="article">
+$body
+    </article>
+    <nav class="pager" aria-label="Previous and next page">
+$pager
+    </nav>
+    <footer class="page-footer">
+      <p>$edit_link</p>
+      <p>VibeStudio $version · Documentation built $build_date · <a href="https://github.com/themuffinator/VibeStudio/blob/main/LICENSE" rel="noopener">GPL-3.0-or-later</a></p>
+    </footer>
+  </main>
+  <aside class="toc" aria-label="On this page">
+$toc
+  </aside>
+</div>
+<script src="${root}assets/search-index.js"></script>
+<script src="${root}assets/app.js"></script>
+</body>
+</html>

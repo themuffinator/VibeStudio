@@ -17,6 +17,7 @@
 #include "core/level_navigation.h"
 #include "core/box_resize.h"
 #include "core/box_draw.h"
+#include "core/camera_surface_placement.h"
 #include "core/model_mesh.h"
 #include "core/model_mdl.h"
 #include "core/model_pose.h"
@@ -37,6 +38,7 @@
 #include <QStringList>
 #include <QVector>
 #include <QWidget>
+#include <functional>
 #include <memory>
 
 class QTimer;
@@ -240,6 +242,8 @@ public:
 
 	void resetView();
 	void frameModel();
+	// Frames a model-space box, such as the selection, and orbits about its centre.
+	void frameBounds(const ModelVec3& low, const ModelVec3& high);
 	void setOrbit(double yawDegrees, double pitchDegrees);
 	[[nodiscard]] double yaw() const;
 	[[nodiscard]] double pitch() const;
@@ -307,8 +311,10 @@ public:
 	void setBrushDrawTool(bool enabled);
 	[[nodiscard]] bool brushDrawTool() const { return m_brushDrawTool; }
 	bool setBrushDrawPlane(int axis, double base, double depth,
-		Qt::KeyboardModifiers square = Qt::NoModifier, Qt::KeyboardModifiers cube = Qt::NoModifier);
+		Qt::KeyboardModifiers square = Qt::NoModifier, Qt::KeyboardModifiers cube = Qt::NoModifier, int direction = 1);
+	bool setBrushDrawPlaneFromSurface(const QPointF& point);
 	[[nodiscard]] int brushDrawAxis() const { return m_brushDraw.axis; }
+	[[nodiscard]] int brushDrawDirection() const { return m_brushDraw.direction; }
 	[[nodiscard]] double brushDrawBase() const { return m_brushDraw.base; }
 	[[nodiscard]] double brushDrawDepth() const { return m_brushDraw.depth; }
 	bool beginBrushDraw(const QPointF& point, Qt::KeyboardModifiers modifiers = Qt::NoModifier);
@@ -329,9 +335,35 @@ public:
 	// Returns no hit until the worker has presented the current camera/pose.
 	// Wireframe preparation is asynchronous too; renderCompleted announces it.
 	[[nodiscard]] ModelViewportHit hitAt(const QPointF& point);
+	// Exact point and camera-facing normal on a current rendered triangle.
+	// Editing drafts, disabled views and stale render buffers cannot be sampled.
+	bool surfacePointAt(const QPointF& point, CameraSurfacePoint* surface, int* triangle = nullptr);
 	[[nodiscard]] bool isRendering() const;
 	// How the view answers the mouse and keys, said after the summary.
 	void setControlsHelp(const QString& text);
+
+	// Modeller interaction helpers: the ray through a widget point, a model
+	// point's widget position (false behind a perspective camera or with no
+	// mesh), and the direction the camera looks into the scene.
+	[[nodiscard]] ModelPickRay viewRay(const QPointF& point);
+	bool projectToView(const ModelVec3& point, QPointF* screen);
+	[[nodiscard]] ModelVec3 viewForward();
+	// The camera's screen-right and screen-up directions in model space.
+	void viewAxes(ModelVec3* right, ModelVec3* up);
+	// Edit-surface vertex positions and occlusion from the latest completed
+	// render; null until one completes. Shared and immutable.
+	[[nodiscard]] std::shared_ptr<const ModelVertexProjection> editVertexProjection() const { return m_rasterVertices; }
+	// Owner-drawn overlay (selection boxes, the 3D cursor, tool guides), painted
+	// last in widget coordinates. An empty function removes it.
+	void setOverlayPainter(std::function<void(QPainter&)> painter);
+	// Shows what `source` shows (mesh, frame, shading, skins, selection and
+	// overlays) through this viewport's own camera: the modeller's mirror
+	// panes (model_viewport_mirror.cpp).
+	void mirrorDisplayFrom(const ModelViewport& source);
+	// A name shown first in the heads-up line, such as "Top" for a four-view
+	// pane (model_viewport_mirror.cpp); empty shows none.
+	void setViewLabel(const QString& label);
+	[[nodiscard]] QString viewLabel() const { return m_viewLabel; }
 
 	[[nodiscard]] QSize sizeHint() const override;
 	[[nodiscard]] QSize minimumSizeHint() const override;
@@ -644,6 +676,7 @@ private:
 
 	CameraViewControls m_controls;
 	QString m_controlsHelp;
+	QString m_viewLabel;
 	bool m_perspective = false;
 	bool m_perspectivePlaced = false;
 	ModelVec3 m_eye;
@@ -726,6 +759,7 @@ private:
 	QPointF m_trackballCentre, m_trackballPoint;
 	QPointF m_rotationTangent;
 	double m_scaleReference = 1;
+	std::function<void(QPainter&)> m_overlayPainter;
 };
 
 QString modelViewportRenderModeDisplayName(ModelViewportRenderMode mode);

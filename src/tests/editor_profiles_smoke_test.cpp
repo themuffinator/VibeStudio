@@ -1,4 +1,5 @@
 #include "core/editor_profiles.h"
+#include "core/level_camera_keys.h"
 #include "core/studio_semantics.h"
 
 #include <QCoreApplication>
@@ -34,7 +35,9 @@ const QSet<QString> kProfilesWithControls = {
 	QStringLiteral("netradiant-custom"),
 	QStringLiteral("netradiant"), QStringLiteral("sledge"),
 	QStringLiteral("q3radiant"),
+	QStringLiteral("doomedit"), QStringLiteral("bsp"),
 	QStringLiteral("gtkradiant-1-6"),
+	QStringLiteral("gtkradiant-1-4"), QStringLiteral("gtkradiant-1-5"), QStringLiteral("qeradiant"),
 	QStringLiteral("quark"), QStringLiteral("hammer"), QStringLiteral("jack"), QStringLiteral("darkradiant"),
 	QStringLiteral("doom-builder"), QStringLiteral("ultimate-doom-builder"), QStringLiteral("slade"), QStringLiteral("eureka"),
 	QStringLiteral("unreal"), QStringLiteral("unity"), QStringLiteral("godot"), QStringLiteral("blender"),
@@ -44,7 +47,7 @@ bool runRegistrySmoke(QSet<QString>* ids)
 {
 	bool ok = true;
 	const QVector<vibestudio::EditorProfileDescriptor> profiles = vibestudio::editorProfileDescriptors();
-	ok &= expect(profiles.size() >= 19, "Expected brush, Doom and modern scene-editor families to be registered.");
+	ok &= expect(profiles.size() >= 24, "Expected versioned Radiant, BSP, brush, Doom and modern scene-editor families to be registered.");
 	ok &= expect(vibestudio::defaultEditorProfileId() == QStringLiteral("vibestudio-default"), "Expected stable default editor profile id.");
 
 	for (const vibestudio::EditorProfileDescriptor& profile : profiles) {
@@ -367,6 +370,124 @@ bool runFamiliarNavigationSmoke()
 	return ok;
 }
 
+bool runRadiantVersionsSmoke()
+{
+	using namespace vibestudio;
+	bool ok = true;
+	const auto bound = [](const LevelEditorControls& controls, const char* command) {
+		for (const auto& binding : controls.keys) {
+			if (binding.commandId == QLatin1String(command)) { return binding.keys; }
+		}
+		return QStringList();
+	};
+	const QMap<QString, QString> aliases {
+		{QStringLiteral("NRC"), QStringLiteral("netradiant-custom")},
+		{QStringLiteral("TB"), QStringLiteral("trenchbroom")},
+		{QStringLiteral("GtkRadiant 1.4.0"), QStringLiteral("gtkradiant-1-4")},
+		{QStringLiteral("GtkRadiant_1.5"), QStringLiteral("gtkradiant-1-5")},
+		{QStringLiteral("GtkRadiant 1.6.0"), QStringLiteral("gtkradiant-1-6")},
+		{QStringLiteral("QE Radiant"), QStringLiteral("qeradiant")},
+	};
+	for (auto it = aliases.cbegin(); it != aliases.cend(); ++it) {
+		EditorProfileDescriptor profile;
+		ok &= expect(editorProfileForId(it.key(), &profile) && profile.id == it.value(), "Common editor names and version aliases resolve to stable profile IDs.");
+		ok &= expect(!profile.referenceUrl.isEmpty(), "Familiar profiles expose their primary reference.");
+	}
+	const auto gtk14 = levelEditorControlsForProfile(QStringLiteral("gtk14"));
+	const auto gtk15 = levelEditorControlsForProfile(QStringLiteral("gtk15"));
+	for (const auto& controls : {gtk14, gtk15}) {
+		ok &= expect(controls.defaultGridUnits == 8 && controls.layout == LevelViewLayout::CameraAndPlan,
+			"Classic GtkRadiant versions retain the 8-unit grid and camera/plan layout.");
+		ok &= expect(cameraKeyUsesFixedStep(controls.camera, Qt::Key_Up, false) && !cameraKeyUsesFixedStep(controls.camera, Qt::Key_Up, true),
+			"GtkRadiant version presets step outside free look and fly continuously inside it.");
+		ok &= expect(cameraKeyMotions(controls.camera, false).value(Qt::Key_A).pitch > 0
+			&& cameraKeyMotions(controls.camera, false).value(Qt::Key_Z).pitch < 0,
+			"GtkRadiant A/Z keys route to opposite pitch motions.");
+		ok &= expect(cameraKeyMotions(controls.camera, false, Qt::NoButton, Qt::NoModifier, Qt::ShiftModifier).isEmpty(),
+			"Modified arrows remain available to surface commands outside free look.");
+		ok &= expect(bound(controls, "map.surfaceFit") == QStringList{QStringLiteral("Shift+B")}
+			&& bound(controls, "map.mergeBrushes") == QStringList{QStringLiteral("Ctrl+U")},
+			"GtkRadiant surface fitting and brush merging reach their matching commands.");
+	}
+	ok &= expect(gtk14.plan.bandModifiers == Qt::AltModifier && gtk15.plan.bandModifiers == Qt::ShiftModifier,
+		"1.4 and 1.5 have distinct area-selection gestures.");
+	ok &= expect(cameraMaterialGesture(gtk14.camera, Qt::MiddleButton, Qt::ShiftModifier) == CameraMaterialGesture::Paint
+		&& cameraMaterialGesture(gtk15.camera, Qt::MiddleButton, Qt::ShiftModifier) == CameraMaterialGesture::None
+		&& cameraMaterialGesture(gtk15.camera, Qt::MiddleButton, Qt::ControlModifier) == CameraMaterialGesture::None
+		&& cameraMaterialGesture(gtk15.camera, Qt::MiddleButton, Qt::ShiftModifier | Qt::ControlModifier) == CameraMaterialGesture::PasteFace,
+		"1.5 does not inherit 1.4's distinct Shift/Ctrl middle-button material actions.");
+	const auto qe = levelEditorControlsForProfile(QStringLiteral("qer"));
+	ok &= expect(cameraNavigationDrag(qe.camera, Qt::RightButton, Qt::NoModifier) == CameraNavigationDrag::Drive
+		&& cameraNavigationDrag(qe.camera, Qt::RightButton, Qt::ControlModifier) == CameraNavigationDrag::Pan,
+		"QeRadiant uses classic position steering and Ctrl-right pan.");
+	ok &= expect(bound(qe, "map.surfaceFit") == QStringList{QStringLiteral("Shift+5"), QStringLiteral("Ctrl+F")}
+		&& bound(qe, "map.editPatch").isEmpty() && bound(qe, "map.capPatch").isEmpty()
+		&& bound(qe, "map.textureLock").isEmpty(), "QeRadiant uses its fit keys without acquiring Q3-only patch shortcuts.");
+	LevelViewLayout restored;
+	ok &= expect(levelViewLayoutForId(QStringLiteral("camera-above-plans"), &restored) && restored == LevelViewLayout::CameraAbovePlans
+		&& levelViewLayoutId(restored) == QStringLiteral("camera-above-plans"), "The camera-above-plans layout round trips its persistent identifier.");
+	return ok;
+}
+
+bool runDoomEditAndBspSmoke()
+{
+	using namespace vibestudio;
+	bool ok = true;
+	const auto bound = [](const LevelEditorControls& controls, const char* command) {
+		for (const auto& binding : controls.keys) { if (binding.commandId == QLatin1String(command)) { return binding.keys; } }
+		return QStringList();
+	};
+	const auto doom = levelEditorControlsForProfile(QStringLiteral("Doom3 Radiant"));
+	ok &= expect(cameraNavigationDrag(doom.camera, Qt::RightButton, Qt::NoModifier) == CameraNavigationDrag::Drive
+		&& cameraNavigationDrag(doom.camera, Qt::RightButton, Qt::ControlModifier) == CameraNavigationDrag::Pan
+		&& cameraNavigationDrag(doom.camera, Qt::RightButton, Qt::ControlModifier | Qt::ShiftModifier) == CameraNavigationDrag::Look,
+		"DoomEdit separates position steering, camera pan and held mouse look.");
+	ok &= expect(bound(doom, "map.mergeBrushes") == QStringList{QStringLiteral("Shift+M")}
+		&& bound(doom, "map.isolateSelection") == QStringList{QStringLiteral("Ctrl+Shift+H")}
+		&& bound(doom, "map.nextProjection").contains(QStringLiteral("Home"))
+		&& bound(doom, "map.carve").isEmpty() && bound(doom, "map.invertSelection").isEmpty(),
+		"DoomEdit's distinct brush/visibility keys do not inherit conflicting Q3 texture bindings.");
+	const auto bsp = levelEditorControlsForProfile(QStringLiteral("BSP Quake Editor"));
+	ok &= expect(bsp.layout == LevelViewLayout::FourViews && bsp.plan.toggleModifiers == Qt::ShiftModifier
+		&& bsp.plan.emptyDrag == PlanEmptyDrag::DrawBrush && !bsp.plan.plainClickSelects,
+		"BSP keeps shared four views and Shift plan selection with empty-space brush drawing.");
+	ok &= expect(cameraNavigationDrag(bsp.camera, Qt::MiddleButton, Qt::NoModifier) == CameraNavigationDrag::Look
+		&& cameraNavigationDrag(bsp.camera, Qt::MiddleButton, Qt::ShiftModifier) == CameraNavigationDrag::Pan
+		&& cameraMaterialGesture(bsp.camera, Qt::RightButton, Qt::NoModifier) == CameraMaterialGesture::Sample,
+		"BSP modified pan wins over optional accelerated look without consuming material sampling.");
+	const auto motions = cameraKeyMotions(bsp.camera, false);
+	const auto flyText = [](const LevelEditorControls& controls) {
+		for (const auto& row : levelEditorControlRows(controls)) { if (row.action == QStringLiteral("Fly")) { return row.gesture; } }
+		return QString();
+	};
+	ok &= expect(flyText(bsp).contains(QStringLiteral("Shift faster")) && !flyText(bsp).contains(QStringLiteral("slower")),
+		"BSP's controls reference describes only its configured speed modifier.");
+	auto noSpeed = bsp;
+	noSpeed.camera.fastModifiers = Qt::NoModifier;
+	ok &= expect(!flyText(noSpeed).isEmpty() && !flyText(noSpeed).contains(QLatin1Char('(')),
+		"Camera keys without speed modifiers have no empty annotation.");
+	noSpeed.camera.slowModifiers = Qt::ControlModifier;
+	ok &= expect(flyText(noSpeed).contains(QStringLiteral("Ctrl slower")) && !flyText(noSpeed).contains(QStringLiteral("faster")),
+		"A slow-only scheme does not advertise an absent fast modifier.");
+	ok &= expect(motions.value(Qt::Key_W).forward > 0 && motions.value(Qt::Key_R).up > 0
+		&& motions.value(Qt::Key_F).up < 0 && motions.value(Qt::Key_Q).turn > 0
+		&& motions.value(Qt::Key_Delete).pitch < 0,
+		"BSP's WASD/RF/QE and Delete camera keys route to movement, elevation, yaw and pitch.");
+	ok &= expect(bound(bsp, "map.duplicateSelection") == QStringList{QStringLiteral("Ctrl+Space")}
+		&& bound(bsp, "map.deleteSelection") == QStringList{QStringLiteral("Ctrl+X"), QStringLiteral("Num+-")}
+		&& bound(bsp, "map.selectAll") == QStringList{QStringLiteral("`")}
+		&& bound(bsp, "map.alignSurfaces") == QStringList{QStringLiteral("Z")},
+		"BSP clone, delete, select-all and surface keys retain their original meanings.");
+	for (const auto layout : {LevelViewLayout::FourViews, LevelViewLayout::CameraAbovePlans, LevelViewLayout::CameraBesidePlans}) {
+		LevelViewLayout restored;
+		ok &= expect(levelViewLayoutHasThreePlans(layout) && levelViewLayoutForId(levelViewLayoutId(layout), &restored)
+			&& restored == layout, "Every four-pane arrangement round trips and declares three plan panes.");
+	}
+	ok &= expect(!levelViewLayoutHasThreePlans(LevelViewLayout::CameraAndPlan) && !levelViewLayoutHasThreePlans(LevelViewLayout::Single3D)
+		&& !levelViewLayoutHasThreePlans(LevelViewLayout::Single2D), "Single-plan layouts do not claim hidden orthographic panes.");
+	return ok;
+}
+
 } // namespace
 
 int main(int argc, char** argv)
@@ -378,6 +499,8 @@ int main(int argc, char** argv)
 	ok &= runLookupSmoke(ids);
 	ok &= runControlsSmoke();
 	ok &= runFamiliarNavigationSmoke();
+	ok &= runRadiantVersionsSmoke();
+	ok &= runDoomEditAndBspSmoke();
 	if (!ok) {
 		return fail("editor_profiles smoke test failed.");
 	}

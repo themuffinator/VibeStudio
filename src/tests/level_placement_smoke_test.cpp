@@ -239,5 +239,110 @@ int main(int argc, char** argv) {
 		expect(reloaded.doomThings.last().x == doom.doomThings.last().x && reloaded.doomThings.last().z == doom.doomThings.last().z,
 			   "WAD exact coordinate persistence");
 	}
+	// Linear arrays keep every native texture dialect and source-relative UVs,
+	// select all copies, and occupy one undo slot even at the history limit.
+	for (const QString& kind : {QStringLiteral("classic"), QStringLiteral("valve220"), QStringLiteral("brushDef"), QStringLiteral("brushDef3")}) {
+		LevelMapDocument array;
+		expect(load(tests::placementFixture(kind), &array, &error), "array dialect fixture", error);
+		selectLevelMapObject(&array, "brush:0");
+		array.undoLimit = 1;
+		expect(moveLevelMapSelection(&array, 1, 0, 0, {true, false}, &error), "array existing history", error);
+		markLevelMapSaved(&array);
+		const auto source = array;
+		expect(arrayLevelMapSelection(&array, {31.25, -17.5, 11, true}, 4, {true, false}, &error), "array placement", kind + error);
+		expect(array.brushes.size() == 5 && array.selection.size() == 4 && array.undoStack.size() == 1 &&
+			array.revision == source.revision + 1, "array is one bounded history operation");
+		for (int i = 1; i <= 4 && array.brushes.size() == 5; ++i) {
+			expect(tests::placementUvsMatch(source.brushes.first(), array.brushes[i], {31.25 * i, -17.5 * i, 11.0 * i, true}),
+				"every array copy preserves its source UVs");
+		}
+		const auto after = serializeLevelMap(array).bytes;
+		LevelMapDocument reloaded;
+		expect(load(after, &reloaded, &error) && reloaded.brushes.size() == 5, "array native round-trip", error);
+		expect(undoLevelMapEdit(&array, &error) && serializeLevelMap(array).bytes == serializeLevelMap(source).bytes &&
+			array.selection == source.selection && array.savedUndoDepth == 0, "array undo restores source and saved point", error);
+		expect(redoLevelMapEdit(&array, &error) && serializeLevelMap(array).bytes == after && array.selection.size() == 4,
+			"array redo restores every copy", error);
+	}
+	LevelMapDocument ownerArray;
+	expect(tests::loadPrefabFixture(&ownerArray, &error), "array owned fixture", error);
+	setLevelMapSelection(&ownerArray, {{LevelMapSelectionKind::Entity, 1}, {LevelMapSelectionKind::QuakeBrush, 0},
+		{LevelMapSelectionKind::QuakePatch, 0}, {LevelMapSelectionKind::Entity, 3}});
+	QString arrayLayer;
+	createLevelSceneNode(&ownerArray, LevelSceneNodeKind::Layer, "Array sources", {}, &arrayLayer, &error);
+	assignLevelSceneObjects(&ownerArray, arrayLayer, {"entity:1", "brush:0", "brush:1", "patch:0", "entity:3"}, &error);
+	const auto ownersBefore = ownerArray;
+	expect(arrayLevelMapSelection(&ownerArray, {128, 0, 0, true}, 3, {true, false}, &error), "array with owners and patches", error);
+	expect(ownerArray.entities.size() == ownersBefore.entities.size() + 6 && ownerArray.brushes.size() == 8 &&
+		ownerArray.patches.size() == 4 && ownerArray.selection.size() == 9, "owned array children copied exactly once");
+	for (int i = 0; i < 3 && ownerArray.brushes.size() == 8; ++i) {
+		expect(ownerArray.brushes[2 + i * 2].entityId == ownerArray.entities[5 + i * 2].id &&
+			ownerArray.brushes[3 + i * 2].entityId == ownerArray.entities[5 + i * 2].id, "array preserves each copied owner");
+	}
+	for (const auto& ref : ownerArray.selection) {
+		expect(levelSceneMembership(ownerArray.scene, levelMapSelectionRefId(ref)) == arrayLayer, "array scene inheritance");
+	}
+	expect(undoLevelMapEdit(&ownerArray, &error) && ownerArray.scene == ownersBefore.scene &&
+		serializeLevelMap(ownerArray).bytes == serializeLevelMap(ownersBefore).bytes, "array restores scene and native source", error);
+	for (int count : {0, -1, kLevelMapMaxArrayCopies + 1}) {
+		const auto source = ownerArray;
+		expect(!arrayLevelMapSelection(&ownerArray, {16, 0, 0, true}, count, {true, false}, &error), "invalid array count rejected", error);
+		unchanged(source, ownerArray);
+	}
+	const auto lateFailure = ownerArray;
+	expect(!arrayLevelMapSelection(&ownerArray, {30000, 0, 0, true}, 4, {true, false}, &error), "later array copy out of bounds rejected", error);
+	unchanged(lateFailure, ownerArray);
+	setLevelSceneLocked(&ownerArray, arrayLayer, true, &error);
+	const auto lockedArray = ownerArray;
+	expect(!arrayLevelMapSelection(&ownerArray, {16, 0, 0, true}, 3, {true, false}, &error), "array respects locked source layers", error);
+	unchanged(lockedArray, ownerArray);
+	LevelMapDocument bounded;
+	expect(tests::createGeometryFixture(129, &bounded, &error), "bounded array fixture", error);
+	setLevelMapSelection(&bounded, levelMapSelectAllObjects(bounded, false));
+	const auto boundedBefore = bounded;
+	expect(!arrayLevelMapSelection(&bounded, {0, 0, 128, true}, 256, {true, false}, &error) && error.contains("limit"),
+		"array allocation budget is checked before expansion", error);
+	unchanged(boundedBefore, bounded);
+	// A scene near its membership limit must reject a small array before the
+	// result becomes impossible to save. Point records keep this fixture cheap.
+	LevelMapDocument crowded;
+	LevelMapCreateRequest crowdedRequest;
+	crowdedRequest.starterRoom = false;
+	createLevelMap(crowdedRequest, &crowded, &error);
+	QString crowdedLayer;
+	createLevelSceneNode(&crowded, LevelSceneNodeKind::Layer, "Nearly full", {}, &crowdedLayer, &error);
+	for (int id = 1; id < kLevelSceneMaxMembers; ++id) {
+		LevelMapEntity entity;
+		entity.id = id;
+		entity.className = QStringLiteral("info_null");
+		entity.origin = {0, 0, 0, true};
+		entity.properties = {{QStringLiteral("classname"), entity.className}, {QStringLiteral("origin"), QStringLiteral("0 0 0")}};
+		crowded.entities << entity;
+		crowded.scene.nodes.first().objects << QStringLiteral("entity:%1").arg(id);
+	}
+	selectLevelMapObject(&crowded, "entity:1");
+	expect(validateLevelScene(crowded, crowded.scene, &error), "near-limit scene starts valid", error);
+	const auto crowdedBefore = crowded;
+	expect(!arrayLevelMapSelection(&crowded, {16, 0, 0, true}, 2, {true, false}, &error) && error.contains("100,000"),
+		"array validates final scene membership capacity", error);
+	expect(crowded.entities.size() == crowdedBefore.entities.size() && crowded.scene == crowdedBefore.scene &&
+		crowded.selection == crowdedBefore.selection && crowded.revision == crowdedBefore.revision &&
+		crowded.undoStack.size() == crowdedBefore.undoStack.size() && crowded.redoStack.size() == crowdedBefore.redoStack.size(),
+		"scene-capacity rejection preserves geometry, scene and history");
+	for (const QString& game : {QStringLiteral("doom"), QStringLiteral("hexen")}) {
+		LevelMapDocument doom;
+		LevelMapCreateRequest request;
+		request.game = game;
+		createLevelMap(request, &doom, &error);
+		selectLevelMapObject(&doom, "thing:0");
+		const auto source = doom;
+		const auto thing = doom.doomThings.first();
+		expect(arrayLevelMapSelection(&doom, {1.4, -1.4, 1.4, true}, 3, {true, false}, &error), "native thing array", error);
+		expect(doom.doomThings.size() == source.doomThings.size() + 3 && doom.doomThings.last().x == std::round(thing.x + 4.2) &&
+			doom.doomThings.last().y == std::round(thing.y - 4.2) &&
+			doom.doomThings.last().z == (game == "hexen" ? std::round(thing.z + 4.2) : thing.z), "array rounding is source-relative");
+		expect(doom.doomGeometryEdits == source.doomGeometryEdits && undoLevelMapEdit(&doom, &error) &&
+			serializeLevelMap(doom).bytes == serializeLevelMap(source).bytes, "thing array undo and node inputs", error);
+	}
 	return ok ? 0 : 1;
 }

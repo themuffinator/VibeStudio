@@ -41,6 +41,11 @@ QByteArray prepareLevelUdmfProperties(const LevelUdmfDocument& source, const QVe
 // linedef endpoint values. Large selections use the document's property budget.
 QByteArray prepareLevelUdmfTransform(const LevelUdmfDocument& source, const LevelMapUndoCommand& transform, QString* error = nullptr,
 									 const std::function<bool()>& isCancelled = {});
+// Append lossless thing-block copies in the supplied order. Each record's id
+// names its source thing; only x/y/height may differ. Other fields, comments,
+// lexical values and unknown extension properties are copied verbatim.
+QByteArray prepareLevelUdmfThingCopies(const LevelUdmfDocument& source, const QVector<LevelMapDoomThing>& copies,
+	QString* error = nullptr, const std::function<bool()>& isCancelled = {});
 QJsonObject levelUdmfDocumentJson(const LevelUdmfDocument& document);
 // Shared atomic authoring/history entry point, implemented with map commands.
 bool editLevelMapUdmfProperties(LevelMapDocument* document, const QVector<LevelUdmfPropertyEdit>& edits, QString* error = nullptr,

@@ -1,4 +1,6 @@
 #include "app/model_editor_dialog.h"
+#include "app/model_editor_tools.h"
+#include "app/studio_sidebar.h"
 #include "core/model_surfaces.h"
 
 #include "app/model_recovery_dialog.h"
@@ -25,6 +27,7 @@
 #include <QItemSelectionModel>
 #include <QLabel>
 #include <QLineEdit>
+#include <QMenu>
 #include <QMessageBox>
 #include <QPainter>
 #include <QPlainTextEdit>
@@ -44,6 +47,7 @@
 #include <QTableView>
 #include <QTimer>
 #include <QToolBar>
+#include <QToolButton>
 #include <QUuid>
 #include <QVBoxLayout>
 
@@ -368,6 +372,46 @@ ModelEditorDialog::ModelEditorDialog(QWidget *parent) : QDialog(parent)
 		   [this]() { exportModel(QStringLiteral("md3")); });
 	action(QCoreApplication::translate("VibeStudioModelEditor", "Export OBJ Frame…"), QStringLiteral("exportMeshObj"),
 		   [this]() { exportModel(QStringLiteral("obj")); });
+	// The skeletal and idTech 4 formats share one menu so the header stays narrow.
+	auto *otherFormats = new QMenu(QCoreApplication::translate("VibeStudioModelEditor", "Export Other Format"), this);
+	otherFormats->setObjectName(QStringLiteral("meshExportFormatsMenu"));
+	otherFormats->menuAction()->setObjectName(QStringLiteral("exportMeshOtherFormat"));
+	const auto formatAction = [&](const QString &label, const QString &name, const QString &format, const QString &tip)
+	{
+		auto *result = otherFormats->addAction(label);
+		result->setObjectName(name);
+		result->setToolTip(tip);
+		result->setStatusTip(tip);
+		connect(result, &QAction::triggered, this,
+				[this, format]()
+				{
+					if (!m_working)
+					{
+						exportModel(format);
+					}
+				});
+	};
+	formatAction(QCoreApplication::translate("VibeStudioModelEditor", "MD5 Mesh…"), QStringLiteral("exportMeshMd5"),
+				 QStringLiteral("md5mesh"),
+				 QCoreApplication::translate("VibeStudioModelEditor",
+											 "Doom 3, Quake 4, Prey and Quake Wars meshes; a model without joints gets one origin joint."));
+	formatAction(QCoreApplication::translate("VibeStudioModelEditor", "MD5 Animation of Clip…"), QStringLiteral("exportMeshMd5Anim"),
+				 QStringLiteral("md5anim"),
+				 QCoreApplication::translate("VibeStudioModelEditor", "The skeletal clip the current frame belongs to, as an md5anim."));
+	formatAction(QCoreApplication::translate("VibeStudioModelEditor", "Inter-Quake Model (IQM)…"), QStringLiteral("exportMeshIqm"),
+				 QStringLiteral("iqm"),
+				 QCoreApplication::translate("VibeStudioModelEditor",
+											 "Joints, weights and every skeletal clip, for ioquake3, Darkplaces and FTEQW."));
+	formatAction(QCoreApplication::translate("VibeStudioModelEditor", "ASE Frame…"), QStringLiteral("exportMeshAse"),
+				 QStringLiteral("ase"),
+				 QCoreApplication::translate("VibeStudioModelEditor",
+											 "The current frame as a static ASCII Scene Export for Doom 3, Quake 4 or q3map2 misc_model."));
+	toolbar->addAction(otherFormats->menuAction());
+	if (auto *button = qobject_cast<QToolButton *>(toolbar->widgetForAction(otherFormats->menuAction())))
+	{
+		button->setPopupMode(QToolButton::InstantPopup);
+		button->setAccessibleName(otherFormats->title());
+	}
 	m_stage = action(QCoreApplication::translate("VibeStudioModelEditor", "Stage in Package"), QStringLiteral("stageMesh"),
 					 [this]() { stage(false); });
 	m_place = action(QCoreApplication::translate("VibeStudioModelEditor", "Stage and Place"), QStringLiteral("placeMesh"),
@@ -423,7 +467,17 @@ ModelEditorDialog::ModelEditorDialog(QWidget *parent) : QDialog(parent)
 	selectAll->setObjectName(QStringLiteral("selectAllMeshComponents"));
 	connect(selectAll, &QPushButton::clicked, m_table, &QTableView::selectAll);
 	componentLayout->addWidget(selectAll);
-	splitter->addWidget(components);
+	// Panels live on two tabbed sidebars, as on the Levels page; the profile's
+	// family decides which tabs sit on which side (model_editor_layout.cpp).
+	m_leadingSidebar = new StudioSidebar(QCoreApplication::translate("VibeStudioModelEditor", "Model outliner and assets"),
+										 StudioSidebar::TabEdge::Trailing);
+	m_leadingSidebar->setObjectName(QStringLiteral("meshLeadingSidebar"));
+	{
+		auto *outliner = createSidebarPage(QStringLiteral("outliner"));
+		outliner->addWidget(components, 1);
+		m_leadingSidebar->addPage(outliner);
+	}
+	splitter->addWidget(m_leadingSidebar);
 	auto *centre = new QWidget;
 	auto *centreLayout = new QVBoxLayout(centre);
 	centreLayout->setContentsMargins(0, 0, 0, 0);
@@ -454,8 +508,20 @@ ModelEditorDialog::ModelEditorDialog(QWidget *parent) : QDialog(parent)
 	auto *moveRow = new QWidget;
 	auto *transformRows = new QVBoxLayout(moveRow);
 	transformRows->setContentsMargins(0, 0, 0, 0);
-	auto *moveTools = new QHBoxLayout;
+	// The Tool sidebar page stacks the transform settings, each step labelled.
+	auto *moveTools = new QVBoxLayout;
 	transformRows->addLayout(moveTools);
+	const auto labelled = [](const QString &text, QWidget *field)
+	{
+		auto *row = new QWidget;
+		auto *line = new QHBoxLayout(row);
+		line->setContentsMargins(0, 0, 0, 0);
+		auto *label = new QLabel(text);
+		label->setBuddy(field);
+		line->addWidget(label);
+		line->addWidget(field, 1);
+		return row;
+	};
 	moveTools->setContentsMargins(0, 0, 0, 0);
 	m_moveGizmo = new QCheckBox(QCoreApplication::translate("VibeStudioModelEditor", "Gizmo"));
 	m_moveGizmo->setObjectName(QStringLiteral("meshMoveGizmo"));
@@ -492,7 +558,7 @@ ModelEditorDialog::ModelEditorDialog(QWidget *parent) : QDialog(parent)
 	m_translationGrid->setValue(1);
 	m_translationGrid->setEnabled(false);
 	m_translationGrid->setAccessibleName(QCoreApplication::translate("VibeStudioModelEditor", "Translation grid step in model units"));
-	moveTools->addWidget(m_translationGrid);
+	moveTools->addWidget(labelled(QCoreApplication::translate("VibeStudioModelEditor", "Move step"), m_translationGrid));
 	m_rotationGrid = new QDoubleSpinBox;
 	m_rotationGrid->setObjectName(QStringLiteral("meshRotationGrid"));
 	m_rotationGrid->setDecimals(6);
@@ -501,7 +567,7 @@ ModelEditorDialog::ModelEditorDialog(QWidget *parent) : QDialog(parent)
 	m_rotationGrid->setValue(15);
 	m_rotationGrid->setAccessibleName(QCoreApplication::translate("VibeStudioModelEditor", "Rotation snap step in degrees"));
 	m_rotationGrid->setSuffix(QStringLiteral("°"));
-	moveTools->addWidget(m_rotationGrid);
+	moveTools->addWidget(labelled(QCoreApplication::translate("VibeStudioModelEditor", "Rotate step"), m_rotationGrid));
 	m_scaleGrid = new QDoubleSpinBox;
 	m_scaleGrid->setObjectName(QStringLiteral("meshScaleGrid"));
 	m_scaleGrid->setDecimals(6);
@@ -511,14 +577,14 @@ ModelEditorDialog::ModelEditorDialog(QWidget *parent) : QDialog(parent)
 	m_scaleGrid->setSingleStep(0.1);
 	m_scaleGrid->setAccessibleName(QCoreApplication::translate("VibeStudioModelEditor", "Scale snap step relative to one"));
 	m_scaleGrid->setSuffix(QStringLiteral("×"));
-	moveTools->addWidget(m_scaleGrid);
+	moveTools->addWidget(labelled(QCoreApplication::translate("VibeStudioModelEditor", "Scale step"), m_scaleGrid));
 	m_xrayVertices = new QCheckBox(QCoreApplication::translate("VibeStudioModelEditor", "X-ray Vertices"));
 	m_xrayVertices->setObjectName(QStringLiteral("meshXrayVertices"));
 	m_xrayVertices->setAccessibleName(m_xrayVertices->text());
 	m_xrayVertices->setToolTip(QCoreApplication::translate("VibeStudioModelEditor",
 														   "Show and select hidden vertices on the active surface. Hidden unselected "
 														   "points use hollow dotted markers. Wireframe always shows through the mesh."));
-	auto *overlayOptions = new QHBoxLayout;
+	auto *overlayOptions = new QVBoxLayout;
 	overlayOptions->addWidget(m_xrayVertices);
 	m_showTags = new QCheckBox(QCoreApplication::translate("VibeStudioModelEditor", "Show Tags"));
 	m_showTags->setObjectName(QStringLiteral("meshShowTags"));
@@ -531,7 +597,7 @@ ModelEditorDialog::ModelEditorDialog(QWidget *parent) : QDialog(parent)
 	overlayOptions->addStretch();
 	transformRows->addLayout(overlayOptions);
 	moveTools->addStretch();
-	centreLayout->addWidget(moveRow);
+	moveRow->setObjectName(QStringLiteral("meshTransformControls"));
 	m_materialRow = new QWidget;
 	m_materialRow->setObjectName(QStringLiteral("meshMaterialState"));
 	auto *materialRow = new QVBoxLayout(m_materialRow);
@@ -561,8 +627,10 @@ ModelEditorDialog::ModelEditorDialog(QWidget *parent) : QDialog(parent)
 	materialActions->addWidget(details);
 	materialActions->addStretch();
 	materialRow->addLayout(materialActions);
+	// Material loading stays in sight above the views, whichever tab is open.
 	centreLayout->addWidget(m_materialRow);
 	auto *viewTabs = new QTabWidget;
+	viewTabs->setObjectName(QStringLiteral("meshViewTabs"));
 	viewTabs->setAccessibleName(QCoreApplication::translate("VibeStudioModelEditor", "Model view"));
 	m_preview = new ModelViewport;
 	m_preview->setObjectName(QStringLiteral("meshPreview"));
@@ -573,7 +641,8 @@ ModelEditorDialog::ModelEditorDialog(QWidget *parent) : QDialog(parent)
 		"Click a face, edge, or vertex in the chosen component mode; Control-click toggles it. Vertex picks use the active surface. "
 		"Drag the selected transform handles; Escape cancels. Drag elsewhere to orbit. Use the component table and Geometry controls "
 		"for keyboard editing."));
-	viewTabs->addTab(m_preview, QCoreApplication::translate("VibeStudioModelEditor", "3D"));
+	buildPaneGrid(m_preview);
+	viewTabs->addTab(m_paneGrid, QCoreApplication::translate("VibeStudioModelEditor", "3D"));
 	viewTabs->addTab(createUvView(), QCoreApplication::translate("VibeStudioModelEditor", "UV"));
 	connect(viewTabs, &QTabWidget::currentChanged, this,
 			[this, moveRow, frameView](int index)
@@ -598,22 +667,10 @@ ModelEditorDialog::ModelEditorDialog(QWidget *parent) : QDialog(parent)
 	connect(play, &QAction::triggered, m_preview, &ModelViewport::togglePlayback);
 	centreLayout->addWidget(timeline);
 	splitter->addWidget(centre);
-	auto *tabs = new QTabWidget;
+	auto *tabs = new StudioSidebar(QCoreApplication::translate("VibeStudioModelEditor", "Mesh properties"), StudioSidebar::TabEdge::Leading);
+	m_trailingSidebar = tabs;
 	tabs->setObjectName(QStringLiteral("meshInspector"));
-	tabs->setAccessibleName(QCoreApplication::translate("VibeStudioModelEditor", "Mesh properties"));
-	const auto page = [&](const QString &label)
-	{
-		auto *contents = new QWidget;
-		auto *form = new QFormLayout(contents);
-		form->setFieldGrowthPolicy(QFormLayout::AllNonFixedFieldsGrow);
-		form->setRowWrapPolicy(QFormLayout::WrapAllRows);
-		auto *scroll = new QScrollArea;
-		scroll->setWidgetResizable(true);
-		scroll->setWidget(contents);
-		scroll->setFrameShape(QFrame::NoFrame);
-		tabs->addTab(scroll, label);
-		return form;
-	};
+	const auto page = [&](const QString &pageId) { return addSidebarForm(pageId, tabs); };
 	const auto values =
 		[&](QFormLayout *form, const QString &label, const QString &name, QDoubleSpinBox **fields, int count, double initial)
 	{
@@ -657,7 +714,7 @@ ModelEditorDialog::ModelEditorDialog(QWidget *parent) : QDialog(parent)
 		form->addRow(control);
 		return control;
 	};
-	auto *geometry = page(QCoreApplication::translate("VibeStudioModelEditor", "Geometry"));
+	auto *geometry = page(QStringLiteral("item"));
 	m_frameScope = new QComboBox;
 	m_frameScope->setObjectName(QStringLiteral("meshFrameScope"));
 	m_frameScope->setAccessibleName(QCoreApplication::translate("VibeStudioModelEditor", "Transform frame scope"));
@@ -765,7 +822,7 @@ ModelEditorDialog::ModelEditorDialog(QWidget *parent) : QDialog(parent)
 		   ModelEditKind::FlipFaces);
 	button(geometry, QCoreApplication::translate("VibeStudioModelEditor", "Recalculate Normals"), QStringLiteral("recalculateMeshNormals"),
 		   ModelEditKind::RecalculateNormals);
-	auto *surface = page(QCoreApplication::translate("VibeStudioModelEditor", "Surface"));
+	auto *surface = page(QStringLiteral("surface"));
 	addMaterialSlotControls(surface);
 	m_material = new QLineEdit;
 	m_material->setObjectName(QStringLiteral("meshMaterial"));
@@ -809,7 +866,7 @@ ModelEditorDialog::ModelEditorDialog(QWidget *parent) : QDialog(parent)
 	project->setToolTip(QCoreApplication::translate("VibeStudioModelEditor",
 													"Project model units onto the chosen plane, then apply UV Scale, "
 													"Rotation, and Offset. One tile per 64 units uses a scale of 0.015625."));
-	auto *animation = page(QCoreApplication::translate("VibeStudioModelEditor", "Animation"));
+	auto *animation = page(QStringLiteral("animation"));
 	m_frameName = new QLineEdit;
 	m_frameName->setAccessibleName(QCoreApplication::translate("VibeStudioModelEditor", "Frame name"));
 	animation->addRow(QCoreApplication::translate("VibeStudioModelEditor", "Frame name"), m_frameName);
@@ -821,9 +878,9 @@ ModelEditorDialog::ModelEditorDialog(QWidget *parent) : QDialog(parent)
 		   ModelEditKind::DeleteFrame);
 	addAnimationControls(animation);
 	addTagControls(animation);
-	addCollisionControls(page(QCoreApplication::translate("VibeStudioModelEditor", "Collision")));
-	addMdlControls(page(QCoreApplication::translate("VibeStudioModelEditor", "Quake MDL")));
-	auto *handoffPage = page(QCoreApplication::translate("VibeStudioModelEditor", "Handoff"));
+	addCollisionControls(page(QStringLiteral("collision")));
+	addMdlControls(page(QStringLiteral("mdl")));
+	auto *handoffPage = page(QStringLiteral("export"));
 	m_md2Width = new QSpinBox;
 	m_md2Height = new QSpinBox;
 	m_md2Width->setObjectName(QStringLiteral("meshMd2Width"));
@@ -854,19 +911,15 @@ ModelEditorDialog::ModelEditorDialog(QWidget *parent) : QDialog(parent)
 	handoffPage->addRow(m_replace);
 	values(handoffPage, QCoreApplication::translate("VibeStudioModelEditor", "Level origin"), QStringLiteral("meshPlacement"), m_placement,
 		   3, 0);
-	addHealthControls(page(QCoreApplication::translate("VibeStudioModelEditor", "Health")));
-	tabs->ensurePolished();
-	int inspectorWidth = 300;
-	for (auto *scroll : tabs->findChildren<QScrollArea *>())
-	{
-		// Measure the whole page, including nested group padding and translated
-		// labels. Button text alone misses margins added by high-contrast styles.
-		scroll->widget()->ensurePolished();
-		const int borders = 2 * tabs->style()->pixelMetric(QStyle::PM_DefaultFrameWidth, nullptr, tabs);
-		inspectorWidth = std::max(inspectorWidth,
-								  scroll->widget()->minimumSizeHint().width() + scroll->verticalScrollBar()->sizeHint().width() + borders);
-	}
-	tabs->setMinimumWidth(inspectorWidth);
+	addHealthControls(page(QStringLiteral("health")));
+	addSkeletonControls(page(QStringLiteral("skeleton")));
+	// The Tool, Materials, View and Add pages hold controls built above, and
+	// tool buttons once the interaction layer exists.
+	createSidebarPage(QStringLiteral("tool"))->addWidget(moveRow);
+	createSidebarPage(QStringLiteral("view"));
+	createSidebarPage(QStringLiteral("add"));
+	for (const auto &id : {QStringLiteral("tool"), QStringLiteral("view"), QStringLiteral("add")})
+		tabs->addPage(m_sidebarPages.value(id));
 	splitter->addWidget(tabs);
 	splitter->setStretchFactor(1, 1);
 	splitter->setSizes({260, 620, 330});
@@ -999,8 +1052,10 @@ ModelEditorDialog::ModelEditorDialog(QWidget *parent) : QDialog(parent)
 		const QList<QDoubleSpinBox *> steps{m_translationGrid, m_rotationGrid, m_scaleGrid};
 		for (int i = 0; i < steps.size(); ++i)
 		{
+			// Only the current tool's step shows, with its label.
 			steps[i]->setEnabled(snap);
-			steps[i]->setVisible(i == tool);
+			if (auto *row = steps[i]->parentWidget())
+				row->setVisible(i == tool);
 		}
 		m_preview->setTransformGizmo(m_moveGizmo->isChecked(), ModelTransformTool(tool), snap ? m_translationGrid->value() : 0,
 									 snap ? m_rotationGrid->value() : 0, snap ? m_scaleGrid->value() : 0);
@@ -1241,12 +1296,18 @@ ModelEditorDialog::ModelEditorDialog(QWidget *parent) : QDialog(parent)
 	connect(m_preview, &ModelViewport::editTransformActiveChanged, this,
 			[this](bool active)
 			{
+				// A resize cancels the drag, so the wrapped status line keeps its
+				// height while a gesture runs instead of reflowing the viewport.
 				if (active)
 				{
+					m_status->setFixedHeight(m_status->height());
 					m_status->setText(QCoreApplication::translate(
 						"VibeStudioModelEditor", "Transforming selection. Release to validate and apply; Escape cancels."));
+					return;
 				}
-				else if (!m_refreshing && !m_working)
+				m_status->setMinimumHeight(0);
+				m_status->setMaximumHeight(QWIDGETSIZE_MAX);
+				if (!m_refreshing && !m_working)
 				{
 					refreshSelection();
 					m_status->setText(m_preview->editTransformValid()
@@ -1371,6 +1432,12 @@ ModelEditorDialog::ModelEditorDialog(QWidget *parent) : QDialog(parent)
 	// Keep construction synchronous; no nested UI events until every control exists.
 	m_document.setMesh(buildModelDesignMesh(design));
 	refresh(false);
+	m_tools = new ModelEditorTools(this);
+	buildToolPages();
+	fitSidebarPages();
+	applyProfile(StudioSettings(StudioSettings::AccessMode::ReadOnly).modelEditorProfileId(), false);
+	if (auto *editing = qobject_cast<QSplitter *>(m_editingControls))
+		editing->setSizes({std::max(260, m_leadingSidebar->minimumSizeHint().width()), 620, std::max(330, m_trailingSidebar->minimumSizeHint().width())});
 }
 
 const ModelDocument &ModelEditorDialog::document() const { return m_document; }
@@ -1667,7 +1734,7 @@ void ModelEditorDialog::refresh(bool keepView)
 	m_skinBindingsPackage->setEnabled(m_skinBindingsFile->isEnabled() && m_materialSource.archive && m_materialSource.archive->isOpen());
 	if (meshChanged)
 	{
-		m_preview->setMesh(mesh, keepView);
+		m_preview->setMesh(m_tools ? m_tools->displayMesh(mesh) : mesh, keepView);
 		m_highlightedRevision.clear();
 		m_previewImageKeys.clear();
 		m_presentedMeshRevision = revision;
@@ -1696,6 +1763,10 @@ void ModelEditorDialog::refresh(bool keepView)
 		m_uv->frameAll();
 	}
 	refreshContext();
+	refreshSkeleton();
+	if (m_tools)
+		m_tools->documentChanged();
+	syncPanes();
 }
 void ModelEditorDialog::selectFromTable()
 {
@@ -2263,10 +2334,14 @@ void ModelEditorDialog::exportModel(const QString &format)
 	}
 	const auto path = QFileDialog::getSaveFileName(
 		this, QCoreApplication::translate("VibeStudioModelEditor", "Export Model"), {},
-		format == QStringLiteral("mdl")	  ? QCoreApplication::translate("VibeStudioModelEditor", "Quake model (*.mdl)")
-		: format == QStringLiteral("md2") ? QCoreApplication::translate("VibeStudioModelEditor", "Quake II model (*.md2)")
-		: format == QStringLiteral("md3") ? QCoreApplication::translate("VibeStudioModelEditor", "Quake III model (*.md3)")
-										  : QCoreApplication::translate("VibeStudioModelEditor", "Wavefront OBJ (*.obj)"));
+		format == QStringLiteral("mdl")		  ? QCoreApplication::translate("VibeStudioModelEditor", "Quake model (*.mdl)")
+		: format == QStringLiteral("md2")	  ? QCoreApplication::translate("VibeStudioModelEditor", "Quake II model (*.md2)")
+		: format == QStringLiteral("md3")	  ? QCoreApplication::translate("VibeStudioModelEditor", "Quake III model (*.md3)")
+		: format == QStringLiteral("md5mesh") ? QCoreApplication::translate("VibeStudioModelEditor", "Doom 3 MD5 mesh (*.md5mesh)")
+		: format == QStringLiteral("md5anim") ? QCoreApplication::translate("VibeStudioModelEditor", "Doom 3 MD5 animation (*.md5anim)")
+		: format == QStringLiteral("iqm")	  ? QCoreApplication::translate("VibeStudioModelEditor", "Inter-Quake Model (*.iqm)")
+		: format == QStringLiteral("ase")	  ? QCoreApplication::translate("VibeStudioModelEditor", "ASCII scene export (*.ase)")
+											  : QCoreApplication::translate("VibeStudioModelEditor", "Wavefront OBJ (*.obj)"));
 	if (path.isEmpty())
 	{
 		return;
@@ -2274,7 +2349,12 @@ void ModelEditorDialog::exportModel(const QString &format)
 	QString error;
 	qint64 written = 0;
 	ModelExportReport report;
-	const int frame = m_frame->currentIndex();
+	int frame = m_frame->currentIndex();
+	if (format == QStringLiteral("md5anim"))
+	{
+		// The clip that the current frame was baked from, else the first.
+		frame = std::max(0, m_document.mesh().skeleton.bakedClipForFrame.value(frame, 0));
+	}
 	if (!performWork(
 			QCoreApplication::translate("VibeStudioModelEditor", "Export Model"),
 			[path, format, frame, &written, &report](ModelDocument &candidate, QString *failure, const ModelWorkControl &control)

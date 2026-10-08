@@ -1,11 +1,15 @@
 #include "core/model_mesh.h"
 #include "core/model_archive.h"
+#include "core/model_document.h"
+#include "core/model_formats_p.h"
+#include "core/model_skeleton.h"
 
 #include "core/model_mdl.h"
 #include "core/model_obj.h"
 #include "core/package_archive.h"
 
 #include <QCoreApplication>
+#include <QFile>
 #include <QHash>
 #include <QRgb>
 
@@ -1438,88 +1442,6 @@ void decodeQuake3Md3(const QByteArray& bytes, ModelMesh* mesh, const ModelWorkCo
 }
 
 // ---------------------------------------------------------------------------
-// Header-only formats
-// ---------------------------------------------------------------------------
-
-void decodeMdcHeader(const QByteArray& bytes, ModelMesh* mesh)
-{
-	// mdcHeader_t: ident, version, name[64], flags, numFrames, numTags,
-	// numSurfaces, numSkins, then the block offsets.
-	if (!rangeOk(bytes, 0, 108)) {
-		mesh->error = QCoreApplication::translate("VibeStudioModelMesh", "The MDC header is truncated.");
-		return;
-	}
-	mesh->version = readI32(bytes, 4);
-	const QString internalName = readFixedName(bytes, 8, 64);
-	mesh->frameCount = std::max(0, readI32(bytes, 76));
-	mesh->tagCount = std::max(0, readI32(bytes, 80));
-	mesh->surfaceCount = std::max(0, readI32(bytes, 84));
-	mesh->skinCount = std::max(0, readI32(bytes, 88));
-	if (!internalName.isEmpty()) {
-		mesh->detailLines << QCoreApplication::translate("VibeStudioModelMesh", "Internal name: %1").arg(internalName);
-	}
-	mesh->detailLines << QCoreApplication::translate("VibeStudioModelMesh", "Flags: 0x%1").arg(QString::number(static_cast<uint>(readI32(bytes, 72)), 16));
-	mesh->detailLines << QCoreApplication::translate("VibeStudioModelMesh", "Frames: %1").arg(mesh->frameCount);
-	mesh->detailLines << QCoreApplication::translate("VibeStudioModelMesh", "Tags: %1").arg(mesh->tagCount);
-	mesh->detailLines << QCoreApplication::translate("VibeStudioModelMesh", "Surfaces: %1").arg(mesh->surfaceCount);
-	mesh->detailLines << QCoreApplication::translate("VibeStudioModelMesh", "Skins: %1").arg(mesh->skinCount);
-	mesh->warnings << QCoreApplication::translate("VibeStudioModelMesh", "Geometry decoding is not implemented for MDC; only the header was read.");
-}
-
-void decodeMdrHeader(const QByteArray& bytes, ModelMesh* mesh)
-{
-	// mdrHeader_t: ident, version, name[64], numFrames, numBones, ofsFrames,
-	// numLODs, ofsLODs, numTags, ofsTags, ofsEnd.
-	if (!rangeOk(bytes, 0, 104)) {
-		mesh->error = QCoreApplication::translate("VibeStudioModelMesh", "The MDR header is truncated.");
-		return;
-	}
-	mesh->version = readI32(bytes, 4);
-	const QString internalName = readFixedName(bytes, 8, 64);
-	mesh->frameCount = std::max(0, readI32(bytes, 72));
-	const int boneCount = std::max(0, readI32(bytes, 76));
-	const int lodCount = std::max(0, readI32(bytes, 84));
-	mesh->tagCount = std::max(0, readI32(bytes, 92));
-	if (!internalName.isEmpty()) {
-		mesh->detailLines << QCoreApplication::translate("VibeStudioModelMesh", "Internal name: %1").arg(internalName);
-	}
-	mesh->detailLines << QCoreApplication::translate("VibeStudioModelMesh", "Frames: %1").arg(mesh->frameCount);
-	mesh->detailLines << QCoreApplication::translate("VibeStudioModelMesh", "Bones: %1").arg(boneCount);
-	mesh->detailLines << QCoreApplication::translate("VibeStudioModelMesh", "Levels of detail: %1").arg(lodCount);
-	mesh->detailLines << QCoreApplication::translate("VibeStudioModelMesh", "Tags: %1").arg(mesh->tagCount);
-	mesh->warnings << QCoreApplication::translate("VibeStudioModelMesh", "Geometry decoding is not implemented for MDR; only the header was read.");
-}
-
-void decodeIqmHeader(const QByteArray& bytes, ModelMesh* mesh)
-{
-	// iqmheader: magic[16], version, filesize, flags, then paired count/offset
-	// fields. See http://sauerbraten.org/iqm/.
-	if (!rangeOk(bytes, 0, 124)) {
-		mesh->error = QCoreApplication::translate("VibeStudioModelMesh", "The IQM header is truncated.");
-		return;
-	}
-	mesh->version = static_cast<int>(readU32(bytes, 16));
-	const qint64 fileSize = static_cast<qint64>(readU32(bytes, 20));
-	mesh->surfaceCount = static_cast<int>(std::min<quint32>(readU32(bytes, 36), static_cast<quint32>(std::numeric_limits<int>::max())));
-	mesh->vertexCount = static_cast<int>(std::min<quint32>(readU32(bytes, 48), static_cast<quint32>(std::numeric_limits<int>::max())));
-	mesh->triangleCount = static_cast<int>(std::min<quint32>(readU32(bytes, 56), static_cast<quint32>(std::numeric_limits<int>::max())));
-	const int jointCount = static_cast<int>(std::min<quint32>(readU32(bytes, 68), static_cast<quint32>(std::numeric_limits<int>::max())));
-	const int animationCount = static_cast<int>(std::min<quint32>(readU32(bytes, 84), static_cast<quint32>(std::numeric_limits<int>::max())));
-	mesh->frameCount = static_cast<int>(std::min<quint32>(readU32(bytes, 92), static_cast<quint32>(std::numeric_limits<int>::max())));
-	mesh->detailLines << QCoreApplication::translate("VibeStudioModelMesh", "Declared file size: %1 byte(s)").arg(fileSize);
-	mesh->detailLines << QCoreApplication::translate("VibeStudioModelMesh", "Meshes: %1").arg(mesh->surfaceCount);
-	mesh->detailLines << QCoreApplication::translate("VibeStudioModelMesh", "Vertices: %1").arg(mesh->vertexCount);
-	mesh->detailLines << QCoreApplication::translate("VibeStudioModelMesh", "Triangles: %1").arg(mesh->triangleCount);
-	mesh->detailLines << QCoreApplication::translate("VibeStudioModelMesh", "Joints: %1").arg(jointCount);
-	mesh->detailLines << QCoreApplication::translate("VibeStudioModelMesh", "Animations: %1").arg(animationCount);
-	mesh->detailLines << QCoreApplication::translate("VibeStudioModelMesh", "Frames: %1").arg(mesh->frameCount);
-	if (fileSize > 0 && fileSize != bytes.size()) {
-		mesh->warnings << QCoreApplication::translate("VibeStudioModelMesh", "The IQM file size field (%1) does not match the file size (%2).").arg(fileSize).arg(bytes.size());
-	}
-	mesh->warnings << QCoreApplication::translate("VibeStudioModelMesh", "Geometry decoding is not implemented for IQM; only the header was read.");
-}
-
-// ---------------------------------------------------------------------------
 // Skin resolution helpers
 // ---------------------------------------------------------------------------
 
@@ -1823,55 +1745,225 @@ float ModelMesh::boundingRadius() const
 	return radius;
 }
 
+namespace {
+
+struct FormatRow {
+	ModelMeshFormat format;
+	const char* id;
+	const char* name;
+	// Suffixes, '|' between them.
+	const char* suffixes;
+	bool skeletal;
+	bool animationOnly;
+};
+
+// Stable ids are written to JSON and receipts; display names are product and
+// format names, which stay untranslated.
+constexpr FormatRow kFormats[] = {
+	{ModelMeshFormat::WavefrontObj, "obj", "Wavefront OBJ", "obj", false, false},
+	{ModelMeshFormat::QuakeMdl, "mdl", "Quake MDL", "mdl", false, false},
+	{ModelMeshFormat::Quake2Md2, "md2", "Quake II MD2", "md2", false, false},
+	{ModelMeshFormat::Quake3Md3, "md3", "Quake III MD3", "md3", false, false},
+	{ModelMeshFormat::Mdc, "mdc", "MDC", "mdc", false, false},
+	{ModelMeshFormat::Mdr, "mdr", "MDR", "mdr", true, false},
+	{ModelMeshFormat::Iqm, "iqm", "Inter-Quake Model", "iqm", true, false},
+	{ModelMeshFormat::Md5Mesh, "md5mesh", "MD5 mesh", "md5mesh", true, false},
+	{ModelMeshFormat::Md5Anim, "md5anim", "MD5 animation", "md5anim", true, true},
+	{ModelMeshFormat::Mds, "mds", "MDS", "mds", true, false},
+	{ModelMeshFormat::Mdm, "mdm", "MDM", "mdm", true, false},
+	{ModelMeshFormat::Mdx, "mdx", "MDX", "mdx", true, true},
+	{ModelMeshFormat::Glm, "glm", "Ghoul 2 GLM", "glm", true, false},
+	{ModelMeshFormat::Gla, "gla", "Ghoul 2 GLA", "gla", true, true},
+	{ModelMeshFormat::HalfLifeMdl, "studio-mdl", "Half-Life MDL", "mdl", true, false},
+	{ModelMeshFormat::Hexen2Mdl, "hexen2-mdl", "Hexen II MDL", "mdl", false, false},
+	{ModelMeshFormat::LightWave, "lwo", "LightWave LWO", "lwo", false, false},
+	{ModelMeshFormat::Ase, "ase", "ASCII Scene Export", "ase", false, false},
+	{ModelMeshFormat::HereticFm, "fm", "Heretic II FM", "fm", false, false},
+	{ModelMeshFormat::Kvx, "kvx", "KVX voxels", "kvx", false, false},
+};
+
+const FormatRow* formatRow(ModelMeshFormat format)
+{
+	for (const FormatRow& row : kFormats) {
+		if (row.format == format) {
+			return &row;
+		}
+	}
+	return nullptr;
+}
+
+// The first token of a text file after whitespace and // or /* */ comments.
+QByteArray firstTextToken(const QByteArray& bytes)
+{
+	qsizetype index = 0;
+	const qsizetype end = std::min<qsizetype>(bytes.size(), 4096);
+	while (index < end) {
+		const char ch = bytes.at(index);
+		if (ch == ' ' || ch == '\t' || ch == '\r' || ch == '\n') {
+			++index;
+		} else if (ch == '/' && index + 1 < end && bytes.at(index + 1) == '/') {
+			while (index < end && bytes.at(index) != '\n') { ++index; }
+		} else if (ch == '/' && index + 1 < end && bytes.at(index + 1) == '*') {
+			index += 2;
+			while (index + 1 < end && !(bytes.at(index) == '*' && bytes.at(index + 1) == '/')) { ++index; }
+			index += 2;
+		} else {
+			break;
+		}
+	}
+	qsizetype stop = index;
+	while (stop < end && bytes.at(stop) != ' ' && bytes.at(stop) != '\t' && bytes.at(stop) != '\r' && bytes.at(stop) != '\n') {
+		++stop;
+	}
+	return bytes.mid(index, stop - index);
+}
+
+} // namespace
+
 QString modelMeshFormatId(ModelMeshFormat format)
 {
-	switch (format) {
-	case ModelMeshFormat::WavefrontObj:
-		return QStringLiteral("obj");
-	case ModelMeshFormat::QuakeMdl:
-		return QStringLiteral("mdl");
-	case ModelMeshFormat::Quake2Md2:
-		return QStringLiteral("md2");
-	case ModelMeshFormat::Quake3Md3:
-		return QStringLiteral("md3");
-	case ModelMeshFormat::Mdc:
-		return QStringLiteral("mdc");
-	case ModelMeshFormat::Mdr:
-		return QStringLiteral("mdr");
-	case ModelMeshFormat::Iqm:
-		return QStringLiteral("iqm");
-	case ModelMeshFormat::Unknown:
-		break;
-	}
-	return QStringLiteral("unknown");
+	const FormatRow* row = formatRow(format);
+	return row ? QString::fromLatin1(row->id) : QStringLiteral("unknown");
 }
 
 QString modelMeshFormatDisplayName(ModelMeshFormat format)
 {
-	switch (format) {
-	case ModelMeshFormat::WavefrontObj:
-		return QStringLiteral("Wavefront OBJ");
-	case ModelMeshFormat::QuakeMdl:
-		return QStringLiteral("Quake MDL");
-	case ModelMeshFormat::Quake2Md2:
-		return QStringLiteral("Quake II MD2");
-	case ModelMeshFormat::Quake3Md3:
-		return QStringLiteral("Quake III MD3");
-	case ModelMeshFormat::Mdc:
-		return QStringLiteral("MDC");
-	case ModelMeshFormat::Mdr:
-		return QStringLiteral("MDR");
-	case ModelMeshFormat::Iqm:
-		return QStringLiteral("Inter-Quake Model");
-	case ModelMeshFormat::Unknown:
-		break;
+	const FormatRow* row = formatRow(format);
+	return row ? QString::fromLatin1(row->name) : QCoreApplication::translate("VibeStudioModelMesh", "Unknown model");
+}
+
+bool modelMeshFormatIsSkeletal(ModelMeshFormat format)
+{
+	const FormatRow* row = formatRow(format);
+	return row && row->skeletal;
+}
+
+bool modelMeshFormatIsAnimationOnly(ModelMeshFormat format)
+{
+	const FormatRow* row = formatRow(format);
+	return row && row->animationOnly;
+}
+
+QStringList modelMeshFileSuffixes()
+{
+	QStringList suffixes;
+	for (const FormatRow& row : kFormats) {
+		for (const QString& suffix : QString::fromLatin1(row.suffixes).split(QLatin1Char('|'))) {
+			if (!suffixes.contains(suffix)) {
+				suffixes.append(suffix);
+			}
+		}
 	}
-	return QCoreApplication::translate("VibeStudioModelMesh", "Unknown model");
+	return suffixes;
+}
+
+namespace {
+
+struct CatalogEntry {
+	ModelMeshFormat format;
+	// '|' between entries.
+	const char* engines;
+	const char* games;
+	const char* companions;
+	// The exportEditableModel id that writes this format, or empty.
+	const char* exportId;
+	const char* notes;
+};
+
+// What each format is for and what the studio keeps of it. Notes are
+// translated where read.
+constexpr CatalogEntry kCatalog[] = {
+	{ModelMeshFormat::QuakeMdl, "idtech2", "Quake|Quake mission packs|Quake source ports", "", "mdl",
+		QT_TRANSLATE_NOOP("VibeStudioModelMesh", "Every pose, frame group and timing, indexed skins and skin groups, header fields; the palette stays external.")},
+	{ModelMeshFormat::Hexen2Mdl, "idtech2", "Hexen II: Portal of Praevus", "", "",
+		QT_TRANSLATE_NOOP("VibeStudioModelMesh", "Mission-pack alias models with per-corner texture coordinates; read only.")},
+	{ModelMeshFormat::Quake2Md2, "idtech2|idtech1", "Quake II|GZDoom and Zandronum (MODELDEF)", "", "md2",
+		QT_TRANSLATE_NOOP("VibeStudioModelMesh", "Every pose, ordered skin names and skin size; one surface.")},
+	{ModelMeshFormat::HereticFm, "idtech2", "Heretic II", "", "",
+		QT_TRANSLATE_NOOP("VibeStudioModelMesh", "Flexible models: frames, skins and mesh nodes as surfaces; read only.")},
+	{ModelMeshFormat::Quake3Md3, "idtech3|idtech2|idtech1",
+		"Quake III Arena|Team Arena|Return to Castle Wolfenstein|Wolfenstein: Enemy Territory|Star Trek: Elite Force|Jedi Outcast|Jedi Academy|Darkplaces|GZDoom (MODELDEF)",
+		"", "md3", QT_TRANSLATE_NOOP("VibeStudioModelMesh", "Surfaces, shaders, every frame and tags; detail levels as name_1.md3 and name_2.md3.")},
+	{ModelMeshFormat::Mdc, "idtech3", "Return to Castle Wolfenstein|Wolfenstein: Enemy Territory", "", "",
+		QT_TRANSLATE_NOOP("VibeStudioModelMesh", "Compressed MD3: base and compressed frames, tags and shaders; read only (export MD3, which both games load).")},
+	{ModelMeshFormat::Mds, "idtech3", "Return to Castle Wolfenstein", "", "",
+		QT_TRANSLATE_NOOP("VibeStudioModelMesh", "Skeletal characters: bones, weights, frames and tags, baked to frames for viewing and MD3 export; read only.")},
+	{ModelMeshFormat::Mdm, "idtech3", "Wolfenstein: Enemy Territory", "mdx", "",
+		QT_TRANSLATE_NOOP("VibeStudioModelMesh", "Skeletal meshes skinned against the MDX that holds their bones; read only.")},
+	{ModelMeshFormat::Mdx, "idtech3", "Wolfenstein: Enemy Territory", "", "",
+		QT_TRANSLATE_NOOP("VibeStudioModelMesh", "Bones and frames without geometry; read only.")},
+	{ModelMeshFormat::Mdr, "idtech3", "Star Trek: Elite Force|ioquake3 games", "", "",
+		QT_TRANSLATE_NOOP("VibeStudioModelMesh", "Skeletal models with per-frame bone matrices; the first detail level is read.")},
+	{ModelMeshFormat::Glm, "idtech3", "Jedi Outcast|Jedi Academy|Soldier of Fortune II", "gla", "",
+		QT_TRANSLATE_NOOP("VibeStudioModelMesh", "Ghoul 2 meshes with the GLA skeleton they name; surface hierarchy and off surfaces are listed; read only.")},
+	{ModelMeshFormat::Gla, "idtech3", "Jedi Outcast|Jedi Academy|Soldier of Fortune II", "", "",
+		QT_TRANSLATE_NOOP("VibeStudioModelMesh", "Ghoul 2 skeletons and their frames without geometry; read only.")},
+	{ModelMeshFormat::Iqm, "idtech3|idtech2", "ioquake3|Spearmint|Darkplaces|FTEQW|Xonotic", "", "iqm",
+		QT_TRANSLATE_NOOP("VibeStudioModelMesh", "Skeletal meshes with joints, weights and animations; static meshes too.")},
+	{ModelMeshFormat::Md5Mesh, "idtech4", "Doom 3|Resurrection of Evil|Quake 4|Prey|Enemy Territory: Quake Wars|The Dark Mod", "md5anim|def",
+		"md5mesh", QT_TRANSLATE_NOOP("VibeStudioModelMesh", "Joints, weights and every md5anim beside the mesh or named by a Doom 3 .def model declaration.")},
+	{ModelMeshFormat::Md5Anim, "idtech4", "Doom 3|Resurrection of Evil|Quake 4|Prey|Enemy Territory: Quake Wars|The Dark Mod", "", "md5anim",
+		QT_TRANSLATE_NOOP("VibeStudioModelMesh", "One animation: the joint hierarchy, base frame, bounds and frames.")},
+	{ModelMeshFormat::LightWave, "idtech4|idtech3", "Doom 3|Quake 4|q3map2 misc_model", "", "",
+		QT_TRANSLATE_NOOP("VibeStudioModelMesh", "Static objects: points, polygons, UV maps and surface names as materials; read only.")},
+	{ModelMeshFormat::Ase, "idtech4|idtech3", "Doom 3|Quake 4|q3map2 misc_model", "", "ase",
+		QT_TRANSLATE_NOOP("VibeStudioModelMesh", "Static scenes: objects, materials and mapping; the first mesh of each object.")},
+	{ModelMeshFormat::HalfLifeMdl, "goldsrc", "Half-Life|Counter-Strike|Team Fortress Classic|Day of Defeat|Sven Co-op", "T.mdl|01.mdl", "",
+		QT_TRANSLATE_NOOP("VibeStudioModelMesh", "Bones, sequences, body parts, embedded textures and attachments, with texture and sequence group files; read only.")},
+	{ModelMeshFormat::Kvx, "idtech1", "GZDoom|ZDoom|Zandronum|Eternity (VOXELDEF)", "", "",
+		QT_TRANSLATE_NOOP("VibeStudioModelMesh", "Voxel sprites meshed into faces, coloured from the palette in the file; read only.")},
+	{ModelMeshFormat::WavefrontObj, "interchange", "Any modeller", "", "obj",
+		QT_TRANSLATE_NOOP("VibeStudioModelMesh", "One pose of polygon geometry with UVs, normals and material names; no MTL library.")},
+};
+
+} // namespace
+
+const ModelEmbeddedSkin* modelEmbeddedSkinForSurface(const ModelMesh& mesh, int surface)
+{
+	if (mesh.embeddedSkins.isEmpty()) {
+		return nullptr;
+	}
+	const QString wanted = surface >= 0 && surface < mesh.surfaces.size() ? mesh.surfaces.at(surface).skinPaths.value(0) : QString();
+	if (!wanted.isEmpty()) {
+		for (const ModelEmbeddedSkin& skin : mesh.embeddedSkins) {
+			if (skin.name.compare(wanted, Qt::CaseInsensitive) == 0) {
+				return &skin;
+			}
+		}
+	}
+	return &mesh.embeddedSkins.first();
+}
+
+QVector<ModelFormatCapability> modelFormatCapabilities()
+{
+	const QStringList exports = modelExportFormatIds();
+	QVector<ModelFormatCapability> capabilities;
+	for (const CatalogEntry& entry : kCatalog) {
+		const FormatRow* row = formatRow(entry.format);
+		if (!row) {
+			continue;
+		}
+		ModelFormatCapability capability;
+		capability.format = entry.format;
+		capability.id = QString::fromLatin1(row->id);
+		capability.name = QString::fromLatin1(row->name);
+		capability.suffixes = QString::fromLatin1(row->suffixes).split(QLatin1Char('|'));
+		capability.engines = QString::fromLatin1(entry.engines).split(QLatin1Char('|'), Qt::SkipEmptyParts);
+		capability.games = QString::fromUtf8(entry.games).split(QLatin1Char('|'), Qt::SkipEmptyParts);
+		capability.skeletal = row->skeletal;
+		capability.animationOnly = row->animationOnly;
+		capability.companions = QString::fromLatin1(entry.companions).split(QLatin1Char('|'), Qt::SkipEmptyParts);
+		capability.writes = *entry.exportId && exports.contains(QString::fromLatin1(entry.exportId));
+		capability.notes = QCoreApplication::translate("VibeStudioModelMesh", entry.notes);
+		capabilities.append(capability);
+	}
+	return capabilities;
 }
 
 ModelMeshFormat detectModelMeshFormat(const QString& virtualPath, const QByteArray& bytes)
 {
-	if (virtualPath.endsWith(QStringLiteral(".obj"), Qt::CaseInsensitive)) {
+	const QString suffix = pathSuffix(virtualPath);
+	if (suffix == QStringLiteral("obj")) {
 		return ModelMeshFormat::WavefrontObj;
 	}
 	if (bytes.size() >= 16 && bytes.startsWith(QByteArrayLiteral("INTERQUAKEMODEL"))) {
@@ -1879,47 +1971,77 @@ ModelMeshFormat detectModelMeshFormat(const QString& virtualPath, const QByteArr
 	}
 	if (bytes.size() >= 4) {
 		const QByteArray magic = bytes.left(4);
-		if (magic == QByteArrayLiteral("IDPO")) {
-			return ModelMeshFormat::QuakeMdl;
+		struct Magic {
+			const char* bytes;
+			ModelMeshFormat format;
+		};
+		static const Magic kMagics[] = {
+			{"IDPO", ModelMeshFormat::QuakeMdl},
+			{"RAPO", ModelMeshFormat::Hexen2Mdl},
+			{"IDP2", ModelMeshFormat::Quake2Md2},
+			{"IDP3", ModelMeshFormat::Quake3Md3},
+			{"IDPC", ModelMeshFormat::Mdc},
+			{"RDM5", ModelMeshFormat::Mdr},
+			{"MDSW", ModelMeshFormat::Mds},
+			{"MDMW", ModelMeshFormat::Mdm},
+			{"MDXW", ModelMeshFormat::Mdx},
+			{"2LGM", ModelMeshFormat::Glm},
+			{"2LGA", ModelMeshFormat::Gla},
+			{"IDST", ModelMeshFormat::HalfLifeMdl},
+			{"IDSQ", ModelMeshFormat::HalfLifeMdl},
+		};
+		for (const Magic& entry : kMagics) {
+			if (magic == QByteArray(entry.bytes, 4)) {
+				return entry.format;
+			}
 		}
-		if (magic == QByteArrayLiteral("IDP2")) {
-			return ModelMeshFormat::Quake2Md2;
+		if (magic == QByteArrayLiteral("FORM") && bytes.size() >= 12) {
+			const QByteArray kind = bytes.mid(8, 4);
+			if (kind == QByteArrayLiteral("LWO2") || kind == QByteArrayLiteral("LWOB") || kind == QByteArrayLiteral("LWLO")) {
+				return ModelMeshFormat::LightWave;
+			}
 		}
-		if (magic == QByteArrayLiteral("IDP3")) {
-			return ModelMeshFormat::Quake3Md3;
-		}
-		if (magic == QByteArrayLiteral("IDPC")) {
-			return ModelMeshFormat::Mdc;
-		}
-		if (magic == QByteArrayLiteral("RDM5")) {
-			return ModelMeshFormat::Mdr;
+		// Heretic II's chunked flexible model opens with a "header" chunk.
+		if (bytes.size() >= 40 && bytes.startsWith(QByteArrayLiteral("header"))) {
+			return ModelMeshFormat::HereticFm;
 		}
 	}
+	const QByteArray token = firstTextToken(bytes);
+	if (token == QByteArrayLiteral("MD5Version")) {
+		if (suffix == QStringLiteral("md5anim")) {
+			return ModelMeshFormat::Md5Anim;
+		}
+		if (suffix == QStringLiteral("md5mesh")) {
+			return ModelMeshFormat::Md5Mesh;
+		}
+		return bytes.contains("numMeshes") ? ModelMeshFormat::Md5Mesh : ModelMeshFormat::Md5Anim;
+	}
+	if (token == QByteArrayLiteral("*3DSMAX_ASCIIEXPORT")) {
+		return ModelMeshFormat::Ase;
+	}
 	// Fall back to the extension so a damaged file still reports which decoder
-	// was expected instead of a bare "unknown".
-	const QString suffix = pathSuffix(virtualPath);
+	// was expected instead of a bare "unknown". ".mdl" means Quake's format.
 	if (suffix == QStringLiteral("mdl")) {
 		return ModelMeshFormat::QuakeMdl;
 	}
-	if (suffix == QStringLiteral("md2")) {
-		return ModelMeshFormat::Quake2Md2;
-	}
-	if (suffix == QStringLiteral("md3")) {
-		return ModelMeshFormat::Quake3Md3;
-	}
-	if (suffix == QStringLiteral("mdc")) {
-		return ModelMeshFormat::Mdc;
-	}
-	if (suffix == QStringLiteral("mdr")) {
-		return ModelMeshFormat::Mdr;
-	}
-	if (suffix == QStringLiteral("iqm")) {
-		return ModelMeshFormat::Iqm;
+	for (const FormatRow& row : kFormats) {
+		if (row.format == ModelMeshFormat::HalfLifeMdl || row.format == ModelMeshFormat::Hexen2Mdl) {
+			continue;
+		}
+		if (QString::fromLatin1(row.suffixes).split(QLatin1Char('|')).contains(suffix)) {
+			return row.format;
+		}
 	}
 	return ModelMeshFormat::Unknown;
 }
 
 ModelMesh decodeModelMesh(const QString& virtualPath, const QByteArray& bytes, const IdTechPalette* palette, const ModelWorkControl& control)
+{
+	return decodeModelMesh(virtualPath, bytes, palette, control, ModelCompanionSource{});
+}
+
+ModelMesh decodeModelMesh(const QString& virtualPath, const QByteArray& bytes, const IdTechPalette* palette, const ModelWorkControl& control,
+	const ModelCompanionSource& companionSource)
 {
 	ModelMesh mesh;
 	mesh.sourcePath = virtualPath;
@@ -1943,6 +2065,7 @@ ModelMesh decodeModelMesh(const QString& virtualPath, const QByteArray& bytes, c
 		effectivePalette = generatedIdTechPalette(QStringLiteral("quake"));
 	}
 
+	model_formats::Companions companions(&companionSource, &mesh);
 	switch (mesh.format) {
 	case ModelMeshFormat::WavefrontObj:
 		return decodeModelObj(virtualPath, bytes, control);
@@ -1956,23 +2079,65 @@ ModelMesh decodeModelMesh(const QString& virtualPath, const QByteArray& bytes, c
 		decodeQuake3Md3(bytes, &mesh, control);
 		break;
 	case ModelMeshFormat::Mdc:
-		decodeMdcHeader(bytes, &mesh);
+		model_formats::decodeMdc(bytes, &mesh, control);
 		break;
 	case ModelMeshFormat::Mdr:
-		decodeMdrHeader(bytes, &mesh);
+		model_formats::decodeMdr(bytes, &mesh, control);
 		break;
 	case ModelMeshFormat::Iqm:
-		decodeIqmHeader(bytes, &mesh);
+		model_formats::decodeIqm(bytes, &mesh, control);
+		break;
+	case ModelMeshFormat::Md5Mesh:
+		model_formats::decodeMd5Mesh(virtualPath, bytes, &mesh, control, companions);
+		break;
+	case ModelMeshFormat::Md5Anim:
+		model_formats::decodeMd5Anim(virtualPath, bytes, &mesh, control);
+		break;
+	case ModelMeshFormat::Mds:
+		model_formats::decodeMds(bytes, &mesh, control);
+		break;
+	case ModelMeshFormat::Mdm:
+		model_formats::decodeMdm(virtualPath, bytes, &mesh, control, companions);
+		break;
+	case ModelMeshFormat::Mdx:
+		model_formats::decodeMdx(bytes, &mesh, control);
+		break;
+	case ModelMeshFormat::Glm:
+		model_formats::decodeGlm(virtualPath, bytes, &mesh, control, companions);
+		break;
+	case ModelMeshFormat::Gla:
+		model_formats::decodeGla(bytes, &mesh, control);
+		break;
+	case ModelMeshFormat::HalfLifeMdl:
+		model_formats::decodeHalfLifeMdl(virtualPath, bytes, &mesh, control, companions);
+		break;
+	case ModelMeshFormat::Hexen2Mdl:
+		model_formats::decodeHexen2Mdl(bytes, effectivePalette, &mesh, control);
+		break;
+	case ModelMeshFormat::LightWave:
+		model_formats::decodeLightWave(virtualPath, bytes, &mesh, control);
+		break;
+	case ModelMeshFormat::Ase:
+		model_formats::decodeAse(virtualPath, bytes, &mesh, control);
+		break;
+	case ModelMeshFormat::HereticFm:
+		model_formats::decodeHereticFm(bytes, &mesh, control);
+		break;
+	case ModelMeshFormat::Kvx:
+		model_formats::decodeKvx(bytes, &mesh, control);
 		break;
 	case ModelMeshFormat::Unknown:
 		break;
 	}
 
-	if (mesh.error.isEmpty() && mesh.geometryAvailable) {
+	const bool legacyWinding = mesh.format == ModelMeshFormat::QuakeMdl || mesh.format == ModelMeshFormat::Quake2Md2
+		|| mesh.format == ModelMeshFormat::Quake3Md3;
+	if (mesh.error.isEmpty() && mesh.geometryAvailable && legacyWinding) {
 		// MDL/MD2/MD3 use clockwise front faces. The editable mesh and OBJ use
 		// cross(b-a, c-a) for outward normals. Convert after the native MD2
 		// command-stream audit, retaining every corner's UV/normal identity.
 		// Original id renderers use GL_FRONT culling; see docs/CREDITS.md.
+		// The decoders in model_format_*.cpp emit counter-clockwise faces.
 		ModelWorkProgress winding(control, ModelWorkPhase::Validating, &mesh.error);
 		for (auto &surface : mesh.surfaces) {
 			for (auto &triangle : surface.triangles) {
@@ -1980,6 +2145,12 @@ ModelMesh decodeModelMesh(const QString& virtualPath, const QByteArray& bytes, c
 				std::swap(triangle.b, triangle.c);
 			}
 			if (!winding.check()) { break; }
+		}
+	}
+	if (mesh.error.isEmpty() && !mesh.skeleton.isEmpty()) {
+		QString problem;
+		if (!validateModelSkeleton(mesh, &problem)) {
+			mesh.error = problem;
 		}
 	}
 	if (mesh.error.isEmpty() && (mesh.geometryAvailable || !mesh.frames.isEmpty())) {
@@ -2000,6 +2171,21 @@ ModelMesh decodeModelMesh(const QString& virtualPath, const QByteArray& bytes, c
 	return mesh;
 }
 
+ModelMesh decodeModelMeshFile(const QString& path, const IdTechPalette* palette, const ModelWorkControl& control)
+{
+	QFile file(path);
+	if (!file.open(QIODevice::ReadOnly)) {
+		ModelMesh mesh;
+		mesh.sourcePath = path;
+		mesh.error = QCoreApplication::translate("VibeStudioModelMesh", "The model file could not be opened: %1").arg(file.errorString());
+		return mesh;
+	}
+	const QByteArray bytes = file.readAll();
+	QString normalized = path;
+	normalized.replace(QLatin1Char('\\'), QLatin1Char('/'));
+	return decodeModelMesh(normalized, bytes, palette, control, modelCompanionsFromFileSystem(path));
+}
+
 ModelMesh decodeModelMeshFromArchive(const PackageArchiveReader& archive, const QString& virtualPath, const QString& paletteId,
 	const ModelWorkControl& control)
 {
@@ -2015,10 +2201,11 @@ ModelMesh decodeModelMeshFromArchive(const PackageArchiveReader& archive, const 
 	// Only MDL embeds palette indices. Palette reads use the same verified,
 	// bounded snapshot as geometry and check cancellation while streaming.
 	IdTechPaletteResolution resolution;
-	if (detectModelMeshFormat(virtualPath, bytes) == ModelMeshFormat::QuakeMdl) {
+	const ModelMeshFormat detected = detectModelMeshFormat(virtualPath, bytes);
+	if (detected == ModelMeshFormat::QuakeMdl || detected == ModelMeshFormat::Hexen2Mdl) {
 		resolution = resolveIdTechPalette(reader, paletteId.isEmpty() ? QStringLiteral("quake") : paletteId);
 	}
-	ModelMesh mesh = decodeModelMesh(virtualPath, bytes, &resolution.palette, control);
+	ModelMesh mesh = decodeModelMesh(virtualPath, bytes, &resolution.palette, control, modelCompanionsFromArchive(archive, control));
 	if (!mesh.embeddedSkins.isEmpty()) {
 		mesh.warnings += resolution.warnings;
 		if (resolution.fromPackage && !resolution.sourceVirtualPath.isEmpty()) {
@@ -2088,7 +2275,10 @@ QStringList modelMeshSummaryLines(const ModelMesh& mesh)
 		lines << QCoreApplication::translate("VibeStudioModelMesh", "Error: %1").arg(mesh.error);
 		return lines;
 	}
-	if (!mesh.geometryAvailable) {
+	if (!mesh.geometryAvailable && !mesh.skeleton.isEmpty()) {
+		lines << QCoreApplication::translate("VibeStudioModelMesh", "%1: animation only, %2 joint(s), %3 frame(s).")
+			.arg(formatName).arg(mesh.skeleton.joints.size()).arg(mesh.frameCount);
+	} else if (!mesh.geometryAvailable) {
 		lines << QCoreApplication::translate("VibeStudioModelMesh", "%1: header only, %2 frame(s), %3 surface(s).").arg(formatName).arg(mesh.frameCount).arg(mesh.surfaceCount);
 	} else {
 		lines << QCoreApplication::translate("VibeStudioModelMesh", "%1: %2 surface(s), %3 frame(s), %4 vertices, %5 triangles.")
@@ -2129,6 +2319,23 @@ QStringList modelMeshSummaryLines(const ModelMesh& mesh)
 	}
 	for (const QString& skin : mesh.skinPaths) {
 		lines << QCoreApplication::translate("VibeStudioModelMesh", "Skin path: %1").arg(skin);
+	}
+	if (!mesh.skeleton.isEmpty()) {
+		lines << QCoreApplication::translate("VibeStudioModelMesh", "Joints: %1").arg(mesh.skeleton.joints.size());
+		for (const ModelSkeletalClip& clip : mesh.skeleton.clips) {
+			lines << QCoreApplication::translate("VibeStudioModelMesh", "Skeletal clip \"%1\": %2 frame(s) at %3 fps%4")
+				.arg(clip.name)
+				.arg(clip.frames.size())
+				.arg(formatCoordinate(clip.framesPerSecond))
+				.arg(clip.sourcePath.isEmpty() ? QString() : QCoreApplication::translate("VibeStudioModelMesh", " from %1").arg(clip.sourcePath));
+		}
+		for (const ModelSkeletalTag& tag : mesh.skeleton.tags) {
+			const QString joint = tag.joint >= 0 && tag.joint < mesh.skeleton.joints.size() ? mesh.skeleton.joints.at(tag.joint).name : QString();
+			lines << QCoreApplication::translate("VibeStudioModelMesh", "Joint tag \"%1\" on %2").arg(tag.name, joint);
+		}
+	}
+	for (const QString& companion : mesh.companionPaths) {
+		lines << QCoreApplication::translate("VibeStudioModelMesh", "Companion file: %1").arg(companion);
 	}
 	lines += mesh.detailLines;
 	for (const ModelSurface& surface : mesh.surfaces) {

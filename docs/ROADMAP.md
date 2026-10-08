@@ -48,7 +48,7 @@ movement. Original clients, rotated-tag source-port differences, older editable
 native-source review and release packaging remain separate acceptance work;
 see [Model Engine Acceptance](MODEL_ENGINE_ACCEPTANCE.md).
 
-Level-editor familiarity now exposes 19 working schemes across brush, Doom
+Level-editor familiarity now exposes 24 working schemes across brush, Doom
 and modern scene-editor families. QuArK has routed viewport controls; modern
 held-button flight and middle-button orbit/pan use shared routing. Settings,
 Controls help, aliases and CLI expose actual bindings and adaptation gaps.
@@ -61,11 +61,18 @@ hold navigation, pitch keys, arrow translation and mouse-button pan are shared
 controls, with cancellation on release, lost focus and profile changes.
 Q3Radiant adds separately audited classic position steering, fixed ground-plane
 movement/pitch steps, and shared brush/surface/patch command bindings. Its
-preferences and lifecycle handling use the same GUI/CLI services. Older
-QERadiant and game-specific Radiant variants still need independent audits.
+preferences and lifecycle handling use the same GUI/CLI services. GtkRadiant
+1.4/1.5, QeRadiant, DoomEdit and BSP now have separately audited control profiles;
+additional game-specific Radiant variants still need independent audits. A
+searchable profile browser previews their actual controls and adaptations, and
+Camera Beside Plans extends the shared layout, bookmark and CLI services.
 Temporary viewport maximization and equal sizing now share the Layout/View
 menus and command system, preserve underlying layouts and bookmarks, and route
 the audited Hammer/J.A.C.K. and NetRadiant Custom workspace keys.
+Camera Above Plans adds a wide camera above three plan views, with saved
+proportions, bookmarks and accessible grouped authoring menus. Surface-based
+camera construction and signed extrusion work through ordinary brush creation;
+linear duplicate arrays share preview, cancellation, undo and CLI services.
 Plan and camera status tags share bounded, direction-aware layouts for narrow
 panes and enlarged text, including the Models surface.
 Complete upstream tool/mode parity and the professional editor acceptance
@@ -217,7 +224,7 @@ NetRadiant Shift+middle pastes parameters; NetRadiant Custom Ctrl+middle wraps
 one hit face and advances the clipboard. Custom Shift+middle pastes values onto
 the hit and selection, including patch materials; Alt+Shift and Alt+Ctrl retain
 materials/flags while preserving texel density. Valve axes remain native to the
-target, and dependency references follow paste/undo. The 19 profiles expose 84
+target, and dependency references follow paste/undo. The profiles expose 84
 preferences. Native Project now covers hit/selected brush and patch UVs with an
 Alt mapping-only variant and edge-on results. Held Values/Project/Wrap strokes
 now stage ordered hits with live previews, first-hit selection, advancing wrap
@@ -296,6 +303,12 @@ changes behavior, update or add a metric-backed test where practical.
 ### Cross-Platform Quality
 - [ ] CI builds and tests pass on Windows, macOS, and Linux.
 - [ ] Installer/portable artifacts are produced for all three platforms before public MVP.
+  Since October 2026 the release workflow (`.github/workflows/release.yml`, [Releasing](RELEASING.md)) builds a
+  Windows installer and portable ZIP, a macOS disk image and a Linux AppImage with the HTML manual inside; this
+  stays open until a hosted run has published them and they have been tried on clean machines. Builds are not
+  code-signed or notarised yet.
+- [x] A brand system (October 2026): logo, wordmark, social preview, platform icon sets and installer art,
+  generated from one script and compiled into the app and its packages ([Branding](BRANDING.md)).
 - [ ] Project, package, and compiler paths work with spaces, Unicode, long paths where supported, and platform path separators.
 - [ ] Platform-specific integration is optional and guarded: file associations, launchers, crash handling, updater, and shell-open.
 
@@ -317,10 +330,10 @@ changes behavior, update or add a metric-backed test where practical.
 - [ ] Color-blind-aware status palette and non-color-only state indicators are used across project, package, compiler, AI, and validation surfaces.
 - [ ] Core shell, setup, package tree, activity center, compiler log, preferences, and editor profile controls support keyboard-only navigation.
 - [ ] Custom widgets expose accessible names, roles, descriptions, focus, values, and state changes.
-- [ ] OS-backed TTS can read selected summaries, diagnostics, setup guidance, and task completion/failure events.
+- [x] OS-backed TTS can read selected summaries, diagnostics, setup guidance, and task completion/failure events.
 - [ ] Reduced motion setting affects transitions, loading visuals, and timeline effects.
 - [x] Translation pipeline supports pseudo-localization, right-to-left checks, pluralization, locale formatting, and stale-string reporting.
-- [x] Initial localization target set covers the 20 languages documented in `docs/ACCESSIBILITY_LOCALIZATION.md`.
+- [x] Localization target set covers the 47 languages and regional standards documented in `docs/ACCESSIBILITY_LOCALIZATION.md`, with the system language as default and region formats chosen separately.
 
 ### User-Visible Progress And Detail
 - [ ] Global activity center shows queued, running, completed, warning, failed, and cancelled tasks.
@@ -1122,8 +1135,19 @@ Goal: widen the workbench into a real asset studio.
   cross-platform performance gates remain open.
 - [x] Add model geometry rendering: decode vertex/triangle data and draw the mesh rather than summarizing it.
   `decodeModelMesh` decodes geometry for Quake MDL (IDPO 6), Quake II MD2 (IDP2 8), and Quake III MD3
-  (IDP3 15). MDC, MDR, and IQM stay header-only: they report their counts, warn that geometry decoding is
-  not implemented, and paint a no-geometry state in the viewport.
+  (IDP3 15). Since 2026-10-08 MDC, MDR and IQM decode fully too, alongside the other idTech 1-4 formats
+  below; animation-only files paint a no-geometry state in the viewport.
+- [x] Read the model formats of every idTech generation: Hexen II and Half-Life MDL, Heretic II FM, MDC,
+  MDS, MDM/MDX, MDR, Ghoul 2 GLM/GLA, IQM, MD5 mesh and animation with `.def` names, LightWave LWO, ASE and
+  KVX, with companion files and skeletons posed into frames; write MD5, IQM and ASE. See
+  [Native Model Formats](MODEL_FORMATS.md).
+- [ ] Verify the model decoders against real game files and the exported MD5, IQM and ASE models in the
+  original engines; read game animation scripts (Jedi Academy `animation.cfg`, Wolfenstein scripts,
+  GZDoom MODELDEF/VOXELDEF) for clip names.
+- [ ] Edit joints and weights: bone overlay, pose mode and weight painting.
+- [x] Give the Mesh Editor the Levels page's sidebar layout, one or four views, and Blender, 3ds Max and
+  MilkShape 3D controls profiles with customisation and CLI parity. See
+  [Modeller Profiles](MODELLER_PROFILES.md).
 - [x] Add skin/material dependency panel.
 - [x] Add model loading state and fallback metadata view.
 - [x] Add animation list where format supports it. Animations are inferred from frame-name stems, because
@@ -1397,6 +1421,11 @@ Goal: widen the workbench into a real asset studio.
 - [x] Query models and sounds the same way in the Models and Sounds filters (`ext=wav size>1mb`).
 - [x] Query shaders in the Shaders filter by counts, directives, and stage keys (`missing>0`, `cull=none`,
   `blend:gl_one`).
+- [x] Materials workbench (2026-10-08): every texture, shader and material of idTech 1 to 4 in one library, a live
+  per-engine preview with animation, validation of each engine's loading rules, text and node-graph editing over one
+  text, saving into package staging, and the `material` CLI family. Listing the maps that use a material, a
+  per-game Quake III dialect setting (RTCW, ET, Jedi Knight effects beyond ET's implicit images) and IWAD/PWAD texture
+  merging remain open.
 - [x] Query project files in the Code page's Files tree (`ext=qc size>10kb`, `language=shader`), and name a key
   no item has in the status bar wherever a query empties a list.
 - [x] Remember each query filter's queries between sessions, offered again as you type or with Down.
@@ -1800,8 +1829,8 @@ Work the release-candidate round exposed but did not finish. Each item has a
 matching entry in the milestone or backlog section above.
 
 - [x] Render model geometry instead of summarizing it: decode vertex/triangle data for the idTech model
-  families and draw the mesh in the Models surface. Done for MDL, MD2, and MD3; MDC, MDR, and IQM remain
-  header-only.
+  families and draw the mesh in the Models surface. Done for MDL, MD2 and MD3, and since 2026-10-08 for
+  every idTech 1-4 format in [Native Model Formats](MODEL_FORMATS.md).
 - [x] Link an audio playback backend and add transport, buffering, and playback state on top of the existing
   metadata and waveform preview. Qt Multimedia, optional at build time.
 - [x] Add a dynamic-Huffman deflate encoder so ZIP/PK3 output is not limited to stored and fixed-Huffman
@@ -1905,7 +1934,10 @@ scene locks, recovery, WAD persistence, CLI and node readiness. Real generated
 Doom/ZDoom UDMF builds pass extended/compressed ZDBSP, package validation and
 launch planning. Native UDMF move/rotate/mirror/snap/resize now preserve fractional
 coordinates and source spans through the same history, worker and scene services.
-Topology creation/deletion, advanced effects, realistic performance and native
+UDMF thing duplication and 1–256-copy arrays retain unknown properties, comments,
+fractional XYZ, scene groups and exact one-step history through GUI and CLI.
+Polyobject control copies invalidate nodes; ordinary thing copies retain them.
+Geometry duplication, topology creation/deletion, advanced effects, realistic performance and native
 interaction acceptance remain open. See the [UDMF acceptance boundaries](LEVEL_EDITOR.md#lossless-udmf-property-authoring).
 Binary Hexen polyobject control-angle semantics and thing-based node invalidation
 still need parity with the UDMF control handling; full polyobject editing and

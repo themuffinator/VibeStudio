@@ -27,7 +27,8 @@ struct StudioChartSlice {
 };
 
 // Horizontal stacked-proportion bar with a legend; used for package
-// composition by type and by size.
+// composition by type and by size. Both start from the leading side, so a
+// right-to-left layout mirrors them.
 class CompositionChart final : public QWidget {
 	Q_OBJECT
 
@@ -80,8 +81,8 @@ struct PipelineStageNode {
 	bool optional = false;
 };
 
-// Left-to-right stage graph: source -> stages -> artifacts, with per-stage
-// state glyphs.
+// Stage graph in reading order: source -> stages -> artifacts, with per-stage
+// state glyphs. It runs right to left in a right-to-left layout.
 class PipelineChart final : public QWidget {
 	Q_OBJECT
 

@@ -16,6 +16,7 @@
 #include <array>
 #include <functional>
 #include <memory>
+#include <vector>
 
 namespace vibestudio {
 
@@ -162,6 +163,9 @@ struct LevelMapBrushFace {
 	// True once the face's texture was replaced, so save-back rewrites the name
 	// on its line. Per face: a face left alone keeps its line as written.
 	bool textureDirty = false;
+	// True when the face's line carries Quake II style contents, surface and
+	// value numbers after its texture placement.
+	bool flagsWritten = false;
 };
 
 struct LevelMapBrush {
@@ -403,7 +407,7 @@ struct LevelMapPropertyStep {
 
 struct LevelMapUndoCommand {
 	QByteArray udmfBefore, udmfAfter;
-	// Native UDMF transforms distinguish ordinary things from node-builder inputs.
+	// Native UDMF edits distinguish ordinary things from node-builder inputs.
 	bool udmfNodeInputsChanged = false;
 	bool hasSceneSnapshot = false;
 	LevelSceneState sceneBefore;
@@ -492,6 +496,13 @@ struct LevelMapUndoCommand {
 	QVector<LevelMapIssue> issueResults;
 	QVector<LevelMapSelectionRef> selectionSnapshot;
 	QVector<LevelMapSelectionRef> selectionResult;
+	// For `batch`: the commands it is made of, in the order they were done;
+	// undo replays them backwards (collapseLevelMapUndoSteps).
+	std::vector<LevelMapUndoCommand> children;
+	// Edits this one caused, done after it and undone before it, such as the
+	// copies of a linked group taking on an edit to one of them
+	// (foldLevelMapFollowUpEdits). The command keeps its own kind and details.
+	std::vector<LevelMapUndoCommand> followers;
 };
 
 // Owned source archive records keep saving/recovery independent of later disk
@@ -844,13 +855,25 @@ bool addLevelMapBoxBrush(LevelMapDocument* document, const LevelMapVec3& mins, c
 // (dx, dy, dz), as one undo command, and selects the copies. An entity's copy
 // brings copies of its brushes and patches; a copied brush or patch joins the
 // entity that holds the original. worldspawn itself is never copied. On a
-// Doom map, things are copied instead.
+// Doom map, things are copied instead. UDMF copies preserve native thing blocks,
+// extension properties and fractional coordinates, including height.
 bool duplicateLevelMapObjects(LevelMapDocument* document, const QVector<LevelMapSelectionRef>& objects,
 	double dx, double dy, double dz, QString* error = nullptr);
 bool duplicateLevelMapObjects(LevelMapDocument* document, const QVector<LevelMapSelectionRef>& objects,
 	double dx, double dy, double dz, const LevelMapTextureLockOptions& textures, QString* error = nullptr);
 bool duplicateLevelMapSelection(LevelMapDocument* document, double dx, double dy, double dz, QString* error = nullptr);
 bool duplicateLevelMapSelection(LevelMapDocument* document, double dx, double dy, double dz,
+	const LevelMapTextureLockOptions& textures, QString* error = nullptr);
+inline constexpr int kLevelMapMaxArrayCopies = 256;
+inline constexpr int kLevelMapMaxArrayRecords = 32768;
+inline constexpr int kLevelMapMaxArrayComponents = 262144;
+// Builds copies at offset, 2*offset, ... copies*offset from the original
+// selection, without accumulating rounding error. Owners and source scene
+// membership follow ordinary duplication. Selects every inserted copy and
+// records one undo command; a failed copy leaves the complete source intact.
+// Bounds native records (including Doom entity mirrors) and brush faces/patch
+// control points before expansion. UDMF supports thing arrays only.
+bool arrayLevelMapSelection(LevelMapDocument* document, const LevelMapVec3& offset, int copies,
 	const LevelMapTextureLockOptions& textures, QString* error = nullptr);
 // Where an entity is drawn: its origin, or the centre of its brushes and
 // patches for a brush entity. False when it has neither.
@@ -1021,6 +1044,130 @@ bool hollowLevelMapSelection(LevelMapDocument* document, double thickness, int* 
 // command; `carved` reports how many brushes were cut.
 bool carveLevelMapSelection(LevelMapDocument* document, int* carved = nullptr, QString* error = nullptr, QStringList* skipped = nullptr,
 	const QVector<int>& spared = {});
+// CSG Intersect, as TrenchBroom has it: the selected brushes give way to the
+// one brush where they all overlap, in the first brush's entity and with each
+// face textured like the face it came from. Fails, changing nothing, when they
+// do not overlap. One undo command.
+bool intersectLevelMapSelection(LevelMapDocument* document, QString* error = nullptr);
+
+// Brush entities, the way Radiant's entity menu and Hammer's Tie to Entity
+// make them: the selected brushes and patches, with those of selected brush
+// entities, leave the entities they belong to (an entity left with none goes
+// too) and become the brushes of a new `className` entity with `properties`.
+// The new entity is selected; one undo command.
+bool tieLevelMapSelectionToEntity(LevelMapDocument* document, const QString& className, const QVector<LevelMapProperty>& properties = {},
+	int* entityId = nullptr, QString* error = nullptr);
+// Hammer's Move to World and Radiant's Ungroup: the selected brush entities,
+// and the entities of selected brushes and patches, give their brushes and
+// patches back to worldspawn and go; their keys go with them. The brushes
+// stay selected; one undo command. `moved` counts brushes and patches.
+bool moveLevelMapSelectionToWorld(LevelMapDocument* document, int* moved = nullptr, QString* error = nullptr);
+
+// Radiant's region selections, using the selection's bounds as the region:
+// objects wholly inside it, objects that touch it, and, looking down the
+// `axis` a 2D view hides (2 for Top), objects whose footprint lies wholly
+// inside the region's (complete tall) or overlaps it (partial tall). Brushes,
+// patches, point entities and Doom things are found; what is selected now is
+// not. The caller selects the result.
+enum class LevelMapRegionSelection {
+	Inside,
+	Touching,
+	CompleteTall,
+	PartialTall,
+};
+QVector<LevelMapSelectionRef> levelMapRegionSelection(const LevelMapDocument& document, LevelMapRegionSelection mode, int axis = 2,
+	QString* error = nullptr);
+
+// True when the map's brush faces carry Quake II style content, surface and
+// value numbers: Quake III maps, and Quake-format maps written with them.
+bool levelMapUsesFaceFlags(const LevelMapDocument& document);
+// Radiant's Make Detail and Make Structural. With face flags the selected
+// brushes' faces gain or lose the detail content bit (0x8000000); Quake's
+// compilers take func_detail entities instead, so there the brushes are tied
+// to func_detail, or func_detail entities move back to the world. One undo
+// command; `changed` counts brushes.
+bool setLevelMapSelectionDetail(LevelMapDocument* document, bool detail, int* changed = nullptr, QString* error = nullptr);
+
+// Drop to Floor: each selected point entity or Doom thing moves straight down
+// until its bounds rest on the highest brush or patch surface beneath it.
+// `bounds` gives a class's mins and maxs when the caller knows them (from the
+// loaded definitions); without them an entity's origin rests on the floor.
+// Entities with nothing beneath them stay. One undo command.
+bool dropLevelMapSelectionToFloor(LevelMapDocument* document,
+	const std::function<bool(const QString& className, LevelMapVec3* mins, LevelMapVec3* maxs)>& bounds = {}, int* dropped = nullptr,
+	QString* error = nullptr);
+
+// Makes the last `count` undo commands follow-ups of the command before
+// them: done after it, undone before it, as one step that keeps that
+// command's description and details. False, changing nothing, when the
+// stack holds no command before them.
+bool foldLevelMapFollowUpEdits(LevelMapDocument* document, int count, QString* error = nullptr);
+
+// Folds the last `count` undo commands into one, so a tool made of several
+// edits undoes and redoes as one step under `description`. False, changing
+// nothing, when the stack holds fewer.
+bool collapseLevelMapUndoSteps(LevelMapDocument* document, int count, const QString& description, const QString& undoDescription,
+	QString* error = nullptr);
+// Slants the selection: every point slides along `axis` by `factor` times
+// its distance from the selection's centre along `along`, as TrenchBroom's
+// shear tool does. Texture lock follows `textures`; Doom maps shear in the
+// top view only. One undo step.
+bool shearLevelMapSelection(LevelMapDocument* document, int axis, int along, double factor, const LevelMapTextureLockOptions& textures = {},
+	QString* error = nullptr);
+// The same about the line at `anchor` along `along`, which stays where it is,
+// as the edge opposite the one dragged in a view's shear mode does.
+bool shearLevelMapSelectionAbout(LevelMapDocument* document, int axis, int along, double factor, double anchor,
+	const LevelMapTextureLockOptions& textures = {}, QString* error = nullptr);
+// Turns the selection `quarterTurns` quarter turns anticlockwise, seen from
+// above, about the vertical line through `pivot`, mirrored first across the
+// line through `pivot` along x when `mirror` is set: the frames of linked
+// group copies (core/level_linked_groups.h). Entity angles turn with it. One
+// undo step; nothing to do (no turn, no mirror) succeeds without one.
+bool turnLevelMapSelection(LevelMapDocument* document, int quarterTurns, bool mirror, const LevelMapVec3& pivot,
+	const LevelMapTextureLockOptions& textures = {}, QString* error = nullptr);
+// Bends each selected Doom linedef into `segments` linedefs along a circular
+// arc bulging `bulge` units towards its front side (negative towards the
+// back), as Doom Builder's curve mode does. New vertices are rounded to whole
+// units; every piece keeps the line's flags, special and tag, with its own
+// sides whose texture offsets carry on along the curve. One undo step that
+// leaves the nodes to rebuild.
+bool curveLevelMapLinedefs(LevelMapDocument* document, int segments, double bulge, int* curved = nullptr, QString* error = nullptr);
+// The entities of a Quake-family map whose `key` (any case) holds `find`:
+// the whole value, or anywhere in it; among all entities or only the
+// selected ones.
+QVector<int> levelMapEntitiesWithValue(const LevelMapDocument& document, const QString& key, const QString& find, bool wholeValue, bool selectionOnly);
+// Find and replace on one key, as Hammer's entity search and Radiant's key
+// find-and-replace do: the whole value, or every occurrence of `find` in it,
+// becomes `replacement` on each matching entity, as one undo step.
+bool replaceLevelMapEntityValues(LevelMapDocument* document, const QString& key, const QString& find, const QString& replacement, bool wholeValue,
+	bool selectionOnly, int* replaced = nullptr, QString* error = nullptr);
+// Which edge of each object Align lines up with the same edge of the whole
+// selection's bounds.
+enum class LevelMapAlignEdge { Minimum, Centre, Maximum };
+// Moves each selected object along one axis so its minimum, centre or
+// maximum meets the selection's, as Hammer's Align Objects does: entities
+// with their brushes and patches, world brushes and patches, and Doom things
+// (which have no Z). One undo step; the selection stays as it was.
+bool alignLevelMapSelection(LevelMapDocument* document, int axis, LevelMapAlignEdge edge, int* moved = nullptr, QString* error = nullptr);
+// A region, as Radiant's regions and Hammer's cordons make: the objects a box
+// keeps. World brushes and patches touching it, point entities whose origin
+// lies in it, and brush entities with a brush or patch touching it.
+QVector<LevelMapSelectionRef> levelMapRegionObjects(const LevelMapDocument& document, const LevelMapVec3& mins, const LevelMapVec3& maxs);
+// What a region leaves out: every other entity (taking its brushes and
+// patches) and world brush and patch; worldspawn itself never.
+QVector<LevelMapSelectionRef> levelMapOutsideRegionObjects(const LevelMapDocument& document, const LevelMapVec3& mins, const LevelMapVec3& maxs);
+struct LevelMapRegionReport {
+	int kept = 0;
+	int removed = 0;
+	int sealBrushes = 0;
+	bool playerStartAdded = false;
+};
+// The region of a Quake-family map as a map of its own, for a quick compile:
+// everything outside removed, the box sealed by six brushes of `sealTexture`
+// just outside it (rounded out to whole units), and an info_player_start at
+// `start` when the region keeps no player start.
+bool levelMapRegionDocument(const LevelMapDocument& source, const LevelMapVec3& mins, const LevelMapVec3& maxs, const LevelMapVec3& start,
+	const QString& sealTexture, LevelMapDocument* region, LevelMapRegionReport* report = nullptr, QString* error = nullptr);
 // Splits each selected linedef of a Doom or Hexen map at its middle: a new
 // vertex there, rounded to whole units, the linedef ending at it, and a new
 // linedef from it to the old end with the same flags, special, and tag or
@@ -1047,6 +1194,15 @@ bool splitLevelMapLinedefs(LevelMapDocument* document, int* split = nullptr, QSt
 // another) is refused rather than drawn over both.
 bool drawLevelMapDoomSector(LevelMapDocument* document, const QVector<LevelMapVec3>& corners, int* sectorId = nullptr,
 	QString* error = nullptr, int* newLinedefs = nullptr);
+// Doom Builder's Make Sectors mode: the area of existing lines around (x, y),
+// with any islands of lines inside it, becomes one new sector. Every side
+// facing that area faces the new sector; a line that faced nothing there
+// opens onto it. The sector copies the one the area belonged to, or else a
+// neighbour, or the map's usual flats; when it takes over the whole of an
+// old sector, that sector's tag and special come across. A point outside
+// every closed shape of lines is refused. The new sector is selected and its
+// id reported. One undo command.
+bool makeLevelMapDoomSectorAt(LevelMapDocument* document, double x, double y, int* sectorId = nullptr, QString* error = nullptr);
 // Joins the selected vertices of a Doom or Hexen map into the primary one:
 // linedefs that ended at the others end there, a linedef whose ends meet
 // goes, and two linedefs left between the same vertices become one, two

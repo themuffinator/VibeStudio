@@ -52,6 +52,24 @@ constexpr auto kThemeKey = "preferences/theme";
 constexpr auto kDensityKey = "preferences/density";
 constexpr auto kReducedMotionKey = "preferences/reducedMotion";
 constexpr auto kTextToSpeechEnabledKey = "preferences/textToSpeechEnabled";
+constexpr auto kFormatLocaleKey = "preferences/formatLocale";
+constexpr auto kColorVisionKey = "preferences/colorVision";
+constexpr auto kReducedSaturationKey = "preferences/reducedSaturation";
+constexpr auto kThickFocusIndicatorKey = "preferences/thickFocusIndicator";
+constexpr auto kThickTextCursorKey = "preferences/thickTextCursor";
+constexpr auto kSteadyTextCursorKey = "preferences/steadyTextCursor";
+constexpr auto kUiFontFamilyKey = "preferences/uiFontFamily";
+constexpr auto kWideTextSpacingKey = "preferences/wideTextSpacing";
+constexpr auto kMessageDurationKey = "preferences/messageDuration";
+constexpr auto kVisualAlertsKey = "preferences/visualAlerts";
+constexpr auto kSoundCuesKey = "preferences/soundCues";
+constexpr auto kSoundCueVolumeKey = "preferences/soundCueVolume";
+constexpr auto kScreenReaderAnnouncementsKey = "preferences/screenReaderAnnouncements";
+constexpr auto kSpeechEventsKey = "preferences/speechEvents";
+constexpr auto kSpeechVoiceKey = "preferences/speechVoice";
+constexpr auto kSpeechRateKey = "preferences/speechRate";
+constexpr auto kSpeechPitchKey = "preferences/speechPitch";
+constexpr auto kSpeechVolumeKey = "preferences/speechVolume";
 constexpr auto kSelectedEditorProfileKey = "editor/selectedProfileId";
 constexpr auto kAiFreeModeKey = "ai/freeMode";
 constexpr auto kAiCloudConnectorsEnabledKey = "ai/cloudConnectorsEnabled";
@@ -878,6 +896,28 @@ AccessibilityPreferences StudioSettings::accessibilityPreferences() const
 	preferences.density = densityFromId(m_settings->value(kDensityKey, densityId(preferences.density)).toString());
 	preferences.reducedMotion = m_settings->value(kReducedMotionKey, preferences.reducedMotion).toBool();
 	preferences.textToSpeechEnabled = m_settings->value(kTextToSpeechEnabledKey, preferences.textToSpeechEnabled).toBool();
+	preferences.formatLocaleName = normalizedFormatLocaleName(m_settings->value(kFormatLocaleKey, preferences.formatLocaleName).toString());
+	preferences.colorVision = colorVisionFromId(m_settings->value(kColorVisionKey, colorVisionId(preferences.colorVision)).toString());
+	preferences.reducedSaturation = m_settings->value(kReducedSaturationKey, preferences.reducedSaturation).toBool();
+	preferences.thickFocusIndicator = m_settings->value(kThickFocusIndicatorKey, preferences.thickFocusIndicator).toBool();
+	preferences.thickTextCursor = m_settings->value(kThickTextCursorKey, preferences.thickTextCursor).toBool();
+	preferences.steadyTextCursor = m_settings->value(kSteadyTextCursorKey, preferences.steadyTextCursor).toBool();
+	preferences.uiFontFamily = m_settings->value(kUiFontFamilyKey, preferences.uiFontFamily).toString().trimmed();
+	preferences.wideTextSpacing = m_settings->value(kWideTextSpacingKey, preferences.wideTextSpacing).toBool();
+	preferences.messageDuration = messageDurationFromId(m_settings->value(kMessageDurationKey, messageDurationId(preferences.messageDuration)).toString());
+	preferences.visualAlerts = m_settings->value(kVisualAlertsKey, preferences.visualAlerts).toBool();
+	preferences.soundCues = m_settings->value(kSoundCuesKey, preferences.soundCues).toBool();
+	preferences.soundCueVolume = std::clamp(m_settings->value(kSoundCueVolumeKey, preferences.soundCueVolume).toInt(), 0, 100);
+	preferences.screenReaderAnnouncements = m_settings->value(kScreenReaderAnnouncementsKey, preferences.screenReaderAnnouncements).toBool();
+	// A stored empty list means every event was switched off; a missing key
+	// keeps the defaults.
+	if (m_settings->contains(kSpeechEventsKey)) {
+		preferences.speechEvents = normalizedSpeechEvents(m_settings->value(kSpeechEventsKey).toStringList());
+	}
+	preferences.speechVoice = m_settings->value(kSpeechVoiceKey, preferences.speechVoice).toString().trimmed();
+	preferences.speechRate = std::clamp(m_settings->value(kSpeechRateKey, preferences.speechRate).toInt(), -10, 10);
+	preferences.speechPitch = std::clamp(m_settings->value(kSpeechPitchKey, preferences.speechPitch).toInt(), -10, 10);
+	preferences.speechVolume = std::clamp(m_settings->value(kSpeechVolumeKey, preferences.speechVolume).toInt(), 0, 100);
 	return preferences;
 }
 
@@ -889,6 +929,24 @@ void StudioSettings::setAccessibilityPreferences(const AccessibilityPreferences&
 	writeValue(kDensityKey, densityId(preferences.density));
 	writeValue(kReducedMotionKey, preferences.reducedMotion);
 	writeValue(kTextToSpeechEnabledKey, preferences.textToSpeechEnabled);
+	writeValue(kFormatLocaleKey, normalizedFormatLocaleName(preferences.formatLocaleName));
+	writeValue(kColorVisionKey, colorVisionId(preferences.colorVision));
+	writeValue(kReducedSaturationKey, preferences.reducedSaturation);
+	writeValue(kThickFocusIndicatorKey, preferences.thickFocusIndicator);
+	writeValue(kThickTextCursorKey, preferences.thickTextCursor);
+	writeValue(kSteadyTextCursorKey, preferences.steadyTextCursor);
+	writeValue(kUiFontFamilyKey, preferences.uiFontFamily.trimmed());
+	writeValue(kWideTextSpacingKey, preferences.wideTextSpacing);
+	writeValue(kMessageDurationKey, messageDurationId(preferences.messageDuration));
+	writeValue(kVisualAlertsKey, preferences.visualAlerts);
+	writeValue(kSoundCuesKey, preferences.soundCues);
+	writeValue(kSoundCueVolumeKey, std::clamp(preferences.soundCueVolume, 0, 100));
+	writeValue(kScreenReaderAnnouncementsKey, preferences.screenReaderAnnouncements);
+	writeValue(kSpeechEventsKey, normalizedSpeechEvents(preferences.speechEvents));
+	writeValue(kSpeechVoiceKey, preferences.speechVoice.trimmed());
+	writeValue(kSpeechRateKey, std::clamp(preferences.speechRate, -10, 10));
+	writeValue(kSpeechPitchKey, std::clamp(preferences.speechPitch, -10, 10));
+	writeValue(kSpeechVolumeKey, std::clamp(preferences.speechVolume, 0, 100));
 }
 
 void StudioSettings::setLocaleName(const QString& localeName)
@@ -1201,10 +1259,21 @@ SetupSummary StudioSettings::setupSummary() const
 		}
 	}
 
-	if (preferences.localeName == QStringLiteral("en")) {
-		summary.warnings.push_back(QStringLiteral("Language is still the default English fallback."));
+	if (isSystemLocalizationPreference(preferences.localeName)) {
+		// Following the system is right unless the system speaks a language
+		// with no catalog, which quietly leaves the interface in English.
+		const QStringList systemLanguages = systemLanguageTags();
+		const QString firstLanguage = systemLanguages.isEmpty() ? QString() : systemLanguages.first().section(QLatin1Char('-'), 0, 0).section(QLatin1Char('_'), 0, 0).toLower();
+		if (systemLocalizationTargetId() == QStringLiteral("en") && !firstLanguage.isEmpty() && firstLanguage != QStringLiteral("en")) {
+			summary.warnings.push_back(QStringLiteral("The system language (%1) has no VibeStudio translation, so the interface is in English.").arg(systemLanguages.first()));
+		}
 	}
-	if (preferences.theme == StudioTheme::Dark && preferences.textScalePercent == 100 && preferences.density == UiDensity::Standard && !preferences.reducedMotion && !preferences.textToSpeechEnabled) {
+	const AccessibilityPreferences defaults;
+	if (preferences.theme == defaults.theme && preferences.textScalePercent == defaults.textScalePercent && preferences.density == defaults.density
+		&& preferences.reducedMotion == defaults.reducedMotion && preferences.textToSpeechEnabled == defaults.textToSpeechEnabled
+		&& preferences.colorVision == defaults.colorVision && !preferences.reducedSaturation && !preferences.thickFocusIndicator
+		&& !preferences.thickTextCursor && !preferences.steadyTextCursor && preferences.uiFontFamily.isEmpty() && !preferences.wideTextSpacing
+		&& preferences.messageDuration == defaults.messageDuration && preferences.soundCues == defaults.soundCues) {
 		summary.warnings.push_back(QStringLiteral("Accessibility preferences are still at defaults."));
 	}
 	if (projects.isEmpty()) {
@@ -2015,24 +2084,22 @@ QStringList supportedLocaleNames()
 QString normalizedLocaleName(const QString& localeName)
 {
 	const QString requested = localeName.trimmed().replace('_', '-');
-	if (requested.isEmpty()) {
-		return QStringLiteral("en");
+	// Nothing stored, or "system", follows the operating system's language.
+	if (requested.isEmpty() || isSystemLocalizationPreference(requested)) {
+		return systemLocalizationPreferenceId();
 	}
-
-	for (const QString& supportedLocale : supportedLocaleNames()) {
-		if (QString::compare(supportedLocale, requested, Qt::CaseInsensitive) == 0) {
-			return supportedLocale;
-		}
+	// Regional and legacy ids resolve to the written standard they use:
+	// zh-TW to zh-Hant, es-MX to es-419, iw to he.
+	LocalizationTarget target;
+	if (localizationTargetForId(requested, &target)) {
+		return target.localeName;
 	}
-
-	const QString languageOnly = requested.section('-', 0, 0);
-	for (const QString& supportedLocale : supportedLocaleNames()) {
-		if (QString::compare(supportedLocale.section('-', 0, 0), languageOnly, Qt::CaseInsensitive) == 0) {
-			return supportedLocale;
-		}
-	}
-
 	return QStringLiteral("en");
+}
+
+QString normalizedFormatLocaleName(const QString& formatLocaleName)
+{
+	return normalizedRegionFormatId(formatLocaleName);
 }
 
 QString themeId(StudioTheme theme)
@@ -2145,6 +2212,101 @@ QStringList densityIds()
 	};
 }
 
+QString colorVisionId(ColorVision vision)
+{
+	switch (vision) {
+	case ColorVision::Typical:
+		return QStringLiteral("typical");
+	case ColorVision::RedGreen:
+		return QStringLiteral("red-green");
+	case ColorVision::BlueYellow:
+		return QStringLiteral("blue-yellow");
+	case ColorVision::Monochrome:
+		return QStringLiteral("monochrome");
+	}
+	return QStringLiteral("typical");
+}
+
+ColorVision colorVisionFromId(const QString& id)
+{
+	const QString normalized = normalizedId(id);
+	// The deficiency names are accepted too, since that is what people search.
+	if (normalized == QStringLiteral("red-green") || normalized == QStringLiteral("protanopia") || normalized == QStringLiteral("deuteranopia")) {
+		return ColorVision::RedGreen;
+	}
+	if (normalized == QStringLiteral("blue-yellow") || normalized == QStringLiteral("tritanopia")) {
+		return ColorVision::BlueYellow;
+	}
+	if (normalized == QStringLiteral("monochrome") || normalized == QStringLiteral("achromatopsia")) {
+		return ColorVision::Monochrome;
+	}
+	return ColorVision::Typical;
+}
+
+QStringList colorVisionIds()
+{
+	return {
+		colorVisionId(ColorVision::Typical),
+		colorVisionId(ColorVision::RedGreen),
+		colorVisionId(ColorVision::BlueYellow),
+		colorVisionId(ColorVision::Monochrome),
+	};
+}
+
+QString messageDurationId(MessageDuration duration)
+{
+	switch (duration) {
+	case MessageDuration::Standard:
+		return QStringLiteral("standard");
+	case MessageDuration::Longer:
+		return QStringLiteral("longer");
+	case MessageDuration::UntilReplaced:
+		return QStringLiteral("until-replaced");
+	}
+	return QStringLiteral("standard");
+}
+
+MessageDuration messageDurationFromId(const QString& id)
+{
+	const QString normalized = normalizedId(id);
+	if (normalized == QStringLiteral("longer") || normalized == QStringLiteral("long")) {
+		return MessageDuration::Longer;
+	}
+	if (normalized == QStringLiteral("until-replaced")) {
+		return MessageDuration::UntilReplaced;
+	}
+	return MessageDuration::Standard;
+}
+
+QStringList messageDurationIds()
+{
+	return {
+		messageDurationId(MessageDuration::Standard),
+		messageDurationId(MessageDuration::Longer),
+		messageDurationId(MessageDuration::UntilReplaced),
+	};
+}
+
+QStringList speechEventIds()
+{
+	return {QStringLiteral("task-results"), QStringLiteral("task-problems"), QStringLiteral("status-messages")};
+}
+
+QStringList normalizedSpeechEvents(const QStringList& events)
+{
+	QStringList wanted;
+	for (const QString& event : events) {
+		wanted << normalizedId(event);
+	}
+	QStringList normalized;
+	for (const QString& id : speechEventIds()) {
+		if (wanted.contains(id)) {
+			normalized << id;
+		}
+	}
+	return normalized;
+}
+
 int normalizedTextScalePercent(int textScalePercent)
 {
 	return std::clamp(textScalePercent, StudioSettings::kMinimumTextScalePercent, StudioSettings::kMaximumTextScalePercent);
@@ -2201,7 +2363,7 @@ QString setupStepDescription(SetupStep step)
 {
 	switch (step) {
 	case SetupStep::WelcomeAccess:
-		return QCoreApplication::translate("VibeStudioSetup", "Review language, visibility, scale, density, motion, and TTS preferences.");
+		return QCoreApplication::translate("VibeStudioSetup", "Review language, region formats, theme, colour vision, text scale, focus, motion, alerts, and TTS preferences.");
 	case SetupStep::WorkspaceProfile:
 		return QCoreApplication::translate("VibeStudioSetup", "Choose your role and the level editor profile whose keys and mouse controls feel familiar.");
 	case SetupStep::ProjectsPackages:
@@ -2217,7 +2379,7 @@ QString setupStepDescription(SetupStep step)
 	case SetupStep::ReviewFinish:
 		return QCoreApplication::translate("VibeStudioSetup", "Inspect skipped, complete, pending, and warning states before entering the workspace.");
 	}
-	return QCoreApplication::translate("VibeStudioSetup", "Review language, visibility, scale, density, motion, and TTS preferences.");
+	return QCoreApplication::translate("VibeStudioSetup", "Review language, region formats, theme, colour vision, text scale, focus, motion, alerts, and TTS preferences.");
 }
 
 SetupStep setupStepFromId(const QString& id)

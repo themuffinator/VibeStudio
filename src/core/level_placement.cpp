@@ -31,6 +31,8 @@ QString levelPlacementPhaseName(LevelPlacementPhase phase) {
 		return QCoreApplication::translate("VibeStudioLevelPlacement", "Preparing map edit…");
 	case LevelPlacementPhase::Building:
 		return QCoreApplication::translate("VibeStudioLevelPlacement", "Building brush geometry…");
+	case LevelPlacementPhase::Arraying:
+		return QCoreApplication::translate("VibeStudioLevelPlacement", "Preparing array copies…");
 	case LevelPlacementPhase::Parsing:
 		return QCoreApplication::translate("VibeStudioLevelPlacement", "Reading pasted geometry…");
 	case LevelPlacementPhase::Transforming:
@@ -56,6 +58,12 @@ LevelPlacementResult prepareLevelPlacement(const LevelMapDocument& source, const
 		case LevelPlacementOperation::AddBrush:
 			applied = addLevelMapBrushPrimitive(&candidate, request.primitive, nullptr, &result.error);
 			break;
+		case LevelPlacementOperation::AddEntity:
+			applied = addLevelMapEntity(&candidate, request.className, request.offset, request.properties, nullptr, &result.error);
+			break;
+		case LevelPlacementOperation::AddThing:
+			applied = addLevelMapDoomThing(&candidate, request.thingType, request.offset.x, request.offset.y, request.thingAngle, nullptr, &result.error);
+			break;
 		case LevelPlacementOperation::Move:
 			applied = request.snapMoveDelta ? moveLevelMapSelectionSnapped(&candidate, request.offset.x, request.offset.y, request.offset.z,
 																		   request.grid, request.textures, &result.error)
@@ -72,8 +80,7 @@ LevelPlacementResult prepareLevelPlacement(const LevelMapDocument& source, const
 			applied = snapLevelMapSelectionToGrid(&candidate, request.grid, request.textures, &result.error);
 			break;
 		case LevelPlacementOperation::Duplicate:
-			applied = duplicateLevelMapSelection(&candidate, request.offset.x, request.offset.y, request.offset.z, request.textures,
-												 &result.error);
+			applied = arrayLevelMapSelection(&candidate, request.offset, request.copies, request.textures, &result.error);
 			break;
 		case LevelPlacementOperation::Paste:
 			applied = pasteLevelMapText(&candidate, request.text, request.offset, request.textures, &result.error);

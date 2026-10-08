@@ -702,18 +702,12 @@ bool runHeaderOnlySmoke()
 	for (int index = 0; index < 5; ++index) {
 		appendI32(mdc, 0);
 	}
+	// These formats decode fully now; a lone header that declares surfaces it
+	// does not hold must fail with a named error and never invent geometry.
 	const ModelMesh mdcMesh = decodeModelMesh(QStringLiteral("models/thing.mdc"), mdc);
-	ok &= expect(mdcMesh.error.isEmpty() && mdcMesh.isValid(), "A complete MDC header should be readable.");
-	ok &= expect(!mdcMesh.geometryAvailable, "MDC geometry is not decoded.");
-	ok &= expect(mdcMesh.frameCount == 12 && mdcMesh.tagCount == 3 && mdcMesh.surfaceCount == 2 && mdcMesh.skinCount == 1, "MDC header counts should be reported.");
-	bool saysSo = false;
-	for (const QString& warning : mdcMesh.warnings) {
-		if (warning.contains(QStringLiteral("not implemented"))) {
-			saysSo = true;
-		}
-	}
-	ok &= expect(saysSo, "MDC should say plainly that geometry decoding is not implemented.");
-	ok &= expect(exportModelFrameObj(mdcMesh, 0).isEmpty(), "A header-only model exports no OBJ.");
+	ok &= expect(!mdcMesh.error.isEmpty() && !mdcMesh.geometryAvailable && mdcMesh.format == ModelMeshFormat::Mdc,
+		"A lone MDC header is refused with an error.");
+	ok &= expect(exportModelFrameObj(mdcMesh, 0).isEmpty(), "A refused model exports no OBJ.");
 
 	QByteArray mdr;
 	mdr.append("RDM5", 4);
@@ -728,9 +722,8 @@ bool runHeaderOnlySmoke()
 	appendI32(mdr, 0);
 	appendI32(mdr, 0);
 	const ModelMesh mdrMesh = decodeModelMesh(QStringLiteral("models/thing.mdr"), mdr);
-	ok &= expect(mdrMesh.error.isEmpty() && !mdrMesh.geometryAvailable, "A complete MDR header should be readable without geometry.");
-	ok &= expect(mdrMesh.frameCount == 7 && mdrMesh.tagCount == 4, "MDR header counts should be reported.");
-	ok &= expect(!mdrMesh.warnings.isEmpty(), "MDR should warn that geometry is not decoded.");
+	ok &= expect(!mdrMesh.error.isEmpty() && !mdrMesh.geometryAvailable && mdrMesh.format == ModelMeshFormat::Mdr,
+		"A lone MDR header is refused with an error.");
 
 	QByteArray iqm = QByteArray("INTERQUAKEMODEL\0", 16);
 	appendI32(iqm, 2);
@@ -743,11 +736,10 @@ bool runHeaderOnlySmoke()
 	patchI32(iqm, 56, 24);
 	patchI32(iqm, 92, 6);
 	const ModelMesh iqmMesh = decodeModelMesh(QStringLiteral("models/thing.iqm"), iqm);
-	ok &= expect(iqmMesh.error.isEmpty() && !iqmMesh.geometryAvailable, "A complete IQM header should be readable without geometry.");
-	ok &= expect(iqmMesh.surfaceCount == 2 && iqmMesh.vertexCount == 48 && iqmMesh.triangleCount == 24 && iqmMesh.frameCount == 6, "IQM header counts should be reported.");
-	ok &= expect(!iqmMesh.warnings.isEmpty(), "IQM should warn that geometry is not decoded.");
+	ok &= expect(!iqmMesh.error.isEmpty() && !iqmMesh.geometryAvailable && iqmMesh.format == ModelMeshFormat::Iqm,
+		"A lone IQM header is refused with an error.");
 	const QStringList lines = modelMeshSummaryLines(iqmMesh);
-	ok &= expect(!lines.isEmpty() && lines.first().contains(QStringLiteral("header only")), "Header-only summaries should say so first.");
+	ok &= expect(!lines.isEmpty() && lines.first().contains(QStringLiteral("could not be decoded")), "Refused models say so first.");
 	return ok;
 }
 

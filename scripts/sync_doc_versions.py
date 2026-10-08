@@ -1,4 +1,10 @@
 #!/usr/bin/env python3
+"""Keep the README's version badge in step with VERSION.
+
+shields.io static badges separate label, message and colour with single
+hyphens, so hyphens and underscores inside the version are doubled
+("0.1.0-alpha.1" becomes "0.1.0--alpha.1").
+"""
 from __future__ import annotations
 
 import argparse
@@ -10,11 +16,15 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 VERSION = (ROOT / "VERSION").read_text(encoding="utf-8").strip()
 README = ROOT / "README.md"
-BADGE_RE = re.compile(r"version-([0-9A-Za-z.\-]+)-")
+BADGE_RE = re.compile(r"(img\.shields\.io/badge/version-)(.+?)(-[0-9A-Fa-f]{6}(?:\?|\"|\)))")
+
+
+def badge_text(version: str) -> str:
+    return version.replace("-", "--").replace("_", "__")
 
 
 def updated_readme(text: str) -> str:
-    return BADGE_RE.sub(f"version-{VERSION}-", text)
+    return BADGE_RE.sub(lambda m: m.group(1) + badge_text(VERSION) + m.group(3), text)
 
 
 def main() -> int:
@@ -23,15 +33,19 @@ def main() -> int:
     args = parser.parse_args()
 
     original = README.read_text(encoding="utf-8")
+    if not BADGE_RE.search(original):
+        print("README.md has no shields.io version badge to keep in sync.", file=sys.stderr)
+        return 1
     updated = updated_readme(original)
     if args.check:
         if original != updated:
-            print("README version badge is out of sync with VERSION.", file=sys.stderr)
+            print("README version badge is out of sync with VERSION; run python scripts/sync_doc_versions.py.",
+                  file=sys.stderr)
             return 1
         return 0
 
     if original != updated:
-        README.write_text(updated, encoding="utf-8")
+        README.write_text(updated, encoding="utf-8", newline="\n")
     return 0
 
 

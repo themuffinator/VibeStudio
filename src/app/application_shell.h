@@ -12,6 +12,7 @@
 #include "core/idtech_image.h"
 #include "core/level_editor_controls.h"
 #include "core/level_navigation.h"
+#include "core/level_sidebar.h"
 #include "core/level_map.h"
 #include "core/level_document.h"
 #include "core/level_materials.h"
@@ -43,12 +44,16 @@
 #include <QVector>
 #include <QStringList>
 
+#include <array>
 #include <atomic>
 #include <functional>
 #include <memory>
+#include <optional>
 
 class QAbstractButton;
 class QAction;
+class QActionGroup;
+class QButtonGroup;
 class QCheckBox;
 class QComboBox;
 class QDockWidget;
@@ -66,6 +71,7 @@ class QProgressBar;
 class QProgressDialog;
 class QPushButton;
 class QSlider;
+class QSpinBox;
 class QSplitter;
 class QTabBar;
 class QTextBrowser;
@@ -84,8 +90,10 @@ class QTreeWidgetItem;
 namespace vibestudio {
 
 struct LevelPlacementRequest;
+struct LevelShapeRequest;
 struct LevelBuildWorkspace;
 
+class MaterialWorkbench;
 class PackageEntryView;
 class PackageStagingView;
 class PackageFolderView;
@@ -121,6 +129,9 @@ class LoadingPane;
 class MapViewport;
 class LevelScenePanel;
 class LevelObjectList;
+class SidebarPage;
+class SidebarSection;
+class StudioSidebar;
 class ModeRail;
 class ModelViewport;
 class ModelDesignDialog;
@@ -147,6 +158,9 @@ struct StudioDiagnosticMarker;
 class TextureEditorDialog;
 class NavigationTile;
 class NoticeBar;
+class StudioSpeech;
+class StudioSoundCues;
+enum class SoundCue;
 class PageHeader;
 class PageTransition;
 class PaletteSwatchView;
@@ -237,6 +251,9 @@ public:
 	bool sampleLevelMaterialTarget(const LevelMaterialTarget& target, QString* error = nullptr);
 	void chooseLevelPaintMaterial(const QString& material);
 	[[nodiscard]] QString levelPaintMaterial() const { return m_levelPaintMaterial; }
+	// The Levels sidebars, for tests: leading holds the browsers by default.
+	[[nodiscard]] StudioSidebar* levelSidebar(bool leading) const { return leading ? m_levelLeadingSidebar : m_levelTrailingSidebar; }
+	bool showLevelSidebarTab(const QString& tabId, bool focus = false) { return showLevelSidebarPage(tabId, QString(), focus); }
 	bool applyLevelBrushPrimitive(const LevelBrushPrimitiveRequest& request, QString* error = nullptr);
 	bool applyLevelBrushMerge(const LevelBrushMergePlan& plan, QString* error = nullptr);
 	bool captureLevelViewState(LevelViewState* state, QString* error = nullptr);
@@ -264,6 +281,9 @@ public:
 	QStringList captureUiSnapshots(const QString& directory);
 
 protected:
+	// A change of layout direction mirrors the docked panels with the rest of
+	// the window, which QMainWindow's dock areas would not do by themselves.
+	void changeEvent(QEvent* event) override;
 	void closeEvent(QCloseEvent* event) override;
 	void dragEnterEvent(QDragEnterEvent* event) override;
 	void dragMoveEvent(QDragMoveEvent* event) override;
@@ -306,6 +326,10 @@ private:
 	QWidget* buildWorkspacePage();
 	QWidget* buildLevelsPage();
 	QWidget* buildModelsPage();
+	// Modeller: the Models page's sidebars and the preview's controls profile (model_page.cpp).
+	void buildModelSidebars(QSplitter* workbench, QWidget* browser, QWidget* centre, QWidget* appearance);
+	void applyModelViewportProfile();
+	void refreshModelSkeletonPanel();
 	void showModelDesign();
 	void showModelEditor(const ModelMesh* initial = nullptr);
 	void showModelAssembly();
@@ -504,6 +528,201 @@ private:
 	void toggleLevelViewMaximized();
 	void restoreLevelViewWorkspace(bool focus = false);
 	void equalizeLevelViews();
+	QWidget* buildLevelAuthoringBar();
+	// The tool toggles that lead the authoring bar: one tool is always on,
+	// Select by default. The tool settings row shows only for a tool that has
+	// settings (paint, sample, draw brush).
+	void chooseLevelTool(const QString& toolId);
+	void refreshLevelToolShelf();
+	[[nodiscard]] QString currentLevelTool() const;
+	// The Levels sidebars (level_sidebar_actions.cpp). The page builders take
+	// the panels buildLevelsPage() made and add the browsers that live only on
+	// the sidebars.
+	struct LevelSidebarContent {
+		QWidget* objects = nullptr;
+		QWidget* scene = nullptr;
+		QWidget* palette = nullptr;
+		QWidget* placement = nullptr;
+		QWidget* textures = nullptr;
+		QWidget* statistics = nullptr;
+		QWidget* inspector = nullptr;
+		QWidget* definitions = nullptr;
+		QWidget* surfaces = nullptr;
+		QWidget* health = nullptr;
+		QWidget* details = nullptr;
+		QWidget* outline = nullptr;
+		QWidget* history = nullptr;
+	};
+	void buildLevelSidebars(const LevelSidebarContent& content);
+	SidebarPage* createLevelSidebarPage(const QString& tabId, bool scrollable);
+	SidebarSection* addLevelSidebarSection(SidebarPage* page, const QString& sectionId, const QString& title, QWidget* body, int stretch = 0,
+		bool expandedByDefault = true);
+	// Opens or folds a section the way it was last left, or as the default.
+	void restoreLevelSidebarSection(SidebarSection* section, bool expandedByDefault);
+	QWidget* buildLevelViewOptions();
+	QWidget* buildLevelLayoutOptions();
+	QWidget* buildLevelNavigationOptions();
+	[[nodiscard]] SidebarPage* levelSidebarPage(const QString& tabId) const;
+	[[nodiscard]] StudioSidebar* levelSidebarHolding(const QString& tabId) const;
+	// Shows a tab wherever it sits, opening its section and, when asked,
+	// moving keyboard focus into the page.
+	bool showLevelSidebarPage(const QString& tabId, const QString& sectionId = QString(), bool focus = false);
+	void arrangeLevelSidebars(const LevelSidebarArrangement& arrangement);
+	[[nodiscard]] LevelSidebarArrangement currentLevelSidebarArrangement() const;
+	[[nodiscard]] LevelSidebarArrangement savedLevelSidebarArrangement() const;
+	void applyLevelSidebarProfile();
+	void refreshLevelSidebarTitles();
+	void restoreLevelSidebarState();
+	void saveLevelSidebarState();
+	void showLevelSidebarTabMenu(StudioSidebar* sidebar, const QString& tabId, const QPoint& globalPosition);
+	void moveLevelSidebarPage(const QString& tabId);
+	void resetLevelSidebars();
+	void setLevelSidebarCaptions(bool show);
+	void toggleLevelSidebar(bool leading);
+	void registerLevelSidebarCommands();
+	// Tools from the other editors (level_editing_actions.cpp): brush
+	// entities, region selections, detail, drop to floor, intersection.
+	void registerLevelEditingCommands();
+	void refreshLevelEditingCommands();
+	void tieLevelMapSelectionFromUi(const QString& className);
+	void selectLevelMapRegionFromUi(LevelMapRegionSelection mode);
+	void setLevelMapDetailFromUi(bool detail);
+	void dropLevelMapSelectionToFloorFromUi();
+	void intersectLevelMapSelectionFromUi();
+	void moveLevelMapSelectionToWorldFromUi();
+	[[nodiscard]] QStringList levelBrushEntityClasses() const;
+	[[nodiscard]] EntityDefinitionCatalogue levelEntityCatalogue() const;
+	QMenu* buildLevelBrushEntityMenu(QWidget* parent);
+	// Uses the map's game's built-in classes while no project definitions are
+	// loaded, and drops them for a project's or a Doom map.
+	void refreshBuiltinEntityDefinitions();
+	// A brush class from the Entities browser: the selected brushes become
+	// one, or, dropped on a view with none selected, a new brush of it.
+	void placeLevelBrushEntity(const QString& className, const QPointF& viewPoint);
+	// The Inspector's Transform section: the selection's centre and size as
+	// numbers, edited in place like Blender's Item panel.
+	QWidget* buildLevelTransformPanel();
+	void refreshLevelTransformPanel();
+	void applyLevelTransformField(bool size, int axis);
+	// Counts beside the sidebar tab titles: objects, issues, history.
+	void refreshLevelSidebarBadges();
+	// The Entities tab's details of the class chosen in its palette, and
+	// placing that class in the middle of the active view.
+	void refreshLevelEntityClassInfo();
+	void placeLevelPaletteInView();
+	// Texture names as maps write them for every texture image in the open
+	// package: textures/base/wall.tga is base/wall.
+	[[nodiscard]] QStringList levelPackageTextureNames();
+	void setLevelTextureTileSize(int pixels);
+	// Map tab: worldspawn keys and the pre-build checklist; View tab: display
+	// filters (level_sidebar_panels.cpp).
+	void buildLevelMapSettings(SidebarPage* page);
+	void refreshLevelMapSettings();
+	void addLevelWorldspawnKey();
+	QWidget* buildLevelFilterOptions();
+	void refreshLevelViewFilters();
+	void applyLevelViewFilters();
+	void setLevelViewFilter(const QString& filterId, bool shown);
+	// Models, Sounds and Prefabs tabs (level_asset_browsers.cpp).
+	void buildLevelModelBrowser(SidebarPage* page);
+	void buildLevelSoundBrowser(SidebarPage* page);
+	void buildLevelPrefabBrowser(SidebarPage* page);
+	// Tools tab (level_tools_page.cpp).
+	void buildLevelToolsPage(SidebarPage* page);
+	void refreshLevelToolsPage();
+	// Shapes tab (level_shapes_panel.cpp).
+	void buildLevelShapesPage(SidebarPage* page);
+	void chooseLevelShape(const QString& shape);
+	void refreshLevelShapesPanel();
+	void saveLevelShapeSettings();
+	[[nodiscard]] int levelShapeViewAxis() const;
+	[[nodiscard]] LevelShapeRequest levelShapeRequest(const LevelMapVec3& mins, const LevelMapVec3& maxs, int viewAxis) const;
+	bool addLevelShapeFromUi(const LevelMapVec3& mins, const LevelMapVec3& maxs, int viewAxis, bool drawn);
+	void addLevelShapeAtViewCentre();
+	void replaceLevelSelectionWithShape();
+	void addLevelSectorShapeAtViewCentre();
+	// The Shapes tab's sector shape filling a box, drawn or typed.
+	void addLevelSectorShape(double minX, double minY, double maxX, double maxY);
+	// Align and regions (level_editing_actions.cpp, level_sidebar_panels.cpp).
+	void alignLevelMapSelectionFromUi(bool horizontal, int edge);
+	void shearLevelMapSelectionFromUi();
+	void replaceLevelMapKeyValuesFromUi();
+	// Doom Builder's visual mode: the floor or ceiling under the camera's
+	// crosshair rises or falls, or its sector's light changes.
+	void shiftLevelCameraSurfaceFromUi(int delta, bool light);
+	// Nudges the texture of the Doom wall under the crosshair.
+	void nudgeLevelCameraTextureFromUi(int dx, int dy);
+	// Doom Builder's auto-align, from the wall at the crosshair or the
+	// selected linedefs (core/level_doom_align.h).
+	void alignLevelWallTexturesFromUi(bool crosshair);
+	// TrenchBroom's shear tool in every 2D view (MapViewport::setShearMode).
+	void setLevelShearMode(bool enabled);
+	// Doom Builder's Make Sectors mode in the Top view.
+	void setLevelMakeSectorMode(bool enabled);
+	void makeLevelSectorFromViewport(const QPointF& point);
+	void shearLevelMapSelectionFromViewport(int axis, int along, double factor, double anchor);
+	// The Doom wall under the camera's crosshair; false with a status message.
+	bool levelCameraWallAtCrosshair(LevelMaterialTarget* target);
+	// Doom Builder's texture dragging in the camera: with the mode on, a left
+	// drag on a Doom wall slides its texture with the pointer, the camera
+	// following live, as one undo step when let go; Escape puts it back.
+	void setLevelTextureDragMode(bool enabled);
+	bool handleLevelTextureDragEvent(QEvent* event);
+	struct LevelTextureDrag {
+		int sidedef = -1;
+		int offsetX = 0;
+		int offsetY = 0;
+		std::array<double, 3> origin {};
+		std::array<double, 3> normal {};
+		std::array<double, 3> along {};
+		int movedX = 0;
+		int movedY = 0;
+		int steps = 0;
+	};
+	bool m_levelTextureDragMode = false;
+	std::optional<LevelTextureDrag> m_levelTextureDrag;
+	// Linked groups (core/level_linked_groups.h): the scene group holding the
+	// selection, and the commands acting on it.
+	QString levelSelectionSceneGroup() const;
+	void createLinkedLevelCopyFromUi();
+	void selectLinkedLevelCopiesFromUi();
+	void updateLinkedLevelCopiesFromUi();
+	void unlinkLevelCopyFromUi();
+	void curveLevelMapLinedefsFromUi();
+	QWidget* buildLevelRegionPanel();
+	void refreshLevelRegionPanel();
+	void setLevelRegion(const LevelMapVec3& mins, const LevelMapVec3& maxs);
+	void setLevelRegionFromSelection();
+	void setLevelRegionFromView();
+	void clearLevelRegion();
+	void saveLevelRegionAs();
+	void compileLevelRegion();
+	// Plans and, when runnable, runs the chosen compiler profile on a map
+	// already on disk: the open map, or a region written from it.
+	void runLevelMapCompile(const LevelMapDocument& document);
+	[[nodiscard]] bool levelRegionActive() const;
+	void refreshLevelAssetBrowsers();
+	void refreshLevelModelBrowser();
+	void refreshLevelSoundBrowser();
+	void refreshLevelPrefabBrowser();
+	void showLevelModelPreview();
+	void showLevelSoundPreview();
+	// Offers Place and Give to Selection on the Models and Sounds tabs for the
+	// chosen asset, the open map and the selection.
+	void refreshLevelAssetButtons();
+	void toggleLevelSoundPlayback();
+	void stopLevelSoundPlayback();
+	// Places a model or sound from its browser ("model:path", "sound:path") at
+	// a point of the active view, or in its middle when the point is negative.
+	bool placeLevelAsset(const QString& payload, const QPointF& viewPoint);
+	// Gives the selected entities the model or sound as their key.
+	bool assignLevelAsset(const QString& payload);
+	[[nodiscard]] QString levelModelEntityClass() const;
+	[[nodiscard]] QString levelSoundEntityClass() const;
+	// What placing a model or a sound makes in the open map, for the tabs'
+	// Place sections.
+	[[nodiscard]] QString levelModelPlaceHint() const;
+	[[nodiscard]] QString levelSoundPlaceHint() const;
 	void refreshLevelViewWorkspaceActions();
 	void refreshLevelBookmarkContext();
 	void copyLevelBookmarksAfterSave();
@@ -518,7 +737,8 @@ private:
 	void setLevelMapGridUnits(int units);
 	void frameLevelMapSelection();
 	void isolateLevelMapSelection();
-	void drawLevelMapBrushFromViewport(const LevelMapVec3& mins, const LevelMapVec3& maxs);
+	// The depth axis is the drawing view's; -1 means the active 2D view's.
+	void drawLevelMapBrushFromViewport(const LevelMapVec3& mins, const LevelMapVec3& maxs, int depthAxis = -1);
 	void levelBrushPrimitiveAdded(const LevelBrushPrimitiveRequest& request);
 	[[nodiscard]] QString levelBrushMaterial() const;
 	void pickLevelMap3D(int triangle, int pick);
@@ -590,6 +810,10 @@ private:
 	void addLevelMapEntityFromUi(const QPointF& viewPoint = QPointF(-1.0, -1.0));
 	// The Doom and Hexen counterpart: asks for a DoomEd type number.
 	void addLevelMapThingFromUi(const QPointF& viewPoint = QPointF(-1.0, -1.0));
+	QWidget* buildLevelCameraPlacementTools();
+	void connectLevelCameraPlacement();
+	void refreshLevelCameraPlacementTools();
+	void placeLevelMapPaletteAtCamera();
 	// Asks for a size and a texture and adds a box brush centred on
 	// `viewPoint`, or on the centre of the view.
 	void addLevelMapBrushFromUi(const QPointF& viewPoint = QPointF(-1.0, -1.0));
@@ -788,6 +1012,13 @@ private:
 	void refreshAdvancedStudioSurface();
 	void refreshShaderDetailSections(const QString& shaderName = QString(), int stageIndex = -1);
 	void inspectAdvancedShaderScript();
+	// The Materials workbench (app/material_actions.cpp): built into the
+	// Shaders mode, fed the package view whenever it changes.
+	QWidget* buildMaterialWorkbench();
+	void syncMaterialWorkbench();
+	void openMaterialScript(const QString& path);
+	void showMaterialsForImage(const QString& virtualPath);
+	void showMaterialNamed(const QString& name);
 	void createAdvancedSpritePlan();
 	void indexAdvancedCodeWorkspace();
 	void createAdvancedAiProposal();
@@ -1039,6 +1270,10 @@ private:
 	bool showLeakTrail(const QString& pointFilePath);
 	void clearLeakTrailFromUi();
 	void loadLeakTrailFromFile();
+	void loadPortalFileFromUi();
+	bool showPortalFile(const QString& path);
+	void clearPortalsFromUi();
+	void paintLevelCameraPortals(QPainter& painter);
 	void syncLeakTrailWithLastBuild();
 	// Shows the trail in Levels and frames it; opens the build's map first
 	// when another map is open. False when the trail could not be read.
@@ -1148,6 +1383,29 @@ private:
 	void savePreferenceControls();
 	void applyPreferencesToUi();
 	void applyPreferencesToWidgets();
+	// Settings > Accessibility, and what its preferences do while the studio
+	// runs: spoken and announced results, sound cues, visual alerts, message
+	// timing.
+	QWidget* buildAccessibilitySettings();
+	void refreshSpeechControls();
+	[[nodiscard]] StudioSpeech& speech();
+	void applySpeechPreferences();
+	void speakEvent(const QString& eventId, const QString& text);
+	void noteTaskOutcome(const OperationTask& task);
+	void handleStatusMessage(const QString& text);
+	void readAloud();
+	void stopSpeaking();
+	void testSpeech();
+	void playSoundCue(SoundCue cue);
+	void testSoundCues();
+	void stepTextScale(int direction);
+	void toggleHighContrastTheme();
+	// Settings > Appearance and Language > Language and Region.
+	void refreshLanguageRestartNotice();
+	void restartToApplyLanguage();
+	void showSettingsCategory(const QString& categoryId);
+	// The setup step's settings: Accessibility for Welcome and Access, and so on.
+	void openCurrentSetupStepSettings();
 	// Re-applies per-item state colours in the lists without touching the
 	// application stylesheet.
 	void applyStateColors();
@@ -1289,9 +1547,117 @@ private:
 	// A filter on what decoding finds is run again a moment after thumbnails
 	// arrive, not after every batch of them.
 	QTimer* m_textureRefilterTimer = nullptr;
-	// The Objects tab, which counts what the filter keeps while one is typed.
-	QTabWidget* m_levelOutlinerTabs = nullptr;
+	// The Levels sidebars: browsers on the leading side, properties on the
+	// trailing side, in the arrangement the editor profile gives them (see
+	// core/level_sidebar.h). Pages are kept by tab id wherever they sit.
+	StudioSidebar* m_levelLeadingSidebar = nullptr;
+	StudioSidebar* m_levelTrailingSidebar = nullptr;
+	QHash<QString, SidebarPage*> m_levelSidebarPages;
+	QString m_levelSidebarFamily;
+	bool m_arrangingLevelSidebars = false;
+	bool m_restoringLevelSidebars = false;
+	// The Objects section, which counts what the filter keeps while one is typed.
 	QWidget* m_levelObjectsPanel = nullptr;
+	SidebarSection* m_levelObjectsSection = nullptr;
+	QLabel* m_levelEntityClassInfo = nullptr;
+	QAbstractButton* m_levelPlaceInView = nullptr;
+	QActionGroup* m_levelToolActions = nullptr;
+	QHash<QString, QAction*> m_levelTools;
+	// Shapes tab: the shape brush drawing makes, and its settings.
+	QHash<QString, SidebarSection*> m_levelToolSections;
+	QString m_levelShape = QStringLiteral("box");
+	QString m_levelSectorShape = QStringLiteral("sector-rectangle");
+	QButtonGroup* m_levelShapeButtons = nullptr;
+	QFormLayout* m_levelShapeForm = nullptr;
+	QComboBox* m_levelShapeAxis = nullptr;
+	QSpinBox* m_levelShapeSides = nullptr;
+	QSpinBox* m_levelShapeBands = nullptr;
+	QSpinBox* m_levelShapeThickness = nullptr;
+	QSpinBox* m_levelShapeArc = nullptr;
+	QSpinBox* m_levelShapeStart = nullptr;
+	QSpinBox* m_levelShapeSteps = nullptr;
+	QComboBox* m_levelShapeRise = nullptr;
+	QSpinBox* m_levelShapeWidth = nullptr;
+	QSpinBox* m_levelShapeDepth = nullptr;
+	QSpinBox* m_levelShapeStepHeight = nullptr;
+	QSpinBox* m_levelShapeColumns = nullptr;
+	QSpinBox* m_levelShapeRows = nullptr;
+	QLabel* m_levelShapeAbout = nullptr;
+	QLabel* m_levelShapeNote = nullptr;
+	QPushButton* m_levelShapeDraw = nullptr;
+	QPushButton* m_levelShapeAdd = nullptr;
+	QPushButton* m_levelShapeReplace = nullptr;
+	SidebarSection* m_levelShapeSettingsSection = nullptr;
+	bool m_restoringLevelShape = false;
+	// The region: a box the views keep to, written as a map of its own for
+	// a quick compile.
+	QString m_levelPortalPath;
+	QVector<QVector<LevelMapVec3>> m_levelPortals;
+	LevelMapVec3 m_levelRegionMins;
+	LevelMapVec3 m_levelRegionMaxs;
+	quint64 m_levelRegionSerial = 0;
+	bool m_levelRegionHideOutside = true;
+	QLabel* m_levelRegionSummary = nullptr;
+	QCheckBox* m_levelRegionHide = nullptr;
+	QPushButton* m_levelRegionFromSelection = nullptr;
+	QPushButton* m_levelRegionFromView = nullptr;
+	QPushButton* m_levelRegionClear = nullptr;
+	QPushButton* m_levelRegionSave = nullptr;
+	QPushButton* m_levelRegionCompile = nullptr;
+	// Inspector Transform section.
+	SidebarSection* m_levelTransformSection = nullptr;
+	QDoubleSpinBox* m_levelPositionFields[3] = {nullptr, nullptr, nullptr};
+	QDoubleSpinBox* m_levelSizeFields[3] = {nullptr, nullptr, nullptr};
+	QLabel* m_levelTransformNote = nullptr;
+	bool m_fillingLevelTransform = false;
+	// Textures tab: the package's textures as well as the map's, and the
+	// names of every texture image the package holds, by package view.
+	bool m_levelTexturesAll = false;
+	SidebarSection* m_levelTexturesSection = nullptr;
+	QString m_levelPackageTextureKey;
+	QStringList m_levelPackageTextureNames;
+	// Map tab.
+	QTreeWidget* m_levelWorldspawn = nullptr;
+	QListWidget* m_levelChecklist = nullptr;
+	quint64 m_levelMapSettingsRevision = 0;
+	QString m_levelMapSettingsSource;
+	bool m_fillingLevelWorldspawn = false;
+	// View tab filters: the switched-off filter ids, and their check boxes.
+	QWidget* m_levelFilterPanel = nullptr;
+	QStringList m_levelFiltersOff;
+	QString m_levelFilterFormatKey;
+	QHash<QString, QCheckBox*> m_levelFilterBoxes;
+	// Models tab.
+	QTreeWidget* m_levelModelList = nullptr;
+	QLineEdit* m_levelModelFilter = nullptr;
+	ModelViewport* m_levelModelPreview = nullptr;
+	ModelPreviewWorker* m_levelModelWorker = nullptr;
+	QLabel* m_levelModelInfo = nullptr;
+	QLabel* m_levelModelPlaceHint = nullptr;
+	QAbstractButton* m_levelModelPlace = nullptr;
+	QAbstractButton* m_levelModelAssign = nullptr;
+	QString m_levelModelListKey;
+	QString m_levelModelShownKey;
+	// Sounds tab.
+	QTreeWidget* m_levelSoundList = nullptr;
+	QLineEdit* m_levelSoundFilter = nullptr;
+	WaveformView* m_levelSoundWave = nullptr;
+	QLabel* m_levelSoundInfo = nullptr;
+	QAbstractButton* m_levelSoundPlay = nullptr;
+	QAbstractButton* m_levelSoundPlace = nullptr;
+	QAbstractButton* m_levelSoundAssign = nullptr;
+	QLabel* m_levelSoundPlaceHint = nullptr;
+	AudioBrowserWorker* m_levelSoundWorker = nullptr;
+	AudioBrowserWorker* m_levelSoundAuditionWorker = nullptr;
+	AudioPlayback* m_levelSoundPlayback = nullptr;
+	QString m_levelSoundListKey;
+	QString m_levelSoundShownPath;
+	quint64 m_levelSoundRevision = 0;
+	// Prefabs tab.
+	QTreeWidget* m_levelPrefabList = nullptr;
+	QLineEdit* m_levelPrefabFilter = nullptr;
+	QLabel* m_levelPrefabInfo = nullptr;
+	QString m_levelPrefabListKey;
 	QLineEdit* m_shaderFilter = nullptr;
 	QLineEdit* m_codeTreeFilter = nullptr;
 	// Package, entry, and palette of the model on screen, so returning to the
@@ -1393,6 +1759,8 @@ private:
 	QComboBox* m_advancedAiKind = nullptr;
 	LoadingPane* m_advancedStudioState = nullptr;
 	QTreeWidget* m_advancedShaderGraph = nullptr;
+	MaterialWorkbench* m_materialWorkbench = nullptr;
+	QTabWidget* m_shaderPageTabs = nullptr;
 	QListWidget* m_advancedSpriteSequence = nullptr;
 	QListWidget* m_advancedCodeTree = nullptr;
 	QListWidget* m_advancedAiProposalList = nullptr;
@@ -1446,6 +1814,10 @@ private:
 	DetailDrawer* m_textureDrawer = nullptr;
 	QListWidget* m_modelEntries = nullptr;
 	ModelViewport* m_modelViewport = nullptr;
+	// Modeller: the Models page's sidebars and joint list (model_page.cpp).
+	StudioSidebar* m_modelBrowserSidebar = nullptr;
+	StudioSidebar* m_modelInspectorSidebar = nullptr;
+	QTreeWidget* m_modelSkeletonTree = nullptr;
 	QComboBox* m_modelRenderMode = nullptr;
 	QComboBox* m_modelAnimation = nullptr;
 	QAbstractButton* m_modelPlayPause = nullptr;
@@ -1674,6 +2046,13 @@ private:
 	QString m_leakTrailPath;
 	// The class last added from the Levels surface, offered first next time.
 	QString m_lastAddedEntityClass;
+	QString m_lastTiedEntityClass;
+	// With no project definitions, the open map's game's built-in classes
+	// stand in (core/entity_builtin_catalogue.h); these say which.
+	bool m_entityDefinitionsBuiltin = false;
+	QString m_entityDefinitionsBuiltinGame;
+	QAbstractButton* m_levelCameraPlace = nullptr;
+	QDoubleSpinBox* m_levelCameraClearance = nullptr;
 	// Textures surface: show only the textures the open map uses.
 	QCheckBox* m_textureInMapOnly = nullptr;
 	QWidget* m_levelsRecentBox = nullptr;
@@ -1705,6 +2084,7 @@ private:
 	QComboBox* m_levelMaterialTool = nullptr;
 	QWidget* m_levelBrushTools = nullptr;
 	QComboBox* m_levelBrushPlane = nullptr;
+	QComboBox* m_levelBrushDirection = nullptr;
 	QDoubleSpinBox* m_levelBrushBase = nullptr;
 	QDoubleSpinBox* m_levelBrushDepth = nullptr;
 	quint64 m_levelBrushWorkSerial = 0;
@@ -1786,7 +2166,6 @@ private:
 	// A record field the Inspector should open to on its next rebuild, as
 	// "face:<brush>:<face>" after a face is picked in the 3D preview.
 	QString m_inspectorFocus;
-	QTabWidget* m_levelMapInspectorTabs = nullptr;
 	QWidget* m_levelMapInspectorPanel = nullptr;
 	// The installation whose remembered game folder the launch form shows.
 	QString m_launchGameDirectoryInstallation;
@@ -1947,6 +2326,45 @@ private:
 	QTabWidget* m_codeOutputTabs = nullptr;
 	LevelMapDoorOptions m_levelMapDoorOptions;
 	QCheckBox* m_textToSpeech = nullptr;
+	QComboBox* m_regionCombo = nullptr;
+	QLabel* m_regionSample = nullptr;
+	NoticeBar* m_languageRestartNotice = nullptr;
+	QComboBox* m_fontCombo = nullptr;
+	QCheckBox* m_wideTextSpacing = nullptr;
+	QComboBox* m_colorVisionCombo = nullptr;
+	QCheckBox* m_reducedSaturation = nullptr;
+	QCheckBox* m_thickFocusIndicator = nullptr;
+	QCheckBox* m_thickTextCursor = nullptr;
+	QCheckBox* m_steadyTextCursor = nullptr;
+	QComboBox* m_messageDurationCombo = nullptr;
+	QCheckBox* m_visualAlerts = nullptr;
+	QCheckBox* m_soundCues = nullptr;
+	QSlider* m_soundCueVolume = nullptr;
+	QAbstractButton* m_soundCueTest = nullptr;
+	QCheckBox* m_screenReaderAnnouncements = nullptr;
+	QHash<QString, QCheckBox*> m_speechEventBoxes;
+	QComboBox* m_speechVoiceCombo = nullptr;
+	QSlider* m_speechRate = nullptr;
+	QSlider* m_speechPitch = nullptr;
+	QSlider* m_speechVolume = nullptr;
+	QAbstractButton* m_speechTest = nullptr;
+	QLabel* m_speechStatus = nullptr;
+	QAbstractButton* m_setupOpenStep = nullptr;
+	// Created on first use: starting a speech engine is not free, and many
+	// sessions never speak.
+	std::unique_ptr<StudioSpeech> m_speech;
+	// Created on first use too: it opens a media player.
+	StudioSoundCues* m_soundCuePlayer = nullptr;
+	// Tasks whose outcome was spoken, announced, or flashed already.
+	QSet<QString> m_reportedTaskOutcomes;
+	// Off until the window has settled after start, so start-up's own tasks
+	// are not read out.
+	bool m_accessibilityAnnouncementsReady = false;
+	QTimer* m_statusAnnouncementTimer = nullptr;
+	QString m_pendingStatusAnnouncement;
+	QString m_lastStatusAnnouncement;
+	MessageDuration m_messageDuration = MessageDuration::Standard;
+	bool m_restartPending = false;
 	QCheckBox* m_aiFreeMode = nullptr;
 	QCheckBox* m_aiCloudConnectors = nullptr;
 	QCheckBox* m_aiAgenticWorkflows = nullptr;

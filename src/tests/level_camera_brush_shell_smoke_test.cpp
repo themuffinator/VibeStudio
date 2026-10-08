@@ -22,6 +22,7 @@
 #include <QTimer>
 #include <QToolButton>
 #include <QTranslator>
+#include <cmath>
 #include <iostream>
 
 using namespace vibestudio;
@@ -81,9 +82,11 @@ int main(int argc, char** argv)
 	auto* plane = shell.findChild<QComboBox*>("levelBrushPlane");
 	auto* base = shell.findChild<QDoubleSpinBox*>("levelBrushBase");
 	auto* depth = shell.findChild<QDoubleSpinBox*>("levelBrushDepth");
+	auto* direction = shell.findChild<QComboBox*>("levelBrushDirection");
+	auto* cameraSurface = shell.findChild<QToolButton*>("levelBrushCameraSurface");
 	auto* material = shell.findChild<QComboBox*>("levelPaintMaterial");
 	auto* command = shell.findChild<QAction*>("map.drawBrush");
-	if (!expect(camera && top && front && side && tool && plane && base && depth && material && command && command->isEnabled(),"construction controls and registered command")) { return 1; }
+	if (!expect(camera && top && front && side && tool && plane && base && depth && direction && cameraSurface && material && command && command->isEnabled(),"construction controls and registered command")) { return 1; }
 	ok &= expect(until([&] { return camera->isEnabled() && camera->hasMesh(); }),"empty map camera finishes loading");
 	ok &= expect(material->currentText() == QStringLiteral("__TB_empty"),"empty maps expose their default creation material");
 	shell.findChild<QAction*>("map.grid16")->trigger(); shell.findChild<QCheckBox*>("levelMapSnap")->setChecked(true);
@@ -141,12 +144,13 @@ int main(int argc, char** argv)
 	// The numeric route starts with the camera plane/depth and the same material.
 	base->setValue(24); depth->setValue(80); drain();
 	bool numeric = false; QString numericMaterial = QStringLiteral("studio/replacement"); QTimer driver; driver.setInterval(20);
+	double numericLow = 24, numericHigh = 104;
 	QObject::connect(&driver,&QTimer::timeout,&shell,[&] {
 		auto* modal = QApplication::activeModalWidget();
 		if (!modal || modal->objectName() != QStringLiteral("addBrushDialog")) { return; }
 		auto* dialog = static_cast<LevelPrimitiveDialog*>(modal);
 		const auto request = dialog->request();
-		numeric = request.mins.z == 24 && request.maxs.z == 104 && request.texture == numericMaterial;
+		numeric = request.mins.z == numericLow && request.maxs.z == numericHigh && request.texture == numericMaterial;
 		dialog->reject(); driver.stop();
 	});
 	driver.start(); shell.findChild<QToolButton*>("levelBrushNumeric")->click(); driver.stop();
@@ -154,6 +158,32 @@ int main(int argc, char** argv)
 	material->setEditText(QString()); numeric = false; numericMaterial = QStringLiteral("studio/new_brush");
 	driver.start(); shell.findChild<QToolButton*>("levelBrushNumeric")->click(); driver.stop();
 	ok &= expect(numeric,"cleared material picker uses the same last-drawn fallback in numeric creation");
+	direction->setCurrentIndex(direction->findData(-1)); numericLow = -56; numericHigh = 24; numeric = false;
+	driver.start(); shell.findChild<QToolButton*>("levelBrushNumeric")->click(); driver.stop();
+	ok &= expect(numeric && camera->brushDrawDirection() == -1,"numeric brush bounds follow negative camera extrusion");
+	const auto beforeNegative = serializeLevelMap(shell.levelDocument()).bytes;
+	const auto negativeHistory = shell.levelDocument().undoStack.size();
+	ok &= draw(*camera); const auto negativeBox = camera->brushDrawBox();
+	ok &= expect(negativeBox.mins[2] == -56 && negativeBox.maxs[2] == 24,"negative camera draft preserves the construction plane");
+	camera->finishBrushDraw(true);
+	ok &= expect(shell.levelDocument().brushes.size() == saved.brushes.size()+1 && shell.levelDocument().undoStack.size() == negativeHistory+1,
+		"negative camera extrusion commits through the shared undo transaction");
+	shell.findChild<QAction*>("map.undo")->trigger();
+	ok &= expect(serializeLevelMap(shell.levelDocument()).bytes == beforeNegative,"negative camera brush undo restores exact source");
+	ok &= until([&] { return camera->isEnabled() && camera->hasMesh(); }); drain();
+	// Surface picking uses current rendered geometry and synchronises the
+	// numeric plane/direction without changing source or selection.
+	const auto midY = (bounds.mins[1]+bounds.maxs[1])/2, midZ = (bounds.mins[2]+bounds.maxs[2])/2;
+	camera->setCameraView({float(bounds.mins[0]-128),float(midY),float(midZ)},0,0);
+	const QPointF aim(camera->width()*0.5,camera->height()*0.5);
+	ok &= until([&] { return camera->hitAt(aim).valid; }); cameraSurface->click();
+	ok &= expect(plane->currentData().toInt() == 0 && direction->currentData().toInt() == -1
+		&& std::abs(base->value()-bounds.mins[0]) < 0.001 && camera->brushDrawDirection() == -1,
+		"camera wall plane and outward direction synchronise every construction control");
+	ok &= expect(serializeLevelMap(shell.levelDocument()).bytes == beforeNegative && shell.levelDocument().undoStack.size() == negativeHistory,
+		"sampling a surface changes construction state without editing map history");
+	direction->setCurrentIndex(direction->findData(1));
+	plane->setCurrentIndex(plane->findData(2));
 	// Scene destinations can change without a source revision. Preserve the
 	// destination captured at gesture start rather than silently retargeting.
 	LevelMapDocument layered = saved; QString layer,locked;
@@ -191,7 +221,7 @@ int main(int argc, char** argv)
 		large.findChild<QAction*>("map.drawBrush")->trigger(); drain();
 		auto* panel = large.findChild<QWidget*>("levelMaterialTools");
 		QVector<QRect> controls;
-		for (const auto* name : {"levelMaterialTool","levelPaintMaterial","levelBrushPlane","levelBrushBase","levelBrushDepth","levelBrushWorkZone","levelBrushNumeric"}) {
+		for (const auto* name : {"levelMaterialTool","levelPaintMaterial","levelBrushPlane","levelBrushBase","levelBrushDepth","levelBrushDirection","levelBrushWorkZone","levelBrushCameraSurface","levelBrushNumeric"}) {
 			auto* control = large.findChild<QWidget*>(name);
 			const QRect bounds(control->mapTo(panel,QPoint()),control->size());
 			ok &= expect(control->isVisible() && !control->accessibleName().isEmpty() && control->focusPolicy() != Qt::NoFocus

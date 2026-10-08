@@ -1211,6 +1211,14 @@ void WaveformView::clearPeaks()
 	update();
 }
 
+void WaveformView::setEmptyText(const QString& text)
+{
+	if (m_emptyText != text) {
+		m_emptyText = text;
+		update();
+	}
+}
+
 bool WaveformView::hasPeaks() const
 {
 	return m_channels > 0 && m_peaks.size() >= 2 * m_channels;
@@ -1426,8 +1434,8 @@ void WaveformView::paintEvent(QPaintEvent* event)
 	painter.fillRect(event->rect(), colors.background);
 
 	if (!hasPeaks()) {
-		drawEmptyState(painter, rect(), colors,
-			QCoreApplication::translate("VibeStudioAssetViews", "No waveform to preview.\nSelect a WAV asset, or the audio could not be decoded."));
+		drawEmptyState(painter, rect(), colors, !m_emptyText.isEmpty() ? m_emptyText
+			: QCoreApplication::translate("VibeStudioAssetViews", "No waveform to preview.\nSelect a WAV asset, or the audio could not be decoded."));
 		return;
 	}
 

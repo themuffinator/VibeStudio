@@ -134,6 +134,12 @@ int main(int argc, char **argv)
 		cli({QStringLiteral("--unknown")}, 2);
 		cli({QStringLiteral("--dry-run")}, 2);
 		ok &= expect(cli({}, 0).value(QStringLiteral("preference")) == QStringLiteral("four-views"), "invalid CLI calls preserve settings");
+		ok &= expect(cli({QStringLiteral("camera-above-plans")}, 0).value(QStringLiteral("effectiveLayout")) == QStringLiteral("camera-above-plans"),
+			"CLI selects camera above plans");
+		ok &= expect(cli({}, 0).value(QStringLiteral("preference")) == QStringLiteral("camera-above-plans"), "CLI persists camera workspace preference");
+		ok &= expect(cli({QStringLiteral("camera-beside-plans")}, 0).value(QStringLiteral("effectiveLayout")) == QStringLiteral("camera-beside-plans"),
+			"CLI selects camera beside plans");
+		ok &= expect(cli({}, 0).value(QStringLiteral("preference")) == QStringLiteral("camera-beside-plans"), "CLI persists wide camera workspace preference");
 		const auto newerPath = temp.filePath(QStringLiteral("newer.ini"));
 		{
 			QSettings newer(newerPath, QSettings::IniFormat);

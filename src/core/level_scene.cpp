@@ -1,4 +1,5 @@
 #include "core/level_scene.h"
+#include "core/level_linked_groups.h"
 #include "core/level_scene_locks.h"
 
 #include <QCoreApplication>
@@ -51,19 +52,28 @@ bool nodeRequired(const LevelMapDocument* document, const QString& id, int* inde
 	*index = nodeIndex(document->scene, id);
 	return *index >= 0 || fail(error, QT_TRANSLATE_NOOP("LevelScene", "The scene node no longer exists."));
 }
-QJsonArray nodesJson(const LevelSceneState& state) {
+QJsonArray nodesJson(const LevelSceneState& state, bool links) {
 	QJsonArray array;
 	for (const auto& node : state.nodes) {
-		array.append(QJsonObject{
+		QJsonObject object{
 			{QStringLiteral("id"), node.id},
 			{QStringLiteral("name"), node.name},
 			{QStringLiteral("parent"), node.parentId},
 			{QStringLiteral("kind"), node.kind == LevelSceneNodeKind::Layer ? QStringLiteral("layer") : QStringLiteral("group")},
 			{QStringLiteral("visible"), node.visible},
 			{QStringLiteral("locked"), node.locked},
-			{QStringLiteral("objects"), QJsonArray::fromStringList(node.objects)}});
+			{QStringLiteral("objects"), QJsonArray::fromStringList(node.objects)}};
+		if (links) {
+			object.insert(QStringLiteral("link"), node.linkId);
+			object.insert(QStringLiteral("turn"), node.linkTurn);
+			object.insert(QStringLiteral("mirror"), node.linkMirror);
+		}
+		array.append(object);
 	}
 	return array;
+}
+bool linked(const LevelSceneState& state) {
+	return std::any_of(state.nodes.cbegin(), state.nodes.cend(), [](const LevelSceneNode& node) { return !node.linkId.isEmpty(); });
 }
 } // namespace
 
@@ -276,6 +286,24 @@ bool validateLevelScene(const LevelMapDocument& document, const LevelSceneState&
 		}
 		if (node.kind == LevelSceneNodeKind::Layer && !node.parentId.isEmpty()) {
 			return fail(error, QT_TRANSLATE_NOOP("LevelScene", "Layers must be at the scene root."));
+		}
+		if (!node.linkId.isEmpty()) {
+			const QUuid link(node.linkId);
+			if (link.isNull() || link.toString(QUuid::WithoutBraces) != node.linkId) {
+				return fail(error, QT_TRANSLATE_NOOP("LevelScene", "Scene link identities must be canonical UUIDs."));
+			}
+			if (node.kind != LevelSceneNodeKind::Group || document.format == LevelMapFormat::DoomWad) {
+				return fail(error, QT_TRANSLATE_NOOP("LevelScene", "Only groups of a Quake-family map can be linked."));
+			}
+			if (node.linkTurn < 0 || node.linkTurn > 3) {
+				return fail(error, QT_TRANSLATE_NOOP("LevelScene", "A linked copy turns 0 to 3 quarter turns."));
+			}
+		}
+	}
+	for (const auto& node : state.nodes) {
+		const auto* parent = nodes.value(node.parentId);
+		if (parent && !parent->linkId.isEmpty()) {
+			return fail(error, QT_TRANSLATE_NOOP("LevelScene", "A linked group cannot hold other layers or groups."));
 		}
 	}
 	const auto all = levelSceneObjects(document);
@@ -492,9 +520,11 @@ QByteArray encodeLevelScene(const LevelMapDocument& document, const QByteArray& 
 			used.insert(saved);
 		}
 	}
-	const QJsonObject json{{QStringLiteral("version"), 2},
+	// Version 3 adds links; a scene without them keeps writing version 2.
+	const bool links = linked(state);
+	const QJsonObject json{{QStringLiteral("version"), links ? 3 : 2},
 						   {QStringLiteral("sha256"), QString::fromLatin1(bodyHash.toHex())},
-						   {QStringLiteral("nodes"), nodesJson(state)}};
+						   {QStringLiteral("nodes"), nodesJson(state, links)}};
 	const auto bytes = QJsonDocument(json).toJson(QJsonDocument::Compact).toBase64();
 	if (bytes.size() > kLevelSceneMaxMetadataBytes) {
 		fail(error, QT_TRANSLATE_NOOP("LevelScene", "Scene metadata exceeds the 4 MiB limit."));
@@ -521,7 +551,8 @@ LevelSceneState decodeLevelScene(const LevelMapDocument& document, const QByteAr
 	}
 	const auto root = json.object();
 	const auto version = root.value(QStringLiteral("version"));
-	if (root.size() != 3 || (version != QJsonValue(1) && version != QJsonValue(2)) || !root.value(QStringLiteral("nodes")).isArray()) {
+	if (root.size() != 3 || (version != QJsonValue(1) && version != QJsonValue(2) && version != QJsonValue(3))
+		|| !root.value(QStringLiteral("nodes")).isArray()) {
 		return preserve(
 			QT_TRANSLATE_NOOP("LevelScene", "Scene metadata uses an unknown schema; it is preserved without applying memberships."));
 	}
@@ -539,8 +570,11 @@ LevelSceneState decodeLevelScene(const LevelMapDocument& document, const QByteAr
 	int members = 0;
 	for (const auto& value : nodes) {
 		const auto object = value.toObject();
-		if (object.size() != (version == QJsonValue(1) ? 6 : 7) ||
-			(version == QJsonValue(2) && !object.value(QStringLiteral("locked")).isBool()) ||
+		if (object.size() != (version == QJsonValue(1) ? 6 : (version == QJsonValue(2) ? 7 : 10)) ||
+			(version != QJsonValue(1) && !object.value(QStringLiteral("locked")).isBool()) ||
+			(version == QJsonValue(3)
+				&& (!object.value(QStringLiteral("link")).isString() || !object.value(QStringLiteral("turn")).isDouble()
+					|| !object.value(QStringLiteral("mirror")).isBool())) ||
 			!object.value(QStringLiteral("id")).isString() || !object.value(QStringLiteral("name")).isString() ||
 			!object.value(QStringLiteral("parent")).isString() || !object.value(QStringLiteral("visible")).isBool() ||
 			!object.value(QStringLiteral("objects")).isArray() ||
@@ -557,6 +591,9 @@ LevelSceneState decodeLevelScene(const LevelMapDocument& document, const QByteAr
 																							   : LevelSceneNodeKind::Group;
 		node.visible = object.value(QStringLiteral("visible")).toBool();
 		node.locked = object.value(QStringLiteral("locked")).toBool(false);
+		node.linkId = object.value(QStringLiteral("link")).toString();
+		node.linkTurn = object.value(QStringLiteral("turn")).toInt(0);
+		node.linkMirror = object.value(QStringLiteral("mirror")).toBool(false);
 		for (const auto& member : object.value(QStringLiteral("objects")).toArray()) {
 			if (!member.isString() || ++members > kLevelSceneMaxMembers) {
 				return preserve(QT_TRANSLATE_NOOP(
@@ -572,7 +609,10 @@ LevelSceneState decodeLevelScene(const LevelMapDocument& document, const QByteAr
 		state =
 			preserve(QT_TRANSLATE_NOOP("LevelScene", "Scene organization is invalid; metadata is preserved without applying memberships."));
 		state.problem += QLatin1Char(' ') + error;
+		return state;
 	}
+	// Linked copies are compared with what they hold as the map opens.
+	refreshLevelLinkBaselines(document, &state);
 	return state;
 }
 
@@ -587,14 +627,14 @@ QByteArray levelSceneDoomHash(const QMap<QString, QByteArray>& lumps) {
 }
 
 QJsonObject levelSceneJson(const LevelMapDocument& document) {
-	auto nodes = nodesJson(document.scene);
+	auto nodes = nodesJson(document.scene, true);
 	const auto locked = levelSceneLockedNodes(document.scene);
 	for (auto value = nodes.begin(); value != nodes.end(); ++value) {
 		auto object = value->toObject();
 		object.insert(QStringLiteral("effectiveLocked"), locked.contains(object.value(QStringLiteral("id")).toString()));
 		*value = object;
 	}
-	return {{QStringLiteral("version"), 2},
+	return {{QStringLiteral("version"), 3},
 			{QStringLiteral("nodes"), nodes},
 			{QStringLiteral("problem"), document.scene.problem},
 			{QStringLiteral("preservedMetadataBytes"), document.scene.opaqueMetadata.size()},

@@ -102,7 +102,7 @@ buttons that show text beside an icon reserve a consistent gap after the glyph.
 
 **Mode rail over a stacked work surface.** `ModeRail` in
 `src/app/studio_layout.*` lists the ten modes (Workspace, Levels, Models,
-Textures, Audio, Packages, Code, Shaders, Build, Settings) as checkable tool
+Textures, Audio, Packages, Code, Materials, Build, Settings) as checkable tool
 buttons over a `QStackedWidget`, grouped by dividers into home, content, assets
 and code, and shipping, with Settings pinned to the bottom. Order still matches
 Ctrl+1 to Ctrl+0. The rail is one tab stop: Tab reaches the current mode and the
@@ -174,7 +174,7 @@ buttons, so switching pages never makes the work area jump, and while a page
 shows its empty state the header's primary action steps back to the secondary
 look (`PageHeader::setPrimaryActionMuted()`), leaving the empty state's own call
 to action as the one emphasised button on screen. Workbench pages (Levels, Models, Textures, Audio,
-Packages, Code, Shaders) use splitters instead of a scrolling column: a list or
+Packages, Code, Materials) use splitters instead of a scrolling column: a list or
 outliner on the left, the viewport, preview, or editor filling the middle, and
 an inspector on the right. Tab groups in side and bottom panels put their tabs
 along the bottom edge, the way idStudio's docked panels do. Splitter
@@ -533,9 +533,17 @@ also counts running tasks.
 
 **Panels as docks.** Activity (every task with its progress, log, warnings, and
 cancel) and Inspector (settings, setup, and project diagnostics) are
-`QDockWidget`s, tabbed together on the right and closed by default so every
-work surface gets the full width. The View menu, the status-bar toggles, and the
-saved window state bring them back where the user left them. Each dock carries a
+`QDockWidget`s, tabbed together on the trailing side, across the page from the
+rail (the right, or the left in a right-to-left layout), and closed by default
+so every work surface gets the full width. The View menu, the status-bar
+toggles, and the saved window state bring them back where the user left them,
+at the saved width when space permits. Minimum widths belong to the panel
+contents, so a temporary start-up size cannot become a permanent dock minimum;
+long Activity rows elide within the available width. **View > Reset Layout**
+closes them on the trailing side again. The state is
+kept as a left-to-right window lays it out and mirrored for a right-to-left
+session, so a panel keeps its side of the page whichever language saved it: a
+panel moved beside the rail stays beside the rail. Each dock carries a
 `DockTitleBar`: the panel name with float and close buttons drawn from the
 studio glyphs, replacing the platform's title buttons, which were a few pixels
 across and nearly invisible on the dark theme. Presses that miss the buttons
@@ -1540,11 +1548,13 @@ detail:
 ## Creative Graphical Communication
 Graphical elements should help users decide and act:
 - [x] Package composition charts for file types and sizes, drawn as a stacked
-  proportion bar with a hatched, glyph-labelled legend.
+  proportion bar with a hatched, glyph-labelled legend; bar and legend both
+  start from the leading side, the right in Arabic and Urdu.
 - [ ] Asset dependency graphs for textures, shaders, models, maps, and packages
   — the dependency surface is still a list, not a graph.
 - [x] Compiler pipeline diagrams for source map to output artifacts, drawn as a
-  left-to-right stage graph with per-stage state glyphs.
+  stage graph that runs in reading order (right to left in Arabic and Urdu)
+  with per-stage state glyphs.
 - [x] Map health overlays for leaks, missing textures, entity problems, and compile warnings.
 - [x] Shader stage diagrams for idTech3 material flow.
 - [x] Timeline views for task history, drawn with duration bars.

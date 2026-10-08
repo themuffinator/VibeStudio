@@ -13,6 +13,8 @@
 - [ ] Meson build/test run or reason it was not applicable.
 - [ ] Relevant CLI command or smoke test run.
 - [ ] Docs/help text updated for behavior, options, formats, dependencies, or setup changes.
+- [ ] `CHANGELOG.md` has an Unreleased entry for user-visible changes (`python scripts/changelog.py add ...`).
+- [ ] User manual (`docs/manual`) updated, and `python scripts/generate_offline_guide.py` run, when user-facing behavior changed.
 - [ ] Accessibility/localization impact checked.
 - [ ] AI-free path preserved for core workflows.
 

@@ -36,12 +36,35 @@ void configureHighDpiBehavior();
 
 // Resolves and installs the .qm catalog for `localeName`, replacing any
 // previously installed VibeStudio translator. An empty or unknown locale falls
-// back to the source language without reporting failure.
+// back to the source language without reporting failure; "system" follows the
+// operating system's language.
 TranslationLoadResult installStudioTranslations(QCoreApplication& app, const QString& localeName);
+// The language the running studio's interface was built in: the resolved
+// target of the last installStudioTranslations() call, "en" before any.
+// Strings are translated as widgets are built, so a different language takes
+// effect when the studio next starts.
+QString activeInterfaceLanguage();
+// Chinese, Japanese, and Korean share the Han characters but draw many of them
+// differently, and a font made for one may lack another's forms. For an
+// interface in one of them, the installed families made for that language,
+// most preferred first; empty for every other language. installStudioTranslations
+// puts them ahead of the platform's own fallback fonts for those scripts.
+QStringList interfaceLanguageFontFamilies(const QString& languageId);
 
 // Applies the layout direction implied by a locale. Returns true when the
 // direction changed.
 bool applyLayoutDirectionForLocale(const QString& localeName);
+
+// Restarting to apply a new interface language. The shell asks for it, closes
+// through its usual unsaved-work guards, and main() starts the new process
+// after the event loop ends, with these arguments (the settings file the
+// session used, if any).
+void requestStudioRestart(const QStringList& arguments);
+bool studioRestartRequested();
+QStringList studioRestartArguments();
+// Starts the requested restart; returns false when nothing was requested or
+// the new process could not be started.
+bool startRequestedStudioRestart();
 
 // Directories searched for compiled translation catalogs, in order.
 QStringList translationSearchPaths();

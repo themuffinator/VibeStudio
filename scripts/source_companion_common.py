@@ -12,8 +12,11 @@ from urllib.parse import urlsplit
 
 
 DEFAULT_PROFILE = Path(__file__).parent / 'runtime_sources/qt-6.10.1-msvc-x64.json'
-SOURCE_DIRECTORIES = ('src', 'scripts', 'docs', 'i18n', 'samples', 'external/audio', 'external/modelling')
-SOURCE_ROOT_FILES = {'.editorconfig', '.gitattributes', '.gitignore', '.gitmodules', 'AGENTS.md',
+# assets/branding and packaging are build inputs too: the icon resources and the
+# Windows .rc template compile into the binary, and meson.build includes packaging/.
+SOURCE_DIRECTORIES = ('src', 'scripts', 'docs', 'i18n', 'samples', 'assets', 'packaging', 'external/audio',
+                      'external/modelling')
+SOURCE_ROOT_FILES = {'.editorconfig', '.gitattributes', '.gitignore', '.gitmodules', 'AGENTS.md', 'CHANGELOG.md',
                      'LICENSE', 'COPYING', 'NOTICE', 'README.md', 'VERSION', 'meson.build', 'meson_options.txt'}
 
 

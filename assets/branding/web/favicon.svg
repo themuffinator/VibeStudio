@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024" role="img" aria-label="VibeStudio">
+<title>VibeStudio</title>
+<defs><linearGradient id="g1" gradientUnits="userSpaceOnUse" x1="0" y1="64" x2="0" y2="960"><stop offset="0" stop-color="#F7A040"/><stop offset="1" stop-color="#D66A0E"/></linearGradient></defs>
+<path d="M280 64L744 64C863.29 64 960 160.71 960 280L960 744C960 863.29 863.29 960 744 960L280 960C160.71 960 64 863.29 64 744L64 280C64 160.71 160.71 64 280 64Z" fill="url(#g1)"/>
+<path d="M242.69 412.49L418.69 766.49C434.43 798.14 472.84 811.04 504.49 795.31C536.14 779.57 549.04 741.16 533.31 709.51L357.31 355.51C341.57 323.86 303.16 310.96 271.51 326.69C239.86 342.43 226.96 380.84 242.69 412.49Z" fill="#FFFFFF"/>
+<path d="M533.31 766.49L709.31 412.49C725.04 380.84 712.14 342.43 680.49 326.69C648.84 310.96 610.43 323.86 594.69 355.51L418.69 709.51C402.96 741.16 415.86 779.57 447.51 795.31C479.16 811.04 517.57 798.14 533.31 766.49Z" fill="#FFFFFF"/>
+<path d="M676 228L748 228L748 300L676 300Z" fill="#FFFFFF"/>
+<path d="M727 153L781 153L781 207L727 207Z" fill="#FFFFFF" fill-opacity="0.8"/>
+<path d="M767 95L805 95L805 133L767 133Z" fill="#FFFFFF" fill-opacity="0.55"/>
+</svg>

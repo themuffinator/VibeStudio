@@ -3,6 +3,7 @@
 #include "app/studio_theme.h"
 #include "cli/cli.h"
 #include "core/package_import_store.h"
+#include "core/localization.h"
 #include "core/package_copy_store.h"
 #include "core/studio_manifest.h"
 #include "core/studio_settings.h"
@@ -19,6 +20,14 @@
 #include <QTimer>
 #include <QScopeGuard>
 #include <QThreadPool>
+
+// The brand icon resource lives in the app library (assets/branding/vibestudio.qrc).
+// Q_INIT_RESOURCE must run from the global namespace, and calling it here makes
+// the linker keep the resource in the executable.
+static void initBrandingResources()
+{
+	Q_INIT_RESOURCE(vibestudio_branding);
+}
 
 namespace {
 
@@ -110,12 +119,26 @@ int main(int argc, char** argv)
 		vibestudio::waitForPackageCopyCleanup();
 	});
 	configureApplicationMetadata(app);
+	// Matches packaging/linux/*.desktop, so Wayland and freedesktop launchers
+	// pair the window with the installed icon.
+	QGuiApplication::setDesktopFileName(QStringLiteral("io.github.themuffinator.VibeStudio"));
+	initBrandingResources();
 	QApplication::setWindowIcon(vibestudio::studioApplicationIcon());
 	vibestudio::installSessionLogging();
 
 	// The offscreen platform (CI self-test, documentation snapshots) has no
 	// system UI font, so pick a real one when it is installed.
 	if (QGuiApplication::platformName() == QStringLiteral("offscreen")) {
+		// Its font database reads only .ttf, .otf, and Type 1 files from
+		// QT_QPA_FONTDIR, leaving out TrueType collections, which is where
+		// Windows keeps its Chinese, Japanese, and Indic interface fonts.
+		const QString fontDirectory = qEnvironmentVariable("QT_QPA_FONTDIR");
+		if (!fontDirectory.isEmpty()) {
+			const QFileInfoList collections = QDir(fontDirectory).entryInfoList({QStringLiteral("*.ttc")}, QDir::Files);
+			for (const QFileInfo& collection : collections) {
+				QFontDatabase::addApplicationFont(collection.absoluteFilePath());
+			}
+		}
 		for (const QString& family : {QStringLiteral("Segoe UI"), QStringLiteral("Helvetica Neue"), QStringLiteral("Noto Sans"), QStringLiteral("DejaVu Sans")}) {
 			if (QFontDatabase::hasFamily(family)) {
 				QFont font = QApplication::font();
@@ -136,9 +159,12 @@ int main(int argc, char** argv)
 		const vibestudio::AccessibilityPreferences preferences = settings.accessibilityPreferences();
 		vibestudio::installStudioTranslations(app, preferences.localeName);
 		vibestudio::applyLayoutDirectionForLocale(preferences.localeName);
+		// Numbers, dates, and sizes follow the region format preference, which
+		// is the operating system's regional settings unless the user chose.
+		QLocale::setDefault(vibestudio::regionFormatLocale(preferences.formatLocaleName, preferences.localeName));
 		// Theme before the first widget exists, so nothing is built with the
 		// platform style and then repolished.
-		vibestudio::applyStudioTheme(app, vibestudio::studioThemeTokens(preferences.theme, preferences.density, preferences.textScalePercent));
+		vibestudio::applyStudioTheme(app, vibestudio::studioThemeTokens(preferences));
 		// Before the shell exists, so it can tell whether the last session
 		// crashed. Turned off in Preferences, nothing is written, though a
 		// crash from before is still offered once.
@@ -203,5 +229,9 @@ int main(int argc, char** argv)
 		});
 	}
 
-	return app.exec();
+	const int exitCode = app.exec();
+	// A language change asked for a restart, and the shell has closed through
+	// its unsaved-work guards: the new studio starts in the new language.
+	vibestudio::startRequestedStudioRestart();
+	return exitCode;
 }

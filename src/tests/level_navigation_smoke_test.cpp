@@ -48,6 +48,14 @@ int main(int argc, char** argv)
 	LevelViewBookmarks original {a}, decoded;
 	QString error;
 	bool ok = expect(parseLevelBookmarks(encode(original), &decoded, &error) && encode(decoded) == encode(original), "full state round trip", error);
+	for (const auto layout : {LevelViewLayout::CameraAbovePlans, LevelViewLayout::CameraBesidePlans}) {
+		auto cameraWorkspace = original;
+		cameraWorkspace[0].view.layout = layout;
+		ok &= expect(parseLevelBookmarks(encode(cameraWorkspace), &decoded, &error)
+			&& encode(decoded) == encode(cameraWorkspace), "camera above plans bookmark round trip", error);
+		cameraWorkspace[0].view.plans[1].projection = 0;
+		ok &= expect(!validateLevelBookmarks(cameraWorkspace, &error), "camera above plans requires three distinct ordered planes");
+	}
 	{
 		auto plans = std::array<PlanViewState, 3> {{{0, {10, 20}, 2}, {1, {-40, 30}, 5}, {2, {70, -80}, 0.5}}};
 		ok &= expect(linkLevelPlanNavigation(&plans, 0, {true, false, false}, &error) && plans[1].center == QPointF(10, 30)

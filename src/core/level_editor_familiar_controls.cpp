@@ -59,6 +59,121 @@ LevelEditorControls familiarLevelControls(const QString& id)
 	LevelEditorControls controls = baseControls();
 	auto& plan = controls.plan;
 	auto& camera = controls.camera;
+	if (id == QLatin1String("doomedit")) {
+		// id Software DOOM-3 a9c49da5, MainFrm.cpp / CamWnd.cpp / XYWnd.cpp,
+		// GPL-3.0-or-later with additional terms. Behaviour facts only; see credits.
+		controls = familiarLevelControls(QStringLiteral("q3radiant"));
+		camera.lookButton = Qt::RightButton;
+		camera.lookModifiers = Qt::ControlModifier | Qt::ShiftModifier;
+		// DoomEdit has its own texture editing; do not inherit unaudited gestures.
+		camera.materialSampleButton = Qt::NoButton;
+		camera.materialPaintButton = Qt::NoButton;
+		camera.surfacePasteFaceButton = Qt::NoButton;
+		camera.surfacePasteBrushButton = Qt::NoButton;
+		key(controls, "map.open", {QStringLiteral("Ctrl+O")});
+		key(controls, "map.nextProjection", {QStringLiteral("Ctrl+Tab"), QStringLiteral("Home")});
+		key(controls, "map.mergeBrushes", {QStringLiteral("Shift+M")});
+		key(controls, "map.isolateSelection", {QStringLiteral("Ctrl+Shift+H")});
+		key(controls, "map.toggleGrid", {QStringLiteral("0")});
+		// Ctrl+U and Shift+U are axial texture tools; I opens the entity list.
+		key(controls, "map.carve", {});
+		key(controls, "map.invertSelection", {});
+		return controls;
+	}
+	if (id == QLatin1String("bsp")) {
+		// BSP 0.97q7 Settings/{bspmouse,bspmou3d,keyboard}.cfg and release notes,
+		// reviewed 2026-10-07. Public binding facts only; no proprietary code,
+		// configuration text, binaries or game assets are incorporated. See credits.
+		controls.layout = LevelViewLayout::FourViews;
+		plan.panButtons = {Qt::RightButton};
+		plan.plainClickSelects = false;
+		plan.toggleModifiers = Qt::ShiftModifier;
+		plan.addModifiers = Qt::NoModifier;
+		plan.bandModifiers = Qt::ShiftModifier;
+		plan.emptyDrag = PlanEmptyDrag::DrawBrush;
+		plan.emptyDragWithSelection = PlanEmptyDrag::ResizeSelection;
+		plan.squareModifiers = plan.cubeModifiers = Qt::NoModifier;
+		camera.lookButton = Qt::MiddleButton;
+		camera.panButtons = {Qt::MiddleButton};
+		camera.panModifiers = Qt::ShiftModifier;
+		camera.slowModifiers = Qt::NoModifier;
+		camera.materialSampleButton = Qt::RightButton;
+		camera.materialSampleModifiers = Qt::NoModifier;
+		camera.flyKeys = {QStringLiteral("W"), QStringLiteral("S"), QStringLiteral("A"), QStringLiteral("D"),
+			QStringLiteral("R"), QStringLiteral("F"), QStringLiteral("Q"), QStringLiteral("E"),
+			QStringLiteral("PgDown"), QStringLiteral("Del")};
+		camera.driveKeys = {QStringLiteral("Up"), QStringLiteral("Down"), QStringLiteral("Ins"), QStringLiteral("PgUp"),
+			QStringLiteral("Home"), QStringLiteral("End"), QStringLiteral("Left"), QStringLiteral("Right")};
+		camera.turnKeysStrafeInLook = false;
+		key(controls, "map.duplicateSelection", {QStringLiteral("Ctrl+Space")});
+		key(controls, "map.deleteSelection", {QStringLiteral("Ctrl+X"), QStringLiteral("Num+-")});
+		key(controls, "map.selectAll", {QStringLiteral("`")});
+		key(controls, "map.selectNone", {QStringLiteral("Escape")});
+		key(controls, "map.snapToGrid", {QStringLiteral("Alt+S")});
+		key(controls, "map.frameSelection", {QStringLiteral("Ctrl+Shift+Y")});
+		key(controls, "map.alignSurfaces", {QStringLiteral("Z")});
+		key(controls, "map.hideSelection", {QStringLiteral("H")});
+		key(controls, "map.showAll", {QStringLiteral("Alt+R")});
+		key(controls, "map.carve", {QStringLiteral("C"), QStringLiteral("Shift+C")});
+		key(controls, "map.toggle3D", {QStringLiteral("Ctrl+Return")});
+		// Native split/clip-point modes do not match the shared modal clip tool.
+		key(controls, "map.clipTool", {});
+		return controls;
+	}
+	if (id == QLatin1String("gtkradiant-1-4") || id == QLatin1String("gtkradiant-1-5")) {
+		// GtkRadiant 1.4.0-era ZeroRadiant 5fc27697 and 1.5 01767337:
+		// mainframe, camwindow, xywindow, selection/drag and grid defaults.
+		// GPL-2.0-or-later; independent behavior adaptation, see docs/CREDITS.md.
+		controls = gtkRadiantLevelControls();
+		plan.fixedCameraSteps = true;
+		camera.discreteDriveKeys = true;
+		camera.driveKeys.pitchUp = QStringLiteral("A");
+		camera.driveKeys.pitchDown = QStringLiteral("Z");
+		// Modified arrows belong to texture tools, not accelerated camera steps.
+		camera.speedModifiersRequireLook = true;
+		key(controls, "map.open", {QStringLiteral("Ctrl+O")});
+		key(controls, "map.selectNone", {QStringLiteral("Escape")});
+		key(controls, "map.selectAll", {});
+		key(controls, "map.mergeBrushes", {QStringLiteral("Ctrl+U")});
+		key(controls, "map.alignSurfaces", {QStringLiteral("S")});
+		key(controls, "map.editPatch", {QStringLiteral("Shift+S")});
+		key(controls, "map.capPatch", {QStringLiteral("Shift+C")});
+		key(controls, "map.textureLock", {QStringLiteral("Shift+T")});
+		key(controls, "map.surfaceShiftLeft", {QStringLiteral("Shift+Left")});
+		key(controls, "map.surfaceShiftRight", {QStringLiteral("Shift+Right")});
+		key(controls, "map.surfaceShiftDown", {QStringLiteral("Shift+Down")});
+		key(controls, "map.surfaceShiftUp", {QStringLiteral("Shift+Up")});
+		key(controls, "map.surfaceRotateLeft", {QStringLiteral("Shift+PgUp")});
+		key(controls, "map.surfaceRotateRight", {QStringLiteral("Shift+PgDown")});
+		key(controls, "map.surfaceFit", {QStringLiteral("Shift+B")});
+		if (id == QLatin1String("gtkradiant-1-5")) {
+			// 1.5's selection system uses Shift area selection, unlike 1.4's Alt.
+			plan.bandModifiers = Qt::ShiftModifier;
+			camera.materialPaintButton = Qt::NoButton;
+			camera.surfacePasteBrushButton = Qt::NoButton;
+			// Keep middle sampling and Ctrl+Shift+middle application. The latter
+			// uses our explicit hit-face clipboard target, as documented.
+			camera.flyKeys = {QStringLiteral("Up"), QStringLiteral("Down"),
+				QStringLiteral("Left"), QStringLiteral("Right"), {}, {}, {}, {}};
+			key(controls, "map.loadLeakTrail", {});
+		}
+		return controls;
+	}
+	if (id == QLatin1String("qeradiant")) {
+		// Eutectic's QeRadiant/Q3Radiant manual, Appendix G (reviewed 2026-10-07).
+		// Facts only: no manual prose or external implementation is incorporated.
+		controls = familiarLevelControls(QStringLiteral("q3radiant"));
+		key(controls, "map.open", {QStringLiteral("Ctrl+O")});
+		key(controls, "map.surfaceFit", {QStringLiteral("Shift+5"), QStringLiteral("Ctrl+F")});
+		// These Q3-specific keys must not run unrelated tools for Qe users.
+		key(controls, "map.editPatch", {});
+		key(controls, "map.capPatch", {});
+		key(controls, "map.textureLock", {});
+		key(controls, "map.hideSelection", {});
+		key(controls, "map.showAll", {});
+		key(controls, "map.selectSimilar", {});
+		return controls;
+	}
 	if (id == QLatin1String("q3radiant")) {
 		// id Software Q3Radiant dbe4ddb1, GPL-2.0-or-later: MainFrm.cpp,
 		// CamWnd.cpp, XYWnd.cpp, PrefsDlg.cpp, QE3.CPP and DRAG.CPP. See credits.
@@ -351,11 +466,13 @@ CameraNavigationDrag cameraNavigationDrag(const CameraViewControls& controls, Qt
 	// Specific gestures first. This also makes an unmodified middle orbit
 	// distinct from Shift+middle pan (Blender/Godot).
 	if (controls.orbitButton == button && controls.orbitModifiers == keys) { return CameraNavigationDrag::Orbit; }
+	// An explicit modified pan (BSP's Shift+middle) wins over the look
+	// gesture's optional speed modifiers. Exact look/pan collisions are invalid.
+	if (controls.panButtons.contains(button) && controls.panModifiers == keys) { return CameraNavigationDrag::Pan; }
 	if (controls.perspective && controls.lookButton == button && !controls.lookClickToggles
 		&& (keys & ~((controls.fastModifiers | controls.slowModifiers) & ~controls.lookModifiers)) == controls.lookModifiers) {
 		return CameraNavigationDrag::Look;
 	}
-	if (controls.panButtons.contains(button) && controls.panModifiers == keys) { return CameraNavigationDrag::Pan; }
 	if (button == Qt::LeftButton && controls.leftPanModifiers != Qt::NoModifier && (keys & controls.leftPanModifiers) != Qt::NoModifier) {
 		return CameraNavigationDrag::Pan;
 	}

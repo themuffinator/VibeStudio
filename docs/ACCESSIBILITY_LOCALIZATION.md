@@ -1,5 +1,11 @@
 # Accessibility And Localization
 
+**Help** > **Documentation** uses the shared command registry, with a
+translatable menu label and status tip. Standard Qt menu and Command Palette
+accessibility exposes its name and keyboard access. Map-edit status messages
+remain translatable, including plural forms, and describe Save Map's change
+check and backup before updating the file.
+
 Q3Radiant's position steering exposes its active state in the camera HUD and
 accessible description, with an accessibility notification on start/end. Release,
 Escape, focus loss, hiding/disabling and workspace replacement end motion.
@@ -86,6 +92,14 @@ review finishes. Source paths/digests are inspectable without relying on color.
 Strings use `AudioMedia`, `AudioMediaDialog`, `AudioSessionDialog` and
 `AudioSessionCli`. Scaled/expanded-RTL fixtures do not establish native
 screen-reader or physical keyboard acceptance.
+
+Camera **Place at Camera Surface** exposes a named, focusable Create action and
+native numeric **Clearance** field in a wrapping form. The command palette
+provides the same action without a mouse gesture. Placement/refusal status uses
+text, and longer insertions reuse the cancellable placement worker and its
+reduced-motion progress. Names, descriptions and status messages are
+translatable. The UI fixture covers 200% high-contrast RTL and expanded strings;
+native screen-reader and physical keyboard acceptance remain open.
 
 Camera **Draw Brush** has named, focusable native plane/base/depth controls,
 work-zone reset and a numeric primitive route. Dashed camera/plan outlines and
@@ -255,7 +269,13 @@ states, package handoffs and Qt-rendered layouts at 100% dark and 200% high-cont
 RTL with expanded strings. Physical keyboard and screen-reader acceptance remain
 part of the release audit.
 
-The 18 level-editor profiles share the existing native Settings selector and
+The profile browser uses a native search field, wrapping profile list and scrollable
+text preview with accessible names. Search includes aliases and engine families;
+no results disables **Use Profile**. Previewing a profile leaves preferences
+untouched until the user applies it. Workspace tests exercise this flow with
+200% text, high-contrast colours, RTL and expanded translations.
+
+The 24 level-editor profiles share the existing native Settings selector and
 Levels Controls menu. The searchable Controls reference adds translated,
 wrapping adaptation rows with accessible text and full tooltips. Camera
 orbit/pan modifiers and mouse-look toggle keys are included in generated help;
@@ -264,6 +284,14 @@ change. Profile descriptors invalidate their translated cache on language
 changes. `level-profiles-ui-smoke` uses direct Qt services and widget rendering
 to check 100% dark and 200% high-contrast RTL layouts with expanded text.
 It does not establish native keyboard or screen-reader acceptance.
+
+GtkRadiant 1.4, 1.5 and QeRadiant use the same translated profile names,
+searchable command/gesture rows and wrapping adaptation descriptions. NRC, TB
+and explicit GtkRadiant version aliases resolve to canonical IDs without adding
+duplicate selector rows. Version differences include area-selection modifiers,
+surface-click roles and discrete camera keys. Their regression tests exercise
+semantic routing without mouse/keyboard injection; physical-input acceptance
+remains open for these additions too.
 
 Plan selection size/readouts and Frame Selection include point-sized objects
 and straight lines. Cached geometry refreshes after selection, projection,
@@ -1230,11 +1258,18 @@ Required settings and behavior:
 - [ ] Follow OS font and scaling defaults on first launch.
   The shell preserves the native UI typeface when applying its theme and uses
   the earlier 10.5-point body text baseline, multiplied by the chosen text scale.
+  The System theme follows the desktop's light, dark, and high-contrast modes,
+  and the interface language follows the system's on first launch.
 - [x] Support application text scale presets: 100%, 125%, 150%, 175%, and 200%,
   and a custom scale path where practical.
 - [x] Support high-contrast dark and high-contrast light themes.
-- [ ] Support a dedicated color-blind-aware status palette and a
-  reduced-saturation option as separate, selectable settings.
+- [x] Support a dedicated color-blind-aware status palette and a
+  reduced-saturation option as separate, selectable settings: red-green safe,
+  blue-yellow safe, and monochrome palettes, and reduced saturation (see
+  [Colour Vision](#colour-vision)).
+- [x] Offer a thick focus outline, a thick and a steady text cursor, a chosen
+  interface typeface, and WCAG 1.4.12 text spacing (see
+  [Accessibility Settings](#accessibility-settings)).
 - [x] Support UI density presets: comfortable, standard, compact.
 - [ ] Ensure toolbars, tabs, cards, inspectors, dialogs, and status chips do not
   clip text at 100%, 125%, 150%, 175%, and 200% scale. Labels that hold paths or
@@ -1342,9 +1377,9 @@ mark itself.
 
 `studioStateColor()` in `src/app/studio_charts.*` keeps four tuned ramps — two
 high-contrast and two standard — and separates the eight operation states by
-both hue and lightness. That is not the same thing as a color-blind-aware
-palette the user can choose, and there is no reduced-saturation setting, so
-both remain unticked above.
+both hue and lightness. With a colour-vision palette chosen, the ramps take the
+palette's state colours instead, and reduced saturation and monochrome apply to
+them as to the theme (see [Colour Vision](#colour-vision)).
 
 ### Non-Color Status
 
@@ -1430,7 +1465,9 @@ The model workbench's Play/Pause button is disabled under reduced motion, and
 its tooltip explains why and that Page Up and Page Down still step frames.
 
 Everything else in the shell is static, so there is nothing further for the
-setting to suppress yet.
+setting to suppress yet. The blinking text cursor has its own switch, **Stop the
+text cursor blinking**, since some readers want the cursor still without losing
+the other motion cues.
 
 The window title names the current page and project ("Levels — Foundry —
 VibeStudio"), which task bars and window switchers show and a screen reader
@@ -1438,6 +1475,21 @@ reads with the window, so the status bar no longer repeats the page name on
 every switch.
 
 ## Keyboard, Screen Reader, And Assistive Tool Support
+
+The Levels sidebars (`StudioSidebar`) are tab bars and pages Qt already
+exposes: each tab has its page's title and description as its accessible name
+and tooltip, with its count, and every tab has a **Show** command in command
+search for keys of the user's own. Section headings are buttons that report
+expanded or collapsed state, toggle with <kbd>Enter</kbd>, <kbd>Space</kbd>,
+<kbd>Left</kbd> and <kbd>Right</kbd> (mirrored in right-to-left layouts), and
+keep focus where it was. Optional captions name each tab under its glyph for
+anyone who prefers words to icons. In right-to-left languages the sidebars
+swap sides with the views. Shape tiles, filter boxes and the Transform fields
+carry accessible names and tooltips; the counts on filters and badges are
+text, not colour. `studio_sidebar_smoke_test` checks the accessible states,
+keys, folding and right-to-left mirroring at 100% and 200% text, and the
+Levels UI suites check the surface controls at 200% with doubled translations
+in right-to-left layout inside the narrower sidebar.
 
 Package menus and toolbar buttons use the same availability policy. Conflicting
 controls remain disabled throughout package work, including selection refreshes,
@@ -1570,6 +1622,18 @@ paths, AI proposal kind/prompt controls, extension discovery roots, summary
 cards, and detail tabs. Visible shader, sprite, code, AI, and extension strings
 route through Qt translation APIs; shader directives, CLI flags, extension IDs,
 file paths, and format identifiers remain stable technical identifiers.
+
+The Materials workbench exposes its node graph to screen readers as a list of
+nodes (`QAccessibleWidget` children), each named by its title and described by
+its subtitle, what feeds it and what it feeds; selection and focus changes are
+announced. The arrow keys follow the graph's wires, Enter moves to the node's
+properties, Delete removes a node and Alt+Up/Alt+Down reorder stages. Ports
+differ by shape as well as colour, library swatches carry shape badges for
+animated and rejected materials, node text scales with the text-size
+preference through the graph zoom, the flow mirrors right to left, and an
+animated preview never starts by itself when reduced motion is on. All
+strings are translatable; engine keywords, node ids and file paths stay
+technical identifiers.
 
 The studio shell's navigation is keyboard-first. The mode rail is a single tab
 stop whose arrow keys, Home, and End move between modes; tool buttons, page
@@ -1961,7 +2025,10 @@ the documented smoke paths for:
 - keyboard-only setup completion, skip, and resume checks;
 - high-contrast dark and high-contrast light preference coverage;
 - text scale checks at 100%, 125%, 150%, 175%, and 200%;
-- pseudo-localization and right-to-left Arabic/Urdu smoke checks;
+- pseudo-localization and right-to-left Arabic, Urdu, Persian, and Hebrew
+  smoke checks;
+- colour-vision palettes, reduced saturation, the thick focus outline, and the
+  thick and steady text cursor;
 - pluralization and translation expansion layout smoke checks;
 - OS-backed TTS test phrase and task-result smoke coverage where the platform
   exposes an engine;
@@ -1981,30 +2048,132 @@ CI additionally runs the shell itself under an offscreen platform plugin with
 a crash in widget construction or painting fails the build rather than waiting
 for a manual pass.
 
+## Accessibility Settings
+
+Settings > **Accessibility** gathers the options below, and Settings >
+**Appearance and Language** holds theme, text scale, density, typeface, text
+spacing, language, and region formats. Every option applies at once, is stored
+with the other preferences, appears in the Settings inspector and
+`--preferences-report`, and can be set from the CLI. The first-run setup's
+Welcome and Access step opens the Accessibility page directly (**Open
+Accessibility Settings**), and command search finds every option's command.
+
+| Option | Choices (default first) | What it does | CLI |
+| --- | --- | --- | --- |
+| Theme | Dark, System, Light, High Contrast Dark, High Contrast Light | System follows the desktop's light or dark scheme and, with Qt 6.10 or later, its high-contrast mode (Windows contrast themes, macOS Increase Contrast, GNOME High Contrast), live as the desktop changes. | `--set-theme` |
+| Text scale | 100% to 200% in 25% steps | Scales every text role, icon, and control; **Larger Text**, **Smaller Text**, and **Reset Text Size** step it from command search. | `--set-text-scale` |
+| Density | Standard, Comfortable, Compact | Target size and spacing; Comfortable gives larger click targets. | `--set-density` |
+| Typeface | System typeface, or any installed family | The interface font, for example Atkinson Hyperlegible, Lexend, or OpenDyslexic when installed. Code keeps its fixed-width font. | `--set-font` |
+| Wider letter and word spacing | off, on | Adds WCAG 1.4.12's spacing: letters 0.12em and words 0.16em further apart. | `--set-text-spacing` |
+| Colour vision | Standard, Red-green safe, Blue-yellow safe, Monochrome | Status colours for protanopia/deuteranopia, tritanopia, or no colour at all (see below). | `--set-color-vision` |
+| Reduce colour saturation | off, on | Softens the accent, selection, and status colours toward grey without changing their contrast. | `--set-reduced-saturation` |
+| Thick focus outline | off, on | A 3px keyboard focus ring on every control, check box, and list, taken out of the padding so text never moves. | `--set-thick-focus` |
+| Thick text cursor | off, on | A 3px text cursor (growing with the text scale) in every field and editor. | `--set-thick-cursor` |
+| Reduce motion | off, on | No rail slide, page fade, marquee progress, model playback, or shimmering dashes (see Reduced Motion). | `--set-reduced-motion` |
+| Stop the text cursor blinking | off, on | A steady cursor everywhere; off restores the platform's blink rate. | `--set-steady-cursor` |
+| Status messages stay | Standard, Three times longer, Until the next message | How long a status bar message that clears itself stays readable (WCAG 2.2.1). | `--set-message-duration` |
+| Announce results to screen readers | on, off | Asks the running screen reader to say when long tasks finish or fail, and what the status bar reports, without moving focus (Qt 6.8 `QAccessibleAnnouncementEvent`; failures are assertive). | `--set-announcements` |
+| Flash the taskbar when background work finishes | on, off | `QApplication::alert` on the window when a long task finishes or fails while another window is in front: a visual signal that needs no sound. | `--set-visual-alerts` |
+| Read status changes aloud | off, on | Speaks the chosen events with the computer's own voices (see OS-Backed Text To Speech). | `--set-tts` |
+| Read | Long tasks that finish, Failures and warnings, Status bar messages | Which events are spoken; the first two by default. | `--set-tts-events` |
+| Voice, rate, pitch, volume | System voice, 0, 0, 100 | The engine's voice and its speaking rate (-10 to 10), pitch (-10 to 10), and volume (0 to 100). **Say Test Phrase** previews them. | `--set-tts-voice`, `--set-tts-rate`, `--set-tts-pitch`, `--set-tts-volume` |
+
+**Read Aloud** (Ctrl+Shift+U, after Microsoft Edge) reads the selected text,
+the current line of an editor, the focused list row, or the focused control's
+name and description, and pressing it again stops; password and key fields are
+never read. **Stop Reading Aloud**, **Accessibility Settings**, and **Toggle
+High Contrast** are commands too, so every option is reachable from the
+keyboard. Access keys are always underlined: the studio's Fusion-based style
+draws them without waiting for Alt.
+
+`vibestudio --cli accessibility report` prints every preference, the speech
+engine, and the languages the system asks for (`--json` for the same fields);
+`accessibility voices` lists the engine's voices with their ids, and
+`accessibility speak <text>` or `accessibility speak --test` speaks with the
+saved voice, rate, pitch, and volume or with `--voice`, `--rate`, `--pitch`,
+and `--volume`.
+
+### Colour Vision
+
+Each colour-vision palette replaces only the state colours (success, warning,
+danger, info) of the chosen theme; text, accent, and focus keep the theme's
+contrast-checked values, and every state keeps its glyph, hatch, or word.
+
+- **Red-green safe** (protanopia, deuteranopia) marks success in blue, as the
+  colour-blind themes of GitHub's Primer design system do, and keeps warning
+  yellow and danger red apart by lightness, since both read as yellows to a
+  red-green dichromat. Info becomes a neutral grey.
+- **Blue-yellow safe** (tritanopia) keeps danger red against a teal success,
+  with a neutral info.
+- **Monochrome** (achromatopsia) turns every chromatic colour into the grey of
+  the same luminance, so contrast is unchanged and states read from lightness,
+  glyph, and word.
+- The chart and timeline ramps follow the same choice: results take the
+  palette's colours and work in progress takes greys of different lightness.
+
+`studio-theme-smoke` checks every theme with every palette: each state colour
+keeps 3:1 against every background of its theme, and a simulation of the
+palette's deficiency (the severity 1.0 matrices of Machado, Oliveira and
+Fernandes, 2009) keeps success, warning, and danger at least 20 CIE76 units
+apart. The standard palette fails that test for red-green readers, which is
+why the alternatives exist. Reduced saturation and monochrome mix colours with
+their equal-luminance grey in linear light, so every WCAG ratio the themes were
+tuned for holds; the test checks that too.
+
 ## OS-Backed Text To Speech
 
-**Status: preference only. No speech engine is wired up.**
+**Status: implemented with the platform's own engines; Windows verified.**
 
-`textToSpeechEnabled` is stored in `src/core/studio_settings.*`, shown as a
-checkbox in preferences, reported by the CLI, and settable with `--set-tts`.
-Nothing reads it back to speak. The build does not link `Qt TextToSpeech`, and
-no `QTextToSpeech` instance exists anywhere in `src/`. Every target below is
-therefore still outstanding, including the preferences test phrase.
+`src/app/studio_speech.*` speaks through the speech engine the operating
+system provides, so no voice data ships with the studio and nothing leaves the
+machine:
 
-VibeStudio should use OS-backed TTS through Qt TextToSpeech where available.
-TTS should be useful without becoming noisy or mandatory.
+| Platform | Engine | Voices | Rate, pitch, volume |
+| --- | --- | --- | --- |
+| Windows | Windows Speech API (SAPI 5) through COM | Desktop and OneCore voices from both registry categories | All three; pitch through SAPI's `<pitch>` markup |
+| macOS | `say` | `say -v ?` | Rate only; pitch and volume follow the system voice settings |
+| Linux and other Unix | Speech Dispatcher (`spd-say`), else eSpeak NG or eSpeak | `spd-say -L`, `espeak-ng --voices` | All three |
 
-Initial TTS targets:
+The engine starts the first time speech is used or the Accessibility page is
+shown, so a session that never speaks never pays for it. When no engine is
+found, Settings says why and how to get one, `accessibility voices` exits with
+the unavailable code, and every message still has its visual or log
+equivalent. `VIBESTUDIO_SPEECH_ENGINE` picks an engine by name (`sapi`, `say`,
+`spd-say`, `espeak-ng`, `espeak`), turns speech off (`none`), or selects the
+silent `log` engine the tests use, which records what would be said.
 
-- [ ] Read selected task summaries, compiler errors, package validation issues,
-  AI proposals, and setup guidance.
-- [ ] Announce long-running task completion or failure when enabled.
-- [ ] Let users select voice, rate, pitch, volume, and enabled event categories
+What is spoken, when **Read status changes aloud** is on:
+
+- **Long tasks that finish**: an Activity task that completes after running
+  for 1.5 seconds or more, with its title, state, and result.
+- **Failures, warnings, and cancellations**: any task that ends that way,
+  however short.
+- **Status bar messages**: off by default. A burst of messages settles for
+  450 ms first, only its last message is read, and the same words are never
+  read twice running.
+- Anything asked for with **Read Aloud**, whether or not the events are on.
+
+Each outcome is spoken once, start-up's own tasks are not read, and a newer
+message cuts off an older one (Speech Dispatcher, which a desktop screen reader
+may share, is never told to cancel other programs' speech). Screen reader
+announcements and taskbar alerts follow the same task outcomes.
+
+- [x] Read selected task summaries, compiler errors, package validation issues,
+  AI proposals, and setup guidance: through task outcomes and status messages,
+  and **Read Aloud** for anything focused or selected.
+- [x] Announce long-running task completion or failure when enabled.
+- [x] Let users select voice, rate, pitch, volume, and enabled event categories
   where the OS engine exposes them.
-- [ ] Provide a test phrase in setup and preferences.
-- [ ] Keep visual/log equivalents for every spoken message.
-- [ ] Never send private project content to cloud voice services unless the user
-  explicitly chooses a cloud connector for that task.
+- [x] Provide a test phrase in setup and preferences (**Say Test Phrase**, and
+  `accessibility speak --test`).
+- [x] Keep visual/log equivalents for every spoken message.
+- [x] Never send private project content to cloud voice services: only the
+  local engine is driven.
+
+The macOS and Linux engines are driven as separate programs and have only been
+checked by code review on this machine; Windows SAPI is exercised with real
+voices at volume 0 and with the silent engine in `studio-speech-smoke` and the
+shell interaction checks.
 
 ## Localization Goals
 
@@ -2024,24 +2193,91 @@ Engineering requirements:
   `QTranslator` at start-up.
 - [x] Set the application layout direction from the selected locale, so Arabic
   and Urdu start the shell right-to-left.
-- [ ] Audit each surface — including the painted charts and map viewport, which
-  do not mirror automatically — under a right-to-left locale. So far the
-  activity timeline mirrors its rows (state glyph and title lead from the
-  right, time and duration trail on the left, duration bars grow from the
-  right), and the notice bar and loading strips paint their state edge on the
-  leading side. The timeline's painted text is first-strong isolated, so
-  untranslated English keeps its ellipsis at its end and a duration reads
-  "0 ms", not "ms 0". Its state glyph column widens with the text size, so a
-  200% glyph is neither clipped nor pressed against the title.
-  `studio-charts-smoke` compares left-to-right and right-to-left renders of
-  the same timeline rows at 100% and 200% text, and `ui-primitives-smoke`
-  checks the notice edge and margins in both directions. The composition and
-  pipeline charts still lay out left to right.
+- [ ] Audit each surface — including the map viewport, which does not mirror
+  automatically — under a right-to-left locale. So far all three painted
+  charts mirror. Activity timeline rows lead with their state glyph and title
+  on the right, trail with time and duration on the left, and grow duration
+  bars from the right. The pipeline chart runs from the right: the source box
+  is on the right, arrows and wrap stubs point left, and each box's glyph,
+  label, badge, and active-stage marker lead from its right edge. The
+  composition bar fills from the right, and its legend flows from the right
+  with each swatch leading its label. Clicks, hover, and the Left and Right
+  keys follow the drawn order. The notice bar and loading strips paint their
+  state edge on the leading side, and the mode rail paints its divider on its
+  trailing edge, beside the page, where a style sheet border-right stayed at
+  the window's edge. Its pin and mode glyphs sit as far from its outer edge as
+  they do left to right, folded or open: neither layout margins nor style
+  sheet padding mirror, so the pin's row swaps its margins (12 px leading,
+  8 px trailing) by direction and the entries are padded 7 px on both sides;
+  right to left, the pin also places its own icon, because a tool button
+  rounds a centred icon's odd spare pixel to the left. The Activity, Inspector,
+  and Assistant panels dock on the trailing side, the left, across the page
+  from the rail, which keeps the window's right edge; `QMainWindow` keeps its
+  dock areas by side, so the shell picks the area by direction
+  (`trailingDockArea()` in `studio_docks`). The settings keep the window state
+  as a left-to-right window lays it out, and a right-to-left session mirrors it
+  (`windowStateForDirection()`), so panels keep their side of the page
+  whichever language saved them: the default arrangement opens on the left, a
+  panel the user moved beside the rail stays beside it, panels side by side
+  along the bottom swap order, tab groups keep their tabs and the one in front,
+  and floating panels keep their place on the screen. Reset Layout docks the
+  panels on the left, and a change of direction under a running window mirrors
+  them. Each panel's title bar keeps the title's wide margin on its leading
+  side, and the Inspector's toggles and a floating panel's dock button show a
+  sidebar on the left. Painted chart text is first-strong isolated,
+  so untranslated English keeps its ellipsis at its end and a number keeps its
+  unit after it ("0 ms", not "ms 0"). The timeline's and pipeline's state glyph
+  columns widen with the text size, so a 200% glyph is neither clipped nor
+  pressed against its text, and a pipeline box widens with its glyph column so
+  the label keeps its room. `studio-charts-smoke` compares left-to-right and
+  right-to-left renders of all three charts at 100% and 200% text and checks
+  where clicks land. It paints them with `grab()`, which starts each painter in
+  the application's layout direction as on-screen painting does (`render()`
+  into an image starts it in the widget's), so a chart that never sets its
+  painter's direction fails. `ui-primitives-smoke` checks the notice edge and
+  margins, that the rail's divider sits beside the page, and the panel title
+  bar's margins, in both directions. It also mirrors a saved window state with
+  a tab group, a closed panel, a floating one, panels side by side, a corner,
+  and a tool bar, checks that each lands where a mirrored window puts it, and
+  that mirroring twice gives back the same bytes. `shell-interaction-smoke`
+  turns the shell's direction both ways with its panels open, with one moved
+  beside the rail, and through Reset Layout. `ui-primitives-smoke` also turns
+  the rail right to left, folded and open, pinned or not, at 100% and 200%
+  text, and checks that its pin and glyphs keep their distance from its outer
+  edge; it turns the application too, because a leading glyph aligns by the
+  application's direction. A Qt 6.10.1 offscreen audit on 2026-10-07 compared
+  English snapshots with horizontally flipped Arabic frames at 1600 × 1000,
+  including the shell's seven menus opened by a scratch driver. The asymmetric
+  `QMenu::item` padding already preserves its icon and text columns, and
+  `studioToolBar` already mirrors its child positions; neither rule needed a
+  change. The `runCommand` buttons' contents were 2 px too far from their
+  leading edge. Their padding now swaps only for `layoutDirection="1"`, with
+  a re-polish on `LayoutDirectionChange`; their widths and LTR padding stay
+  the same. `searchField` is not currently assigned to a shell field; a probe
+  with it assigned confirms the base 8 px horizontal padding and the focused
+  content rectangle already mirror, including a thick focus ring. The command
+  search's custom painter already places its own leading and trailing insets.
+  `ui-primitives-smoke` checks the four audited rules at 100% dark and 200%
+  high-contrast light, on startup, live direction changes, and return to LTR,
+  changing the application direction too. An A/B build linked the original
+  theme object ahead of the same app library and ran alongside the fix with
+  the same project and settings paths: all 16 LTR PNGs were byte-identical.
+  Ordinary icon-only tool buttons still have Qt's separate 1 px centring
+  rounding offset; this audit does not extend the rail pin's workaround.
+  Still to mirror: the Levels inspector's own tab
+  shows a sidebar on the right (the `inspector` glyph) though its pane moves
+  to the left.
 - [ ] Leave expansion room in layouts for longer translated text.
 - [ ] Keep file formats, technical identifiers, paths, compiler flags, and code
   snippets untranslated unless they are explanatory prose.
-- [ ] Allow language selection in setup and preferences, with a restart prompt
-  only if live switching is not yet implemented.
+- [x] Allow language selection in setup and preferences, with a restart prompt
+  only if live switching is not yet implemented. The Language list (Settings >
+  Appearance and Language, reached from the setup's Welcome and Access step)
+  starts with **System language**, the default, then every language by its
+  name in the interface language and its own name. Choosing a language other
+  than the running one shows a notice with **Restart Now**, which closes
+  through the usual save prompts and starts the studio again in that language
+  with the session reopened.
 - [x] Provide pseudo-localization and right-to-left test modes.
 
 ### Translation Context
@@ -2125,8 +2361,13 @@ VibeStudio translator, then searches these directories in order:
 5. `<application dir>/../../i18n` (the portable package layout);
 6. `<working directory>/i18n`.
 
-Within each directory it tries `vibestudio_<requested>.qm`, then the normalized
-target id, then the base language, so `pt_BR` falls back to `pt`. The source
+The requested language is first resolved to a target (`system` to the
+operating system's language, `zh-TW` to `zh-Hant`, `es-MX` to `es-419`, and so
+on; see [Supported Languages And Regions](#supported-languages-and-regions)).
+Within each directory it tries `vibestudio_<target>.qm`, then the base
+language, so `es_419` falls back to `es`. File names always use underscores
+(`vibestudio_pt_BR.qm`); until October 2026 the loader looked for the hyphenated
+id (`vibestudio_pt-BR.qm`), so no regional catalog could ever load. The source
 language (`en` or an empty locale) installs `vibestudio_en.qm`, which holds only
 English plural forms (see below), and skips Qt's own catalogs. For any other
 language, Qt's `qtbase_<locale>.qm` is installed alongside the studio catalog so
@@ -2141,7 +2382,7 @@ prints a message and the application runs in the source language.
 
 Portable packaging discovers those compiled catalogs from the selected Meson
 build and includes them in its checksums and ZIP. Release artifact steps pass
-`--compiled-translations <builddir>/i18n`, requiring all 21 files before replacing
+`--compiled-translations <builddir>/i18n`, requiring all 48 files before replacing
 an existing package. The `compiledLocalization` manifest field distinguishes
 complete, partial and unavailable compiled sets. Catalog availability is
 separate from translation completeness; see [Packaging](PACKAGING.md).
@@ -2157,11 +2398,37 @@ review or native assistive-technology acceptance.
 locales — including ones outside the shipped target set — and is likewise called
 from `main()`.
 
-Both of these run once, at start-up. Changing the language in preferences
-updates `QLocale::setDefault()` immediately, which changes number, date, and
-size formatting, but it does **not** reinstall the translator or flip the layout
-direction, and the shell does not yet show a restart prompt. That is why the
-language-selection item above is still unticked.
+**Han-script fonts.** Chinese, Japanese, and Korean share the Han characters
+but draw many of them differently, and a font made for one may lack another's
+forms. Qt picks a fallback font for a script by the operating system's
+language, so a Japanese interface on an English system could take its kanji
+from a Chinese or Korean font: the wrong shapes, or empty boxes. For a `ja`,
+`zh-Hans`, `zh-Hant`, or `ko` interface, `installStudioTranslations()` puts
+that language's own interface fonts ahead of the platform's fallback for its
+scripts (`QFontDatabase::addApplicationFallbackFontFamily`, Qt 6.8 and later):
+Yu Gothic UI, Meiryo UI, Hiragino Sans, or Noto Sans CJK JP for Japanese;
+Microsoft YaHei UI, PingFang SC, or Noto Sans CJK SC for Simplified Chinese;
+Microsoft JhengHei UI, PingFang TC, or Noto Sans CJK TC for Traditional
+Chinese; Malgun Gothic, Apple SD Gothic Neo, or Noto Sans CJK KR for Korean;
+whichever are installed (`interfaceLanguageFontFamilies()` lists them). Other
+languages keep the platform's fallback. Snapshot runs on the offscreen
+platform also load the TrueType collections (`.ttc`) in `QT_QPA_FONTDIR`,
+which Qt's offscreen font database skips; Windows keeps its Chinese,
+Japanese, and Indic interface fonts in collections, so without them those
+snapshots showed empty boxes.
+
+Both of these run once, at start-up: strings are translated as widgets are
+built, so a new language takes effect after a restart, which Settings offers
+(see the language-selection item above). `activeInterfaceLanguage()` reports
+the language the running window was built in.
+
+**Region formats** are chosen apart from the language: **System regional
+settings** (the default, the operating system's own number, date, and time
+conventions), **Match the interface language**, or any of the roughly 900
+regional locales Qt knows, each listed by its own name (`Deutsch (Schweiz)`)
+with a sample of how it writes numbers, dates, and times. The choice is applied
+through `QLocale::setDefault()` at start-up and as soon as it changes, so
+English menus can show Swiss dates. `--set-region` sets it from the CLI.
 
 ### Catalog Contents
 
@@ -2185,11 +2452,11 @@ fill in.
 `python scripts/extract_translations.py --write` runs lupdate over `src/` into
 every catalog, with relative source locations and `-no-obsolete`. As a result,
 each `i18n/vibestudio_*.ts` file holds every extracted message under its context,
-marked `type="unfinished"`. `lrelease` skips unfinished messages, so a compiled
-`.qm` still resolves almost nothing. The UI therefore renders in the source
-language even when a translator is installed and the layout direction has
-flipped. Treat right-to-left runs as layout smoke tests, not as localized
-builds.
+marked `type="unfinished"`. `lrelease` compiles a message only when it has
+text: an empty unfinished message is skipped, but an unfinished message that
+carries a draft is compiled (the build does not pass `-nounfinished`), so
+drafts show in the interface while Qt Linguist still marks them for review.
+The localization report counts those drafts apart (`draftedCount`).
 
 After adding or changing strings, refresh the catalogs with
 `extract_translations.py --write` and then `english_plurals.py --write`, both
@@ -2203,8 +2470,9 @@ single pseudo-translated sample.
 
 The active localization scaffold lives in `src/core/localization.*` and is
 shared by preferences, tests, CLI reports, and diagnostic bundles. It defines
-the 20-language target registry, normalizes locale IDs, identifies Arabic and
-Urdu as right-to-left smoke targets, generates pseudo-localized and expansion
+the 47-language target registry, resolves regional and legacy locale IDs and
+the system language, lists the region formats, identifies Arabic, Urdu,
+Persian, and Hebrew as right-to-left targets, generates pseudo-localized and expansion
 stress samples, emits `QLocale` formatting and pluralization samples, checks
 expanded text against representative shell layout budgets, resolves the catalog
 root and the ordered `.qm` candidates for a locale, reports which `.ts`/`.qm`
@@ -2216,40 +2484,81 @@ from a translator", so a stub catalog cannot read as a pass.
 see (see Translation Context). It then dry-runs Qt `lupdate` against the source
 tree and catalogs, so extraction drift is visible before release.
 
-## Initial Localization Set
+## Supported Languages And Regions
 
-The initial target set covers 20 predominant world languages by total speaker
-reach, global distribution, development relevance, and writing-system coverage.
-The list should be reviewed periodically against sources such as the
-[Ethnologue 200](https://www.ethnologue.com/insights/ethnologue200/) and real
-user demand.
+VibeStudio's interface targets 47 languages. A language is on the list when it
+meets at least one of these tests:
 
-| Code | Language | Notes |
-| --- | --- | --- |
-| en | English | Source language and fallback. |
-| zh-Hans | Chinese, Simplified | Mandarin-focused Simplified Chinese UI. |
-| hi | Hindi | Devanagari script coverage. |
-| es | Spanish | Global Spanish localization. |
-| fr | French | Global French localization. |
-| ar | Arabic | Right-to-left layout and Arabic-script validation. |
-| bn | Bengali | Bengali script coverage. |
-| pt-BR | Portuguese, Brazil | Largest Portuguese localization target. |
-| ru | Russian | Cyrillic script coverage. |
-| ur | Urdu | Right-to-left Arabic-script validation. |
-| id | Indonesian | Southeast Asia coverage. |
-| de | German | Long-string layout stress case. |
-| ja | Japanese | CJK layout and line-break validation. |
-| pcm | Nigerian Pidgin | Broad West African reach; fallback strategy may begin with English-adjacent terminology. |
-| mr | Marathi | Devanagari and Indic shaping coverage. |
-| te | Telugu | Telugu script coverage. |
-| tr | Turkish | Locale casing and terminology validation. |
-| ta | Tamil | Tamil script coverage. |
-| vi | Vietnamese | Diacritics and text rendering validation. |
-| ko | Korean | Hangul and CJK-adjacent layout validation. |
+- **Reach:** about 50 million or more total speakers in the
+  [Ethnologue 200](https://www.ethnologue.com/insights/ethnologue200/), with a
+  standard written form used for desktop software.
+- **Game development market:** it is a language PC game stores localize for
+  (the [Steam supported languages](https://partner.steamgames.com/doc/store/localization/languages)
+  list), since VibeStudio's users build and mod games.
+- **Written standard:** one language written two ways in software, where a
+  reader of one cannot be expected to use the other: Simplified and
+  Traditional Chinese, Brazilian and European Portuguese, and Spanish as
+  written in Spain and in Latin America.
+- **Script coverage:** Hebrew, so a right-to-left script other than Arabic's
+  is part of every layout check.
 
-A pseudo-localization catalog ships beside these 20 targets. The pipeline —
-extraction, compilation, installation, locale formatting, and layout direction —
-is proven end to end; the translations themselves are not written yet.
+Spoken varieties without their own written software standard are served by the
+written language their speakers read: Cantonese by Traditional Chinese, Wu by
+Simplified Chinese, Egyptian and Levantine Arabic by Arabic, Bhojpuri by
+Hindi, Western Punjabi (Shahmukhi) by Urdu, and Javanese by Indonesian. Review
+the list against Ethnologue and user requests at each release.
+
+| Code | Language | Native name | Script | Notes |
+| --- | --- | --- | --- | --- |
+| en | English | English | Latin | Source language and fallback. |
+| zh-Hans | Chinese (Simplified) | 简体中文 | Han (Simplified) | Mainland China, Singapore; also Wu. |
+| zh-Hant | Chinese (Traditional) | 繁體中文 | Han (Traditional) | Taiwan, Hong Kong, Macau; also Cantonese. |
+| hi | Hindi | हिन्दी | Devanagari | Also serves Bhojpuri readers. |
+| es | Spanish (Spain) | Español (España) | Latin | Spain and Equatorial Guinea. |
+| es-419 | Spanish (Latin America) | Español (Latinoamérica) | Latin | The Americas and US Spanish. |
+| ar | Arabic | العربية | Arabic | Right-to-left; Modern Standard Arabic. |
+| fr | French | Français | Latin | France, Canada, Belgium, Switzerland, Africa. |
+| bn | Bengali | বাংলা | Bengali | Bangladesh and India. |
+| pt-BR | Portuguese (Brazil) | Português (Brasil) | Latin | |
+| pt-PT | Portuguese (Portugal) | Português (Portugal) | Latin | Portugal and Lusophone Africa. |
+| ru | Russian | Русский | Cyrillic | |
+| id | Indonesian | Bahasa Indonesia | Latin | Also serves Javanese readers. |
+| ur | Urdu | اردو | Arabic (Nastaliq) | Right-to-left. |
+| de | German | Deutsch | Latin | Long-string layout stress case. |
+| ja | Japanese | 日本語 | Han, Kana | CJK line breaking. |
+| pcm | Nigerian Pidgin | Naijá | Latin | West Africa. |
+| mr | Marathi | मराठी | Devanagari | |
+| vi | Vietnamese | Tiếng Việt | Latin | Stacked diacritics. |
+| te | Telugu | తెలుగు | Telugu | |
+| ha | Hausa | Hausa | Latin | West Africa. |
+| tr | Turkish | Türkçe | Latin | Dotted and dotless i casing. |
+| pa | Punjabi | ਪੰਜਾਬੀ | Gurmukhi | India. |
+| sw | Swahili | Kiswahili | Latin | East Africa. |
+| fil | Filipino | Filipino | Latin | Philippines (standard Tagalog). |
+| ta | Tamil | தமிழ் | Tamil | India, Sri Lanka, Singapore. |
+| fa | Persian | فارسی | Arabic | Right-to-left. |
+| ko | Korean | 한국어 | Hangul | |
+| th | Thai | ไทย | Thai | No spaces between words. |
+| ms | Malay | Bahasa Melayu | Latin | Malaysia, Brunei, Singapore. |
+| it | Italian | Italiano | Latin | |
+| gu | Gujarati | ગુજરાતી | Gujarati | |
+| am | Amharic | አማርኛ | Ethiopic | Horn of Africa. |
+| kn | Kannada | ಕನ್ನಡ | Kannada | |
+| pl | Polish | Polski | Latin | Three plural forms. |
+| uk | Ukrainian | Українська | Cyrillic | |
+| ro | Romanian | Română | Latin | |
+| nl | Dutch | Nederlands | Latin | Netherlands and Belgium. |
+| el | Greek | Ελληνικά | Greek | |
+| hu | Hungarian | Magyar | Latin | |
+| cs | Czech | Čeština | Latin | |
+| sv | Swedish | Svenska | Latin | |
+| bg | Bulgarian | Български | Cyrillic | |
+| he | Hebrew | עברית | Hebrew | Right-to-left. |
+| da | Danish | Dansk | Latin | |
+| fi | Finnish | Suomi | Latin | |
+| nb | Norwegian Bokmål | Norsk bokmål | Latin | Also chosen for `no` and `nn`. |
+
+A pseudo-localization catalog (`en_XA`) ships beside these targets.
 
 ## Testing And Acceptance
 
@@ -2685,6 +2994,14 @@ move, turn, mirror, connected selection, resize and numeric rotation, exact undo
 save, accessible control roles/focus metadata and 100%/200% high-contrast RTL
 renders. Native keyboard and screen-reader acceptance is still required.
 
+UDMF thing duplication uses the same named **Duplicate Selection** and
+**Duplicate with Offset…** actions. The placement dialog exposes six decimal
+places on XYZ controls and enables height for UDMF, while retaining whole-unit
+controls for binary Doom/Hexen. Shared preview, count, progress and cancellation
+controls retain their accessible names, roles and focus behaviour. The UDMF
+UI suite also exercises these controls at 100% and 200% high-contrast RTL,
+confirms fractional-height previews and verifies exact shell duplication undo.
+
 ## Workspace and asset-format cohesion
 
 The Level texture-check status keeps Qt's native text-derived accessible name,
@@ -2798,3 +3115,21 @@ translation contexts. The dedicated Qt UI test exercises inspector edits,
 history, high contrast, RTL and expanded translations; owned renders are checked
 at actual 1x and 2x display scale. Native platform/screen-reader acceptance
 remains part of the release gate. See [the workflow](LEVEL_MODEL_APPEARANCE.md).
+
+## Modeller Profiles And Layout
+
+The Mesh Editor's outliner and property pages sit on the shared `StudioSidebar`,
+so they keep its keyboard order, accessible tab names (also for icon-only tabs),
+folding and right-to-left mirroring. Each of the four view panes has an
+accessible name naming its view ("Top view"), shows that name in its corner, and
+marks the active pane with a border as well as its accent colour. Controls
+profiles change keys and gestures only: every command keeps its menu entry,
+command search (<kbd>F3</kbd> or the profile's key) and keyboard route, and
+**Customise Controls…** lists every binding in labelled tables, reports
+collisions in text, and offers **Reset**. The status line keeps its height
+during a viewport drag, so wrapped translated text cannot cancel the gesture.
+Profile, sidebar and format strings use the `VibeStudioModelControls`,
+`VibeStudioModelSidebar`, `VibeStudioModelSkeleton` and `VibeStudioModelMesh`
+contexts. `model-profiles-ui-smoke` runs each profile at 100% dark and at 200%
+high-contrast light right to left. Real-device keyboard and screen-reader review
+remains part of the [modeller gate](MODELLER_RELEASE.md).

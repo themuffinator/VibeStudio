@@ -186,7 +186,7 @@ int main(int argc, char **argv)
 		const auto tag = [&](int pose) { return *findModelTag(editor->document().mesh(), "tag_weapon", pose); };
 		ok &= expect(preview && mode && table && inspector && name && scope && frame && tool && originX && undo && redo,
 					 "tag authoring exposes the connected controls");
-		inspector->setCurrentIndex(2);
+		editor->showSidebarPage(QStringLiteral("animation"));
 		table->selectAll();
 		press("meshTagUseSelectionCentre");
 		ok &= expect(originX->value() == 0, "new tag origin can use selected geometry bounds");
@@ -333,7 +333,7 @@ int main(int argc, char **argv)
 		tool->setCurrentIndex(0);
 		editor->findChild<QComboBox *>("meshViewPreset")->setCurrentIndex(0);
 		ok &= expect(tests::settleModelViewport(*preview), "attachment evidence view settles");
-		auto *scroll = qobject_cast<QScrollArea *>(inspector->currentWidget());
+		auto *scroll = tests::pageScroll(inspector->currentWidget());
 		scroll->ensureWidgetVisible(name, 0, 60);
 		app.processEvents();
 		const auto evidence = qEnvironmentVariable("VIBESTUDIO_MODELLER_EVIDENCE");

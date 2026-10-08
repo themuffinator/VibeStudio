@@ -93,7 +93,7 @@ on 2026-10-05. This is a capability comparison, not a claim of complete parity.
 |---|---|---|
 | Packages | Folder, PAK, ZIP/PK3/PK4/PKZ, WAD2/WAD3 and Doom WAD readers; supported writers/drafts | SiN SPAK, BFG `.resources`, Quake Live encrypted PK3 and broader nested-container workflows. |
 | Images | Existing idTech codecs plus DDS/FTX/SWL import and DDS/FTX export | SWL native writing and wider conversion combinations; fidelity and target-engine fixtures before claiming parity. |
-| Models | OBJ, MDL, MD2, MD3 geometry and authoring; MDC/MDR/IQM metadata | FM, MDC/MDR/IQM geometry, MD4, SKB/SKD/MDM/GLM, MD5, TAN, ASE, LWO/BLWO. |
+| Models | OBJ, MDL, MD2, MD3, MD5, IQM and ASE geometry and authoring; Hexen II MDL, FM, MDC, MDS, MDM/MDX, MDR, Ghoul 2 GLM/GLA, Half-Life MDL, LWO and KVX reading | MD4, SKB/SKD, TAN and BLWO; writers for the read-only formats. |
 | Audio | PCM/float WAV, digital DMX, native MP3/FLAC/Vorbis decoding and WAV/DMX delivery | IDWAV; Opus remains metadata/backend playback rather than native sample import. |
 | Maps/cinematics | Source-map authoring and BSP inspection | `.proc` geometry, best-effort BSP decompilation, CIN/ROQ decoding/export and video workflows. |
 | Other inspectors | Existing code/shader/script tooling | Demo/navigation/font and additional animation/binary inspectors. |

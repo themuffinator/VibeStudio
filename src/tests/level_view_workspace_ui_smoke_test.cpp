@@ -1,4 +1,5 @@
 #include "app/application_shell.h"
+#include "app/editor_profile_dialog.h"
 #include "app/map_viewport.h"
 #include "app/model_viewport.h"
 #include "app/studio_theme.h"
@@ -8,14 +9,20 @@
 #include <QAction>
 #include <QApplication>
 #include <QComboBox>
+#include <QCheckBox>
 #include <QElapsedTimer>
 #include <QFile>
 #include <QJsonDocument>
+#include <QLineEdit>
+#include <QListWidget>
+#include <QPushButton>
+#include <QTextBrowser>
 #include <QMenu>
 #include <QSplitter>
 #include <QTemporaryDir>
 #include <QTimer>
 #include <QToolButton>
+#include <QToolBar>
 #include <QTranslator>
 #include <cmath>
 #include <iostream>
@@ -190,6 +197,119 @@ int main(int argc, char** argv)
 			}
 			ok &= expect(tests::settleModelViewport(*camera), "restored camera completes its render");
 			capture(root, QStringLiteral("restored-four-views"));
+			// A broad camera above all three plans retains the same editing,
+			// saved-view and focus behaviour as the traditional four-view grid.
+			action("map.layout.camera-above-plans")->trigger(); settle();
+			ok &= expect(upper->count() == 1 && upper->widget(0) == camera && lower->count() == 3,
+				"camera spans the upper row above three plans");
+			ok &= expect(lower->widget(0) == top && lower->widget(1) == front && lower->widget(2) == side,
+				"camera workspace retains ordered top front and side panes");
+			ok &= expect(camera->width() == root->width() && camera->height() > top->height(), "camera receives primary workspace area");
+			LevelViewState cameraWorkspace;
+			ok &= expect(shell.captureLevelViewState(&cameraWorkspace, &error)
+				&& cameraWorkspace.layout == LevelViewLayout::CameraAbovePlans, "new layout captures valid bookmark");
+			for (auto* target : panes) {
+				focus(target); maximize->trigger(); settle();
+				ok &= expect(target->width() == root->width() && target->height() == root->height(), "new layout maximizes each pane");
+				if (target == camera) {
+					ok &= expect(shell.findChild<QComboBox*>(QStringLiteral("levelMapGrid"))->isEnabled()
+						&& shell.findChild<QCheckBox*>(QStringLiteral("levelMapSnap"))->isEnabled(), "camera authoring keeps grid and snap available");
+				}
+				maximize->trigger(); settle();
+			}
+			action("map.toggle3D")->trigger(); settle();
+			ok &= expect(!upper->isVisible() && lower->height() == root->height(), "hidden camera leaves no empty workspace row");
+			action("map.layout.four-views")->trigger(); settle();
+			ok &= expect(upper->isVisible() && top->isVisible(), "layout switch restores hidden upper splitter");
+			ok &= expect(shell.restoreLevelViewState(cameraWorkspace, &error), "camera workspace bookmark restores");
+			settle();
+			ok &= expect(camera->isVisible() && upper->count() == 1 && lower->count() == 3, "bookmark restores new pane arrangement");
+			for (const auto* name : {"levelCreateTools", "levelSelectTools", "levelTransformTools", "levelGeometryTools", "levelSurfaceToolsMenu"}) {
+				auto* button = shell.findChild<QToolButton*>(QString::fromLatin1(name));
+				auto* menu = button && button->defaultAction() ? button->defaultAction()->menu() : nullptr;
+				ok &= expect(button && menu && !menu->actions().isEmpty()
+					&& button->focusPolicy() != Qt::NoFocus && QAccessible::queryAccessibleInterface(button)
+					&& !button->accessibleDescription().isEmpty(), "authoring groups expose accessible keyboard menus");
+			}
+			auto* selectTools = shell.findChild<QToolButton*>(QStringLiteral("levelSelectTools"));
+			auto* selectionMenu = selectTools && selectTools->defaultAction() ? selectTools->defaultAction()->menu() : nullptr;
+			ok &= expect(selectionMenu && selectionMenu->actions().contains(action("map.selectNone")), "authoring shelf shares live commands");
+			if (selectionMenu) {
+				bool opened = false;
+				const auto connection = QObject::connect(selectionMenu, &QMenu::aboutToShow, &shell, [&] { opened = true; });
+				QTimer::singleShot(20, selectionMenu, &QMenu::close);
+				selectTools->showMenu();
+				QObject::disconnect(connection);
+				ok &= expect(opened, "authoring button opens its default action menu");
+			}
+			action("map.selectNone")->trigger();
+			ok &= expect(shell.levelDocument().selection.isEmpty()
+				&& !action("map.duplicateWithOffset")->isEnabled(), "shelf command selection updates transform enablement");
+			action("map.selectAll")->trigger();
+			ok &= expect(serializeLevelMap(shell.levelDocument()).bytes == bytes, "workspace and shelf preserve map contents");
+			auto* authoringBar = shell.findChild<QToolBar*>(QStringLiteral("levelAuthoringBar"));
+			authoringBar->setFixedWidth(180); settle();
+			auto* overflow = authoringBar->findChild<QToolButton*>(QStringLiteral("qt_toolbar_ext_button"));
+			ok &= expect(overflow && overflow->isVisible() && overflow->menu(), "narrow authoring shelf exposes overflow");
+			for (auto* groupedAction : authoringBar->actions()) {
+				auto* control = authoringBar->widgetForAction(groupedAction);
+				ok &= expect((control && control->isVisible()) || (overflow && overflow->menu() && overflow->menu()->actions().contains(groupedAction)),
+					"every authoring menu remains reachable at narrow widths");
+			}
+			authoringBar->setMinimumWidth(0); authoringBar->setMaximumWidth(QWIDGETSIZE_MAX); settle();
+			ok &= expect(tests::settleModelViewport(*camera), "camera authoring workspace render completes");
+			capture(&shell, QStringLiteral("camera-authoring-workspace"));
+			action("map.layout.camera-beside-plans")->trigger(); settle();
+			ok &= expect(root->orientation() == Qt::Horizontal && lower->orientation() == Qt::Vertical
+				&& upper->count() == 1 && lower->count() == 3, "wide workspace stacks three plans beside the camera");
+			ok &= expect(camera->height() == root->height() && camera->width() > top->width(), "wide camera occupies primary column");
+			LevelViewState wideWorkspace;
+			ok &= expect(shell.captureLevelViewState(&wideWorkspace, &error)
+				&& wideWorkspace.layout == LevelViewLayout::CameraBesidePlans, "wide workspace captures valid bookmark");
+			root->setSizes({1000, 600}); lower->setSizes({300, 250, 200}); settle();
+			const auto wideSizes = root->sizes();
+			const auto planSizes = lower->sizes();
+			for (auto* target : panes) {
+				focus(target); maximize->trigger(); settle();
+				ok &= expect(target->width() == root->width() && target->height() == root->height(), "wide layout maximizes every pane");
+				maximize->trigger(); settle();
+				ok &= expect(root->sizes() == wideSizes && lower->sizes() == planSizes, "wide layout restores exact pane proportions");
+			}
+			action("map.toggle3D")->trigger(); settle();
+			ok &= expect(!upper->isVisible() && lower->width() == root->width(), "hidden camera leaves no empty column");
+			action("map.toggle3D")->trigger(); settle();
+			ok &= expect(tests::settleModelViewport(*camera), "wide camera render completes");
+			capture(&shell, QStringLiteral("camera-beside-plans"));
+			action("map.layout.four-views")->trigger(); settle();
+			ok &= expect(root->orientation() == Qt::Vertical && lower->orientation() == Qt::Horizontal, "classic layout resets splitter orientation");
+			ok &= expect(shell.restoreLevelViewState(wideWorkspace, &error), "wide bookmark restores");
+			settle();
+			ok &= expect(root->orientation() == Qt::Horizontal && camera->isVisible(), "wide bookmark restores orientation and visibility");
+			action("map.layout.camera-beside-plans")->trigger(); settle();
+			const auto priorProfile = settings.selectedEditorProfileId();
+			QTimer::singleShot(0, &shell, [&] {
+				auto* browser = shell.findChild<EditorProfileDialog*>();
+				if (!expect(browser != nullptr, "profile browser opens from controls")) { ok = false; return; }
+				auto* search = browser->findChild<QLineEdit*>(QStringLiteral("editorProfileSearch"));
+				auto* choices = browser->findChild<QListWidget*>(QStringLiteral("editorProfileChoices"));
+				auto* preview = browser->findChild<QTextBrowser*>(QStringLiteral("editorProfilePreview"));
+				auto* use = browser->findChild<QPushButton*>(QStringLiteral("editorProfileApply"));
+				ok &= expect(browser->layoutDirection() == shell.layoutDirection(), "profile browser follows workspace reading direction");
+				ok &= expect(choices->count() == editorProfileDescriptors().size(), "browser includes every configured profile");
+				search->setText(QStringLiteral("no such editor xyz"));
+				ok &= expect(!use->isEnabled() && browser->selectedProfileId().isEmpty(), "empty search cannot apply stale selection");
+				search->setText(QStringLiteral("TB"));
+				ok &= expect(browser->selectedProfileId() == QStringLiteral("trenchbroom") && use->isEnabled(), "profile aliases are searchable");
+				ok &= expect(preview->toPlainText().contains(QStringLiteral("TrenchBroom"))
+					&& !preview->accessibleName().isEmpty() && QAccessible::queryAccessibleInterface(choices), "profile preview exposes accessible controls");
+				ok &= expect(settings.selectedEditorProfileId() == priorProfile, "browsing does not mutate settings");
+				settle(); capture(browser, QStringLiteral("profile-browser"));
+				use->click();
+			});
+			action("levelBrowseProfiles")->trigger(); settle();
+			ok &= expect(settings.selectedEditorProfileId() == QStringLiteral("trenchbroom"), "profile browser applies through shared settings");
+			ok &= expect(settings.levelViewLayoutPreference() == QStringLiteral("camera-beside-plans"), "profile choice preserves explicit layout override");
+			action("map.layout.four-views")->trigger(); settle();
 			focus(front); maximize->trigger(); action("map.viewSide")->trigger(); settle();
 			ok &= expect(!maximize->isChecked() && side->isVisible() && side->hasFocus(), "projection change restores and focuses destination pane");
 			focus(camera); maximize->trigger(); action("map.clipTool")->trigger(); settle();

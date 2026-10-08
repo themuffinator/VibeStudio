@@ -754,6 +754,23 @@ void ModelViewport::frameModel()
 	announceView();
 }
 
+void ModelViewport::frameBounds(const ModelVec3& low, const ModelVec3& high)
+{
+	if (!m_hasMesh || !vecIsFinite(low) || !vecIsFinite(high)) { return; }
+	m_center = makeVec((double(low.x) + high.x) * .5, (double(low.y) + high.y) * .5, (double(low.z) + high.z) * .5);
+	m_radius = std::max(.5, .5 * std::hypot(double(high.x) - low.x, double(high.y) - low.y, double(high.z) - low.z));
+	if (m_perspective) {
+		frameModelPerspective();
+		return;
+	}
+	const double viewWidth = width() > 64 ? static_cast<double>(width()) : 640.0;
+	const double viewHeight = height() > 64 ? static_cast<double>(height()) : 480.0;
+	m_scale = clampScale(kFitFraction * std::min(viewWidth, viewHeight) / std::max(m_radius, 1e-3));
+	m_pan = QPointF();
+	invalidateProjection();
+	announceView();
+}
+
 void ModelViewport::setOrbit(double yawDegrees, double pitchDegrees)
 {
 	if (m_perspective) {
@@ -2072,6 +2089,7 @@ void ModelViewport::paintEvent(QPaintEvent*)
 	if (!m_hasMesh) {
 		if (m_brushDrawTool) { paintBrushDraw(painter); paintHud(painter,palette); }
 		else { paintEmptyState(painter, palette); }
+		if (m_overlayPainter) { m_overlayPainter(painter); }
 		paintOverlay(painter, palette);
 		return;
 	}
@@ -2097,6 +2115,11 @@ void ModelViewport::paintEvent(QPaintEvent*)
 	}
 	paintBrushDraw(painter);
 	if (!m_meshTriangles.isEmpty() || m_brushDrawTool) { paintHud(painter, palette); }
+	if (m_overlayPainter) {
+		painter.save();
+		m_overlayPainter(painter);
+		painter.restore();
+	}
 	paintOverlay(painter, palette);
 }
 
@@ -2104,6 +2127,7 @@ void ModelViewport::paintHud(QPainter& painter, const Palette& palette) const
 {
 	const QString separator = QStringLiteral("  %1  ").arg(QChar(0x00b7));
 	QStringList left;
+	if (!m_viewLabel.isEmpty()) { left << m_viewLabel; }
 	if (m_perspective) { left << tr("Camera, %1%2 view").arg(qRound(m_fov)).arg(QChar(0x00b0)); }
 	left << effectiveRenderModeName();
 	if (isResizingSelection()) { left << selectionResizeSummary(false); }

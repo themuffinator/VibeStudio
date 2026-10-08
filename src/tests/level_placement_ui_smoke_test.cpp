@@ -14,6 +14,7 @@
 #include <QPushButton>
 #include <QScrollArea>
 #include <QScrollBar>
+#include <QSpinBox>
 #include <QTemporaryDir>
 #include <QTimer>
 #include <QTranslator>
@@ -118,6 +119,18 @@ int main(int argc, char** argv) {
 				   QAccessible::queryAccessibleInterface(coordinate)->role() == QAccessible::SpinBox,
 			   "accessible coordinate control");
 		expect(dialog.findChild<QScrollArea*>()->horizontalScrollBar()->maximum() == 0, "expanded controls fit");
+		auto* copies = dialog.findChild<QSpinBox*>("placementCopies");
+		expect(copies && copies->focusPolicy() != Qt::NoFocus && !copies->accessibleDescription().isEmpty() &&
+			copies->layoutDirection() == Qt::LeftToRight && copies->maximum() == kLevelMapMaxArrayCopies,
+			"accessible bounded copy-count control");
+		dialog.setCopies(3);
+		expect(until([&] { return dialog.isReady(); }) && dialog.previewValid() &&
+			dialog.previewDocument().brushes.size() == source.brushes.size() * 4 &&
+			dialog.previewDocument().brushes.last().mins.x == source.brushes.last().mins.x + 192 &&
+			dialog.previewDocument().undoStack.size() == source.undoStack.size() + 1,
+			"array preview uses cumulative offsets and one undo");
+		dialog.setCopies(1);
+		expect(until([&] { return dialog.isReady(); }) && dialog.previewValid(), "single duplicate preview restored");
 		expect(tests::settleModelViewport(*preview), "render settled");
 		const auto capture = qEnvironmentVariable("VIBESTUDIO_TEST_CAPTURE_DIR");
 		if (!capture.isEmpty()) {

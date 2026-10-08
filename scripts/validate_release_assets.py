@@ -151,7 +151,9 @@ def validate_portable_targets(root: Path, binary: Path, temp_root: Path) -> list
             "all",
         ],
         cwd=root,
-        timeout=60,
+        # Three targets each copy and zip ~160 MB of translation catalogs; a
+        # busy machine needs more than a minute for that alone.
+        timeout=300,
     )
 
     package_dirs = sorted(path for path in output.iterdir() if path.is_dir())
@@ -175,7 +177,7 @@ def validate_portable_targets(root: Path, binary: Path, temp_root: Path) -> list
             raise RuntimeError(f"License bundle missing from manifest {manifest_path}")
         if manifest.get("localizationCatalogRoot") != "i18n":
             raise RuntimeError(f"Localization catalog root missing from manifest {manifest_path}")
-        if len(manifest.get("includedLocalizationCatalogs", [])) < 21:
+        if len(manifest.get("includedLocalizationCatalogs", [])) < 48:
             raise RuntimeError(f"Localization catalog list incomplete in manifest {manifest_path}")
         for relative in [
             "bin/" + binary.name,

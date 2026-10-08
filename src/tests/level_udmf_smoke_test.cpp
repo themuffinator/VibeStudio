@@ -8,6 +8,7 @@
 #include <QCoreApplication>
 #include <QElapsedTimer>
 #include <QJsonDocument>
+#include <QJsonArray>
 #include <QProcess>
 #include <QTemporaryDir>
 #include <iostream>
@@ -200,6 +201,16 @@ int main(int argc, char** argv) {
 		run(args);
 		expect(loadLevelMap({cliOutput, "MAP01", {}}, &loaded, &error) && loaded.doomVertices[0].x == 32.75, "CLI edit roundtrip", error);
 		run({"package", "validate", cliOutput});
+		const auto arrayOutput = temp.filePath("array-cli.wad");
+		const QStringList arrayArgs{"map", "duplicate", input, "--map-name", "MAP01", "--object", "thing:0",
+			"--delta", "0.375,-0.125,0.25", "--copies", "3", "--output", arrayOutput};
+		run(arrayArgs + QStringList{"--dry-run"});
+		expect(!QFileInfo::exists(arrayOutput), "UDMF array dry-run does not write");
+		const auto arrayReport = run(arrayArgs);
+		expect(arrayReport.value("copies").toArray().size() == 3 && loadLevelMap({arrayOutput, "MAP01", {}}, &loaded, &error)
+			&& loaded.doomThings.size() == 4 && loaded.doomThings.last().x == 65.375 && loaded.doomThings.last().z == 1.25
+			&& loaded.doomUdmf->source.startsWith(f::textmap()) && loaded.doomUdmf->source.count("user_note = \"untouched\";") == 4
+			&& inspectLevelDoomNodes(loaded).state == LevelDoomNodeState::Present, "CLI UDMF thing array roundtrip", error);
 	}
 	return ok ? 0 : 1;
 }

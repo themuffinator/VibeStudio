@@ -148,6 +148,31 @@ int main(int argc, char** argv)
 	view.setBrushDrawTool(true); ok &= expect(view.surfaceTool() == ModelViewportSurfaceTool::None,"drawing replaces painting");
 	ok &= draw(view,2); ok &= expect(!view.updateBrushDraw({std::numeric_limits<double>::quiet_NaN(),0}),"invalid projection rejected");
 	view.finishBrushDraw(true); ok &= expect(requests == cases,"cancelled or invalid drafts never commit");
+	// Sample a genuine rendered surface; moving the camera invalidates its
+	// picking buffer and must never reuse a hit from the preceding view.
+	LevelMapDocument surfaceDocument; QString surfaceError;
+	surfaceDocument.format = LevelMapFormat::QuakeMap;
+	LevelMapCreateRequest surfaceCreate; surfaceCreate.starterRoom = false;
+	ok &= createLevelMap(surfaceCreate,&surfaceDocument,&surfaceError);
+	ok &= addLevelMapBoxBrush(&surfaceDocument,{-64,-64,0,true},{64,64,64,true},QStringLiteral("studio/surface"),nullptr,&surfaceError);
+	const auto surfaceMesh = buildLevelMapPreviewMesh(surfaceDocument);
+	view.setMesh(surfaceMesh.mesh); view.setCameraControls(trenchBroomLevelControls().camera);
+	view.setCameraView({-200,0,32},0,0); view.setBrushDrawTool(true); view.setBrushDrawPlane(2,8,64);
+	ok &= settle(view);
+	const QPointF aim(view.width()*0.5,view.height()*0.5);
+	ok &= expect(view.setBrushDrawPlaneFromSurface(aim) && view.brushDrawAxis() == 0 && view.brushDrawDirection() == -1
+		&& std::abs(view.brushDrawBase()+64) < 1e-6 && view.brushDrawDepth() == 64,"camera surface chooses negative-X wall and outward depth");
+	ok &= expect(view.beginBrushDraw(aim+QPointF(-20,-20)) && view.updateBrushDraw(aim+QPointF(35,35))
+		&& view.brushDrawBox().mins[0] == -128 && view.brushDrawBox().maxs[0] == -64,"surface draft starts on the wall and grows towards the camera");
+	view.finishBrushDraw(false);
+	view.setCameraView({200,0,32},180,0);
+	ok &= expect(!view.setBrushDrawPlaneFromSurface(aim) && view.brushDrawDirection() == -1,"stale render cannot reposition the construction plane");
+	ok &= settle(view);
+	ok &= expect(view.setBrushDrawPlaneFromSurface(aim) && view.brushDrawAxis() == 0 && view.brushDrawDirection() == 1
+		&& std::abs(view.brushDrawBase()-64) < 1e-6,"opposite wall chooses positive-X extrusion");
+	view.setCameraView({200,0,32},0,0); ok &= settle(view);
+	ok &= expect(!view.setBrushDrawPlaneFromSurface(aim) && view.brushDrawBase() == 64,"empty view does not change the construction plane");
+	setup(view,trenchBroomLevelControls()); view.setBrushDrawPlane(2,0,64);
 	Expanded expanded; app.installTranslator(&expanded);
 	applyStudioTheme(app,studioThemeTokens(StudioTheme::HighContrastDark,UiDensity::Standard,200));
 	view.setHighContrast(true); view.setLayoutDirection(Qt::RightToLeft); view.resize(760,650);

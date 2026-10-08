@@ -42,7 +42,8 @@ QWidget *ApplicationShell::buildLevelPreviewStatus()
 	textured->setToolTip(tr("Use package images and static shader previews on brushes, patches and placed models."));
 	const bool showTextures = m_settings.shellLayoutState(QStringLiteral("levelPreviewTextured")) != QByteArrayLiteral("off");
 	textured->setChecked(showTextures);
-	m_levelPreviewTextured = new QAction(this);
+	m_levelPreviewTextured = new QAction(tr("Textures in Camera"), this);
+	m_levelPreviewTextured->setToolTip(textured->toolTip());
 	m_levelPreviewTextured->setCheckable(true);
 	m_levelPreviewTextured->setChecked(showTextures);
 	connect(textured, &QCheckBox::toggled, m_levelPreviewTextured, &QAction::setChecked);
@@ -213,7 +214,7 @@ void ApplicationShell::refreshLevelMap3D()
 			refreshCommandEnablement();
 		};
 	}
-	const bool filtered = m_levelMapViewport && m_levelMapViewport->hiddenCount() > 0;
+	const bool filtered = m_levelMapViewport && (m_levelMapViewport->hiddenCount() > 0 || m_levelMapViewport->filteredCount() > 0);
 	LevelPreviewRequest request;
 	request.document = filtered ? m_levelMapViewport->displayDocument() : m_levelMapDocument;
 	request.options.paletteId = activePaletteId();

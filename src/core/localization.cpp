@@ -7,10 +7,13 @@
 #include <QFile>
 #include <QFileInfo>
 #include <QLocale>
+#include <QRegularExpression>
+#include <QSet>
 #include <QTimeZone>
 #include <QXmlStreamReader>
 
 #include <algorithm>
+#include <iterator>
 #include <utility>
 
 namespace vibestudio {
@@ -117,9 +120,20 @@ struct CatalogCounts {
 	int messages = 0;
 	int translated = 0;
 	int unfinished = 0;
+	// Unfinished messages that already have text.
+	int drafted = 0;
 	int obsolete = 0;
 	int vanished = 0;
 };
+
+// Whether a translation element's content holds any text: plain text, or a
+// plural form that is not empty.
+bool translationHasText(QByteArrayView content)
+{
+	QByteArray text = content.toByteArray();
+	text.replace("<numerusform>", "").replace("</numerusform>", "");
+	return !text.trimmed().isEmpty();
+}
 
 void countTranslationType(QByteArrayView type, CatalogCounts* counts)
 {
@@ -187,7 +201,17 @@ bool scanCatalogCounts(QByteArrayView bytes, CatalogCounts* counts)
 		if (tagEnd < 0 || tagEnd > end) {
 			return false;
 		}
-		countTranslationType(attributeValue(bytes.sliced(translation, tagEnd - translation), "type"), &scanned);
+		const QByteArrayView type = attributeValue(bytes.sliced(translation, tagEnd - translation), "type");
+		countTranslationType(type, &scanned);
+		if (type == QByteArrayView("unfinished") && bytes.at(tagEnd - 1) != '/') {
+			const qsizetype close = bytes.indexOf("</translation>", tagEnd);
+			if (close < 0 || close > end) {
+				return false;
+			}
+			if (translationHasText(bytes.sliced(tagEnd + 1, close - tagEnd - 1))) {
+				++scanned.drafted;
+			}
+		}
 	}
 	if (bytes.count("</message>") != scanned.messages) {
 		return false;
@@ -212,7 +236,11 @@ bool parseCatalogCounts(QIODevice* device, CatalogCounts* counts, QString* error
 				++counts->messages;
 			} else if (inMessage && xml.name() == QLatin1String("translation")) {
 				messageHasTranslation = true;
-				countTranslationType(xml.attributes().value(QStringLiteral("type")).toUtf8(), counts);
+				const QByteArray type = xml.attributes().value(QStringLiteral("type")).toUtf8();
+				countTranslationType(type, counts);
+				if (type == "unfinished" && !xml.readElementText(QXmlStreamReader::IncludeChildElements).trimmed().isEmpty()) {
+					++counts->drafted;
+				}
 			}
 		} else if (xml.isEndElement() && xml.name() == QLatin1String("message")) {
 			if (!messageHasTranslation) {
@@ -261,6 +289,7 @@ TranslationCatalogStatus inspectTranslationCatalog(const QDir& catalogRoot, cons
 	status.messageCount = counts.messages;
 	status.translatedCount = counts.translated;
 	status.unfinishedCount = counts.unfinished;
+	status.draftedCount = counts.drafted;
 	status.obsoleteCount = counts.obsolete;
 	status.vanishedCount = counts.vanished;
 
@@ -276,6 +305,9 @@ TranslationCatalogStatus inspectTranslationCatalog(const QDir& catalogRoot, cons
 		status.issues.push_back(QCoreApplication::translate("VibeStudioLocalization", "%1 %2")
 			.arg(status.unfinishedCount)
 			.arg(quantityLabel(status.unfinishedCount, QCoreApplication::translate("VibeStudioLocalization", "unfinished translation"), QCoreApplication::translate("VibeStudioLocalization", "unfinished translations"))));
+	}
+	if (status.draftedCount > 0) {
+		status.issues.push_back(QCoreApplication::translate("VibeStudioLocalization", "%n drafted translation(s) awaiting review", nullptr, status.draftedCount));
 	}
 	if (status.obsoleteCount > 0) {
 		status.issues.push_back(QCoreApplication::translate("VibeStudioLocalization", "%1 %2")
@@ -339,62 +371,278 @@ TranslationExpansionLayoutCheck buildLayoutCheck(const QString& surfaceId, const
 
 } // namespace
 
+namespace {
+
+struct TargetEntry {
+	const char* localeName;
+	const char* englishName;
+	const char* nativeName;
+	const char* script;
+	bool rightToLeft;
+};
+
+// The supported interface languages, largest first. English names are
+// translated where a list needs them; native names (autonyms) never are.
+// See docs/ACCESSIBILITY_LOCALIZATION.md, "Supported Languages And Regions",
+// for why each language is here.
+constexpr TargetEntry kTargets[] = {
+	{"en", QT_TRANSLATE_NOOP("VibeStudioLocalization", "English"), "English", "Latn", false},
+	{"zh-Hans", QT_TRANSLATE_NOOP("VibeStudioLocalization", "Chinese (Simplified)"), "简体中文", "Hans", false},
+	{"zh-Hant", QT_TRANSLATE_NOOP("VibeStudioLocalization", "Chinese (Traditional)"), "繁體中文", "Hant", false},
+	{"hi", QT_TRANSLATE_NOOP("VibeStudioLocalization", "Hindi"), "हिन्दी", "Deva", false},
+	{"es", QT_TRANSLATE_NOOP("VibeStudioLocalization", "Spanish (Spain)"), "Español (España)", "Latn", false},
+	{"es-419", QT_TRANSLATE_NOOP("VibeStudioLocalization", "Spanish (Latin America)"), "Español (Latinoamérica)", "Latn", false},
+	{"ar", QT_TRANSLATE_NOOP("VibeStudioLocalization", "Arabic"), "العربية", "Arab", true},
+	{"fr", QT_TRANSLATE_NOOP("VibeStudioLocalization", "French"), "Français", "Latn", false},
+	{"bn", QT_TRANSLATE_NOOP("VibeStudioLocalization", "Bengali"), "বাংলা", "Beng", false},
+	{"pt-BR", QT_TRANSLATE_NOOP("VibeStudioLocalization", "Portuguese (Brazil)"), "Português (Brasil)", "Latn", false},
+	{"pt-PT", QT_TRANSLATE_NOOP("VibeStudioLocalization", "Portuguese (Portugal)"), "Português (Portugal)", "Latn", false},
+	{"ru", QT_TRANSLATE_NOOP("VibeStudioLocalization", "Russian"), "Русский", "Cyrl", false},
+	{"id", QT_TRANSLATE_NOOP("VibeStudioLocalization", "Indonesian"), "Bahasa Indonesia", "Latn", false},
+	{"ur", QT_TRANSLATE_NOOP("VibeStudioLocalization", "Urdu"), "اردو", "Arab", true},
+	{"de", QT_TRANSLATE_NOOP("VibeStudioLocalization", "German"), "Deutsch", "Latn", false},
+	{"ja", QT_TRANSLATE_NOOP("VibeStudioLocalization", "Japanese"), "日本語", "Jpan", false},
+	{"pcm", QT_TRANSLATE_NOOP("VibeStudioLocalization", "Nigerian Pidgin"), "Naijá", "Latn", false},
+	{"mr", QT_TRANSLATE_NOOP("VibeStudioLocalization", "Marathi"), "मराठी", "Deva", false},
+	{"vi", QT_TRANSLATE_NOOP("VibeStudioLocalization", "Vietnamese"), "Tiếng Việt", "Latn", false},
+	{"te", QT_TRANSLATE_NOOP("VibeStudioLocalization", "Telugu"), "తెలుగు", "Telu", false},
+	{"ha", QT_TRANSLATE_NOOP("VibeStudioLocalization", "Hausa"), "Hausa", "Latn", false},
+	{"tr", QT_TRANSLATE_NOOP("VibeStudioLocalization", "Turkish"), "Türkçe", "Latn", false},
+	{"pa", QT_TRANSLATE_NOOP("VibeStudioLocalization", "Punjabi"), "ਪੰਜਾਬੀ", "Guru", false},
+	{"sw", QT_TRANSLATE_NOOP("VibeStudioLocalization", "Swahili"), "Kiswahili", "Latn", false},
+	{"fil", QT_TRANSLATE_NOOP("VibeStudioLocalization", "Filipino"), "Filipino", "Latn", false},
+	{"ta", QT_TRANSLATE_NOOP("VibeStudioLocalization", "Tamil"), "தமிழ்", "Taml", false},
+	{"fa", QT_TRANSLATE_NOOP("VibeStudioLocalization", "Persian"), "فارسی", "Arab", true},
+	{"ko", QT_TRANSLATE_NOOP("VibeStudioLocalization", "Korean"), "한국어", "Kore", false},
+	{"th", QT_TRANSLATE_NOOP("VibeStudioLocalization", "Thai"), "ไทย", "Thai", false},
+	{"ms", QT_TRANSLATE_NOOP("VibeStudioLocalization", "Malay"), "Bahasa Melayu", "Latn", false},
+	{"it", QT_TRANSLATE_NOOP("VibeStudioLocalization", "Italian"), "Italiano", "Latn", false},
+	{"gu", QT_TRANSLATE_NOOP("VibeStudioLocalization", "Gujarati"), "ગુજરાતી", "Gujr", false},
+	{"am", QT_TRANSLATE_NOOP("VibeStudioLocalization", "Amharic"), "አማርኛ", "Ethi", false},
+	{"kn", QT_TRANSLATE_NOOP("VibeStudioLocalization", "Kannada"), "ಕನ್ನಡ", "Knda", false},
+	{"pl", QT_TRANSLATE_NOOP("VibeStudioLocalization", "Polish"), "Polski", "Latn", false},
+	{"uk", QT_TRANSLATE_NOOP("VibeStudioLocalization", "Ukrainian"), "Українська", "Cyrl", false},
+	{"ro", QT_TRANSLATE_NOOP("VibeStudioLocalization", "Romanian"), "Română", "Latn", false},
+	{"nl", QT_TRANSLATE_NOOP("VibeStudioLocalization", "Dutch"), "Nederlands", "Latn", false},
+	{"el", QT_TRANSLATE_NOOP("VibeStudioLocalization", "Greek"), "Ελληνικά", "Grek", false},
+	{"hu", QT_TRANSLATE_NOOP("VibeStudioLocalization", "Hungarian"), "Magyar", "Latn", false},
+	{"cs", QT_TRANSLATE_NOOP("VibeStudioLocalization", "Czech"), "Čeština", "Latn", false},
+	{"sv", QT_TRANSLATE_NOOP("VibeStudioLocalization", "Swedish"), "Svenska", "Latn", false},
+	{"bg", QT_TRANSLATE_NOOP("VibeStudioLocalization", "Bulgarian"), "Български", "Cyrl", false},
+	{"he", QT_TRANSLATE_NOOP("VibeStudioLocalization", "Hebrew"), "עברית", "Hebr", true},
+	{"da", QT_TRANSLATE_NOOP("VibeStudioLocalization", "Danish"), "Dansk", "Latn", false},
+	{"fi", QT_TRANSLATE_NOOP("VibeStudioLocalization", "Finnish"), "Suomi", "Latn", false},
+	{"nb", QT_TRANSLATE_NOOP("VibeStudioLocalization", "Norwegian Bokmål"), "Norsk bokmål", "Latn", false},
+};
+
+// The count docs/ACCESSIBILITY_LOCALIZATION.md documents; the report and the
+// catalog checks hold the registry to it.
+constexpr int kDocumentedTargetCount = 47;
+static_assert(std::size(kTargets) == kDocumentedTargetCount, "Update the documented language set with the registry.");
+
+// Codes that name a supported language another way: older ISO codes,
+// macrolanguage codes, and regions written with a different standard.
+struct AliasEntry {
+	const char* requested;
+	const char* target;
+};
+
+constexpr AliasEntry kAliases[] = {
+	{"iw", "he"},
+	{"in", "id"},
+	{"tl", "fil"},
+	{"no", "nb"},
+	{"nn", "nb"},
+	{"zh", "zh-Hans"},
+	{"zh-CN", "zh-Hans"},
+	{"zh-SG", "zh-Hans"},
+	{"zh-MY", "zh-Hans"},
+	{"zh-TW", "zh-Hant"},
+	{"zh-HK", "zh-Hant"},
+	{"zh-MO", "zh-Hant"},
+	{"pt", "pt-BR"},
+	{"es-ES", "es"},
+	{"es-419", "es-419"},
+	{"pa-IN", "pa"},
+	{"pa-Guru", "pa"},
+	{"ms-MY", "ms"},
+	{"ms-BN", "ms"},
+	{"ms-SG", "ms"},
+};
+
+// Where Spanish is written the Latin American way (CLDR's es-419 parent
+// locale), and where Portuguese follows the European standard.
+const QStringList& latinAmericanSpanishTerritories()
+{
+	static const QStringList territories {
+		QStringLiteral("419"), QStringLiteral("AR"), QStringLiteral("BO"), QStringLiteral("BR"), QStringLiteral("BZ"),
+		QStringLiteral("CL"), QStringLiteral("CO"), QStringLiteral("CR"), QStringLiteral("CU"), QStringLiteral("DO"),
+		QStringLiteral("EC"), QStringLiteral("GT"), QStringLiteral("HN"), QStringLiteral("MX"), QStringLiteral("NI"),
+		QStringLiteral("PA"), QStringLiteral("PE"), QStringLiteral("PR"), QStringLiteral("PY"), QStringLiteral("SV"),
+		QStringLiteral("US"), QStringLiteral("UY"), QStringLiteral("VE"),
+	};
+	return territories;
+}
+
+const TargetEntry* targetEntry(const QString& localeName)
+{
+	for (const TargetEntry& entry : kTargets) {
+		if (QString::compare(QLatin1String(entry.localeName), localeName, Qt::CaseInsensitive) == 0) {
+			return &entry;
+		}
+	}
+	return nullptr;
+}
+
+LocalizationTarget targetFromEntry(const TargetEntry& entry)
+{
+	LocalizationTarget target;
+	target.localeName = QString::fromLatin1(entry.localeName);
+	target.englishName = QCoreApplication::translate("VibeStudioLocalization", entry.englishName);
+	target.nativeName = QString::fromUtf8(entry.nativeName);
+	target.script = QString::fromLatin1(entry.script);
+	target.rightToLeft = entry.rightToLeft;
+	return target;
+}
+
+// The supported language a BCP 47 tag asks for, or null. Regions and scripts
+// pick between the written standards of one language (zh-TW is Traditional
+// Chinese, es-MX is Latin American Spanish, pt-AO is European Portuguese);
+// otherwise the language alone decides.
+const TargetEntry* resolveTargetEntry(const QString& localeName)
+{
+	const QString requested = normalizedId(localeName);
+	if (const TargetEntry* exact = targetEntry(requested)) {
+		return exact;
+	}
+	for (const AliasEntry& alias : kAliases) {
+		if (QString::compare(QLatin1String(alias.requested), requested, Qt::CaseInsensitive) == 0) {
+			return targetEntry(QString::fromLatin1(alias.target));
+		}
+	}
+
+	const QStringList parts = requested.split(QLatin1Char('-'), Qt::SkipEmptyParts);
+	if (parts.isEmpty()) {
+		return nullptr;
+	}
+	const QString language = parts.first().toLower();
+	QString script;
+	QString territory;
+	for (int index = 1; index < parts.size(); ++index) {
+		const QString& part = parts.at(index);
+		if (part.size() == 4 && script.isEmpty()) {
+			script = part.left(1).toUpper() + part.mid(1).toLower();
+		} else if ((part.size() == 2 || part.size() == 3) && territory.isEmpty()) {
+			territory = part.toUpper();
+		}
+	}
+
+	if (language == QStringLiteral("zh")) {
+		const bool traditional = script == QStringLiteral("Hant")
+			|| (script.isEmpty() && (territory == QStringLiteral("TW") || territory == QStringLiteral("HK") || territory == QStringLiteral("MO")));
+		return targetEntry(traditional ? QStringLiteral("zh-Hant") : QStringLiteral("zh-Hans"));
+	}
+	if (language == QStringLiteral("yue")) {
+		// Cantonese is written in Traditional characters in Hong Kong and
+		// Macau, Simplified in mainland China.
+		return targetEntry(script == QStringLiteral("Hans") || territory == QStringLiteral("CN") ? QStringLiteral("zh-Hans") : QStringLiteral("zh-Hant"));
+	}
+	if (language == QStringLiteral("es")) {
+		return targetEntry(latinAmericanSpanishTerritories().contains(territory) ? QStringLiteral("es-419") : QStringLiteral("es"));
+	}
+	if (language == QStringLiteral("pt")) {
+		return targetEntry(territory.isEmpty() || territory == QStringLiteral("BR") ? QStringLiteral("pt-BR") : QStringLiteral("pt-PT"));
+	}
+	// A legacy or macrolanguage code with a region: iw-IL, tl-PH, nn-NO.
+	for (const AliasEntry& alias : kAliases) {
+		if (QString::compare(QLatin1String(alias.requested), language, Qt::CaseInsensitive) == 0) {
+			return targetEntry(QString::fromLatin1(alias.target));
+		}
+	}
+	for (const TargetEntry& entry : kTargets) {
+		const QString targetLanguage = QString::fromLatin1(entry.localeName).section(QLatin1Char('-'), 0, 0);
+		if (targetLanguage != language) {
+			continue;
+		}
+		// A script the target is not written in is a different written
+		// language: Shahmukhi Punjabi (pa-Arab) is not read in Gurmukhi.
+		if (!script.isEmpty() && script != QLatin1String(entry.script)) {
+			return nullptr;
+		}
+		return &entry;
+	}
+	return nullptr;
+}
+
+} // namespace
+
 QVector<LocalizationTarget> localizationTargets()
 {
-	return {
-		{QStringLiteral("en"), QCoreApplication::translate("VibeStudioLocalization", "English"), QCoreApplication::translate("VibeStudioLocalization", "English"), false},
-		{QStringLiteral("zh-Hans"), QCoreApplication::translate("VibeStudioLocalization", "Chinese (Simplified)"), QString::fromUtf8("简体中文"), false},
-		{QStringLiteral("hi"), QCoreApplication::translate("VibeStudioLocalization", "Hindi"), QString::fromUtf8("हिन्दी"), false},
-		{QStringLiteral("es"), QCoreApplication::translate("VibeStudioLocalization", "Spanish"), QString::fromUtf8("Español"), false},
-		{QStringLiteral("fr"), QCoreApplication::translate("VibeStudioLocalization", "French"), QString::fromUtf8("Français"), false},
-		{QStringLiteral("ar"), QCoreApplication::translate("VibeStudioLocalization", "Arabic"), QString::fromUtf8("العربية"), true},
-		{QStringLiteral("bn"), QCoreApplication::translate("VibeStudioLocalization", "Bengali"), QString::fromUtf8("বাংলা"), false},
-		{QStringLiteral("pt-BR"), QCoreApplication::translate("VibeStudioLocalization", "Portuguese (Brazil)"), QString::fromUtf8("Português (Brasil)"), false},
-		{QStringLiteral("ru"), QCoreApplication::translate("VibeStudioLocalization", "Russian"), QString::fromUtf8("Русский"), false},
-		{QStringLiteral("ur"), QCoreApplication::translate("VibeStudioLocalization", "Urdu"), QString::fromUtf8("اردو"), true},
-		{QStringLiteral("id"), QCoreApplication::translate("VibeStudioLocalization", "Indonesian"), QCoreApplication::translate("VibeStudioLocalization", "Bahasa Indonesia"), false},
-		{QStringLiteral("de"), QCoreApplication::translate("VibeStudioLocalization", "German"), QCoreApplication::translate("VibeStudioLocalization", "Deutsch"), false},
-		{QStringLiteral("ja"), QCoreApplication::translate("VibeStudioLocalization", "Japanese"), QString::fromUtf8("日本語"), false},
-		{QStringLiteral("pcm"), QCoreApplication::translate("VibeStudioLocalization", "Nigerian Pidgin"), QCoreApplication::translate("VibeStudioLocalization", "Naija"), false},
-		{QStringLiteral("mr"), QCoreApplication::translate("VibeStudioLocalization", "Marathi"), QString::fromUtf8("मराठी"), false},
-		{QStringLiteral("te"), QCoreApplication::translate("VibeStudioLocalization", "Telugu"), QString::fromUtf8("తెలుగు"), false},
-		{QStringLiteral("tr"), QCoreApplication::translate("VibeStudioLocalization", "Turkish"), QString::fromUtf8("Türkçe"), false},
-		{QStringLiteral("ta"), QCoreApplication::translate("VibeStudioLocalization", "Tamil"), QString::fromUtf8("தமிழ்"), false},
-		{QStringLiteral("vi"), QCoreApplication::translate("VibeStudioLocalization", "Vietnamese"), QString::fromUtf8("Tiếng Việt"), false},
-		{QStringLiteral("ko"), QCoreApplication::translate("VibeStudioLocalization", "Korean"), QString::fromUtf8("한국어"), false},
-	};
+	QVector<LocalizationTarget> targets;
+	targets.reserve(static_cast<int>(std::size(kTargets)));
+	for (const TargetEntry& entry : kTargets) {
+		targets.push_back(targetFromEntry(entry));
+	}
+	return targets;
 }
 
 QStringList localizationTargetIds()
 {
 	QStringList ids;
-	for (const LocalizationTarget& target : localizationTargets()) {
-		ids.push_back(target.localeName);
+	for (const TargetEntry& entry : kTargets) {
+		ids.push_back(QString::fromLatin1(entry.localeName));
 	}
 	return ids;
 }
 
 bool localizationTargetForId(const QString& localeName, LocalizationTarget* out)
 {
-	const QString requested = normalizedId(localeName);
-	for (const LocalizationTarget& target : localizationTargets()) {
-		if (QString::compare(target.localeName, requested, Qt::CaseInsensitive) == 0) {
-			if (out) {
-				*out = target;
-			}
-			return true;
+	const TargetEntry* entry = isSystemLocalizationPreference(localeName)
+		? targetEntry(systemLocalizationTargetId())
+		: resolveTargetEntry(localeName);
+	if (!entry) {
+		return false;
+	}
+	if (out) {
+		*out = targetFromEntry(*entry);
+	}
+	return true;
+}
+
+QString systemLocalizationPreferenceId()
+{
+	return QStringLiteral("system");
+}
+
+bool isSystemLocalizationPreference(const QString& localeName)
+{
+	return localeName.trimmed().compare(systemLocalizationPreferenceId(), Qt::CaseInsensitive) == 0;
+}
+
+QString preferredLocalizationTargetId(const QStringList& languageTags)
+{
+	for (const QString& tag : languageTags) {
+		if (const TargetEntry* entry = resolveTargetEntry(tag)) {
+			return QString::fromLatin1(entry->localeName);
 		}
 	}
-	const QString languageOnly = requested.section('-', 0, 0);
-	for (const LocalizationTarget& target : localizationTargets()) {
-		if (QString::compare(target.localeName.section('-', 0, 0), languageOnly, Qt::CaseInsensitive) == 0) {
-			if (out) {
-				*out = target;
-			}
-			return true;
-		}
+	return QStringLiteral("en");
+}
+
+QStringList systemLanguageTags()
+{
+	// VIBESTUDIO_SYSTEM_LANGUAGES stands in for the platform's language list
+	// in tests, so "follow the system" can be checked on any machine.
+	const QString overridden = qEnvironmentVariable("VIBESTUDIO_SYSTEM_LANGUAGES").trimmed();
+	if (!overridden.isEmpty()) {
+		return overridden.split(QRegularExpression(QStringLiteral("[,;\\s]+")), Qt::SkipEmptyParts);
 	}
-	return false;
+	return QLocale::system().uiLanguages();
+}
+
+QString systemLocalizationTargetId()
+{
+	return preferredLocalizationTargetId(systemLanguageTags());
 }
 
 QStringList rightToLeftLanguageCodes()
@@ -521,6 +769,8 @@ CatalogRootResolution resolveTranslationCatalogRoot(const QString& explicitCatal
 		candidates.push_back({applicationDir + QStringLiteral("/i18n"), QStringLiteral("application-dir")});
 		candidates.push_back({applicationDir + QStringLiteral("/../i18n"), QStringLiteral("application-parent")});
 		candidates.push_back({applicationDir + QStringLiteral("/../share/vibestudio/i18n"), QStringLiteral("installed-share")});
+		// macOS bundle: Contents/MacOS/vibestudio -> Contents/Resources/i18n.
+		candidates.push_back({applicationDir + QStringLiteral("/../Resources/i18n"), QStringLiteral("bundle-resources")});
 		candidates.push_back({applicationDir + QStringLiteral("/../../i18n"), QStringLiteral("application-parent")});
 	}
 	candidates.push_back({QDir::currentPath() + QStringLiteral("/i18n"), QStringLiteral("working-directory")});
@@ -663,6 +913,85 @@ LocaleFormattingSample localeFormattingSample(const QString& localeName)
 	return sample;
 }
 
+QString systemRegionFormatId()
+{
+	return QStringLiteral("system");
+}
+
+QString languageRegionFormatId()
+{
+	return QStringLiteral("language");
+}
+
+QString normalizedRegionFormatId(const QString& regionFormat)
+{
+	const QString requested = QString(regionFormat).trimmed().replace(QLatin1Char('_'), QLatin1Char('-'));
+	if (requested.isEmpty() || requested.compare(systemRegionFormatId(), Qt::CaseInsensitive) == 0) {
+		return systemRegionFormatId();
+	}
+	if (requested.compare(languageRegionFormatId(), Qt::CaseInsensitive) == 0) {
+		return languageRegionFormatId();
+	}
+	// Qt answers an unknown tag with some other locale, so only one whose
+	// language is the one asked for counts.
+	const QLocale locale(requested);
+	const QString askedLanguage = requested.section(QLatin1Char('-'), 0, 0).toLower();
+	if (locale.language() == QLocale::C || QLocale::languageToCode(locale.language()).toLower() != askedLanguage) {
+		return systemRegionFormatId();
+	}
+	return locale.bcp47Name();
+}
+
+QLocale regionFormatLocale(const QString& regionFormat, const QString& languagePreference)
+{
+	const QString normalized = normalizedRegionFormatId(regionFormat);
+	if (normalized == systemRegionFormatId()) {
+		return QLocale::system();
+	}
+	if (normalized == languageRegionFormatId()) {
+		return QLocale(normalizedLocalizationTargetId(languagePreference));
+	}
+	return QLocale(normalized);
+}
+
+QVector<RegionFormatChoice> regionFormatChoices()
+{
+	QVector<RegionFormatChoice> choices;
+	QSet<QString> seen;
+	for (const QLocale& locale : QLocale::matchingLocales(QLocale::AnyLanguage, QLocale::AnyScript, QLocale::AnyTerritory)) {
+		if (locale.language() == QLocale::C || locale.territory() == QLocale::AnyTerritory || locale.territory() == QLocale::World) {
+			continue;
+		}
+		const QString name = locale.bcp47Name();
+		if (name.isEmpty() || seen.contains(name)) {
+			continue;
+		}
+		seen.insert(name);
+		QString language = locale.nativeLanguageName();
+		if (language.isEmpty()) {
+			language = QLocale::languageToString(locale.language());
+		}
+		language = locale.toUpper(language.left(1)) + language.mid(1);
+		const QString territory = locale.nativeTerritoryName();
+		choices.push_back({name, territory.isEmpty() ? language : QStringLiteral("%1 (%2)").arg(language, territory)});
+	}
+	QCollator collator;
+	collator.setCaseSensitivity(Qt::CaseInsensitive);
+	std::sort(choices.begin(), choices.end(), [&collator](const RegionFormatChoice& left, const RegionFormatChoice& right) {
+		const int order = collator.compare(left.displayName, right.displayName);
+		return order != 0 ? order < 0 : left.localeName < right.localeName;
+	});
+	return choices;
+}
+
+QString regionFormatSample(const QLocale& locale)
+{
+	// A number with grouping and decimals, a short date, and a short time,
+	// apart with middle dots, since commas belong to some regions' numbers.
+	return QCoreApplication::translate("VibeStudioLocalization", "%1 · %2 · %3")
+		.arg(locale.toString(1234567.891, 'f', 2), locale.toString(QDate(2026, 12, 31), QLocale::ShortFormat), locale.toString(QTime(14, 5), QLocale::ShortFormat));
+}
+
 QVector<PluralizationSmokeSample> pluralizationSmokeSamples(const QString& localeName)
 {
 	const QString normalized = normalizedLocalizationTargetId(localeName);
@@ -779,18 +1108,24 @@ LocalizationSmokeReport buildLocalizationSmokeReport(const QString& localeName, 
 			++report.staleCatalogCount;
 		}
 		report.untranslatedMessageCount += status.unfinishedCount;
+		report.draftedMessageCount += status.draftedCount;
 		report.obsoleteMessageCount += status.obsoleteCount + status.vanishedCount;
 		report.catalogs.push_back(status);
 	}
 	report.catalogCount = report.catalogs.size();
+	report.systemLanguages = systemLanguageTags();
+	report.systemTargetName = systemLocalizationTargetId();
 
-	if (report.targets.size() < 20) {
+	if (report.targets.size() < kDocumentedTargetCount) {
 		report.ok = false;
-		report.warnings.push_back(QCoreApplication::translate("VibeStudioLocalization", "Localization target set is smaller than the documented 20-language target."));
+		report.warnings.push_back(QCoreApplication::translate("VibeStudioLocalization", "Localization target set is smaller than the documented %1-language set.").arg(kDocumentedTargetCount));
 	}
-	if (!report.rightToLeftLocales.contains(QStringLiteral("ar")) || !report.rightToLeftLocales.contains(QStringLiteral("ur"))) {
-		report.ok = false;
-		report.warnings.push_back(QCoreApplication::translate("VibeStudioLocalization", "Right-to-left smoke set must include Arabic and Urdu."));
+	for (const QString& required : {QStringLiteral("ar"), QStringLiteral("ur"), QStringLiteral("fa"), QStringLiteral("he")}) {
+		if (!report.rightToLeftLocales.contains(required)) {
+			report.ok = false;
+			report.warnings.push_back(QCoreApplication::translate("VibeStudioLocalization", "Right-to-left smoke set must include Arabic, Urdu, Persian, and Hebrew."));
+			break;
+		}
 	}
 	if (!report.expansionSmokeOk) {
 		report.ok = false;
@@ -813,6 +1148,8 @@ QString localizationSmokeReportText(const LocalizationSmokeReport& report)
 	lines << QCoreApplication::translate("VibeStudioLocalization", "Localization smoke report");
 	lines << QCoreApplication::translate("VibeStudioLocalization", "Locale: %1").arg(report.localeName);
 	lines << QCoreApplication::translate("VibeStudioLocalization", "Targets: %1").arg(report.targets.size());
+	lines << QCoreApplication::translate("VibeStudioLocalization", "System languages: %1 (follows %2)")
+		.arg(report.systemLanguages.isEmpty() ? QCoreApplication::translate("VibeStudioLocalization", "none reported") : report.systemLanguages.join(QStringLiteral(", ")), report.systemTargetName);
 	lines << QCoreApplication::translate("VibeStudioLocalization", "Right-to-left: %1").arg(report.rightToLeftLocales.join(QStringLiteral(", ")));
 	lines << QCoreApplication::translate("VibeStudioLocalization", "Pseudo: %1").arg(report.pseudoSample);
 	lines << QCoreApplication::translate("VibeStudioLocalization", "Expansion: %1").arg(report.expansionSample);
@@ -837,10 +1174,11 @@ QString localizationSmokeReportText(const LocalizationSmokeReport& report)
 			.arg(check.maxRecommendedCharacters)
 			.arg(check.passed ? QCoreApplication::translate("VibeStudioLocalization", "ok") : QCoreApplication::translate("VibeStudioLocalization", "over budget"));
 	}
-	lines << QCoreApplication::translate("VibeStudioLocalization", "Catalogs: %1 total, %2 needing translation, %3 unfinished messages, %4 obsolete/vanished messages")
+	lines << QCoreApplication::translate("VibeStudioLocalization", "Catalogs: %1 total, %2 needing translation, %3 unfinished messages (%4 of them drafted, awaiting review), %5 obsolete/vanished messages")
 		.arg(report.catalogCount)
 		.arg(report.staleCatalogCount)
 		.arg(report.untranslatedMessageCount)
+		.arg(report.draftedMessageCount)
 		.arg(report.obsoleteMessageCount);
 	lines << QCoreApplication::translate("VibeStudioLocalization", "Compiled catalogs (.qm): %1 of %2 targets")
 		.arg(report.compiledCatalogCount)

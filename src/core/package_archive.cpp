@@ -169,7 +169,10 @@ QString entryTypeHint(const QString& virtualPath, PackageEntryKind kind)
 	static const QStringList kModelExtensions = {
 		QStringLiteral("obj"),
 		QStringLiteral("mdl"), QStringLiteral("md2"), QStringLiteral("md3"), QStringLiteral("mdc"),
-		QStringLiteral("mdr"), QStringLiteral("iqm"),
+		QStringLiteral("mdr"), QStringLiteral("iqm"), QStringLiteral("md5mesh"), QStringLiteral("md5anim"),
+		QStringLiteral("mds"), QStringLiteral("mdm"), QStringLiteral("mdx"), QStringLiteral("glm"),
+		QStringLiteral("gla"), QStringLiteral("lwo"), QStringLiteral("ase"), QStringLiteral("fm"),
+		QStringLiteral("kvx"),
 	};
 
 	if (kTextExtensions.contains(ext)) {

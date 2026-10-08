@@ -3,8 +3,11 @@
 #include "app/model_viewport.h"
 #include "app/studio_actions.h"
 #include "app/studio_layout.h"
+#include "app/studio_icons.h"
 #include "app/ui_primitives.h"
+#include "core/level_shapes.h"
 #include <QAction>
+#include <QActionGroup>
 #include <QCheckBox>
 #include <QComboBox>
 #include <QMenu>
@@ -13,10 +16,116 @@
 #include <QSplitter>
 #include <QStatusBar>
 #include <QToolButton>
+#include <QToolBar>
 #include <initializer_list>
 
 namespace vibestudio
 {
+QWidget* ApplicationShell::buildLevelAuthoringBar()
+{
+	// Reuse the registry actions so enablement, profile shortcuts and undo stay
+	// identical to menus and command search. Menus keep the shelf compact.
+	auto* bar = createPageToolBar(tr("Level authoring tools"));
+	bar->setObjectName(QStringLiteral("levelAuthoringBar"));
+	// The tools lead the bar, as in Hammer's and TrenchBroom's tool bars: one
+	// is always on, and the views answer the mouse the way it says.
+	m_levelToolActions = new QActionGroup(bar);
+	m_levelToolActions->setExclusive(true);
+	const auto tool = [this, bar](const QString& id, const QString& icon, const QString& label, const QString& tip) {
+		auto* action = new QAction(studioIcon(icon), label, bar);
+		action->setObjectName(QStringLiteral("levelTool-") + id);
+		action->setCheckable(true);
+		action->setData(id);
+		action->setToolTip(tip);
+		action->setStatusTip(tip);
+		m_levelToolActions->addAction(action);
+		bar->addAction(action);
+		if (auto* button = qobject_cast<QToolButton*>(bar->widgetForAction(action))) {
+			button->setObjectName(QStringLiteral("levelToolButton-") + id);
+			button->setToolButtonStyle(Qt::ToolButtonIconOnly);
+			button->setAccessibleName(label);
+			button->setAccessibleDescription(tip);
+			button->setFocusPolicy(Qt::TabFocus);
+		}
+		connect(action, &QAction::triggered, this, [this, id]() { chooseLevelTool(id); });
+		m_levelTools.insert(id, action);
+	};
+	tool(QStringLiteral("select"), QStringLiteral("select-box"), tr("Select"),
+		tr("Select, move and resize objects; the camera navigates with your editor profile's controls."));
+	tool(QStringLiteral("brush"), QStringLiteral("cube"), tr("Draw Brush"),
+		tr("Drag a brush footprint in the camera, on a construction plane; the wheel sets its depth."));
+	tool(QStringLiteral("clip"), QStringLiteral("clip"), tr("Clip"),
+		tr("Drag a line across brushes in a 2D view to cut them; Tab chooses what stays and Enter cuts."));
+	tool(QStringLiteral("paint"), QStringLiteral("paint"), tr("Paint"),
+		tr("Drag across surfaces in the camera to give them the chosen material, one undo step per stroke."));
+	tool(QStringLiteral("sample"), QStringLiteral("eyedropper"), tr("Sample"),
+		tr("Click a surface in the camera to choose its material."));
+	tool(QStringLiteral("sector"), QStringLiteral("polygon"), tr("Draw Sector"),
+		tr("Click the corners of a Doom sector in the Top view; the first corner again, or Enter, closes it."));
+	m_levelTools.value(QStringLiteral("select"))->setChecked(true);
+	bar->addSeparator();
+	auto group = [this, bar](const QString& name, const QString& label, const QString& icon,
+		const QString& description, const QStringList& ids) {
+		// QAction-backed menus remain reachable in the toolbar overflow when
+		// translated labels or large text leave too little horizontal room.
+		auto* menu = new QMenu(label, bar);
+		menu->setIcon(studioIcon(icon));
+		menu->setToolTipsVisible(true);
+		auto* menuAction = menu->menuAction();
+		menuAction->setToolTip(description);
+		bar->addAction(menuAction);
+		auto* button = qobject_cast<QToolButton*>(bar->widgetForAction(menuAction));
+		Q_ASSERT(button);
+		button->setObjectName(name);
+		button->setAccessibleName(label);
+		button->setAccessibleDescription(description);
+		button->setFocusPolicy(Qt::TabFocus);
+		button->setPopupMode(QToolButton::InstantPopup);
+		for (const auto& id : ids) {
+			if (id.isEmpty()) { menu->addSeparator(); }
+			else if (auto* action = m_commands->action(id)) { menu->addAction(action); }
+		}
+		// The default action already owns this menu. Calling setMenu() would
+		// re-add that action to the button and clear its default-action link.
+	};
+	group(QStringLiteral("levelCreateTools"), tr("Create"), QStringLiteral("add"), tr("Create geometry, entities and reusable prefabs."),
+		{QStringLiteral("map.drawBrush"), QStringLiteral("map.addBrush"), QStringLiteral("map.addEntity"), QStringLiteral("map.addPatch"),
+		 QStringLiteral("map.addThing"), QStringLiteral("map.placeAtCamera"), QStringLiteral("map.drawSector"), QStringLiteral("map.makeSectorMode"), QStringLiteral("map.addSector"), {},
+		 QStringLiteral("map.insertPrefab"), QStringLiteral("map.exportPrefab"), QStringLiteral("map.stagePrefab"), {},
+		 QStringLiteral("map.tieToEntity"), QStringLiteral("map.moveToWorld")});
+	group(QStringLiteral("levelSelectTools"), tr("Select"), QStringLiteral("crosshair"), tr("Find related objects and control working visibility."),
+		{QStringLiteral("map.selectAll"), QStringLiteral("map.selectNone"), QStringLiteral("map.invertSelection"), {},
+		 QStringLiteral("map.selectSimilar"), QStringLiteral("map.selectByTexture"), QStringLiteral("map.selectConnectedGeometry"),
+		 QStringLiteral("map.selectTargets"), QStringLiteral("map.selectSources"), {},
+		 QStringLiteral("map.selectInside"), QStringLiteral("map.selectTouching"), QStringLiteral("map.selectCompleteTall"),
+		 QStringLiteral("map.selectPartialTall"), {},
+		 QStringLiteral("map.hideSelection"), QStringLiteral("map.isolateSelection"), QStringLiteral("map.showAll"), {},
+		 QStringLiteral("map.regionSetSelection"), QStringLiteral("map.regionSetView"), QStringLiteral("map.regionClear"),
+		 QStringLiteral("map.regionSave"), QStringLiteral("map.regionCompile")});
+	group(QStringLiteral("levelTransformTools"), tr("Transform"), QStringLiteral("move"), tr("Move, resize, rotate and repeat the selection with exact values."),
+		{QStringLiteral("map.moveSelection"), QStringLiteral("map.resizeSelection"), QStringLiteral("map.rotatePrecisely"),
+		 QStringLiteral("map.duplicateWithOffset"), QStringLiteral("map.snapToGrid"), QStringLiteral("map.dropToFloor"), {},
+		 QStringLiteral("map.rotateLeft"), QStringLiteral("map.rotateRight"), QStringLiteral("map.flipHorizontal"), QStringLiteral("map.flipVertical"), {},
+		 QStringLiteral("map.alignLeft"), QStringLiteral("map.alignRight"), QStringLiteral("map.alignTop"), QStringLiteral("map.alignBottom"),
+		 QStringLiteral("map.alignCentreHorizontal"), QStringLiteral("map.alignCentreVertical"), QStringLiteral("map.shearTool"), QStringLiteral("map.shearSelection"), {},
+		 QStringLiteral("map.textureLock"), QStringLiteral("map.textureScaleLock")});
+	group(QStringLiteral("levelGeometryTools"), tr("Geometry"), QStringLiteral("cube"), tr("Clip, hollow, merge and refine brush or patch geometry."),
+		{QStringLiteral("map.clipTool"), QStringLiteral("map.clipSelection"), QStringLiteral("map.hollowSelection"), QStringLiteral("map.carve"),
+		 QStringLiteral("map.mergeBrushes"), QStringLiteral("map.intersect"), QStringLiteral("map.editBrushComponents"), {},
+		 QStringLiteral("map.makeDetail"), QStringLiteral("map.makeStructural"), {},
+		 QStringLiteral("map.editPatch"), QStringLiteral("map.stitchPatches"), QStringLiteral("map.capPatch"), {},
+		 QStringLiteral("map.splitLinedefs"), QStringLiteral("map.curveLinedefs"), QStringLiteral("map.flipLinedefs"), QStringLiteral("map.mergeVertices"),
+		 QStringLiteral("map.joinSectors"), QStringLiteral("map.mergeSectors"), QStringLiteral("map.makeDoor"), {},
+		 QStringLiteral("map.raiseCameraSurface"), QStringLiteral("map.lowerCameraSurface"), QStringLiteral("map.brightenCameraSurface"),
+		 QStringLiteral("map.darkenCameraSurface"), QStringLiteral("map.nudgeCameraTextureLeft"), QStringLiteral("map.nudgeCameraTextureRight"),
+		 QStringLiteral("map.nudgeCameraTextureUp"), QStringLiteral("map.nudgeCameraTextureDown"), QStringLiteral("map.dragCameraTextures"), QStringLiteral("map.alignWallTexturesCrosshair"),
+		 QStringLiteral("map.alignWallTextures")});
+	group(QStringLiteral("levelSurfaceToolsMenu"), tr("Surfaces"), QStringLiteral("image"), tr("Paint, sample and align map materials."),
+		{QStringLiteral("map.paintMaterial"), QStringLiteral("map.sampleMaterial"), QStringLiteral("map.applyTexture"),
+		 QStringLiteral("map.alignSurfaces"), QStringLiteral("map.replaceTexture")});
+	return bar;
+}
+
 MapViewport *ApplicationShell::createLevelPlanViewport(int index)
 {
 	auto *view = new MapViewport;
@@ -63,6 +172,25 @@ MapViewport *ApplicationShell::createLevelPlanViewport(int index)
 		activateLevelPlanViewport(view);
 		drawLevelMapBrushFromViewport(mins, maxs);
 	});
+	connect(view, &MapViewport::sectorMakeRequested, this, [this, view](const QPointF &point) {
+		activateLevelPlanViewport(view);
+		makeLevelSectorFromViewport(point);
+	});
+	connect(view, &MapViewport::makeSectorModeChanged, this, [this](bool enabled) {
+		if (!enabled) {
+			setLevelMakeSectorMode(false);
+		}
+	});
+	connect(view, &MapViewport::shearRequested, this, [this, view](int axis, int along, double factor, double anchor) {
+		activateLevelPlanViewport(view);
+		shearLevelMapSelectionFromViewport(axis, along, factor, anchor);
+	});
+	// Escape in one view leaves the shear tool in all of them.
+	connect(view, &MapViewport::shearModeChanged, this, [this](bool enabled) {
+		if (!enabled) {
+			setLevelShearMode(false);
+		}
+	});
 	connect(view, &MapViewport::cameraAimRequested, this, [this, view](const QPointF &point) {
 		activateLevelPlanViewport(view);
 		aimLevelCameraAt(point, false);
@@ -85,6 +213,7 @@ MapViewport *ApplicationShell::createLevelPlanViewport(int index)
 		if (auto *action = m_commands ? m_commands->action(QStringLiteral("map.drawSector")) : nullptr) {
 			action->setChecked(enabled);
 		}
+		refreshLevelToolShelf();
 		statusBar()->showMessage(enabled ? tr("Draw Sector on: click the corners, then the first corner or Enter to close the shape.")
 										 : tr("Draw Sector off."));
 	});
@@ -95,6 +224,7 @@ MapViewport *ApplicationShell::createLevelPlanViewport(int index)
 		if (auto *action = m_commands ? m_commands->action(QStringLiteral("map.clipTool")) : nullptr) {
 			action->setChecked(enabled);
 		}
+		refreshLevelToolShelf();
 		statusBar()->showMessage(enabled ? tr("Clip tool on: drag a line across the brushes, Tab chooses what stays, Enter cuts.")
 										 : tr("Clip tool off."));
 	});
@@ -108,6 +238,128 @@ MapViewport *ApplicationShell::createLevelPlanViewport(int index)
 		}
 	});
 	return view;
+}
+
+QString ApplicationShell::currentLevelTool() const
+{
+	if (m_levelMapViewport && m_levelMapViewport->clipMode()) {
+		return QStringLiteral("clip");
+	}
+	if (m_levelMapViewport && m_levelMapViewport->drawMode()) {
+		return QStringLiteral("sector");
+	}
+	if (m_levelMap3D && m_levelMap3D->brushDrawTool()) {
+		return QStringLiteral("brush");
+	}
+	if (m_levelMap3D && m_levelMap3D->surfaceTool() == ModelViewportSurfaceTool::Paint) {
+		return QStringLiteral("paint");
+	}
+	if (m_levelMap3D && m_levelMap3D->surfaceTool() == ModelViewportSurfaceTool::Sample) {
+		return QStringLiteral("sample");
+	}
+	return QStringLiteral("select");
+}
+
+void ApplicationShell::chooseLevelTool(const QString &toolId)
+{
+	if (!m_levelMapViewport || !m_levelMap3D || m_levelMapDocument.format == LevelMapFormat::Unknown) {
+		refreshLevelToolShelf();
+		return;
+	}
+	// One tool at a time: leaving one ends its gesture first.
+	if (toolId != QLatin1String("clip") && m_levelMapViewport->clipMode()) {
+		setLevelMapClipMode(false);
+	}
+	if (toolId != QLatin1String("sector") && m_levelMapViewport->drawMode()) {
+		setLevelMapDrawMode(false);
+	}
+	if (toolId != QLatin1String("shape") && m_levelMapViewport->shapeDrawMode()) {
+		m_levelMapViewport->setShapeDrawMode(false);
+	}
+	if (m_levelMapViewport->makeSectorMode()) {
+		setLevelMakeSectorMode(false);
+	}
+	if (toolId == QLatin1String("brush")) {
+		setLevelMaterialTool(3);
+	} else if (toolId == QLatin1String("paint")) {
+		setLevelMaterialTool(1);
+	} else if (toolId == QLatin1String("sample")) {
+		setLevelMaterialTool(2);
+	} else {
+		if (currentLevelTool() == QLatin1String("brush") || currentLevelTool() == QLatin1String("paint") || currentLevelTool() == QLatin1String("sample")) {
+			setLevelMaterialTool(0);
+		}
+		if (toolId == QLatin1String("clip") && !m_levelMapViewport->clipMode()) {
+			setLevelMapClipMode(true);
+		} else if (toolId == QLatin1String("sector") && !m_levelMapViewport->drawMode()) {
+			setLevelMapDrawMode(true);
+		} else if (toolId == QLatin1String("shape") && levelMapDoomEditable()) {
+			// The Shapes tab's sector shapes are drawn as boxes in the Top view.
+			if (!levelMap2DShowing()) {
+				setLevelMap3D(false);
+			}
+			if (m_levelMapProjection && m_levelMapProjection->currentIndex() != 0) {
+				m_levelMapProjection->setCurrentIndex(0);
+			}
+			m_levelMapViewport->setShapeDrawMode(true);
+			m_levelMapViewport->setFocus(Qt::ShortcutFocusReason);
+		}
+	}
+	refreshLevelToolShelf();
+}
+
+void ApplicationShell::refreshLevelToolShelf()
+{
+	if (!m_levelToolActions) {
+		return;
+	}
+	const bool hasMap = m_levelMapDocument.format != LevelMapFormat::Unknown;
+	const bool quake = m_levelMapDocument.format == LevelMapFormat::QuakeMap || m_levelMapDocument.format == LevelMapFormat::Quake3Map;
+	const bool doomPlan = m_levelMapDocument.format == LevelMapFormat::DoomWad && m_levelMapDocument.doomFormat != LevelMapDoomFormat::Udmf;
+	const bool paintable = quake || levelMapDoomEditable();
+	// Tools a map's game cannot use are not shown at all, so the bar holds
+	// only what works on the open map.
+	const QHash<QString, bool> available {
+		{QStringLiteral("select"), true},
+		{QStringLiteral("brush"), quake},
+		{QStringLiteral("clip"), quake},
+		{QStringLiteral("paint"), paintable},
+		{QStringLiteral("sample"), paintable},
+		{QStringLiteral("sector"), doomPlan},
+	};
+	const QHash<QString, QString> commands {
+		{QStringLiteral("brush"), QStringLiteral("map.drawBrush")},
+		{QStringLiteral("clip"), QStringLiteral("map.clipTool")},
+		{QStringLiteral("paint"), QStringLiteral("map.paintMaterial")},
+		{QStringLiteral("sample"), QStringLiteral("map.sampleMaterial")},
+		{QStringLiteral("sector"), QStringLiteral("map.drawSector")},
+	};
+	// Draw Brush shows the shape it draws, chosen in the Shapes tab.
+	if (QAction* brush = m_levelTools.value(QStringLiteral("brush"))) {
+		const bool shaped = m_levelShape != QLatin1String("box");
+		brush->setIcon(studioIcon(shaped ? levelShapeIconName(m_levelShape) : QStringLiteral("cube")));
+		brush->setText(shaped ? tr("Draw %1").arg(levelShapeLabel(m_levelShape)) : tr("Draw Brush"));
+		for (QObject* object : brush->associatedObjects()) {
+			if (auto* button = qobject_cast<QToolButton*>(object)) {
+				button->setAccessibleName(brush->text());
+			}
+		}
+	}
+	const QString current = currentLevelTool();
+	for (auto it = m_levelTools.cbegin(); it != m_levelTools.cend(); ++it) {
+		QAction* action = it.value();
+		const QSignalBlocker blocker(action);
+		action->setVisible(available.value(it.key()));
+		action->setEnabled(hasMap);
+		action->setChecked(it.key() == current);
+		// The key that turns the tool on under the editor profile, if any.
+		QString tip = action->statusTip();
+		if (QAction* command = m_commands ? m_commands->action(commands.value(it.key())) : nullptr; command && !command->shortcut().isEmpty()) {
+			tip = tr("%1 (%2)").arg(tip, command->shortcut().toString(QKeySequence::NativeText));
+		}
+		action->setToolTip(tr("%1\n%2").arg(action->text(), tip));
+	}
+	refreshLevelMaterialTools();
 }
 
 void ApplicationShell::activateLevelPlanViewport(MapViewport *view)
@@ -124,6 +376,10 @@ void ApplicationShell::activateLevelPlanViewport(MapViewport *view)
 		m_levelMapViewport->cancelInteraction();
 		m_levelMapViewport->setClipMode(false);
 		m_levelMapViewport->setDrawMode(false);
+		m_levelMapViewport->setShapeDrawMode(false);
+		if (m_levelMapViewport->makeSectorMode()) {
+			setLevelMakeSectorMode(false);
+		}
 	}
 	m_levelMapViewport = view;
 	for (auto *pane : m_levelPlanViews) {
@@ -260,7 +516,7 @@ void ApplicationShell::saveLevelViewSplitters()
 	}
 	const QString prefix = QStringLiteral("levelViews/%1/").arg(levelViewLayoutId(m_levelViewLayout));
 	m_settings.setShellLayoutState(prefix + QStringLiteral("upper"), m_levelMapUpperViews->saveState());
-	if (m_levelViewLayout == LevelViewLayout::FourViews) {
+	if (levelViewLayoutHasThreePlans(m_levelViewLayout)) {
 		m_settings.setShellLayoutState(prefix + QStringLiteral("root"), m_levelMapViews->saveState());
 		m_settings.setShellLayoutState(prefix + QStringLiteral("lower"), m_levelMapLowerViews->saveState());
 	}
@@ -351,9 +607,13 @@ void ApplicationShell::refreshLevelViewWorkspaceActions()
 	const bool cameraShowing = levelMap3DShowing();
 	const bool planShowing = levelMap2DShowing();
 	if (m_levelMap3DButton) { const QSignalBlocker block(m_levelMap3DButton); m_levelMap3DButton->setChecked(cameraShowing); }
-	for (QWidget* control : std::initializer_list<QWidget*>{m_levelMapProjection, m_levelMapGrid, m_levelMapSnap,
-		findChild<QToolButton*>(QStringLiteral("levelMapShowButton")), findChild<QToolButton*>(QStringLiteral("levelMapZoomSelection"))}) {
+	for (QWidget* control : std::initializer_list<QWidget*>{m_levelMapProjection,
+		findChild<QToolButton*>(QStringLiteral("levelMapShowButton"))}) {
 		if (control) { control->setEnabled(planShowing && m_levelMapDocument.format != LevelMapFormat::Unknown); }
+	}
+	for (QWidget* control : std::initializer_list<QWidget*>{m_levelMapGrid, m_levelMapSnap,
+		findChild<QToolButton*>(QStringLiteral("levelMapZoomSelection"))}) {
+		if (control) { control->setEnabled(m_levelMapDocument.format != LevelMapFormat::Unknown && (planShowing || cameraShowing)); }
 	}
 	if (!m_commands) { return; }
 	if (auto* toggle = m_commands->action(QStringLiteral("map.toggle3D"))) { const QSignalBlocker block(toggle); toggle->setChecked(cameraShowing); }
@@ -410,6 +670,8 @@ void ApplicationShell::applyLevelViewLayout(LevelViewLayout layout)
 	saveLevelViewSplitters();
 	const QScopedValueRollback<bool> applying(m_applyingLevelViewLayout, true);
 	m_levelViewLayout = layout;
+	m_levelMapViews->setOrientation(layout == LevelViewLayout::CameraBesidePlans ? Qt::Horizontal : Qt::Vertical);
+	m_levelMapLowerViews->setOrientation(layout == LevelViewLayout::CameraBesidePlans ? Qt::Vertical : Qt::Horizontal);
 	synchronizeLevelPlanViews();
 	for (auto *view : m_levelPlanViews) {
 		view->cancelInteraction();
@@ -418,11 +680,12 @@ void ApplicationShell::applyLevelViewLayout(LevelViewLayout layout)
 		view->hide();
 	}
 	m_levelMapUpperViews->insertWidget(0, m_levelMap3D);
-	if (layout == LevelViewLayout::FourViews) {
+	m_levelMapUpperViews->show();
+	if (levelViewLayoutHasThreePlans(layout)) {
 		for (int i = 0; i < m_levelPlanViews.size(); ++i) {
 			auto *view = m_levelPlanViews.at(i);
 			view->setProjection(static_cast<MapViewportProjection>(i));
-			(i == 0 ? m_levelMapUpperViews : m_levelMapLowerViews)->addWidget(view);
+			(i == 0 && layout == LevelViewLayout::FourViews ? m_levelMapUpperViews : m_levelMapLowerViews)->addWidget(view);
 			view->show();
 		}
 		m_levelMapLowerViews->show();
@@ -448,7 +711,7 @@ void ApplicationShell::applyLevelViewLayout(LevelViewLayout layout)
 	}
 	if (m_commands) {
 		for (const auto &id : {QStringLiteral("profile"), QStringLiteral("single-2d"), QStringLiteral("single-3d"),
-							   QStringLiteral("camera-and-plan"), QStringLiteral("four-views")}) {
+							   QStringLiteral("camera-and-plan"), QStringLiteral("four-views"), QStringLiteral("camera-above-plans"), QStringLiteral("camera-beside-plans")}) {
 			if (auto *action = m_commands->action(QStringLiteral("map.layout.") + id)) {
 				action->setChecked(id == preference);
 			}
@@ -466,10 +729,14 @@ void ApplicationShell::applyLevelViewLayout(LevelViewLayout layout)
 	if (!upper.isEmpty()) {
 		m_levelMapUpperViews->restoreState(upper);
 	}
-	if (layout == LevelViewLayout::FourViews) {
+	if (levelViewLayoutHasThreePlans(layout)) {
 		const int height = std::max(2, m_levelMapViews->height());
-		m_levelMapViews->setSizes({height / 2, height / 2});
-		m_levelMapLowerViews->setSizes({width / 2, width / 2});
+		const int extent = layout == LevelViewLayout::CameraBesidePlans ? width : height;
+		m_levelMapViews->setSizes(layout == LevelViewLayout::FourViews
+			? QList<int>{extent / 2, extent / 2} : QList<int>{extent * 2 / 3, extent / 3});
+		m_levelMapLowerViews->setSizes(layout == LevelViewLayout::CameraBesidePlans
+			? QList<int>{height / 3, height / 3, height / 3} : (layout == LevelViewLayout::CameraAbovePlans
+			? QList<int>{width / 3, width / 3, width / 3} : QList<int>{width / 2, width / 2}));
 		const auto root = m_settings.shellLayoutState(prefix + QStringLiteral("root"));
 		const auto lower = m_settings.shellLayoutState(prefix + QStringLiteral("lower"));
 		if (!root.isEmpty()) {

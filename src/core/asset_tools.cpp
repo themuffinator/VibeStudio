@@ -1253,7 +1253,9 @@ AssetAnalysis analyzeModel(const QString& virtualPath, const QByteArray& bytes, 
 				? QCoreApplication::translate("VibeStudioAssetTools", "Surface walk incomplete: %1 of %2 surfaces are inside the sampled %3.").arg(walked).arg(analysis.modelSurfaceCount).arg(sizeText(bytes.size()))
 				: QCoreApplication::translate("VibeStudioAssetTools", "Surface walk incomplete: only %1 of %2 surfaces could be read.").arg(walked).arg(analysis.modelSurfaceCount));
 		}
-	} else if (!QStringList {QStringLiteral("mdl"), QStringLiteral("md2"), QStringLiteral("md3"), QStringLiteral("mdc"), QStringLiteral("mdr"), QStringLiteral("iqm")}.contains(ext)) {
+	} else if (!QStringList {QStringLiteral("mdl"), QStringLiteral("md2"), QStringLiteral("md3"), QStringLiteral("mdc"), QStringLiteral("mdr"), QStringLiteral("iqm"),
+			QStringLiteral("md5mesh"), QStringLiteral("md5anim"), QStringLiteral("mds"), QStringLiteral("mdm"), QStringLiteral("mdx"), QStringLiteral("glm"),
+			QStringLiteral("gla"), QStringLiteral("lwo"), QStringLiteral("ase"), QStringLiteral("fm"), QStringLiteral("kvx")}.contains(ext)) {
 		return {};
 	} else {
 		analysis.modelFormat = ext.toUpper();

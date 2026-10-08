@@ -86,6 +86,23 @@ int main(int argc, char** argv) {
 	expect(report["textureLockPolicy"] == "locked", "CLI duplicate locks by default");
 	loadLevelMap({output, {}, {}}, &placed, &error);
 	expect(tests::placementUvsMatch(original.brushes.first(), placed.brushes.last(), {31, -17, 11, true}), "CLI duplicate UV oracle");
+	const QStringList array{"duplicate", input, "--object", "brush:0", "--delta", "31,-17,11", "--copies", "3", "--output", output, "--overwrite"};
+	const auto beforeArray = read(output);
+	report = run(array + QStringList{"--dry-run"});
+	expect(report["copies"].toArray().size() == 3 && report["copyCount"] == 3 && read(output) == beforeArray,
+		"CLI array dry-run reports every copy without publication");
+	report = run(array);
+	expect(loadLevelMap({output, {}, {}}, &placed, &error) && placed.brushes.size() == 4 &&
+		tests::placementUvsMatch(original.brushes.first(), placed.brushes.last(), {93, -51, 33, true}), "CLI array cumulative UV oracle", error);
+	for (const auto& count : QStringList{"0", "257", "-1", "1.5", "many"}) {
+		const auto before = read(output);
+		run({"duplicate", input, "--object", "brush:0", "--copies", count, "--output", output, "--overwrite"}, false);
+		expect(read(output) == before && read(input) == bytes, "invalid CLI array count cannot publish");
+	}
+	const auto beforeFailure = read(output);
+	run(array + QStringList{"--copies", "2"}, false);
+	run({"duplicate", input, "--object", "brush:0", "--copies", "4", "--delta", "30000,0,0", "--output", output, "--overwrite"}, false);
+	expect(read(output) == beforeFailure && read(input) == bytes, "ambiguous or later out-of-range array preserves output");
 	report = run({"snap", input, "--object", "brush:0", "--grid", "16", "--output", output, "--overwrite"});
 	expect(report["snapped"].toArray() == QJsonArray{"brush:0"} && report["textureLockPolicy"] == "locked", "CLI snap report");
 	loadLevelMap({output, {}, {}}, &placed, &error);

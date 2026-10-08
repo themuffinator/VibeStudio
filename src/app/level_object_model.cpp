@@ -33,10 +33,12 @@ QPair<QString, QString> LevelObjectRows::text(int row) const
 	switch (entry.reference.kind) {
 	case LevelMapSelectionKind::Entity: {
 		const auto& entity = document.entities[at];
-		QString detail = QCoreApplication::translate("vibestudio::ApplicationShell", "Origin %1 / %2 keys")
-			.arg(entity.origin.valid ? QStringLiteral("%1,%2,%3").arg(entity.origin.x, 0, 'f', 0).arg(entity.origin.y, 0, 'f', 0)
-				.arg(entity.origin.z, 0, 'f', 0) : QCoreApplication::translate("vibestudio::ApplicationShell", "unknown"))
-			.arg(entity.properties.size());
+		// The world and brush entities have no origin of their own to show.
+		const int keys = static_cast<int>(entity.properties.size());
+		QString detail = entity.origin.valid
+			? QCoreApplication::translate("vibestudio::ApplicationShell", "Origin %1 / %n key(s)", nullptr, keys)
+				  .arg(QStringLiteral("%1,%2,%3").arg(entity.origin.x, 0, 'f', 0).arg(entity.origin.y, 0, 'f', 0).arg(entity.origin.z, 0, 'f', 0))
+			: QCoreApplication::translate("vibestudio::ApplicationShell", "%n key(s)", nullptr, keys);
 		for (const auto& property : entity.properties) {
 			if (property.value.isEmpty()) { continue; }
 			if (property.key.compare(QStringLiteral("targetname"), Qt::CaseInsensitive) == 0) {

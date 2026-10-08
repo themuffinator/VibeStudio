@@ -54,7 +54,8 @@ void ApplicationShell::addLevelMapBrushFromUi(const QPointF &viewPoint)
 	request.maxs = {request.mins.x + size, request.mins.y + size, request.mins.z + size, true};
 	if (m_levelMap3D && m_levelMap3D->brushDrawTool()) {
 		request.axis = m_levelMap3D->brushDrawAxis();
-		const auto base = m_levelMap3D->brushDrawBase(), top = base + m_levelMap3D->brushDrawDepth();
+		const double plane = m_levelMap3D->brushDrawBase(), end = plane + m_levelMap3D->brushDrawDirection()*m_levelMap3D->brushDrawDepth();
+		const double base = std::min(plane,end), top = std::max(plane,end);
 		if (request.axis == 0) { request.mins.x = base; request.maxs.x = top; }
 		else if (request.axis == 1) { request.mins.y = base; request.maxs.y = top; }
 		else { request.mins.z = base; request.maxs.z = top; }

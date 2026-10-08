@@ -661,7 +661,7 @@ documented in
 
 ### Studio Shell
 - Qt Widgets application frame.
-- Mode rail for workspace, levels, models, textures, audio, packages, code, scripts, shaders, and build output.
+- Mode rail for workspace, levels, models, textures, audio, packages, code, scripts, materials, and build output.
 - Shared inspector, status, search, diagnostics, and task surfaces.
 - Dockable panes for asset context, compiler logs, map/object properties, and dependency information.
 - Layout preset service for editor-profile workspaces and user-customized panes.
@@ -710,6 +710,13 @@ documented in
 - Advanced Studio services for idTech3 shader script models, shader stage
   edits, sprite workflow planning, source tree indexing, extension manifests,
   and deterministic AI creation proposals.
+- The materials module (`core/material_*`): one definition model for Doom,
+  Quake, Quake II, Quake III and Doom 3 surfaces, source-preserving script
+  edits, expression and wave evaluation, engine image lookup, a CPU renderer
+  per engine, a library scan and node graphs whose edits become text edits.
+  The Materials page (`app/material_*`, the `shell.mode.shaders` mode) and the
+  `material` CLI family (`cli/materials.*`) share it; see
+  [Materials](MATERIALS.md).
 - Shared command services used by both GUI actions and CLI commands.
 - Operation state model for loading, scanning, indexing, compiling, extracting, saving, cancelling, and failure recovery.
 
@@ -1993,11 +2000,18 @@ The current scaffold contains:
   triangle, vertex, tag and bounds loops and discards partial results.
   The editor uses its existing document worker. MTL shading conversion is open;
   no new dependency is linked.
-- `src/core/model_mesh.*`: MDL/MD2/MD3 geometry decoding, MDC/MDR/IQM header
-  reads, package skin resolution, frame-name-inferred animations, summary
-  lines, and single-frame Wavefront OBJ export. `core/model_document` preserves
+- `src/core/model_mesh.*`: format detection, the format catalogue
+  (`modelFormatCapabilities`), companion-file sources, package skin resolution,
+  frame-name-inferred animations, summary lines, and single-frame Wavefront OBJ
+  export. Each native decoder is its own `src/core/model_format_*.cpp` behind
+  `model_formats_p.h` (MDL, Hexen II MDL, MD2, FM, MD3, MDC, MDS, MDM/MDX, MDR,
+  Ghoul 2, IQM, MD5, LWO, ASE, Half-Life MDL, KVX); `core/model_skeleton` holds
+  joints, skinning, clips, baking into frames and bind-pose re-binding, and
+  `core/model_md5`, `core/model_iqm` and `core/model_ase` write those formats.
+  See [Native Model Formats](MODEL_FORMATS.md). `core/model_document` preserves
   all poses and authoring metadata in schema-3 sources (schema 4 for native MDL,
-  5 for static collision, 6 for saved clip FPS, 7 for animated collision)
+  5 for static collision, 6 for saved clip FPS, 7 for animated collision,
+  8 for skeletons)
   and shares undo/recovery/CLI
   operations. MD2 GL/indexed consistency warnings originate in the decoder so
   package-browser and file imports use the same authoring refusal. `core/model_export`
@@ -2070,6 +2084,11 @@ The current scaffold contains:
 - `src/app/studio_layout.*`: shared work-surface parts: the mode rail, page
   header, empty state, card, dock title bar, eliding label, panel tabs, and
   icon scaling.
+- `src/app/studio_docks.*`: where the panels dock whichever way the interface
+  reads. `QMainWindow` keeps its dock areas by side, so the shell opens panels
+  on `trailingDockArea()` and keeps its saved window state in left-to-right
+  terms, mirrored for a right-to-left window by swapping the left and right
+  dock area records in the bytes `QMainWindow::saveState()` writes.
 - `src/app/code_editor.*`: the Code page's plain-text editor with a
   line-number gutter and current-line band drawn from the theme.
 - `src/core/code_files.*` provides a bounded, cancellable filename and metadata
@@ -2298,3 +2317,16 @@ The resolver diagnoses the pinned importer's ignored nonzero frame requests;
 an Assembly pose bake supplies a separate static derivative. Existing map entity
 authoring remains responsible for history and scene locks. No renderer, library
 or build-system change is introduced. See [the contract](LEVEL_MODEL_APPEARANCE.md).
+
+### Modeller Profiles
+
+`core/model_editor_controls` defines the modeller's controls profiles as data:
+navigation for 3D and orthographic views, selection gestures, transform style,
+layout and a command key table, with override diffs, conflict checks and the
+`vibestudio.modeller-controls` file format. `core/model_sidebar` arranges and
+names the Mesh Editor's sidebar pages per profile family. `StudioSettings`
+stores the profile, overrides and sidebar state (`studio_settings_modeller.cpp`).
+The Mesh Editor applies them in `app/model_editor_layout.cpp`,
+`app/model_editor_profiles.cpp` and `app/model_editor_modal.cpp`;
+`cli/model_controls` serves `model profiles`, `model controls` and
+`model formats`. See [Modeller Profiles](MODELLER_PROFILES.md).

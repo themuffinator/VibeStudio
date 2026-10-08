@@ -88,6 +88,7 @@ install_data(
 )
 subdir('external/modelling')
 subdir('src')
+subdir('packaging')
 
 python_for_tests = find_program('python', 'python3', required: false)
 if python_for_tests.found()
@@ -143,8 +144,39 @@ if python_for_tests.found()
     args: [files('scripts/extract_translations.py'), '--check'],
   )
   test(
+    'translation-extraction-smoke',
+    python_for_tests,
+    args: [files('src/tests/translation_extraction_test.py')],
+  )
+  test(
     'english-plurals-validation',
     python_for_tests,
     args: [files('scripts/english_plurals.py')],
+  )
+  # Releases, the changelog, brand artwork and the HTML documentation
+  # (docs/RELEASING.md, docs/BRANDING.md). The branding and documentation
+  # checks skip (exit 77) when fontTools or Markdown/Pygments are missing.
+  test(
+    'release-tooling-smoke',
+    python_for_tests,
+    args: [files('src/tests/release_tooling_test.py')],
+    timeout: 120,
+  )
+  test(
+    'changelog-validation',
+    python_for_tests,
+    args: [files('scripts/changelog.py'), 'check'],
+  )
+  test(
+    'branding-validation',
+    python_for_tests,
+    args: [files('scripts/generate_branding.py'), '--check', '--skip-missing-tools'],
+    timeout: 120,
+  )
+  test(
+    'documentation-site',
+    python_for_tests,
+    args: [files('scripts/build_docs_site.py'), '--output', meson.current_build_dir() / 'docs-site-check', '--skip-missing-tools'],
+    timeout: 120,
   )
 endif

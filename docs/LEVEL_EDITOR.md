@@ -30,7 +30,7 @@ selected brushes"). See `docs/AI_AUTOMATION.md`.
 
 ## Familiarity coverage and navigation
 
-The [profile catalog](EDITOR_PROFILES.md) contains 19 working schemes spanning
+The [profile catalog](EDITOR_PROFILES.md) contains 24 working schemes spanning
 classic brush editors, Doom editors and modern scene editors. QuArK now has
 four-view controls; Hammer-family profiles connect familiar editing keys and
 F9 to existing build/test services. Modern profiles support held-button flight,
@@ -72,13 +72,225 @@ keys during mouse look, and required held-look modifiers work with movement.
 Potential command overlaps remain visible in GUI details and CLI diagnostics.
 Physical movement is not simulated by the acceptance suite.
 
+## Coverage of other editors
+
+What the familiar editors offer and where VibeStudio stands, using the status
+labels of `docs/BRANDING.md`. Available means implemented and covered by
+automated tests; none of it has been proven on production maps yet.
+
+| Area | From | Status |
+|---|---|---|
+| Tabbed sidebars of browsers and properties, per-profile arrangement and names | Blender, TrenchBroom, Hammer, Radiant, Doom Builder | Available |
+| Every editing tool in one sidebar tab, grouped | Blender's Tool tab | Available |
+| Entity, texture, model, sound and prefab browsers with drag-and-drop placement | Radiant, TrenchBroom, VibeRadiant | Available |
+| Built-in Quake, Quake II and Quake III Arena entity classes when a project has none | TrenchBroom's bundled definitions | Available |
+| Brush shapes: box, wedge, cylinder, cone, sphere, arch, ring, stairs, room | Hammer, J.A.C.K., Sledge object tools; Radiant brush menu; bobToolz stairs | Available |
+| Turning brushes into a shape filling their bounds | Radiant's arbitrary-sided brush commands | Available |
+| Clip, hollow, carve (CSG subtract), merge, intersect | Radiant, TrenchBroom, Hammer | Available |
+| Tie to entity, move to world | Hammer, Radiant | Available |
+| Select inside, touching, complete tall, partial tall | Radiant, TrenchBroom | Available |
+| Detail brushes (face flag or `func_detail`) | Radiant's Make Detail, ericw-tools' `func_detail` | Available |
+| Drop to floor | Unreal Editor's Snap to Floor | Available |
+| Numeric transform of the selection (centre and size) | Blender's Item panel, Hammer's transform dialog | Available |
+| Display filters by kind of object, with counts | Radiant filters, TrenchBroom view options | Available |
+| Pre-build checklist and worldspawn editor | TrenchBroom's Map inspector, VibeRadiant's globals | Available |
+| Vertex, edge and face editing; patches; surface alignment; painting | Radiant, TrenchBroom | Available |
+| Doom sectors and lines: draw, make from existing lines, join, merge, doors, gradients, rectangles, polygons, stairs, grids, curved linedefs | Doom Builder, SLADE, Eureka | Available; shapes are dragged as boxes or placed numerically |
+| Doom visual mode: editing in the camera | Doom Builder | Available for Doom and Hexen maps: materials painted and sampled, floors, ceilings and light changed at the crosshair, wall textures dragged, nudged and auto-aligned; UDMF vertex heights (slopes) are edited as properties, not in the camera |
+| Regions (cordon): views kept to a box, the region saved and compiled as a sealed map | Radiant regions, Hammer cordon | Available |
+| Shear | TrenchBroom's shear tool | Available: side handles in every 2D view, and a numeric Shear dialog |
+| Linked groups: copies that take on each other's edits, each moved, turned and mirrored on its own | TrenchBroom | Available: quarter turns about the vertical and mirrors; other turns reach every copy |
+| Align objects to each other | Hammer | Available |
+| Find and replace key values | Hammer's entity search, Radiant's find and replace | Available |
+| Portal file (`.prt`) display | Radiant's portal viewer, TrenchBroom's Load Portal File | Available |
+
+## Tabbed sidebars
+
+The Levels page frames its views with two `StudioSidebar` widgets
+(`src/app/studio_sidebar.*`), after Blender's sidebars and VibeRadiant's tabbed
+browser. Each is a `QTabWidget` whose tab bar paints a column of glyph tiles,
+with optional captions and gaps between groups; the current tile joins its page
+and carries the accent mark. Choosing the current tab again folds the sidebar
+to its tab column, giving the splitter's space to the views. Pages
+(`SidebarPage`) always scroll and are built from `SidebarSection` panels whose
+headers toggle with a click, <kbd>Enter</kbd>, or <kbd>Left</kbd> and
+<kbd>Right</kbd> (mirrored right to left), report expanded or collapsed state
+to assistive technology, and remember how they were left.
+
+The tabs are Outliner, Shapes, Entities, Textures, Models, Sounds, Prefabs,
+Inspector, Tools, Surfaces, Map, View, Health and History. The Tools tab
+(`level_tools_page.cpp`) lists every editing command in groups, each button
+bound to its registered command, and hides the groups a format cannot use. Where each sits and what it
+is called depends on the editor profile's family; see
+[Sidebars](EDITOR_PROFILES.md#sidebars). Every tab has a `map.sidebar.<id>`
+command, and `map.sidebar.toggleLeading`, `map.sidebar.toggleTrailing`,
+`map.sidebar.captions` and `map.sidebar.reset` fold, caption and reset them.
+The pages reuse the shell's existing services: the Entities tab is the map
+palette, now with brush classes and editor colours; the Models tab previews
+through `ModelPreviewWorker`; the Sounds tab decodes through
+`AudioBrowserWorker` and plays through `AudioPlayback`; the Prefabs tab lists
+`.vprefab` files from the project and package. Placing a class, a model or a
+sound selects the new entity, so its keys are on the Inspector at once, and
+the Models and Sounds tabs offer Give to Selection whenever an entity is
+selected. Their Place sections name the class each makes in the open map
+(`misc_model` and a speaker, baked by q3map2 in Quake III) and say so when the
+loaded definitions do not declare it, as Quake's own do not. The Surfaces tab
+is `LevelSurfaceTools`, which scrolls by itself and brings its own Target,
+Adjust and Copy and Paste sections; the page adopts them
+(`SidebarPage::adoptSection`), so they are remembered and found like the
+page's own.
+
+Pickers are tiles in a `TileGrid` (`src/app/tile_grid.*`): the Shapes tab's
+shapes and the View tab's layouts, whose `layout-*` glyphs picture the panes
+with the camera pane filled and mirror right to left with the panes. The grid
+takes as many columns as its widest label allows at the sidebar's width, so
+labels stay whole at 200% text and in longer languages, and hidden tiles leave
+no gaps. It re-arranges from the event loop, never inside Qt's show or layout
+handling. `level_sidebar_ui_smoke_test` shows every page at 100% text and at
+200% in high contrast right to left, and fails naming the widest widgets if any
+page is wider than its sidebar.
+
+## Brush shapes
+
+`src/core/level_shapes.*` builds the Shapes tab's shapes and `map add-shape`.
+Box, wedge, cylinder, cone and sphere go through the existing primitive builder
+(`addLevelMapBrushPrimitive`). Arch, ring, stairs and room are several convex
+brushes added by `addLevelMapBrushHulls` as one `add-objects` undo step, in the
+face style of the map's first brush:
+
+- Arches and rings: one brush per segment; the outer curve fills the box, so the
+  box drawn is the shape's extent. Angles are measured across the depth axis
+  from the view's right towards its up, so the default half arch stands up as a
+  doorway when drawn in the Front or Side view. Walls as thick as the radius
+  close the segments into slices. A narrow sweep's inner wall can reach past the
+  box, since only the outer curve is fitted.
+- Stairs: solid steps, each from the box's floor to its own height, climbing
+  along the longer side or towards a chosen axis; stairs always rise along Z.
+- Room: floor, ceiling and four walls of the given thickness inside the box,
+  none overlapping.
+
+Every corner is rounded to whole units, so neighbouring brushes share their
+corners exactly. `replaceLevelMapBrushesWithShape` deletes world brushes and
+adds the shape filling their bounds as one step; brushes of brush entities are
+refused. Drawing with the brush tool uses the chosen shape, and its tool button
+shows it. On Doom maps the tab offers rectangle, polygon, stairs and grid
+sectors through the Draw Sector service (`map draw-sector`, `map draw-stairs`,
+`map draw-grid`); **Draw in a View** turns on `MapViewport`'s shape drawing, in
+which a drag anywhere in the Top view, over sectors too, draws the box the shape
+fills (`brushDrawRequested`), until Escape. `level_shapes_smoke_test` covers the
+geometry, the refusals, and undo to the exact bytes for Quake and Quake III
+maps.
+
+## Brush entities, regions, detail and CSG intersect
+
+These tools sit in the right-click menu, the authoring menus and command
+search, each one undo step (`LevelMapUndoCommand` gained a `batch` kind that
+folds several edits into one), with CLI parity:
+
+| Tool | Behaviour | CLI |
+|---|---|---|
+| Tie to Entity | Makes the selected brushes and patches, or the brushes of selected brush entities, into a new brush entity; an entity left empty goes | `map tie-entity` |
+| Move to World | Gives brush entities' brushes back to worldspawn and removes the emptied entities | `map move-to-world` |
+| Select Inside, Touching, Complete Tall, Partial Tall | Radiant's region selections, using the selection's bounds; the tall modes look along the active 2D view's depth | `map select-region` |
+| Make Detail, Make Structural | Quake II and Quake III: the detail content flag on every face; Quake: `func_detail` | `map detail` |
+| Intersect | Replaces overlapping brushes with the brush where they all overlap, each face keeping its source texture | `map intersect` |
+| Drop to Floor | Moves point entities down onto the highest brush or patch top beneath them, keeping their definition's height above it | `map drop-to-floor` |
+| Align Left, Right, Top, Bottom, Centre Horizontally and Vertically | Hammer's Align Objects along the active 2D view's right and up, against the whole selection's bounds; entities move with their brushes, Doom things keep whole units | `map align` |
+| Replace Key Values | Finds one key's value (in any case of the key) across the entities or the selection, as the whole value or every occurrence within it, and sets each entity's new value through `setLevelMapEntitiesProperty`, one all-or-nothing undo step | `map replace-key` |
+| Shear | Slants the selection about its centre, or about a side (`shearLevelMapSelectionAbout`), through the shared transform service: points slide along one axis by a factor of their distance along another; normals transform by the inverse transpose, and texture lock behaves as for other transforms. The Shear Tool turns on `MapViewport`'s shear mode in every 2D view: the selection box's side handles slide their side along itself, snapped to the grid, the opposite side fixed, with a dashed outline while dragging; corners do nothing | `map shear` |
+| Doom stairs and grids | Doom Builder's stair builder and grid drawing (`src/core/level_doom_shapes.*`): rectangles drawn one after another through Draw Sector's service, so new lines join and split existing ones; stairs then raise each step's floor above the last. One undo step | `map draw-stairs`, `map draw-grid` |
+| Curve Linedefs | Doom Builder's curve mode: each selected linedef becomes N pieces along a circular arc through its ends and a bulge point off its middle, new vertices rounded to whole units; every piece keeps the flags, special and tag, with its own sides whose offsets carry on (front from the start, back from the end) | `map curve-linedefs` |
+| Regions | The View tab's Region section keeps the views to a box: world brushes and patches touching it, point entities inside it and brush entities touching it stay drawn, the rest is hidden or shaded (`MapViewport::setRegionBox`). Save Region As writes those objects as a map of their own, sealed by six brushes just outside the box (caulk in Quake III, the chosen material otherwise) and given a player start where the camera stands if none is kept; Compile Region writes it beside the map as `<name>-region.map` and runs the chosen compiler profile on it | `map region` |
+
+`level_map_tools_smoke_test` checks each against exact bytes after undo, redo
+and a reload.
+
+## Built-in entity classes
+
+`src/core/entity_builtin_catalogue.*` holds starter catalogues for Quake (101
+classes), Quake II (147) and Quake III Arena (83): class names, keys and their
+defaults, spawnflags, editor sizes and colours, taken as facts from id
+Software's GPL game code and compiler sources, with the Quake compiler classes
+of ericw-tools. The descriptions are VibeStudio's own. They stand in only when
+no project definitions load, for Quake-family maps; Doom maps keep their thing
+categories. The game is chosen from the map: a Quake III map is Quake III; a
+Quake II header or a class only Quake II has means Quake II; TrenchBroom's
+Quake header, a class only Quake has, or a `wad` or `worldtype` key means Quake;
+otherwise texture names mostly in folders mean Quake II. A mod's own classes
+read as unknown until its definitions are loaded, and Health and the Map tab's
+checklist say which catalogue was used. `entity_builtin_catalogue_smoke_test`
+checks the catalogues against their key types and the detection's edge cases.
+
+## Portal files
+
+`src/core/portal_file.*` reads a compiler's vis portals: PRT1 from Quake's,
+Quake II's and Quake III's compilers (q3map's solid faces after the
+portals are skipped), and PRT2 and PRT1-AM from ericw-tools, with the header
+orders of ericw-tools' `common/prtfile.cc`. Build > Load Portal File outlines
+the portals in the 2D views (`MapViewport::setPortals`), lightly filled so
+overlapping ones read as denser, and in the camera through its overlay painter,
+leaving out any portal with a corner behind the camera; Clear Portals removes
+them. The same header order fixed the artifact summary's PRT1-AM
+portal count. `portal_file_smoke_test` covers each header, q3map's faces and
+the refusals.
+
+## View filters
+
+`src/core/level_view_filters.*` sorts a map's objects into kinds (world
+brushes, brush entities, detail, clip, hint and skip, caulk, sky, liquids,
+patches, point entities, lights, triggers, monsters, items, player starts,
+paths and models; Doom thing categories) with counts. The View tab's Filters
+section hides kinds in the 2D views and the camera through
+`MapViewport::setFilteredObjects`, a set separate from objects hidden by hand,
+which Show All Hidden leaves alone. Filters change what is drawn only, never the
+map, its builds or its packages.
+
+## Camera surface placement
+
+**Create → Place at Camera Surface** places the selected Quake-family point class
+at the visible brush or patch beneath the camera centre. Definition bounds, or
+an 8-unit marker fallback, keep the entity outside the sampled plane. The
+session-only **Clearance** field adds distance, and shared map snapping rounds
+outwards when necessary. Arbitrary slopes are supported for point placement;
+this is a surface half-space check, not whole-scene collision detection.
+A two-tone centre reticle marks the aim while a placeable class is selected;
+loading, stale renders and active manipulation suppress it.
+
+The read-only `ModelViewport::surfacePointAt` query validates the exact ray
+against the currently rendered triangle and returns its point and camera-facing
+normal. Nonfinite, degenerate, behind-camera and stale hits fail without
+changing outputs. Disabled/loading views, active drafts, transforms and strokes
+cannot supply a placement sample. Entity markers and placed model meshes are
+not construction surfaces. Doom/Hexen things require a sector-floor target;
+their final native integer coordinates are checked against the visible floor
+after snapping. Ceiling/wall hits and points that leave that floor are refused.
+UDMF creation remains planned.
+
+Insertion uses `LevelPlacementOperation::AddEntity` or `AddThing` on the normal
+cancellable worker. Existing map/load/selection/scene/package guards reject
+stale publication; scene membership and insertion share one undo entry. Saving,
+recovery, inspector selection and package/build handoffs retain the ordinary
+document services. The command palette exposes `map.placeAtCamera` without
+claiming a profile-specific upstream shortcut. CLI `map add-entity` and
+`map add-thing` remain the numeric authoring routes; camera sampling belongs to
+the rendered viewport.
+
+`camera-surface-placement-smoke` covers exact intersections, invalid inputs,
+outward snapping across 74 slope orientations, four map formats, scene locks,
+cancellation, serialization and undo/redo. `level-camera-placement-ui-smoke`
+covers the actual Create action, stale buffers, definition bounds, save-back,
+changed creation destinations and Doom/Hexen floor-only placement using
+semantic Widgets methods. Native assistive-technology and cross-platform
+acceptance remain open.
+
 ## Camera brush creation
 
 Quake-family maps offer **Draw Brush** in the camera tool selector, Edit menu,
 context menu and command palette. Choose XY, XZ or YZ, then left-drag a footprint
 and release to create a box. The shared grid/snap setting and the profile's
 plan square/cube modifiers apply. Wheel steps during the drag adjust depth;
-**Base** and **Depth** supply exact coordinates. **Use Work Zone** takes the
+**Base**, **Depth** and **Direction** supply the construction coordinate and
+positive or negative extrusion. **Use Work Zone** takes the
 last selection's hidden-axis range, falling back to 0–64 in an empty map.
 Document, list and camera selection updates now refresh that work zone too.
 **Numeric Brush…** opens the existing primitive preview with the same material,
@@ -102,7 +314,7 @@ must have at least one unit on every axis. Paint/Sample and navigation retain
 their profile behavior outside the explicit drawing gesture. No default shortcut
 is reserved; `map.draw-brush` is available for custom bindings.
 
-`box-draw-smoke` checks ray/grid/constraint math. Camera UI tests cover all 19
+`box-draw-smoke` checks ray/grid/constraint math. Camera UI tests cover all 24
 profiles on all three planes, cancellation and enlarged high-contrast RTL
 renders. The shell suite checks empty-map creation, linked draft outlines,
 work-zone/material/numeric handoff, scene destinations/locks, exact undo/redo and
@@ -111,11 +323,36 @@ complete 1,000/10,000-brush scenes and verifies no geometry render rebuilds;
 `VIBESTUDIO_LEVEL_BRUSH_MAX_CALL_MS` can enforce a local GUI-call budget.
 Tests use semantic Qt calls and widget render targets, not physical input.
 
-Surface-aligned/slanted construction planes, native input and screen-reader
+Arbitrary slanted construction planes, native input and screen-reader
 acceptance, production-map and full-shell creation latency remain open.
 The camera draft is an outline rather than a textured solid; committed geometry
 uses the normal material renderer. CLI `map add-brush`, including its `--shape`
 option, uses the same creation services without a camera gesture.
+
+### Place construction planes from a camera surface
+
+**Status: Partial.** **Use Camera Surface** places an axis-aligned construction
+plane through the visible surface at the centre crosshair. Depth extends towards
+the camera; **Direction** can reverse it. The plane stays fixed while wheel depth
+or cube constraints grow the other face. Sloped triangles choose their dominant
+normal axis, so arbitrary oblique construction remains unsupported. The bounded
+construction grid follows the camera's visible work area.
+
+Sampling uses the current rendered triangle and verifies its ray intersection.
+Empty, stale, grazing, degenerate and out-of-bounds hits leave the previous plane
+unchanged and explain the failure in the viewport readout. Choosing the action
+cancels a pending draft first. Changing direction also cancels drafts. Work-zone
+selection, numeric creation, linked plan outlines and the shared one-step brush
+transaction preserve the chosen direction; sampling alone does not edit source
+geometry or map history.
+
+The existing `box-draw-smoke`, `level-camera-brush-ui-smoke` and
+`level-camera-brush-shell-smoke` suites cover six facing directions, reversed
+triangle winding, sloped-plane selection, negative depth and cube constraints,
+world limits, stale/empty render rejection, control synchronisation, numeric
+handoff, exact undo and enlarged high-contrast RTL controls. These are synthetic
+geometry and semantic Qt tests; physical input, screen-reader and production-map
+acceptance remain unverified.
 
 ### Cancellable brush insertion
 
@@ -197,7 +434,7 @@ The opposite face stays fixed; the moved face follows the shared grid/snap
 setting. Crossing the opposite face clamps the size instead of mirroring or
 collapsing geometry. Near-parallel or indistinguishable handles are hidden;
 orbit the view or use **Resize Selection** for numeric keyboard editing.
-This explicit handle gesture is available with all 19 profiles, including
+This explicit handle gesture is available with all 24 profiles, including
 orthographic orbit cameras, and appears in Controls and `editor controls`.
 Paint/Sample and mouse-look keep their own input while active.
 
@@ -441,10 +678,11 @@ the remaining native runtime and accessibility acceptance work.
 ## Scene Organization
 
 The Scene tab now provides named layers and nested groups, undoable assignment,
-selection, inherited visibility, editing locks and creation destinations. Native map metadata,
-save/recovery, CLI operations, structural edits and package grouping share the
-same document service; see [Level scene organization](LEVEL_SCENE.md). Reusable
-linked instances and native accessibility acceptance remain open.
+selection, inherited visibility, editing locks, creation destinations and linked
+copies of groups. Native map metadata, save/recovery, CLI operations, structural
+edits and package grouping share the same document service; see
+[Level scene organization](LEVEL_SCENE.md#linked-groups). Native accessibility
+acceptance remains open.
 
 ## Maps Opened from Packages
 
@@ -866,6 +1104,41 @@ Backface culling permits editing from inside a room or through its outside
 ceiling. Paint, Sample, Targets, undo, recovery and normal WAD saves all use the
 same material transaction; painting does not invalidate Doom node lumps.
 
+Make Sector (`makeLevelMapDoomSectorAt`, `map make-sector`, Make Sector Mode in
+the Top view) follows Doom Builder's Make Sectors mode. It traces the line
+graph's faces as a planar map: each linedef is two half-edges, a face keeps to
+their left, and at a vertex a face goes on along the half-edge just clockwise of
+the way back. Counter-clockwise cycles bound areas; the smallest one around the
+point is the new sector's outline, and clockwise cycles (islands and loose
+lines) whose left side lies in that area join it. Each side facing the area
+faces the new sector; a line that faced nothing there gets a side and opens,
+its wall texture moving to the upper and lower. The sector copies the one the
+area was, else a neighbour, else the map's usual flats, and keeps the tag and
+special of an old sector it wholly replaces. One `doom-topology` undo step;
+`level-map-tools-smoke` and `doom-preview-ui-smoke` cover it.
+
+**Drag Textures in Camera** filters the camera's mouse events in the shell: a
+left press on a wall records its sidedef, offsets, the hit point and the wall's
+plane and running direction; each move meets the pointer's view ray
+(`ModelViewport::viewRay`) with that plane and sets the offsets from the
+distance along the wall and in height, whole units, refreshing the camera; the
+release folds those steps into one, and Escape undoes them. A press anywhere
+else reaches the camera as usual. `doom-preview-ui-smoke` drags, undoes and
+cancels a drag at 100% and 200% text.
+
+Texture auto-align (`src/core/level_doom_align.*`, `map align-walls`) follows
+Ultimate Doom Builder's: from one side it walks both ways along the walls whose
+start meets the last one's end and that show the same texture in the same part,
+turning least at junctions, on either side of a line. X offsets run on by each
+wall's length, wrapped to the texture's width when the package supplies it, so
+textures continue across every join. Y offsets keep rows level by the renderer's
+pegging rules (linuxdoom-1.10 `r_segs.c`): a one-sided middle hangs from the
+ceiling, or stands on the floor when lower-unpegged; an upper hangs from the
+back ceiling unless upper-unpegged; a lower starts at the back floor unless
+lower-unpegged. A texture's height drops out, as rows repeat. One undo step;
+`level-map-tools-smoke` covers the walk, widths, pegging and refusals, and
+`doom-preview-ui-smoke` the camera command.
+
 Open the resource WAD or asset folder in Packages. Flat and wall namespaces are
 resolved separately, including when a flat and a patch have the same name.
 The resolver composes classic `TEXTURE1`/`TEXTURE2` entries through `PNAMES`,
@@ -1119,6 +1392,28 @@ hashes and reviewed widget renders are retained under `.agents/tmp/level-bookmar
 
 ## Four-View Workspace
 
+**Camera Beside Plans** places a full-height camera beside a vertical stack of
+Top, Front and Side views. It uses the same links, bookmarks, maximise/restore
+and per-layout saved proportions as the other workspaces. The CLI identifier is
+`camera-beside-plans`. Switching layouts restores the appropriate splitter
+orientations, and hiding the camera leaves no empty column.
+
+**Camera Above Plans** gives the camera a full-width upper row with Top, Front
+and Side beneath. It uses the existing document, selection, navigation links,
+saved views and per-layout splitter persistence. Hiding the camera expands the
+plans without leaving an empty row. Maximising any pane and restoring it keeps
+the arrangement and proportions. The layout is also available through
+`editor layout camera-above-plans`; it does not change profile bindings.
+Grid, snap and selection framing remain enabled when only the camera is visible.
+
+A compact authoring shelf groups the existing commands under **Create**,
+**Select**, **Transform**, **Geometry** and **Surfaces**. Each menu shares the
+registered action, enablement and shortcut with the main menu and command
+palette. Unsupported map/selection combinations retain their existing guards.
+Workspace tests cover pane transitions, bookmarks, camera visibility, editing
+isolation, accessible keyboard menus and rendered normal/high-contrast RTL
+layouts at 100%/200% text. Native input and screen-reader acceptance remain open.
+
 The Levels **Layout** menu and View commands choose a single plan, a single
 camera, camera beside plan, or four views: camera/top above front/side. **Follow
 Editor Profile** restores the profile's default arrangement. Layout is an
@@ -1189,7 +1484,7 @@ vibestudio --cli editor layout profile
 ```
 
 Accepted preferences are `profile`, `single-2d`, `single-3d`, `camera-and-plan`
-and `four-views`. Omitting the identifier reads without changing the preference.
+`four-views`, `camera-above-plans` and `camera-beside-plans`. Omitting the identifier reads without changing the preference.
 JSON reports `preference`, `effectiveLayout` and `profileId`. Unknown identifiers,
 options and extra positional arguments fail with usage code 2; failed settings
 writes return 1. `--settings-file` selects an isolated store for automation.
@@ -2509,6 +2804,17 @@ replace indeterminate animation with a static indicator.
 Changing the map, selection, active scene destination, save state or package
 invalidates publication. Applying the prepared candidate is one undo step.
 
+**Copies** in **Duplicate with Offset…** creates a linear array of 1–256
+additional copies. Each copy uses the original selection and a cumulative XYZ
+offset, avoiding repeated rounding. The preview, worker and CLI
+`map duplicate --copies N` share native ownership, scene membership, texture
+locking, cancellation and one-step undo/redo. Multi-copy arrays are limited to
+32,768 added records and 262,144 brush faces/patch points; invalid offsets,
+locked destinations and scene-capacity failures leave the document unchanged.
+Quake dialects and Doom/Hexen/UDMF things use existing duplication support.
+UDMF retains fractional XYZ positions and lossless native thing blocks. Target names retain ordinary duplication
+semantics; use prefabs for separately remapped linked assemblies.
+
 The existing quick Duplicate command still moves one grid step in the active
 plan projection. Quick Snap, Duplicate and Paste also prepare on a worker. A
 progress window appears after 150 ms for longer edits, with textual phases,
@@ -2575,8 +2881,9 @@ Use `--engine idTech3` when an otherwise ambiguous classic text map needs that
 target. Duplication and paste retain model, sound, target and material references;
 they do not rename target connections or move asset files. Use reusable prefabs
 when each assembly needs a new internal target namespace. Doom/Hexen duplication
-supports things, rounded to their stored whole coordinates; Doom map-text paste
-and geometry duplication remain unsupported.
+supports things, rounded to their stored whole coordinates. UDMF copies existing
+things with fractional XYZ positions, preserving comments and extension fields;
+Doom map-text paste and geometry duplication remain unsupported.
 
 `level-placement-smoke`, `level-placement-cli-smoke` and
 `level-placement-ui-smoke` cover dialect/UV persistence, owner overlap, sparse
@@ -2731,6 +3038,21 @@ In ZDoom/Hexen/Vavoom namespaces, known polyobject controls (types 3000–3002 a
 nodes; changing only height does not. Full polyobject/effect preview remains
 outside the common-field renderer.
 
+UDMF **Duplicate Selection**, **Duplicate with Offset…** and `map duplicate`
+copy existing things through the same cancellable worker. Each native block is
+appended verbatim except changed X/Y/height value spans; optional height is added
+only when needed. Original TEXTMAP bytes, comments, unknown thing fields and
+unrelated WAD lumps remain unchanged. Arrays support 1–256 copies derived from
+the original positions in one undo step, within the native-record, source-size,
+block/property and scene-membership budgets. Copies inherit source scene groups
+and locks apply to those destinations. Exact undo/redo restores source/copy
+selection, scene membership, source spelling and node state. Ordinary things
+retain valid nodes; adding known polyobject controls marks nodes stale even for
+zero-offset copies. Game IDs, action arguments and polyobject identifiers are
+retained, so users must review them when copies need independent behaviour.
+New things from a type, thing deletion, geometry duplication and topology
+creation/deletion remain unsupported for UDMF.
+
 Numeric and viewport move/resize, quick turns, and numeric rotation Apply share
 the cancellable placement worker with mirror and snap. The rotation preview uses
 the same service and shared Models viewport. Publication checks map revision,
@@ -2747,7 +3069,10 @@ vibestudio --cli map snap ./maps/mirrored.wad --map MAP01 --object sector:0 --gr
 
 `level-udmf-transform-smoke` checks independent affine/area oracles, exact source
 undo, archive preservation, reference/collapse/range refusal, inherited locks,
-ordinary-thing node validity and cancellation through final publication. A generated
+ordinary-thing node validity and cancellation through final publication. It also
+checks lossless thing arrays, optional-height insertion, group inheritance,
+polyobject node invalidation, exact selection history and late-copy failure.
+`level-udmf-smoke` covers CLI array dry runs and save/reopen. A generated
 3,004-vertex transform exercises 6,008 changes in one transaction; this is not a
 production-map performance acceptance result. `level-udmf-transform-ui-smoke`
 uses the actual shell controls at 100% and 200% high-contrast RTL with expanded

@@ -49,6 +49,8 @@ QByteArray catalogFixture(const QString& language, bool complete)
 		bytes += "\t<message>\n\t\t<source>Compiler</source>\n\t\t<translation>Compiler</translation>\n\t</message>\n";
 	} else {
 		bytes += "\t<message>\n\t\t<source>Compiler</source>\n\t\t<translation type=\"unfinished\"></translation>\n\t</message>\n";
+		// A draft: unfinished, but with text that lrelease compiles.
+		bytes += "\t<message>\n\t\t<source>Map</source>\n\t\t<translation type=\"unfinished\">Karte</translation>\n\t</message>\n";
 	}
 	bytes += "</context>\n</TS>\n";
 	return bytes;
@@ -73,10 +75,80 @@ bool runTargetSmoke()
 {
 	bool ok = true;
 	const QVector<vibestudio::LocalizationTarget> targets = vibestudio::localizationTargets();
-	ok &= expect(targets.size() == 20 && vibestudio::localizationTargetIds() == vibestudio::supportedLocaleNames(),
-		"Expected documented 20-language localization target set to drive settings.");
+	ok &= expect(targets.size() == 47 && vibestudio::localizationTargetIds() == vibestudio::supportedLocaleNames(),
+		"Expected the documented 47-language localization target set to drive settings.");
 	ok &= expect(vibestudio::normalizedLocalizationTargetId(QStringLiteral("pt_BR")) == QStringLiteral("pt-BR") && vibestudio::normalizedLocalizationTargetId(QStringLiteral("missing")) == QStringLiteral("en"),
 		"Expected locale target normalization.");
+	for (const vibestudio::LocalizationTarget& target : targets) {
+		ok &= expect(!target.englishName.isEmpty() && !target.nativeName.isEmpty() && target.script.size() == 4,
+			"Expected every target to carry an English name, a native name, and a script code.");
+	}
+
+	// Regional and legacy tags resolve to the written standard they use.
+	const QList<QPair<QString, QString>> resolutions = {
+		{QStringLiteral("zh-TW"), QStringLiteral("zh-Hant")},
+		{QStringLiteral("zh-HK"), QStringLiteral("zh-Hant")},
+		{QStringLiteral("zh-Hant-MO"), QStringLiteral("zh-Hant")},
+		{QStringLiteral("yue-HK"), QStringLiteral("zh-Hant")},
+		{QStringLiteral("zh"), QStringLiteral("zh-Hans")},
+		{QStringLiteral("zh-CN"), QStringLiteral("zh-Hans")},
+		{QStringLiteral("zh-Hans-SG"), QStringLiteral("zh-Hans")},
+		{QStringLiteral("es-MX"), QStringLiteral("es-419")},
+		{QStringLiteral("es-AR"), QStringLiteral("es-419")},
+		{QStringLiteral("es-US"), QStringLiteral("es-419")},
+		{QStringLiteral("es-ES"), QStringLiteral("es")},
+		{QStringLiteral("es"), QStringLiteral("es")},
+		{QStringLiteral("pt"), QStringLiteral("pt-BR")},
+		{QStringLiteral("pt-BR"), QStringLiteral("pt-BR")},
+		{QStringLiteral("pt-AO"), QStringLiteral("pt-PT")},
+		{QStringLiteral("pt_PT"), QStringLiteral("pt-PT")},
+		{QStringLiteral("iw"), QStringLiteral("he")},
+		{QStringLiteral("in"), QStringLiteral("id")},
+		{QStringLiteral("tl"), QStringLiteral("fil")},
+		{QStringLiteral("no"), QStringLiteral("nb")},
+		{QStringLiteral("nn-NO"), QStringLiteral("nb")},
+		{QStringLiteral("de-CH"), QStringLiteral("de")},
+		{QStringLiteral("en-GB"), QStringLiteral("en")},
+		{QStringLiteral("fr-CA"), QStringLiteral("fr")},
+		{QStringLiteral("pa-Guru-IN"), QStringLiteral("pa")},
+		{QStringLiteral("sw-KE"), QStringLiteral("sw")},
+	};
+	for (const auto& [requested, expected] : resolutions) {
+		const QString resolved = vibestudio::normalizedLocalizationTargetId(requested);
+		if (resolved != expected) {
+			std::cerr << qPrintable(requested) << " resolved to " << qPrintable(resolved) << ", not " << qPrintable(expected) << "\n";
+			ok = false;
+		}
+	}
+	// Punjabi in the Shahmukhi script is not read in Gurmukhi: no target.
+	ok &= expect(!vibestudio::localizationTargetForId(QStringLiteral("pa-Arab-PK")), "Expected a script the target is not written in to match nothing.");
+	ok &= expect(vibestudio::preferredLocalizationTargetId({QStringLiteral("yo-NG"), QStringLiteral("fr-BE"), QStringLiteral("en")}) == QStringLiteral("fr"),
+		"Expected the first system language with a target to win.");
+	ok &= expect(vibestudio::preferredLocalizationTargetId({QStringLiteral("yo-NG")}) == QStringLiteral("en"), "Expected English when no system language has a target.");
+	qputenv("VIBESTUDIO_SYSTEM_LANGUAGES", "pt-AO,en-US");
+	ok &= expect(vibestudio::systemLocalizationTargetId() == QStringLiteral("pt-PT") && vibestudio::normalizedLocalizationTargetId(QStringLiteral("system")) == QStringLiteral("pt-PT"),
+		"Expected the system preference to follow the system language list.");
+	ok &= expect(vibestudio::normalizedLocaleName(QStringLiteral("system")) == QStringLiteral("system") && vibestudio::normalizedLocaleName(QString()) == QStringLiteral("system"),
+		"Expected the stored preference to keep system.");
+	qunsetenv("VIBESTUDIO_SYSTEM_LANGUAGES");
+
+	// Region formats are chosen apart from the language.
+	ok &= expect(vibestudio::normalizedRegionFormatId(QStringLiteral("de_CH")) == QStringLiteral("de-CH")
+			&& vibestudio::normalizedRegionFormatId(QStringLiteral("language")) == QStringLiteral("language")
+			&& vibestudio::normalizedRegionFormatId(QStringLiteral("xx-unknown")) == QStringLiteral("system")
+			&& vibestudio::normalizedRegionFormatId(QString()) == QStringLiteral("system"),
+		"Expected region format preferences to normalize.");
+	ok &= expect(vibestudio::regionFormatLocale(QStringLiteral("de-DE"), QStringLiteral("en")).toString(1234.5, 'f', 1) == QStringLiteral("1.234,5"),
+		"Expected an explicit region format to decide number formatting.");
+	ok &= expect(vibestudio::regionFormatLocale(QStringLiteral("language"), QStringLiteral("es-419")).territory() != QLocale::Spain,
+		"Expected language-matched formats to follow the Latin American standard.");
+	const QVector<vibestudio::RegionFormatChoice> regions = vibestudio::regionFormatChoices();
+	bool hasSwissGerman = false;
+	for (const vibestudio::RegionFormatChoice& region : regions) {
+		hasSwissGerman |= region.localeName == QStringLiteral("de-CH");
+	}
+	ok &= expect(regions.size() > 200 && hasSwissGerman, "Expected every regional locale Qt knows among the region format choices.");
+	ok &= expect(!vibestudio::regionFormatSample(QLocale(QStringLiteral("en-GB"))).isEmpty(), "Expected a region format sample.");
 
 	// Shipped RTL targets plus the general right-to-left script set.
 	for (const QString& rtl : {QStringLiteral("ar"), QStringLiteral("ur"), QStringLiteral("ur-PK"), QStringLiteral("he"), QStringLiteral("fa"), QStringLiteral("ps"), QStringLiteral("sd"), QStringLiteral("ug"), QStringLiteral("dv"), QStringLiteral("ckb"), QStringLiteral("yi")}) {
@@ -89,6 +161,12 @@ bool runTargetSmoke()
 	}
 	ok &= expect(vibestudio::rightToLeftLanguageCodes().contains(QStringLiteral("ar")) && vibestudio::rightToLeftLanguageCodes().contains(QStringLiteral("ur")),
 		"Expected Arabic and Urdu in the right-to-left language set.");
+	int rightToLeftTargets = 0;
+	for (const vibestudio::LocalizationTarget& target : targets) {
+		rightToLeftTargets += target.rightToLeft ? 1 : 0;
+		ok &= expect(target.rightToLeft == vibestudio::isRightToLeftLocale(target.localeName), "Expected each target direction to agree with the locale check.");
+	}
+	ok &= expect(rightToLeftTargets == 4, "Expected Arabic, Urdu, Persian, and Hebrew as the right-to-left targets.");
 
 	const QString pseudo = vibestudio::pseudoLocalizeText(QStringLiteral("Compiler finished"));
 	ok &= expect(pseudo.startsWith(QStringLiteral("[!! ")) && pseudo.endsWith(QStringLiteral(" !!]")) && pseudo != QStringLiteral("Compiler finished"),
@@ -240,8 +318,9 @@ bool runCatalogRootSmoke(const QDir& root)
 	const vibestudio::TranslationCatalogStatus* spanish = catalogFor(QStringLiteral("es"));
 	ok &= expect(english && english->status == QStringLiteral("complete") && english->messageCount == 2 && english->translatedCount == 2,
 		"Expected the complete fixture catalog to count two translated messages.");
-	ok &= expect(german && german->status == QStringLiteral("needs-translation") && german->messageCount == 2 && german->unfinishedCount == 1,
-		"Expected the fixture catalog with an unfinished message to need translation.");
+	ok &= expect(german && german->status == QStringLiteral("needs-translation") && german->messageCount == 3 && german->unfinishedCount == 2 && german->draftedCount == 1,
+		"Expected the fixture catalog with an unfinished message and a draft to need translation.");
+	ok &= expect(report.draftedMessageCount >= 1, "Expected the report to total drafted messages.");
 	ok &= expect(french && french->status == QStringLiteral("complete") && french->messageCount == 2 && french->translatedCount == 2,
 		"Expected a catalog with a comment to be parsed as XML with the same counts.");
 	ok &= expect(spanish && spanish->status == QStringLiteral("invalid") && spanish->stale,
@@ -249,8 +328,8 @@ bool runCatalogRootSmoke(const QDir& root)
 	ok &= expect(QDir(report.catalogRoot.rootPath) == QDir(catalogDir) && report.catalogRoot.source == QStringLiteral("environment"),
 		"Expected the report to use the resolved catalog root.");
 	ok &= expect(report.compiledCatalogCount == 1, "Expected the report to count compiled catalogs.");
-	ok &= expect(report.catalogs.size() >= 21, "Expected the report to inspect every expected catalog file.");
-	ok &= expect(report.rightToLeftLocales.contains(QStringLiteral("ar")) && report.rightToLeftLocales.contains(QStringLiteral("ur")),
+	ok &= expect(report.catalogs.size() == 48, "Expected the report to inspect every expected catalog file.");
+	ok &= expect(report.rightToLeftLocales == QStringList({QStringLiteral("ar"), QStringLiteral("ur"), QStringLiteral("fa"), QStringLiteral("he")}),
 		"Expected right-to-left targets in the report.");
 	ok &= expect(report.expansionSmokeOk && report.expansionRatio >= 1.30, "Expected translation expansion smoke coverage.");
 	ok &= expect(report.expansionLayoutSmokeOk && report.layoutChecks.size() >= 5, "Expected translation expansion layout smoke coverage.");

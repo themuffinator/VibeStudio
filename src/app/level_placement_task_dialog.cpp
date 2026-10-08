@@ -41,6 +41,12 @@ LevelPlacementResult LevelPlacementTaskDialog::prepare(QWidget* parent, const Le
 	case LevelPlacementOperation::AddBrush:
 		dialog.setWindowTitle(tr("Add Brush"));
 		break;
+	case LevelPlacementOperation::AddEntity:
+		dialog.setWindowTitle(tr("Add Entity"));
+		break;
+	case LevelPlacementOperation::AddThing:
+		dialog.setWindowTitle(tr("Add Thing"));
+		break;
 	case LevelPlacementOperation::Move:
 		dialog.setWindowTitle(tr("Move Selection"));
 		break;

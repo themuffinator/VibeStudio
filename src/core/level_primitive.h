@@ -26,4 +26,10 @@ bool createLevelBrushPrimitive(const LevelBrushPrimitiveRequest &request, LevelM
 // A single undo step restores the source exactly. Failure leaves it unchanged.
 bool addLevelMapBrushPrimitive(LevelMapDocument *document, const LevelBrushPrimitiveRequest &request, int *brushId = nullptr,
 							   QString *error = nullptr);
+// Adds one convex brush per point set to worldspawn, in the face style of
+// the map's first brush, as a single undo step that selects them all. Every
+// point must be a corner of its hull. Failure leaves the map unchanged.
+bool addLevelMapBrushHulls(LevelMapDocument *document, const QVector<QVector<LevelMapVec3>> &hulls, const QString &texture,
+						   const QString &description, const QString &undoDescription, QVector<int> *brushIds = nullptr,
+						   QString *error = nullptr);
 } // namespace vibestudio

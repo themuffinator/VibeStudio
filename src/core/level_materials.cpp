@@ -203,8 +203,8 @@ LevelPreviewAssets resolvePreviewAssets(const LevelMapDocument &document, const 
 			// Only package-relative provenance supplies relative image candidates.
 			request.modelPath = isSafePackageVirtualPath(authoredMesh->sourcePath)
 				? authoredMesh->sourcePath : QString();
-			if (!authoredMesh->embeddedSkins.isEmpty()) {
-				request.embedded = authoredMesh->embeddedSkins.first().image;
+			if (const auto *skin = modelEmbeddedSkinForSurface(*authoredMesh, static_cast<int>(s))) {
+				request.embedded = skin->image;
 			}
 			requests.insert(request.key, std::move(request));
 		}
@@ -288,8 +288,8 @@ LevelPreviewAssets resolvePreviewAssets(const LevelMapDocument &document, const 
 					request.key = levelModelSurfaceMaterialKey(it.key(), surface.index);
 					request.name = surface.skinPaths.value(0, model.skinPaths.value(0));
 					request.modelPath = appearance.modelPath;
-					if (!model.embeddedSkins.isEmpty()) {
-						request.embedded = model.embeddedSkins.first().image;
+					if (const auto *skin = modelEmbeddedSkinForSurface(model, surface.index)) {
+						request.embedded = skin->image;
 					}
 					if (!request.name.isEmpty() || !request.embedded.isNull()) {
 						requests.insert(request.key, request);

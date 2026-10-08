@@ -77,6 +77,19 @@ int main(int argc, char** argv) {
 				   "candidate exact history", error);
 		}
 	}
+	// Cancellation after several copies must discard the entire staged array.
+	LevelPlacementRequest array;
+	array.offset = {16, 0, 0, true};
+	array.copies = 8;
+	bool arrayStopped = false;
+	LevelPlacementControl arrayControl;
+	arrayControl.isCancelled = [&] { return arrayStopped; };
+	arrayControl.progress = [&](const auto& p) {
+		if (p.phase == LevelPlacementPhase::Arraying && p.completed == 3) { arrayStopped = true; }
+	};
+	const auto cancelledArray = prepareLevelPlacement(source, array, arrayControl);
+	expect(arrayStopped && cancelledArray.cancelled && !cancelledArray.succeeded && source.revision == revision &&
+		serializeLevelMap(source).bytes == original, "mid-array cancellation discards all copies", cancelledArray.error);
 	// Cancellation inside a long parser pass, not just at a phase transition.
 	LevelPlacementRequest paste;
 	paste.operation = LevelPlacementOperation::Paste;

@@ -83,7 +83,7 @@ int main(int argc, char** argv)
 	ok &= expect(assetPackageOpenFilter().contains(QStringLiteral("*.pk4")) && assetPackageOpenFilter().contains(QStringLiteral("*.pkz")), "shared package filter includes ZIP aliases");
 	cli = cli::runWorkspaceCommand({"vibestudio", "asset", "formats", "--module", "models"});
 	ok &= expect(cli.exitCode == 0 && cli.payload.value("formats").toArray().size() >= 7, "module-filtered format catalog", cli.error);
-	ok &= expect(assetFormatForPath(QStringLiteral("test.iqm"))->readCapability == QStringLiteral("metadata") && !assetFormatForPath(QStringLiteral("test.iqm"))->runtimeWrite,
-		"metadata is not advertised as geometry export");
+	ok &= expect(assetFormatForPath(QStringLiteral("test.iqm"))->readCapability == QStringLiteral("geometry") && assetFormatForPath(QStringLiteral("test.iqm"))->runtimeWrite,
+		"IQM is advertised as decoded geometry with export");
 	return ok ? 0 : 1;
 }

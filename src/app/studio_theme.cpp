@@ -4,6 +4,7 @@
 
 #include <QApplication>
 #include <QDir>
+#include <QEvent>
 #include <QFileInfo>
 #include <QFont>
 #include <QFontMetrics>
@@ -12,16 +13,23 @@
 #include <QImage>
 #include <QPainter>
 #include <QPainterPath>
+#include <QPlainTextEdit>
 #include <QProxyStyle>
 #include <QStyleOption>
 #include <QStyle>
 #include <QStyleFactory>
 #include <QStyleHints>
 #include <QTemporaryDir>
+#include <QTextEdit>
+#include <QToolButton>
 #include <QVector>
 #include <QWidget>
+#if QT_VERSION >= QT_VERSION_CHECK(6, 10, 0)
+#include <QAccessibilityHints>
+#endif
 
 #include <algorithm>
+#include <cmath>
 #include <utility>
 
 namespace vibestudio {
@@ -177,6 +185,89 @@ StudioThemeColors highContrastLightColors()
 	return c;
 }
 
+// The state colours for a colour-vision choice. Red-green safe moves success
+// to blue, as the colour-blind themes GitHub Primer publishes do, and keeps
+// warning yellow and danger red apart by lightness: a protanope or deuteranope
+// sees both as yellows, one light and one dark. Blue-yellow safe keeps red
+// against teal for tritanopia. Info turns a quiet neutral in both, so work in
+// progress never competes with a result. studio-theme-smoke simulates each
+// deficiency (Machado, Oliveira and Fernandes, 2009) to keep the three states
+// apart, and checks 3:1 contrast on every background of the theme. Every
+// state keeps its glyph, hatch, or words besides.
+void applyColorVision(StudioThemeColors* c, ColorVision vision, StudioTheme theme)
+{
+	const bool light = theme == StudioTheme::Light || theme == StudioTheme::HighContrastLight;
+	const bool highContrast = theme == StudioTheme::HighContrastDark || theme == StudioTheme::HighContrastLight;
+	switch (vision) {
+	case ColorVision::Typical:
+	case ColorVision::Monochrome:
+		return;
+	case ColorVision::RedGreen:
+		if (highContrast) {
+			c->success = light ? QColor(0x00, 0x33, 0xcc) : QColor(0x6a, 0xb7, 0xff);
+			c->warning = light ? QColor(0x7a, 0x5c, 0x00) : QColor(0xff, 0xd8, 0x00);
+			c->danger = light ? QColor(0x80, 0x26, 0x26) : QColor(0xdb, 0x58, 0x58);
+			c->info = light ? QColor(0x40, 0x40, 0x40) : QColor(0xbf, 0xbf, 0xbf);
+		} else {
+			c->success = light ? QColor(0x0b, 0x5c, 0xad) : QColor(0x4f, 0xa3, 0xf7);
+			c->warning = light ? QColor(0x7d, 0x62, 0x00) : QColor(0xf0, 0xd2, 0x3c);
+			c->danger = light ? QColor(0x80, 0x26, 0x26) : QColor(0xe0, 0x5e, 0x5a);
+			c->info = light ? QColor(0x4f, 0x5b, 0x6b) : QColor(0xa8, 0xb3, 0xc2);
+		}
+		return;
+	case ColorVision::BlueYellow:
+		if (highContrast) {
+			c->success = light ? QColor(0x00, 0x6b, 0x5e) : QColor(0x40, 0xe0, 0xd0);
+			c->warning = light ? QColor(0x8a, 0x4b, 0x00) : QColor(0xff, 0xd8, 0x00);
+			c->danger = light ? QColor(0xa0, 0x00, 0x00) : QColor(0xff, 0x6b, 0x6b);
+			c->info = light ? QColor(0x40, 0x40, 0x40) : QColor(0xbf, 0xbf, 0xbf);
+		} else {
+			c->success = light ? QColor(0x00, 0x75, 0x6a) : QColor(0x33, 0xc3, 0xa8);
+			c->warning = light ? QColor(0x8a, 0x5a, 0x00) : QColor(0xf7, 0xc5, 0x48);
+			c->danger = light ? QColor(0xc4, 0x1f, 0x3a) : QColor(0xff, 0x5c, 0x6c);
+			c->info = light ? QColor(0x4f, 0x5b, 0x6b) : QColor(0xa8, 0xb3, 0xc2);
+		}
+		return;
+	}
+}
+
+// sRGB channels to linear light and back (IEC 61966-2-1).
+double linearChannel(double value)
+{
+	return value <= 0.04045 ? value / 12.92 : std::pow((value + 0.055) / 1.055, 2.4);
+}
+
+double gammaChannel(double value)
+{
+	return value <= 0.0031308 ? value * 12.92 : 1.055 * std::pow(value, 1.0 / 2.4) - 0.055;
+}
+
+// Moves a colour toward the grey of the same relative luminance. Mixing in
+// linear light, where luminance is a weighted sum, keeps luminance and with
+// it every WCAG contrast ratio the palettes were tuned for.
+QColor desaturated(const QColor& color, double amount)
+{
+	const double r = linearChannel(color.redF());
+	const double g = linearChannel(color.greenF());
+	const double b = linearChannel(color.blueF());
+	const double luminance = 0.2126 * r + 0.7152 * g + 0.0722 * b;
+	const double t = std::clamp(amount, 0.0, 1.0);
+	const auto mixed = [luminance, t](double channel) {
+		return static_cast<float>(std::clamp(gammaChannel(channel + (luminance - channel) * t), 0.0, 1.0));
+	};
+	return QColor::fromRgbF(mixed(r), mixed(g), mixed(b), color.alphaF());
+}
+
+// Accent, selection, and state colours; the neutrals are grey already, and
+// the focus ring keeps its hue so it never reads as one more border.
+void desaturateChromaticColors(StudioThemeColors* c, double amount)
+{
+	for (QColor* color : {&c->accent, &c->accentHover, &c->accentPressed, &c->accentSubtle, &c->selection, &c->rowSelection,
+			 &c->success, &c->warning, &c->danger, &c->info}) {
+		*color = desaturated(*color, amount);
+	}
+}
+
 StudioThemeMetrics metricsFor(UiDensity density, int textScalePercent, bool highContrast)
 {
 	StudioThemeMetrics m;
@@ -235,6 +326,20 @@ public:
 			drawRadioIndicator(option, painter);
 			return;
 		}
+		// Check boxes, radio buttons, and item rows show focus with this frame;
+		// with the thick focus ring it is drawn in the focus colour at the
+		// ring's width, like every other focused control.
+		if (element == PE_FrameFocusRect && currentStudioTheme().thickFocusIndicator) {
+			const StudioThemeTokens& theme = currentStudioTheme();
+			const qreal width = theme.metrics.focusWidth;
+			painter->save();
+			painter->setRenderHint(QPainter::Antialiasing, true);
+			painter->setPen(QPen(theme.colors.focus, width));
+			painter->setBrush(Qt::NoBrush);
+			painter->drawRoundedRect(QRectF(option->rect).adjusted(width / 2.0, width / 2.0, -width / 2.0, -width / 2.0), 3.0, 3.0);
+			painter->restore();
+			return;
+		}
 		// Fusion caps its arrows at 8 pixels whatever the text size, so a combo
 		// box's or a tree's arrow shrank beside 200% text. These are the
 		// studio's chevrons instead, sized from the text scale.
@@ -287,6 +392,9 @@ public:
 		case PM_TabBarIconSize:
 		case PM_LineEditIconSize:
 			return std::max(base, scaled(16));
+		// A thick text cursor is three pixels at 100% and grows with the text.
+		case PM_TextCursorWidth:
+			return currentStudioTheme().thickTextCursor ? std::max(3, scaled(3)) : base;
 		default:
 			return base;
 		}
@@ -438,6 +546,72 @@ StudioThemeTokens& mutableCurrentTheme()
 	return tokens;
 }
 
+// Text editors take the style's cursor width once, when built, and
+// QPlainTextEdit not even then (Qt 6.10.1), so the theme sets it on every
+// editor as it is polished or restyled. Line edits re-read the style
+// themselves on a style change. The run buttons also need their cached style
+// sheet selector refreshed when their layoutDirection property changes
+// (Qt::RightToLeft is 1 in the selector). Their physical padding swaps sides;
+// the menu and toolbar layout already mirror their measured insets.
+class StudioStyleFilter final : public QObject {
+public:
+	using QObject::QObject;
+
+	static int width()
+	{
+		const StudioThemeTokens& theme = currentStudioTheme();
+		if (!theme.thickTextCursor) {
+			return 1;
+		}
+		return std::max(3, static_cast<int>(3.0 * std::clamp(theme.textScalePercent, 50, 400) / 100.0 + 0.5));
+	}
+
+	static void apply(QObject* object)
+	{
+		if (auto* plain = qobject_cast<QPlainTextEdit*>(object)) {
+			if (plain->cursorWidth() != width()) {
+				plain->setCursorWidth(width());
+			}
+		} else if (auto* rich = qobject_cast<QTextEdit*>(object)) {
+			if (rich->cursorWidth() != width()) {
+				rich->setCursorWidth(width());
+			}
+		}
+	}
+
+protected:
+	bool eventFilter(QObject* watched, QEvent* event) override
+	{
+		if (event->type() == QEvent::Polish || event->type() == QEvent::StyleChange) {
+			apply(watched);
+		} else if (event->type() == QEvent::LayoutDirectionChange) {
+			if (auto* button = qobject_cast<QToolButton*>(watched); button && button->property("runCommand").toBool()) {
+				button->style()->unpolish(button);
+				button->style()->polish(button);
+				button->updateGeometry();
+				button->update();
+			}
+		}
+		return false;
+	}
+};
+
+// The cursor blink interval the platform asked for, read once before the
+// studio first changes it, so turning steady cursors off restores it.
+int platformCursorFlashTime()
+{
+	static const int flashTime = QGuiApplication::styleHints() ? QGuiApplication::styleHints()->cursorFlashTime() : 1000;
+	return flashTime;
+}
+
+// The interface typeface the platform chose, read before the studio first
+// changes it.
+QString platformFontFamily()
+{
+	static const QString family = QGuiApplication::font().family();
+	return family;
+}
+
 bool& themeApplied()
 {
 	static bool applied = false;
@@ -496,6 +670,17 @@ StudioTheme effectiveStudioTheme(StudioTheme preference)
 	if (preference != StudioTheme::System) {
 		return preference;
 	}
+#if QT_VERSION >= QT_VERSION_CHECK(6, 10, 0)
+	// A high-contrast desktop asks for the high-visibility theme of its own
+	// lightness (Windows contrast themes, macOS Increase Contrast, GNOME
+	// High Contrast).
+	if (const QStyleHints* hints = QGuiApplication::styleHints()) {
+		if (const QAccessibilityHints* accessibility = hints->accessibility();
+			accessibility && accessibility->contrastPreference() == Qt::ContrastPreference::HighContrast) {
+			return hints->colorScheme() == Qt::ColorScheme::Light ? StudioTheme::HighContrastLight : StudioTheme::HighContrastDark;
+		}
+	}
+#endif
 #if QT_VERSION >= QT_VERSION_CHECK(6, 5, 0)
 	if (const QStyleHints* hints = QGuiApplication::styleHints()) {
 		switch (hints->colorScheme()) {
@@ -535,6 +720,30 @@ StudioThemeTokens studioThemeTokens(StudioTheme preference, UiDensity density, i
 		break;
 	}
 	tokens.metrics = metricsFor(density, textScalePercent, tokens.highContrast);
+	return tokens;
+}
+
+StudioThemeTokens studioThemeTokens(const AccessibilityPreferences& preferences)
+{
+	StudioThemeTokens tokens = studioThemeTokens(preferences.theme, preferences.density, preferences.textScalePercent);
+	tokens.colorVision = preferences.colorVision;
+	tokens.reducedSaturation = preferences.reducedSaturation;
+	tokens.thickFocusIndicator = preferences.thickFocusIndicator;
+	tokens.thickTextCursor = preferences.thickTextCursor;
+	tokens.steadyTextCursor = preferences.steadyTextCursor;
+	tokens.fontFamily = preferences.uiFontFamily.trimmed();
+	tokens.wideTextSpacing = preferences.wideTextSpacing;
+	applyColorVision(&tokens.colors, tokens.colorVision, tokens.theme);
+	if (tokens.colorVision == ColorVision::Monochrome) {
+		desaturateChromaticColors(&tokens.colors, 1.0);
+	} else if (tokens.reducedSaturation) {
+		desaturateChromaticColors(&tokens.colors, kReducedSaturationAmount);
+	}
+	// A thick focus ring is three pixels in every theme, beside the one- or
+	// two-pixel borders, so focus stands out from any outline.
+	if (tokens.thickFocusIndicator) {
+		tokens.metrics.focusWidth = 3;
+	}
 	return tokens;
 }
 
@@ -640,6 +849,21 @@ QString studioStyleSheet(const StudioThemeTokens& tokens)
 	values.insert(QStringLiteral("radius"), pixels(m.radius));
 	values.insert(QStringLiteral("bw"), pixels(m.borderWidth));
 	values.insert(QStringLiteral("fw"), pixels(m.focusWidth));
+	values.insert(QStringLiteral("railPinPad"), pixels(kRailPinPadding));
+	// A focus ring wider than the border takes its extra width out of the
+	// padding, so focusing a control never moves its text. Equal widths (every
+	// theme without the thick focus ring) leave the padding alone.
+	const int focusInset = std::max(0, m.focusWidth - m.borderWidth);
+	const auto focusPadding = [focusInset](int vertical, int horizontal) {
+		if (focusInset == 0) {
+			return QString();
+		}
+		return QStringLiteral("padding: %1px %2px; ").arg(std::max(0, vertical - focusInset)).arg(std::max(0, horizontal - focusInset));
+	};
+	values.insert(QStringLiteral("fieldFocusPad"), focusPadding(m.controlPaddingVertical, 8));
+	values.insert(QStringLiteral("buttonFocusPad"), focusPadding(m.controlPaddingVertical, m.controlPaddingHorizontal));
+	values.insert(QStringLiteral("toolFocusPad"), focusPadding(3, 5));
+	values.insert(QStringLiteral("barToolFocusPad"), focusPadding(4, 6));
 	values.insert(QStringLiteral("controlContent"), pixels(controlContent));
 	// A combo box's arrow area grows with the text, so its chevron can.
 	const double textScale = std::clamp(tokens.textScalePercent, 50, 400) / 100.0;
@@ -677,13 +901,14 @@ QToolBar QToolButton { background: transparent; color: @text; border: @bw solid 
 QToolBar QToolButton:hover { background: @panelRaised; border-color: @panelRaised; }
 QToolBar QToolButton:pressed { background: @accentSubtle; color: @selectionText; }
 QToolBar QToolButton:checked { background: @accentSubtle; color: @selectionText; border-color: @accent; }
-QToolBar QToolButton:focus { border-color: @focus; }
+QToolBar QToolButton:focus { border: @fw solid @focus; @barToolFocusPad}
 QToolBar QToolButton:disabled { color: @textFaint; }
 QToolBar#pageToolBar { background: @surface; border-bottom: 1px solid @borderSubtle; padding: 4px 14px; spacing: 4px; }
 QToolBar QLabel { color: @textMuted; padding: 0 4px; }
 QToolBar#studioToolBar { padding: 3px 8px 3px 4px; spacing: 1px; }
 QToolBar#studioToolBar QMenuBar { background: transparent; border: none; padding: 0px; }
 QToolBar#studioToolBar QToolButton[runCommand="true"] { padding: 4px 10px 4px 8px; }
+QToolBar#studioToolBar QToolButton[runCommand="true"][layoutDirection="1"] { padding: 4px 8px 4px 10px; }
 
 QStatusBar { background: @appBackground; color: @textMuted; border-top: 1px solid @borderSubtle; }
 QStatusBar::item { border: none; }
@@ -692,12 +917,12 @@ QStatusBar QToolButton { background: transparent; color: @textMuted; border: @bw
 QStatusBar QToolButton:hover { background: @panelRaised; color: @text; }
 QStatusBar QToolButton:checked { color: @text; background: @panelRaised; }
 
-QWidget#modeRail { background: @appBackground; border-right: 1px solid @borderSubtle; }
-QToolButton#modeButton { background: transparent; color: @textMuted; border: @bw solid transparent; border-radius: @radiusSmall; margin: 1px 6px; padding: 7px 6px 7px 7px; text-align: left; }
+QWidget#modeRail { background: @appBackground; }
+QToolButton#modeButton { background: transparent; color: @textMuted; border: @bw solid transparent; border-radius: @radiusSmall; margin: 1px 6px; padding: 7px; text-align: left; }
 QToolButton#modeButton:hover { background: @panelRaised; color: @text; }
 QToolButton#modeButton:checked { background: @accentSubtle; color: @selectionText; font-weight: 600; }
 QToolButton#modeButton:focus { border: @fw solid @focus; }
-QToolButton#railToggle { background: transparent; color: @textFaint; border: @bw solid transparent; border-radius: @radiusSmall; padding: 6px; }
+QToolButton#railToggle { background: transparent; color: @textFaint; border: @bw solid transparent; border-radius: @radiusSmall; padding: @railPinPad; }
 QToolButton#railToggle:hover { background: @panelRaised; color: @text; }
 QToolButton#railToggle:checked { background: @accentSubtle; }
 QToolButton#railToggle:focus { border: @fw solid @focus; }
@@ -733,24 +958,24 @@ QLabel#emptyBody { color: @textMuted; }
 QPushButton { background: @panelRaised; color: @text; border: @bw solid @border; border-radius: @radiusSmall; padding: @padV @padH; min-height: @controlContent; }
 QPushButton:hover { background: @panelHover; border-color: @borderStrong; }
 QPushButton:pressed { background: @panel; }
-QPushButton:focus { border-color: @focus; }
+QPushButton:focus { border: @fw solid @focus; @buttonFocusPad}
 QPushButton:disabled { background: @panel; color: @textFaint; border-color: @borderSubtle; }
 QPushButton[variant="primary"] { background: @accent; color: @accentText; border-color: @accent; font-weight: 600; }
 QPushButton[variant="primary"]:hover { background: @accentHover; border-color: @accentHover; }
 QPushButton[variant="primary"]:pressed { background: @accentPressed; border-color: @accentPressed; }
-QPushButton[variant="primary"]:focus { border: @fw solid @focus; }
+QPushButton[variant="primary"]:focus { border: @fw solid @focus; @buttonFocusPad}
 QPushButton[variant="primary"]:disabled { background: @panelRaised; color: @textFaint; border-color: @borderSubtle; }
 QPushButton[variant="danger"] { color: @danger; }
 QPushButton[variant="danger"]:hover { background: @dangerSubtle; border-color: @danger; }
 QPushButton[variant="ghost"] { background: transparent; border-color: transparent; }
 QPushButton[variant="ghost"]:hover { background: @panelRaised; border-color: @border; }
-QPushButton[variant="ghost"]:focus { border-color: @focus; }
+QPushButton[variant="ghost"]:focus { border: @fw solid @focus; @buttonFocusPad}
 
 QToolButton { background: transparent; color: @text; border: @bw solid transparent; border-radius: @radiusSmall; padding: 3px 5px; }
 QToolButton:hover { background: @panelRaised; border-color: @border; }
 QToolButton:pressed { background: @accentSubtle; }
 QToolButton:checked { background: @accentSubtle; color: @selectionText; border-color: @accent; }
-QToolButton:focus { border-color: @focus; }
+QToolButton:focus { border: @fw solid @focus; @toolFocusPad}
 QToolButton:disabled { color: @textFaint; }
 QToolButton#qt_toolbar_ext_button { padding: 0px; margin: 0px; }
 QToolButton[segment="true"] { background: @input; border: @bw solid @border; border-radius: 0px; padding: 3px 10px; }
@@ -762,13 +987,14 @@ QToolButton[segmentPosition="last"] { border-top-right-radius: @radiusSmall; bor
 QLineEdit, QAbstractSpinBox { background: @input; color: @text; border: @bw solid @border; border-radius: @radiusSmall; padding: @padV 8px; min-height: @controlContent; selection-background-color: @accent; selection-color: @accentText; }
 QPlainTextEdit, QTextEdit { background: @input; color: @text; border: @bw solid @borderSubtle; border-radius: @radiusSmall; selection-background-color: @accent; selection-color: @accentText; }
 QLineEdit:hover, QAbstractSpinBox:hover { border-color: @borderStrong; }
-QLineEdit:focus, QAbstractSpinBox:focus, QPlainTextEdit:focus, QTextEdit:focus { border: @fw solid @focus; }
+QLineEdit:focus, QAbstractSpinBox:focus { border: @fw solid @focus; @fieldFocusPad}
+QPlainTextEdit:focus, QTextEdit:focus { border: @fw solid @focus; }
 QLineEdit:disabled, QAbstractSpinBox:disabled { background: @panel; color: @textFaint; border-color: @borderSubtle; }
 QLineEdit[searchField="true"] { padding-left: 8px; }
 
 QComboBox { background: @input; color: @text; border: @bw solid @border; border-radius: @radiusSmall; padding: @padV 8px; min-height: @controlContent; }
 QComboBox:hover { border-color: @borderStrong; }
-QComboBox:focus { border: @fw solid @focus; }
+QComboBox:focus { border: @fw solid @focus; @fieldFocusPad}
 QComboBox:disabled { background: @panel; color: @textFaint; border-color: @borderSubtle; }
 QComboBox:on { border-color: @accent; }
 QComboBox::drop-down { subcontrol-origin: padding; subcontrol-position: center right; width: @dropWidth; border: none; background: transparent; }
@@ -816,6 +1042,30 @@ QTabBar::tab:bottom:selected { border-bottom: none; border-top: 2px solid @accen
 QTabBar[compactTabs="true"]::tab { padding: 6px 6px; }
 QTabBar[compactTabs="true"]::tab:bottom { padding: 5px 6px; }
 QTabWidget[tabsAtBottom="true"]::pane { border-top: none; border-bottom: 1px solid @borderSubtle; }
+QTabWidget[studioSidebar="true"]::pane { border: none; top: 0px; left: 0px; right: 0px; background: @surface; }
+QTabWidget[studioSidebar="true"]::tab-bar { top: 0px; left: 0px; right: 0px; }
+QWidget[sidebarPage="true"], QWidget#sidebarPageContent, QScrollArea#sidebarPageScroll { background: @surface; border: none; }
+QWidget#sidebarPageHeader { background: @surface; border-bottom: 1px solid @borderSubtle; }
+QLabel#sidebarPageTitle { font-size: @headingPt; font-weight: 600; color: @text; }
+QLabel#sidebarPageBadge { color: @textMuted; font-size: @smallPt; background: @panelRaised; border-radius: @radiusSmall; padding: 1px 6px; }
+QToolButton#sidebarHeaderButton { padding: 3px; }
+QWidget#sidebarSectionHeaderRow, QWidget#sidebarSectionBody { background: transparent; }
+QLabel#sidebarHint, QLabel[sidebarHint="true"] { color: @textMuted; font-size: @smallPt; }
+QLabel#sidebarFieldLabel { color: @textMuted; }
+QPushButton[sidebarToolRow="true"] { text-align: left; padding: 4px 8px; border: none; border-radius: @radiusSmall; background: transparent; color: @text; }
+QPushButton[sidebarToolRow="true"]:hover { background: @rowHover; }
+QPushButton[sidebarToolRow="true"]:checked { background: @selectionFill; color: @selectionText; }
+QPushButton[sidebarToolRow="true"]:disabled { color: @textFaint; }
+QToolButton[sidebarButton="true"] { padding: 4px 8px; border: @bw solid @border; border-radius: @radiusSmall; background: @panel; color: @text; }
+QFrame[modelPane="true"] { border: 2px solid transparent; }
+QFrame[modelPane="true"][activePane="true"] { border-color: @accent; }
+QToolButton[sidebarButton="true"]:hover { background: @panelRaised; }
+QToolButton[sidebarButton="true"]:pressed { background: @accentSubtle; }
+QToolButton[sidebarButton="true"]:disabled { color: @textFaint; border-color: @borderSubtle; background: transparent; }
+QToolButton[shapeTile="true"] { padding: 6px 2px 4px 2px; border: @bw solid @borderSubtle; border-radius: @radius; background: @panel; color: @text; }
+QToolButton[shapeTile="true"]:hover { background: @panelRaised; }
+QToolButton[shapeTile="true"]:checked { border: @bw solid @accent; background: @accentSubtle; }
+QToolButton[shapeTile="true"]:disabled { color: @textFaint; }
 
 QGroupBox { background: @panel; border: @bw solid @borderSubtle; border-radius: @radius; margin-top: 22px; padding: 14px 12px 12px 12px; }
 QGroupBox::title { subcontrol-origin: margin; subcontrol-position: top left; left: 2px; top: 0px; padding: 0px 4px; color: @text; font-weight: 600; font-size: @headingPt; }
@@ -919,9 +1169,39 @@ void applyStudioTheme(QApplication& app, const StudioThemeTokens& tokens)
 {
 	// Keep the native UI typeface used before the design-system switch.
 	// Capture it before installing Fusion, which may replace the style font.
+	const QString platformFamily = platformFontFamily();
+	const int platformFlashTime = platformCursorFlashTime();
+	const bool hadTheme = themeApplied();
+	const QString previousFamily = hadTheme ? mutableCurrentTheme().fontFamily : QString();
+	// Widgets the sheet gives a font size resolve their font when polished, so
+	// a new typeface or spacing needs the sheet applied afresh to reach them.
+	const bool fontChanged = hadTheme
+		&& (mutableCurrentTheme().fontFamily != tokens.fontFamily || mutableCurrentTheme().wideTextSpacing != tokens.wideTextSpacing);
 	QFont font = QApplication::font();
 	mutableCurrentTheme() = tokens;
 	themeApplied() = true;
+	// A chosen typeface replaces the platform's; choosing none again puts the
+	// platform's back. Wide spacing is WCAG 1.4.12's: letters 0.12em and
+	// words 0.16em apart, on top of the font's own spacing.
+	if (!tokens.fontFamily.isEmpty()) {
+		font.setFamily(tokens.fontFamily);
+	} else if (!previousFamily.isEmpty()) {
+		font.setFamily(platformFamily);
+	}
+	const qreal em = tokens.metrics.baseFontPoints * 96.0 / 72.0;
+	font.setLetterSpacing(QFont::AbsoluteSpacing, tokens.wideTextSpacing ? 0.12 * em : 0.0);
+	font.setWordSpacing(tokens.wideTextSpacing ? 0.16 * em : 0.0);
+	if (QStyleHints* hints = QGuiApplication::styleHints()) {
+		const int flashTime = tokens.steadyTextCursor ? 0 : platformFlashTime;
+		if (hints->cursorFlashTime() != flashTime) {
+			hints->setCursorFlashTime(flashTime);
+		}
+	}
+	static StudioStyleFilter* styleFilter = nullptr;
+	if (!styleFilter) {
+		styleFilter = new StudioStyleFilter(&app);
+		app.installEventFilter(styleFilter);
+	}
 	// Fusion paints arrows, tree branches, and frames from the palette, so one
 	// palette gives consistent results on every platform; the proxy on top of it
 	// draws check and radio indicators from the tokens.
@@ -935,7 +1215,7 @@ void applyStudioTheme(QApplication& app, const StudioThemeTokens& tokens)
 		}
 	}
 	const auto sheet = studioStyleSheet(tokens);
-	const bool replaceSheet = app.styleSheet() != sheet;
+	const bool replaceSheet = app.styleSheet() != sheet || fontChanged;
 	// Updating Qt's existing application sheet recursively repolishes cached
 	// descendants once per ancestor. Detach it before installing a changed
 	// sheet so each widget follows the normal style replacement path instead.
@@ -947,6 +1227,10 @@ void applyStudioTheme(QApplication& app, const StudioThemeTokens& tokens)
 	font.setPointSizeF(tokens.metrics.baseFontPoints);
 	QApplication::setFont(font);
 	if (replaceSheet) { app.setStyleSheet(sheet); }
+	// Editors built before this change keep their old width otherwise.
+	for (QWidget* widget : QApplication::allWidgets()) {
+		StudioStyleFilter::apply(widget);
+	}
 }
 
 const StudioThemeTokens& currentStudioTheme()
@@ -958,7 +1242,24 @@ bool studioThemeIsApplied(const StudioThemeTokens& tokens)
 {
 	const StudioThemeTokens& current = mutableCurrentTheme();
 	return themeApplied() && current.theme == tokens.theme && current.density == tokens.density
-		&& current.textScalePercent == tokens.textScalePercent;
+		&& current.textScalePercent == tokens.textScalePercent && current.colorVision == tokens.colorVision
+		&& current.reducedSaturation == tokens.reducedSaturation && current.thickFocusIndicator == tokens.thickFocusIndicator
+		&& current.thickTextCursor == tokens.thickTextCursor && current.steadyTextCursor == tokens.steadyTextCursor
+		&& current.fontFamily == tokens.fontFamily && current.wideTextSpacing == tokens.wideTextSpacing;
+}
+
+QColor studioDesaturatedColor(const QColor& color, double amount)
+{
+	return desaturated(color, amount);
+}
+
+QColor studioAdjustedStateColor(const QColor& color)
+{
+	const StudioThemeTokens& tokens = currentStudioTheme();
+	if (tokens.colorVision == ColorVision::Monochrome) {
+		return desaturated(color, 1.0);
+	}
+	return tokens.reducedSaturation ? desaturated(color, kReducedSaturationAmount) : color;
 }
 
 QColor studioThemeStateColor(const StudioThemeTokens& tokens, const QString& operationStateId)

@@ -12,7 +12,7 @@ Plan and camera brush insertion share cancellable worker preparation with all
 profiles. Numeric primitives publish their validated previews through the same
 source, selection, creation-layer and package guards.
 The shared Objects model and background queries preserve profile-independent
-selection, filtering, framing and hidden-object behavior across all 19 profiles.
+selection, filtering, framing and hidden-object behavior across all 24 profiles.
 
 Every profile shares explicit camera selection resize handles. Unmodified left
 drag on an X/Y/Z face handle or its label resizes a Quake-family selection;
@@ -38,7 +38,9 @@ Capture/manage/next/previous saved-view commands
 are available for user bindings and reserve no default keys.
 
 Levels' **Layout** menu can override the profile with a single plan, single
-camera, camera beside plan or four synchronized views. The override keeps the
+camera, camera beside plan or four synchronised views. The latter can use equal
+quadrants, **Camera Above Plans** or **Camera Beside Plans**, which gives the
+camera a large left pane and stacks three plan panes on the right. The override keeps the
 profile's gestures and keys; **Follow Editor Profile** returns to its layout.
 `vibestudio --cli editor layout [preference] --json` reads or changes this setting.
 See [Four-View Workspace](LEVEL_EDITOR.md#four-view-workspace) for active-pane,
@@ -82,11 +84,13 @@ new wrap and selected-value defaults. The dialog reports this adjustment. Explic
 choices still require a conflict-free combination. Version 1 gesture files,
 per-profile settings and `editor gestures` share these rules.
 
-Q3Radiant and GtkRadiant default to middle-click material sampling and
-Shift+middle single-surface painting. NetRadiant and NetRadiant Custom default
+QeRadiant, Q3Radiant and GtkRadiant 1.4/1.6 default to middle-click material sampling and
+Shift+middle single-surface painting. GtkRadiant 1.5 samples with middle and pastes
+onto the hit face with Ctrl+Shift+middle; Shift+middle and Ctrl+middle stay unbound.
+NetRadiant and NetRadiant Custom default
 to middle-click sampling. Sampling chooses the name for the shared picker,
 painting and subsequent brush creation; a brush face also supplies its mapping
-and flags to the session surface clipboard. Q3Radiant/GtkRadiant use Ctrl+middle
+and flags to the session surface clipboard. QeRadiant/Q3Radiant/GtkRadiant 1.4/1.6 use Ctrl+middle
 to paste this definition onto the hit brush and Ctrl+Shift+middle onto the hit
 face. Paste always uses the copied material, even after the picker changes,
 and requires matching mapping formats. NetRadiant uses Shift+middle for a full
@@ -272,6 +276,37 @@ profile brings that profile's grid.
 both looks and orbits, no key bound to two commands. The editor profile smoke
 test runs it over every profile.
 
+## Sidebars
+
+The Levels page keeps its browsers and properties in two tabbed sidebars, after
+Blender's: tabs of glyphs down the outer edge, each page made of collapsible
+sections, and either sidebar folding down to its tabs. Which tab sits on which
+side, where the gaps between groups of tabs fall, which tab is open first, and
+what each tab is called are data too, in `src/core/level_sidebar.*`, keyed by a
+family of profiles:
+
+| Family | Profiles | Left | Right | Names |
+|---|---|---|---|---|
+| Studio | VibeStudio Default and any profile not listed | Outliner, Shapes, Entities, Textures, Models, Sounds, Prefabs | Inspector, Tools, Surfaces, Map, View, Health, History | The studio's own |
+| Radiant | GtkRadiant 1.4 to 1.6, QeRadiant, Q3Radiant, NetRadiant, NetRadiant Custom, DarkRadiant, DoomEdit | Textures first, then Entities, the Entity List and the asset browsers | Entity, Surface, Filters, Map, Issues, Undo | **Entity List**, **Entity**, **Surface**, **Filters**, **Issues**, **Undo**, **Brush** |
+| TrenchBroom | TrenchBroom | None | One inspector: Map, Entity, Face, then the browsers | **Entity**, **Face**, **Issues** |
+| Hammer | Hammer, J.A.C.K., Sledge, BSP Quake Editor | Objects and View | Textures and Primitives first, as Hammer's texture group and object bar | **Objects**, **Properties**, **Face Edit**, **Problems**, **Primitives** |
+| Doom Builder | Doom Builder 2 / X, Ultimate Doom Builder, SLADE, Eureka | None | One docker of Properties, Things and Textures | **Properties**, **Things**, **Analysis**, **Undo**, **Draw** |
+| QuArK | QuArK | As the studio | Specifics, Faces and the views | **Map Tree**, **Specifics**, **Faces** |
+| Blender, Unreal | Blender, Unreal Editor | Add (or Place) and the browsers | The outliner joins the properties | Blender: **Add**, **Item**, **Tool**, **Materials**; Unreal: **Place**, **Details**, **Materials** |
+| Unity, Godot | Unity Scene View, Godot 3D | As the studio | As the studio | Unity: **Hierarchy**, **Materials**; Godot: **Scene**, **Materials** |
+
+Browse Editor Profiles previews each profile's two sidebars with its names, so
+the arrangement is seen before it is applied. On a Doom map, **Entities** is
+called **Things** whatever the family. Moving
+tabs with the tab context menu changes only the current family's arrangement,
+which the settings keep as JSON; **Reset Sidebars** returns to the family's. A
+saved arrangement from an older build is normalized, so tabs added since appear
+where the family places them. `level_sidebar_smoke_test` checks that every
+profile places every tab exactly once, the family names, and the JSON round trip;
+`studio_sidebar_smoke_test` checks the widgets, folding, keys, accessibility and
+right-to-left mirroring.
+
 ## Profiles
 
 | Profile | Status |
@@ -281,7 +316,12 @@ test runs it over every profile.
 | NetRadiant Custom Style | Brush/camera controls adapted from NetRadiant Custom's defaults |
 | NetRadiant Style | Standalone Xonotic defaults, 8-unit grid, 110-degree camera and Delete/Insert zoom |
 | GtkRadiant 1.6.0 Style | Brush/camera controls adapted from GtkRadiant 1.6.0's defaults |
+| GtkRadiant 1.4 Style | Classic Alt area selection, fixed camera steps, A/Z pitch and Shift+B texture fitting |
+| GtkRadiant 1.5 Style | Shift area selection, arrow free flight and Ctrl+Shift+middle surface paste |
+| QeRadiant Style | Classic Quake II camera steering and Shift+5/Ctrl+F texture fitting without Q3 patch shortcuts |
 | Q3Radiant Style | Classic right-button steering, fixed movement/pitch steps and native brush/surface/patch keys |
+| DoomEdit Style | Right steering, Ctrl+right pan, Ctrl+Shift+right look, Shift+M merging and Home projection |
+| BSP Quake Editor Style | Middle look, Shift+middle pan, right material sampling, WASD/RF/QE and Ctrl+Space cloning |
 | QuArK Style | Adapted four-view controls, plan pan/zoom and camera drive keys |
 | Hammer / Worldcraft Style | Adapted four-view, Z mouse look, WASD, clipping and build/test |
 | J.A.C.K. Style | Hammer-family four-view workflow with shared brush/build services |
@@ -296,11 +336,88 @@ test runs it over every profile.
 | Godot 3D Style | Middle orbit, Shift+middle pan, right-button flight, Shift+F look |
 | Blender Style | Middle orbit, Shift+middle pan, keypad views and familiar selection keys |
 
-There are 19 selectable profiles, including VibeStudio Default. They are
+There are 24 selectable profiles, including VibeStudio Default. They are
 familiarity adaptations for VibeStudio's supported map formats, not claims of
 complete upstream editor or engine emulation. The reference window includes
 searchable **Profile adaptations** alongside the actual gestures. Detailed
 coverage and remaining work follow below.
+
+The CLI and stored preferences also accept `NRC`, `TB`, `GtkRadiant 1.4.0`,
+`GtkRadiant 1.5.0`, `GtkRadiant 1.6.0` and `QE Radiant`. Canonical IDs remain
+stable; aliases resolve to the same preset and do not create duplicate profiles.
+Layout overrides, gestures, camera keys and command shortcuts remain independently
+customisable for every profile.
+
+### DoomEdit and BSP Quake Editor
+
+`doomedit` follows [id Software's Doom 3 GPL editor](https://github.com/id-Software/DOOM-3/tree/a9c49da5afb18201d31e3f0a429a037e56ce2b9a/neo/tools/radiant),
+revision `a9c49da5`, with classic Radiant plan/brush controls and a distinct
+Ctrl+Shift+right camera-look gesture. Right drag steers and Ctrl+right pans;
+arrow/comma/period/D/C and A/Z keys retain fixed camera steps. Shift+M merges,
+Ctrl+Shift+H isolates, 0 toggles the grid and Home or Ctrl+Tab changes the plan
+projection. Ctrl+U and Shift+U remain unassigned because DoomEdit uses them for
+axial texture operations. Surface and patch inspectors use S and Shift+S.
+`doom3-radiant`, `doom-edit` and `d3radiant` are aliases. This is an adaptation
+for supported map formats: Doom 3 rendering, lights, material editing, floor
+stepping, fractional grids and native texture gestures remain unsupported.
+It does not claim idStudio or idTech4 format support.
+
+`bsp` follows the [BSP 0.97q7 release settings](https://www.bspquakeeditor.com/downloads.php)
+and [author's navigation release notes](https://www.bspquakeeditor.com/), reviewed
+7 October 2026. Middle drag looks, Shift+middle pans and right click samples
+material. WASD moves, R/F rises/sinks and Q/E turns; arrows, Insert/Page Up and
+Home/End retain additional movement keys. Page Down/Delete pitches up/down.
+Ctrl+Space duplicates, Ctrl+X or keypad minus deletes, backtick selects all,
+Z opens Surface Alignment and Alt+S snaps. The shared four-pane workspace uses
+a 16-unit grid. Shift selects in the plan and a bare drag draws or resizes.
+The camera uses replacement selection with Ctrl toggling. Selection cycling
+on hold, native texture drags, region bounds, alternate mouse configurations
+and configuration import remain unsupported. `bsp-editor`, `bsp-quake-editor`
+and `bsp97` resolve to this profile. Exact modified-pan chords take precedence
+over optional mouse-look speed modifiers in every profile.
+
+`hammer++` and `hammer-plus-plus` remain aliases for the classic Hammer preset;
+the catalogue now explicitly labels that limitation. Hammer++ extensions and
+Hammer 2 are not represented as separate implemented profiles.
+
+### GtkRadiant 1.4 and 1.5
+
+`gtkradiant-1-4` follows the [1.4.0-era ZeroRadiant source](https://github.com/TTimo/GtkRadiant/tree/5fc27697b313ddb925e57605c9983f5727a3c19f)
+whose `include/version.default` identifies 1.4.0. `gtkradiant-1-5` follows the
+[upstream 1.5 branch](https://github.com/TTimo/GtkRadiant/tree/017673373699174b574c92a262496826a6b409e9).
+Both start with camera beside plan, an 8-unit grid, Shift selection,
+Shift+right plan zoom, Space cloning, Backspace deletion, Insert/Delete zoom,
+right-click free look and Ctrl+Shift+Tab framing. Outside free look,
+arrow/comma/period/D/C keys step the camera by 32 units or 22.5 degrees;
+A/Z pitch up/down. Modified arrows remain available to surface tools.
+
+1.4 uses Alt area selection, middle surface sampling, Shift+middle material
+painting, Ctrl+middle brush-definition paste and Ctrl+Shift+middle face paste.
+1.5 uses Shift area selection and arrow-key translation during free look;
+middle samples and Ctrl+Shift+middle pastes onto the hit face. 1.5 leaves the
+separate Shift/Ctrl middle-button material chords unbound.
+
+Both route Ctrl+U to brush merging, S to Surface Alignment, Shift+S to patch
+editing, Shift+C to caps, Shift+T to texture lock and Shift+B to texture fitting.
+Shift+arrows and Shift+Page Up/Down use the shared Surfaces target and step
+settings, with centre-anchored rotation. These are independent studio
+adaptations: 1.5 area selection adds rather than toggles members; native
+replacement-area selection, component manipulators, fractional grids, floor
+stepping, Z-checker and preference imports are not emulated. Selecting a
+profile does not add another game format or engine.
+
+### Classic QeRadiant
+
+`qeradiant` follows the shared and Qe-specific behaviours documented in
+[Eutectic's QeRadiant/Q3Radiant manual, Appendix G](https://icculus.org/gtkradiant/documentation/q3radiant_manual/appndx/sskey_dl.htm),
+reviewed 7 October 2026. It uses the classic Q3Radiant camera steering and
+brush controls below, with Shift+5 and Ctrl+F mapped to texture fitting.
+Ctrl+F applies to the Surfaces target while a map view has focus. Q3 patch,
+hide/show, select-similar and texture-lock keys are unassigned; those shared
+studio commands remain available in menus and command search. Whole-entity
+selection mode, animated entity previews, Alt+right texture dragging and
+Z-checker remain unsupported. Surface sampling/paste keeps the common studio
+clipboard rules rather than reproducing implicit selected-set changes.
 
 ### TrenchBroom Style
 Reference: [TrenchBroom](https://trenchbroom.github.io/). The values follow its
@@ -602,8 +719,8 @@ stand in for QERadiant, DoomEdit or game-specific Radiant variants.
 
 ### Coverage still needed for professional acceptance
 
-The catalog covers major brush, Doom and modern scene-editor families. Legacy
-QERadiant and game-specific Radiant variants,
+The catalog covers major brush, Doom and modern scene-editor families. Additional
+game-specific Radiant variants,
 Qoole/BSP, DEdit and older UnrealEd require separate reference audits before any
 claim of matching their defaults. These are not silently treated as equivalent
 to newer profiles. Native preference-file import and native mode/tool parity,
