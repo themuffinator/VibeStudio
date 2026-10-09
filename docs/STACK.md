@@ -1193,6 +1193,12 @@ pins. `scripts/build_release.py` and `scripts/package_windows_release.py` add
 fresh-build evidence, Windows Qt deployment, runtime checks and matching source
 archives using the runtime/source helpers. PR/nightly Windows jobs are configured
 to upload the pair together; hosted execution must be verified independently.
+Every Windows job builds with the MSVC 2022 toolset (14.44): the hosted
+`windows-latest` image now defaults to Visual Studio 2026, whose MSVC 19.51
+flags a deprecation inside Qt 6.10.1's own `qguiapplication.h` and
+`qapplication.h`, which `build_release.py`'s warnings-as-errors build cannot
+pass. The image carries the 2022 toolset alongside, and Qt's `msvc2022_64` kit
+targets it.
 These tools do not bundle external compiler executables or sign artifacts.
 
 **Release pipeline (2026-10-07).** `VERSION` (Semantic Versioning 2.0) and

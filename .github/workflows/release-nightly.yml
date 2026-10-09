@@ -42,11 +42,17 @@ jobs:
       - name: Validate Credits And Compiler Pins
         run: python scripts/validate_credits.py
 
+      # windows-latest carries Visual Studio 2026, whose compiler (MSVC 19.51)
+      # flags a deprecation inside Qt 6.10.1's own qguiapplication.h and
+      # qapplication.h, and the release build treats warnings as errors. Build
+      # with the MSVC 2022 toolset (14.44) the image also has, as Qt's
+      # msvc2022_64 kit and docs/manual/building-from-source.md expect.
       - name: Setup MSVC
         if: matrix.os == 'windows-latest'
         uses: TheMrMilchmann/setup-msvc-dev@v4
         with:
           arch: x64
+          toolset: "14.44"
 
       # Qt Multimedia (audio playback) is an add-on module. Windows and macOS
       # install it; the Linux job builds without it, which keeps the
