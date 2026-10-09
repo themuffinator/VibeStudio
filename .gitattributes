@@ -5,6 +5,7 @@ external/audio/r8brain-free-src/** -text
 external/audio/dr_libs/** -text
 external/audio/libogg/** -text
 external/audio/libvorbis/** -text
+external/audio/libebur128/** -text
 external/audio/portaudio/** -text
 external/modelling/xatlas/** -text
 external/graphics/vulkan-headers/** -text
