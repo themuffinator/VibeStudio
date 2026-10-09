@@ -1141,9 +1141,16 @@ Tests that check what the 3D renderer draws call
 neither OpenGL nor Vulkan starts they skip (exit 77), or skip only their
 drawing checks, and with `VIBESTUDIO_RENDER_REQUIRE=1` a missing renderer is a
 failure instead. Most tests run on Qt's offscreen platform, where only Vulkan
-draws on Windows and macOS, so hosted Windows and macOS runners skip those
-checks; Linux CI installs Mesa's lavapipe and sets the variable, so every
-drawing check runs there. `render-device-smoke` compares the backends with
+draws on Windows and macOS. Hosted runners have no GPU, so CI gives the Linux
+and Windows jobs Mesa's lavapipe, a Vulkan driver that runs on the processor,
+and sets the variable, so every drawing check runs there. Linux installs
+`mesa-vulkan-drivers`; Windows runs `scripts/install_software_vulkan.py`,
+which fetches LunarG's Vulkan loader and a mesa-dist-win build of lavapipe,
+both pinned by version and SHA-256, and points `VK_DRIVER_FILES` at lavapipe's
+manifest; then `vibestudio --cli render backends --json` must report Vulkan as
+the active renderer before the tests start. The same script sets lavapipe up
+on any Windows machine without a GPU. Hosted macOS runners still skip the
+drawing checks. `render-device-smoke` compares the backends with
 each other on any machine that has both, and `render-cli-smoke` covers the
 `render` commands. Pretend a machine has no renderer with
 `QT_QPA_PLATFORM=offscreen` and `VK_ICD_FILENAMES`/`VK_DRIVER_FILES` pointing

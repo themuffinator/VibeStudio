@@ -27,9 +27,10 @@ workflow on GitHub Actions). Each run:
   and writers, parser fuzzing and deliberately damaged files, saving and
   recovery, command-line commands, theme contrast checks, and GUI tests that
   drive the real studio window with simulated input on an off-screen display;
-- checks what the 3D views draw on Linux, with Mesa's software Vulkan driver.
-  The Windows and macOS runners have no graphics driver, so those drawing
-  checks are skipped there;
+- checks what the 3D views draw on Windows and Linux, with Mesa's software
+  Vulkan driver, since the runners have no graphics card. The macOS runners
+  have no graphics driver the tests can use, so those drawing checks are
+  skipped there;
 - starts the studio in a self-test mode that builds and paints every page;
 - checks that the command-line documentation matches the commands the program
   really has;

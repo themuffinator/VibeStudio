@@ -234,7 +234,8 @@ core (or OpenGL ES 3.0) driver through Qt Gui's `QOpenGLContext`, or with its
 Vulkan 1.0 driver through the loader above. Neither is bundled, and a machine
 needs only one of them; with neither, 3D views say why and draw nothing, while
 every other workflow is unaffected. Mesa's llvmpipe and lavapipe software
-drivers work, slowly, and are what Linux CI uses.
+drivers work, slowly; lavapipe is what CI draws with on Linux and Windows (see
+[Software Vulkan For CI](#software-vulkan-for-ci-not-shipped)).
 
 The shaders' SPIR-V and OpenGL text are generated into
 `src/core/render_shader_data.inc`, which is committed, so building needs no
@@ -243,6 +244,28 @@ shader compiler. `scripts/build_render_shaders.py` regenerates it with
 the `glslang-tools` (Debian, Ubuntu) and `glslang` (Homebrew) packages, and
 `render-shaders-validation` checks it: with the hash of the sources always,
 and by compiling every variant again when the tool is on `PATH`.
+
+### Software Vulkan For CI (Not Shipped)
+
+Hosted CI runners have no GPU, so the drawing tests get Mesa's lavapipe, a
+Vulkan driver that runs on the processor. The Linux jobs install Ubuntu's
+`mesa-vulkan-drivers` and `libvulkan1`. The Windows jobs in `pr-ci.yml`,
+`release-nightly.yml` and `release.yml` run `scripts/install_software_vulkan.py`
+after the build, which downloads two pinned files, refuses any whose SHA-256
+differs, and unpacks only what the tests use into the runner's temporary
+folder. It needs 7-Zip, which the runner image has.
+
+| Download | Pinned version and SHA-256 | Files used | Licence |
+| --- | --- | --- | --- |
+| [LunarG Vulkan Runtime](https://vulkan.lunarg.com/sdk/home#windows) components | 1.4.363.0, `a25a927aa8b9f0371048f1861cf88ac3b9bc9b1fb332c42d897c8ab32695769a` | `vulkan-1.dll` (the Khronos Vulkan loader) and `vulkaninfo.exe` | Apache-2.0 and MIT |
+| [mesa-dist-win](https://github.com/pal1000/mesa-dist-win/releases/tag/26.2.4) MSVC release package | Mesa 26.2.4, `351fc8c8b695878ffb3eaa044b3ead08672a48b1a045e3c3e3975811df0f6695` | `x64/vulkan_lvp.dll` and `x64/lvp_icd.x86_64.json` (lavapipe) | MIT (Mesa); the driver also contains LLVM (Apache-2.0 with LLVM exceptions) |
+
+The script adds the folder to `PATH` and sets `VK_DRIVER_FILES` to lavapipe's
+manifest for the job's later steps, and the workflow checks that
+`vibestudio --cli render backends --json` reports Vulkan before the tests run.
+Nothing is installed system-wide, linked into VibeStudio or shipped with it.
+To move a pin, change the version and hash in the script after checking the new
+file, and update this table and [Credits](CREDITS.md#3d-rendering-opengl-and-vulkan-2026-10-08).
 
 ### Optional Local Language Servers
 

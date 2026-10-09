@@ -132,9 +132,10 @@ workflow on GitHub Actions). Each run:
   and writers, parser fuzzing and deliberately damaged files, saving and
   recovery, command-line commands, theme contrast checks, and GUI tests that
   drive the real studio window with simulated input on an off-screen display;
-- checks what the 3D views draw on Linux, with Mesa's software Vulkan driver.
-  The Windows and macOS runners have no graphics driver, so those drawing
-  checks are skipped there;
+- checks what the 3D views draw on Windows and Linux, with Mesa's software
+  Vulkan driver, since the runners have no graphics card. The macOS runners
+  have no graphics driver the tests can use, so those drawing checks are
+  skipped there;
 - starts the studio in a self-test mode that builds and paints every page;
 - checks that the command-line documentation matches the commands the program
   really has;
@@ -5499,7 +5500,7 @@ building, testing, running and packaging.
 | Git | To clone the source with its submodules. |
 | Qt Linguist tools, optional | `lrelease` compiles the translation catalogues; without it the build still succeeds. `lupdate` is used by the translation check in the full validation run. |
 | ALSA development files, Linux, optional | For the synchronised recording backend, such as `libasound2-dev` on Debian and Ubuntu. Without them, that backend is left out. |
-| An OpenGL 3.3 or Vulkan 1.0 driver, for running | The 3D views and many tests draw with it. No Vulkan SDK is needed to build: the Vulkan headers are in the source, and the loader is opened at run time. On Linux without a GPU, Mesa's `mesa-vulkan-drivers` (lavapipe) works. |
+| An OpenGL 3.3 or Vulkan 1.0 driver, for running | The 3D views and many tests draw with it. No Vulkan SDK is needed to build: the Vulkan headers are in the source, and the loader is opened at run time. On Linux without a GPU, Mesa's `mesa-vulkan-drivers` (lavapipe) works; on Windows, `python scripts/install_software_vulkan.py` puts lavapipe and a Vulkan loader in `build/software-vulkan` (it needs 7-Zip) and prints the two settings that use them. |
 | glslang, optional | Only when you change the shaders in `src/core/shaders`: `python scripts/build_render_shaders.py` regenerates `src/core/render_shader_data.inc` with `glslangValidator` (Vulkan SDK, or `glslang-tools` on Debian and Ubuntu). |
 
 Meson finds Qt through `qmake6`, so put your Qt installation's `bin` folder on PATH, or make Qt
@@ -5537,8 +5538,8 @@ meson test -C builddir --print-errorlogs
 Meson's default build type is `debug`, which runs noticeably slower. CI configures with
 `--buildtype=debugoptimized`, which you can add to `meson setup` too. Tests that draw in 3D skip their
 drawing checks when neither OpenGL nor Vulkan starts; set `VIBESTUDIO_RENDER_REQUIRE=1` to make that a
-failure instead, as Linux CI does. Most tests use Qt's offscreen platform, where only Vulkan can draw on
-Windows and macOS. On Windows, Qt's `bin` folder
+failure instead, as CI does on Windows and Linux. Most tests use Qt's offscreen platform, where only Vulkan
+can draw on Windows and macOS. On Windows, Qt's `bin` folder
 must also be on PATH when the tests run, as in
 [Run from the build folder](manual/building-from-source.md#run-from-the-build-folder).
 

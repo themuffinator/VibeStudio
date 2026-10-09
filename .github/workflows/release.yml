@@ -195,7 +195,28 @@ jobs:
           --github-repo "${{ github.repository }}"
           --update-channel ${{ needs.prepare.outputs.update_channel }}
 
+      # Mesa's lavapipe with LunarG's Vulkan loader lets the 3D renderer's
+      # tests draw on this runner, which has no GPU. The tests run on Qt's
+      # offscreen platform, where Windows draws with Vulkan only, so lavapipe
+      # must be the renderer that starts.
+      - name: Install software graphics drivers
+        run: python scripts/install_software_vulkan.py --dest "${{ runner.temp }}/software-vulkan"
+
+      - name: Check the 3D renderer
+        shell: pwsh
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: |
+          $report = ./builddir/src/vibestudio.exe --settings-file "${{ runner.temp }}/vibestudio-render.ini" --cli render backends --json | Out-String
+          $report
+          if ($LASTEXITCODE -ne 0 -or ($report | ConvertFrom-Json).active -ne 'vulkan') {
+            Write-Output "::error::render backends does not report Vulkan as the active renderer, so the drawing tests cannot draw."
+            exit 1
+          }
+
       - name: Test
+        env:
+          VIBESTUDIO_RENDER_REQUIRE: "1"
         run: meson test -C builddir --print-errorlogs
 
       - name: Validate

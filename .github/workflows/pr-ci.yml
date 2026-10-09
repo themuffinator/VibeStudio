@@ -99,17 +99,38 @@ jobs:
 
       # Mesa's software Vulkan driver (lavapipe) lets the 3D renderer's tests
       # draw on a runner without a GPU, so a test that cannot draw fails here
-      # instead of skipping. Windows and macOS runners have no renderer for the
-      # offscreen test platform; their drawing checks skip.
+      # instead of skipping. Linux takes lavapipe from the distribution;
+      # Windows takes a pinned mesa-dist-win build and LunarG's Vulkan loader
+      # (scripts/install_software_vulkan.py). macOS runners have no renderer
+      # for the offscreen test platform; their drawing checks skip.
       - name: Install Software Graphics Drivers (Linux)
         if: matrix.os == 'ubuntu-latest'
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends mesa-vulkan-drivers libvulkan1
 
+      - name: Install Software Graphics Drivers (Windows)
+        if: matrix.os == 'windows-latest'
+        run: python scripts/install_software_vulkan.py --dest "${{ runner.temp }}/software-vulkan"
+
+      # The tests run on Qt's offscreen platform, where Windows draws with
+      # Vulkan only, so lavapipe must be the renderer that starts.
+      - name: Check The 3D Renderer (Windows)
+        if: matrix.os == 'windows-latest'
+        shell: pwsh
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: |
+          $report = ./builddir/src/vibestudio.exe --settings-file "${{ runner.temp }}/vibestudio-render.ini" --cli render backends --json | Out-String
+          $report
+          if ($LASTEXITCODE -ne 0 -or ($report | ConvertFrom-Json).active -ne 'vulkan') {
+            Write-Output "::error::render backends does not report Vulkan as the active renderer, so the drawing tests cannot draw."
+            exit 1
+          }
+
       - name: Test
         env:
-          VIBESTUDIO_RENDER_REQUIRE: ${{ matrix.os == 'ubuntu-latest' && '1' || '' }}
+          VIBESTUDIO_RENDER_REQUIRE: ${{ matrix.os != 'macos-latest' && '1' || '' }}
         run: meson test -C builddir --print-errorlogs
 
       - name: Validate CLI Binary (Windows)
