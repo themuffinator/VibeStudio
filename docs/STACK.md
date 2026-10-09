@@ -1,5 +1,20 @@
 # Technology Stack
 
+3D rendering decision (2026-10-08): every 3D view and material preview draws on
+the GPU through VibeStudio's own frame layer (`core/render_device`), with an
+OpenGL backend (3.3 core or ES 3.0 through Qt's `QOpenGLContext`) and a Vulkan
+1.0 backend (the loader opened at run time; declarations from the pinned
+Khronos Vulkan-Headers). The user picks Automatic, OpenGL or Vulkan in
+Settings, with `render set`, or for one run with `--renderer` or
+`VIBESTUDIO_RENDER_BACKEND`. The CPU 3D rasterisers (`app/model_rasterizer`
+and the material renderer's) are removed; 2D views keep `QPainter`. QRhi was
+declined because it cannot render under the offscreen platform the tests use
+or in the console-only CLI; bgfx stays declined (a large dependency for
+backends the studio does not need). Shaders are written once in GLSL and
+compiled offline to SPIR-V by `scripts/build_render_shaders.py`; no shader
+compiler or Vulkan SDK is needed to build. Without a working backend a 3D view
+says why and draws nothing.
+
 Recording comp decision (2026-10-06): original C++ snapshot planning validates
 queued pass-local cuts and explicit after-cut linear crossfades. Batch journal
 reads avoid rescanning a take for every section. Qt Widgets review and version-3
@@ -144,7 +159,7 @@ compiler pipeline. A shared workspace service serializes the current map and
 streams the package reader into independent files with a SHA-256 inventory.
 Qt Widgets workers provide GUI preparation; a modular CLI adapter uses the same
 service. Quake III receives explicit filesystem flags. Quake/Quake II now use
-the same service with isolated ericw paths, captured WAD2 or validated WAL assets,
+the same service with isolated VibeMap2 paths, captured WAD2 or validated WAL assets,
 and PAK publication including Quake runtime lighting. No new library or compiler
 fork is introduced; Doom prepared layouts remain open. Quake-family deployment reuses
 the package publisher and game launch planner, with one-operation installation
@@ -258,6 +273,7 @@ library or new dependency was introduced. See [Level Editor](LEVEL_EDITOR.md).
 | Localization | [Qt internationalization](https://doc.qt.io/qt-6/internationalization.html), Qt Linguist, `lrelease` at build time, `QTranslator` at run time, `QLocale` | Active | Runtime loading landed this round: `i18n/meson.build` compiles each checked-in `.ts` catalog to a `.qm` with `lrelease`, and `installStudioTranslations` resolves and installs the catalog with `QTranslator`, falling back from the exact locale to the base language to the source language and applying layout direction per locale. `lrelease` is optional, so a toolchain without it still builds and simply runs in the source language. Locale preference storage, pseudo-localization, RTL smoke, `QLocale` formatting, pluralization and expansion samples, stale/untranslated reporting, and dry-run `lupdate` validation remain active; finished translations are still seed catalogs. |
 | Asset index/search | [SQLite](https://sqlite.org/) through [Qt SQL](https://doc.qt.io/qt-6/qtsql-index.html), with [FTS5](https://sqlite.org/fts5.html) where available | Planned | Lightweight local database for project metadata, dependencies, search, diagnostics, and recent activity. |
 | CLI parser | Lightweight Qt `QStringList` router with in-process command registry; [CLI11](https://github.com/CLIUtils/CLI11) deferred | Active | Current router keeps project/package/install/asset/map/shader/sprite/code/extension/compiler/AI/credits subcommands dependency-free with JSON output, quiet/verbose/watch/task-state switches, stable exit codes, and testable command metadata through `cli commands`; CLI11 remains deferred until shell completion and broader validation justify the dependency. |
+| Level compilers | VibeStudio's own VibeMap2 (derived from ericw-tools) and VibeMap3 (continuing q3map2 from NetRadiant Custom), plus ZDBSP and ZokumBSP, as Git submodules run as separate processes | Active (integration Partial) | Owning the Quake-family compilers lets fixes land in the compiler instead of only in wrapper workarounds, while process execution keeps every compiler outside VibeStudio's binaries. Profiles, discovery and pipelines target them; no VibeMap2/VibeMap3 end-to-end proof has run inside VibeStudio yet. See [Compiler Integration](COMPILER_INTEGRATION.md#vibestudio-compilers). |
 | Task execution | Qt `QProcess`, threads, signals, and a VibeStudio task model | Active/planned | The reusable operation-state model, shell activity center, compiler process runner, captured logs, cancellation plumbing, and run manifests are active; broader thread-pool/future integration is planned. |
 | External change detection | `QFileSystemWatcher` hints plus authoritative fingerprint polling in `src/core/document_watch.{h,cpp}` | Active | Added this round. The open map, package, and code-editor file are registered by role; a SHA-1 content fingerprint decides what actually changed, and filesystem notifications are treated only as a reason to re-check. The class declares no `Q_OBJECT`, so core still needs no moc, and the shell drives `poll()` from a timer it already owns. |
 | Package/archive layer | PakFu-derived C++ services plus focused format readers and deterministic writers | Active | Package/archive interfaces, virtual path safety, read-only folder/PAK/WAD/ZIP/PK3 entry readers, text/image/model/audio/script metadata previews, safe extraction reports, staged write-back, package manifests, and deterministic PAK/ZIP/PK3/WAD save-as writers are active. `src/core/package_compare.{h,cpp}` added entry-by-entry comparison of two packages, or of a package against a staged plan, this round. |
@@ -274,9 +290,9 @@ library or new dependency was introduced. See [Level Editor](LEVEL_EDITOR.md).
 | 2D editor rendering | Custom `QWidget` subclasses painted with `QPainter` | Active | Chosen this round over Qt Graphics View and over an early GPU backend. The map viewport, image and palette views, waveform view, and the composition/pipeline/timeline charts are all hand-painted widgets, so 2D rendering needs no Qt module beyond Widgets and no third-party renderer. |
 | Texture authoring/export | Bounded native C++ document/profile services and Qt Widgets | Active | Layers, checksummed projects/recovery, CPU paint/transforms and nine GUI/CLI output profiles share validation and guarded publication. Original native encoders generate previewable indexed mips; explicit indexed PNG uses existing Qt compression/core CRC. Optional external Pillow verifies raster fixtures; it is not bundled or required. No new runtime library or rendering backend. WAD2/Doom namespace staging, CLI package drafts, level/model material handoffs and external compiler acceptance use existing services. Project preparation is cancellable; final publication rechecks destination identity. Release evidence and limits are tracked in [Texture Editor](TEXTURE_EDITOR.md). |
 | Headless map rendering | Deterministic SVG generated as text by `src/core/map_render.cpp` | Active | Chosen this round so a map picture is available from the CLI, from generated documentation, and from CI without a display or a GUI session. It is pure string generation, shares `map_geometry` with the painted viewport, and produces byte-identical output for the same input. |
-| Early 3D preview | Qt `QOpenGLWidget` behind a renderer interface | Planned | Acceptable for MVP preview work while keeping the future backend replaceable. |
-| Material previews | Native C++ CPU renderer per engine (`core/material_render*`), drawing into `QImage` | Active | Chosen 2026-10-08. Each engine's surface rules (Quake III stages and waves, Doom 3 interactions, Doom colormap lighting, Quake and Quake II warps, skies and light styles) are reimplemented on a small rasteriser with perspective-correct sampling, so the GUI, the CLI and tests render identically on every platform with no GPU dependency. Frames run on a worker and shrink to keep animation near 30 frames a second. A GPU path can replace it behind the same API later. |
-| Long-term 3D rendering | [bgfx](https://bkaradzic.github.io/bgfx/overview.html) behind a renderer abstraction | Deferred | Still the intended backend for 3D editor viewports, and still not linked. The 2D work this round deliberately did not pull it in: nothing in the map, texture, audio, or chart surfaces needs a GPU abstraction yet, and adding one would cost packaging and platform work for no current user-visible gain. |
+| 3D rendering | Own frame layer (`core/render_device`, `core/render_opengl`, `core/render_vulkan`) with OpenGL 3.3 core / ES 3.0 through `QOpenGLContext` and Vulkan 1.0 through the run-time loader and the pinned [Vulkan-Headers](https://github.com/KhronosGroup/Vulkan-Headers) | Active | Chosen 2026-10-08, replacing the CPU rasterisers. A frame is plain data (targets, passes, draws, uploads, read-backs) rendered offscreen on the backend's own thread and read back, so widgets keep presenting with `QPainter` under their overlays, and the GUI, the CLI and tests share one path. Choice: Automatic (Vulkan then OpenGL; OpenGL first on macOS), OpenGL or Vulkan, saved in Settings and overridable per run. GLSL sources in `src/core/shaders`, compiled offline to SPIR-V and checked as OpenGL text. Qt's offscreen platform and the console-only CLI offer Vulkan only. |
+| Material previews | Engine rules per engine in `core/material_render*`, drawn by GLSL shaders on the 3D renderer | Active | Chosen 2026-10-08. What each engine computes per vertex and per stage (Quake III waves and texture-coordinate modifiers, Doom 3 expressions, Doom light levels, Quake light styles) is worked out on the CPU; everything per pixel (stage blending, alpha tests, depth functions, sky boxes and clouds, fog, Doom 3 interactions, Doom colormap lighting, warps) runs in shaders with exact texel fetches, so OpenGL and Vulkan agree, and both match the former CPU renderer to within two levels apart from isolated pixels at texel and triangle edges. |
+| Long-term 3D rendering | [bgfx](https://bkaradzic.github.io/bgfx/overview.html) | Declined 2026-10-08 | The own OpenGL/Vulkan layer covers every 3D view the studio has. bgfx would add a large dependency and Direct3D and Metal backends nobody needs yet; a native Metal or Direct3D backend can join `RenderDevice` later if a platform requires it. |
 | Text editing | [`QSyntaxHighlighter`](https://doc.qt.io/qt-6/qsyntaxhighlighter.html) with data-driven language rules; [KSyntaxHighlighting](https://api.kde.org/frameworks/syntax-highlighting/html/index.html) and [Tree-sitter](https://tree-sitter.github.io/tree-sitter/) deferred | Active | Chosen this round. `StudioSyntaxHighlighter` builds its rules from `StudioLanguageDescriptor` records, so plain text, config, idTech3 shader scripts, QuakeC, `.map` source, entity definitions, INI-style key-value files, and JSON are described as data rather than as widget code, and a new language is a new descriptor. Colours come from the active studio theme so high-contrast stays readable. KSyntaxHighlighting and Tree-sitter remain deferred until packaging cost and incremental-parsing value justify the dependencies. |
 | Language services | Native C++/Qt Core stdio LSP client using `QProcess` | Active, bounded | Explicit local connections provide live synchronization, diagnostics, formatting, semantic completion, Quick Info, Parameter Hints, definitions, references, reviewed symbol rename and code actions through shared GUI/CLI services. UTF-16 positions, bounded parsing, version checks, cancellation and shutdown are enforced. Rename and code actions share Search Results and the project replacement writer, preserve open-document Undo and guard CLI writes with the whole plan's hash. Completion resolves deferred metadata/imports before acceptance; completion/formatting share document undo and save. Quick Info and signature documentation share resource-isolated Qt rendering; hints use native inline overload controls. No added library or bundled server. Code actions include lazy edit resolution; server commands remain unsupported. See [Local Language Services](LANGUAGE_SERVICES.md). |
 | Audio | Native WAV/DMX, pinned dr_libs/Xiph compressed decoding, optional [Qt Multimedia](https://doc.qt.io/qt-6/qtmultimedia-index.html) playback | Active, release verification in progress | The [Audio Editor](AUDIO_EDITOR.md), `asset audio-edit`, and `asset audio-export` share bounded float processing, MP3/FLAC/Vorbis import, integer/float WAV precision, optional dither, markers and Doom/Quake-family delivery. Doom DMX joins WAD staging. Direct decoder APIs preserve native rate/channels without miniaudio's unused device/mixer layers; no runtime codec install is needed for editing. Compressed browser audition still uses Qt. Pinned r8brain-free-src 7.5 provides anti-aliased resampling. Standalone capture and Record Tracks are available; the optional pinned PortAudio backend supports explicit duplex devices, punch capture, monitoring and grouped review/import. Physical platform acceptance remains open. |
@@ -288,7 +304,7 @@ library or new dependency was introduced. See [Level Editor](LEVEL_EDITOR.md).
 | UV authoring view | `ModelUvView`, `app/model_uv_render`, and shared `core/model_uv` / `core/model_uv_transform` | Active, bounded | Indexed seam/island analysis and clipped QPainter drawing run on a value-only cancellable worker with one active/one replaceable request and a 4,194,304-pixel image limit. Pan/zoom, aspect-correct repeating material images, shared component selection, shared or independent island pivots and delta snapping use mesh document services. Independent chart transforms preflight corner splits and copy exact geometry/normals across all poses. Version-3 editable sources retain authoring seam marks and MD2 skin dimensions and read versions 1 and 2. Native exports preserve resolved UV splits; marks stay in sources/recovery. Uses existing Qt Core/Gui/Widgets with no new dependency. |
 | Rectangular UV atlases | Existing pinned xatlas with generated axis-limit adaptation | Active, bounded | Separate width/height controls and `--uv-atlas-size WIDTHxHEIGHT` use the existing document worker. Raster-mask packing retains pixel shape and uniform density; a bounded fit search uses the long axis. Original vendored source/header hashes and licence notices remain intact. No new runtime library, renderer or mesh schema. Pinned/obstacle packing and texture rebaking remain open. |
 | Linked model assemblies | `core/model_assembly`, `core/model_assembly_document`, `core/model_assembly_recovery`, `ModelAssemblyDialog`, `model assembly` CLI | Active, incomplete | Separate schema-1 `.assembly.json` graph retains file/package references, nested tags, local transforms and independent frame playback settings. Bounded immutable model snapshots share pose/tag interpolation and the software viewport; explicit pose and sampled-animation baking enter ordinary mesh/package/level workflows. `core/model_assembly_animation` preflights frame storage, validates topology across samples and retains clip FPS in optional mesh schema 6. Relative source references, bounded history and guarded writes share existing services. Checksummed recovery records retain recipe/selection/time, with a coalescing worker, session lease and verified GUI/CLI restore/discard. Native engine timing configuration, animated-bake engine acceptance and maximum-assembly performance remain open. No new library or renderer. |
-| Model preview widget | `ModelViewport` and `app/model_rasterizer.*`, presented with `QPainter` | Active | Orthographic and perspective cameras feed a bounded software depth buffer. Intersecting surfaces and picking use actual fragment depth; skins use repeating bilinear, perspective-correct UV sampling, including near-plane clipped faces. A cancellable worker resolves opaque depth first, then composites translucent fragments in depth order per pixel with bounded scratch storage. Camera requests coalesce behind one running job; document and material changes retire stale output. Selection hatches and edges respect depth. Wireframe remains a view through the mesh. The Levels preview shares this renderer and its existing profile-based camera controls. No GPU or new Qt module is required. |
+| Model preview widget | `ModelViewport` (`app/model_viewport_render.cpp`) on the 3D renderer, presented with `QPainter` | Active | Orthographic and perspective cameras with reversed depth. World-space geometry uploads once per mesh revision and stays cached on the device; per-corner flags carry hover and selection. Skins sample bilinear and repeating; translucent skins peel up to four layers and composite them. Wireframe is an instanced, antialiased line pass with the former CPU coverage formula; picking reads a triangle-ID target. Camera requests coalesce behind one running job; document and material changes retire stale output. The Levels camera, modeller views and Doom preview share it. |
 | AI connector layer | Provider-neutral connector/model metadata plus manifest-backed workflow experiments | Active experimental | Lets users route reasoning, coding, image, audio, voice, 3D, and agentic workflows through OpenAI, Claude, Gemini, ElevenLabs, Meshy, local/offline models, or future connectors while keeping credentials redacted and outputs staged. |
 | First AI provider | OpenAI connector scaffold, with future provider calls following [Responses](https://platform.openai.com/docs/api-reference/responses) and [tools/function calling](https://developers.openai.com/api/docs/guides/tools) patterns | Active experimental | OpenAI is implemented for configuration, credential discovery, model routing, safe tool descriptors, and no-write first experiments; network invocation remains opt-in future work. |
 | Generative AI | Native Qt Network transports: structured JSON output for OpenAI-compatible endpoints, Claude and Gemini; image generation through OpenAI's Images API, Gemini image output and the Stable Diffusion web UI API; sound effects through ElevenLabs' API; deterministic level, texture and sound generators and schema-checked map edits that use them | Active experimental | Level plans, map edits, textures and sounds come from the user's chosen providers (or local runtimes) through the same opt-in, consent, preview and redaction rules as the Assistant, while the rules planner, picture-based texture path, saved proposals and the sound synthesizer keep every generator complete without AI. No new dependencies. |
@@ -400,8 +416,8 @@ Recommended progression:
    `QWidget` subclasses that paint in `paintEvent`. No Qt Graphics View scene,
    no GPU context, and no extra Qt module are involved.
    Quake-family plan brushes now use bounded projected-wire batches and a
-   physical-pixel image, composited with the same CPU edge renderer as model
-   previews. QPainter presents that image with separate grid, text and interaction
+   physical-pixel image, composited with the shared 2D line painter
+   (`app/wire_lines`). QPainter presents that image with separate grid, text and interaction
    overlays. Pan/zoom, viewport scale and geometry changes refresh the relevant
    cache. Cache limits fall back to complete ordinary drawing. Selected
    brush/patch outlines use a separate bounded CPU layer with thicker
@@ -435,27 +451,25 @@ Recommended progression:
    layout constraints. These GUI-only caches add no dependency, graphics API,
    profile setting, document format or CLI requirement. Cold navigation remains
    a separate performance target from warm repainting.
-2. Early 3D previews: `QOpenGLWidget` through a thin `RenderBackend` interface.
-   Not started; `QOpenGLWidget` is not linked. `ModelViewport` instead projects
-   through a software rasterizer with a separate camera/triangle boundary.
-   Orthographic depth and perspective reciprocal depth are interpolated per
-   pixel; UVs use reciprocal-distance interpolation. This replaces the former
-   average-depth sort, which failed at intersections. Near-plane clipping
-   retains UVs and hides internal fan edges. Bilinear textures repeat in both
-   directions and preserve premultiplied alpha. Opaque depth is resolved first;
-   translucent fragments are sorted per pixel within small reusable tiles,
-   avoiding a fragment list proportional to screen area times mesh size.
-   The cached colour/depth/pick buffers have an 8,388,608-pixel ceiling
-   (128 MiB per result); larger windows scale the image uniformly. One cancellable
-   worker projects an immutable geometry/material snapshot, prepares its picking
-   index and renders either filled triangles or a wireframe QImage. No triangle
-   projection or wireframe polygon loop remains in the GUI paint path. Wireframe
-   uses an original CPU line rasterizer with pixel-area antialiasing, bounded
-   major-axis scans and the same image ceiling/cancellation contract. Shared
-   surface edges draw once; selected dashes composite last with logical stroke
-   widths preserved at high DPI. No geometry is dropped to reduce drawing cost.
-   The UV worker shares that line renderer for ordinary wires, dotted seams and
-   selected dashes, with explicit overlay ordering. Opaque passes cache only
+2. 3D views on the GPU: **done** (2026-10-08). `core/render_device` is the
+   renderer abstraction this section asked for: a frame describes render
+   targets (colour, 16-bit colour, integer and float IDs, depth), passes of
+   draws with blend, depth, cull and scissor state, uploaded textures and
+   vertex data (cached per owner across frames), and the targets to read back.
+   One device per backend runs on its own thread: OpenGL through
+   `QOpenGLContext` on a `QOffscreenSurface`, Vulkan through the loader opened
+   at run time with explicit barriers and pooled targets. Both follow one set
+   of conventions (y-down clip space, depth 0..1, top-first read-back,
+   counter-clockwise front faces), so the same frame gives the same pixels on
+   either; `render-device-smoke` checks that on every backend that starts.
+   `ModelViewport` builds world-space geometry once per mesh revision, draws it
+   with reversed depth and an infinite far plane, peels up to four
+   translucent layers, draws wireframes as instanced antialiased segments and
+   picks from a triangle-ID target. Read-back images keep the
+   8,388,608-pixel ceiling; larger windows scale the image uniformly. The
+   former CPU rasteriser (`app/model_rasterizer`) is removed; the UV view and
+   the Levels plan views keep a 2D line painter (`app/wire_lines`) for their
+   wires, dotted seams and selected dashes, with explicit overlay ordering. Opaque passes cache only
    tiles whose pixels already equal the stroke color; unknown tiles retain
    ordinary coverage and compositing. Dense UV strokes visit the layout in a
    deterministic dispersed order before adjacent subpixel strokes, keeping all
@@ -519,16 +533,17 @@ Recommended progression:
    brush faces, tessellated patches, and Doom walls into a mesh with one
    surface per texture, and brush faces carry outward normals for backface
    culling. Render/pick tests and a fixed textured-scene timing run exercise
-   the same rasterizer without a GPU context or OS screen capture.
+   the same renderer through offscreen frames, without OS screen capture.
    `core/map_geometry_cache` now reuses unchanged brush polygons across plan
    edits and camera mesh rebuilds, with exact keys and bounded retained payload.
    Separate value snapshots preserve worker cancellation and fresh package UVs;
    this adds no dependency or renderer backend. The explicit
    `level_geometry_benchmark` measures synthetic 100–10,000-brush workflows,
    with cold-load and software-drawing limits still open.
-3. Production 3D/editor viewports: bgfx backend once map/model previews need
-   durable cross-platform rendering, batching, materials, and GPU portability.
-   Still deferred, and deliberately not pulled forward by the 2D work.
+3. Production 3D/editor viewports: grow the same layer rather than add bgfx
+   (declined 2026-10-08). Still open: presenting straight to a window surface
+   instead of reading frames back, GPU-side picking for very large scenes,
+   and a native Metal backend if OpenGL's deprecation on macOS bites.
 
 Headless rendering is a separate path, not a fallback for the widgets. The SVG
 renderer in `src/core/map_render.cpp` builds its document as text, so it runs in
@@ -581,9 +596,10 @@ Compiler registry data is now modeled as descriptors over imported compiler
 submodules, expected executable names/build paths, capability flags, user
 executable overrides, and project-local executable overrides. Discovery checks
 source directories, known build-output paths, extra search paths, overrides,
-and PATH, and registry reports can run short version/help probes. ericw-tools
-`qbsp`, `vis`, and `light`, ZDBSP/ZokumBSP node-builder profiles, and q3map2
-probe/BSP profiles can produce command plans with arguments, working directory,
+and PATH, and registry reports can run short version/help probes. VibeMap2
+`vibemap2-bsp`, `vibemap2-vis`, and `vibemap2-light`, ZDBSP/ZokumBSP
+node-builder profiles, and VibeMap3 probe/BSP profiles can produce command
+plans with arguments, working directory,
 expected output, warnings, and readiness. Plans and runs emit
 schema-versioned JSON command manifests with command/environment details,
 duration, exit code, hashes, stdout/stderr, diagnostics, task-log entries, and
@@ -1079,10 +1095,21 @@ explicitly credited forks. Invoke compilers through wrapper services that
 capture command manifests, environment, progress, stdout/stderr, diagnostics,
 outputs, and exit state.
 
+Decision (2026-10-08): the Quake-family compilers are VibeStudio's own forks,
+VibeMap2 (`external/compilers/vibemap2`, derived from ericw-tools) and VibeMap3
+(`external/compilers/vibemap3`, continuing q3map2 from NetRadiant Custom),
+replacing the stock ericw-tools and NetRadiant Custom q3map2 submodules. They
+are developed as part of the VibeStudio project, stay separate GPL executables,
+and are discovered under their own names (`vibemap2-*`, `vibemap3`) and their
+pre-rename names (`vmt-*`, `q3mapx`). Stock tools remain usable through explicit
+executable overrides. ZDBSP and ZokumBSP are unchanged. Fork URLs, pins and the
+planned repository renames are in
+[Compiler Integration](COMPILER_INTEGRATION.md#vibestudio-compilers).
+
 VibeStudio-owned compiler orchestration should not depend on a GUI. Every
 compiler run must be reproducible from the CLI.
-The active wrapper slices define ericw-tools, Doom-family node-builder, and
-q3map2 command profiles with CLI command planning, manifest writing/loading,
+The active wrapper slices define VibeMap2, Doom-family node-builder, and
+VibeMap3 command profiles with CLI command planning, manifest writing/loading,
 run/rerun execution, copyable command lines, output registration, and GUI
 readiness/run summaries by engine/stage. Process execution captures
 stdout/stderr, parsed diagnostics, duration, exit code, file hashes, and
@@ -1108,6 +1135,19 @@ alone. `corrupt-fixture-smoke` is
 the readable counterpart, pinning the exact message each hand-built damaged
 fixture produces. Both test files assemble their fixtures from published format
 layouts; neither embeds or reads commercial game data.
+
+Tests that check what the 3D renderer draws call
+`exitCodeWithoutRenderer()` from `src/tests/render_test_support.h`: where
+neither OpenGL nor Vulkan starts they skip (exit 77), or skip only their
+drawing checks, and with `VIBESTUDIO_RENDER_REQUIRE=1` a missing renderer is a
+failure instead. Most tests run on Qt's offscreen platform, where only Vulkan
+draws on Windows and macOS, so hosted Windows and macOS runners skip those
+checks; Linux CI installs Mesa's lavapipe and sets the variable, so every
+drawing check runs there. `render-device-smoke` compares the backends with
+each other on any machine that has both, and `render-cli-smoke` covers the
+`render` commands. Pretend a machine has no renderer with
+`QT_QPA_PLATFORM=offscreen` and `VK_ICD_FILENAMES`/`VK_DRIVER_FILES` pointing
+at a missing file.
 
 The other new core modules land in the same runner: `model-mesh-smoke`,
 `entity-definitions-smoke`, `package-compare-smoke`, and

@@ -2,6 +2,7 @@
 #include "core/model_document.h"
 #include "tests/model_mdl_test_helpers.h"
 #include "tests/model_viewport_test_helpers.h"
+#include "tests/render_test_support.h"
 
 #include <QApplication>
 #include <QDir>
@@ -157,6 +158,10 @@ int main(int argc, char **argv)
 	qputenv("QT_QPA_FONTDIR", QDir(qEnvironmentVariable("SystemRoot")).filePath("Fonts").toLocal8Bit());
 #endif
 	QApplication app(argc, argv);
+	// Draws in 3D: skip where no OpenGL or Vulkan renderer starts.
+	if (const int skip = vibestudio::test_support::exitCodeWithoutRenderer("model-mdl-playback-smoke"); skip >= 0) {
+		return skip;
+	}
 #ifdef Q_OS_WIN
 	app.setFont(QFont("Segoe UI", 10));
 #endif

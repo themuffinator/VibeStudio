@@ -78,7 +78,7 @@ int main(int argc, char** argv) {
 	expect(!inspectLevelBuildArtifacts(workspace).verified, "unbuilt outputs cannot publish");
 	BuildPipelineRequest request;
 	request.pipelineId = "quake3-full";
-	request.executableOverrides = {{"q3map2", app.applicationFilePath()}};
+	request.executableOverrides = {{"vibemap3", app.applicationFilePath()}};
 	request.registerOutputs = true;
 	auto run = runLevelBuildWorkspace(workspace, request);
 	if (!expect(run.succeeded(), "compiler fixture succeeds", run.errors.join('\n'))) {

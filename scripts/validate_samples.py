@@ -135,14 +135,14 @@ def main() -> int:
             "sample-quake-minimal",
             samples_root / "quake-minimal",
             samples_root / "quake-minimal" / "packages",
-            "ericw-qbsp",
+            "vibemap2-bsp",
             samples_root / "quake-minimal" / "maps" / "start.map",
         ),
         SampleProject(
             "sample-quake3-minimal",
             samples_root / "quake3-minimal",
             samples_root / "quake3-minimal" / "packages",
-            "q3map2-bsp",
+            "vibemap3-bsp",
             samples_root / "quake3-minimal" / "maps" / "sample_q3.map",
         ),
     ]

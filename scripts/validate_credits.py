@@ -9,10 +9,13 @@ import subprocess
 import sys
 from dataclasses import dataclass
 from pathlib import Path
+from urllib.parse import urljoin
 
 
 CREDIT_TOKENS = [
     "PakFu",
+    "VibeMap2",
+    "VibeMap3",
     "ericw-tools",
     "NetRadiant Custom",
     "ZDBSP",
@@ -31,6 +34,7 @@ CREDIT_TOKENS = [
     "libogg",
     "libebur128",
     "xatlas",
+    "Vulkan-Headers",
 ]
 
 
@@ -112,8 +116,17 @@ def parse_gitmodules(path: Path) -> dict[str, str]:
     return paths
 
 
+# VibeStudio's own compilers are submodules with URLs relative to this repository's home
+# ("../q3mapx.git"), which git resolves against the superproject's remote. Resolve them
+# against the canonical home so they compare with the manifest's absolute URLs.
+SUPERPROJECT_URL = "https://github.com/themuffinator/VibeStudio/"
+
+
 def normalize_url(url: str) -> str:
-    normalized = url.strip().rstrip("/")
+    normalized = url.strip()
+    if normalized.startswith(("../", "./")):
+        normalized = urljoin(SUPERPROJECT_URL, normalized)
+    normalized = normalized.rstrip("/")
     if normalized.endswith(".git"):
         normalized = normalized[:-4]
     return normalized.lower()
@@ -212,6 +225,21 @@ def main() -> int:
             errors.append("xatlas pinned revision is missing from repository credits.")
     except (OSError, ValueError, KeyError) as error:
         errors.append(f"Unable to verify xatlas attribution: {error}")
+
+    vulkan_root = root / "external" / "graphics" / "vulkan-headers"
+    try:
+        pin = json.loads(read_text(vulkan_root / "UPSTREAM.json"))
+        for path, digest in pin["files"].items():
+            source = (vulkan_root / path).resolve()
+            if not source.is_relative_to(vulkan_root.resolve()) or hashlib.sha256(source.read_bytes()).hexdigest() != digest:
+                errors.append(f"Vulkan-Headers pinned source hash mismatch: {path}")
+        for notice in ("LICENSE.md", "LICENSES/Apache-2.0.txt", "LICENSES/MIT.txt", "VIBESTUDIO.md"):
+            if not (vulkan_root / notice).is_file():
+                errors.append(f"Vulkan-Headers attribution file missing: {notice}")
+        if pin["revision"] not in readme_credits or pin["revision"] not in credits:
+            errors.append("Vulkan-Headers pinned revision is missing from repository credits.")
+    except (OSError, ValueError, KeyError) as error:
+        errors.append(f"Unable to verify Vulkan-Headers attribution: {error}")
 
     for token in CREDIT_TOKENS:
         if token not in readme_credits:

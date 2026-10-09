@@ -6,6 +6,7 @@
 #include "tests/level_material_test_helpers.h"
 #include "tests/model_uv_view_test_helpers.h"
 #include "tests/model_viewport_test_helpers.h"
+#include "tests/render_test_support.h"
 
 #include <QApplication>
 #include <QComboBox>
@@ -117,6 +118,10 @@ int main(int argc, char **argv)
 	qputenv("QT_QPA_FONTDIR", QDir(qEnvironmentVariable("SystemRoot")).filePath(QStringLiteral("Fonts")).toLocal8Bit());
 #endif
 	QApplication app(argc, argv);
+	// Draws in 3D: skip where no OpenGL or Vulkan renderer starts.
+	if (const int skip = vibestudio::test_support::exitCodeWithoutRenderer("model-materials-ui-smoke"); skip >= 0) {
+		return skip;
+	}
 #ifdef Q_OS_WIN
 	app.setFont(QFont(QStringLiteral("Segoe UI"), 10));
 #endif

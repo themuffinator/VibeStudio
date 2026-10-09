@@ -325,6 +325,12 @@ public:
 	// offer; on unless the user turns it off. Reports are never sent anywhere.
 	bool crashReports() const;
 	void setCrashReports(bool enabled);
+	// The 3D renderer: "automatic" (the default), "opengl" or "vulkan", as
+	// core/render_device.h spells them; anything else reads back as
+	// "automatic". VIBESTUDIO_RENDER_BACKEND and the CLI's --renderer
+	// override it for one run without changing it.
+	QString renderBackendPreference() const;
+	void setRenderBackendPreference(const QString& id);
 	// Local, asynchronous checkpoints of modified maps; separate from crash logs.
 	bool levelRecoveryEnabled() const;
 	// "profile" follows the interaction profile; other values are

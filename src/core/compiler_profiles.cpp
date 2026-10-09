@@ -1,7 +1,7 @@
 #include "core/compiler_profiles.h"
 
 #include "core/compiler_known_issues.h"
-#include "core/ericw_map_preflight.h"
+#include "core/quake_map_preflight.h"
 
 #include <QCoreApplication>
 #include <QCryptographicHash>
@@ -68,9 +68,9 @@ CompilerArgumentPreset argumentPreset(
 	return preset;
 }
 
-// ericw-tools qbsp targets and map-development switches, from
-// external/compilers/ericw-tools/qbsp/qbsp.cc (game_target_group / common_format_group / map_development_group).
-QVector<CompilerArgumentPreset> ericwQbspPresets()
+// VibeMap2 bsp targets and map-development switches, from
+// external/compilers/vibemap2/src/qbsp/qbsp.cc (game_target_group / common_format_group / map_development_group).
+QVector<CompilerArgumentPreset> vibemap2BspPresets()
 {
 	return {
 		argumentPreset(QStringLiteral("bsp2"), QCoreApplication::translate("VibeStudioCompilerProfiles", "Target BSP2"), QCoreApplication::translate("VibeStudioCompilerProfiles", "Writes Quake's extended BSP2 format for large maps."), {QStringLiteral("-bsp2")}),
@@ -84,8 +84,8 @@ QVector<CompilerArgumentPreset> ericwQbspPresets()
 	};
 }
 
-// ericw-tools vis switches, from external/compilers/ericw-tools/include/vis/vis.hh.
-QVector<CompilerArgumentPreset> ericwVisPresets()
+// VibeMap2 vis switches, from external/compilers/vibemap2/src/include/vis/vis.hh.
+QVector<CompilerArgumentPreset> vibemap2VisPresets()
 {
 	return {
 		argumentPreset(QStringLiteral("level4"), QCoreApplication::translate("VibeStudioCompilerProfiles", "Full detail (level 4)"), QCoreApplication::translate("VibeStudioCompilerProfiles", "Runs the highest visibility test iteration count."), {QStringLiteral("-level"), QStringLiteral("4")}),
@@ -93,8 +93,8 @@ QVector<CompilerArgumentPreset> ericwVisPresets()
 	};
 }
 
-// ericw-tools light switches, from external/compilers/ericw-tools/light/light.cc.
-QVector<CompilerArgumentPreset> ericwLightPresets()
+// VibeMap2 light switches, from external/compilers/vibemap2/src/light/light.cc.
+QVector<CompilerArgumentPreset> vibemap2LightPresets()
 {
 	return {
 		argumentPreset(QStringLiteral("extra4"), QCoreApplication::translate("VibeStudioCompilerProfiles", "4x4 supersampling"), QCoreApplication::translate("VibeStudioCompilerProfiles", "Supersamples lighting at 4x4 for release-quality output."), {QStringLiteral("-extra4")}),
@@ -104,13 +104,13 @@ QVector<CompilerArgumentPreset> ericwLightPresets()
 	};
 }
 
-// q3map2 general options, from external/compilers/q3map2-nrc/tools/quake3/q3map2/main.cpp and path_init.cpp.
-QVector<CompilerArgumentPreset> q3map2Presets()
+// VibeMap3 general options, from external/compilers/vibemap3/tools/quake3/q3map2/main.cpp and path_init.cpp.
+QVector<CompilerArgumentPreset> vibemap3Presets()
 {
 	return {
 		argumentPreset(QStringLiteral("meta"), QCoreApplication::translate("VibeStudioCompilerProfiles", "Meta surfaces"), QCoreApplication::translate("VibeStudioCompilerProfiles", "Enables surface metadata optimisation for the BSP stage."), {QStringLiteral("-meta")}),
 		argumentPreset(QStringLiteral("fast"), QCoreApplication::translate("VibeStudioCompilerProfiles", "Fast pass"), QCoreApplication::translate("VibeStudioCompilerProfiles", "Runs the faster, lower quality variant of the stage."), {QStringLiteral("-fast")}),
-		argumentPreset(QStringLiteral("fs-basepath"), QCoreApplication::translate("VibeStudioCompilerProfiles", "Set base path"), QCoreApplication::translate("VibeStudioCompilerProfiles", "Points q3map2 at the game's base installation directory."), {QStringLiteral("-fs_basepath")}, true, QCoreApplication::translate("VibeStudioCompilerProfiles", "directory")),
+		argumentPreset(QStringLiteral("fs-basepath"), QCoreApplication::translate("VibeStudioCompilerProfiles", "Set base path"), QCoreApplication::translate("VibeStudioCompilerProfiles", "Points VibeMap3 at the game's base installation directory."), {QStringLiteral("-fs_basepath")}, true, QCoreApplication::translate("VibeStudioCompilerProfiles", "directory")),
 		argumentPreset(QStringLiteral("fs-game"), QCoreApplication::translate("VibeStudioCompilerProfiles", "Set mod"), QCoreApplication::translate("VibeStudioCompilerProfiles", "Selects the mod directory used for shaders and assets."), {QStringLiteral("-fs_game")}, true, QCoreApplication::translate("VibeStudioCompilerProfiles", "mod name")),
 		argumentPreset(QStringLiteral("threads"), QCoreApplication::translate("VibeStudioCompilerProfiles", "Thread count"), QCoreApplication::translate("VibeStudioCompilerProfiles", "Limits the number of worker threads."), {QStringLiteral("-threads")}, true, QCoreApplication::translate("VibeStudioCompilerProfiles", "count")),
 		argumentPreset(QStringLiteral("verbose"), QCoreApplication::translate("VibeStudioCompilerProfiles", "Verbose output"), QCoreApplication::translate("VibeStudioCompilerProfiles", "Prints verbose progress output."), {QStringLiteral("-v")}),
@@ -458,11 +458,11 @@ QVector<CompilerProfileDescriptor> compilerProfileDescriptors()
 	QVector<CompilerProfileDescriptor> profiles;
 
 	{
-		// qbsp accepts "sourcefile.map [destfile.bsp]" (external/compilers/ericw-tools/qbsp/qbsp.cc).
+		// qbsp accepts "sourcefile.map [destfile.bsp]" (external/compilers/vibemap2/src/qbsp/qbsp.cc).
 		CompilerProfileDescriptor qbsp = compilerProfile(
-			QStringLiteral("ericw-qbsp"),
-			QStringLiteral("ericw-qbsp"),
-			QCoreApplication::translate("VibeStudioCompilerProfiles", "ericw-tools qbsp"),
+			QStringLiteral("vibemap2-bsp"),
+			QStringLiteral("vibemap2-bsp"),
+			QCoreApplication::translate("VibeStudioCompilerProfiles", "VibeMap2 bsp"),
 			QStringLiteral("idTech2"),
 			QStringLiteral("qbsp"),
 			QCoreApplication::translate("VibeStudioCompilerProfiles", "Quake .map source"),
@@ -474,17 +474,17 @@ QVector<CompilerProfileDescriptor> compilerProfileDescriptors()
 		qbsp.outputArgumentStyle = CompilerOutputArgumentStyle::Positional;
 		qbsp.defaultOutputMode = CompilerDefaultOutputMode::DerivedFromInput;
 		// qbsp writes "<bsp>.prt" for vis and "<bsp>.pts" plus "<bsp>.leak.prt" when the map leaks
-		// (external/compilers/ericw-tools/qbsp/outside.cc).
+		// (external/compilers/vibemap2/src/qbsp/outside.cc).
 		qbsp.relatedOutputExtensions = {QStringLiteral("prt"), QStringLiteral("pts"), QStringLiteral("leak.prt")};
-		qbsp.argumentPresets = ericwQbspPresets();
+		qbsp.argumentPresets = vibemap2BspPresets();
 		profiles.push_back(qbsp);
 	}
 
 	{
 		CompilerProfileDescriptor vis = compilerProfile(
-			QStringLiteral("ericw-vis"),
-			QStringLiteral("ericw-vis"),
-			QCoreApplication::translate("VibeStudioCompilerProfiles", "ericw-tools vis"),
+			QStringLiteral("vibemap2-vis"),
+			QStringLiteral("vibemap2-vis"),
+			QCoreApplication::translate("VibeStudioCompilerProfiles", "VibeMap2 vis"),
 			QStringLiteral("idTech2"),
 			QStringLiteral("vis"),
 			QCoreApplication::translate("VibeStudioCompilerProfiles", "Quake BSP"),
@@ -494,17 +494,17 @@ QVector<CompilerProfileDescriptor> compilerProfileDescriptors()
 			{},
 			true);
 		vis.defaultOutputMode = CompilerDefaultOutputMode::InPlace;
-		// vis loads "<bsp base>.prt" (external/compilers/ericw-tools/vis/vis.cc).
+		// vis loads "<bsp base>.prt" (external/compilers/vibemap2/src/vis/vis.cc).
 		vis.requiredCompanionInputExtensions = {QStringLiteral("prt")};
-		vis.argumentPresets = ericwVisPresets();
+		vis.argumentPresets = vibemap2VisPresets();
 		profiles.push_back(vis);
 	}
 
 	{
 		CompilerProfileDescriptor light = compilerProfile(
-			QStringLiteral("ericw-light"),
-			QStringLiteral("ericw-light"),
-			QCoreApplication::translate("VibeStudioCompilerProfiles", "ericw-tools light"),
+			QStringLiteral("vibemap2-light"),
+			QStringLiteral("vibemap2-light"),
+			QCoreApplication::translate("VibeStudioCompilerProfiles", "VibeMap2 light"),
 			QStringLiteral("idTech2"),
 			QStringLiteral("light"),
 			QCoreApplication::translate("VibeStudioCompilerProfiles", "Quake BSP"),
@@ -514,19 +514,19 @@ QVector<CompilerProfileDescriptor> compilerProfileDescriptors()
 			{},
 			true);
 		light.defaultOutputMode = CompilerDefaultOutputMode::InPlace;
-		// "-lit" writes a sibling coloured lighting file (external/compilers/ericw-tools/light/light.cc).
+		// "-lit" writes a sibling coloured lighting file (external/compilers/vibemap2/src/light/light.cc).
 		light.argumentTriggeredOutputExtensions.insert(QStringLiteral("-lit"), QStringLiteral("lit"));
-		light.argumentPresets = ericwLightPresets();
+		light.argumentPresets = vibemap2LightPresets();
 		profiles.push_back(light);
 	}
 
 	{
 		// bspinfo takes bsp files only and serialises "<base>.bsp.json"
-		// (external/compilers/ericw-tools/bspinfo/main.cc).
+		// (external/compilers/vibemap2/src/bspinfo/main.cc).
 		CompilerProfileDescriptor bspinfo = compilerProfile(
-			QStringLiteral("ericw-bspinfo"),
-			QStringLiteral("ericw-bspinfo"),
-			QCoreApplication::translate("VibeStudioCompilerProfiles", "ericw-tools bspinfo"),
+			QStringLiteral("vibemap2-bspinfo"),
+			QStringLiteral("vibemap2-bspinfo"),
+			QCoreApplication::translate("VibeStudioCompilerProfiles", "VibeMap2 bspinfo"),
 			QStringLiteral("idTech2"),
 			QStringLiteral("inspect"),
 			QCoreApplication::translate("VibeStudioCompilerProfiles", "Quake BSP"),
@@ -541,11 +541,11 @@ QVector<CompilerProfileDescriptor> compilerProfileDescriptors()
 
 	{
 		// bsputil parses options before the single positional bsp path
-		// (external/compilers/ericw-tools/bsputil/bsputil.cc and common/settings.cc).
+		// (external/compilers/vibemap2/src/bsputil/bsputil.cc and common/settings.cc).
 		CompilerProfileDescriptor check = compilerProfile(
-			QStringLiteral("ericw-bsputil-check"),
-			QStringLiteral("ericw-bsputil"),
-			QCoreApplication::translate("VibeStudioCompilerProfiles", "ericw-tools bsputil --check"),
+			QStringLiteral("vibemap2-bsputil-check"),
+			QStringLiteral("vibemap2-bsputil"),
+			QCoreApplication::translate("VibeStudioCompilerProfiles", "VibeMap2 bsputil --check"),
 			QStringLiteral("idTech2"),
 			QStringLiteral("inspect"),
 			QCoreApplication::translate("VibeStudioCompilerProfiles", "Quake BSP"),
@@ -559,9 +559,9 @@ QVector<CompilerProfileDescriptor> compilerProfileDescriptors()
 		profiles.push_back(check);
 
 		CompilerProfileDescriptor entities = compilerProfile(
-			QStringLiteral("ericw-bsputil-extract-entities"),
-			QStringLiteral("ericw-bsputil"),
-			QCoreApplication::translate("VibeStudioCompilerProfiles", "ericw-tools bsputil --extract-entities"),
+			QStringLiteral("vibemap2-bsputil-extract-entities"),
+			QStringLiteral("vibemap2-bsputil"),
+			QCoreApplication::translate("VibeStudioCompilerProfiles", "VibeMap2 bsputil --extract-entities"),
 			QStringLiteral("idTech2"),
 			QStringLiteral("extract"),
 			QCoreApplication::translate("VibeStudioCompilerProfiles", "Quake BSP"),
@@ -575,9 +575,9 @@ QVector<CompilerProfileDescriptor> compilerProfileDescriptors()
 		profiles.push_back(entities);
 
 		CompilerProfileDescriptor textures = compilerProfile(
-			QStringLiteral("ericw-bsputil-extract-textures"),
-			QStringLiteral("ericw-bsputil"),
-			QCoreApplication::translate("VibeStudioCompilerProfiles", "ericw-tools bsputil --extract-textures"),
+			QStringLiteral("vibemap2-bsputil-extract-textures"),
+			QStringLiteral("vibemap2-bsputil"),
+			QCoreApplication::translate("VibeStudioCompilerProfiles", "VibeMap2 bsputil --extract-textures"),
 			QStringLiteral("idTech2"),
 			QStringLiteral("extract"),
 			QCoreApplication::translate("VibeStudioCompilerProfiles", "Quake BSP"),
@@ -637,15 +637,15 @@ QVector<CompilerProfileDescriptor> compilerProfileDescriptors()
 
 	{
 		CompilerProfileDescriptor probe = compilerProfile(
-			QStringLiteral("q3map2-probe"),
-			QStringLiteral("q3map2"),
-			QCoreApplication::translate("VibeStudioCompilerProfiles", "q3map2 help/probe"),
+			QStringLiteral("vibemap3-probe"),
+			QStringLiteral("vibemap3"),
+			QCoreApplication::translate("VibeStudioCompilerProfiles", "VibeMap3 help/probe"),
 			QStringLiteral("idTech3"),
 			QStringLiteral("probe"),
 			QCoreApplication::translate("VibeStudioCompilerProfiles", "No input"),
 			{},
 			QString(),
-			QCoreApplication::translate("VibeStudioCompilerProfiles", "Runs q3map2 help/probe output to verify the executable and inspect supported options."),
+			QCoreApplication::translate("VibeStudioCompilerProfiles", "Runs VibeMap3 help/probe output to verify the executable and inspect supported options."),
 			{QStringLiteral("-help")},
 			false);
 		probe.defaultOutputMode = CompilerDefaultOutputMode::NoArtifact;
@@ -653,83 +653,83 @@ QVector<CompilerProfileDescriptor> compilerProfileDescriptors()
 	}
 
 	{
-		// q3map2 dispatches on the first remaining token; BSPMain is the fall-through case, so the
+		// VibeMap3 dispatches on the first remaining token like q3map2; BSPMain is the fall-through case, so the
 		// BSP profile has no leading stage token (tools/quake3/q3map2/main.cpp).
 		CompilerProfileDescriptor bsp = compilerProfile(
-			QStringLiteral("q3map2-bsp"),
-			QStringLiteral("q3map2"),
-			QCoreApplication::translate("VibeStudioCompilerProfiles", "q3map2 BSP compile"),
+			QStringLiteral("vibemap3-bsp"),
+			QStringLiteral("vibemap3"),
+			QCoreApplication::translate("VibeStudioCompilerProfiles", "VibeMap3 BSP compile"),
 			QStringLiteral("idTech3"),
 			QStringLiteral("bsp"),
 			QCoreApplication::translate("VibeStudioCompilerProfiles", "Quake III .map source"),
 			{QStringLiteral("map")},
 			QStringLiteral("bsp"),
-			QCoreApplication::translate("VibeStudioCompilerProfiles", "Builds a Quake III-family BSP from a .map source through q3map2."),
+			QCoreApplication::translate("VibeStudioCompilerProfiles", "Builds a Quake III-family BSP from a .map source through VibeMap3."),
 			{QStringLiteral("-meta")},
 			true);
 		bsp.defaultOutputMode = CompilerDefaultOutputMode::DerivedFromInput;
 		bsp.relatedOutputExtensions = {QStringLiteral("prt"), QStringLiteral("srf"), QStringLiteral("lin")};
-		bsp.argumentPresets = q3map2Presets();
+		bsp.argumentPresets = vibemap3Presets();
 		profiles.push_back(bsp);
 
 		CompilerProfileDescriptor vis = compilerProfile(
-			QStringLiteral("q3map2-vis"),
-			QStringLiteral("q3map2"),
-			QCoreApplication::translate("VibeStudioCompilerProfiles", "q3map2 vis"),
+			QStringLiteral("vibemap3-vis"),
+			QStringLiteral("vibemap3"),
+			QCoreApplication::translate("VibeStudioCompilerProfiles", "VibeMap3 vis"),
 			QStringLiteral("idTech3"),
 			QStringLiteral("vis"),
 			QCoreApplication::translate("VibeStudioCompilerProfiles", "Quake III BSP"),
 			{QStringLiteral("bsp")},
 			QStringLiteral("bsp"),
-			QCoreApplication::translate("VibeStudioCompilerProfiles", "Runs the q3map2 visibility stage over an existing Quake III-family BSP."),
+			QCoreApplication::translate("VibeStudioCompilerProfiles", "Runs the VibeMap3 visibility stage over an existing Quake III-family BSP."),
 			{},
 			true);
 		vis.leadingStageArgument = QStringLiteral("-vis");
 		vis.defaultOutputMode = CompilerDefaultOutputMode::InPlace;
 		// VisMain loads "<base>.prt" written by the BSP stage (tools/quake3/q3map2/vis.cpp).
 		vis.requiredCompanionInputExtensions = {QStringLiteral("prt")};
-		vis.argumentPresets = q3map2Presets();
+		vis.argumentPresets = vibemap3Presets();
 		profiles.push_back(vis);
 
 		CompilerProfileDescriptor light = compilerProfile(
-			QStringLiteral("q3map2-light"),
-			QStringLiteral("q3map2"),
-			QCoreApplication::translate("VibeStudioCompilerProfiles", "q3map2 light"),
+			QStringLiteral("vibemap3-light"),
+			QStringLiteral("vibemap3"),
+			QCoreApplication::translate("VibeStudioCompilerProfiles", "VibeMap3 light"),
 			QStringLiteral("idTech3"),
 			QStringLiteral("light"),
 			QCoreApplication::translate("VibeStudioCompilerProfiles", "Quake III BSP"),
 			{QStringLiteral("bsp")},
 			QStringLiteral("bsp"),
-			QCoreApplication::translate("VibeStudioCompilerProfiles", "Runs the q3map2 lighting stage over an existing Quake III-family BSP."),
+			QCoreApplication::translate("VibeStudioCompilerProfiles", "Runs the VibeMap3 lighting stage over an existing Quake III-family BSP."),
 			{},
 			true);
 		light.leadingStageArgument = QStringLiteral("-light");
 		light.defaultOutputMode = CompilerDefaultOutputMode::InPlace;
-		light.argumentPresets = q3map2Presets();
+		light.argumentPresets = vibemap3Presets();
 		profiles.push_back(light);
 
 		CompilerProfileDescriptor convert = compilerProfile(
-			QStringLiteral("q3map2-convert"),
-			QStringLiteral("q3map2"),
-			QCoreApplication::translate("VibeStudioCompilerProfiles", "q3map2 convert"),
+			QStringLiteral("vibemap3-convert"),
+			QStringLiteral("vibemap3"),
+			QCoreApplication::translate("VibeStudioCompilerProfiles", "VibeMap3 convert"),
 			QStringLiteral("idTech3"),
 			QStringLiteral("convert"),
 			QCoreApplication::translate("VibeStudioCompilerProfiles", "Quake III BSP or .map source"),
 			{QStringLiteral("bsp"), QStringLiteral("map")},
 			QString(),
-			QCoreApplication::translate("VibeStudioCompilerProfiles", "Converts a BSP or .map through q3map2; the destination depends on the requested -format."),
+			QCoreApplication::translate("VibeStudioCompilerProfiles", "Converts a BSP or .map through VibeMap3; the destination depends on the requested -format."),
 			{},
 			true);
 		convert.leadingStageArgument = QStringLiteral("-convert");
 		// ConvertBSPMain names its output from the chosen -format (tools/quake3/q3map2/convert_bsp.cpp).
 		convert.defaultOutputMode = CompilerDefaultOutputMode::Unknown;
-		convert.argumentPresets = q3map2Presets();
+		convert.argumentPresets = vibemap3Presets();
 		profiles.push_back(convert);
 
 		CompilerProfileDescriptor pk3 = compilerProfile(
-			QStringLiteral("q3map2-pk3"),
-			QStringLiteral("q3map2"),
-			QCoreApplication::translate("VibeStudioCompilerProfiles", "q3map2 auto-package"),
+			QStringLiteral("vibemap3-pk3"),
+			QStringLiteral("vibemap3"),
+			QCoreApplication::translate("VibeStudioCompilerProfiles", "VibeMap3 auto-package"),
 			QStringLiteral("idTech3"),
 			QStringLiteral("package"),
 			QCoreApplication::translate("VibeStudioCompilerProfiles", "Quake III BSP"),
@@ -741,7 +741,7 @@ QVector<CompilerProfileDescriptor> compilerProfileDescriptors()
 		pk3.leadingStageArgument = QStringLiteral("-pk3");
 		// pk3BSPMain writes "<engine path>/<name>_autopacked.pk3" (tools/quake3/q3map2/autopk3.cpp).
 		pk3.defaultOutputMode = CompilerDefaultOutputMode::Unknown;
-		pk3.argumentPresets = q3map2Presets();
+		pk3.argumentPresets = vibemap3Presets();
 		profiles.push_back(pk3);
 	}
 
@@ -803,7 +803,10 @@ CompilerCommandPlan buildCompilerCommandPlan(const CompilerCommandRequest& reque
 	const QString requestedProfileId = normalizedId(request.profileId);
 	plan.profileFound = compilerProfileForId(requestedProfileId, &plan.profile);
 	if (!plan.profileFound) {
-		plan.errors << QCoreApplication::translate("VibeStudioCompilerProfiles", "Compiler profile is not known.");
+		const QString renamed = renamedCompilerId(requestedProfileId);
+		plan.errors << (renamed.isEmpty()
+			? QCoreApplication::translate("VibeStudioCompilerProfiles", "Compiler profile is not known.")
+			: QCoreApplication::translate("VibeStudioCompilerProfiles", "Compiler profile %1 was renamed %2 when VibeStudio moved to VibeMap2 and VibeMap3.").arg(requestedProfileId, renamed));
 		plan.commandLine = compilerCommandLineText(plan.program, plan.arguments);
 		return plan;
 	}
@@ -933,14 +936,14 @@ CompilerCommandPlan buildCompilerCommandPlan(const CompilerCommandRequest& reque
 			continue;
 		}
 		// Both BSP compilers skip or delete the portal file when the map leaks
-		// (external/compilers/ericw-tools/qbsp/outside.cc and
-		// external/compilers/q3map2-nrc/tools/quake3/q3map2/bsp.cpp), so this warning must not name
-		// one of them: it fires for the q3map2 chain exactly as it does for the Quake chain.
+		// (external/compilers/vibemap2/src/qbsp/outside.cc and
+		// external/compilers/vibemap3/tools/quake3/q3map2/bsp.cpp), so this warning must not name
+		// one of them: it fires for the VibeMap3 chain exactly as it does for the VibeMap2 chain.
 		plan.warnings << QCoreApplication::translate("VibeStudioCompilerProfiles", "The %1 stage needs %2 beside its input, but that file is missing. This is usually the classic chain where the BSP stage found a leak, so no portal file was kept and the visibility stage cannot run.")
 			.arg(plan.profile.stageId, QDir::toNativeSeparators(companion));
 	}
 
-	if (plan.profile.toolId.startsWith(QStringLiteral("ericw-"), Qt::CaseInsensitive)) {
+	if (plan.profile.toolId.startsWith(QStringLiteral("vibemap2-"), Qt::CaseInsensitive)) {
 		const QVector<CompilerKnownIssueDescriptor> profileIssues = compilerKnownIssuesForProfile(plan.profile.id);
 		int highValueCount = 0;
 		for (const CompilerKnownIssueDescriptor& issue : profileIssues) {
@@ -949,14 +952,14 @@ CompilerCommandPlan buildCompilerCommandPlan(const CompilerCommandRequest& reque
 			}
 		}
 		if (!profileIssues.isEmpty()) {
-			// Informational only: tracking upstream issues must not make every ericw run a warning.
-			plan.knownIssueNotes << QCoreApplication::translate("VibeStudioCompilerProfiles", "ericw-tools known-issue checks active: %1 high-value upstream issues are tracked for this profile.").arg(highValueCount);
+			// Informational only: tracking upstream issues must not make every VibeMap2 run a warning.
+			plan.knownIssueNotes << QCoreApplication::translate("VibeStudioCompilerProfiles", "VibeMap2 known-issue checks active: %1 high-value issues inherited from ericw-tools are tracked for this profile.").arg(highValueCount);
 		}
-		plan.knownIssueWarnings += ericwKnownIssuePlanWarnings(plan.profile.id, plan.inputPath, plan.arguments);
+		plan.knownIssueWarnings += vibemap2KnownIssuePlanWarnings(plan.profile.id, plan.inputPath, plan.arguments);
 		plan.warnings += plan.knownIssueWarnings;
 		if (QFileInfo(plan.inputPath).suffix().compare(QStringLiteral("map"), Qt::CaseInsensitive) == 0) {
 			QString preflightError;
-			const EricwMapPreflightReport preflight = inspectEricwMapPreflightFile(plan.inputPath, &preflightError);
+			const QuakeMapPreflightReport preflight = inspectQuakeMapPreflightFile(plan.inputPath, &preflightError);
 			if (!preflightError.isEmpty()) {
 				plan.preflightWarnings << preflightError;
 			}

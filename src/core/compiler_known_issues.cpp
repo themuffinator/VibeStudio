@@ -105,62 +105,62 @@ CompilerKnownIssueDescriptor knownIssue(
 
 QStringList qbspTool()
 {
-	return {QStringLiteral("ericw-qbsp")};
+	return {QStringLiteral("vibemap2-bsp")};
 }
 
 QStringList visTool()
 {
-	return {QStringLiteral("ericw-vis")};
+	return {QStringLiteral("vibemap2-vis")};
 }
 
 QStringList lightTool()
 {
-	return {QStringLiteral("ericw-light")};
+	return {QStringLiteral("vibemap2-light")};
 }
 
 QStringList qbspProfile()
 {
-	return {QStringLiteral("ericw-qbsp")};
+	return {QStringLiteral("vibemap2-bsp")};
 }
 
 QStringList visProfile()
 {
-	return {QStringLiteral("ericw-vis")};
+	return {QStringLiteral("vibemap2-vis")};
 }
 
 QStringList lightProfile()
 {
-	return {QStringLiteral("ericw-light")};
+	return {QStringLiteral("vibemap2-light")};
 }
 
 QStringList allCompileTools()
 {
-	return {QStringLiteral("ericw-qbsp"), QStringLiteral("ericw-vis"), QStringLiteral("ericw-light")};
+	return {QStringLiteral("vibemap2-bsp"), QStringLiteral("vibemap2-vis"), QStringLiteral("vibemap2-light")};
 }
 
 QStringList allCompileProfiles()
 {
-	return {QStringLiteral("ericw-qbsp"), QStringLiteral("ericw-vis"), QStringLiteral("ericw-light")};
+	return {QStringLiteral("vibemap2-bsp"), QStringLiteral("vibemap2-vis"), QStringLiteral("vibemap2-light")};
 }
 
 QStringList bsputilTool()
 {
-	return {QStringLiteral("ericw-bsputil")};
+	return {QStringLiteral("vibemap2-bsputil")};
 }
 
 QStringList bsputilProfile()
 {
-	return {QStringLiteral("ericw-bsputil")};
+	return {QStringLiteral("vibemap2-bsputil")};
 }
 
-QStringList lightpreviewTool()
+QStringList hubTool()
 {
-	return {QStringLiteral("ericw-lightpreview")};
+	return {QStringLiteral("vibemap2-hub")};
 }
 
-QStringList lightpreviewProfile()
+QStringList hubProfile()
 {
-	return {QStringLiteral("ericw-lightpreview")};
+	return {QStringLiteral("vibemap2-hub")};
 }
 
 } // namespace
@@ -196,9 +196,9 @@ QString compilerKnownIssueSeverityText(CompilerKnownIssueSeverity severity)
 }
 
 // Match keywords must discriminate. Two invariants keep the catalog from firing on healthy runs:
-// a keyword may never be a tool's own program name, because ericw-tools prints
-// "---- <program_name> / ericw-tools <version> ----" as the first line of every run
-// (external/compilers/ericw-tools/common/settings.cc, common_settings::set_parameters), and a
+// a keyword may never be a tool's own program name, because VibeMap2 prints
+// "---- <program_name> / VibeMap2 <version> ----" as the first line of every run
+// (external/compilers/vibemap2/src/common/settings.cc, common_settings::set_parameters), and a
 // keyword may never be a word that ordinary compiler output uses for its own status lines
 // ("error", "warning", "failed"). An entry with nothing distinctive to match on carries an empty
 // keyword list and stays a documentation-only note.
@@ -207,7 +207,7 @@ QVector<CompilerKnownIssueDescriptor> compilerKnownIssueDescriptors()
 	return {
 		knownIssue(QStringLiteral("483"), QStringLiteral("D01"), CompilerKnownIssueSeverity::Warning, true, lightTool(), lightProfile(), {QStringLiteral("light compilation parameters"), QStringLiteral("_light_cmdline"), QStringLiteral("_light_ver"), QStringLiteral("provenance")},
 			QT_TRANSLATE_NOOP("VibeStudioCompilerKnownIssues", "Light compile parameters are not embedded in BSP/BSPX output."),
-			QT_TRANSLATE_NOOP("VibeStudioCompilerKnownIssues", "Compiled lighting may be hard to reproduce because ericw-tools does not yet persist the full light command."),
+			QT_TRANSLATE_NOOP("VibeStudioCompilerKnownIssues", "Compiled lighting may be hard to reproduce because VibeMap2 does not yet persist the full light command."),
 			QT_TRANSLATE_NOOP("VibeStudioCompilerKnownIssues", "Keep VibeStudio command manifests beside generated BSPs and show them as the authoritative provenance record.")),
 		knownIssue(QStringLiteral("399"), QStringLiteral("D01"), CompilerKnownIssueSeverity::Error, true, lightTool(), lightProfile(), {QStringLiteral("LMSHIFT"), QStringLiteral("_lmscale"), QStringLiteral("lightmap scale"), QStringLiteral("BSPX")},
 			QT_TRANSLATE_NOOP("VibeStudioCompilerKnownIssues", "LMSHIFT metadata can be missing from 2.0 alpha builds."),
@@ -215,7 +215,7 @@ QVector<CompilerKnownIssueDescriptor> compilerKnownIssueDescriptors()
 			QT_TRANSLATE_NOOP("VibeStudioCompilerKnownIssues", "Warn on custom _lmscale use, preserve the compiler version, and verify BSPX lightmap metadata after compile.")),
 		knownIssue(QStringLiteral("167"), QStringLiteral("D01"), CompilerKnownIssueSeverity::Warning, true, lightTool(), lightProfile(), {QStringLiteral("save commandline"), QStringLiteral("tools version"), QStringLiteral("_light_cmdline"), QStringLiteral("_light_ver")},
 			QT_TRANSLATE_NOOP("VibeStudioCompilerKnownIssues", "Older provenance request for saved command lines and tool versions."),
-			QT_TRANSLATE_NOOP("VibeStudioCompilerKnownIssues", "Generated BSPs may not explain which ericw-tools version or flags produced the lighting."),
+			QT_TRANSLATE_NOOP("VibeStudioCompilerKnownIssues", "Generated BSPs may not explain which VibeMap2 version or flags produced the lighting."),
 			QT_TRANSLATE_NOOP("VibeStudioCompilerKnownIssues", "Record tool versions, arguments, inputs, and output hashes in the VibeStudio manifest.")),
 		knownIssue(QStringLiteral("415"), QStringLiteral("D01"), CompilerKnownIssueSeverity::Info, false, lightTool(), lightProfile(), {QStringLiteral("BSPX"), QStringLiteral("light-specific lump"), QStringLiteral("LIGHTINGDIR"), QStringLiteral("LMSHIFT")},
 			QT_TRANSLATE_NOOP("VibeStudioCompilerKnownIssues", "Light-specific BSPX lump documentation is incomplete upstream."),
@@ -262,10 +262,10 @@ QVector<CompilerKnownIssueDescriptor> compilerKnownIssueDescriptors()
 			QT_TRANSLATE_NOOP("VibeStudioCompilerKnownIssues", "Preflight suspicious backslashes and offer a map-safe escaped replacement.")),
 		// Deliberately unmatchable: this is a user-experience meta-issue about how compiler output is
 		// presented, and no compiler line can legitimately indicate it. Its former keywords ("error",
-		// "warning", "failed") appear in the normal output of every successful ericw-tools run, which
+		// "warning", "failed") appear in the normal output of every successful VibeMap2 run, which
 		// downgraded clean compiles to Warning and cited an unrelated upstream issue. It stays
 		// high-value so the notes for these profiles keep listing it.
-		knownIssue(QStringLiteral("287"), QStringLiteral("D04"), CompilerKnownIssueSeverity::Warning, true, {QStringLiteral("ericw-qbsp"), QStringLiteral("ericw-vis"), QStringLiteral("ericw-light")}, {QStringLiteral("ericw-qbsp"), QStringLiteral("ericw-vis"), QStringLiteral("ericw-light")}, {},
+		knownIssue(QStringLiteral("287"), QStringLiteral("D04"), CompilerKnownIssueSeverity::Warning, true, {QStringLiteral("vibemap2-bsp"), QStringLiteral("vibemap2-vis"), QStringLiteral("vibemap2-light")}, {QStringLiteral("vibemap2-bsp"), QStringLiteral("vibemap2-vis"), QStringLiteral("vibemap2-light")}, {},
 			QT_TRANSLATE_NOOP("VibeStudioCompilerKnownIssues", "Common compiler errors need richer user-facing guidance."),
 			QT_TRANSLATE_NOOP("VibeStudioCompilerKnownIssues", "Raw compiler output may not explain the practical fix."),
 			QT_TRANSLATE_NOOP("VibeStudioCompilerKnownIssues", "Layer known-issue explanations over parsed diagnostics and keep raw logs available.")),
@@ -296,7 +296,7 @@ QVector<CompilerKnownIssueDescriptor> compilerKnownIssueDescriptors()
 
 		knownIssue(QStringLiteral("333"), QStringLiteral("D05"), CompilerKnownIssueSeverity::Warning, true, qbspTool(), qbspProfile(), {QStringLiteral("_external_map"), QStringLiteral("entities"), QStringLiteral("prefab")},
 			QT_TRANSLATE_NOOP("VibeStudioCompilerKnownIssues", "External maps do not import full entity content yet."),
-			QT_TRANSLATE_NOOP("VibeStudioCompilerKnownIssues", "Prefab maps may lose entity behavior when compiled through current ericw-tools support."),
+			QT_TRANSLATE_NOOP("VibeStudioCompilerKnownIssues", "Prefab maps may lose entity behavior when compiled through current VibeMap2 support."),
 			QT_TRANSLATE_NOOP("VibeStudioCompilerKnownIssues", "Flag prefab sources containing entities and document what will be merged.")),
 		knownIssue(QStringLiteral("231"), QStringLiteral("D05"), CompilerKnownIssueSeverity::Warning, true, qbspTool(), qbspProfile(), {QStringLiteral("misc_external_map"), QStringLiteral("_phong"), QStringLiteral("lighting key")},
 			QT_TRANSLATE_NOOP("VibeStudioCompilerKnownIssues", "External-map lighting keys can be ignored."),
@@ -337,7 +337,7 @@ QVector<CompilerKnownIssueDescriptor> compilerKnownIssueDescriptors()
 			QT_TRANSLATE_NOOP("VibeStudioCompilerKnownIssues", "Warn on origin-brush rotating doors in region+ profiles and suggest a full compile for validation.")),
 		knownIssue(QStringLiteral("390"), QStringLiteral("D06"), CompilerKnownIssueSeverity::Info, true, qbspTool(), qbspProfile(), {QStringLiteral("multiple region brushes"), QStringLiteral("region brush"), QStringLiteral("partial compile")},
 			QT_TRANSLATE_NOOP("VibeStudioCompilerKnownIssues", "Multiple region brushes are not supported as a union."),
-			QT_TRANSLATE_NOOP("VibeStudioCompilerKnownIssues", "Editor selections using several regions may not match ericw-tools region behavior."),
+			QT_TRANSLATE_NOOP("VibeStudioCompilerKnownIssues", "Editor selections using several regions may not match VibeMap2 region behavior."),
 			QT_TRANSLATE_NOOP("VibeStudioCompilerKnownIssues", "Collapse region requests to one temporary region volume or explain the limitation before compile.")),
 
 		knownIssue(QStringLiteral("484"), QStringLiteral("D07"), CompilerKnownIssueSeverity::Warning, true, lightTool(), lightProfile(), {QStringLiteral("LIGHTINGDIR"), QStringLiteral("_sunlight2"), QStringLiteral("Q2"), QStringLiteral("BSPX")},
@@ -348,7 +348,7 @@ QVector<CompilerKnownIssueDescriptor> compilerKnownIssueDescriptors()
 			QT_TRANSLATE_NOOP("VibeStudioCompilerKnownIssues", "Structural meshes and func_* entities can cast inconsistent shadows."),
 			QT_TRANSLATE_NOOP("VibeStudioCompilerKnownIssues", "Entity-based geometry may not light like equivalent structural brushes."),
 			QT_TRANSLATE_NOOP("VibeStudioCompilerKnownIssues", "Flag mixed structural/detail shadow tests in map QA and keep versioned preview captures.")),
-		knownIssue(QStringLiteral("441"), QStringLiteral("D07"), CompilerKnownIssueSeverity::Warning, true, {QStringLiteral("ericw-qbsp"), QStringLiteral("ericw-vis")}, {QStringLiteral("ericw-qbsp"), QStringLiteral("ericw-vis")}, {QStringLiteral("func_illusionary_visblocker"), QStringLiteral("0.18.1"), QStringLiteral("visible faces")},
+		knownIssue(QStringLiteral("441"), QStringLiteral("D07"), CompilerKnownIssueSeverity::Warning, true, {QStringLiteral("vibemap2-bsp"), QStringLiteral("vibemap2-vis")}, {QStringLiteral("vibemap2-bsp"), QStringLiteral("vibemap2-vis")}, {QStringLiteral("func_illusionary_visblocker"), QStringLiteral("0.18.1"), QStringLiteral("visible faces")},
 			QT_TRANSLATE_NOOP("VibeStudioCompilerKnownIssues", "func_illusionary_visblocker behavior changed from older releases."),
 			QT_TRANSLATE_NOOP("VibeStudioCompilerKnownIssues", "Maps relying on old visblocker behavior may render or vis differently."),
 			QT_TRANSLATE_NOOP("VibeStudioCompilerKnownIssues", "Record compiler version and prompt for a regression check when visblockers are present.")),
@@ -410,7 +410,7 @@ QVector<CompilerKnownIssueDescriptor> compilerKnownIssueDescriptors()
 			QT_TRANSLATE_NOOP("VibeStudioCompilerKnownIssues", "Preflight this entity combination and recommend a small preview compile before shipping.")),
 		knownIssue(QStringLiteral("247"), QStringLiteral("D07"), CompilerKnownIssueSeverity::Warning, true, lightTool(), lightProfile(), {QStringLiteral("misc_model"), QStringLiteral("cast shadow"), QStringLiteral("model shadow"), QStringLiteral("prop shadow")},
 			QT_TRANSLATE_NOOP("VibeStudioCompilerKnownIssues", "misc_model shadow casting is a requested upstream feature."),
-			QT_TRANSLATE_NOOP("VibeStudioCompilerKnownIssues", "Model props cannot be assumed to contribute baked shadows in current ericw-tools compiles."),
+			QT_TRANSLATE_NOOP("VibeStudioCompilerKnownIssues", "Model props cannot be assumed to contribute baked shadows in current VibeMap2 compiles."),
 			QT_TRANSLATE_NOOP("VibeStudioCompilerKnownIssues", "Expose model shadow expectations in asset diagnostics and suggest brush proxies when the target engine needs baked shadows.")),
 		knownIssue(QStringLiteral("238"), QStringLiteral("D07"), CompilerKnownIssueSeverity::Warning, false, lightTool(), lightProfile(), {QStringLiteral("penumbra"), QStringLiteral("pitch"), QStringLiteral("yaw"), QStringLiteral("sunlight")},
 			QT_TRANSLATE_NOOP("VibeStudioCompilerKnownIssues", "Sunlight penumbra can deviate differently in pitch and yaw."),
@@ -477,9 +477,9 @@ QVector<CompilerKnownIssueDescriptor> compilerKnownIssueDescriptors()
 			QT_TRANSLATE_NOOP("VibeStudioCompilerKnownIssues", "Non-WAD compiles can still report missing texture data."),
 			QT_TRANSLATE_NOOP("VibeStudioCompilerKnownIssues", "Generated or external-texture BSP workflows may warn even when texture data is intentionally omitted."),
 			QT_TRANSLATE_NOOP("VibeStudioCompilerKnownIssues", "Explain -notex/non-WAD profile behavior and separate expected warnings from real missing assets.")),
-		knownIssue(QStringLiteral("346"), QStringLiteral("D08"), CompilerKnownIssueSeverity::Info, true, {QStringLiteral("ericw-qbsp"), QStringLiteral("ericw-light")}, {QStringLiteral("ericw-qbsp"), QStringLiteral("ericw-light")}, {QStringLiteral("PCX"), QStringLiteral("PNG"), QStringLiteral("external textures"), QStringLiteral("palette")},
+		knownIssue(QStringLiteral("346"), QStringLiteral("D08"), CompilerKnownIssueSeverity::Info, true, {QStringLiteral("vibemap2-bsp"), QStringLiteral("vibemap2-light")}, {QStringLiteral("vibemap2-bsp"), QStringLiteral("vibemap2-light")}, {QStringLiteral("PCX"), QStringLiteral("PNG"), QStringLiteral("external textures"), QStringLiteral("palette")},
 			QT_TRANSLATE_NOOP("VibeStudioCompilerKnownIssues", "External texture format support is still expanding."),
-			QT_TRANSLATE_NOOP("VibeStudioCompilerKnownIssues", "Some custom texture formats may not be accepted by ericw-tools."),
+			QT_TRANSLATE_NOOP("VibeStudioCompilerKnownIssues", "Some custom texture formats may not be accepted by VibeMap2."),
 			QT_TRANSLATE_NOOP("VibeStudioCompilerKnownIssues", "Validate replacement textures through VibeStudio asset tools before starting a compile.")),
 		knownIssue(QStringLiteral("201"), QStringLiteral("D08"), CompilerKnownIssueSeverity::Warning, true, qbspTool(), qbspProfile(), {QStringLiteral("-outputdir"), QStringLiteral("-waddir"), QStringLiteral("working directory")},
 			QT_TRANSLATE_NOOP("VibeStudioCompilerKnownIssues", "Explicit output and WAD directories are a requested upstream feature."),
@@ -490,31 +490,31 @@ QVector<CompilerKnownIssueDescriptor> compilerKnownIssueDescriptors()
 			QT_TRANSLATE_NOOP("VibeStudioCompilerKnownIssues", "Bounce lighting can be wrong for total conversions with custom palettes."),
 			QT_TRANSLATE_NOOP("VibeStudioCompilerKnownIssues", "Add a custom-palette profile warning and require visual QA for relit maps.")),
 
-		knownIssue(QStringLiteral("463"), QString(), CompilerKnownIssueSeverity::Critical, true, {QStringLiteral("ericw-lightpreview")}, {QStringLiteral("ericw-lightpreview")}, {QStringLiteral("temporary directory"), QStringLiteral("overwrite")},
-			QT_TRANSLATE_NOOP("VibeStudioCompilerKnownIssues", "lightpreview should run in a temporary directory."),
+		knownIssue(QStringLiteral("463"), QString(), CompilerKnownIssueSeverity::Critical, true, {QStringLiteral("vibemap2-hub")}, {QStringLiteral("vibemap2-hub")}, {QStringLiteral("temporary directory"), QStringLiteral("overwrite")},
+			QT_TRANSLATE_NOOP("VibeStudioCompilerKnownIssues", "Preview compiles should run in a temporary directory."),
 			QT_TRANSLATE_NOOP("VibeStudioCompilerKnownIssues", "Preview compiles may write beside the source map and overwrite outputs."),
 			QT_TRANSLATE_NOOP("VibeStudioCompilerKnownIssues", "Always launch preview-style compiles in an isolated VibeStudio work directory.")),
-		knownIssue(QStringLiteral("435"), QStringLiteral("D09"), CompilerKnownIssueSeverity::Error, true, {QStringLiteral("ericw-bsputil")}, {QStringLiteral("ericw-bsputil")}, {QStringLiteral("argument parsing"), QStringLiteral("dummy argument")},
+		knownIssue(QStringLiteral("435"), QStringLiteral("D09"), CompilerKnownIssueSeverity::Error, true, {QStringLiteral("vibemap2-bsputil")}, {QStringLiteral("vibemap2-bsputil")}, {QStringLiteral("argument parsing"), QStringLiteral("dummy argument")},
 			QT_TRANSLATE_NOOP("VibeStudioCompilerKnownIssues", "bsputil argument parsing can reject valid operations."),
 			QT_TRANSLATE_NOOP("VibeStudioCompilerKnownIssues", "Some bsputil wrapper commands may fail unless extra dummy arguments are supplied."),
 			QT_TRANSLATE_NOOP("VibeStudioCompilerKnownIssues", "Smoke-test each bsputil operation before exposing it as a package or diagnostics action.")),
-		knownIssue(QStringLiteral("482"), QStringLiteral("D09"), CompilerKnownIssueSeverity::Warning, true, {QStringLiteral("ericw-tools")}, {QStringLiteral("ericw-tools")}, {QStringLiteral("Embree"), QStringLiteral("TBB"), QStringLiteral("Linux Mint"), QStringLiteral("build")},
+		knownIssue(QStringLiteral("482"), QStringLiteral("D09"), CompilerKnownIssueSeverity::Warning, true, {QStringLiteral("vibemap2")}, {QStringLiteral("vibemap2")}, {QStringLiteral("Embree"), QStringLiteral("TBB"), QStringLiteral("Linux Mint"), QStringLiteral("build")},
 			QT_TRANSLATE_NOOP("VibeStudioCompilerKnownIssues", "Embree/TBB build requirements can fail on older Linux distributions."),
-			QT_TRANSLATE_NOOP("VibeStudioCompilerKnownIssues", "Local ericw-tools builds may need newer compiler dependencies than the host provides."),
+			QT_TRANSLATE_NOOP("VibeStudioCompilerKnownIssues", "Local VibeMap2 builds may need newer compiler dependencies than the host provides."),
 			QT_TRANSLATE_NOOP("VibeStudioCompilerKnownIssues", "Probe dependencies up front and show distro-specific build guidance.")),
-		knownIssue(QStringLiteral("480"), QStringLiteral("D09"), CompilerKnownIssueSeverity::Warning, false, lightpreviewTool(), lightpreviewProfile(), {QStringLiteral("Arch"), QStringLiteral("Nvidia"), QStringLiteral("Wayland")},
-			QT_TRANSLATE_NOOP("VibeStudioCompilerKnownIssues", "lightpreview can fail to launch on some Linux graphics stacks."),
+		knownIssue(QStringLiteral("480"), QStringLiteral("D09"), CompilerKnownIssueSeverity::Warning, false, hubTool(), hubProfile(), {QStringLiteral("Arch"), QStringLiteral("Nvidia"), QStringLiteral("Wayland")},
+			QT_TRANSLATE_NOOP("VibeStudioCompilerKnownIssues", "The hub (formerly lightpreview) can fail to launch on some Linux graphics stacks."),
 			QT_TRANSLATE_NOOP("VibeStudioCompilerKnownIssues", "Qt/OpenGL context creation may fail before any compile work begins."),
-			QT_TRANSLATE_NOOP("VibeStudioCompilerKnownIssues", "Keep lightpreview optional, expose launch diagnostics, and prefer VibeStudio previews where available.")),
-		knownIssue(QStringLiteral("449"), QStringLiteral("D09"), CompilerKnownIssueSeverity::Info, false, {QStringLiteral("ericw-tools")}, {QStringLiteral("ericw-tools")}, {QStringLiteral("std::format"), QStringLiteral("fmt"), QStringLiteral("logging"), QStringLiteral("format")},
+			QT_TRANSLATE_NOOP("VibeStudioCompilerKnownIssues", "Keep the hub optional, expose launch diagnostics, and prefer VibeStudio previews where available.")),
+		knownIssue(QStringLiteral("449"), QStringLiteral("D09"), CompilerKnownIssueSeverity::Info, false, {QStringLiteral("vibemap2")}, {QStringLiteral("vibemap2")}, {QStringLiteral("std::format"), QStringLiteral("fmt"), QStringLiteral("logging"), QStringLiteral("format")},
 			QT_TRANSLATE_NOOP("VibeStudioCompilerKnownIssues", "Upstream logging format internals may change."),
 			QT_TRANSLATE_NOOP("VibeStudioCompilerKnownIssues", "Forks or log parsers that depend on third-party formatting details could be fragile."),
 			QT_TRANSLATE_NOOP("VibeStudioCompilerKnownIssues", "Parse stable diagnostic content rather than assuming a particular upstream logging library.")),
-		knownIssue(QStringLiteral("289"), QStringLiteral("D09"), CompilerKnownIssueSeverity::Info, true, {QStringLiteral("ericw-bsputil")}, {QStringLiteral("ericw-bsputil")}, {QStringLiteral("bspinfo"), QStringLiteral("diagnostics"), QStringLiteral("light stats"), QStringLiteral("entity extraction")},
+		knownIssue(QStringLiteral("289"), QStringLiteral("D09"), CompilerKnownIssueSeverity::Info, true, {QStringLiteral("vibemap2-bsputil")}, {QStringLiteral("vibemap2-bsputil")}, {QStringLiteral("bspinfo"), QStringLiteral("diagnostics"), QStringLiteral("light stats"), QStringLiteral("entity extraction")},
 			QT_TRANSLATE_NOOP("VibeStudioCompilerKnownIssues", "Richer bspinfo-style diagnostics are requested upstream."),
 			QT_TRANSLATE_NOOP("VibeStudioCompilerKnownIssues", "Current tools may not expose every statistic VibeStudio wants in a structured way."),
 			QT_TRANSLATE_NOOP("VibeStudioCompilerKnownIssues", "Keep VibeStudio diagnostics pane tolerant of missing fields and preserve raw tool output.")),
-		knownIssue(QStringLiteral("335"), QStringLiteral("D09"), CompilerKnownIssueSeverity::Warning, false, {QStringLiteral("ericw-tools")}, {QStringLiteral("ericw-tools")}, {QStringLiteral("binary name"), QStringLiteral("light"), QStringLiteral("vis"), QStringLiteral("tool discovery")},
+		knownIssue(QStringLiteral("335"), QStringLiteral("D09"), CompilerKnownIssueSeverity::Warning, false, {QStringLiteral("vibemap2")}, {QStringLiteral("vibemap2")}, {QStringLiteral("binary name"), QStringLiteral("light"), QStringLiteral("vis"), QStringLiteral("tool discovery")},
 			QT_TRANSLATE_NOOP("VibeStudioCompilerKnownIssues", "Generic binary names can conflict with other packages."),
 			QT_TRANSLATE_NOOP("VibeStudioCompilerKnownIssues", "Launching bare `light` or `vis` may resolve to the wrong executable on some systems."),
 			QT_TRANSLATE_NOOP("VibeStudioCompilerKnownIssues", "Use VibeStudio tool descriptors, version probes, and explicit executable paths instead of bare command names alone.")),
@@ -522,13 +522,13 @@ QVector<CompilerKnownIssueDescriptor> compilerKnownIssueDescriptors()
 			QT_TRANSLATE_NOOP("VibeStudioCompilerKnownIssues", "bspinfo does not provide every requested log-file workflow upstream."),
 			QT_TRANSLATE_NOOP("VibeStudioCompilerKnownIssues", "Helper-tool diagnostics may only be available through captured process output."),
 			QT_TRANSLATE_NOOP("VibeStudioCompilerKnownIssues", "Capture stdout and stderr in VibeStudio manifests and expose them as the durable diagnostic log.")),
-		knownIssue(QStringLiteral("223"), QStringLiteral("D09"), CompilerKnownIssueSeverity::Info, false, {QStringLiteral("ericw-tools")}, {QStringLiteral("ericw-tools")}, {QStringLiteral("Darwin"), QStringLiteral("macOS"), QStringLiteral("package suffix"), QStringLiteral("release artifact")},
+		knownIssue(QStringLiteral("223"), QStringLiteral("D09"), CompilerKnownIssueSeverity::Info, false, {QStringLiteral("vibemap2")}, {QStringLiteral("vibemap2")}, {QStringLiteral("Darwin"), QStringLiteral("macOS"), QStringLiteral("package suffix"), QStringLiteral("release artifact")},
 			QT_TRANSLATE_NOOP("VibeStudioCompilerKnownIssues", "macOS release artifact naming is tracked upstream."),
 			QT_TRANSLATE_NOOP("VibeStudioCompilerKnownIssues", "Automated tool discovery may encounter package names that use older platform wording."),
 			QT_TRANSLATE_NOOP("VibeStudioCompilerKnownIssues", "Match release artifacts by descriptor metadata and checksums instead of display suffix alone.")),
-		knownIssue(QStringLiteral("215"), QStringLiteral("D09"), CompilerKnownIssueSeverity::Info, false, {QStringLiteral("ericw-tools")}, {QStringLiteral("ericw-tools")}, {QStringLiteral("Flatpak"), QStringLiteral("Flathub"), QStringLiteral("Linux package"), QStringLiteral("bundle")},
+		knownIssue(QStringLiteral("215"), QStringLiteral("D09"), CompilerKnownIssueSeverity::Info, false, {QStringLiteral("vibemap2")}, {QStringLiteral("vibemap2")}, {QStringLiteral("Flatpak"), QStringLiteral("Flathub"), QStringLiteral("Linux package"), QStringLiteral("bundle")},
 			QT_TRANSLATE_NOOP("VibeStudioCompilerKnownIssues", "Flatpak packaging is an upstream distribution request."),
-			QT_TRANSLATE_NOOP("VibeStudioCompilerKnownIssues", "Linux users may not have a single supported package route for ericw-tools."),
+			QT_TRANSLATE_NOOP("VibeStudioCompilerKnownIssues", "Linux users may not have a single supported package route for VibeMap2."),
 			QT_TRANSLATE_NOOP("VibeStudioCompilerKnownIssues", "Keep VibeStudio setup able to use user-selected executables, submodule builds, or future package channels.")),
 
 		knownIssue(QStringLiteral("464"), QStringLiteral("D10"), CompilerKnownIssueSeverity::Info, false, visTool(), visProfile(), {QStringLiteral("func_viscluster"), QStringLiteral("VIS cluster"), QStringLiteral("optimization")},
@@ -541,7 +541,7 @@ QVector<CompilerKnownIssueDescriptor> compilerKnownIssueDescriptors()
 			QT_TRANSLATE_NOOP("VibeStudioCompilerKnownIssues", "Show entity and bmodel ordering as fragile compatibility data and avoid reordering source entities silently.")),
 		knownIssue(QStringLiteral("413"), QString(), CompilerKnownIssueSeverity::Info, false, lightTool(), lightProfile(), {QStringLiteral("translucency"), QStringLiteral("light transmission"), QStringLiteral("tinting"), QStringLiteral("thin material")},
 			QT_TRANSLATE_NOOP("VibeStudioCompilerKnownIssues", "Translucency lighting support is requested upstream."),
-			QT_TRANSLATE_NOOP("VibeStudioCompilerKnownIssues", "Thin or translucent material lighting cannot be assumed in current ericw-tools profiles."),
+			QT_TRANSLATE_NOOP("VibeStudioCompilerKnownIssues", "Thin or translucent material lighting cannot be assumed in current VibeMap2 profiles."),
 			QT_TRANSLATE_NOOP("VibeStudioCompilerKnownIssues", "Keep translucent-material intent visible in the asset inspector and mark compiler transmission as unsupported unless detected.")),
 		knownIssue(QStringLiteral("411"), QString(), CompilerKnownIssueSeverity::Info, false, bsputilTool(), bsputilProfile(), {QStringLiteral("decompiled output"), QStringLiteral("special texture"), QStringLiteral("no nodes"), QStringLiteral("round trip")},
 			QT_TRANSLATE_NOOP("VibeStudioCompilerKnownIssues", "A special decompile texture is requested for round-trip output."),
@@ -594,7 +594,7 @@ QVector<CompilerKnownIssueDescriptor> compilerKnownIssueDescriptors()
 			QT_TRANSLATE_NOOP("VibeStudioCompilerKnownIssues", "Warn in custom-engine profiles and keep hull settings explicit in project metadata.")),
 		knownIssue(QStringLiteral("437"), QStringLiteral("D12"), CompilerKnownIssueSeverity::Info, false, allCompileTools(), allCompileProfiles(), {QStringLiteral("HLBSP"), QStringLiteral("GoldSrc"), QStringLiteral("Half-Life"), QStringLiteral("parity")},
 			QT_TRANSLATE_NOOP("VibeStudioCompilerKnownIssues", "GoldSrc HLBSP parity is incomplete upstream."),
-			QT_TRANSLATE_NOOP("VibeStudioCompilerKnownIssues", "Half-Life-style maps may rely on original compiler behaviors that ericw-tools does not fully match."),
+			QT_TRANSLATE_NOOP("VibeStudioCompilerKnownIssues", "Half-Life-style maps may rely on original compiler behaviors that VibeMap2 does not fully match."),
 			QT_TRANSLATE_NOOP("VibeStudioCompilerKnownIssues", "Keep GoldSrc compatibility profile warnings explicit and avoid claiming original-compiler parity.")),
 
 		knownIssue(QStringLiteral("350"), QString(), CompilerKnownIssueSeverity::Error, true, qbspTool(), qbspProfile(), {QStringLiteral("leak"), QStringLiteral("face splitting"), QStringLiteral("excessive")},
@@ -609,7 +609,7 @@ QVector<CompilerKnownIssueDescriptor> compilerKnownIssueDescriptors()
 			QT_TRANSLATE_NOOP("VibeStudioCompilerKnownIssues", "Brush entities with origin keys can affect leak detection."),
 			QT_TRANSLATE_NOOP("VibeStudioCompilerKnownIssues", "Entity origins may cause false or confusing leak results."),
 			QT_TRANSLATE_NOOP("VibeStudioCompilerKnownIssues", "Validate brush-entity origin usage before qbsp and point leaks back to source entities.")),
-		knownIssue(QStringLiteral("278"), QString(), CompilerKnownIssueSeverity::Critical, true, {QStringLiteral("ericw-qbsp"), QStringLiteral("ericw-light")}, {QStringLiteral("ericw-qbsp"), QStringLiteral("ericw-light")}, {QStringLiteral("corrupt BSP"), QStringLiteral("Hexen2"), QStringLiteral("misidentified")},
+		knownIssue(QStringLiteral("278"), QString(), CompilerKnownIssueSeverity::Critical, true, {QStringLiteral("vibemap2-bsp"), QStringLiteral("vibemap2-light")}, {QStringLiteral("vibemap2-bsp"), QStringLiteral("vibemap2-light")}, {QStringLiteral("corrupt BSP"), QStringLiteral("Hexen2"), QStringLiteral("misidentified")},
 			QT_TRANSLATE_NOOP("VibeStudioCompilerKnownIssues", "Corrupt Q1 BSPs can be misidentified as Hexen2."),
 			QT_TRANSLATE_NOOP("VibeStudioCompilerKnownIssues", "A compile/light pipeline may produce a BSP with the wrong detected format."),
 			QT_TRANSLATE_NOOP("VibeStudioCompilerKnownIssues", "Inspect BSP headers and lump sanity after compile before registering the artifact.")),
@@ -687,7 +687,7 @@ QVector<CompilerKnownIssueDescriptor> compilerKnownIssueDescriptors()
 			QT_TRANSLATE_NOOP("VibeStudioCompilerKnownIssues", "Warn when `_project_texture` is combined with `_surface` and preserve the setup for upstream regression reporting.")),
 		knownIssue(QStringLiteral("200"), QString(), CompilerKnownIssueSeverity::Info, false, qbspTool(), qbspProfile(), {QStringLiteral("random texture tiling"), QStringLiteral("texture randomization"), QStringLiteral("tiling"), QStringLiteral("variation")},
 			QT_TRANSLATE_NOOP("VibeStudioCompilerKnownIssues", "Random texture tiling is a requested compiler feature."),
-			QT_TRANSLATE_NOOP("VibeStudioCompilerKnownIssues", "Texture variation cannot be assumed at compile time for current ericw-tools profiles."),
+			QT_TRANSLATE_NOOP("VibeStudioCompilerKnownIssues", "Texture variation cannot be assumed at compile time for current VibeMap2 profiles."),
 			QT_TRANSLATE_NOOP("VibeStudioCompilerKnownIssues", "Keep random tiling as an editor/export feature unless a selected compiler version advertises support.")),
 		knownIssue(QStringLiteral("195"), QString(), CompilerKnownIssueSeverity::Warning, false, lightTool(), lightProfile(), {QStringLiteral("AD start.bsp"), QStringLiteral("Arcane Dimensions"), QStringLiteral("odd face"), QStringLiteral("visual compatibility")},
 			QT_TRANSLATE_NOOP("VibeStudioCompilerKnownIssues", "A specific Arcane Dimensions face has reported odd lighting or rendering."),
@@ -824,10 +824,10 @@ QString compilerKnownIssueText(const CompilerKnownIssueDescriptor& issue)
 	return lines.join('\n');
 }
 
-QStringList ericwKnownIssuePlanWarnings(const QString& profileId, const QString& inputPath, const QStringList& arguments)
+QStringList vibemap2KnownIssuePlanWarnings(const QString& profileId, const QString& inputPath, const QStringList& arguments)
 {
 	QStringList warnings;
-	if (!profileId.startsWith(QStringLiteral("ericw-"), Qt::CaseInsensitive)) {
+	if (!profileId.startsWith(QStringLiteral("vibemap2-"), Qt::CaseInsensitive)) {
 		return warnings;
 	}
 
@@ -850,14 +850,14 @@ QStringList ericwKnownIssuePlanWarnings(const QString& profileId, const QString&
 		}
 	}
 
-	if (profileId.compare(QStringLiteral("ericw-light"), Qt::CaseInsensitive) == 0 && QFileInfo(inputPath).completeBaseName().contains('.')) {
+	if (profileId.compare(QStringLiteral("vibemap2-light"), Qt::CaseInsensitive) == 0 && QFileInfo(inputPath).completeBaseName().contains('.')) {
 		appendIssue(QStringLiteral("230"));
 	}
-	if (profileId.compare(QStringLiteral("ericw-light"), Qt::CaseInsensitive) == 0
+	if (profileId.compare(QStringLiteral("vibemap2-light"), Qt::CaseInsensitive) == 0
 		&& (arguments.contains(QStringLiteral("-bspxhdr"), Qt::CaseInsensitive) || arguments.contains(QStringLiteral("-bspxlux"), Qt::CaseInsensitive) || arguments.contains(QStringLiteral("-wrnormals"), Qt::CaseInsensitive))) {
 		appendIssue(QStringLiteral("484"));
 	}
-	if (profileId.compare(QStringLiteral("ericw-qbsp"), Qt::CaseInsensitive) == 0 && arguments.contains(QStringLiteral("-notex"), Qt::CaseInsensitive)) {
+	if (profileId.compare(QStringLiteral("vibemap2-bsp"), Qt::CaseInsensitive) == 0 && arguments.contains(QStringLiteral("-notex"), Qt::CaseInsensitive)) {
 		appendIssue(QStringLiteral("450"));
 	}
 

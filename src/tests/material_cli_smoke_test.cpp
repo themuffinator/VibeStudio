@@ -321,23 +321,37 @@ int main(int argc, char** argv)
 	result = run({QStringLiteral("render"), q3, QStringLiteral("--material"), QStringLiteral("textures/test/anim"), QStringLiteral("--frames"),
 		QStringLiteral("2"), QStringLiteral("--fps"), QStringLiteral("4"), QStringLiteral("--columns"), QStringLiteral("2"), QStringLiteral("--size"),
 		QStringLiteral("64x64"), QStringLiteral("--orthographic"), QStringLiteral("--tiling"), QStringLiteral("1"), QStringLiteral("--output"), sheet});
-	const QImage rendered(sheet);
-	expect(lastExit == 0 && rendered.size() == QSize(128, 64), "material render writes a two-frame sheet", lastOutput);
-	if (rendered.size() == QSize(128, 64)) {
-		const QRgb first = rendered.pixel(32, 32);
-		const QRgb second = rendered.pixel(96, 32);
-		expect(qRed(first) > qBlue(first) && qBlue(second) > qRed(second), "animMap frames follow time in the sheet");
+	if (lastExit == 5) {
+		// No OpenGL or Vulkan for the CLI here: the command says why and
+		// writes nothing; the drawing checks need a renderer.
+		expect(!QFile::exists(sheet) && lastOutput.contains(QStringLiteral("could not be drawn")),
+			"material render without a 3D renderer says why and writes nothing", lastOutput);
+		expect(qEnvironmentVariableIntValue("VIBESTUDIO_RENDER_REQUIRE") == 0, "VIBESTUDIO_RENDER_REQUIRE is set, but material render has no 3D renderer",
+			lastOutput);
+		std::cout << "No 3D renderer starts for the CLI here: material render drawing checks skipped.\n";
+	} else {
+		const QImage rendered(sheet);
+		expect(lastExit == 0 && rendered.size() == QSize(128, 64), "material render writes a two-frame sheet", lastOutput);
+		expect(!result.value(QStringLiteral("renderer")).toString().isEmpty(), "material render names the renderer that drew it", lastOutput);
+		if (rendered.size() == QSize(128, 64)) {
+			const QRgb first = rendered.pixel(32, 32);
+			const QRgb second = rendered.pixel(96, 32);
+			expect(qRed(first) > qBlue(first) && qBlue(second) > qRed(second), "animMap frames follow time in the sheet");
+		}
+		run({QStringLiteral("render"), q3, QStringLiteral("--material"), QStringLiteral("textures/test/anim"), QStringLiteral("--output"), sheet});
+		expect(lastExit == 1, "render will not replace a file without --overwrite", lastOutput);
+		const QString dry = root.filePath(QStringLiteral("dry.png"));
+		result = run({QStringLiteral("render"), wad, QStringLiteral("--material"), QStringLiteral("NUKAGE1"), QStringLiteral("--output"), dry,
+			QStringLiteral("--dry-run")});
+		expect(lastExit == 0 && !QFile::exists(dry) && !result.value(QStringLiteral("written")).toBool()
+				&& result.value(QStringLiteral("shape")).toString() == QStringLiteral("floor"),
+			"a dry render writes nothing and puts flats on the floor", lastOutput);
+		result = run({QStringLiteral("render"), q3, QStringLiteral("--material"), QStringLiteral("textures/test/bad"), QStringLiteral("--dry-run")});
+		expect(result.value(QStringLiteral("fallback")).toBool(), "a shader Quake III drops renders as its fallback", lastOutput);
 	}
-	run({QStringLiteral("render"), q3, QStringLiteral("--material"), QStringLiteral("textures/test/anim"), QStringLiteral("--output"), sheet});
-	expect(lastExit == 1, "render will not replace a file without --overwrite", lastOutput);
-	const QString dry = root.filePath(QStringLiteral("dry.png"));
-	result = run({QStringLiteral("render"), wad, QStringLiteral("--material"), QStringLiteral("NUKAGE1"), QStringLiteral("--output"), dry,
-		QStringLiteral("--dry-run")});
-	expect(lastExit == 0 && !QFile::exists(dry) && !result.value(QStringLiteral("written")).toBool()
-			&& result.value(QStringLiteral("shape")).toString() == QStringLiteral("floor"),
-		"a dry render writes nothing and puts flats on the floor", lastOutput);
-	result = run({QStringLiteral("render"), q3, QStringLiteral("--material"), QStringLiteral("textures/test/bad"), QStringLiteral("--dry-run")});
-	expect(result.value(QStringLiteral("fallback")).toBool(), "a shader Quake III drops renders as its fallback", lastOutput);
+	run({QStringLiteral("render"), q3, QStringLiteral("--material"), QStringLiteral("textures/test/anim"), QStringLiteral("--renderer"),
+		QStringLiteral("software"), QStringLiteral("--dry-run")});
+	expect(lastExit == 2, "material render refuses an unknown --renderer", lastOutput);
 
 	// graph
 	result = run({QStringLiteral("graph"), q3, QStringLiteral("--material"), QStringLiteral("textures/test/glow")});

@@ -41,7 +41,7 @@ reminders such as "No game installation profile has been added yet."
 | Step | What you choose | Settings button |
 | --- | --- | --- |
 | Welcome and Access | Language, region formats, theme, text size, colour vision, focus outline, motion, alerts and speech | **Open Accessibility Settings** |
-| Workspace and Editor Profile | The editor profile the Levels page follows | **Choose Editor Profile** |
+| Workspace and Editor Profile | The editor profile the Levels page follows, and the 3D renderer | **Choose Editor Profile** |
 | Projects and Packages | A project folder and its manifest, or nothing for now | **Open Workspace** |
 | Game Installations | Your games, detected from Steam and GOG or added by hand | **Open Workspace** |
 | Toolchains | Where your compiler programs are | **Open Build Toolchains** |
@@ -94,6 +94,18 @@ start with. **Customize Gestures…** adjusts the chosen profile. See
 [Editor profiles](editor-profiles.md) for the supported controls and remaining
 differences; choosing a profile does not add its original editor's file formats.
 
+The same page has **3D Rendering**. Its **Renderer** decides what draws the
+Levels camera, models, the modeller and material previews:
+
+- **Automatic** (the default) uses Vulkan where it works and OpenGL otherwise.
+  On macOS it tries OpenGL first.
+- **OpenGL** or **Vulkan** uses only that one.
+
+**Status** shows what each renderer found on your computer and which one is in
+use. **Check Renderers** starts both again and draws a test image on each; use
+it after updating a graphics driver. See
+[3D views stay empty](troubleshooting.md#3d-views-stay-empty) if neither works.
+
 ## Projects and game installations
 
 **Open Workspace** opens the **Workspace** page.
@@ -115,9 +127,11 @@ test map into a game only after you allow it. See
 ## Compilers
 
 **Open Build Toolchains** opens the **Build** page. Its **Toolchain** tab lists
-each compiler tool (ericw-tools for Quake and Quake II, q3map2 for Quake III,
+each compiler tool (VibeMap2 for Quake and Quake II, VibeMap3 for Quake III,
 ZDBSP and ZokumBSP for Doom), whether it was found, and where its path comes
-from. VibeStudio also looks on your `PATH`.
+from. VibeStudio also looks on your `PATH`. VibeMap2 and VibeMap3 are
+VibeStudio's own compilers; stock ericw-tools and q3map2 programs can still be
+used, but you choose them with **Locate…**.
 
 1. Select a tool whose status is **Not found**.
 2. Choose **Locate…** and pick its program.
@@ -176,9 +190,10 @@ vibestudio --cli --setup-step game-installations
 vibestudio --cli --set-theme high-contrast-dark
 vibestudio --cli --set-text-scale 150
 vibestudio --cli editor select trenchbroom
+vibestudio --cli render set vulkan
 vibestudio --cli install detect --json
 vibestudio --cli project init ./mymod
-vibestudio --cli compiler set-path ericw-qbsp --executable /opt/ericw-tools/bin/qbsp
+vibestudio --cli compiler set-path vibemap2-bsp --executable /opt/vibemap2/vibemap2-bsp
 ```
 
 Setup progress also accepts `--setup-start`, `--setup-next`, `--setup-skip`,

@@ -34,6 +34,7 @@ using vibestudio::tests::setObjectSelected;
 #include "core/studio_settings.h"
 #include "tests/fake_ai_provider.h"
 #include "vibestudio_config.h"
+#include "tests/render_test_support.h"
 
 #include <QAbstractButton>
 #include <QAction>
@@ -115,6 +116,9 @@ using namespace vibestudio;
 namespace {
 
 int g_failures = 0;
+// Whether OpenGL or Vulkan draws here. The few checks that click into a 3D
+// view need one; Linux CI always has one (see render_test_support.h).
+bool drawsIn3D = true;
 
 void check(bool condition, const char* message)
 {
@@ -821,6 +825,7 @@ void checkHeaderFolding();
 void checkReflowGrid();
 void checkShortcutRules(ApplicationShell& shell);
 void checkCrashReportPreference(ApplicationShell& shell);
+void checkRendererPreference(ApplicationShell& shell);
 void checkLevelTextures(ApplicationShell& shell, const Fixtures& fixtures);
 void checkObjectQuery(ApplicationShell& shell, const Fixtures& fixtures);
 void checkPackageQuery(ApplicationShell& shell, const Fixtures& fixtures);
@@ -2591,14 +2596,16 @@ void checkMapClip(ApplicationShell& shell)
 		QMouseEvent releaseEvent(QEvent::MouseButtonRelease, middle, preview->mapToGlobal(middle), Qt::LeftButton, Qt::NoButton, Qt::NoModifier);
 		QCoreApplication::sendEvent(preview, &releaseEvent);
 		settle();
-		check(currentPath(objects) == QStringLiteral("brush:0") && preview->highlightedTriangleCount() == 12
-				&& shell.statusBar()->currentMessage().startsWith(QStringLiteral("Selected brush:0, face ")),
+		check(!drawsIn3D
+				|| (currentPath(objects) == QStringLiteral("brush:0") && preview->highlightedTriangleCount() == 12
+					&& shell.statusBar()->currentMessage().startsWith(QStringLiteral("Selected brush:0, face "))),
 			"A click on the floor in the 3D preview should select it, light it, and name the face.");
 		// The face clicked opens in the Inspector at its texture.
 		auto* picked = child<QTreeWidget>(shell, "entityInspector");
 		QTreeWidgetItem* pickedRow = picked ? picked->currentItem() : nullptr;
-		check(pickedRow && pickedRow->text(0) == QStringLiteral("Texture") && pickedRow->parent()
-				&& pickedRow->parent()->text(0).startsWith(QStringLiteral("Face ")) && pickedRow->parent()->isExpanded() && picked->isVisible(),
+		check(!drawsIn3D
+				|| (pickedRow && pickedRow->text(0) == QStringLiteral("Texture") && pickedRow->parent()
+					&& pickedRow->parent()->text(0).startsWith(QStringLiteral("Face ")) && pickedRow->parent()->isExpanded() && picked->isVisible()),
 			"The clicked face should open in the Inspector, at its texture.");
 		// W switches the preview to edges and back.
 		ensureActive(shell, "checkMapClip: 3D wireframe");
@@ -5019,7 +5026,7 @@ void checkEditorProfiles(ApplicationShell& shell, const Fixtures& fixtures)
 	settle();
 	check(camera->isVisible(), "The camera should be showing for the move check.");
 	drag(camera, Qt::LeftButton, Qt::NoModifier, camera->rect().center(), camera->rect().center() + QPoint(90, 0));
-	check(shell.statusBar()->currentMessage().startsWith(QStringLiteral("Moved")) && !camera->isMovingSelection(),
+	check(!drawsIn3D || (shell.statusBar()->currentMessage().startsWith(QStringLiteral("Moved")) && !camera->isMovingSelection()),
 		"A left drag on the selection in TrenchBroom's camera should move it.");
 	trigger(shell, "map.undo");
 	press(shell, Qt::Key_Space);
@@ -5165,7 +5172,7 @@ void checkEditorProfiles(ApplicationShell& shell, const Fixtures& fixtures)
 		check(map->selectionSet().isEmpty(), "A plain click in GtkRadiant's camera should select nothing.");
 		QTest::mouseClick(camera, Qt::LeftButton, Qt::ShiftModifier, camera->rect().center());
 		settle();
-		check(map->selectionSet().size() == 1, "Shift+click in GtkRadiant's camera should select what is under the pointer.");
+		check(!drawsIn3D || map->selectionSet().size() == 1, "Shift+click in GtkRadiant's camera should select what is under the pointer.");
 		// Backspace deletes, as Delete zooms.
 		const int brushesHere = brushCount();
 		const bool brushPicked = !map->selectionSet().isEmpty() && map->selectionSet().first().kind == LevelMapSelectionKind::QuakeBrush;
@@ -5920,6 +5927,39 @@ void checkCrashReportPreference(ApplicationShell& shell)
 	keep->setChecked(true);
 	settle();
 	check(shell.statusBar()->currentMessage().startsWith(QStringLiteral("Crash reports are on")), "Turning crash reports on should say so.");
+}
+
+// Settings > Appearance and Language > 3D Rendering: the choice is saved and
+// said, the status names both renderers in words, and Check Renderers runs
+// to a reported end whether or not this machine can draw.
+void checkRendererPreference(ApplicationShell& shell)
+{
+	ensureActive(shell, "checkRendererPreference");
+	auto* combo = child<QComboBox>(shell, "rendererCombo");
+	auto* status = child<QLabel>(shell, "rendererStatus");
+	auto* checkButton = child<QPushButton>(shell, "rendererCheck");
+	check(combo && status && checkButton, "Settings should offer the 3D renderer, its status and Check Renderers.");
+	if (!combo || !status || !checkButton) {
+		return;
+	}
+	check(combo->count() == 3 && combo->currentData().toString() == QStringLiteral("automatic"),
+		"The 3D renderer should start as Automatic, beside OpenGL and Vulkan.");
+	check(!combo->accessibleName().isEmpty() && !status->accessibleName().isEmpty() && !checkButton->accessibleName().isEmpty(),
+		"The 3D rendering controls should have accessible names.");
+	combo->setCurrentIndex(combo->findData(QStringLiteral("vulkan")));
+	settle();
+	check(StudioSettings().renderBackendPreference() == QStringLiteral("vulkan"), "Choosing Vulkan should save it.");
+	check(shell.statusBar()->currentMessage().contains(QStringLiteral("Vulkan")), "Choosing a renderer should say so.");
+	check(waitFor([status]() { return status->text().contains(QStringLiteral("OpenGL")) && status->text().contains(QStringLiteral("Vulkan")); }),
+		"The renderer status should name OpenGL and Vulkan.");
+	checkButton->click();
+	settle();
+	check(waitFor([checkButton]() { return checkButton->isEnabled(); }, 60000), "Check Renderers should finish.");
+	const QString checked = shell.statusBar()->currentMessage();
+	check(checked.contains(QStringLiteral("renderer")) || checked.contains(QStringLiteral("OpenGL")), "Check Renderers should report its result.");
+	combo->setCurrentIndex(combo->findData(QStringLiteral("automatic")));
+	settle();
+	check(StudioSettings().renderBackendPreference() == QStringLiteral("automatic"), "Choosing Automatic again should save it.");
 }
 
 // A second studio started while another runs does not reopen the session the
@@ -8076,8 +8116,8 @@ void checkBuildLoop(ApplicationShell& shell, const Fixtures& fixtures)
 	// Locate points qbsp at this program, which stands in for it.
 	sections->setCurrentIndex(1);
 	settle();
-	QTreeWidgetItem* qbsp = findTreeItem(tools, Qt::UserRole, QStringLiteral("ericw-qbsp"));
-	check(qbsp != nullptr, "The tool list should include ericw-tools qbsp.");
+	QTreeWidgetItem* qbsp = findTreeItem(tools, Qt::UserRole, QStringLiteral("vibemap2-bsp"));
+	check(qbsp != nullptr, "The tool list should include VibeMap2 bsp.");
 	if (!qbsp) {
 		return;
 	}
@@ -8095,7 +8135,7 @@ void checkBuildLoop(ApplicationShell& shell, const Fixtures& fixtures)
 	});
 	locate->click();
 	settle();
-	qbsp = findTreeItem(tools, Qt::UserRole, QStringLiteral("ericw-qbsp"));
+	qbsp = findTreeItem(tools, Qt::UserRole, QStringLiteral("vibemap2-bsp"));
 	check(qbsp && qbsp->text(3) == QStringLiteral("Chosen path") && sameFile(qbsp->text(2), standIn),
 		"Locate should make qbsp run the chosen program.");
 	check(automatic->isEnabled(), "Use Automatic should be offered once a path is chosen.");
@@ -8342,13 +8382,13 @@ void checkBuildLoop(ApplicationShell& shell, const Fixtures& fixtures)
 	// Use Automatic forgets the chosen path.
 	sections->setCurrentIndex(1);
 	settle();
-	qbsp = findTreeItem(tools, Qt::UserRole, QStringLiteral("ericw-qbsp"));
+	qbsp = findTreeItem(tools, Qt::UserRole, QStringLiteral("vibemap2-bsp"));
 	if (qbsp) {
 		tools->setCurrentItem(qbsp);
 		settle();
 		automatic->click();
 		settle();
-		qbsp = findTreeItem(tools, Qt::UserRole, QStringLiteral("ericw-qbsp"));
+		qbsp = findTreeItem(tools, Qt::UserRole, QStringLiteral("vibemap2-bsp"));
 		check(qbsp && qbsp->text(3) != QStringLiteral("Chosen path"), "Use Automatic should forget the chosen path.");
 	}
 
@@ -8958,6 +8998,11 @@ int main(int argc, char** argv)
 	QApplication app(argc, argv);
 	app.setOrganizationName(QStringLiteral("DarkMatterProductions"));
 	app.setApplicationName(QStringLiteral("VibeStudioTest"));
+	{
+		const int renderSkip = vibestudio::test_support::exitCodeWithoutRenderer("shell-interaction-smoke");
+		drawsIn3D = renderSkip < 0;
+		check(renderSkip != 1, "VIBESTUDIO_RENDER_REQUIRE is set, but no 3D renderer starts.");
+	}
 	applyStudioTheme(app, studioThemeTokens(StudioTheme::Dark, UiDensity::Standard, 100));
 
 	const Fixtures fixtures = buildFixtures(fixtureDir.path());
@@ -9034,6 +9079,7 @@ int main(int argc, char** argv)
 	RUN_CHECK(checkStatusBarFolding);
 	RUN_CHECK(checkShortcutRules, shell);
 	RUN_CHECK(checkCrashReportPreference, shell);
+	RUN_CHECK(checkRendererPreference, shell);
 	RUN_CHECK(checkSettingsSearch, shell);
 	RUN_CHECK(checkToolBarLabels, shell);
 	RUN_CHECK(checkLevelTextures, shell, fixtures);

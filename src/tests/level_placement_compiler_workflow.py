@@ -1,4 +1,4 @@
-"""Optional snap/duplicate/paste -> q3map2 UV -> model/audio dependency -> PK3 proof.
+"""Optional snap/duplicate/paste -> VibeMap3 UV -> model/audio dependency -> PK3 proof.
 
 Uses generated assets only. No game launch, native input or screen capture.
 All output must stay under this project's .agents/tmp directory.

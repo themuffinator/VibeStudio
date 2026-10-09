@@ -635,7 +635,31 @@ their own fixtures.
 | [QuakeSpasm](https://github.com/sezero/quakespasm), [DarkPlaces](https://github.com/DarkPlacesEngine/darkplaces), [FTEQW](https://github.com/fte-team/fteqw) | Lightmap overbright, fullbright and companion-image loading | The modern-port lightmap scale and the `_norm`, `_gloss`, `_glow`, `_luma`, `_pants`, `_shirt` and `_reflect` companions | GPL-2.0-or-later |
 
 The node graph, its layout, the text edits that keep a script's layout, the
-renderer, the library scan and every user interface are VibeStudio's own.
+renderer (GLSL shaders on OpenGL or Vulkan since 2026-10-08; see
+[3D Rendering: OpenGL And Vulkan](#3d-rendering-opengl-and-vulkan-2026-10-08)),
+the library scan and every user interface are VibeStudio's own.
+
+## 3D Rendering: OpenGL And Vulkan (2026-10-08)
+
+Every 3D view (the Levels camera, model previews, the modeller, the Doom
+preview) and the material previews draw on the GPU through VibeStudio's own
+frame layer in `src/core/render_*`, with an OpenGL and a Vulkan backend; the
+CPU renderers they replace are removed. The layer, its shaders in
+`src/core/shaders/`, the material shaders' port of the engine rules credited
+above, the wireframe coverage and the ID-buffer picking are VibeStudio's own.
+
+| Upstream | Used for | Licence | Revision and review |
+| --- | --- | --- | --- |
+| [Vulkan-Headers](https://github.com/KhronosGroup/Vulkan-Headers/tree/409c16be502e39fe70dd6fe2d9ad4842ef2c9a53) (The Khronos Group) | `include/vulkan/vulkan_core.h`, `vk_platform.h` and the `include/vk_video` headers it includes, vendored unchanged in `external/graphics/vulkan-headers` with `LICENSE.md` and `LICENSES/` ([integration notes](../external/graphics/vulkan-headers/VIBESTUDIO.md)) | Apache-2.0 (the repository also offers MIT for other files) | v1.4.313, `409c16be502e39fe70dd6fe2d9ad4842ef2c9a53`, reviewed 2026-10-08 |
+| [glslang](https://github.com/KhronosGroup/glslang) (The Khronos Group) | `glslangValidator` from the Vulkan SDK compiles the shaders to SPIR-V and checks their OpenGL 3.3 core and OpenGL ES 3.0 forms in `scripts/build_render_shaders.py`; only its output, compiled from VibeStudio's sources, is committed | BSD-3-Clause and others (tool only; not linked or distributed) | 15.x, reviewed 2026-10-08 |
+| [Vulkan 1.0 specification](https://registry.khronos.org/vulkan/specs/1.0/html/), [OpenGL 3.3 core](https://registry.khronos.org/OpenGL/specs/gl/glspec33.core.pdf), [OpenGL ES 3.0](https://registry.khronos.org/OpenGL/specs/es/3.0/es_spec_3.0.pdf) and [GLSL](https://registry.khronos.org/OpenGL/index_gl.php) specifications | API, synchronisation, rasterisation and texel-fetch rules both backends follow | Specification text; facts only | Read 2026-10-08 |
+| [Qt 6](https://doc.qt.io/qt-6/qopenglcontext.html) | `QOpenGLContext`, `QOffscreenSurface` and `QOpenGLExtraFunctions` for the OpenGL backend; `QLibrary` opens the Vulkan loader | GPL-3.0 / LGPL-3.0 | 6.10.1 headers, reviewed 2026-10-08 |
+| Cass Everitt, ["Interactive Order-Independent Transparency"](https://developer.nvidia.com/content/interactive-order-independent-transparency) (NVIDIA, 2001) | Depth peeling: translucent skins drawn as up to four layers, nearest first, and composited | Published technique | Reviewed 2026-10-08 |
+| Nathan Reed, ["Depth Precision Visualized"](https://developer.nvidia.com/content/depth-precision-visualized) (NVIDIA, 2015) | Reversed depth with an infinite far plane, so distant level geometry keeps its precision | Published technique | Reviewed 2026-10-08 |
+
+No code was copied from these sources. The renderer opens the Vulkan loader
+(`vulkan-1`, `libvulkan.so.1`, the macOS loader or MoltenVK) and the system's
+OpenGL driver at run time; VibeStudio does not distribute either.
 
 ## Audio Sample Rate Conversion
 
@@ -840,14 +864,28 @@ into VibeStudio or linked into its binaries.
 
 | Tool | Role | Upstream | Imported revision | License notes |
 |---|---|---|---|---|
-| ericw-tools | Quake/idTech2-style `qbsp`, `vis`, `light`, `bspinfo`, `bsputil` | [ericwa/ericw-tools](https://github.com/ericwa/ericw-tools) | `f80b1e216a415581aea7475cb52b16b8c4859084` | GPL-2.0-or-later; upstream notes GPL-3.0+ compatibility for Embree-enabled builds. See `external/compilers/ericw-tools/COPYING` and `gpl_v3.txt`. |
-| q3map2-nrc | q3map2 compiler from NetRadiant Custom for idTech3 BSP, lighting, conversion, and packaging | [Garux/netradiant-custom](https://github.com/Garux/netradiant-custom) | `68ecbed64b7be78741878c730279b5471d978c7c` | Mixed GPL/LGPL/BSD by file; upstream marks Quake III tools, including q3map2, as GPL. See `external/compilers/q3map2-nrc/LICENSE`, `GPL`, and `LGPL`. |
+| VibeMap2 | VibeStudio's Quake/idTech2 compilers: `vibemap2-bsp`, `vibemap2-vis`, `vibemap2-light`, the `vibemap2-bspinfo`, `vibemap2-bsputil` and `vibemap2-maputil` utilities, and the `vibemap2-hub` build and preview GUI. A fork developed as part of the VibeStudio project, derived from ericw-tools. | [themuffinator/VibeyMapTools](https://github.com/themuffinator/VibeyMapTools), branch `main` (to be renamed VibeMap2) | `4495049a9e4c1f6deadae3a76b8256614840af35` | GPL-3.0; keeps ericw-tools' history and notices. See `external/compilers/vibemap2/COPYING`; release bundles carry it as `licenses/external/compilers/VibeMap2/COPYING`. |
+| VibeMap3 | VibeStudio's Quake III/idTech3 compiler (`vibemap3`) for BSP compile, VIS, light, conversion and packaging, plus the `vibemap3-workbench` GUI. A fork developed as part of the VibeStudio project: a performance-focused continuation of q3map2 from NetRadiant Custom revision `8216133`. | [themuffinator/q3mapx](https://github.com/themuffinator/q3mapx), branch `main` (to be renamed VibeMap3) | `897524439cb58d2b736bc96b16c231d22dc5ddce` | GPL-3.0-or-later; imported q3map2 files keep their GPL-2.0-or-later notices, and the inherited NetRadiant Custom tree keeps its per-file GPL/LGPL/BSD licensing. See `external/compilers/vibemap3/COPYING`, `LICENSE`, `GPL`, and `LGPL`; release bundles carry `licenses/external/compilers/VibeMap3/COPYING`. |
 | ZDBSP | Doom-family node builder | [rheit/zdbsp](https://github.com/rheit/zdbsp) | `bcb9bdbcaf8ad296242c03cf3f9bff7ee732f659` | GPL-2.0-or-later. See `external/compilers/zdbsp/COPYING`. |
 | ZokumBSP | Doom-family node/blockmap/reject builder | [zokum-no/zokumbsp](https://github.com/zokum-no/zokumbsp) | `22af6defeb84ce836e0b184d6be5e80f127d9451` | GPL-2.0 text in `external/compilers/zokumbsp/src/COPYING`; based on ZenNode lineage credited upstream. |
 
 These compiler projects are imported as submodules so their history and license
-files remain intact. VibeStudio should invoke them as external tools until a
-specific source-level integration has a documented compatibility review.
+files remain intact. VibeStudio invokes them as external tools until a specific
+source-level integration has a documented compatibility review. VibeMap2 and
+VibeMap3 are VibeStudio's own forks; their URLs, branch, pins and reasons are
+recorded in [Compiler Integration](COMPILER_INTEGRATION.md#vibestudio-compilers).
+
+### Compiler Upstreams
+
+VibeMap2 and VibeMap3 build on these projects, which stay credited as their
+upstreams. Until VibeStudio moved to its own compilers, both were imported here
+as submodules at the revisions below, and VibeStudio's code comments and format
+credits still cite those revisions.
+
+| Upstream | Relationship | Link | Reviewed revision | License notes |
+|---|---|---|---|---|
+| ericw-tools | Upstream of VibeMap2. Its `qbsp`, `vis`, `light`, `bspinfo`, `bsputil` and `lightpreview` were VibeStudio's Quake/idTech2 compilers before VibeMap2, and its issue tracker supplies the known-issue catalogue's issue numbers. | [ericwa/ericw-tools](https://github.com/ericwa/ericw-tools) | `f80b1e216a415581aea7475cb52b16b8c4859084` | GPL-2.0-or-later; upstream notes GPL-3.0+ compatibility for Embree-enabled builds (its `COPYING` and `gpl_v3.txt`). |
+| q3map2 from NetRadiant Custom | Upstream of VibeMap3, which starts from NetRadiant Custom revision `8216133`. q3map2 was VibeStudio's Quake III compiler before VibeMap3. | [Garux/netradiant-custom](https://github.com/Garux/netradiant-custom) | `68ecbed64b7be78741878c730279b5471d978c7c` | Mixed GPL/LGPL/BSD by file; upstream marks Quake III tools, including q3map2, as GPL (its `LICENSE`, `GPL`, and `LGPL`). |
 
 ## Format And Engine Lineage
 VibeStudio targets public idTech-era formats and workflows from the Doom,
@@ -983,8 +1021,8 @@ compatible with VibeStudio's GPL-3.0 license.
 | Valve 220 `.map` texture axes | [Valve Developer Community MAP (file format)](https://developer.valvesoftware.com/wiki/MAP_%28file_format%29) | `src/core/level_map.cpp` - Valve 220 face parsing | Living wiki page |
 | Q3Radiant / GtkRadiant brush primitives | [Q3Radiant manual](https://icculus.org/gtkradiant/documentation/q3radiant_manual/) | `src/core/level_map.cpp` - `brushDef`, `brushDef3`, `patchDef2`, `patchDef3` | Manual as published by the GtkRadiant project |
 | q3map2 shader manual | [q3map2 shader manual](https://q3map2.robotrenegade.com/docs/shader_manual/) | `src/app/syntax_highlight.cpp` - shader keyword highlighting | Living document |
-| ericw-tools sources (imported submodule) | [ericwa/ericw-tools](https://github.com/ericwa/ericw-tools), local copy under `external/compilers/ericw-tools` | `src/core/map_geometry.cpp` - the `PlaneFromPoints` winding convention and the `ON_EPSILON`/`DIST_EPSILON` tolerance conventions, reimplemented rather than copied | Pinned revision `f80b1e216a415581aea7475cb52b16b8c4859084` |
-| q3map2 sources from NetRadiant Custom (imported submodule) | [Garux/netradiant-custom](https://github.com/Garux/netradiant-custom), local copy under `external/compilers/q3map2-nrc` | `src/core/map_geometry.cpp` - the +/-65536 `MAX_WORLD_COORD` base-winding extent and quadratic Bezier patch tessellation of `(2n+1)x(2m+1)` control grids | Pinned revision `68ecbed64b7be78741878c730279b5471d978c7c` |
+| ericw-tools sources (VibeMap2's upstream) | [ericwa/ericw-tools](https://github.com/ericwa/ericw-tools), reviewed at the revision VibeStudio imported as a submodule before moving to VibeMap2 | `src/core/map_geometry.cpp` - the `PlaneFromPoints` winding convention and the `ON_EPSILON`/`DIST_EPSILON` tolerance conventions, reimplemented rather than copied | Pinned revision `f80b1e216a415581aea7475cb52b16b8c4859084` |
+| q3map2 sources from NetRadiant Custom (VibeMap3's upstream) | [Garux/netradiant-custom](https://github.com/Garux/netradiant-custom), reviewed at the revision VibeStudio imported as a submodule before moving to VibeMap3 | `src/core/map_geometry.cpp` - the +/-65536 `MAX_WORLD_COORD` base-winding extent and quadratic Bezier patch tessellation of `(2n+1)x(2m+1)` control grids | Pinned revision `68ecbed64b7be78741878c730279b5471d978c7c` |
 
 Patch authoring (`src/core/level_patch.*`, reviewed 2026-10-04) uses the
 31-point axis limit and width-major map layout documented by NetRadiant Custom's
@@ -1008,11 +1046,11 @@ All rows below are implemented in `src/core/bsp_inspect.h` and
 | Specification | Reference | What it covers | Revision / date |
 |---|---|---|---|
 | Quake Specifications, chapter 4 "BSP files" | [qkspec_4](https://www.gamers.org/dEngine/quake/spec/quake-spec34/qkspec_4.htm) | BSP29 lump order and record layouts | "Quake Documentation Version 3.4" |
-| ericw-tools documentation | [ericw-tools docs](https://ericwa.github.io/ericw-tools/) | The `BSP2` and `2PSB` widened node/leaf/clipnode/edge/marksurface records, and the `.prt` / `.pts` / `.lin` files the compilers write | Matches the pinned submodule revision `f80b1e216a415581aea7475cb52b16b8c4859084` |
+| ericw-tools documentation | [ericw-tools docs](https://ericwa.github.io/ericw-tools/) | The `BSP2` and `2PSB` widened node/leaf/clipnode/edge/marksurface records, and the `.prt` / `.pts` / `.lin` files the compilers write | Matches revision `f80b1e216a415581aea7475cb52b16b8c4859084`, VibeStudio's ericw-tools submodule pin before VibeMap2 |
 | Released id Software Quake II sources | [`qcommon/qfiles.h`](https://github.com/id-Software/Quake-2/blob/master/qcommon/qfiles.h) | IBSP v38 header and lump records | GPL source release |
 | q2tools-220 / qbism extended Quake II BSP | [qbism/q2tools-220](https://github.com/qbism/q2tools-220) | The `QBSP` widened `dqnode_t`, `dqleaf_t`, `dqface_t`, `dqbrushside_t`, `dqedge_t` records | Upstream project; not imported as a submodule |
 | Released id Software Quake III Arena sources | [`code/qcommon/qfiles.h`](https://github.com/id-Software/Quake-III-Arena/blob/master/code/qcommon/qfiles.h) | IBSP v46 header and lump records | GPL source release |
-| q3map2 sources from NetRadiant Custom (imported submodule) | `external/compilers/q3map2-nrc` | Raven `RBSP` v1 draw-surface and draw-vertex records | Pinned revision `68ecbed64b7be78741878c730279b5471d978c7c` |
+| q3map2 sources from NetRadiant Custom (VibeMap3's upstream) | [Garux/netradiant-custom](https://github.com/Garux/netradiant-custom), at VibeStudio's q3map2 submodule pin before VibeMap3 | Raven `RBSP` v1 draw-surface and draw-vertex records | Pinned revision `68ecbed64b7be78741878c730279b5471d978c7c` |
 
 `src/core/asset_tools.cpp` reads the `IDPO` (Quake MDL), `IDP2` (MD2) and
 `IDP3` (MD3) headers for metadata only; those layouts come from the same
@@ -1320,7 +1358,7 @@ intended to help users feel at home without copying third-party assets or
 proprietary content. Profile and interface inspiration and compatibility
 research should credit:
 - [GtkRadiant](https://github.com/TTimo/GtkRadiant) (GPL-2.0), especially the GtkRadiant 1.6.0-era layout and control expectations. The GtkRadiant 1.6.0 editor profile's controls are its default bindings, read from the `1.6-release` branch at `270af88f3c2471f6773bded0b5760a3115b52965` (August 2024): key bindings from the `g_Commands[]` table in `radiant/mainframe.cpp`, the 2D view's mouse from `radiant/xywindow.cpp` (right drag pans, Shift+right zooms, the middle button aims and with Ctrl moves the camera, a left drag with nothing selected draws a brush), selection from `radiant/drag.cpp` (Shift toggles, Shift+Alt drills, Alt+drag selects an area, Ctrl+Shift picks a face in the camera), the camera from `radiant/camwindow.cpp` (a right click toggles free look, the wheel moves along the view), defaults from `radiant/preferences.cpp` (free look on, wheel zoom about the centre), and the 8-unit grid from `radiant/qe3.cpp`. Facts about behaviour only; no GtkRadiant code is used.
-- [NetRadiant Custom](https://github.com/Garux/netradiant-custom) (GPL-2.0), for modern Radiant-family workflow refinements and q3map2-oriented editing expectations. The NetRadiant Custom editor profile's controls are its default bindings, read from its sources at `68ecbed` (the revision the q3map2 submodule pins, January 2026): key bindings from the `GlobalCommands_insert`, `GlobalToggles_insert`, and `GlobalShortcuts_insert` calls in `radiant/*.cpp`, the 2D view's mouse from `radiant/xywindow.cpp` (right drag pans, Alt+right zooms, the middle button aims and moves the camera, a left drag with nothing selected draws a brush), selection from `radiant/selection.cpp` (Shift toggles, Ctrl picks faces, a plain click tunnels), and the camera from `radiant/camwindow.cpp` (a right click toggles free look, strafe mode 3, Alt+right orbits, a 100 degree field of view) and `radiant/grid.cpp` (16-unit grid). Facts about behaviour only; no NetRadiant Custom editor code is used, and the implementation in `src/core/level_editor_controls.*`, `src/app/map_viewport.*`, and `src/app/model_viewport.*` is VibeStudio's own.
+- [NetRadiant Custom](https://github.com/Garux/netradiant-custom) (GPL-2.0), for modern Radiant-family workflow refinements and q3map2-oriented editing expectations. The NetRadiant Custom editor profile's controls are its default bindings, read from its sources at `68ecbed` (January 2026; the revision VibeStudio's q3map2 submodule pinned before the move to VibeMap3): key bindings from the `GlobalCommands_insert`, `GlobalToggles_insert`, and `GlobalShortcuts_insert` calls in `radiant/*.cpp`, the 2D view's mouse from `radiant/xywindow.cpp` (right drag pans, Alt+right zooms, the middle button aims and moves the camera, a left drag with nothing selected draws a brush), selection from `radiant/selection.cpp` (Shift toggles, Ctrl picks faces, a plain click tunnels), and the camera from `radiant/camwindow.cpp` (a right click toggles free look, strafe mode 3, Alt+right orbits, a 100 degree field of view) and `radiant/grid.cpp` (16-unit grid). Facts about behaviour only; no NetRadiant Custom editor code is used, and the implementation in `src/core/level_editor_controls.*`, `src/app/map_viewport.*`, and `src/app/model_viewport.*` is VibeStudio's own.
 - [TrenchBroom](https://trenchbroom.github.io/) (GPL-3.0), for modern single-window brush editing and project workflow expectations. The TrenchBroom editor profile's controls are its default bindings, read from [its sources](https://github.com/TrenchBroom/TrenchBroom) at `master` `90de03c` (September 2026): the camera from `lib/TbAppLib/src/CameraTool3D.cpp` (right drag looks, Alt+right orbits, middle pans, the wheel moves, Shift+wheel zooms), fly keys from `lib/TbPreferencesLib/include/prefs/Preferences.h` (W S A D, Q up, X down) and `lib/TbUiLib/src/FlyModeHelper.cpp` (Shift faster, Alt slower), selection from `lib/TbAppLib/src/SelectionTool.cpp` (Ctrl toggles, Shift picks faces), menu keys from `lib/TbUiLib/src/ActionManager.cpp`, and the 16-unit grid from `lib/TbMdlLib/src/Map.cpp`. Facts about behaviour only; no TrenchBroom code is used.
 - [QuArK](https://quark.sourceforge.io/), for integrated object/package/map editing lineage.
 - [Ultimate Doom Builder](https://github.com/UltimateDoomBuilder/UltimateDoomBuilder) (GPL-3.0), and the Doom Builder line it continues, for how Doom map editing behaves: drawing, deleting, merging, and joining sectors, and Make Door (`Source/Plugins/BuilderModes/ClassicModes/SectorsMode.cs`, `MakeDoor`), whose rules VibeStudio's `makeLevelMapDoors` follows: ceiling to floor, lines facing out with the door action, door and track textures, lower-unpegged tracks. Behaviour only; no Doom Builder code is used, and the implementation in `src/core/level_map.cpp` is VibeStudio's own. Reference as of the `master` branch, September 2026.
@@ -1345,7 +1383,7 @@ copied; the references below supplied patterns and behavioural facts.
 |---|---|---|---|
 | [VibeRadiant](https://github.com/themuffinator/VibeRadiant) [`radiant/assetbrowser.cpp`](https://github.com/themuffinator/VibeRadiant/blob/f2fb5340333099dc8767c8d08f7e4757b8d23a02/radiant/assetbrowser.cpp) | One tabbed browser for entities, materials, surfaces, sounds and models, and its Globals tab's worldspawn editor and checklist, which the Map tab's **Worldspawn** and **Checklist** follow | `f2fb5340333099dc8767c8d08f7e4757b8d23a02` (2026-08-26), read 2026-10-08 | GPL-2.0 (GtkRadiant licence); pattern only |
 | [Blender's sidebar and panels](https://docs.blender.org/manual/en/latest/interface/window_system/regions.html#sidebar) | Tabs down a side region, collapsible panels, folding to the tab column, and the Item panel's numeric transform | Current manual | GPL software, CC-BY-SA-4.0 manual; pattern only |
-| [NetRadiant Custom](https://github.com/Garux/netradiant-custom) [`radiant/select.cpp`](https://github.com/Garux/netradiant-custom/blob/68ecbed64b7be78741878c730279b5471d978c7c/radiant/select.cpp) and [`radiant/brushmanip.cpp`](https://github.com/Garux/netradiant-custom/blob/68ecbed64b7be78741878c730279b5471d978c7c/radiant/brushmanip.cpp) | Select Inside and Select Touching; Make Detail and Make Structural; the Prism, Cone and Sphere commands that replace the selected brush with a shape filling its bounds | `68ecbed64b7be78741878c730279b5471d978c7c`, the q3map2 submodule's revision, read 2026-10-08 | GPL-2.0-or-later; behaviour only |
+| [NetRadiant Custom](https://github.com/Garux/netradiant-custom) [`radiant/select.cpp`](https://github.com/Garux/netradiant-custom/blob/68ecbed64b7be78741878c730279b5471d978c7c/radiant/select.cpp) and [`radiant/brushmanip.cpp`](https://github.com/Garux/netradiant-custom/blob/68ecbed64b7be78741878c730279b5471d978c7c/radiant/brushmanip.cpp) | Select Inside and Select Touching; Make Detail and Make Structural; the Prism, Cone and Sphere commands that replace the selected brush with a shape filling its bounds | `68ecbed64b7be78741878c730279b5471d978c7c`, the revision of VibeStudio's former q3map2 submodule, read 2026-10-08 | GPL-2.0-or-later; behaviour only |
 | [id Software's Q3Radiant `SELECT.CPP`](https://github.com/id-Software/Quake-III-Arena/blob/dbe4ddb10315479fc00086f08e25d968b4b43c49/q3radiant/SELECT.CPP) | Select Complete Tall and Select Partial Tall, looking along the view's depth | `dbe4ddb10315479fc00086f08e25d968b4b43c49`, read 2026-10-08 | GPL-2.0-or-later; behaviour only |
 | [TrenchBroom](https://trenchbroom.github.io/) | CSG Intersect; the shear tool; linked groups, copies that take on each other's edits while each keeps its place; one inspector of Map, Entity and Face tabs; bundled definitions standing in when a game has none | The release credited under Editor Workflow Inspirations (`90de03c`) | GPL-3.0; behaviour only, no code or `_tb_` keys |
 | Hammer and [J.A.C.K.](https://valvedev.info/tools/jack/jack_manual.pdf) | Tie to Entity and Move to World; the object bar's block, wedge, cylinder, spike, sphere, arch and torus fitted to a drawn box; the Properties, Face Edit and Primitives names | J.A.C.K. manual 1.1 (November 2016), credited above | Proprietary software and documentation; behaviour only |
@@ -1407,10 +1445,34 @@ built by the tests.
 | [GtkRadiant `qdata_heretic2`](https://github.com/TTimo/GtkRadiant/tree/270af88f3c24/tools/quake2/qdata_heretic2) (`qcommon/fmodel.h`, `qcommon/flex.h`, `fmodels.c`) | Heretic II FM chunks, frames, mesh nodes and GL commands | 1.6-release at `270af88f3c24`, read 2026-10-08 | GPL-2.0-or-later; layout only |
 | [Heretic2R](https://github.com/m-x-d/Heretic2R/tree/4d677156a458) (`src/ref_gl1/src/gl1_FlexModel.c`) | How FM models are loaded | `4d677156a458`, read 2026-10-08 | GPL-3.0; behaviour only |
 | [GZDoom](https://github.com/ZDoom/gzdoom/tree/c26ce2e6ca2a0c770f140cb25dde0d30073ca8f7) (`src/common/models/voxels.cpp`, `models_voxel.cpp`) and Ken Silverman's `slab6.txt` | KVX layout, slab meshing, VOXELDEF placement and palette colours | `c26ce2e6ca2a0c770f140cb25dde0d30073ca8f7` (2026-08-10), read 2026-10-08 | `voxels.cpp` BSD-3-Clause, GZDoom GPL-3.0; layout and behaviour only |
-| picomodel and q3map2 in [NetRadiant Custom](https://github.com/Garux/netradiant-custom/tree/68ecbed64b7be78741878c730279b5471d978c7c) (`libs/picomodel/pm_ase.c`, `pm_lwo.c`, `tools/quake3/q3map2/model.cpp`) | How q3map2 reads ASE and LWO for `misc_model`: sub-materials, winding, texture paths | `68ecbed64b7be78741878c730279b5471d978c7c` (the q3map2 submodule), read 2026-10-08 | picomodel BSD-style, q3map2 GPL-2.0-or-later; behaviour only |
+| picomodel and q3map2 in [NetRadiant Custom](https://github.com/Garux/netradiant-custom/tree/68ecbed64b7be78741878c730279b5471d978c7c) (`libs/picomodel/pm_ase.c`, `pm_lwo.c`, `tools/quake3/q3map2/model.cpp`) | How q3map2 reads ASE and LWO for `misc_model`: sub-materials, winding, texture paths | `68ecbed64b7be78741878c730279b5471d978c7c` (VibeStudio's former q3map2 submodule), read 2026-10-08 | picomodel BSD-style, q3map2 GPL-2.0-or-later; behaviour only |
 | [Blender keymap](https://docs.blender.org/manual/en/latest/interface/keymap/blender_default.html) and [3D viewport navigation](https://docs.blender.org/manual/en/latest/editors/3dview/navigate/index.html) | The Blender and VibeStudio profiles' navigation, selection, modal transforms and keys; the Blender sidebar names | Blender 4 manual, read 2026-10-08 | Manual CC-BY-SA-4.0; behaviour only |
 | [Autodesk 3ds Max keyboard shortcuts](https://help.autodesk.com/view/3DSMAX/2024/ENU/?guid=GUID-A73E1B09-7BFE-4A22-8153-1D3D2237B8E9) | The 3ds Max profile's views, navigation, selection, tools, sub-object levels and keys; command panel names | 3ds Max 2024 help, read 2026-10-08 | Proprietary documentation; behaviour only |
 | [MilkShape 3D](https://chumbalum.swissquake.ch/) by chUmbaLum sOft | The MilkShape 3D profile's four views, navigation, tools, keys and tab names | MilkShape 3D 1.8 documentation, read 2026-10-08 | Proprietary software and documentation; behaviour only |
+
+## Project Releases And The Game Asset Index (2026-10-08)
+
+The game asset index, release planning, release notes and publishing
+(`src/core/game_asset_register.*`, `src/core/project_content.*`,
+`src/core/release_plan.*`, `src/core/release_notes.*`,
+`src/core/release_publish.*`, `src/cli/release.*`,
+`src/app/release_dialog.*`, `src/app/release_actions.cpp`) are original
+VibeStudio code. The references below supplied file formats, conventions and
+engine behaviour only; no upstream code, text or game data is copied, and the
+tests generate every package they index. Packages are read and written with
+VibeStudio's existing PAK, WAD and ZIP/PK3 code, credited under
+[Compression and archive formats](#compression-and-archive-formats).
+
+| Reference | What it informed | Revision | Licence / use |
+|---|---|---|---|
+| [Keep a Changelog 1.1.0](https://keepachangelog.com/en/1.1.0/) by Olivier Lacan | The project changelog VibeStudio reads and writes: the Unreleased section, `## [version] - date` headings and the six change categories | 1.1.0, read 2026-10-08 | MIT; format only |
+| [Semantic Versioning 2.0.0](https://semver.org/spec/v2.0.0.html) by Tom Preston-Werner | Patch, minor and major bumps, and pre-release versions bumping to their release | 2.0.0, read 2026-10-08 | CC BY 3.0; rules only |
+| The [/idgames archive](https://www.doomworld.com/idgames/)'s text file template | The field layout of the generated readme (Title, Filename, Author, Description, the construction and copyright fields) | Read 2026-10-08 | Community convention; field names only |
+| [Quake GPL source](https://github.com/id-Software/Quake) (`WinQuake/common.c`, `COM_AddGameDirectory`) | The numbered `pak*.pak` search order, which decides which stock file shadows another, and why a release should not take a numbered slot | Read 2026-10-08 | GPL-2.0-or-later; behaviour only |
+| [Quake II GPL source](https://github.com/id-Software/Quake-2/tree/372afde46e7defc9dd2d719a1732b8ace1fa096e) (`qcommon/files.c`, `FS_AddGameDirectory`) | The same order for Quake II's game folders | `372afde46e7defc9dd2d719a1732b8ace1fa096e`, read 2026-10-08 | GPL-2.0-or-later; behaviour only |
+| [Quake III Arena GPL source](https://github.com/id-Software/Quake-III-Arena/tree/dbe4ddb10315479fc00086f08e25d968b4b43c49) (`code/qcommon/files.c`, `code/q3_ui/ui_gameinfo.c`, `code/botlib`) | PK3 load order by name; `.arena` scripts and `levelshots/`; `.aas` bot files beside the BSP | `dbe4ddb10315479fc00086f08e25d968b4b43c49`, read 2026-10-08 | GPL-2.0-or-later; behaviour only |
+| q3map2 in [NetRadiant Custom](https://github.com/Garux/netradiant-custom/tree/68ecbed64b7be78741878c730279b5471d978c7c) (VibeMap3's upstream) | External lightmaps in `maps/<map>/lm_*.tga` and the generated `scripts/q3map2_<map>.shader`, which VibeMap3 keeps | `68ecbed64b7be78741878c730279b5471d978c7c`, read 2026-10-08 | GPL-2.0-or-later; behaviour only |
+| [ericw-tools](https://github.com/ericwa/ericw-tools) (VibeMap2's upstream) | `.lit` and `.lux` lighting files beside Quake BSPs, which VibeMap2 keeps | `f80b1e216a415581aea7475cb52b16b8c4859084`, read 2026-10-08 | GPL-2.0-or-later; behaviour only |
 
 ## AI Integration References
 - [OpenAI API documentation](https://platform.openai.com/docs/quickstart), planned as the first optional general-purpose provider reference for prompt-based and agentic automation experiments.
@@ -1471,7 +1533,7 @@ built by the tests.
 
 ## Community Thanks
 - The idTech mapping, modding, speedrunning, source-port, and preservation communities who kept these workflows usable and documented across decades.
-- The maintainers and contributors of the imported compiler projects listed above.
+- The maintainers and contributors of the imported compiler projects listed above, and of ericw-tools and NetRadiant Custom, on whose work VibeMap2 and VibeMap3 build.
 
 ## Doom Node Readiness
 

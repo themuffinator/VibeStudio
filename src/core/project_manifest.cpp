@@ -1,4 +1,5 @@
 #include "core/project_manifest.h"
+#include "core/game_installation.h"
 
 #include <QCoreApplication>
 #include <QCryptographicHash>
@@ -8,10 +9,154 @@
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
+#include <QRegularExpression>
+#include <QSaveFile>
+#include <QSet>
+
+#include <algorithm>
 
 namespace vibestudio {
 
 namespace {
+
+const QStringList& knownManifestKeys()
+{
+	static const QStringList keys {
+		QStringLiteral("schemaVersion"), QStringLiteral("projectId"), QStringLiteral("displayName"), QStringLiteral("game"),
+		QStringLiteral("sourceFolders"), QStringLiteral("packageFolders"), QStringLiteral("outputFolder"), QStringLiteral("tempFolder"),
+		QStringLiteral("selectedInstallationId"), QStringLiteral("compilerSearchPaths"), QStringLiteral("compilerToolOverrides"),
+		QStringLiteral("registeredOutputPaths"), QStringLiteral("settingsOverrides"), QStringLiteral("release"),
+		QStringLiteral("createdUtc"), QStringLiteral("updatedUtc"),
+	};
+	return keys;
+}
+
+const QStringList& knownReleaseKeys()
+{
+	static const QStringList keys {
+		QStringLiteral("title"), QStringLiteral("version"), QStringLiteral("authors"), QStringLiteral("description"),
+		QStringLiteral("website"), QStringLiteral("license"), QStringLiteral("packageName"), QStringLiteral("packageFormat"),
+		QStringLiteral("gameFolder"), QStringLiteral("stockSources"), QStringLiteral("requires"), QStringLiteral("include"),
+		QStringLiteral("exclude"), QStringLiteral("outputFolder"), QStringLiteral("changelog"), QStringLiteral("includeSources"),
+	};
+	return keys;
+}
+
+QStringList releaseStrings(const QJsonValue& value)
+{
+	QStringList result;
+	for (const QJsonValue& item : value.toArray()) {
+		const QString text = item.toString().trimmed();
+		if (!text.isEmpty() && !result.contains(text)) {
+			result.push_back(text);
+		}
+	}
+	return result;
+}
+
+QJsonArray releaseStringArray(const QStringList& values)
+{
+	QJsonArray array;
+	for (const QString& value : values) {
+		if (!value.trimmed().isEmpty()) {
+			array.append(value.trimmed());
+		}
+	}
+	return array;
+}
+
+ProjectReleaseSettings releaseSettingsFromJson(const QJsonValue& value)
+{
+	ProjectReleaseSettings release;
+	if (!value.isObject()) {
+		return release;
+	}
+	const QJsonObject object = value.toObject();
+	release.title = object.value(QStringLiteral("title")).toString().trimmed();
+	release.version = object.value(QStringLiteral("version")).toString().trimmed();
+	release.authors = releaseStrings(object.value(QStringLiteral("authors")));
+	release.description = object.value(QStringLiteral("description")).toString().trimmed();
+	release.website = object.value(QStringLiteral("website")).toString().trimmed();
+	release.license = object.value(QStringLiteral("license")).toString().trimmed();
+	release.packageName = object.value(QStringLiteral("packageName")).toString().trimmed();
+	release.packageFormat = object.value(QStringLiteral("packageFormat")).toString().trimmed().toLower();
+	release.gameFolder = object.value(QStringLiteral("gameFolder")).toString().trimmed();
+	release.stockSources = releaseStrings(object.value(QStringLiteral("stockSources")));
+	for (const QJsonValue& item : object.value(QStringLiteral("requires")).toArray()) {
+		const QJsonObject requirement = item.toObject();
+		ProjectReleaseRequirement entry;
+		entry.name = requirement.value(QStringLiteral("name")).toString().trimmed();
+		entry.path = requirement.value(QStringLiteral("path")).toString().trimmed();
+		entry.url = requirement.value(QStringLiteral("url")).toString().trimmed();
+		if (!entry.name.isEmpty() || !entry.path.isEmpty()) {
+			release.requirements.push_back(entry);
+		}
+	}
+	release.include = releaseStrings(object.value(QStringLiteral("include")));
+	release.exclude = releaseStrings(object.value(QStringLiteral("exclude")));
+	release.outputFolder = object.value(QStringLiteral("outputFolder")).toString().trimmed();
+	release.changelogFile = object.value(QStringLiteral("changelog")).toString().trimmed();
+	release.includeSources = object.value(QStringLiteral("includeSources")).toBool(false);
+	for (auto it = object.constBegin(); it != object.constEnd(); ++it) {
+		if (!knownReleaseKeys().contains(it.key())) {
+			release.extraFields.insert(it.key(), it.value());
+		}
+	}
+	return release;
+}
+
+QJsonObject releaseSettingsToJson(const ProjectReleaseSettings& release)
+{
+	QJsonObject object = release.extraFields;
+	const auto put = [&object](const QString& key, const QString& value) {
+		if (!value.trimmed().isEmpty()) {
+			object.insert(key, value.trimmed());
+		} else {
+			object.remove(key);
+		}
+	};
+	const auto putList = [&object](const QString& key, const QStringList& values) {
+		const QJsonArray array = releaseStringArray(values);
+		if (!array.isEmpty()) {
+			object.insert(key, array);
+		} else {
+			object.remove(key);
+		}
+	};
+	put(QStringLiteral("title"), release.title);
+	put(QStringLiteral("version"), release.version);
+	putList(QStringLiteral("authors"), release.authors);
+	put(QStringLiteral("description"), release.description);
+	put(QStringLiteral("website"), release.website);
+	put(QStringLiteral("license"), release.license);
+	put(QStringLiteral("packageName"), release.packageName);
+	put(QStringLiteral("packageFormat"), release.packageFormat);
+	put(QStringLiteral("gameFolder"), release.gameFolder);
+	putList(QStringLiteral("stockSources"), release.stockSources);
+	QJsonArray requirements;
+	for (const ProjectReleaseRequirement& requirement : release.requirements) {
+		QJsonObject entry;
+		if (!requirement.name.trimmed().isEmpty()) { entry.insert(QStringLiteral("name"), requirement.name.trimmed()); }
+		if (!requirement.path.trimmed().isEmpty()) { entry.insert(QStringLiteral("path"), requirement.path.trimmed()); }
+		if (!requirement.url.trimmed().isEmpty()) { entry.insert(QStringLiteral("url"), requirement.url.trimmed()); }
+		if (!entry.isEmpty()) { requirements.append(entry); }
+	}
+	if (!requirements.isEmpty()) {
+		object.insert(QStringLiteral("requires"), requirements);
+	} else {
+		object.remove(QStringLiteral("requires"));
+	}
+	putList(QStringLiteral("include"), release.include);
+	putList(QStringLiteral("exclude"), release.exclude);
+	put(QStringLiteral("outputFolder"), release.outputFolder);
+	put(QStringLiteral("changelog"), release.changelogFile);
+	if (release.includeSources) {
+		object.insert(QStringLiteral("includeSources"), true);
+	} else {
+		object.remove(QStringLiteral("includeSources"));
+	}
+	return object;
+}
 
 QString shortPathHash(const QString& path)
 {
@@ -164,6 +309,14 @@ void addCheck(ProjectHealthSummary* summary, const QString& id, const QString& t
 
 } // namespace
 
+bool ProjectReleaseSettings::isEmpty() const
+{
+	return title.trimmed().isEmpty() && version.trimmed().isEmpty() && authors.isEmpty() && description.trimmed().isEmpty()
+		&& website.trimmed().isEmpty() && license.trimmed().isEmpty() && packageName.trimmed().isEmpty() && packageFormat.trimmed().isEmpty()
+		&& gameFolder.trimmed().isEmpty() && stockSources.isEmpty() && requirements.isEmpty() && include.isEmpty() && exclude.isEmpty()
+		&& outputFolder.trimmed().isEmpty() && changelogFile.trimmed().isEmpty() && !includeSources && extraFields.isEmpty();
+}
+
 bool ProjectSettingsOverride::isEmpty() const
 {
 	return selectedInstallationId.trimmed().isEmpty()
@@ -289,6 +442,7 @@ bool loadProjectManifest(const QString& projectRootPath, ProjectManifest* manife
 	loaded.projectId = object.value(QStringLiteral("projectId")).toString(defaultProjectId(projectRootPath)).trimmed();
 	loaded.displayName = object.value(QStringLiteral("displayName")).toString(QFileInfo(projectRootPath).fileName()).trimmed();
 	loaded.rootPath = normalizedProjectRootPath(projectRootPath);
+	loaded.gameKey = object.value(QStringLiteral("game")).toString().trimmed().toLower();
 	loaded.sourceFolders = jsonToStringList(object.value(QStringLiteral("sourceFolders")));
 	loaded.packageFolders = jsonToStringList(object.value(QStringLiteral("packageFolders")));
 	loaded.outputFolder = object.value(QStringLiteral("outputFolder")).toString(QStringLiteral("build")).trimmed();
@@ -298,6 +452,12 @@ bool loadProjectManifest(const QString& projectRootPath, ProjectManifest* manife
 	loaded.compilerToolOverrides = compilerToolOverridesFromJson(object.value(QStringLiteral("compilerToolOverrides")));
 	loaded.registeredOutputPaths = jsonToStringList(object.value(QStringLiteral("registeredOutputPaths")));
 	loaded.settingsOverrides = projectSettingsOverridesFromJson(object.value(QStringLiteral("settingsOverrides")));
+	loaded.release = releaseSettingsFromJson(object.value(QStringLiteral("release")));
+	for (auto it = object.constBegin(); it != object.constEnd(); ++it) {
+		if (!knownManifestKeys().contains(it.key())) {
+			loaded.extraFields.insert(it.key(), it.value());
+		}
+	}
 	if (loaded.settingsOverrides.selectedInstallationId.isEmpty()) {
 		loaded.settingsOverrides.selectedInstallationId = loaded.selectedInstallationId;
 	}
@@ -404,10 +564,17 @@ bool saveProjectManifest(const ProjectManifest& manifest, QString* error)
 		return false;
 	}
 
-	QJsonObject object;
-	object.insert(QStringLiteral("schemaVersion"), normalized.schemaVersion);
+	// Unknown keys first, so the known ones below always win.
+	QJsonObject object = normalized.extraFields;
+	// Saving writes the current schema; older manifests are upgraded in place.
+	object.insert(QStringLiteral("schemaVersion"), std::max(normalized.schemaVersion, ProjectManifest::kSchemaVersion));
 	object.insert(QStringLiteral("projectId"), normalized.projectId);
 	object.insert(QStringLiteral("displayName"), normalized.displayName);
+	if (!normalized.gameKey.trimmed().isEmpty()) {
+		object.insert(QStringLiteral("game"), normalized.gameKey.trimmed().toLower());
+	} else {
+		object.remove(QStringLiteral("game"));
+	}
 	object.insert(QStringLiteral("sourceFolders"), stringListToJson(normalized.sourceFolders));
 	object.insert(QStringLiteral("packageFolders"), stringListToJson(normalized.packageFolders));
 	object.insert(QStringLiteral("outputFolder"), normalized.outputFolder);
@@ -417,17 +584,24 @@ bool saveProjectManifest(const ProjectManifest& manifest, QString* error)
 	object.insert(QStringLiteral("compilerToolOverrides"), compilerToolOverridesToJson(normalized.compilerToolOverrides));
 	object.insert(QStringLiteral("registeredOutputPaths"), stringListToJson(normalized.registeredOutputPaths));
 	object.insert(QStringLiteral("settingsOverrides"), projectSettingsOverridesToJson(normalized.settingsOverrides));
+	const QJsonObject release = releaseSettingsToJson(normalized.release);
+	if (!release.isEmpty()) {
+		object.insert(QStringLiteral("release"), release);
+	} else {
+		object.remove(QStringLiteral("release"));
+	}
 	object.insert(QStringLiteral("createdUtc"), normalized.createdUtc.toUTC().toString(Qt::ISODate));
 	object.insert(QStringLiteral("updatedUtc"), normalized.updatedUtc.toUTC().toString(Qt::ISODate));
 
-	QFile file(projectManifestPath(normalized.rootPath));
-	if (!file.open(QIODevice::WriteOnly | QIODevice::Truncate)) {
+	// Atomic replacement: an interrupted save leaves the previous manifest.
+	QSaveFile file(projectManifestPath(normalized.rootPath));
+	const QByteArray bytes = QJsonDocument(object).toJson(QJsonDocument::Indented);
+	if (!file.open(QIODevice::WriteOnly) || file.write(bytes) != bytes.size() || !file.commit()) {
 		if (error) {
 			*error = QCoreApplication::translate("VibeStudioProjectManifest", "Unable to write project manifest.");
 		}
 		return false;
 	}
-	file.write(QJsonDocument(object).toJson(QJsonDocument::Indented));
 	return true;
 }
 
@@ -462,6 +636,82 @@ QString effectiveProjectCompilerProfileId(const ProjectManifest& manifest, const
 bool effectiveProjectAiFreeMode(const ProjectManifest& manifest, bool fallbackAiFreeMode)
 {
 	return manifest.settingsOverrides.aiFreeModeSet ? manifest.settingsOverrides.aiFreeMode : fallbackAiFreeMode;
+}
+
+QString effectiveProjectGameKey(const ProjectManifest& manifest, const GameInstallationProfile* installation)
+{
+	if (!manifest.gameKey.trimmed().isEmpty()) {
+		return normalizedGameKey(manifest.gameKey);
+	}
+	if (installation && !installation->gameKey.trimmed().isEmpty()) {
+		return normalizedGameKey(installation->gameKey);
+	}
+	return QStringLiteral("custom");
+}
+
+QString defaultReleasePackageFormat(const QString& gameKey)
+{
+	const QString key = normalizedGameKey(gameKey);
+	if (key == QStringLiteral("quake3")) {
+		return QStringLiteral("pk3");
+	}
+	if (key == QStringLiteral("quake") || key == QStringLiteral("quake2")) {
+		return QStringLiteral("pak");
+	}
+	if (key == QStringLiteral("doom") || key == QStringLiteral("heretic-hexen")) {
+		return QStringLiteral("wad");
+	}
+	return QStringLiteral("zip");
+}
+
+QString releaseSlug(const QString& text)
+{
+	QString slug = text.normalized(QString::NormalizationForm_KD).toLower();
+	QString result;
+	result.reserve(slug.size());
+	for (const QChar ch : std::as_const(slug)) {
+		if ((ch >= QLatin1Char('a') && ch <= QLatin1Char('z')) || (ch >= QLatin1Char('0') && ch <= QLatin1Char('9')) || ch == QLatin1Char('_')) {
+			result.append(ch);
+		} else if (ch.isSpace() || ch == QLatin1Char('-') || ch == QLatin1Char('.')) {
+			if (!result.isEmpty() && !result.endsWith(QLatin1Char('-'))) {
+				result.append(QLatin1Char('-'));
+			}
+		}
+	}
+	while (result.endsWith(QLatin1Char('-'))) {
+		result.chop(1);
+	}
+	return result.left(64);
+}
+
+ProjectReleaseSettings effectiveProjectReleaseSettings(const ProjectManifest& manifest, const QString& gameKey)
+{
+	ProjectReleaseSettings release = manifest.release;
+	if (release.title.isEmpty()) {
+		release.title = manifest.displayName.trimmed().isEmpty() ? QFileInfo(manifest.rootPath).fileName() : manifest.displayName.trimmed();
+	}
+	if (release.version.isEmpty()) {
+		release.version = QStringLiteral("1.0.0");
+	}
+	if (release.packageName.isEmpty()) {
+		release.packageName = releaseSlug(release.title);
+		if (release.packageName.isEmpty()) {
+			release.packageName = QStringLiteral("release");
+		}
+	}
+	// An empty format stays Automatic: the release planner picks one per
+	// game and scope (a single Quake map ships loose, a whole mod as a PAK).
+	if (release.gameFolder.isEmpty()) {
+		release.gameFolder = gameDefinitionForKey(gameKey).baseGameDirectory;
+	}
+	if (release.outputFolder.isEmpty()) {
+		const QString output = manifest.outputFolder.trimmed().isEmpty() ? QStringLiteral("build") : manifest.outputFolder.trimmed();
+		release.outputFolder = QDir::fromNativeSeparators(output) + QStringLiteral("/releases");
+	}
+	if (release.changelogFile.isEmpty()) {
+		release.changelogFile = QStringLiteral("CHANGELOG.md");
+	}
+	return release;
 }
 
 QStringList effectiveProjectCompilerSearchPaths(const ProjectManifest& manifest, const QStringList& fallbackSearchPaths)
@@ -546,8 +796,11 @@ ProjectHealthSummary buildProjectHealthSummary(const ProjectManifest& manifest, 
 		const QString path = normalizedChildPath(sourceFolder, manifest.rootPath);
 		addCheck(&summary, QStringLiteral("source-folder"), QCoreApplication::translate("VibeStudioProjectManifest", "Source Folder"), relativeOrNativePath(path, manifest.rootPath), QFileInfo::exists(path) ? OperationState::Completed : OperationState::Warning);
 	}
+	// The project folder is laid out the way the game reads it, so extra
+	// package folders are optional, and output and temporary folders appear
+	// when something first writes to them: none of these is a problem.
 	if (manifest.packageFolders.isEmpty()) {
-		addCheck(&summary, QStringLiteral("package-folders"), QCoreApplication::translate("VibeStudioProjectManifest", "Package Folders"), QCoreApplication::translate("VibeStudioProjectManifest", "No package folders configured yet."), OperationState::Warning);
+		addCheck(&summary, QStringLiteral("package-folders"), QCoreApplication::translate("VibeStudioProjectManifest", "Package Folders"), QCoreApplication::translate("VibeStudioProjectManifest", "None: the project folder holds the game files."), OperationState::Idle);
 	} else {
 		for (const QString& packageFolder : manifest.packageFolders) {
 			const QString path = normalizedChildPath(packageFolder, manifest.rootPath);
@@ -556,12 +809,30 @@ ProjectHealthSummary buildProjectHealthSummary(const ProjectManifest& manifest, 
 	}
 
 	const QString outputPath = normalizedChildPath(manifest.outputFolder, manifest.rootPath);
-	addCheck(&summary, QStringLiteral("output-folder"), QCoreApplication::translate("VibeStudioProjectManifest", "Output Folder"), relativeOrNativePath(outputPath, manifest.rootPath), QFileInfo::exists(outputPath) ? OperationState::Completed : OperationState::Warning);
+	const bool outputExists = QFileInfo::exists(outputPath);
+	addCheck(&summary, QStringLiteral("output-folder"), QCoreApplication::translate("VibeStudioProjectManifest", "Output Folder"),
+		outputExists ? relativeOrNativePath(outputPath, manifest.rootPath)
+					 : QCoreApplication::translate("VibeStudioProjectManifest", "%1 (created when first needed)").arg(relativeOrNativePath(outputPath, manifest.rootPath)),
+		outputExists ? OperationState::Completed : OperationState::Idle);
 	const QString tempPath = normalizedChildPath(manifest.tempFolder, manifest.rootPath);
-	addCheck(&summary, QStringLiteral("temp-folder"), QCoreApplication::translate("VibeStudioProjectManifest", "Temp Folder"), relativeOrNativePath(tempPath, manifest.rootPath), QFileInfo::exists(tempPath) ? OperationState::Completed : OperationState::Warning);
+	const bool tempExists = QFileInfo::exists(tempPath);
+	addCheck(&summary, QStringLiteral("temp-folder"), QCoreApplication::translate("VibeStudioProjectManifest", "Temp Folder"),
+		tempExists ? relativeOrNativePath(tempPath, manifest.rootPath)
+				   : QCoreApplication::translate("VibeStudioProjectManifest", "%1 (created when first needed)").arg(relativeOrNativePath(tempPath, manifest.rootPath)),
+		tempExists ? OperationState::Completed : OperationState::Idle);
 
 	const QString effectiveInstallation = effectiveProjectInstallationId(manifest, fallbackInstallationId);
 	addCheck(&summary, QStringLiteral("installation"), QCoreApplication::translate("VibeStudioProjectManifest", "Game Installation"), effectiveInstallation.isEmpty() ? QCoreApplication::translate("VibeStudioProjectManifest", "No installation profile linked yet.") : effectiveInstallation, effectiveInstallation.isEmpty() ? OperationState::Warning : OperationState::Completed);
+	const QString game = manifest.gameKey.trimmed();
+	const bool knownGame = !game.isEmpty() && knownGameKeys().contains(normalizedGameKey(game));
+	addCheck(&summary, QStringLiteral("game"), QCoreApplication::translate("VibeStudioProjectManifest", "Target Game"),
+		game.isEmpty() ? QCoreApplication::translate("VibeStudioProjectManifest", "Not set; the linked installation's game is used.")
+			: knownGame ? gameDefinitionForKey(game).displayName : QCoreApplication::translate("VibeStudioProjectManifest", "Unknown game %1.").arg(game),
+		game.isEmpty() ? OperationState::Idle : knownGame ? OperationState::Completed : OperationState::Warning);
+	addCheck(&summary, QStringLiteral("release"), QCoreApplication::translate("VibeStudioProjectManifest", "Release Settings"),
+		manifest.release.isEmpty() ? QCoreApplication::translate("VibeStudioProjectManifest", "Not set yet; Package and Release fills in defaults.")
+			: QCoreApplication::translate("VibeStudioProjectManifest", "Version %1").arg(manifest.release.version.isEmpty() ? QStringLiteral("1.0.0") : manifest.release.version),
+		manifest.release.isEmpty() ? OperationState::Idle : OperationState::Completed);
 	addCheck(&summary, QStringLiteral("compiler-overrides"), QCoreApplication::translate("VibeStudioProjectManifest", "Compiler Overrides"), manifest.compilerToolOverrides.isEmpty() ? QCoreApplication::translate("VibeStudioProjectManifest", "No project-local compiler executable overrides configured.") : QCoreApplication::translate("VibeStudioProjectManifest", "Compiler executable overrides configured: %1").arg(manifest.compilerToolOverrides.size()), manifest.compilerToolOverrides.isEmpty() ? OperationState::Idle : OperationState::Completed);
 	addCheck(&summary, QStringLiteral("registered-outputs"), QCoreApplication::translate("VibeStudioProjectManifest", "Registered Outputs"), manifest.registeredOutputPaths.isEmpty() ? QCoreApplication::translate("VibeStudioProjectManifest", "No compiler outputs registered yet.") : QCoreApplication::translate("VibeStudioProjectManifest", "Compiler outputs registered: %1").arg(manifest.registeredOutputPaths.size()), manifest.registeredOutputPaths.isEmpty() ? OperationState::Idle : OperationState::Completed);
 	addCheck(&summary, QStringLiteral("settings-overrides"), QCoreApplication::translate("VibeStudioProjectManifest", "Project Settings Overrides"), manifest.settingsOverrides.isEmpty() ? QCoreApplication::translate("VibeStudioProjectManifest", "No project-local overrides configured.") : QCoreApplication::translate("VibeStudioProjectManifest", "Project-local overrides are active."), manifest.settingsOverrides.isEmpty() ? OperationState::Idle : OperationState::Completed);
@@ -575,6 +846,7 @@ QString projectManifestToText(const ProjectManifest& manifest)
 	lines << QCoreApplication::translate("VibeStudioProjectManifest", "Name: %1").arg(manifest.displayName);
 	lines << QCoreApplication::translate("VibeStudioProjectManifest", "Root: %1").arg(QDir::toNativeSeparators(manifest.rootPath));
 	lines << QCoreApplication::translate("VibeStudioProjectManifest", "Schema: %1").arg(manifest.schemaVersion);
+	lines << QCoreApplication::translate("VibeStudioProjectManifest", "Game: %1").arg(manifest.gameKey.isEmpty() ? QCoreApplication::translate("VibeStudioProjectManifest", "from the installation") : manifest.gameKey);
 	lines << QCoreApplication::translate("VibeStudioProjectManifest", "Source folders: %1").arg(manifest.sourceFolders.join(QStringLiteral("; ")));
 	lines << QCoreApplication::translate("VibeStudioProjectManifest", "Package folders: %1").arg(manifest.packageFolders.isEmpty() ? QCoreApplication::translate("VibeStudioProjectManifest", "none") : manifest.packageFolders.join(QStringLiteral("; ")));
 	lines << QCoreApplication::translate("VibeStudioProjectManifest", "Output folder: %1").arg(manifest.outputFolder);
@@ -591,6 +863,10 @@ QString projectManifestToText(const ProjectManifest& manifest)
 	lines << QCoreApplication::translate("VibeStudioProjectManifest", "Override palette: %1").arg(manifest.settingsOverrides.paletteId.isEmpty() ? QCoreApplication::translate("VibeStudioProjectManifest", "none") : manifest.settingsOverrides.paletteId);
 	lines << QCoreApplication::translate("VibeStudioProjectManifest", "Override compiler profile: %1").arg(manifest.settingsOverrides.compilerProfileId.isEmpty() ? QCoreApplication::translate("VibeStudioProjectManifest", "none") : manifest.settingsOverrides.compilerProfileId);
 	lines << QCoreApplication::translate("VibeStudioProjectManifest", "Override AI-free mode: %1").arg(manifest.settingsOverrides.aiFreeModeSet ? (manifest.settingsOverrides.aiFreeMode ? QCoreApplication::translate("VibeStudioProjectManifest", "enabled") : QCoreApplication::translate("VibeStudioProjectManifest", "disabled")) : QCoreApplication::translate("VibeStudioProjectManifest", "global default"));
+	if (!manifest.release.isEmpty()) {
+		lines << QCoreApplication::translate("VibeStudioProjectManifest", "Release: %1 %2").arg(manifest.release.title.isEmpty() ? manifest.displayName : manifest.release.title,
+			manifest.release.version.isEmpty() ? QStringLiteral("1.0.0") : manifest.release.version);
+	}
 	lines << QCoreApplication::translate("VibeStudioProjectManifest", "Created UTC: %1").arg(manifest.createdUtc.toUTC().toString(Qt::ISODate));
 	lines << QCoreApplication::translate("VibeStudioProjectManifest", "Updated UTC: %1").arg(manifest.updatedUtc.toUTC().toString(Qt::ISODate));
 	return lines.join('\n');

@@ -1,4 +1,4 @@
-"""Compile generated collision through ericw-tools and q3map2; inspect BSP data.
+"""Compile generated collision through VibeMap2 and VibeMap3; inspect BSP data.
 
 Optional integration proof: pass --binary, --qbsp, --q3map2 and a new
 --output-root below this repository's .agents/tmp. No game data or game launch.

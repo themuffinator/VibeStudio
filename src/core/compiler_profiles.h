@@ -14,9 +14,9 @@ namespace vibestudio {
 
 // How a profile's tool accepts an explicit output path.
 enum class CompilerOutputArgumentStyle {
-	// The tool has no way to receive an output path (ericw-tools vis/light rewrite their input).
+	// The tool has no way to receive an output path (VibeMap2 vis/light rewrite their input).
 	None,
-	// The output path is a trailing positional argument (ericw-tools qbsp: "sourcefile.map [destfile.bsp]").
+	// The output path is a trailing positional argument (VibeMap2 bsp: "sourcefile.map [destfile.bsp]").
 	Positional,
 	// The output path follows a flag, for example ZDBSP's "-o/--output=FILE" (see external/compilers/zdbsp/main.cpp).
 	Flag,
@@ -26,13 +26,13 @@ enum class CompilerOutputArgumentStyle {
 enum class CompilerDefaultOutputMode {
 	// "<input base>.<defaultOutputExtension>" beside the input.
 	DerivedFromInput,
-	// The tool rewrites its input file (ericw-tools vis/light, q3map2 -vis/-light).
+	// The tool rewrites its input file (VibeMap2 vis/light, VibeMap3 -vis/-light).
 	InPlace,
 	// A fixed file name in the working directory (ZDBSP writes "tmp.wad" when -o is absent).
 	WorkingDirectoryFile,
-	// The destination cannot be predicted from the command line (q3map2 -pk3 writes into the engine path).
+	// The destination cannot be predicted from the command line (VibeMap3 -pk3 writes into the engine path).
 	Unknown,
-	// The tool reports to its console channels and writes no artifact (bsputil --check, q3map2 -help).
+	// The tool reports to its console channels and writes no artifact (bsputil --check, VibeMap3 -help).
 	NoArtifact,
 };
 
@@ -59,8 +59,8 @@ struct CompilerProfileDescriptor {
 	QStringList defaultArguments;
 	bool inputRequired = true;
 	bool outputPathArgumentSupported = false;
-	// Always emitted as argument 0, before default and user arguments. q3map2 dispatches on the first
-	// remaining token (external/compilers/q3map2-nrc/tools/quake3/q3map2/main.cpp), so the stage token
+	// Always emitted as argument 0, before default and user arguments. VibeMap3 dispatches on the first
+	// remaining token (external/compilers/vibemap3/tools/quake3/q3map2/main.cpp), so the stage token
 	// must never be pushed behind user extras.
 	QString leadingStageArgument;
 	CompilerOutputArgumentStyle outputArgumentStyle = CompilerOutputArgumentStyle::None;

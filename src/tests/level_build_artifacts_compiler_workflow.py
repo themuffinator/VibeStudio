@@ -1,4 +1,4 @@
-"""Real q3map2 external lightmaps/generated shaders -> reviewed PK3 acceptance.
+"""Real VibeMap3 external lightmaps/generated shaders -> reviewed PK3 acceptance.
 
 Reuses the generated model/draft/map proof. No commercial assets, game launch,
 native input or screen capture. All output stays in the project's .agents/tmp.
@@ -55,7 +55,7 @@ def main():
     captured = run('prepare', ['build', 'prepare', baseline / 'arena.map', '--package', draft,
                               '--output', workspace, '--name', 'arena'])['workspace']
     base = workspace / 'game/baseq3'
-    pipeline = ['build', 'run-prepared', workspace, '--tool', 'q3map2=' + str(args.compiler.resolve()),
+    pipeline = ['build', 'run-prepared', workspace, '--tool', 'vibemap3=' + str(args.compiler.resolve()),
                 '--stage-args', 'bsp=-threads 2 -meta', '--stage-args', 'vis=-threads 2 -fast']
     external = pipeline + ['--stage-args', 'light=-threads 2 -fast -extlmhacksize 256']
     assert run('external-compile', external)['pipeline']['succeeded']

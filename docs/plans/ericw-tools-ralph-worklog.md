@@ -1,5 +1,10 @@
 # ericw-tools Ralph Agent Worklog
 
+> [!NOTE]
+> VibeStudio now compiles Quake-family maps with VibeMap2, its own compiler
+> derived from ericw-tools. This plan is kept as written; its issue numbers are
+> upstream ericw-tools issues.
+
 Date: 2026-05-02
 
 Parent task: `docs/plans/ericw-tools-high-value-resolution.md`
@@ -15,7 +20,7 @@ scope and returned either file changes or blocking review findings.
 | Agent | Subagent id | Lane | First pass result | Second pass result |
 |---|---|---|---|---|
 | Tesla | `019de7f8-e768-7ab2-861f-e3245eb0f9f9` | Known-issue catalog | Implemented `src/core/compiler_known_issues.*` plus smoke coverage for upstream issue metadata, dedupe clusters, matching, and formatted warning text. | Found missing high-value issue `#114`, added it to the catalog, deduplicated emitted issue warnings, and verified all 52 high-value audit rows had catalog coverage. |
-| Noether | `019de7f8-e907-72d1-aae0-d0cbe4fe5cc3` | Quake `.map` preflight | Implemented `src/core/ericw_map_preflight.*` plus smoke coverage for absolute WADs, long values, backslashes, external-map hazards, grouped/toggled light conflicts, origins, and region risks. | Patched scanner gaps for `#135`, `#201`, `#207`, `#230`, `#231`, `#257`, `#417`, and tightened variants for `#199`, `#470`, and `#485`. |
+| Noether | `019de7f8-e907-72d1-aae0-d0cbe4fe5cc3` | Quake `.map` preflight | Implemented `src/core/quake_map_preflight.*` plus smoke coverage for absolute WADs, long values, backslashes, external-map hazards, grouped/toggled light conflicts, origins, and region risks. | Patched scanner gaps for `#135`, `#201`, `#207`, `#230`, `#231`, `#257`, `#417`, and tightened variants for `#199`, `#470`, and `#485`. |
 | Jason | `019de7f8-ea27-7a80-a77d-8d630f365eb4` | Runner and manifest behavior | Patched compiler runner safety: missing working-directory refusal, isolated `TMP`/`TEMP`/`TMPDIR`, warning callbacks, rerun provenance warnings, and diagnostic path handling. | Fixed warning categorization so generic plan warnings, known-issue warnings, and preflight warnings are surfaced separately and dry-runs with ericw warnings report warning state. |
 | Franklin | `019de7f8-ec70-7053-9547-41c86b4e1e54` | Documentation and scope boundary | Updated `docs/COMPILER_INTEGRATION.md` and added the high-value resolution plan, keeping VibeStudio mitigations separate from upstream compiler fixes. | Tightened overclaims about version/help probe manifest data, `bspinfo`/`bsputil` probes, version-keyed warnings, and remaining planned checks. |
 | Curie | `019de7f8-eded-71b0-b5a0-aadc7120c6e2` | Architect verification | Rejected initial sign-off until docs distinguished wrapper/preflight mitigations from upstream compiler fixes and removed unsupported version/probe claims. | Rejected second sign-off only because the five-agent work evidence was not yet durable in the workspace; this worklog is the resulting artifact. |

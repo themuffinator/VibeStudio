@@ -20,6 +20,8 @@ The Workspace page is the studio's start page. Choose **Workspace** on the left 
   open map with its entity and brush counts. Select a tile to go to its page.
 - **Project Health** collects the open project's state in five tabs (see the table below).
 - **Recent Projects** and **Game Installations** list the folders and games VibeStudio remembers.
+- **Releases** shows the project's unreleased changes and latest releases, with **Record Change…** and
+  **Package and Release…**. See [Package and release](releases.md).
 - **Workspace Details** shows the manifest and health details of the open or selected project.
 - **Recent Activity** charts recent tasks with their state and duration. Select one to see its full
   log in the Activity Center.
@@ -53,14 +55,15 @@ in the recent list.
 ## Describe the project with a manifest
 
 The project manifest is the file `.vibestudio/project.json` inside the project folder. It records the
-project's folders, its game installation, compiler paths and per-project settings. The Workspace and
-Build pages and the command line read it.
+project's game and folders, its game installation, compiler paths, release settings and per-project
+settings. The Workspace, Build and release pages and the command line read it.
 
 To create or refresh it, open the project and choose **Initialize Manifest** on the Workspace header,
 or **File** > **Initialize Project Manifest** (<kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>I</kbd>). A new
 manifest treats the whole project folder as source, uses `build` as the output folder and keeps
 temporary files in `.vibestudio/tmp`. Refreshing an existing manifest keeps its folders and records
-the game installation and editor profile you are using now.
+the game installation and editor profile you are using now, and the game when the manifest names
+none.
 
 The manifest is plain JSON that you can edit in any text editor, and the Workspace page refreshes when
 it changes on disk. Paths are relative to the project folder. This is the manifest of the Quake sample
@@ -86,9 +89,10 @@ project:
 
 | Field | Meaning |
 | --- | --- |
-| `schemaVersion` | Manifest format version, currently 1. |
+| `schemaVersion` | Manifest format version, currently 2. Version 1 manifests still open, and are saved as version 2. |
 | `projectId` | Stable identifier. Made from the folder name when missing. |
 | `displayName` | The name the studio shows. |
+| `game` | The game the project targets, such as `quake`, `quake2`, `quake3` or `doom`. Empty uses the game of the linked installation. |
 | `sourceFolders` | Folders that hold your sources. |
 | `packageFolders` | Asset folders. `map textures --project-root` checks a map's textures against them. |
 | `outputFolder` | Where the Build page writes its command manifests. |
@@ -98,7 +102,10 @@ project:
 | `compilerToolOverrides` | Exact compiler programs, as a list of `toolId` and `executablePath` pairs. These win over paths chosen on the Build page while the project is open. |
 | `registeredOutputPaths` | Compiled outputs recorded for the project. |
 | `settingsOverrides` | Per-project choices: `selectedInstallationId`, `editorProfileId`, `paletteId`, `compilerProfileId` and `aiFreeMode`. Setting `aiFreeMode` to `true` keeps AI off while the project is open; `false` cannot turn AI on. |
+| `release` | How the project is packaged and described when released; see [Release settings](releases.md#release-settings). |
 | `createdUtc`, `updatedUtc` | When the manifest was created and last saved. |
+
+Keys VibeStudio does not know, for example from a newer version, are kept when it saves the manifest.
 
 </details>
 
@@ -109,8 +116,10 @@ manifest, for example to attach to a bug report.
 
 Choose **Project** > **Validate Project** to run the health checks. VibeStudio switches to the
 Workspace page and lists anything that needs attention under **Problems**: a missing manifest or
-folder, a newer manifest version, or no linked game installation. Warnings alone do not block your
-work. `vibestudio --cli project validate` exits with code 4 only for blocking problems, and with code 3
+source folder, a newer manifest version, no linked game installation, or a game whose assets are not
+indexed or whose index is out of date. Activate the asset index problem to index the game. Output
+and temporary folders that do not exist yet are not problems: they are created when first needed.
+Warnings alone do not block your work. `vibestudio --cli project validate` exits with code 4 only for blocking problems, and with code 3
 when the folder has no manifest yet.
 
 ## Add your game installations
@@ -148,6 +157,19 @@ Select a profile and choose **Use** to make it the default; its row shows **in u
 page launches it. Each row also shows **Ready**, or **Needs Review** when a check fails, such as a
 missing root folder. **Remove** deletes the profile only, never game files. A project manifest can
 also record an installation for the project, which the project health checks report.
+
+### Index the game's assets
+
+Select a profile and choose **Index Assets**, or **Project** > **Index Game Assets**. VibeStudio reads
+the game's own packages once, in the background, and remembers every file they hold, the Quake III
+shaders they declare and the Doom-family names they define. Releases use this index to leave the
+game's own files out, and the Levels page's **Dependencies** uses it to mark references the game
+provides. The index is kept with VibeStudio's own data, never in the game folder.
+
+Each row says **assets indexed**, **assets not indexed** or **asset index out of date**; an index
+goes out of date when the game's packages change, for example after a patch. Indexing knows the
+standard packages of Quake, Quake II, Quake III Arena, Doom, Heretic and Hexen and their official
+expansions, plus any base packages saved in the profile. See [Package and release](releases.md).
 
 ### Allow test maps
 
@@ -207,6 +229,8 @@ you can move a folder that contains both.
 | List project files | `vibestudio --cli project files <folder> --where "kind=image"` |
 | List, detect or add installations | `vibestudio --cli install list`, `install detect`, `install add <root>` |
 | Use, check or remove a profile | `vibestudio --cli install select <id>`, `install validate <id>`, `install remove <id>` |
+| Index a game's assets, or check its index | `vibestudio --cli install register build <id>`, `install register info <id>` |
+| Package and release the project | `vibestudio --cli release plan <folder>`, `release publish <folder>` |
 | Search project text | `vibestudio --cli asset find <folder> --find <text>` |
 | Replace project text | `vibestudio --cli asset replace <folder> --find <old> --replace <new>` |
 | Save or check a workspace | `vibestudio --cli workspace create <file>`, `workspace inspect <file>` |
@@ -226,7 +250,9 @@ vibestudio --cli workspace create ./work.vibeworkspace --project ./mymod --activ
 
 ## Learn more
 
-- [Game installations](../GAME_INSTALLATIONS.md): profile data, detection sources and safety rules.
+- [Package and release](releases.md): package the project for players.
+- [Game installations](../GAME_INSTALLATIONS.md): profile data, detection sources, the asset index and
+  safety rules.
 - [Project search](../PROJECT_SEARCH.md): matching rules, limits and partial-write reporting.
 - [Portable workspaces](../WORKSPACES.md): the `.vibeworkspace` format.
 - [CLI strategy](../CLI_STRATEGY.md): every `project`, `install` and `workspace` option.

@@ -1,4 +1,4 @@
-"""Optional generated-map UV proof through q3map2 and PK3 publication.
+"""Optional generated-map UV proof through VibeMap3 and PK3 publication.
 
 Requires --binary, --compiler and --output-root under this project's .agents/tmp.
 No game assets, game launch, native input or screen capture are used.

@@ -1,5 +1,5 @@
 #include "app/model_uv_render.h"
-#include "app/model_rasterizer.h"
+#include "app/wire_lines.h"
 #include "app/model_uv_fill.h"
 
 #include <QCoreApplication>
@@ -227,7 +227,7 @@ bool renderModelUv(const ModelUvRenderRequest &r, ModelUvRenderResult *result, Q
 	// Complete indexed geometry, ordered by meaning rather than vertex index.
 	// Contrast outlines cannot cover a later seam or selected edge. No nearby
 	// edges are merged, snapped, or omitted to reduce overdraw.
-	std::array<QVector<ModelWireSegment>, 3> layers;
+	std::array<QVector<WireSegment>, 3> layers;
 	const double margin = std::max(4.0, 2.5 + 1.0 / ratio);
 	const auto lineArea = area.adjusted(-margin, -margin, margin, margin);
 	for (const auto &edge : candidate.topology->edges)
@@ -277,9 +277,9 @@ bool renderModelUv(const ModelUvRenderRequest &r, ModelUvRenderResult *result, Q
 		if (longStrokes >= 1024 && (layer != 2 || r.accent.alpha() == 255))
 		{
 			// Visit the whole layout before filling adjacent subpixel strokes.
-			// This lets the shared rasterizer prove opaque tiles unchanged early.
+			// This lets the shared line painter prove opaque tiles unchanged early.
 			// Every indexed stroke is still submitted once, at its exact position.
-			QVector<ModelWireSegment> spread;
+			QVector<WireSegment> spread;
 			spread.reserve(strokes.size());
 			const auto capacity = std::bit_ceil(quint32(strokes.size()));
 			quint32 index = 0;
@@ -303,13 +303,13 @@ bool renderModelUv(const ModelUvRenderRequest &r, ModelUvRenderResult *result, Q
 			}
 			strokes.swap(spread);
 		}
-		ModelWireStyle style;
+		WireStyle style;
 		style.pixelRatio = ratio;
 		style.width = style.selectionWidth = layer == 0 ? 3 : 5;
 		style.wire = style.selection = qRgb(0, 0, 0);
 		style.dashLength = 0;
 		const auto cancelled = [&] { return !work.check(); };
-		if (!paintModelWireframe(&candidate.image, layers[layer], style, nullptr, cancelled))
+		if (!paintWireLines(&candidate.image, layers[layer], style, nullptr, cancelled))
 		{
 			return false;
 		}
@@ -318,7 +318,7 @@ bool renderModelUv(const ModelUvRenderRequest &r, ModelUvRenderResult *result, Q
 		style.wire = qRgb(255, 255, 255);
 		style.selection = layer == 1 ? qRgb(255, 115, 225) : r.accent.rgba();
 		style.dashLength = layer == 1 ? 1 : 4;
-		if (!paintModelWireframe(&candidate.image, layers[layer], style, nullptr, cancelled))
+		if (!paintWireLines(&candidate.image, layers[layer], style, nullptr, cancelled))
 		{
 			return false;
 		}

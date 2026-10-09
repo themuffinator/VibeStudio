@@ -41,7 +41,7 @@ struct ModelUvRenderResult
 QRectF modelUvSelectionBounds(const ModelSurface &surface, const ModelSelection &selection, bool *available = nullptr);
 // Runs on a value-only worker. Bounded to 4,194,304 pixels even for extreme aspect
 // ratios. Selection is a clipped winding union; complete indexed wires share the
-// antialiased CPU rasterizer, with seams/selection above ordinary geometry.
+// antialiased 2D line painter (app/wire_lines), with seams/selection above ordinary geometry.
 // Cancellation never publishes a partial image, camera or topology.
 bool renderModelUv(const ModelUvRenderRequest &request, ModelUvRenderResult *result, QString *error, const ModelWorkControl &control = {});
 } // namespace vibestudio

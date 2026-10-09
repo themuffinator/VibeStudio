@@ -213,14 +213,17 @@ collision acceptance and cross-platform release checks remain on the
 The optional `src/tests/model_collision_compiler_workflow.py` proof creates two
 rotated volumes, transforms one through local scaling and world rotation/movement,
 and creates a sealed room and original texture/palette/shader assets. It
-runs authoring, export and placement through the real CLI, then invokes supplied
-ericw-tools `qbsp` and `q3map2` binaries. It independently reads BSP29 hulls and
-IBSP38/46 brush planes, leaf references, contents and draw surfaces. Quake hulls
-1/2 contain the boxes while draw hull 0 remains empty at those positions;
+runs authoring, export and placement through the real CLI, then invokes the
+supplied Quake and Quake III compilers: VibeMap2 `vibemap2-bsp` through
+`--qbsp` and VibeMap3 `vibemap3` through `--q3map2`. Stock ericw-tools `qbsp`
+and q3map2, which the recorded runs used, are accepted too. It independently
+reads BSP29 hulls and IBSP38/46 brush planes, leaf references, contents and
+draw surfaces. Quake hulls 1/2 contain the boxes while draw hull 0 remains
+empty at those positions;
 Quake II/III contain player-clip brushes with no visible clip faces.
 
 ```sh
-python src/tests/model_collision_compiler_workflow.py --binary <vibestudio> --qbsp <qbsp> --q3map2 <q3map2> --output-root .agents/tmp/modeller-collision-compiler
+python src/tests/model_collision_compiler_workflow.py --binary <vibestudio> --qbsp <vibemap2-bsp> --q3map2 <vibemap3> --output-root .agents/tmp/modeller-collision-compiler
 ```
 
 Use a new output directory inside `.agents/tmp`. The proof records binary and

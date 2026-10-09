@@ -6,6 +6,7 @@
 #include "core/level_scene.h"
 #include "core/level_scene_locks.h"
 #include "tests/level_material_test_helpers.h"
+#include "tests/render_test_support.h"
 
 #include <QAccessible>
 #include <QAction>
@@ -130,6 +131,10 @@ int main(int argc, char** argv)
 	qputenv("QT_QPA_FONTDIR", QDir(qEnvironmentVariable("SystemRoot")).filePath("Fonts").toLocal8Bit());
 #endif
 	QApplication app(argc, argv);
+	// Draws in 3D: skip where no OpenGL or Vulkan renderer starts.
+	if (const int skip = vibestudio::test_support::exitCodeWithoutRenderer("level-material-gestures-ui-smoke"); skip >= 0) {
+		return skip;
+	}
 #ifdef Q_OS_WIN
 	QApplication::setFont(QFont(QStringLiteral("Segoe UI")));
 #endif

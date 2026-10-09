@@ -118,7 +118,7 @@ after the tool exited. The runner now polls with `waitForFinished(100)` and
 pumps both channels on every iteration, splitting complete lines out of a
 pending buffer and handing each one to the log callback and the diagnostic
 parser immediately. The same loop checks the cancellation callback and the
-timeout, so a long q3map2 stage produces live output, can be cancelled, and can
+timeout, so a long VibeMap3 stage produces live output, can be cancelled, and can
 be timed out instead of appearing frozen. Full stdout and stderr are still
 captured for the manifest, and any trailing partial line is flushed after exit.
 
@@ -131,9 +131,9 @@ each one previously had to be selected and launched by hand as its own compiler
 profile, with the user responsible for pointing each stage at the previous
 stage's output. `runBuildPipeline()` replaces that with a declared chain.
 
-Registered pipelines include `quake-full` (qbsp, vis, light through
-ericw-tools), `quake-fast` (qbsp then light, visibility off by default),
-`quake-bsp-only`, `quake3-full` and `quake3-bsp-only` (q3map2 BSP, vis, and
+Registered pipelines include `quake-full` (bsp, vis, light through
+VibeMap2), `quake-fast` (bsp then light, visibility off by default),
+`quake-bsp-only`, `quake3-full` and `quake3-bsp-only` (VibeMap3 BSP, vis, and
 light stages), and the `doom-zdbsp` and `doom-zokumbsp` node builders. A stage
 declares `inputFromStageId`, so the first stage is told where to write and the
 in-place stages follow it automatically. `planBuildPipeline()` resolves stages,

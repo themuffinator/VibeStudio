@@ -5,6 +5,7 @@
 #include "core/package_import_store.h"
 #include "core/localization.h"
 #include "core/package_copy_store.h"
+#include "core/render_device.h"
 #include "core/studio_manifest.h"
 #include "core/studio_settings.h"
 
@@ -20,6 +21,8 @@
 #include <QTimer>
 #include <QScopeGuard>
 #include <QThreadPool>
+
+#include <memory>
 
 // The brand icon resource lives in the app library (assets/branding/vibestudio.qrc).
 // Q_INIT_RESOURCE must run from the global namespace, and calling it here makes
@@ -86,6 +89,43 @@ QStringList pathsToOpen(const QStringList& args)
 	return paths;
 }
 
+// Whether a command-line run that draws in 3D can have a GUI application,
+// which Qt needs before it offers OpenGL. On X11 and Wayland systems that
+// takes a display; without one the run stays console-only and draws with
+// Vulkan. macOS keeps the process out of the Dock, and a display that will
+// not open falls back to the offscreen platform (Vulkan only) rather than
+// ending the run.
+bool prepareGraphicsCommandLine()
+{
+#if defined(Q_OS_MACOS)
+	if (qEnvironmentVariableIsEmpty("QT_MAC_DISABLE_FOREGROUND_APPLICATION_TRANSFORM")) {
+		qputenv("QT_MAC_DISABLE_FOREGROUND_APPLICATION_TRANSFORM", "1");
+	}
+	return true;
+#elif defined(Q_OS_UNIX)
+	const bool wayland = !qEnvironmentVariableIsEmpty("WAYLAND_DISPLAY");
+	const bool x11 = !qEnvironmentVariableIsEmpty("DISPLAY");
+	if (!qEnvironmentVariableIsEmpty("QT_QPA_PLATFORM")) {
+		return true;
+	}
+	if (!wayland && !x11) {
+		return false;
+	}
+	QByteArrayList platforms;
+	if (wayland) {
+		platforms << QByteArrayLiteral("wayland");
+	}
+	if (x11) {
+		platforms << QByteArrayLiteral("xcb");
+	}
+	platforms << QByteArrayLiteral("offscreen");
+	qputenv("QT_QPA_PLATFORM", platforms.join(';'));
+	return true;
+#else
+	return true;
+#endif
+}
+
 } // namespace
 
 int main(int argc, char** argv)
@@ -98,14 +138,22 @@ int main(int argc, char** argv)
 	}
 
 	if (args.contains(QStringLiteral("--cli"))) {
-		QCoreApplication app(argc, argv);
+		// Commands that draw in 3D get a GUI application without a window, so
+		// they can use OpenGL as well as Vulkan; the rest stay console-only.
+		std::unique_ptr<QCoreApplication> app;
+		if (vibestudio::cli::commandUsesRenderer(args) && prepareGraphicsCommandLine()) {
+			app = std::make_unique<QGuiApplication>(argc, argv);
+			vibestudio::prepareRenderBackends();
+		} else {
+			app = std::make_unique<QCoreApplication>(argc, argv);
+		}
 		const auto imports = qScopeGuard([] {
 			QThreadPool::globalInstance()->waitForDone();
 			vibestudio::waitForPackageImportCleanup();
 			vibestudio::waitForPackageCopyCleanup();
 		});
-		configureApplicationMetadata(app);
-		return vibestudio::cli::run(app.arguments());
+		configureApplicationMetadata(*app);
+		return vibestudio::cli::run(app->arguments());
 	}
 
 	vibestudio::configureHighDpiBehavior();
@@ -165,6 +213,12 @@ int main(int argc, char** argv)
 		// Theme before the first widget exists, so nothing is built with the
 		// platform style and then repolished.
 		vibestudio::applyStudioTheme(app, vibestudio::studioThemeTokens(preferences));
+		// The 3D renderer the user chose, starting on its own thread now so
+		// the first 3D view does not wait for it.
+		vibestudio::RenderBackendChoice renderer = vibestudio::RenderBackendChoice::Automatic;
+		vibestudio::renderBackendChoiceFromId(settings.renderBackendPreference(), &renderer);
+		vibestudio::setRenderBackendChoice(renderer);
+		vibestudio::prepareRenderBackends(true);
 		// Before the shell exists, so it can tell whether the last session
 		// crashed. Turned off in Preferences, nothing is written, though a
 		// crash from before is still offered once.

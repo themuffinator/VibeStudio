@@ -57,6 +57,8 @@ public:
 	[[nodiscard]] QSet<QString> propertyKeys() const;
 	[[nodiscard]] int rowForName(const QString& name, MaterialEngine engine = MaterialEngine::Unknown) const;
 	void setThumbnailSide(int side);
+	// Draws every swatch again, after the 3D renderer changed.
+	void refreshThumbnails();
 	[[nodiscard]] int thumbnailSide() const { return m_side; }
 	// The size of each item in the grid, so names use the whole cell; an
 	// invalid size leaves sizing to the view (the list).

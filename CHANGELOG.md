@@ -16,7 +16,7 @@ release is cut; [docs/RELEASING.md](docs/RELEASING.md) explains how.
 - **Packages:** Browse, preview, filter, extract, compare and validate PAK, PK3/ZIP, WAD and WAD2/WAD3 packages, and stage changes into a new package.
 - **Assets:** Decode idTech textures with their palettes, view and edit models (OBJ, MDL, MD2, MD3), and preview, edit and analyse sounds.
 - **Code:** An editor for QuakeC, shader scripts, configs and entity definitions with highlighting, find and replace, Go to Definition and a problems list.
-- **Build and launch:** Run ericw-tools, q3map2, ZDBSP and ZokumBSP through build pipelines with a Problems list, leak trails, and Build and Launch into a game.
+- **Build and launch:** Run VibeMap2, VibeMap3, ZDBSP and ZokumBSP through build pipelines with a Problems list, leak trails, and Build and Launch into a game.
 - **AI:** An optional assistant and generators, off by default, for OpenAI, Claude, Gemini and local models, with a preview of every request before it is sent.
 - **Command line:** `vibestudio --cli` exposes the studio's services as scriptable commands with JSON output.
 - **Accessibility and languages:** High-contrast themes, text scaling, keyboard navigation, screen reader metadata and OS text-to-speech; 47 interface languages are registered, though their translations are still to come.
@@ -51,6 +51,9 @@ release is cut; [docs/RELEASING.md](docs/RELEASING.md) explains how.
 - **Levels:** The **Shear Tool** slants the selection by dragging the handle in the middle of one of its sides in any 2D view, as TrenchBroom's shear tool does, the opposite side staying put.
 - **Levels:** **Make Sector Mode** makes a Doom sector of the existing lines around a click in the **Top** view, islands inside included, as Doom Builder's Make Sectors mode does; `map make-sector` does the same from the command line.
 - **Levels:** **Drag Textures in Camera** slides a Doom wall's texture with the mouse in the 3D camera, as in Doom Builder's visual mode, the camera following as you drag, one undo step when you let go.
+- **Releases:** Package and Release turns a project, map, model or texture folders into a release with only your own files: a one-time index of each game's own packages leaves out what the game already has, and every custom texture, shader, model, sound and script the work uses is gathered, with the map's build and companion files. Choose **Package Map** on the Levels page, or **Package and Release…** on the Workspace page.
+- **Releases:** Release notes and a readme are generated from the project's changelog (Keep a Changelog), with **Record Change** to add entries and suggestions drawn from what changed since the last release; publishing writes the package, readme, notes and a distribution archive, records the release and moves the changes under the new version. The `release` and `install register` commands do the same from the command line.
+- **Rendering:** Choose OpenGL or Vulkan for every 3D view and material preview in **Settings** > **Appearance and Language** > **3D Rendering** (**Automatic** by default), see what each renderer found and check both with a test image; `render backends`, `render test`, `render set` and `--renderer` do the same from the command line.
 
 ### Changed
 
@@ -58,6 +61,14 @@ release is cut; [docs/RELEASING.md](docs/RELEASING.md) explains how.
 - **Documentation:** The README is now a short landing page, and the design records sit behind a documentation index in [docs/README.md](docs/README.md).
 - **Levels:** The **Layout** section of the **View** tab offers the view layouts as tiles picturing their panes, and the **Shapes** and **Layout** tiles take as many columns as their labels allow, so they stay whole at 200% text and in longer languages.
 - **Levels:** The Surfaces tab is in Target, Adjust and Copy and Paste sections like the other sidebar pages; placing a class from the Entities tab selects the new entity, as placing a model or sound does; Give to Selection on the Models and Sounds tabs is offered as soon as an entity is selected; and their Place sections name the class each makes in the open map, warning when the loaded definitions do not declare it.
+- **Levels:** **Dependencies** works without an open package by reading the project's folders, and marks what the game provides once its assets are indexed; `map dependencies --installation` does the same from the command line.
+- **Projects:** Project manifests (schema 2) record the project's game and release settings and keep settings they do not know; the Workspace page gains a **Releases** card and flags a linked game whose assets are not indexed.
+- **Build:** VibeStudio now compiles Quake and Quake II maps with VibeMap2 and Quake III maps with VibeMap3, its own compilers derived from ericw-tools and from q3map2 in NetRadiant Custom. Compiler ids follow the new names (`ericw-qbsp` is now `vibemap2-bsp`, `q3map2-light` is now `vibemap3-light`, and so on); an old id is refused with a message naming its replacement. Stock ericw-tools and q3map2 builds still work through **Locate…** or `compiler set-path`.
+- **Rendering:** The Levels camera, model views, the modeller, the Doom preview and material previews and swatches now draw on the GPU instead of the processor, so large scenes and animated materials stay fluid; a view with no working renderer says why instead of drawing.
+
+### Removed
+
+- **Rendering:** The software 3D renderers (the model rasteriser and the CPU material renderer). 3D views need an OpenGL 3.3 or Vulkan 1.0 driver; Mesa's software drivers still work where there is no GPU.
 
 ### Fixed
 

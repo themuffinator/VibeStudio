@@ -87,6 +87,14 @@ bool runPreferenceAndHistorySmoke(const QDir& root)
 	settings.setCrashReports(false);
 	ok &= expect(!settings.crashReports(), "Expected crash reports to turn off.");
 	settings.setCrashReports(true);
+	ok &= expect(settings.renderBackendPreference() == QStringLiteral("automatic"), "Expected the 3D renderer to be chosen automatically by default.");
+	settings.setRenderBackendPreference(QStringLiteral("Vulkan"));
+	ok &= expect(settings.renderBackendPreference() == QStringLiteral("vulkan"), "Expected the 3D renderer preference to keep Vulkan.");
+	settings.setRenderBackendPreference(QStringLiteral("software"));
+	ok &= expect(settings.renderBackendPreference() == QStringLiteral("automatic"), "Expected an unknown 3D renderer to fall back to automatic.");
+	settings.setRenderBackendPreference(QStringLiteral("opengl"));
+	settings.sync();
+	ok &= expect(vibestudio::StudioSettings(settingsPath).renderBackendPreference() == QStringLiteral("opengl"), "Expected the 3D renderer preference to persist.");
 	ok &= expect(settings.codeRecoveryEnabled(), "Expected local Code recovery to be enabled by default.");
 	settings.setCodeRecoveryEnabled(false);
 	ok &= expect(settings.audioRecoveryEnabled() && settings.audioRecoveryNotifyAtStartup(),
@@ -172,7 +180,7 @@ bool runPreferenceAndHistorySmoke(const QDir& root)
 	settings.recordRecentCommand(QStringLiteral("  "));
 
 	vibestudio::RecentActivityTask compilerActivity;
-	compilerActivity.id = QStringLiteral("compiler-ericw-qbsp");
+	compilerActivity.id = QStringLiteral("compiler-vibemap2-bsp");
 	compilerActivity.title = QStringLiteral("Compiler Run");
 	compilerActivity.detail = QStringLiteral("maps/start.map");
 	compilerActivity.source = QStringLiteral("compiler");
@@ -227,7 +235,7 @@ bool runPreferenceAndHistorySmoke(const QDir& root)
 	preferences.speechVolume = 60;
 	settings.setAccessibilityPreferences(preferences);
 	settings.setSelectedEditorProfileId(QStringLiteral("TrenchBroom"));
-	settings.upsertCompilerToolPathOverride({QStringLiteral("ericw-qbsp"), root.filePath(QStringLiteral("qbsp-test"))});
+	settings.upsertCompilerToolPathOverride({QStringLiteral("vibemap2-bsp"), root.filePath(QStringLiteral("qbsp-test"))});
 	vibestudio::AiAutomationPreferences aiPreferences;
 	aiPreferences.aiFreeMode = false;
 	aiPreferences.cloudConnectorsEnabled = true;
@@ -295,7 +303,7 @@ bool runPreferenceAndHistorySmoke(const QDir& root)
 	ok &= expect(activities.size() == 1, "Expected recent activity task history to persist.");
 	if (!activities.isEmpty()) {
 		const vibestudio::RecentActivityTask& task = activities.front();
-		ok &= expect(task.id == QStringLiteral("compiler-ericw-qbsp") && task.source == QStringLiteral("compiler") && task.state == vibestudio::OperationState::Completed && task.warnings.size() == 1,
+		ok &= expect(task.id == QStringLiteral("compiler-vibemap2-bsp") && task.source == QStringLiteral("compiler") && task.state == vibestudio::OperationState::Completed && task.warnings.size() == 1,
 			"Expected recent activity task headline fields to persist.");
 		// The detail behind the headline must survive too.
 		ok &= expect(task.durationMs == 4242, "Expected task duration to persist.");
@@ -316,7 +324,7 @@ bool runPreferenceAndHistorySmoke(const QDir& root)
 	}
 	ok &= expect(reloaded.selectedGameInstallationId() == installations.front().id, "Expected first installation to become selected.");
 	ok &= expect(reloaded.selectedEditorProfileId() == QStringLiteral("trenchbroom"), "Expected selected editor profile to persist with normalized id.");
-	ok &= expect(reloaded.compilerToolPathOverrides().size() == 1 && reloaded.compilerToolPathOverrides().front().toolId == QStringLiteral("ericw-qbsp"),
+	ok &= expect(reloaded.compilerToolPathOverrides().size() == 1 && reloaded.compilerToolPathOverrides().front().toolId == QStringLiteral("vibemap2-bsp"),
 		"Expected compiler executable override to persist.");
 
 	const vibestudio::AiAutomationPreferences reloadedAiPreferences = reloaded.aiAutomationPreferences();
@@ -441,7 +449,7 @@ bool runPreferenceAndHistorySmoke(const QDir& root)
 
 	reloaded.removeGameInstallation(installations.front().id);
 	ok &= expect(reloaded.gameInstallations().isEmpty() && reloaded.selectedGameInstallationId().isEmpty(), "Expected game installation removal to clear selection.");
-	reloaded.removeCompilerToolPathOverride(QStringLiteral("ericw-qbsp"));
+	reloaded.removeCompilerToolPathOverride(QStringLiteral("vibemap2-bsp"));
 	ok &= expect(reloaded.compilerToolPathOverrides().isEmpty(), "Expected compiler executable override removal.");
 	return ok;
 }
@@ -637,15 +645,15 @@ bool runActivityLogTruncationSmoke(const QDir& root)
 	const int transitionCount = vibestudio::StudioSettings::kMaximumActivityTransitions + 16;
 
 	vibestudio::RecentActivityTask task;
-	task.id = QStringLiteral("compiler-q3map2-bsp");
-	task.title = QStringLiteral("q3map2 BSP");
+	task.id = QStringLiteral("compiler-vibemap3-bsp");
+	task.title = QStringLiteral("VibeMap3 BSP");
 	task.source = QStringLiteral("compiler");
 	task.state = vibestudio::OperationState::Completed;
 	task.createdUtc = QDateTime::fromString(QStringLiteral("2026-05-01T09:00:00Z"), Qt::ISODate);
 	task.updatedUtc = QDateTime::fromString(QStringLiteral("2026-05-01T09:00:30Z"), Qt::ISODate);
 	task.finishedUtc = task.updatedUtc;
 	for (int index = 0; index < logEntryCount; ++index) {
-		task.log.push_back({task.createdUtc, vibestudio::OperationState::Running, QStringLiteral("q3map2 line %1").arg(index)});
+		task.log.push_back({task.createdUtc, vibestudio::OperationState::Running, QStringLiteral("VibeMap3 line %1").arg(index)});
 	}
 	for (int index = 0; index < transitionCount; ++index) {
 		task.transitions.push_back({task.createdUtc, vibestudio::OperationState::Running, index, QStringLiteral("step %1").arg(index)});
@@ -666,7 +674,7 @@ bool runActivityLogTruncationSmoke(const QDir& root)
 	ok &= expect(stored.logTruncated, "Expected truncation to be recorded, not hidden.");
 	ok &= expect(stored.droppedLogEntryCount == logEntryCount - vibestudio::StudioSettings::kMaximumActivityLogEntries,
 		"Expected the number of dropped log entries to be recorded.");
-	ok &= expect(!stored.log.isEmpty() && stored.log.last().message == QStringLiteral("q3map2 line %1").arg(logEntryCount - 1),
+	ok &= expect(!stored.log.isEmpty() && stored.log.last().message == QStringLiteral("VibeMap3 line %1").arg(logEntryCount - 1),
 		"Expected the newest log lines to be the ones kept.");
 	ok &= expect(stored.transitions.size() == vibestudio::StudioSettings::kMaximumActivityTransitions, "Expected the transition timeline to be capped.");
 	ok &= expect(stored.durationMs == 30000, "Expected a missing duration to be derived from the task timestamps.");

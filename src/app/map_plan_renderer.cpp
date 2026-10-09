@@ -1,5 +1,5 @@
 #include "app/map_plan_renderer.h"
-#include "app/model_rasterizer.h"
+#include "app/wire_lines.h"
 #include "app/viewport_image.h"
 #include <QPainter>
 #include <QPen>
@@ -134,7 +134,7 @@ bool renderMapPlanFrame(const MapPlanRenderRequest& request, bool selected, cons
 		if (!paintMapPlanFallback(painter, request, selected, cancelled)) { return false; }
 	} else {
 		const auto clip = visible(next);
-		QVector<ModelWireSegment> segments;
+		QVector<WireSegment> segments;
 		for (const auto& batch : wires.batches) {
 			if (stopped(cancelled)) { return false; }
 			if (!overlap(batch.bounds, clip)) { continue; }
@@ -149,10 +149,10 @@ bool renderMapPlanFrame(const MapPlanRenderRequest& request, bool selected, cons
 				segments.clear(); segments.reserve(batch.lines.size());
 				for (const auto& line : batch.lines) { segments.append({screen(next, line.p1()) + origin, screen(next, line.p2()) + origin, selected}); }
 				const bool world = batch.style == MapPlanWireStyle::World;
-				ModelWireStyle style; style.pixelRatio = next.pixelRatio; style.wire = world ? next.world : next.entity;
+				WireStyle style; style.pixelRatio = next.pixelRatio; style.wire = world ? next.world : next.entity;
 				style.width = world ? (next.highContrast ? 1.6 : 1.1) : (next.highContrast ? 2.8 : 2.2);
 				style.selection = next.selection; style.selectionWidth = next.highContrast ? 3.6 : 2.8;
-				if (!paintModelWireframe(&next.image, segments, style, cancelled)) { return false; }
+				if (!paintWireLines(&next.image, segments, style, cancelled)) { return false; }
 			}
 		}
 		if (!selected) {

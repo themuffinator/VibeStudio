@@ -21,7 +21,10 @@ package, so open a package or a folder first (see [Packages](packages.md));
 selects it. The filter accepts words and terms such as `ext=md5mesh size>64kb`.
 
 Select a model to load it in the background; **Cancel Preview** stops a slow
-one. The viewport is software-rendered, so it needs no OpenGL support:
+one. The viewport draws with your graphics card through OpenGL or Vulkan
+(**Settings** > **Appearance and Language** > **3D Rendering**; see
+[3D views stay empty](troubleshooting.md#3d-views-stay-empty) if it says it
+cannot draw):
 
 - Choose **Textured**, **Flat shaded** or **Wireframe**, and tick **Grid**,
   **Axes**, **Edges** or **Cull backfaces** (turn culling off for single-sided

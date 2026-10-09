@@ -1,10 +1,15 @@
 # ericw-tools Open Issues Audit
 
+> [!NOTE]
+> VibeStudio now compiles Quake-family maps with VibeMap2, its own compiler
+> derived from ericw-tools. This plan is kept as written; its issue numbers are
+> upstream ericw-tools issues.
+
 Audit date: 2026-05-02
 
 Upstream source: <https://github.com/ericwa/ericw-tools/issues>
 
-Local submodule: `external/compilers/ericw-tools` at `f80b1e216a415581aea7475cb52b16b8c4859084`
+Local submodule at audit time: ericw-tools at `f80b1e216a415581aea7475cb52b16b8c4859084`, since replaced by VibeMap2 in `external/compilers/vibemap2`
 
 Remaining-pass matrix:
 `docs/plans/ericw-tools-remaining-bugs-resolution.md`

@@ -87,6 +87,14 @@ install_data(
   install_dir: get_option('datadir') / 'vibestudio/licenses/libebur128',
 )
 subdir('external/modelling')
+install_data(
+  'external/graphics/vulkan-headers/LICENSE.md',
+  'external/graphics/vulkan-headers/LICENSES/Apache-2.0.txt',
+  'external/graphics/vulkan-headers/LICENSES/MIT.txt',
+  'external/graphics/vulkan-headers/VIBESTUDIO.md',
+  'external/graphics/vulkan-headers/UPSTREAM.json',
+  install_dir: get_option('datadir') / 'vibestudio/licenses/vulkan-headers',
+)
 subdir('src')
 subdir('packaging')
 
@@ -137,6 +145,14 @@ if python_for_tests.found()
     'credits-validation',
     python_for_tests,
     args: [files('scripts/validate_credits.py')],
+  )
+  # The committed SPIR-V and OpenGL shader text match src/core/shaders; with
+  # glslangValidator on PATH every variant is compiled again and compared.
+  test(
+    'render-shaders-validation',
+    python_for_tests,
+    args: [files('scripts/build_render_shaders.py'), '--check'],
+    timeout: 120,
   )
   test(
     'translation-extraction-validation',

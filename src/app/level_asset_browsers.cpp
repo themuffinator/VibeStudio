@@ -859,7 +859,7 @@ void ApplicationShell::refreshLevelPrefabBrowser()
 
 QString ApplicationShell::levelModelEntityClass() const
 {
-	// misc_model is the class q3map2 bakes models from, and the one the
+	// misc_model is the class VibeMap3 (like q3map2) bakes models from, and the one the
 	// Quake-family definitions most often declare.
 	EntityClassDefinition definition;
 	for (const QString& candidate : {QStringLiteral("misc_model"), QStringLiteral("misc_gamemodel")}) {
@@ -898,9 +898,9 @@ QString ApplicationShell::levelModelPlaceHint() const
 		return tr("Open a Quake-family map to place models and sounds.");
 	}
 	const QString className = levelModelEntityClass();
-	// q3map2 bakes misc_model whatever the game's definitions say.
+	// VibeMap3 bakes misc_model whatever the game's definitions say.
 	if (m_levelMapDocument.format == LevelMapFormat::Quake3Map) {
-		return tr("Models are placed as %1 entities with their model key set; q3map2 bakes them into the map.").arg(className);
+		return tr("Models are placed as %1 entities with their model key set; VibeMap3 bakes them into the map.").arg(className);
 	}
 	EntityClassDefinition definition;
 	const QString placed = tr("Models are placed as %1 entities with their model key set.").arg(className);

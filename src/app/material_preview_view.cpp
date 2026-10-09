@@ -2,6 +2,7 @@
 
 #include "app/material_tasks.h"
 #include "app/studio_theme.h"
+#include "core/render_device.h"
 
 #include <QAccessible>
 #include <QKeyEvent>
@@ -51,6 +52,9 @@ MaterialPreviewView::MaterialPreviewView(QWidget* parent)
 	connect(m_timer, &QTimer::timeout, this, &MaterialPreviewView::tick);
 	m_lane = new MaterialTaskLane(this);
 	m_clock.start();
+	// OpenGL needs its surface made on this (the GUI) thread before a worker
+	// draws; cheap when it is already made.
+	prepareRenderBackends();
 	m_message = tr("Choose a material to see it the way its engine draws it.");
 	refreshAccessibleDescription();
 }
@@ -194,6 +198,14 @@ bool MaterialPreviewView::renderPending() const
 	return m_lane && m_lane->pending();
 }
 
+void MaterialPreviewView::resetRendering()
+{
+	m_image = QImage();
+	m_result = MaterialRenderResult();
+	refreshAccessibleDescription();
+	requestRender(true);
+}
+
 void MaterialPreviewView::restartClock()
 {
 	m_clockBase = m_time;
@@ -221,6 +233,7 @@ void MaterialPreviewView::requestRender(bool supersede)
 		return;
 	}
 	m_dirty = false;
+	m_renderGeneration = renderBackendGeneration();
 	MaterialRenderOptions options = m_options;
 	const double dpr = devicePixelRatioF();
 	const double scale = m_playing || m_dragging ? m_playScale : 1.0;
@@ -250,6 +263,7 @@ void MaterialPreviewView::requestRender(bool supersede)
 						m_playScale = std::min(1.0, m_playScale * 1.1);
 					}
 				}
+				refreshAccessibleDescription();
 				update();
 				Q_EMIT frameRendered();
 				if (m_dirty) {
@@ -265,13 +279,23 @@ void MaterialPreviewView::paintEvent(QPaintEvent*)
 	QPainter painter(this);
 	const StudioThemeColors& colors = currentStudioTheme().colors;
 	painter.fillRect(rect(), colors.surface);
+	if (m_hasMaterial && m_renderGeneration != renderBackendGeneration() && !m_result.error.isEmpty()) {
+		// The renderer changed or restarted since this preview failed.
+		QTimer::singleShot(0, this, [this]() { requestRender(true); });
+	}
 	if (m_hasMaterial && !m_image.isNull()) {
 		painter.setRenderHint(QPainter::SmoothPixmapTransform, true);
 		painter.drawImage(rect(), m_image);
 	} else {
 		painter.setPen(colors.textMuted);
 		const QRect area = rect().adjusted(24, 24, -24, -24);
-		painter.drawText(area, Qt::AlignCenter | Qt::TextWordWrap, m_hasMaterial ? tr("Drawing...") : m_message);
+		QString text = m_message;
+		if (m_hasMaterial) {
+			text = m_result.error.isEmpty() ? tr("Drawing...")
+											: tr("The 3D renderer could not draw this preview: %1 Choose another renderer in Settings, under Appearance and Language.")
+												  .arg(m_result.error);
+		}
+		painter.drawText(area, Qt::AlignCenter | Qt::TextWordWrap, text);
 	}
 	if (m_hasMaterial && m_result.fallback) {
 		// The engine would not draw this material; say so on the image, not
@@ -471,12 +495,17 @@ void MaterialPreviewView::refreshAccessibleDescription()
 	QString description;
 	if (!m_hasMaterial) {
 		description = m_message;
+	} else if (m_image.isNull() && !m_result.error.isEmpty()) {
+		description = tr("%1 (%2) could not be drawn: %3").arg(m_definition.name, materialEngineDisplayName(m_definition.engine), m_result.error);
 	} else {
 		const QString shape = materialPreviewShapeDisplayName(m_options.shape);
 		description = m_playing ? tr("%1 (%2) on a %3 shape, playing.").arg(m_definition.name, materialEngineDisplayName(m_definition.engine), shape)
 								: tr("%1 (%2) on a %3 shape, paused at %4 seconds.")
 									  .arg(m_definition.name, materialEngineDisplayName(m_definition.engine), shape)
 									  .arg(m_time, 0, 'f', 1);
+		if (!m_result.renderer.isEmpty()) {
+			description += QLatin1Char(' ') + tr("Drawn with %1.").arg(m_result.renderer);
+		}
 	}
 	if (accessibleDescription() != description) {
 		setAccessibleDescription(description);

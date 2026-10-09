@@ -1,5 +1,10 @@
 # ericw-tools Remaining Bugs Resolution Matrix
 
+> [!NOTE]
+> VibeStudio now compiles Quake-family maps with VibeMap2, its own compiler
+> derived from ericw-tools. This plan is kept as written; its issue numbers are
+> upstream ericw-tools issues.
+
 Date: 2026-05-02
 
 Context snapshot: `.omx/context/ericw-remaining-bugs-20260502T094709Z.md`
@@ -18,7 +23,7 @@ and keep upstream limitations visible.
 | Status | Acceptance meaning |
 |---|---|
 | Implemented catalog warning | `src/core/compiler_known_issues.*` has an issue descriptor with upstream URL, severity, tool/profile scope, match keywords, warning text, and local action text. |
-| Implemented map preflight warning | `src/core/ericw_map_preflight.*` emits a map/entity/path warning before the compiler starts. These IDs also remain in the catalog for help text and matching. |
+| Implemented map preflight warning | `src/core/quake_map_preflight.*` emits a map/entity/path warning before the compiler starts. These IDs also remain in the catalog for help text and matching. |
 | Implemented registry/helper readiness | Registry or setup diagnostics make source/executable/probe/helper readiness visible before users rely on the tool. This pass adds first-class `bspinfo`, `bsputil`, and `lightpreview` discovery plus readiness warnings; deeper helper-operation probes remain a separate future wrapper task. |
 | Implemented artifact validation | VibeStudio validates produced artifacts before promotion, packaging, or release. This pass adds lightweight expected-output, BSP-family, lump, face-reference, conversion-output, and BSPX metadata checks; catalog warnings remain the honest mitigation for output features the validator cannot inspect. |
 | Upstream-only tracked limitation | VibeStudio can document, warn, or create regression fixtures, but the functional fix belongs in ericw-tools or a documented fork/submodule update. |

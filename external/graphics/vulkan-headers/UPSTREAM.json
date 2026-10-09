@@ -1,0 +1,24 @@
+{
+  "upstream": "https://github.com/KhronosGroup/Vulkan-Headers",
+  "revision": "409c16be502e39fe70dd6fe2d9ad4842ef2c9a53",
+  "version": "v1.4.313",
+  "reviewed": "2026-10-08",
+  "licenseReview": "Every vendored header is Apache-2.0 (SPDX lines unchanged); the repository's LICENSE.md also names MIT, which covers files not vendored here. Headers only, compiled into VibeStudio; Apache-2.0 is compatible with GPLv3. LICENSE.md and both licence texts are kept unchanged.",
+  "files": {
+    "include/vk_video/vulkan_video_codec_av1std.h": "76c408eb8dce6e1f068594eb3239e75a05e3395f2ce10fef512599bd916fe879",
+    "include/vk_video/vulkan_video_codec_av1std_decode.h": "2b912389d39d6627ee8af01e052e9557d213b27c0b79a0e25f5366cfe1942f1a",
+    "include/vk_video/vulkan_video_codec_av1std_encode.h": "93ad363de123988cd7b27acc7930f7f93497bc2e5d74f8420ee8ba18e8746e0a",
+    "include/vk_video/vulkan_video_codec_h264std.h": "05859b58e094a8dcc88cb3766a1fcbfd62bcaab20c93d2c3e5cec853628f277c",
+    "include/vk_video/vulkan_video_codec_h264std_decode.h": "d2be01f84f773644a24b7634f49e63ff8c6f0e807119b1bf609176585031f93a",
+    "include/vk_video/vulkan_video_codec_h264std_encode.h": "c68a1fa4ebadd1b50992a61fb93310a6686d5ea932b91b850d3ad9bc8dec488e",
+    "include/vk_video/vulkan_video_codec_h265std.h": "a5d0b2e7b47843db610d2769c7b0202c90cd7db82108b60fb2631d1c7976a395",
+    "include/vk_video/vulkan_video_codec_h265std_decode.h": "944646ced5bf9f49b79144c18369f0b932900c375fd81c262a3c30e9c60de8c6",
+    "include/vk_video/vulkan_video_codec_h265std_encode.h": "aa8c75beac0962abf752a5ec741a42b1a108ee28fb6b3abcdc995e57e20c6c14",
+    "include/vk_video/vulkan_video_codecs_common.h": "7afc98e84d3bea72e40a65161463abbd4be2ff1e1853eca3f8c331afb7329a8b",
+    "include/vulkan/vk_platform.h": "2fa47dd60cd94eb6fd8d7615953878f5664eb57fdff3b1b9b856c1d8f1496737",
+    "include/vulkan/vulkan_core.h": "7895976b1c44a002b0670865d2dce844185530d5f25728fc575f70f941935483",
+    "LICENSE.md": "ac24e5ea920e4318e4d02c4086ae51f53cfb03feed06c18df1019e7ada1ec7bc",
+    "LICENSES/Apache-2.0.txt": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30",
+    "LICENSES/MIT.txt": "1ca3502222d967f3be5751c55f6b7ee735b5383909c3b501495f54b216dbf227"
+  }
+}

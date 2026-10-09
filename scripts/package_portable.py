@@ -61,8 +61,10 @@ CANONICAL_DOCS = [
 ]
 
 COMPILER_LICENSE_SOURCES = [
-    ("ericw-tools", "external/compilers/ericw-tools/COPYING"),
-    ("q3map2-nrc", "external/compilers/q3map2-nrc/LICENSE"),
+    ("VibeMap2", "external/compilers/vibemap2/COPYING"),
+    ("VibeMap3", "external/compilers/vibemap3/COPYING"),
+    # NetRadiant Custom's per-component licence summary, which VibeMap3 keeps.
+    ("VibeMap3", "external/compilers/vibemap3/LICENSE"),
     ("ZDBSP", "external/compilers/zdbsp/COPYING"),
     ("ZokumBSP", "external/compilers/zokumbsp/src/COPYING"),
 ]
@@ -263,6 +265,14 @@ def write_license_bundle(root: Path, package_dir: Path) -> tuple[str, list[str]]
         copied_sources.append(relative_path(destination, package_dir))
         atlas_rows.append(f"- `{relative_path(destination, package_dir)}`")
 
+    render_rows: list[str] = []
+    for name in ("LICENSE.md", "LICENSES/Apache-2.0.txt", "LICENSES/MIT.txt", "VIBESTUDIO.md", "UPSTREAM.json"):
+        relative = f"external/graphics/vulkan-headers/{name}"
+        destination = license_dir / relative
+        copy_path(root / relative, destination)
+        copied_sources.append(relative_path(destination, package_dir))
+        render_rows.append(f"- `{relative_path(destination, package_dir)}`")
+
     third_party = license_dir / "THIRD_PARTY_LICENSES.md"
     third_party.write_text(
         "\n".join(
@@ -303,6 +313,11 @@ def write_license_bundle(root: Path, package_dir: Path) -> tuple[str, list[str]]
                 "",
                 "Jonathan Young's xatlas (MIT), with thekla_atlas/NVIDIA and Fast-BVH ancestry, and Bruno Levy's OpenNL (BSD-3-Clause).",
                 *atlas_rows,
+                "",
+                "## 3D Rendering",
+                "",
+                "The Khronos Group's Vulkan-Headers v1.4.313 (Apache-2.0), compiled into the Vulkan renderer. The Vulkan loader and OpenGL drivers come from the system and are not bundled.",
+                *render_rows,
                 "",
                 "## Imported Compiler Source Licenses",
                 "",

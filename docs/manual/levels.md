@@ -38,7 +38,7 @@ or **Empty map**. Texture names refer to your own assets.
 
 | Area | What it holds |
 | --- | --- |
-| Header | **Dependencies**, **Save**, **New Map**, **Generate**, **Edit with AI**, **Open Map** |
+| Header | **Dependencies**, **Package Map**, **Save**, **New Map**, **Generate**, **Edit with AI**, **Open Map** |
 | Document bar | The map path, the WAD's map list, the engine list, **Reload**, the compiler profile, **Run Profile**, **Copy CLI** |
 | Left sidebar | **Outliner**, **Shapes**, **Entities**, **Textures**, **Models**, **Sounds**, **Prefabs** |
 | Centre | The view toolbar; the tool bar (**Select**, **Draw Brush**, **Clip**, **Paint**, **Sample**, **Draw Sector**) with the grouped authoring menus; the material strip; the 2D and 3D views; and a readout of what is under the pointer |
@@ -170,7 +170,7 @@ Most actions are in the **Edit** menu, the right-click menu of the views and the
 | Hollow | **Hollow…** turns each selected brush into walls of the thickness you choose, one per face. |
 | Carve (CSG subtract) | **Carve** cuts the selected brushes out of every brush they overlap. The carving brushes stay selected, ready to delete; hidden brushes are left alone. |
 | Intersect (CSG) | **Intersect** replaces the selected brushes with the one brush where they all overlap, as TrenchBroom does; each face keeps the texture of the face it came from. |
-| Make detail | **Make Detail** stops brushes sealing the map or splitting its visibility: in Quake II and Quake III maps it sets each face's detail flag, and in Quake maps it moves the brushes into a `func_detail` for ericw-tools. **Make Structural** undoes it. |
+| Make detail | **Make Detail** stops brushes sealing the map or splitting its visibility: in Quake II and Quake III maps it sets each face's detail flag, and in Quake maps it moves the brushes into a `func_detail` for VibeMap2, as ericw-tools expects. **Make Structural** undoes it. |
 | Drop to the floor | **Drop to Floor** moves the selected point entities straight down onto the brush or patch below, keeping each class's height above it. |
 | Merge brushes | **Merge Brushes…** previews their convex union and lets you choose where conflicting materials, mappings and flags come from. |
 | Apply a texture | Select brushes or patches and choose **Apply Texture…**, or press <kbd>Enter</kbd> on a tile on the **Textures** tab. **Replace Texture…** swaps one texture for another across the map or the selection. |
@@ -369,13 +369,18 @@ optional Valve 220 conversion.
   undeclared keys, invalid values, missing required keys, unknown spawnflags, and targets that name nothing. An `.ent`
   file lists placed entities only, so it cannot check key types or spawnflag names.
 - **Built-in classes.** With no definitions found, a Quake-family map is checked against the classes of the stock
-  game it looks like: Quake, Quake II or Quake III Arena, taken from id Software's GPL game code, with Quake's
-  ericw-tools compiler classes such as `func_detail`. A mod's own classes read as unknown until you load its
+  game it looks like: Quake, Quake II or Quake III Arena, taken from id Software's GPL game code, with the
+  Quake compiler classes VibeMap2 inherits from ericw-tools, such as `func_detail`. A mod's own classes read as unknown until you load its
   definitions, and **Health** and the **Checklist** say which classes were used.
-- **Dependencies.** Open the map's package or asset folder on the **Packages** page, then choose **Dependencies** in
-  the header. The scan lists textures, shader images, models, model materials and sounds, marking missing and
-  ambiguous ones. Tick **Problems only** to filter, **Select in Map** to find the objects that use an asset,
-  **Copy JSON** for the full report, and **Export Assets…** to write the resolved files to a new package.
+- **Dependencies.** Choose **Dependencies** in the header. The scan reads the package or asset folder open on the
+  **Packages** page or, with none open, the project's folders. It lists textures, shader images, models, model
+  materials and sounds, marking missing and ambiguous ones; with the game's assets indexed (see
+  [Package and release](releases.md#before-you-start)), references the game provides show as **Provided by the
+  game**. Tick **Problems only** to filter, **Select in Map** to find the objects that use an asset, and **Copy
+  JSON** for the full report. **Export Assets…** writes the resolved files of a package to a new package; when the
+  scan read the project, **Package Map…** releases the map instead.
+- **Package Map.** Choose **Package Map** in the header to release the map with its build and every custom asset it
+  uses, leaving the game's own files out. See [Package and release](releases.md).
 - **Leaks.** **Build** > **Load Leak Trail…** draws a compiler `.pts` or `.lin` file over the map.
 - **Portals.** **Build** > **Load Portal File…** outlines the vis portals of a compiler `.prt` file (PRT1, PRT1-AM or
   PRT2) in the 2D views and the camera, to see where visibility is cut and where detail or hint brushes would help.
@@ -470,7 +475,8 @@ vibestudio --cli map move ./maps/start.map --object brush:12 --delta 16,0,0 --ou
 | `map make-sector` | Make a Doom sector of the lines around a point |
 | `map shift-sectors`, `map gradient-sectors` | Raise, lower or grade Doom sectors |
 | `map inspect-udmf`, `map edit-udmf` | Read and edit UDMF properties |
-| `map textures`, `map dependencies` | Check a map's textures and assets against a package or folder |
+| `map textures`, `map dependencies` | Check a map's textures and assets against a package or folder; `--installation <id>` marks what the game provides |
+| `release plan`, `release publish` | Package and release a map with `--map <map>`; see [Package and release](releases.md) |
 | `map render` | Draw an SVG picture of a map |
 | `map compile-plan` | Plan a compile with a compiler profile |
 | `map recoveries`, `map recover` | List recovery checkpoints and save one to a file |

@@ -1,4 +1,4 @@
-"""Optional generated-texture acceptance through ericw qbsp and q3map2.
+"""Optional generated-texture acceptance through VibeMap2 bsp and VibeMap3.
 
 All assets are authored by VibeStudio CLI from a synthetic layered recipe.
 Outputs and compiler logs stay under the repository's .agents/tmp directory.

@@ -27,6 +27,12 @@ below, `<version>` is the release's version number.
 | Any | `VibeStudio-<version>-docs.zip` | Offline HTML documentation; every package also contains it |
 | Any | `VibeStudio-<version>-source.tar.gz` | Full source code, including the compiler submodules |
 
+VibeStudio's 3D views (the Levels camera, models, the modeller and material
+previews) need a graphics driver with OpenGL 3.3 or Vulkan 1.0, which almost
+every computer from the last decade has. Without one, everything else works and
+the 3D views say why they are empty; see
+[3D views stay empty](troubleshooting.md#3d-views-stay-empty).
+
 ## Verify your download
 
 Put `SHA256SUMS.txt` in the same folder as the files you downloaded, open a

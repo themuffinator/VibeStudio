@@ -177,9 +177,9 @@ int main(int argc, char** argv) {
 		}
 		BuildPipelineRequest build;
 		build.pipelineId = "quake-full";
-		build.executableOverrides = {{"ericw-qbsp", app.applicationFilePath()},
-									 {"ericw-vis", app.applicationFilePath()},
-									 {"ericw-light", app.applicationFilePath()}};
+		build.executableOverrides = {{"vibemap2-bsp", app.applicationFilePath()},
+									 {"vibemap2-vis", app.applicationFilePath()},
+									 {"vibemap2-light", app.applicationFilePath()}};
 		if (target == "quake") {
 			build.stageExtraArguments["light"] = {"-lit"};
 		}
@@ -275,11 +275,11 @@ int main(int argc, char** argv) {
 		};
 		const auto cliRoot = QDir(root).filePath("cli workspace");
 		cli({"prepare", source, "--target", target, "--package", archive.sourcePath(), "--output", cliRoot}, 0);
-		cli({"run-prepared", cliRoot, "--tool", "ericw-qbsp=" + app.applicationFilePath(), "--tool",
-			 "ericw-vis=" + app.applicationFilePath(), "--tool", "ericw-light=" + app.applicationFilePath()},
+		cli({"run-prepared", cliRoot, "--tool", "vibemap2-bsp=" + app.applicationFilePath(), "--tool",
+			 "vibemap2-vis=" + app.applicationFilePath(), "--tool", "vibemap2-light=" + app.applicationFilePath()},
 			0);
 		cli({"publish-prepared", cliRoot, "--output", QDir(root).filePath("cli.pak")}, 0);
-		cli({"run-prepared", cliRoot, "--tool", "ericw-qbsp=one", "--tool", "ericw-qbsp=two"}, 2);
+		cli({"run-prepared", cliRoot, "--tool", "vibemap2-bsp=one", "--tool", "vibemap2-bsp=two"}, 2);
 		cli({"run-prepared", cliRoot, "--pipeline", "quake3-full"}, 4);
 		if (target == "quake") {
 			const auto generated = QDir(workspace.directory).filePath(workspace.textureWadPath());

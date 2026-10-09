@@ -19,7 +19,7 @@ fixtures only, and has not been proven against real game packages.
 | Classic | `src/core/material_classic.*` | Doom composites, flats, vanilla and Boom animation and switch tables, SWANTBLS and ANIMDEFS text; Quake texture names; Quake II WAL headers and `.wal_json` |
 | Evaluation | `src/core/material_eval.*` | Quake III wave tables and noise, Doom 3 expressions and tables, classic frame timing, Quake light styles |
 | Images | `src/core/material_images.*` | Engine lookup order, decoding, image programs, cube maps, Doom composition, palettes and colormaps, a shared byte-bounded cache and a shared per-package index |
-| Renderer | `src/core/material_render*.cpp` | A CPU renderer per engine on six preview shapes (wall, floor, cube, sphere, cylinder, room) |
+| Renderer | `src/core/material_render*.cpp`, `src/core/shaders/material_*` | Each engine's drawing rules on six preview shapes (wall, floor, cube, sphere, cylinder, room): per-vertex and per-stage values on the CPU, every pixel in GLSL shaders on the studio's 3D renderer (OpenGL or Vulkan; see [3D rendering](ARCHITECTURE.md#project-core)) |
 | Library | `src/core/material_library.*` | Scans a package: scripts, implicit shaders, classic textures; which duplicate the game uses |
 | Graph | `src/core/material_graph.*` | Node graphs built from definitions, and graph edits turned into text edits |
 | CLI | `src/cli/materials.*` | `material list`, `inspect`, `validate`, `render`, `graph`, `edit`, `templates`, `new`, `doom-tables`, `wal` |
@@ -136,9 +136,16 @@ arrow keys mirror. All text is translatable.
 
 ## Limits And Integration Gaps
 
-- Renders are CPU approximations: no real lightmaps or bump-mapped geometry
-  from a map, no Doom 3 GLSL or ARB fragment programs beyond the interaction,
-  and no RoQ/CIN video (a moving placeholder stands in).
+- Renders are approximations on preview shapes: no real lightmaps or
+  bump-mapped geometry from a map, no Doom 3 GLSL or ARB fragment programs
+  beyond the interaction, and no RoQ/CIN video (a moving placeholder stands
+  in).
+- Previews, swatches and `material render` need a working 3D renderer. Where
+  neither OpenGL nor Vulkan starts, the preview says why (and points to
+  **Settings** > **Appearance and Language** > **3D Rendering**), swatches stay
+  blank and `material render` exits 5. The shaders match the former CPU
+  renderer to within two levels apart from isolated pixels at texel and
+  triangle edges, and OpenGL and Vulkan match each other.
 - Quake III dialects: Enemy Territory's `implicitMap`, `implicitMask` and
   `implicitBlend` are drawn as Enemy Territory draws them, and the other
   Wolfenstein and Jedi Knight keywords (fog, sun, light grid, compression,

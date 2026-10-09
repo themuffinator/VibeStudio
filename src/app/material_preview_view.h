@@ -56,6 +56,8 @@ public:
 	[[nodiscard]] const MaterialRenderResult& lastResult() const { return m_result; }
 	// A frame is being drawn or waits to be.
 	[[nodiscard]] bool renderPending() const;
+	// Draws again on the current 3D renderer, after it changed.
+	void resetRendering();
 
 Q_SIGNALS:
 	void timeChanged(double seconds);
@@ -106,6 +108,9 @@ private:
 	// frames take too long so playback keeps its pace.
 	double m_playScale = 1.0;
 	bool m_dirty = false;
+	// renderBackendGeneration() of the last frame asked for: a renderer
+	// change or restart draws again.
+	quint64 m_renderGeneration = 0;
 
 	QPoint m_dragOrigin;
 	double m_dragYaw = 0.0;

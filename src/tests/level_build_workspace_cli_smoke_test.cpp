@@ -66,9 +66,11 @@ int main(int argc, char** argv) {
 	cli(prepare + QStringList{"--output", temp.filePath("repeat")}, 2);
 	cli({"prepare", source, "--package", temp.filePath("assets"), "--output", temp.filePath("assets/nested")}, 4);
 	cli({"prepare", source, "--package", temp.filePath("assets"), "--output", temp.filePath("folder")});
-	const QStringList run{"run-prepared", output, "--tool", "q3map2=" + QString::fromLocal8Bit(argv[1]), "--dry-run"};
+	const QStringList run{"run-prepared", output, "--tool", "vibemap3=" + QString::fromLocal8Bit(argv[1]), "--dry-run"};
 	const auto plan = cli(run);
 	expect(plan["pipeline"].toObject()["stages"].toArray().size() == 3, "CLI shared pipeline plans three stages");
+	const auto retired = cli({"run-prepared", output, "--tool", "q3map2=" + QString::fromLocal8Bit(argv[1]), "--dry-run"}, 2);
+	expect(QJsonDocument(retired).toJson().contains("vibemap3"), "a retired --tool id names its VibeMap3 replacement");
 	cli(run + QStringList{"--stage-args", "bsp=-fs_basepath somewhere"}, 4);
 	cli(run + QStringList{"--disable-stage", "typo"}, 2);
 	cli(run + QStringList{"--pipeline", "quake-full"}, 4);

@@ -2,6 +2,7 @@
 
 #include "app/studio_theme.h"
 #include "core/material_render.h"
+#include "core/render_device.h"
 
 #include <QCoreApplication>
 #include <QPainter>
@@ -93,6 +94,8 @@ MaterialLibraryModel::MaterialLibraryModel(QObject* parent)
 	m_animation->setInterval(kAnimationIntervalMs);
 	connect(m_animation, &QTimer::timeout, this, &MaterialLibraryModel::advanceAnimation);
 	m_pending = std::make_shared<std::atomic_int>(0);
+	// OpenGL's surface is made on the GUI thread, before swatches draw.
+	prepareRenderBackends();
 }
 
 MaterialLibraryModel::~MaterialLibraryModel()
@@ -149,6 +152,11 @@ void MaterialLibraryModel::setThumbnailSide(int side)
 		return;
 	}
 	m_side = side;
+	refreshThumbnails();
+}
+
+void MaterialLibraryModel::refreshThumbnails()
+{
 	m_pool->clear();
 	++m_generation;
 	m_thumbnails.clear();

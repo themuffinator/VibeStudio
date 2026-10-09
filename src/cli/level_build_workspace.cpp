@@ -1,4 +1,5 @@
 #include "cli/level_build_workspace.h"
+#include "core/compiler_registry.h"
 #include "core/level_build_workspace.h"
 #include "core/package_draft.h"
 #include "core/studio_settings.h"
@@ -124,7 +125,10 @@ LevelBuildCliResult runLevelBuildWorkspaceCommand(const QStringList& arguments) 
 		const auto equal = tool.indexOf('=');
 		const auto id = tool.left(equal), executable = tool.mid(equal + 1);
 		const auto allowedTools =
-			workspace.target == QStringLiteral("quake3") ? QStringList{"q3map2"} : QStringList{"ericw-qbsp", "ericw-vis", "ericw-light"};
+			workspace.target == QStringLiteral("quake3") ? QStringList{"vibemap3"} : QStringList{"vibemap2-bsp", "vibemap2-vis", "vibemap2-light"};
+		if (equal >= 1 && allowedTools.contains(renamedCompilerId(id))) {
+			return fail(2, QCoreApplication::translate("LevelBuildCli", "--tool %1 was renamed %2 when VibeStudio moved to VibeMap2 and VibeMap3.").arg(id, renamedCompilerId(id)));
+		}
 		if (equal < 1 || !allowedTools.contains(id) || executable.trimmed().isEmpty() || seenTools.contains(id)) {
 			return fail(2,
 						QCoreApplication::translate("LevelBuildCli", "Use one --tool <compiler-id>=<executable> per compatible compiler."));

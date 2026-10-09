@@ -1,7 +1,7 @@
 #pragma once
 
 #include "app/model_uv_fill.h"
-#include "app/model_rasterizer.h"
+#include "app/wire_lines.h"
 #include "app/model_uv_render.h"
 #include <QDir>
 #include <QElapsedTimer>
@@ -338,14 +338,14 @@ inline bool tileChecks()
 	{
 		for (double dash : {0.0, 1.0, 4.0})
 		{
-			ModelWireStyle style;
+			WireStyle style;
 			style.pixelRatio = ratio;
 			style.width = 3;
 			style.selectionWidth = 2.5;
 			style.wire = qRgb(171, 129, 73);
 			style.selection = qRgb(47, 173, 199);
 			style.dashLength = dash;
-			QVector<ModelWireSegment> lines;
+			QVector<WireSegment> lines;
 			for (int i = 0; i < 1600; ++i)
 			{
 				const double x = i * .08 - 10;
@@ -354,33 +354,33 @@ inline bool tileChecks()
 			QImage batched(QSize(int(96 * ratio), int(96 * ratio)), QImage::Format_ARGB32_Premultiplied);
 			batched.fill(qRgba(13, 7, 20, 71));
 			QImage scalar = batched;
-			ok &= expect(paintModelWireframe(&batched, lines, style), "dense layered wire paint succeeds");
+			ok &= expect(paintWireLines(&batched, lines, style), "dense layered wire paint succeeds");
 			for (bool selected : {false, true})
 			{
 				for (const auto &line : lines)
 				{
 					if (line.selected == selected)
 					{
-						ok &= paintModelWireframe(&scalar, {line}, style);
+						ok &= paintWireLines(&scalar, {line}, style);
 					}
 				}
 			}
 			ok &= expect(batched == scalar, "opaque tile reuse is pixel-exact against unbatched coverage, dash and alpha composition");
 		}
 	}
-	ModelWireStyle style;
+	WireStyle style;
 	QImage image(1, 4 * 1024 * 1024, QImage::Format_ARGB32_Premultiplied);
 	image.fill(Qt::transparent);
 	int polls = 0;
 	QElapsedTimer timer;
 	timer.start();
-	ok &= expect(!paintModelWireframe(&image, {{{.5, 0}, {.5, 4 * 1024 * 1024}, false}}, style, nullptr, [&] { return ++polls == 20; }) &&
+	ok &= expect(!paintWireLines(&image, {{{.5, 0}, {.5, 4 * 1024 * 1024}, false}}, style, nullptr, [&] { return ++polls == 20; }) &&
 					 polls == 20 && timer.elapsed() < 1000,
 				 "cancellation callback interrupts the interior of one long stroke promptly");
 	for (double invalid : {-1.0, 65.0, std::numeric_limits<double>::quiet_NaN()})
 	{
 		style.dashLength = invalid;
-		ok &= expect(!paintModelWireframe(&image, {}, style), "invalid dash length is rejected before drawing");
+		ok &= expect(!paintWireLines(&image, {}, style), "invalid dash length is rejected before drawing");
 	}
 	return ok;
 }

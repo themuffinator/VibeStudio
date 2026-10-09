@@ -1,4 +1,4 @@
-#include "core/ericw_map_preflight.h"
+#include "core/quake_map_preflight.h"
 
 #include <QCoreApplication>
 #include <QString>
@@ -15,9 +15,9 @@ int fail(const char* message)
 	return EXIT_FAILURE;
 }
 
-bool hasCode(const vibestudio::EricwMapPreflightResult& result, const QString& code)
+bool hasCode(const vibestudio::QuakeMapPreflightResult& result, const QString& code)
 {
-	for (const vibestudio::EricwMapPreflightWarning& warning : result.warnings) {
+	for (const vibestudio::QuakeMapPreflightWarning& warning : result.warnings) {
 		if (warning.code == code) {
 			return true;
 		}
@@ -25,10 +25,10 @@ bool hasCode(const vibestudio::EricwMapPreflightResult& result, const QString& c
 	return false;
 }
 
-bool hasIssueNumber(const vibestudio::EricwMapPreflightResult& result, int issueNumber)
+bool hasIssueNumber(const vibestudio::QuakeMapPreflightResult& result, int issueNumber)
 {
 	const QString suffix = QStringLiteral("#%1").arg(issueNumber);
-	for (const vibestudio::EricwMapPreflightWarning& warning : result.warnings) {
+	for (const vibestudio::QuakeMapPreflightWarning& warning : result.warnings) {
 		if (warning.upstreamIssue.endsWith(suffix)) {
 			return true;
 		}
@@ -133,10 +133,10 @@ int main(int argc, char** argv)
 }
 )MAP").arg(longValue);
 
-	vibestudio::EricwMapPreflightOptions options;
+	vibestudio::QuakeMapPreflightOptions options;
 	options.mapPath = QStringLiteral("maps/start.v1.map");
 	options.regionCompile = true;
-	const vibestudio::EricwMapPreflightResult result = vibestudio::validateEricwMapPreflightText(mapText, options);
+	const vibestudio::QuakeMapPreflightResult result = vibestudio::validateQuakeMapPreflightText(mapText, options);
 	if (!result.parseComplete) {
 		return fail("Expected preflight parser to complete.");
 	}
@@ -272,12 +272,12 @@ int main(int argc, char** argv)
 	denseMap += QStringLiteral(R"MAP(
 }
 )MAP");
-	const vibestudio::EricwMapPreflightResult denseResult = vibestudio::validateEricwMapPreflightText(denseMap);
+	const vibestudio::QuakeMapPreflightResult denseResult = vibestudio::validateQuakeMapPreflightText(denseMap);
 	if (!hasCode(denseResult, QStringLiteral("high-brush-count-clipnode-risk")) || !hasIssueNumber(denseResult, 136)) {
 		return fail("Expected dense detail brush map to warn about clipnode and marksurface risk.");
 	}
 
-	const vibestudio::EricwMapPreflightResult cleanResult = vibestudio::validateEricwMapPreflightText(QStringLiteral(R"MAP(
+	const vibestudio::QuakeMapPreflightResult cleanResult = vibestudio::validateQuakeMapPreflightText(QStringLiteral(R"MAP(
 {
 "classname" "worldspawn"
 "wad" "base.wad"
@@ -297,7 +297,7 @@ int main(int argc, char** argv)
 		return fail("Expected conservative clean map to pass without warnings.");
 	}
 
-	if (vibestudio::ericwMapPreflightSeverityId(vibestudio::EricwMapPreflightSeverity::Warning) != QStringLiteral("warning")) {
+	if (vibestudio::quakeMapPreflightSeverityId(vibestudio::QuakeMapPreflightSeverity::Warning) != QStringLiteral("warning")) {
 		return fail("Expected severity id helper.");
 	}
 

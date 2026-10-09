@@ -26,7 +26,7 @@ path.
 
 The optional [model engine acceptance workflow](MODEL_ENGINE_ACCEPTANCE.md)
 accepts supplied FTE dedicated-server and FTEQCC executables, alongside the
-existing ericw-tools/q3map2 compilers. FTE remains an external GPL tool; none of
+existing VibeMap2/VibeMap3 compilers. FTE remains an external GPL tool; none of
 its engine or compiler code is linked, vendored into production, downloaded by
 the test, or required for ordinary builds. The Linux server uses `env`/GNU
 `timeout`; Windows can invoke it through a named WSL distribution. Interface
@@ -209,6 +209,41 @@ source-only dependencies.
   deterministic output, overlap refusal, cancellation, allocation limits,
   history, source persistence, native export and CLI parity.
 
+### Vulkan-Headers
+
+- Role: the Vulkan declarations `core/render_vulkan.cpp` compiles against.
+  Only the headers are vendored; no Vulkan library is linked.
+- Source: [Vulkan-Headers v1.4.313](https://github.com/KhronosGroup/Vulkan-Headers/tree/409c16be502e39fe70dd6fe2d9ad4842ef2c9a53),
+  revision `409c16be502e39fe70dd6fe2d9ad4842ef2c9a53`: `include/vulkan/vulkan_core.h`,
+  `vk_platform.h` and the `include/vk_video` headers it includes.
+- Licence: Apache-2.0 (the repository also offers MIT for files not vendored
+  here), reviewed for GPLv3 compatibility 2026-10-08. `LICENSE.md` and both
+  licence texts are kept unchanged.
+- Platform impact: none at build time. At run time the Vulkan backend opens the
+  system's loader (`vulkan-1.dll` on Windows, `libvulkan.so.1` on Linux, the
+  loader or MoltenVK on macOS) with `QLibrary`; a machine without it runs and
+  reports Vulkan unavailable. VibeStudio does not ship a loader or driver.
+- Packaging/update: [integration record](../external/graphics/vulkan-headers/VIBESTUDIO.md),
+  hash-verified by `credits-validation`; the licence files ship with Meson
+  installs and portable bundles.
+
+### Graphics Drivers And The Shader Compiler
+
+3D views and material previews draw with the operating system's OpenGL 3.3
+core (or OpenGL ES 3.0) driver through Qt Gui's `QOpenGLContext`, or with its
+Vulkan 1.0 driver through the loader above. Neither is bundled, and a machine
+needs only one of them; with neither, 3D views say why and draw nothing, while
+every other workflow is unaffected. Mesa's llvmpipe and lavapipe software
+drivers work, slowly, and are what Linux CI uses.
+
+The shaders' SPIR-V and OpenGL text are generated into
+`src/core/render_shader_data.inc`, which is committed, so building needs no
+shader compiler. `scripts/build_render_shaders.py` regenerates it with
+`glslangValidator` from the [Vulkan SDK](https://vulkan.lunarg.com/sdk/home) or
+the `glslang-tools` (Debian, Ubuntu) and `glslang` (Homebrew) packages, and
+`render-shaders-validation` checks it: with the hash of the sources always,
+and by compiling every variant again when the tool is on `PATH`.
+
 ### Optional Local Language Servers
 
 The Code language client uses existing Qt Core process, JSON and timer APIs;
@@ -248,6 +283,8 @@ runtime dependency and is not included in application packages.
 - [Ninja](https://ninja-build.org/).
 - [Qt 6](https://www.qt.io/product/qt6): Core, Gui, Widgets, Network.
 - Python 3 for the pinned UV-library build adaptation, validation scripts and CI helpers.
+- At run time, for 3D views: an OpenGL 3.3 or Vulkan 1.0 graphics driver (see
+  [Graphics drivers](#graphics-drivers-and-the-shader-compiler)).
 
 ### Qt Modules In Use
 
@@ -262,7 +299,7 @@ install without Qt Test builds everything else and skips that test.
 | Module | Used by | What for |
 |---|---|---|
 | Qt Core | Core library, CLI, application | Strings, containers, JSON, files, `QSettings`, `QProcess`, date/time, `QCoreApplication::translate` for core strings. |
-| Qt Gui | Core library, application | `QImage`, `QRgb`, `QPainter`, `QIcon`, `QColor`. Core needs it because the idTech image decoders return `QImage` and the palette tools render swatches; the application needs it for every painted widget. |
+| Qt Gui | Core library, application | `QImage`, `QRgb`, `QPainter`, `QIcon`, `QColor`, and `QOpenGLContext`, `QOffscreenSurface` and `QOpenGLExtraFunctions` for the OpenGL renderer. Core needs it because the idTech image decoders return `QImage`, the palette tools render swatches and the 3D renderer lives there; the application needs it for every painted widget. |
 | Qt Widgets | Application only | The whole shell: `QMainWindow`, `QStackedWidget`, dialogs, the command palette, and the custom `QWidget` subclasses for the map viewport, asset views, and charts. |
 | Qt Test | `shell-interaction-smoke` only | `QTest::keyClick`, `QTest::qWaitForWindowActive`, and `QTest::qSleep` to drive the real window in the GUI interaction test. Nothing that ships links it. |
 | Qt Multimedia | Application, **optional** | `QMediaPlayer` and `QAudioOutput` play browser/waveform audio from memory. The multitrack worker uses the Qt 6.4-compatible `QAudioSink` push API for bounded stereo float blocks, explicit output selection and processed-time estimates. No input device is opened. All processing/CLI paths remain device-independent. Found through the `audio_playback` feature option (`auto`: linked when the module is present); `-Daudio_playback=enabled` makes it required, `disabled` leaves it out. Without it `VIBESTUDIO_HAVE_AUDIO_PLAYBACK` is 0 and the transport stays on the page, disabled. It is a Qt add-on module, so CI installs `qtmultimedia` on Windows and macOS; the Linux job builds the no-playback path, which keeps that branch compiling. |
@@ -270,8 +307,9 @@ install without Qt Test builds everything else and skips that test.
 
 Required Qt modules should stay minimal in `meson.build` until code uses them.
 Planned modules
-include SQL, Concurrent, OpenGLWidgets, and TextToSpeech. None of them are
-linked today.
+include SQL, Concurrent and TextToSpeech. None of them are linked today.
+OpenGLWidgets is not planned: the 3D renderer draws offscreen through Qt Gui
+alone.
 
 ## Optional Build-Time Tools
 - **`lrelease`** (Qt Linguist release tool), looked up as `lrelease-qt6`,
@@ -381,10 +419,14 @@ commercial game data.
 
 ## Imported Compiler Source Dependencies
 The external compiler submodules keep their own build systems and dependency
-requirements. VibeStudio does not build them by default yet.
+requirements. VibeStudio does not build them by default yet. VibeMap2 and
+VibeMap3 are VibeStudio's own compilers, developed as part of the project; they
+replace the stock ericw-tools and NetRadiant Custom q3map2 submodules and add no
+library to VibeStudio itself, because the studio runs them as separate
+processes.
 
-- [ericw-tools](https://github.com/ericwa/ericw-tools): CMake, Embree, oneTBB, optional Qt6 for `lightpreview`, and bundled third-party libraries documented upstream.
-- [q3map2-nrc](https://github.com/Garux/netradiant-custom): q3map2 compiler source imported from NetRadiant Custom; upstream Makefile-based build and dependencies documented in its `COMPILING` file.
+- [VibeMap2](https://github.com/themuffinator/VibeyMapTools) (derived from [ericw-tools](https://github.com/ericwa/ericw-tools)): CMake 3.16+, Embree 4 and oneTBB for `vibemap2-light`, Qt6 for the `vibemap2-hub` GUI, and bundled third-party libraries documented in its `BUILDING.md`.
+- [VibeMap3](https://github.com/themuffinator/q3mapx) (continuing q3map2 from [NetRadiant Custom](https://github.com/Garux/netradiant-custom)): CMake 3.25+ presets with Ninja, a C++20 compiler, pkg-config, GLib, libxml2, Assimp, libpng, libjpeg and zlib; Qt 6.4+ for `vibemap3-workbench` (the `cli` preset builds without Qt); OpenCL is loaded at run time when present. See its `docs/DEVELOPMENT.md`.
 - [ZDBSP](https://github.com/rheit/zdbsp): CMake and zlib-oriented source tree as documented upstream.
 - [ZokumBSP](https://github.com/zokum-no/zokumbsp): upstream source/build instructions in its README and `doc` directory.
 
@@ -400,8 +442,6 @@ Likely future additions:
   (GPL-3.0-or-later) when installed, as separate programs; none is shipped.
   [Qt TextToSpeech](https://doc.qt.io/qt-6/qttexttospeech-index.html) remains a
   possible future backend.
-- [bgfx](https://bkaradzic.github.io/bgfx/overview.html): long-term renderer backend behind a VibeStudio render abstraction. Still not linked, and deliberately not pulled forward by the 2D work: the map viewport, asset views, and charts are `QPainter` widgets, and the headless map renderer emits SVG, so nothing currently needs a GPU abstraction.
-- Qt OpenGLWidgets: early MVP 3D preview backend while the renderer abstraction matures.
 - [KSyntaxHighlighting](https://api.kde.org/frameworks/syntax-highlighting/html/index.html): reusable syntax highlighting definitions for editor surfaces. Deferred: highlighting is currently `QSyntaxHighlighter` with data-driven language descriptors, which adds no dependency and no KDE Frameworks packaging burden.
 - [Tree-sitter](https://tree-sitter.github.io/tree-sitter/): incremental parsing for scripts, shader files, configs, and AI/editor context where useful.
 - [miniaudio](https://miniaud.io/): small portable audio fallback for playback, decoding, and waveform-oriented workflows.
@@ -414,6 +454,8 @@ Likely future additions:
 ## Evaluated And Declined
 - [zlib](https://zlib.net/) and [miniz](https://github.com/richgel999/miniz): evaluated for ZIP/PK3 compression and declined in favour of the in-tree DEFLATE codec documented above. Revisit only if archive size or compression throughput becomes a real user complaint that a dynamic-Huffman encoder in `src/core/deflate.cpp` cannot answer.
 - Qt Graphics View and an early GPU backend for 2D editor surfaces: declined in favour of plain `QPainter` widgets, which need no Qt module beyond Widgets.
+- [bgfx](https://bkaradzic.github.io/bgfx/overview.html) and Qt's QRhi for 3D views (2026-10-08): bgfx adds a large dependency for backends the studio does not need, and QRhi cannot render under the offscreen platform the tests use or in the console-only CLI. VibeStudio's own OpenGL and Vulkan layer replaced the CPU rasterisers instead (see [STACK.md](STACK.md)).
+- Qt OpenGLWidgets: no longer planned; frames render offscreen and widgets present them with `QPainter`.
 
 Any new dependency must be recorded here with its role, license, platform notes,
 whether it is required, optional, bundled, or external, and any credits updates

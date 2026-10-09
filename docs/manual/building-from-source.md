@@ -19,6 +19,8 @@ building, testing, running and packaging.
 | Git | To clone the source with its submodules. |
 | Qt Linguist tools, optional | `lrelease` compiles the translation catalogues; without it the build still succeeds. `lupdate` is used by the translation check in the full validation run. |
 | ALSA development files, Linux, optional | For the synchronised recording backend, such as `libasound2-dev` on Debian and Ubuntu. Without them, that backend is left out. |
+| An OpenGL 3.3 or Vulkan 1.0 driver, for running | The 3D views and many tests draw with it. No Vulkan SDK is needed to build: the Vulkan headers are in the source, and the loader is opened at run time. On Linux without a GPU, Mesa's `mesa-vulkan-drivers` (lavapipe) works. |
+| glslang, optional | Only when you change the shaders in `src/core/shaders`: `python scripts/build_render_shaders.py` regenerates `src/core/render_shader_data.inc` with `glslangValidator` (Vulkan SDK, or `glslang-tools` on Debian and Ubuntu). |
 
 Meson finds Qt through `qmake6`, so put your Qt installation's `bin` folder on PATH, or make Qt
 available to `pkg-config`. On Windows, build from a Developer PowerShell or Developer Command Prompt
@@ -38,8 +40,11 @@ If you cloned without `--recursive`, fetch the submodules afterwards:
 git submodule update --init --recursive
 ```
 
-The submodules hold the source of ericw-tools, q3map2, ZDBSP and ZokumBSP for reference and licence
-review. The build does not compile them, but one of the tests checks that they are present.
+The submodules hold the source of VibeMap2 and VibeMap3, VibeStudio's own compilers (derived from
+ericw-tools and from q3map2 in NetRadiant Custom), and of ZDBSP and ZokumBSP, for building the
+compilers yourself and for licence review. The VibeStudio build does not compile them, but one of the
+tests checks that they are present. VibeMap2 and VibeMap3 build with CMake; when you build them in
+place, VibeStudio finds the programs in their build folders.
 
 ## Configure, build and test
 
@@ -50,7 +55,10 @@ meson test -C builddir --print-errorlogs
 ```
 
 Meson's default build type is `debug`, which runs noticeably slower. CI configures with
-`--buildtype=debugoptimized`, which you can add to `meson setup` too. On Windows, Qt's `bin` folder
+`--buildtype=debugoptimized`, which you can add to `meson setup` too. Tests that draw in 3D skip their
+drawing checks when neither OpenGL nor Vulkan starts; set `VIBESTUDIO_RENDER_REQUIRE=1` to make that a
+failure instead, as Linux CI does. Most tests use Qt's offscreen platform, where only Vulkan can draw on
+Windows and macOS. On Windows, Qt's `bin` folder
 must also be on PATH when the tests run, as in
 [Run from the build folder](#run-from-the-build-folder).
 

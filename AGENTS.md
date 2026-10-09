@@ -68,7 +68,8 @@ credits list.
 
 ## External Compiler Toolchains
 - Imported compilers live under `external/compilers` as Git submodules unless there is a strong reason to vendor a specific fork.
-- Preserve upstream history for ericw-tools, q3map2 from NetRadiant Custom, ZDBSP, ZokumBSP, and future compilers.
+- VibeMap2 (derived from ericw-tools) and VibeMap3 (derived from q3map2 in NetRadiant Custom) are VibeStudio's own Quake/Quake II and Quake III compilers, developed in their own repositories and pinned here as submodules. Keep their upstream history and credits, and consider how compiler changes affect VibeStudio's profiles, discovery, diagnostics and tests in the same piece of work.
+- Preserve upstream history for ZDBSP, ZokumBSP, and future compilers.
 - VibeStudio-owned changes to external compilers should be made in explicit forks or patch directories, with upstream links and rationale documented in `docs/COMPILER_INTEGRATION.md`.
 - The studio should invoke external compilers through a wrapper/orchestration layer with structured logs, progress, inputs, outputs, and reproducible command manifests.
 

@@ -54,7 +54,7 @@ int main()
 	if (profile.basePackagePaths.size() != 1 || !QFile::exists(profile.basePackagePaths.front())) {
 		return fail("Expected relative base package path to normalize under root.");
 	}
-	if (profile.paletteId != QStringLiteral("quake") || profile.compilerProfileId != QStringLiteral("ericw-tools")) {
+	if (profile.paletteId != QStringLiteral("quake") || profile.compilerProfileId != QStringLiteral("vibemap2")) {
 		return fail("Expected Quake defaults.");
 	}
 

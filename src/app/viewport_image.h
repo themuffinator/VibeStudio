@@ -6,6 +6,11 @@
 
 namespace vibestudio {
 
+// Ceiling for one viewport image in physical pixels: 2D line caches, vertex
+// markers and GPU frames read back from the 3D views. Larger windows scale
+// their images uniformly to stay within it.
+constexpr qint64 viewportImageMaxPixels = 8 * 1024 * 1024;
+
 struct ViewportImageDevice {
 	// Zero means that the transform needs ordinary painter drawing.
 	double pixelRatio = 0;

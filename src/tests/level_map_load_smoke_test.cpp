@@ -1,4 +1,4 @@
-#include "core/ericw_map_preflight.h"
+#include "core/quake_map_preflight.h"
 #include "core/map_geometry_cache.h"
 #include "core/map_preview_mesh.h"
 #include "tests/level_geometry_test_helpers.h"
@@ -133,12 +133,12 @@ int main(int argc, char** argv)
 	ok &= expect(!loadLevelMapBytes({QStringLiteral("amplified.wad"), {}, {}}, amplified, &kept, &error)
 		&& error.contains(QStringLiteral("512 MiB")) && unchanged(), "expanded WAD payload bound enforced", error);
 
-	EricwMapPreflightOptions preflight; checks = 0;
+	QuakeMapPreflightOptions preflight; checks = 0;
 	preflight.isCancelled = [&] { return ++checks > 15; };
-	const auto report = validateEricwMapPreflightText(QString::fromUtf8(bytes), preflight);
+	const auto report = validateQuakeMapPreflightText(QString::fromUtf8(bytes), preflight);
 	ok &= expect(report.cancelled && !report.parseComplete && report.warnings.isEmpty(), "cancelled preflight publishes no partial diagnostics");
 	checks = 0;
-	ok &= expect(validateEricwMapPreflightFile(path, preflight).cancelled, "file preflight propagates cancellation");
+	ok &= expect(validateQuakeMapPreflightFile(path, preflight).cancelled, "file preflight propagates cancellation");
 
 	request.isCancelled = {}; request.brushGeometryCache = nullptr;
 	bool changed = false;

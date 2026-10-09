@@ -2,10 +2,12 @@
 #include "cli/audio_session.h"
 #include "cli/audio_take.h"
 #include "cli/audio_recording.h"
+#include "cli/release.h"
 #include "cli/workspace.h"
 #include "cli/package_copy_limits.h"
 #include "cli/package_copy_sessions.h"
 #include "core/level_placement.h"
+#include "core/render_device.h"
 #include "cli/level_bookmarks.h"
 #include "cli/level_gestures.h"
 #include "cli/level_build_workspace.h"
@@ -24,6 +26,7 @@
 #include "cli/model_skin_bindings.h"
 #include "cli/model_surfaces.h"
 #include "cli/materials.h"
+#include "cli/render.h"
 #include "cli/model_tools.h"
 #include "cli/model_controls.h"
 #include "cli/model_material_slots.h"
@@ -109,6 +112,7 @@
 #include "core/package_validation.h"
 #include "core/package_publication.h"
 #include "core/project_manifest.h"
+#include "core/release_plan.h"
 #include "core/studio_semantics.h"
 #include "core/studio_manifest.h"
 #include "core/studio_settings.h"
@@ -361,19 +365,22 @@ QVector<CliCommandDescriptor> cliCommandDescriptors()
 		{QStringLiteral("map"), QStringLiteral("snap"), QStringLiteral("Snap objects independently, preserving owner assemblies and shared Doom vertices. Brush textures lock by default; --texture-lock off keeps source parameters."), {QStringLiteral("vibestudio --cli map snap ./maps/start.map --object entity:3 --object brush:12 --grid 16 --output ./maps/start-snapped.map")}, true, true, true},
 		{QStringLiteral("map"), QStringLiteral("duplicate"), QStringLiteral("Copy Quake-family objects or Doom/Hexen/UDMF things with an optional delta. UDMF retains fractional XYZ coordinates, comments and unknown thing properties. --copies 1..256 creates a linear array at successive multiples of --delta, in one atomic edit. Arrays are limited to 32768 added native records and 262144 brush faces/patch points. Brush textures lock by default; --texture-lock off keeps source parameters."), {QStringLiteral("vibestudio --cli map duplicate ./maps/start.map --object entity:3 --object brush:12 --delta 64,0,0 --copies 8 --output ./maps/start-more.map")}, true, true, true},
 		{QStringLiteral("map"), QStringLiteral("paste"), QStringLiteral("Insert UTF-8 map text from --from with an optional --delta. Brush textures lock by default; --texture-lock off keeps source parameters. Input limit: 8 MiB / 4 million UTF-16 characters."), {QStringLiteral("vibestudio --cli map paste ./maps/start.map --from ./assembly.map --delta 128,0,0 --output ./maps/placed.map --dry-run --json")}, true, true, true},
-		{QStringLiteral("map"), QStringLiteral("compile-plan"), QStringLiteral("Build a compiler command plan from the inspected map and selected compiler profile."), {QStringLiteral("vibestudio --cli map compile-plan ./maps/start.map --profile ericw-qbsp --json")}, true, true, true},
+		{QStringLiteral("map"), QStringLiteral("compile-plan"), QStringLiteral("Build a compiler command plan from the inspected map and selected compiler profile."), {QStringLiteral("vibestudio --cli map compile-plan ./maps/start.map --profile vibemap2-bsp --json")}, true, true, true},
 		{QStringLiteral("shader"), QStringLiteral("inspect"), QStringLiteral("Parse idTech3 shader scripts into an editable graph model and validate texture references."), {QStringLiteral("vibestudio --cli shader inspect ./scripts/common.shader --package ./baseq3 --json")}},
 		{QStringLiteral("shader"), QStringLiteral("set-stage"), QStringLiteral("Edit a shader stage directive and write a round-tripped shader script to a save-as path."), {QStringLiteral("vibestudio --cli shader set-stage ./scripts/common.shader --shader textures/base/wall --stage 1 --directive blendFunc --value \"GL_ONE GL_ONE\" --output ./scripts/common-edited.shader")}, true, true, true},
 		{QStringLiteral("material"), QStringLiteral("list"), QStringLiteral("List every material a package, folder, WAD or script defines across Doom, Quake, Quake II, Quake III and Doom 3, with --where filters and the definitions the game shadows."), {QStringLiteral("vibestudio --cli material list ./baseq3 --where \"engine=quake3 animated=yes\" --json")}},
 		{QStringLiteral("material"), QStringLiteral("inspect"), QStringLiteral("Show one material's stages, images and how they resolve, diagnostics, node graph and source text."), {QStringLiteral("vibestudio --cli material inspect ./baseq3 --material textures/liquids/lavahell --show-source")}},
 		{QStringLiteral("material"), QStringLiteral("validate"), QStringLiteral("Check materials the way each engine loads them: syntax, keywords it rejects, missing images and shadowed definitions. Exits 4 on errors, or on warnings with --strict."), {QStringLiteral("vibestudio --cli material validate ./mymod --base ./baseq3 --json")}},
 		{QStringLiteral("material"), QStringLiteral("render"), QStringLiteral("Render a material the way its engine draws it, on a wall, floor, cube, sphere, cylinder or room, at one moment or as an animation sheet."), {QStringLiteral("vibestudio --cli material render ./baseq3 --material textures/sfx/fire_ctfblue --frames 8 --fps 10 --size 256x256 --output fire.png")}, true, true, true},
+		{QStringLiteral("render"), QStringLiteral("backends"), QStringLiteral("Start each 3D renderer (OpenGL and Vulkan) and report its device, driver and version, or why it is unavailable, and which one 3D views use."), {QStringLiteral("vibestudio --cli render backends --json")}},
+		{QStringLiteral("render"), QStringLiteral("test"), QStringLiteral("Draw a known image on each available 3D renderer and check every pixel. Exits 4 when one draws wrongly and 5 when none can start."), {QStringLiteral("vibestudio --cli render test --renderer vulkan")}},
+		{QStringLiteral("render"), QStringLiteral("set"), QStringLiteral("Save the 3D renderer the studio and the CLI use: automatic, opengl or vulkan."), {QStringLiteral("vibestudio --cli render set opengl")}},
 		{QStringLiteral("material"), QStringLiteral("graph"), QStringLiteral("Print a material's node graph, or apply graph edits from JSON and write the edited text."), {QStringLiteral("vibestudio --cli material graph ./scripts/mymod.shader --material textures/mymod/glow --edits graph-edits.json --output ./scripts/mymod.shader --overwrite")}, true, true, true},
 		{QStringLiteral("material"), QStringLiteral("edit"), QStringLiteral("Apply directive and stage edits from JSON to a Quake III shader or Doom 3 material script."), {QStringLiteral("vibestudio --cli material edit ./materials/mymod.mtr --edits edits.json --output ./materials/mymod.mtr --overwrite")}, true, true, true},
 		{QStringLiteral("material"), QStringLiteral("templates"), QStringLiteral("List the starting points material new can write, by engine."), {QStringLiteral("vibestudio --cli material templates --engine doom3")}},
 		{QStringLiteral("material"), QStringLiteral("new"), QStringLiteral("Write a new material from a template to the console, a new script, or the end of an existing one."), {QStringLiteral("vibestudio --cli material new --template q3-glow --name textures/mymod/lamp --output ./scripts/mymod.shader --append")}, true, true, true},
 		{QStringLiteral("material"), QStringLiteral("doom-tables"), QStringLiteral("Show a Doom package's animation and switch tables, and compile Boom ANIMATED and SWITCHES lumps from them or from SWANTBLS text."), {QStringLiteral("vibestudio --cli material doom-tables ./SWANTBLS.txt --output-dir ./lumps")}, true, true, true},
-		{QStringLiteral("material"), QStringLiteral("wal"), QStringLiteral("Show a Quake II WAL header as ericw-tools .wal_json, or rewrite its flags, value and next frame from one."), {QStringLiteral("vibestudio --cli material wal ./textures/e1u1/floor1_3.wal --metadata floor1_3.wal_json --output ./floor1_3.wal")}, true, true, true},
+		{QStringLiteral("material"), QStringLiteral("wal"), QStringLiteral("Show a Quake II WAL header as a .wal_json sidecar (the ericw-tools format VibeMap2 reads), or rewrite its flags, value and next frame from one."), {QStringLiteral("vibestudio --cli material wal ./textures/e1u1/floor1_3.wal --metadata floor1_3.wal_json --output ./floor1_3.wal")}, true, true, true},
 		{QStringLiteral("sprite"), QStringLiteral("plan"), QStringLiteral("Create Doom or Quake sprite frame, palette, sequencing, and package staging plans."), {QStringLiteral("vibestudio --cli sprite plan --engine doom --name TROO --frames 2 --rotations 8 --palette doom --json")}, true, true, true},
 		{QStringLiteral("code"), QStringLiteral("language-server"), QStringLiteral("Run a local stdio server for diagnostics, --line/--column definitions, --hover, --signature-help, --completion (with optional --resolve-completion <index>) or --references. Preview --rename <name>, or list --code-actions and preview --action-index <n>; their --write requires --expected-plan-sha256. Preview --format-document or --format-range with --end-line/--end-column, --tab-size and --insert-spaces; formatting --write requires --expected-sha256. Code actions accept optional range endpoints. --server is absolute."), {QStringLiteral("vibestudio --cli code language-server ./main.cpp --server /absolute/path/clangd --root . --language cpp --json")}},
 		{QStringLiteral("code"), QStringLiteral("index"), QStringLiteral("Index a project source tree with language hooks, diagnostics, symbols, build tasks, and launch profiles."), {QStringLiteral("vibestudio --cli code index ./mymod --find monster --json")}},
@@ -396,11 +403,11 @@ QVector<CliCommandDescriptor> cliCommandDescriptors()
 		{QStringLiteral("extension"), QStringLiteral("run"), QStringLiteral("Build or execute an approved extension command plan with generated-file staging."), {QStringLiteral("vibestudio --cli extension run ./extensions/tool/vibestudio.extension.json build --dry-run --json")}, true, true, true},
 		{QStringLiteral("compiler"), QStringLiteral("list"), QStringLiteral("Print compiler registry and executable discovery."), {QStringLiteral("vibestudio --cli compiler list --json")}},
 		{QStringLiteral("compiler"), QStringLiteral("profiles"), QStringLiteral("Print compiler wrapper profiles."), {QStringLiteral("vibestudio --cli compiler profiles")}},
-		{QStringLiteral("compiler"), QStringLiteral("plan"), QStringLiteral("Build a reviewable compiler command plan."), {QStringLiteral("vibestudio --cli compiler plan ericw-qbsp --input ./maps/start.map --dry-run")}, true, true, true},
-		{QStringLiteral("compiler"), QStringLiteral("manifest"), QStringLiteral("Print or write a compiler command manifest."), {QStringLiteral("vibestudio --cli compiler manifest ericw-qbsp --input ./maps/start.map --manifest ./build/start.compiler.json")}, true, true, true},
-		{QStringLiteral("compiler"), QStringLiteral("run"), QStringLiteral("Execute a compiler command with logs, diagnostics, task state, and manifest capture."), {QStringLiteral("vibestudio --cli compiler run ericw-qbsp --input ./maps/start.map --watch --manifest ./build/start.run.json")}, true, true, true, true},
+		{QStringLiteral("compiler"), QStringLiteral("plan"), QStringLiteral("Build a reviewable compiler command plan."), {QStringLiteral("vibestudio --cli compiler plan vibemap2-bsp --input ./maps/start.map --dry-run")}, true, true, true},
+		{QStringLiteral("compiler"), QStringLiteral("manifest"), QStringLiteral("Print or write a compiler command manifest."), {QStringLiteral("vibestudio --cli compiler manifest vibemap2-bsp --input ./maps/start.map --manifest ./build/start.compiler.json")}, true, true, true},
+		{QStringLiteral("compiler"), QStringLiteral("run"), QStringLiteral("Execute a compiler command with logs, diagnostics, task state, and manifest capture."), {QStringLiteral("vibestudio --cli compiler run vibemap2-bsp --input ./maps/start.map --watch --manifest ./build/start.run.json")}, true, true, true, true},
 		{QStringLiteral("compiler"), QStringLiteral("rerun"), QStringLiteral("Re-run a saved compiler command manifest."), {QStringLiteral("vibestudio --cli compiler rerun ./build/start.run.json --watch")}, true, true, false, true},
-		{QStringLiteral("compiler"), QStringLiteral("copy-command"), QStringLiteral("Print shell-ready command line from a manifest or profile."), {QStringLiteral("vibestudio --cli compiler copy-command ericw-qbsp --input ./maps/start.map")}},
+		{QStringLiteral("compiler"), QStringLiteral("copy-command"), QStringLiteral("Print shell-ready command line from a manifest or profile."), {QStringLiteral("vibestudio --cli compiler copy-command vibemap2-bsp --input ./maps/start.map")}},
 		{QStringLiteral("ai"), QStringLiteral("status"), QStringLiteral("Print AI preferences, credentials, models, tools, and connector metadata."), {QStringLiteral("vibestudio --cli ai status --json")}},
 		{QStringLiteral("ai"), QStringLiteral("tools"), QStringLiteral("Print AI-callable VibeStudio tool descriptors."), {QStringLiteral("vibestudio --cli ai tools")}},
 		{QStringLiteral("ai"), QStringLiteral("explain-log"), QStringLiteral("Explain a compiler log as a reviewable, no-write AI workflow."), {QStringLiteral("vibestudio --cli ai explain-log --log ./build/qbsp.log --json")}},
@@ -408,7 +415,7 @@ QVector<CliCommandDescriptor> cliCommandDescriptors()
 		{QStringLiteral("ai"), QStringLiteral("propose-manifest"), QStringLiteral("Draft a project manifest without writing files."), {QStringLiteral("vibestudio --cli ai propose-manifest ./mymod --name \"My Mod\"")}},
 		{QStringLiteral("ai"), QStringLiteral("package-deps"), QStringLiteral("Suggest missing package dependencies from metadata."), {QStringLiteral("vibestudio --cli ai package-deps ./release.pk3")}},
 		{QStringLiteral("ai"), QStringLiteral("cli-command"), QStringLiteral("Generate a safe CLI command proposal."), {QStringLiteral("vibestudio --cli ai cli-command --prompt \"validate pak0.pak\"")}},
-		{QStringLiteral("ai"), QStringLiteral("fix-plan"), QStringLiteral("Generate a supervised fix-and-retry plan from compiler output."), {QStringLiteral("vibestudio --cli ai fix-plan --log ./build/qbsp.log --command \"vibestudio --cli compiler run ericw-qbsp --input maps/start.map\"")}},
+		{QStringLiteral("ai"), QStringLiteral("fix-plan"), QStringLiteral("Generate a supervised fix-and-retry plan from compiler output."), {QStringLiteral("vibestudio --cli ai fix-plan --log ./build/qbsp.log --command \"vibestudio --cli compiler run vibemap2-bsp --input maps/start.map\"")}},
 		{QStringLiteral("ai"), QStringLiteral("asset-request"), QStringLiteral("Stage an ElevenLabs/Meshy/OpenAI asset generation request before import."), {QStringLiteral("vibestudio --cli ai asset-request --provider meshy --kind texture --prompt \"rusty sci-fi panel\"")}, true, true, true},
 		{QStringLiteral("ai"), QStringLiteral("compare"), QStringLiteral("Prepare side-by-side provider output comparison metadata."), {QStringLiteral("vibestudio --cli ai compare --provider-a openai --provider-b claude --prompt \"explain this build failure\"")}},
 		{QStringLiteral("ai"), QStringLiteral("shader-scaffold"), QStringLiteral("Generate a staged prompt-to-shader scaffold proposal."), {QStringLiteral("vibestudio --cli ai shader-scaffold --prompt \"glowing gothic wall\" --json")}, true, true, true},
@@ -426,6 +433,13 @@ QVector<CliCommandDescriptor> cliCommandDescriptors()
 		{QStringLiteral("install"), QStringLiteral("select"), QStringLiteral("Mark a saved installation profile as the selected one."), {QStringLiteral("vibestudio --cli install select quake-games-quake")}},
 		{QStringLiteral("install"), QStringLiteral("validate"), QStringLiteral("Validate a saved installation profile read-only."), {QStringLiteral("vibestudio --cli install validate quake-games-quake --json")}},
 		{QStringLiteral("install"), QStringLiteral("remove"), QStringLiteral("Remove a saved installation profile without touching game files."), {QStringLiteral("vibestudio --cli install remove quake-games-quake --dry-run")}, true, true, true},
+		{QStringLiteral("install"), QStringLiteral("register"), QStringLiteral("Index a game installation's stock packages so releases leave the game's own files out: build, info, check or export the index."), {QStringLiteral("vibestudio --cli install register build quake3-games-quake3 --json"), QStringLiteral("vibestudio --cli install register check quake3-games-quake3 textures/base_wall/basewall01.tga"), QStringLiteral("vibestudio --cli install register export quake3-games-quake3 --output ./quake3.register.json")}, true, true, true},
+		{QStringLiteral("release"), QStringLiteral("plan"), QStringLiteral("Work out what a project, map, model or texture release ships and what the game already provides; exit 4 when something blocks publishing."), {QStringLiteral("vibestudio --cli release plan ./mymod --map maps/arena1.map --json")}},
+		{QStringLiteral("release"), QStringLiteral("publish"), QStringLiteral("Write the package, readme, release notes, distribution archive and release record, and move the changelog's Unreleased changes under the new version."), {QStringLiteral("vibestudio --cli release publish ./mymod --map maps/arena1.map --release-version 1.0.0 --dry-run --json")}, true, true, true},
+		{QStringLiteral("release"), QStringLiteral("notes"), QStringLiteral("Print the generated release notes as Markdown, or the plain-text readme with --readme."), {QStringLiteral("vibestudio --cli release notes ./mymod --map maps/arena1.map --readme")}},
+		{QStringLiteral("release"), QStringLiteral("changelog"), QStringLiteral("Show the project's unreleased changes, or record one with --add and --category."), {QStringLiteral("vibestudio --cli release changelog ./mymod --add \"New arena: The Pit\" --category added")}, true, true, true},
+		{QStringLiteral("release"), QStringLiteral("history"), QStringLiteral("List the project's published releases with their packages and hashes."), {QStringLiteral("vibestudio --cli release history ./mymod --json")}},
+		{QStringLiteral("release"), QStringLiteral("catalog"), QStringLiteral("List the maps (with build state), models and texture folders a project can release."), {QStringLiteral("vibestudio --cli release catalog ./mymod --json")}},
 		{QStringLiteral("editor"), QStringLiteral("view-links"), QStringLiteral("Inspect or set linked plan centres, plan zoom and camera-follow defaults with --centers, --zoom and --follow-camera on|off."), {QStringLiteral("vibestudio --cli editor view-links --json"), QStringLiteral("vibestudio --cli editor view-links --centers on --zoom on --follow-camera off")}},
 		{QStringLiteral("editor"), QStringLiteral("bookmarks"), QStringLiteral("List, import, export, rename or remove named level views. WADs require --map-name; import replacement requires --replace and export replacement --overwrite."), {QStringLiteral("vibestudio --cli editor bookmarks list arena.map --json"), QStringLiteral("vibestudio --cli editor bookmarks import arena.map --input arena.vviews"), QStringLiteral("vibestudio --cli editor bookmarks export doom.wad --map-name MAP01 --output map01.vviews")}},
 		{QStringLiteral("editor"), QStringLiteral("scene"), QStringLiteral("List, create, rename, move, assign, change visibility, lock, remove or reset map layers and groups. Use lock --id <UUID> --locked true|false. Changes require --output; use --dry-run to validate. WADs require --map-name; node IDs are UUIDs or default."), {QStringLiteral("vibestudio --cli editor scene list arena.map --json"), QStringLiteral("vibestudio --cli editor scene create arena.map --kind layer --name Architecture --output organized.map --dry-run")}, true, true, true},
@@ -436,12 +450,12 @@ QVector<CliCommandDescriptor> cliCommandDescriptors()
 		{QStringLiteral("editor"), QStringLiteral("layout"), QStringLiteral("Read or choose the level view layout: profile, single-2d, single-3d, camera-and-plan, four-views, camera-above-plans or camera-beside-plans."), {QStringLiteral("vibestudio --cli editor layout four-views --json"), QStringLiteral("vibestudio --cli editor layout profile")}},
 		{QStringLiteral("editor"), QStringLiteral("controls"), QStringLiteral("Print how the Levels views answer the mouse and keys under an editor profile: layout, 2D view, 3D camera, and keys."), {QStringLiteral("vibestudio --cli editor controls trenchbroom"), QStringLiteral("vibestudio --cli editor controls netradiant-custom --json")}},
 		{QStringLiteral("editor"), QStringLiteral("keys"), QStringLiteral("List the keys the user gave commands in place of their defaults; --reset puts every default back."), {QStringLiteral("vibestudio --cli editor keys --json"), QStringLiteral("vibestudio --cli editor keys --reset")}},
-		{QStringLiteral("compiler"), QStringLiteral("set-path"), QStringLiteral("Store a user compiler executable override."), {QStringLiteral("vibestudio --cli compiler set-path ericw-qbsp --executable /opt/ericw-tools/bin/qbsp")}},
-		{QStringLiteral("compiler"), QStringLiteral("clear-path"), QStringLiteral("Remove a user compiler executable override."), {QStringLiteral("vibestudio --cli compiler clear-path ericw-qbsp")}},
+		{QStringLiteral("compiler"), QStringLiteral("set-path"), QStringLiteral("Store a user compiler executable override."), {QStringLiteral("vibestudio --cli compiler set-path vibemap2-bsp --executable /opt/vibemap2/vibemap2-bsp")}},
+		{QStringLiteral("compiler"), QStringLiteral("clear-path"), QStringLiteral("Remove a user compiler executable override."), {QStringLiteral("vibestudio --cli compiler clear-path vibemap2-bsp")}},
 		{QStringLiteral("ai"), QStringLiteral("connectors"), QStringLiteral("List provider-neutral AI connector descriptors and capabilities."), {QStringLiteral("vibestudio --cli ai connectors --json")}},
 		{QStringLiteral("map"), QStringLiteral("render"), QStringLiteral("Render a deterministic SVG picture of a Doom or Quake-family map, optionally with a compiler leak trail."), {QStringLiteral("vibestudio --cli map render ./maps/start.map --output ./docs/start.svg --projection top --overwrite"), QStringLiteral("vibestudio --cli map render ./maps/start.map --leak ./maps/start.pts --output ./start-leak.svg"), QStringLiteral("vibestudio --cli map render ./maps/start.map --links --labels --output ./start-logic.svg")}, true, true, true},
 		{QStringLiteral("map"), QStringLiteral("textures"), QStringLiteral("Check map textures against an archive, saved package draft, or up to 64 asset roots with shared indexing limits; missing references or incomplete audits return exit 4. Or list the objects that use one texture."), {QStringLiteral("vibestudio --cli map textures ./maps/start.map --package ./id1/pak0.pak --json"), QStringLiteral("vibestudio --cli map textures ./maps/start.map --uses base/wall")}},
-		{QStringLiteral("map"), QStringLiteral("dependencies"), QStringLiteral("Resolve explicit level textures, shader images, models, and sounds from an archive, folder or .vibepackage draft, with map object attribution."), {QStringLiteral("vibestudio --cli map dependencies ./maps/arena.map --package ./assets --engine idTech3 --json")}},
+		{QStringLiteral("map"), QStringLiteral("dependencies"), QStringLiteral("Resolve explicit level textures, shader images, models, and sounds from an archive, folder or .vibepackage draft, with map object attribution; --installation <id> marks what the game already provides."), {QStringLiteral("vibestudio --cli map dependencies ./maps/arena.map --package ./assets --engine idTech3 --json"), QStringLiteral("vibestudio --cli map dependencies ./maps/arena.map --package ./mymod --installation quake3-games-quake3")}},
 		{QStringLiteral("map"), QStringLiteral("materials"), QStringLiteral("Resolve camera materials and placed models, including MD3 misc_model compiler skins, remaps, frame diagnostics, omitted surfaces and exact skin hashes; accepts staged .vibepackage inputs. Doom composites retain exact source inputs; --geometry also checks the camera mesh."), {QStringLiteral("vibestudio --cli map materials ./maps/arena.map --package ./assets --engine idTech3 --json"), QStringLiteral("vibestudio --cli map materials ./room.wad --map-name MAP01 --package ./resources.wad --geometry --json")}},
 		{QStringLiteral("map"), QStringLiteral("find"), QStringLiteral("List the map objects a query matches, as the Levels Objects filter reads it: key=value, key:text, key!=value, key<n, key>n, and plain words, all of which must hold."), {QStringLiteral("vibestudio --cli map find ./maps/start.map --where \"class=light light>200\""), QStringLiteral("vibestudio --cli map find ./maps/doom.wad --map MAP01 --where tag=3 --json")}},
 		{QStringLiteral("entity"), QStringLiteral("definitions"), QStringLiteral("Load Radiant .def, Valve .fgd, and Quake III .ent catalogues and list the entity classes they declare."), {QStringLiteral("vibestudio --cli entity definitions ./defs --json")}},
@@ -645,6 +659,9 @@ QStringList commandTokens(const QStringList& args)
 			QStringLiteral("--no-seamless"),
 			QStringLiteral("--transparent"),
 			QStringLiteral("--tileable"),
+			// release and install register (cli/release.cpp)
+			QStringLiteral("--no-stock"), QStringLiteral("--include-sources"), QStringLiteral("--no-readme"), QStringLiteral("--no-notes"),
+			QStringLiteral("--no-archive"), QStringLiteral("--no-record"), QStringLiteral("--no-changelog"), QStringLiteral("--readme"),
 	};
 
 	static const QSet<QString> valueFlags = {
@@ -726,6 +743,7 @@ QStringList commandTokens(const QStringList& args)
 			QStringLiteral("--end-frame"),
 			QStringLiteral("--db"),
 			QStringLiteral("--settings-file"),
+			QStringLiteral("--renderer"),
 			QStringLiteral("--installation"),
 			QStringLiteral("--project-installation"),
 			QStringLiteral("--project-root"),
@@ -953,6 +971,9 @@ QStringList commandTokens(const QStringList& args)
 			QStringLiteral("--voice"), QStringLiteral("--rate"), QStringLiteral("--pitch"), QStringLiteral("--volume"),
 			// material
 			QStringLiteral("--base"), QStringLiteral("--limit"), QStringLiteral("--sky"), QStringLiteral("--fps"), QStringLiteral("--yaw"), QStringLiteral("--zoom"), QStringLiteral("--fov"), QStringLiteral("--tiling"), QStringLiteral("--context"), QStringLiteral("--lightmap"), QStringLiteral("--doom-light"), QStringLiteral("--doom-extralight"), QStringLiteral("--quake-renderer"), QStringLiteral("--quake-style"), QStringLiteral("--quake-lightmap"), QStringLiteral("--quake2-intensity"), QStringLiteral("--light-color"), QStringLiteral("--light-angle"), QStringLiteral("--doom3-shading"), QStringLiteral("--ambient"), QStringLiteral("--parms"), QStringLiteral("--sound"), QStringLiteral("--filter"), QStringLiteral("--background"), QStringLiteral("--text-kind"), QStringLiteral("--edits"), QStringLiteral("--script"), QStringLiteral("--template"), QStringLiteral("--output-dir"), QStringLiteral("--metadata"),
+			// release and install register (cli/release.cpp)
+			QStringLiteral("--scope"), QStringLiteral("--register"), QStringLiteral("--release-version"), QStringLiteral("--package-name"),
+			QStringLiteral("--notes-file"), QStringLiteral("--date"), QStringLiteral("--add"), QStringLiteral("--category"),
 	};
 
 	QStringList tokens;
@@ -1017,6 +1038,9 @@ void printHelp()
 	std::cout << "  --settings-file <path>\n";
 	std::cout << "                      Use an INI settings file instead of the user's own preference store.\n";
 	std::cout << "                      Resolved before any settings access, so scripts and CI never touch real preferences.\n";
+	std::cout << "  --renderer <automatic|opengl|vulkan>\n";
+	std::cout << "                      The 3D renderer for this run (material render, render backends, render test),\n";
+	std::cout << "                      ahead of VIBESTUDIO_RENDER_BACKEND and the saved preference.\n";
 	std::cout << "  --self-test         GUI mode only: build every work surface, repaint it, and exit. Used by CI.\n";
 	std::cout << "  --studio-report     Print planned studio modules.\n";
 	std::cout << "  --compiler-report   Print imported compiler integrations.\n";
@@ -1077,7 +1101,7 @@ void printHelp()
 	std::cout << "  build prepare <map> --package <assets-or-draft> --output <new-directory> [--target quake|quake2|quake3]\n";
 	std::cout << "                      Capture Quake III inputs; --name sets the map name, --max-bytes caps the snapshot (default 4 GiB).\n";
 	std::cout << "  build run-prepared <directory> [--pipeline quake3-full|quake3-bsp-only]\n";
-	std::cout << "                      Verify and build; --tool q3map2=<path>, --timeout-ms, --stage-args stage=arguments, --disable-stage.\n";
+	std::cout << "                      Verify and build; --tool vibemap3=<path> (or vibemap2-bsp/-vis/-light=<path>), --timeout-ms, --stage-args stage=arguments, --disable-stage.\n";
 	std::cout << "                      Both commands support --dry-run; existing prepared directories are never overwritten.\n";
 	std::cout << "  build artifacts <directory>\n";
 	std::cout << "                      Verify the last successful build's inputs, BSP, generated shaders and external lightmaps.\n";
@@ -1246,7 +1270,7 @@ void printHelp()
 	}
 	std::cout << "\nExamples:\n";
 	std::cout << "  PowerShell: vibestudio --cli package validate \"C:\\Games\\Quake\\id1\\pak0.pak\" --json\n";
-	std::cout << "  POSIX:      vibestudio --cli compiler plan ericw-qbsp --input './maps/start.map' --dry-run\n";
+	std::cout << "  POSIX:      vibestudio --cli compiler plan vibemap2-bsp --input './maps/start.map' --dry-run\n";
 }
 
 void printStudioReport()
@@ -2390,6 +2414,18 @@ QJsonObject diagnosticBundleJson()
 	object.insert(QStringLiteral("operationStates"), operationStatesJson());
 	object.insert(QStringLiteral("uiSemantics"), uiSemanticsJson());
 	object.insert(QStringLiteral("localization"), localizationSmokeReportJson(buildLocalizationSmokeReport(QStringLiteral("en"))));
+	// The 3D renderer the studio would use; starting the renderers to report
+	// their devices is `render backends`, so the bundle stays quick.
+	{
+		const StudioSettings settings(StudioSettings::AccessMode::ReadOnly);
+		const QString source = renderBackendChoiceSource();
+		QJsonObject rendering;
+		rendering.insert(QStringLiteral("preference"), settings.renderBackendPreference());
+		rendering.insert(QStringLiteral("choice"), source == QStringLiteral("preference") ? settings.renderBackendPreference() : renderBackendChoiceId(renderBackendChoice()));
+		rendering.insert(QStringLiteral("choiceSource"), source);
+		rendering.insert(QStringLiteral("devices"), QStringLiteral("vibestudio --cli render backends --json"));
+		object.insert(QStringLiteral("rendering"), rendering);
+	}
 	object.insert(QStringLiteral("redaction"), QStringLiteral("No secrets, API keys, environment values, home-directory contents, or project file payloads are included."));
 	return object;
 }
@@ -4058,9 +4094,15 @@ QString markdownSectionText(const QString& markdown, const QString& heading)
 	return markdown.mid(headingIndex, nextHeadingIndex - headingIndex);
 }
 
+// VibeStudio's own compilers are submodules with URLs relative to this repository's home
+// ("../q3mapx.git"), which git resolves against the superproject's remote. Credits
+// validation resolves them against the canonical home so they compare with absolute URLs.
 QString normalizedRepositoryUrl(QString url)
 {
 	url = url.trimmed();
+	if (url.startsWith(QStringLiteral("../")) || url.startsWith(QStringLiteral("./"))) {
+		url = QUrl(QStringLiteral("https://github.com/themuffinator/VibeStudio/")).resolved(QUrl(url)).toString();
+	}
 	while (url.endsWith(QLatin1Char('/'))) {
 		url.chop(1);
 	}
@@ -4120,6 +4162,8 @@ QVector<CreditTokenRequirement> requiredCreditTokens()
 {
 	return {
 		{QStringLiteral("pakfu"), QStringLiteral("PakFu")},
+		{QStringLiteral("vibemap2"), QStringLiteral("VibeMap2")},
+		{QStringLiteral("vibemap3"), QStringLiteral("VibeMap3")},
 		{QStringLiteral("ericw-tools"), QStringLiteral("ericw-tools")},
 		{QStringLiteral("netradiant-custom"), QStringLiteral("NetRadiant Custom")},
 		{QStringLiteral("zdbsp"), QStringLiteral("ZDBSP")},
@@ -5416,7 +5460,7 @@ int runProjectInitCommand(const QString& commandName, const QString& path, const
 		}
 		CompilerToolDescriptor descriptor;
 		if (!compilerToolDescriptorForId(projectCompilerToolId, &descriptor)) {
-			return printCliError(commandName, CliExitCode::Usage, QStringLiteral("Unknown compiler tool id: %1").arg(projectCompilerToolId), format);
+			return printCliError(commandName, CliExitCode::Usage, unknownCompilerToolIdText(projectCompilerToolId), format);
 		}
 		const QString executablePath = QFileInfo(projectCompilerExecutable).isAbsolute() ? QFileInfo(projectCompilerExecutable).absoluteFilePath() : projectCompilerExecutable;
 		bool replaced = false;
@@ -11217,7 +11261,7 @@ int runCompilerSetPathCommand(const QString& commandName, const QString& toolId,
 	}
 	CompilerToolDescriptor descriptor;
 	if (!compilerToolDescriptorForId(toolId, &descriptor)) {
-		return printCliError(commandName, CliExitCode::Usage, QStringLiteral("Unknown compiler tool id: %1").arg(toolId), format);
+		return printCliError(commandName, CliExitCode::Usage, unknownCompilerToolIdText(toolId), format);
 	}
 	const QString executablePath = optionValue(args, QStringLiteral("--executable"));
 	if (executablePath.trimmed().isEmpty()) {
@@ -12583,7 +12627,31 @@ int runMapDependenciesCommand(const QString& commandName, const QString& path, c
 	    !loadPackageForCliQuiet(packagePath, &archive, &error)) {
 		return printCliError(commandName, CliExitCode::Failure, error, format);
 	}
-	LevelDependencyReport report = inspectLevelDependencies(document, archive);
+	// --installation marks what the game provides, as the Dependencies dialog
+	// does with the selected installation's asset index.
+	LevelDependencyOptions options;
+	QStringList stockWarnings;
+	if (hasOption(args, QStringLiteral("--installation"))) {
+		const QString id = optionValue(args, QStringLiteral("--installation"));
+		const StudioSettings settings(StudioSettings::AccessMode::ReadOnly);
+		GameInstallationProfile installation;
+		bool found = false;
+		for (const GameInstallationProfile& candidate : settings.gameInstallations()) {
+			if (sameGameInstallationId(candidate.id, id)) {
+				installation = candidate;
+				found = true;
+				break;
+			}
+		}
+		if (!found) {
+			return printCliError(commandName, CliExitCode::NotFound, QStringLiteral("No saved installation has the id %1. List them with: vibestudio --cli install list").arg(id), format);
+		}
+		const ReleaseStockContext stock = prepareReleaseStock(&installation, ProjectReleaseSettings {}, normalizedGameKey(installation.gameKey));
+		options.stock = stock.stock;
+		stockWarnings = stock.warnings;
+	}
+	LevelDependencyReport report = inspectLevelDependencies(document, archive, {}, options);
+	report.warnings = stockWarnings + report.warnings;
 	// A planned archive may have no base path, or retain its original archive's
 	// path. The CLI report must identify the package or draft the user reviewed.
 	report.packagePath = QFileInfo(packagePath).absoluteFilePath();
@@ -13964,6 +14032,33 @@ int runSubcommand(const QStringList& args)
 		return printCliError(commandName, CliExitCode::Usage, QStringLiteral("Missing CLI subcommand. Run --cli --help."), format);
 	}
 
+	// Releases and the game asset register (cli/release.cpp).
+	const bool installFamily = family == QStringLiteral("install") || family == QStringLiteral("installation") || family == QStringLiteral("installations");
+	if (family == QStringLiteral("release") || family == QStringLiteral("releases") || (installFamily && action == QStringLiteral("register"))) {
+		const bool release = !installFamily;
+		const cli::ReleaseCliResult result = release ? cli::runReleaseCommand(args) : cli::runInstallRegisterCommand(args);
+		const QString name = release ? QStringLiteral("release %1").arg(action) : QStringLiteral("install register %1").arg(normalizedOptionId(tokens.value(2))).trimmed();
+		if (result.payload.isEmpty() && result.exitCode != 0) {
+			return printCliError(name, static_cast<CliExitCode>(result.exitCode), result.error, format);
+		}
+		if (format == CliOutputFormat::Json) {
+			QJsonObject output = cliResultJson(name, static_cast<CliExitCode>(result.exitCode));
+			for (auto it = result.payload.begin(); it != result.payload.end(); ++it) {
+				output.insert(it.key(), it.value());
+			}
+			if (!result.error.isEmpty()) {
+				output.insert(QStringLiteral("message"), result.error);
+			}
+			printJson(output);
+		} else {
+			std::cout << text(result.lines.join(QLatin1Char('\n'))) << '\n';
+			if (!result.error.isEmpty()) {
+				std::cerr << text(result.error) << '\n';
+			}
+		}
+		return result.exitCode;
+	}
+
 	if (family == QStringLiteral("project")) {
 		if (action == QStringLiteral("files")) { return runCodeFilesCommand(tokens.value(2), args, format, true); }
 		if (action == QStringLiteral("init") || action == QStringLiteral("create")) {
@@ -14592,6 +14687,22 @@ int runSubcommand(const QStringList& args)
 				: (hasOption(args, QStringLiteral("--package")) ? tokens.value(2) : tokens.value(3));
 			return runTextureDecodeCommand(QStringLiteral("texture decode"), packagePath, entryPath, args, format);
 		}
+	}
+
+	if (family == QStringLiteral("render") || family == QStringLiteral("renderer")) {
+		const QString renderCommand = QStringLiteral("render %1").arg(action);
+		const cli::RenderCliResult result = cli::runRenderCommand(action, args);
+		if (result.exitCode != 0 && (format != CliOutputFormat::Json || result.payload.isEmpty())) {
+			if (format == CliOutputFormat::Text && !result.lines.isEmpty()) { std::cout << text(result.lines.join(QLatin1Char('\n'))) << '\n'; }
+			return printCliError(renderCommand, static_cast<CliExitCode>(result.exitCode), result.error, format);
+		}
+		if (format == CliOutputFormat::Json) {
+			auto output = cliResultJson(renderCommand, static_cast<CliExitCode>(result.exitCode));
+			for (auto it = result.payload.begin(); it != result.payload.end(); ++it) { output.insert(it.key(), it.value()); }
+			if (!result.error.isEmpty()) { output.insert(QStringLiteral("message"), result.error); }
+			printJson(output);
+		} else if (!result.lines.isEmpty()) { std::cout << text(result.lines.join(QLatin1Char('\n'))) << '\n'; }
+		return result.exitCode;
 	}
 
 	if (family == QStringLiteral("material") || family == QStringLiteral("materials")) {
@@ -15499,6 +15610,17 @@ int runImpl(const QStringList& args)
 
 	std::cerr << "Unknown VibeStudio CLI option. Run --cli --help.\n";
 	return 2;
+}
+
+bool commandUsesRenderer(const QStringList& args)
+{
+	const QStringList tokens = commandTokens(args);
+	const QString family = normalizedOptionId(tokens.value(0));
+	const QString action = normalizedOptionId(tokens.value(1));
+	if (family == QStringLiteral("render") || family == QStringLiteral("renderer")) {
+		return action != QStringLiteral("set");
+	}
+	return (family == QStringLiteral("material") || family == QStringLiteral("materials")) && action == QStringLiteral("render");
 }
 
 int run(const QStringList& args)

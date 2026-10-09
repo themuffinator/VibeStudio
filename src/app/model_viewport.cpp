@@ -1,7 +1,10 @@
 #include "app/model_viewport.h"
 #include <QAccessible>
+#include "app/model_viewport_p.h"
 #include "app/viewport_hud.h"
+#include "app/viewport_image.h"
 #include "core/model_collision.h"
+#include "core/render_device.h"
 
 #include <QBrush>
 #include <QCoreApplication>
@@ -21,6 +24,7 @@
 #include <QScopedValueRollback>
 #include <QTimer>
 #include <QThread>
+#include <QVarLengthArray>
 #include <QWheelEvent>
 
 #include <algorithm>
@@ -42,10 +46,6 @@ constexpr double kFitFraction = 0.44;
 constexpr double kOrbitDegreesPerPixel = 0.4;
 constexpr double kKeyOrbitDegrees = 5.0;
 constexpr double kPanLimitFactor = 4.0;
-// Shading is quantised so the fill brushes can live in a small preallocated
-// table; 24 steps is far below what the eye separates on a flat-shaded face,
-// and it keeps the paint loop free of allocations.
-constexpr int kShadeSteps = 24;
 constexpr double kMinGridPixels = 10.0;
 constexpr double kMaxGridPixels = 160.0;
 constexpr int kMaxGridLines = 81;
@@ -141,54 +141,23 @@ double gridSpacingForScale(double scale, double radius)
 	return spacing;
 }
 
-QColor surfaceBaseColor(int surfaceIndex, bool highContrast)
+// The triangle a presented frame drew under a widget point, or -1.
+int triangleIdAt(const ModelRenderFrame& frame, const QPointF& point)
 {
-	if (highContrast) {
-		// Maximally separated hues at full value; surfaces also carry their name
-		// in the hover readout, so colour is never the only distinction.
-		static const QColor kColors[] = {
-			QColor(255, 255, 255),
-			QColor(255, 255, 0),
-			QColor(0, 255, 255),
-			QColor(255, 0, 255),
-			QColor(0, 255, 0),
-			QColor(255, 160, 0),
-		};
-		const int count = static_cast<int>(sizeof(kColors) / sizeof(kColors[0]));
-		return kColors[((surfaceIndex % count) + count) % count];
+	if (frame.image.isNull() || !std::isfinite(point.x()) || !std::isfinite(point.y()) || point.x() < 0 || point.y() < 0) {
+		return -1;
 	}
-	const int hue = ((surfaceIndex * 47 + 205) % 360 + 360) % 360;
-	return QColor::fromHsv(hue, 92, 214);
-}
-
-QColor scaledColor(const QColor& base, double factor)
-{
-	const double clamped = std::clamp(factor, 0.0, 1.0);
-	return QColor(static_cast<int>(std::lround(base.red() * clamped)),
-		static_cast<int>(std::lround(base.green() * clamped)),
-		static_cast<int>(std::lround(base.blue() * clamped)));
+	const int width = frame.image.width();
+	const int height = frame.image.height();
+	const int x = int(std::floor(point.x() * frame.pixelRatio));
+	const int y = int(std::floor(point.y() * frame.pixelRatio));
+	if (x < 0 || y < 0 || x >= width || y >= height || frame.source.size() != qsizetype(width) * height) {
+		return -1;
+	}
+	return frame.source.at(qsizetype(y) * width + x);
 }
 
 } // namespace
-
-// Colour set for one paint pass. Every distinction the viewport draws is also
-// carried by line weight, marker shape or text so nothing depends on colour
-// alone.
-struct ModelViewport::Palette {
-	QColor background;
-	QColor grid;
-	QColor gridMajor;
-	QColor axisX;
-	QColor axisY;
-	QColor axisZ;
-	QColor wire;
-	QColor edge;
-	QColor hover;
-	QColor text;
-	QColor subtleText;
-	QColor focus;
-	QColor highlight;
-};
 
 ModelViewport::ModelViewport(QWidget* parent)
 	: QWidget(parent)
@@ -211,102 +180,24 @@ ModelViewport::ModelViewport(QWidget* parent)
 	m_flyTimer->setInterval(kFlyIntervalMsecs);
 	connect(m_flyTimer, &QTimer::timeout, this, &ModelViewport::flyStep);
 
-	rebuildFillBrushes();
+	// Frames render on the GPU; OpenGL needs its surface made on this thread.
+	prepareRenderBackends();
+	m_renderOwner = newRenderCacheOwner();
 }
-
-struct ModelViewport::RasterWork {
-	std::atomic_bool cancelled {false};
-	// Value snapshots only. Workers never read the widget or GUI-owned state.
-	ModelMesh mesh;
-	QVector<MeshTriangle> meshTriangles;
-	QVector<ProjectedTriangle> projected;
-	QVector<int> order;
-	QVector<QBrush> fillBrushes;
-	Camera camera;
-	ModelVec3 center, eye, moveOffset;
-	bool perspective = false, backfaceCulling = true, textured = false, wireframe = false, highContrast = false;
-	bool moving = false, editMoveActive = false, editTagEmpty = true;
-	bool resizingSelection = false;
-	ResizeBox resizeFrom, resizeTo;
-	QHash<int,BoxResizePoint> resizeOrigins;
-	int frame = 0, blendFrame = 0, editSurface = -1, edgeSelectionSurface = -1, hover = -1;
-	double frameBlend = 0;
-	ModelTransform editTransform;
-	QSet<int> editVertices, editSurfaces, surfaceStrokeTriangles;
-	QVector<bool> highlighted;
-	QSet<QPair<int, int>> selectedEdges;
-	QImage skin;
-	bool skinHasAlpha = false;
-	QHash<int, QImage> surfaceSkins;
-	QSet<int> surfaceSkinAlpha;
-	Palette palette;
-	int visibleTriangles = 0, culledTriangles = 0;
-	ModelRasterPickIndex pickIndex;
-	bool projectionReady = false;
-	QVector<TagOverlay> tags;
-	QVector<CollisionOverlay> collision;
-	QSize logicalSize;
-	QVector<ModelRasterTriangle> triangles;
-	ModelRasterStyle style;
-	QSize size;
-	ModelRasterFrame result;
-	QImage vertexOverlay;
-	std::shared_ptr<const ModelVertexProjection> vertices;
-	QColor vertexAccent;
-	bool vertexPicking = false, xrayVertices = false, reuseBase = false;
-	quint64 revision = 0;
-	quint64 baseRevision = 0;
-	quint64 contentRevision = 0;
-	quint64 projectionRevision = 0;
-	bool success = false;
-
-	ModelVec3 vertexPosition(int surface, int vertex) const
-	{
-		const auto& part = mesh.surfaces[surface];
-		const auto& pose = part.frames[std::min(frame, int(part.frames.size()) - 1)];
-		auto point = pose.positions[vertex];
-		if (frameBlend > 0 && blendFrame < part.frames.size() && part.frames[blendFrame].positions.size() == pose.positions.size()) {
-			point = interpolateModelPosition(point, part.frames[blendFrame].positions[vertex], frameBlend);
-		}
-		return editMoveActive && (editSurfaces.contains(surface) || (surface == editSurface && editVertices.contains(vertex))) ? transformModelPoint(point, editTransform) : point;
-	}
-	void toView(const ModelVec3& point, double* x, double* y, double* z) const
-	{
-		const auto relative = makeVec(double(point.x) - camera.position.x, double(point.y) - camera.position.y, double(point.z) - camera.position.z);
-		*x = dotVec(relative, camera.right); *y = dotVec(relative, camera.up); *z = dotVec(relative, camera.forward);
-	}
-	QPointF fromView(double x, double y, double z) const
-	{
-		const double depth = std::max(z, kNearPlane);
-		return {camera.origin.x() + camera.focal * x / depth, camera.origin.y() - camera.focal * y / depth};
-	}
-	QPointF projectPoint(const ModelVec3& point, double* depthOut) const
-	{
-		const auto relative = makeVec(double(point.x) - center.x, double(point.y) - center.y, double(point.z) - center.z);
-		if (depthOut) { *depthOut = dotVec(relative, camera.eye); }
-		return {camera.origin.x() + dotVec(relative, camera.right) * camera.scale, camera.origin.y() - dotVec(relative, camera.up) * camera.scale};
-	}
-	bool projectSegment(const ModelVec3& a, const ModelVec3& b, QPointF* screenA, QPointF* screenB) const
-	{
-		if (!perspective) { *screenA = projectPoint(a, nullptr); *screenB = projectPoint(b, nullptr); return true; }
-		double ax, ay, az, bx, by, bz;
-		toView(a, &ax, &ay, &az); toView(b, &bx, &by, &bz);
-		if (az < kNearPlane && bz < kNearPlane) { return false; }
-		if (az < kNearPlane) {
-			const double t = (kNearPlane - az) / (bz - az);
-			ax += t * (bx - ax); ay += t * (by - ay); az = kNearPlane;
-		} else if (bz < kNearPlane) {
-			const double t = (kNearPlane - bz) / (az - bz);
-			bx += t * (ax - bx); by += t * (ay - by); bz = kNearPlane;
-		}
-		*screenA = fromView(ax, ay, az); *screenB = fromView(bx, by, bz); return true;
-	}
-};
 
 ModelViewport::~ModelViewport()
 {
 	if (m_rasterWork) { m_rasterWork->cancelled.store(true); }
 	if (m_rasterThread) { m_rasterThread->wait(); }
+	releaseRenderCacheOwner(m_renderOwner);
+}
+
+void ModelViewport::resetRendering()
+{
+	m_rasterError.clear();
+	invalidateRaster(true);
+	setAccessibleDescription(accessibleSummary());
+	update();
 }
 
 bool ModelViewport::isRendering() const
@@ -356,6 +247,7 @@ void ModelViewport::setMesh(const ModelMesh& mesh, bool keepView)
 	invalidateRaster(true);
 	const bool keepCamera = keepView && m_hasMesh;
 	m_mesh = mesh;
+	++m_meshRevision;
 	m_nativeMdl = false;
 	m_mdlPlaybackSkins.clear();
 	m_mdlSample = {};
@@ -405,7 +297,6 @@ void ModelViewport::setMesh(const ModelMesh& mesh, bool keepView)
 	}
 
 	rebuildMeshTriangles();
-	rebuildFillBrushes();
 	updatePlaybackTimer();
 	if (keepCamera) {
 		invalidateProjection();
@@ -505,14 +396,13 @@ void ModelViewport::clearMesh()
 	m_selectedEdges.clear(); m_edgeSelectionSurface = -1;
 	invalidateRaster(true);
 	m_mesh = ModelMesh();
+	++m_meshRevision;
 	m_nativeMdl = false;
 	m_mdlPlaybackSkins.clear();
 	m_mdlSample = {};
 	m_raster.clear();
 	m_hasMesh = false;
 	m_meshTriangles.clear();
-	m_projected.clear();
-	m_order.clear();
 	m_frame = 0;
 	m_blendFrame = 0;
 	m_frameBlend = 0;
@@ -534,7 +424,6 @@ void ModelViewport::clearMesh()
 	unsetCursor();
 	updatePlaybackTimer();
 	invalidateProjection();
-	rebuildFillBrushes();
 	setAccessibleDescription(accessibleSummary());
 	update();
 	Q_EMIT playbackChanged(m_playing);
@@ -560,7 +449,7 @@ void ModelViewport::setSkin(const QImage& skin)
 	}
 	// Cache premultiplied pixels and alpha classification once per skin.
 	m_skin = skin.convertToFormat(QImage::Format_ARGB32_Premultiplied);
-	m_skinHasAlpha = modelTextureHasAlpha(m_skin);
+	m_skinHasAlpha = modelSkinHasAlpha(m_skin);
 	m_surfaceSkins.clear();
 	m_surfaceSkinAlpha.clear();
 	invalidateProjection();
@@ -675,7 +564,6 @@ void ModelViewport::setHighContrast(bool enabled)
 	}
 	m_highContrast = enabled;
 	invalidateRaster();
-	rebuildFillBrushes();
 	update();
 }
 
@@ -944,7 +832,8 @@ QStringList ModelViewport::statusLines() const
 	}
 	lines << (m_backfaceCulling ? tr("Backfaces: culled") : tr("Backfaces: drawn (single-sided model)"));
 	if (isRendering()) { lines << tr("Rendering model…"); }
-	if (m_rasterFailed) { lines << tr("Unable to allocate the model preview. Reduce the viewport size."); }
+	if (!m_renderDeviceSummary.isEmpty()) { lines << tr("Renderer: %1").arg(m_renderDeviceSummary); }
+	if (m_rasterFailed) { lines << renderFailureText(); }
 	return lines;
 }
 
@@ -1003,7 +892,7 @@ QString ModelViewport::accessibleSummary() const
 	if (m_brushDrawTool) { summary += QStringLiteral(" ") + brushDrawSummary(); }
 	if (isRendering()) { summary += QStringLiteral(" ") + tr("Rendering model…"); }
 	if (m_pointerDriving) { summary += QStringLiteral(" ") + tr("Position steering; release or Escape stops movement."); }
-	if (m_rasterFailed) { summary += QStringLiteral(" ") + tr("Unable to allocate the model preview. Reduce the viewport size."); }
+	if (m_rasterFailed) { summary += QStringLiteral(" ") + renderFailureText(); }
 	return m_controlsHelp.isEmpty() ? summary : summary + QStringLiteral(" ") + m_controlsHelp;
 }
 
@@ -1061,8 +950,6 @@ void ModelViewport::rebuildMeshTriangles()
 	// Flattening happens here and only here: paintEvent must never rebuild the
 	// triangle list, and the list does not depend on the frame or the camera.
 	m_meshTriangles.clear();
-	m_projected.clear();
-	m_order.clear();
 	m_visibleTriangles = 0;
 	m_culledTriangles = 0;
 	if (!m_hasMesh) {
@@ -1110,23 +997,9 @@ void ModelViewport::setSurfaceSkins(const QHash<int, QImage>& skins)
 		if (it.key() < 0 || it.key() >= m_mesh.surfaces.size() || it.value().isNull()) { continue; }
 		const auto converted = it.value().convertToFormat(QImage::Format_ARGB32_Premultiplied);
 		m_surfaceSkins.insert(it.key(), converted);
-		if (modelTextureHasAlpha(converted)) { m_surfaceSkinAlpha.insert(it.key()); }
+		if (modelSkinHasAlpha(converted)) { m_surfaceSkinAlpha.insert(it.key()); }
 	}
 	invalidateProjection(); setAccessibleDescription(accessibleSummary()); update();
-}
-
-void ModelViewport::rebuildFillBrushes()
-{
-	const int surfaceCount = std::max(1, static_cast<int>(m_mesh.surfaces.size()));
-	m_fillBrushes.resize(surfaceCount * kShadeSteps);
-	for (int surfaceIndex = 0; surfaceIndex < surfaceCount; ++surfaceIndex) {
-		const QColor base = surfaceBaseColor(surfaceIndex, m_highContrast);
-		for (int step = 0; step < kShadeSteps; ++step) {
-			const double t = static_cast<double>(step) / static_cast<double>(kShadeSteps - 1);
-			m_fillBrushes[surfaceIndex * kShadeSteps + step] = QBrush(scaledColor(base, 0.22 + 0.78 * t));
-		}
-	}
-
 }
 
 void ModelViewport::invalidateProjection()
@@ -1227,197 +1100,6 @@ void ModelViewport::ensureProjection()
 	update();
 }
 
-void ModelViewport::projectRaster(RasterWork& work)
-{
-	const auto& scene = work;
-	work.visibleTriangles = 0;
-	work.culledTriangles = 0;
-	work.order.clear();
-	if (work.projected.size() != scene.meshTriangles.size()) {
-		work.projected.resize(scene.meshTriangles.size());
-	}
-	if (scene.meshTriangles.isEmpty()) {
-		return;
-	}
-
-	const bool textured = scene.textured;
-	const int surfaceCount = std::max(1, static_cast<int>(scene.mesh.surfaces.size()));
-	int currentSurface = -1;
-	const ModelFrameGeometry* geometry = nullptr;
-
-	for (int index = 0; index < scene.meshTriangles.size(); ++index) {
-		if (work.cancelled.load()) { return; }
-		const MeshTriangle& source = scene.meshTriangles.at(index);
-		ProjectedTriangle& target = work.projected[index];
-		target.visible = false;
-		target.textureValid = false;
-		target.source = index;
-		if (source.surface != currentSurface) {
-			currentSurface = source.surface;
-			geometry = nullptr;
-			if (currentSurface >= 0 && currentSurface < scene.mesh.surfaces.size()) {
-				const ModelSurface& surface = scene.mesh.surfaces.at(currentSurface);
-				const int frameIndex = std::min(scene.frame, static_cast<int>(surface.frames.size()) - 1);
-				if (frameIndex >= 0) {
-					geometry = &surface.frames.at(frameIndex);
-				}
-			}
-		}
-		if (geometry == nullptr) {
-			continue;
-		}
-		const QVector<ModelVec3>& positions = geometry->positions;
-		if (source.a >= positions.size() || source.b >= positions.size() || source.c >= positions.size()) {
-			continue;
-		}
-		ModelVec3 p0 = positions.at(source.a);
-		ModelVec3 p1 = positions.at(source.b);
-		ModelVec3 p2 = positions.at(source.c);
-		if (scene.frameBlend > 0 || (scene.editMoveActive && (source.surface == scene.editSurface || scene.editSurfaces.contains(source.surface)))) {
-			p0 = scene.vertexPosition(source.surface, source.a);
-			p1 = scene.vertexPosition(source.surface, source.b);
-			p2 = scene.vertexPosition(source.surface, source.c);
-		}
-		if (!vecIsFinite(p0) || !vecIsFinite(p1) || !vecIsFinite(p2)) {
-			continue;
-		}
-		if (scene.moving && index < scene.highlighted.size() && scene.highlighted.at(index)) {
-			for (ModelVec3* corner : {&p0, &p1, &p2}) {
-				corner->x += scene.moveOffset.x;
-				corner->y += scene.moveOffset.y;
-				corner->z += scene.moveOffset.z;
-			}
-		}
-		if (scene.resizingSelection && index < scene.highlighted.size() && scene.highlighted.at(index)) {
-			const auto origin = scene.resizeOrigins.constFind(index);
-			BoxResizePoint translation{};
-			if (origin != scene.resizeOrigins.constEnd()) {
-				const auto moved = resizeBoxPoint(scene.resizeFrom,scene.resizeTo,*origin);
-				for (int axis = 0; axis < 3; ++axis) { translation[axis] = moved[axis]-(*origin)[axis]; }
-			}
-			for (auto* point : {&p0,&p1,&p2}) {
-				BoxResizePoint target{point->x,point->y,point->z};
-				if (origin == scene.resizeOrigins.constEnd()) { target = resizeBoxPoint(scene.resizeFrom,scene.resizeTo,target); }
-				else { for (int axis = 0; axis < 3; ++axis) { target[axis] += translation[axis]; } }
-				*point = makeVec(target[0],target[1],target[2]);
-			}
-		}
-
-		ModelVec3 normal = crossVec(makeVec(static_cast<double>(p1.x) - p0.x, static_cast<double>(p1.y) - p0.y,
-						 static_cast<double>(p1.z) - p0.z),
-			makeVec(static_cast<double>(p2.x) - p0.x, static_cast<double>(p2.y) - p0.y,
-				static_cast<double>(p2.z) - p0.z));
-		const double normalLength = lengthVec(normal);
-		if (!std::isfinite(normalLength) || normalLength <= 1e-12) {
-			// A zero-area triangle has no facing and no shade; skipping it also
-			// keeps degenerate data out of the rasterizer.
-			continue;
-		}
-		normal = makeVec(normal.x / normalLength, normal.y / normalLength, normal.z / normalLength);
-		// MDL, MD2 and MD3 all wind their triangles counter-clockwise when seen
-		// from outside, but decoded files in the wild are not always consistent.
-		// When the format carries vertex normals, they settle the argument.
-		const bool transforming = scene.editMoveActive && scene.editTagEmpty && (source.surface == scene.editSurface || scene.editSurfaces.contains(source.surface));
-		if (geometry->normals.size() == positions.size() && (!transforming || scene.editSurfaces.contains(source.surface) || scene.editVertices.size() == positions.size())) {
-			const auto normalAt = [&](int vertex) {
-				auto normal = geometry->normals.at(vertex);
-				const auto& frames = scene.mesh.surfaces[currentSurface].frames;
-				if (scene.frameBlend > 0 && scene.blendFrame < frames.size()
-					&& frames[scene.blendFrame].positions.size() == positions.size()
-					&& frames[scene.blendFrame].normals.size() == positions.size()) {
-					// Opposing or invalid normals have no unique direction. Let the
-					// geometric face normal determine facing for that transient pose.
-					if (!interpolateModelNormal(normal, frames[scene.blendFrame].normals[vertex], scene.frameBlend, &normal)) { normal = {}; }
-				}
-				return transforming ? transformModelNormal(normal, scene.editTransform) : normal;
-			};
-			const auto na = normalAt(source.a), nb = normalAt(source.b), nc = normalAt(source.c);
-			const ModelVec3 average = makeVec(static_cast<double>(na.x) + nb.x + nc.x,
-				static_cast<double>(na.y) + nb.y + nc.y, static_cast<double>(na.z) + nb.z + nc.z);
-			if (lengthVec(average) > 1e-6 && dotVec(normal, average) < 0.0) {
-				normal = makeVec(-normal.x, -normal.y, -normal.z);
-			}
-		}
-
-		// In perspective a face turns toward the camera when the camera
-		// stands on the side its normal points to.
-		const double facing = scene.perspective
-			? dotVec(normal, makeVec(static_cast<double>(scene.eye.x) - p0.x, static_cast<double>(scene.eye.y) - p0.y, static_cast<double>(scene.eye.z) - p0.z))
-			: dotVec(normal, scene.camera.eye);
-		target.frontFacing = facing > 0.0;
-		if (scene.backfaceCulling && !target.frontFacing) {
-			++work.culledTriangles;
-			continue;
-		}
-
-
-		const auto& coords = scene.mesh.surfaces.at(source.surface).texCoords;
-		target.textureValid = textured && source.a < coords.size() && source.b < coords.size() && source.c < coords.size();
-		QPointF uv[3];
-		if (target.textureValid) {
-			const int indices[] = {source.a, source.b, source.c};
-			for (int corner = 0; corner < 3; ++corner) {
-				const auto& value = coords.at(indices[corner]);
-				if (!std::isfinite(value.u) || !std::isfinite(value.v)) { target.textureValid = false; break; }
-				uv[corner] = QPointF(value.u, value.v);
-			}
-		}
-		if (!target.textureValid) { uv[0] = uv[1] = uv[2] = QPointF(); }
-		target.cornerCount = 0;
-		const ModelVec3* corners[] = {&p0, &p1, &p2};
-		if (scene.perspective) {
-			double x[3], y[3], z[3];
-			for (int corner = 0; corner < 3; ++corner) { scene.toView(*corners[corner], &x[corner], &y[corner], &z[corner]); }
-			const auto append = [&](double px, double py, double pz, const QPointF& texcoord, int edgeMask) {
-				const auto screen = scene.fromView(px, py, pz);
-				target.corners[target.cornerCount] = {screen, 1.0 / pz, 1.0 / pz, texcoord};
-				target.cornerEdges[target.cornerCount] = edgeMask;
-				target.screen[target.cornerCount++] = screen;
-			};
-			for (int corner = 0; corner < 3; ++corner) {
-				const int next = (corner + 1) % 3;
-				const bool here = z[corner] >= kNearPlane, there = z[next] >= kNearPlane;
-				if (here) { append(x[corner], y[corner], z[corner], uv[corner], 7 ^ (1 << corner)); }
-				if (here != there) {
-					const double t = (kNearPlane - z[corner]) / (z[next] - z[corner]);
-					append(x[corner] + t * (x[next]-x[corner]), y[corner] + t * (y[next]-y[corner]),
-						kNearPlane, uv[corner] + t * (uv[next]-uv[corner]), (7 ^ (1 << corner)) & (7 ^ (1 << next)));
-				}
-			}
-		} else {
-			for (int corner = 0; corner < 3; ++corner) {
-				double depth = 0;
-				const auto screen = scene.projectPoint(*corners[corner], &depth);
-				target.corners[corner] = {screen, depth, 1.0, uv[corner]};
-				target.cornerEdges[corner] = 7 ^ (1 << corner);
-				target.screen[target.cornerCount++] = screen;
-			}
-		}
-		if (target.cornerCount < 3 || std::any_of(target.screen.cbegin(), target.screen.cbegin() + target.cornerCount, [](const QPointF& point) {
-			return !std::isfinite(point.x()) || !std::isfinite(point.y());
-		})) { continue; }
-
-		// Two-sided sheets are lit by the absolute value so the back of a flag
-		// is not a black hole.
-		double lambert = dotVec(normal, scene.camera.light);
-		if (!target.frontFacing) {
-			lambert = -lambert;
-		}
-		const double shade = std::clamp(lambert, 0.0, 1.0);
-		const int step = std::clamp(static_cast<int>(std::lround(shade * (kShadeSteps - 1))), 0, kShadeSteps - 1);
-		const int surfaceSlot = std::clamp(source.surface, 0, surfaceCount - 1);
-		target.brushIndex = std::clamp(surfaceSlot * kShadeSteps + step, 0,
-			std::max(static_cast<int>(scene.fillBrushes.size()) - 1, 0));
-		target.shadowIndex = step;
-
-		target.visible = true;
-		work.order.append(index);
-		++work.visibleTriangles;
-	}
-
-
-}
-
 ModelViewportHit ModelViewport::hitAt(const QPointF& point)
 {
 	ensureProjection();
@@ -1450,46 +1132,6 @@ ModelViewportEdgeHit ModelViewport::edgeAt(const QPointF& point, double toleranc
 	return result;
 }
 
-QVector<ModelRasterTriangle> ModelViewport::rasterTriangles(const RasterWork& work)
-{
-	QVector<ModelRasterTriangle> result;
-	result.reserve(work.order.size());
-	for (int index : work.order) {
-		if (work.cancelled.load()) { return {}; }
-		const auto& projected = work.projected.at(index);
-		if (!projected.visible) { continue; }
-		ModelRasterTriangle triangle;
-		triangle.source = index;
-		triangle.highlighted = (index < work.highlighted.size() && work.highlighted.at(index)) || work.surfaceStrokeTriangles.contains(index);
-		triangle.hovered = work.hover == index;
-		triangle.color = work.fillBrushes.at(projected.brushIndex).color().rgba();
-		triangle.light = 1.0 - (1.0 - double(projected.shadowIndex) / (kShadeSteps - 1)) * 135.0 / 255.0;
-		if (projected.textureValid) {
-			const int surface = work.meshTriangles.at(index).surface;
-			const auto found = work.surfaceSkins.constFind(surface);
-			triangle.texture = found == work.surfaceSkins.cend() ? &work.skin : &found.value();
-			triangle.textureHasAlpha = found == work.surfaceSkins.cend() ? work.skinHasAlpha : work.surfaceSkinAlpha.contains(surface);
-			if (triangle.texture->isNull()) { triangle.texture = nullptr; }
-		}
-		int selectedMask = 0;
-		const auto source = work.meshTriangles[index];
-		if (source.surface == work.edgeSelectionSurface) {
-			const QPair<int, int> edges[] = {{source.b, source.c}, {source.c, source.a}, {source.a, source.b}};
-			for (int e = 0; e < 3; ++e) {
-				if (work.selectedEdges.contains(qMakePair(std::min(edges[e].first, edges[e].second), std::max(edges[e].first, edges[e].second)))) { selectedMask |= 1 << e; }
-			}
-		}
-		for (int corner = 1; corner + 1 < projected.cornerCount; ++corner) {
-			triangle.vertices = {projected.corners[0], projected.corners[corner], projected.corners[corner + 1]};
-			triangle.edges = {true, corner + 1 == projected.cornerCount - 1, corner == 1};
-			const int origin[] = {projected.cornerEdges[0], projected.cornerEdges[corner], projected.cornerEdges[corner + 1]};
-			for (int e = 0; e < 3; ++e) { triangle.selectedEdges[e] = (origin[(e + 1) % 3] & origin[(e + 2) % 3] & selectedMask) != 0; }
-			result.append(triangle);
-		}
-	}
-	return result;
-}
-
 ModelViewportHit ModelViewport::hitTest(const QPointF& viewPoint) const
 {
 	ModelViewportHit hit;
@@ -1497,7 +1139,7 @@ ModelViewportHit ModelViewport::hitTest(const QPointF& viewPoint) const
 		|| viewPoint.x() >= width() || viewPoint.y() >= height()) { return hit; }
 	// Never select stale geometry during a camera, pose or material change.
 	if (m_projectionDirty || !m_presentedRaster || m_presentedRaster->projectionRevision != m_projectionRevision) { return hit; }
-	const int index = pickModelRaster(viewPoint, m_presentedRaster->triangles, m_presentedRaster->pickIndex);
+	const int index = presentedTriangleAt(viewPoint);
 	if (index >= 0 && index < m_meshTriangles.size()) {
 		hit.valid = true;
 		hit.triangle = index;
@@ -1507,14 +1149,98 @@ ModelViewportHit ModelViewport::hitTest(const QPointF& viewPoint) const
 	return hit;
 }
 
+// The ID target holds the triangle drawn at each pixel's centre. A point
+// between centres, such as one exactly on a silhouette edge, belongs to the
+// triangles that contain it, as it did when picking was done on the CPU:
+// when the centre's triangle does not contain the point, the triangles drawn
+// in the surrounding pixels are tested exactly, and the nearest along the
+// view ray wins.
+int ModelViewport::presentedTriangleAt(const QPointF& viewPoint) const
+{
+	const ModelRenderFrame& frame = m_presentedRaster->result;
+	const int centre = triangleIdAt(frame, viewPoint);
+	const auto contains = [&](int triangle) {
+		const QPolygonF outline = triangleOutline(triangle);
+		if (outline.size() < 3) {
+			return false;
+		}
+		// Convex, either winding: inside, or on an edge within a millionth
+		// of a pixel.
+		int sign = 0;
+		for (qsizetype corner = 0; corner < outline.size(); ++corner) {
+			const QPointF a = outline.at(corner);
+			const QPointF edge = outline.at((corner + 1) % outline.size()) - a;
+			const double length = std::hypot(edge.x(), edge.y());
+			if (!(length > 1e-12)) {
+				continue;
+			}
+			const double side = (edge.x() * (viewPoint.y() - a.y()) - edge.y() * (viewPoint.x() - a.x())) / length;
+			if (std::abs(side) <= 1e-6) {
+				continue;
+			}
+			const int current = side > 0.0 ? 1 : -1;
+			if (sign != 0 && current != sign) {
+				return false;
+			}
+			sign = current;
+		}
+		return true;
+	};
+	if (centre >= 0 && centre < m_meshTriangles.size() && contains(centre)) {
+		return centre;
+	}
+	const int width = frame.image.width();
+	const int height = frame.image.height();
+	if (frame.source.size() != qsizetype(width) * height) {
+		return centre;
+	}
+	const int x = int(std::floor(viewPoint.x() * frame.pixelRatio));
+	const int y = int(std::floor(viewPoint.y() * frame.pixelRatio));
+	const ModelPickRay ray = editRay(viewPoint);
+	int best = -1;
+	double nearest = std::numeric_limits<double>::infinity();
+	QVarLengthArray<int, 9> tested;
+	for (int dy = -1; dy <= 1; ++dy) {
+		for (int dx = -1; dx <= 1; ++dx) {
+			if (x + dx < 0 || y + dy < 0 || x + dx >= width || y + dy >= height) {
+				continue;
+			}
+			const int candidate = frame.source.at(qsizetype(y + dy) * width + x + dx);
+			if (candidate < 0 || candidate >= m_meshTriangles.size() || tested.contains(candidate)) {
+				continue;
+			}
+			tested.append(candidate);
+			if (!contains(candidate)) {
+				continue;
+			}
+			const MeshTriangle& source = m_meshTriangles.at(candidate);
+			const ModelVec3 a = editVertexPosition(source.surface, source.a);
+			const ModelVec3 b = editVertexPosition(source.surface, source.b);
+			const ModelVec3 c = editVertexPosition(source.surface, source.c);
+			const ModelVec3 normal = crossVec(makeVec(double(b.x) - a.x, double(b.y) - a.y, double(b.z) - a.z),
+				makeVec(double(c.x) - a.x, double(c.y) - a.y, double(c.z) - a.z));
+			const double along = dotVec(normal, ray.direction);
+			if (!(std::abs(along) > 1e-12)) {
+				continue;
+			}
+			const double distance = dotVec(normal, makeVec(double(a.x) - ray.origin.x, double(a.y) - ray.origin.y, double(a.z) - ray.origin.z)) / along;
+			if (distance < nearest) {
+				nearest = distance;
+				best = candidate;
+			}
+		}
+	}
+	return best >= 0 ? best : centre;
+}
+
 int ModelViewport::materialStrokeTriangleAt(const QPointF& point) const
 {
 	if (!m_materialStrokeRaster || !std::isfinite(point.x()) || !std::isfinite(point.y())
 		|| point.x() < 0 || point.y() < 0 || point.x() >= width() || point.y() >= height()) { return -1; }
 	// Material regrouping changes flattened triangle IDs. Picking stays bound
-	// to the mouse-down geometry until this transaction ends; previews use their
+	// to the mouse-down frame until this transaction ends; previews use their
 	// own triangle ordering. No camera or geometry edit can run during a stroke.
-	return pickModelRaster(point, m_materialStrokeRaster->triangles, m_materialStrokeRaster->pickIndex);
+	return triangleIdAt(m_materialStrokeRaster->result, point);
 }
 
 void ModelViewport::clearMaterialStrokePreview()
@@ -1680,84 +1406,6 @@ void ModelViewport::paintAxes(QPainter& painter, const Palette& palette) const
 	}
 }
 
-void ModelViewport::renderRaster(RasterWork& work)
-{
-	if (!work.projectionReady) { projectRaster(work); }
-	if (work.cancelled.load()) { return; }
-	work.triangles = rasterTriangles(work);
-	if (!work.projectionReady && !buildModelRasterPickIndex(work.logicalSize, work.triangles, &work.pickIndex, &work.cancelled)) { return; }
-	if (work.reuseBase) { work.success = true; return; }
-	if (work.wireframe) {
-		QVector<ModelWireSegment> segments;
-		segments.reserve(work.order.size() * 2);
-		QSet<quint64> baseEdges, highlightedEdges;
-		int surface = -1;
-		for (int index : std::as_const(work.order)) {
-			if (work.cancelled.load()) { return; }
-			const auto& source = std::as_const(work.meshTriangles).at(index);
-			if (source.surface != surface) {
-				surface = source.surface;
-				baseEdges.clear(); highlightedEdges.clear();
-			}
-			const bool highlighted = (index < work.highlighted.size() && work.highlighted.at(index)) || work.surfaceStrokeTriangles.contains(index);
-			const auto& triangle = work.projected.at(index);
-			for (int corner = 0; corner < triangle.cornerCount; ++corner) {
-				const int next = (corner + 1) % triangle.cornerCount;
-				const int mask = triangle.cornerEdges[corner] & triangle.cornerEdges[next];
-				const int a = mask == 1 ? source.b : mask == 2 ? source.c : source.a;
-				const int b = mask == 1 ? source.c : mask == 2 ? source.a : source.b;
-				const auto edge = qMakePair(std::min(a, b), std::max(a, b));
-				const quint64 key = (quint64(edge.first) << 32) | quint32(edge.second);
-				// Clipping boundaries have no source edge. Legacy face moves can
-				// separate shared endpoints; retain every segment in that case.
-				const bool shared = mask != 0 && !work.moving;
-				if (!shared || !baseEdges.contains(key)) {
-					segments.append({triangle.screen[corner], triangle.screen[next], false});
-					if (shared) { baseEdges.insert(key); }
-				}
-				const bool explicitEdge = mask != 0 && source.surface == work.edgeSelectionSurface && work.selectedEdges.contains(edge);
-				if (highlighted && !explicitEdge && (!shared || !highlightedEdges.contains(key))) {
-					segments.append({triangle.screen[corner], triangle.screen[next], true});
-					if (shared) { highlightedEdges.insert(key); }
-				}
-			}
-		}
-		if (work.edgeSelectionSurface >= 0 && work.edgeSelectionSurface < work.mesh.surfaces.size()) {
-			const auto& part = std::as_const(work.mesh).surfaces[work.edgeSelectionSurface];
-			const int frame = std::min(work.frame, int(part.frames.size()) - 1);
-			if (frame >= 0) {
-				for (auto edge : std::as_const(work.selectedEdges)) {
-					if (work.cancelled.load()) { return; }
-					QPointF a, b;
-					if (work.projectSegment(work.vertexPosition(work.edgeSelectionSurface, edge.first), work.vertexPosition(work.edgeSelectionSurface, edge.second), &a, &b)) {
-						segments.append({a, b, true});
-					}
-				}
-			}
-		}
-		ModelWireStyle style;
-		style.pixelRatio = work.style.pixelRatio;
-		style.width = work.highContrast ? 1.6 : 1.0;
-		style.selectionWidth = work.highContrast ? 3.2 : 2.4;
-		style.wire = work.palette.wire.rgba();
-		style.selection = work.palette.highlight.rgba();
-		work.success = renderModelWireframe(work.size, segments, style, &work.result.image, &work.cancelled);
-		return;
-	}
-	// Keep logical-coordinate triangles and their owned texture snapshots for
-	// exact subpixel picking. Only this worker allocates the scaled render copy.
-	auto scaled = work.triangles;
-	for (auto& triangle : scaled) {
-		if (work.cancelled.load()) { return; }
-		if (triangle.highlighted && !triangle.texture) {
-			const double light = double(work.projected.at(triangle.source).shadowIndex) / (kShadeSteps - 1);
-			triangle.color = scaledColor(work.palette.highlight, 0.45 + 0.55 * light).rgba();
-		}
-		for (auto& vertex : triangle.vertices) { vertex.screen *= work.style.pixelRatio; }
-	}
-	work.success = renderModelRaster(work.size, scaled, work.style, &work.result, &work.cancelled);
-}
-
 void ModelViewport::renderVertexOverlay(RasterWork &work)
 {
 	if (!work.success || work.cancelled.load() || work.editSurface < 0 || work.editSurface >= work.mesh.surfaces.size())
@@ -1848,7 +1496,7 @@ void ModelViewport::renderVertexOverlay(RasterWork &work)
 	}
 	if (work.vertexPicking)
 	{
-		work.success = renderModelVertexOverlay(*work.vertices, work.size, work.style.pixelRatio, work.editVertices, work.xrayVertices,
+		work.success = renderModelVertexOverlay(*work.vertices, work.size, work.pixelRatio, work.editVertices, work.xrayVertices,
 												work.editMoveActive, work.vertexAccent, &work.vertexOverlay, &work.cancelled);
 	}
 }
@@ -1864,49 +1512,36 @@ void ModelViewport::paintTriangles(QPainter &painter, const Palette &palette)
 			invalidateRaster();
 		}
 	}
+	if (m_renderGeneration != renderBackendGeneration())
+	{
+		// The 3D renderer changed or restarted; draw again on the new one.
+		m_renderGeneration = renderBackendGeneration();
+		invalidateRaster();
+	}
 	if (m_rasterDirty && !m_rasterThread)
 	{
-		// High-DPI renders stay sharp up to the bounded buffer budget; extreme
+		// High-DPI frames stay sharp up to the bounded read-back budget; extreme
 		// window sizes keep the same framing with a uniformly scaled image.
 		double ratio = devicePixelRatioF();
 		const double pixels = double(width()) * height() * ratio * ratio;
-		if (pixels > modelRasterMaxPixels)
+		if (pixels > viewportImageMaxPixels)
 		{
-			ratio *= std::sqrt(modelRasterMaxPixels / pixels);
+			ratio *= std::sqrt(viewportImageMaxPixels / pixels);
 		}
 		const QSize target(std::max(1, int(std::floor(width() * ratio))), std::max(1, int(std::floor(height() * ratio))));
-		ModelRasterStyle style;
-		style.pixelRatio = ratio;
-		style.showEdges = m_showEdges;
-		style.edge = palette.edge.rgba();
-		style.hatch =
-			QColor(palette.background.red(), palette.background.green(), palette.background.blue(), m_highContrast ? 200 : 110).rgba();
-		style.hover = palette.hover.rgba();
-		style.selection = palette.highlight.rgba();
 		auto work = std::make_shared<RasterWork>();
 		work->revision = m_rasterRevision;
 		work->baseRevision = m_baseRasterRevision;
 		work->contentRevision = m_rasterContentRevision;
 		work->size = target;
+		work->pixelRatio = ratio;
 		work->logicalSize = size();
 		work->tags = projectTagOverlays();
 		work->collision = projectCollisionOverlays();
-		work->style = style;
 		work->projectionRevision = m_projectionRevision;
-		if (m_presentedRaster && m_presentedRaster->projectionRevision == m_projectionRevision)
-		{
-			// Selection/hover/style updates share immutable projection/index data;
-			// their topology, camera, clipping and texture coverage have not changed.
-			work->projectionReady = true;
-			work->projected = m_presentedRaster->projected;
-			work->order = m_presentedRaster->order;
-			work->pickIndex = m_presentedRaster->pickIndex;
-			work->visibleTriangles = m_presentedRaster->visibleTriangles;
-			work->culledTriangles = m_presentedRaster->culledTriangles;
-		}
+		work->renderOwner = m_renderOwner;
 		work->mesh = m_mesh;
 		work->meshTriangles = m_meshTriangles;
-		work->fillBrushes = m_fillBrushes;
 		work->camera = m_camera;
 		work->center = m_center;
 		work->eye = m_eye;
@@ -1916,6 +1551,7 @@ void ModelViewport::paintTriangles(QPainter &painter, const Palette &palette)
 		work->textured = m_renderMode == ModelViewportRenderMode::Textured && hasSkin();
 		work->wireframe = m_renderMode == ModelViewportRenderMode::Wireframe;
 		work->highContrast = m_highContrast;
+		work->showEdges = m_showEdges;
 		work->moving = m_dragStarted && m_dragAction == DragAction::Move;
 		work->resizingSelection = isResizingSelection();
 		work->resizeFrom = m_selectionResizeBox; work->resizeTo = m_selectionResizePreview;
@@ -1944,6 +1580,18 @@ void ModelViewport::paintTriangles(QPainter &painter, const Palette &palette)
 			work->surfaceSkins = m_surfaceSkins;
 			work->surfaceSkinAlpha = m_surfaceSkinAlpha;
 		}
+		// Uploads made for an earlier frame of the same pose and selection are
+		// reused: a camera move only re-runs the GPU.
+		work->geometryKey = currentGeometryKey(work->textured, work->moving);
+		if (m_gpuGeometry && m_gpuGeometry->key.matches(work->geometryKey))
+		{
+			work->geometry = m_gpuGeometry;
+		}
+		work->flagsKey = currentFlagsKey();
+		if (m_gpuFlags && m_gpuFlags->key.matches(work->flagsKey))
+		{
+			work->flags = m_gpuFlags;
+		}
 		work->reuseBase = m_presentedRaster && m_presentedRaster->baseRevision == m_baseRasterRevision;
 		if (work->reuseBase)
 		{
@@ -1953,23 +1601,19 @@ void ModelViewport::paintTriangles(QPainter &painter, const Palette &palette)
 				work->vertices = m_rasterVertices;
 			}
 		}
-		else
-		{
-			work->result.depth = std::move(m_raster.depth);
-			work->result.source = std::move(m_raster.source);
-		}
 		m_rasterWork = work;
 		auto *thread = QThread::create(
 			[work]()
 			{
 				try
 				{
-					renderRaster(*work);
+					renderGpu(*work);
 					renderVertexOverlay(*work);
 				}
 				catch (const std::bad_alloc &)
 				{
 					work->success = false;
+					work->error = QCoreApplication::translate("VibeStudioRendering", "There was not enough memory to render this view.");
 					work->result.clear();
 					work->vertexOverlay = {};
 					work->vertices.reset();
@@ -1984,11 +1628,10 @@ void ModelViewport::paintTriangles(QPainter &painter, const Palette &palette)
 					m_rasterWork.reset();
 					if (work->contentRevision == m_rasterContentRevision && !work->cancelled.load())
 					{
-						m_raster = std::move(work->result);
+						// Shared, not moved: picking reads the presented work's ids.
+						m_raster = work->result;
 						m_vertexOverlay = std::move(work->vertexOverlay);
 						m_rasterVertices = work->success ? work->vertices : nullptr;
-						m_projected = work->projected;
-						m_order = work->order;
 						m_visibleTriangles = work->visibleTriangles;
 						m_culledTriangles = work->culledTriangles;
 						m_presentedRaster = work->success ? work : nullptr;
@@ -1996,6 +1639,23 @@ void ModelViewport::paintTriangles(QPainter &painter, const Palette &palette)
 						m_rasterCollision = std::move(work->collision);
 						m_rasterLogicalSize = work->logicalSize;
 						m_rasterFailed = !work->success;
+						m_rasterError = work->success ? QString() : work->error;
+						if (!work->deviceSummary.isEmpty())
+						{
+							m_renderDeviceSummary = work->deviceSummary;
+						}
+						if (work->geometry)
+						{
+							m_gpuGeometry = work->geometry;
+						}
+						if (work->flags)
+						{
+							m_gpuFlags = work->flags;
+						}
+						if (!work->success)
+						{
+							m_raster.clear();
+						}
 						// Camera/style updates coalesce behind this completed image. This
 						// keeps motion visible even when requests outpace the renderer.
 						m_rasterDirty = work->revision != m_rasterRevision;
@@ -2015,8 +1675,7 @@ void ModelViewport::paintTriangles(QPainter &painter, const Palette &palette)
 	}
 	if (isRendering() || m_rasterFailed)
 	{
-		const QString message =
-			m_rasterFailed ? tr("Unable to allocate the model preview. Reduce the viewport size.") : tr("Rendering model…");
+		const QString message = m_rasterFailed ? renderFailureText() : tr("Rendering model…");
 		const int textWidth = std::max(1, width() - 24);
 		const auto textBounds = painter.fontMetrics().boundingRect(QRect(0, 0, textWidth, height()), Qt::TextWordWrap, message);
 		const int statusHeight = std::min(height(), textBounds.height() + 12);
@@ -2027,16 +1686,70 @@ void ModelViewport::paintTriangles(QPainter &painter, const Palette &palette)
 	}
 }
 
+QString ModelViewport::renderFailureText() const
+{
+	return m_rasterError.isEmpty() ? tr("The 3D renderer could not draw this view.")
+		: tr("The 3D renderer could not draw this view: %1 Choose another renderer in Settings, under Appearance and Language.").arg(m_rasterError);
+}
+
+ModelViewport::GeometryKey ModelViewport::currentGeometryKey(bool textured, bool moving) const
+{
+	GeometryKey key;
+	key.mesh = m_meshRevision;
+	key.frame = m_frame;
+	key.blendFrame = m_blendFrame;
+	key.frameBlend = m_frameBlend;
+	key.textured = textured;
+	key.highContrast = m_highContrast;
+	key.editMoveActive = m_editMoveActive;
+	if (m_editMoveActive)
+	{
+		key.editTagEmpty = m_editTag.isEmpty();
+		key.editSurface = m_editSurface;
+		key.editTransform = m_editTransform;
+		key.editSurfaces = m_editSurfaces;
+		key.editVertices = m_editVertices;
+	}
+	key.moving = moving;
+	if (moving)
+	{
+		key.moveOffset = m_moveOffset;
+	}
+	key.resizing = isResizingSelection();
+	if (key.resizing)
+	{
+		key.resizeFrom = m_selectionResizeBox;
+		key.resizeTo = m_selectionResizePreview;
+		key.resizeOrigins = m_selectionResizeOrigins;
+	}
+	if (moving || key.resizing)
+	{
+		key.highlighted = m_highlighted;
+	}
+	return key;
+}
+
+ModelViewport::FlagsKey ModelViewport::currentFlagsKey() const
+{
+	FlagsKey key;
+	key.mesh = m_meshRevision;
+	key.highlighted = m_highlighted;
+	key.strokeTriangles = m_surfaceStrokeTriangles;
+	key.edgeSelectionSurface = m_edgeSelectionSurface;
+	key.selectedEdges = m_selectedEdges;
+	return key;
+}
+
 void ModelViewport::paintOverlay(QPainter& painter, const Palette& palette) const
 {
 	painter.setRenderHint(QPainter::Antialiasing, true);
 	painter.resetTransform();
-	if (!isRendering() && m_renderMode == ModelViewportRenderMode::Wireframe && m_hover.valid && m_hover.triangle >= 0 && m_hover.triangle < m_projected.size()) {
-		const ProjectedTriangle& triangle = m_projected.at(m_hover.triangle);
-		if (triangle.visible && triangle.cornerCount >= 3) {
+	if (!isRendering() && m_renderMode == ModelViewportRenderMode::Wireframe && m_hover.valid) {
+		const QPolygonF outline = triangleOutline(m_hover.triangle);
+		if (outline.size() >= 3) {
 			painter.setBrush(Qt::NoBrush);
 			painter.setPen(QPen(palette.hover, 1.8));
-			painter.drawPolygon(triangle.screen.data(), triangle.cornerCount);
+			painter.drawPolygon(outline);
 		}
 	}
 
@@ -2915,24 +2628,21 @@ ModelVec3 ModelViewport::orbitPivotAt(const QPointF& viewPoint) const
 	const ModelVec3 direction = pickDirection(viewPoint);
 	double distance = m_focusDistance;
 	const ModelViewportHit hit = hitTest(viewPoint);
-	if (hit.valid && hit.triangle >= 0 && hit.triangle < m_projected.size()) {
-		// Perspective reciprocal depth is affine on the projected face. The
-		// first three clipped corners define that plane even for a quad.
-		const auto& corners = m_projected.at(hit.triangle).corners;
-		const QPointF ab = corners[1].screen - corners[0].screen;
-		const QPointF ac = corners[2].screen - corners[0].screen;
-		const QPointF ap = viewPoint - corners[0].screen;
-		const double determinant = ab.x() * ac.y() - ab.y() * ac.x();
-		double reciprocal = 0;
-		if (std::abs(determinant) > 1e-12) {
-			const double b = (ap.x() * ac.y() - ap.y() * ac.x()) / determinant;
-			const double c = (ab.x() * ap.y() - ab.y() * ap.x()) / determinant;
-			reciprocal = (1 - b - c) * corners[0].reciprocalW + b * corners[1].reciprocalW + c * corners[2].reciprocalW;
-		}
-		const double viewDepth = reciprocal > 0 ? 1.0 / reciprocal : 0;
-		const double along = dotVec(direction, m_camera.forward);
-		if (viewDepth > kNearPlane && along > 0.05) {
-			distance = viewDepth / along;
+	if (hit.valid && hit.triangle >= 0 && hit.triangle < m_meshTriangles.size()) {
+		// The point under the pointer is where its ray meets the picked face.
+		const MeshTriangle& face = m_meshTriangles.at(hit.triangle);
+		const ModelVec3 a = editVertexPosition(face.surface, face.a);
+		const ModelVec3 b = editVertexPosition(face.surface, face.b);
+		const ModelVec3 c = editVertexPosition(face.surface, face.c);
+		const ModelVec3 normal = crossVec(makeVec(double(b.x) - a.x, double(b.y) - a.y, double(b.z) - a.z),
+			makeVec(double(c.x) - a.x, double(c.y) - a.y, double(c.z) - a.z));
+		const double facing = dotVec(normal, direction);
+		if (std::abs(facing) > 1e-12) {
+			const double along = dotVec(normal, makeVec(double(a.x) - m_eye.x, double(a.y) - m_eye.y, double(a.z) - m_eye.z)) / facing;
+			const double ahead = dotVec(direction, m_camera.forward);
+			if (std::isfinite(along) && along * ahead > kNearPlane && ahead > 0.05) {
+				distance = along;
+			}
 		}
 	}
 	return makeVec(m_eye.x + direction.x * distance, m_eye.y + direction.y * distance, m_eye.z + direction.z * distance);

@@ -88,7 +88,19 @@ jobs:
         if: matrix.os != 'windows-latest'
         run: meson compile -C builddir
 
+      # Mesa's software Vulkan driver (lavapipe) lets the 3D renderer's tests
+      # draw on a runner without a GPU, so a test that cannot draw fails here
+      # instead of skipping. Windows and macOS runners have no renderer for the
+      # offscreen test platform; their drawing checks skip.
+      - name: Install Software Graphics Drivers (Linux)
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends mesa-vulkan-drivers libvulkan1
+
       - name: Test
+        env:
+          VIBESTUDIO_RENDER_REQUIRE: ${{ matrix.os == 'ubuntu-latest' && '1' || '' }}
         run: meson test -C builddir --print-errorlogs
 
       - name: Validate Windows Release

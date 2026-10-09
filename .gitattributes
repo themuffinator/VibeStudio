@@ -7,4 +7,5 @@ external/audio/libogg/** -text
 external/audio/libvorbis/** -text
 external/audio/portaudio/** -text
 external/modelling/xatlas/** -text
+external/graphics/vulkan-headers/** -text
 src/tests/fixtures/audio_decode/*.f32 -text

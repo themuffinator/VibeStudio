@@ -182,14 +182,14 @@ QString chooseCompilerProfileId(const QString& prompt)
 		return QString();
 	};
 
-	if (containsAny(lower, {QStringLiteral("q3"), QStringLiteral("quake 3"), QStringLiteral("q3map2")})) {
+	if (containsAny(lower, {QStringLiteral("q3"), QStringLiteral("quake 3"), QStringLiteral("q3map2"), QStringLiteral("vibemap3")})) {
 		if (lower.contains(QStringLiteral("light"))) {
-			return firstProfile({QStringLiteral("q3map2-light")});
+			return firstProfile({QStringLiteral("vibemap3-light")});
 		}
 		if (lower.contains(QStringLiteral("vis"))) {
-			return firstProfile({QStringLiteral("q3map2-vis")});
+			return firstProfile({QStringLiteral("vibemap3-vis")});
 		}
-		return firstProfile({QStringLiteral("q3map2-bsp"), QStringLiteral("q3map2")});
+		return firstProfile({QStringLiteral("vibemap3-bsp")});
 	}
 	if (containsAny(lower, {QStringLiteral("doom"), QStringLiteral("node"), QStringLiteral("zdbsp")})) {
 		return firstProfile({QStringLiteral("zdbsp"), QStringLiteral("zokumbsp")});
@@ -198,12 +198,12 @@ QString chooseCompilerProfileId(const QString& prompt)
 		return firstProfile({QStringLiteral("zokumbsp"), QStringLiteral("zdbsp")});
 	}
 	if (lower.contains(QStringLiteral("light"))) {
-		return firstProfile({QStringLiteral("ericw-light")});
+		return firstProfile({QStringLiteral("vibemap2-light")});
 	}
 	if (lower.contains(QStringLiteral("vis"))) {
-		return firstProfile({QStringLiteral("ericw-vis")});
+		return firstProfile({QStringLiteral("vibemap2-vis")});
 	}
-	return firstProfile({QStringLiteral("ericw-qbsp")});
+	return firstProfile({QStringLiteral("vibemap2-bsp")});
 }
 
 QString quotedCliPath(const QString& value)

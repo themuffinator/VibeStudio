@@ -7,7 +7,7 @@
 
 namespace vibestudio {
 
-struct EricwMapPreflightIssue {
+struct QuakeMapPreflightIssue {
 	QString issueId;
 	QString clusterId;
 	QString severity;
@@ -17,20 +17,20 @@ struct EricwMapPreflightIssue {
 	int line = 0;
 };
 
-struct EricwMapPreflightReport {
-	QVector<EricwMapPreflightIssue> issues;
+struct QuakeMapPreflightReport {
+	QVector<QuakeMapPreflightIssue> issues;
 
 	[[nodiscard]] bool hasIssues() const;
 	[[nodiscard]] QStringList warningMessages() const;
 };
 
-enum class EricwMapPreflightSeverity {
+enum class QuakeMapPreflightSeverity {
 	Info,
 	Warning,
 	Error,
 };
 
-struct EricwMapPreflightOptions {
+struct QuakeMapPreflightOptions {
 	QString mapPath;
 	bool regionCompile = false;
 	int longValueWarningThreshold = 1024;
@@ -40,8 +40,8 @@ struct EricwMapPreflightOptions {
 	std::function<void(qint64 completed, qint64 total)> progress {};
 };
 
-struct EricwMapPreflightWarning {
-	EricwMapPreflightSeverity severity = EricwMapPreflightSeverity::Warning;
+struct QuakeMapPreflightWarning {
+	QuakeMapPreflightSeverity severity = QuakeMapPreflightSeverity::Warning;
 	QString code;
 	QString message;
 	QString upstreamIssue;
@@ -53,18 +53,18 @@ struct EricwMapPreflightWarning {
 	QString key;
 };
 
-struct EricwMapPreflightResult {
-	QVector<EricwMapPreflightWarning> warnings;
+struct QuakeMapPreflightResult {
+	QVector<QuakeMapPreflightWarning> warnings;
 	int entityCount = 0;
 	int brushEntityCount = 0;
 	bool parseComplete = true;
 	bool cancelled = false;
 };
 
-QString ericwMapPreflightSeverityId(EricwMapPreflightSeverity severity);
-EricwMapPreflightResult validateEricwMapPreflightText(const QString& mapText, const EricwMapPreflightOptions& options = {});
-EricwMapPreflightResult validateEricwMapPreflightFile(const QString& mapPath, const EricwMapPreflightOptions& options = {});
-EricwMapPreflightReport inspectEricwMapPreflightText(const QString& mapText, const QString& mapPath = QString());
-EricwMapPreflightReport inspectEricwMapPreflightFile(const QString& mapPath, QString* error = nullptr);
+QString quakeMapPreflightSeverityId(QuakeMapPreflightSeverity severity);
+QuakeMapPreflightResult validateQuakeMapPreflightText(const QString& mapText, const QuakeMapPreflightOptions& options = {});
+QuakeMapPreflightResult validateQuakeMapPreflightFile(const QString& mapPath, const QuakeMapPreflightOptions& options = {});
+QuakeMapPreflightReport inspectQuakeMapPreflightText(const QString& mapText, const QString& mapPath = QString());
+QuakeMapPreflightReport inspectQuakeMapPreflightFile(const QString& mapPath, QString* error = nullptr);
 
 } // namespace vibestudio

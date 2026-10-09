@@ -63,7 +63,7 @@ int main(int argc, char** argv) {
 	const auto workspace = prepareLevelBuildWorkspace(map, assets, preparation);
 	BuildPipelineRequest build;
 	build.pipelineId = "quake3-full";
-	build.executableOverrides = {{"q3map2", QString::fromLocal8Bit(argv[1])}};
+	build.executableOverrides = {{"vibemap3", QString::fromLocal8Bit(argv[1])}};
 	const auto compiled = runLevelBuildWorkspace(workspace, build);
 	if (!expect(workspace.ready && compiled.succeeded(), "prepared compiler fixture", workspace.error + compiled.errors.join('\n'))) {
 		return 1;

@@ -456,8 +456,11 @@ defaults as of `master` `90de03c`, September 2026 (see docs/CREDITS.md).
 
 ### NetRadiant Custom Style
 Reference: [NetRadiant Custom](https://github.com/Garux/netradiant-custom).
-The values follow its defaults at `68ecbed` (January 2026), the same revision
-VibeStudio's q3map2 submodule pins (see docs/CREDITS.md).
+The values follow its defaults at `68ecbed` (January 2026), the revision
+VibeStudio's q3map2 submodule pinned before VibeStudio moved to the VibeMap3
+compiler (see docs/CREDITS.md). The profile's compiler panel is **VibeMap3
+Build**, and its **Plan VibeMap3 Build** binding (`compiler.vibemap3.plan`)
+plans a VibeMap3 build.
 
 - **Layout:** the 3D camera beside a 2D view, with a 16-unit grid.
   - Ctrl+Tab steps the 2D view through Top, Front, and Side, and keypad 7, 1,

@@ -1,4 +1,4 @@
-"""Generated model/draft -> real q3map2 -> complete installation PK3 -> recorder.
+"""Generated model/draft -> VibeMap3 -> complete installation PK3 -> recorder.
 
 The recorder is level_build_deployment_smoke_test, never a game executable.
 No native input or screen capture. All files stay in the project .agents/tmp.
@@ -48,7 +48,7 @@ def main():
 
     workspace = baseline / 'prepared'
     # Return the proven workspace to generated shaders and external lightmaps.
-    run('external-build', ['build', 'run-prepared', workspace, '--tool', 'q3map2=' + str(args.compiler.resolve()),
+    run('external-build', ['build', 'run-prepared', workspace, '--tool', 'vibemap3=' + str(args.compiler.resolve()),
                           '--stage-args', 'bsp=-threads 2 -meta', '--stage-args', 'vis=-threads 2 -fast',
                           '--stage-args', 'light=-threads 2 -fast -extlmhacksize 256'])
     installation = root / 'disposable game installation'

@@ -3,6 +3,7 @@
 #include "core/editor_profiles.h"
 #include "core/map_preview_mesh.h"
 #include "tests/level_geometry_test_helpers.h"
+#include "tests/render_test_support.h"
 #include <QApplication>
 #include <QDir>
 #include <QElapsedTimer>
@@ -107,6 +108,10 @@ int main(int argc, char** argv)
 	qputenv("QT_QPA_FONTDIR",QDir(qEnvironmentVariable("SystemRoot")).filePath("Fonts").toLocal8Bit());
 #endif
 	QApplication app(argc,argv); applyStudioTheme(app,studioThemeTokens(StudioTheme::Dark,UiDensity::Standard,100));
+	// Draws in 3D: skip where no OpenGL or Vulkan renderer starts.
+	if (const int skip = vibestudio::test_support::exitCodeWithoutRenderer("level-camera-brush-ui-smoke"); skip >= 0) {
+		return skip;
+	}
 	if (argc > 1 && QByteArray(argv[1]) == "--latency") {
 		QJsonArray results; bool ok = true;
 		for (int count : {1000,10000}) { const auto result = latency(count); results.append(result); ok &= result.value("ok").toBool(); }

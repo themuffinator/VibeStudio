@@ -1,4 +1,4 @@
-"""Generated Quake/Quake II prepared builds through real ericw-tools.
+"""Generated Quake/Quake II prepared builds through VibeMap2.
 
 Creates only synthetic content below .agents/tmp; never launches a game.
 Independently reads BSP texture references and every published PAK payload.
@@ -113,8 +113,8 @@ def main():
         base = workspace / 'game' / ('id1' if target == 'quake' else 'baseq2')
         manifest = json.loads((workspace / 'build-inputs.json').read_text(encoding='utf-8'))
         assert manifest['target'] == target
-        run_words = ['build', 'run-prepared', workspace, '--tool', f'ericw-qbsp={args.qbsp.resolve()}', '--tool', f'ericw-vis={args.vis.resolve()}',
-                     '--tool', f'ericw-light={args.light.resolve()}', '--stage-args', 'qbsp=-threads 2', '--stage-args', 'vis=-threads 2',
+        run_words = ['build', 'run-prepared', workspace, '--tool', f'vibemap2-bsp={args.qbsp.resolve()}', '--tool', f'vibemap2-vis={args.vis.resolve()}',
+                     '--tool', f'vibemap2-light={args.light.resolve()}', '--stage-args', 'qbsp=-threads 2', '--stage-args', 'vis=-threads 2',
                      '--stage-args', 'light=-threads 2' + (' -lit -lux' if target == 'quake' else '')]
         compiled = run(target + '-compile', run_words)
         assert all('does not match the selected compiler profile' not in warning for warning in compiled['pipeline']['warnings'])

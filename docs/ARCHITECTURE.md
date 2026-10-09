@@ -104,7 +104,7 @@ copies and `build-inputs.json`; publication is one directory rename. A bounded
 reader validates the inventory and verification hashes inputs before and after
 compiler execution. `core/level_quake_assets` resolves bounded WAD2/miptex
 bytes from the package and assembles a deterministic compiler WAD. Quake/Quake II
-use explicit ericw search/log paths, with target-aware WAL dependency validation
+use explicit VibeMap2 search/log paths, with target-aware WAL dependency validation
 and runtime lighting classification. Quake III base/home flags are injected by the shared service
 for every stage; caller path overrides are refused. `app/level_build_workspace_dialog`
 prepares on a worker with cooperative cancellation and phase/count progress.
@@ -328,7 +328,8 @@ pixel pane moves reuse it. Axis-aligned positive uniform scaling is supported;
 rotation, shear and nonuniform transforms use the complete ordinary painter path.
 This keeps cached strokes aligned with current primary markers and edit handles
 inside fractional-scale split layouts without altering world coordinates.
-The shared Levels/Models CPU wire renderer anchors selection dashes at the
+The shared 2D line painter (`app/wire_lines`, used by the Levels plan views and
+the UV view) anchors selection dashes at the
 leftmost (then topmost) endpoint independently of its scan axis, so rounding near
 a diagonal cannot flip the dash pattern when an image origin changes.
 
@@ -687,8 +688,9 @@ documented in
 - Compiler registry descriptors and executable discovery for imported external
   tools, user-configured executable paths, project-local overrides, version
   probes, and capability flags.
-- Compiler wrapper profiles and command planning for ericw-tools `qbsp`, `vis`,
-  and `light`, Doom-family node-builder stages, and q3map2 probe/BSP stages.
+- Compiler wrapper profiles and command planning for VibeMap2 `vibemap2-bsp`,
+  `vibemap2-vis`, and `vibemap2-light`, Doom-family node-builder stages, and
+  VibeMap3 probe/BSP stages.
 - Compiler runner services for `QProcess` execution, cancellation, stdout/stderr
   capture, diagnostic parsing, output registration, and re-running manifests.
 - Schema-versioned compiler command manifests with structured task-log entries,
@@ -712,11 +714,26 @@ documented in
   and deterministic AI creation proposals.
 - The materials module (`core/material_*`): one definition model for Doom,
   Quake, Quake II, Quake III and Doom 3 surfaces, source-preserving script
-  edits, expression and wave evaluation, engine image lookup, a CPU renderer
-  per engine, a library scan and node graphs whose edits become text edits.
+  edits, expression and wave evaluation, engine image lookup, each engine's
+  drawing rules as GLSL shaders on the 3D renderer, a library scan and node
+  graphs whose edits become text edits.
   The Materials page (`app/material_*`, the `shell.mode.shaders` mode) and the
   `material` CLI family (`cli/materials.*`) share it; see
   [Materials](MATERIALS.md).
+- The 3D renderer (`core/render_device`, `core/render_opengl`,
+  `core/render_vulkan`, `core/render_shaders`): frames as plain data (render
+  targets, passes of draws with their state, uploads cached per owner, and the
+  targets to read back) executed offscreen by an OpenGL or a Vulkan device,
+  each on its own thread, and read back. Automatic, OpenGL or Vulkan comes
+  from the saved preference, `VIBESTUDIO_RENDER_BACKEND` or the CLI's
+  `--renderer`. OpenGL needs a `QGuiApplication` (`prepareRenderBackends()`
+  makes its offscreen surface on the GUI thread); Vulkan loads its loader at
+  run time and works headless. GLSL in `src/core/shaders` is compiled offline
+  into `core/render_shader_data.inc` (SPIR-V and checked OpenGL text) by
+  `scripts/build_render_shaders.py`. `runRenderSelfTest()` draws a known frame
+  and checks every pixel for Settings and `render test`. Clients never touch a
+  graphics API: `ModelViewport`, the material renderer, the CLI and tests
+  describe frames, and a missing backend becomes a reason shown in the view.
 - Shared command services used by both GUI actions and CLI commands.
 - Operation state model for loading, scanning, indexing, compiling, extracting, saving, cancelling, and failure recovery.
 
@@ -1102,9 +1119,9 @@ in [Placed Model Appearances](LEVEL_MODEL_APPEARANCE.md).
 worker. `app/model_uv_fill` converts selected faces to winding contours, removing
 only opposite indexed borders and exactly collinear fill segments. Qt paints
 the selected union once; wire and picking topology are unchanged. Ordinary
-wires, seams and selection use `app/model_rasterizer` in that order. Its opaque
-tile cache proves pixels unchanged before bypassing coverage work and is local
-to one color pass. A callback polls cancellation within long strokes. UV images
+wires, seams and selection use the 2D line painter `app/wire_lines` in that
+order. Its opaque tile cache proves pixels unchanged before bypassing coverage
+work and is local to one color pass. A callback polls cancellation within long strokes. UV images
 retain a 4,194,304-pixel limit for both ordinary and extreme aspect ratios.
 Mesh data, document transactions, material resolution and CLI operations keep
 their existing services and contracts.
@@ -1320,22 +1337,22 @@ and full texture/patch/game-code dependency closure remain integration requireme
   definition catalogue, explains each key, marks spawnflag state as text rather
   than colour, and folds entity findings into the map health view.
 - Texture, sprite, model, audio, and cinematic editors.
-- Software-rendered model viewport: orthographic/perspective projection with
-  bounded depth buffering in `app/model_rasterizer.*`, matching picking,
-  perspective-correct textures and per-pixel transparency compositing. QPainter
-  presents the cached image and overlays without an OpenGL dependency, with
-  wireframe/flat/textured modes,
-  inferred animation playback, and OBJ export of the displayed frame.
-  The same cancellable worker projects immutable scene snapshots, prepares a
-  bounded screen-space picking index, and paints wireframe images. Pointer
-  queries reuse that index with exact depth/alpha sampling; camera/pose revision
-  checks reject stale geometry. Selection/style changes reuse projection data,
-  and one active worker coalesces newer requests. This also applies to the
-  Levels preview. Wireframe uses the original antialiased CPU line path in
-  `app/model_rasterizer.*`; it deduplicates shared surface edges and composites
-  selected dashes after ordinary wires. Clipped boundaries and displaced face
-  edges retain their separate geometry. Bounded scans avoid work proportional
-  to offscreen coordinates, and cancellation never publishes partial pixels.
+- GPU-rendered model viewport (`app/model_viewport_render.cpp` on the 3D
+  renderer): orthographic/perspective cameras with reversed depth, world-space
+  geometry uploaded once per mesh revision and cached on the device,
+  per-corner hover/selection flags, repeating bilinear skins, up to four
+  peeled translucent layers composited in order, and a triangle-ID target for
+  picking; a point between pixel centres, such as one on a silhouette edge, is
+  resolved by testing the neighbouring pixels' triangles exactly. QPainter presents the read-back image under the overlays, with
+  wireframe/flat/textured modes, inferred animation playback, and OBJ export of
+  the displayed frame. One cancellable worker describes and submits each
+  frame; camera/pose revision checks reject stale results, and one active
+  worker coalesces newer requests. This also applies to the Levels camera,
+  the modeller views and the Doom preview. Wireframe is an instanced,
+  antialiased segment pass using the former CPU coverage formula; it
+  deduplicates shared surface edges and draws selected dashes after ordinary
+  wires. A view whose renderer is unavailable says why, names Settings, and
+  draws nothing; a renderer change or Check Renderers redraws every view.
   Vertex authoring adds a worker-prepared projection/occlusion snapshot with one
   cell reference per finite vertex. `app/model_vertex_overlay.*` performs exact
   indexed picks and bounded CPU marker stamps. Selection-only overlays reuse the
@@ -1466,16 +1483,28 @@ The current scaffold contains:
   model, known idTech game keys, engine-family defaults, read-only validation,
   and confirmable Steam/GOG candidate detection.
 - `src/core/compiler_registry.*`: compiler tool descriptors and discovery
-  results for imported ericw-tools, q3map2, ZDBSP, and ZokumBSP executables.
+  results for VibeStudio's own VibeMap2 and VibeMap3 and the imported ZDBSP and
+  ZokumBSP executables.
 - `src/core/compiler_profiles.*`: wrapper profile descriptors and command-plan
-  generation for ericw-tools, Doom-family node builders, and q3map2, plus
+  generation for VibeMap2, Doom-family node builders, and VibeMap3, plus
   schema-versioned compiler command manifests.
+- `src/core/quake_map_preflight.*`: conservative Quake `.map` preflight checks
+  for VibeMap2 profiles.
 - `src/core/compiler_runner.*`: compiler execution, re-run, stdout/stderr
   capture, diagnostic parsing, cancellation callbacks, manifest saving, and
   output registration data.
 - `src/core/project_manifest.*`: project manifest schema, project-local
-  settings/compiler overrides, registered compiler outputs, JSON load/save, and
-  health summary checks for the workspace dashboard and CLI.
+  settings/compiler overrides, registered compiler outputs, the project's game
+  and release settings, JSON load/save that keeps unknown keys, and health
+  summary checks for the workspace dashboard and CLI.
+- `src/core/game_asset_register.*`: the read-only game asset index of an
+  installation's stock packages, with freshness checks and a cached status.
+- `src/core/project_content.*`: project folders presented as a package reader,
+  and a layered reader that stacks project, package folders and open packages.
+- `src/core/release_plan.*`, `src/core/release_notes.*` and
+  `src/core/release_publish.*`: release planning against the asset index, the
+  changelog, release records and generated notes, and publishing. See
+  [Project releases](PROJECT_RELEASES.md).
 - `src/core/studio_settings.*`: Qt settings facade for shell state, recent
   projects, recent activity history, accessibility/localization preferences,
   setup progress, editor profile selection, game installations, compiler
@@ -2063,8 +2092,8 @@ The current scaffold contains:
 - `src/cli`: diagnostics and automation entry points, including the active
   subcommand router, localization reports, diagnostic bundle export, JSON
   output envelopes, and stable exit-code contract.
-- `src/app`: Qt Widgets studio shell, including the software-rendered map and
-  model viewports. The build's moc step covers app headers only. The app
+- `src/app`: Qt Widgets studio shell, including the QPainter map views and the
+  GPU-rendered model viewports. The build's moc step covers app headers only. The app
   sources build as the `vibestudio_app` static library; the `vibestudio`
   executable is `src/main.cpp` and `src/cli/cli.cpp` linked against it, which
   lets a GUI test construct and drive the real `ApplicationShell`.
@@ -2302,6 +2331,22 @@ material dependencies and rechecks closure from the captured bytes. A private
 GUI workers and `model assembly` CLI share these services, including portable
 package drafts. No new renderer, library or build dependency is introduced.
 See [publication contracts](MODEL_ASSEMBLY.md#native-player-packages).
+
+## Project Releases
+
+`core/release_plan` reads the project through `ProjectContentReader` layers,
+classifies every file, follows map references with `inspectLevelDependencies`
+and model materials with `inspectModelMaterialDependencies`, and checks each
+candidate against the merged game asset index from `prepareReleaseStock`.
+`core/release_notes` owns Keep a Changelog parsing that prints unchanged text
+back byte for byte, release records under `.vibestudio/releases`, inventory
+diffs and the generated notes and readme. `core/release_publish` writes the
+package through a private `PackageStagingModel` (or merges Doom-family lumps
+into one PWAD), then the readme, notes, distribution archive, record and
+changelog through the package publication service. The Package and Release
+window runs the same functions on workers and reaches the shell only through
+`ReleaseDialogHooks`; the `release` and `install register` CLI families call
+them directly. See [Project releases](PROJECT_RELEASES.md).
 
 ## Placed MD3 Appearance Resolution
 

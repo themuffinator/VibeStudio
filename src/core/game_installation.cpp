@@ -458,7 +458,7 @@ QVector<GameDefinition> knownGameDefinitions()
 				QStringLiteral("id1/pak0.pak"),
 			},
 			QStringLiteral("quake"),
-			QStringLiteral("ericw-tools"),
+			QStringLiteral("vibemap2"),
 			QStringLiteral("id1"),
 		},
 		{
@@ -469,7 +469,7 @@ QVector<GameDefinition> knownGameDefinitions()
 				QStringLiteral("baseq2/pak0.pak"),
 			},
 			QStringLiteral("quake2"),
-			QStringLiteral("ericw-tools"),
+			QStringLiteral("vibemap2"),
 			QStringLiteral("baseq2"),
 		},
 		{
@@ -480,7 +480,7 @@ QVector<GameDefinition> knownGameDefinitions()
 				QStringLiteral("baseq3/pak0.pk3"),
 			},
 			QStringLiteral("quake3"),
-			QStringLiteral("q3map2"),
+			QStringLiteral("vibemap3"),
 			QStringLiteral("baseq3"),
 		},
 	};
@@ -585,7 +585,11 @@ GameInstallationProfile normalizedGameInstallationProfile(const GameInstallation
 	if (normalized.paletteId.trimmed().isEmpty()) {
 		normalized.paletteId = definition.defaultPaletteId;
 	}
-	if (normalized.compilerProfileId.trimmed().isEmpty()) {
+	// Installations saved before the move to VibeMap2 and VibeMap3 carry the old defaults.
+	const QString storedCompilerProfileId = normalized.compilerProfileId.trimmed();
+	if (storedCompilerProfileId.isEmpty()
+		|| storedCompilerProfileId.compare(QStringLiteral("ericw-tools"), Qt::CaseInsensitive) == 0
+		|| storedCompilerProfileId.compare(QStringLiteral("q3map2"), Qt::CaseInsensitive) == 0) {
 		normalized.compilerProfileId = definition.defaultCompilerProfileId;
 	}
 	normalized.displayName = defaultGameInstallationDisplayName(normalized.rootPath, normalized.gameKey, profile.displayName);

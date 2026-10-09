@@ -27,6 +27,9 @@ workflow on GitHub Actions). Each run:
   and writers, parser fuzzing and deliberately damaged files, saving and
   recovery, command-line commands, theme contrast checks, and GUI tests that
   drive the real studio window with simulated input on an off-screen display;
+- checks what the 3D views draw on Linux, with Mesa's software Vulkan driver.
+  The Windows and macOS runners have no graphics driver, so those drawing
+  checks are skipped there;
 - starts the studio in a self-test mode that builds and paints every page;
 - checks that the command-line documentation matches the commands the program
   really has;
@@ -50,6 +53,10 @@ workflow on GitHub Actions). Each run:
   those files have been loaded in every game and source port they target.
 - **Hard failures.** Safe package saving has not been verified after a power
   loss or on network drives.
+- **Graphics drivers.** The OpenGL and Vulkan renderers have been tried on a
+  few Windows drivers (NVIDIA and Intel) and with Mesa's software Vulkan
+  driver in CI; other graphics cards, macOS and Linux desktop drivers have not
+  been tried.
 
 ## Keep your work safe
 
@@ -79,6 +86,11 @@ says Ctrl.
   on the Workspace page to take that back), and **Deploy Prepared Build**
   writes a reviewed package into the game folder only after you confirm it,
   keeping a backup of any package it replaces.
+- **Releases.** Publishing writes only into the release's output folder and
+  the project's changelog and `.vibestudio/releases` record, never into the
+  game. Publishing the same version again is refused unless you choose to
+  replace it, and replaced files are kept with `.bak` added to their names.
+  Indexing a game's assets only reads its packages.
 - **Everything else.** Commands that write files report the exact output path
   in the **Activity** panel, and many command-line commands that write files
   offer `--dry-run` to show what would happen first.
@@ -95,16 +107,17 @@ exact limits.
 
 | Area | Main limitations |
 | --- | --- |
-| Everywhere | Views are drawn in software, without GPU acceleration. Performance on large maps and packages has not been measured. |
+| Everywhere | 3D views and material previews need OpenGL 3.3 or Vulkan 1.0; without either they stay empty and say why. Performance on large maps and packages has not been measured. |
 | Level editing | The 3D view shows textures, but not Quake III shader effects such as blending, animation and deformation, nor Doom sector lighting and skies. Doom maps need an external node builder after geometry edits. |
 | Editor profiles | Profiles reproduce keys, mouse gestures, camera and layout, not every behaviour of the original editors, and they do not add other engines' formats. |
 | Models | Formats from Doom source ports to the Doom 3 family are read, but only tested against files the tests build, not real game files. Skeletal models are posed into frames; joints and weights cannot be edited yet. MD5, IQM and ASE exports have not been loaded in the original games. |
 | Textures | No sprite animation editing or pressure-sensitive painting. A canvas holds at most 4,194,304 pixels (2048 × 2048). |
 | Audio | Linux builds cannot play or record audio. |
 | Packages | Renaming or deleting files does not update references to them in scripts, shaders or metadata. |
+| Releases | A release finds what maps, models and shader scripts name; files that game code or scripts load by name must be added with include patterns. Telling the game's files from yours needs the game indexed first. Not yet tried with real game installations. |
 | Code | Language-server support is an early client that some servers will not work with. |
-| Materials and shaders | The preview is a software approximation on a single shape, without map lightmaps or Doom 3 fragment programs beyond the light interaction; videos show a placeholder. Return to Castle Wolfenstein, Enemy Territory and Jedi Knight shader keywords are read with a warning, but only Enemy Territory's implicit images are drawn. Not yet tried on real game packages. |
-| Build and launch | VibeStudio does not include the compiler programs; you point it at your own. |
+| Materials and shaders | The preview is an approximation on a single shape, without map lightmaps or Doom 3 fragment programs beyond the light interaction; videos show a placeholder. Return to Castle Wolfenstein, Enemy Territory and Jedi Knight shader keywords are read with a warning, but only Enemy Territory's implicit images are drawn. Not yet tried on real game packages. |
+| Build and launch | VibeStudio does not include the compiler programs; you point it at your own. Its own VibeMap2 and VibeMap3 compilers have not yet been tested end to end inside VibeStudio. |
 | First-run setup | A checklist that opens the right settings; role presets, guided project creation and a toolchain check are not part of it yet. |
 | AI | Agentic workflows are not built. Cloud connectors need your own API keys. |
 | Languages and accessibility | No finished translations. Not yet tested with real screen readers. |
@@ -154,9 +167,9 @@ exact limits.
 3. Attach diagnostics:
    - In the studio, **Tools** > **Copy Diagnostic Bundle**
      (<kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>D</kbd> on Windows and Linux) copies
-     a summary to the clipboard: version, platform, the open project and
-     package, the compilers found, the number of crash reports, and the latest
-     lines of the session log. Paste it into the issue. It contains folder
+     a summary to the clipboard: version, platform, the 3D renderer, the open
+     project and package, the compilers found, the number of crash reports, and
+     the latest lines of the session log. Paste it into the issue. It contains folder
      paths, so remove any you do not want to share.
    - From the command line, the command below writes
      `vibestudio-diagnostics.json` into the folder you name. It leaves out

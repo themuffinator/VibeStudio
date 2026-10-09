@@ -1,6 +1,7 @@
 #include "app/level_dependency_dialog.h"
 #include "app/package_subset_dialog.h"
 
+#include "core/game_asset_register.h"
 #include "core/level_dependencies.h"
 #include "core/package_staging.h"
 
@@ -37,6 +38,9 @@ struct WorkState {
 	std::atomic_int total {0};
 	LevelDependencyReport dependencies;
 	PackageWriteReport write;
+	// The reader the scan used; set on the worker when built from a factory.
+	std::shared_ptr<const PackageArchiveReader> archive;
+	QString error;
 };
 
 // The worker owns only value snapshots. Closing the dialog cancels it without
@@ -75,7 +79,7 @@ QDialog* showPackageSubsetDialog(QWidget* parent, std::shared_ptr<const PackageA
 }
 
 QDialog* showLevelDependencyDialog(QWidget* parent, const LevelMapDocument& document, std::shared_ptr<const PackageArchiveReader> archive,
-	std::function<void(const QStringList&)> selectObjects)
+	std::function<void(const QStringList&)> selectObjects, const LevelDependencyDialogOptions& options)
 {
 	auto* dialog = new QDialog(parent);
 	dialog->setAttribute(Qt::WA_DeleteOnClose);
@@ -84,10 +88,13 @@ QDialog* showLevelDependencyDialog(QWidget* parent, const LevelMapDocument& docu
 	dialog->setAccessibleName(QCoreApplication::translate("VibeStudioLevelDependencyDialog", "Level dependencies"));
 	dialog->resize(1000, 650);
 	auto* layout = new QVBoxLayout(dialog);
-	auto* context = new QLabel(QCoreApplication::translate("VibeStudioLevelDependencyDialog", "Map: %1 · Assets: %2").arg(document.mapName, QFileInfo(archive->sourcePath()).fileName()));
+	const QString assets = archive ? QFileInfo(archive->sourcePath()).fileName() : options.sourceLabel;
+	auto* context = new QLabel(options.stockFactory
+			? QCoreApplication::translate("VibeStudioLevelDependencyDialog", "Map: %1 · Assets: %2 and the game's own files").arg(document.mapName, assets)
+			: QCoreApplication::translate("VibeStudioLevelDependencyDialog", "Map: %1 · Assets: %2").arg(document.mapName, assets));
 	context->setTextFormat(Qt::PlainText);
 	context->setWordWrap(true);
-	context->setToolTip(archive->sourcePath());
+	context->setToolTip(archive ? archive->sourcePath() : options.sourceLabel);
 	context->setAccessibleName(QCoreApplication::translate("VibeStudioLevelDependencyDialog", "Dependency scan sources"));
 	layout->addWidget(context);
 	auto* summary = new QLabel(QCoreApplication::translate("VibeStudioLevelDependencyDialog", "Checking dependencies for %1…").arg(document.mapName));
@@ -141,6 +148,13 @@ QDialog* showLevelDependencyDialog(QWidget* parent, const LevelMapDocument& docu
 	exportButton->setObjectName(QStringLiteral("exportLevelAssets"));
 	exportButton->setAccessibleName(QCoreApplication::translate("VibeStudioLevelDependencyDialog", "Export resolved level assets"));
 	exportButton->setToolTip(QCoreApplication::translate("VibeStudioLevelDependencyDialog", "Review the resolved files and export them as a new asset package. The map and BSP are not included."));
+	if (options.packageMap) {
+		// Assets read from the project ship through a release, with the build.
+		exportButton->setText(QCoreApplication::translate("VibeStudioLevelDependencyDialog", "Package Map…"));
+		exportButton->setObjectName(QStringLiteral("packageLevelMapFromDependencies"));
+		exportButton->setAccessibleName(QCoreApplication::translate("VibeStudioLevelDependencyDialog", "Package and release this map"));
+		exportButton->setToolTip(QCoreApplication::translate("VibeStudioLevelDependencyDialog", "Release the map with its build and every custom asset it uses, leaving the game's own files out."));
+	}
 	exportButton->setEnabled(false);
 	auto* cancelButton = buttons->addButton(QCoreApplication::translate("VibeStudioLevelDependencyDialog", "Cancel Scan"), QDialogButtonBox::ActionRole);
 	cancelButton->setAccessibleName(QCoreApplication::translate("VibeStudioLevelDependencyDialog", "Cancel dependency scan"));
@@ -175,8 +189,13 @@ QDialog* showLevelDependencyDialog(QWidget* parent, const LevelMapDocument& docu
 	QObject::connect(copyButton, &QPushButton::clicked, dialog, [state]() {
 		QApplication::clipboard()->setText(QString::fromUtf8(QJsonDocument(levelDependencyReportJson(state->dependencies)).toJson()));
 	});
+	const auto packageMap = options.packageMap;
 	QObject::connect(exportButton, &QPushButton::clicked, dialog, [=]() {
-		showPackageSubsetDialog(dialog, archive, state->dependencies.resolvedPaths);
+		if (packageMap) {
+			packageMap();
+			return;
+		}
+		showPackageSubsetDialog(dialog, state->archive, state->dependencies.resolvedPaths);
 	});
 	QObject::connect(cancelButton, &QPushButton::clicked, dialog, [=]() {
 		state->cancel = true;
@@ -190,12 +209,28 @@ QDialog* showLevelDependencyDialog(QWidget* parent, const LevelMapDocument& docu
 		if (total > 0) { progress->setRange(0, total); progress->setValue(state->completed.load()); }
 	});
 	timer->start();
+	state->archive = archive;
+	const auto archiveFactory = options.archiveFactory;
+	const auto stockFactory = options.stockFactory;
 	auto* worker = QThread::create([=]() {
-		state->dependencies = inspectLevelDependencies(document, *archive, [state](int done, int total) {
+		if (!state->archive && archiveFactory) {
+			state->archive = archiveFactory(&state->error);
+		}
+		if (!state->archive) {
+			state->dependencies.complete = false;
+			state->dependencies.warnings << (state->error.isEmpty()
+				? QCoreApplication::translate("VibeStudioLevelDependencyDialog", "No assets were available to check against.") : state->error);
+			return;
+		}
+		LevelDependencyOptions inspect;
+		if (stockFactory) {
+			inspect.stock = stockFactory();
+		}
+		state->dependencies = inspectLevelDependencies(document, *state->archive, [state](int done, int total) {
 			state->completed = done;
 			state->total = total;
 			return !state->cancel.load();
-		});
+		}, inspect);
 	});
 	QObject::connect(worker, &QThread::finished, dialog, [=]() {
 		timer->stop();
@@ -206,12 +241,14 @@ QDialog* showLevelDependencyDialog(QWidget* parent, const LevelMapDocument& docu
 		summary->setText(report.cancelled ? QCoreApplication::translate("VibeStudioLevelDependencyDialog", "Dependency scan cancelled.")
 			: QCoreApplication::translate("VibeStudioLevelDependencyDialog", "References: %1 · Files: %2 · Bytes: %3 · Problems: %4%5").arg(report.dependencies.size())
 				.arg(report.resolvedPaths.size()).arg(report.totalBytes).arg(report.problemCount)
-				.arg(report.complete ? QString() : QCoreApplication::translate("VibeStudioLevelDependencyDialog", " · Incomplete scan")));
+				.arg((report.stockCount > 0 ? QCoreApplication::translate("VibeStudioLevelDependencyDialog", " · From the game: %1").arg(report.stockCount) : QString())
+					+ (report.complete ? QString() : QCoreApplication::translate("VibeStudioLevelDependencyDialog", " · Incomplete scan"))));
 		for (int i = 0; i < report.dependencies.size(); ++i) {
 			const LevelDependency& dependency = report.dependencies.at(i);
 			auto* item = new QTreeWidgetItem({dependency.reference, kindName(dependency.kind), levelDependencyStatusName(dependency.status), dependency.resolvedPath});
 			item->setData(0, Qt::UserRole, i);
-			item->setData(0, Qt::UserRole + 1, dependency.status != LevelDependencyStatus::Resolved && dependency.status != LevelDependencyStatus::Builtin);
+			item->setData(0, Qt::UserRole + 1, dependency.status != LevelDependencyStatus::Resolved && dependency.status != LevelDependencyStatus::Builtin
+				&& dependency.status != LevelDependencyStatus::Stock);
 			item->setData(0, Qt::UserRole + 2, dependency.reference + QLatin1Char(' ') + dependency.resolvedPath + QLatin1Char(' ') + dependency.selectors.join(QLatin1Char(' ')));
 			item->setToolTip(0, dependency.note);
 			tree->addTopLevelItem(item);
@@ -220,7 +257,7 @@ QDialog* showLevelDependencyDialog(QWidget* parent, const LevelMapDocument& docu
 		tree->resizeColumnToContents(2);
 		details->setPlainText((report.warnings + report.limitations).join(QLatin1Char('\n')));
 		copyButton->setEnabled(true);
-		exportButton->setEnabled(report.canExport());
+		exportButton->setEnabled(packageMap ? !report.cancelled : report.canExport());
 		if (!report.exportSupported && !report.limitations.isEmpty()) { exportButton->setToolTip(report.limitations.last()); }
 		applyFilter();
 	});

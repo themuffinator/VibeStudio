@@ -1,5 +1,10 @@
 # ericw-tools High-Value Resolution Plan
 
+> [!NOTE]
+> VibeStudio now compiles Quake-family maps with VibeMap2, its own compiler
+> derived from ericw-tools. This plan is kept as written; its issue numbers are
+> upstream ericw-tools issues.
+
 Plan date: 2026-05-02
 
 Source audit: `docs/plans/ericw-tools-open-issues-audit.md`
@@ -29,7 +34,7 @@ Implemented on 2026-05-02:
 - `src/core/compiler_known_issues.*` provides a high-value ericw-tools issue
   catalog with upstream issue IDs, dedupe clusters, affected tools/profiles,
   match keywords, severity, warning text, and suggested local action.
-- `src/core/ericw_map_preflight.*` provides conservative Quake `.map`
+- `src/core/quake_map_preflight.*` provides conservative Quake `.map`
   preflight validation for path privacy, long values, escape sequences,
   external-map/prefab hazards, grouped/toggled light conflicts, region risks,
   brush-entity origins, Phong risks, `_minlight`, `_sunlight2`, and
@@ -200,7 +205,7 @@ Goal: make external executable and dependency problems understandable before
 users lose time to failed compiles.
 
 User-facing behavior:
-- Tool discovery uses VibeStudio descriptors such as `ericw-light`, not only
+- Tool discovery uses VibeStudio descriptors such as `vibemap2-light`, not only
   generic executable names like `light`.
 - Setup diagnostics separate missing executable, missing source submodule,
   failed version probe, failed helper-tool smoke test, and likely dependency

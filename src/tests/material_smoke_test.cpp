@@ -11,6 +11,7 @@
 #include "core/material_render.h"
 #include "core/material_script.h"
 #include "core/package_archive.h"
+#include "tests/render_test_support.h"
 
 #include <QCoreApplication>
 #include <QDir>
@@ -782,7 +783,11 @@ int main(int argc, char** argv)
 	checkEvaluation();
 	checkClassic();
 	QTemporaryDir directory;
-	if (expect(directory.isValid(), "a temporary folder")) {
+	// Drawing needs OpenGL or Vulkan; every other check runs anywhere.
+	const int renderSkip = vibestudio::test_support::exitCodeWithoutRenderer("material-smoke");
+	if (renderSkip == 1) {
+		++failures;
+	} else if (renderSkip < 0 && expect(directory.isValid(), "a temporary folder")) {
 		checkRendering(directory.path());
 	}
 	if (failures > 0) {

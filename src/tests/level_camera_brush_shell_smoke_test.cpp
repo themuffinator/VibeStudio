@@ -6,6 +6,7 @@
 #include "core/level_scene.h"
 #include "core/level_scene_locks.h"
 #include "tests/level_udmf_test_helpers.h"
+#include "tests/render_test_support.h"
 #include <QAction>
 #include <QApplication>
 #include <QCheckBox>
@@ -67,6 +68,10 @@ int main(int argc, char** argv)
 	qputenv("QT_QPA_FONTDIR",QDir(qEnvironmentVariable("SystemRoot")).filePath("Fonts").toLocal8Bit());
 #endif
 	QApplication app(argc,argv); QTemporaryDir temp; QString error; bool ok = temp.isValid();
+	// Draws in 3D: skip where no OpenGL or Vulkan renderer starts.
+	if (const int skip = vibestudio::test_support::exitCodeWithoutRenderer("level-camera-brush-shell-smoke"); skip >= 0) {
+		return skip;
+	}
 	StudioSettings::setOverrideFilePath(temp.filePath("settings.ini"));
 	StudioSettings settings; settings.setReducedMotion(true); settings.setRestoreSession(false);
 	settings.setSelectedEditorProfileId(QStringLiteral("trenchbroom")); settings.setLevelViewLayoutPreference(QStringLiteral("four-views")); settings.sync();

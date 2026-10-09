@@ -66,8 +66,8 @@ CompilerFileHash hashFile(const QString& path)
 // Extensions VibeStudio is willing to treat as a diagnostic's source file.
 const char* kDiagnosticPathExtensions = "map|bsp|wad|shader|cfg|script|txt|c|cpp|h|hpp|pts|prt|lin|lit|pk3|mdl|md3|wal|tga|jpg|def|ent";
 
-// Compiler output is decoded once, from a complete byte buffer. ericw-tools formats its log through
-// fmt and emits UTF-8, while q3map2 echoes the narrow argv it was handed, which on Windows is the
+// Compiler output is decoded once, from a complete byte buffer. VibeMap2 formats its log through
+// fmt and emits UTF-8, while VibeMap3 echoes the narrow argv it was handed, which on Windows is the
 // ANSI codepage; decoding UTF-8 first with a local-8-bit fallback covers both without forcing either.
 QString decodeToolOutput(const QByteArray& bytes)
 {
@@ -88,7 +88,7 @@ QString stripTrailingCarriageReturn(const QString& line)
 	return stripped;
 }
 
-// Tools that colour their console output, as ericw-tools 2 does, wrap their
+// Tools that colour their console output, as VibeMap2 does, wrap their
 // messages in ECMA-48 escape sequences: "ESC [ ... final byte" (CSI), "ESC ]
 // ... BEL" (OSC), or a two-byte escape. Left in, they show as stray
 // characters in the Problems list and the logs, and hide a leading level from
@@ -102,7 +102,7 @@ QString stripTerminalEscapes(const QString& line)
 	return QString(line).remove(escapes);
 }
 
-// Both ericw-tools (common/log.cc, exit_on_exception) and q3map2
+// Both VibeMap2 (src/common/log.cc, exit_on_exception) and VibeMap3
 // (tools/quake3/common/inout.cpp, Error) print a banner line and then the message on the next line.
 bool isFatalErrorBanner(const QString& trimmedLine)
 {
@@ -154,16 +154,16 @@ void applyDiagnosticLocation(CompilerDiagnostic* diagnostic, const QString& text
 		return;
 	}
 
-	// ericw-tools report locations as "<source>[line N]" (include/common/parser.hh, the
+	// VibeMap2 reports locations as "<source>[line N]" (src/include/common/parser.hh, the
 	// parser_source_location formatter), not as "path:N".
-	static const QRegularExpression ericwLinePattern(QStringLiteral(R"regex(\[line\s+(\d+)\])regex"), QRegularExpression::CaseInsensitiveOption);
-	static const QRegularExpression ericwSourcePattern(QString::fromLatin1(R"regex(((?:[A-Za-z]:)?[^\s\[\]":]+\.(?:%1))\s*\[line\s+\d+\])regex").arg(QString::fromLatin1(kDiagnosticPathExtensions)), QRegularExpression::CaseInsensitiveOption);
-	const QRegularExpressionMatch ericwLine = ericwLinePattern.match(text);
-	if (ericwLine.hasMatch()) {
-		diagnostic->line = ericwLine.captured(1).toInt();
-		const QRegularExpressionMatch ericwSource = ericwSourcePattern.match(text);
-		if (ericwSource.hasMatch()) {
-			diagnostic->filePath = QDir::cleanPath(ericwSource.captured(1));
+	static const QRegularExpression bracketLinePattern(QStringLiteral(R"regex(\[line\s+(\d+)\])regex"), QRegularExpression::CaseInsensitiveOption);
+	static const QRegularExpression bracketSourcePattern(QString::fromLatin1(R"regex(((?:[A-Za-z]:)?[^\s\[\]":]+\.(?:%1))\s*\[line\s+\d+\])regex").arg(QString::fromLatin1(kDiagnosticPathExtensions)), QRegularExpression::CaseInsensitiveOption);
+	const QRegularExpressionMatch bracketLine = bracketLinePattern.match(text);
+	if (bracketLine.hasMatch()) {
+		diagnostic->line = bracketLine.captured(1).toInt();
+		const QRegularExpressionMatch bracketSource = bracketSourcePattern.match(text);
+		if (bracketSource.hasMatch()) {
+			diagnostic->filePath = QDir::cleanPath(bracketSource.captured(1));
 		}
 		return;
 	}
@@ -328,8 +328,8 @@ bool manifestHasWarnings(const CompilerCommandManifest& manifest)
 }
 
 // A tool that exited 0 produced its artifacts, so an error-shaped output line is reported rather
-// than fatal: ericw-tools prints non-fatal "ERROR: ..." notices (common/bspfile_common.cc,
-// common/bspxfile.cc) and carries on. The run is not clean either, so it lands on Warning.
+// than fatal: VibeMap2 prints non-fatal "ERROR: ..." notices (src/common/bspfile_common.cc,
+// src/common/bspxfile.cc) and carries on. The run is not clean either, so it lands on Warning.
 OperationState successfulRunState(const CompilerCommandManifest& manifest)
 {
 	return manifestHasWarnings(manifest) || !manifest.errors.isEmpty() ? OperationState::Warning : OperationState::Completed;
@@ -401,19 +401,19 @@ void enrichWithKnownIssues(CompilerRunResult* result, const CompilerRunCallbacks
 bool profileWritesLeakFiles(const CompilerCommandManifest& manifest)
 {
 	if (manifest.stageId.compare(QStringLiteral("qbsp"), Qt::CaseInsensitive) == 0
-		|| manifest.toolId.compare(QStringLiteral("ericw-qbsp"), Qt::CaseInsensitive) == 0) {
+		|| manifest.toolId.compare(QStringLiteral("vibemap2-bsp"), Qt::CaseInsensitive) == 0) {
 		return true;
 	}
-	// q3map2's BSPMain removes "<source>.lin" at startup and LeakFile() rewrites it when the map
+	// VibeMap3's BSPMain removes "<source>.lin" at startup and LeakFile() rewrites it when the map
 	// leaks, after which the process still exits 0
-	// (external/compilers/q3map2-nrc/tools/quake3/q3map2/bsp.cpp and leakfile.cpp). Only the BSP
+	// (external/compilers/vibemap3/tools/quake3/q3map2/bsp.cpp and leakfile.cpp). Only the BSP
 	// stage does that: -vis and -light never remove the file, so a stale .lin must not be read back
 	// as a fresh leak there.
-	return manifest.toolId.compare(QStringLiteral("q3map2"), Qt::CaseInsensitive) == 0
+	return manifest.toolId.compare(QStringLiteral("vibemap3"), Qt::CaseInsensitive) == 0
 		&& manifest.stageId.compare(QStringLiteral("bsp"), Qt::CaseInsensitive) == 0;
 }
 
-// ericw qbsp writes "<bsp>.pts" (plus "<bsp>.leak.prt"); q3map2 writes "<source>.lin".
+// VibeMap2 bsp writes "<bsp>.pts" (plus "<bsp>.leak.prt"); VibeMap3 writes "<source>.lin".
 bool isLeakPointFile(const QString& path)
 {
 	return path.endsWith(QStringLiteral(".pts"), Qt::CaseInsensitive)
@@ -430,7 +430,7 @@ using LeakFileSnapshot = QHash<QString, LeakFileState>;
 
 // Taken immediately before the process starts. A leak point file that was already on disk proves
 // nothing on its own: qbsp only removes stale .bsp/.prt/.pts files when neither -onlyents nor
-// -convert is in play (external/compilers/ericw-tools/qbsp/qbsp.cc), so an entity-only recompile of
+// -convert is in play (external/compilers/vibemap2/src/qbsp/qbsp.cc), so an entity-only recompile of
 // a repaired map leaves the old .pts sitting beside the BSP.
 LeakFileSnapshot captureLeakFileSnapshot(const CompilerCommandManifest& manifest)
 {
@@ -502,7 +502,7 @@ void detectLeak(CompilerRunResult* result, const LeakFileSnapshot& preRunLeakFil
 
 	const QString output = QStringLiteral("%1\n%2").arg(result->stdoutText, result->stderrText);
 
-	// ericw qbsp names the entity it reached and where (qbsp/outside.cc).
+	// VibeMap2 bsp names the entity it reached and where (src/qbsp/outside.cc).
 	static const QRegularExpression occupantPattern(QStringLiteral(R"regex(Reached occupant\s+"([^"]*)"\s+at\s+\(([^)]*)\))regex"), QRegularExpression::CaseInsensitiveOption);
 	const QRegularExpressionMatch occupant = occupantPattern.match(output);
 	if (occupant.hasMatch()) {
@@ -511,9 +511,9 @@ void detectLeak(CompilerRunResult* result, const LeakFileSnapshot& preRunLeakFil
 		result->leakPointText = occupant.captured(2).trimmed();
 	}
 
-	// q3map2 prints a "******* leaked *******" banner from Leak_feedback() and
+	// VibeMap3 prints a "******* leaked *******" banner from Leak_feedback() and
 	// "Entity <n>, Brush <m>: Entity leaked" from xml_Select()
-	// (external/compilers/q3map2-nrc/tools/quake3/q3map2/leakfile.cpp and common/inout.cpp). It
+	// (external/compilers/vibemap3/tools/quake3/q3map2/leakfile.cpp and common/inout.cpp). It
 	// reports no classname and no coordinates, so only the entity index is available.
 	static const QRegularExpression q3LeakBannerPattern(QStringLiteral(R"regex(\*{3,}\s*leaked\s*\*{3,})regex"), QRegularExpression::CaseInsensitiveOption);
 	static const QRegularExpression q3LeakEntityPattern(QStringLiteral(R"regex(Entity\s+(-?\d+),\s*Brush\s+-?\d+:\s*Entity leaked)regex"), QRegularExpression::CaseInsensitiveOption);
@@ -552,7 +552,7 @@ void detectLeak(CompilerRunResult* result, const LeakFileSnapshot& preRunLeakFil
 		message += QCoreApplication::translate("VibeStudioCompilerRunner", "Load the leak point file %1 in the editor to follow the leak line.").arg(QDir::toNativeSeparators(result->leakPointFilePath));
 	}
 	// -leaktest makes qbsp print this and exit 1 on purpose, after the leak files are written
-	// (external/compilers/ericw-tools/qbsp/outside.cc).
+	// (external/compilers/vibemap2/src/qbsp/outside.cc).
 	if (result->exitCode != 0 && output.contains(QStringLiteral("Aborting because -leaktest was used"))) {
 		message += QLatin1Char(' ');
 		message += QCoreApplication::translate("VibeStudioCompilerRunner", "The non-zero exit code is the expected -leaktest behaviour rather than a separate compile error.");
@@ -821,7 +821,7 @@ CompilerRunResult runResolvedCommand(CompilerRunResult result, const CompilerRun
 	enrichWithKnownIssues(&result, callbacks);
 
 	// Diagnose the leak before the exit-code branches. With -leaktest qbsp writes the leak files and
-	// then exits 1 on purpose (external/compilers/ericw-tools/qbsp/outside.cc), so the one run the
+	// then exits 1 on purpose (external/compilers/vibemap2/src/qbsp/outside.cc), so the one run the
 	// user explicitly asked to fail on a leak used to be the one run that never explained it.
 	detectLeak(&result, preRunLeakFiles, callbacks);
 

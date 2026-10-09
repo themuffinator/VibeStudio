@@ -289,7 +289,7 @@ completed, failed, or cancelled.
 
 ## Initial Experiments
 - [x] Explain compiler errors and suggest likely fixes.
-- [x] Generate q3map2, ericw-tools, ZDBSP, or ZokumBSP command presets from natural language.
+- [x] Generate VibeMap3, VibeMap2, ZDBSP, or ZokumBSP command presets from natural language.
 - [x] Draft project manifests from an existing folder.
 - [x] Suggest missing asset dependencies from package/project scans.
 - [x] Generate batch conversion recipes.

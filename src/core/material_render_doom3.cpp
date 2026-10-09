@@ -354,200 +354,18 @@ void applyDoom3Deforms(const MaterialDefinition& definition, Mesh* mesh, const C
 }
 
 // One preview light: box attenuation (R_DeriveLightData) with a projection
-// and a falloff image, coloured 2 x the light stage's RGB.
+// and a falloff image, coloured 2 x the light stage's RGB. The shaders
+// sample it (material_doom3.frag).
 struct PreviewLight {
 	Vec3 origin;
 	Vec3 radius {256, 256, 256};
 	Color color {2, 2, 2, 1};
-	const MaterialTexture* projection = nullptr;
-	TextureMatrix projectionMatrix;
-	Wrap projectionWrap = Wrap::ZeroClamp;
-	const MaterialTexture* falloff = nullptr;
-	bool ambient = false;
-
-	[[nodiscard]] double attenuation(const Vec3& position) const
-	{
-		const Vec3 local = position - origin;
-		double s = 0.5 + local.x / (2 * radius.x);
-		double t = 0.5 + local.y / (2 * radius.y);
-		const double f = 0.5 + local.z / (2 * radius.z);
-		double projected = 0.0;
-		if (projection) {
-			projectionMatrix.apply(&s, &t);
-			const Color sample = sampleTexture(*projection, s, t, true, projectionWrap);
-			projected = (sample.r + sample.g + sample.b) / 3.0;
-		} else {
-			// A soft round spot when no light material is chosen.
-			const double dx = s - 0.5;
-			const double dy = t - 0.5;
-			const double d2 = (dx * dx + dy * dy) * 4.0;
-			projected = (s < 0 || s > 1 || t < 0 || t > 1) ? 0.0 : std::clamp(1.0 - d2, 0.0, 1.0);
-		}
-		double fall = 0.0;
-		if (falloff) {
-			fall = sampleTexture(*falloff, f, 0.5, true, Wrap::ZeroClamp).r;
-		} else {
-			// _quadratic: brightest in the middle of the light's depth.
-			const double x = f * 32.0;
-			double d = std::abs(x - 15.5) - 0.5;
-			d = std::max(0.0, d);
-			fall = (f < 0 || f > 1) ? 0.0 : std::pow(std::max(0.0, 1.0 - d / 16.0), 2.0);
-		}
-		return projected * fall;
-	}
-	[[nodiscard]] Color tint(const Vec3& position) const
-	{
-		if (!projection) {
-			return color;
-		}
-		const Vec3 local = position - origin;
-		double s = 0.5 + local.x / (2 * radius.x);
-		double t = 0.5 + local.y / (2 * radius.y);
-		projectionMatrix.apply(&s, &t);
-		const Color sample = sampleTexture(*projection, s, t, true, projectionWrap);
-		const double mean = std::max(1.0e-6, (sample.r + sample.g + sample.b) / 3.0);
-		return {color.r * sample.r / mean, color.g * sample.g / mean, color.b * sample.b / mean, 1.0};
-	}
 };
 
-Vec3 tangentLight(const Vec3& direction, const Vec3& tangent, const Vec3& bitangent, const Vec3& normal)
+// The "very ad-hoc wobble transform" of the skybox texgen, as three rows the
+// shader dots a direction with.
+std::array<Vec3, 3> wobbleSkyRows(double degrees, double wobbleRpm, double rotateRpm, double time)
 {
-	return Vec3 {direction.dot(tangent), direction.dot(bitangent), direction.dot(normal)}.normalized();
-}
-
-Vec3 decodeNormal(const Color& sample)
-{
-	return Vec3 {sample.r * 2 - 1, sample.g * 2 - 1, sample.b * 2 - 1}.normalized();
-}
-
-struct SurfaceFrame {
-	Vec3 position;
-	Vec3 normal;
-	Vec3 tangent;
-	Vec3 bitangent;
-	double s = 0;
-	double t = 0;
-};
-
-SurfaceFrame surfaceAt(const Attributes& a)
-{
-	SurfaceFrame frame;
-	frame.position = {a[0], a[1], a[2]};
-	frame.normal = Vec3 {a[3], a[4], a[5]}.normalized();
-	frame.tangent = Vec3 {a[6], a[7], a[8]}.normalized();
-	frame.bitangent = Vec3 {a[9], a[10], a[11]}.normalized();
-	frame.s = a[12];
-	frame.t = a[13];
-	return frame;
-}
-
-void fillAttributes(const Vertex& vertex, Attributes* a)
-{
-	(*a)[0] = vertex.position.x;
-	(*a)[1] = vertex.position.y;
-	(*a)[2] = vertex.position.z;
-	(*a)[3] = vertex.normal.x;
-	(*a)[4] = vertex.normal.y;
-	(*a)[5] = vertex.normal.z;
-	(*a)[6] = vertex.tangent.x;
-	(*a)[7] = vertex.tangent.y;
-	(*a)[8] = vertex.tangent.z;
-	(*a)[9] = vertex.bitangent.x;
-	(*a)[10] = vertex.bitangent.y;
-	(*a)[11] = vertex.bitangent.z;
-	(*a)[12] = vertex.s;
-	(*a)[13] = vertex.t;
-}
-
-void forEachFragment(const Mesh& mesh, const Camera& camera, CullMode cull, const std::function<void(const FragmentInput&)>& fragment)
-{
-	for (const Triangle& triangle : mesh.triangles) {
-		const Vertex& a = mesh.vertices.at(triangle.a);
-		const Vertex& b = mesh.vertices.at(triangle.b);
-		const Vertex& c = mesh.vertices.at(triangle.c);
-		std::array<Attributes, 3> attributes {};
-		fillAttributes(a, &attributes[0]);
-		fillAttributes(b, &attributes[1]);
-		fillAttributes(c, &attributes[2]);
-		rasterizeTriangle(camera, {a.position, b.position, c.position}, attributes, 14, cull, fragment);
-	}
-}
-
-// Shades one interaction for one light at a surface point.
-Color shadeInteraction(const MaterialDefinition& definition, const Interaction& interaction, const PreviewLight& light, const SurfaceFrame& surface,
-	const Camera& camera, const MaterialImageSet& images, const Registers& registers, const MaterialTableSet& tables, const MaterialRenderOptions& options)
-{
-	const double attenuation = light.attenuation(surface.position);
-	if (attenuation <= 0.0) {
-		return {0, 0, 0, 0};
-	}
-	const Color lightColor = light.tint(surface.position);
-	// Normal from the bump stage (or _flat).
-	Vec3 normal {0, 0, 1};
-	if (interaction.bump) {
-		const MaterialTexturePtr bump = stageTexture(definition, *interaction.bump, images);
-		if (bump && bump->usable()) {
-			double s = surface.s;
-			double t = surface.t;
-			stageMatrix(*interaction.bump, registers, tables).apply(&s, &t);
-			normal = decodeNormal(sampleTexture(*bump, s, t, true, stageWrap(*interaction.bump, definition)));
-		}
-	}
-	const Vec3 toLight = (light.origin - surface.position).normalized();
-	const Vec3 toEye = (camera.eye - surface.position).normalized();
-	Vec3 l = tangentLight(toLight, surface.tangent, surface.bitangent, surface.normal);
-	if (light.ambient) {
-		// Vanilla ambient lights read a fixed direction from _ambient.
-		l = Vec3 {0.0, -0.77, 0.785}.normalized();
-	}
-	const Vec3 v = tangentLight(toEye, surface.tangent, surface.bitangent, surface.normal);
-	const Vec3 h = (l + v).normalized();
-	const double nDotL = normal.dot(l);
-	if (nDotL <= 0.0) {
-		return {0, 0, 0, 0};
-	}
-	const double nDotH = std::max(0.0, normal.dot(h));
-	Color diffuse {0, 0, 0, 0};
-	if (interaction.diffuse) {
-		const MaterialTexturePtr texture = stageTexture(definition, *interaction.diffuse, images);
-		if (texture && texture->usable()) {
-			double s = surface.s;
-			double t = surface.t;
-			stageMatrix(*interaction.diffuse, registers, tables).apply(&s, &t);
-			diffuse = sampleTexture(*texture, s, t, true, stageWrap(*interaction.diffuse, definition)) * interaction.diffuseColor;
-		}
-	}
-	Color specular {0, 0, 0, 0};
-	if (interaction.specular && options.lighting.doom3Specular && !light.ambient) {
-		const MaterialTexturePtr texture = stageTexture(definition, *interaction.specular, images);
-		if (texture && texture->usable()) {
-			double s = surface.s;
-			double t = surface.t;
-			stageMatrix(*interaction.specular, registers, tables).apply(&s, &t);
-			const Color map = sampleTexture(*texture, s, t, true, stageWrap(*interaction.specular, definition));
-			double term = 0.0;
-			if (options.lighting.doom3Shading == MaterialDoom3Shading::Bfg) {
-				term = std::pow(nDotH, 10.0) * 2.0;
-			} else {
-				// _specularTable, then the specular map doubled.
-				const double f = std::max(0.0, 4.0 * nDotH - 3.0);
-				term = f * f * 2.0;
-			}
-			specular = map * interaction.specularColor * term;
-		}
-	}
-	double vertex = 1.0;
-	if (interaction.vertexColor == MaterialVertexColor::InverseVertex) {
-		vertex = 0.0;
-	}
-	const double scale = nDotL * attenuation * vertex;
-	return {(diffuse.r + specular.r) * scale * lightColor.r, (diffuse.g + specular.g) * scale * lightColor.g,
-		(diffuse.b + specular.b) * scale * lightColor.b, 0.0};
-}
-
-Vec3 wobbleSky(const Vec3& direction, double degrees, double wobbleRpm, double rotateRpm, double time)
-{
-	// The "very ad-hoc wobble transform" of the skybox texgen.
 	const double wobble = degrees * kPi / 180.0;
 	const double wobbleSpeed = wobbleRpm * 2 * kPi / 60.0;
 	const double rotateSpeed = rotateRpm * 2 * kPi / 60.0;
@@ -564,8 +382,21 @@ Vec3 wobbleSky(const Vec3& direction, double degrees, double wobbleRpm, double r
 	const Vec3 row0 {axis0.x * c + axis1.x * s, axis1.x * c - axis0.x * s, axis2.x};
 	const Vec3 row1 {axis0.y * c + axis1.y * s, axis1.y * c - axis0.y * s, axis2.y};
 	const Vec3 row2 {axis0.z * c + axis1.z * s, axis1.z * c - axis0.z * s, axis2.z};
-	return Vec3 {direction.dot(Vec3 {row0.x, row1.x, row2.x}), direction.dot(Vec3 {row0.y, row1.y, row2.y}),
-		direction.dot(Vec3 {row0.z, row1.z, row2.z})};
+	return {Vec3 {row0.x, row1.x, row2.x}, Vec3 {row0.y, row1.y, row2.y}, Vec3 {row0.z, row1.z, row2.z}};
+}
+
+void setLight(MaterialUniforms* u, const PreviewLight& light)
+{
+	u->light[0] = static_cast<float>(light.origin.x);
+	u->light[1] = static_cast<float>(light.origin.y);
+	u->light[2] = static_cast<float>(light.origin.z);
+	u->setParam(0, light.radius.x, light.radius.y, light.radius.z);
+	u->setParam(1, light.color.r, light.color.g, light.color.b);
+}
+
+void setMatrix(MaterialUniforms* u, int slot, const TextureMatrix& matrix)
+{
+	u->setMatrix(slot, matrix.m);
 }
 
 PreviewLight defaultLight(const Mesh& mesh, const MaterialRenderOptions& options)
@@ -640,25 +471,35 @@ MaterialRenderResult renderDoom3Material(const MaterialDefinition& source, const
 	const Camera camera = makeCamera(mesh, cameraOptions);
 	applyDoom3Deforms(definition, &mesh, camera, registers, tables, &result.notes);
 
-	Framebuffer framebuffer;
-	framebuffer.reset(camera.width, camera.height);
-	framebuffer.clear(options.background, options.checker, 1.0);
+	MaterialGpuFrame gpu(camera, mesh, options);
+	gpu.background(options.background, options.checker, 1.0);
 	const CullMode cull = cullModeFor(definition.cull);
+	const int vertices = gpu.vertices();
+	GpuState fillState;
+	fillState.depthTest = true;
+	fillState.depthWrite = true;
+	fillState.depthCompare = GpuCompare::Greater;
+	// Light added over what is there, clamped; alpha left alone.
+	GpuState addState;
+	addState.blend = true;
+	addState.sourceColor = GpuBlend::One;
+	addState.destinationColor = GpuBlend::One;
+	addState.sourceAlpha = GpuBlend::Zero;
+	addState.destinationAlpha = GpuBlend::One;
+	addState.depthTest = true;
+	addState.depthCompare = GpuCompare::Equal;
 
 	if (light) {
 		// A light material lights a neutral test surface: each light stage
 		// that passes its condition is a pass, coloured 2 x its RGB,
 		// projected through its image and faded by the falloff image.
-		forEachFragment(mesh, camera, CullMode::Front, [&](const FragmentInput& input) {
-			float& depth = framebuffer.depthAt(input.x, input.y);
-			if (input.depth >= depth) {
-				return;
-			}
-			depth = static_cast<float>(input.depth);
-			float* pixel = framebuffer.pixel(input.x, input.y);
-			pixel[0] = pixel[1] = pixel[2] = 0.0f;
-			pixel[3] = 1.0f;
-		});
+		{
+			MaterialUniforms u = gpu.uniforms();
+			u.mode[0] = 0;
+			GpuState state = fillState;
+			state.cull = gpuCull(CullMode::Front);
+			gpu.draw(GpuProgram::MaterialDoom3, u, state, vertices, GpuDraw());
+		}
 		const MaterialTexturePtr falloff = definition.lightFalloffImage.isEmpty() ? MaterialTexturePtr() : images.find(definition.lightFalloffImage);
 		for (const MaterialStage& stage : definition.stages) {
 			if (cancelled && cancelled()) {
@@ -676,38 +517,23 @@ MaterialRenderResult renderDoom3Material(const MaterialDefinition& source, const
 			}
 			preview.color = {2.0 * rgb.r, 2.0 * rgb.g, 2.0 * rgb.b, 1.0};
 			const MaterialTexturePtr projection = stageTexture(definition, stage, images);
-			preview.projection = projection && projection->usable() ? projection.get() : nullptr;
-			preview.projectionMatrix = stageMatrix(stage, registers, tables);
-			preview.projectionWrap = stage.zeroClamp || stage.alphaZeroClamp ? Wrap::ZeroClamp : (stage.clamp ? Wrap::Clamp : Wrap::Repeat);
-			preview.falloff = falloff && falloff->usable() ? falloff.get() : nullptr;
-			preview.ambient = definition.ambientLight;
-			forEachFragment(mesh, camera, CullMode::Front, [&](const FragmentInput& input) {
-				const float depth = framebuffer.depthAt(input.x, input.y);
-				if (std::abs(input.depth - depth) > 1.0e-4 * std::max(1.0, input.depth)) {
-					return;
-				}
-				const SurfaceFrame surface = surfaceAt(*input.attributes);
-				const double attenuation = preview.attenuation(surface.position);
-				if (attenuation <= 0.0) {
-					return;
-				}
-				const Color tint = preview.tint(surface.position);
-				const Vec3 toLight = (preview.origin - surface.position).normalized();
-				const double nDotL = definition.ambientLight ? 1.0 : std::max(0.0, surface.normal.dot(toLight));
-				// The test surface: mid grey, a faint checker so motion reads.
-				const bool checker = (static_cast<int>(std::floor(surface.s * 4)) + static_cast<int>(std::floor(surface.t * 4))) % 2 == 0;
-				const double albedo = checker ? 0.55 : 0.45;
-				float* pixel = framebuffer.pixel(input.x, input.y);
-				if (definition.blendLight) {
-					blendInto(pixel, Color {tint.r / 2 * attenuation, tint.g / 2 * attenuation, tint.b / 2 * attenuation, 1.0}, stage.blend.source,
-						stage.blend.destination);
-					return;
-				}
-				const double scale = albedo * nDotL * attenuation;
-				pixel[0] = static_cast<float>(std::min(1.0, pixel[0] + tint.r * scale));
-				pixel[1] = static_cast<float>(std::min(1.0, pixel[1] + tint.g * scale));
-				pixel[2] = static_cast<float>(std::min(1.0, pixel[2] + tint.b * scale));
-			});
+			const bool projected = projection && projection->usable();
+			const bool fades = falloff && falloff->usable();
+			MaterialUniforms u = gpu.uniforms();
+			u.mode[0] = 3;
+			u.mode[2] = (projected ? 1 : 0) | (fades ? 2 : 0) | (definition.ambientLight ? 4 : 0) | (definition.blendLight ? 8 : 0);
+			setLight(&u, preview);
+			setMatrix(&u, 3, stageMatrix(stage, registers, tables));
+			GpuDraw textures;
+			const Wrap projectionWrap = stage.zeroClamp || stage.alphaZeroClamp ? Wrap::ZeroClamp : (stage.clamp ? Wrap::Clamp : Wrap::Repeat);
+			gpu.bind(&textures, &u, 3, projected ? gpu.texture(projection.get()) : -1, projectionWrap);
+			gpu.bind(&textures, &u, 4, fades ? gpu.texture(falloff.get()) : -1, Wrap::ZeroClamp);
+			GpuState state = addState;
+			state.cull = gpuCull(CullMode::Front);
+			if (definition.blendLight) {
+				state = stageState(stage.blend, GpuCompare::Equal, false, CullMode::Front);
+			}
+			gpu.draw(GpuProgram::MaterialDoom3, u, state, vertices, textures);
 			++result.stagesDrawn;
 		}
 		if (definition.fogLight) {
@@ -716,7 +542,7 @@ MaterialRenderResult renderDoom3Material(const MaterialDefinition& source, const
 		if (falloff == nullptr) {
 			result.notes << Text::tr("No falloff image: the preview uses _quadratic.");
 		}
-		result.image = framebuffer.toImage(1.0);
+		gpu.finish(1.0, &result, cancelled);
 		return result;
 	}
 
@@ -727,70 +553,71 @@ MaterialRenderResult renderDoom3Material(const MaterialDefinition& source, const
 	// 1. The depth fill: opaque surfaces become black; perforated ones only
 	// where an alpha-tested stage passes.
 	if (!translucent) {
-		forEachFragment(mesh, camera, cull, [&](const FragmentInput& input) {
-			float& depth = framebuffer.depthAt(input.x, input.y);
-			if (input.depth >= depth) {
-				return;
-			}
-			if (coverage == QStringLiteral("perforated")) {
-				const SurfaceFrame surface = surfaceAt(*input.attributes);
-				bool passed = false;
-				for (int index : order) {
-					const MaterialStage& stage = definition.stages.at(index);
-					if (stage.alphaTest != MaterialAlphaTest::Expression || !stageActive(stage, registers)) {
-						continue;
-					}
-					const MaterialTexturePtr texture = stageTexture(definition, stage, images);
-					if (!texture || !texture->usable()) {
-						continue;
-					}
-					double s = surface.s;
-					double t = surface.t;
-					stageMatrix(stage, registers, tables).apply(&s, &t);
-					const double alpha = sampleTexture(*texture, s, t, true, stageWrap(stage, definition)).a * stageColor(stage, registers).a;
-					if (alpha > registers.at(stage.alphaTestExpression, 0.5)) {
-						passed = true;
-						break;
-					}
+		MaterialUniforms u = gpu.uniforms();
+		u.mode[0] = 0;
+		GpuDraw textures;
+		if (coverage == QStringLiteral("perforated")) {
+			int tested = 0;
+			for (int index : order) {
+				const MaterialStage& stage = definition.stages.at(index);
+				if (tested >= 4 || stage.alphaTest != MaterialAlphaTest::Expression || !stageActive(stage, registers)) {
+					continue;
 				}
-				if (!passed) {
-					return;
+				const MaterialTexturePtr texture = stageTexture(definition, stage, images);
+				if (!texture || !texture->usable()) {
+					continue;
 				}
+				gpu.bind(&textures, &u, tested, gpu.texture(texture.get()), stageWrap(stage, definition));
+				setMatrix(&u, tested, stageMatrix(stage, registers, tables));
+				u.setParam(tested, registers.at(stage.alphaTestExpression, 0.5), stageColor(stage, registers).a);
+				++tested;
 			}
-			depth = static_cast<float>(input.depth);
-			float* pixel = framebuffer.pixel(input.x, input.y);
-			pixel[0] = pixel[1] = pixel[2] = 0.0f;
-			pixel[3] = 1.0f;
-		});
+			u.mode[2] = 1;
+			u.mode[3] = tested;
+		}
+		GpuState state = fillState;
+		state.cull = gpuCull(cull);
+		gpu.draw(GpuProgram::MaterialDoom3, u, state, vertices, textures);
 	}
 
 	// 2. Interactions with the preview light, added where depth matches.
 	bool implicitBump = false;
 	const QVector<Interaction> interactions = translucent ? QVector<Interaction>() : pairInteractions(definition, order, registers, &implicitBump);
 	if (!interactions.isEmpty()) {
-		const PreviewLight light = defaultLight(mesh, options);
-		PreviewLight ambient = light;
-		ambient.ambient = true;
-		ambient.projection = nullptr;
-		forEachFragment(mesh, camera, cull, [&](const FragmentInput& input) {
-			const float depth = framebuffer.depthAt(input.x, input.y);
-			if (std::abs(input.depth - depth) > 1.0e-4 * std::max(1.0, input.depth)) {
-				return;
-			}
-			const SurfaceFrame surface = surfaceAt(*input.attributes);
-			float* pixel = framebuffer.pixel(input.x, input.y);
-			for (const Interaction& interaction : interactions) {
-				Color added = shadeInteraction(definition, interaction, light, surface, camera, images, registers, tables, options);
-				if (options.lighting.doom3Ambient > 0.0) {
-					Color base = shadeInteraction(definition, interaction, ambient, surface, camera, images, registers, tables, options);
-					const double level = options.lighting.doom3Ambient / std::max(1.0e-6, ambient.attenuation(surface.position));
-					added = added + base * std::min(4.0, level);
+		const PreviewLight preview = defaultLight(mesh, options);
+		for (const Interaction& interaction : interactions) {
+			MaterialUniforms u = gpu.uniforms();
+			u.mode[0] = 1;
+			setLight(&u, preview);
+			GpuDraw textures;
+			int flags = 0;
+			const auto bindStage = [&](const MaterialStage* stage, int slot, int bit) {
+				if (!stage) {
+					return;
 				}
-				pixel[0] = static_cast<float>(std::clamp(pixel[0] + added.r, 0.0, 1.0));
-				pixel[1] = static_cast<float>(std::clamp(pixel[1] + added.g, 0.0, 1.0));
-				pixel[2] = static_cast<float>(std::clamp(pixel[2] + added.b, 0.0, 1.0));
-			}
-		});
+				const MaterialTexturePtr texture = stageTexture(definition, *stage, images);
+				if (!texture || !texture->usable()) {
+					return;
+				}
+				gpu.bind(&textures, &u, slot, gpu.texture(texture.get()), stageWrap(*stage, definition));
+				setMatrix(&u, slot, stageMatrix(*stage, registers, tables));
+				flags |= bit;
+			};
+			bindStage(interaction.bump, 0, 4);
+			bindStage(interaction.diffuse, 1, 8);
+			bindStage(interaction.specular, 2, 16);
+			flags |= options.lighting.doom3Specular ? 32 : 0;
+			flags |= options.lighting.doom3Shading == MaterialDoom3Shading::Bfg ? 64 : 0;
+			flags |= interaction.vertexColor == MaterialVertexColor::InverseVertex ? 128 : 0;
+			flags |= options.lighting.doom3Ambient > 0.0 ? 256 : 0;
+			u.mode[2] = flags;
+			u.setParam(2, interaction.diffuseColor.r, interaction.diffuseColor.g, interaction.diffuseColor.b, interaction.diffuseColor.a);
+			u.setParam(3, interaction.specularColor.r, interaction.specularColor.g, interaction.specularColor.b, interaction.specularColor.a);
+			u.setParam(4, options.lighting.doom3Ambient);
+			GpuState state = addState;
+			state.cull = gpuCull(cull);
+			gpu.draw(GpuProgram::MaterialDoom3, u, state, vertices, textures);
+		}
 		result.stagesDrawn += static_cast<int>(interactions.size());
 	}
 
@@ -823,84 +650,63 @@ MaterialRenderResult renderDoom3Material(const MaterialDefinition& source, const
 		if (stage.vertexProgram.size() > 0 || stage.fragmentProgram.size() > 0) {
 			result.notes << Text::tr("Stage %1 runs an ARB program in game; the preview draws its image plainly.").arg(index + 1);
 		}
-		// _currentRender reads what is already on screen.
-		const QVector<float> snapshot = renderTarget ? framebuffer.color : QVector<float>();
+		MaterialUniforms u = gpu.uniforms();
+		u.mode[0] = 2;
+		GpuDraw textures;
+		int source = 0;
+		switch (stage.tcGen.source) {
+		case MaterialTexCoordSource::Normal:
+			source = 1;
+			break;
+		case MaterialTexCoordSource::Reflect:
+			source = 2;
+			break;
+		case MaterialTexCoordSource::Skybox:
+			source = 3;
+			break;
+		case MaterialTexCoordSource::WobbleSky: {
+			source = 4;
+			const std::array<Vec3, 3> rows = wobbleSkyRows(registers.at(stage.tcGen.expressions[0], 0.0), registers.at(stage.tcGen.expressions[1], 0.0),
+				registers.at(stage.tcGen.expressions[2], 0.0), options.time);
+			for (int row = 0; row < 3; ++row) {
+				u.setParam(row, rows[size_t(row)].x, rows[size_t(row)].y, rows[size_t(row)].z);
+			}
+			break;
+		}
+		case MaterialTexCoordSource::Screen:
+		case MaterialTexCoordSource::Screen2:
+		case MaterialTexCoordSource::GlassWarp:
+			source = 5;
+			break;
+		default:
+			break;
+		}
 		const bool bilinear = options.filtering != MaterialFiltering::Nearest && !stage.nearest;
-		const Wrap wrap = stageWrap(stage, definition);
-		const double wobble[3] = {registers.at(stage.tcGen.expressions[0], 0.0), registers.at(stage.tcGen.expressions[1], 0.0),
-			registers.at(stage.tcGen.expressions[2], 0.0)};
-		forEachFragment(mesh, camera, cull, [&](const FragmentInput& input) {
-			float& depth = framebuffer.depthAt(input.x, input.y);
-			const double tolerance = 1.0e-4 * std::max(1.0, input.depth);
-			if (translucent || stage.ignoreAlphaTest) {
-				if (input.depth > depth + tolerance) {
-					return;
-				}
-			} else if (std::abs(input.depth - depth) > tolerance) {
-				return;
+		int flags = bilinear ? 1 : 0;
+		if (renderTarget) {
+			// _currentRender reads what is already on screen.
+			gpu.bindSnapshot(&textures, &u, 7);
+			flags |= 4;
+		} else if (cube) {
+			for (int face = 0; face < 6; ++face) {
+				const MaterialTexturePtr& faceTexture = cube->faces[size_t(face)];
+				gpu.bind(&textures, &u, face, faceTexture && faceTexture->usable() ? gpu.texture(faceTexture.get()) : -1, Wrap::Clamp);
 			}
-			const SurfaceFrame surface = surfaceAt(*input.attributes);
-			Color fragment;
-			const Vec3 view = (surface.position - camera.eye).normalized();
-			switch (stage.tcGen.source) {
-			case MaterialTexCoordSource::Normal:
-			case MaterialTexCoordSource::Reflect:
-			case MaterialTexCoordSource::Skybox:
-			case MaterialTexCoordSource::WobbleSky: {
-				Vec3 direction = surface.normal;
-				if (stage.tcGen.source == MaterialTexCoordSource::Reflect) {
-					direction = view - surface.normal * (2 * surface.normal.dot(view));
-				} else if (stage.tcGen.source == MaterialTexCoordSource::Skybox) {
-					direction = surface.position - camera.eye;
-				} else if (stage.tcGen.source == MaterialTexCoordSource::WobbleSky) {
-					direction = wobbleSky(surface.position - camera.eye, wobble[0], wobble[1], wobble[2], options.time);
-				}
-				if (cube) {
-					// Camera cube faces were turned into GL faces when loaded.
-					fragment = sampleCubeMap(*cube, direction);
-				} else if (texture && texture->usable()) {
-					fragment = sampleTexture(*texture, 0.5 + direction.normalized().y * 0.5, 0.5 - direction.normalized().z * 0.5, bilinear, wrap);
-				}
-				break;
-			}
-			case MaterialTexCoordSource::Screen:
-			case MaterialTexCoordSource::Screen2:
-			case MaterialTexCoordSource::GlassWarp:
-			default: {
-				double s = surface.s;
-				double t = surface.t;
-				const bool screen = stage.tcGen.source == MaterialTexCoordSource::Screen || stage.tcGen.source == MaterialTexCoordSource::Screen2
-					|| stage.tcGen.source == MaterialTexCoordSource::GlassWarp || renderTarget;
-				if (screen) {
-					s = (input.x + 0.5) / framebuffer.width;
-					t = 1.0 - (input.y + 0.5) / framebuffer.height;
-				}
-				matrix.apply(&s, &t);
-				if (renderTarget) {
-					const int x = std::clamp(static_cast<int>(s * framebuffer.width), 0, framebuffer.width - 1);
-					const int y = std::clamp(static_cast<int>((1.0 - t) * framebuffer.height), 0, framebuffer.height - 1);
-					const float* p = snapshot.constData() + (static_cast<qsizetype>(y) * framebuffer.width + x) * 4;
-					fragment = {p[0], p[1], p[2], 1.0};
-				} else if (cube) {
-					fragment = sampleCubeMap(*cube, surface.normal);
-				} else {
-					const double obliquity = std::abs(surface.normal.dot(view));
-					const double lod = bilinear ? mipLevel(camera, input.depth, obliquity, texture->width / std::max(1.0, mesh.repeatS)) : 0.0;
-					fragment = sampleTexture(*texture, s, t, bilinear, wrap, lod);
-				}
-				break;
-			}
-			}
-			fragment = fragment * color;
-			if (stage.vertexColor == MaterialVertexColor::InverseVertex) {
-				fragment = fragment * Color {0, 0, 0, 0};
-			}
-			blendInto(framebuffer.pixel(input.x, input.y), fragment, stage.blend.source, stage.blend.destination, stage.maskRed, stage.maskGreen,
-				stage.maskBlue, stage.maskAlpha);
-			if (translucent && stage.blend.isOpaqueReplace() && !stage.maskDepth) {
-				depth = static_cast<float>(input.depth);
-			}
-		});
+			flags |= 2;
+		} else {
+			gpu.bind(&textures, &u, 0, gpu.texture(texture.get()), stageWrap(stage, definition));
+			flags |= 16;
+			u.lighting[3] = static_cast<float>(texture->width / std::max(1.0, mesh.repeatS));
+		}
+		flags |= stage.vertexColor == MaterialVertexColor::InverseVertex ? 8 : 0;
+		u.mode[2] = flags;
+		u.mode[3] = source;
+		u.setColor(color);
+		setMatrix(&u, 6, matrix);
+		const GpuCompare depth = translucent || stage.ignoreAlphaTest ? GpuCompare::GreaterOrEqual : GpuCompare::Equal;
+		GpuState state = stageState(stage.blend, depth, translucent && stage.blend.isOpaqueReplace() && !stage.maskDepth, cull);
+		state.colorMask = quint8((stage.maskRed ? 0 : 1) | (stage.maskGreen ? 0 : 2) | (stage.maskBlue ? 0 : 4) | (stage.maskAlpha ? 0 : 8));
+		gpu.draw(GpuProgram::MaterialDoom3, u, state, vertices, textures);
 		++result.stagesDrawn;
 	}
 	if (implicitBump && !interactions.isEmpty()) {
@@ -909,7 +715,7 @@ MaterialRenderResult renderDoom3Material(const MaterialDefinition& source, const
 	if (!translucent && interactions.isEmpty() && result.stagesDrawn == 0) {
 		result.notes << Text::tr("Nothing draws over the depth fill, so the surface is black, as in game.");
 	}
-	result.image = framebuffer.toImage(1.0);
+	gpu.finish(1.0, &result, cancelled);
 	return result;
 }
 

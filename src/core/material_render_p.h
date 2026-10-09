@@ -1,13 +1,17 @@
 #pragma once
 
 // Internal pieces of the material renderer shared by its engine files:
-// vector maths, preview meshes, the camera, a float framebuffer, a
-// perspective-correct triangle rasterizer with near-plane clipping, and
-// texture sampling with the engines' wrap modes.
+// vector maths, preview meshes, the camera, and the GPU frame each engine
+// path fills with its passes. The per-pixel parts of every engine live in
+// shaders (src/core/shaders/material_*.frag); the engine files work out what
+// the engines compute per vertex and per stage, and choose the passes.
 
 #include "core/material_render.h"
+#include "core/render_device.h"
+#include "core/render_shaders.h"
 
 #include <QColor>
+#include <QHash>
 #include <QImage>
 #include <QVector>
 
@@ -118,23 +122,7 @@ struct Camera {
 
 Camera makeCamera(const Mesh& mesh, const MaterialRenderOptions& options);
 
-struct Framebuffer {
-	int width = 0;
-	int height = 0;
-	QVector<float> color;
-	QVector<float> depth;
-
-	void reset(int w, int h);
-	void clear(const QColor& background, bool checker, double scale);
-	[[nodiscard]] float* pixel(int x, int y) { return color.data() + (static_cast<qsizetype>(y) * width + x) * 4; }
-	[[nodiscard]] const float* pixel(int x, int y) const { return color.data() + (static_cast<qsizetype>(y) * width + x) * 4; }
-	[[nodiscard]] float& depthAt(int x, int y) { return depth[static_cast<qsizetype>(y) * width + x]; }
-	[[nodiscard]] QImage toImage(double displayScale) const;
-};
-
-inline constexpr int kMaxAttributes = 20;
-using Attributes = std::array<double, kMaxAttributes>;
-
+// The engines' culling, in terms of which faces are drawn.
 enum class CullMode {
 	Front, // draw front faces only (the engines' default)
 	Back,  // draw back faces only
@@ -142,21 +130,9 @@ enum class CullMode {
 };
 
 CullMode cullModeFor(MaterialCull cull);
+GpuCull gpuCull(CullMode cull);
 
-struct FragmentInput {
-	int x = 0;
-	int y = 0;
-	double depth = 0.0;
-	bool frontFacing = true;
-	const Attributes* attributes = nullptr;
-};
-
-// Rasterizes one triangle given world positions and per-vertex attributes,
-// clipping at the camera's near plane. Attributes are interpolated with
-// perspective correction. The callback runs once per covered pixel centre.
-void rasterizeTriangle(const Camera& camera, const std::array<Vec3, 3>& positions, const std::array<Attributes, 3>& attributes, int count,
-	CullMode cull, const std::function<void(const FragmentInput&)>& fragment);
-
+// How a stage's image repeats; the shaders sample with these rules.
 enum class Wrap {
 	Repeat,
 	Clamp,          // clamp to edge
@@ -164,34 +140,126 @@ enum class Wrap {
 	AlphaZeroClamp, // outside keeps colour, alpha 0
 };
 
-// Samples straight RGBA at (s, t) in texture repeats; `lod` picks a mip
-// level (0 = full size) for minification.
-Color sampleTexture(const MaterialTexture& texture, double s, double t, bool bilinear, Wrap wrap, double lod = 0.0);
-// The palette index under (s, t), point sampled, -1 when the texture has
-// no indices or the texel is transparent.
-int sampleIndex(const MaterialTexture& texture, double s, double t, Wrap wrap);
-
-// Samples a cube in idTech sky box orientation (Quake II/III `env` boxes)
-// for a world direction (Z up).
-Color sampleSkyBox(const MaterialCubeTexture& cube, const Vec3& direction);
-// Samples a Doom 3 cube map (GL face convention) for a world direction.
-Color sampleCubeMap(const MaterialCubeTexture& cube, const Vec3& direction);
-
-// Blends a fragment into a framebuffer pixel with GL factors and clamps.
-void blendInto(float* destination, const Color& source, MaterialBlendFactor sourceFactor, MaterialBlendFactor destinationFactor,
-	bool maskRed = false, bool maskGreen = false, bool maskBlue = false, bool maskAlpha = false);
-
 // A soft light falling on a point, for synthetic lightmaps and vertex
 // colours: 1.0 is full brightness. Deterministic in position and time.
 double previewLightAt(const Vec3& position, const Vec3& normal, const Mesh& mesh, const MaterialPreviewLighting& lighting, double time);
 // Where the preview light is, orbiting or fixed.
 Vec3 previewLightPosition(const Mesh& mesh, const MaterialPreviewLighting& lighting, double time);
 
-// Mip level for a fragment: texels per pixel from depth, the surface's
-// obliquity and the stage's texture density.
-double mipLevel(const Camera& camera, double depth, double obliquity, double texelsPerUnit);
 
 double fract(double value);
+
+// ---------------------------------------------------------------------------
+// GPU frames
+// ---------------------------------------------------------------------------
+
+// The uniform block every material program reads (material_common.glsl),
+// in std140 layout.
+struct MaterialUniforms {
+	float viewProjection[16] {};
+	float eye[4] {};
+	float forward[4] {};
+	float right[4] {};
+	float up[4] {};
+	float viewport[4] {};
+	float light[4] {};
+	float mesh[4] {};
+	float lighting[4] {};
+	float lightColor[4] {};
+	qint32 mode[4] {};
+	float color[4] {1.0f, 1.0f, 1.0f, 1.0f};
+	float params[8][4] {};
+	float matrices[16][4] {};
+	qint32 samplerInfo[8][4] {};
+
+	void setColor(const Color& value);
+	void setParam(int index, double x, double y = 0.0, double z = 0.0, double w = 0.0);
+	// A 2x3 texture matrix for slot `slot` (rows s and t).
+	void setMatrix(int slot, const double rows[2][3]);
+	void setIdentityMatrix(int slot);
+};
+static_assert(sizeof(MaterialUniforms) == 752, "MaterialUniforms must match material_common.glsl");
+
+// Per-vertex values a stage supplies: texture coordinates and a colour.
+struct StageVertex {
+	double s = 0.0;
+	double t = 0.0;
+	Color color {1.0, 1.0, 1.0, 1.0};
+};
+
+// One preview frame on the GPU: a 16-bit colour target (the engines'
+// framebuffer, clamped after every blend), depth, and the passes the engine
+// path adds. finish() renders it on the active backend and returns the
+// display-scaled 8-bit image.
+class MaterialGpuFrame {
+public:
+	MaterialGpuFrame(const Camera& camera, const Mesh& mesh, const MaterialRenderOptions& options);
+
+	// Camera, viewport, preview light and time, ready for a draw to adjust.
+	[[nodiscard]] MaterialUniforms uniforms() const;
+
+	// Textures, uploaded once per frame each. -1 for an unusable texture.
+	int texture(const MaterialTexture* texture);
+	// Palette indices in red, the texel's alpha kept.
+	int indices(const MaterialTexture* texture);
+	// 256 colours in one row.
+	int palette(const QVector<QRgb>& palette);
+	// Rows of 256 palette indices (COLORMAP, colormap.lmp) in red.
+	int rows(const QByteArray& table, int rowCount);
+	// Binds a texture to a sampler slot of a draw: its wrap rule and mip
+	// levels go to the uniforms. A negative texture binds nothing.
+	void bind(GpuDraw* draw, MaterialUniforms* uniforms, int slot, int texture, Wrap wrap) const;
+	// The colour so far, for _currentRender; binds it to `slot`.
+	void bindSnapshot(GpuDraw* draw, MaterialUniforms* uniforms, int slot);
+
+	// The mesh as vertex data, with each vertex's stage coordinates and
+	// colour (or its own s, t and white when `stage` is null).
+	int vertices(const QVector<StageVertex>* stage = nullptr);
+	int vertices(const Mesh& mesh, const QVector<StageVertex>* stage = nullptr);
+
+	// Draws `program` over the mesh (or a substitute `mesh` given to
+	// vertices()) with this state. Depth compares nearness: Greater for the
+	// engines' less-than, GreaterOrEqual for less-or-equal, Equal for equal.
+	void draw(GpuProgram program, const MaterialUniforms& uniforms, const GpuState& state, int vertexBuffer, const GpuDraw& textures,
+		int indexBuffer = -1, int indexCount = -1);
+	// The background: a colour, optionally checkered, times `scale`.
+	void background(const QColor& colour, bool checker, double scale);
+	// Quake III's fog volume from inside: walls writing their distance, then
+	// the fog curve over them.
+	void fogScene(int vertexBuffer, const Color& fog, double distanceToOpaque, double identityLight);
+	// The index buffer of the frame's main mesh.
+	[[nodiscard]] int meshIndices() const { return m_meshIndices; }
+	[[nodiscard]] int meshIndexCount() const { return m_meshIndexCount; }
+
+	// Renders and reads back the frame. On failure the result has no image
+	// and `error` says why; a cancelled frame sets `cancelled`.
+	void finish(double displayScale, MaterialRenderResult* result, const std::function<bool()>& cancelled);
+
+private:
+	GpuPass& mainPass();
+	void closePass();
+
+	Camera m_camera;
+	const Mesh* m_mesh = nullptr;
+	const MaterialRenderOptions* m_options = nullptr;
+	GpuFrame m_frame;
+	QHash<const void*, int> m_textures;
+	QHash<const void*, int> m_indexTextures;
+	// Mip levels of each uploaded texture, by frame texture index.
+	QHash<int, int> m_levels;
+	int m_meshIndices = -1;
+	int m_meshIndexCount = 0;
+	int m_snapshotTarget = -1;
+	bool m_passOpen = false;
+	bool m_colorWritten = false;
+	bool m_depthWritten = false;
+	double m_depthLow = 0.5;
+	double m_depthHigh = 1.0;
+};
+
+// Fixed-function state for an engine's blend, depth function and writes.
+GpuBlend gpuBlendFactor(MaterialBlendFactor factor);
+GpuState stageState(const MaterialBlend& blend, GpuCompare depth, bool depthWrite, CullMode cull);
 
 // The engine paths, implemented in their own files.
 MaterialRenderResult renderQuake3Material(const MaterialDefinition& definition, const MaterialImageSet& images, const MaterialTableSet& tables,

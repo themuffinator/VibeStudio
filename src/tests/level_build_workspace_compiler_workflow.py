@@ -1,4 +1,4 @@
-"""Generated draft -> prepared workspace -> q3map2 -> verified PK3 integration proof.
+"""Generated draft -> prepared workspace -> VibeMap3 -> verified PK3 integration proof.
 
 No game launch, native input or screen capture. Output stays in .agents/tmp.
 """
@@ -79,7 +79,7 @@ def main():
     for record in prepared['inputs']:
         data = (workspace / record['path']).read_bytes()
         assert len(data) == record['bytes'] and hashlib.sha256(data).hexdigest() == record['sha256']
-    pipeline = ['build', 'run-prepared', workspace, '--tool', 'q3map2=' + str(args.compiler.resolve()),
+    pipeline = ['build', 'run-prepared', workspace, '--tool', 'vibemap3=' + str(args.compiler.resolve()),
                 '--stage-args', 'bsp=-threads 2 -meta', '--stage-args', 'vis=-threads 2 -fast', '--stage-args', 'light=-threads 2 -fast']
     run('plan', pipeline + ['--dry-run'])
     result = run('compile', pipeline)['pipeline']

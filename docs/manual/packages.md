@@ -175,6 +175,9 @@ separate package. Doom map lumps travel with their whole map. To collect the tex
 sounds a map uses, open the map and its package and choose **Dependencies** on the Levels header,
 which can export the resolved assets; see [Level editing](levels.md).
 
+To release your own project, map, model or textures for players, with only your own files, release
+notes and a readme, use **Package and Release** instead; see [Package and release](releases.md).
+
 ## Command-line equivalents
 
 | Task | Command |
@@ -205,6 +208,7 @@ original at `--backup` (by default `<output>.bak`). Add `--dry-run` to see what 
 
 ## Learn more
 
+- [Package and release](releases.md): package your own work for players.
 - [Package manager](../PACKAGE_MANAGER.md): limits, drafts, recovery and every staging rule.
 - [Support matrix](../SUPPORT_MATRIX.md#archive-and-package-formats): exact format support.
 - [CLI strategy](../CLI_STRATEGY.md): every `package` option.

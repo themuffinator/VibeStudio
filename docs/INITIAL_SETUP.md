@@ -826,6 +826,16 @@ choices sit on Settings > Appearance and Language beside it.
 - [x] Preview key differences: layout, camera, grid, selection, clipping,
   shortcuts, and terminology.
 - [ ] Import or skip shortcut/profile files where supported later.
+- [x] Choose the 3D renderer: **Automatic** (the default; Vulkan, then
+  OpenGL, with OpenGL first on macOS), **OpenGL** or **Vulkan**, on the same
+  **Appearance and Language** page the step's button opens. **Status** says
+  what each renderer found, which one is in use, or why one cannot start, in
+  words rather than colour; **Check Renderers** starts both again and draws a
+  test image on each. The choice is `rendering/backend` in the settings store,
+  shared with `render set` and overridden for a run by `--renderer` or
+  `VIBESTUDIO_RENDER_BACKEND`. Setup never blocks on it: a computer where
+  neither renderer starts finishes setup, and its 3D views say why they are
+  empty.
 
 ### 4. Game Installations
 
@@ -850,7 +860,7 @@ choices sit on Settings > Appearance and Language beside it.
 ### 6. Toolchains and Build
 
 - [ ] Detect bundled and system compiler tools.
-- [ ] Configure ericw-tools, q3map2, ZDBSP, ZokumBSP, and source-port launchers.
+- [ ] Configure VibeMap2, VibeMap3, ZDBSP, ZokumBSP, and source-port launchers.
 - [ ] Choose default compiler profiles by engine family.
 - [ ] Run a harmless toolchain probe and show results.
 - [ ] Enable command manifests and output-path reporting.
@@ -858,7 +868,12 @@ choices sit on Settings > Appearance and Language beside it.
 Until this step lands in the guided flow, compiler executables are located on
 the Build page's **Toolchain** tab, which saves the same user override as
 `vibestudio --cli compiler set-path` and stays editable afterwards. The compiler
-status chip opens that tab.
+status chip opens that tab. VibeStudio's own VibeMap2 and VibeMap3 programs are
+found automatically under their current and pre-rename names; stock ericw-tools
+and q3map2 programs need **Locate…**. Game installation profiles default to the
+`vibemap2` compiler label for Quake and Quake II and `vibemap3` for Quake III,
+and profiles saved with the old `ericw-tools` and `q3map2` labels migrate
+automatically.
 
 After opening a Quake-family map and its asset package/draft, **Build > Prepare
 Build Workspace** can capture current edits and staged assets into a new
@@ -873,7 +888,7 @@ opens the full snapshot for general inspection. **Deploy Prepared Build** review
 the matching Quake-family installation, game folder, full PAK/PK3 and optional windowed
 launch. Read-only profiles require permission for that deployment only; replacing
 a package keeps a verified backup. **Build and Launch** opens this review after
-compilation. Quake/Quake II use the target selector and ericw-tools, with PAK
+compilation. Quake/Quake II use the target selector and VibeMap2, with PAK
 publication. Direct WAD2 texture drafts are accepted for Quake. Classic deployment
 adds a PAK slot control: Automatic reuses this map's remembered slot or chooses
 a free loadable slot; explicit selection requires another review. Quake needs a
@@ -1008,14 +1023,15 @@ select the model again to retry. Native metadata and per-surface material detail
 remain available after decoding. See [OBJ interchange](MODEL_MESH.md#obj-polygon-interchange).
 Filled and wireframe views prepare in the background with visible rendering
 state. Navigation stays available; component picking resumes when the camera
-and pose are ready. The preview uses the existing CPU renderer and needs no
-graphics backend, connector or setup preference change. Wireframe retains every
+and pose are ready. The preview draws with the 3D renderer chosen in
+**Appearance and Language** > **3D Rendering** (Automatic by default) and needs
+no connector or other setup change. Wireframe retains every
 edge and uses thicker dashed selection cues; display scaling and high-visibility
 themes adjust stroke widths automatically.
 Vertex markers and their picking index also prepare in the background. Dense
 component selections and frame changes preserve table context, and unchanged
 inspector refreshes reuse the completed preview. These optimizations use the
-same local CPU renderer and require no additional setup.
+same renderer and require no additional setup.
 Browser **Export OBJ** also runs with progress and cancellation. Choose its
 output outside the source package folder or draft; those files stay under the
 package editor's staging workflow. No new setup option or dependency is needed.
@@ -1168,7 +1184,7 @@ Reload Images, and Details expose loading and missing-image diagnostics. No extr
 connector, renderer, or preference is needed. Animation
 playback follows reduced-motion settings. The shared preview renders on a worker
 and shows when it is updating; model or material changes retire older work.
-This needs no GPU backend. Keep local recovery copies defaults on and checks
+It draws with the shared 3D renderer (OpenGL or Vulkan). Keep local recovery copies defaults on and checks
 unsaved mesh changes every five seconds. Its checkbox persists under
 `model/recoveryEnabled`; turning it off retains existing copies. Recover shows
 the local folder and restores a verified copy as an unsaved draft. Import,

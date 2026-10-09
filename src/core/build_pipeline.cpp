@@ -445,13 +445,13 @@ QVector<BuildPipelineDescriptor> buildPipelineDescriptors()
 			QStringLiteral("quake-full"),
 			QCoreApplication::translate("VibeStudioBuildPipeline", "Quake full compile"),
 			QStringLiteral("idTech2"),
-			QCoreApplication::translate("VibeStudioBuildPipeline", "Runs the complete Quake-family loop: BSP, visibility, and lighting through ericw-tools."),
+			QCoreApplication::translate("VibeStudioBuildPipeline", "Runs the complete Quake-family loop: BSP, visibility, and lighting through VibeMap2."),
 			{QStringLiteral("map")},
 			QStringLiteral("bsp"),
 			{
 				pipelineStage(
 					QStringLiteral("qbsp"),
-					QStringLiteral("ericw-qbsp"),
+					QStringLiteral("vibemap2-bsp"),
 					QCoreApplication::translate("VibeStudioBuildPipeline", "QBSP"),
 					QCoreApplication::translate("VibeStudioBuildPipeline", "Compiles the .map source into a Quake-family BSP."),
 					QString(),
@@ -459,7 +459,7 @@ QVector<BuildPipelineDescriptor> buildPipelineDescriptors()
 					true),
 				pipelineStage(
 					QStringLiteral("vis"),
-					QStringLiteral("ericw-vis"),
+					QStringLiteral("vibemap2-vis"),
 					QCoreApplication::translate("VibeStudioBuildPipeline", "VIS"),
 					QCoreApplication::translate("VibeStudioBuildPipeline", "Computes the potentially visible set for the compiled BSP, in place."),
 					QStringLiteral("qbsp"),
@@ -467,7 +467,7 @@ QVector<BuildPipelineDescriptor> buildPipelineDescriptors()
 					true),
 				pipelineStage(
 					QStringLiteral("light"),
-					QStringLiteral("ericw-light"),
+					QStringLiteral("vibemap2-light"),
 					QCoreApplication::translate("VibeStudioBuildPipeline", "LIGHT"),
 					QCoreApplication::translate("VibeStudioBuildPipeline", "Computes lightmaps and light data for the compiled BSP, in place."),
 					QStringLiteral("vis"),
@@ -484,7 +484,7 @@ QVector<BuildPipelineDescriptor> buildPipelineDescriptors()
 			{
 				pipelineStage(
 					QStringLiteral("qbsp"),
-					QStringLiteral("ericw-qbsp"),
+					QStringLiteral("vibemap2-bsp"),
 					QCoreApplication::translate("VibeStudioBuildPipeline", "QBSP"),
 					QCoreApplication::translate("VibeStudioBuildPipeline", "Compiles the .map source into a Quake-family BSP."),
 					QString(),
@@ -492,7 +492,7 @@ QVector<BuildPipelineDescriptor> buildPipelineDescriptors()
 					true),
 				pipelineStage(
 					QStringLiteral("vis"),
-					QStringLiteral("ericw-vis"),
+					QStringLiteral("vibemap2-vis"),
 					QCoreApplication::translate("VibeStudioBuildPipeline", "VIS"),
 					QCoreApplication::translate("VibeStudioBuildPipeline", "Visibility processing, disabled by default for fast iteration."),
 					QStringLiteral("qbsp"),
@@ -500,7 +500,7 @@ QVector<BuildPipelineDescriptor> buildPipelineDescriptors()
 					false),
 				pipelineStage(
 					QStringLiteral("light"),
-					QStringLiteral("ericw-light"),
+					QStringLiteral("vibemap2-light"),
 					QCoreApplication::translate("VibeStudioBuildPipeline", "LIGHT"),
 					QCoreApplication::translate("VibeStudioBuildPipeline", "Lighting pass; the caller supplies fast-mode arguments."),
 					QStringLiteral("vis"),
@@ -517,7 +517,7 @@ QVector<BuildPipelineDescriptor> buildPipelineDescriptors()
 			{
 				pipelineStage(
 					QStringLiteral("qbsp"),
-					QStringLiteral("ericw-qbsp"),
+					QStringLiteral("vibemap2-bsp"),
 					QCoreApplication::translate("VibeStudioBuildPipeline", "QBSP"),
 					QCoreApplication::translate("VibeStudioBuildPipeline", "Compiles the .map source into a Quake-family BSP."),
 					QString(),
@@ -528,13 +528,13 @@ QVector<BuildPipelineDescriptor> buildPipelineDescriptors()
 			QStringLiteral("quake3-full"),
 			QCoreApplication::translate("VibeStudioBuildPipeline", "Quake III full compile"),
 			QStringLiteral("idTech3"),
-			QCoreApplication::translate("VibeStudioBuildPipeline", "Runs the complete Quake III-family loop: BSP, visibility, and lighting through q3map2."),
+			QCoreApplication::translate("VibeStudioBuildPipeline", "Runs the complete Quake III-family loop: BSP, visibility, and lighting through VibeMap3."),
 			{QStringLiteral("map")},
 			QStringLiteral("bsp"),
 			{
 				pipelineStage(
 					QStringLiteral("bsp"),
-					QStringLiteral("q3map2-bsp"),
+					QStringLiteral("vibemap3-bsp"),
 					QCoreApplication::translate("VibeStudioBuildPipeline", "BSP"),
 					QCoreApplication::translate("VibeStudioBuildPipeline", "Builds the Quake III-family BSP from the .map source."),
 					QString(),
@@ -542,7 +542,7 @@ QVector<BuildPipelineDescriptor> buildPipelineDescriptors()
 					true),
 				pipelineStage(
 					QStringLiteral("vis"),
-					QStringLiteral("q3map2-vis"),
+					QStringLiteral("vibemap3-vis"),
 					QCoreApplication::translate("VibeStudioBuildPipeline", "VIS"),
 					QCoreApplication::translate("VibeStudioBuildPipeline", "Computes the potentially visible set for the compiled BSP, in place."),
 					QStringLiteral("bsp"),
@@ -550,7 +550,7 @@ QVector<BuildPipelineDescriptor> buildPipelineDescriptors()
 					true),
 				pipelineStage(
 					QStringLiteral("light"),
-					QStringLiteral("q3map2-light"),
+					QStringLiteral("vibemap3-light"),
 					QCoreApplication::translate("VibeStudioBuildPipeline", "LIGHT"),
 					QCoreApplication::translate("VibeStudioBuildPipeline", "Computes lightmaps for the compiled BSP, in place."),
 					QStringLiteral("vis"),
@@ -567,7 +567,7 @@ QVector<BuildPipelineDescriptor> buildPipelineDescriptors()
 			{
 				pipelineStage(
 					QStringLiteral("bsp"),
-					QStringLiteral("q3map2-bsp"),
+					QStringLiteral("vibemap3-bsp"),
 					QCoreApplication::translate("VibeStudioBuildPipeline", "BSP"),
 					QCoreApplication::translate("VibeStudioBuildPipeline", "Builds the Quake III-family BSP from the .map source."),
 					QString(),
@@ -775,7 +775,7 @@ BuildPipelineResult runBuildPipeline(const BuildPipelineRequest& request, const 
 			result.completedStageCount++;
 		}
 
-		// A stage that exited 0 still produced its artifacts. ericw-tools prints non-fatal
+		// A stage that exited 0 still produced its artifacts. VibeMap2 prints non-fatal
 		// "ERROR: ..." notices and carries on (common/bspfile_common.cc, common/bspxfile.cc), so
 		// those lines are reported as warnings instead of failing a pipeline whose every stage
 		// succeeded. The same applies to the partial output of a cancelled stage, which would
@@ -1388,7 +1388,7 @@ GameMapDeployPlan planGameMapDeploy(const GameInstallationProfile& installation,
 	if (!QFileInfo(QDir(root).filePath(plan.gameDirectory)).isDir()) {
 		plan.warnings << QCoreApplication::translate("VibeStudioBuildPipeline", "The game folder %1 does not exist yet and will be created.").arg(plan.gameDirectory);
 	}
-	// ericw-tools write coloured light to .lit and deluxemaps to .lux beside
+	// VibeMap2 writes coloured light to .lit and deluxemaps to .lux beside
 	// the BSP; engines look for them beside the copied map.
 	const QFileInfo mapInfo(builtMap);
 	QStringList sources {builtMap};

@@ -45,6 +45,43 @@ Only continue if you got VibeStudio from the project's own
   AppImage, or build VibeStudio from source.
 
 The command line (`vibestudio --cli ...`) needs no display, so it also works over SSH and in CI.
+Commands that draw in 3D (`material render`, `render backends`, `render test`) can use only Vulkan
+when there is no display; see [3D views stay empty](#3d-views-stay-empty).
+
+## 3D views stay empty
+
+The Levels camera, the model views and material previews draw with OpenGL or Vulkan. When neither
+works, a view shows **The 3D renderer could not draw this view** with the reason, and material
+swatches stay blank.
+
+1. Open **Settings** > **Appearance and Language** > **3D Rendering**. **Status** says what each
+   renderer found, or why it could not start.
+2. Select **Check Renderers**. It starts both again and draws a test image on each.
+3. Choose the other renderer under **Renderer**, or **Automatic**.
+4. Update your graphics driver. Vulkan needs a Vulkan 1.0 driver; OpenGL needs OpenGL 3.3 (or
+   OpenGL ES 3.0). On macOS, OpenGL works without extra software; Vulkan needs MoltenVK.
+5. On Linux without a GPU driver, Mesa's software drivers (`mesa-vulkan-drivers` for Vulkan,
+   llvmpipe for OpenGL) work, but slowly. **Status** says **runs on the processor** for them.
+
+From the command line:
+
+```sh
+vibestudio --cli render backends
+vibestudio --cli render test
+vibestudio --cli render set opengl
+```
+
+`render backends` lists each renderer with its device and driver, or why it is unavailable.
+`render test` exits 4 when a renderer draws its test image wrongly and 5 when none can start. To try
+a renderer for one run without changing the setting, add `--renderer vulkan` to a command, or set
+the environment variable `VIBESTUDIO_RENDER_BACKEND` to `opengl` or `vulkan` before starting the
+studio.
+
+On a computer with two graphics processors, Vulkan picks the discrete one. To use another, set
+`VIBESTUDIO_VULKAN_DEVICE` to part of its name, such as `Intel`, or to its place in the system's list
+of Vulkan devices, counting from 0; `render backends` then names the one in use. OpenGL uses the
+graphics processor your operating system assigns to VibeStudio. `VIBESTUDIO_VULKAN_VALIDATION=1`
+turns on the Khronos validation layer, where it is installed, for reports to the developers.
 
 ## Find the logs
 
@@ -68,11 +105,13 @@ A diagnostics bundle describes your setup for a bug report.
 - In the studio, choose **Tools** > **Copy Diagnostic Bundle**
   (<kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>D</kbd>; on macOS, <kbd>Cmd</kbd> takes the place of
   <kbd>Ctrl</kbd>). It copies to the clipboard the version, Qt runtime, platform, language and theme,
-  the open project and package, the log file's path, the number of crash reports, where each compiler
-  was found, any keyboard shortcut conflicts and the last 60 lines of the session log.
+  the 3D renderer and what OpenGL and Vulkan found, the open project and package, the log file's path,
+  the number of crash reports, where each compiler was found, any keyboard shortcut conflicts and the
+  last 60 lines of the session log.
 - From the command line, run `vibestudio --cli diagnostics bundle --output ./diagnostics`. It writes
-  `vibestudio-diagnostics.json` with the version, Qt and system details, and the studio's command,
-  module, operation-state, interface and localization reports. It leaves out secrets, API keys,
+  `vibestudio-diagnostics.json` with the version, Qt and system details, the 3D renderer choice, and
+  the studio's command, module, operation-state, interface and localization reports. Add the output of
+  `vibestudio --cli render backends` when 3D views are the problem. It leaves out secrets, API keys,
   environment values, home-directory contents and project files.
 
 > [!IMPORTANT]
@@ -136,12 +175,17 @@ From the command line, `vibestudio --cli --set-text-scale 150` sets the scale. S
 
 ## Compilers are not found
 
-VibeStudio does not include the compilers; install ericw-tools, q3map2, ZDBSP or ZokumBSP yourself.
-Then open the **Toolchain** tab on the Build page: a tool that shows **Not found** needs
-**Locate…**, and **Rescan** looks again after you install one. On macOS and Linux, the program must
-be executable. Because `vis` and `light` are common program names, check that **Executable** points
-at the ericw-tools programs and not something else on your PATH. If **Path from** says
-**Project manifest (missing)**, fix `compilerToolOverrides` in the project's manifest.
+VibeStudio does not include the compiler programs yet; install VibeMap2, VibeMap3, ZDBSP or
+ZokumBSP yourself. Then open the **Toolchain** tab on the Build page: a tool that shows **Not found**
+needs **Locate…**, and **Rescan** looks again after you install one. On macOS and Linux, the program
+must be executable. VibeStudio finds VibeMap2 and VibeMap3 under their current names
+(`vibemap2-bsp`, `vibemap3`) and their earlier ones (`vmt-bsp`, `q3mapx`), but not stock ericw-tools
+or q3map2: choose those with **Locate…**. Because stock ericw-tools uses the common program names
+`vis` and `light`, check that **Executable** points at the ericw-tools programs and not something
+else. Scripts must use the new tool ids, such as `vibemap2-bsp` and `vibemap3`: a `compiler`
+command given an old id, such as `ericw-qbsp` or `q3map2`, stops with a message that names the new
+one. If **Path from** says **Project manifest (missing)**, fix `compilerToolOverrides` in the
+project's manifest.
 `vibestudio --cli compiler list` shows where each tool was found and its version. See
 [Build and launch](build-and-launch.md).
 
@@ -154,6 +198,27 @@ from another store or as a source port, choose **Add** in **Game Installations**
 folder. To scan another Steam library or game folder, run
 `vibestudio --cli install detect --root "<folder>"`. Detected games are not saved until you choose
 **Import Detected**. See [Projects and game installations](projects.md#add-your-game-installations).
+
+## A release includes the game's own files
+
+A release can only leave out what it knows the game ships. If **Package and Release** says the
+game's own files were not checked, or the **From the game** chip shows nothing:
+
+- Link the project to its game installation: select it under **Game Installations** on the
+  Workspace page and choose **Use**.
+- Choose **Index Assets** for that installation, or **Index Game Assets** in the release window's
+  notice. Index it again after the game is patched; its row then says **asset index out of date**.
+- A file in your project with the same path as one of the game's ships on purpose, because it
+  replaces the game's version. The **Included** list marks it with a warning icon; delete or rename
+  your copy if that is not what you want.
+- For an expansion or another mod, name it as a requirement in the project manifest. See
+  [Package and release](releases.md#requirements-and-expansions).
+
+## A release is missing a file
+
+A release gathers what your maps, models and shader scripts name. Sounds, models or textures that
+game code, QuakeC or scripts load by name are not found that way: add them with `release.include`
+patterns in the project manifest. See [Package and release](releases.md#choose-what-ships).
 
 ## A package will not open
 
@@ -169,10 +234,11 @@ folder. To scan another Steam library or game folder, run
 
 ### Game folders stay unchanged
 
-Detection only reads, and installation profiles start read-only. VibeStudio writes into a game folder
-only for test-map copies you allow and prepared-build deployments you review, though the game itself
-may write its own configuration and logs when you launch it. Removing a profile never deletes game
-files.
+Detection and indexing a game's assets only read, and installation profiles start read-only.
+VibeStudio writes into a game folder only for test-map copies you allow and prepared-build deployments
+you review, though the game itself may write its own configuration and logs when you launch it.
+Releases are written to your project's output folder, never into the game. Removing a profile never
+deletes game files.
 
 ### Nothing is sent without your consent
 

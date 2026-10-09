@@ -1,11 +1,15 @@
 #pragma once
 
-// Software-rendered model viewport.
+// GPU-rendered model viewport.
 //
-// Orthographic and perspective cameras share a bounded software depth buffer,
-// perspective-correct texture sampling and per-pixel transparency compositing.
-// QPainter presents the result and draws the grid, wireframe and accessible HUD;
-// no OpenGL context or platform-specific rendering dependency is required.
+// Orthographic and perspective cameras render through the active OpenGL or
+// Vulkan backend (core/render_device.h): depth-tested triangles with skins,
+// flat shading, selection hatching and edges, translucent texels peeled and
+// composited in depth order, or antialiased wireframe edges. A worker builds
+// each frame and the device reads back its image and the triangle under every
+// pixel; QPainter presents the image beneath the grid, overlays and the
+// accessible HUD. Picking reads the triangle ids of the presented frame. With
+// no working backend the view says why and draws no model.
 //
 // idTech models are Z-up: X forward, Y left, Z up (see the Quake
 // Specifications, chapter 5, https://www.gamers.org/dEngine/quake/spec/quake-spec34/qkspec_5.htm).
@@ -23,7 +27,6 @@
 #include "core/model_pose.h"
 #include "core/model_transform.h"
 #include "core/model_trackball.h"
-#include "app/model_rasterizer.h"
 #include "app/model_vertex_overlay.h"
 
 #include <QBrush>
@@ -45,6 +48,19 @@ class QTimer;
 class QThread;
 
 namespace vibestudio {
+
+// One presented GPU frame: the colour image (premultiplied ARGB32) and the
+// triangle drawn at each of its pixels (-1 for none), in physical pixels.
+struct ModelRenderFrame {
+	QImage image;
+	QVector<int> source;
+	double pixelRatio = 1.0;
+	void clear()
+	{
+		image = QImage();
+		source.clear();
+	}
+};
 
 enum class ModelViewportRenderMode {
 	Wireframe,
@@ -339,6 +355,12 @@ public:
 	// Editing drafts, disabled views and stale render buffers cannot be sampled.
 	bool surfacePointAt(const QPointF& point, CameraSurfacePoint* surface, int* triangle = nullptr);
 	[[nodiscard]] bool isRendering() const;
+	// The renderer behind the last frame, such as "Vulkan 1.3.290 · <device>",
+	// or empty before the first; and why the last frame could not be drawn.
+	[[nodiscard]] QString renderDeviceSummary() const { return m_renderDeviceSummary; }
+	[[nodiscard]] QString renderError() const { return m_rasterError; }
+	// Draws again on the current backend, after the 3D renderer changed.
+	void resetRendering();
 	// How the view answers the mouse and keys, said after the summary.
 	void setControlsHelp(const QString& text);
 
@@ -440,9 +462,15 @@ private:
 	QPointF m_brushDrawPoint;
 	Qt::KeyboardModifiers m_brushSquareModifiers, m_brushCubeModifiers, m_brushDrawModifiers;
 	double m_brushWheelRemainder = 0;
+public:
+	// Render-worker types, defined in model_viewport_p.h and shared with
+	// model_viewport_render.cpp; not part of the widget's interface.
 	struct Palette;
 	struct RasterWork;
-	int materialStrokeTriangleAt(const QPointF& point) const;
+	struct GeometryKey;
+	struct GpuGeometry;
+	struct FlagsKey;
+	struct GpuFlags;
 	struct TagOverlay {
 		QString name;
 		QPointF centre;
@@ -453,19 +481,6 @@ private:
 		QString name;
 		QVector<QLineF> edges;
 	};
-
-	// What a drag of the pressed button does, settled once it moves.
-	enum class DragAction {
-		None,
-		Orbit,
-		Look,
-		Pan,
-		Drive,
-		Move,
-	};
-	// One held key's share of a fly or drive step.
-	using KeyMotion = CameraKeyMotion;
-
 	// Camera basis in model space. `eye` points from the model centre towards
 	// the camera, so a face is turned towards the viewer when its normal has a
 	// positive dot product with it.
@@ -482,7 +497,6 @@ private:
 		ModelVec3 forward;
 		double focal = 1.0;
 	};
-
 	// Flattened triangle list for the whole mesh, built once per mesh rather
 	// than once per frame or per paint.
 	struct MeshTriangle {
@@ -492,21 +506,21 @@ private:
 		int c = 0;
 	};
 
-	struct ProjectedTriangle {
-		std::array<QPointF, 4> screen;
-		int cornerCount = 0;
-		std::array<int, 4> cornerEdges{};
-		std::array<ModelRasterVertex, 4> corners;
-		bool textureValid = false;
-		bool visible = false;
-		bool frontFacing = true;
-		int brushIndex = 0;
-		int shadowIndex = 0;
-		int source = -1;
+private:
+	int materialStrokeTriangleAt(const QPointF& point) const;
+	// What a drag of the pressed button does, settled once it moves.
+	enum class DragAction {
+		None,
+		Orbit,
+		Look,
+		Pan,
+		Drive,
+		Move,
 	};
+	// One held key's share of a fly or drive step.
+	using KeyMotion = CameraKeyMotion;
 
 	void rebuildMeshTriangles();
-	void rebuildFillBrushes();
 	void invalidateProjection();
 	void invalidateRaster(bool retire = false);
 	void invalidateVertexOverlay();
@@ -546,6 +560,9 @@ private:
 	void recentreLookCursor(const QPointF& position);
 	[[nodiscard]] QString accessibleSummaryWithoutHelp() const;
 	[[nodiscard]] ModelViewportHit hitTest(const QPointF& viewPoint) const;
+	// The presented frame's triangle at a point, exact to the point rather
+	// than to the pixel's centre (see the definition).
+	[[nodiscard]] int presentedTriangleAt(const QPointF& viewPoint) const;
 	void applyOrbitDelta(double yawDelta, double pitchDelta);
 	void applyPanDelta(const QPointF& delta);
 	void applyZoomFactor(double factor, const QPointF& anchor);
@@ -564,10 +581,18 @@ private:
 	void paintGround(QPainter& painter, const Palette& palette) const;
 	void paintAxes(QPainter& painter, const Palette& palette) const;
 	void paintTriangles(QPainter& painter, const Palette& palette);
-	static void projectRaster(RasterWork& work);
-	static void renderRaster(RasterWork& work);
+	[[nodiscard]] GeometryKey currentGeometryKey(bool textured, bool moving) const;
+	[[nodiscard]] FlagsKey currentFlagsKey() const;
+	// What the view says when its last frame failed: the renderer's reason
+	// and where to choose another.
+	[[nodiscard]] QString renderFailureText() const;
+	[[nodiscard]] static std::shared_ptr<const GpuGeometry> buildGpuGeometry(const RasterWork& work);
+	[[nodiscard]] static std::shared_ptr<const GpuFlags> buildGpuFlags(const RasterWork& work);
+	static void renderGpu(RasterWork& work);
 	static void renderVertexOverlay(RasterWork& work);
-	[[nodiscard]] static QVector<ModelRasterTriangle> rasterTriangles(const RasterWork& work);
+	// The hovered triangle's outline in widget coordinates, clipped to the
+	// perspective camera's near plane; empty when it cannot be seen.
+	[[nodiscard]] QPolygonF triangleOutline(int triangle) const;
 	void paintOverlay(QPainter& painter, const Palette& palette) const;
 	// Corner readouts in the style of idStudio's model view: render mode in the
 	// top-left; file, frame, and geometry counts in the top-right.
@@ -600,10 +625,15 @@ private:
 	QSet<int> m_surfaceSkinAlpha;
 
 	QVector<MeshTriangle> m_meshTriangles;
-	QVector<ProjectedTriangle> m_projected;
-	QVector<int> m_order;
-	QVector<QBrush> m_fillBrushes;
-	ModelRasterFrame m_raster;
+	// Bumped whenever m_mesh is replaced, so cached GPU uploads never outlive it.
+	quint64 m_meshRevision = 0;
+	quint64 m_renderOwner = 0;
+	std::shared_ptr<const GpuGeometry> m_gpuGeometry;
+	std::shared_ptr<const GpuFlags> m_gpuFlags;
+	QString m_rasterError;
+	QString m_renderDeviceSummary;
+	quint64 m_renderGeneration = 0;
+	ModelRenderFrame m_raster;
 	QImage m_vertexOverlay;
 	std::shared_ptr<const ModelVertexProjection> m_rasterVertices;
 	QVector<TagOverlay> m_rasterTags;

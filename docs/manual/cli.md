@@ -59,6 +59,7 @@ Options can go anywhere after `--cli`.
 | `--watch` | Streams progress lines from `build run`, `compiler run` and `compiler rerun` in text output. Nothing is streamed with `--json`. |
 | `--task-state` | Adds task-state objects to JSON output where supported. |
 | `--exit-codes` | Prints the exit-code table below. |
+| `--renderer <automatic\|opengl\|vulkan>` | Chooses the 3D renderer for this run (`material render`, `render backends`, `render test`) without changing the setting. |
 
 The command line uses the same settings as the studio, so commands such as `install add`,
 `compiler set-path` or `editor select` change what the studio sees. In scripts and CI, pass
@@ -75,9 +76,10 @@ list, and `--json` adds whether each command supports `--json`, `--dry-run` and 
 | `cli` | The command list and the exit-code table |
 | `ui` | Status chips, default keyboard shortcuts and command palette entries |
 | `project` | Project manifests, health checks and file lists |
-| `install` | Game installation profiles and Steam and GOG detection |
+| `install` | Game installation profiles, Steam and GOG detection, and the index of each game's own assets |
 | `workspace` | `.vibeworkspace` files |
 | `package` | Inspecting, extracting, validating, comparing, staging and saving packages, drafts and recovery |
+| `release` | Packaging and releasing a project, map, model or textures: plans, release notes, the changelog, publishing and release history |
 | `asset` | Format capabilities, image conversion, audio editing, and project text search and replace |
 | `map` | Inspecting, editing, rendering and generating maps, their textures and dependencies |
 | `entity` | Entity definition catalogues and map entity validation |
@@ -86,6 +88,7 @@ list, and `--json` adds whether each command supports `--json`, `--dry-run` and 
 | `texture` | Decoding, creating, editing, exporting, staging and generating textures |
 | `shader` | Quake III shader scripts |
 | `material` | Textures, shaders and materials of idTech 1 to 4: list, check, render, edit |
+| `render` | The 3D renderers: what each one found, a drawing test, and which one to use |
 | `sprite` | Doom and Quake sprite plans |
 | `code` | Code file lists, local language servers and format-preserving text saves |
 | `compiler` | Compiler discovery, paths, single compiler runs and command manifests |
@@ -123,6 +126,14 @@ vibestudio --cli map render ./maps/start.map --output ./start.svg
 vibestudio --cli map render ./maps/start.map --projection front --leak ./maps/start.pts --output ./start-leak.svg --overwrite
 ```
 
+Index a game's own files once, then review and publish a map release with only your own files:
+
+```sh
+vibestudio --cli install register build quake3-games-quake3
+vibestudio --cli release plan ./mymod --map maps/arena1.map
+vibestudio --cli release publish ./mymod --map maps/arena1.map --release-version 1.0.0
+```
+
 Plan a build without running anything, then run it with live progress:
 
 ```sh
@@ -151,8 +162,8 @@ the command palette entries:
 vibestudio --cli ui semantics
 ```
 
-More examples are on the pages for each area, such as [Packages](packages.md) and
-[Build and launch](build-and-launch.md).
+More examples are on the pages for each area, such as [Packages](packages.md),
+[Package and release](releases.md) and [Build and launch](build-and-launch.md).
 
 ## Use JSON output in scripts
 

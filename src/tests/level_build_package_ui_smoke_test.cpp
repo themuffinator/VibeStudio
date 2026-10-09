@@ -68,7 +68,7 @@ int main(int argc, char** argv) {
 	StudioSettings::setOverrideFilePath(temp.filePath("settings.ini"));
 	StudioSettings settings;
 	settings.setReducedMotion(true);
-	settings.upsertCompilerToolPathOverride({"q3map2", QString::fromLocal8Bit(argv[1])});
+	settings.upsertCompilerToolPathOverride({"vibemap3", QString::fromLocal8Bit(argv[1])});
 	QString error;
 	LevelMapDocument map;
 	if (!expect(tests::createMaterialFixture(temp.path(), &map, &error), "fixture", error)) {

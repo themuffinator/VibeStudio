@@ -276,12 +276,12 @@ static QVector<EditorProfileDescriptor> buildEditorProfileDescriptors()
 				QCoreApplication::translate("VibeStudioEditorProfiles", "Filters"),
 				QCoreApplication::translate("VibeStudioEditorProfiles", "Texture Tools"),
 				QCoreApplication::translate("VibeStudioEditorProfiles", "Entity Inspector"),
-				QCoreApplication::translate("VibeStudioEditorProfiles", "q3map2 Build"),
+				QCoreApplication::translate("VibeStudioEditorProfiles", "VibeMap3 Build"),
 			},
 			{
 				QCoreApplication::translate("VibeStudioEditorProfiles", "Make filters, texture projection, and compile profiles easy to reach."),
 				QCoreApplication::translate("VibeStudioEditorProfiles", "Keep dense toolbars optional so accessibility scaling remains viable."),
-				QCoreApplication::translate("VibeStudioEditorProfiles", "Treat q3map2 compile profiles as first-class build actions."),
+				QCoreApplication::translate("VibeStudioEditorProfiles", "Treat VibeMap3 compile profiles as first-class build actions."),
 			},
 			{
 				QCoreApplication::translate("VibeStudioEditorProfiles", "Reserve selection, texture-fit, filter, and build shortcuts for editor-command routing."),
@@ -297,7 +297,7 @@ static QVector<EditorProfileDescriptor> buildEditorProfileDescriptors()
 				shellBinding(QStringLiteral("build.run-pipeline"), QCoreApplication::translate("VibeStudioEditorProfiles", "Run Build Pipeline"), QStringLiteral("Ctrl+Shift+B"), QCoreApplication::translate("VibeStudioEditorProfiles", "Build")),
 				binding(QStringLiteral("editor.filters.toggle-caulk"), QCoreApplication::translate("VibeStudioEditorProfiles", "Toggle Caulk Filter"), QString(), QString(), QCoreApplication::translate("VibeStudioEditorProfiles", "Map Editor"), QStringLiteral("level-editor")),
 				binding(QStringLiteral("editor.texture.fit"), QCoreApplication::translate("VibeStudioEditorProfiles", "Fit Texture"), QStringLiteral("Ctrl+F"), QString(), QCoreApplication::translate("VibeStudioEditorProfiles", "Texture Tools"), QStringLiteral("texture-tools")),
-				binding(QStringLiteral("compiler.q3map2.plan"), QCoreApplication::translate("VibeStudioEditorProfiles", "Plan q3map2 Build"), QString(), QString(), QCoreApplication::translate("VibeStudioEditorProfiles", "Compiler"), QStringLiteral("compiler")),
+				binding(QStringLiteral("compiler.vibemap3.plan"), QCoreApplication::translate("VibeStudioEditorProfiles", "Plan VibeMap3 Build"), QString(), QString(), QCoreApplication::translate("VibeStudioEditorProfiles", "Compiler"), QStringLiteral("compiler")),
 				binding(QStringLiteral("editor.selection.expand"), QCoreApplication::translate("VibeStudioEditorProfiles", "Expand Selection"), QStringLiteral("Shift+E"), QString(), QCoreApplication::translate("VibeStudioEditorProfiles", "Map Editor"), QStringLiteral("level-editor")),
 			}),
 			netRadiantCustomLevelControls()),

@@ -8,7 +8,7 @@
 // large quad on the face plane and clipping it against every other face plane.
 // The plane-from-three-points convention matches id Software's released qbsp
 // sources (ericw-tools `PlaneFromPoints`, upstream at
-// https://github.com/ericwa/ericw-tools), which VibeStudio already imports as a
+// https://github.com/ericwa/ericw-tools), the base of VibeStudio's VibeMap2
 // compiler submodule.
 //
 // Doom sector outlines are traced from the linedef/sidedef/sector relationships

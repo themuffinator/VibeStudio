@@ -31,10 +31,10 @@ int main(int argc, char** argv)
 		return EXIT_FAILURE;
 	}
 
-	bool hasQ3Map2 = false;
+	bool hasVibeMap3 = false;
 	bool hasIdTech1 = false;
 	for (const vibestudio::CompilerIntegration& compiler : compilers) {
-		hasQ3Map2 = hasQ3Map2 || compiler.id == "q3map2-nrc";
+		hasVibeMap3 = hasVibeMap3 || compiler.id == "vibemap3";
 		hasIdTech1 = hasIdTech1 || compiler.engines.contains("idTech1");
 		if (compiler.upstreamUrl.isEmpty() || compiler.pinnedRevision.size() < 12) {
 			std::cerr << "Compiler manifest entry is missing provenance.\n";
@@ -42,8 +42,8 @@ int main(int argc, char** argv)
 		}
 	}
 
-	if (!hasQ3Map2 || !hasIdTech1) {
-		std::cerr << "Compiler manifest is missing q3map2 or idTech1 coverage.\n";
+	if (!hasVibeMap3 || !hasIdTech1) {
+		std::cerr << "Compiler manifest is missing VibeMap3 or idTech1 coverage.\n";
 		return EXIT_FAILURE;
 	}
 

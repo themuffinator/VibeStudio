@@ -86,7 +86,7 @@ QByteArray minimalQuakeBsp()
 
 // Stands in for a compiler stage that produces its artifact, prints an error-shaped but non-fatal
 // notice, and exits 0 - exactly what ericw-tools does for data it cannot parse
-// (external/compilers/ericw-tools/common/bspfile_common.cc, common/bspxfile.cc).
+// (external/compilers/vibemap2/src/common/bspfile_common.cc, common/bspxfile.cc).
 int runFakeStageCompiler(const QStringList& appArgs)
 {
 	QString outputPath;
@@ -138,12 +138,12 @@ bool runDescriptorSmoke()
 	ok &= expect(quakeFull.inputExtensions == QStringList{QStringLiteral("map")}, "quake-full should consume .map sources.");
 	ok &= expect(quakeFull.stages.size() == 3, "quake-full should declare three stages.");
 	if (quakeFull.stages.size() == 3) {
-		ok &= expect(quakeFull.stages.at(0).id == QStringLiteral("qbsp") && quakeFull.stages.at(0).profileId == QStringLiteral("ericw-qbsp"), "quake-full stage 1 should be ericw qbsp.");
+		ok &= expect(quakeFull.stages.at(0).id == QStringLiteral("qbsp") && quakeFull.stages.at(0).profileId == QStringLiteral("vibemap2-bsp"), "quake-full stage 1 should be VibeMap2 bsp.");
 		ok &= expect(quakeFull.stages.at(0).inputFromStageId.isEmpty(), "quake-full qbsp should consume the pipeline input.");
-		ok &= expect(quakeFull.stages.at(1).id == QStringLiteral("vis") && quakeFull.stages.at(1).profileId == QStringLiteral("ericw-vis"), "quake-full stage 2 should be ericw vis.");
+		ok &= expect(quakeFull.stages.at(1).id == QStringLiteral("vis") && quakeFull.stages.at(1).profileId == QStringLiteral("vibemap2-vis"), "quake-full stage 2 should be VibeMap2 vis.");
 		ok &= expect(quakeFull.stages.at(1).inputFromStageId == QStringLiteral("qbsp"), "quake-full vis should chain from qbsp.");
 		ok &= expect(quakeFull.stages.at(1).optional && quakeFull.stages.at(1).enabledByDefault, "quake-full vis should be optional but enabled.");
-		ok &= expect(quakeFull.stages.at(2).id == QStringLiteral("light") && quakeFull.stages.at(2).profileId == QStringLiteral("ericw-light"), "quake-full stage 3 should be ericw light.");
+		ok &= expect(quakeFull.stages.at(2).id == QStringLiteral("light") && quakeFull.stages.at(2).profileId == QStringLiteral("vibemap2-light"), "quake-full stage 3 should be VibeMap2 light.");
 		ok &= expect(quakeFull.stages.at(2).inputFromStageId == QStringLiteral("vis"), "quake-full light should chain from vis.");
 	}
 	for (const BuildPipelineStage& stage : quakeFull.stages) {
@@ -165,9 +165,9 @@ bool runDescriptorSmoke()
 	ok &= expect(quake3Full.engineFamily == QStringLiteral("idTech3"), "quake3-full should be an idTech3 pipeline.");
 	ok &= expect(quake3Full.stages.size() == 3, "quake3-full should declare three stages.");
 	if (quake3Full.stages.size() == 3) {
-		ok &= expect(quake3Full.stages.at(0).profileId == QStringLiteral("q3map2-bsp"), "quake3-full should start with q3map2-bsp.");
-		ok &= expect(quake3Full.stages.at(1).profileId == QStringLiteral("q3map2-vis"), "quake3-full should continue with q3map2-vis.");
-		ok &= expect(quake3Full.stages.at(2).profileId == QStringLiteral("q3map2-light"), "quake3-full should finish with q3map2-light.");
+		ok &= expect(quake3Full.stages.at(0).profileId == QStringLiteral("vibemap3-bsp"), "quake3-full should start with vibemap3-bsp.");
+		ok &= expect(quake3Full.stages.at(1).profileId == QStringLiteral("vibemap3-vis"), "quake3-full should continue with vibemap3-vis.");
+		ok &= expect(quake3Full.stages.at(2).profileId == QStringLiteral("vibemap3-light"), "quake3-full should finish with vibemap3-light.");
 	}
 
 	BuildPipelineDescriptor doomZokum;
@@ -268,14 +268,14 @@ bool runPlanSmoke(const QDir& root)
 	if (!q3vis) {
 		return expect(false, "Expected a quake3-full vis stage result.");
 	}
-	if (compilerProfileForId(QStringLiteral("q3map2-vis"))) {
-		ok &= expect(!q3vis->skipped, "q3map2-vis should be planned once the profile exists.");
+	if (compilerProfileForId(QStringLiteral("vibemap3-vis"))) {
+		ok &= expect(!q3vis->skipped, "vibemap3-vis should be planned once the profile exists.");
 	} else {
 		ok &= expect(q3vis->skipped && !q3vis->skipReason.isEmpty(), "A missing compiler profile should skip its stage with a reason.");
 		const BuildPipelineStageResult* q3light = stageById(quake3Plan, QStringLiteral("light"));
 		const BuildPipelineStageResult* q3bsp = stageById(quake3Plan, QStringLiteral("bsp"));
 		if (q3light && q3bsp && q3light->skipped) {
-			ok &= expect(!q3bsp->skipped, "The q3map2 bsp stage should still be planned.");
+			ok &= expect(!q3bsp->skipped, "The VibeMap3 bsp stage should still be planned.");
 		}
 	}
 	return ok;
@@ -370,7 +370,7 @@ bool runNonFatalStageErrorSmoke(const QDir& root)
 	request.inputPath = mapPath;
 	request.workspaceRootPath = root.path();
 	request.registerOutputs = true;
-	request.executableOverrides.push_back({QStringLiteral("ericw-qbsp"), QCoreApplication::applicationFilePath()});
+	request.executableOverrides.push_back({QStringLiteral("vibemap2-bsp"), QCoreApplication::applicationFilePath()});
 	request.stageExtraArguments.insert(QStringLiteral("qbsp"), {QStringLiteral("--fake-stage-compiler")});
 
 	const BuildPipelineResult result = runBuildPipeline(request);

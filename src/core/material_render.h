@@ -1,7 +1,7 @@
 #pragma once
 
-// A software renderer that draws a material the way its engine draws it, on
-// a preview shape, at a moment in time.
+// Draws a material the way its engine draws it, on a preview shape, at a
+// moment in time, on the GPU (core/render_device.h: OpenGL or Vulkan).
 //
 // Each engine keeps its own pipeline (details and sources in
 // docs/MATERIALS.md and docs/CREDITS.md, "Materials"):
@@ -18,8 +18,10 @@
 //   with lightmaps, light styles, fullbrights, turbulent liquids, two-layer
 //   skies, flowing and translucent surfaces.
 //
-// Rendering is CPU only, deterministic for the same inputs, bounded and
-// cancellable, so the GUI, the CLI and tests share it.
+// What the engines compute per vertex and per stage is worked out on the
+// CPU; everything per pixel runs in shaders (src/core/shaders/material_*),
+// so the GUI, the CLI and tests render identically on either backend.
+// Without a working backend the result has no image and says why (error).
 
 #include "core/material_eval.h"
 #include "core/material_images.h"
@@ -161,6 +163,12 @@ struct MaterialRenderResult {
 	bool cancelled = false;
 	// True when the engine's fallback (default shader, _default) was drawn.
 	bool fallback = false;
+	// The renderer that drew it, such as "Vulkan 1.3.290 · <device>".
+	QString renderer;
+	// Why there is no image: the 3D renderer could not draw it (translated),
+	// and the untranslated detail behind that.
+	QString error;
+	QString errorDetail;
 };
 
 MaterialRenderResult renderMaterial(const MaterialDefinition& definition, const MaterialImageSet& images, const MaterialTableSet& tables,

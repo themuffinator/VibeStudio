@@ -5,6 +5,7 @@
 #include "app/studio_theme.h"
 #include "tests/doom_preview_test_helpers.h"
 #include "tests/model_viewport_test_helpers.h"
+#include "tests/render_test_support.h"
 #include <QAction>
 #include <QApplication>
 #include <QDir>
@@ -41,6 +42,10 @@ int main(int argc, char** argv)
 	qputenv("QT_QPA_FONTDIR",QDir(qEnvironmentVariable("SystemRoot")).filePath(QStringLiteral("Fonts")).toLocal8Bit());
 #endif
 	QApplication app(argc,argv); QTemporaryDir temp; bool ok=temp.isValid(); QString error;
+	// Draws in 3D: skip where no OpenGL or Vulkan renderer starts.
+	if (const int skip = vibestudio::test_support::exitCodeWithoutRenderer("doom-preview-ui-smoke"); skip >= 0) {
+		return skip;
+	}
 	StudioSettings::setOverrideFilePath(temp.filePath(QStringLiteral("settings.ini")));
 	StudioSettings settings; settings.setReducedMotion(true);
 	const auto assetPath=temp.filePath(QStringLiteral("assets.wad")), mapPath=temp.filePath(QStringLiteral("room.wad"));

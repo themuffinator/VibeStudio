@@ -1,5 +1,5 @@
 #include "app/viewport_image.h"
-#include "app/model_rasterizer.h"
+
 #include <cmath>
 
 namespace vibestudio {
@@ -19,7 +19,7 @@ QSize viewportImageSize(QSize viewport, double pixelRatio, QPointF pixelPhase)
 		|| !std::isfinite(pixelPhase.x() / pixelRatio) || !std::isfinite(pixelPhase.y() / pixelRatio)) { return {}; }
 	const double width = std::ceil(viewport.width() * pixelRatio + pixelPhase.x());
 	const double height = std::ceil(viewport.height() * pixelRatio + pixelPhase.y());
-	if (width <= 0 || height <= 0 || !std::isfinite(width * height) || width * height > modelRasterMaxPixels) { return {}; }
+	if (width <= 0 || height <= 0 || !std::isfinite(width * height) || width * height > viewportImageMaxPixels) { return {}; }
 	return QSize(int(width),int(height));
 }
 

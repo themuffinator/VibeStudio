@@ -8,7 +8,7 @@
 // (neo/framework/FileSystem.cpp) and idDeclManagerLocal::MakeNameCanonical
 // (neo/framework/DeclManager.cpp). q3map2 differences come from picomodel
 // (libs/picomodel/pm_ase.c) and q3map2's model.cpp in NetRadiant Custom
-// (external/compilers/q3map2-nrc). This is an independent implementation; no
+// (external/compilers/vibemap3). This is an independent implementation; no
 // upstream code is copied.
 //
 // Conventions:

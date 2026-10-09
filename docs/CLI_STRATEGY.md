@@ -832,6 +832,18 @@ destination checks and retain the original source or recovery copy.
 - [x] `install validate`
 - [x] `install select`
 - [x] `install remove`
+- [x] `install register build <installation> [--package <path>]... [--dry-run]`: reads the
+  installation's stock packages (or the given packages and folders) into the game asset index and
+  saves it as `asset-registers/<id>.json` beside the settings. JSON: `register` (summary),
+  `path`, `written`, `bytesRead`, `warnings`. Exit 4 when a package cannot be read.
+- [x] `install register info <installation>`: the index's sources, counts and freshness under
+  `status`; exit 4 when it is missing or out of date, listing each `staleReasons` entry.
+- [x] `install register check <installation> <game-path>...`: whether each path is a stock file or a
+  shader the game declares, with its package; `--file <local> --as <game-path>` compares a local
+  file and reports `match` as `identical`, `different` (the file would replace the game's) or `none`.
+- [x] `install register export <installation> --output <file>`: writes the index to a file for
+  `release plan --register` on a machine without the game.
+  See [Project releases](PROJECT_RELEASES.md#the-game-asset-index).
 
 ### Packages
 
@@ -1043,6 +1055,8 @@ previews return validation failure; it writes no images. See
 `requiredBy`, warnings, and coverage limits. Exit `0` means the supported scan
 completed without unresolved references; `4` means dependency problems or an
 incomplete scan. Usage errors return `2`; input-load failures return `1`.
+`--installation <id>` checks references against that installation's asset index: references the
+game provides get the status `stock` and the report a `stock` count, and they are not problems.
 Its `--package` input accepts an archive, folder or `.vibepackage` draft. Drafts
 are inspected through their planned contents, including staged additions,
 replacements, renames and deletions. Review does not publish or change the draft;
@@ -1080,6 +1094,53 @@ Package output must be outside an input folder and separate from imported source
 files. Manifest and backup paths must also be separate from source content and
 the archive output. These checks run before writing; they are path-based guards,
 not a guarantee against concurrent filesystem replacement by another process.
+
+### Project Releases
+
+```sh
+vibestudio --cli install register build quake3-games-quake3
+vibestudio --cli release catalog ./mymod --json
+vibestudio --cli release plan ./mymod --map maps/arena1.map --json
+vibestudio --cli release notes ./mymod --map maps/arena1.map --readme
+vibestudio --cli release changelog ./mymod --add "New arena: The Pit" --category added
+vibestudio --cli release publish ./mymod --map maps/arena1.map --release-version 1.0.0 --dry-run --json
+vibestudio --cli release history ./mymod --json
+```
+
+- [x] `release plan [<project>]`: what a release ships and what the game provides. The project
+  defaults to the working folder, which must then hold a manifest; a named folder without one uses
+  folder defaults with a warning. `--map`, `--model` or `--texture` (repeatable, one kind per run)
+  choose items; none releases the whole project, and `--scope project|maps|models|textures` states
+  it explicitly. JSON: `project`, `manifest`, `game`, `installation`, `stock` (`available`,
+  `description`, `warnings`, `register`) and `plan` (entries with `path`, `role`, `bytes`,
+  `requiredBy`, `replacesStock`, `loose`; `stock` references; `problems` with `kind` and `blocking`;
+  `maps` with their build state; `warnings`, `limitations`, `canPublish`, `stockChecked`, `files`,
+  `package`). Exit 4 when something blocks publishing.
+- [x] `release notes [<project>]`: the generated Markdown notes, or the readme with `--readme`.
+  JSON adds `notes`, `readme`, `changes` and `compared` (the inventory diff with the previous
+  release). Exit 4 when the plan cannot publish.
+- [x] `release publish [<project>]`: writes the package, readme, `RELEASE_NOTES.md` and
+  distribution archive into `--output` (default `<release.outputFolder>/<name>-<version>`), records
+  `.vibestudio/releases/<version>.json` and moves the changelog's Unreleased changes under the
+  version. `--notes-file` replaces the generated notes; `--no-readme`, `--no-notes`,
+  `--no-archive`, `--no-record` and `--no-changelog` skip those outputs; `--compression` applies
+  to ZIP and PK3; `--date` sets the release date. A released version is refused unless
+  `--overwrite` replaces it, keeping `.bak` copies. `--dry-run` reports every path without writing.
+  JSON: `publication`. Exit 4 when the plan blocks or the output is refused before writing; exit 1
+  when writing fails afterwards.
+- [x] `release changelog [<project>]`: the unreleased changes and released versions; `--add <text>
+  --category added|changed|deprecated|removed|fixed|security` records one (`--dry-run` previews).
+- [x] `release history [<project>]`: published releases from `.vibestudio/releases`, with their
+  package, hash, size, file count and maps.
+- [x] `release catalog [<project>]`: the maps (with `built` and `stale`), models and texture
+  folders a project can release.
+
+Every planning command accepts `--installation <id>`, `--register <file>` (an exported index, which
+wins over the installation's), `--no-stock`, `--game <key>`, `--release-version`, `--title`,
+`--format pk3|pak|wad|zip`, `--package-name` and `--include-sources`. The project's linked
+installation is used by default, then any saved installation of the project's game. Options that
+only one command reads are refused by the others with exit 2. See
+[Project releases](PROJECT_RELEASES.md).
 
 ### Assets
 - [x] `asset inspect`
@@ -1953,7 +2014,9 @@ package, and level CLI example and the editable JSON schema.
   shared pipeline. `--pipeline` supports `quake3-full` (default) and
   `quake3-bsp-only` for Quake III. Quake/Quake II use `quake-full` (their default),
   `quake-fast` or `quake-bsp-only`. Repeat `--tool <id>=<executable>` for distinct
-  compatible IDs: `q3map2`, or `ericw-qbsp`, `ericw-vis`, `ericw-light`. `--timeout-ms`, one
+  compatible IDs: `vibemap3` for Quake III, or `vibemap2-bsp`, `vibemap2-vis`,
+  `vibemap2-light` for Quake/Quake II. The pre-VibeMap ids (`q3map2`,
+  `ericw-qbsp`, `ericw-vis`, `ericw-light`) are refused. `--timeout-ms`, one
   `--stage-args <stage>=<arguments>` per stage, and repeated `--disable-stage`
   control execution. Workspace game/filesystem and output-path flags cannot be
   overridden (`-lightmapdir`, `-tempname` and `-rename` are refused).
@@ -2096,9 +2159,11 @@ paletted images when the package has none.
   Doom 3 defaults the material), missing images, definitions another one
   shadows, and Doom lump problems. It exits 4 on errors, or on warnings with
   `--strict`; `--no-images` skips image lookups and `--where` narrows the set.
-- [x] `material render` draws a material the way its engine draws it with the
-  shared CPU renderer and writes a PNG to `--output` (or reports with
-  `--dry-run`). `--shape wall|floor|cube|sphere|cylinder|room`, `--size WxH`,
+- [x] `material render` draws a material the way its engine draws it on the
+  GPU, with the same OpenGL or Vulkan renderer as the **Materials** page, and
+  writes a PNG to `--output` (or reports with `--dry-run`). The JSON names the
+  renderer that drew it; `--renderer automatic|opengl|vulkan` picks one for
+  the run, and the command exits 5 when no renderer can start. `--shape wall|floor|cube|sphere|cylinder|room`, `--size WxH`,
   `--time`, `--yaw`, `--pitch`, `--zoom`, `--fov`, `--orthographic`, `--tiling`
   and `--swatch` frame it; `--frames N --fps F --columns C` writes an animation
   sheet. Lighting follows the engine: `--lightmap`, `--flat-lightmap`,
@@ -2139,6 +2204,25 @@ paletted images when the package has none.
   `--material` in a package) as ericw-tools `.wal_json`; `--output` writes that
   sidecar, and `--metadata <wal_json> --output <wal>` rewrites the header's
   flags, contents, value and next frame without touching the pixels.
+
+### 3D Rendering
+Every 3D view and material preview draws on the GPU through one renderer
+(`core/render_device`; design in `docs/ARCHITECTURE.md`) with an OpenGL and a
+Vulkan backend. The choice is the saved preference (**Settings** >
+**Appearance and Language** > **3D Rendering**), overridden for a run by
+`VIBESTUDIO_RENDER_BACKEND` and, ahead of that, by `--renderer`. Commands
+that draw get a windowless GUI application so OpenGL is available to them; on
+Linux without `DISPLAY` or `WAYLAND_DISPLAY`, and under the offscreen
+platform, only Vulkan can draw.
+- [x] `render backends` starts each renderer and reports its API version,
+  device, driver, kind of device, largest texture and start-up time, or why it
+  is unavailable, then which one 3D views use. It exits 5 when the choice
+  leaves no working renderer.
+- [x] `render test` draws a known image on each available renderer (or only
+  `--renderer opengl|vulkan`) and checks every pixel. It exits 4 when one
+  draws wrongly and 5 when none can start.
+- [x] `render set automatic|opengl|vulkan` saves the preference the studio and
+  the CLI share; `--settings-file` keeps scripts away from the user's own.
 
 ### Sprites
 - [x] `sprite plan` for Doom lump naming, Quake `.spr` sequencing, palette
@@ -2231,6 +2315,15 @@ paletted images when the package has none.
 - [x] `compiler manifest`
 - [x] `compiler copy-command`
 - [ ] `compiler explain-log`
+
+Tool and profile ids name VibeStudio's own compilers: `vibemap2-bsp`,
+`vibemap2-vis`, `vibemap2-light`, `vibemap2-bspinfo`, `vibemap2-bsputil` (with
+the `vibemap2-bsputil-check`, `-extract-entities` and `-extract-textures`
+profiles) and `vibemap2-hub` for VibeMap2; `vibemap3` and the `vibemap3-probe`,
+`-bsp`, `-vis`, `-light`, `-convert` and `-pk3` profiles for VibeMap3. The ids
+used before the move to VibeMap2 and VibeMap3 (`ericw-qbsp`, `ericw-lightpreview`,
+`q3map2`, `q3map2-bsp` and the rest) are refused; the `compiler` commands and
+compiler plans name the new id in their error. See [Compiler Integration](COMPILER_INTEGRATION.md#renamed-ids).
 
 ### Editor Profiles
 
@@ -2366,6 +2459,9 @@ format or engine support. See [Editor Profiles](EDITOR_PROFILES.md).
   and compiler command runs without touching files.
 - [x] `--watch` streams compiler task log entries while long-running process-backed commands are active.
 - [x] `--task-state` adds automation-friendly task-state objects to JSON output where supported.
+- [x] `--renderer automatic|opengl|vulkan` picks the 3D renderer for one run of a
+  command that draws (`material render`, `render backends`, `render test`),
+  ahead of `VIBESTUDIO_RENDER_BACKEND` and the saved preference.
 - [x] Non-zero exit codes distinguish usage errors, not-found cases,
   validation failures, operation failures, and unavailable workflows.
 
@@ -2411,7 +2507,7 @@ vibestudio --cli sprite plan --engine doom --name TROO --frames 2 --rotations 8 
 vibestudio --cli entity validate ".\maps\start.map" --definitions ".\defs\quake.def" --strict --json
 vibestudio --cli model export ".\id1\pak0.pak" progs/player.mdl --frame 0 --output ".\out\player.obj" --dry-run
 vibestudio --cli package compare ".\release-1.pk3" ".\release-2.pk3" --json
-vibestudio --cli compiler run ericw-qbsp --input ".\maps\start.map" --watch --manifest ".\build\start.run.json"
+vibestudio --cli compiler run vibemap2-bsp --input ".\maps\start.map" --watch --manifest ".\build\start.run.json"
 vibestudio --cli ui semantics --json
 vibestudio --cli localization report --locale ar --json
 vibestudio --cli diagnostics bundle --output ".\diagnostics"
@@ -2441,7 +2537,7 @@ vibestudio --cli entity definitions './defs' --json
 vibestudio --cli model inspect './id1/pak0.pak' progs/player.mdl --json
 vibestudio --cli shader inspect './scripts/common.shader' --package './baseq3' --json
 vibestudio --cli code index './mymod' --find monster --json
-vibestudio --cli compiler plan ericw-qbsp --input './maps/start.map' --dry-run
+vibestudio --cli compiler plan vibemap2-bsp --input './maps/start.map' --dry-run
 vibestudio --cli ui semantics
 vibestudio --cli localization targets
 vibestudio --cli accessibility report --json

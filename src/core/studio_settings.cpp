@@ -6,6 +6,7 @@
 #include "core/package_draft_storage.h"
 #include "core/package_copy_budget.h"
 #include "core/project_manifest.h"
+#include "core/render_device.h"
 
 #include <QCoreApplication>
 #include <QCryptographicHash>
@@ -34,6 +35,7 @@ constexpr auto kShellModeRailBehaviourKey = "shell/modeRailBehaviour";
 constexpr auto kShellLayoutPrefix = "shell/layout/";
 constexpr auto kRestoreSessionKey = "session/restore";
 constexpr auto kCrashReportsKey = "diagnostics/crashReports";
+constexpr auto kRenderBackendKey = "rendering/backend";
 constexpr auto kCodeZoomPercentKey = "code/zoomPercent";
 constexpr auto kCodeStickyHeadersKey = "code/stickyHeaders";
 constexpr auto kUserShortcutsGroup = "shortcuts";
@@ -1675,6 +1677,20 @@ void StudioSettings::setCrashReports(bool enabled)
 	writeValue(kCrashReportsKey, enabled);
 }
 
+QString StudioSettings::renderBackendPreference() const
+{
+	RenderBackendChoice choice = RenderBackendChoice::Automatic;
+	renderBackendChoiceFromId(m_settings->value(kRenderBackendKey).toString(), &choice);
+	return renderBackendChoiceId(choice);
+}
+
+void StudioSettings::setRenderBackendPreference(const QString& id)
+{
+	RenderBackendChoice choice = RenderBackendChoice::Automatic;
+	renderBackendChoiceFromId(id, &choice);
+	writeValue(kRenderBackendKey, renderBackendChoiceId(choice));
+}
+
 int StudioSettings::codeZoomPercent() const
 {
 	return std::clamp(m_settings->value(kCodeZoomPercentKey, 100).toInt(), 50, 300);
@@ -2365,7 +2381,7 @@ QString setupStepDescription(SetupStep step)
 	case SetupStep::WelcomeAccess:
 		return QCoreApplication::translate("VibeStudioSetup", "Review language, region formats, theme, colour vision, text scale, focus, motion, alerts, and TTS preferences.");
 	case SetupStep::WorkspaceProfile:
-		return QCoreApplication::translate("VibeStudioSetup", "Choose your role and the level editor profile whose keys and mouse controls feel familiar.");
+		return QCoreApplication::translate("VibeStudioSetup", "Choose your role, the level editor profile whose keys and mouse controls feel familiar, and the 3D renderer: OpenGL, Vulkan or Automatic.");
 	case SetupStep::ProjectsPackages:
 		return QCoreApplication::translate("VibeStudioSetup", "Open a project folder, initialize a manifest, or defer project/package setup.");
 	case SetupStep::GameInstallations:

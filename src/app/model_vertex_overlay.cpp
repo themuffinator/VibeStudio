@@ -1,5 +1,5 @@
 #include "app/model_vertex_overlay.h"
-#include "app/model_rasterizer.h"
+#include "app/viewport_image.h"
 
 #include <QRectF>
 #include <algorithm>
@@ -85,7 +85,7 @@ int pickModelVertex(const ModelVertexProjection &projection, QPointF point, doub
 bool renderModelVertexOverlay(const ModelVertexProjection &projection, QSize size, double pixelRatio, const QSet<int> &selectedVertices,
 							  bool xray, bool transforming, QColor accent, QImage *image, const std::atomic_bool *cancelled)
 {
-	if (!image || size.isEmpty() || qint64(size.width()) * size.height() > modelRasterMaxPixels || !std::isfinite(pixelRatio) ||
+	if (!image || size.isEmpty() || qint64(size.width()) * size.height() > viewportImageMaxPixels || !std::isfinite(pixelRatio) ||
 		pixelRatio <= 0 || pixelRatio > 64 || projection.visible.size() != projection.positions.size())
 	{
 		return false;

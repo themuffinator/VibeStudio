@@ -24,6 +24,7 @@ Release packages also include the manual as HTML: open
   - [Level editing](#level-editing)
   - [Editor profiles and controls](#editor-profiles-and-controls)
   - [Packages](#packages)
+  - [Package and release](#package-and-release)
   - [Textures and sprites](#textures-and-sprites)
   - [Materials and shaders](#materials-and-shaders)
   - [Models](#models)
@@ -64,16 +65,17 @@ linked page lists the gaps. **Planned** means not built yet.
 | --- | --- | --- |
 | [Workspace and projects](manual/projects.md) | Open a project folder and write its manifest, check project health, find files by name, add or detect game installations, save and reopen workspaces | Available |
 | [Level editing: Doom family](manual/levels.md) | Open, edit and save Doom and Hexen maps in WADs, including UDMF; draw and shape sectors; build nodes with ZDBSP or ZokumBSP | Partial |
-| [Level editing: Quake family](manual/levels.md) | Edit Quake and Quake II `.map` brushes, entities and texture alignment in a four-view workspace; prefabs; compile with ericw-tools | Partial |
-| [Level editing: Quake III](manual/levels.md) | Brushes, curved patches and shader images in the 3D view; compile with q3map2 and package the result as a PK3 | Partial |
+| [Level editing: Quake family](manual/levels.md) | Edit Quake and Quake II `.map` brushes, entities and texture alignment in a four-view workspace; prefabs; compile with VibeMap2 | Partial |
+| [Level editing: Quake III](manual/levels.md) | Brushes, curved patches and shader images in the 3D view; compile with VibeMap3 and package the result as a PK3 | Partial |
 | [Familiar editor controls](manual/editor-profiles.md) | 19 editor profiles bring the keys, mouse gestures, camera and layout of editors such as TrenchBroom, NetRadiant Custom, GtkRadiant, Hammer and Ultimate Doom Builder | Partial |
 | [Models](manual/models.md) | View and animate MDL, MD2 and MD3 models; edit meshes, including imported OBJ files, and export MDL, MD2 or MD3; design simple props; assemble tagged models; build Quake III player packages | Partial |
 | [Textures](manual/textures.md) | Browse images, sprites and palettes; paint in the layered Texture Editor; export PNG, TGA, PCX, Quake WAD2, Quake II WAL and Doom flats and patches | Partial |
 | [Audio](manual/audio.md) | Preview sounds in packages; edit WAV, MP3, FLAC, Ogg Vorbis and Doom sounds; multitrack sessions; deliver sounds in each game's format. Linux builds cannot play or record audio yet | Partial |
 | [Packages](manual/packages.md) | Browse, extract, validate and compare PAK, WAD, ZIP and PK3 files and plain folders; stage changes with undo; save a new package; drafts and automatic recovery | Available |
+| [Package and release](manual/releases.md) | Package a project, map, model or textures with only your own files, leaving out what the game already has; keep a changelog; generate release notes and a readme; publish with a distribution archive and a record of each release | Partial |
 | [Code and scripts](manual/code.md) | Edit QuakeC, shader scripts, configs and other text with highlighting, project-wide search and replace, and optional local language servers | Partial |
 | [Materials and shaders](manual/materials.md) | Every texture, Quake III shader and Doom 3 material of idTech 1 to 4: a live, animated preview drawn by each engine's rules, editing as text or as nodes, checks the game would make, and saving into the package | Partial |
-| [Build and launch](manual/build-and-launch.md) | Run chained compile pipelines with ericw-tools, q3map2, ZDBSP or ZokumBSP, jump to problems and leaks, and launch the game with your map. You provide the compiler programs | Partial |
+| [Build and launch](manual/build-and-launch.md) | Run chained compile pipelines with VibeMap2, VibeMap3, ZDBSP or ZokumBSP, jump to problems and leaks, and launch the game with your map. You provide the compiler programs | Partial |
 | [AI assistant (optional)](manual/ai.md) | Off by default (AI-free mode). Opt in to ask a model about your map, code or build in the Assistant, and to use AI when generating levels, textures and sounds | Partial |
 | [Command line](manual/cli.md) | Scriptable commands for projects, packages, maps, assets, builds and settings, with JSON output and stable exit codes; `cli commands` lists them all | Available |
 | [Accessibility and languages](manual/accessibility.md) | High-contrast themes, text up to 200%, colour-vision options, every command reachable from the keyboard, screen reader announcements and spoken status. 47 interface languages are registered, but no translation is finished yet | Partial |
@@ -130,6 +132,9 @@ workflow on GitHub Actions). Each run:
   and writers, parser fuzzing and deliberately damaged files, saving and
   recovery, command-line commands, theme contrast checks, and GUI tests that
   drive the real studio window with simulated input on an off-screen display;
+- checks what the 3D views draw on Linux, with Mesa's software Vulkan driver.
+  The Windows and macOS runners have no graphics driver, so those drawing
+  checks are skipped there;
 - starts the studio in a self-test mode that builds and paints every page;
 - checks that the command-line documentation matches the commands the program
   really has;
@@ -153,6 +158,10 @@ workflow on GitHub Actions). Each run:
   those files have been loaded in every game and source port they target.
 - **Hard failures.** Safe package saving has not been verified after a power
   loss or on network drives.
+- **Graphics drivers.** The OpenGL and Vulkan renderers have been tried on a
+  few Windows drivers (NVIDIA and Intel) and with Mesa's software Vulkan
+  driver in CI; other graphics cards, macOS and Linux desktop drivers have not
+  been tried.
 
 ### Keep your work safe
 
@@ -182,6 +191,11 @@ says Ctrl.
   on the Workspace page to take that back), and **Deploy Prepared Build**
   writes a reviewed package into the game folder only after you confirm it,
   keeping a backup of any package it replaces.
+- **Releases.** Publishing writes only into the release's output folder and
+  the project's changelog and `.vibestudio/releases` record, never into the
+  game. Publishing the same version again is refused unless you choose to
+  replace it, and replaced files are kept with `.bak` added to their names.
+  Indexing a game's assets only reads its packages.
 - **Everything else.** Commands that write files report the exact output path
   in the **Activity** panel, and many command-line commands that write files
   offer `--dry-run` to show what would happen first.
@@ -198,16 +212,17 @@ exact limits.
 
 | Area | Main limitations |
 | --- | --- |
-| Everywhere | Views are drawn in software, without GPU acceleration. Performance on large maps and packages has not been measured. |
+| Everywhere | 3D views and material previews need OpenGL 3.3 or Vulkan 1.0; without either they stay empty and say why. Performance on large maps and packages has not been measured. |
 | Level editing | The 3D view shows textures, but not Quake III shader effects such as blending, animation and deformation, nor Doom sector lighting and skies. Doom maps need an external node builder after geometry edits. |
 | Editor profiles | Profiles reproduce keys, mouse gestures, camera and layout, not every behaviour of the original editors, and they do not add other engines' formats. |
 | Models | Formats from Doom source ports to the Doom 3 family are read, but only tested against files the tests build, not real game files. Skeletal models are posed into frames; joints and weights cannot be edited yet. MD5, IQM and ASE exports have not been loaded in the original games. |
 | Textures | No sprite animation editing or pressure-sensitive painting. A canvas holds at most 4,194,304 pixels (2048 × 2048). |
 | Audio | Linux builds cannot play or record audio. |
 | Packages | Renaming or deleting files does not update references to them in scripts, shaders or metadata. |
+| Releases | A release finds what maps, models and shader scripts name; files that game code or scripts load by name must be added with include patterns. Telling the game's files from yours needs the game indexed first. Not yet tried with real game installations. |
 | Code | Language-server support is an early client that some servers will not work with. |
-| Materials and shaders | The preview is a software approximation on a single shape, without map lightmaps or Doom 3 fragment programs beyond the light interaction; videos show a placeholder. Return to Castle Wolfenstein, Enemy Territory and Jedi Knight shader keywords are read with a warning, but only Enemy Territory's implicit images are drawn. Not yet tried on real game packages. |
-| Build and launch | VibeStudio does not include the compiler programs; you point it at your own. |
+| Materials and shaders | The preview is an approximation on a single shape, without map lightmaps or Doom 3 fragment programs beyond the light interaction; videos show a placeholder. Return to Castle Wolfenstein, Enemy Territory and Jedi Knight shader keywords are read with a warning, but only Enemy Territory's implicit images are drawn. Not yet tried on real game packages. |
+| Build and launch | VibeStudio does not include the compiler programs; you point it at your own. Its own VibeMap2 and VibeMap3 compilers have not yet been tested end to end inside VibeStudio. |
 | First-run setup | A checklist that opens the right settings; role presets, guided project creation and a toolchain check are not part of it yet. |
 | AI | Agentic workflows are not built. Cloud connectors need your own API keys. |
 | Languages and accessibility | No finished translations. Not yet tested with real screen readers. |
@@ -257,9 +272,9 @@ exact limits.
 3. Attach diagnostics:
    - In the studio, **Tools** > **Copy Diagnostic Bundle**
      (<kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>D</kbd> on Windows and Linux) copies
-     a summary to the clipboard: version, platform, the open project and
-     package, the compilers found, the number of crash reports, and the latest
-     lines of the session log. Paste it into the issue. It contains folder
+     a summary to the clipboard: version, platform, the 3D renderer, the open
+     project and package, the compilers found, the number of crash reports, and
+     the latest lines of the session log. Paste it into the issue. It contains folder
      paths, so remove any you do not want to share.
    - From the command line, the command below writes
      `vibestudio-diagnostics.json` into the folder you name. It leaves out
@@ -308,6 +323,12 @@ below, `<version>` is the release's version number.
 | Linux x86_64 | `VibeStudio-<version>-linux-x86_64.AppImage` | Single runnable file |
 | Any | `VibeStudio-<version>-docs.zip` | Offline HTML documentation; every package also contains it |
 | Any | `VibeStudio-<version>-source.tar.gz` | Full source code, including the compiler submodules |
+
+VibeStudio's 3D views (the Levels camera, models, the modeller and material
+previews) need a graphics driver with OpenGL 3.3 or Vulkan 1.0, which almost
+every computer from the last decade has. Without one, everything else works and
+the 3D views say why they are empty; see
+[3D views stay empty](manual/troubleshooting.md#3d-views-stay-empty).
 
 ### Verify your download
 
@@ -538,7 +559,7 @@ reminders such as "No game installation profile has been added yet."
 | Step | What you choose | Settings button |
 | --- | --- | --- |
 | Welcome and Access | Language, region formats, theme, text size, colour vision, focus outline, motion, alerts and speech | **Open Accessibility Settings** |
-| Workspace and Editor Profile | The editor profile the Levels page follows | **Choose Editor Profile** |
+| Workspace and Editor Profile | The editor profile the Levels page follows, and the 3D renderer | **Choose Editor Profile** |
 | Projects and Packages | A project folder and its manifest, or nothing for now | **Open Workspace** |
 | Game Installations | Your games, detected from Steam and GOG or added by hand | **Open Workspace** |
 | Toolchains | Where your compiler programs are | **Open Build Toolchains** |
@@ -591,6 +612,18 @@ start with. **Customize Gestures…** adjusts the chosen profile. See
 [Editor profiles](manual/editor-profiles.md) for the supported controls and remaining
 differences; choosing a profile does not add its original editor's file formats.
 
+The same page has **3D Rendering**. Its **Renderer** decides what draws the
+Levels camera, models, the modeller and material previews:
+
+- **Automatic** (the default) uses Vulkan where it works and OpenGL otherwise.
+  On macOS it tries OpenGL first.
+- **OpenGL** or **Vulkan** uses only that one.
+
+**Status** shows what each renderer found on your computer and which one is in
+use. **Check Renderers** starts both again and draws a test image on each; use
+it after updating a graphics driver. See
+[3D views stay empty](manual/troubleshooting.md#3d-views-stay-empty) if neither works.
+
 ### Projects and game installations
 
 **Open Workspace** opens the **Workspace** page.
@@ -612,9 +645,11 @@ test map into a game only after you allow it. See
 ### Compilers
 
 **Open Build Toolchains** opens the **Build** page. Its **Toolchain** tab lists
-each compiler tool (ericw-tools for Quake and Quake II, q3map2 for Quake III,
+each compiler tool (VibeMap2 for Quake and Quake II, VibeMap3 for Quake III,
 ZDBSP and ZokumBSP for Doom), whether it was found, and where its path comes
-from. VibeStudio also looks on your `PATH`.
+from. VibeStudio also looks on your `PATH`. VibeMap2 and VibeMap3 are
+VibeStudio's own compilers; stock ericw-tools and q3map2 programs can still be
+used, but you choose them with **Locate…**.
 
 1. Select a tool whose status is **Not found**.
 2. Choose **Locate…** and pick its program.
@@ -673,9 +708,10 @@ vibestudio --cli --setup-step game-installations
 vibestudio --cli --set-theme high-contrast-dark
 vibestudio --cli --set-text-scale 150
 vibestudio --cli editor select trenchbroom
+vibestudio --cli render set vulkan
 vibestudio --cli install detect --json
 vibestudio --cli project init ./mymod
-vibestudio --cli compiler set-path ericw-qbsp --executable /opt/ericw-tools/bin/qbsp
+vibestudio --cli compiler set-path vibemap2-bsp --executable /opt/vibemap2/vibemap2-bsp
 ```
 
 Setup progress also accepts `--setup-start`, `--setup-next`, `--setup-skip`,
@@ -903,6 +939,8 @@ The Workspace page is the studio's start page. Choose **Workspace** on the left 
   open map with its entity and brush counts. Select a tile to go to its page.
 - **Project Health** collects the open project's state in five tabs (see the table below).
 - **Recent Projects** and **Game Installations** list the folders and games VibeStudio remembers.
+- **Releases** shows the project's unreleased changes and latest releases, with **Record Change…** and
+  **Package and Release…**. See [Package and release](manual/releases.md).
 - **Workspace Details** shows the manifest and health details of the open or selected project.
 - **Recent Activity** charts recent tasks with their state and duration. Select one to see its full
   log in the Activity Center.
@@ -936,14 +974,15 @@ in the recent list.
 ### Describe the project with a manifest
 
 The project manifest is the file `.vibestudio/project.json` inside the project folder. It records the
-project's folders, its game installation, compiler paths and per-project settings. The Workspace and
-Build pages and the command line read it.
+project's game and folders, its game installation, compiler paths, release settings and per-project
+settings. The Workspace, Build and release pages and the command line read it.
 
 To create or refresh it, open the project and choose **Initialize Manifest** on the Workspace header,
 or **File** > **Initialize Project Manifest** (<kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>I</kbd>). A new
 manifest treats the whole project folder as source, uses `build` as the output folder and keeps
 temporary files in `.vibestudio/tmp`. Refreshing an existing manifest keeps its folders and records
-the game installation and editor profile you are using now.
+the game installation and editor profile you are using now, and the game when the manifest names
+none.
 
 The manifest is plain JSON that you can edit in any text editor, and the Workspace page refreshes when
 it changes on disk. Paths are relative to the project folder. This is the manifest of the Quake sample
@@ -969,9 +1008,10 @@ project:
 
 | Field | Meaning |
 | --- | --- |
-| `schemaVersion` | Manifest format version, currently 1. |
+| `schemaVersion` | Manifest format version, currently 2. Version 1 manifests still open, and are saved as version 2. |
 | `projectId` | Stable identifier. Made from the folder name when missing. |
 | `displayName` | The name the studio shows. |
+| `game` | The game the project targets, such as `quake`, `quake2`, `quake3` or `doom`. Empty uses the game of the linked installation. |
 | `sourceFolders` | Folders that hold your sources. |
 | `packageFolders` | Asset folders. `map textures --project-root` checks a map's textures against them. |
 | `outputFolder` | Where the Build page writes its command manifests. |
@@ -981,7 +1021,10 @@ project:
 | `compilerToolOverrides` | Exact compiler programs, as a list of `toolId` and `executablePath` pairs. These win over paths chosen on the Build page while the project is open. |
 | `registeredOutputPaths` | Compiled outputs recorded for the project. |
 | `settingsOverrides` | Per-project choices: `selectedInstallationId`, `editorProfileId`, `paletteId`, `compilerProfileId` and `aiFreeMode`. Setting `aiFreeMode` to `true` keeps AI off while the project is open; `false` cannot turn AI on. |
+| `release` | How the project is packaged and described when released; see [Release settings](manual/releases.md#release-settings). |
 | `createdUtc`, `updatedUtc` | When the manifest was created and last saved. |
+
+Keys VibeStudio does not know, for example from a newer version, are kept when it saves the manifest.
 
 </details>
 
@@ -992,8 +1035,10 @@ manifest, for example to attach to a bug report.
 
 Choose **Project** > **Validate Project** to run the health checks. VibeStudio switches to the
 Workspace page and lists anything that needs attention under **Problems**: a missing manifest or
-folder, a newer manifest version, or no linked game installation. Warnings alone do not block your
-work. `vibestudio --cli project validate` exits with code 4 only for blocking problems, and with code 3
+source folder, a newer manifest version, no linked game installation, or a game whose assets are not
+indexed or whose index is out of date. Activate the asset index problem to index the game. Output
+and temporary folders that do not exist yet are not problems: they are created when first needed.
+Warnings alone do not block your work. `vibestudio --cli project validate` exits with code 4 only for blocking problems, and with code 3
 when the folder has no manifest yet.
 
 ### Add your game installations
@@ -1031,6 +1076,19 @@ Select a profile and choose **Use** to make it the default; its row shows **in u
 page launches it. Each row also shows **Ready**, or **Needs Review** when a check fails, such as a
 missing root folder. **Remove** deletes the profile only, never game files. A project manifest can
 also record an installation for the project, which the project health checks report.
+
+#### Index the game's assets
+
+Select a profile and choose **Index Assets**, or **Project** > **Index Game Assets**. VibeStudio reads
+the game's own packages once, in the background, and remembers every file they hold, the Quake III
+shaders they declare and the Doom-family names they define. Releases use this index to leave the
+game's own files out, and the Levels page's **Dependencies** uses it to mark references the game
+provides. The index is kept with VibeStudio's own data, never in the game folder.
+
+Each row says **assets indexed**, **assets not indexed** or **asset index out of date**; an index
+goes out of date when the game's packages change, for example after a patch. Indexing knows the
+standard packages of Quake, Quake II, Quake III Arena, Doom, Heretic and Hexen and their official
+expansions, plus any base packages saved in the profile. See [Package and release](manual/releases.md).
 
 #### Allow test maps
 
@@ -1090,6 +1148,8 @@ you can move a folder that contains both.
 | List project files | `vibestudio --cli project files <folder> --where "kind=image"` |
 | List, detect or add installations | `vibestudio --cli install list`, `install detect`, `install add <root>` |
 | Use, check or remove a profile | `vibestudio --cli install select <id>`, `install validate <id>`, `install remove <id>` |
+| Index a game's assets, or check its index | `vibestudio --cli install register build <id>`, `install register info <id>` |
+| Package and release the project | `vibestudio --cli release plan <folder>`, `release publish <folder>` |
 | Search project text | `vibestudio --cli asset find <folder> --find <text>` |
 | Replace project text | `vibestudio --cli asset replace <folder> --find <old> --replace <new>` |
 | Save or check a workspace | `vibestudio --cli workspace create <file>`, `workspace inspect <file>` |
@@ -1109,7 +1169,9 @@ vibestudio --cli workspace create ./work.vibeworkspace --project ./mymod --activ
 
 ### Learn more
 
-- [Game installations](GAME_INSTALLATIONS.md): profile data, detection sources and safety rules.
+- [Package and release](manual/releases.md): package the project for players.
+- [Game installations](GAME_INSTALLATIONS.md): profile data, detection sources, the asset index and
+  safety rules.
 - [Project search](PROJECT_SEARCH.md): matching rules, limits and partial-write reporting.
 - [Portable workspaces](WORKSPACES.md): the `.vibeworkspace` format.
 - [CLI strategy](CLI_STRATEGY.md): every `project`, `install` and `workspace` option.
@@ -1154,7 +1216,7 @@ or **Empty map**. Texture names refer to your own assets.
 
 | Area | What it holds |
 | --- | --- |
-| Header | **Dependencies**, **Save**, **New Map**, **Generate**, **Edit with AI**, **Open Map** |
+| Header | **Dependencies**, **Package Map**, **Save**, **New Map**, **Generate**, **Edit with AI**, **Open Map** |
 | Document bar | The map path, the WAD's map list, the engine list, **Reload**, the compiler profile, **Run Profile**, **Copy CLI** |
 | Left sidebar | **Outliner**, **Shapes**, **Entities**, **Textures**, **Models**, **Sounds**, **Prefabs** |
 | Centre | The view toolbar; the tool bar (**Select**, **Draw Brush**, **Clip**, **Paint**, **Sample**, **Draw Sector**) with the grouped authoring menus; the material strip; the 2D and 3D views; and a readout of what is under the pointer |
@@ -1286,7 +1348,7 @@ Most actions are in the **Edit** menu, the right-click menu of the views and the
 | Hollow | **Hollow…** turns each selected brush into walls of the thickness you choose, one per face. |
 | Carve (CSG subtract) | **Carve** cuts the selected brushes out of every brush they overlap. The carving brushes stay selected, ready to delete; hidden brushes are left alone. |
 | Intersect (CSG) | **Intersect** replaces the selected brushes with the one brush where they all overlap, as TrenchBroom does; each face keeps the texture of the face it came from. |
-| Make detail | **Make Detail** stops brushes sealing the map or splitting its visibility: in Quake II and Quake III maps it sets each face's detail flag, and in Quake maps it moves the brushes into a `func_detail` for ericw-tools. **Make Structural** undoes it. |
+| Make detail | **Make Detail** stops brushes sealing the map or splitting its visibility: in Quake II and Quake III maps it sets each face's detail flag, and in Quake maps it moves the brushes into a `func_detail` for VibeMap2, as ericw-tools expects. **Make Structural** undoes it. |
 | Drop to the floor | **Drop to Floor** moves the selected point entities straight down onto the brush or patch below, keeping each class's height above it. |
 | Merge brushes | **Merge Brushes…** previews their convex union and lets you choose where conflicting materials, mappings and flags come from. |
 | Apply a texture | Select brushes or patches and choose **Apply Texture…**, or press <kbd>Enter</kbd> on a tile on the **Textures** tab. **Replace Texture…** swaps one texture for another across the map or the selection. |
@@ -1485,13 +1547,18 @@ optional Valve 220 conversion.
   undeclared keys, invalid values, missing required keys, unknown spawnflags, and targets that name nothing. An `.ent`
   file lists placed entities only, so it cannot check key types or spawnflag names.
 - **Built-in classes.** With no definitions found, a Quake-family map is checked against the classes of the stock
-  game it looks like: Quake, Quake II or Quake III Arena, taken from id Software's GPL game code, with Quake's
-  ericw-tools compiler classes such as `func_detail`. A mod's own classes read as unknown until you load its
+  game it looks like: Quake, Quake II or Quake III Arena, taken from id Software's GPL game code, with the
+  Quake compiler classes VibeMap2 inherits from ericw-tools, such as `func_detail`. A mod's own classes read as unknown until you load its
   definitions, and **Health** and the **Checklist** say which classes were used.
-- **Dependencies.** Open the map's package or asset folder on the **Packages** page, then choose **Dependencies** in
-  the header. The scan lists textures, shader images, models, model materials and sounds, marking missing and
-  ambiguous ones. Tick **Problems only** to filter, **Select in Map** to find the objects that use an asset,
-  **Copy JSON** for the full report, and **Export Assets…** to write the resolved files to a new package.
+- **Dependencies.** Choose **Dependencies** in the header. The scan reads the package or asset folder open on the
+  **Packages** page or, with none open, the project's folders. It lists textures, shader images, models, model
+  materials and sounds, marking missing and ambiguous ones; with the game's assets indexed (see
+  [Package and release](manual/releases.md#before-you-start)), references the game provides show as **Provided by the
+  game**. Tick **Problems only** to filter, **Select in Map** to find the objects that use an asset, and **Copy
+  JSON** for the full report. **Export Assets…** writes the resolved files of a package to a new package; when the
+  scan read the project, **Package Map…** releases the map instead.
+- **Package Map.** Choose **Package Map** in the header to release the map with its build and every custom asset it
+  uses, leaving the game's own files out. See [Package and release](manual/releases.md).
 - **Leaks.** **Build** > **Load Leak Trail…** draws a compiler `.pts` or `.lin` file over the map.
 - **Portals.** **Build** > **Load Portal File…** outlines the vis portals of a compiler `.prt` file (PRT1, PRT1-AM or
   PRT2) in the 2D views and the camera, to see where visibility is cut and where detail or hint brushes would help.
@@ -1586,7 +1653,8 @@ vibestudio --cli map move ./maps/start.map --object brush:12 --delta 16,0,0 --ou
 | `map make-sector` | Make a Doom sector of the lines around a point |
 | `map shift-sectors`, `map gradient-sectors` | Raise, lower or grade Doom sectors |
 | `map inspect-udmf`, `map edit-udmf` | Read and edit UDMF properties |
-| `map textures`, `map dependencies` | Check a map's textures and assets against a package or folder |
+| `map textures`, `map dependencies` | Check a map's textures and assets against a package or folder; `--installation <id>` marks what the game provides |
+| `release plan`, `release publish` | Package and release a map with `--map <map>`; see [Package and release](manual/releases.md) |
 | `map render` | Draw an SVG picture of a map |
 | `map compile-plan` | Plan a compile with a compiler profile |
 | `map recoveries`, `map recover` | List recovery checkpoints and save one to a file |
@@ -2683,6 +2751,9 @@ separate package. Doom map lumps travel with their whole map. To collect the tex
 sounds a map uses, open the map and its package and choose **Dependencies** on the Levels header,
 which can export the resolved assets; see [Level editing](manual/levels.md).
 
+To release your own project, map, model or textures for players, with only your own files, release
+notes and a readme, use **Package and Release** instead; see [Package and release](manual/releases.md).
+
 ### Command-line equivalents
 
 | Task | Command |
@@ -2713,9 +2784,273 @@ original at `--backup` (by default `<output>.bak`). Add `--dry-run` to see what 
 
 ### Learn more
 
+- [Package and release](manual/releases.md): package your own work for players.
 - [Package manager](PACKAGE_MANAGER.md): limits, drafts, recovery and every staging rule.
 - [Support matrix](SUPPORT_MATRIX.md#archive-and-package-formats): exact format support.
 - [CLI strategy](CLI_STRATEGY.md): every `package` option.
+
+## Package and release
+
+**Package and Release** turns your project, a map, a model or a set of textures into something players
+can install. VibeStudio works out which files are yours and which the game already has, gathers every
+custom texture, shader, model, sound and script your work uses, and writes the package with a readme,
+release notes and a distribution archive. It keeps a changelog and a record of every release, so the
+next one can say what changed.
+
+> [!NOTE]
+> **Status: Partial.** Planning, release notes and publishing work for Quake, Quake II, Quake III
+> Arena, Doom, Heretic and Hexen projects, with automated tests built from generated files. They have
+> not been tried with real game installations or real projects yet. A release finds the files that
+> maps, models and shader scripts name; files that game code or scripts load by name must be added by
+> hand (see [Choose what ships](manual/releases.md#choose-what-ships)). Doom 3-era games are not indexed automatically.
+
+### Before you start
+
+1. Open your project on the Workspace page (see [Projects and game installations](manual/projects.md)).
+2. Link the game it plays in: select the installation under **Game Installations** and choose
+   **Use**, or record it in the project manifest.
+3. Index the game's own files: choose **Index Assets** under **Game Installations**, or **Project** >
+   **Index Game Assets**. VibeStudio reads the game's own packages once and remembers what they hold.
+   Nothing in the installation is changed.
+
+The index is how a release leaves the game's own files out. Without it, VibeStudio cannot tell a
+stock texture from yours: anything the project lacks is assumed to come with the game, and the
+release says the game's files were not checked. The installation's row on the Workspace page shows
+**assets indexed**, **assets not indexed** or **asset index out of date**; an out-of-date index
+means the game's packages changed since, so index it again.
+
+### Package a map
+
+1. Open the map on the Levels page and save it.
+2. Build it, so the compiled BSP is up to date. The release ships the build, not the `.map` file.
+3. Choose **Package Map** on the Levels header, or **Project** > **Package This Map…**. **Package
+   Map** on the Build header releases the pipeline's map instead.
+
+The **Package and Release** window opens with the map ticked and reviews the release straight away.
+It includes:
+
+- the compiled BSP and the files the engine loads beside it: lighting (`.lit`, `.lux`), bot
+  navigation (`.aas`), external lightmaps, the level shot and the `.arena` script;
+- every custom texture, shader script, model, skin, sound and music track the map uses, and the
+  images inside those shaders and model skins;
+- for Doom-family maps, the map's lumps and the custom textures, flats, patches, sprites, sounds and
+  music it needs, merged into one WAD.
+
+Files the game provides stay out. A project file with the same path as one of the game's own files
+ships, because it replaces the game's version; the review marks it so you can decide whether that is
+what you want. An identical copy of a stock file stays out.
+
+### Package a project, model or textures
+
+Choose **Package and Release…** on the Workspace page's **Releases** card, or **Project** >
+**Package and Release…**, then pick **What to Release**:
+
+| Choice | Ships |
+| --- | --- |
+| **Whole project** | Everything in the project the game does not already have: built maps, textures, shaders, models, sounds and scripts. |
+| **Maps** | Each ticked map with its build, companions and custom assets. |
+| **Models** | Each ticked model with its skins, shader scripts and their images. |
+| **Textures** | Each ticked texture folder with its images and the shader scripts that declare shaders in it. |
+
+Tick the items in the list; **Add Files…** adds maps, models or texture folders the list does not
+show. Ticks are kept when you switch between choices. **Package This Model…** and **Package These
+Textures…** on the **Project** menu start from the model or texture selected in a folder package.
+
+**Also use the open package** layers the package open on the Packages page over the project, for work
+you keep in a package rather than in folders. Leave it off unless that package holds your own work.
+
+### Review what ships
+
+The review beside the options updates as you change them:
+
+- The status line says **Ready to publish** or **Not ready**, with the file count, size and package
+  name.
+- Chips count **Included** files, files **From the game**, files that **Replace** the game's own, and
+  **Problems**. Select a chip to open its list.
+- **Contents by kind** charts the release by maps, textures, shaders, models, sounds and other files.
+- **Included** lists every file with its kind, size and the map or model that needs it. A warning
+  icon marks a file that replaces one of the game's; a muted icon marks a file that ships beside the
+  package, such as native game code, which engines cannot load from a package.
+- **From the Game** lists the references the game provides and which of its packages holds each.
+- **Problems** lists what blocks publishing first, such as a missing texture or a map that has not
+  been built, then advisories. Activate an unbuilt or out-of-date map to open it on the Build page.
+- **Details** is the whole plan as text.
+
+### Choose what ships
+
+Some files cannot be found by reading maps and models, such as sounds that game code plays or
+textures a script picks at run time. The project's release settings handle them:
+
+- **Include sources** ships the `.map` files and source art too.
+- In the project manifest, `release.include` lists patterns that always ship, and `release.exclude`
+  patterns that never do, such as `"docs/*.txt"` or `"**/*.psd"`. See
+  [Release settings](manual/releases.md#release-settings).
+
+Some files never ship from a project: sources such as `.map`, `.psd` and `.blend` (unless you include
+sources), compiler leftovers such as `.prt`, `.lin`, `.log` and `.bak`, programs, the project's
+`.vibestudio` folder, its output and temporary folders, and Quake-family texture WADs, which the
+compiled BSP already contains.
+
+### Describe the release
+
+The **Release** card holds the **Title**, **Version**, **Authors**, **Description**, **Website** and
+**Licence**; the **Package** card holds the **Format**, **File name**, **Game folder** and
+**Compression**. They start from the project manifest, and publishing saves them back to it.
+
+**Format** offers what the game can load. **Automatic** picks the usual choice:
+
+| Game | Automatic format |
+| --- | --- |
+| Quake III Arena | PK3 |
+| Quake and Quake II | PAK for a whole project; a ZIP of loose files for maps, models and textures, because the engines only load numbered PAK files and a new one could clash with other releases |
+| Doom, Heretic and Hexen | WAD, with other files, such as a readme or native code, beside it |
+| Other games | ZIP of loose files |
+
+**Next** beside the version offers the next patch, minor or major version. A version that has
+already been released cannot be published again unless you tick **Replace an earlier release of this
+version**.
+
+### Write the release notes
+
+The **Notes** tab shows the project's unreleased changes, the release notes and, on the **Readme**
+tab, the text file players read.
+
+- To record a change, choose its kind (**Added**, **Changed**, **Deprecated**, **Removed**,
+  **Fixed** or **Security**), describe it, and choose **Record Change**. The change goes into the
+  Unreleased section of the project's `CHANGELOG.md` straight away. **Project** > **Record a
+  Change…** and **Record Change…** on the Workspace **Releases** card do the same from anywhere.
+- With no changes recorded, VibeStudio suggests them from what changed since the last release, such
+  as maps or textures added and updated, or "First release." for the first one.
+- The notes and readme are generated from the plan and the changelog. Edit them freely before
+  publishing; **Regenerate** discards your edits and builds them again.
+- `{{package-sha256}}` and `{{package-size}}` are filled in with the package's SHA-256 hash and size
+  when it is written.
+
+The changelog follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and VibeStudio
+rewrites only the parts it changes, so you can also edit it by hand. The readme follows the layout of
+the text files that accompany releases in the [/idgames archive](https://www.doomworld.com/idgames/).
+
+### Publish
+
+1. Check the **Output folder**. It defaults to `build/releases/<name>-<version>` in the project.
+2. Choose whether to **Write a distribution archive (.zip)** and to **Move unreleased changes under
+   this version**.
+3. Choose **Publish Release**, or press <kbd>Ctrl</kbd>+<kbd>Enter</kbd> (<kbd>Cmd</kbd>+<kbd>Enter</kbd>
+   on macOS).
+
+Publishing runs in the background with progress and **Cancel**, and the Activity Center records it.
+The output folder receives:
+
+| File | What it is |
+| --- | --- |
+| `<name>.pk3`, `.pak`, `.wad` or `.zip` | The package, written and then verified. |
+| `<name>.txt` | The readme for players. |
+| `RELEASE_NOTES.md` | The release notes, for a website or forum post. |
+| `<name>-<version>.zip` | The distribution archive: the package, the readme and any files that ship beside the package, in the layout players extract into the game folder. |
+
+VibeStudio also records the release in the project's `.vibestudio/releases/<version>.json`, with the
+package's hash and a list of every file, and moves the changelog's unreleased changes under the new
+version. Nothing is written into the game installation, and an existing release is never overwritten
+unless you choose to replace it; replaced files are kept with `.bak` added to their names.
+
+When it finishes, **Show Folder** opens the output folder and **Open Package** opens the package on
+the Packages page. The version field then says the version has been released: choose **Next** to
+start the next one.
+
+### Release history
+
+The Workspace page's **Releases** card shows the number of unreleased changes and the latest
+releases, with their package, date and size. Activate a release to open its folder. The next release
+compares itself with the latest one recorded, so its notes can list what was added, updated and
+removed.
+
+### Check a map's dependencies
+
+**Dependencies** on the Levels header lists what the open map uses, also when no package is open: it
+then reads the project's folders, as a release does, and offers **Package Map…** in place of
+**Export Assets…**. With an indexed installation, references the game provides show as **Provided by
+the game**. See [Level editing](manual/levels.md#check-maps-and-entities).
+
+### Requirements and expansions
+
+By default only the base game counts as provided. A release for an expansion or another mod, such as
+Team Arena, names it as a requirement in the project manifest:
+
+```json
+"release": {
+  "requires": [
+    { "name": "Team Arena", "path": "missionpack", "url": "https://example.com/team-arena" }
+  ]
+}
+```
+
+Files under the requirement's folder or package, relative to the installation, then count as
+provided, and the notes and readme tell players to install it first. `release.stockSources` instead
+sets exactly which of the game's packages count as provided, by their path in the installation, such
+as `baseq3/pak0.pk3` and `missionpack/pak0.pk3`; `install register info` lists them.
+
+### Release settings
+
+The project manifest's `release` object holds the release settings. Every field is optional; empty
+ones use the project's and game's defaults. Publishing from the window saves the fields you changed.
+
+<details>
+<summary>All release fields</summary>
+
+| Field | Meaning |
+| --- | --- |
+| `title`, `version`, `description`, `website`, `license` | How the release is described. The title defaults to the project name, the version to `1.0.0`. |
+| `authors` | A list such as `["Ada <ada@example.com>"]`; the readme splits names from email addresses. |
+| `packageName` | The package file name without its extension. Defaults to a short form of the title. |
+| `packageFormat` | `pk3`, `pak`, `wad` or `zip`. Empty chooses automatically. |
+| `gameFolder` | The folder players install into, such as `baseq3`, `id1` or a mod folder. |
+| `stockSources` | The game's packages that count as provided. Empty uses the base game. |
+| `requires` | Content a release needs but does not ship: `name`, `path` and `url`. |
+| `include`, `exclude` | Patterns of project files that always or never ship. |
+| `outputFolder` | Where releases are written. Defaults to `build/releases`. |
+| `changelog` | The changelog file. Defaults to `CHANGELOG.md`. |
+| `includeSources` | `true` ships `.map` files and source art too. |
+
+</details>
+
+### Command-line equivalents
+
+| Task | Command |
+| --- | --- |
+| Index the game's own files | `vibestudio --cli install register build <installation>` |
+| Check the index, or whether a file is the game's | `install register info <installation>`, `install register check <installation> <path>` |
+| Save the index for another machine | `install register export <installation> --output <file>` |
+| List what a project can release | `vibestudio --cli release catalog <project>` |
+| Review a release | `vibestudio --cli release plan <project> --map <map>` |
+| Print the notes or readme | `vibestudio --cli release notes <project> --map <map>`, add `--readme` for the readme |
+| Show or record changes | `vibestudio --cli release changelog <project>`, `--add "<change>" --category added` |
+| Publish | `vibestudio --cli release publish <project> --map <map> --release-version <version>` |
+| List published releases | `vibestudio --cli release history <project>` |
+| Check a map against the game | `vibestudio --cli map dependencies <map> --package <project> --installation <installation>` |
+
+For example:
+
+```sh
+vibestudio --cli install register build quake3-games-quake3
+vibestudio --cli release plan ./mymod --map maps/arena1.map --json
+vibestudio --cli release changelog ./mymod --add "New arena: The Pit" --category added
+vibestudio --cli release publish ./mymod --map maps/arena1.map --release-version 1.0.0 --dry-run
+vibestudio --cli release publish ./mymod --release-version 1.1.0 --output ./out/1.1.0
+```
+
+Use `--model` or `--texture` instead of `--map` for models and texture folders, and nothing for the
+whole project. `--installation <id>` picks the installation, `--register <file>` uses an exported
+index instead, for example on a build server without the game, and `--no-stock` skips the game
+check. `release plan` and `install register info` exit with code 4 when something needs attention.
+`release publish` writes nothing with `--dry-run`, and `--no-archive`, `--no-readme`, `--no-notes`,
+`--no-record` and `--no-changelog` leave those files out.
+
+### Learn more
+
+- [Project releases](PROJECT_RELEASES.md): how releases are planned, the asset index format and
+  every rule.
+- [Packages](manual/packages.md): open, check and edit packages by hand.
+- [CLI strategy](CLI_STRATEGY.md): every `release` and `install register` option.
 
 ## Textures and sprites
 
@@ -3045,6 +3380,11 @@ instead (Quake III's default shader, for example) and says why under the
 picture. Turn off **Show What the Engine Draws Instead** to see the stages
 anyway.
 
+The preview and the swatches draw with your graphics card, through the 3D
+renderer chosen in **Settings** > **Appearance and Language** > **3D
+Rendering**. If neither OpenGL nor Vulkan works, the preview says why; see
+[3D views stay empty](manual/troubleshooting.md#3d-views-stay-empty).
+
 ### Edit as nodes
 
 The **Nodes** tab shows the material as a graph: images and coordinate,
@@ -3113,6 +3453,9 @@ vibestudio --cli material validate ./mymod --base ./baseq3
 vibestudio --cli material render ./baseq3 --material textures/sfx/fire_ctfblue --frames 8 --fps 10 --output fire.png
 ```
 
+`material render` draws with the same renderer; add `--renderer opengl` or
+`--renderer vulkan` to choose one for that run.
+
 <details>
 <summary>All material commands</summary>
 
@@ -3156,7 +3499,10 @@ package, so open a package or a folder first (see [Packages](manual/packages.md)
 selects it. The filter accepts words and terms such as `ext=md5mesh size>64kb`.
 
 Select a model to load it in the background; **Cancel Preview** stops a slow
-one. The viewport is software-rendered, so it needs no OpenGL support:
+one. The viewport draws with your graphics card through OpenGL or Vulkan
+(**Settings** > **Appearance and Language** > **3D Rendering**; see
+[3D views stay empty](manual/troubleshooting.md#3d-views-stay-empty) if it says it
+cannot draw):
 
 - Choose **Textured**, **Flat shaded** or **Wireframe**, and tick **Grid**,
   **Axes**, **Edges** or **Cull backfaces** (turn culling off for single-sided
@@ -3929,27 +4275,40 @@ The `code text-…` commands and `asset replace` only preview until you add
 
 ## Build and launch
 
-The Build page compiles your map with the community's standard compilers, shows each problem where it
-happens, and starts the game with the result. This page covers setting up the compilers, running a
-build, fixing problems and leaks, and launching a test.
+The Build page compiles your map with VibeStudio's own VibeMap2 and VibeMap3 compilers or the Doom
+node builders, shows each problem where it happens, and starts the game with the result. This page
+covers setting up the compilers, running a build, fixing problems and leaks, and launching a test.
 
 > [!NOTE]
-> **Status: Partial.** Build pipelines for Quake, Quake III and Doom maps run ericw-tools, q3map2,
+> **Status: Partial.** Build pipelines for Quake, Quake III and Doom maps run VibeMap2, VibeMap3,
 > ZDBSP and ZokumBSP and report problems, leaks and outputs. VibeStudio does not include the
-> compilers themselves, and only a few compiler and game combinations have been tested end to end.
+> compiler programs yet, and only a few compiler and game combinations have been tested end to end.
+> On 2026-10-08 VibeMap2 and VibeMap3 passed VibeStudio's Quake, Quake II and Quake III prepared-build
+> tests on Windows; other platforms, games and the older stock-compiler tests are still to be repeated.
 
 ### Install the compilers
 
-VibeStudio runs four external compilers. Their source code is kept with the VibeStudio source for
-reference and licence review, but VibeStudio builds do not include the compiler programs: install the
-ones you need from their own projects.
+VibeStudio runs four compilers. VibeMap2 and VibeMap3 are VibeStudio's own, developed as part of the
+project: VibeMap2 is derived from ericw-tools and VibeMap3 continues q3map2 from NetRadiant Custom.
+ZDBSP and ZokumBSP are external projects. The source code of all four is kept with the VibeStudio
+source, but VibeStudio builds do not include the compiler programs yet: build or download the ones
+you need from their own projects.
 
 | Compiler | Used for | Programs |
 | --- | --- | --- |
-| [ericw-tools](https://github.com/ericwa/ericw-tools) | Quake-family maps | `qbsp`, `vis`, `light` |
-| [q3map2 from NetRadiant Custom](https://github.com/Garux/netradiant-custom) | Quake III-family maps | `q3map2` |
+| [VibeMap2](https://github.com/themuffinator/VibeyMapTools) | Quake and Quake II maps | `vibemap2-bsp`, `vibemap2-vis`, `vibemap2-light` |
+| [VibeMap3](https://github.com/themuffinator/q3mapx) | Quake III-family maps | `vibemap3` |
 | [ZDBSP](https://github.com/rheit/zdbsp) | Doom-family nodes | `zdbsp` |
 | [ZokumBSP](https://github.com/zokum-no/zokumbsp) | Doom-family nodes, blockmap and reject | `zokumbsp` |
+
+VibeMap2 releases come as `vibemap2-windows-<version>.zip`, `vibemap2-linux-<version>.tar.gz` and
+`vibemap2-macos-<version>.tar.gz`, with every program at the top of the archive. Add the extracted
+folder to your PATH or to the project's compiler search paths, and VibeStudio finds the programs.
+
+VibeStudio also finds VibeMap2 and VibeMap3 under their earlier names (`vmt-bsp` and the other
+`vmt-` programs, and `q3mapx`), and in their build folders when you build them from the copies in
+`external/compilers`. Stock ericw-tools (`qbsp`, `vis`, `light`) and q3map2 are not found
+automatically; to use one, choose its program with **Locate…** as described below.
 
 ### Point VibeStudio at your compilers
 
@@ -3970,7 +4329,7 @@ they win over your choice, and **Path from** shows **Project manifest**; see
 [Projects and game installations](manual/projects.md#describe-the-project-with-a-manifest).
 
 **Compiler profiles**, below the tools, lists every single compiler step, such as
-**ericw-tools qbsp** or **q3map2 light**, and whether its tool is ready. **Run Profile**
+**VibeMap2 bsp** or **VibeMap3 light**, and whether its tool is ready. **Run Profile**
 (<kbd>Ctrl</kbd>+<kbd>R</kbd>) runs the selected step, **Copy CLI**
 (<kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>C</kbd>) copies a matching `vibestudio --cli compiler run`
 command, and **Copy Manifest** copies the step's command manifest.
@@ -3979,7 +4338,8 @@ command, and **Copy Manifest** copies the step's command manifest.
 
 1. Open the map on the Levels page.
    The **Input** field on the Build page follows the open map. To build another file, type its path
-   or choose it with the folder button beside the field.
+   or choose it with the folder button beside the field. Until a map is chosen, opening a project
+   picks a **Pipeline** for the project's game.
 2. Choose a **Pipeline**.
 3. Choose **Run Pipeline** (<kbd>F7</kbd>).
    The stages run in order, each feeding the next. **Pipeline Stages** shows their progress, and the
@@ -3991,10 +4351,10 @@ If the map has unsaved edits, VibeStudio asks first, because the compilers read 
 
 | Pipeline | Stages | Input |
 | --- | --- | --- |
-| **Quake full compile** | QBSP, then VIS and LIGHT (ericw-tools) | `.map` |
+| **Quake full compile** | QBSP, then VIS and LIGHT (VibeMap2) | `.map` |
 | **Quake fast iteration** | QBSP and LIGHT; VIS is skipped | `.map` |
 | **Quake BSP only** | QBSP | `.map` |
-| **Quake III full compile** | BSP, then VIS and LIGHT (q3map2) | `.map` |
+| **Quake III full compile** | BSP, then VIS and LIGHT (VibeMap3) | `.map` |
 | **Quake III BSP only** | BSP | `.map` |
 | **Doom nodes (ZDBSP)** | Nodes | `.wad` |
 | **Doom nodes (ZokumBSP)** | Nodes | `.wad` |
@@ -4083,6 +4443,9 @@ own key choices can change them, and **Help** > **Keyboard Shortcuts** lists the
 
 ### Share the result
 
+- **Package Map** on the Build header releases the pipeline's map for players: its build, the files
+  the engine loads beside it and every custom asset it uses, without the game's own files, with a
+  readme and release notes. See [Package and release](manual/releases.md).
 - **Add to Package** stages the built map into the open package under `maps/`, ready for Save As; see
   [Packages](manual/packages.md#save-a-new-package).
 - **Copy Commands** copies every stage's command line, so the same build can run from a shell or CI.
@@ -4108,13 +4471,14 @@ details.
 | Inspect a compiled map | `vibestudio --cli bsp inspect <bsp>` |
 | Draw a leak trail to a picture | `vibestudio --cli map render <map> --leak <file.pts> --output <file.svg>` |
 | Plan or start a launch | `vibestudio --cli launch plan --map <name>`, `launch run --map <name>` |
+| Release the built map | `vibestudio --cli release publish <project> --map <map> --release-version <version>` |
 
 For example:
 
 ```sh
 vibestudio --cli build plan quake-full --input ./maps/start.map
 vibestudio --cli build run quake-full --input ./maps/start.map --watch
-vibestudio --cli compiler set-path ericw-qbsp --executable /opt/ericw-tools/bin/qbsp
+vibestudio --cli compiler set-path vibemap2-bsp --executable /opt/vibemap2/vibemap2-bsp
 vibestudio --cli launch plan --bsp ./maps/start.bsp --deploy
 vibestudio --cli launch run --bsp ./maps/start.bsp --deploy --allow-test-maps
 ```
@@ -4665,6 +5029,7 @@ Options can go anywhere after `--cli`.
 | `--watch` | Streams progress lines from `build run`, `compiler run` and `compiler rerun` in text output. Nothing is streamed with `--json`. |
 | `--task-state` | Adds task-state objects to JSON output where supported. |
 | `--exit-codes` | Prints the exit-code table below. |
+| `--renderer <automatic\|opengl\|vulkan>` | Chooses the 3D renderer for this run (`material render`, `render backends`, `render test`) without changing the setting. |
 
 The command line uses the same settings as the studio, so commands such as `install add`,
 `compiler set-path` or `editor select` change what the studio sees. In scripts and CI, pass
@@ -4681,9 +5046,10 @@ list, and `--json` adds whether each command supports `--json`, `--dry-run` and 
 | `cli` | The command list and the exit-code table |
 | `ui` | Status chips, default keyboard shortcuts and command palette entries |
 | `project` | Project manifests, health checks and file lists |
-| `install` | Game installation profiles and Steam and GOG detection |
+| `install` | Game installation profiles, Steam and GOG detection, and the index of each game's own assets |
 | `workspace` | `.vibeworkspace` files |
 | `package` | Inspecting, extracting, validating, comparing, staging and saving packages, drafts and recovery |
+| `release` | Packaging and releasing a project, map, model or textures: plans, release notes, the changelog, publishing and release history |
 | `asset` | Format capabilities, image conversion, audio editing, and project text search and replace |
 | `map` | Inspecting, editing, rendering and generating maps, their textures and dependencies |
 | `entity` | Entity definition catalogues and map entity validation |
@@ -4692,6 +5058,7 @@ list, and `--json` adds whether each command supports `--json`, `--dry-run` and 
 | `texture` | Decoding, creating, editing, exporting, staging and generating textures |
 | `shader` | Quake III shader scripts |
 | `material` | Textures, shaders and materials of idTech 1 to 4: list, check, render, edit |
+| `render` | The 3D renderers: what each one found, a drawing test, and which one to use |
 | `sprite` | Doom and Quake sprite plans |
 | `code` | Code file lists, local language servers and format-preserving text saves |
 | `compiler` | Compiler discovery, paths, single compiler runs and command manifests |
@@ -4729,6 +5096,14 @@ vibestudio --cli map render ./maps/start.map --output ./start.svg
 vibestudio --cli map render ./maps/start.map --projection front --leak ./maps/start.pts --output ./start-leak.svg --overwrite
 ```
 
+Index a game's own files once, then review and publish a map release with only your own files:
+
+```sh
+vibestudio --cli install register build quake3-games-quake3
+vibestudio --cli release plan ./mymod --map maps/arena1.map
+vibestudio --cli release publish ./mymod --map maps/arena1.map --release-version 1.0.0
+```
+
 Plan a build without running anything, then run it with live progress:
 
 ```sh
@@ -4757,8 +5132,8 @@ the command palette entries:
 vibestudio --cli ui semantics
 ```
 
-More examples are on the pages for each area, such as [Packages](manual/packages.md) and
-[Build and launch](manual/build-and-launch.md).
+More examples are on the pages for each area, such as [Packages](manual/packages.md),
+[Package and release](manual/releases.md) and [Build and launch](manual/build-and-launch.md).
 
 ### Use JSON output in scripts
 
@@ -4885,6 +5260,43 @@ Only continue if you got VibeStudio from the project's own
   AppImage, or build VibeStudio from source.
 
 The command line (`vibestudio --cli ...`) needs no display, so it also works over SSH and in CI.
+Commands that draw in 3D (`material render`, `render backends`, `render test`) can use only Vulkan
+when there is no display; see [3D views stay empty](manual/troubleshooting.md#3d-views-stay-empty).
+
+### 3D views stay empty
+
+The Levels camera, the model views and material previews draw with OpenGL or Vulkan. When neither
+works, a view shows **The 3D renderer could not draw this view** with the reason, and material
+swatches stay blank.
+
+1. Open **Settings** > **Appearance and Language** > **3D Rendering**. **Status** says what each
+   renderer found, or why it could not start.
+2. Select **Check Renderers**. It starts both again and draws a test image on each.
+3. Choose the other renderer under **Renderer**, or **Automatic**.
+4. Update your graphics driver. Vulkan needs a Vulkan 1.0 driver; OpenGL needs OpenGL 3.3 (or
+   OpenGL ES 3.0). On macOS, OpenGL works without extra software; Vulkan needs MoltenVK.
+5. On Linux without a GPU driver, Mesa's software drivers (`mesa-vulkan-drivers` for Vulkan,
+   llvmpipe for OpenGL) work, but slowly. **Status** says **runs on the processor** for them.
+
+From the command line:
+
+```sh
+vibestudio --cli render backends
+vibestudio --cli render test
+vibestudio --cli render set opengl
+```
+
+`render backends` lists each renderer with its device and driver, or why it is unavailable.
+`render test` exits 4 when a renderer draws its test image wrongly and 5 when none can start. To try
+a renderer for one run without changing the setting, add `--renderer vulkan` to a command, or set
+the environment variable `VIBESTUDIO_RENDER_BACKEND` to `opengl` or `vulkan` before starting the
+studio.
+
+On a computer with two graphics processors, Vulkan picks the discrete one. To use another, set
+`VIBESTUDIO_VULKAN_DEVICE` to part of its name, such as `Intel`, or to its place in the system's list
+of Vulkan devices, counting from 0; `render backends` then names the one in use. OpenGL uses the
+graphics processor your operating system assigns to VibeStudio. `VIBESTUDIO_VULKAN_VALIDATION=1`
+turns on the Khronos validation layer, where it is installed, for reports to the developers.
 
 ### Find the logs
 
@@ -4908,11 +5320,13 @@ A diagnostics bundle describes your setup for a bug report.
 - In the studio, choose **Tools** > **Copy Diagnostic Bundle**
   (<kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>D</kbd>; on macOS, <kbd>Cmd</kbd> takes the place of
   <kbd>Ctrl</kbd>). It copies to the clipboard the version, Qt runtime, platform, language and theme,
-  the open project and package, the log file's path, the number of crash reports, where each compiler
-  was found, any keyboard shortcut conflicts and the last 60 lines of the session log.
+  the 3D renderer and what OpenGL and Vulkan found, the open project and package, the log file's path,
+  the number of crash reports, where each compiler was found, any keyboard shortcut conflicts and the
+  last 60 lines of the session log.
 - From the command line, run `vibestudio --cli diagnostics bundle --output ./diagnostics`. It writes
-  `vibestudio-diagnostics.json` with the version, Qt and system details, and the studio's command,
-  module, operation-state, interface and localization reports. It leaves out secrets, API keys,
+  `vibestudio-diagnostics.json` with the version, Qt and system details, the 3D renderer choice, and
+  the studio's command, module, operation-state, interface and localization reports. Add the output of
+  `vibestudio --cli render backends` when 3D views are the problem. It leaves out secrets, API keys,
   environment values, home-directory contents and project files.
 
 > [!IMPORTANT]
@@ -4976,12 +5390,17 @@ From the command line, `vibestudio --cli --set-text-scale 150` sets the scale. S
 
 ### Compilers are not found
 
-VibeStudio does not include the compilers; install ericw-tools, q3map2, ZDBSP or ZokumBSP yourself.
-Then open the **Toolchain** tab on the Build page: a tool that shows **Not found** needs
-**Locate…**, and **Rescan** looks again after you install one. On macOS and Linux, the program must
-be executable. Because `vis` and `light` are common program names, check that **Executable** points
-at the ericw-tools programs and not something else on your PATH. If **Path from** says
-**Project manifest (missing)**, fix `compilerToolOverrides` in the project's manifest.
+VibeStudio does not include the compiler programs yet; install VibeMap2, VibeMap3, ZDBSP or
+ZokumBSP yourself. Then open the **Toolchain** tab on the Build page: a tool that shows **Not found**
+needs **Locate…**, and **Rescan** looks again after you install one. On macOS and Linux, the program
+must be executable. VibeStudio finds VibeMap2 and VibeMap3 under their current names
+(`vibemap2-bsp`, `vibemap3`) and their earlier ones (`vmt-bsp`, `q3mapx`), but not stock ericw-tools
+or q3map2: choose those with **Locate…**. Because stock ericw-tools uses the common program names
+`vis` and `light`, check that **Executable** points at the ericw-tools programs and not something
+else. Scripts must use the new tool ids, such as `vibemap2-bsp` and `vibemap3`: a `compiler`
+command given an old id, such as `ericw-qbsp` or `q3map2`, stops with a message that names the new
+one. If **Path from** says **Project manifest (missing)**, fix `compilerToolOverrides` in the
+project's manifest.
 `vibestudio --cli compiler list` shows where each tool was found and its version. See
 [Build and launch](manual/build-and-launch.md).
 
@@ -4994,6 +5413,27 @@ from another store or as a source port, choose **Add** in **Game Installations**
 folder. To scan another Steam library or game folder, run
 `vibestudio --cli install detect --root "<folder>"`. Detected games are not saved until you choose
 **Import Detected**. See [Projects and game installations](manual/projects.md#add-your-game-installations).
+
+### A release includes the game's own files
+
+A release can only leave out what it knows the game ships. If **Package and Release** says the
+game's own files were not checked, or the **From the game** chip shows nothing:
+
+- Link the project to its game installation: select it under **Game Installations** on the
+  Workspace page and choose **Use**.
+- Choose **Index Assets** for that installation, or **Index Game Assets** in the release window's
+  notice. Index it again after the game is patched; its row then says **asset index out of date**.
+- A file in your project with the same path as one of the game's ships on purpose, because it
+  replaces the game's version. The **Included** list marks it with a warning icon; delete or rename
+  your copy if that is not what you want.
+- For an expansion or another mod, name it as a requirement in the project manifest. See
+  [Package and release](manual/releases.md#requirements-and-expansions).
+
+### A release is missing a file
+
+A release gathers what your maps, models and shader scripts name. Sounds, models or textures that
+game code, QuakeC or scripts load by name are not found that way: add them with `release.include`
+patterns in the project manifest. See [Package and release](manual/releases.md#choose-what-ships).
 
 ### A package will not open
 
@@ -5009,10 +5449,11 @@ folder. To scan another Steam library or game folder, run
 
 #### Game folders stay unchanged
 
-Detection only reads, and installation profiles start read-only. VibeStudio writes into a game folder
-only for test-map copies you allow and prepared-build deployments you review, though the game itself
-may write its own configuration and logs when you launch it. Removing a profile never deletes game
-files.
+Detection and indexing a game's assets only read, and installation profiles start read-only.
+VibeStudio writes into a game folder only for test-map copies you allow and prepared-build deployments
+you review, though the game itself may write its own configuration and logs when you launch it.
+Releases are written to your project's output folder, never into the game. Removing a profile never
+deletes game files.
 
 #### Nothing is sent without your consent
 
@@ -5058,6 +5499,8 @@ building, testing, running and packaging.
 | Git | To clone the source with its submodules. |
 | Qt Linguist tools, optional | `lrelease` compiles the translation catalogues; without it the build still succeeds. `lupdate` is used by the translation check in the full validation run. |
 | ALSA development files, Linux, optional | For the synchronised recording backend, such as `libasound2-dev` on Debian and Ubuntu. Without them, that backend is left out. |
+| An OpenGL 3.3 or Vulkan 1.0 driver, for running | The 3D views and many tests draw with it. No Vulkan SDK is needed to build: the Vulkan headers are in the source, and the loader is opened at run time. On Linux without a GPU, Mesa's `mesa-vulkan-drivers` (lavapipe) works. |
+| glslang, optional | Only when you change the shaders in `src/core/shaders`: `python scripts/build_render_shaders.py` regenerates `src/core/render_shader_data.inc` with `glslangValidator` (Vulkan SDK, or `glslang-tools` on Debian and Ubuntu). |
 
 Meson finds Qt through `qmake6`, so put your Qt installation's `bin` folder on PATH, or make Qt
 available to `pkg-config`. On Windows, build from a Developer PowerShell or Developer Command Prompt
@@ -5077,8 +5520,11 @@ If you cloned without `--recursive`, fetch the submodules afterwards:
 git submodule update --init --recursive
 ```
 
-The submodules hold the source of ericw-tools, q3map2, ZDBSP and ZokumBSP for reference and licence
-review. The build does not compile them, but one of the tests checks that they are present.
+The submodules hold the source of VibeMap2 and VibeMap3, VibeStudio's own compilers (derived from
+ericw-tools and from q3map2 in NetRadiant Custom), and of ZDBSP and ZokumBSP, for building the
+compilers yourself and for licence review. The VibeStudio build does not compile them, but one of the
+tests checks that they are present. VibeMap2 and VibeMap3 build with CMake; when you build them in
+place, VibeStudio finds the programs in their build folders.
 
 ### Configure, build and test
 
@@ -5089,7 +5535,10 @@ meson test -C builddir --print-errorlogs
 ```
 
 Meson's default build type is `debug`, which runs noticeably slower. CI configures with
-`--buildtype=debugoptimized`, which you can add to `meson setup` too. On Windows, Qt's `bin` folder
+`--buildtype=debugoptimized`, which you can add to `meson setup` too. Tests that draw in 3D skip their
+drawing checks when neither OpenGL nor Vulkan starts; set `VIBESTUDIO_RENDER_REQUIRE=1` to make that a
+failure instead, as Linux CI does. Most tests use Qt's offscreen platform, where only Vulkan can draw on
+Windows and macOS. On Windows, Qt's `bin` folder
 must also be on PATH when the tests run, as in
 [Run from the build folder](manual/building-from-source.md#run-from-the-build-folder).
 

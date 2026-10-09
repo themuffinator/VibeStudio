@@ -27,6 +27,7 @@ void ModelViewport::mirrorDisplayFrom(const ModelViewport& source)
 	const bool hadMesh = m_hasMesh;
 	if (meshChanged) {
 		m_mesh = source.m_mesh;
+		++m_meshRevision;
 		m_hasMesh = source.m_hasMesh;
 		m_frameTotal = source.m_frameTotal;
 		m_editPivotCache = {};
@@ -73,7 +74,6 @@ void ModelViewport::mirrorDisplayFrom(const ModelViewport& source)
 	m_showCollision = source.m_showCollision;
 	m_collisionPicking = source.m_collisionPicking;
 	m_editCollision = source.m_editCollision;
-	rebuildFillBrushes();
 	if (meshChanged && !hadMesh && m_hasMesh) {
 		m_center = source.m_center;
 		m_radius = source.m_radius;

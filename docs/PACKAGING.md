@@ -31,8 +31,9 @@ notarised yet, and clean-machine acceptance of the installers remains open.
   beside the selected Meson build's executable;
 - `samples/` with license-clean Doom, Quake, and Quake III-family projects;
 - `licenses/THIRD_PARTY_LICENSES.md` plus VibeStudio license/credits files and
-  imported compiler source licenses for ericw-tools, q3map2-nrc, ZDBSP, and
-  ZokumBSP;
+  imported compiler source licenses for VibeMap2, VibeMap3, ZDBSP, and
+  ZokumBSP under `licenses/external/compilers/` (VibeMap2 and VibeMap3 as
+  `VibeMap2/COPYING` and `VibeMap3/COPYING`);
 - the pinned r8brain-free-src MIT and Ooura FFT licences, attribution, and
   source hash manifest under `licenses/external/audio/r8brain-free-src/`;
 - pinned libebur128 MIT, R128Scan MIT and BSD-3-Clause queue notices, integration
@@ -40,6 +41,11 @@ notarised yet, and clean-machine acceptance of the installers remains open.
 - pinned PortAudio MIT-style license, integration notes and original-source
   hashes under `licenses/external/audio/portaudio/`; the source companion also
   includes checked host patches and their Meson build rules;
+- the pinned Vulkan-Headers `LICENSE.md`, Apache-2.0 and MIT texts, integration
+  notes and header hashes under `licenses/external/graphics/vulkan-headers/`.
+  No Vulkan loader, MoltenVK or OpenGL driver is bundled: the 3D renderer opens
+  the system's at run time, and a machine with neither runs with empty 3D views
+  that say why;
 - `platform/README.txt` with target-specific launch and clean-machine smoke
   notes;
 - `package-manifest.json` schema version 2 with target platform,

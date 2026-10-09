@@ -110,6 +110,16 @@ prop edits, shader verification and original-engine acceptance remain open.
 This increment does not close the professional modeller release gate. See
 [Model Collision](MODEL_COLLISION.md) and [release evidence](MODELLER_RELEASE.md).
 
+Quake-family compilation now targets VibeStudio's own compilers: VibeMap2,
+derived from ericw-tools, for Quake and Quake II, and VibeMap3, continuing q3map2
+from NetRadiant Custom, for Quake III. Profiles, discovery, pipelines and
+prepared builds use them, and the old `ericw-*` and `q3map2*` tool and profile
+ids are refused, naming the new id. The Quake/Quake II and Quake III prepared-build
+proofs passed with VibeMap2 and VibeMap3 on Windows on 2026-10-08; the other
+compiler proofs recorded below ran stock ericw-tools and q3map2 and have not been
+repeated yet, and the known-issue catalogue still needs a re-audit against VibeMap2. See
+[Compiler Integration](COMPILER_INTEGRATION.md#vibestudio-compilers).
+
 Quake/Quake II/Quake III prepared builds now connect current map edits, generated/staged package
 assets, compiler execution and package publication through one verified snapshot.
 The GUI and CLI share preparation, input/output receipts, cancellable publication,
@@ -405,9 +415,11 @@ idTech project workbench that proves the end-to-end loop:
 MVP exit criteria:
 
 - [ ] Runs on Windows, macOS, and Linux from CI-built artifacts.
-- [x] Supports at least one complete idTech2/Quake-family compile loop using ericw-tools.
+- [x] Supports at least one complete idTech2/Quake-family compile loop (proved with stock ericw-tools, before the move to VibeMap2).
 - [x] Supports at least one Doom-family node-building loop using ZDBSP or ZokumBSP.
-- [x] Supports at least one idTech3/q3map2 diagnostic or compile loop.
+- [x] Supports at least one idTech3 diagnostic or compile loop (proved with NetRadiant Custom q3map2, before the move to VibeMap3).
+- [x] Proves the Quake-family and Quake III compile loops again with VibeStudio's own VibeMap2 and VibeMap3 (Windows, 2026-10-08).
+- [ ] Reruns the artifacts, deployment and MD3 appearance compiler proofs with VibeMap2 and VibeMap3, and on macOS and Linux.
 - [x] Supports package browsing for folders, PAK, WAD, and PK3/ZIP-family archives.
 - [x] Supports previews for core text, image/palette, audio metadata and waveform, and model/map metadata.
 - [x] Supports audio playback through Qt Multimedia when the build links it; without it, audio previews stop at metadata and waveform.
@@ -507,6 +519,14 @@ Goal: make the repository easy to build, test, credit, and extend.
   ([`docs/STACK.md`](STACK.md)).
 - [x] Add renderer abstraction decision record covering QPainter, QOpenGLWidget MVP previews, and bgfx
   production viewport goals ([`docs/STACK.md`](STACK.md)).
+- [x] Draw every 3D view and material preview on the GPU with user-selectable OpenGL and Vulkan backends
+  (2026-10-08): `core/render_device` frames, OpenGL 3.3 core / ES 3.0 and Vulkan 1.0 devices on their own
+  threads, GLSL compiled offline to SPIR-V, **Settings** > **Appearance and Language** > **3D Rendering**,
+  the `render backends|test|set` commands and `--renderer`; the CPU rasterisers are removed
+  ([`docs/STACK.md`](STACK.md)).
+- [ ] Present 3D views straight to a window surface instead of reading frames back, and measure the
+  difference on large maps.
+- [ ] Try the renderers on macOS (OpenGL, and Vulkan through MoltenVK) and on AMD and Linux desktop drivers.
 - [x] Add project health summary.
 - [x] Add package composition chart: stacked proportions by entry type and by size, with a legend.
 - [x] Add compiler pipeline chart: source, stages, and artifacts with per-stage state glyphs.
@@ -622,6 +642,9 @@ Goal: make VibeStudio understand games and projects, not just individual files.
 - [x] Add profile validation against expected base packages/executables.
 - [x] Add per-profile palette and engine-family defaults.
 - [x] Add first-run installation flow with skip/later path.
+- [x] Index each installation's stock packages (files, Quake III shader declarations, Doom-family
+  names) into a read-only game asset index with freshness checks, from the Workspace page, Project
+  Health and `install register`. See [Project releases](PROJECT_RELEASES.md#the-game-asset-index).
 
 ### Workspace UX
 - [x] Add workspace dashboard for active project, install, packages, recent files, and tasks.
@@ -649,7 +672,7 @@ editors.
 - [x] Add user-configured executable paths (Build > Toolchain **Locate…** and `compiler set-path`).
 - [x] Add project-local compiler overrides.
 - [x] Add compiler version probing.
-- [x] Add capability flags for Doom node builders, ericw-tools, and q3map2.
+- [x] Add capability flags for Doom node builders, VibeMap2, and VibeMap3 (first written for ericw-tools and q3map2).
 
 ### Command Manifests
 - [x] Define compiler run manifest schema.
@@ -659,13 +682,17 @@ editors.
 - [x] Add copy command line action.
 
 ### Toolchain Slices
-- [x] Add ericw-tools profile: `qbsp`.
-- [x] Add ericw-tools profile: `vis`.
-- [x] Add ericw-tools profile: `light`.
+- [x] Add VibeMap2 profile: `vibemap2-bsp` (first written for ericw-tools `qbsp`).
+- [x] Add VibeMap2 profile: `vibemap2-vis` (first written for ericw-tools `vis`).
+- [x] Add VibeMap2 profile: `vibemap2-light` (first written for ericw-tools `light`).
 - [x] Add ZDBSP profile for a selected WAD/map.
 - [x] Add ZokumBSP profile for a selected WAD/map.
-- [x] Add q3map2 info/help/probe profile.
-- [x] Add q3map2 compile profile for a simple `.map`.
+- [x] Add VibeMap3 info/help/probe profile (first written for q3map2).
+- [x] Add VibeMap3 compile profile for a simple `.map` (first written for q3map2).
+- [x] Move the Quake-family toolchain to VibeStudio's own VibeMap2 and VibeMap3, renaming the `ericw-*` and `q3map2*` ids and refusing the old ones with the new id named.
+- [ ] Rerun the Quake-family and Quake III compiler proofs with VibeMap2 and VibeMap3.
+- [ ] Re-audit the known-issue catalogue against VibeMap2's upstream audit and retire the entries it resolves.
+- [ ] Ship VibeMap2 and VibeMap3 programs with VibeStudio releases.
 
 ### Diagnostics
 - [x] Capture stdout/stderr in task log.
@@ -935,6 +962,14 @@ Goal: make package edits practical without sacrificing trust.
   and texture namespace anchors. Block ambiguous map ownership.
 - [ ] Rewrite map metadata/script references and finish transitive
   texture/patch/game-asset dependency closure.
+- [x] Package and release a project, map, model or texture folders with only the project's own
+  files: releases follow map, model and shader references, ship build companions, leave out what
+  the game asset index lists, flag files that replace stock ones, keep a Keep a Changelog file,
+  generate release notes and an /idgames-style readme, write a distribution archive and record each
+  release for the next one's diff. One planner and publisher serve the Package and Release window
+  and the `release` CLI. See [Project releases](PROJECT_RELEASES.md).
+- [ ] Prove releases with real game installations and projects; follow references that game code,
+  QuakeC and scripts make; index Doom 3-era and other idTech 3 games without manual package lists.
 
 - [x] Add PAK writer from PakFu lineage.
 - [x] Add ZIP/PK3 writer from PakFu lineage, choosing per entry between stored and deflated output.
@@ -1116,7 +1151,8 @@ Goal: widen the workbench into a real asset studio.
   remain open. See [engine acceptance](MODEL_ENGINE_ACCEPTANCE.md#baked-assembly-animation).
 - [x] Port/adapt model metadata loader workflow concepts from PakFu.
 - [x] Define native idTech model loader boundary before adding optional Assimp import/export.
-- [x] Add model preview viewport. `ModelViewport` uses a bounded software depth buffer presented by QPainter, with no OpenGL dependency:
+- [x] Add model preview viewport. `ModelViewport` first used a bounded software depth buffer presented by QPainter; since
+  2026-10-08 it draws on the GPU (OpenGL or Vulkan) with the same QPainter overlays:
   orthographic/perspective projection, perspective-correct skins, per-pixel transparency, orbit/pan/zoom, frame stepping and timed
   playback, hover read-out, and wireframe, flat-shaded, and textured modes.
 - [x] Move projection and indexed exact picking preparation off the GUI thread;
@@ -1476,7 +1512,7 @@ full Radiant/Doom Builder replacement in one step.
   traced sector fills, and things.
 - [x] Add orthographic brush preview for Quake-family maps, with solved brush bounds and tessellated Quake III
   patches on top, front, and side projections, alongside the shared perspective camera.
-- [x] Add a read-only 3D preview to Levels (`buildLevelMapPreviewMesh` on the Models surface's software renderer):
+- [x] Add a read-only 3D preview to Levels (`buildLevelMapPreviewMesh` on the Models surface's renderer, on the GPU since 2026-10-08):
   brushes, patches, and Doom walls, flat shaded, keeping its camera across edits.
 - [x] Add selection model.
 - [x] Add property inspector.
@@ -1811,9 +1847,9 @@ Use this queue to get to MVP quickly.
 10. [x] Add project manifest and workspace dashboard with project health summary.
 11. [x] Add compiler registry and executable discovery.
 12. [x] Add CLI subcommand router, JSON output, and exit-code contract.
-13. [x] Add ericw-tools `qbsp/vis/light` wrapper profile.
+13. [x] Add `qbsp/vis/light` wrapper profiles (ericw-tools then, VibeMap2 now).
 14. [x] Add ZDBSP or ZokumBSP wrapper profile.
-15. [x] Add q3map2 probe/compile wrapper profile.
+15. [x] Add probe/compile wrapper profiles for Quake III (q3map2 then, VibeMap3 now).
 16. [x] Add structured task logs, command manifests, and output-path reporting.
 17. [x] Add package composition and compiler pipeline graphical summaries.
 18. [x] Add editor profile registry and routed MVP presets.

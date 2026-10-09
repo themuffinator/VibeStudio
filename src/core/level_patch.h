@@ -5,7 +5,7 @@
 namespace vibestudio {
 
 // Authorable quadratic grids have odd dimensions, matching q3map2's 31-point
-// axis limit (external/compilers/q3map2-nrc/tools/quake3/q3map2/q3map2.h).
+// axis limit (external/compilers/vibemap3/tools/quake3/q3map2/q3map2.h).
 inline constexpr int kLevelPatchMaxDimension = 31;
 
 struct LevelPatchCreateRequest {

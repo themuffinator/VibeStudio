@@ -269,6 +269,17 @@ states, package handoffs and Qt-rendered layouts at 100% dark and 200% high-cont
 RTL with expanded strings. Physical keyboard and screen-reader acceptance remain
 part of the release audit.
 
+The Package and Release window gives every focusable control an accessible name,
+announces its review state through a status strip, chips and a Problems list whose
+rows read as "Blocking:" or "Advisory:", and never relies on colour alone: warning
+and error glyphs mark files that replace the game's and blocking problems. Space
+ticks or unticks the current item, Ctrl+Enter publishes, and Escape during
+publishing cancels it instead of closing the window mid-write. The window sizes itself from the text size within the screen, its
+options column scales with the font, and paths, versions and package names stay
+left to right in a right-to-left layout. `release-dialog-ui-smoke` checks the
+names and the review, notes, publishing and indexing states in dark, light,
+high-contrast, 150% and 200% text and right-to-left, with snapshots on request.
+
 The profile browser uses a native search field, wrapping profile list and scrollable
 text preview with accessible names. Search includes aliases and engine families;
 no results disables **Use Profile**. Previewing a profile leaves preferences
@@ -1876,7 +1887,7 @@ The UI functionality round makes the keyboard reach further:
   the Levels **Show** menu (checkable items whose names follow the map's
   game), **Zoom to Selection**, **Use Open Map**, **Show Output**, the
   compiler tool table
-  ("ericw-tools qbsp, Ready, path from Automatic"), **Locate…**, **Use
+  ("VibeMap2 bsp, Ready, path from Automatic"), **Locate…**, **Use
   Automatic**, **Rescan**, and the build problem rows ("Warning: message,
   stage and location"). Build problems and tool states pair a glyph with words,
   never colour alone.
@@ -2120,6 +2131,22 @@ why the alternatives exist. Reduced saturation and monochrome mix colours with
 their equal-luminance grey in linear light, so every WCAG ratio the themes were
 tuned for holds; the test checks that too.
 
+### 3D Renderer Settings
+
+**Settings** > **Appearance and Language** > **3D Rendering** holds the
+**Renderer** combo box (accessible name "3D renderer"), a selectable plain-text
+**Status** label ("3D renderer status") and **Check Renderers** ("Check 3D
+renderers"). Status gives every state in words: in use, available,
+unavailable with the reason, not started yet, test image correct or wrong,
+and an environment override; nothing relies on colour. The label wraps and
+takes the panel's width, so translated text and 200% text scale grow it
+downwards. Changing the renderer or finishing a check reports the result in
+the status bar, which reaches screen readers and speech like every status
+message. A 3D view or material preview that cannot draw says so in its own
+text and accessible description, naming this page. New strings use the
+`ApplicationShell`, `VibeStudioRendering`, `ModelViewport`,
+`MaterialPreviewView` and `RenderCli` contexts.
+
 ## OS-Backed Text To Speech
 
 **Status: implemented with the platform's own engines; Windows verified.**
@@ -2312,8 +2339,9 @@ catalog, so no translation could ever apply to them. Those call sites now call
 
 Text kept in tables and translated later is marked with
 `QT_TRANSLATE_NOOP("<context>", "...")`, using the same context as the call that
-translates it. This covers known compiler issues (`knownIssue`), ericw-tools
-preflight messages (`addIssue`), the Levels command table, and generated palette
+translates it. This covers known compiler issues (`knownIssue`), Quake map
+preflight messages (`addIssue`, context `VibeStudioQuakeMapPreflight`), the
+Levels command table, and generated palette
 names. lupdate's `-tr-function-alias` is deliberately not used: it would file
 these strings under the wrong context.
 
@@ -2719,8 +2747,8 @@ normal progress, cancellation and mutation locking. New shared diagnostics use
 focus loss cancels a move. Chart analysis and drawing run on a worker, and picks
 wait for its current result. New strings use `VibeStudioModelUv` and
 `VibeStudioModelUvView` alongside the existing mesh editor contexts. The
-viewport honors high contrast and reduced motion. The shared software renderer
-runs on a cancellable worker, with a visible and accessible rendering state;
+viewport honors high contrast and reduced motion. The shared 3D renderer
+(OpenGL or Vulkan) draws on a cancellable worker, with a visible and accessible rendering state;
 selection waits for the displayed view to catch up. Depth-tested hatches and
 hover edges supplement color without showing hidden faces through the mesh.
 Recovery has a named preference, textual checkpoint status, a keyboard-focusable

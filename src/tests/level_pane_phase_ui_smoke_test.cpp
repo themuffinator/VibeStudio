@@ -1,6 +1,6 @@
 #include "tests/map_viewport_test_helpers.h"
 #include "tests/level_geometry_test_helpers.h"
-#include "app/model_rasterizer.h"
+#include "app/wire_lines.h"
 #include "core/level_patch.h"
 #include <QApplication>
 #include <QDir>
@@ -111,15 +111,15 @@ bool rasterPaths(QJsonArray* samples)
 					QPainter painter(&reference); painter.setRenderHint(QPainter::Antialiasing); painter.translate(offset);
 					ok &= paintMapPlanFallback(painter,source,selected);
 				} else {
-					QVector<ModelWireSegment> lines;
+					QVector<WireSegment> lines;
 					const auto at = [&](const QPointF& point) {
 						return offset + QPointF(source.view.viewport.width()*0.5+(point.x()-source.view.center.x())*source.view.zoom,
 							source.view.viewport.height()*0.5-(point.y()-source.view.center.y())*source.view.zoom);
 					};
 					for (const auto& batch : wires.batches) { for (const auto& line : batch.lines) { lines.append({at(line.p1()),at(line.p2()),true}); } }
-					ModelWireStyle style; style.pixelRatio = ratio; style.selection = source.view.selection;
+					WireStyle style; style.pixelRatio = ratio; style.selection = source.view.selection;
 					style.selectionWidth = source.view.highContrast ? 3.6 : 2.8;
-					ok &= paintModelWireframe(&reference,lines,style);
+					ok &= paintWireLines(&reference,lines,style);
 				}
 				const QRect region(int(std::ceil((offset.x()+8)*ratio)),int(std::ceil((offset.y()+8)*ratio)),
 					int((source.view.viewport.width()-16)*ratio),int((source.view.viewport.height()-16)*ratio));
@@ -194,14 +194,14 @@ int main(int argc, char** argv)
 				ok &= settle(host,*view,&actual);
 				// Rasterize directly into the physical parent target. No cached
 				// image placement or production device-phase helper participates.
-				QVector<ModelWireSegment> lines;
+				QVector<WireSegment> lines;
 				const auto at = [&](const QPointF& point) {
 					return QPointF(view->x() + view->width() * 0.5 + (point.x()-nav.center.x())*nav.zoom,
 						view->y() + view->height() * 0.5 - (point.y()-nav.center.y())*nav.zoom);
 				};
 				for (const auto& batch : wires.batches) { for (const auto& line : batch.lines) { lines.append({at(line.p1()),at(line.p2()),false}); } }
-				ModelWireStyle style; style.pixelRatio = ratio; style.width = 1.6; style.wire = qRgb(255,255,255);
-				ok &= paintModelWireframe(&reference,lines,style);
+				WireStyle style; style.pixelRatio = ratio; style.width = 1.6; style.wire = qRgb(255,255,255);
+				ok &= paintWireLines(&reference,lines,style);
 				const QRect region(int(std::ceil((view->x()+8)*ratio)),int(std::ceil((view->y()+60)*ratio)),
 					int((view->width()-16)*ratio),int((view->height()-68)*ratio));
 				const int delta = difference(actual.copy(region),reference.copy(region)); ok &= delta <= 1;

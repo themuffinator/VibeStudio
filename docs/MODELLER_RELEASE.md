@@ -1186,7 +1186,9 @@ flags supply Quake II player clipping; Quake III requires an explicit project
 shader. Shader availability in the user's project remains unverified.
 
 The generated compiler workflow exercises source import, collision authoring,
-texture export, map export and placement, then runs real ericw-tools and q3map2.
+texture export, map export and placement, then runs real Quake-family compilers
+(stock ericw-tools and q3map2 in the recorded runs; not yet rerun with VibeMap2
+and VibeMap3).
 Independent BSP readers verify empty Quake draw-hull points and solid expanded
 hulls at the boxes, Quake II/III player-clip contents, leaf references, rotated
 plane membership and absence of visible clip faces. It uses original assets,
@@ -1477,7 +1479,9 @@ scene, integration, accessibility and platform gaps listed above remain open.
 
 Wireframe now uses an original CPU line rasterizer on the existing worker. It
 integrates stroke coverage over pixels, deduplicates shared surface edges and
-draws selected dashes after ordinary edges. Logical widths scale with display
+draws selected dashes after ordinary edges. (Since 2026-10-08 the 3D views draw
+wireframes on the GPU with the same coverage formula; the UV view keeps the CPU
+line painter. See [STACK.md](STACK.md).) Logical widths scale with display
 density and high-visibility mode. Near-plane cuts, original selected edges and
 displaced faces retain their respective geometry; no decimation is used.
 Offscreen coordinates cannot enlarge the scan beyond the bounded image, and
@@ -2172,7 +2176,7 @@ conflict check. The existing modeller suites pass with the new layout,
 including 200% text, RTL, expanded translations and both high-contrast themes.
 
 Still open: no decoder has been run against real game files; no MD5, IQM or ASE
-export has been loaded in Doom 3, Quake 4, ioquake3 or q3map2; joints and
+export has been loaded in Doom 3, Quake 4, ioquake3, VibeMap3 or q3map2; joints and
 weights cannot be edited; levels of detail beyond the first, game animation
 scripts and run-time blending are not read; and the profiles have not been
 reviewed by users of the editors they follow.

@@ -41,14 +41,15 @@ optional and off by default.
 | [Levels](docs/manual/levels.md) | Open, edit and save Doom-family maps (including UDMF properties) and Quake, Quake II and Quake III `.map` files in 2D and 3D views, with undo, validation and backups | Partial |
 | [Editor profiles](docs/manual/editor-profiles.md) | The keys, mouse gestures and camera of TrenchBroom, NetRadiant Custom, GtkRadiant, QuArK, Hammer, Ultimate Doom Builder and more | Partial |
 | [Packages](docs/manual/packages.md) | Browse, extract, validate and compare PAK, WAD, ZIP and PK3 files; stage changes and save a new package | Available |
+| [Releases](docs/manual/releases.md) | Package a project, map, model or textures with only your own files, leaving out what the game already has; keep a changelog, generate release notes and publish | Partial |
 | [Models](docs/manual/models.md) | View and animate MDL, MD2 and MD3; edit meshes; export to the game formats | Partial |
 | [Textures](docs/manual/textures.md) | Decode idTech images with their palettes; paint in a layered editor; export to the game formats | Partial |
 | [Audio](docs/manual/audio.md) | Preview, edit and analyse game sounds; multitrack sessions (no playback in Linux builds yet) | Partial |
 | [Materials and shaders](docs/manual/materials.md) | Every texture, Quake III shader and Doom 3 material of idTech 1 to 4, previewed live and animated by each engine's rules, checked, and edited as text or as nodes | Partial |
 | [Code](docs/manual/code.md) | Edit QuakeC, shader scripts and configs with highlighting, search and language servers | Partial |
-| [Build and launch](docs/manual/build-and-launch.md) | Run ericw-tools, q3map2, ZDBSP and ZokumBSP pipelines, jump to problems and leaks, and launch the game | Partial |
+| [Build and launch](docs/manual/build-and-launch.md) | Run VibeMap2, VibeMap3, ZDBSP and ZokumBSP pipelines, jump to problems and leaks, and launch the game | Partial |
 | [AI assistant](docs/manual/ai.md) | Optional and off by default; ask a model about your work, or generate levels, textures and sounds for review | Partial |
-| [Command line](docs/manual/cli.md) | 261 scriptable commands in 27 families with JSON output | Available |
+| [Command line](docs/manual/cli.md) | 273 scriptable commands in 29 families with JSON output | Available |
 | [Accessibility and languages](docs/manual/accessibility.md) | High-contrast themes, text up to 200%, full keyboard use, screen reader support; 47 languages registered, none translated yet | Partial |
 
 **Available** means implemented and covered by automated tests, but not yet
@@ -106,10 +107,13 @@ vibestudio --cli --help                                   # usage and global opt
 vibestudio --cli cli commands                             # every command, by family
 vibestudio --cli package validate ./pak0.pak --json       # check a package
 vibestudio --cli map render ./maps/start.map --output ./start.svg --projection top
+vibestudio --cli compiler list                            # find VibeMap2, VibeMap3 and the Doom node builders
 vibestudio --cli build run quake-full --input ./maps/start.map --watch
+vibestudio --cli release publish ./mymod --map maps/arena1.map --release-version 1.0.0
 vibestudio --cli localization targets                     # the 47 interface languages
 vibestudio --cli diagnostics bundle --output ./diagnostics
 vibestudio --cli ui semantics --json                      # commands, shortcuts and accessibility metadata
+vibestudio --cli render backends                          # the OpenGL and Vulkan renderers, and the one in use
 ```
 
 Add `--json` for machine-readable output and `--settings-file <path>` to keep
@@ -147,7 +151,10 @@ C++20 and [Qt 6](https://www.qt.io/) Widgets, built with
 [Meson](https://mesonbuild.com/) and Ninja. Compression, image decoding and map
 parsing are written in-house; audio uses pinned copies of dr_libs, Xiph's
 libogg and libvorbis, libebur128, r8brain and PortAudio, and UV atlases use
-xatlas. Level compilers are Git submodules under `external/compilers`.
+xatlas. 3D views and material previews draw on the GPU with OpenGL or Vulkan,
+your choice, through an in-house renderer built on the pinned Vulkan-Headers.
+Level compilers are Git submodules under `external/compilers`,
+including VibeStudio's own VibeMap2 and VibeMap3.
 [docs/STACK.md](docs/STACK.md) records the stack decisions and
 [docs/DEPENDENCIES.md](docs/DEPENDENCIES.md) every dependency.
 
@@ -162,8 +169,10 @@ revisions.
 | Upstream | Used for | Licence | Pinned revision |
 | --- | --- | --- | --- |
 | [PakFu](https://github.com/themuffinator/PakFu) | Package, archive, format and installation reference; DDS/FTX/SWL codecs | GPL-3.0 | `13111e4c` |
-| [ericw-tools](https://github.com/ericwa/ericw-tools) | Quake/idTech2 compilers (submodule) | GPL-2.0-or-later | `f80b1e216a415581aea7475cb52b16b8c4859084` |
-| q3map2 from [NetRadiant Custom](https://github.com/Garux/netradiant-custom) | Quake III compiler (submodule) | GPL (repository mixes GPL, LGPL and BSD) | `68ecbed64b7be78741878c730279b5471d978c7c` |
+| [VibeMap2](https://github.com/themuffinator/VibeyMapTools) | VibeStudio's Quake/idTech2 compilers (submodule), derived from ericw-tools | GPL-3.0 | `4495049a9e4c1f6deadae3a76b8256614840af35` |
+| [VibeMap3](https://github.com/themuffinator/q3mapx) | VibeStudio's Quake III compiler (submodule), continuing q3map2 from NetRadiant Custom | GPL-3.0-or-later; imported q3map2 files GPL-2.0-or-later | `897524439cb58d2b736bc96b16c231d22dc5ddce` |
+| [ericw-tools](https://github.com/ericwa/ericw-tools) | Upstream of VibeMap2; Quake BSP format and interface references | GPL-2.0-or-later | `f80b1e216a415581aea7475cb52b16b8c4859084` |
+| q3map2 from [NetRadiant Custom](https://github.com/Garux/netradiant-custom) | Upstream of VibeMap3; Quake III format and interface references | GPL (repository mixes GPL, LGPL and BSD) | `68ecbed64b7be78741878c730279b5471d978c7c` |
 | [ZDBSP](https://github.com/rheit/zdbsp) | Doom node builder (submodule) | GPL-2.0-or-later | `bcb9bdbcaf8ad296242c03cf3f9bff7ee732f659` |
 | [ZokumBSP](https://github.com/zokum-no/zokumbsp) | Doom node, blockmap and reject builder (submodule) | GPL-2.0 | `22af6defeb84ce836e0b184d6be5e80f127d9451` |
 | [r8brain-free-src](https://github.com/avaneev/r8brain-free-src) 7.5 | Sample-rate conversion | MIT | `cb2abb9977efe2471979b380ed95daa56ab4fdb9` |
@@ -172,6 +181,7 @@ revisions.
 | [libebur128](https://github.com/jiixyj/libebur128) 1.2.6 | Loudness metering | MIT | `67b33abe1558160ed76ada1322329b0e9e058b02` |
 | [PortAudio](https://github.com/PortAudio/portaudio) | Synchronized recording backend | MIT-style | `873e3c83fbe2f57ebcf59083e627a3f8fa051ffe` |
 | [xatlas](https://github.com/jpcy/xatlas) | Mesh UV atlas generation | MIT | `f700c7790aaa030e794b52ba7791a05c085faf0c` |
+| [Vulkan-Headers](https://github.com/KhronosGroup/Vulkan-Headers) v1.4.313 | Vulkan declarations for the Vulkan renderer (the loader is opened at run time) | Apache-2.0 | `409c16be502e39fe70dd6fe2d9ad4842ef2c9a53` |
 | [Manrope](https://github.com/sharanda/manrope) 4.504 | Brand typeface (logo, docs headings) | OFL-1.1 | 4.504 |
 
 Editor profiles and workflows follow the behaviour (never the code) of
@@ -218,6 +228,24 @@ and their re-release code, Boom's SWANTBLS format via [SMMU](https://github.com/
 ZDoom's ANIMDEFS, [ericw-tools](https://github.com/ericwa/ericw-tools)' `.wal_json`, and
 QuakeSpasm, DarkPlaces and FTE companion images, reviewed 2026-10-07 to 2026-10-08.
 No code or game data is copied. See [Materials, Shaders And Textures](docs/CREDITS.md#materials-shaders-and-textures-2026-10-08).
+
+The 3D renderer draws with OpenGL or Vulkan through Qt's public OpenGL classes
+and the [Vulkan-Headers](https://github.com/KhronosGroup/Vulkan-Headers)
+above. It peels translucent layers after Cass Everitt's
+[depth peeling](https://developer.nvidia.com/content/interactive-order-independent-transparency)
+(NVIDIA, 2001) and keeps depth reversed after Nathan Reed's
+[Depth Precision Visualized](https://developer.nvidia.com/content/depth-precision-visualized)
+(NVIDIA, 2015); its SPIR-V is compiled from VibeStudio's own GLSL with
+Khronos' [glslang](https://github.com/KhronosGroup/glslang), reviewed
+2026-10-08. See [3D Rendering: OpenGL And Vulkan](docs/CREDITS.md#3d-rendering-opengl-and-vulkan-2026-10-08).
+
+Releases follow [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
+(MIT) for project changelogs, [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
+(CC BY 3.0) for version bumps and the [/idgames archive](https://www.doomworld.com/idgames/)'s
+text file fields for readmes; package load orders and companion files follow
+the Quake, Quake II and Quake III GPL sources and the compilers' upstreams,
+q3map2 and ericw-tools, read 2026-10-08. Formats and behaviour only. See
+[Project Releases And The Game Asset Index](docs/CREDITS.md#project-releases-and-the-game-asset-index-2026-10-08).
 
 Placed MD3 compiler appearances follow NetRadiant Custom's
 [q3map2 model contract](https://github.com/Garux/netradiant-custom/blob/68ecbed64b7be78741878c730279b5471d978c7c/tools/quake3/q3map2/model.cpp)
@@ -611,7 +639,7 @@ at the same revision and license.
   light-image references follow the [Quake III Shader Manual, revision 12](https://icculus.org/gtkradiant/documentation/Q3AShader_Manual/index.htm).
 - Creator: [themuffinator](https://github.com/themuffinator) (DarkMatter Productions)
 - Structural, archive-tooling, and installation-profile reference: [PakFu](https://github.com/themuffinator/PakFu), with the current package interface, virtual-path safety, and staged package write-back concepts adapted from its archive direction at `c82dfb0ef0b5d7442e243ace8cd83bc45f82f257`; the game installation profile/detection model is a VibeStudio-owned adaptation of PakFu's profile-driven workflow ideas.
-- Imported compiler/toolchain sources: [ericw-tools](https://github.com/ericwa/ericw-tools), q3map2 from [NetRadiant Custom](https://github.com/Garux/netradiant-custom), [ZDBSP](https://github.com/rheit/zdbsp), and [ZokumBSP](https://github.com/zokum-no/zokumbsp)
+- Imported compiler/toolchain sources: VibeStudio's own [VibeMap2](https://github.com/themuffinator/VibeyMapTools) (derived from [ericw-tools](https://github.com/ericwa/ericw-tools)) and [VibeMap3](https://github.com/themuffinator/q3mapx) (continuing q3map2 from [NetRadiant Custom](https://github.com/Garux/netradiant-custom)), developed as part of the project, plus [ZDBSP](https://github.com/rheit/zdbsp) and [ZokumBSP](https://github.com/zokum-no/zokumbsp). See [Compiler Integration](docs/COMPILER_INTEGRATION.md#vibestudio-compilers)
 - Prepared build filesystem flags follow q3map2's [path initialization](https://github.com/Garux/netradiant-custom/blob/68ecbed64b7be78741878c730279b5471d978c7c/tools/quake3/q3map2/path_init.cpp) and shader-list behavior in its [shader loader](https://github.com/Garux/netradiant-custom/blob/68ecbed64b7be78741878c730279b5471d978c7c/tools/quake3/q3map2/shaders.cpp), NetRadiant Custom revision `68ecbed64b7be78741878c730279b5471d978c7c` (GPL-2.0-or-later, reviewed for GPL-3.0 compatibility 2026-10-05). Interface reference only; no upstream code copied.
 - Prepared output naming follows that revision's [map shader writer](https://github.com/Garux/netradiant-custom/blob/68ecbed64b7be78741878c730279b5471d978c7c/tools/quake3/q3map2/shaders.cpp), [external lightmap writer](https://github.com/Garux/netradiant-custom/blob/68ecbed64b7be78741878c730279b5471d978c7c/tools/quake3/q3map2/lightmaps_ydnar.cpp) and `q3map2.h`. BSP header validation follows id Software's [Quake III `qfiles.h`](https://github.com/id-Software/Quake-III-Arena/blob/master/code/qcommon/qfiles.h) and q3map2's [Quake Live extension](https://github.com/Garux/netradiant-custom/blob/68ecbed64b7be78741878c730279b5471d978c7c/tools/quake3/q3map2/bspfile_ibsp.cpp). GPL-2.0-or-later format/interface references, reviewed 2026-10-05; no upstream implementation copied. Output receipts, retained history and publication orchestration are VibeStudio code.
 - Editor workflow inspirations: [GtkRadiant](https://github.com/TTimo/GtkRadiant), [NetRadiant Custom](https://github.com/Garux/netradiant-custom), [TrenchBroom](https://trenchbroom.github.io/), [QuArK](https://quark.sourceforge.io/), and, for Doom map editing behaviour such as Make Door, [Ultimate Doom Builder](https://github.com/UltimateDoomBuilder/UltimateDoomBuilder) (behaviour only, no code used). The TrenchBroom, NetRadiant Custom, and GtkRadiant 1.6.0 editor profiles follow those editors' default mouse and key bindings, read from their sources (TrenchBroom `master` `90de03c`, September 2026; NetRadiant Custom `68ecbed`; GtkRadiant `1.6-release` `270af88`, August 2024); facts about behaviour only, no code used

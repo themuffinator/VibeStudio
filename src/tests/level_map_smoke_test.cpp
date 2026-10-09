@@ -529,7 +529,7 @@ bool runQuakeMapSmoke(const QDir& root)
 	ok &= expect(savedText.contains(QStringLiteral("\"origin\" \"48 32 64\"")), "Quake save-as should persist moved entity origin.");
 
 	const CompilerCommandRequest request = compilerRequestForLevelMap(document, QString(), QString());
-	ok &= expect(request.profileId == QStringLiteral("ericw-qbsp"), "Quake map should default to ericw-qbsp compile plan.");
+	ok &= expect(request.profileId == QStringLiteral("vibemap2-bsp"), "Quake map should default to vibemap2-bsp compile plan.");
 	return ok;
 }
 

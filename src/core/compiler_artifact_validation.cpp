@@ -316,7 +316,7 @@ QStringList parseBspxLumps(const QByteArray& bytes, const BspHeaderInfo& info, b
 QStringList expectedBspxLumps(const CompilerCommandManifest& manifest)
 {
 	QStringList expected;
-	if (manifest.profileId.compare(QStringLiteral("ericw-light"), Qt::CaseInsensitive) != 0) {
+	if (manifest.profileId.compare(QStringLiteral("vibemap2-light"), Qt::CaseInsensitive) != 0) {
 		return expected;
 	}
 	const QStringList arguments = manifest.arguments;
@@ -348,23 +348,23 @@ QStringList expectedBspxLumps(const CompilerCommandManifest& manifest)
 bool outputLooksLikeRequestedFamily(const CompilerCommandManifest& manifest, BspFamily family)
 {
 	const bool idTech3Profile = manifest.engineFamily.compare(QStringLiteral("idTech3"), Qt::CaseInsensitive) == 0
-		|| manifest.profileId.startsWith(QStringLiteral("q3map2-"), Qt::CaseInsensitive);
+		|| manifest.profileId.startsWith(QStringLiteral("vibemap3-"), Qt::CaseInsensitive);
 	if (idTech3Profile) {
 		return family == BspFamily::Quake3Ibsp || family == BspFamily::QuakeLiveIbsp;
 	}
-	const bool ericwProfile = manifest.toolId.startsWith(QStringLiteral("ericw-"), Qt::CaseInsensitive);
-	if (!ericwProfile) {
+	const bool vibemap2Profile = manifest.toolId.startsWith(QStringLiteral("vibemap2-"), Qt::CaseInsensitive);
+	if (!vibemap2Profile) {
 		return true;
 	}
-	// ericw vis/vis.cc and light/light.cc load and preserve the input BSP's
+	// VibeMap2 src/vis/vis.cc and src/light/light.cc load and preserve the input BSP's
 	// dialect; unlike qbsp they do not accept a -q2bsp target switch.
-	if ((manifest.toolId.compare(QStringLiteral("ericw-vis"), Qt::CaseInsensitive) == 0 ||
-		 manifest.toolId.compare(QStringLiteral("ericw-light"), Qt::CaseInsensitive) == 0) &&
+	if ((manifest.toolId.compare(QStringLiteral("vibemap2-vis"), Qt::CaseInsensitive) == 0 ||
+		 manifest.toolId.compare(QStringLiteral("vibemap2-light"), Qt::CaseInsensitive) == 0) &&
 		(family == BspFamily::Quake2Ibsp || family == BspFamily::QbismIbsp)) {
 		return true;
 	}
 	// qbsp's target flags are "-q2bsp", "-qbism", "-hlbsp", "-bsp2" and "-hexen2"
-	// (external/compilers/ericw-tools/qbsp/qbsp.cc, game_target_group).
+	// (external/compilers/vibemap2/src/qbsp/qbsp.cc, game_target_group).
 	if (containsArgument(manifest.arguments, {QStringLiteral("-q2bsp"), QStringLiteral("-qbism")})) {
 		return family == BspFamily::Quake2Ibsp || family == BspFamily::QbismIbsp;
 	}

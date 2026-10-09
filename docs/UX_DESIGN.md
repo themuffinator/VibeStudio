@@ -575,10 +575,10 @@ in the copyable inspector dump, where plain text is the point; the Toolchain
 tab's profile rows carry a state glyph instead. `src/app/asset_views.*` adds
 image, palette-swatch, and waveform views so textures, palettes, and audio are
 shown rather than described, and `src/app/model_viewport.*` does the same for
-models — orthographic and perspective projection into a bounded software depth
-buffer, presented by `QPainter`. Intersections, texture transparency and selection
-hatches respect depth; picking uses the same coverage and texture sampling.
-The studio still carries no OpenGL dependency.
+models — orthographic and perspective projection drawn on the GPU (OpenGL or
+Vulkan, the user's choice) and presented by `QPainter` under the overlays.
+Intersections, texture transparency and selection hatches respect depth;
+picking reads the same frame's triangle IDs.
 
 **Direct manipulation.** The window accepts dropped files and routes each one by
 type: maps to the Levels surface, a folder holding a project manifest to
@@ -1562,8 +1562,8 @@ Graphical elements should help users decide and act:
 - [x] An interactive 2D map viewport with grid, sector fills, brush and patch
   outlines, things, labels, hover, multi-select, rubber band, drag-to-move,
   arrow-key nudge, and orthographic projections.
-- [x] A software-rendered model viewport with wireframe, flat-shaded, and
-  textured modes, animation selection, and frame playback.
+- [x] A model viewport drawn on the GPU (OpenGL or Vulkan) with wireframe,
+  flat-shaded, and textured modes, animation selection, and frame playback.
 
 ## Detail Surfaces
 Advanced users should be able to inspect:

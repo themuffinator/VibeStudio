@@ -94,14 +94,20 @@ install_headers('core/doom_preview_geometry.h', 'core/doom_preview_materials.h',
 install_headers('core/extra_image.h', subdir: 'vibestudio/core')
 
 install_headers('core/asset_formats.h', 'core/workspace_document.h', subdir: 'vibestudio/core')
+install_headers('core/game_asset_register.h', 'core/project_content.h', 'core/release_plan.h', 'core/release_notes.h', 'core/release_publish.h', subdir: 'vibestudio/core')
 install_headers('core/material_model.h', 'core/material_script.h', subdir: 'vibestudio/core')
 install_headers('core/material_classic.h', subdir: 'vibestudio/core')
 install_headers('core/material_eval.h', 'core/material_images.h', subdir: 'vibestudio/core')
 install_headers('core/material_render.h', 'core/material_render_p.h', subdir: 'vibestudio/core')
+install_headers('core/render_device.h', 'core/render_device_p.h', 'core/render_shaders.h', subdir: 'vibestudio/core')
 install_headers('core/material_library.h', subdir: 'vibestudio/core')
 install_headers('core/material_graph.h', subdir: 'vibestudio/core')
 
 core_sources = files(
+  'core/render_device.cpp',
+  'core/render_opengl.cpp',
+  'core/render_shaders.cpp',
+  'core/render_vulkan.cpp',
   'core/level_gestures.cpp',
   'core/level_camera_keys.cpp',
   'core/studio_settings_gestures.cpp',
@@ -155,6 +161,7 @@ core_sources = files(
   'core/material_eval.cpp',
   'core/material_images.cpp',
   'core/material_render.cpp',
+  'core/material_render_gpu.cpp',
   'core/material_render_classic.cpp',
   'core/material_render_doom3.cpp',
   'core/material_library.cpp',
@@ -228,8 +235,13 @@ core_sources = files(
   'core/document_watch.cpp',
   'core/editor_profiles.cpp',
   'core/entity_definitions.cpp',
-  'core/ericw_map_preflight.cpp',
+  'core/quake_map_preflight.cpp',
   'core/game_installation.cpp',
+  'core/game_asset_register.cpp',
+  'core/project_content.cpp',
+  'core/release_plan.cpp',
+  'core/release_notes.cpp',
+  'core/release_publish.cpp',
   'core/idtech_image.cpp',
   'core/level_editor_controls.cpp',
   'core/level_editor_familiar_controls.cpp',
@@ -391,7 +403,7 @@ audio_threads_dep = dependency('threads')
 vibestudio_core = static_library(
   'vibestudio_core',
   core_sources,
-  include_directories: [vibestudio_includes, include_directories('../external/audio/r8brain-free-src', '../external/audio/dr_libs', is_system: true)],
+  include_directories: [vibestudio_includes, include_directories('../external/audio/r8brain-free-src', '../external/audio/dr_libs', '../external/graphics/vulkan-headers/include', is_system: true)],
   dependencies: [qt6_core_dep, audio_threads_dep, xiph_decoder_dep, audio_meter_dep, xatlas_dep],
   install: true,
 )
@@ -458,7 +470,7 @@ install_headers('core/package_draft.h', 'core/package_draft_access.h', 'core/pac
 install_headers('core/package_recovery.h', subdir: 'vibestudio/core')
 install_headers('core/package_storage.h', 'core/package_copy.h', 'core/package_copy_budget.h', 'core/package_copy_store.h', subdir: 'vibestudio/core')
 
-install_headers(files('core/advanced_studio.h', 'core/ai_connectors.h', 'core/ai_transport.h', 'core/ai_workflows.h', 'core/asset_tools.h', 'core/bsp_inspect.h', 'core/build_pipeline.h', 'core/compiler_artifact_validation.h', 'core/compiler_known_issues.h', 'core/compiler_profiles.h', 'core/compiler_registry.h', 'core/compiler_runner.h', 'core/deflate.h', 'core/document_watch.h', 'core/ericw_map_preflight.h', 'core/editor_profiles.h', 'core/entity_definitions.h', 'core/game_installation.h', 'core/idtech_image.h', 'core/level_editor_controls.h', 'core/level_gestures.h', 'core/level_camera_keys.h', 'core/level_map.h', 'core/localization.h', 'core/map_assets.h', 'core/map_geometry.h', 'core/map_preview_mesh.h', 'core/map_render.h', 'core/model_mesh.h', 'core/operation_state.h', 'core/package_archive.h', 'core/package_compare.h', 'core/package_preview.h', 'core/package_staging.h', 'core/package_directory.h', 'core/package_browser.h', 'core/parser_fuzz.h', 'core/project_manifest.h', 'core/studio_semantics.h', 'core/studio_manifest.h', 'core/studio_query.h', 'core/studio_settings.h'), subdir: 'vibestudio/core')
+install_headers(files('core/advanced_studio.h', 'core/ai_connectors.h', 'core/ai_transport.h', 'core/ai_workflows.h', 'core/asset_tools.h', 'core/bsp_inspect.h', 'core/build_pipeline.h', 'core/compiler_artifact_validation.h', 'core/compiler_known_issues.h', 'core/compiler_profiles.h', 'core/compiler_registry.h', 'core/compiler_runner.h', 'core/deflate.h', 'core/document_watch.h', 'core/quake_map_preflight.h', 'core/editor_profiles.h', 'core/entity_definitions.h', 'core/game_installation.h', 'core/idtech_image.h', 'core/level_editor_controls.h', 'core/level_gestures.h', 'core/level_camera_keys.h', 'core/level_map.h', 'core/localization.h', 'core/map_assets.h', 'core/map_geometry.h', 'core/map_preview_mesh.h', 'core/map_render.h', 'core/model_mesh.h', 'core/operation_state.h', 'core/package_archive.h', 'core/package_compare.h', 'core/package_preview.h', 'core/package_staging.h', 'core/package_directory.h', 'core/package_browser.h', 'core/parser_fuzz.h', 'core/project_manifest.h', 'core/studio_semantics.h', 'core/studio_manifest.h', 'core/studio_query.h', 'core/studio_settings.h'), subdir: 'vibestudio/core')
 
 install_headers('core/ai_image_transport.h', subdir: 'vibestudio/core')
 install_headers('core/texture_generation.h', subdir: 'vibestudio/core')
@@ -474,6 +486,8 @@ app_sources = files(
   'app/ai_generation_actions.cpp',
   'app/level_ai_edit_dialog.cpp',
   'app/level_generation_dialog.cpp',
+  'app/release_dialog.cpp',
+  'app/release_actions.cpp',
   'app/sound_generation_dialog.cpp',
   'app/texture_generation_dialog.cpp',
   'app/workspace_actions.cpp',
@@ -646,6 +660,7 @@ app_sources = files(
   'app/viewport_ring_cache.cpp',
   'app/map_grid.cpp',
   'app/model_viewport.cpp',
+  'app/model_viewport_render.cpp',
   'app/model_viewport_resize.cpp',
   'app/model_viewport_brush.cpp',
   'app/level_camera_brush_actions.cpp',
@@ -685,7 +700,7 @@ app_sources = files(
   'app/model_preview_worker.cpp',
   'app/model_uv_render.cpp',
   'app/model_uv_fill.cpp',
-  'app/model_rasterizer.cpp',
+  'app/wire_lines.cpp',
   'app/model_vertex_overlay.cpp',
   'app/studio_accessibility.cpp',
   'app/studio_actions.cpp',
@@ -838,7 +853,7 @@ vibestudio = executable(
   files('cli/model_import_repair.cpp'),
   files('cli/model_controls.cpp'),
   files('cli/ai_generation.cpp'),
-  ['main.cpp', 'cli/cli.cpp', 'cli/audio_session.cpp', 'cli/level_scene.cpp', 'cli/level_bookmarks.cpp', 'cli/workspace.cpp', 'cli/level_build_workspace.cpp', 'cli/level_build_artifacts.cpp', 'cli/level_build_deployment.cpp', 'cli/level_material_paint.cpp', 'cli/level_surface_clipboard.cpp', 'cli/model_mdl.cpp', 'cli/model_appearance.cpp', 'cli/model_assembly.cpp', 'cli/model_collision.cpp', 'cli/model_skin_bindings.cpp', 'cli/model_surfaces.cpp', 'cli/model_tools.cpp', 'cli/materials.cpp', 'cli/model_material_slots.cpp', 'cli/model_intersections.cpp', 'cli/package_copy_limits.cpp', 'cli/package_copy_store_limits.cpp', 'cli/package_copy_sessions.cpp'],
+  ['main.cpp', 'cli/cli.cpp', 'cli/audio_session.cpp', 'cli/level_scene.cpp', 'cli/level_bookmarks.cpp', 'cli/workspace.cpp', 'cli/release.cpp', 'cli/level_build_workspace.cpp', 'cli/level_build_artifacts.cpp', 'cli/level_build_deployment.cpp', 'cli/level_material_paint.cpp', 'cli/level_surface_clipboard.cpp', 'cli/model_mdl.cpp', 'cli/model_appearance.cpp', 'cli/model_assembly.cpp', 'cli/model_collision.cpp', 'cli/model_skin_bindings.cpp', 'cli/model_surfaces.cpp', 'cli/model_tools.cpp', 'cli/materials.cpp', 'cli/render.cpp', 'cli/model_material_slots.cpp', 'cli/model_intersections.cpp', 'cli/package_copy_limits.cpp', 'cli/package_copy_store_limits.cpp', 'cli/package_copy_sessions.cpp'],
   include_directories: vibestudio_includes,
   dependencies: [vibestudio_app_dep],
   install: true,
@@ -917,6 +932,17 @@ material_cli_smoke_test = executable(
   install: false,
 )
 test('material-cli-smoke', material_cli_smoke_test, args: [vibestudio], timeout: 240)
+
+# The `render` family (backends, test, set) and the renderer overrides, run
+# against the built CLI; drawing checks skip where no renderer starts.
+render_cli_smoke_test = executable(
+  'render_cli_smoke_test',
+  ['tests/render_cli_smoke_test.cpp'],
+  include_directories: vibestudio_includes,
+  dependencies: [qt6_core_dep],
+  install: false,
+)
+test('render-cli-smoke', render_cli_smoke_test, args: [vibestudio], timeout: 180)
 
 # The Materials workbench as a widget, driven with Qt Test.
 if qt6_test_dep.found()
@@ -1447,15 +1473,15 @@ compiler_artifact_validation_smoke_test = executable(
 
 test('compiler-artifact-validation-smoke', compiler_artifact_validation_smoke_test)
 
-ericw_map_preflight_smoke_test = executable(
-  'ericw_map_preflight_smoke_test',
-  ['tests/ericw_map_preflight_smoke_test.cpp'],
+quake_map_preflight_smoke_test = executable(
+  'quake_map_preflight_smoke_test',
+  ['tests/quake_map_preflight_smoke_test.cpp'],
   include_directories: vibestudio_includes,
   dependencies: [vibestudio_core_dep],
   install: false,
 )
 
-test('ericw-map-preflight-smoke', ericw_map_preflight_smoke_test)
+test('quake-map-preflight-smoke', quake_map_preflight_smoke_test)
 
 level_map_smoke_test = executable(
   'level_map_smoke_test',
@@ -2293,6 +2319,48 @@ project_manifest_smoke_test = executable(
 
 test('project-manifest-smoke', project_manifest_smoke_test)
 
+game_asset_register_smoke_test = executable(
+  'game_asset_register_smoke_test',
+  ['tests/game_asset_register_smoke_test.cpp'],
+  include_directories: vibestudio_includes,
+  dependencies: [vibestudio_core_dep],
+  install: false,
+)
+
+test('game-asset-register-smoke', game_asset_register_smoke_test, timeout: 120)
+
+release_smoke_test = executable(
+  'release_smoke_test',
+  ['tests/release_smoke_test.cpp'],
+  include_directories: vibestudio_includes,
+  dependencies: [vibestudio_core_dep],
+  install: false,
+)
+
+test('release-smoke', release_smoke_test, timeout: 180)
+
+release_cli_smoke_test = executable(
+  'release_cli_smoke_test',
+  ['tests/release_cli_smoke_test.cpp'],
+  include_directories: vibestudio_includes,
+  dependencies: [vibestudio_core_dep],
+  install: false,
+)
+
+test('release-cli-smoke', release_cli_smoke_test, args: [vibestudio], timeout: 300)
+
+# Package and Release as a widget, driven with Qt Test.
+if qt6_test_dep.found()
+  release_dialog_ui_smoke_test = executable(
+    'release_dialog_ui_smoke_test',
+    ['tests/release_dialog_ui_smoke_test.cpp'],
+    include_directories: vibestudio_includes,
+    dependencies: [vibestudio_app_dep, qt6_test_dep],
+    install: false,
+  )
+  test('release-dialog-ui-smoke', release_dialog_ui_smoke_test, timeout: 300)
+endif
+
 inspector_layout_smoke_test = executable('inspector_layout_smoke_test', ['tests/inspector_layout_smoke_test.cpp'],
   include_directories: vibestudio_includes, dependencies: [vibestudio_app_dep], install: false)
 test('inspector-layout-smoke', inspector_layout_smoke_test, timeout: 90)
@@ -2801,7 +2869,7 @@ model_uv_ui_smoke_test = executable(
 test('model-uv-ui-smoke', model_uv_ui_smoke_test, env: model_document_test_env, timeout: 90)
 
 model_uv_render_smoke_test = executable(
-  'model_uv_render_smoke_test', ['tests/model_uv_render_smoke_test.cpp', 'app/model_uv_render.cpp', 'app/model_uv_fill.cpp', 'app/model_rasterizer.cpp', 'core/model_uv.cpp', 'core/model_work.cpp'],
+  'model_uv_render_smoke_test', ['tests/model_uv_render_smoke_test.cpp', 'app/model_uv_render.cpp', 'app/model_uv_fill.cpp', 'app/wire_lines.cpp', 'core/model_uv.cpp', 'core/model_work.cpp'],
   include_directories: vibestudio_includes, dependencies: [qt6_core_dep], install: false,
 )
 test('model-uv-render-smoke', model_uv_render_smoke_test, env: model_document_test_env, timeout: 240)
@@ -2892,17 +2960,17 @@ model_shell_smoke_test = executable(
 )
 test('model-shell-smoke', model_shell_smoke_test, env: model_document_test_env, timeout: 90)
 
-model_rasterizer_smoke_test = executable(
-  'model_rasterizer_smoke_test',
-  ['tests/model_rasterizer_smoke_test.cpp', 'app/model_rasterizer.cpp'],
-  include_directories: vibestudio_includes,
-  dependencies: [qt6_core_dep],
-  install: false,
+# The OpenGL and Vulkan backends render the same frames; exits 77 (skipped)
+# where neither can start. VIBESTUDIO_RENDER_REQUIRE=opengl,vulkan makes a
+# missing backend fail instead.
+render_device_smoke_test = executable(
+  'render_device_smoke_test', ['tests/render_device_smoke_test.cpp'],
+  include_directories: vibestudio_includes, dependencies: [vibestudio_core_dep], install: false,
 )
-test('model-rasterizer-smoke', model_rasterizer_smoke_test, timeout: 90)
+test('render-device-smoke', render_device_smoke_test, timeout: 120)
 
 model_wireframe_smoke_test = executable(
-  'model_wireframe_smoke_test', ['tests/model_wireframe_smoke_test.cpp', 'app/model_rasterizer.cpp'],
+  'model_wireframe_smoke_test', ['tests/model_wireframe_smoke_test.cpp', 'app/wire_lines.cpp'],
   include_directories: vibestudio_includes, dependencies: [qt6_core_dep], install: false,
 )
 test('model-wireframe-smoke', model_wireframe_smoke_test, timeout: 90)

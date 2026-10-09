@@ -88,7 +88,7 @@ int main(int argc, char** argv) {
 		const auto workspace = prepareLevelBuildWorkspace(map, assets, prepare);
 		BuildPipelineRequest build;
 		build.pipelineId = workspace.defaultPipeline();
-		for (const auto& tool : QStringList{"ericw-qbsp", "ericw-vis", "ericw-light"}) {
+		for (const auto& tool : QStringList{"vibemap2-bsp", "vibemap2-vis", "vibemap2-light"}) {
 			build.executableOverrides.append({tool, QString::fromLocal8Bit(argv[1])});
 		}
 		const auto compiled = runLevelBuildWorkspace(workspace, build);

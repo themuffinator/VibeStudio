@@ -18,12 +18,6 @@ struct Text {
 
 constexpr double kPi = 3.14159265358979323846;
 
-int wrapCoordinate(int value, int size)
-{
-	const int m = value % size;
-	return m < 0 ? m + size : m;
-}
-
 } // namespace
 
 double fract(double value)
@@ -257,7 +251,7 @@ Mesh buildMesh(MaterialPreviewShape shape, double repeatS, double repeatT, doubl
 }
 
 // ---------------------------------------------------------------------------
-// Camera and framebuffer
+// Camera
 // ---------------------------------------------------------------------------
 
 void Camera::project(const Vec3& point, double* sx, double* sy) const
@@ -328,436 +322,6 @@ Camera makeCamera(const Mesh& mesh, const MaterialRenderOptions& options)
 	return camera;
 }
 
-void Framebuffer::reset(int w, int h)
-{
-	width = std::max(1, w);
-	height = std::max(1, h);
-	color.fill(0.0f, static_cast<qsizetype>(width) * height * 4);
-	depth.fill(std::numeric_limits<float>::infinity(), static_cast<qsizetype>(width) * height);
-}
-
-void Framebuffer::clear(const QColor& background, bool checker, double scale)
-{
-	const double r = background.redF() * scale;
-	const double g = background.greenF() * scale;
-	const double b = background.blueF() * scale;
-	for (int y = 0; y < height; ++y) {
-		for (int x = 0; x < width; ++x) {
-			float* p = pixel(x, y);
-			const double shade = checker && ((x / 12 + y / 12) % 2 == 0) ? 1.18 : 1.0;
-			p[0] = static_cast<float>(std::min(1.0, r * shade));
-			p[1] = static_cast<float>(std::min(1.0, g * shade));
-			p[2] = static_cast<float>(std::min(1.0, b * shade));
-			p[3] = 0.0f;
-		}
-	}
-	std::fill(depth.begin(), depth.end(), std::numeric_limits<float>::infinity());
-}
-
-QImage Framebuffer::toImage(double displayScale) const
-{
-	QImage image(width, height, QImage::Format_ARGB32);
-	for (int y = 0; y < height; ++y) {
-		auto* line = reinterpret_cast<QRgb*>(image.scanLine(y));
-		for (int x = 0; x < width; ++x) {
-			const float* p = pixel(x, y);
-			const auto channel = [&](float value) { return static_cast<int>(std::clamp(value * displayScale, 0.0, 1.0) * 255.0 + 0.5); };
-			line[x] = qRgb(channel(p[0]), channel(p[1]), channel(p[2]));
-		}
-	}
-	return image;
-}
-
-// ---------------------------------------------------------------------------
-// Rasterizer
-// ---------------------------------------------------------------------------
-
-namespace {
-
-struct ClipVertex {
-	Vec3 position;
-	double depth = 0.0;
-	Attributes attributes {};
-};
-
-struct ScreenVertex {
-	double x = 0.0;
-	double y = 0.0;
-	double depth = 0.0;
-	double w = 1.0;
-	const Attributes* attributes = nullptr;
-};
-
-double edgeFunction(const ScreenVertex& a, const ScreenVertex& b, double px, double py)
-{
-	return (b.x - a.x) * (py - a.y) - (b.y - a.y) * (px - a.x);
-}
-
-// Exactly one of two triangles sharing an edge owns pixels on it.
-bool ownsEdge(const ScreenVertex& a, const ScreenVertex& b)
-{
-	const double dy = b.y - a.y;
-	const double dx = b.x - a.x;
-	return dy > 0.0 || (dy == 0.0 && dx > 0.0);
-}
-
-void rasterizeProjected(const Camera& camera, ScreenVertex v0, ScreenVertex v1, ScreenVertex v2, int count, bool frontFacing,
-	const std::function<void(const FragmentInput&)>& fragment)
-{
-	double area = edgeFunction(v0, v1, v2.x, v2.y);
-	if (std::abs(area) < 1.0e-12) {
-		return;
-	}
-	if (area < 0.0) {
-		std::swap(v1, v2);
-		area = -area;
-	}
-	const int minX = std::max(0, static_cast<int>(std::floor(std::min({v0.x, v1.x, v2.x}))));
-	const int maxX = std::min(camera.width - 1, static_cast<int>(std::ceil(std::max({v0.x, v1.x, v2.x}))));
-	const int minY = std::max(0, static_cast<int>(std::floor(std::min({v0.y, v1.y, v2.y}))));
-	const int maxY = std::min(camera.height - 1, static_cast<int>(std::ceil(std::max({v0.y, v1.y, v2.y}))));
-	if (minX > maxX || minY > maxY) {
-		return;
-	}
-	const bool own0 = ownsEdge(v1, v2);
-	const bool own1 = ownsEdge(v2, v0);
-	const bool own2 = ownsEdge(v0, v1);
-	Attributes interpolated {};
-	FragmentInput input;
-	input.frontFacing = frontFacing;
-	input.attributes = &interpolated;
-	for (int y = minY; y <= maxY; ++y) {
-		const double py = y + 0.5;
-		for (int x = minX; x <= maxX; ++x) {
-			const double px = x + 0.5;
-			const double w0 = edgeFunction(v1, v2, px, py);
-			const double w1 = edgeFunction(v2, v0, px, py);
-			const double w2 = edgeFunction(v0, v1, px, py);
-			if (w0 < 0.0 || w1 < 0.0 || w2 < 0.0) {
-				continue;
-			}
-			if ((w0 == 0.0 && !own0) || (w1 == 0.0 && !own1) || (w2 == 0.0 && !own2)) {
-				continue;
-			}
-			const double l0 = w0 / area;
-			const double l1 = w1 / area;
-			const double l2 = w2 / area;
-			const double p0 = l0 * v0.w;
-			const double p1 = l1 * v1.w;
-			const double p2 = l2 * v2.w;
-			const double sum = p0 + p1 + p2;
-			if (sum <= 0.0) {
-				continue;
-			}
-			const double inverse = 1.0 / sum;
-			for (int k = 0; k < count; ++k) {
-				interpolated[static_cast<size_t>(k)] = ((*v0.attributes)[static_cast<size_t>(k)] * p0 + (*v1.attributes)[static_cast<size_t>(k)] * p1
-														   + (*v2.attributes)[static_cast<size_t>(k)] * p2)
-					* inverse;
-			}
-			input.x = x;
-			input.y = y;
-			input.depth = camera.orthographic ? l0 * v0.depth + l1 * v1.depth + l2 * v2.depth : inverse;
-			fragment(input);
-		}
-	}
-}
-
-} // namespace
-
-void rasterizeTriangle(const Camera& camera, const std::array<Vec3, 3>& positions, const std::array<Attributes, 3>& attributes, int count,
-	CullMode cull, const std::function<void(const FragmentInput&)>& fragment)
-{
-	const Vec3 normal = (positions[1] - positions[0]).cross(positions[2] - positions[0]);
-	const bool front = camera.orthographic ? normal.dot(-camera.forward) > 0.0 : normal.dot(camera.eye - positions[0]) > 0.0;
-	if ((cull == CullMode::Front && !front) || (cull == CullMode::Back && front)) {
-		return;
-	}
-	count = std::clamp(count, 0, kMaxAttributes);
-	QVarLengthArray<ClipVertex, 8> polygon;
-	for (int index = 0; index < 3; ++index) {
-		ClipVertex vertex;
-		vertex.position = positions[static_cast<size_t>(index)];
-		vertex.depth = camera.depthOf(vertex.position);
-		vertex.attributes = attributes[static_cast<size_t>(index)];
-		polygon.push_back(vertex);
-	}
-	// Clip against the near plane (Sutherland-Hodgman on one plane).
-	const double nearPlane = camera.nearPlane;
-	bool needsClip = false;
-	bool anyVisible = false;
-	for (const ClipVertex& vertex : polygon) {
-		needsClip |= vertex.depth < nearPlane;
-		anyVisible |= vertex.depth >= nearPlane;
-	}
-	if (!anyVisible) {
-		return;
-	}
-	if (needsClip) {
-		QVarLengthArray<ClipVertex, 8> clipped;
-		for (int index = 0; index < polygon.size(); ++index) {
-			const ClipVertex& current = polygon[index];
-			const ClipVertex& next = polygon[(index + 1) % polygon.size()];
-			const bool currentIn = current.depth >= nearPlane;
-			const bool nextIn = next.depth >= nearPlane;
-			if (currentIn) {
-				clipped.push_back(current);
-			}
-			if (currentIn != nextIn) {
-				const double t = (nearPlane - current.depth) / (next.depth - current.depth);
-				ClipVertex middle;
-				middle.position = current.position + (next.position - current.position) * t;
-				middle.depth = nearPlane;
-				for (int k = 0; k < count; ++k) {
-					middle.attributes[static_cast<size_t>(k)] = current.attributes[static_cast<size_t>(k)]
-						+ (next.attributes[static_cast<size_t>(k)] - current.attributes[static_cast<size_t>(k)]) * t;
-				}
-				clipped.push_back(middle);
-			}
-		}
-		polygon = clipped;
-	}
-	if (polygon.size() < 3) {
-		return;
-	}
-	QVarLengthArray<ScreenVertex, 8> screen;
-	for (const ClipVertex& vertex : polygon) {
-		ScreenVertex projected;
-		camera.project(vertex.position, &projected.x, &projected.y);
-		projected.depth = vertex.depth;
-		projected.w = camera.orthographic ? 1.0 : 1.0 / std::max(1.0e-6, vertex.depth);
-		projected.attributes = &vertex.attributes;
-		screen.push_back(projected);
-	}
-	for (int index = 1; index + 1 < screen.size(); ++index) {
-		rasterizeProjected(camera, screen[0], screen[index], screen[index + 1], count, front, fragment);
-	}
-}
-
-// ---------------------------------------------------------------------------
-// Sampling
-// ---------------------------------------------------------------------------
-
-Color sampleTexture(const MaterialTexture& texture, double s, double t, bool bilinear, Wrap wrap, double lod)
-{
-	if (!texture.isValid()) {
-		return {1.0, 0.0, 1.0, 1.0};
-	}
-	const QVector<QRgb>* pixels = &texture.pixels;
-	int width = texture.width;
-	int height = texture.height;
-	if (lod >= 0.5 && !texture.mipPixels.isEmpty()) {
-		const int level = std::min(static_cast<int>(texture.mipPixels.size()), static_cast<int>(std::lround(lod)));
-		if (level > 0) {
-			pixels = &texture.mipPixels.at(level - 1);
-			width = texture.mipSizes.at(level - 1).width();
-			height = texture.mipSizes.at(level - 1).height();
-		}
-	}
-	if (!std::isfinite(s) || !std::isfinite(t)) {
-		s = 0.0;
-		t = 0.0;
-	}
-	if (std::abs(s) > 1.0e6 || std::abs(t) > 1.0e6) {
-		s = fract(s);
-		t = fract(t);
-	}
-	const auto texel = [&](int x, int y) -> Color {
-		switch (wrap) {
-		case Wrap::Repeat:
-			x = wrapCoordinate(x, width);
-			y = wrapCoordinate(y, height);
-			break;
-		case Wrap::Clamp:
-			x = std::clamp(x, 0, width - 1);
-			y = std::clamp(y, 0, height - 1);
-			break;
-		case Wrap::ZeroClamp:
-			if (x < 0 || y < 0 || x >= width || y >= height) {
-				return {0.0, 0.0, 0.0, 0.0};
-			}
-			break;
-		case Wrap::AlphaZeroClamp: {
-			const bool outside = x < 0 || y < 0 || x >= width || y >= height;
-			x = std::clamp(x, 0, width - 1);
-			y = std::clamp(y, 0, height - 1);
-			if (outside) {
-				Color c = Color::fromRgb(pixels->at(static_cast<qsizetype>(y) * width + x));
-				c.a = 0.0;
-				return c;
-			}
-			break;
-		}
-		}
-		return Color::fromRgb(pixels->at(static_cast<qsizetype>(y) * width + x));
-	};
-	if (!bilinear) {
-		return texel(static_cast<int>(std::floor(s * width)), static_cast<int>(std::floor(t * height)));
-	}
-	const double u = s * width - 0.5;
-	const double v = t * height - 0.5;
-	const int x0 = static_cast<int>(std::floor(u));
-	const int y0 = static_cast<int>(std::floor(v));
-	const double fx = u - x0;
-	const double fy = v - y0;
-	const Color c00 = texel(x0, y0);
-	const Color c10 = texel(x0 + 1, y0);
-	const Color c01 = texel(x0, y0 + 1);
-	const Color c11 = texel(x0 + 1, y0 + 1);
-	return (c00 * ((1 - fx) * (1 - fy))) + (c10 * (fx * (1 - fy))) + (c01 * ((1 - fx) * fy)) + (c11 * (fx * fy));
-}
-
-int sampleIndex(const MaterialTexture& texture, double s, double t, Wrap wrap)
-{
-	if (!texture.hasIndices()) {
-		return -1;
-	}
-	if (!std::isfinite(s) || !std::isfinite(t)) {
-		return -1;
-	}
-	int x = static_cast<int>(std::floor(s * texture.width));
-	int y = static_cast<int>(std::floor(t * texture.height));
-	if (wrap == Wrap::Repeat) {
-		x = wrapCoordinate(x, texture.width);
-		y = wrapCoordinate(y, texture.height);
-	} else {
-		if (wrap == Wrap::ZeroClamp && (x < 0 || y < 0 || x >= texture.width || y >= texture.height)) {
-			return -1;
-		}
-		x = std::clamp(x, 0, texture.width - 1);
-		y = std::clamp(y, 0, texture.height - 1);
-	}
-	const qsizetype at = static_cast<qsizetype>(y) * texture.width + x;
-	if (qAlpha(texture.pixels.at(at)) == 0) {
-		return -1;
-	}
-	return texture.indices.at(at);
-}
-
-namespace {
-
-double component(const Vec3& v, int selector)
-{
-	const int axis = std::abs(selector) - 1;
-	const double value = axis == 0 ? v.x : axis == 1 ? v.y : v.z;
-	return selector < 0 ? -value : value;
-}
-
-} // namespace
-
-Color sampleSkyBox(const MaterialCubeTexture& cube, const Vec3& direction)
-{
-	// tr_sky.c vec_to_st: per face, s and t as signed components divided
-	// by the major axis; images rt bk lf ft up dn are +X +Y -X -Y +Z -Z.
-	static const int vecToSt[6][3] = {{-2, 3, 1}, {2, 3, -1}, {1, 3, 2}, {-1, 3, -2}, {-2, -1, 3}, {-2, 1, -3}};
-	const double ax = std::abs(direction.x);
-	const double ay = std::abs(direction.y);
-	const double az = std::abs(direction.z);
-	int axis = 0;
-	if (ax >= ay && ax >= az) {
-		axis = direction.x < 0 ? 1 : 0;
-	} else if (ay >= az) {
-		axis = direction.y < 0 ? 3 : 2;
-	} else {
-		axis = direction.z < 0 ? 5 : 4;
-	}
-	const double dv = component(direction, vecToSt[axis][2]);
-	if (dv <= 1.0e-9) {
-		return {0, 0, 0, 1};
-	}
-	const double s = component(direction, vecToSt[axis][0]) / dv;
-	const double t = component(direction, vecToSt[axis][1]) / dv;
-	const MaterialTexturePtr& face = cube.faces[static_cast<size_t>(axis)];
-	if (!face || !face->usable()) {
-		return {0, 0, 0, 1};
-	}
-	const double u = std::clamp((s + 1) / 2, 0.0, 1.0);
-	const double v = std::clamp(1.0 - (t + 1) / 2, 0.0, 1.0);
-	return sampleTexture(*face, u, v, true, Wrap::Clamp);
-}
-
-Color sampleCubeMap(const MaterialCubeTexture& cube, const Vec3& direction)
-{
-	// The GL cube map face rules (+X, -X, +Y, -Y, +Z, -Z), with the world
-	// direction used as given, as Doom 3's texgens pass it.
-	const double ax = std::abs(direction.x);
-	const double ay = std::abs(direction.y);
-	const double az = std::abs(direction.z);
-	int face = 0;
-	double sc = 0;
-	double tc = 0;
-	double ma = 1;
-	if (ax >= ay && ax >= az) {
-		face = direction.x >= 0 ? 0 : 1;
-		ma = ax;
-		sc = direction.x >= 0 ? -direction.z : direction.z;
-		tc = -direction.y;
-	} else if (ay >= az) {
-		face = direction.y >= 0 ? 2 : 3;
-		ma = ay;
-		sc = direction.x;
-		tc = direction.y >= 0 ? direction.z : -direction.z;
-	} else {
-		face = direction.z >= 0 ? 4 : 5;
-		ma = az;
-		sc = direction.z >= 0 ? direction.x : -direction.x;
-		tc = -direction.y;
-	}
-	const MaterialTexturePtr& texture = cube.faces[static_cast<size_t>(face)];
-	if (!texture || !texture->usable() || ma <= 0.0) {
-		return {0, 0, 0, 1};
-	}
-	return sampleTexture(*texture, (sc / ma + 1) / 2, (tc / ma + 1) / 2, true, Wrap::Clamp);
-}
-
-void blendInto(float* destination, const Color& source, MaterialBlendFactor sourceFactor, MaterialBlendFactor destinationFactor, bool maskRed,
-	bool maskGreen, bool maskBlue, bool maskAlpha)
-{
-	const Color dst {destination[0], destination[1], destination[2], destination[3]};
-	const auto factor = [&](MaterialBlendFactor f) -> Color {
-		switch (f) {
-		case MaterialBlendFactor::Zero:
-			return {0, 0, 0, 0};
-		case MaterialBlendFactor::One:
-			return {1, 1, 1, 1};
-		case MaterialBlendFactor::SourceColor:
-			return source;
-		case MaterialBlendFactor::OneMinusSourceColor:
-			return {1 - source.r, 1 - source.g, 1 - source.b, 1 - source.a};
-		case MaterialBlendFactor::DestinationColor:
-			return dst;
-		case MaterialBlendFactor::OneMinusDestinationColor:
-			return {1 - dst.r, 1 - dst.g, 1 - dst.b, 1 - dst.a};
-		case MaterialBlendFactor::SourceAlpha:
-			return {source.a, source.a, source.a, source.a};
-		case MaterialBlendFactor::OneMinusSourceAlpha:
-			return {1 - source.a, 1 - source.a, 1 - source.a, 1 - source.a};
-		case MaterialBlendFactor::DestinationAlpha:
-			return {dst.a, dst.a, dst.a, dst.a};
-		case MaterialBlendFactor::OneMinusDestinationAlpha:
-			return {1 - dst.a, 1 - dst.a, 1 - dst.a, 1 - dst.a};
-		case MaterialBlendFactor::SourceAlphaSaturate: {
-			const double f2 = std::min(source.a, 1 - dst.a);
-			return {f2, f2, f2, 1};
-		}
-		}
-		return {1, 1, 1, 1};
-	};
-	const Color result = (source * factor(sourceFactor) + dst * factor(destinationFactor)).clamped();
-	if (!maskRed) {
-		destination[0] = static_cast<float>(result.r);
-	}
-	if (!maskGreen) {
-		destination[1] = static_cast<float>(result.g);
-	}
-	if (!maskBlue) {
-		destination[2] = static_cast<float>(result.b);
-	}
-	if (!maskAlpha) {
-		destination[3] = static_cast<float>(result.a);
-	}
-}
-
 Vec3 previewLightPosition(const Mesh& mesh, const MaterialPreviewLighting& lighting, double time)
 {
 	const double angle = lighting.lightOrbit ? 2 * kPi * time / std::max(0.5, lighting.lightOrbitSeconds) : lighting.lightAngle * kPi / 180.0;
@@ -787,13 +351,6 @@ double previewLightAt(const Vec3& position, const Vec3& normal, const Mesh& mesh
 	const double facing = std::max(0.0, normal.dot(toLight * (1.0 / std::max(1.0e-6, distance))));
 	const double falloff = std::clamp(1.0 - distance / (mesh.radius * 2.4), 0.0, 1.0);
 	return level * (0.42 + 0.95 * facing * falloff);
-}
-
-double mipLevel(const Camera& camera, double depth, double obliquity, double texelsPerUnit)
-{
-	const double unitsPerPixel = camera.orthographic ? 1.0 / std::max(1.0e-6, camera.orthoScale) : depth / std::max(1.0e-6, camera.focal);
-	const double texelsPerPixel = unitsPerPixel * texelsPerUnit / std::clamp(obliquity, 0.2, 1.0);
-	return texelsPerPixel <= 1.0 ? 0.0 : std::log2(texelsPerPixel);
 }
 
 QSize mainImageSize(const MaterialDefinition& definition, const MaterialImageSet& images)
@@ -1156,20 +713,18 @@ Color quake3VertexColor(const MaterialDefinition& definition, const MaterialStag
 	return color;
 }
 
-bool alphaPasses(MaterialAlphaTest test, double alpha)
+int alphaTestCode(MaterialAlphaTest test)
 {
 	switch (test) {
-	case MaterialAlphaTest::None:
-	case MaterialAlphaTest::Expression:
-		return true;
 	case MaterialAlphaTest::Greater0:
-		return alpha > 0.0;
+		return 1;
 	case MaterialAlphaTest::Less128:
-		return alpha < 0.5;
+		return 2;
 	case MaterialAlphaTest::GreaterEqual128:
-		return alpha >= 0.5;
+		return 3;
+	default:
+		return 0;
 	}
-	return true;
 }
 
 // The image a Quake III stage samples at this moment.
@@ -1216,112 +771,186 @@ QString quake3MissingImage(const MaterialDefinition& definition, const MaterialI
 	return QString();
 }
 
-void drawFogScene(const Mesh& mesh, const Camera& camera, Framebuffer* framebuffer, const MaterialDefinition& definition, const Quake3Frame& frame)
+// The fog volume seen from inside: neutral lit walls, then the fog curve
+// sqrt(min(1, depth / distanceToOpaque)) over planar depth.
+void drawFogScene(MaterialGpuFrame* gpu, const MaterialDefinition& definition, const Quake3Frame& frame)
 {
-	// The fog volume seen from inside: neutral lit walls, then the fog
-	// curve sqrt(min(1, depth / distanceToOpaque)) over planar depth.
-	for (const Triangle& triangle : mesh.triangles) {
-		const std::array<Vec3, 3> positions {mesh.vertices[triangle.a].position, mesh.vertices[triangle.b].position, mesh.vertices[triangle.c].position};
-		std::array<Attributes, 3> attributes {};
-		const Vertex* vertices[3] = {&mesh.vertices[triangle.a], &mesh.vertices[triangle.b], &mesh.vertices[triangle.c]};
-		for (int index = 0; index < 3; ++index) {
-			attributes[static_cast<size_t>(index)][0] = vertices[index]->s;
-			attributes[static_cast<size_t>(index)][1] = vertices[index]->t;
-		}
-		rasterizeTriangle(camera, positions, attributes, 2, CullMode::Front, [&](const FragmentInput& input) {
-			float* pixel = framebuffer->pixel(input.x, input.y);
-			if (input.depth >= framebuffer->depthAt(input.x, input.y)) {
-				return;
-			}
-			framebuffer->depthAt(input.x, input.y) = static_cast<float>(input.depth);
-			const double s = (*input.attributes)[0];
-			const double t = (*input.attributes)[1];
-			const bool light = (static_cast<int>(std::floor(s * 4)) + static_cast<int>(std::floor(t * 4))) % 2 == 0;
-			const double value = (light ? 0.62 : 0.42) * frame.identityLight;
-			pixel[0] = pixel[1] = pixel[2] = static_cast<float>(value);
-			pixel[3] = 1.0f;
-		});
-	}
-	const double opaque = std::max(1.0, definition.fog.distanceToOpaque);
 	const Color fog {definition.fog.color[0] * frame.identityLight, definition.fog.color[1] * frame.identityLight,
 		definition.fog.color[2] * frame.identityLight, 1.0};
-	for (int y = 0; y < framebuffer->height; ++y) {
-		for (int x = 0; x < framebuffer->width; ++x) {
-			const double depth = framebuffer->depthAt(x, y);
-			const double amount = std::isfinite(depth) ? std::sqrt(std::min(1.0, depth / opaque)) : 1.0;
-			float* pixel = framebuffer->pixel(x, y);
-			pixel[0] = static_cast<float>(pixel[0] * (1 - amount) + fog.r * amount);
-			pixel[1] = static_cast<float>(pixel[1] * (1 - amount) + fog.g * amount);
-			pixel[2] = static_cast<float>(pixel[2] * (1 - amount) + fog.b * amount);
-		}
-	}
-	Q_UNUSED(camera);
+	gpu->fogScene(gpu->vertices(), fog, std::max(1.0, definition.fog.distanceToOpaque), frame.identityLight);
 }
 
-void drawQuake3Sky(const MaterialDefinition& definition, const MaterialImageSet& images, const Mesh& mesh, const Camera& camera,
-	Framebuffer* framebuffer, const Quake3Frame& frame, MaterialRenderResult* result)
+// The per-pixel colour of a cloud layer: constant parts are worked out here,
+// the rest (lighting at the cloud point) by the shader. Returns the codes the
+// shader's mode.w expects.
+int cloudColorCodes(const MaterialDefinition& definition, const MaterialStage& stage, const Mesh& mesh, const Camera& camera,
+	const Quake3Frame& frame, MaterialUniforms* uniforms)
 {
-	// Coverage first: sky surfaces show the sky wherever they are seen.
-	QVector<char> covered(static_cast<qsizetype>(framebuffer->width) * framebuffer->height, 0);
-	for (const Triangle& triangle : mesh.triangles) {
-		const std::array<Vec3, 3> positions {mesh.vertices[triangle.a].position, mesh.vertices[triangle.b].position, mesh.vertices[triangle.c].position};
-		rasterizeTriangle(camera, positions, {}, 0, CullMode::None, [&](const FragmentInput& input) {
-			covered[static_cast<qsizetype>(input.y) * framebuffer->width + input.x] = 1;
-		});
-	}
-	const MaterialCubeTexturePtr box = images.findCube(definition.sky.farBox);
-	const double radius = 4096.0;
-	const double height = definition.sky.cloudHeight > 0 ? definition.sky.cloudHeight : 512.0;
-	for (int y = 0; y < framebuffer->height; ++y) {
-		for (int x = 0; x < framebuffer->width; ++x) {
-			if (!covered[static_cast<qsizetype>(y) * framebuffer->width + x]) {
-				continue;
-			}
-			float* pixel = framebuffer->pixel(x, y);
-			const Vec3 d = camera.ray(x + 0.5, y + 0.5);
-			// The far box draws with colour identityLight.
-			Color sky {0, 0, 0, 1};
-			if (box) {
-				sky = sampleSkyBox(*box, d) * frame.identityLight;
-			}
-			pixel[0] = static_cast<float>(sky.r);
-			pixel[1] = static_cast<float>(sky.g);
-			pixel[2] = static_cast<float>(sky.b);
-			pixel[3] = 1.0f;
-			// Clouds: R_InitSkyTexCoords on a sphere of radius 4096 at the
-			// cloud height; no clouds below the horizon box face.
-			const bool bottom = std::abs(d.z) >= std::max(std::abs(d.x), std::abs(d.y)) && d.z < 0;
-			if (bottom) {
-				continue;
-			}
-			const double dd = d.dot(d);
-			const double p = (-2 * radius * d.z
-								 + 2 * std::sqrt(radius * radius * d.z * d.z + dd * (2 * radius * height + height * height)))
-				/ (2 * dd);
-			const Vec3 n = (d * p + Vec3 {0, 0, radius}).normalized();
-			Vertex cloud;
-			cloud.s = std::acos(std::clamp(n.x, -1.0, 1.0));
-			cloud.t = std::acos(std::clamp(n.y, -1.0, 1.0));
-			cloud.position = d * p;
-			cloud.normal = Vec3 {0, 0, -1};
-			for (const MaterialStage& stage : definition.stages) {
-				const MaterialTexturePtr texture = quake3StageTexture(stage, images, frame.time);
-				if (!texture || !texture->usable()) {
-					continue;
-				}
-				double s = 0;
-				double t = 0;
-				quake3TexCoords(stage, cloud, camera, frame, &s, &t);
-				Color fragment = sampleTexture(*texture, s, t, frame.options->filtering != MaterialFiltering::Nearest,
-					stage.clamp ? Wrap::Clamp : Wrap::Repeat);
-				const Color vertexColor = quake3VertexColor(definition, stage, cloud, mesh, camera, frame);
-				fragment = fragment * vertexColor;
-				if (!alphaPasses(stage.alphaTest, fragment.a)) {
-					continue;
-				}
-				blendInto(pixel, fragment, stage.blend.source, stage.blend.destination);
-			}
+	const MaterialRenderOptions& options = *frame.options;
+	Vertex cloud;
+	cloud.normal = Vec3 {0, 0, -1};
+	uniforms->setColor(quake3VertexColor(definition, stage, cloud, mesh, camera, frame));
+	int rgb = 0;
+	if (options.context == MaterialSurfaceContext::World) {
+		switch (stage.rgbGen.source) {
+		case MaterialColorSource::Vertex:
+			rgb = 1;
+			break;
+		case MaterialColorSource::ExactVertex:
+			rgb = 2;
+			break;
+		case MaterialColorSource::OneMinusVertex:
+			rgb = 3;
+			break;
+		default:
+			break;
 		}
+	}
+	if (stage.rgbGen.source == MaterialColorSource::LightingDiffuse) {
+		rgb = 4;
+	}
+	int alpha = 0;
+	if (stage.alphaGen.source == MaterialColorSource::LightingSpecular) {
+		alpha = 1;
+	} else if (stage.alphaGen.source == MaterialColorSource::Portal) {
+		alpha = 2;
+	}
+	uniforms->setParam(7, options.lighting.gridAmbient, options.lighting.gridDirected, std::max(1.0, stage.alphaGen.portalRange));
+	return rgb | (alpha << 4);
+}
+
+// A cloud layer's tcMods for the shader: turbulence stays per pixel, the
+// rest are affine maps of this moment (quake3TexCoords).
+void cloudTexMods(const MaterialStage& stage, const Quake3Frame& frame, MaterialUniforms* uniforms)
+{
+	const double time = frame.time;
+	int count = 0;
+	for (const MaterialTexMod& mod : stage.tcMods) {
+		if (count >= 4) {
+			break;
+		}
+		double m[2][3] = {{1, 0, 0}, {0, 1, 0}};
+		bool affine = true;
+		switch (mod.kind) {
+		case MaterialTexModKind::Turbulent:
+			uniforms->setParam(count, 1, mod.wave.amplitude, mod.wave.phase + time * mod.wave.frequency);
+			affine = false;
+			break;
+		case MaterialTexModKind::Scroll: {
+			double os = mod.values[0] * time;
+			double ot = mod.values[1] * time;
+			os -= std::floor(os);
+			ot -= std::floor(ot);
+			m[0][2] = os;
+			m[1][2] = ot;
+			break;
+		}
+		case MaterialTexModKind::Scale:
+			m[0][0] = mod.values[0];
+			m[1][1] = mod.values[1];
+			break;
+		case MaterialTexModKind::Rotate: {
+			const double degrees = -mod.values[0] * time;
+			const int index = static_cast<int>(degrees * (kQuake3FunctionTableSize / 360.0));
+			const double sn = quake3Sin(index);
+			const double cs = quake3Sin(index + kQuake3FunctionTableSize / 4);
+			m[0][0] = cs;
+			m[0][1] = -sn;
+			m[0][2] = 0.5 - 0.5 * cs + 0.5 * sn;
+			m[1][0] = sn;
+			m[1][1] = cs;
+			m[1][2] = 0.5 - 0.5 * sn - 0.5 * cs;
+			break;
+		}
+		case MaterialTexModKind::Stretch: {
+			const double wave = evaluateQuake3Wave(mod.wave, time);
+			const double p = std::abs(wave) < 1.0e-9 ? 1.0e9 : 1.0 / wave;
+			m[0][0] = p;
+			m[0][2] = 0.5 - 0.5 * p;
+			m[1][1] = p;
+			m[1][2] = 0.5 - 0.5 * p;
+			break;
+		}
+		case MaterialTexModKind::Transform:
+			m[0][0] = mod.values[0];
+			m[0][1] = mod.values[2];
+			m[0][2] = mod.values[4];
+			m[1][0] = mod.values[1];
+			m[1][1] = mod.values[3];
+			m[1][2] = mod.values[5];
+			break;
+		default:
+			continue;
+		}
+		if (affine) {
+			uniforms->setParam(count, 2);
+			uniforms->setMatrix(count, m);
+		}
+		++count;
+	}
+}
+
+void drawQuake3Sky(MaterialGpuFrame* gpu, const MaterialDefinition& definition, const MaterialImageSet& images, const Mesh& mesh,
+	const Camera& camera, const Quake3Frame& frame, MaterialRenderResult* result)
+{
+	// Sky surfaces show the sky wherever they are seen: the box first, then
+	// each cloud layer blended over it, worked out per pixel from the ray.
+	const MaterialCubeTexturePtr box = images.findCube(definition.sky.farBox);
+	const int vertices = gpu->vertices();
+	GpuState coverage;
+	coverage.cull = GpuCull::None;
+	{
+		MaterialUniforms u = gpu->uniforms();
+		u.mode[0] = 5;
+		u.viewport[3] = static_cast<float>(frame.identityLight);
+		GpuDraw textures;
+		for (int face = 0; face < 6; ++face) {
+			const MaterialTexturePtr& texture = box ? box->faces[size_t(face)] : MaterialTexturePtr();
+			gpu->bind(&textures, &u, face, texture && texture->usable() ? gpu->texture(texture.get()) : -1, Wrap::Clamp);
+		}
+		gpu->draw(GpuProgram::MaterialQuake3, u, coverage, vertices, textures);
+	}
+	const double height = definition.sky.cloudHeight > 0 ? definition.sky.cloudHeight : 512.0;
+	const bool bilinear = frame.options->filtering != MaterialFiltering::Nearest;
+	for (const MaterialStage& stage : definition.stages) {
+		const MaterialTexturePtr texture = quake3StageTexture(stage, images, frame.time);
+		if (!texture || !texture->usable()) {
+			continue;
+		}
+		MaterialUniforms u = gpu->uniforms();
+		u.mode[0] = 6;
+		u.mode[1] = alphaTestCode(stage.alphaTest);
+		u.mode[2] = bilinear ? 1 : 0;
+		u.mode[3] = cloudColorCodes(definition, stage, mesh, camera, frame, &u);
+		u.viewport[3] = static_cast<float>(frame.identityLight);
+		u.lighting[1] = static_cast<float>(frame.shift);
+		int source = 0;
+		switch (stage.tcGen.source) {
+		case MaterialTexCoordSource::Lightmap:
+			source = 1;
+			break;
+		case MaterialTexCoordSource::Environment:
+			source = 2;
+			break;
+		case MaterialTexCoordSource::Vector:
+			source = 3;
+			u.setParam(5, stage.tcGen.vectorS[0], stage.tcGen.vectorS[1], stage.tcGen.vectorS[2]);
+			u.setParam(6, stage.tcGen.vectorT[0], stage.tcGen.vectorT[1], stage.tcGen.vectorT[2]);
+			break;
+		default:
+			break;
+		}
+		u.setParam(4, height, source);
+		cloudTexMods(stage, frame, &u);
+		GpuDraw textures;
+		gpu->bind(&textures, &u, 0, gpu->texture(texture.get()), stage.clamp ? Wrap::Clamp : Wrap::Repeat);
+		GpuState state = coverage;
+		state.blend = !stage.blend.isOpaqueReplace();
+		state.sourceColor = gpuBlendFactor(stage.blend.source);
+		state.destinationColor = gpuBlendFactor(stage.blend.destination);
+		state.sourceAlpha = state.sourceColor == GpuBlend::SourceAlphaSaturate ? GpuBlend::One : state.sourceColor;
+		state.destinationAlpha = state.destinationColor;
+		gpu->draw(GpuProgram::MaterialQuake3, u, state, vertices, textures);
 	}
 	result->stagesDrawn = static_cast<int>(definition.stages.size()) + (box ? 1 : 0);
 	if (box && !box->note.isEmpty()) {
@@ -1387,18 +1016,17 @@ MaterialRenderResult renderQuake3Material(const MaterialDefinition& source, cons
 	const Camera camera = makeCamera(mesh, cameraOptions);
 	applyQuake3Deforms(definition, &mesh, camera, frame.time, &result.notes);
 
-	Framebuffer framebuffer;
-	framebuffer.reset(camera.width, camera.height);
-	framebuffer.clear(options.background, options.checker, frame.identityLight);
+	MaterialGpuFrame gpu(camera, mesh, options);
+	gpu.background(options.background, options.checker, frame.identityLight);
 
 	if (definition.isSky()) {
-		drawQuake3Sky(definition, images, mesh, camera, &framebuffer, frame, &result);
-		result.image = framebuffer.toImage(frame.displayScale);
+		drawQuake3Sky(&gpu, definition, images, mesh, camera, frame, &result);
+		gpu.finish(frame.displayScale, &result, cancelled);
 		return result;
 	}
 	if (definition.fog.present && definition.stages.isEmpty()) {
-		drawFogScene(mesh, camera, &framebuffer, definition, frame);
-		result.image = framebuffer.toImage(frame.displayScale);
+		drawFogScene(&gpu, definition, frame);
+		gpu.finish(frame.displayScale, &result, cancelled);
 		result.notes << Text::tr("Fog is shown from inside the volume: opaque at %1 units.").arg(definition.fog.distanceToOpaque);
 		return result;
 	}
@@ -1426,66 +1054,32 @@ MaterialRenderResult renderQuake3Material(const MaterialDefinition& source, cons
 		}
 		const bool noLightmap = lightmap && options.context != MaterialSurfaceContext::World;
 		// Per-vertex coordinates and colours, as the engine computes them.
-		QVector<std::array<double, 6>> perVertex(mesh.vertices.size());
+		QVector<StageVertex> perVertex(mesh.vertices.size());
 		for (int index = 0; index < mesh.vertices.size(); ++index) {
 			const Vertex& vertex = mesh.vertices.at(index);
-			double s = 0;
-			double t = 0;
-			quake3TexCoords(stage, vertex, camera, frame, &s, &t);
-			const Color color = quake3VertexColor(definition, stage, vertex, mesh, camera, frame);
-			perVertex[index] = {s, t, color.r, color.g, color.b, color.a};
+			StageVertex& values = perVertex[index];
+			quake3TexCoords(stage, vertex, camera, frame, &values.s, &values.t);
+			values.color = quake3VertexColor(definition, stage, vertex, mesh, camera, frame);
 		}
 		const double texelsPerUnit = texture ? texture->width / std::max(1.0, mesh.repeatS) : 1.0;
-		for (const Triangle& triangle : mesh.triangles) {
-			const int ids[3] = {triangle.a, triangle.b, triangle.c};
-			std::array<Vec3, 3> positions {};
-			std::array<Attributes, 3> attributes {};
-			for (int k = 0; k < 3; ++k) {
-				const Vertex& vertex = mesh.vertices.at(ids[k]);
-				positions[static_cast<size_t>(k)] = vertex.position;
-				Attributes& a = attributes[static_cast<size_t>(k)];
-				for (int c = 0; c < 6; ++c) {
-					a[static_cast<size_t>(c)] = perVertex.at(ids[k])[static_cast<size_t>(c)];
-				}
-				a[6] = vertex.position.x;
-				a[7] = vertex.position.y;
-				a[8] = vertex.position.z;
-				a[9] = vertex.normal.x;
-				a[10] = vertex.normal.y;
-				a[11] = vertex.normal.z;
-			}
-			rasterizeTriangle(camera, positions, attributes, 12, cull, [&](const FragmentInput& input) {
-				float& depth = framebuffer.depthAt(input.x, input.y);
-				const double tolerance = 1.0e-4 * std::max(1.0, input.depth);
-				if (stage.depthFunc == MaterialDepthFunc::Equal ? std::abs(input.depth - depth) > tolerance : input.depth > depth + tolerance) {
-					return;
-				}
-				const Attributes& a = *input.attributes;
-				Color fragment;
-				if (lightmap) {
-					const Vec3 position {a[6], a[7], a[8]};
-					const Vec3 normal = Vec3 {a[9], a[10], a[11]}.normalized();
-					fragment = noLightmap ? Color {1, 1, 1, 1}
-										  : quake3Lightmap(previewLightAt(position, normal, mesh, options.lighting, frame.time), frame);
-				} else {
-					const Vec3 toEye = (camera.eye - Vec3 {a[6], a[7], a[8]}).normalized();
-					const double obliquity = std::abs(Vec3 {a[9], a[10], a[11]}.normalized().dot(toEye));
-					const double lod = bilinear ? mipLevel(camera, input.depth, obliquity, texelsPerUnit) : 0.0;
-					fragment = sampleTexture(*texture, a[0], a[1], bilinear, stage.clamp ? Wrap::Clamp : Wrap::Repeat, lod);
-				}
-				fragment = fragment * Color {a[2], a[3], a[4], a[5]};
-				if (!alphaPasses(stage.alphaTest, fragment.a)) {
-					return;
-				}
-				blendInto(framebuffer.pixel(input.x, input.y), fragment, stage.blend.source, stage.blend.destination);
-				if (stage.depthWrite) {
-					depth = static_cast<float>(input.depth);
-				}
-			});
+		MaterialUniforms u = gpu.uniforms();
+		u.mode[0] = lightmap ? (noLightmap ? 2 : 1) : 0;
+		u.mode[1] = alphaTestCode(stage.alphaTest);
+		u.mode[2] = bilinear ? 1 : 0;
+		u.lighting[1] = static_cast<float>(frame.shift);
+		u.lighting[3] = static_cast<float>(texelsPerUnit);
+		u.viewport[3] = static_cast<float>(frame.identityLight);
+		GpuDraw textures;
+		if (!lightmap) {
+			gpu.bind(&textures, &u, 0, gpu.texture(texture.get()), stage.clamp ? Wrap::Clamp : Wrap::Repeat);
 		}
+		// Equal-depth stages line up exactly: every pass draws the same
+		// positions with the same (invariant) transform.
+		const GpuCompare depth = stage.depthFunc == MaterialDepthFunc::Equal ? GpuCompare::Equal : GpuCompare::GreaterOrEqual;
+		gpu.draw(GpuProgram::MaterialQuake3, u, stageState(stage.blend, depth, stage.depthWrite, cull), gpu.vertices(&perVertex), textures);
 		++result.stagesDrawn;
 	}
-	result.image = framebuffer.toImage(frame.displayScale);
+	gpu.finish(frame.displayScale, &result, cancelled);
 	return result;
 }
 
@@ -1648,10 +1242,10 @@ MaterialRenderResult renderMaterial(const MaterialDefinition& definition, const 
 		result = renderClassicMaterial(definition, images, bounded, cancelled);
 		break;
 	case MaterialEngine::Unknown: {
-		Framebuffer framebuffer;
-		framebuffer.reset(bounded.size.width(), bounded.size.height());
-		framebuffer.clear(bounded.background, bounded.checker, 1.0);
-		result.image = framebuffer.toImage(1.0);
+		const Mesh mesh = buildMesh(MaterialPreviewShape::Wall, 64.0, 64.0, 1.0, 64.0);
+		MaterialGpuFrame gpu(makeCamera(mesh, bounded), mesh, bounded);
+		gpu.background(bounded.background, bounded.checker, 1.0);
+		gpu.finish(1.0, &result, cancelled);
 		result.notes << QCoreApplication::translate("VibeStudioMaterials", "The material's engine is unknown, so nothing is drawn.");
 		break;
 	}

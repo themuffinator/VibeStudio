@@ -5,6 +5,13 @@ builds a staging plan; source files remain unchanged until a requested save.
 Generated assets, imported files, compiled map output, and dependency exports use
 the same package services as the CLI.
 
+Releasing a project's own work for players is a separate, project-level flow:
+**Package and Release** reads the project's folders (optionally with the open
+package layered on top), leaves out what the game installation's asset index
+lists, and writes the package through these same writers and the publication
+service, with a readme, notes, a distribution archive and a release record. See
+[Project releases](PROJECT_RELEASES.md).
+
 Package menus and toolbars share command availability. Opening, saving, staging
 and extraction disable conflicting package controls until the work completes,
 fails or is cancelled. The Open Package, Open Folder Package and Open Draft

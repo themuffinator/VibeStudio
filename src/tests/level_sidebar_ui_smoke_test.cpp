@@ -664,7 +664,7 @@ int main(int argc, char** argv)
 		if (required(expect(models && placeModel && modelHint && until([&] { return itemWithPayload(models, crate) != nullptr; }),
 				"the Models tab lists the package's model"))) {
 			// Quake's own classes have no misc_model, and no q3map2 bakes it.
-			ok &= expect(modelHint->text().contains(QStringLiteral("misc_model")) && !modelHint->text().contains(QStringLiteral("q3map2"))
+			ok &= expect(modelHint->text().contains(QStringLiteral("misc_model")) && !modelHint->text().contains(QStringLiteral("VibeMap3"))
 					&& modelHint->text().contains(QStringLiteral("No loaded definition")),
 				"the Models tab says what a Quake map makes of a model", modelHint->text());
 			models->setCurrentItem(itemWithPayload(models, crate));

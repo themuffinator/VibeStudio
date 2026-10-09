@@ -163,7 +163,7 @@ int main(int argc, char** argv) {
 			expect(preparedClassic.target == target, "GUI target handoff");
 			BuildPipelineRequest build;
 			build.pipelineId = preparedClassic.defaultPipeline();
-			for (const auto& id : QStringList{"ericw-qbsp", "ericw-vis", "ericw-light"}) {
+			for (const auto& id : QStringList{"vibemap2-bsp", "vibemap2-vis", "vibemap2-light"}) {
 				build.executableOverrides.append({id, QString::fromLocal8Bit(argv[1])});
 			}
 			if (target == "quake") {

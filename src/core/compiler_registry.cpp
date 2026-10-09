@@ -5,6 +5,7 @@
 #include <QCoreApplication>
 #include <QDir>
 #include <QFileInfo>
+#include <QHash>
 #include <QProcess>
 #include <QStringDecoder>
 #include <QRegularExpression>
@@ -130,16 +131,42 @@ QString commandLineText(const QString& program, const QStringList& arguments)
 	return parts.join(' ');
 }
 
-QStringList ericwToolCandidatePaths(const QString& baseName)
+// VibeMap2 builds each tool under build/src/<tool directory>, inside a Release folder for
+// multi-config generators, and installs every executable flat into the install prefix
+// (external/compilers/vibemap2/src/*/CMakeLists.txt).
+QStringList vibemap2ToolCandidatePaths(const QString& sourceDirectory, const QStringList& baseNames)
 {
-	const QString buildPath = QStringLiteral("external/compilers/ericw-tools/build/bin/%1");
-	const QString binPath = QStringLiteral("external/compilers/ericw-tools/bin/%1");
-	return {
-		buildPath.arg(QStringLiteral("%1.exe").arg(baseName)),
-		buildPath.arg(baseName),
-		binPath.arg(QStringLiteral("%1.exe").arg(baseName)),
-		binPath.arg(baseName),
+	const QStringList directories = {
+		QStringLiteral("external/compilers/vibemap2/build/src/%1").arg(sourceDirectory),
+		QStringLiteral("external/compilers/vibemap2/build/src/%1/Release").arg(sourceDirectory),
+		QStringLiteral("external/compilers/vibemap2/install"),
 	};
+	QStringList paths;
+	for (const QString& directory : directories) {
+		for (const QString& baseName : baseNames) {
+			paths << QStringLiteral("%1/%2.exe").arg(directory, baseName) << QStringLiteral("%1/%2").arg(directory, baseName);
+		}
+	}
+	return paths;
+}
+
+// VibeMap3 presets build into build/<preset>/bin (external/compilers/vibemap3/CMakePresets.json)
+// and install into <prefix>/bin.
+QStringList vibemap3CandidatePaths(const QStringList& baseNames)
+{
+	const QStringList directories = {
+		QStringLiteral("external/compilers/vibemap3/build/release/bin"),
+		QStringLiteral("external/compilers/vibemap3/build/cli/bin"),
+		QStringLiteral("external/compilers/vibemap3/build/cpu-only/bin"),
+		QStringLiteral("external/compilers/vibemap3/install/bin"),
+	};
+	QStringList paths;
+	for (const QString& directory : directories) {
+		for (const QString& baseName : baseNames) {
+			paths << QStringLiteral("%1/%2.exe").arg(directory, baseName) << QStringLiteral("%1/%2").arg(directory, baseName);
+		}
+	}
+	return paths;
 }
 
 QString firstUsefulProbeLine(const QString& text)
@@ -154,9 +181,11 @@ QString firstUsefulProbeLine(const QString& text)
 	return {};
 }
 
-// ericw-tools prints "---- <tool> / ericw-tools <version> ----" (common/settings.cc),
-// q3map2 prints its Q3MAP_VERSION lines (tools/quake3/q3map2/main.cpp), ZDBSP prints
-// "ZDBSP <version> (...)" and ZokumBSP prints "ZokumBSP Version: <version> ...".
+// VibeMap2 prints "---- <tool> / VibeMap2 <version> ----" (src/common/settings.cc), VibeMap3
+// answers --version with "VibeMap3 <version> (NRC <revision>)" (tools/quake3/q3map2/main.cpp),
+// ZDBSP prints "ZDBSP <version> (...)" and ZokumBSP prints "ZokumBSP Version: <version> ...".
+// The pre-rename banners (VibeyMapTools, q3mapx) and their upstreams' (ericw-tools, q3map2)
+// are still recognised for executables configured by hand.
 QString decodeProbeOutput(const QByteArray& bytes)
 {
 	if (bytes.isEmpty()) {
@@ -172,7 +201,7 @@ QString decodeProbeOutput(const QByteArray& bytes)
 
 QString versionBannerLine(const QString& text)
 {
-	static const QRegularExpression bannerPattern(QStringLiteral(R"regex((?:ericw-tools|zdbsp|zokumbsp|zennode|q3map|netradiant|version)\b)regex"), QRegularExpression::CaseInsensitiveOption);
+	static const QRegularExpression bannerPattern(QStringLiteral(R"regex((?:vibemap2|vibemap3|vibeymaptools|q3mapx|ericw-tools|zdbsp|zokumbsp|zennode|q3map|netradiant|version)\b)regex"), QRegularExpression::CaseInsensitiveOption);
 	static const QRegularExpression numberPattern(QStringLiteral(R"regex(\b\d+\.\d+)regex"));
 	const QStringList lines = text.split('\n');
 	for (QString line : lines) {
@@ -215,8 +244,8 @@ void probeCompilerVersion(CompilerToolDiscovery* discovery, int startTimeoutMs, 
 	}
 
 	discovery->versionProbeExitCode = process.exitCode();
-	// ericw-tools formats its banner with fmt and emits UTF-8; q3map2 echoes the
-	// narrow argv it was handed, which on Windows is the ANSI codepage. Decoding
+	// VibeMap2 formats its banner with fmt and emits UTF-8; VibeMap3 (like q3map2) echoes
+	// the narrow argv it was handed, which on Windows is the ANSI codepage. Decoding
 	// UTF-8 first with a local-8-bit fallback reads both correctly, and matches
 	// what the compiler runner does with streamed output.
 	const QString output = decodeProbeOutput(process.readAllStandardOutput());
@@ -329,13 +358,13 @@ OperationState CompilerRegistrySummary::overallState() const
 QVector<CompilerToolDescriptor> compilerToolDescriptors()
 {
 	return {
-		tool(QStringLiteral("ericw-qbsp"), QStringLiteral("ericw-tools"), QCoreApplication::translate("VibeStudioCompilerRegistry", "ericw-tools qbsp"), QStringLiteral("idTech2"), QCoreApplication::translate("VibeStudioCompilerRegistry", "Quake BSP compiler"), QStringLiteral("external/compilers/ericw-tools"), {QStringLiteral("qbsp")}, ericwToolCandidatePaths(QStringLiteral("qbsp")), {}, {QStringLiteral("quake-map-to-bsp"), QStringLiteral("bsp2"), QStringLiteral("lit-support"), QStringLiteral("ericw-tools")}),
-		tool(QStringLiteral("ericw-vis"), QStringLiteral("ericw-tools"), QCoreApplication::translate("VibeStudioCompilerRegistry", "ericw-tools vis"), QStringLiteral("idTech2"), QCoreApplication::translate("VibeStudioCompilerRegistry", "Quake visibility compiler"), QStringLiteral("external/compilers/ericw-tools"), {QStringLiteral("vis")}, ericwToolCandidatePaths(QStringLiteral("vis")), {}, {QStringLiteral("quake-vis"), QStringLiteral("fastvis"), QStringLiteral("ericw-tools"), QStringLiteral("generic-binary-name-risk"), QStringLiteral("upstream-issue-335")}),
-		tool(QStringLiteral("ericw-light"), QStringLiteral("ericw-tools"), QCoreApplication::translate("VibeStudioCompilerRegistry", "ericw-tools light"), QStringLiteral("idTech2"), QCoreApplication::translate("VibeStudioCompilerRegistry", "Quake light compiler"), QStringLiteral("external/compilers/ericw-tools"), {QStringLiteral("light")}, ericwToolCandidatePaths(QStringLiteral("light")), {}, {QStringLiteral("quake-light"), QStringLiteral("bounce-light"), QStringLiteral("lit-output"), QStringLiteral("ericw-tools"), QStringLiteral("generic-binary-name-risk"), QStringLiteral("upstream-issue-335")}),
-		tool(QStringLiteral("ericw-bspinfo"), QStringLiteral("ericw-tools"), QCoreApplication::translate("VibeStudioCompilerRegistry", "ericw-tools bspinfo"), QStringLiteral("idTech2"), QCoreApplication::translate("VibeStudioCompilerRegistry", "Quake BSP inspection helper"), QStringLiteral("external/compilers/ericw-tools"), {QStringLiteral("bspinfo")}, ericwToolCandidatePaths(QStringLiteral("bspinfo")), {}, {QStringLiteral("bsp-inspection"), QStringLiteral("bsp-metadata"), QStringLiteral("captured-output-log"), QStringLiteral("ericw-helper"), QStringLiteral("ericw-tools"), QStringLiteral("helper-probe-limited"), QStringLiteral("upstream-issue-225"), QStringLiteral("upstream-issue-289")}, {QCoreApplication::translate("VibeStudioCompilerRegistry", "Helper discovery currently verifies executable presence and help/version output only; operation-level bspinfo diagnostics still need smoke-test coverage before automation depends on them.")}),
-		tool(QStringLiteral("ericw-bsputil"), QStringLiteral("ericw-tools"), QCoreApplication::translate("VibeStudioCompilerRegistry", "ericw-tools bsputil"), QStringLiteral("idTech2"), QCoreApplication::translate("VibeStudioCompilerRegistry", "Quake BSP utility helper"), QStringLiteral("external/compilers/ericw-tools"), {QStringLiteral("bsputil")}, ericwToolCandidatePaths(QStringLiteral("bsputil")), {}, {QStringLiteral("bsp-utility"), QStringLiteral("bsp-inspection"), QStringLiteral("bsp-mutation-risk"), QStringLiteral("ericw-helper"), QStringLiteral("ericw-tools"), QStringLiteral("helper-probe-limited"), QStringLiteral("argument-parser-risk"), QStringLiteral("upstream-issue-289"), QStringLiteral("upstream-issue-435")}, {QCoreApplication::translate("VibeStudioCompilerRegistry", "bsputil has known upstream argument parsing risk (#435); VibeStudio should keep BSP-changing operations behind explicit operation smoke tests."), QCoreApplication::translate("VibeStudioCompilerRegistry", "Helper discovery currently verifies executable presence and help/version output only; operation-level bsputil diagnostics still need smoke-test coverage before automation depends on them.")}),
-		tool(QStringLiteral("ericw-lightpreview"), QStringLiteral("ericw-tools"), QCoreApplication::translate("VibeStudioCompilerRegistry", "ericw-tools lightpreview"), QStringLiteral("idTech2"), QCoreApplication::translate("VibeStudioCompilerRegistry", "Quake lighting preview helper"), QStringLiteral("external/compilers/ericw-tools"), {QStringLiteral("lightpreview")}, ericwToolCandidatePaths(QStringLiteral("lightpreview")), {}, {QStringLiteral("lighting-preview"), QStringLiteral("gui-helper"), QStringLiteral("platform-launch-risk"), QStringLiteral("temp-dir-risk"), QStringLiteral("ericw-helper"), QStringLiteral("ericw-tools"), QStringLiteral("helper-probe-limited"), QStringLiteral("upstream-issue-463"), QStringLiteral("upstream-issue-480")}, {QCoreApplication::translate("VibeStudioCompilerRegistry", "lightpreview launch readiness is not smoke-tested because platform OpenGL/Qt setup can fail on some systems (#480)."), QCoreApplication::translate("VibeStudioCompilerRegistry", "lightpreview may write preview outputs beside the map unless launched through an isolated temporary workflow (#463); registry discovery is presence-only for now."), QCoreApplication::translate("VibeStudioCompilerRegistry", "Helper discovery currently verifies executable presence only for lightpreview; VibeStudio does not launch GUI preview helpers during registry probes.")}, false),
-		tool(QStringLiteral("q3map2"), QStringLiteral("q3map2-nrc"), QCoreApplication::translate("VibeStudioCompilerRegistry", "NetRadiant Custom q3map2"), QStringLiteral("idTech3"), QCoreApplication::translate("VibeStudioCompilerRegistry", "Quake III BSP compiler"), QStringLiteral("external/compilers/q3map2-nrc"), {QStringLiteral("q3map2")}, {QStringLiteral("external/compilers/q3map2-nrc/install/q3map2.exe"), QStringLiteral("external/compilers/q3map2-nrc/install/q3map2"), QStringLiteral("external/compilers/q3map2-nrc/tools/quake3/q3map2/q3map2.exe"), QStringLiteral("external/compilers/q3map2-nrc/tools/quake3/q3map2/q3map2")}, {QStringLiteral("-help")}, {QStringLiteral("idtech3-bsp"), QStringLiteral("meta"), QStringLiteral("vis"), QStringLiteral("light"), QStringLiteral("shader-aware")}),
+		tool(QStringLiteral("vibemap2-bsp"), QStringLiteral("vibemap2"), QCoreApplication::translate("VibeStudioCompilerRegistry", "VibeMap2 bsp"), QStringLiteral("idTech2"), QCoreApplication::translate("VibeStudioCompilerRegistry", "Quake BSP compiler"), QStringLiteral("external/compilers/vibemap2"), {QStringLiteral("vibemap2-bsp"), QStringLiteral("vmt-bsp")}, vibemap2ToolCandidatePaths(QStringLiteral("qbsp"), {QStringLiteral("vibemap2-bsp"), QStringLiteral("vmt-bsp")}), {}, {QStringLiteral("quake-map-to-bsp"), QStringLiteral("bsp2"), QStringLiteral("lit-support"), QStringLiteral("vibemap2")}),
+		tool(QStringLiteral("vibemap2-vis"), QStringLiteral("vibemap2"), QCoreApplication::translate("VibeStudioCompilerRegistry", "VibeMap2 vis"), QStringLiteral("idTech2"), QCoreApplication::translate("VibeStudioCompilerRegistry", "Quake visibility compiler"), QStringLiteral("external/compilers/vibemap2"), {QStringLiteral("vibemap2-vis"), QStringLiteral("vmt-vis")}, vibemap2ToolCandidatePaths(QStringLiteral("vis"), {QStringLiteral("vibemap2-vis"), QStringLiteral("vmt-vis")}), {}, {QStringLiteral("quake-vis"), QStringLiteral("fastvis"), QStringLiteral("vibemap2")}),
+		tool(QStringLiteral("vibemap2-light"), QStringLiteral("vibemap2"), QCoreApplication::translate("VibeStudioCompilerRegistry", "VibeMap2 light"), QStringLiteral("idTech2"), QCoreApplication::translate("VibeStudioCompilerRegistry", "Quake light compiler"), QStringLiteral("external/compilers/vibemap2"), {QStringLiteral("vibemap2-light"), QStringLiteral("vmt-light")}, vibemap2ToolCandidatePaths(QStringLiteral("light"), {QStringLiteral("vibemap2-light"), QStringLiteral("vmt-light")}), {}, {QStringLiteral("quake-light"), QStringLiteral("bounce-light"), QStringLiteral("lit-output"), QStringLiteral("vibemap2")}),
+		tool(QStringLiteral("vibemap2-bspinfo"), QStringLiteral("vibemap2"), QCoreApplication::translate("VibeStudioCompilerRegistry", "VibeMap2 bspinfo"), QStringLiteral("idTech2"), QCoreApplication::translate("VibeStudioCompilerRegistry", "Quake BSP inspection helper"), QStringLiteral("external/compilers/vibemap2"), {QStringLiteral("vibemap2-bspinfo"), QStringLiteral("vmt-bspinfo")}, vibemap2ToolCandidatePaths(QStringLiteral("bspinfo"), {QStringLiteral("vibemap2-bspinfo"), QStringLiteral("vmt-bspinfo")}), {}, {QStringLiteral("bsp-inspection"), QStringLiteral("bsp-metadata"), QStringLiteral("captured-output-log"), QStringLiteral("vibemap2-helper"), QStringLiteral("vibemap2"), QStringLiteral("helper-probe-limited"), QStringLiteral("upstream-issue-225"), QStringLiteral("upstream-issue-289")}, {QCoreApplication::translate("VibeStudioCompilerRegistry", "Helper discovery currently verifies executable presence and help/version output only; operation-level bspinfo diagnostics still need smoke-test coverage before automation depends on them.")}),
+		tool(QStringLiteral("vibemap2-bsputil"), QStringLiteral("vibemap2"), QCoreApplication::translate("VibeStudioCompilerRegistry", "VibeMap2 bsputil"), QStringLiteral("idTech2"), QCoreApplication::translate("VibeStudioCompilerRegistry", "Quake BSP utility helper"), QStringLiteral("external/compilers/vibemap2"), {QStringLiteral("vibemap2-bsputil"), QStringLiteral("vmt-bsputil")}, vibemap2ToolCandidatePaths(QStringLiteral("bsputil"), {QStringLiteral("vibemap2-bsputil"), QStringLiteral("vmt-bsputil")}), {}, {QStringLiteral("bsp-utility"), QStringLiteral("bsp-inspection"), QStringLiteral("bsp-mutation-risk"), QStringLiteral("vibemap2-helper"), QStringLiteral("vibemap2"), QStringLiteral("helper-probe-limited"), QStringLiteral("argument-parser-risk"), QStringLiteral("upstream-issue-289"), QStringLiteral("upstream-issue-435")}, {QCoreApplication::translate("VibeStudioCompilerRegistry", "bsputil has a known argument parsing risk inherited from ericw-tools (#435); VibeStudio should keep BSP-changing operations behind explicit operation smoke tests."), QCoreApplication::translate("VibeStudioCompilerRegistry", "Helper discovery currently verifies executable presence and help/version output only; operation-level bsputil diagnostics still need smoke-test coverage before automation depends on them.")}),
+		tool(QStringLiteral("vibemap2-hub"), QStringLiteral("vibemap2"), QCoreApplication::translate("VibeStudioCompilerRegistry", "VibeMap2 hub"), QStringLiteral("idTech2"), QCoreApplication::translate("VibeStudioCompilerRegistry", "Quake build and lighting preview hub"), QStringLiteral("external/compilers/vibemap2"), {QStringLiteral("vibemap2-hub"), QStringLiteral("vmt-hub")}, vibemap2ToolCandidatePaths(QStringLiteral("hub"), {QStringLiteral("vibemap2-hub"), QStringLiteral("vmt-hub")}), {}, {QStringLiteral("build-hub"), QStringLiteral("lighting-preview"), QStringLiteral("gui-helper"), QStringLiteral("platform-launch-risk"), QStringLiteral("vibemap2-helper"), QStringLiteral("vibemap2"), QStringLiteral("helper-probe-limited"), QStringLiteral("upstream-issue-480")}, {QCoreApplication::translate("VibeStudioCompilerRegistry", "The hub's launch readiness is not smoke-tested because platform OpenGL/Qt setup can fail on some systems (#480)."), QCoreApplication::translate("VibeStudioCompilerRegistry", "Helper discovery currently verifies executable presence only for the hub; VibeStudio does not launch GUI helpers during registry probes.")}, false),
+		tool(QStringLiteral("vibemap3"), QStringLiteral("vibemap3"), QCoreApplication::translate("VibeStudioCompilerRegistry", "VibeMap3"), QStringLiteral("idTech3"), QCoreApplication::translate("VibeStudioCompilerRegistry", "Quake III BSP compiler"), QStringLiteral("external/compilers/vibemap3"), {QStringLiteral("vibemap3"), QStringLiteral("q3mapx")}, vibemap3CandidatePaths({QStringLiteral("vibemap3"), QStringLiteral("q3mapx")}), {QStringLiteral("--version")}, {QStringLiteral("idtech3-bsp"), QStringLiteral("meta"), QStringLiteral("vis"), QStringLiteral("light"), QStringLiteral("shader-aware"), QStringLiteral("vibemap3")}),
 		tool(QStringLiteral("zdbsp"), QStringLiteral("zdbsp"), QCoreApplication::translate("VibeStudioCompilerRegistry", "ZDBSP"), QStringLiteral("idTech1"), QCoreApplication::translate("VibeStudioCompilerRegistry", "Doom node builder"), QStringLiteral("external/compilers/zdbsp"), {QStringLiteral("zdbsp")}, {QStringLiteral("external/compilers/zdbsp/build/zdbsp.exe"), QStringLiteral("external/compilers/zdbsp/build/zdbsp"), QStringLiteral("external/compilers/zdbsp/zdbsp.exe"), QStringLiteral("external/compilers/zdbsp/zdbsp")}, {QStringLiteral("-V")}, {QStringLiteral("doom-nodes"), QStringLiteral("extended-nodes"), QStringLiteral("gl-nodes")}),
 		tool(QStringLiteral("zokumbsp"), QStringLiteral("zokumbsp"), QCoreApplication::translate("VibeStudioCompilerRegistry", "ZokumBSP"), QStringLiteral("idTech1"), QCoreApplication::translate("VibeStudioCompilerRegistry", "Doom node/blockmap/reject builder"), QStringLiteral("external/compilers/zokumbsp"), {QStringLiteral("zokumbsp"), QStringLiteral("zennode")}, {QStringLiteral("external/compilers/zokumbsp/build/zokumbsp.exe"), QStringLiteral("external/compilers/zokumbsp/build/zokumbsp"), QStringLiteral("external/compilers/zokumbsp/src/zokumbsp/zokumbsp.exe"), QStringLiteral("external/compilers/zokumbsp/src/zokumbsp/zokumbsp"), QStringLiteral("external/compilers/zokumbsp/src/zokumbsp/zennode.exe"), QStringLiteral("external/compilers/zokumbsp/src/zokumbsp/zennode")}, {}, {QStringLiteral("doom-nodes"), QStringLiteral("blockmap"), QStringLiteral("reject"), QStringLiteral("visplane-aware")}),
 	};
@@ -353,6 +382,38 @@ bool compilerToolDescriptorForId(const QString& id, CompilerToolDescriptor* out)
 		}
 	}
 	return false;
+}
+
+QString renamedCompilerId(const QString& retiredId)
+{
+	static const QHash<QString, QString> renames = {
+		{QStringLiteral("ericw-qbsp"), QStringLiteral("vibemap2-bsp")},
+		{QStringLiteral("ericw-vis"), QStringLiteral("vibemap2-vis")},
+		{QStringLiteral("ericw-light"), QStringLiteral("vibemap2-light")},
+		{QStringLiteral("ericw-bspinfo"), QStringLiteral("vibemap2-bspinfo")},
+		{QStringLiteral("ericw-bsputil"), QStringLiteral("vibemap2-bsputil")},
+		{QStringLiteral("ericw-bsputil-check"), QStringLiteral("vibemap2-bsputil-check")},
+		{QStringLiteral("ericw-bsputil-extract-entities"), QStringLiteral("vibemap2-bsputil-extract-entities")},
+		{QStringLiteral("ericw-bsputil-extract-textures"), QStringLiteral("vibemap2-bsputil-extract-textures")},
+		{QStringLiteral("ericw-lightpreview"), QStringLiteral("vibemap2-hub")},
+		{QStringLiteral("q3map2"), QStringLiteral("vibemap3")},
+		{QStringLiteral("q3map2-probe"), QStringLiteral("vibemap3-probe")},
+		{QStringLiteral("q3map2-bsp"), QStringLiteral("vibemap3-bsp")},
+		{QStringLiteral("q3map2-vis"), QStringLiteral("vibemap3-vis")},
+		{QStringLiteral("q3map2-light"), QStringLiteral("vibemap3-light")},
+		{QStringLiteral("q3map2-convert"), QStringLiteral("vibemap3-convert")},
+		{QStringLiteral("q3map2-pk3"), QStringLiteral("vibemap3-pk3")},
+	};
+	return renames.value(normalizedId(retiredId));
+}
+
+QString unknownCompilerToolIdText(const QString& id)
+{
+	const QString renamed = renamedCompilerId(id);
+	if (!renamed.isEmpty()) {
+		return QCoreApplication::translate("VibeStudioCompilerRegistry", "Unknown compiler tool id: %1. It was renamed %2 when VibeStudio moved to VibeMap2 and VibeMap3.").arg(id, renamed);
+	}
+	return QCoreApplication::translate("VibeStudioCompilerRegistry", "Unknown compiler tool id: %1").arg(id);
 }
 
 CompilerRegistrySummary discoverCompilerTools(const QString& workspaceRootPath, const QStringList& extraSearchPaths)

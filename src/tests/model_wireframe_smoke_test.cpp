@@ -1,4 +1,4 @@
-#include "app/model_rasterizer.h"
+#include "app/wire_lines.h"
 
 #include <QCoreApplication>
 #include <QDir>
@@ -64,12 +64,12 @@ bool benchmark(bool compare)
 			clock.start();
 			if (mode >= 4)
 			{
-				QVector<vibestudio::ModelWireSegment> segments;
+				QVector<vibestudio::WireSegment> segments;
 				for (const auto &line : (mode == 4 ? lines : unique))
 				{
-					segments << vibestudio::ModelWireSegment{line.p1(), line.p2(), false};
+					segments << vibestudio::WireSegment{line.p1(), line.p2(), false};
 				}
-				ok &= expect(vibestudio::renderModelWireframe(image.size(), segments, {.pixelRatio = double(ratio)}, &image),
+				ok &= expect(vibestudio::renderWireLines(image.size(), segments, {.pixelRatio = double(ratio)}, &image),
 							 "dense wireframe probe completes");
 			}
 			else
@@ -110,48 +110,48 @@ int main(int argc, char **argv)
 	QCoreApplication app(argc, argv);
 	bool ok = true;
 	QImage image, reverse;
-	ModelWireStyle style;
+	WireStyle style;
 	style.wire = qRgb(255, 0, 0);
 	{
 		QImage layer(64, 64, QImage::Format_ARGB32_Premultiplied); layer.fill(qRgb(10, 20, 30));
-		ModelWireStyle first, second; first.wire = qRgb(220, 10, 10); second.wire = qRgb(10, 220, 10);
-		ok &= expect(paintModelWireframe(&layer, {{{8,32.5},{56,32.5},false}}, first)
-			&& paintModelWireframe(&layer, {{{32.5,8},{32.5,56},false}}, second)
+		WireStyle first, second; first.wire = qRgb(220, 10, 10); second.wire = qRgb(10, 220, 10);
+		ok &= expect(paintWireLines(&layer, {{{8,32.5},{56,32.5},false}}, first)
+			&& paintWireLines(&layer, {{{32.5,8},{32.5,56},false}}, second)
 			&& layer.pixel(4,4) == qRgb(10,20,30) && layer.pixel(16,32) == first.wire && layer.pixel(32,32) == second.wire,
 			"ordered wire batches preserve existing content and composite the later style last");
 		const QImage previous = layer; std::atomic_bool cancelled{true};
-		ok &= expect(!paintModelWireframe(&layer, {{{0,0},{64,64},false}}, first, &cancelled) && layer == previous,
+		ok &= expect(!paintWireLines(&layer, {{{0,0},{64,64},false}}, first, &cancelled) && layer == previous,
 			"pre-cancelled composition leaves the existing frame untouched");
 		QImage unsupported(8,8,QImage::Format_RGB32); unsupported.fill(Qt::blue); const auto before = unsupported;
-		ok &= expect(!paintModelWireframe(&unsupported, {}, first) && unsupported == before,
+		ok &= expect(!paintWireLines(&unsupported, {}, first) && unsupported == before,
 			"composition refuses unsupported pixel storage without changing it");
 	}
 	for (int ratio : {1, 2})
 	{
 		style.pixelRatio = ratio;
-		ok &= expect(renderModelWireframe({64 * ratio, 64 * ratio}, {{{8, 16.5}, {56, 16.5}, false}}, style, &image),
+		ok &= expect(renderWireLines({64 * ratio, 64 * ratio}, {{{8, 16.5}, {56, 16.5}, false}}, style, &image),
 					 "render a scaled horizontal edge");
 		ok &= expect(image.pixel(32 * ratio, 16 * ratio) == style.wire && qAlpha(image.pixel(32 * ratio, 14 * ratio)) == 0,
 					 "wire stroke follows logical coordinates and physical pixel ratio");
-		ok &= expect(renderModelWireframe(image.size(), {{{56, 16.5}, {8, 16.5}, false}}, style, &reverse) && image == reverse,
+		ok &= expect(renderWireLines(image.size(), {{{56, 16.5}, {8, 16.5}, false}}, style, &reverse) && image == reverse,
 					 "reversing an edge retains identical coverage");
 	}
 	style.pixelRatio = 1;
-	ok &= expect(renderModelWireframe({64, 64}, {{{8, 16}, {56, 16}, false}}, style, &image) && qAlpha(image.pixel(32, 15)) == 128 &&
+	ok &= expect(renderWireLines({64, 64}, {{{8, 16}, {56, 16}, false}}, style, &image) && qAlpha(image.pixel(32, 15)) == 128 &&
 					 qAlpha(image.pixel(32, 16)) == 128 && qAlpha(image.pixel(32, 14)) == 0,
 				 "fractional wire positions share coverage across neighbouring pixels");
 	style.width = .5;
-	ok &= expect(renderModelWireframe({64, 64}, {{{8, 16.5}, {56, 16.5}, false}}, style, &image) && qAlpha(image.pixel(32, 16)) == 128,
+	ok &= expect(renderWireLines({64, 64}, {{{8, 16.5}, {56, 16.5}, false}}, style, &image) && qAlpha(image.pixel(32, 16)) == 128,
 				 "subpixel-width strokes retain their fractional coverage");
 	style.width = 1;
 	style.wire = qRgba(255, 0, 0, 128);
-	ok &= expect(renderModelWireframe({64, 64}, {{{8, 16.5}, {56, 16.5}, false}}, style, &image) &&
+	ok &= expect(renderWireLines({64, 64}, {{{8, 16.5}, {56, 16.5}, false}}, style, &image) &&
 					 image.pixel(32, 16) == qRgba(128, 0, 0, 128),
 				 "wire pixels preserve premultiplied alpha");
 	style.wire = qRgb(20, 40, 200);
 	style.selection = qRgb(255, 210, 20);
-	QVector<ModelWireSegment> selected{{{8, 32.5}, {56, 32.5}, true}, {{8, 32.5}, {56, 32.5}, false}};
-	ok &= expect(renderModelWireframe({64, 64}, selected, style, &image) && image.pixel(12, 32) == style.selection &&
+	QVector<WireSegment> selected{{{8, 32.5}, {56, 32.5}, true}, {{8, 32.5}, {56, 32.5}, false}};
+	ok &= expect(renderWireLines({64, 64}, selected, style, &image) && image.pixel(12, 32) == style.selection &&
 					 image.pixel(20, 32) == style.wire,
 				 "selected dashes composite last while their gaps retain the ordinary wire cue");
 	std::reverse(selected.begin(), selected.end());
@@ -159,19 +159,19 @@ int main(int argc, char **argv)
 	{
 		std::swap(segment.a, segment.b);
 	}
-	ok &= expect(renderModelWireframe({64, 64}, selected, style, &reverse) && image == reverse,
+	ok &= expect(renderWireLines({64, 64}, selected, style, &reverse) && image == reverse,
 				 "selection colour and dash phase are independent of edge submission direction and order");
 	// A nearly diagonal edge may choose another scan axis after subpixel
 	// translation or rounding. Its dash anchor must still be the same endpoint.
 	for (double ratio : {1.0, 1.25, 1.5, 1.75, 2.0})
 	{
-		ModelWireStyle diagonalStyle; diagonalStyle.pixelRatio = ratio; diagonalStyle.selectionWidth = 3.6;
+		WireStyle diagonalStyle; diagonalStyle.pixelRatio = ratio; diagonalStyle.selectionWidth = 3.6;
 		const QSize size(int(120 * ratio), int(120 * ratio));
 		const QPointF a(10.125, 90.25), b(90.125, 10.25);
-		ok &= expect(renderModelWireframe(size, {{a, b, true}}, diagonalStyle, &image), "render selected diagonal reference");
+		ok &= expect(renderWireLines(size, {{a, b, true}}, diagonalStyle, &image), "render selected diagonal reference");
 		for (double epsilon : {-1e-11, 1e-11})
 		{
-			ok &= expect(renderModelWireframe(size, {{a, b + QPointF(0, epsilon), true}}, diagonalStyle, &reverse),
+			ok &= expect(renderWireLines(size, {{a, b + QPointF(0, epsilon), true}}, diagonalStyle, &reverse),
 				"render selected diagonal across scan-axis boundary");
 			int difference = 0;
 			for (int y = 0; y < size.height(); ++y) { for (int x = 0; x < size.width(); ++x) {
@@ -197,13 +197,13 @@ int main(int argc, char **argv)
 				const QPointF a = QPointF(32.25, 31.75) - delta, b = QPointF(32.25, 31.75) + delta;
 				for (bool dashed : {false, true})
 				{
-					ok &= expect(renderModelWireframe(size, {{a, b, dashed}}, style, &image) &&
-									 renderModelWireframe(size, {{b, a, dashed}}, style, &reverse) && image == reverse,
+					ok &= expect(renderWireLines(size, {{a, b, dashed}}, style, &image) &&
+									 renderWireLines(size, {{b, a, dashed}}, style, &reverse) && image == reverse,
 								 "antialiasing and selected dashes agree in every octant and display scale");
 				}
 				// An independently constructed stroke polygon avoids Qt's specialised
 				// one-pixel line path and checks the actual geometric stroke area.
-				ok &= expect(renderModelWireframe(size, {{a, b, false}}, style, &image), "render stroke for area comparison");
+				ok &= expect(renderWireLines(size, {{a, b, false}}, style, &image), "render stroke for area comparison");
 				QImage reference(size, QImage::Format_ARGB32_Premultiplied);
 				reference.fill(Qt::transparent);
 				{
@@ -242,23 +242,23 @@ int main(int argc, char **argv)
 	std::cout << "Independent wire coverage comparisons: " << comparisons << '\n';
 	style.pixelRatio = 1;
 	style.width = 1;
-	ok &= expect(renderModelWireframe({64, 64}, {{{-1e100, -1e100}, {1e100, 1e100}, false}}, style, &image) &&
-					 renderModelWireframe({64, 64}, {{{-100, -100}, {100, 100}, false}}, style, &reverse) && image == reverse,
+	ok &= expect(renderWireLines({64, 64}, {{{-1e100, -1e100}, {1e100, 1e100}, false}}, style, &image) &&
+					 renderWireLines({64, 64}, {{{-100, -100}, {100, 100}, false}}, style, &reverse) && image == reverse,
 				 "far-offscreen diagonal endpoints clip to a bounded, accurate visible line");
 	const double nan = std::numeric_limits<double>::quiet_NaN();
-	ok &= expect(renderModelWireframe({64, 64}, {{{nan, 0}, {16, 16}, false}, {{8, 16.5}, {56, 16.5}, false}}, style, &image) &&
+	ok &= expect(renderWireLines({64, 64}, {{{nan, 0}, {16, 16}, false}, {{8, 16.5}, {56, 16.5}, false}}, style, &image) &&
 					 image.pixel(32, 16) == style.wire,
 				 "non-finite segments cannot poison valid wire geometry");
-	ok &= expect(!renderModelWireframe({100000, 100000}, {}, style, &image) && image.isNull(),
+	ok &= expect(!renderWireLines({100000, 100000}, {}, style, &image) && image.isNull(),
 				 "wire output obeys the shared pixel-allocation ceiling");
 	style.pixelRatio = nan;
-	ok &= expect(!renderModelWireframe({64, 64}, {}, style, &image) && image.isNull(), "invalid render scale fails without stale output");
+	ok &= expect(!renderWireLines({64, 64}, {}, style, &image) && image.isNull(), "invalid render scale fails without stale output");
 	style.pixelRatio = 1;
 	std::atomic_bool cancelled{true};
-	ok &= expect(!renderModelWireframe({64, 64}, {}, style, &image, &cancelled) && image.isNull(),
+	ok &= expect(!renderWireLines({64, 64}, {}, style, &image, &cancelled) && image.isNull(),
 				 "wire cancellation is checked before allocation");
 	cancelled.store(false);
-	QVector<ModelWireSegment> busy(50000, {{-100, 512.5}, {2000, 512.5}, false});
+	QVector<WireSegment> busy(50000, {{-100, 512.5}, {2000, 512.5}, false});
 	auto *cancel = QThread::create(
 		[&]
 		{
@@ -268,7 +268,7 @@ int main(int argc, char **argv)
 	QElapsedTimer deadline;
 	deadline.start();
 	cancel->start();
-	const bool finished = renderModelWireframe({1024, 1024}, busy, style, &image, &cancelled);
+	const bool finished = renderWireLines({1024, 1024}, busy, style, &image, &cancelled);
 	cancel->wait();
 	delete cancel;
 	ok &=

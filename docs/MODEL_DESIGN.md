@@ -8,15 +8,17 @@ After staging and placing a generated prop in a Quake III map, **Prepare Build
 Workspace** captures that draft and the current map together. Compile the
 snapshot, then **Publish Prepared Build** reviews the model/material assets and
 verified compiler outputs as one PK3. The generated-model integration proof
-checks this handoff through real q3map2, including external lightmaps and generated
-shaders. **Deploy Prepared Build** carries the same model/material snapshot and
+checks this handoff through a real Quake III compiler, including external
+lightmaps and generated shaders; its recorded runs used stock q3map2 and have not
+been repeated with VibeMap3. **Deploy Prepared Build** carries the same model/material snapshot and
 runtime outputs into a reviewed game folder; Build and Launch uses that review
 after compilation. Recorder tests verify that the full package is present before
 the executable starts. See [Prepared Builds](LEVEL_EDITOR.md#prepared-builds-with-current-assets).
 
 Prepared Quake II builds also capture MD2 props and their resolved PCX skins
 with WAL textures and sounds, then publish the verified BSP/assets as one PAK.
-The generated ericw-tools proof checks each payload independently; it does not
+The generated Quake-family compiler proof, recorded with stock ericw-tools
+before the move to VibeMap2, checks each payload independently; it does not
 establish runtime behavior of game-specific entity classes. Quake/Quake II
 prepared installation deployment remains separate acceptance work.
 

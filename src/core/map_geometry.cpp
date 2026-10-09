@@ -15,8 +15,8 @@ namespace {
 
 // Tolerances follow the conventions used by the released idTech qbsp sources
 // (see `ON_EPSILON` / `DIST_EPSILON` in ericw-tools,
-// https://github.com/ericwa/ericw-tools), which VibeStudio imports under
-// external/compilers/ericw-tools. They are reimplemented here, not copied.
+// https://github.com/ericwa/ericw-tools), the base of VibeStudio's VibeMap2 in
+// external/compilers/vibemap2. They are reimplemented here, not copied.
 constexpr double kOnPlaneEpsilon = 0.01;
 constexpr double kNormalEpsilon = 1.0e-6;
 constexpr double kDistanceEpsilon = 1.0e-4;
@@ -374,8 +374,8 @@ QVector<QPolygonF> MapBrushGeometry::footprintPolygons() const
 MapPlane planeFromPoints(const LevelMapVec3& a, const LevelMapVec3& b, const LevelMapVec3& c, MapGeometryPrecision precision)
 {
 	// idTech convention, matching `PlaneFromPoints` in the released qbsp sources
-	// (ericw-tools, https://github.com/ericwa/ericw-tools, imported under
-	// external/compilers/ericw-tools): normal = cross(a - b, c - b), normalised,
+	// (ericw-tools, https://github.com/ericwa/ericw-tools, the base of VibeMap2 in
+	// external/compilers/vibemap2): normal = cross(a - b, c - b), normalised,
 	// and distance = dot(a, normal). Map brush face normals therefore point away
 	// from the brush interior.
 	MapPlane plane;

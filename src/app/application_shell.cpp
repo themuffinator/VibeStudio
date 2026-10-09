@@ -29,6 +29,7 @@
 #include "core/package_copy_store.h"
 #include "app/package_extraction_paths.h"
 #include "app/level_dependency_dialog.h"
+#include "app/release_dialog.h"
 #include "app/package_subset_dialog.h"
 #include "app/model_design_dialog.h"
 #include "app/model_editor_dialog.h"
@@ -40,6 +41,8 @@
 #include "app/package_preview_worker.h"
 #include "app/texture_png_export_dialog.h"
 #include "app/texture_canvas.h"
+#include "app/material_library_model.h"
+#include "app/material_preview_view.h"
 #include "app/material_workbench.h"
 #include "core/package_selection.h"
 
@@ -51,6 +54,7 @@
 #include "app/project_search_panel.h"
 #include "app/map_viewport.h"
 #include "app/model_viewport.h"
+#include "core/render_device.h"
 #include "app/studio_actions.h"
 #include "app/studio_charts.h"
 #include "app/studio_docks.h"
@@ -87,6 +91,10 @@
 #include "core/localization.h"
 #include "core/package_preview.h"
 #include "core/project_manifest.h"
+#include "core/game_asset_register.h"
+#include "core/project_content.h"
+#include "core/release_notes.h"
+#include "core/release_plan.h"
 #include "core/studio_manifest.h"
 #include "vibestudio_config.h"
 #include <QAbstractItemView>
@@ -1889,6 +1897,7 @@ void ApplicationShell::buildUi()
 			focusPagePrimaryWidget(static_cast<StudioMode>(m_modeStack->currentIndex()), true);
 		}
 	});
+	connect(m_rendererCombo, &QComboBox::currentIndexChanged, this, &ApplicationShell::applyRendererChoice);
 	connect(m_railBehaviourCombo, &QComboBox::currentIndexChanged, this, [this]() {
 		const RailBehaviour behaviour = railBehaviourFromId(m_railBehaviourCombo->currentData().toString());
 		m_settings.setShellModeRailBehaviour(railBehaviourId(behaviour));
@@ -1982,10 +1991,14 @@ void ApplicationShell::buildUi()
 		}
 	});
 	connect(m_soundCueVolume, &QSlider::sliderReleased, this, persistSoundCueChange);
-	// The voice list fills when Accessibility is first shown, not at start.
+	// The voice list fills when Accessibility is first shown, not at start;
+	// the renderers' status whenever Appearance and Language is.
 	connect(m_settingsCategories, &QListWidget::currentRowChanged, this, [this](int row) {
-		if (row >= 0 && m_settingsCategories->item(row)->data(Qt::UserRole).toString() == QStringLiteral("accessibility")) {
+		const QString category = row >= 0 ? m_settingsCategories->item(row)->data(Qt::UserRole).toString() : QString();
+		if (category == QStringLiteral("accessibility")) {
 			QTimer::singleShot(0, this, [this]() { refreshSpeechControls(); });
+		} else if (category == QStringLiteral("appearance")) {
+			QTimer::singleShot(0, this, [this]() { refreshRendererStatus(); });
 		}
 	});
 	// Status messages last as long as the user asked, and reach the screen
@@ -2159,7 +2172,7 @@ QWidget* ApplicationShell::buildWorkspacePage()
 	m_dependencyGraph = new QListWidget;
 	m_dependencyGraph->setObjectName("dependencyGraph");
 	m_dependencyGraph->setAccessibleName(tr("Project dependency graph"));
-	m_dependencyGraph->setAccessibleDescription(tr("Placeholder dependency graph nodes for project roots, installs, packages, and compilers."));
+	m_dependencyGraph->setAccessibleDescription(tr("How the project links to its manifest, folders, game, installation and asset index, releases, packages and compilers."));
 	markFlat(m_dependencyGraph);
 	workspaceTabs->addTab(m_dependencyGraph, studioIcon(QStringLiteral("tree")), tr("Graph"));
 
@@ -2248,6 +2261,9 @@ QWidget* ApplicationShell::buildWorkspacePage()
 		if (m_importDetectedInstall) {
 			m_importDetectedInstall->setEnabled(selectedDetectedInstallationIndex() >= 0);
 		}
+		if (m_indexInstallAssets) {
+			m_indexInstallAssets->setEnabled(!selectedGameInstallationId().isEmpty());
+		}
 		refreshInstallTestMapsToggle();
 		refreshInspectorDrawerForSettings();
 	});
@@ -2268,6 +2284,14 @@ QWidget* ApplicationShell::buildWorkspacePage()
 		importSelectedDetectedInstallation();
 	});
 	installActions->addWidget(m_importDetectedInstall);
+	m_indexInstallAssets = createButton(tr("Index Assets"), QStringLiteral("index"));
+	m_indexInstallAssets->setObjectName(QStringLiteral("indexInstallAssets"));
+	m_indexInstallAssets->setAccessibleName(tr("Index the selected installation's game assets"));
+	m_indexInstallAssets->setToolTip(tr("Read the selected installation's own packages once, so releases leave the game's files out. Nothing in the installation changes."));
+	connect(m_indexInstallAssets, &QPushButton::clicked, this, [this]() {
+		indexGameAssets(selectedGameInstallationId());
+	});
+	installActions->addWidget(m_indexInstallAssets);
 	m_installTestMaps = new QCheckBox(tr("Allow test maps"));
 	m_installTestMaps->setObjectName(QStringLiteral("installTestMaps"));
 	m_installTestMaps->setAccessibleName(tr("Allow test maps for the selected installation"));
@@ -2294,6 +2318,40 @@ QWidget* ApplicationShell::buildWorkspacePage()
 	installActions->addWidget(removeInstall);
 	installCard->bodyLayout()->addLayout(installActions);
 	listsColumn->addWidget(installCard);
+
+	// Releases: what is waiting to ship, and what already has.
+	auto* releaseCard = new CardFrame(tr("Releases"));
+	m_releaseSummary = releaseCard->metaLabel();
+	m_releaseSummary->setAccessibleName(tr("Release summary"));
+	m_releaseSummary->setVisible(true);
+	m_releaseHistory = new QListWidget;
+	m_releaseHistory->setObjectName(QStringLiteral("releaseHistory"));
+	m_releaseHistory->setAccessibleName(tr("Releases"));
+	m_releaseHistory->setAccessibleDescription(tr("Unreleased changes and the project's published releases. Activate a release to open its folder."));
+	m_releaseHistory->setSelectionMode(QAbstractItemView::SingleSelection);
+	m_releaseHistory->setUniformItemSizes(false);
+	m_releaseHistory->setMinimumHeight(48);
+	m_releaseHistory->setMaximumHeight(170);
+	markFlat(m_releaseHistory);
+	connect(m_releaseHistory, &QListWidget::itemActivated, this, [this](QListWidgetItem* item) {
+		openWorkspaceRow(item);
+	});
+	releaseCard->bodyLayout()->addWidget(m_releaseHistory, 1);
+	auto* releaseActions = new QHBoxLayout;
+	releaseActions->setSpacing(6);
+	auto* recordChange = createButton(tr("Record Change…"), QStringLiteral("book"), QStringLiteral("ghost"));
+	recordChange->setObjectName(QStringLiteral("recordReleaseChange"));
+	recordChange->setAccessibleName(tr("Record a change for the next release"));
+	bindCommandButton(recordChange, m_commands->action(QStringLiteral("release.recordChange")));
+	releaseActions->addWidget(recordChange);
+	releaseActions->addStretch(1);
+	auto* packageRelease = createButton(tr("Package and Release…"), QStringLiteral("rocket"));
+	packageRelease->setObjectName(QStringLiteral("packageAndRelease"));
+	packageRelease->setAccessibleName(tr("Package and release the project"));
+	bindCommandButton(packageRelease, m_commands->action(QStringLiteral("release.package")));
+	releaseActions->addWidget(packageRelease);
+	releaseCard->bodyLayout()->addLayout(releaseActions);
+	listsColumn->addWidget(releaseCard);
 	// The cards keep the height their rows need; spare height stays below.
 	listsColumn->addStretch(1);
 
@@ -2365,8 +2423,8 @@ QWidget* ApplicationShell::buildLevelsPage()
 	dependencies->setAccessibleName(tr("Inspect level asset dependencies"));
 	dependencies->setToolTip(tr("Check textures, shader images, models, and sounds against the open package, then export resolved assets."));
 	connect(dependencies, &QPushButton::clicked, this, [this]() {
-		if (m_levelMapDocument.format == LevelMapFormat::Unknown || !m_packageArchive.isOpen()) {
-			statusBar()->showMessage(tr("Open a map and its asset package before checking dependencies."));
+		if (m_levelMapDocument.format == LevelMapFormat::Unknown) {
+			statusBar()->showMessage(tr("Open a map before checking its dependencies."));
 			return;
 		}
 		const QString source = m_levelMapDocument.sourcePath;
@@ -2374,11 +2432,49 @@ QWidget* ApplicationShell::buildLevelsPage()
 		const QString original = m_levelMapDocument.originalText;
 		const QString mapName = m_levelMapDocument.mapName;
 		const auto doomLumps = m_levelMapDocument.doomLumps;
-		if (!m_packageStaging.summary().canSave) {
+		if (m_packageArchive.isOpen() && !m_packageStaging.summary().canSave) {
 			statusBar()->showMessage(tr("Resolve package staging conflicts before checking dependencies."));
 			return;
 		}
-		showLevelDependencyDialog(this, m_levelMapDocument, std::make_shared<PackageStagingArchive>(m_packageStaging), [this, source, revision, original, mapName, doomLumps](const QStringList& selectors) {
+		// The game's own files, read on the dialog's worker, mark references the
+		// game provides. Without an open package the project's folders supply
+		// the assets, as they do for a release.
+		LevelDependencyDialogOptions options;
+		GameInstallationProfile installation;
+		const ProjectManifest manifest = currentProjectManifestOrDefault();
+		if (releaseGameInstallation(&installation)) {
+			const QString gameKey = effectiveProjectGameKey(manifest, &installation);
+			const ProjectReleaseSettings release = effectiveProjectReleaseSettings(manifest, gameKey);
+			options.stockFactory = [installation, release, gameKey]() {
+				return prepareReleaseStock(&installation, release, gameKey).stock;
+			};
+		}
+		std::shared_ptr<const PackageArchiveReader> archive;
+		if (m_packageArchive.isOpen()) {
+			archive = std::make_shared<PackageStagingArchive>(m_packageStaging);
+		} else {
+			QVector<ProjectContentRoot> roots = projectContentRoots(manifest);
+			if (roots.isEmpty()) {
+				// A loose map: the folder above maps/ plays the project's part.
+				QDir folder = QFileInfo(m_levelMapDocument.sourcePath).absoluteDir();
+				if (folder.dirName().compare(QStringLiteral("maps"), Qt::CaseInsensitive) == 0) {
+					folder.cdUp();
+				}
+				roots << ProjectContentRoot {folder.absolutePath(), QStringLiteral("project"), folder.dirName(), {}};
+			}
+			options.sourceLabel = manifest.rootPath.isEmpty() ? QDir::toNativeSeparators(roots.first().path) : manifest.displayName;
+			options.archiveFactory = [roots](QString* error) -> std::shared_ptr<const PackageArchiveReader> {
+				auto reader = std::make_shared<ProjectContentReader>();
+				if (!reader->load(roots, error)) {
+					return {};
+				}
+				return reader;
+			};
+			options.packageMap = [this]() {
+				packageCurrentMapFromUi();
+			};
+		}
+		showLevelDependencyDialog(this, m_levelMapDocument, archive, [this, source, revision, original, mapName, doomLumps](const QStringList& selectors) {
 			if (m_levelMapDocument.sourcePath != source || m_levelMapDocument.revision != revision || m_levelMapDocument.originalText != original
 				|| m_levelMapDocument.mapName != mapName || m_levelMapDocument.doomLumps != doomLumps) {
 				statusBar()->showMessage(tr("The map changed after this scan. Reopen Dependencies to select current objects."));
@@ -2394,9 +2490,15 @@ QWidget* ApplicationShell::buildLevelsPage()
 				setMode(StudioMode::Levels);
 				frameLevelMapSelection();
 			}
-		});
+		}, options);
 	});
 	header->addActionWidget(dependencies);
+	auto* packageMap = createButton(tr("Package Map"), QStringLiteral("rocket"));
+	packageMap->setObjectName(QStringLiteral("packageLevelMap"));
+	packageMap->setAccessibleName(tr("Package and release this map"));
+	packageMap->setToolTip(tr("Release the map with its build and every custom asset it uses, leaving the game's own files out."));
+	bindCommandButton(packageMap, m_commands->action(QStringLiteral("release.packageMap")));
+	header->addActionWidget(packageMap);
 
 	m_levelMapSaveAs = createButton(tr("Save"), QStringLiteral("save"));
 	m_levelMapSaveAs->setObjectName(QStringLiteral("saveLevelMapButton"));
@@ -3720,6 +3822,21 @@ QWidget* ApplicationShell::buildBuildPage()
 	});
 	header->addActionWidget(m_buildInspectArtifacts);
 
+	auto* packageBuiltMap = createButton(tr("Package Map"), QStringLiteral("rocket"));
+	packageBuiltMap->setObjectName(QStringLiteral("packageBuiltMap"));
+	packageBuiltMap->setAccessibleName(tr("Package and release the pipeline's map"));
+	packageBuiltMap->setToolTip(tr("Release the pipeline's map with its build and every custom asset it uses, leaving the game's own files out."));
+	connect(packageBuiltMap, &QPushButton::clicked, this, [this]() {
+		followOpenMapInBuild();
+		QString input = m_buildPipelineInput ? m_buildPipelineInput->text().trimmed() : QString();
+		const QString project = m_settings.currentProjectPath();
+		if (!input.isEmpty() && QDir::isRelativePath(input) && !project.isEmpty()) {
+			input = QDir(project).absoluteFilePath(input);
+		}
+		showReleaseDialog(QStringLiteral("maps"), input.isEmpty() || !QFileInfo(input).isFile() ? QStringList() : QStringList {input});
+	});
+	header->addActionWidget(packageBuiltMap);
+
 	m_buildPipelineCancel = createButton(tr("Cancel"), QStringLiteral("stop"));
 	m_buildPipelineCancel->setAccessibleName(tr("Cancel build pipeline"));
 	m_buildPipelineCancel->setToolTip(tr("Stop the running pipeline after the current stage."));
@@ -4410,6 +4527,42 @@ QWidget* ApplicationShell::buildSettingsPage()
 	connect(gestures, &QPushButton::clicked, this, &ApplicationShell::showLevelGesturePreferences);
 	editingLayout->addRow(gestures);
 	appearanceLayout->addWidget(editingPanel);
+
+	// Which graphics interface draws the Levels camera, models, the modeller
+	// and material previews, and what each one found on this computer.
+	auto* renderingPanel = new QGroupBox(tr("3D Rendering"));
+	renderingPanel->setObjectName(QStringLiteral("renderingPanel"));
+	renderingPanel->setAccessibleName(tr("3D rendering preferences"));
+	auto* renderingLayout = new QFormLayout(renderingPanel);
+	renderingLayout->setHorizontalSpacing(16);
+	renderingLayout->setVerticalSpacing(10);
+	// The status uses the panel's width; the combo keeps its size.
+	renderingLayout->setFieldGrowthPolicy(QFormLayout::ExpandingFieldsGrow);
+	m_rendererCombo = new QComboBox;
+	m_rendererCombo->setObjectName(QStringLiteral("rendererCombo"));
+	m_rendererCombo->setAccessibleName(tr("3D renderer"));
+	m_rendererCombo->setToolTip(tr("The graphics interface that draws the Levels camera, models, the modeller, and material previews. Automatic uses Vulkan where it works and OpenGL otherwise; on macOS it tries OpenGL first."));
+	for (RenderBackendChoice choice : renderBackendChoices()) {
+		m_rendererCombo->addItem(renderBackendChoiceDisplayName(choice), renderBackendChoiceId(choice));
+	}
+	m_rendererCombo->setCurrentIndex(std::max(0, m_rendererCombo->findData(m_settings.renderBackendPreference())));
+	sizeCombo(m_rendererCombo);
+	renderingLayout->addRow(tr("Renderer"), m_rendererCombo);
+	m_rendererStatus = new QLabel;
+	m_rendererStatus->setObjectName(QStringLiteral("rendererStatus"));
+	m_rendererStatus->setWordWrap(true);
+	m_rendererStatus->setTextFormat(Qt::PlainText);
+	m_rendererStatus->setTextInteractionFlags(Qt::TextSelectableByMouse);
+	m_rendererStatus->setAccessibleName(tr("3D renderer status"));
+	m_rendererStatus->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Preferred);
+	renderingLayout->addRow(tr("Status"), m_rendererStatus);
+	m_rendererCheck = new QPushButton(tr("Check Renderers"));
+	m_rendererCheck->setObjectName(QStringLiteral("rendererCheck"));
+	m_rendererCheck->setAccessibleName(tr("Check 3D renderers"));
+	m_rendererCheck->setToolTip(tr("Start OpenGL and Vulkan again, draw a test image on each, and show what they found. Use it after updating a graphics driver or when 3D views stay empty."));
+	connect(m_rendererCheck, &QPushButton::clicked, this, &ApplicationShell::checkRenderers);
+	renderingLayout->addRow(QString(), m_rendererCheck);
+	appearanceLayout->addWidget(renderingPanel);
 
 	auto* startupPanel = new QGroupBox(tr("Startup and Recovery"));
 	auto* startupLayout = new QFormLayout(startupPanel);
@@ -5266,7 +5419,7 @@ QWidget* ApplicationShell::buildModelsPage()
 	m_modelViewport = new ModelViewport;
 	m_modelViewport->setObjectName(QStringLiteral("modelViewport"));
 	m_modelViewport->setAccessibleName(tr("Model viewport"));
-	m_modelViewport->setAccessibleDescription(tr("Software-rendered view of the selected model. Drag to orbit, wheel to zoom, Space to play, Page Up and Page Down to step frames."));
+	m_modelViewport->setAccessibleDescription(tr("3D view of the selected model, drawn with OpenGL or Vulkan. Drag to orbit, wheel to zoom, Space to play, Page Up and Page Down to step frames."));
 	m_modelViewport->setMinimumSize(320, 260);
 	// The combo box opens on its first mode; the viewport must start there too
 	// rather than at its own default, or the two disagree until the user picks.
@@ -6179,6 +6332,7 @@ void ApplicationShell::refreshWorkspaceDashboard()
 		m_workspaceDrawer->setSubtitle(tr("No project is open."));
 		m_workspaceDrawer->setSections({});
 		refreshWorkspaceContextPanels();
+		refreshReleaseCard();
 		return;
 	}
 
@@ -6267,6 +6421,7 @@ void ApplicationShell::refreshWorkspaceDashboard()
 	refreshWorkspacePackageContext();
 	m_workspaceDrawer->showSection(QStringLiteral("health"));
 	refreshWorkspaceContextPanels();
+	refreshReleaseCard();
 }
 
 void ApplicationShell::initializeCurrentProjectManifest()
@@ -6288,6 +6443,12 @@ void ApplicationShell::initializeCurrentProjectManifest()
 		manifest.settingsOverrides.selectedInstallationId = selectedInstallationId;
 	}
 	manifest.settingsOverrides.editorProfileId = m_settings.selectedEditorProfileId();
+	if (manifest.gameKey.isEmpty()) {
+		GameInstallationProfile installation;
+		if (selectedGameInstallation(&installation) && normalizedGameKey(installation.gameKey) != QStringLiteral("custom")) {
+			manifest.gameKey = normalizedGameKey(installation.gameKey);
+		}
+	}
 	if (!saveOwnProjectManifest(manifest, &error)) {
 		recordActivity(tr("Project Manifest Failed"), nativePath(projectPath), tr("project"), OperationState::Failed, error);
 		statusBar()->showMessage(tr("Project manifest failed: %1").arg(error));
@@ -6348,6 +6509,7 @@ void ApplicationShell::fitWorkspaceLists()
 	};
 	fitListHeightToRows(m_recentProjects, scaled(48), scaled(170));
 	fitListHeightToRows(m_gameInstallations, scaled(48), scaled(150));
+	fitListHeightToRows(m_releaseHistory, scaled(48), scaled(170));
 }
 
 void ApplicationShell::refreshGameInstallations()
@@ -6394,10 +6556,12 @@ void ApplicationShell::refreshGameInstallations()
 		if (!profile.readOnly) {
 			title += separator + tr("test maps allowed");
 		}
+		const QString assetIndex = gameAssetIndexStateText(profile);
+		title += separator + assetIndex;
 		auto* item = new QListWidgetItem(studioIcon(QStringLiteral("gamepad"), selected ? StudioIconTone::Accent : StudioIconTone::Muted),
 			QStringLiteral("%1\n%2").arg(title, localizedGameEngineFamilyName(profile.engineFamily) + separator + nativePath(profile.rootPath)));
 		item->setData(Qt::AccessibleTextRole, tr("%1, %2%3%4, %5, %6").arg(profile.displayName, state, selected ? tr(", in use") : QString(),
-			profile.readOnly ? QString() : tr(", test maps allowed"), localizedGameEngineFamilyName(profile.engineFamily), nativePath(profile.rootPath)));
+			profile.readOnly ? QString() : tr(", test maps allowed"), localizedGameEngineFamilyName(profile.engineFamily), nativePath(profile.rootPath)) + QStringLiteral(", ") + assetIndex);
 		item->setData(Qt::UserRole, profile.id);
 		item->setData(Qt::UserRole + 1, operationStateId(validation.isUsable() ? OperationState::Completed : OperationState::Warning));
 		item->setData(Qt::UserRole + 2, QStringLiteral("profile"));
@@ -6887,8 +7051,16 @@ void ApplicationShell::refreshProjectProblemsPanel()
 		addProblem(check.title, check.detail, check.state, filePath, workspaceVirtualPath(projectPath, filePath));
 	}
 
-	if (!m_packageArchive.isOpen()) {
-		addProblem(tr("No package mounted"), tr("Open a package so project files and mounted package entries can be searched together."), OperationState::Warning);
+	GameInstallationProfile installation;
+	if (releaseGameInstallation(&installation) && !m_assetIndexJobs.contains(installation.id)) {
+		const GameAssetRegisterStatus index = gameAssetRegisterStatus(installation);
+		if (!index.usable()) {
+			addProblem(index.exists ? tr("Game asset index out of date") : tr("Game assets not indexed"),
+				index.exists ? tr("%1 changed since it was indexed. Activate to index it again, so releases leave the game's own files out.").arg(installation.displayName)
+							 : tr("Activate to index %1's own packages once, so releases can tell the game's files from yours.").arg(installation.displayName),
+				OperationState::Warning);
+			m_projectProblems->item(m_projectProblems->count() - 1)->setData(Qt::UserRole + 40, QStringLiteral("install.indexAssets"));
+		}
 	}
 	if (compilerRegistry.executableAvailableCount == 0) {
 		addProblem(tr("No compiler executable found"), tr("Compiler sources may be present, but no runnable tool was discovered in known paths or PATH."), OperationState::Warning);
@@ -7088,6 +7260,15 @@ void ApplicationShell::refreshProjectDependencyGraph()
 		}
 	}
 	addNode(tr("Project > Installation"), installId.isEmpty() ? tr("No installation linked.") : installId);
+	GameInstallationProfile installation;
+	const bool hasInstallation = releaseGameInstallation(&installation);
+	addNode(tr("Project > Game"), gameDefinitionForKey(effectiveProjectGameKey(manifest, hasInstallation ? &installation : nullptr)).displayName);
+	if (hasInstallation) {
+		addNode(tr("Installation > Asset Index"), gameAssetIndexStateText(installation));
+	}
+	const QVector<ReleaseRecord> releases = listReleaseRecords(projectPath);
+	addNode(tr("Project > Releases"), releases.isEmpty() ? tr("No releases yet.") : tr("Latest %1 of %n release(s).", nullptr, int(releases.size())).arg(releases.last().version),
+		releaseRecordDirectory(projectPath), workspaceVirtualPath(projectPath, releaseRecordDirectory(projectPath)));
 	if (manifest.registeredOutputPaths.isEmpty()) {
 		addNode(tr("Project > Compiler Outputs"), tr("No compiler outputs registered."));
 	} else {
@@ -13015,6 +13196,23 @@ void ApplicationShell::openProjectPath(const QString& path)
 	m_settings.setCurrentProjectPath(normalized);
 	invalidateDefinitionIndex();
 	m_settings.sync();
+	// Until a map is chosen, the Build page offers the project's game's
+	// compilers rather than whichever pipeline comes first.
+	if (m_buildPipelineChoice && m_buildPipelineInput && m_buildPipelineInput->text().trimmed().isEmpty()) {
+		GameInstallationProfile installation;
+		const QString game = effectiveProjectGameKey(currentProjectManifestOrDefault(), releaseGameInstallation(&installation) ? &installation : nullptr);
+		const QString family = gameEngineFamilyId(gameDefinitionForKey(game).engineFamily);
+		BuildPipelineDescriptor current;
+		const bool matches = buildPipelineForId(m_buildPipelineChoice->currentData().toString(), &current)
+			&& current.engineFamily.compare(family, Qt::CaseInsensitive) == 0;
+		for (int index = 0; !matches && family != QStringLiteral("unknown") && index < m_buildPipelineChoice->count(); ++index) {
+			BuildPipelineDescriptor candidate;
+			if (buildPipelineForId(m_buildPipelineChoice->itemData(index).toString(), &candidate) && candidate.engineFamily.compare(family, Qt::CaseInsensitive) == 0) {
+				m_buildPipelineChoice->setCurrentIndex(index);
+				break;
+			}
+		}
+	}
 	recordActivity(tr("Open Project"), nativePath(normalized), tr("project"), OperationState::Completed, tr("Project folder ready."));
 	refreshSetupPanel();
 	refreshRecentProjects();
@@ -13578,6 +13776,9 @@ void ApplicationShell::cancelSelectedActivityTask()
 	if (taskId.isEmpty()) {
 		return;
 	}
+	if (cancelGameAssetIndexing(taskId)) {
+		return;
+	}
 	if (taskId == m_codeIndexActivityId && m_codeIndexWorker && m_codeIndexWorker->busy()) { cancelCodeIndex(); return; }
 	if (!m_codeFormattingActivityId.isEmpty() && taskId == m_codeFormattingActivityId) { retireCodeFormatting(tr("Formatting cancelled. The document was not changed.")); return; }
 	if (taskId == m_quickOpenActivityId && m_quickOpen && m_quickOpen->catalogBusy()) { m_quickOpen->cancelCatalog(); return; }
@@ -13944,6 +14145,10 @@ void ApplicationShell::refreshPreferenceControls()
 	if (m_crashReports) {
 		const QSignalBlocker crashBlocker(m_crashReports);
 		m_crashReports->setChecked(m_settings.crashReports());
+	}
+	if (m_rendererCombo) {
+		const QSignalBlocker rendererBlocker(m_rendererCombo);
+		m_rendererCombo->setCurrentIndex(std::max(0, m_rendererCombo->findData(m_settings.renderBackendPreference())));
 	}
 	m_textToSpeech->setChecked(preferences.textToSpeechEnabled);
 	m_regionCombo->setCurrentIndex(std::max(0, m_regionCombo->findData(preferences.formatLocaleName)));
@@ -14426,6 +14631,7 @@ void ApplicationShell::buildCommands()
 	m_commands->beginBatch();
 	registerAssetWorkbenchCommands();
 	registerAiGenerationCommands();
+	registerReleaseCommands();
 	const auto installKeys = qScopeGuard([this]() {
 		m_commands->endBatch();
 	});
@@ -17461,6 +17667,13 @@ void ApplicationShell::openWorkspaceRow(const QListWidgetItem* item)
 	if (!item || !item->flags().testFlag(Qt::ItemIsEnabled)) {
 		return;
 	}
+	// A row that suggests a fix runs it (an unindexed game, a first change).
+	if (const QString command = item->data(Qt::UserRole + 40).toString(); !command.isEmpty()) {
+		if (QAction* action = m_commands->action(command)) {
+			action->trigger();
+			return;
+		}
+	}
 	const QString filePath = item->data(Qt::UserRole).toString();
 	const QString virtualPath = item->data(Qt::UserRole + 1).toString();
 	const QString source = item->data(Qt::UserRole + 2).toString();
@@ -17556,6 +17769,175 @@ void ApplicationShell::showSettingsCategory(int index)
 	if (m_settingsCategories && index >= 0 && index < m_settingsCategories->count()) {
 		m_settingsCategories->setCurrentRow(index);
 		m_settingsCategories->setFocus(Qt::OtherFocusReason);
+	}
+}
+
+void ApplicationShell::applyRendererChoice()
+{
+	if (!m_rendererCombo) {
+		return;
+	}
+	const QString id = m_rendererCombo->currentData().toString();
+	m_settings.setRenderBackendPreference(id);
+	RenderBackendChoice choice = RenderBackendChoice::Automatic;
+	renderBackendChoiceFromId(id, &choice);
+	setRenderBackendChoice(choice);
+	// Start the new choice now, so the views redraw without waiting for it.
+	prepareRenderBackends(true);
+	m_rendererTestOutcomes.clear();
+	redrawThreeDViews();
+	refreshRendererStatus();
+	QString message;
+	if (renderBackendChoiceOverridden()) {
+		message = tr("3D renderer saved: %1. VIBESTUDIO_RENDER_BACKEND chooses for this session.").arg(renderBackendChoiceDisplayName(choice));
+	} else if (choice == RenderBackendChoice::Automatic) {
+		message = tr("3D views now use the first renderer that works, Vulkan or OpenGL.");
+	} else {
+		message = tr("3D views now draw with %1.").arg(renderBackendChoiceDisplayName(choice));
+	}
+	statusBar()->showMessage(message);
+}
+
+void ApplicationShell::refreshRendererStatus()
+{
+	if (!m_rendererStatus) {
+		return;
+	}
+	if (m_rendererCheckRunning) {
+		m_rendererStatus->setText(tr("Checking OpenGL and Vulkan..."));
+		return;
+	}
+	const RenderBackendChoice choice = renderBackendChoice();
+	QVector<RenderBackend> order = automaticRenderBackendOrder();
+	if (choice == RenderBackendChoice::OpenGL) {
+		order = {RenderBackend::OpenGL};
+	} else if (choice == RenderBackendChoice::Vulkan) {
+		order = {RenderBackend::Vulkan};
+	}
+	// The renderer the choice resolves to: the first in its order that
+	// started and works. Undecided while one ahead of it has not started.
+	int inUse = -1;
+	bool decided = true;
+	for (RenderBackend backend : std::as_const(order)) {
+		const RenderDeviceInfo info = renderBackendStatus(backend);
+		if (!info.started) {
+			decided = false;
+			break;
+		}
+		if (info.available) {
+			inUse = int(backend);
+			break;
+		}
+	}
+	QStringList lines;
+	for (RenderBackend backend : automaticRenderBackendOrder()) {
+		const RenderDeviceInfo info = renderBackendStatus(backend);
+		const QString name = renderBackendDisplayName(backend);
+		QString line;
+		if (!info.started) {
+			line = tr("%1: not started yet; Check Renderers starts it.").arg(name);
+		} else if (!info.available) {
+			line = tr("%1: unavailable. %2").arg(name, info.error);
+		} else if (int(backend) == inUse) {
+			line = tr("%1: in use.").arg(renderDeviceSummary(info));
+		} else {
+			line = tr("%1: available.").arg(renderDeviceSummary(info));
+		}
+		const QString id = renderBackendId(backend);
+		if (m_rendererTestOutcomes.contains(id)) {
+			const QString outcome = m_rendererTestOutcomes.value(id);
+			line += QLatin1Char(' ') + (outcome.isEmpty() ? tr("Test image correct.") : tr("Test image wrong: %1").arg(outcome));
+		}
+		lines << line;
+	}
+	if (decided && inUse < 0) {
+		lines << tr("No renderer the choice allows is working, so 3D views stay empty and say why. Choose another renderer, or update the graphics driver and select Check Renderers.");
+	}
+	if (renderBackendChoiceOverridden()) {
+		lines << tr("VIBESTUDIO_RENDER_BACKEND chooses %1 for this session; this setting applies when it is not set.").arg(renderBackendChoiceDisplayName(choice));
+	}
+	m_rendererStatus->setText(lines.join(QLatin1Char('\n')));
+	if (!decided && !m_rendererResolveRunning) {
+		// Start the renderers the choice tries, in order, off the GUI thread,
+		// then say which one answered.
+		m_rendererResolveRunning = true;
+		auto* worker = QThread::create([] { activeRenderDevice(); });
+		connect(worker, &QThread::finished, this, [this]() {
+			m_rendererResolveRunning = false;
+			refreshRendererStatus();
+		});
+		connect(worker, &QThread::finished, worker, &QObject::deleteLater);
+		connect(qApp, &QCoreApplication::aboutToQuit, worker, [worker] { worker->wait(); });
+		worker->start();
+	}
+}
+
+void ApplicationShell::checkRenderers()
+{
+	if (m_rendererCheckRunning) {
+		return;
+	}
+	m_rendererCheckRunning = true;
+	if (m_rendererCheck) {
+		m_rendererCheck->setEnabled(false);
+	}
+	refreshRendererStatus();
+	statusBar()->showMessage(tr("Checking OpenGL and Vulkan..."));
+	// Start both again, so a driver updated since the studio started is the
+	// one checked and used.
+	for (RenderBackend backend : renderBackends()) {
+		resetRenderBackend(backend);
+	}
+	auto outcomes = std::make_shared<QHash<QString, QString>>();
+	auto* worker = QThread::create([outcomes] {
+		for (RenderBackend backend : renderBackends()) {
+			const std::shared_ptr<RenderDevice> device = renderDevice(backend);
+			if (!device->info().available) {
+				continue;
+			}
+			const RenderSelfTestResult test = runRenderSelfTest(*device);
+			outcomes->insert(renderBackendId(backend), test.passed ? QString() : test.error);
+		}
+	});
+	connect(worker, &QThread::finished, this, [this, outcomes]() {
+		m_rendererCheckRunning = false;
+		m_rendererTestOutcomes = *outcomes;
+		if (m_rendererCheck) {
+			m_rendererCheck->setEnabled(true);
+		}
+		refreshRendererStatus();
+		redrawThreeDViews();
+		int failed = 0;
+		for (const QString& outcome : std::as_const(*outcomes)) {
+			failed += outcome.isEmpty() ? 0 : 1;
+		}
+		const int passed = int(outcomes->size()) - failed;
+		if (outcomes->isEmpty()) {
+			statusBar()->showMessage(tr("Neither OpenGL nor Vulkan could start. Settings shows why."));
+		} else if (failed > 0) {
+			statusBar()->showMessage(tr("%n renderer(s) drew the test image wrongly. Settings shows which.", nullptr, failed));
+		} else {
+			statusBar()->showMessage(tr("3D renderers checked: the test image is correct on %n renderer(s).", nullptr, passed));
+		}
+	});
+	connect(worker, &QThread::finished, worker, &QObject::deleteLater);
+	connect(qApp, &QCoreApplication::aboutToQuit, worker, [worker] { worker->wait(); });
+	worker->start();
+}
+
+void ApplicationShell::redrawThreeDViews()
+{
+	const QList<QWidget*> widgets = QApplication::allWidgets();
+	for (QWidget* widget : widgets) {
+		if (auto* view = qobject_cast<ModelViewport*>(widget)) {
+			view->resetRendering();
+		} else if (auto* preview = qobject_cast<MaterialPreviewView*>(widget)) {
+			preview->resetRendering();
+		}
+	}
+	const QList<MaterialLibraryModel*> models = findChildren<MaterialLibraryModel*>();
+	for (MaterialLibraryModel* model : models) {
+		model->refreshThumbnails();
 	}
 }
 
@@ -19946,7 +20328,7 @@ void ApplicationShell::refreshModelBrowser()
 	}
 	m_modelState->setState(models.isEmpty() ? OperationState::Warning : OperationState::Completed,
 		tr("%n model(s)", nullptr, static_cast<int>(models.size())));
-	m_modelState->setDetail(tr("Geometry is software-rendered from the package. Skins decode with the package palette; animations come from frame names."));
+	m_modelState->setDetail(tr("Geometry is drawn from the package on the 3D renderer. Skins decode with the package palette; animations come from frame names."));
 	restoreListSelection(m_modelEntries, previousModel);
 	filterEntryList(m_modelEntries, m_modelFilter);
 	showSelectedModel();
@@ -24894,10 +25276,25 @@ bool ApplicationShell::followOpenMapInBuild()
 
 bool ApplicationShell::selectedGameInstallation(GameInstallationProfile* out) const
 {
-	// The selected installation, or the first one when none is selected.
+	// The open project's installation, when its manifest names one that is
+	// saved; then the selected installation; then the first one.
+	const QVector<GameInstallationProfile> profiles = m_settings.gameInstallations();
+	const QString projectPath = m_settings.currentProjectPath();
+	if (!projectPath.isEmpty()) {
+		ProjectManifest manifest;
+		const QString projectId = loadProjectManifest(projectPath, &manifest) ? effectiveProjectInstallationId(manifest) : QString();
+		for (const GameInstallationProfile& profile : profiles) {
+			if (!projectId.isEmpty() && sameGameInstallationId(profile.id, projectId)) {
+				if (out) {
+					*out = profile;
+				}
+				return true;
+			}
+		}
+	}
 	const QString selectedId = m_settings.selectedGameInstallationId();
 	bool found = false;
-	for (const GameInstallationProfile& profile : m_settings.gameInstallations()) {
+	for (const GameInstallationProfile& profile : profiles) {
 		const bool selected = sameGameInstallationId(profile.id, selectedId);
 		if (!found || selected) {
 			if (out) {
@@ -25533,6 +25930,16 @@ void ApplicationShell::copyDiagnosticBundle()
 	lines << tr("Platform: %1 (%2)").arg(QSysInfo::prettyProductName(), QSysInfo::currentCpuArchitecture());
 	lines << tr("Locale: %1").arg(m_settings.accessibilityPreferences().localeName);
 	lines << tr("Theme: %1").arg(localizedThemeName(m_settings.accessibilityPreferences().theme));
+	// What each renderer found so far; nothing is started for the bundle.
+	lines << tr("3D renderer: %1 (%2)").arg(renderBackendChoiceDisplayName(renderBackendChoice()), renderBackendChoiceSource());
+	for (RenderBackend backend : renderBackends()) {
+		const RenderDeviceInfo info = renderBackendStatus(backend);
+		QString state = tr("not started");
+		if (info.started) {
+			state = info.available ? tr("%1, driver %2").arg(renderDeviceSummary(info), info.driverVersion) : info.error;
+		}
+		lines << tr("  %1: %2").arg(renderBackendDisplayName(backend), state);
+	}
 	lines << tr("Project: %1").arg(m_settings.currentProjectPath().isEmpty() ? tr("(none)") : nativePath(m_settings.currentProjectPath()));
 	lines << tr("Package: %1").arg(m_packageArchive.isOpen() ? nativePath(m_packageArchive.sourcePath()) : tr("(none)"));
 	lines << tr("Session log: %1").arg(sessionLogFilePath().isEmpty() ? tr("(not writable)") : nativePath(sessionLogFilePath()));

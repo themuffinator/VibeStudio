@@ -36,14 +36,16 @@ REQUIRED_CREDIT_TOKENS = [
     "NetRadiant Custom",
     "TrenchBroom",
     "QuArK",
+    "VibeMap2",
+    "VibeMap3",
     "ericw-tools",
     "ZDBSP",
     "ZokumBSP",
 ]
 
 EXPECTED_SUBMODULES = [
-    "external/compilers/ericw-tools",
-    "external/compilers/q3map2-nrc",
+    "external/compilers/vibemap2",
+    "external/compilers/vibemap3",
     "external/compilers/zdbsp",
     "external/compilers/zokumbsp",
 ]

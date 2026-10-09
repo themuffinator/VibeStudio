@@ -240,7 +240,7 @@ policies; they do not replace OS screen-reader or physical keyboard acceptance.
 
 `src/tests/level_scene_workflow.py` generates an original room and model, hides and locks
 them through the actual CLI, compares baseline and organized map geometry after
-q3map2, runs VIS/LIGHT and publishes a validated package. Supply `--binary`,
+a VibeMap3 BSP compile, runs VIS/LIGHT and publishes a validated package. Supply `--binary`,
 `--compiler` and `--output-root` under `.agents/tmp`. No game is launched.
 
 `level_scene_locks_benchmark` reports five unrelated-edit timings with no locks,

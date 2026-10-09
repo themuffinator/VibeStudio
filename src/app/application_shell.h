@@ -166,6 +166,7 @@ class PageTransition;
 class PaletteSwatchView;
 class PipelineChart;
 class QuickOpenDialog;
+class ReleaseDialog;
 class ProjectSearchPanel;
 class StudioCommandRegistry;
 class StudioCodeEditor;
@@ -296,6 +297,31 @@ private:
 	// Generative AI: the Level, Texture, and Sound Generators, Edit Map with
 	// AI, and the image and sound model settings (ai_generation_actions.cpp).
 	void registerAiGenerationCommands();
+	// Package and Release, the Workspace Releases card and game asset
+	// indexing (release_actions.cpp).
+	void registerReleaseCommands();
+	// `scopeId` is project, maps, models or textures; items are absolute paths.
+	void showReleaseDialog(const QString& scopeId = QString(), const QStringList& items = {});
+	void packageCurrentMapFromUi();
+	void packageCurrentModelFromUi();
+	void packageCurrentTexturesFromUi();
+	void recordReleaseChangeFromUi();
+	// Indexes an installation's stock packages on a worker, as an Activity
+	// task; `done` runs on the GUI thread with the outcome.
+	void indexGameAssets(const QString& installationId, std::function<void(bool)> done = {});
+	bool cancelGameAssetIndexing(const QString& taskId);
+	[[nodiscard]] QString gameAssetIndexStateText(const GameInstallationProfile& profile) const;
+	void refreshReleaseCard();
+	// The open project's manifest, its folder defaults when it has none, or an
+	// empty manifest (no root) when no project is open.
+	[[nodiscard]] ProjectManifest currentProjectManifestOrDefault() const;
+	// The installation releases and dependency checks use for the open project:
+	// its linked one, else one of its game (see releaseInstallationFor).
+	[[nodiscard]] bool releaseGameInstallation(GameInstallationProfile* profile) const;
+	bool saveProjectReleaseSettings(const ProjectReleaseSettings& release, const QString& gameKey, QString* error);
+	// The file on disk behind an entry of an open folder package, or empty.
+	[[nodiscard]] QString openPackageFilePathFor(const QString& virtualPath) const;
+	[[nodiscard]] QListWidgetItem* disabledReleaseItem(const QString& text) const;
 	void showLevelGenerator();
 	void showTextureGenerator();
 	void showLevelAiEditor();
@@ -1264,7 +1290,7 @@ private:
 	// Runs the pipeline and, once it succeeds, launches the game with the map
 	// it built (F5).
 	void buildAndLaunch();
-	// Leak trails: the point file a leaking qbsp or q3map2 run writes, drawn
+	// Leak trails: the point file a leaking VibeMap2 or VibeMap3 run writes, drawn
 	// over the open map. A build of the open map shows or clears its trail by
 	// itself; the Build menu loads one by hand.
 	bool showLeakTrail(const QString& pointFilePath);
@@ -1403,6 +1429,14 @@ private:
 	// Settings > Appearance and Language > Language and Region.
 	void refreshLanguageRestartNotice();
 	void restartToApplyLanguage();
+	// Settings > Appearance and Language > 3D Rendering: the renderer choice,
+	// what each renderer found, and a check that starts both again and draws
+	// a test image on each.
+	void applyRendererChoice();
+	void refreshRendererStatus();
+	void checkRenderers();
+	// Every 3D view, material preview and swatch draws again.
+	void redrawThreeDViews();
 	void showSettingsCategory(const QString& categoryId);
 	// The setup step's settings: Accessibility for Welcome and Access, and so on.
 	void openCurrentSetupStepSettings();
@@ -1674,6 +1708,14 @@ private:
 	QHash<int, EmptyStateView*> m_emptyStates;
 	QListWidget* m_recentProjects = nullptr;
 	QListWidget* m_gameInstallations = nullptr;
+	QPushButton* m_indexInstallAssets = nullptr;
+	// Installation id -> (Activity task id, cancel flag) while indexing.
+	QHash<QString, QPair<QString, std::shared_ptr<std::atomic_bool>>> m_assetIndexJobs;
+	// Installation id -> callers waiting for that indexing to end.
+	QHash<QString, QVector<std::function<void(bool)>>> m_assetIndexWaiters;
+	QListWidget* m_releaseHistory = nullptr;
+	QLabel* m_releaseSummary = nullptr;
+	QPointer<ReleaseDialog> m_releaseDialog;
 	QTextEdit* m_inspector = nullptr;
 	ElidedLabel* m_recentSummary = nullptr;
 	ElidedLabel* m_installSummary = nullptr;
@@ -2229,6 +2271,15 @@ private:
 	QCheckBox* m_reducedMotion = nullptr;
 	QCheckBox* m_restoreSession = nullptr;
 	QCheckBox* m_crashReports = nullptr;
+	QComboBox* m_rendererCombo = nullptr;
+	QLabel* m_rendererStatus = nullptr;
+	QPushButton* m_rendererCheck = nullptr;
+	bool m_rendererCheckRunning = false;
+	// A worker is finding which renderer the choice resolves to.
+	bool m_rendererResolveRunning = false;
+	// The last check's test image by renderer id: empty when it was right,
+	// else why not. Renderers the check could not start are absent.
+	QHash<QString, QString> m_rendererTestOutcomes;
 	QToolButton* m_codeZoomReadout = nullptr;
 	QListWidget* m_codeOutline = nullptr;
 	QWidget* m_codeBreadcrumb = nullptr;

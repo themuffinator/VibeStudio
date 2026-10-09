@@ -89,7 +89,7 @@ int main(int argc, char** argv) {
 	BuildPipelineRequest pipeline;
 	pipeline.pipelineId = "quake3-full";
 	pipeline.dryRun = true;
-	pipeline.executableOverrides = {{"q3map2", app.applicationFilePath()}};
+	pipeline.executableOverrides = {{"vibemap3", app.applicationFilePath()}};
 	pipeline.stageExtraArguments["light"] = {"-fast"};
 	expect(configureLevelBuildPipeline(loaded, &pipeline, &error), "configure workspace paths", error);
 	const auto configured = pipeline;

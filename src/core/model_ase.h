@@ -4,7 +4,7 @@
 // load directly and q3map2 bakes into Quake III maps as misc_model.
 //
 // Format knowledge: the released Doom 3 GPL source (neo/renderer/Model_ase.cpp)
-// and the q3map2 picomodel ASE loader (external/compilers/netradiant-custom,
+// and the q3map2 picomodel ASE loader (NetRadiant Custom,
 // libs/picomodel/pm_ase.c); see docs/CREDITS.md. Decoding lives in
 // model_format_ase.cpp behind decodeModelMesh.
 

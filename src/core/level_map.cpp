@@ -15,7 +15,7 @@
 #include "core/level_merge.h"
 #include "core/level_placement_control_p.h"
 
-#include "core/ericw_map_preflight.h"
+#include "core/quake_map_preflight.h"
 #include "core/map_geometry.h"
 #include "core/map_geometry_cache.h"
 
@@ -1530,7 +1530,7 @@ bool parsePatchBody(QuakeParseState* state, LevelMapPatch* patch, bool patchDef3
 	// `for (j < m.width) { for (i < m.height) ... m[i][j] }` and `mesh_t`
 	// strides by width, so the reference parser transposes the file into a
 	// row-major `[height][width]` grid. See
-	// external/compilers/q3map2-nrc/tools/quake3/q3map2/patch.cpp (ParsePatch)
+	// external/compilers/vibemap3/tools/quake3/q3map2/patch.cpp (ParsePatch)
 	// and https://quakewiki.org/wiki/Quake_Map_Format#Patches. Collect each
 	// source group as a grid column and transpose so controlPoints matches the
 	// `[row * width + column]` layout tessellatePatchMesh expects.
@@ -1861,22 +1861,22 @@ void parseQuakeMapText(const QString& text, const QString& sourcePath, const QSt
 		addIssue(document, LevelMapIssueSeverity::Warning, QStringLiteral("missing-worldspawn"), QCoreApplication::translate("VibeStudioLevelMap", "Map has no worldspawn entity."), document->mapName);
 	}
 
-	EricwMapPreflightOptions preflightOptions;
+	QuakeMapPreflightOptions preflightOptions;
 	preflightOptions.mapPath = document->sourcePath;
 	if (request) {
 		preflightOptions.isCancelled = request->isCancelled;
 		preflightOptions.progress = [request](qint64 done, qint64 total) { loadCheckpoint(request, LevelMapLoadPhase::Validating, done, total); };
 	}
-	const EricwMapPreflightResult preflight = validateEricwMapPreflightText(text, preflightOptions);
+	const QuakeMapPreflightResult preflight = validateQuakeMapPreflightText(text, preflightOptions);
 	if (preflight.cancelled) { throw MapLoadCancelled {}; }
-	for (const EricwMapPreflightWarning& warning : preflight.warnings) {
+	for (const QuakeMapPreflightWarning& warning : preflight.warnings) {
 		// Fractional vertices are normal for q3map2 radial brushes. This
 		// particular upstream advisory concerns qbsp, not the Quake III target.
 		if (quake3 && warning.code == QStringLiteral("non-integer-brush-coordinate")) { continue; }
 		LevelMapIssueSeverity severity = LevelMapIssueSeverity::Warning;
-		if (warning.severity == EricwMapPreflightSeverity::Info) {
+		if (warning.severity == QuakeMapPreflightSeverity::Info) {
 			severity = LevelMapIssueSeverity::Info;
-		} else if (warning.severity == EricwMapPreflightSeverity::Error) {
+		} else if (warning.severity == QuakeMapPreflightSeverity::Error) {
 			severity = LevelMapIssueSeverity::Error;
 		}
 		QString objectId;
@@ -14334,10 +14334,10 @@ CompilerCommandRequest compilerRequestForLevelMap(const LevelMapDocument& docume
 {
 	CompilerCommandRequest request;
 	request.profileId = profileId.trimmed().isEmpty()
-		? (document.format == LevelMapFormat::DoomWad ? QStringLiteral("zdbsp-nodes") : (document.format == LevelMapFormat::Quake3Map ? QStringLiteral("q3map2-bsp") : QStringLiteral("ericw-qbsp")))
+		? (document.format == LevelMapFormat::DoomWad ? QStringLiteral("zdbsp-nodes") : (document.format == LevelMapFormat::Quake3Map ? QStringLiteral("vibemap3-bsp") : QStringLiteral("vibemap2-bsp")))
 		: profileId.trimmed();
 	request.inputPath = document.outputPath.trimmed().isEmpty() ? document.sourcePath : document.outputPath;
-	if (request.profileId == QStringLiteral("ericw-qbsp") && document.originalText.section(QLatin1Char('\n'), 0, 0).trimmed() == QString::fromLatin1(kQuake2MapTargetHeader).trimmed()) {
+	if (request.profileId == QStringLiteral("vibemap2-bsp") && document.originalText.section(QLatin1Char('\n'), 0, 0).trimmed() == QString::fromLatin1(kQuake2MapTargetHeader).trimmed()) {
 		request.extraArguments << QStringLiteral("-q2bsp");
 	}
 	request.outputPath = outputPath;

@@ -6,7 +6,7 @@
  *
  * Copyright (C) 1999-2007 id Software, Inc. and contributors.
  * For a list of contributors, see the accompanying CONTRIBUTORS file in
- * external/compilers/q3map2-nrc.
+ * external/compilers/vibemap3.
  *
  * This file is part of GtkRadiant.
  *

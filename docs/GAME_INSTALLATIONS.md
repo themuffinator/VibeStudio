@@ -35,7 +35,20 @@ project-aware game management.
   never a path, and nothing else in the installation is written.
 - Project manifests can carry project-local overrides for selected install,
   editor profile, palette, compiler profile, compiler executable search
-  paths/overrides, registered compiler outputs, and AI-free mode.
+  paths/overrides, registered compiler outputs, and AI-free mode. Since
+  manifest schema 2 they also name the project's `game`, which wins over the
+  installation's when they differ.
+- Each installation can have a game asset index: a read-only scan of its stock
+  packages recording every file (path, size, CRC-32), every Quake III shader
+  declaration and every Doom-family name. **Index Assets** on the Workspace
+  page, **Project** > **Index Game Assets**, and `install register build`
+  create it in the background; it is saved beside the settings as
+  `asset-registers/<id>.json`, never inside the installation. The Workspace
+  row shows "assets indexed", "assets not indexed" or "asset index out of
+  date", and **Project Health** offers to index a linked installation that has
+  no usable index. Releases use it to leave the game's own files out, and the
+  Levels **Dependencies** check uses it to mark references the game provides.
+  See [Project releases](PROJECT_RELEASES.md#the-game-asset-index).
 
 ## Goals
 - Detect installed games without modifying them.
@@ -65,7 +78,9 @@ Each profile should eventually include:
   arguments planned]
 - Palette and texture defaults. [palette default active; texture defaults
   planned]
-- Compiler profile defaults. [active]
+- Compiler profile defaults. [active: `vibemap2` for Quake and Quake II,
+  `vibemap3` for Quake III; profiles saved with the earlier `ericw-tools` and
+  `q3map2` labels migrate automatically]
 - Validation rules for required files. [active]
 - Project-local selected-install overrides. [active]
 
@@ -79,6 +94,10 @@ as a profile change. Review details, backup behavior and source-port limitations
 are documented in [prepared builds](LEVEL_EDITOR.md#prepared-builds-with-current-assets).
 
 - Detection must be read-only.
+- Indexing an installation's assets must be read-only, and the index stays
+  outside the installation.
 - Profile creation must be user-confirmed.
 - Package writes should happen through staged project/package workflows.
-- Never assume commercial game data can be redistributed.
+- Never assume commercial game data can be redistributed. Releases leave every
+  file the game asset index lists out of the package unless the project's copy
+  differs, and say when the game's files could not be checked.

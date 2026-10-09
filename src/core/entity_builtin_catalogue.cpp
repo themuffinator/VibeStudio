@@ -23,14 +23,14 @@
 //   (code/botlib/be_ai_goal.c) from the same revision. Compiler keys that
 //   id's q3map does not read (_blocksize, _ambient, the light noincidence
 //   flag, and the misc_model angles and modelscale keys) follow q3map2 from
-//   NetRadiant Custom (GPL-2.0 or later), which VibeStudio ships in
-//   external/compilers/q3map2-nrc.
+//   NetRadiant Custom (GPL-2.0 or later), which VibeStudio ships as VibeMap3 in
+//   external/compilers/vibemap3.
 //
 // - Quake compiler classes (func_group and func_detail with its _illusionary,
 //   _wall and _fence variants) follow the qbsp documentation of ericw-tools
 //   (GPL-2.0 or later), docs/qbsp.rst at
 //   https://github.com/ericwa/ericw-tools/blob/f80b1e216a415581aea7475cb52b16b8c4859084/docs/qbsp.rst,
-//   which VibeStudio ships in external/compilers/ericw-tools.
+//   which VibeStudio ships as VibeMap2 in external/compilers/vibemap2.
 //
 // Where a QUAKED comment and the code disagree, the tables follow the code:
 // for example the Quake II func_button wait of 3 and func_train dmg of 100.

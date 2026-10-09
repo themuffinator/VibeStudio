@@ -1,4 +1,4 @@
-"""Original prefab -> Models -> q3map2 -> package integration proof.
+"""Original prefab -> Models -> VibeMap3 -> package integration proof.
 
 Use --output-root below the project's .agents/tmp. --compiler is optional;
 without it, this still exercises CLI validation, dependencies and PK3 round trips.

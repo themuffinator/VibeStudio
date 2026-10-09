@@ -10,6 +10,7 @@
 #include "tests/level_material_test_helpers.h"
 #include "tests/level_object_test_helpers.h"
 #include "tests/level_surface_test_helpers.h"
+#include "tests/render_test_support.h"
 #include <QAccessible>
 #include <QAction>
 #include <QApplication>
@@ -95,6 +96,10 @@ int main(int argc, char** argv)
 	qputenv("QT_QPA_FONTDIR", QDir(qEnvironmentVariable("SystemRoot")).filePath("Fonts").toLocal8Bit());
 #endif
 	QApplication app(argc, argv); QApplication::setFont(QFont("Segoe UI"));
+	// Draws in 3D: skip where no OpenGL or Vulkan renderer starts.
+	if (const int skip = vibestudio::test_support::exitCodeWithoutRenderer("level-surface-clipboard-ui-smoke"); skip >= 0) {
+		return skip;
+	}
 	QTemporaryDir temp; if (!temp.isValid()) { return 1; }
 	StudioSettings::setOverrideFilePath(temp.filePath("settings.ini")); StudioSettings settings;
 	settings.setRestoreSession(false); settings.setReducedMotion(true);

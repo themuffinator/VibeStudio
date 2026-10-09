@@ -13,6 +13,7 @@
 #include "app/material_workbench.h"
 #include "app/studio_theme.h"
 #include "core/package_archive.h"
+#include "tests/render_test_support.h"
 
 #include <QAccessible>
 #include <QApplication>
@@ -295,11 +296,16 @@ int main(int argc, char** argv)
 		}
 		return done;
 	};
+	// Without OpenGL or Vulkan the preview finishes with the reason instead of
+	// a picture; everything else on the page works the same.
+	const int renderSkip = vibestudio::test_support::exitCodeWithoutRenderer("material-workbench-ui-smoke");
+	expect(renderSkip != 1, "VIBESTUDIO_RENDER_REQUIRE is set, but no 3D renderer starts");
+	const bool canRender = renderSkip < 0;
 	const auto rendered = [&]() {
 		// A playing preview always has a frame coming; a drawn one is enough.
 		return waitFor([&]() {
-			return !workbench.isBusy() && !workbench.preview()->lastImage().isNull()
-				&& (workbench.preview()->isPlaying() || !workbench.preview()->renderPending());
+			const bool finished = canRender ? !workbench.preview()->lastImage().isNull() : !workbench.preview()->lastResult().error.isEmpty();
+			return !workbench.isBusy() && finished && (workbench.preview()->isPlaying() || !workbench.preview()->renderPending());
 		});
 	};
 

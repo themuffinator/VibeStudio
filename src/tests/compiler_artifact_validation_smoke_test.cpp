@@ -65,12 +65,12 @@ QByteArray hexen2AlignedQuakeHeader()
 	return bytes;
 }
 
-vibestudio::CompilerCommandManifest manifestForOutput(const QString& path, const QString& profileId = QStringLiteral("ericw-qbsp"))
+vibestudio::CompilerCommandManifest manifestForOutput(const QString& path, const QString& profileId = QStringLiteral("vibemap2-bsp"))
 {
 	vibestudio::CompilerCommandManifest manifest;
 	manifest.profileId = profileId;
-	manifest.toolId = profileId.startsWith(QStringLiteral("q3map2")) ? QStringLiteral("q3map2") : profileId;
-	manifest.engineFamily = profileId.startsWith(QStringLiteral("q3map2")) ? QStringLiteral("idTech3") : QStringLiteral("idTech2");
+	manifest.toolId = profileId.startsWith(QStringLiteral("vibemap3")) ? QStringLiteral("vibemap3") : profileId;
+	manifest.engineFamily = profileId.startsWith(QStringLiteral("vibemap3")) ? QStringLiteral("idTech3") : QStringLiteral("idTech2");
 	manifest.expectedOutputPaths = {path};
 	return manifest;
 }
@@ -115,9 +115,9 @@ int main(int argc, char** argv)
 	if (!writeFile(q3Path, minimalQuake3Bsp())) {
 		return fail("Expected Q3 BSP fixture.");
 	}
-	const vibestudio::CompilerArtifactValidationReport q3Report = vibestudio::validateCompilerArtifacts(manifestForOutput(q3Path, QStringLiteral("q3map2-bsp")));
+	const vibestudio::CompilerArtifactValidationReport q3Report = vibestudio::validateCompilerArtifacts(manifestForOutput(q3Path, QStringLiteral("vibemap3-bsp")));
 	if (q3Report.hasErrors()) {
-		return fail("Expected minimal Quake III BSP header to validate for q3map2 profile.");
+		return fail("Expected minimal Quake III BSP header to validate for VibeMap3 profile.");
 	}
 	// A v46 payload begins after 17 lumps, not after the Quake Live extension.
 	QByteArray q3Entities = minimalQuake3Bsp();
@@ -126,12 +126,12 @@ int main(int argc, char** argv)
 	qToLittleEndian<qint32>(entities.size(), reinterpret_cast<uchar*>(q3Entities.data() + 12));
 	q3Entities += entities;
 	if (!writeFile(q3Path, q3Entities) ||
-		vibestudio::validateCompilerArtifacts(manifestForOutput(q3Path, QStringLiteral("q3map2-bsp"))).hasErrors()) {
+		vibestudio::validateCompilerArtifacts(manifestForOutput(q3Path, QStringLiteral("vibemap3-bsp"))).hasErrors()) {
 		return fail("Expected Quake III entity bytes immediately after its 17-lump header to validate.");
 	}
-	const vibestudio::CompilerArtifactValidationReport wrongProfileReport = vibestudio::validateCompilerArtifacts(manifestForOutput(q3Path, QStringLiteral("ericw-qbsp")));
+	const vibestudio::CompilerArtifactValidationReport wrongProfileReport = vibestudio::validateCompilerArtifacts(manifestForOutput(q3Path, QStringLiteral("vibemap2-bsp")));
 	if (!containsText(wrongProfileReport.warnings, QStringLiteral("#278"))) {
-		return fail("Expected rough BSP family mismatch warning for ericw profile.");
+		return fail("Expected rough BSP family mismatch warning for VibeMap2 profile.");
 	}
 
 	// "-qbism" is a real qbsp target flag; substring matching on "q2bsp"/"quake2" used to miss it
@@ -156,21 +156,21 @@ int main(int argc, char** argv)
 	if (!writeFile(q2Path, q2)) {
 		return fail("Expected Quake II BSP fixture.");
 	}
-	for (const auto& tool : QStringList{QStringLiteral("ericw-vis"), QStringLiteral("ericw-light")}) {
+	for (const auto& tool : QStringList{QStringLiteral("vibemap2-vis"), QStringLiteral("vibemap2-light")}) {
 		for (const auto& path : QStringList{q2Path, qbismPath}) {
 			const auto report = vibestudio::validateCompilerArtifacts(manifestForOutput(path, tool));
 			if (report.hasErrors() || !report.warnings.isEmpty()) {
-				return fail("Expected ericw VIS/LIGHT to preserve Quake II and Qbism without QBSP target flags.");
+				return fail("Expected VibeMap2 VIS/LIGHT to preserve Quake II and Qbism without QBSP target flags.");
 			}
 		}
 		if (!containsText(vibestudio::validateCompilerArtifacts(manifestForOutput(q3Path, tool)).warnings,
 						  QStringLiteral("does not match the selected compiler profile"))) {
-			return fail("Expected ericw VIS/LIGHT to still reject Quake III profile expectations.");
+			return fail("Expected VibeMap2 VIS/LIGHT to still reject Quake III profile expectations.");
 		}
 	}
 	qToLittleEndian<qint32>(999, reinterpret_cast<uchar*>(q2.data() + 4));
 	if (!writeFile(q2Path, q2) ||
-		!vibestudio::validateCompilerArtifacts(manifestForOutput(q2Path, QStringLiteral("ericw-light"))).hasErrors()) {
+		!vibestudio::validateCompilerArtifacts(manifestForOutput(q2Path, QStringLiteral("vibemap2-light"))).hasErrors()) {
 		return fail("Expected an unknown IBSP version to fail instead of being treated as Quake II.");
 	}
 
@@ -209,7 +209,7 @@ int main(int argc, char** argv)
 	if (!writeFile(bspxPath, minimalQuakeBsp())) {
 		return fail("Expected BSPX metadata gap fixture.");
 	}
-	vibestudio::CompilerCommandManifest bspxManifest = manifestForOutput(bspxPath, QStringLiteral("ericw-light"));
+	vibestudio::CompilerCommandManifest bspxManifest = manifestForOutput(bspxPath, QStringLiteral("vibemap2-light"));
 	bspxManifest.arguments = {QStringLiteral("-lmshift"), QStringLiteral("3"), QStringLiteral("-world_units_per_luxel"), QStringLiteral("8")};
 	const vibestudio::CompilerArtifactValidationReport bspxReport = vibestudio::validateCompilerArtifacts(bspxManifest);
 	if (!containsText(bspxReport.warnings, QStringLiteral("#309")) || !containsText(bspxReport.warnings, QStringLiteral("#399")) || !containsText(bspxReport.warnings, QStringLiteral("#415")) || !containsText(bspxReport.warnings, QStringLiteral("#249"))) {
@@ -221,7 +221,7 @@ int main(int argc, char** argv)
 	if (!writeFile(bspxFlagPath, minimalQuakeBsp())) {
 		return fail("Expected bare -bspx fixture.");
 	}
-	vibestudio::CompilerCommandManifest bspxFlagManifest = manifestForOutput(bspxFlagPath, QStringLiteral("ericw-light"));
+	vibestudio::CompilerCommandManifest bspxFlagManifest = manifestForOutput(bspxFlagPath, QStringLiteral("vibemap2-light"));
 	bspxFlagManifest.arguments = {QStringLiteral("-bspx")};
 	const vibestudio::CompilerArtifactValidationReport bspxFlagReport = vibestudio::validateCompilerArtifacts(bspxFlagManifest);
 	if (!containsText(bspxFlagReport.warnings, QStringLiteral("RGBLIGHTING")) || !containsText(bspxFlagReport.warnings, QStringLiteral("LIGHTINGDIR"))) {

@@ -66,14 +66,15 @@ writer's native winding is correct.
 
 ## Reproduction
 
-Supply a built VibeStudio CLI, ericw-tools `qbsp`, q3map2, FTE's server-only
-executable and FTEQCC. No tool is downloaded or installed by the workflow.
+Supply a built VibeStudio CLI, VibeMap2 `vibemap2-bsp` (or ericw-tools
+`qbsp`), VibeMap3 (or q3map2), FTE's server-only executable and FTEQCC.
+No tool is downloaded or installed by the workflow.
 These optional GPL tools stay separate executables; no engine library is linked
 into VibeStudio. Use an unmodified reference source/build and retain its revision
 or source inventory beside the evidence.
 
 ```sh
-python src/tests/model_engine_workflow.py --binary <vibestudio> --qbsp <qbsp> --q3map2 <q3map2> --engine <fteqw-sv> --qcc <fteqcc> --output-root .agents/tmp/modeller-engine-proof
+python src/tests/model_engine_workflow.py --binary <vibestudio> --qbsp <vibemap2-bsp> --q3map2 <vibemap3> --engine <fteqw-sv> --qcc <fteqcc> --output-root .agents/tmp/modeller-engine-proof
 ```
 
 On Windows, supply local paths to Linux ELF server/compiler binaries and append

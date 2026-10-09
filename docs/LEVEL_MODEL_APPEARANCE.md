@@ -40,7 +40,9 @@ run material/dependency review before packaging or building.
 
 The contract follows the pinned NetRadiant Custom q3map2 importer, reviewed in
 [Credits](CREDITS.md#placed-model-compiler-appearances). It is separate from the
-[native player skin workflow](MODEL_MESH.md#quake-iii-skin-assignments).
+[native player skin workflow](MODEL_MESH.md#quake-iii-skin-assignments). It was
+verified against NetRadiant Custom q3map2 before VibeStudio moved to its own
+VibeMap3 compiler, and has not been rechecked with VibeMap3 yet.
 
 | Entity value for `models/prop.md3` | Compiler file |
 | --- | --- |
@@ -128,9 +130,10 @@ high contrast, RTL and translation expansion. It uses owned Qt APIs and
 The optional real compiler proof uses synthetic assets and inspects BSP data:
 
 ```sh
-python src/tests/level_model_appearance_compiler_workflow.py --binary builddir/src/vibestudio --compiler /path/to/q3map2 --output-root .agents/tmp/model-appearance-proof
+python src/tests/level_model_appearance_compiler_workflow.py --binary builddir/src/vibestudio --compiler /path/to/vibemap3 --output-root .agents/tmp/model-appearance-proof
 ```
 
 The accepted local executable and source revision are recorded in the scoped
-milestone evidence. This is a Windows compiler/UI check, not cross-platform
-release approval.
+milestone evidence; they are NetRadiant Custom q3map2 builds, and the proof has
+not been rerun with VibeMap3. This is a Windows compiler/UI check, not
+cross-platform release approval.

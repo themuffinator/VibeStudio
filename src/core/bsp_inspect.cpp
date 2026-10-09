@@ -36,7 +36,7 @@ namespace {
 //
 // Quake III IBSP v46: the released Quake III Arena source `qfiles.h`
 // (https://github.com/id-Software/Quake-III-Arena/blob/master/code/qcommon/qfiles.h).
-// Raven RBSP v1: the q3map2 sources imported under external/compilers
+// Raven RBSP v1: the q3map2 sources VibeMap3 carries under external/compilers/vibemap3
 // (`game_*.h` / `bspfile_rbsp.c`, `rbspDrawSurface_t`, `rbspDrawVert_t`).
 //
 // Portal (.prt) and leak point (.pts/.lin) text files: qbsp/vis output as

@@ -133,7 +133,7 @@ through `ModelPreviewWorker`; the Sounds tab decodes through
 sound selects the new entity, so its keys are on the Inspector at once, and
 the Models and Sounds tabs offer Give to Selection whenever an entity is
 selected. Their Place sections name the class each makes in the open map
-(`misc_model` and a speaker, baked by q3map2 in Quake III) and say so when the
+(`misc_model` and a speaker, baked by VibeMap3 in Quake III) and say so when the
 loaded definitions do not declare it, as Quake's own do not. The Surfaces tab
 is `LevelSurfaceTools`, which scrolls by itself and brings its own Target,
 Adjust and Copy and Paste sections; the page adopts them
@@ -481,7 +481,7 @@ only when all inputs succeed. The original map and draft remain unchanged.
 
 **Use in Build** pins the captured map as the Build input. It refuses a handoff
 if the live map or package changed during preparation. Later edits need a new
-workspace. Existing ericw-tools/q3map2 pipelines, logs, cancellation, diagnostics, artifact
+workspace. Existing VibeMap2/VibeMap3 pipelines, logs, cancellation, diagnostics, artifact
 validation and command manifests remain the execution path. Every run verifies
 the captured inputs before starting a compiler and checks them again afterwards.
 Missing, changed or unexpected asset files fail the build, including failures
@@ -564,8 +564,8 @@ The target selector distinguishes Quake and Quake II's shared MAP grammar and
 honors a saved Quake II target marker. Quake uses `game/id1`, Quake II uses
 `game/baseq2`, and Quake III uses `game/baseq3` with an isolated home folder.
 Quake/Quake II use `quake-full`, `quake-fast` or `quake-bsp-only`, with separate
-ericw-tools executables, explicit asset lookup and per-stage logs. Quake II adds
-`-q2bsp`; Quake III retains its q3map2 BSP/full pipelines and base/home flags.
+VibeMap2 executables, explicit asset lookup and per-stage logs. Quake II adds
+`-q2bsp`; Quake III retains its VibeMap3 BSP/full pipelines and base/home flags.
 
 Quake captures native loose `.mip` textures and WAD2 texture lumps into
 `maps/<name>.wad`, preserving animation frames and liquid names. Only the private
@@ -584,7 +584,7 @@ retrying up to six times over 310 ms. Every attempt rechecks cancellation,
 ancestor links and destination absence; a newly appeared destination is kept.
 
 Quake `.lit` and `.lux` files are runtime outputs and publish alongside the BSP.
-Portal/leak files, ericw texture/content metadata, visibility state and per-stage
+Portal/leak files, VibeMap2 texture/content metadata, visibility state and per-stage
 logs stay diagnostic. **Include build sources** includes the map and generated
 Quake WAD; these two inputs are otherwise omitted. PAK uses the existing portable
 name/size checks and stores files without compression. Package review keeps a
@@ -664,7 +664,7 @@ recorder checks the actual numbered PAK search and published map bytes before
 recording arguments. `level-classic-deployment-ui-smoke` covers both engines'
 slot controls and shell Prepare → Build and Launch → Deploy handoff, plus 100%/
 200% text, dark/high-contrast themes, RTL, expanded labels and live worker UI.
-The real ericw workflow accepts `--recorder builddir/src/level_classic_deployment_smoke_test`
+The real Quake-family compiler workflow accepts `--recorder builddir/src/level_classic_deployment_smoke_test`
 to extend texture/model/audio capture and complete PAK verification through
 installation deployment, stable-slot backup, review-token refusal and recorder
 launch. On Windows use the `.exe` suffix. Evidence for this round belongs under
@@ -674,6 +674,12 @@ targets, and all 11 final Meson regression suites passed. Test binary hashes
 stayed unchanged; the tested production binary matched the real compiler proof.
 The inventory and validation summary distinguish recorder/UI evidence from
 the remaining native runtime and accessibility acceptance work.
+
+The dated compiler runs in this document used stock ericw-tools (2.0.0-alpha8)
+and NetRadiant Custom q3map2 (`2.5.17n-git-e62c6f4b` where noted), before
+VibeStudio moved to its own VibeMap2 and VibeMap3 compilers. None has been
+repeated with VibeMap2 or VibeMap3 yet; see
+[Compiler Integration](COMPILER_INTEGRATION.md#status).
 
 ## Scene Organization
 
@@ -741,7 +747,7 @@ acknowledgement. Build with the normal preset and run, for example,
 `builddir/src/level_map_load_benchmark 10000` (`.exe` on Windows), with temporary
 storage under `.agents/tmp`. Its timings are local evidence, not CI thresholds
 or proof of production performance. It does not measure a full shell refresh,
-native input, software rendering or asset decoding.
+native input, 3D rendering or asset decoding.
 
 ## Geometry Reuse and Scale Measurements
 
@@ -786,7 +792,7 @@ Nearby edges retain their original coordinates, and ownership colors retain
 their original drawing order. Invalid brushes retain their dashed warning boxes
 and crosses. Picking, selection cycling, undo, map saving and compiler inputs
 continue to use complete objects; drawing reuse never merges map objects. Edge
-coverage uses the same antialiased CPU renderer as model previews, so stroke
+coverage uses the shared antialiased 2D line painter (`app/wire_lines`), so stroke
 brightness no longer builds up from repeated coincident faces in a pen run.
 
 Wire data has a 32 MiB payload ceiling, 262,144 unique-edge ceiling, 65,536-batch
@@ -906,7 +912,7 @@ live primary markers and handles. A move that changes this fractional origin
 refreshes the image; a whole-physical-pixel move can reuse it. The leading and
 trailing coverage pixels count against the unchanged image ceiling. Rotation,
 shear and nonuniform target transforms retain complete ordinary drawing.
-Selected dashes in the shared Levels/Models CPU renderer use a stable endpoint
+Selected dashes in the shared 2D line painter use a stable endpoint
 anchor independent of the scan axis; rounding near a diagonal no longer reverses
 the pattern. This changes the dash origin of steep falling edges without changing
 their stroke geometry, picking, source or selection identities.
@@ -1080,7 +1086,7 @@ capture, network service or AI connector is needed.
 
 These synthetic boxes test geometry reuse, not complete production performance.
 The harness's camera time includes the existing 60 ms debounce and mesh/UV
-assembly, but excludes software rasterization. The first widget render includes
+assembly, but excludes GPU rendering. The first widget render includes
 font/platform initialization. Cold cache creation can cost more than a fresh
 uncached solve. Parser throughput, complex brushes, patches, Doom sectors,
 large material sets, realistic projects, memory peaks and native platforms
@@ -1788,7 +1794,7 @@ Flat, non-finite, out-of-world or numerically unstable results are refused.
 Every dimension is at least one map unit and every vertex is within ±32768.
 Radial shapes can use fractional coordinates. The existing qbsp advisory remains
 available for Quake-family qbsp targets; it no longer flags Quake III maps that
-use q3map2. Quake/Quake II compiler acceptance requires separate verification.
+use VibeMap3. Quake/Quake II compiler acceptance requires separate verification.
 
 Vertices fit the requested world-aligned bounds, including odd-sided polygons.
 A Z-axis wedge rises along +X and extrudes along Y. X/Y axis choices cyclically
@@ -1982,7 +1988,7 @@ cancellation; the existing Surfaces controls provide keyboard alternatives.
   Failure, cancellation or stale context advances neither document nor clipboard.
   Undo restores the map; the session clipboard remains at its last successful copy.
 - **Allow map-wide Valve 220 conversion** explicitly permits converting all
-  classic faces when projected or wrapped mapping requires shear. q3map2 chooses syntax
+  classic faces when projected or wrapped mapping requires shear. VibeMap3, like q3map2, chooses syntax
   from the first face, so conversion keeps the entire map consistent. Unpasted
   materials, flags and UVs remain unchanged. Unselected locks still apply; any
   locked or invalid face rejects the whole batch. Verify compiler support for
@@ -2344,7 +2350,7 @@ Texture lock preserves the texture coordinates of every point on a brush face.
 Valve 220 axes and brushDef/brushDef3 matrices retain their dialect. Classic
 shift/rotation/scale fields are solved exactly when possible. A rotation that
 requires shear fails unless **Allow Valve 220 conversion** is enabled. Because
-q3map2 selects one texture dialect for the whole map, this option converts *all*
+VibeMap3, like q3map2, selects one texture dialect for the whole map, this option converts *all*
 classic faces when needed, including unselected brushes, while preserving their
 appearance. All affected faces are reported in the preview and included in the
 same undo step. Conversion refuses maps containing brush-primitive matrices.
@@ -2637,9 +2643,9 @@ The Surface / UV Checker tab previews the tessellated result with a procedural
 checker, not the selected game's material. Shared level preview meshes now carry
 interpolated patch UVs. Existing `patchDef3` subdivision counts are retained and
 used on each preview axis; the creation presets write `patchDef2`. Compiler
-support depends on the map dialect: the bundled q3map2 source accepts
-`patchDef2`, so preserving a loaded `patchDef3` does not establish Quake III
-compiler compatibility.
+support depends on the map dialect: the bundled VibeMap3 source, like q3map2,
+accepts `patchDef2` but not `patchDef3`, so preserving a loaded `patchDef3` does
+not establish Quake III compiler compatibility.
 
 Editing normalizes the patch's own text block, retaining its header extension
 fields and comments. Unrelated map text stays intact. Patches whose opening or
@@ -2658,7 +2664,7 @@ vibestudio --cli map edit-patch arena-raised.map --patch 0 --point 1,2 --uv 0.25
 Use `--columns`, `--rows` and `--plane xy|xz|yz` for planes; curved presets always
 use nine columns. `--texture` is required. A leading
 `textures/` is removed once from material choices for `patchDef2`, because
-q3map2 supplies that prefix; existing map tokens retain their spelling.
+the compiler (VibeMap3, like q3map2) supplies that prefix; existing map tokens retain their spelling.
 The Health texture check follows the planned package, including staged edits and
 Undo/Redo. It runs in the background with visible progress, Cancel and Retry;
 changes to either document supersede older requests. Missing references and

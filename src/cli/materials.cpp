@@ -1,5 +1,7 @@
 #include "cli/materials.h"
 
+#include "cli/render.h"
+
 #include "core/material_classic.h"
 #include "core/material_eval.h"
 #include "core/material_graph.h"
@@ -40,6 +42,7 @@ constexpr int kFailure = 1;
 constexpr int kUsage = 2;
 constexpr int kNotFound = 3;
 constexpr int kValidationFailed = 4;
+constexpr int kUnavailable = 5;
 
 constexpr qint64 kMaximumEditBytes = 4LL * 1024 * 1024;
 constexpr qint64 kMaximumWalBytes = 16LL * 1024 * 1024;
@@ -1100,7 +1103,7 @@ MaterialsCliResult renderCommand(const QStringList& arguments)
 		QStringLiteral("--doom-light"), QStringLiteral("--doom-extralight"), QStringLiteral("--quake-renderer"), QStringLiteral("--quake-style"),
 		QStringLiteral("--quake-lightmap"), QStringLiteral("--quake2-intensity"), QStringLiteral("--light-color"), QStringLiteral("--light-angle"),
 		QStringLiteral("--doom3-shading"), QStringLiteral("--ambient"), QStringLiteral("--parms"), QStringLiteral("--sound"), QStringLiteral("--filter"),
-		QStringLiteral("--background"), QStringLiteral("--seed"), QStringLiteral("--sky")});
+		QStringLiteral("--background"), QStringLiteral("--seed"), QStringLiteral("--sky"), QStringLiteral("--renderer")});
 	const QSet<QString> flags {QStringLiteral("--dry-run"), QStringLiteral("--overwrite"), QStringLiteral("--swatch"), QStringLiteral("--orthographic"),
 		QStringLiteral("--flat-lightmap"), QStringLiteral("--no-overbright"), QStringLiteral("--no-doom-distance"), QStringLiteral("--no-fake-contrast"),
 		QStringLiteral("--boom-wrapping"), QStringLiteral("--no-specular"), QStringLiteral("--alternate"), QStringLiteral("--editor-image"),
@@ -1143,6 +1146,9 @@ MaterialsCliResult renderCommand(const QStringList& arguments)
 	if (const int code = readRenderOptions(args, &render, &error)) {
 		return fail(code, error);
 	}
+	if (!applyRendererChoice(arguments, &error)) {
+		return fail(kUsage, error);
+	}
 	const bool swatch = args.has(QStringLiteral("--swatch"));
 	const int side = std::min(render.size.width(), render.size.height());
 	const QSize frameSize = swatch ? QSize(side, side) : render.size;
@@ -1162,6 +1168,7 @@ MaterialsCliResult renderCommand(const QStringList& arguments)
 	QJsonArray frameList;
 	QStringList notes;
 	bool fallback = false;
+	QString renderer;
 	for (int frame = 0; frame < frames; ++frame) {
 		const double time = render.time + frame / fps;
 		MaterialRenderResult rendered;
@@ -1172,6 +1179,11 @@ MaterialsCliResult renderCommand(const QStringList& arguments)
 			each.time = time;
 			rendered = renderMaterial(definition, images, source.library.tables, each);
 		}
+		if (rendered.image.isNull()) {
+			const QString detail = rendered.errorDetail.isEmpty() ? QString() : QStringLiteral(" (%1)").arg(rendered.errorDetail);
+			return fail(kUnavailable, Text::tr("%1 could not be drawn: %2").arg(definition.name, rendered.error + detail));
+		}
+		renderer = rendered.renderer;
 		if (frames == 1) {
 			sheet = rendered.image;
 		} else {
@@ -1217,6 +1229,7 @@ MaterialsCliResult renderCommand(const QStringList& arguments)
 	payload.insert(QStringLiteral("columns"), columns);
 	payload.insert(QStringLiteral("frames"), frameList);
 	payload.insert(QStringLiteral("fallback"), fallback);
+	payload.insert(QStringLiteral("renderer"), renderer);
 	payload.insert(QStringLiteral("notes"), QJsonArray::fromStringList(notes));
 	payload.insert(QStringLiteral("missingImages"), QJsonArray::fromStringList(images.missing()));
 	payload.insert(QStringLiteral("outputPath"), output.isEmpty() ? QString() : QFileInfo(output).absoluteFilePath());

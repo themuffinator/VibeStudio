@@ -17,7 +17,8 @@ package, or **VibeStudio Documentation** in the Start menu on Windows).
 | [Project status](manual/status.md) | [Level editing](manual/levels.md) | [Command line](manual/cli.md) |
 | [Install VibeStudio](manual/install.md) | [Editor profiles and controls](manual/editor-profiles.md) | [Troubleshooting and FAQ](manual/troubleshooting.md) |
 | [First-run setup](manual/first-run.md) | [Packages](manual/packages.md) | [Build from source](manual/building-from-source.md) |
-| [A tour of the studio](manual/tour.md) | [Textures and sprites](manual/textures.md) | [Changelog](../CHANGELOG.md) |
+| [A tour of the studio](manual/tour.md) | [Package and release](manual/releases.md) | [Changelog](../CHANGELOG.md) |
+| | [Textures and sprites](manual/textures.md) | |
 | | [Models](manual/models.md) | |
 | | [Audio](manual/audio.md) | |
 | | [Code, scripts and shaders](manual/code.md) | |
@@ -54,7 +55,7 @@ the code; the manual and the support matrix describe what ships.
 | Levels | [Level editor](LEVEL_EDITOR.md), [Level scenes](LEVEL_SCENE.md), [Placed model appearances](LEVEL_MODEL_APPEARANCE.md), [Editor profiles](EDITOR_PROFILES.md) |
 | Models | [Editable meshes](MODEL_MESH.md), [Native formats and skeletons](MODEL_FORMATS.md), [Modeller profiles and layout](MODELLER_PROFILES.md), [Mesh tools](MODEL_TOOLS.md), [Model design](MODEL_DESIGN.md), [Assemblies](MODEL_ASSEMBLY.md), [Surfaces](MODEL_SURFACES.md), [Material slots](MODEL_MATERIAL_SLOTS.md), [Collision](MODEL_COLLISION.md), [Engine acceptance](MODEL_ENGINE_ACCEPTANCE.md), [Modeller release gate](MODELLER_RELEASE.md) |
 | Textures and audio | [Texture editor](TEXTURE_EDITOR.md), [Audio editor](AUDIO_EDITOR.md), [Duplex recording](AUDIO_DUPLEX.md), [Shared asset formats](ASSET_FORMATS.md) |
-| Packages and code | [Package manager](PACKAGE_MANAGER.md), [Code editor](CODE_EDITOR.md), [Language services](LANGUAGE_SERVICES.md), [Project search](PROJECT_SEARCH.md) |
+| Packages and code | [Package manager](PACKAGE_MANAGER.md), [Project releases and the game asset index](PROJECT_RELEASES.md), [Code editor](CODE_EDITOR.md), [Language services](LANGUAGE_SERVICES.md), [Project search](PROJECT_SEARCH.md) |
 | Build, games and automation | [Compiler integration](COMPILER_INTEGRATION.md), [Game installations](GAME_INSTALLATIONS.md), [CLI strategy and reference](CLI_STRATEGY.md), [AI automation](AI_AUTOMATION.md) |
 | Release history and audits | [0.1.0 foundation cut](RELEASE_CANDIDATE.md), [audit plans](plans/package-manager-release-candidate.md) in `docs/plans/` |
 

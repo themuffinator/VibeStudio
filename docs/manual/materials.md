@@ -74,6 +74,11 @@ instead (Quake III's default shader, for example) and says why under the
 picture. Turn off **Show What the Engine Draws Instead** to see the stages
 anyway.
 
+The preview and the swatches draw with your graphics card, through the 3D
+renderer chosen in **Settings** > **Appearance and Language** > **3D
+Rendering**. If neither OpenGL nor Vulkan works, the preview says why; see
+[3D views stay empty](troubleshooting.md#3d-views-stay-empty).
+
 ## Edit as nodes
 
 The **Nodes** tab shows the material as a graph: images and coordinate,
@@ -141,6 +146,9 @@ vibestudio --cli material list ./baseq3 --where "animated=yes" --json
 vibestudio --cli material validate ./mymod --base ./baseq3
 vibestudio --cli material render ./baseq3 --material textures/sfx/fire_ctfblue --frames 8 --fps 10 --output fire.png
 ```
+
+`material render` draws with the same renderer; add `--renderer opengl` or
+`--renderer vulkan` to choose one for that run.
 
 <details>
 <summary>All material commands</summary>

@@ -467,7 +467,7 @@ UV preparation and drawing stay on the cancellable preview worker. The image
 has a 4,194,304-pixel ceiling, including extreme aspect ratios. Selection fills
 cancel exactly shared internal borders and simplify exactly collinear contour
 segments. The separate wire and pick geometry retains every indexed edge and
-face. Wires reuse the studio's antialiased CPU renderer; opaque tile reuse skips
+face. Wires use the studio's antialiased 2D line painter (`app/wire_lines`); opaque tile reuse skips
 only pixels already proven unchanged by another stroke of the same color.
 This changes neither mesh data nor GUI/CLI authoring, history, recovery or export.
 

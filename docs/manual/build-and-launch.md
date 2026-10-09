@@ -1,26 +1,39 @@
 # Build and launch
 
-The Build page compiles your map with the community's standard compilers, shows each problem where it
-happens, and starts the game with the result. This page covers setting up the compilers, running a
-build, fixing problems and leaks, and launching a test.
+The Build page compiles your map with VibeStudio's own VibeMap2 and VibeMap3 compilers or the Doom
+node builders, shows each problem where it happens, and starts the game with the result. This page
+covers setting up the compilers, running a build, fixing problems and leaks, and launching a test.
 
 > [!NOTE]
-> **Status: Partial.** Build pipelines for Quake, Quake III and Doom maps run ericw-tools, q3map2,
+> **Status: Partial.** Build pipelines for Quake, Quake III and Doom maps run VibeMap2, VibeMap3,
 > ZDBSP and ZokumBSP and report problems, leaks and outputs. VibeStudio does not include the
-> compilers themselves, and only a few compiler and game combinations have been tested end to end.
+> compiler programs yet, and only a few compiler and game combinations have been tested end to end.
+> On 2026-10-08 VibeMap2 and VibeMap3 passed VibeStudio's Quake, Quake II and Quake III prepared-build
+> tests on Windows; other platforms, games and the older stock-compiler tests are still to be repeated.
 
 ## Install the compilers
 
-VibeStudio runs four external compilers. Their source code is kept with the VibeStudio source for
-reference and licence review, but VibeStudio builds do not include the compiler programs: install the
-ones you need from their own projects.
+VibeStudio runs four compilers. VibeMap2 and VibeMap3 are VibeStudio's own, developed as part of the
+project: VibeMap2 is derived from ericw-tools and VibeMap3 continues q3map2 from NetRadiant Custom.
+ZDBSP and ZokumBSP are external projects. The source code of all four is kept with the VibeStudio
+source, but VibeStudio builds do not include the compiler programs yet: build or download the ones
+you need from their own projects.
 
 | Compiler | Used for | Programs |
 | --- | --- | --- |
-| [ericw-tools](https://github.com/ericwa/ericw-tools) | Quake-family maps | `qbsp`, `vis`, `light` |
-| [q3map2 from NetRadiant Custom](https://github.com/Garux/netradiant-custom) | Quake III-family maps | `q3map2` |
+| [VibeMap2](https://github.com/themuffinator/VibeyMapTools) | Quake and Quake II maps | `vibemap2-bsp`, `vibemap2-vis`, `vibemap2-light` |
+| [VibeMap3](https://github.com/themuffinator/q3mapx) | Quake III-family maps | `vibemap3` |
 | [ZDBSP](https://github.com/rheit/zdbsp) | Doom-family nodes | `zdbsp` |
 | [ZokumBSP](https://github.com/zokum-no/zokumbsp) | Doom-family nodes, blockmap and reject | `zokumbsp` |
+
+VibeMap2 releases come as `vibemap2-windows-<version>.zip`, `vibemap2-linux-<version>.tar.gz` and
+`vibemap2-macos-<version>.tar.gz`, with every program at the top of the archive. Add the extracted
+folder to your PATH or to the project's compiler search paths, and VibeStudio finds the programs.
+
+VibeStudio also finds VibeMap2 and VibeMap3 under their earlier names (`vmt-bsp` and the other
+`vmt-` programs, and `q3mapx`), and in their build folders when you build them from the copies in
+`external/compilers`. Stock ericw-tools (`qbsp`, `vis`, `light`) and q3map2 are not found
+automatically; to use one, choose its program with **Locate…** as described below.
 
 ## Point VibeStudio at your compilers
 
@@ -41,7 +54,7 @@ they win over your choice, and **Path from** shows **Project manifest**; see
 [Projects and game installations](projects.md#describe-the-project-with-a-manifest).
 
 **Compiler profiles**, below the tools, lists every single compiler step, such as
-**ericw-tools qbsp** or **q3map2 light**, and whether its tool is ready. **Run Profile**
+**VibeMap2 bsp** or **VibeMap3 light**, and whether its tool is ready. **Run Profile**
 (<kbd>Ctrl</kbd>+<kbd>R</kbd>) runs the selected step, **Copy CLI**
 (<kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>C</kbd>) copies a matching `vibestudio --cli compiler run`
 command, and **Copy Manifest** copies the step's command manifest.
@@ -50,7 +63,8 @@ command, and **Copy Manifest** copies the step's command manifest.
 
 1. Open the map on the Levels page.
    The **Input** field on the Build page follows the open map. To build another file, type its path
-   or choose it with the folder button beside the field.
+   or choose it with the folder button beside the field. Until a map is chosen, opening a project
+   picks a **Pipeline** for the project's game.
 2. Choose a **Pipeline**.
 3. Choose **Run Pipeline** (<kbd>F7</kbd>).
    The stages run in order, each feeding the next. **Pipeline Stages** shows their progress, and the
@@ -62,10 +76,10 @@ If the map has unsaved edits, VibeStudio asks first, because the compilers read 
 
 | Pipeline | Stages | Input |
 | --- | --- | --- |
-| **Quake full compile** | QBSP, then VIS and LIGHT (ericw-tools) | `.map` |
+| **Quake full compile** | QBSP, then VIS and LIGHT (VibeMap2) | `.map` |
 | **Quake fast iteration** | QBSP and LIGHT; VIS is skipped | `.map` |
 | **Quake BSP only** | QBSP | `.map` |
-| **Quake III full compile** | BSP, then VIS and LIGHT (q3map2) | `.map` |
+| **Quake III full compile** | BSP, then VIS and LIGHT (VibeMap3) | `.map` |
 | **Quake III BSP only** | BSP | `.map` |
 | **Doom nodes (ZDBSP)** | Nodes | `.wad` |
 | **Doom nodes (ZokumBSP)** | Nodes | `.wad` |
@@ -154,6 +168,9 @@ own key choices can change them, and **Help** > **Keyboard Shortcuts** lists the
 
 ## Share the result
 
+- **Package Map** on the Build header releases the pipeline's map for players: its build, the files
+  the engine loads beside it and every custom asset it uses, without the game's own files, with a
+  readme and release notes. See [Package and release](releases.md).
 - **Add to Package** stages the built map into the open package under `maps/`, ready for Save As; see
   [Packages](packages.md#save-a-new-package).
 - **Copy Commands** copies every stage's command line, so the same build can run from a shell or CI.
@@ -179,13 +196,14 @@ details.
 | Inspect a compiled map | `vibestudio --cli bsp inspect <bsp>` |
 | Draw a leak trail to a picture | `vibestudio --cli map render <map> --leak <file.pts> --output <file.svg>` |
 | Plan or start a launch | `vibestudio --cli launch plan --map <name>`, `launch run --map <name>` |
+| Release the built map | `vibestudio --cli release publish <project> --map <map> --release-version <version>` |
 
 For example:
 
 ```sh
 vibestudio --cli build plan quake-full --input ./maps/start.map
 vibestudio --cli build run quake-full --input ./maps/start.map --watch
-vibestudio --cli compiler set-path ericw-qbsp --executable /opt/ericw-tools/bin/qbsp
+vibestudio --cli compiler set-path vibemap2-bsp --executable /opt/vibemap2/vibemap2-bsp
 vibestudio --cli launch plan --bsp ./maps/start.bsp --deploy
 vibestudio --cli launch run --bsp ./maps/start.bsp --deploy --allow-test-maps
 ```
