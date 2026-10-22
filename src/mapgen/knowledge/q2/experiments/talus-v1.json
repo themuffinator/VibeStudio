@@ -1,0 +1,564 @@
+{
+  "schema_version": 1,
+  "id": "talus-v1",
+  "date": "2026-09-13",
+  "status": "compiled_static_and_dedicated_initialization_validated_playtesting_pending",
+  "map": "qmg_talus",
+  "intended_mode": "stock_q2_deathmatch",
+  "intended_players": [
+    4,
+    6
+  ],
+  "construction": "Original explicit qmg_core recipe; default-planner motif selection and trained weights remain pending",
+  "recipe": "tools/map_recipes/talus.cpp",
+  "study": "docs/Q2_TALUS_STUDY.md",
+  "local_artifacts": "out/talus",
+  "canonical_layout_sha256": "2aa8bda475c1855d159a674ff73e62e185593a798c6f7d1b06c4b76fe9868a34",
+  "artifact_hashes": {
+    "source_sha256": "4583964d19748a00b2686d2b30b48fa4131c852534786d0f75cc5574119f37a6",
+    "bsp_sha256": "6ac8fb109af4062fc08b51c5bc766edb36fd728f5afc7d2461f127c821329b03",
+    "recipe_sha256": "7c1cf9837662a6bcb588907ca28e3d7450aee6828e358ca097329a2007291e7a",
+    "recipe_support_sha256": "c1e45e774b5408cbb4e2176b898044fce36d1d182b4d36c68621e56dcff30d81",
+    "core_sha256": "a0653a842e37671dc3599fa255e9e3dfa73b64f303dc81c258b51a46a2e62322",
+    "profile_sha256": "4f833d1a09eab67c719175310e101befcc9ad43d330985e7bc7a7d645f65d935"
+  },
+  "evidence_files": [
+    {
+      "path": "out/talus/cleanup-status.json",
+      "sha256": "666cdadd232913d1d7c5b89fab4c58155f5486ae97fe7b039847c4e429b88d44"
+    },
+    {
+      "path": "out/talus/comparison-to-counterweight.json",
+      "sha256": "a401211e67a174c475e1273ba63c9804206c030b4d0c3ed5465847e3975c1a66"
+    },
+    {
+      "path": "out/talus/comparison.log",
+      "sha256": "9837fa43b311dc09e61c1ca35bdedbe723159e068f8806dc8cf2bdb789adf353"
+    },
+    {
+      "path": "out/talus/compiled-analysis.json",
+      "sha256": "8a82d696936d6d6ce2741ea6b1cfe3753f9902757acbe30033bd6cfba03a2622"
+    },
+    {
+      "path": "out/talus/ctest.log",
+      "sha256": "095ed6c474b945c63a7b0b8242749bba12682a66043945b3f21a29aad3f8dbf3"
+    },
+    {
+      "path": "out/talus/engine-smoke/authored-entities.ent",
+      "sha256": "c0b98b75c7ff972616a436c1b4256104bcef3b85fda67fb1b88ee35a8e6ce216"
+    },
+    {
+      "path": "out/talus/engine-smoke/engine-smoke.json",
+      "sha256": "004122bbc979bbb78be0e4983a71f4a57ae51414d2d0281fc448851d1f4c6f8f"
+    },
+    {
+      "path": "out/talus/engine-smoke/engine.log",
+      "sha256": "e93f28d48f826704f8c3f412f96d0d28504b7e4b3c34a904e73da4e5922419cd"
+    },
+    {
+      "path": "out/talus/engine-smoke/profile.cfg",
+      "sha256": "d387b2aebcaf2286bc7c5ca02b440606e3e0d4b2dd7d439224ef412f5e70c58c"
+    },
+    {
+      "path": "out/talus/engine-smoke/stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "out/talus/engine-smoke/stdout.log",
+      "sha256": "43f82b62c76eb60202fdf7902a4b8f460fe26bf24a8d15618656437b631cd776"
+    },
+    {
+      "path": "out/talus/floor-0.png",
+      "sha256": "0dec5c00fd611bc1cedfd35f5a242cdf7f3bdd0cf147c935c64bcf605d857a51"
+    },
+    {
+      "path": "out/talus/floor-128.png",
+      "sha256": "1c1b830c5f935087b8216e0d2f54c8efe135d479d797e40d8cef469303664551"
+    },
+    {
+      "path": "out/talus/floor-256.png",
+      "sha256": "e60e2a4427d81b5cf54e87701e070ae40a565ede22fb6d5e0b3848b2af4f075e"
+    },
+    {
+      "path": "out/talus/flow.json",
+      "sha256": "ce201d6bcbb9f8d255394e6eb9b8d685a4a0c2ce0f8c9b872c72b20f6c7218d7"
+    },
+    {
+      "path": "out/talus/generation.log",
+      "sha256": "4bbbb946df961030bce1e639cac77cd1a01e4268ac39ce4e41d0c1fffc105d7e"
+    },
+    {
+      "path": "out/talus/geometry-tests.log",
+      "sha256": "faa37dab35fbf17352e321d668c87bb1b1a05a7515c3e6c7537f70055f060653"
+    },
+    {
+      "path": "out/talus/index.html",
+      "sha256": "b4e7a7b38175f2c4890fb6d931c0afec8f2a409efba6de62f82ac821e4129ee8"
+    },
+    {
+      "path": "out/talus/layout.json",
+      "sha256": "212df836dd2ca78babd5d8916e45fb83e3e33780313188036677f0baaddcf5ef"
+    },
+    {
+      "path": "out/talus/light.log",
+      "sha256": "41d3d97ae943172e7116a5f7d9c5113c2ddd2dcc7c87a2388f821b893e0dbaff"
+    },
+    {
+      "path": "out/talus/overview-mobile-light.png",
+      "sha256": "66620186e367bd386661d732ccf354276f397a505367169f85a03870a8b587f9"
+    },
+    {
+      "path": "out/talus/overview.png",
+      "sha256": "51f16964556be3bc407918b1abb5d323e6880e5ab53eaef57d2acf8bee5d0837"
+    },
+    {
+      "path": "out/talus/preview-checks.json",
+      "sha256": "2b7775193eef266ef409d763615ec1a0015ba8f12a8956cf86923d0d7ec9b1db"
+    },
+    {
+      "path": "out/talus/qbsp.log",
+      "sha256": "857dbc8fe4ab0d72a376edd7a186d4ae6ed08eaa586670e61d2fc64530ffe220"
+    },
+    {
+      "path": "out/talus/qmg_talus.bsp",
+      "sha256": "6ac8fb109af4062fc08b51c5bc766edb36fd728f5afc7d2461f127c821329b03"
+    },
+    {
+      "path": "out/talus/qmg_talus.content.json",
+      "sha256": "9e813912dfbeecc1b5ccba3fd80636ee5f0fba9293ac679be463a91c73085431"
+    },
+    {
+      "path": "out/talus/qmg_talus.map",
+      "sha256": "4583964d19748a00b2686d2b30b48fa4131c852534786d0f75cc5574119f37a6"
+    },
+    {
+      "path": "out/talus/qmg_talus.prt",
+      "sha256": "37a2c8c691d68c77b0046d77ccc738d312e055f57f6edced1dced21d90eb9f74"
+    },
+    {
+      "path": "out/talus/qmg_talus.qmg.json",
+      "sha256": "18e85cada43b8b2c403e1ffb4c67d0f4f72614e348e44f3f7e2650ce906ecc9e"
+    },
+    {
+      "path": "out/talus/qmg_talus.texinfo.json",
+      "sha256": "2755a66526e0efbc4c44dca5309e5b645758468ce82613f1e32c371138b902b3"
+    },
+    {
+      "path": "out/talus/qmg_talus.zip",
+      "sha256": "400f4fb94de97e7020d7621951852d48e11e72c7a71dc7d7d38b10fafd98ceb9"
+    },
+    {
+      "path": "out/talus/recipe-build.log",
+      "sha256": "085f96a0f39358b4be44ff20acda84daec641ba097d0803c68cfa150da809c9c"
+    },
+    {
+      "path": "out/talus/reference-comparison.json",
+      "sha256": "0074cb87039b40d9a111db324395364189c96bcea9818c62aeb531c198f2bd8d"
+    },
+    {
+      "path": "out/talus/talus-layout.html",
+      "sha256": "e06f40f9c2801403e4826a7cbdc73f066900da1995ac0c4fd1a48db90794ee91"
+    },
+    {
+      "path": "out/talus/verification.json",
+      "sha256": "99373980f65e4a9fd5713a06845eb461094aab9c4d1bdaabfd76d22c847ada63"
+    },
+    {
+      "path": "out/talus/verification.log",
+      "sha256": "901e3faedbbfb287ad4dc6dd5f8fe5945991cb66afaa4042c4ef128aa1d59de2"
+    },
+    {
+      "path": "out/talus/vis.log",
+      "sha256": "2ab5966aa29b5363e16de805f98b5ec9463765dfc9556fcd3a80b11ed4123c09"
+    }
+  ],
+  "implementation_evidence": [
+    {
+      "path": "include/qmg/navigation.hpp",
+      "sha256": "f05c1a1cf36436730c097864cd677d7e6e645de9faa6d34778bf98c696058039"
+    },
+    {
+      "path": "src/navigation.cpp",
+      "sha256": "fbab7a31deafacebb72f4c8717b106c44eba2b7571a2c43247935467923add00"
+    },
+    {
+      "path": "include/qmg/visibility.hpp",
+      "sha256": "68aafb5198492a1b3e056137722b320583d2e843b93b047960bf0784436863af"
+    },
+    {
+      "path": "src/visibility.cpp",
+      "sha256": "93c57d17ad89894a7959ebd5a5f5cdde1295dc8a5413ac53d846595c7a7be8af"
+    },
+    {
+      "path": "src/report.cpp",
+      "sha256": "913db0fe107024bdddf688a2481fa8e1c9b6146f63d4d10b4bc431760b8b2006"
+    },
+    {
+      "path": "tools/map_recipes/geometry.py",
+      "sha256": "dcfcc3413468cad9993476736edfae5f13eb03e26035fc39d73f83aa5a90742b"
+    },
+    {
+      "path": "tools/map_recipes/ramp_audit.py",
+      "sha256": "1a6e17dd124db8ba030cc56927f6cb4b1c7ebecbfbadcf529165efded3103cdc"
+    },
+    {
+      "path": "tools/map_recipes/inspect.py",
+      "sha256": "0e43b77e4933a157370cbc6443ca7990f89926f9fc54e55718e5941ac416657d"
+    },
+    {
+      "path": "tools/map_recipes/layout-view-v2.html",
+      "sha256": "c9b7ca608796b51497da37aaa113e9feae6b190e9d39667bb0be1beedc8b7e51"
+    },
+    {
+      "path": "tools/map_recipes/render_layout.py",
+      "sha256": "6955f964d90353749e78774c9ad3854c66a2cf36b0c5cfc7655a9ad5608e9a6c"
+    },
+    {
+      "path": "tests/test_navigation.cpp",
+      "sha256": "a72dd70bfc6594b76607c4517b7e7681c4dabb89d1b8077d88700733fe5f17dc"
+    },
+    {
+      "path": "tests/test_visibility.cpp",
+      "sha256": "0a326e4026a107b5cc3f36990365cef2bfda56dc1c875a9516f66ce1ba8b932b"
+    },
+    {
+      "path": "tests/test_recipe_geometry.py",
+      "sha256": "26217fc78f4e8cb344be216d6afe52043d0e7ef9dda7c416cdb70a09dc4cb017"
+    },
+    {
+      "path": "tests/recipe_preview_check.cjs",
+      "sha256": "97fdedb9ac12948ec889c43112a699b121a920754649e7461df1f54407cd1f77"
+    }
+  ],
+  "research": {
+    "record": "knowledge/q2/continuous-movement-study.json",
+    "record_sha256": "1564c2e19b65f6eb0e16a362f88d3c99c833d1c422499557685050430d18537b",
+    "study_sha256": "b5d4ac495ea0300445dcf277217d18cebae658705ed9fed7a228e049724be915",
+    "references": [
+      {
+        "map": "gladdm1",
+        "title": "Violent & Funky",
+        "bsp_sha256": "6f6af2acdd5108b3dea18ae181358dc81708b6540aab5a0a6417f3c98a4feec1",
+        "partition": "reference"
+      },
+      {
+        "map": "trdm05a",
+        "title": "Vertical Asylum",
+        "bsp_sha256": "4a08ade7e68e8542216541d5faf32d585fec27d1d4d980accf8965bd2c44eed7",
+        "partition": "reference"
+      },
+      {
+        "map": "spirit2dm9",
+        "title": "The Cake is a Lie",
+        "bsp_sha256": "1223f87c821a725bc8407b4bd380c306723f7481135dfcaa2aa2d8a3576b90dc",
+        "partition": "reference"
+      }
+    ],
+    "profile_changed": false,
+    "archive_geometry_copied": false,
+    "model_weights_trained": false,
+    "rights_review": "not established for model training; local analysis only"
+  },
+  "design": {
+    "rooms": 6,
+    "connections": 9,
+    "max_incident_passages": 4,
+    "cycle_rank": 4,
+    "articulation_rooms": 0,
+    "floor_levels": [
+      0,
+      128,
+      256
+    ],
+    "stair_runs": 4,
+    "treads_per_run": 8,
+    "tread_run": 36,
+    "tread_rise": 16,
+    "ramps": [
+      {
+        "id": 1,
+        "solid_id": 58,
+        "bounds": [
+          [
+            -736,
+            -160,
+            0
+          ],
+          [
+            -576,
+            320,
+            128
+          ]
+        ],
+        "surface": [
+          [
+            -736,
+            -160,
+            8
+          ],
+          [
+            -576,
+            -160,
+            8
+          ],
+          [
+            -576,
+            320,
+            128
+          ],
+          [
+            -736,
+            320,
+            128
+          ]
+        ],
+        "from": [
+          -656,
+          -160,
+          8
+        ],
+        "to": [
+          -656,
+          320,
+          128
+        ],
+        "width": 160,
+        "run": 480,
+        "rise": 120,
+        "base_floor": 0
+      },
+      {
+        "id": 2,
+        "solid_id": 59,
+        "bounds": [
+          [
+            -624,
+            576,
+            128
+          ],
+          [
+            -144,
+            736,
+            256
+          ]
+        ],
+        "surface": [
+          [
+            -624,
+            576,
+            136
+          ],
+          [
+            -624,
+            736,
+            136
+          ],
+          [
+            -144,
+            736,
+            256
+          ],
+          [
+            -144,
+            576,
+            256
+          ]
+        ],
+        "from": [
+          -624,
+          656,
+          136
+        ],
+        "to": [
+          -144,
+          656,
+          256
+        ],
+        "width": 160,
+        "run": 480,
+        "rise": 120,
+        "base_floor": 128
+      }
+    ],
+    "spawns": 8,
+    "gameplay_anchors": 33,
+    "weapon_types": 7,
+    "major_items": 2,
+    "route_roles_document": "docs/Q2_TALUS_STUDY.md",
+    "intended_benefits": [
+      "continuous uphill combat movement",
+      "distributed height access",
+      "unequal recovery and contest routes"
+    ],
+    "causal_improvement_claimed": false
+  },
+  "validation": {
+    "repository_ctests": {
+      "passed": 22,
+      "failed": 0,
+      "elapsed_seconds": 212.07
+    },
+    "final_geometry_tests": {
+      "passed": 24,
+      "failed": 0
+    },
+    "preview_states": 24,
+    "typed_and_serialized_ordinary_pairs": 264,
+    "ordinary_edge_kinds": [
+      "walk",
+      "step",
+      "door"
+    ],
+    "continuous_ramp_nodes": [
+      {
+        "ramp": 1,
+        "node": 105,
+        "slope": {
+          "along_x": false,
+          "start": -160,
+          "end": 320,
+          "low_z": 8,
+          "rise": 120,
+          "support_offset": 16
+        },
+        "gate_edge_ids": [
+          3,
+          189,
+          356,
+          357
+        ]
+      },
+      {
+        "ramp": 2,
+        "node": 106,
+        "slope": {
+          "along_x": true,
+          "start": -624,
+          "end": -144,
+          "low_z": 136,
+          "rise": 120,
+          "support_offset": 16
+        },
+        "gate_edge_ids": [
+          70,
+          235,
+          358,
+          359
+        ]
+      }
+    ],
+    "compiled_world_collision_brushes": 174,
+    "anchor_hull_checks": 5742,
+    "stair_hull_support_samples": 32,
+    "ramp_swept_translations": 92,
+    "ramp_world_pair_checks": 16008,
+    "ramp_audit": {
+      "path": "out/talus/verification.json",
+      "ok": true,
+      "collision_epsilon": 0,
+      "lanes_per_ramp": 3,
+      "both_landing_turns_checked": true
+    },
+    "visible_spawn_eye_pairs": 0,
+    "tested_spawn_eye_pairs": 28,
+    "q2_spawn_eye_offset_z": 22,
+    "sealed": true,
+    "full_vis": true,
+    "lighting": "extra4, one bounce, soft shadows; no empty lightmaps",
+    "engine_initialization_gates": 16,
+    "engine_initialization_ok": true,
+    "native_player_traversal_tested": false,
+    "rendered_engine_tested": false,
+    "human_playtested": false
+  },
+  "metrics": {
+    "spawn_count": 8,
+    "weapon_count": 7,
+    "weapon_types": 7,
+    "major_item_count": 2,
+    "combat_height_p90_p10": 256.0,
+    "combat_height_bands_128": 3,
+    "spawn_nearest_weapon_euclidean_p50": 320.4007490565527,
+    "spawn_nearest_weapon_euclidean_p90": 445.68082388683104,
+    "spawn_pair_world_los_fraction": 0.0,
+    "major_item_min_euclidean_separation": 1373.5792660054242,
+    "world_diagonal": 2793.5010291746808,
+    "upward_surface_area": 3590519.256023718,
+    "texture_area_entropy_bits": 2.932805838280167,
+    "texture_top_area_fraction": 0.240955659726533,
+    "sky_surface_area_fraction": 0.0,
+    "sampled_world_sightline_p50": 227.97122625454296,
+    "sampled_world_sightline_p90": 561.1858785713143
+  },
+  "comparison": "out/talus/comparison-to-counterweight.json",
+  "observed_tradeoffs": [
+    "Compared with Counterweight: lower maximum room incidence and shorter sampled sightlines; larger footprint and longer median straight-line spawn-to-nearest-weapon distance.",
+    "Several design variables changed; this is descriptive rather than a controlled causal result."
+  ],
+  "caught_failures": [
+    {
+      "kind": "material_physics",
+      "rejected_candidate": {
+        "texture": "e2u1/mud1_1",
+        "wal_sha256": "14511c9bcd6f7edebb26e4d5ab6f9de784ae0812b3a7d20b274edeee7afd142c",
+        "flags": 8,
+        "contents": 32,
+        "value": 0
+      },
+      "replacement": {
+        "texture": "e2u1/mine04_1",
+        "wal_sha256": "2f63828420b4a54889b940eac4ec03b1fef566624be307633fdd9d7bc6dab22c",
+        "flags": 0,
+        "contents": 0,
+        "value": 0
+      },
+      "observed": "26 architectural brushes compiled as water, including stairs and both ramps; authored navigation passed but compiled stair support failed",
+      "correction": "Use neutral architectural WAL and reject mixed-content warnings; all final architectural brushes must be SOLID",
+      "failed_candidate_bsp_retained": false
+    },
+    {
+      "kind": "probe_and_spawn_refinement",
+      "observed": "Initial room-center lighting probes overlapped a cover brush/stair; a same-room spawn pair was exposed or too close",
+      "correction": "Repositioned cover/stair, added local lights and moved lower Bench spawn; final analytical findings zero and compiled 28 eye pairs clear"
+    }
+  ],
+  "next_trials": {
+    "status": "defined_not_executed",
+    "protocol": "docs/Q2_TALUS_STUDY.md",
+    "conditions": [
+      "single ramp versus equal-endpoint 8x60-unit-tread staircase",
+      "single landing width change",
+      "one drop versus closed ledge with verified ordinary return",
+      "matched 2/4/6-player recovery and control",
+      "windowed engine-written screenshot orientation review"
+    ]
+  },
+  "limits": [
+    "Multiple design variables changed; this is not a controlled causal comparison.",
+    "Current costs include endpoint approaches but remain Manhattan/node-center estimates. Earlier artifacts use a different timing basis; do not compare their costs or call them measured travel time.",
+    "Point LOS is not a match, spawn-safety guarantee or rendered lighting check.",
+    "Three explicit lateral lanes, not every possible lateral trajectory or an engine pmove test.",
+    "Entry step and exit settling are checked geometric translations, not measured native step/drop behavior.",
+    "All model-zero player-mask brushes are checked; dynamic entities and moving submodels are not simulated.",
+    "Stored-float matching bounds identify source correspondence only. Exact rational support and SAT retain every positive-volume collision.",
+    "No fake stair construction or sample-only traversal evidence; each reported route segment is swept in both directions.",
+    "Reference capacities conflict with author readmes; trdm05a readme revision association is uncertain.",
+    "Q1/Q3 spawn visibility retains the historical origin sampling policy; Q2 historical outputs are not rewritten.",
+    "Default StairRunSpec32-unit treads and normal Windows engine-client focus behavior remain open engineering issues.",
+    "Compiler artifact bytes are not claimed deterministic. Final preview and engine evidence bind this delivered BSP."
+  ],
+  "cleanup": {
+    "status": "automatic_review_rejected",
+    "reason": "blocked by policy",
+    "attempted_action": "Remove only the verified project-local Talus engine and viewer temporary directories",
+    "paths": [
+      ".agents/tmp/talus-engine",
+      ".agents/tmp/talus-viewer"
+    ],
+    "reparse_points_found": false,
+    "command_executed": false,
+    "retried": false,
+    "delivery_directory": "out/talus",
+    "useful_engine_and_preview_evidence_retained_in_delivery": true
+  }
+}

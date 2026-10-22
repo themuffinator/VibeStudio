@@ -1,0 +1,1479 @@
+{
+  "name": "Quake-MapGen",
+  "url": "https://github.com/themuffinator/Quake-MapGen",
+  "license": "MIT",
+  "commit": "1252548ad68f44df63d56f1c6c068c4fc6f6330c",
+  "commitDate": "2026-08-26",
+  "workingTree": "uncommitted changes up to 2026-10-16 included",
+  "importedOn": "2026-10-22",
+  "files": {
+    ".clang-format": {
+      "path": ".clang-format",
+      "sha256": "4d6c5a22af3ce10e4dae9bd4b4e3f4988fcbe1d375be18965fc91559fa8872a6"
+    },
+    "LICENSE": {
+      "path": "LICENSE",
+      "sha256": "d35347ea259490f387f8b8fa7bafd1a76ac79b233bfd9ea20caa7c3c545dd7e8"
+    },
+    "README.md": {
+      "path": "docs/UPSTREAM_README.md",
+      "sha256": "18b819715da157c3d850834c2d7c098cd7add7b665d738bf65769000e9f5ca36"
+    },
+    "THIRD_PARTY.md": {
+      "path": "THIRD_PARTY.md",
+      "sha256": "13a21c18e9236ea5da8538c04196abbf30c94d2922764f74e434afe0294df6bf"
+    },
+    "data/profiles/q1/generator-current.json": {
+      "path": "data/profiles/q1/generator-current.json",
+      "sha256": "651cc30137834ac3e9f9febd588a4cfd89a259c1ad2f24892a97beeff065c176"
+    },
+    "data/profiles/q1/id1-1996.json": {
+      "path": "data/profiles/q1/id1-1996.json",
+      "sha256": "6e6391043d10e81a9c8f291daf31abc26328890e142fa51d388ee6af063e90b2"
+    },
+    "data/profiles/q1/rerelease-2021.json": {
+      "path": "data/profiles/q1/rerelease-2021.json",
+      "sha256": "1e391cb00332eeadf40c07ce5a41f2bde713cb21ac782dfc1cdfff008210750c"
+    },
+    "data/profiles/q1/threewave-5.0.json": {
+      "path": "data/profiles/q1/threewave-5.0.json",
+      "sha256": "5cf6eca3c417912641e93850f7bcda75848733640e233b167e4087be2870eb39"
+    },
+    "data/profiles/q2/baseq2-3.19.json": {
+      "path": "data/profiles/q2/baseq2-3.19.json",
+      "sha256": "894355febdf24c60ec146c3d3c1f547da3f2c8a015a77c936ed137611c89db4a"
+    },
+    "data/profiles/q2/ctf-3.19.json": {
+      "path": "data/profiles/q2/ctf-3.19.json",
+      "sha256": "eb9f381d77f742c8cd036c5d8876cd403608fd8ffe5159ddf04d5b8fc64e3f54"
+    },
+    "data/profiles/q2/generator-current.json": {
+      "path": "data/profiles/q2/generator-current.json",
+      "sha256": "39ad9d0d7a1eaab51c86ad19b5c6e2a4d6cfb60623e7e6111fadb1c8a4b5f947"
+    },
+    "data/profiles/q3/baseq3-1.32b.json": {
+      "path": "data/profiles/q3/baseq3-1.32b.json",
+      "sha256": "0eb62f3dab957edf0658d20478f52922484f4a6dbc6c1c4277945db8e8582f25"
+    },
+    "data/profiles/q3/generator-current.json": {
+      "path": "data/profiles/q3/generator-current.json",
+      "sha256": "d92507d86e8b5d9c0ff80c9fa880d9afd6ee273e3a53f76d35b61f554fcd72e0"
+    },
+    "data/profiles/schema.json": {
+      "path": "data/profiles/schema.json",
+      "sha256": "61a2eb29140077b46c60dcc548704c13ff4856cab547181a5572bd9a2450d872"
+    },
+    "docs/ARCHITECTURE.md": {
+      "path": "docs/ARCHITECTURE.md",
+      "sha256": "af05631468f028693d0417ce8d27121dc55e4b6deee04258daaf4fc0a702af0c"
+    },
+    "docs/CHANGE_PROTOCOL.md": {
+      "path": "docs/CHANGE_PROTOCOL.md",
+      "sha256": "2680ea3e872ffc44a3018d46000371abade22e354e8d6cce269a7dce4c3c0597"
+    },
+    "docs/DATASET.md": {
+      "path": "docs/DATASET.md",
+      "sha256": "b179e64f159ba345f61b5679dc2190a2da68fb823ed32604519c192049e30f67"
+    },
+    "docs/MAP_DESIGN_PLAYBOOK.md": {
+      "path": "docs/MAP_DESIGN_PLAYBOOK.md",
+      "sha256": "7d8a50577e826f35adcdcd127eea660be14d456edc66a85917f9fca8ad8d475a"
+    },
+    "docs/MAP_FORMATS.md": {
+      "path": "docs/MAP_FORMATS.md",
+      "sha256": "b0bb0b2ed18234ef3cf667b4ce9aba8d39a39c62b158eedd6442c6cf265d8dc1"
+    },
+    "docs/MAP_STUDY.md": {
+      "path": "docs/MAP_STUDY.md",
+      "sha256": "03ee04ed7f2e6ccf626b3a4db85ae41256ab9f466e4d29cf818b517b5702676c"
+    },
+    "docs/MP_COMPACT_LAYOUT_REGIMEN.md": {
+      "path": "docs/MP_COMPACT_LAYOUT_REGIMEN.md",
+      "sha256": "2fda5c85e790908bd7e7adb0c91721698d2f3cef779269684aa0719c3ae19337"
+    },
+    "docs/MP_SPATIAL_PATTERNS.md": {
+      "path": "docs/MP_SPATIAL_PATTERNS.md",
+      "sha256": "802b918e48aa1d618513e4b685a0a94717d340d0034676e866ff8a6973330374"
+    },
+    "docs/PLAYTEST_PROTOCOL.md": {
+      "path": "docs/PLAYTEST_PROTOCOL.md",
+      "sha256": "d1e3b8fbcbfd7452e2cd94cdbc539be3f2516524ae2ed7457600b29a223dc85e"
+    },
+    "docs/Q2_ATRIUM_ROUTE_STUDY.md": {
+      "path": "docs/Q2_ATRIUM_ROUTE_STUDY.md",
+      "sha256": "134be260817082f8e85d59b1deef0cb4c36b09f771a5f3180396294996da95ca"
+    },
+    "docs/Q2_BRAID_STUDY.md": {
+      "path": "docs/Q2_BRAID_STUDY.md",
+      "sha256": "3be022f957750e4dff497be8187087418c2ecb0a10c9f9b502d68b4b14ffee6c"
+    },
+    "docs/Q2_CONTINUOUS_MOVEMENT_STUDY.md": {
+      "path": "docs/Q2_CONTINUOUS_MOVEMENT_STUDY.md",
+      "sha256": "b5d4ac495ea0300445dcf277217d18cebae658705ed9fed7a228e049724be915"
+    },
+    "docs/Q2_COUNTERWEIGHT_STUDY.md": {
+      "path": "docs/Q2_COUNTERWEIGHT_STUDY.md",
+      "sha256": "508102259bbcdeca8d3bdf77576a8c247168e5a6b1031c661deeafe94d765ed7"
+    },
+    "docs/Q2_COURTYARD_LIQUID_STUDY.md": {
+      "path": "docs/Q2_COURTYARD_LIQUID_STUDY.md",
+      "sha256": "1787bf70e72000cbc24821dba33518bea9a4d0f91bccb4a7af8e73bcb9beea50"
+    },
+    "docs/Q2_DROP_RETURN_STUDY.md": {
+      "path": "docs/Q2_DROP_RETURN_STUDY.md",
+      "sha256": "b96cb7594dd5bc5c2a0fc3cec4bcf53e0773468fc9238f58c339a7a104593eb5"
+    },
+    "docs/Q2_FIRST_STUDY.md": {
+      "path": "docs/Q2_FIRST_STUDY.md",
+      "sha256": "59d98f4273dd9a19d16977682a5bc14293a6e10919954a6e64aa5badfd798aed"
+    },
+    "docs/Q2_FOLD_STUDY.md": {
+      "path": "docs/Q2_FOLD_STUDY.md",
+      "sha256": "72a831d6a7414bf07ae1b4b14b96a097f206b45b955eaa46537b13600f501de1"
+    },
+    "docs/Q2_HINGE_STUDY.md": {
+      "path": "docs/Q2_HINGE_STUDY.md",
+      "sha256": "2c3d28924e19dfb877830076933f36ae586444d5453403523e7d00d3b1f341b0"
+    },
+    "docs/Q2_INTERLEAVED_ROUTE_STUDY.md": {
+      "path": "docs/Q2_INTERLEAVED_ROUTE_STUDY.md",
+      "sha256": "0ab4d7490d2b78acd5bd2db055ce89475d349673f097030218f4b17a6bc9c6c0"
+    },
+    "docs/Q2_INTERLOCKING_TOPOLOGY_STUDY.md": {
+      "path": "docs/Q2_INTERLOCKING_TOPOLOGY_STUDY.md",
+      "sha256": "b59fe83e7660423bcfa88b15d4df015df4a4e5bd57010e73e7ffdf96c733ffce"
+    },
+    "docs/Q2_LATTICE_STUDY.md": {
+      "path": "docs/Q2_LATTICE_STUDY.md",
+      "sha256": "fcb59c113307c81cad9526dff9b238f75ab82e8c48787f8c1b827328502e71d7"
+    },
+    "docs/Q2_LOCKYARD_STUDY.md": {
+      "path": "docs/Q2_LOCKYARD_STUDY.md",
+      "sha256": "7d6ad2864ba23ea15b55c295122442dd48970bd9583b41fbcf1aef5abd2662ce"
+    },
+    "docs/Q2_MECHANISMS.md": {
+      "path": "docs/Q2_MECHANISMS.md",
+      "sha256": "da704b138dbfbb688f66fcc78df8e6174c2b91f4b81ed52ff6ece78fa7350596"
+    },
+    "docs/Q2_NATIVE_ASCENT_STUDY.md": {
+      "path": "docs/Q2_NATIVE_ASCENT_STUDY.md",
+      "sha256": "1f4394ead9dbce4a81beb8a5dc10c9b0f690d18531517c7ca1ca6f75be87987a"
+    },
+    "docs/Q2_NATIVE_MOTIF_CIRCUITS.md": {
+      "path": "docs/Q2_NATIVE_MOTIF_CIRCUITS.md",
+      "sha256": "4eeefc701fef6f527d192d1591d63a7eb85323962e3ec051704e909dea2a6c08"
+    },
+    "docs/Q2_NATIVE_MOTIF_TURNING.md": {
+      "path": "docs/Q2_NATIVE_MOTIF_TURNING.md",
+      "sha256": "175fbf39950a91e58c824572f163fce5a8d09fe07526674c610e168b00d180d3"
+    },
+    "docs/Q2_NATIVE_RECOVERY_STUDY.md": {
+      "path": "docs/Q2_NATIVE_RECOVERY_STUDY.md",
+      "sha256": "46bfb4f1bd4da2e2ca9b63e71c7150d57c0f97b5145a2ba2462b80003b13f080"
+    },
+    "docs/Q2_NATIVE_TELEPORT.md": {
+      "path": "docs/Q2_NATIVE_TELEPORT.md",
+      "sha256": "df0e6de698fe4ccd6f84b4a1374d129fc7ebb61f72a5396a9cd704f9a0e3fb39"
+    },
+    "docs/Q2_NATIVE_UPPER_LINK.md": {
+      "path": "docs/Q2_NATIVE_UPPER_LINK.md",
+      "sha256": "7e9b42d8f511b7876daadf1066dfca32117375df1b17bc6b1e043a6f1e2be1b9"
+    },
+    "docs/Q2_RAISED_RESOURCE_CIRCUIT_STUDY.md": {
+      "path": "docs/Q2_RAISED_RESOURCE_CIRCUIT_STUDY.md",
+      "sha256": "ca3df4218bf14a1fdaf229a93d2ba50766454e1d74539da19e91c42d0f1f1f03"
+    },
+    "docs/Q2_RAMPS.md": {
+      "path": "docs/Q2_RAMPS.md",
+      "sha256": "c89eec37b4ab8012a1ce947194c30e065322f6dea60d46992cd13277b1151cd4"
+    },
+    "docs/Q2_RAMP_STAIR_COMPARISON.md": {
+      "path": "docs/Q2_RAMP_STAIR_COMPARISON.md",
+      "sha256": "a01b9cf126eb883d13b0275998af255f62c6f24a106473461d275761da83dde4"
+    },
+    "docs/Q2_RANKING_FEATURE_STUDY.md": {
+      "path": "docs/Q2_RANKING_FEATURE_STUDY.md",
+      "sha256": "4da9aacd35a4768ffc6837e79af4bd9c23d150759e7af88d78a33afb028ca5f1"
+    },
+    "docs/Q2_RAVEL_STUDY.md": {
+      "path": "docs/Q2_RAVEL_STUDY.md",
+      "sha256": "068ab5f2dc6c420545fb0f6f0a73ba7ed6e73c1acdcd7d45c67c873f276fbbcc"
+    },
+    "docs/Q2_RELAY_STUDY.md": {
+      "path": "docs/Q2_RELAY_STUDY.md",
+      "sha256": "f0c79b59ee5426a2d1f6b6ece247d0c49534f3d1a52c8387e37cc5e4870ed23d"
+    },
+    "docs/Q2_ROUTE_DIVERSITY_STUDY.md": {
+      "path": "docs/Q2_ROUTE_DIVERSITY_STUDY.md",
+      "sha256": "0e4ede186a5e9341a3fcb722ac6e2c9b3c196dd8e8248b9f8f333fcbb43c7adc"
+    },
+    "docs/Q2_SPAN_ROUTE_AUDIT.md": {
+      "path": "docs/Q2_SPAN_ROUTE_AUDIT.md",
+      "sha256": "f5de7ea75f2d4c9e91f0cbfd5a60861034f3fbee4061a60b971453f445a8b7b6"
+    },
+    "docs/Q2_SPAN_STUDY.md": {
+      "path": "docs/Q2_SPAN_STUDY.md",
+      "sha256": "7afa079f382b4f769f4885b92ec7fd3ff4f1fbf70e2f5f5537b51512e4a3299e"
+    },
+    "docs/Q2_SPAWN_SEPARATION_STUDY.md": {
+      "path": "docs/Q2_SPAWN_SEPARATION_STUDY.md",
+      "sha256": "24a7eef4028038b719a274d28614be6859c3245778679c992534b60fe0785de3"
+    },
+    "docs/Q2_SPILLWAY_STUDY.md": {
+      "path": "docs/Q2_SPILLWAY_STUDY.md",
+      "sha256": "94c84b17677f22515e5d75e14aef212e9dbeb0e3de1c6db6dadc2fa738952066"
+    },
+    "docs/Q2_SPLICE_STUDY.md": {
+      "path": "docs/Q2_SPLICE_STUDY.md",
+      "sha256": "d82f5122ef7e4687ea16bfc5d19a7fc85f522ba2c01e531cc6746426bb327ee2"
+    },
+    "docs/Q2_SWITCHBACK_STUDY.md": {
+      "path": "docs/Q2_SWITCHBACK_STUDY.md",
+      "sha256": "449ec431423237a868fdde2987f46ac0be270f6b392f2aae279c4a774c35f285"
+    },
+    "docs/Q2_TALUS_STUDY.md": {
+      "path": "docs/Q2_TALUS_STUDY.md",
+      "sha256": "a7fa36e49811fa55dc18d7f946ac08a33e041325760185939f938e4fccf62d70"
+    },
+    "docs/Q2_TELEPORTER_ARRIVAL_STUDY.md": {
+      "path": "docs/Q2_TELEPORTER_ARRIVAL_STUDY.md",
+      "sha256": "4d79e4daff58de46c48fb63e9113be15e5f76ce018d028014b4580cbbf4aa88b"
+    },
+    "docs/Q2_TRAVERSAL_STUDY.md": {
+      "path": "docs/Q2_TRAVERSAL_STUDY.md",
+      "sha256": "0240b92f973fb1883c0a4c9c2fda1f5dc92181c884e3dec2896f6a8fef3eed12"
+    },
+    "docs/Q2_UNDERCUT_STUDY.md": {
+      "path": "docs/Q2_UNDERCUT_STUDY.md",
+      "sha256": "114c04b8fb2a713cfe00a0d7692fe0187e531ca2527d88831b4346ea6b0082a7"
+    },
+    "docs/Q2_UPPER_CONNECTION_STUDY.md": {
+      "path": "docs/Q2_UPPER_CONNECTION_STUDY.md",
+      "sha256": "07f2ef36de556af04b295bcdbc90a704eda97486a215d8f8a78247b881eec451"
+    },
+    "docs/Q2_WEFT_STUDY.md": {
+      "path": "docs/Q2_WEFT_STUDY.md",
+      "sha256": "2ff93b0fdc827a8642383f59a8fe20f4269bf8044f9cb3d3efebf3f4bf86b23d"
+    },
+    "docs/RC_PHASE1_AUDIT_AND_PLAN.md": {
+      "path": "docs/RC_PHASE1_AUDIT_AND_PLAN.md",
+      "sha256": "6fa65d585b292441af886e39f53a7c79debdaaccb9d00769ced2466e4afabb40"
+    },
+    "docs/RESEARCH.md": {
+      "path": "docs/RESEARCH.md",
+      "sha256": "bc963069387e07f1b824fddc75b32daea15205f0642a822db0b14ca490bab7a9"
+    },
+    "docs/ROADMAP.md": {
+      "path": "docs/ROADMAP.md",
+      "sha256": "1839524904af4fa509be6bab77dd8e18032e735e81e69b5d809a136d74aecf4f"
+    },
+    "docs/VALIDATION.md": {
+      "path": "docs/VALIDATION.md",
+      "sha256": "605c17c03c045c10955ec17850369cbf45b51cf3f225e14b968b45ca35480703"
+    },
+    "grammars/semantic-plan-v1.gbnf": {
+      "path": "grammars/semantic-plan-v1.gbnf",
+      "sha256": "6fe16bb426623fa690dcd457488a0a59c999d89b12c7ffab9c8dd58c944b887a"
+    },
+    "include/qmg/construction.hpp": {
+      "path": "include/qmg/construction.hpp",
+      "sha256": "4c2c867fda4dc4e439e7d74b53d9b2ef13b4e90fb38d573212faaf4caed4548d"
+    },
+    "include/qmg/entities.hpp": {
+      "path": "include/qmg/entities.hpp",
+      "sha256": "0d8e8db20a52ca5d8e087268022970be874a180835e19b30448eda20ad26b3d7"
+    },
+    "include/qmg/generator.hpp": {
+      "path": "include/qmg/generator.hpp",
+      "sha256": "cdc6dd284bdd7987c9411dbf93ec70b6407158d665820ef314c20995fc2b033a"
+    },
+    "include/qmg/ggml_ranker.hpp": {
+      "path": "include/qmg/layout_ranker.hpp",
+      "sha256": "946dd439c9914134cb67a52d01b9ea118b11b4cacdd5f76b8cefe530bd83ee68"
+    },
+    "include/qmg/layout.hpp": {
+      "path": "include/qmg/layout.hpp",
+      "sha256": "465016f727d634160cedef6f5f92582562b7b8579579636f05821586ebeee715"
+    },
+    "include/qmg/layout_fingerprint.hpp": {
+      "path": "include/qmg/layout_fingerprint.hpp",
+      "sha256": "3301093beff5e80ecc8667f7c71baaaa4e786e43aec57f7eac44902f4d2c5de1"
+    },
+    "include/qmg/leak.hpp": {
+      "path": "include/qmg/leak.hpp",
+      "sha256": "8e0ad0a029ea4afa578efca487b1fed26de2b937495df54d52c0da20f7ae39cd"
+    },
+    "include/qmg/lighting.hpp": {
+      "path": "include/qmg/lighting.hpp",
+      "sha256": "9b69a8d89c6ee41045b7292283e70ffea864abfcac0f09ee697c80c723ea1b75"
+    },
+    "include/qmg/map_builder.hpp": {
+      "path": "include/qmg/map_builder.hpp",
+      "sha256": "525d60e3825b24ac85c86eb9a292d0561727e46318e988286beb1fa85c5ad6cc"
+    },
+    "include/qmg/map_document.hpp": {
+      "path": "include/qmg/map_document.hpp",
+      "sha256": "417c827cd617bf4ab276256e78b61cb967df7c3da3a50f882d9df3115b2d319a"
+    },
+    "include/qmg/map_document_writer.hpp": {
+      "path": "include/qmg/map_document_writer.hpp",
+      "sha256": "a7c029134ab9cfab4e57586ca2c812e0d3bea4bb6fd05f4dec64dacc20e27c54"
+    },
+    "include/qmg/map_parser.hpp": {
+      "path": "include/qmg/map_parser.hpp",
+      "sha256": "559ee2f2bd72751f45776569dd2e12d5bd8f3d4a7b067ef9c2c7a85ae53312ca"
+    },
+    "include/qmg/map_writer.hpp": {
+      "path": "include/qmg/map_writer.hpp",
+      "sha256": "b38627c00c0c9aaffbb361fc111e9fc3f36a6da017616dd81b6544adc8c81560"
+    },
+    "include/qmg/mp_motifs.hpp": {
+      "path": "include/qmg/mp_motifs.hpp",
+      "sha256": "50ea52c7778cae83dd1692a950034681231b1d57a099717bb9835768fe048ed2"
+    },
+    "include/qmg/navigation.hpp": {
+      "path": "include/qmg/navigation.hpp",
+      "sha256": "f05c1a1cf36436730c097864cd677d7e6e645de9faa6d34778bf98c696058039"
+    },
+    "include/qmg/pipeline.hpp": {
+      "path": "include/qmg/pipeline.hpp",
+      "sha256": "247d6c41166acc996416891f2f912940876639491d216726978863194cd0109f"
+    },
+    "include/qmg/prompt.hpp": {
+      "path": "include/qmg/prompt.hpp",
+      "sha256": "bead7aaf975cb66c053c27aaa2ffd2f98df961a0bb1a58dc88cb6c448694ffdf"
+    },
+    "include/qmg/quake2_mechanisms.hpp": {
+      "path": "include/qmg/quake2_mechanisms.hpp",
+      "sha256": "79077734698c1ceb6b497167c10eccf1db7580e0fb8a02111c12ae75f9f7a26b"
+    },
+    "include/qmg/quality.hpp": {
+      "path": "include/qmg/quality.hpp",
+      "sha256": "563e620f5c7ece0f8223fc21aefd53eebd35e80e6d825c3bf0eac5125240eb89"
+    },
+    "include/qmg/repair.hpp": {
+      "path": "include/qmg/repair.hpp",
+      "sha256": "f31493b96f1576ea1eb0745dbc8d93ad41d76fdaed6c460674e6913b64753fed"
+    },
+    "include/qmg/report.hpp": {
+      "path": "include/qmg/report.hpp",
+      "sha256": "45348430b150a54fe6ed6cea79f86464223ab3d2547cdf552f9f5044780386d5"
+    },
+    "include/qmg/semantic_plan.hpp": {
+      "path": "include/qmg/semantic_plan.hpp",
+      "sha256": "d835856a3046bef2eac360b24f3e3ba75d13d7926d5fd478d0c3478c6ece2192"
+    },
+    "include/qmg/semantic_planner.hpp": {
+      "path": "include/qmg/semantic_planner.hpp",
+      "sha256": "b7bd5d622f75ef2950b44429cc41a590d641eb0beac431cb4ece2ce25a7bb55e"
+    },
+    "include/qmg/sha256.hpp": {
+      "path": "include/qmg/sha256.hpp",
+      "sha256": "af2d8aae235ec28c49ca18dc0c90900df7c7852e5ccbe381154073a315fac076"
+    },
+    "include/qmg/spawn_refinement.hpp": {
+      "path": "include/qmg/spawn_refinement.hpp",
+      "sha256": "429b07e6b4474ea2f6a73e2dfab8be0783c420f903e9465942e78301f91886d3"
+    },
+    "include/qmg/switches.hpp": {
+      "path": "include/qmg/switches.hpp",
+      "sha256": "1cbf903dba576062d5fda343a0db852e80275d073569ddfe3960da3fce029095"
+    },
+    "include/qmg/text_model.hpp": {
+      "path": "include/qmg/text_model.hpp",
+      "sha256": "9709a6a0cf656935232db431ba209a37434cfddd4a1d36b7d2490b32793bde4a"
+    },
+    "include/qmg/types.hpp": {
+      "path": "include/qmg/types.hpp",
+      "sha256": "948f776b4ad558e9d9675f5f7ce601a333562785cfa0efcf3482a2ff801eda64"
+    },
+    "include/qmg/upper_links.hpp": {
+      "path": "include/qmg/upper_links.hpp",
+      "sha256": "5980508f20396615b2368ca1d14ed233800c2cc9b4896f0f8e0491a8ad034d56"
+    },
+    "include/qmg/validator.hpp": {
+      "path": "include/qmg/validator.hpp",
+      "sha256": "1e27f25997deb096e129285fdc099539b60fc543827bbc68a96c53d2fd0a7c4c"
+    },
+    "include/qmg/visibility.hpp": {
+      "path": "include/qmg/visibility.hpp",
+      "sha256": "68aafb5198492a1b3e056137722b320583d2e843b93b047960bf0784436863af"
+    },
+    "knowledge/mp/spatial-patterns.json": {
+      "path": "knowledge/mp/spatial-patterns.json",
+      "sha256": "afcf3f505d67e5eb0fe191b80571bdb2d0c7923f2462637b98033bd543f71bfd"
+    },
+    "knowledge/q1/experiments/phase2-r1s-monster-hull-support.json": {
+      "path": "knowledge/q1/experiments/phase2-r1s-monster-hull-support.json",
+      "sha256": "7978e9c7c192f382f1d2cfafbfa87c700b7164198f76645615a4ddc29057743f"
+    },
+    "knowledge/q1/experiments/phase2-r1s-mp-player-start.json": {
+      "path": "knowledge/q1/experiments/phase2-r1s-mp-player-start.json",
+      "sha256": "7e920058fe0546d21ed3e9a6be853f672a415718bb8ecf17b9f90f40ac1446d8"
+    },
+    "knowledge/q1/experiments/phase2-r1s-q1-intermission.json": {
+      "path": "knowledge/q1/experiments/phase2-r1s-q1-intermission.json",
+      "sha256": "d84c49dc66e51e3e4093b337e85f70c96bcfb096523fa6889519e79b17b30d1c"
+    },
+    "knowledge/q1/experiments/phase2-r1s-sp-coop-starts.json": {
+      "path": "knowledge/q1/experiments/phase2-r1s-sp-coop-starts.json",
+      "sha256": "b6205fdd6dc66e7ea4b5313dbec13376a1be8a43e499fcdb3aebefdc9be3d72d"
+    },
+    "knowledge/q2/atrium-route-study.json": {
+      "path": "knowledge/q2/atrium-route-study.json",
+      "sha256": "809966136480c7a6e9527cce80929a65a77e0e8507d96d1369656eabd7f57ed9"
+    },
+    "knowledge/q2/continuous-movement-study.json": {
+      "path": "knowledge/q2/continuous-movement-study.json",
+      "sha256": "1564c2e19b65f6eb0e16a362f88d3c99c833d1c422499557685050430d18537b"
+    },
+    "knowledge/q2/courtyard-liquid-study.json": {
+      "path": "knowledge/q2/courtyard-liquid-study.json",
+      "sha256": "6f32e3c3794e51ddaf128e53b83133a17d5c6962005a2b70fded960fa6cca781"
+    },
+    "knowledge/q2/curriculum.json": {
+      "path": "knowledge/q2/curriculum.json",
+      "sha256": "a1286f1a0105a0858bfcf4a648fa2b0e866e45e3162a149e41fe8296b342f000"
+    },
+    "knowledge/q2/drop-return-study.json": {
+      "path": "knowledge/q2/drop-return-study.json",
+      "sha256": "d89cab564fa58facf5509aa7f3063031b182bb63ed402cf6ec5525d91e8536ca"
+    },
+    "knowledge/q2/experiments/braid-v1.json": {
+      "path": "knowledge/q2/experiments/braid-v1.json",
+      "sha256": "b2051d1ec2782f1df972940075e3b07bf89d10381ab34d862e8570d3f607a253"
+    },
+    "knowledge/q2/experiments/counterweight-v1.json": {
+      "path": "knowledge/q2/experiments/counterweight-v1.json",
+      "sha256": "07da111d2b616032dffee8fbc1146ecfb9bf62d2d685aa33c169f9ec09ac56c4"
+    },
+    "knowledge/q2/experiments/crosscurrent-v1.json": {
+      "path": "knowledge/q2/experiments/crosscurrent-v1.json",
+      "sha256": "726fb03bd7314883889784712925c17e12c3da22f0efa78da8b70b8540d37cc7"
+    },
+    "knowledge/q2/experiments/fold-v1.json": {
+      "path": "knowledge/q2/experiments/fold-v1.json",
+      "sha256": "641f61908dd939ddde460cf0e47159d5abf9ed744d2103bbb66d5551aaa0ce03"
+    },
+    "knowledge/q2/experiments/hinge-v1.json": {
+      "path": "knowledge/q2/experiments/hinge-v1.json",
+      "sha256": "16c7bdd0a2023d15496ca28f7f881ff9f497622e2c4ab1c9158603ddc9095dc1"
+    },
+    "knowledge/q2/experiments/lattice-v1.json": {
+      "path": "knowledge/q2/experiments/lattice-v1.json",
+      "sha256": "f901fe19688eff0aca880ba0fd68bce99113dd252f0c42b44f5082a0990d307b"
+    },
+    "knowledge/q2/experiments/lockyard-v1.json": {
+      "path": "knowledge/q2/experiments/lockyard-v1.json",
+      "sha256": "0d55fae087ba67548092160eb3ad8dcc30431312134ff5e316203a93f937c7c6"
+    },
+    "knowledge/q2/experiments/phase2-r1s-monster-hull-support.json": {
+      "path": "knowledge/q2/experiments/phase2-r1s-monster-hull-support.json",
+      "sha256": "f2d41cacc8abb49c64b0a9fe21cfb091cde60f2412d7b647d328061a90672459"
+    },
+    "knowledge/q2/experiments/phase2-r1s-mp-player-start.json": {
+      "path": "knowledge/q2/experiments/phase2-r1s-mp-player-start.json",
+      "sha256": "873b2e65ddde37bdc774b92ceaf356226e0e206f41b985af27616cc27d453924"
+    },
+    "knowledge/q2/experiments/phase2-r1s-sp-coop-starts.json": {
+      "path": "knowledge/q2/experiments/phase2-r1s-sp-coop-starts.json",
+      "sha256": "5a0dc949cc7e8c81c611c8715efd0b0c45fc543d0e52581adf37196dfcf3fa10"
+    },
+    "knowledge/q2/experiments/ravel-v1.json": {
+      "path": "knowledge/q2/experiments/ravel-v1.json",
+      "sha256": "875a66f865a189100c35a784e4be8c7bba17a1cad037df11c0bfc926303d3b18"
+    },
+    "knowledge/q2/experiments/relay-v1.json": {
+      "path": "knowledge/q2/experiments/relay-v1.json",
+      "sha256": "3693957bff3a485e3fe2f46e7e1af2f5182281855df62b951c78741f00947f67"
+    },
+    "knowledge/q2/experiments/span-v1.json": {
+      "path": "knowledge/q2/experiments/span-v1.json",
+      "sha256": "438c37c17d3988975b6d18a6883288ce2d13f06b2f777ec7df47eff79da2f3ac"
+    },
+    "knowledge/q2/experiments/spillway-v1.json": {
+      "path": "knowledge/q2/experiments/spillway-v1.json",
+      "sha256": "bbd848c6f3e58b6d59e5b629ed8ba91f58de74137fa50da9ccc4a4ac487096be"
+    },
+    "knowledge/q2/experiments/splice-v1.json": {
+      "path": "knowledge/q2/experiments/splice-v1.json",
+      "sha256": "af9ce297c6c00648c37360e46a1ae5a5fff1d42e1b4fb11a43cae80bc8aa3dee"
+    },
+    "knowledge/q2/experiments/switchback-v1.json": {
+      "path": "knowledge/q2/experiments/switchback-v1.json",
+      "sha256": "9be5bed18faafb3258acf3beb74b7d17515e9dbe0f6ea02ce1947621c1cdb410"
+    },
+    "knowledge/q2/experiments/talus-v1.json": {
+      "path": "knowledge/q2/experiments/talus-v1.json",
+      "sha256": "1a8271ab1c49b4508915885cbda115cc7cad80f0a00563ce9b9cd11dfee93726"
+    },
+    "knowledge/q2/experiments/undercut-v1.json": {
+      "path": "knowledge/q2/experiments/undercut-v1.json",
+      "sha256": "737e765264a06d7d99abe63be465f42260cba351e064971124ac7136fa0b1d89"
+    },
+    "knowledge/q2/experiments/weft-v1.json": {
+      "path": "knowledge/q2/experiments/weft-v1.json",
+      "sha256": "0d3aa2d188664cb731378118ba16a6944aae08592eccaa3786af6da609af2130"
+    },
+    "knowledge/q2/first-study.json": {
+      "path": "knowledge/q2/first-study.json",
+      "sha256": "fb8203f7748ddbf5f917290827d33f8e49b91cbb633e3288c5797e63285bb22f"
+    },
+    "knowledge/q2/generator-regression.json": {
+      "path": "knowledge/q2/generator-regression.json",
+      "sha256": "426d14cd85e2a4eac7f36d957af177697b5f7341b768aba2035ab8055f5a2a16"
+    },
+    "knowledge/q2/interleaved-route-study.json": {
+      "path": "knowledge/q2/interleaved-route-study.json",
+      "sha256": "684b62c74075090de09c4be74791650087d6ca5daa6581392d301a61cf2cb79f"
+    },
+    "knowledge/q2/interlocking-topology-study.json": {
+      "path": "knowledge/q2/interlocking-topology-study.json",
+      "sha256": "45d87dac52fb8a677858cbcdc6674d6cd100ac5980dd36ac9070a6484f37f05e"
+    },
+    "knowledge/q2/iteration-roadmap.json": {
+      "path": "knowledge/q2/iteration-roadmap.json",
+      "sha256": "5b79f4d22ea0d1dd577e454b1d55c964f78c486f479f285d9d15f1cfc888d0a1"
+    },
+    "knowledge/q2/native-ascent-study.json": {
+      "path": "knowledge/q2/native-ascent-study.json",
+      "sha256": "9ed40539b2f802a918acb990644575a61d954d96b03426f37b0dfc7bcc7f6b28"
+    },
+    "knowledge/q2/native-motif-circuits.json": {
+      "path": "knowledge/q2/native-motif-circuits.json",
+      "sha256": "e05a867772425ac4e5934a1b8da6f48baf47954aabf21c4aaf9bf11c7012bb2c"
+    },
+    "knowledge/q2/native-motif-turning.json": {
+      "path": "knowledge/q2/native-motif-turning.json",
+      "sha256": "ca6a27b43986018bd5bada98600cc8ccf48d6233504b1d872631c7174f2aa8d5"
+    },
+    "knowledge/q2/native-recovery-study.json": {
+      "path": "knowledge/q2/native-recovery-study.json",
+      "sha256": "ba49aba1272715b14863bed14ad75eb07af8369fbe6be0000f522e40574a07f4"
+    },
+    "knowledge/q2/raised-resource-circuit.json": {
+      "path": "knowledge/q2/raised-resource-circuit.json",
+      "sha256": "30aa1ba2051037539c88e631d8c58ba9083e88ea3c39e9d0114ffb5b3efebe5d"
+    },
+    "knowledge/q2/ramp-stair-comparison.json": {
+      "path": "knowledge/q2/ramp-stair-comparison.json",
+      "sha256": "e26304ea658560a70c8ab775d51fb1ea740a00c37645a4ccb8410f5429c847ea"
+    },
+    "knowledge/q2/ranking-feature-study.json": {
+      "path": "knowledge/q2/ranking-feature-study.json",
+      "sha256": "f2e7c7b37ca8aab64182e8abdccdf97868eaf502f1921f26523ae4fbf3087386"
+    },
+    "knowledge/q2/route-diversity-study.json": {
+      "path": "knowledge/q2/route-diversity-study.json",
+      "sha256": "9e7cc4b5b50b6adf413b6981f5848964f95d993213e48f8e3a86f160a25cd609"
+    },
+    "knowledge/q2/rules.json": {
+      "path": "knowledge/q2/rules.json",
+      "sha256": "cefb516f37dd7a20052ad1b99e83bc71a670119091390de9627b1a6b749b6f62"
+    },
+    "knowledge/q2/spawn-separation-study.json": {
+      "path": "knowledge/q2/spawn-separation-study.json",
+      "sha256": "79896cc0d459ba21e82e22823c32ef650de1e73681df122294ad72a098dd5343"
+    },
+    "knowledge/q2/teleporter-arrival-study.json": {
+      "path": "knowledge/q2/teleporter-arrival-study.json",
+      "sha256": "0c37cc9170fc2ad2f7e16f1346548882d3636247afe6b3bad644727fb6c63b5d"
+    },
+    "knowledge/q2/traversal-study.json": {
+      "path": "knowledge/q2/traversal-study.json",
+      "sha256": "0194e174c4508da4550b36ffc1aa135424018fd8e1c215d459598ebf214f9712"
+    },
+    "knowledge/q2/upper-connection-study.json": {
+      "path": "knowledge/q2/upper-connection-study.json",
+      "sha256": "f4699aee12f35928917c55a2e31e4c4ddd315b4b5bf1158c45c32043f4059017"
+    },
+    "knowledge/q3/experiments/phase2-r1s-q3-ctf-team-begin.json": {
+      "path": "knowledge/q3/experiments/phase2-r1s-q3-ctf-team-begin.json",
+      "sha256": "e719cc2296de7a4c83a4e17931179ad3fef7553acf4e81dae032b3c9ed1acb40"
+    },
+    "schemas/semantic-plan-v1.schema.json": {
+      "path": "schemas/semantic-plan-v1.schema.json",
+      "sha256": "aa4be94082b433f6de298d8a0d0521becb398e22ebec529b7c971fab89cc9557"
+    },
+    "src/construction.cpp": {
+      "path": "src/construction.cpp",
+      "sha256": "e269fe175663a7ba128423d5966532290b38df0ed5044afac04e2517ab5741df"
+    },
+    "src/entities.cpp": {
+      "path": "src/entities.cpp",
+      "sha256": "58446412f4cb58832adf4aed527b646c429c6ac4d49a91a5a3521167175c1964"
+    },
+    "src/generator.cpp": {
+      "path": "src/generator.cpp",
+      "sha256": "c795115119d33b20a0027e29fe1b3b6b6267d9cc1697ce05b22fe3dd99ddae08"
+    },
+    "src/ggml_ranker.cpp": {
+      "path": "src/layout_ranker.cpp",
+      "sha256": "f7a1162be864c2f7167230fd5e473bc7e503c67b4b324c778fb395f09c3f546b"
+    },
+    "src/layout_fingerprint.cpp": {
+      "path": "src/layout_fingerprint.cpp",
+      "sha256": "07b6a3ccda50b3cdfb235dd46476e9c22ff6d97016702cb2e685e3b8137b54bc"
+    },
+    "src/leak.cpp": {
+      "path": "src/leak.cpp",
+      "sha256": "33073a8555f87a384db74ee871bccb7ce437f62ef902e950c5fde85c8e9a4985"
+    },
+    "src/lighting.cpp": {
+      "path": "src/lighting.cpp",
+      "sha256": "14fcac8d6f67c55707ac7ec640740db6176e85e3672b61c036c61873e368cecd"
+    },
+    "src/map_builder.cpp": {
+      "path": "src/map_builder.cpp",
+      "sha256": "c9cbe14557b56ffa3567cbb2607280427463ab005f21580605b1bbb4bc0df2f9"
+    },
+    "src/map_document.cpp": {
+      "path": "src/map_document.cpp",
+      "sha256": "657848b1a5b074096d3ecbd6e8da97588e56037d09fabb3e0fa1b23ddd0e212d"
+    },
+    "src/map_document_writer.cpp": {
+      "path": "src/map_document_writer.cpp",
+      "sha256": "8681b8aeb26ebc1d869d11c62c2d302dcdaa7724d1637f41d5cbfab49799068d"
+    },
+    "src/map_parser.cpp": {
+      "path": "src/map_parser.cpp",
+      "sha256": "085a286bcefe1ca9175884d27538a358ebb8a4591d47a04497b9ca9bfdda407d"
+    },
+    "src/map_writer.cpp": {
+      "path": "src/map_writer.cpp",
+      "sha256": "49575e8fd3d0d77f560dd3021f07406380d589e81cc0ac2a6121b5ca67085cc7"
+    },
+    "src/mp_motifs.cpp": {
+      "path": "src/mp_motifs.cpp",
+      "sha256": "f9f4a4f90f37e27907a32694d739005b40fd45dcdd7bfd9610fb2a5a01afe69c"
+    },
+    "src/navigation.cpp": {
+      "path": "src/navigation.cpp",
+      "sha256": "edb2db51641947cade179a836c30462012c44ccfbbdfc98be6301083d24cdb72"
+    },
+    "src/pipeline.cpp": {
+      "path": "src/pipeline.cpp",
+      "sha256": "ae4c6e912684de2cc7a8795a28bbd67f205c4dfa3d4efbada5b4fc550fcca8e5"
+    },
+    "src/prompt.cpp": {
+      "path": "src/prompt.cpp",
+      "sha256": "2d8d00cd16109c8a56523b0875b408562a24d85ee3b5f9345b58d9dbdd102de9"
+    },
+    "src/quality.cpp": {
+      "path": "src/quality.cpp",
+      "sha256": "f9621913da5f4939fd0e158922a351ed9cb659f81f125a5893259c603dd11dbc"
+    },
+    "src/repair.cpp": {
+      "path": "src/repair.cpp",
+      "sha256": "6285ba4fa60e894c6a935c311f2b32384eae573c7e72085c2eaa111ba76ef478"
+    },
+    "src/report.cpp": {
+      "path": "src/report.cpp",
+      "sha256": "3d150adcb36ef83a38df1abf04c43e9aae5857dbc306fde6e9b563f1488c81bf"
+    },
+    "src/semantic_plan.cpp": {
+      "path": "src/semantic_plan.cpp",
+      "sha256": "dbc139bb8df6e8149ab110dbc7780c7d21919445e62749c7c08f44f4adb2cbd5"
+    },
+    "src/semantic_planner.cpp": {
+      "path": "src/semantic_planner.cpp",
+      "sha256": "1aff0eb81ff10b59bc71d6fbe210cd8f733ebc075e5c3dfa47b70779c023881b"
+    },
+    "src/sha256.cpp": {
+      "path": "src/sha256.cpp",
+      "sha256": "b8abfe6207b3460f08edd26927191509dedc5c78aee915f6eed637c85506f01b"
+    },
+    "src/spawn_refinement.cpp": {
+      "path": "src/spawn_refinement.cpp",
+      "sha256": "1b585eb7ab4a598acd1b76e52bf94d7120a3c8f5408b64acc6c10ea9a6192cc8"
+    },
+    "src/switches.cpp": {
+      "path": "src/switches.cpp",
+      "sha256": "a56232e01cdf87dcb7abad41e64e5caa55864f3dad646a7c9ada40af1cb29b26"
+    },
+    "src/types.cpp": {
+      "path": "src/types.cpp",
+      "sha256": "fd3f6d2a30aac90b05fd7a13f4726cca37b61bd6251e267f6a64aec095c125a4"
+    },
+    "src/upper_links.cpp": {
+      "path": "src/upper_links.cpp",
+      "sha256": "0d74de2d508f13c85549b572f0dca5da638f9b3f6f19048d3215888a2d57a65b"
+    },
+    "src/validator.cpp": {
+      "path": "src/validator.cpp",
+      "sha256": "56177de4504f8f8604e0b5fce4a4cea60a93a482baf24d36ed9ba57f67cbff85"
+    },
+    "src/visibility.cpp": {
+      "path": "src/visibility.cpp",
+      "sha256": "ebe1fc5302e78aeca5b391677d4389021e2a009ee5290193190f205f151625e7"
+    },
+    "tests/fixtures/profiles/facts.json": {
+      "path": "tests/fixtures/profiles/facts.json",
+      "sha256": "30b06484937b55cafe406636c644ef33b5cb47586a0e5d6fb6fcfe262a7143d2"
+    },
+    "tests/golden/map_document_q1_valve220.map": {
+      "path": "tests/golden/map_document_q1_valve220.map",
+      "sha256": "b5c47cf2127ef2c5208fc5baaff89b3edc1aed5c10b38c2aee98d9708192a451"
+    },
+    "tests/golden/map_document_q2_valve220.map": {
+      "path": "tests/golden/map_document_q2_valve220.map",
+      "sha256": "791faef452f6b9263db9298781b95ec8b1bb2a7dec36df8a1b5f8352c73c3dc4"
+    },
+    "tests/golden/map_document_q3_brush_primitives.map": {
+      "path": "tests/golden/map_document_q3_brush_primitives.map",
+      "sha256": "285c7e30450bbcdb24fecfcf1b73c55e6bc4b8de6e640a86355322e21b6d1bab"
+    },
+    "tests/golden/map_document_q3_legacy.map": {
+      "path": "tests/golden/map_document_q3_legacy.map",
+      "sha256": "a2d7217a489e95682c04fd3cc8113bc48676fd80e62c429940fccf5978aeedb4"
+    },
+    "tests/recipe_preview_check.cjs": {
+      "path": "tests/recipe_preview_check.cjs",
+      "sha256": "18ea0423c1ce4c9b75622a843a3cc03e2ee371161fa5f553014ceed72b1a6617"
+    },
+    "tests/test_arrival_audit.py": {
+      "path": "tests/test_arrival_audit.py",
+      "sha256": "29ff84a8206a3d53bbde931c9fe3b75addfb6ae25ddabfdc1b61c5c4f70ef949"
+    },
+    "tests/test_arrival_bindings.py": {
+      "path": "tests/test_arrival_bindings.py",
+      "sha256": "60a3dc74686096713d9eca00e76d7d32bfd0798f14388c976c75d43f17b60ba6"
+    },
+    "tests/test_atrium_audit.py": {
+      "path": "tests/test_atrium_audit.py",
+      "sha256": "6dec6de3a3378276ec386cfc2a9ffe9adbadf33a962b0e93b1714c0fffb0c5ba"
+    },
+    "tests/test_atrium_routes.py": {
+      "path": "tests/test_atrium_routes.py",
+      "sha256": "59e22147395e68e46de6f2ff43d1019c5559b6d66588e541b3592fc1f52a45cd"
+    },
+    "tests/test_braid_compare.py": {
+      "path": "tests/test_braid_compare.py",
+      "sha256": "a5fd7ee33ed06baddb0281b260b2312a0d05805557a5704cb186b7d6fa4709a2"
+    },
+    "tests/test_construction.cpp": {
+      "path": "tests/test_construction.cpp",
+      "sha256": "d2ffde379406fff732931f992d94a25c478f0e50e3a15d5df03e9236e091ebcf"
+    },
+    "tests/test_drop_audit.py": {
+      "path": "tests/test_drop_audit.py",
+      "sha256": "b7d6d2261f8c9cb8ca5a67ff8daa6ea19fc25f2a94aa7ab8b578047998dafbcc"
+    },
+    "tests/test_fold_audit.py": {
+      "path": "tests/test_fold_audit.py",
+      "sha256": "3566105a710772003847a83ef7b49916c540cbe5570d5e41c8f820f3fdb5310f"
+    },
+    "tests/test_gate_audit.py": {
+      "path": "tests/test_gate_audit.py",
+      "sha256": "8f0ac8a2202fc6329ccb25033a018c414ee8635784cdd53d54e96d70531259fa"
+    },
+    "tests/test_hinge_compare.py": {
+      "path": "tests/test_hinge_compare.py",
+      "sha256": "f1a1f03c0231d02426b428604cd207064b188e95d22e0b9d7f5ccf8164532950"
+    },
+    "tests/test_leak.cpp": {
+      "path": "tests/test_leak.cpp",
+      "sha256": "0669da9b47b2ae071fc99fe0c83dfe98ede8a460b80c6bfb846e2dac2ebe66dc"
+    },
+    "tests/test_lighting.cpp": {
+      "path": "tests/test_lighting.cpp",
+      "sha256": "9bc721b4cb7cffb22d06038b9e07400252ff7e7938a23993918d6dc247a7bd46"
+    },
+    "tests/test_lockyard_audit.py": {
+      "path": "tests/test_lockyard_audit.py",
+      "sha256": "20c4dc8dca07737403329b95ed07985c1b2ec82951b7447e80eae925302d8a59"
+    },
+    "tests/test_main.cpp": {
+      "path": "tests/test_main.cpp",
+      "sha256": "9dc535df0071e76cbb72da85cde3b7e5faa636a5cff25014b51eae51ea1cab7c"
+    },
+    "tests/test_map_builder.cpp": {
+      "path": "tests/test_map_builder.cpp",
+      "sha256": "83d6ed059744fd47182551d0e336685cd967fea2865f3cc79547eab2590a5dcc"
+    },
+    "tests/test_map_document.cpp": {
+      "path": "tests/test_map_document.cpp",
+      "sha256": "3ebaf5c37551a29f263609b0a6da8f508527c97966a85d3c1b94cb88f8ca3137"
+    },
+    "tests/test_map_study.py": {
+      "path": "tests/test_map_study.py",
+      "sha256": "6ba262fbc39dd8d41bd39f71b4f2415a18f8219ef67584bb92e2b7ab6da1ade7"
+    },
+    "tests/test_map_study_q1q3.py": {
+      "path": "tests/test_map_study_q1q3.py",
+      "sha256": "d4efe120a97302c9a2e5e364c100cd6df18ae2434cc107c127b51541516ac062"
+    },
+    "tests/test_mp_motifs.cpp": {
+      "path": "tests/test_mp_motifs.cpp",
+      "sha256": "f57586b34b3e9bb8748e3060c886b2426404d01882af04612cefcbbbf0eda78b"
+    },
+    "tests/test_mp_portfolio.py": {
+      "path": "tests/test_mp_portfolio.py",
+      "sha256": "cfb8e940795138e2eb9ab8b04685b888be1800c6b1bfed331c152ab41731b9a1"
+    },
+    "tests/test_mp_ranking.py": {
+      "path": "tests/test_mp_ranking.py",
+      "sha256": "1344e8da86ba7c3572c0facbeae8efb8eba075ce3344db3aa418c74fae7b9ffd"
+    },
+    "tests/test_mp_topology.py": {
+      "path": "tests/test_mp_topology.py",
+      "sha256": "47e295251a8ba9c991dcff17ed0260a54585cb32874c8cb03d172b6b7b73221a"
+    },
+    "tests/test_native_ascent.py": {
+      "path": "tests/test_native_ascent.py",
+      "sha256": "14173f27a00bda84d13e6b82075da44ad1418d76b3708a8989a650fa2d1d1284"
+    },
+    "tests/test_native_motif_circuits.py": {
+      "path": "tests/test_native_motif_circuits.py",
+      "sha256": "89925417a142e5b20443e2ce30a7606199d895309ce4fb34860f7c22fdbe4f3f"
+    },
+    "tests/test_native_motif_turning.py": {
+      "path": "tests/test_native_motif_turning.py",
+      "sha256": "7bc4ba7105d106b261291b7f1db61e678e4504dc6f83ec1a00d34a08e66fcb0e"
+    },
+    "tests/test_native_movement.py": {
+      "path": "tests/test_native_movement.py",
+      "sha256": "f23404a3e84ae0e87e0c899b16f7b2b2bdf98c808da3972305181ca969dacb78"
+    },
+    "tests/test_native_ravel.py": {
+      "path": "tests/test_native_ravel.py",
+      "sha256": "93958936fc0ae82f9390f1acdbeb78dde774c0af37f38d6951f5d61846004b7e"
+    },
+    "tests/test_native_recovery.py": {
+      "path": "tests/test_native_recovery.py",
+      "sha256": "990a608e82f89b76a211c13234ec148421d4975bc14c567c9073df002a67b4b2"
+    },
+    "tests/test_native_teleport.py": {
+      "path": "tests/test_native_teleport.py",
+      "sha256": "9b154733263ffb09c1abdbe265986df721539dfd16d5853cfd78c8ec94b73604"
+    },
+    "tests/test_native_upper_link.py": {
+      "path": "tests/test_native_upper_link.py",
+      "sha256": "ae374881adc4234e6640b5c98597e45b2797b85e15c34d9bb5509498288646fd"
+    },
+    "tests/test_navigation.cpp": {
+      "path": "tests/test_navigation.cpp",
+      "sha256": "a72dd70bfc6594b76607c4517b7e7681c4dabb89d1b8077d88700733fe5f17dc"
+    },
+    "tests/test_opposed_bridge.cpp": {
+      "path": "tests/test_opposed_bridge.cpp",
+      "sha256": "2545a66d204c843d00eae7dee710685ab96f17f9a69f5008c4cae2b02615e84a"
+    },
+    "tests/test_packing_audit.py": {
+      "path": "tests/test_packing_audit.py",
+      "sha256": "bcde7c57a4df935a16c3910f1d9315b17287e8897e6ac621ba5c67ad7c9e1ab6"
+    },
+    "tests/test_ql_atlas.py": {
+      "path": "tests/test_ql_atlas.py",
+      "sha256": "445195caa43fa337c1a2875228b34fa69396a7f002863dd0000b6fe9faff2b2e"
+    },
+    "tests/test_quality.cpp": {
+      "path": "tests/test_quality.cpp",
+      "sha256": "0fa0e46c19073c5abc2a60eb5ea0d8a7b14f1993fdb34bdc3cc97de549fefa7e"
+    },
+    "tests/test_r1s_intermission.cpp": {
+      "path": "tests/test_r1s_intermission.cpp",
+      "sha256": "9cfae5589f17b2833bf4b30a15ca1de39ac4c46584dea69f8d8a431069ac0cde"
+    },
+    "tests/test_r1s_monster_hull_support.cpp": {
+      "path": "tests/test_r1s_monster_hull_support.cpp",
+      "sha256": "d3ab81d0459b4a6199f9e0de39d6ea8a79f6c9320e0001a66c7f41d531af842a"
+    },
+    "tests/test_r1s_mp_player_start.cpp": {
+      "path": "tests/test_r1s_mp_player_start.cpp",
+      "sha256": "b14865695572c8bdd6b92bc90906733b706cdc8cefcc503c4597fd766185a060"
+    },
+    "tests/test_r1s_q3_ctf_team_begin.cpp": {
+      "path": "tests/test_r1s_q3_ctf_team_begin.cpp",
+      "sha256": "72943912e4c628d23884bb067c68ec9abcd950b1cbfe8958bb5062a695fe6e31"
+    },
+    "tests/test_r1s_sp_coop_starts.cpp": {
+      "path": "tests/test_r1s_sp_coop_starts.cpp",
+      "sha256": "2e1fe07fe9438560a6a7b7a3f8533c36c7ce3017ee5e2728e1e1d08adad30021"
+    },
+    "tests/test_r1s_sp_pickup_hull_support.cpp": {
+      "path": "tests/test_r1s_sp_pickup_hull_support.cpp",
+      "sha256": "cf7f3ab3e18331aec6c16f1fe98de6275a83e50b97f4733a92c29186dc0a3cde"
+    },
+    "tests/test_ranker_diagnostics.cpp": {
+      "path": "tests/test_ranker_diagnostics.cpp",
+      "sha256": "0c9635e36d64816b432d3139948ed7fb2e3b642d1259526ff7152dc5656696f6"
+    },
+    "tests/test_ravel_audit.py": {
+      "path": "tests/test_ravel_audit.py",
+      "sha256": "57676eb982d610198f50f7bfcda221779711516849ca2d083eeb08c24b1bec59"
+    },
+    "tests/test_recipe_environment.cpp": {
+      "path": "tests/test_recipe_environment.cpp",
+      "sha256": "42205e904b4f967e08c8877026d130b31c8cf2543f06a21d3024a6a7db026ea7"
+    },
+    "tests/test_recipe_geometry.py": {
+      "path": "tests/test_recipe_geometry.py",
+      "sha256": "26217fc78f4e8cb344be216d6afe52043d0e7ef9dda7c416cdb70a09dc4cb017"
+    },
+    "tests/test_recipe_native_display.py": {
+      "path": "tests/test_recipe_native_display.py",
+      "sha256": "0f3895133ec4fd7e1c37388ba02fa7839725ef7bcf50967051195c3cdd5db0a7"
+    },
+    "tests/test_span_compare.py": {
+      "path": "tests/test_span_compare.py",
+      "sha256": "bee021c847ed23a0399f4359f84171a940b994dfea237edd7996576b9c6acc98"
+    },
+    "tests/test_spawn_refinement.cpp": {
+      "path": "tests/test_spawn_refinement.cpp",
+      "sha256": "89e36d8dedb67744af1f785cf704e2c615081d62d828858d4c58ee7cfe01d4b8"
+    },
+    "tests/test_spawn_separation_study.py": {
+      "path": "tests/test_spawn_separation_study.py",
+      "sha256": "9025bd41249c536c503c368acf28651277a94876408940b9ad72a054192c27d5"
+    },
+    "tests/test_switches.cpp": {
+      "path": "tests/test_switches.cpp",
+      "sha256": "0b6943ab9bb548950f7f98bb7b618cb200d65003f05a42cefc17a796d01e7df2"
+    },
+    "tests/test_teleporter_arrivals.py": {
+      "path": "tests/test_teleporter_arrivals.py",
+      "sha256": "6173700372688dbc2d64c8feba75e10f4462259b6b781a5111c4dd643b16e888"
+    },
+    "tests/test_upper_link_controls.py": {
+      "path": "tests/test_upper_link_controls.py",
+      "sha256": "782f7e550f1540141122690586e31742b8780f4052e23db448b1ec516d152e54"
+    },
+    "tests/test_upper_links.cpp": {
+      "path": "tests/test_upper_links.cpp",
+      "sha256": "fff7933afa45b8e996fe680a9ad62d2319be0869b10f6a219599d058545f4dcd"
+    },
+    "tests/test_visibility.cpp": {
+      "path": "tests/test_visibility.cpp",
+      "sha256": "0a326e4026a107b5cc3f36990365cef2bfda56dc1c875a9516f66ce1ba8b932b"
+    },
+    "tests/test_wrapped_intent.cpp": {
+      "path": "tests/test_wrapped_intent.cpp",
+      "sha256": "69195b885f7a7cf3c18acbdf713e596ca903dfaafe54418af305540788a2197a"
+    },
+    "tools/__init__.py": {
+      "path": "tools/__init__.py",
+      "sha256": "1f1949a79a42fa2fa8fb7415ebd92a9781d637ab19cea5ab8255bffe378c8532"
+    },
+    "tools/asset_registry/README.md": {
+      "path": "tools/asset_registry/README.md",
+      "sha256": "1af0a231f977fb00b04057702df48275f3e1715c936bea1fe08ef1d775241e45"
+    },
+    "tools/asset_registry/__init__.py": {
+      "path": "tools/asset_registry/__init__.py",
+      "sha256": "ed70c9cacb067e66ec1b3151df99767f7ab93831c477915a72761afa7f688cdb"
+    },
+    "tools/asset_registry/admission.py": {
+      "path": "tools/asset_registry/admission.py",
+      "sha256": "5503ec7677e752d3347a25e2e0d1ae61ec9e1e40cc589d85efe9995570dd40d3"
+    },
+    "tools/asset_registry/controls.json": {
+      "path": "tools/asset_registry/controls.json",
+      "sha256": "5f8c1b6a8889f402c187114b3d7977185a09c1117680724a415c2ed50009d3db"
+    },
+    "tools/asset_registry/registry.py": {
+      "path": "tools/asset_registry/registry.py",
+      "sha256": "8bf4fa455f68e8f1848abecfaf3e04aace7b6fe882c3d8aac4db9b1ad5d75fbe"
+    },
+    "tools/asset_registry/scan_data_bytes.py": {
+      "path": "tools/asset_registry/scan_data_bytes.py",
+      "sha256": "4f25268114988f2b55ff66e38b27f970f022ee89da35aa34f7b83597b5f72bee"
+    },
+    "tools/asset_registry/test_asset_admission.py": {
+      "path": "tools/asset_registry/test_asset_admission.py",
+      "sha256": "29af625d47562edcf06c667b8eeec5f6227990357ce46fdbeb1973fa6ecf7610"
+    },
+    "tools/benchmark/README.md": {
+      "path": "tools/benchmark/README.md",
+      "sha256": "cad00fdfad6c2673b32ff826839c11ede2fbb1e1f9ad40209d62f110f3635aff"
+    },
+    "tools/benchmark/baselines/index.json": {
+      "path": "tools/benchmark/baselines/index.json",
+      "sha256": "6903ad004b42bdb2bc4fbadd0318ebd0667965046d7617e45a0703728a54eb0a"
+    },
+    "tools/benchmark/compare.py": {
+      "path": "tools/benchmark/compare.py",
+      "sha256": "a738936725a4fb6abfd935bdb6019aa5f3443c41e6df63d9b10e886b0adf118b"
+    },
+    "tools/benchmark/contra-v1.json": {
+      "path": "tools/benchmark/contra-v1.json",
+      "sha256": "564b43a3b6753a35ab7a785aaf6ea8a8406bc930dbde316627635929d5ee6ccb"
+    },
+    "tools/benchmark/decisions.json": {
+      "path": "tools/benchmark/decisions.json",
+      "sha256": "16b40adff669ac7262dcfc1a6e20ac500f36615619c94195c3d414e2db9906e2"
+    },
+    "tools/benchmark/docs-claims.json": {
+      "path": "tools/benchmark/docs-claims.json",
+      "sha256": "f7c6c8ab836912ac14364bb143aca22c22a6d0cd934d6265e53013a161a6165c"
+    },
+    "tools/benchmark/docs_claims.py": {
+      "path": "tools/benchmark/docs_claims.py",
+      "sha256": "fa16c4e214c7945788fa31cebd2058cf7a090efbb2b0622640fdb5ca23cd2042"
+    },
+    "tools/benchmark/draft-v0.json": {
+      "path": "tools/benchmark/draft-v0.json",
+      "sha256": "056889a0bdf7f74fad66c5afc493d3da9217becd834b0af6774954c54edea3d7"
+    },
+    "tools/benchmark/freeze_sets.py": {
+      "path": "tools/benchmark/freeze_sets.py",
+      "sha256": "1b5609b82b5b737a20751762341751ae5fdd8a21b9519a52a6a7485f10b7f3c9"
+    },
+    "tools/benchmark/heroes.json": {
+      "path": "tools/benchmark/heroes.json",
+      "sha256": "33aa68a8bf6c2d68c82f336022c74ba29821cefaeb44d82f9f900db2ecfc72c2"
+    },
+    "tools/benchmark/ledger_check.py": {
+      "path": "tools/benchmark/ledger_check.py",
+      "sha256": "9d59b4fba16c3012db3a708eee77ca0e71a4a4eb6ef522615eee76d78f907e43"
+    },
+    "tools/benchmark/manifests.json": {
+      "path": "tools/benchmark/manifests.json",
+      "sha256": "6b7876dc5ca9cbea1ae653710a4543ed8d709537d30d4b4f6c08f18d2b342855"
+    },
+    "tools/benchmark/parity.py": {
+      "path": "tools/benchmark/parity.py",
+      "sha256": "9607daaabb42da50018b044ee1c0d06e295a6f080e463e852a1aea089f4aec94"
+    },
+    "tools/benchmark/parse-matrix-v1.json": {
+      "path": "tools/benchmark/parse-matrix-v1.json",
+      "sha256": "b6118fbf1e9c15287d5c6f08c3f7fe1b40a2c1594be4ccfe059ad4f8dcbd7bd2"
+    },
+    "tools/benchmark/portfolios/lattice-portfolio.json": {
+      "path": "tools/benchmark/portfolios/lattice-portfolio.json",
+      "sha256": "d1c27a5ab25544c8597ae1cf797abd54741e72fc5430627b28b39a914b72d226"
+    },
+    "tools/benchmark/portfolios/mp-portfolio.json": {
+      "path": "tools/benchmark/portfolios/mp-portfolio.json",
+      "sha256": "7e4e22f91380a53deb1fd00f4c85d689ea1e752d03f08f326da16f2952d28c70"
+    },
+    "tools/benchmark/portfolios/span-portfolio.json": {
+      "path": "tools/benchmark/portfolios/span-portfolio.json",
+      "sha256": "c3bee7bc9a9b19a17e1191ee2e264d2fa18adf1c0b95dffe34bbe172c293bc77"
+    },
+    "tools/benchmark/portfolios/splice-portfolio.json": {
+      "path": "tools/benchmark/portfolios/splice-portfolio.json",
+      "sha256": "09bb690bb6897f8aa720ea33e2d83c4f6c0dcef1a84d77cda94d2f3d307b4a16"
+    },
+    "tools/benchmark/pr-subset-v1.json": {
+      "path": "tools/benchmark/pr-subset-v1.json",
+      "sha256": "0556b76dad32cab6a99e65b25a56221676a282e55952945cea22b29db2f24cac"
+    },
+    "tools/benchmark/rc-ledger.json": {
+      "path": "tools/benchmark/rc-ledger.json",
+      "sha256": "e3af89258f6db14fffd8dfc67aa7dcfae5384653bb11e08ecdceee2380e41c82"
+    },
+    "tools/benchmark/rc-ledger.schema.json": {
+      "path": "tools/benchmark/rc-ledger.schema.json",
+      "sha256": "43c7c30883634f8bcdf3d3209f87291fec57f3eb2d0bbe04c18ef91ceb3fbf6f"
+    },
+    "tools/benchmark/rc1-v1.json": {
+      "path": "tools/benchmark/rc1-v1.json",
+      "sha256": "4de23ee55d7bd709b74bd85839bc518656433cccd86fb373cbd63aa1006c7203"
+    },
+    "tools/benchmark/rc_benchmark.py": {
+      "path": "tools/benchmark/rc_benchmark.py",
+      "sha256": "d5c452790f094f912fcd5fc9fa593933044a56f3d558f4f87e8e20668a7aea51"
+    },
+    "tools/benchmark/run.py": {
+      "path": "tools/benchmark/run.py",
+      "sha256": "d061a4b0c8f6b638d76b7ca1df7b4347e1837e851aae37c609858a10bc6d1773"
+    },
+    "tools/benchmark/schemas/playtest-session.schema.json": {
+      "path": "tools/benchmark/schemas/playtest-session.schema.json",
+      "sha256": "e87c275c7e7d35f5439773c29c50a964b3900bb6fad620559874efcccf9f404c"
+    },
+    "tools/benchmark/sealed.json": {
+      "path": "tools/benchmark/sealed.json",
+      "sha256": "43ccd72165a97cab16777feb6e75be7d1d3419875303af058509c4dae1a575be"
+    },
+    "tools/benchmark/templates/experiment-record.json": {
+      "path": "tools/benchmark/templates/experiment-record.json",
+      "sha256": "5ef2bba63f35487f80ecb87e47177ff135a15e4a4458ab01a9e2beef06dbfc44"
+    },
+    "tools/map_recipes/ENGINE_SMOKE.md": {
+      "path": "tools/map_recipes/ENGINE_SMOKE.md",
+      "sha256": "e4ec4a710800073f0d296c545c779f5382f610c9d5783e2dedf880850bc8d475"
+    },
+    "tools/map_recipes/README.md": {
+      "path": "tools/map_recipes/README.md",
+      "sha256": "ba7392c50d15d32f911f0a0a8896ecf82965775ebfe775f646db7874686e8cf1"
+    },
+    "tools/map_recipes/__init__.py": {
+      "path": "tools/map_recipes/__init__.py",
+      "sha256": "e2a47cc3b82003778eaa95cee9e07bac1b079612df6610b71e05e9364f30634b"
+    },
+    "tools/map_recipes/arrival_audit.py": {
+      "path": "tools/map_recipes/arrival_audit.py",
+      "sha256": "91e337f19586a6af29f2da10ddbfa31f85ca862fea43d38b88de84b18103e3aa"
+    },
+    "tools/map_recipes/build.ps1": {
+      "path": "tools/map_recipes/build.ps1",
+      "sha256": "2a9986ad3019b3ea5125ec0ef3fbaa42cab3916bdd6de2b945053748633793d4"
+    },
+    "tools/map_recipes/counterweight.cpp": {
+      "path": "tools/map_recipes/counterweight.cpp",
+      "sha256": "b6a667f8d876873fdf4699d31e0eefba1c168f674a8eba5ab0546ecb6e390898"
+    },
+    "tools/map_recipes/drop_audit.py": {
+      "path": "tools/map_recipes/drop_audit.py",
+      "sha256": "f9c284ad85ead67913dcf3a51945bb21be994fa4968b60f60bbb876cd581f2de"
+    },
+    "tools/map_recipes/engine_smoke.py": {
+      "path": "tools/map_recipes/engine_smoke.py",
+      "sha256": "7f886dcf892858d8d65251121d6235b786c49191be61c898ca4b40fa43a633a5"
+    },
+    "tools/map_recipes/fold.cpp": {
+      "path": "tools/map_recipes/fold.cpp",
+      "sha256": "d3cba899927f85862572a96c1388df5925d85bcad6f2640e2be45ec07ed3b936"
+    },
+    "tools/map_recipes/fold_audit.py": {
+      "path": "tools/map_recipes/fold_audit.py",
+      "sha256": "5a979b5d3f2de11f9232eeb0e457bd3ae9820165dccc1adc37431b34f3606e5c"
+    },
+    "tools/map_recipes/gate_audit.py": {
+      "path": "tools/map_recipes/gate_audit.py",
+      "sha256": "cf02b7fabe2e9241203d89b662e85bb7064f050fd281ff841324896442ba2559"
+    },
+    "tools/map_recipes/geometry.py": {
+      "path": "tools/map_recipes/geometry.py",
+      "sha256": "dcfcc3413468cad9993476736edfae5f13eb03e26035fc39d73f83aa5a90742b"
+    },
+    "tools/map_recipes/inspect.py": {
+      "path": "tools/map_recipes/inspect.py",
+      "sha256": "545d45472596133851326174eb3752cfdb3d41ead495f1c684bc7142b28b3253"
+    },
+    "tools/map_recipes/layout-view-v2.html": {
+      "path": "tools/map_recipes/layout-view-v2.html",
+      "sha256": "44114d19e5a84bd002e30b2b9243fb4e5f54d16008fa22e271ac2bcc36c9b3ad"
+    },
+    "tools/map_recipes/layout-view.html": {
+      "path": "tools/map_recipes/layout-view.html",
+      "sha256": "d209818410559fbe595cf988389f1172b168968968298e33b3efbd126d7560dc"
+    },
+    "tools/map_recipes/lockyard.cpp": {
+      "path": "tools/map_recipes/lockyard.cpp",
+      "sha256": "1811ae0ce8863a635d9deff0407c502e3fde7e2005569d714d83dd62192480a2"
+    },
+    "tools/map_recipes/lockyard_audit.py": {
+      "path": "tools/map_recipes/lockyard_audit.py",
+      "sha256": "300ed04982fd76082eac1adc6cfe4643eb4a6ae46e5ea398aa0db1963bd3e73d"
+    },
+    "tools/map_recipes/packing_audit.py": {
+      "path": "tools/map_recipes/packing_audit.py",
+      "sha256": "7ac251edd70ed2835478b78e019e4aa23edd7492b5e13d50fa517e8c231e658a"
+    },
+    "tools/map_recipes/ramp_audit.py": {
+      "path": "tools/map_recipes/ramp_audit.py",
+      "sha256": "1a6e17dd124db8ba030cc56927f6cb4b1c7ebecbfbadcf529165efded3103cdc"
+    },
+    "tools/map_recipes/ramp_stair_comparison.py": {
+      "path": "tools/map_recipes/ramp_stair_comparison.py",
+      "sha256": "711bb6b48e3676a909bfb907799417d51f65373bf86a6295e0ba2f2bfb488dd8"
+    },
+    "tools/map_recipes/ravel.cpp": {
+      "path": "tools/map_recipes/ravel.cpp",
+      "sha256": "ed62c7416d1296dcab6d3ddedc656b62ce28733dc40415fe0220f81cd35c6198"
+    },
+    "tools/map_recipes/ravel_audit.py": {
+      "path": "tools/map_recipes/ravel_audit.py",
+      "sha256": "a25628bc6647efd4e67dd2ce21e2e29b9f620ee9b446d699ca75ad18da2f1d6d"
+    },
+    "tools/map_recipes/recipe_support.hpp": {
+      "path": "tools/map_recipes/recipe_support.hpp",
+      "sha256": "8b1321145e9fa896c71ad86be44025b6400992f11d07ceb0052683b23ed6600c"
+    },
+    "tools/map_recipes/relay.cpp": {
+      "path": "tools/map_recipes/relay.cpp",
+      "sha256": "1fa6f0cce4626d67de3469eff7f4f736a6808ac91675c06eb7efd9301b6818e7"
+    },
+    "tools/map_recipes/render_layout.py": {
+      "path": "tools/map_recipes/render_layout.py",
+      "sha256": "07d3d70e635e918a3dcbbdc3f01723df549a220170464cc92156064fe39b26bb"
+    },
+    "tools/map_recipes/spillway.cpp": {
+      "path": "tools/map_recipes/spillway.cpp",
+      "sha256": "2a563e6e16c8a32840203249c3e8d0522aa0def918c8b0c8e32b13d02813f7b3"
+    },
+    "tools/map_recipes/switchback.cpp": {
+      "path": "tools/map_recipes/switchback.cpp",
+      "sha256": "c8fcc482f2e3f17aeaea6cb8d727f19c40d9081b74a259c4478758d236776c2d"
+    },
+    "tools/map_recipes/talus.cpp": {
+      "path": "tools/map_recipes/talus.cpp",
+      "sha256": "7c1cf9837662a6bcb588907ca28e3d7450aee6828e358ca097329a2007291e7a"
+    },
+    "tools/map_recipes/talus_stairs.cpp": {
+      "path": "tools/map_recipes/talus_stairs.cpp",
+      "sha256": "e76f0eb1a377bc018d1d3da35f75de0f85e6838aab00db81a9c1d3b565f4f0fa"
+    },
+    "tools/map_recipes/undercut.cpp": {
+      "path": "tools/map_recipes/undercut.cpp",
+      "sha256": "0587d571fc222af766948b01e9ea7132e49667563cd7b857ba724fb25c09c487"
+    },
+    "tools/map_study/__init__.py": {
+      "path": "tools/map_study/__init__.py",
+      "sha256": "8305d2a7bfc81ff83b9b4aa85beb1fd5284c049667cc61c8c80f53b5e94b3b74"
+    },
+    "tools/map_study/__main__.py": {
+      "path": "tools/map_study/__main__.py",
+      "sha256": "75027cb0d9f5f53a12afd3a7604045f31bae283419ce2daf65e3add3db210866"
+    },
+    "tools/map_study/atrium_routes.py": {
+      "path": "tools/map_study/atrium_routes.py",
+      "sha256": "2e3c1d4e51b1419c7b013e3ddbf94572da35ed5f5248b6349b6210328d399945"
+    },
+    "tools/map_study/binary.py": {
+      "path": "tools/map_study/binary.py",
+      "sha256": "2b76559a71365eaab41e6876ff7da94fe938994b4a5199d63620b8b60918daf1"
+    },
+    "tools/map_study/bsp29.py": {
+      "path": "tools/map_study/bsp29.py",
+      "sha256": "614c9d6b2cf6f2b5f48241aba28fc2dd8648db00f44de9a985157bbe66e80557"
+    },
+    "tools/map_study/corpus.py": {
+      "path": "tools/map_study/corpus.py",
+      "sha256": "907aab1f4ee3fe055faeca378acf0d91464b2a5a8b5cda2aadd983996470da92"
+    },
+    "tools/map_study/features.py": {
+      "path": "tools/map_study/features.py",
+      "sha256": "9fd18f7ed3d9f5299d38d63d328daa3a20fd9bcc249e969054ba8a7c707ba535"
+    },
+    "tools/map_study/ibsp46.py": {
+      "path": "tools/map_study/ibsp46.py",
+      "sha256": "b20303d11ad38b16b4cf6b6407adc51d489090b8a0dd4ff47b4d27f1a2444baa"
+    },
+    "tools/map_study/interlocking_topology.py": {
+      "path": "tools/map_study/interlocking_topology.py",
+      "sha256": "44897a19f77253374c4d55d8dd2042b0375206675a610d9a6f71483bf3644ef5"
+    },
+    "tools/map_study/raised_resource_circuit.py": {
+      "path": "tools/map_study/raised_resource_circuit.py",
+      "sha256": "a1436e01ec22f79d103c63febb7d391b8b300e84b712ab86b205973a2f5daa90"
+    },
+    "tools/map_study/ranking_features.py": {
+      "path": "tools/map_study/ranking_features.py",
+      "sha256": "d903d5156dc49d42f206d207ee72f5b47d2cb074f828ef8ac70963c1bdf7683b"
+    },
+    "tools/map_study/render.py": {
+      "path": "tools/map_study/render.py",
+      "sha256": "3aebb2df3cc99f70813ddcde7a4169bef79190e1d8ab145c9c17f39497a13c9c"
+    },
+    "tools/map_study/spawn_separation.py": {
+      "path": "tools/map_study/spawn_separation.py",
+      "sha256": "cb896d1d140fe6289202d2f48c0257431ba0f7853aa2e8df586d3a1d800e8614"
+    },
+    "tools/map_study/stock_survey.py": {
+      "path": "tools/map_study/stock_survey.py",
+      "sha256": "ade8bba1e8fdb8914272301c1491bc202e4b608648af33e1a460d68fb99ff275"
+    },
+    "tools/map_study/teleporter_arrivals.py": {
+      "path": "tools/map_study/teleporter_arrivals.py",
+      "sha256": "e7a91d7f26a1c0e2619b176f2a962089688573910a954bcdb732fab9daa64d45"
+    },
+    "tools/map_study/upper_connections.py": {
+      "path": "tools/map_study/upper_connections.py",
+      "sha256": "9c4bc4e37ed20065d8195cbb9b7a2300338b77783d7fc6f3f041f19ccad3ac2f"
+    },
+    "tools/mp_portfolio/README.md": {
+      "path": "tools/mp_portfolio/README.md",
+      "sha256": "78b8c872642ba8f8398f14641dd96f136053151782b2190717248c1f21347482"
+    },
+    "tools/mp_portfolio/atrium_audit.py": {
+      "path": "tools/mp_portfolio/atrium_audit.py",
+      "sha256": "43db7fbf46487cb22fd8be2c8812f5dd5b7105d1f2f3fa9cd53fb56ae665baeb"
+    },
+    "tools/mp_portfolio/braid_compare.py": {
+      "path": "tools/mp_portfolio/braid_compare.py",
+      "sha256": "824754d225238b576fcd64ab567871dad9223445a851a9ec918c7dbe74162458"
+    },
+    "tools/mp_portfolio/compare.py": {
+      "path": "tools/mp_portfolio/compare.py",
+      "sha256": "0bcdbbbb6340835e8d42d5c022b2806c55f67a823b38a37daa6bdfe711156e5e"
+    },
+    "tools/mp_portfolio/compile.ps1": {
+      "path": "tools/mp_portfolio/compile.ps1",
+      "sha256": "34a821120bef1be0ca659e8fa612d0dc9a32e931aadb42f03fe997bb2eefaed5"
+    },
+    "tools/mp_portfolio/export.cpp": {
+      "path": "tools/mp_portfolio/export.cpp",
+      "sha256": "3a899ed9ffa65e0ff8c6726c9a53db89178a9f96774b36229267abbbe8a0ccbf"
+    },
+    "tools/mp_portfolio/hinge_compare.py": {
+      "path": "tools/mp_portfolio/hinge_compare.py",
+      "sha256": "78fcf3f48671bdfa2e87cb322a9a0e495dbc1342e8834d54c2f7b4f0935fc24d"
+    },
+    "tools/mp_portfolio/inspect.py": {
+      "path": "tools/mp_portfolio/inspect.py",
+      "sha256": "60a06fb80b519fa735e622cfca9df07912500c0e36cd840f1937287561c0ceb7"
+    },
+    "tools/mp_portfolio/ranking_compare.py": {
+      "path": "tools/mp_portfolio/ranking_compare.py",
+      "sha256": "3c00f39819d0d348697e3b4532da9ce169d317f812197a5346bddf98c3bdfcfb"
+    },
+    "tools/mp_portfolio/span_compare.py": {
+      "path": "tools/mp_portfolio/span_compare.py",
+      "sha256": "9a8068fad98e7379e457090847bf1f51e2ab554f2d7cb868df38588cd93d44d0"
+    },
+    "tools/mp_portfolio/span_trace.cpp": {
+      "path": "tools/mp_portfolio/span_trace.cpp",
+      "sha256": "3991414b6b2419fd1355cd245c124d7f433b8acdb6da07d111626f6fe9580d0e"
+    },
+    "tools/mp_portfolio/topology_compare.py": {
+      "path": "tools/mp_portfolio/topology_compare.py",
+      "sha256": "3ddf54a06d5538342fb677019665bb9246a878efcfe307b7cba4021a1379a091"
+    },
+    "tools/mp_portfolio/trace_candidates.cpp": {
+      "path": "tools/mp_portfolio/trace_candidates.cpp",
+      "sha256": "d8416738be7d92b8f37b71d69346c592901510547dc4965e02b480a440ba34d5"
+    },
+    "tools/mp_portfolio/upper_link_controls.py": {
+      "path": "tools/mp_portfolio/upper_link_controls.py",
+      "sha256": "2220b7705700d2af282cf31fa2976ba7399b1870129b406ef49c75e3218c54ce"
+    },
+    "tools/native_movement/CMakeLists.txt": {
+      "path": "tools/native_movement/CMakeLists.txt",
+      "sha256": "d0960a5ecf0e5cd50d80a2ae68b65a4f47dc014ffb87049210cb0c6235db8e1a"
+    },
+    "tools/native_movement/CMakePresets.json": {
+      "path": "tools/native_movement/CMakePresets.json",
+      "sha256": "fa3ea01f168dea374b0571e48cf5df7914413e090e0244eb2d212056828cbe7e"
+    },
+    "tools/native_movement/README.md": {
+      "path": "tools/native_movement/README.md",
+      "sha256": "21bb02e3b6f0ef2461187132f640b70e0a23bdc7db21f30fec63b5b97e3c80ac"
+    },
+    "tools/native_movement/ascent.py": {
+      "path": "tools/native_movement/ascent.py",
+      "sha256": "3c3f806623bb8a1457a91ace728f84a65e6f485bee8e762c62b4c10a128a8cdc"
+    },
+    "tools/native_movement/build.py": {
+      "path": "tools/native_movement/build.py",
+      "sha256": "717626eb046ef7cb3db741f5b01ead54d371c63ae1bc16cf7c40b4be7cb2384e"
+    },
+    "tools/native_movement/experiment.py": {
+      "path": "tools/native_movement/experiment.py",
+      "sha256": "6c34a26ada986ebdffcdf45adbc3cd7759e19d40b19b0b37ed2625972399cfd9"
+    },
+    "tools/native_movement/harness.c": {
+      "path": "tools/native_movement/harness.c",
+      "sha256": "b74c0aa004ab7f7671745285552e190c2d5428d9a9f7973a4a08563e56ed8abb"
+    },
+    "tools/native_movement/manifest.py": {
+      "path": "tools/native_movement/manifest.py",
+      "sha256": "d7d69458ba500fc1d0a70f53b570912f43d6052dbc2b76a2e76c8f21edd4975b"
+    },
+    "tools/native_movement/motif_circuits.py": {
+      "path": "tools/native_movement/motif_circuits.py",
+      "sha256": "90690f23926d55efd522c98d3da33b0f6db1d28d0553e99bf6cc05a2f21f7414"
+    },
+    "tools/native_movement/motif_turning.py": {
+      "path": "tools/native_movement/motif_turning.py",
+      "sha256": "608fdeb6a4250e10e58c6ad47536baf1a716b302ebd9c3b431f3488dc83a573e"
+    },
+    "tools/native_movement/ravel.py": {
+      "path": "tools/native_movement/ravel.py",
+      "sha256": "2d770afec404b52bb3f513fd8bebdda5e019d960b74d4b10d04ba66e24c15d71"
+    },
+    "tools/native_movement/recovery.py": {
+      "path": "tools/native_movement/recovery.py",
+      "sha256": "a54e206f62c3bc97032553fde956fd5f2816fce5f2776232c893a438f8893ef1"
+    },
+    "tools/native_movement/reference.json": {
+      "path": "tools/native_movement/reference.json",
+      "sha256": "b1ec942ca5126b5cf535cf3e0ca049901401c454e30684ae94241d3d88678d40"
+    },
+    "tools/native_movement/run.py": {
+      "path": "tools/native_movement/run.py",
+      "sha256": "58177a70d4b12a9687d65f2fb1e1f2c9c72e4e05e1e9df10da8d17b26da5a8c2"
+    },
+    "tools/native_movement/upper_link.py": {
+      "path": "tools/native_movement/upper_link.py",
+      "sha256": "f91967a64b45fb6b2376ba8448ce80fc6922e300e8f9cafb2ae620135599f5c7"
+    },
+    "tools/native_teleport/CMakeLists.txt": {
+      "path": "tools/native_teleport/CMakeLists.txt",
+      "sha256": "0d10a71e2ab336641be2dd993ab8da85071957ca600dc2643a0df05965e590ad"
+    },
+    "tools/native_teleport/CMakePresets.json": {
+      "path": "tools/native_teleport/CMakePresets.json",
+      "sha256": "c0453ec4e2651c7cd1a0a007cdb25eac6dd1bf1c0b670a9961e400116c05b2b9"
+    },
+    "tools/native_teleport/README.md": {
+      "path": "tools/native_teleport/README.md",
+      "sha256": "be21261c67d1789ed08d4145f95d4e825d4d689ceafb383c5ad60f8efc9e38c8"
+    },
+    "tools/native_teleport/build.py": {
+      "path": "tools/native_teleport/build.py",
+      "sha256": "2fac677f2a26f07c593b615667c4ce633a560f84f3b00b22d904f705300d82ee"
+    },
+    "tools/native_teleport/development_v2.py": {
+      "path": "tools/native_teleport/development_v2.py",
+      "sha256": "b32c791c5ae65441ae1135519db92fff79344ff87447e33d651288d5a7e1bda2"
+    },
+    "tools/native_teleport/host.c": {
+      "path": "tools/native_teleport/host.c",
+      "sha256": "9f29fa9b66ec4342414fe7fd4ff3e5587c6a685f369709be019a772c0b933b15"
+    },
+    "tools/native_teleport/reference.json": {
+      "path": "tools/native_teleport/reference.json",
+      "sha256": "ab11146cb0eb501f6a33c586601032b2384f60d4fa24eaa4c2f49a9e69cc40aa"
+    },
+    "tools/native_teleport/relay.py": {
+      "path": "tools/native_teleport/relay.py",
+      "sha256": "176459ac92936e80cf69a52514b8f351aca4b97597cb206c47b4b50c9805c89c"
+    },
+    "tools/native_teleport/release.py": {
+      "path": "tools/native_teleport/release.py",
+      "sha256": "0d17a7be67ef073c5d942fd36bd058ce13569938639b477e0881617683822dea"
+    },
+    "tools/native_teleport/run.py": {
+      "path": "tools/native_teleport/run.py",
+      "sha256": "cf59997b021a9e1fa9b5c0e5a7f4d04ec6ab0b316ade64847535cf11601f3188"
+    },
+    "tools/native_teleport/server_bridge.c": {
+      "path": "tools/native_teleport/server_bridge.c",
+      "sha256": "3bf1174ba323c89b1c0451e12efed483a4967e7c46e44d558a0d77879606ffa9"
+    },
+    "tools/native_teleport/verify.py": {
+      "path": "tools/native_teleport/verify.py",
+      "sha256": "94dca8213c0eafdb1f3f56b671b6b68ef0c3af953298c7930a8959d03516741d"
+    },
+    "tools/profiles/check_profiles.py": {
+      "path": "tools/profiles/check_profiles.py",
+      "sha256": "cd00786913c86d8ec475d7f11d23f62cb2e5b132e2c9d7451844bd426f0c7acf"
+    },
+    "tools/profiles/progs_disasm.py": {
+      "path": "tools/profiles/progs_disasm.py",
+      "sha256": "654bfcba5976f63b9cb5821107e7b7af4d84b81e38a2403744dfe17155a86b04"
+    },
+    "tools/ql_atlas/README.md": {
+      "path": "tools/ql_atlas/README.md",
+      "sha256": "d7f623ad8226fb32ce723883c3169d83e0437aab76e30a5f7f889bf1b86d1fc9"
+    },
+    "tools/ql_atlas/__init__.py": {
+      "path": "tools/ql_atlas/__init__.py",
+      "sha256": "8c9899259a7985fcf833eaf0447870b41459713d3ce0bc6d35113745c149770a"
+    },
+    "tools/ql_atlas/__main__.py": {
+      "path": "tools/ql_atlas/__main__.py",
+      "sha256": "ada9db5d139ccae6036e5966f9f6572e7241b1b0c71ce696069615ea46ae5567"
+    },
+    "tools/ql_atlas/atlas-view.html": {
+      "path": "tools/ql_atlas/atlas-view.html",
+      "sha256": "67d8e5e7fd63485a31d331b62e6955fe6a5732a1a6d4dd378eec92935b72facb"
+    },
+    "tools/ql_atlas/bsp.py": {
+      "path": "tools/ql_atlas/bsp.py",
+      "sha256": "9348a5126591d6204a42bc3278e9bcc392a6790141877f765f8803f96fd0c9d5"
+    },
+    "tools/ql_atlas/package.py": {
+      "path": "tools/ql_atlas/package.py",
+      "sha256": "a522933039c7686b439ab950c4d066cd14d2cd3d9b17c8e0851e05031fa4f0bb"
+    },
+    "tools/ql_atlas/preview_check.cjs": {
+      "path": "tools/ql_atlas/preview_check.cjs",
+      "sha256": "4fe118014addbaac9b75b26989932a0e7f0ce6bcf91388cc28d228964c41280b"
+    }
+  }
+}

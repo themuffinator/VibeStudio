@@ -1,0 +1,125 @@
+<div id="switchback-layout">
+  <style>
+    #switchback-layout .map-stage{width:100%;min-width:0}
+    #switchback-layout .map-stage svg{display:block;width:100%;overflow:visible}
+    #switchback-layout .map-label{fill:var(--foreground);font-size:12px;paint-order:stroke;stroke:var(--background);stroke-width:3px;stroke-linejoin:round}
+    #switchback-layout .map-outline{fill:none;stroke:var(--border);stroke-width:1}
+    #switchback-layout .map-legend{display:flex;flex-wrap:wrap;gap:6px 18px;margin-top:10px}
+    #switchback-layout .map-legend span{display:inline-flex;align-items:center;gap:6px}
+    #switchback-layout .swatch{width:10px;height:10px;display:inline-block}
+    #switchback-layout .zone-key{display:flex;flex-wrap:wrap;gap:4px 14px;margin:10px 0}
+  </style>
+  <h3>Switchback</h3>
+  <div class="viz-controls">
+    <label class="form-label">Floor
+      <select class="form-select" id="switchback-floor">
+        <option value="stacked">All three levels</option>
+        <option value="0">Lower · 0 units</option>
+        <option value="192">Middle · +192 units</option>
+        <option value="384">Upper · +384 units</option>
+      </select>
+    </label>
+  </div>
+  <div class="map-stage" id="switchback-stage"></div>
+  <div class="zone-key text-small"><span>A · Turbine</span><span>B · Pumpwell</span><span>C · Loading</span><span>D · Relay</span><span>E · Accumulator</span></div>
+  <div class="map-legend text-small">
+    <span><i class="swatch" style="background:var(--viz-series-2)"></i>Weapon</span>
+    <span><i class="swatch" style="background:var(--viz-series-3)"></i>Armor</span>
+    <span><i class="swatch" style="background:var(--viz-series-4)"></i>Major item</span>
+    <span>○ Spawn</span><span>↗ Stairs</span>
+  </div>
+  <div id="switchback-detail" class="text-small" aria-live="polite">4–6 players · 10 connections · 6 stair routes</div>
+  <script type="application/json" id="switchback-data">__SWITCHBACK_DATA__</script>
+  <script>
+  (()=>{
+    const root=document.getElementById('switchback-layout');
+    const data=JSON.parse(root.querySelector('#switchback-data').textContent);
+    const stage=root.querySelector('#switchback-stage');
+    const selector=root.querySelector('#switchback-floor');
+    const detail=root.querySelector('#switchback-detail');
+    const ns='http://www.w3.org/2000/svg';
+    const levels=[0,192,384];
+    const colors=['var(--viz-series-1)','var(--viz-series-3)','var(--viz-series-5)'];
+    const corners=b=>[[b[0][0],b[0][1]],[b[1][0],b[0][1]],[b[1][0],b[1][1]],[b[0][0],b[1][1]]];
+    const center=b=>[(b[0][0]+b[1][0])/2,(b[0][1]+b[1][1])/2];
+    const node=(name,attributes,parent,text)=>{
+      const el=document.createElementNS(ns,name);
+      for(const [key,value]of Object.entries(attributes||{}))el.setAttribute(key,value);
+      if(text!==undefined)el.textContent=text;
+      if(parent)parent.appendChild(el);
+      return el;
+    };
+    const slabs=z=>[
+      ...data.rooms.filter(r=>r.bounds[0][2]===z).map(r=>r.bounds),
+      ...data.connections.flatMap(c=>c.volumes).filter(b=>b[0][2]===z),
+      ...data.solids.filter(s=>s.purpose===1&&s.bounds[1][2]===z).map(s=>s.bounds)
+    ];
+    const steps=data.solids.filter(s=>s.purpose===2);
+    const runs=[];for(let i=0;i<steps.length;i+=12)runs.push(steps.slice(i,i+12));
+    function draw(){
+      const w=Math.max(300,stage.getBoundingClientRect().width);
+      const stacked=selector.value==='stacked';
+      const h=stacked?Math.max(440,Math.min(610,w*.8)):Math.max(350,Math.min(620,w*.85));
+      const active=stacked?levels:[Number(selector.value)];
+      const raw=(p,z)=>stacked?[.8*(p[0]-p[1]),.34*(-p[0]-p[1])-z*2.4]:[p[0],-p[1]];
+      const extent=active.flatMap(z=>slabs(z).flatMap(b=>corners(b).map(p=>raw(p,z))));
+      const xs=extent.map(p=>p[0]),ys=extent.map(p=>p[1]);
+      const xmin=Math.min(...xs),xmax=Math.max(...xs),ymin=Math.min(...ys),ymax=Math.max(...ys);
+      const s=Math.min((w-40)/(xmax-xmin),(h-48)/(ymax-ymin));
+      const project=(p,z)=>{const q=raw(p,z);return[(w-(xmax-xmin)*s)/2+(q[0]-xmin)*s,24+(q[1]-ymin)*s];};
+      stage.replaceChildren();
+      const svg=node('svg',{viewBox:`0 0 ${w} ${h}`,width:w,height:h,role:'img','aria-label':'Switchback: asymmetric combat spaces and routes at three elevations'},stage);
+      node('desc',{},svg,'Five unequal spaces. Lower circulation through Turbine, Pumpwell and Loading; middle bypasses connect Relay and Accumulator. Upper balconies connect Turbine to Relay.');
+      const defs=node('defs',{},svg);
+      const marker=node('marker',{id:'switchback-arrow',viewBox:'0 0 10 10',refX:9,refY:5,markerWidth:5,markerHeight:5,orient:'auto-start-reverse'},defs);
+      node('path',{d:'M 0 0 L 10 5 L 0 10 z',fill:'var(--foreground)'},marker);
+      const polygon=(b,z,attrs,parent=svg)=>node('polygon',{points:corners(b).map(p=>project(p,z).join(',')).join(' '),...attrs},parent);
+      if(!stacked)for(const room of data.rooms)polygon(room.bounds,active[0],{class:'map-outline'});
+      for(const z of active){
+        const color=colors[levels.indexOf(z)];
+        const group=node('g',{'data-level':z},svg);
+        for(const b of slabs(z))polygon(b,z,{fill:color,'fill-opacity':stacked?.28:.2,stroke:'var(--border)','stroke-width':1},group);
+        for(const solid of data.solids){
+          const b=solid.bounds;
+          if(solid.purpose!==2&&solid.purpose!==1&&b[0][2]<=z&&b[1][2]>z)
+            polygon(b,z,{fill:'var(--foreground)','fill-opacity':.3,stroke:'var(--border)','stroke-width':.6},group);
+        }
+        for(const run of runs){
+          const base=run[0].bounds[0][2],top=run.at(-1).bounds[1][2];
+          if(base!==z&&(!stacked&&top!==z))continue;
+          if(stacked&&base!==z)continue;
+          for(const step of run)polygon(step.bounds,stacked?step.bounds[1][2]:z,{fill:color,'fill-opacity':.25,stroke:'var(--foreground)','stroke-opacity':.4,'stroke-width':.6},group);
+          const a=project(center(run[0].bounds),stacked?base+16:z),b=project(center(run.at(-1).bounds),stacked?top:z);
+          node('line',{x1:a[0],y1:a[1],x2:b[0],y2:b[1],stroke:'var(--foreground)','stroke-width':1.3,'marker-end':'url(#switchback-arrow)'},group);
+        }
+        for(const anchor of data.anchors){
+          if(Math.abs(anchor.origin[2]-24-z)>2)continue;
+          if(!['spawn','weapon','major_item','armor'].includes(anchor.role))continue;
+          const [x,y]=project(anchor.origin,z);
+          const label=anchor.class.replaceAll('_',' ')+' · '+z+' units';
+          const attrs={'data-tooltip':label,'data-anchor':anchor.entity,'data-role':anchor.role};
+          if(anchor.role==='spawn')node('circle',{cx:x,cy:y,r:4,fill:'var(--background)',stroke:'var(--foreground)','stroke-width':1.5,...attrs},group);
+          else if(anchor.role==='major_item')node('path',{d:`M${x} ${y-6}L${x+6} ${y}L${x} ${y+6}L${x-6} ${y}Z`,fill:'var(--viz-series-4)',...attrs},group);
+          else node('rect',{x:x-3.5,y:y-3.5,width:7,height:7,fill:anchor.role==='weapon'?'var(--viz-series-2)':'var(--viz-series-3)',...attrs},group);
+        }
+        if(stacked){
+          const b=slabs(z).reduce((best,b)=>b[0][0]<best[0][0]?b:best);
+          const [x,y]=project([b[0][0],b[1][1]],z);
+          node('text',{x:Math.max(6,x-8),y:y-10,class:'map-label','text-anchor':'start'},group,z===0?'Lower · 0':z===192?'Middle · 192':'Upper · 384');
+        }
+          for(const room of data.rooms){
+            const local=slabs(z).filter(b=>b[0][0]>=room.bounds[0][0]&&b[1][0]<=room.bounds[1][0]&&b[0][1]>=room.bounds[0][1]&&b[1][1]<=room.bounds[1][1]);
+            if(!local.length)continue;
+            const b=local.reduce((a,b)=>(b[1][0]-b[0][0])*(b[1][1]-b[0][1])>(a[1][0]-a[0][0])*(a[1][1]-a[0][1])?b:a);
+            const [x,y]=project([b[0][0]+32,b[1][1]-32],z);
+            node('text',{x,y:y+8,class:'map-label'},group,String.fromCharCode(64+room.id));
+          }
+      }
+      detail.textContent=stacked?'4–6 players · 10 connections · 6 stair routes':`${selector.selectedOptions[0].textContent} · ${data.anchors.filter(a=>a.role==='spawn'&&Math.abs(a.origin[2]-24-active[0])<2).length} respawn positions`;
+    }
+    selector.addEventListener('change',draw);
+    new ResizeObserver(draw).observe(stage);
+    draw();
+  })();
+  </script>
+</div>

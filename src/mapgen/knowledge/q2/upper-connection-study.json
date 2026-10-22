@@ -1,0 +1,281 @@
+{
+  "schema_version": 1,
+  "id": "powertrip-upper-connection-v1",
+  "date": "2026-09-14",
+  "status": "two_bounded_flat_routes_and_stacked_connector_certified_geometrically_native_untested",
+  "study": "docs/Q2_UPPER_CONNECTION_STUDY.md",
+  "audit": "out/upper-connection-study/audit.json",
+  "figure": "out/upper-connection-study/upper-and-lower-routes.png",
+  "protocol_sha256": "2dc2998a4e5df9641ac975951b9bab7c440d94a5ac0c99d0925a12f35c6c90cd",
+  "source": {
+    "map": "ptrip",
+    "title": "Powertrip",
+    "author": "Dennis 'headshot' Kaltwasser",
+    "format": "IBSP38",
+    "bsp_sha256": "7e237f4d0d6f018d58bd06969fd0bbe09479b6aa89665d349e19f47c9ed7e2f2",
+    "partition": "reference",
+    "split_group": "01b7818a69ea19b5",
+    "split_review": "Provisional author/family grouping; based on D-Lite per original readme.",
+    "release_date": "1998-06-15",
+    "readme_context": "Author describes a duel map for QuakeCon98; actual tournament use is not independently verified here.",
+    "capacity_conflict": "Readme recommends duel or4FFA; local metadata gives2\u20135. No allocation-policy inference.",
+    "metadata_issue": "Malformed metadata line12 retained.",
+    "rights": {
+      "training_eligible": false,
+      "status": "unreviewed_local_reference",
+      "raw_bsp_redistributed": false,
+      "geometry_copied_into_generator": false,
+      "readme_restrictions": "No use as base for additional levels; distribution restricted by original readme."
+    }
+  },
+  "selection": {
+    "bsp_candidates_geometrically_inspected": 1,
+    "chosen": "ptrip",
+    "source_inspection_before_freeze": true,
+    "waypoints_changed_after_measurement": false,
+    "negative_candidates_replaced": false
+  },
+  "results": {
+    "blocking_brushes": 551,
+    "liquid_brushes": 0,
+    "excluded_plat_submodels": 2,
+    "standing_hull": [
+      32,
+      32,
+      56
+    ],
+    "upper_main": {
+      "foot_z": 0,
+      "xy_length": 1568,
+      "segments": 8,
+      "pass": true
+    },
+    "lower_main": {
+      "foot_z": -256,
+      "xy_length": 992,
+      "segments": 4,
+      "pass": true
+    },
+    "stacked_connector": {
+      "centerline_xy": [
+        [
+          480,
+          -256
+        ],
+        [
+          560,
+          -256
+        ]
+      ],
+      "centerline_length": 80,
+      "full_swept_footprint_xy": [
+        [
+          464,
+          -272
+        ],
+        [
+          576,
+          -240
+        ]
+      ],
+      "foot_heights": [
+        -256,
+        0
+      ],
+      "upper_support_brushes": [
+        71
+      ],
+      "lower_support_brushes": [
+        5,
+        115
+      ],
+      "both_supported_clear": true
+    },
+    "same_xy_endpoints_different_z": true,
+    "interfloor_return_certified": false,
+    "native_traversal_certified": false,
+    "upper_projected_shortcut_pass": false,
+    "upper_missing_support_cell": [
+      176,
+      -272,
+      432,
+      -240
+    ],
+    "upper_middle_blockers": [
+      93
+    ],
+    "upper_east_blockers": [
+      83,
+      429
+    ],
+    "vertical_shortcut_clear": false,
+    "vertical_blockers": [
+      15,
+      71
+    ],
+    "supported_stations_bound_to_complete_main_routes": 6,
+    "fixed_directed_eye_rays": 30,
+    "clear_directed_rays": 2,
+    "clear_pairs": [
+      [
+        "lower_west",
+        "lower_bridge"
+      ],
+      [
+        "lower_bridge",
+        "lower_west"
+      ]
+    ],
+    "controls_passed": 9,
+    "controls_total": 9
+  },
+  "recommendations": [
+    {
+      "id": "upper-connection-layer-identity",
+      "claim": "An upper passage may connect distinct spaces over a lower corridor; certify complete path support and collision on each layer instead of merging sharedXY into one node."
+    },
+    {
+      "id": "overlap-is-not-transition",
+      "claim": "Require an explicit physically checked ascent/drop/return contract before adding a vertical edge between stacked supported stations; exactXY alignment and projection continuity are insufficient."
+    },
+    {
+      "id": "stacked-exposure-is-station-specific",
+      "claim": "Measure exposure at supported stations attached to complete routes. Different upper/lower point-ray results are local evidence, not a universal height advantage or safety score."
+    }
+  ],
+  "limits": [
+    "No shortest-path search or whole-map room segmentation",
+    "Upper/lower selected endpoints differ by256Z, so lengths are not interchangeable route costs",
+    "No ordinary inter-floor ascent/return certificate",
+    "No native trajectory, item settlement/contact or human multiplayer experiment",
+    "Grey source draw surfaces are not collision/support proof",
+    "No reference geometry copied or model training performed"
+  ],
+  "runtime": {
+    "python": "3.11.3",
+    "pillow": "11.3.0",
+    "shapely": "2.1.2"
+  },
+  "bound_files": [
+    {
+      "path": "E:/Development/q2maparchive-wip/maps/ptrip/pack/maps/ptrip.bsp",
+      "sha256": "7e237f4d0d6f018d58bd06969fd0bbe09479b6aa89665d349e19f47c9ed7e2f2",
+      "bytes": 429656
+    },
+    {
+      "path": "E:/Development/q2maparchive-wip/maps/ptrip/pack/maps/ref/ptrip.ref",
+      "sha256": "35d605680d8692b67d06b603d605178642f9aee2a352e218c412ab14421369fd",
+      "bytes": 383
+    },
+    {
+      "path": "E:/Development/q2maparchive-wip/maps/ptrip/pack/docs/ptrip-readme.txt",
+      "sha256": "881a613c5e15bc36818d7b18d269ea28990c91e5310d291b4033970b90f801bd",
+      "bytes": 1929
+    },
+    {
+      "path": "tools/map_study/upper_connections.py",
+      "sha256": "9c4bc4e37ed20065d8195cbb9b7a2300338b77783d7fc6f3f041f19ccad3ac2f",
+      "bytes": 5745
+    },
+    {
+      "path": "tools/map_study/raised_resource_circuit.py",
+      "sha256": "a1436e01ec22f79d103c63febb7d391b8b300e84b712ab86b205973a2f5daa90",
+      "bytes": 14972
+    },
+    {
+      "path": "tools/map_study/interlocking_topology.py",
+      "sha256": "44897a19f77253374c4d55d8dd2042b0375206675a610d9a6f71483bf3644ef5",
+      "bytes": 15461
+    },
+    {
+      "path": "tools/map_study/binary.py",
+      "sha256": "2b76559a71365eaab41e6876ff7da94fe938994b4a5199d63620b8b60918daf1",
+      "bytes": 15999
+    },
+    {
+      "path": "tools/map_recipes/geometry.py",
+      "sha256": "dcfcc3413468cad9993476736edfae5f13eb03e26035fc39d73f83aa5a90742b",
+      "bytes": 19674
+    },
+    {
+      "path": "docs/Q2_UPPER_CONNECTION_STUDY.md",
+      "sha256": "07f2ef36de556af04b295bcdbc90a704eda97486a215d8f8a78247b881eec451",
+      "bytes": 10768
+    },
+    {
+      "path": "out/map-study/records/ptrip-467cff01da.json",
+      "sha256": "96bd23ba586409230f1629ffda1f81701a81fe1c0d174ae4f394748ea68a5009",
+      "bytes": 30203
+    },
+    {
+      "path": "knowledge/q2/interleaved-route-study.json",
+      "sha256": "684b62c74075090de09c4be74791650087d6ca5daa6581392d301a61cf2cb79f",
+      "bytes": 18803
+    },
+    {
+      "path": "docs/Q2_INTERLEAVED_ROUTE_STUDY.md",
+      "sha256": "0ab4d7490d2b78acd5bd2db055ce89475d349673f097030218f4b17a6bc9c6c0",
+      "bytes": 10816
+    },
+    {
+      "path": "knowledge/q2/raised-resource-circuit.json",
+      "sha256": "30aa1ba2051037539c88e631d8c58ba9083e88ea3c39e9d0114ffb5b3efebe5d",
+      "bytes": 9902
+    },
+    {
+      "path": "docs/Q2_RAISED_RESOURCE_CIRCUIT_STUDY.md",
+      "sha256": "ca3df4218bf14a1fdaf229a93d2ba50766454e1d74539da19e91c42d0f1f1f03",
+      "bytes": 12330
+    },
+    {
+      "path": "out/upper-connection-study/audit.json",
+      "sha256": "2264b74ec506548c2495379c660a224dfe754f4da8a60c745b5efe9238ead9fa",
+      "bytes": 57734
+    },
+    {
+      "path": "out/upper-connection-study/controls.json",
+      "sha256": "9bc9f6fe30dc541a2be1718f6fefd0ce53baed0d17501253a6d0e6a3b255d92c",
+      "bytes": 654
+    },
+    {
+      "path": "out/upper-connection-study/controls.py",
+      "sha256": "2cec64e844572ed3c8d34c826cf59bea1bea8f6d1a4af830f3eb0a20a06b3050",
+      "bytes": 2147
+    },
+    {
+      "path": "out/upper-connection-study/inspect_source.py",
+      "sha256": "ffede0c917f28ccfe9de65106462be29cb67c9e3fb4cd3da24ead218738790ac",
+      "bytes": 3242
+    },
+    {
+      "path": "out/upper-connection-study/protocol.json",
+      "sha256": "2dc2998a4e5df9641ac975951b9bab7c440d94a5ac0c99d0925a12f35c6c90cd",
+      "bytes": 2054
+    },
+    {
+      "path": "out/upper-connection-study/record_evidence.py",
+      "sha256": "34152f556fe83dc3421e15f3dc9c6a8e62de7b2098c8618daa5176499692ca11",
+      "bytes": 8466
+    },
+    {
+      "path": "out/upper-connection-study/render.py",
+      "sha256": "4570feb0a1f72a013bda4a7c29b0bc62b4e9459a680737d7ce38169075d8ee1e",
+      "bytes": 4682
+    },
+    {
+      "path": "out/upper-connection-study/source-floors.png",
+      "sha256": "86d7852835f67c3b8feba19cd742e52fe490cf4c2edcc31e6963e475a5ec986d",
+      "bytes": 58477
+    },
+    {
+      "path": "out/upper-connection-study/source-inspection.json",
+      "sha256": "b8713c27af8ee839fdb6d23dc4e754784d5d11d4c3ee7a60c64c1670c7ddc437",
+      "bytes": 4271
+    },
+    {
+      "path": "out/upper-connection-study/upper-and-lower-routes.png",
+      "sha256": "ebc24b2b21bf73ead785bd7b9d47b5fa1068e97f8a6fd8c00ad63302bf15a757",
+      "bytes": 91171
+    }
+  ]
+}

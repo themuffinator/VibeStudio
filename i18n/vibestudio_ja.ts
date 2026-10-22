@@ -6527,7 +6527,7 @@ Assets: %2</source>
 <context>
     <name>LevelPatchCap</name>
     <message>
-        <location filename="../src/cli/cli.cpp" line="+8306"/>
+        <location filename="../src/cli/cli.cpp" line="+8364"/>
         <source>Added %1 patch caps.</source>
         <translation type="unfinished"></translation>
     </message>
@@ -10549,7 +10549,7 @@ Assets: %2</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/cli/cli.cpp" line="-13211"/>
+        <location filename="../src/cli/cli.cpp" line="-13267"/>
         <source>Inspect or edit a linked .assembly.json recipe, independently sample each part, or bake composed poses. Animation baking uses --operation bake-animation with --frames, --sample-fps, optional --time and --clip-name; output supports .mesh.json, .md2 and .md3 with normal format limits. Sampling is start + index / FPS; editable sources retain clip timing. Supports --operation inspect|add|update|remove|bake|bake-animation, --new, --part, --model, --kind file|package, --parent, --tag, --translation X,Y,Z, --rotation X,Y,Z, --scale, --first-frame, --last-frame, --fps, --phase, --loop on|off, --interpolate on|off, --rename-to, --time, --package and --palette. Mutations require --output. Part add/update accepts --skin PATH, --skin-kind file|package (default file), and package-only --skin-entry-index N. An omitted index requires a unique package path. Omitted skin options preserve the link; update --clear-skin removes it. Linked skins use assembly schema 3, drive preview/bake materials, and retain original model files. JSON includes verified skin inputs and material assignments. Quake III animation.cfg uses animation-set with --config, --lower-part, --upper-part and optional --lower-animation/--upper-animation native slot names. Existing bindings retain omitted choices. animation-export writes .cfg; animation-clear removes the binding. All require --output and support --dry-run. Native clip selections drive inspection and bakes with lower frame offsets, reverse and loop tails. Player publication: player-review and player-export require --player-name ID, --head-part ID, --icon PATH and --package PATH. Optional --skin-name defaults to default; --icon-kind file|package defaults to file; --icon-entry-index selects an exact package image. Review captures separate lower/upper/head MD3 models, native skins, animation.cfg, a TGA icon and shader/image dependencies. Export requires --output .pk3 and supports --overwrite and --dry-run. It uses protected atomic publication and verifies deterministic bytes. Source models and assembly stay unchanged. Recovery operations: recoveries lists verified copies; recover and discard require --recovery UUID and --sha256 DIGEST. All three accept --directory. Recover requires --output and protects the original source; discard refuses active editors. Both support --dry-run.</source>
         <translation type="unfinished"></translation>
     </message>
@@ -11441,7 +11441,7 @@ Original source files remain unchanged.</source>
 <context>
     <name>ModelBoundaryBridge</name>
     <message>
-        <location filename="../src/cli/cli.cpp" line="+13235"/>
+        <location filename="../src/cli/cli.cpp" line="+13291"/>
         <source>--bridge-twist applies once to bridge-boundary-loops and requires an integer from -1023 to 1023.</source>
         <translation type="unfinished"></translation>
     </message>
@@ -11645,7 +11645,7 @@ Original source files remain unchanged.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/cli/cli.cpp" line="-13241"/>
+        <location filename="../src/cli/cli.cpp" line="-13297"/>
         <source>Author static or animated collision boxes with --operation inspect|add|fit|fit-animated|animate|freeze|update|transform|duplicate|delete|export-map|place. Use --name, --box, --centre X,Y,Z, --size X,Y,Z and --rotation X,Y,Z. Transform uses --box with --offset/--rotate X,Y,Z in --transform-space world|selection|custom (default world), custom --axis-rotation X,Y,Z, and intrinsic local --scale X,Y,Z, --pivot-mode selection|origin|custom, custom --pivot X,Y,Z and --snap-grid/--snap-angle/--snap-scale. The default pivot is selection centre. Static fitting accepts --frame all|N; fit-animated fits every pose. Both accept optional --surface with --vertices, --faces or --edges. Animate copies a static --box into every frame; freeze keeps --frame N. Animated update/transform require explicit --frame all|N; omitted update fields retain their per-pose values. Inspect accepts --frame N. Export/placement of animated boxes require --frame N and produce static brushes. Export/placement require --target quake|quake2|quake3; Quake III also requires --material for a project clip shader. Use --origin X,Y,Z and --map for placement into a separate output map. All mutations require --output; --dry-run validates without writing. Existing derivatives require --overwrite.</source>
         <translation type="unfinished"></translation>
     </message>
@@ -13963,7 +13963,7 @@ Target materials: %2
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+13174"/>
+        <location line="+13230"/>
         <source>--surfaces applies only to transform and cannot be mixed with --surface or component selectors.</source>
         <translation type="unfinished"></translation>
     </message>
@@ -14054,7 +14054,7 @@ Target materials: %2
 <context>
     <name>ModelSurfacesCli</name>
     <message>
-        <location filename="../src/cli/cli.cpp" line="-13333"/>
+        <location filename="../src/cli/cli.cpp" line="-13389"/>
         <source>List or edit model surfaces across every animation pose. Use --operation rename|separate|move|duplicate|delete|join, --surface N for a source, --name for a new name, --faces all or comma-separated indices for separate/move, and --surfaces indices with --target-surface N for join. Move also requires --target-surface. Different material slots require --adopt-target-materials. Edits require --output .mesh.json; --dry-run validates and --overwrite permits replacing an existing output.</source>
         <translation type="unfinished"></translation>
     </message>
@@ -14508,7 +14508,7 @@ Target materials: %2
 <context>
     <name>ModelTransformAxesCli</name>
     <message>
-        <location filename="../src/cli/cli.cpp" line="+13414"/>
+        <location filename="../src/cli/cli.cpp" line="+13470"/>
         <source>Use each transform axes option only once.</source>
         <translation type="unfinished"></translation>
     </message>
@@ -14996,7 +14996,7 @@ Live usage is available in File &gt; Temporary Package Copies.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/cli/cli.cpp" line="-13686"/>
+        <location filename="../src/cli/cli.cpp" line="-13742"/>
         <source>Inspect or propose per-window temporary-copy limits with --max-mib, --max-files, --max-entries and --max-batches. Default read-only/dry run; --write saves limits. Live reservations are available in the GUI.</source>
         <translation type="unfinished"></translation>
     </message>
@@ -18720,7 +18720,7 @@ Grids: %5 × %6 and %7 × %8</source>
 <context>
     <name>StudioSettings</name>
     <message>
-        <location filename="../src/core/studio_settings.cpp" line="+1834"/>
+        <location filename="../src/core/studio_settings.cpp" line="+1835"/>
         <source>Settings schema %1 inspected read-only; migration to %2 was skipped.</source>
         <translation type="unfinished"></translation>
     </message>
@@ -20502,17 +20502,17 @@ Grids: %5 × %6 and %7 × %8</source>
     </message>
     <message>
         <location line="+3"/>
-        <location line="+18"/>
+        <location line="+19"/>
         <source>User-provided API key.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-17"/>
+        <location line="-18"/>
         <source>Cloud connector for generated audio and voice experiments; asset provenance must stay visible.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+14"/>
+        <location line="+15"/>
         <source>Meshy</source>
         <translation type="unfinished"></translation>
     </message>
@@ -20548,6 +20548,101 @@ Grids: %5 × %6 and %7 × %8</source>
     </message>
     <message>
         <location line="+7"/>
+        <source>Local GGUF Model (ggml)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>A .gguf model file on this machine; no account or key.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Runs inside VibeStudio through llama.cpp and ggml; nothing leaves this machine.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <source>Answers text questions with a GGUF language model run on the CPU: name the .gguf file as the model in Settings. Structured requests are held to their schema by a grammar.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Needs a build configured with -Dggml=enabled (scripts/build_ggml.py builds the pinned llama.cpp).</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+6"/>
+        <source>Claude Code</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>The Claude Code command-line tool, signed in with your Claude subscription (claude auth login); no API key.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Cloud connector through your own login; requests go to Anthropic as Claude Code sends them, after the same review as any cloud request.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <source>Runs claude -p in an empty folder with its tools, MCP servers, hooks and memory off, so it only answers; claude-opus-5-5 unless another model is named in Settings.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Finds claude on PATH or in its usual install folders; set its path as the endpoint to choose another. ANTHROPIC_API_KEY is not passed on, so your login answers.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+6"/>
+        <source>Codex</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>The Codex command-line tool, signed in with your ChatGPT plan (codex login); no API key.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Cloud connector through your own login; requests go to OpenAI as Codex sends them, after the same review as any cloud request.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <source>Runs codex exec in an empty folder with a read-only sandbox and no saved session; Codex&apos;s own default model unless one is named in Settings.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Finds codex on PATH or in its usual install folders; set its path as the endpoint to choose another.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+6"/>
+        <source>Custom Command</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>Any program that answers a prompt, with whatever login it has.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>User-defined command; treated as leaving this machine, so it needs cloud connectors allowed and shows the same review first.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+6"/>
+        <source>Set the command line as the endpoint, with {model}, {prompt_file}, {system_file}, {schema_file} and {answer_file} where they go; without {prompt_file} the prompt is sent on standard input, and without {answer_file} the answer is read from standard output.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+6"/>
         <source>Custom HTTP Connector</source>
         <translation type="unfinished"></translation>
     </message>
@@ -20622,7 +20717,27 @@ Grids: %5 × %6 and %7 × %8</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-139"/>
+        <location line="+288"/>
+        <source>Workflow text model</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+21"/>
+        <source>Status: %1</source>
+        <translation type="unfinished">ステータス: %1</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Available</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Planned</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="-519"/>
         <source>Makes sound effects through the Sound Effects API (eleven_text_to_sound_v2 by default) with the ELEVENLABS_API_KEY credential.</source>
         <translation type="unfinished"></translation>
     </message>
@@ -20632,12 +20747,12 @@ Grids: %5 × %6 and %7 × %8</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+37"/>
+        <location line="+38"/>
         <source>Makes images through a Stable Diffusion web UI on this machine (AUTOMATIC1111 or Forge at http://127.0.0.1:7860 by default), or an OpenAI-compatible image server at an address ending in /v1.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+26"/>
+        <location line="+96"/>
         <source>Makes sound effects through an endpoint that takes ElevenLabs&apos; sound-generation request, when a sound endpoint is set.</source>
         <translation type="unfinished"></translation>
     </message>
@@ -20668,6 +20783,46 @@ Grids: %5 × %6 and %7 × %8</source>
     </message>
     <message>
         <location line="+6"/>
+        <source>Local GGUF model file</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>The .gguf file named in Settings, run inside VibeStudio for reasoning and structured plans.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+6"/>
+        <source>Claude Code model</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>claude-opus-5-5, or the Claude model or alias (opus, sonnet) named in Settings, answered through your Claude login.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+6"/>
+        <source>Codex model</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Codex&apos;s default model, or the one named in Settings, answered through your ChatGPT login.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+6"/>
+        <source>Custom command model</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Whatever the command runs; the model named in Settings fills {model}.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+6"/>
         <source>Custom HTTP default model</source>
         <translation type="unfinished"></translation>
     </message>
@@ -20685,6 +20840,11 @@ Grids: %5 × %6 and %7 × %8</source>
         <location line="+8"/>
         <source>not required</source>
         <translation type="unfinished">不要</translation>
+    </message>
+    <message>
+        <location line="+8"/>
+        <source>the tool&apos;s own login</source>
+        <translation type="unfinished"></translation>
     </message>
     <message>
         <location line="+7"/>
@@ -20776,12 +20936,7 @@ Grids: %5 × %6 and %7 × %8</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+1"/>
-        <source>Text model</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+1"/>
+        <location line="+2"/>
         <source>Coding model</source>
         <translation type="unfinished"></translation>
     </message>
@@ -20856,22 +21011,7 @@ Grids: %5 × %6 and %7 × %8</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+1"/>
-        <source>Implemented: %1</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+0"/>
-        <source>yes</source>
-        <translation type="unfinished">はい</translation>
-    </message>
-    <message>
-        <location line="+0"/>
-        <source>design stub</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+1"/>
+        <location line="+2"/>
         <source>Capabilities: %1</source>
         <translation type="unfinished"></translation>
     </message>
@@ -20887,9 +21027,22 @@ Grids: %5 × %6 and %7 × %8</source>
     </message>
 </context>
 <context>
+    <name>VibeStudioAiGeneration</name>
+    <message>
+        <location filename="../src/app/ai_generation_actions.cpp" line="+64"/>
+        <source>the tool signs in with your own login, in an empty folder with its tools turned off, so it can only answer</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>your API key is sent only to authenticate</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
     <name>VibeStudioAiGenerationCli</name>
     <message>
-        <location filename="../src/cli/ai_generation.cpp" line="+75"/>
+        <location filename="../src/cli/ai_generation.cpp" line="+76"/>
         <source>Unexpected option: %1</source>
         <translation type="unfinished"></translation>
     </message>
@@ -20914,17 +21067,19 @@ Grids: %5 × %6 and %7 × %8</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+137"/>
+        <location line="+139"/>
         <source>This sends the request to %1, off this machine. Review it with --dry-run, then pass --yes to send.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+71"/>
+        <location line="+87"/>
+        <location line="+61"/>
         <source>%1 takes one of: %2.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+20"/>
+        <location line="-41"/>
+        <location line="+61"/>
         <source>--seed takes a whole number of 0 or more.</source>
         <translation type="unfinished"></translation>
     </message>
@@ -20940,17 +21095,19 @@ Grids: %5 × %6 and %7 × %8</source>
     </message>
     <message>
         <location line="+27"/>
+        <location line="+103"/>
         <source>--planner takes rules or ai.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+7"/>
+        <location line="-96"/>
         <source>Could not read the plan %1.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
         <location line="+29"/>
-        <location line="+266"/>
+        <location line="+83"/>
+        <location line="+322"/>
         <location line="+309"/>
         <location line="+236"/>
         <location line="+165"/>
@@ -20958,8 +21115,8 @@ Grids: %5 × %6 and %7 × %8</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-947"/>
-        <location line="+249"/>
+        <location line="-1086"/>
+        <location line="+388"/>
         <location line="+309"/>
         <location line="+154"/>
         <location line="+90"/>
@@ -20968,17 +21125,18 @@ Grids: %5 × %6 and %7 × %8</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-971"/>
+        <location line="-1110"/>
         <source>The model&apos;s plan could not be used (%1); the rules planner made one instead.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+27"/>
+        <location line="+163"/>
         <source>map plan --planner ai needs --prompt.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+30"/>
+        <location line="-68"/>
+        <location line="+98"/>
         <source>Plan written to %1.</source>
         <translation type="unfinished"></translation>
     </message>
@@ -20988,12 +21146,44 @@ Grids: %5 × %6 and %7 × %8</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+38"/>
+        <location line="-102"/>
+        <location line="+143"/>
         <source>A %1 level is written as .%2.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+32"/>
+        <location line="-477"/>
+        <source>%1 is for the studio generator; Quake-MapGen reads the theme and the rest from --prompt.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+41"/>
+        <source>Quake-MapGen needs --prompt &quot;&lt;the level&gt;&quot; or at least --game.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+14"/>
+        <source>--generator takes studio or quake-mapgen.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+6"/>
+        <source>%1 is for --generator quake-mapgen.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+186"/>
+        <source>--save-plan keeps studio plans; Quake-MapGen&apos;s plan is in --report.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>--planner ai needs --prompt.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+109"/>
+        <location line="+148"/>
         <location line="+137"/>
         <location line="+332"/>
         <location line="+202"/>
@@ -21001,7 +21191,8 @@ Grids: %5 × %6 and %7 × %8</source>
         <translation type="unfinished">警告: %1</translation>
     </message>
     <message>
-        <location line="-668"/>
+        <location line="-816"/>
+        <location line="+148"/>
         <location line="+169"/>
         <location line="+493"/>
         <location line="+218"/>
@@ -21267,6 +21458,164 @@ Grids: %5 × %6 and %7 × %8</source>
     </message>
 </context>
 <context>
+    <name>VibeStudioAiGguf</name>
+    <message>
+        <location filename="../src/core/ai_gguf_runtime.cpp" line="+40"/>
+        <source>No GGUF model file is set. Name a .gguf file as the model in Settings &gt; AI and Automation.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>The GGUF model %1 does not exist.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>%1 is not a .gguf model file.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <source>This build of VibeStudio has no ggml runtime. Build llama.cpp with python scripts/build_ggml.py and configure with -Dggml=enabled, or run llama.cpp&apos;s server and use the Local/Offline Runtime connector.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+329"/>
+        <source>The request is %1 tokens; the model&apos;s context holds %2.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+88"/>
+        <source>The GGUF model could not answer: %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../src/core/ai_json_grammar.cpp" line="+283"/>
+        <source>Only a JSON object schema can be turned into a grammar.</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
+    <name>VibeStudioAiHarness</name>
+    <message>
+        <location filename="../src/core/ai_harness.cpp" line="+97"/>
+        <source>The command</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+60"/>
+        <source>Could not read %1.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <source>%1 is a batch file VibeStudio cannot run safely. Point the connector at the program itself (an .exe), or at node and its script.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+9"/>
+        <source>%1 needs Node.js, which was not found.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+34"/>
+        <source>%1 is older than VibeStudio needs (%2). Update it and try again: %3</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+8"/>
+        <source>%1 is not signed in (%2). %3</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+26"/>
+        <source>Claude Code exited with code %1 and no answer.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+32"/>
+        <source>Claude Code finished without an answer.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+55"/>
+        <source>Codex exited with code %1 and no answer.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+17"/>
+        <source>The command exited with code %1 and no answer.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+92"/>
+        <source>check the command&apos;s options</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <source>Install Claude Code (https://code.claude.com/docs/en/setup), then sign in with: claude auth login</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Install Codex (npm install -g @openai/codex), then sign in with: codex login</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Set the command line in Settings &gt; AI and Automation, for example: gemini -m {model} (the prompt arrives on standard input)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+17"/>
+        <location line="+131"/>
+        <source>%1 is not a command-line connector.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="-79"/>
+        <source>No command is set for the custom command connector.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>The custom command&apos;s program was not found.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+39"/>
+        <source>%1 was not found. %2</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+72"/>
+        <location line="+26"/>
+        <source>%1 did not say whether it is signed in.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>%1 is not signed in. %2</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>%1 is signed in with an API key (%2), so requests are billed to it, not to a subscription.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>%1 is signed in.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>%1 is signed in (%2).</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
     <name>VibeStudioAiImageTransport</name>
     <message>
         <location filename="../src/core/ai_image_transport.cpp" line="+201"/>
@@ -21418,7 +21767,7 @@ Grids: %5 × %6 and %7 × %8</source>
 <context>
     <name>VibeStudioAiTransport</name>
     <message>
-        <location filename="../src/core/ai_transport.cpp" line="+110"/>
+        <location filename="../src/core/ai_transport.cpp" line="+122"/>
         <source>The provider&apos;s answer had no choices in it.</source>
         <translation type="unfinished"></translation>
     </message>
@@ -21429,12 +21778,12 @@ Grids: %5 × %6 and %7 × %8</source>
     </message>
     <message>
         <location line="+33"/>
-        <location line="+729"/>
+        <location line="+794"/>
         <source>The model declined to answer.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-728"/>
+        <location line="-793"/>
         <source>The model declined to answer (%1).</source>
         <translation type="unfinished"></translation>
     </message>
@@ -21468,12 +21817,12 @@ Grids: %5 × %6 and %7 × %8</source>
         </translation>
     </message>
     <message>
-        <location line="+73"/>
+        <location line="+94"/>
         <source>No request to fill.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+4"/>
+        <location line="+48"/>
         <location line="+149"/>
         <source>The %1 connector does not answer text requests.</source>
         <translation type="unfinished"></translation>
@@ -21494,12 +21843,14 @@ Grids: %5 × %6 and %7 × %8</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+3"/>
+        <location filename="../src/core/ai_harness.cpp" line="-200"/>
+        <location filename="../src/core/ai_transport.cpp" line="-45"/>
+        <location line="+48"/>
         <source>There is nothing to ask.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+94"/>
+        <location filename="../src/core/ai_transport.cpp" line="+94"/>
         <source>The endpoint does not make a valid address.</source>
         <translation type="unfinished"></translation>
     </message>
@@ -21640,12 +21991,54 @@ Grids: %5 × %6 and %7 × %8</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+216"/>
+        <location line="+59"/>
+        <source>Runs in a new, empty folder that is removed afterwards.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Not passed on: %1.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>standard input</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>Runs inside VibeStudio; nothing leaves this machine.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message numerus="yes">
+        <location line="+62"/>
+        <source>grammar: %n line(s) of GBNF</source>
+        <translation type="unfinished">
+            <numerusform></numerusform>
+        </translation>
+    </message>
+    <message>
+        <location line="+137"/>
         <source>This project turns AI off in its manifest. To allow AI here, run: vibestudio --cli project init &lt;project folder&gt; --project-ai-free off</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
         <location line="+9"/>
+        <source>Ready: %1, %2, run inside VibeStudio.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>Ready: %1 with its own default model; requests go to %2.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Ready: %1, model %2; requests go to %3.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+3"/>
         <source>Ready: %1, model %2, on this machine.</source>
         <translation type="unfinished"></translation>
     </message>
@@ -21666,11 +22059,26 @@ Grids: %5 × %6 and %7 × %8</source>
     </message>
     <message>
         <location line="+2"/>
-        <source>%1 does not answer text questions. Pick OpenAI, Claude, Gemini, a local runtime, or a custom endpoint.</source>
+        <source>%1 does not answer text questions. Pick a connector listed under Text Model: a provider, Claude Code or Codex with your own login, a local runtime, or a GGUF model.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+2"/>
+        <location line="+319"/>
+        <source>Could not make a folder for %1 to run in.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+9"/>
+        <source>Could not write %1 for %2.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+74"/>
+        <source>Could not start %1: %2</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="-398"/>
         <source>%1 has no endpoint. Set one in Settings &gt; AI and Automation.</source>
         <translation type="unfinished"></translation>
     </message>
@@ -21680,13 +22088,69 @@ Grids: %5 × %6 and %7 × %8</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+3"/>
+        <location line="+6"/>
         <source>No model is set for %1. Name one in Settings &gt; AI and Automation.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
+        <location line="+4"/>
+        <source>No command is set for %1. %2</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>The program of %1&apos;s command line was not found: %2</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
         <location line="+2"/>
+        <source>%1 was not found (looked in: %2). %3</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+5"/>
         <source>%1 needs an API key in the %2 environment variable, which is not set.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+9"/>
+        <location line="+12"/>
+        <source>this machine</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+9"/>
+        <source>%1 with %2</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+9"/>
+        <source>Nothing has been run. This is the command %1 would run, with the files and input it would get; %2 signs in with its own login.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>Nothing has been run. This is what %1 would give the model on this machine.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>Nothing has been sent. This is the request %1 would send, without your API key.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+20"/>
+        <source>AI-free mode is on.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>Not in this build: it needs -Dggml=enabled. Local/Offline Runtime can reach llama.cpp&apos;s own server instead.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>It leaves this machine; tick Allow cloud AI connectors first.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
@@ -21695,12 +22159,14 @@ Grids: %5 × %6 and %7 × %8</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+82"/>
+        <location line="+118"/>
         <source>A request is already running.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+40"/>
+        <location line="+47"/>
+        <location line="+81"/>
+        <location line="+86"/>
         <source>No answer after %1 seconds.</source>
         <translation type="unfinished"></translation>
     </message>
@@ -24319,7 +24785,7 @@ Select a WAV asset, or the audio could not be decoded.</source>
 <context>
     <name>VibeStudioAssistant</name>
     <message>
-        <location filename="../src/app/application_shell.cpp" line="+16231"/>
+        <location filename="../src/app/application_shell.cpp" line="+16300"/>
         <source>Show the raw JSON</source>
         <translation type="unfinished"></translation>
     </message>
@@ -26085,7 +26551,7 @@ Select a WAV asset, or the audio could not be decoded.</source>
 <context>
     <name>VibeStudioCLI</name>
     <message>
-        <location filename="../src/cli/cli.cpp" line="+12775"/>
+        <location filename="../src/cli/cli.cpp" line="+12831"/>
         <source>Preview: %1 triangles, %2 walls, %3 floors, %4 ceilings.</source>
         <translation type="unfinished"></translation>
     </message>
@@ -36831,12 +37297,12 @@ Select a WAV asset, or the audio could not be decoded.</source>
     <name>VibeStudioLevelAiEditDialog</name>
     <message>
         <location filename="../src/app/level_ai_edit_dialog.cpp" line="+62"/>
-        <location line="+280"/>
+        <location line="+291"/>
         <source>Edit Map with AI</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-278"/>
+        <location line="-289"/>
         <source>Say what should change in the open map; review the edits the text model proposes, then apply the ones you keep.</source>
         <translation type="unfinished"></translation>
     </message>
@@ -36896,7 +37362,22 @@ Select a WAV asset, or the audio could not be decoded.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+7"/>
+        <location line="+1"/>
+        <source>AI Settings…</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Open AI settings</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Choose the connector, model, and endpoint in Settings &gt; AI and Automation.</source>
+        <translation type="unfinished">コネクタ、モデル、エンドポイントは、[設定] &gt; [AI と自動化] で選択します。</translation>
+    </message>
+    <message>
+        <location line="+13"/>
         <source>&amp;Ask for Edits</source>
         <translation type="unfinished"></translation>
     </message>
@@ -37071,7 +37552,7 @@ Select a WAV asset, or the audio could not be decoded.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+58"/>
+        <location line="+59"/>
         <source>Say what should change in the map.</source>
         <translation type="unfinished"></translation>
     </message>
@@ -37082,11 +37563,21 @@ Select a WAV asset, or the audio could not be decoded.</source>
     </message>
     <message>
         <location line="+5"/>
-        <source>Asking %1 (%2): %3</source>
+        <source>Asking %1: %2</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+2"/>
+        <location line="+248"/>
+        <source>Ask for Edits</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>It holds your instruction and a summary of the map, with your home and project folders shortened.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="-247"/>
         <source>Asking %1 for edits…</source>
         <translation type="unfinished"></translation>
     </message>
@@ -37235,12 +37726,7 @@ Select a WAV asset, or the audio could not be decoded.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+4"/>
-        <source>Nothing has been sent. This is the request Ask for Edits would send, without your API key: your instruction and a summary of the map, with your home and project folders shortened. %1</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+6"/>
+        <location line="+12"/>
         <source>The edit request</source>
         <translation type="unfinished"></translation>
     </message>
@@ -38706,7 +39192,7 @@ Searched: %3
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/core/level_generation_build.cpp" line="+838"/>
+        <location filename="../src/core/level_generation_build.cpp" line="+839"/>
         <source>Room %1 did not fit beside the rooms it joins and was left out.</source>
         <translation type="unfinished"></translation>
     </message>
@@ -38756,7 +39242,7 @@ Searched: %3
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+217"/>
+        <location line="+232"/>
         <source>%1 (%2, %3, %4 theme, seed %5), planned by %6.</source>
         <translation type="unfinished"></translation>
     </message>
@@ -38779,14 +39265,16 @@ Searched: %3
 <context>
     <name>VibeStudioLevelGenerationDialog</name>
     <message>
-        <location filename="../src/app/level_generation_dialog.cpp" line="+77"/>
-        <location line="+286"/>
+        <location filename="../src/app/level_generation_dialog.cpp" line="+94"/>
+        <location line="+390"/>
+        <location line="+30"/>
+        <location line="+46"/>
         <location line="+29"/>
         <source>Generate Level</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-313"/>
+        <location line="-493"/>
         <source>Describe a level, choose who plans it, review the layout, then open it in Levels or save it.</source>
         <translation type="unfinished"></translation>
     </message>
@@ -38806,7 +39294,7 @@ Searched: %3
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+9"/>
+        <location line="+20"/>
         <source>Game</source>
         <translation type="unfinished">ゲーム</translation>
     </message>
@@ -38821,12 +39309,12 @@ Searched: %3
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+0"/>
+        <location line="+1"/>
         <source>Quake III Arena</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+1"/>
+        <location line="+0"/>
         <source>Doom</source>
         <translation type="unfinished">Doom</translation>
     </message>
@@ -38841,11 +39329,13 @@ Searched: %3
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+0"/>
-        <location line="+3"/>
+        <location line="-8"/>
+        <location line="+8"/>
+        <location line="+7"/>
         <location line="+6"/>
         <location line="+2"/>
         <location line="+3"/>
+        <location line="+4"/>
         <location line="+3"/>
         <location line="+6"/>
         <location line="+3"/>
@@ -38853,7 +39343,42 @@ Searched: %3
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-26"/>
+        <location line="-52"/>
+        <source>Generator</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Studio blockout</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Quake-MapGen</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Rooms and corridors on a grid of sealed cells, with themed textures, liquids, and monsters. Quake, Quake II, Quake III Arena, and Doom.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Quake-MapGen: ranked layouts with stairs, raised crossings, and passages, checked for navigation, visibility, and lighting before the map is written. Quake, Quake II, and Quake III Arena, with capture the flag. It reads the theme from the description.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>Which generator builds the level. Hover over each for what it makes.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Ge&amp;nerator:</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+10"/>
         <source>Single player</source>
         <translation type="unfinished"></translation>
     </message>
@@ -38868,8 +39393,28 @@ Searched: %3
         <translation type="unfinished"></translation>
     </message>
     <message>
+        <location line="+0"/>
+        <source>Capture the flag</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
         <location line="+1"/>
         <source>&amp;Mode:</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Map format</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>How the map file writes its brushes. Quake III Arena takes classic brushes or brush primitives.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Map &amp;format:</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
@@ -38945,6 +39490,36 @@ Searched: %3
     <message>
         <location line="+1"/>
         <source>&amp;Verticality:</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Intensity</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Quiet</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Balanced</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Intense</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>How much combat the plan asks for: fewer encounters, or more.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>&amp;Intensity:</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
@@ -39074,11 +39649,12 @@ Searched: %3
     </message>
     <message>
         <location line="+1"/>
+        <location line="+197"/>
         <source>The &amp;text model</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+2"/>
+        <location line="-195"/>
         <source>Plan with the text model</source>
         <translation type="unfinished"></translation>
     </message>
@@ -39098,7 +39674,22 @@ Searched: %3
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+8"/>
+        <location line="+1"/>
+        <source>AI Settings…</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Open AI settings</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Choose the connector, model, and endpoint in Settings &gt; AI and Automation.</source>
+        <translation type="unfinished">コネクタ、モデル、エンドポイントは、[設定] &gt; [AI と自動化] で選択します。</translation>
+    </message>
+    <message>
+        <location line="+17"/>
         <source>&amp;Generate</source>
         <translation type="unfinished"></translation>
     </message>
@@ -39194,6 +39785,16 @@ Searched: %3
     </message>
     <message>
         <location line="+3"/>
+        <source>Navigation, visibility, lighting, and quality analysis</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Quake-MapGen report</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+3"/>
         <source>Plan</source>
         <translation type="unfinished"></translation>
     </message>
@@ -39204,11 +39805,21 @@ Searched: %3
     </message>
     <message>
         <location line="+1"/>
+        <source>Analysis</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
         <source>Map</source>
         <translation type="unfinished">マップ</translation>
     </message>
     <message>
-        <location line="+9"/>
+        <location line="+1"/>
+        <source>Report</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+12"/>
         <source>&amp;Open in Levels</source>
         <translation type="unfinished"></translation>
     </message>
@@ -39248,32 +39859,114 @@ Searched: %3
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+60"/>
-        <source>The rules plan the level here, the same way every time for the same description and seed.</source>
+        <location line="+1"/>
+        <source>Save R&amp;eport…</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+35"/>
-        <source>Planning &quot;%1&quot; by the rules.</source>
+        <location line="+1"/>
+        <source>Save the Quake-MapGen report as JSON</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+6"/>
-        <source>Describe the level for the text model to plan.</source>
+        <location line="+1"/>
+        <source>Keep the plan, ranking, repairs, and analysis Quake-MapGen recorded, as its .qmg.json report.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+18"/>
-        <source>Nothing was sent.</source>
+        <location line="+69"/>
+        <source>The &amp;text model: %1</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
         <location line="+5"/>
-        <source>Asking %1 (%2) for a plan.</source>
+        <source>Quake-MapGen&apos;s rules plan the level here, the same way every time for the same description and seed.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+7"/>
+        <location line="+2"/>
+        <source>The rules plan the level here, the same way every time for the same description and seed.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+14"/>
+        <source>Quake-MapGen builds Quake, Quake II, and Quake III Arena levels.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>Capture the flag needs Quake-MapGen.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+11"/>
+        <source>The game&apos;s own</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>Classic brushes</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Brush primitives</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Valve 220</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+42"/>
+        <source>Quake-MapGen is planning &quot;%1&quot; by its rules.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Planning, laying out, building, and analysing the level…</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+28"/>
+        <source>Asking %1 to plan &quot;%2&quot; for Quake-MapGen.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+6"/>
+        <source>Asking %1 for a plan, then building and analysing the level…</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+40"/>
+        <source>Planning &quot;%1&quot; by the rules.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+29"/>
+        <source>Asking %1 for a plan.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+214"/>
+        <source>Generate</source>
+        <translation type="unfinished">生成</translation>
+    </message>
+    <message>
+        <location line="-313"/>
+        <location line="+76"/>
+        <source>Describe the level for the text model to plan.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="-57"/>
+        <location line="+75"/>
+        <source>Nothing was sent.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+12"/>
         <source>Asking %1 for a plan…</source>
         <translation type="unfinished"></translation>
     </message>
@@ -39305,12 +39998,12 @@ Searched: %3
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+13"/>
+        <location line="+15"/>
         <source>Laying out and building the level…</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+11"/>
+        <location line="+15"/>
         <source>Cancelled. The level was not shown.</source>
         <translation type="unfinished"></translation>
     </message>
@@ -39320,7 +40013,7 @@ Searched: %3
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+15"/>
+        <location line="+27"/>
         <source>The level could not be built: %1</source>
         <translation type="unfinished"></translation>
     </message>
@@ -39354,22 +40047,17 @@ Searched: %3
         </translation>
     </message>
     <message>
-        <location line="+38"/>
+        <location line="+41"/>
         <source>Cancelling…</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+49"/>
+        <location line="+55"/>
         <source>Plan Request</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+4"/>
-        <source>Nothing has been sent. This is the request Generate would send, without your API key. %1</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+4"/>
+        <location line="+9"/>
         <source>The plan request</source>
         <translation type="unfinished"></translation>
     </message>
@@ -39396,11 +40084,12 @@ Searched: %3
     <message>
         <location line="+6"/>
         <location line="+22"/>
+        <location line="+19"/>
         <source>Could not save %1: %2</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-19"/>
+        <location line="-38"/>
         <source>Saved %1.</source>
         <translation type="unfinished">%1 を保存しました。</translation>
     </message>
@@ -39417,6 +40106,21 @@ Searched: %3
     <message>
         <location line="+12"/>
         <source>Saved the plan to %1.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+9"/>
+        <source>Save Quake-MapGen Report</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Quake-MapGen report (*.json)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+9"/>
+        <source>Saved the report to %1.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
@@ -43435,6 +44139,194 @@ Searched: %3
         <location line="+14"/>
         <source>The transformed texture projection is not finite.</source>
         <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
+    <name>VibeStudioLevelMapgen</name>
+    <message>
+        <location filename="../src/core/level_mapgen.cpp" line="+652"/>
+        <source>%1 route, %2 symmetry, %3 lighting; verticality %4, intensity %5 (of 100).</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+52"/>
+        <source>error</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>warning</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <source>no findings</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+16"/>
+        <source>errors %1, warnings %2 (%3)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+6"/>
+        <source>player</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>small monsters</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>large monsters</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+21"/>
+        <source>Analysis (advisory): error findings %1 (navigation %2, visibility %3, lighting %4, timing %5), warnings %6.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+17"/>
+        <source>Navigation for %1: %2.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <source>Visibility: %1 of %2 spawns safe, chokepoint links %3; %4.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>visibility</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+6"/>
+        <source>Lighting: lights %1, %2 of %3 sample points readable; %4.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>lighting</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>Travel: %1 of %2 timed routes reachable; %3.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>travel</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+13"/>
+        <source>- %1 %2 (%3)%4</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message numerus="yes">
+        <location line="+7"/>
+        <source>%n more finding(s) are in the report.</source>
+        <translation type="unfinished">
+            <numerusform></numerusform>
+        </translation>
+    </message>
+    <message>
+        <location line="+92"/>
+        <source>Quake-MapGen builds Quake, Quake II, and Quake III Arena levels, not %1; use the studio generator for it.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>Quake-MapGen&apos;s modes are %1, not %2.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>The map formats are %1, not %2.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>%1 is not a %2 map format; it takes %3.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>Intensity is one of %1, not %2.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>This build has no ggml to rank with; configure it with -Dggml=enabled, or use the scalar ranker, which gives the same scores.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>The rankers are %1, not %2.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>Quake-MapGen ranks 1 to 64 candidate layouts.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>Quake-MapGen runs 0 to 64 repair passes.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>Stage switches: %1. Known switches: %2.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+66"/>
+        <source>Cancelled. Nothing was built.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>The text model did not plan the level: %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message numerus="yes">
+        <location line="+73"/>
+        <source>Quake-MapGen %1 ranked %n candidate layout(s) and kept the best (score %2), written as %3.</source>
+        <translation type="unfinished">
+            <numerusform></numerusform>
+        </translation>
+    </message>
+    <message>
+        <location line="+6"/>
+        <source>The text model&apos;s plan could not be used (%1); the rules planned the level instead.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message numerus="yes">
+        <location line="+3"/>
+        <source>The text model planned it in %n attempt(s).</source>
+        <translation type="unfinished">
+            <numerusform></numerusform>
+        </translation>
+    </message>
+    <message numerus="yes">
+        <location line="+3"/>
+        <source>Repair pass %1 addressed %n issue(s).</source>
+        <translation type="unfinished">
+            <numerusform></numerusform>
+        </translation>
+    </message>
+    <message numerus="yes">
+        <location line="+7"/>
+        <source>The layout failed validation after %n repair pass(es), so no map was written; the report says why.</source>
+        <translation type="unfinished">
+            <numerusform></numerusform>
+        </translation>
     </message>
 </context>
 <context>
@@ -66961,7 +67853,7 @@ Output: %2</source>
         <translation type="unfinished">警告:</translation>
     </message>
     <message>
-        <location filename="../src/cli/cli.cpp" line="-10124"/>
+        <location filename="../src/cli/cli.cpp" line="-10177"/>
         <source>Stage command</source>
         <translation type="unfinished"></translation>
     </message>
@@ -73834,13 +74726,13 @@ Output: %2</source>
     <name>VibeStudioSoundGenerationDialog</name>
     <message>
         <location filename="../src/app/sound_generation_dialog.cpp" line="+83"/>
-        <location line="+332"/>
+        <location line="+346"/>
         <location line="+32"/>
         <source>Generate Sound</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-362"/>
+        <location line="-376"/>
         <source>Describe a sound effect, make variants with the synthesizer or your sound model, listen, then save one where the game reads it.</source>
         <translation type="unfinished"></translation>
     </message>
@@ -74017,7 +74909,22 @@ Output: %2</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+8"/>
+        <location line="+1"/>
+        <source>AI Settings…</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Open AI settings</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Choose the connector, model, and endpoint in Settings &gt; AI and Automation.</source>
+        <translation type="unfinished">コネクタ、モデル、エンドポイントは、[設定] &gt; [AI と自動化] で選択します。</translation>
+    </message>
+    <message>
+        <location line="+17"/>
         <source>&amp;Generate</source>
         <translation type="unfinished"></translation>
     </message>
@@ -74068,18 +74975,18 @@ Output: %2</source>
     </message>
     <message>
         <location line="+6"/>
-        <location line="+423"/>
+        <location line="+424"/>
         <source>&amp;Play</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-421"/>
-        <location line="+422"/>
+        <location line="-422"/>
+        <location line="+423"/>
         <source>Play the selected sound</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-415"/>
+        <location line="-416"/>
         <source>Sound details</source>
         <translation type="unfinished"></translation>
     </message>
@@ -74129,7 +75036,7 @@ Output: %2</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+51"/>
+        <location line="+52"/>
         <source>Describe the sound, or choose its kind.</source>
         <translation type="unfinished"></translation>
     </message>
@@ -74312,7 +75219,7 @@ Output: %2</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+7"/>
+        <location line="+8"/>
         <source>The sound request</source>
         <translation type="unfinished"></translation>
     </message>
@@ -74383,7 +75290,7 @@ Output: %2</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+203"/>
+        <location line="+211"/>
         <source>File</source>
         <translation type="unfinished">ファイル</translation>
     </message>
@@ -76866,13 +77773,13 @@ Recorded source: %2</source>
     <name>VibeStudioTextureGenerationDialog</name>
     <message>
         <location filename="../src/app/texture_generation_dialog.cpp" line="+83"/>
-        <location line="+389"/>
+        <location line="+406"/>
         <location line="+31"/>
         <source>Generate Texture</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-418"/>
+        <location line="-435"/>
         <source>Describe a texture, draw variants with the image model or start from a picture, review them tiled, then save one where the game reads it.</source>
         <translation type="unfinished"></translation>
     </message>
@@ -77152,7 +78059,22 @@ Recorded source: %2</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+10"/>
+        <location line="+1"/>
+        <source>AI Settings…</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Open AI settings</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Choose the connector, model, and endpoint in Settings &gt; AI and Automation.</source>
+        <translation type="unfinished">コネクタ、モデル、エンドポイントは、[設定] &gt; [AI と自動化] で選択します。</translation>
+    </message>
+    <message>
+        <location line="+19"/>
         <source>&amp;Generate</source>
         <translation type="unfinished"></translation>
     </message>
@@ -77252,7 +78174,7 @@ Recorded source: %2</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+75"/>
+        <location line="+78"/>
         <source>No missing textures to make</source>
         <translation type="unfinished"></translation>
     </message>
@@ -77264,7 +78186,7 @@ Recorded source: %2</source>
         </translation>
     </message>
     <message>
-        <location line="+40"/>
+        <location line="+41"/>
         <source>Making %1 under the name the map uses. Describe it, then Generate.</source>
         <translation type="unfinished"></translation>
     </message>
@@ -77436,7 +78358,7 @@ Replace what is there with this variant?</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+6"/>
+        <location line="+7"/>
         <source>The image request</source>
         <translation type="unfinished"></translation>
     </message>
@@ -78512,15 +79434,15 @@ Replace what is there with this variant?</source>
 <context>
     <name>vibestudio::ApplicationShell</name>
     <message>
-        <location filename="../src/app/application_shell.cpp" line="-16003"/>
-        <location line="+13818"/>
+        <location filename="../src/app/application_shell.cpp" line="-16067"/>
+        <location line="+13878"/>
         <location line="+55"/>
-        <location line="+402"/>
+        <location line="+406"/>
         <source>ready</source>
         <translation type="unfinished">準備完了</translation>
     </message>
     <message>
-        <location line="-14273"/>
+        <location line="-14337"/>
         <source>access error</source>
         <translation type="unfinished">アクセス エラー</translation>
     </message>
@@ -78535,13 +79457,13 @@ Replace what is there with this variant?</source>
         <location line="+3"/>
         <location line="+1"/>
         <location line="+25"/>
-        <location line="+11354"/>
+        <location line="+11414"/>
         <location line="+1829"/>
         <source>unknown</source>
         <translation type="unfinished">不明</translation>
     </message>
     <message>
-        <location line="-13501"/>
+        <location line="-13561"/>
         <source>System</source>
         <translation type="unfinished">システム</translation>
     </message>
@@ -78605,7 +79527,7 @@ Replace what is there with this variant?</source>
     <message>
         <location line="+18"/>
         <location line="+16"/>
-        <location line="+6002"/>
+        <location line="+6054"/>
         <location line="+618"/>
         <location line="+449"/>
         <location line="+519"/>
@@ -78613,46 +79535,46 @@ Replace what is there with this variant?</source>
         <translation type="unfinished">アイドル</translation>
     </message>
     <message>
-        <location line="-7602"/>
+        <location line="-7654"/>
         <source>Queued</source>
         <translation type="unfinished">待機中</translation>
     </message>
     <message>
         <location line="+2"/>
-        <location line="+6550"/>
+        <location line="+6602"/>
         <location filename="../src/app/audio_browser_actions.cpp" line="+157"/>
         <source>Loading</source>
         <translation type="unfinished">読み込み中</translation>
     </message>
     <message>
-        <location line="-6548"/>
-        <location line="+12429"/>
+        <location line="-6600"/>
+        <location line="+12489"/>
         <location line="+357"/>
-        <location line="+11885"/>
+        <location line="+12072"/>
         <source>Running</source>
         <translation type="unfinished">実行中</translation>
     </message>
     <message>
-        <location line="-24669"/>
-        <location line="+25207"/>
+        <location line="-24916"/>
+        <location line="+25454"/>
         <location filename="../src/app/code_language_actions.cpp" line="+112"/>
         <source>Warning</source>
         <translation type="unfinished">警告</translation>
     </message>
     <message>
-        <location line="-25205"/>
+        <location line="-25452"/>
         <source>Failed</source>
         <translation type="unfinished">失敗</translation>
     </message>
     <message>
         <location line="+2"/>
-        <location line="+7138"/>
-        <location line="+4599"/>
+        <location line="+7190"/>
+        <location line="+4607"/>
         <source>Cancelled</source>
         <translation type="unfinished">キャンセル済み</translation>
     </message>
     <message>
-        <location line="-11735"/>
+        <location line="-11795"/>
         <source>Completed</source>
         <translation type="unfinished">完了</translation>
     </message>
@@ -78685,12 +79607,12 @@ Replace what is there with this variant?</source>
     <message>
         <location line="+4"/>
         <location line="+26"/>
-        <location line="+24473"/>
+        <location line="+24720"/>
         <source>Unknown</source>
         <translation type="unfinished">不明</translation>
     </message>
     <message>
-        <location line="-24492"/>
+        <location line="-24739"/>
         <location line="+4"/>
         <source>File</source>
         <translation type="unfinished">ファイル</translation>
@@ -78719,43 +79641,43 @@ Replace what is there with this variant?</source>
     <message>
         <location line="+11"/>
         <location line="+14"/>
-        <location line="+6573"/>
+        <location line="+6625"/>
         <location line="+5"/>
-        <location line="+13618"/>
+        <location line="+13808"/>
         <location filename="../src/app/package_context_actions.cpp" line="+22"/>
         <source>Unavailable</source>
         <translation type="unfinished">利用不可</translation>
     </message>
     <message>
-        <location line="-20206"/>
+        <location line="-20448"/>
         <source>Text</source>
         <translation type="unfinished">テキスト</translation>
     </message>
     <message>
         <location line="+2"/>
-        <location line="+4250"/>
+        <location line="+4254"/>
         <source>Image</source>
         <translation type="unfinished">画像</translation>
     </message>
     <message>
-        <location filename="../src/app/ai_generation_actions.cpp" line="+422"/>
-        <location line="+91"/>
-        <location filename="../src/app/application_shell.cpp" line="-4248"/>
+        <location filename="../src/app/ai_generation_actions.cpp" line="+408"/>
+        <location line="+106"/>
+        <location filename="../src/app/application_shell.cpp" line="-4252"/>
         <location line="+1175"/>
         <location line="+25"/>
-        <location line="+3078"/>
-        <location line="+18991"/>
+        <location line="+3103"/>
+        <location line="+19213"/>
         <source>Model</source>
         <translation type="unfinished">モデル</translation>
     </message>
     <message>
-        <location filename="../src/app/application_shell.cpp" line="-23267"/>
+        <location filename="../src/app/application_shell.cpp" line="-23514"/>
         <location line="+290"/>
-        <location line="+3957"/>
-        <location line="+891"/>
+        <location line="+3962"/>
+        <location line="+938"/>
         <location line="+37"/>
         <location line="+3077"/>
-        <location line="+6008"/>
+        <location line="+6020"/>
         <location filename="../src/app/asset_workbench_actions.cpp" line="+94"/>
         <location line="+2"/>
         <location line="+2"/>
@@ -78765,7 +79687,7 @@ Replace what is there with this variant?</source>
         <translation type="unfinished">オーディオ</translation>
     </message>
     <message>
-        <location line="-14258"/>
+        <location line="-14322"/>
         <source>Binary</source>
         <translation type="unfinished">バイナリ</translation>
     </message>
@@ -78777,7 +79699,7 @@ Replace what is there with this variant?</source>
     </message>
     <message>
         <location line="+2"/>
-        <location line="+5855"/>
+        <location line="+5907"/>
         <location line="+13"/>
         <location filename="../src/app/code_document_actions.cpp" line="+93"/>
         <location filename="../src/app/level_editing_actions.cpp" line="+901"/>
@@ -78785,18 +79707,18 @@ Replace what is there with this variant?</source>
         <translation type="unfinished">置換</translation>
     </message>
     <message>
-        <location line="-5866"/>
+        <location line="-5918"/>
         <source>Rename</source>
         <translation type="unfinished">名前変更</translation>
     </message>
     <message>
         <location line="+2"/>
-        <location line="+20617"/>
+        <location line="+20864"/>
         <source>Delete</source>
         <translation type="unfinished">削除</translation>
     </message>
     <message>
-        <location line="-20625"/>
+        <location line="-20872"/>
         <source>Stage</source>
         <translation type="unfinished">ステージ</translation>
     </message>
@@ -78864,14 +79786,14 @@ Replace what is there with this variant?</source>
     <message>
         <location line="+1"/>
         <location line="+29"/>
-        <location line="+11502"/>
+        <location line="+11562"/>
         <location line="+1092"/>
         <location filename="../src/app/package_context_actions.cpp" line="+7"/>
         <source>Format: %1</source>
         <translation type="unfinished">形式: %1</translation>
     </message>
     <message>
-        <location line="-12622"/>
+        <location line="-12682"/>
         <source>Dimensions: %1</source>
         <translation type="unfinished">寸法: %1</translation>
     </message>
@@ -78900,9 +79822,9 @@ Replace what is there with this variant?</source>
         <location line="+61"/>
         <location line="+1"/>
         <location line="+1"/>
-        <location line="+5772"/>
+        <location line="+5824"/>
         <location line="+6"/>
-        <location line="+5538"/>
+        <location line="+5546"/>
         <location line="+1"/>
         <location line="+878"/>
         <location line="+364"/>
@@ -78912,13 +79834,13 @@ Replace what is there with this variant?</source>
         <translation type="unfinished">はい</translation>
     </message>
     <message>
-        <location line="-13577"/>
+        <location line="-13637"/>
         <location line="+61"/>
         <location line="+1"/>
         <location line="+1"/>
-        <location line="+5772"/>
+        <location line="+5824"/>
         <location line="+6"/>
-        <location line="+5538"/>
+        <location line="+5546"/>
         <location line="+1"/>
         <location line="+878"/>
         <location line="+364"/>
@@ -78928,7 +79850,7 @@ Replace what is there with this variant?</source>
         <translation type="unfinished">いいえ</translation>
     </message>
     <message>
-        <location line="-13575"/>
+        <location line="-13635"/>
         <source>Palette sample:</source>
         <translation type="unfinished">パレット サンプル:</translation>
     </message>
@@ -78974,13 +79896,13 @@ Replace what is there with this variant?</source>
     </message>
     <message>
         <location line="+18"/>
-        <location line="+13496"/>
-        <location line="+402"/>
+        <location line="+13556"/>
+        <location line="+406"/>
         <source>Name: %1</source>
         <translation type="unfinished">名前: %1</translation>
     </message>
     <message>
-        <location line="-13897"/>
+        <location line="-13961"/>
         <source>Profile ID: %1</source>
         <translation type="unfinished">プロファイル ID: %1</translation>
     </message>
@@ -78991,12 +79913,12 @@ Replace what is there with this variant?</source>
     </message>
     <message>
         <location line="+1"/>
-        <location line="+11760"/>
+        <location line="+11820"/>
         <source>Engine: %1</source>
         <translation type="unfinished">エンジン: %1</translation>
     </message>
     <message>
-        <location line="-11759"/>
+        <location line="-11819"/>
         <location line="+29"/>
         <source>Root: %1</source>
         <translation type="unfinished">ルート: %1</translation>
@@ -79019,22 +79941,22 @@ Replace what is there with this variant?</source>
     <message>
         <location line="+0"/>
         <location line="+1"/>
-        <location line="+5762"/>
+        <location line="+5814"/>
         <location line="+19"/>
         <location line="+1"/>
         <location line="+146"/>
-        <location line="+6037"/>
+        <location line="+6045"/>
         <location line="+1186"/>
         <location line="+164"/>
         <location line="+3"/>
         <location line="+95"/>
-        <location line="+444"/>
+        <location line="+448"/>
         <location line="+1"/>
         <source>none</source>
         <translation type="unfinished">なし</translation>
     </message>
     <message>
-        <location line="-13858"/>
+        <location line="-13922"/>
         <source>Mod package paths: %1</source>
         <translation type="unfinished">Mod パッケージ パス: %1</translation>
     </message>
@@ -79081,42 +80003,42 @@ Replace what is there with this variant?</source>
     </message>
     <message>
         <location line="+0"/>
-        <location line="+12578"/>
+        <location line="+12638"/>
         <source>blocked</source>
         <translation type="unfinished">ブロック中</translation>
     </message>
     <message>
-        <location line="-12576"/>
+        <location line="-12636"/>
         <source>Errors:</source>
         <translation type="unfinished">エラー:</translation>
     </message>
     <message>
         <location line="+6"/>
-        <location line="+13344"/>
+        <location line="+13404"/>
         <source>Warnings:</source>
         <translation type="unfinished">警告:</translation>
     </message>
     <message>
-        <location line="-13333"/>
-        <location line="+6479"/>
-        <location line="+18934"/>
+        <location line="-13393"/>
+        <location line="+6531"/>
+        <location line="+19129"/>
         <source>Project: %1</source>
         <translation type="unfinished">プロジェクト: %1</translation>
     </message>
     <message>
-        <location line="-25411"/>
+        <location line="-25658"/>
         <source>Ready checks: %1</source>
         <translation type="unfinished">準備完了のチェック: %1</translation>
     </message>
     <message>
         <location line="+1"/>
-        <location line="+13145"/>
+        <location line="+13205"/>
         <location filename="../src/app/package_context_actions.cpp" line="+2"/>
         <source>Warnings: %1</source>
         <translation type="unfinished">警告: %1</translation>
     </message>
     <message>
-        <location line="-13144"/>
+        <location line="-13204"/>
         <source>Failures: %1</source>
         <translation type="unfinished">失敗: %1</translation>
     </message>
@@ -79132,20 +80054,20 @@ Replace what is there with this variant?</source>
     </message>
     <message>
         <location line="+3"/>
-        <location line="+4578"/>
+        <location line="+4630"/>
         <source>Images</source>
         <translation type="unfinished">画像</translation>
     </message>
     <message>
-        <location line="-4575"/>
+        <location line="-4627"/>
         <source>Text And Maps</source>
         <translation type="unfinished">テキストとマップ</translation>
     </message>
     <message>
         <location line="+6"/>
-        <location line="+4604"/>
+        <location line="+4656"/>
         <location line="+41"/>
-        <location line="+9316"/>
+        <location line="+9328"/>
         <location filename="../src/app/asset_workbench_actions.cpp" line="-18"/>
         <location line="+2"/>
         <location line="+2"/>
@@ -79157,7 +80079,7 @@ Replace what is there with this variant?</source>
         <translation type="unfinished">モデル</translation>
     </message>
     <message>
-        <location line="-13958"/>
+        <location line="-14022"/>
         <source>Compiled Maps</source>
         <translation type="unfinished">コンパイル済みマップ</translation>
     </message>
@@ -79199,7 +80121,7 @@ Replace what is there with this variant?</source>
     <message>
         <location line="+0"/>
         <location line="+1741"/>
-        <location line="+5199"/>
+        <location line="+5251"/>
         <location line="+6"/>
         <location filename="../src/app/level_sidebar_panels.cpp" line="+16"/>
         <location line="+101"/>
@@ -79208,21 +80130,21 @@ Replace what is there with this variant?</source>
         <translation type="unfinished">値</translation>
     </message>
     <message>
-        <location line="-6686"/>
+        <location line="-6738"/>
         <location line="+25"/>
-        <location line="+4067"/>
+        <location line="+4119"/>
         <source>Format</source>
         <translation type="unfinished">形式</translation>
     </message>
     <message>
-        <location line="-4091"/>
-        <location line="+23962"/>
+        <location line="-4143"/>
+        <location line="+24209"/>
         <location filename="../src/app/code_language_actions.cpp" line="+0"/>
         <source>Error</source>
         <translation type="unfinished">エラー</translation>
     </message>
     <message>
-        <location line="-23958"/>
+        <location line="-24205"/>
         <source>No model metadata could be read from this entry.</source>
         <translation type="unfinished">このエントリからモデルのメタデータを読み取れませんでした。</translation>
     </message>
@@ -79248,12 +80170,12 @@ Replace what is there with this variant?</source>
     </message>
     <message>
         <location line="+2"/>
-        <location line="+3635"/>
+        <location line="+3687"/>
         <source>Frames</source>
         <translation type="unfinished">フレーム</translation>
     </message>
     <message>
-        <location line="-3634"/>
+        <location line="-3686"/>
         <location filename="../src/app/level_view_actions.cpp" line="+130"/>
         <source>Surfaces</source>
         <translation type="unfinished">サーフェス</translation>
@@ -79276,25 +80198,25 @@ Replace what is there with this variant?</source>
     </message>
     <message>
         <location line="+0"/>
-        <location line="+7791"/>
-        <location line="+15888"/>
+        <location line="+7843"/>
+        <location line="+16083"/>
         <source>%1 to %2</source>
         <translation type="unfinished">%1 から %2</translation>
     </message>
     <message>
-        <location line="-23678"/>
+        <location line="-23925"/>
         <source>Radius</source>
         <translation type="unfinished">半径</translation>
     </message>
     <message>
         <location line="+2"/>
-        <location line="+19027"/>
+        <location line="+19269"/>
         <location filename="../src/app/level_view_actions.cpp" line="-14"/>
         <source>Geometry</source>
         <translation type="unfinished">ジオメトリ</translation>
     </message>
     <message>
-        <location line="-19027"/>
+        <location line="-19269"/>
         <source>Header only; this format&apos;s geometry is not decoded yet.</source>
         <translation type="unfinished">ヘッダーのみです。この形式のジオメトリはまだデコードされていません。</translation>
     </message>
@@ -79391,14 +80313,15 @@ Double-click or press Enter to show it on the Textures surface.</source>
     </message>
     <message>
         <location line="+47"/>
-        <location line="+15063"/>
+        <location line="+15305"/>
         <source>VibeStudio</source>
         <translation type="unfinished">VibeStudio</translation>
     </message>
     <message>
-        <location line="-15043"/>
-        <location line="+7517"/>
-        <location line="+8994"/>
+        <location line="-15285"/>
+        <location line="+7569"/>
+        <location line="+7402"/>
+        <location line="+1782"/>
         <location line="+3470"/>
         <location filename="../src/app/level_sidebar_panels.cpp" line="+207"/>
         <location filename="../src/app/level_view_actions.cpp" line="+296"/>
@@ -79406,7 +80329,7 @@ Double-click or press Enter to show it on the Textures surface.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-19968"/>
+        <location line="-20210"/>
         <source>Studio work surface</source>
         <translation type="unfinished">スタジオの作業画面</translation>
     </message>
@@ -79417,13 +80340,13 @@ Double-click or press Enter to show it on the Textures surface.</source>
     </message>
     <message>
         <location line="+156"/>
-        <location line="+12426"/>
+        <location line="+12490"/>
         <location line="+184"/>
         <source>Workspace</source>
         <translation type="unfinished">ワークスペース</translation>
     </message>
     <message>
-        <location line="-12609"/>
+        <location line="-12673"/>
         <source>Workspace header</source>
         <translation type="unfinished">ワークスペースのヘッダー</translation>
     </message>
@@ -79459,13 +80382,13 @@ Double-click or press Enter to show it on the Textures surface.</source>
     </message>
     <message>
         <location line="+6"/>
-        <location line="+4009"/>
-        <location line="+7204"/>
+        <location line="+4061"/>
+        <location line="+7212"/>
         <source>Open Project</source>
         <translation type="unfinished">プロジェクトを開く</translation>
     </message>
     <message>
-        <location line="-11212"/>
+        <location line="-11272"/>
         <source>Open project folder</source>
         <translation type="unfinished">プロジェクト フォルダーを開く</translation>
     </message>
@@ -79481,13 +80404,13 @@ Double-click or press Enter to show it on the Textures surface.</source>
     </message>
     <message>
         <location line="+2"/>
-        <location line="+4976"/>
-        <location line="+5305"/>
+        <location line="+5028"/>
+        <location line="+5313"/>
         <source>Project manifest</source>
         <translation type="unfinished">プロジェクト マニフェスト</translation>
     </message>
     <message>
-        <location line="-10280"/>
+        <location line="-10340"/>
         <source>Project health</source>
         <translation type="unfinished">プロジェクトの正常性</translation>
     </message>
@@ -79503,12 +80426,12 @@ Double-click or press Enter to show it on the Textures surface.</source>
     </message>
     <message>
         <location line="+26"/>
-        <location line="+12026"/>
+        <location line="+12086"/>
         <source>Project Health</source>
         <translation type="unfinished">プロジェクトの正常性</translation>
     </message>
     <message>
-        <location line="-12025"/>
+        <location line="-12085"/>
         <source>Workspace context panels</source>
         <translation type="unfinished">ワークスペースのコンテキスト パネル</translation>
     </message>
@@ -79530,16 +80453,16 @@ Double-click or press Enter to show it on the Textures surface.</source>
     <message>
         <location line="+3"/>
         <location line="+1878"/>
-        <location line="+1973"/>
-        <location line="+14329"/>
-        <location line="+4600"/>
+        <location line="+2025"/>
+        <location line="+14519"/>
+        <location line="+4605"/>
         <location line="+643"/>
         <location filename="../src/app/level_sidebar_actions.cpp" line="+279"/>
         <source>Problems</source>
         <translation type="unfinished">問題</translation>
     </message>
     <message>
-        <location line="-23414"/>
+        <location line="-23661"/>
         <source>Workspace search</source>
         <translation type="unfinished">ワークスペース検索</translation>
     </message>
@@ -79580,12 +80503,12 @@ Double-click or press Enter to show it on the Textures surface.</source>
     </message>
     <message>
         <location line="+5"/>
-        <location line="+16404"/>
+        <location line="+16646"/>
         <source>Copy Path</source>
         <translation type="unfinished">パスをコピー</translation>
     </message>
     <message>
-        <location line="-16403"/>
+        <location line="-16645"/>
         <source>Copy selected virtual path</source>
         <translation type="unfinished">選択した仮想パスをコピー</translation>
     </message>
@@ -79646,13 +80569,13 @@ Double-click or press Enter to show it on the Textures surface.</source>
     </message>
     <message>
         <location line="+1"/>
-        <location line="+4136"/>
+        <location line="+4188"/>
         <location line="+80"/>
         <source>Workspace Details</source>
         <translation type="unfinished">ワークスペースの詳細</translation>
     </message>
     <message>
-        <location line="-4215"/>
+        <location line="-4267"/>
         <source>Open a project folder to inspect manifest and health details.</source>
         <translation type="unfinished">プロジェクト フォルダーを開くと、マニフェストと正常性の詳細を確認できます。</translation>
     </message>
@@ -79689,12 +80612,12 @@ Double-click or press Enter to show it on the Textures surface.</source>
     </message>
     <message>
         <location line="+5"/>
-        <location line="+11154"/>
+        <location line="+11214"/>
         <source>Clear</source>
         <translation type="unfinished">クリア</translation>
     </message>
     <message>
-        <location line="-11153"/>
+        <location line="-11213"/>
         <source>Clear recent projects</source>
         <translation type="unfinished">最近のプロジェクトをクリア</translation>
     </message>
@@ -79705,12 +80628,12 @@ Double-click or press Enter to show it on the Textures surface.</source>
     </message>
     <message>
         <location line="+8"/>
-        <location line="+11809"/>
+        <location line="+11869"/>
         <source>Game Installations</source>
         <translation type="unfinished">ゲームのインストール</translation>
     </message>
     <message>
-        <location line="-11807"/>
+        <location line="-11867"/>
         <source>Game installation summary</source>
         <translation type="unfinished">ゲームのインストールのサマリー</translation>
     </message>
@@ -79827,21 +80750,21 @@ Double-click or press Enter to show it on the Textures surface.</source>
     </message>
     <message>
         <location line="+1"/>
-        <location line="+2493"/>
-        <location line="+6649"/>
+        <location line="+2545"/>
+        <location line="+6657"/>
         <source>Shader</source>
         <translation type="unfinished">シェーダー</translation>
     </message>
     <message>
-        <location line="-9141"/>
-        <location line="+21023"/>
-        <location line="+236"/>
+        <location line="-9201"/>
+        <location line="+21265"/>
+        <location line="+241"/>
         <location filename="../src/app/level_geometry_actions.cpp" line="+816"/>
         <source>Entity</source>
         <translation type="unfinished">エンティティ</translation>
     </message>
     <message>
-        <location line="-21258"/>
+        <location line="-21505"/>
         <source>Package Plan</source>
         <translation type="unfinished">パッケージ計画</translation>
     </message>
@@ -79902,13 +80825,13 @@ Double-click or press Enter to show it on the Textures surface.</source>
     </message>
     <message>
         <location line="+5"/>
-        <location line="+6220"/>
-        <location line="+6003"/>
+        <location line="+6272"/>
+        <location line="+6015"/>
         <source>Levels</source>
         <translation type="unfinished">レベル</translation>
     </message>
     <message>
-        <location line="-12222"/>
+        <location line="-12286"/>
         <source>Level editor header</source>
         <translation type="unfinished">レベル エディターのヘッダー</translation>
     </message>
@@ -79965,12 +80888,12 @@ Double-click or press Enter to show it on the Textures surface.</source>
     </message>
     <message>
         <location line="+24"/>
-        <location line="+4794"/>
+        <location line="+4846"/>
         <source>Save before opening another map?</source>
         <translation type="unfinished">別のマップを開く前に保存しますか?</translation>
     </message>
     <message>
-        <location line="-4004"/>
+        <location line="-4056"/>
         <source>Review selected planned files and save them as a separate package.</source>
         <translation type="unfinished">選択した計画済みファイルを確認し、別のパッケージとして保存します。</translation>
     </message>
@@ -79990,7 +80913,7 @@ Double-click or press Enter to show it on the Textures surface.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+1393"/>
+        <location line="+1445"/>
         <location filename="../src/app/asset_workbench_actions.cpp" line="-22"/>
         <source>Edit the displayed mip level or sprite frame with its native export metadata.</source>
         <translation type="unfinished">表示中のミップ レベルまたはスプライト フレームを、ネイティブのエクスポート メタデータとともに編集します。</translation>
@@ -80016,15 +80939,15 @@ Double-click or press Enter to show it on the Textures surface.</source>
         <translation type="unfinished">サムネイルを準備中…</translation>
     </message>
     <message>
-        <location line="-1308"/>
-        <location line="+1311"/>
+        <location line="-1360"/>
+        <location line="+1363"/>
         <location line="+248"/>
-        <location line="+6707"/>
+        <location line="+6715"/>
         <source>Cancel Preview</source>
         <translation type="unfinished">プレビューをキャンセル</translation>
     </message>
     <message>
-        <location line="-6955"/>
+        <location line="-6963"/>
         <source>Cancel texture preview and queued thumbnails.</source>
         <translation type="unfinished">テクスチャのプレビューと待機中のサムネイルをキャンセルします。</translation>
     </message>
@@ -80081,24 +81004,24 @@ Double-click or press Enter to show it on the Textures surface.</source>
         <translation type="unfinished">無題のパッケージ</translation>
     </message>
     <message>
-        <location line="+4986"/>
+        <location line="+4994"/>
         <source>Texture Preview</source>
         <translation type="unfinished">テクスチャのプレビュー</translation>
     </message>
     <message>
         <location line="+1"/>
         <location line="+68"/>
-        <location line="+7995"/>
+        <location line="+8177"/>
         <source>Loading texture preview…</source>
         <translation type="unfinished">テクスチャのプレビューを読み込み中…</translation>
     </message>
     <message>
-        <location line="-5272"/>
+        <location line="-5450"/>
         <source>Write the edited map to a new path without touching the source.</source>
         <translation type="unfinished">ソースには触れずに、編集したマップを新しいパスに書き込みます。</translation>
     </message>
     <message>
-        <location line="-12232"/>
+        <location line="-12296"/>
         <location line="+704"/>
         <source>Open Map</source>
         <translation type="unfinished">マップを開く</translation>
@@ -80263,13 +81186,13 @@ Double-click or press Enter to show it on the Textures surface.</source>
     </message>
     <message>
         <location line="+1"/>
-        <location line="+5281"/>
+        <location line="+5333"/>
         <location line="+13"/>
         <source>Level Map</source>
         <translation type="unfinished">レベル マップ</translation>
     </message>
     <message>
-        <location line="-5293"/>
+        <location line="-5345"/>
         <source>Open a Doom WAD map or Quake-family .map source to inspect and edit.</source>
         <translation type="unfinished">検査と編集のために、Doom WAD のマップまたは Quake 系の .map ソースを開きます。</translation>
     </message>
@@ -80319,13 +81242,13 @@ Double-click or press Enter to show it on the Textures surface.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+4872"/>
+        <location line="+4924"/>
         <location filename="../src/app/level_sidebar_actions.cpp" line="-136"/>
         <source>Objects</source>
         <translation type="unfinished">オブジェクト</translation>
     </message>
     <message>
-        <location line="-4849"/>
+        <location line="-4901"/>
         <source>Map palette</source>
         <translation type="unfinished">マップ パレット</translation>
     </message>
@@ -80749,10 +81672,10 @@ Double-click or press Enter to show it on the Textures surface.</source>
         <translation type="unfinished">マップ テクスチャ フィルター</translation>
     </message>
     <message>
-        <location line="+2194"/>
+        <location line="+2246"/>
         <location line="+147"/>
         <location line="+2998"/>
-        <location line="+6553"/>
+        <location line="+6565"/>
         <location filename="../src/app/asset_workbench_actions.cpp" line="-2"/>
         <location line="+2"/>
         <location line="+2"/>
@@ -80762,43 +81685,43 @@ Double-click or press Enter to show it on the Textures surface.</source>
         <translation type="unfinished">テクスチャ</translation>
     </message>
     <message>
-        <location line="-6554"/>
+        <location line="-6566"/>
         <location filename="../src/app/level_sidebar_actions.cpp" line="+115"/>
         <source>Statistics</source>
         <translation type="unfinished">統計</translation>
     </message>
     <message>
-        <location line="-5329"/>
+        <location line="-5381"/>
         <source>Map viewport controls</source>
         <translation type="unfinished">マップ ビューポートのコントロール</translation>
     </message>
     <message>
         <location line="+2"/>
         <location line="+727"/>
-        <location line="+4604"/>
+        <location line="+4656"/>
         <source>Undo</source>
         <translation type="unfinished">元に戻す</translation>
     </message>
     <message>
-        <location line="-5331"/>
-        <location line="+12095"/>
+        <location line="-5383"/>
+        <location line="+12159"/>
         <source>Undo the last map edit.</source>
         <translation type="unfinished">直前のマップ編集を元に戻します。</translation>
     </message>
     <message>
-        <location line="-12090"/>
+        <location line="-12154"/>
         <location line="+725"/>
         <source>Redo</source>
         <translation type="unfinished">やり直し</translation>
     </message>
     <message>
         <location line="-725"/>
-        <location line="+12093"/>
+        <location line="+12157"/>
         <source>Redo the last undone map edit.</source>
         <translation type="unfinished">元に戻した直前のマップ編集をやり直します。</translation>
     </message>
     <message>
-        <location line="-12084"/>
+        <location line="-12148"/>
         <source>Map projection</source>
         <translation type="unfinished">マップの投影</translation>
     </message>
@@ -80830,12 +81753,12 @@ Double-click or press Enter to show it on the Textures surface.</source>
     </message>
     <message>
         <location line="+2"/>
-        <location line="+12421"/>
+        <location line="+12485"/>
         <source>Grid %1</source>
         <translation type="unfinished">グリッド %1</translation>
     </message>
     <message>
-        <location line="-12416"/>
+        <location line="-12480"/>
         <source>Snap</source>
         <translation type="unfinished">スナップ</translation>
     </message>
@@ -80857,18 +81780,18 @@ Double-click or press Enter to show it on the Textures surface.</source>
     </message>
     <message>
         <location line="-7"/>
-        <location line="+20019"/>
+        <location line="+20261"/>
         <source>Things</source>
         <translation type="unfinished">シング</translation>
     </message>
     <message>
-        <location line="-20019"/>
-        <location line="+20020"/>
+        <location line="-20261"/>
+        <location line="+20262"/>
         <source>Draw Doom things.</source>
         <translation type="unfinished">Doom のシングを描画します。</translation>
     </message>
     <message>
-        <location line="-20019"/>
+        <location line="-20261"/>
         <source>Sector Fill</source>
         <translation type="unfinished">セクターの塗りつぶし</translation>
     </message>
@@ -80879,14 +81802,14 @@ Double-click or press Enter to show it on the Textures surface.</source>
     </message>
     <message>
         <location line="+1"/>
-        <location line="+2614"/>
+        <location line="+2666"/>
         <location filename="../src/app/level_shapes_panel.cpp" line="-468"/>
         <location filename="../src/app/level_sidebar_actions.cpp" line="+17"/>
         <source>Grid</source>
         <translation type="unfinished">グリッド</translation>
     </message>
     <message>
-        <location line="-2614"/>
+        <location line="-2666"/>
         <source>Draw grid lines at the grid spacing.</source>
         <translation type="unfinished">グリッド間隔でグリッド線を描画します。</translation>
     </message>
@@ -80927,14 +81850,14 @@ Double-click or press Enter to show it on the Textures surface.</source>
     </message>
     <message>
         <location line="+6"/>
-        <location line="+2322"/>
-        <location line="+19098"/>
+        <location line="+2374"/>
+        <location line="+19293"/>
         <location filename="../src/app/level_geometry_actions.cpp" line="-712"/>
         <source>Zoom to Fit</source>
         <translation type="unfinished">全体表示</translation>
     </message>
     <message>
-        <location line="-21420"/>
+        <location line="-21667"/>
         <source>Frame the whole map in the viewport.</source>
         <translation type="unfinished">ビューポートにマップ全体を収めます。</translation>
     </message>
@@ -80945,12 +81868,12 @@ Double-click or press Enter to show it on the Textures surface.</source>
     </message>
     <message>
         <location line="+11"/>
-        <location line="+21405"/>
+        <location line="+21652"/>
         <source>Zoom to Selection</source>
         <translation type="unfinished">選択範囲にズーム</translation>
     </message>
     <message>
-        <location line="-21405"/>
+        <location line="-21652"/>
         <source>Frame the selected objects in the viewport (F).</source>
         <translation type="unfinished">ビューポートに選択したオブジェクトを収めます (F)。</translation>
     </message>
@@ -80976,13 +81899,12 @@ Double-click or press Enter to show it on the Textures surface.</source>
     </message>
     <message>
         <location line="+6"/>
-        <location line="+1776"/>
         <location filename="../src/app/level_sidebar_actions.cpp" line="+44"/>
         <source>3D</source>
         <translation type="unfinished">3D</translation>
     </message>
     <message>
-        <location line="-1776"/>
+        <location line="+0"/>
         <source>Show the map in 3D: drag to orbit, wheel to zoom. The 2D view comes back with the same button.</source>
         <translation type="unfinished"></translation>
     </message>
@@ -81003,12 +81925,12 @@ Double-click or press Enter to show it on the Textures surface.</source>
     </message>
     <message>
         <location line="+2"/>
-        <location line="+7609"/>
+        <location line="+7664"/>
         <source>Level editor controls</source>
         <translation type="unfinished">レベル エディターの操作</translation>
     </message>
     <message>
-        <location line="-7594"/>
+        <location line="-7649"/>
         <source>Controls like</source>
         <translation type="unfinished">操作のスタイル</translation>
     </message>
@@ -81377,7 +82299,7 @@ No definition is loaded for this class, so its keys are not known. Load entity d
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/app/application_shell.cpp" line="+11870"/>
+        <location filename="../src/app/application_shell.cpp" line="+11934"/>
         <location filename="../src/app/level_sidebar_actions.cpp" line="-766"/>
         <source>Change a key on the selected map object.</source>
         <translation type="unfinished">選択したマップ オブジェクトのキーを変更します。</translation>
@@ -81394,14 +82316,15 @@ No definition is loaded for this class, so its keys are not known. Load entity d
         <translation type="unfinished">選択したマップ オブジェクトを差分だけ移動します。</translation>
     </message>
     <message>
-        <location line="-11828"/>
+        <location line="-11892"/>
         <source>Entity inspector</source>
         <translation type="unfinished">エンティティ インスペクター</translation>
     </message>
     <message>
         <location line="+3"/>
-        <location line="+1631"/>
-        <location line="+3550"/>
+        <location line="+1670"/>
+        <location line="+3563"/>
+        <location line="+8356"/>
         <location filename="../src/app/level_editing_actions.cpp" line="-39"/>
         <location line="+32"/>
         <location filename="../src/app/level_sidebar_panels.cpp" line="-310"/>
@@ -81411,7 +82334,7 @@ No definition is loaded for this class, so its keys are not known. Load entity d
         <translation type="unfinished">キー</translation>
     </message>
     <message>
-        <location line="-5165"/>
+        <location line="-13573"/>
         <source>Colour for %1</source>
         <translation type="unfinished">%1 の色</translation>
     </message>
@@ -81453,11 +82376,12 @@ No definition is loaded for this class, so its keys are not known. Load entity d
     <message>
         <location line="+5"/>
         <location line="+761"/>
+        <location line="+792"/>
         <source>Browse</source>
         <translation type="unfinished">参照</translation>
     </message>
     <message>
-        <location line="-761"/>
+        <location line="-1553"/>
         <source>Choose a .def, .fgd, or .ent file.</source>
         <translation type="unfinished">.def、.fgd、.ent のいずれかのファイルを選択してください。</translation>
     </message>
@@ -81518,13 +82442,13 @@ No definition is loaded for this class, so its keys are not known. Load entity d
     </message>
     <message>
         <location line="+1"/>
-        <location line="+4745"/>
+        <location line="+4797"/>
         <location line="+168"/>
         <source>Level Map Details</source>
         <translation type="unfinished">レベル マップの詳細</translation>
     </message>
     <message>
-        <location line="-4912"/>
+        <location line="-4964"/>
         <source>Inspect map statistics, properties, textures, validation, and undo history.</source>
         <translation type="unfinished">マップの統計、プロパティ、テクスチャ、検証、元に戻す履歴を確認します。</translation>
     </message>
@@ -81539,51 +82463,51 @@ No definition is loaded for this class, so its keys are not known. Load entity d
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+2969"/>
+        <location line="+3021"/>
         <location line="+28"/>
-        <location line="+10476"/>
+        <location line="+10666"/>
         <source>Inspector</source>
         <translation type="unfinished">インスペクター</translation>
     </message>
     <message>
-        <location line="-8561"/>
+        <location line="-8751"/>
         <source>Health</source>
         <translation type="unfinished">正常性</translation>
     </message>
     <message>
-        <location line="-4399"/>
-        <location line="+1177"/>
+        <location line="-4451"/>
+        <location line="+1229"/>
         <location line="+374"/>
-        <location line="+16063"/>
+        <location line="+16253"/>
         <location filename="../src/app/level_preview_actions.cpp" line="+34"/>
         <source>Details</source>
         <translation type="unfinished">詳細</translation>
     </message>
     <message>
-        <location line="-15265"/>
+        <location line="-15455"/>
         <source>Outline</source>
         <translation type="unfinished">アウトライン</translation>
     </message>
     <message>
-        <location line="-2835"/>
+        <location line="-2887"/>
         <source>Level map workbench</source>
         <translation type="unfinished">レベル マップ ワークベンチ</translation>
     </message>
     <message>
         <location line="+20"/>
-        <location line="+13945"/>
+        <location line="+14187"/>
         <location line="+11"/>
         <source>No map open</source>
         <translation type="unfinished">開いているマップはありません</translation>
     </message>
     <message>
-        <location line="-13955"/>
-        <location line="+13956"/>
+        <location line="-14197"/>
+        <location line="+14198"/>
         <source>Open a Quake, Quake II, or Quake III .map, or a Doom WAD, to inspect its entities, brushes, and health in the viewport.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-13944"/>
+        <location line="-14186"/>
         <location line="+6"/>
         <source>Recent maps</source>
         <translation type="unfinished">最近のマップ</translation>
@@ -81595,14 +82519,14 @@ No definition is loaded for this class, so its keys are not known. Load entity d
     </message>
     <message>
         <location line="+99"/>
-        <location line="+5287"/>
-        <location line="+4706"/>
-        <location line="+1311"/>
+        <location line="+5339"/>
+        <location line="+4714"/>
+        <location line="+1315"/>
         <source>Packages</source>
         <translation type="unfinished">パッケージ</translation>
     </message>
     <message>
-        <location line="-11303"/>
+        <location line="-11367"/>
         <source>Package manager header</source>
         <translation type="unfinished">パッケージ マネージャーのヘッダー</translation>
     </message>
@@ -81677,7 +82601,7 @@ No definition is loaded for this class, so its keys are not known. Load entity d
     <message>
         <location line="+6"/>
         <location line="+384"/>
-        <location line="+1480"/>
+        <location line="+1532"/>
         <location line="+241"/>
         <location line="+200"/>
         <location line="+1089"/>
@@ -81685,7 +82609,7 @@ No definition is loaded for this class, so its keys are not known. Load entity d
         <translation type="unfinished">パッケージを開く</translation>
     </message>
     <message>
-        <location line="-3393"/>
+        <location line="-3445"/>
         <source>Open package file</source>
         <translation type="unfinished">パッケージ ファイルを開く</translation>
     </message>
@@ -81773,12 +82697,12 @@ No definition is loaded for this class, so its keys are not known. Load entity d
     </message>
     <message>
         <location line="+3"/>
-        <location line="+10384"/>
+        <location line="+10444"/>
         <source>Package extraction cancellation requested</source>
         <translation type="unfinished">パッケージの展開のキャンセルを要求しました</translation>
     </message>
     <message>
-        <location line="-10379"/>
+        <location line="-10439"/>
         <source>New Folder</source>
         <translation type="unfinished">新しいフォルダー</translation>
     </message>
@@ -81834,12 +82758,12 @@ No definition is loaded for this class, so its keys are not known. Load entity d
     </message>
     <message>
         <location line="+1"/>
-        <location line="+11931"/>
+        <location line="+11995"/>
         <source>Stage a rename for the selected package entry.</source>
         <translation type="unfinished">選択したパッケージ エントリの名前変更をステージします。</translation>
     </message>
     <message>
-        <location line="-11930"/>
+        <location line="-11994"/>
         <source>Stage package delete</source>
         <translation type="unfinished">パッケージの削除をステージ</translation>
     </message>
@@ -81860,12 +82784,12 @@ No definition is loaded for this class, so its keys are not known. Load entity d
     </message>
     <message>
         <location line="+1"/>
-        <location line="+11942"/>
+        <location line="+12006"/>
         <source>Compare the source package with the staged result before saving.</source>
         <translation type="unfinished">保存する前に、ソース パッケージとステージ済みの結果を比較します。</translation>
     </message>
     <message>
-        <location line="-11928"/>
+        <location line="-11992"/>
         <source>Package compression level</source>
         <translation type="unfinished">パッケージの圧縮レベル</translation>
     </message>
@@ -81962,20 +82886,20 @@ No definition is loaded for this class, so its keys are not known. Load entity d
     </message>
     <message>
         <location line="+1"/>
-        <location line="+3345"/>
-        <location line="+4960"/>
+        <location line="+3397"/>
+        <location line="+4968"/>
         <location line="+203"/>
         <source>Package Entry Details</source>
         <translation type="unfinished">パッケージ エントリの詳細</translation>
     </message>
     <message>
-        <location line="-8507"/>
-        <location line="+3345"/>
+        <location line="-8567"/>
+        <location line="+3397"/>
         <source>Open a package to inspect entry metadata.</source>
         <translation type="unfinished">エントリのメタデータを確認するには、パッケージを開いてください。</translation>
     </message>
     <message>
-        <location line="-3340"/>
+        <location line="-3392"/>
         <source>Package staging summary</source>
         <translation type="unfinished">パッケージのステージングのサマリー</translation>
     </message>
@@ -82001,12 +82925,12 @@ No definition is loaded for this class, so its keys are not known. Load entity d
     </message>
     <message>
         <location line="+1"/>
-        <location line="+8089"/>
+        <location line="+8149"/>
         <source>Open a package to see how its content divides by type and size.</source>
         <translation type="unfinished">パッケージを開くと、内容が種類とサイズごとにどう分かれているかを確認できます。</translation>
     </message>
     <message>
-        <location line="-8077"/>
+        <location line="-8137"/>
         <source>Package composition summary</source>
         <translation type="unfinished">パッケージ構成のサマリー</translation>
     </message>
@@ -82022,26 +82946,26 @@ No definition is loaded for this class, so its keys are not known. Load entity d
     </message>
     <message>
         <location line="+8"/>
-        <location line="+8235"/>
+        <location line="+8295"/>
         <source>Select an image or text entry to preview it.</source>
         <translation type="unfinished">プレビューするには、画像またはテキストのエントリを選択してください。</translation>
     </message>
     <message>
-        <location line="-8223"/>
+        <location line="-8283"/>
         <source>Package entry inspector</source>
         <translation type="unfinished">パッケージ エントリ インスペクター</translation>
     </message>
     <message>
         <location line="+3"/>
-        <location line="+4399"/>
-        <location line="+4022"/>
-        <location line="+3790"/>
+        <location line="+4451"/>
+        <location line="+4030"/>
+        <location line="+3794"/>
         <location filename="../src/app/level_asset_browsers.cpp" line="-209"/>
         <source>Preview</source>
         <translation type="unfinished">プレビュー</translation>
     </message>
     <message>
-        <location line="-12210"/>
+        <location line="-12274"/>
         <source>Staging</source>
         <translation type="unfinished">ステージング</translation>
     </message>
@@ -82122,7 +83046,7 @@ No definition is loaded for this class, so its keys are not known. Load entity d
     </message>
     <message>
         <location line="+30"/>
-        <location line="+13416"/>
+        <location line="+13658"/>
         <location line="+8"/>
         <location line="+47"/>
         <location line="+2474"/>
@@ -82132,30 +83056,30 @@ No definition is loaded for this class, so its keys are not known. Load entity d
         <translation type="unfinished">開いているパッケージはありません</translation>
     </message>
     <message>
-        <location line="-16987"/>
-        <location line="+13424"/>
+        <location line="-17229"/>
+        <location line="+13666"/>
         <source>Open a PAK, WAD, ZIP, or PK3 archive, or a folder, to browse its entries, preview content, and stage changes for a new package.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-13402"/>
-        <location line="+10848"/>
+        <location line="-13644"/>
+        <location line="+10912"/>
         <source>Build</source>
         <translation type="unfinished">ビルド</translation>
     </message>
     <message>
-        <location line="-10847"/>
+        <location line="-10911"/>
         <source>Build header</source>
         <translation type="unfinished">ビルドのヘッダー</translation>
     </message>
     <message>
         <location line="+3"/>
-        <location line="+21397"/>
+        <location line="+21644"/>
         <source>Inspect Artifacts</source>
         <translation type="unfinished">成果物を検査</translation>
     </message>
     <message>
-        <location line="-21396"/>
+        <location line="-21643"/>
         <source>Inspect compiled artifacts</source>
         <translation type="unfinished">コンパイル済みの成果物を検査</translation>
     </message>
@@ -82167,9 +83091,9 @@ No definition is loaded for this class, so its keys are not known. Load entity d
     <message>
         <location line="-380"/>
         <location line="+401"/>
-        <location line="+2261"/>
-        <location line="+9843"/>
-        <location line="+2768"/>
+        <location line="+2313"/>
+        <location line="+9855"/>
+        <location line="+2946"/>
         <location line="+917"/>
         <location filename="../src/app/code_formatting.cpp" line="+58"/>
         <location filename="../src/app/code_index_actions.cpp" line="+68"/>
@@ -82180,7 +83104,7 @@ No definition is loaded for this class, so its keys are not known. Load entity d
         <translation type="unfinished">キャンセル</translation>
     </message>
     <message>
-        <location line="-15788"/>
+        <location line="-16030"/>
         <source>Cancel build pipeline</source>
         <translation type="unfinished">ビルド パイプラインをキャンセル</translation>
     </message>
@@ -82322,12 +83246,12 @@ No definition is loaded for this class, so its keys are not known. Load entity d
     </message>
     <message>
         <location line="+5"/>
-        <location line="+21647"/>
+        <location line="+21894"/>
         <source>Show Output</source>
         <translation type="unfinished">出力を表示</translation>
     </message>
     <message>
-        <location line="-21647"/>
+        <location line="-21894"/>
         <source>Open the folder that holds the compiled map.</source>
         <translation type="unfinished">コンパイル済みのマップがあるフォルダーを開きます。</translation>
     </message>
@@ -82343,12 +83267,12 @@ No definition is loaded for this class, so its keys are not known. Load entity d
     </message>
     <message>
         <location line="+0"/>
-        <location line="+11570"/>
+        <location line="+11634"/>
         <source>Stage the built map into the open package under maps/, for Save As to write.</source>
         <translation type="unfinished">ビルドしたマップを、開いているパッケージの maps/ 以下にステージします。名前を付けて保存で書き込まれます。</translation>
     </message>
     <message>
-        <location line="-11568"/>
+        <location line="-11632"/>
         <source>Add the built map to the open package</source>
         <translation type="unfinished">ビルドしたマップを開いているパッケージに追加</translation>
     </message>
@@ -82359,12 +83283,12 @@ No definition is loaded for this class, so its keys are not known. Load entity d
     </message>
     <message>
         <location line="+0"/>
-        <location line="+11634"/>
+        <location line="+11698"/>
         <source>Ask the Assistant about the last build&apos;s problems. You see what is sent before it goes.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-11632"/>
+        <location line="-11696"/>
         <source>Explain the build problems with the Assistant</source>
         <translation type="unfinished">アシスタントでビルドの問題を説明</translation>
     </message>
@@ -82375,12 +83299,12 @@ No definition is loaded for this class, so its keys are not known. Load entity d
     </message>
     <message>
         <location line="+1"/>
-        <location line="+21037"/>
+        <location line="+21284"/>
         <source>Build Pipeline</source>
         <translation type="unfinished">ビルド パイプライン</translation>
     </message>
     <message>
-        <location line="-21036"/>
+        <location line="-21283"/>
         <source>Chained compile stages with per-stage logs, diagnostics, and output paths.</source>
         <translation type="unfinished">ステージごとのログ、診断、出力パスを備えた、連結されたコンパイル ステージ。</translation>
     </message>
@@ -82497,15 +83421,16 @@ No definition is loaded for this class, so its keys are not known. Load entity d
         <translation type="unfinished">ツール</translation>
     </message>
     <message>
-        <location filename="../src/app/ai_generation_actions.cpp" line="-81"/>
-        <location line="+91"/>
+        <location filename="../src/app/ai_generation_actions.cpp" line="-96"/>
+        <location line="+106"/>
         <location filename="../src/app/application_shell.cpp" line="+0"/>
         <location line="+527"/>
+        <location line="+161"/>
         <source>Status</source>
         <translation type="unfinished">ステータス</translation>
     </message>
     <message>
-        <location filename="../src/app/application_shell.cpp" line="-527"/>
+        <location filename="../src/app/application_shell.cpp" line="-688"/>
         <source>Executable</source>
         <translation type="unfinished">実行可能ファイル</translation>
     </message>
@@ -82622,12 +83547,12 @@ No definition is loaded for this class, so its keys are not known. Load entity d
     </message>
     <message>
         <location line="+1"/>
-        <location line="+20671"/>
+        <location line="+20918"/>
         <source>Map name to load, for example start</source>
         <translation type="unfinished">読み込むマップ名 (例: start)</translation>
     </message>
     <message>
-        <location line="-20669"/>
+        <location line="-20916"/>
         <source>Map</source>
         <translation type="unfinished">マップ</translation>
     </message>
@@ -82655,14 +83580,14 @@ No definition is loaded for this class, so its keys are not known. Load entity d
     </message>
     <message>
         <location line="+5"/>
-        <location line="+21134"/>
+        <location line="+21381"/>
         <location line="+19"/>
         <location line="+3"/>
         <source>Launch Game</source>
         <translation type="unfinished">ゲームを起動</translation>
     </message>
     <message>
-        <location line="-21154"/>
+        <location line="-21401"/>
         <source>Launch configured game</source>
         <translation type="unfinished">設定済みのゲームを起動</translation>
     </message>
@@ -82719,14 +83644,14 @@ No definition is loaded for this class, so its keys are not known. Load entity d
     </message>
     <message>
         <location line="+65"/>
-        <location line="+10199"/>
+        <location line="+10263"/>
         <location line="+215"/>
         <location filename="../src/app/level_shapes_panel.cpp" line="+90"/>
         <source>Settings</source>
         <translation type="unfinished">設定</translation>
     </message>
     <message>
-        <location line="-10413"/>
+        <location line="-10477"/>
         <source>Settings header</source>
         <translation type="unfinished">設定のヘッダー</translation>
     </message>
@@ -82757,13 +83682,13 @@ No definition is loaded for this class, so its keys are not known. Load entity d
     </message>
     <message>
         <location line="+7"/>
-        <location line="+1847"/>
-        <location line="+7770"/>
+        <location line="+1899"/>
+        <location line="+7778"/>
         <source>Setup status</source>
         <translation type="unfinished">セットアップのステータス</translation>
     </message>
     <message>
-        <location line="-9614"/>
+        <location line="-9674"/>
         <source>Current setup step</source>
         <translation type="unfinished">現在のセットアップ手順</translation>
     </message>
@@ -82789,13 +83714,13 @@ No definition is loaded for this class, so its keys are not known. Load entity d
     </message>
     <message>
         <location line="+7"/>
-        <location line="+4408"/>
+        <location line="+4460"/>
         <location filename="../src/app/model_browser_appearance.cpp" line="+60"/>
         <source>Reset</source>
         <translation type="unfinished">リセット</translation>
     </message>
     <message>
-        <location line="-4407"/>
+        <location line="-4459"/>
         <source>Reset setup progress</source>
         <translation type="unfinished">セットアップの進行状況をリセット</translation>
     </message>
@@ -82835,13 +83760,13 @@ No definition is loaded for this class, so its keys are not known. Load entity d
     </message>
     <message>
         <location line="+5"/>
-        <location line="+9105"/>
+        <location line="+9165"/>
         <location filename="../src/app/level_shapes_panel.cpp" line="-15"/>
         <source>Start</source>
         <translation type="unfinished">開始</translation>
     </message>
     <message>
-        <location line="-9104"/>
+        <location line="-9164"/>
         <source>Start or resume setup</source>
         <translation type="unfinished">セットアップを開始または再開</translation>
     </message>
@@ -82856,12 +83781,12 @@ No definition is loaded for this class, so its keys are not known. Load entity d
         <translation type="unfinished">外観</translation>
     </message>
     <message>
-        <location line="+9937"/>
+        <location line="+10001"/>
         <source>Accessibility and language preferences</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-9921"/>
+        <location line="-9985"/>
         <location line="+13"/>
         <source>Theme</source>
         <translation type="unfinished">テーマ</translation>
@@ -82874,13 +83799,13 @@ No definition is loaded for this class, so its keys are not known. Load entity d
     </message>
     <message>
         <location line="-3"/>
-        <location line="+9355"/>
-        <location line="+8200"/>
+        <location line="+9415"/>
+        <location line="+8382"/>
         <source>%1%</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-17549"/>
+        <location line="-17791"/>
         <source>UI density</source>
         <translation type="unfinished">UI の密度</translation>
     </message>
@@ -82906,7 +83831,7 @@ No definition is loaded for this class, so its keys are not known. Load entity d
         <translation type="unfinished">ナビゲーション</translation>
     </message>
     <message>
-        <location line="+13641"/>
+        <location line="+13883"/>
         <source>Reduce motion</source>
         <translation type="unfinished">動きを減らす</translation>
     </message>
@@ -82926,7 +83851,7 @@ No definition is loaded for this class, so its keys are not known. Load entity d
         <translation type="unfinished">テキスト読み上げ</translation>
     </message>
     <message>
-        <location line="-13692"/>
+        <location line="-13934"/>
         <location line="+20"/>
         <source>Language</source>
         <translation type="unfinished">言語</translation>
@@ -82994,12 +83919,7 @@ No definition is loaded for this class, so its keys are not known. Load entity d
         <translation type="unfinished">AI なしモード</translation>
     </message>
     <message>
-        <location line="+1"/>
-        <source>Keeps cloud and agentic AI workflows disabled for core editing, package, compiler, and CLI work.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+2"/>
+        <location line="+3"/>
         <source>Every core workflow stays local and deterministic. Connectors below are remembered but not used.</source>
         <translation type="unfinished"></translation>
     </message>
@@ -83014,12 +83934,7 @@ No definition is loaded for this class, so its keys are not known. Load entity d
         <translation type="unfinished">クラウド AI コネクタ</translation>
     </message>
     <message>
-        <location line="+1"/>
-        <source>Opt in to experimental provider-neutral cloud connector configuration. Secrets are read through redacted environment references, not shown in logs.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+2"/>
+        <location line="+3"/>
         <source>Allow agentic workflows</source>
         <translation type="unfinished">エージェント型ワークフローを許可</translation>
     </message>
@@ -83029,12 +83944,7 @@ No definition is loaded for this class, so its keys are not known. Load entity d
         <translation type="unfinished">エージェント型ワークフロー</translation>
     </message>
     <message>
-        <location line="+1"/>
-        <source>Opt in to future supervised plan, review, stage, validate, and summarize workflows.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+4"/>
+        <location line="+5"/>
         <source>Preferred Connectors</source>
         <translation type="unfinished">優先するコネクタ</translation>
     </message>
@@ -83044,79 +83954,23 @@ No definition is loaded for this class, so its keys are not known. Load entity d
         <translation type="unfinished">未選択</translation>
     </message>
     <message>
-        <location line="+10"/>
+        <location line="+13"/>
         <source>Reasoning</source>
         <translation type="unfinished">推論</translation>
     </message>
     <message>
-        <location line="+0"/>
-        <source>Preferred provider-neutral reasoning connector for future AI-assisted planning, review, and explanation.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>Coding</source>
-        <translation type="unfinished">コーディング</translation>
-    </message>
-    <message>
-        <location line="+0"/>
-        <source>Preferred connector for future code, script, shader, and config assistance.</source>
-        <translation type="unfinished">今後のコード、スクリプト、シェーダー、構成の支援に優先して使用するコネクタ。</translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>Vision</source>
-        <translation type="unfinished">ビジョン</translation>
-    </message>
-    <message>
-        <location line="+0"/>
-        <source>Preferred connector for future image, screenshot, and visual context understanding.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+3"/>
-        <location line="+13536"/>
+        <location line="+13780"/>
         <location line="+3"/>
         <source>Voice</source>
         <translation type="unfinished">音声</translation>
     </message>
     <message>
-        <location line="-13539"/>
-        <source>Preferred connector for future narration, speech, and voice workflow experiments.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>Preferred connector for future model, texture, and concept-to-asset generation.</source>
-        <translation type="unfinished">今後のモデル、テクスチャ、コンセプトからアセットへの生成に優先して使用するコネクタ。</translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>Embeddings</source>
-        <translation type="unfinished">埋め込み</translation>
-    </message>
-    <message>
-        <location line="+0"/>
-        <source>Preferred connector for future semantic search, retrieval, and context ranking.</source>
-        <translation type="unfinished">今後のセマンティック検索、取得、コンテキストのランク付けに優先して使用するコネクタ。</translation>
-    </message>
-    <message>
-        <location line="+1"/>
+        <location line="-13772"/>
         <source>Local</source>
         <translation type="unfinished">ローカル</translation>
     </message>
     <message>
-        <location line="+0"/>
-        <source>Preferred connector for future local/offline AI runtime use.</source>
-        <translation type="unfinished">今後のローカル/オフラインの AI ランタイムの使用に優先して使用するコネクタ。</translation>
-    </message>
-    <message>
-        <location line="+5"/>
-        <source>Assistant Model</source>
-        <translation type="unfinished">アシスタントのモデル</translation>
-    </message>
-    <message>
-        <location line="+7"/>
+        <location line="+16"/>
         <source>Connector to set up</source>
         <translation type="unfinished">セットアップするコネクタ</translation>
     </message>
@@ -83126,46 +83980,49 @@ No definition is loaded for this class, so its keys are not known. Load entity d
         <translation type="unfinished">モデル、エンドポイント、キーを下に表示するコネクタ。</translation>
     </message>
     <message>
-        <location filename="../src/app/ai_generation_actions.cpp" line="-106"/>
-        <location line="+91"/>
+        <location filename="../src/app/ai_generation_actions.cpp" line="-121"/>
+        <location line="+106"/>
         <location filename="../src/app/application_shell.cpp" line="+7"/>
         <source>Connector</source>
         <translation type="unfinished">コネクタ</translation>
     </message>
     <message>
-        <location filename="../src/app/application_shell.cpp" line="+3"/>
+        <location filename="../src/app/application_shell.cpp" line="+18"/>
+        <location line="+11958"/>
         <source>Model name</source>
         <translation type="unfinished">モデル名</translation>
     </message>
     <message>
-        <location line="+1"/>
+        <location line="-11957"/>
         <source>The model&apos;s name as the provider or runtime lists it.</source>
         <translation type="unfinished">プロバイダーまたはランタイムが一覧に表示するとおりのモデル名。</translation>
     </message>
     <message>
-        <location line="+4"/>
+        <location line="+11"/>
+        <location line="+11945"/>
         <source>Endpoint address</source>
         <translation type="unfinished">エンドポイント アドレス</translation>
     </message>
     <message>
-        <location line="+1"/>
+        <location line="-11944"/>
         <source>Leave empty for the provider&apos;s own address. A local runtime is usually http://localhost with its port.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/app/ai_generation_actions.cpp" line="-81"/>
-        <location line="+91"/>
+        <location filename="../src/app/ai_generation_actions.cpp" line="-96"/>
+        <location line="+106"/>
         <location filename="../src/app/application_shell.cpp" line="+1"/>
+        <location line="+11928"/>
         <source>Endpoint</source>
         <translation type="unfinished">エンドポイント</translation>
     </message>
     <message>
-        <location filename="../src/app/application_shell.cpp" line="+4"/>
+        <location filename="../src/app/application_shell.cpp" line="-11917"/>
         <source>API key source</source>
         <translation type="unfinished">API キーの取得元</translation>
     </message>
     <message>
-        <location line="+4"/>
+        <location line="+17"/>
         <source>Test Connection</source>
         <translation type="unfinished">接続をテスト</translation>
     </message>
@@ -83379,12 +84236,12 @@ No definition is loaded for this class, so its keys are not known. Load entity d
         <translation type="unfinished">ステージ グラフ</translation>
     </message>
     <message>
-        <location line="+6603"/>
+        <location line="+6611"/>
         <source>No shader script loaded</source>
         <translation type="unfinished">読み込まれているシェーダー スクリプトはありません</translation>
     </message>
     <message>
-        <location line="-6567"/>
+        <location line="-6575"/>
         <source>Texture workbench header</source>
         <translation type="unfinished">テクスチャ ワークベンチのヘッダー</translation>
     </message>
@@ -83470,12 +84327,12 @@ No definition is loaded for this class, so its keys are not known. Load entity d
         <location line="+3"/>
         <location line="+93"/>
         <location line="+147"/>
-        <location line="+15045"/>
+        <location line="+15235"/>
         <source>Palette</source>
         <translation type="unfinished">パレット</translation>
     </message>
     <message>
-        <location line="-15284"/>
+        <location line="-15474"/>
         <source>Palette used to decode indexed idTech art. Real palettes are read from the open package when it has one.</source>
         <translation type="unfinished"></translation>
     </message>
@@ -83556,12 +84413,12 @@ No definition is loaded for this class, so its keys are not known. Load entity d
     </message>
     <message>
         <location line="+3"/>
-        <location line="+14624"/>
+        <location line="+14814"/>
         <source>No palette resolved yet.</source>
         <translation type="unfinished">解決されたパレットはまだありません。</translation>
     </message>
     <message>
-        <location line="-14622"/>
+        <location line="-14812"/>
         <source>Palette source</source>
         <translation type="unfinished">パレットのソース</translation>
     </message>
@@ -83768,12 +84625,12 @@ No definition is loaded for this class, so its keys are not known. Load entity d
     </message>
     <message>
         <location line="+17"/>
-        <location line="+11969"/>
+        <location line="+12159"/>
         <source>No textures to show</source>
         <translation type="unfinished">表示するテクスチャはありません</translation>
     </message>
     <message>
-        <location line="-11949"/>
+        <location line="-12139"/>
         <source>Model workbench header</source>
         <translation type="unfinished">モデル ワークベンチのヘッダー</translation>
     </message>
@@ -83889,7 +84746,7 @@ No definition is loaded for this class, so its keys are not known. Load entity d
     </message>
     <message>
         <location line="+9"/>
-        <location line="+15307"/>
+        <location line="+15497"/>
         <location filename="../src/app/level_asset_browsers.cpp" line="+62"/>
         <location line="+100"/>
         <location line="+316"/>
@@ -83897,13 +84754,13 @@ No definition is loaded for this class, so its keys are not known. Load entity d
         <translation type="unfinished">再生</translation>
     </message>
     <message>
-        <location line="-15307"/>
-        <location line="+15315"/>
+        <location line="-15497"/>
+        <location line="+15505"/>
         <source>Play or pause the model animation (Space).</source>
         <translation type="unfinished">モデルのアニメーションを再生または一時停止します (Space)。</translation>
     </message>
     <message>
-        <location line="-15313"/>
+        <location line="-15503"/>
         <source>Play or pause the model animation</source>
         <translation type="unfinished">モデルのアニメーションを再生/一時停止</translation>
     </message>
@@ -84129,11 +84986,11 @@ No definition is loaded for this class, so its keys are not known. Load entity d
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/app/application_shell.cpp" line="+6635"/>
+        <location filename="../src/app/application_shell.cpp" line="+6643"/>
         <location line="+734"/>
         <location line="+340"/>
         <location line="+595"/>
-        <location line="+6495"/>
+        <location line="+6677"/>
         <location line="+731"/>
         <location filename="../src/app/model_page.cpp" line="-97"/>
         <source>Summary</source>
@@ -84145,7 +85002,7 @@ No definition is loaded for this class, so its keys are not known. Load entity d
         <translation type="unfinished">スキン</translation>
     </message>
     <message>
-        <location filename="../src/app/application_shell.cpp" line="-15357"/>
+        <location filename="../src/app/application_shell.cpp" line="-15547"/>
         <location filename="../src/app/model_page.cpp" line="+1"/>
         <source>Metadata</source>
         <translation type="unfinished">メタデータ</translation>
@@ -84174,12 +85031,12 @@ No definition is loaded for this class, so its keys are not known. Load entity d
     </message>
     <message>
         <location line="+19"/>
-        <location line="+11734"/>
+        <location line="+11924"/>
         <source>No models to show</source>
         <translation type="unfinished">表示するモデルはありません</translation>
     </message>
     <message>
-        <location line="-11714"/>
+        <location line="-11904"/>
         <source>Audio workbench header</source>
         <translation type="unfinished">オーディオ ワークベンチのヘッダー</translation>
     </message>
@@ -84242,12 +85099,12 @@ No definition is loaded for this class, so its keys are not known. Load entity d
     </message>
     <message>
         <location line="+1"/>
-        <location line="+15453"/>
+        <location line="+15643"/>
         <source>Waveform</source>
         <translation type="unfinished">波形</translation>
     </message>
     <message>
-        <location line="-15452"/>
+        <location line="-15642"/>
         <source>Format details</source>
         <translation type="unfinished">形式の詳細</translation>
     </message>
@@ -84288,13 +85145,13 @@ No definition is loaded for this class, so its keys are not known. Load entity d
     </message>
     <message>
         <location line="+6"/>
-        <location line="+12573"/>
+        <location line="+12763"/>
         <location line="+1"/>
         <source>Volume</source>
         <translation type="unfinished">音量</translation>
     </message>
     <message>
-        <location line="-12566"/>
+        <location line="-12756"/>
         <source>Playback volume</source>
         <translation type="unfinished">再生音量</translation>
     </message>
@@ -84395,19 +85252,19 @@ No definition is loaded for this class, so its keys are not known. Load entity d
     </message>
     <message>
         <location line="+20"/>
-        <location line="+11540"/>
+        <location line="+11730"/>
         <source>No sounds to show</source>
         <translation type="unfinished">表示するサウンドはありません</translation>
     </message>
     <message>
-        <location line="-11520"/>
+        <location line="-11710"/>
         <location line="+2911"/>
-        <location line="+6016"/>
+        <location line="+6028"/>
         <source>Code</source>
         <translation type="unfinished">コード</translation>
     </message>
     <message>
-        <location line="-8926"/>
+        <location line="-8938"/>
         <source>Code workbench header</source>
         <translation type="unfinished">コード ワークベンチのヘッダー</translation>
     </message>
@@ -84424,12 +85281,12 @@ No definition is loaded for this class, so its keys are not known. Load entity d
     </message>
     <message>
         <location line="+1"/>
-        <location line="+9798"/>
+        <location line="+9810"/>
         <source>Scan the project for languages, symbols, build tasks, and launch profiles.</source>
         <translation type="unfinished">プロジェクトをスキャンして、言語、シンボル、ビルド タスク、起動プロファイルを検出します。</translation>
     </message>
     <message>
-        <location line="-9792"/>
+        <location line="-9804"/>
         <source>Code tools</source>
         <translation type="unfinished">コード ツール</translation>
     </message>
@@ -84449,14 +85306,14 @@ No definition is loaded for this class, so its keys are not known. Load entity d
         <translation type="unfinished">ソース ツリーを更新</translation>
     </message>
     <message>
-        <location line="-3245"/>
-        <location line="+3251"/>
-        <location line="+5468"/>
+        <location line="-3297"/>
+        <location line="+3303"/>
+        <location line="+5476"/>
         <source>Save</source>
         <translation type="unfinished">保存</translation>
     </message>
     <message>
-        <location line="-5903"/>
+        <location line="-5911"/>
         <source>Cancel model preview</source>
         <translation type="unfinished">モデルのプレビューをキャンセル</translation>
     </message>
@@ -84492,12 +85349,12 @@ No definition is loaded for this class, so its keys are not known. Load entity d
     </message>
     <message>
         <location line="+12"/>
-        <location line="+16021"/>
+        <location line="+16211"/>
         <source>No file open.</source>
         <translation type="unfinished">開いているファイルはありません。</translation>
     </message>
     <message>
-        <location line="-16013"/>
+        <location line="-16203"/>
         <location line="+2907"/>
         <source>Code editor</source>
         <translation type="unfinished">コード エディター</translation>
@@ -84534,12 +85391,12 @@ No definition is loaded for this class, so its keys are not known. Load entity d
     </message>
     <message>
         <location line="+4"/>
-        <location line="+15973"/>
+        <location line="+16163"/>
         <source>Choose a file under Project files to edit it here.</source>
         <translation type="unfinished">ここで編集するには、[プロジェクト ファイル] からファイルを選択してください。</translation>
     </message>
     <message>
-        <location line="-15960"/>
+        <location line="-16150"/>
         <source>Open files</source>
         <translation type="unfinished">開いているファイル</translation>
     </message>
@@ -84600,12 +85457,12 @@ No definition is loaded for this class, so its keys are not known. Load entity d
     </message>
     <message>
         <location line="+1"/>
-        <location line="+17667"/>
+        <location line="+17862"/>
         <source>Index</source>
         <translation type="unfinished">インデックス</translation>
     </message>
     <message>
-        <location line="-17662"/>
+        <location line="-17857"/>
         <source>Editor and output</source>
         <translation type="unfinished">エディターと出力</translation>
     </message>
@@ -84663,13 +85520,13 @@ No definition is loaded for this class, so its keys are not known. Load entity d
     <message>
         <location line="+9"/>
         <location line="+975"/>
-        <location line="+10249"/>
+        <location line="+10439"/>
         <location filename="../src/app/release_actions.cpp" line="+482"/>
         <source>No project open</source>
         <translation type="unfinished">開いているプロジェクトはありません</translation>
     </message>
     <message>
-        <location line="-11223"/>
+        <location line="-11413"/>
         <source>Open a project folder to browse and edit its scripts, configs, shaders, and QuakeC with highlighting and diagnostics.</source>
         <translation type="unfinished"></translation>
     </message>
@@ -84730,13 +85587,13 @@ No definition is loaded for this class, so its keys are not known. Load entity d
     </message>
     <message>
         <location line="+1"/>
-        <location line="+7605"/>
+        <location line="+7613"/>
         <location line="+52"/>
         <source>Task Details</source>
         <translation type="unfinished">タスクの詳細</translation>
     </message>
     <message>
-        <location line="-7656"/>
+        <location line="-7664"/>
         <source>Select an activity to inspect logs, warnings, timing, and raw task metadata.</source>
         <translation type="unfinished">アクティビティを選択すると、ログ、警告、所要時間、未加工のタスク メタデータを確認できます。</translation>
     </message>
@@ -84747,19 +85604,19 @@ No definition is loaded for this class, so its keys are not known. Load entity d
     </message>
     <message>
         <location line="+2"/>
-        <location line="+7770"/>
+        <location line="+7778"/>
         <source>Settings metadata</source>
         <translation type="unfinished">設定のメタデータ</translation>
     </message>
     <message>
-        <location line="-7768"/>
-        <location line="+7770"/>
+        <location line="-7776"/>
+        <location line="+7778"/>
         <location line="+178"/>
         <source>Raw diagnostics</source>
         <translation type="unfinished">未加工の診断</translation>
     </message>
     <message>
-        <location line="-7941"/>
+        <location line="-7949"/>
         <source>Shows settings, recent project, compiler, and project diagnostics.</source>
         <translation type="unfinished">設定、最近のプロジェクト、コンパイラ、プロジェクトの診断を表示します。</translation>
     </message>
@@ -84770,24 +85627,24 @@ No definition is loaded for this class, so its keys are not known. Load entity d
     </message>
     <message>
         <location line="+1"/>
-        <location line="+7888"/>
+        <location line="+7896"/>
         <source>Inspector Details</source>
         <translation type="unfinished">インスペクターの詳細</translation>
     </message>
     <message>
-        <location line="-7887"/>
+        <location line="-7895"/>
         <source>Settings, setup, and raw diagnostics.</source>
         <translation type="unfinished">設定、セットアップ、未加工の診断。</translation>
     </message>
     <message>
         <location line="+4"/>
-        <location line="+7514"/>
-        <location line="+2975"/>
+        <location line="+7522"/>
+        <location line="+3157"/>
         <source>Activity</source>
         <translation type="unfinished">アクティビティ</translation>
     </message>
     <message>
-        <location line="-10487"/>
+        <location line="-10677"/>
         <source>Activity panel</source>
         <translation type="unfinished">アクティビティ パネル</translation>
     </message>
@@ -84828,12 +85685,12 @@ No definition is loaded for this class, so its keys are not known. Load entity d
     </message>
     <message>
         <location line="+4"/>
-        <location line="+6949"/>
+        <location line="+6957"/>
         <source>No project is open.</source>
         <translation type="unfinished">プロジェクトが開かれていません。</translation>
     </message>
     <message>
-        <location line="-6910"/>
+        <location line="-6918"/>
         <source>Manifest not initialized: %1</source>
         <translation type="unfinished"></translation>
     </message>
@@ -84844,12 +85701,12 @@ No definition is loaded for this class, so its keys are not known. Load entity d
     </message>
     <message>
         <location line="+7"/>
-        <location line="+7736"/>
+        <location line="+7744"/>
         <source>Manifest status: %1</source>
         <translation type="unfinished">マニフェストのステータス: %1</translation>
     </message>
     <message>
-        <location line="-7732"/>
+        <location line="-7740"/>
         <source>Current project path: %1</source>
         <translation type="unfinished">現在のプロジェクト パス: %1</translation>
     </message>
@@ -84899,7 +85756,7 @@ No definition is loaded for this class, so its keys are not known. Load entity d
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+5683"/>
+        <location line="+5691"/>
         <location line="+730"/>
         <location line="+360"/>
         <location line="+592"/>
@@ -84924,7 +85781,7 @@ No definition is loaded for this class, so its keys are not known. Load entity d
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/app/application_shell.cpp" line="-6762"/>
+        <location filename="../src/app/application_shell.cpp" line="-6770"/>
         <source>No linked installation profile is available.</source>
         <translation type="unfinished"></translation>
     </message>
@@ -84940,12 +85797,12 @@ No definition is loaded for this class, so its keys are not known. Load entity d
     </message>
     <message>
         <location line="+1"/>
-        <location line="+7721"/>
+        <location line="+7729"/>
         <source>Project Manifest</source>
         <translation type="unfinished">プロジェクト マニフェスト</translation>
     </message>
     <message>
-        <location line="-7720"/>
+        <location line="-7728"/>
         <source>Install Validation</source>
         <translation type="unfinished">インストールの検証</translation>
     </message>
@@ -84960,24 +85817,24 @@ No definition is loaded for this class, so its keys are not known. Load entity d
         <translation type="unfinished">マウントされたパッケージ ルート</translation>
     </message>
     <message>
-        <location line="+10272"/>
+        <location line="+10462"/>
         <location filename="../src/app/package_context_actions.cpp" line="-1"/>
         <source>No package</source>
         <translation type="unfinished">パッケージなし</translation>
     </message>
     <message>
-        <location line="-10271"/>
+        <location line="-10461"/>
         <source>Compiler Context</source>
         <translation type="unfinished">コンパイラのコンテキスト</translation>
     </message>
     <message>
         <location line="+0"/>
-        <location line="+7638"/>
+        <location line="+7646"/>
         <source>%1 of %2 executables</source>
         <translation type="unfinished">%2 個の実行可能ファイルのうち %1 個</translation>
     </message>
     <message>
-        <location line="-7637"/>
+        <location line="-7645"/>
         <source>Raw Workspace</source>
         <translation type="unfinished">未加工のワークスペース</translation>
     </message>
@@ -84994,7 +85851,7 @@ No definition is loaded for this class, so its keys are not known. Load entity d
     <message>
         <location line="+0"/>
         <location line="+6"/>
-        <location line="+6763"/>
+        <location line="+6771"/>
         <location line="+38"/>
         <location line="+30"/>
         <location line="+84"/>
@@ -85003,7 +85860,7 @@ No definition is loaded for this class, so its keys are not known. Load entity d
         <translation type="unfinished">プロジェクト</translation>
     </message>
     <message>
-        <location line="-6941"/>
+        <location line="-6949"/>
         <source>Project manifest failed: %1</source>
         <translation type="unfinished"></translation>
     </message>
@@ -85034,32 +85891,32 @@ No definition is loaded for this class, so its keys are not known. Load entity d
         <location line="+75"/>
         <location line="+435"/>
         <location line="+946"/>
-        <location line="+4358"/>
+        <location line="+4366"/>
         <location line="+64"/>
         <location line="+1735"/>
         <location line="+46"/>
-        <location line="+6455"/>
-        <location line="+4261"/>
+        <location line="+6637"/>
+        <location line="+4266"/>
         <source>Ready</source>
         <translation type="unfinished">準備完了</translation>
     </message>
     <message>
-        <location line="-18375"/>
-        <location line="+7613"/>
+        <location line="-18570"/>
+        <location line="+7621"/>
         <location line="+46"/>
         <source>Missing</source>
         <translation type="unfinished">不足</translation>
     </message>
     <message>
-        <location line="-7655"/>
-        <location line="+7535"/>
+        <location line="-7663"/>
+        <location line="+7543"/>
         <location line="+85"/>
-        <location line="+402"/>
+        <location line="+406"/>
         <source>missing</source>
         <translation type="unfinished">不足</translation>
     </message>
     <message>
-        <location line="-8020"/>
+        <location line="-8032"/>
         <source>open</source>
         <translation type="unfinished">開いている</translation>
     </message>
@@ -85075,12 +85932,12 @@ Last opened %3. Double-click to open.</source>
         <location line="+1827"/>
         <location line="+361"/>
         <location line="+43"/>
-        <location line="+15736"/>
+        <location line="+15931"/>
         <source>%1, %2, %3</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-17959"/>
+        <location line="-18154"/>
         <source>No recent projects</source>
         <translation type="unfinished">最近のプロジェクトはありません</translation>
     </message>
@@ -85153,18 +86010,18 @@ Last opened %3. Double-click to open.</source>
     </message>
     <message>
         <location line="+44"/>
-        <location line="+19345"/>
+        <location line="+19540"/>
         <source>Test maps allowed</source>
         <translation type="unfinished">テスト マップを許可</translation>
     </message>
     <message>
-        <location line="-19345"/>
+        <location line="-19540"/>
         <source>Installation made read-only</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
         <location line="+0"/>
-        <location line="+18662"/>
+        <location line="+18857"/>
         <location line="+3"/>
         <location line="+8"/>
         <location line="+3"/>
@@ -85173,7 +86030,7 @@ Last opened %3. Double-click to open.</source>
         <translation type="unfinished">ゲーム</translation>
     </message>
     <message>
-        <location line="-19344"/>
+        <location line="-19539"/>
         <source>Built maps may be copied into its maps folder before launching.</source>
         <translation type="unfinished"></translation>
     </message>
@@ -85261,15 +86118,15 @@ Last opened %3. Double-click to open.</source>
     <message>
         <location line="+5"/>
         <location line="+3418"/>
-        <location line="+427"/>
-        <location line="+2193"/>
-        <location line="+5526"/>
+        <location line="+430"/>
+        <location line="+2198"/>
+        <location line="+5708"/>
         <location line="+38"/>
         <source>%1: %2</source>
         <translation type="unfinished"></translation>
     </message>
     <message numerus="yes">
-        <location line="-11599"/>
+        <location line="-11789"/>
         <source>Found %n confirmable installation candidates.</source>
         <translation type="unfinished">
             <numerusform></numerusform>
@@ -85375,7 +86232,7 @@ Last opened %3. Double-click to open.</source>
     </message>
     <message>
         <location line="+0"/>
-        <location line="+5223"/>
+        <location line="+5231"/>
         <location line="+648"/>
         <location line="+92"/>
         <location line="+107"/>
@@ -85383,12 +86240,12 @@ Last opened %3. Double-click to open.</source>
         <location line="+15"/>
         <location line="+29"/>
         <location line="+82"/>
-        <location line="+4663"/>
+        <location line="+4845"/>
         <location line="+1720"/>
         <location line="+925"/>
         <location line="+103"/>
         <location line="+378"/>
-        <location line="+5048"/>
+        <location line="+5053"/>
         <location line="+214"/>
         <location filename="../src/app/package_document_actions.cpp" line="-51"/>
         <location line="+71"/>
@@ -85399,7 +86256,7 @@ Last opened %3. Double-click to open.</source>
         <translation type="unfinished">パッケージ</translation>
     </message>
     <message>
-        <location line="-19280"/>
+        <location line="-19475"/>
         <source>Opening package.</source>
         <translation type="unfinished">パッケージを開いています。</translation>
     </message>
@@ -85407,13 +86264,13 @@ Last opened %3. Double-click to open.</source>
         <location line="+75"/>
         <location line="+5"/>
         <location line="+1"/>
-        <location line="+4753"/>
+        <location line="+4761"/>
         <location line="+434"/>
         <source>No package loaded</source>
         <translation type="unfinished">読み込まれているパッケージはありません</translation>
     </message>
     <message>
-        <location line="-5257"/>
+        <location line="-5265"/>
         <source>Package open failed: %1</source>
         <translation type="unfinished">パッケージを開けませんでした: %1</translation>
     </message>
@@ -85456,7 +86313,7 @@ Last opened %3. Double-click to open.</source>
     <message>
         <location line="+6"/>
         <location line="+946"/>
-        <location line="+4192"/>
+        <location line="+4200"/>
         <location line="+731"/>
         <location line="+340"/>
         <location line="+595"/>
@@ -85464,7 +86321,7 @@ Last opened %3. Double-click to open.</source>
         <translation type="unfinished">警告</translation>
     </message>
     <message>
-        <location line="-6762"/>
+        <location line="-6770"/>
         <source>Open a project folder to activate project health, package roots, and next actions.</source>
         <translation type="unfinished"></translation>
     </message>
@@ -85535,12 +86392,12 @@ Last opened %3. Double-click to open.</source>
     </message>
     <message>
         <location line="+40"/>
-        <location line="+18921"/>
+        <location line="+19116"/>
         <source>Package: %1</source>
         <translation type="unfinished">パッケージ: %1</translation>
     </message>
     <message>
-        <location line="-18921"/>
+        <location line="-19116"/>
         <source>%1 / %2 / %3</source>
         <translation type="unfinished"></translation>
     </message>
@@ -85581,12 +86438,12 @@ Last opened %3. Double-click to open.</source>
     </message>
     <message>
         <location line="+6"/>
-        <location line="+10078"/>
+        <location line="+10268"/>
         <source>modified</source>
         <translation type="unfinished">変更済み</translation>
     </message>
     <message>
-        <location line="-10042"/>
+        <location line="-10232"/>
         <source>No project open. Dependency graph will connect project roots, installs, packages, and compilers.</source>
         <translation type="unfinished"></translation>
     </message>
@@ -85780,7 +86637,7 @@ Last opened %3. Double-click to open.</source>
     <message numerus="yes">
         <location line="+2"/>
         <location line="+1406"/>
-        <location line="+1866"/>
+        <location line="+1874"/>
         <location line="+49"/>
         <source>%n hidden one(s) left out; Show All Hidden brings them back.</source>
         <translation type="unfinished">
@@ -85788,7 +86645,7 @@ Last opened %3. Double-click to open.</source>
         </translation>
     </message>
     <message>
-        <location line="-3248"/>
+        <location line="-3256"/>
         <source>Open a Doom WAD map or Quake-family .map source to inspect entities, textures, health, and safe edits.</source>
         <translation type="unfinished"></translation>
     </message>
@@ -85862,7 +86719,7 @@ Last opened %3. Double-click to open.</source>
         <translation type="unfinished">%1 · 非表示</translation>
     </message>
     <message>
-        <location filename="../src/app/application_shell.cpp" line="+15460"/>
+        <location filename="../src/app/application_shell.cpp" line="+15650"/>
         <location filename="../src/app/level_object_model.cpp" line="-110"/>
         <source>Brush %1</source>
         <translation type="unfinished">ブラシ %1</translation>
@@ -85889,16 +86746,16 @@ Last opened %3. Double-click to open.</source>
         <translation type="unfinished">頂点 %1</translation>
     </message>
     <message>
-        <location line="-14003"/>
-        <location line="+3148"/>
-        <location line="+9936"/>
-        <location line="+2277"/>
+        <location line="-14193"/>
+        <location line="+3156"/>
+        <location line="+10118"/>
+        <location line="+2282"/>
         <location filename="../src/app/level_object_model.cpp" line="+1"/>
         <source>%1, %2</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-1337"/>
+        <location line="-1342"/>
         <location filename="../src/app/level_object_model.cpp" line="+4"/>
         <source>Linedef %1</source>
         <translation type="unfinished">ラインデフ %1</translation>
@@ -85937,7 +86794,7 @@ Last opened %3. Double-click to open.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/app/application_shell.cpp" line="-15105"/>
+        <location filename="../src/app/application_shell.cpp" line="-15295"/>
         <source>LEAK
 The map leaks. The trail from %1 is drawn in the view; press Enter to frame it.</source>
         <translation type="unfinished"></translation>
@@ -86044,12 +86901,12 @@ All %n entit(y)(ies) match the loaded definitions.</source>
     </message>
     <message>
         <location filename="../src/app/application_shell.cpp" line="+92"/>
-        <location line="+4018"/>
+        <location line="+4026"/>
         <source>%1 / %2</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-4016"/>
+        <location line="-4024"/>
         <location filename="../src/app/level_sidebar_actions.cpp" line="-53"/>
         <source>Properties</source>
         <translation type="unfinished">プロパティ</translation>
@@ -86103,24 +86960,24 @@ All %n entit(y)(ies) match the loaded definitions.</source>
     <message>
         <location line="+8"/>
         <location line="+9"/>
-        <location line="+2921"/>
+        <location line="+2929"/>
         <location line="+10"/>
-        <location line="+12162"/>
-        <location line="+633"/>
+        <location line="+12344"/>
+        <location line="+638"/>
         <location line="+54"/>
         <source>Map edit failed: %1</source>
         <translation type="unfinished">マップの編集に失敗しました: %1</translation>
     </message>
     <message>
-        <location line="-15786"/>
-        <location line="+15738"/>
+        <location line="-15981"/>
+        <location line="+15933"/>
         <source>Level map entities edited</source>
         <translation type="unfinished">レベル マップのエンティティを編集しました</translation>
     </message>
     <message>
-        <location filename="../src/app/ai_generation_actions.cpp" line="-242"/>
-        <location line="+51"/>
-        <location filename="../src/app/application_shell.cpp" line="-15738"/>
+        <location filename="../src/app/ai_generation_actions.cpp" line="-272"/>
+        <location line="+56"/>
+        <location filename="../src/app/application_shell.cpp" line="-15933"/>
         <location line="+9"/>
         <location line="+46"/>
         <location line="+93"/>
@@ -86134,7 +86991,7 @@ All %n entit(y)(ies) match the loaded definitions.</source>
         <location line="+27"/>
         <location line="+57"/>
         <location line="+430"/>
-        <location line="+407"/>
+        <location line="+415"/>
         <location line="+41"/>
         <location line="+35"/>
         <location line="+41"/>
@@ -86142,8 +86999,8 @@ All %n entit(y)(ies) match the loaded definitions.</source>
         <location line="+40"/>
         <location line="+167"/>
         <location line="+9"/>
-        <location line="+12165"/>
-        <location line="+633"/>
+        <location line="+12347"/>
+        <location line="+638"/>
         <location line="+54"/>
         <location line="+403"/>
         <location filename="../src/app/brush_editor_actions.cpp" line="+18"/>
@@ -86196,13 +87053,13 @@ All %n entit(y)(ies) match the loaded definitions.</source>
         <translation type="unfinished">未保存のマップ編集</translation>
     </message>
     <message>
-        <location filename="../src/app/application_shell.cpp" line="-16186"/>
-        <location line="+15783"/>
+        <location filename="../src/app/application_shell.cpp" line="-16381"/>
+        <location line="+15978"/>
         <source>Level map entity edited</source>
         <translation type="unfinished">レベル マップのエンティティを編集しました</translation>
     </message>
     <message>
-        <location line="-15775"/>
+        <location line="-15970"/>
         <source>Select map objects before moving them.</source>
         <translation type="unfinished"></translation>
     </message>
@@ -86235,13 +87092,13 @@ All %n entit(y)(ies) match the loaded definitions.</source>
     </message>
     <message>
         <location line="+3"/>
-        <location line="+16139"/>
+        <location line="+16334"/>
         <location filename="../src/app/level_sidebar_panels.cpp" line="+0"/>
         <source>Level map selection moved</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-16092"/>
+        <location line="-16287"/>
         <location line="+30"/>
         <source>Open a Quake-family .map to add entities.</source>
         <translation type="unfinished"></translation>
@@ -86278,7 +87135,7 @@ All %n entit(y)(ies) match the loaded definitions.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/app/application_shell.cpp" line="+2479"/>
+        <location filename="../src/app/application_shell.cpp" line="+2487"/>
         <source>Width (x)</source>
         <translation type="unfinished">幅 (x)</translation>
     </message>
@@ -86293,14 +87150,14 @@ All %n entit(y)(ies) match the loaded definitions.</source>
         <translation type="unfinished">高さ (z)</translation>
     </message>
     <message>
-        <location line="-951"/>
-        <location line="+962"/>
+        <location line="-959"/>
+        <location line="+970"/>
         <source> units</source>
         <translation type="unfinished"> ユニット</translation>
     </message>
     <message>
         <location line="+198"/>
-        <location line="+12366"/>
+        <location line="+12548"/>
         <source>Texture</source>
         <translation type="unfinished">テクスチャ</translation>
     </message>
@@ -86310,7 +87167,7 @@ All %n entit(y)(ies) match the loaded definitions.</source>
         <translation type="unfinished">レベル マップにブラシを追加しました</translation>
     </message>
     <message>
-        <location filename="../src/app/application_shell.cpp" line="-15044"/>
+        <location filename="../src/app/application_shell.cpp" line="-15234"/>
         <location line="+33"/>
         <source>Open a Doom or Hexen map to add things.</source>
         <translation type="unfinished"></translation>
@@ -86637,12 +87494,12 @@ All %n entit(y)(ies) match the loaded definitions.</source>
         <location line="+31"/>
         <location line="+313"/>
         <location line="+1"/>
-        <location line="+10026"/>
+        <location line="+10216"/>
         <source>, </source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-10333"/>
+        <location line="-10523"/>
         <source>Keys for %1</source>
         <translation type="unfinished">%1 のキー</translation>
     </message>
@@ -86775,18 +87632,18 @@ All %n entit(y)(ies) match the loaded definitions.</source>
     </message>
     <message>
         <location line="+53"/>
-        <location line="+1866"/>
+        <location line="+1874"/>
         <source>Only hidden objects use %1; Show All Hidden brings them back.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-1865"/>
-        <location line="+1866"/>
+        <location line="-1873"/>
+        <location line="+1874"/>
         <source>Nothing in the map uses %1.</source>
         <translation type="unfinished"></translation>
     </message>
     <message numerus="yes">
-        <location line="-1861"/>
+        <location line="-1869"/>
         <source>Selected the %n object(s) that use %1.</source>
         <translation type="unfinished">
             <numerusform></numerusform>
@@ -86900,7 +87757,7 @@ All %n entit(y)(ies) match the loaded definitions.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/app/ai_generation_actions.cpp" line="-51"/>
+        <location filename="../src/app/ai_generation_actions.cpp" line="-56"/>
         <location filename="../src/app/application_shell.cpp" line="+4"/>
         <source>Level map texture applied</source>
         <translation type="unfinished">レベル マップにテクスチャを適用しました</translation>
@@ -87089,12 +87946,12 @@ All %n entit(y)(ies) match the loaded definitions.</source>
     </message>
     <message>
         <location line="+1"/>
-        <location line="+13461"/>
+        <location line="+13651"/>
         <source>Ceiling flat</source>
         <translation type="unfinished">天井のフラット</translation>
     </message>
     <message>
-        <location line="-13459"/>
+        <location line="-13649"/>
         <source>Left empty, each door keeps its own ceiling flat.</source>
         <translation type="unfinished">空のままにすると、各ドアはそれぞれの天井のフラットを維持します。</translation>
     </message>
@@ -87488,12 +88345,12 @@ All %n entit(y)(ies) match the loaded definitions.</source>
     </message>
     <message>
         <location line="+39"/>
-        <location line="+437"/>
+        <location line="+445"/>
         <source>Grid: %1 units.</source>
         <translation type="unfinished">グリッド: %1 ユニット。</translation>
     </message>
     <message>
-        <location line="-396"/>
+        <location line="-404"/>
         <source>Select what to keep in view first.</source>
         <translation type="unfinished">先に、ビューに収めたいものを選択してください。</translation>
     </message>
@@ -87520,7 +88377,7 @@ All %n entit(y)(ies) match the loaded definitions.</source>
         <translation type="unfinished">%5 で brush:%1 (%2 x %3 x %4) を描画しました。</translation>
     </message>
     <message>
-        <location line="+83"/>
+        <location line="+86"/>
         <source>Face %1 of %2 is in the Inspector.</source>
         <translation type="unfinished">面 %1 / %2 がインスペクターに表示されています。</translation>
     </message>
@@ -87560,7 +88417,7 @@ All %n entit(y)(ies) match the loaded definitions.</source>
         <translation type="unfinished">%1 の操作</translation>
     </message>
     <message>
-        <location line="+96"/>
+        <location line="+101"/>
         <source>The grid is already at its finest, %1 unit.</source>
         <translation type="unfinished">グリッドはすでに最も細かい %1 ユニットです。</translation>
     </message>
@@ -88102,13 +88959,13 @@ All %n entit(y)(ies) match the loaded definitions.</source>
     </message>
     <message>
         <location line="+0"/>
-        <location line="+9610"/>
+        <location line="+9792"/>
         <location line="+2078"/>
         <source>level-map</source>
         <translation type="unfinished">level-map</translation>
     </message>
     <message>
-        <location line="-11687"/>
+        <location line="-11869"/>
         <location line="+1222"/>
         <source>Planning compiler command.</source>
         <translation type="unfinished">コンパイラ コマンドを計画しています。</translation>
@@ -88150,14 +89007,14 @@ All %n entit(y)(ies) match the loaded definitions.</source>
     </message>
     <message numerus="yes">
         <location line="+36"/>
-        <location line="+13318"/>
+        <location line="+13505"/>
         <source>%n stage(s)</source>
         <translation type="unfinished">
             <numerusform></numerusform>
         </translation>
     </message>
     <message numerus="yes">
-        <location line="-13317"/>
+        <location line="-13504"/>
         <source>%n texture(s)</source>
         <translation type="unfinished">
             <numerusform></numerusform>
@@ -88397,14 +89254,14 @@ Open a folder, PAK, WAD, ZIP, or PK3 to see type and size distribution.</source>
         <location line="+23"/>
         <location line="+313"/>
         <location line="+1681"/>
-        <location line="+3410"/>
+        <location line="+3592"/>
         <source>%n entries</source>
         <translation type="unfinished">
             <numerusform></numerusform>
         </translation>
     </message>
     <message>
-        <location line="-5419"/>
+        <location line="-5601"/>
         <source>Package is empty</source>
         <translation type="unfinished">パッケージは空です</translation>
     </message>
@@ -88489,12 +89346,12 @@ Use Stage Add, Replace, Rename, or Delete to build a save-as plan.</source>
     <message>
         <location line="+10"/>
         <location line="+2175"/>
-        <location line="+402"/>
+        <location line="+406"/>
         <source>Path: %1</source>
         <translation type="unfinished">パス: %1</translation>
     </message>
     <message>
-        <location line="-2576"/>
+        <location line="-2580"/>
         <source>Kind: %1</source>
         <translation type="unfinished">分類: %1</translation>
     </message>
@@ -88516,12 +89373,12 @@ Use Stage Add, Replace, Rename, or Delete to build a save-as plan.</source>
     <message>
         <location line="+1"/>
         <location line="+1991"/>
-        <location line="+531"/>
+        <location line="+535"/>
         <source>Storage: %1</source>
         <translation type="unfinished">格納方法: %1</translation>
     </message>
     <message>
-        <location line="-2521"/>
+        <location line="-2525"/>
         <source>Readable now: %1</source>
         <translation type="unfinished">現在読み取り可能: %1</translation>
     </message>
@@ -88657,18 +89514,18 @@ Use Stage Add, Replace, Rename, or Delete to build a save-as plan.</source>
     </message>
     <message>
         <location line="+1"/>
-        <location line="+8511"/>
+        <location line="+8693"/>
         <source>Raw Metadata</source>
         <translation type="unfinished">未加工メタデータ</translation>
     </message>
     <message>
-        <location line="-8402"/>
-        <location line="+10432"/>
+        <location line="-8584"/>
+        <location line="+10614"/>
         <source>Folder %1</source>
         <translation type="unfinished">フォルダー %1</translation>
     </message>
     <message>
-        <location line="-10431"/>
+        <location line="-10613"/>
         <source>Package root</source>
         <translation type="unfinished">パッケージ ルート</translation>
     </message>
@@ -88698,12 +89555,12 @@ Use Stage Add, Replace, Rename, or Delete to build a save-as plan.</source>
     <message>
         <location line="-3"/>
         <location line="+4"/>
-        <location line="+13771"/>
+        <location line="+13958"/>
         <source>not found</source>
         <translation type="unfinished">見つかりません</translation>
     </message>
     <message>
-        <location line="-13772"/>
+        <location line="-13959"/>
         <source>Source only, not built</source>
         <translation type="unfinished">ソースのみ (未ビルド)</translation>
     </message>
@@ -88721,12 +89578,12 @@ Executable: %2</source>
     </message>
     <message>
         <location line="+43"/>
-        <location line="+7382"/>
+        <location line="+7564"/>
         <source>Automatic</source>
         <translation type="unfinished">自動</translation>
     </message>
     <message>
-        <location line="-7379"/>
+        <location line="-7561"/>
         <source>Project manifest (missing)</source>
         <translation type="unfinished"></translation>
     </message>
@@ -88793,12 +89650,12 @@ Executable: %2</source>
         <location line="+24"/>
         <location line="+52"/>
         <location line="+10"/>
-        <location line="+5257"/>
+        <location line="+5439"/>
         <source>compiler</source>
         <translation type="unfinished">コンパイラ</translation>
     </message>
     <message>
-        <location line="-5341"/>
+        <location line="-5523"/>
         <source>%1 now runs %2.</source>
         <translation type="unfinished">%1 は %2 を実行するようになりました。</translation>
     </message>
@@ -88999,12 +89856,12 @@ Executable: %2</source>
     </message>
     <message>
         <location line="+1"/>
-        <location line="+11875"/>
+        <location line="+12062"/>
         <source>Skipped: %1</source>
         <translation type="unfinished">スキップ: %1</translation>
     </message>
     <message>
-        <location line="-11874"/>
+        <location line="-12061"/>
         <source>Errors: %1</source>
         <translation type="unfinished">エラー: %1</translation>
     </message>
@@ -89181,12 +90038,12 @@ Executable: %2</source>
     </message>
     <message>
         <location line="+3"/>
-        <location line="+6543"/>
+        <location line="+6725"/>
         <source>Package Stage Add</source>
         <translation type="unfinished">パッケージへの追加をステージ</translation>
     </message>
     <message>
-        <location line="-6543"/>
+        <location line="-6725"/>
         <source>File staged for save-as.</source>
         <translation type="unfinished">名前を付けて保存用にファイルをステージしました。</translation>
     </message>
@@ -89278,12 +90135,12 @@ Executable: %2</source>
         <translation type="unfinished">パッケージの比較</translation>
     </message>
     <message>
-        <location line="-7223"/>
+        <location line="-7231"/>
         <source>Find in Project</source>
         <translation type="unfinished">プロジェクト内を検索</translation>
     </message>
     <message>
-        <location line="-2813"/>
+        <location line="-2865"/>
         <source>The level camera shows brushes, patches and placed models using package material images. Select geometry to edit it; Details lists unresolved images and preview limitations.</source>
         <translation type="unfinished"></translation>
     </message>
@@ -89338,7 +90195,7 @@ Executable: %2</source>
         <translation type="unfinished">パッケージの内容と編集履歴を .vibepackage ディレクトリに保存します。</translation>
     </message>
     <message>
-        <location line="+1798"/>
+        <location line="+1850"/>
         <source>Open the model mesh editor</source>
         <translation type="unfinished">モデルのメッシュ エディターを開く</translation>
     </message>
@@ -89512,12 +90369,12 @@ Edited, not saved:
         <translation type="unfinished">プレビューは利用できません</translation>
     </message>
     <message>
-        <location line="+2105"/>
+        <location line="+2113"/>
         <source>The compiler reads the saved file, so it would not see them. Save and compile the current map?</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+7551"/>
+        <location line="+7733"/>
         <source>Undo: %1</source>
         <translation type="unfinished">元に戻す: %1</translation>
     </message>
@@ -89527,7 +90384,7 @@ Edited, not saved:
         <translation type="unfinished">やり直し: %1</translation>
     </message>
     <message>
-        <location line="-6956"/>
+        <location line="-7138"/>
         <source>Draft: %1
 %2</source>
         <translation type="unfinished">下書き: %1
@@ -89582,14 +90439,14 @@ Edited, not saved:
         <translation type="unfinished">%1 (ソース エントリ %2)</translation>
     </message>
     <message>
-        <location line="-11994"/>
+        <location line="-12054"/>
         <location line="+2"/>
         <location line="+2"/>
         <source>The studio is closing.</source>
         <translation type="unfinished">スタジオを閉じています。</translation>
     </message>
     <message>
-        <location line="+11997"/>
+        <location line="+12057"/>
         <location filename="../src/app/package_document_actions.cpp" line="-29"/>
         <source>The package changed; select the entry again.</source>
         <translation type="unfinished"></translation>
@@ -89726,12 +90583,12 @@ The new archive is written beside it and verified first; only then does the orig
     </message>
     <message>
         <location line="+6"/>
-        <location line="+11531"/>
+        <location line="+11718"/>
         <source>Output: %1</source>
         <translation type="unfinished">出力: %1</translation>
     </message>
     <message>
-        <location line="-11526"/>
+        <location line="-11713"/>
         <source>SHA-256: %1</source>
         <translation type="unfinished">SHA-256: %1</translation>
     </message>
@@ -90050,12 +90907,12 @@ The new archive is written beside it and verified first; only then does the orig
         <location line="+10"/>
         <location line="+10"/>
         <location line="+26"/>
-        <location line="+4207"/>
+        <location line="+4389"/>
         <source>setup</source>
         <translation type="unfinished">セットアップ</translation>
     </message>
     <message>
-        <location line="-4274"/>
+        <location line="-4456"/>
         <source>Setup resumed.</source>
         <translation type="unfinished">セットアップを再開しました。</translation>
     </message>
@@ -90076,12 +90933,12 @@ The new archive is written beside it and verified first; only then does the orig
     </message>
     <message>
         <location line="+1"/>
-        <location line="+947"/>
+        <location line="+951"/>
         <source>Setup step: %1</source>
         <translation type="unfinished">セットアップの手順: %1</translation>
     </message>
     <message>
-        <location line="-940"/>
+        <location line="-944"/>
         <source>Skipped for now</source>
         <translation type="unfinished">今はスキップ</translation>
     </message>
@@ -90128,13 +90985,13 @@ The new archive is written beside it and verified first; only then does the orig
     </message>
     <message>
         <location line="+0"/>
-        <location line="+759"/>
-        <location line="+3464"/>
+        <location line="+763"/>
+        <location line="+3642"/>
         <source>settings</source>
         <translation type="unfinished">設定</translation>
     </message>
     <message>
-        <location line="-4221"/>
+        <location line="-4403"/>
         <source>Settings loaded successfully.</source>
         <translation type="unfinished"></translation>
     </message>
@@ -90203,12 +91060,12 @@ The new archive is written beside it and verified first; only then does the orig
     <message>
         <location line="+2"/>
         <location line="+341"/>
-        <location line="+402"/>
+        <location line="+406"/>
         <source>State: %1</source>
         <translation type="unfinished">状態: %1</translation>
     </message>
     <message>
-        <location line="-742"/>
+        <location line="-746"/>
         <source>Detail: %1</source>
         <translation type="unfinished">詳細: %1</translation>
     </message>
@@ -90305,12 +91162,12 @@ The new archive is written beside it and verified first; only then does the orig
     </message>
     <message>
         <location line="+2"/>
-        <location line="+11225"/>
+        <location line="+11412"/>
         <source>Cancellation requested. The current stage is being stopped.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-11220"/>
+        <location line="-11407"/>
         <source>Compiler cancellation requested.</source>
         <translation type="unfinished"></translation>
     </message>
@@ -90356,48 +91213,48 @@ The new archive is written beside it and verified first; only then does the orig
     </message>
     <message>
         <location line="+11"/>
-        <location line="+531"/>
+        <location line="+535"/>
         <source>Schema: %1</source>
         <translation type="unfinished">スキーマ: %1</translation>
     </message>
     <message>
-        <location line="-530"/>
+        <location line="-534"/>
         <location line="+36"/>
-        <location line="+495"/>
+        <location line="+499"/>
         <source>Status: %1</source>
         <translation type="unfinished">ステータス: %1</translation>
     </message>
     <message>
-        <location line="-530"/>
+        <location line="-534"/>
         <source>Selected mode index: %1</source>
         <translation type="unfinished">選択したモードのインデックス: %1</translation>
     </message>
     <message>
         <location line="+1"/>
-        <location line="+543"/>
+        <location line="+547"/>
         <source>Current project: %1</source>
         <translation type="unfinished">現在のプロジェクト: %1</translation>
     </message>
     <message>
-        <location line="-542"/>
-        <location line="+530"/>
+        <location line="-546"/>
+        <location line="+534"/>
         <source>Recent projects: %1</source>
         <translation type="unfinished">最近のプロジェクト: %1</translation>
     </message>
     <message>
-        <location line="-529"/>
-        <location line="+539"/>
+        <location line="-533"/>
+        <location line="+543"/>
         <source>Game installations: %1</source>
         <translation type="unfinished">ゲームのインストール: %1</translation>
     </message>
     <message>
-        <location line="-538"/>
-        <location line="+539"/>
+        <location line="-542"/>
+        <location line="+543"/>
         <source>Selected installation: %1</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-538"/>
+        <location line="-542"/>
         <source>Selected editor profile: %1</source>
         <translation type="unfinished"></translation>
     </message>
@@ -90419,13 +91276,13 @@ The new archive is written beside it and verified first; only then does the orig
         <location line="+1"/>
         <location line="+2"/>
         <location line="+1"/>
-        <location line="+505"/>
+        <location line="+509"/>
         <location line="+1"/>
         <source>enabled</source>
         <translation type="unfinished">有効</translation>
     </message>
     <message>
-        <location line="-532"/>
+        <location line="-536"/>
         <location line="+10"/>
         <location line="+1"/>
         <location line="+4"/>
@@ -90438,13 +91295,13 @@ The new archive is written beside it and verified first; only then does the orig
         <location line="+1"/>
         <location line="+1"/>
         <location line="+1"/>
-        <location line="+505"/>
+        <location line="+509"/>
         <location line="+1"/>
         <source>disabled</source>
         <translation type="unfinished">無効</translation>
     </message>
     <message>
-        <location line="-531"/>
+        <location line="-535"/>
         <source>Compiler tools with source: %1</source>
         <translation type="unfinished"></translation>
     </message>
@@ -90455,52 +91312,52 @@ The new archive is written beside it and verified first; only then does the orig
     </message>
     <message>
         <location line="+3"/>
-        <location line="+522"/>
-        <location line="+11579"/>
+        <location line="+526"/>
+        <location line="+11762"/>
         <source>Locale: %1</source>
         <translation type="unfinished">ロケール: %1</translation>
     </message>
     <message>
-        <location line="-12100"/>
-        <location line="+522"/>
-        <location line="+4022"/>
-        <location line="+7557"/>
+        <location line="-12287"/>
+        <location line="+526"/>
+        <location line="+4200"/>
+        <location line="+7562"/>
         <source>Theme: %1</source>
         <translation type="unfinished">テーマ: %1</translation>
     </message>
     <message>
-        <location line="-12100"/>
-        <location line="+522"/>
-        <location line="+3999"/>
+        <location line="-12287"/>
+        <location line="+526"/>
+        <location line="+4177"/>
         <location line="+8"/>
         <source>Text scale: %1%</source>
         <translation type="unfinished">テキストの拡大率: %1%</translation>
     </message>
     <message>
-        <location line="-4528"/>
-        <location line="+522"/>
+        <location line="-4710"/>
+        <location line="+526"/>
         <source>Density: %1</source>
         <translation type="unfinished">密度: %1</translation>
     </message>
     <message>
-        <location line="-521"/>
+        <location line="-525"/>
         <source>Editor profile: %1</source>
         <translation type="unfinished">エディター プロファイル: %1</translation>
     </message>
     <message>
         <location line="+1"/>
-        <location line="+521"/>
+        <location line="+525"/>
         <source>Reduced motion: %1</source>
         <translation type="unfinished">動きの軽減: %1</translation>
     </message>
     <message>
-        <location line="-520"/>
-        <location line="+521"/>
+        <location line="-524"/>
+        <location line="+525"/>
         <source>Text to speech: %1</source>
         <translation type="unfinished">テキスト読み上げ: %1</translation>
     </message>
     <message>
-        <location line="-520"/>
+        <location line="-524"/>
         <source>Interface language: %1 (running in %2)</source>
         <translation type="unfinished"></translation>
     </message>
@@ -90805,12 +91662,12 @@ The new archive is written beside it and verified first; only then does the orig
     </message>
     <message>
         <location line="+0"/>
-        <location line="+2707"/>
+        <location line="+2889"/>
         <source>AI-free</source>
         <translation type="unfinished">AI なし</translation>
     </message>
     <message>
-        <location line="-2707"/>
+        <location line="-2889"/>
         <source>Experimental opt-in</source>
         <translation type="unfinished">試験的なオプトイン</translation>
     </message>
@@ -90876,12 +91733,12 @@ The new archive is written beside it and verified first; only then does the orig
     </message>
     <message>
         <location line="+9"/>
-        <location line="+402"/>
+        <location line="+406"/>
         <source>Last opened: %1</source>
         <translation type="unfinished">最後に開いた日時: %1</translation>
     </message>
     <message>
-        <location line="-384"/>
+        <location line="-388"/>
         <source>Project manifest: available.</source>
         <translation type="unfinished"></translation>
     </message>
@@ -90937,12 +91794,12 @@ The new archive is written beside it and verified first; only then does the orig
     </message>
     <message>
         <location line="+1"/>
-        <location line="+377"/>
+        <location line="+381"/>
         <source>Settings storage: %1</source>
         <translation type="unfinished">設定の保存先: %1</translation>
     </message>
     <message>
-        <location line="-375"/>
+        <location line="-379"/>
         <source>Project Details</source>
         <translation type="unfinished">プロジェクトの詳細</translation>
     </message>
@@ -90977,7 +91834,7 @@ The new archive is written beside it and verified first; only then does the orig
         <translation type="unfinished">次のように書き込まれます: %1</translation>
     </message>
     <message>
-        <location line="+76"/>
+        <location line="+80"/>
         <source>Preferences saved</source>
         <translation type="unfinished">環境設定を保存しました</translation>
     </message>
@@ -91338,12 +92195,12 @@ The new archive is written beside it and verified first; only then does the orig
     </message>
     <message>
         <location line="+2"/>
-        <location line="+7120"/>
+        <location line="+7298"/>
         <source>Save File &amp;As…</source>
         <translation type="unfinished">ファイルに名前を付けて保存(&amp;A)…</translation>
     </message>
     <message>
-        <location line="-7119"/>
+        <location line="-7297"/>
         <source>Save this document to a chosen path, preserving its text format and undo history.</source>
         <translation type="unfinished"></translation>
     </message>
@@ -91639,12 +92496,12 @@ The new archive is written beside it and verified first; only then does the orig
     </message>
     <message>
         <location line="+2"/>
-        <location line="+9225"/>
+        <location line="+9408"/>
         <source>Edit Brush Components…</source>
         <translation type="unfinished">ブラシ コンポーネントを編集…</translation>
     </message>
     <message>
-        <location line="-9224"/>
+        <location line="-9407"/>
         <source>Reshape the selected brush&apos;s vertices, edges and faces.</source>
         <translation type="unfinished">選択したブラシの頂点、エッジ、面の形状を変更します。</translation>
     </message>
@@ -91660,12 +92517,12 @@ The new archive is written beside it and verified first; only then does the orig
     </message>
     <message>
         <location line="+6"/>
-        <location line="+9223"/>
+        <location line="+9406"/>
         <source>Edit Patch Control Points…</source>
         <translation type="unfinished">パッチのコントロール ポイントを編集…</translation>
     </message>
     <message>
-        <location line="-9222"/>
+        <location line="-9405"/>
         <source>Reshape, subdivide and texture the selected patch.</source>
         <translation type="unfinished">選択したパッチの形状変更、分割、テクスチャ設定を行います。</translation>
     </message>
@@ -91741,12 +92598,12 @@ The new archive is written beside it and verified first; only then does the orig
     </message>
     <message>
         <location line="+2"/>
-        <location line="+9296"/>
+        <location line="+9479"/>
         <source>Rotate Selection…</source>
         <translation type="unfinished">選択範囲を回転…</translation>
     </message>
     <message>
-        <location line="-9295"/>
+        <location line="-9478"/>
         <source>Preview an arbitrary rotation with a chosen pivot and texture lock.</source>
         <translation type="unfinished">任意の回転を、選択したピボットとテクスチャ ロックでプレビューします。</translation>
     </message>
@@ -92474,12 +93331,12 @@ The new archive is written beside it and verified first; only then does the orig
     </message>
     <message>
         <location line="+2"/>
-        <location line="+8856"/>
+        <location line="+9039"/>
         <source>Paste with Offset…</source>
         <translation type="unfinished">オフセットを指定して貼り付け…</translation>
     </message>
     <message>
-        <location line="-8855"/>
+        <location line="-9038"/>
         <source>Preview clipboard objects at an explicit offset, with package materials and one undo step.</source>
         <translation type="unfinished"></translation>
     </message>
@@ -92505,12 +93362,12 @@ The new archive is written beside it and verified first; only then does the orig
     </message>
     <message>
         <location line="+2"/>
-        <location line="+8853"/>
+        <location line="+9036"/>
         <source>Duplicate with Offset…</source>
         <translation type="unfinished">オフセットを指定して複製…</translation>
     </message>
     <message>
-        <location line="-8852"/>
+        <location line="-9035"/>
         <source>Preview copies at an explicit offset, preserving texture alignment and entity ownership.</source>
         <translation type="unfinished"></translation>
     </message>
@@ -93374,13 +94231,13 @@ The new archive is written beside it and verified first; only then does the orig
     </message>
     <message>
         <location line="+5"/>
-        <location line="+397"/>
-        <location line="+7778"/>
+        <location line="+411"/>
+        <location line="+7947"/>
         <source>Copy</source>
         <translation type="unfinished">コピー</translation>
     </message>
     <message>
-        <location line="-8173"/>
+        <location line="-8356"/>
         <source>Copy the last answer</source>
         <translation type="unfinished">最後の回答をコピー</translation>
     </message>
@@ -93415,14 +94272,14 @@ The new archive is written beside it and verified first; only then does the orig
         <translation type="unfinished">質問をキャンセル</translation>
     </message>
     <message>
-        <location filename="../src/app/ai_generation_actions.cpp" line="-95"/>
+        <location filename="../src/app/ai_generation_actions.cpp" line="-100"/>
         <location filename="../src/app/application_shell.cpp" line="+5"/>
-        <location line="+306"/>
+        <location line="+320"/>
         <source>Send</source>
         <translation type="unfinished">送信</translation>
     </message>
     <message>
-        <location filename="../src/app/application_shell.cpp" line="-304"/>
+        <location filename="../src/app/application_shell.cpp" line="-318"/>
         <source>Send the question</source>
         <translation type="unfinished">質問を送信</translation>
     </message>
@@ -93435,12 +94292,12 @@ The new archive is written beside it and verified first; only then does the orig
     </message>
     <message>
         <location line="+3"/>
-        <location line="+506"/>
+        <location line="+520"/>
         <source>Assistant</source>
         <translation type="unfinished">アシスタント</translation>
     </message>
     <message>
-        <location line="-504"/>
+        <location line="-518"/>
         <source>Assistant panel</source>
         <translation type="unfinished">アシスタント パネル</translation>
     </message>
@@ -93455,18 +94312,7 @@ The new archive is written beside it and verified first; only then does the orig
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+49"/>
-        <location line="+340"/>
-        <source>%1 · %2 · on this machine</source>
-        <translation type="unfinished">%1 · %2 · このコンピューター上</translation>
-    </message>
-    <message>
-        <location line="-339"/>
-        <source>%1 · %2 · sends to %3</source>
-        <translation type="unfinished">%1 · %2 · 送信先: %3</translation>
-    </message>
-    <message>
-        <location line="+7"/>
+        <location line="+57"/>
         <source>Send the question and the ticked context to %1 on this machine.</source>
         <translation type="unfinished"></translation>
     </message>
@@ -93545,13 +94391,13 @@ The new archive is written beside it and verified first; only then does the orig
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/app/ai_generation_actions.cpp" line="-25"/>
+        <location filename="../src/app/ai_generation_actions.cpp" line="-30"/>
         <location filename="../src/app/application_shell.cpp" line="+79"/>
         <source>Send to %1?</source>
         <translation type="unfinished">%1 に送信しますか?</translation>
     </message>
     <message>
-        <location filename="../src/app/application_shell.cpp" line="+5"/>
+        <location filename="../src/app/application_shell.cpp" line="+17"/>
         <source>The question and the context you ticked go to %1 at %2. Nothing else from the project goes with them, and your API key is sent only to authenticate. This is the first question from this project to %2, so here is exactly what will be sent:</source>
         <translation type="unfinished"></translation>
     </message>
@@ -93560,8 +94406,8 @@ The new archive is written beside it and verified first; only then does the orig
         <location line="+3"/>
         <location line="+3"/>
         <location line="+3"/>
-        <location filename="../src/app/application_shell.cpp" line="-13733"/>
-        <location line="+2451"/>
+        <location filename="../src/app/application_shell.cpp" line="-13809"/>
+        <location line="+2503"/>
         <location line="+581"/>
         <source>Generate</source>
         <translation type="unfinished">生成</translation>
@@ -93608,13 +94454,8 @@ The new archive is written beside it and verified first; only then does the orig
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+93"/>
-        <source>The description and settings below go to %1 at %2; nothing else from the project goes with them, and your API key is sent only to authenticate. This is the first request from this project to %2, so here is exactly what will be sent:</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+7"/>
-        <location filename="../src/app/application_shell.cpp" line="+11283"/>
+        <location line="+105"/>
+        <location filename="../src/app/application_shell.cpp" line="+11309"/>
         <source>The request that will be sent</source>
         <translation type="unfinished"></translation>
     </message>
@@ -93655,7 +94496,7 @@ The new archive is written beside it and verified first; only then does the orig
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+46"/>
+        <location line="+51"/>
         <source>Saved, but nothing is selected in the open map to apply it to.</source>
         <translation type="unfinished"></translation>
     </message>
@@ -93666,15 +94507,25 @@ The new archive is written beside it and verified first; only then does the orig
     </message>
     <message numerus="yes">
         <location line="+1"/>
-        <location line="+105"/>
+        <location line="+115"/>
         <source>%n file(s) written</source>
         <translation type="unfinished">
             <numerusform></numerusform>
         </translation>
     </message>
     <message>
-        <location line="-70"/>
-        <source>Your instruction and a summary of the open map (its entities and their keys, brush bounds, textures, and selection, with your home and project folders shortened) go to %1 at %2; nothing else from the project goes with them, and your API key is sent only to authenticate. This is the first request from this project to %2, so here is exactly what will be sent:</source>
+        <location line="-245"/>
+        <source>The description and settings below go to %1 through %2, with your own login; nothing else from the project goes with them, and %2 runs in an empty folder with its tools turned off, so it can only answer. This is the first request from this project through %2, so here is exactly what will run:</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>The description and settings below go to %1 (%2); nothing else from the project goes with them, and your API key is sent only to authenticate. This is the first request from this project to %2, so here is exactly what will be sent:</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+166"/>
+        <source>Your instruction and a summary of the open map (its entities and their keys, brush bounds, textures, and selection, with your home and project folders shortened) go to %1 (%2); nothing else from the project goes with them, and %3. This is the first request from this project to %2, so here is exactly what will be sent:</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
@@ -93690,7 +94541,7 @@ The new archive is written beside it and verified first; only then does the orig
         </translation>
     </message>
     <message>
-        <location line="+55"/>
+        <location line="+60"/>
         <source>Generated sound placed</source>
         <translation type="unfinished">生成したサウンドを配置しました</translation>
     </message>
@@ -93705,7 +94556,7 @@ The new archive is written beside it and verified first; only then does the orig
         <translation type="unfinished">生成したサウンドを保存しました</translation>
     </message>
     <message>
-        <location line="+17"/>
+        <location line="+22"/>
         <source>Image Model</source>
         <translation type="unfinished">画像モデル</translation>
     </message>
@@ -93765,7 +94616,7 @@ The new archive is written beside it and verified first; only then does the orig
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+25"/>
+        <location line="+40"/>
         <source>Saved the %1 image model settings.</source>
         <translation type="unfinished"></translation>
     </message>
@@ -93820,7 +94671,7 @@ The new archive is written beside it and verified first; only then does the orig
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+24"/>
+        <location line="+22"/>
         <source>Saved the %1 sound model settings.</source>
         <translation type="unfinished"></translation>
     </message>
@@ -93865,12 +94716,7 @@ The new archive is written beside it and verified first; only then does the orig
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+19"/>
-        <source>%1 · %2 · %3</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+1"/>
+        <location line="+20"/>
         <source>Assistant Question</source>
         <translation type="unfinished">アシスタントへの質問</translation>
     </message>
@@ -93961,20 +94807,20 @@ The new archive is written beside it and verified first; only then does the orig
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/app/ai_generation_actions.cpp" line="-120"/>
+        <location filename="../src/app/ai_generation_actions.cpp" line="-133"/>
         <location filename="../src/app/application_shell.cpp" line="+15"/>
         <source>The model name your provider lists</source>
         <translation type="unfinished">プロバイダーが一覧に表示するモデル名</translation>
     </message>
     <message>
         <location line="+3"/>
-        <location line="+88"/>
+        <location line="+103"/>
         <location filename="../src/app/application_shell.cpp" line="+3"/>
         <source>https://… (required)</source>
         <translation type="unfinished">https://… (必須)</translation>
     </message>
     <message>
-        <location filename="../src/app/application_shell.cpp" line="+7"/>
+        <location filename="../src/app/application_shell.cpp" line="+48"/>
         <source>None needed: the endpoint is on this machine.</source>
         <translation type="unfinished">不要: エンドポイントはこのコンピューター上にあります。</translation>
     </message>
@@ -93994,12 +94840,12 @@ The new archive is written beside it and verified first; only then does the orig
         <translation type="unfinished">環境変数 %1 から読み取りますが、設定されていません。</translation>
     </message>
     <message>
-        <location line="+24"/>
+        <location line="+118"/>
         <source>Saved the %1 model settings.</source>
         <translation type="unfinished">%1 のモデル設定を保存しました。</translation>
     </message>
     <message>
-        <location line="+29"/>
+        <location line="+55"/>
         <source>Asking %1…</source>
         <translation type="unfinished">%1 に問い合わせています…</translation>
     </message>
@@ -94014,7 +94860,7 @@ The new archive is written beside it and verified first; only then does the orig
         <translation type="unfinished">%1 秒後に失敗しました: %2</translation>
     </message>
     <message>
-        <location line="+3"/>
+        <location line="+6"/>
         <source>AI Connection Test</source>
         <translation type="unfinished">AI 接続テスト</translation>
     </message>
@@ -94382,7 +95228,7 @@ The new archive is written beside it and verified first; only then does the orig
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+3251"/>
+        <location line="+3256"/>
         <source>Use UDMF Properties to edit existing things; UDMF thing placement is not supported yet.</source>
         <translation type="unfinished"></translation>
     </message>
@@ -94402,7 +95248,7 @@ The new archive is written beside it and verified first; only then does the orig
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-7379"/>
+        <location line="-7384"/>
         <source>No temporary folder is available for package entry copies.</source>
         <translation type="unfinished">パッケージ エントリのコピー用の一時フォルダーを利用できません。</translation>
     </message>
@@ -94463,13 +95309,13 @@ The new archive is written beside it and verified first; only then does the orig
     </message>
     <message>
         <location line="-2980"/>
-        <location line="+7216"/>
+        <location line="+7221"/>
         <location line="+231"/>
         <source>build</source>
         <translation type="unfinished">ビルド</translation>
     </message>
     <message>
-        <location line="-7443"/>
+        <location line="-7448"/>
         <location line="+4685"/>
         <location line="+27"/>
         <source>code</source>
@@ -94603,12 +95449,12 @@ The new archive is written beside it and verified first; only then does the orig
     </message>
     <message>
         <location line="+4"/>
-        <location line="+5872"/>
+        <location line="+5877"/>
         <source>Export Failed</source>
         <translation type="unfinished">エクスポートに失敗しました</translation>
     </message>
     <message>
-        <location line="-5872"/>
+        <location line="-5877"/>
         <source>%1 could not be exported.</source>
         <translation type="unfinished">%1 をエクスポートできませんでした。</translation>
     </message>
@@ -94816,7 +95662,7 @@ The new archive is written beside it and verified first; only then does the orig
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-8621"/>
+        <location line="-8799"/>
         <source>Undo &amp;Package Edit</source>
         <translation type="unfinished">パッケージの編集を元に戻す(&amp;P)</translation>
     </message>
@@ -94831,13 +95677,13 @@ The new archive is written beside it and verified first; only then does the orig
         <translation type="unfinished">パッケージの編集をやり直し(&amp;a)</translation>
     </message>
     <message>
-        <location line="-11360"/>
-        <location line="+11361"/>
+        <location line="-11424"/>
+        <location line="+11425"/>
         <source>Redo the last undone package edit.</source>
         <translation type="unfinished">元に戻した直前のパッケージ編集をやり直します。</translation>
     </message>
     <message numerus="yes">
-        <location line="+4316"/>
+        <location line="+4494"/>
         <source>%n code file(s)</source>
         <translation type="unfinished">
             <numerusform></numerusform>
@@ -95089,13 +95935,13 @@ Used %n time(s) in the open map</source>
         <translation type="unfinished">フレーム %1 / %2</translation>
     </message>
     <message>
-        <location line="-8300"/>
-        <location line="+8311"/>
+        <location line="-8482"/>
+        <location line="+8493"/>
         <source>%1, %2 x %3</source>
         <translation type="unfinished">%1、%2 x %3</translation>
     </message>
     <message>
-        <location line="-5341"/>
+        <location line="-5519"/>
         <source>Fit the selection to a new size. Texture Scale Lock stretches brush textures with it; otherwise their source parameters stay fixed. Viewport handles use the same setting.</source>
         <translation type="unfinished"></translation>
     </message>
@@ -95160,7 +96006,7 @@ Used %n time(s) in the open map</source>
         <translation type="unfinished">テクスチャ ロックは、マップの形式を維持するか、維持できない理由を報告します。</translation>
     </message>
     <message>
-        <location line="+5321"/>
+        <location line="+5499"/>
         <source>Not decodable</source>
         <translation type="unfinished">デコードできません</translation>
     </message>
@@ -95506,14 +96352,14 @@ Reloading discards them. Reload?</source>
         <translation type="unfinished">フォルダーで表示</translation>
     </message>
     <message>
-        <location line="-21116"/>
-        <location line="+21122"/>
-        <location line="+3383"/>
+        <location line="-21358"/>
+        <location line="+21364"/>
+        <location line="+3388"/>
         <source>%1 — %2</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-3383"/>
+        <location line="-3388"/>
         <source>Unknown time</source>
         <translation type="unfinished">不明な日時</translation>
     </message>
@@ -95552,7 +96398,7 @@ Reloading discards them. Reload?</source>
         <translation type="unfinished">変更済み</translation>
     </message>
     <message>
-        <location line="-6826"/>
+        <location line="-7004"/>
         <source>Preview and add a box, wedge, cylinder, cone or sphere brush.</source>
         <translation type="unfinished">ボックス、ウェッジ、円柱、円錐、球のブラシをプレビューして追加します。</translation>
     </message>
@@ -95562,7 +96408,7 @@ Reloading discards them. Reload?</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+5493"/>
+        <location line="+5671"/>
         <location line="+171"/>
         <source>Includes pending package changes. Waveforms use PCM; compressed codecs report header metadata.</source>
         <translation type="unfinished"></translation>
@@ -95684,12 +96530,12 @@ Reloading discards them. Reload?</source>
     </message>
     <message>
         <location line="+15"/>
-        <location line="+3518"/>
+        <location line="+3523"/>
         <source>line %1</source>
         <translation type="unfinished">行 %1</translation>
     </message>
     <message>
-        <location line="-3446"/>
+        <location line="-3451"/>
         <source>Put the caret on a name to go to where it is defined.</source>
         <translation type="unfinished"></translation>
     </message>
@@ -95740,12 +96586,12 @@ Reloading discards them. Reload?</source>
     </message>
     <message>
         <location line="+72"/>
-        <location line="+3278"/>
+        <location line="+3283"/>
         <source>%1, line %2</source>
         <translation type="unfinished">%1、行 %2</translation>
     </message>
     <message>
-        <location line="-3261"/>
+        <location line="-3266"/>
         <source>Nowhere to go back to yet</source>
         <translation type="unfinished"></translation>
     </message>
@@ -95994,7 +96840,7 @@ Reloading discards them. Reload?</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-20381"/>
+        <location line="-20623"/>
         <source>Showing an excerpt. The Preview tab contains the full sampled text.</source>
         <translation type="unfinished">抜粋を表示しています。サンプリングした全文は [プレビュー] タブにあります。</translation>
     </message>
@@ -96035,7 +96881,7 @@ Reloading discards them. Reload?</source>
         <translation type="unfinished">保存したレベル ビュー</translation>
     </message>
     <message>
-        <location line="+2398"/>
+        <location line="+2450"/>
         <source>OBJ, MDL, MD2, MD3, and adjacent idTech model metadata with skin and material dependencies.</source>
         <translation type="unfinished"></translation>
     </message>
@@ -96084,7 +96930,7 @@ Wall</source>
         <translation type="unfinished">マテリアルの入力を表示…</translation>
     </message>
     <message>
-        <location line="+2804"/>
+        <location line="+2812"/>
         <source>Inspecting preview…</source>
         <translation type="unfinished">プレビューを検査しています…</translation>
     </message>
@@ -96115,7 +96961,7 @@ Wall</source>
         <translation type="unfinished">読み込み中…</translation>
     </message>
     <message>
-        <location line="+5422"/>
+        <location line="+5604"/>
         <source>Package copy cancelled. No files were handed off.</source>
         <translation type="unfinished"></translation>
     </message>
@@ -96167,10 +97013,10 @@ Wall</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-15806"/>
+        <location line="-15996"/>
         <location line="+110"/>
-        <location line="+9734"/>
-        <location line="+5971"/>
+        <location line="+9746"/>
+        <location line="+6149"/>
         <source>Materials</source>
         <translation type="unfinished">マテリアル</translation>
     </message>
@@ -96186,18 +97032,18 @@ Wall</source>
         <translation type="unfinished">モデルの準備完了</translation>
     </message>
     <message>
-        <location line="-20143"/>
+        <location line="-20385"/>
         <source>Size unavailable</source>
         <translation type="unfinished">サイズを取得できません</translation>
     </message>
     <message>
         <location line="+1"/>
-        <location line="+11232"/>
+        <location line="+11292"/>
         <source>Size exceeds the supported range</source>
         <translation type="unfinished">サイズがサポートされている範囲を超えています</translation>
     </message>
     <message>
-        <location line="-8808"/>
+        <location line="-8868"/>
         <location line="+1619"/>
         <source>Customize Gestures…</source>
         <translation type="unfinished">ジェスチャをカスタマイズ…</translation>
@@ -96230,12 +97076,12 @@ Wall</source>
     </message>
     <message>
         <location line="+141"/>
-        <location line="+8677"/>
+        <location line="+8737"/>
         <source>Preparing…</source>
         <translation type="unfinished">準備中…</translation>
     </message>
     <message>
-        <location line="-8628"/>
+        <location line="-8688"/>
         <source>Staged change details</source>
         <translation type="unfinished">ステージ済みの変更の詳細</translation>
     </message>
@@ -96255,37 +97101,37 @@ Wall</source>
         <translation type="unfinished">エディターのジェスチャをカスタマイズ</translation>
     </message>
     <message>
-        <location line="+742"/>
-        <location line="+11969"/>
+        <location line="+794"/>
+        <location line="+12159"/>
         <source>Create a texture or browse images from a package.</source>
         <translation type="unfinished">テクスチャを作成するか、パッケージ内の画像を参照します。</translation>
     </message>
     <message>
-        <location line="-11850"/>
+        <location line="-12040"/>
         <source>Preview frames per second. Selecting a clip uses its saved rate when specified; this control does not change the source.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
         <location line="+122"/>
-        <location line="+11734"/>
+        <location line="+11924"/>
         <source>Create a mesh or browse models from a package.</source>
         <translation type="unfinished">メッシュを作成するか、パッケージ内のモデルを参照します。</translation>
     </message>
     <message>
-        <location line="-11534"/>
-        <location line="+11540"/>
+        <location line="-11724"/>
+        <location line="+11730"/>
         <source>Open a sound or browse audio from a package.</source>
         <translation type="unfinished">サウンドを開くか、パッケージ内のオーディオを参照します。</translation>
     </message>
     <message>
-        <location line="-10280"/>
-        <location line="+4734"/>
+        <location line="-10470"/>
+        <location line="+4742"/>
         <location line="+39"/>
         <location line="+171"/>
         <location line="+224"/>
         <location line="+1004"/>
         <location line="+1"/>
-        <location line="+4051"/>
+        <location line="+4233"/>
         <location line="+64"/>
         <location line="+4"/>
         <location filename="../src/app/package_context_actions.cpp" line="-73"/>
@@ -96293,12 +97139,12 @@ Wall</source>
         <translation type="unfinished">パッケージ ビューは利用できません</translation>
     </message>
     <message>
-        <location line="-7140"/>
+        <location line="-7330"/>
         <source>Gesture preferences could not be applied: %1. Profile defaults are in use.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+414"/>
+        <location line="+417"/>
         <source>%1 Controls (customized)</source>
         <translation type="unfinished">%1 の操作 (カスタマイズ済み)</translation>
     </message>
@@ -96313,7 +97159,7 @@ Wall</source>
         <translation type="unfinished">ワークフローの違い</translation>
     </message>
     <message>
-        <location line="+1163"/>
+        <location line="+1168"/>
         <location line="+45"/>
         <source>Preparing package entries…</source>
         <translation type="unfinished"></translation>
@@ -96331,7 +97177,7 @@ Wall</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-8584"/>
+        <location line="-8644"/>
         <source>Package save options</source>
         <translation type="unfinished">パッケージの保存オプション</translation>
     </message>
@@ -96347,7 +97193,7 @@ Wall</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+4020"/>
+        <location line="+4072"/>
         <source>Objects (filtering…)</source>
         <translation type="unfinished">オブジェクト (フィルター中…)</translation>
     </message>
@@ -96359,7 +97205,7 @@ Wall</source>
         <translation type="unfinished">オブジェクトをフィルター中…</translation>
     </message>
     <message>
-        <location line="-5723"/>
+        <location line="-5775"/>
         <source>How the project links to its manifest, folders, game, installation and asset index, releases, packages and compilers.</source>
         <translation type="unfinished"></translation>
     </message>
@@ -96483,12 +97329,12 @@ Wall</source>
     </message>
     <message>
         <location line="+503"/>
-        <location line="+9151"/>
+        <location line="+9211"/>
         <source>Open Step Settings</source>
         <translation type="unfinished">手順の設定を開く</translation>
     </message>
     <message>
-        <location line="-9108"/>
+        <location line="-9168"/>
         <source>Appearance preferences</source>
         <translation type="unfinished">外観の環境設定</translation>
     </message>
@@ -96640,17 +97486,148 @@ Wall</source>
         <translation type="unfinished">アクセシビリティ</translation>
     </message>
     <message>
-        <location line="+51"/>
-        <source>The connector the Texture Generator and ai image draw with; set its model under Image Model.</source>
+        <location line="+12"/>
+        <source>Turns every AI feature off. Editing, packages, compiling, and the CLI never need AI.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+8"/>
+        <source>Let AI features use connectors that send requests off this machine: providers with your API key, or Claude Code and Codex with your own login. Each request is shown for your approval first; keys are read from environment variables and never logged.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>Planned: supervised plan, review, stage, validate, and summarize workflows. Nothing uses this yet.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+28"/>
+        <source>The connector every text feature asks: the Assistant, Generate Level, Edit Map with AI, and ai ask. Set its model under Text Model.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
         <location line="+1"/>
+        <source>Coding (planned)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Planned: code, script, shader, and config assistance. Nothing uses this yet.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Vision (planned)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Planned: reading images and screenshots as context. Nothing uses this yet.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>The connector the Texture Generator and ai image draw with; set its model under Image Model.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+2"/>
         <source>The connector the Sound Generator asks for sound effects; set its model under Sound Model.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+179"/>
+        <location line="+1"/>
+        <source>Voice (planned)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Planned: narration and speech. Nothing uses this yet.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>3D (planned)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Planned: model and concept-to-asset generation. Nothing uses this yet.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Embeddings (planned)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Planned: semantic search and context ranking. Nothing uses this yet.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>The connector text features use instead while cloud connectors are off: a runtime on this machine, or a GGUF model run inside VibeStudio.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+6"/>
+        <source>Text Model</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Used by the Assistant, Generate Level, Edit Map with AI, and ai ask.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+35"/>
+        <source>Choose a GGUF model file</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Choose a GGUF Model</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>GGUF models (*.gguf);;All files (*.*)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+10"/>
+        <source>Choose the tool&apos;s program</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Choose the Program</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+14"/>
+        <source>Text connection status</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>Use This Connector</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Use this connector for text features</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <location line="+11965"/>
+        <source>Make this the connector the Assistant, Generate Level, and Edit Map with AI ask.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="-11823"/>
         <source>Materials workbench header</source>
         <translation type="unfinished"></translation>
     </message>
@@ -96692,12 +97669,12 @@ Wall</source>
     </message>
     <message>
         <location line="+9"/>
-        <location line="+12354"/>
+        <location line="+12544"/>
         <source>No materials yet</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-12353"/>
+        <location line="-12543"/>
         <source>Open a package, folder or WAD to browse its textures, shaders and materials with a live preview, or open a .shader or .mtr script.</source>
         <translation type="unfinished"></translation>
     </message>
@@ -96812,14 +97789,14 @@ Wall</source>
     </message>
     <message numerus="yes">
         <location line="+297"/>
-        <location line="+15740"/>
+        <location line="+15935"/>
         <source>%1 set to %2 on %n entit(y)(ies). Use Save Map to update the file after a change check and backup.</source>
         <translation type="unfinished">
             <numerusform></numerusform>
         </translation>
     </message>
     <message>
-        <location line="-15731"/>
+        <location line="-15926"/>
         <source>Entity key edited; use Save Map to update the file after a change check and backup.</source>
         <translation type="unfinished"></translation>
     </message>
@@ -96857,24 +97834,24 @@ Wall</source>
     </message>
     <message>
         <location line="+570"/>
-        <location line="+9378"/>
+        <location line="+9568"/>
         <source>Show in Materials</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-9377"/>
+        <location line="-9567"/>
         <source>Preview this texture or shader the way the game draws it, and edit it.</source>
         <translation type="unfinished"></translation>
     </message>
     <message numerus="yes">
-        <location line="+1208"/>
+        <location line="+1211"/>
         <source>%n face(s) picked; the Surfaces tab&apos;s Picked Faces target adjusts them together.</source>
         <translation type="unfinished">
             <numerusform></numerusform>
         </translation>
     </message>
     <message>
-        <location line="+4262"/>
+        <location line="+4271"/>
         <source>Browse, preview and edit the textures, shaders and materials of idTech 1 to 4, as text or as nodes.</source>
         <translation type="unfinished"></translation>
     </message>
@@ -97014,7 +97991,118 @@ Wall</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+1129"/>
+        <location line="+399"/>
+        <location line="+354"/>
+        <source>%1 · on this machine</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="-353"/>
+        <source>%1 · sends to %2</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+217"/>
+        <source>The question and the context you ticked are given to %1, your custom command, which sends them wherever it is set up to. Nothing else from the project goes with them. This is the first question from this project to %1, so here is exactly what it will get:</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>The question and the context you ticked go to %1 through %2, which signs in with your own login and runs in an empty folder with its tools turned off. Nothing else from the project goes with them. This is the first question from this project to %1, so here is exactly what will be sent:</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+133"/>
+        <source>%1 · %2</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+181"/>
+        <source>Sign-in</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+12"/>
+        <source>Program path or command line</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>GGUF model file</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Path to a .gguf model file</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>Command line, for example: gemini -m {model}</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Not found: install it, or give its path</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>The tool&apos;s own default model</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>None needed: runs inside VibeStudio (%1).</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Whatever login the command has; VibeStudio passes no key.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Your own login, kept by the tool; Test Connection checks it.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+16"/>
+        <source>Not in use: text features ask %1. %2</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>no connector</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+16"/>
+        <source>needs cloud connectors</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>It leaves this machine; tick Allow cloud AI connectors first.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+28"/>
+        <source>not in this build</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+44"/>
+        <source>Text features now ask %1.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+43"/>
+        <source>Checking that %1 is signed in…</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+192"/>
         <source>This project turns AI off in its manifest. Every workflow stays local and deterministic here.</source>
         <translation type="unfinished"></translation>
     </message>
@@ -97594,12 +98682,12 @@ Cancel keeps both the disk file and your unsaved edits.</source>
     </message>
     <message>
         <location line="+71"/>
-        <location line="+979"/>
+        <location line="+984"/>
         <source>Entities</source>
         <translation type="unfinished">エンティティ</translation>
     </message>
     <message>
-        <location line="-978"/>
+        <location line="-983"/>
         <source>Draw point entities such as lights and spawn points.</source>
         <translation type="unfinished"></translation>
     </message>
@@ -97998,12 +99086,12 @@ Cancel keeps both the disk file and your unsaved edits.</source>
     </message>
     <message>
         <location line="+0"/>
-        <location line="+1598"/>
+        <location line="+1603"/>
         <source>None</source>
         <translation type="unfinished">なし</translation>
     </message>
     <message>
-        <location line="-1598"/>
+        <location line="-1603"/>
         <source>None: the line is one-sided</source>
         <translation type="unfinished"></translation>
     </message>
@@ -98139,24 +99227,24 @@ Cancel keeps both the disk file and your unsaved edits.</source>
     </message>
     <message>
         <location line="+27"/>
-        <location line="+419"/>
+        <location line="+424"/>
         <source>entity %1</source>
         <translation type="unfinished">エンティティ %1</translation>
     </message>
     <message>
-        <location line="-416"/>
+        <location line="-421"/>
         <source>%1 (entity %2)</source>
         <translation type="unfinished">%1 (エンティティ %2)</translation>
     </message>
     <message>
         <location line="+10"/>
-        <location line="+246"/>
+        <location line="+251"/>
         <location filename="../src/app/level_sidebar_panels.cpp" line="-83"/>
         <source>Size</source>
         <translation type="unfinished">サイズ</translation>
     </message>
     <message>
-        <location line="-246"/>
+        <location line="-251"/>
         <source>%1 × %2 × %3</source>
         <translation type="unfinished"></translation>
     </message>
@@ -98266,7 +99354,7 @@ Cancel keeps both the disk file and your unsaved edits.</source>
         <translation type="unfinished"></translation>
     </message>
     <message numerus="yes">
-        <location line="+108"/>
+        <location line="+113"/>
         <source>The last of %n selected objects; an edit here changes it alone.</source>
         <translation type="unfinished">
             <numerusform></numerusform>
@@ -98799,13 +99887,13 @@ A value set here is set on all %n entit(y)(ies).</source>
         <translation type="unfinished">%1、保存済み</translation>
     </message>
     <message>
-        <location line="-6099"/>
-        <location line="+6103"/>
+        <location line="-6104"/>
+        <location line="+6108"/>
         <source>%1. %2</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-6445"/>
+        <location line="-6450"/>
         <source>Vision</source>
         <comment>accessibility settings group about seeing the screen, not computer vision</comment>
         <translation type="unfinished">ビジョン</translation>
@@ -98826,7 +99914,7 @@ A value set here is set on all %n entit(y)(ies).</source>
         <translation type="unfinished"></translation>
     </message>
     <message numerus="yes">
-        <location line="+634"/>
+        <location line="+639"/>
         <source>%1 %2 on %n entit(y)(ies). Use Save Map to update the file after a change check and backup.</source>
         <translation type="unfinished">
             <numerusform></numerusform>
@@ -99085,7 +100173,8 @@ A value set here is set on all %n entit(y)(ies).</source>
         <translation type="unfinished">プロファイル</translation>
     </message>
     <message>
-        <location line="+1"/>
+        <location line="-8462"/>
+        <location line="+8463"/>
         <source>Program</source>
         <translation type="unfinished">プログラム</translation>
     </message>
@@ -99921,7 +101010,7 @@ Working directory: %2</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/app/application_shell.cpp" line="-14638"/>
+        <location filename="../src/app/application_shell.cpp" line="-14825"/>
         <location filename="../src/app/code_document_actions.cpp" line="-109"/>
         <source>Untitled %1</source>
         <translation type="unfinished">無題の %1</translation>
@@ -100446,7 +101535,7 @@ Activate to open line %2.</source>
         <translation type="unfinished">新しいフォルダー…</translation>
     </message>
     <message>
-        <location filename="../src/app/application_shell.cpp" line="-8163"/>
+        <location filename="../src/app/application_shell.cpp" line="-8223"/>
         <location filename="../src/app/package_document_actions.cpp" line="+1"/>
         <source>Rename Folder…</source>
         <translation type="unfinished">フォルダーの名前を変更…</translation>
@@ -100554,7 +101643,7 @@ Activate to open line %2.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/app/application_shell.cpp" line="+2426"/>
+        <location filename="../src/app/application_shell.cpp" line="+2478"/>
         <location filename="../src/app/code_language_actions.cpp" line="+17"/>
         <source>Language Server</source>
         <translation type="unfinished">言語サーバー</translation>
@@ -102108,7 +103197,7 @@ Activate to open line %2.</source>
         <translation type="unfinished">ビュー レイアウトを復元</translation>
     </message>
     <message>
-        <location filename="../src/app/application_shell.cpp" line="+9147"/>
+        <location filename="../src/app/application_shell.cpp" line="+9159"/>
         <location filename="../src/app/level_view_actions.cpp" line="+0"/>
         <source>Maximize Active View</source>
         <translation type="unfinished">アクティブなビューを最大化</translation>
@@ -102583,7 +103672,7 @@ Activate to open line %2.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/app/application_shell.cpp" line="-1651"/>
+        <location filename="../src/app/application_shell.cpp" line="-1655"/>
         <location filename="../src/app/workspace_actions.cpp" line="+6"/>
         <source>Open Workspace</source>
         <translation type="unfinished">ワークスペースを開く</translation>
@@ -102650,7 +103739,7 @@ Activate to open line %2.</source>
         <translation type="unfinished">表示中のテクスチャを、別の PNG 画像としてエクスポートします。</translation>
     </message>
     <message>
-        <location filename="../src/app/application_shell.cpp" line="-8177"/>
+        <location filename="../src/app/application_shell.cpp" line="-8185"/>
         <location line="+215"/>
         <location filename="../src/app/asset_workbench_actions.cpp" line="+2"/>
         <source>Mesh Editor</source>
@@ -112904,7 +113993,7 @@ Invalid or unsupported parts omitted: %1.</source>
         <translation type="unfinished">コマンド パレットのキーボード ヘルプ</translation>
     </message>
     <message>
-        <location line="+213"/>
+        <location line="+216"/>
         <source>%1 [destructive]</source>
         <translation type="unfinished">%1 [破壊的]</translation>
     </message>

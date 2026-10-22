@@ -1,0 +1,550 @@
+{
+  "schema_version": 1,
+  "objective": "Expand original tactical variety while turning reference observations into reproducible construction contracts and controlled gameplay evidence.",
+  "current_iteration": "span-v1",
+  "prior_iterations": [
+    "counterweight-v1",
+    "talus-v1",
+    "undercut-v1",
+    "fold-v1",
+    "lockyard-v1",
+    "ravel-v1",
+    "weft-v1",
+    "splice-v1",
+    "lattice-v1",
+    "braid-v1",
+    "hinge-v1",
+    "relay-v1"
+  ],
+  "current_iteration_contract": {
+    "map": "qmg_span",
+    "request_case": "rooms6-seed701",
+    "default_candidates": 6,
+    "status": "default_opposed_bridge_construction_compiled_portfolio_and_first_open_native_upper_journeys",
+    "sources": [
+      "src/mp_motifs.cpp",
+      "include/qmg/mp_motifs.hpp"
+    ],
+    "scope": "Every third eligible elevated compactQ2DM/duel room receives an opposed stair bridge within the existing2–32-room construction scope. Original rooms/lower passages and RNG preserved; placements and optional upper links may respond. No planner/ranking/model-weight change.",
+    "rooms": 6,
+    "connections": 10,
+    "main_floor_levels": [
+      0,
+      128
+    ],
+    "ordinary_stair_runs": 10,
+    "ordinary_treads": 80,
+    "typed_gameplay_anchors": 23,
+    "spawns": 6,
+    "ordinary_spawn_anchor_pairs": 138,
+    "comparison_cases": 14,
+    "candidate_observations_per_stage": 84,
+    "selected_high_maps": 11,
+    "selected_compiled_bridge_rooms": 14,
+    "artifact_gate_record": "knowledge/q2/experiments/span-v1.json",
+    "comparison_record": "out/span-portfolio/comparison.json",
+    "reference_record": "knowledge/q2/atrium-route-study.json",
+    "native_record": "out/span-study/native-comparison.json",
+    "limits": "Six hero lighting warnings remain. Resource allocation includes no major item. Four open upper native journeys pass with paused turns and wall-adjacent dwell; native lower return,192-height transfer, resource contact and human combat remain untested."
+  },
+  "promotion_policy": "Keep hypotheses and descriptive metrics separate from measured runtime/play results. Do not add generated maps to the reference profile or claim trained weights.",
+  "next_experiments": [
+    {
+      "id": "explicit-wrapped-layout-intent",
+      "status": "bounded_typed_construction_complete_full_journeys_and_human_review_pending",
+      "hypothesis": "An explicit spatial contract can honor compact wrapped-layout requests without pretending room-volume or center-distance proxies measure quality.",
+      "design": "Declare non-slicing arrangement, useful bypass and supported raised-route intent before generation; compare full path exposure, travel, item approaches and envelope within that declared structure. Retain ordinary varied selection for requests without that intent.",
+      "gates": [
+        "native complete journeys and encounter exposure within wrapped geometry",
+        "resource approach and pickup contact",
+        "human combat and navigation observations"
+      ],
+      "record": "out/braid-portfolio/comparison.json",
+      "completed_evidence": [
+        "16 retained A/B/C requests with 13 explicit intent requests",
+        "42 historical intent-only parity files;12 separate final CLI/legacy files",
+        "Braid predeclared seed 503 ordinary default selection and independent compiled checks"
+      ]
+    },
+    {
+      "id": "candidate-family-selection-bias",
+      "status": "fixed_pool_diagnostics_and_scoped_abstention_complete_human_quality_pending",
+      "hypothesis": "Selection can preserve useful structural variety without hiding construction or movement failures.",
+      "design": "Freeze Splice candidate pools; isolate inherited ranker features and explicit structural intent. Do not improve apparent variety by hand-picking seed outputs.",
+      "record": "out/lattice-portfolio/comparison.json",
+      "gates": [
+        "Bound all candidate hashes and rank scores",
+        "Compare selected canonical graphs and physical traits",
+        "Retain compiled and movement failures",
+        "Blind human preference and combat observations"
+      ]
+    },
+    {
+      "id": "counterweight-shortcut-ablation",
+      "status": "defined_runtime_pending",
+      "hypothesis": "Optional lift and teleport choices improve rotation and recovery without becoming compulsory.",
+      "design": "Fixed geometry/items with lift on/off crossed with teleport on/off; matched starts and lift states; isolate exit facing in a separate variant.",
+      "gates": [
+        "native mechanism activation",
+        "pickup contact",
+        "arrival ambush and occupied exit",
+        "separate wait/ride/exit timings",
+        "2/4/6-player observations"
+      ]
+    },
+    {
+      "id": "continuous-ascent",
+      "status": "matched_compiled_pair_and_32_bounded_native_attempts_complete_full_gameplay_pending",
+      "hypothesis": "A ramp can provide continuous combat movement and different exposure from stairs or a lift.",
+      "reference_record": "knowledge/q2/continuous-movement-study.json",
+      "completed_evidence": [
+        "three reference ramps with supported center poses and continuous sweeps",
+        "confirmed obstructed lateral lane in trdm05a",
+        "exact bounded axial-wedge support profile and hull-aware node/placement/cost semantics",
+        "independent exact compiled sloped-hull checker",
+        "two original Talus ramps with 264 authored walk/step/door-only anchor pairs",
+        "Talus Bench matched pair: 173 unchanged complete source and compiled brush signatures, 81 identical nonworld entities; one wedge replaced by eight material-matched treads",
+        "Independent three-lane bidirectional compiled stair sweeps and baseline/remaining ramp audits pass; both BSPs pass 16 dedicated initialization checks",
+        "48 fixed-origin ray pairs: three lower approach uphill queries shorten about32 units;45 unchanged. Local static descriptor only, not measured combat value",
+        "Three native lanes crossed with two directions and forward400/200:24primary complete journeys; eight center repeats have identical full frame bytes.",
+        "Upward ramp/stair native times tie at1984/2976ms despite seven extra graph step penalties.",
+        "Downhill grounded goal differs96/48ms; planar crossing differs0/16ms. Feet displacement, native velocity and contact state remain distinct evidence."
+      ],
+      "design": "Swap only one Talus ramp and an equal-endpoint stair route; hold width, topology, resources, cover, settings and starts fixed. Compare movement rhythm and combat consequences separately.",
+      "gates": [
+        "native turning, jumping and pickup contact",
+        "camera and aim response in the full client",
+        "landing recovery under perpendicular traffic or pursuit",
+        "matched human paired journeys before recommending one profile"
+      ],
+      "comparison_record": "knowledge/q2/ramp-stair-comparison.json",
+      "paired_map_package": "out/talus-stairs/qmg_talus_ascent_pair.zip",
+      "native_record": "knowledge/q2/native-ascent-study.json"
+    },
+    {
+      "id": "drop-and-recovery",
+      "status": "bounded_ravel_drop_and_pause_recovery_complete_full_return_pending",
+      "hypothesis": "A visible drop with a legible return offers a useful pursuit and escape commitment.",
+      "reference_record": "knowledge/q2/drop-return-study.json",
+      "known_limits": "Two Ravel native drops and eight fixed recovery profiles provide bounded world-only evidence: five pauses succeed and three fail. Complete corners and ordinary returns, fall damage, opponents and full-game behavior remain untested. Reference gladdm1 and Undercut candidates remain geometric.",
+      "gates": [
+        "landing damage under pinned physics",
+        "landing hull and opponent threats",
+        "ordinary return journey",
+        "drop-enabled versus closed comparison"
+      ],
+      "native_record": "out/ravel/native-routes/summary.json",
+      "recovery_record": "knowledge/q2/native-recovery-study.json"
+    },
+    {
+      "id": "generator-motif-portfolio",
+      "status": "two_default_families_offered_selection_bias_measured_native_and_human_validation_pending",
+      "hypothesis": "The learned construction vocabulary can produce distinct valid maps across fixed prompts and seeds.",
+      "gates": [
+        "native full upper/lower motif circuits",
+        "blind variety and gameplay review",
+        "other engines/modes require their own movement and objective contracts"
+      ],
+      "construction_examples": [
+        "Switchback",
+        "Spillway",
+        "Counterweight",
+        "Talus",
+        "Undercut",
+        "Fold",
+        "Lockyard",
+        "Ravel",
+        "Weft (default pipeline)",
+        "Splice (default interlocking family)"
+      ],
+      "record": "knowledge/q2/experiments/splice-v1.json",
+      "completed_evidence": [
+        "Nine predeclared requests and two separate verticality controls fully compiled and inspected",
+        "216 analytical preview states and16 Weft dedicated initialization checks",
+        "42 configured CTest gates passed in two nonoverlapping waves",
+        "CLI MAP/report parity and eight earlier recipe MAP parity",
+        "Canonical graph counts expose limited topology variation;39 primary lighting warnings retained",
+        "Six of nine selected room graphs change under second-family integration",
+        "Candidate tracing exposes persistent wrapped-family selection and reduced eight-room selected variety"
+      ]
+    },
+    {
+      "id": "fold-liquid-and-teleport",
+      "status": "bounded_native_water_pair_complete_teleport_activation_and_gameplay_pending",
+      "hypothesis": "Optional wet travel and committed teleport arrival create useful choices without weakening dry ordinary circulation.",
+      "design": "Keep the delivered geometry fixed. Compare basin wet/dry and teleporter enabled/disabled separately before combining. Match starts and physics, and include occupied arrival and failed liquid exits.",
+      "gates": [
+        "full-game air, damage, sound and pickup contact",
+        "teleporter trigger, facing and post-arrival movement",
+        "matched 2/4/6-player route and control observations"
+      ],
+      "record": "knowledge/q2/experiments/fold-v1.json",
+      "completed_evidence": [
+        "Four matched native world-movement trials complete shallow water entry/exit with 178 unchanged compiled control solids.",
+        "Forward 400 wet/drained1680/1424 ms; forward2002560/2128 ms at16ms resolution."
+      ],
+      "native_record": "out/native-movement/fold-comparison.json"
+    },
+    {
+      "id": "open-courtyard-and-deep-liquid",
+      "status": "reference_study_original_compiled_fixture_and_bounded_native_water_trials_complete",
+      "hypothesis": "A purposeful open court or deeper liquid path can provide a distinct spatial and movement commitment.",
+      "design": "Lockyard tests a sealed outdoor spine, partial galleries and a deliberate submerged crossing. Retain level-input failures and matched drained controls; next test actual ordinary-return time and full-game interpretation.",
+      "record": "knowledge/q2/experiments/lockyard-v1.json",
+      "reference_record": "knowledge/q2/courtyard-liquid-study.json",
+      "completed_evidence": [
+        "Manhunt upper horseshoe support and viewpoint-specific sky audit; gladdm1 deep basin exit and blocked-emergence counterexample.",
+        "Lockyard final compiled upper/lower routes, two emergence columns, wet steps and dry passage dependency repair.",
+        "Twelve Lockyard native current trials: ten complete, two level-view failures retained; water removed alone in compiled controls."
+      ],
+      "gates": [
+        "native actual dry-perimeter journey from matching stations",
+        "engine-written underwater and court render-target images",
+        "game-module oxygen/damage and pickup contact",
+        "first-time dive discoverability",
+        "matched multiplayer exit-threat and resource-control observations"
+      ]
+    },
+    {
+      "id": "ravel-corner-and-landing-recovery",
+      "status": "eight_fixed_native_pause_profiles_complete_full_corners_and_onward_routes_pending",
+      "hypothesis": "The compact bent routes and local drop create distinct approach/recovery options without excessive congestion.",
+      "reference_record": "knowledge/q2/interleaved-route-study.json",
+      "design": "Hold final Ravel geometry and items fixed; extend successful native approaches into explicit braking and90-degree turns, then compare one landing screen or inner-corner intervention. Match starts and define grounded recovery before opponent trials.",
+      "gates": [
+        "bounded complete native turn trajectories",
+        "braking and cross-traffic after the momentum landing",
+        "full ordinary return journey",
+        "matched2/4/6-player encounter and resource observations"
+      ],
+      "record": "knowledge/q2/experiments/ravel-v1.json",
+      "recovery_record": "knowledge/q2/native-recovery-study.json",
+      "completed_evidence": [
+        "5 bounded stable pauses and3 retained failures from8 predeclared inputs",
+        "unchanged approach bytes and compiled full-footprint pocket support",
+        "separate jamb-alignment checks; successful turn bursts stop before onward traversal"
+      ]
+    },
+    {
+      "id": "generated-motif-circuits",
+      "status": "eight_fixed_weft_trials_retained_strict_protocol_failed_geometry_gate_discrepancy_measured",
+      "hypothesis": "Two ordinary stair accesses support useful circulation through each generated upper motif.",
+      "design": "Traverse stair to gallery/elbow to second stair in both directions across four rotations and128/192 elevations, retaining failures and a bounded grounded low-speed arrival.",
+      "gates": [
+        "Predeclare geometry-based exit gates and distinguish precision-lane tests",
+        "Matched turn-timing intervention with fixed geometry and retained failures",
+        "Complete native circuits across other rotations and192 elevation",
+        "Opposing traffic and human encounters"
+      ],
+      "source": "src/mp_motifs.cpp",
+      "record": "knowledge/q2/native-motif-circuits.json",
+      "completed_evidence": [
+        "Eight unchanged first attempts cross ascent and upper corners but fail narrow exit gate",
+        "Four physical full-hull stair-band routes and four partial-edge routes distinguished",
+        "Two later endpoint dwells are observations, not retroactive circuit passes"
+      ]
+    },
+    {
+      "id": "contextual-spawn-recovery",
+      "status": "static_pairwise_refinement_complete_runtime_pending",
+      "record": "knowledge/q2/spawn-separation-study.json",
+      "hypothesis": "Supported local spacing can reduce same-floor proximity without losing pairwise occlusion.",
+      "design": "Keep the current count policy and 256-unit warning. Follow the 16-case placement intervention with declared spawn-selection, resource access and opponent recovery trials; study broader size/count scopes separately.",
+      "gates": [
+        "native spawn selection and contact",
+        "first-resource and escape journeys",
+        "opponent exposure and respawn diversity",
+        "9–32-room transfer needs separate evidence"
+      ]
+    },
+    {
+      "id": "resource-approach-circuit",
+      "status": "two_static_armor_approaches_complete_declared_circuit_failed",
+      "record": "knowledge/q2/raised-resource-circuit.json",
+      "hypothesis": "Raised resources can offer distinct approach exposure when complete supported routes are demonstrated.",
+      "design": "Retain the failed Rage drop and disconnected tested Rail/Mega approaches. Declare any new complete circuit before checking it; use matched endpoints for route comparisons.",
+      "gates": [
+        "every edge clear and supported under one explicit contract",
+        "native traversal and resource contact",
+        "timing and opponent-controlled exposure"
+      ]
+    },
+    {
+      "id": "inter-room-upper-network",
+      "status": "one_optional_link_compiled_and_bounded_native_trials_complete",
+      "record": "out/hinge-portfolio/comparison.json",
+      "hypothesis": "Useful inter-room upper connections can support distinct resource approaches without erasing lower circulation.",
+      "design": "Retain the optional-link/no-link populations and first native failure. Study multiple compatible links,192-height journeys, resource contact, opposing traffic and route choice with declared endpoints and controls.",
+      "gates": [
+        "complete upper/lower network and resource circuits",
+        "192-height and additional orientation trials",
+        "open-space stopping and under-route native journeys",
+        "opponents, spawn recovery and human combat"
+      ]
+    },
+    {
+      "id": "relay-arrival-and-resource-choice",
+      "status": "static_reference_and_original_paths_plus_first_native_initial_departures_complete",
+      "record": "knowledge/q2/experiments/relay-v1.json",
+      "reference_record": "knowledge/q2/teleporter-arrival-study.json",
+      "hypothesis": "An offset arrival pocket with distinct ground departures and a resource beyond the corner can create an optional, contestable rotation.",
+      "design": "Retain Relay and its exposed arrival ray. Match teleport touch enabled/disabled with both discs and the same ordinary source/resource endpoints; isolate a partition change separately. Preserve all first attempts and measure actual pickup before route-value claims.",
+      "completed_evidence": [
+        "Four continuous static ground paths with exact room/resource bindings",
+        "All 264 ordinary graph pairs survive each single passage-node-set removal",
+        "Four first stock game-module source/hold/disc-departure trials pass; eight mechanism controls and eight earlier startup failures retained"
+      ],
+      "gates": [
+        "complete native onward-resource journeys and actual pickup contact",
+        "matched touch on/off with unchanged disc collision",
+        "partition-dependent exit denial and actual opponent exposure",
+        "proposed matched 2/4/6-player route and control observations",
+        "typed opt-in shortcut construction and fixed default-candidate portfolio before procedural coverage claims"
+      ]
+    },
+    {
+      "id": "opposed-bridge-full-loops-and-resource-choice",
+      "status": "compiled_fixed_population_and_four_first_open_native_upper_journeys_complete",
+      "record": "knowledge/q2/experiments/span-v1.json",
+      "hypothesis": "Opposed approaches can provide useful upper attack/escape options while preserving independent lower circulation.",
+      "design": "Match earlier crosswalk and opposed bridge rooms/resources/endpoints; predeclare lower returns,192-height and long/aligned transfer, continuous turns and interior stopping targets. Then measure resource contact, opponent denial and route choice.",
+      "gates": [
+        "native complete upper/lower loops",
+        "192-height and other-rotation transfer",
+        "continuous turns and open-space braking",
+        "actual resource contact and spawn recovery",
+        "matched2/4/6-player observations"
+      ]
+    }
+  ],
+  "open_engineering_issues": [
+    "StairRunSpec defaults to 32 while the core erodes each tread separately and recipes explicitly use 36. The gladdm1 geometric certificate traverses 24-unit treads using neighboring support; this is a conservative planner/API contract issue, not proof of native invalidity. Audit union support and callers before changing the default.",
+    "The installed normal Windows Q2REPRO client requests foreground/focus at startup; render validation needs a non-hijacking engine path and engine-written screenshots.",
+    "Axial ramp navigation is deliberately bounded: one wholly clear continuous wedge, ordinary longitudinal end joins and conservative surrounding blockers. Arbitrary sloped surfaces, partial obstacle-aware ramp partitioning and native movement simulation are not implemented.",
+    "Palette selection must validate WAL flags/contents/value and compiled player-mask support. A typed solid graph and a resolved texture name alone did not reject Talus's initial water/warp mud1_1 material; retain this negative case when integrating material-role gates into default generation.",
+    "Default Q2 liquid material e1u1/water1 is absent from the current local stock asset tree, and generic liquid lowering writes surface flags/value0. Fold explicitly selects a verified WATER material with WARP|TRANS33 and no emissive flag; default-planner material-role validation remains outstanding.",
+    "Very short face-to-face passages can lose positive hull-center extent after erosion. Fold uses48-unit seams; overlap into rooms violates the current passage validator. This conservative construction contract is distinct from a native engine minimum corridor length.",
+    "Point lights inside liquid volume bounds are rejected by aggregate placement_in_solid validation (src/validator.cpp:609-617), despite valid native underwater lights. Lockyard uses dry/above-water lights; refine role-aware liquid placement without weakening solid collision gates.",
+    "The new compact generator retains the old target-player-count spawn policy: sampled duel maps have2 spawn positions and DM maps6. Spawn-pair occlusion does not establish adequate respawn diversity.",
+    "Lattice removes volume-CV and1280-center-distance preferences only for coherent marked2–8-room Q2DM/duel pools. Larger/unmarked/other-mode pools retain legacy weights. Remaining count inputs are adequacy heuristics; full-candidate physical ranking and human quality evidence remain open.",
+    "Bounded source-eye spawn refinement increases dense32-player regression cost; nearest24 supported alternatives and two passes cap the search. Normal and stress performance should be measured separately.",
+    "Remaining analytical lighting findings in generated rooms are retained; full VIS/light compilation does not establish client-rendered readability.",
+    "The historical Lattice example retained a larger envelope, more room hops and slicing gaps. Braid adds explicit wrapped_center construction for Q2 DM/duel with 5–8 rooms and separates its 16-case comparison from placement. Full native journeys, resource exposure and human flow remain open; unweighted room hops do not establish them.",
+    "The first Weft circuit protocol remains0/8. A separatelydeclared physical rescore is2/8 and16new earlier-turn trials pass; allfinishes arewall-adjacent and fivebroader stationdiagnostics fail. Open-space recovery and transfer toLattice remain untested.",
+    "Braid local spawn refinement is bounded to static common-floor AABB compact Q2 DM/duel layouts with 2–8 rooms, with exact valid-eye and per-pair occlusion checks. Spawn quantity and the 256-unit warning are unchanged; broader sizes, opponent pressure, native spawn selection and recovery remain untested.",
+    "Hinge demonstrates one optional upper connection at a time. Four-room controls stay outside scope and one scoped holdout selects no link. More links,192-height native journeys, route preference, open-space stopping and game-module resource/respawn behavior remain untested."
+  ],
+  "resolved_engineering_issues": [
+    {
+      "id": "q2-spawn-eye-coordinate-basis",
+      "previous_issue": "Typed placement LOS sampled entity origins while compiled spawn LOS sampled origin+22; compiled checks caught and corrected a Counterweight spawn-eye ray.",
+      "resolution": "Q2 spawn pair visibility now samples entity origin plus 22 Z, exports actual endpoints and offset metadata, and rejects invalid eye positions. Other placement roles retain explicitly labeled origin sampling.",
+      "evidence": [
+        "src/visibility.cpp",
+        "include/qmg/visibility.hpp",
+        "src/report.cpp",
+        "tests/test_visibility.cpp"
+      ],
+      "remaining_limits": "Historical artifacts using origin rays require a fresh matched-basis analysis before comparison. Dynamic entities, mover state, facing, attacker approaches and real spawn safety remain separate questions."
+    },
+    {
+      "id": "compact-occluded-close-spawn-skip",
+      "previous_issue": "The original visibility pass stopped when no peers were visible, retaining close same-floor pairs across room seams.",
+      "resolution": "A separate lexicographic local station pass follows the previous visibility pass, preserving every blocked pair, initial room/floor and full support. B→C changes three of 16 selected maps; the hero stays identical.",
+      "evidence": [
+        "src/spawn_refinement.cpp",
+        "tests/test_spawn_refinement.cpp",
+        "knowledge/q2/spawn-separation-study.json",
+        "out/braid-portfolio/comparison.json"
+      ],
+      "remaining_limits": "Cleared static spacing warnings do not establish respawn diversity, safe spawns, count policy or multiplayer balance."
+    },
+    {
+      "id": "upper-link-coordinate-phase-and-shell-feasibility",
+      "previous_issue": "Global16-unit snapping skipped exact160-wide legal intervals after room recentering; source-clear strips could also fail emitted shell clearance.",
+      "resolution": "Anchor the16-unit sequence to the legal interval. Retain first-stage outputs and bound actual MapBuilder trials to64 strips in seed order, with unchanged geometry on exhaustion.",
+      "evidence": [
+        "tests/test_upper_links.cpp",
+        "out/hinge-portfolio/comparison.json",
+        "out/upper-link-study/hinge-first-phase-diagnostic.log",
+        "out/upper-link-study/hinge-refined-phase-diagnostic.log"
+      ],
+      "remaining_limits": "Optional construction is not guaranteed coverage or a quality score; no candidate seed or ranking rule changed."
+    }
+  ],
+  "material_physics_negative_control": {
+    "rejected_texture": "e2u1/mud1_1",
+    "rejected_wal_flags": 8,
+    "rejected_wal_contents": 32,
+    "failure": "Compiled architectural stair support was missing despite a passing authored solid navigation graph.",
+    "replacement_texture": "e2u1/mine04_1",
+    "replacement_wal_flags": 0,
+    "replacement_wal_contents": 0,
+    "required_gate": "Verify the exact final palette and compiled player-mask collision/support; preserve liquid contents for intentional liquids instead of globally zeroing metadata.",
+    "rule": "material-physics-before-palette"
+  },
+  "cross_game_research": {
+    "atlas": "out/ql-atlas/atlas.json",
+    "record": "knowledge/mp/spatial-patterns.json",
+    "protocol": "docs/MP_COMPACT_LAYOUT_REGIMEN.md",
+    "context": "Six local preSteam QL revisions plus supplementary QL and Q2 references; static projected surfaces are not native navigation or Q2 movement rules.",
+    "profile_or_training_admission": false,
+    "new_q2_interleaving_record": "knowledge/q2/interleaved-route-study.json"
+  },
+  "native_movement_progress": {
+    "harness": "tools/native_movement/README.md",
+    "baseline": "Unmodified external native Q2 3.19 CM/Pmove; compiled world only, no client/input devices.",
+    "experiments": [
+      {
+        "record": "out/native-movement/artifact-manifest.json",
+        "attempts": 16,
+        "complete": 14,
+        "retained_failures": 2
+      },
+      {
+        "record": "knowledge/q2/native-ascent-study.json",
+        "attempts": 32,
+        "primary": 24,
+        "deterministic_repeats": 8,
+        "complete": 32
+      },
+      {
+        "record": "out/ravel/native-routes/summary.json",
+        "attempts": 6,
+        "complete": 6
+      },
+      {
+        "record": "knowledge/q2/native-recovery-study.json",
+        "attempts": 8,
+        "complete": 5,
+        "retained_failures": 3
+      },
+      {
+        "record": "knowledge/q2/native-motif-circuits.json",
+        "attempts": 8,
+        "complete": 0,
+        "retained_failures": 8,
+        "physical_full_hull_exit_band_observations": 4,
+        "later_end_pocket_dwell_observations": 2,
+        "scope": "Original strict circuit protocol remains failed; observations do not change outcomes."
+      },
+      {
+        "record": "knowledge/q2/native-motif-turning.json",
+        "attempts": 16,
+        "complete": 16,
+        "retained_failures": 0,
+        "separate_station_diagnostic_failures": 5,
+        "prior_raw_physical_rescore": {
+          "traces": 8,
+          "complete": 2,
+          "new_native_runs": 0
+        },
+        "scope": "World-only frozenWeft; wall-adjacent dwell. Original0/8 strictresults unchanged."
+      },
+      {
+        "record": "out/native-upper-link/comparison.json",
+        "attempts": 12,
+        "complete": 11,
+        "retained_failures": 1,
+        "rotation_attempts": 8,
+        "complete_rotations": 7,
+        "straight_transfers": 4,
+        "complete_transfers": 4,
+        "scope": "Frozen Hinge world only; first fixed commands, wall-adjacent goal dwells, one retained fast rolling forward phase-gate miss. No gameplay."
+      },
+      {
+        "record": "out/span-study/native-comparison.json",
+        "attempts": 4,
+        "complete": 4,
+        "retained_failures": 0,
+        "raw_frames": 2306,
+        "scope": "World-only original Span upper journeys, forward/reverse inputs200/400; four24-frame corner pauses, airborne descent and wall-adjacent dwell. Lower return only statically checked; no native closed loop or gameplay."
+      }
+    ],
+    "time_resolution_ms": 16,
+    "limits": "No full Q2REPRO movement equivalence, game-module damage/oxygen, moving entities, client camera or match outcomes. Replicates are deterministic consistency checks, not human samples.",
+    "next": "Retain all previous failures; predeclare Span lower returns,192-height/other-rotation transfer, continuous turns, interior stopping, resource contact and opponent behavior."
+  },
+  "historical_iteration_contracts": {
+    "hinge-v1": {
+      "map": "qmg_hinge",
+      "request_case": "rooms8-seed607",
+      "default_candidates": 6,
+      "status": "bounded_inter_room_upper_construction_compiled_controls_and_first_native_trials",
+      "sources": [
+        "src/upper_links.cpp",
+        "include/qmg/upper_links.hpp",
+        "src/mp_motifs.cpp",
+        "src/spawn_refinement.cpp"
+      ],
+      "scope": "One optional upper link for explicit wrapped Q2 DM/duel5–8 rooms at planned verticality>=0.3; existing decks/lower geometry retained. No ranking or model-weight change.",
+      "rooms": 8,
+      "connections": 12,
+      "main_floor_levels": [
+        0,
+        128
+      ],
+      "ordinary_stair_runs": 10,
+      "ordinary_treads": 80,
+      "typed_gameplay_anchors": 27,
+      "ordinary_spawn_anchor_pairs": 162,
+      "comparison_cases": 16,
+      "candidate_observations": 96,
+      "first_stage_offered_links": 67,
+      "first_stage_selected_links": 10,
+      "refined_offered_links": 77,
+      "refined_selected_links": 12,
+      "artifact_gate_record": "knowledge/q2/experiments/hinge-v1.json",
+      "comparison_record": "out/hinge-portfolio/comparison.json",
+      "native_record": "out/native-upper-link/comparison.json",
+      "limits": "Hero envelope and unique room adjacency/hops remain unchanged. Four lighting findings remain. Seven of eight native rotations and four transfers pass; one phase-gate failure remains and ground dwells are wall-adjacent. No gameplay or resource-contact validation."
+    },
+    "relay-v1": {
+      "map": "qmg_relay",
+      "status": "original_fixed_recipe_static_routes_and_first_stock_game_module_departures_complete",
+      "sources": [
+        "tools/map_recipes/relay.cpp",
+        "tools/map_recipes/arrival_audit.py"
+      ],
+      "scope": "Six adjoining unequal rooms with an optional one-way teleporter, offset arrival partition and ordinary same-resource bypass. This is a fixed recipe; no default generator, semantic planner, ranker or model-weight change.",
+      "identity_seed": 20260924,
+      "rooms": 6,
+      "connections": 10,
+      "main_floor_levels": [
+        0,
+        128
+      ],
+      "ordinary_stair_runs": 2,
+      "ordinary_treads": 16,
+      "typed_gameplay_anchors": 33,
+      "spawns": 8,
+      "ordinary_spawn_anchor_pairs": 264,
+      "fixed_static_paths": 4,
+      "passing_static_paths": 4,
+      "native_first_trials": 4,
+      "native_completed_initial_departures": 4,
+      "artifact_gate_record": "knowledge/q2/experiments/relay-v1.json",
+      "reference_record": "knowledge/q2/teleporter-arrival-study.json",
+      "native_record": "out/native-teleport/summary.json",
+      "limits": "Nine visibility and three lighting warnings remain. One of eight arrival-to-spawn rays is clear. Static paths begin at off-disc stations; native journeys end after initial departure and sampled dwell, before onward resource pickup. No human matches or general procedural coverage claim."
+    }
+  },
+  "game_module_progress": {
+    "harness": "tools/native_teleport/README.md",
+    "baseline": "Pinned unmodified stock Quake II 3.19 game API, server entity collision, CM and Pmove linked into a private headless Windows x64 host. Separate from the earlier world-only harness.",
+    "record": "out/native-teleport/record.json",
+    "summary": "out/native-teleport/summary.json",
+    "retained_startup_failures": 8,
+    "development_cases": 8,
+    "development_expected_outcomes": 8,
+    "development_clear_arrivals": 5,
+    "development_blocked_arrivals": 1,
+    "development_nonactivations": 2,
+    "relay_first_trials": 4,
+    "relay_completed_initial_departures": 4,
+    "ClientThink_states": 1603,
+    "synthetic_command_ms": 16,
+    "stock_game_frame_ms": 100,
+    "limits": "Modern checked private ABI, stubbed asset/message imports and synthetic command/game clocks. No renderer, client, sockets, input devices, onward pickup or multiplayer match. Telefrag and blocked occupancy are controlled fixtures; earlier world-only studies are unchanged."
+  }
+}

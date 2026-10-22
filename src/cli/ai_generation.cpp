@@ -6,6 +6,7 @@
 #include "core/idtech_image.h"
 #include "core/level_ai_edit.h"
 #include "core/level_generation.h"
+#include "core/level_mapgen.h"
 #include "core/level_map.h"
 #include "core/package_archive.h"
 #include "core/sound_generation.h"
@@ -283,16 +284,18 @@ QJsonObject usageJson(const QString& connector, const QString& model, const QStr
 	};
 }
 
-// What stops a send: a blocked connection, or an endpoint off this machine
-// without --yes. Empty when it may go.
-QString sendBlock(bool ready, const QString& blockText, bool local, const QString& endpoint, const Options& options)
+// What stops a send: a blocked connection, or a destination off this machine
+// without --yes. Empty when it may go. `destination` is an endpoint address,
+// or already a name for where the request goes (a harness's provider).
+QString sendBlock(bool ready, const QString& blockText, bool local, const QString& destination, const Options& options)
 {
 	if (!ready) {
 		return blockText;
 	}
 	if (!local && !options.has(QStringLiteral("--yes"))) {
+		const QString host = QUrl(destination).host();
 		return QCoreApplication::translate("VibeStudioAiGenerationCli",
-			"This sends the request to %1, off this machine. Review it with --dry-run, then pass --yes to send.").arg(QUrl(endpoint).host());
+			"This sends the request to %1, off this machine. Review it with --dry-run, then pass --yes to send.").arg(host.isEmpty() ? destination : host);
 	}
 	return {};
 }
@@ -346,10 +349,87 @@ const QSet<QString> kMapSpecValues = {
 	QStringLiteral("--planner"),
 	QStringLiteral("--plan"),
 	QStringLiteral("--revisions"),
+	QStringLiteral("--generator"),
+	QStringLiteral("--format"),
+	QStringLiteral("--intensity"),
+	QStringLiteral("--candidates"),
+	QStringLiteral("--repair-iterations"),
+	QStringLiteral("--switch"),
+	QStringLiteral("--ranker"),
 };
+
+// Quake-MapGen's spec: what the options set, the prompt the rest. The studio
+// generator's theme, size, liquid, monster, and texture options do not apply.
+bool mapgenSpecFrom(const Options& options, LevelGenerationSpec* spec, QString* error)
+{
+	for (const QString& key : {QStringLiteral("--theme"), QStringLiteral("--size"), QStringLiteral("--monsters"), QStringLiteral("--liquid"), QStringLiteral("--wad"),
+			 QStringLiteral("--texture"), QStringLiteral("--textures-from"), QStringLiteral("--plan")}) {
+		if (options.has(key)) {
+			*error = QCoreApplication::translate("VibeStudioAiGenerationCli", "%1 is for the studio generator; Quake-MapGen reads the theme and the rest from --prompt.").arg(key);
+			return false;
+		}
+	}
+	spec->generator = levelMapgenGeneratorId();
+	spec->prompt = options.value(QStringLiteral("--prompt"));
+	spec->game = options.value(QStringLiteral("--game"));
+	spec->mode = options.value(QStringLiteral("--mode"));
+	spec->verticality = options.value(QStringLiteral("--verticality"));
+	spec->intensity = options.value(QStringLiteral("--intensity"));
+	spec->format = options.value(QStringLiteral("--format"));
+	spec->title = options.value(QStringLiteral("--title"));
+	spec->switches = options.values(QStringLiteral("--switch"));
+	spec->ranker = options.value(QStringLiteral("--ranker"));
+	const auto checkChoice = [&](const QString& key, const QString& value, const QStringList& allowed) {
+		if (!value.isEmpty() && !allowed.contains(value)) {
+			*error = QCoreApplication::translate("VibeStudioAiGenerationCli", "%1 takes one of: %2.").arg(key, allowed.join(QStringLiteral(", ")));
+			return false;
+		}
+		return true;
+	};
+	if (!checkChoice(QStringLiteral("--game"), spec->game, levelMapgenGameIds()) || !checkChoice(QStringLiteral("--mode"), spec->mode, levelMapgenModeIds())
+		|| !checkChoice(QStringLiteral("--verticality"), spec->verticality, {QStringLiteral("flat"), QStringLiteral("low"), QStringLiteral("medium"), QStringLiteral("high")})
+		|| !checkChoice(QStringLiteral("--intensity"), spec->intensity, levelMapgenIntensityIds())
+		|| !checkChoice(QStringLiteral("--format"), spec->format, levelMapgenFormatIds())) {
+		return false;
+	}
+	if (!readInteger(options, QStringLiteral("--rooms"), 2, 32, &spec->rooms, error) || !readInteger(options, QStringLiteral("--players"), 2, 32, &spec->players, error)
+		|| !readInteger(options, QStringLiteral("--candidates"), 1, 64, &spec->candidates, error)
+		|| !readInteger(options, QStringLiteral("--repair-iterations"), 0, 64, &spec->repairIterations, error)) {
+		return false;
+	}
+	if (options.has(QStringLiteral("--seed"))) {
+		bool ok = false;
+		spec->seed = options.value(QStringLiteral("--seed")).toLongLong(&ok);
+		if (!ok || spec->seed < 0) {
+			*error = QCoreApplication::translate("VibeStudioAiGenerationCli", "--seed takes a whole number of 0 or more.");
+			return false;
+		}
+	}
+	if (spec->prompt.trimmed().isEmpty() && spec->game.isEmpty()) {
+		*error = QCoreApplication::translate("VibeStudioAiGenerationCli", "Quake-MapGen needs --prompt \"<the level>\" or at least --game.");
+		return false;
+	}
+	*error = levelMapgenSpecProblem(*spec);
+	return error->isEmpty();
+}
 
 bool levelSpecFrom(const Options& options, LevelGenerationSpec* spec, QString* error)
 {
+	const QString generator = options.value(QStringLiteral("--generator"), QStringLiteral("studio"));
+	if (generator == levelMapgenGeneratorId()) {
+		return mapgenSpecFrom(options, spec, error);
+	}
+	if (generator != QStringLiteral("studio")) {
+		*error = QCoreApplication::translate("VibeStudioAiGenerationCli", "--generator takes studio or quake-mapgen.");
+		return false;
+	}
+	for (const QString& key : {QStringLiteral("--format"), QStringLiteral("--intensity"), QStringLiteral("--candidates"), QStringLiteral("--repair-iterations"), QStringLiteral("--switch"),
+			 QStringLiteral("--ranker")}) {
+		if (options.has(key)) {
+			*error = QCoreApplication::translate("VibeStudioAiGenerationCli", "%1 is for --generator quake-mapgen.").arg(key);
+			return false;
+		}
+	}
 	spec->prompt = options.value(QStringLiteral("--prompt"));
 	spec->game = options.value(QStringLiteral("--game"));
 	spec->mode = options.value(QStringLiteral("--mode"));
@@ -466,7 +546,7 @@ PlanOutcome planFor(const Options& options, const LevelGenerationSpec& spec)
 		outcome.lines << (buildAiHttpRequest(request, QString(), &http, &error) ? describeAiHttpRequest(http) : error);
 		return outcome;
 	}
-	const QString blocked = sendBlock(connection.ready(), aiTextConnectionBlockText(connection), connection.local, connection.endpoint, options);
+	const QString blocked = sendBlock(connection.ready(), aiTextConnectionBlockText(connection), connection.local, aiTextConnectionDestinationText(connection), options);
 	if (!blocked.isEmpty()) {
 		outcome.exitCode = 5;
 		outcome.error = blocked;
@@ -523,6 +603,139 @@ PlanOutcome planFor(const Options& options, const LevelGenerationSpec& spec)
 	return outcome;
 }
 
+// map plan and map generate with Quake-MapGen: its rules or a text model plan,
+// it builds and analyses, and the studio report carries its own report.
+AiGenerationCliResult runMapgen(const Options& options, const LevelGenerationSpec& spec, bool planOnly)
+{
+	const QString planner = options.value(QStringLiteral("--planner"), QStringLiteral("rules"));
+	if (planner != QStringLiteral("rules") && planner != QStringLiteral("ai")) {
+		return failure(2, QCoreApplication::translate("VibeStudioAiGenerationCli", "--planner takes rules or ai."));
+	}
+	if (options.has(QStringLiteral("--save-plan"))) {
+		return failure(2, QCoreApplication::translate("VibeStudioAiGenerationCli", "--save-plan keeps studio plans; Quake-MapGen's plan is in --report."));
+	}
+	std::optional<LevelMapgenModel> model;
+	if (planner == QStringLiteral("ai")) {
+		if (spec.prompt.trimmed().isEmpty()) {
+			return failure(2, QCoreApplication::translate("VibeStudioAiGenerationCli", "--planner ai needs --prompt."));
+		}
+		const AiTextConnection connection = resolveAiTextConnection(preferencesFor(options, false), options.value(QStringLiteral("--provider")));
+		if (options.has(QStringLiteral("--dry-run"))) {
+			AiChatRequest request;
+			AiHttpRequest http;
+			QString error;
+			AiGenerationCliResult result;
+			result.lines << QCoreApplication::translate("VibeStudioAiGenerationCli", "Dry run: nothing was sent. %1").arg(aiTextConnectionBlockText(connection));
+			result.lines << (levelMapgenPlanAiRequest(spec, connection, &request, &error) && buildAiHttpRequest(request, QString(), &http, &error) ? describeAiHttpRequest(http) : error);
+			result.payload.insert(QStringLiteral("dryRun"), true);
+			result.payload.insert(QStringLiteral("request"), result.lines.join(QLatin1Char('\n')));
+			return result;
+		}
+		const QString blocked = sendBlock(connection.ready(), aiTextConnectionBlockText(connection), connection.local, aiTextConnectionDestinationText(connection), options);
+		if (!blocked.isEmpty()) {
+			return failure(5, blocked);
+		}
+		model.emplace();
+		model->connection = connection;
+		model->apiKey = aiTextConnectionApiKey(connection);
+		model->timeoutMsecs = timeoutFor(options);
+		QString error;
+		if (!readInteger(options, QStringLiteral("--revisions"), 0, 8, &model->maxRevisions, &error)) {
+			return failure(2, error);
+		}
+	}
+	const LevelGenerationResult level = generateMapgenLevel(spec, model ? &*model : nullptr);
+	QJsonObject report = levelGenerationReportJson(level);
+	if (model) {
+		report.insert(QStringLiteral("ai"), levelMapgenUsageJson(*model));
+	}
+	const bool overwrite = options.has(QStringLiteral("--overwrite"));
+	QString error;
+	QStringList written;
+	const auto writeReport = [&]() {
+		if (!options.has(QStringLiteral("--report"))) {
+			return true;
+		}
+		if (!writeFile(options.value(QStringLiteral("--report")), QJsonDocument(report).toJson(QJsonDocument::Indented), overwrite, &error)) {
+			return false;
+		}
+		written << options.value(QStringLiteral("--report"));
+		return true;
+	};
+	if (!level.ok) {
+		// A layout that failed validation still has its report to read.
+		if (!level.generatorReport.isEmpty() && !planOnly && !writeReport()) {
+			return failure(1, error);
+		}
+		return failure(4, level.error);
+	}
+
+	AiGenerationCliResult result;
+	const QJsonObject semanticPlan = report.value(QStringLiteral("quakeMapgen")).toObject().value(QStringLiteral("semantic_plan")).toObject();
+	if (planOnly) {
+		result.lines = levelSemanticPlanLines(level.plan) + level.warnings;
+		result.payload.insert(QStringLiteral("spec"), levelGenerationSpecJson(level.spec));
+		result.payload.insert(QStringLiteral("plan"), semanticPlan);
+		result.payload.insert(QStringLiteral("planner"), level.plan.planner);
+		result.payload.insert(QStringLiteral("warnings"), QJsonArray::fromStringList(level.warnings));
+		if (model) {
+			result.payload.insert(QStringLiteral("ai"), levelMapgenUsageJson(*model));
+		}
+		if (options.has(QStringLiteral("--output"))) {
+			const QString path = options.value(QStringLiteral("--output"));
+			if (!writeFile(path, QJsonDocument(semanticPlan).toJson(QJsonDocument::Indented), overwrite, &error)) {
+				return failure(1, error);
+			}
+			result.payload.insert(QStringLiteral("output"), path);
+			result.lines << QCoreApplication::translate("VibeStudioAiGenerationCli", "Plan written to %1.").arg(QDir::toNativeSeparators(path));
+		}
+		return result;
+	}
+
+	result.lines = levelGenerationSummaryLines(level);
+	if (options.has(QStringLiteral("--output"))) {
+		QString path = options.value(QStringLiteral("--output"));
+		if (QFileInfo(path).isDir() || path.endsWith(QLatin1Char('/')) || path.endsWith(QLatin1Char('\\'))) {
+			path = QDir(path).filePath(level.suggestedFileName);
+		}
+		if (QFileInfo(path).suffix().compare(QStringLiteral("map"), Qt::CaseInsensitive) != 0) {
+			return failure(2, QCoreApplication::translate("VibeStudioAiGenerationCli", "A %1 level is written as .%2.").arg(level.spec.game, QStringLiteral("map")));
+		}
+		if (!writeFile(path, level.mapBytes, overwrite, &error)) {
+			return failure(1, error);
+		}
+		written << path;
+		report.insert(QStringLiteral("output"), path);
+	}
+	if (options.has(QStringLiteral("--preview"))) {
+		if (!writeFile(options.value(QStringLiteral("--preview")), pngBytes(renderLevelLayoutPreview(level, QSize(1024, 1024))), overwrite, &error)) {
+			return failure(1, error);
+		}
+		written << options.value(QStringLiteral("--preview"));
+	}
+	if (!writeReport()) {
+		return failure(1, error);
+	}
+	for (const QString& note : level.notes) {
+		result.lines << QStringLiteral("- %1").arg(note);
+	}
+	// The verdict is in the summary; each analysis follows, and its findings with --verbose.
+	for (const QString& line : level.analysis.mid(1)) {
+		if (!line.startsWith(QStringLiteral("- ")) || options.has(QStringLiteral("--verbose"))) {
+			result.lines << line;
+		}
+	}
+	for (const QString& warning : level.warnings) {
+		result.lines << QCoreApplication::translate("VibeStudioAiGenerationCli", "Warning: %1").arg(warning);
+	}
+	for (const QString& path : written) {
+		result.lines << QCoreApplication::translate("VibeStudioAiGenerationCli", "Wrote %1").arg(QDir::toNativeSeparators(path));
+	}
+	report.insert(QStringLiteral("written"), QJsonArray::fromStringList(written));
+	result.payload = report;
+	return result;
+}
+
 } // namespace
 
 AiGenerationCliResult runMapPlan(const QStringList& arguments)
@@ -537,6 +750,9 @@ AiGenerationCliResult runMapPlan(const QStringList& arguments)
 	LevelGenerationSpec spec;
 	if (!levelSpecFrom(options, &spec, &error)) {
 		return failure(2, error);
+	}
+	if (spec.generator == levelMapgenGeneratorId()) {
+		return runMapgen(options, spec, true);
 	}
 	if (spec.prompt.trimmed().isEmpty() && options.value(QStringLiteral("--planner")) == QStringLiteral("ai")) {
 		return failure(2, QCoreApplication::translate("VibeStudioAiGenerationCli", "map plan --planner ai needs --prompt."));
@@ -591,6 +807,9 @@ AiGenerationCliResult runMapGenerate(const QStringList& arguments)
 	LevelGenerationSpec spec;
 	if (!levelSpecFrom(options, &spec, &error)) {
 		return failure(2, error);
+	}
+	if (spec.generator == levelMapgenGeneratorId()) {
+		return runMapgen(options, spec, false);
 	}
 	spec = normalizedLevelGenerationSpec(spec);
 	const PlanOutcome outcome = planFor(options, spec);

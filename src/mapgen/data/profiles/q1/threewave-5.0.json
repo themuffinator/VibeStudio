@@ -1,0 +1,1187 @@
+{
+  "schema": "qmg.game_profile",
+  "schema_version": 1,
+  "profile_kind": "module",
+  "game": "quake1",
+  "module": "q1-threewave-5.0",
+  "title": "ThreeWave CTF 5.0 QuakeC from the 2021 re-release (quakec_ctf)",
+  "evidence_level": "static analysis",
+  "sources": {
+    "q1rr": {
+      "description": "id/Nightdive GPL release of the 2021 Quake re-release QuakeC (quake-rerelease-qc-main): quakec/ (base campaign) and quakec_ctf/ (ThreeWave CTF 5.0).",
+      "identity": "quake-rerelease-qc-main",
+      "kind": "file_lines"
+    },
+    "q1src": {
+      "description": "id Software GPL Quake source release (Quake-master): WinQuake engine, cited only for engine values the re-release engine source would hold.",
+      "identity": "Quake-master/WinQuake",
+      "kind": "file_lines"
+    }
+  },
+  "runtime": {
+    "name": "ThreeWave CTF 5.0 QuakeC (quakec_ctf/) on the re-release engine",
+    "version": {
+      "value": "ThreeWave CTF 5.0",
+      "cite": [
+        "q1rr:quakec_ctf/status.qc:52|Running ThreeWave CTF 5.0"
+      ]
+    },
+    "note": "The re-release (KEX) engine source is not local; engine-side values carry basis engine_assumed."
+  },
+  "starting_inventory": {
+    "value": [
+      "shotgun",
+      "axe"
+    ],
+    "cite": [
+      "q1rr:quakec_ctf/client.qc:128|parm1 = IT_SHOTGUN | IT_AXE;"
+    ]
+  },
+  "movement": {
+    "gravity": {
+      "value": 800,
+      "unit": "u/s^2",
+      "basis": "engine_assumed",
+      "cite": [
+        "q1src:WinQuake/sv_phys.c:44|cvar_t sv_gravity = {\"sv_gravity\",\"800\",false,true};"
+      ],
+      "note": "WinQuake engine value. The 2021 re-release (KEX) engine source is not local, so this value is assumed, not verified, for this runtime."
+    },
+    "max_ground_speed": {
+      "value": 320,
+      "unit": "u/s",
+      "basis": "engine_assumed",
+      "cite": [
+        "q1src:WinQuake/sv_user.c:167|cvar_t sv_maxspeed = {\"sv_maxspeed\", \"320\", false, true};"
+      ],
+      "note": "WinQuake engine value. The 2021 re-release (KEX) engine source is not local, so this value is assumed, not verified, for this runtime."
+    },
+    "accelerate": {
+      "value": 10,
+      "unit": "1/s",
+      "basis": "engine_assumed",
+      "cite": [
+        "q1src:WinQuake/sv_user.c:168|cvar_t sv_accelerate = {\"sv_accelerate\", \"10\"};"
+      ],
+      "note": "WinQuake engine value. The 2021 re-release (KEX) engine source is not local, so this value is assumed, not verified, for this runtime."
+    },
+    "friction": {
+      "value": 4,
+      "unit": "1/s",
+      "basis": "engine_assumed",
+      "cite": [
+        "q1src:WinQuake/sv_phys.c:42|cvar_t sv_friction = {\"sv_friction\",\"4\",false,true};"
+      ],
+      "note": "WinQuake engine value. The 2021 re-release (KEX) engine source is not local, so this value is assumed, not verified, for this runtime."
+    },
+    "edge_friction": {
+      "value": 2,
+      "unit": "multiplier",
+      "basis": "engine_assumed",
+      "cite": [
+        "q1src:WinQuake/sv_user.c:27|cvar_t sv_edgefriction = {\"edgefriction\", \"2\"};"
+      ],
+      "note": "WinQuake engine value. The 2021 re-release (KEX) engine source is not local, so this value is assumed, not verified, for this runtime."
+    },
+    "stop_speed": {
+      "value": 100,
+      "unit": "u/s",
+      "basis": "engine_assumed",
+      "cite": [
+        "q1src:WinQuake/sv_phys.c:43|cvar_t sv_stopspeed = {\"sv_stopspeed\",\"100\"};"
+      ],
+      "note": "WinQuake engine value. The 2021 re-release (KEX) engine source is not local, so this value is assumed, not verified, for this runtime."
+    },
+    "max_velocity": {
+      "value": 2000,
+      "unit": "u/s per axis",
+      "basis": "engine_assumed",
+      "cite": [
+        "q1src:WinQuake/sv_phys.c:45|cvar_t sv_maxvelocity = {\"sv_maxvelocity\",\"2000\"};"
+      ],
+      "note": "WinQuake engine value. The 2021 re-release (KEX) engine source is not local, so this value is assumed, not verified, for this runtime."
+    },
+    "step_height": {
+      "value": 18,
+      "unit": "u",
+      "basis": "engine_assumed",
+      "cite": [
+        "q1src:WinQuake/sv_phys.c:957|#define STEPSIZE 18"
+      ],
+      "note": "WinQuake engine value. The 2021 re-release (KEX) engine source is not local, so this value is assumed, not verified, for this runtime."
+    },
+    "jump_velocity": {
+      "value": 270,
+      "unit": "u/s",
+      "cite": [
+        "q1rr:quakec_ctf/client.qc:864|self.velocity_z = self.velocity_z + 270;"
+      ]
+    },
+    "eye_height": {
+      "value": 22,
+      "unit": "u",
+      "cite": [
+        "q1rr:quakec_ctf/client.qc:631|self.view_ofs = '0 0 22';"
+      ]
+    },
+    "player_mins": {
+      "value": [
+        -16,
+        -16,
+        -24
+      ],
+      "unit": "u",
+      "cite": [
+        "q1rr:quakec_ctf/defs.qc:356|VEC_HULL_MIN = '-16 -16 -24';"
+      ]
+    },
+    "player_maxs": {
+      "value": [
+        16,
+        16,
+        32
+      ],
+      "unit": "u",
+      "cite": [
+        "q1rr:quakec_ctf/defs.qc:357|VEC_HULL_MAX = '16 16 32';"
+      ]
+    }
+  },
+  "spawnflags": [
+    {
+      "name": "NOT_EASY",
+      "bit": 256,
+      "scope": "every entity",
+      "tested_when": "deathmatch == 0 and skill == 0",
+      "effect": "removed at map load",
+      "cite": [
+        "q1src:WinQuake/server.h:180|#define SPAWNFLAG_NOT_EASY 256",
+        "q1src:WinQuake/pr_edict.c:941-943|else if ((current_skill == 0 && ((int)ent->v.spawnflags & SPAWNFLAG_NOT_EASY))"
+      ],
+      "basis": "engine_assumed",
+      "note": "WinQuake engine value. The 2021 re-release (KEX) engine source is not local, so this value is assumed, not verified, for this runtime."
+    },
+    {
+      "name": "NOT_MEDIUM",
+      "bit": 512,
+      "scope": "every entity",
+      "tested_when": "deathmatch == 0 and skill == 1",
+      "effect": "removed at map load",
+      "cite": [
+        "q1src:WinQuake/server.h:181|#define SPAWNFLAG_NOT_MEDIUM 512",
+        "q1src:WinQuake/pr_edict.c:941-943|else if ((current_skill == 0 && ((int)ent->v.spawnflags & SPAWNFLAG_NOT_EASY))"
+      ],
+      "basis": "engine_assumed",
+      "note": "WinQuake engine value. The 2021 re-release (KEX) engine source is not local, so this value is assumed, not verified, for this runtime."
+    },
+    {
+      "name": "NOT_HARD",
+      "bit": 1024,
+      "scope": "every entity",
+      "tested_when": "deathmatch == 0 and skill >= 2",
+      "effect": "removed at map load; nightmare (skill 3) uses the NOT_HARD set",
+      "cite": [
+        "q1src:WinQuake/server.h:182|#define SPAWNFLAG_NOT_HARD 1024",
+        "q1src:WinQuake/pr_edict.c:941-943|else if ((current_skill == 0 && ((int)ent->v.spawnflags & SPAWNFLAG_NOT_EASY))"
+      ],
+      "basis": "engine_assumed",
+      "note": "WinQuake engine value. The 2021 re-release (KEX) engine source is not local, so this value is assumed, not verified, for this runtime."
+    },
+    {
+      "name": "NOT_DEATHMATCH",
+      "bit": 2048,
+      "scope": "every entity",
+      "tested_when": "deathmatch != 0",
+      "effect": "removed at map load; skill flags are not tested in deathmatch",
+      "cite": [
+        "q1src:WinQuake/server.h:183|#define SPAWNFLAG_NOT_DEATHMATCH 2048",
+        "q1src:WinQuake/pr_edict.c:931-937|if (deathmatch.value)"
+      ],
+      "basis": "engine_assumed",
+      "note": "WinQuake engine value. The 2021 re-release (KEX) engine source is not local, so this value is assumed, not verified, for this runtime."
+    },
+    {
+      "name": "DOOR_GOLD_KEY",
+      "bit": 8,
+      "scope": "func_door",
+      "tested_when": "always",
+      "effect": "the door needs the gold key (IT_KEY2, item_key2)",
+      "cite": [
+        "q1rr:quakec_ctf/doors.qc:22|float DOOR_GOLD_KEY = 8;",
+        "q1rr:quakec_ctf/doors.qc:542|if (self.spawnflags & DOOR_GOLD_KEY)"
+      ]
+    },
+    {
+      "name": "DOOR_SILVER_KEY",
+      "bit": 16,
+      "scope": "func_door",
+      "tested_when": "always",
+      "effect": "the door needs the silver key (IT_KEY1, item_key1)",
+      "cite": [
+        "q1rr:quakec_ctf/doors.qc:23|float DOOR_SILVER_KEY = 16;",
+        "q1rr:quakec_ctf/doors.qc:539|if (self.spawnflags & DOOR_SILVER_KEY)"
+      ]
+    }
+  ],
+  "respawn_rules": [
+    {
+      "id": "weapon",
+      "cite": [
+        "q1rr:quakec_ctf/items.qc:470|void() weapon_touch ="
+      ],
+      "cases": [
+        {
+          "id": "deathmatch",
+          "when": "deathmatch != 0 and deathmatch != 2",
+          "behaviour": "respawn",
+          "seconds": 30,
+          "cite": [
+            "q1rr:quakec_ctf/items.qc:598-599|if (deathmatch && deathmatch != 2)"
+          ]
+        },
+        {
+          "id": "leave",
+          "when": "coop or deathmatch 2, 3 or 5",
+          "behaviour": "stays",
+          "cite": [
+            "q1rr:quakec_ctf/items.qc:487-488|if (coop || deathmatch == 2 || deathmatch == 3 || deathmatch == 5)"
+          ]
+        },
+        {
+          "id": "single_player",
+          "when": "deathmatch 0 and coop 0",
+          "behaviour": "removed",
+          "cite": [
+            "q1rr:quakec_ctf/items.qc:598-599|if (deathmatch && deathmatch != 2)"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "armor",
+      "cite": [
+        "q1rr:quakec_ctf/items.qc:261|void() armor_touch ="
+      ],
+      "cases": [
+        {
+          "id": "deathmatch",
+          "when": "deathmatch != 0 and deathmatch != 2",
+          "behaviour": "respawn",
+          "seconds": 20,
+          "cite": [
+            "q1rr:quakec_ctf/items.qc:306-307|if (deathmatch && deathmatch != 2)"
+          ]
+        },
+        {
+          "id": "other",
+          "when": "deathmatch 0 or 2",
+          "behaviour": "removed",
+          "cite": [
+            "q1rr:quakec_ctf/items.qc:306-307|if (deathmatch && deathmatch != 2)"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "health",
+      "cite": [
+        "q1rr:quakec_ctf/items.qc:181|void() health_touch ="
+      ],
+      "cases": [
+        {
+          "id": "deathmatch",
+          "when": "deathmatch != 0 and deathmatch != 2",
+          "behaviour": "respawn",
+          "seconds": 20,
+          "cite": [
+            "q1rr:quakec_ctf/items.qc:214-218|if ( deathmatch && deathmatch != 2 ) {"
+          ]
+        },
+        {
+          "id": "other",
+          "when": "deathmatch 0 or 2",
+          "behaviour": "removed",
+          "cite": [
+            "q1rr:quakec_ctf/items.qc:214-218|if ( deathmatch && deathmatch != 2 ) {"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "mega_health",
+      "cite": [
+        "q1rr:quakec_ctf/items.qc:181|void() health_touch ="
+      ],
+      "cases": [
+        {
+          "id": "deathmatch",
+          "when": "deathmatch != 0 and deathmatch != 2",
+          "behaviour": "respawn",
+          "seconds": 120,
+          "cite": [
+            "q1rr:quakec_ctf/items.qc:214-216|if ( deathmatch && deathmatch != 2 ) {",
+            "q1rr:quakec_ctf/items.qc:209-211|if ( self.healtype == 2 ) {"
+          ],
+          "note": "A fixed 120 s from pickup; the rot runs on the player (IT_SUPERHEALTH, healthrot_nextcheck), not on the item."
+        },
+        {
+          "id": "other",
+          "when": "deathmatch 0 or 2",
+          "behaviour": "removed",
+          "cite": [
+            "q1rr:quakec_ctf/items.qc:214-216|if ( deathmatch && deathmatch != 2 ) {"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ammo",
+      "cite": [
+        "q1rr:quakec_ctf/items.qc:702|void() ammo_touch ="
+      ],
+      "cases": [
+        {
+          "id": "deathmatch_3_5",
+          "when": "deathmatch 3 or 5",
+          "behaviour": "respawn",
+          "seconds": 15,
+          "cite": [
+            "q1rr:quakec_ctf/items.qc:783-784|if (deathmatch == 3 || deathmatch == 5) {"
+          ]
+        },
+        {
+          "id": "deathmatch",
+          "when": "deathmatch != 0, 2, 3 or 5",
+          "behaviour": "respawn",
+          "seconds": 30,
+          "cite": [
+            "q1rr:quakec_ctf/items.qc:785-786|} else if (deathmatch != 2) {"
+          ]
+        },
+        {
+          "id": "other",
+          "when": "deathmatch 0 or 2",
+          "behaviour": "removed",
+          "cite": [
+            "q1rr:quakec_ctf/items.qc:785-786|} else if (deathmatch != 2) {"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "powerup",
+      "cite": [
+        "q1rr:quakec_ctf/items.qc:1197|void() powerup_touch ="
+      ],
+      "cases": [
+        {
+          "id": "deathmatch_long",
+          "when": "deathmatch != 0, invulnerability or invisibility",
+          "behaviour": "respawn",
+          "seconds": 300,
+          "cite": [
+            "q1rr:quakec_ctf/items.qc:1212-1213|(self.classname == \"item_artifact_invulnerability\") || (self.classname == \"item_artifact_invisibility\")"
+          ]
+        },
+        {
+          "id": "deathmatch_short",
+          "when": "deathmatch != 0, quad damage or biosuit",
+          "behaviour": "respawn",
+          "seconds": 60,
+          "cite": [
+            "q1rr:quakec_ctf/items.qc:1215|self.nextthink = time + 60;"
+          ]
+        },
+        {
+          "id": "other",
+          "when": "deathmatch == 0",
+          "behaviour": "removed",
+          "cite": [
+            "q1rr:quakec_ctf/items.qc:1208|if (deathmatch)"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "flag",
+      "cite": [
+        "q1rr:quakec_ctf/teamplay.qc:64|float TEAM_CAPTURE_FLAG_RETURN_TIME = 15;"
+      ],
+      "cases": [
+        {
+          "id": "dropped",
+          "when": "a carried flag is dropped",
+          "behaviour": "auto_return",
+          "seconds": 30,
+          "cite": [
+            "q1rr:quakec_ctf/teamplay.qc:914|flg.super_time = time + TEAM_CAPTURE_FLAG_RETURN_TIME;",
+            "q1rr:quakec_ctf/teamplay.qc:1091|if (time - self.super_time > TEAM_CAPTURE_FLAG_RETURN_TIME)"
+          ],
+          "note": "TEAM_CAPTURE_FLAG_RETURN_TIME is 15, but super_time is set to drop + 15 and the return fires 15 s after that, about 30 s in all."
+        }
+      ]
+    }
+  ],
+  "items": [
+    {
+      "classname": "weapon_supershotgun",
+      "kind": "weapon",
+      "tier": "pickup",
+      "respawn": "weapon",
+      "cite": [
+        "q1rr:quakec_ctf/items.qc:611|void() weapon_supershotgun ="
+      ]
+    },
+    {
+      "classname": "weapon_nailgun",
+      "kind": "weapon",
+      "tier": "pickup",
+      "respawn": "weapon",
+      "cite": [
+        "q1rr:quakec_ctf/items.qc:625|void() weapon_nailgun ="
+      ]
+    },
+    {
+      "classname": "weapon_supernailgun",
+      "kind": "weapon",
+      "tier": "pickup",
+      "respawn": "weapon",
+      "cite": [
+        "q1rr:quakec_ctf/items.qc:639|void() weapon_supernailgun ="
+      ]
+    },
+    {
+      "classname": "weapon_grenadelauncher",
+      "kind": "weapon",
+      "tier": "pickup",
+      "respawn": "weapon",
+      "cite": [
+        "q1rr:quakec_ctf/items.qc:653|void() weapon_grenadelauncher ="
+      ]
+    },
+    {
+      "classname": "weapon_rocketlauncher",
+      "kind": "weapon",
+      "tier": "pickup",
+      "respawn": "weapon",
+      "cite": [
+        "q1rr:quakec_ctf/items.qc:667|void() weapon_rocketlauncher ="
+      ]
+    },
+    {
+      "classname": "weapon_lightning",
+      "kind": "weapon",
+      "tier": "pickup",
+      "respawn": "weapon",
+      "cite": [
+        "q1rr:quakec_ctf/items.qc:682|void() weapon_lightning ="
+      ]
+    },
+    {
+      "classname": "item_shells",
+      "kind": "ammo",
+      "tier": "ammo",
+      "respawn": "ammo",
+      "cite": [
+        "q1rr:quakec_ctf/items.qc:801|void() item_shells ="
+      ],
+      "spawnflags": [
+        {
+          "bit": 1,
+          "name": "large box",
+          "cite": [
+            "q1rr:quakec_ctf/items.qc:805|if (self.spawnflags & WEAPON_BIG2)",
+            "q1rr:quakec_ctf/items.qc:796|float WEAPON_BIG2 = 1;"
+          ]
+        }
+      ]
+    },
+    {
+      "classname": "item_spikes",
+      "kind": "ammo",
+      "tier": "ammo",
+      "respawn": "ammo",
+      "cite": [
+        "q1rr:quakec_ctf/items.qc:827|void() item_spikes ="
+      ],
+      "spawnflags": [
+        {
+          "bit": 1,
+          "name": "large box",
+          "cite": [
+            "q1rr:quakec_ctf/items.qc:831|if (self.spawnflags & WEAPON_BIG2)",
+            "q1rr:quakec_ctf/items.qc:796|float WEAPON_BIG2 = 1;"
+          ]
+        }
+      ]
+    },
+    {
+      "classname": "item_rockets",
+      "kind": "ammo",
+      "tier": "ammo",
+      "respawn": "ammo",
+      "cite": [
+        "q1rr:quakec_ctf/items.qc:853|void() item_rockets ="
+      ],
+      "spawnflags": [
+        {
+          "bit": 1,
+          "name": "large box",
+          "cite": [
+            "q1rr:quakec_ctf/items.qc:857|if (self.spawnflags & WEAPON_BIG2)",
+            "q1rr:quakec_ctf/items.qc:796|float WEAPON_BIG2 = 1;"
+          ]
+        }
+      ]
+    },
+    {
+      "classname": "item_cells",
+      "kind": "ammo",
+      "tier": "ammo",
+      "respawn": "ammo",
+      "cite": [
+        "q1rr:quakec_ctf/items.qc:879|void() item_cells ="
+      ],
+      "spawnflags": [
+        {
+          "bit": 1,
+          "name": "large box",
+          "cite": [
+            "q1rr:quakec_ctf/items.qc:883|if (self.spawnflags & WEAPON_BIG2)",
+            "q1rr:quakec_ctf/items.qc:796|float WEAPON_BIG2 = 1;"
+          ]
+        }
+      ]
+    },
+    {
+      "classname": "item_armor1",
+      "kind": "armor",
+      "tier": "light",
+      "respawn": "armor",
+      "amount": {
+        "value": 100,
+        "cite": [
+          "q1rr:quakec_ctf/items.qc:327|self.armorvalue = 100;"
+        ]
+      },
+      "cite": [
+        "q1rr:quakec_ctf/items.qc:323|void() item_armor1 ="
+      ]
+    },
+    {
+      "classname": "item_armor2",
+      "kind": "armor",
+      "tier": "medium",
+      "respawn": "armor",
+      "amount": {
+        "value": 150,
+        "cite": [
+          "q1rr:quakec_ctf/items.qc:342|self.armorvalue = 150;"
+        ]
+      },
+      "cite": [
+        "q1rr:quakec_ctf/items.qc:338|void() item_armor2 ="
+      ]
+    },
+    {
+      "classname": "item_armorInv",
+      "kind": "armor",
+      "tier": "heavy",
+      "respawn": "armor",
+      "amount": {
+        "value": 200,
+        "cite": [
+          "q1rr:quakec_ctf/items.qc:357|self.armorvalue = 200;"
+        ]
+      },
+      "cite": [
+        "q1rr:quakec_ctf/items.qc:353|void() item_armorInv ="
+      ]
+    },
+    {
+      "classname": "item_health",
+      "kind": "health",
+      "tier": "by_spawnflags",
+      "respawn": "health",
+      "cite": [
+        "q1rr:quakec_ctf/items.qc:144|void() item_health ="
+      ],
+      "variants": [
+        {
+          "spawnflags": 0,
+          "tier": "medium",
+          "respawn": "health",
+          "amount": {
+            "value": 25,
+            "cite": [
+              "q1rr:quakec_ctf/items.qc:173|self.healamount = 25;"
+            ]
+          },
+          "cite": [
+            "q1rr:quakec_ctf/items.qc:144|void() item_health ="
+          ]
+        },
+        {
+          "spawnflags": 1,
+          "tier": "rotten",
+          "respawn": "health",
+          "amount": {
+            "value": 15,
+            "cite": [
+              "q1rr:quakec_ctf/items.qc:155|self.healamount = 15;"
+            ]
+          },
+          "cite": [
+            "q1rr:quakec_ctf/items.qc:148|if (self.spawnflags & H_ROTTEN)",
+            "q1rr:quakec_ctf/items.qc:138|float H_ROTTEN = 1;"
+          ]
+        },
+        {
+          "spawnflags": 2,
+          "tier": "mega",
+          "respawn": "mega_health",
+          "amount": {
+            "value": 100,
+            "cite": [
+              "q1rr:quakec_ctf/items.qc:164|self.healamount = 100;"
+            ]
+          },
+          "cite": [
+            "q1rr:quakec_ctf/items.qc:158|else if (self.spawnflags & H_MEGA)",
+            "q1rr:quakec_ctf/items.qc:139|float H_MEGA = 2;"
+          ]
+        }
+      ]
+    },
+    {
+      "classname": "item_artifact_super_damage",
+      "kind": "powerup",
+      "tier": "powerup",
+      "respawn": "powerup",
+      "cite": [
+        "q1rr:quakec_ctf/items.qc:1318|void() item_artifact_super_damage ="
+      ]
+    },
+    {
+      "classname": "item_artifact_invulnerability",
+      "kind": "powerup",
+      "tier": "powerup",
+      "respawn": "powerup",
+      "cite": [
+        "q1rr:quakec_ctf/items.qc:1260|void() item_artifact_invulnerability ="
+      ]
+    },
+    {
+      "classname": "item_artifact_invisibility",
+      "kind": "powerup",
+      "tier": "powerup",
+      "respawn": "powerup",
+      "cite": [
+        "q1rr:quakec_ctf/items.qc:1298|void() item_artifact_invisibility ="
+      ]
+    },
+    {
+      "classname": "item_artifact_envirosuit",
+      "kind": "powerup",
+      "tier": "powerup",
+      "respawn": "powerup",
+      "cite": [
+        "q1rr:quakec_ctf/items.qc:1279|void() item_artifact_envirosuit ="
+      ]
+    },
+    {
+      "classname": "item_key1",
+      "kind": "key",
+      "tier": "key",
+      "respawn": "none",
+      "cite": [
+        "q1rr:quakec_ctf/items.qc:1043|void() item_key1 ="
+      ],
+      "note": "Silver key (IT_KEY1): opens a func_door with spawnflag 16."
+    },
+    {
+      "classname": "item_key2",
+      "kind": "key",
+      "tier": "key",
+      "respawn": "none",
+      "cite": [
+        "q1rr:quakec_ctf/items.qc:1082|void() item_key2 ="
+      ],
+      "note": "Gold key (IT_KEY2): opens a func_door with spawnflag 8."
+    },
+    {
+      "classname": "item_sigil",
+      "kind": "other",
+      "tier": "episode_rune",
+      "respawn": "none",
+      "cite": [
+        "q1rr:quakec_ctf/items.qc:1149|void() item_sigil ="
+      ]
+    },
+    {
+      "classname": "item_flag_team1",
+      "kind": "flag",
+      "tier": "flag",
+      "team": 1,
+      "respawn": "flag",
+      "cite": [
+        "q1rr:quakec_ctf/teamplay.qc:1198|void() item_flag_team1 ="
+      ]
+    },
+    {
+      "classname": "item_flag_team2",
+      "kind": "flag",
+      "tier": "flag",
+      "team": 2,
+      "respawn": "flag",
+      "cite": [
+        "q1rr:quakec_ctf/teamplay.qc:1217|void() item_flag_team2 ="
+      ]
+    }
+  ],
+  "classnames": [
+    {
+      "classname": "info_player_start",
+      "role": "player_start",
+      "cite": [
+        "q1rr:quakec_ctf/client.qc:664|void() info_player_start ="
+      ]
+    },
+    {
+      "classname": "info_player_start2",
+      "role": "player_start",
+      "cite": [
+        "q1rr:quakec_ctf/client.qc:672|void() info_player_start2 ="
+      ]
+    },
+    {
+      "classname": "info_player_deathmatch",
+      "role": "deathmatch_spawn",
+      "cite": [
+        "q1rr:quakec_ctf/client.qc:689|void() info_player_deathmatch ="
+      ]
+    },
+    {
+      "classname": "info_player_coop",
+      "role": "coop_start",
+      "cite": [
+        "q1rr:quakec_ctf/client.qc:706|void() info_player_coop ="
+      ]
+    },
+    {
+      "classname": "info_intermission",
+      "role": "intermission",
+      "cite": [
+        "q1rr:quakec_ctf/client.qc:81|void() info_intermission ="
+      ]
+    },
+    {
+      "classname": "info_teleport_destination",
+      "role": "teleporter_destination",
+      "cite": [
+        "q1rr:quakec_ctf/triggers.qc:454|void() info_teleport_destination ="
+      ]
+    },
+    {
+      "classname": "info_notnull",
+      "role": "target_point",
+      "cite": [
+        "q1rr:quakec_ctf/misc.qc:31|void() info_notnull ="
+      ]
+    },
+    {
+      "classname": "info_null",
+      "role": "target_point",
+      "cite": [
+        "q1rr:quakec_ctf/misc.qc:23|void() info_null ="
+      ]
+    },
+    {
+      "classname": "trigger_teleport",
+      "role": "teleporter",
+      "cite": [
+        "q1rr:quakec_ctf/triggers.qc:478|void() trigger_teleport ="
+      ]
+    },
+    {
+      "classname": "trigger_changelevel",
+      "role": "level_exit",
+      "cite": [
+        "q1rr:quakec_ctf/client.qc:432|void() trigger_changelevel ="
+      ]
+    },
+    {
+      "classname": "trigger_multiple",
+      "role": "trigger",
+      "cite": [
+        "q1rr:quakec_ctf/triggers.qc:129|void() trigger_multiple ="
+      ]
+    },
+    {
+      "classname": "trigger_once",
+      "role": "trigger",
+      "cite": [
+        "q1rr:quakec_ctf/triggers.qc:188|void() trigger_once ="
+      ]
+    },
+    {
+      "classname": "trigger_push",
+      "role": "trigger",
+      "cite": [
+        "q1rr:quakec_ctf/triggers.qc:636|void() trigger_push ="
+      ]
+    },
+    {
+      "classname": "trigger_secret",
+      "role": "secret",
+      "cite": [
+        "q1rr:quakec_ctf/triggers.qc:216|void() trigger_secret ="
+      ]
+    },
+    {
+      "classname": "func_door",
+      "role": "mover",
+      "cite": [
+        "q1rr:quakec_ctf/doors.qc:459|void() func_door ="
+      ]
+    },
+    {
+      "classname": "func_plat",
+      "role": "mover",
+      "cite": [
+        "q1rr:quakec_ctf/plats.qc:169|void() func_plat ="
+      ]
+    },
+    {
+      "classname": "func_train",
+      "role": "mover",
+      "cite": [
+        "q1rr:quakec_ctf/plats.qc:319|void() func_train ="
+      ]
+    },
+    {
+      "classname": "light",
+      "role": "light",
+      "cite": [
+        "q1rr:quakec_ctf/misc.qc:59|void() light ="
+      ]
+    },
+    {
+      "classname": "monster_army",
+      "role": "removed",
+      "cite": [
+        "q1rr:quakec_ctf/server.qc:24|void() monster_army ="
+      ],
+      "note": "Defined only as a stub that removes itself, so monsters never appear in this mod."
+    },
+    {
+      "classname": "monster_dog",
+      "role": "removed",
+      "cite": [
+        "q1rr:quakec_ctf/server.qc:26|void() monster_dog ="
+      ],
+      "note": "Defined only as a stub that removes itself, so monsters never appear in this mod."
+    },
+    {
+      "classname": "monster_ogre",
+      "role": "removed",
+      "cite": [
+        "q1rr:quakec_ctf/server.qc:20|void() monster_ogre ="
+      ],
+      "note": "Defined only as a stub that removes itself, so monsters never appear in this mod."
+    },
+    {
+      "classname": "monster_knight",
+      "role": "removed",
+      "cite": [
+        "q1rr:quakec_ctf/server.qc:23|void() monster_knight ="
+      ],
+      "note": "Defined only as a stub that removes itself, so monsters never appear in this mod."
+    },
+    {
+      "classname": "monster_hell_knight",
+      "role": "removed",
+      "cite": [
+        "q1rr:quakec_ctf/server.qc:30|void() monster_hell_knight ="
+      ],
+      "note": "Defined only as a stub that removes itself, so monsters never appear in this mod."
+    },
+    {
+      "classname": "monster_demon1",
+      "role": "removed",
+      "cite": [
+        "q1rr:quakec_ctf/server.qc:21|void() monster_demon1 ="
+      ],
+      "note": "Defined only as a stub that removes itself, so monsters never appear in this mod."
+    },
+    {
+      "classname": "monster_shalrath",
+      "role": "removed",
+      "cite": [
+        "q1rr:quakec_ctf/server.qc:32|void() monster_shalrath ="
+      ],
+      "note": "Defined only as a stub that removes itself, so monsters never appear in this mod."
+    },
+    {
+      "classname": "monster_shambler",
+      "role": "removed",
+      "cite": [
+        "q1rr:quakec_ctf/server.qc:22|void() monster_shambler ="
+      ],
+      "note": "Defined only as a stub that removes itself, so monsters never appear in this mod."
+    },
+    {
+      "classname": "monster_wizard",
+      "role": "removed",
+      "cite": [
+        "q1rr:quakec_ctf/server.qc:25|void() monster_wizard ="
+      ],
+      "note": "Defined only as a stub that removes itself, so monsters never appear in this mod."
+    },
+    {
+      "classname": "monster_zombie",
+      "role": "removed",
+      "cite": [
+        "q1rr:quakec_ctf/server.qc:27|void() monster_zombie ="
+      ],
+      "note": "Defined only as a stub that removes itself, so monsters never appear in this mod."
+    },
+    {
+      "classname": "monster_fish",
+      "role": "removed",
+      "cite": [
+        "q1rr:quakec_ctf/server.qc:31|void() monster_fish ="
+      ],
+      "note": "Defined only as a stub that removes itself, so monsters never appear in this mod."
+    },
+    {
+      "classname": "monster_tarbaby",
+      "role": "removed",
+      "cite": [
+        "q1rr:quakec_ctf/server.qc:29|void() monster_tarbaby ="
+      ],
+      "note": "Defined only as a stub that removes itself, so monsters never appear in this mod."
+    },
+    {
+      "classname": "monster_enforcer",
+      "role": "removed",
+      "cite": [
+        "q1rr:quakec_ctf/server.qc:33|void() monster_enforcer ="
+      ],
+      "note": "Defined only as a stub that removes itself, so monsters never appear in this mod."
+    },
+    {
+      "classname": "monster_boss",
+      "role": "removed",
+      "cite": [
+        "q1rr:quakec_ctf/server.qc:28|void() monster_boss ="
+      ],
+      "note": "Defined only as a stub that removes itself, so monsters never appear in this mod."
+    },
+    {
+      "classname": "monster_oldone",
+      "role": "removed",
+      "cite": [
+        "q1rr:quakec_ctf/server.qc:34|void() monster_oldone ="
+      ],
+      "note": "Defined only as a stub that removes itself, so monsters never appear in this mod."
+    },
+    {
+      "classname": "info_player_team1",
+      "role": "team_start",
+      "team": 1,
+      "cite": [
+        "q1rr:quakec_ctf/client.qc:695|void() info_player_team1 ="
+      ]
+    },
+    {
+      "classname": "info_player_team2",
+      "role": "team_start",
+      "team": 2,
+      "cite": [
+        "q1rr:quakec_ctf/client.qc:699|void() info_player_team2 ="
+      ]
+    }
+  ],
+  "mode_contracts": [
+    {
+      "mode": "single_player",
+      "runtime": "deathmatch 0, coop 0",
+      "entities": [
+        {
+          "classname": "info_player_start",
+          "requirement": "required",
+          "min": 1,
+          "selection": "the first one found",
+          "cite": [
+            "q1rr:quakec_ctf/client.qc:559-561|spot = find (world, classname, \"info_player_start\");"
+          ]
+        }
+      ],
+      "failure": "error 'PutClientInServer: no info_player_start on level'",
+      "cite": [
+        "q1rr:quakec_ctf/client.qc:559-561|spot = find (world, classname, \"info_player_start\");"
+      ]
+    },
+    {
+      "mode": "cooperative",
+      "runtime": "coop 1",
+      "entities": [
+        {
+          "classname": "info_player_coop",
+          "requirement": "used_if_present",
+          "selection": "cycled from the last one used",
+          "cite": [
+            "q1rr:quakec_ctf/client.qc:524-528|if (coop)"
+          ]
+        },
+        {
+          "classname": "info_player_start",
+          "requirement": "fallback",
+          "cite": [
+            "q1rr:quakec_ctf/client.qc:524-528|if (coop)"
+          ]
+        }
+      ],
+      "cite": [
+        "q1rr:quakec_ctf/client.qc:524-528|if (coop)"
+      ]
+    },
+    {
+      "mode": "deathmatch",
+      "runtime": "deathmatch 1 without teams",
+      "entities": [
+        {
+          "classname": "info_player_deathmatch",
+          "requirement": "required",
+          "min": 1,
+          "selection": "cycled from the last one used",
+          "cite": [
+            "q1rr:quakec_ctf/client.qc:534-549|if (!self.killed) {"
+          ]
+        }
+      ],
+      "cite": [
+        "q1rr:quakec_ctf/client.qc:534-549|if (!self.killed) {"
+      ]
+    },
+    {
+      "mode": "capture_the_flag",
+      "runtime": "deathmatch with teamplay (ThreeWave CTF 5.0)",
+      "entities": [
+        {
+          "classname": "info_player_team1",
+          "requirement": "used_if_present",
+          "team": 1,
+          "selection": "every spawn while self.killed == 0 (normal deaths never set it; a team change sets 2)",
+          "cite": [
+            "q1rr:quakec_ctf/teamplay.qc:1152-1165|entity() TeamCaptureSpawn =",
+            "q1rr:quakec_ctf/client.qc:534-549|if (!self.killed) {"
+          ]
+        },
+        {
+          "classname": "info_player_team2",
+          "requirement": "used_if_present",
+          "team": 2,
+          "selection": "every spawn while self.killed == 0",
+          "cite": [
+            "q1rr:quakec_ctf/teamplay.qc:1152-1165|entity() TeamCaptureSpawn =",
+            "q1rr:quakec_ctf/client.qc:534-549|if (!self.killed) {"
+          ]
+        },
+        {
+          "classname": "info_player_deathmatch",
+          "requirement": "required",
+          "min": 1,
+          "selection": "fallback when no team spot exists; runes also spawn here",
+          "cite": [
+            "q1rr:quakec_ctf/client.qc:534-549|if (!self.killed) {",
+            "q1rr:quakec_ctf/items.qc:1546-1550|runespawn = find(runespawn, classname, \"info_player_deathmatch\");"
+          ]
+        },
+        {
+          "classname": "item_flag_team1",
+          "requirement": "required",
+          "min": 1,
+          "team": 1,
+          "cite": [
+            "q1rr:quakec_ctf/teamplay.qc:1198|void() item_flag_team1 ="
+          ]
+        },
+        {
+          "classname": "item_flag_team2",
+          "requirement": "required",
+          "min": 1,
+          "team": 2,
+          "cite": [
+            "q1rr:quakec_ctf/teamplay.qc:1217|void() item_flag_team2 ="
+          ]
+        }
+      ],
+      "cite": [
+        "q1rr:quakec_ctf/client.qc:534-549|if (!self.killed) {",
+        "q1rr:quakec_ctf/teamplay.qc:1152-1165|entity() TeamCaptureSpawn ="
+      ]
+    },
+    {
+      "mode": "intermission",
+      "runtime": "any",
+      "entities": [
+        {
+          "classname": "info_intermission",
+          "requirement": "optional",
+          "selection": "a random one of up to four",
+          "cite": [
+            "q1rr:quakec_ctf/client.qc:197-221|spot = find (world, classname, \"info_intermission\");"
+          ]
+        }
+      ],
+      "fallback_chain": [
+        "info_player_start",
+        "testplayerstart"
+      ],
+      "failure": "objerror 'FindIntermission: no spot'",
+      "cite": [
+        "q1rr:quakec_ctf/client.qc:197-221|spot = find (world, classname, \"info_intermission\");"
+      ]
+    },
+    {
+      "mode": "level_exit",
+      "runtime": "single player and coop",
+      "entities": [
+        {
+          "classname": "trigger_changelevel",
+          "requirement": "required_for_exit",
+          "selection": "brush trigger with a 'map' key",
+          "cite": [
+            "q1rr:quakec_ctf/client.qc:435|objerror (\"chagnelevel trigger doesn't have map\");"
+          ]
+        }
+      ],
+      "cite": [
+        "q1rr:quakec_ctf/client.qc:432|void() trigger_changelevel ="
+      ]
+    }
+  ],
+  "digest_corrections": [
+    {
+      "claim": "Mega Health 20 s after it decays",
+      "encoded": "a fixed 120 s from pickup; the rot moved onto the player",
+      "path": "respawn_rules[id=mega_health].cases[id=deathmatch].seconds"
+    },
+    {
+      "claim": "(omitted) ammo",
+      "encoded": "30 s; 15 s in deathmatch 3 and 5; none in deathmatch 2",
+      "path": "respawn_rules[id=ammo].cases[id=deathmatch_3_5].seconds"
+    },
+    {
+      "claim": "CTF via Threewave",
+      "encoded": "item_flag_team1/2 and info_player_team1/2 exist only in this module",
+      "path": "classnames[classname=info_player_team1].role"
+    }
+  ],
+  "notes": [
+    "No value here was measured at runtime.",
+    "Monster spawn functions are stubs that remove themselves (server.qc)."
+  ]
+}

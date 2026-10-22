@@ -1,0 +1,854 @@
+{
+  "schema": "qmg.game_profile",
+  "schema_version": 1,
+  "profile_kind": "generator",
+  "game": "quake1",
+  "module": "generator-current",
+  "title": "Current generator tables for quake1 (byte-equivalent to the pre-X2 code)",
+  "evidence_level": "static analysis",
+  "modules": [
+    "q1-id1-1996",
+    "q1-rerelease-2021",
+    "q1-threewave-5.0"
+  ],
+  "sources": {
+    "repo": {
+      "description": "This repository (plan and audit records).",
+      "identity": "Quake-MapGen working tree",
+      "kind": "file_lines"
+    },
+    "progs1996": {
+      "description": "The shipped id1 progs.dat (1996, version 6, CRC 5927, 413,116 bytes, sha256 f2619787f9aa0f057246eea1665b622b4691b5c5a800b1a46133d1fe8b771580). No QuakeC source for it is local; facts are cited by function and statement index, rendered by tools/profiles/progs_disasm.py.",
+      "identity": "sha256 f2619787f9aa0f057246eea1665b622b4691b5c5a800b1a46133d1fe8b771580",
+      "kind": "progs_statements"
+    },
+    "q1rr": {
+      "description": "id/Nightdive GPL release of the 2021 Quake re-release QuakeC (quake-rerelease-qc-main): quakec/ (base campaign) and quakec_ctf/ (ThreeWave CTF 5.0).",
+      "identity": "quake-rerelease-qc-main",
+      "kind": "file_lines"
+    },
+    "q1src": {
+      "description": "id Software GPL source release of Quake (Quake-master): WinQuake/ (the NetQuake engine).",
+      "identity": "Quake-master/WinQuake",
+      "kind": "file_lines"
+    }
+  },
+  "origin": "Copied verbatim from src/map_builder.cpp (solid_material, liquid_material, variant_class, classname_for) and src/entities.cpp (add_lighting, weapon_variant_count, monster_variant_count) before change x2-profiles. They mirror current behaviour and are not id-source facts; known_defects lists where they disagree with the module profiles.",
+  "solid_materials": {
+    "floor": {
+      "value": "FLOOR0_1",
+      "cite": [
+        "generator-current:map_builder.solid_material"
+      ]
+    },
+    "platform": {
+      "value": "FLOOR0_1",
+      "cite": [
+        "generator-current:map_builder.solid_material"
+      ]
+    },
+    "stair": {
+      "value": "FLOOR0_1",
+      "cite": [
+        "generator-current:map_builder.solid_material"
+      ]
+    },
+    "ramp": {
+      "value": "FLOOR0_1",
+      "cite": [
+        "generator-current:map_builder.solid_material"
+      ]
+    },
+    "ceiling": {
+      "value": "CEIL1_1",
+      "cite": [
+        "generator-current:map_builder.solid_material"
+      ]
+    },
+    "trigger": {
+      "value": "trigger",
+      "cite": [
+        "generator-current:map_builder.solid_material"
+      ]
+    },
+    "wall": {
+      "value": "WALL1_1",
+      "cite": [
+        "generator-current:map_builder.solid_material"
+      ]
+    },
+    "arch": {
+      "value": "WALL1_1",
+      "cite": [
+        "generator-current:map_builder.solid_material"
+      ]
+    },
+    "curve": {
+      "value": "WALL1_1",
+      "cite": [
+        "generator-current:map_builder.solid_material"
+      ]
+    },
+    "door": {
+      "value": "WALL1_1",
+      "cite": [
+        "generator-current:map_builder.solid_material"
+      ]
+    },
+    "lift": {
+      "value": "WALL1_1",
+      "cite": [
+        "generator-current:map_builder.solid_material"
+      ]
+    },
+    "hidden": {
+      "value": "WALL1_1",
+      "cite": [
+        "generator-current:map_builder.solid_material"
+      ]
+    },
+    "liquid": {
+      "value": null,
+      "cite": [
+        "generator-current:map_builder.solid_material"
+      ],
+      "note": "A solid brush cannot take the liquid role (map build error invalid_material_role)."
+    }
+  },
+  "liquid_materials": {
+    "solid": {
+      "value": null,
+      "cite": [
+        "generator-current:map_builder.liquid_material"
+      ],
+      "note": "Solid contents take a solid material (map build error invalid_liquid_contract)."
+    },
+    "water": {
+      "value": "*water0",
+      "cite": [
+        "generator-current:map_builder.liquid_material"
+      ]
+    },
+    "slime": {
+      "value": "*slime0",
+      "cite": [
+        "generator-current:map_builder.liquid_material"
+      ]
+    },
+    "lava": {
+      "value": "*lava1",
+      "cite": [
+        "generator-current:map_builder.liquid_material"
+      ]
+    }
+  },
+  "classnames": {
+    "player_start": {
+      "value": "info_player_start",
+      "cite": [
+        "generator-current:map_builder.classname_for",
+        "progs1996:SelectSpawnPoint:6072-6080|\"info_player_start\"?",
+        "q1rr:quakec/client.qc:680-684|spot = find( world, classname, \"info_player_start\" );",
+        "q1rr:quakec_ctf/client.qc:559-561|spot = find (world, classname, \"info_player_start\");"
+      ],
+      "note": "Change r1s-mp-player-start (switch r1s.mp_player_start): also emitted exactly once in every Quake 1 multiplayer map (deathmatch, duel, CTF), for `map` loads with deathmatch 0, whose spawn-point search aborts without it (cited). Deathmatch spawn selection never reads it; the proof is in src/entities.cpp and the change record. The value was already info_player_start."
+    },
+    "deathmatch_spawn": {
+      "value": "info_player_deathmatch",
+      "cite": [
+        "generator-current:map_builder.classname_for"
+      ]
+    },
+    "health": {
+      "value": "item_health",
+      "cite": [
+        "generator-current:map_builder.classname_for"
+      ]
+    },
+    "armor": {
+      "value": "item_armor2",
+      "cite": [
+        "generator-current:map_builder.classname_for"
+      ]
+    },
+    "light": {
+      "value": "light",
+      "cite": [
+        "generator-current:map_builder.classname_for"
+      ]
+    },
+    "exit_trigger": {
+      "value": "trigger_changelevel",
+      "cite": [
+        "generator-current:map_builder.classname_for"
+      ]
+    },
+    "exit_destination": {
+      "value": "info_notnull",
+      "cite": [
+        "generator-current:map_builder.classname_for"
+      ]
+    },
+    "door": {
+      "value": "func_door",
+      "cite": [
+        "generator-current:map_builder.classname_for"
+      ]
+    },
+    "door_trigger": {
+      "value": "trigger_multiple",
+      "cite": [
+        "generator-current:map_builder.classname_for"
+      ]
+    },
+    "door_destination": {
+      "value": "info_notnull",
+      "cite": [
+        "generator-current:map_builder.classname_for"
+      ]
+    },
+    "lift": {
+      "value": "func_plat",
+      "cite": [
+        "generator-current:map_builder.classname_for"
+      ]
+    },
+    "lift_trigger": {
+      "value": "trigger_multiple",
+      "cite": [
+        "generator-current:map_builder.classname_for"
+      ]
+    },
+    "lift_destination": {
+      "value": "info_notnull",
+      "cite": [
+        "generator-current:map_builder.classname_for"
+      ]
+    },
+    "teleporter_trigger": {
+      "value": "trigger_teleport",
+      "cite": [
+        "generator-current:map_builder.classname_for"
+      ]
+    },
+    "teleporter_destination": {
+      "value": "info_teleport_destination",
+      "cite": [
+        "generator-current:map_builder.classname_for"
+      ]
+    },
+    "intermission": {
+      "value": "info_intermission",
+      "cite": [
+        "progs1996:FindIntermission:5672-5698|\"info_intermission\"?",
+        "q1rr:quakec/client.qc:141-168|spot = find (world, classname, \"info_intermission\");",
+        "q1rr:quakec_ctf/client.qc:197-221|spot = find (world, classname, \"info_intermission\");"
+      ],
+      "note": "Added by change r1s-q1-intermission (switch r1s.q1_intermission, D8 role intermission): the camera FindIntermission looks for first; without it a deathmatch map, which has no info_player_start, ends a match in objerror 'FindIntermission: no spot'. The value is the id-source classname, not a mirror of earlier generator behaviour."
+    },
+    "coop_start": {
+      "value": "info_player_coop",
+      "cite": [
+        "progs1996:SelectSpawnPoint:6014-6030|\"info_player_coop\"?",
+        "q1rr:quakec/client.qc:562-572|lastspawn = find( lastspawn, classname, \"info_player_coop\" );",
+        "q1rr:quakec_ctf/client.qc:526-530|lastspawn = find(lastspawn, classname, \"info_player_coop\");"
+      ],
+      "note": "Added by change r1s-sp-coop-starts (switch r1s.sp_coop_starts, D8 role coop_start): three are emitted beside the info_player_start of every Quake 1 single-player map. With coop set, SelectSpawnPoint cycles through the info_player_coop entities and then the info_player_start (cited), and PutClientInServer telefrags whatever stands on the chosen spot, so without them every co-op player lands on the one start. info_player_coop is an empty function, so single-player play never reads it."
+    }
+  },
+  "team_classnames": {
+    "team_initial_spawn": {
+      "red": {
+        "value": "info_player_team1",
+        "cite": [
+          "generator-current:map_builder.classname_for"
+        ]
+      },
+      "blue": {
+        "value": "info_player_team2",
+        "cite": [
+          "generator-current:map_builder.classname_for"
+        ]
+      }
+    },
+    "team_respawn": {
+      "red": {
+        "value": "info_player_team1",
+        "cite": [
+          "generator-current:map_builder.classname_for"
+        ]
+      },
+      "blue": {
+        "value": "info_player_team2",
+        "cite": [
+          "generator-current:map_builder.classname_for"
+        ]
+      }
+    },
+    "flag": {
+      "red": {
+        "value": "item_flag_team1",
+        "cite": [
+          "generator-current:map_builder.classname_for"
+        ]
+      },
+      "blue": {
+        "value": "item_flag_team2",
+        "cite": [
+          "generator-current:map_builder.classname_for"
+        ]
+      }
+    }
+  },
+  "variants": {
+    "weapon": {
+      "value": [
+        "weapon_nailgun",
+        "weapon_supernailgun",
+        "weapon_grenadelauncher",
+        "weapon_rocketlauncher",
+        "weapon_lightning"
+      ],
+      "cite": [
+        "generator-current:map_builder.variant_class",
+        "generator-current:entities.weapon_variant_count"
+      ],
+      "note": "Order is significant: a placement's variant index selects from this list."
+    },
+    "monster": {
+      "value": [
+        "monster_army",
+        "monster_knight",
+        "monster_ogre",
+        "monster_demon1",
+        "monster_shalrath"
+      ],
+      "cite": [
+        "generator-current:map_builder.variant_class",
+        "generator-current:entities.monster_variant_count"
+      ],
+      "note": "Order is significant: a placement's variant index selects from this list."
+    }
+  },
+  "monster_hulls": {
+    "monster_army": {
+      "value": {
+        "mins": [
+          -16,
+          -16,
+          -24
+        ],
+        "maxs": [
+          16,
+          16,
+          40
+        ]
+      },
+      "cite": [
+        "progs1996:monster_army:14962-14965|VEC_HULL_MIN",
+        "progs1996:monster_army:14964|'16 16 40'",
+        "progs1996:@global:VEC_HULL_MIN|'-16 -16 -24'",
+        "q1rr:quakec/monsters/grunt.qc:319|setsize (self, '-16 -16 -24', '16 16 40');",
+        "q1src:WinQuake/world.c:148-153|hull = &model->hulls[2];",
+        "q1src:WinQuake/pr_cmds.c:1198-1202|if (trace.fraction == 1 || trace.allsolid)",
+        "q1src:WinQuake/sv_move.c:56|if (SV_PointContents (start) != CONTENTS_SOLID)",
+        "q1src:WinQuake/sv_move.c:91|if (trace.fraction == 1.0 || mid - trace.endpos[2] > STEPSIZE)",
+        "progs1996:walkmonster_start_go:8409-8416|droptofloor",
+        "q1rr:quakec/monsters.qc:92-98|walkmonster in wall at:"
+      ],
+      "note": "Change r1s-monster-hull-support (switch r1s.monster_hull_support): the spawn box each monster class sets. walkmonster_start_go raises the monster 1 unit and drops it with droptofloor, which leaves it in place when its box starts in solid, then reports \"walkmonster in wall\" when walkmove(0,0) fails (cited). The engine clips a monster against the world with hull 1 when the box is at most 32 wide and hull 2 ('-32 -32 -24' '32 32 64') otherwise (WinQuake/world.c), and SV_CheckBottom refuses a step when a bottom corner hangs more than STEPSIZE (18) over an edge (WinQuake/sv_move.c). The 32-wide classes' setsize box is 64 high and contains hull 1 (56 high), so the generator tests the setsize box."
+    },
+    "monster_knight": {
+      "value": {
+        "mins": [
+          -16,
+          -16,
+          -24
+        ],
+        "maxs": [
+          16,
+          16,
+          40
+        ]
+      },
+      "cite": [
+        "progs1996:monster_knight:14445-14448|VEC_HULL_MIN",
+        "progs1996:monster_knight:14447|'16 16 40'",
+        "progs1996:@global:VEC_HULL_MIN|'-16 -16 -24'",
+        "q1rr:quakec/monsters/knight.qc:279|setsize (self, '-16 -16 -24', '16 16 40');",
+        "q1src:WinQuake/world.c:148-153|hull = &model->hulls[2];",
+        "q1src:WinQuake/pr_cmds.c:1198-1202|if (trace.fraction == 1 || trace.allsolid)",
+        "q1src:WinQuake/sv_move.c:56|if (SV_PointContents (start) != CONTENTS_SOLID)",
+        "q1src:WinQuake/sv_move.c:91|if (trace.fraction == 1.0 || mid - trace.endpos[2] > STEPSIZE)",
+        "progs1996:walkmonster_start_go:8409-8416|droptofloor",
+        "q1rr:quakec/monsters.qc:92-98|walkmonster in wall at:"
+      ],
+      "note": "Change r1s-monster-hull-support (switch r1s.monster_hull_support): the spawn box each monster class sets. walkmonster_start_go raises the monster 1 unit and drops it with droptofloor, which leaves it in place when its box starts in solid, then reports \"walkmonster in wall\" when walkmove(0,0) fails (cited). The engine clips a monster against the world with hull 1 when the box is at most 32 wide and hull 2 ('-32 -32 -24' '32 32 64') otherwise (WinQuake/world.c), and SV_CheckBottom refuses a step when a bottom corner hangs more than STEPSIZE (18) over an edge (WinQuake/sv_move.c). The 32-wide classes' setsize box is 64 high and contains hull 1 (56 high), so the generator tests the setsize box."
+    },
+    "monster_ogre": {
+      "value": {
+        "mins": [
+          -32,
+          -32,
+          -24
+        ],
+        "maxs": [
+          32,
+          32,
+          64
+        ]
+      },
+      "cite": [
+        "progs1996:monster_ogre:12732-12735|VEC_HULL2_MIN",
+        "progs1996:monster_ogre:12734|VEC_HULL2_MAX",
+        "progs1996:@global:VEC_HULL2_MIN|'-32 -32 -24'",
+        "progs1996:@global:VEC_HULL2_MAX|'32 32 64'",
+        "q1rr:quakec/monsters/ogre.qc:520|setsize (self, VEC_HULL2_MIN, VEC_HULL2_MAX);",
+        "q1rr:quakec/defs.qc:354-355|VEC_HULL2_MIN = '-32 -32 -24';",
+        "q1src:WinQuake/world.c:148-153|hull = &model->hulls[2];",
+        "q1src:WinQuake/pr_cmds.c:1198-1202|if (trace.fraction == 1 || trace.allsolid)",
+        "q1src:WinQuake/sv_move.c:56|if (SV_PointContents (start) != CONTENTS_SOLID)",
+        "q1src:WinQuake/sv_move.c:91|if (trace.fraction == 1.0 || mid - trace.endpos[2] > STEPSIZE)",
+        "progs1996:walkmonster_start_go:8409-8416|droptofloor",
+        "q1rr:quakec/monsters.qc:92-98|walkmonster in wall at:"
+      ],
+      "note": "Change r1s-monster-hull-support (switch r1s.monster_hull_support): the spawn box each monster class sets. walkmonster_start_go raises the monster 1 unit and drops it with droptofloor, which leaves it in place when its box starts in solid, then reports \"walkmonster in wall\" when walkmove(0,0) fails (cited). The engine clips a monster against the world with hull 1 when the box is at most 32 wide and hull 2 ('-32 -32 -24' '32 32 64') otherwise (WinQuake/world.c), and SV_CheckBottom refuses a step when a bottom corner hangs more than STEPSIZE (18) over an edge (WinQuake/sv_move.c). The 32-wide classes' setsize box is 64 high and contains hull 1 (56 high), so the generator tests the setsize box."
+    },
+    "monster_demon1": {
+      "value": {
+        "mins": [
+          -32,
+          -32,
+          -24
+        ],
+        "maxs": [
+          32,
+          32,
+          64
+        ]
+      },
+      "cite": [
+        "progs1996:monster_demon1:13101-13104|VEC_HULL2_MIN",
+        "progs1996:monster_demon1:13103|VEC_HULL2_MAX",
+        "progs1996:@global:VEC_HULL2_MIN|'-32 -32 -24'",
+        "progs1996:@global:VEC_HULL2_MAX|'32 32 64'",
+        "q1rr:quakec/monsters/fiend.qc:231|setsize (self, VEC_HULL2_MIN, VEC_HULL2_MAX);",
+        "q1src:WinQuake/world.c:148-153|hull = &model->hulls[2];",
+        "q1src:WinQuake/pr_cmds.c:1198-1202|if (trace.fraction == 1 || trace.allsolid)",
+        "q1src:WinQuake/sv_move.c:56|if (SV_PointContents (start) != CONTENTS_SOLID)",
+        "q1src:WinQuake/sv_move.c:91|if (trace.fraction == 1.0 || mid - trace.endpos[2] > STEPSIZE)",
+        "progs1996:walkmonster_start_go:8409-8416|droptofloor",
+        "q1rr:quakec/monsters.qc:92-98|walkmonster in wall at:"
+      ],
+      "note": "Change r1s-monster-hull-support (switch r1s.monster_hull_support): the spawn box each monster class sets. walkmonster_start_go raises the monster 1 unit and drops it with droptofloor, which leaves it in place when its box starts in solid, then reports \"walkmonster in wall\" when walkmove(0,0) fails (cited). The engine clips a monster against the world with hull 1 when the box is at most 32 wide and hull 2 ('-32 -32 -24' '32 32 64') otherwise (WinQuake/world.c), and SV_CheckBottom refuses a step when a bottom corner hangs more than STEPSIZE (18) over an edge (WinQuake/sv_move.c). The 32-wide classes' setsize box is 64 high and contains hull 1 (56 high), so the generator tests the setsize box."
+    },
+    "monster_shalrath": {
+      "value": {
+        "mins": [
+          -32,
+          -32,
+          -24
+        ],
+        "maxs": [
+          32,
+          32,
+          64
+        ]
+      },
+      "cite": [
+        "progs1996:monster_shalrath:19855-19858|VEC_HULL2_MIN",
+        "progs1996:monster_shalrath:19857|VEC_HULL2_MAX",
+        "progs1996:@global:VEC_HULL2_MIN|'-32 -32 -24'",
+        "progs1996:@global:VEC_HULL2_MAX|'32 32 64'",
+        "q1rr:quakec/monsters/vore.qc:262|setsize (self, VEC_HULL2_MIN, VEC_HULL2_MAX);",
+        "q1src:WinQuake/world.c:148-153|hull = &model->hulls[2];",
+        "q1src:WinQuake/pr_cmds.c:1198-1202|if (trace.fraction == 1 || trace.allsolid)",
+        "q1src:WinQuake/sv_move.c:56|if (SV_PointContents (start) != CONTENTS_SOLID)",
+        "q1src:WinQuake/sv_move.c:91|if (trace.fraction == 1.0 || mid - trace.endpos[2] > STEPSIZE)",
+        "progs1996:walkmonster_start_go:8409-8416|droptofloor",
+        "q1rr:quakec/monsters.qc:92-98|walkmonster in wall at:"
+      ],
+      "note": "Change r1s-monster-hull-support (switch r1s.monster_hull_support): the spawn box each monster class sets. walkmonster_start_go raises the monster 1 unit and drops it with droptofloor, which leaves it in place when its box starts in solid, then reports \"walkmonster in wall\" when walkmove(0,0) fails (cited). The engine clips a monster against the world with hull 1 when the box is at most 32 wide and hull 2 ('-32 -32 -24' '32 32 64') otherwise (WinQuake/world.c), and SV_CheckBottom refuses a step when a bottom corner hangs more than STEPSIZE (18) over an edge (WinQuake/sv_move.c). The 32-wide classes' setsize box is 64 high and contains hull 1 (56 high), so the generator tests the setsize box."
+    }
+  },
+  "pickup_hulls": {
+    "item_armor2": {
+      "value": {
+        "mins": [
+          -16,
+          -16,
+          0
+        ],
+        "maxs": [
+          16,
+          16,
+          56
+        ]
+      },
+      "cite": [
+        "progs1996:item_armor2:2045-2048|'-16 -16 0'",
+        "progs1996:item_armor2:2047|'16 16 56'",
+        "q1rr:quakec/items.qc:321|setsize (self, '-16 -16 0', '16 16 56');",
+        "progs1996:StartItem:1745-1749|PlaceItem",
+        "progs1996:PlaceItem:1723-1726|MOVETYPE_TOSS(=6)",
+        "progs1996:PlaceItem:1729-1743|droptofloor",
+        "progs1996:PlaceItem:1732|Bonus item fell out of level",
+        "q1rr:quakec/items.qc:94-95|self.think = PlaceItem;",
+        "q1rr:quakec/items.qc:72|self.origin_z = self.origin_z + 6;",
+        "q1rr:quakec/items.qc:75-81|Bonus item fell out of level at",
+        "q1src:WinQuake/pr_cmds.c:1198|end[2] -= 256;",
+        "q1src:WinQuake/pr_cmds.c:1200-1202|if (trace.fraction == 1 || trace.allsolid)",
+        "q1src:WinQuake/world.c:150-151|hull = &model->hulls[1];",
+        "q1src:WinQuake/world.c:156|VectorSubtract (hull->clip_mins, mins, offset);"
+      ],
+      "note": "Change r1s-sp-pickup-hull-support (switch r1s.sp_pickup_hull_support): the box the item's spawn function sets (setsize). StartItem defers PlaceItem 0.2 s; PlaceItem raises the origin 6 units and calls droptofloor, which traces this box 256 units down and returns 0 when the trace starts all in solid or finds no floor, and the item is then removed (\"Bonus item fell out of level\") (cited). The box is 32 wide, so the engine clips it with hull 1, offset so the hull covers exactly the box (WinQuake/world.c): a box that only touches a brush face is not in solid."
+    },
+    "item_health": {
+      "value": {
+        "mins": [
+          0,
+          0,
+          0
+        ],
+        "maxs": [
+          32,
+          32,
+          56
+        ]
+      },
+      "cite": [
+        "progs1996:item_health:1834-1837|'32 32 56'",
+        "progs1996:item_health:1835|VEC_ORIGIN",
+        "progs1996:@global:VEC_ORIGIN|'0 0 0'",
+        "q1rr:quakec/items.qc:176|setsize (self, '0 0 0', '32 32 56');",
+        "progs1996:StartItem:1745-1749|PlaceItem",
+        "progs1996:PlaceItem:1723-1726|MOVETYPE_TOSS(=6)",
+        "progs1996:PlaceItem:1729-1743|droptofloor",
+        "progs1996:PlaceItem:1732|Bonus item fell out of level",
+        "q1rr:quakec/items.qc:94-95|self.think = PlaceItem;",
+        "q1rr:quakec/items.qc:72|self.origin_z = self.origin_z + 6;",
+        "q1rr:quakec/items.qc:75-81|Bonus item fell out of level at",
+        "q1src:WinQuake/pr_cmds.c:1198|end[2] -= 256;",
+        "q1src:WinQuake/pr_cmds.c:1200-1202|if (trace.fraction == 1 || trace.allsolid)",
+        "q1src:WinQuake/world.c:150-151|hull = &model->hulls[1];",
+        "q1src:WinQuake/world.c:156|VectorSubtract (hull->clip_mins, mins, offset);"
+      ],
+      "note": "Change r1s-sp-pickup-hull-support (switch r1s.sp_pickup_hull_support): the box the item's spawn function sets (setsize). StartItem defers PlaceItem 0.2 s; PlaceItem raises the origin 6 units and calls droptofloor, which traces this box 256 units down and returns 0 when the trace starts all in solid or finds no floor, and the item is then removed (\"Bonus item fell out of level\") (cited). The box is 32 wide, so the engine clips it with hull 1, offset so the hull covers exactly the box (WinQuake/world.c): a box that only touches a brush face is not in solid. The health box's origin is its minimum corner, not its centre."
+    },
+    "weapon_grenadelauncher": {
+      "value": {
+        "mins": [
+          -16,
+          -16,
+          0
+        ],
+        "maxs": [
+          16,
+          16,
+          56
+        ]
+      },
+      "cite": [
+        "progs1996:weapon_grenadelauncher:2350-2352|'-16 -16 0'",
+        "progs1996:weapon_grenadelauncher:2351|'16 16 56'",
+        "q1rr:quakec/items.qc:618|setsize (self, '-16 -16 0', '16 16 56');",
+        "progs1996:StartItem:1745-1749|PlaceItem",
+        "progs1996:PlaceItem:1723-1726|MOVETYPE_TOSS(=6)",
+        "progs1996:PlaceItem:1729-1743|droptofloor",
+        "progs1996:PlaceItem:1732|Bonus item fell out of level",
+        "q1rr:quakec/items.qc:94-95|self.think = PlaceItem;",
+        "q1rr:quakec/items.qc:72|self.origin_z = self.origin_z + 6;",
+        "q1rr:quakec/items.qc:75-81|Bonus item fell out of level at",
+        "q1src:WinQuake/pr_cmds.c:1198|end[2] -= 256;",
+        "q1src:WinQuake/pr_cmds.c:1200-1202|if (trace.fraction == 1 || trace.allsolid)",
+        "q1src:WinQuake/world.c:150-151|hull = &model->hulls[1];",
+        "q1src:WinQuake/world.c:156|VectorSubtract (hull->clip_mins, mins, offset);"
+      ],
+      "note": "Change r1s-sp-pickup-hull-support (switch r1s.sp_pickup_hull_support): the box the item's spawn function sets (setsize). StartItem defers PlaceItem 0.2 s; PlaceItem raises the origin 6 units and calls droptofloor, which traces this box 256 units down and returns 0 when the trace starts all in solid or finds no floor, and the item is then removed (\"Bonus item fell out of level\") (cited). The box is 32 wide, so the engine clips it with hull 1, offset so the hull covers exactly the box (WinQuake/world.c): a box that only touches a brush face is not in solid."
+    },
+    "weapon_lightning": {
+      "value": {
+        "mins": [
+          -16,
+          -16,
+          0
+        ],
+        "maxs": [
+          16,
+          16,
+          56
+        ]
+      },
+      "cite": [
+        "progs1996:weapon_lightning:2384-2386|'-16 -16 0'",
+        "progs1996:weapon_lightning:2385|'16 16 56'",
+        "q1rr:quakec/items.qc:647|setsize (self, '-16 -16 0', '16 16 56');",
+        "progs1996:StartItem:1745-1749|PlaceItem",
+        "progs1996:PlaceItem:1723-1726|MOVETYPE_TOSS(=6)",
+        "progs1996:PlaceItem:1729-1743|droptofloor",
+        "progs1996:PlaceItem:1732|Bonus item fell out of level",
+        "q1rr:quakec/items.qc:94-95|self.think = PlaceItem;",
+        "q1rr:quakec/items.qc:72|self.origin_z = self.origin_z + 6;",
+        "q1rr:quakec/items.qc:75-81|Bonus item fell out of level at",
+        "q1src:WinQuake/pr_cmds.c:1198|end[2] -= 256;",
+        "q1src:WinQuake/pr_cmds.c:1200-1202|if (trace.fraction == 1 || trace.allsolid)",
+        "q1src:WinQuake/world.c:150-151|hull = &model->hulls[1];",
+        "q1src:WinQuake/world.c:156|VectorSubtract (hull->clip_mins, mins, offset);"
+      ],
+      "note": "Change r1s-sp-pickup-hull-support (switch r1s.sp_pickup_hull_support): the box the item's spawn function sets (setsize). StartItem defers PlaceItem 0.2 s; PlaceItem raises the origin 6 units and calls droptofloor, which traces this box 256 units down and returns 0 when the trace starts all in solid or finds no floor, and the item is then removed (\"Bonus item fell out of level\") (cited). The box is 32 wide, so the engine clips it with hull 1, offset so the hull covers exactly the box (WinQuake/world.c): a box that only touches a brush face is not in solid."
+    },
+    "weapon_nailgun": {
+      "value": {
+        "mins": [
+          -16,
+          -16,
+          0
+        ],
+        "maxs": [
+          16,
+          16,
+          56
+        ]
+      },
+      "cite": [
+        "progs1996:weapon_nailgun:2316-2318|'-16 -16 0'",
+        "progs1996:weapon_nailgun:2317|'16 16 56'",
+        "q1rr:quakec/items.qc:590|setsize (self, '-16 -16 0', '16 16 56');",
+        "progs1996:StartItem:1745-1749|PlaceItem",
+        "progs1996:PlaceItem:1723-1726|MOVETYPE_TOSS(=6)",
+        "progs1996:PlaceItem:1729-1743|droptofloor",
+        "progs1996:PlaceItem:1732|Bonus item fell out of level",
+        "q1rr:quakec/items.qc:94-95|self.think = PlaceItem;",
+        "q1rr:quakec/items.qc:72|self.origin_z = self.origin_z + 6;",
+        "q1rr:quakec/items.qc:75-81|Bonus item fell out of level at",
+        "q1src:WinQuake/pr_cmds.c:1198|end[2] -= 256;",
+        "q1src:WinQuake/pr_cmds.c:1200-1202|if (trace.fraction == 1 || trace.allsolid)",
+        "q1src:WinQuake/world.c:150-151|hull = &model->hulls[1];",
+        "q1src:WinQuake/world.c:156|VectorSubtract (hull->clip_mins, mins, offset);"
+      ],
+      "note": "Change r1s-sp-pickup-hull-support (switch r1s.sp_pickup_hull_support): the box the item's spawn function sets (setsize). StartItem defers PlaceItem 0.2 s; PlaceItem raises the origin 6 units and calls droptofloor, which traces this box 256 units down and returns 0 when the trace starts all in solid or finds no floor, and the item is then removed (\"Bonus item fell out of level\") (cited). The box is 32 wide, so the engine clips it with hull 1, offset so the hull covers exactly the box (WinQuake/world.c): a box that only touches a brush face is not in solid."
+    },
+    "weapon_rocketlauncher": {
+      "value": {
+        "mins": [
+          -16,
+          -16,
+          0
+        ],
+        "maxs": [
+          16,
+          16,
+          56
+        ]
+      },
+      "cite": [
+        "progs1996:weapon_rocketlauncher:2367-2369|'-16 -16 0'",
+        "progs1996:weapon_rocketlauncher:2368|'16 16 56'",
+        "q1rr:quakec/items.qc:632|setsize (self, '-16 -16 0', '16 16 56');",
+        "progs1996:StartItem:1745-1749|PlaceItem",
+        "progs1996:PlaceItem:1723-1726|MOVETYPE_TOSS(=6)",
+        "progs1996:PlaceItem:1729-1743|droptofloor",
+        "progs1996:PlaceItem:1732|Bonus item fell out of level",
+        "q1rr:quakec/items.qc:94-95|self.think = PlaceItem;",
+        "q1rr:quakec/items.qc:72|self.origin_z = self.origin_z + 6;",
+        "q1rr:quakec/items.qc:75-81|Bonus item fell out of level at",
+        "q1src:WinQuake/pr_cmds.c:1198|end[2] -= 256;",
+        "q1src:WinQuake/pr_cmds.c:1200-1202|if (trace.fraction == 1 || trace.allsolid)",
+        "q1src:WinQuake/world.c:150-151|hull = &model->hulls[1];",
+        "q1src:WinQuake/world.c:156|VectorSubtract (hull->clip_mins, mins, offset);"
+      ],
+      "note": "Change r1s-sp-pickup-hull-support (switch r1s.sp_pickup_hull_support): the box the item's spawn function sets (setsize). StartItem defers PlaceItem 0.2 s; PlaceItem raises the origin 6 units and calls droptofloor, which traces this box 256 units down and returns 0 when the trace starts all in solid or finds no floor, and the item is then removed (\"Bonus item fell out of level\") (cited). The box is 32 wide, so the engine clips it with hull 1, offset so the hull covers exactly the box (WinQuake/world.c): a box that only touches a brush face is not in solid."
+    },
+    "weapon_supernailgun": {
+      "value": {
+        "mins": [
+          -16,
+          -16,
+          0
+        ],
+        "maxs": [
+          16,
+          16,
+          56
+        ]
+      },
+      "cite": [
+        "progs1996:weapon_supernailgun:2333-2335|'-16 -16 0'",
+        "progs1996:weapon_supernailgun:2334|'16 16 56'",
+        "q1rr:quakec/items.qc:604|setsize (self, '-16 -16 0', '16 16 56');",
+        "progs1996:StartItem:1745-1749|PlaceItem",
+        "progs1996:PlaceItem:1723-1726|MOVETYPE_TOSS(=6)",
+        "progs1996:PlaceItem:1729-1743|droptofloor",
+        "progs1996:PlaceItem:1732|Bonus item fell out of level",
+        "q1rr:quakec/items.qc:94-95|self.think = PlaceItem;",
+        "q1rr:quakec/items.qc:72|self.origin_z = self.origin_z + 6;",
+        "q1rr:quakec/items.qc:75-81|Bonus item fell out of level at",
+        "q1src:WinQuake/pr_cmds.c:1198|end[2] -= 256;",
+        "q1src:WinQuake/pr_cmds.c:1200-1202|if (trace.fraction == 1 || trace.allsolid)",
+        "q1src:WinQuake/world.c:150-151|hull = &model->hulls[1];",
+        "q1src:WinQuake/world.c:156|VectorSubtract (hull->clip_mins, mins, offset);"
+      ],
+      "note": "Change r1s-sp-pickup-hull-support (switch r1s.sp_pickup_hull_support): the box the item's spawn function sets (setsize). StartItem defers PlaceItem 0.2 s; PlaceItem raises the origin 6 units and calls droptofloor, which traces this box 256 units down and returns 0 when the trace starts all in solid or finds no floor, and the item is then removed (\"Bonus item fell out of level\") (cited). The box is 32 wide, so the engine clips it with hull 1, offset so the hull covers exactly the box (WinQuake/world.c): a box that only touches a brush face is not in solid."
+    }
+  },
+  "lighting": {
+    "balanced": {
+      "brightness": {
+        "value": 320,
+        "cite": [
+          "generator-current:entities.add_lighting"
+        ]
+      },
+      "color": {
+        "value": [
+          920,
+          880,
+          760
+        ],
+        "cite": [
+          "generator-current:entities.add_lighting"
+        ]
+      }
+    },
+    "low_key": {
+      "brightness": {
+        "value": 220,
+        "cite": [
+          "generator-current:entities.add_lighting"
+        ]
+      },
+      "color": {
+        "value": [
+          560,
+          620,
+          720
+        ],
+        "cite": [
+          "generator-current:entities.add_lighting"
+        ]
+      }
+    },
+    "high_contrast": {
+      "brightness": {
+        "value": 450,
+        "cite": [
+          "generator-current:entities.add_lighting"
+        ]
+      },
+      "odd_room_color": {
+        "value": [
+          1000,
+          720,
+          480
+        ],
+        "cite": [
+          "generator-current:entities.add_lighting"
+        ],
+        "note": "Rooms whose id is odd."
+      },
+      "even_room_color": {
+        "value": [
+          480,
+          660,
+          1000
+        ],
+        "cite": [
+          "generator-current:entities.add_lighting"
+        ],
+        "note": "Rooms whose id is even."
+      }
+    }
+  },
+  "uncompiled": {
+    "analysis_spawn_eye_offset_z": {
+      "value": 0,
+      "unit": "u",
+      "cite": [
+        "generator-current:src/visibility.cpp:player_spawn_eye_offset"
+      ],
+      "note": "Height added to player-spawn origins for the visibility analysis; still a literal in src/visibility.cpp (not read from this file)."
+    },
+    "spawn_refinement_eye_offset_z": {
+      "value": 22,
+      "unit": "u",
+      "cite": [
+        "generator-current:src/spawn_refinement.cpp:eye",
+        "generator-current:src/mp_motifs.cpp:refine_spawn_visibility"
+      ],
+      "note": "Literal +22 eye used by the spawn refinement passes; not read from this file."
+    }
+  },
+  "known_defects": [
+    {
+      "id": "q1-weapons-omit-supershotgun",
+      "check": "computed",
+      "kind": "generator_omits_catalogue_weapon",
+      "classnames": [
+        "weapon_supershotgun"
+      ],
+      "detail": "The weapon variants leave out weapon_supershotgun, a valid classname in every Quake module.",
+      "cite": [
+        "repo:docs/RC_PHASE1_AUDIT_AND_PLAN.md:832|The Q1 SSG is missing."
+      ]
+    },
+    {
+      "id": "q1-team-classnames-threewave-only",
+      "check": "computed",
+      "kind": "module_specific_classname",
+      "classnames": [
+        "info_player_team1",
+        "info_player_team2",
+        "item_flag_team1",
+        "item_flag_team2"
+      ],
+      "modules_with": [
+        "q1-threewave-5.0"
+      ],
+      "detail": "Team spawns and flags exist only in ThreeWave CTF; id1 and the re-release campaign have none.",
+      "cite": [
+        "repo:docs/RC_PHASE1_AUDIT_AND_PLAN.md:211|exist only in quakec_ctf"
+      ]
+    },
+    {
+      "id": "q1-monsters-removed-in-threewave",
+      "check": "computed",
+      "kind": "classname_removed_in_module",
+      "classnames": [
+        "monster_army",
+        "monster_knight",
+        "monster_ogre",
+        "monster_demon1",
+        "monster_shalrath"
+      ],
+      "modules_with": [
+        "q1-threewave-5.0"
+      ],
+      "detail": "ThreeWave CTF defines every monster as a stub that removes itself, so monster placements vanish under that module.",
+      "cite": [
+        "generator-current:map_builder.variant_class"
+      ]
+    },
+    {
+      "id": "q1-analysis-eye-offset",
+      "check": "computed",
+      "kind": "analysis_eye_offset_differs",
+      "detail": "The visibility analysis adds 0 to Quake spawn origins; the player's view_ofs is 22 in every Quake module.",
+      "cite": [
+        "generator-current:src/visibility.cpp:player_spawn_eye_offset"
+      ]
+    },
+    {
+      "id": "q1-textures-not-stock",
+      "check": "declared",
+      "kind": "material_not_stock",
+      "values": [
+        "WALL1_1",
+        "FLOOR0_1"
+      ],
+      "detail": "WALL1_1 and FLOOR0_1 are not stock texture names (Phase-1 audit). Not re-checked here: the asset registry is pending D9.",
+      "cite": [
+        "repo:docs/RC_PHASE1_AUDIT_AND_PLAN.md:834|- WALL1_1 and FLOOR0_1 are not stock names."
+      ]
+    }
+  ]
+}

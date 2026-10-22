@@ -1,0 +1,1353 @@
+{
+  "schema_version": 1,
+  "id": "ravel-v1",
+  "date": "2026-09-13",
+  "map": "qmg_ravel",
+  "status": "compiled_and_dedicated_initialization_validated_with_bounded_native_world_movement",
+  "intended_mode": "stock_q2_deathmatch",
+  "intended_players": [
+    4,
+    6
+  ],
+  "construction": "Original explicit qmg_core recipe; automatic motif selection and model-weight training remain pending.",
+  "recipe": "tools/map_recipes/ravel.cpp",
+  "study": "docs/Q2_RAVEL_STUDY.md",
+  "testing_regimen": "docs/MP_COMPACT_LAYOUT_REGIMEN.md",
+  "local_artifacts": "out/ravel",
+  "canonical_layout_sha256": "2f7f315bb2863b229e9e5cebc9a5998bff77328469cfa1a625e827d61678d864",
+  "artifact_hashes": {
+    "source_sha256": "3af5b50fc6c0e82b4ae250dcc165b54b075789ad3cd95985cfb2f057e8891197",
+    "bsp_sha256": "8b88bf771c64783a812aa20160250da60201d625ba8eb8d7920b006e7097b69c",
+    "recipe_sha256": "ed62c7416d1296dcab6d3ddedc656b62ce28733dc40415fe0220f81cd35c6198",
+    "recipe_support_sha256": "8b1321145e9fa896c71ad86be44025b6400992f11d07ceb0052683b23ed6600c",
+    "core_sha256": "a0653a842e37671dc3599fa255e9e3dfa73b64f303dc81c258b51a46a2e62322",
+    "profile_sha256": "4f833d1a09eab67c719175310e101befcc9ad43d330985e7bc7a7d645f65d935"
+  },
+  "current_documentation": [
+    "README.md",
+    "THIRD_PARTY.md",
+    "docs/ROADMAP.md",
+    "docs/VALIDATION.md",
+    "docs/MAP_DESIGN_PLAYBOOK.md",
+    "docs/MP_COMPACT_LAYOUT_REGIMEN.md",
+    "docs/MP_SPATIAL_PATTERNS.md",
+    "docs/Q2_RAVEL_STUDY.md",
+    "docs/Q2_INTERLEAVED_ROUTE_STUDY.md",
+    "docs/Q2_NATIVE_ASCENT_STUDY.md",
+    "tools/map_recipes/README.md",
+    "out/ravel/native-routes/README.md"
+  ],
+  "evidence_files": [
+    {
+      "path": "CMakeLists.txt",
+      "sha256": "97ffb9854ca639b3dbf825eca34f32915b2771e60ddca18ac97b336d4de7c8db",
+      "bytes": 27767
+    },
+    {
+      "path": "docs/MAP_DESIGN_PLAYBOOK.md",
+      "sha256": "834a248d082fde3c7d35e44a48e6704b22cfec8380a524483cff330f4afbceda",
+      "bytes": 28081
+    },
+    {
+      "path": "docs/MP_COMPACT_LAYOUT_REGIMEN.md",
+      "sha256": "2c7ed3dbbbc84bf3e3cbb92cea8d79f046a733dc5470bee7be122df87e354f3e",
+      "bytes": 13417
+    },
+    {
+      "path": "docs/MP_SPATIAL_PATTERNS.md",
+      "sha256": "802b918e48aa1d618513e4b685a0a94717d340d0034676e866ff8a6973330374",
+      "bytes": 14170
+    },
+    {
+      "path": "docs/Q2_INTERLEAVED_ROUTE_STUDY.md",
+      "sha256": "0ab4d7490d2b78acd5bd2db055ce89475d349673f097030218f4b17a6bc9c6c0",
+      "bytes": 10816
+    },
+    {
+      "path": "docs/Q2_NATIVE_ASCENT_STUDY.md",
+      "sha256": "1f4394ead9dbce4a81beb8a5dc10c9b0f690d18531517c7ca1ca6f75be87987a",
+      "bytes": 9168
+    },
+    {
+      "path": "docs/Q2_RAVEL_STUDY.md",
+      "sha256": "068ab5f2dc6c420545fb0f6f0a73ba7ed6e73c1acdcd7d45c67c873f276fbbcc",
+      "bytes": 8442
+    },
+    {
+      "path": "docs/ROADMAP.md",
+      "sha256": "2dda39a782a7bde97214ecb6f2dff5e49978abdf5e3de3661dcce4998f835964",
+      "bytes": 16023
+    },
+    {
+      "path": "docs/VALIDATION.md",
+      "sha256": "8d0701365694262f70725e962580e4cbfacef37400871f708767daba6ac5a22f",
+      "bytes": 30999
+    },
+    {
+      "path": "knowledge/q2/interleaved-route-study.json",
+      "sha256": "684b62c74075090de09c4be74791650087d6ca5daa6581392d301a61cf2cb79f",
+      "bytes": 18803
+    },
+    {
+      "path": "knowledge/q2/iteration-roadmap.json",
+      "sha256": "1388c7e091cc93d63806aa12b48c597a2e6e88e6ac6e2af25376b38bbd874f50",
+      "bytes": 15053
+    },
+    {
+      "path": "knowledge/q2/native-ascent-study.json",
+      "sha256": "9ed40539b2f802a918acb990644575a61d954d96b03426f37b0dfc7bcc7f6b28",
+      "bytes": 52979
+    },
+    {
+      "path": "knowledge/q2/rules.json",
+      "sha256": "248498df9f9eb6a05eed3222d5dabe52b6c7e748a2fddae4eeca186aca126d56",
+      "bytes": 59109
+    },
+    {
+      "path": "out/interleaved-route-study/audit_routes.py",
+      "sha256": "5d45532ae7b5416be106b16116e410c2e59d8813f9337d19f55e9487f93c1cf6",
+      "bytes": 8861
+    },
+    {
+      "path": "out/interleaved-route-study/q2rdm2-plans.png",
+      "sha256": "b2cc911a908e4b3b5cd7006afa1bbf4c95cbee534f8cb738621a3bb3be657681",
+      "bytes": 80662
+    },
+    {
+      "path": "out/interleaved-route-study/q2rdm7-nested-routes.png",
+      "sha256": "8f5cf797c9aedad414939d18f9de4a76db477ff930fda50ef814f9430232f363",
+      "bytes": 75379
+    },
+    {
+      "path": "out/interleaved-route-study/q2rdm7-plans.png",
+      "sha256": "78658950bee365797f2a1a3e046bb6df9db7b9b609cb087ea2e34d0f0117e4a1",
+      "bytes": 76195
+    },
+    {
+      "path": "out/interleaved-route-study/q2rdm7-route-audit.json",
+      "sha256": "bb8de05f79a27ec3c1cc248cbee5dbe6f7d9494be5051d671dee0b554039babc",
+      "bytes": 83183
+    },
+    {
+      "path": "out/interleaved-route-study/render_context.py",
+      "sha256": "1dacba719688196a24492f69d05bf5dbbde0ef4790f0d63775b9a02c897d7d3d",
+      "bytes": 1024
+    },
+    {
+      "path": "out/interleaved-route-study/render_routes.py",
+      "sha256": "7130a44acd04bc96a7997f43bc743ca4e285050994af82436f64ecb0471a8e8d",
+      "bytes": 3806
+    },
+    {
+      "path": "out/interleaved-route-study/write_record.py",
+      "sha256": "4edc9679bd5c44ab974940fbccac20891d1e3f3bae2f6241b4d4875f032f1856",
+      "bytes": 8335
+    },
+    {
+      "path": "out/native-ascent/comparison.json",
+      "sha256": "114637683b338b1443b510b7e1122a7d7bed50290641a8d75fe45744ca47da59",
+      "bytes": 136133
+    },
+    {
+      "path": "out/native-ascent/verify_evidence.py",
+      "sha256": "b1deb19bd9941a295b118ded7fb64417888e92cd862a4957ee1beb5d5cc9baff",
+      "bytes": 11266
+    },
+    {
+      "path": "out/ql-atlas/atlas.json",
+      "sha256": "f0b908e01243f62ddad535d7db3a8f614ca8c25ddb963fb62e7d72c96062a869",
+      "bytes": 22940
+    },
+    {
+      "path": "out/ql-atlas/package.json",
+      "sha256": "1f2771a784164752ae8b644d9fbae42f303d9b254495e6aa190b4b2812ad1d7a",
+      "bytes": 337
+    },
+    {
+      "path": "out/ravel/cleanup-preflight.json",
+      "sha256": "956f627d4e57ba487c93be2afa2016c6ada879e26426870335c66dbbe7d34c01",
+      "bytes": 324
+    },
+    {
+      "path": "out/ravel/cleanup-status.json",
+      "sha256": "ecd000f16d3e0c2125aa805bc3ddd0f33c6d728e716fbb1f7bbd65c23d8ddc08",
+      "bytes": 392
+    },
+    {
+      "path": "out/ravel/comparison-to-lockyard.json",
+      "sha256": "0d60107a85242dec2e12b13a7dee0f9a7a2fdbed39c5920a410d1949e136852f",
+      "bytes": 1400
+    },
+    {
+      "path": "out/ravel/compiled-analysis.json",
+      "sha256": "ab5bdfef741af4441d0b39b69e0fa4e16c1efb7ea9de23412e0eee8d334aba4e",
+      "bytes": 22446
+    },
+    {
+      "path": "out/ravel/ctest-focused.log",
+      "sha256": "67d9054883fac0554cdecf99402a856ab1620a68024899050ac73314c0181fd7",
+      "bytes": 2759
+    },
+    {
+      "path": "out/ravel/design-controls/exposed-spawns/layout.json",
+      "sha256": "868a58c28d5e386d8f5c1eca25201259c3666158d51117c7028e7e56d5184b27",
+      "bytes": 7697
+    },
+    {
+      "path": "out/ravel/design-controls/exposed-spawns/qmg_ravel.map",
+      "sha256": "778b1ff322e9d2f80df9c690a6a45413c2321df0bcbbe9e2d98810c5e7d329a2",
+      "bytes": 97447
+    },
+    {
+      "path": "out/ravel/design-controls/exposed-spawns/qmg_ravel.qmg.json",
+      "sha256": "7b651a3d6d45db23cd566687e2ab487850ebb94f76ce671e277fab20fa2e9f9b",
+      "bytes": 60892
+    },
+    {
+      "path": "out/ravel/design-controls/exposed-spawns/ravel.cpp",
+      "sha256": "86856e3fb55f9b5a5f53237e97d2dbf671f57f0b24c5fe1978fc3115a992a950",
+      "bytes": 6074
+    },
+    {
+      "path": "out/ravel/design-controls/exposed-spawns/README.md",
+      "sha256": "f5736ad6cf07da5e67ad6f79bb906f1d632b13266ed4fafbf1f84ec11cf9e77c",
+      "bytes": 1040
+    },
+    {
+      "path": "out/ravel/engine-smoke/authored-entities.ent",
+      "sha256": "5532d7595ec4395c9778c026af64234beeee15af104ae57714abce3e39b2416e",
+      "bytes": 6426
+    },
+    {
+      "path": "out/ravel/engine-smoke/engine-smoke.json",
+      "sha256": "cfe2b3ca96d703f78eae3f00a8ed0ad09e5414f8638927f3370eadbde2060f9e",
+      "bytes": 6502
+    },
+    {
+      "path": "out/ravel/engine-smoke/engine.log",
+      "sha256": "0986509d3b4d0f4a8c0a268030f323bce71e9e0970bc2da822568d950f32abf7",
+      "bytes": 2756
+    },
+    {
+      "path": "out/ravel/engine-smoke/profile.cfg",
+      "sha256": "7f57088def0af0ef74d5eb4c7f4bb3a136c864256a59c2dbab8b55de80b120db",
+      "bytes": 243
+    },
+    {
+      "path": "out/ravel/engine-smoke/stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    {
+      "path": "out/ravel/engine-smoke/stdout.log",
+      "sha256": "c3fdf80750ff61794ce4f17fe3a13bb49bf1f055cd18610dc846fbe8bcf55d3f",
+      "bytes": 2187
+    },
+    {
+      "path": "out/ravel/floor-0.png",
+      "sha256": "1d23c24d8352d98c413fadc67117ddbe4ae0854b91c80fa62bcc9ad648f40ede",
+      "bytes": 28280
+    },
+    {
+      "path": "out/ravel/floor-128.png",
+      "sha256": "4f05aa3b4b18272c30f8f4365d2344835690f407b7b8322b85a2038504718a3c",
+      "bytes": 34407
+    },
+    {
+      "path": "out/ravel/floor-256.png",
+      "sha256": "ebf1fd0430d8bfd9c340a95680a42f3fa0f0194ea05a61728c2c7bdc34b30011",
+      "bytes": 25639
+    },
+    {
+      "path": "out/ravel/flow.json",
+      "sha256": "1ef44c35acee5bb33811e19bc49d84db487158d3b9830cc86ed0c275617ddf17",
+      "bytes": 13153
+    },
+    {
+      "path": "out/ravel/index.html",
+      "sha256": "d583bc7389470a0d4d18d1a5ef10e5b1d7f37bb884aa475a4a2becb22306ad0e",
+      "bytes": 99674
+    },
+    {
+      "path": "out/ravel/layout.json",
+      "sha256": "0e33a315685c2f854c4f3eb4ff8b86b785a37e8744096dc67ce8756dc2690132",
+      "bytes": 7771
+    },
+    {
+      "path": "out/ravel/light.log",
+      "sha256": "24cddd850b615cc256d4a00a05d610807ab042f6c36464f52b7786801d34a674",
+      "bytes": 1913
+    },
+    {
+      "path": "out/ravel/native-routes/artifact-manifest.json",
+      "sha256": "320b108cc9a22cf83e5d808a42079f59832f676289a7352cac350856972fdf9a",
+      "bytes": 9750
+    },
+    {
+      "path": "out/ravel/native-routes/comparison.json",
+      "sha256": "76bf34b95a7e138f9353d18964b7eaa22815e6707bbeae99e42806bec73e2c57",
+      "bytes": 26301
+    },
+    {
+      "path": "out/ravel/native-routes/experiment.log",
+      "sha256": "38256401fef25243cd94b05c952326488f87f802d69aab7b62d5874eb6951f7b",
+      "bytes": 638
+    },
+    {
+      "path": "out/ravel/native-routes/ravel-drop-forward200/commands.txt",
+      "sha256": "9d8335f3964dc7b75cc6bf6cac2487c109e5caf9af2c7fa28ed3955ecaf2d2bc",
+      "bytes": 8128
+    },
+    {
+      "path": "out/ravel/native-routes/ravel-drop-forward200/frames.ndjson",
+      "sha256": "e9a9c04a231ca1b68683729cf4066f7430a6993439a7a422250c3906116022cd",
+      "bytes": 157255
+    },
+    {
+      "path": "out/ravel/native-routes/ravel-drop-forward200/native-stderr.txt",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    {
+      "path": "out/ravel/native-routes/ravel-drop-forward200/result.json",
+      "sha256": "030b34cba471162d4028309c9016891b4749f59103d7f4496cdd19e3062d71ab",
+      "bytes": 3187
+    },
+    {
+      "path": "out/ravel/native-routes/ravel-drop-forward200/route-audit.json",
+      "sha256": "79dda505661d2ddc90bde1b093b97402a0874e15d5664a6a2dc8fb1998560a32",
+      "bytes": 19399
+    },
+    {
+      "path": "out/ravel/native-routes/ravel-drop-forward200/trial.json",
+      "sha256": "a45b1db27c8c5a4ebeffc16a4942086f0eb85e7b0d391b5f9528c477013fb901",
+      "bytes": 734
+    },
+    {
+      "path": "out/ravel/native-routes/ravel-drop-forward400/commands.txt",
+      "sha256": "15c1b358e92ecfa2a00ef504118042655f909ed2b10277f9976a768ba6a06c84",
+      "bytes": 8128
+    },
+    {
+      "path": "out/ravel/native-routes/ravel-drop-forward400/frames.ndjson",
+      "sha256": "29410728b736dc9a112666827eb6260fc612056cf1920772d3ead75498facebd",
+      "bytes": 157348
+    },
+    {
+      "path": "out/ravel/native-routes/ravel-drop-forward400/native-stderr.txt",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    {
+      "path": "out/ravel/native-routes/ravel-drop-forward400/result.json",
+      "sha256": "2b57427eb5f74b38f37096b299305bf351ee96acd4be9be5125297a5e5f8e14a",
+      "bytes": 3194
+    },
+    {
+      "path": "out/ravel/native-routes/ravel-drop-forward400/route-audit.json",
+      "sha256": "b103c2614ce0a66fa4d90815d9fa24a6f54a88d9661fc36f97b2725646dd84f0",
+      "bytes": 15903
+    },
+    {
+      "path": "out/ravel/native-routes/ravel-drop-forward400/trial.json",
+      "sha256": "59bc6c07234cf445fdec49a7a697a4cbb20e710e52fd8233f9f3b65f5552d9b7",
+      "bytes": 734
+    },
+    {
+      "path": "out/ravel/native-routes/ravel-ramp-down-forward200/commands.txt",
+      "sha256": "72a57133de5f0c269775b63cea2040195495ac916795616dcbb5c6791dbac31d",
+      "bytes": 8128
+    },
+    {
+      "path": "out/ravel/native-routes/ravel-ramp-down-forward200/frames.ndjson",
+      "sha256": "7f217c42d95e49cacc6c00e94e3ebc84cdb33c6ec125456c1d02c9cc24275d1d",
+      "bytes": 156619
+    },
+    {
+      "path": "out/ravel/native-routes/ravel-ramp-down-forward200/native-stderr.txt",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    {
+      "path": "out/ravel/native-routes/ravel-ramp-down-forward200/result.json",
+      "sha256": "d6a88b32d4213195f7b17fe7fafaacbe15f567847cd742459f8dfa8d27bfaa07",
+      "bytes": 3205
+    },
+    {
+      "path": "out/ravel/native-routes/ravel-ramp-down-forward200/route-audit.json",
+      "sha256": "e6cdfd5b3c296acb2576062523e1cc9a3b3135b0df3f668267f5cab2f6a5ffc1",
+      "bytes": 57856
+    },
+    {
+      "path": "out/ravel/native-routes/ravel-ramp-down-forward200/trial.json",
+      "sha256": "3b7bbc2bcf8034afd7f358d0d5c4d143fa8b57dabb5db70d6e6bef4ac550f513",
+      "bytes": 746
+    },
+    {
+      "path": "out/ravel/native-routes/ravel-ramp-down-forward400/commands.txt",
+      "sha256": "474f6685a6ab9031285d5983520030f9663b6652799de9c25314267505fce3c9",
+      "bytes": 8128
+    },
+    {
+      "path": "out/ravel/native-routes/ravel-ramp-down-forward400/frames.ndjson",
+      "sha256": "e810b9b27405f13a86e932c62d58d2385ca68b2ab5c0ab81dda51f93079b6a18",
+      "bytes": 156128
+    },
+    {
+      "path": "out/ravel/native-routes/ravel-ramp-down-forward400/native-stderr.txt",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    {
+      "path": "out/ravel/native-routes/ravel-ramp-down-forward400/result.json",
+      "sha256": "f4e6b9ac5386fea4b6b56f89bc22b35087e9d2035b52778a39a9d4c04dd6bc0a",
+      "bytes": 3209
+    },
+    {
+      "path": "out/ravel/native-routes/ravel-ramp-down-forward400/route-audit.json",
+      "sha256": "299fb0353e6cec29c78d9e9204f1a66dc02a885d0cf1361c9a87b31ad7ca2dc9",
+      "bytes": 39630
+    },
+    {
+      "path": "out/ravel/native-routes/ravel-ramp-down-forward400/trial.json",
+      "sha256": "baae46aa461469e37657b851651203fd6d3f7b8f0a254a3689fe044d3c70d6f8",
+      "bytes": 746
+    },
+    {
+      "path": "out/ravel/native-routes/ravel-ramp-up-forward200/commands.txt",
+      "sha256": "215ac601ace04a323b2e69c7f3d0143bc1c876ed0b19c9dd55ba880853fcef30",
+      "bytes": 7728
+    },
+    {
+      "path": "out/ravel/native-routes/ravel-ramp-up-forward200/frames.ndjson",
+      "sha256": "521e1bace361de88880afd6cfd1e88b531f6676a3a61cc83c7333f2a18cf845d",
+      "bytes": 156638
+    },
+    {
+      "path": "out/ravel/native-routes/ravel-ramp-up-forward200/native-stderr.txt",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    {
+      "path": "out/ravel/native-routes/ravel-ramp-up-forward200/result.json",
+      "sha256": "4fa63da186b0f93249dbfbf941e25ee641b98b895461ea4ffc4d3a5622dd5b5e",
+      "bytes": 3203
+    },
+    {
+      "path": "out/ravel/native-routes/ravel-ramp-up-forward200/route-audit.json",
+      "sha256": "3474e5bd784df5651289b32f41b1829afd23a73de85bb0f03ae28c49d77a6b77",
+      "bytes": 54905
+    },
+    {
+      "path": "out/ravel/native-routes/ravel-ramp-up-forward200/trial.json",
+      "sha256": "d16fcc54cf78d30913359fd7794849c4413d3d5479fe4bb922c2949a42d3cecd",
+      "bytes": 742
+    },
+    {
+      "path": "out/ravel/native-routes/ravel-ramp-up-forward400/commands.txt",
+      "sha256": "3cd3165b559b5b0d21dd64c834acbe09e0380033b700bbc0d853ad8acd316989",
+      "bytes": 7728
+    },
+    {
+      "path": "out/ravel/native-routes/ravel-ramp-up-forward400/frames.ndjson",
+      "sha256": "ae1e40794a4df09d5d18401d550638f6474f3b415b8a2b57a5d720b100e09e31",
+      "bytes": 156292
+    },
+    {
+      "path": "out/ravel/native-routes/ravel-ramp-up-forward400/native-stderr.txt",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    {
+      "path": "out/ravel/native-routes/ravel-ramp-up-forward400/result.json",
+      "sha256": "7b50e48b58964d5c138c33b5086b93774bf3ef920b1bf7517c21ab38fa7121f3",
+      "bytes": 3202
+    },
+    {
+      "path": "out/ravel/native-routes/ravel-ramp-up-forward400/route-audit.json",
+      "sha256": "e4160729db64fc0a07d8c7a6a72c0e2bfdb3e03c80f004f9d21637dd5bbe798e",
+      "bytes": 37410
+    },
+    {
+      "path": "out/ravel/native-routes/ravel-ramp-up-forward400/trial.json",
+      "sha256": "8fded32bca8e32f38987a96301666af4e0d3981e5f5a6f1ce2ecab08776c171e",
+      "bytes": 742
+    },
+    {
+      "path": "out/ravel/native-routes/README.md",
+      "sha256": "4d266b651a6a27278b75f24081547c60c5d33ca0ae599fe7c9e71ae5461a263c",
+      "bytes": 3475
+    },
+    {
+      "path": "out/ravel/native-routes/summary.json",
+      "sha256": "7d5848f5bdbac2942cea22936e8e598079af8dc87c8812fd05aacd0629a5a9cd",
+      "bytes": 5914
+    },
+    {
+      "path": "out/ravel/native-routes/talus-ramp-translation-check.json",
+      "sha256": "2e7c8abf1d51880d41534c03ebb4b97b8143010510280542e512e2a716651ecc",
+      "bytes": 6286
+    },
+    {
+      "path": "out/ravel/native-routes/tests.log",
+      "sha256": "9c914377440581bc1848c9f428e4af6fb7ac81d644fc0b5118a745aef640d9f1",
+      "bytes": 617
+    },
+    {
+      "path": "out/ravel/ordinary-gate-dependencies.json",
+      "sha256": "3bd5ec0a5d9b3d97fb200b653a2d0d2f193226765cab7d1588957b3787c165f6",
+      "bytes": 2982
+    },
+    {
+      "path": "out/ravel/overview-mobile-light.png",
+      "sha256": "3e5fe5382002feccf383fd967e221954a1e64f24e12dad852aa578c22e932e59",
+      "bytes": 50366
+    },
+    {
+      "path": "out/ravel/overview.png",
+      "sha256": "8dd6fcc0a0a70cda580daf0af379bb57145e97979682eb04f113af440e5d08d9",
+      "bytes": 102094
+    },
+    {
+      "path": "out/ravel/packing-comparison.json",
+      "sha256": "0d319da0981b682a95b471375d00283ebd19cb272d3c342cd9af646428d98323",
+      "bytes": 3108
+    },
+    {
+      "path": "out/ravel/packing.log",
+      "sha256": "0d319da0981b682a95b471375d00283ebd19cb272d3c342cd9af646428d98323",
+      "bytes": 3108
+    },
+    {
+      "path": "out/ravel/preview-checks.json",
+      "sha256": "57439b1194df1a0d5529febe77df4af2642a2f76cfc04d5142bcc9645d2b160c",
+      "bytes": 66626
+    },
+    {
+      "path": "out/ravel/preview-controls/counterweight/compiled-analysis.json",
+      "sha256": "b116dbc995433015a27729de6cc88245125316c14837d1b38423ad19464dd5f4",
+      "bytes": 22137
+    },
+    {
+      "path": "out/ravel/preview-controls/counterweight/counterweight-layout.html",
+      "sha256": "b5445ad6d3c1778764d7e65184f03b906f53fd971ff3a0187b9a70c2775be53d",
+      "bytes": 49319
+    },
+    {
+      "path": "out/ravel/preview-controls/counterweight/floor-0.png",
+      "sha256": "31fee7aa2423976c4bff41b10387784eb3c0dfd0e10c6dcdc53f0462c543f068",
+      "bytes": 31525
+    },
+    {
+      "path": "out/ravel/preview-controls/counterweight/floor-128.png",
+      "sha256": "ed1dbf3df8a22a9c6ae530c871ad2e6f5889d39df87c6abf8aac493e5d928e38",
+      "bytes": 31755
+    },
+    {
+      "path": "out/ravel/preview-controls/counterweight/floor-256.png",
+      "sha256": "5cc3b72010702db7fd7e75ee023638e2148ced18da8181efe54a3b830ed4a587",
+      "bytes": 27660
+    },
+    {
+      "path": "out/ravel/preview-controls/counterweight/index.html",
+      "sha256": "fde8e1eb6bf9242bce41677ac21526056d3e55cf42c7bcebe7b0586fb63e4c8d",
+      "bytes": 101376
+    },
+    {
+      "path": "out/ravel/preview-controls/counterweight/layout.json",
+      "sha256": "b6b52fbcad3902a23199d8e7e0d0b950c3645781c182c008d3de49508f2262a7",
+      "bytes": 9537
+    },
+    {
+      "path": "out/ravel/preview-controls/counterweight/overview-mobile-light.png",
+      "sha256": "fdc158c414c82e5a4c1cb080ce30f45a5600b611fb7c6671f7540c2bc14bb89b",
+      "bytes": 51845
+    },
+    {
+      "path": "out/ravel/preview-controls/counterweight/overview.png",
+      "sha256": "2de87a23032596814132de2772579bb2feb46b2c3bf41992408d64512305cd54",
+      "bytes": 101719
+    },
+    {
+      "path": "out/ravel/preview-controls/counterweight/preview-checks.json",
+      "sha256": "81e8376757a320d41d3f47af35a91d961e4934bbcb6ed70a4f027a0c98f338a3",
+      "bytes": 63366
+    },
+    {
+      "path": "out/ravel/preview-controls/counterweight/qmg_counterweight.bsp",
+      "sha256": "cbf6c90de2baa23bf04e6f47f7d35a6286582febddf9b0c0c7e350c07014ebca",
+      "bytes": 298924
+    },
+    {
+      "path": "out/ravel/preview-controls/counterweight/verification.json",
+      "sha256": "223c0eab038d5c730ec4cc80d4c55fc397a96915ef0474c7b55dd36cd55e80e0",
+      "bytes": 3001
+    },
+    {
+      "path": "out/ravel/preview-controls/lockyard/compiled-analysis.json",
+      "sha256": "53fb810e550acc153f03051b24d416560ca1351cdcaf717263638f39e277472c",
+      "bytes": 21955
+    },
+    {
+      "path": "out/ravel/preview-controls/lockyard/features.json",
+      "sha256": "12174d152b64cec8ad2ef1bccd505de7413243ef192950ce78b353ed569b25ec",
+      "bytes": 1641
+    },
+    {
+      "path": "out/ravel/preview-controls/lockyard/floor--128.png",
+      "sha256": "413badd5afb8b2bb3f40ddef25b9705a5db03fb0247868246a8a9cadd46084e8",
+      "bytes": 28852
+    },
+    {
+      "path": "out/ravel/preview-controls/lockyard/floor-0.png",
+      "sha256": "b0a3883b4546c0afac546127ae5e13e5a524a79bb70cbad55c1911768647fac1",
+      "bytes": 29925
+    },
+    {
+      "path": "out/ravel/preview-controls/lockyard/floor-128.png",
+      "sha256": "60400eda8f570f13a7c347566309fa8662f5bd05a384f2560d32fcaab2a0bf6e",
+      "bytes": 30088
+    },
+    {
+      "path": "out/ravel/preview-controls/lockyard/index.html",
+      "sha256": "e1e57e5c7a5fe932d240d03ed9530202569d222b269dba7ab9d9dae485535384",
+      "bytes": 102539
+    },
+    {
+      "path": "out/ravel/preview-controls/lockyard/layout.json",
+      "sha256": "becacb47faf580655f84c63030610fd85faf46d21ee8b3ba69c66f75ead4cab6",
+      "bytes": 9419
+    },
+    {
+      "path": "out/ravel/preview-controls/lockyard/lockyard-layout.html",
+      "sha256": "df7b82c490e5f3526250282ce93bb0698dc01169c6dc9695acdaa92ca9b0f7cd",
+      "bytes": 50087
+    },
+    {
+      "path": "out/ravel/preview-controls/lockyard/overview-mobile-light.png",
+      "sha256": "f6fe1bb5ddbcf4012ee55242e364024d04ec10fc504fbf5034f128f9cb4cfec1",
+      "bytes": 52435
+    },
+    {
+      "path": "out/ravel/preview-controls/lockyard/overview.png",
+      "sha256": "35dcaaa20e53dbf1d25b4ad29dfc229295246174bc9b4eea7b76788eb04611cf",
+      "bytes": 108691
+    },
+    {
+      "path": "out/ravel/preview-controls/lockyard/preview-checks.json",
+      "sha256": "7ddbc57e600329cc059207e5190c5b03dc45a8675f0a620c7d73c7b826adacfd",
+      "bytes": 38078
+    },
+    {
+      "path": "out/ravel/preview-controls/lockyard/qmg_lockyard.bsp",
+      "sha256": "66799ef3829a28d04759c33be72d3ac131f17c86b3cb6e3f5eae933d34445f60",
+      "bytes": 421604
+    },
+    {
+      "path": "out/ravel/preview-controls/lockyard/verification.json",
+      "sha256": "6ab2c9ba842206db80a03eb64494e98868cf0007dac0ffcd9b73def6bc15a4ff",
+      "bytes": 32090
+    },
+    {
+      "path": "out/ravel/preview-controls/talus/compiled-analysis.json",
+      "sha256": "8a82d696936d6d6ce2741ea6b1cfe3753f9902757acbe30033bd6cfba03a2622",
+      "bytes": 22776
+    },
+    {
+      "path": "out/ravel/preview-controls/talus/floor-0.png",
+      "sha256": "5637482aea5681580922966ef08df3ff09061f7b97d685d88400b4444c4b1fbd",
+      "bytes": 28285
+    },
+    {
+      "path": "out/ravel/preview-controls/talus/floor-128.png",
+      "sha256": "1d7d5c724cde68301b5b404938651a1d53633b0dde1be022f803d7a1837a0df0",
+      "bytes": 32258
+    },
+    {
+      "path": "out/ravel/preview-controls/talus/floor-256.png",
+      "sha256": "3fdbd7881eb9668e3a6f006328926f0e8240f29a3fe45c50605201b716e0f59b",
+      "bytes": 24426
+    },
+    {
+      "path": "out/ravel/preview-controls/talus/index.html",
+      "sha256": "8db118f0b8184055bec85d2b24b7b5a1665dbd388d4299160889936c1f028535",
+      "bytes": 100554
+    },
+    {
+      "path": "out/ravel/preview-controls/talus/layout.json",
+      "sha256": "212df836dd2ca78babd5d8916e45fb83e3e33780313188036677f0baaddcf5ef",
+      "bytes": 8957
+    },
+    {
+      "path": "out/ravel/preview-controls/talus/overview-mobile-light.png",
+      "sha256": "d26826e9a46138539766245e94f008841d212e1a190c707d20e3668bbd6b877d",
+      "bytes": 50952
+    },
+    {
+      "path": "out/ravel/preview-controls/talus/overview.png",
+      "sha256": "aa634dca1dcf75b18cee056b581e0e2c779297960871f42859e34a29ac667cf3",
+      "bytes": 103418
+    },
+    {
+      "path": "out/ravel/preview-controls/talus/preview-checks.json",
+      "sha256": "07887f3d4e3d769fd73755cbff716a3804dc1a77385487464d3a135837b661ff",
+      "bytes": 63068
+    },
+    {
+      "path": "out/ravel/preview-controls/talus/qmg_talus.bsp",
+      "sha256": "6ac8fb109af4062fc08b51c5bc766edb36fd728f5afc7d2461f127c821329b03",
+      "bytes": 337604
+    },
+    {
+      "path": "out/ravel/preview-controls/talus/talus-layout.html",
+      "sha256": "ee6d18366621f19598eea69601acdf9c461c0081940cad89404bd6d1085afdb2",
+      "bytes": 48741
+    },
+    {
+      "path": "out/ravel/preview-controls/talus/verification.json",
+      "sha256": "99373980f65e4a9fd5713a06845eb461094aab9c4d1bdaabfd76d22c847ada63",
+      "bytes": 52222
+    },
+    {
+      "path": "out/ravel/prior-source-regression.json",
+      "sha256": "54610c5b65687974a9527e74c69b61c1012e57db64d428b058a7145e7d7edd1d",
+      "bytes": 1097
+    },
+    {
+      "path": "out/ravel/qbsp.log",
+      "sha256": "9d76c57069e6d66541c045b8e482834b8c98e0ddd468aaa93e561bc20eaf8f63",
+      "bytes": 1737
+    },
+    {
+      "path": "out/ravel/qmg_ravel.bsp",
+      "sha256": "8b88bf771c64783a812aa20160250da60201d625ba8eb8d7920b006e7097b69c",
+      "bytes": 291104
+    },
+    {
+      "path": "out/ravel/qmg_ravel.content.json",
+      "sha256": "1392c0801d22d0100f1b28611a6b8c01af415020ae6e62a63f7fdcebebe6d849",
+      "bytes": 2532
+    },
+    {
+      "path": "out/ravel/qmg_ravel.map",
+      "sha256": "3af5b50fc6c0e82b4ae250dcc165b54b075789ad3cd95985cfb2f057e8891197",
+      "bytes": 98089
+    },
+    {
+      "path": "out/ravel/qmg_ravel.prt",
+      "sha256": "04f2a2657466b16c7ba84f405b9fd567891a4a5e4b6d65d6213d175330c683cc",
+      "bytes": 20450
+    },
+    {
+      "path": "out/ravel/qmg_ravel.qmg.json",
+      "sha256": "5e85afc1a419ee509e049a74c6713825913a8de14b3441fc90cd0e1dba79af50",
+      "bytes": 59662
+    },
+    {
+      "path": "out/ravel/qmg_ravel.texinfo.json",
+      "sha256": "4b3f0b24094507367115664622209f8fba04f7a6f158c6b2828fd6a3f9cc6ad2",
+      "bytes": 352
+    },
+    {
+      "path": "out/ravel/qmg_ravel.zip",
+      "sha256": "bc3e95f7608b6cc6bda8e8118d135fb97d4333c85731c36865dbe6b89d0adf6b",
+      "bytes": 110743
+    },
+    {
+      "path": "out/ravel/ravel-layout.html",
+      "sha256": "1e90d7fa36938d7e2e8d129b021ce1613cf3face8225169dd790ad539cae26bc",
+      "bytes": 48071
+    },
+    {
+      "path": "out/ravel/record_evidence.py",
+      "sha256": "b82c7f05ceefd80bec78e0b7093c60bbdc38eb450f529f922461f9f57e714c82",
+      "bytes": 13183
+    },
+    {
+      "path": "out/ravel/reference-comparison.json",
+      "sha256": "93b04843f968fdaa0bc37946c0684205c061edc81b7d15afd6da71f1481a7938",
+      "bytes": 6263
+    },
+    {
+      "path": "out/ravel/verification.json",
+      "sha256": "ce2abcb123429e99008f3b24af7fbe12c07fd7df3ad7e78d23d1f8d120138aa6",
+      "bytes": 46422
+    },
+    {
+      "path": "out/ravel/verification.log",
+      "sha256": "1cb16b604fdd429dad53285487a661fa40bd0b725cc40b28c9426a4f4bba7cfe",
+      "bytes": 1027
+    },
+    {
+      "path": "out/ravel/vis.log",
+      "sha256": "4a106133feb396ecea89e306b2298289fce09a2d8b346e0c96b156293b8afd7f",
+      "bytes": 1082
+    },
+    {
+      "path": "README.md",
+      "sha256": "fde2020931b31ad6768f218ba8c5e424bcc7be8a3663253183db5d674c409497",
+      "bytes": 22080
+    },
+    {
+      "path": "tests/recipe_preview_check.cjs",
+      "sha256": "18ea0423c1ce4c9b75622a843a3cc03e2ee371161fa5f553014ceed72b1a6617",
+      "bytes": 27396
+    },
+    {
+      "path": "tests/test_native_ascent.py",
+      "sha256": "14173f27a00bda84d13e6b82075da44ad1418d76b3708a8989a650fa2d1d1284",
+      "bytes": 3580
+    },
+    {
+      "path": "tests/test_native_ravel.py",
+      "sha256": "93958936fc0ae82f9390f1acdbeb78dde774c0af37f38d6951f5d61846004b7e",
+      "bytes": 2288
+    },
+    {
+      "path": "tests/test_ravel_audit.py",
+      "sha256": "57676eb982d610198f50f7bfcda221779711516849ca2d083eeb08c24b1bec59",
+      "bytes": 4789
+    },
+    {
+      "path": "tests/test_recipe_native_display.py",
+      "sha256": "0f3895133ec4fd7e1c37388ba02fa7839725ef7bcf50967051195c3cdd5db0a7",
+      "bytes": 10151
+    },
+    {
+      "path": "THIRD_PARTY.md",
+      "sha256": "67f02524a4f5baabf69b92cda70f99e42daa9c94caa6bb613651b7fd7888ac1c",
+      "bytes": 13267
+    },
+    {
+      "path": "tools/map_recipes/build.ps1",
+      "sha256": "2a9986ad3019b3ea5125ec0ef3fbaa42cab3916bdd6de2b945053748633793d4",
+      "bytes": 3696
+    },
+    {
+      "path": "tools/map_recipes/geometry.py",
+      "sha256": "dcfcc3413468cad9993476736edfae5f13eb03e26035fc39d73f83aa5a90742b",
+      "bytes": 19674
+    },
+    {
+      "path": "tools/map_recipes/inspect.py",
+      "sha256": "545d45472596133851326174eb3752cfdb3d41ead495f1c684bc7142b28b3253",
+      "bytes": 23811
+    },
+    {
+      "path": "tools/map_recipes/layout-view-v2.html",
+      "sha256": "44114d19e5a84bd002e30b2b9243fb4e5f54d16008fa22e271ac2bcc36c9b3ad",
+      "bytes": 36118
+    },
+    {
+      "path": "tools/map_recipes/ravel.cpp",
+      "sha256": "ed62c7416d1296dcab6d3ddedc656b62ce28733dc40415fe0220f81cd35c6198",
+      "bytes": 6169
+    },
+    {
+      "path": "tools/map_recipes/ravel_audit.py",
+      "sha256": "a25628bc6647efd4e67dd2ce21e2e29b9f620ee9b446d699ca75ad18da2f1d6d",
+      "bytes": 7472
+    },
+    {
+      "path": "tools/map_recipes/README.md",
+      "sha256": "29d288bcf44e2b9d2383839a926d293c9597b200279117e075120c040951baf1",
+      "bytes": 8360
+    },
+    {
+      "path": "tools/map_recipes/recipe_support.hpp",
+      "sha256": "8b1321145e9fa896c71ad86be44025b6400992f11d07ceb0052683b23ed6600c",
+      "bytes": 30269
+    },
+    {
+      "path": "tools/map_recipes/render_layout.py",
+      "sha256": "07d3d70e635e918a3dcbbdc3f01723df549a220170464cc92156064fe39b26bb",
+      "bytes": 23462
+    },
+    {
+      "path": "tools/native_movement/ascent.py",
+      "sha256": "3c3f806623bb8a1457a91ace728f84a65e6f485bee8e762c62b4c10a128a8cdc",
+      "bytes": 13495
+    },
+    {
+      "path": "tools/native_movement/ravel.py",
+      "sha256": "2d770afec404b52bb3f513fd8bebdda5e019d960b74d4b10d04ba66e24c15d71",
+      "bytes": 19098
+    }
+  ],
+  "hash_scope": "Current sources and outputs at delivery. This record and its post-record checks are excluded to avoid self-reference. Older manifests retain historical source pins.",
+  "construction_contract": {
+    "map": "qmg_ravel",
+    "status": "compiled_and_initialization_validated_with_bounded_native_world_movement",
+    "rooms": 6,
+    "connections": 9,
+    "main_floor_levels": [
+      0,
+      128
+    ],
+    "local_third_floor": 256,
+    "ordinary_stair_runs": [
+      8,
+      8,
+      8
+    ],
+    "ramps": 1,
+    "optional_drops": 1,
+    "ramp_profile": {
+      "width": 160,
+      "run": 480,
+      "low_lip": 8,
+      "slope_rise": 120,
+      "high_floor": 128
+    },
+    "gameplay_anchors": 33,
+    "spawn_to_anchor_pairs": 264,
+    "required_edge_kinds": [
+      "walk",
+      "step",
+      "door"
+    ],
+    "all_single_passage_closures_preserve_required_pairs": true,
+    "passage_closure_count": 9,
+    "articulation_rooms": 0,
+    "local_chokepoint_openings": 9,
+    "room_envelope_xy": [
+      1696,
+      1440
+    ],
+    "artifact_gate_record": "knowledge/q2/experiments/ravel-v1.json",
+    "native_reference": "External id Software Quake II3.19 CM/Pmove, compiled world model only",
+    "limitations": "Native straight ramp and momentum-drop probes do not establish cornering, braking, a full ordinary return, fall damage, rendered readability or multiplayer balance."
+  },
+  "compiled_metrics": {
+    "spawn_count": 8,
+    "weapon_count": 7,
+    "weapon_types": 7,
+    "major_item_count": 2,
+    "combat_height_p90_p10": 153.5999999999999,
+    "combat_height_bands_128": 3,
+    "spawn_nearest_weapon_euclidean_p50": 352.66551326067673,
+    "spawn_nearest_weapon_euclidean_p90": 481.23441458429056,
+    "spawn_pair_world_los_fraction": 0.0,
+    "major_item_min_euclidean_separation": 911.4384235920713,
+    "world_diagonal": 2345.569440455771,
+    "upward_surface_area": 2906683.628011859,
+    "texture_area_entropy_bits": 2.7503561348915953,
+    "texture_top_area_fraction": 0.3145493789990646,
+    "sky_surface_area_fraction": 0.0,
+    "sampled_world_sightline_p50": 223.25146690668345,
+    "sampled_world_sightline_p90": 581.1899226613998
+  },
+  "packing": {
+    "schema_version": 1,
+    "method": "exact_axis_aligned_room_and_passage_xy_union",
+    "units": "map units; areas in square map units",
+    "maps": [
+      {
+        "map": "qmg_fold",
+        "layout_path": "out/fold/layout.json",
+        "layout_sha256": "4e44001f128063c144809892a7fde50622eea6329d0742412ac5e3c0e65a171a",
+        "canonical_layout_sha256": "3d14936d3382b25f1aedfdf387d49b4e226c43b260a73a3480a4ac5bc94d4153",
+        "bounds_xy": [
+          [
+            -896,
+            -832
+          ],
+          [
+            896,
+            832
+          ]
+        ],
+        "width": 1792,
+        "depth": 1664,
+        "envelope_area": 2981888,
+        "projected_volume_union_area": 2825984,
+        "envelope_coverage_fraction": 0.9477163461538461,
+        "edge_connected_uncovered_area": 16896,
+        "enclosed_uncovered_area": 139008,
+        "uncovered_area": 155904,
+        "rectangles": 14,
+        "exact_partition_cells": 195
+      },
+      {
+        "map": "qmg_lockyard",
+        "layout_path": "out/lockyard/layout.json",
+        "layout_sha256": "becacb47faf580655f84c63030610fd85faf46d21ee8b3ba69c66f75ead4cab6",
+        "canonical_layout_sha256": "8a8d1fdd8d0f426ef8fa2d6498d8dbcdee913895ae3124c8a60b8f87417db9e0",
+        "bounds_xy": [
+          [
+            -1008,
+            -768
+          ],
+          [
+            1008,
+            960
+          ]
+        ],
+        "width": 2016,
+        "depth": 1728,
+        "envelope_area": 3483648,
+        "projected_volume_union_area": 3168768,
+        "envelope_coverage_fraction": 0.9096119929453262,
+        "edge_connected_uncovered_area": 141312,
+        "enclosed_uncovered_area": 173568,
+        "uncovered_area": 314880,
+        "rectangles": 16,
+        "exact_partition_cells": 195
+      },
+      {
+        "map": "qmg_ravel",
+        "layout_path": "out/ravel/layout.json",
+        "layout_sha256": "0e33a315685c2f854c4f3eb4ff8b86b785a37e8744096dc67ce8756dc2690132",
+        "canonical_layout_sha256": "2f7f315bb2863b229e9e5cebc9a5998bff77328469cfa1a625e827d61678d864",
+        "bounds_xy": [
+          [
+            -848,
+            -720
+          ],
+          [
+            848,
+            720
+          ]
+        ],
+        "width": 1696,
+        "depth": 1440,
+        "envelope_area": 2442240,
+        "projected_volume_union_area": 2296320,
+        "envelope_coverage_fraction": 0.940251572327044,
+        "edge_connected_uncovered_area": 35328,
+        "enclosed_uncovered_area": 110592,
+        "uncovered_area": 145920,
+        "rectangles": 15,
+        "exact_partition_cells": 209
+      }
+    ],
+    "limits": [
+      "All-height authored room/passage boxes are projected without subtracting internal solids.",
+      "This is gross volume packing, not usable floor area, hull clearance, travel time or map quality.",
+      "Uncovered areas may be intentional structure, courtyards or sightline separation. No quality threshold is assigned.",
+      "Connectivity of uncovered cells uses shared edges; corner contact is not a connection.",
+      "Do not compare these coverage fractions with QL rendered-surface coverage as if their denominators and geometry were identical."
+    ]
+  },
+  "validation": {
+    "selected_ctest_gates": 23,
+    "full_suite_rerun": false,
+    "ravel_viewer_states": 24,
+    "prior_viewer_compatibility_states": 72,
+    "dedicated_initialization_gates": 16,
+    "dedicated_scheduled_frames": 40,
+    "dedicated_frame_ms": 100,
+    "initial_settling_frames": 2,
+    "earlier_published_sources": [
+      {
+        "map": "switchback",
+        "sha256": "dbc21872eaccdb4d3c55178b14c76936294ef5ca10a8c7cd8038b0726780a506",
+        "rebuilt_source_identical": true
+      },
+      {
+        "map": "spillway",
+        "sha256": "2de31a79a02b4aca151d7bd4c5c106734aacf9826d8487adfab39a951c89d433",
+        "rebuilt_source_identical": true
+      },
+      {
+        "map": "counterweight",
+        "sha256": "92767c3918617b065fe3b6f3676f969c352ced0e53ecbd5ff8f047e8fb9c5a6c",
+        "rebuilt_source_identical": true
+      },
+      {
+        "map": "talus",
+        "sha256": "4583964d19748a00b2686d2b30b48fa4131c852534786d0f75cc5574119f37a6",
+        "rebuilt_source_identical": true
+      },
+      {
+        "map": "undercut",
+        "sha256": "b8d564eb8b125b43caf5d718e4908082cb4f430a5160c75c56957905e612bcd7",
+        "rebuilt_source_identical": true
+      },
+      {
+        "map": "fold",
+        "sha256": "0b9b02ff34d482d1757aebb3f8c1bbc21b67981d7fa9899e715f59179b5a46ac",
+        "rebuilt_source_identical": true
+      },
+      {
+        "map": "lockyard",
+        "sha256": "ac766bf4ea086d8f8ae55fa98b7c4b2c017e4c0727724c9bdfedc72112f4ec7b",
+        "rebuilt_source_identical": true
+      }
+    ],
+    "world_hull_pair_checks": 5379,
+    "ordinary_tread_centers": 24,
+    "interleaved_flat_sweeps": 12,
+    "native_gameplay_tested": false
+  },
+  "native_world_movement": {
+    "ravel": {
+      "schema_version": 1,
+      "id": "ravel-native-route-summary-v1",
+      "bsp_sha256": "8b88bf771c64783a812aa20160250da60201d625ba8eb8d7920b006e7097b69c",
+      "layout_sha256": "2f7f315bb2863b229e9e5cebc9a5998bff77328469cfa1a625e827d61678d864",
+      "layout_file_sha256": "0e33a315685c2f854c4f3eb4ff8b86b785a37e8744096dc67ce8756dc2690132",
+      "map_sha256": "3af5b50fc6c0e82b4ae250dcc165b54b075789ad3cd95985cfb2f057e8891197",
+      "world_only": true,
+      "gameplay_tested": false,
+      "scope": "Official Quake II3.19 world-only CM/Pmove fixed centerline commands; no game module, fall damage, opponent, camera or rendered trajectory.",
+      "ramp": {
+        "id": 1,
+        "trials": [
+          {
+            "id": "ravel-ramp-up-forward400",
+            "route": "ramp-up",
+            "forwardmove": 400,
+            "success": true,
+            "failure_reason": null,
+            "bounded_goal_time_ms": 1952,
+            "source_feet": [
+              -736,
+              -640,
+              0
+            ],
+            "explicit_launch_clearance_z": 0.125,
+            "actual_first_landing_feet": null,
+            "actual_goal_feet": [
+              -736,
+              -62.25,
+              128.125
+            ],
+            "actual_goal_velocity": [
+              0,
+              300,
+              0
+            ],
+            "route_audit_sha256": "e4160729db64fc0a07d8c7a6a72c0e2bfdb3e03c80f004f9d21637dd5bbe798e",
+            "result_sha256": "7b50e48b58964d5c138c33b5086b93774bf3ef920b1bf7517c21ab38fa7121f3"
+          },
+          {
+            "id": "ravel-ramp-up-forward200",
+            "route": "ramp-up",
+            "forwardmove": 200,
+            "success": true,
+            "failure_reason": null,
+            "bounded_goal_time_ms": 2896,
+            "source_feet": [
+              -736,
+              -640,
+              0
+            ],
+            "explicit_launch_clearance_z": 0.125,
+            "actual_first_landing_feet": null,
+            "actual_goal_feet": [
+              -736,
+              -63.625,
+              128.125
+            ],
+            "actual_goal_velocity": [
+              0,
+              200,
+              0
+            ],
+            "route_audit_sha256": "3474e5bd784df5651289b32f41b1829afd23a73de85bb0f03ae28c49d77a6b77",
+            "result_sha256": "4fa63da186b0f93249dbfbf941e25ee641b98b895461ea4ffc4d3a5622dd5b5e"
+          },
+          {
+            "id": "ravel-ramp-down-forward400",
+            "route": "ramp-down",
+            "forwardmove": 400,
+            "success": true,
+            "failure_reason": null,
+            "bounded_goal_time_ms": 2032,
+            "source_feet": [
+              -736,
+              -64,
+              128
+            ],
+            "explicit_launch_clearance_z": 0.125,
+            "actual_first_landing_feet": [
+              -736,
+              -651.25,
+              0.125
+            ],
+            "actual_goal_feet": [
+              -736,
+              -651.25,
+              0.125
+            ],
+            "actual_goal_velocity": [
+              0,
+              -300,
+              1.125
+            ],
+            "route_audit_sha256": "299fb0353e6cec29c78d9e9204f1a66dc02a885d0cf1361c9a87b31ad7ca2dc9",
+            "result_sha256": "f4e6b9ac5386fea4b6b56f89bc22b35087e9d2035b52778a39a9d4c04dd6bc0a"
+          },
+          {
+            "id": "ravel-ramp-down-forward200",
+            "route": "ramp-down",
+            "forwardmove": 200,
+            "success": true,
+            "failure_reason": null,
+            "bounded_goal_time_ms": 3008,
+            "source_feet": [
+              -736,
+              -64,
+              128
+            ],
+            "explicit_launch_clearance_z": 0.125,
+            "actual_first_landing_feet": [
+              -736,
+              -631,
+              0.125
+            ],
+            "actual_goal_feet": [
+              -736,
+              -640.375,
+              0.125
+            ],
+            "actual_goal_velocity": [
+              0,
+              -200,
+              0
+            ],
+            "route_audit_sha256": "e6cdfd5b3c296acb2576062523e1cc9a3b3135b0df3f668267f5cab2f6a5ffc1",
+            "result_sha256": "d6a88b32d4213195f7b17fe7fafaacbe15f567847cd742459f8dfa8d27bfaa07"
+          }
+        ]
+      },
+      "drop": {
+        "id": 1,
+        "geometric_candidate_departure": [
+          112,
+          16,
+          256
+        ],
+        "geometric_candidate_landing": [
+          112,
+          16,
+          128
+        ],
+        "trials": [
+          {
+            "id": "ravel-drop-forward400",
+            "route": "drop",
+            "forwardmove": 400,
+            "success": true,
+            "failure_reason": null,
+            "bounded_goal_time_ms": 736,
+            "source_feet": [
+              176,
+              16,
+              256
+            ],
+            "explicit_launch_clearance_z": 0.125,
+            "actual_first_landing_feet": [
+              -30.375,
+              16,
+              128.125
+            ],
+            "actual_goal_feet": [
+              -30.375,
+              16,
+              128.125
+            ],
+            "actual_goal_velocity": [
+              -300,
+              0,
+              4.375
+            ],
+            "route_audit_sha256": "b103c2614ce0a66fa4d90815d9fa24a6f54a88d9661fc36f97b2725646dd84f0",
+            "result_sha256": "2b57427eb5f74b38f37096b299305bf351ee96acd4be9be5125297a5e5f8e14a"
+          },
+          {
+            "id": "ravel-drop-forward200",
+            "route": "drop",
+            "forwardmove": 200,
+            "success": true,
+            "failure_reason": null,
+            "bounded_goal_time_ms": 928,
+            "source_feet": [
+              176,
+              16,
+              256
+            ],
+            "explicit_launch_clearance_z": 0.125,
+            "actual_first_landing_feet": [
+              28.625,
+              16,
+              128.125
+            ],
+            "actual_goal_feet": [
+              -0.5,
+              16,
+              128.125
+            ],
+            "actual_goal_velocity": [
+              -200,
+              0,
+              0
+            ],
+            "route_audit_sha256": "79dda505661d2ddc90bde1b093b97402a0874e15d5664a6a2dc8fb1998560a32",
+            "result_sha256": "030b34cba471162d4028309c9016891b4749f59103d7f4496cdd19e3062d71ab"
+          }
+        ],
+        "diagram_rule": "Drawn drop endpoint is the geometric candidate, not a replay of either native momentum trajectory."
+      }
+    },
+    "ravel_artifact_record": "out/ravel/native-routes/artifact-manifest.json",
+    "talus_study": "knowledge/q2/native-ascent-study.json",
+    "talus_primary_trials": 24,
+    "talus_exact_repeat_trials": 8,
+    "talus_uphill_result": "Ramp and matched stairs tie at1984ms(forward400) and2976ms(forward200).",
+    "talus_downhill_result": "Grounded completion differs from planar crossing; stair delay96/48ms under these inputs.",
+    "cross_map_translation_check": "out/ravel/native-routes/talus-ramp-translation-check.json",
+    "cross_map_limit": "Nominal ramp dimensions match but full maps differ; native translated frames differ and do not support a causal cross-map speed ranking."
+  },
+  "reference_research": {
+    "record": "knowledge/q2/interleaved-route-study.json",
+    "map": "Reclamation (q2rdm7)",
+    "patterns": [
+      "independent stacked routes",
+      "full-hull bent approaches",
+      "viewpoint-dependent occlusion",
+      "separate mechanism and ordinary-route evidence"
+    ],
+    "prior_ql_atlas": "out/ql-atlas/atlas.json",
+    "ql_maps": 6,
+    "ql_orthographic_images": 64,
+    "ql_scope": "Existing local preSteam source revisions; rendered-surface height slices are not certified floors.",
+    "q2_rule_cards": 40,
+    "geometry_copied": false,
+    "profile_retrained": false,
+    "model_weights_trained": false
+  },
+  "caught_failures": [
+    "Earlier uncompiled draft retained6 directed hostile spawn sightlines,2 crossfire findings and1 lighting finding; final multi-variable revision has0/28 compiled spawn-eye LOS pairs.",
+    "Reference diagonal corner shortcuts and direct vertical descent between stacked stations fail compiled collision.",
+    "Geometric drop endpointX112 does not predict native momentum landingsX-30.375/X28.625.",
+    "Independent floor auto-fit made comparison difficult; fixed XY envelope/origin/scale now persists across floor switches."
+  ],
+  "limits": [
+    "Gross envelope coverage is not usable floor density, navigation quality or multiplayer balance.",
+    "Nine passage-closure tests do not cover every internal stair/choke; graph returns are not complete compiled/native route certificates.",
+    "World-only CM/Pmove does not test fall damage, stopping, turning, aim, pickups, dynamic entities or opponents.",
+    "Analytical PNGs are diagrams; no game client, user-input capture or engine render-target validation occurred.",
+    "Reference observations do not admit copyrighted geometry into a training corpus or the original generator."
+  ],
+  "next_trials": [
+    "Native cornering and braking after the drop",
+    "Complete ordinary return traversal",
+    "Opposing traffic and matched2/4/6-player item-control observations",
+    "Promote accepted motifs into a fixed prompt/seed portfolio"
+  ],
+  "unrelated_issues": "No new unrelated defect found; existing underwater point-light rejection, default liquid material validation, conservative planner and client-focus limitations remain recorded.",
+  "cleanup": {
+    "status": "retained_after_automatic_approval_review_rejection",
+    "reason": "blocked by policy",
+    "attempted_paths": [
+      "E:/Repositories/Quake-MapGen/.agents/tmp/ravel-engine",
+      "E:/Repositories/Quake-MapGen/.agents/tmp/ravel-viewer"
+    ],
+    "preflight": "out/ravel/cleanup-preflight.json",
+    "attempts": 1,
+    "retried": false,
+    "older_blocked_paths_untouched": true
+  }
+}

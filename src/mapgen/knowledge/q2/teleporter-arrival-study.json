@@ -1,0 +1,263 @@
+{
+  "schema_version": 1,
+  "id": "teleporter-arrival-v1",
+  "date": "2026-09-14",
+  "status": "bounded_static_departures_with_retained_failed_branches_native_untested",
+  "study": "docs/Q2_TELEPORTER_ARRIVAL_STUDY.md",
+  "audit": "out/teleporter-arrival-study/audit.json",
+  "figure": "out/teleporter-arrival-study/arrival-departures.png",
+  "protocol_sha256": "584900ad28e6cccd3fe6e9e9cc8c973993bad45bfaeed308f5f5d57ff7c3f3b3",
+  "sources": [
+    {
+      "title": "Painkiller",
+      "author": "Sten \"ztn\" Uusvali",
+      "bsp_path": "E:/Development/q2maparchive-wip/maps/ztn2dm1/pack/maps/ztn2dm1.bsp",
+      "bsp_sha256": "2f8a3bab196b20193057919d600e91eca6a97322e8e0a3429abe2115f71ef0dc",
+      "source_entity": 11,
+      "destination_entity": 12,
+      "map": "ztn2dm1",
+      "format": "IBSP38",
+      "partition": "reference",
+      "split_group": "50259728799005a8",
+      "rights_status": "unreviewed_local_reference",
+      "training_eligible": false,
+      "source_assets_copied": false,
+      "geometry_copied_into_generator": false,
+      "metadata_issue": "Existing malformed metadata line12 retained"
+    },
+    {
+      "title": "Torn Glory",
+      "author": "Dan \"CardO\" Shannon",
+      "bsp_path": "E:/Development/q2maparchive-wip/maps/card2dm1/pack/maps/card2dm1.bsp",
+      "bsp_sha256": "fff80700ce171e611066bdd09b84bc2d0bb421ca736fe1eaf6b3dec7398b2c7f",
+      "source_entity": 17,
+      "destination_entity": 67,
+      "map": "card2dm1",
+      "format": "IBSP38",
+      "partition": "reference",
+      "split_group": "edeff59a840ff1a0",
+      "rights_status": "unreviewed_local_reference",
+      "training_eligible": false,
+      "source_assets_copied": false,
+      "geometry_copied_into_generator": false,
+      "metadata_issue": "Existing malformed metadata line12 retained"
+    }
+  ],
+  "selection": {
+    "reference_maps_considered": 2,
+    "embedded_entities_and_upward_surfaces_before_protocol": true,
+    "protocol_frozen_before_route_certification": true,
+    "waypoints_changed_after_measurement": false,
+    "failed_candidates_repaired_or_replaced": false,
+    "source_trigger_checks": "Supplemental exclusion applied to unchanged frozen poses and paths"
+  },
+  "results": {
+    "reference_maps": 2,
+    "fixed_paths": 7,
+    "passing_paths": 3,
+    "intended_onward_paths": 4,
+    "passing_onward_paths": 3,
+    "tested_legs": 21,
+    "passing_legs": 15,
+    "initial_geometric_settles_passed": 2,
+    "standing_stations": 6,
+    "supported_stations": 6,
+    "stations_connected_by_selected_routes": 5,
+    "facing_rays": 18,
+    "clear_facing_rays": 9,
+    "clear_facing_rays_from_reached_stations": 6,
+    "authored_resource_rays": 12,
+    "clear_authored_resource_rays": 6,
+    "selected_torn_glory_shared_xy_length": 336,
+    "source_trigger_disjoint_checks": 34,
+    "native_archive_attempts": 0,
+    "pickup_contacts_tested": 0
+  },
+  "controls": {
+    "passed": 12,
+    "total": 12,
+    "scope": "Original analytical contract controls; no native map movement"
+  },
+  "recommendations": [
+    {
+      "id": "arrival-commitment-before-branch-count",
+      "claim": "Certify the stock landing/settle and measure the travel shared before selected onward branches; two downstream paths need not be two immediate independent exits."
+    },
+    {
+      "id": "arrival-resource-approach-separate-from-visibility",
+      "claim": "Bind each resource approach to a complete supported path from the landing. Visibility and a separately supported item station do not repair a failed departure."
+    },
+    {
+      "id": "arrival-facing-is-sampled-exposure",
+      "claim": "Keep authored destination yaw, fixed facing rays and observed native recovery separate. A clear eye ray does not certify a walkable escape direction."
+    }
+  ],
+  "limits": [
+    "Reference partition and two selected areas only; no universal quality thresholds or shortest paths",
+    "Arrival pose derives from stock code; settle and departure are static geometric constructions, not executed native trajectories",
+    "Painkiller west route fails despite visible grenade launcher; no claim item is generally unreachable",
+    "Torn Glory fixed branch paths share336units; no whole-map mandatory commitment claim",
+    "Authored resource origins differ from chosen support feet; no pickup contact or item settlement measured",
+    "No dynamic occupancy, KillBox outcomes, sound, human match, game-mod safety or trained weights"
+  ],
+  "local_document_links": [
+    "docs/Q2_TRAVERSAL_STUDY.md",
+    "out/teleporter-arrival-study/arrival-departures.png",
+    "out/teleporter-arrival-study/protocol-v1.json",
+    "out/teleporter-arrival-study/audit.json",
+    "tools/map_study/teleporter_arrivals.py",
+    "knowledge/q2/teleporter-arrival-study.json",
+    "tests/test_teleporter_arrivals.py"
+  ],
+  "runtime": {
+    "python": "3.11.3",
+    "pillow": "11.3.0"
+  },
+  "bound_files": [
+    {
+      "path": "E:/Development/q2maparchive-wip/maps/ztn2dm1/pack/maps/ztn2dm1.bsp",
+      "sha256": "2f8a3bab196b20193057919d600e91eca6a97322e8e0a3429abe2115f71ef0dc",
+      "bytes": 361376
+    },
+    {
+      "path": "E:/Development/q2maparchive-wip/maps/ztn2dm1/pack/maps/ref/ztn2dm1.ref",
+      "sha256": "096c3a5727e2638d669a3dd0d74912295b43fe2d36430cb2fae5378460778654",
+      "bytes": 380
+    },
+    {
+      "path": "E:/Development/q2maparchive-wip/maps/ztn2dm1/pack/docs/ztn2dm1-readme.txt",
+      "sha256": "cc2e8d993fbbf7c48eabb2487125a3ff794ad1964da488307e1368ab7860b7fe",
+      "bytes": 1779
+    },
+    {
+      "path": "E:/Development/q2maparchive-wip/maps/card2dm1/pack/maps/card2dm1.bsp",
+      "sha256": "fff80700ce171e611066bdd09b84bc2d0bb421ca736fe1eaf6b3dec7398b2c7f",
+      "bytes": 1538524
+    },
+    {
+      "path": "E:/Development/q2maparchive-wip/maps/card2dm1/pack/maps/ref/card2dm1.ref",
+      "sha256": "817d528d752f186db2cdd8c7f433683151cfc7d8e0723f477fa364a90c402f25",
+      "bytes": 356
+    },
+    {
+      "path": "E:/Development/q2maparchive-wip/maps/card2dm1/pack/docs/card2dm1-readme.txt",
+      "sha256": "8799ad17302304d5276adc60432c9cc24d2b8fdd58d1f90add5feaa31ebf42c3",
+      "bytes": 3954
+    },
+    {
+      "path": "E:/_SOURCE/_CODE/Quake-2-master/game/g_misc.c",
+      "sha256": "d39e96f6e8793ea768c56df820edcd987d90c9f43b7c3c7037e6ed7cd92413ee",
+      "bytes": 45231
+    },
+    {
+      "path": "tools/map_study/teleporter_arrivals.py",
+      "sha256": "e7a91d7f26a1c0e2619b176f2a962089688573910a954bcdb732fab9daa64d45",
+      "bytes": 16187
+    },
+    {
+      "path": "tests/test_teleporter_arrivals.py",
+      "sha256": "6173700372688dbc2d64c8feba75e10f4462259b6b781a5111c4dd643b16e888",
+      "bytes": 3660
+    },
+    {
+      "path": "tools/map_study/binary.py",
+      "sha256": "2b76559a71365eaab41e6876ff7da94fe938994b4a5199d63620b8b60918daf1",
+      "bytes": 15999
+    },
+    {
+      "path": "tools/map_study/interlocking_topology.py",
+      "sha256": "44897a19f77253374c4d55d8dd2042b0375206675a610d9a6f71483bf3644ef5",
+      "bytes": 15461
+    },
+    {
+      "path": "tools/map_study/raised_resource_circuit.py",
+      "sha256": "a1436e01ec22f79d103c63febb7d391b8b300e84b712ab86b205973a2f5daa90",
+      "bytes": 14972
+    },
+    {
+      "path": "tools/map_recipes/geometry.py",
+      "sha256": "dcfcc3413468cad9993476736edfae5f13eb03e26035fc39d73f83aa5a90742b",
+      "bytes": 19674
+    },
+    {
+      "path": "docs/Q2_TELEPORTER_ARRIVAL_STUDY.md",
+      "sha256": "4d79e4daff58de46c48fb63e9113be15e5f76ce018d028014b4580cbbf4aa88b",
+      "bytes": 12505
+    },
+    {
+      "path": "docs/Q2_TRAVERSAL_STUDY.md",
+      "sha256": "0240b92f973fb1883c0a4c9c2fda1f5dc92181c884e3dec2896f6a8fef3eed12",
+      "bytes": 9755
+    },
+    {
+      "path": "knowledge/q2/traversal-study.json",
+      "sha256": "0194e174c4508da4550b36ffc1aa135424018fd8e1c215d459598ebf214f9712",
+      "bytes": 22846
+    },
+    {
+      "path": "out/traversal-study/mechanic-inventory.json",
+      "sha256": "ce0dcc1013f3ba580d7cfed8d3e29c3b436d0d6c9322dae046d65d657d4dff4e",
+      "bytes": 12445
+    },
+    {
+      "path": "out/traversal-study/ztn2dm1-traversal.png",
+      "sha256": "84d0edd71cb7bb436f1eaacf3d0c333d19c26a9d0cbbeb08995cef2a841bef99",
+      "bytes": 87010
+    },
+    {
+      "path": "out/traversal-study/card2dm1-traversal.png",
+      "sha256": "b789a21b6b64503aefe519d5b7a5dbc199f19ca57a0157c0c816382136dd54a0",
+      "bytes": 83967
+    },
+    {
+      "path": "out/map-study/manifest.json",
+      "sha256": "434ed06e37447872df92f0eb9a35c7a0d40b59c5cae77709493d544801d87c02",
+      "bytes": 1303666
+    },
+    {
+      "path": "out/map-study/records/ztn2dm1-10f206acab.json",
+      "sha256": "ce7355cac2c6d0df823d6851d349dd4443afc00dbed25c7fddcfabfebb8c3f0d",
+      "bytes": 30824
+    },
+    {
+      "path": "out/map-study/records/card2dm1-edeff59a84.json",
+      "sha256": "95df094436b77a86036a4875f2da4dbe3eda51d196124eff0f77e952a760e567",
+      "bytes": 33170
+    },
+    {
+      "path": "out/teleporter-arrival-study/arrival-departures.png",
+      "sha256": "b51e73381fd14af2b82cf68d9825e26da977b66237456eead2ab05f90fd1a81a",
+      "bytes": 75766
+    },
+    {
+      "path": "out/teleporter-arrival-study/audit.json",
+      "sha256": "508b425d4ca6c8aa4b66b84be676ceb9f5d1ccf0df7136c13c9931c456b07e04",
+      "bytes": 108696
+    },
+    {
+      "path": "out/teleporter-arrival-study/controls.log",
+      "sha256": "aa2d664910e0697523738dd237179802d70c5ac1fa7d10e80ddfc66ae94da442",
+      "bytes": 1756
+    },
+    {
+      "path": "out/teleporter-arrival-study/protocol-v1.json",
+      "sha256": "584900ad28e6cccd3fe6e9e9cc8c973993bad45bfaeed308f5f5d57ff7c3f3b3",
+      "bytes": 9398
+    },
+    {
+      "path": "out/teleporter-arrival-study/record_evidence.py",
+      "sha256": "f297f5278760150e058ad07eae920f60ce9bf9b4db0c0f6c91c73d575d0ebb2b",
+      "bytes": 12068
+    },
+    {
+      "path": "out/teleporter-arrival-study/render.py",
+      "sha256": "72a5e07f545e11a18d24b970bc3807786dd4a965db7a1622ec67cfca186e63d5",
+      "bytes": 4851
+    },
+    {
+      "path": "out/teleporter-arrival-study/source-trigger-exclusions.json",
+      "sha256": "34af96e4fca5475573b6d013b6d5e9cb1c75f6c44b69c2e345131600043607e6",
+      "bytes": 11997
+    }
+  ]
+}

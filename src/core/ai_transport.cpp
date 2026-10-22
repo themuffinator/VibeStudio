@@ -1,9 +1,20 @@
 #include "core/ai_transport.h"
 
 #include "core/ai_connectors.h"
+#include "core/ai_gguf_runtime.h"
+#include "core/ai_harness.h"
+#include "core/process_tree.h"
+#include "core/ai_json_grammar.h"
 
 #include <QCoreApplication>
+#include <QDir>
 #include <QElapsedTimer>
+#include <QFile>
+#include <QFileInfo>
+#include <QProcess>
+#include <QProcessEnvironment>
+#include <QTemporaryDir>
+#include <QThread>
 #include <QHostAddress>
 #include <QJsonArray>
 #include <QJsonDocument>
@@ -16,6 +27,7 @@
 #include <QTimer>
 
 #include <algorithm>
+#include <atomic>
 #include <cmath>
 #include <limits>
 
@@ -442,11 +454,31 @@ QStringList multipartSummary(const QByteArray& contentType, const QByteArray& bo
 	return lines;
 }
 
+// The most a GGUF run writes: the review shows the limit the run keeps.
+int ggufOutputLimit(const AiChatRequest& request)
+{
+	return std::clamp(request.maxOutputTokens, 16, 32768);
+}
+
 } // namespace
+
+AiTextTransport aiTextTransport(const QString& connectorId)
+{
+	if (wireFormatFor(connectorId) != WireFormat::None) {
+		return AiTextTransport::Http;
+	}
+	if (aiConnectorIsHarness(connectorId)) {
+		return AiTextTransport::Harness;
+	}
+	if (normalizedAiId(connectorId) == QStringLiteral("local-gguf")) {
+		return AiTextTransport::Gguf;
+	}
+	return AiTextTransport::None;
+}
 
 bool aiConnectorHasChatTransport(const QString& connectorId)
 {
-	return wireFormatFor(connectorId) != WireFormat::None;
+	return aiTextTransport(connectorId) != AiTextTransport::None;
 }
 
 QString aiDefaultEndpoint(const QString& connectorId)
@@ -471,7 +503,8 @@ QString aiDefaultEndpoint(const QString& connectorId)
 
 QString aiSuggestedModel(const QString& connectorId)
 {
-	if (normalizedAiId(connectorId) == QStringLiteral("claude")) {
+	const QString id = normalizedAiId(connectorId);
+	if (id == QStringLiteral("claude") || id == QStringLiteral("claude-code")) {
 		return QStringLiteral("claude-opus-5-5");
 	}
 	return {};
@@ -507,6 +540,50 @@ bool buildAiHttpRequest(const AiChatRequest& request, const QString& apiKey, AiH
 	};
 	if (!out) {
 		return fail(QCoreApplication::translate("VibeStudioAiTransport", "No request to fill."));
+	}
+	const AiTextTransport transport = aiTextTransport(request.connectorId);
+	if (transport == AiTextTransport::Harness) {
+		AiHarnessInvocation invocation;
+		const QString program = aiHarnessKind(request.connectorId) == AiHarnessKind::CustomCommand ? request.endpoint
+																								   : aiHarnessProgram(request.connectorId, request.endpoint);
+		if (!buildAiHarnessInvocation(request, program, &invocation, error)) {
+			return false;
+		}
+		*out = aiHarnessRequestRecord(invocation);
+		return true;
+	}
+	if (transport == AiTextTransport::Gguf) {
+		if (request.messages.isEmpty()) {
+			return fail(QCoreApplication::translate("VibeStudioAiTransport", "There is nothing to ask."));
+		}
+		if (const QString problem = aiGgufModelProblem(request.model); !problem.isEmpty()) {
+			return fail(problem);
+		}
+		// Recorded in the Chat Completions shape, so the review reads it the same way.
+		QJsonArray messages;
+		if (!request.system.isEmpty()) {
+			messages.append(QJsonObject {{QStringLiteral("role"), QStringLiteral("system")}, {QStringLiteral("content"), request.system}});
+		}
+		for (const AiChatMessage& message : request.messages) {
+			messages.append(QJsonObject {{QStringLiteral("role"), message.role}, {QStringLiteral("content"), message.text}});
+		}
+		QString grammar = request.grammar;
+		if (grammar.isEmpty() && !request.responseSchema.isEmpty()) {
+			grammar = aiJsonSchemaGrammar(request.responseSchema);
+		}
+		QJsonObject body {
+			{QStringLiteral("model"), QFileInfo(request.model).fileName()},
+			{QStringLiteral("max_tokens"), ggufOutputLimit(request)},
+			{QStringLiteral("messages"), messages},
+		};
+		if (!grammar.isEmpty()) {
+			body.insert(QStringLiteral("grammar"), grammar);
+		}
+		AiHttpRequest record;
+		record.modelFile = request.model;
+		record.body = QJsonDocument(body).toJson(QJsonDocument::Compact);
+		*out = record;
+		return true;
 	}
 	const WireFormat format = wireFormatFor(request.connectorId);
 	if (format == WireFormat::None) {
@@ -944,7 +1021,31 @@ QString redactAiContextPaths(const QString& text, const QString& projectRoot, co
 QString describeAiHttpRequest(const AiHttpRequest& request, AiRequestView view)
 {
 	QStringList lines;
-	lines << QStringLiteral("POST %1").arg(request.url.toString(QUrl::RemoveUserInfo));
+	if (!request.command.isEmpty()) {
+		// A harness: the command, what is kept from it, then the files and input it is given.
+		QStringList words;
+		for (const QString& word : request.command) {
+			const QString shown = word.isEmpty() ? QStringLiteral("\"\"")
+				: word.contains(QLatin1Char(' ')) || word.contains(QLatin1Char('"')) ? QStringLiteral("'%1'").arg(word) : word;
+			words << (view == AiRequestView::Readable && shown.size() > 160 ? shown.left(157) + QStringLiteral("...") : shown);
+		}
+		lines << QStringLiteral("RUN %1").arg(words.join(QLatin1Char(' ')).replace(QStringLiteral("{dir}"), QStringLiteral("<run folder>")));
+		lines << QCoreApplication::translate("VibeStudioAiTransport", "Runs in a new, empty folder that is removed afterwards.");
+		if (!request.removedEnvironment.isEmpty()) {
+			lines << QCoreApplication::translate("VibeStudioAiTransport", "Not passed on: %1.").arg(request.removedEnvironment.join(QStringLiteral(", ")));
+		}
+		for (const auto& file : request.files) {
+			lines << QString() << QStringLiteral("=== %1 ===").arg(file.first) << QString::fromUtf8(file.second);
+		}
+		lines << QString() << QStringLiteral("=== %1 ===").arg(QCoreApplication::translate("VibeStudioAiTransport", "standard input")) << QString::fromUtf8(request.body);
+		return lines.join(QLatin1Char('\n'));
+	}
+	if (!request.modelFile.isEmpty()) {
+		lines << QStringLiteral("RUN %1 %2").arg(aiGgufRuntimeVersion().isEmpty() ? QStringLiteral("llama.cpp") : aiGgufRuntimeVersion(), QDir::toNativeSeparators(request.modelFile));
+		lines << QCoreApplication::translate("VibeStudioAiTransport", "Runs inside VibeStudio; nothing leaves this machine.");
+	} else {
+		lines << QStringLiteral("POST %1").arg(request.url.toString(QUrl::RemoveUserInfo));
+	}
 	QByteArray contentType;
 	for (const auto& header : request.headers) {
 		lines << QStringLiteral("%1: %2").arg(QString::fromUtf8(header.first),
@@ -1002,6 +1103,8 @@ QString describeAiHttpRequest(const AiHttpRequest& request, AiRequestView view)
 			}
 		} else if (key == QStringLiteral("system") || key == QStringLiteral("systemInstruction")) {
 			system << QStringLiteral("=== system ===\n%1").arg(textOf(value));
+		} else if (key == QStringLiteral("grammar") && view == AiRequestView::Readable) {
+			settings << QCoreApplication::translate("VibeStudioAiTransport", "grammar: %n line(s) of GBNF", nullptr, int(value.toString().count(QLatin1Char('\n'))));
 		} else if (value.isObject()) {
 			const QJsonObject group = value.toObject();
 			for (auto inner = group.constBegin(); inner != group.constEnd(); ++inner) {
@@ -1027,8 +1130,7 @@ AiTextConnection resolveAiTextConnection(const AiAutomationPreferences& preferen
 		// cloud connectors are off and a local one is set: then the local one.
 		const QString reasoning = normalized.preferredReasoningConnectorId;
 		const QString local = normalized.preferredLocalConnectorId;
-		const bool reasoningAllowed = !reasoning.isEmpty()
-			&& (normalized.cloudConnectorsEnabled || aiEndpointIsLocal(aiEffectiveEndpoint(reasoning, normalized.connectorEndpoints.value(reasoning))));
+		const bool reasoningAllowed = !reasoning.isEmpty() && (normalized.cloudConnectorsEnabled || aiTextConnectorRunsLocally(reasoning, normalized));
 		connection.connectorId = reasoningAllowed || local.isEmpty() ? reasoning : local;
 	}
 	AiConnectorDescriptor descriptor;
@@ -1048,6 +1150,31 @@ AiTextConnection resolveAiTextConnection(const AiAutomationPreferences& preferen
 	}
 	if (!aiConnectorHasChatTransport(connection.connectorId)) {
 		connection.block = AiTextConnectionBlock::NoTextTransport;
+		return connection;
+	}
+	const AiTextTransport transport = aiTextTransport(connection.connectorId);
+	if (transport == AiTextTransport::Harness) {
+		// The tool's own login answers; it reaches its provider, off this machine.
+		connection.endpoint = normalized.connectorEndpoints.value(connection.connectorId);
+		connection.program = aiHarnessProgram(connection.connectorId, connection.endpoint);
+		connection.model = normalized.connectorModels.value(connection.connectorId, aiSuggestedModel(connection.connectorId));
+		connection.local = false;
+		if (connection.program.isEmpty()) {
+			connection.block = AiTextConnectionBlock::NoProgram;
+		} else if (!normalized.cloudConnectorsEnabled) {
+			connection.block = AiTextConnectionBlock::CloudNotAllowed;
+		}
+		return connection;
+	}
+	if (transport == AiTextTransport::Gguf) {
+		// The model is a .gguf file, run here.
+		connection.model = normalized.connectorModels.value(connection.connectorId);
+		connection.local = true;
+		if (!aiGgufRuntimeAvailable()) {
+			connection.block = AiTextConnectionBlock::NoRuntime;
+		} else if (!aiGgufModelProblem(connection.model).isEmpty()) {
+			connection.block = AiTextConnectionBlock::NoModel;
+		}
 		return connection;
 	}
 	connection.endpoint = aiEffectiveEndpoint(connection.connectorId, normalized.connectorEndpoints.value(connection.connectorId));
@@ -1104,6 +1231,10 @@ QString aiTextConnectionBlockId(AiTextConnectionBlock block)
 		return QStringLiteral("no-model");
 	case AiTextConnectionBlock::NoCredential:
 		return QStringLiteral("no-credential");
+	case AiTextConnectionBlock::NoProgram:
+		return QStringLiteral("no-program");
+	case AiTextConnectionBlock::NoRuntime:
+		return QStringLiteral("no-runtime");
 	}
 	return QStringLiteral("no-connector");
 }
@@ -1118,6 +1249,14 @@ QString aiTextConnectionBlockText(const AiTextConnection& connection)
 {
 	switch (connection.block) {
 	case AiTextConnectionBlock::None:
+		if (aiTextTransport(connection.connectorId) == AiTextTransport::Gguf) {
+			return QCoreApplication::translate("VibeStudioAiTransport", "Ready: %1, %2, run inside VibeStudio.").arg(connection.displayName, QFileInfo(connection.model).fileName());
+		}
+		if (aiTextTransport(connection.connectorId) == AiTextTransport::Harness) {
+			return connection.model.isEmpty()
+				? QCoreApplication::translate("VibeStudioAiTransport", "Ready: %1 with its own default model; requests go to %2.").arg(connection.displayName, aiTextConnectionDestinationText(connection))
+				: QCoreApplication::translate("VibeStudioAiTransport", "Ready: %1, model %2; requests go to %3.").arg(connection.displayName, connection.model, aiTextConnectionDestinationText(connection));
+		}
 		return connection.local
 			? QCoreApplication::translate("VibeStudioAiTransport", "Ready: %1, model %2, on this machine.").arg(connection.displayName, connection.model)
 			: QCoreApplication::translate("VibeStudioAiTransport", "Ready: %1, model %2, at %3.").arg(connection.displayName, connection.model, QUrl(connection.endpoint).host());
@@ -1128,16 +1267,104 @@ QString aiTextConnectionBlockText(const AiTextConnection& connection)
 	case AiTextConnectionBlock::NoConnector:
 		return QCoreApplication::translate("VibeStudioAiTransport", "No connector is chosen. Pick a Reasoning or Local connector in Settings > AI and Automation.");
 	case AiTextConnectionBlock::NoTextTransport:
-		return QCoreApplication::translate("VibeStudioAiTransport", "%1 does not answer text questions. Pick OpenAI, Claude, Gemini, a local runtime, or a custom endpoint.").arg(connection.displayName);
+		return QCoreApplication::translate("VibeStudioAiTransport",
+			"%1 does not answer text questions. Pick a connector listed under Text Model: a provider, Claude Code or Codex with your own login, a local runtime, or a GGUF model.")
+			.arg(connection.displayName);
 	case AiTextConnectionBlock::NoEndpoint:
 		return QCoreApplication::translate("VibeStudioAiTransport", "%1 has no endpoint. Set one in Settings > AI and Automation.").arg(connection.displayName);
 	case AiTextConnectionBlock::CloudNotAllowed:
 		return QCoreApplication::translate("VibeStudioAiTransport", "%1 sends to %2, off this machine, and cloud connectors are not allowed. Allow them in Settings > AI and Automation, or use a local runtime.")
-			.arg(connection.displayName, QUrl(connection.endpoint).host());
+			.arg(connection.displayName, aiTextConnectionDestinationText(connection));
 	case AiTextConnectionBlock::NoModel:
+		if (aiTextTransport(connection.connectorId) == AiTextTransport::Gguf) {
+			return aiGgufModelProblem(connection.model);
+		}
 		return QCoreApplication::translate("VibeStudioAiTransport", "No model is set for %1. Name one in Settings > AI and Automation.").arg(connection.displayName);
+	case AiTextConnectionBlock::NoProgram:
+		if (aiHarnessKind(connection.connectorId) == AiHarnessKind::CustomCommand) {
+			return connection.endpoint.trimmed().isEmpty()
+				? QCoreApplication::translate("VibeStudioAiTransport", "No command is set for %1. %2").arg(connection.displayName, aiHarnessSetupHint(connection.connectorId))
+				: QCoreApplication::translate("VibeStudioAiTransport", "The program of %1's command line was not found: %2").arg(connection.displayName, connection.endpoint);
+		}
+		return QCoreApplication::translate("VibeStudioAiTransport", "%1 was not found (looked in: %2). %3")
+			.arg(aiHarnessToolName(connection.connectorId), aiHarnessSearchLocations(connection.connectorId).join(QStringLiteral(", ")), aiHarnessSetupHint(connection.connectorId));
+	case AiTextConnectionBlock::NoRuntime:
+		return aiGgufRuntimeMissingText();
 	case AiTextConnectionBlock::NoCredential:
 		return QCoreApplication::translate("VibeStudioAiTransport", "%1 needs an API key in the %2 environment variable, which is not set.").arg(connection.displayName, connection.credentialVariable);
+	}
+	return {};
+}
+
+QString aiTextConnectionDestinationText(const AiTextConnection& connection)
+{
+	switch (aiTextTransport(connection.connectorId)) {
+	case AiTextTransport::Gguf:
+		return QCoreApplication::translate("VibeStudioAiTransport", "this machine");
+	case AiTextTransport::Harness:
+		// The provider the tool's own login reaches, or the custom command's program; never
+		// translated, so a remembered consent survives a change of language.
+		if (const QString provider = aiHarnessProvider(connection.connectorId); !provider.isEmpty()) {
+			return provider;
+		}
+		return QFileInfo(connection.program).fileName();
+	case AiTextTransport::Http:
+	case AiTextTransport::None:
+		break;
+	}
+	return connection.local ? QCoreApplication::translate("VibeStudioAiTransport", "this machine") : QUrl(connection.endpoint).host();
+}
+
+QString aiTextConnectionLabel(const AiTextConnection& connection)
+{
+	if (connection.model.isEmpty()) {
+		return connection.displayName;
+	}
+	if (aiTextTransport(connection.connectorId) == AiTextTransport::Gguf) {
+		return QCoreApplication::translate("VibeStudioAiTransport", "%1 with %2").arg(connection.displayName, QFileInfo(connection.model).fileName());
+	}
+	return QStringLiteral("%1 (%2)").arg(connection.displayName, connection.model);
+}
+
+QString aiTextRequestPreviewNote(const AiTextConnection& connection, const QString& action)
+{
+	switch (aiTextTransport(connection.connectorId)) {
+	case AiTextTransport::Harness:
+		return QCoreApplication::translate("VibeStudioAiTransport", "Nothing has been run. This is the command %1 would run, with the files and input it would get; %2 signs in with its own login.")
+			.arg(action, aiHarnessToolName(connection.connectorId));
+	case AiTextTransport::Gguf:
+		return QCoreApplication::translate("VibeStudioAiTransport", "Nothing has been run. This is what %1 would give the model on this machine.").arg(action);
+	case AiTextTransport::Http:
+	case AiTextTransport::None:
+		break;
+	}
+	return QCoreApplication::translate("VibeStudioAiTransport", "Nothing has been sent. This is the request %1 would send, without your API key.").arg(action);
+}
+
+bool aiTextConnectorRunsLocally(const QString& connectorId, const AiAutomationPreferences& preferences)
+{
+	switch (aiTextTransport(connectorId)) {
+	case AiTextTransport::Gguf:
+		return true;
+	case AiTextTransport::Http:
+		return aiEndpointIsLocal(aiEffectiveEndpoint(connectorId, preferences.connectorEndpoints.value(normalizedAiId(connectorId))));
+	case AiTextTransport::Harness:
+	case AiTextTransport::None:
+		break;
+	}
+	return false;
+}
+
+QString aiTextConnectorUnavailableReason(const QString& connectorId, const AiAutomationPreferences& preferences)
+{
+	if (preferences.aiFreeMode) {
+		return QCoreApplication::translate("VibeStudioAiTransport", "AI-free mode is on.");
+	}
+	if (aiTextTransport(connectorId) == AiTextTransport::Gguf && !aiGgufRuntimeAvailable()) {
+		return QCoreApplication::translate("VibeStudioAiTransport", "Not in this build: it needs -Dggml=enabled. Local/Offline Runtime can reach llama.cpp's own server instead.");
+	}
+	if (!preferences.cloudConnectorsEnabled && !aiTextConnectorRunsLocally(connectorId, preferences)) {
+		return QCoreApplication::translate("VibeStudioAiTransport", "It leaves this machine; tick Allow cloud AI connectors first.");
 	}
 	return {};
 }
@@ -1217,6 +1444,16 @@ struct AiChatClient::State {
 	QNetworkAccessManager* network = nullptr;
 	std::unique_ptr<QNetworkAccessManager> ownedNetwork;
 	QPointer<QNetworkReply> reply;
+	// A harness run: its process, the processes it starts, and the empty folder it runs in.
+	QPointer<QProcess> process;
+	std::unique_ptr<ProcessTree> processTree;
+	std::unique_ptr<QTemporaryDir> runFolder;
+	QString answerFile;
+	// A GGUF run: its worker, and the flag that stops it.
+	QPointer<QThread> worker;
+	std::shared_ptr<std::atomic_bool> stop;
+	// Lives on the client's thread, so a worker's result is delivered there.
+	std::unique_ptr<QObject> context = std::make_unique<QObject>();
 	QElapsedTimer clock;
 	QString connectorId;
 	QStringList secrets;
@@ -1224,6 +1461,19 @@ struct AiChatClient::State {
 	int timeoutMsecs = 5 * 60 * 1000;
 	bool cancelled = false;
 	bool timedOut = false;
+
+	// Hands the answer over, last, so the callback may start the next request.
+	void finish(AiChatResponse response)
+	{
+		response.errorMessage = redactAiText(response.errorMessage, secrets);
+		response.elapsedMsecs = clock.elapsed();
+		Callback callback = std::move(done);
+		done = nullptr;
+		secrets.clear();
+		if (callback) {
+			callback(response);
+		}
+	}
 };
 
 AiChatClient::AiChatClient(QNetworkAccessManager* network)
@@ -1245,6 +1495,19 @@ AiChatClient::~AiChatClient()
 		reply->abort();
 		reply->deleteLater();
 	}
+	if (QProcess* process = m_state->process) {
+		QObject::disconnect(process, nullptr, nullptr, nullptr);
+		m_state->processTree->kill();
+		process->waitForFinished(3000);
+		m_state->processTree.reset();
+		delete process;
+	}
+	if (QThread* worker = m_state->worker) {
+		QObject::disconnect(worker, nullptr, nullptr, nullptr);
+		m_state->stop->store(true);
+		worker->wait();
+		delete worker;
+	}
 }
 
 bool AiChatClient::send(const AiChatRequest& request, const QString& apiKey, Callback done, QString* error)
@@ -1254,6 +1517,13 @@ bool AiChatClient::send(const AiChatRequest& request, const QString& apiKey, Cal
 			*error = QCoreApplication::translate("VibeStudioAiTransport", "A request is already running.");
 		}
 		return false;
+	}
+	const AiTextTransport transport = aiTextTransport(request.connectorId);
+	if (transport == AiTextTransport::Harness) {
+		return sendHarness(request, std::move(done), error);
+	}
+	if (transport == AiTextTransport::Gguf) {
+		return sendGguf(request, std::move(done), error);
 	}
 	AiHttpRequest http;
 	if (!buildAiHttpRequest(request, apiKey, &http, error)) {
@@ -1299,32 +1569,212 @@ bool AiChatClient::send(const AiChatRequest& request, const QString& apiKey, Cal
 			response.failure = AiChatFailure::Network;
 			response.errorMessage = reply->errorString();
 		}
-		response.errorMessage = redactAiText(response.errorMessage, m_state->secrets);
-		response.elapsedMsecs = m_state->clock.elapsed();
-		Callback done = std::move(m_state->done);
-		m_state->done = nullptr;
 		m_state->reply = nullptr;
-		m_state->secrets.clear();
 		reply->deleteLater();
-		// Last, so the callback may start the next request.
-		if (done) {
-			done(response);
+		m_state->finish(response);
+	});
+	return true;
+}
+
+bool AiChatClient::sendHarness(const AiChatRequest& request, Callback done, QString* error)
+{
+	const QString program = aiHarnessKind(request.connectorId) == AiHarnessKind::CustomCommand ? request.endpoint : aiHarnessProgram(request.connectorId, request.endpoint);
+	AiHarnessInvocation invocation;
+	if (!buildAiHarnessInvocation(request, program, &invocation, error)) {
+		return false;
+	}
+	auto folder = std::make_unique<QTemporaryDir>(QDir(QDir::tempPath()).filePath(QStringLiteral("vibestudio-harness-XXXXXX")));
+	if (!folder->isValid()) {
+		if (error) {
+			*error = QCoreApplication::translate("VibeStudioAiTransport", "Could not make a folder for %1 to run in.").arg(request.connectorId);
+		}
+		return false;
+	}
+	const QString root = QDir::toNativeSeparators(folder->path());
+	for (const auto& file : invocation.files) {
+		QFile out(QDir(folder->path()).filePath(file.first));
+		if (!out.open(QIODevice::WriteOnly) || out.write(file.second) != file.second.size()) {
+			if (error) {
+				*error = QCoreApplication::translate("VibeStudioAiTransport", "Could not write %1 for %2.").arg(file.first, request.connectorId);
+			}
+			return false;
+		}
+	}
+	QStringList arguments;
+	for (QString argument : invocation.arguments) {
+		arguments << argument.replace(QStringLiteral("{dir}/"), root + QDir::separator()).replace(QStringLiteral("{dir}"), root);
+	}
+	QProcessEnvironment environment = QProcessEnvironment::systemEnvironment();
+	for (const QString& name : invocation.removedEnvironment) {
+		environment.remove(name);
+	}
+	for (const auto& variable : invocation.setEnvironment) {
+		environment.insert(variable.first, variable.second);
+	}
+
+	auto* process = new QProcess;
+	process->setProgram(invocation.program);
+	process->setArguments(arguments);
+	process->setWorkingDirectory(folder->path());
+	process->setProcessEnvironment(environment);
+	m_state->connectorId = request.connectorId;
+	m_state->secrets.clear();
+	m_state->done = std::move(done);
+	m_state->cancelled = false;
+	m_state->timedOut = false;
+	m_state->answerFile = invocation.answerFile.isEmpty() ? QString() : QDir(folder->path()).filePath(invocation.answerFile);
+	m_state->runFolder = std::move(folder);
+	m_state->process = process;
+	m_state->processTree = std::make_unique<ProcessTree>(process);
+	m_state->clock.start();
+
+	auto* timer = new QTimer(process);
+	timer->setSingleShot(true);
+	QObject::connect(timer, &QTimer::timeout, process, [this]() {
+		m_state->timedOut = true;
+		m_state->processTree->kill();
+	});
+	const auto conclude = [this, process, timer](int exitCode, bool crashed, const QString& startError) {
+		timer->stop();
+		AiChatResponse response;
+		if (m_state->cancelled) {
+			response.failure = AiChatFailure::Cancelled;
+			response.errorMessage = aiChatFailureText(AiChatFailure::Cancelled);
+		} else if (m_state->timedOut) {
+			response.failure = AiChatFailure::Timeout;
+			response.errorMessage = QCoreApplication::translate("VibeStudioAiTransport", "No answer after %1 seconds.").arg(m_state->timeoutMsecs / 1000);
+		} else if (!startError.isEmpty()) {
+			response.failure = AiChatFailure::NotConfigured;
+			response.errorMessage = startError;
+		} else {
+			QByteArray answer;
+			if (!m_state->answerFile.isEmpty()) {
+				QFile file(m_state->answerFile);
+				if (file.open(QIODevice::ReadOnly)) {
+					answer = file.readAll();
+				}
+			}
+			response = parseAiHarnessOutput(m_state->connectorId, crashed ? -1 : exitCode, process->readAllStandardOutput(), process->readAllStandardError(), answer);
+		}
+		m_state->process = nullptr;
+		// Ends anything the tool left running, so its folder can go too.
+		m_state->processTree.reset();
+		m_state->runFolder.reset();
+		process->deleteLater();
+		m_state->finish(response);
+	};
+	QObject::connect(process, &QProcess::finished, process, [conclude](int exitCode, QProcess::ExitStatus status) {
+		conclude(exitCode, status == QProcess::CrashExit, QString());
+	});
+	QObject::connect(process, &QProcess::errorOccurred, process, [conclude, process](QProcess::ProcessError failure) {
+		if (failure == QProcess::FailedToStart) {
+			// Later, so a failure inside start() still answers after send() returns.
+			const QString message = QCoreApplication::translate("VibeStudioAiTransport", "Could not start %1: %2").arg(QDir::toNativeSeparators(process->program()), process->errorString());
+			QMetaObject::invokeMethod(process, [conclude, message]() { conclude(-1, false, message); }, Qt::QueuedConnection);
 		}
 	});
+	process->start();
+	m_state->processTree->adopt();
+	if (process->state() != QProcess::NotRunning) {
+		process->write(invocation.input);
+		process->closeWriteChannel();
+	}
+	timer->start(m_state->timeoutMsecs);
+	return true;
+}
+
+bool AiChatClient::sendGguf(const AiChatRequest& request, Callback done, QString* error)
+{
+	if (!aiGgufRuntimeAvailable()) {
+		if (error) {
+			*error = aiGgufRuntimeMissingText();
+		}
+		return false;
+	}
+	if (const QString problem = aiGgufModelProblem(request.model); !problem.isEmpty()) {
+		if (error) {
+			*error = problem;
+		}
+		return false;
+	}
+	AiGgufRequest run;
+	run.modelPath = request.model;
+	run.system = request.system;
+	run.messages = request.messages;
+	run.grammar = !request.grammar.isEmpty() ? request.grammar : request.responseSchema.isEmpty() ? QString() : aiJsonSchemaGrammar(request.responseSchema);
+	run.maxOutputTokens = ggufOutputLimit(request);
+	auto stop = std::make_shared<std::atomic_bool>(false);
+	auto result = std::make_shared<AiGgufResult>();
+	QThread* worker = QThread::create([run, stop, result]() { *result = runAiGguf(run, stop.get()); });
+	m_state->connectorId = request.connectorId;
+	m_state->secrets.clear();
+	m_state->done = std::move(done);
+	m_state->cancelled = false;
+	m_state->timedOut = false;
+	m_state->stop = stop;
+	m_state->worker = worker;
+	m_state->clock.start();
+	auto* timer = new QTimer(m_state->context.get());
+	timer->setSingleShot(true);
+	QObject::connect(timer, &QTimer::timeout, m_state->context.get(), [this, stop]() {
+		m_state->timedOut = true;
+		stop->store(true);
+	});
+	QObject::connect(worker, &QThread::finished, m_state->context.get(), [this, worker, timer, result]() {
+		timer->deleteLater();
+		AiChatResponse response;
+		if (m_state->cancelled || (result->cancelled && !m_state->timedOut)) {
+			response.failure = AiChatFailure::Cancelled;
+			response.errorMessage = aiChatFailureText(AiChatFailure::Cancelled);
+		} else if (m_state->timedOut) {
+			response.failure = AiChatFailure::Timeout;
+			response.errorMessage = QCoreApplication::translate("VibeStudioAiTransport", "No answer after %1 seconds.").arg(m_state->timeoutMsecs / 1000);
+		} else if (!result->ok) {
+			response.failure = AiChatFailure::Provider;
+			response.errorMessage = result->error;
+		} else {
+			response.ok = true;
+			response.text = result->text;
+			response.truncated = result->truncated;
+			response.finishReason = result->truncated ? QStringLiteral("length") : QStringLiteral("stop");
+		}
+		response.inputTokens = result->promptTokens;
+		response.outputTokens = result->outputTokens;
+		response.model = result->modelName;
+		response.modelSha256 = result->modelSha256;
+		response.contextTokens = result->contextTokens;
+		response.threads = result->threads;
+		response.sampling = result->sampling;
+		m_state->worker = nullptr;
+		m_state->stop.reset();
+		worker->deleteLater();
+		m_state->finish(response);
+	});
+	worker->start();
+	timer->start(m_state->timeoutMsecs);
 	return true;
 }
 
 void AiChatClient::cancel()
 {
+	// One request runs at a time. The answer always comes from the event loop: an aborted reply
+	// finishes inside abort(), so the abort waits for it, and a callback that starts the next
+	// request cannot have it cancelled here too.
 	if (QNetworkReply* reply = m_state->reply) {
 		m_state->cancelled = true;
-		reply->abort();
+		QMetaObject::invokeMethod(reply, &QNetworkReply::abort, Qt::QueuedConnection);
+	} else if (m_state->process) {
+		m_state->cancelled = true;
+		m_state->processTree->kill();
+	} else if (m_state->worker && m_state->stop) {
+		m_state->cancelled = true;
+		m_state->stop->store(true);
 	}
 }
 
 bool AiChatClient::busy() const
 {
-	return !m_state->reply.isNull();
+	return !m_state->reply.isNull() || !m_state->process.isNull() || !m_state->worker.isNull();
 }
 
 void AiChatClient::setTimeoutMsecs(int msecs)

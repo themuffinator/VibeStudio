@@ -18,6 +18,7 @@
 #include "app/texture_generation_dialog.h"
 
 #include "core/ai_audio_transport.h"
+#include "core/ai_harness.h"
 #include "core/ai_image_transport.h"
 #include "core/audio_level.h"
 #include "core/level_build_workspace.h"
@@ -40,6 +41,31 @@
 #include <QVBoxLayout>
 
 namespace vibestudio {
+
+namespace {
+
+// Where a generation request goes, as the consent dialog names it: the provider's host, or for a
+// harness its provider and tool ("Anthropic, through Claude Code").
+QString generationDestination(const QString& connectorId, const QString& endpoint)
+{
+	if (aiTextTransport(connectorId) != AiTextTransport::Harness) {
+		return QUrl(endpoint).host();
+	}
+	AiTextConnection target;
+	target.connectorId = connectorId;
+	target.endpoint = endpoint;
+	target.program = aiHarnessProgram(connectorId, endpoint);
+	return aiTextConnectionDestinationText(target);
+}
+
+QString generationCredentialText(const QString& connectorId)
+{
+	return aiTextTransport(connectorId) == AiTextTransport::Harness
+		? QCoreApplication::translate("VibeStudioAiGeneration", "the tool signs in with your own login, in an empty folder with its tools turned off, so it can only answer")
+		: QCoreApplication::translate("VibeStudioAiGeneration", "your API key is sent only to authenticate");
+}
+
+} // namespace
 
 void ApplicationShell::registerAiGenerationCommands()
 {
@@ -146,7 +172,7 @@ QStringList ApplicationShell::generationTextureNames(const QString& game) const
 bool ApplicationShell::confirmGenerationSend(const QString& connectorId, const QString& displayName, const QString& endpoint, const AiHttpRequest& request,
 	const QString& explanationText)
 {
-	const QString host = QUrl(endpoint).host();
+	const QString host = generationDestination(connectorId, endpoint);
 	const QString destination = QStringLiteral("%1@%2").arg(connectorId, host);
 	if (m_settings.aiContextConsentGiven(m_settings.currentProjectPath(), destination)) {
 		return true;
@@ -158,7 +184,12 @@ bool ApplicationShell::confirmGenerationSend(const QString& connectorId, const Q
 	dialog.resize(680, 540);
 	auto* layout = new QVBoxLayout(&dialog);
 	auto* explanation = new QLabel(!explanationText.isEmpty() ? explanationText
-			: tr("The description and settings below go to %1 at %2; nothing else from the project goes with them, and your API key is sent only to "
+			: aiTextTransport(connectorId) == AiTextTransport::Harness
+			? tr("The description and settings below go to %1 through %2, with your own login; nothing else from the project goes with them, and %2 runs in "
+				 "an empty folder with its tools turned off, so it can only answer. This is the first request from this project through %2, so here is exactly "
+				 "what will run:")
+				  .arg(host, aiHarnessToolName(connectorId))
+			: tr("The description and settings below go to %1 (%2); nothing else from the project goes with them, and your API key is sent only to "
 				 "authenticate. This is the first request from this project to %2, so here is exactly what will be sent:")
 				  .arg(displayName, host));
 	explanation->setWordWrap(true);
@@ -231,6 +262,11 @@ void ApplicationShell::showLevelGenerator()
 			const QString maps = QDir(project).filePath(QStringLiteral("maps"));
 			return QFileInfo(maps).isDir() ? maps : project;
 		};
+		hooks.openAiSettings = [this] {
+			showSettingsCategory(QStringLiteral("ai"));
+			raise();
+			activateWindow();
+		};
 		m_levelGenerationDialog = new LevelGenerationDialog(this, std::move(hooks));
 	}
 	m_levelGenerationDialog->refreshPlannerStatus();
@@ -295,6 +331,11 @@ void ApplicationShell::showTextureGenerator()
 		};
 		hooks.beginTask = [this](const QString& title, const QString& detail) { return beginGenerationTask(title, detail); };
 		hooks.endTask = [this](const QString& id, bool succeeded, bool cancelled, const QString& summary) { endGenerationTask(id, succeeded, cancelled, summary); };
+		hooks.openAiSettings = [this] {
+			showSettingsCategory(QStringLiteral("ai"));
+			raise();
+			activateWindow();
+		};
 		m_textureGenerationDialog = new TextureGenerationDialog(this, std::move(hooks));
 	}
 	m_textureGenerationDialog->refreshSourceStatus();
@@ -312,12 +353,12 @@ void ApplicationShell::showLevelAiEditor()
 		};
 		hooks.projectRoot = [this] { return m_settings.currentProjectPath(); };
 		hooks.confirmSend = [this](const QString& connectorId, const QString& displayName, const QString& endpoint, const AiHttpRequest& request) {
-			const QString host = QUrl(endpoint).host();
+			const QString host = generationDestination(connectorId, endpoint);
 			return confirmGenerationSend(connectorId, displayName, endpoint, request,
 				tr("Your instruction and a summary of the open map (its entities and their keys, brush bounds, textures, and selection, with your home and project "
-				   "folders shortened) go to %1 at %2; nothing else from the project goes with them, and your API key is sent only to authenticate. This is the "
-				   "first request from this project to %2, so here is exactly what will be sent:")
-					.arg(displayName, host));
+				   "folders shortened) go to %1 (%2); nothing else from the project goes with them, and %3. This is the first request from this project to %2, so "
+				   "here is exactly what will be sent:")
+					.arg(aiTextTransport(connectorId) == AiTextTransport::Harness ? aiHarnessToolName(connectorId) : displayName, host, generationCredentialText(connectorId)));
 		};
 		hooks.apply = [this](const LevelAiEditProposal& proposal) {
 			// Through the editor's own operations, so each edit is an undo step.
@@ -334,6 +375,11 @@ void ApplicationShell::showLevelAiEditor()
 		hooks.proposalFolder = [this] {
 			const QString project = m_settings.currentProjectPath();
 			return project.isEmpty() ? QDir::homePath() : project;
+		};
+		hooks.openAiSettings = [this] {
+			showSettingsCategory(QStringLiteral("ai"));
+			raise();
+			activateWindow();
 		};
 		m_levelAiEditDialog = new LevelAiEditDialog(this, std::move(hooks));
 	}
@@ -388,6 +434,11 @@ void ApplicationShell::showSoundGenerator()
 		};
 		hooks.beginTask = [this](const QString& title, const QString& detail) { return beginGenerationTask(title, detail); };
 		hooks.endTask = [this](const QString& id, bool succeeded, bool cancelled, const QString& summary) { endGenerationTask(id, succeeded, cancelled, summary); };
+		hooks.openAiSettings = [this] {
+			showSettingsCategory(QStringLiteral("ai"));
+			raise();
+			activateWindow();
+		};
 		m_soundGenerationDialog = new SoundGenerationDialog(this, std::move(hooks));
 	}
 	m_soundGenerationDialog->refreshSourceStatus();
@@ -464,6 +515,23 @@ void ApplicationShell::refreshAiImageModelFields()
 	m_aiImageStatus->setAccessibleDescription(m_aiImageStatus->text());
 }
 
+void ApplicationShell::refreshAiFeatures()
+{
+	refreshAssistant();
+	if (m_levelGenerationDialog) {
+		m_levelGenerationDialog->refreshPlannerStatus();
+	}
+	if (m_levelAiEditDialog) {
+		m_levelAiEditDialog->refreshStatus();
+	}
+	if (m_textureGenerationDialog) {
+		m_textureGenerationDialog->refreshSourceStatus();
+	}
+	if (m_soundGenerationDialog) {
+		m_soundGenerationDialog->refreshSourceStatus();
+	}
+}
+
 void ApplicationShell::saveAiImageModelFields()
 {
 	if (!m_aiImageConnector || !m_aiImageModel || !m_aiImageEndpoint) {
@@ -481,9 +549,7 @@ void ApplicationShell::saveAiImageModelFields()
 	m_settings.setAiAutomationPreferences(preferences);
 	m_settings.sync();
 	refreshAiImageModelFields();
-	if (m_textureGenerationDialog) {
-		m_textureGenerationDialog->refreshSourceStatus();
-	}
+	refreshAiFeatures();
 	statusBar()->showMessage(tr("Saved the %1 image model settings.").arg(m_aiImageConnector->currentText()), 4000);
 }
 
@@ -568,9 +634,7 @@ void ApplicationShell::saveAiSoundModelFields()
 	m_settings.setAiAutomationPreferences(preferences);
 	m_settings.sync();
 	refreshAiSoundModelFields();
-	if (m_soundGenerationDialog) {
-		m_soundGenerationDialog->refreshSourceStatus();
-	}
+	refreshAiFeatures();
 	statusBar()->showMessage(tr("Saved the %1 sound model settings.").arg(m_aiSoundConnector->currentText()), 4000);
 }
 

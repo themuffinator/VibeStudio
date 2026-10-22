@@ -1,0 +1,29 @@
+{
+  "schema": "qmg.benchmark.heroes",
+  "schema_version": 1,
+  "created": "2026-10-15",
+  "change_id": "x1-bench",
+  "description": "HEROES (plan section 8.3). One entry per path, committed before that hero is generated. A hero's primary seed appears in no other fixed set. No hero seed is chosen yet (D26 is pending): the list is empty.",
+  "entry_schema": {
+    "path": "one of the 17 paths",
+    "name": "hero name",
+    "prompt": "the exact prompt text",
+    "prompt_sha256": "sha256 of the UTF-8 prompt",
+    "seed": "primary seed (integer); must not appear in any other fixed set",
+    "control_seeds": "optional same-prompt controls (for example 4242 for the Q2 DM hero under D26 (b))",
+    "expected_requests": "list, in the run.py request vocabulary",
+    "declared_out_of_scope": "requests declared out of scope BEFORE generation, each with a reason; waivers on a hero are 0 unless declared here",
+    "reference_set": "stock maps used for comparison (ids only)",
+    "evidence_plan": {
+      "native_routes": "predeclared routes for native movement trials",
+      "bot_runs": {
+        "k": "number of runs",
+        "frame_budget": "frames per run"
+      },
+      "screenshot_views": "named camera views (D19)"
+    },
+    "committed": "date the entry was committed, before generation",
+    "approved_by": "the user's approval record"
+  },
+  "heroes": []
+}

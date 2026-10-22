@@ -1,0 +1,1446 @@
+{
+  "schema": "qmg.game_profile",
+  "schema_version": 1,
+  "profile_kind": "module",
+  "game": "quake2",
+  "module": "q2-baseq2-3.19",
+  "title": "Quake II 3.19 baseq2 game DLL",
+  "evidence_level": "static analysis",
+  "sources": {
+    "q2src": {
+      "description": "id Software GPL source release of Quake II (Quake-2-master): game/ (baseq2 game DLL), ctf/ (ThreeWave CTF 1.09b game DLL), qcommon/ (pmove), server/.",
+      "identity": "qcommon/qcommon.h:26 VERSION 3.19",
+      "kind": "file_lines"
+    }
+  },
+  "runtime": {
+    "name": "baseq2 game DLL, id source 3.19",
+    "version": {
+      "value": "3.19",
+      "cite": [
+        "q2src:qcommon/qcommon.h:26|#define VERSION 3.19"
+      ]
+    },
+    "note": "The 3.20/3.21 retail binaries and the 2023 re-release DLL were not examined."
+  },
+  "movement": {
+    "gravity": {
+      "value": 800,
+      "unit": "u/s^2",
+      "cite": [
+        "q2src:game/g_save.c:164|\"sv_gravity\", \"800\""
+      ],
+      "note": "worldspawn 'gravity' overrides the cvar per map."
+    },
+    "max_ground_speed": {
+      "value": 300,
+      "unit": "u/s",
+      "cite": [
+        "q2src:qcommon/pmove.c:54|pm_maxspeed = 300"
+      ]
+    },
+    "duck_speed": {
+      "value": 100,
+      "unit": "u/s",
+      "cite": [
+        "q2src:qcommon/pmove.c:55|pm_duckspeed = 100"
+      ]
+    },
+    "accelerate": {
+      "value": 10,
+      "unit": "1/s",
+      "cite": [
+        "q2src:qcommon/pmove.c:56|pm_accelerate = 10"
+      ]
+    },
+    "air_accelerate": {
+      "value": 0,
+      "cite": [
+        "q2src:qcommon/pmove.c:57|pm_airaccelerate = 0",
+        "q2src:qcommon/pmove.c:654-657|if (pm_airaccelerate)",
+        "q2src:server/sv_init.c:196-204|if (Cvar_VariableValue (\"deathmatch\"))"
+      ],
+      "note": "A switch, not a rate: when nonzero, air movement uses pm_accelerate (10); the server forces it to 0 outside deathmatch."
+    },
+    "friction": {
+      "value": 6,
+      "unit": "1/s",
+      "cite": [
+        "q2src:qcommon/pmove.c:59|pm_friction = 6"
+      ]
+    },
+    "stop_speed": {
+      "value": 100,
+      "unit": "u/s",
+      "cite": [
+        "q2src:qcommon/pmove.c:53|pm_stopspeed = 100"
+      ]
+    },
+    "water_speed": {
+      "value": 400,
+      "unit": "u/s",
+      "cite": [
+        "q2src:qcommon/pmove.c:61|pm_waterspeed = 400"
+      ]
+    },
+    "jump_velocity": {
+      "value": 270,
+      "unit": "u/s",
+      "cite": [
+        "q2src:qcommon/pmove.c:820-822|pml.velocity[2] += 270;"
+      ],
+      "note": "Jump must be released between jumps (PMF_JUMP_HELD)."
+    },
+    "step_height": {
+      "value": 18,
+      "unit": "u",
+      "cite": [
+        "q2src:qcommon/pmove.c:25|#define STEPSIZE 18"
+      ]
+    },
+    "eye_height": {
+      "value": 22,
+      "unit": "u",
+      "cite": [
+        "q2src:game/p_client.c:1167|ent->viewheight = 22;"
+      ],
+      "note": "Standing view height above the entity origin, set in PutClientInServer."
+    },
+    "player_mins": {
+      "value": [
+        -16,
+        -16,
+        -24
+      ],
+      "unit": "u",
+      "cite": [
+        "q2src:game/p_client.c:1099|vec3_t mins = {-16, -16, -24};"
+      ]
+    },
+    "player_maxs": {
+      "value": [
+        16,
+        16,
+        32
+      ],
+      "unit": "u",
+      "cite": [
+        "q2src:game/p_client.c:1100|vec3_t maxs = {16, 16, 32};"
+      ]
+    }
+  },
+  "spawnflags": [
+    {
+      "name": "NOT_EASY",
+      "bit": 256,
+      "scope": "every entity",
+      "tested_when": "deathmatch == 0 and skill == 0",
+      "effect": "removed at map load",
+      "cite": [
+        "q2src:game/g_local.h:50|#define SPAWNFLAG_NOT_EASY 0x00000100",
+        "q2src:game/g_spawn.c:576-599|if (deathmatch->value)"
+      ]
+    },
+    {
+      "name": "NOT_MEDIUM",
+      "bit": 512,
+      "scope": "every entity",
+      "tested_when": "deathmatch == 0 and skill == 1",
+      "effect": "removed at map load",
+      "cite": [
+        "q2src:game/g_local.h:51|#define SPAWNFLAG_NOT_MEDIUM 0x00000200",
+        "q2src:game/g_spawn.c:576-599|if (deathmatch->value)"
+      ]
+    },
+    {
+      "name": "NOT_HARD",
+      "bit": 1024,
+      "scope": "every entity",
+      "tested_when": "deathmatch == 0 and skill >= 2",
+      "effect": "removed at map load; skill 3 uses the NOT_HARD set",
+      "cite": [
+        "q2src:game/g_local.h:52|#define SPAWNFLAG_NOT_HARD 0x00000400",
+        "q2src:game/g_spawn.c:576-599|if (deathmatch->value)"
+      ]
+    },
+    {
+      "name": "NOT_DEATHMATCH",
+      "bit": 2048,
+      "scope": "every entity",
+      "tested_when": "deathmatch != 0",
+      "effect": "removed at map load; in deathmatch the skill flags are not tested",
+      "cite": [
+        "q2src:game/g_local.h:53|#define SPAWNFLAG_NOT_DEATHMATCH 0x00000800",
+        "q2src:game/g_spawn.c:576-599|if (deathmatch->value)"
+      ]
+    },
+    {
+      "name": "NOT_COOP",
+      "bit": 4096,
+      "scope": "every entity",
+      "tested_when": "never",
+      "effect": "inert: its test is commented out and the bit is only cleared, so co-op cannot be told apart from single player by spawnflags",
+      "cite": [
+        "q2src:game/g_local.h:54|#define SPAWNFLAG_NOT_COOP 0x00001000",
+        "q2src:game/g_spawn.c:587|/* ((coop->value) && (ent->spawnflags & SPAWNFLAG_NOT_COOP)) || */",
+        "q2src:game/g_spawn.c:599|ent->spawnflags &= ~(SPAWNFLAG_NOT_EASY|SPAWNFLAG_NOT_MEDIUM|SPAWNFLAG_NOT_HARD|SPAWNFLAG_NOT_COOP|SPAWNFLAG_NOT_DEATHMATCH);"
+      ],
+      "note": "4096 is also DF_ALLOW_EXIT in the separate dmflags namespace."
+    },
+    {
+      "name": "ITEM_TRIGGER_SPAWN",
+      "bit": 1,
+      "scope": "map-placed items",
+      "tested_when": "never",
+      "effect": "inert on map-placed items: SpawnItem zeroes the spawnflags of every placed item except key_power_cube",
+      "cite": [
+        "q2src:game/g_local.h:556|#define ITEM_TRIGGER_SPAWN 0x00000001",
+        "q2src:game/g_items.c:1065-1069|if (ent->spawnflags)"
+      ]
+    },
+    {
+      "name": "ITEM_NO_TOUCH",
+      "bit": 2,
+      "scope": "map-placed items",
+      "tested_when": "never",
+      "effect": "inert on map-placed items (zeroed by SpawnItem, as above)",
+      "cite": [
+        "q2src:game/g_local.h:557|#define ITEM_NO_TOUCH 0x00000002",
+        "q2src:game/g_items.c:1065-1069|if (ent->spawnflags)"
+      ]
+    }
+  ],
+  "respawn_rules": [
+    {
+      "id": "weapon",
+      "cite": [
+        "q2src:game/p_weapon.c:118-160|qboolean Pickup_Weapon (edict_t *ent, edict_t *other)"
+      ],
+      "cases": [
+        {
+          "id": "deathmatch",
+          "when": "deathmatch != 0 and not (dmflags & DF_WEAPONS_STAY)",
+          "behaviour": "respawn",
+          "seconds": 30,
+          "cite": [
+            "q2src:game/p_weapon.c:145-150|if (deathmatch->value)"
+          ]
+        },
+        {
+          "id": "weapons_stay",
+          "when": "deathmatch != 0 and (dmflags & DF_WEAPONS_STAY)",
+          "behaviour": "stays",
+          "cite": [
+            "q2src:game/p_weapon.c:125-129|if ( ( ((int)(dmflags->value) & DF_WEAPONS_STAY) || coop->value)",
+            "q2src:game/p_weapon.c:147-148|if ((int)(dmflags->value) & DF_WEAPONS_STAY)",
+            "q2src:game/q_shared.h:1018|#define DF_WEAPONS_STAY 0x00000004"
+          ]
+        },
+        {
+          "id": "coop",
+          "when": "coop != 0",
+          "behaviour": "stays",
+          "cite": [
+            "q2src:game/p_weapon.c:125-129|if ( ( ((int)(dmflags->value) & DF_WEAPONS_STAY) || coop->value)",
+            "q2src:game/p_weapon.c:152-153|if (coop->value)"
+          ]
+        },
+        {
+          "id": "single_player",
+          "when": "deathmatch == 0 and coop == 0",
+          "behaviour": "removed",
+          "cite": [
+            "q2src:game/g_items.c:814-819|if (!((coop->value) && (ent->item->flags & IT_STAY_COOP))"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "armor",
+      "cite": [
+        "q2src:game/g_items.c:607-683|qboolean Pickup_Armor (edict_t *ent, edict_t *other)"
+      ],
+      "cases": [
+        {
+          "id": "deathmatch",
+          "when": "deathmatch != 0",
+          "behaviour": "respawn",
+          "seconds": 20,
+          "cite": [
+            "q2src:game/g_items.c:680-681|if (!(ent->spawnflags & DROPPED_ITEM) && (deathmatch->value))"
+          ]
+        },
+        {
+          "id": "otherwise",
+          "when": "deathmatch == 0",
+          "behaviour": "removed",
+          "cite": [
+            "q2src:game/g_items.c:814-819|if (!((coop->value) && (ent->item->flags & IT_STAY_COOP))"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "power_armor",
+      "cite": [
+        "q2src:game/g_items.c:727-738|qboolean Pickup_PowerArmor (edict_t *ent, edict_t *other)"
+      ],
+      "cases": [
+        {
+          "id": "deathmatch",
+          "when": "deathmatch != 0",
+          "behaviour": "respawn",
+          "seconds_from": "quantity",
+          "cite": [
+            "q2src:game/g_items.c:735-738|if (deathmatch->value)"
+          ]
+        },
+        {
+          "id": "otherwise",
+          "when": "deathmatch == 0",
+          "behaviour": "removed",
+          "cite": [
+            "q2src:game/g_items.c:814-819|if (!((coop->value) && (ent->item->flags & IT_STAY_COOP))"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "health",
+      "cite": [
+        "q2src:game/g_items.c:556-585|qboolean Pickup_Health (edict_t *ent, edict_t *other)"
+      ],
+      "cases": [
+        {
+          "id": "deathmatch",
+          "when": "deathmatch != 0",
+          "behaviour": "respawn",
+          "seconds": 30,
+          "cite": [
+            "q2src:game/g_items.c:581-582|if (!(ent->spawnflags & DROPPED_ITEM) && (deathmatch->value))"
+          ]
+        },
+        {
+          "id": "otherwise",
+          "when": "deathmatch == 0",
+          "behaviour": "removed",
+          "cite": [
+            "q2src:game/g_items.c:814-819|if (!((coop->value) && (ent->item->flags & IT_STAY_COOP))"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "mega_health",
+      "cite": [
+        "q2src:game/g_items.c:541-553|void MegaHealth_think (edict_t *self)"
+      ],
+      "cases": [
+        {
+          "id": "deathmatch",
+          "when": "deathmatch != 0",
+          "behaviour": "respawn_after_rot",
+          "delay_seconds": 5,
+          "rot_hp_per_second": 1,
+          "seconds": 20,
+          "cite": [
+            "q2src:game/g_items.c:573|ent->nextthink = level.time + 5;",
+            "q2src:game/g_items.c:545-546|self->nextthink = level.time + 1;",
+            "q2src:game/g_items.c:550-551|if (!(self->spawnflags & DROPPED_ITEM) && (deathmatch->value))"
+          ],
+          "note": "Respawn time = 5 s + the time the picker spends above max_health (1 HP/s) + 20 s."
+        },
+        {
+          "id": "otherwise",
+          "when": "deathmatch == 0",
+          "behaviour": "removed",
+          "cite": [
+            "q2src:game/g_items.c:550-553|if (!(self->spawnflags & DROPPED_ITEM) && (deathmatch->value))"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ammo",
+      "cite": [
+        "q2src:game/g_items.c:483-510|qboolean Pickup_Ammo (edict_t *ent, edict_t *other)"
+      ],
+      "cases": [
+        {
+          "id": "deathmatch",
+          "when": "deathmatch != 0",
+          "behaviour": "respawn",
+          "seconds": 30,
+          "cite": [
+            "q2src:game/g_items.c:508-509|if (!(ent->spawnflags & (DROPPED_ITEM | DROPPED_PLAYER_ITEM)) && (deathmatch->value))"
+          ]
+        },
+        {
+          "id": "otherwise",
+          "when": "deathmatch == 0",
+          "behaviour": "removed",
+          "cite": [
+            "q2src:game/g_items.c:814-819|if (!((coop->value) && (ent->item->flags & IT_STAY_COOP))"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "powerup",
+      "cite": [
+        "q2src:game/g_items.c:159-184|qboolean Pickup_Powerup (edict_t *ent, edict_t *other)"
+      ],
+      "cases": [
+        {
+          "id": "deathmatch",
+          "when": "deathmatch != 0",
+          "behaviour": "respawn",
+          "seconds_from": "quantity",
+          "cite": [
+            "q2src:game/g_items.c:172-175|if (deathmatch->value)"
+          ]
+        },
+        {
+          "id": "otherwise",
+          "when": "deathmatch == 0",
+          "behaviour": "removed",
+          "cite": [
+            "q2src:game/g_items.c:814-819|if (!((coop->value) && (ent->item->flags & IT_STAY_COOP))"
+          ],
+          "note": "In coop, items flagged IT_STAY_COOP (rebreather, environment suit) are not removed."
+        }
+      ]
+    },
+    {
+      "id": "quantity_pickup",
+      "cite": [
+        "q2src:game/g_items.c:197|qboolean Pickup_Adrenaline (edict_t *ent, edict_t *other)",
+        "q2src:game/g_items.c:211|qboolean Pickup_AncientHead (edict_t *ent, edict_t *other)",
+        "q2src:game/g_items.c:221|qboolean Pickup_Bandolier (edict_t *ent, edict_t *other)",
+        "q2src:game/g_items.c:259|qboolean Pickup_Pack (edict_t *ent, edict_t *other)"
+      ],
+      "cases": [
+        {
+          "id": "deathmatch",
+          "when": "deathmatch != 0",
+          "behaviour": "respawn",
+          "seconds_from": "quantity",
+          "cite": [
+            "q2src:game/g_items.c:205-206|if (!(ent->spawnflags & DROPPED_ITEM) && (deathmatch->value))",
+            "q2src:game/g_items.c:215-216|if (!(ent->spawnflags & DROPPED_ITEM) && (deathmatch->value))",
+            "q2src:game/g_items.c:253-254|if (!(ent->spawnflags & DROPPED_ITEM) && (deathmatch->value))",
+            "q2src:game/g_items.c:331-332|if (!(ent->spawnflags & DROPPED_ITEM) && (deathmatch->value))"
+          ]
+        },
+        {
+          "id": "otherwise",
+          "when": "deathmatch == 0",
+          "behaviour": "removed",
+          "cite": [
+            "q2src:game/g_items.c:814-819|if (!((coop->value) && (ent->item->flags & IT_STAY_COOP))"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "key",
+      "cite": [
+        "q2src:game/g_items.c:422-439|qboolean Pickup_Key (edict_t *ent, edict_t *other)"
+      ],
+      "cases": [
+        {
+          "id": "all",
+          "when": "always",
+          "behaviour": "not_respawned",
+          "cite": [
+            "q2src:game/g_items.c:422-445|qboolean Pickup_Key (edict_t *ent, edict_t *other)"
+          ],
+          "note": "Pickup_Key never calls SetRespawn; in coop keys carry IT_STAY_COOP and stay for other players."
+        }
+      ]
+    }
+  ],
+  "items": [
+    {
+      "classname": "weapon_blaster",
+      "kind": "weapon",
+      "tier": "starting",
+      "respawn": "none",
+      "cite": [
+        "q2src:game/g_items.c:1292|\"weapon_blaster\",",
+        "q2src:game/p_client.c:613|item = FindItem(\"Blaster\");"
+      ],
+      "note": "Given at spawn; the itemlist entry has no pickup function, so it is not a map pickup."
+    },
+    {
+      "classname": "weapon_shotgun",
+      "kind": "weapon",
+      "tier": "pickup",
+      "respawn": "weapon",
+      "cite": [
+        "q2src:game/g_items.c:1315|\"weapon_shotgun\","
+      ]
+    },
+    {
+      "classname": "weapon_supershotgun",
+      "kind": "weapon",
+      "tier": "pickup",
+      "respawn": "weapon",
+      "cite": [
+        "q2src:game/g_items.c:1338|\"weapon_supershotgun\","
+      ]
+    },
+    {
+      "classname": "weapon_machinegun",
+      "kind": "weapon",
+      "tier": "pickup",
+      "respawn": "weapon",
+      "cite": [
+        "q2src:game/g_items.c:1361|\"weapon_machinegun\","
+      ]
+    },
+    {
+      "classname": "weapon_chaingun",
+      "kind": "weapon",
+      "tier": "pickup",
+      "respawn": "weapon",
+      "cite": [
+        "q2src:game/g_items.c:1384|\"weapon_chaingun\","
+      ]
+    },
+    {
+      "classname": "weapon_grenadelauncher",
+      "kind": "weapon",
+      "tier": "pickup",
+      "respawn": "weapon",
+      "cite": [
+        "q2src:game/g_items.c:1430|\"weapon_grenadelauncher\","
+      ]
+    },
+    {
+      "classname": "weapon_rocketlauncher",
+      "kind": "weapon",
+      "tier": "pickup",
+      "respawn": "weapon",
+      "cite": [
+        "q2src:game/g_items.c:1453|\"weapon_rocketlauncher\","
+      ]
+    },
+    {
+      "classname": "weapon_hyperblaster",
+      "kind": "weapon",
+      "tier": "pickup",
+      "respawn": "weapon",
+      "cite": [
+        "q2src:game/g_items.c:1476|\"weapon_hyperblaster\","
+      ]
+    },
+    {
+      "classname": "weapon_railgun",
+      "kind": "weapon",
+      "tier": "pickup",
+      "respawn": "weapon",
+      "cite": [
+        "q2src:game/g_items.c:1499|\"weapon_railgun\","
+      ]
+    },
+    {
+      "classname": "weapon_bfg",
+      "kind": "weapon",
+      "tier": "pickup",
+      "respawn": "weapon",
+      "cite": [
+        "q2src:game/g_items.c:1522|\"weapon_bfg\","
+      ]
+    },
+    {
+      "classname": "ammo_grenades",
+      "kind": "ammo",
+      "tier": "ammo",
+      "respawn": "ammo",
+      "cite": [
+        "q2src:game/g_items.c:1407|\"ammo_grenades\","
+      ],
+      "note": "Hand grenades: flagged IT_AMMO|IT_WEAPON."
+    },
+    {
+      "classname": "ammo_shells",
+      "kind": "ammo",
+      "tier": "ammo",
+      "respawn": "ammo",
+      "cite": [
+        "q2src:game/g_items.c:1549|\"ammo_shells\","
+      ]
+    },
+    {
+      "classname": "ammo_bullets",
+      "kind": "ammo",
+      "tier": "ammo",
+      "respawn": "ammo",
+      "cite": [
+        "q2src:game/g_items.c:1572|\"ammo_bullets\","
+      ]
+    },
+    {
+      "classname": "ammo_cells",
+      "kind": "ammo",
+      "tier": "ammo",
+      "respawn": "ammo",
+      "cite": [
+        "q2src:game/g_items.c:1595|\"ammo_cells\","
+      ]
+    },
+    {
+      "classname": "ammo_rockets",
+      "kind": "ammo",
+      "tier": "ammo",
+      "respawn": "ammo",
+      "cite": [
+        "q2src:game/g_items.c:1618|\"ammo_rockets\","
+      ]
+    },
+    {
+      "classname": "ammo_slugs",
+      "kind": "ammo",
+      "tier": "ammo",
+      "respawn": "ammo",
+      "cite": [
+        "q2src:game/g_items.c:1641|\"ammo_slugs\","
+      ]
+    },
+    {
+      "classname": "item_armor_jacket",
+      "kind": "armor",
+      "tier": "light",
+      "respawn": "armor",
+      "amount": {
+        "value": 25,
+        "unit": "armor points (base_count)",
+        "cite": [
+          "q2src:game/g_items.c:39|gitem_armor_t jacketarmor_info"
+        ]
+      },
+      "cite": [
+        "q2src:game/g_items.c:1193|\"item_armor_jacket\","
+      ]
+    },
+    {
+      "classname": "item_armor_combat",
+      "kind": "armor",
+      "tier": "medium",
+      "respawn": "armor",
+      "amount": {
+        "value": 50,
+        "unit": "armor points (base_count)",
+        "cite": [
+          "q2src:game/g_items.c:40|gitem_armor_t combatarmor_info"
+        ]
+      },
+      "cite": [
+        "q2src:game/g_items.c:1170|\"item_armor_combat\","
+      ]
+    },
+    {
+      "classname": "item_armor_body",
+      "kind": "armor",
+      "tier": "heavy",
+      "respawn": "armor",
+      "amount": {
+        "value": 100,
+        "unit": "armor points (base_count)",
+        "cite": [
+          "q2src:game/g_items.c:41|gitem_armor_t bodyarmor_info"
+        ]
+      },
+      "cite": [
+        "q2src:game/g_items.c:1147|\"item_armor_body\","
+      ]
+    },
+    {
+      "classname": "item_armor_shard",
+      "kind": "armor",
+      "tier": "shard",
+      "respawn": "armor",
+      "amount": {
+        "value": 2,
+        "unit": "armor points",
+        "cite": [
+          "q2src:game/g_items.c:622-627|if (ent->item->tag == ARMOR_SHARD)"
+        ]
+      },
+      "cite": [
+        "q2src:game/g_items.c:1216|\"item_armor_shard\","
+      ]
+    },
+    {
+      "classname": "item_power_screen",
+      "kind": "armor",
+      "tier": "power_armor",
+      "respawn": "power_armor",
+      "quantity": {
+        "value": 60,
+        "unit": "s (respawn)",
+        "cite": [
+          "q2src:game/g_items.c:1251|60,"
+        ]
+      },
+      "cite": [
+        "q2src:game/g_items.c:1240|\"item_power_screen\","
+      ]
+    },
+    {
+      "classname": "item_power_shield",
+      "kind": "armor",
+      "tier": "power_armor",
+      "respawn": "power_armor",
+      "quantity": {
+        "value": 60,
+        "unit": "s (respawn)",
+        "cite": [
+          "q2src:game/g_items.c:1274|60,"
+        ]
+      },
+      "cite": [
+        "q2src:game/g_items.c:1263|\"item_power_shield\","
+      ]
+    },
+    {
+      "classname": "item_health",
+      "kind": "health",
+      "tier": "medium",
+      "respawn": "health",
+      "amount": {
+        "value": 10,
+        "unit": "HP",
+        "cite": [
+          "q2src:game/g_items.c:2130|self->count = 10;"
+        ]
+      },
+      "cite": [
+        "q2src:game/g_spawn.c:149|{\"item_health\", SP_item_health},",
+        "q2src:game/g_items.c:2121|void SP_item_health (edict_t *self)"
+      ]
+    },
+    {
+      "classname": "item_health_small",
+      "kind": "health",
+      "tier": "small",
+      "respawn": "health",
+      "amount": {
+        "value": 2,
+        "unit": "HP",
+        "cite": [
+          "q2src:game/g_items.c:2146|self->count = 2;"
+        ]
+      },
+      "cite": [
+        "q2src:game/g_spawn.c:150|{\"item_health_small\", SP_item_health_small},",
+        "q2src:game/g_items.c:2137|void SP_item_health_small (edict_t *self)"
+      ]
+    },
+    {
+      "classname": "item_health_large",
+      "kind": "health",
+      "tier": "large",
+      "respawn": "health",
+      "amount": {
+        "value": 25,
+        "unit": "HP",
+        "cite": [
+          "q2src:game/g_items.c:2163|self->count = 25;"
+        ]
+      },
+      "cite": [
+        "q2src:game/g_spawn.c:151|{\"item_health_large\", SP_item_health_large},",
+        "q2src:game/g_items.c:2154|void SP_item_health_large (edict_t *self)"
+      ]
+    },
+    {
+      "classname": "item_health_mega",
+      "kind": "health",
+      "tier": "mega",
+      "respawn": "mega_health",
+      "amount": {
+        "value": 100,
+        "unit": "HP",
+        "cite": [
+          "q2src:game/g_items.c:2179|self->count = 100;"
+        ]
+      },
+      "cite": [
+        "q2src:game/g_spawn.c:152|{\"item_health_mega\", SP_item_health_mega},",
+        "q2src:game/g_items.c:2170|void SP_item_health_mega (edict_t *self)"
+      ]
+    },
+    {
+      "classname": "item_quad",
+      "kind": "powerup",
+      "tier": "powerup",
+      "respawn": "powerup",
+      "quantity": {
+        "value": 60,
+        "unit": "s (respawn)",
+        "cite": [
+          "q2src:game/g_items.c:1679|60,"
+        ]
+      },
+      "cite": [
+        "q2src:game/g_items.c:1668|\"item_quad\","
+      ]
+    },
+    {
+      "classname": "item_invulnerability",
+      "kind": "powerup",
+      "tier": "powerup",
+      "respawn": "powerup",
+      "quantity": {
+        "value": 300,
+        "unit": "s (respawn)",
+        "cite": [
+          "q2src:game/g_items.c:1702|300,"
+        ]
+      },
+      "cite": [
+        "q2src:game/g_items.c:1691|\"item_invulnerability\","
+      ]
+    },
+    {
+      "classname": "item_silencer",
+      "kind": "powerup",
+      "tier": "powerup",
+      "respawn": "powerup",
+      "quantity": {
+        "value": 60,
+        "unit": "s (respawn)",
+        "cite": [
+          "q2src:game/g_items.c:1725|60,"
+        ]
+      },
+      "cite": [
+        "q2src:game/g_items.c:1714|\"item_silencer\","
+      ]
+    },
+    {
+      "classname": "item_breather",
+      "kind": "powerup",
+      "tier": "powerup",
+      "respawn": "powerup",
+      "quantity": {
+        "value": 60,
+        "unit": "s (respawn)",
+        "cite": [
+          "q2src:game/g_items.c:1748|60,"
+        ]
+      },
+      "cite": [
+        "q2src:game/g_items.c:1737|\"item_breather\","
+      ]
+    },
+    {
+      "classname": "item_enviro",
+      "kind": "powerup",
+      "tier": "powerup",
+      "respawn": "powerup",
+      "quantity": {
+        "value": 60,
+        "unit": "s (respawn)",
+        "cite": [
+          "q2src:game/g_items.c:1771|60,"
+        ]
+      },
+      "cite": [
+        "q2src:game/g_items.c:1760|\"item_enviro\","
+      ]
+    },
+    {
+      "classname": "item_ancient_head",
+      "kind": "other",
+      "tier": "utility",
+      "respawn": "quantity_pickup",
+      "quantity": {
+        "value": 60,
+        "unit": "s (respawn)",
+        "cite": [
+          "q2src:game/g_items.c:1795|60,"
+        ]
+      },
+      "cite": [
+        "q2src:game/g_items.c:1784|\"item_ancient_head\","
+      ]
+    },
+    {
+      "classname": "item_adrenaline",
+      "kind": "other",
+      "tier": "utility",
+      "respawn": "quantity_pickup",
+      "quantity": {
+        "value": 60,
+        "unit": "s (respawn)",
+        "cite": [
+          "q2src:game/g_items.c:1819|60,"
+        ]
+      },
+      "cite": [
+        "q2src:game/g_items.c:1808|\"item_adrenaline\","
+      ]
+    },
+    {
+      "classname": "item_bandolier",
+      "kind": "other",
+      "tier": "utility",
+      "respawn": "quantity_pickup",
+      "quantity": {
+        "value": 60,
+        "unit": "s (respawn)",
+        "cite": [
+          "q2src:game/g_items.c:1842|60,"
+        ]
+      },
+      "cite": [
+        "q2src:game/g_items.c:1831|\"item_bandolier\","
+      ]
+    },
+    {
+      "classname": "item_pack",
+      "kind": "other",
+      "tier": "utility",
+      "respawn": "quantity_pickup",
+      "quantity": {
+        "value": 180,
+        "unit": "s (respawn)",
+        "cite": [
+          "q2src:game/g_items.c:1865|180,"
+        ]
+      },
+      "cite": [
+        "q2src:game/g_items.c:1854|\"item_pack\","
+      ]
+    },
+    {
+      "classname": "key_data_cd",
+      "kind": "key",
+      "tier": "key",
+      "respawn": "key",
+      "cite": [
+        "q2src:game/g_items.c:1881|\"key_data_cd\","
+      ]
+    },
+    {
+      "classname": "key_power_cube",
+      "kind": "key",
+      "tier": "key",
+      "respawn": "key",
+      "cite": [
+        "q2src:game/g_items.c:1905|\"key_power_cube\","
+      ]
+    },
+    {
+      "classname": "key_pyramid",
+      "kind": "key",
+      "tier": "key",
+      "respawn": "key",
+      "cite": [
+        "q2src:game/g_items.c:1929|\"key_pyramid\","
+      ]
+    },
+    {
+      "classname": "key_data_spinner",
+      "kind": "key",
+      "tier": "key",
+      "respawn": "key",
+      "cite": [
+        "q2src:game/g_items.c:1953|\"key_data_spinner\","
+      ]
+    },
+    {
+      "classname": "key_pass",
+      "kind": "key",
+      "tier": "key",
+      "respawn": "key",
+      "cite": [
+        "q2src:game/g_items.c:1977|\"key_pass\","
+      ]
+    },
+    {
+      "classname": "key_blue_key",
+      "kind": "key",
+      "tier": "key",
+      "respawn": "key",
+      "cite": [
+        "q2src:game/g_items.c:2001|\"key_blue_key\","
+      ]
+    },
+    {
+      "classname": "key_red_key",
+      "kind": "key",
+      "tier": "key",
+      "respawn": "key",
+      "cite": [
+        "q2src:game/g_items.c:2025|\"key_red_key\","
+      ]
+    },
+    {
+      "classname": "key_commander_head",
+      "kind": "key",
+      "tier": "key",
+      "respawn": "key",
+      "cite": [
+        "q2src:game/g_items.c:2049|\"key_commander_head\","
+      ]
+    },
+    {
+      "classname": "key_airstrike_target",
+      "kind": "key",
+      "tier": "key",
+      "respawn": "key",
+      "cite": [
+        "q2src:game/g_items.c:2073|\"key_airstrike_target\","
+      ]
+    }
+  ],
+  "classnames": [
+    {
+      "classname": "info_player_start",
+      "role": "player_start",
+      "cite": [
+        "q2src:game/g_spawn.c:154|{\"info_player_start\", SP_"
+      ]
+    },
+    {
+      "classname": "info_player_deathmatch",
+      "role": "deathmatch_spawn",
+      "cite": [
+        "q2src:game/g_spawn.c:155|{\"info_player_deathmatch\", SP_"
+      ]
+    },
+    {
+      "classname": "info_player_coop",
+      "role": "coop_start",
+      "cite": [
+        "q2src:game/g_spawn.c:156|{\"info_player_coop\", SP_"
+      ]
+    },
+    {
+      "classname": "info_player_intermission",
+      "role": "intermission",
+      "cite": [
+        "q2src:game/g_spawn.c:157|{\"info_player_intermission\", SP_"
+      ]
+    },
+    {
+      "classname": "func_door",
+      "role": "mover",
+      "cite": [
+        "q2src:game/g_spawn.c:161|{\"func_door\", SP_"
+      ]
+    },
+    {
+      "classname": "func_plat",
+      "role": "mover",
+      "cite": [
+        "q2src:game/g_spawn.c:159|{\"func_plat\", SP_"
+      ]
+    },
+    {
+      "classname": "func_train",
+      "role": "mover",
+      "cite": [
+        "q2src:game/g_spawn.c:165|{\"func_train\", SP_"
+      ]
+    },
+    {
+      "classname": "trigger_once",
+      "role": "trigger",
+      "cite": [
+        "q2src:game/g_spawn.c:177|{\"trigger_once\", SP_"
+      ]
+    },
+    {
+      "classname": "trigger_multiple",
+      "role": "trigger",
+      "cite": [
+        "q2src:game/g_spawn.c:178|{\"trigger_multiple\", SP_"
+      ]
+    },
+    {
+      "classname": "trigger_key",
+      "role": "trigger",
+      "cite": [
+        "q2src:game/g_spawn.c:182|{\"trigger_key\", SP_"
+      ],
+      "note": "Key lock relay: an 'item' key names the key; it fires its target (a func_door has no key field)."
+    },
+    {
+      "classname": "trigger_push",
+      "role": "trigger",
+      "cite": [
+        "q2src:game/g_spawn.c:180|{\"trigger_push\", SP_"
+      ]
+    },
+    {
+      "classname": "target_changelevel",
+      "role": "level_exit",
+      "cite": [
+        "q2src:game/g_spawn.c:191|{\"target_changelevel\", SP_"
+      ],
+      "note": "Requires a 'map' key; in deathmatch without DF_ALLOW_EXIT it damages the toucher."
+    },
+    {
+      "classname": "target_help",
+      "role": "objective",
+      "cite": [
+        "q2src:game/g_spawn.c:200|{\"target_help\", SP_"
+      ],
+      "note": "spawnflag 1 writes helpmessage1, otherwise helpmessage2 (a mapping convention for primary/secondary)."
+    },
+    {
+      "classname": "target_crosslevel_trigger",
+      "role": "unit_state",
+      "cite": [
+        "q2src:game/g_spawn.c:197|{\"target_crosslevel_trigger\", SP_"
+      ]
+    },
+    {
+      "classname": "target_crosslevel_target",
+      "role": "unit_state",
+      "cite": [
+        "q2src:game/g_spawn.c:198|{\"target_crosslevel_target\", SP_"
+      ]
+    },
+    {
+      "classname": "misc_teleporter",
+      "role": "teleporter",
+      "cite": [
+        "q2src:game/g_spawn.c:232|{\"misc_teleporter\", SP_"
+      ],
+      "note": "A point pad with its own 16-unit trigger; the base DLL has no brush trigger_teleport."
+    },
+    {
+      "classname": "misc_teleporter_dest",
+      "role": "teleporter_destination",
+      "cite": [
+        "q2src:game/g_spawn.c:233|{\"misc_teleporter_dest\", SP_"
+      ]
+    },
+    {
+      "classname": "info_notnull",
+      "role": "target_point",
+      "cite": [
+        "q2src:game/g_spawn.c:215|{\"info_notnull\", SP_"
+      ]
+    },
+    {
+      "classname": "light",
+      "role": "light",
+      "cite": [
+        "q2src:game/g_spawn.c:210|{\"light\", SP_"
+      ]
+    },
+    {
+      "classname": "monster_berserk",
+      "role": "monster",
+      "cite": [
+        "q2src:game/g_spawn.c:239|{\"monster_berserk\", SP_"
+      ]
+    },
+    {
+      "classname": "monster_gladiator",
+      "role": "monster",
+      "cite": [
+        "q2src:game/g_spawn.c:240|{\"monster_gladiator\", SP_"
+      ]
+    },
+    {
+      "classname": "monster_gunner",
+      "role": "monster",
+      "cite": [
+        "q2src:game/g_spawn.c:241|{\"monster_gunner\", SP_"
+      ]
+    },
+    {
+      "classname": "monster_infantry",
+      "role": "monster",
+      "cite": [
+        "q2src:game/g_spawn.c:242|{\"monster_infantry\", SP_"
+      ]
+    },
+    {
+      "classname": "monster_soldier_light",
+      "role": "monster",
+      "cite": [
+        "q2src:game/g_spawn.c:243|{\"monster_soldier_light\", SP_"
+      ]
+    },
+    {
+      "classname": "monster_soldier",
+      "role": "monster",
+      "cite": [
+        "q2src:game/g_spawn.c:244|{\"monster_soldier\", SP_"
+      ]
+    },
+    {
+      "classname": "monster_soldier_ss",
+      "role": "monster",
+      "cite": [
+        "q2src:game/g_spawn.c:245|{\"monster_soldier_ss\", SP_"
+      ]
+    },
+    {
+      "classname": "monster_tank",
+      "role": "monster",
+      "cite": [
+        "q2src:game/g_spawn.c:246|{\"monster_tank\", SP_"
+      ]
+    },
+    {
+      "classname": "monster_tank_commander",
+      "role": "monster",
+      "cite": [
+        "q2src:game/g_spawn.c:247|{\"monster_tank_commander\", SP_"
+      ]
+    },
+    {
+      "classname": "monster_medic",
+      "role": "monster",
+      "cite": [
+        "q2src:game/g_spawn.c:248|{\"monster_medic\", SP_"
+      ]
+    },
+    {
+      "classname": "monster_flipper",
+      "role": "monster",
+      "cite": [
+        "q2src:game/g_spawn.c:249|{\"monster_flipper\", SP_"
+      ]
+    },
+    {
+      "classname": "monster_chick",
+      "role": "monster",
+      "cite": [
+        "q2src:game/g_spawn.c:250|{\"monster_chick\", SP_"
+      ]
+    },
+    {
+      "classname": "monster_parasite",
+      "role": "monster",
+      "cite": [
+        "q2src:game/g_spawn.c:251|{\"monster_parasite\", SP_"
+      ]
+    },
+    {
+      "classname": "monster_flyer",
+      "role": "monster",
+      "cite": [
+        "q2src:game/g_spawn.c:252|{\"monster_flyer\", SP_"
+      ]
+    },
+    {
+      "classname": "monster_brain",
+      "role": "monster",
+      "cite": [
+        "q2src:game/g_spawn.c:253|{\"monster_brain\", SP_"
+      ]
+    },
+    {
+      "classname": "monster_floater",
+      "role": "monster",
+      "cite": [
+        "q2src:game/g_spawn.c:254|{\"monster_floater\", SP_"
+      ]
+    },
+    {
+      "classname": "monster_hover",
+      "role": "monster",
+      "cite": [
+        "q2src:game/g_spawn.c:255|{\"monster_hover\", SP_"
+      ]
+    },
+    {
+      "classname": "monster_mutant",
+      "role": "monster",
+      "cite": [
+        "q2src:game/g_spawn.c:256|{\"monster_mutant\", SP_"
+      ]
+    },
+    {
+      "classname": "monster_supertank",
+      "role": "monster",
+      "cite": [
+        "q2src:game/g_spawn.c:257|{\"monster_supertank\", SP_"
+      ]
+    },
+    {
+      "classname": "monster_boss2",
+      "role": "monster",
+      "cite": [
+        "q2src:game/g_spawn.c:258|{\"monster_boss2\", SP_"
+      ]
+    },
+    {
+      "classname": "monster_boss3_stand",
+      "role": "monster",
+      "cite": [
+        "q2src:game/g_spawn.c:259|{\"monster_boss3_stand\", SP_"
+      ]
+    },
+    {
+      "classname": "monster_jorg",
+      "role": "monster",
+      "cite": [
+        "q2src:game/g_spawn.c:260|{\"monster_jorg\", SP_"
+      ]
+    },
+    {
+      "classname": "monster_commander_body",
+      "role": "monster",
+      "cite": [
+        "q2src:game/g_spawn.c:262|{\"monster_commander_body\", SP_"
+      ]
+    }
+  ],
+  "mode_contracts": [
+    {
+      "mode": "single_player",
+      "runtime": "deathmatch 0, coop 0",
+      "entities": [
+        {
+          "classname": "info_player_start",
+          "requirement": "required",
+          "min": 1,
+          "selection": "the start whose targetname matches the arrival $spawnpoint, else an untargeted start, else any start",
+          "cite": [
+            "q2src:game/p_client.c:875-906|void SelectSpawnPoint (edict_t *ent, vec3_t origin, vec3_t angles)"
+          ]
+        }
+      ],
+      "failure": "gi.error 'Couldn't find spawn point'",
+      "cite": [
+        "q2src:game/p_client.c:875-906|void SelectSpawnPoint (edict_t *ent, vec3_t origin, vec3_t angles)"
+      ]
+    },
+    {
+      "mode": "cooperative",
+      "runtime": "coop 1",
+      "entities": [
+        {
+          "classname": "info_player_coop",
+          "requirement": "used_if_present",
+          "selection": "client N > 0 takes the Nth info_player_coop whose targetname matches the $spawnpoint; client 0 uses info_player_start",
+          "cite": [
+            "q2src:game/p_client.c:839-859|// player 0 starts in normal player spawn point"
+          ]
+        },
+        {
+          "classname": "info_player_start",
+          "requirement": "fallback",
+          "cite": [
+            "q2src:game/p_client.c:875-906|void SelectSpawnPoint (edict_t *ent, vec3_t origin, vec3_t angles)"
+          ]
+        }
+      ],
+      "cite": [
+        "q2src:game/p_client.c:875-906|void SelectSpawnPoint (edict_t *ent, vec3_t origin, vec3_t angles)"
+      ],
+      "note": "NOT_COOP is inert, so a co-op map shares SP spawnflag filtering; weapons and IT_STAY_COOP items stay."
+    },
+    {
+      "mode": "deathmatch",
+      "runtime": "deathmatch 1",
+      "entities": [
+        {
+          "classname": "info_player_deathmatch",
+          "requirement": "required",
+          "min": 1,
+          "selection": "random, avoiding the two spots nearest players; DF_SPAWN_FARTHEST picks the farthest",
+          "cite": [
+            "q2src:game/p_client.c:880|spot = SelectDeathmatchSpawnPoint ();"
+          ]
+        },
+        {
+          "classname": "info_player_start",
+          "requirement": "fallback",
+          "cite": [
+            "q2src:game/p_client.c:875-906|void SelectSpawnPoint (edict_t *ent, vec3_t origin, vec3_t angles)"
+          ]
+        }
+      ],
+      "cite": [
+        "q2src:game/p_client.c:875-906|void SelectSpawnPoint (edict_t *ent, vec3_t origin, vec3_t angles)"
+      ]
+    },
+    {
+      "mode": "intermission",
+      "runtime": "any",
+      "entities": [
+        {
+          "classname": "info_player_intermission",
+          "requirement": "optional",
+          "selection": "one of the first four, at random",
+          "cite": [
+            "q2src:game/p_hud.c:126-132|ent = G_Find (NULL, FOFS(classname), \"info_player_intermission\");"
+          ]
+        }
+      ],
+      "fallback_chain": [
+        "info_player_start",
+        "info_player_deathmatch"
+      ],
+      "cite": [
+        "q2src:game/p_hud.c:126-131|ent = G_Find (NULL, FOFS(classname), \"info_player_intermission\");"
+      ]
+    },
+    {
+      "mode": "level_exit",
+      "runtime": "single player and coop",
+      "entities": [
+        {
+          "classname": "target_changelevel",
+          "requirement": "required_for_exit",
+          "selection": "fired by a trigger; the 'map' key holds the next map with optional $spawnpoint, + and * prefixes",
+          "cite": [
+            "q2src:game/g_target.c:302|void SP_target_changelevel (edict_t *ent)"
+          ]
+        }
+      ],
+      "cite": [
+        "q2src:game/g_target.c:302|void SP_target_changelevel (edict_t *ent)"
+      ]
+    }
+  ],
+  "digest_corrections": [
+    {
+      "claim": "Q2 adds 4096 = not in co-op",
+      "encoded": "spawnflags[name=NOT_COOP]: inert (test commented out, bit cleared)",
+      "path": "spawnflags[name=NOT_COOP].tested_when"
+    },
+    {
+      "claim": "armor 20 s",
+      "encoded": "jacket/combat/body/shard 20 s; power screen and shield 60 s (quantity)",
+      "path": "items[classname=item_power_screen].quantity"
+    },
+    {
+      "claim": "Mega Health 20 s after it decays",
+      "encoded": "5 s delay + decay at 1 HP/s + 20 s",
+      "path": "respawn_rules[id=mega_health].cases[id=deathmatch].delay_seconds"
+    },
+    {
+      "claim": "(omitted) health, ammo, utility pickups",
+      "encoded": "health 30 s, ammo 30 s, utility 60 s, ammo pack 180 s",
+      "path": "respawn_rules[id=health].cases[id=deathmatch].seconds"
+    },
+    {
+      "claim": "teleporters",
+      "encoded": "misc_teleporter point pad; no brush trigger_teleport in baseq2 (CTF DLL only)",
+      "path": "classnames[classname=misc_teleporter].note"
+    },
+    {
+      "claim": "item TRIGGER_SPAWN/NO_TOUCH",
+      "encoded": "zeroed on placed items except key_power_cube",
+      "path": "spawnflags[name=ITEM_TRIGGER_SPAWN].tested_when"
+    }
+  ],
+  "notes": [
+    "Every timer applies only in deathmatch. In coop, weapons stay and nothing respawns.",
+    "No value here was measured at runtime."
+  ]
+}

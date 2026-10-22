@@ -1,0 +1,200 @@
+{
+  "schema_version": 1,
+  "id": "interlocking-topology-study-v1",
+  "date": "2026-09-13",
+  "status": "bounded_static_geometry_and_fixed_viewpoint_evidence_native_and_human_tests_pending",
+  "map": {
+    "name": "q2rdm2",
+    "title": "The Chastity Belt Duel",
+    "author": "German 'JaLisK0' Garcia",
+    "partition": "reference",
+    "split_group": "52d56ae05d40c3fb",
+    "bsp_sha256": "d6ee3b39d4e557e7ad5cd39d2bf955e8251edd7e491f2033eee80500791d7199",
+    "archive_revision": "Q2R TMP Edition",
+    "readme_dates": "May2001, updated June2001",
+    "archive_date": "2001-08-02",
+    "capacity_conflict": "Author says duel2; archive says2\u20134 with duel/FFA/2v2. Unresolved.",
+    "rights": "Original readme prohibits using map as base; redistribution restricted. Training rights unreviewed."
+  },
+  "novel_question": "Two approaches around irregular central mass to the same rocket station; compare geometric route contracts, lengths and fixed-view rays.",
+  "prior_scope": "Earlier q2rdm2 surface and item descriptors did not certify these corridors. Reclamation routes are a separate study.",
+  "protocol_refined_after_failed_candidates": true,
+  "protocol": "out/interlocking-topology-study/protocol.json",
+  "audit": "out/interlocking-topology-study/route-audit.json",
+  "diagram": "out/interlocking-topology-study/q2rdm2-route-comparison.png",
+  "study": "docs/Q2_INTERLOCKING_TOPOLOGY_STUDY.md",
+  "summary": {
+    "blocking_world_brushes": 646,
+    "standing_hull": [
+      32,
+      32,
+      56
+    ],
+    "collision_mask": 33619971,
+    "collision_epsilon": 0,
+    "accepted_segments": 9,
+    "observer_stations": 3,
+    "north_length": 1312,
+    "south_length": 1760,
+    "south_extra_fraction": 0.34146341463414637,
+    "north_contract": "Clear hull envelope feet\u2212288, actual projected ground continuously in[\u2212290.015625,\u2212288]; no constant-floor/native-contact certificate.",
+    "south_contract": "Full-footprint flat support at feet\u2212288 and continuous complete standing-hull clearance.",
+    "north_viewpoint_visible_north": [
+      34,
+      44
+    ],
+    "north_viewpoint_visible_south": [
+      0,
+      60
+    ],
+    "point_rays": 312,
+    "target_eye_z": -242,
+    "mechanism_envelopes": 6,
+    "mechanism_exclusion_checks": 54,
+    "liquid_brushes": 3,
+    "rejected_final_controls": 4,
+    "witness_nodes": 9,
+    "witness_edges": 9,
+    "witness_cycle_rank": 1
+  },
+  "candidate_design_lessons": [
+    {
+      "id": "same_endpoint_alternate_approach",
+      "hypothesis": "Compare routes between identical endpoints for length, approach side and viewpoint-specific rays; extra path length can preserve an approach outside one viewpoint.",
+      "limit": "No fastest-path, safety, exposure-time, human choice or whole-map dominance claim."
+    },
+    {
+      "id": "geometry_bound_edge_contract",
+      "hypothesis": "Bind every graph edge to its complete collision/support construction and preserve contract classes; do not admit a short crossing from endpoint proximity.",
+      "limit": "Northern shallow-band corridor is weaker evidence than an ordinary/native movement certificate; graph edits are not physical closures."
+    }
+  ],
+  "native_tested": false,
+  "gameplay_tested": false,
+  "reference_geometry_copied": false,
+  "profile_changed": false,
+  "partition_changed": false,
+  "weights_trained": false,
+  "negative_evidence": [
+    "Direct832-unit crossing intersects330/331/339/400.",
+    "Eastern X704 line clips379/380/430; accepted X672 differs.",
+    "North fixed\u2212288 support fails; exact2-unit band fails at stored slope\u2212290.000009545.",
+    "Admitting only constant-floor edges removes the north witness."
+  ],
+  "limits": [
+    "The two-polyline witness graph is not a full reference navigation graph or centrality result.",
+    "North target rays use the fixed clearance-envelope eye plane, up to about2units above a grounded eye.",
+    "Draw surfaces supply diagram context; all route predicates use actual model0 collision brushes.",
+    "Door envelopes use reviewed stock direction/travel bounds; no mechanism or game module is executed.",
+    "No source rights, author label or reference partition was promoted to training admission."
+  ],
+  "source_files": [
+    {
+      "path": "E:/Development/q2maparchive-wip/maps/q2rmappack/pack/maps/q2rdm2.bsp",
+      "sha256": "d6ee3b39d4e557e7ad5cd39d2bf955e8251edd7e491f2033eee80500791d7199",
+      "bytes": 824200
+    },
+    {
+      "path": "E:/Development/q2maparchive-wip/maps/q2rmappack/pack/maps/ref/q2rdm2.ref",
+      "sha256": "a7ed922e8f0a6980e6e45764ef5c7cfe25a80788a30ec5d2832453d85a853c5a",
+      "bytes": 424
+    },
+    {
+      "path": "E:/Development/q2maparchive-wip/maps/q2rmappack/pack/docs/q2rdm2.txt",
+      "sha256": "842c2f34ee6852302d35a79636b5ee87603b74cd7bdb5c24ea4d03736a632d1e",
+      "bytes": 4076
+    },
+    {
+      "path": "E:/_SOURCE/_CODE/Quake-2-master/game/g_func.c",
+      "sha256": "aa12e2ef06f30bba957adb46cc9caecf843c575041ca5287abec5ecaad2c7873",
+      "bytes": 51174
+    },
+    {
+      "path": "E:/_SOURCE/_CODE/Quake-2-master/game/g_utils.c",
+      "sha256": "441b5eeb751763171e507e262cf4a8d525db72c5d98a271edd591f0a6dbb6f22",
+      "bytes": 11074
+    }
+  ],
+  "artifact_files": [
+    {
+      "path": "docs/Q2_INTERLOCKING_TOPOLOGY_STUDY.md",
+      "sha256": "b59fe83e7660423bcfa88b15d4df015df4a4e5bd57010e73e7ffdf96c733ffce",
+      "bytes": 9033
+    },
+    {
+      "path": "knowledge/q2/interleaved-route-study.json",
+      "sha256": "684b62c74075090de09c4be74791650087d6ca5daa6581392d301a61cf2cb79f",
+      "bytes": 18803
+    },
+    {
+      "path": "knowledge/q2/route-diversity-study.json",
+      "sha256": "9e7cc4b5b50b6adf413b6981f5848964f95d993213e48f8e3a86f160a25cd609",
+      "bytes": 25032
+    },
+    {
+      "path": "out/interlocking-topology-study/exploratory-audit.json",
+      "sha256": "0b5c422eaa759fb3b7e1df3624aefa5bd34355134879300fb3c1d0b8c921ff50",
+      "bytes": 15385
+    },
+    {
+      "path": "out/interlocking-topology-study/exploratory-routes.json",
+      "sha256": "b5c10b6496312dc05663144b65749bd8f9cbd62f56aea73b3d7077f187319abd",
+      "bytes": 389
+    },
+    {
+      "path": "out/interlocking-topology-study/protocol.json",
+      "sha256": "517177ca85bac544a6e8a000bf865dede8b5e3b212b11901072e6d7eb59cc0ee",
+      "bytes": 1118
+    },
+    {
+      "path": "out/interlocking-topology-study/q2rdm2-route-comparison.png",
+      "sha256": "7591ced62f7cc7b489ae1f355689a047801bb49c47e6b12c2d2e4254e68f489e",
+      "bytes": 103450
+    },
+    {
+      "path": "out/interlocking-topology-study/record_evidence.py",
+      "sha256": "d73fe51f02ddc5a574852e1b8070110558cd8dac285fb2f48d6a9dcd8b93f8cd",
+      "bytes": 8175
+    },
+    {
+      "path": "out/interlocking-topology-study/refined-audit.json",
+      "sha256": "e102d0320338fa08a87024c18160ec913c4bc6a55626f88f4174bd8e9430cc28",
+      "bytes": 24154
+    },
+    {
+      "path": "out/interlocking-topology-study/refined-routes.json",
+      "sha256": "87bf80d646747d29db422b3c40fdff195d6ab28d78d57053547cb8a4e47f90be",
+      "bytes": 625
+    },
+    {
+      "path": "out/interlocking-topology-study/render.py",
+      "sha256": "4fec02c06ecbedba63d0f4ac37a773a4217395f7ef337e8b98a00d4a25fa3bc9",
+      "bytes": 5145
+    },
+    {
+      "path": "out/interlocking-topology-study/route-audit.json",
+      "sha256": "f0daba10e1cd97b095741679508aaa3a65b69f470a395051bb02cd00439cbc35",
+      "bytes": 151637
+    },
+    {
+      "path": "out/map-study/records/q2rdm2-5bb0fec44f.json",
+      "sha256": "88d8842e6480b6752b42f33139ab72678bedea4e575bdbc083bb9323b324911b",
+      "bytes": 33562
+    },
+    {
+      "path": "tools/map_recipes/geometry.py",
+      "sha256": "dcfcc3413468cad9993476736edfae5f13eb03e26035fc39d73f83aa5a90742b",
+      "bytes": 19674
+    },
+    {
+      "path": "tools/map_study/binary.py",
+      "sha256": "2b76559a71365eaab41e6876ff7da94fe938994b4a5199d63620b8b60918daf1",
+      "bytes": 15999
+    },
+    {
+      "path": "tools/map_study/interlocking_topology.py",
+      "sha256": "44897a19f77253374c4d55d8dd2042b0375206675a610d9a6f71483bf3644ef5",
+      "bytes": 15461
+    }
+  ]
+}

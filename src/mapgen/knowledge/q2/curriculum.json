@@ -1,0 +1,91 @@
+{
+  "schema_version": 1,
+  "name": "Curated Quake II map studies, first cycle",
+  "scope": "Local reference analysis and structured playtest preparation; multiplayer-first. Selection is a study hypothesis, not a new quality rating.",
+  "families": [
+    ["aerowalk", "aeroq2"],
+    ["ptrip", "dlite"],
+    ["campgrounds", "pro-q3dm6", "q3dm6"],
+    ["spirit2dm2", "spirit2dm2ld"],
+    ["monster2", "monster2_aw2"],
+    ["monster4", "monster4_aw2"],
+    ["monster5", "monster5_aw2"],
+    ["monster6", "monster6_aw2"],
+    ["monster7", "monster7_aw2"],
+    ["monster8", "monster8_aw2"]
+  ],
+  "lessons": [
+    {
+      "id": "orientation", "title": "01 — Recognizable spaces and route choice", "partition": "reference",
+      "maps": ["ztn2dm3", "ptrip"],
+      "question": "From each spawn, identify the first landmark, first useful weapon, two route choices and a return route. Which cues let a new player predict where a route goes?",
+      "rules": ["navigation-legibility", "spawn-recovery", "purposeful-loops"]
+    },
+    {
+      "id": "height", "title": "02 — Vertical combat and asymmetric return paths", "partition": "reference",
+      "maps": ["aeroq2", "mktriple"],
+      "question": "Compare upper/lower control, upward access, safe retreat, drops and teleporter exits. Does gaining height create a decision, and what can the lower player do in response?",
+      "rules": ["useful-verticality", "counterplay", "movement-contracts"]
+    },
+    {
+      "id": "economy", "title": "03 — Item economies and contestable control", "partition": "reference",
+      "maps": ["ztn2dm2", "q2rdm2"],
+      "question": "Trace armor, major health and strong-weapon circuits. Measure actual travel time and exposure before assigning an advantage to proximity or height.",
+      "rules": ["distributed-economy", "counterplay", "spawn-recovery"]
+    },
+    {
+      "id": "spaces", "title": "04 — Alternating combat ranges and room proportions", "partition": "reference",
+      "maps": ["q2rdm7", "koldduel1"],
+      "question": "Mark close, medium and long engagements, ceiling clearance, cover, narrow thresholds and open courts. Does each transition offer a distinct tactical choice?",
+      "rules": ["range-variety", "space-rhythm", "navigation-legibility"]
+    },
+    {
+      "id": "theme", "title": "05 — Theme, landmarks, materials and light", "partition": "reference",
+      "maps": ["grdm1", "colour", "japang"],
+      "question": "Inspect landmark silhouettes, material families, light hierarchy and sound cues in engine. Separate archive theme labels from what the rendered map actually communicates.",
+      "rules": ["coherent-theme", "readable-light", "navigation-legibility"]
+    },
+    {
+      "id": "capacity", "title": "06 — FFA scale, encounters and congestion", "partition": "reference",
+      "maps": ["bugdm3", "hammer"],
+      "question": "Run the documented low and high player loads. Track encounter intervals, empty travel, spawn pressure and congestion; distinguish intentional breathing space from wasted space.",
+      "rules": ["capacity-fit", "space-rhythm", "spawn-recovery"]
+    },
+    {
+      "id": "objectives", "title": "07 — CTF routes, bases and return pressure", "partition": "reference",
+      "maps": ["spogctf1", "rqmctf1"],
+      "question": "Verify the required CTF game module, then test both teams, both base exits and flag-return routes. Compare access to weapons/resources before considering visual symmetry.",
+      "rules": ["objective-fairness", "purposeful-loops", "capacity-fit"]
+    },
+    {
+      "id": "construction", "title": "08 — Detail that supports navigation", "partition": "reference",
+      "maps": ["spirit2dm2", "poodm6"],
+      "question": "Inspect stairs, ramps, ledges, trims, collision silhouettes and sightline interruptions. Source files are present, but authored origin and permissions still require verification before source training.",
+      "rules": ["movement-contracts", "coherent-theme", "performance-budget"]
+    },
+    {
+      "id": "lineage", "title": "09 — Remakes and the difference between variety and reskinning", "partition": "reference",
+      "maps": ["bloodrun", "ztn2dm5"],
+      "question": "Compare authorship, recorded lineage and gameplay descriptors. Identify which choices change control and flow, and which only change presentation. Keep all related works in one partition.",
+      "rules": ["portfolio-variety", "distributed-economy"]
+    },
+    {
+      "id": "validation", "title": "10 — Validation authors, used to tune the rubric", "partition": "validation",
+      "maps": ["ikdm1", "ikdm5", "q2rdm10"],
+      "question": "Apply the frozen rubric and reference bands to these authors. Record justified exceptions and adjust the rubric here, with a version change, before opening final test results.",
+      "rules": ["portfolio-variety", "counterplay", "movement-contracts"]
+    },
+    {
+      "id": "test", "title": "11 — Reserved authors for a prospective final evaluation", "partition": "test",
+      "maps": ["tsh2tourney1", "ohmdm1", "thegrit"],
+      "question": "Freeze generator, prompts, seeds and rubric first. Have reviewers compare blinded generated/reference pairs; report all failures and preferences. Never tune on this partition after inspecting results.",
+      "rules": ["portfolio-variety", "capacity-fit", "navigation-legibility"]
+    },
+    {
+      "id": "stress", "title": "12 — Large-map boundary case", "partition": "study_only",
+      "maps": ["city64"],
+      "question": "Audit this archive-labelled 24–64-player map as a scale boundary. Resolve its author and metadata before admitting it to any reference profile; do not extrapolate duel defaults to it.",
+      "rules": ["capacity-fit", "performance-budget"]
+    }
+  ]
+}

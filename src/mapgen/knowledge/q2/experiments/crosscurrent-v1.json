@@ -1,0 +1,219 @@
+{
+  "schema_version": 1,
+  "id": "crosscurrent-v1",
+  "date": "2026-09-10",
+  "status": "compiled_static_validated_runtime_pending",
+  "construction": "Original explicit qmg_core recipe; not an automatic CLI output or trained model",
+  "map": "qmg_crosscurrent",
+  "intended_mode": "stock_q2_deathmatch",
+  "intended_players": [
+    4,
+    6
+  ],
+  "local_artifacts": "out/crosscurrent",
+  "artifact_hashes": {
+    "source_sha256": "6257d91b70462ef09d10196a2bb556ba153a1f337362854b6aa99e7be7745750",
+    "bsp_sha256": "85c57b07ca11881b79b1dadf17f229bf15c478e7b73bc5059860c6bfda8f764a",
+    "recipe_sha256": "54f94062d412c7b76408475087e4f71fdd958db6e1abacc2470045087c3ed98b",
+    "core_sha256": "b92ca36308ab710aa1124de95373dc808f20777abe657021b86d94a319c547ef",
+    "profile_sha256": "4f833d1a09eab67c719175310e101befcc9ad43d330985e7bc7a7d645f65d935"
+  },
+  "static_checks": {
+    "sealed": true,
+    "full_vis": true,
+    "lighting": "extra4, one bounce, soft shadows; zero empty lightmaps",
+    "spawn_to_gameplay_anchor_paths_checked": 264,
+    "compiled_spawn_hull_vs_brush_checks": 1384,
+    "advisory_warnings": 0,
+    "compiled_spawn_los": {
+      "tested_pairs": 28,
+      "visible_pairs": [
+        [
+          3,
+          4
+        ],
+        [
+          7,
+          8
+        ]
+      ],
+      "invalid_eye_entities": []
+    }
+  },
+  "cohort": "dm_small",
+  "descriptors": [
+    {
+      "metric": "spawn_count",
+      "observation": "within_reference_band",
+      "percentile_of_group_medians": 81.91489361702128,
+      "reference_p10": 4.800000000000001,
+      "reference_p50": 7.0,
+      "reference_p90": 9.399999999999999,
+      "value": 8
+    },
+    {
+      "metric": "weapon_count",
+      "observation": "within_reference_band",
+      "percentile_of_group_medians": 62.765957446808514,
+      "reference_p10": 5.0,
+      "reference_p50": 6.5,
+      "reference_p90": 9.0,
+      "value": 7
+    },
+    {
+      "metric": "weapon_types",
+      "observation": "within_reference_band",
+      "percentile_of_group_medians": 75.53191489361703,
+      "reference_p10": 5.0,
+      "reference_p50": 6.0,
+      "reference_p90": 8.0,
+      "value": 7
+    },
+    {
+      "metric": "major_item_count",
+      "observation": "within_reference_band",
+      "percentile_of_group_medians": 61.702127659574465,
+      "reference_p10": 1.0,
+      "reference_p50": 2.0,
+      "reference_p90": 3.0,
+      "value": 2
+    },
+    {
+      "metric": "combat_height_p90_p10",
+      "observation": "within_reference_band",
+      "percentile_of_group_medians": 19.148936170212767,
+      "reference_p10": 232.61,
+      "reference_p50": 313.0,
+      "reference_p90": 474.88,
+      "value": 256.0
+    },
+    {
+      "metric": "combat_height_bands_128",
+      "observation": "below_reference_band",
+      "percentile_of_group_medians": 4.25531914893617,
+      "reference_p10": 3.0,
+      "reference_p50": 4.0,
+      "reference_p90": 5.0,
+      "value": 2
+    },
+    {
+      "metric": "spawn_nearest_weapon_euclidean_p50",
+      "observation": "within_reference_band",
+      "percentile_of_group_medians": 59.57446808510638,
+      "reference_p10": 259.19596623063023,
+      "reference_p50": 326.43529220965064,
+      "reference_p90": 466.1249760255388,
+      "value": 336.0
+    },
+    {
+      "metric": "spawn_nearest_weapon_euclidean_p90",
+      "observation": "within_reference_band",
+      "percentile_of_group_medians": 76.59574468085107,
+      "reference_p10": 369.61933021278435,
+      "reference_p50": 472.0643495311462,
+      "reference_p90": 697.9498816237119,
+      "value": 568.8971953261208
+    },
+    {
+      "metric": "spawn_pair_world_los_fraction",
+      "observation": "within_reference_band",
+      "percentile_of_group_medians": 68.08510638297872,
+      "reference_p10": 0.0,
+      "reference_p50": 0.047619047619047616,
+      "reference_p90": 0.13333333333333333,
+      "value": 0.07142857142857142
+    },
+    {
+      "metric": "major_item_min_euclidean_separation",
+      "observation": "within_reference_band",
+      "percentile_of_group_medians": 84.84848484848484,
+      "reference_p10": 392.1293919442603,
+      "reference_p50": 911.0609200267565,
+      "reference_p90": 1211.615951734297,
+      "value": 1161.9569699433796
+    },
+    {
+      "metric": "world_diagonal",
+      "observation": "within_reference_band",
+      "percentile_of_group_medians": 51.06382978723404,
+      "reference_p10": 2364.5185253701766,
+      "reference_p50": 2808.774821875189,
+      "reference_p90": 3845.0627290278653,
+      "value": 2877.865875957391
+    },
+    {
+      "metric": "upward_surface_area",
+      "observation": "within_reference_band",
+      "percentile_of_group_medians": 74.46808510638297,
+      "reference_p10": 1726246.7197004547,
+      "reference_p50": 2453723.9359840997,
+      "reference_p90": 4003212.7335635205,
+      "value": 3305472.0
+    },
+    {
+      "metric": "texture_area_entropy_bits",
+      "observation": "below_reference_band",
+      "percentile_of_group_medians": 10.638297872340425,
+      "reference_p10": 2.7414402488991825,
+      "reference_p50": 3.6130096959423685,
+      "reference_p90": 4.153590711259181,
+      "value": 2.7348105707936257
+    },
+    {
+      "metric": "texture_top_area_fraction",
+      "observation": "within_reference_band",
+      "percentile_of_group_medians": 72.34042553191489,
+      "reference_p10": 0.15035926195440605,
+      "reference_p50": 0.21452445632940786,
+      "reference_p90": 0.4000166587169061,
+      "value": 0.267663563321005
+    },
+    {
+      "metric": "sky_surface_area_fraction",
+      "observation": "within_reference_band",
+      "percentile_of_group_medians": 36.170212765957444,
+      "reference_p10": 0.0,
+      "reference_p50": 0.0,
+      "reference_p90": 0.04774835172748135,
+      "value": 0.0
+    },
+    {
+      "metric": "sampled_world_sightline_p50",
+      "observation": "above_reference_band",
+      "percentile_of_group_medians": 93.61702127659575,
+      "reference_p10": 145.5152927466382,
+      "reference_p50": 167.50129730136263,
+      "reference_p90": 236.75116624058182,
+      "value": 259.083924626751
+    },
+    {
+      "metric": "sampled_world_sightline_p90",
+      "observation": "within_reference_band",
+      "percentile_of_group_medians": 82.97872340425532,
+      "reference_p10": 489.9734627673122,
+      "reference_p50": 593.6091426239186,
+      "reference_p90": 871.4241553225985,
+      "value": 739.2
+    }
+  ],
+  "observations": [
+    "Five rooms and eight connections provide lower circulation and a central upper shortcut.",
+    "256-unit galleries, four stair routes, eight respawns, seven weapon types and two major items give an executable first study-guided prototype.",
+    "The ordinary 32-unit tread leaves no interior after the navigation analyzer applies a 32-unit standing hull; this recipe uses 36-unit treads.",
+    "Typed spawn visibility reports no findings, while compiled eye-level point LOS sees two of 28 spawn pairs. Treat the proxies separately.",
+    "The sampled median sightline remains above the small-DM reference band, and only two combat height bands are occupied."
+  ],
+  "runtime_questions": [
+    "Can a player recover from each spawn without immediately being controlled from above?",
+    "Do Quad and Mega Health create competing routes, or can one player control both?",
+    "Do the four stair routes and the central junction sustain circulation at four and six players?",
+    "Are opponents readable under galleries, and is the longer sampled sightline useful rail counterplay?"
+  ],
+  "inference_limits": [
+    "No matched control experiment",
+    "No engine render or traversal test",
+    "No human or multiplayer balance ratings",
+    "No model training",
+    "Not admitted to the reference calibration profile"
+  ]
+}

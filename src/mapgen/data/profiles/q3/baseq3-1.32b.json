@@ -1,0 +1,1147 @@
+{
+  "schema": "qmg.game_profile",
+  "schema_version": 1,
+  "profile_kind": "module",
+  "game": "quake3",
+  "module": "q3-baseq3-1.32b",
+  "title": "Quake III Arena 1.32b baseq3 game module",
+  "evidence_level": "static analysis",
+  "sources": {
+    "q3src": {
+      "description": "id Software GPL source release of Quake III Arena (Quake-III-Arena-master): code/game, code/botlib, code/bspc, code/q3_ui.",
+      "identity": "code/game/q_shared.h:29 Q3_VERSION \"Q3 1.32b\"",
+      "kind": "file_lines"
+    }
+  },
+  "runtime": {
+    "name": "baseq3 qagame built from the 1.32b source",
+    "version": {
+      "value": "Q3 1.32b",
+      "cite": [
+        "q3src:code/game/q_shared.h:29|#define Q3_VERSION \"Q3 1.32b\""
+      ]
+    },
+    "note": "Point releases before 1.32b were not available. The local qvm was not compared with this source."
+  },
+  "movement": {
+    "gravity": {
+      "value": 800,
+      "unit": "u/s^2",
+      "cite": [
+        "q3src:code/game/g_main.c:143|{ &g_gravity, \"g_gravity\", \"800\", 0, 0, qtrue },",
+        "q3src:code/game/bg_public.h:30|#define DEFAULT_GRAVITY 800"
+      ]
+    },
+    "max_ground_speed": {
+      "value": 320,
+      "unit": "u/s",
+      "cite": [
+        "q3src:code/game/g_main.c:142|{ &g_speed, \"g_speed\", \"320\", 0, 0, qtrue },"
+      ],
+      "note": "ps.speed is copied from g_speed every ClientThink; haste multiplies it by 1.3."
+    },
+    "accelerate": {
+      "value": 10,
+      "unit": "1/s",
+      "cite": [
+        "q3src:code/game/bg_pmove.c:39|float pm_accelerate = 10.0f;"
+      ]
+    },
+    "air_accelerate": {
+      "value": 1,
+      "unit": "1/s",
+      "cite": [
+        "q3src:code/game/bg_pmove.c:40|float pm_airaccelerate = 1.0f;"
+      ]
+    },
+    "friction": {
+      "value": 6,
+      "unit": "1/s",
+      "cite": [
+        "q3src:code/game/bg_pmove.c:44|float pm_friction = 6.0f;"
+      ]
+    },
+    "stop_speed": {
+      "value": 100,
+      "unit": "u/s",
+      "cite": [
+        "q3src:code/game/bg_pmove.c:34|float pm_stopspeed = 100.0f;"
+      ]
+    },
+    "jump_velocity": {
+      "value": 270,
+      "unit": "u/s",
+      "cite": [
+        "q3src:code/game/bg_local.h:29|#define JUMP_VELOCITY 270"
+      ],
+      "note": "Jump must be released between jumps (PMF_JUMP_HELD)."
+    },
+    "step_height": {
+      "value": 18,
+      "unit": "u",
+      "cite": [
+        "q3src:code/game/bg_local.h:27|#define STEPSIZE 18"
+      ]
+    },
+    "eye_height": {
+      "value": 26,
+      "unit": "u",
+      "cite": [
+        "q3src:code/game/bg_public.h:50|#define DEFAULT_VIEWHEIGHT 26"
+      ]
+    },
+    "crouch_eye_height": {
+      "value": 12,
+      "unit": "u",
+      "cite": [
+        "q3src:code/game/bg_public.h:51|#define CROUCH_VIEWHEIGHT 12"
+      ]
+    },
+    "player_mins": {
+      "value": [
+        -15,
+        -15,
+        -24
+      ],
+      "unit": "u",
+      "cite": [
+        "q3src:code/game/g_client.c:27|static vec3_t playerMins = {-15, -15, -24};"
+      ]
+    },
+    "player_maxs": {
+      "value": [
+        15,
+        15,
+        32
+      ],
+      "unit": "u",
+      "cite": [
+        "q3src:code/game/g_client.c:28|static vec3_t playerMaxs = {15, 15, 32};"
+      ]
+    }
+  },
+  "spawnflags": [
+    {
+      "name": "ITEM_SUSPENDED",
+      "bit": 1,
+      "scope": "items",
+      "tested_when": "always",
+      "effect": "the item floats at its origin; otherwise it is dropped to the floor by a trace of up to 4096 units, and an item that starts in solid is freed",
+      "cite": [
+        "q3src:code/game/g_items.c:666-682|if ( ent->spawnflags & 1 ) {"
+      ]
+    },
+    {
+      "name": "INITIAL",
+      "bit": 1,
+      "scope": "info_player_deathmatch",
+      "tested_when": "first spawn of a local (listen-server) client",
+      "effect": "SelectInitialSpawnPoint picks the first spot with this bit; remote players and bots ignore it",
+      "cite": [
+        "q3src:code/game/g_client.c:281-299|gentity_t *SelectInitialSpawnPoint( vec3_t origin, vec3_t angles ) {",
+        "q3src:code/game/g_client.c:1085-1087|if ( !client->pers.initialSpawn && client->pers.localClient ) {"
+      ]
+    }
+  ],
+  "entity_keys": [
+    {
+      "key": "gametype",
+      "scope": "every entity",
+      "effect": "the entity is freed unless the value contains the current gametype's name (substring match)",
+      "tokens": [
+        "ffa",
+        "tournament",
+        "single",
+        "team",
+        "ctf"
+      ],
+      "cite": [
+        "q3src:code/game/g_spawn.c:458-464|if( G_SpawnString( \"gametype\", NULL, &value ) ) {",
+        "q3src:code/game/g_spawn.c:412|static char *gametypeNames[] = {\"ffa\", \"tournament\", \"single\", \"team\", \"ctf\", \"oneflag\", \"obelisk\", \"harvester\", \"teamtournament\"};"
+      ],
+      "note": "Outside #ifdef MISSIONPACK, so present in baseq3. The entity key uses 'tournament'; arena files and the UI use 'tourney'."
+    },
+    {
+      "key": "notfree",
+      "scope": "every entity",
+      "effect": "freed when g_gametype < GT_TEAM (FFA, tournament and single player)",
+      "cite": [
+        "q3src:code/game/g_spawn.c:429-444|G_SpawnInt( \"notfree\", \"0\", &i );"
+      ]
+    },
+    {
+      "key": "notteam",
+      "scope": "every entity",
+      "effect": "freed when g_gametype >= GT_TEAM",
+      "cite": [
+        "q3src:code/game/g_spawn.c:429-444|G_SpawnInt( \"notteam\", \"0\", &i );"
+      ]
+    },
+    {
+      "key": "notsingle",
+      "scope": "every entity",
+      "effect": "freed when g_gametype == GT_SINGLE_PLAYER",
+      "cite": [
+        "q3src:code/game/g_spawn.c:422-425|G_SpawnInt( \"notsingle\", \"0\", &i );"
+      ]
+    },
+    {
+      "key": "notq3a",
+      "scope": "every entity",
+      "effect": "freed in the baseq3 (non-MISSIONPACK) build",
+      "cite": [
+        "q3src:code/game/g_spawn.c:451-453|G_SpawnInt( \"notq3a\", \"0\", &i );"
+      ]
+    },
+    {
+      "key": "wait",
+      "scope": "items",
+      "effect": "-1: never respawns; any other nonzero value replaces the default respawn time",
+      "cite": [
+        "q3src:code/game/g_items.c:882|G_SpawnFloat( \"wait\", \"0\", &ent->wait );",
+        "q3src:code/game/g_items.c:506-516|if ( ent->wait == -1 ) {"
+      ]
+    },
+    {
+      "key": "random",
+      "scope": "items",
+      "effect": "adds crandom() * random seconds to the respawn time, floored at 1 s",
+      "cite": [
+        "q3src:code/game/g_items.c:881|G_SpawnFloat( \"random\", \"0\", &ent->random );",
+        "q3src:code/game/g_items.c:520-523|if ( ent->random ) {"
+      ]
+    }
+  ],
+  "respawn_rules": [
+    {
+      "id": "weapon",
+      "cite": [
+        "q3src:code/game/g_items.c:235-272|int Pickup_Weapon (gentity_t *ent, gentity_t *other) {"
+      ],
+      "cases": [
+        {
+          "id": "team_deathmatch",
+          "when": "g_gametype == GT_TEAM",
+          "behaviour": "respawn",
+          "seconds": 30,
+          "cite": [
+            "q3src:code/game/g_items.c:268-269|if ( g_gametype.integer == GT_TEAM ) {",
+            "q3src:code/game/g_main.c:147|{ &g_weaponTeamRespawn, \"g_weaponTeamRespawn\", \"30\", 0, 0, qtrue },"
+          ]
+        },
+        {
+          "id": "other_gametypes",
+          "when": "g_gametype != GT_TEAM (FFA, tournament, single player, CTF)",
+          "behaviour": "respawn",
+          "seconds": 5,
+          "cite": [
+            "q3src:code/game/g_items.c:272|return g_weaponRespawn.integer;",
+            "q3src:code/game/g_main.c:146|{ &g_weaponRespawn, \"g_weaponrespawn\", \"5\", 0, 0, qtrue },"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "armor",
+      "cite": [
+        "q3src:code/game/g_items.c:39|#define RESPAWN_ARMOR 25"
+      ],
+      "cases": [
+        {
+          "id": "all",
+          "when": "always",
+          "behaviour": "respawn",
+          "seconds": 25,
+          "cite": [
+            "q3src:code/game/g_items.c:39|#define RESPAWN_ARMOR 25",
+            "q3src:code/game/g_items.c:340|return RESPAWN_ARMOR;"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "health",
+      "cite": [
+        "q3src:code/game/g_items.c:40|#define RESPAWN_HEALTH 35"
+      ],
+      "cases": [
+        {
+          "id": "all",
+          "when": "always",
+          "behaviour": "respawn",
+          "seconds": 35,
+          "cite": [
+            "q3src:code/game/g_items.c:40|#define RESPAWN_HEALTH 35",
+            "q3src:code/game/g_items.c:312|return RESPAWN_HEALTH;"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "mega_health",
+      "cite": [
+        "q3src:code/game/g_items.c:43|#define RESPAWN_MEGAHEALTH 35//120"
+      ],
+      "cases": [
+        {
+          "id": "all",
+          "when": "always",
+          "behaviour": "respawn",
+          "seconds": 35,
+          "cite": [
+            "q3src:code/game/g_items.c:43|#define RESPAWN_MEGAHEALTH 35//120",
+            "q3src:code/game/g_items.c:308-309|if ( ent->item->quantity == 100 ) {"
+          ],
+          "note": "The define keeps a commented-out 120. Mega health is selected by quantity == 100."
+        }
+      ]
+    },
+    {
+      "id": "ammo",
+      "cite": [
+        "q3src:code/game/g_items.c:41|#define RESPAWN_AMMO 40"
+      ],
+      "cases": [
+        {
+          "id": "all",
+          "when": "always",
+          "behaviour": "respawn",
+          "seconds": 40,
+          "cite": [
+            "q3src:code/game/g_items.c:41|#define RESPAWN_AMMO 40",
+            "q3src:code/game/g_items.c:229|return RESPAWN_AMMO;"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "holdable",
+      "cite": [
+        "q3src:code/game/g_items.c:42|#define RESPAWN_HOLDABLE 60"
+      ],
+      "cases": [
+        {
+          "id": "all",
+          "when": "always",
+          "behaviour": "respawn",
+          "seconds": 60,
+          "cite": [
+            "q3src:code/game/g_items.c:42|#define RESPAWN_HOLDABLE 60",
+            "q3src:code/game/g_items.c:203|return RESPAWN_HOLDABLE;"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "powerup",
+      "cite": [
+        "q3src:code/game/g_items.c:44|#define RESPAWN_POWERUP 120"
+      ],
+      "cases": [
+        {
+          "id": "after_pickup",
+          "when": "after a pickup",
+          "behaviour": "respawn",
+          "seconds": 120,
+          "cite": [
+            "q3src:code/game/g_items.c:44|#define RESPAWN_POWERUP 120",
+            "q3src:code/game/g_items.c:115|return RESPAWN_POWERUP;"
+          ]
+        },
+        {
+          "id": "first_spawn",
+          "when": "map start",
+          "behaviour": "delayed_first_spawn",
+          "seconds_range": [
+            30,
+            60
+          ],
+          "cite": [
+            "q3src:code/game/g_items.c:693-700|if ( ent->item->giType == IT_POWERUP ) {"
+          ],
+          "note": "45 + crandom() * 15 seconds after the item finishes spawning."
+        }
+      ]
+    },
+    {
+      "id": "flag",
+      "cite": [
+        "q3src:code/game/g_items.c:589-592|if (g_gametype.integer == GT_CTF && item->giType == IT_TEAM) { // Special case for CTF flags"
+      ],
+      "cases": [
+        {
+          "id": "dropped",
+          "when": "a carried flag is dropped in CTF",
+          "behaviour": "auto_return",
+          "seconds": 30,
+          "cite": [
+            "q3src:code/game/g_items.c:589-592|if (g_gametype.integer == GT_CTF && item->giType == IT_TEAM) { // Special case for CTF flags"
+          ],
+          "note": "Team_DroppedFlagThink returns the flag 30000 ms after the drop."
+        }
+      ]
+    }
+  ],
+  "items": [
+    {
+      "classname": "item_armor_shard",
+      "kind": "armor",
+      "tier": "shard",
+      "respawn": "armor",
+      "cite": [
+        "q3src:code/game/bg_misc.c:68|\"item_armor_shard\","
+      ],
+      "amount": {
+        "value": 5,
+        "unit": "armor points",
+        "cite": [
+          "q3src:code/game/bg_misc.c:75|5,"
+        ]
+      }
+    },
+    {
+      "classname": "item_armor_combat",
+      "kind": "armor",
+      "tier": "medium",
+      "respawn": "armor",
+      "cite": [
+        "q3src:code/game/bg_misc.c:85|\"item_armor_combat\","
+      ],
+      "amount": {
+        "value": 50,
+        "unit": "armor points",
+        "cite": [
+          "q3src:code/game/bg_misc.c:91|50,"
+        ]
+      }
+    },
+    {
+      "classname": "item_armor_body",
+      "kind": "armor",
+      "tier": "heavy",
+      "respawn": "armor",
+      "cite": [
+        "q3src:code/game/bg_misc.c:101|\"item_armor_body\","
+      ],
+      "amount": {
+        "value": 100,
+        "unit": "armor points",
+        "cite": [
+          "q3src:code/game/bg_misc.c:107|100,"
+        ]
+      }
+    },
+    {
+      "classname": "item_health_small",
+      "kind": "health",
+      "tier": "small",
+      "respawn": "health",
+      "cite": [
+        "q3src:code/game/bg_misc.c:120|\"item_health_small\","
+      ],
+      "amount": {
+        "value": 5,
+        "unit": "HP",
+        "cite": [
+          "q3src:code/game/bg_misc.c:127|5,"
+        ]
+      }
+    },
+    {
+      "classname": "item_health",
+      "kind": "health",
+      "tier": "medium",
+      "respawn": "health",
+      "cite": [
+        "q3src:code/game/bg_misc.c:137|\"item_health\","
+      ],
+      "amount": {
+        "value": 25,
+        "unit": "HP",
+        "cite": [
+          "q3src:code/game/bg_misc.c:144|25,"
+        ]
+      }
+    },
+    {
+      "classname": "item_health_large",
+      "kind": "health",
+      "tier": "large",
+      "respawn": "health",
+      "cite": [
+        "q3src:code/game/bg_misc.c:154|\"item_health_large\","
+      ],
+      "amount": {
+        "value": 50,
+        "unit": "HP",
+        "cite": [
+          "q3src:code/game/bg_misc.c:161|50,"
+        ]
+      }
+    },
+    {
+      "classname": "item_health_mega",
+      "kind": "health",
+      "tier": "mega",
+      "respawn": "mega_health",
+      "cite": [
+        "q3src:code/game/bg_misc.c:171|\"item_health_mega\","
+      ],
+      "amount": {
+        "value": 100,
+        "unit": "HP",
+        "cite": [
+          "q3src:code/game/bg_misc.c:178|100,"
+        ]
+      }
+    },
+    {
+      "classname": "weapon_gauntlet",
+      "kind": "weapon",
+      "tier": "starting",
+      "respawn": "weapon",
+      "cite": [
+        "q3src:code/game/bg_misc.c:193|\"weapon_gauntlet\",",
+        "q3src:code/game/g_client.c:1179-1187|client->ps.stats[STAT_WEAPONS] = ( 1 << WP_MACHINEGUN );"
+      ],
+      "note": "Every player spawns with it, so a placed copy adds ammo rather than a new weapon."
+    },
+    {
+      "classname": "weapon_shotgun",
+      "kind": "weapon",
+      "tier": "pickup",
+      "respawn": "weapon",
+      "cite": [
+        "q3src:code/game/bg_misc.c:209|\"weapon_shotgun\","
+      ]
+    },
+    {
+      "classname": "weapon_machinegun",
+      "kind": "weapon",
+      "tier": "starting",
+      "respawn": "weapon",
+      "cite": [
+        "q3src:code/game/bg_misc.c:225|\"weapon_machinegun\",",
+        "q3src:code/game/g_client.c:1179-1187|client->ps.stats[STAT_WEAPONS] = ( 1 << WP_MACHINEGUN );"
+      ],
+      "note": "Every player spawns with it, so a placed copy adds ammo rather than a new weapon."
+    },
+    {
+      "classname": "weapon_grenadelauncher",
+      "kind": "weapon",
+      "tier": "pickup",
+      "respawn": "weapon",
+      "cite": [
+        "q3src:code/game/bg_misc.c:241|\"weapon_grenadelauncher\","
+      ]
+    },
+    {
+      "classname": "weapon_rocketlauncher",
+      "kind": "weapon",
+      "tier": "pickup",
+      "respawn": "weapon",
+      "cite": [
+        "q3src:code/game/bg_misc.c:257|\"weapon_rocketlauncher\","
+      ]
+    },
+    {
+      "classname": "weapon_lightning",
+      "kind": "weapon",
+      "tier": "pickup",
+      "respawn": "weapon",
+      "cite": [
+        "q3src:code/game/bg_misc.c:273|\"weapon_lightning\","
+      ]
+    },
+    {
+      "classname": "weapon_railgun",
+      "kind": "weapon",
+      "tier": "pickup",
+      "respawn": "weapon",
+      "cite": [
+        "q3src:code/game/bg_misc.c:289|\"weapon_railgun\","
+      ]
+    },
+    {
+      "classname": "weapon_plasmagun",
+      "kind": "weapon",
+      "tier": "pickup",
+      "respawn": "weapon",
+      "cite": [
+        "q3src:code/game/bg_misc.c:305|\"weapon_plasmagun\","
+      ]
+    },
+    {
+      "classname": "weapon_bfg",
+      "kind": "weapon",
+      "tier": "pickup",
+      "respawn": "weapon",
+      "cite": [
+        "q3src:code/game/bg_misc.c:321|\"weapon_bfg\","
+      ]
+    },
+    {
+      "classname": "weapon_grapplinghook",
+      "kind": "weapon",
+      "tier": "special",
+      "respawn": "weapon",
+      "cite": [
+        "q3src:code/game/bg_misc.c:337|\"weapon_grapplinghook\","
+      ],
+      "note": "In the item table; no stock baseq3 map was checked for it here."
+    },
+    {
+      "classname": "ammo_shells",
+      "kind": "ammo",
+      "tier": "ammo",
+      "respawn": "ammo",
+      "cite": [
+        "q3src:code/game/bg_misc.c:357|\"ammo_shells\","
+      ]
+    },
+    {
+      "classname": "ammo_bullets",
+      "kind": "ammo",
+      "tier": "ammo",
+      "respawn": "ammo",
+      "cite": [
+        "q3src:code/game/bg_misc.c:373|\"ammo_bullets\","
+      ]
+    },
+    {
+      "classname": "ammo_grenades",
+      "kind": "ammo",
+      "tier": "ammo",
+      "respawn": "ammo",
+      "cite": [
+        "q3src:code/game/bg_misc.c:389|\"ammo_grenades\","
+      ]
+    },
+    {
+      "classname": "ammo_cells",
+      "kind": "ammo",
+      "tier": "ammo",
+      "respawn": "ammo",
+      "cite": [
+        "q3src:code/game/bg_misc.c:405|\"ammo_cells\","
+      ]
+    },
+    {
+      "classname": "ammo_lightning",
+      "kind": "ammo",
+      "tier": "ammo",
+      "respawn": "ammo",
+      "cite": [
+        "q3src:code/game/bg_misc.c:421|\"ammo_lightning\","
+      ]
+    },
+    {
+      "classname": "ammo_rockets",
+      "kind": "ammo",
+      "tier": "ammo",
+      "respawn": "ammo",
+      "cite": [
+        "q3src:code/game/bg_misc.c:437|\"ammo_rockets\","
+      ]
+    },
+    {
+      "classname": "ammo_slugs",
+      "kind": "ammo",
+      "tier": "ammo",
+      "respawn": "ammo",
+      "cite": [
+        "q3src:code/game/bg_misc.c:453|\"ammo_slugs\","
+      ]
+    },
+    {
+      "classname": "ammo_bfg",
+      "kind": "ammo",
+      "tier": "ammo",
+      "respawn": "ammo",
+      "cite": [
+        "q3src:code/game/bg_misc.c:469|\"ammo_bfg\","
+      ]
+    },
+    {
+      "classname": "holdable_teleporter",
+      "kind": "holdable",
+      "tier": "holdable",
+      "respawn": "holdable",
+      "cite": [
+        "q3src:code/game/bg_misc.c:488|\"holdable_teleporter\","
+      ]
+    },
+    {
+      "classname": "holdable_medkit",
+      "kind": "holdable",
+      "tier": "holdable",
+      "respawn": "holdable",
+      "cite": [
+        "q3src:code/game/bg_misc.c:503|\"holdable_medkit\","
+      ]
+    },
+    {
+      "classname": "item_quad",
+      "kind": "powerup",
+      "tier": "powerup",
+      "respawn": "powerup",
+      "cite": [
+        "q3src:code/game/bg_misc.c:524|\"item_quad\","
+      ],
+      "duration": {
+        "value": 30,
+        "unit": "s",
+        "cite": [
+          "q3src:code/game/bg_misc.c:531|30,"
+        ]
+      }
+    },
+    {
+      "classname": "item_enviro",
+      "kind": "powerup",
+      "tier": "powerup",
+      "respawn": "powerup",
+      "cite": [
+        "q3src:code/game/bg_misc.c:541|\"item_enviro\","
+      ],
+      "duration": {
+        "value": 30,
+        "unit": "s",
+        "cite": [
+          "q3src:code/game/bg_misc.c:548|30,"
+        ]
+      }
+    },
+    {
+      "classname": "item_haste",
+      "kind": "powerup",
+      "tier": "powerup",
+      "respawn": "powerup",
+      "cite": [
+        "q3src:code/game/bg_misc.c:558|\"item_haste\","
+      ],
+      "duration": {
+        "value": 30,
+        "unit": "s",
+        "cite": [
+          "q3src:code/game/bg_misc.c:565|30,"
+        ]
+      }
+    },
+    {
+      "classname": "item_invis",
+      "kind": "powerup",
+      "tier": "powerup",
+      "respawn": "powerup",
+      "cite": [
+        "q3src:code/game/bg_misc.c:575|\"item_invis\","
+      ],
+      "duration": {
+        "value": 30,
+        "unit": "s",
+        "cite": [
+          "q3src:code/game/bg_misc.c:582|30,"
+        ]
+      }
+    },
+    {
+      "classname": "item_regen",
+      "kind": "powerup",
+      "tier": "powerup",
+      "respawn": "powerup",
+      "cite": [
+        "q3src:code/game/bg_misc.c:592|\"item_regen\","
+      ],
+      "duration": {
+        "value": 30,
+        "unit": "s",
+        "cite": [
+          "q3src:code/game/bg_misc.c:599|30,"
+        ]
+      }
+    },
+    {
+      "classname": "item_flight",
+      "kind": "powerup",
+      "tier": "powerup",
+      "respawn": "powerup",
+      "cite": [
+        "q3src:code/game/bg_misc.c:609|\"item_flight\","
+      ],
+      "duration": {
+        "value": 60,
+        "unit": "s",
+        "cite": [
+          "q3src:code/game/bg_misc.c:616|60,"
+        ]
+      }
+    },
+    {
+      "classname": "team_CTF_redflag",
+      "kind": "flag",
+      "tier": "flag",
+      "respawn": "flag",
+      "cite": [
+        "q3src:code/game/bg_misc.c:627|\"team_CTF_redflag\","
+      ],
+      "team": "red"
+    },
+    {
+      "classname": "team_CTF_blueflag",
+      "kind": "flag",
+      "tier": "flag",
+      "respawn": "flag",
+      "cite": [
+        "q3src:code/game/bg_misc.c:644|\"team_CTF_blueflag\","
+      ],
+      "team": "blue"
+    }
+  ],
+  "classnames": [
+    {
+      "classname": "info_player_start",
+      "role": "player_start",
+      "cite": [
+        "q3src:code/game/g_spawn.c:199|{\"info_player_start\", SP_"
+      ],
+      "note": "Converted to info_player_deathmatch at spawn."
+    },
+    {
+      "classname": "info_player_deathmatch",
+      "role": "deathmatch_spawn",
+      "cite": [
+        "q3src:code/game/g_spawn.c:200|{\"info_player_deathmatch\", SP_"
+      ]
+    },
+    {
+      "classname": "info_player_intermission",
+      "role": "intermission",
+      "cite": [
+        "q3src:code/game/g_spawn.c:201|{\"info_player_intermission\", SP_"
+      ]
+    },
+    {
+      "classname": "team_CTF_redplayer",
+      "role": "team_start",
+      "cite": [
+        "q3src:code/game/g_spawn.c:256|{\"team_CTF_redplayer\", SP_"
+      ]
+    },
+    {
+      "classname": "team_CTF_blueplayer",
+      "role": "team_start",
+      "cite": [
+        "q3src:code/game/g_spawn.c:257|{\"team_CTF_blueplayer\", SP_"
+      ]
+    },
+    {
+      "classname": "team_CTF_redspawn",
+      "role": "team_respawn",
+      "cite": [
+        "q3src:code/game/g_spawn.c:259|{\"team_CTF_redspawn\", SP_"
+      ]
+    },
+    {
+      "classname": "team_CTF_bluespawn",
+      "role": "team_respawn",
+      "cite": [
+        "q3src:code/game/g_spawn.c:260|{\"team_CTF_bluespawn\", SP_"
+      ]
+    },
+    {
+      "classname": "func_door",
+      "role": "mover",
+      "cite": [
+        "q3src:code/game/g_spawn.c:208|{\"func_door\", SP_"
+      ]
+    },
+    {
+      "classname": "func_plat",
+      "role": "mover",
+      "cite": [
+        "q3src:code/game/g_spawn.c:206|{\"func_plat\", SP_"
+      ]
+    },
+    {
+      "classname": "trigger_multiple",
+      "role": "trigger",
+      "cite": [
+        "q3src:code/game/g_spawn.c:223|{\"trigger_multiple\", SP_"
+      ]
+    },
+    {
+      "classname": "trigger_push",
+      "role": "jump_pad",
+      "cite": [
+        "q3src:code/game/g_spawn.c:224|{\"trigger_push\", SP_"
+      ]
+    },
+    {
+      "classname": "trigger_teleport",
+      "role": "teleporter",
+      "cite": [
+        "q3src:code/game/g_spawn.c:225|{\"trigger_teleport\", SP_"
+      ]
+    },
+    {
+      "classname": "target_position",
+      "role": "target_point",
+      "cite": [
+        "q3src:code/game/g_spawn.c:240|{\"target_position\", SP_"
+      ]
+    },
+    {
+      "classname": "target_relay",
+      "role": "relay",
+      "cite": [
+        "q3src:code/game/g_spawn.c:238|{\"target_relay\", SP_"
+      ]
+    },
+    {
+      "classname": "target_push",
+      "role": "jump_pad",
+      "cite": [
+        "q3src:code/game/g_spawn.c:242|{\"target_push\", SP_"
+      ]
+    },
+    {
+      "classname": "misc_teleporter_dest",
+      "role": "teleporter_destination",
+      "cite": [
+        "q3src:code/game/g_spawn.c:247|{\"misc_teleporter_dest\", SP_"
+      ]
+    },
+    {
+      "classname": "info_notnull",
+      "role": "target_point",
+      "cite": [
+        "q3src:code/game/g_spawn.c:203|{\"info_notnull\", SP_"
+      ]
+    },
+    {
+      "classname": "info_camp",
+      "role": "bot_hint",
+      "cite": [
+        "q3src:code/game/g_spawn.c:204|{\"info_camp\", SP_"
+      ],
+      "note": "Kept in game; botlib parses range, weight, wait and random but never uses them after parsing."
+    },
+    {
+      "classname": "light",
+      "role": "light",
+      "cite": [
+        "q3src:code/game/g_spawn.c:244|{\"light\", SP_"
+      ],
+      "note": "A compile-time entity for q3map2; the game frees it."
+    }
+  ],
+  "mode_contracts": [
+    {
+      "mode": "deathmatch",
+      "runtime": "g_gametype 0 (GT_FFA)",
+      "entities": [
+        {
+          "classname": "info_player_deathmatch",
+          "requirement": "required",
+          "min": 1,
+          "selection": "SelectSpawnPoint: random, avoiding the spot nearest the player's death point",
+          "cite": [
+            "q3src:code/game/g_client.c:241-269|gentity_t *SelectSpawnPoint ( vec3_t avoidPoint, vec3_t origin, vec3_t angles ) {"
+          ]
+        }
+      ],
+      "cite": [
+        "q3src:code/game/g_client.c:1076-1090|} else if (g_gametype.integer >= GT_CTF ) {"
+      ]
+    },
+    {
+      "mode": "tournament",
+      "runtime": "g_gametype 1 (GT_TOURNAMENT)",
+      "entities": [
+        {
+          "classname": "info_player_deathmatch",
+          "requirement": "required",
+          "min": 1,
+          "selection": "SelectSpawnPoint: random, avoiding the spot nearest the player's death point",
+          "cite": [
+            "q3src:code/game/g_client.c:241-269|gentity_t *SelectSpawnPoint ( vec3_t avoidPoint, vec3_t origin, vec3_t angles ) {"
+          ]
+        }
+      ],
+      "cite": [
+        "q3src:code/game/g_client.c:1076-1090|} else if (g_gametype.integer >= GT_CTF ) {"
+      ]
+    },
+    {
+      "mode": "bot_arena",
+      "runtime": "g_gametype 2 (GT_SINGLE_PLAYER)",
+      "entities": [
+        {
+          "classname": "info_player_deathmatch",
+          "requirement": "required",
+          "min": 1,
+          "selection": "SelectSpawnPoint: random, avoiding the spot nearest the player's death point",
+          "cite": [
+            "q3src:code/game/g_client.c:241-269|gentity_t *SelectSpawnPoint ( vec3_t avoidPoint, vec3_t origin, vec3_t angles ) {"
+          ]
+        }
+      ],
+      "cite": [
+        "q3src:code/game/g_client.c:1076-1090|} else if (g_gametype.integer >= GT_CTF ) {"
+      ],
+      "note": "The ladder entry (.arena script) is outside the map; notsingle and notfree entity keys apply."
+    },
+    {
+      "mode": "team_deathmatch",
+      "runtime": "g_gametype 3 (GT_TEAM)",
+      "entities": [
+        {
+          "classname": "info_player_deathmatch",
+          "requirement": "required",
+          "min": 1,
+          "selection": "SelectSpawnPoint: random, avoiding the spot nearest the player's death point",
+          "cite": [
+            "q3src:code/game/g_client.c:241-269|gentity_t *SelectSpawnPoint ( vec3_t avoidPoint, vec3_t origin, vec3_t angles ) {"
+          ]
+        }
+      ],
+      "cite": [
+        "q3src:code/game/g_client.c:1076-1090|} else if (g_gametype.integer >= GT_CTF ) {"
+      ],
+      "note": "GT_TEAM is below GT_CTF, so team deathmatch uses the deathmatch spots."
+    },
+    {
+      "mode": "capture_the_flag",
+      "runtime": "g_gametype 4 (GT_CTF)",
+      "entities": [
+        {
+          "classname": "team_CTF_redplayer",
+          "requirement": "used_if_present",
+          "team": "red",
+          "selection": "a player's spawn while their team state is TEAM_BEGIN",
+          "cite": [
+            "q3src:code/game/g_team.c:990-1001|if (teamstate == TEAM_BEGIN) {"
+          ]
+        },
+        {
+          "classname": "team_CTF_blueplayer",
+          "requirement": "used_if_present",
+          "team": "blue",
+          "selection": "a player's spawn while their team state is TEAM_BEGIN",
+          "cite": [
+            "q3src:code/game/g_team.c:990-1001|if (teamstate == TEAM_BEGIN) {"
+          ]
+        },
+        {
+          "classname": "team_CTF_redspawn",
+          "requirement": "used_if_present",
+          "team": "red",
+          "selection": "every later respawn",
+          "cite": [
+            "q3src:code/game/g_team.c:990-1001|if (teamstate == TEAM_BEGIN) {"
+          ]
+        },
+        {
+          "classname": "team_CTF_bluespawn",
+          "requirement": "used_if_present",
+          "team": "blue",
+          "selection": "every later respawn",
+          "cite": [
+            "q3src:code/game/g_team.c:990-1001|if (teamstate == TEAM_BEGIN) {"
+          ]
+        },
+        {
+          "classname": "info_player_deathmatch",
+          "requirement": "fallback",
+          "selection": "when no team spot of the needed class exists",
+          "cite": [
+            "q3src:code/game/g_team.c:1033-1039|gentity_t *SelectCTFSpawnPoint ( team_t team, int teamstate, vec3_t origin, vec3_t angles ) {"
+          ]
+        },
+        {
+          "classname": "team_CTF_redflag",
+          "requirement": "required",
+          "min": 1,
+          "team": "red",
+          "cite": [
+            "q3src:code/game/bg_misc.c:627|\"team_CTF_redflag\","
+          ]
+        },
+        {
+          "classname": "team_CTF_blueflag",
+          "requirement": "required",
+          "min": 1,
+          "team": "blue",
+          "cite": [
+            "q3src:code/game/bg_misc.c:644|\"team_CTF_blueflag\","
+          ]
+        }
+      ],
+      "cite": [
+        "q3src:code/game/g_client.c:1076-1081|} else if (g_gametype.integer >= GT_CTF ) {",
+        "q3src:code/game/g_team.c:1033-1039|gentity_t *SelectCTFSpawnPoint ( team_t team, int teamstate, vec3_t origin, vec3_t angles ) {"
+      ]
+    },
+    {
+      "mode": "intermission",
+      "runtime": "any",
+      "entities": [
+        {
+          "classname": "info_player_intermission",
+          "requirement": "optional",
+          "selection": "the first one found",
+          "cite": [
+            "q3src:code/game/g_main.c:942|ent = G_Find (NULL, FOFS(classname), \"info_player_intermission\");"
+          ]
+        }
+      ],
+      "fallback_chain": [
+        "info_player_deathmatch"
+      ],
+      "cite": [
+        "q3src:code/game/g_main.c:942-944|ent = G_Find (NULL, FOFS(classname), \"info_player_intermission\");"
+      ]
+    }
+  ],
+  "digest_corrections": [
+    {
+      "claim": "weapons 30 s in team modes",
+      "encoded": "30 s only when g_gametype == GT_TEAM; CTF and the others use 5 s",
+      "path": "respawn_rules[id=weapon].cases[id=other_gametypes].seconds"
+    },
+    {
+      "claim": "powerups 120 s",
+      "encoded": "120 s after a pickup; first appearance 30-60 s after map start",
+      "path": "respawn_rules[id=powerup].cases[id=first_spawn].seconds_range"
+    },
+    {
+      "claim": "(omitted) ammo and holdables",
+      "encoded": "ammo 40 s, holdables 60 s",
+      "path": "respawn_rules[id=ammo].cases[id=all].seconds"
+    },
+    {
+      "claim": "gametype key is Team Arena only",
+      "encoded": "present in baseq3, substring match, entity token 'tournament'",
+      "path": "entity_keys[key=gametype].tokens"
+    },
+    {
+      "claim": "notfree",
+      "encoded": "removes entities in every gametype below GT_TEAM",
+      "path": "entity_keys[key=notfree].effect"
+    },
+    {
+      "claim": "health item_health_normal",
+      "encoded": "item_health",
+      "path": "items[classname=item_health].tier"
+    },
+    {
+      "claim": "info_player_deathmatch initial spawn",
+      "encoded": "local client's first spawn only",
+      "path": "spawnflags[name=INITIAL].tested_when"
+    }
+  ],
+  "notes": [
+    "Per-entity wait and random override every default timer (entity_keys).",
+    "No value here was measured at runtime."
+  ]
+}

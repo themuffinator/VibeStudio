@@ -1,0 +1,47 @@
+{
+  "schema": "qmg.experiment_record",
+  "schema_version": 1,
+  "id": "<change-id, unique; for example r1s-q1-intermission>",
+  "title": "<one line>",
+  "game": "<q1|q2|q3|all>",
+  "kind": "<output|infra>",
+  "sub_lane": "<mp|sp|both|none>  (docs/CHANGE_PROTOCOL.md: one output change in flight per sub-lane; 'both' waits for both lanes)",
+  "cause": "<the single cause this change introduces>",
+  "hypothesis": "<what is expected to change for players, and why>",
+  "expected_mechanism": "<which stage, which function, which entities/brushes/fields change>",
+  "switch": {
+    "name": "<dotted.lowercase switch name, for example r1s.q1_intermission>",
+    "default": "off",
+    "qmg_args_on": "--switch <name>=on"
+  },
+  "declared_scope": {
+    "description": "<which cases may change, written before any run>",
+    "fixed_sets": ["BENCH-v1"],
+    "case_ids": ["<case id>", "..."],
+    "case_ids_file": "<optional repo-relative file with one id per line>"
+  },
+  "build": {"cmd": "cmake --build --preset windows-clang", "exit": null},
+  "ctest": {"cmd": "ctest --preset windows-clang", "passed": null, "total": null, "failed": []},
+  "compiler_fixtures": {"required": "<yes for serialization or shell-construction changes>", "result": null},
+  "runs": {
+    "baseline": {"baseline_id": "<baseline-N from tools/benchmark/baselines/index.json>", "summary_sha256": null},
+    "switch_off": {"out_dir": "out/...", "summary_sha256": null, "byte_identical_to_baseline": null},
+    "switch_on": {"out_dir": "out/...", "summary_sha256": null, "qmg_extra": "--switch <name>=on"}
+  },
+  "scope_diff": {
+    "command": "python -B tools/benchmark/compare.py <off-run> <on-run> --scope <declared> --json <file>",
+    "off_vs_baseline_differences": null,
+    "out_of_scope_differences": null,
+    "in_scope_differences": null,
+    "other_sub_lane_byte_differences": null,
+    "json": "<path of the compare.py --json output>"
+  },
+  "portfolios": {"required": "<yes for any Q2 DM change: MP-PORTFOLIO and SPAN-PORTFOLIO>", "result": null},
+  "before": {"<metric>": null},
+  "after": {"<metric>": null},
+  "verdict": "<accepted|rejected|split|redeclared>",
+  "evidence_level": "<one of: static analysis, compiler output, AAS routing, native movement trial, engine initialization, engine runtime with bots, engine rendering, human play>",
+  "failures_and_counterexamples_kept": ["<paths of failed variants and counterexamples; nothing is deleted>"],
+  "default_flip": {"separate_commit": "<pending D1 decision; recorded under out/phase2/changes until then>", "new_baseline_id": null},
+  "notes": ""
+}

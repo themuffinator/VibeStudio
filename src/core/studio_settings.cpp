@@ -19,6 +19,7 @@
 #include <QtGlobal>
 
 #include <algorithm>
+#include <cmath>
 #include <memory>
 #include <utility>
 
@@ -1285,7 +1286,7 @@ SetupSummary StudioSettings::setupSummary() const
 		summary.warnings.push_back(QStringLiteral("No game installation profile has been added yet."));
 	}
 	if (!aiPreferences.aiFreeMode && aiPreferences.cloudConnectorsEnabled) {
-		summary.warnings.push_back(QStringLiteral("AI connectors are enabled as experimental design stubs; no provider credentials are stored yet."));
+		summary.warnings.push_back(QStringLiteral("Cloud AI connectors are allowed: AI features may send what you ask about to the provider you pick, after you confirm each request."));
 	}
 
 	return summary;

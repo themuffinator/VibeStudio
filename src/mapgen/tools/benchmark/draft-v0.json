@@ -1,0 +1,2559 @@
+{
+  "schema_version": 1,
+  "description": "Draft Phase-1 prompt benchmark (v0) for Quake-MapGen: 17 game x mode targets the release candidate would claim, 8 prompts each (3 vague, 3 specific, 2 contradictory), plus 2 Quake 2 showcase probes. Prompts are run through the normal prompt-driven CLI only (no --game/--mode overrides). expected_requests list the explicit requests a correct brief must honour; they are not tuned to the current prompt parser.",
+  "created": "2026-10-15",
+  "target_mode_vocabulary": {
+    "sp": "single_player",
+    "dm": "deathmatch",
+    "ffa": "deathmatch",
+    "duel": "duel",
+    "tourney": "duel",
+    "ctf": "capture_the_flag",
+    "coop": null,
+    "tdm": null,
+    "botarena": null,
+    "ctf-threewave": null
+  },
+  "game_vocabulary": {
+    "q1": "quake1",
+    "q2": "quake2",
+    "q3": "quake3"
+  },
+  "targets": [
+    "q1-sp",
+    "q1-coop",
+    "q1-dm",
+    "q1-duel",
+    "q1-tdm",
+    "q1-ctf-threewave",
+    "q2-sp",
+    "q2-coop",
+    "q2-dm",
+    "q2-duel",
+    "q2-tdm",
+    "q2-ctf",
+    "q3-botarena",
+    "q3-ffa",
+    "q3-tourney",
+    "q3-tdm",
+    "q3-ctf",
+    "q2-showcase"
+  ],
+  "cases": [
+    {
+      "id": "q1-sp-v1",
+      "target": "q1-sp",
+      "game": "q1",
+      "mode": "sp",
+      "category": "vague",
+      "prompt": "a quake 1 single player level",
+      "seed": 1000,
+      "expected_requests": [
+        "game quake1",
+        "mode single_player",
+        "exit"
+      ],
+      "notes": ""
+    },
+    {
+      "id": "q1-sp-v2",
+      "target": "q1-sp",
+      "game": "q1",
+      "mode": "sp",
+      "category": "vague",
+      "prompt": "make me a Quake map I can play through on my own",
+      "seed": 1001,
+      "expected_requests": [
+        "game quake1",
+        "mode single_player",
+        "exit"
+      ],
+      "notes": "No explicit mode keyword; 'on my own' implies single player."
+    },
+    {
+      "id": "q1-sp-v3",
+      "target": "q1-sp",
+      "game": "q1",
+      "mode": "sp",
+      "category": "vague",
+      "prompt": "Quake episode-style level, something classic",
+      "seed": 1002,
+      "expected_requests": [
+        "game quake1",
+        "mode single_player",
+        "exit"
+      ],
+      "notes": "Episode-style implies a campaign level; no explicit mode keyword."
+    },
+    {
+      "id": "q1-sp-s1",
+      "target": "q1-sp",
+      "game": "q1",
+      "mode": "sp",
+      "category": "specific",
+      "prompt": "Quake 1 single-player level: gothic castle, 8 rooms, start in a quiet courtyard under an open sky, a lava moat around the keep, a gold key door guarding the exit, ogres and knights, ends at a slipgate exit.",
+      "seed": 1003,
+      "expected_requests": [
+        "game quake1",
+        "mode single_player",
+        "theme gothic",
+        "8 rooms",
+        "outdoor sky",
+        "lava",
+        "gold key",
+        "ogre",
+        "knight",
+        "exit"
+      ],
+      "notes": ""
+    },
+    {
+      "id": "q1-sp-s2",
+      "target": "q1-sp",
+      "game": "q1",
+      "mode": "sp",
+      "category": "specific",
+      "prompt": "Quake single player base level, 10 rooms, techbase theme, sewer section with slime, multi-level with a lift up to an upper catwalk, grunts and enforcers, a secret area hiding a quad damage, exit at the end.",
+      "seed": 1004,
+      "expected_requests": [
+        "game quake1",
+        "mode single_player",
+        "theme techbase",
+        "10 rooms",
+        "slime",
+        "lift",
+        "2 floor levels",
+        "grunt",
+        "enforcer",
+        "secret area",
+        "quad damage in secret",
+        "exit"
+      ],
+      "notes": ""
+    },
+    {
+      "id": "q1-sp-s3",
+      "target": "q1-sp",
+      "game": "q1",
+      "mode": "sp",
+      "category": "specific",
+      "prompt": "Q1 SP map, 6 rooms, temple ruins, atmospheric and quiet exploration, a water pool landmark in the central hall, few monsters (zombies and fiends), a mega health secret, linear path to the exit.",
+      "seed": 1005,
+      "expected_requests": [
+        "game quake1",
+        "mode single_player",
+        "theme temple",
+        "6 rooms",
+        "water",
+        "central water pool landmark",
+        "zombie",
+        "fiend",
+        "mega health",
+        "secret area",
+        "linear route",
+        "exit"
+      ],
+      "notes": ""
+    },
+    {
+      "id": "q1-sp-c1",
+      "target": "q1-sp",
+      "game": "q1",
+      "mode": "sp",
+      "category": "contradictory",
+      "prompt": "a flat Quake 1 single-player map with extreme verticality",
+      "seed": 1006,
+      "expected_requests": [
+        "game quake1",
+        "mode single_player",
+        "flat",
+        "extreme verticality",
+        "conflict surfaced"
+      ],
+      "notes": "Contradiction: flat vs extreme verticality."
+    },
+    {
+      "id": "q1-sp-c2",
+      "target": "q1-sp",
+      "game": "q1",
+      "mode": "sp",
+      "category": "contradictory",
+      "prompt": "a tiny Quake 1 single-player map with 32 rooms",
+      "seed": 1007,
+      "expected_requests": [
+        "game quake1",
+        "mode single_player",
+        "tiny",
+        "32 rooms",
+        "conflict surfaced"
+      ],
+      "notes": "Contradiction: tiny vs 32 rooms (the generator's maximum)."
+    },
+    {
+      "id": "q1-coop-v1",
+      "target": "q1-coop",
+      "game": "q1",
+      "mode": "coop",
+      "category": "vague",
+      "prompt": "a quake 1 coop map",
+      "seed": 1008,
+      "expected_requests": [
+        "game quake1",
+        "mode coop",
+        "coop spawns",
+        "exit"
+      ],
+      "notes": ""
+    },
+    {
+      "id": "q1-coop-v2",
+      "target": "q1-coop",
+      "game": "q1",
+      "mode": "coop",
+      "category": "vague",
+      "prompt": "Quake co-op level for me and a friend",
+      "seed": 1009,
+      "expected_requests": [
+        "game quake1",
+        "mode coop",
+        "2 players",
+        "coop spawns",
+        "exit"
+      ],
+      "notes": ""
+    },
+    {
+      "id": "q1-coop-v3",
+      "target": "q1-coop",
+      "game": "q1",
+      "mode": "coop",
+      "category": "vague",
+      "prompt": "cooperative Quake 1 map",
+      "seed": 1010,
+      "expected_requests": [
+        "game quake1",
+        "mode coop",
+        "coop spawns",
+        "exit"
+      ],
+      "notes": ""
+    },
+    {
+      "id": "q1-coop-s1",
+      "target": "q1-coop",
+      "game": "q1",
+      "mode": "coop",
+      "category": "specific",
+      "prompt": "Quake 1 cooperative level for 4 players: medieval castle, 10 rooms, wide corridors so players don't block each other, coop spawn points near the start, shamblers and ogres, two keys, exit slipgate.",
+      "seed": 1011,
+      "expected_requests": [
+        "game quake1",
+        "mode coop",
+        "4 players",
+        "theme medieval",
+        "10 rooms",
+        "wide corridors",
+        "coop spawns",
+        "shambler",
+        "ogre",
+        "silver key",
+        "gold key",
+        "exit"
+      ],
+      "notes": ""
+    },
+    {
+      "id": "q1-coop-s2",
+      "target": "q1-coop",
+      "game": "q1",
+      "mode": "coop",
+      "category": "specific",
+      "prompt": "Q1 coop map for 2 players, techbase, 8 rooms, slime pits, separate coop start spots, plenty of ammo and health for both players, a grenade launcher early on, ends at an exit.",
+      "seed": 1012,
+      "expected_requests": [
+        "game quake1",
+        "mode coop",
+        "2 players",
+        "theme techbase",
+        "8 rooms",
+        "slime",
+        "coop spawns",
+        "health",
+        "grenade launcher early",
+        "exit"
+      ],
+      "notes": ""
+    },
+    {
+      "id": "q1-coop-s3",
+      "target": "q1-coop",
+      "game": "q1",
+      "mode": "coop",
+      "category": "specific",
+      "prompt": "Quake co-op for 3 players, sewer theme, 7 rooms, multi-level with water channels, a shared nailgun room, enforcers and fiends, exit door at the end.",
+      "seed": 1013,
+      "expected_requests": [
+        "game quake1",
+        "mode coop",
+        "3 players",
+        "theme sewer",
+        "7 rooms",
+        "2 floor levels",
+        "water",
+        "nailgun",
+        "enforcer",
+        "fiend",
+        "exit"
+      ],
+      "notes": ""
+    },
+    {
+      "id": "q1-coop-c1",
+      "target": "q1-coop",
+      "game": "q1",
+      "mode": "coop",
+      "category": "contradictory",
+      "prompt": "Quake 1 coop map for exactly 1 player",
+      "seed": 1014,
+      "expected_requests": [
+        "game quake1",
+        "mode coop",
+        "1 players",
+        "conflict surfaced"
+      ],
+      "notes": "Contradiction: cooperative play with one player."
+    },
+    {
+      "id": "q1-coop-c2",
+      "target": "q1-coop",
+      "game": "q1",
+      "mode": "coop",
+      "category": "contradictory",
+      "prompt": "Quake 1 coop campaign map for 16 players in 2 rooms",
+      "seed": 1015,
+      "expected_requests": [
+        "game quake1",
+        "mode coop",
+        "16 players",
+        "2 rooms",
+        "conflict surfaced"
+      ],
+      "notes": "Contradiction: 16 cooperative players in a 2-room campaign map."
+    },
+    {
+      "id": "q1-dm-v1",
+      "target": "q1-dm",
+      "game": "q1",
+      "mode": "dm",
+      "category": "vague",
+      "prompt": "a quake 1 deathmatch map",
+      "seed": 1016,
+      "expected_requests": [
+        "game quake1",
+        "mode deathmatch"
+      ],
+      "notes": ""
+    },
+    {
+      "id": "q1-dm-v2",
+      "target": "q1-dm",
+      "game": "q1",
+      "mode": "dm",
+      "category": "vague",
+      "prompt": "Quake DM map",
+      "seed": 1017,
+      "expected_requests": [
+        "game quake1",
+        "mode deathmatch"
+      ],
+      "notes": ""
+    },
+    {
+      "id": "q1-dm-v3",
+      "target": "q1-dm",
+      "game": "q1",
+      "mode": "dm",
+      "category": "vague",
+      "prompt": "something fun for a Quake LAN party",
+      "seed": 1018,
+      "expected_requests": [
+        "game quake1",
+        "mode deathmatch"
+      ],
+      "notes": "No explicit mode keyword; a LAN party implies multiplayer deathmatch."
+    },
+    {
+      "id": "q1-dm-s1",
+      "target": "q1-dm",
+      "game": "q1",
+      "mode": "dm",
+      "category": "specific",
+      "prompt": "Quake 1 deathmatch for 4-6 players, gothic, 7 rooms, rocket launcher on a raised platform over a lava pit, red armor in a dead-end alcove, quad damage in the central atrium, multi-level with two lifts.",
+      "seed": 1019,
+      "expected_requests": [
+        "game quake1",
+        "mode deathmatch",
+        "4-6 players",
+        "theme gothic",
+        "7 rooms",
+        "rocket launcher on raised platform",
+        "lava",
+        "red armor in dead-end alcove",
+        "quad damage in central atrium",
+        "2 floor levels",
+        "lift"
+      ],
+      "notes": ""
+    },
+    {
+      "id": "q1-dm-s2",
+      "target": "q1-dm",
+      "game": "q1",
+      "mode": "dm",
+      "category": "specific",
+      "prompt": "Q1 DM, 8 players, techbase, 10 rooms, loops everywhere, lightning gun at the bottom of a water pit, mega health on a ledge, three height levels, an outdoor sky courtyard.",
+      "seed": 1020,
+      "expected_requests": [
+        "game quake1",
+        "mode deathmatch",
+        "8 players",
+        "theme techbase",
+        "10 rooms",
+        "loop route",
+        "lightning gun in water pit",
+        "water",
+        "mega health on ledge",
+        "3 floor levels",
+        "outdoor sky"
+      ],
+      "notes": ""
+    },
+    {
+      "id": "q1-dm-s3",
+      "target": "q1-dm",
+      "game": "q1",
+      "mode": "dm",
+      "category": "specific",
+      "prompt": "Quake deathmatch, 6 rooms, medieval ruins, tight and intense arena combat, grenade launcher and super nailgun, yellow armor, a teleporter between the two ends.",
+      "seed": 1021,
+      "expected_requests": [
+        "game quake1",
+        "mode deathmatch",
+        "theme medieval",
+        "6 rooms",
+        "high intensity",
+        "grenade launcher",
+        "super nailgun",
+        "yellow armor",
+        "teleporter"
+      ],
+      "notes": ""
+    },
+    {
+      "id": "q1-dm-c1",
+      "target": "q1-dm",
+      "game": "q1",
+      "mode": "dm",
+      "category": "contradictory",
+      "prompt": "a flat Quake 1 deathmatch map with extreme verticality",
+      "seed": 1022,
+      "expected_requests": [
+        "game quake1",
+        "mode deathmatch",
+        "flat",
+        "extreme verticality",
+        "conflict surfaced"
+      ],
+      "notes": "Contradiction: flat vs extreme verticality."
+    },
+    {
+      "id": "q1-dm-c2",
+      "target": "q1-dm",
+      "game": "q1",
+      "mode": "dm",
+      "category": "contradictory",
+      "prompt": "Quake 1 deathmatch for 32 players in 2 rooms",
+      "seed": 1023,
+      "expected_requests": [
+        "game quake1",
+        "mode deathmatch",
+        "32 players",
+        "2 rooms",
+        "conflict surfaced"
+      ],
+      "notes": "Contradiction: 32 players in 2 rooms."
+    },
+    {
+      "id": "q1-duel-v1",
+      "target": "q1-duel",
+      "game": "q1",
+      "mode": "duel",
+      "category": "vague",
+      "prompt": "a quake 1 duel map",
+      "seed": 1024,
+      "expected_requests": [
+        "game quake1",
+        "mode duel"
+      ],
+      "notes": ""
+    },
+    {
+      "id": "q1-duel-v2",
+      "target": "q1-duel",
+      "game": "q1",
+      "mode": "duel",
+      "category": "vague",
+      "prompt": "Quake 1v1 map",
+      "seed": 1025,
+      "expected_requests": [
+        "game quake1",
+        "mode duel"
+      ],
+      "notes": ""
+    },
+    {
+      "id": "q1-duel-v3",
+      "target": "q1-duel",
+      "game": "q1",
+      "mode": "duel",
+      "category": "vague",
+      "prompt": "a small Quake map for two players to fight it out",
+      "seed": 1026,
+      "expected_requests": [
+        "game quake1",
+        "mode duel",
+        "2 players"
+      ],
+      "notes": "No explicit mode keyword; 'two players' implies a duel."
+    },
+    {
+      "id": "q1-duel-s1",
+      "target": "q1-duel",
+      "game": "q1",
+      "mode": "duel",
+      "category": "specific",
+      "prompt": "Quake 1 duel map, 5 rooms, gothic, one red armor and one mega health on opposite ends, rocket launcher in the center, lightning gun on an upper ledge, vertical with two levels.",
+      "seed": 1027,
+      "expected_requests": [
+        "game quake1",
+        "mode duel",
+        "theme gothic",
+        "5 rooms",
+        "red armor",
+        "mega health",
+        "red armor and mega health on opposite ends",
+        "rocket launcher in center",
+        "lightning gun on upper ledge",
+        "2 floor levels"
+      ],
+      "notes": ""
+    },
+    {
+      "id": "q1-duel-s2",
+      "target": "q1-duel",
+      "game": "q1",
+      "mode": "duel",
+      "category": "specific",
+      "prompt": "Q1 1v1 arena, 4 rooms, techbase, tight loops, a water room with the yellow armor, grenade launcher near the lift, and no quad damage.",
+      "seed": 1028,
+      "expected_requests": [
+        "game quake1",
+        "mode duel",
+        "theme techbase",
+        "4 rooms",
+        "loop route",
+        "water",
+        "yellow armor in water room",
+        "grenade launcher near lift",
+        "lift",
+        "no quad damage"
+      ],
+      "notes": ""
+    },
+    {
+      "id": "q1-duel-s3",
+      "target": "q1-duel",
+      "game": "q1",
+      "mode": "duel",
+      "category": "specific",
+      "prompt": "Quake duel for 2 players, 6 rooms, lava fortress, a ring layout around a lava pit, red armor over the lava, nailgun near both spawns.",
+      "seed": 1029,
+      "expected_requests": [
+        "game quake1",
+        "mode duel",
+        "2 players",
+        "theme lava fortress",
+        "6 rooms",
+        "loop route",
+        "lava",
+        "red armor over lava",
+        "nailgun near spawns"
+      ],
+      "notes": ""
+    },
+    {
+      "id": "q1-duel-c1",
+      "target": "q1-duel",
+      "game": "q1",
+      "mode": "duel",
+      "category": "contradictory",
+      "prompt": "Quake 1 duel map for 16 players",
+      "seed": 1030,
+      "expected_requests": [
+        "game quake1",
+        "mode duel",
+        "16 players",
+        "conflict surfaced"
+      ],
+      "notes": "Contradiction: a duel is two players."
+    },
+    {
+      "id": "q1-duel-c2",
+      "target": "q1-duel",
+      "game": "q1",
+      "mode": "duel",
+      "category": "contradictory",
+      "prompt": "a tiny Quake 1 duel map with 32 rooms",
+      "seed": 1031,
+      "expected_requests": [
+        "game quake1",
+        "mode duel",
+        "tiny",
+        "32 rooms",
+        "conflict surfaced"
+      ],
+      "notes": "Contradiction: tiny vs 32 rooms."
+    },
+    {
+      "id": "q1-tdm-v1",
+      "target": "q1-tdm",
+      "game": "q1",
+      "mode": "tdm",
+      "category": "vague",
+      "prompt": "a quake 1 team deathmatch map",
+      "seed": 1032,
+      "expected_requests": [
+        "game quake1",
+        "mode team_deathmatch"
+      ],
+      "notes": ""
+    },
+    {
+      "id": "q1-tdm-v2",
+      "target": "q1-tdm",
+      "game": "q1",
+      "mode": "tdm",
+      "category": "vague",
+      "prompt": "Quake teamplay map",
+      "seed": 1033,
+      "expected_requests": [
+        "game quake1",
+        "mode team_deathmatch"
+      ],
+      "notes": ""
+    },
+    {
+      "id": "q1-tdm-v3",
+      "target": "q1-tdm",
+      "game": "q1",
+      "mode": "tdm",
+      "category": "vague",
+      "prompt": "Quake 1 TDM map for clan matches",
+      "seed": 1034,
+      "expected_requests": [
+        "game quake1",
+        "mode team_deathmatch"
+      ],
+      "notes": ""
+    },
+    {
+      "id": "q1-tdm-s1",
+      "target": "q1-tdm",
+      "game": "q1",
+      "mode": "tdm",
+      "category": "specific",
+      "prompt": "Quake 1 team deathmatch, 4v4, 8 rooms, techbase, two mirrored team bases with a red armor each, a central quad room, rocket launcher on a bridge over slime.",
+      "seed": 1035,
+      "expected_requests": [
+        "game quake1",
+        "mode team_deathmatch",
+        "4v4 players",
+        "theme techbase",
+        "8 rooms",
+        "mirrored symmetry",
+        "red armor per base",
+        "quad damage in central room",
+        "rocket launcher on bridge",
+        "slime"
+      ],
+      "notes": ""
+    },
+    {
+      "id": "q1-tdm-s2",
+      "target": "q1-tdm",
+      "game": "q1",
+      "mode": "tdm",
+      "category": "specific",
+      "prompt": "Q1 teamplay map for 2v2, gothic, 6 rooms, symmetric layout, mega health in the middle on a raised platform, lightning gun in the water, two floors.",
+      "seed": 1036,
+      "expected_requests": [
+        "game quake1",
+        "mode team_deathmatch",
+        "2v2 players",
+        "theme gothic",
+        "6 rooms",
+        "mirrored symmetry",
+        "mega health on raised central platform",
+        "lightning gun in water",
+        "water",
+        "2 floor levels"
+      ],
+      "notes": ""
+    },
+    {
+      "id": "q1-tdm-s3",
+      "target": "q1-tdm",
+      "game": "q1",
+      "mode": "tdm",
+      "category": "specific",
+      "prompt": "Quake TDM for 8 players, medieval castle, 10 rooms, a courtyard open to the sky, a lava moat, yellow armor on each side, grenade launcher in the keep.",
+      "seed": 1037,
+      "expected_requests": [
+        "game quake1",
+        "mode team_deathmatch",
+        "8 players",
+        "theme medieval",
+        "10 rooms",
+        "outdoor sky",
+        "lava",
+        "yellow armor per side",
+        "grenade launcher in keep"
+      ],
+      "notes": ""
+    },
+    {
+      "id": "q1-tdm-c1",
+      "target": "q1-tdm",
+      "game": "q1",
+      "mode": "tdm",
+      "category": "contradictory",
+      "prompt": "Quake 1 team deathmatch for 2 players",
+      "seed": 1038,
+      "expected_requests": [
+        "game quake1",
+        "mode team_deathmatch",
+        "2 players",
+        "conflict surfaced"
+      ],
+      "notes": "Contradiction: two players cannot form teams in a team match."
+    },
+    {
+      "id": "q1-tdm-c2",
+      "target": "q1-tdm",
+      "game": "q1",
+      "mode": "tdm",
+      "category": "contradictory",
+      "prompt": "Quake 1 team deathmatch single-player campaign with monsters",
+      "seed": 1039,
+      "expected_requests": [
+        "game quake1",
+        "mode team_deathmatch",
+        "mode single_player",
+        "monsters",
+        "conflict surfaced"
+      ],
+      "notes": "Contradiction: team deathmatch vs single-player campaign."
+    },
+    {
+      "id": "q1-ctf-threewave-v1",
+      "target": "q1-ctf-threewave",
+      "game": "q1",
+      "mode": "ctf-threewave",
+      "category": "vague",
+      "prompt": "a quake 1 ctf map",
+      "seed": 1040,
+      "expected_requests": [
+        "game quake1",
+        "mode threewave_ctf",
+        "flags",
+        "team spawns"
+      ],
+      "notes": ""
+    },
+    {
+      "id": "q1-ctf-threewave-v2",
+      "target": "q1-ctf-threewave",
+      "game": "q1",
+      "mode": "ctf-threewave",
+      "category": "vague",
+      "prompt": "Threewave CTF map for Quake",
+      "seed": 1041,
+      "expected_requests": [
+        "game quake1",
+        "mode threewave_ctf",
+        "flags",
+        "team spawns"
+      ],
+      "notes": ""
+    },
+    {
+      "id": "q1-ctf-threewave-v3",
+      "target": "q1-ctf-threewave",
+      "game": "q1",
+      "mode": "ctf-threewave",
+      "category": "vague",
+      "prompt": "Quake capture the flag map",
+      "seed": 1042,
+      "expected_requests": [
+        "game quake1",
+        "mode threewave_ctf",
+        "flags",
+        "team spawns"
+      ],
+      "notes": ""
+    },
+    {
+      "id": "q1-ctf-threewave-s1",
+      "target": "q1-ctf-threewave",
+      "game": "q1",
+      "mode": "ctf-threewave",
+      "category": "specific",
+      "prompt": "Quake 1 Threewave CTF map, 4v4, 10 rooms, gothic, mirrored red and blue bases with the flags at the back, a central bridge over lava, a rocket launcher in each base, quad in the middle.",
+      "seed": 1043,
+      "expected_requests": [
+        "game quake1",
+        "mode threewave_ctf",
+        "4v4 players",
+        "10 rooms",
+        "theme gothic",
+        "mirrored symmetry",
+        "flags",
+        "team spawns",
+        "flags at back of bases",
+        "lava",
+        "rocket launcher per base",
+        "quad damage in middle"
+      ],
+      "notes": ""
+    },
+    {
+      "id": "q1-ctf-threewave-s2",
+      "target": "q1-ctf-threewave",
+      "game": "q1",
+      "mode": "ctf-threewave",
+      "category": "specific",
+      "prompt": "Q1 CTF for 8 players, techbase, 12 rooms, three routes between the bases (high, middle and a water route), red armor near each flag, high ceilings for the grappling hook.",
+      "seed": 1044,
+      "expected_requests": [
+        "game quake1",
+        "mode threewave_ctf",
+        "8 players",
+        "theme techbase",
+        "12 rooms",
+        "flags",
+        "team spawns",
+        "three routes between bases",
+        "water",
+        "red armor near each flag",
+        "grapple-friendly ceilings"
+      ],
+      "notes": ""
+    },
+    {
+      "id": "q1-ctf-threewave-s3",
+      "target": "q1-ctf-threewave",
+      "game": "q1",
+      "mode": "ctf-threewave",
+      "category": "specific",
+      "prompt": "Threewave capture the flag, 6v6, medieval castle, 14 rooms, an open sky field between two keeps, flag rooms on the top floor, mega health in the center.",
+      "seed": 1045,
+      "expected_requests": [
+        "game quake1",
+        "mode threewave_ctf",
+        "6v6 players",
+        "theme medieval",
+        "14 rooms",
+        "flags",
+        "team spawns",
+        "outdoor sky",
+        "flags on top floor",
+        "mega health in center"
+      ],
+      "notes": ""
+    },
+    {
+      "id": "q1-ctf-threewave-c1",
+      "target": "q1-ctf-threewave",
+      "game": "q1",
+      "mode": "ctf-threewave",
+      "category": "contradictory",
+      "prompt": "Quake 1 capture the flag duel for 2 players with no flags",
+      "seed": 1046,
+      "expected_requests": [
+        "game quake1",
+        "mode threewave_ctf",
+        "mode duel",
+        "2 players",
+        "no flags",
+        "conflict surfaced"
+      ],
+      "notes": "Contradiction: CTF without flags, and CTF vs duel."
+    },
+    {
+      "id": "q1-ctf-threewave-c2",
+      "target": "q1-ctf-threewave",
+      "game": "q1",
+      "mode": "ctf-threewave",
+      "category": "contradictory",
+      "prompt": "a single-player Quake 1 CTF campaign with monsters",
+      "seed": 1047,
+      "expected_requests": [
+        "game quake1",
+        "mode threewave_ctf",
+        "mode single_player",
+        "monsters",
+        "conflict surfaced"
+      ],
+      "notes": "Contradiction: CTF vs single-player campaign."
+    },
+    {
+      "id": "q2-sp-v1",
+      "target": "q2-sp",
+      "game": "q2",
+      "mode": "sp",
+      "category": "vague",
+      "prompt": "a quake 2 single player map",
+      "seed": 1048,
+      "expected_requests": [
+        "game quake2",
+        "mode single_player",
+        "exit"
+      ],
+      "notes": ""
+    },
+    {
+      "id": "q2-sp-v2",
+      "target": "q2-sp",
+      "game": "q2",
+      "mode": "sp",
+      "category": "vague",
+      "prompt": "Quake II campaign level",
+      "seed": 1049,
+      "expected_requests": [
+        "game quake2",
+        "mode single_player",
+        "exit"
+      ],
+      "notes": ""
+    },
+    {
+      "id": "q2-sp-v3",
+      "target": "q2-sp",
+      "game": "q2",
+      "mode": "sp",
+      "category": "vague",
+      "prompt": "a Quake 2 level for single player, surprise me",
+      "seed": 1050,
+      "expected_requests": [
+        "game quake2",
+        "mode single_player",
+        "exit"
+      ],
+      "notes": ""
+    },
+    {
+      "id": "q2-sp-s1",
+      "target": "q2-sp",
+      "game": "q2",
+      "mode": "sp",
+      "category": "specific",
+      "prompt": "Quake 2 single-player unit level, Strogg base, 8 rooms, start in a hangar, a blue keycard door, slime pools, gunners and berserkers, a security computer landmark, ends at an elevator exit.",
+      "seed": 1051,
+      "expected_requests": [
+        "game quake2",
+        "mode single_player",
+        "theme techbase",
+        "8 rooms",
+        "blue keycard",
+        "slime",
+        "gunner",
+        "berserker",
+        "security computer landmark",
+        "exit"
+      ],
+      "notes": ""
+    },
+    {
+      "id": "q2-sp-s2",
+      "target": "q2-sp",
+      "game": "q2",
+      "mode": "sp",
+      "category": "specific",
+      "prompt": "Q2 SP map, 10 rooms, industrial refinery, multi-level with lifts and catwalks over lava, enforcers and parasites, a hidden quad damage secret, exit to the next unit.",
+      "seed": 1052,
+      "expected_requests": [
+        "game quake2",
+        "mode single_player",
+        "theme industrial",
+        "10 rooms",
+        "2 floor levels",
+        "lift",
+        "lava",
+        "enforcer",
+        "parasite",
+        "quad damage in secret",
+        "secret area",
+        "exit"
+      ],
+      "notes": ""
+    },
+    {
+      "id": "q2-sp-s3",
+      "target": "q2-sp",
+      "game": "q2",
+      "mode": "sp",
+      "category": "specific",
+      "prompt": "Quake II campaign level, 6 rooms, outdoor canyon under the sky, atmospheric exploration, a water section, iron maidens, an ammo depot, exit at the top of the cliff.",
+      "seed": 1053,
+      "expected_requests": [
+        "game quake2",
+        "mode single_player",
+        "6 rooms",
+        "outdoor sky",
+        "low intensity",
+        "water",
+        "iron maiden",
+        "ammo depot",
+        "exit at top of cliff",
+        "exit"
+      ],
+      "notes": ""
+    },
+    {
+      "id": "q2-sp-c1",
+      "target": "q2-sp",
+      "game": "q2",
+      "mode": "sp",
+      "category": "contradictory",
+      "prompt": "Quake 2 single player deathmatch for 8 players",
+      "seed": 1054,
+      "expected_requests": [
+        "game quake2",
+        "mode single_player",
+        "mode deathmatch",
+        "8 players",
+        "conflict surfaced"
+      ],
+      "notes": "Contradiction: single player vs 8-player deathmatch."
+    },
+    {
+      "id": "q2-sp-c2",
+      "target": "q2-sp",
+      "game": "q2",
+      "mode": "sp",
+      "category": "contradictory",
+      "prompt": "a flat Quake 2 single-player map with extreme verticality",
+      "seed": 1055,
+      "expected_requests": [
+        "game quake2",
+        "mode single_player",
+        "flat",
+        "extreme verticality",
+        "conflict surfaced"
+      ],
+      "notes": "Contradiction: flat vs extreme verticality."
+    },
+    {
+      "id": "q2-coop-v1",
+      "target": "q2-coop",
+      "game": "q2",
+      "mode": "coop",
+      "category": "vague",
+      "prompt": "a quake 2 coop map",
+      "seed": 1056,
+      "expected_requests": [
+        "game quake2",
+        "mode coop",
+        "coop spawns",
+        "exit"
+      ],
+      "notes": ""
+    },
+    {
+      "id": "q2-coop-v2",
+      "target": "q2-coop",
+      "game": "q2",
+      "mode": "coop",
+      "category": "vague",
+      "prompt": "Quake II co-op level",
+      "seed": 1057,
+      "expected_requests": [
+        "game quake2",
+        "mode coop",
+        "coop spawns",
+        "exit"
+      ],
+      "notes": ""
+    },
+    {
+      "id": "q2-coop-v3",
+      "target": "q2-coop",
+      "game": "q2",
+      "mode": "coop",
+      "category": "vague",
+      "prompt": "cooperative Quake 2 mission",
+      "seed": 1058,
+      "expected_requests": [
+        "game quake2",
+        "mode coop",
+        "coop spawns",
+        "exit"
+      ],
+      "notes": ""
+    },
+    {
+      "id": "q2-coop-s1",
+      "target": "q2-coop",
+      "game": "q2",
+      "mode": "coop",
+      "category": "specific",
+      "prompt": "Quake 2 cooperative map for 4 players, Strogg prison, 10 rooms, coop starts in a shared landing bay, gladiators and tanks, a red keycard, lots of ammo pickups, exit through a hangar door.",
+      "seed": 1059,
+      "expected_requests": [
+        "game quake2",
+        "mode coop",
+        "4 players",
+        "10 rooms",
+        "coop spawns",
+        "gladiator",
+        "tank",
+        "red keycard",
+        "ammo",
+        "exit"
+      ],
+      "notes": ""
+    },
+    {
+      "id": "q2-coop-s2",
+      "target": "q2-coop",
+      "game": "q2",
+      "mode": "coop",
+      "category": "specific",
+      "prompt": "Q2 coop for 2 players, techbase, 8 rooms, slime channels, two routes that rejoin, chaingun and grenade launcher, a power armor secret, exit elevator.",
+      "seed": 1060,
+      "expected_requests": [
+        "game quake2",
+        "mode coop",
+        "2 players",
+        "theme techbase",
+        "8 rooms",
+        "slime",
+        "loop route",
+        "chaingun",
+        "grenade launcher",
+        "power armor",
+        "secret area",
+        "coop spawns",
+        "exit"
+      ],
+      "notes": ""
+    },
+    {
+      "id": "q2-coop-s3",
+      "target": "q2-coop",
+      "game": "q2",
+      "mode": "coop",
+      "category": "specific",
+      "prompt": "Quake II coop for 3 players, 7 rooms, warehouse with an outdoor sky yard, multi-level crates and catwalks, flyers and gunners, exit at the end.",
+      "seed": 1061,
+      "expected_requests": [
+        "game quake2",
+        "mode coop",
+        "3 players",
+        "7 rooms",
+        "outdoor sky",
+        "2 floor levels",
+        "flyer",
+        "gunner",
+        "coop spawns",
+        "exit"
+      ],
+      "notes": ""
+    },
+    {
+      "id": "q2-coop-c1",
+      "target": "q2-coop",
+      "game": "q2",
+      "mode": "coop",
+      "category": "contradictory",
+      "prompt": "Quake 2 coop for 1 player",
+      "seed": 1062,
+      "expected_requests": [
+        "game quake2",
+        "mode coop",
+        "1 players",
+        "conflict surfaced"
+      ],
+      "notes": "Contradiction: cooperative play with one player."
+    },
+    {
+      "id": "q2-coop-c2",
+      "target": "q2-coop",
+      "game": "q2",
+      "mode": "coop",
+      "category": "contradictory",
+      "prompt": "Quake 2 co-op deathmatch for 16 players with no monsters",
+      "seed": 1063,
+      "expected_requests": [
+        "game quake2",
+        "mode coop",
+        "mode deathmatch",
+        "16 players",
+        "no monsters",
+        "conflict surfaced"
+      ],
+      "notes": "Contradiction: co-op vs deathmatch."
+    },
+    {
+      "id": "q2-dm-v1",
+      "target": "q2-dm",
+      "game": "q2",
+      "mode": "dm",
+      "category": "vague",
+      "prompt": "a quake 2 deathmatch map",
+      "seed": 1064,
+      "expected_requests": [
+        "game quake2",
+        "mode deathmatch"
+      ],
+      "notes": ""
+    },
+    {
+      "id": "q2-dm-v2",
+      "target": "q2-dm",
+      "game": "q2",
+      "mode": "dm",
+      "category": "vague",
+      "prompt": "Quake II DM",
+      "seed": 1065,
+      "expected_requests": [
+        "game quake2",
+        "mode deathmatch"
+      ],
+      "notes": ""
+    },
+    {
+      "id": "q2-dm-v3",
+      "target": "q2-dm",
+      "game": "q2",
+      "mode": "dm",
+      "category": "vague",
+      "prompt": "q2 dm map for some friends",
+      "seed": 1066,
+      "expected_requests": [
+        "game quake2",
+        "mode deathmatch"
+      ],
+      "notes": ""
+    },
+    {
+      "id": "q2-dm-s1",
+      "target": "q2-dm",
+      "game": "q2",
+      "mode": "dm",
+      "category": "specific",
+      "prompt": "Quake 2 deathmatch for 6 players, Strogg base, 8 rooms, railgun on a high ledge, quad damage out in the open center, body armor in a slime-pit alcove, three floor levels, an outdoor sky courtyard.",
+      "seed": 1067,
+      "expected_requests": [
+        "game quake2",
+        "mode deathmatch",
+        "6 players",
+        "theme techbase",
+        "8 rooms",
+        "railgun on high ledge",
+        "quad damage exposed in center",
+        "body armor in slime alcove",
+        "slime",
+        "3 floor levels",
+        "outdoor sky"
+      ],
+      "notes": ""
+    },
+    {
+      "id": "q2-dm-s2",
+      "target": "q2-dm",
+      "game": "q2",
+      "mode": "dm",
+      "category": "specific",
+      "prompt": "Q2 DM for 4-8 players, industrial, 10 rooms, looping routes, rocket launcher next to the lava channel, mega health behind a jump, combat armor at both ends, a teleporter shortcut.",
+      "seed": 1068,
+      "expected_requests": [
+        "game quake2",
+        "mode deathmatch",
+        "4-8 players",
+        "theme industrial",
+        "10 rooms",
+        "loop route",
+        "rocket launcher near lava",
+        "lava",
+        "mega health behind a jump",
+        "combat armor at both ends",
+        "teleporter"
+      ],
+      "notes": ""
+    },
+    {
+      "id": "q2-dm-s3",
+      "target": "q2-dm",
+      "game": "q2",
+      "mode": "dm",
+      "category": "specific",
+      "prompt": "Quake II deathmatch, 7 rooms, warehouse, intense close-quarters fighting, hyperblaster and super shotgun, a water room with a rebreather, two lifts.",
+      "seed": 1069,
+      "expected_requests": [
+        "game quake2",
+        "mode deathmatch",
+        "7 rooms",
+        "high intensity",
+        "hyperblaster",
+        "super shotgun",
+        "water",
+        "rebreather in water room",
+        "lift"
+      ],
+      "notes": ""
+    },
+    {
+      "id": "q2-dm-c1",
+      "target": "q2-dm",
+      "game": "q2",
+      "mode": "dm",
+      "category": "contradictory",
+      "prompt": "Quake 2 deathmatch for 32 players in a tiny 2-room map",
+      "seed": 1070,
+      "expected_requests": [
+        "game quake2",
+        "mode deathmatch",
+        "32 players",
+        "tiny",
+        "2 rooms",
+        "conflict surfaced"
+      ],
+      "notes": "Contradiction: 32 players in 2 rooms."
+    },
+    {
+      "id": "q2-dm-c2",
+      "target": "q2-dm",
+      "game": "q2",
+      "mode": "dm",
+      "category": "contradictory",
+      "prompt": "a flat Quake 2 deathmatch map with extreme verticality",
+      "seed": 1071,
+      "expected_requests": [
+        "game quake2",
+        "mode deathmatch",
+        "flat",
+        "extreme verticality",
+        "conflict surfaced"
+      ],
+      "notes": "Contradiction: flat vs extreme verticality."
+    },
+    {
+      "id": "q2-duel-v1",
+      "target": "q2-duel",
+      "game": "q2",
+      "mode": "duel",
+      "category": "vague",
+      "prompt": "a quake 2 duel map",
+      "seed": 1072,
+      "expected_requests": [
+        "game quake2",
+        "mode duel"
+      ],
+      "notes": ""
+    },
+    {
+      "id": "q2-duel-v2",
+      "target": "q2-duel",
+      "game": "q2",
+      "mode": "duel",
+      "category": "vague",
+      "prompt": "Quake II 1v1 map",
+      "seed": 1073,
+      "expected_requests": [
+        "game quake2",
+        "mode duel"
+      ],
+      "notes": ""
+    },
+    {
+      "id": "q2-duel-v3",
+      "target": "q2-duel",
+      "game": "q2",
+      "mode": "duel",
+      "category": "vague",
+      "prompt": "a small q2 map for one-on-one",
+      "seed": 1074,
+      "expected_requests": [
+        "game quake2",
+        "mode duel",
+        "2 players"
+      ],
+      "notes": "No exact duel keyword; 'one-on-one' implies a duel."
+    },
+    {
+      "id": "q2-duel-s1",
+      "target": "q2-duel",
+      "game": "q2",
+      "mode": "duel",
+      "category": "specific",
+      "prompt": "Quake 2 duel, 5 rooms, Strogg base, railgun and rocket launcher on opposite sides, one body armor, one mega health, two floor levels connected by stairs and a lift.",
+      "seed": 1075,
+      "expected_requests": [
+        "game quake2",
+        "mode duel",
+        "theme techbase",
+        "5 rooms",
+        "railgun",
+        "rocket launcher",
+        "railgun and rocket launcher on opposite sides",
+        "body armor",
+        "mega health",
+        "2 floor levels",
+        "lift"
+      ],
+      "notes": ""
+    },
+    {
+      "id": "q2-duel-s2",
+      "target": "q2-duel",
+      "game": "q2",
+      "mode": "duel",
+      "category": "specific",
+      "prompt": "Q2 1v1, 4 rooms, industrial, a tight loop, combat armor over lava, hyperblaster in the water corridor, no quad damage.",
+      "seed": 1076,
+      "expected_requests": [
+        "game quake2",
+        "mode duel",
+        "theme industrial",
+        "4 rooms",
+        "loop route",
+        "combat armor over lava",
+        "lava",
+        "hyperblaster in water corridor",
+        "water",
+        "no quad damage"
+      ],
+      "notes": ""
+    },
+    {
+      "id": "q2-duel-s3",
+      "target": "q2-duel",
+      "game": "q2",
+      "mode": "duel",
+      "category": "specific",
+      "prompt": "Quake II duel for 2 players, 6 rooms, outdoor canyon with sky, railgun on the backside ledge, body armor in the central pit, high verticality.",
+      "seed": 1077,
+      "expected_requests": [
+        "game quake2",
+        "mode duel",
+        "2 players",
+        "6 rooms",
+        "outdoor sky",
+        "railgun on backside ledge",
+        "body armor in central pit",
+        "high verticality"
+      ],
+      "notes": ""
+    },
+    {
+      "id": "q2-duel-c1",
+      "target": "q2-duel",
+      "game": "q2",
+      "mode": "duel",
+      "category": "contradictory",
+      "prompt": "Quake 2 duel map for 16 players",
+      "seed": 1078,
+      "expected_requests": [
+        "game quake2",
+        "mode duel",
+        "16 players",
+        "conflict surfaced"
+      ],
+      "notes": "Contradiction: a duel is two players."
+    },
+    {
+      "id": "q2-duel-c2",
+      "target": "q2-duel",
+      "game": "q2",
+      "mode": "duel",
+      "category": "contradictory",
+      "prompt": "Quake 2 1v1 map for single player with monsters",
+      "seed": 1079,
+      "expected_requests": [
+        "game quake2",
+        "mode duel",
+        "mode single_player",
+        "monsters",
+        "conflict surfaced"
+      ],
+      "notes": "Contradiction: duel vs single-player with monsters."
+    },
+    {
+      "id": "q2-tdm-v1",
+      "target": "q2-tdm",
+      "game": "q2",
+      "mode": "tdm",
+      "category": "vague",
+      "prompt": "a quake 2 team deathmatch map",
+      "seed": 1080,
+      "expected_requests": [
+        "game quake2",
+        "mode team_deathmatch"
+      ],
+      "notes": ""
+    },
+    {
+      "id": "q2-tdm-v2",
+      "target": "q2-tdm",
+      "game": "q2",
+      "mode": "tdm",
+      "category": "vague",
+      "prompt": "Quake II teamplay map",
+      "seed": 1081,
+      "expected_requests": [
+        "game quake2",
+        "mode team_deathmatch"
+      ],
+      "notes": ""
+    },
+    {
+      "id": "q2-tdm-v3",
+      "target": "q2-tdm",
+      "game": "q2",
+      "mode": "tdm",
+      "category": "vague",
+      "prompt": "Q2 TDM for clan wars",
+      "seed": 1082,
+      "expected_requests": [
+        "game quake2",
+        "mode team_deathmatch"
+      ],
+      "notes": ""
+    },
+    {
+      "id": "q2-tdm-s1",
+      "target": "q2-tdm",
+      "game": "q2",
+      "mode": "tdm",
+      "category": "specific",
+      "prompt": "Quake 2 team deathmatch 4v4, 10 rooms, Strogg base, mirrored halves with a body armor each, quad damage in the center atrium, railgun on a bridge over slime.",
+      "seed": 1083,
+      "expected_requests": [
+        "game quake2",
+        "mode team_deathmatch",
+        "4v4 players",
+        "10 rooms",
+        "theme techbase",
+        "mirrored symmetry",
+        "body armor per half",
+        "quad damage in central atrium",
+        "railgun on bridge",
+        "slime"
+      ],
+      "notes": ""
+    },
+    {
+      "id": "q2-tdm-s2",
+      "target": "q2-tdm",
+      "game": "q2",
+      "mode": "tdm",
+      "category": "specific",
+      "prompt": "Q2 TDM for 2v2, 6 rooms, industrial, symmetric, mega health on a raised platform, rocket launcher in the water, three levels.",
+      "seed": 1084,
+      "expected_requests": [
+        "game quake2",
+        "mode team_deathmatch",
+        "2v2 players",
+        "6 rooms",
+        "theme industrial",
+        "mirrored symmetry",
+        "mega health on raised platform",
+        "rocket launcher in water",
+        "water",
+        "3 floor levels"
+      ],
+      "notes": ""
+    },
+    {
+      "id": "q2-tdm-s3",
+      "target": "q2-tdm",
+      "game": "q2",
+      "mode": "tdm",
+      "category": "specific",
+      "prompt": "Quake II teamplay, 8 players, 9 rooms, an outdoor sky yard, a lava trench, combat armor per side, chaingun in the middle.",
+      "seed": 1085,
+      "expected_requests": [
+        "game quake2",
+        "mode team_deathmatch",
+        "8 players",
+        "9 rooms",
+        "outdoor sky",
+        "lava",
+        "combat armor per side",
+        "chaingun in middle"
+      ],
+      "notes": ""
+    },
+    {
+      "id": "q2-tdm-c1",
+      "target": "q2-tdm",
+      "game": "q2",
+      "mode": "tdm",
+      "category": "contradictory",
+      "prompt": "Quake 2 team deathmatch for 2 players",
+      "seed": 1086,
+      "expected_requests": [
+        "game quake2",
+        "mode team_deathmatch",
+        "2 players",
+        "conflict surfaced"
+      ],
+      "notes": "Contradiction: two players cannot form teams in a team match."
+    },
+    {
+      "id": "q2-tdm-c2",
+      "target": "q2-tdm",
+      "game": "q2",
+      "mode": "tdm",
+      "category": "contradictory",
+      "prompt": "Quake 2 team deathmatch with three teams of one player in a 32-room map",
+      "seed": 1087,
+      "expected_requests": [
+        "game quake2",
+        "mode team_deathmatch",
+        "3 players",
+        "32 rooms",
+        "conflict surfaced"
+      ],
+      "notes": "Contradiction: one-player teams in a team mode; 3 players in 32 rooms."
+    },
+    {
+      "id": "q2-ctf-v1",
+      "target": "q2-ctf",
+      "game": "q2",
+      "mode": "ctf",
+      "category": "vague",
+      "prompt": "a quake 2 ctf map",
+      "seed": 1088,
+      "expected_requests": [
+        "game quake2",
+        "mode capture_the_flag",
+        "flags",
+        "team spawns"
+      ],
+      "notes": ""
+    },
+    {
+      "id": "q2-ctf-v2",
+      "target": "q2-ctf",
+      "game": "q2",
+      "mode": "ctf",
+      "category": "vague",
+      "prompt": "Quake II capture the flag map",
+      "seed": 1089,
+      "expected_requests": [
+        "game quake2",
+        "mode capture_the_flag",
+        "flags",
+        "team spawns"
+      ],
+      "notes": ""
+    },
+    {
+      "id": "q2-ctf-v3",
+      "target": "q2-ctf",
+      "game": "q2",
+      "mode": "ctf",
+      "category": "vague",
+      "prompt": "q2ctf style map",
+      "seed": 1090,
+      "expected_requests": [
+        "game quake2",
+        "mode capture_the_flag",
+        "flags",
+        "team spawns"
+      ],
+      "notes": "'q2ctf' is one token; tests word-boundary handling of 'ctf'."
+    },
+    {
+      "id": "q2-ctf-s1",
+      "target": "q2-ctf",
+      "game": "q2",
+      "mode": "ctf",
+      "category": "specific",
+      "prompt": "Quake 2 CTF, 5v5, 12 rooms, Strogg bases at both ends, flag rooms with a railgun and rocket launcher, a central water channel, quad in the middle, a grapple-friendly sky courtyard.",
+      "seed": 1091,
+      "expected_requests": [
+        "game quake2",
+        "mode capture_the_flag",
+        "5v5 players",
+        "12 rooms",
+        "theme techbase",
+        "flags",
+        "team spawns",
+        "railgun",
+        "rocket launcher",
+        "water",
+        "quad damage in middle",
+        "outdoor sky"
+      ],
+      "notes": ""
+    },
+    {
+      "id": "q2-ctf-s2",
+      "target": "q2-ctf",
+      "game": "q2",
+      "mode": "ctf",
+      "category": "specific",
+      "prompt": "Q2 capture the flag for 8 players, industrial, 10 rooms, three lanes (upper catwalk, middle, lower slime tunnel), a power shield near each flag.",
+      "seed": 1092,
+      "expected_requests": [
+        "game quake2",
+        "mode capture_the_flag",
+        "8 players",
+        "theme industrial",
+        "10 rooms",
+        "flags",
+        "team spawns",
+        "three lanes",
+        "slime",
+        "power shield near each flag"
+      ],
+      "notes": ""
+    },
+    {
+      "id": "q2-ctf-s3",
+      "target": "q2-ctf",
+      "game": "q2",
+      "mode": "ctf",
+      "category": "specific",
+      "prompt": "Quake II CTF, 6v6, 14 rooms, symmetric, a lava moat in front of each base, mega health and body armor on each side, two floors.",
+      "seed": 1093,
+      "expected_requests": [
+        "game quake2",
+        "mode capture_the_flag",
+        "6v6 players",
+        "14 rooms",
+        "mirrored symmetry",
+        "flags",
+        "team spawns",
+        "lava",
+        "mega health per side",
+        "body armor per side",
+        "2 floor levels"
+      ],
+      "notes": ""
+    },
+    {
+      "id": "q2-ctf-c1",
+      "target": "q2-ctf",
+      "game": "q2",
+      "mode": "ctf",
+      "category": "contradictory",
+      "prompt": "Quake 2 CTF map for one player with no flags",
+      "seed": 1094,
+      "expected_requests": [
+        "game quake2",
+        "mode capture_the_flag",
+        "1 players",
+        "no flags",
+        "conflict surfaced"
+      ],
+      "notes": "Contradiction: CTF with one player and no flags."
+    },
+    {
+      "id": "q2-ctf-c2",
+      "target": "q2-ctf",
+      "game": "q2",
+      "mode": "ctf",
+      "category": "contradictory",
+      "prompt": "a tiny 2-room Quake 2 capture the flag map for 32 players",
+      "seed": 1095,
+      "expected_requests": [
+        "game quake2",
+        "mode capture_the_flag",
+        "tiny",
+        "2 rooms",
+        "32 players",
+        "conflict surfaced"
+      ],
+      "notes": "Contradiction: 32 players in 2 rooms."
+    },
+    {
+      "id": "q3-botarena-v1",
+      "target": "q3-botarena",
+      "game": "q3",
+      "mode": "botarena",
+      "category": "vague",
+      "prompt": "a quake 3 bot arena",
+      "seed": 1096,
+      "expected_requests": [
+        "game quake3",
+        "mode bot_arena",
+        "aas"
+      ],
+      "notes": ""
+    },
+    {
+      "id": "q3-botarena-v2",
+      "target": "q3-botarena",
+      "game": "q3",
+      "mode": "botarena",
+      "category": "vague",
+      "prompt": "Quake III map for practicing against bots",
+      "seed": 1097,
+      "expected_requests": [
+        "game quake3",
+        "mode bot_arena",
+        "aas"
+      ],
+      "notes": ""
+    },
+    {
+      "id": "q3-botarena-v3",
+      "target": "q3-botarena",
+      "game": "q3",
+      "mode": "botarena",
+      "category": "vague",
+      "prompt": "Q3A map that bots can navigate well",
+      "seed": 1098,
+      "expected_requests": [
+        "game quake3",
+        "mode bot_arena",
+        "aas"
+      ],
+      "notes": ""
+    },
+    {
+      "id": "q3-botarena-s1",
+      "target": "q3-botarena",
+      "game": "q3",
+      "mode": "botarena",
+      "category": "specific",
+      "prompt": "Quake 3 bot arena for 4 bots, 6 rooms, gothic, clean AAS-friendly floors, rocket launcher in the center, mega health on a jump pad, red armor in a corner room.",
+      "seed": 1099,
+      "expected_requests": [
+        "game quake3",
+        "mode bot_arena",
+        "4 players",
+        "6 rooms",
+        "theme gothic",
+        "aas",
+        "rocket launcher in center",
+        "mega health on jump pad",
+        "jump pad",
+        "red armor in corner room"
+      ],
+      "notes": ""
+    },
+    {
+      "id": "q3-botarena-s2",
+      "target": "q3-botarena",
+      "game": "q3",
+      "mode": "botarena",
+      "category": "specific",
+      "prompt": "Quake III bot practice map, 8 rooms, base theme, loops so the bots don't camp, railgun on a ledge, plasma gun, quad on a bridge, two levels connected by stairs.",
+      "seed": 1100,
+      "expected_requests": [
+        "game quake3",
+        "mode bot_arena",
+        "8 rooms",
+        "theme techbase",
+        "aas",
+        "loop route",
+        "railgun on ledge",
+        "plasma gun",
+        "quad damage on bridge",
+        "2 floor levels"
+      ],
+      "notes": ""
+    },
+    {
+      "id": "q3-botarena-s3",
+      "target": "q3-botarena",
+      "game": "q3",
+      "mode": "botarena",
+      "category": "specific",
+      "prompt": "Q3A bot arena, 5 rooms, space theme with sky, lightning gun and shotgun, yellow armor, no water so the bots path cleanly.",
+      "seed": 1101,
+      "expected_requests": [
+        "game quake3",
+        "mode bot_arena",
+        "5 rooms",
+        "theme space",
+        "outdoor sky",
+        "aas",
+        "lightning gun",
+        "shotgun",
+        "yellow armor",
+        "no water"
+      ],
+      "notes": ""
+    },
+    {
+      "id": "q3-botarena-c1",
+      "target": "q3-botarena",
+      "game": "q3",
+      "mode": "botarena",
+      "category": "contradictory",
+      "prompt": "Quake 3 bot arena with no bots",
+      "seed": 1102,
+      "expected_requests": [
+        "game quake3",
+        "mode bot_arena",
+        "no bots",
+        "conflict surfaced"
+      ],
+      "notes": "Contradiction: bot arena without bots."
+    },
+    {
+      "id": "q3-botarena-c2",
+      "target": "q3-botarena",
+      "game": "q3",
+      "mode": "botarena",
+      "category": "contradictory",
+      "prompt": "Quake 3 campaign with monsters for bot practice",
+      "seed": 1103,
+      "expected_requests": [
+        "game quake3",
+        "mode single_player",
+        "monsters",
+        "mode bot_arena",
+        "conflict surfaced"
+      ],
+      "notes": "Contradiction: stock Quake 3 has no campaign monsters."
+    },
+    {
+      "id": "q3-ffa-v1",
+      "target": "q3-ffa",
+      "game": "q3",
+      "mode": "ffa",
+      "category": "vague",
+      "prompt": "a quake 3 ffa map",
+      "seed": 1104,
+      "expected_requests": [
+        "game quake3",
+        "mode deathmatch"
+      ],
+      "notes": "'ffa' abbreviation."
+    },
+    {
+      "id": "q3-ffa-v2",
+      "target": "q3-ffa",
+      "game": "q3",
+      "mode": "ffa",
+      "category": "vague",
+      "prompt": "Quake III free for all map",
+      "seed": 1105,
+      "expected_requests": [
+        "game quake3",
+        "mode deathmatch"
+      ],
+      "notes": ""
+    },
+    {
+      "id": "q3-ffa-v3",
+      "target": "q3-ffa",
+      "game": "q3",
+      "mode": "ffa",
+      "category": "vague",
+      "prompt": "a quake 3 map",
+      "seed": 1106,
+      "expected_requests": [
+        "game quake3",
+        "mode deathmatch"
+      ],
+      "notes": "No mode keyword at all."
+    },
+    {
+      "id": "q3-ffa-s1",
+      "target": "q3-ffa",
+      "game": "q3",
+      "mode": "ffa",
+      "category": "specific",
+      "prompt": "Quake 3 free for all for 8 players, gothic, 9 rooms, rocket launcher in the central hall, quad on a high platform, red armor down a jump pad, a lava trench, three levels.",
+      "seed": 1107,
+      "expected_requests": [
+        "game quake3",
+        "mode deathmatch",
+        "8 players",
+        "theme gothic",
+        "9 rooms",
+        "rocket launcher in central hall",
+        "quad damage on high platform",
+        "red armor via jump pad",
+        "jump pad",
+        "lava",
+        "3 floor levels"
+      ],
+      "notes": ""
+    },
+    {
+      "id": "q3-ffa-s2",
+      "target": "q3-ffa",
+      "game": "q3",
+      "mode": "ffa",
+      "category": "specific",
+      "prompt": "Q3A FFA, 6 players, 7 rooms, base theme, railgun on the backside catwalk, mega health out in the open, plasma gun near the water, loops everywhere.",
+      "seed": 1108,
+      "expected_requests": [
+        "game quake3",
+        "mode deathmatch",
+        "6 players",
+        "7 rooms",
+        "theme techbase",
+        "railgun on backside catwalk",
+        "mega health exposed",
+        "plasma gun near water",
+        "water",
+        "loop route"
+      ],
+      "notes": ""
+    },
+    {
+      "id": "q3-ffa-s3",
+      "target": "q3-ffa",
+      "game": "q3",
+      "mode": "ffa",
+      "category": "specific",
+      "prompt": "Quake III FFA for 4-6 players, 6 rooms, space platform with sky, jump pads between levels, lightning gun, yellow armor.",
+      "seed": 1109,
+      "expected_requests": [
+        "game quake3",
+        "mode deathmatch",
+        "4-6 players",
+        "6 rooms",
+        "theme space",
+        "outdoor sky",
+        "jump pad",
+        "2 floor levels",
+        "lightning gun",
+        "yellow armor"
+      ],
+      "notes": ""
+    },
+    {
+      "id": "q3-ffa-c1",
+      "target": "q3-ffa",
+      "game": "q3",
+      "mode": "ffa",
+      "category": "contradictory",
+      "prompt": "Quake 3 free for all with 32 players in a 2-room map",
+      "seed": 1110,
+      "expected_requests": [
+        "game quake3",
+        "mode deathmatch",
+        "32 players",
+        "2 rooms",
+        "conflict surfaced"
+      ],
+      "notes": "Contradiction: 32 players in 2 rooms."
+    },
+    {
+      "id": "q3-ffa-c2",
+      "target": "q3-ffa",
+      "game": "q3",
+      "mode": "ffa",
+      "category": "contradictory",
+      "prompt": "a flat Quake 3 FFA map with extreme verticality",
+      "seed": 1111,
+      "expected_requests": [
+        "game quake3",
+        "mode deathmatch",
+        "flat",
+        "extreme verticality",
+        "conflict surfaced"
+      ],
+      "notes": "Contradiction: flat vs extreme verticality."
+    },
+    {
+      "id": "q3-tourney-v1",
+      "target": "q3-tourney",
+      "game": "q3",
+      "mode": "tourney",
+      "category": "vague",
+      "prompt": "a quake 3 tourney map",
+      "seed": 1112,
+      "expected_requests": [
+        "game quake3",
+        "mode duel"
+      ],
+      "notes": "'tourney' is Quake 3's own name for duel."
+    },
+    {
+      "id": "q3-tourney-v2",
+      "target": "q3-tourney",
+      "game": "q3",
+      "mode": "tourney",
+      "category": "vague",
+      "prompt": "Quake III tournament map",
+      "seed": 1113,
+      "expected_requests": [
+        "game quake3",
+        "mode duel"
+      ],
+      "notes": ""
+    },
+    {
+      "id": "q3-tourney-v3",
+      "target": "q3-tourney",
+      "game": "q3",
+      "mode": "tourney",
+      "category": "vague",
+      "prompt": "q3 1v1 map",
+      "seed": 1114,
+      "expected_requests": [
+        "game quake3",
+        "mode duel"
+      ],
+      "notes": ""
+    },
+    {
+      "id": "q3-tourney-s1",
+      "target": "q3-tourney",
+      "game": "q3",
+      "mode": "tourney",
+      "category": "specific",
+      "prompt": "Quake 3 tourney map, 5 rooms, gothic, red armor and mega health far apart, rocket launcher in the center, railgun on the upper ledge, two floors with a jump pad.",
+      "seed": 1115,
+      "expected_requests": [
+        "game quake3",
+        "mode duel",
+        "5 rooms",
+        "theme gothic",
+        "red armor",
+        "mega health",
+        "red armor and mega health far apart",
+        "rocket launcher in center",
+        "railgun on upper ledge",
+        "2 floor levels",
+        "jump pad"
+      ],
+      "notes": ""
+    },
+    {
+      "id": "q3-tourney-s2",
+      "target": "q3-tourney",
+      "game": "q3",
+      "mode": "tourney",
+      "category": "specific",
+      "prompt": "Q3A tourney, 6 rooms, base theme, tight loops, yellow armor over the lava, lightning gun near the stairs, no quad.",
+      "seed": 1116,
+      "expected_requests": [
+        "game quake3",
+        "mode duel",
+        "6 rooms",
+        "theme techbase",
+        "loop route",
+        "yellow armor over lava",
+        "lava",
+        "lightning gun near stairs",
+        "no quad damage"
+      ],
+      "notes": ""
+    },
+    {
+      "id": "q3-tourney-s3",
+      "target": "q3-tourney",
+      "game": "q3",
+      "mode": "tourney",
+      "category": "specific",
+      "prompt": "Quake III duel for 2 players, 4 rooms, space with sky, plasma gun and shotgun, red armor on a jump pad.",
+      "seed": 1117,
+      "expected_requests": [
+        "game quake3",
+        "mode duel",
+        "2 players",
+        "4 rooms",
+        "theme space",
+        "outdoor sky",
+        "plasma gun",
+        "shotgun",
+        "red armor on jump pad",
+        "jump pad"
+      ],
+      "notes": ""
+    },
+    {
+      "id": "q3-tourney-c1",
+      "target": "q3-tourney",
+      "game": "q3",
+      "mode": "tourney",
+      "category": "contradictory",
+      "prompt": "Quake 3 tourney map for 16 players",
+      "seed": 1118,
+      "expected_requests": [
+        "game quake3",
+        "mode duel",
+        "16 players",
+        "conflict surfaced"
+      ],
+      "notes": "Contradiction: tourney is two players."
+    },
+    {
+      "id": "q3-tourney-c2",
+      "target": "q3-tourney",
+      "game": "q3",
+      "mode": "tourney",
+      "category": "contradictory",
+      "prompt": "Quake 3 tourney campaign with monsters and a boss",
+      "seed": 1119,
+      "expected_requests": [
+        "game quake3",
+        "mode duel",
+        "mode single_player",
+        "monsters",
+        "conflict surfaced"
+      ],
+      "notes": "Contradiction: stock Quake 3 has no campaign monsters."
+    },
+    {
+      "id": "q3-tdm-v1",
+      "target": "q3-tdm",
+      "game": "q3",
+      "mode": "tdm",
+      "category": "vague",
+      "prompt": "a quake 3 team deathmatch map",
+      "seed": 1120,
+      "expected_requests": [
+        "game quake3",
+        "mode team_deathmatch"
+      ],
+      "notes": ""
+    },
+    {
+      "id": "q3-tdm-v2",
+      "target": "q3-tdm",
+      "game": "q3",
+      "mode": "tdm",
+      "category": "vague",
+      "prompt": "Quake III TDM",
+      "seed": 1121,
+      "expected_requests": [
+        "game quake3",
+        "mode team_deathmatch"
+      ],
+      "notes": ""
+    },
+    {
+      "id": "q3-tdm-v3",
+      "target": "q3-tdm",
+      "game": "q3",
+      "mode": "tdm",
+      "category": "vague",
+      "prompt": "q3 team map for 4v4",
+      "seed": 1122,
+      "expected_requests": [
+        "game quake3",
+        "mode team_deathmatch",
+        "4v4 players"
+      ],
+      "notes": ""
+    },
+    {
+      "id": "q3-tdm-s1",
+      "target": "q3-tdm",
+      "game": "q3",
+      "mode": "tdm",
+      "category": "specific",
+      "prompt": "Quake 3 team deathmatch 4v4, 10 rooms, gothic, mirrored halves, red armor on each side, quad in the center, railgun on the bridge over lava.",
+      "seed": 1123,
+      "expected_requests": [
+        "game quake3",
+        "mode team_deathmatch",
+        "4v4 players",
+        "10 rooms",
+        "theme gothic",
+        "mirrored symmetry",
+        "red armor per side",
+        "quad damage in center",
+        "railgun on bridge",
+        "lava"
+      ],
+      "notes": ""
+    },
+    {
+      "id": "q3-tdm-s2",
+      "target": "q3-tdm",
+      "game": "q3",
+      "mode": "tdm",
+      "category": "specific",
+      "prompt": "Q3A TDM, 8 players, 8 rooms, base theme, mega health in the middle on a jump pad, rocket launcher near the water, three levels.",
+      "seed": 1124,
+      "expected_requests": [
+        "game quake3",
+        "mode team_deathmatch",
+        "8 players",
+        "8 rooms",
+        "theme techbase",
+        "mega health on jump pad",
+        "jump pad",
+        "rocket launcher near water",
+        "water",
+        "3 floor levels"
+      ],
+      "notes": ""
+    },
+    {
+      "id": "q3-tdm-s3",
+      "target": "q3-tdm",
+      "game": "q3",
+      "mode": "tdm",
+      "category": "specific",
+      "prompt": "Quake III team deathmatch for 3v3, 7 rooms, space with sky, symmetric, plasma gun and lightning gun, yellow armor per side.",
+      "seed": 1125,
+      "expected_requests": [
+        "game quake3",
+        "mode team_deathmatch",
+        "3v3 players",
+        "7 rooms",
+        "theme space",
+        "outdoor sky",
+        "mirrored symmetry",
+        "plasma gun",
+        "lightning gun",
+        "yellow armor per side"
+      ],
+      "notes": ""
+    },
+    {
+      "id": "q3-tdm-c1",
+      "target": "q3-tdm",
+      "game": "q3",
+      "mode": "tdm",
+      "category": "contradictory",
+      "prompt": "Quake 3 team deathmatch for 2 players",
+      "seed": 1126,
+      "expected_requests": [
+        "game quake3",
+        "mode team_deathmatch",
+        "2 players",
+        "conflict surfaced"
+      ],
+      "notes": "Contradiction: two players cannot form teams in a team match."
+    },
+    {
+      "id": "q3-tdm-c2",
+      "target": "q3-tdm",
+      "game": "q3",
+      "mode": "tdm",
+      "category": "contradictory",
+      "prompt": "Quake 3 TDM single-player campaign with monsters",
+      "seed": 1127,
+      "expected_requests": [
+        "game quake3",
+        "mode team_deathmatch",
+        "mode single_player",
+        "monsters",
+        "conflict surfaced"
+      ],
+      "notes": "Contradiction: TDM vs campaign; stock Quake 3 has no monsters."
+    },
+    {
+      "id": "q3-ctf-v1",
+      "target": "q3-ctf",
+      "game": "q3",
+      "mode": "ctf",
+      "category": "vague",
+      "prompt": "a quake 3 ctf map",
+      "seed": 1128,
+      "expected_requests": [
+        "game quake3",
+        "mode capture_the_flag",
+        "flags",
+        "team spawns"
+      ],
+      "notes": ""
+    },
+    {
+      "id": "q3-ctf-v2",
+      "target": "q3-ctf",
+      "game": "q3",
+      "mode": "ctf",
+      "category": "vague",
+      "prompt": "Quake III capture the flag",
+      "seed": 1129,
+      "expected_requests": [
+        "game quake3",
+        "mode capture_the_flag",
+        "flags",
+        "team spawns"
+      ],
+      "notes": ""
+    },
+    {
+      "id": "q3-ctf-v3",
+      "target": "q3-ctf",
+      "game": "q3",
+      "mode": "ctf",
+      "category": "vague",
+      "prompt": "q3 ctf map for a 4v4",
+      "seed": 1130,
+      "expected_requests": [
+        "game quake3",
+        "mode capture_the_flag",
+        "4v4 players",
+        "flags",
+        "team spawns"
+      ],
+      "notes": ""
+    },
+    {
+      "id": "q3-ctf-s1",
+      "target": "q3-ctf",
+      "game": "q3",
+      "mode": "ctf",
+      "category": "specific",
+      "prompt": "Quake 3 CTF, 5v5, 12 rooms, gothic, red and blue bases at opposite ends, each flag on a raised platform, rocket launcher and railgun in each base, quad in the center, jump pads.",
+      "seed": 1131,
+      "expected_requests": [
+        "game quake3",
+        "mode capture_the_flag",
+        "5v5 players",
+        "12 rooms",
+        "theme gothic",
+        "flags",
+        "team spawns",
+        "flags on raised platforms",
+        "rocket launcher per base",
+        "railgun per base",
+        "quad damage in center",
+        "jump pad"
+      ],
+      "notes": ""
+    },
+    {
+      "id": "q3-ctf-s2",
+      "target": "q3-ctf",
+      "game": "q3",
+      "mode": "ctf",
+      "category": "specific",
+      "prompt": "Q3A capture the flag for 8 players, base theme, 10 rooms, three lanes, a lava moat, red armor near each flag, mega health in the middle.",
+      "seed": 1132,
+      "expected_requests": [
+        "game quake3",
+        "mode capture_the_flag",
+        "8 players",
+        "theme techbase",
+        "10 rooms",
+        "flags",
+        "team spawns",
+        "three lanes",
+        "lava",
+        "red armor near each flag",
+        "mega health in middle"
+      ],
+      "notes": ""
+    },
+    {
+      "id": "q3-ctf-s3",
+      "target": "q3-ctf",
+      "game": "q3",
+      "mode": "ctf",
+      "category": "specific",
+      "prompt": "Quake III CTF, 6v6, 14 rooms, a space map with sky, symmetric, a water tunnel route, plasma gun in the mid.",
+      "seed": 1133,
+      "expected_requests": [
+        "game quake3",
+        "mode capture_the_flag",
+        "6v6 players",
+        "14 rooms",
+        "theme space",
+        "outdoor sky",
+        "mirrored symmetry",
+        "flags",
+        "team spawns",
+        "water",
+        "plasma gun in middle"
+      ],
+      "notes": ""
+    },
+    {
+      "id": "q3-ctf-c1",
+      "target": "q3-ctf",
+      "game": "q3",
+      "mode": "ctf",
+      "category": "contradictory",
+      "prompt": "Quake 3 CTF map for one player with no flags",
+      "seed": 1134,
+      "expected_requests": [
+        "game quake3",
+        "mode capture_the_flag",
+        "1 players",
+        "no flags",
+        "conflict surfaced"
+      ],
+      "notes": "Contradiction: CTF with one player and no flags."
+    },
+    {
+      "id": "q3-ctf-c2",
+      "target": "q3-ctf",
+      "game": "q3",
+      "mode": "ctf",
+      "category": "contradictory",
+      "prompt": "Quake 3 capture the flag duel for 2 players in 32 rooms",
+      "seed": 1135,
+      "expected_requests": [
+        "game quake3",
+        "mode capture_the_flag",
+        "mode duel",
+        "2 players",
+        "32 rooms",
+        "conflict surfaced"
+      ],
+      "notes": "Contradiction: CTF vs duel; 2 players in 32 rooms."
+    },
+    {
+      "id": "q2-showcase-hero",
+      "target": "q2-showcase",
+      "game": "q2",
+      "mode": "dm",
+      "category": "specific",
+      "prompt": "Quake 2 deathmatch for 2–8 players that also works for 1v1. A Strogg refinery cut into a canyon wall: three floor levels, a central furnace landmark, warm furnace interiors against a cold outdoor sky. Railgun on the backside, Quad in a contested exposed spot, Body Armor and Mega Health far apart.",
+      "seed": 4242,
+      "expected_requests": [
+        "game quake2",
+        "mode deathmatch",
+        "2-8 players",
+        "also works for 1v1",
+        "theme strogg refinery",
+        "canyon wall setting",
+        "3 floor levels",
+        "central furnace landmark",
+        "warm interior vs cold exterior lighting",
+        "outdoor sky",
+        "railgun on backside",
+        "quad damage in contested exposed spot",
+        "body armor",
+        "mega health",
+        "body armor and mega health far apart"
+      ],
+      "notes": "Hero showcase prompt, verbatim (contains an en dash U+2013 in '2–8'). Expected primary mode is deathmatch; '1v1' is a secondary compatibility request."
+    },
+    {
+      "id": "q2-showcase-vague",
+      "target": "q2-showcase",
+      "game": "q2",
+      "mode": "dm",
+      "category": "vague",
+      "prompt": "a Quake II deathmatch map",
+      "seed": 4242,
+      "expected_requests": [
+        "game quake2",
+        "mode deathmatch"
+      ],
+      "notes": "Vague showcase control with the same seed as the hero prompt."
+    }
+  ]
+}

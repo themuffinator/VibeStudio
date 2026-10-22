@@ -192,21 +192,27 @@ Editor profiles and workflows follow the behaviour (never the code) of
 [QeRadiant's documented controls](https://icculus.org/gtkradiant/documentation/q3radiant_manual/appndx/sskey_dl.htm)
 and other editors. Optional AI connectors target [OpenAI](https://platform.openai.com/docs/quickstart),
 [Claude](https://platform.claude.com/docs/en/home), [Gemini](https://ai.google.dev/api),
-[ElevenLabs](https://elevenlabs.io/docs/overview/intro) and [Meshy](https://docs.meshy.ai/en).
+[ElevenLabs](https://elevenlabs.io/docs/overview/intro) and [Meshy](https://docs.meshy.ai/en);
+[Claude Code](https://code.claude.com/docs/en/cli-reference) and [Codex](https://github.com/openai/codex)
+answer through your own login, and builds with `-Dggml=enabled` link [llama.cpp](https://github.com/ggml-org/llama.cpp)
+and [ggml](https://github.com/ggml-org/ggml) (MIT, `c1d0e7a`) for local GGUF models.
 The release flow follows the pattern of [FnQL](https://github.com/themuffinator/FnQL)'s
 versioning and changelog tooling (pattern only; the scripts are original).
 
 <details>
 <summary><b>Full attribution</b>: every reference, specification and pattern, with licences and review dates</summary>
 
-The level generator follows the pipeline design of
-[Quake-MapGen](https://github.com/themuffinator/Quake-MapGen) (MIT, `1252548`,
-2026-08-26, reviewed 2026-10-06), and the texture generator the prompt design
+The Map Generator in `src/mapgen` is
+[Quake-MapGen](https://github.com/themuffinator/Quake-MapGen) (MIT, `1252548`
+plus its work to 2026-10-16), imported on 2026-10-22 and developed here; see
+[Map Generator](docs/CREDITS.md#map-generator-quake-mapgen-2026-10-22). The
+studio's own level generator follows its pipeline design (reviewed
+2026-10-06), and the texture generator the prompt design
 and derived-layer idea of [TexAI](https://github.com/themuffinator/TexAI)
 (GPL-3.0, `7f56a4b`, 2026-02-14); the sound synthesizer follows the preset
 kinds and voice model of DrPetter's [sfxr](https://drpetter.se/project_sfxr.html)
-(MIT, 2007, reviewed 2026-10-06). All are original implementations with no
-code copied. See [Generative Level, Texture, And Sound Design](docs/CREDITS.md#generative-level-texture-and-sound-design-2026-10-06).
+(MIT, 2007, reviewed 2026-10-06). Those three are original implementations
+with no code copied. See [Generative Level, Texture, And Sound Design](docs/CREDITS.md#generative-level-texture-and-sound-design-2026-10-06).
 
 The model decoders and writers for idTech 1 to idTech 4 formats follow the
 public layouts and behaviour of the [Doom 3](https://github.com/id-Software/DOOM-3),

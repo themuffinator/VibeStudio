@@ -1,0 +1,156 @@
+{
+  "schema_version": 1,
+  "id": "switchback-v1",
+  "date": "2026-09-10",
+  "status": "compiled_static_validated_runtime_pending",
+  "construction": "Original explicit qmg_core recipe; not an automatic CLI output or trained model",
+  "map": "qmg_switchback",
+  "intended_mode": "stock_q2_deathmatch",
+  "intended_players": [
+    4,
+    6
+  ],
+  "local_artifacts": "out/switchback",
+  "recipe": "tools/map_recipes/switchback.cpp",
+  "artifact_hashes": {
+    "source_sha256": "dbc21872eaccdb4d3c55178b14c76936294ef5ca10a8c7cd8038b0726780a506",
+    "bsp_sha256": "47c630ec3c7306b10bc816ac24426c656c93e45813f6a8e91fdc7e6bf009e41b",
+    "recipe_sha256": "c8fcc482f2e3f17aeaea6cb8d727f19c40d9081b74a259c4478758d236776c2d",
+    "recipe_support_sha256": "ab4bb23adf2eb7c03b04897a713012d0a236c85df113b3c55620bc651c2e2f86",
+    "core_sha256": "b6c86e0cd1236f56daaefd19e8f92ef1b1a71317724c29c1bd16298b89765d0b",
+    "profile_sha256": "4f833d1a09eab67c719175310e101befcc9ad43d330985e7bc7a7d645f65d935"
+  },
+  "reference_observations": [
+    {
+      "name": "Aerowalk",
+      "author": "Mattias \"Preacher\" Konradsson",
+      "archive_path": "aerowalk/pack/maps/aeroq2.bsp",
+      "sha256": "1a163c94cda63ef856a19861957983f79ba57a72b6d86fe492cacb6ed350cddc",
+      "combat_height_p90_p10": 352,
+      "sampled_world_sightline_p50_rounded": 135.76
+    },
+    {
+      "name": "Powertrip",
+      "author": "Dennis \"headshot\" Kaltwasser",
+      "archive_path": "ptrip/pack/maps/ptrip.bsp",
+      "sha256": "7e237f4d0d6f018d58bd06969fd0bbe09479b6aa89665d349e19f47c9ed7e2f2",
+      "combat_height_p90_p10": 330.2,
+      "sampled_world_sightline_p50_rounded": 132.23
+    },
+    {
+      "name": "The Rage",
+      "author": "Sten \"ztn\" Uusvali",
+      "archive_path": "ztn2dm3/pack/maps/ztn2dm3.bsp",
+      "sha256": "18a265da5b4be7664b22e6eff80adca7ce4c41da3ee1e152479b24b9ea36a1e2",
+      "combat_height_p90_p10": 302.2,
+      "sampled_world_sightline_p50_rounded": 138.4
+    }
+  ],
+  "static_checks": {
+    "sealed": true,
+    "full_vis": true,
+    "lighting": "extra4, one bounce, soft shadows; no empty lightmaps",
+    "path_checks": 264,
+    "standing_hull_vs_brush_checks": 7128,
+    "gameplay_anchors_checked": 33,
+    "layout_analysis": {
+      "structural_errors": 0,
+      "leak_errors": 0,
+      "navigation_errors": 0,
+      "visibility_errors": 0,
+      "lighting_errors": 0,
+      "timing_errors": 0,
+      "warnings": 0
+    },
+    "compiled_spawn_los": {
+      "tested_pairs": 28,
+      "visible_pairs": [],
+      "invalid_eye_entities": []
+    }
+  },
+  "comparison_to_crosscurrent": {
+    "baseline": "Crosscurrent",
+    "candidate": "Switchback",
+    "metrics": {
+      "combat_height_p90_p10": {
+        "before": 256.0,
+        "after": 384.0
+      },
+      "combat_height_bands_128": {
+        "before": 2,
+        "after": 3
+      },
+      "world_diagonal": {
+        "before": 2877.865875957391,
+        "after": 2783.4275632751787
+      },
+      "upward_surface_area": {
+        "before": 3305472.0,
+        "after": 2847936.0
+      },
+      "sampled_world_sightline_p50": {
+        "before": 259.083924626751,
+        "after": 154.3246391493337
+      },
+      "sampled_world_sightline_p90": {
+        "before": 739.2,
+        "after": 580.4403864499973
+      },
+      "spawn_pair_world_los_fraction": {
+        "before": 0.07142857142857142,
+        "after": 0.0
+      }
+    },
+    "room_connections": {
+      "before": 8,
+      "after": 10
+    },
+    "room_graph_cycle_rank": {
+      "before": 4,
+      "after": 6
+    },
+    "articulation_rooms": {
+      "before": 0,
+      "after": 0
+    },
+    "limits": [
+      "Multiple design variables changed; this is not a controlled causal comparison.",
+      "Graph cost omits approach distances within bound areas and can be zero for distinct anchors; do not report it as exact travel time or use small differences as quality claims.",
+      "Point LOS is not a match, spawn-safety guarantee or rendered lighting check."
+    ],
+    "raw_graph_cost_median": {
+      "before": 2172.0,
+      "after": 2145.5
+    }
+  },
+  "cohort": "dm_small",
+  "observations": [
+    "Five differently sized spaces replace the repeated four-room arrangement.",
+    "Ten physical connections include separate lower/middle and middle/upper links between two room pairs.",
+    "Two independent lower-to-middle Turbine ascents feed partial galleries; the third floor is local to Turbine and Relay.",
+    "Lower and middle outer routes allow travel around the main atrium.",
+    "Final XY compression preserves all 16-unit stair rises and 33-34-unit treads.",
+    "Sampled sightlines shortened and all spawn eye pairs are screened, but runtime safety is unverified."
+  ],
+  "hypotheses_pending_runtime": [
+    "Unequal room shapes and staggered approaches make route choices easier to distinguish.",
+    "A second ascent limits control from a single middle landing.",
+    "The separate upper Turbine-Relay link creates useful armor counterplay.",
+    "Quad on the Loading mezzanine pulls traffic toward the east bypass without concentrating all major-item control."
+  ],
+  "next_controlled_variants": [
+    "Remove only the second Turbine ascent.",
+    "Close only the upper Turbine-Relay connection.",
+    "Move only Quad to a lower Loading position."
+  ],
+  "new_unrelated_issue": "Quality graph timing omits intra-area approach distance and may be zero for distinct anchors on the same node. Correct and verify endpoint costs before treating timing as a ranking objective.",
+  "inference_limits": [
+    "Multiple design variables changed; this is not a controlled causal comparison.",
+    "Graph cost omits approach distances within bound areas and can be zero for distinct anchors; do not report it as exact travel time or use small differences as quality claims.",
+    "Point LOS is not a match, spawn-safety guarantee or rendered lighting check.",
+    "No engine rendering, traversal or multiplayer playtest.",
+    "No model weights trained; no archive geometry copied.",
+    "Not admitted to the reference calibration profile.",
+    "Archive AAS data provides no usable reference reachability proof."
+  ]
+}

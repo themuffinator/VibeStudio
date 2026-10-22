@@ -11,6 +11,7 @@
 #include <QGuiApplication>
 #include <QHash>
 #include <QJsonArray>
+#include <QJsonDocument>
 #include <QPainter>
 #include <QPainterPath>
 #include <QQueue>
@@ -2232,6 +2233,13 @@ QJsonObject levelGenerationSpecJson(const LevelGenerationSpec& spec)
 		{QStringLiteral("seed"), double(spec.seed)},
 		{QStringLiteral("textures"), textures},
 		{QStringLiteral("wad"), spec.wad},
+		{QStringLiteral("generator"), spec.generator.isEmpty() ? QStringLiteral("studio") : spec.generator},
+		{QStringLiteral("format"), spec.format},
+		{QStringLiteral("intensity"), spec.intensity},
+		{QStringLiteral("candidates"), spec.candidates},
+		{QStringLiteral("repairIterations"), spec.repairIterations},
+		{QStringLiteral("switches"), QJsonArray::fromStringList(spec.switches)},
+		{QStringLiteral("ranker"), spec.ranker.isEmpty() ? QStringLiteral("scalar") : spec.ranker},
 	};
 }
 
@@ -2256,9 +2264,10 @@ QJsonObject levelGenerationReportJson(const LevelGenerationResult& result)
 		});
 	}
 	const LevelGenerationStatistics& stats = result.statistics;
-	return QJsonObject {
+	QJsonObject report {
 		{QStringLiteral("ok"), result.ok},
 		{QStringLiteral("error"), result.error},
+		{QStringLiteral("generator"), result.generator},
 		{QStringLiteral("format"), result.format},
 		{QStringLiteral("suggestedFileName"), result.suggestedFileName},
 		{QStringLiteral("mapName"), result.mapName},
@@ -2289,6 +2298,13 @@ QJsonObject levelGenerationReportJson(const LevelGenerationResult& result)
 		{QStringLiteral("notes"), QJsonArray::fromStringList(result.notes)},
 		{QStringLiteral("warnings"), QJsonArray::fromStringList(result.warnings)},
 	};
+	if (!result.generatorReport.isEmpty()) {
+		// Quake-MapGen's own schema v4 report, and its analysis as read.
+		report.insert(QStringLiteral("dialect"), result.dialect);
+		report.insert(QStringLiteral("analysis"), QJsonArray::fromStringList(result.analysis));
+		report.insert(QStringLiteral("quakeMapgen"), QJsonDocument::fromJson(result.generatorReport).object());
+	}
+	return report;
 }
 
 QStringList levelGenerationSummaryLines(const LevelGenerationResult& result)
@@ -2314,6 +2330,10 @@ QStringList levelGenerationSummaryLines(const LevelGenerationResult& result)
 					 .arg(stats.lights)
 					 .arg(stats.monsters)
 					 .arg(stats.items);
+	}
+	// Quake-MapGen's quality verdict; the rest of its analysis is under Details.
+	if (!result.analysis.isEmpty()) {
+		lines << result.analysis.first();
 	}
 	return lines;
 }

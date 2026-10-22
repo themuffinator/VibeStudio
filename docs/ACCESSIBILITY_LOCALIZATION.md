@@ -1644,6 +1644,35 @@ cards, and detail tabs. Visible shader, sprite, code, AI, and extension strings
 route through Qt translation APIs; shader directives, CLI flags, extension IDs,
 file paths, and format identifiers remain stable technical identifiers.
 
+Under **Settings** > **AI and Automation** > **Text Model**, the field
+labels and accessible names follow the connector: **Program** (program path or
+command line) and **Sign-in** for a harness, and **Model** as a GGUF model file
+for the Local GGUF connector, whose endpoint row is hidden. The **Browse**
+buttons beside **Model** and **Program** are tool buttons with accessible names
+("Choose a GGUF model file", "Choose the tool's program") and appear only for
+the connectors they serve. The **Sign-in**/**Key** line says the tool keeps its
+own login, or that a GGUF model needs none; in a build without ggml, it says
+how to get the runtime. **Status** is a word-wrapped label, named "Text
+connection status", whose accessible description repeats what text features
+use now. Preferred
+Connectors entries the settings rule out are disabled and carry their reason
+as text after the name ("(needs cloud connectors)", "(not in this build)") and
+as a tooltip, so the state does not rely on greyed colour alone; the planned
+rows say "(planned)" in their labels. All of these strings route through
+`tr()`; connector ids stay technical identifiers.
+
+The Generate Level dialog's **Generator**, **Map format** and **Intensity**
+choices, its **Analysis** and **Report** tabs and **Save Report…** have
+accessible names and route through `tr()`. Each generator's **AI Settings…**
+button is named "Open AI settings" and is hidden, not disabled, while the AI
+path is not chosen. Controls the chosen generator does
+not read are hidden rather than disabled, so keyboard focus skips them; the
+items a generator cannot use (**Doom**, **Capture the flag**) stay listed but
+disabled with a tooltip saying why. Known gap: Quake-MapGen's finding codes,
+finding messages and error messages come from the generator library in
+English, inside translated sentences; its report keys are technical
+identifiers.
+
 The Materials workbench exposes its node graph to screen readers as a list of
 nodes (`QAccessibleWidget` children), each named by its title and described by
 its subtitle, what feeds it and what it feeds; selection and focus changes are

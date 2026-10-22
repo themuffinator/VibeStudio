@@ -1,0 +1,701 @@
+{
+  "schema_version": 1,
+  "id": "counterweight-v1",
+  "date": "2026-09-13",
+  "status": "compiled_static_and_dedicated_initialization_validated_playtesting_pending",
+  "construction": "Original explicit qmg_core source recipe; no automatic CLI motif selection and no model-weight training",
+  "map": "qmg_counterweight",
+  "intended_mode": "stock_q2_deathmatch",
+  "intended_players": [
+    4,
+    6
+  ],
+  "local_artifacts": "out/counterweight",
+  "recipe": "tools/map_recipes/counterweight.cpp",
+  "study": "docs/Q2_COUNTERWEIGHT_STUDY.md",
+  "artifact_hashes": {
+    "source_sha256": "92767c3918617b065fe3b6f3676f969c352ced0e53ecbd5ff8f047e8fb9c5a6c",
+    "bsp_sha256": "cbf6c90de2baa23bf04e6f47f7d35a6286582febddf9b0c0c7e350c07014ebca",
+    "recipe_sha256": "b6a667f8d876873fdf4699d31e0eefba1c168f674a8eba5ab0546ecb6e390898",
+    "recipe_support_sha256": "182d582ce9ef9995bb8d8dadb8d1defd9d1538ac4d1f50c39556c9dd2aae92ff",
+    "core_sha256": "0ca42f29ddcf963c788d22147e5cad6d7e0ae3cf0ddc7bfa369600c4660494ef",
+    "profile_sha256": "4f833d1a09eab67c719175310e101befcc9ad43d330985e7bc7a7d645f65d935"
+  },
+  "canonical_layout_sha256": "2ed81861b49aed5febc955474e5457bd4a4e3f29f00adcb0ff5ad6af9ae5ae9d",
+  "evidence_files": [
+    {
+      "path": "out/counterweight/layout.json",
+      "sha256": "b6b52fbcad3902a23199d8e7e0d0b950c3645781c182c008d3de49508f2262a7"
+    },
+    {
+      "path": "out/counterweight/compiled-analysis.json",
+      "sha256": "b116dbc995433015a27729de6cc88245125316c14837d1b38423ad19464dd5f4"
+    },
+    {
+      "path": "out/counterweight/verification.json",
+      "sha256": "223c0eab038d5c730ec4cc80d4c55fc397a96915ef0474c7b55dd36cd55e80e0"
+    },
+    {
+      "path": "out/counterweight/qmg_counterweight.zip",
+      "sha256": "76e59681ae7b3ee61cab2069a61692e1e243dc6e3ded45d2a54e34ce6bed3ce6"
+    },
+    {
+      "path": "out/counterweight/generation.log",
+      "sha256": "8c6759fd21a85022a07656c718068591377034cc58eaeb25d0b58781825e43bc"
+    },
+    {
+      "path": "out/counterweight/qbsp.log",
+      "sha256": "80f27e188ac350414b5d83d50ea9a80a30e6bc2943ef82549b2d230b7f455620"
+    },
+    {
+      "path": "out/counterweight/vis.log",
+      "sha256": "cebb5a6a32c49af90556ba4617ce4c0d27bb99493adc168b2f3cc6c6f43f5210"
+    },
+    {
+      "path": "out/counterweight/light.log",
+      "sha256": "3bac05738b2e2a4ec08b34b5e60cf2d729fbc371317e375a5208d10a0ef93a33"
+    },
+    {
+      "path": "out/counterweight/verification.log",
+      "sha256": "96c8b3cfe967a044e6346f1777dd3de3e0eaa4ce2f529669eecc7a1c6dfa577a"
+    }
+  ],
+  "byte_reproducibility": {
+    "claimed": false,
+    "observation": "Final full build changed lighting bytes while source MAP, canonical layout and compiled analysis remained unchanged. Final smoke and preview evidence bind the exact delivered BSP."
+  },
+  "research": {
+    "record": {
+      "path": "knowledge/q2/traversal-study.json",
+      "sha256": "0194e174c4508da4550b36ffc1aa135424018fd8e1c215d459598ebf214f9712"
+    },
+    "references": [
+      {
+        "map": "ztn2dm1",
+        "title": "Painkiller",
+        "authors": [
+          "Sten 'ztn' Uusvali"
+        ],
+        "bsp": {
+          "archive_relative_path": "ztn2dm1/pack/maps/ztn2dm1.bsp",
+          "sha256": "2f8a3bab196b20193057919d600e91eca6a97322e8e0a3429abe2115f71ef0dc",
+          "current_bytes_verified": true
+        },
+        "partition": "reference"
+      },
+      {
+        "map": "card2dm1",
+        "title": "Torn Glory",
+        "authors": [
+          "Dan 'CardO' Shannon"
+        ],
+        "bsp": {
+          "archive_relative_path": "card2dm1/pack/maps/card2dm1.bsp",
+          "sha256": "fff80700ce171e611066bdd09b84bc2d0bb421ca736fe1eaf6b3dec7398b2c7f",
+          "current_bytes_verified": true
+        },
+        "partition": "reference"
+      },
+      {
+        "map": "koldduel1",
+        "title": "Bio Rust",
+        "authors": [
+          "kold"
+        ],
+        "bsp": {
+          "archive_relative_path": "koldduel1/pack/maps/koldduel1.bsp",
+          "sha256": "f176d92ef81b288dd9dc33336106d33ee9bfd13bf9acd6a985f8d88e0c7186dc",
+          "current_bytes_verified": true
+        },
+        "partition": "reference"
+      }
+    ],
+    "playbook": "docs/MAP_DESIGN_PLAYBOOK.md",
+    "mechanism_contract": "docs/Q2_MECHANISMS.md",
+    "translations": [
+      {
+        "reference": "ztn2dm1",
+        "observation": "Two physical lifts and two directed teleporter links create distinct ascent/arrival arrangements.",
+        "application": "Separate ordinary circulation, optional physical ascent and one committed remote arrival.",
+        "status": "design_hypothesis_not_runtime_validated"
+      },
+      {
+        "reference": "card2dm1",
+        "observation": "Faceted spaces coexist with a lift and a directed height shortcut; small rotating screens are not traversable doors.",
+        "application": "Author original faceted encounters and classify mechanisms by actual role.",
+        "status": "source_and_geometry_observation_not_quality_proof"
+      },
+      {
+        "reference": "koldduel1",
+        "observation": "Chamfered encounter boundaries and three lifts coexist without a teleporter.",
+        "application": "Treat encounter shape and traversal mechanisms as independent design variables in later controlled tests.",
+        "status": "design_hypothesis_not_runtime_validated"
+      }
+    ],
+    "rights": "No archive geometry, assets or external implementation copied. Torn Glory author restriction against using the map as a base is respected.",
+    "limits": [
+      "Reference AAS files have zero reachabilities and unverified BSP association.",
+      "No new reference-map engine play was performed.",
+      "Author/archive capacity conflicts for Torn Glory and Bio Rust remain unresolved."
+    ]
+  },
+  "static_checks": {
+    "bsp_version": 38,
+    "sealed": true,
+    "full_vis": true,
+    "lighting": "extra4, one bounce, soft shadows; no empty lightmaps",
+    "path_checks": 264,
+    "standing_hull_vs_brush_checks": 5544,
+    "gameplay_anchors_checked": 33,
+    "layout_analysis": {
+      "structural_errors": 0,
+      "leak_errors": 0,
+      "navigation_errors": 0,
+      "visibility_errors": 0,
+      "lighting_errors": 0,
+      "timing_errors": 0,
+      "warnings": 0
+    },
+    "native_textures_verified": [
+      "e1u1/btactmach0",
+      "e1u1/btactmach1",
+      "e1u1/btactmach2",
+      "e1u1/btactmach3",
+      "e1u1/ceil1_4",
+      "e1u1/flat1_1",
+      "e1u1/flat1_2",
+      "e1u1/floor3_1",
+      "e1u1/floor3_2",
+      "e1u1/ggrat12_2",
+      "e1u1/grate1_5",
+      "e1u1/stairs1_1"
+    ],
+    "compiled_spawn_los": {
+      "tested_pairs": 28,
+      "visible_pairs": [],
+      "invalid_eye_entities": []
+    },
+    "mechanism_checks": {
+      "ordinary_path_checks": 264,
+      "edge_counts": {
+        "walk": 148,
+        "step": 94,
+        "jump": 30,
+        "drop": 53,
+        "door": 0,
+        "lift": 2,
+        "teleporter": 1
+      },
+      "full_platform_sweep_clear": true,
+      "full_passenger_envelope_clear": true,
+      "lift_native_top_z": 256,
+      "lift_native_bottom_z": 16,
+      "lift_shaft_hull_samples": 11,
+      "teleporter_disc_support_samples": 18,
+      "teleporter_native_clearance_poses": [
+        [
+          544.0,
+          -96.0,
+          32.0
+        ],
+        [
+          -832.0,
+          192.0,
+          162.0
+        ]
+      ],
+      "ordinary_route_policy": "walk, step and bounded drop; lift, teleporter and jump edges excluded",
+      "runtime_activation_tested": false
+    },
+    "compiled_world_solid_prisms": 168,
+    "collision_method": "exact vertical convex prism versus AABB, positive-volume overlap",
+    "additional_compiled_traversal_hull_samples": 40
+  },
+  "repository_tests": {
+    "passed": 21,
+    "failed": 0,
+    "duration_seconds": 217.88,
+    "path": "out/counterweight/ctest.log",
+    "sha256": "019c72df3b822ebf3cca0069450829b734a781c0358b6e328d4022843e524a6f",
+    "after_final_shared_metadata_change": {
+      "passed": 4,
+      "failed": 0,
+      "duration_seconds": 1.94,
+      "path": "out/counterweight/final-recipe-tests.log",
+      "sha256": "51e73b81a57197a8580fb83ca836102cc56aeefeadafce8f956637bdca3efd93"
+    },
+    "final_end_to_end_build": "Passed generation, QBSP, full VIS, lighting, compiled inspection and preview export after the focused tests."
+  },
+  "preview": {
+    "kind": "analytical_layout_diagram",
+    "engine_render": false,
+    "states_passed": 24,
+    "path": "out/counterweight/preview-checks.json",
+    "sha256": "c433bad95786794ebcb028b1169f6259e5b59474e81fc9d2afe9366e0129739a",
+    "fragment_sha256": "09e8cc4f73bb42579a2ff54a4d8047c6bcad378a034339fdc2b3c00ac9f68ef9",
+    "wrapper_sha256": "c9d8c6cb0a8d48274d4628ea53bd1c983f7844ef5320f66d0677b241effe2fc1",
+    "bound_inputs": {
+      "layout.json": "b6b52fbcad3902a23199d8e7e0d0b950c3645781c182c008d3de49508f2262a7",
+      "compiled-analysis.json": "b116dbc995433015a27729de6cc88245125316c14837d1b38423ad19464dd5f4",
+      "counterweight-layout.html": "09e8cc4f73bb42579a2ff54a4d8047c6bcad378a034339fdc2b3c00ac9f68ef9",
+      "qmg_counterweight.bsp": "cbf6c90de2baa23bf04e6f47f7d35a6286582febddf9b0c0c7e350c07014ebca"
+    }
+  },
+  "dedicated_engine_smoke": {
+    "path": "out/counterweight/engine-smoke/engine-smoke.json",
+    "sha256": "4bd9a0ff188f5322dc99eacc6d17b1815fa602a2173d7bfc726176cc85552b48",
+    "ok": true,
+    "gates_passed": 16,
+    "bsp_sha256": "cbf6c90de2baa23bf04e6f47f7d35a6286582febddf9b0c0c7e350c07014ebca",
+    "engine": "Q2REPRO r4580~aeeb335f",
+    "source_commit": "aeeb335f9a4de296c73d66b39e2a1efcfe7ade0d",
+    "dependency_hashes": {
+      "q2reproded.exe": "6a41422ad60fc3e8679192feb45a9b56da225a29e8d4d09e2a9cd87d824c3053",
+      "gamex86_64.dll": "9f59a9f0c0c69e746cc0eec708920d8f5a52fcf843e74dee099af601a023a036"
+    },
+    "exit_code": 0,
+    "post_spawn_server_frames": 40,
+    "initial_settling_frames": 2,
+    "server_frame_milliseconds": 100,
+    "native_inhibited_entity_count": 0,
+    "matched_failure_diagnostics": [],
+    "client_launched": false,
+    "keyboard_mouse_input": false,
+    "rendering_captured": false,
+    "live_edict_state_dump": false,
+    "evidence": [
+      {
+        "path": "out/counterweight/engine-smoke/engine.log",
+        "sha256": "85005a5cf30b4bb4d814dffd7d30cea39bd3a027671a96de217c056f7fdfd9c0"
+      },
+      {
+        "path": "out/counterweight/engine-smoke/stdout.log",
+        "sha256": "ecd3f1b8c364d5c6536273b6ee76db1e914d08d65f7d84b874a9d10e0f56a47d"
+      },
+      {
+        "path": "out/counterweight/engine-smoke/stderr.log",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      {
+        "path": "out/counterweight/engine-smoke/profile.cfg",
+        "sha256": "4922c93f62f6e43da12989f7ff4896ea541174a83fa4fb2c573ba065137c106b"
+      },
+      {
+        "path": "out/counterweight/engine-smoke/authored-entities.ent",
+        "sha256": "a0265f704287c19bffb2b094747aaf24ea32edf96dd0b5b23671b7083c86cbb2"
+      }
+    ],
+    "controls": [
+      {
+        "path": "out/counterweight/engine-smoke/controls/control-spillway/engine-smoke.json",
+        "sha256": "7b1f1f50dd92bd113b704e6866b1361fbaeef07625bf8da000a10f1e3dacf403",
+        "expected_acceptance": true,
+        "observed_acceptance": true,
+        "bsp_sha256": "77f23cf645ffac919bfc70c8093f44889aa873b80d70a8cdf1761e06535d01b0",
+        "matched_failure_diagnostics": []
+      },
+      {
+        "path": "out/counterweight/engine-smoke/controls/control-baditem/engine-smoke.json",
+        "sha256": "887335adb01040c3e6dd53d4f53af2475e997131a4f7807616010c0f8b0d4c89",
+        "expected_acceptance": false,
+        "observed_acceptance": false,
+        "bsp_sha256": "0d0ff88c751c412ed9f5bb577031729c263b38b7764a37b748f8e5f8eadfd676",
+        "matched_failure_diagnostics": [
+          "droptofloor: weapon_rocketlauncher startsolid at (-592 -224 -8)"
+        ]
+      }
+    ],
+    "negative_fixture_transformation": {
+      "path": "out/counterweight/engine-smoke/controls/create-negative-control.py",
+      "sha256": "4064151341d1a67219d222425b517394cb5e4a80e40a26f6a55df1a9d62323f3"
+    },
+    "limits": [
+      "Dedicated server only: no engine render target or lighting/readability evidence.",
+      "No connected players: no spawn selection, pickup contact, traversal, mover activation or teleporter-use test.",
+      "Checks native entity initialization and scheduled autonomous physics ticks; absence of diagnostics is a smoke result, not a balance or reachability proof.",
+      "dumpents exports the authored BSP entity text, not live edict origins or mover state.",
+      "The standard legacy module exposes no live entity-state dump server command; lift initial state is not established by this check.",
+      "Read-only assets and a copied executable/module are local test dependencies, not bundled map content or project-linked libraries."
+    ],
+    "driver": {
+      "path": "tools/map_recipes/engine_smoke.py",
+      "sha256": "7f886dcf892858d8d65251121d6235b786c49191be61c898ca4b40fa43a633a5"
+    },
+    "negative_fixture": {
+      "path": "out/counterweight/engine-smoke/controls/qmg_smoke_baditem.bsp",
+      "sha256": "0d0ff88c751c412ed9f5bb577031729c263b38b7764a37b748f8e5f8eadfd676"
+    }
+  },
+  "topology": {
+    "rooms": 5,
+    "connections": 8,
+    "cycle_rank": 4,
+    "articulation_rooms": 0,
+    "maximum_incident_degree": 5,
+    "incident_degree_by_room": {
+      "Counterweight Hall": 5,
+      "Kiln": 3,
+      "Spool": 3,
+      "Switchroom": 3,
+      "Service Bay": 2
+    },
+    "prior_maximum_incident_degree": 4,
+    "floors": [
+      0,
+      128,
+      256
+    ],
+    "stair_runs": 5,
+    "treads_per_run": 8,
+    "tread_depth": 36,
+    "tread_rise": 16,
+    "source_brushes": 169,
+    "compiled_world_solid_prisms": 168,
+    "lift_brushes": 1,
+    "ordinary_path_policy": "walk, step and bounded drop; lift, teleporter and jump edges excluded",
+    "interpretation": "Fewer edges and a smaller footprint are descriptors, not evidence of better connectivity, tighter flow or lower central control."
+  },
+  "mechanisms": {
+    "lift": {
+      "native_class": "func_plat",
+      "platform_dimensions": [
+        128,
+        128,
+        16
+      ],
+      "compiled_upper_brush_bounds": [
+        [
+          192,
+          -64,
+          240
+        ],
+        [
+          320,
+          64,
+          256
+        ]
+      ],
+      "native_lower_standing_z": 16,
+      "native_upper_standing_z": 256,
+      "native_height": 240,
+      "speed": 200,
+      "external_trigger": false,
+      "source_start_state": "lower station",
+      "source_top_return_delay_seconds": 3,
+      "live_initial_pose_observed": false,
+      "ordinary_bypass": "No Hall 128-to-256 stair. Ordinary ascent goes through Spool and Switchroom and returns along the upper Hall passage."
+    },
+    "teleporter": {
+      "native_classes": [
+        "misc_teleporter",
+        "misc_teleporter_dest"
+      ],
+      "directed": true,
+      "source_room": "Service Bay",
+      "destination_room": "Kiln",
+      "source_origin": [
+        544,
+        -96,
+        24
+      ],
+      "canonical_touch_bounds": [
+        [
+          536,
+          -104,
+          32
+        ],
+        [
+          552,
+          -88,
+          48
+        ]
+      ],
+      "authored_destination_origin": [
+        -832,
+        192,
+        152
+      ],
+      "native_player_arrival_origin": [
+        -832,
+        192,
+        162
+      ],
+      "destination_yaw": 0,
+      "destination_count": 1,
+      "nearby_chaingun_xy_distance": 97.32420048477151,
+      "nearby_upper_spawn_xy_distance": 113.13708498984761,
+      "runtime_use_tested": false
+    }
+  },
+  "metrics": {
+    "spawn_count": 8,
+    "weapon_count": 7,
+    "weapon_types": 7,
+    "major_item_count": 2,
+    "combat_height_p90_p10": 256.0,
+    "combat_height_bands_128": 3,
+    "spawn_nearest_weapon_euclidean_p50": 251.85104339514925,
+    "spawn_nearest_weapon_euclidean_p90": 368.2482836391955,
+    "spawn_pair_world_los_fraction": 0.0,
+    "major_item_min_euclidean_separation": 1793.784825445906,
+    "world_diagonal": 2643.343337517849,
+    "upward_surface_area": 2804480.0,
+    "texture_area_entropy_bits": 2.8793755967609114,
+    "texture_top_area_fraction": 0.22906706500280535,
+    "sky_surface_area_fraction": 0.0,
+    "sampled_world_sightline_p50": 240.0,
+    "sampled_world_sightline_p90": 668.7256422811754
+  },
+  "comparison_to_spillway": {
+    "baseline": "Spillway",
+    "candidate": "Counterweight",
+    "baseline_available": true,
+    "metrics": {
+      "combat_height_p90_p10": {
+        "before": 288.0,
+        "after": 256.0
+      },
+      "combat_height_bands_128": {
+        "before": 3,
+        "after": 3
+      },
+      "world_diagonal": {
+        "before": 2952.119238784233,
+        "after": 2643.343337517849
+      },
+      "upward_surface_area": {
+        "before": 3461568.0,
+        "after": 2804480.0
+      },
+      "sampled_world_sightline_p50": {
+        "before": 214.96046148071048,
+        "after": 240.0
+      },
+      "sampled_world_sightline_p90": {
+        "before": 555.3214763082908,
+        "after": 668.7256422811754
+      },
+      "spawn_pair_world_los_fraction": {
+        "before": 0.0,
+        "after": 0.0
+      }
+    },
+    "room_connections": {
+      "before": 10,
+      "after": 8
+    },
+    "room_graph_cycle_rank": {
+      "before": 5,
+      "after": 4
+    },
+    "articulation_rooms": {
+      "before": 0,
+      "after": 0
+    },
+    "limits": [
+      "Multiple design variables changed; this is not a controlled causal comparison.",
+      "Current costs include endpoint approaches but remain Manhattan/node-center estimates. Earlier artifacts use a different timing basis; do not compare their costs or call them measured travel time.",
+      "Point LOS is not a match, spawn-safety guarantee or rendered lighting check."
+    ]
+  },
+  "timing_basis": "endpoint-aware Manhattan/node-anchor proxy v2",
+  "knowledge_cards": [
+    {
+      "id": "counterweight-ordinary-alternative",
+      "status": "static_contract_verified_gameplay_hypothesis_pending",
+      "evidence": "All 264 ordinary paths pass with jump, lift and teleporter edges excluded. Hall upper ascent still incurs a route through Spool and Switchroom.",
+      "candidate_rule": "A mechanism can be optional while materially changing commitment and journey cost.",
+      "falsification_test": "Matched Hall starts show whether wait plus ride plus exit reliably beats the ordinary route, and under which defender/platform states it becomes a trap."
+    },
+    {
+      "id": "counterweight-arrival-resource-stack",
+      "status": "authored_spatial_risk_not_observed_outcome",
+      "evidence": "Kiln arrival faces a chaingun approximately 97 XY units away; an upper spawn is approximately 113 XY units behind the arrival.",
+      "candidate_rule": "Audit destination resources and spawn-to-arrival exposure separately from spawn-pair LOS.",
+      "falsification_test": "Compare the same onward goal with teleport on/off; log weapon acquisition, damage and deaths within three seconds of arrival under matched defender positions."
+    },
+    {
+      "id": "counterweight-central-route-concentration",
+      "status": "topology_observation_route_use_pending",
+      "evidence": "Hall has five incident passages versus Spillway maximum four; room edges decrease from ten to eight and cycle rank from five to four.",
+      "candidate_rule": "Edge count alone cannot establish distributed flow.",
+      "falsification_test": "At 2, 4 and 6 players compare Hall traffic share, sustained control, contested entrances and unused alternative paths."
+    },
+    {
+      "id": "counterweight-footprint-versus-los",
+      "status": "static_distribution_observation",
+      "evidence": "World diagonal decreases from 2952.1 to 2643.3 while sampled LOS median grows from 215.0 to 240.0 and p90 from 555.3 to 668.7.",
+      "candidate_rule": "Measure footprint and sightline distributions independently.",
+      "falsification_test": "Controlled geometry-only variants should preserve item/mechanism state while evaluating pursuit breaks and long-angle control in actual play."
+    },
+    {
+      "id": "counterweight-native-initialization-gate",
+      "status": "positive_and_negative_control_verified",
+      "evidence": "Pinned dedicated engine accepts final Counterweight and unchanged Spillway; a buried pickup fixture is rejected through native droptofloor diagnostics despite exit code zero.",
+      "candidate_rule": "Native initialization diagnostics supplement static hull validation but do not validate player traversal.",
+      "falsification_test": "Keep the negative control and reject any driver revision that accepts it or fails to bind exact BSP/module identities."
+    }
+  ],
+  "play_regimen": {
+    "status": "proposed_not_executed",
+    "design": "matched-start 2x2 lift activation by teleporter activation",
+    "conditions": [
+      {
+        "id": "L0T0",
+        "lift": false,
+        "teleporter": false
+      },
+      {
+        "id": "L1T0",
+        "lift": true,
+        "teleporter": false
+      },
+      {
+        "id": "L0T1",
+        "lift": false,
+        "teleporter": true
+      },
+      {
+        "id": "L1T1",
+        "lift": true,
+        "teleporter": true
+      }
+    ],
+    "activation_control": "Prepare a separately hashed test module with verified activation toggles. Preserve world geometry, items, timers, disc models/collision and movement settings. Disabled lift remains at the lower station; targetname is not an equivalent disable because it changes native initial state.",
+    "lift_matched_journeys": {
+      "start": "same covered Hall approach",
+      "finish": "same goal beyond upper Hall exit",
+      "off_route": "complete ordinary Spool-Switchroom bypass",
+      "active_platform_states": [
+        "bottom",
+        "rising",
+        "top",
+        "descending",
+        "occupied"
+      ],
+      "pairs_per_active_state": 10,
+      "off_state": "platform parked below; player/defender starts matched to corresponding active trial",
+      "metrics": [
+        "arrival-to-boarding wait",
+        "boarding-to-top ride duration",
+        "top-arrival-to-exit time",
+        "full start-to-goal duration",
+        "failed boarding",
+        "obstruction and reversal",
+        "phase-specific damage",
+        "defender visibility by phase"
+      ],
+      "not_applicable": "Off-condition ride and wait are missing/not applicable, not zero."
+    },
+    "teleporter_matched_journeys": {
+      "start": "same Service Bay approach",
+      "finish": "same Kiln onward goal",
+      "arrival_conditions": [
+        "vacant exit",
+        "defender ahead",
+        "defender at nearby upper spawn behind arrival",
+        "paired arrivals"
+      ],
+      "metrics": [
+        "approach duration",
+        "teleport hold duration",
+        "arrival-to-exit duration",
+        "full start-to-goal duration",
+        "telefrags",
+        "failed arrivals",
+        "damage and deaths within 3 seconds",
+        "chaingun acquisition",
+        "onward route chosen"
+      ],
+      "reset_between_pairs": [
+        "health",
+        "ammo",
+        "item timers"
+      ]
+    },
+    "populated_rounds": {
+      "populations": [
+        2,
+        4,
+        6
+      ],
+      "intended_population_conditions": [
+        4,
+        6
+      ],
+      "sparse_control_population": 2,
+      "matched_blocks_per_population": 4,
+      "conditions_per_block": 4,
+      "round_minutes": 4,
+      "condition_orders": [
+        [
+          "L0T0",
+          "L1T0",
+          "L1T1",
+          "L0T1"
+        ],
+        [
+          "L1T0",
+          "L0T1",
+          "L0T0",
+          "L1T1"
+        ],
+        [
+          "L0T1",
+          "L1T1",
+          "L1T0",
+          "L0T0"
+        ],
+        [
+          "L1T1",
+          "L0T0",
+          "L0T1",
+          "L1T0"
+        ]
+      ],
+      "counterbalance": "Rotate matched starts and participants across conditions; record familiarity and rule settings. Analyze each population separately.",
+      "metrics": [
+        "route and mechanism use",
+        "Hall traffic share",
+        "congestion",
+        "empty travel",
+        "recovery after death",
+        "sustained upper control",
+        "resource acquisition",
+        "post-arrival deaths"
+      ],
+      "reporting": "Keep failures and variation alongside medians; do not promote rules from a single match or small unreplicated difference."
+    },
+    "input_control": "No input automation performed or authorized by this study. Any later automated keyboard/mouse action requires specific permission.",
+    "rendering_evidence": "Any later rendering validation must use a windowed engine and its registered screenshot command."
+  },
+  "inference_limits": [
+    "Multiple design variables changed; this is not a controlled causal comparison.",
+    "Current costs include endpoint approaches but remain Manhattan/node-center estimates. Earlier artifacts use a different timing basis; do not compare their costs or call them measured travel time.",
+    "Point LOS is not a match, spawn-safety guarantee or rendered lighting check.",
+    "No engine traversal, lift activation, teleporter use, live edict initial-state observation, rendered readability or multiplayer match evidence.",
+    "Spawn-pair LOS does not measure spawn-to-teleport-arrival exposure or guarantee spawn safety.",
+    "Straight-line item distances are not route times; upward world area includes trim and is not measured walkable area.",
+    "The 30 jump graph edges are excluded from the ordinary reachability claim.",
+    "Multiple shape, item and traversal variables changed from Spillway; this is exploration, not controlled causal improvement.",
+    "No model weights trained; generated example excluded from reference-profile calibration; no archive geometry copied.",
+    "Open engineering issues are tracked in knowledge/q2/iteration-roadmap.json: default 32-unit stair treads, stock client focus behavior, origin-versus-eye LOS sampling, and separate geometry/state precision limits."
+  ],
+  "model_weights_trained": false,
+  "archive_geometry_copied": false,
+  "included_in_reference_calibration": false,
+  "runtime_playtested": false,
+  "cleanup": {
+    "path": "out/counterweight/cleanup-status.json",
+    "sha256": "574baa024e2afb743a032fc245ffacf3f2eec2353fde4b7619cc481fb8648099",
+    "status": "blocked_by_automatic_approval_review",
+    "reason": "blocked by policy",
+    "attempts": 1,
+    "temporary_directories_remaining": [
+      ".agents/tmp/counterweight-viewer",
+      ".agents/tmp/counterweight-engine"
+    ],
+    "retained_evidence": "out/counterweight",
+    "retry_performed": false
+  }
+}

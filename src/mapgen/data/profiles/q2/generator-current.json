@@ -1,0 +1,825 @@
+{
+  "schema": "qmg.game_profile",
+  "schema_version": 1,
+  "profile_kind": "generator",
+  "game": "quake2",
+  "module": "generator-current",
+  "title": "Current generator tables for quake2 (byte-equivalent to the pre-X2 code)",
+  "evidence_level": "static analysis",
+  "modules": [
+    "q2-baseq2-3.19",
+    "q2-ctf-3.19"
+  ],
+  "sources": {
+    "repo": {
+      "description": "This repository (plan and audit records).",
+      "identity": "Quake-MapGen working tree",
+      "kind": "file_lines"
+    },
+    "q2src": {
+      "description": "id Software GPL source release of Quake II (Quake-2-master): game/ (baseq2 game DLL), ctf/ (ThreeWave CTF 1.09b game DLL), qcommon/ (pmove), server/.",
+      "identity": "qcommon/qcommon.h:26 VERSION 3.19",
+      "kind": "file_lines"
+    }
+  },
+  "origin": "Copied verbatim from src/map_builder.cpp (solid_material, liquid_material, variant_class, classname_for) and src/entities.cpp (add_lighting, weapon_variant_count, monster_variant_count) before change x2-profiles. They mirror current behaviour and are not id-source facts; known_defects lists where they disagree with the module profiles.",
+  "solid_materials": {
+    "floor": {
+      "value": "e1u1/floor3_1",
+      "cite": [
+        "generator-current:map_builder.solid_material"
+      ]
+    },
+    "platform": {
+      "value": "e1u1/floor3_1",
+      "cite": [
+        "generator-current:map_builder.solid_material"
+      ]
+    },
+    "stair": {
+      "value": "e1u1/floor3_1",
+      "cite": [
+        "generator-current:map_builder.solid_material"
+      ]
+    },
+    "ramp": {
+      "value": "e1u1/floor3_1",
+      "cite": [
+        "generator-current:map_builder.solid_material"
+      ]
+    },
+    "ceiling": {
+      "value": "e1u1/ceil1_4",
+      "cite": [
+        "generator-current:map_builder.solid_material"
+      ]
+    },
+    "trigger": {
+      "value": "e3u1/trigger",
+      "cite": [
+        "generator-current:map_builder.solid_material"
+      ]
+    },
+    "wall": {
+      "value": "e1u1/flat1_1",
+      "cite": [
+        "generator-current:map_builder.solid_material"
+      ]
+    },
+    "arch": {
+      "value": "e1u1/flat1_1",
+      "cite": [
+        "generator-current:map_builder.solid_material"
+      ]
+    },
+    "curve": {
+      "value": "e1u1/flat1_1",
+      "cite": [
+        "generator-current:map_builder.solid_material"
+      ]
+    },
+    "door": {
+      "value": "e1u1/flat1_1",
+      "cite": [
+        "generator-current:map_builder.solid_material"
+      ]
+    },
+    "lift": {
+      "value": "e1u1/flat1_1",
+      "cite": [
+        "generator-current:map_builder.solid_material"
+      ]
+    },
+    "hidden": {
+      "value": "e1u1/flat1_1",
+      "cite": [
+        "generator-current:map_builder.solid_material"
+      ]
+    },
+    "liquid": {
+      "value": null,
+      "cite": [
+        "generator-current:map_builder.solid_material"
+      ],
+      "note": "A solid brush cannot take the liquid role (map build error invalid_material_role)."
+    }
+  },
+  "liquid_materials": {
+    "solid": {
+      "value": null,
+      "cite": [
+        "generator-current:map_builder.liquid_material"
+      ],
+      "note": "Solid contents take a solid material (map build error invalid_liquid_contract)."
+    },
+    "water": {
+      "value": "e1u1/water1",
+      "cite": [
+        "generator-current:map_builder.liquid_material"
+      ]
+    },
+    "slime": {
+      "value": "e1u1/slime1",
+      "cite": [
+        "generator-current:map_builder.liquid_material"
+      ]
+    },
+    "lava": {
+      "value": "e1u1/lava1",
+      "cite": [
+        "generator-current:map_builder.liquid_material"
+      ]
+    }
+  },
+  "classnames": {
+    "player_start": {
+      "value": "info_player_start",
+      "cite": [
+        "generator-current:map_builder.classname_for",
+        "q2src:game/p_client.c:885-908|while ((spot = G_Find (spot, FOFS(classname), \"info_player_start\")) != NULL)",
+        "q2src:ctf/p_client.c:918-941|while ((spot = G_Find (spot, FOFS(classname), \"info_player_start\")) != NULL)"
+      ],
+      "note": "Change r1s-mp-player-start (switch r1s.mp_player_start): also emitted exactly once in every Quake 2 multiplayer map (deathmatch, duel, CTF), for `map` loads with deathmatch 0, whose spawn-point search aborts without it (cited). Deathmatch spawn selection never reads it; the proof is in src/entities.cpp and the change record. The value was already info_player_start."
+    },
+    "deathmatch_spawn": {
+      "value": "info_player_deathmatch",
+      "cite": [
+        "generator-current:map_builder.classname_for"
+      ]
+    },
+    "health": {
+      "value": "item_health",
+      "cite": [
+        "generator-current:map_builder.classname_for"
+      ]
+    },
+    "armor": {
+      "value": "item_armor_combat",
+      "cite": [
+        "generator-current:map_builder.classname_for"
+      ]
+    },
+    "light": {
+      "value": "light",
+      "cite": [
+        "generator-current:map_builder.classname_for"
+      ]
+    },
+    "exit_trigger": {
+      "value": "trigger_once",
+      "cite": [
+        "generator-current:map_builder.classname_for"
+      ]
+    },
+    "exit_destination": {
+      "value": "target_changelevel",
+      "cite": [
+        "generator-current:map_builder.classname_for"
+      ]
+    },
+    "door": {
+      "value": "func_door",
+      "cite": [
+        "generator-current:map_builder.classname_for"
+      ]
+    },
+    "door_trigger": {
+      "value": "trigger_multiple",
+      "cite": [
+        "generator-current:map_builder.classname_for"
+      ]
+    },
+    "door_destination": {
+      "value": "info_notnull",
+      "cite": [
+        "generator-current:map_builder.classname_for"
+      ]
+    },
+    "lift": {
+      "value": "func_plat",
+      "cite": [
+        "generator-current:map_builder.classname_for"
+      ]
+    },
+    "lift_trigger": {
+      "value": "trigger_multiple",
+      "cite": [
+        "generator-current:map_builder.classname_for"
+      ]
+    },
+    "lift_destination": {
+      "value": "info_notnull",
+      "cite": [
+        "generator-current:map_builder.classname_for"
+      ]
+    },
+    "teleporter_trigger": {
+      "value": "misc_teleporter",
+      "cite": [
+        "generator-current:map_builder.classname_for"
+      ]
+    },
+    "teleporter_destination": {
+      "value": "misc_teleporter_dest",
+      "cite": [
+        "generator-current:map_builder.classname_for"
+      ]
+    },
+    "intermission": {
+      "value": "info_player_intermission",
+      "cite": [
+        "q2src:game/p_hud.c:126-132|ent = G_Find (NULL, FOFS(classname), \"info_player_intermission\");",
+        "q2src:ctf/p_hud.c:131-137|ent = G_Find (NULL, FOFS(classname), \"info_player_intermission\");"
+      ],
+      "note": "Added by change r1s-q1-intermission to keep the PlacementRole partition complete. Mapping only: no Quake 2 intermission placement is generated yet, and the map builder refuses one (Quake 2 and Quake 3 intermission points are a later R1-s cause)."
+    },
+    "coop_start": {
+      "value": "info_player_coop",
+      "cite": [
+        "q2src:game/p_client.c:831-866|spot = G_Find (spot, FOFS(classname), \"info_player_coop\");",
+        "q2src:ctf/p_client.c:859-894|spot = G_Find (spot, FOFS(classname), \"info_player_coop\");"
+      ],
+      "note": "Added by change r1s-sp-coop-starts (switch r1s.sp_coop_starts, D8 role coop_start): three are emitted beside the info_player_start of every Quake 2 single-player map, with no targetname, because a generated map is loaded directly (empty spawnpoint). SelectCoopSpawnPoint gives co-op client N >= 1 the Nth matching info_player_coop and the start otherwise (cited), and PutClientInServer KillBox-es the spot, so without them co-op clients telefrag on the start. SP_info_player_coop frees the entity when coop is 0."
+    }
+  },
+  "team_classnames": {
+    "team_initial_spawn": {
+      "red": {
+        "value": "info_player_team1",
+        "cite": [
+          "generator-current:map_builder.classname_for"
+        ]
+      },
+      "blue": {
+        "value": "info_player_team2",
+        "cite": [
+          "generator-current:map_builder.classname_for"
+        ]
+      }
+    },
+    "team_respawn": {
+      "red": {
+        "value": "info_player_team1",
+        "cite": [
+          "generator-current:map_builder.classname_for"
+        ]
+      },
+      "blue": {
+        "value": "info_player_team2",
+        "cite": [
+          "generator-current:map_builder.classname_for"
+        ]
+      }
+    },
+    "flag": {
+      "red": {
+        "value": "item_flag_team1",
+        "cite": [
+          "generator-current:map_builder.classname_for"
+        ]
+      },
+      "blue": {
+        "value": "item_flag_team2",
+        "cite": [
+          "generator-current:map_builder.classname_for"
+        ]
+      }
+    }
+  },
+  "variants": {
+    "weapon": {
+      "value": [
+        "weapon_shotgun",
+        "weapon_machinegun",
+        "weapon_chaingun",
+        "weapon_grenadelauncher",
+        "weapon_rocketlauncher",
+        "weapon_hyperblaster",
+        "weapon_railgun"
+      ],
+      "cite": [
+        "generator-current:map_builder.variant_class",
+        "generator-current:entities.weapon_variant_count"
+      ],
+      "note": "Order is significant: a placement's variant index selects from this list."
+    },
+    "monster": {
+      "value": [
+        "monster_soldier",
+        "monster_infantry",
+        "monster_gunner",
+        "monster_berserk",
+        "monster_gladiator"
+      ],
+      "cite": [
+        "generator-current:map_builder.variant_class",
+        "generator-current:entities.monster_variant_count"
+      ],
+      "note": "Order is significant: a placement's variant index selects from this list."
+    }
+  },
+  "monster_hulls": {
+    "monster_soldier": {
+      "value": {
+        "mins": [
+          -16,
+          -16,
+          -24
+        ],
+        "maxs": [
+          16,
+          16,
+          32
+        ]
+      },
+      "cite": [
+        "q2src:game/m_soldier.c:1269|SP_monster_soldier_x (self);",
+        "q2src:game/m_soldier.c:1205-1206|VectorSet (self->maxs, 16, 16, 32);",
+        "q2src:game/g_monster.c:315-322|if (trace.fraction == 1 || trace.allsolid)",
+        "q2src:game/g_monster.c:673-679|if (!M_walkmove (self, 0, 0))",
+        "q2src:game/m_move.c:56|if (gi.pointcontents (start) != CONTENTS_SOLID)",
+        "q2src:game/m_move.c:91|if (trace.fraction == 1.0 || mid - trace.endpos[2] > STEPSIZE)"
+      ],
+      "note": "Change r1s-monster-hull-support (switch r1s.monster_hull_support): the spawn box each monster class sets. walkmonster_start_go drops the monster with M_droptofloor, which leaves it in place when its box starts in solid (trace.allsolid), then reports \"in solid\" when M_walkmove(self, 0, 0) fails (game/g_monster.c:310-321, 671-680); M_CheckBottom refuses a step when a bottom corner hangs more than STEPSIZE (18) over an edge (game/m_move.c:37-97)."
+    },
+    "monster_infantry": {
+      "value": {
+        "mins": [
+          -16,
+          -16,
+          -24
+        ],
+        "maxs": [
+          16,
+          16,
+          32
+        ]
+      },
+      "cite": [
+        "q2src:game/m_infantry.c:582-583|VectorSet (self->maxs, 16, 16, 32);",
+        "q2src:game/g_monster.c:315-322|if (trace.fraction == 1 || trace.allsolid)",
+        "q2src:game/g_monster.c:673-679|if (!M_walkmove (self, 0, 0))",
+        "q2src:game/m_move.c:56|if (gi.pointcontents (start) != CONTENTS_SOLID)",
+        "q2src:game/m_move.c:91|if (trace.fraction == 1.0 || mid - trace.endpos[2] > STEPSIZE)"
+      ],
+      "note": "Change r1s-monster-hull-support (switch r1s.monster_hull_support): the spawn box each monster class sets. walkmonster_start_go drops the monster with M_droptofloor, which leaves it in place when its box starts in solid (trace.allsolid), then reports \"in solid\" when M_walkmove(self, 0, 0) fails (game/g_monster.c:310-321, 671-680); M_CheckBottom refuses a step when a bottom corner hangs more than STEPSIZE (18) over an edge (game/m_move.c:37-97)."
+    },
+    "monster_gunner": {
+      "value": {
+        "mins": [
+          -16,
+          -16,
+          -24
+        ],
+        "maxs": [
+          16,
+          16,
+          32
+        ]
+      },
+      "cite": [
+        "q2src:game/m_gunner.c:603-604|VectorSet (self->maxs, 16, 16, 32);",
+        "q2src:game/g_monster.c:315-322|if (trace.fraction == 1 || trace.allsolid)",
+        "q2src:game/g_monster.c:673-679|if (!M_walkmove (self, 0, 0))",
+        "q2src:game/m_move.c:56|if (gi.pointcontents (start) != CONTENTS_SOLID)",
+        "q2src:game/m_move.c:91|if (trace.fraction == 1.0 || mid - trace.endpos[2] > STEPSIZE)"
+      ],
+      "note": "Change r1s-monster-hull-support (switch r1s.monster_hull_support): the spawn box each monster class sets. walkmonster_start_go drops the monster with M_droptofloor, which leaves it in place when its box starts in solid (trace.allsolid), then reports \"in solid\" when M_walkmove(self, 0, 0) fails (game/g_monster.c:310-321, 671-680); M_CheckBottom refuses a step when a bottom corner hangs more than STEPSIZE (18) over an edge (game/m_move.c:37-97)."
+    },
+    "monster_berserk": {
+      "value": {
+        "mins": [
+          -16,
+          -16,
+          -24
+        ],
+        "maxs": [
+          16,
+          16,
+          32
+        ]
+      },
+      "cite": [
+        "q2src:game/m_berserk.c:430-431|VectorSet (self->maxs, 16, 16, 32);",
+        "q2src:game/g_monster.c:315-322|if (trace.fraction == 1 || trace.allsolid)",
+        "q2src:game/g_monster.c:673-679|if (!M_walkmove (self, 0, 0))",
+        "q2src:game/m_move.c:56|if (gi.pointcontents (start) != CONTENTS_SOLID)",
+        "q2src:game/m_move.c:91|if (trace.fraction == 1.0 || mid - trace.endpos[2] > STEPSIZE)"
+      ],
+      "note": "Change r1s-monster-hull-support (switch r1s.monster_hull_support): the spawn box each monster class sets. walkmonster_start_go drops the monster with M_droptofloor, which leaves it in place when its box starts in solid (trace.allsolid), then reports \"in solid\" when M_walkmove(self, 0, 0) fails (game/g_monster.c:310-321, 671-680); M_CheckBottom refuses a step when a bottom corner hangs more than STEPSIZE (18) over an edge (game/m_move.c:37-97)."
+    },
+    "monster_gladiator": {
+      "value": {
+        "mins": [
+          -32,
+          -32,
+          -24
+        ],
+        "maxs": [
+          32,
+          32,
+          64
+        ]
+      },
+      "cite": [
+        "q2src:game/m_gladiator.c:362-363|VectorSet (self->maxs, 32, 32, 64);",
+        "q2src:game/g_monster.c:315-322|if (trace.fraction == 1 || trace.allsolid)",
+        "q2src:game/g_monster.c:673-679|if (!M_walkmove (self, 0, 0))",
+        "q2src:game/m_move.c:56|if (gi.pointcontents (start) != CONTENTS_SOLID)",
+        "q2src:game/m_move.c:91|if (trace.fraction == 1.0 || mid - trace.endpos[2] > STEPSIZE)"
+      ],
+      "note": "Change r1s-monster-hull-support (switch r1s.monster_hull_support): the spawn box each monster class sets. walkmonster_start_go drops the monster with M_droptofloor, which leaves it in place when its box starts in solid (trace.allsolid), then reports \"in solid\" when M_walkmove(self, 0, 0) fails (game/g_monster.c:310-321, 671-680); M_CheckBottom refuses a step when a bottom corner hangs more than STEPSIZE (18) over an edge (game/m_move.c:37-97)."
+    }
+  },
+  "pickup_hulls": {
+    "item_armor_combat": {
+      "value": {
+        "mins": [
+          -15,
+          -15,
+          -15
+        ],
+        "maxs": [
+          15,
+          15,
+          15
+        ]
+      },
+      "cite": [
+        "q2src:game/g_items.c:1170|\"item_armor_combat\"",
+        "q2src:game/g_spawn.c:291-298|SpawnItem (ent, item);",
+        "q2src:game/g_items.c:1124-1125|ent->think = droptofloor;",
+        "q2src:game/g_items.c:924-927|v = tv(-15,-15,-15);",
+        "q2src:game/g_items.c:926-927|v = tv(15,15,15);",
+        "q2src:game/g_items.c:937-940|v = tv(0,0,-128);",
+        "q2src:game/g_items.c:940|MASK_SOLID",
+        "q2src:game/g_items.c:941-946|G_FreeEdict (ent);",
+        "q2src:qcommon/cmodel.c:1048-1049|startout = true;",
+        "q2src:qcommon/cmodel.c:1077-1079|trace->startsolid = true;"
+      ],
+      "note": "Change r1s-sp-pickup-hull-support (switch r1s.sp_pickup_hull_support): the box droptofloor sets for every item before it traces the item 128 units down with MASK_SOLID; when the trace starts in solid the item is freed (\"droptofloor: %s startsolid\") (game/g_items.c:918-946). A box that only touches a brush face starts in solid: CM_ClipBoxToBrush counts the start outside a brush only when it is strictly in front of a face (qcommon/cmodel.c:1048-1049, 1077-1079). With no floor within 128 units the item is left at the trace end."
+    },
+    "item_health": {
+      "value": {
+        "mins": [
+          -15,
+          -15,
+          -15
+        ],
+        "maxs": [
+          15,
+          15,
+          15
+        ]
+      },
+      "cite": [
+        "q2src:game/g_spawn.c:149|{\"item_health\", SP_item_health},",
+        "q2src:game/g_items.c:2121-2131|SpawnItem (self, FindItem (\"Health\"));",
+        "q2src:game/g_items.c:1124-1125|ent->think = droptofloor;",
+        "q2src:game/g_items.c:924-927|v = tv(-15,-15,-15);",
+        "q2src:game/g_items.c:926-927|v = tv(15,15,15);",
+        "q2src:game/g_items.c:937-940|v = tv(0,0,-128);",
+        "q2src:game/g_items.c:940|MASK_SOLID",
+        "q2src:game/g_items.c:941-946|G_FreeEdict (ent);",
+        "q2src:qcommon/cmodel.c:1048-1049|startout = true;",
+        "q2src:qcommon/cmodel.c:1077-1079|trace->startsolid = true;"
+      ],
+      "note": "Change r1s-sp-pickup-hull-support (switch r1s.sp_pickup_hull_support): the box droptofloor sets for every item before it traces the item 128 units down with MASK_SOLID; when the trace starts in solid the item is freed (\"droptofloor: %s startsolid\") (game/g_items.c:918-946). A box that only touches a brush face starts in solid: CM_ClipBoxToBrush counts the start outside a brush only when it is strictly in front of a face (qcommon/cmodel.c:1048-1049, 1077-1079). With no floor within 128 units the item is left at the trace end."
+    },
+    "weapon_chaingun": {
+      "value": {
+        "mins": [
+          -15,
+          -15,
+          -15
+        ],
+        "maxs": [
+          15,
+          15,
+          15
+        ]
+      },
+      "cite": [
+        "q2src:game/g_items.c:1384|\"weapon_chaingun\"",
+        "q2src:game/g_spawn.c:291-298|SpawnItem (ent, item);",
+        "q2src:game/g_items.c:1124-1125|ent->think = droptofloor;",
+        "q2src:game/g_items.c:924-927|v = tv(-15,-15,-15);",
+        "q2src:game/g_items.c:926-927|v = tv(15,15,15);",
+        "q2src:game/g_items.c:937-940|v = tv(0,0,-128);",
+        "q2src:game/g_items.c:940|MASK_SOLID",
+        "q2src:game/g_items.c:941-946|G_FreeEdict (ent);",
+        "q2src:qcommon/cmodel.c:1048-1049|startout = true;",
+        "q2src:qcommon/cmodel.c:1077-1079|trace->startsolid = true;"
+      ],
+      "note": "Change r1s-sp-pickup-hull-support (switch r1s.sp_pickup_hull_support): the box droptofloor sets for every item before it traces the item 128 units down with MASK_SOLID; when the trace starts in solid the item is freed (\"droptofloor: %s startsolid\") (game/g_items.c:918-946). A box that only touches a brush face starts in solid: CM_ClipBoxToBrush counts the start outside a brush only when it is strictly in front of a face (qcommon/cmodel.c:1048-1049, 1077-1079). With no floor within 128 units the item is left at the trace end."
+    },
+    "weapon_grenadelauncher": {
+      "value": {
+        "mins": [
+          -15,
+          -15,
+          -15
+        ],
+        "maxs": [
+          15,
+          15,
+          15
+        ]
+      },
+      "cite": [
+        "q2src:game/g_items.c:1430|\"weapon_grenadelauncher\"",
+        "q2src:game/g_spawn.c:291-298|SpawnItem (ent, item);",
+        "q2src:game/g_items.c:1124-1125|ent->think = droptofloor;",
+        "q2src:game/g_items.c:924-927|v = tv(-15,-15,-15);",
+        "q2src:game/g_items.c:926-927|v = tv(15,15,15);",
+        "q2src:game/g_items.c:937-940|v = tv(0,0,-128);",
+        "q2src:game/g_items.c:940|MASK_SOLID",
+        "q2src:game/g_items.c:941-946|G_FreeEdict (ent);",
+        "q2src:qcommon/cmodel.c:1048-1049|startout = true;",
+        "q2src:qcommon/cmodel.c:1077-1079|trace->startsolid = true;"
+      ],
+      "note": "Change r1s-sp-pickup-hull-support (switch r1s.sp_pickup_hull_support): the box droptofloor sets for every item before it traces the item 128 units down with MASK_SOLID; when the trace starts in solid the item is freed (\"droptofloor: %s startsolid\") (game/g_items.c:918-946). A box that only touches a brush face starts in solid: CM_ClipBoxToBrush counts the start outside a brush only when it is strictly in front of a face (qcommon/cmodel.c:1048-1049, 1077-1079). With no floor within 128 units the item is left at the trace end."
+    },
+    "weapon_hyperblaster": {
+      "value": {
+        "mins": [
+          -15,
+          -15,
+          -15
+        ],
+        "maxs": [
+          15,
+          15,
+          15
+        ]
+      },
+      "cite": [
+        "q2src:game/g_items.c:1476|\"weapon_hyperblaster\"",
+        "q2src:game/g_spawn.c:291-298|SpawnItem (ent, item);",
+        "q2src:game/g_items.c:1124-1125|ent->think = droptofloor;",
+        "q2src:game/g_items.c:924-927|v = tv(-15,-15,-15);",
+        "q2src:game/g_items.c:926-927|v = tv(15,15,15);",
+        "q2src:game/g_items.c:937-940|v = tv(0,0,-128);",
+        "q2src:game/g_items.c:940|MASK_SOLID",
+        "q2src:game/g_items.c:941-946|G_FreeEdict (ent);",
+        "q2src:qcommon/cmodel.c:1048-1049|startout = true;",
+        "q2src:qcommon/cmodel.c:1077-1079|trace->startsolid = true;"
+      ],
+      "note": "Change r1s-sp-pickup-hull-support (switch r1s.sp_pickup_hull_support): the box droptofloor sets for every item before it traces the item 128 units down with MASK_SOLID; when the trace starts in solid the item is freed (\"droptofloor: %s startsolid\") (game/g_items.c:918-946). A box that only touches a brush face starts in solid: CM_ClipBoxToBrush counts the start outside a brush only when it is strictly in front of a face (qcommon/cmodel.c:1048-1049, 1077-1079). With no floor within 128 units the item is left at the trace end."
+    },
+    "weapon_machinegun": {
+      "value": {
+        "mins": [
+          -15,
+          -15,
+          -15
+        ],
+        "maxs": [
+          15,
+          15,
+          15
+        ]
+      },
+      "cite": [
+        "q2src:game/g_items.c:1361|\"weapon_machinegun\"",
+        "q2src:game/g_spawn.c:291-298|SpawnItem (ent, item);",
+        "q2src:game/g_items.c:1124-1125|ent->think = droptofloor;",
+        "q2src:game/g_items.c:924-927|v = tv(-15,-15,-15);",
+        "q2src:game/g_items.c:926-927|v = tv(15,15,15);",
+        "q2src:game/g_items.c:937-940|v = tv(0,0,-128);",
+        "q2src:game/g_items.c:940|MASK_SOLID",
+        "q2src:game/g_items.c:941-946|G_FreeEdict (ent);",
+        "q2src:qcommon/cmodel.c:1048-1049|startout = true;",
+        "q2src:qcommon/cmodel.c:1077-1079|trace->startsolid = true;"
+      ],
+      "note": "Change r1s-sp-pickup-hull-support (switch r1s.sp_pickup_hull_support): the box droptofloor sets for every item before it traces the item 128 units down with MASK_SOLID; when the trace starts in solid the item is freed (\"droptofloor: %s startsolid\") (game/g_items.c:918-946). A box that only touches a brush face starts in solid: CM_ClipBoxToBrush counts the start outside a brush only when it is strictly in front of a face (qcommon/cmodel.c:1048-1049, 1077-1079). With no floor within 128 units the item is left at the trace end."
+    },
+    "weapon_railgun": {
+      "value": {
+        "mins": [
+          -15,
+          -15,
+          -15
+        ],
+        "maxs": [
+          15,
+          15,
+          15
+        ]
+      },
+      "cite": [
+        "q2src:game/g_items.c:1499|\"weapon_railgun\"",
+        "q2src:game/g_spawn.c:291-298|SpawnItem (ent, item);",
+        "q2src:game/g_items.c:1124-1125|ent->think = droptofloor;",
+        "q2src:game/g_items.c:924-927|v = tv(-15,-15,-15);",
+        "q2src:game/g_items.c:926-927|v = tv(15,15,15);",
+        "q2src:game/g_items.c:937-940|v = tv(0,0,-128);",
+        "q2src:game/g_items.c:940|MASK_SOLID",
+        "q2src:game/g_items.c:941-946|G_FreeEdict (ent);",
+        "q2src:qcommon/cmodel.c:1048-1049|startout = true;",
+        "q2src:qcommon/cmodel.c:1077-1079|trace->startsolid = true;"
+      ],
+      "note": "Change r1s-sp-pickup-hull-support (switch r1s.sp_pickup_hull_support): the box droptofloor sets for every item before it traces the item 128 units down with MASK_SOLID; when the trace starts in solid the item is freed (\"droptofloor: %s startsolid\") (game/g_items.c:918-946). A box that only touches a brush face starts in solid: CM_ClipBoxToBrush counts the start outside a brush only when it is strictly in front of a face (qcommon/cmodel.c:1048-1049, 1077-1079). With no floor within 128 units the item is left at the trace end."
+    },
+    "weapon_rocketlauncher": {
+      "value": {
+        "mins": [
+          -15,
+          -15,
+          -15
+        ],
+        "maxs": [
+          15,
+          15,
+          15
+        ]
+      },
+      "cite": [
+        "q2src:game/g_items.c:1453|\"weapon_rocketlauncher\"",
+        "q2src:game/g_spawn.c:291-298|SpawnItem (ent, item);",
+        "q2src:game/g_items.c:1124-1125|ent->think = droptofloor;",
+        "q2src:game/g_items.c:924-927|v = tv(-15,-15,-15);",
+        "q2src:game/g_items.c:926-927|v = tv(15,15,15);",
+        "q2src:game/g_items.c:937-940|v = tv(0,0,-128);",
+        "q2src:game/g_items.c:940|MASK_SOLID",
+        "q2src:game/g_items.c:941-946|G_FreeEdict (ent);",
+        "q2src:qcommon/cmodel.c:1048-1049|startout = true;",
+        "q2src:qcommon/cmodel.c:1077-1079|trace->startsolid = true;"
+      ],
+      "note": "Change r1s-sp-pickup-hull-support (switch r1s.sp_pickup_hull_support): the box droptofloor sets for every item before it traces the item 128 units down with MASK_SOLID; when the trace starts in solid the item is freed (\"droptofloor: %s startsolid\") (game/g_items.c:918-946). A box that only touches a brush face starts in solid: CM_ClipBoxToBrush counts the start outside a brush only when it is strictly in front of a face (qcommon/cmodel.c:1048-1049, 1077-1079). With no floor within 128 units the item is left at the trace end."
+    },
+    "weapon_shotgun": {
+      "value": {
+        "mins": [
+          -15,
+          -15,
+          -15
+        ],
+        "maxs": [
+          15,
+          15,
+          15
+        ]
+      },
+      "cite": [
+        "q2src:game/g_items.c:1315|\"weapon_shotgun\"",
+        "q2src:game/g_spawn.c:291-298|SpawnItem (ent, item);",
+        "q2src:game/g_items.c:1124-1125|ent->think = droptofloor;",
+        "q2src:game/g_items.c:924-927|v = tv(-15,-15,-15);",
+        "q2src:game/g_items.c:926-927|v = tv(15,15,15);",
+        "q2src:game/g_items.c:937-940|v = tv(0,0,-128);",
+        "q2src:game/g_items.c:940|MASK_SOLID",
+        "q2src:game/g_items.c:941-946|G_FreeEdict (ent);",
+        "q2src:qcommon/cmodel.c:1048-1049|startout = true;",
+        "q2src:qcommon/cmodel.c:1077-1079|trace->startsolid = true;"
+      ],
+      "note": "Change r1s-sp-pickup-hull-support (switch r1s.sp_pickup_hull_support): the box droptofloor sets for every item before it traces the item 128 units down with MASK_SOLID; when the trace starts in solid the item is freed (\"droptofloor: %s startsolid\") (game/g_items.c:918-946). A box that only touches a brush face starts in solid: CM_ClipBoxToBrush counts the start outside a brush only when it is strictly in front of a face (qcommon/cmodel.c:1048-1049, 1077-1079). With no floor within 128 units the item is left at the trace end."
+    }
+  },
+  "lighting": {
+    "balanced": {
+      "brightness": {
+        "value": 320,
+        "cite": [
+          "generator-current:entities.add_lighting"
+        ]
+      },
+      "color": {
+        "value": [
+          920,
+          880,
+          760
+        ],
+        "cite": [
+          "generator-current:entities.add_lighting"
+        ]
+      }
+    },
+    "low_key": {
+      "brightness": {
+        "value": 220,
+        "cite": [
+          "generator-current:entities.add_lighting"
+        ]
+      },
+      "color": {
+        "value": [
+          560,
+          620,
+          720
+        ],
+        "cite": [
+          "generator-current:entities.add_lighting"
+        ]
+      }
+    },
+    "high_contrast": {
+      "brightness": {
+        "value": 450,
+        "cite": [
+          "generator-current:entities.add_lighting"
+        ]
+      },
+      "odd_room_color": {
+        "value": [
+          1000,
+          720,
+          480
+        ],
+        "cite": [
+          "generator-current:entities.add_lighting"
+        ],
+        "note": "Rooms whose id is odd."
+      },
+      "even_room_color": {
+        "value": [
+          480,
+          660,
+          1000
+        ],
+        "cite": [
+          "generator-current:entities.add_lighting"
+        ],
+        "note": "Rooms whose id is even."
+      }
+    }
+  },
+  "uncompiled": {
+    "analysis_spawn_eye_offset_z": {
+      "value": 22,
+      "unit": "u",
+      "cite": [
+        "generator-current:src/visibility.cpp:player_spawn_eye_offset"
+      ],
+      "note": "Height added to player-spawn origins for the visibility analysis; still a literal in src/visibility.cpp (not read from this file)."
+    },
+    "spawn_refinement_eye_offset_z": {
+      "value": 22,
+      "unit": "u",
+      "cite": [
+        "generator-current:src/spawn_refinement.cpp:eye",
+        "generator-current:src/mp_motifs.cpp:refine_spawn_visibility"
+      ],
+      "note": "Literal +22 eye used by the spawn refinement passes; not read from this file."
+    }
+  },
+  "known_defects": [
+    {
+      "id": "q2-weapons-omit-ssg-bfg",
+      "check": "computed",
+      "kind": "generator_omits_catalogue_weapon",
+      "classnames": [
+        "weapon_supershotgun",
+        "weapon_bfg"
+      ],
+      "detail": "The weapon variants leave out weapon_supershotgun and weapon_bfg.",
+      "cite": [
+        "generator-current:map_builder.variant_class"
+      ]
+    },
+    {
+      "id": "q2-team-classnames-ctf-dll-only",
+      "check": "computed",
+      "kind": "module_specific_classname",
+      "classnames": [
+        "info_player_team1",
+        "info_player_team2",
+        "item_flag_team1",
+        "item_flag_team2"
+      ],
+      "modules_with": [
+        "q2-ctf-3.19"
+      ],
+      "detail": "Team spawns and flags exist only in the CTF game DLL, not in baseq2.",
+      "cite": [
+        "generator-current:map_builder.classname_for"
+      ]
+    },
+    {
+      "id": "q2-ceiling-surface-light",
+      "check": "declared",
+      "kind": "material_flags",
+      "values": [
+        "e1u1/ceil1_4"
+      ],
+      "detail": "e1u1/ceil1_4 carries SURF_LIGHT 10000 in its WAL, so every ceiling emits light (Phase-1 audit). Not re-checked here.",
+      "cite": [
+        "repo:docs/RC_PHASE1_AUDIT_AND_PLAN.md:835|- e1u1/ceil1_4 inherits SURF_LIGHT 10000."
+      ]
+    },
+    {
+      "id": "q2-liquids-absent",
+      "check": "declared",
+      "kind": "material_absent",
+      "values": [
+        "e1u1/water1",
+        "e1u1/slime1",
+        "e1u1/lava1"
+      ],
+      "detail": "These liquid textures are not in baseq2 (Phase-1 audit). Not re-checked here.",
+      "cite": [
+        "repo:docs/RC_PHASE1_AUDIT_AND_PLAN.md:836|- e1u1/water1, slime1 and lava1 are not in baseq2."
+      ]
+    }
+  ]
+}

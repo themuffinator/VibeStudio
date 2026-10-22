@@ -1,0 +1,130 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "qmg.rc_ledger.schema.v1",
+  "title": "Quake-MapGen release-candidate ledger",
+  "description": "One row per game x mode path (17). Every claim carries an evidence pointer (a repository file plus its sha256 and one evidence level) or is null/empty. tools/benchmark/ledger_check.py validates this file against this schema (a stdlib subset of JSON Schema: type, required, properties, additionalProperties, enum, const, items, pattern, minimum, maximum, minItems) and then checks pointers, hashes and waivers.",
+  "type": "object",
+  "required": ["schema", "schema_version", "updated", "evidence_levels", "rubric", "sources", "paths"],
+  "additionalProperties": false,
+  "properties": {
+    "schema": {"const": "qmg.rc_ledger"},
+    "schema_version": {"const": 1},
+    "updated": {"type": "string", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"},
+    "change_id": {"type": "string"},
+    "description": {"type": "string"},
+    "evidence_levels": {
+      "type": "array",
+      "items": {"enum": ["static analysis", "compiler output", "AAS routing", "native movement trial",
+                         "engine initialization", "engine runtime with bots", "engine rendering", "human play"]},
+      "minItems": 8
+    },
+    "rc_conditions": {"type": "object"},
+    "rubric": {
+      "type": "object",
+      "required": ["P1", "P2", "P3", "P4", "P5", "P6", "P7", "P8", "P9", "P10", "P11"],
+      "additionalProperties": {"type": "string"}
+    },
+    "sp_rubric": {"type": "object", "additionalProperties": {"type": "string"}},
+    "waiver_policy": {"type": "object"},
+    "sources": {"type": "array", "items": {"$ref": "#/$defs/pointer"}},
+    "paths": {
+      "type": "object",
+      "required": ["q1-sp", "q1-coop", "q1-dm", "q1-duel", "q1-tdm", "q1-ctf-threewave", "q2-sp", "q2-coop",
+                   "q2-dm", "q2-duel", "q2-tdm", "q2-ctf", "q3-botarena", "q3-ffa", "q3-tourney", "q3-tdm",
+                   "q3-ctf"],
+      "additionalProperties": {"$ref": "#/$defs/path"}
+    }
+  },
+  "$defs": {
+    "pointer": {
+      "type": "object",
+      "required": ["path", "sha256", "level"],
+      "additionalProperties": false,
+      "properties": {
+        "path": {"type": "string", "pattern": "^[^/\\\\:][^:]*$"},
+        "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "level": {"enum": ["static analysis", "compiler output", "AAS routing", "native movement trial",
+                           "engine initialization", "engine runtime with bots", "engine rendering", "human play",
+                           "plan record"]},
+        "section": {"type": "string"},
+        "note": {"type": "string"}
+      }
+    },
+    "item": {
+      "type": "object",
+      "required": ["status", "evidence"],
+      "additionalProperties": false,
+      "properties": {
+        "status": {"enum": ["pass", "fail", "partial", "unassessed", "not_met", "met", "not_measured", "n/a"]},
+        "evidence": {"type": "array", "items": {"$ref": "#/$defs/pointer"}},
+        "expected_at_baseline0": {"type": "boolean"},
+        "close_by": {"type": "string"},
+        "note": {"type": "string"}
+      }
+    },
+    "waiver": {
+      "type": "object",
+      "required": ["id", "gate", "instance", "reason_code", "approved_by_user", "measured_instances"],
+      "additionalProperties": false,
+      "properties": {
+        "id": {"type": "string"},
+        "gate": {"enum": ["G1", "G2", "G3", "G4", "G5", "G6", "G7", "G8", "G9", "G10", "G11", "G12", "G13", "G14",
+                          "G15"]},
+        "instance": {"type": "string", "description": "finding or instance id (case id plus finding code/index)"},
+        "reason_code": {"enum": ["stock_parity", "analyzer_false_positive", "tool_defect_upstream",
+                                 "runtime_verified_harmless", "input_pending_user_decision",
+                                 "declared_out_of_scope"]},
+        "hero": {"type": "boolean"},
+        "approved_by_user": {
+          "type": "object",
+          "required": ["by", "date", "record"],
+          "additionalProperties": false,
+          "properties": {
+            "by": {"const": "user"},
+            "date": {"type": "string", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"},
+            "record": {"type": "string", "description": "where the approval was given (message, review or file)"}
+          }
+        },
+        "measured_instances": {"type": "integer", "minimum": 1},
+        "evidence": {"type": "array", "items": {"$ref": "#/$defs/pointer"}},
+        "note": {"type": "string"}
+      }
+    },
+    "path": {
+      "type": "object",
+      "required": ["game", "mode", "module", "claimed", "status", "rc", "parity", "human_playtest", "waivers"],
+      "additionalProperties": false,
+      "properties": {
+        "game": {"enum": ["q1", "q2", "q3"]},
+        "mode": {"enum": ["sp", "coop", "dm", "duel", "tdm", "ctf-threewave", "ctf", "botarena", "ffa", "tourney"]},
+        "module": {"enum": ["q1-id1", "q1-threewave-5.0", "q2-baseq2-3.19", "q2-ctf-3.19", "q3-baseq3-1.32b"]},
+        "claimed": {"enum": ["committed", "conditional", "deferred", "dropped-claim"]},
+        "status": {"enum": ["in_progress", "not_started", "deferred", "dropped", "released"]},
+        "status_note": {"type": "string"},
+        "rc": {
+          "type": "object",
+          "required": ["RC1", "RC2", "RC3", "RC4", "RC5"],
+          "additionalProperties": false,
+          "properties": {
+            "RC1": {"$ref": "#/$defs/item"}, "RC2": {"$ref": "#/$defs/item"}, "RC3": {"$ref": "#/$defs/item"},
+            "RC4": {"$ref": "#/$defs/item"}, "RC5": {"$ref": "#/$defs/item"}
+          }
+        },
+        "parity": {
+          "type": "object",
+          "required": ["P1", "P2", "P3", "P4", "P5", "P6", "P7", "P8", "P9", "P10", "P11"],
+          "additionalProperties": false,
+          "properties": {
+            "P1": {"$ref": "#/$defs/item"}, "P2": {"$ref": "#/$defs/item"}, "P3": {"$ref": "#/$defs/item"},
+            "P4": {"$ref": "#/$defs/item"}, "P5": {"$ref": "#/$defs/item"}, "P6": {"$ref": "#/$defs/item"},
+            "P7": {"$ref": "#/$defs/item"}, "P8": {"$ref": "#/$defs/item"}, "P9": {"$ref": "#/$defs/item"},
+            "P10": {"$ref": "#/$defs/item"}, "P11": {"$ref": "#/$defs/item"}
+          }
+        },
+        "sp_parity": {"type": "object", "additionalProperties": {"$ref": "#/$defs/item"}},
+        "human_playtest": {"enum": ["none", "scheduled", "done"]},
+        "waivers": {"type": "array", "items": {"$ref": "#/$defs/waiver"}}
+      }
+    }
+  }
+}

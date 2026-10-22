@@ -1,0 +1,275 @@
+{
+  "schema_version": 1,
+  "id": "rage-raised-resource-circuit-v1",
+  "date": "2026-09-13",
+  "status": "bounded_subroutes_certified_geometrically_declared_circuit_failed_native_untested",
+  "study": "docs/Q2_RAISED_RESOURCE_CIRCUIT_STUDY.md",
+  "audit": "out/raised-resource-circuit/audit.json",
+  "figure": "out/raised-resource-circuit/resource-approaches.png",
+  "protocol_sha256": "0c7f78bd452360cb7ea4cdcdf5c0fc6ccc5e819c32fd60adb6a12c6449062bb2",
+  "reference": {
+    "map": "ztn2dm3",
+    "title": "The Rage",
+    "author": "Sten 'ztn' Uusvali",
+    "format": "IBSP38",
+    "partition": "reference",
+    "split_group": "50259728799005a8",
+    "split_review": "provisional author/family aliases",
+    "bsp_sha256": "18a265da5b4be7664b22e6eff80adca7ce4c41da3ee1e152479b24b9ea36a1e2",
+    "archive_release_date": "1998-04-10",
+    "readme_date": "04/10/1998",
+    "capacity_conflict": "Readme 2\u20138; metadata 2\u20136. Unresolved.",
+    "spawn_count_conflict": "Readme 7; existing parsed dossier 8. Not a new runtime spawn audit.",
+    "metadata_issue": "Malformed metadata line 12 remains recorded.",
+    "entity_scope": "Embedded authored stock entities; game mode filtering and settling not executed",
+    "rights": {
+      "training_eligible": false,
+      "status": "unreviewed_local_reference",
+      "readme_distribution_conditions": "Keep original readme, credit author and notify author.",
+      "raw_bsp_redistributed": false,
+      "author_contacted": false,
+      "modification_permission_inferred": false
+    }
+  },
+  "selection": "Source inspection narrowed initial higher-resource question to center floor0/64 and Jacket Armor. Frozen waypoints unchanged after collision measurement.",
+  "results": {
+    "passing_path_records": [
+      "center_stair",
+      "lower_center_approach",
+      "raised_armor_approach",
+      "stair_armor_approach"
+    ],
+    "failing_path_records": [
+      "east_drop_candidate",
+      "lower_rail_direct_negative",
+      "mega_flat_extension_negative",
+      "raised_corner_cut_negative"
+    ],
+    "circuit_pass": false,
+    "exact_circuit_joins": 5,
+    "proposed_circuit_xy_length": 1376,
+    "proposed_circuit_absolute_vertical_sum": 128,
+    "resource_entity": 73,
+    "resource_authored_origin": [
+      -640,
+      848,
+      80
+    ],
+    "resource_station_feet": [
+      -640,
+      848,
+      64
+    ],
+    "raised_approach_xy_length": 688,
+    "center_approach_xy_length": 400,
+    "center_approach_rise": 64,
+    "approach_startpoints_differ": true,
+    "shared_final_xy_length": 80,
+    "supported_named_stations": 6,
+    "directed_geometric_armor_connections": [
+      "east_arm",
+      "armor",
+      "center",
+      "drop_landing"
+    ],
+    "higher_supported_stations_without_passed_armor_connection": [
+      "mega",
+      "rail"
+    ],
+    "step_constructions": 4,
+    "step_rise": 16,
+    "step_station_xy_spacing": 32,
+    "native_step_certified": false,
+    "sightline_rays": 20,
+    "clear_by_source_of_five": {
+      "east_arm": 0,
+      "center": 3,
+      "armor": 3,
+      "mega": 0
+    },
+    "drop_lateral_blockers": [
+      404,
+      690
+    ],
+    "mega_approach_blockers": [
+      585,
+      598
+    ],
+    "mega_approach_actual_floor_support": true,
+    "synthetic_controls_passed": 9,
+    "synthetic_controls_total": 9
+  },
+  "ql_comparison": {
+    "map": "bloodrun",
+    "source_sha256": "f299faab9d93987a14a3cf3fdf0efd3ed7794fe72c3e70f79b5d925b9131ec26",
+    "scope": "Existing pre-Steam IBSP47 upward-surface form only; no new QL movement test or current Steam equivalence.",
+    "surface_ids": [
+      1095,
+      1353,
+      1354
+    ],
+    "z": 512,
+    "western_join": true,
+    "arm_gap_at_x480": 138,
+    "arm_gap_at_x640": 64
+  },
+  "recommendations": [
+    {
+      "id": "resource-approach-contract",
+      "claim": "Bind selected resource stations to actual supported paths with height, merge and mechanism semantics; different starts are not an endpoint-paired cost comparison."
+    },
+    {
+      "id": "visibility-is-not-connectivity",
+      "claim": "Keep supported sightline stations and clear point rays separate from standing-hull movement edges; retain failed shortcuts and disconnected height bands."
+    },
+    {
+      "id": "wrapped-form-needs-physical-circuit",
+      "claim": "A wrapped outline or exact endpoint cycle does not establish a physical loop; certify every edge and return before counting connectivity."
+    }
+  ],
+  "limits": [
+    "No whole-map graph or shortest-path search",
+    "No certified closed circuit",
+    "No native movement, settled item contact, human playtest or gameplay balance",
+    "Exact static step construction is not a Pmove trajectory",
+    "No map geometry or external code incorporated into generator",
+    "No model weights, profile or ranking behavior changed"
+  ],
+  "runtime": {
+    "python": "3.11.3",
+    "pillow": "11.3.0",
+    "shapely": "2.1.2"
+  },
+  "bound_files": [
+    {
+      "path": "E:/Development/q2maparchive-wip/maps/ztn2dm3/pack/maps/ztn2dm3.bsp",
+      "sha256": "18a265da5b4be7664b22e6eff80adca7ce4c41da3ee1e152479b24b9ea36a1e2",
+      "bytes": 519096
+    },
+    {
+      "path": "E:/Development/q2maparchive-wip/maps/ztn2dm3/pack/maps/ref/ztn2dm3.ref",
+      "sha256": "5df0f336f0d12180aacaa71767128f23eb16c555e02f67474924df27c2258b87",
+      "bytes": 388
+    },
+    {
+      "path": "E:/Development/q2maparchive-wip/maps/ztn2dm3/pack/docs/ztn2dm3-readme.txt",
+      "sha256": "361d3180aae978c3ea23eac1fc34224e9c8c479f5adff2982cfe1d8e556a9fc7",
+      "bytes": 1350
+    },
+    {
+      "path": "E:/_SOURCE/_ASSETS/QL-preSteam/bloodrun.pk3/maps/bloodrun.bsp",
+      "sha256": "f299faab9d93987a14a3cf3fdf0efd3ed7794fe72c3e70f79b5d925b9131ec26",
+      "bytes": 2234936
+    },
+    {
+      "path": "tools/map_study/raised_resource_circuit.py",
+      "sha256": "a1436e01ec22f79d103c63febb7d391b8b300e84b712ab86b205973a2f5daa90",
+      "bytes": 14972
+    },
+    {
+      "path": "tools/map_study/interlocking_topology.py",
+      "sha256": "44897a19f77253374c4d55d8dd2042b0375206675a610d9a6f71483bf3644ef5",
+      "bytes": 15461
+    },
+    {
+      "path": "tools/map_study/binary.py",
+      "sha256": "2b76559a71365eaab41e6876ff7da94fe938994b4a5199d63620b8b60918daf1",
+      "bytes": 15999
+    },
+    {
+      "path": "tools/map_recipes/geometry.py",
+      "sha256": "dcfcc3413468cad9993476736edfae5f13eb03e26035fc39d73f83aa5a90742b",
+      "bytes": 19674
+    },
+    {
+      "path": "docs/Q2_RAISED_RESOURCE_CIRCUIT_STUDY.md",
+      "sha256": "ca3df4218bf14a1fdaf229a93d2ba50766454e1d74539da19e91c42d0f1f1f03",
+      "bytes": 12330
+    },
+    {
+      "path": "out/map-study/records/ztn2dm3-6351c2b9cf.json",
+      "sha256": "37e7fed98c989475df97fbd74558e880102cf4b5ac5dd95df5524f83da1cd0e7",
+      "bytes": 33342
+    },
+    {
+      "path": "knowledge/mp/spatial-patterns.json",
+      "sha256": "afcf3f505d67e5eb0fe191b80571bdb2d0c7923f2462637b98033bd543f71bfd",
+      "bytes": 68864
+    },
+    {
+      "path": "docs/MP_SPATIAL_PATTERNS.md",
+      "sha256": "802b918e48aa1d618513e4b685a0a94717d340d0034676e866ff8a6973330374",
+      "bytes": 14170
+    },
+    {
+      "path": "out/mp-spatial-patterns/bloodrun-upper-horseshoe.png",
+      "sha256": "ee81f9ae3ff7adfdfe3debbb511818fe2608ce4f6e28eadf5ebd78e09bb26043",
+      "bytes": 44163
+    },
+    {
+      "path": "out/mp-spatial-patterns/focused-measurements.json",
+      "sha256": "710d194a5116f4be5fb31e3f148423c6888bb3656b7a774ea3331baff87c7da8",
+      "bytes": 30074
+    },
+    {
+      "path": "out/ql-atlas/maps/bloodrun.json",
+      "sha256": "8de28e06effd7baee3bcf787849095a58a11b7f5d81de56204c509817945ee9e",
+      "bytes": 174786
+    },
+    {
+      "path": "out/raised-resource-circuit/audit-summary.log",
+      "sha256": "c40dc35804e4a2459cc6c4b06263e70a5837199675a4f1898fca541e82319d00",
+      "bytes": 2418
+    },
+    {
+      "path": "out/raised-resource-circuit/audit.json",
+      "sha256": "aca175d5948df0b8a8503f31ed7a993d5626bf9aed5a1a7371d8d69cab255bed",
+      "bytes": 99954
+    },
+    {
+      "path": "out/raised-resource-circuit/controls.json",
+      "sha256": "ff26c6b16f3a6322febd110c90f0fdd852a57c89735c45c72acb23e653841d77",
+      "bytes": 596
+    },
+    {
+      "path": "out/raised-resource-circuit/controls.py",
+      "sha256": "a8dc4f6b8d3b62f5898a3f49d327acdd74c5fe6baa3bcb1dbd6d38b4f97a878e",
+      "bytes": 2189
+    },
+    {
+      "path": "out/raised-resource-circuit/exploratory-floors.png",
+      "sha256": "6ce4de67fceed95e2db730a0e974b4c4c523f4ffcd7d30e4ceffa1a3647712f0",
+      "bytes": 62211
+    },
+    {
+      "path": "out/raised-resource-circuit/exploratory-inventory.json",
+      "sha256": "5b42de7731e316364162af0a5b9c805578309529c9f92d3801806d4159fb574d",
+      "bytes": 5876
+    },
+    {
+      "path": "out/raised-resource-circuit/explore.py",
+      "sha256": "47ccc93badd4c2a58a1309f6fe3a7a9115bdace963d1e337a52cb94d9da79219",
+      "bytes": 3849
+    },
+    {
+      "path": "out/raised-resource-circuit/protocol.json",
+      "sha256": "0c7f78bd452360cb7ea4cdcdf5c0fc6ccc5e819c32fd60adb6a12c6449062bb2",
+      "bytes": 3061
+    },
+    {
+      "path": "out/raised-resource-circuit/record_evidence.py",
+      "sha256": "0871da5cae51169737d93a3f99dd19fdf199e578c35f121d4041c9c71af141b7",
+      "bytes": 9035
+    },
+    {
+      "path": "out/raised-resource-circuit/render.py",
+      "sha256": "55d41d247a896aca11e72bf984940b3f61f0fde3d5a3ba3a04242d0a71f19f4f",
+      "bytes": 5693
+    },
+    {
+      "path": "out/raised-resource-circuit/resource-approaches.png",
+      "sha256": "168c9eff0df04ff3e9db4399c9379fad9f0771a53e059d3a448e2845e1584c48",
+      "bytes": 100541
+    }
+  ]
+}

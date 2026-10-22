@@ -1,0 +1,1595 @@
+{
+  "schema": "qmg.rc_ledger",
+  "schema_version": 1,
+  "updated": "2026-10-15",
+  "change_id": "x1-bench",
+  "description": "Release-candidate ledger (plan 9.1, D11, D12). Status per path, the claimed tier from plan section 12, RC1-RC5 and the parity rubric P1-P11 with evidence pointers, the human-playtest field and waivers. A status of pass, met or partial needs at least one evidence pointer with a sha256 and one evidence level (D34); fail, not_met, not_measured and unassessed rest on the plan record. Statuses restate the plan record named in 'sources'; ledger_check.py fails when that file changes, so the rows are re-reviewed whenever the plan is edited. No human has played any generated map.",
+  "evidence_levels": [
+    "static analysis",
+    "compiler output",
+    "AAS routing",
+    "native movement trial",
+    "engine initialization",
+    "engine runtime with bots",
+    "engine rendering",
+    "human play"
+  ],
+  "rc_conditions": {
+    "RC1": "100% of the path's RC1 set (plan 8.3) passes every hard gate.",
+    "RC2": "Depth parity: rubric P1-P11 (D12 (c)), plus the SP rubric for SP and co-op.",
+    "RC3": "A hero chosen in advance, with study, viewer and package.",
+    "RC4": "Engine smoke passes (and Q3 bots reach every item).",
+    "RC5": "README/ROADMAP state the gaps and the playtest status."
+  },
+  "rubric": {
+    "P1": "A dedicated mode-aware construction path; geometry differs across games and modes at a fixed seed.",
+    "P2": "At least 2 layout families, at least 3 vertical motifs, a barrier/cover motif and at least 1 inter-room vertical link, each with typed access contracts and access-removal unit tests.",
+    "P3": "Item/spawn station binding and spawn LOS refinement at the game's eye height.",
+    "P4": "Mechanisms chosen by the default planner without a prompt request (provisional metric in plan 9.1), with recipe-audit, native-traversal and engine-initialization evidence on MECH-SAMPLE.",
+    "P5": "The item model and timing simulation (workstream D).",
+    "P6": "Materials and lighting (workstreams F and G).",
+    "P7": "Navigation, visibility, lighting and quality analysis with game constants, with error findings gated.",
+    "P8": "A CTest compiler gate on the default path at two scales.",
+    "P9": "Native movement trials on the hero's main routes: 100% of predeclared routes complete; failures kept.",
+    "P10": "Engine initialization on bench cases and the hero.",
+    "P11": "The variety gate."
+  },
+  "sp_rubric": {
+    "SP1": "Progression graph with key gating (C6a).",
+    "SP2": "Loop-back and views ahead (C6b).",
+    "SP3": "At least 5 typed encounter kinds.",
+    "SP4": "Per-skill plans.",
+    "SP5": "Resource model with a completability check.",
+    "SP6": "Hinted secrets; coop starts and the D28 co-op output model."
+  },
+  "waiver_policy": {
+    "reason_codes": "closed list in rc-ledger.schema.json and tools/benchmark/README.md",
+    "cap": "at most 5% of the measured instances per gate per path",
+    "heroes": "0 unless declared in the hero's HEROES entry before generation",
+    "approval": "each waiver carries the user's approval; an agent cannot approve its own waivers"
+  },
+  "sources": [
+    {
+      "path": "docs/RC_PHASE1_AUDIT_AND_PLAN.md",
+      "sha256": "6fa65d585b292441af886e39f53a7c79debdaaccb9d00769ced2466e4afabb40",
+      "level": "plan record",
+      "section": "5, 7, 9.1, 12",
+      "note": "Statuses and notes in this ledger restate this record; re-review them when it changes."
+    }
+  ],
+  "paths": {
+    "q1-sp": {
+      "game": "q1",
+      "mode": "sp",
+      "module": "q1-id1",
+      "claimed": "deferred",
+      "status": "deferred",
+      "status_note": "Decide at the Q1 E1 checkpoint (Phase-6 exit); default defer (plan section 12).",
+      "rc": {
+        "RC1": {
+          "status": "not_measured",
+          "evidence": [],
+          "note": "BENCH-v1 has not been run under the v1 policy. Draft-v0 core cases passing G1-G7: 8/8 (plan section 5)."
+        },
+        "RC2": {
+          "status": "not_met",
+          "evidence": [],
+          "note": "Below the Q2 DM parity bar (rubric P1-P11, D12); see plan section 7."
+        },
+        "RC3": {
+          "status": "not_met",
+          "evidence": [],
+          "note": "No hero is chosen; heroes.json is empty (D26 pending)."
+        },
+        "RC4": {
+          "status": "not_met",
+          "evidence": [],
+          "note": "No Q1 smoke harness or reviewable pinned engine (D16 pending)."
+        },
+        "RC5": {
+          "status": "not_met",
+          "evidence": [],
+          "note": "README/ROADMAP do not yet state this path's gaps and playtest status (X3 truth patch pending)."
+        }
+      },
+      "parity": {
+        "P1": {
+          "status": "unassessed",
+          "evidence": []
+        },
+        "P2": {
+          "status": "unassessed",
+          "evidence": []
+        },
+        "P3": {
+          "status": "unassessed",
+          "evidence": []
+        },
+        "P4": {
+          "status": "unassessed",
+          "evidence": []
+        },
+        "P5": {
+          "status": "unassessed",
+          "evidence": []
+        },
+        "P6": {
+          "status": "unassessed",
+          "evidence": []
+        },
+        "P7": {
+          "status": "unassessed",
+          "evidence": []
+        },
+        "P8": {
+          "status": "unassessed",
+          "evidence": []
+        },
+        "P9": {
+          "status": "unassessed",
+          "evidence": []
+        },
+        "P10": {
+          "status": "unassessed",
+          "evidence": []
+        },
+        "P11": {
+          "status": "unassessed",
+          "evidence": []
+        }
+      },
+      "human_playtest": "none",
+      "waivers": [],
+      "sp_parity": {
+        "SP1": {
+          "status": "unassessed",
+          "evidence": []
+        },
+        "SP2": {
+          "status": "unassessed",
+          "evidence": []
+        },
+        "SP3": {
+          "status": "unassessed",
+          "evidence": []
+        },
+        "SP4": {
+          "status": "unassessed",
+          "evidence": []
+        },
+        "SP5": {
+          "status": "unassessed",
+          "evidence": []
+        },
+        "SP6": {
+          "status": "unassessed",
+          "evidence": []
+        }
+      }
+    },
+    "q1-coop": {
+      "game": "q1",
+      "mode": "coop",
+      "module": "q1-id1",
+      "claimed": "deferred",
+      "status": "deferred",
+      "status_note": "Decided with Q1 SP, plus D28 (plan section 12).",
+      "rc": {
+        "RC1": {
+          "status": "not_measured",
+          "evidence": [],
+          "note": "BENCH-v1 has not been run under the v1 policy. Draft-v0 core cases passing G1-G7: 0/8 (plan section 5)."
+        },
+        "RC2": {
+          "status": "not_met",
+          "evidence": [],
+          "note": "Below the Q2 DM parity bar (rubric P1-P11, D12); see plan section 7."
+        },
+        "RC3": {
+          "status": "not_met",
+          "evidence": [],
+          "note": "No hero is chosen; heroes.json is empty (D26 pending)."
+        },
+        "RC4": {
+          "status": "not_met",
+          "evidence": [],
+          "note": "No Q1 smoke harness or reviewable pinned engine (D16 pending)."
+        },
+        "RC5": {
+          "status": "not_met",
+          "evidence": [],
+          "note": "README/ROADMAP do not yet state this path's gaps and playtest status (X3 truth patch pending)."
+        }
+      },
+      "parity": {
+        "P1": {
+          "status": "unassessed",
+          "evidence": []
+        },
+        "P2": {
+          "status": "unassessed",
+          "evidence": []
+        },
+        "P3": {
+          "status": "unassessed",
+          "evidence": []
+        },
+        "P4": {
+          "status": "unassessed",
+          "evidence": []
+        },
+        "P5": {
+          "status": "unassessed",
+          "evidence": []
+        },
+        "P6": {
+          "status": "unassessed",
+          "evidence": []
+        },
+        "P7": {
+          "status": "unassessed",
+          "evidence": []
+        },
+        "P8": {
+          "status": "unassessed",
+          "evidence": []
+        },
+        "P9": {
+          "status": "unassessed",
+          "evidence": []
+        },
+        "P10": {
+          "status": "unassessed",
+          "evidence": []
+        },
+        "P11": {
+          "status": "unassessed",
+          "evidence": []
+        }
+      },
+      "human_playtest": "none",
+      "waivers": [],
+      "sp_parity": {
+        "SP1": {
+          "status": "unassessed",
+          "evidence": []
+        },
+        "SP2": {
+          "status": "unassessed",
+          "evidence": []
+        },
+        "SP3": {
+          "status": "unassessed",
+          "evidence": []
+        },
+        "SP4": {
+          "status": "unassessed",
+          "evidence": []
+        },
+        "SP5": {
+          "status": "unassessed",
+          "evidence": []
+        },
+        "SP6": {
+          "status": "unassessed",
+          "evidence": []
+        }
+      }
+    },
+    "q1-dm": {
+      "game": "q1",
+      "mode": "dm",
+      "module": "q1-id1",
+      "claimed": "conditional",
+      "status": "not_started",
+      "status_note": "Kept if D9 (WAD) and D16 (engine) are decided by the Phase-3 exit; otherwise deferred per D25.",
+      "rc": {
+        "RC1": {
+          "status": "not_measured",
+          "evidence": [],
+          "note": "BENCH-v1 has not been run under the v1 policy. Draft-v0 core cases passing G1-G7: 7/8 (plan section 5)."
+        },
+        "RC2": {
+          "status": "not_met",
+          "evidence": [],
+          "note": "Below the Q2 DM parity bar (rubric P1-P11, D12); see plan section 7."
+        },
+        "RC3": {
+          "status": "not_met",
+          "evidence": [],
+          "note": "No hero is chosen; heroes.json is empty (D26 pending)."
+        },
+        "RC4": {
+          "status": "not_met",
+          "evidence": [],
+          "note": "No Q1 smoke harness or reviewable pinned engine (D16 pending)."
+        },
+        "RC5": {
+          "status": "not_met",
+          "evidence": [],
+          "note": "README/ROADMAP do not yet state this path's gaps and playtest status (X3 truth patch pending)."
+        }
+      },
+      "parity": {
+        "P1": {
+          "status": "unassessed",
+          "evidence": []
+        },
+        "P2": {
+          "status": "unassessed",
+          "evidence": []
+        },
+        "P3": {
+          "status": "unassessed",
+          "evidence": []
+        },
+        "P4": {
+          "status": "unassessed",
+          "evidence": []
+        },
+        "P5": {
+          "status": "unassessed",
+          "evidence": []
+        },
+        "P6": {
+          "status": "unassessed",
+          "evidence": []
+        },
+        "P7": {
+          "status": "unassessed",
+          "evidence": []
+        },
+        "P8": {
+          "status": "unassessed",
+          "evidence": []
+        },
+        "P9": {
+          "status": "unassessed",
+          "evidence": []
+        },
+        "P10": {
+          "status": "unassessed",
+          "evidence": []
+        },
+        "P11": {
+          "status": "unassessed",
+          "evidence": []
+        }
+      },
+      "human_playtest": "none",
+      "waivers": []
+    },
+    "q1-duel": {
+      "game": "q1",
+      "mode": "duel",
+      "module": "q1-id1",
+      "claimed": "conditional",
+      "status": "not_started",
+      "status_note": "Rides on Q1 DM plus the shared duel item-control layer.",
+      "rc": {
+        "RC1": {
+          "status": "not_measured",
+          "evidence": [],
+          "note": "BENCH-v1 has not been run under the v1 policy. Draft-v0 core cases passing G1-G7: 7/8 (plan section 5)."
+        },
+        "RC2": {
+          "status": "not_met",
+          "evidence": [],
+          "note": "Below the Q2 DM parity bar (rubric P1-P11, D12); see plan section 7."
+        },
+        "RC3": {
+          "status": "not_met",
+          "evidence": [],
+          "note": "No hero is chosen; heroes.json is empty (D26 pending)."
+        },
+        "RC4": {
+          "status": "not_met",
+          "evidence": [],
+          "note": "No Q1 smoke harness or reviewable pinned engine (D16 pending)."
+        },
+        "RC5": {
+          "status": "not_met",
+          "evidence": [],
+          "note": "README/ROADMAP do not yet state this path's gaps and playtest status (X3 truth patch pending)."
+        }
+      },
+      "parity": {
+        "P1": {
+          "status": "unassessed",
+          "evidence": []
+        },
+        "P2": {
+          "status": "unassessed",
+          "evidence": []
+        },
+        "P3": {
+          "status": "unassessed",
+          "evidence": []
+        },
+        "P4": {
+          "status": "unassessed",
+          "evidence": []
+        },
+        "P5": {
+          "status": "unassessed",
+          "evidence": []
+        },
+        "P6": {
+          "status": "unassessed",
+          "evidence": []
+        },
+        "P7": {
+          "status": "unassessed",
+          "evidence": []
+        },
+        "P8": {
+          "status": "unassessed",
+          "evidence": []
+        },
+        "P9": {
+          "status": "unassessed",
+          "evidence": []
+        },
+        "P10": {
+          "status": "unassessed",
+          "evidence": []
+        },
+        "P11": {
+          "status": "unassessed",
+          "evidence": []
+        }
+      },
+      "human_playtest": "none",
+      "waivers": []
+    },
+    "q1-tdm": {
+      "game": "q1",
+      "mode": "tdm",
+      "module": "q1-id1",
+      "claimed": "dropped-claim",
+      "status": "dropped",
+      "status_note": "Dropped as a separate claim; Q1 DM is documented as teamplay-capable (plan section 12).",
+      "rc": {
+        "RC1": {
+          "status": "not_measured",
+          "evidence": [],
+          "note": "BENCH-v1 has not been run under the v1 policy. Draft-v0 core cases passing G1-G7: 0/8 (plan section 5)."
+        },
+        "RC2": {
+          "status": "not_met",
+          "evidence": [],
+          "note": "Below the Q2 DM parity bar (rubric P1-P11, D12); see plan section 7."
+        },
+        "RC3": {
+          "status": "not_met",
+          "evidence": [],
+          "note": "No hero is chosen; heroes.json is empty (D26 pending)."
+        },
+        "RC4": {
+          "status": "not_met",
+          "evidence": [],
+          "note": "No Q1 smoke harness or reviewable pinned engine (D16 pending)."
+        },
+        "RC5": {
+          "status": "not_met",
+          "evidence": [],
+          "note": "README/ROADMAP do not yet state this path's gaps and playtest status (X3 truth patch pending)."
+        }
+      },
+      "parity": {
+        "P1": {
+          "status": "unassessed",
+          "evidence": []
+        },
+        "P2": {
+          "status": "unassessed",
+          "evidence": []
+        },
+        "P3": {
+          "status": "unassessed",
+          "evidence": []
+        },
+        "P4": {
+          "status": "unassessed",
+          "evidence": []
+        },
+        "P5": {
+          "status": "unassessed",
+          "evidence": []
+        },
+        "P6": {
+          "status": "unassessed",
+          "evidence": []
+        },
+        "P7": {
+          "status": "unassessed",
+          "evidence": []
+        },
+        "P8": {
+          "status": "unassessed",
+          "evidence": []
+        },
+        "P9": {
+          "status": "unassessed",
+          "evidence": []
+        },
+        "P10": {
+          "status": "unassessed",
+          "evidence": []
+        },
+        "P11": {
+          "status": "unassessed",
+          "evidence": []
+        }
+      },
+      "human_playtest": "none",
+      "waivers": []
+    },
+    "q1-ctf-threewave": {
+      "game": "q1",
+      "mode": "ctf-threewave",
+      "module": "q1-threewave-5.0",
+      "claimed": "dropped-claim",
+      "status": "dropped",
+      "status_note": "Likely drop: no runnable Threewave runtime (plan section 12).",
+      "rc": {
+        "RC1": {
+          "status": "not_measured",
+          "evidence": [],
+          "note": "BENCH-v1 has not been run under the v1 policy. Draft-v0 core cases passing G1-G7: 0/8 (plan section 5)."
+        },
+        "RC2": {
+          "status": "not_met",
+          "evidence": [],
+          "note": "Below the Q2 DM parity bar (rubric P1-P11, D12); see plan section 7."
+        },
+        "RC3": {
+          "status": "not_met",
+          "evidence": [],
+          "note": "No hero is chosen; heroes.json is empty (D26 pending)."
+        },
+        "RC4": {
+          "status": "not_met",
+          "evidence": [],
+          "note": "No Q1 smoke harness or reviewable pinned engine (D16 pending)."
+        },
+        "RC5": {
+          "status": "not_met",
+          "evidence": [],
+          "note": "README/ROADMAP do not yet state this path's gaps and playtest status (X3 truth patch pending)."
+        }
+      },
+      "parity": {
+        "P1": {
+          "status": "unassessed",
+          "evidence": []
+        },
+        "P2": {
+          "status": "unassessed",
+          "evidence": []
+        },
+        "P3": {
+          "status": "unassessed",
+          "evidence": []
+        },
+        "P4": {
+          "status": "unassessed",
+          "evidence": []
+        },
+        "P5": {
+          "status": "unassessed",
+          "evidence": []
+        },
+        "P6": {
+          "status": "unassessed",
+          "evidence": []
+        },
+        "P7": {
+          "status": "unassessed",
+          "evidence": []
+        },
+        "P8": {
+          "status": "unassessed",
+          "evidence": []
+        },
+        "P9": {
+          "status": "unassessed",
+          "evidence": []
+        },
+        "P10": {
+          "status": "unassessed",
+          "evidence": []
+        },
+        "P11": {
+          "status": "unassessed",
+          "evidence": []
+        }
+      },
+      "human_playtest": "none",
+      "waivers": []
+    },
+    "q2-sp": {
+      "game": "q2",
+      "mode": "sp",
+      "module": "q2-baseq2-3.19",
+      "claimed": "deferred",
+      "status": "deferred",
+      "status_note": "Decide at the Q2 E1 checkpoint (Phase-5 exit); default defer.",
+      "rc": {
+        "RC1": {
+          "status": "not_measured",
+          "evidence": [],
+          "note": "BENCH-v1 has not been run under the v1 policy. Draft-v0 core cases passing G1-G7: 7/8 (plan section 5)."
+        },
+        "RC2": {
+          "status": "not_met",
+          "evidence": [],
+          "note": "Below the Q2 DM parity bar (rubric P1-P11, D12); see plan section 7."
+        },
+        "RC3": {
+          "status": "not_met",
+          "evidence": [],
+          "note": "No hero is chosen; heroes.json is empty (D26 pending)."
+        },
+        "RC4": {
+          "status": "not_met",
+          "evidence": [],
+          "note": "The Q2 dedicated-init evidence predates the build and does not reproduce from its documented root (D17 pending)."
+        },
+        "RC5": {
+          "status": "not_met",
+          "evidence": [],
+          "note": "README/ROADMAP do not yet state this path's gaps and playtest status (X3 truth patch pending)."
+        }
+      },
+      "parity": {
+        "P1": {
+          "status": "unassessed",
+          "evidence": []
+        },
+        "P2": {
+          "status": "unassessed",
+          "evidence": []
+        },
+        "P3": {
+          "status": "unassessed",
+          "evidence": []
+        },
+        "P4": {
+          "status": "unassessed",
+          "evidence": []
+        },
+        "P5": {
+          "status": "unassessed",
+          "evidence": []
+        },
+        "P6": {
+          "status": "unassessed",
+          "evidence": []
+        },
+        "P7": {
+          "status": "unassessed",
+          "evidence": []
+        },
+        "P8": {
+          "status": "unassessed",
+          "evidence": []
+        },
+        "P9": {
+          "status": "unassessed",
+          "evidence": []
+        },
+        "P10": {
+          "status": "unassessed",
+          "evidence": []
+        },
+        "P11": {
+          "status": "unassessed",
+          "evidence": []
+        }
+      },
+      "human_playtest": "none",
+      "waivers": [],
+      "sp_parity": {
+        "SP1": {
+          "status": "unassessed",
+          "evidence": []
+        },
+        "SP2": {
+          "status": "unassessed",
+          "evidence": []
+        },
+        "SP3": {
+          "status": "unassessed",
+          "evidence": []
+        },
+        "SP4": {
+          "status": "unassessed",
+          "evidence": []
+        },
+        "SP5": {
+          "status": "unassessed",
+          "evidence": []
+        },
+        "SP6": {
+          "status": "unassessed",
+          "evidence": []
+        }
+      }
+    },
+    "q2-coop": {
+      "game": "q2",
+      "mode": "coop",
+      "module": "q2-baseq2-3.19",
+      "claimed": "deferred",
+      "status": "deferred",
+      "status_note": "Decided with Q2 SP, plus D28.",
+      "rc": {
+        "RC1": {
+          "status": "not_measured",
+          "evidence": [],
+          "note": "BENCH-v1 has not been run under the v1 policy. Draft-v0 core cases passing G1-G7: 0/8 (plan section 5)."
+        },
+        "RC2": {
+          "status": "not_met",
+          "evidence": [],
+          "note": "Below the Q2 DM parity bar (rubric P1-P11, D12); see plan section 7."
+        },
+        "RC3": {
+          "status": "not_met",
+          "evidence": [],
+          "note": "No hero is chosen; heroes.json is empty (D26 pending)."
+        },
+        "RC4": {
+          "status": "not_met",
+          "evidence": [],
+          "note": "The Q2 dedicated-init evidence predates the build and does not reproduce from its documented root (D17 pending)."
+        },
+        "RC5": {
+          "status": "not_met",
+          "evidence": [],
+          "note": "README/ROADMAP do not yet state this path's gaps and playtest status (X3 truth patch pending)."
+        }
+      },
+      "parity": {
+        "P1": {
+          "status": "unassessed",
+          "evidence": []
+        },
+        "P2": {
+          "status": "unassessed",
+          "evidence": []
+        },
+        "P3": {
+          "status": "unassessed",
+          "evidence": []
+        },
+        "P4": {
+          "status": "unassessed",
+          "evidence": []
+        },
+        "P5": {
+          "status": "unassessed",
+          "evidence": []
+        },
+        "P6": {
+          "status": "unassessed",
+          "evidence": []
+        },
+        "P7": {
+          "status": "unassessed",
+          "evidence": []
+        },
+        "P8": {
+          "status": "unassessed",
+          "evidence": []
+        },
+        "P9": {
+          "status": "unassessed",
+          "evidence": []
+        },
+        "P10": {
+          "status": "unassessed",
+          "evidence": []
+        },
+        "P11": {
+          "status": "unassessed",
+          "evidence": []
+        }
+      },
+      "human_playtest": "none",
+      "waivers": [],
+      "sp_parity": {
+        "SP1": {
+          "status": "unassessed",
+          "evidence": []
+        },
+        "SP2": {
+          "status": "unassessed",
+          "evidence": []
+        },
+        "SP3": {
+          "status": "unassessed",
+          "evidence": []
+        },
+        "SP4": {
+          "status": "unassessed",
+          "evidence": []
+        },
+        "SP5": {
+          "status": "unassessed",
+          "evidence": []
+        },
+        "SP6": {
+          "status": "unassessed",
+          "evidence": []
+        }
+      }
+    },
+    "q2-dm": {
+      "game": "q2",
+      "mode": "dm",
+      "module": "q2-baseq2-3.19",
+      "claimed": "committed",
+      "status": "in_progress",
+      "status_note": "Committed; Phase 2 measuring stick in progress.",
+      "rc": {
+        "RC1": {
+          "status": "not_measured",
+          "evidence": [],
+          "note": "BENCH-v1 has not been run under the v1 policy. Draft-v0 core cases passing G1-G7: 8/8 (q2-showcase-hero fails G2) (plan section 5)."
+        },
+        "RC2": {
+          "status": "not_met",
+          "evidence": [],
+          "note": "Q2 DM is the reference path; the bar is Q2 DM frozen at the Phase-4 exit, expressed as P1-P11 (D12)."
+        },
+        "RC3": {
+          "status": "not_met",
+          "evidence": [],
+          "note": "No hero is chosen; heroes.json is empty (D26 pending)."
+        },
+        "RC4": {
+          "status": "not_met",
+          "evidence": [],
+          "note": "The Q2 dedicated-init evidence predates the build and does not reproduce from its documented root (D17 pending)."
+        },
+        "RC5": {
+          "status": "not_met",
+          "evidence": [],
+          "note": "README/ROADMAP do not yet state this path's gaps and playtest status (X3 truth patch pending)."
+        }
+      },
+      "parity": {
+        "P1": {
+          "status": "unassessed",
+          "evidence": []
+        },
+        "P2": {
+          "status": "unassessed",
+          "evidence": []
+        },
+        "P3": {
+          "status": "unassessed",
+          "evidence": []
+        },
+        "P4": {
+          "status": "unassessed",
+          "evidence": []
+        },
+        "P5": {
+          "status": "unassessed",
+          "evidence": []
+        },
+        "P6": {
+          "status": "unassessed",
+          "evidence": []
+        },
+        "P7": {
+          "status": "unassessed",
+          "evidence": []
+        },
+        "P8": {
+          "status": "fail",
+          "evidence": [],
+          "expected_at_baseline0": true,
+          "close_by": "Phase 4 exit",
+          "note": "No CTest compiler fixture on the default compact Q2 DM/duel path (src/generator.cpp:223-226 vs cmake/RunQ2CompilerTest.cmake:141-143; plan 9.1)."
+        },
+        "P9": {
+          "status": "unassessed",
+          "evidence": []
+        },
+        "P10": {
+          "status": "fail",
+          "evidence": [],
+          "expected_at_baseline0": true,
+          "close_by": "Phase 4 exit",
+          "note": "The Q2 dedicated-initialization smoke predates the current build and does not reproduce from its documented root (plan sections 7 and 9.1)."
+        },
+        "P11": {
+          "status": "fail",
+          "evidence": [],
+          "expected_at_baseline0": true,
+          "close_by": "Phase 4 exit",
+          "note": "Variety gate: Splice 8-room graph variety fell from 2 to 1 (plan 9.1 rubric self-check)."
+        }
+      },
+      "human_playtest": "none",
+      "waivers": []
+    },
+    "q2-duel": {
+      "game": "q2",
+      "mode": "duel",
+      "module": "q2-baseq2-3.19",
+      "claimed": "committed",
+      "status": "in_progress",
+      "status_note": "Committed; shares the compact path.",
+      "rc": {
+        "RC1": {
+          "status": "not_measured",
+          "evidence": [],
+          "note": "BENCH-v1 has not been run under the v1 policy. Draft-v0 core cases passing G1-G7: 7/8 (plan section 5)."
+        },
+        "RC2": {
+          "status": "not_met",
+          "evidence": [],
+          "note": "Below the Q2 DM parity bar (rubric P1-P11, D12); see plan section 7."
+        },
+        "RC3": {
+          "status": "not_met",
+          "evidence": [],
+          "note": "No hero is chosen; heroes.json is empty (D26 pending)."
+        },
+        "RC4": {
+          "status": "not_met",
+          "evidence": [],
+          "note": "The Q2 dedicated-init evidence predates the build and does not reproduce from its documented root (D17 pending)."
+        },
+        "RC5": {
+          "status": "not_met",
+          "evidence": [],
+          "note": "README/ROADMAP do not yet state this path's gaps and playtest status (X3 truth patch pending)."
+        }
+      },
+      "parity": {
+        "P1": {
+          "status": "unassessed",
+          "evidence": []
+        },
+        "P2": {
+          "status": "unassessed",
+          "evidence": []
+        },
+        "P3": {
+          "status": "unassessed",
+          "evidence": []
+        },
+        "P4": {
+          "status": "unassessed",
+          "evidence": []
+        },
+        "P5": {
+          "status": "unassessed",
+          "evidence": []
+        },
+        "P6": {
+          "status": "unassessed",
+          "evidence": []
+        },
+        "P7": {
+          "status": "unassessed",
+          "evidence": []
+        },
+        "P8": {
+          "status": "fail",
+          "evidence": [],
+          "expected_at_baseline0": true,
+          "close_by": "Phase 4 exit",
+          "note": "No CTest compiler fixture on the default compact Q2 DM/duel path (src/generator.cpp:223-226 vs cmake/RunQ2CompilerTest.cmake:141-143; plan 9.1)."
+        },
+        "P9": {
+          "status": "unassessed",
+          "evidence": []
+        },
+        "P10": {
+          "status": "fail",
+          "evidence": [],
+          "expected_at_baseline0": true,
+          "close_by": "Phase 4 exit",
+          "note": "The Q2 dedicated-initialization smoke predates the current build and does not reproduce from its documented root (plan sections 7 and 9.1). It has not been run on a duel output."
+        },
+        "P11": {
+          "status": "fail",
+          "evidence": [],
+          "expected_at_baseline0": true,
+          "close_by": "Phase 4 exit",
+          "note": "Variety gate not met on the shared compact pool (the plan 9.1 rubric self-check covers Q2 DM and duel)."
+        }
+      },
+      "human_playtest": "none",
+      "waivers": []
+    },
+    "q2-tdm": {
+      "game": "q2",
+      "mode": "tdm",
+      "module": "q2-baseq2-3.19",
+      "claimed": "conditional",
+      "status": "not_started",
+      "status_note": "Kept if D14 is chosen.",
+      "rc": {
+        "RC1": {
+          "status": "not_measured",
+          "evidence": [],
+          "note": "BENCH-v1 has not been run under the v1 policy. Draft-v0 core cases passing G1-G7: 0/8 (plan section 5)."
+        },
+        "RC2": {
+          "status": "not_met",
+          "evidence": [],
+          "note": "Below the Q2 DM parity bar (rubric P1-P11, D12); see plan section 7."
+        },
+        "RC3": {
+          "status": "not_met",
+          "evidence": [],
+          "note": "No hero is chosen; heroes.json is empty (D26 pending)."
+        },
+        "RC4": {
+          "status": "not_met",
+          "evidence": [],
+          "note": "The Q2 dedicated-init evidence predates the build and does not reproduce from its documented root (D17 pending)."
+        },
+        "RC5": {
+          "status": "not_met",
+          "evidence": [],
+          "note": "README/ROADMAP do not yet state this path's gaps and playtest status (X3 truth patch pending)."
+        }
+      },
+      "parity": {
+        "P1": {
+          "status": "unassessed",
+          "evidence": []
+        },
+        "P2": {
+          "status": "unassessed",
+          "evidence": []
+        },
+        "P3": {
+          "status": "unassessed",
+          "evidence": []
+        },
+        "P4": {
+          "status": "unassessed",
+          "evidence": []
+        },
+        "P5": {
+          "status": "unassessed",
+          "evidence": []
+        },
+        "P6": {
+          "status": "unassessed",
+          "evidence": []
+        },
+        "P7": {
+          "status": "unassessed",
+          "evidence": []
+        },
+        "P8": {
+          "status": "unassessed",
+          "evidence": []
+        },
+        "P9": {
+          "status": "unassessed",
+          "evidence": []
+        },
+        "P10": {
+          "status": "unassessed",
+          "evidence": []
+        },
+        "P11": {
+          "status": "unassessed",
+          "evidence": []
+        }
+      },
+      "human_playtest": "none",
+      "waivers": []
+    },
+    "q2-ctf": {
+      "game": "q2",
+      "mode": "ctf",
+      "module": "q2-ctf-3.19",
+      "claimed": "conditional",
+      "status": "not_started",
+      "status_note": "Kept if D14 and D21 are approved (x64 3.19 ctf module).",
+      "rc": {
+        "RC1": {
+          "status": "not_measured",
+          "evidence": [],
+          "note": "BENCH-v1 has not been run under the v1 policy. Draft-v0 core cases passing G1-G7: 7/8 (plan section 5)."
+        },
+        "RC2": {
+          "status": "not_met",
+          "evidence": [],
+          "note": "Below the Q2 DM parity bar (rubric P1-P11, D12); see plan section 7."
+        },
+        "RC3": {
+          "status": "not_met",
+          "evidence": [],
+          "note": "No hero is chosen; heroes.json is empty (D26 pending)."
+        },
+        "RC4": {
+          "status": "not_met",
+          "evidence": [],
+          "note": "The Q2 dedicated-init evidence predates the build and does not reproduce from its documented root (D17 pending)."
+        },
+        "RC5": {
+          "status": "not_met",
+          "evidence": [],
+          "note": "README/ROADMAP do not yet state this path's gaps and playtest status (X3 truth patch pending)."
+        }
+      },
+      "parity": {
+        "P1": {
+          "status": "unassessed",
+          "evidence": []
+        },
+        "P2": {
+          "status": "unassessed",
+          "evidence": []
+        },
+        "P3": {
+          "status": "unassessed",
+          "evidence": []
+        },
+        "P4": {
+          "status": "unassessed",
+          "evidence": []
+        },
+        "P5": {
+          "status": "unassessed",
+          "evidence": []
+        },
+        "P6": {
+          "status": "unassessed",
+          "evidence": []
+        },
+        "P7": {
+          "status": "unassessed",
+          "evidence": []
+        },
+        "P8": {
+          "status": "unassessed",
+          "evidence": []
+        },
+        "P9": {
+          "status": "unassessed",
+          "evidence": []
+        },
+        "P10": {
+          "status": "unassessed",
+          "evidence": []
+        },
+        "P11": {
+          "status": "unassessed",
+          "evidence": []
+        }
+      },
+      "human_playtest": "none",
+      "waivers": []
+    },
+    "q3-botarena": {
+      "game": "q3",
+      "mode": "botarena",
+      "module": "q3-baseq3-1.32b",
+      "claimed": "conditional",
+      "status": "not_started",
+      "status_note": "Kept if D15 (a) gives bot arena its own contract.",
+      "rc": {
+        "RC1": {
+          "status": "not_measured",
+          "evidence": [],
+          "note": "BENCH-v1 has not been run under the v1 policy. Draft-v0 core cases passing G1-G7: 0/8 (plan section 5)."
+        },
+        "RC2": {
+          "status": "not_met",
+          "evidence": [],
+          "note": "Below the Q2 DM parity bar (rubric P1-P11, D12); see plan section 7."
+        },
+        "RC3": {
+          "status": "not_met",
+          "evidence": [],
+          "note": "No hero is chosen; heroes.json is empty (D26 pending)."
+        },
+        "RC4": {
+          "status": "not_met",
+          "evidence": [],
+          "note": "Quake3e dedicated has not been run for the project; no per-item reachability (H2; D18 pending)."
+        },
+        "RC5": {
+          "status": "not_met",
+          "evidence": [],
+          "note": "README/ROADMAP do not yet state this path's gaps and playtest status (X3 truth patch pending)."
+        }
+      },
+      "parity": {
+        "P1": {
+          "status": "unassessed",
+          "evidence": []
+        },
+        "P2": {
+          "status": "unassessed",
+          "evidence": []
+        },
+        "P3": {
+          "status": "unassessed",
+          "evidence": []
+        },
+        "P4": {
+          "status": "unassessed",
+          "evidence": []
+        },
+        "P5": {
+          "status": "unassessed",
+          "evidence": []
+        },
+        "P6": {
+          "status": "unassessed",
+          "evidence": []
+        },
+        "P7": {
+          "status": "unassessed",
+          "evidence": []
+        },
+        "P8": {
+          "status": "unassessed",
+          "evidence": []
+        },
+        "P9": {
+          "status": "unassessed",
+          "evidence": []
+        },
+        "P10": {
+          "status": "unassessed",
+          "evidence": []
+        },
+        "P11": {
+          "status": "unassessed",
+          "evidence": []
+        }
+      },
+      "human_playtest": "none",
+      "waivers": []
+    },
+    "q3-ffa": {
+      "game": "q3",
+      "mode": "ffa",
+      "module": "q3-baseq3-1.32b",
+      "claimed": "committed",
+      "status": "in_progress",
+      "status_note": "Committed.",
+      "rc": {
+        "RC1": {
+          "status": "not_measured",
+          "evidence": [],
+          "note": "BENCH-v1 has not been run under the v1 policy. Draft-v0 core cases passing G1-G7: 8/8 (plan section 5)."
+        },
+        "RC2": {
+          "status": "not_met",
+          "evidence": [],
+          "note": "Below the Q2 DM parity bar (rubric P1-P11, D12); see plan section 7."
+        },
+        "RC3": {
+          "status": "not_met",
+          "evidence": [],
+          "note": "No hero is chosen; heroes.json is empty (D26 pending)."
+        },
+        "RC4": {
+          "status": "not_met",
+          "evidence": [],
+          "note": "Quake3e dedicated has not been run for the project; no per-item reachability (H2; D18 pending)."
+        },
+        "RC5": {
+          "status": "not_met",
+          "evidence": [],
+          "note": "README/ROADMAP do not yet state this path's gaps and playtest status (X3 truth patch pending)."
+        }
+      },
+      "parity": {
+        "P1": {
+          "status": "unassessed",
+          "evidence": []
+        },
+        "P2": {
+          "status": "unassessed",
+          "evidence": []
+        },
+        "P3": {
+          "status": "unassessed",
+          "evidence": []
+        },
+        "P4": {
+          "status": "unassessed",
+          "evidence": []
+        },
+        "P5": {
+          "status": "unassessed",
+          "evidence": []
+        },
+        "P6": {
+          "status": "unassessed",
+          "evidence": []
+        },
+        "P7": {
+          "status": "unassessed",
+          "evidence": []
+        },
+        "P8": {
+          "status": "unassessed",
+          "evidence": []
+        },
+        "P9": {
+          "status": "unassessed",
+          "evidence": []
+        },
+        "P10": {
+          "status": "unassessed",
+          "evidence": []
+        },
+        "P11": {
+          "status": "unassessed",
+          "evidence": []
+        }
+      },
+      "human_playtest": "none",
+      "waivers": []
+    },
+    "q3-tourney": {
+      "game": "q3",
+      "mode": "tourney",
+      "module": "q3-baseq3-1.32b",
+      "claimed": "committed",
+      "status": "in_progress",
+      "status_note": "Committed.",
+      "rc": {
+        "RC1": {
+          "status": "not_measured",
+          "evidence": [],
+          "note": "BENCH-v1 has not been run under the v1 policy. Draft-v0 core cases passing G1-G7: 2/8 (plan section 5)."
+        },
+        "RC2": {
+          "status": "not_met",
+          "evidence": [],
+          "note": "Below the Q2 DM parity bar (rubric P1-P11, D12); see plan section 7."
+        },
+        "RC3": {
+          "status": "not_met",
+          "evidence": [],
+          "note": "No hero is chosen; heroes.json is empty (D26 pending)."
+        },
+        "RC4": {
+          "status": "not_met",
+          "evidence": [],
+          "note": "Quake3e dedicated has not been run for the project; no per-item reachability (H2; D18 pending)."
+        },
+        "RC5": {
+          "status": "not_met",
+          "evidence": [],
+          "note": "README/ROADMAP do not yet state this path's gaps and playtest status (X3 truth patch pending)."
+        }
+      },
+      "parity": {
+        "P1": {
+          "status": "unassessed",
+          "evidence": []
+        },
+        "P2": {
+          "status": "unassessed",
+          "evidence": []
+        },
+        "P3": {
+          "status": "unassessed",
+          "evidence": []
+        },
+        "P4": {
+          "status": "unassessed",
+          "evidence": []
+        },
+        "P5": {
+          "status": "unassessed",
+          "evidence": []
+        },
+        "P6": {
+          "status": "unassessed",
+          "evidence": []
+        },
+        "P7": {
+          "status": "unassessed",
+          "evidence": []
+        },
+        "P8": {
+          "status": "unassessed",
+          "evidence": []
+        },
+        "P9": {
+          "status": "unassessed",
+          "evidence": []
+        },
+        "P10": {
+          "status": "unassessed",
+          "evidence": []
+        },
+        "P11": {
+          "status": "unassessed",
+          "evidence": []
+        }
+      },
+      "human_playtest": "none",
+      "waivers": []
+    },
+    "q3-tdm": {
+      "game": "q3",
+      "mode": "tdm",
+      "module": "q3-baseq3-1.32b",
+      "claimed": "committed",
+      "status": "in_progress",
+      "status_note": "Committed.",
+      "rc": {
+        "RC1": {
+          "status": "not_measured",
+          "evidence": [],
+          "note": "BENCH-v1 has not been run under the v1 policy. Draft-v0 core cases passing G1-G7: 0/8 (plan section 5)."
+        },
+        "RC2": {
+          "status": "not_met",
+          "evidence": [],
+          "note": "Below the Q2 DM parity bar (rubric P1-P11, D12); see plan section 7."
+        },
+        "RC3": {
+          "status": "not_met",
+          "evidence": [],
+          "note": "No hero is chosen; heroes.json is empty (D26 pending)."
+        },
+        "RC4": {
+          "status": "not_met",
+          "evidence": [],
+          "note": "Quake3e dedicated has not been run for the project; no per-item reachability (H2; D18 pending)."
+        },
+        "RC5": {
+          "status": "not_met",
+          "evidence": [],
+          "note": "README/ROADMAP do not yet state this path's gaps and playtest status (X3 truth patch pending)."
+        }
+      },
+      "parity": {
+        "P1": {
+          "status": "unassessed",
+          "evidence": []
+        },
+        "P2": {
+          "status": "unassessed",
+          "evidence": []
+        },
+        "P3": {
+          "status": "unassessed",
+          "evidence": []
+        },
+        "P4": {
+          "status": "unassessed",
+          "evidence": []
+        },
+        "P5": {
+          "status": "unassessed",
+          "evidence": []
+        },
+        "P6": {
+          "status": "unassessed",
+          "evidence": []
+        },
+        "P7": {
+          "status": "unassessed",
+          "evidence": []
+        },
+        "P8": {
+          "status": "unassessed",
+          "evidence": []
+        },
+        "P9": {
+          "status": "unassessed",
+          "evidence": []
+        },
+        "P10": {
+          "status": "unassessed",
+          "evidence": []
+        },
+        "P11": {
+          "status": "unassessed",
+          "evidence": []
+        }
+      },
+      "human_playtest": "none",
+      "waivers": []
+    },
+    "q3-ctf": {
+      "game": "q3",
+      "mode": "ctf",
+      "module": "q3-baseq3-1.32b",
+      "claimed": "committed",
+      "status": "in_progress",
+      "status_note": "Committed.",
+      "rc": {
+        "RC1": {
+          "status": "not_measured",
+          "evidence": [],
+          "note": "BENCH-v1 has not been run under the v1 policy. Draft-v0 core cases passing G1-G7: 8/8 (plan section 5)."
+        },
+        "RC2": {
+          "status": "not_met",
+          "evidence": [],
+          "note": "Below the Q2 DM parity bar (rubric P1-P11, D12); see plan section 7."
+        },
+        "RC3": {
+          "status": "not_met",
+          "evidence": [],
+          "note": "No hero is chosen; heroes.json is empty (D26 pending)."
+        },
+        "RC4": {
+          "status": "not_met",
+          "evidence": [],
+          "note": "Quake3e dedicated has not been run for the project; no per-item reachability (H2; D18 pending)."
+        },
+        "RC5": {
+          "status": "not_met",
+          "evidence": [],
+          "note": "README/ROADMAP do not yet state this path's gaps and playtest status (X3 truth patch pending)."
+        }
+      },
+      "parity": {
+        "P1": {
+          "status": "unassessed",
+          "evidence": []
+        },
+        "P2": {
+          "status": "unassessed",
+          "evidence": []
+        },
+        "P3": {
+          "status": "unassessed",
+          "evidence": []
+        },
+        "P4": {
+          "status": "unassessed",
+          "evidence": []
+        },
+        "P5": {
+          "status": "unassessed",
+          "evidence": []
+        },
+        "P6": {
+          "status": "unassessed",
+          "evidence": []
+        },
+        "P7": {
+          "status": "unassessed",
+          "evidence": []
+        },
+        "P8": {
+          "status": "unassessed",
+          "evidence": []
+        },
+        "P9": {
+          "status": "unassessed",
+          "evidence": []
+        },
+        "P10": {
+          "status": "unassessed",
+          "evidence": []
+        },
+        "P11": {
+          "status": "unassessed",
+          "evidence": []
+        }
+      },
+      "human_playtest": "none",
+      "waivers": []
+    }
+  }
+}

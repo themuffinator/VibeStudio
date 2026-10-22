@@ -10,3 +10,5 @@ external/audio/portaudio/** -text
 external/modelling/xatlas/** -text
 external/graphics/vulkan-headers/** -text
 src/tests/fixtures/audio_decode/*.f32 -text
+# The Map Generator's golden maps compare canonical LF bytes.
+src/mapgen/** text eol=lf

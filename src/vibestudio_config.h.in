@@ -7,3 +7,8 @@
 #define VIBESTUDIO_HAVE_AUDIO_PLAYBACK @VIBESTUDIO_HAVE_AUDIO_PLAYBACK@
 // Native duplex devices are separate from optional Qt playback/capture.
 #define VIBESTUDIO_HAVE_AUDIO_DUPLEX @VIBESTUDIO_HAVE_AUDIO_DUPLEX@
+
+// 1 when the build links llama.cpp and ggml (-Dggml=enabled): the Local GGUF connector.
+#define VIBESTUDIO_HAVE_GGML @VIBESTUDIO_HAVE_GGML@
+// The pinned llama.cpp revision linked, or empty.
+#define VIBESTUDIO_GGML_REVISION @VIBESTUDIO_GGML_REVISION@

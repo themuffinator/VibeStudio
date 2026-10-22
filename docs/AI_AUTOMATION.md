@@ -82,7 +82,11 @@ Initial connector targets:
 | [ElevenLabs](https://elevenlabs.io/docs/overview/intro) | Sound effects through the [Sound Effects API](https://elevenlabs.io/docs/api-reference/text-to-sound-effects/convert) with `ELEVENLABS_API_KEY`, `eleven_text_to_sound_v2` by default; voice, narration and speech-to-text remain planned. |
 | [Meshy](https://docs.meshy.ai/en) | Prompt/image-to-3D experiments, AI texturing, placeholder model generation, and concept-to-asset workflows. |
 | Local/offline models | Text questions to an OpenAI-compatible server on this machine: Ollama at `http://localhost:11434/v1` by default, or LM Studio and llama.cpp's server at their own addresses. Pictures from a [Stable Diffusion web UI](https://github.com/AUTOMATIC1111/stable-diffusion-webui/wiki/API) (AUTOMATIC1111 or Forge) at `http://127.0.0.1:7860`, or an OpenAI-compatible image server at an address ending in `/v1`. No key and no cloud opt-in needed. |
-| Custom HTTP/MCP-style connectors | Text questions to any OpenAI-compatible endpoint you set, such as a team proxy, and sound effects from an endpoint that takes ElevenLabs' sound-generation request; MCP-style tools are a future extension path. |
+| Custom HTTP/MCP-style connectors | Text questions to any OpenAI-compatible endpoint you set, such as a team proxy, pictures from an OpenAI Images-compatible or Stable Diffusion web UI endpoint, and sound effects from an endpoint that takes ElevenLabs' sound-generation request; MCP-style tools are a future extension path. |
+| [Claude Code](https://code.claude.com/docs/en/cli-reference) (`claude-code`) | Text questions through the user's own Claude login, run as `claude -p` with its tools off (see [Connectors without API keys](#connectors-without-api-keys)); `claude-opus-5-5` unless another model is named. A cloud connector. |
+| [Codex](https://github.com/openai/codex) (`codex`) | Text questions through the user's own ChatGPT login, run as `codex exec` with its tools off and the user's config not loaded; Codex's own default model unless one is named. A cloud connector. |
+| Custom Command (`custom-command`) | Text questions from any program the user names as a command-line template. VibeStudio cannot tell where it sends the prompt, so it is a cloud connector. |
+| Local GGUF Model (`local-gguf`) | Text questions from a `.gguf` file run inside the studio on the CPU, only in builds with `-Dggml=enabled`; release packages are built without it. No key and no cloud opt-in needed. |
 
 Connector capabilities should be declared explicitly:
 - Text generation and reasoning.
@@ -97,6 +101,74 @@ Connector capabilities should be declared explicitly:
 - Cost/usage reporting where providers expose it.
 - Data retention and privacy notes.
 
+### Connectors without API keys
+
+Text requests travel one of three ways (`core/ai_transport.h`,
+`aiTextTransport`), and every pipeline that sends through `AiChatClient` works
+with all three unchanged: the Assistant, both level generators' planners,
+**Edit Map with AI**, `ai ask` and connection tests.
+
+- **HTTP** to a provider or a local server.
+- **Harnesses** (`core/ai_harness.h`): **Claude Code** (`claude -p`) and
+  **Codex** (`codex exec`) answer through the user's own subscription login,
+  and **Custom Command** runs any program from a command-line template. Each
+  run gets a new, empty folder.
+  - Claude Code runs with `--safe-mode` (no `CLAUDE.md`, hooks, plugins, MCP
+    or memory), `--tools ""`, `--strict-mcp-config`,
+    `--no-session-persistence`, `--max-turns 3` and `--output-format json`,
+    the system prompt in a file and structured requests through
+    `--json-schema`; updates, telemetry, error reports and surveys are turned
+    off for the run.
+  - Codex runs `exec` with `--ignore-user-config`, so the user's
+    `config.toml`, with its MCP servers, hooks and plugins, is not loaded (the
+    login still is); its shell and other tools switched off with
+    `-c features.<name>=false`; `--sandbox read-only`, `--ephemeral`,
+    `--ignore-rules`, `--json`, a schema file and `-o`.
+  - Environment variables that would redirect or re-bill requests are not
+    passed. Claude Code gets no `ANTHROPIC_API_KEY`, `ANTHROPIC_AUTH_TOKEN`,
+    `ANTHROPIC_BASE_URL`, `CLAUDE_CODE_USE_BEDROCK`, `CLAUDE_CODE_USE_VERTEX`
+    or `CLAUDE_CODE_USE_FOUNDRY`; Codex gets no `CODEX_API_KEY`,
+    `OPENAI_API_KEY` or `OPENAI_BASE_URL`. The Claude and OpenAI connectors
+    are the API-key routes; a Custom Command can run a tool any other way.
+  - Custom Command fills `{model}`, `{prompt_file}`, `{system_file}`,
+    `{schema_file}` and `{answer_file}` in its command line. With no model
+    set, a `{model}` word and the option before a bare `{model}`
+    (`-m {model}`) are left out, so the program uses its own default.
+  - The program is found on PATH or in the tool's usual install folders, or
+    set as the connector's endpoint (**Program** in Settings). npm's Windows
+    `.cmd` shims are run as node and their script, never through `cmd.exe`;
+    other batch files are refused.
+  - Cancelling or timing out ends the tool and everything it started
+    (`core/process_tree`: a job object on Windows, a process group on Unix),
+    so no tool process keeps running; the run folder is then removed.
+  - A tool that rejects an option VibeStudio passes is reported as older than
+    VibeStudio needs, with its update command (`claude update`,
+    `npm install -g @openai/codex@latest`).
+  - Harnesses count as cloud connectors: they need cloud connectors allowed,
+    and the first request from a project shows the exact command, files and
+    input in the consent dialog. Settings' **Test Connection** and
+    `ai test-connection` run `claude auth status --json` or
+    `codex login status` first, stop when the tool is signed out, and warn
+    when it is signed in with an API key, which bills that key.
+- **GGUF** (`core/ai_gguf_runtime.h`): in builds with `-Dggml=enabled`, a
+  `.gguf` model named as the Local GGUF connector's model runs inside the
+  studio through the pinned llama.cpp, on the CPU, with greedy decoding. A
+  structured request's JSON Schema becomes a GBNF grammar
+  (`core/ai_json_grammar.h`), so the model can only write a matching object;
+  free text adds a repetition penalty. The model stays loaded between
+  requests, and its SHA-256 is cached by path, size and time. The context
+  window is the model's trained window, up to 32,768 tokens, and the same for
+  every request, so Quake-MapGen's revision rounds all see one window. Output
+  stops at the request's limit (at most 32,768 tokens, as the review record
+  shows) and is marked cut only when it was. A queued request can be
+  cancelled while it waits for the model, and so can loading. Message text
+  that spells out the model's control tokens is removed before tokenizing.
+  Builds without ggml report how to get it; release packages are built
+  without ggml for now.
+
+Image and sound generation still need an image or sound connector; the
+harnesses and the GGUF runtime answer text only.
+
 ## Assistant
 
 The Assistant panel (View > Assistant Panel, the AI status chip, **Explain** on
@@ -105,8 +177,13 @@ the text model a question about the open work:
 
 - **Who answers.** The Reasoning connector from Settings > AI and Automation,
   else the Local one. With cloud connectors off, a local connector wins. Each
-  text connector's model, endpoint, and key source are set under Assistant
-  Model, where **Test Connection** asks the model to reply OK.
+  text connector's model, endpoint (or program), and key source are set under
+  **Text Model**, whose **Status** line says what text features use now.
+  **Use This Connector** makes the connector shown the one they ask (Reasoning,
+  or Local while cloud connectors are off), and **Test Connection** asks it to
+  reply OK, after checking Claude Code's or Codex's login. Preferred
+  Connectors entries the settings rule out are greyed with the reason, such
+  as "(needs cloud connectors)" or "(not in this build)".
 - **What goes.** Only what is ticked under *Send with the question*: the
   selected code or the open file, the map summary, the selected map objects,
   the last build's problems and the end of each tool's output, or the project
@@ -136,7 +213,8 @@ cannot send, and names the setting. `vibestudio --cli ai ask` and
 ## Generating Levels
 
 **Generate Level** (the Levels header, the command palette, or
-`vibestudio --cli map generate`) turns a description into a sealed, playable
+`vibestudio --cli map generate`) has two generators. The studio generator
+(**Generator: Studio blockout**) turns a description into a sealed, playable
 level for Quake, Quake II, Quake III, or Doom. It follows the pipeline of
 [Quake-MapGen](https://github.com/themuffinator/Quake-MapGen) (credited in
 docs/CREDITS.md): plan without coordinates, lay out on an integer grid, build
@@ -182,6 +260,68 @@ colour), the plan, the notes and repairs, and the map text. **Open in Levels**
 opens it as a new, unsaved map; Save As and Save Plan write files. Textures
 are the games' stock names unless the project's own fit (matched by role from
 the open package and map) or are named outright.
+
+### Quake-MapGen
+
+**Generator: Quake-MapGen** in the same dialog (or `map generate --generator
+quake-mapgen`) builds the level with Quake-MapGen itself. Its source now lives
+in VibeStudio as the Map Generator module (`src/mapgen`, imported from
+[Quake-MapGen](https://github.com/themuffinator/Quake-MapGen), MIT; see
+`src/mapgen/VIBESTUDIO.md`), and it is developed there from now on. Status:
+**Partial**. No generated map has had a human playtest.
+
+- **Games and modes.** Quake, Quake II and Quake III Arena; single player,
+  deathmatch, duel and capture the flag. Quake III single player is an arena
+  with deathmatch starts. Co-op, team deathmatch, Threewave CTF starts and
+  Quake III bot-arena entries are not supported. Doom stays with the studio
+  generator.
+- **Request.** Quake-MapGen reads the game, mode, theme, rooms (2 to 32),
+  players, verticality, intensity and seed from the description. The dialog's
+  and CLI's choices override them. Without a seed in the description it uses
+  seed 1, so the same description gives the same level.
+- **Plan.** The rules planner, or the configured text model through the
+  studio's connectors, chooses the route style, symmetry, lighting style,
+  verticality, intensity and one role per room. The model is sent the plan's
+  JSON Schema for this request; an invalid plan gets up to two correction
+  rounds, then the rules plan the level instead and the notes say why. A
+  connector that cannot be reached, or a cancelled request, builds nothing.
+  The report names a connector's model by connector and model name, with no
+  weight digests; a tool left on its own default model is recorded as
+  `<connector>-default`, such as `codex-default`, the same on every revision.
+  A `.gguf` file run by the Local GGUF connector is named by its SHA-256
+  instead. Claude Code and Codex count every turn and their reasoning in
+  their token counts, so those counts are not checked against the plan's
+  output limit.
+- **Build.** Several candidate layouts (6 by default) are drawn on an integer
+  grid and ranked; the best is validated, repaired and lowered into sealed
+  brushes, stairs, raised crossings and Quake III patch veneers, written as
+  Valve 220 (Quake, Quake II) or classic brushes or brush primitives (Quake
+  III).
+- **Analysis.** Before the map is written, player and monster navigation,
+  spawn visibility, lighting readability and travel timing are analysed. The
+  findings are advisory; a failed analysis run stops the build. The
+  **Analysis** tab lists them, and the **Report** tab shows Quake-MapGen's own
+  schema v4 report, which **Save Report…** writes as `.qmg.json`.
+- **Stage switches.** `--switch <name>=on|off` turns a generator change on or
+  off for one run. Each switch is recorded in the report.
+
+The ranker that orders the candidates used a ggml graph upstream. VibeStudio
+computes the same scores in plain C++, bit for bit, so builds need neither
+ggml nor llama.cpp. Builds with `-Dggml=enabled` can rank through the upstream
+graph instead (`--ranker ggml`, command line only; the default is `scalar`),
+with the same results and ggml's provenance in the report.
+`level-mapgen-smoke` checks four maps byte for byte against the upstream
+program. With the Local GGUF connector, Quake-MapGen plans under its own GBNF
+grammar, as its llama.cpp backend did; with Claude Code or Codex it plans
+through the user's login, Codex's default model included. Analysis findings
+and the generator's own error messages are in English only.
+
+Quake-MapGen's research tooling came with it: the map recipes and portfolio
+programs, and the Python map study, benchmark, profile and atlas tools, run from
+`src/mapgen` (`src/mapgen/VIBESTUDIO.md` says how), with up to 48 tests in
+the `mapgen-research` Meson suite (11 without Python 3.10 or newer; the Quake
+Live atlas test runs only when Shapely is installed). Most of them need maps, game data or compilers
+you supply. Their outputs stay under `src/mapgen/out`, which Git ignores.
 
 ## Editing Maps with AI
 
@@ -238,9 +378,15 @@ Selection** also puts it on the selected faces, and **Open in Texture Editor**
 continues by hand. `texture derive` makes the companion maps for any picture.
 
 The generators and Edit with AI show their requests before sending
-(**Preview Request**), ask before the first request from a project to an
-endpoint off this machine, run as Activity tasks, and can be cancelled while a
-provider is working.
+(**Preview Request…**: the request without the key, a harness's command with
+its files and input, or what a GGUF model would be given, and why the
+connection is blocked when it is), ask before the first request from a
+project to an endpoint off this machine, run as Activity tasks, and can be
+cancelled while a provider is working. **AI Settings…**, beside
+**Preview Request…** on the AI path, opens Settings > AI and Automation, and
+open generator windows refresh as soon as AI settings change; Generate
+Level's model choice names the ready connection ("The text model: Claude Code
+(claude-opus-5-5)").
 
 ## Generating Sounds
 

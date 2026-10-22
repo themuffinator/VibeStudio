@@ -18,6 +18,13 @@ stairs, pits, pillars and daises only; no doors, lifts, or teleporters yet;
 links that cannot be routed are reported and left out; Doom maps need their
 nodes built before they are played.
 
+**Generator: Quake-MapGen** builds Quake, Quake II and Quake III levels with
+the Map Generator module (`src/mapgen`, through `core/level_mapgen`): ranked
+layouts with stairs, raised crossings and Quake III patch veneers, capture
+the flag, a choice of map format, and navigation, visibility and lighting
+analysis before the map is written. The result opens the same way, as a new,
+unsaved map of ordinary brushes.
+
 ## Edit with AI
 
 **Edit with AI** on the Levels header (or `map ai-edit`) takes an

@@ -1,0 +1,71 @@
+{
+  "schema_version": 1,
+  "id": "compact-spawn-separation-v1",
+  "status": "bounded_reference_feasibility_and_validated_helper_complete_default_comparison_separate",
+  "study": "docs/Q2_SPAWN_SEPARATION_STUDY.md",
+  "observations": "out/spawn-separation-study/observations.json",
+  "observations_sha256": "d7282144535599f7bc6f1a028f773957b4c465cc3093ed8bf28fa3a75a72333d",
+  "feasibility": "out/spawn-separation-study/feasibility.json",
+  "feasibility_sha256": "7ad4c5a757e461184371c38566a111496e03b73de6df50f3fc2cb89d20738727",
+  "reference_sample": {
+    "maps": ["ztn2dm3", "ptrip", "aeroq2", "mktriple", "q2rdm2", "koldduel1"],
+    "recorded_author_family_groups": 6,
+    "partition": "reference",
+    "authored_spawns": 44,
+    "unordered_pairs": 154,
+    "close_pairs_below_existing256": 3,
+    "all_close_pairs_occluded_with_authored_height_difference192": true,
+    "world_eye_visible_pairs": 10,
+    "invalid_eyes": 0,
+    "reference_full_standing_support_tested": false,
+    "native_spawn_adjustment_tested": false
+  },
+  "frozen_generated_baseline": {
+    "cases": 16,
+    "independently_checked_full_standing_stations": 84,
+    "close_unordered_pairs": 5,
+    "directed_separation_warnings": 10,
+    "all_close_pairs_on_ground_across_room_seams": true,
+    "world_eye_visible_pairs": 0
+  },
+  "first_feasibility": {
+    "cases": 5,
+    "successful_local_proposals": 5,
+    "accepted_moves": 5,
+    "final_close_pairs": 0,
+    "final_world_eye_visible_pairs": 0,
+    "all_final_compiled_standing_poses_supported": true,
+    "candidate_stations_tested": 120,
+    "generated_layouts_written": 0,
+    "source_analyzer_executed": false,
+    "default_pipeline_rerun": false
+  },
+  "helper_contract": {
+    "room_count_scope": [2, 8],
+    "games": ["quake2"],
+    "modes": ["deathmatch", "duel"],
+    "required_room_tag": "compact_mp",
+    "construction": "static all-solid AABB on one common room/passage shell-floor plane; no trigger/liquid materials, invalid ownership, convex, liquid or mechanism transfer; shared explicit-intent guard",
+    "same_initial_room_and_floor": true,
+    "full_standing_hull": [32, 32, 56],
+    "other_point_anchor_min_distance": 64,
+    "objective": ["visible_unordered_pairs", "unordered_pairs_below_squared_distance65536", "sum_capped_squared_distance_deficit"],
+    "protect_each_known_occluded_pair": true,
+    "endpoint_queries": "exact-visible zero-length at authored origin+22",
+    "shell_relation": "exact outside_free_space segment between separately valid endpoints in the bounded all-solid box construction",
+    "nearest_eligible_candidates": 24,
+    "passes": 2,
+    "strict_objective_improvement_only": true,
+    "tie_break": "minimum current-station squared displacement, thenXYZ",
+    "larger_9_to32_room_distance_policy": "not enabled"
+  },
+  "controls": {"cpp_groups": 15, "python_tests": 6},
+  "unchanged_policy": {"minimum_spawn_separation": 256, "spawn_count_allocation": true, "model_weights": true, "archive_reference_profile": true},
+  "limits": [
+    "The distance warning is an existing heuristic; reference exceptions remain meaningful.",
+    "Authored spawn counts and archive player ranges are separate variables, not validated capacity or an inferred multiplier.",
+    "Exact source-space occlusion and compiled world point rays are separate checks; neither proves spawn safety.",
+    "The five first in-memory proposals do not certify matched default-generation outputs or native settlement.",
+    "No gameplay, native movement, input, client rendering, reference copying or learned model training."
+  ]
+}

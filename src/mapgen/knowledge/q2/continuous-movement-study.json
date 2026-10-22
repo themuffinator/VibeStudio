@@ -1,0 +1,625 @@
+{
+  "schema_version": 1,
+  "study": "continuous-movement-study",
+  "date": "2026-09-13",
+  "status": "reference observations and testable hypotheses, not learned weights or quality targets",
+  "archive_root": "E:/Development/q2maparchive-wip/maps",
+  "study_document": "docs/Q2_CONTINUOUS_MOVEMENT_STUDY.md",
+  "profile_or_split_changes": false,
+  "geometry_or_assets_copied_into_generation": false,
+  "training_rights": "not established; no weight training",
+  "method": {
+    "candidate_filter": "world rendered face normal.z >=0.7 and <0.995, area>=5000, z span>=32, exclude flags128|4|8|16|32; candidate only",
+    "hull": {
+      "mins": [
+        -16,
+        -16,
+        -24
+      ],
+      "maxs": [
+        16,
+        16,
+        32
+      ]
+    },
+    "contents_mask": 33619971,
+    "world_models": [
+      0
+    ],
+    "sampling": "joined contiguous coplanar face intervals; <=8-unit sample spacing; 48-unit approach at each end; downward conservative hull casts; 0.125 clearance; continuous linear sweeps between samples",
+    "limitations": [
+      "Conservative brush-plane expansion can overestimate convex collision; rejection is not proof without further checking.",
+      "This is not an engine trace or movement simulation.",
+      "Standing support is positive hull support, not proof of whole-footprint contact.",
+      "No acceleration, friction, engine stepping, entity state, live collision, steering or fall damage simulated.",
+      "Full drop-landing-to-ramp ordinary return routes remain unverified.",
+      "AAS reachability records unavailable in the wider archive extraction."
+    ]
+  },
+  "references": [
+    {
+      "map": "gladdm1",
+      "title": "Violent & Funky",
+      "authors": [
+        "Todd 'Mr.CleaN' Rose"
+      ],
+      "artifact_id": "gladdm1-9325547e4a",
+      "partition": "reference",
+      "split_group": "1e97e74979f0d55d",
+      "bsp_sha256": "6f6af2acdd5108b3dea18ae181358dc81708b6540aab5a0a6417f3c98a4feec1",
+      "geometry_sha256": "d8456576b997477ccd32b861d28c8c024e53bf5ec7ddc5b067f1cf8e426e8e44",
+      "issues": [
+        "malformed metadata line 12"
+      ],
+      "bsp_path": "E:/Development/q2maparchive-wip/maps/gladdm1/pack/maps/gladdm1.bsp",
+      "evidence_files": [
+        {
+          "kind": "metadata",
+          "path": "E:/Development/q2maparchive-wip/maps/gladdm1/pack/maps/ref/gladdm1.ref",
+          "sha256": "4a56db22f1dc9071f4b6f206388602ff922b9556b99da6c218152b4ddeded6fa"
+        },
+        {
+          "kind": "readme",
+          "path": "E:/Development/q2maparchive-wip/maps/gladdm1/pack/docs/gladdm1-readme.txt",
+          "sha256": "0ff597213699003fa8ba1b862748bde0aecda5961e5ab34940dc5a4193d2d01b"
+        }
+      ],
+      "capacity_conflict": {
+        "archive": [
+          2,
+          5
+        ],
+        "author": [
+          2,
+          4
+        ],
+        "preferred": "duel"
+      },
+      "ramp": {
+        "seed_face": 204,
+        "coplanar_faces": [
+          204,
+          205,
+          269
+        ],
+        "normal": [
+          -0.0,
+          0.3162277638912201,
+          0.9486833214759827
+        ],
+        "plane_distance": 566.6801605224609,
+        "base": [
+          800.0,
+          896.0
+        ],
+        "uphill_xy": [
+          0.0,
+          -1.0
+        ],
+        "run_interval": [
+          -128.0,
+          256.0
+        ],
+        "run": 384.0,
+        "rise": 127.99999597895612,
+        "standing_hull": [
+          -16,
+          -16,
+          -24,
+          16,
+          16,
+          32
+        ],
+        "probe_approach_extension": 48,
+        "max_sample_spacing": 8,
+        "all_poses_clear_and_grounded": true,
+        "all_sweeps_clear": true,
+        "sample_count": 61,
+        "sweep_count": 60,
+        "lower_approach_origin": [
+          800.0,
+          1072.0,
+          280.125
+        ],
+        "upper_exit_origin": [
+          800.0,
+          592.0,
+          408.125
+        ]
+      },
+      "lateral_lanes": [
+        {
+          "offset": -40,
+          "all_poses_clear_and_grounded": true,
+          "all_sweeps_clear": true,
+          "rejection_is_inconclusive_until_checked": false
+        },
+        {
+          "offset": 40,
+          "all_poses_clear_and_grounded": true,
+          "all_sweeps_clear": true,
+          "rejection_is_inconclusive_until_checked": false
+        }
+      ]
+    },
+    {
+      "map": "trdm05a",
+      "title": "Vertical Asylum",
+      "authors": [
+        "Daniel 'Trebz' Nolan"
+      ],
+      "artifact_id": "trdm05a-39a0b8c885",
+      "partition": "reference",
+      "split_group": "4bbb62a36be21983",
+      "bsp_sha256": "4a08ade7e68e8542216541d5faf32d585fec27d1d4d980accf8965bd2c44eed7",
+      "geometry_sha256": "6e004e6edc3ec147c7e1ccfb30f5d42d95f7d6f90bb6fb65f9d36b53a9da85f9",
+      "issues": [
+        "malformed metadata line 12"
+      ],
+      "bsp_path": "E:/Development/q2maparchive-wip/maps/trdm05a/pack/maps/trdm05a.bsp",
+      "evidence_files": [
+        {
+          "kind": "metadata",
+          "path": "E:/Development/q2maparchive-wip/maps/trdm05a/pack/maps/ref/trdm05a.ref",
+          "sha256": "e7abdbc209755f328f3647cf23d0dfa27557efc1606ca4dc0b49d819da65935e"
+        },
+        {
+          "kind": "readme",
+          "path": "E:/Development/q2maparchive-wip/maps/trdm05a/pack/docs/trdm05a-readme.txt",
+          "sha256": "3866a885d218b059db4cdc94a143746decd070578700a82aab936c499f63a1ba"
+        }
+      ],
+      "capacity_conflict": {
+        "archive": [
+          2,
+          6
+        ],
+        "author": [
+          2,
+          4
+        ],
+        "preferred": "duel; 2-4 possibly; 5-16 explicitly rejected",
+        "revision_conflict": "readme filename trdm05.bsp versus analyzed trdm05a.bsp"
+      },
+      "ramp": {
+        "seed_face": 87,
+        "coplanar_faces": [
+          87,
+          88
+        ],
+        "normal": [
+          -0.0,
+          -0.3713906705379486,
+          0.9284766912460327
+        ],
+        "plane_distance": 118.84484137556501,
+        "base": [
+          327.22222222222223,
+          245.32889811197916
+        ],
+        "uphill_xy": [
+          0.0,
+          1.0
+        ],
+        "run_interval": [
+          -245.32889811197916,
+          74.67110188802084
+        ],
+        "run": 320.0,
+        "rise": 127.99999794572265,
+        "standing_hull": [
+          -16,
+          -16,
+          -24,
+          16,
+          16,
+          32
+        ],
+        "probe_approach_extension": 48,
+        "max_sample_spacing": 8,
+        "all_poses_clear_and_grounded": true,
+        "all_sweeps_clear": true,
+        "sample_count": 53,
+        "sweep_count": 52,
+        "lower_approach_origin": [
+          327.22222222222223,
+          -47.99999999999997,
+          152.125
+        ],
+        "upper_exit_origin": [
+          327.22222222222223,
+          368.0,
+          280.125
+        ]
+      },
+      "lateral_lanes": [
+        {
+          "offset": -40,
+          "all_poses_clear_and_grounded": false,
+          "all_sweeps_clear": false,
+          "rejection_is_inconclusive_until_checked": true
+        },
+        {
+          "offset": 40,
+          "all_poses_clear_and_grounded": true,
+          "all_sweeps_clear": true,
+          "rejection_is_inconclusive_until_checked": false
+        }
+      ]
+    },
+    {
+      "map": "spirit2dm9",
+      "title": "The Cake is a Lie",
+      "authors": [
+        "Tim 'spirit' Schaefer"
+      ],
+      "artifact_id": "spirit2dm9-d379983661",
+      "partition": "reference",
+      "split_group": "46b0d6f970f3102d",
+      "bsp_sha256": "1223f87c821a725bc8407b4bd380c306723f7481135dfcaa2aa2d8a3576b90dc",
+      "geometry_sha256": "c5256e87365c0b50b8c6291365f8538e27a51db1d8a43c8d04101cb6b2313ec4",
+      "issues": [
+        "malformed metadata line 15"
+      ],
+      "bsp_path": "E:/Development/q2maparchive-wip/maps/spirit2dm9/pack/maps/spirit2dm9.bsp",
+      "evidence_files": [
+        {
+          "kind": "metadata",
+          "path": "E:/Development/q2maparchive-wip/maps/spirit2dm9/pack/maps/ref/spirit2dm9.ref",
+          "sha256": "cc96dc1f1c41b9165ae5e37115f8251f32b41abab2788dc85761f400ece1688a"
+        },
+        {
+          "kind": "readme",
+          "path": "E:/Development/q2maparchive-wip/maps/spirit2dm9/pack/docs/spirit2dm9-readme.txt",
+          "sha256": "83ab9b193d5f53e596ac74f41a09fc6217b27f49649d0182f0c1d4341bccb9ee"
+        }
+      ],
+      "capacity_conflict": {
+        "archive": [
+          2,
+          6
+        ],
+        "author": [
+          2,
+          4
+        ],
+        "preferred": "duel or FFA 2-4"
+      },
+      "ramp": {
+        "seed_face": 1788,
+        "coplanar_faces": [
+          1788,
+          1789
+        ],
+        "normal": [
+          -0.4472135901451111,
+          0.0,
+          0.8944271802902222
+        ],
+        "plane_distance": -171.73001861572266,
+        "base": [
+          485.3333333333333,
+          288.0
+        ],
+        "uphill_xy": [
+          1.0,
+          -0.0
+        ],
+        "run_interval": [
+          -101.33333333333331,
+          154.66666666666669
+        ],
+        "run": 256.0,
+        "rise": 128.0,
+        "standing_hull": [
+          -16,
+          -16,
+          -24,
+          16,
+          16,
+          32
+        ],
+        "probe_approach_extension": 48,
+        "max_sample_spacing": 8,
+        "all_poses_clear_and_grounded": true,
+        "all_sweeps_clear": true,
+        "sample_count": 45,
+        "sweep_count": 44,
+        "lower_approach_origin": [
+          336.0,
+          288.0,
+          24.125
+        ],
+        "upper_exit_origin": [
+          688.0,
+          288.0,
+          152.125
+        ]
+      },
+      "lateral_lanes": [
+        {
+          "offset": -40,
+          "all_poses_clear_and_grounded": true,
+          "all_sweeps_clear": true,
+          "rejection_is_inconclusive_until_checked": false
+        },
+        {
+          "offset": 40,
+          "all_poses_clear_and_grounded": true,
+          "all_sweeps_clear": true,
+          "rejection_is_inconclusive_until_checked": false
+        }
+      ]
+    }
+  ],
+  "engine_source_evidence": [
+    {
+      "path": "E:/_SOURCE/_CODE/Quake-2-master/qcommon/pmove.c",
+      "sha256": "8861daaeff7efd7bc6d3c5e65ef99801567f3e06eb14020787206d39dd0038a8",
+      "locations": {
+        "step_size_line": 25,
+        "minimum_step_normal_line": 111,
+        "step_slide_move_line": 271,
+        "categorize_position_line": 671,
+        "standing_hull_lines": [
+          980,
+          1025
+        ]
+      }
+    },
+    {
+      "path": "E:/_SOURCE/_CODE/Quake-2-master/game/p_client.c",
+      "sha256": "d4bad9aa34ec3d2c667eaf64c0d84c7a555e8162b8252c245fde4a54e343ae3f",
+      "locations": {
+        "player_trace_line": 1537,
+        "client_think_line": 1570,
+        "pmove_call_line": 1633
+      }
+    },
+    {
+      "path": "E:/_SOURCE/_CODE/Quake-2-master/game/p_view.c",
+      "sha256": "915358415b8088552f7ace5d0a822f122d99b4fe2b9fdb553b9aca460712efcf",
+      "locations": {
+        "falling_damage_line": 501
+      }
+    },
+    {
+      "path": "E:/_SOURCE/_CODE/Quake-2-master/game/g_phys.c",
+      "sha256": "31e3b813814c249734550d262d2b4766184849563960c0d9715005a6e5743481",
+      "locations": {
+        "fly_move_line": 183,
+        "add_gravity_line": 322
+      }
+    },
+    {
+      "path": "E:/_SOURCE/_CODE/Quake-2-master/game/q_shared.h",
+      "sha256": "c552978e0efed7d7f2daf3cef50af5b7b248555021e93a3347cc73d46d25389c",
+      "locations": {
+        "contents_lines": [
+          338,
+          366
+        ],
+        "collision_masks_lines": [
+          387,
+          393
+        ]
+      }
+    }
+  ],
+  "confirmed_negative_control": {
+    "map": "trdm05a",
+    "lane_offset": -40,
+    "brush": 297,
+    "origin": [
+      367.22222222222223,
+      160.00000000000003,
+      222.52499887014744
+    ],
+    "brush_bounds": [
+      [
+        368.4146423339844,
+        0,
+        128
+      ],
+      [
+        448,
+        320,
+        383.99999794572267
+      ]
+    ],
+    "exact_convex_aabb_overlap": true,
+    "checker_path": "tools/map_recipes/geometry.py",
+    "checker_sha256": "dcfcc3413468cad9993476736edfae5f13eb03e26035fc39d73f83aa5a90742b",
+    "meaning": "rendered ramp face width overstates usable lateral hull space; centerline and opposite lane remain clear"
+  },
+  "drop_candidates": [
+    {
+      "map": "gladdm1",
+      "hypothetical_piecewise_origins": [
+        [
+          704,
+          512,
+          408.125
+        ],
+        [
+          656,
+          512,
+          408.125
+        ],
+        [
+          656,
+          512,
+          136.125
+        ]
+      ],
+      "clear_segments": [
+        true,
+        true
+      ],
+      "collisions": [
+        null,
+        null
+      ],
+      "landing_standing_clear": true,
+      "drop_height": 272.0,
+      "return_status": "Incline itself verified bidirectionally; complete landing-to-ramp ordinary route unverified; no safe-drop claim."
+    },
+    {
+      "map": "trdm05a",
+      "hypothetical_piecewise_origins": [
+        [
+          80,
+          352,
+          280.125
+        ],
+        [
+          80,
+          320,
+          280.125
+        ],
+        [
+          80,
+          320,
+          24.125
+        ]
+      ],
+      "clear_segments": [
+        true,
+        true
+      ],
+      "collisions": [
+        null,
+        null
+      ],
+      "landing_standing_clear": true,
+      "drop_height": 256.0,
+      "return_status": "Incline itself verified bidirectionally; complete landing-to-ramp ordinary route unverified; no safe-drop claim."
+    }
+  ],
+  "rules": [
+    {
+      "id": "CM1",
+      "rule": "Validate actual sloped surface, lips, landings, three lateral lanes and continuous sweeps."
+    },
+    {
+      "id": "CM2",
+      "rule": "Use partial floors for route roles and crossings; prove ordinary connectivity independently."
+    },
+    {
+      "id": "CM3",
+      "rule": "Treat usable width as hull clearance including trim/playerclip, not rendered face width."
+    },
+    {
+      "id": "CM4",
+      "rule": "Model drops as directed commitment and verify the complete ordinary return; measure damage in engine."
+    },
+    {
+      "id": "CM5",
+      "rule": "Compare same-endpoint ramp/stair variants while holding topology and resources fixed."
+    },
+    {
+      "id": "CM6",
+      "rule": "Change one exposure screen at a time; measure interception and route use instead of scoring height counts."
+    }
+  ],
+  "proposed_example": {
+    "name": "Talus",
+    "status": "design intent only; no outcome metrics in this study",
+    "surface_grade": 0.25,
+    "ramp_surface_rise": 120,
+    "ramp_surface_run": 480,
+    "lip": 8,
+    "ramp_widths": [
+      160,
+      160
+    ],
+    "passage_widths": [
+      144,
+      160
+    ],
+    "passage_height": 192,
+    "no_required_movers": true
+  },
+  "evidence_outputs": [
+    {
+      "path": "out/continuous-movement-study/candidate-slopes.json",
+      "sha256": "526aed73e2002111cd228cbac42bfceeea130e24c30ba51ead257205240cbc09"
+    },
+    {
+      "path": "out/continuous-movement-study/draw_plans.py",
+      "sha256": "c7363f6ff6f1a5b33f5cbb5cc1f92b0592118a3c59b4ce04efc1a9b6c7cb1781"
+    },
+    {
+      "path": "out/continuous-movement-study/drop-candidates.json",
+      "sha256": "af4511793813f4bba8bd5762d514a64292471941cec1119d3cbc6539ceb7a9db"
+    },
+    {
+      "path": "out/continuous-movement-study/gladdm1-anchor-key.json",
+      "sha256": "7d2e6896506f2839cec060e3419f194b8aa10b8a5a2149130011306088aa6fb0"
+    },
+    {
+      "path": "out/continuous-movement-study/gladdm1-offset+40-probe.json",
+      "sha256": "2bfb21f8c72b464b05aae42c3665bed3451c64c0fa483a080419e82f6f4f953b"
+    },
+    {
+      "path": "out/continuous-movement-study/gladdm1-offset-40-probe.json",
+      "sha256": "68ca74093ca0fd8b5f6ddd6632204a4871966396a29b7a4740e1fc8d97d0f84a"
+    },
+    {
+      "path": "out/continuous-movement-study/gladdm1-plan.png",
+      "sha256": "1885d348936619d23f5425470f7b6c2267861da9874794a36ca4c151d057457a"
+    },
+    {
+      "path": "out/continuous-movement-study/gladdm1-probe.json",
+      "sha256": "2aec5d892de405f90fb1fe63a0575d14d2bae9f884168ac192a436df28b754c0"
+    },
+    {
+      "path": "out/continuous-movement-study/probe_slopes.py",
+      "sha256": "99282f5c80822cd402004e539513b35e6b16017d56bccd71f6505fcf280abd1e"
+    },
+    {
+      "path": "out/continuous-movement-study/spirit2dm9-anchor-key.json",
+      "sha256": "ac0d84ca4203314723da58746c723ce98d6366d3b2c6585be4fe2fdba59ef2a0"
+    },
+    {
+      "path": "out/continuous-movement-study/spirit2dm9-offset+40-probe.json",
+      "sha256": "e64d27b3f5036f4f183e0ba1e2d8a9bbac573b8026ca3e9ba1277e0515291198"
+    },
+    {
+      "path": "out/continuous-movement-study/spirit2dm9-offset-40-probe.json",
+      "sha256": "11afa27882b636bcc9bf82fa60fb48e8d7298426d82bcb8101e749cfb0dc7b2c"
+    },
+    {
+      "path": "out/continuous-movement-study/spirit2dm9-plan.png",
+      "sha256": "60494ae1716c8cfc2e49c804ed0b6634ee503ea98f89ddf7bca754f383bf759d"
+    },
+    {
+      "path": "out/continuous-movement-study/spirit2dm9-probe.json",
+      "sha256": "25c3fed48670c7f31f4486c230ef3bb883e7d99278947eea7361634b44142e9c"
+    },
+    {
+      "path": "out/continuous-movement-study/trdm05a-anchor-key.json",
+      "sha256": "c9f82ebb529e629a3375713de43754433fdc05a4fa20f3ef87ab2f6219e3cc87"
+    },
+    {
+      "path": "out/continuous-movement-study/trdm05a-offset+40-probe.json",
+      "sha256": "4ec04f0a913191357961b0e2631854ccc73100feb4493cdee5ead934de629fec"
+    },
+    {
+      "path": "out/continuous-movement-study/trdm05a-offset-40-probe.json",
+      "sha256": "ad63c1163ab0fbbf4079ea26cfa972d480dd09f8990490a5b4dd1438bfc83fce"
+    },
+    {
+      "path": "out/continuous-movement-study/trdm05a-plan.png",
+      "sha256": "0e7d5eacff47cd1026702e51437817f02ec5dd4b37cd1629e327dc9630fe5eb9"
+    },
+    {
+      "path": "out/continuous-movement-study/trdm05a-probe.json",
+      "sha256": "ee0242198cd7811b9b8ec3e7f3c54a108a3740f7ccc46d20ddf8206b1409ee77"
+    },
+    {
+      "path": "out/continuous-movement-study/write_record.py",
+      "sha256": "08f9e5b730acf7340f96b75a87e32058938d49d918e8cdac63effa0ca0b48a9f"
+    }
+  ]
+}

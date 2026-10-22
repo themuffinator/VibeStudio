@@ -1,0 +1,1394 @@
+{
+  "schema_version": 1,
+  "scope": "Quake II multiplayer design hypotheses. Transfer to Q1/Q3, SP or different physics requires separate evidence.",
+  "status": "Evolving rubric; none of these hypotheses has a new human-playtest validation claim.",
+  "promotion_policy": "A measured descriptor becomes a recommendation only with a documented mechanism, counterexamples, paired procedural experiment, and reviewer evidence. Compile/navigation failures remain hard gates. Distribution tails are questions, never automatic defects.",
+  "rules": [
+    {
+      "id": "purposeful-loops",
+      "principle": "Connect meaningful destinations with alternative routes and understandable return paths.",
+      "mechanism": "Players can rotate, retreat and intercept instead of repeatedly retracing a single corridor.",
+      "generator_action": "Give major combat spaces distinct approaches; connect upper and lower routes to useful destinations; test directed reachability.",
+      "measure": [
+        "runtime route alternatives between hotspots",
+        "directed strongly connected gameplay graph",
+        "forced backtracking seconds"
+      ],
+      "counterexample": "A short exposed dead end can work when its reward and escape commitment are deliberate.",
+      "experiment": "Compare the same procedural blockout with one return connection present/absent; retain resource positions and count forced backtracks and meaningful route choices.",
+      "status": "design_hypothesis"
+    },
+    {
+      "id": "navigation-legibility",
+      "principle": "Make destinations, exits and route identities readable at movement speed.",
+      "mechanism": "Distinct silhouettes, materials, height cues and sound reduce navigation effort while preserving tactical uncertainty.",
+      "generator_action": "Assign spatial identities before texture details; expose landmark cues at decision points and test each spawn-to-landmark journey.",
+      "measure": [
+        "first-time wrong turns",
+        "time to identify major destinations",
+        "blinded landmark recognition"
+      ],
+      "counterexample": "Showing every route and opponent from one hub can make the map readable but strategically shallow.",
+      "experiment": "Hold geometry fixed while changing only landmark/light cues; compare first-time navigation without giving players a route map.",
+      "status": "design_hypothesis"
+    },
+    {
+      "id": "spawn-recovery",
+      "principle": "Give each spawn a plausible route to useful equipment and a chance to choose an escape.",
+      "mechanism": "Recovery opportunities keep map control contestable without making all spawns identical.",
+      "generator_action": "Audit every spawn, equipment route and attacker approach; record cover, facing and multiple-exit access with the actual player hull.",
+      "measure": [
+        "spawn_pair_world_los_fraction (proxy)",
+        "spawn_nearest_weapon_euclidean_p90 (proxy)",
+        "deaths within five seconds",
+        "time to first useful weapon"
+      ],
+      "counterexample": "A nearby weapon through a wall can take longer to reach than a distant weapon on an open route; zero spawn-to-spawn LOS does not prove safety.",
+      "experiment": "Move one spawn behind existing cover without changing item economy; compare recovery and immediate deaths from matched starts.",
+      "status": "design_hypothesis"
+    },
+    {
+      "id": "useful-verticality",
+      "principle": "Put combat, routes and resources on useful height levels, with ways to contest the upper position.",
+      "mechanism": "Height changes engagement angles, access cost and route commitment when players have reasons to use it.",
+      "generator_action": "Place objectives/items and entrances at different elevations; construct reachable up/down circuits before adding decorative platforms.",
+      "measure": [
+        "combat_height_p90_p10",
+        "combat_height_bands_128 (coarse descriptor)",
+        "time spent per useful height level",
+        "upper/lower control exchanges"
+      ],
+      "counterexample": "A high ceiling, stacked trim or a platform nobody visits adds geometric height without vertical gameplay.",
+      "experiment": "Move a major resource and its approach onto a validated upper route; compare use of height against the same geometry with all resources on the floor.",
+      "status": "design_hypothesis"
+    },
+    {
+      "id": "counterplay",
+      "principle": "Pair strong positions and rewards with readable costs, threats or commitment.",
+      "mechanism": "Map control matters while the disadvantaged player still has a way to change the state.",
+      "generator_action": "For each strong position identify a flank, exposed transition, resource cost or timed commitment and test it from both sides.",
+      "measure": [
+        "position hold duration",
+        "control reversal frequency",
+        "routes visible from dominant position",
+        "resource coverage from one position"
+      ],
+      "counterexample": "Adding arbitrary exposure to every reward can erase valuable safe recovery spaces.",
+      "experiment": "Open one alternate approach to a dominant position; compare control duration and reversal opportunities while keeping the main approach unchanged.",
+      "status": "design_hypothesis"
+    },
+    {
+      "id": "distributed-economy",
+      "principle": "Distribute complementary resources to encourage decisions about timing, movement and risk.",
+      "mechanism": "Useful circuits create contests in several parts of the map instead of allowing one safe position to collect everything.",
+      "generator_action": "Separate major resources by meaningful route cost, test strong-weapon/armor combinations, and document the exact game module and respawn settings.",
+      "measure": [
+        "major_item_min_euclidean_separation (proxy)",
+        "item acquisition sequences",
+        "actual route times",
+        "resource control by player"
+      ],
+      "counterexample": "Maximum spacing can create tedious empty travel and is not a quality objective.",
+      "experiment": "Compare a clustered major-item pair against a distributed pair on the same map; retain item counts, timers and player starts.",
+      "status": "design_hypothesis"
+    },
+    {
+      "id": "range-variety",
+      "principle": "Offer useful close, medium and long engagements with transitions and counter-routes.",
+      "mechanism": "Different spaces reward different weapons and positioning skills.",
+      "generator_action": "Design a distribution of combat ranges, break selected long views with geometry, and avoid a uniformly narrow or uniformly open map.",
+      "measure": [
+        "sampled_world_sightline_p50",
+        "sampled_world_sightline_p90",
+        "engagement distances",
+        "weapon use by space"
+      ],
+      "counterexample": "A distinctive rail-focused arena may deliberately concentrate long sightlines; the target mode and intended experience matter.",
+      "experiment": "Change one sightline interruption while preserving routes; compare engagement ranges and weapon choices rather than optimizing ray lengths alone.",
+      "status": "design_hypothesis"
+    },
+    {
+      "id": "space-rhythm",
+      "principle": "Vary space proportions and transitions for a reason, balancing combat, recovery and movement.",
+      "mechanism": "Alternating compression and openness creates anticipation, pacing and differentiated decisions.",
+      "generator_action": "Vary playable width, ceiling height and approach angles around explicit spatial roles; use the hull to validate clearances.",
+      "measure": [
+        "playable cross-sections",
+        "encounter intervals",
+        "room-role recognition",
+        "time without a meaningful decision"
+      ],
+      "counterexample": "Random room-size variance can produce awkward leftover space without improving flow.",
+      "experiment": "Compare role-driven room proportions against uniform rooms with the same route graph and resource budget.",
+      "status": "design_hypothesis"
+    },
+    {
+      "id": "coherent-theme",
+      "principle": "Use a coherent material and architectural language while giving spaces recognizable identities.",
+      "mechanism": "Consistent construction and differentiated landmarks support both atmosphere and orientation.",
+      "generator_action": "Specify a small set of material roles, structural motifs, trim rules and landmark exceptions, then review actual engine renders.",
+      "measure": [
+        "texture_area_entropy_bits (descriptor)",
+        "texture_top_area_fraction (descriptor)",
+        "human coherence and landmark ratings"
+      ],
+      "counterexample": "Texture count cannot measure theme quality; many textures may implement one coherent kit, while one texture may conceal navigation cues.",
+      "experiment": "Keep geometry fixed and compare two deliberate art-direction passes; ask reviewers to recognize spaces and assess coherence without showing texture counts.",
+      "status": "design_hypothesis"
+    },
+    {
+      "id": "readable-light",
+      "principle": "Use lighting to reveal movement and combat cues while preserving the intended atmosphere.",
+      "mechanism": "Players can see opponents, exits and hazards without losing spatial mood or hierarchy.",
+      "generator_action": "Validate the compiled light pass and inspect dark corners, bright backgrounds, silhouettes and landmark emphasis through engine screenshots.",
+      "measure": [
+        "compiled light evidence",
+        "opponent recognition at representative distances",
+        "exit/hazard identification"
+      ],
+      "counterexample": "Uniform brightness can remove atmosphere; nonempty light data and bright lamps do not prove readability.",
+      "experiment": "Hold camera, display settings and geometry fixed while changing the light hierarchy; compare recognition tasks using engine-written screenshots.",
+      "status": "design_hypothesis"
+    },
+    {
+      "id": "capacity-fit",
+      "principle": "Fit route capacity, equipment and encounter frequency to the intended player count and mode.",
+      "mechanism": "The map supports useful contact without persistent congestion or long empty periods.",
+      "generator_action": "Condition size and resource budgets on mode/capacity; test the lower, nominal and upper intended loads separately.",
+      "measure": [
+        "spawn_count",
+        "weapon_count",
+        "encounter intervals",
+        "congestion seconds",
+        "early spawn deaths"
+      ],
+      "counterexample": "An archive recommendation is not a measured capacity limit; a duel layout may behave differently at eight players.",
+      "experiment": "Run the same map at three loads with identical rules and report the tradeoffs instead of averaging them into one score.",
+      "status": "design_hypothesis"
+    },
+    {
+      "id": "objective-fairness",
+      "principle": "Give each team viable attack, defense and return routes with comparable opportunities.",
+      "mechanism": "Objective play offers decisions for both teams, including the team recovering from a lost fight.",
+      "generator_action": "Use the actual CTF module; verify team starts, both flags, base exits, equipment access and carrier routes in both directions.",
+      "measure": [
+        "team-conditioned route times",
+        "flag return success",
+        "resource access",
+        "side-swapped match results"
+      ],
+      "counterexample": "Visual symmetry does not establish equal travel, weapon access or defensive strength.",
+      "experiment": "Swap teams/sides and test one route change at a time; retain the objective and resource budget.",
+      "status": "design_hypothesis"
+    },
+    {
+      "id": "movement-contracts",
+      "principle": "Make intended movement reliable under the target game's real physics and collision hull.",
+      "mechanism": "Players can execute intended routes without snagging, unexplained blocks or misleading visual promises.",
+      "generator_action": "Validate stairs, ramps, jumps, drops, movers and teleporters with explicit ordinary/special-movement requirements and directional reachability.",
+      "measure": [
+        "hull traversal failures",
+        "route completion",
+        "snag events",
+        "mover and teleporter failure cases"
+      ],
+      "counterexample": "A point ray, visual gap or unbound AAS file cannot establish player traversal.",
+      "experiment": "Use project-authored narrow-gap, excessive-step, blocked-return and mover-state controls to demonstrate that the relevant validators reject broken routes.",
+      "status": "design_hypothesis"
+    },
+    {
+      "id": "performance-budget",
+      "principle": "Spend geometry, visibility and effect budgets on gameplay and visual identity that players notice.",
+      "mechanism": "Stable frame time preserves movement and aiming quality at the intended load.",
+      "generator_action": "Measure compiled visibility and representative in-engine frame times; budget detail around the worst views and busiest encounters.",
+      "measure": [
+        "frame-time p95/p99",
+        "visible surfaces/entities in worst views",
+        "VIS/compiler diagnostics"
+      ],
+      "counterexample": "BSP size, face count or PVS size alone cannot establish performance on a target renderer.",
+      "experiment": "Compare a costly detail/effect pass enabled and disabled from identical recorded views and player loads.",
+      "status": "design_hypothesis"
+    },
+    {
+      "id": "portfolio-variety",
+      "principle": "Generate distinct tactical experiences across seeds while keeping each map coherent.",
+      "mechanism": "Different topology, height use, item circuits, space rhythms and visual identities sustain replay value.",
+      "generator_action": "Evaluate a prompt/seed portfolio by gameplay descriptors and blind recognition; detect repeated layouts separately from repeated textures.",
+      "measure": [
+        "pairwise descriptor diversity",
+        "author/family novelty review",
+        "blind map distinguishability",
+        "topology and item-circuit differences"
+      ],
+      "counterexample": "Random noise, novelty by broken navigation, and copying a reference layout are not useful variety.",
+      "experiment": "Freeze the prompt/seed matrix; compare before/after map portfolios in blinded pairs, including quality regressions and mode-specific exceptions.",
+      "status": "design_hypothesis",
+      "evidence": [
+        {
+          "level": "default_q2_dm_duel_pipeline_portfolio",
+          "record": "knowledge/q2/experiments/weft-v1.json",
+          "observation": "Compact room partitioning and rotated crosswalk/horseshoe motifs enter the actual default six-candidate pipeline. Nine fixed requests and separate low/high verticality controls retain all outputs, graph signatures, findings and compiler evidence. No model weights or reference profile are retrained."
+        }
+      ]
+    },
+    {
+      "id": "optional-shortcut-states",
+      "principle": "A shortcut should offer a useful tradeoff while the required ordinary journey remains viable.",
+      "mechanism": "Lifts exchange distance for waiting and exposed ascent; a physical alternative lets players respond to platform state and enemy control.",
+      "generator_action": "Audit ordinary routes with lift, teleporter and optional jump edges removed; retain native platform stations, full sweep, boarding/exit space and activation rules.",
+      "measure": [
+        "ordinary route completion",
+        "wait time",
+        "ride time",
+        "landing exit time",
+        "platform use by state",
+        "control reversals"
+      ],
+      "counterexample": "A shortcut so much faster than its bypass can become effectively compulsory; an unused detour is not meaningful counterplay.",
+      "experiment": "Keep geometry and resources fixed, toggle one mechanism, use matched starts at bottom/rising/top/descending/occupied states, and report each travel phase separately.",
+      "reference_record": "knowledge/q2/traversal-study.json",
+      "status": "design_hypothesis"
+    },
+    {
+      "id": "committed-teleport-arrival",
+      "principle": "Design a teleporter around arrival behavior and subsequent choices as well as displacement.",
+      "mechanism": "Stock Quake II clears velocity, turns the player, briefly holds movement and can telefrag an occupied destination; the exit is a contestable commitment.",
+      "generator_action": "Use the native source disc and trigger, supported destination, actual raised arrival hull, explicit yaw, usable escape space and an arrival-threat audit.",
+      "measure": [
+        "entry-to-exit time",
+        "post-arrival deaths",
+        "time to leave the pad",
+        "telefrags",
+        "post-arrival resource acquisition",
+        "repeat arrival failures"
+      ],
+      "counterexample": "Zero spawn-to-spawn sightlines does not prevent a nearby spawn from ambushing the teleporter exit.",
+      "experiment": "Toggle only the teleporter link, compare empty/occupied/repeated arrivals from matched starts, and rotate only exit facing in a separate experiment.",
+      "reference_record": "knowledge/q2/traversal-study.json",
+      "status": "design_hypothesis"
+    },
+    {
+      "id": "facets-with-tactical-purpose",
+      "principle": "Change room outlines and peek angles where they alter a useful encounter or route.",
+      "mechanism": "A chamfer or L shaped recess can interrupt a view, reveal a route gradually or provide a distinct recovery position without repeating another room's footprint.",
+      "generator_action": "Record the exact convex footprint, preserve fighting width, inspect both directions and compare compiled visibility with the coarse layout model.",
+      "measure": [
+        "approach visibility",
+        "movement snagging",
+        "engagement angles",
+        "use of recesses",
+        "resource control"
+      ],
+      "counterexample": "Extra corner cuts can reduce usable space or merely decorate a rectangular tactical plan; aggregate bounding boxes can also hide actual sightlines.",
+      "experiment": "Change one square corner into a chamfer with items and routes fixed; compare compiled hulls first, then player movement and combat choices.",
+      "reference_record": "knowledge/q2/traversal-study.json",
+      "status": "design_hypothesis"
+    },
+    {
+      "id": "continuous-ascent-support",
+      "principle": "Treat a ramp as one continuous supported surface with a lower approach and upper landing.",
+      "mechanism": "An incline changes movement rhythm and exposure only when the full player hull can enter, traverse and leave it; a sloped rendered face or maximum bounding-box height is insufficient.",
+      "generator_action": "Use an exact supported height function, uphill hull extent, native slope/step bounds, complete end joins and continuous clearance checks. Export signed slope metadata and compare compiled geometry with the authored contract.",
+      "measure": [
+        "continuous supported hull sweeps",
+        "low-lip and crest clearance",
+        "bidirectional landing joins",
+        "local placement support height",
+        "native traversal-time distribution",
+        "aim disruption and pursuit outcomes"
+      ],
+      "counterexample": "A valid gentle plane can have an excessive entry lip or blocked exit; a smoother route can expose a player for longer and need not improve combat.",
+      "experiment": "Replace only one route with an equal-endpoint stair/ramp variant; hold topology, items, widths, cover, settings and starts fixed. Compare native movement and combat outcomes separately.",
+      "evidence": [
+        {
+          "level": "reference_static",
+          "record": "knowledge/q2/continuous-movement-study.json",
+          "observation": "gladdm1, trdm05a and spirit2dm9 have supported centerline ramp poses and continuous sweeps; the method is conservative geometry, not engine movement."
+        },
+        {
+          "level": "core_contract",
+          "record": "docs/Q2_RAMPS.md",
+          "observation": "Six-plane axial wedges retain continuous height functions; ordinary end joins, hull-aware origins and costs are tested in four directions for Q1/Q2/Q3. Talus uses two 1:4 ramps."
+        }
+      ],
+      "status": "design_hypothesis_with_static_construction_contract"
+    },
+    {
+      "id": "usable-width-at-landings",
+      "principle": "Measure fighting and turning width with the collision hull throughout approaches and exits.",
+      "mechanism": "Trim, neighboring solids and playerclip can remove lateral choices from a visually broad incline or landing.",
+      "generator_action": "Check the center and both lateral routes, full standing height, end support and continuous sweeps. Retain rejected lanes and distinguish conservative rejections from confirmed collisions.",
+      "measure": [
+        "usable lateral hull interval",
+        "blocked center/side lanes",
+        "landing turn clearance",
+        "wall contacts",
+        "contested passage and missed turns"
+      ],
+      "counterexample": "One clear centerline does not prove the advertised width; a narrow recovery route may be deliberate when its commitment and exit remain useful.",
+      "experiment": "Change only landing width or intrusive trim, retaining the incline, items and exposure; compare collision evidence first, then turns and contested passage in engine.",
+      "evidence": [
+        {
+          "level": "reference_static_negative_control",
+          "record": "knowledge/q2/continuous-movement-study.json",
+          "observation": "trdm05a's minus-40 lateral lane overlaps brush297; exact convex/AABB overlap confirms the conservative probe's rejection while the center and opposite lane pass."
+        }
+      ],
+      "status": "design_hypothesis_with_confirmed_collision_counterexample"
+    },
+    {
+      "id": "ordinary-return-without-drops",
+      "principle": "State required edge kinds and prove ordinary circulation independently of one-way descents and special movement.",
+      "mechanism": "A visible downward opening can shorten pursuit while concealing a missing return journey; explicit edge filtering distinguishes optional commitment from required circulation.",
+      "generator_action": "For a no-drop play contract, require every spawn-to-gameplay-anchor pair through walk, step and ordinary door edges only; exclude jump, drop, lift and teleporter edges. Preserve older experiments' explicitly different policies.",
+      "measure": [
+        "spawn-to-anchor pairs under named edge policy",
+        "directed return routes",
+        "required versus optional drops",
+        "native landing damage and exposure"
+      ],
+      "counterexample": "A clear landing and a ramp elsewhere do not establish a return loop. Some intentional modes can require a one-way descent, but must declare and validate that commitment separately.",
+      "experiment": "Keep ordinary routes fixed and enable/close one drop; record pinned game module, gravity, dmflags, water depth, landing velocity/damage, threats and the complete route back.",
+      "evidence": [
+        {
+          "level": "reference_static_limit",
+          "record": "knowledge/q2/continuous-movement-study.json",
+          "observation": "At the continuous-movement study stage, gladdm1 and trdm05a descents lacked verified full ordinary returns. The later drop-return study supplies one complete geometric gladdm1 return; trdm05a and native damage remain unverified."
+        },
+        {
+          "level": "original_layout_graph",
+          "record": "out/talus/qmg_talus.qmg.json",
+          "observation": "An independent BFS over the exported Talus graph reaches all 264 spawn-to-gameplay pairs through walk/step/door only; no native player traversal is established."
+        },
+        {
+          "level": "reference_static_return",
+          "record": "knowledge/q2/drop-return-study.json",
+          "observation": "The later gladdm1 certificate separates continuously supported translations from bounded stair changes and retains every world-brush collision check."
+        }
+      ],
+      "status": "explicit_static_route_contract_runtime_pending"
+    },
+    {
+      "id": "spawn-eye-sampling-contract",
+      "principle": "Use and label the same coordinate basis when comparing spawn visibility evidence.",
+      "mechanism": "Cover can block a ray between entity origins while exposing the standing player's eye, producing incompatible safety summaries from unchanged geometry.",
+      "generator_action": "For stock Q2 spawn pairs, sample entity origin plus 22 Z and export the actual endpoints and offset. Keep other placement roles and Q1/Q3 conventions explicitly distinct; reject invalid eye positions and retain historical sampling provenance.",
+      "measure": [
+        "valid eye positions",
+        "actual sampled endpoint coordinates",
+        "matched-basis spawn LOS pairs",
+        "native post-spawn threats and deaths"
+      ],
+      "counterexample": "Zero visible spawn pairs does not rule out attacks from a weapon route, upper ledge or teleporter arrival; eye LOS alone is not a spawn-safety guarantee.",
+      "experiment": "Hold geometry fixed and retain both origin-ray and eye-ray results as a diagnostic; assess the real threat with pinned engine views and matched spawn recovery trials.",
+      "evidence": [
+        {
+          "level": "core_regression",
+          "record": "tests/test_visibility.cpp",
+          "observation": "Q2 spawn visibility now uses plus 22 eye height, exports actual samples and rejects eyes inside solids or outside explicit free space."
+        },
+        {
+          "level": "artifact_contract",
+          "record": "src/report.cpp",
+          "observation": "Visibility reports label player_spawn_eye_offset_z, zero other-placement offset and entity-origin distance basis; navigation graph export preserves these labels."
+        }
+      ],
+      "status": "measurement_contract_not_gameplay_validation"
+    },
+    {
+      "id": "material-physics-before-palette",
+      "principle": "Validate a material's collision and surface metadata before using it as architecture.",
+      "mechanism": "A Quake II WAL carries flags and contents as well as pixels; compiler interpretation can turn an authored solid stair or floor into water while it still renders as an architectural surface.",
+      "generator_action": "Record WAL identity, flags, contents and value; reject liquid/warp metadata for ordinary architectural roles unless deliberately supported. Recompile and require player-mask collision, stair/ramp support and sealed-world checks after a palette change.",
+      "measure": [
+        "WAL metadata by role",
+        "compiled brush contents",
+        "player-mask support on every route",
+        "material/source/BSP hashes",
+        "negative palette-control rejection"
+      ],
+      "counterexample": "A texture name resolving successfully, an attractive render or a passing typed solid graph does not prove solid compiled support; intentional liquid volumes must retain their actual contents contract.",
+      "experiment": "On identical project-authored geometry compare the rejected water/warp WAL against an approved architectural WAL; require the compiled support gate to reject the former before any gameplay test.",
+      "evidence": [
+        {
+          "level": "local_asset_metadata",
+          "path": "E:/_SOURCE/_ASSETS/Q2/textures/e2u1/mud1_1.wal",
+          "sha256": "14511c9bcd6f7edebb26e4d5ab6f9de784ae0812b3a7d20b274edeee7afd142c",
+          "flags": 8,
+          "contents": 32,
+          "value": 0
+        },
+        {
+          "level": "local_asset_metadata",
+          "path": "E:/_SOURCE/_ASSETS/Q2/textures/e2u1/mine04_1.wal",
+          "sha256": "2f63828420b4a54889b940eac4ec03b1fef566624be307633fdd9d7bc6dab22c",
+          "flags": 0,
+          "contents": 0,
+          "value": 0
+        },
+        {
+          "level": "original_compiler_negative_control",
+          "record": "docs/Q2_TALUS_STUDY.md",
+          "observation": "Talus's first palette used mud1_1 on authored architecture; compiled stair-support checks rejected it. The replacement palette uses mine04_1 and must pass the final compiled gates."
+        },
+        {
+          "level": "native_source",
+          "path": "E:/_SOURCE/_CODE/Quake-2-master/game/q_shared.h",
+          "observation": "CONTENTS_WATER=32, SURF_WARP=8; MASK_PLAYERSOLID does not classify water as ordinary solid support."
+        }
+      ],
+      "status": "material_and_compiler_contract"
+    },
+    {
+      "id": "return-route-burden",
+      "principle": "Evaluate the complete return as part of a downward shortcut commitment.",
+      "mechanism": "A quick descent may lead to additional descent, several climbs and an exposed re-entry; binary reachability hides that burden.",
+      "generator_action": "Record one supported ordinary return with its height profile, route phases, clear widths and exposed sections. State whether it is merely a demonstrated route or an optimized route.",
+      "measure": [
+        "return plan length",
+        "total ascent and additional descent",
+        "route phases and local width",
+        "exposure by phase",
+        "native return time and failed recoveries"
+      ],
+      "counterexample": "A connected loop may be too costly under pressure, while a longer hidden section can still be a useful recovery option. The shortest geometric route is not automatically the best combat route.",
+      "experiment": "Keep the descent fixed and change only one return screen or connection; compare full matched return journeys and outcomes, not only drop time.",
+      "evidence": [
+        {
+          "level": "reference_static",
+          "record": "knowledge/q2/drop-return-study.json",
+          "observation": "A demonstrated gladdm1 return covers 3088 plan units, climbs 384 and descends another 112 after the initial 272-unit drop; it is not claimed shortest or runtime tested."
+        },
+        {
+          "level": "original_typed_graph",
+          "record": "out/undercut/verification.json",
+          "observation": "Both Undercut descent candidates have exact-height ordinary return bindings, requiring 12 and 10 walk/step edges in the retained BFS paths. Entire compiled return sweeps remain unverified."
+        }
+      ],
+      "status": "design_hypothesis_with_explicit_return_evidence"
+    },
+    {
+      "id": "drop-information-before-commitment",
+      "principle": "Check the landing information available before a player commits to descent.",
+      "mechanism": "A ledge can offer a useful escape or contest only if its landing and onward options can be understood; the lip itself can hide a lower target from a position set too far back.",
+      "generator_action": "Retain a full-footprint supported takeoff, clear candidate descent, supported landing and ordinary return. Sample landing visibility at the actual standing eye and test recognition in the engine.",
+      "measure": [
+        "takeoff and landing hull support",
+        "compiled departure/descent clearance",
+        "landing eye visibility from takeoff",
+        "occupied-landing threats",
+        "native damage and post-landing escape"
+      ],
+      "counterexample": "A clear eye ray does not establish a readable render, harmless fall or safe landing. Some deliberate blind drops can work, but their information and risk contract must be explicit.",
+      "experiment": "Change only a landing screen, with the drop and resources fixed; compare advance information, hesitation, interceptions and successful disengagement from matched starts.",
+      "evidence": [
+        {
+          "level": "original_compiled_geometry",
+          "record": "out/undercut/verification.json",
+          "observation": "Two fully supported ledge-edge takeoffs have clear landing-eye rays and four clear literal horizontal/vertical swept translations against 178 world solids. These are geometric candidates, not ballistic trajectories."
+        }
+      ],
+      "status": "bounded_geometric_contract_gameplay_pending"
+    },
+    {
+      "id": "matched-surface-controls",
+      "principle": "Verify the compiled intervention rather than assuming unchanged recipe inputs imply a controlled comparison.",
+      "mechanism": "Replacing a sloped brush with steps can trigger material or compiler changes even when dimensions, light entities and the typed material role are preserved.",
+      "generator_action": "Compare semantic world brushes and entity properties between conditions, normalize only stable identity fields, and explicitly validate changed face materials. Keep source/compiler/asset hashes and both final artifacts.",
+      "measure": [
+        "unchanged nonintervention brush geometry and material counts",
+        "unchanged entity properties",
+        "controlled support profiles",
+        "compiled validity for both variants",
+        "native paired outcomes"
+      ],
+      "counterexample": "A recompiled lightmap can differ with changed geometry without a second authored intervention; it must be recorded, not falsely claimed pixel-identical. Changed texture assignment is an avoidable authored-material confound.",
+      "experiment": "Replace only Talus Bench ascent with equal-footprint, equal-endpoint stairs; preserve all other geometry/items/lights and match actual architectural face materials before running paired native journeys.",
+      "evidence": [
+        {
+          "level": "matched_source_and_compiled_geometry",
+          "record": "knowledge/q2/ramp-stair-comparison.json",
+          "observation": "Talus Bench retains 173 complete source/compiled brush signatures and all 81 nonworld entities. Exactly one ramp becomes eight material-matched treads. Both BSPs pass dedicated initialization; paired native movement remains untested."
+        }
+      ],
+      "status": "measurement_contract_native_outcomes_pending"
+    },
+    {
+      "id": "compact-interleaving",
+      "principle": "Place useful routes beside, around and above one another before shrinking movement clearance.",
+      "mechanism": "Shared room boundaries and short offset connections can reduce empty peripheral travel while preserving different approach angles.",
+      "generator_action": "Track gross envelope coverage, actual ordinary routes, route detours and lower/upper use separately. Preserve deliberate courts and sightline separators.",
+      "measure": [
+        "exact room/passage projected union",
+        "edge-connected exterior gaps",
+        "native journey time",
+        "congestion and peripheral route use"
+      ],
+      "counterexample": "A full bounding rectangle can hide solid cores, inaccessible areas or excessive central pressure. Surface packing and movement quality are different quantities.",
+      "experiment": "Close or relocate one exterior detour with its endpoints, resources and local widths held fixed; measure travel and encounters rather than rewarding coverage alone.",
+      "evidence": [
+        {
+          "level": "reference_geometry_and_engine_contract_study",
+          "record": "knowledge/mp/spatial-patterns.json",
+          "observation": "Reference-specific geometry and native Q2 transfer constraints are retained separately from the design hypothesis."
+        },
+        {
+          "level": "original_compiled_or_authored_geometry",
+          "record": "out/fold/packing-comparison.json",
+          "observation": "Fold gross room/passage envelope coverage 94.8% versus Undercut 61.2%, in a 20.2% smaller envelope; internal solids are not subtracted and these values are not playable-density scores."
+        }
+      ],
+      "status": "design_hypothesis_with_compiled_fixture_native_outcomes_pending"
+    },
+    {
+      "id": "raised-route-two-sided-clearance",
+      "principle": "Give raised interior walkways a purpose above and a usable space below.",
+      "mechanism": "A partial gallery can provide an alternative approach while its underside shapes a separate lower route or encounter.",
+      "generator_action": "Export both route stations and their actual heights. Check supported hull sweeps above and below, landing turns, sightline interruptions and exits.",
+      "measure": [
+        "upper and lower continuous hull clearance",
+        "turning room",
+        "per-floor use",
+        "upper control and lower counterattacks"
+      ],
+      "counterexample": "Projected overlap is not a connection. A walkway can waste the floor below, create an uncontested rail perch or hide a cramped recovery trap.",
+      "experiment": "Change one walkway screen or width with the same endpoints and items; compare movement, pursuit and lower-player responses.",
+      "evidence": [
+        {
+          "level": "reference_geometry_and_engine_contract_study",
+          "record": "knowledge/mp/spatial-patterns.json",
+          "observation": "Reference-specific geometry and native Q2 transfer constraints are retained separately from the design hypothesis."
+        },
+        {
+          "level": "original_compiled_or_authored_geometry",
+          "record": "out/fold/verification.json",
+          "observation": "Same-XY atrium segments at feet 0/128 both have full-footprint continuous support and clear compiled standing-hull sweeps."
+        }
+      ],
+      "status": "design_hypothesis_with_compiled_fixture_native_outcomes_pending"
+    },
+    {
+      "id": "horseshoe-arms-and-crossbar",
+      "principle": "Design a horseshoe as connected arms around a meaningful core with distinct onward choices.",
+      "mechanism": "The central obstruction separates approach information while the crossbar connects the arms; additional mouths can prevent a forced U-turn.",
+      "generator_action": "Retain the actual U-shaped free footprint, identify both arm entrances and the crossbar, and audit the complete ordinary path around the core.",
+      "measure": [
+        "arm and crossbar clear widths",
+        "onward exits",
+        "views between mouths",
+        "return and retreat outcomes"
+      ],
+      "counterexample": "A U-shaped outline can still be two dead ends or a single long corridor. A filled central core is structure, not automatically wasted exterior void.",
+      "experiment": "Open or close one secondary arm exit while holding the core and items fixed; observe retreat failures and control of both mouths.",
+      "evidence": [
+        {
+          "level": "reference_geometry_and_engine_contract_study",
+          "record": "knowledge/mp/spatial-patterns.json",
+          "observation": "Reference-specific geometry and native Q2 transfer constraints are retained separately from the design hypothesis."
+        },
+        {
+          "level": "original_compiled_or_authored_geometry",
+          "record": "out/fold/verification.json",
+          "observation": "Three joined flat segments trace the real lower U around its service core with continuous supported hull clearance; native encounter outcomes remain unknown."
+        }
+      ],
+      "status": "design_hypothesis_with_compiled_fixture_native_outcomes_pending"
+    },
+    {
+      "id": "barrier-or-traversal-contract",
+      "principle": "Declare whether each crate or barrier is cover, a climbable platform or a route separator.",
+      "mechanism": "A prop changes peeks, strafe room and access to height; its visual identity should match its collision and landing behavior.",
+      "generator_action": "For climbable props retain the approach, bounded ascent, supported top and departure. Show local prop heights without inventing a whole additional floor.",
+      "measure": [
+        "approach and landing hull support",
+        "snagging and lateral clearance",
+        "ordinary versus optional ascent",
+        "encounter changes"
+      ],
+      "counterexample": "A crate that looks climbable but has no reliable landing misleads players; scattering crates to raise cover counts can obstruct the entire room.",
+      "experiment": "Move one crate or change only its height; compare approach choices and congestion before changing the resource it protects.",
+      "evidence": [
+        {
+          "level": "reference_geometry_and_engine_contract_study",
+          "record": "knowledge/mp/spatial-patterns.json",
+          "observation": "Reference-specific geometry and native Q2 transfer constraints are retained separately from the design hypothesis."
+        },
+        {
+          "level": "original_compiled_or_authored_geometry",
+          "record": "out/fold/verification.json",
+          "observation": "The explicit 64-unit crate has a four-step ordinary ascent and a checked flat top segment; it is displayed as a local prop landing, not another whole floor."
+        }
+      ],
+      "status": "design_hypothesis_with_compiled_fixture_native_outcomes_pending"
+    },
+    {
+      "id": "liquid-route-commitment",
+      "principle": "Treat liquid as a movement and information commitment with explicit exits.",
+      "mechanism": "Depth and native contents change waterlevel, friction, swimming, sound and potentially damage; visual shallowness does not imply dry movement.",
+      "generator_action": "Record liquid bounds, depth, native contents/surface flags, bottom support, entry/exit profiles and air. Keep required dry circulation independent until swim navigation is implemented.",
+      "measure": [
+        "stationary waterlevel samples",
+        "native velocity and air",
+        "successful and failed exits",
+        "wet versus dry route use"
+      ],
+      "counterexample": "A short wet route may be slower and more predictable than a dry detour; a harmless-looking surface can conceal a movement or exit trap.",
+      "experiment": "Compare the same solid basin wet and dry under pinned physics, then change only one exit. Measure the complete journey and failed attempts.",
+      "evidence": [
+        {
+          "level": "reference_geometry_and_engine_contract_study",
+          "record": "knowledge/mp/spatial-patterns.json",
+          "observation": "Reference-specific geometry and native Q2 transfer constraints are retained separately from the design hypothesis."
+        },
+        {
+          "level": "original_compiled_or_authored_geometry",
+          "record": "out/fold/verification.json",
+          "observation": "The exact 24-deep WATER box preserves explicit surface metadata; two stationary standing samples are submerged. All 264 required dry ordinary paths and an inner wet flat segment are checked, while complete wet/native motion remains untested."
+        },
+        {
+          "level": "native_q2_319_world_movement",
+          "record": "out/native-movement/artifact-manifest.json",
+          "observation": "Later Fold and Lockyard controlled trials now demonstrate bounded full wet journeys and retain two failed level-view inputs. This supplements the historical static Fold record; game-module effects remain untested."
+        }
+      ],
+      "status": "design_hypothesis_with_compiled_and_native_world_evidence"
+    },
+    {
+      "id": "sky-viewpoints-not-roof-count",
+      "principle": "Evaluate an open court from useful player positions, including beneath its bridges.",
+      "mechanism": "A partial upper route can shelter lower crossings while other lanes remain open to sky; a sky roof alone does not describe that contrast.",
+      "generator_action": "Bind a sealed sky ceiling to its actual room and record clear player viewpoints, overhead obstructions and useful upper/lower routes independently.",
+      "measure": [
+        "supported player viewpoints",
+        "first overhead hit and surface role",
+        "upper/lower continuous hull clearance",
+        "engine visibility and landmark recognition"
+      ],
+      "counterexample": "Counting sky faces can label a bridge-covered lane as open; copying a large FFA courtyard into duel can create empty travel.",
+      "experiment": "Hold the court and items fixed and change one partial gallery or screen; compare lower exposure, upper access and encounter use.",
+      "evidence": [
+        {
+          "level": "reference_compiled_geometry",
+          "record": "knowledge/q2/courtyard-liquid-study.json",
+          "observation": "Manhunt has six sampled upper circuit eyes reaching sky and two roof-covered endpoints; gladdm1 central bridge and lateral sky viewpoints differ."
+        },
+        {
+          "level": "original_compiled_geometry",
+          "record": "out/lockyard/verification.json",
+          "observation": "Three selected court sky rays and same-XY upper/lower routes are checked on a sealed BSP; engine sunlight/render recognition remains unmeasured."
+        }
+      ],
+      "status": "design_hypothesis_with_bounded_compiled_evidence"
+    },
+    {
+      "id": "surfacing-clearance-and-exit-turn",
+      "principle": "Treat surfacing and the turn onto dry ground as separate parts of a water exit.",
+      "mechanism": "A valid bottom and reachable water surface do not guarantee enough headroom, a dry lip or room to turn away from the basin.",
+      "generator_action": "Check full hull emergence columns, bottom-to-exit support profiles and the dry turn; retain failed straight-up or straight-ahead candidates.",
+      "measure": [
+        "emergence column clearance",
+        "continuous exit support and swept hull",
+        "dry lip rise and turning clearance",
+        "complete native wet-to-dry arrival"
+      ],
+      "counterexample": "The gladdm1 basin starts beneath a roof below the water surface; its ramp reaches a shallow shelf where a sideways turn is needed.",
+      "experiment": "Keep the basin fixed and alter only one exit or overhead obstruction; compare successful emergence, failed exits and recovery under the same inputs.",
+      "evidence": [
+        {
+          "level": "reference_compiled_geometry",
+          "record": "knowledge/q2/courtyard-liquid-study.json",
+          "observation": "A 896-unit gladdm1 geometric route includes the ramp, shallow shelf and dry lip; a blocked starting emergence and two clear later columns are retained."
+        },
+        {
+          "level": "original_compiled_geometry_and_native_world_movement",
+          "record": "docs/Q2_LOCKYARD_STUDY.md",
+          "observation": "Two clear geometric emergence columns flank a blocked surfacing attempt under the roof; successful scripted dives complete the full dry exit in native Q2 3.19 CM/Pmove."
+        }
+      ],
+      "status": "design_hypothesis_with_static_and_native_world_evidence"
+    },
+    {
+      "id": "ordinary-passage-dependency",
+      "principle": "Audit route dependence on individual passages at the actual traversable-surface level.",
+      "mechanism": "An abstract room can contain disconnected dry stations; merging them can conceal a forced return even when every destination is reachable.",
+      "generator_action": "Remove one passage node set from the directed ordinary navigation graph; retain which spawn-to-anchor pairs are lost and whether the dependent space is a deliberate optional recess.",
+      "measure": [
+        "baseline directed required reachability",
+        "lost pairs for each passage closure",
+        "exact endpoint and layout binding",
+        "native alternate-return journeys"
+      ],
+      "counterexample": "An optional health recess may intentionally have one mouth. Zero dependencies everywhere is not a universal map-quality target.",
+      "experiment": "Hold the final graph and items fixed, enable/disable one added return, then close the previously dominant passage. Follow with a physical compiled intervention before gameplay claims.",
+      "evidence": [
+        {
+          "level": "matched_graph_intervention",
+          "record": "out/lockyard/dry-return-comparison.json",
+          "observation": "On final Lockyard, closing Boiler-Winding loses zero required pairs with the added Court-west-station return; excluding that return as well loses 57. The east health recess intentionally loses eight pairs on its own passage closure."
+        }
+      ],
+      "status": "measurement_contract_with_original_connectivity_repair"
+    },
+    {
+      "id": "dive-commitment-and-recovery",
+      "principle": "A submerged shortcut needs an understandable dive commitment and a demonstrated recovery.",
+      "mechanism": "Water movement can hold a level-view swimmer above a low opening even when the standing hull fits beneath it; the input needed to dive is part of the route.",
+      "generator_action": "Retain the level-input failure and explicit successful dive sequence, full standing-hull clearance, waterlevel progression and dry arrival. Test discoverability before automatic use.",
+      "measure": [
+        "successful and failed command profiles",
+        "first valid dry grounded arrival",
+        "waterlevel sequence",
+        "stalled movement intervals",
+        "first-time player recognition and exit threats"
+      ],
+      "counterexample": "A scripted dive succeeding does not prove that a first-time player understands the route, survives oxygen/damage or escapes an opponent.",
+      "experiment": "Keep the culvert fixed and compare level, constant dive and phased dive inputs; later change only the visual entry cue and test first-time players.",
+      "evidence": [
+        {
+          "level": "native_q2_319_world_movement",
+          "record": "out/native-movement/lockyard-comparison.json",
+          "observation": "Level-view forward 200/400 stall before the low roof. Constant and phased 30-degree dive profiles complete the standing-hull crossing and dry exit with waterlevel 0-1-2-3-2-1-0, without jump/upmove."
+        }
+      ],
+      "status": "bounded_native_movement_contract_gameplay_pending"
+    },
+    {
+      "id": "measured-liquid-cost",
+      "principle": "Measure liquid travel with matched commands and the same solid geometry before assigning a shortcut value.",
+      "mechanism": "Water friction, vertical input, view pitch and exit steps can change both speed and completion; a single geometric distance or speed ratio misses those effects.",
+      "generator_action": "Pin source, BSP, physics, start state, usercmd sequence and arrival predicate; retain drained controls, full frames, failures and first-goal timing separately from command-budget diagnostics.",
+      "measure": [
+        "first valid goal at declared time resolution",
+        "matched wet/drained solids and commands",
+        "velocity and waterlevel transitions",
+        "failed trial budget",
+        "actual competing dry-perimeter time"
+      ],
+      "counterexample": "Removing water from the same tunnel does not measure the real dry detour. A constant dive profile is not a fastest-route proof or multiplayer result.",
+      "experiment": "Remove only the water volume, verify unchanged source and compiled solids/entities, and compare matched complete journeys. Then separately measure the actual alternative route.",
+      "evidence": [
+        {
+          "level": "native_q2_319_world_movement_control",
+          "record": "out/native-movement/fold-comparison.json",
+          "observation": "Fold level-view forward 400 takes 1680 ms wet versus 1424 drained; forward 200 takes 2560 versus 2128. Results use 16 ms commands and exclude 128 ms verified settling."
+        },
+        {
+          "level": "native_q2_319_world_movement_control",
+          "record": "out/native-movement/lockyard-comparison.json",
+          "observation": "Lockyard constant 30-degree dive takes 6400/10048 ms wet at forward 400/200 versus 3920/5904 drained under matching commands. Flat wet attempts fail; oxygen, damage, entities and opponents are outside the harness."
+        }
+      ],
+      "status": "measurement_contract_with_bounded_native_water_trials"
+    },
+    {
+      "id": "arrival-state-is-part-of-route",
+      "principle": "Distinguish reaching an exit plane from regaining the intended movement state at that exit.",
+      "mechanism": "A player can cross a destination while still falling, overshoot its cover or lack the same grounded movement options as another route.",
+      "generator_action": "Specify destination lane, floor, stance, water state, ground contact and bounded overshoot. Retain planar crossing and stable arrival as separate observations.",
+      "measure": [
+        "first station-plane crossing",
+        "first grounded standing arrival",
+        "landing overshoot",
+        "state and velocity at both events",
+        "recovery or interception after arrival"
+      ],
+      "counterexample": "A deliberately airborne jump route may want an airborne goal; requiring grounded arrival universally would erase that intended mechanic.",
+      "experiment": "Compare equal-endpoint ascent profiles with identical starts and inputs; then alter only landing space and test movement recovery without conflating it with horizontal speed.",
+      "evidence": [
+        {
+          "level": "native_q2_319_matched_world_movement",
+          "record": "knowledge/q2/native-ascent-study.json",
+          "observation": "Talus forward400 descent crosses the lower station at1968ms in both geometries; stairs remain airborne and reach a grounded goal96ms later. At forward200 the48ms difference includes16ms crossing and32ms subsequent recovery."
+        },
+        {
+          "level": "native_q2_319_world_recovery_profiles",
+          "record": "knowledge/q2/native-recovery-study.json",
+          "observation": "Eight predeclared profiles on unchanged Ravel produce5 bounded pauses and3 retained failures. Release needs36.125/23.5 further westward units after landing;9 frame-end samples span128ms. A successful pause does not establish onward doorway traversal or safe falling."
+        }
+      ],
+      "status": "measurement_contract_with_native_paired_evidence"
+    },
+    {
+      "id": "step-count-is-not-travel-time",
+      "principle": "Use graph transition penalties as planning policy until native journey evidence calibrates them.",
+      "mechanism": "Adding graph nodes and step edges can increase an estimated cost without increasing a player journey under the same commands.",
+      "generator_action": "Label proxy costs and retain matched native timing before favoring ramps or minimizing stair counts. Keep route purpose, slope, landings and visibility as distinct design variables.",
+      "measure": [
+        "graph cost basis and transition counts",
+        "matched native complete journeys",
+        "failure and recovery state",
+        "route use and combat consequences"
+      ],
+      "counterexample": "A tie on one straight uphill fixture does not make every step penalty wrong; narrow treads, turns, collisions and different movement inputs can change outcomes.",
+      "experiment": "Replace one ramp by equal-footprint stairs, verify all other source and compiled geometry/materials/entities, then compare native lanes and directions with the same inputs.",
+      "evidence": [
+        {
+          "level": "matched_static_and_native_world_movement",
+          "record": "knowledge/q2/native-ascent-study.json",
+          "observation": "The existing Talus graph adds seven step penalties; all three native uphill lanes tie at1984ms for forward400 and2976ms for forward200 across ramp/stairs."
+        }
+      ],
+      "status": "measurement_contract_proxy_calibration_still_pending"
+    },
+    {
+      "id": "position-and-velocity-evidence",
+      "principle": "Read movement position, velocity and contact state together when evaluating traversal geometry.",
+      "mechanism": "Native stepping can change feet height while preserving a zero stored vertical velocity; continuous support geometry also need not keep a descending player grounded every frame.",
+      "generator_action": "Retain command-end feet displacement, native velocity and ground contact. Do not infer camera motion, aim disturbance or continuous ground contact from one series or a geometric surface label.",
+      "measure": [
+        "per-command feet displacement",
+        "native vertical velocity",
+        "grounded state transitions",
+        "client camera response",
+        "weapon and player outcomes"
+      ],
+      "counterexample": "A larger discrete position update can be smoothed by a client; more sampled airborne frames do not by themselves prove worse control or a dangerous landing.",
+      "experiment": "Hold input and complete route endpoints fixed; compare support profiles using native frames, then separately measure camera/aim behavior in a full client test.",
+      "evidence": [
+        {
+          "level": "native_q2_319_world_movement",
+          "record": "knowledge/q2/native-ascent-study.json",
+          "observation": "Talus stair ascent makes eight16-unit feet updates with zero stored Zvelocity; ramp ascent spreads the rise across more updates. Both descents contain ungrounded samples. No client rendering or aim trial was performed."
+        },
+        {
+          "level": "native_q2_319_world_recovery_profiles",
+          "record": "knowledge/q2/native-recovery-study.json",
+          "observation": "Continuation can stop changing XY against geometry while stored horizontal velocity remains nonzero. Recovery requires position bounds, contact, velocity and a sampled dwell together; no one field is a substitute for the full predicate."
+        }
+      ],
+      "status": "measurement_contract_with_native_state_counterexample"
+    },
+    {
+      "id": "elbow-clearance-before-tightening",
+      "principle": "Preserve the space needed to turn around a room core when compacting an interleaved route.",
+      "mechanism": "Close adjacent corridors can still collide with an inside corner or lose floor support while turning; the continuous player hull determines the usable elbow.",
+      "generator_action": "Audit full-footprint support and continuous hull sweeps on every side of the turn, including its shared corner. Separate upper/lower routes and verify their actual inter-floor return independently.",
+      "measure": [
+        "complete elbow route support",
+        "continuous standing-hull clearance",
+        "blocked tighter-turn controls",
+        "ordinary return binding",
+        "native turns and passing under pressure"
+      ],
+      "counterexample": "An unblocked center point or two individually reachable nodes do not certify the turn; stacked projected floors may depend on push triggers or other optional mechanics.",
+      "experiment": "Hold destinations and items fixed while moving only an inside barrier or turn station; retain blocked and clear trials before judging congestion or pursuit.",
+      "evidence": [
+        {
+          "level": "reference_compiled_geometry",
+          "record": "knowledge/q2/interleaved-route-study.json",
+          "observation": "Reclamation has verified lower and upper routes, while an attempted tighter upper elbow hits two real solids. Push triggers prevent treating floor proximity as an ordinary inter-floor return certificate."
+        },
+        {
+          "level": "original_compiled_geometry",
+          "record": "out/ravel/verification.json",
+          "observation": "Ravel separately checks supported bent routes, an upper/lower crossing, and its ramp/drop returns; geometric evidence does not establish native cornering or multiplayer passing."
+        },
+        {
+          "level": "compiled_static_followup_to_native_recovery",
+          "record": "knowledge/q2/native-recovery-study.json",
+          "observation": "At the fast north-turn pause X-68.625, advancing a standing pose toY72 overlaps a doorway jamb; the selected X-96,Y72 static pose clears. Neither pose proves a completed native doorway journey."
+        }
+      ],
+      "status": "design_hypothesis_with_bounded_compiled_evidence"
+    },
+    {
+      "id": "pickup-anchor-hull-margin",
+      "principle": "A clear item origin is insufficient evidence for a clear player approach.",
+      "mechanism": "A point may lie beside a tread or ledge while a standing player hull centered there intersects it or overhangs its support.",
+      "generator_action": "Place gameplay anchors on explicitly supported, clear player stations. Keep authored origins and any geometric settling candidate separate from native item/spawn physics.",
+      "measure": [
+        "full32-by32 support footprint",
+        "56-unit standing clearance",
+        "bounded clear vertical settling path",
+        "actual native pickup contact when tested"
+      ],
+      "counterexample": "A player may collect an item from the side without centering on it; failure of the conservative anchor-center check does not prove native pickup unreachability.",
+      "experiment": "Retain fixed default-pipeline outputs before and after scoped placement binding; compile every case and retain failing health-center examples.",
+      "evidence": [
+        {
+          "level": "compiled_fixed_portfolio",
+          "record": "knowledge/q2/experiments/weft-v1.json",
+          "observation": "Three old seed99 cases have one full-standing-hull overlap at a health origin despite typed navigation success. Compact motif placement selects complete supported stations for every gameplay role; compiled checks independently assess the new outputs."
+        }
+      ],
+      "status": "conservative_construction_contract_with_compiled_counterexamples"
+    },
+    {
+      "id": "structural-variety-beyond-seeds",
+      "principle": "Count different spatial structures separately from different seeds or file hashes.",
+      "mechanism": "Changing dimensions, coordinates, names or rotation can produce a new fingerprint while leaving the same route topology.",
+      "generator_action": "Retain fixed prompts and the actual selected candidates. Compare room multigraphs and motif arrangements independently from dimensions, elevations, usable routes and human preference.",
+      "measure": [
+        "canonical unlabelled room multigraph",
+        "motif-colored graph",
+        "cycle rank and degree pattern",
+        "within-room upper/lower circuits",
+        "separate footprint and gameplay observations"
+      ],
+      "counterexample": "The same room graph can support very different combat through heights, openings and cover; graph uniqueness is neither necessary nor sufficient for good variety.",
+      "experiment": "Permute IDs/order/names/coordinates without changing a graph, then add a distinct passage or change a motif; only the appropriate structural signature should change.",
+      "evidence": [
+        {
+          "level": "bounded_structural_comparison",
+          "record": "tools/mp_portfolio/compare.py",
+          "observation": "Small-map canonical signatures ignore IDs, ordering, coordinates and naming; parallel passages remain distinct, and motif-colored identity is reported separately. Synthetic controls reject fingerprint-only variety claims."
+        },
+        {
+          "level": "non_slicing_geometry_and_selected_topology_comparison",
+          "record": "knowledge/q2/experiments/splice-v1.json",
+          "observation": "A reconstructed split-arm pinwheel keeps room cycles while reintroducing a global slicing gap. The new family prevents aligned cuts; changed spatial structure and selected variety remain separate outcomes."
+        }
+      ],
+      "status": "measurement_contract_for_default_generator_promotion"
+    },
+    {
+      "id": "contested-center-with-ordinary-bypass",
+      "principle": "A central space can invite encounters while an outer ordinary route preserves a choice to avoid it.",
+      "mechanism": "A perimeter loop links approaches without forcing every rotation through the central room. Its tactical value depends on exposure, travel and resources, not the room graph alone.",
+      "generator_action": "Offer unequal interlocking room partitions with a playable center and a connected outer loop; verify real passage faces and full within-room routes independently.",
+      "measure": [
+        "outer connectivity with center removed",
+        "actual route hull clearance and support",
+        "separate route lengths and sightlines",
+        "resource control and human route choices"
+      ],
+      "counterexample": "A bypass may be so exposed or unrewarding that players never use it. A shorter room-hop path may be longer to run. A ring around a solid obstruction is not proof of an optional playable center.",
+      "experiment": "Hold geometry/items fixed and block only a selected ordinary approach; compare native journey, exposure and human rotation choices before promoting a preference.",
+      "evidence": [
+        {
+          "level": "compiled_reference_routes",
+          "record": "knowledge/q2/interlocking-topology-study.json",
+          "observation": "Separate routes around a blocked direct crossing require exact corner clearance and separate floor/support contracts; their geometric existence does not prove tactical equivalence."
+        },
+        {
+          "level": "original_default_family_and_graph_checks",
+          "record": "knowledge/q2/experiments/splice-v1.json",
+          "observation": "Splice has nine physical passages and a connected outer loop after central-room removal. Maximum room hops changes3 to2; full native Splice circuits remain untested."
+        }
+      ],
+      "status": "design_hypothesis_with_bounded_geometry_and_topology_evidence"
+    },
+    {
+      "id": "offered-versus-selected-variety",
+      "principle": "Measure the variety the selector delivers separately from the variety the generator offers.",
+      "mechanism": "A ranking proxy can consistently prefer one family even when each candidate pool contains several structures.",
+      "generator_action": "Trace every candidate family, structural signature and rank score; bind the chosen candidate to the final canonical layout and retain fixed request-level comparisons.",
+      "measure": [
+        "candidate family distribution",
+        "candidate canonical room multigraphs",
+        "selected structural variety by request group",
+        "rank-score and final-layout identity",
+        "blind gameplay review"
+      ],
+      "counterexample": "Forcing equal family counts does not establish equal quality. Extra room-graph variety can hide poor flow; one graph can support meaningful local differences.",
+      "experiment": "Hold the full generated candidate pools fixed and isolate ranker feature changes or explicit structural-intent selection. Inspect selected variety and retained construction gates before native/human quality evaluation.",
+      "evidence": [
+        {
+          "level": "fixed_default_candidate_trace",
+          "record": "out/splice-portfolio/comparison.json",
+          "observation": "Eligible requests offer three row and three pinwheel candidates, but all six primary6/8-room requests select pinwheel. Eight-room candidate pools contain three graphs while selected graph variety falls from two to one."
+        },
+        {
+          "level": "separate_followup_experiment",
+          "record": "out/lattice-portfolio/comparison.json",
+          "observation": "Lattice isolates ranking across96unchanged candidates. Exact ties use a family-neutral seed policy; selected variety is reported separately for9primary and6holdout requests, with physical regressions retained."
+        }
+      ],
+      "status": "fixed_pool_followup_complete_gameplay_preference_pending"
+    },
+    {
+      "id": "movement-gates-bound-to-geometry",
+      "principle": "Separate an intended movement-lane test from the physical space a standing player can actually traverse.",
+      "mechanism": "Momentum after a turn can miss a narrow protocol gate while remaining on fully supported, clear geometry; conversely a broad endpoint success can conceal partial edge support or a missed route.",
+      "generator_action": "Declare route order, physical clearance bands, optional precision gates and final dwell before running native commands. Retain each result under its original acceptance definition and audit physical trajectories separately.",
+      "measure": [
+        "ordered gates and immutable command phases",
+        "standing-footprint support across actual upper chords",
+        "exit lateral offset versus full-hull stair band",
+        "ground contact and end-pocket low-speed dwell"
+      ],
+      "counterexample": "Moving a gate after observing a failure can make a test pass without changing the map. A strict-gate failure alone does not justify widening architecture or declaring a route impassable.",
+      "experiment": "Keep the eight original Weft attempts unchanged; predeclare a separate geometry-based gate protocol and then vary only turn timing or one approach intervention.",
+      "evidence": [
+        {
+          "level": "bounded_native_world_circuits",
+          "record": "knowledge/q2/native-motif-circuits.json",
+          "observation": "All eight fixed circuits fail their original narrow exit gate. Four remain in the actual full-hull stair band with supported clear upper chords; four use partial edge support. Two later achieve final-pocket dwell without changing their failed circuit outcome."
+        },
+        {
+          "level": "separate_followup_experiment",
+          "record": "knowledge/q2/native-motif-turning.json",
+          "observation": "A predeclared physical contract scores2/8prior rawtraces; original0/8is unchanged.16new earlier-turn commands pass; endpoint station diagnostics and wall-adjacent recovery remain separately reported."
+        }
+      ],
+      "status": "measurement_contract_with_native_counterexamples"
+    },
+    {
+      "id": "ranking-descriptors-need-semantic-contracts",
+      "principle": "A room-record descriptor needs a clear meaning before it can express a quality preference.",
+      "mechanism": "Equivalent convex partitions can change volume and center-distance scores while collision space stays unchanged; an actual barrier can change a supported journey without changing these inputs.",
+      "generator_action": "Keep feature definitions, clipping and contributions visible. Use dimensions and spacing as explicit construction intent where justified; evaluate real supported routes and viewpoints separately.",
+      "measure": [
+        "same-union partition invariance",
+        "sensitivity to compiled obstructions",
+        "actual route lengths with support contract",
+        "viewpoint-specific exposure"
+      ],
+      "counterexample": "Physically different room sizes can produce meaningful combat variety. The synthetic metadata controls do not make all production partitions equivalent or establish that variance is undesirable.",
+      "experiment": "Use original identical-world metadata variants and a fixed-metadata barrier pair before treating a proxy as map quality.",
+      "evidence": [
+        {
+          "level": "compiled_original_controls_and_retained_reference_routes",
+          "record": "knowledge/q2/ranking-feature-study.json",
+          "observation": "Four partitions share one compiled open world but change reconstructed scores; actual ggml confirms equal/unequal delta0.34. A barrier blocks1920-unit crossing while inputs stay equal; a checked detour is2304. Retained q2rdm2 routes keep their separate support contracts."
+        }
+      ],
+      "status": "measurement_contract_with_representation_and_obstruction_counterexamples"
+    },
+    {
+      "id": "abstain-when-quality-evidence-is-missing",
+      "principle": "When supported adequacy inputs tie, selection should not imply a learned quality preference.",
+      "mechanism": "Unsupported preferences can suppress offered structures; a deterministic family-neutral tie choice exposes alternatives without claiming which plays best.",
+      "generator_action": "For coherent marked2–8-room Q2DM/duel pools, retain six adequacy weights, set volume-CV and center-distance weights to zero, and resolve exact best-score ties by stable mixed seed then neutral canonical hash. Keep other scopes unchanged.",
+      "measure": [
+        "unchanged rank-neutral candidate geometry",
+        "exact feature and contribution trace",
+        "selected graph variety separated by request group",
+        "retained compiled failures and footprint/route tradeoffs"
+      ],
+      "counterexample": "More selected graphs can increase travel or reintroduce slicing gaps. Counts are adequacy heuristics, not full candidate validity gates; a seed tie policy is not a human preference model.",
+      "experiment": "Freeze16 requests and96 candidates before selection changes; retain diagnostic and legacy byte parity, compile selected outputs, and report the predeclared example even when its spatial descriptors regress.",
+      "evidence": [
+        {
+          "level": "fixed_pool_procedural_selection",
+          "record": "out/lattice-portfolio/comparison.json",
+          "observation": "All96 candidate geometries/features remain unchanged. Lattice selects a row family with8.1% larger compiled envelope,3→4 maximum room hops and returning room-only gaps; delivered variety and spatial quality remain distinct."
+        }
+      ],
+      "status": "scoped_procedural_policy_without_trained_quality_weights"
+    },
+    {
+      "id": "corner-recovery-has-time-and-space-cost",
+      "principle": "Judge a turn using its complete approach, supported corner, exit alignment and final recovery.",
+      "mechanism": "Momentum can persist after yaw changes. Earlier turns or a deliberate pause can reduce lateral drift, but pausing consumes time and a nearby wall may contribute to stopping.",
+      "generator_action": "Predeclare geometry-bound gates and fixed commands. Keep active timing equal within pause comparisons; test open-space recovery separately before transferring wall-adjacent results.",
+      "measure": [
+        "ordered native circuit completion",
+        "upper reconstructed chord support and clearance",
+        "exit/final cross-lane offsets",
+        "corner velocity",
+        "completed low-speed dwell and wall distance"
+      ],
+      "counterexample": "A successful end pocket near a wall does not prove free-space braking or generalize to another rotation, height, map, jumping or opponents. Pausing can cost time without being required for success.",
+      "experiment": "On the frozen Weft BSP cross two motifs, both directions,200/400 inputs and0/24-frame corner pauses using earlier empirically derived active timings.",
+      "evidence": [
+        {
+          "level": "bounded_native_world_first_attempts",
+          "record": "knowledge/q2/native-motif-turning.json",
+          "observation": "16/16 new circuits pass; original0/8 remains unchanged and separate physical rescore is2/8. Pausing reduces final lateral offsets4.125–21.5→0–2.125 units and adds688–752ms. Every finish is0.125unit hull-to-wall; five separate station diagnostics fail."
+        }
+      ],
+      "status": "bounded_native_turning_evidence_with_wall_recovery_limit"
+    },
+    {
+      "id": "explicit-construction-intent",
+      "principle": "Honor an explicit spatial request through a typed construction contract before ranking candidates.",
+      "mechanism": "A family-neutral quality tie does not guarantee a wrapped center; declared structure can constrain construction without treating envelope or room-distance proxies as learned quality.",
+      "generator_action": "For explicit wrapped_center in Q2 DM/duel with 5–8 rooms, require no symmetry and construct the existing pinwheel family for every candidate. Keep unspecified family selection and ranker weights separate.",
+      "measure": [
+        "intent parser/planner/report/trace agreement",
+        "offered and selected family",
+        "compiled envelope and ordinary paths",
+        "unchanged out-of-scope controls"
+      ],
+      "counterexample": "Restricting a family reduces offered family variety, and a smaller envelope or fewer room hops does not prove better combat flow. Generic loops do not imply wrapped intent.",
+      "experiment": "Retain 16 exact prompts at baseline A, intent-only B and spawn-refined C; separate 13 explicit requests from three unmarked four-room controls. Preserve 42 historical intent-only parity files separately from 12 final CLI/legacy files.",
+      "evidence": [
+        {
+          "level": "matched_procedural_construction_with_compiled_selected_outputs",
+          "record": "out/braid-portfolio/comparison.json",
+          "observation": "The predeclared eight-room seed 503 example changes rows→pinwheel at A→B: envelope 5,825,280→5,233,920, maximum room hops 4→3 and passages 10→11. C leaves its MAP/report unchanged from B; full journeys and gameplay remain untested."
+        }
+      ],
+      "status": "bounded_explicit_construction_policy_without_quality_training"
+    },
+    {
+      "id": "context-aware-pairwise-spawn-stations",
+      "principle": "Improve close spawn stations locally while preserving each known occluded pair and full standing support.",
+      "mechanism": "Zero visible peers can hide an existing close same-floor pair. Aggregate visibility equality could also conceal a newly exposed pair; endpoint validity and pair identity matter.",
+      "generator_action": "After the existing visibility pass, refine spawns in marked Q2 DM/duel layouts with 2–8 rooms within their initial room/floor. Require a supported clear 32×32×56 hull, 64-unit non-light anchor clearance and exact eye endpoints; preserve both explicit-solid and implicit-shell occlusion per pair. Strictly reduce visible-pair count, close-pair count and capped squared deficit in lexicographic order using nearest 24 candidates and at most two passes.",
+      "measure": [
+        "unordered pair identity and source/compiled eye result",
+        "3D distance and existing 256-unit threshold",
+        "full-footprint support and clearance",
+        "nonspawn geometry/entity invariance",
+        "movement count and displacement"
+      ],
+      "counterexample": "The six-map reference sample contains three close but occluded pairs with 192-unit vertical separation. A global distance increase or player-count rule cannot be learned from this bounded sample; local static spacing is not respawn safety.",
+      "experiment": "Retain the first five frozen Lattice feasibility moves, then compare B→C across the 16 separately fixed Braid requests after construction intent. Keep spawn counts, warning threshold, geometry, facing and all nonspawn entities unchanged.",
+      "evidence": [
+        {
+          "level": "bounded_reference_observations_and_first_local_feasibility",
+          "record": "knowledge/q2/spawn-separation-study.json",
+          "observation": "Six reference maps provide 44 spawn stations and 154 pairs; all three close pairs are occluded and vertically separated. Five historical generated close pairs each admit a first retained supported local shift; these are distinct from the later Braid population."
+        },
+        {
+          "level": "matched_generated_placement_intervention",
+          "record": "out/braid-portfolio/comparison.json",
+          "observation": "B→C changes three selected maps while preserving spawn-neutral hashes for all 96 candidates. The hero already loses its close pair at A→B and is unchanged by C. Source support and per-pair occlusion have independent selected-BSP checks."
+        }
+      ],
+      "status": "bounded_local_spacing_policy_spawn_count_and_gameplay_pending"
+    },
+    {
+      "id": "resource-approaches-before-projection",
+      "principle": "Bind resource access and exposure to exact supported stations and complete checked edges before calling a projection a circuit.",
+      "mechanism": "A resource station, landing or matching graph endpoint can be valid while the connecting hull intersects a wall. Exposure also changes between approach stations and does not imply pickup contact.",
+      "generator_action": "Declare approach endpoints, full hull/support and step/drop contracts before tracing. Keep blocked edges in the resource graph, and measure station-specific eye rays separately from route, pickup and native movement evidence.",
+      "measure": [
+        "complete edge support and swept hull",
+        "exact endpoint joins",
+        "named station eye exposure",
+        "resource entity-to-feet offset",
+        "retained failed approach and mechanism exclusions"
+      ],
+      "counterexample": "Two armor approaches with different starts and a shared final segment are not competing routes between identical endpoints. A supported Rail or Mega station does not make its failed tested approach usable.",
+      "experiment": "On frozen The Rage ztn2dm3, test the declared flat east and stepped center armor approaches and all edges of the proposed closed circuit. Do not search for a replacement drop after its failure.",
+      "evidence": [
+        {
+          "level": "bounded_reference_exact_static_hull_and_station_rays",
+          "record": "knowledge/q2/raised-resource-circuit.json",
+          "observation": "Armor approaches of 688 XY units flat and 400 XY units/+64 via four 16-unit static steps pass from different starts with 80 XY units shared. The declared 64-unit drop hits brushes 404/690, so all five matching joins do not certify the circuit. Twenty rays give E 0/5, C 3/5, J 3/5, Mega 0/5; no native/contact or closed-loop proof."
+        }
+      ],
+      "status": "static_route_and_exposure_contract_with_retained_blocked_circuit"
+    },
+    {
+      "id": "upper-routes-connect-distinct-spaces",
+      "principle": "Give raised routes supported destinations in other spaces and explicit ordinary access to both layers.",
+      "mechanism": "An inter-room upper passage can create a distinct circulation layer above an existing lower adjacency; it need not change unique room adjacency or room-hop counts.",
+      "generator_action": "Extend compatible existing128/192-height decks across a shared face while retaining original rooms, stairs and lower passages. Bind both exact deck endpoints to bidirectional local ordinary ground access before accepting a connection.",
+      "measure": [
+        "actual upper endpoint and continuous route support",
+        "ordinary access in both rooms",
+        "lower-route preservation",
+        "station-specific exposure",
+        "selected inter-room route identity"
+      ],
+      "counterexample": "Powertrip upper/lower routes share endpointXY but differ256 inZ, so their1568/992 lengths are not interchangeable costs. Hinge adds a parallel upper route without changing unique adjacency or maximum room hops.",
+      "experiment": "Retain the exact Powertrip upper/lower route certificates, then compare16 fixed original generator requests before and after one optional upper link; separate primary, holdout and hero strata.",
+      "evidence": [
+        {
+          "level": "bounded_reference_static_support_and_eye_rays",
+          "record": "knowledge/q2/upper-connection-study.json",
+          "observation": "Both routes include the same80-unit connector footprint at floors0/−256. The direct vertical sweep hits deck brushes15/71. Fixed lower west↔bridge eyes are mutually clear; the corresponding upper pair is blocked. No native ascent, resource contact or whole-route safety claim."
+        },
+        {
+          "level": "matched_original_construction_with_selected_BSP_checks",
+          "record": "out/hinge-portfolio/comparison.json",
+          "observation": "Refined fixed pools offer77 upper links among96 candidate observations and select12 among16 outputs. All selected seeds, original rooms/stairs/solids/lower passages and compiled envelopes are preserved. Allocation and analytical warnings remain separate effects."
+        }
+      ],
+      "status": "bounded_connected_upper_construction_gameplay_quality_pending"
+    },
+    {
+      "id": "layered-routes-need-physical-support",
+      "principle": "Certify actual support and movement envelopes separately for each layer of overlapping free space.",
+      "mechanism": "Free-volume union can erase an implicit upper floor even when a source passage node remains. Clear standing poses can also hide a blocked step raise or an isolated endpoint fragment.",
+      "generator_action": "Supply an explicit24-thick portal slab, require continuous32×32×56 upper support, protect full old tread footprints through top+56+18, and bind the exact endpoint fragment to both-direction local access. Physically mask the upper opening for dependency controls while preserving lower clearance.",
+      "measure": [
+        "emitted and compiled full-footprint support",
+        "missing-slab and closed-upper-opening negatives",
+        "original full-width lower doorway",
+        "step raise-before-advance envelopes",
+        "first native phase gates and bounded grounded dwells"
+      ],
+      "counterexample": "Deleting only an upper connection declaration need not close a128-height route under an overlapping192-high doorway. The original lower opening still leaves64 units above the slab. A declared source floor is not proof of a physical floor.",
+      "experiment": "Compare final Hinge, physically closed upper opening and missing support slab using frozen BSPs; separately execute12 first fixed native rotation/transfer trials on the final Hinge world.",
+      "evidence": [
+        {
+          "level": "compiled_layered_geometry_control",
+          "record": "out/hinge-portal-controls/lower-route-audit.json",
+          "observation": "The original160-wide lower doorway retains continuous full-hull support and56-unit clearance in normal, closed-upper and missing-upper-support worlds. This is static lower-route evidence, not a native lower journey."
+        },
+        {
+          "level": "first_fixed_world_movement_trials",
+          "record": "out/native-upper-link/comparison.json",
+          "observation": "Four straight transfers and seven of eight complete rotations pass. One fast rolling forward rotation misses its declared upper phase gate and remains failed. Wall-adjacent finishing dwells do not demonstrate open-space stopping, and no game module, pickup, opponent or match behavior is tested."
+        }
+      ],
+      "status": "compiled_layer_controls_and11_of12_bounded_native_trials_gameplay_pending"
+    },
+    {
+      "id": "construction-coverage-before-example-selection",
+      "principle": "Diagnose missing construction features across fixed candidate populations before changing examples or promoting coverage claims.",
+      "mechanism": "Global coordinate snapping and shell thickness can suppress physically useful strips. A selected no-feature result may reveal a construction bug, a legitimate constraint or selection behavior; those causes require different responses.",
+      "generator_action": "Anchor16-unit enumeration to each legal deck interval, retain exact-width translations and too-narrow negatives, and count considered/source-clear/lowered candidates. Test at most64 strips in deterministic seeded order and return unchanged geometry on exhaustion; never reroll the request.",
+      "measure": [
+        "offered versus selected upper connections",
+        "same requested and selected seed",
+        "grid-phase translation controls",
+        "emitted-shell failures and search caps",
+        "retained no-compatible cases and warning regressions"
+      ],
+      "counterexample": "The first Hinge pool offered four links but selected none. Its selected geometry had legal160-wide intervals centered at8mod16; global snapping considered zero strips. This was not evidence that the level had no possible upper connection.",
+      "experiment": "Freeze the first16 exports (67/96 offers,10/16 selected) before changing only the interval phase. Regenerate the identical16 requests into a distinct refined stage, preserving all seeds and ranker policy.",
+      "evidence": [
+        {
+          "level": "retained_construction_failure_and_general_fixed_population_correction",
+          "record": "out/hinge-portfolio/comparison.json",
+          "observation": "Boundary-anchored enumeration raises offers to77/96 and selected links to12/16. The predeclared hero gains the key-selected Crossing4→Crossing6 link, not a forced earlier3→4 witness. One scoped holdout remains without a selected link; three unrequested four-room controls remain unchanged."
+        }
+      ],
+      "status": "bounded_procedural_coverage_policy_without_weight_training"
+    },
+    {
+      "id": "teleport-arrivals-need-distinct-departures",
+      "principle": "Design the landing, off-disc departure and first real branch as separate spatial contracts.",
+      "mechanism": "A clear landing can feed a blocked descent or a shared narrow route; distant endpoints alone do not establish immediate escape choice.",
+      "generator_action": "Bind the actual native arrival pose and both physical discs. Certify complete standing-hull paths from supported off-disc starts through incident passages into distinct rooms. Measure any shared prefix and the first choice separately from facing rays.",
+      "measure": [
+        "full disc support and raised arrival clearance",
+        "continuous departure hull and floor union",
+        "arrival and destination room identity",
+        "distance before route divergence",
+        "station-specific eye exposure"
+      ],
+      "counterexample": "Painkiller's chosen four-unit cap descent fails despite a supported visible grenade-launcher endpoint. Torn Glory's two accepted routes share 336 XY units; this does not prove all possible routes share that prefix.",
+      "experiment": "Freeze one local reference arrival per map, retain every declared route failure, then build Relay with opposite off-disc starts and two independently checked room departures. Compare exit denial before promoting the pattern.",
+      "evidence": [
+        {
+          "level": "bounded_reference_static_arrival_and_route_checks",
+          "record": "knowledge/q2/teleporter-arrival-study.json",
+          "observation": "Two landing constructions pass. Three of four intended onward paths pass; the Painkiller west path remains failed. Facing, resource rays and supported endpoints are distinct observations."
+        },
+        {
+          "level": "original_compiled_arrival_room_contract",
+          "record": "out/relay/arrival-audit.json",
+          "observation": "Two departures start on opposite sides of Relay's disc, cross passages 1 and 2 and finish inside Elbow and Crossover. All four fixed paths have full continuous hull/support checks. One of eight arrival-to-spawn rays remains clear."
+        }
+      ],
+      "status": "bounded_reference_and_original_static_contract_opponent_exit_denial_pending"
+    },
+    {
+      "id": "teleport-events-are-not-usable-arrivals",
+      "principle": "Test actual trigger dispatch, post-touch state and physical recovery before accepting a teleport route.",
+      "mechanism": "Stock transport changes entity state before the next Pmove update and can still occur when an unkillable occupant blocks the destination. Event presence alone conflates activation with a usable exit.",
+      "generator_action": "Use a separately pinned game-module fixture with vacant, player-occupied, unkillable, missing-target and near-miss controls. Distinguish relink, next ClientThink and game-frame states; require alive, clear, dry, standing departure and bounded grounded low-speed dwell.",
+      "measure": [
+        "actual source trigger and target identity",
+        "entity state versus Pmove shorts",
+        "hold expiry and destination-relative view",
+        "telefrag outcome and post-arrival solid overlap",
+        "first valid dwell and complete retained command history"
+      ],
+      "counterexample": "Stock teleporter_touch ignores a failed KillBox return: the unkillable fixture emits transport but leaves the actor startsolid. Eight earlier host-startup failures are not mechanism observations.",
+      "experiment": "Retain the eight startup failures, repair only the host configstring import contract, repeat the unchanged eight development commands under a versioned declaration, then execute four separately frozen Relay source-to-off-disc journeys.",
+      "evidence": [
+        {
+          "level": "stock_game_module_controlled_native_trials",
+          "record": "out/native-teleport/summary.json",
+          "observation": "Eight repaired development cases observe their expected outcomes: five clear arrivals including a real telefrag, one blocked transport and two nonactivations. Four first Relay journeys pass east/west at inputs 200/400 with nine sampled low-speed end states spanning 128 ms. The 1,603 ClientThink states use synthetic clocks; no onward native pickup or human match is claimed."
+        }
+      ],
+      "status": "controlled_stock_game_module_activation_and_initial_recovery_complete_full_journeys_pending"
+    },
+    {
+      "id": "optional-shortcuts-preserve-resource-counterfactuals",
+      "principle": "Give a shortcut a useful downstream destination and a separately supported ordinary alternative before comparing its value.",
+      "mechanism": "Resource placement can motivate a transport choice while keeping control contestable. Removing a native pad changes collision as well as transport, so an unpaired route or entity deletion confounds the comparison.",
+      "generator_action": "Freeze the same source approach, exact resource identity and finish. Preserve both solid discs in touch-disabled controls. Certify the ordinary bypass and arrival-side path, then measure activation, hold, disc exit, onward movement and actual pickup separately.",
+      "measure": [
+        "same source and resource endpoints",
+        "ordinary reachability without special edges",
+        "pad collision invariance",
+        "complete native resource journey and contact",
+        "opponent denial and chosen route"
+      ],
+      "counterexample": "Relay's 2,240-unit ordinary path and 560-unit arrival-side path start at different points. Their difference is not a measured teleport time saving; two distinct room exits do not guarantee safe or equally useful choices.",
+      "experiment": "Compare touch enabled/disabled with both discs and all other geometry/items fixed, then isolate the arrival partition in a separate matched control. Run proposed 2/4/6-player blocks only after full pickup journeys are recorded.",
+      "evidence": [
+        {
+          "level": "original_static_bypass_and_resource_binding",
+          "record": "out/relay/arrival-audit.json",
+          "observation": "Relay's ordinary source approach and arrival-side path terminate at chaingun placement 9; both paths pass. The weapon is hidden from the fixed arrival eye. All 264 ordinary spawn-to-anchor graph pairs survive each individual passage-node removal; these graph removals are not compiled closures or native journeys."
+        }
+      ],
+      "status": "supported_original_counterfactual_matched_activation_and_pickup_comparison_pending"
+    },
+    {
+      "id": "opposed-stairs-preserve-an-independent-under-route",
+      "principle": "Use opposed stair approaches to diversify an upper journey while keeping a separately supported lower route.",
+      "mechanism": "Moving one stair to the opposite end changes the upper approach sequence without enlarging the room. A crossing deck can preserve the lower route when underside clearance and turns remain complete.",
+      "generator_action": "Construct two opposite 128-wide stair runs and three connected 160-wide deck sections. Check the entire lower aisle and both end connectors independently; retain neighboring room and lower-passage geometry.",
+      "measure": [
+        "full-width upper joins and turns",
+        "independent lower hull/support sweep",
+        "fixed-pool offers and selected coverage",
+        "native ordered gates and actual stopping location"
+      ],
+      "counterexample": "A high platform with two distant endpoints need not have a clear journey between them. The Killing Machine reference high route has support but fails its final bend.",
+      "experiment": "Compare the same14 requests and84 candidates per stage; separate9 primary,2 holdout and3 flat controls. Preserve all outputs and ordinary selection.",
+      "evidence": [
+        {
+          "level": "paired_default_construction_and_compiled_geometry",
+          "record": "out/span-portfolio/comparison.json",
+          "observation": "All66 high-verticality candidate observations offer bridges;11 selected maps contain14 independently certified rooms. All18 flat candidate fingerprints and3 selected MAPs are unchanged. Selected seeds do not change; warnings increase28→30 primary and decrease10→9 holdout."
+        }
+      ],
+      "status": "bounded_construction_coverage_complete_combat_value_pending"
+    },
+    {
+      "id": "bridge-joins-must-survive-dimension-and-orientation-changes",
+      "principle": "Certify the shared walking width of every deck join across the full constructor domain.",
+      "mechanism": "A middle interval that works in a small square room can invert or meet a landing through a narrow edge in a long room. A plan label cannot guarantee the emitted bridge shape.",
+      "generator_action": "Build the middle span from the union of both landing bands; check minimum, long and aligned rooms at all rotations and both supported elevations. Bind compiled slabs and stair levels to the source contract.",
+      "measure": [
+        "128/192-height fixtures in four rotations",
+        "exact160-width deck union",
+        "18-unit stair raise envelope",
+        "complete actor footprint at turns",
+        "actual gameplay entity identity and station support"
+      ],
+      "counterexample": "The pre-generation Span design review found an inverted long-room middle interval and a64-unit landing overlap. Aligned bands legitimately yield a straight bridge, so not every opposed-stair room is bent.",
+      "experiment": "Exercise the pure constructor and emitted geometry before generation, then audit every selected compiled bridge rather than only the displayed hero.",
+      "evidence": [
+        {
+          "level": "construction_controls_and_all_selected_compiled_rooms",
+          "record": "out/span-study/portfolio-audit-summary.json",
+          "observation": "Fourteen rooms pass full stair/deck/lower-route checks, spanning all four rotations, thirteen128-height and one192-height rooms. All56 local gameplay stations pass their actual class, support and standing checks."
+        }
+      ],
+      "status": "bounded_static_domain_checked_native_transfer_beyond_hero_pending"
+    },
+    {
+      "id": "projected-overlap-is-not-a-completed-traversal-cycle",
+      "principle": "Keep projected overlap, floor support, continuous hull clearance, exposure and completed native routes as separate evidence.",
+      "mechanism": "Overlapping floors may be separated by a solid slab or an obstructed turn. A successful open upper journey plus a geometric lower return does not establish a native closed loop.",
+      "generator_action": "Freeze each reference path and observer pair before checking. Retain blocked turns and rays. Native acceptance requires every ordered gate, first-failure preservation and a bounded dwell; report pauses, airborne descent and nearby walls.",
+      "measure": [
+        "per-leg hull and cap-union support",
+        "fixed eye matrix",
+        "ordered native phase gates",
+        "full retained frame history",
+        "interior versus wall-adjacent dwell"
+      ],
+      "counterexample": "The Killing Machine has accepted overlap subroutes at0/288 but no certified128→288 connector; all18 selected eye rays are blocked. Span native descents include airborne states and finish against perimeter walls.",
+      "experiment": "Retain the failed reference high bend. Execute four first declared Span upper journeys, then predeclare future native lower returns and matched continuous-turn trials.",
+      "evidence": [
+        {
+          "level": "bounded_reference_route_and_eye_audit",
+          "record": "knowledge/q2/atrium-route-study.json",
+          "observation": "Two0→128 stairs and the lower connecting route pass. The high route fails its final144-unit bend despite support; the projected128 connection fails all3 legs. No reference route retuning or native trial."
+        },
+        {
+          "level": "world_only_first_native_upper_journeys",
+          "record": "out/span-study/native-comparison.json",
+          "observation": "Four first journeys pass forward/reverse at inputs200/400 with2306 retained16-ms states. Four24-frame corner pauses per attempt and wall-adjacent stationary dwell limit transfer. The lower return and gameplay are untested."
+        }
+      ],
+      "status": "static_layers_and_open_native_upper_journeys_complete_closed_loops_and_combat_pending"
+    }
+  ]
+}

@@ -1,0 +1,192 @@
+{
+  "schema_version": 1,
+  "id": "spillway-v1",
+  "date": "2026-09-13",
+  "status": "compiled_static_validated_runtime_pending",
+  "construction": "Original explicit qmg_core recipe; not automatic CLI motif selection or trained model",
+  "map": "qmg_spillway",
+  "intended_mode": "stock_q2_deathmatch",
+  "intended_players": [
+    4,
+    6
+  ],
+  "local_artifacts": "out/spillway",
+  "recipe": "tools/map_recipes/spillway.cpp",
+  "artifact_hashes": {
+    "source_sha256": "2de31a79a02b4aca151d7bd4c5c106734aacf9826d8487adfab39a951c89d433",
+    "bsp_sha256": "77f23cf645ffac919bfc70c8093f44889aa873b80d70a8cdf1761e06535d01b0",
+    "recipe_sha256": "2a563e6e16c8a32840203249c3e8d0522aa0def918c8b0c8e32b13d02813f7b3",
+    "recipe_support_sha256": "dd2c69bcb72b915214af1fabcdde56e7f88f00299f3d5dc37e1b49e55aa20239",
+    "core_sha256": "d3629f3317a19f9da564685df9af2930908baa40d12e6c750acb4ad2aed34c56",
+    "profile_sha256": "4f833d1a09eab67c719175310e101befcc9ad43d330985e7bc7a7d645f65d935"
+  },
+  "research": {
+    "record": "knowledge/q2/route-diversity-study.json",
+    "sha256": "9e7cc4b5b50b6adf413b6981f5848964f95d993213e48f8e3a86f160a25cd609",
+    "reference_maps": [
+      "q2rdm2",
+      "q2rdm7",
+      "mktriple",
+      "grdm1"
+    ],
+    "playbook": "docs/MAP_DESIGN_PLAYBOOK.md"
+  },
+  "static_checks": {
+    "sealed": true,
+    "full_vis": true,
+    "lighting": "extra4, one bounce, soft shadows; no empty lightmaps",
+    "path_checks": 264,
+    "standing_hull_vs_brush_checks": 6963,
+    "gameplay_anchors_checked": 33,
+    "layout_analysis": {
+      "structural_errors": 0,
+      "leak_errors": 0,
+      "navigation_errors": 0,
+      "visibility_errors": 0,
+      "lighting_errors": 0,
+      "timing_errors": 0,
+      "warnings": 0
+    },
+    "compiled_spawn_los": {
+      "tested_pairs": 28,
+      "visible_pairs": [],
+      "invalid_eye_entities": []
+    },
+    "crossing_checks": {
+      "lower_open": true,
+      "upper_open": true,
+      "solid_between": true
+    },
+    "additional_compiled_traversal_hull_samples": 122
+  },
+  "repository_tests": {
+    "passed": 19,
+    "failed": 0,
+    "log": "out/spillway/ctest.log",
+    "sha256": "688c2e144e213fb0068bade266e87366d7a2a5f1ffffce8bb86288280d0643a1"
+  },
+  "preview": {
+    "states_passed": 24,
+    "fragment_sha256": "486039ccf2075551e4214384d020a09eeeef760e2362c8ae5087e01f64776209",
+    "checks_sha256": "0e75d2b0caaf76c25770c41c859fab25a9f8170644c8b0c2800ae8af3fdc284e"
+  },
+  "topology": {
+    "rooms": 6,
+    "connections": 10,
+    "cycle_rank": 5,
+    "maximum_incident_degree": 4,
+    "prior_maximum_incident_degree": 6,
+    "floors": [
+      0,
+      144,
+      288
+    ],
+    "stair_runs": 6
+  },
+  "metrics": {
+    "spawn_count": 8,
+    "weapon_count": 7,
+    "weapon_types": 7,
+    "major_item_count": 2,
+    "combat_height_p90_p10": 288.0,
+    "combat_height_bands_128": 3,
+    "spawn_nearest_weapon_euclidean_p50": 347.9998492857889,
+    "spawn_nearest_weapon_euclidean_p90": 421.59957252033695,
+    "spawn_pair_world_los_fraction": 0.0,
+    "major_item_min_euclidean_separation": 1871.4529115101989,
+    "world_diagonal": 2952.119238784233,
+    "upward_surface_area": 3461568.0,
+    "texture_area_entropy_bits": 2.8431031384021974,
+    "texture_top_area_fraction": 0.28777506112469436,
+    "sky_surface_area_fraction": 0.0,
+    "sampled_world_sightline_p50": 214.96046148071048,
+    "sampled_world_sightline_p90": 555.3214763082908
+  },
+  "comparison_to_switchback": {
+    "baseline": "Switchback",
+    "candidate": "Spillway",
+    "baseline_available": true,
+    "metrics": {
+      "combat_height_p90_p10": {
+        "before": 384.0,
+        "after": 288.0
+      },
+      "combat_height_bands_128": {
+        "before": 3,
+        "after": 3
+      },
+      "world_diagonal": {
+        "before": 2783.4275632751787,
+        "after": 2952.119238784233
+      },
+      "upward_surface_area": {
+        "before": 2847936.0,
+        "after": 3461568.0
+      },
+      "sampled_world_sightline_p50": {
+        "before": 154.3246391493337,
+        "after": 214.96046148071048
+      },
+      "sampled_world_sightline_p90": {
+        "before": 580.4403864499973,
+        "after": 555.3214763082908
+      },
+      "spawn_pair_world_los_fraction": {
+        "before": 0.0,
+        "after": 0.0
+      }
+    },
+    "room_connections": {
+      "before": 10,
+      "after": 10
+    },
+    "room_graph_cycle_rank": {
+      "before": 6,
+      "after": 5
+    },
+    "articulation_rooms": {
+      "before": 0,
+      "after": 0
+    },
+    "limits": [
+      "Multiple design variables changed; this is not a controlled causal comparison.",
+      "Current costs include endpoint approaches but remain Manhattan/node-center estimates. Earlier artifacts use a different timing basis; do not compare their costs or call them measured travel time.",
+      "Point LOS is not a match, spawn-safety guarantee or rendered lighting check."
+    ]
+  },
+  "timing_basis": "endpoint-aware Manhattan/node-anchor proxy v2",
+  "observations": [
+    "An independent middle bridge crosses the lower Workshop-Separator trench; compiled hull samples and solid-separator traces pass.",
+    "The two upper armor rooms have separate middle and upper connections, while strong weapons and recovery remain below.",
+    "The incident route count is less concentrated than Switchback, but real route use has not been observed.",
+    "The median sampled world sightline is longer and p90 shorter than Switchback; these describe a different distribution rather than a quality score.",
+    "Major-item separation exceeds the small-DM descriptive band; this needs an empty-travel and capacity playtest."
+  ],
+  "reusable_improvements": [
+    "Point-aware placement costs include same-node XY distance and cross-node approaches, with explicit flow cost-basis metadata.",
+    "Point lights can occupy valid sealed passage volumes without relaxing gameplay room binding.",
+    "Recipe export and the new viewer use explicit stair runs and declared floor levels.",
+    "One build/inspection pipeline supports both recipes, optional earlier-map comparison and compiled overpass/hull checks."
+  ],
+  "controlled_variants_pending": [
+    "Close only the eastern Outfall-Control bypass.",
+    "Close only the upper Separator-Control return.",
+    "Move only one upper armor to a validated middle socket.",
+    "Move only Mega Health closer to Intake."
+  ],
+  "runtime_questions": [
+    "Do four and six players use distinct circuits, or does the larger area cause empty travel?",
+    "Can lower players recover while an opponent controls the upper armor circuit?",
+    "Are the low trench, gallery undersides and exits readable in the target renderer?",
+    "Does the overpass improve route choice and recognition without causing unwanted pursuit breaks?"
+  ],
+  "inference_limits": [
+    "Multiple design variables changed; this is not a controlled causal comparison.",
+    "Current costs include endpoint approaches but remain Manhattan/node-center estimates. Earlier artifacts use a different timing basis; do not compare their costs or call them measured travel time.",
+    "Point LOS is not a match, spawn-safety guarantee or rendered lighting check.",
+    "No engine traversal, rendered readability, multiplayer matches or human quality ratings.",
+    "No archive geometry copied and no model weights trained.",
+    "Generated example is excluded from reference calibration.",
+    "Reference capacity conflicts and historical-review provenance remain unresolved in the linked research record."
+  ]
+}

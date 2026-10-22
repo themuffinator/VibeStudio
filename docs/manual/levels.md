@@ -416,7 +416,21 @@ optional Valve 220 conversion.
 
 **Generate** in the header plans and builds a sealed level from a short description for Quake, Quake II, Quake III or
 Doom. Under **Who plans the rooms**, **The rules, on this machine** needs no AI; **The text model** uses your configured
-model. You review the layout, then open it in Levels as a new, unsaved map or save it. **Edit with AI** asks your text
+model, which it names once it is ready, and needs a description to plan from; with it chosen, **AI Settings…** beside
+**Preview Request…** opens the AI settings. You review the layout, then open it in Levels as a new, unsaved map or
+save it.
+
+**Generator** chooses who builds it:
+
+| Generator | Games and modes | What you get |
+| --- | --- | --- |
+| **Studio blockout** (Available) | Quake, Quake II, Quake III, Doom; single player, deathmatch, duel | Rooms on a grid of sealed cells, themed textures, liquid pits, monsters |
+| **Quake-MapGen** (Partial) | Quake, Quake II, Quake III; single player, deathmatch, duel, capture the flag | Ranked layouts with stairs and raised crossings, a choice of **Map format**, and an **Analysis** of navigation, visibility and lighting |
+
+Quake-MapGen reads the theme from the description, so **Theme**, **Liquid**, **Monsters** and
+**Use the project's textures where they fit** are hidden while it is chosen; **Intensity** and **Map format** appear
+instead, and **Rooms** goes up to 32 rather than 16. Its findings are advisory: read them under **Details** >
+**Analysis**, and keep its full report with **Save Report…**. **Edit with AI** asks your text
 model for changes to an open Quake-family map and lists each proposed edit for review before anything changes. AI is
 off by default; see [AI assistant](ai.md).
 
@@ -496,7 +510,7 @@ vibestudio --cli map move ./maps/start.map --object brush:12 --delta 16,0,0 --ou
 | `map render` | Draw an SVG picture of a map |
 | `map compile-plan` | Plan a compile with a compiler profile |
 | `map recoveries`, `map recover` | List recovery checkpoints and save one to a file |
-| `map generate` | Generate a level from a description |
+| `map generate` | Generate a level from a description; `--generator quake-mapgen` builds it with Quake-MapGen, and `--planner ai` asks your text model for the plan |
 | `entity definitions`, `entity validate` | List entity classes, and check a map's entities against them |
 | `editor scene link`, `editor scene update-links`, `editor scene unlink` | Make a linked copy of a scene group, make its copies match it, or separate it |
 

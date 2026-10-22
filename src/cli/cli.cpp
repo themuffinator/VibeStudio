@@ -43,6 +43,8 @@
 #include "core/language_server.h"
 #include "core/language_references.h"
 #include "core/ai_connectors.h"
+#include "core/ai_gguf_runtime.h"
+#include "core/ai_harness.h"
 #include "core/ai_transport.h"
 #include "core/ai_workflows.h"
 #include "core/asset_tools.h"
@@ -304,8 +306,8 @@ QVector<CliCommandDescriptor> cliCommandDescriptors()
 		{QStringLiteral("map"), QStringLiteral("copy-surface"), QStringLiteral("Copy one brush face's material, mapping and flags to a versioned surface clipboard JSON file. Requires --target face:brushId:faceNumber (one-based) and --output. Supports --dry-run and --overwrite."), {QStringLiteral("vibestudio --cli map copy-surface ./maps/start.map --target face:0:1 --output ./surface.json --json")}, true, true, true},
 		{QStringLiteral("map"), QStringLiteral("paste-surface"), QStringLiteral("Paste --clipboard surface.json onto repeatable --target face:brushId:faceNumber, brush:brushId or patch:patchId targets. Requires --output. --mode parameters copies matching-format values; radiant-values retains Valve axes; radiant-project copies classic/Valve values and projects matrix/patch UVs; project preserves world UVs; seamless wraps the shared plane edge. Parameter modes and radiant-project support patch targets and repeatable --object brush:id|patch:id|entity:id selection. Native projection reports edgeOnFaces. --mapping-only keeps materials/flags. Supply source --texture-size W,H and repeatable --material-size material=W,H when dimensions are needed. Project/seamless accept explicit --allow-valve220. --stroke replays up to 4096 ordered face/patch hits, applies selection only on the first hit and advances the seamless source; later source sizes use --material-size. JSON adds strokeHits, sourceAdvanced and finalSource. Supports --dry-run and --overwrite."), {QStringLiteral("vibestudio --cli map paste-surface ./maps/start.map --clipboard ./surface.json --target brush:0 --output ./maps/pasted.map --dry-run --json")}, true, true, true},
 		{QStringLiteral("map"), QStringLiteral("new"), QStringLiteral("Create an empty map or starter room for Quake, Quake II, Quake III, Doom, or Hexen."), {QStringLiteral("vibestudio --cli map new --game quake3 --preset room --output ./maps/arena.map --dry-run --json")}, true, true, true},
-		{QStringLiteral("map"), QStringLiteral("generate"), QStringLiteral("Generate a sealed, playable level from a prompt for Quake, Quake II, Quake III, or Doom: rules plan it, or --planner ai asks your text model; --preview draws the layout."), {QStringLiteral("vibestudio --cli map generate --prompt \"gothic castle with lava, 8 rooms, seed 42\" --game quake --output ./maps/generated.map --preview ./maps/generated.png"), QStringLiteral("vibestudio --cli map generate --prompt \"quake 3 duel arena\" --planner ai --dry-run")}, true, true, true},
-		{QStringLiteral("map"), QStringLiteral("plan"), QStringLiteral("Make a level's room-and-connection plan without building it, by rules or by your text model, to review or edit before map generate --plan."), {QStringLiteral("vibestudio --cli map plan --prompt \"doom tech base, 6 rooms\" --output ./plan.json"), QStringLiteral("vibestudio --cli map plan --prompt \"deathmatch for 8 players\" --planner ai --provider local-offline --json")}, true, true, true},
+		{QStringLiteral("map"), QStringLiteral("generate"), QStringLiteral("Generate a sealed level from a prompt for Quake, Quake II, Quake III, or Doom: rules plan it, or --planner ai asks your text model; --generator quake-mapgen builds it with Quake-MapGen (capture the flag, map formats, analysis); --preview draws the layout."), {QStringLiteral("vibestudio --cli map generate --prompt \"gothic castle with lava, 8 rooms, seed 42\" --game quake --output ./maps/generated.map --preview ./maps/generated.png"), QStringLiteral("vibestudio --cli map generate --generator quake-mapgen --prompt \"Quake 3 capture the flag, 8 rooms, seed 7\" --format q3-brush-primitives --output ./maps/ctf.map --report ./maps/ctf.json"), QStringLiteral("vibestudio --cli map generate --prompt \"quake 3 duel arena\" --planner ai --dry-run")}, true, true, true},
+		{QStringLiteral("map"), QStringLiteral("plan"), QStringLiteral("Make a level's room-and-connection plan without building it, by rules or by your text model, to review or edit before map generate --plan; --generator quake-mapgen shows Quake-MapGen's semantic plan."), {QStringLiteral("vibestudio --cli map plan --prompt \"doom tech base, 6 rooms\" --output ./plan.json"), QStringLiteral("vibestudio --cli map plan --prompt \"deathmatch for 8 players\" --planner ai --provider local-offline --json"), QStringLiteral("vibestudio --cli map plan --generator quake-mapgen --prompt \"Quake 1 single-player castle, 6 rooms\" --json")}, true, true, true},
 		{QStringLiteral("map"), QStringLiteral("ai-edit"), QStringLiteral("Ask your text model for edits to a Quake-family .map in checked actions (add entity, set or remove a key, add a box, retexture, move, delete); review them, then --output writes the map with the ready ones. --proposal reviews a saved proposal with no model."), {QStringLiteral("vibestudio --cli map ai-edit ./maps/start.map --prompt \"add a light above each player start\" --save-proposal ./edits.json"), QStringLiteral("vibestudio --cli map ai-edit ./maps/start.map --proposal ./edits.json --only 1,2 --output ./maps/start-lit.map")}, true, true, true},
 		{QStringLiteral("map"), QStringLiteral("recover"), QStringLiteral("Verify a recovery checkpoint and save its map to an explicit output."), {QStringLiteral("vibestudio --cli map recover ./recovery/document.vsrecovery --output ./maps/recovered.map --dry-run --json")}, true, true, true},
 		{QStringLiteral("map"), QStringLiteral("recoveries"), QStringLiteral("List recovery checkpoints and their bounded metadata."), {QStringLiteral("vibestudio --cli map recoveries ./recovery --json")}},
@@ -676,6 +678,8 @@ QStringList commandTokens(const QStringList& args)
 			QStringLiteral("--mode"), QStringLiteral("--theme"), QStringLiteral("--rooms"), QStringLiteral("--seed"), QStringLiteral("--verticality"),
 			QStringLiteral("--players"), QStringLiteral("--monsters"), QStringLiteral("--liquid"), QStringLiteral("--title"), QStringLiteral("--wad"),
 			QStringLiteral("--textures-from"), QStringLiteral("--planner"), QStringLiteral("--plan"), QStringLiteral("--revisions"), QStringLiteral("--save-plan"),
+			QStringLiteral("--generator"), QStringLiteral("--intensity"), QStringLiteral("--candidates"), QStringLiteral("--repair-iterations"), QStringLiteral("--switch"),
+			QStringLiteral("--ranker"),
 			QStringLiteral("--preview"), QStringLiteral("--report"), QStringLiteral("--style"), QStringLiteral("--count"), QStringLiteral("--quality"),
 			QStringLiteral("--from-image"), QStringLiteral("--source"), QStringLiteral("--folder"), QStringLiteral("--seam-blend"),
 			QStringLiteral("--normal-strength"), QStringLiteral("--glow-threshold"), QStringLiteral("--negative"), QStringLiteral("--steps"), QStringLiteral("--strength"),
@@ -1159,22 +1163,23 @@ void printHelp()
 	std::cout << "  --editor-profiles   Print routed editor interaction profiles.\n";
 	std::cout << "  --set-editor-profile <id>\n";
 	std::cout << "                      Select editor profile: " << text(editorProfileIds().join(", ")) << "\n";
-	std::cout << "  --ai-status         Print AI-free mode, opt-in settings, and connector stubs.\n";
+	std::cout << "  --ai-status         Print AI settings, what text, image, and sound features would use, and the connectors.\n";
 	std::cout << "  --set-ai-text-model <id>\n";
 	std::cout << "                      Preferred text model: " << text(aiModelIds().join(", ")) << "\n";
 	std::cout << "  --set-ai-free <on|off>\n";
 	std::cout << "                      Enable or disable AI-free mode. Default is on.\n";
 	std::cout << "  --set-ai-cloud <on|off>\n";
-	std::cout << "                      Opt in or out of experimental cloud AI connector settings.\n";
+	std::cout << "                      Allow connectors that send requests off this machine, after you confirm each one.\n";
 	std::cout << "  --set-ai-agentic <on|off>\n";
-	std::cout << "                      Opt in or out of future supervised agentic workflows.\n";
+	std::cout << "                      Planned: supervised agentic workflows. Nothing uses this yet.\n";
 	std::cout << "  --set-ai-reasoning <id>\n";
 	std::cout << "                      Preferred reasoning connector: " << text(aiConnectorIds().join(", ")) << "\n";
-	std::cout << "  --set-ai-local <id> Preferred local connector, used when cloud connectors are off.\n";
+	std::cout << "  --set-ai-local <id> Connector used when cloud connectors are off: local-offline or local-gguf.\n";
 	std::cout << "  --set-ai-model <connector>=<model>\n";
 	std::cout << "                      The model a text connector asks, as its provider names it; empty clears it.\n";
 	std::cout << "  --set-ai-endpoint <connector>=<url>\n";
-	std::cout << "                      A text connector's base URL, such as http://localhost:11434/v1; empty restores the default.\n";
+	std::cout << "                      A text connector's base URL, such as http://localhost:11434/v1, or for claude-code,\n";
+	std::cout << "                      codex, and custom-command the program or command line; empty restores the default.\n";
 	std::cout << "  --set-ai-image <id> Image connector for the Texture Generator and ai image.\n";
 	std::cout << "  --set-ai-image-model <connector>=<model>\n";
 	std::cout << "  --set-ai-image-endpoint <connector>=<url>\n";
@@ -4870,7 +4875,35 @@ QJsonObject aiTextConnectionJson(const AiTextConnection& connection)
 	object.insert(QStringLiteral("credentialFound"), connection.credentialFound);
 	object.insert(QStringLiteral("state"), aiTextConnectionBlockId(connection.block));
 	object.insert(QStringLiteral("message"), aiTextConnectionBlockText(connection));
+	const AiTextTransport transport = aiTextTransport(connection.connectorId);
+	object.insert(QStringLiteral("transport"), transport == AiTextTransport::Harness ? QStringLiteral("harness")
+			: transport == AiTextTransport::Gguf                                     ? QStringLiteral("gguf")
+			: transport == AiTextTransport::Http                                     ? QStringLiteral("http")
+																					 : QStringLiteral("none"));
+	object.insert(QStringLiteral("program"), connection.program);
+	object.insert(QStringLiteral("destination"), aiTextConnectionDestinationText(connection));
 	return object;
+}
+
+// The runtimes text connectors use besides HTTP: harness programs found, and the GGUF runtime.
+QJsonObject aiRuntimesJson()
+{
+	const AiAutomationPreferences preferences = StudioSettings().aiAutomationPreferences();
+	QJsonArray harnesses;
+	for (const AiConnectorDescriptor& connector : aiConnectorDescriptors()) {
+		if (aiConnectorIsHarness(connector.id)) {
+			const QString configured = preferences.connectorEndpoints.value(connector.id);
+			harnesses.append(QJsonObject {
+				{QStringLiteral("connectorId"), connector.id},
+				{QStringLiteral("program"), aiHarnessProgram(connector.id, configured)},
+				{QStringLiteral("configured"), configured},
+			});
+		}
+	}
+	return QJsonObject {
+		{QStringLiteral("gguf"), QJsonObject {{QStringLiteral("available"), aiGgufRuntimeAvailable()}, {QStringLiteral("version"), aiGgufRuntimeVersion()}}},
+		{QStringLiteral("harnesses"), harnesses},
+	};
 }
 
 QJsonObject aiImageConnectionJson(const AiImageConnection& connection)
@@ -5020,8 +5053,8 @@ int runAiAskCommand(const QString& commandName, const QStringList& args, CliOutp
 		return printCliError(commandName, CliExitCode::Unavailable, aiTextConnectionBlockText(connection), format);
 	}
 	if (!connection.local && !hasOption(args, QStringLiteral("--yes"))) {
-		const QString message = QStringLiteral("This question would go to %1 at %2, off this machine. Review it with --dry-run, then add --yes to send it.")
-									.arg(connection.displayName, QUrl(connection.endpoint).host());
+		const QString message = QStringLiteral("This question would go to %1 (%2), off this machine. Review it with --dry-run, then add --yes to send it.")
+									.arg(connection.displayName, aiTextConnectionDestinationText(connection));
 		return printCliError(commandName, CliExitCode::Unavailable, message, format);
 	}
 	bool timeoutOk = true;
@@ -5061,6 +5094,15 @@ int runAiTestConnectionCommand(const QString& commandName, const QStringList& ar
 	if (!connection.ready()) {
 		return printCliError(commandName, CliExitCode::Unavailable, aiTextConnectionBlockText(connection), format);
 	}
+	// A harness that says it is signed out is not asked.
+	AiHarnessLoginStatus login;
+	const bool harness = aiTextTransport(connection.connectorId) == AiTextTransport::Harness;
+	if (harness) {
+		login = aiHarnessLoginStatus(connection.connectorId, connection.program);
+		if (login.known && !login.signedIn) {
+			return printCliError(commandName, CliExitCode::Unavailable, aiHarnessLoginStatusText(connection.connectorId, login), format);
+		}
+	}
 	// A fixed question with nothing from the project in it.
 	AiChatRequest request;
 	request.connectorId = connection.connectorId;
@@ -5075,17 +5117,25 @@ int runAiTestConnectionCommand(const QString& commandName, const QStringList& ar
 		QJsonObject object = cliResultJson(commandName, code);
 		object.insert(QStringLiteral("connection"), aiTextConnectionJson(connection));
 		object.insert(QStringLiteral("response"), aiChatResponseJson(response));
+		if (harness) {
+			object.insert(QStringLiteral("login"), QJsonObject {{QStringLiteral("known"), login.known}, {QStringLiteral("signedIn"), login.signedIn},
+													   {QStringLiteral("method"), login.method}, {QStringLiteral("message"), aiHarnessLoginStatusText(connection.connectorId, login)}});
+		}
 		printJson(object);
 		return exitCodeValue(code);
 	}
-	const QString where = connection.local ? QStringLiteral("on this machine") : QStringLiteral("at %1").arg(QUrl(connection.endpoint).host());
+	const QString where = connection.local ? QStringLiteral("on this machine") : QStringLiteral("through %1").arg(aiTextConnectionDestinationText(connection));
 	const QString seconds = QString::number(response.elapsedMsecs / 1000.0, 'f', 1);
 	if (!response.ok) {
-		return printCliError(commandName, code, QStringLiteral("%1 (%2 %3) failed after %4 s: %5 %6")
-			.arg(connection.displayName, connection.model, where, seconds, aiChatFailureText(response.failure), response.errorMessage).trimmed(), format);
+		return printCliError(commandName, code, QStringLiteral("%1 %2 failed after %3 s: %4 %5")
+			.arg(aiTextConnectionLabel(connection), where, seconds, aiChatFailureText(response.failure), response.errorMessage).trimmed(), format);
 	}
-	std::cout << text(QStringLiteral("%1 (%2) answered %3 in %4 s: %5").arg(connection.displayName, response.model.isEmpty() ? connection.model : response.model, where, seconds,
-		response.text.trimmed().left(80))) << "\n";
+	// The model the answer names, when the tool picked it.
+	AiTextConnection answered = connection;
+	if (!response.model.isEmpty()) {
+		answered.model = response.model;
+	}
+	std::cout << text(QStringLiteral("%1 answered %2 in %3 s: %4").arg(aiTextConnectionLabel(answered), where, seconds, response.text.trimmed().left(80))) << "\n";
 	return exitCodeValue(code);
 }
 
@@ -5102,6 +5152,7 @@ int runAiStatusCommand(const QString& commandName, CliOutputFormat format)
 		object.insert(QStringLiteral("credentials"), aiCredentialStatusesJson(preferences));
 		object.insert(QStringLiteral("tools"), aiToolsJson());
 		object.insert(QStringLiteral("textConnection"), aiTextConnectionJson(resolveAiTextConnection(preferences)));
+		object.insert(QStringLiteral("runtimes"), aiRuntimesJson());
 		object.insert(QStringLiteral("imageConnection"), aiImageConnectionJson(resolveAiImageConnection(preferences)));
 		object.insert(QStringLiteral("soundConnection"), aiSoundConnectionJson(resolveAiSoundConnection(preferences)));
 		printJson(object);
@@ -5110,16 +5161,23 @@ int runAiStatusCommand(const QString& commandName, CliOutputFormat format)
 
 	std::cout << "AI automation\n";
 	std::cout << text(aiAutomationPreferencesText(preferences)) << "\n";
-	std::cout << "Assistant: " << text(aiTextConnectionBlockText(resolveAiTextConnection(preferences))) << "\n";
+	std::cout << "Text: " << text(aiTextConnectionBlockText(resolveAiTextConnection(preferences))) << "\n";
 	std::cout << "Images: " << text(aiImageConnectionBlockText(resolveAiImageConnection(preferences))) << "\n";
 	std::cout << "Sounds: " << text(aiSoundConnectionBlockText(resolveAiSoundConnection(preferences))) << "\n";
-	std::cout << "Connector stubs\n";
+	std::cout << "GGUF runtime: " << text(aiGgufRuntimeAvailable() ? aiGgufRuntimeVersion() : aiGgufRuntimeMissingText()) << "\n";
+	for (const AiConnectorDescriptor& connector : aiConnectorDescriptors()) {
+		if (aiConnectorIsHarness(connector.id) && aiHarnessKind(connector.id) != AiHarnessKind::CustomCommand) {
+			const QString program = aiHarnessProgram(connector.id, preferences.connectorEndpoints.value(connector.id));
+			std::cout << text(connector.displayName) << ": " << text(program.isEmpty() ? QStringLiteral("not found") : QDir::toNativeSeparators(program)) << "\n";
+		}
+	}
+	std::cout << "Connectors\n";
 	for (const AiConnectorDescriptor& connector : aiConnectorDescriptors()) {
 		std::cout << "- " << text(connector.displayName) << " [" << text(connector.id) << "]\n";
 		std::cout << "  Provider: " << text(connector.providerFamily) << "\n";
 		std::cout << "  Endpoint: " << text(connector.endpointKind) << "\n";
 		std::cout << "  Location: " << (connector.cloudBased ? "cloud" : "local/offline") << "\n";
-		std::cout << "  Implemented: " << (connector.implemented ? "yes" : "design stub") << "\n";
+		std::cout << "  Status: " << (connector.implemented ? "Available" : "Planned") << "\n";
 		std::cout << "  Capabilities: " << text(connector.capabilities.join(", ")) << "\n";
 	}
 	std::cout << "Credential status\n";
@@ -5146,7 +5204,7 @@ int runAiConnectorsCommand(const QString& commandName, CliOutputFormat format)
 		return exitCodeValue(CliExitCode::Success);
 	}
 
-	std::cout << "AI connector design stubs\n";
+	std::cout << "AI connectors\n";
 	for (const AiConnectorDescriptor& connector : aiConnectorDescriptors()) {
 		std::cout << text(aiConnectorSummaryText(connector)) << "\n\n";
 	}
@@ -15550,6 +15608,20 @@ int runImpl(const QStringList& args)
 		|| hasOption(args, "--set-ai-audio") || hasOption(args, "--set-ai-audio-model") || hasOption(args, "--set-ai-audio-endpoint")) {
 		StudioSettings settings;
 		AiAutomationPreferences preferences = settings.aiAutomationPreferences();
+		// The connectors each option takes, for its error message.
+		const auto connectorList = [](const auto& accepts) {
+			QStringList ids;
+			for (const QString& id : aiConnectorIds()) {
+				if (accepts(id)) {
+					ids << id;
+				}
+			}
+			return text(ids.join(QStringLiteral(", ")));
+		};
+		const auto localConnector = [](const QString& id) {
+			AiConnectorDescriptor connector;
+			return aiConnectorForId(id, &connector) && connector.capabilities.contains(QStringLiteral("local-offline")) && aiConnectorHasChatTransport(connector.id);
+		};
 
 		if (hasOption(args, "--set-ai-free")) {
 			bool value = true;
@@ -15601,10 +15673,9 @@ int runImpl(const QStringList& args)
 			preferences.preferredTextModelId = modelId;
 		}
 		if (hasOption(args, "--set-ai-local")) {
-			AiConnectorDescriptor connector;
 			const QString connectorId = optionValue(args, "--set-ai-local");
-			if (!connectorId.isEmpty() && (!aiConnectorForId(connectorId, &connector) || !aiConnectorHasChatTransport(connector.id))) {
-				std::cerr << "--set-ai-local requires a text connector: local-offline, custom-http, openai, claude, or gemini.\n";
+			if (!connectorId.isEmpty() && !localConnector(connectorId)) {
+				std::cerr << "--set-ai-local requires a connector that runs on this machine: " << connectorList(localConnector) << ".\n";
 				return 2;
 			}
 			preferences.preferredLocalConnectorId = connectorId;
@@ -15618,7 +15689,7 @@ int runImpl(const QStringList& args)
 			const qsizetype equals = pair.indexOf(QLatin1Char('='));
 			const QString connectorId = normalizedAiId(pair.left(equals));
 			if (equals <= 0 || !aiConnectorHasChatTransport(connectorId)) {
-				std::cerr << text(option) << " takes <connector>=<value>, with a text connector: local-offline, custom-http, openai, claude, or gemini.\n";
+				std::cerr << text(option) << " takes <connector>=<value>, with a text connector: " << connectorList(aiConnectorHasChatTransport) << ".\n";
 				return 2;
 			}
 			QHash<QString, QString>& values = option == QStringLiteral("--set-ai-model") ? preferences.connectorModels : preferences.connectorEndpoints;
@@ -15633,7 +15704,7 @@ int runImpl(const QStringList& args)
 		if (hasOption(args, "--set-ai-image")) {
 			const QString connectorId = normalizedAiId(optionValue(args, "--set-ai-image"));
 			if (!connectorId.isEmpty() && !aiConnectorHasImageTransport(connectorId)) {
-				std::cerr << "--set-ai-image requires an image connector: openai, gemini, local-offline, or custom-http.\n";
+				std::cerr << "--set-ai-image requires an image connector: " << connectorList(aiConnectorHasImageTransport) << ".\n";
 				return 2;
 			}
 			preferences.preferredImageConnectorId = connectorId;
@@ -15646,7 +15717,7 @@ int runImpl(const QStringList& args)
 			const qsizetype equals = pair.indexOf(QLatin1Char('='));
 			const QString connectorId = normalizedAiId(pair.left(equals));
 			if (equals <= 0 || !aiConnectorHasImageTransport(connectorId)) {
-				std::cerr << text(option) << " takes <connector>=<value>, with an image connector: openai, gemini, local-offline, or custom-http.\n";
+				std::cerr << text(option) << " takes <connector>=<value>, with an image connector: " << connectorList(aiConnectorHasImageTransport) << ".\n";
 				return 2;
 			}
 			QHash<QString, QString>& values = option == QStringLiteral("--set-ai-image-model") ? preferences.connectorImageModels : preferences.connectorImageEndpoints;
@@ -15661,7 +15732,7 @@ int runImpl(const QStringList& args)
 		if (hasOption(args, "--set-ai-audio")) {
 			const QString connectorId = normalizedAiId(optionValue(args, "--set-ai-audio"));
 			if (!connectorId.isEmpty() && !aiConnectorHasSoundTransport(connectorId)) {
-				std::cerr << "--set-ai-audio requires a sound connector: elevenlabs or custom-http.\n";
+				std::cerr << "--set-ai-audio requires a sound connector: " << connectorList(aiConnectorHasSoundTransport) << ".\n";
 				return 2;
 			}
 			preferences.preferredAudioConnectorId = connectorId;
@@ -15674,7 +15745,7 @@ int runImpl(const QStringList& args)
 			const qsizetype equals = pair.indexOf(QLatin1Char('='));
 			const QString connectorId = normalizedAiId(pair.left(equals));
 			if (equals <= 0 || !aiConnectorHasSoundTransport(connectorId)) {
-				std::cerr << text(option) << " takes <connector>=<value>, with a sound connector: elevenlabs or custom-http.\n";
+				std::cerr << text(option) << " takes <connector>=<value>, with a sound connector: " << connectorList(aiConnectorHasSoundTransport) << ".\n";
 				return 2;
 			}
 			QHash<QString, QString>& values = option == QStringLiteral("--set-ai-audio-model") ? preferences.connectorAudioModels : preferences.connectorAudioEndpoints;
@@ -15693,7 +15764,12 @@ int runImpl(const QStringList& args)
 			return 1;
 		}
 		std::cout << "AI preferences saved.\n";
-		std::cout << text(aiAutomationPreferencesText(settings.aiAutomationPreferences())) << "\n";
+		const AiAutomationPreferences saved = settings.aiAutomationPreferences();
+		std::cout << text(aiAutomationPreferencesText(saved)) << "\n";
+		// What the settings now mean: who answers text, image, and sound requests.
+		std::cout << "Text: " << text(aiTextConnectionBlockText(resolveAiTextConnection(saved))) << "\n";
+		std::cout << "Images: " << text(aiImageConnectionBlockText(resolveAiImageConnection(saved))) << "\n";
+		std::cout << "Sounds: " << text(aiSoundConnectionBlockText(resolveAiSoundConnection(saved))) << "\n";
 		return 0;
 	}
 	if (hasOption(args, "--installations-report")) {

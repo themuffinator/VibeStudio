@@ -913,6 +913,14 @@ guided first-run flow still needs to expose this choice.
 - [ ] Explain what project context may be sent to providers.
 - [ ] Configure consent, redaction, cost/usage display, and generated-asset
   provenance.
+- [x] Set the text model: Settings > AI and Automation > Text Model takes each
+  text connector's model and endpoint (**Program** for Claude Code, Codex and
+  Custom Command; a `.gguf` file as the model for the Local GGUF connector,
+  with **Browse**), says what text features use now, and offers
+  **Use This Connector** and **Test Connection**. Preferred Connectors entries
+  the settings rule out are greyed with the reason. The CLI sets the same with
+  `--set-ai-reasoning`, `--set-ai-local`, `--set-ai-model <connector>=<model>`
+  and `--set-ai-endpoint <connector>=<url or program>`.
 - [x] Set the image model: Settings > AI and Automation > Image Model takes
   each image connector's model and endpoint (OpenAI's Images API, Gemini, a
   local Stable Diffusion web UI at `http://127.0.0.1:7860`, or a custom
@@ -927,7 +935,8 @@ guided first-run flow still needs to expose this choice.
   sets the same with `--set-ai-audio <connector>`,
   `--set-ai-audio-model <connector>=<model>`, and
   `--set-ai-audio-endpoint <connector>=<url>`.
-- [x] Enable or skip agentic workflows.
+- [x] Enable or skip agentic workflows. The setting is stored, but
+  **Allow agentic workflows** is Planned: nothing uses it yet.
 
 ### 8. CLI and Integration
 
@@ -1419,3 +1428,14 @@ as unavailable instances and block dependency export. To place an animated pose,
 bake it as a static MD3 through Assemblies; the pinned compiler reads frame zero.
 No cloud service, new preference or first-run step is required. See
 [Placed Model Appearances](LEVEL_MODEL_APPEARANCE.md).
+
+## AI connectors without API keys
+
+No first-run step is needed for the Claude Code, Codex, Custom Command or Local
+GGUF connectors. They appear with the others under **Settings** > **AI and
+Automation**: Claude Code and Codex use the login you made in each tool
+(`claude auth login`, `codex login`), and the Local GGUF connector needs a build
+with `-Dggml=enabled` (release packages are built without it) and a `.gguf`
+file named as its model. AI-free mode stays on until you turn it off. Claude
+Code, Codex and Custom Command also need **Allow cloud AI connectors**.
+See [AI assistant](manual/ai.md#use-your-claude-or-chatgpt-login).

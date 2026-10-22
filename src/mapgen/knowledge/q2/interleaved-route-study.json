@@ -1,0 +1,562 @@
+{
+  "schema_version": 1,
+  "id": "q2-interleaved-route-study-v1",
+  "date": "2026-09-13",
+  "status": "bounded_compiled_static_routes_and_viewpoints_native_and_human_validation_pending",
+  "document": {
+    "path": "docs/Q2_INTERLEAVED_ROUTE_STUDY.md",
+    "sha256": "0ab4d7490d2b78acd5bd2db055ce89475d349673f097030218f4b17a6bc9c6c0",
+    "bytes": 10816
+  },
+  "references": [
+    {
+      "map": "q2rdm7",
+      "title": "Reclamation",
+      "authors": [
+        "Corey 'Kamarov' Peters"
+      ],
+      "partition": "reference",
+      "split_group": "c3a05cfde155d55e",
+      "bsp": {
+        "path": "E:/Development/q2maparchive-wip/maps/q2rmappack/pack/maps/q2rdm7.bsp",
+        "sha256": "9220bcea7b7cf4f3f0ac5c6a1d106251954408d3b562f52e977c8eb8909f0095",
+        "bytes": 537796
+      },
+      "scope": "new complete flat-route and corner measurements",
+      "metadata_and_readme": [
+        {
+          "path": "E:/Development/q2maparchive-wip/maps/q2rmappack/pack/maps/ref/q2rdm7.ref",
+          "sha256": "cebed7b4142f2fe75efe30e20505d66517e389ccdc39d7ab3d7a712688c2d6d6",
+          "bytes": 410
+        },
+        {
+          "path": "E:/Development/q2maparchive-wip/maps/q2rmappack/pack/docs/q2rdm7.txt",
+          "sha256": "58c472c81cc1a1e4e88dbf9d451c02ba4ef0f14564f9ea3723c109e290299db8",
+          "bytes": 2966
+        }
+      ],
+      "previous_analysis": {
+        "path": "out/map-study/records/q2rdm7-69a49cb855.json",
+        "sha256": "749d9a417a30376dd75661d039624f7fa126d2174426943bbab4a8ce5dad21fa",
+        "bytes": 25611
+      },
+      "capacity_from_archive": [
+        2,
+        4
+      ],
+      "all_mode_authored_origins_not_settled_items": true,
+      "original_alias_readme": {
+        "path": "E:/Development/q2maparchive-wip/maps/kamq2dm3/pack/docs/kamq2dm3-readme.txt",
+        "sha256": "cd78307b4b9b293bfacb2249e555ae6bda0bd8a9f1e6488c13a96b1c809aae4a",
+        "bytes": 2194
+      },
+      "version_limit": "Certified Q2R Edition has its own BSP hash. Historical kamq2dm3 reviews/original1999 readme do not establish exact gameplay or byte equivalence with archived2001 Q2R Edition.",
+      "rights": "Original readme prohibits building additional levels from this level and restricts distribution; no source geometry or assets copied into generation. No training licence inferred."
+    },
+    {
+      "map": "q2rdm2",
+      "title": "The Chastity Belt Duel",
+      "authors": [
+        "German 'JaLisK0' Garcia"
+      ],
+      "partition": "reference",
+      "split_group": "52d56ae05d40c3fb",
+      "bsp": {
+        "path": "E:/Development/q2maparchive-wip/maps/q2rmappack/pack/maps/q2rdm2.bsp",
+        "sha256": "d6ee3b39d4e557e7ad5cd39d2bf955e8251edd7e491f2033eee80500791d7199",
+        "bytes": 824200
+      },
+      "scope": "exploratory surface plan only; no new route certificate",
+      "metadata_and_readme": [
+        {
+          "path": "E:/Development/q2maparchive-wip/maps/q2rmappack/pack/maps/ref/q2rdm2.ref",
+          "sha256": "a7ed922e8f0a6980e6e45764ef5c7cfe25a80788a30ec5d2832453d85a853c5a",
+          "bytes": 424
+        },
+        {
+          "path": "E:/Development/q2maparchive-wip/maps/q2rmappack/pack/docs/q2rdm2.txt",
+          "sha256": "842c2f34ee6852302d35a79636b5ee87603b74cd7bdb5c24ea4d03736a632d1e",
+          "bytes": 4076
+        }
+      ],
+      "previous_analysis": {
+        "path": "out/map-study/records/q2rdm2-5bb0fec44f.json",
+        "sha256": "88d8842e6480b6752b42f33139ab72678bedea4e575bdbc083bb9323b324911b",
+        "bytes": 33562
+      },
+      "capacity_from_archive": [
+        2,
+        4
+      ],
+      "all_mode_authored_origins_not_settled_items": true
+    }
+  ],
+  "previous_context": [
+    {
+      "path": "docs/MP_SPATIAL_PATTERNS.md",
+      "sha256": "802b918e48aa1d618513e4b685a0a94717d340d0034676e866ff8a6973330374",
+      "bytes": 14170
+    },
+    {
+      "path": "knowledge/mp/spatial-patterns.json",
+      "sha256": "afcf3f505d67e5eb0fe191b80571bdb2d0c7923f2462637b98033bd543f71bfd",
+      "bytes": 68864
+    },
+    {
+      "path": "knowledge/q2/route-diversity-study.json",
+      "sha256": "9e7cc4b5b50b6adf413b6981f5848964f95d993213e48f8e3a86f160a25cd609",
+      "bytes": 25032
+    }
+  ],
+  "new_evidence": {
+    "compiled_static_audit": {
+      "path": "out/interleaved-route-study/q2rdm7-route-audit.json",
+      "sha256": "bb8de05f79a27ec3c1cc248cbee5dbe6f7d9494be5051d671dee0b554039babc",
+      "bytes": 83183
+    },
+    "world_player_brushes": 418,
+    "standing_hull": [
+      32,
+      32,
+      56
+    ],
+    "player_mask": 33619971,
+    "collision_epsilon": 0,
+    "passing_selected_paths": [
+      {
+        "name": "lower-loop",
+        "poses": 5,
+        "segments": 4,
+        "plan_length": 2112.0
+      },
+      {
+        "name": "rocket-approach",
+        "poses": 2,
+        "segments": 1,
+        "plan_length": 576.0
+      },
+      {
+        "name": "rail-spur",
+        "poses": 2,
+        "segments": 1,
+        "plan_length": 288.0
+      },
+      {
+        "name": "upper-bent-route",
+        "poses": 8,
+        "segments": 7,
+        "plan_length": 2256.0
+      }
+    ],
+    "floor_contract": "Exact rational coplanar floor-cap rectangular cell union covers the full swept bottom rectangle. Every cell corner is tested against the real solid planes. Independent translated-hull SAT checks the complete path.",
+    "rejected_shortcuts": [
+      {
+        "id": "lower-inside-corner",
+        "from_feet": [
+          448,
+          -640,
+          -272
+        ],
+        "to_feet": [
+          576,
+          -768,
+          -272
+        ],
+        "world_blockers": [
+          38,
+          45
+        ],
+        "clear": false
+      },
+      {
+        "id": "stacked-is-not-drop",
+        "from_feet": [
+          448,
+          -640,
+          -48
+        ],
+        "to_feet": [
+          448,
+          -640,
+          -272
+        ],
+        "world_blockers": [
+          75
+        ],
+        "clear": false
+      }
+    ],
+    "retained_failed_route": "upper-rejected-shortcut",
+    "stacked_stations": [
+      {
+        "xy": [
+          448,
+          -640
+        ],
+        "lower_feet": [
+          448,
+          -640,
+          -272
+        ],
+        "upper_feet": [
+          448,
+          -640,
+          -48
+        ],
+        "both_hulls_clear_and_fully_supported": true,
+        "floor_separation": 224,
+        "lower_eye": [
+          448,
+          -640,
+          -226
+        ],
+        "upper_eye": [
+          448,
+          -640,
+          -2
+        ],
+        "vertical_trace_fraction": 0.7232142857142857,
+        "first_solid_hit_z": -64.0
+      },
+      {
+        "xy": [
+          448,
+          -736
+        ],
+        "lower_feet": [
+          448,
+          -736,
+          -272
+        ],
+        "upper_feet": [
+          448,
+          -736,
+          -48
+        ],
+        "both_hulls_clear_and_fully_supported": true,
+        "floor_separation": 224,
+        "lower_eye": [
+          448,
+          -736,
+          -226
+        ],
+        "upper_eye": [
+          448,
+          -736,
+          -2
+        ],
+        "vertical_trace_fraction": 0.7232142857142857,
+        "first_solid_hit_z": -64.0
+      }
+    ],
+    "fixed_eye_rays": {
+      "source": [
+        -128,
+        -256,
+        -226
+      ],
+      "mask": 3,
+      "tested": 10,
+      "clear": 6,
+      "limits": "Selected static omnidirectional point rays only; no global safety, exact visibility threshold, exposure duration, sound, player occupancy or weapon splash."
+    },
+    "mechanism_inventory": {
+      "func_rotating": 2,
+      "trigger_push": 2,
+      "teleporter_links": 2,
+      "conservative_envelopes": 10,
+      "strict_exclusions": 130
+    },
+    "liquid_inventory": {
+      "lava_brushes": [
+        {
+          "brush": 31,
+          "contents": 8,
+          "bounds": [
+            [
+              -192,
+              -736,
+              -320
+            ],
+            [
+              1168,
+              -128,
+              -296
+            ]
+          ]
+        },
+        {
+          "brush": 92,
+          "contents": 8,
+          "bounds": [
+            [
+              96,
+              -128,
+              -320
+            ],
+            [
+              512,
+              128,
+              -296
+            ]
+          ]
+        },
+        {
+          "brush": 204,
+          "contents": 8,
+          "bounds": [
+            [
+              256,
+              -992,
+              -320
+            ],
+            [
+              1168,
+              -736,
+              -296
+            ]
+          ]
+        }
+      ],
+      "clear_complete_segment_checks": 39
+    },
+    "ordinary_upper_lower_return_verified": false,
+    "drop_space_at_stacked_station": false,
+    "native_movement_verified": false,
+    "shortest_paths_verified": false
+  },
+  "prior_drop_return": {
+    "study": {
+      "path": "knowledge/q2/drop-return-study.json",
+      "sha256": "d89cab564fa58facf5509aa7f3063031b182bb63ed402cf6ec5525d91e8536ca",
+      "bytes": 17415
+    },
+    "document": {
+      "path": "docs/Q2_DROP_RETURN_STUDY.md",
+      "sha256": "b96cb7594dd5bc5c2a0fc3cec4bcf53e0773468fc9238f58c339a7a104593eb5",
+      "bytes": 11534
+    },
+    "role": "Existing complementary positive example of a fully documented geometric ordinary return. Hashes rechecked; not rerun.",
+    "drop_height": 272,
+    "selected_return_plan_length": 3088,
+    "native_trajectory_or_damage_verified": false,
+    "rechecked_bindings": [
+      {
+        "path": "E:/Development/q2maparchive-wip/maps/gladdm1/pack/maps/gladdm1.bsp",
+        "sha256": "6f6af2acdd5108b3dea18ae181358dc81708b6540aab5a0a6417f3c98a4feec1",
+        "bytes": 348048
+      },
+      {
+        "path": "E:/Development/q2maparchive-wip/maps/gladdm1/pack/maps/ref/gladdm1.ref",
+        "sha256": "4a56db22f1dc9071f4b6f206388602ff922b9556b99da6c218152b4ddeded6fa",
+        "bytes": 386
+      },
+      {
+        "path": "E:/Development/q2maparchive-wip/maps/gladdm1/pack/docs/gladdm1-readme.txt",
+        "sha256": "0ff597213699003fa8ba1b862748bde0aecda5961e5ab34940dc5a4193d2d01b",
+        "bytes": 2207
+      },
+      {
+        "path": "E:/_SOURCE/_CODE/Quake-2-master/qcommon/pmove.c",
+        "sha256": "8861daaeff7efd7bc6d3c5e65ef99801567f3e06eb14020787206d39dd0038a8",
+        "bytes": 27381
+      },
+      {
+        "path": "E:/_SOURCE/_CODE/Quake-2-master/game/p_client.c",
+        "sha256": "d4bad9aa34ec3d2c667eaf64c0d84c7a555e8162b8252c245fde4a54e343ae3f",
+        "bytes": 42397
+      },
+      {
+        "path": "E:/_SOURCE/_CODE/Quake-2-master/game/p_view.c",
+        "sha256": "915358415b8088552f7ace5d0a822f122d99b4fe2b9fdb553b9aca460712efcf",
+        "bytes": 26675
+      },
+      {
+        "path": "E:/_SOURCE/_CODE/Quake-2-master/game/g_phys.c",
+        "sha256": "31e3b813814c249734550d262d2b4766184849563960c0d9715005a6e5743481",
+        "bytes": 21442
+      },
+      {
+        "path": "E:/_SOURCE/_CODE/Quake-2-master/game/q_shared.h",
+        "sha256": "c552978e0efed7d7f2daf3cef50af5b7b248555021e93a3347cc73d46d25389c",
+        "bytes": 34549
+      },
+      {
+        "path": "out/drop-return-study/audit_return.py",
+        "sha256": "216241cdcba52b655d154817b777ce3b595814f0b84f0b49692af82a7e41f4eb",
+        "bytes": 13398
+      },
+      {
+        "path": "out/drop-return-study/draw_plan.py",
+        "sha256": "5db35907b467d7c9a7fdd589f797b6eef3b83661ce8cd3caf03352366b5fb1c0",
+        "bytes": 5541
+      },
+      {
+        "path": "out/drop-return-study/gladdm1-context.json",
+        "sha256": "eee2e3c4918fc5bde9c84997dd273c7f2d7a47aca9d7428163641088894faa20",
+        "bytes": 55608
+      },
+      {
+        "path": "out/drop-return-study/gladdm1-drop-return.png",
+        "sha256": "8d0a7c6bd8b74197e704becc421b879ce7df422f2d1f61510133278f0d52335a",
+        "bytes": 118906
+      },
+      {
+        "path": "out/drop-return-study/gladdm1-return-audit.json",
+        "sha256": "b783afc7944572b0ec0aca0d87f1f76d25edd085f1e446ef51f07d777fe29a0b",
+        "bytes": 622940
+      },
+      {
+        "path": "out/drop-return-study/measure_context.py",
+        "sha256": "1bedf6cb66d1fe529c644e83b4a3f05588e58a6429b72bfe246ada769f085502",
+        "bytes": 5628
+      },
+      {
+        "path": "out/drop-return-study/write_record.py",
+        "sha256": "993468da47abd4a85fd647cac9067b8c853355cb704e2cbc1404925c0566bbaa",
+        "bytes": 7537
+      }
+    ]
+  },
+  "behavior_sources": [
+    {
+      "file": {
+        "path": "E:/_SOURCE/_CODE/Quake-2-master/game/g_trigger.c",
+        "sha256": "8b68089f68cbd686b4fb13e6f37497c62c23554054ce801d8b4046849acdad9c",
+        "bytes": 13860
+      },
+      "contract": "trigger_push_touch assigns movedir*speed*10; local lines394\u2013432. No runtime landing inferred."
+    },
+    {
+      "file": {
+        "path": "E:/_SOURCE/_CODE/Quake-2-master/game/g_misc.c",
+        "sha256": "d39e96f6e8793ea768c56df820edcd987d90c9f43b7c3c7037e6ed7cd92413ee",
+        "bytes": 45231
+      },
+      "contract": "Stock source teleporter pads mins\u221232,\u221232,\u221224/maxs32,32,\u221216 and source trigger mins\u22128,\u22128,8/maxs8,8,24. Used only for conservative route disjointness."
+    },
+    {
+      "file": {
+        "path": "E:/_SOURCE/_CODE/Quake-2-master/qcommon/pmove.c",
+        "sha256": "8861daaeff7efd7bc6d3c5e65ef99801567f3e06eb14020787206d39dd0038a8",
+        "bytes": 27381
+      },
+      "contract": "Standing hull origin offsets and dimensions; geometric flat paths do not simulate Pmove."
+    }
+  ],
+  "reusable_design_hypotheses": [
+    {
+      "id": "nested-route-separation",
+      "principle": "Overlap routes in XY when their different destinations warrant it; certify each floor and separately certify access.",
+      "counterexample": "Two supported stacked stations are separated by a solid deck and cannot become a vertical drop."
+    },
+    {
+      "id": "elbow-is-a-trajectory",
+      "principle": "Validate complete turn hulls and floor support; endpoint distance cannot substitute.",
+      "counterexample": "Lower inside-corner diagonal hits brushes38/45 though its endpoints and two-leg route are valid."
+    },
+    {
+      "id": "bend-exposure-is-local",
+      "principle": "Compare exact sampled source/target eyes to test how a bend changes a specific sightline.",
+      "counterexample": "A hidden later ray does not erase visibility of the earlier approach or establish player safety."
+    },
+    {
+      "id": "complete-return-policy",
+      "principle": "Bind the drop departure, edge exit, descent, landing and exact ordinary return; special mechanisms get separate roles.",
+      "counterexample": "Reclamation pushes and stacked floors cannot establish an ordinary return."
+    },
+    {
+      "id": "committed-resource-branch",
+      "principle": "Give an inward branch a resource role and measure escape/interception before excluding it by rule.",
+      "counterexample": "A 288-unit rail spur is a geometric observation, not evidence its commitment is balanced."
+    }
+  ],
+  "proposed_original_iteration": "Ravel; recipe validation and runtime evidence remain separate",
+  "promotion_policy": "No profile, partition, quality-score or trained-weight promotion from this small static study.",
+  "safety_and_rights": {
+    "archive_read_only": true,
+    "game_client_launched": false,
+    "input_control": false,
+    "os_capture": false,
+    "reference_geometry_or_assets_in_generation": false,
+    "model_weight_training": false
+  },
+  "unrelated_issues": {
+    "new_implementation_defects": [],
+    "evidence_limits": [
+      "Existing malformed Q2R score_level metadata remains.",
+      "Historical player-review alias and version attribution do not bind gameplay reports to the tested BSP.",
+      "Push volumes now inventoried explicitly; older studies retain their narrower original scope."
+    ]
+  },
+  "artifacts": [
+    {
+      "path": "out/interleaved-route-study/audit_routes.py",
+      "sha256": "5d45532ae7b5416be106b16116e410c2e59d8813f9337d19f55e9487f93c1cf6",
+      "bytes": 8861
+    },
+    {
+      "path": "out/interleaved-route-study/q2rdm2-plans.png",
+      "sha256": "b2cc911a908e4b3b5cd7006afa1bbf4c95cbee534f8cb738621a3bb3be657681",
+      "bytes": 80662
+    },
+    {
+      "path": "out/interleaved-route-study/q2rdm7-nested-routes.png",
+      "sha256": "8f5cf797c9aedad414939d18f9de4a76db477ff930fda50ef814f9430232f363",
+      "bytes": 75379
+    },
+    {
+      "path": "out/interleaved-route-study/q2rdm7-plans.png",
+      "sha256": "78658950bee365797f2a1a3e046bb6df9db7b9b609cb087ea2e34d0f0117e4a1",
+      "bytes": 76195
+    },
+    {
+      "path": "out/interleaved-route-study/q2rdm7-route-audit.json",
+      "sha256": "bb8de05f79a27ec3c1cc248cbee5dbe6f7d9494be5051d671dee0b554039babc",
+      "bytes": 83183
+    },
+    {
+      "path": "out/interleaved-route-study/render_context.py",
+      "sha256": "1dacba719688196a24492f69d05bf5dbbde0ef4790f0d63775b9a02c897d7d3d",
+      "bytes": 1024
+    },
+    {
+      "path": "out/interleaved-route-study/render_routes.py",
+      "sha256": "7130a44acd04bc96a7997f43bc743ca4e285050994af82436f64ecb0471a8e8d",
+      "bytes": 3806
+    },
+    {
+      "path": "out/interleaved-route-study/write_record.py",
+      "sha256": "4edc9679bd5c44ab974940fbccac20891d1e3f3bae2f6241b4d4875f032f1856",
+      "bytes": 8335
+    }
+  ],
+  "tools": [
+    {
+      "path": "tools/map_study/binary.py",
+      "sha256": "2b76559a71365eaab41e6876ff7da94fe938994b4a5199d63620b8b60918daf1",
+      "bytes": 15999
+    },
+    {
+      "path": "tools/map_recipes/geometry.py",
+      "sha256": "dcfcc3413468cad9993476736edfae5f13eb03e26035fc39d73f83aa5a90742b",
+      "bytes": 19674
+    },
+    {
+      "path": "out/mp-spatial-patterns/inspect_patterns.py",
+      "sha256": "1574a88bd601cfd98d0b61e0b3a4e00ab8c0534a6170f13d4e993f7b634e9779",
+      "bytes": 6556
+    },
+    {
+      "path": "tools/ql_atlas/bsp.py",
+      "sha256": "9348a5126591d6204a42bc3278e9bcc392a6790141877f765f8803f96fd0c9d5",
+      "bytes": 10151
+    }
+  ],
+  "reproduce": [
+    "python -B out/interleaved-route-study/audit_routes.py",
+    "python -B out/interleaved-route-study/render_context.py",
+    "python -B out/interleaved-route-study/render_routes.py",
+    "python -B out/interleaved-route-study/write_record.py"
+  ]
+}

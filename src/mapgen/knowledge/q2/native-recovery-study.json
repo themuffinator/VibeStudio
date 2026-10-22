@@ -1,0 +1,1326 @@
+{
+  "schema_version": 1,
+  "id": "ravel-native-recovery-v1",
+  "status": "bounded_native_recovery_evidence_with_failed_profiles_retained",
+  "comparison": {
+    "schema_version": 1,
+    "id": "ravel-native-recovery-v1",
+    "status": "completed_fixed_profile_experiment",
+    "inputs": {
+      "bsp_sha256": "8b88bf771c64783a812aa20160250da60201d625ba8eb8d7920b006e7097b69c",
+      "map_sha256": "3af5b50fc6c0e82b4ae250dcc165b54b075789ad3cd95985cfb2f057e8891197",
+      "runner_sha256": "58177a70d4b12a9687d65f2fb1e1f2c9c72e4e05e1e9df10da8d17b26da5a8c2",
+      "native_build_record_sha256": "b19bf77b1987f3035d60b46a3147eb33501184e41dc1f56c0af6253978d76a7a",
+      "native_executable_sha256": "ce4e7d365a7949ec4d2d252b9eda534f1373574255b4e1c6e25fa2090e328aac"
+    },
+    "protocol_sha256": "e3c8ca56f7513616af5b5216d7052c9a90c22e274964be5c24508c5020c1d23b",
+    "orchestrator_sha256": "a54e206f62c3bc97032553fde956fd5f2816fce5f2776232c893a438f8893ef1",
+    "trials": [
+      {
+        "id": "ravel-recovery-f400-continue",
+        "profile": "continue",
+        "literal_forwardmove": 400,
+        "recovery_success": false,
+        "failure_reason": "no_qualified_dwell_within_budget",
+        "goal_movement_time_ms": null,
+        "landing_to_completed_dwell_ms": null,
+        "native_station_diagnostic_success": true,
+        "initial_approach_exactly_matches_prior": true,
+        "prior_frames_sha256": "29410728b736dc9a112666827eb6260fc612056cf1920772d3ead75498facebd",
+        "recovery_sha256": "69312e1550c95e90bdef3e4d6337a4af5e73f086ecfa11451613ff6e6431e16c"
+      },
+      {
+        "id": "ravel-recovery-f400-release",
+        "profile": "release",
+        "literal_forwardmove": 400,
+        "recovery_success": true,
+        "failure_reason": null,
+        "goal_movement_time_ms": 1200,
+        "landing_to_completed_dwell_ms": 464,
+        "native_station_diagnostic_success": true,
+        "initial_approach_exactly_matches_prior": true,
+        "prior_frames_sha256": "29410728b736dc9a112666827eb6260fc612056cf1920772d3ead75498facebd",
+        "recovery_sha256": "9295dd87927fe2a1bd16d23fb3a16cf1ac40eb6850251eb03b8310d27e388dce"
+      },
+      {
+        "id": "ravel-recovery-f400-north8-release",
+        "profile": "north8-release",
+        "literal_forwardmove": 400,
+        "recovery_success": false,
+        "failure_reason": "no_qualified_dwell_within_budget",
+        "goal_movement_time_ms": null,
+        "landing_to_completed_dwell_ms": null,
+        "native_station_diagnostic_success": true,
+        "initial_approach_exactly_matches_prior": true,
+        "prior_frames_sha256": "29410728b736dc9a112666827eb6260fc612056cf1920772d3ead75498facebd",
+        "recovery_sha256": "346de9dac16bae37141dc6ca9400552c00437aed7f40859a6339c3cbae6c7a6e"
+      },
+      {
+        "id": "ravel-recovery-f400-south8-release",
+        "profile": "south8-release",
+        "literal_forwardmove": 400,
+        "recovery_success": true,
+        "failure_reason": null,
+        "goal_movement_time_ms": 1328,
+        "landing_to_completed_dwell_ms": 592,
+        "native_station_diagnostic_success": true,
+        "initial_approach_exactly_matches_prior": true,
+        "prior_frames_sha256": "29410728b736dc9a112666827eb6260fc612056cf1920772d3ead75498facebd",
+        "recovery_sha256": "f4072fb29ac45701c6d204384dbc29585e573be6d0d0070395be17ea6319142c"
+      },
+      {
+        "id": "ravel-recovery-f200-continue",
+        "profile": "continue",
+        "literal_forwardmove": 200,
+        "recovery_success": false,
+        "failure_reason": "no_qualified_dwell_within_budget",
+        "goal_movement_time_ms": null,
+        "landing_to_completed_dwell_ms": null,
+        "native_station_diagnostic_success": true,
+        "initial_approach_exactly_matches_prior": true,
+        "prior_frames_sha256": "e9a9c04a231ca1b68683729cf4066f7430a6993439a7a422250c3906116022cd",
+        "recovery_sha256": "3f4184ff803c7e7618adaf8c9cb1e8c03b22400a16c97f25df3e01976d14fbd1"
+      },
+      {
+        "id": "ravel-recovery-f200-release",
+        "profile": "release",
+        "literal_forwardmove": 200,
+        "recovery_success": true,
+        "failure_reason": null,
+        "goal_movement_time_ms": 1184,
+        "landing_to_completed_dwell_ms": 400,
+        "native_station_diagnostic_success": false,
+        "initial_approach_exactly_matches_prior": true,
+        "prior_frames_sha256": "e9a9c04a231ca1b68683729cf4066f7430a6993439a7a422250c3906116022cd",
+        "recovery_sha256": "9d4185d42c7dd7bd63633042371fd35537b6852b74262423fa4ff7a0d427035f"
+      },
+      {
+        "id": "ravel-recovery-f200-north8-release",
+        "profile": "north8-release",
+        "literal_forwardmove": 200,
+        "recovery_success": true,
+        "failure_reason": null,
+        "goal_movement_time_ms": 1312,
+        "landing_to_completed_dwell_ms": 528,
+        "native_station_diagnostic_success": false,
+        "initial_approach_exactly_matches_prior": true,
+        "prior_frames_sha256": "e9a9c04a231ca1b68683729cf4066f7430a6993439a7a422250c3906116022cd",
+        "recovery_sha256": "7c13fff976262a5d745d7f65bab71ae9fed8ae5275400128f460d0a3f39e7c39"
+      },
+      {
+        "id": "ravel-recovery-f200-south8-release",
+        "profile": "south8-release",
+        "literal_forwardmove": 200,
+        "recovery_success": true,
+        "failure_reason": null,
+        "goal_movement_time_ms": 1312,
+        "landing_to_completed_dwell_ms": 528,
+        "native_station_diagnostic_success": false,
+        "initial_approach_exactly_matches_prior": true,
+        "prior_frames_sha256": "e9a9c04a231ca1b68683729cf4066f7430a6993439a7a422250c3906116022cd",
+        "recovery_sha256": "00d89fd283c0340e21aea31a9ffb517fc41839b37707e86d6236d86a4b59b9f0"
+      }
+    ],
+    "recovery_successes": 5,
+    "retained_recovery_failures": 3,
+    "world_only": true,
+    "game_module_tested": false,
+    "model_weights_trained": false,
+    "scope": "Unmodified official QuakeII3.19 Pmove/CM world-only. No client, renderer, inputdevice, game-module damage, dynamic entities, weapons, opponent or human optimality claim."
+  },
+  "protocol": {
+    "schema_version": 1,
+    "id": "ravel-native-recovery-v1",
+    "inputs": {
+      "bsp_sha256": "8b88bf771c64783a812aa20160250da60201d625ba8eb8d7920b006e7097b69c",
+      "map_sha256": "3af5b50fc6c0e82b4ae250dcc165b54b075789ad3cd95985cfb2f057e8891197",
+      "runner_sha256": "58177a70d4b12a9687d65f2fb1e1f2c9c72e4e05e1e9df10da8d17b26da5a8c2",
+      "native_build_record_sha256": "b19bf77b1987f3035d60b46a3147eb33501184e41dc1f56c0af6253978d76a7a",
+      "native_executable_sha256": "ce4e7d365a7949ec4d2d252b9eda534f1373574255b4e1c6e25fa2090e328aac"
+    },
+    "recovery_goal": {
+      "center_xy_bounds": [
+        [
+          -128,
+          -56
+        ],
+        [
+          80,
+          56
+        ]
+      ],
+      "transient_center_xy_bounds": [
+        [
+          -144,
+          -64
+        ],
+        [
+          96,
+          64
+        ]
+      ],
+      "feet_z": 128,
+      "feet_tolerance": 1,
+      "maximum_horizontal_speed": 10,
+      "maximum_absolute_vertical_speed": 10,
+      "consecutive_samples": 9,
+      "sample_interval_ms": 16,
+      "first_to_last_dwell_ms": 128,
+      "after_first_landing_allow_airborne": false,
+      "waterlevel": 0,
+      "standing_hull": [
+        32,
+        32,
+        56
+      ]
+    },
+    "trials": [
+      {
+        "schema_version": 1,
+        "id": "ravel-recovery-f400-continue",
+        "bsp": "E:\\Repositories\\Quake-MapGen\\out\\ravel\\qmg_ravel.bsp",
+        "start": {
+          "feet": [
+            176,
+            16,
+            256
+          ],
+          "clearance_z": 0.125,
+          "velocity": [
+            0,
+            0,
+            0
+          ]
+        },
+        "gravity": 800,
+        "timestep_ms": 16,
+        "settle_frames": 8,
+        "commands": [
+          {
+            "side": 0,
+            "up": 0,
+            "pitch": 0,
+            "frames": 46,
+            "forward": 400,
+            "yaw": 180
+          },
+          {
+            "side": 0,
+            "up": 0,
+            "pitch": 0,
+            "frames": 256,
+            "forward": 400,
+            "yaw": 180
+          }
+        ],
+        "goal": {
+          "axis": "x",
+          "coordinate": 0,
+          "direction": -1,
+          "feet_z": 128,
+          "z_tolerance": 1,
+          "cross_axis_range": [
+            -1024,
+            1024
+          ],
+          "waterlevel": 0,
+          "grounded": true
+        },
+        "goal_role": "Broad native station diagnostic only; independent recovery_goal defines study success.",
+        "recovery_goal": {
+          "center_xy_bounds": [
+            [
+              -128,
+              -56
+            ],
+            [
+              80,
+              56
+            ]
+          ],
+          "transient_center_xy_bounds": [
+            [
+              -144,
+              -64
+            ],
+            [
+              96,
+              64
+            ]
+          ],
+          "feet_z": 128,
+          "feet_tolerance": 1,
+          "maximum_horizontal_speed": 10,
+          "maximum_absolute_vertical_speed": 10,
+          "consecutive_samples": 9,
+          "sample_interval_ms": 16,
+          "first_to_last_dwell_ms": 128,
+          "after_first_landing_allow_airborne": false,
+          "waterlevel": 0,
+          "standing_hull": [
+            32,
+            32,
+            56
+          ]
+        },
+        "profile": "continue",
+        "literal_forwardmove": 400,
+        "approach_frames": 46,
+        "recovery_command_frames": 256,
+        "switch_schedule_basis": "Fixed from prior frozen-BSP first middle-floor landing; never observe or adapt during execution."
+      },
+      {
+        "schema_version": 1,
+        "id": "ravel-recovery-f400-release",
+        "bsp": "E:\\Repositories\\Quake-MapGen\\out\\ravel\\qmg_ravel.bsp",
+        "start": {
+          "feet": [
+            176,
+            16,
+            256
+          ],
+          "clearance_z": 0.125,
+          "velocity": [
+            0,
+            0,
+            0
+          ]
+        },
+        "gravity": 800,
+        "timestep_ms": 16,
+        "settle_frames": 8,
+        "commands": [
+          {
+            "side": 0,
+            "up": 0,
+            "pitch": 0,
+            "frames": 46,
+            "forward": 400,
+            "yaw": 180
+          },
+          {
+            "side": 0,
+            "up": 0,
+            "pitch": 0,
+            "frames": 256,
+            "forward": 0,
+            "yaw": 180
+          }
+        ],
+        "goal": {
+          "axis": "x",
+          "coordinate": 0,
+          "direction": -1,
+          "feet_z": 128,
+          "z_tolerance": 1,
+          "cross_axis_range": [
+            -1024,
+            1024
+          ],
+          "waterlevel": 0,
+          "grounded": true
+        },
+        "goal_role": "Broad native station diagnostic only; independent recovery_goal defines study success.",
+        "recovery_goal": {
+          "center_xy_bounds": [
+            [
+              -128,
+              -56
+            ],
+            [
+              80,
+              56
+            ]
+          ],
+          "transient_center_xy_bounds": [
+            [
+              -144,
+              -64
+            ],
+            [
+              96,
+              64
+            ]
+          ],
+          "feet_z": 128,
+          "feet_tolerance": 1,
+          "maximum_horizontal_speed": 10,
+          "maximum_absolute_vertical_speed": 10,
+          "consecutive_samples": 9,
+          "sample_interval_ms": 16,
+          "first_to_last_dwell_ms": 128,
+          "after_first_landing_allow_airborne": false,
+          "waterlevel": 0,
+          "standing_hull": [
+            32,
+            32,
+            56
+          ]
+        },
+        "profile": "release",
+        "literal_forwardmove": 400,
+        "approach_frames": 46,
+        "recovery_command_frames": 256,
+        "switch_schedule_basis": "Fixed from prior frozen-BSP first middle-floor landing; never observe or adapt during execution."
+      },
+      {
+        "schema_version": 1,
+        "id": "ravel-recovery-f400-north8-release",
+        "bsp": "E:\\Repositories\\Quake-MapGen\\out\\ravel\\qmg_ravel.bsp",
+        "start": {
+          "feet": [
+            176,
+            16,
+            256
+          ],
+          "clearance_z": 0.125,
+          "velocity": [
+            0,
+            0,
+            0
+          ]
+        },
+        "gravity": 800,
+        "timestep_ms": 16,
+        "settle_frames": 8,
+        "commands": [
+          {
+            "side": 0,
+            "up": 0,
+            "pitch": 0,
+            "frames": 46,
+            "forward": 400,
+            "yaw": 180
+          },
+          {
+            "side": 0,
+            "up": 0,
+            "pitch": 0,
+            "frames": 8,
+            "forward": 400,
+            "yaw": 90
+          },
+          {
+            "side": 0,
+            "up": 0,
+            "pitch": 0,
+            "frames": 248,
+            "forward": 0,
+            "yaw": 90
+          }
+        ],
+        "goal": {
+          "axis": "x",
+          "coordinate": 0,
+          "direction": -1,
+          "feet_z": 128,
+          "z_tolerance": 1,
+          "cross_axis_range": [
+            -1024,
+            1024
+          ],
+          "waterlevel": 0,
+          "grounded": true
+        },
+        "goal_role": "Broad native station diagnostic only; independent recovery_goal defines study success.",
+        "recovery_goal": {
+          "center_xy_bounds": [
+            [
+              -128,
+              -56
+            ],
+            [
+              80,
+              56
+            ]
+          ],
+          "transient_center_xy_bounds": [
+            [
+              -144,
+              -64
+            ],
+            [
+              96,
+              64
+            ]
+          ],
+          "feet_z": 128,
+          "feet_tolerance": 1,
+          "maximum_horizontal_speed": 10,
+          "maximum_absolute_vertical_speed": 10,
+          "consecutive_samples": 9,
+          "sample_interval_ms": 16,
+          "first_to_last_dwell_ms": 128,
+          "after_first_landing_allow_airborne": false,
+          "waterlevel": 0,
+          "standing_hull": [
+            32,
+            32,
+            56
+          ]
+        },
+        "profile": "north8-release",
+        "literal_forwardmove": 400,
+        "approach_frames": 46,
+        "recovery_command_frames": 256,
+        "switch_schedule_basis": "Fixed from prior frozen-BSP first middle-floor landing; never observe or adapt during execution."
+      },
+      {
+        "schema_version": 1,
+        "id": "ravel-recovery-f400-south8-release",
+        "bsp": "E:\\Repositories\\Quake-MapGen\\out\\ravel\\qmg_ravel.bsp",
+        "start": {
+          "feet": [
+            176,
+            16,
+            256
+          ],
+          "clearance_z": 0.125,
+          "velocity": [
+            0,
+            0,
+            0
+          ]
+        },
+        "gravity": 800,
+        "timestep_ms": 16,
+        "settle_frames": 8,
+        "commands": [
+          {
+            "side": 0,
+            "up": 0,
+            "pitch": 0,
+            "frames": 46,
+            "forward": 400,
+            "yaw": 180
+          },
+          {
+            "side": 0,
+            "up": 0,
+            "pitch": 0,
+            "frames": 8,
+            "forward": 400,
+            "yaw": -90
+          },
+          {
+            "side": 0,
+            "up": 0,
+            "pitch": 0,
+            "frames": 248,
+            "forward": 0,
+            "yaw": -90
+          }
+        ],
+        "goal": {
+          "axis": "x",
+          "coordinate": 0,
+          "direction": -1,
+          "feet_z": 128,
+          "z_tolerance": 1,
+          "cross_axis_range": [
+            -1024,
+            1024
+          ],
+          "waterlevel": 0,
+          "grounded": true
+        },
+        "goal_role": "Broad native station diagnostic only; independent recovery_goal defines study success.",
+        "recovery_goal": {
+          "center_xy_bounds": [
+            [
+              -128,
+              -56
+            ],
+            [
+              80,
+              56
+            ]
+          ],
+          "transient_center_xy_bounds": [
+            [
+              -144,
+              -64
+            ],
+            [
+              96,
+              64
+            ]
+          ],
+          "feet_z": 128,
+          "feet_tolerance": 1,
+          "maximum_horizontal_speed": 10,
+          "maximum_absolute_vertical_speed": 10,
+          "consecutive_samples": 9,
+          "sample_interval_ms": 16,
+          "first_to_last_dwell_ms": 128,
+          "after_first_landing_allow_airborne": false,
+          "waterlevel": 0,
+          "standing_hull": [
+            32,
+            32,
+            56
+          ]
+        },
+        "profile": "south8-release",
+        "literal_forwardmove": 400,
+        "approach_frames": 46,
+        "recovery_command_frames": 256,
+        "switch_schedule_basis": "Fixed from prior frozen-BSP first middle-floor landing; never observe or adapt during execution."
+      },
+      {
+        "schema_version": 1,
+        "id": "ravel-recovery-f200-continue",
+        "bsp": "E:\\Repositories\\Quake-MapGen\\out\\ravel\\qmg_ravel.bsp",
+        "start": {
+          "feet": [
+            176,
+            16,
+            256
+          ],
+          "clearance_z": 0.125,
+          "velocity": [
+            0,
+            0,
+            0
+          ]
+        },
+        "gravity": 800,
+        "timestep_ms": 16,
+        "settle_frames": 8,
+        "commands": [
+          {
+            "side": 0,
+            "up": 0,
+            "pitch": 0,
+            "frames": 49,
+            "forward": 200,
+            "yaw": 180
+          },
+          {
+            "side": 0,
+            "up": 0,
+            "pitch": 0,
+            "frames": 256,
+            "forward": 200,
+            "yaw": 180
+          }
+        ],
+        "goal": {
+          "axis": "x",
+          "coordinate": 0,
+          "direction": -1,
+          "feet_z": 128,
+          "z_tolerance": 1,
+          "cross_axis_range": [
+            -1024,
+            1024
+          ],
+          "waterlevel": 0,
+          "grounded": true
+        },
+        "goal_role": "Broad native station diagnostic only; independent recovery_goal defines study success.",
+        "recovery_goal": {
+          "center_xy_bounds": [
+            [
+              -128,
+              -56
+            ],
+            [
+              80,
+              56
+            ]
+          ],
+          "transient_center_xy_bounds": [
+            [
+              -144,
+              -64
+            ],
+            [
+              96,
+              64
+            ]
+          ],
+          "feet_z": 128,
+          "feet_tolerance": 1,
+          "maximum_horizontal_speed": 10,
+          "maximum_absolute_vertical_speed": 10,
+          "consecutive_samples": 9,
+          "sample_interval_ms": 16,
+          "first_to_last_dwell_ms": 128,
+          "after_first_landing_allow_airborne": false,
+          "waterlevel": 0,
+          "standing_hull": [
+            32,
+            32,
+            56
+          ]
+        },
+        "profile": "continue",
+        "literal_forwardmove": 200,
+        "approach_frames": 49,
+        "recovery_command_frames": 256,
+        "switch_schedule_basis": "Fixed from prior frozen-BSP first middle-floor landing; never observe or adapt during execution."
+      },
+      {
+        "schema_version": 1,
+        "id": "ravel-recovery-f200-release",
+        "bsp": "E:\\Repositories\\Quake-MapGen\\out\\ravel\\qmg_ravel.bsp",
+        "start": {
+          "feet": [
+            176,
+            16,
+            256
+          ],
+          "clearance_z": 0.125,
+          "velocity": [
+            0,
+            0,
+            0
+          ]
+        },
+        "gravity": 800,
+        "timestep_ms": 16,
+        "settle_frames": 8,
+        "commands": [
+          {
+            "side": 0,
+            "up": 0,
+            "pitch": 0,
+            "frames": 49,
+            "forward": 200,
+            "yaw": 180
+          },
+          {
+            "side": 0,
+            "up": 0,
+            "pitch": 0,
+            "frames": 256,
+            "forward": 0,
+            "yaw": 180
+          }
+        ],
+        "goal": {
+          "axis": "x",
+          "coordinate": 0,
+          "direction": -1,
+          "feet_z": 128,
+          "z_tolerance": 1,
+          "cross_axis_range": [
+            -1024,
+            1024
+          ],
+          "waterlevel": 0,
+          "grounded": true
+        },
+        "goal_role": "Broad native station diagnostic only; independent recovery_goal defines study success.",
+        "recovery_goal": {
+          "center_xy_bounds": [
+            [
+              -128,
+              -56
+            ],
+            [
+              80,
+              56
+            ]
+          ],
+          "transient_center_xy_bounds": [
+            [
+              -144,
+              -64
+            ],
+            [
+              96,
+              64
+            ]
+          ],
+          "feet_z": 128,
+          "feet_tolerance": 1,
+          "maximum_horizontal_speed": 10,
+          "maximum_absolute_vertical_speed": 10,
+          "consecutive_samples": 9,
+          "sample_interval_ms": 16,
+          "first_to_last_dwell_ms": 128,
+          "after_first_landing_allow_airborne": false,
+          "waterlevel": 0,
+          "standing_hull": [
+            32,
+            32,
+            56
+          ]
+        },
+        "profile": "release",
+        "literal_forwardmove": 200,
+        "approach_frames": 49,
+        "recovery_command_frames": 256,
+        "switch_schedule_basis": "Fixed from prior frozen-BSP first middle-floor landing; never observe or adapt during execution."
+      },
+      {
+        "schema_version": 1,
+        "id": "ravel-recovery-f200-north8-release",
+        "bsp": "E:\\Repositories\\Quake-MapGen\\out\\ravel\\qmg_ravel.bsp",
+        "start": {
+          "feet": [
+            176,
+            16,
+            256
+          ],
+          "clearance_z": 0.125,
+          "velocity": [
+            0,
+            0,
+            0
+          ]
+        },
+        "gravity": 800,
+        "timestep_ms": 16,
+        "settle_frames": 8,
+        "commands": [
+          {
+            "side": 0,
+            "up": 0,
+            "pitch": 0,
+            "frames": 49,
+            "forward": 200,
+            "yaw": 180
+          },
+          {
+            "side": 0,
+            "up": 0,
+            "pitch": 0,
+            "frames": 8,
+            "forward": 200,
+            "yaw": 90
+          },
+          {
+            "side": 0,
+            "up": 0,
+            "pitch": 0,
+            "frames": 248,
+            "forward": 0,
+            "yaw": 90
+          }
+        ],
+        "goal": {
+          "axis": "x",
+          "coordinate": 0,
+          "direction": -1,
+          "feet_z": 128,
+          "z_tolerance": 1,
+          "cross_axis_range": [
+            -1024,
+            1024
+          ],
+          "waterlevel": 0,
+          "grounded": true
+        },
+        "goal_role": "Broad native station diagnostic only; independent recovery_goal defines study success.",
+        "recovery_goal": {
+          "center_xy_bounds": [
+            [
+              -128,
+              -56
+            ],
+            [
+              80,
+              56
+            ]
+          ],
+          "transient_center_xy_bounds": [
+            [
+              -144,
+              -64
+            ],
+            [
+              96,
+              64
+            ]
+          ],
+          "feet_z": 128,
+          "feet_tolerance": 1,
+          "maximum_horizontal_speed": 10,
+          "maximum_absolute_vertical_speed": 10,
+          "consecutive_samples": 9,
+          "sample_interval_ms": 16,
+          "first_to_last_dwell_ms": 128,
+          "after_first_landing_allow_airborne": false,
+          "waterlevel": 0,
+          "standing_hull": [
+            32,
+            32,
+            56
+          ]
+        },
+        "profile": "north8-release",
+        "literal_forwardmove": 200,
+        "approach_frames": 49,
+        "recovery_command_frames": 256,
+        "switch_schedule_basis": "Fixed from prior frozen-BSP first middle-floor landing; never observe or adapt during execution."
+      },
+      {
+        "schema_version": 1,
+        "id": "ravel-recovery-f200-south8-release",
+        "bsp": "E:\\Repositories\\Quake-MapGen\\out\\ravel\\qmg_ravel.bsp",
+        "start": {
+          "feet": [
+            176,
+            16,
+            256
+          ],
+          "clearance_z": 0.125,
+          "velocity": [
+            0,
+            0,
+            0
+          ]
+        },
+        "gravity": 800,
+        "timestep_ms": 16,
+        "settle_frames": 8,
+        "commands": [
+          {
+            "side": 0,
+            "up": 0,
+            "pitch": 0,
+            "frames": 49,
+            "forward": 200,
+            "yaw": 180
+          },
+          {
+            "side": 0,
+            "up": 0,
+            "pitch": 0,
+            "frames": 8,
+            "forward": 200,
+            "yaw": -90
+          },
+          {
+            "side": 0,
+            "up": 0,
+            "pitch": 0,
+            "frames": 248,
+            "forward": 0,
+            "yaw": -90
+          }
+        ],
+        "goal": {
+          "axis": "x",
+          "coordinate": 0,
+          "direction": -1,
+          "feet_z": 128,
+          "z_tolerance": 1,
+          "cross_axis_range": [
+            -1024,
+            1024
+          ],
+          "waterlevel": 0,
+          "grounded": true
+        },
+        "goal_role": "Broad native station diagnostic only; independent recovery_goal defines study success.",
+        "recovery_goal": {
+          "center_xy_bounds": [
+            [
+              -128,
+              -56
+            ],
+            [
+              80,
+              56
+            ]
+          ],
+          "transient_center_xy_bounds": [
+            [
+              -144,
+              -64
+            ],
+            [
+              96,
+              64
+            ]
+          ],
+          "feet_z": 128,
+          "feet_tolerance": 1,
+          "maximum_horizontal_speed": 10,
+          "maximum_absolute_vertical_speed": 10,
+          "consecutive_samples": 9,
+          "sample_interval_ms": 16,
+          "first_to_last_dwell_ms": 128,
+          "after_first_landing_allow_airborne": false,
+          "waterlevel": 0,
+          "standing_hull": [
+            32,
+            32,
+            56
+          ]
+        },
+        "profile": "south8-release",
+        "literal_forwardmove": 200,
+        "approach_frames": 49,
+        "recovery_command_frames": 256,
+        "switch_schedule_basis": "Fixed from prior frozen-BSP first middle-floor landing; never observe or adapt during execution."
+      }
+    ],
+    "hypotheses": [
+      "Continuing may satisfy a station but fail bounded low-speed recovery.",
+      "Releasing input after a fixed landing may stop within the supported staging area.",
+      "Identical90-degree bursts in opposite directions may consume different available space.",
+      "Literal input speed can change landing and recovery space needs."
+    ],
+    "not_optimized": true,
+    "profiles_fixed_before_execution": true
+  },
+  "verification": {
+    "verified_profiles": 8,
+    "recovery_successes": 5,
+    "retained_failures": 3,
+    "independently_derived_first_recovery_goals": true,
+    "unchanged_initial_approaches": 8,
+    "predeclared_protocol_unchanged": true,
+    "whole_recovery_envelope_compiled_support_and_clearance": true
+  },
+  "analysis_tests_passed": 6,
+  "historical_ravel_native_artifacts_unchanged": 49,
+  "limits": [
+    "Nine sampled states span128ms; continuous subframe stability is not established.",
+    "Approach switches are scheduled from earlier same-BSP trials, not human reactions or real-time steering.",
+    "A failed goal is not necessarily a fall; position, speed and floor requirements are reported separately.",
+    "World-only engine movement omits falling damage, opponents, game entities, camera, aim and multiplayer quality."
+  ],
+  "artifact_files": [
+    {
+      "path": "docs/Q2_NATIVE_RECOVERY_STUDY.md",
+      "bytes": 9322,
+      "sha256": "46bfb4f1bd4da2e2ca9b63e71c7150d57c0f97b5145a2ba2462b80003b13f080"
+    },
+    {
+      "path": "out/native-movement/build-provenance.json",
+      "bytes": 3665,
+      "sha256": "b19bf77b1987f3035d60b46a3147eb33501184e41dc1f56c0af6253978d76a7a"
+    },
+    {
+      "path": "out/native-recovery/comparison.json",
+      "bytes": 5835,
+      "sha256": "93f18fc6b7d55b5975b0ce0f93dd76c510d141e125eb79f0e37849bc41c4ac03"
+    },
+    {
+      "path": "out/native-recovery/experiment.log",
+      "bytes": 3975,
+      "sha256": "23e151116e9308b61b0618fa778b9bb14d6be817d166b2eeb22d67999f31967f"
+    },
+    {
+      "path": "out/native-recovery/pocket-support.json",
+      "bytes": 7028,
+      "sha256": "76d131532fc047119e2235bfa68c7c435910ba98e865c7da193fa84c2646f384"
+    },
+    {
+      "path": "out/native-recovery/protocol.json",
+      "bytes": 20349,
+      "sha256": "e3c8ca56f7513616af5b5216d7052c9a90c22e274964be5c24508c5020c1d23b"
+    },
+    {
+      "path": "out/native-recovery/ravel-recovery-f200-continue/commands.txt",
+      "bytes": 6228,
+      "sha256": "00c952608e87d0585791713f004ca211a78147681be76360e59f9a48bf3f07d6"
+    },
+    {
+      "path": "out/native-recovery/ravel-recovery-f200-continue/frames.ndjson",
+      "bytes": 120585,
+      "sha256": "b907e243b877e471c68d1e770c419a4fed63845e3c834a03fa7c7681e42f53ba"
+    },
+    {
+      "path": "out/native-recovery/ravel-recovery-f200-continue/native-stderr.txt",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "out/native-recovery/ravel-recovery-f200-continue/recovery.json",
+      "bytes": 1218,
+      "sha256": "3f4184ff803c7e7618adaf8c9cb1e8c03b22400a16c97f25df3e01976d14fbd1"
+    },
+    {
+      "path": "out/native-recovery/ravel-recovery-f200-continue/result.json",
+      "bytes": 3194,
+      "sha256": "2331b26b45784fc6191e2ef6072bf7c05c11899727db97ff9bd4a972284e97a5"
+    },
+    {
+      "path": "out/native-recovery/ravel-recovery-f200-continue/trial.json",
+      "bytes": 1876,
+      "sha256": "5b8a71f5314eca080e966f60509e81c1e1eaec6a53c357f8580d0b06958bd2a9"
+    },
+    {
+      "path": "out/native-recovery/ravel-recovery-f200-north8-release/commands.txt",
+      "bytes": 5476,
+      "sha256": "6f64678ef02792e5662670f12a9495851c795fd7164f888ec0600dfb330e9540"
+    },
+    {
+      "path": "out/native-recovery/ravel-recovery-f200-north8-release/frames.ndjson",
+      "bytes": 119943,
+      "sha256": "9b3bb10b5c032bd48facd8d715979fd31e8b1252304a46c56001f890662552ef"
+    },
+    {
+      "path": "out/native-recovery/ravel-recovery-f200-north8-release/native-stderr.txt",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "out/native-recovery/ravel-recovery-f200-north8-release/recovery.json",
+      "bytes": 1924,
+      "sha256": "7c13fff976262a5d745d7f65bab71ae9fed8ae5275400128f460d0a3f39e7c39"
+    },
+    {
+      "path": "out/native-recovery/ravel-recovery-f200-north8-release/result.json",
+      "bytes": 3243,
+      "sha256": "d214fa1c220acc2607c2d2489df283a2ec7e95324e573cb54495f7c041b58042"
+    },
+    {
+      "path": "out/native-recovery/ravel-recovery-f200-north8-release/trial.json",
+      "bytes": 2013,
+      "sha256": "81172a13c61d5f8ddfdbd894e9fcee9cf1a396da26c48265068f7a1182b040db"
+    },
+    {
+      "path": "out/native-recovery/ravel-recovery-f200-release/commands.txt",
+      "bytes": 5716,
+      "sha256": "74370ded76a57d4bdb0abf1b694940834cbb1fdacd0357bc754ba8abee880328"
+    },
+    {
+      "path": "out/native-recovery/ravel-recovery-f200-release/frames.ndjson",
+      "bytes": 119032,
+      "sha256": "1ad39a1b33ec72494cd8cf0fb001bb5dce470f662f809052ddf15e358fa03c7c"
+    },
+    {
+      "path": "out/native-recovery/ravel-recovery-f200-release/native-stderr.txt",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "out/native-recovery/ravel-recovery-f200-release/recovery.json",
+      "bytes": 1905,
+      "sha256": "9d4185d42c7dd7bd63633042371fd35537b6852b74262423fa4ff7a0d427035f"
+    },
+    {
+      "path": "out/native-recovery/ravel-recovery-f200-release/result.json",
+      "bytes": 3233,
+      "sha256": "d86d058ee27d03af660fd32bb3f8666f672dc312f25d1862f711a9d3b46e96f5"
+    },
+    {
+      "path": "out/native-recovery/ravel-recovery-f200-release/trial.json",
+      "bytes": 1872,
+      "sha256": "1cb7d85f0e3e877c423439b865999569c2e9c05019a650160ac08f8bbe545653"
+    },
+    {
+      "path": "out/native-recovery/ravel-recovery-f200-south8-release/commands.txt",
+      "bytes": 5732,
+      "sha256": "0d766c3715ee7512100df58cbb11d74686099568c3d1467ec8da5ac475089204"
+    },
+    {
+      "path": "out/native-recovery/ravel-recovery-f200-south8-release/frames.ndjson",
+      "bytes": 120213,
+      "sha256": "b45376f8d7c84ae581e371c8091d59979c1b15c971a9821a33f36578a4870f1e"
+    },
+    {
+      "path": "out/native-recovery/ravel-recovery-f200-south8-release/native-stderr.txt",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "out/native-recovery/ravel-recovery-f200-south8-release/recovery.json",
+      "bytes": 1931,
+      "sha256": "00d89fd283c0340e21aea31a9ffb517fc41839b37707e86d6236d86a4b59b9f0"
+    },
+    {
+      "path": "out/native-recovery/ravel-recovery-f200-south8-release/result.json",
+      "bytes": 3244,
+      "sha256": "392272421364ff729b7ea1527945a7cb482953b591bfdef8213b9196d137293c"
+    },
+    {
+      "path": "out/native-recovery/ravel-recovery-f200-south8-release/trial.json",
+      "bytes": 2015,
+      "sha256": "1585ab5e2601b026698a88cfb041c7d221e7e4478465c1d4666e6f9ddcb835b8"
+    },
+    {
+      "path": "out/native-recovery/ravel-recovery-f400-continue/commands.txt",
+      "bytes": 6168,
+      "sha256": "76f437b1288681a1afc3c762e1d23c4ec6ceeb69a74bc4aab5f68238b9321bf9"
+    },
+    {
+      "path": "out/native-recovery/ravel-recovery-f400-continue/frames.ndjson",
+      "bytes": 119520,
+      "sha256": "95cecb5cda9f6f86c04ca89d95b09adab6698e0f17aae27bf9d972164c326cfe"
+    },
+    {
+      "path": "out/native-recovery/ravel-recovery-f400-continue/native-stderr.txt",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "out/native-recovery/ravel-recovery-f400-continue/recovery.json",
+      "bytes": 1220,
+      "sha256": "69312e1550c95e90bdef3e4d6337a4af5e73f086ecfa11451613ff6e6431e16c"
+    },
+    {
+      "path": "out/native-recovery/ravel-recovery-f400-continue/result.json",
+      "bytes": 3201,
+      "sha256": "35f3d5555b4aecc7920f4c45aad33e75f8dd2902ef4de5e6e17ee0bbdcb93ae0"
+    },
+    {
+      "path": "out/native-recovery/ravel-recovery-f400-continue/trial.json",
+      "bytes": 1876,
+      "sha256": "1a80382ffb2a2869823b867b139af7ba0fb322f0ba90dcea7ec4c5c93b8aa3f9"
+    },
+    {
+      "path": "out/native-recovery/ravel-recovery-f400-north8-release/commands.txt",
+      "bytes": 5416,
+      "sha256": "5e6654b63bae563f3b17c67bb381f982affff3f9b0623df9d095e99769f1e2ba"
+    },
+    {
+      "path": "out/native-recovery/ravel-recovery-f400-north8-release/frames.ndjson",
+      "bytes": 119484,
+      "sha256": "58c2bcbb230318057469f5d99d73b9479cd5695eb71fd6f4cc2479b2d73c273c"
+    },
+    {
+      "path": "out/native-recovery/ravel-recovery-f400-north8-release/native-stderr.txt",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "out/native-recovery/ravel-recovery-f400-north8-release/recovery.json",
+      "bytes": 1223,
+      "sha256": "346de9dac16bae37141dc6ca9400552c00437aed7f40859a6339c3cbae6c7a6e"
+    },
+    {
+      "path": "out/native-recovery/ravel-recovery-f400-north8-release/result.json",
+      "bytes": 3207,
+      "sha256": "e9dd104c8d13bfd555fba64985641b8bf88e71b4237db1c85d5230a51181779e"
+    },
+    {
+      "path": "out/native-recovery/ravel-recovery-f400-north8-release/trial.json",
+      "bytes": 2013,
+      "sha256": "fbe7448ecbed458c61d682089fd3a170bc5860fb28645f5a252db526ba6d534e"
+    },
+    {
+      "path": "out/native-recovery/ravel-recovery-f400-release/commands.txt",
+      "bytes": 5656,
+      "sha256": "759ec094843e3d20a1fc6b136e458200b3949046478919dca42b3030e93a7f5a"
+    },
+    {
+      "path": "out/native-recovery/ravel-recovery-f400-release/frames.ndjson",
+      "bytes": 117898,
+      "sha256": "a97754069461cdce165e451730effaac50bf3e48c724887e4e62cb4a358d01fc"
+    },
+    {
+      "path": "out/native-recovery/ravel-recovery-f400-release/native-stderr.txt",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "out/native-recovery/ravel-recovery-f400-release/recovery.json",
+      "bytes": 1907,
+      "sha256": "9295dd87927fe2a1bd16d23fb3a16cf1ac40eb6850251eb03b8310d27e388dce"
+    },
+    {
+      "path": "out/native-recovery/ravel-recovery-f400-release/result.json",
+      "bytes": 3200,
+      "sha256": "c63b6518e71c4e51d4bb03c185dd7d6bbaaf5193d5e3c3a52262a19feb93e304"
+    },
+    {
+      "path": "out/native-recovery/ravel-recovery-f400-release/trial.json",
+      "bytes": 1872,
+      "sha256": "f47702fd954363fe6ffd27179af58115a94410c9baeeb97550be169346eeb36c"
+    },
+    {
+      "path": "out/native-recovery/ravel-recovery-f400-south8-release/commands.txt",
+      "bytes": 5672,
+      "sha256": "749223ccf089570b1e40600b8ee5ef5a7f279298fa3026ce68f1501896396358"
+    },
+    {
+      "path": "out/native-recovery/ravel-recovery-f400-south8-release/frames.ndjson",
+      "bytes": 119551,
+      "sha256": "4e3f567df68bd766ee4864465cc601e7d84bb31d294eec9937d3f0641937e6d8"
+    },
+    {
+      "path": "out/native-recovery/ravel-recovery-f400-south8-release/native-stderr.txt",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "out/native-recovery/ravel-recovery-f400-south8-release/recovery.json",
+      "bytes": 1941,
+      "sha256": "f4072fb29ac45701c6d204384dbc29585e573be6d0d0070395be17ea6319142c"
+    },
+    {
+      "path": "out/native-recovery/ravel-recovery-f400-south8-release/result.json",
+      "bytes": 3207,
+      "sha256": "8a564d6b483b7ff0046d01056224c73ae4878e730ec09e37f067e2ffdeb1c55a"
+    },
+    {
+      "path": "out/native-recovery/ravel-recovery-f400-south8-release/trial.json",
+      "bytes": 2015,
+      "sha256": "7241edd6494e9c34aa487208f72bf714f14edc8f9c4d56b900f45c632a1c3298"
+    },
+    {
+      "path": "out/native-recovery/tests.log",
+      "bytes": 985,
+      "sha256": "b051606f344600b89f8505c9e11539d9db967a40c6f6915573e097bc6e1a114d"
+    },
+    {
+      "path": "out/ravel/layout.json",
+      "bytes": 7771,
+      "sha256": "0e33a315685c2f854c4f3eb4ff8b86b785a37e8744096dc67ce8756dc2690132"
+    },
+    {
+      "path": "out/ravel/native-routes/artifact-manifest.json",
+      "bytes": 9750,
+      "sha256": "320b108cc9a22cf83e5d808a42079f59832f676289a7352cac350856972fdf9a"
+    },
+    {
+      "path": "out/ravel/qmg_ravel.bsp",
+      "bytes": 291104,
+      "sha256": "8b88bf771c64783a812aa20160250da60201d625ba8eb8d7920b006e7097b69c"
+    },
+    {
+      "path": "out/ravel/qmg_ravel.map",
+      "bytes": 98089,
+      "sha256": "3af5b50fc6c0e82b4ae250dcc165b54b075789ad3cd95985cfb2f057e8891197"
+    },
+    {
+      "path": "tests/test_native_recovery.py",
+      "bytes": 2915,
+      "sha256": "990a608e82f89b76a211c13234ec148421d4975bc14c567c9073df002a67b4b2"
+    },
+    {
+      "path": "tools/map_recipes/drop_audit.py",
+      "bytes": 15605,
+      "sha256": "f9c284ad85ead67913dcf3a51945bb21be994fa4968b60f60bbb876cd581f2de"
+    },
+    {
+      "path": "tools/map_recipes/geometry.py",
+      "bytes": 19674,
+      "sha256": "dcfcc3413468cad9993476736edfae5f13eb03e26035fc39d73f83aa5a90742b"
+    },
+    {
+      "path": "tools/map_recipes/ravel_audit.py",
+      "bytes": 7472,
+      "sha256": "a25628bc6647efd4e67dd2ce21e2e29b9f620ee9b446d699ca75ad18da2f1d6d"
+    },
+    {
+      "path": "tools/map_study/binary.py",
+      "bytes": 15999,
+      "sha256": "2b76559a71365eaab41e6876ff7da94fe938994b4a5199d63620b8b60918daf1"
+    },
+    {
+      "path": "tools/native_movement/recovery.py",
+      "bytes": 18731,
+      "sha256": "a54e206f62c3bc97032553fde956fd5f2816fce5f2776232c893a438f8893ef1"
+    },
+    {
+      "path": "tools/native_movement/reference.json",
+      "bytes": 1204,
+      "sha256": "b1ec942ca5126b5cf535cf3e0ca049901401c454e30684ae94241d3d88678d40"
+    },
+    {
+      "path": "tools/native_movement/run.py",
+      "bytes": 16756,
+      "sha256": "58177a70d4b12a9687d65f2fb1e1f2c9c72e4e05e1e9df10da8d17b26da5a8c2"
+    }
+  ]
+}

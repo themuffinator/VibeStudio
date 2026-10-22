@@ -1,0 +1,16 @@
+{
+  "schema_version": 1,
+  "reference": "id Software Quake II source release 3.19",
+  "source_url": "https://github.com/id-Software/Quake-2",
+  "licence": "GPL-2.0-or-later engine files; external qcommon/md4.c carries RSA MD4 attribution terms",
+  "dependencies": [
+    {"relative_path":"qcommon/pmove.c","sha256":"8861daaeff7efd7bc6d3c5e65ef99801567f3e06eb14020787206d39dd0038a8"},
+    {"relative_path":"qcommon/cmodel.c","sha256":"c956c5717bdf7d327f7c05f512d70dd9f2ef354d35c9c2fbf408fc716e107785"},
+    {"relative_path":"game/q_shared.c","sha256":"ebdbc0a79a2eae288630647cc3f5542f0d5bc2aa6f2d8c04781c6aaebfbe0e60"},
+    {"relative_path":"qcommon/md4.c","sha256":"7c070a8204ff23f112767532f0a0c23c8730c6409ce84bf09ba1b77e27d7743e"},
+    {"relative_path":"qcommon/qcommon.h","sha256":"f66fc292c1a195b5e1de35cf1410b86e7d5c5cbc0bb5b76be37e19a2cdafdd46"},
+    {"relative_path":"qcommon/qfiles.h","sha256":"3a3e55d65897a83150531c72d2b1087a2d632e9cb73782e382c17643c580a11e"},
+    {"relative_path":"game/q_shared.h","sha256":"c552978e0efed7d7f2daf3cef50af5b7b248555021e93a3347cc73d46d25389c"},
+    {"relative_path":"readme.txt","sha256":"07895b5f72d8a1cf9000017f8a9d803fa9a968752a273371bd9f60bb790f7dab"}
+  ]
+}

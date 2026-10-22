@@ -45,12 +45,15 @@ int main(int argc, char** argv)
 		if (connector.capabilities.isEmpty() || connector.authRequirement.isEmpty() || connector.privacyNote.isEmpty()) {
 			return fail("Expected connector capability, auth, and privacy metadata.");
 		}
-		// The text connectors answer through core/ai_transport; audio, voice,
-		// and 3D generation remain design stubs.
+		// The text connectors answer through core/ai_transport (HTTP, a harness,
+		// or the GGUF runtime) and ElevenLabs makes sound effects; voice and 3D
+		// generation remain design stubs.
 		const bool textConnector = connector.id == QStringLiteral("openai") || connector.id == QStringLiteral("claude")
-			|| connector.id == QStringLiteral("gemini") || connector.id == QStringLiteral("local-offline") || connector.id == QStringLiteral("custom-http");
-		if (textConnector != connector.implemented) {
-			return fail("Expected exactly the text connectors to be implemented.");
+			|| connector.id == QStringLiteral("gemini") || connector.id == QStringLiteral("local-offline") || connector.id == QStringLiteral("custom-http")
+			|| connector.id == QStringLiteral("claude-code") || connector.id == QStringLiteral("codex") || connector.id == QStringLiteral("custom-command")
+			|| connector.id == QStringLiteral("local-gguf");
+		if ((textConnector || connector.id == QStringLiteral("elevenlabs")) != connector.implemented) {
+			return fail("Expected exactly the text connectors and ElevenLabs to be implemented.");
 		}
 	}
 

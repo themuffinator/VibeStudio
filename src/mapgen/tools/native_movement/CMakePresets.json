@@ -1,0 +1,14 @@
+{
+  "version": 6,
+  "configurePresets": [{
+    "name": "windows-clang",
+    "generator": "Ninja",
+    "binaryDir": "${sourceDir}/../../.agents/tmp/native-movement/build",
+    "cacheVariables": {
+      "CMAKE_BUILD_TYPE": "Debug",
+      "CMAKE_C_COMPILER": "clang-cl",
+      "Q2_REFERENCE_SOURCE": "E:/_SOURCE/_CODE/Quake-2-master"
+    }
+  }],
+  "buildPresets": [{"name": "windows-clang", "configurePreset": "windows-clang"}]
+}

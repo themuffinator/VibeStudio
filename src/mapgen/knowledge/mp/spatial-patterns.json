@@ -1,0 +1,2259 @@
+{
+  "schema_version": 1,
+  "id": "mp-spatial-patterns-v1",
+  "date": "2026-09-13",
+  "status": "local_geometry_and_source_research_native_and_human_validation_pending",
+  "scope": "Raised in-room walkways, atriums/courts, horseshoe forms, ordinary crate detours, liquid choices and teleport shortcuts; compact interleaving for an original Q2 design",
+  "document": {
+    "project_relative_path": "docs/MP_SPATIAL_PATTERNS.md",
+    "sha256": "802b918e48aa1d618513e4b685a0a94717d340d0034676e866ff8a6973330374",
+    "bytes": 14170
+  },
+  "atlas": {
+    "project_relative_path": "out/ql-atlas/atlas.json",
+    "sha256": "f0b908e01243f62ddad535d7db3a8f614ca8c25ddb963fb62e7d72c96062a869",
+    "bytes": 22940
+  },
+  "existing_q2_manifest": {
+    "project_relative_path": "out/map-study/manifest.json",
+    "sha256": "434ed06e37447872df92f0eb9a35c7a0d40b59c5cae77709493d544801d87c02",
+    "bytes": 1303666
+  },
+  "references": [
+    {
+      "map": "campgrounds",
+      "game": "ql",
+      "role": "six_map_atlas_reference",
+      "title": "Campgrounds",
+      "authors_from_worldspawn": [],
+      "source": {
+        "path": "E:\\_SOURCE\\_ASSETS\\QL-preSteam\\campgrounds.pk3\\maps\\campgrounds.bsp",
+        "sha256": "3d8b04fb46df89169ebfd3cefa635d295e0d3913af74643d51784ebb4ed3de16",
+        "bytes": 2875772
+      },
+      "format": "IBSP47",
+      "revision_context": "QL-preSteam local directory snapshot; exact release date and current Steam equivalence unverified",
+      "authored_mode_properties_evaluated": false,
+      "capacity_label": null,
+      "capacity_reason": "No validated source capacity imported for this QL snapshot",
+      "focused_evidence": {
+        "map": "campgrounds",
+        "path": "E:\\_SOURCE\\_ASSETS\\QL-preSteam\\campgrounds.pk3\\maps\\campgrounds.bsp",
+        "sha256": "3d8b04fb46df89169ebfd3cefa635d295e0d3913af74643d51784ebb4ed3de16",
+        "liquid_brushes": [
+          {
+            "brush": 1990,
+            "contents": 536870920,
+            "shader": "textures/liquids/lavahell_750",
+            "bounds": [
+              [
+                192,
+                -768,
+                -64
+              ],
+              [
+                320,
+                -640,
+                -28
+              ]
+            ]
+          },
+          {
+            "brush": 1991,
+            "contents": 536870920,
+            "shader": "textures/liquids/lavahell_750",
+            "bounds": [
+              [
+                -256,
+                -384,
+                -64
+              ],
+              [
+                -128,
+                -256,
+                -28
+              ]
+            ]
+          },
+          {
+            "brush": 1994,
+            "contents": 536870920,
+            "shader": "textures/liquids/lavahell_750",
+            "bounds": [
+              [
+                -632,
+                0,
+                -64
+              ],
+              [
+                -520,
+                128,
+                -28
+              ]
+            ]
+          },
+          {
+            "brush": 1995,
+            "contents": 536870920,
+            "shader": "textures/liquids/lavahell_750",
+            "bounds": [
+              [
+                -384,
+                272,
+                -64
+              ],
+              [
+                -256,
+                368,
+                -28
+              ]
+            ]
+          }
+        ]
+      },
+      "authored_teleport_target_links": [],
+      "atlas_record": {
+        "project_relative_path": "out/ql-atlas/maps/campgrounds.json",
+        "sha256": "fa2dce56280fa314a8477f671e915a0e0dc728f192d5a99fda048ca439cb39c6",
+        "bytes": 232263
+      },
+      "descriptive_surface_projection_box_coverage": 0.49204049841175,
+      "authored_teleport_trigger_count": 0,
+      "inspected_supplied_levelshot": {
+        "path": "E:\\_SOURCE\\_ASSETS\\QL-preSteam\\campgrounds.pk3\\levelshots\\campgrounds.jpg",
+        "sha256": "b6b27bc76dfa83fb2351daa109dbd9a07620b6fe47f9e682d6b2adfa6ff73f4e",
+        "bytes": 143579
+      },
+      "levelshot_limit": "Supplied package artwork, not a new engine capture or verified runtime render of these BSP bytes"
+    },
+    {
+      "map": "bloodrun",
+      "game": "ql",
+      "role": "six_map_atlas_reference",
+      "title": "Blood Run",
+      "authors_from_worldspawn": [
+        "ztn"
+      ],
+      "source": {
+        "path": "E:\\_SOURCE\\_ASSETS\\QL-preSteam\\bloodrun.pk3\\maps\\bloodrun.bsp",
+        "sha256": "f299faab9d93987a14a3cf3fdf0efd3ed7794fe72c3e70f79b5d925b9131ec26",
+        "bytes": 2234936
+      },
+      "format": "IBSP47",
+      "revision_context": "QL-preSteam local directory snapshot; exact release date and current Steam equivalence unverified",
+      "authored_mode_properties_evaluated": false,
+      "capacity_label": null,
+      "capacity_reason": "No validated source capacity imported for this QL snapshot",
+      "focused_evidence": {
+        "map": "bloodrun",
+        "path": "E:\\_SOURCE\\_ASSETS\\QL-preSteam\\bloodrun.pk3\\maps\\bloodrun.bsp",
+        "sha256": "f299faab9d93987a14a3cf3fdf0efd3ed7794fe72c3e70f79b5d925b9131ec26",
+        "liquid_brushes": [
+          {
+            "brush": 1591,
+            "contents": 536870920,
+            "shader": "textures/liquids/lavahell",
+            "bounds": [
+              [
+                -544,
+                -400,
+                0
+              ],
+              [
+                -416,
+                -48,
+                16
+              ]
+            ]
+          }
+        ],
+        "horseshoe": {
+          "surface_ids": [
+            1095,
+            1353,
+            1354
+          ],
+          "z": 512,
+          "sections": [
+            {
+              "x": 280,
+              "intersection_wkt": "LINESTRING Z (280 -440 512, 280 -8 512)"
+            },
+            {
+              "x": 480,
+              "intersection_wkt": "MULTILINESTRING Z ((480 -420 512, 480 -293 512), (480 -155 512, 480 -28 512))"
+            },
+            {
+              "x": 640,
+              "intersection_wkt": "MULTILINESTRING Z ((640 -464 512, 640 -256 512), (640 -192 512, 640 192 512))"
+            },
+            {
+              "x": 760,
+              "intersection_wkt": "MULTILINESTRING Z ((760 -451.2 512, 760 -256 512), (760 -192 512, 760 38.4 512))"
+            },
+            {
+              "x": 800,
+              "intersection_wkt": "LINESTRING EMPTY"
+            }
+          ],
+          "interpretation": "Continuous western join and two separated eastward arms, open beyond X768. Draw-surface form only; not a collision route certificate."
+        }
+      },
+      "authored_teleport_target_links": [
+        {
+          "source": 37,
+          "target_entity": 38,
+          "kind": "teleport",
+          "from": [
+            672.0,
+            -1296.0,
+            96.0
+          ],
+          "to": [
+            -576.0,
+            368.0,
+            592.0
+          ],
+          "target_class": "target_position",
+          "angle": "270",
+          "relation": "authored target key, not trajectory"
+        },
+        {
+          "source": 46,
+          "target_entity": 45,
+          "kind": "teleport",
+          "from": [
+            -272.0,
+            160.0,
+            84.0
+          ],
+          "to": [
+            736.0,
+            -96.0,
+            576.0
+          ],
+          "target_class": "target_position",
+          "angle": "180",
+          "relation": "authored target key, not trajectory"
+        }
+      ],
+      "atlas_record": {
+        "project_relative_path": "out/ql-atlas/maps/bloodrun.json",
+        "sha256": "8de28e06effd7baee3bcf787849095a58a11b7f5d81de56204c509817945ee9e",
+        "bytes": 174786
+      },
+      "descriptive_surface_projection_box_coverage": 0.5749989271968944,
+      "authored_teleport_trigger_count": 2,
+      "inspected_supplied_levelshot": {
+        "path": "E:\\_SOURCE\\_ASSETS\\QL-preSteam\\bloodrun.pk3\\levelshots\\bloodrun.jpg",
+        "sha256": "7c4c157730c08f48e6dfcec22c2779c8e5e76f75fec46ea00edf2cba0a9c6d31",
+        "bytes": 346061
+      },
+      "levelshot_limit": "Supplied package artwork, not a new engine capture or verified runtime render of these BSP bytes"
+    },
+    {
+      "map": "aerowalk",
+      "game": "ql",
+      "role": "six_map_atlas_reference",
+      "title": "Aerowalk",
+      "authors_from_worldspawn": [
+        "Mindi 'Hubster' Burji",
+        "Mattias 'Preacher' Konradsson"
+      ],
+      "source": {
+        "path": "E:\\_SOURCE\\_ASSETS\\QL-preSteam\\aerowalk.pk3\\maps\\aerowalk.bsp",
+        "sha256": "9ecd802e5124bc283553ed35208647573452d2f84a8c64908e0b30f7961ddc29",
+        "bytes": 1800056
+      },
+      "format": "IBSP47",
+      "revision_context": "QL-preSteam local directory snapshot; exact release date and current Steam equivalence unverified",
+      "authored_mode_properties_evaluated": false,
+      "capacity_label": null,
+      "capacity_reason": "No validated source capacity imported for this QL snapshot",
+      "focused_evidence": {
+        "map": "aerowalk",
+        "path": "E:\\_SOURCE\\_ASSETS\\QL-preSteam\\aerowalk.pk3\\maps\\aerowalk.bsp",
+        "sha256": "9ecd802e5124bc283553ed35208647573452d2f84a8c64908e0b30f7961ddc29",
+        "liquid_brushes": []
+      },
+      "authored_teleport_target_links": [
+        {
+          "source": 23,
+          "target_entity": 4,
+          "kind": "teleport",
+          "from": [
+            -66.0,
+            -464.0,
+            440.0
+          ],
+          "to": [
+            -324.0,
+            -304.0,
+            144.0
+          ],
+          "target_class": "misc_teleporter_dest",
+          "angle": "180",
+          "relation": "authored target key, not trajectory"
+        },
+        {
+          "source": 24,
+          "target_entity": 3,
+          "kind": "teleport",
+          "from": [
+            -286.0,
+            -304.0,
+            208.0
+          ],
+          "to": [
+            16.0,
+            -464.0,
+            376.0
+          ],
+          "target_class": "misc_teleporter_dest",
+          "angle": null,
+          "relation": "authored target key, not trajectory"
+        },
+        {
+          "source": 25,
+          "target_entity": 26,
+          "kind": "teleport",
+          "from": [
+            128.0,
+            159.0,
+            16.0
+          ],
+          "to": [
+            368.0,
+            120.0,
+            144.0
+          ],
+          "target_class": "misc_teleporter_dest",
+          "angle": "270",
+          "relation": "authored target key, not trajectory"
+        },
+        {
+          "source": 30,
+          "target_entity": 53,
+          "kind": "teleport",
+          "from": [
+            -63.0,
+            -224.0,
+            16.0
+          ],
+          "to": [
+            928.0,
+            -160.0,
+            376.0
+          ],
+          "target_class": "misc_teleporter_dest",
+          "angle": "270",
+          "relation": "authored target key, not trajectory"
+        },
+        {
+          "source": 35,
+          "target_entity": 36,
+          "kind": "teleport",
+          "from": [
+            689.0,
+            -640.0,
+            208.0
+          ],
+          "to": [
+            640.0,
+            -648.0,
+            376.0
+          ],
+          "target_class": "misc_teleporter_dest",
+          "angle": "90",
+          "relation": "authored target key, not trajectory"
+        }
+      ],
+      "atlas_record": {
+        "project_relative_path": "out/ql-atlas/maps/aerowalk.json",
+        "sha256": "fc77ecd501298e60b6f27c06a946d3cd7683c194679feb1969972981c586de7f",
+        "bytes": 132852
+      },
+      "descriptive_surface_projection_box_coverage": 0.6367326205318393,
+      "authored_teleport_trigger_count": 5,
+      "inspected_supplied_levelshot": {
+        "path": "E:\\_SOURCE\\_ASSETS\\QL-preSteam\\aerowalk.pk3\\levelshots\\aerowalk.jpg",
+        "sha256": "c547d4b5e3969a7f37d1a592becc184f3d42536d4c25281b572e4f4e01868eb0",
+        "bytes": 258209
+      },
+      "levelshot_limit": "Supplied package artwork, not a new engine capture or verified runtime render of these BSP bytes"
+    },
+    {
+      "map": "furiousheights",
+      "game": "ql",
+      "role": "six_map_atlas_reference",
+      "title": "Furious Heights",
+      "authors_from_worldspawn": [],
+      "source": {
+        "path": "E:\\_SOURCE\\_ASSETS\\QL-preSteam\\furiousheights.pk3\\maps\\furiousheights.bsp",
+        "sha256": "eedd43ad30a40186ed22bf4c222e2a33cc906c9603f4db327b09184e34325b7e",
+        "bytes": 3654424
+      },
+      "format": "IBSP47",
+      "revision_context": "QL-preSteam local directory snapshot; exact release date and current Steam equivalence unverified",
+      "authored_mode_properties_evaluated": false,
+      "capacity_label": null,
+      "capacity_reason": "No validated source capacity imported for this QL snapshot",
+      "focused_evidence": {
+        "map": "furiousheights",
+        "path": "E:\\_SOURCE\\_ASSETS\\QL-preSteam\\furiousheights.pk3\\maps\\furiousheights.bsp",
+        "sha256": "eedd43ad30a40186ed22bf4c222e2a33cc906c9603f4db327b09184e34325b7e",
+        "liquid_brushes": [
+          {
+            "brush": 2263,
+            "contents": 536870944,
+            "shader": "textures/liquids/clear_calm1",
+            "bounds": [
+              [
+                -704,
+                320,
+                -24
+              ],
+              [
+                -544,
+                640,
+                -20
+              ]
+            ]
+          },
+          {
+            "brush": 2392,
+            "contents": 536870944,
+            "shader": "textures/liquids/clear_calm1",
+            "bounds": [
+              [
+                -1536,
+                1024,
+                -32
+              ],
+              [
+                -1088,
+                1472,
+                -4
+              ]
+            ]
+          },
+          {
+            "brush": 2475,
+            "contents": 536870944,
+            "shader": "textures/liquids/clear_calm1",
+            "bounds": [
+              [
+                -1600,
+                -192,
+                -32
+              ],
+              [
+                -1312,
+                664,
+                -28
+              ]
+            ]
+          }
+        ],
+        "partial_floor_stack": [
+          {
+            "xy": [
+              -256,
+              256
+            ],
+            "upward_surface_hits": [
+              {
+                "surface": 708,
+                "z_vertices": [
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                "shader": "textures/wet/largerblock3b3dim_wet"
+              },
+              {
+                "surface": 2854,
+                "z_vertices": [
+                  444.0,
+                  444.0,
+                  444.0
+                ],
+                "shader": "textures/gothic_trim/pitted_rust3"
+              }
+            ]
+          },
+          {
+            "xy": [
+              -64,
+              512
+            ],
+            "upward_surface_hits": [
+              {
+                "surface": 714,
+                "z_vertices": [
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                "shader": "textures/gothic_floor/block3b3dim_broke"
+              },
+              {
+                "surface": 714,
+                "z_vertices": [
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                "shader": "textures/gothic_floor/block3b3dim_broke"
+              }
+            ]
+          },
+          {
+            "xy": [
+              192,
+              640
+            ],
+            "upward_surface_hits": [
+              {
+                "surface": 725,
+                "z_vertices": [
+                  960.0,
+                  960.0,
+                  864.0
+                ],
+                "shader": "textures/gothic_wall/slateroofc"
+              },
+              {
+                "surface": 1348,
+                "z_vertices": [
+                  152.0,
+                  152.0,
+                  152.0
+                ],
+                "shader": "textures/proto2/tin_floor03"
+              },
+              {
+                "surface": 2721,
+                "z_vertices": [
+                  160.0,
+                  160.0,
+                  160.0
+                ],
+                "shader": "textures/gothic_trim/pitted_rust3"
+              }
+            ]
+          },
+          {
+            "xy": [
+              192,
+              1088
+            ],
+            "upward_surface_hits": [
+              {
+                "surface": 1402,
+                "z_vertices": [
+                  190.0,
+                  190.0,
+                  190.0
+                ],
+                "shader": "textures/gothic_floor/q1metal7_99_broke_a"
+              },
+              {
+                "surface": 2161,
+                "z_vertices": [
+                  448.0,
+                  448.0,
+                  448.0
+                ],
+                "shader": "textures/wet/q1metal7_98a_wet"
+              }
+            ]
+          }
+        ]
+      },
+      "authored_teleport_target_links": [
+        {
+          "source": 32,
+          "target_entity": 33,
+          "kind": "teleport",
+          "from": [
+            -256.0,
+            904.0,
+            68.0
+          ],
+          "to": [
+            256.0,
+            1152.0,
+            472.0
+          ],
+          "target_class": "misc_teleporter_dest",
+          "angle": "225",
+          "relation": "authored target key, not trajectory"
+        },
+        {
+          "source": 39,
+          "target_entity": 40,
+          "kind": "teleport",
+          "from": [
+            -955.9982299804688,
+            579.9963073730469,
+            68.0
+          ],
+          "to": [
+            -1728.0,
+            448.0,
+            472.0
+          ],
+          "target_class": "misc_teleporter_dest",
+          "angle": "360",
+          "relation": "authored target key, not trajectory"
+        },
+        {
+          "source": 60,
+          "target_entity": 61,
+          "kind": "teleport",
+          "from": [
+            -1740.0,
+            1152.0,
+            76.0
+          ],
+          "to": [
+            -1688.0,
+            960.0,
+            440.0
+          ],
+          "target_class": "misc_teleporter_dest",
+          "angle": "360",
+          "relation": "authored target key, not trajectory"
+        }
+      ],
+      "atlas_record": {
+        "project_relative_path": "out/ql-atlas/maps/furiousheights.json",
+        "sha256": "a5cb3d66de1105c09c67dd616e13155a271d4730e5b9156bed8b9817a8ac9461",
+        "bytes": 239882
+      },
+      "descriptive_surface_projection_box_coverage": 0.6674187749302888,
+      "authored_teleport_trigger_count": 3,
+      "inspected_supplied_levelshot": {
+        "path": "E:\\_SOURCE\\_ASSETS\\QL-preSteam\\furiousheights.pk3\\levelshots\\furiousheights.jpg",
+        "sha256": "3c837109f22bb213845224254c489a4de0ec0e7a9a8dc3a5e2ce85a81b9bb944",
+        "bytes": 105752
+      },
+      "levelshot_limit": "Supplied package artwork, not a new engine capture or verified runtime render of these BSP bytes"
+    },
+    {
+      "map": "toxicity",
+      "game": "ql",
+      "role": "six_map_atlas_reference",
+      "title": "Toxicity",
+      "authors_from_worldspawn": [
+        "Alexander Mader"
+      ],
+      "source": {
+        "path": "E:\\_SOURCE\\_ASSETS\\QL-preSteam\\toxicity.pk3\\maps\\toxicity.bsp",
+        "sha256": "2424bcc1fe40ec68936077acd1eba27ec80aa341d9f4fac366b14594a01c13cd",
+        "bytes": 3403212
+      },
+      "format": "IBSP47",
+      "revision_context": "QL-preSteam local directory snapshot; exact release date and current Steam equivalence unverified",
+      "authored_mode_properties_evaluated": false,
+      "capacity_label": null,
+      "capacity_reason": "No validated source capacity imported for this QL snapshot",
+      "focused_evidence": {
+        "map": "toxicity",
+        "path": "E:\\_SOURCE\\_ASSETS\\QL-preSteam\\toxicity.pk3\\maps\\toxicity.bsp",
+        "sha256": "2424bcc1fe40ec68936077acd1eba27ec80aa341d9f4fac366b14594a01c13cd",
+        "liquid_brushes": [
+          {
+            "brush": 2173,
+            "contents": 536870928,
+            "shader": "textures/common/slimecaulk",
+            "bounds": [
+              [
+                -408,
+                1880,
+                944
+              ],
+              [
+                -40,
+                2168,
+                1000
+              ]
+            ]
+          },
+          {
+            "brush": 2174,
+            "contents": 536870928,
+            "shader": "textures/common/slimecaulk",
+            "bounds": [
+              [
+                -1000,
+                1528,
+                920
+              ],
+              [
+                -872,
+                1752,
+                970
+              ]
+            ]
+          },
+          {
+            "brush": 2175,
+            "contents": 536870928,
+            "shader": "textures/liquids/acid",
+            "bounds": [
+              [
+                -1352,
+                1704,
+                920
+              ],
+              [
+                -1016,
+                1992,
+                970
+              ]
+            ]
+          },
+          {
+            "brush": 2194,
+            "contents": 536870944,
+            "shader": "textures/common/watercaulk",
+            "bounds": [
+              [
+                -1080,
+                808,
+                832
+              ],
+              [
+                -232,
+                1208,
+                986
+              ]
+            ]
+          }
+        ]
+      },
+      "authored_teleport_target_links": [
+        {
+          "source": 3,
+          "target_entity": 12,
+          "kind": "teleport",
+          "from": [
+            80.0,
+            1778.0,
+            1104.0
+          ],
+          "to": [
+            64.0,
+            1136.0,
+            1208.0
+          ],
+          "target_class": "misc_teleporter_dest",
+          "angle": "90",
+          "relation": "authored target key, not trajectory"
+        },
+        {
+          "source": 11,
+          "target_entity": 4,
+          "kind": "teleport",
+          "from": [
+            -824.0,
+            912.0,
+            1064.0
+          ],
+          "to": [
+            -1176.0,
+            1144.0,
+            1176.0
+          ],
+          "target_class": "misc_teleporter_dest",
+          "angle": "360",
+          "relation": "authored target key, not trajectory"
+        }
+      ],
+      "atlas_record": {
+        "project_relative_path": "out/ql-atlas/maps/toxicity.json",
+        "sha256": "9dcfd0918a3d5b52c5ae8a52c123aa9adb1626f3051a20602f296960f6435273",
+        "bytes": 211425
+      },
+      "descriptive_surface_projection_box_coverage": 0.7315451851305489,
+      "authored_teleport_trigger_count": 2
+    },
+    {
+      "map": "lostworld",
+      "game": "ql",
+      "role": "six_map_atlas_reference",
+      "title": "Lost World",
+      "authors_from_worldspawn": [],
+      "source": {
+        "path": "E:\\_SOURCE\\_ASSETS\\QL-preSteam\\lostworld.pk3\\maps\\lostworld.bsp",
+        "sha256": "ecc66faf12e5c74991f6fcec27062aa5b3fe1dbdcbbe87812b9de9b7dfc1534c",
+        "bytes": 2547564
+      },
+      "format": "IBSP47",
+      "revision_context": "QL-preSteam local directory snapshot; exact release date and current Steam equivalence unverified",
+      "authored_mode_properties_evaluated": false,
+      "capacity_label": null,
+      "capacity_reason": "No validated source capacity imported for this QL snapshot",
+      "focused_evidence": {
+        "map": "lostworld",
+        "path": "E:\\_SOURCE\\_ASSETS\\QL-preSteam\\lostworld.pk3\\maps\\lostworld.bsp",
+        "sha256": "ecc66faf12e5c74991f6fcec27062aa5b3fe1dbdcbbe87812b9de9b7dfc1534c",
+        "liquid_brushes": [
+          {
+            "brush": 1572,
+            "contents": 536870920,
+            "shader": "textures/common/lavacaulk",
+            "bounds": [
+              [
+                250,
+                -29,
+                -328
+              ],
+              [
+                256,
+                0,
+                -156
+              ]
+            ]
+          },
+          {
+            "brush": 1658,
+            "contents": 536870920,
+            "shader": "textures/common/lavacaulk",
+            "bounds": [
+              [
+                -75,
+                -40,
+                -328
+              ],
+              [
+                128,
+                99,
+                -156
+              ]
+            ]
+          },
+          {
+            "brush": 1659,
+            "contents": 536870920,
+            "shader": "textures/common/lavacaulk",
+            "bounds": [
+              [
+                128,
+                -40,
+                -328
+              ],
+              [
+                156,
+                0,
+                -156
+              ]
+            ]
+          },
+          {
+            "brush": 1660,
+            "contents": 536870920,
+            "shader": "textures/common/lavacaulk",
+            "bounds": [
+              [
+                128,
+                81,
+                -328
+              ],
+              [
+                173,
+                99,
+                -156
+              ]
+            ]
+          },
+          {
+            "brush": 1661,
+            "contents": 536870920,
+            "shader": "textures/common/lavacaulk",
+            "bounds": [
+              [
+                128,
+                39,
+                -328
+              ],
+              [
+                163,
+                81,
+                -156
+              ]
+            ]
+          },
+          {
+            "brush": 1662,
+            "contents": 536870920,
+            "shader": "textures/common/lavacaulk",
+            "bounds": [
+              [
+                210,
+                -40,
+                -328
+              ],
+              [
+                250,
+                0,
+                -156
+              ]
+            ]
+          },
+          {
+            "brush": 1663,
+            "contents": 536870920,
+            "shader": "textures/common/lavacaulk",
+            "bounds": [
+              [
+                470,
+                -228,
+                -328
+              ],
+              [
+                660,
+                -112,
+                -156
+              ]
+            ]
+          },
+          {
+            "brush": 1673,
+            "contents": 536870920,
+            "shader": "textures/common/lavacaulk",
+            "bounds": [
+              [
+                708,
+                836,
+                117
+              ],
+              [
+                892,
+                956,
+                121
+              ]
+            ]
+          },
+          {
+            "brush": 1694,
+            "contents": 536870920,
+            "shader": "textures/liquids/lavahellflat_400",
+            "bounds": [
+              [
+                641,
+                -228,
+                -328
+              ],
+              [
+                664,
+                -217,
+                -156
+              ]
+            ]
+          },
+          {
+            "brush": 1695,
+            "contents": 536870920,
+            "shader": "textures/common/lavacaulk",
+            "bounds": [
+              [
+                385,
+                -228,
+                -328
+              ],
+              [
+                470,
+                -217,
+                -156
+              ]
+            ]
+          },
+          {
+            "brush": 1696,
+            "contents": 536870920,
+            "shader": "textures/common/lavacaulk",
+            "bounds": [
+              [
+                250,
+                -228,
+                -328
+              ],
+              [
+                341,
+                -157,
+                -156
+              ]
+            ]
+          },
+          {
+            "brush": 1697,
+            "contents": 536870920,
+            "shader": "textures/common/lavacaulk",
+            "bounds": [
+              [
+                250,
+                -157,
+                -328
+              ],
+              [
+                309,
+                -100,
+                -156
+              ]
+            ]
+          },
+          {
+            "brush": 1698,
+            "contents": 536870920,
+            "shader": "textures/common/lavacaulk",
+            "bounds": [
+              [
+                250,
+                -100,
+                -328
+              ],
+              [
+                341,
+                -59,
+                -156
+              ]
+            ]
+          },
+          {
+            "brush": 1699,
+            "contents": 536870920,
+            "shader": "textures/common/lavacaulk",
+            "bounds": [
+              [
+                250,
+                -59,
+                -328
+              ],
+              [
+                360,
+                -29,
+                -156
+              ]
+            ]
+          },
+          {
+            "brush": 1700,
+            "contents": 536870920,
+            "shader": "textures/common/lavacaulk",
+            "bounds": [
+              [
+                256,
+                -29,
+                -328
+              ],
+              [
+                309,
+                39,
+                -156
+              ]
+            ]
+          },
+          {
+            "brush": 1701,
+            "contents": 536870920,
+            "shader": "textures/common/lavacaulk",
+            "bounds": [
+              [
+                0,
+                99,
+                -328
+              ],
+              [
+                54,
+                129,
+                -156
+              ]
+            ]
+          },
+          {
+            "brush": 1702,
+            "contents": 536870920,
+            "shader": "textures/common/lavacaulk",
+            "bounds": [
+              [
+                -75,
+                99,
+                -328
+              ],
+              [
+                0,
+                156,
+                -156
+              ]
+            ]
+          },
+          {
+            "brush": 1703,
+            "contents": 536870920,
+            "shader": "textures/common/lavacaulk",
+            "bounds": [
+              [
+                -75,
+                156,
+                -328
+              ],
+              [
+                -43,
+                227,
+                -156
+              ]
+            ]
+          },
+          {
+            "brush": 1704,
+            "contents": 536870920,
+            "shader": "textures/common/lavacaulk",
+            "bounds": [
+              [
+                -75,
+                -228,
+                -328
+              ],
+              [
+                250,
+                -40,
+                -156
+              ]
+            ]
+          },
+          {
+            "brush": 1705,
+            "contents": 536870920,
+            "shader": "textures/common/lavacaulk",
+            "bounds": [
+              [
+                -256,
+                -228,
+                -176
+              ],
+              [
+                -75,
+                227,
+                -156
+              ]
+            ]
+          },
+          {
+            "brush": 1706,
+            "contents": 536870920,
+            "shader": "textures/common/lavacaulk",
+            "bounds": [
+              [
+                -256,
+                -524,
+                -168
+              ],
+              [
+                704,
+                -228,
+                -156
+              ]
+            ]
+          }
+        ]
+      },
+      "authored_teleport_target_links": [
+        {
+          "source": 67,
+          "target_entity": 81,
+          "kind": "teleport",
+          "from": [
+            508.0,
+            315.0,
+            -88.0
+          ],
+          "to": [
+            404.0,
+            648.0,
+            220.0
+          ],
+          "target_class": "misc_teleporter_dest",
+          "angle": null,
+          "relation": "authored target key, not trajectory"
+        }
+      ],
+      "atlas_record": {
+        "project_relative_path": "out/ql-atlas/maps/lostworld.json",
+        "sha256": "f3080588c86dbb2e04dfce9f4b1ae61c744e0a240767692419fef436490bbf20",
+        "bytes": 202082
+      },
+      "descriptive_surface_projection_box_coverage": 0.630477953930134,
+      "authored_teleport_trigger_count": 1,
+      "inspected_supplied_levelshot": {
+        "path": "E:\\_SOURCE\\_ASSETS\\QL-preSteam\\lostworld.pk3\\levelshots\\lostworld.jpg",
+        "sha256": "8f94c45399db53ff1d7ae0110dcf6512dce5fa47cd8fdbb8e0be7f1ccd76bc98",
+        "bytes": 301428
+      },
+      "levelshot_limit": "Supplied package artwork, not a new engine capture or verified runtime render of these BSP bytes"
+    },
+    {
+      "map": "deepinside",
+      "game": "ql",
+      "role": "supplementary_water_comparison",
+      "title": "Deep Inside",
+      "authors_from_worldspawn": [
+        "J. Scott Drader"
+      ],
+      "source": {
+        "path": "E:\\_SOURCE\\_ASSETS\\QL-preSteam\\deepinside.pk3\\maps\\deepinside.bsp",
+        "sha256": "c5793ec642605e306cd4c1a96f4ab6abb3cedaa4d953638e651bc2e5682eb3e6",
+        "bytes": 3407044
+      },
+      "format": "IBSP47",
+      "revision_context": "QL-preSteam local directory snapshot; exact release date and current Steam equivalence unverified",
+      "authored_mode_properties_evaluated": false,
+      "capacity_label": null,
+      "capacity_reason": "No validated source capacity imported for this QL snapshot",
+      "focused_evidence": {
+        "map": "deepinside",
+        "path": "E:\\_SOURCE\\_ASSETS\\QL-preSteam\\deepinside.pk3\\maps\\deepinside.bsp",
+        "sha256": "c5793ec642605e306cd4c1a96f4ab6abb3cedaa4d953638e651bc2e5682eb3e6",
+        "liquid_brushes": [
+          {
+            "brush": 2475,
+            "contents": 536870944,
+            "shader": "textures/liquids/clear_ripple2",
+            "bounds": [
+              [
+                -624,
+                -160,
+                -96
+              ],
+              [
+                32,
+                96,
+                -76
+              ]
+            ]
+          },
+          {
+            "brush": 2483,
+            "contents": 536870944,
+            "shader": "textures/liquids/clear_ripple2",
+            "bounds": [
+              [
+                672,
+                -1184,
+                -256
+              ],
+              [
+                1056,
+                -480,
+                -212
+              ]
+            ]
+          }
+        ],
+        "point_stacks": [
+          {
+            "xy": [
+              864,
+              -864
+            ],
+            "upward_surface_hits": [
+              {
+                "surface": 80,
+                "z_vertices": [
+                  -256.0,
+                  -256.0,
+                  -256.0
+                ],
+                "shader": "textures/stone/pjrock17"
+              },
+              {
+                "surface": 620,
+                "z_vertices": [
+                  -134.0,
+                  -134.0,
+                  -134.0
+                ],
+                "shader": "textures/base_support/flat1_1"
+              },
+              {
+                "surface": 620,
+                "z_vertices": [
+                  -134.0,
+                  -134.0,
+                  -134.0
+                ],
+                "shader": "textures/base_support/flat1_1"
+              },
+              {
+                "surface": 1740,
+                "z_vertices": [
+                  -104.0,
+                  -104.0,
+                  -104.0
+                ],
+                "shader": "textures/sfx/xfinalfog"
+              },
+              {
+                "surface": 1985,
+                "z_vertices": [
+                  -212.0,
+                  -212.0,
+                  -212.0
+                ],
+                "shader": "textures/liquids/clear_ripple2"
+              },
+              {
+                "surface": 2522,
+                "z_vertices": [
+                  -130.0,
+                  -130.0,
+                  -130.0
+                ],
+                "shader": "textures/base_floor/floor3_3dark_ow"
+              },
+              {
+                "surface": 2522,
+                "z_vertices": [
+                  -130.0,
+                  -130.0,
+                  -130.0
+                ],
+                "shader": "textures/base_floor/floor3_3dark_ow"
+              },
+              {
+                "surface": 2698,
+                "z_vertices": [
+                  848.0,
+                  848.0,
+                  848.0
+                ],
+                "shader": "textures/base_floor/concretefloor1"
+              },
+              {
+                "surface": 2737,
+                "z_vertices": [
+                  744.0,
+                  816.0,
+                  744.0
+                ],
+                "shader": "textures/base_floor/concretefloor1"
+              }
+            ]
+          },
+          {
+            "xy": [
+              -304,
+              -32
+            ],
+            "upward_surface_hits": [
+              {
+                "surface": 81,
+                "z_vertices": [
+                  -96.0,
+                  -96.0,
+                  -96.0
+                ],
+                "shader": "textures/stone/pjrock17"
+              },
+              {
+                "surface": 1986,
+                "z_vertices": [
+                  -76.0,
+                  -76.0,
+                  -76.0
+                ],
+                "shader": "textures/liquids/clear_ripple2"
+              },
+              {
+                "surface": 3195,
+                "z_vertices": [
+                  720.0,
+                  647.25,
+                  720.0
+                ],
+                "shader": "textures/base_floor/concretefloor1"
+              }
+            ]
+          }
+        ]
+      },
+      "authored_teleport_target_links": [
+        {
+          "source": 20,
+          "target_entity": 90,
+          "kind": "teleport",
+          "from": [
+            864.0,
+            -520.0,
+            -65.0
+          ],
+          "to": [
+            1456.0,
+            -952.0,
+            184.0
+          ],
+          "target_class": "misc_teleporter_dest",
+          "angle": "90",
+          "relation": "authored target key, not trajectory"
+        }
+      ],
+      "inspected_supplied_levelshot": {
+        "path": "E:\\_SOURCE\\_ASSETS\\QL-preSteam\\deepinside.pk3\\levelshots\\deepinside.jpg",
+        "sha256": "f80bb8915ff9c956274a5bf53aaf5fc273b4b607c61d349c297b85417881b7fe",
+        "bytes": 241601
+      },
+      "levelshot_limit": "Supplied package artwork, not a new engine capture or verified runtime render of these BSP bytes"
+    },
+    {
+      "map": "auh2dm1",
+      "game": "q2",
+      "title": "Hell Orphanage",
+      "authors": [
+        "Toni 'Auhsan' Jaume"
+      ],
+      "source": {
+        "path": "E:\\Development\\q2maparchive-wip\\maps\\auh2dm1\\pack\\maps\\auh2dm1.bsp",
+        "sha256": "fd2f12be1b7c4c4d4203bc4159c57622583b4cd773e04db06b2933e2b76c9f79",
+        "bytes": 779520
+      },
+      "format": "IBSP38",
+      "partition": "reference",
+      "split_group": "bb5cab7c768c027d",
+      "source_evidence": [
+        {
+          "kind": "metadata",
+          "path": "E:\\Development\\q2maparchive-wip\\maps\\auh2dm1\\pack\\maps\\ref\\auh2dm1.ref",
+          "sha256": "0822874c051074867c05b9323c63e4a84d98fb268327e8b92f22253056ce3a96",
+          "bytes": 360,
+          "verified_against_existing_manifest": true
+        },
+        {
+          "kind": "readme",
+          "path": "E:\\Development\\q2maparchive-wip\\maps\\auh2dm1\\pack\\docs\\auh2dm1-readme.txt",
+          "sha256": "e6f95e2f5a67682d07e1d88314b4781d4df94523b1eca44bbe097e913520452a",
+          "bytes": 1698,
+          "verified_against_existing_manifest": true
+        }
+      ],
+      "archive_capacity_label": [
+        3,
+        5
+      ],
+      "author_capacity_label": [
+        2,
+        5
+      ],
+      "capacity_conflict": "Preserved, not resolved or promoted into profile labels",
+      "author_limit": "Interior stair bug mentioned, not reproduced",
+      "focused_evidence": {
+        "map": "auh2dm1",
+        "path": "E:\\Development\\q2maparchive-wip\\maps\\auh2dm1\\pack\\maps\\auh2dm1.bsp",
+        "sha256": "fd2f12be1b7c4c4d4203bc4159c57622583b4cd773e04db06b2933e2b76c9f79",
+        "world_player_solids": 589,
+        "mask": 33619971,
+        "floor_z": -128,
+        "hull_dimensions": [
+          32,
+          32,
+          56
+        ],
+        "collision_epsilon": 0,
+        "routes": {
+          "west": {
+            "waypoints": [
+              {
+                "xy": [
+                  -528,
+                  -192
+                ],
+                "standing_origin": [
+                  -528,
+                  -192,
+                  -104
+                ],
+                "support_brush": 286,
+                "support_z": -128,
+                "full_bottom_footprint_on_support": true,
+                "blocked_by": []
+              },
+              {
+                "xy": [
+                  -592,
+                  -192
+                ],
+                "standing_origin": [
+                  -592,
+                  -192,
+                  -104
+                ],
+                "support_brush": 286,
+                "support_z": -128,
+                "full_bottom_footprint_on_support": true,
+                "blocked_by": []
+              },
+              {
+                "xy": [
+                  -592,
+                  -64
+                ],
+                "standing_origin": [
+                  -592,
+                  -64,
+                  -104
+                ],
+                "support_brush": 286,
+                "support_z": -128,
+                "full_bottom_footprint_on_support": true,
+                "blocked_by": []
+              },
+              {
+                "xy": [
+                  -528,
+                  -64
+                ],
+                "standing_origin": [
+                  -528,
+                  -64,
+                  -104
+                ],
+                "support_brush": 286,
+                "support_z": -128,
+                "full_bottom_footprint_on_support": true,
+                "blocked_by": []
+              }
+            ],
+            "segments": [
+              {
+                "from": [
+                  -528,
+                  -192
+                ],
+                "to": [
+                  -592,
+                  -192
+                ],
+                "blocked_by": []
+              },
+              {
+                "from": [
+                  -592,
+                  -192
+                ],
+                "to": [
+                  -592,
+                  -64
+                ],
+                "blocked_by": []
+              },
+              {
+                "from": [
+                  -592,
+                  -64
+                ],
+                "to": [
+                  -528,
+                  -64
+                ],
+                "blocked_by": []
+              }
+            ],
+            "plan_length": 256,
+            "support_certificate": "One convex horizontal support brush286 covers endpoint hull footprints; its convexity covers interpolated contact for each flat axis-aligned segment."
+          },
+          "east": {
+            "waypoints": [
+              {
+                "xy": [
+                  -528,
+                  -192
+                ],
+                "standing_origin": [
+                  -528,
+                  -192,
+                  -104
+                ],
+                "support_brush": 286,
+                "support_z": -128,
+                "full_bottom_footprint_on_support": true,
+                "blocked_by": []
+              },
+              {
+                "xy": [
+                  -448,
+                  -192
+                ],
+                "standing_origin": [
+                  -448,
+                  -192,
+                  -104
+                ],
+                "support_brush": 286,
+                "support_z": -128,
+                "full_bottom_footprint_on_support": true,
+                "blocked_by": []
+              },
+              {
+                "xy": [
+                  -448,
+                  -64
+                ],
+                "standing_origin": [
+                  -448,
+                  -64,
+                  -104
+                ],
+                "support_brush": 286,
+                "support_z": -128,
+                "full_bottom_footprint_on_support": true,
+                "blocked_by": []
+              },
+              {
+                "xy": [
+                  -528,
+                  -64
+                ],
+                "standing_origin": [
+                  -528,
+                  -64,
+                  -104
+                ],
+                "support_brush": 286,
+                "support_z": -128,
+                "full_bottom_footprint_on_support": true,
+                "blocked_by": []
+              }
+            ],
+            "segments": [
+              {
+                "from": [
+                  -528,
+                  -192
+                ],
+                "to": [
+                  -448,
+                  -192
+                ],
+                "blocked_by": []
+              },
+              {
+                "from": [
+                  -448,
+                  -192
+                ],
+                "to": [
+                  -448,
+                  -64
+                ],
+                "blocked_by": []
+              },
+              {
+                "from": [
+                  -448,
+                  -64
+                ],
+                "to": [
+                  -528,
+                  -64
+                ],
+                "blocked_by": []
+              }
+            ],
+            "plan_length": 288,
+            "support_certificate": "One convex horizontal support brush286 covers endpoint hull footprints; its convexity covers interpolated contact for each flat axis-aligned segment."
+          }
+        },
+        "direct_blocking_brushes": [
+          207
+        ],
+        "eye_ray": {
+          "start": [
+            -528,
+            -192,
+            -82
+          ],
+          "end": [
+            -528,
+            -64,
+            -82
+          ],
+          "trace": 0.25
+        },
+        "selected_brush_bounds": {
+          "208": [
+            [
+              -560,
+              -160,
+              -64
+            ],
+            [
+              -496,
+              -96,
+              0
+            ]
+          ],
+          "286": [
+            [
+              -656,
+              -512,
+              -160
+            ],
+            [
+              704,
+              272,
+              -128
+            ]
+          ],
+          "207": [
+            [
+              -544,
+              -160,
+              -128
+            ],
+            [
+              -480,
+              -96,
+              -64
+            ]
+          ]
+        },
+        "crate_surface_2618": {
+          "id": 2618,
+          "points": [
+            [
+              -496.0,
+              -160.0,
+              0.0
+            ],
+            [
+              -560.0,
+              -160.0,
+              0.0
+            ],
+            [
+              -560.0,
+              -96.0,
+              0.0
+            ],
+            [
+              -496.0,
+              -96.0,
+              0.0
+            ]
+          ],
+          "area": 4096.0,
+          "normal": [
+            0.0,
+            0.0,
+            1.0
+          ],
+          "center": [
+            -528.0,
+            -128.0,
+            0.0
+          ],
+          "texture": "e1u3/wbox3_4",
+          "flags": 0
+        },
+        "dynamic_entity_classes": [],
+        "authored_teleporter_pads": [
+          {
+            "entity": 77,
+            "properties": {
+              "origin": "460 1160 -280",
+              "target": "quad",
+              "classname": "misc_teleporter"
+            },
+            "original_q2_contract_bounds": [
+              [
+                428.0,
+                1128.0,
+                -304.0
+              ],
+              [
+                492.0,
+                1192.0,
+                -296.0
+              ]
+            ],
+            "outside_local_route_bounds": true
+          },
+          {
+            "entity": 78,
+            "properties": {
+              "origin": "-592 -448 24",
+              "targetname": "quad",
+              "classname": "misc_teleporter_dest"
+            },
+            "original_q2_contract_bounds": [
+              [
+                -624.0,
+                -480.0,
+                0.0
+              ],
+              [
+                -560.0,
+                -416.0,
+                8.0
+              ]
+            ],
+            "outside_local_route_bounds": true
+          }
+        ]
+      }
+    },
+    {
+      "map": "gladdm1",
+      "game": "q2",
+      "title": "Violent & Funky",
+      "authors": [
+        "Todd 'Mr.CleaN' Rose"
+      ],
+      "source": {
+        "path": "E:\\Development\\q2maparchive-wip\\maps\\gladdm1\\pack\\maps\\gladdm1.bsp",
+        "sha256": "6f6af2acdd5108b3dea18ae181358dc81708b6540aab5a0a6417f3c98a4feec1",
+        "bytes": 348048
+      },
+      "format": "IBSP38",
+      "partition": "reference",
+      "split_group": "1e97e74979f0d55d",
+      "source_evidence": [
+        {
+          "kind": "metadata",
+          "path": "E:\\Development\\q2maparchive-wip\\maps\\gladdm1\\pack\\maps\\ref\\gladdm1.ref",
+          "sha256": "4a56db22f1dc9071f4b6f206388602ff922b9556b99da6c218152b4ddeded6fa",
+          "bytes": 386,
+          "verified_against_existing_manifest": true
+        },
+        {
+          "kind": "readme",
+          "path": "E:\\Development\\q2maparchive-wip\\maps\\gladdm1\\pack\\docs\\gladdm1-readme.txt",
+          "sha256": "0ff597213699003fa8ba1b862748bde0aecda5961e5ab34940dc5a4193d2d01b",
+          "bytes": 2207,
+          "verified_against_existing_manifest": true
+        }
+      ],
+      "archive_capacity_label": [
+        2,
+        5
+      ],
+      "author_capacity_label": [
+        2,
+        4
+      ],
+      "capacity_conflict": "Preserved, not resolved or promoted into profile labels",
+      "author_limit": "Author prefers duel; earlier ordinary return study applies only to its specified route",
+      "focused_evidence": {
+        "map": "gladdm1",
+        "path": "E:\\Development\\q2maparchive-wip\\maps\\gladdm1\\pack\\maps\\gladdm1.bsp",
+        "sha256": "6f6af2acdd5108b3dea18ae181358dc81708b6540aab5a0a6417f3c98a4feec1",
+        "brush": 64,
+        "contents": 32,
+        "bounds": [
+          [
+            -64,
+            0,
+            -320
+          ],
+          [
+            704,
+            1024,
+            -136
+          ]
+        ],
+        "mega_entity": {
+          "origin": "320 512 -240",
+          "classname": "item_health_mega"
+        },
+        "limits": "Water volume and item origin only; no swim route or exit certified. Earlier drop-return route is in a different height region."
+      }
+    }
+  ],
+  "q2_behavior_sources": [
+    {
+      "path": "E:\\_SOURCE\\_CODE\\Quake-2-master\\qcommon\\pmove.c",
+      "sha256": "8861daaeff7efd7bc6d3c5e65ef99801567f3e06eb14020787206d39dd0038a8",
+      "bytes": 27381,
+      "contracts": [
+        {
+          "function": "PM_Friction",
+          "lines": [
+            345,
+            376
+          ],
+          "contract": "Water friction scales with waterlevel."
+        },
+        {
+          "function": "PM_AddCurrents",
+          "lines": [
+            438,
+            525
+          ],
+          "contract": "Water and conveyor currents alter wish velocity; grounded shallow-water current scaling is separate."
+        },
+        {
+          "function": "PM_WaterMove",
+          "lines": [
+            533,
+            565
+          ],
+          "contract": "Clamp wishspeed then halve it; use water acceleration and step-slide movement."
+        },
+        {
+          "function": "PM_CategorizePosition",
+          "lines": [
+            743,
+            768
+          ],
+          "contract": "Standing water samples derive to foot+1,+23,+46 from viewheight22 and minsZ-24; crouched samples+1,+11,+22."
+        },
+        {
+          "function": "PM_CheckJump / PM_CheckSpecialMovement",
+          "lines": [
+            798,
+            878
+          ],
+          "contract": "Swimming at waterlevel>=2; special waterjump has two forward point checks, not a general lip guarantee."
+        },
+        {
+          "function": "PM_CheckDuck",
+          "lines": [
+            976,
+            1025
+          ],
+          "contract": "Standing hull mins(-16,-16,-24), maxs(16,16,32), viewheight22. Duck maxZ4/viewheight-2."
+        },
+        {
+          "function": "PM_StepSlideMove and ground categorization",
+          "lines": [
+            191,
+            341,
+            682,
+            710
+          ],
+          "contract": "18-unit step attempt and normalZ0.7 grounding threshold; neither alone certifies an authored route."
+        }
+      ],
+      "interpretation_limit": "Original local Q2 source snapshot, not active module/runtime validation"
+    },
+    {
+      "path": "E:\\_SOURCE\\_CODE\\Quake-2-master\\game\\p_view.c",
+      "sha256": "915358415b8088552f7ace5d0a822f122d99b4fe2b9fdb553b9aca460712efcf",
+      "bytes": 26675,
+      "contracts": [
+        {
+          "function": "P_FallingDamage",
+          "lines": [
+            491,
+            575
+          ],
+          "contract": "Velocity/state/immersion-dependent damage; no safe height inferred."
+        },
+        {
+          "function": "P_WorldEffects",
+          "lines": [
+            578,
+            738
+          ],
+          "contract": "Liquid transition sounds, air/drowning state, immersion-dependent slime/lava damage; no universal DPS or swim-time claim."
+        }
+      ],
+      "interpretation_limit": "Original local Q2 source snapshot, not active module/runtime validation"
+    },
+    {
+      "path": "E:\\_SOURCE\\_CODE\\Quake-2-master\\game\\g_misc.c",
+      "sha256": "d39e96f6e8793ea768c56df820edcd987d90c9f43b7c3c7037e6ed7cd92413ee",
+      "bytes": 45231,
+      "contracts": [
+        {
+          "function": "teleporter_touch",
+          "lines": [
+            1783,
+            1825
+          ],
+          "contract": "Destination origin+10Z, cleared velocity, hold flag/timer, destination facing, KillBox."
+        },
+        {
+          "function": "SP_misc_teleporter / SP_misc_teleporter_dest",
+          "lines": [
+            1830,
+            1880
+          ],
+          "contract": "64x64x8 solid pads, source trigger16x16x16; derived pad bounds checked disjoint from local crate route."
+        }
+      ],
+      "interpretation_limit": "Original local Q2 source snapshot, not active module/runtime validation"
+    },
+    {
+      "path": "E:\\_SOURCE\\_CODE\\Quake-2-master\\game\\g_utils.c",
+      "sha256": "441b5eeb751763171e507e262cf4a8d525db72c5d98a271edd591f0a6dbb6f22",
+      "bytes": 11074,
+      "contracts": [
+        {
+          "function": "KillBox",
+          "lines": [
+            549,
+            580
+          ],
+          "contract": "Attempts to remove overlapping occupants with telefrag damage; occupied exit is not automatically safe."
+        }
+      ],
+      "interpretation_limit": "Original local Q2 source snapshot, not active module/runtime validation"
+    },
+    {
+      "path": "E:\\_SOURCE\\_CODE\\Quake-2-master\\game\\q_shared.h",
+      "sha256": "c552978e0efed7d7f2daf3cef50af5b7b248555021e93a3347cc73d46d25389c",
+      "bytes": 34549,
+      "contracts": [
+        {
+          "definitions": "CONTENTS and MASK_WATER",
+          "lines": [
+            339,
+            392
+          ],
+          "contract": "Lava8, slime16, water32; player-blocking mask used by static Q2 analysis is recorded separately."
+        }
+      ],
+      "interpretation_limit": "Original local Q2 source snapshot, not active module/runtime validation"
+    }
+  ],
+  "methods": [
+    "Read exact local BSP/entity/model-zero draw-surface and compiled brush-plane evidence, preserving source hashes and revision identities.",
+    "QL draw-surface sections and sampled patches describe projected form only. No QL player hull or native path is certified.",
+    "Q2 auh2dm1 local routes use exact stored-plane convex solids, zero collision epsilon, all589 model-zero player blockers,32x32x56 standing hull, full endpoint support-footprint membership, and continuous swept clearance.",
+    "Q2 support brush286 is convex and horizontal at feetZ-128; endpoint full-footprint containment proves continuous flat contact along the six checked segments.",
+    "Liquid brush bounds use exact plane intersections; a brush extent is not a measured swimming depth or exit proof.",
+    "Use source-authored item origins and direct target relations. Do not interpret mode filters, infer runtime settled origins, or turn trigger-box centers into contact points.",
+    "Inspect analytical plans and supplied package artwork; no native game, input automation, OS screenshot, asset transfer or geometry reuse."
+  ],
+  "reusable_patterns": [
+    {
+      "id": "partial_upper_route",
+      "evidence": [
+        "furiousheights",
+        "campgrounds"
+      ],
+      "hypothesis": "Partial upper paths create meaningful shared encounters while retaining distinct lower circulation.",
+      "contract": "Support and sweep the whole usable walkway/underpass; give each upper route a destination and cost.",
+      "ablation": "Remove only one upper path; compare route choice and resource control."
+    },
+    {
+      "id": "deliberate_void",
+      "evidence": [
+        "campgrounds",
+        "lostworld"
+      ],
+      "hypothesis": "An atrium/court can organize cross-level visibility and separate routes within a compact footprint.",
+      "contract": "Label its intended view/approach separation; do not count it as dead exterior by projection alone.",
+      "ablation": "Fill only one selected void; compare visibility/control and movement."
+    },
+    {
+      "id": "horseshoe_form",
+      "evidence": [
+        "bloodrun surface1095/1353/1354"
+      ],
+      "hypothesis": "Joined rear and separated arms produce different approaches around an inset.",
+      "contract": "Author true concave room topology as convex pieces; certify ordinary turns and each arm.",
+      "ablation": "Fill only the inset; keep items and doorways fixed."
+    },
+    {
+      "id": "barrier_detours",
+      "evidence": [
+        "auh2dm1 brushes207/208/286"
+      ],
+      "hypothesis": "An obstacle with unequal supported bypasses can create local pursuit/escape decisions.",
+      "measured_local_result": {
+        "west_plan_length": 256,
+        "east_plan_length": 288,
+        "direct_plan_length": 128,
+        "poses": 8,
+        "swept_segments": 6,
+        "fixed_eye_ray_blocked": true
+      },
+      "contract": "Validate both sides with hull and support; treat optional top access separately.",
+      "ablation": "Remove only this barrier; measure route selection and exposure."
+    },
+    {
+      "id": "optional_liquid",
+      "evidence": [
+        "deepinside brushes2475/2483",
+        "furiousheights water brushes",
+        "toxicity water/slime distinction",
+        "gladdm1 brush64"
+      ],
+      "hypothesis": "A liquid lane adds a state/sound/commitment choice if exits and a dry alternative are explicit.",
+      "contract": "Bind actual contents/depth to support and Q2 immersion state; prove exits separately.",
+      "ablation": "Drain only the lane while retaining its bed and all other geometry."
+    },
+    {
+      "id": "teleport_shortcut",
+      "evidence": [
+        "bloodrun entity37->38 /46->45",
+        "aerowalk authored links",
+        "Q2 teleporter_touch"
+      ],
+      "hypothesis": "A shortcut trades path cost for an exposed, oriented arrival and lost momentum under stock Q2.",
+      "contract": "Ordinary graph still works when link disabled; validate real arrival/occupancy/escape.",
+      "ablation": "Disable only the teleporter; compare actual journey and post-arrival outcomes."
+    },
+    {
+      "id": "compact_interleaving",
+      "evidence": [
+        "six_map_atlas_surface_sections"
+      ],
+      "hypothesis": "Nearby volumes with selective floor overlap can shorten useful circulation without removing courts or tactical separation.",
+      "contract": "Report rendered-surface coverage separately from authored envelope use and certified reachable floor area.",
+      "ablation": "Shorten only one exterior connector while preserving doorway angles and resources."
+    }
+  ],
+  "candidate_q2_dimensions": {
+    "standing_hull": [
+      32,
+      32,
+      56
+    ],
+    "step_limit": 18,
+    "walkway_width_candidates": [
+      144,
+      160
+    ],
+    "partial_upper_floor_candidate": 128,
+    "candidate_liquid_depth": 24,
+    "classification": "Project design choices constrained by source behavior; not learned QL quality bands"
+  },
+  "coverage_metric": {
+    "definition": "XY union of selected upward rendered surfaces divided by their own XY bounding rectangle",
+    "observed_six_map_range": [
+      0.49204049841175,
+      0.7315451851305489
+    ],
+    "not": [
+      "playable density",
+      "exterior dead space fraction",
+      "quality ranking",
+      "directly comparable to an authored Q2 room-envelope ratio"
+    ]
+  },
+  "expert_guidance": [
+    {
+      "url": "https://robotrenegade.com/articles/multiplayer-level-design-guide.html",
+      "title": "Multiplayer Level Design Guide",
+      "author": "Patrick (pjw) Williams",
+      "publication_date": "2000-12-05",
+      "accessed": "2026-09-13",
+      "use": "Multiple approaches, item distribution, deliberate dead ends, teleporters cannot replace sound basic layout. Expert guidance; no imported quality score or code."
+    },
+    {
+      "url": "https://book.leveldesignbook.com/process/layout/flow",
+      "title": "Flow",
+      "accessed": "2026-09-13",
+      "use": "Flow concerns requested player movement and requires blockout/playtesting. Expert design guidance."
+    }
+  ],
+  "preserved_limits": [
+    "QL snapshot release date/current revision and capacity unverified; authored item variants are not all simultaneously active.",
+    "Hell Orphanage archive3-5 versus author2-5; author-reported interior stair bug not reproduced.",
+    "Violent & Funky archive2-5 versus author2-4; previous local drop-return evidence is not a water return proof.",
+    "No QL or Q2 water exit, native swimming velocity/damage, teleport occupancy or human balance result claimed by this study.",
+    "No reference geometry/assets/source implementation copied into generation, no trained weights, no profile/split/global-rule edits."
+  ],
+  "new_example_context": {
+    "name": "Fold",
+    "status": "Design context only; final generated outcomes belong to its own artifacts"
+  },
+  "runtime": {
+    "python": "3.11.3",
+    "pillow": "11.3.0",
+    "shapely": "2.1.2"
+  },
+  "artifacts": [
+    {
+      "project_relative_path": "out/mp-spatial-patterns/aerowalk-plans.png",
+      "sha256": "fd2715691715ec7126f64efb2ee5fae02f40b1d7f8aa8a95acc561fc47f7b103",
+      "bytes": 74136
+    },
+    {
+      "project_relative_path": "out/mp-spatial-patterns/auh2dm1-crate-detours.png",
+      "sha256": "3d771838294e2239762141351d4cafd60ff5f2661c552fa15fe47fafb7beeda2",
+      "bytes": 51026
+    },
+    {
+      "project_relative_path": "out/mp-spatial-patterns/auh2dm1-plans.png",
+      "sha256": "a0fda652ab85b1c4c3c5b95c9fce0a37e20effeb846a8e31911238c3a99c23e2",
+      "bytes": 76875
+    },
+    {
+      "project_relative_path": "out/mp-spatial-patterns/bloodrun-plans.png",
+      "sha256": "80e0dc5698a6230e15f80a450269fbf5c3a2c75d54c8bb2c753486aab4550972",
+      "bytes": 73919
+    },
+    {
+      "project_relative_path": "out/mp-spatial-patterns/bloodrun-upper-horseshoe.png",
+      "sha256": "ee81f9ae3ff7adfdfe3debbb511818fe2608ce4f6e28eadf5ebd78e09bb26043",
+      "bytes": 44163
+    },
+    {
+      "project_relative_path": "out/mp-spatial-patterns/campgrounds-plans.png",
+      "sha256": "3f1974f7973bbd3ce3abfb8432dd296bd9e0ee129dda7acd173145e2f19986c9",
+      "bytes": 86113
+    },
+    {
+      "project_relative_path": "out/mp-spatial-patterns/deepinside-plans.png",
+      "sha256": "207343c157858977b1e84dfb8613ecc5cffdf94a43ce2f4ee0281b1166e2a0cf",
+      "bytes": 82621
+    },
+    {
+      "project_relative_path": "out/mp-spatial-patterns/draw_focus.py",
+      "sha256": "77fc4e2b3b85d81c3e75bda60901815792f6188f0fef29774817c9844bb2755a",
+      "bytes": 3997
+    },
+    {
+      "project_relative_path": "out/mp-spatial-patterns/focused-measurements.json",
+      "sha256": "710d194a5116f4be5fb31e3f148423c6888bb3656b7a774ea3331baff87c7da8",
+      "bytes": 30074
+    },
+    {
+      "project_relative_path": "out/mp-spatial-patterns/furiousheights-plans.png",
+      "sha256": "f07596bf31994de7624ebe241851d1eb68fda471de3be4a9f1c322427d3b6c5f",
+      "bytes": 80123
+    },
+    {
+      "project_relative_path": "out/mp-spatial-patterns/inspect_patterns.py",
+      "sha256": "1574a88bd601cfd98d0b61e0b3a4e00ab8c0534a6170f13d4e993f7b634e9779",
+      "bytes": 6556
+    },
+    {
+      "project_relative_path": "out/mp-spatial-patterns/lostworld-plans.png",
+      "sha256": "fb3135a75a1770ca86a3bd8de51d60b32d047e3e2cbb4ef0e4e84a627cf68051",
+      "bytes": 72792
+    },
+    {
+      "project_relative_path": "out/mp-spatial-patterns/measure_patterns.py",
+      "sha256": "47fa892f566fe31953e506537c9e19589af29d8480a13787afef796118b108f6",
+      "bytes": 7579
+    },
+    {
+      "project_relative_path": "out/mp-spatial-patterns/raw-observations.json",
+      "sha256": "1be314f8361db13a1309c5583d98eddb839c4828819bc40ceb8323adf90f0482",
+      "bytes": 280016
+    },
+    {
+      "project_relative_path": "out/mp-spatial-patterns/toxicity-plans.png",
+      "sha256": "5379a86d812d87b6a5375cb190f7c3739312fd97cc3accb5d18ceb40bbeb71c9",
+      "bytes": 75066
+    },
+    {
+      "project_relative_path": "out/mp-spatial-patterns/write_record.py",
+      "sha256": "3095746cf59e3be27b04370a0ef2918e50e65bb4f95dc3a948157c4516c6ba75",
+      "bytes": 14424
+    }
+  ],
+  "reproduce": [
+    "python -B out/mp-spatial-patterns/inspect_patterns.py",
+    "python -B out/mp-spatial-patterns/measure_patterns.py",
+    "python -B out/mp-spatial-patterns/draw_focus.py",
+    "python -B out/mp-spatial-patterns/write_record.py"
+  ],
+  "unrelated_issues": "No new unrelated repository defect found. Historical source limitations retained above."
+}

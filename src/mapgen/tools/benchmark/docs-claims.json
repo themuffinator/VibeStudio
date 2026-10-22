@@ -1,0 +1,856 @@
+{
+  "schema": "qmg.docs_claims",
+  "schema_version": 1,
+  "description": "Machine-checkable statements that README.md, docs/ROADMAP.md and docs/PLAYTEST_PROTOCOL.md must keep (X3 truth patch and H6 protocol, docs/RC_PHASE1_AUDIT_AND_PLAN.md sections 9.10 and 9.12). Intended for a later qmg_docs_claims CTest. Changing a claim needs the same review as changing the docs.",
+  "regex_dialect": "python-re",
+  "vibestudio": "VibeStudio: README.md is kept as docs/UPSTREAM_README.md with its links repointed, so the README claims read that file and expect the repointed links.",
+  "semantics": {
+    "file": "Path relative to the repository root, read as UTF-8 with LF line endings.",
+    "expect": "'match': re.search(regex, text) must find a match. 'no_match': it must find none.",
+    "regex": "Python re syntax. Inline flags such as (?m), (?s) and (?i) are part of the regex.",
+    "count_source": "Optional. The match's named group 'count' must equal the length of the JSON array at json_pointer (RFC 6901) in file.",
+    "controls": "Every string in controls.match must match the regex and every string in controls.no_match must not. They prove the regex can both pass and fail."
+  },
+  "claims": [
+    {
+      "id": "readme.human-playtest-status",
+      "file": "docs/UPSTREAM_README.md",
+      "expect": "match",
+      "regex": "No human playtest of any generated map has been done\\.",
+      "reason": "README states the human-playtest status plainly.",
+      "source": "docs/RC_PHASE1_AUDIT_AND_PLAN.md sections 9.12, 13",
+      "controls": {
+        "match": ["No human playtest of any generated map has been done."],
+        "no_match": ["Human playtests have been done."]
+      }
+    },
+    {
+      "id": "readme.playtest-protocol-not-executed",
+      "file": "docs/UPSTREAM_README.md",
+      "expect": "match",
+      "regex": "\\(PLAYTEST_PROTOCOL\\.md\\)[^\\n]{0,200}?no session has been run under it",
+      "reason": "README links the playtest protocol and says it has not been executed.",
+      "source": "docs/RC_PHASE1_AUDIT_AND_PLAN.md section 9.10 (H6)",
+      "controls": {
+        "match": ["The [protocol](PLAYTEST_PROTOCOL.md) defines sessions; no session has been run under it."],
+        "no_match": ["The [protocol](PLAYTEST_PROTOCOL.md) has been run twice."]
+      }
+    },
+    {
+      "id": "readme.modes-section",
+      "file": "docs/UPSTREAM_README.md",
+      "expect": "match",
+      "regex": "(?m)^## Modes and current limits$",
+      "reason": "README has a section listing supported and unsupported modes.",
+      "source": "docs/RC_PHASE1_AUDIT_AND_PLAN.md section 9.12",
+      "controls": {"match": ["## Modes and current limits"], "no_match": ["## Modes"]}
+    },
+    {
+      "id": "readme.unsupported.coop",
+      "file": "docs/UPSTREAM_README.md",
+      "expect": "match",
+      "regex": "(?ms)\\*\\*not supported today\\*\\*.{0,3000}?^- \\*\\*Co-op\\*\\*",
+      "reason": "README lists this mode under 'not supported today'.",
+      "source": "docs/RC_PHASE1_AUDIT_AND_PLAN.md sections 3 (M2, gaps 3, 10, 14, 22), 9.12",
+      "controls": {
+        "match": ["The following are **not supported today**.\n\n- **Co-op** (Quake, Quake II)."],
+        "no_match": ["Supported:\n\n- **Co-op** (Quake, Quake II)."]
+      }
+    },
+    {
+      "id": "readme.unsupported.tdm",
+      "file": "docs/UPSTREAM_README.md",
+      "expect": "match",
+      "regex": "(?ms)\\*\\*not supported today\\*\\*.{0,3000}?^- \\*\\*Team deathmatch\\*\\*",
+      "reason": "README lists this mode under 'not supported today'.",
+      "source": "docs/RC_PHASE1_AUDIT_AND_PLAN.md sections 3 (M2, gaps 3, 10, 14, 22), 9.12",
+      "controls": {
+        "match": ["The following are **not supported today**.\n\n- **Team deathmatch** (all three games)."],
+        "no_match": ["Supported:\n\n- **Team deathmatch** (all three games)."]
+      }
+    },
+    {
+      "id": "readme.unsupported.threewave",
+      "file": "docs/UPSTREAM_README.md",
+      "expect": "match",
+      "regex": "(?ms)\\*\\*not supported today\\*\\*.{0,3000}?^- \\*\\*Quake Threewave CTF\\.\\*\\*",
+      "reason": "README lists this mode under 'not supported today'.",
+      "source": "docs/RC_PHASE1_AUDIT_AND_PLAN.md sections 3 (M2, gaps 3, 10, 14, 22), 9.12",
+      "controls": {
+        "match": ["The following are **not supported today**.\n\n- **Quake Threewave CTF.** Text."],
+        "no_match": ["Supported:\n\n- **Quake Threewave CTF.** Text."]
+      }
+    },
+    {
+      "id": "readme.unsupported.botarena",
+      "file": "docs/UPSTREAM_README.md",
+      "expect": "match",
+      "regex": "(?ms)\\*\\*not supported today\\*\\*.{0,3000}?^- \\*\\*Quake III bot arena\\.\\*\\*",
+      "reason": "README lists this mode under 'not supported today'.",
+      "source": "docs/RC_PHASE1_AUDIT_AND_PLAN.md sections 3 (M2, gaps 3, 10, 14, 22), 9.12",
+      "controls": {
+        "match": ["The following are **not supported today**.\n\n- **Quake III bot arena.** Text."],
+        "no_match": ["Supported:\n\n- **Quake III bot arena.** Text."]
+      }
+    },
+    {
+      "id": "readme.unsupported.tourney-word",
+      "file": "docs/UPSTREAM_README.md",
+      "expect": "match",
+      "regex": "(?ms)\\*\\*not supported today\\*\\*.{0,3000}?^- \\*\\*.Tourney. as a mode word\\.\\*\\*",
+      "reason": "README lists this mode under 'not supported today'.",
+      "source": "docs/RC_PHASE1_AUDIT_AND_PLAN.md sections 3 (M2, gaps 3, 10, 14, 22), 9.12",
+      "controls": {
+        "match": ["The following are **not supported today**.\n\n- **“Tourney” as a mode word.** Text."],
+        "no_match": ["Supported:\n\n- **“Tourney” as a mode word.** Text."]
+      }
+    },
+    {
+      "id": "readme.tourney-words-not-recognised",
+      "file": "docs/UPSTREAM_README.md",
+      "expect": "match",
+      "regex": "[“\\\"]tourney[”\\\"] and [“\\\"]tournament[”\\\"] are not recognised",
+      "reason": "README says the mode words tourney/tournament are not recognised.",
+      "source": "docs/RC_PHASE1_AUDIT_AND_PLAN.md section 3 gap 10",
+      "controls": {"match": ["“tourney” and “tournament” are not recognised;"], "no_match": ["tourney is recognised"]}
+    },
+    {
+      "id": "readme.q3-sp-not-botarena",
+      "file": "docs/UPSTREAM_README.md",
+      "expect": "match",
+      "regex": "not a bot-arena ladder entry",
+      "reason": "README says Quake III single-player output is not a bot-arena ladder entry.",
+      "source": "docs/RC_PHASE1_AUDIT_AND_PLAN.md section 3 gap 14",
+      "controls": {"match": ["so it is not a bot-arena ladder entry."], "no_match": ["it is a bot-arena ladder entry"]}
+    },
+    {
+      "id": "readme.no-stale-botarena-generation",
+      "file": "docs/UPSTREAM_README.md",
+      "expect": "no_match",
+      "regex": "(?i)means tournament/bot-arena generation",
+      "reason": "The earlier sentence implied Quake III single-player output is bot-arena generation.",
+      "source": "docs/RC_PHASE1_AUDIT_AND_PLAN.md section 7 (Q3 bot arena, RC5)",
+      "controls": {
+        "match": ["Q3 “single-player” means tournament/bot-arena generation"],
+        "no_match": ["Q3 “single-player” output is an arena with deathmatch spawns, not a bot-arena ladder entry"]
+      }
+    },
+    {
+      "id": "readme.no-support-claim.coop",
+      "file": "docs/UPSTREAM_README.md",
+      "expect": "no_match",
+      "regex": "(?i)(?<!not )(?<!n't )\\bsupport(?:s|ed|ing)?\\b[^.\\n]{0,80}?\\b(?:co-?op(?:erative)?)\\b|\\b(?:co-?op(?:erative)?)\\b[^.\\n]{0,80}?(?<!not )(?<!n't )\\bsupport(?:s|ed|ing)?\\b",
+      "reason": "README must not claim support for a mode the generator cannot produce today.",
+      "source": "docs/RC_PHASE1_AUDIT_AND_PLAN.md sections 9.12, 12",
+      "controls": {
+        "match": ["Quake II co-op is supported.", "The generator supports co-op maps.", "Co-op support has landed."],
+        "no_match": [
+          "Co-op is not supported today.",
+          "Co-op, team deathmatch, Quake Threewave CTF and Quake III bot arena are not supported today.",
+          "The generator doesn't support co-op."
+        ]
+      }
+    },
+    {
+      "id": "readme.no-support-claim.tdm",
+      "file": "docs/UPSTREAM_README.md",
+      "expect": "no_match",
+      "regex": "(?i)(?<!not )(?<!n't )\\bsupport(?:s|ed|ing)?\\b[^.\\n]{0,80}?\\b(?:team deathmatch|TDM|team ?play)\\b|\\b(?:team deathmatch|TDM|team ?play)\\b[^.\\n]{0,80}?(?<!not )(?<!n't )\\bsupport(?:s|ed|ing)?\\b",
+      "reason": "README must not claim support for a mode the generator cannot produce today.",
+      "source": "docs/RC_PHASE1_AUDIT_AND_PLAN.md sections 9.12, 12",
+      "controls": {
+        "match": ["Team deathmatch is supported in all three games.", "Quake-MapGen supports TDM."],
+        "no_match": [
+          "Co-op, team deathmatch, Quake Threewave CTF and Quake III bot arena are not supported today.",
+          "TDM prompts produce deathmatch maps."
+        ]
+      }
+    },
+    {
+      "id": "readme.no-support-claim.threewave",
+      "file": "docs/UPSTREAM_README.md",
+      "expect": "no_match",
+      "regex": "(?i)(?<!not )(?<!n't )\\bsupport(?:s|ed|ing)?\\b[^.\\n]{0,80}?\\b(?:Threewave)\\b|\\b(?:Threewave)\\b[^.\\n]{0,80}?(?<!not )(?<!n't )\\bsupport(?:s|ed|ing)?\\b",
+      "reason": "README must not claim support for a mode the generator cannot produce today.",
+      "source": "docs/RC_PHASE1_AUDIT_AND_PLAN.md sections 9.12, 12",
+      "controls": {
+        "match": ["Quake Threewave CTF is supported.", "Now supports Threewave CTF."],
+        "no_match": ["Quake Threewave CTF is not supported today."]
+      }
+    },
+    {
+      "id": "readme.no-support-claim.botarena",
+      "file": "docs/UPSTREAM_README.md",
+      "expect": "no_match",
+      "regex": "(?i)(?<!not )(?<!n't )\\bsupport(?:s|ed|ing)?\\b[^.\\n]{0,80}?\\b(?:bot[- ]arena)\\b|\\b(?:bot[- ]arena)\\b[^.\\n]{0,80}?(?<!not )(?<!n't )\\bsupport(?:s|ed|ing)?\\b",
+      "reason": "README must not claim support for a mode the generator cannot produce today.",
+      "source": "docs/RC_PHASE1_AUDIT_AND_PLAN.md sections 9.12, 12",
+      "controls": {
+        "match": ["Quake III bot arena is supported.", "Supports bot-arena ladder entries."],
+        "no_match": ["Quake III bot arena is not supported today.", "it is not a bot-arena ladder entry."]
+      }
+    },
+    {
+      "id": "readme.draft-benchmark-result",
+      "file": "docs/UPSTREAM_README.md",
+      "expect": "match",
+      "regex": "70 of 138 cases pass every hard gate",
+      "reason": "README states the draft benchmark result.",
+      "source": "docs/RC_PHASE1_AUDIT_AND_PLAN.md sections 1, 5",
+      "controls": {
+        "match": ["**70 of 138 cases pass every hard gate**"],
+        "no_match": ["138 of 138 cases pass every hard gate"]
+      }
+    },
+    {
+      "id": "readme.draft-benchmark-evidence-level",
+      "file": "docs/UPSTREAM_README.md",
+      "expect": "match",
+      "regex": "(?s)70 of 138 cases pass every hard gate.{0,1500}?Evidence level: compiler output\\.",
+      "reason": "README names the evidence level of the draft benchmark result.",
+      "source": "docs/RC_PHASE1_AUDIT_AND_PLAN.md section 5",
+      "controls": {
+        "match": ["70 of 138 cases pass every hard gate (G1–G7). Evidence level: compiler output."],
+        "no_match": ["70 of 138 cases pass every hard gate. Evidence level: human play."]
+      }
+    },
+    {
+      "id": "readme.draft-benchmark-plan-link",
+      "file": "docs/UPSTREAM_README.md",
+      "expect": "match",
+      "regex": "(?s)\\*\\*Draft benchmark\\.\\*\\*.{0,2500}?\\]\\(RC_PHASE1_AUDIT_AND_PLAN\\.md\\)",
+      "reason": "README links the draft benchmark result to the Phase 1 audit and plan.",
+      "source": "docs/RC_PHASE1_AUDIT_AND_PLAN.md section 9.12",
+      "controls": {
+        "match": ["**Draft benchmark.** ... in the [plan](RC_PHASE1_AUDIT_AND_PLAN.md)"],
+        "no_match": ["**Draft benchmark.** ... no link"]
+      }
+    },
+    {
+      "id": "readme.rc-programme-section",
+      "file": "docs/UPSTREAM_README.md",
+      "expect": "match",
+      "regex": "(?ms)^## Release-candidate programme$.{0,600}?\\]\\(RC_PHASE1_AUDIT_AND_PLAN\\.md\\)",
+      "reason": "README has a release-candidate programme section that points to the plan.",
+      "source": "docs/RC_PHASE1_AUDIT_AND_PLAN.md section 9.12",
+      "controls": {
+        "match": ["## Release-candidate programme\n\nSee [Phase 1](RC_PHASE1_AUDIT_AND_PLAN.md)."],
+        "no_match": ["## Release-candidate programme\n\nNothing here."]
+      }
+    },
+    {
+      "id": "readme.no-path-claimed",
+      "file": "docs/UPSTREAM_README.md",
+      "expect": "match",
+      "regex": "No path meets the release-candidate conditions yet\\.",
+      "reason": "README does not claim a release-candidate path before one qualifies.",
+      "source": "docs/RC_PHASE1_AUDIT_AND_PLAN.md sections 7, 12",
+      "controls": {
+        "match": ["No path meets the release-candidate conditions yet."],
+        "no_match": ["Every path meets the conditions."]
+      }
+    },
+    {
+      "id": "readme.card-count",
+      "file": "docs/UPSTREAM_README.md",
+      "expect": "match",
+      "regex": "\\[knowledge base\\]\\(\\.\\./knowledge/q2/rules\\.json\\) contains (?P<count>[0-9]+) cards today",
+      "reason": "README's current card count equals the number of cards in the knowledge base.",
+      "source": "docs/RC_PHASE1_AUDIT_AND_PLAN.md section 3 gap 53",
+      "count_source": {"file": "knowledge/q2/rules.json", "json_pointer": "/rules"},
+      "controls": {
+        "match": ["The [knowledge base](../knowledge/q2/rules.json) contains 60 cards today"],
+        "no_match": ["The [knowledge base](../knowledge/q2/rules.json) contains 48 cards,"]
+      }
+    },
+    {
+      "id": "readme.docs-list.plan",
+      "file": "docs/UPSTREAM_README.md",
+      "expect": "match",
+      "regex": "(?m)^- \\[Release-candidate Phase 1 audit and plan\\]\\(RC_PHASE1_AUDIT_AND_PLAN\\.md\\)$",
+      "reason": "README's documentation list includes the Phase 1 audit and plan.",
+      "source": "docs/RC_PHASE1_AUDIT_AND_PLAN.md section 9.12",
+      "controls": {
+        "match": ["- [Release-candidate Phase 1 audit and plan](RC_PHASE1_AUDIT_AND_PLAN.md)"],
+        "no_match": ["- [Roadmap](docs/ROADMAP.md)"]
+      }
+    },
+    {
+      "id": "readme.docs-list.protocol",
+      "file": "docs/UPSTREAM_README.md",
+      "expect": "match",
+      "regex": "(?m)^- \\[Human playtest protocol\\]\\(PLAYTEST_PROTOCOL\\.md\\)$",
+      "reason": "README's documentation list includes the playtest protocol.",
+      "source": "docs/RC_PHASE1_AUDIT_AND_PLAN.md section 9.10 (H6)",
+      "controls": {
+        "match": ["- [Human playtest protocol](PLAYTEST_PROTOCOL.md)"],
+        "no_match": ["- [Roadmap](docs/ROADMAP.md)"]
+      }
+    },
+    {
+      "id": "roadmap.status-section",
+      "file": "docs/ROADMAP.md",
+      "expect": "match",
+      "regex": "(?m)^## Current limits and release-candidate programme$",
+      "reason": "ROADMAP has a current-limits and release-candidate section.",
+      "source": "docs/RC_PHASE1_AUDIT_AND_PLAN.md section 9.12",
+      "controls": {"match": ["## Current limits and release-candidate programme"], "no_match": ["## Milestones"]}
+    },
+    {
+      "id": "roadmap.human-playtest-status",
+      "file": "docs/ROADMAP.md",
+      "expect": "match",
+      "regex": "No human playtest of any generated map has been done\\.",
+      "reason": "ROADMAP states the human-playtest status plainly.",
+      "source": "docs/RC_PHASE1_AUDIT_AND_PLAN.md sections 9.12, 13",
+      "controls": {
+        "match": ["No human playtest of any generated map has been done."],
+        "no_match": ["Human playtests have been done."]
+      }
+    },
+    {
+      "id": "roadmap.playtest-protocol-not-executed",
+      "file": "docs/ROADMAP.md",
+      "expect": "match",
+      "regex": "\\(PLAYTEST_PROTOCOL\\.md\\)[^\\n]{0,200}?no session has been run under it",
+      "reason": "ROADMAP links the playtest protocol and says it has not been executed.",
+      "source": "docs/RC_PHASE1_AUDIT_AND_PLAN.md section 9.10 (H6)",
+      "controls": {
+        "match": ["The [protocol](PLAYTEST_PROTOCOL.md) defines sessions; no session has been run under it."],
+        "no_match": ["The [protocol](PLAYTEST_PROTOCOL.md) has been run."]
+      }
+    },
+    {
+      "id": "roadmap.unsupported-modes",
+      "file": "docs/ROADMAP.md",
+      "expect": "match",
+      "regex": "Co-op, team deathmatch, Quake Threewave CTF and Quake III bot arena are not supported today\\.",
+      "reason": "ROADMAP states which modes are not supported.",
+      "source": "docs/RC_PHASE1_AUDIT_AND_PLAN.md sections 3 (M2), 9.12",
+      "controls": {
+        "match": ["Co-op, team deathmatch, Quake Threewave CTF and Quake III bot arena are not supported today."],
+        "no_match": ["Co-op and team deathmatch are supported today."]
+      }
+    },
+    {
+      "id": "roadmap.tourney-words-not-recognised",
+      "file": "docs/ROADMAP.md",
+      "expect": "match",
+      "regex": "[“\\\"]tourney[”\\\"] and [“\\\"]tournament[”\\\"] are not recognised as mode words",
+      "reason": "ROADMAP says the mode words tourney/tournament are not recognised.",
+      "source": "docs/RC_PHASE1_AUDIT_AND_PLAN.md section 3 gap 10",
+      "controls": {
+        "match": ["“tourney” and “tournament” are not recognised as mode words"],
+        "no_match": ["tourney is a mode word"]
+      }
+    },
+    {
+      "id": "roadmap.q3-sp-not-botarena",
+      "file": "docs/ROADMAP.md",
+      "expect": "match",
+      "regex": "not a bot-arena ladder entry",
+      "reason": "ROADMAP says Quake III SP output is not a bot-arena ladder entry.",
+      "source": "docs/RC_PHASE1_AUDIT_AND_PLAN.md section 3 gap 14",
+      "controls": {
+        "match": ["not a bot-arena ladder entry or a monster campaign"],
+        "no_match": ["a bot-arena ladder entry"]
+      }
+    },
+    {
+      "id": "roadmap.no-stale-tournament-arena",
+      "file": "docs/ROADMAP.md",
+      "expect": "no_match",
+      "regex": "remains tournament/arena generation",
+      "reason": "The earlier M2 sentence implied Quake III SP output is tournament generation.",
+      "source": "docs/RC_PHASE1_AUDIT_AND_PLAN.md section 3 gap 14",
+      "controls": {
+        "match": ["Q3 “SP” remains tournament/arena generation, not a monster campaign"],
+        "no_match": ["Q3 “SP” remains arena generation with deathmatch spawns"]
+      }
+    },
+    {
+      "id": "roadmap.no-support-claim.coop",
+      "file": "docs/ROADMAP.md",
+      "expect": "no_match",
+      "regex": "(?i)(?<!not )(?<!n't )\\bsupport(?:s|ed|ing)?\\b[^.\\n]{0,80}?\\b(?:co-?op(?:erative)?)\\b|\\b(?:co-?op(?:erative)?)\\b[^.\\n]{0,80}?(?<!not )(?<!n't )\\bsupport(?:s|ed|ing)?\\b",
+      "reason": "ROADMAP must not claim support for a mode the generator cannot produce today.",
+      "source": "docs/RC_PHASE1_AUDIT_AND_PLAN.md sections 9.12, 12",
+      "controls": {
+        "match": ["Quake II co-op is supported.", "The generator supports co-op maps.", "Co-op support has landed."],
+        "no_match": [
+          "Co-op is not supported today.",
+          "Co-op, team deathmatch, Quake Threewave CTF and Quake III bot arena are not supported today.",
+          "The generator doesn't support co-op."
+        ]
+      }
+    },
+    {
+      "id": "roadmap.no-support-claim.tdm",
+      "file": "docs/ROADMAP.md",
+      "expect": "no_match",
+      "regex": "(?i)(?<!not )(?<!n't )\\bsupport(?:s|ed|ing)?\\b[^.\\n]{0,80}?\\b(?:team deathmatch|TDM|team ?play)\\b|\\b(?:team deathmatch|TDM|team ?play)\\b[^.\\n]{0,80}?(?<!not )(?<!n't )\\bsupport(?:s|ed|ing)?\\b",
+      "reason": "ROADMAP must not claim support for a mode the generator cannot produce today.",
+      "source": "docs/RC_PHASE1_AUDIT_AND_PLAN.md sections 9.12, 12",
+      "controls": {
+        "match": ["Team deathmatch is supported in all three games.", "Quake-MapGen supports TDM."],
+        "no_match": [
+          "Co-op, team deathmatch, Quake Threewave CTF and Quake III bot arena are not supported today.",
+          "TDM prompts produce deathmatch maps."
+        ]
+      }
+    },
+    {
+      "id": "roadmap.no-support-claim.threewave",
+      "file": "docs/ROADMAP.md",
+      "expect": "no_match",
+      "regex": "(?i)(?<!not )(?<!n't )\\bsupport(?:s|ed|ing)?\\b[^.\\n]{0,80}?\\b(?:Threewave)\\b|\\b(?:Threewave)\\b[^.\\n]{0,80}?(?<!not )(?<!n't )\\bsupport(?:s|ed|ing)?\\b",
+      "reason": "ROADMAP must not claim support for a mode the generator cannot produce today.",
+      "source": "docs/RC_PHASE1_AUDIT_AND_PLAN.md sections 9.12, 12",
+      "controls": {
+        "match": ["Quake Threewave CTF is supported.", "Now supports Threewave CTF."],
+        "no_match": ["Quake Threewave CTF is not supported today."]
+      }
+    },
+    {
+      "id": "roadmap.no-support-claim.botarena",
+      "file": "docs/ROADMAP.md",
+      "expect": "no_match",
+      "regex": "(?i)(?<!not )(?<!n't )\\bsupport(?:s|ed|ing)?\\b[^.\\n]{0,80}?\\b(?:bot[- ]arena)\\b|\\b(?:bot[- ]arena)\\b[^.\\n]{0,80}?(?<!not )(?<!n't )\\bsupport(?:s|ed|ing)?\\b",
+      "reason": "ROADMAP must not claim support for a mode the generator cannot produce today.",
+      "source": "docs/RC_PHASE1_AUDIT_AND_PLAN.md sections 9.12, 12",
+      "controls": {
+        "match": ["Quake III bot arena is supported.", "Supports bot-arena ladder entries."],
+        "no_match": ["Quake III bot arena is not supported today.", "it is not a bot-arena ladder entry."]
+      }
+    },
+    {
+      "id": "roadmap.draft-benchmark-result",
+      "file": "docs/ROADMAP.md",
+      "expect": "match",
+      "regex": "70 of 138 draft benchmark cases pass every hard gate",
+      "reason": "ROADMAP states the draft benchmark result.",
+      "source": "docs/RC_PHASE1_AUDIT_AND_PLAN.md sections 1, 5",
+      "controls": {
+        "match": ["70 of 138 draft benchmark cases pass every hard gate (G1–G7)."],
+        "no_match": ["all draft benchmark cases pass"]
+      }
+    },
+    {
+      "id": "roadmap.draft-benchmark-evidence-level",
+      "file": "docs/ROADMAP.md",
+      "expect": "match",
+      "regex": "(?s)70 of 138 draft benchmark cases pass every hard gate.{0,300}?Evidence level: compiler output\\.",
+      "reason": "ROADMAP names the evidence level of the draft benchmark result.",
+      "source": "docs/RC_PHASE1_AUDIT_AND_PLAN.md section 5",
+      "controls": {
+        "match": ["70 of 138 draft benchmark cases pass every hard gate (G1–G7). Evidence level: compiler output."],
+        "no_match": ["70 of 138 draft benchmark cases pass every hard gate. Evidence level: engine initialization."]
+      }
+    },
+    {
+      "id": "roadmap.plan-link",
+      "file": "docs/ROADMAP.md",
+      "expect": "match",
+      "regex": "(?ms)^## Current limits and release-candidate programme$.{0,3000}?\\]\\(RC_PHASE1_AUDIT_AND_PLAN\\.md\\)",
+      "reason": "ROADMAP's status section links the Phase 1 audit and plan.",
+      "source": "docs/RC_PHASE1_AUDIT_AND_PLAN.md section 9.12",
+      "controls": {
+        "match": ["## Current limits and release-candidate programme\n\nSee the [plan](RC_PHASE1_AUDIT_AND_PLAN.md)."],
+        "no_match": ["## Current limits and release-candidate programme\n\nNo link."]
+      }
+    },
+    {
+      "id": "roadmap.no-path-claimed",
+      "file": "docs/ROADMAP.md",
+      "expect": "match",
+      "regex": "No game × mode path meets the release-candidate conditions yet\\.",
+      "reason": "ROADMAP does not claim a release-candidate path before one qualifies.",
+      "source": "docs/RC_PHASE1_AUDIT_AND_PLAN.md sections 7, 12",
+      "controls": {
+        "match": ["No game × mode path meets the release-candidate conditions yet."],
+        "no_match": ["Q2 DM meets the conditions."]
+      }
+    },
+    {
+      "id": "roadmap.m4-card-count",
+      "file": "docs/ROADMAP.md",
+      "expect": "match",
+      "regex": "(?m)^Initial local-study foundation implemented:[^\\n]*?\\b(?P<count>[0-9]+) Q2 multiplayer rule cards\\b",
+      "reason": "ROADMAP M4 gives the current card count, equal to the knowledge base.",
+      "source": "docs/RC_PHASE1_AUDIT_AND_PLAN.md section 3 (B1, gap 53)",
+      "count_source": {"file": "knowledge/q2/rules.json", "json_pointer": "/rules"},
+      "controls": {
+        "match": [
+          "Initial local-study foundation implemented: a curriculum, 60 Q2 multiplayer rule cards (15 initial)"
+        ],
+        "no_match": ["Initial local-study foundation implemented: a curriculum, 15 rule hypotheses"]
+      }
+    },
+    {
+      "id": "roadmap.no-stale-15-rule-hypotheses",
+      "file": "docs/ROADMAP.md",
+      "expect": "no_match",
+      "regex": "\\b15 rule hypotheses\\b",
+      "reason": "ROADMAP M4 said '15 rule hypotheses' while the knowledge base has 60 cards.",
+      "source": "docs/RC_PHASE1_AUDIT_AND_PLAN.md section 3 gap 53",
+      "controls": {
+        "match": ["26-map/12-lesson curriculum, 15 rule hypotheses, provisional"],
+        "no_match": ["60 Q2 multiplayer rule cards (15 initial rule hypotheses)"]
+      }
+    },
+    {
+      "id": "protocol.not-human-play-evidence",
+      "file": "docs/PLAYTEST_PROTOCOL.md",
+      "expect": "match",
+      "regex": "checked by static analysis only\\. They produce no human-play evidence\\.",
+      "reason": "The protocol labels itself static analysis, not human-play evidence.",
+      "source": "docs/RC_PHASE1_AUDIT_AND_PLAN.md sections 9.10 (H6), 13",
+      "controls": {
+        "match": ["are checked by static analysis only. They produce no human-play evidence."],
+        "no_match": ["This protocol is human-play evidence."]
+      }
+    },
+    {
+      "id": "protocol.not-executed",
+      "file": "docs/PLAYTEST_PROTOCOL.md",
+      "expect": "match",
+      "regex": "No session has been run under this protocol",
+      "reason": "The protocol says no session has been run.",
+      "source": "docs/RC_PHASE1_AUDIT_AND_PLAN.md section 9.10 (H6)",
+      "controls": {
+        "match": ["No session has been run under this protocol"],
+        "no_match": ["Two sessions have been run under this protocol"]
+      }
+    },
+    {
+      "id": "protocol.human-playtest-status",
+      "file": "docs/PLAYTEST_PROTOCOL.md",
+      "expect": "match",
+      "regex": "(?i)no human playtest of any generated map has been done",
+      "reason": "The protocol repeats the human-playtest status.",
+      "source": "docs/RC_PHASE1_AUDIT_AND_PLAN.md section 13",
+      "controls": {
+        "match": ["and no human playtest of any generated map has been done."],
+        "no_match": ["a human playtest has been done"]
+      }
+    },
+    {
+      "id": "protocol.schema-link",
+      "file": "docs/PLAYTEST_PROTOCOL.md",
+      "expect": "match",
+      "regex": "\\]\\(\\.\\./tools/benchmark/schemas/playtest-session\\.schema\\.json\\)",
+      "reason": "The protocol links its session-record schema.",
+      "source": "docs/RC_PHASE1_AUDIT_AND_PLAN.md section 9.10 deliverables",
+      "controls": {
+        "match": ["[schema](../tools/benchmark/schemas/playtest-session.schema.json)"],
+        "no_match": ["[schema](schema.json)"]
+      }
+    },
+    {
+      "id": "protocol.no-agent-launch-or-input",
+      "file": "docs/PLAYTEST_PROTOCOL.md",
+      "expect": "match",
+      "regex": "no agent or script launches a client, joins a server or sends input to a game",
+      "reason": "Agents never launch clients or inject input during a playtest.",
+      "source": "docs/RC_PHASE1_AUDIT_AND_PLAN.md section 8.3; docs/MAP_STUDY.md",
+      "controls": {
+        "match": ["During a playtest, no agent or script launches a client, joins a server or sends input to a game."],
+        "no_match": ["The agent launches the client."]
+      }
+    },
+    {
+      "id": "protocol.engine-screenshots-only",
+      "file": "docs/PLAYTEST_PROTOCOL.md",
+      "expect": "match",
+      "regex": "never an operating-system capture",
+      "reason": "Rendering evidence comes only from the engine's screenshot command.",
+      "source": "docs/MAP_STUDY.md; docs/RC_PHASE1_AUDIT_AND_PLAN.md section 8.3",
+      "controls": {
+        "match": ["in a windowed client, never an operating-system capture."],
+        "no_match": ["use an OS capture"]
+      }
+    },
+    {
+      "id": "protocol.section.consent-and-personal-data",
+      "file": "docs/PLAYTEST_PROTOCOL.md",
+      "expect": "match",
+      "regex": "(?m)^## 4\\. Consent and personal data$",
+      "reason": "The protocol has its 'Consent and personal data' section.",
+      "source": "docs/RC_PHASE1_AUDIT_AND_PLAN.md section 9.10 (H6)",
+      "controls": {"match": ["## 4. Consent and personal data"], "no_match": ["## 4. Something else"]}
+    },
+    {
+      "id": "protocol.section.anchored-ratings",
+      "file": "docs/PLAYTEST_PROTOCOL.md",
+      "expect": "match",
+      "regex": "(?m)^## 10\\. Anchored ratings$",
+      "reason": "The protocol has its 'Anchored ratings' section.",
+      "source": "docs/RC_PHASE1_AUDIT_AND_PLAN.md section 9.10 (H6)",
+      "controls": {"match": ["## 10. Anchored ratings"], "no_match": ["## 10. Something else"]}
+    },
+    {
+      "id": "protocol.section.null-when-not-observed",
+      "file": "docs/PLAYTEST_PROTOCOL.md",
+      "expect": "match",
+      "regex": "(?m)^## 11\\. Null when not observed$",
+      "reason": "The protocol has its 'Null when not observed' section.",
+      "source": "docs/RC_PHASE1_AUDIT_AND_PLAN.md section 9.10 (H6)",
+      "controls": {"match": ["## 11. Null when not observed"], "no_match": ["## 11. Something else"]}
+    },
+    {
+      "id": "protocol.section.how-results-enter-the-ledger",
+      "file": "docs/PLAYTEST_PROTOCOL.md",
+      "expect": "match",
+      "regex": "(?m)^## 14\\. How results enter the ledger$",
+      "reason": "The protocol has its 'How results enter the ledger' section.",
+      "source": "docs/RC_PHASE1_AUDIT_AND_PLAN.md section 9.10 (H6)",
+      "controls": {"match": ["## 14. How results enter the ledger"], "no_match": ["## 14. Something else"]}
+    },
+    {
+      "id": "protocol.question-set.all",
+      "file": "docs/PLAYTEST_PROTOCOL.md",
+      "expect": "match",
+      "regex": "(?m)^### All modes\\n\\n\\| Id \\| Question \\| Recorded as \\|",
+      "reason": "The protocol has the 'all' question set.",
+      "source": "docs/RC_PHASE1_AUDIT_AND_PLAN.md section 9.10 (H6)",
+      "controls": {"match": ["### All modes\n\n| Id | Question | Recorded as |"], "no_match": ["### All modes\n\nTBD"]}
+    },
+    {
+      "id": "protocol.question-set.sp",
+      "file": "docs/PLAYTEST_PROTOCOL.md",
+      "expect": "match",
+      "regex": "(?m)^### Single-player \\(sp\\)\\n\\n\\| Id \\| Question \\| Recorded as \\|",
+      "reason": "The protocol has the 'sp' question set.",
+      "source": "docs/RC_PHASE1_AUDIT_AND_PLAN.md section 9.10 (H6)",
+      "controls": {
+        "match": ["### Single-player (sp)\n\n| Id | Question | Recorded as |"],
+        "no_match": ["### Single-player (sp)\n\nTBD"]
+      }
+    },
+    {
+      "id": "protocol.question-set.coop",
+      "file": "docs/PLAYTEST_PROTOCOL.md",
+      "expect": "match",
+      "regex": "(?m)^### Co-op \\(coop\\)\\n\\n\\| Id \\| Question \\| Recorded as \\|",
+      "reason": "The protocol has the 'coop' question set.",
+      "source": "docs/RC_PHASE1_AUDIT_AND_PLAN.md section 9.10 (H6)",
+      "controls": {
+        "match": ["### Co-op (coop)\n\n| Id | Question | Recorded as |"],
+        "no_match": ["### Co-op (coop)\n\nTBD"]
+      }
+    },
+    {
+      "id": "protocol.question-set.dm",
+      "file": "docs/PLAYTEST_PROTOCOL.md",
+      "expect": "match",
+      "regex": "(?m)^### Deathmatch and free-for-all \\(dm\\)\\n\\n\\| Id \\| Question \\| Recorded as \\|",
+      "reason": "The protocol has the 'dm' question set.",
+      "source": "docs/RC_PHASE1_AUDIT_AND_PLAN.md section 9.10 (H6)",
+      "controls": {
+        "match": ["### Deathmatch and free-for-all (dm)\n\n| Id | Question | Recorded as |"],
+        "no_match": ["### Deathmatch and free-for-all (dm)\n\nTBD"]
+      }
+    },
+    {
+      "id": "protocol.question-set.tdm",
+      "file": "docs/PLAYTEST_PROTOCOL.md",
+      "expect": "match",
+      "regex": "(?m)^### Team deathmatch \\(tdm\\)\\n\\n\\| Id \\| Question \\| Recorded as \\|",
+      "reason": "The protocol has the 'tdm' question set.",
+      "source": "docs/RC_PHASE1_AUDIT_AND_PLAN.md section 9.10 (H6)",
+      "controls": {
+        "match": ["### Team deathmatch (tdm)\n\n| Id | Question | Recorded as |"],
+        "no_match": ["### Team deathmatch (tdm)\n\nTBD"]
+      }
+    },
+    {
+      "id": "protocol.question-set.duel",
+      "file": "docs/PLAYTEST_PROTOCOL.md",
+      "expect": "match",
+      "regex": "(?m)^### Duel and tourney \\(duel\\)\\n\\n\\| Id \\| Question \\| Recorded as \\|",
+      "reason": "The protocol has the 'duel' question set.",
+      "source": "docs/RC_PHASE1_AUDIT_AND_PLAN.md section 9.10 (H6)",
+      "controls": {
+        "match": ["### Duel and tourney (duel)\n\n| Id | Question | Recorded as |"],
+        "no_match": ["### Duel and tourney (duel)\n\nTBD"]
+      }
+    },
+    {
+      "id": "protocol.question-set.ctf",
+      "file": "docs/PLAYTEST_PROTOCOL.md",
+      "expect": "match",
+      "regex": "(?m)^### Capture the flag \\(ctf\\)\\n\\n\\| Id \\| Question \\| Recorded as \\|",
+      "reason": "The protocol has the 'ctf' question set.",
+      "source": "docs/RC_PHASE1_AUDIT_AND_PLAN.md section 9.10 (H6)",
+      "controls": {
+        "match": ["### Capture the flag (ctf)\n\n| Id | Question | Recorded as |"],
+        "no_match": ["### Capture the flag (ctf)\n\nTBD"]
+      }
+    },
+    {
+      "id": "protocol.question-set.botarena",
+      "file": "docs/PLAYTEST_PROTOCOL.md",
+      "expect": "match",
+      "regex": "(?m)^### Quake III bot arena \\(botarena\\)\\n\\n\\| Id \\| Question \\| Recorded as \\|",
+      "reason": "The protocol has the 'botarena' question set.",
+      "source": "docs/RC_PHASE1_AUDIT_AND_PLAN.md section 9.10 (H6)",
+      "controls": {
+        "match": ["### Quake III bot arena (botarena)\n\n| Id | Question | Recorded as |"],
+        "no_match": ["### Quake III bot arena (botarena)\n\nTBD"]
+      }
+    },
+    {
+      "id": "protocol.path.q1-sp",
+      "file": "docs/PLAYTEST_PROTOCOL.md",
+      "expect": "match",
+      "regex": "(?m)^\\| `q1-sp` \\| all, sp\\b",
+      "reason": "Path q1-sp has the 'all' and 'sp' question sets.",
+      "source": "docs/RC_PHASE1_AUDIT_AND_PLAN.md section 9.10 acceptance (playtest protocol)",
+      "controls": {"match": ["| `q1-sp` | all, sp |"], "no_match": ["| `q1-sp` | all |"]}
+    },
+    {
+      "id": "protocol.path.q1-coop",
+      "file": "docs/PLAYTEST_PROTOCOL.md",
+      "expect": "match",
+      "regex": "(?m)^\\| `q1-coop` \\| all, coop\\b",
+      "reason": "Path q1-coop has the 'all' and 'coop' question sets.",
+      "source": "docs/RC_PHASE1_AUDIT_AND_PLAN.md section 9.10 acceptance (playtest protocol)",
+      "controls": {"match": ["| `q1-coop` | all, coop |"], "no_match": ["| `q1-coop` | all |"]}
+    },
+    {
+      "id": "protocol.path.q1-dm",
+      "file": "docs/PLAYTEST_PROTOCOL.md",
+      "expect": "match",
+      "regex": "(?m)^\\| `q1-dm` \\| all, dm\\b",
+      "reason": "Path q1-dm has the 'all' and 'dm' question sets.",
+      "source": "docs/RC_PHASE1_AUDIT_AND_PLAN.md section 9.10 acceptance (playtest protocol)",
+      "controls": {"match": ["| `q1-dm` | all, dm |"], "no_match": ["| `q1-dm` | all |"]}
+    },
+    {
+      "id": "protocol.path.q1-duel",
+      "file": "docs/PLAYTEST_PROTOCOL.md",
+      "expect": "match",
+      "regex": "(?m)^\\| `q1-duel` \\| all, duel\\b",
+      "reason": "Path q1-duel has the 'all' and 'duel' question sets.",
+      "source": "docs/RC_PHASE1_AUDIT_AND_PLAN.md section 9.10 acceptance (playtest protocol)",
+      "controls": {"match": ["| `q1-duel` | all, duel |"], "no_match": ["| `q1-duel` | all |"]}
+    },
+    {
+      "id": "protocol.path.q1-tdm",
+      "file": "docs/PLAYTEST_PROTOCOL.md",
+      "expect": "match",
+      "regex": "(?m)^\\| `q1-tdm` \\| all, tdm\\b",
+      "reason": "Path q1-tdm has the 'all' and 'tdm' question sets.",
+      "source": "docs/RC_PHASE1_AUDIT_AND_PLAN.md section 9.10 acceptance (playtest protocol)",
+      "controls": {"match": ["| `q1-tdm` | all, tdm |"], "no_match": ["| `q1-tdm` | all |"]}
+    },
+    {
+      "id": "protocol.path.q1-ctf-threewave",
+      "file": "docs/PLAYTEST_PROTOCOL.md",
+      "expect": "match",
+      "regex": "(?m)^\\| `q1-ctf-threewave` \\| all, ctf\\b",
+      "reason": "Path q1-ctf-threewave has the 'all' and 'ctf' question sets.",
+      "source": "docs/RC_PHASE1_AUDIT_AND_PLAN.md section 9.10 acceptance (playtest protocol)",
+      "controls": {"match": ["| `q1-ctf-threewave` | all, ctf |"], "no_match": ["| `q1-ctf-threewave` | all |"]}
+    },
+    {
+      "id": "protocol.path.q2-sp",
+      "file": "docs/PLAYTEST_PROTOCOL.md",
+      "expect": "match",
+      "regex": "(?m)^\\| `q2-sp` \\| all, sp\\b",
+      "reason": "Path q2-sp has the 'all' and 'sp' question sets.",
+      "source": "docs/RC_PHASE1_AUDIT_AND_PLAN.md section 9.10 acceptance (playtest protocol)",
+      "controls": {"match": ["| `q2-sp` | all, sp |"], "no_match": ["| `q2-sp` | all |"]}
+    },
+    {
+      "id": "protocol.path.q2-coop",
+      "file": "docs/PLAYTEST_PROTOCOL.md",
+      "expect": "match",
+      "regex": "(?m)^\\| `q2-coop` \\| all, coop\\b",
+      "reason": "Path q2-coop has the 'all' and 'coop' question sets.",
+      "source": "docs/RC_PHASE1_AUDIT_AND_PLAN.md section 9.10 acceptance (playtest protocol)",
+      "controls": {"match": ["| `q2-coop` | all, coop |"], "no_match": ["| `q2-coop` | all |"]}
+    },
+    {
+      "id": "protocol.path.q2-dm",
+      "file": "docs/PLAYTEST_PROTOCOL.md",
+      "expect": "match",
+      "regex": "(?m)^\\| `q2-dm` \\| all, dm\\b",
+      "reason": "Path q2-dm has the 'all' and 'dm' question sets.",
+      "source": "docs/RC_PHASE1_AUDIT_AND_PLAN.md section 9.10 acceptance (playtest protocol)",
+      "controls": {"match": ["| `q2-dm` | all, dm |"], "no_match": ["| `q2-dm` | all |"]}
+    },
+    {
+      "id": "protocol.path.q2-duel",
+      "file": "docs/PLAYTEST_PROTOCOL.md",
+      "expect": "match",
+      "regex": "(?m)^\\| `q2-duel` \\| all, duel\\b",
+      "reason": "Path q2-duel has the 'all' and 'duel' question sets.",
+      "source": "docs/RC_PHASE1_AUDIT_AND_PLAN.md section 9.10 acceptance (playtest protocol)",
+      "controls": {"match": ["| `q2-duel` | all, duel |"], "no_match": ["| `q2-duel` | all |"]}
+    },
+    {
+      "id": "protocol.path.q2-tdm",
+      "file": "docs/PLAYTEST_PROTOCOL.md",
+      "expect": "match",
+      "regex": "(?m)^\\| `q2-tdm` \\| all, tdm\\b",
+      "reason": "Path q2-tdm has the 'all' and 'tdm' question sets.",
+      "source": "docs/RC_PHASE1_AUDIT_AND_PLAN.md section 9.10 acceptance (playtest protocol)",
+      "controls": {"match": ["| `q2-tdm` | all, tdm |"], "no_match": ["| `q2-tdm` | all |"]}
+    },
+    {
+      "id": "protocol.path.q2-ctf",
+      "file": "docs/PLAYTEST_PROTOCOL.md",
+      "expect": "match",
+      "regex": "(?m)^\\| `q2-ctf` \\| all, ctf\\b",
+      "reason": "Path q2-ctf has the 'all' and 'ctf' question sets.",
+      "source": "docs/RC_PHASE1_AUDIT_AND_PLAN.md section 9.10 acceptance (playtest protocol)",
+      "controls": {"match": ["| `q2-ctf` | all, ctf |"], "no_match": ["| `q2-ctf` | all |"]}
+    },
+    {
+      "id": "protocol.path.q3-botarena",
+      "file": "docs/PLAYTEST_PROTOCOL.md",
+      "expect": "match",
+      "regex": "(?m)^\\| `q3-botarena` \\| all, botarena\\b",
+      "reason": "Path q3-botarena has the 'all' and 'botarena' question sets.",
+      "source": "docs/RC_PHASE1_AUDIT_AND_PLAN.md section 9.10 acceptance (playtest protocol)",
+      "controls": {"match": ["| `q3-botarena` | all, botarena |"], "no_match": ["| `q3-botarena` | all |"]}
+    },
+    {
+      "id": "protocol.path.q3-ffa",
+      "file": "docs/PLAYTEST_PROTOCOL.md",
+      "expect": "match",
+      "regex": "(?m)^\\| `q3-ffa` \\| all, dm\\b",
+      "reason": "Path q3-ffa has the 'all' and 'dm' question sets.",
+      "source": "docs/RC_PHASE1_AUDIT_AND_PLAN.md section 9.10 acceptance (playtest protocol)",
+      "controls": {"match": ["| `q3-ffa` | all, dm |"], "no_match": ["| `q3-ffa` | all |"]}
+    },
+    {
+      "id": "protocol.path.q3-tourney",
+      "file": "docs/PLAYTEST_PROTOCOL.md",
+      "expect": "match",
+      "regex": "(?m)^\\| `q3-tourney` \\| all, duel\\b",
+      "reason": "Path q3-tourney has the 'all' and 'duel' question sets.",
+      "source": "docs/RC_PHASE1_AUDIT_AND_PLAN.md section 9.10 acceptance (playtest protocol)",
+      "controls": {"match": ["| `q3-tourney` | all, duel |"], "no_match": ["| `q3-tourney` | all |"]}
+    },
+    {
+      "id": "protocol.path.q3-tdm",
+      "file": "docs/PLAYTEST_PROTOCOL.md",
+      "expect": "match",
+      "regex": "(?m)^\\| `q3-tdm` \\| all, tdm\\b",
+      "reason": "Path q3-tdm has the 'all' and 'tdm' question sets.",
+      "source": "docs/RC_PHASE1_AUDIT_AND_PLAN.md section 9.10 acceptance (playtest protocol)",
+      "controls": {"match": ["| `q3-tdm` | all, tdm |"], "no_match": ["| `q3-tdm` | all |"]}
+    },
+    {
+      "id": "protocol.path.q3-ctf",
+      "file": "docs/PLAYTEST_PROTOCOL.md",
+      "expect": "match",
+      "regex": "(?m)^\\| `q3-ctf` \\| all, ctf\\b",
+      "reason": "Path q3-ctf has the 'all' and 'ctf' question sets.",
+      "source": "docs/RC_PHASE1_AUDIT_AND_PLAN.md section 9.10 acceptance (playtest protocol)",
+      "controls": {"match": ["| `q3-ctf` | all, ctf |"], "no_match": ["| `q3-ctf` | all |"]}
+    }
+  ]
+}

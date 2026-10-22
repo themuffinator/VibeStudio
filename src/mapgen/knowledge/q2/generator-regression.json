@@ -1,0 +1,11 @@
+{
+  "schema_version": 1,
+  "purpose": "Frozen first-cycle Q2 baseline matrix. Descriptive reference comparisons never replace structural/compiler/navigation gates.",
+  "cases": [
+    {"id": "duel_industrial", "prompt": "Quake 2 duel, industrial 6-room loop with high verticality", "mode": "duel", "rooms": 6, "players": 2, "cohort": "duel", "seeds": [104729, 130363]},
+    {"id": "duel_gothic", "prompt": "Quake 2 duel, gothic 6-room loop with low verticality", "mode": "duel", "rooms": 6, "players": 2, "cohort": "duel", "seeds": [104729, 130363]},
+    {"id": "ffa_small", "prompt": "Quake 2 deathmatch, space 8-room loop with height variation", "mode": "dm", "rooms": 8, "players": 4, "cohort": "dm_small", "seeds": [104729, 130363]},
+    {"id": "ffa_medium", "prompt": "Quake 2 deathmatch, industrial 12-room loop with high verticality", "mode": "dm", "rooms": 12, "players": 8, "cohort": "dm_medium", "seeds": [104729, 130363]},
+    {"id": "ctf", "prompt": "Quake 2 capture the flag, industrial 12-room loop with height variation", "mode": "ctf", "rooms": 12, "players": 12, "cohort": "ctf", "seeds": [104729, 130363]}
+  ]
+}

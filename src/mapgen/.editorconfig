@@ -1,0 +1,5 @@
+# The Map Generator keeps Quake-MapGen's style (VIBESTUDIO.md).
+[*.{cpp,hpp}]
+indent_style = space
+indent_size = 4
+trim_trailing_whitespace = true

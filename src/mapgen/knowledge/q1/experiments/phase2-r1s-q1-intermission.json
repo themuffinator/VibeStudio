@@ -1,0 +1,86 @@
+{
+  "schema": "qmg.experiment_record",
+  "schema_version": 1,
+  "id": "r1s-q1-intermission",
+  "title": "R1-s entity safety (1): one info_intermission camera in every Quake 1 map",
+  "game": "q1",
+  "kind": "output",
+  "sub_lane": "both",
+  "cause": "Every Quake 1 map gets exactly one info_intermission (D8 PlacementRole intermission; classname from data/profiles/q1/generator-current.json) at a standing-eye viewpoint over the floor of its largest room, clear of solids and at least 64 units (x or y) from every other entity, with a mangle (pitch yaw 0) facing the room centre.",
+  "hypothesis": "When a Quake 1 level or match ends, FindIntermission takes an info_intermission, else an info_player_start, else a testplayerstart, and otherwise calls objerror 'FindIntermission: no spot', a fatal Program error (1996 id1 progs FindIntermission statements 5672-5715, reached from execute_changelevel statement 5878; quake-rerelease-qc quakec/client.qc:135-168 and quakec_ctf/client.qc:191-221). Generated Q1 deathmatch, duel, CTF and TDM maps have neither entity, so a fraglimit or timelimit ending is fatal; single-player and co-op maps fall back to the player start's view. Adding one info_intermission removes the fatal path and gives every map a deliberate end-of-level view, and changes nothing else.",
+  "expected_mechanism": "src/entities.cpp EntityAllocator::populate appends one intermission placement after the lights when spec.game == quake1 and the switch is on (add_quake1_intermission: rooms by floor area, then height, then id; candidate points at 12/88 % corners, then wall midpoints, then the 8 x 8 spawn grid; first point whose standing column x/y +-16 from the walkable surface to eye + 16 lies inside the room, overlaps no solid and no entity volume, and is >= 64 u on x or y from every point entity). Origin z = walkable surface + 46 (player hull mins z -24 plus view_ofs 22; execute_changelevel sets view_ofs '0 0 0' and setorigin to the spot, so the camera is the origin). Yaw faces the room centre, pitch looks at the centre of its floor. src/map_builder.cpp writes classname info_intermission, mangle '<pitch> <yaw> 0' (execute_changelevel copies mangle into angles and v_angle) and origin. No other placement, solid or random draw changes; Q2 and Q3 are untouched (the builder refuses a non-Q1 camera).",
+  "switch": {
+    "name": "r1s.q1_intermission",
+    "default": "off",
+    "qmg_args_on": "--switch r1s.q1_intermission=on"
+  },
+  "declared_scope": {
+    "description": "Written before any run with the new binary (out/phase2/changes/r1s-q1-intermission/declared_scope.json, scripts/declare_scope.py): every non-sealed case whose baseline-0 report resolves game quake1. That is the 142 BENCH-v1 cases of the six Q1 paths (q1-sp 27, q1-coop 23, q1-dm 28, q1-duel 21, q1-tdm 20, q1-ctf-threewave 23); no portfolio case (all Quake 2). Manifest game and resolved game agree for every case.",
+    "fixed_sets": ["BENCH-v1", "MP-PORTFOLIO", "SPAN-PORTFOLIO", "LATTICE-PORTFOLIO", "SPLICE-PORTFOLIO"],
+    "case_count": 142,
+    "case_ids_rule": "BENCH-v1 ids containing 'q1-' (equal to the declared list, checked by scripts/compile_on.sh)",
+    "case_ids_file": "out/phase2/changes/r1s-q1-intermission/declared_scope.json"
+  },
+  "build": {"cmd": "cmake --build --preset windows-clang", "exit": 0, "warnings": 0},
+  "ctest": {"cmd": "ctest --preset windows-clang -j 8", "passed": 87, "total": 88, "failed": [], "skipped": ["qmg_rc_benchmark (opt-in, QMG_RC_BENCHMARK=OFF)"]},
+  "compiler_fixtures": {
+    "required": "yes (serialization change: a new point entity and the mangle key)",
+    "result": "pass: qmg_q1_qbsp, qmg_q2_qbsp, qmg_q3_legacy_compilers, qmg_q3_brush_primitives_compilers, qmg_q2_compact_dm6/duel5/dm32 and the dm6 leak negative (switch at its default); with the switch on, the 142 in-scope maps compiled leak-free with full VIS and final light (below)"
+  },
+  "runs": {
+    "baseline": {"baseline_id": "baseline-0", "summary_sha256": "e8cb8e982c8bd5d1aecf49b9e29dfcd226ccf114db0a0986a409d09f8b44a204"},
+    "switch_off": {"out_dir": "out/phase2/r1s-q1-intermission/gen/off", "summary_sha256": "c44353dc29c31291b90fdbdc548dedb1f7389a378cb5eb46159471b0890a54da", "byte_identical_to_baseline": true, "note": "bench summary hash; 410 BENCH-v1 + 49 portfolio cases, compare.py against baseline-0 with no --scope: 0 differences"},
+    "switch_on": {"out_dir": "out/phase2/r1s-q1-intermission/gen/on", "summary_sha256": "3d7c68000de87b214509a5e76fdebf25a49d2aa8a972f638b04b5864ad6bce28", "qmg_extra": "--switch r1s.q1_intermission=on"},
+    "switch_on_compiled": {"out_dir": "out/phase2/r1s-q1-intermission/compile-on", "summary_sha256": "e6916428a5dd651bed16b7696114a774823637f97239364e4c2b0cc3ca581c3f", "policy": "v1", "jobs": 8, "tool_threads": 2, "light_budget_seconds": 1020, "cases": 142},
+    "qmg_sha256": "2a7c293da6f1b96e48c0197473d917d7d9592ca8aaa33d7b524f4650f74abe16",
+    "runner_sha256": "d061a4b0c8f6b638d76b7ca1df7b4347e1837e851aae37c609858a10bc6d1773",
+    "compare_sha256": "a738936725a4fb6abfd935bdb6019aa5f3443c41e6df63d9b10e886b0adf118b"
+  },
+  "scope_diff": {
+    "command": "python -B tools/benchmark/compare.py <off-run>/<set> <on-run-normalized>/<set> --generate-only --scope out/phase2/changes/r1s-q1-intermission/declared_scope.json --json <file>",
+    "identity_field_discount": "compare.py a738936 counts a switched run's identity fields ($.switches and every layout_sha256) as differences (docs/CHANGE_PROTOCOL.md, known gap). The on-run was normalized by out/phase2/changes/r1s-q1-intermission/scripts/normalize_switched.py, which removes exactly the one switches line and resets the on-run layout hash (5-7 layout_sha256 fields per report) to the off-run's, copying every .map unchanged; the unmodified compare.py then diffed everything else. The raw comparison was kept: 268 BENCH-v1 and 49 portfolio cases out of scope, every one differing only in report bytes at $.switches and *.layout_sha256, with every .map byte-identical (scripts/check_identity_fields.py).",
+    "off_vs_baseline_differences": 0,
+    "out_of_scope_differences": 0,
+    "in_scope_differences": 142,
+    "other_sub_lane_byte_differences": "n/a (sub-lane both)",
+    "in_scope_difference_shape": "every in-scope .map equals its switch-off .map plus exactly one entity block {classname info_intermission, mangle, origin} (142/142); report changes are only counts and lists that grow by that placement: counts.entities, map.stats.entity_count, map.manifest_entries, map.manifest_node_ids, analysis.visibility.summary.placements and segment_tests, navigation placement_bindings (player 142, monster 56); no finding, validation issue, repair, quality, lighting, spawn-safety or timing field changed",
+    "json": "out/phase2/r1s-q1-intermission/gen/compare-off-vs-on-bench.json"
+  },
+  "portfolios": {"required": "rerun as an out-of-scope control (the change is not a Q2 DM change)", "result": "MP 11, SPAN 14, LATTICE 15, SPLICE 9: switch off byte-identical to baseline-0; switch on 0 differences after the identity-field discount and every .map byte-identical"},
+  "before": {
+    "q1_maps_with_info_intermission": "0/142",
+    "q1_maps_where_FindIntermission_reaches_objerror": "86/142 (no info_intermission and no info_player_start: q1-dm 27, q1-duel 20, q1-tdm 16, q1-ctf-threewave 23)",
+    "q1_maps_falling_back_to_info_player_start": "56/142",
+    "G1_G7_pass_counts_in_scope": {"G1": 142, "G2": 74, "G3": 142, "G4": 142, "G5": 142, "G6": "n/a 142", "G7": 74}
+  },
+  "after": {
+    "q1_maps_with_info_intermission_in_compiled_entity_lump": "142/142 (exactly one each; origin and mangle equal to the .map)",
+    "q1_maps_where_FindIntermission_reaches_objerror": "0/142",
+    "cameras_inside_a_brush": 0,
+    "cameras_whose_standing_column_has_a_sample_point_inside_a_brush": 0,
+    "cameras_overlapping_another_entity": 0,
+    "camera_height_above_floor": "46 in 142/142 (every camera stands on the room floor)",
+    "camera_pitch_degrees": {"6": 140, "7": 1, "8": 1},
+    "G1_G7_pass_counts_in_scope": {"G1": 142, "G2": 74, "G3": 142, "G4": 142, "G5": 142, "G6": "n/a 142", "G7": 74},
+    "new_G3_G6_failures": 0,
+    "G7_new_failures": 0,
+    "other_gate_changes": "none apart from G8 'not run' in the compile run; G8 with --repeat 2 and the switch on: 142/142 pass (out/phase2/r1s-q1-intermission/g8-on)",
+    "slowest_light_seconds": 15.173
+  },
+  "verdict": "accepted",
+  "evidence_level": "compiler output",
+  "evidence_notes": "Presence, origin and mangle are read from the compiled BSP entity lumps (compiler output). In-solid and overlap checks are static analysis of the .map brushes and entities. That FindIntermission no longer reaches objerror is static analysis of the 1996 progs disassembly and the re-release QuakeC; no engine was run, so the match-end behaviour itself is not engine-tested (D20 keeps Q1 connected-client tests out).",
+  "failures_and_counterexamples_kept": [
+    "out/phase2/r1s-q1-intermission/gen/compare-off-vs-on-raw-*.json (raw compare.py: identity fields counted, every out-of-scope case flagged; kept as the measured counterexample to comparing switched runs without the discount)"
+  ],
+  "default_flip": {
+    "separate_commit": "pending D1; recorded as change r1s-q1-intermission-flip under out/phase2/changes",
+    "flip_change_id": "r1s-q1-intermission-flip",
+    "flipped_qmg_sha256": "de8cc158b4901a0197002ac4d1854bf532eddf16940dbad4b7bdbcca39796629",
+    "checks": "flipped default vs baseline-0: 142 in-scope differences, 0 out of scope over 459 cases; flipped default reproduces the switch-on run (459 maps byte-identical, reports differ only in $.switches and layout_sha256); --switch r1s.q1_intermission=off reproduces baseline-0 (459 maps byte-identical, identity fields only); ctest 87/88 passed, 1 opt-in skipped",
+    "new_baseline_id": "baseline-1",
+    "new_baseline_summary_sha256": "4ae8a466ef5adf68934bfa53e8929e5db74d58df2b09f5672a655ea95fe58ef9",
+    "new_baseline_composite_sha256": "ccbf19cf616f56e7809aca2efbe494c887cea1428e93eab1adb445fa581caf91"
+  },
+  "notes": "Records: out/phase2/changes/r1s-q1-intermission/ (record.json, change.patch, scripts, logs). Q2 and Q3 intermission points (info_player_intermission) are not part of this cause; the D8 role exists for them in the profiles, and the map builder and validator refuse a non-Q1 camera until a later cause defines them."
+}

@@ -1,0 +1,800 @@
+{
+  "schema_version": 1,
+  "id": "q2-courtyard-liquid-study-v1",
+  "date": "2026-09-13",
+  "status": "compiled_static_geometry_and_source_contracts_native_and_human_validation_pending",
+  "scope": "Open court circulation and a complete deep wet bed-to-dry-connector geometry path.",
+  "document": {
+    "project_relative_path": "docs/Q2_COURTYARD_LIQUID_STUDY.md",
+    "sha256": "1787bf70e72000cbc24821dba33518bea9a4d0f91bccb4a7af8e73bcb9beea50",
+    "bytes": 11728
+  },
+  "existing_manifest": {
+    "project_relative_path": "out/map-study/manifest.json",
+    "sha256": "434ed06e37447872df92f0eb9a35c7a0d40b59c5cae77709493d544801d87c02",
+    "bytes": 1303666
+  },
+  "references": [
+    {
+      "map": "manhunt",
+      "title": "Manhunt",
+      "authors": [
+        "Steve 'Scary-one' Lyne"
+      ],
+      "source": {
+        "path": "E:/Development/q2maparchive-wip/maps/manhunt/pack/maps/manhunt.bsp",
+        "sha256": "0e407a8c6f36a3300d74996c3ae019f3951785aed12c0349d29ad2e16514a0c8",
+        "bytes": 993064
+      },
+      "format": "IBSP38",
+      "game": "q2",
+      "source_evidence": [
+        {
+          "kind": "metadata",
+          "path": "E:/Development/q2maparchive-wip/maps/manhunt/pack/maps/ref/manhunt.ref",
+          "sha256": "588be3e090f260b50b43ca914ba535507a7d7ee4be92a2b1241c909ad44b1707",
+          "bytes": 370
+        },
+        {
+          "kind": "readme",
+          "path": "E:/Development/q2maparchive-wip/maps/manhunt/pack/docs/manhunt-readme.txt",
+          "sha256": "1803bebea0aede8095c7daa970322ffa4200bf69c2af4ea7a3eb1cfb13684d76",
+          "bytes": 2783
+        }
+      ],
+      "partition": "reference",
+      "split_group": "a1f3645029775450",
+      "split_review": "provisional; author aliases and unrecorded remakes require human review",
+      "archive_capacity": [
+        5,
+        10
+      ],
+      "author_capacity": [
+        6,
+        12
+      ],
+      "author_capacity_qualifier": "About six or more, up to about twelve; LAN/FFA intent.",
+      "capacity_conflict": "Preserved; author range is qualitative and not substituted into profile labels.",
+      "existing_issues": [
+        "malformed metadata line 12"
+      ],
+      "existing_rights": {
+        "canonical_source_url": null,
+        "licence_evidence_url": null,
+        "licence_identifier": null,
+        "ml_training_allowed": null,
+        "modification_allowed": null,
+        "raw_retrieval_eligible": false,
+        "redistribution_allowed": null,
+        "retrieved_at": null,
+        "status": "unreviewed_local_reference",
+        "training_eligible": false
+      },
+      "revision_limit": "Exact local archived bytes; no current release equivalence or historical playtest reproduction claimed.",
+      "research_usage": "Read-only geometry/entity/source study; no geometry/assets copied into generation and no ML weights trained."
+    },
+    {
+      "map": "gladdm1",
+      "title": "Violent & Funky",
+      "authors": [
+        "Todd 'Mr.CleaN' Rose"
+      ],
+      "source": {
+        "path": "E:/Development/q2maparchive-wip/maps/gladdm1/pack/maps/gladdm1.bsp",
+        "sha256": "6f6af2acdd5108b3dea18ae181358dc81708b6540aab5a0a6417f3c98a4feec1",
+        "bytes": 348048
+      },
+      "format": "IBSP38",
+      "game": "q2",
+      "source_evidence": [
+        {
+          "kind": "metadata",
+          "path": "E:/Development/q2maparchive-wip/maps/gladdm1/pack/maps/ref/gladdm1.ref",
+          "sha256": "4a56db22f1dc9071f4b6f206388602ff922b9556b99da6c218152b4ddeded6fa",
+          "bytes": 386
+        },
+        {
+          "kind": "readme",
+          "path": "E:/Development/q2maparchive-wip/maps/gladdm1/pack/docs/gladdm1-readme.txt",
+          "sha256": "0ff597213699003fa8ba1b862748bde0aecda5961e5ab34940dc5a4193d2d01b",
+          "bytes": 2207
+        }
+      ],
+      "partition": "reference",
+      "split_group": "1e97e74979f0d55d",
+      "split_review": "provisional; author aliases and unrecorded remakes require human review",
+      "archive_capacity": [
+        2,
+        5
+      ],
+      "author_capacity": [
+        2,
+        4
+      ],
+      "author_capacity_qualifier": "Duel preferred; Gladiators construction with author-described stock-Q2 use.",
+      "capacity_conflict": "Preserved; author range is qualitative and not substituted into profile labels.",
+      "existing_issues": [
+        "malformed metadata line 12"
+      ],
+      "existing_rights": {
+        "canonical_source_url": null,
+        "licence_evidence_url": null,
+        "licence_identifier": null,
+        "ml_training_allowed": null,
+        "modification_allowed": null,
+        "raw_retrieval_eligible": false,
+        "redistribution_allowed": null,
+        "retrieved_at": null,
+        "status": "unreviewed_local_reference",
+        "training_eligible": false
+      },
+      "revision_limit": "Exact local archived bytes; no current release equivalence or historical playtest reproduction claimed.",
+      "research_usage": "Read-only geometry/entity/source study; no geometry/assets copied into generation and no ML weights trained."
+    }
+  ],
+  "q2_behavior_sources": [
+    {
+      "path": "E:/_SOURCE/_CODE/Quake-2-master/qcommon/pmove.c",
+      "sha256": "8861daaeff7efd7bc6d3c5e65ef99801567f3e06eb14020787206d39dd0038a8",
+      "bytes": 27381,
+      "contracts": [
+        {
+          "function": "PM_Friction",
+          "lines": [
+            345,
+            376
+          ],
+          "contract": "Water friction scales with waterlevel."
+        },
+        {
+          "function": "PM_AddCurrents",
+          "lines": [
+            438,
+            525
+          ],
+          "contract": "Water/conveyor currents alter wish velocity."
+        },
+        {
+          "function": "PM_WaterMove",
+          "lines": [
+            533,
+            565
+          ],
+          "contract": "Clamped wish speed is halved; water acceleration and step-slide motion apply. This is not a measured speed for an authored route."
+        },
+        {
+          "function": "PM_CategorizePosition",
+          "lines": [
+            743,
+            768
+          ],
+          "contract": "Standing water sampling derives to foot+1, +23, +46; crouched sampling to +1, +11, +22."
+        },
+        {
+          "function": "PM_CheckJump / PM_CheckSpecialMovement",
+          "lines": [
+            798,
+            878
+          ],
+          "contract": "Waterlevel at least two uses swimming behavior; special waterjump tests two forward points, not every possible exit lip."
+        },
+        {
+          "function": "PM_CheckDuck",
+          "lines": [
+            976,
+            1025
+          ],
+          "contract": "Standing hull mins(-16,-16,-24), maxs(16,16,32), viewheight22. Hull top is ten above standing eye."
+        },
+        {
+          "function": "PM_StepSlideMove / ground categorization",
+          "lines": [
+            191,
+            341,
+            682,
+            710
+          ],
+          "contract": "18-unit step attempt and normal-Z0.7 threshold do not alone prove a traversable route."
+        }
+      ],
+      "scope": "Original local source snapshot, not the active game module or a native execution result."
+    },
+    {
+      "path": "E:/_SOURCE/_CODE/Quake-2-master/game/p_view.c",
+      "sha256": "915358415b8088552f7ace5d0a822f122d99b4fe2b9fdb553b9aca460712efcf",
+      "bytes": 26675,
+      "contracts": [
+        {
+          "function": "P_FallingDamage",
+          "lines": [
+            491,
+            575
+          ],
+          "contract": "Damage depends on velocity/state/immersion; geometric fall height alone is not damage."
+        },
+        {
+          "function": "P_WorldEffects",
+          "lines": [
+            578,
+            738
+          ],
+          "contract": "Liquid sounds, air depletion/drowning and immersion-dependent slime/lava effects; no oxygen or damage integration in this study."
+        }
+      ],
+      "scope": "Original local source snapshot, not the active game module or a native execution result."
+    },
+    {
+      "path": "E:/_SOURCE/_CODE/Quake-2-master/game/g_func.c",
+      "sha256": "aa12e2ef06f30bba957adb46cc9caecf843c575041ca5287abec5ecaad2c7873",
+      "bytes": 51174,
+      "contracts": [
+        {
+          "function": "SP_func_door",
+          "lines": [
+            1164,
+            1191
+          ],
+          "contract": "Axial travel is absolute movedir dot size minus lip; START_OPEN swaps endpoints. Manhunt lift3 size192/lip34 implies nominal travel158, not native boarding/cycle validation."
+        }
+      ],
+      "scope": "Original local source snapshot, not the active game module or a native execution result."
+    },
+    {
+      "path": "E:/_SOURCE/_CODE/Quake-2-master/game/g_misc.c",
+      "sha256": "d39e96f6e8793ea768c56df820edcd987d90c9f43b7c3c7037e6ed7cd92413ee",
+      "bytes": 45231,
+      "contracts": [
+        {
+          "function": "teleporter_touch",
+          "lines": [
+            1783,
+            1825
+          ],
+          "contract": "Destination+10Z, cleared velocity, hold flag/timer, facing and KillBox; source target relation is not safe arrival proof."
+        },
+        {
+          "function": "SP_misc_teleporter / SP_misc_teleporter_dest",
+          "lines": [
+            1830,
+            1880
+          ],
+          "contract": "64x64x8 pads and source trigger16x16x16; authored locations used only for route disjointness context."
+        }
+      ],
+      "scope": "Original local source snapshot, not the active game module or a native execution result."
+    },
+    {
+      "path": "E:/_SOURCE/_CODE/Quake-2-master/game/g_utils.c",
+      "sha256": "441b5eeb751763171e507e262cf4a8d525db72c5d98a271edd591f0a6dbb6f22",
+      "bytes": 11074,
+      "contracts": [
+        {
+          "function": "KillBox",
+          "lines": [
+            549,
+            580
+          ],
+          "contract": "Attempts telefrag damage against overlapping occupants; no occupancy test performed here."
+        }
+      ],
+      "scope": "Original local source snapshot, not the active game module or a native execution result."
+    },
+    {
+      "path": "E:/_SOURCE/_CODE/Quake-2-master/game/q_shared.h",
+      "sha256": "c552978e0efed7d7f2daf3cef50af5b7b248555021e93a3347cc73d46d25389c",
+      "bytes": 34549,
+      "contracts": [
+        {
+          "definitions": "CONTENTS and masks",
+          "lines": [
+            339,
+            392
+          ],
+          "contract": "Water32, slime16, lava8; selected static player blockers use mask33619971."
+        }
+      ],
+      "scope": "Original local source snapshot, not the active game module or a native execution result."
+    }
+  ],
+  "context_read_at_study_time": [
+    {
+      "project_relative_path": "docs/ROADMAP.md",
+      "sha256": "2f6bb7a9e9fa244d142a7e6223ec7d36be7d72e826b9508807caab3bf22c9c51",
+      "bytes": 12360
+    },
+    {
+      "project_relative_path": "knowledge/q2/iteration-roadmap.json",
+      "sha256": "1d7b46404299bef97b07f198c99f52bfadea473a53d6504d363567313a21c2e0",
+      "bytes": 10403
+    },
+    {
+      "project_relative_path": "docs/MP_SPATIAL_PATTERNS.md",
+      "sha256": "802b918e48aa1d618513e4b685a0a94717d340d0034676e866ff8a6973330374",
+      "bytes": 14170
+    },
+    {
+      "project_relative_path": "docs/Q2_DROP_RETURN_STUDY.md",
+      "sha256": "b96cb7594dd5bc5c2a0fc3cec4bcf53e0773468fc9238f58c339a7a104593eb5",
+      "bytes": 11534
+    },
+    {
+      "project_relative_path": "docs/Q2_CONTINUOUS_MOVEMENT_STUDY.md",
+      "sha256": "b5d4ac495ea0300445dcf277217d18cebae658705ed9fed7a228e049724be915",
+      "bytes": 11712
+    }
+  ],
+  "context_hash_limit": "As-read snapshots; common roadmap files may evolve independently after this record.",
+  "findings": {
+    "manhunt_upper_court": {
+      "claim_level": "Complete supported static hull route; selected viewpoint sky and authored mechanisms.",
+      "floor_z": 272,
+      "center_xy_waypoints": [
+        [
+          480,
+          352
+        ],
+        [
+          480,
+          640
+        ],
+        [
+          576,
+          768
+        ],
+        [
+          704,
+          832
+        ],
+        [
+          960,
+          832
+        ],
+        [
+          1088,
+          768
+        ],
+        [
+          1184,
+          640
+        ],
+        [
+          1184,
+          352
+        ]
+      ],
+      "standing_hull": [
+        32,
+        32,
+        56
+      ],
+      "player_blocking_model0_brushes": 1684,
+      "poses": 8,
+      "full_hull_sweeps": 7,
+      "plan_length": 1438.216701119973,
+      "support_method": "Exact rational SAT gives every convex horizontal cap vs moving bottom rectangle contact interval. Their closed interval union covers each full segment. Independently swept full-hull SAT excludes penetration.",
+      "route_sky_first_queries": 6,
+      "route_sky_query_count": 8,
+      "separate_unsupported_central_sky_query": {
+        "eye": [
+          832,
+          512,
+          318
+        ],
+        "first_hit_sky_z": 752
+      },
+      "covered_endpoint_first_ceiling_z": 496,
+      "exposed_middle_first_sky_z": 752,
+      "authored_reward_origins": [
+        {
+          "class": "weapon_machinegun",
+          "origin": [
+            480,
+            344,
+            304
+          ]
+        },
+        {
+          "class": "item_armor_body",
+          "origin": [
+            1184,
+            352,
+            312
+          ]
+        }
+      ],
+      "vertical_context": {
+        "lift_entity": 74,
+        "targetname": "lift3",
+        "model": "*6",
+        "bounds": [
+          [
+            768,
+            928,
+            80
+          ],
+          [
+            896,
+            1056,
+            272
+          ]
+        ],
+        "angle": -2,
+        "spawnflags": 1,
+        "lip": 34,
+        "speed": 130,
+        "wait": 3,
+        "nominal_source_translation": 158,
+        "nominal_lower_top": 114,
+        "nearby_render_surface_z": 96,
+        "diagnostic_difference": 18,
+        "boarding_or_cycle_proven": false,
+        "teleporter_source_entity": 41,
+        "target": "tele2",
+        "destination_entity": 172,
+        "destination_origin": [
+          768,
+          224,
+          392
+        ],
+        "destination_angle": 30,
+        "ordinary_lower_to_upper_route_proven": false
+      },
+      "dynamic_limit": "Route swept XY bounds[464,336]..[1200,848] are disjoint from the three vertical door-lift submodels. The two train cycles remain at negativeXY coordinates. Authored teleporter pads do not touch this upper route. Native cycle/state not run.",
+      "inference": "A wrapped upper route preserves a shared encounter while offering covered endpoints and an exposed open middle; balance must be tested."
+    },
+    "gladdm1_deep_wet_return": {
+      "claim_level": "Complete static supported geometric path through actual deep water to a dry connector; no native movement integration.",
+      "water": {
+        "brush": 64,
+        "contents": 32,
+        "bounds": [
+          [
+            -64,
+            0,
+            -320
+          ],
+          [
+            704,
+            1024,
+            -136
+          ]
+        ],
+        "bed_start_z": -256,
+        "local_start_depth": 120,
+        "native_state_verified": false
+      },
+      "waypoints_xy": [
+        [
+          320,
+          512
+        ],
+        [
+          384,
+          512
+        ],
+        [
+          384,
+          704
+        ],
+        [
+          448,
+          704
+        ],
+        [
+          448,
+          944
+        ],
+        [
+          288,
+          944
+        ],
+        [
+          288,
+          1120
+        ]
+      ],
+      "phases": [
+        "deep basin lateral approach",
+        "northern submerged ramp entry",
+        "widening submerged ramp turn",
+        "northern bed ramp ascent",
+        "shallow shelf to dry lip",
+        "dry north connector"
+      ],
+      "poses": 188,
+      "full_hull_sweeps": 187,
+      "continuous_convex_support_segments": 183,
+      "bounded_step_pairs": [
+        {
+          "phase": "northern submerged ramp entry",
+          "foot_delta": 0.00032967207132344247,
+          "foot_delta_exact": "10691505/32430727168",
+          "transition_trigger": "support transition has no shared convex contact",
+          "from_xy": [
+            384,
+            624.0000102713869
+          ],
+          "to_xy": [
+            384,
+            624.0009765625
+          ],
+          "from_pose": 30,
+          "intermediate_pose": 31,
+          "to_pose": 32
+        },
+        {
+          "phase": "shallow shelf to dry lip",
+          "foot_delta": 16.000014145597095,
+          "foot_delta_exact": "9048760/565547",
+          "transition_trigger": 76,
+          "from_xy": [
+            399.99999383716795,
+            944
+          ],
+          "to_xy": [
+            399.99903623238373,
+            944
+          ],
+          "from_pose": 123,
+          "intermediate_pose": 124,
+          "to_pose": 125
+        }
+      ],
+      "plan_length": 896,
+      "ascent": 128,
+      "descent": 0,
+      "player_blocking_model0_brushes": 345,
+      "ramp_draw_faces": [
+        455,
+        456,
+        457,
+        458
+      ],
+      "nominal_ramp_rise": 112,
+      "nominal_ramp_run": 320,
+      "ramp_normal_z": 0.9438583850860596,
+      "nominal_shallow_crest_depth": 8,
+      "nominal_dry_lip": 16,
+      "supported_pose_immersion_counts": {
+        "3": 99,
+        "2": 9,
+        "1": 15,
+        "0": 63
+      },
+      "count_limit": "Uneven geometric pose samples; not time, distance or native state proportions.",
+      "surfacing_columns": [
+        {
+          "xy": [
+            320,
+            512
+          ],
+          "source_foot_z": -256,
+          "target_foot_z": -181,
+          "target_eye_z": -135,
+          "target_hull_top_z": -125,
+          "vertical_hull_sweep_blockers": [
+            179
+          ],
+          "surfacing_column_geometrically_clear": false,
+          "point_first_ceiling_z": -144.0
+        },
+        {
+          "xy": [
+            384,
+            704
+          ],
+          "source_foot_z": -228.0000126299974,
+          "target_foot_z": -181,
+          "target_eye_z": -135,
+          "target_hull_top_z": -125,
+          "vertical_hull_sweep_blockers": [],
+          "surfacing_column_geometrically_clear": true,
+          "point_first_ceiling_z": -32.0
+        },
+        {
+          "xy": [
+            448,
+            704
+          ],
+          "source_foot_z": -228.0000126299974,
+          "target_foot_z": -181,
+          "target_eye_z": -135,
+          "target_hull_top_z": -125,
+          "vertical_hull_sweep_blockers": [],
+          "surfacing_column_geometrically_clear": true,
+          "point_first_ceiling_z": -32.0
+        }
+      ],
+      "dry_exit_eye": [
+        288,
+        1120,
+        -82
+      ],
+      "distinct_fixed_exit_rays": {
+        "total": 6,
+        "clear": 1,
+        "blocked": 5,
+        "excluded": "Self-ray at dry connector"
+      },
+      "rejected_probe_observations": [
+        {
+          "xy": [
+            424,
+            512
+          ],
+          "blocking_brush": 78,
+          "reason": "Straight bed approach intersects solid."
+        },
+        {
+          "xy": [
+            384,
+            912
+          ],
+          "blocking_brush": 241,
+          "reason": "Inner ramp-edge proposal is too early/tight."
+        },
+        {
+          "xy": [
+            448,
+            944.0009765625
+          ],
+          "blocking_brush": 152,
+          "reason": "Straight continuation past crest is blocked."
+        }
+      ],
+      "rejected_probe_limit": "Recorded diagnostic probes from route selection; the retained complete certificate covers only the final successful route.",
+      "inference": "An exit must include the crest turn and dry landing, and a covered deep basin may need a distinct emergence zone."
+    }
+  },
+  "methods": [
+    "Exact stored compiled convex brush planes represented as rational values; zero collision epsilon for static full-hull queries.",
+    "Manhunt horizontal cap-vs-bottom-rectangle SAT contact intervals are unioned over every whole segment, independently of full translated-hull clearance.",
+    "Wet route starts from conservative support proposals, adds actual support-boundary knots, then verifies exact poses and whole sweeps. Same convex contact at endpoints certifies continuous support; bounded step pairs separately prove clear raise/translate legs and supported endpoints.",
+    "Water membership samples strict plane interiors and flags boundaries; it does not execute PM_CategorizePosition or state integration.",
+    "Upward point hits are matched to actual sky-flagged draw faces; upward full-hull sweeps separately check room to surface.",
+    "Analytical plans show selected upward rendered surfaces, sky omitted, in height slabs; trim and overlapping surfaces can remain and are not automatically playable floors."
+  ],
+  "reusable_patterns": [
+    {
+      "id": "covered_to_open_court",
+      "evidence": "manhunt_upper_court",
+      "contract": "Support the whole wrap route; verify sky-first viewpoints and ordinary ascent separately.",
+      "ablation": "Change only one gallery section or one cover block; compare entrance/ascent control and route choice."
+    },
+    {
+      "id": "wet_exit_as_complete_route",
+      "evidence": "gladdm1_deep_wet_return",
+      "contract": "Bind depth to actual support and contents; include entry, submerged path, air space, crest, lip, turn and dry landing.",
+      "ablation": "Drain exactly the same compiled lane before changing one exit feature; retain matched commands/start/goal and failures."
+    },
+    {
+      "id": "emergence_space",
+      "evidence": "gladdm1 surfacing columns",
+      "contract": "A standing eye ten units below hull top needs a clear full-hull column to rise above water.",
+      "ablation": "Change only the emergence roof clearance; retain bed, water surface and route."
+    }
+  ],
+  "new_example_context": {
+    "name": "Lockyard",
+    "proposed_liquid_depth": 112,
+    "status": "Design context only; compile/runtime/balance outcomes belong to the example artifacts.",
+    "dimensions_are": "Project candidate choices, not learned reference quality thresholds."
+  },
+  "not_claimed": [
+    "Native swimming trajectory, speed, timing, oxygen, damage or mover cycle.",
+    "Safe teleporter arrival, full ordinary lower-to-upper Manhunt return, or universally open court.",
+    "Shortest route, whole-map navigation, playable density, competitive quality or current release equivalence."
+  ],
+  "mutations_excluded": [
+    "Archive source changes",
+    "Geometry/asset copying",
+    "Training weights",
+    "Profile or partition changes",
+    "Global rule changes"
+  ],
+  "analysis_tools": [
+    {
+      "project_relative_path": "out/continuous-movement-study/probe_slopes.py",
+      "sha256": "99282f5c80822cd402004e539513b35e6b16017d56bccd71f6505fcf280abd1e",
+      "bytes": 6095
+    },
+    {
+      "project_relative_path": "out/courtyard-liquid-study/audit_court.py",
+      "sha256": "0f839b4d254c8db0ba3f54f50470cc6c1bf6e5f396b6d9d942ce43670c3151ba",
+      "bytes": 6015
+    },
+    {
+      "project_relative_path": "out/courtyard-liquid-study/audit_wet_route.py",
+      "sha256": "e08982b798254bb6ac9adf8101f37646b4ea9dda8825e83720059b3b867eda8b",
+      "bytes": 14842
+    },
+    {
+      "project_relative_path": "out/courtyard-liquid-study/measure_wet_context.py",
+      "sha256": "a616993b75c8ed5e3ff43aa12a351966e19f40c527c99b5598331cc1fd4631cf",
+      "bytes": 4879
+    },
+    {
+      "project_relative_path": "out/mp-spatial-patterns/inspect_patterns.py",
+      "sha256": "1574a88bd601cfd98d0b61e0b3a4e00ab8c0534a6170f13d4e993f7b634e9779",
+      "bytes": 6556
+    },
+    {
+      "project_relative_path": "tools/map_recipes/geometry.py",
+      "sha256": "dcfcc3413468cad9993476736edfae5f13eb03e26035fc39d73f83aa5a90742b",
+      "bytes": 19674
+    },
+    {
+      "project_relative_path": "tools/map_study/binary.py",
+      "sha256": "2b76559a71365eaab41e6876ff7da94fe938994b4a5199d63620b8b60918daf1",
+      "bytes": 15999
+    }
+  ],
+  "runtime": {
+    "python": "3.11.3"
+  },
+  "artifacts": [
+    {
+      "project_relative_path": "out/courtyard-liquid-study/audit_court.py",
+      "sha256": "0f839b4d254c8db0ba3f54f50470cc6c1bf6e5f396b6d9d942ce43670c3151ba",
+      "bytes": 6015
+    },
+    {
+      "project_relative_path": "out/courtyard-liquid-study/audit_wet_route.py",
+      "sha256": "e08982b798254bb6ac9adf8101f37646b4ea9dda8825e83720059b3b867eda8b",
+      "bytes": 14842
+    },
+    {
+      "project_relative_path": "out/courtyard-liquid-study/gladdm1-basin-plans.png",
+      "sha256": "64c70a82268459a1a133d3d79279a3a3bdb43449233fc7a2917cbe3261db4533",
+      "bytes": 69581
+    },
+    {
+      "project_relative_path": "out/courtyard-liquid-study/gladdm1-court-plans.png",
+      "sha256": "620ed436cf019110e68b6656dd41b2eabe9e855ba74cca9200a6c3cd45ddfcbe",
+      "bytes": 73033
+    },
+    {
+      "project_relative_path": "out/courtyard-liquid-study/gladdm1-wet-context.json",
+      "sha256": "bca4261c959f8427c2a7c58085381bbfb4e040216c7b52373d1eff03e9ed1024",
+      "bytes": 182001
+    },
+    {
+      "project_relative_path": "out/courtyard-liquid-study/gladdm1-wet-route-audit.json",
+      "sha256": "7cbfacf70a49f30da7a5216e7abc66cde44811f76789feec1fea600728619a3d",
+      "bytes": 218274
+    },
+    {
+      "project_relative_path": "out/courtyard-liquid-study/manhunt-court-audit.json",
+      "sha256": "8bd10e8bafab292283a04409ab015007fb7d8c4ebe8b189fffc04a5f75c0752d",
+      "bytes": 16377
+    },
+    {
+      "project_relative_path": "out/courtyard-liquid-study/manhunt-plans.png",
+      "sha256": "03691b354aa073ba8eb808efb58b1fd437d4ae9b698aca0357865df2fb18d7cd",
+      "bytes": 105004
+    },
+    {
+      "project_relative_path": "out/courtyard-liquid-study/measure_wet_context.py",
+      "sha256": "a616993b75c8ed5e3ff43aa12a351966e19f40c527c99b5598331cc1fd4631cf",
+      "bytes": 4879
+    },
+    {
+      "project_relative_path": "out/courtyard-liquid-study/render_references.py",
+      "sha256": "c31604f7a8feb4271dc90eeab04ee50033eaffad632461e787f7cd1e1ef044c3",
+      "bytes": 1352
+    },
+    {
+      "project_relative_path": "out/courtyard-liquid-study/write_record.py",
+      "sha256": "c324cb59aedc139efaf383a7efdc02a6b072adcbae5c34ed417d1de8f4c51bd7",
+      "bytes": 15038
+    }
+  ],
+  "reproduce": [
+    "python -B out/courtyard-liquid-study/render_references.py",
+    "python -B out/courtyard-liquid-study/audit_wet_route.py",
+    "python -B out/courtyard-liquid-study/audit_court.py",
+    "python -B out/courtyard-liquid-study/measure_wet_context.py",
+    "python -B out/courtyard-liquid-study/write_record.py"
+  ],
+  "unrelated_issues": "No new unrelated repository defect; both pre-existing malformed metadata warnings and differing archive/author capacities are preserved."
+}

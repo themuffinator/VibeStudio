@@ -1,0 +1,320 @@
+{
+  "schema_version": 1,
+  "id": "killing-machine-atrium-v1",
+  "date": "2026-09-14",
+  "status": "bounded_connected_stairs_and_lower_route_with_retained_high_route_and_ray_failures",
+  "study": "docs/Q2_ATRIUM_ROUTE_STUDY.md",
+  "audit": "out/atrium-route-study/audit.json",
+  "figure": "out/atrium-route-study/atrium-routes.png",
+  "protocol_sha256": "b98d35c12fe4e4df237ad1e3edab6680dd3edeb4c17d766517cf8de7f9058de3",
+  "sources": [
+    {
+      "map": "ztn2dm2",
+      "title": "The Killing Machine",
+      "authors": [
+        "Sten 'ztn' Uusvali"
+      ],
+      "format": "IBSP38",
+      "bsp": {
+        "path": "E:/Development/q2maparchive-wip/maps/ztn2dm2/pack/maps/ztn2dm2.bsp",
+        "sha256": "8b548b52106d66fdef005ed3b64a5959442255b29203b22729bf79af5e83dcb4",
+        "bytes": 574180
+      },
+      "version": "",
+      "partition": "reference",
+      "split_group": "50259728799005a8",
+      "rights_status": "unreviewed_local_reference",
+      "training_eligible": false,
+      "source_metadata_issues": [
+        "malformed metadata line 12"
+      ],
+      "draw_inspected": true,
+      "hull_measured": true,
+      "source_assets_copied": false,
+      "geometry_copied_into_generator": false
+    },
+    {
+      "map": "q2rdm6",
+      "title": "Cunning Plan",
+      "authors": [
+        "Paul 'PeeJ' James"
+      ],
+      "format": "IBSP38",
+      "bsp": {
+        "path": "E:/Development/q2maparchive-wip/maps/q2rmappack/pack/maps/q2rdm6.bsp",
+        "sha256": "858108d3c2400528c510f6b8d80137da86b3c0e18dbe4ed8d3b9d2a3604fcc7c",
+        "bytes": 473288
+      },
+      "version": "Q2R Edition",
+      "partition": "reference",
+      "split_group": "df6a17406b3695d7",
+      "rights_status": "unreviewed_local_reference",
+      "training_eligible": false,
+      "source_metadata_issues": [
+        "malformed metadata line 12"
+      ],
+      "draw_inspected": true,
+      "hull_measured": false,
+      "source_assets_copied": false,
+      "geometry_copied_into_generator": false
+    }
+  ],
+  "selection": {
+    "draw_inspected_maps": [
+      "ztn2dm2",
+      "q2rdm6"
+    ],
+    "chosen": "ztn2dm2",
+    "chosen_reason": "Two differently oriented ordinary stair candidates connect lower0 to separate middle128 stations; a distinct high288 crossing overlaps lower0. The relationship itself is under test, not an asserted opposed-stair Z bridge.",
+    "unselected": "Cunning Plan slices show multiple tiers and two lift entities; no route certificate attempted and no ordinary ascent inferred from that projection.",
+    "source_inspection_sha256": "7c03156a2bc83a78915d85e993820a7441b7f66cf22444ee083016d7dc819391",
+    "pre_measurement_tool_issue": "Initial source diagram script used nonexistent face key; corrected to reader id before any image or route measurements. No geometry trial outcome was changed."
+  },
+  "results": {
+    "draw_inspected_maps": 2,
+    "hull_audited_maps": 1,
+    "hull_audited_areas": 1,
+    "world_blocking_brushes": 830,
+    "liquid_brushes": 0,
+    "excluded_movers": 4,
+    "stock_pad_solids": 0,
+    "fixed_paths_including_repeated_overlap_subroutes": 7,
+    "passing_paths_including_repeated_overlap_subroutes": 5,
+    "paired_legs_including_repeated_overlap_subroutes": 33,
+    "passing_paired_legs_including_repeated_overlap_subroutes": 29,
+    "main_routes": 4,
+    "passing_main_routes": 3,
+    "bidirectional_stairs": 2,
+    "sixteen_unit_step_pairs": 16,
+    "west_stair_xy_length": 352,
+    "east_stair_xy_length": 256,
+    "stair_rise_each": 128,
+    "lower_connection_xy_length": 640,
+    "middle_endpoints_via_lower_xy_length": 1248,
+    "complete_high_route_pass": false,
+    "high_passing_prefix_xy_length": 320,
+    "shared_upper_lower_subroute_xy_length": 64,
+    "shared_upper_lower_full_footprint": [
+      [
+        144,
+        0
+      ],
+      [
+        240,
+        32
+      ]
+    ],
+    "shared_upper_lower_floors": [
+      0,
+      288
+    ],
+    "shared_subroutes_both_pass": true,
+    "upper288_to_middle128_connection_certified": false,
+    "standing_stations": 8,
+    "supported_stations": 8,
+    "stations_bound_to_complete_passing_paths": 5,
+    "directed_eye_rays": 18,
+    "clear_directed_eye_rays": 0,
+    "cross_level_directed_eye_rays": 12,
+    "clear_cross_level_directed_eye_rays": 0,
+    "native_archive_attempts": 0,
+    "pickup_contacts_tested": 0,
+    "failed_paths_repaired_or_replaced": false,
+    "waypoints_changed_after_measurement": false
+  },
+  "controls": {
+    "passed": 10,
+    "total": 10,
+    "scope": "Original convex collision/support constructions; no native execution"
+  },
+  "recommendations": [
+    {
+      "id": "bind-stairs-to-the-intended-level",
+      "claim": "Certify distinct stair endpoints and their ordinary lower connection, then prove their connection to the specific intended raised deck. Nearby supported levels are not interchangeable."
+    },
+    {
+      "id": "supported-overlap-is-not-a-complete-crossing",
+      "claim": "Retain whole-path clearance and layer-specific support outcomes. An upper bend can fail despite full support and a valid shared-XY prefix."
+    },
+    {
+      "id": "height-does-not-imply-cross-level-exposure",
+      "claim": "Use fixed supported eye stations to measure cross-level rays; do not assign visibility or combat value from raised-route presence alone."
+    }
+  ],
+  "limits": [
+    "Two inspected maps, one fixed area audited; every failed waypoint retained",
+    "The two stairs end at128; the high crossing is288. These observations are not a connected opposed-stair Z-bridge precedent",
+    "Geometric step constructions prove full support and clearance in their declared sequences, not native stepping or motion time",
+    "Fixed rays are point exposure observations, not whole-map visibility, firing safety or height advantage",
+    "No archive geometry/assets copied into generation; no human match or model training",
+    "The inspected stair approaches are differently oriented, not a certified opposed-stair Z-bridge template",
+    "All18 fixed rays are blocked; no universal invisibility, safe position, firing cone or height advantage claimed",
+    "The1248XY middle connection uses stair descent and ascent; no shortest-path or timing claim",
+    "Passing overlap subroutes repeat main legs and are not independent route-count evidence",
+    "Resource origins are context only; no resource approach or pickup contact"
+  ],
+  "local_document_links": [
+    "knowledge/q2/atrium-route-study.json",
+    "out/atrium-route-study/protocol-v1.json",
+    "out/atrium-route-study/audit.json",
+    "out/atrium-route-study/atrium-routes.png",
+    "out/map-study/records/ztn2dm2-793d2fcf79.json",
+    "out/map-study/records/q2rdm6-e4dca6965d.json",
+    "out/atrium-route-study/source-inspection.json",
+    "out/atrium-route-study/ztn2dm2-inspection.png",
+    "out/atrium-route-study/q2rdm6-inspection.png",
+    "docs/Q2_UPPER_CONNECTION_STUDY.md",
+    "docs/Q2_TRAVERSAL_STUDY.md"
+  ],
+  "runtime": {
+    "python": "3.11.3",
+    "pillow": "11.3.0"
+  },
+  "bound_files": [
+    {
+      "path": "C:/Windows/Fonts/arial.ttf",
+      "sha256": "b3658eadae55e682b5f69eb64c439c1ecc8f196c0bb8d4756d145d13bc86476a",
+      "bytes": 1045720
+    },
+    {
+      "path": "E:/Development/q2maparchive-wip/maps/q2rmappack/pack/maps/q2rdm6.bsp",
+      "sha256": "858108d3c2400528c510f6b8d80137da86b3c0e18dbe4ed8d3b9d2a3604fcc7c",
+      "bytes": 473288
+    },
+    {
+      "path": "E:/Development/q2maparchive-wip/maps/q2rmappack/pack/maps/ref/q2rdm6.ref",
+      "sha256": "7f16c7e8a86506bff737c7b1579d1a512117dcf615dfc5966dcb9265013f791a",
+      "bytes": 410
+    },
+    {
+      "path": "E:/Development/q2maparchive-wip/maps/ztn2dm2/pack/docs/ztn2dm2-readme.txt",
+      "sha256": "294ae679ee72dac24adb2b1f3dcc78c342d9e1de57a0055c6cb845b3c15a6d92",
+      "bytes": 1477
+    },
+    {
+      "path": "E:/Development/q2maparchive-wip/maps/ztn2dm2/pack/maps/ref/ztn2dm2.ref",
+      "sha256": "9a6d6a53a80a79dc0a9b93aa8d61b0d8b46b1db52eef257123745df721a4f16a",
+      "bytes": 393
+    },
+    {
+      "path": "E:/Development/q2maparchive-wip/maps/ztn2dm2/pack/maps/ztn2dm2.bsp",
+      "sha256": "8b548b52106d66fdef005ed3b64a5959442255b29203b22729bf79af5e83dcb4",
+      "bytes": 574180
+    },
+    {
+      "path": "docs/Q2_ATRIUM_ROUTE_STUDY.md",
+      "sha256": "134be260817082f8e85d59b1deef0cb4c36b09f771a5f3180396294996da95ca",
+      "bytes": 9986
+    },
+    {
+      "path": "docs/Q2_TRAVERSAL_STUDY.md",
+      "sha256": "0240b92f973fb1883c0a4c9c2fda1f5dc92181c884e3dec2896f6a8fef3eed12",
+      "bytes": 9755
+    },
+    {
+      "path": "docs/Q2_UPPER_CONNECTION_STUDY.md",
+      "sha256": "07f2ef36de556af04b295bcdbc90a704eda97486a215d8f8a78247b881eec451",
+      "bytes": 10768
+    },
+    {
+      "path": "out/atrium-route-study/atrium-routes.png",
+      "sha256": "a93bc3862ff85d7f3dd03cecab9e6be74db61d9590af848010bedd11e9110ccb",
+      "bytes": 98416
+    },
+    {
+      "path": "out/atrium-route-study/audit.json",
+      "sha256": "c1d4b261aacc59fd32483e315a4b2d3a60ccabc5cf868167603dc7b3e9eb602b",
+      "bytes": 250282
+    },
+    {
+      "path": "out/atrium-route-study/controls.log",
+      "sha256": "9ad0a2d703c2996f5bb5cd37719633f250c8a3ee0e2ad1e61a11cb569d76367e",
+      "bytes": 1388
+    },
+    {
+      "path": "out/atrium-route-study/inspect_source.py",
+      "sha256": "e321b9e702d37bc3a6396b78bab90b17a86cc389882ed39b17f684d4c3a5addc",
+      "bytes": 3025
+    },
+    {
+      "path": "out/atrium-route-study/protocol-v1.json",
+      "sha256": "b98d35c12fe4e4df237ad1e3edab6680dd3edeb4c17d766517cf8de7f9058de3",
+      "bytes": 8582
+    },
+    {
+      "path": "out/atrium-route-study/q2rdm6-inspection.png",
+      "sha256": "23f65262705405a2cff4f2fe184eca56b0c609c35ed05d55929b222ccf3f5020",
+      "bytes": 38842
+    },
+    {
+      "path": "out/atrium-route-study/record_evidence.py",
+      "sha256": "0ea660836e22c213f817012c146cee6c342c6814c92e7688cd77c63078be8b02",
+      "bytes": 12765
+    },
+    {
+      "path": "out/atrium-route-study/render.py",
+      "sha256": "74d4bb95deea42aec7f8814a02f1f00a8655ce99247ab53aa13f4d938ec182fc",
+      "bytes": 5088
+    },
+    {
+      "path": "out/atrium-route-study/source-inspection.json",
+      "sha256": "7c03156a2bc83a78915d85e993820a7441b7f66cf22444ee083016d7dc819391",
+      "bytes": 355822
+    },
+    {
+      "path": "out/atrium-route-study/ztn2dm2-inspection.png",
+      "sha256": "ceead0f4a53d2a26b47e23bb3104dbe7904bc07c1739e44e360d52e51aa4d67b",
+      "bytes": 45003
+    },
+    {
+      "path": "out/map-study/manifest.json",
+      "sha256": "434ed06e37447872df92f0eb9a35c7a0d40b59c5cae77709493d544801d87c02",
+      "bytes": 1303666
+    },
+    {
+      "path": "out/map-study/records/q2rdm6-e4dca6965d.json",
+      "sha256": "b47f9552c9baeeca04f7709f506b2233c36432595837facb9ad625c87f710dee",
+      "bytes": 31042
+    },
+    {
+      "path": "out/map-study/records/ztn2dm2-793d2fcf79.json",
+      "sha256": "cefd552dd0f0ef9215647300c1b29ad38cf559edf2a28f5cb679fcbb43993cd4",
+      "bytes": 33220
+    },
+    {
+      "path": "tests/test_atrium_routes.py",
+      "sha256": "59e22147395e68e46de6f2ff43d1019c5559b6d66588e541b3592fc1f52a45cd",
+      "bytes": 3022
+    },
+    {
+      "path": "tools/map_recipes/geometry.py",
+      "sha256": "dcfcc3413468cad9993476736edfae5f13eb03e26035fc39d73f83aa5a90742b",
+      "bytes": 19674
+    },
+    {
+      "path": "tools/map_study/atrium_routes.py",
+      "sha256": "2e3c1d4e51b1419c7b013e3ddbf94572da35ed5f5248b6349b6210328d399945",
+      "bytes": 9624
+    },
+    {
+      "path": "tools/map_study/binary.py",
+      "sha256": "2b76559a71365eaab41e6876ff7da94fe938994b4a5199d63620b8b60918daf1",
+      "bytes": 15999
+    },
+    {
+      "path": "tools/map_study/interlocking_topology.py",
+      "sha256": "44897a19f77253374c4d55d8dd2042b0375206675a610d9a6f71483bf3644ef5",
+      "bytes": 15461
+    },
+    {
+      "path": "tools/map_study/raised_resource_circuit.py",
+      "sha256": "a1436e01ec22f79d103c63febb7d391b8b300e84b712ab86b205973a2f5daa90",
+      "bytes": 14972
+    },
+    {
+      "path": "tools/map_study/teleporter_arrivals.py",
+      "sha256": "e7a91d7f26a1c0e2619b176f2a962089688573910a954bcdb732fab9daa64d45",
+      "bytes": 16187
+    }
+  ]
+}

@@ -1511,8 +1511,16 @@ private:
 	void askAssistantAboutCode();
 	// Settings > AI and Automation > Assistant Model.
 	void refreshAiTextModelFields();
+	// Makes a connector the one text features ask: Reasoning, or Local while cloud connectors are off.
+	void useAiTextConnector(const QString& connectorId);
+	// After an AI settings change: the Assistant and every open generator say what they would use now.
+	void refreshAiFeatures();
+	// Greys the Preferred Connectors entries the settings rule out, each saying why.
+	void refreshAiConnectorAvailability(const AiAutomationPreferences& preferences);
 	void saveAiTextModelFields();
 	void testAiTextConnection();
+	// Asks the connection to reply OK; `note` (a tool's sign-in) leads the result.
+	void sendAiTextTest(const AiTextConnection& connection, const QString& note);
 	void persistActivityTask(const QString& taskId);
 	void updateSetupActivity();
 	void refreshActivityCenter(const QString& preferredTaskId = QString());

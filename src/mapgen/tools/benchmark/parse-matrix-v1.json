@@ -1,0 +1,1080 @@
+{
+  "schema": "qmg.benchmark.parse_matrix",
+  "schema_version": 1,
+  "set": "PARSE-MATRIX-v1",
+  "created": "2026-10-15",
+  "frozen": true,
+  "change_id": "x1-bench",
+  "description": "Unit-test table for the prompt normalizer (rank 1 deliverable tests/test_prompt_normalization.cpp). Each row gives an input and the normalized fields it must produce. Keys absent from 'expect' are not checked by that row. Rows with a decision_dependency are reported, not failed, until that decision is recorded.",
+  "expect_keys": {
+    "game": "PromptSpec game token (quake1, quake2, quake3).",
+    "mode": "Primary GameMode token (D4 vocabulary); null means no mode may be inferred from the phrase.",
+    "module": "GameModule token (D4).",
+    "finding": "A typed prompt finding code that must be raised.",
+    "player_min": "Lower bound of the player range.",
+    "player_max": "Upper bound of the player range.",
+    "route_style_not": "The plan's route style must not be this value.",
+    "verticality": "Verticality class the normalizer must set.",
+    "liquids_forbidden": "Liquids the brief must mark forbidden.",
+    "theme": "Theme the brief must select.",
+    "theme_not": "Theme the brief must not select.",
+    "monsters": "'none' means no monsters may be requested.",
+    "forbidden_items": "Classnames the brief must mark forbidden.",
+    "forbidden_item_classes": "Item classes the brief must mark forbidden.",
+    "player_count_not": "A player count the phrase must not produce.",
+    "style_reference": "Map-name style hint to record.",
+    "game_from_style_reference": "Whether the game may be taken from the style reference (always false).",
+    "mode_from_style_reference": "Whether the mode may be taken from the style reference (always false).",
+    "entity_gametype_token": "Q3 entity gametype key token (g_spawn.c).",
+    "arena_type_token": "Q3 arena/UI type token (ui_startserver.c)."
+  },
+  "rows": [
+    {
+      "id": "pm-001",
+      "group": "mode_phrase",
+      "input": "a Quake 1 single player map",
+      "expect": {
+        "game": "quake1",
+        "mode": "single_player"
+      },
+      "decision_dependency": [],
+      "note": ""
+    },
+    {
+      "id": "pm-002",
+      "group": "mode_phrase",
+      "input": "a Quake 1 single-player map",
+      "expect": {
+        "game": "quake1",
+        "mode": "single_player"
+      },
+      "decision_dependency": [],
+      "note": ""
+    },
+    {
+      "id": "pm-003",
+      "group": "mode_phrase",
+      "input": "a Quake 1 campaign map",
+      "expect": {
+        "game": "quake1",
+        "mode": "single_player"
+      },
+      "decision_dependency": [],
+      "note": ""
+    },
+    {
+      "id": "pm-004",
+      "group": "mode_phrase",
+      "input": "a Quake 1 co-op map",
+      "expect": {
+        "game": "quake1",
+        "mode": "cooperative"
+      },
+      "decision_dependency": [],
+      "note": ""
+    },
+    {
+      "id": "pm-005",
+      "group": "mode_phrase",
+      "input": "a Quake 1 coop map",
+      "expect": {
+        "game": "quake1",
+        "mode": "cooperative"
+      },
+      "decision_dependency": [],
+      "note": ""
+    },
+    {
+      "id": "pm-006",
+      "group": "mode_phrase",
+      "input": "a Quake 1 cooperative map",
+      "expect": {
+        "game": "quake1",
+        "mode": "cooperative"
+      },
+      "decision_dependency": [],
+      "note": ""
+    },
+    {
+      "id": "pm-007",
+      "group": "mode_phrase",
+      "input": "a Quake 1 deathmatch map",
+      "expect": {
+        "game": "quake1",
+        "mode": "deathmatch"
+      },
+      "decision_dependency": [],
+      "note": ""
+    },
+    {
+      "id": "pm-008",
+      "group": "mode_phrase",
+      "input": "a Quake 1 DM map",
+      "expect": {
+        "game": "quake1",
+        "mode": "deathmatch"
+      },
+      "decision_dependency": [],
+      "note": ""
+    },
+    {
+      "id": "pm-009",
+      "group": "mode_phrase",
+      "input": "a Quake 1 free for all map",
+      "expect": {
+        "game": "quake1",
+        "mode": "deathmatch"
+      },
+      "decision_dependency": [],
+      "note": ""
+    },
+    {
+      "id": "pm-010",
+      "group": "mode_phrase",
+      "input": "a Quake 1 FFA map",
+      "expect": {
+        "game": "quake1",
+        "mode": "deathmatch"
+      },
+      "decision_dependency": [],
+      "note": ""
+    },
+    {
+      "id": "pm-011",
+      "group": "mode_phrase",
+      "input": "a Quake 1 LAN party map",
+      "expect": {
+        "game": "quake1",
+        "mode": "deathmatch"
+      },
+      "decision_dependency": [],
+      "note": ""
+    },
+    {
+      "id": "pm-012",
+      "group": "mode_phrase",
+      "input": "a Quake 1 duel map",
+      "expect": {
+        "game": "quake1",
+        "mode": "duel"
+      },
+      "decision_dependency": [],
+      "note": ""
+    },
+    {
+      "id": "pm-013",
+      "group": "mode_phrase",
+      "input": "a Quake 1 1v1 map",
+      "expect": {
+        "game": "quake1",
+        "mode": "duel"
+      },
+      "decision_dependency": [],
+      "note": ""
+    },
+    {
+      "id": "pm-014",
+      "group": "mode_phrase",
+      "input": "a Quake 1 one-on-one map",
+      "expect": {
+        "game": "quake1",
+        "mode": "duel"
+      },
+      "decision_dependency": [],
+      "note": ""
+    },
+    {
+      "id": "pm-015",
+      "group": "mode_phrase",
+      "input": "a Quake 1 tourney map",
+      "expect": {
+        "game": "quake1",
+        "mode": "duel"
+      },
+      "decision_dependency": [],
+      "note": ""
+    },
+    {
+      "id": "pm-016",
+      "group": "mode_phrase",
+      "input": "a Quake 1 tournament map",
+      "expect": {
+        "game": "quake1",
+        "mode": "duel"
+      },
+      "decision_dependency": [],
+      "note": ""
+    },
+    {
+      "id": "pm-017",
+      "group": "mode_phrase",
+      "input": "a Quake 1 team deathmatch map",
+      "expect": {
+        "game": "quake1",
+        "mode": "team_deathmatch"
+      },
+      "decision_dependency": [],
+      "note": "Q1 TDM is dropped as a separate claim (section 12) but must still parse."
+    },
+    {
+      "id": "pm-018",
+      "group": "mode_phrase",
+      "input": "a Quake 1 TDM map",
+      "expect": {
+        "game": "quake1",
+        "mode": "team_deathmatch"
+      },
+      "decision_dependency": [],
+      "note": "Q1 TDM is dropped as a separate claim (section 12) but must still parse."
+    },
+    {
+      "id": "pm-019",
+      "group": "mode_phrase",
+      "input": "a Quake 1 capture the flag map",
+      "expect": {
+        "game": "quake1",
+        "mode": "capture_the_flag",
+        "module": "q1-threewave-5.0"
+      },
+      "decision_dependency": [],
+      "note": "id1 has no CTF; Quake 1 CTF means Threewave."
+    },
+    {
+      "id": "pm-020",
+      "group": "mode_phrase",
+      "input": "a Quake 1 CTF map",
+      "expect": {
+        "game": "quake1",
+        "mode": "capture_the_flag",
+        "module": "q1-threewave-5.0"
+      },
+      "decision_dependency": [],
+      "note": "id1 has no CTF; Quake 1 CTF means Threewave."
+    },
+    {
+      "id": "pm-021",
+      "group": "mode_phrase",
+      "input": "a Quake 1 Threewave CTF map",
+      "expect": {
+        "game": "quake1",
+        "mode": "capture_the_flag",
+        "module": "q1-threewave-5.0"
+      },
+      "decision_dependency": [],
+      "note": "id1 has no CTF; Quake 1 CTF means Threewave."
+    },
+    {
+      "id": "pm-022",
+      "group": "mode_phrase",
+      "input": "a Quake 1 bot arena map",
+      "expect": {
+        "game": "quake1",
+        "mode": null,
+        "finding": "unsupported_mode"
+      },
+      "decision_dependency": [],
+      "note": "Bot arena exists only in Quake 3."
+    },
+    {
+      "id": "pm-023",
+      "group": "mode_phrase",
+      "input": "a Quake 2 single player map",
+      "expect": {
+        "game": "quake2",
+        "mode": "single_player"
+      },
+      "decision_dependency": [],
+      "note": ""
+    },
+    {
+      "id": "pm-024",
+      "group": "mode_phrase",
+      "input": "a Quake 2 single-player map",
+      "expect": {
+        "game": "quake2",
+        "mode": "single_player"
+      },
+      "decision_dependency": [],
+      "note": ""
+    },
+    {
+      "id": "pm-025",
+      "group": "mode_phrase",
+      "input": "a Quake 2 campaign map",
+      "expect": {
+        "game": "quake2",
+        "mode": "single_player"
+      },
+      "decision_dependency": [],
+      "note": ""
+    },
+    {
+      "id": "pm-026",
+      "group": "mode_phrase",
+      "input": "a Quake 2 co-op map",
+      "expect": {
+        "game": "quake2",
+        "mode": "cooperative"
+      },
+      "decision_dependency": [],
+      "note": ""
+    },
+    {
+      "id": "pm-027",
+      "group": "mode_phrase",
+      "input": "a Quake 2 coop map",
+      "expect": {
+        "game": "quake2",
+        "mode": "cooperative"
+      },
+      "decision_dependency": [],
+      "note": ""
+    },
+    {
+      "id": "pm-028",
+      "group": "mode_phrase",
+      "input": "a Quake 2 cooperative map",
+      "expect": {
+        "game": "quake2",
+        "mode": "cooperative"
+      },
+      "decision_dependency": [],
+      "note": ""
+    },
+    {
+      "id": "pm-029",
+      "group": "mode_phrase",
+      "input": "a Quake 2 deathmatch map",
+      "expect": {
+        "game": "quake2",
+        "mode": "deathmatch"
+      },
+      "decision_dependency": [],
+      "note": ""
+    },
+    {
+      "id": "pm-030",
+      "group": "mode_phrase",
+      "input": "a Quake 2 DM map",
+      "expect": {
+        "game": "quake2",
+        "mode": "deathmatch"
+      },
+      "decision_dependency": [],
+      "note": ""
+    },
+    {
+      "id": "pm-031",
+      "group": "mode_phrase",
+      "input": "a Quake 2 free for all map",
+      "expect": {
+        "game": "quake2",
+        "mode": "deathmatch"
+      },
+      "decision_dependency": [],
+      "note": ""
+    },
+    {
+      "id": "pm-032",
+      "group": "mode_phrase",
+      "input": "a Quake 2 FFA map",
+      "expect": {
+        "game": "quake2",
+        "mode": "deathmatch"
+      },
+      "decision_dependency": [],
+      "note": ""
+    },
+    {
+      "id": "pm-033",
+      "group": "mode_phrase",
+      "input": "a Quake 2 LAN party map",
+      "expect": {
+        "game": "quake2",
+        "mode": "deathmatch"
+      },
+      "decision_dependency": [],
+      "note": ""
+    },
+    {
+      "id": "pm-034",
+      "group": "mode_phrase",
+      "input": "a Quake 2 duel map",
+      "expect": {
+        "game": "quake2",
+        "mode": "duel"
+      },
+      "decision_dependency": [],
+      "note": ""
+    },
+    {
+      "id": "pm-035",
+      "group": "mode_phrase",
+      "input": "a Quake 2 1v1 map",
+      "expect": {
+        "game": "quake2",
+        "mode": "duel"
+      },
+      "decision_dependency": [],
+      "note": ""
+    },
+    {
+      "id": "pm-036",
+      "group": "mode_phrase",
+      "input": "a Quake 2 one-on-one map",
+      "expect": {
+        "game": "quake2",
+        "mode": "duel"
+      },
+      "decision_dependency": [],
+      "note": ""
+    },
+    {
+      "id": "pm-037",
+      "group": "mode_phrase",
+      "input": "a Quake 2 tourney map",
+      "expect": {
+        "game": "quake2",
+        "mode": "duel"
+      },
+      "decision_dependency": [],
+      "note": ""
+    },
+    {
+      "id": "pm-038",
+      "group": "mode_phrase",
+      "input": "a Quake 2 tournament map",
+      "expect": {
+        "game": "quake2",
+        "mode": "duel"
+      },
+      "decision_dependency": [],
+      "note": ""
+    },
+    {
+      "id": "pm-039",
+      "group": "mode_phrase",
+      "input": "a Quake 2 team deathmatch map",
+      "expect": {
+        "game": "quake2",
+        "mode": "team_deathmatch"
+      },
+      "decision_dependency": [],
+      "note": ""
+    },
+    {
+      "id": "pm-040",
+      "group": "mode_phrase",
+      "input": "a Quake 2 TDM map",
+      "expect": {
+        "game": "quake2",
+        "mode": "team_deathmatch"
+      },
+      "decision_dependency": [],
+      "note": ""
+    },
+    {
+      "id": "pm-041",
+      "group": "mode_phrase",
+      "input": "a Quake 2 capture the flag map",
+      "expect": {
+        "game": "quake2",
+        "mode": "capture_the_flag",
+        "module": "q2-ctf-3.19"
+      },
+      "decision_dependency": [],
+      "note": ""
+    },
+    {
+      "id": "pm-042",
+      "group": "mode_phrase",
+      "input": "a Quake 2 CTF map",
+      "expect": {
+        "game": "quake2",
+        "mode": "capture_the_flag",
+        "module": "q2-ctf-3.19"
+      },
+      "decision_dependency": [],
+      "note": ""
+    },
+    {
+      "id": "pm-043",
+      "group": "mode_phrase",
+      "input": "a Quake 2 Threewave CTF map",
+      "expect": {
+        "game": "quake2",
+        "mode": "capture_the_flag",
+        "module": "q2-ctf-3.19"
+      },
+      "decision_dependency": [],
+      "note": ""
+    },
+    {
+      "id": "pm-044",
+      "group": "mode_phrase",
+      "input": "a Quake 2 bot arena map",
+      "expect": {
+        "game": "quake2",
+        "mode": null,
+        "finding": "unsupported_mode"
+      },
+      "decision_dependency": [],
+      "note": "Bot arena exists only in Quake 3."
+    },
+    {
+      "id": "pm-045",
+      "group": "mode_phrase",
+      "input": "a Quake 3 single player map",
+      "expect": {
+        "game": "quake3",
+        "mode": null
+      },
+      "decision_dependency": [
+        "D15"
+      ],
+      "note": "Quake 3 single player is the bot-arena ladder or a tourney map; D15 decides."
+    },
+    {
+      "id": "pm-046",
+      "group": "mode_phrase",
+      "input": "a Quake 3 single-player map",
+      "expect": {
+        "game": "quake3",
+        "mode": null
+      },
+      "decision_dependency": [
+        "D15"
+      ],
+      "note": "Quake 3 single player is the bot-arena ladder or a tourney map; D15 decides."
+    },
+    {
+      "id": "pm-047",
+      "group": "mode_phrase",
+      "input": "a Quake 3 campaign map",
+      "expect": {
+        "game": "quake3",
+        "mode": null
+      },
+      "decision_dependency": [
+        "D15"
+      ],
+      "note": "Quake 3 single player is the bot-arena ladder or a tourney map; D15 decides."
+    },
+    {
+      "id": "pm-048",
+      "group": "mode_phrase",
+      "input": "a Quake 3 co-op map",
+      "expect": {
+        "game": "quake3",
+        "mode": null,
+        "finding": "unsupported_mode"
+      },
+      "decision_dependency": [],
+      "note": "Quake 3 has no co-op mode."
+    },
+    {
+      "id": "pm-049",
+      "group": "mode_phrase",
+      "input": "a Quake 3 coop map",
+      "expect": {
+        "game": "quake3",
+        "mode": null,
+        "finding": "unsupported_mode"
+      },
+      "decision_dependency": [],
+      "note": "Quake 3 has no co-op mode."
+    },
+    {
+      "id": "pm-050",
+      "group": "mode_phrase",
+      "input": "a Quake 3 cooperative map",
+      "expect": {
+        "game": "quake3",
+        "mode": null,
+        "finding": "unsupported_mode"
+      },
+      "decision_dependency": [],
+      "note": "Quake 3 has no co-op mode."
+    },
+    {
+      "id": "pm-051",
+      "group": "mode_phrase",
+      "input": "a Quake 3 deathmatch map",
+      "expect": {
+        "game": "quake3",
+        "mode": "deathmatch"
+      },
+      "decision_dependency": [],
+      "note": ""
+    },
+    {
+      "id": "pm-052",
+      "group": "mode_phrase",
+      "input": "a Quake 3 DM map",
+      "expect": {
+        "game": "quake3",
+        "mode": "deathmatch"
+      },
+      "decision_dependency": [],
+      "note": ""
+    },
+    {
+      "id": "pm-053",
+      "group": "mode_phrase",
+      "input": "a Quake 3 free for all map",
+      "expect": {
+        "game": "quake3",
+        "mode": "deathmatch"
+      },
+      "decision_dependency": [],
+      "note": ""
+    },
+    {
+      "id": "pm-054",
+      "group": "mode_phrase",
+      "input": "a Quake 3 FFA map",
+      "expect": {
+        "game": "quake3",
+        "mode": "deathmatch"
+      },
+      "decision_dependency": [],
+      "note": ""
+    },
+    {
+      "id": "pm-055",
+      "group": "mode_phrase",
+      "input": "a Quake 3 LAN party map",
+      "expect": {
+        "game": "quake3",
+        "mode": "deathmatch"
+      },
+      "decision_dependency": [],
+      "note": ""
+    },
+    {
+      "id": "pm-056",
+      "group": "mode_phrase",
+      "input": "a Quake 3 duel map",
+      "expect": {
+        "game": "quake3",
+        "mode": "duel"
+      },
+      "decision_dependency": [],
+      "note": ""
+    },
+    {
+      "id": "pm-057",
+      "group": "mode_phrase",
+      "input": "a Quake 3 1v1 map",
+      "expect": {
+        "game": "quake3",
+        "mode": "duel"
+      },
+      "decision_dependency": [],
+      "note": ""
+    },
+    {
+      "id": "pm-058",
+      "group": "mode_phrase",
+      "input": "a Quake 3 one-on-one map",
+      "expect": {
+        "game": "quake3",
+        "mode": "duel"
+      },
+      "decision_dependency": [],
+      "note": ""
+    },
+    {
+      "id": "pm-059",
+      "group": "mode_phrase",
+      "input": "a Quake 3 tourney map",
+      "expect": {
+        "game": "quake3",
+        "mode": "duel",
+        "entity_gametype_token": "tournament",
+        "arena_type_token": "tourney"
+      },
+      "decision_dependency": [],
+      "note": ""
+    },
+    {
+      "id": "pm-060",
+      "group": "mode_phrase",
+      "input": "a Quake 3 tournament map",
+      "expect": {
+        "game": "quake3",
+        "mode": "duel",
+        "entity_gametype_token": "tournament",
+        "arena_type_token": "tourney"
+      },
+      "decision_dependency": [],
+      "note": ""
+    },
+    {
+      "id": "pm-061",
+      "group": "mode_phrase",
+      "input": "a Quake 3 team deathmatch map",
+      "expect": {
+        "game": "quake3",
+        "mode": "team_deathmatch"
+      },
+      "decision_dependency": [],
+      "note": ""
+    },
+    {
+      "id": "pm-062",
+      "group": "mode_phrase",
+      "input": "a Quake 3 TDM map",
+      "expect": {
+        "game": "quake3",
+        "mode": "team_deathmatch"
+      },
+      "decision_dependency": [],
+      "note": ""
+    },
+    {
+      "id": "pm-063",
+      "group": "mode_phrase",
+      "input": "a Quake 3 capture the flag map",
+      "expect": {
+        "game": "quake3",
+        "mode": "capture_the_flag"
+      },
+      "decision_dependency": [],
+      "note": ""
+    },
+    {
+      "id": "pm-064",
+      "group": "mode_phrase",
+      "input": "a Quake 3 CTF map",
+      "expect": {
+        "game": "quake3",
+        "mode": "capture_the_flag"
+      },
+      "decision_dependency": [],
+      "note": ""
+    },
+    {
+      "id": "pm-065",
+      "group": "mode_phrase",
+      "input": "a Quake 3 Threewave CTF map",
+      "expect": {
+        "game": "quake3",
+        "mode": "capture_the_flag",
+        "module": "q3-baseq3-1.32b",
+        "finding": "unsupported_module"
+      },
+      "decision_dependency": [],
+      "note": "Threewave is not part of stock Quake 3; CTF is served by baseq3."
+    },
+    {
+      "id": "pm-066",
+      "group": "mode_phrase",
+      "input": "a Quake 3 bot arena map",
+      "expect": {
+        "game": "quake3",
+        "mode": "bot_arena"
+      },
+      "decision_dependency": [
+        "D15"
+      ],
+      "note": ""
+    },
+    {
+      "id": "pm-067",
+      "group": "number",
+      "input": "a Quake 2 deathmatch map for eight players",
+      "expect": {
+        "player_min": 8,
+        "player_max": 8
+      },
+      "decision_dependency": [],
+      "note": ""
+    },
+    {
+      "id": "pm-068",
+      "group": "number",
+      "input": "a Quake 3 FFA map for 16 people",
+      "expect": {
+        "player_min": 16,
+        "player_max": 16
+      },
+      "decision_dependency": [],
+      "note": ""
+    },
+    {
+      "id": "pm-069",
+      "group": "number",
+      "input": "a Quake 2 deathmatch map for 2-8 players",
+      "expect": {
+        "player_min": 2,
+        "player_max": 8
+      },
+      "decision_dependency": [],
+      "note": ""
+    },
+    {
+      "id": "pm-070",
+      "group": "number",
+      "input": "a Quake 2 deathmatch map for 2 to 8 players",
+      "expect": {
+        "player_min": 2,
+        "player_max": 8
+      },
+      "decision_dependency": [],
+      "note": ""
+    },
+    {
+      "id": "pm-071",
+      "group": "number",
+      "input": "a Quake 2 deathmatch map for 2–8 players",
+      "expect": {
+        "player_min": 2,
+        "player_max": 8
+      },
+      "decision_dependency": [],
+      "note": ""
+    },
+    {
+      "id": "pm-072",
+      "group": "number",
+      "input": "a Quake 1 duel map for two players",
+      "expect": {
+        "player_min": 2,
+        "player_max": 2
+      },
+      "decision_dependency": [],
+      "note": ""
+    },
+    {
+      "id": "pm-073",
+      "group": "number",
+      "input": "a Quake 3 team deathmatch map for four to six players",
+      "expect": {
+        "player_min": 4,
+        "player_max": 6
+      },
+      "decision_dependency": [],
+      "note": ""
+    },
+    {
+      "id": "pm-074",
+      "group": "number",
+      "input": "a Quake 2 CTF map for 4v4",
+      "expect": {
+        "player_min": 8,
+        "player_max": 8
+      },
+      "decision_dependency": [],
+      "note": ""
+    },
+    {
+      "id": "pm-075",
+      "group": "number",
+      "input": "a Quake 1 deathmatch map for twelve players",
+      "expect": {
+        "player_min": 12,
+        "player_max": 12
+      },
+      "decision_dependency": [],
+      "note": ""
+    },
+    {
+      "id": "pm-076",
+      "group": "number",
+      "input": "a Quake 3 tourney map for 2 players",
+      "expect": {
+        "player_min": 2,
+        "player_max": 2
+      },
+      "decision_dependency": [],
+      "note": ""
+    },
+    {
+      "id": "pm-077",
+      "group": "negation",
+      "input": "a Quake 1 deathmatch map with no loops",
+      "expect": {
+        "route_style_not": "loop"
+      },
+      "decision_dependency": [],
+      "note": ""
+    },
+    {
+      "id": "pm-078",
+      "group": "negation",
+      "input": "a Quake 2 duel map that is not vertical",
+      "expect": {
+        "verticality": "flat"
+      },
+      "decision_dependency": [],
+      "note": ""
+    },
+    {
+      "id": "pm-079",
+      "group": "negation",
+      "input": "a Quake 3 FFA map with no water",
+      "expect": {
+        "liquids_forbidden": [
+          "water"
+        ],
+        "theme_not": "waterworks"
+      },
+      "decision_dependency": [],
+      "note": ""
+    },
+    {
+      "id": "pm-080",
+      "group": "negation",
+      "input": "a Quake 2 single-player level without lava",
+      "expect": {
+        "liquids_forbidden": [
+          "lava"
+        ],
+        "theme_not": "lava fortress"
+      },
+      "decision_dependency": [],
+      "note": ""
+    },
+    {
+      "id": "pm-081",
+      "group": "negation",
+      "input": "a Quake 1 single-player map with no monsters",
+      "expect": {
+        "monsters": "none"
+      },
+      "decision_dependency": [],
+      "note": ""
+    },
+    {
+      "id": "pm-082",
+      "group": "negation",
+      "input": "a Quake 2 deathmatch map with no BFG",
+      "expect": {
+        "forbidden_items": [
+          "weapon_bfg"
+        ]
+      },
+      "decision_dependency": [],
+      "note": ""
+    },
+    {
+      "id": "pm-083",
+      "group": "negation",
+      "input": "a Quake 3 tourney map without powerups",
+      "expect": {
+        "forbidden_item_classes": [
+          "powerup"
+        ]
+      },
+      "decision_dependency": [],
+      "note": ""
+    },
+    {
+      "id": "pm-084",
+      "group": "false_positive",
+      "input": "a Quake 2 deathmatch map in a gothic cathedral with a database archive",
+      "expect": {
+        "theme": "gothic",
+        "theme_not": "techbase"
+      },
+      "decision_dependency": [],
+      "note": ""
+    },
+    {
+      "id": "pm-085",
+      "group": "false_positive",
+      "input": "a Quake 3 CTF map with two bases in a medieval castle",
+      "expect": {
+        "theme": "medieval",
+        "theme_not": "techbase",
+        "player_count_not": 2,
+        "mode": "capture_the_flag"
+      },
+      "decision_dependency": [],
+      "note": ""
+    },
+    {
+      "id": "pm-086",
+      "group": "false_positive",
+      "input": "a Quake 1 deathmatch map in a medieval keep with open space",
+      "expect": {
+        "theme": "medieval",
+        "theme_not": "space"
+      },
+      "decision_dependency": [],
+      "note": ""
+    },
+    {
+      "id": "pm-087",
+      "group": "false_positive",
+      "input": "a Quake 2 single-player level in a gothic basement",
+      "expect": {
+        "theme": "gothic",
+        "theme_not": "techbase"
+      },
+      "decision_dependency": [],
+      "note": ""
+    },
+    {
+      "id": "pm-088",
+      "group": "map_reference",
+      "input": "a q2dm1 style map",
+      "expect": {
+        "style_reference": "q2dm1",
+        "game_from_style_reference": false,
+        "mode_from_style_reference": false
+      },
+      "decision_dependency": [],
+      "note": "Map-name references are style hints; they never switch game or mode (rank 1, R1-e)."
+    },
+    {
+      "id": "pm-089",
+      "group": "map_reference",
+      "input": "q3dm17 remake for Quake 2",
+      "expect": {
+        "game": "quake2",
+        "style_reference": "q3dm17",
+        "game_from_style_reference": false
+      },
+      "decision_dependency": [],
+      "note": "Map-name references are style hints; they never switch game or mode (rank 1, R1-e)."
+    },
+    {
+      "id": "pm-090",
+      "group": "map_reference",
+      "input": "like q3dm6 but for Quake 1 deathmatch",
+      "expect": {
+        "game": "quake1",
+        "mode": "deathmatch",
+        "style_reference": "q3dm6"
+      },
+      "decision_dependency": [],
+      "note": "Map-name references are style hints; they never switch game or mode (rank 1, R1-e)."
+    },
+    {
+      "id": "pm-091",
+      "group": "map_reference",
+      "input": "a dm3-inspired Quake 2 duel map",
+      "expect": {
+        "game": "quake2",
+        "mode": "duel",
+        "style_reference": "dm3"
+      },
+      "decision_dependency": [],
+      "note": "Map-name references are style hints; they never switch game or mode (rank 1, R1-e)."
+    },
+    {
+      "id": "pm-092",
+      "group": "map_reference",
+      "input": "a q2ctf1 style capture the flag map for Quake 2",
+      "expect": {
+        "game": "quake2",
+        "mode": "capture_the_flag",
+        "style_reference": "q2ctf1"
+      },
+      "decision_dependency": [],
+      "note": "Map-name references are style hints; they never switch game or mode (rank 1, R1-e)."
+    }
+  ]
+}

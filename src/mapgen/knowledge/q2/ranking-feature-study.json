@@ -1,0 +1,403 @@
+{
+  "schema_version": 1,
+  "id": "ranking-feature-study-v1",
+  "date": "2026-09-13",
+  "status": "bounded_feature_semantics_controls_complete_no_ranker_tuning",
+  "study": "docs/Q2_RANKING_FEATURE_STUDY.md",
+  "results": "out/ranking-feature-study/results.json",
+  "reproduce": "python -B -m tools.map_study.ranking_features",
+  "reference": {
+    "name": "q2rdm2",
+    "title": "The Chastity Belt Duel",
+    "author": "German 'JaLisK0' Garcia",
+    "partition": "reference",
+    "split_group": "52d56ae05d40c3fb",
+    "bsp_sha256": "d6ee3b39d4e557e7ad5cd39d2bf955e8251edd7e491f2033eee80500791d7199",
+    "archive_revision": "Q2R TMP Edition",
+    "readme_dates": "May2001, updated June2001",
+    "archive_date": "2001-08-02",
+    "capacity_conflict": "Author says duel2; archive says2\u20134 with duel/FFA/2v2. Unresolved.",
+    "rights": "Original readme prohibits using map as base; redistribution restricted. Training rights unreviewed."
+  },
+  "reference_evidence_reused": "knowledge/q2/interlocking-topology-study.json",
+  "novel_question": "Which inherited score inputs change under equivalent room descriptions, and which ignore real route obstructions?",
+  "control_ownership": "New sealed geometry is project-original; room partitions are analytical metadata, not production MapBuilder variants.",
+  "partition_controls": {
+    "equal-x": {
+      "strip_volumes": [
+        134217728,
+        134217728,
+        134217728,
+        134217728
+      ],
+      "volume_cv": 0.0,
+      "volume_input": 0.0,
+      "mean_center_xy_manhattan": 512.0,
+      "center_input": 0.3999999761581421,
+      "reconstructed_score": 3.8200000452995297
+    },
+    "unequal-x": {
+      "strip_volumes": [
+        67108864,
+        67108864,
+        134217728,
+        268435456
+      ],
+      "volume_cv": 0.6123724356957945,
+      "volume_input": 1.0,
+      "mean_center_xy_manhattan": 469.3333333333333,
+      "center_input": 0.36666667461395264,
+      "reconstructed_score": 4.1600000484784445
+    },
+    "cv-only-x": {
+      "strip_volumes": [
+        67108864,
+        201326592,
+        67108864,
+        201326592
+      ],
+      "volume_cv": 0.5,
+      "volume_input": 1.0,
+      "mean_center_xy_manhattan": 512.0,
+      "center_input": 0.3999999761581421,
+      "reconstructed_score": 4.170000039339065
+    },
+    "equal-y": {
+      "strip_volumes": [
+        134217728,
+        134217728,
+        134217728,
+        134217728
+      ],
+      "volume_cv": 0.0,
+      "volume_input": 0.0,
+      "mean_center_xy_manhattan": 256.0,
+      "center_input": 0.19999998807907104,
+      "reconstructed_score": 3.760000046491623
+    }
+  },
+  "compiled_controls": {
+    "open-chamber": {
+      "map_sha256": "1371990c0a380ec9334c723098d83af3ffcb45998b3b421f00a492be2150f240",
+      "bsp_sha256": "ccbb70eae3967d4b5f32031e982a06eecff379025358d93bc3f7f2b158efdec8",
+      "world_brushes": 6,
+      "standing_hull": [
+        32,
+        32,
+        56
+      ],
+      "mask": 33619971
+    },
+    "barrier-chamber": {
+      "map_sha256": "9326208997afd61f06e29d5cc710e9895e343abf56cd692221042a16c70f65aa",
+      "bsp_sha256": "28a776446e5b9b4551e542566d5bc3ea5d282b3ad47e092d705ae72c943590f3",
+      "world_brushes": 7,
+      "standing_hull": [
+        32,
+        32,
+        56
+      ],
+      "mask": 33619971
+    }
+  },
+  "actual_ggml_fixture": {
+    "equal_vs_unequal_score_delta": 0.34,
+    "tolerance": 2e-06,
+    "equal_and_unequal_feature_vectors_tested": true,
+    "passage_dimensions_ignored_control_passed": true,
+    "test_record": "out/ranking-feature-study/ggml-test-record.json",
+    "other_partition_rows": "Analytical feature reconstruction only."
+  },
+  "barrier_comparison": {
+    "same_room_and_connection_records": true,
+    "barrier_purpose": "non-raised structural obstruction",
+    "all_inherited_features_equal": true,
+    "direct_length": 1920,
+    "clear_detour_length": 2304,
+    "detour_not_proven_shortest": true
+  },
+  "piece_decomposition_control": {
+    "same_box_union": [
+      [
+        768,
+        256,
+        104
+      ],
+      [
+        1280,
+        768,
+        128
+      ]
+    ],
+    "pieces": [
+      [
+        [
+          768,
+          256,
+          104
+        ],
+        [
+          1024,
+          768,
+          128
+        ]
+      ],
+      [
+        [
+          1024,
+          256,
+          104
+        ],
+        [
+          1280,
+          768,
+          128
+        ]
+      ]
+    ],
+    "exact_same_union_verified": true,
+    "one_piece": 1,
+    "two_adjacent_pieces_split_x": 1024,
+    "room_count": 4,
+    "feature_one_piece": 0.5,
+    "feature_two_pieces": 1.0,
+    "scope": "Exact solid-union arithmetic; not another compiled geometry or elevated-route test."
+  },
+  "reference_comparison": {
+    "map": "q2rdm2",
+    "bsp_sha256": "d6ee3b39d4e557e7ad5cd39d2bf955e8251edd7e491f2033eee80500791d7199",
+    "start_feet": [
+      -160,
+      560,
+      -288
+    ],
+    "end_feet": [
+      640,
+      592,
+      -288
+    ],
+    "endpoint_xy_manhattan": 832,
+    "endpoint_1280_affinity": 0.65,
+    "selected_north_length": 1312,
+    "selected_south_length": 1760,
+    "ratios_to_endpoint_l1": {
+      "north": 1.5769230769230769,
+      "south": 2.1153846153846154
+    },
+    "north_contract": "Shallow ground band; no constant-floor/native-contact certificate.",
+    "south_contract": "Full-footprint flat support and full standing-hull sweep.",
+    "central_832_unit_polyline_blocked": true,
+    "limit": "The endpoint L1 comparison illustrates information loss; these are not extracted room centers or a whole-map rank score."
+  },
+  "candidate_design_lessons": [
+    {
+      "id": "representation_sensitive_descriptors",
+      "hypothesis": "Keep room CV, center spacing and piece counts as explicit structural descriptors; test invariance before using them as quality preferences.",
+      "limit": "No canonical room segmentation or replacement weights established."
+    },
+    {
+      "id": "path_bound_ranking_evidence",
+      "hypothesis": "Evaluate actual supported routes and selected viewpoint rays between shared endpoints; expose contracts and raw measurements separately from scores.",
+      "limit": "Static witnesses do not establish native travel time, player choice, competitive balance or shortest routes."
+    }
+  ],
+  "native_tested": false,
+  "gameplay_tested": false,
+  "reference_geometry_copied": false,
+  "ranker_formula_changed": false,
+  "profile_changed": false,
+  "weights_trained": false,
+  "partition_changed": false,
+  "training_rights_reviewed": false,
+  "negative_evidence": [
+    "Same verified open BSP receives different inputs under equivalent adjacent convex partition metadata.",
+    "A real non-raised barrier leaves all inherited feature inputs equal but blocks the direct standing-hull crossing.",
+    "The q2rdm2 endpoint-Manhattan central line is blocked and unsupported; its shorter northern bypass has a weaker ground-band contract.",
+    "Splitting one identical platform solid union into two records increases the platform-count input."
+  ],
+  "limits": [
+    "Partition metadata does not create interior walls in this control; all variants refer to one compiled BSP.",
+    "No claim that arbitrary repartition is accepted by the production Layout validator or canonical MapBuilder.",
+    "BSP/hull checks do not simulate player motion or establish match quality.",
+    "Reconstructed feature arithmetic is distinct from real ggml diagnostic tests.",
+    "Compiler controls are sealed QBSP-only, with no VIS or lighting; no engine is launched.",
+    "The reference endpoints are not inferred room centers and no whole-reference-map score is calculated.",
+    "Original barrier detour and retained reference polylines are selected witnesses, not global shortest paths.",
+    "The independent core instrumentation exposes existing behavior; this research does not tune selection.",
+    "Solid-piece example is exact-union arithmetic, not a compiled elevated movement test."
+  ],
+  "source_files": [
+    {
+      "path": "E:/Development/q2maparchive-wip/maps/q2rmappack/pack/maps/q2rdm2.bsp",
+      "sha256": "d6ee3b39d4e557e7ad5cd39d2bf955e8251edd7e491f2033eee80500791d7199",
+      "bytes": 824200
+    },
+    {
+      "path": "E:/Development/q2maparchive-wip/maps/q2rmappack/pack/maps/ref/q2rdm2.ref",
+      "sha256": "a7ed922e8f0a6980e6e45764ef5c7cfe25a80788a30ec5d2832453d85a853c5a",
+      "bytes": 424
+    },
+    {
+      "path": "E:/Development/q2maparchive-wip/maps/q2rmappack/pack/docs/q2rdm2.txt",
+      "sha256": "842c2f34ee6852302d35a79636b5ee87603b74cd7bdb5c24ea4d03736a632d1e",
+      "bytes": 4076
+    },
+    {
+      "path": "E:/_SOURCE/_CODE/ericw-tools-2.0.0-alpha11/qbsp.exe",
+      "sha256": "fad5a4dc4daf42773ad9a812349b2667221bec47a920cad10cb821ae442c8eb8",
+      "bytes": 1270272
+    }
+  ],
+  "artifact_files": [
+    {
+      "path": "docs/Q2_INTERLOCKING_TOPOLOGY_STUDY.md",
+      "sha256": "b59fe83e7660423bcfa88b15d4df015df4a4e5bd57010e73e7ffdf96c733ffce",
+      "bytes": 9033
+    },
+    {
+      "path": "docs/Q2_RANKING_FEATURE_STUDY.md",
+      "sha256": "4da9aacd35a4768ffc6837e79af4bd9c23d150759e7af88d78a33afb028ca5f1",
+      "bytes": 11409
+    },
+    {
+      "path": "knowledge/q2/interlocking-topology-study.json",
+      "sha256": "45d87dac52fb8a677858cbcdc6674d6cd100ac5980dd36ac9070a6484f37f05e",
+      "bytes": 8331
+    },
+    {
+      "path": "out/interlocking-topology-study/protocol.json",
+      "sha256": "517177ca85bac544a6e8a000bf865dede8b5e3b212b11901072e6d7eb59cc0ee",
+      "bytes": 1118
+    },
+    {
+      "path": "out/interlocking-topology-study/route-audit.json",
+      "sha256": "f0daba10e1cd97b095741679508aaa3a65b69f470a395051bb02cd00439cbc35",
+      "bytes": 151637
+    },
+    {
+      "path": "out/ranking-feature-study/barrier-chamber-qbsp.log",
+      "sha256": "1ac50c0b5edc9aae1b28a6307a8e0b78952bc7a88646c97783aa1692b15ce1ff",
+      "bytes": 1883
+    },
+    {
+      "path": "out/ranking-feature-study/barrier-chamber.bsp",
+      "sha256": "28a776446e5b9b4551e542566d5bc3ea5d282b3ad47e092d705ae72c943590f3",
+      "bytes": 13296
+    },
+    {
+      "path": "out/ranking-feature-study/barrier-chamber.content.json",
+      "sha256": "93ea99fb9ea9be688cae262c3d6eb0be4e035aa9980e44ff5cad5a3ed7f5798f",
+      "bytes": 163
+    },
+    {
+      "path": "out/ranking-feature-study/barrier-chamber.map",
+      "sha256": "9326208997afd61f06e29d5cc710e9895e343abf56cd692221042a16c70f65aa",
+      "bytes": 4499
+    },
+    {
+      "path": "out/ranking-feature-study/barrier-chamber.prt",
+      "sha256": "5b49585589e2e1eff54575f85660b694d4d7d1e227624d83180f19be960ce238",
+      "bytes": 520
+    },
+    {
+      "path": "out/ranking-feature-study/barrier-chamber.texinfo.json",
+      "sha256": "9aed2bc6dfbecacf3b13f49c35cf5c8b370f7c3884270bef399ac5585e07b83f",
+      "bytes": 35
+    },
+    {
+      "path": "out/ranking-feature-study/compile-record.json",
+      "sha256": "2e576fd7645d592c7d50567e8fa68aab0cf0238cda95fce35f181ff5637df8e0",
+      "bytes": 1424
+    },
+    {
+      "path": "out/ranking-feature-study/generator-source-snapshot.cpp",
+      "sha256": "c795115119d33b20a0027e29fe1b3b6b6267d9cc1697ce05b22fe3dd99ddae08",
+      "bytes": 12616
+    },
+    {
+      "path": "out/ranking-feature-study/ggml-diagnostics.log",
+      "sha256": "898fe205f07cdbb59898ab6c7d717a66c3e17a17f6703bca9298f130f0541cf3",
+      "bytes": 156
+    },
+    {
+      "path": "out/ranking-feature-study/ggml-test-record.json",
+      "sha256": "49a35979a5f124ab685a5303704fa8af4c330a379d5bf04326fd6fa68ece1c6e",
+      "bytes": 590
+    },
+    {
+      "path": "out/ranking-feature-study/open-chamber-qbsp.log",
+      "sha256": "fba83e2996f6f35780ef0a2a2460bc2ac7014e2606096dd6f8acb9218298f0d8",
+      "bytes": 1871
+    },
+    {
+      "path": "out/ranking-feature-study/open-chamber.bsp",
+      "sha256": "ccbb70eae3967d4b5f32031e982a06eecff379025358d93bc3f7f2b158efdec8",
+      "bytes": 11684
+    },
+    {
+      "path": "out/ranking-feature-study/open-chamber.content.json",
+      "sha256": "db8ecc3e732870cab9b4d1226461bd0e180ed86f4b3bdcf742c30504d35f5c58",
+      "bytes": 126
+    },
+    {
+      "path": "out/ranking-feature-study/open-chamber.map",
+      "sha256": "1371990c0a380ec9334c723098d83af3ffcb45998b3b421f00a492be2150f240",
+      "bytes": 3944
+    },
+    {
+      "path": "out/ranking-feature-study/open-chamber.prt",
+      "sha256": "379a60f85a5621652cded226bc453e7e3cc881a157f01e0cb9d3e60d86f89da1",
+      "bytes": 12
+    },
+    {
+      "path": "out/ranking-feature-study/open-chamber.texinfo.json",
+      "sha256": "9aed2bc6dfbecacf3b13f49c35cf5c8b370f7c3884270bef399ac5585e07b83f",
+      "bytes": 35
+    },
+    {
+      "path": "out/ranking-feature-study/ranker-diagnostics-test-snapshot.cpp",
+      "sha256": "0c9635e36d64816b432d3139948ed7fb2e3b642d1259526ff7152dc5656696f6",
+      "bytes": 17122
+    },
+    {
+      "path": "out/ranking-feature-study/ranker-source-snapshot.cpp",
+      "sha256": "3c2e77019daffa6fda2ba3f5209cf78405ac645dd6af626bac236499c03678d2",
+      "bytes": 9040
+    },
+    {
+      "path": "out/ranking-feature-study/README.md",
+      "sha256": "d1a1e987983dce846077847ee9a745a3c605925df2e7a2f56430602613426661",
+      "bytes": 660
+    },
+    {
+      "path": "out/ranking-feature-study/record_evidence.py",
+      "sha256": "59613b9b36db539ef8e1da3ae372d626b37f5220e1fc9f9a9818f81cf8b19608",
+      "bytes": 10026
+    },
+    {
+      "path": "out/ranking-feature-study/results.json",
+      "sha256": "fddb940a9f4875f51b695711064c3fb356a3f2ac0fcc1e3b7824b45131037736",
+      "bytes": 26379
+    },
+    {
+      "path": "tools/map_recipes/geometry.py",
+      "sha256": "dcfcc3413468cad9993476736edfae5f13eb03e26035fc39d73f83aa5a90742b",
+      "bytes": 19674
+    },
+    {
+      "path": "tools/map_study/binary.py",
+      "sha256": "2b76559a71365eaab41e6876ff7da94fe938994b4a5199d63620b8b60918daf1",
+      "bytes": 15999
+    },
+    {
+      "path": "tools/map_study/interlocking_topology.py",
+      "sha256": "44897a19f77253374c4d55d8dd2042b0375206675a610d9a6f71483bf3644ef5",
+      "bytes": 15461
+    },
+    {
+      "path": "tools/map_study/ranking_features.py",
+      "sha256": "d903d5156dc49d42f206d207ee72f5b47d2cb074f828ef8ac70963c1bdf7683b",
+      "bytes": 11673
+    }
+  ]
+}

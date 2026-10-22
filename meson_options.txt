@@ -33,3 +33,18 @@ option(
   value: 'auto',
   description: 'Native synchronized recording backend: WASAPI, CoreAudio or ALSA. Disable for device-free builds.'
 )
+
+
+option(
+  'ggml',
+  type: 'feature',
+  value: 'disabled',
+  description: 'Link llama.cpp and ggml: the Local GGUF connector for every text pipeline, and the ggml layout ranker of Quake-MapGen. Build them first with scripts/build_ggml.py.'
+)
+
+option(
+  'ggml_prefix',
+  type: 'string',
+  value: '',
+  description: 'Install folder of the pinned llama.cpp/ggml build (scripts/build_ggml.py --prefix). Empty uses external/ai/ggml.'
+)

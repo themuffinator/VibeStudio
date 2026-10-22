@@ -1,0 +1,400 @@
+{
+  "schema": "qmg.benchmark.manifest",
+  "schema_version": 2,
+  "set": "SPLICE-PORTFOLIO",
+  "created": "2026-10-15",
+  "frozen": true,
+  "change_id": "x1-bench",
+  "description": "Splice nine: 4/6/8 rooms x seeds 17/42/99 through the ordinary default pipeline. The separate Splice example (rooms6-seed73) is not part of the nine.",
+  "reconstructed_from": [
+    "out/splice-portfolio/cases.json",
+    "out/splice-portfolio/README.md"
+  ],
+  "invocation": "qmg generate --prompt-file <exact prompt bytes> --output <map_name>.map, all other options at their defaults (6 candidates, rules planner, no --seed: the request seed is in the prompt text). run.py writes the prompt bytes verbatim to <case>/prompt.txt.",
+  "invocation_evidence": "out/splice-portfolio/README.md: 'run through the ordinary default pipeline'.",
+  "reconstruction_gaps": [
+    "No generation script is retained under out/splice-portfolio; the invocation is taken from the README ('run through the ordinary default pipeline') and the exporter contract in tools/mp_portfolio/README.md."
+  ],
+  "cases_sha256": "5354e33cc8b34fd59fac991ae0c661a5146612b1b7fbbad103955bc422bc0698",
+  "case_count": 9,
+  "cases": [
+    {
+      "id": "rooms4-seed17",
+      "target": "q2-duel",
+      "game": "q2",
+      "mode": "duel",
+      "category": "portfolio",
+      "group": "primary",
+      "prompt": "Quake 2 duel industrial arena for 2 players with 4 rooms, vertical combat, tight connected loops, seed 17\r\n",
+      "prompt_sha256": "153bcf22c45d7e218e203b7e45b4d32f867400d94dc09f360edb1707a5d1176b",
+      "prompt_source": "out/splice-portfolio/prompts/rooms4-seed17.txt",
+      "requested_seed": 17,
+      "seed": null,
+      "rooms": 4,
+      "map_name": "qmg_rooms4-seed17",
+      "qmg_args": [
+        "generate",
+        "--prompt-file",
+        "{prompt_file}",
+        "--output",
+        "qmg_rooms4-seed17.map"
+      ],
+      "expected_requests": [
+        "game quake2",
+        "mode duel",
+        "4 rooms",
+        "theme industrial"
+      ],
+      "notes": "",
+      "path": "q2-duel",
+      "claimed": "committed",
+      "module": "q2-baseq2-3.19",
+      "expected_conflicts": [],
+      "expected_resolution": null,
+      "recorded_outputs": {
+        "map_sha256": "d547edcc18b347b59e6318b6cf6803c097d52ba1c9b5d2dbbf038e3b963e39bd",
+        "qmg_json_sha256": "26bf7f48d9754b6bf6dd4704876ee8b74d80da6415d0d77d49e47c8bb06b56fe",
+        "layout_sha256": "2aac9d4460d8d4885a45f50b016784d3b68b7050dfd5a021fcd87994e95f4cb8",
+        "candidate_seed": "1663341875487337594",
+        "report_prompt_matches_file": true,
+        "directory": "out/splice-portfolio/generated/rooms4-seed17"
+      }
+    },
+    {
+      "id": "rooms4-seed42",
+      "target": "q2-duel",
+      "game": "q2",
+      "mode": "duel",
+      "category": "portfolio",
+      "group": "primary",
+      "prompt": "Quake 2 duel industrial arena for 2 players with 4 rooms, vertical combat, tight connected loops, seed 42\r\n",
+      "prompt_sha256": "6a59244ade8e4ffe311d0dfd5757d765329f70c0e29bb2ea0df9338f2dd1f11e",
+      "prompt_source": "out/splice-portfolio/prompts/rooms4-seed42.txt",
+      "requested_seed": 42,
+      "seed": null,
+      "rooms": 4,
+      "map_name": "qmg_rooms4-seed42",
+      "qmg_args": [
+        "generate",
+        "--prompt-file",
+        "{prompt_file}",
+        "--output",
+        "qmg_rooms4-seed42.map"
+      ],
+      "expected_requests": [
+        "game quake2",
+        "mode duel",
+        "4 rooms",
+        "theme industrial"
+      ],
+      "notes": "",
+      "path": "q2-duel",
+      "claimed": "committed",
+      "module": "q2-baseq2-3.19",
+      "expected_conflicts": [],
+      "expected_resolution": null,
+      "recorded_outputs": {
+        "map_sha256": "659dc8f56578df4d5bb23ea7544bbf015c1cad68455dc5dae836f97f35eccfc1",
+        "qmg_json_sha256": "c7847a2b7d7095933bdbf799f6144f6592f5b63d5a37179b0f6b3cba65b2a886",
+        "layout_sha256": "53c906a8dfe92ecb53d6c0fa63b5100874fa392efcaf4b18029e4528ab4cae78",
+        "candidate_seed": "15755400384260043881",
+        "report_prompt_matches_file": true,
+        "directory": "out/splice-portfolio/generated/rooms4-seed42"
+      }
+    },
+    {
+      "id": "rooms4-seed99",
+      "target": "q2-duel",
+      "game": "q2",
+      "mode": "duel",
+      "category": "portfolio",
+      "group": "primary",
+      "prompt": "Quake 2 duel industrial arena for 2 players with 4 rooms, vertical combat, tight connected loops, seed 99\r\n",
+      "prompt_sha256": "7b390b72e87bdabe6ccf5eb3235a4b6c2c8217a0fcdb6b47a0bf8fad422e35be",
+      "prompt_source": "out/splice-portfolio/prompts/rooms4-seed99.txt",
+      "requested_seed": 99,
+      "seed": null,
+      "rooms": 4,
+      "map_name": "qmg_rooms4-seed99",
+      "qmg_args": [
+        "generate",
+        "--prompt-file",
+        "{prompt_file}",
+        "--output",
+        "qmg_rooms4-seed99.map"
+      ],
+      "expected_requests": [
+        "game quake2",
+        "mode duel",
+        "4 rooms",
+        "theme industrial"
+      ],
+      "notes": "",
+      "path": "q2-duel",
+      "claimed": "committed",
+      "module": "q2-baseq2-3.19",
+      "expected_conflicts": [],
+      "expected_resolution": null,
+      "recorded_outputs": {
+        "map_sha256": "48f3bc672b493f2d24a63fc8631c04124e65b73e679c74966017623690df31d8",
+        "qmg_json_sha256": "b2ab8ba16730feece1f25bd74aa4d3fd7f50a25f18dfe02a507cd9e5b910c9e5",
+        "layout_sha256": "5e946a8e08d5c1d3bc57e02217b8c85d1d9e75c432e7bea74ebf0f88899acc59",
+        "candidate_seed": "1663341875487337676",
+        "report_prompt_matches_file": true,
+        "directory": "out/splice-portfolio/generated/rooms4-seed99"
+      }
+    },
+    {
+      "id": "rooms6-seed17",
+      "target": "q2-dm",
+      "game": "q2",
+      "mode": "dm",
+      "category": "portfolio",
+      "group": "primary",
+      "prompt": "Quake 2 deathmatch industrial arena for 6 players with 6 rooms, vertical combat, tight connected loops, seed 17\r\n",
+      "prompt_sha256": "35104636b1f0f0f78f1170cc3a8e055ab2cbab4a120974840d3b485b11c5bc52",
+      "prompt_source": "out/splice-portfolio/prompts/rooms6-seed17.txt",
+      "requested_seed": 17,
+      "seed": null,
+      "rooms": 6,
+      "map_name": "qmg_rooms6-seed17",
+      "qmg_args": [
+        "generate",
+        "--prompt-file",
+        "{prompt_file}",
+        "--output",
+        "qmg_rooms6-seed17.map"
+      ],
+      "expected_requests": [
+        "game quake2",
+        "mode deathmatch",
+        "6 rooms",
+        "theme industrial"
+      ],
+      "notes": "",
+      "path": "q2-dm",
+      "claimed": "committed",
+      "module": "q2-baseq2-3.19",
+      "expected_conflicts": [],
+      "expected_resolution": null,
+      "recorded_outputs": {
+        "map_sha256": "c38728e1263e6205922e09491bc84ab5172528b57b78481095069b23911353f1",
+        "qmg_json_sha256": "76a29d3747d14e9db0a697a73e94ef08fdd667c8c0fb9b689075814c342daf3f",
+        "layout_sha256": "3fb53bceb4c3522730ed27205f0f32e5406d48ac074a0a66cb14c0adfd5a4380",
+        "candidate_seed": "8709371129873690725",
+        "report_prompt_matches_file": true,
+        "directory": "out/splice-portfolio/generated/rooms6-seed17"
+      }
+    },
+    {
+      "id": "rooms6-seed42",
+      "target": "q2-dm",
+      "game": "q2",
+      "mode": "dm",
+      "category": "portfolio",
+      "group": "primary",
+      "prompt": "Quake 2 deathmatch industrial arena for 6 players with 6 rooms, vertical combat, tight connected loops, seed 42\r\n",
+      "prompt_sha256": "801dd41dd670099e3acf7917604d90c09bb03a01d7d84672d0175da78aa43e22",
+      "prompt_source": "out/splice-portfolio/prompts/rooms6-seed42.txt",
+      "requested_seed": 42,
+      "seed": null,
+      "rooms": 6,
+      "map_name": "qmg_rooms6-seed42",
+      "qmg_args": [
+        "generate",
+        "--prompt-file",
+        "{prompt_file}",
+        "--output",
+        "qmg_rooms6-seed42.map"
+      ],
+      "expected_requests": [
+        "game quake2",
+        "mode deathmatch",
+        "6 rooms",
+        "theme industrial"
+      ],
+      "notes": "",
+      "path": "q2-dm",
+      "claimed": "committed",
+      "module": "q2-baseq2-3.19",
+      "expected_conflicts": [],
+      "expected_resolution": null,
+      "recorded_outputs": {
+        "map_sha256": "9c09e2ea9aaa8c8a6b109ec7f512998a8f723eb9e2e8496343832f6662235319",
+        "qmg_json_sha256": "4f888e991efaf944b8e865ec7a4a31d69b85da27f3389146fc04776f972c2c5b",
+        "layout_sha256": "0a1a5c7d6ba773882a27b6fc757b998f4ba464f39ba18db43896b50cc215bc4d",
+        "candidate_seed": "1663341875487337619",
+        "report_prompt_matches_file": true,
+        "directory": "out/splice-portfolio/generated/rooms6-seed42"
+      }
+    },
+    {
+      "id": "rooms6-seed99",
+      "target": "q2-dm",
+      "game": "q2",
+      "mode": "dm",
+      "category": "portfolio",
+      "group": "primary",
+      "prompt": "Quake 2 deathmatch industrial arena for 6 players with 6 rooms, vertical combat, tight connected loops, seed 99\r\n",
+      "prompt_sha256": "2d608d2f3ea1441165324024c2423fe3e2b097ad62d507047ce07e74ec08d0a9",
+      "prompt_source": "out/splice-portfolio/prompts/rooms6-seed99.txt",
+      "requested_seed": 99,
+      "seed": null,
+      "rooms": 6,
+      "map_name": "qmg_rooms6-seed99",
+      "qmg_args": [
+        "generate",
+        "--prompt-file",
+        "{prompt_file}",
+        "--output",
+        "qmg_rooms6-seed99.map"
+      ],
+      "expected_requests": [
+        "game quake2",
+        "mode deathmatch",
+        "6 rooms",
+        "theme industrial"
+      ],
+      "notes": "",
+      "path": "q2-dm",
+      "claimed": "committed",
+      "module": "q2-baseq2-3.19",
+      "expected_conflicts": [],
+      "expected_resolution": null,
+      "recorded_outputs": {
+        "map_sha256": "d02ee78223540bca42e1564a39af52f51acc576e89ac808265b2d964d21d8b55",
+        "qmg_json_sha256": "2bcde4ea44e279ccd432d54be8805992c84dd96a1512130ed0c1c50c58bc635d",
+        "layout_sha256": "8faa663f27078746946a07e8ea1aaf005fe2bfc2e2652c4e9bafcb460c194918",
+        "candidate_seed": "8709371129873690807",
+        "report_prompt_matches_file": true,
+        "directory": "out/splice-portfolio/generated/rooms6-seed99"
+      }
+    },
+    {
+      "id": "rooms8-seed17",
+      "target": "q2-dm",
+      "game": "q2",
+      "mode": "dm",
+      "category": "portfolio",
+      "group": "primary",
+      "prompt": "Quake 2 deathmatch industrial arena for 6 players with 8 rooms, vertical combat, tight connected loops, seed 17\r\n",
+      "prompt_sha256": "4322fa34ea8ba362a19adcde638de7f55df2f3c37d3ccda8c0b4fdd5b0926559",
+      "prompt_source": "out/splice-portfolio/prompts/rooms8-seed17.txt",
+      "requested_seed": 17,
+      "seed": null,
+      "rooms": 8,
+      "map_name": "qmg_rooms8-seed17",
+      "qmg_args": [
+        "generate",
+        "--prompt-file",
+        "{prompt_file}",
+        "--output",
+        "qmg_rooms8-seed17.map"
+      ],
+      "expected_requests": [
+        "game quake2",
+        "mode deathmatch",
+        "8 rooms",
+        "theme industrial"
+      ],
+      "notes": "",
+      "path": "q2-dm",
+      "claimed": "committed",
+      "module": "q2-baseq2-3.19",
+      "expected_conflicts": [],
+      "expected_resolution": null,
+      "recorded_outputs": {
+        "map_sha256": "4ac492773a57df492a9d1215ed042d93e36ac0438eb1220bce44773b8268f3e5",
+        "qmg_json_sha256": "da6c1ccb30b57e98b1974cc41277bc4c4f4f9629f7a4533f601019669e9bd120",
+        "layout_sha256": "0378918d2670d0522a04458623682d9c8ae13d1956eda741671ae00e276181fe",
+        "candidate_seed": "17",
+        "report_prompt_matches_file": true,
+        "directory": "out/splice-portfolio/generated/rooms8-seed17"
+      }
+    },
+    {
+      "id": "rooms8-seed42",
+      "target": "q2-dm",
+      "game": "q2",
+      "mode": "dm",
+      "category": "portfolio",
+      "group": "primary",
+      "prompt": "Quake 2 deathmatch industrial arena for 6 players with 8 rooms, vertical combat, tight connected loops, seed 42\r\n",
+      "prompt_sha256": "cdfd2328ec3918478444603797f67247144a2f36a08add71f32306401b11aac6",
+      "prompt_source": "out/splice-portfolio/prompts/rooms8-seed42.txt",
+      "requested_seed": 42,
+      "seed": null,
+      "rooms": 8,
+      "map_name": "qmg_rooms8-seed42",
+      "qmg_args": [
+        "generate",
+        "--prompt-file",
+        "{prompt_file}",
+        "--output",
+        "qmg_rooms8-seed42.map"
+      ],
+      "expected_requests": [
+        "game quake2",
+        "mode deathmatch",
+        "8 rooms",
+        "theme industrial"
+      ],
+      "notes": "",
+      "path": "q2-dm",
+      "claimed": "committed",
+      "module": "q2-baseq2-3.19",
+      "expected_conflicts": [],
+      "expected_resolution": null,
+      "recorded_outputs": {
+        "map_sha256": "436ea9fa1716e9c6f3dd8424c45d4e4bb65dfd826fdf1cd6f07356b19bf6bc1f",
+        "qmg_json_sha256": "d77fa5cdaed0f320fbbd768b932f890abb4b196948eef248c85764572bbdd246",
+        "layout_sha256": "b248ad284771952e0176f8e86977f718f74baf521c488b50c0b277c53697d73b",
+        "candidate_seed": "11400714819323198527",
+        "report_prompt_matches_file": true,
+        "directory": "out/splice-portfolio/generated/rooms8-seed42"
+      }
+    },
+    {
+      "id": "rooms8-seed99",
+      "target": "q2-dm",
+      "game": "q2",
+      "mode": "dm",
+      "category": "portfolio",
+      "group": "primary",
+      "prompt": "Quake 2 deathmatch industrial arena for 6 players with 8 rooms, vertical combat, tight connected loops, seed 99\r\n",
+      "prompt_sha256": "b965930bf25f63512396ec63d0986f892633984343c42c12f61e3077a4886405",
+      "prompt_source": "out/splice-portfolio/prompts/rooms8-seed99.txt",
+      "requested_seed": 99,
+      "seed": null,
+      "rooms": 8,
+      "map_name": "qmg_rooms8-seed99",
+      "qmg_args": [
+        "generate",
+        "--prompt-file",
+        "{prompt_file}",
+        "--output",
+        "qmg_rooms8-seed99.map"
+      ],
+      "expected_requests": [
+        "game quake2",
+        "mode deathmatch",
+        "8 rooms",
+        "theme industrial"
+      ],
+      "notes": "",
+      "path": "q2-dm",
+      "claimed": "committed",
+      "module": "q2-baseq2-3.19",
+      "expected_conflicts": [],
+      "expected_resolution": null,
+      "recorded_outputs": {
+        "map_sha256": "61698b44fd1ea8767fdfb0e7551fd415c21e5f6f511e53a90fddc58d8878eef8",
+        "qmg_json_sha256": "810913f69e2d37d1e78aefb596127c8ee46c6e52bf567419fb0bd84578cc45a2",
+        "layout_sha256": "5ac43f72924b751d6deca705df4cc7cf99ee11129e35378ba0bec12f64c6764d",
+        "candidate_seed": "99",
+        "report_prompt_matches_file": true,
+        "directory": "out/splice-portfolio/generated/rooms8-seed99"
+      }
+    }
+  ]
+}

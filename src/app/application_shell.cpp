@@ -81,6 +81,10 @@
 #include "core/model_mesh.h"
 #include "core/model_frame_export.h"
 #include "core/ai_connectors.h"
+#include "core/ai_audio_transport.h"
+#include "core/ai_gguf_runtime.h"
+#include "core/ai_image_transport.h"
+#include "core/ai_harness.h"
 #include "core/ai_workflows.h"
 #include "core/compiler_profiles.h"
 #include "core/compiler_registry.h"
@@ -120,6 +124,7 @@
 #include <QScopeGuard>
 #include <QScopedValueRollback>
 #include <QStackedWidget>
+#include <QStandardItemModel>
 #include <QSysInfo>
 #include <QTextBlock>
 #include <QTextCursor>
@@ -4595,7 +4600,7 @@ QWidget* ApplicationShell::buildSettingsPage()
 	aiModeLayout->setSpacing(8);
 	m_aiFreeMode = new QCheckBox(tr("AI-free mode"));
 	m_aiFreeMode->setAccessibleName(tr("AI-free mode"));
-	m_aiFreeMode->setToolTip(tr("Keeps cloud and agentic AI workflows disabled for core editing, package, compiler, and CLI work."));
+	m_aiFreeMode->setToolTip(tr("Turns every AI feature off. Editing, packages, compiling, and the CLI never need AI."));
 	aiModeLayout->addWidget(m_aiFreeMode);
 	auto* aiFreeHint = new QLabel(tr("Every core workflow stays local and deterministic. Connectors below are remembered but not used."));
 	aiFreeHint->setObjectName(QStringLiteral("fieldHint"));
@@ -4603,11 +4608,11 @@ QWidget* ApplicationShell::buildSettingsPage()
 	aiModeLayout->addWidget(aiFreeHint);
 	m_aiCloudConnectors = new QCheckBox(tr("Allow cloud AI connectors"));
 	m_aiCloudConnectors->setAccessibleName(tr("Cloud AI connectors"));
-	m_aiCloudConnectors->setToolTip(tr("Opt in to experimental provider-neutral cloud connector configuration. Secrets are read through redacted environment references, not shown in logs."));
+	m_aiCloudConnectors->setToolTip(tr("Let AI features use connectors that send requests off this machine: providers with your API key, or Claude Code and Codex with your own login. Each request is shown for your approval first; keys are read from environment variables and never logged."));
 	aiModeLayout->addWidget(m_aiCloudConnectors);
 	m_aiAgenticWorkflows = new QCheckBox(tr("Allow agentic workflows"));
 	m_aiAgenticWorkflows->setAccessibleName(tr("Agentic workflows"));
-	m_aiAgenticWorkflows->setToolTip(tr("Opt in to future supervised plan, review, stage, validate, and summarize workflows."));
+	m_aiAgenticWorkflows->setToolTip(tr("Planned: supervised plan, review, stage, validate, and summarize workflows. Nothing uses this yet."));
 	aiModeLayout->addWidget(m_aiAgenticWorkflows);
 	aiLayout->addWidget(aiModePanel);
 
@@ -4616,14 +4621,14 @@ QWidget* ApplicationShell::buildSettingsPage()
 	connectorLayout->setHorizontalSpacing(16);
 	connectorLayout->setVerticalSpacing(10);
 	connectorLayout->setFieldGrowthPolicy(QFormLayout::FieldsStayAtSizeHint);
-	auto addAiConnectorCombo = [connectorLayout, sizeCombo](const QString& label, const QString& capabilityId, const QString& description) {
+	auto addAiConnectorCombo = [connectorLayout, sizeCombo](const QString& label, const std::function<bool(const AiConnectorDescriptor&)>& includes, const QString& description) {
 		auto* combo = new QComboBox;
 		combo->setAccessibleName(label);
 		combo->setAccessibleDescription(description);
 		combo->setToolTip(description);
 		combo->addItem(tr("Not selected"), QString());
 		for (const AiConnectorDescriptor& connector : aiConnectorDescriptors()) {
-			if (connector.capabilities.contains(capabilityId)) {
+			if (includes(connector)) {
 				combo->addItem(connector.displayName, connector.id);
 			}
 		}
@@ -4631,20 +4636,30 @@ QWidget* ApplicationShell::buildSettingsPage()
 		connectorLayout->addRow(label, combo);
 		return combo;
 	};
-	m_aiReasoningConnectorCombo = addAiConnectorCombo(tr("Reasoning"), QStringLiteral("reasoning"), tr("Preferred provider-neutral reasoning connector for future AI-assisted planning, review, and explanation."));
-	m_aiCodingConnectorCombo = addAiConnectorCombo(tr("Coding"), QStringLiteral("coding"), tr("Preferred connector for future code, script, shader, and config assistance."));
-	m_aiVisionConnectorCombo = addAiConnectorCombo(tr("Vision"), QStringLiteral("vision"), tr("Preferred connector for future image, screenshot, and visual context understanding."));
-	m_aiImageConnectorCombo = addAiConnectorCombo(tr("Image"), QStringLiteral("image"), tr("The connector the Texture Generator and ai image draw with; set its model under Image Model."));
-	m_aiAudioConnectorCombo = addAiConnectorCombo(tr("Audio"), QStringLiteral("audio"), tr("The connector the Sound Generator asks for sound effects; set its model under Sound Model."));
-	m_aiVoiceConnectorCombo = addAiConnectorCombo(tr("Voice"), QStringLiteral("voice"), tr("Preferred connector for future narration, speech, and voice workflow experiments."));
-	m_aiThreeDConnectorCombo = addAiConnectorCombo(tr("3D"), QStringLiteral("three-d"), tr("Preferred connector for future model, texture, and concept-to-asset generation."));
-	m_aiEmbeddingsConnectorCombo = addAiConnectorCombo(tr("Embeddings"), QStringLiteral("embeddings"), tr("Preferred connector for future semantic search, retrieval, and context ranking."));
-	m_aiLocalConnectorCombo = addAiConnectorCombo(tr("Local"), QStringLiteral("local-offline"), tr("Preferred connector for future local/offline AI runtime use."));
+	const auto capable = [](const QString& capabilityId) {
+		return [capabilityId](const AiConnectorDescriptor& connector) { return connector.capabilities.contains(capabilityId); };
+	};
+	m_aiReasoningConnectorCombo = addAiConnectorCombo(tr("Reasoning"), [](const AiConnectorDescriptor& connector) { return aiConnectorHasChatTransport(connector.id); },
+		tr("The connector every text feature asks: the Assistant, Generate Level, Edit Map with AI, and ai ask. Set its model under Text Model."));
+	m_aiCodingConnectorCombo = addAiConnectorCombo(tr("Coding (planned)"), capable(QStringLiteral("coding")), tr("Planned: code, script, shader, and config assistance. Nothing uses this yet."));
+	m_aiVisionConnectorCombo = addAiConnectorCombo(tr("Vision (planned)"), capable(QStringLiteral("vision")), tr("Planned: reading images and screenshots as context. Nothing uses this yet."));
+	m_aiImageConnectorCombo = addAiConnectorCombo(tr("Image"), [](const AiConnectorDescriptor& connector) { return aiConnectorHasImageTransport(connector.id); },
+		tr("The connector the Texture Generator and ai image draw with; set its model under Image Model."));
+	m_aiAudioConnectorCombo = addAiConnectorCombo(tr("Audio"), [](const AiConnectorDescriptor& connector) { return aiConnectorHasSoundTransport(connector.id); },
+		tr("The connector the Sound Generator asks for sound effects; set its model under Sound Model."));
+	m_aiVoiceConnectorCombo = addAiConnectorCombo(tr("Voice (planned)"), capable(QStringLiteral("voice")), tr("Planned: narration and speech. Nothing uses this yet."));
+	m_aiThreeDConnectorCombo = addAiConnectorCombo(tr("3D (planned)"), capable(QStringLiteral("three-d")), tr("Planned: model and concept-to-asset generation. Nothing uses this yet."));
+	m_aiEmbeddingsConnectorCombo = addAiConnectorCombo(tr("Embeddings (planned)"), capable(QStringLiteral("embeddings")), tr("Planned: semantic search and context ranking. Nothing uses this yet."));
+	m_aiLocalConnectorCombo = addAiConnectorCombo(tr("Local"),
+		[](const AiConnectorDescriptor& connector) { return connector.capabilities.contains(QStringLiteral("local-offline")) && aiConnectorHasChatTransport(connector.id); },
+		tr("The connector text features use instead while cloud connectors are off: a runtime on this machine, or a GGUF model run inside VibeStudio."));
 	aiLayout->addWidget(connectorPanel);
 
-	// The model the Assistant and `ai ask` use: one connector's model,
-	// endpoint, and key at a time.
-	auto* textPanel = new QGroupBox(tr("Assistant Model"));
+	// The model every text feature uses (the Assistant, both level
+	// generators, map edits, `ai ask`): one connector's model, endpoint, and
+	// key at a time, opened on the connector in use.
+	auto* textPanel = new QGroupBox(tr("Text Model"));
+	textPanel->setToolTip(tr("Used by the Assistant, Generate Level, Edit Map with AI, and ai ask."));
 	textPanel->setObjectName(QStringLiteral("aiTextModelPanel"));
 	auto* textLayout = new QFormLayout(textPanel);
 	textLayout->setHorizontalSpacing(16);
@@ -4660,23 +4675,65 @@ QWidget* ApplicationShell::buildSettingsPage()
 	}
 	sizeCombo(m_aiTextConnector);
 	textLayout->addRow(tr("Connector"), m_aiTextConnector);
+	// A field with a Browse button beside it, shown for the connectors whose value is a file.
+	const auto addBrowsableRow = [textLayout](const QString& label, QLineEdit* field, const QString& name, const QString& browseName) {
+		auto* row = new QWidget;
+		row->setObjectName(name + QStringLiteral("Row"));
+		auto* rowLayout = new QHBoxLayout(row);
+		rowLayout->setContentsMargins(0, 0, 0, 0);
+		rowLayout->setSpacing(6);
+		rowLayout->addWidget(field, 1);
+		auto* browse = createToolButton(QStringLiteral("folder-open"), tr("Browse"), browseName, false);
+		browse->setObjectName(name + QStringLiteral("Browse"));
+		browse->setAccessibleName(browseName);
+		rowLayout->addWidget(browse);
+		textLayout->addRow(label, row);
+		return browse;
+	};
 	m_aiTextModel = new QLineEdit;
 	m_aiTextModel->setObjectName(QStringLiteral("aiTextModel"));
 	m_aiTextModel->setAccessibleName(tr("Model name"));
 	m_aiTextModel->setToolTip(tr("The model's name as the provider or runtime lists it."));
-	textLayout->addRow(tr("Model"), m_aiTextModel);
+	QToolButton* browseModel = addBrowsableRow(tr("Model"), m_aiTextModel, QStringLiteral("aiTextModel"), tr("Choose a GGUF model file"));
+	connect(browseModel, &QToolButton::clicked, this, [this]() {
+		const QString path = QFileDialog::getOpenFileName(this, tr("Choose a GGUF Model"), QFileInfo(m_aiTextModel->text()).absolutePath(), tr("GGUF models (*.gguf);;All files (*.*)"));
+		if (!path.isEmpty()) {
+			m_aiTextModel->setText(QDir::toNativeSeparators(path));
+			saveAiTextModelFields();
+		}
+	});
 	m_aiTextEndpoint = new QLineEdit;
 	m_aiTextEndpoint->setObjectName(QStringLiteral("aiTextEndpoint"));
 	m_aiTextEndpoint->setAccessibleName(tr("Endpoint address"));
 	m_aiTextEndpoint->setToolTip(tr("Leave empty for the provider's own address. A local runtime is usually http://localhost with its port."));
-	textLayout->addRow(tr("Endpoint"), m_aiTextEndpoint);
+	QToolButton* browseProgram = addBrowsableRow(tr("Endpoint"), m_aiTextEndpoint, QStringLiteral("aiTextEndpoint"), tr("Choose the tool's program"));
+	connect(browseProgram, &QToolButton::clicked, this, [this]() {
+		const QString path = QFileDialog::getOpenFileName(this, tr("Choose the Program"), QFileInfo(m_aiTextEndpoint->text()).absolutePath());
+		if (!path.isEmpty()) {
+			m_aiTextEndpoint->setText(QDir::toNativeSeparators(path));
+			saveAiTextModelFields();
+		}
+	});
 	m_aiTextCredential = new QLabel;
 	m_aiTextCredential->setObjectName(QStringLiteral("aiTextCredential"));
 	m_aiTextCredential->setWordWrap(true);
 	m_aiTextCredential->setAccessibleName(tr("API key source"));
 	textLayout->addRow(tr("Key"), m_aiTextCredential);
+	auto* textStatus = new QLabel;
+	textStatus->setObjectName(QStringLiteral("aiTextStatus"));
+	textStatus->setWordWrap(true);
+	textStatus->setAccessibleName(tr("Text connection status"));
+	textLayout->addRow(tr("Status"), textStatus);
 	auto* testRow = new QHBoxLayout;
 	testRow->setSpacing(8);
+	auto* useConnector = createButton(tr("Use This Connector"), QStringLiteral("sparkle"));
+	useConnector->setObjectName(QStringLiteral("aiTextUse"));
+	useConnector->setAccessibleName(tr("Use this connector for text features"));
+	useConnector->setToolTip(tr("Make this the connector the Assistant, Generate Level, and Edit Map with AI ask."));
+	testRow->addWidget(useConnector);
+	connect(useConnector, &QPushButton::clicked, this, [this]() {
+		useAiTextConnector(m_aiTextConnector->currentData().toString());
+	});
 	m_aiTextTest = createButton(tr("Test Connection"), QStringLiteral("refresh"));
 	m_aiTextTest->setObjectName(QStringLiteral("aiTextTest"));
 	m_aiTextTest->setAccessibleName(tr("Test the connection"));
@@ -14239,16 +14296,20 @@ void ApplicationShell::refreshPreferenceControls()
 	m_aiLocalConnectorCombo->setCurrentIndex(std::max(0, m_aiLocalConnectorCombo->findData(aiPreferences.preferredLocalConnectorId)));
 	m_aiCloudConnectors->setEnabled(!aiPreferences.aiFreeMode);
 	m_aiAgenticWorkflows->setEnabled(!aiPreferences.aiFreeMode && aiPreferences.cloudConnectorsEnabled);
-	const bool aiConnectorSelectionEnabled = !aiPreferences.aiFreeMode && aiPreferences.cloudConnectorsEnabled;
-	m_aiReasoningConnectorCombo->setEnabled(aiConnectorSelectionEnabled);
-	m_aiCodingConnectorCombo->setEnabled(aiConnectorSelectionEnabled);
-	m_aiVisionConnectorCombo->setEnabled(aiConnectorSelectionEnabled);
-	m_aiImageConnectorCombo->setEnabled(aiConnectorSelectionEnabled);
-	m_aiAudioConnectorCombo->setEnabled(aiConnectorSelectionEnabled);
-	m_aiVoiceConnectorCombo->setEnabled(aiConnectorSelectionEnabled);
-	m_aiThreeDConnectorCombo->setEnabled(aiConnectorSelectionEnabled);
-	m_aiEmbeddingsConnectorCombo->setEnabled(aiConnectorSelectionEnabled);
-	m_aiLocalConnectorCombo->setEnabled(!aiPreferences.aiFreeMode);
+	refreshAiConnectorAvailability(aiPreferences);
+	// The model panels show the connector each feature uses, and follow it when it changes.
+	const auto follow = [](QComboBox* combo, const QString& active) {
+		if (!combo || active.isEmpty() || combo->property("followedConnector").toString() == active) {
+			return;
+		}
+		combo->setProperty("followedConnector", active);
+		if (const int index = combo->findData(active); index >= 0) {
+			combo->setCurrentIndex(index);
+		}
+	};
+	follow(m_aiTextConnector, resolveAiTextConnection(aiPreferences).connectorId);
+	follow(m_aiImageConnector, resolveAiImageConnection(aiPreferences).connectorId);
+	follow(m_aiSoundConnector, resolveAiSoundConnection(aiPreferences).connectorId);
 	refreshAiTextModelFields();
 	refreshAiImageModelFields();
 	refreshAiSoundModelFields();
@@ -14314,7 +14375,7 @@ void ApplicationShell::savePreferenceControls()
 	aiPreferences.preferredLocalConnectorId = m_aiLocalConnectorCombo->currentData().toString();
 	m_settings.setAiAutomationPreferences(aiPreferences);
 	m_settings.sync();
-	refreshAssistant();
+	refreshAiFeatures();
 	QLocale::setDefault(regionFormatLocale(preferences.formatLocaleName, preferences.localeName));
 	recordActivity(tr("Preferences Saved"), tr("Accessibility and language preferences"), tr("settings"), OperationState::Completed, tr("Preferences saved."));
 	refreshPreferenceControls();
@@ -16040,8 +16101,8 @@ void ApplicationShell::refreshAssistant()
 	const bool busy = m_assistantClient && m_assistantClient->busy();
 	QString where;
 	if (connection.ready()) {
-		where = connection.local ? tr("%1 · %2 · on this machine").arg(connection.displayName, connection.model)
-								 : tr("%1 · %2 · sends to %3").arg(connection.displayName, connection.model, QUrl(connection.endpoint).host());
+		where = connection.local ? tr("%1 · on this machine").arg(aiTextConnectionLabel(connection))
+								 : tr("%1 · sends to %2").arg(aiTextConnectionLabel(connection), aiTextConnectionDestinationText(connection));
 	}
 	m_assistantConnection->setText(connection.ready() ? where : aiTextConnectionBlockText(connection));
 	m_assistantConnection->setProperty("state", connection.ready() ? QStringLiteral("ready") : QStringLiteral("blocked"));
@@ -16049,7 +16110,7 @@ void ApplicationShell::refreshAssistant()
 	m_assistantSend->setEnabled(connection.ready() && !busy);
 	m_assistantSend->setToolTip(connection.ready()
 			? (connection.local ? tr("Send the question and the ticked context to %1 on this machine.").arg(connection.displayName)
-								: tr("Send the question and the ticked context to %1 at %2.").arg(connection.displayName, QUrl(connection.endpoint).host()))
+								: tr("Send the question and the ticked context to %1 at %2.").arg(connection.displayName, aiTextConnectionDestinationText(connection)))
 			: aiTextConnectionBlockText(connection));
 	m_assistantCancel->setEnabled(busy);
 	m_assistantCancel->setVisible(busy);
@@ -16253,9 +16314,23 @@ bool ApplicationShell::confirmAssistantConsent(const AiTextConnection& connectio
 	dialog.setAccessibleName(dialog.windowTitle());
 	dialog.resize(640, 520);
 	auto* layout = new QVBoxLayout(&dialog);
-	const QString host = QUrl(connection.endpoint).host();
-	auto* explanation = new QLabel(tr("The question and the context you ticked go to %1 at %2. Nothing else from the project goes with them, and your API key is sent only to authenticate. This is the first question from this project to %2, so here is exactly what will be sent:")
-			.arg(connection.displayName, host));
+	const QString host = aiTextConnectionDestinationText(connection);
+	// Who receives it and how it signs in, by transport: a provider with the key, a tool with
+	// the user's own login, or a command of the user's own.
+	QString sentence;
+	if (aiHarnessKind(connection.connectorId) == AiHarnessKind::CustomCommand) {
+		sentence = tr("The question and the context you ticked are given to %1, your custom command, which sends them wherever it is set up to. Nothing else from the project goes with them. "
+						  "This is the first question from this project to %1, so here is exactly what it will get:")
+						   .arg(host);
+	} else if (aiTextTransport(connection.connectorId) == AiTextTransport::Harness) {
+		sentence = tr("The question and the context you ticked go to %1 through %2, which signs in with your own login and runs in an empty folder with its tools turned off. Nothing else from "
+						  "the project goes with them. This is the first question from this project to %1, so here is exactly what will be sent:")
+						   .arg(host, aiHarnessToolName(connection.connectorId));
+	} else {
+		sentence = tr("The question and the context you ticked go to %1 at %2. Nothing else from the project goes with them, and your API key is sent only to authenticate. This is the first question from this project to %2, so here is exactly what will be sent:")
+						   .arg(connection.displayName, host);
+	}
+	auto* explanation = new QLabel(sentence);
 	explanation->setWordWrap(true);
 	layout->addWidget(explanation);
 	layout->addWidget(assistantRequestView(http, QStringLiteral("assistantConsentRequest"), tr("The request that will be sent"), QString()), 1);
@@ -16360,7 +16435,7 @@ void ApplicationShell::sendAssistantQuestion()
 		return;
 	}
 	if (!connection.local) {
-		const QString destination = QStringLiteral("%1@%2").arg(connection.connectorId, QUrl(connection.endpoint).host());
+		const QString destination = QStringLiteral("%1@%2").arg(connection.connectorId, aiTextConnectionDestinationText(connection));
 		if (!m_settings.aiContextConsentGiven(m_settings.currentProjectPath(), destination) && !confirmAssistantConsent(connection, http)) {
 			setAssistantStatus(tr("Not sent. Nothing left this machine."));
 			return;
@@ -16380,8 +16455,8 @@ void ApplicationShell::sendAssistantQuestion()
 	}
 	m_assistantPendingName = connection.displayName;
 	m_assistantStartedMs = QDateTime::currentMSecsSinceEpoch();
-	const QString detail = connection.local ? tr("%1 · %2 · on this machine").arg(connection.displayName, connection.model)
-											: tr("%1 · %2 · %3").arg(connection.displayName, connection.model, QUrl(connection.endpoint).host());
+	const QString detail = connection.local ? tr("%1 · on this machine").arg(aiTextConnectionLabel(connection))
+											: tr("%1 · %2").arg(aiTextConnectionLabel(connection), aiTextConnectionDestinationText(connection));
 	m_assistantTaskId = m_activity.createTask(tr("Assistant Question"), detail, QStringLiteral("ai"), OperationState::Running, true);
 	m_activity.appendLog(m_assistantTaskId, OperationState::Running,
 		turn.contextLabels.isEmpty() ? tr("Sent the question alone.") : tr("Sent the question with: %1").arg(turn.contextLabels.join(QStringLiteral(", "))));
@@ -16553,8 +16628,49 @@ void ApplicationShell::refreshAiTextModelFields()
 	AiConnectorDescriptor descriptor;
 	aiConnectorForId(id, &descriptor);
 	const QString variable = aiCredentialEnvironmentVariableForConnector(id, preferences);
+	// A harness runs a program and a GGUF connector a model file: the fields say so.
+	const AiTextTransport transport = aiTextTransport(id);
+	QWidget* endpointRow = m_aiTextEndpoint->parentWidget();
+	auto* form = qobject_cast<QFormLayout*>(endpointRow && endpointRow->parentWidget() ? endpointRow->parentWidget()->layout() : nullptr);
+	if (form) {
+		if (auto* label = qobject_cast<QLabel*>(form->labelForField(endpointRow))) {
+			label->setText(transport == AiTextTransport::Harness ? tr("Program") : tr("Endpoint"));
+		}
+		if (auto* label = qobject_cast<QLabel*>(form->labelForField(m_aiTextCredential))) {
+			label->setText(transport == AiTextTransport::Harness ? tr("Sign-in") : tr("Key"));
+		}
+		form->setRowVisible(endpointRow, transport != AiTextTransport::Gguf);
+	}
+	// Browse for a GGUF file, and for Claude Code's or Codex's program; a custom command is a
+	// whole command line, typed.
+	if (auto* browse = endpointRow ? endpointRow->findChild<QToolButton*>(QStringLiteral("aiTextEndpointBrowse")) : nullptr) {
+		browse->setVisible(transport == AiTextTransport::Harness && aiHarnessKind(id) != AiHarnessKind::CustomCommand);
+	}
+	if (auto* browse = m_aiTextModel->parentWidget() ? m_aiTextModel->parentWidget()->findChild<QToolButton*>(QStringLiteral("aiTextModelBrowse")) : nullptr) {
+		browse->setVisible(transport == AiTextTransport::Gguf);
+	}
+	m_aiTextEndpoint->setAccessibleName(transport == AiTextTransport::Harness ? tr("Program path or command line") : tr("Endpoint address"));
+	m_aiTextModel->setAccessibleName(transport == AiTextTransport::Gguf ? tr("GGUF model file") : tr("Model name"));
+	if (transport == AiTextTransport::Gguf) {
+		m_aiTextModel->setPlaceholderText(tr("Path to a .gguf model file"));
+	} else if (transport == AiTextTransport::Harness) {
+		const QString found = aiHarnessProgram(id);
+		if (aiHarnessKind(id) == AiHarnessKind::CustomCommand) {
+			m_aiTextEndpoint->setPlaceholderText(tr("Command line, for example: gemini -m {model}"));
+		} else {
+			m_aiTextEndpoint->setPlaceholderText(found.isEmpty() ? tr("Not found: install it, or give its path") : QDir::toNativeSeparators(found));
+		}
+		if (suggested.isEmpty()) {
+			m_aiTextModel->setPlaceholderText(tr("The tool's own default model"));
+		}
+	}
 	QString credential;
-	if (!descriptor.cloudBased || aiEndpointIsLocal(endpoint)) {
+	if (transport == AiTextTransport::Gguf) {
+		credential = aiGgufRuntimeAvailable() ? tr("None needed: runs inside VibeStudio (%1).").arg(aiGgufRuntimeVersion()) : aiGgufRuntimeMissingText();
+	} else if (transport == AiTextTransport::Harness) {
+		credential = aiHarnessKind(id) == AiHarnessKind::CustomCommand ? tr("Whatever login the command has; VibeStudio passes no key.")
+																	   : tr("Your own login, kept by the tool; Test Connection checks it.");
+	} else if (!descriptor.cloudBased || aiEndpointIsLocal(endpoint)) {
 		credential = tr("None needed: the endpoint is on this machine.");
 	} else if (variable.isEmpty()) {
 		credential = tr("None: this endpoint is asked without a key.");
@@ -16565,6 +16681,100 @@ void ApplicationShell::refreshAiTextModelFields()
 	}
 	m_aiTextCredential->setText(credential);
 	m_aiTextCredential->setAccessibleDescription(credential);
+	// What text features use now, and what using this connector would take.
+	const AiTextConnection active = resolveAiTextConnection(preferences);
+	const bool inUse = active.connectorId == id;
+	QString status = inUse ? aiTextConnectionBlockText(active)
+						   : tr("Not in use: text features ask %1. %2").arg(active.displayName.isEmpty() ? tr("no connector") : active.displayName, aiTextConnectionBlockText(active));
+	if (auto* label = m_aiTextConnector->window()->findChild<QLabel*>(QStringLiteral("aiTextStatus"))) {
+		label->setText(status);
+		label->setAccessibleDescription(status);
+	}
+	if (auto* use = m_aiTextConnector->window()->findChild<QPushButton*>(QStringLiteral("aiTextUse"))) {
+		use->setVisible(!inUse);
+		const QString unavailable = aiTextConnectorUnavailableReason(id, preferences);
+		use->setEnabled(unavailable.isEmpty());
+		use->setToolTip(unavailable.isEmpty() ? tr("Make this the connector the Assistant, Generate Level, and Edit Map with AI ask.") : unavailable);
+	}
+}
+
+void ApplicationShell::refreshAiConnectorAvailability(const AiAutomationPreferences& preferences)
+{
+	// Short, so the reason shows in the closed combo too, not only greyed text.
+	const QString needsCloud = tr("needs cloud connectors");
+	const QString cloudReason = tr("It leaves this machine; tick Allow cloud AI connectors first.");
+	const auto mark = [](QComboBox* combo, bool open, const std::function<QPair<QString, QString>(const QString&)>& unavailable) {
+		if (!combo) {
+			return;
+		}
+		combo->setEnabled(open);
+		auto* model = qobject_cast<QStandardItemModel*>(combo->model());
+		for (int row = 1; model && row < model->rowCount(); ++row) {
+			QStandardItem* item = model->item(row);
+			if (!item->data(Qt::UserRole + 1).isValid()) {
+				item->setData(item->text(), Qt::UserRole + 1);
+			}
+			const QString name = item->data(Qt::UserRole + 1).toString();
+			const QPair<QString, QString> reason = unavailable(item->data(Qt::UserRole).toString());
+			item->setEnabled(reason.first.isEmpty());
+			item->setText(reason.first.isEmpty() ? name : tr("%1 (%2)").arg(name, reason.first));
+			item->setToolTip(reason.second);
+		}
+	};
+	const bool open = !preferences.aiFreeMode;
+	const auto text = [&preferences, &needsCloud](const QString& id) -> QPair<QString, QString> {
+		AiAutomationPreferences asIfOn = preferences;
+		asIfOn.aiFreeMode = false;
+		const QString reason = aiTextConnectorUnavailableReason(id, asIfOn);
+		if (reason.isEmpty()) {
+			return {};
+		}
+		const bool missingRuntime = aiTextTransport(id) == AiTextTransport::Gguf && !aiGgufRuntimeAvailable();
+		return {missingRuntime ? tr("not in this build") : needsCloud, reason};
+	};
+	const auto cloud = [&preferences, &needsCloud, &cloudReason](bool local) -> QPair<QString, QString> {
+		return local || preferences.cloudConnectorsEnabled ? QPair<QString, QString>() : QPair<QString, QString> {needsCloud, cloudReason};
+	};
+	mark(m_aiReasoningConnectorCombo, open, text);
+	mark(m_aiLocalConnectorCombo, open, text);
+	mark(m_aiImageConnectorCombo, open, [&preferences, &cloud](const QString& id) {
+		return cloud(aiEndpointIsLocal(aiEffectiveImageEndpoint(id, preferences.connectorImageEndpoints.value(id))));
+	});
+	mark(m_aiAudioConnectorCombo, open, [&preferences, &cloud](const QString& id) {
+		return cloud(aiEndpointIsLocal(aiEffectiveSoundEndpoint(id, preferences.connectorAudioEndpoints.value(id))));
+	});
+	for (QComboBox* planned : {m_aiCodingConnectorCombo, m_aiVisionConnectorCombo, m_aiVoiceConnectorCombo, m_aiThreeDConnectorCombo, m_aiEmbeddingsConnectorCombo}) {
+		mark(planned, open, [&cloud](const QString& id) {
+			AiConnectorDescriptor connector;
+			return cloud(aiConnectorForId(id, &connector) && !connector.cloudBased);
+		});
+	}
+}
+
+void ApplicationShell::useAiTextConnector(const QString& connectorId)
+{
+	AiAutomationPreferences preferences = m_settings.aiAutomationPreferences();
+	if (!aiTextConnectorUnavailableReason(connectorId, preferences).isEmpty()) {
+		return;
+	}
+	// With cloud connectors allowed the Reasoning connector answers. Without, a local
+	// connector becomes the Local one, so a cloud Reasoning connector stays chosen for when
+	// cloud connectors are allowed again; one that cannot be (an HTTP endpoint on this
+	// machine), or that a local Reasoning connector would still outrank, becomes Reasoning.
+	AiConnectorDescriptor connector;
+	if (!preferences.cloudConnectorsEnabled && aiConnectorForId(connectorId, &connector) && connector.capabilities.contains(QStringLiteral("local-offline"))) {
+		preferences.preferredLocalConnectorId = connectorId;
+	}
+	if (resolveAiTextConnection(preferences).connectorId != normalizedAiId(connectorId)) {
+		preferences.preferredReasoningConnectorId = connectorId;
+	}
+	m_settings.setAiAutomationPreferences(preferences);
+	m_settings.sync();
+	refreshPreferenceControls();
+	refreshAiFeatures();
+	AiConnectorDescriptor descriptor;
+	aiConnectorForId(connectorId, &descriptor);
+	statusBar()->showMessage(tr("Text features now ask %1.").arg(descriptor.displayName), 5000);
 }
 
 void ApplicationShell::saveAiTextModelFields()
@@ -16584,7 +16794,7 @@ void ApplicationShell::saveAiTextModelFields()
 	m_settings.setAiAutomationPreferences(preferences);
 	m_settings.sync();
 	refreshAiTextModelFields();
-	refreshAssistant();
+	refreshAiFeatures();
 	statusBar()->showMessage(tr("Saved the %1 model settings.").arg(m_aiTextConnector->currentText()), 4000);
 }
 
@@ -16603,6 +16813,32 @@ void ApplicationShell::testAiTextConnection()
 		m_aiTextTestResult->setText(aiTextConnectionBlockText(connection));
 		return;
 	}
+	m_aiTextTest->setEnabled(false);
+	// Claude Code and Codex say first whether they are signed in, and how: an API key login bills
+	// that key. The tool's status command runs off the UI thread.
+	if (aiTextTransport(connection.connectorId) == AiTextTransport::Harness && aiHarnessKind(connection.connectorId) != AiHarnessKind::CustomCommand) {
+		m_aiTextTestResult->setText(tr("Checking that %1 is signed in…").arg(connection.displayName));
+		auto login = std::make_shared<AiHarnessLoginStatus>();
+		QThread* check = QThread::create([login, id = connection.connectorId, program = connection.program] { *login = aiHarnessLoginStatus(id, program); });
+		connect(check, &QThread::finished, this, [this, check, login, connection]() {
+			check->deleteLater();
+			const QString loginText = aiHarnessLoginStatusText(connection.connectorId, *login);
+			if (login->known && !login->signedIn) {
+				m_aiTextTest->setEnabled(true);
+				m_aiTextTestResult->setText(loginText);
+				m_aiTextTestResult->setAccessibleDescription(loginText);
+				return;
+			}
+			sendAiTextTest(connection, loginText);
+		});
+		check->start();
+		return;
+	}
+	sendAiTextTest(connection, QString());
+}
+
+void ApplicationShell::sendAiTextTest(const AiTextConnection& connection, const QString& note)
+{
 	// A question with no project context in it: the button is consent enough.
 	AiChatRequest request;
 	request.connectorId = connection.connectorId;
@@ -16617,15 +16853,18 @@ void ApplicationShell::testAiTextConnection()
 	m_aiTextTestResult->setText(tr("Asking %1…").arg(connection.displayName));
 	m_aiTextTest->setEnabled(false);
 	QString error;
-	const bool started = m_aiTestClient->send(request, aiTextConnectionApiKey(connection), [this, connection](const AiChatResponse& response) {
+	const bool started = m_aiTestClient->send(request, aiTextConnectionApiKey(connection), [this, connection, note](const AiChatResponse& response) {
 		m_aiTextTest->setEnabled(true);
 		const QString seconds = QLocale().toString(response.elapsedMsecs / 1000.0, 'f', 1);
-		const QString text = response.ok
+		QString text = response.ok
 			? tr("Answered in %1 s by %2: %3").arg(seconds, response.model.isEmpty() ? connection.model : response.model, response.text.trimmed().left(80))
 			: tr("Failed after %1 s: %2").arg(seconds, response.errorMessage.isEmpty() ? aiChatFailureText(response.failure) : response.errorMessage);
+		if (!note.isEmpty()) {
+			text = note + QLatin1Char(' ') + text;
+		}
 		m_aiTextTestResult->setText(text);
 		m_aiTextTestResult->setAccessibleDescription(text);
-		recordActivity(tr("AI Connection Test"), QStringLiteral("%1 · %2").arg(connection.displayName, connection.model), QStringLiteral("ai"),
+		recordActivity(tr("AI Connection Test"), aiTextConnectionLabel(connection), QStringLiteral("ai"),
 			response.ok ? OperationState::Completed : OperationState::Failed, text);
 	}, &error);
 	if (!started) {
@@ -26500,11 +26739,11 @@ QStringList ApplicationShell::captureUiSnapshots(const QString& directory)
 			written.push_back(filePath);
 		}
 	}
-	// The Settings pages people change first: appearance and language, and
-	// accessibility, each from its top.
+	// The Settings pages people change first: appearance and language,
+	// accessibility, and AI and Automation, each from its top.
 	if (m_settingsCategories) {
 		int number = static_cast<int>(descriptors.size()) + 5;
-		for (const QString& category : {QStringLiteral("appearance"), QStringLiteral("accessibility")}) {
+		for (const QString& category : {QStringLiteral("appearance"), QStringLiteral("accessibility"), QStringLiteral("ai")}) {
 			showSettingsCategory(category);
 			QCoreApplication::processEvents(QEventLoop::ExcludeUserInputEvents, 50);
 			QCoreApplication::processEvents(QEventLoop::ExcludeUserInputEvents, 50);

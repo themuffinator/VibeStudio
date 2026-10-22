@@ -96,8 +96,18 @@ LevelAiEditDialog::LevelAiEditDialog(QWidget* parent, LevelAiEditDialogHooks hoo
 	m_loadProposal->setObjectName(QStringLiteral("levelAiEditLoad"));
 	m_loadProposal->setAccessibleName(tr("Load a saved proposal"));
 	m_loadProposal->setToolTip(tr("Review a proposal saved earlier, or one from vibestudio --cli map ai-edit --save-proposal. No model is asked."));
+	m_aiSettings = new QPushButton(tr("AI Settings…"));
+	m_aiSettings->setObjectName(QStringLiteral("levelAiEditAiSettings"));
+	m_aiSettings->setAccessibleName(tr("Open AI settings"));
+	m_aiSettings->setToolTip(tr("Choose the connector, model, and endpoint in Settings > AI and Automation."));
+	connect(m_aiSettings, &QPushButton::clicked, this, [this] {
+		if (m_hooks.openAiSettings) {
+			m_hooks.openAiSettings();
+		}
+	});
 	connectionRow->addWidget(m_connectionStatus, 1);
 	connectionRow->addWidget(m_previewRequest);
+	connectionRow->addWidget(m_aiSettings);
 	connectionRow->addWidget(m_loadProposal);
 	root->addLayout(connectionRow);
 
@@ -266,6 +276,7 @@ void LevelAiEditDialog::refreshStatus()
 	const AiTextConnection connection = resolveAiTextConnection(StudioSettings().aiAutomationPreferences());
 	m_connectionStatus->setText(aiTextConnectionBlockText(connection));
 	m_connectionStatus->setAccessibleDescription(m_connectionStatus->text());
+	m_aiSettings->setVisible(bool(m_hooks.openAiSettings));
 	updateButtons();
 }
 
@@ -339,7 +350,7 @@ void LevelAiEditDialog::ask()
 		}
 	}
 	if (m_hooks.beginTask) {
-		m_task = m_hooks.beginTask(tr("Edit Map with AI"), tr("Asking %1 (%2): %3").arg(connection.displayName, connection.model, instruction.left(120)));
+		m_task = m_hooks.beginTask(tr("Edit Map with AI"), tr("Asking %1: %2").arg(aiTextConnectionLabel(connection), instruction.left(120)));
 	}
 	setBusy(true, tr("Asking %1 for edits…").arg(connection.displayName));
 	const QString key = documentKey(*document);
@@ -586,10 +597,12 @@ void LevelAiEditDialog::showRequestPreview()
 	dialog.setAccessibleName(dialog.windowTitle());
 	dialog.resize(760, 560);
 	auto* layout = new QVBoxLayout(&dialog);
-	auto* explanation = new QLabel(built ? tr("Nothing has been sent. This is the request Ask for Edits would send, without your API key: your instruction and a summary "
-											  "of the map, with your home and project folders shortened. %1")
-												.arg(aiTextConnectionBlockText(connection))
-										 : error);
+	auto* explanation = new QLabel(built ? QStringLiteral("%1 %2 %3")
+												.arg(aiTextRequestPreviewNote(connection, tr("Ask for Edits")),
+													tr("It holds your instruction and a summary of the map, with your home and project folders shortened."),
+													aiTextConnectionBlockText(connection))
+		: connection.ready()			 ? error
+										 : aiTextConnectionBlockText(connection));
 	explanation->setWordWrap(true);
 	layout->addWidget(explanation);
 	auto* text = readOnlyText(QStringLiteral("levelAiEditRequestText"), tr("The edit request"));

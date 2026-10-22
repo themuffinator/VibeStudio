@@ -1207,9 +1207,41 @@ bounds, encoding behavior, batch cancellation, and concurrency limits.
   (wall, floor, ceiling, trim, liquid) and `--textures-from <package>` choose
   textures the project has. AI rules follow `ai ask`: `--dry-run`, `--yes`,
   `--provider`, `--model`, `--endpoint`, `--timeout-ms`.
+- [x] `map generate --generator quake-mapgen` builds the level with
+  Quake-MapGen (`src/mapgen`) for Quake, Quake II or Quake III. `--mode` also
+  takes `ctf`; `--format q1-valve220|q2-valve220|q3-legacy|q3-brush-primitives`
+  picks the map dialect (default: the game's); `--intensity quiet|balanced|intense`,
+  `--rooms` (2 to 32), `--players`, `--seed`, `--verticality` and `--title`
+  override the description; `--candidates` (1 to 64, default 6) and
+  `--repair-iterations` (0 to 64, default 8) bound ranking and repair; and
+  `--switch <name>=on|off` (repeatable) sets a stage switch. `--planner ai`
+  plans through the configured text model with `--revisions` corrections
+  (0 to 8, default 2) before the rules step in; a connector failure or
+  cancellation fails the command. `--report` writes the studio report with
+  Quake-MapGen's schema v4 report under `quakeMapgen`, also when validation
+  fails. `--verbose` prints each analysis finding. The studio generator's
+  `--theme`, `--size`, `--liquid`, `--monsters`, `--wad`, `--texture`,
+  `--textures-from`, `--plan` and `--save-plan` are refused with this
+  generator.
 - [x] `map plan --prompt <description>` prints the room-and-connection plan
   without building it, by `--planner rules` or `ai`; `--output` writes it as
-  JSON for review, editing, and `map generate --plan`.
+  JSON for review, editing, and `map generate --plan`. With `--generator
+  quake-mapgen` it prints Quake-MapGen's semantic plan instead.
+- [x] `--ranker scalar|ggml` (Quake-MapGen, default `scalar`) picks the
+  candidate ranker; `ggml` needs a build with `-Dggml=enabled` and gives the
+  same scores.
+- [x] Every text AI command (`ai ask`, `ai test-connection`, `map generate`
+  and `map plan` with `--planner ai`, and `map ai-edit`) takes
+  `--provider claude-code|codex|custom-command|local-gguf` besides the HTTP
+  connectors; image and sound commands do not. For a harness, `--endpoint`
+  is the program (or the custom command line) and `--model` the tool's model,
+  `claude-opus-5-5` by default for Claude Code; for `local-gguf`, `--model`
+  is the `.gguf` file.
+  Harnesses are cloud requests: they need cloud connectors allowed and
+  `--yes`, and `--dry-run` prints the exact command, files and input.
+  `ai test-connection` checks a harness's login first and reports it under
+  `login`; `ai status` lists the harness programs found and the GGUF runtime
+  under `runtimes`.
 - [x] `map ai-edit <map> --prompt <instruction>` asks the configured text
   model for edits to a Quake, Quake II, or Quake III `.map`, in a fixed set
   of actions (add an entity, set or remove a key, add a box brush,
@@ -2410,8 +2442,12 @@ format or engine support. See [Editor Profiles](EDITOR_PROFILES.md).
 - [x] `ai status`: the settings, connectors, credentials, and where text,
   images, and sounds would go now (`textConnection`, `imageConnection`,
   `soundConnection`), with what stops each; `projectAiFree` says when the
-  open project's manifest turns AI off.
-- [x] `ai connectors`
+  open project's manifest turns AI off. As text it prints `Text:`, `Images:`
+  and `Sounds:` lines saying what each feature would use now, the GGUF
+  runtime and the Claude Code and Codex programs found, and a `Connectors`
+  list with each connector's `Status: Available` or `Status: Planned`.
+- [x] `ai connectors`: every connector with its capabilities, notes and
+  `Status: Available|Planned`.
 - [x] `ai tools`
 - [x] `ai explain-log`
 - [x] `ai propose-command`
@@ -2434,10 +2470,21 @@ format or engine support. See [Editor Profiles](EDITOR_PROFILES.md).
   show the request to. `--provider`, `--model`, and `--endpoint` override the
   settings for one run; `--max-tokens` and `--timeout-ms` bound the answer.
 - [x] `ai test-connection`: asks the model to reply OK and reports who
-  answered, from where, and how fast; nothing from the project is sent.
+  answered, from where, and how fast; nothing from the project is sent. For
+  Claude Code and Codex it checks the login first, stops when the tool is
+  signed out, and says when the tool is signed in with an API key, which is
+  then billed.
+- [x] `--set-ai-cloud on|off` allows connectors that send requests off this
+  machine, after the user confirms each one; `--set-ai-agentic` stores the
+  opt-in for the planned agentic workflows, which nothing uses yet.
 - [x] `--set-ai-local <connector>`, `--set-ai-model <connector>=<model>`, and
   `--set-ai-endpoint <connector>=<url>` configure the text connectors without
-  the GUI; an empty value clears the setting.
+  the GUI; an empty value clears the setting. `--set-ai-local` accepts only
+  the connectors that run on this machine (`local-offline`, `local-gguf`).
+  For `claude-code`, `codex` and `custom-command`, `--set-ai-endpoint` takes
+  the program or command line. A rejected id prints the ids the option
+  accepts. After saving, the command prints `Text:`, `Images:` and `Sounds:`
+  lines saying what each feature would now use.
 - [x] `--set-ai-image <connector>`, `--set-ai-image-model <connector>=<model>`,
   and `--set-ai-image-endpoint <connector>=<url>` do the same for the image
   connectors the Texture Generator and `ai image` use.

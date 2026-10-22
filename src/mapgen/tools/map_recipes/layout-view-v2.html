@@ -1,0 +1,473 @@
+<div id="recipe-layout-v2">
+  <style>
+    #recipe-layout-v2 .layout-heading{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:8px 20px}
+    #recipe-layout-v2 .layout-heading h3{margin:0}
+    #recipe-layout-v2 .layout-stage{width:100%;min-width:0;margin-top:8px}
+    #recipe-layout-v2 .layout-map{display:block;width:100%;overflow:visible}
+    #recipe-layout-v2 .layout-map text{fill:var(--foreground);font-size:12px;paint-order:stroke;stroke:var(--background);stroke-width:3px;stroke-linejoin:round}
+    #recipe-layout-v2 .layout-map .floor-label{font-weight:500}
+    #recipe-layout-v2 .layout-key{display:flex;flex-wrap:wrap;gap:5px 18px;margin-top:10px}
+    #recipe-layout-v2 .layout-key span{display:inline-flex;align-items:center;gap:5px}
+    #recipe-layout-v2 .layout-key [hidden]{display:none}
+    #recipe-layout-v2 .key-mark{width:8px;height:8px;display:inline-block}
+    #recipe-layout-v2 .key-weapon{background:var(--viz-series-2)}
+    #recipe-layout-v2 .key-armor{background:var(--viz-series-3);transform:rotate(45deg)}
+    #recipe-layout-v2 .key-major{background:var(--viz-series-4);border-radius:50%}
+    #recipe-layout-v2 .key-spawn{border:1.5px solid var(--foreground);border-radius:50%}
+    #recipe-layout-v2 .key-solid{background:var(--foreground);opacity:.3}
+    #recipe-layout-v2 .key-stair{color:var(--viz-series-5)}
+    #recipe-layout-v2 .key-teleporter{color:var(--viz-series-6)}
+    #recipe-layout-v2 .key-drop{color:var(--viz-series-6)}
+    #recipe-layout-v2 .layout-detail{margin-top:10px}
+  </style>
+  <div class="layout-heading">
+    <h3 data-layout-name></h3>
+    <label class="form-label">Floor
+      <select class="form-select" data-layout-floor aria-label="Layout floor"></select>
+    </label>
+  </div>
+  <div class="layout-stage" data-layout-stage></div>
+  <div class="layout-key text-small" data-layout-rooms aria-label="Room names"></div>
+  <div class="layout-key text-small" aria-label="Map legend">
+    <span><i class="key-mark key-weapon" aria-hidden="true"></i>Weapon</span>
+    <span><i class="key-mark key-armor" aria-hidden="true"></i>Armor</span>
+    <span><i class="key-mark key-major" aria-hidden="true"></i>Major item</span>
+    <span><i class="key-mark key-spawn" aria-hidden="true"></i>Spawn</span>
+    <span><i class="key-mark key-solid" aria-hidden="true"></i>Cover / wall</span>
+    <span><span class="key-stair" aria-hidden="true">↗</span>Stairs up</span>
+    <span data-key-ramp hidden><span class="key-stair" aria-hidden="true">↗</span>Continuous ramp</span>
+    <span data-key-lift hidden><span class="key-stair" aria-hidden="true">↕</span>Lift · wait + ride</span>
+    <span data-key-teleporter hidden><span class="key-teleporter" aria-hidden="true">⇢</span>One-way teleporter</span>
+    <span data-key-drop hidden><span class="key-drop" aria-hidden="true">↘</span><span data-drop-name>Drop</span></span>
+    <span data-key-liquid hidden><span class="key-teleporter" aria-hidden="true">≈</span>Liquid volume</span>
+    <span data-key-context hidden>Dashed outlines · other-floor rooms</span>
+  </div>
+  <div class="layout-detail text-small" data-layout-detail aria-live="polite"></div>
+  <script type="application/json" id="recipe-layout-v2-data">__LAYOUT_DATA__</script>
+  <script>
+  (() => {
+    const root = document.getElementById('recipe-layout-v2');
+    const data = JSON.parse(root.querySelector('#recipe-layout-v2-data').textContent);
+    const stage = root.querySelector('[data-layout-stage]');
+    const selector = root.querySelector('[data-layout-floor]');
+    const detail = root.querySelector('[data-layout-detail]');
+    const ns = 'http://www.w3.org/2000/svg';
+    const localLevels = data.local_floor_levels || [];
+    const levels = [...data.levels, ...localLevels.map(value => value.height)].sort((a, b) => a - b);
+    const ramps = (data.ramps || []).map((ramp, index) => ({...ramp, code:`R${index + 1}`}));
+    const drops = (data.drops || []).map((drop, index) => ({...drop, code:`D${index + 1}`}));
+    const liquids = data.liquids || [];
+    const overheads = data.overhead_obstacles || [];
+    const rampSolidIds = new Set(ramps.map(ramp => ramp.solid_id));
+    const mechanisms = (data.mechanisms || []).map((mechanism, index, list) => ({...mechanism,
+      code:`${{lift:'L',teleporter:'T',drop:'D'}[mechanism.kind]}${list.slice(0, index + 1).filter(item => item.kind === mechanism.kind).length}`
+    }));
+    const mainLevels = [...data.levels].sort((a,b) => a-b);
+    const levelNames = levels.map(z => `${localLevels.find(value => value.height === z)?.label ??
+      (mainLevels.length === 3 ? ['Lower', 'Middle', 'Upper'][mainLevels.indexOf(z)] : `Floor ${mainLevels.indexOf(z) + 1}`)} · ${z > 0 ? '+' : ''}${z}`);
+    const boundsOf = value => value.bounds || value;
+    const runs = [...data.stair_runs, ...(data.auxiliary_stair_runs || [])].map((value, i) => ({
+      id: value.id ?? i + 1,
+      name: value.name || `Stair ${i + 1}`,
+      steps: (Array.isArray(value) ? value : value.bounds || value.steps).map(boundsOf)
+    }));
+    const validBounds = b => Array.isArray(b) && b.length === 2 && b.every(p => Array.isArray(p) && p.length === 3 && p.every(Number.isFinite));
+    if (!levels.length || levels.some(z => !Number.isFinite(z)) || new Set(levels).size !== levels.length ||
+        runs.some(run => !run.steps.length || run.steps.some(b => !validBounds(b))))
+      throw new Error('Layout requires numeric levels and explicit per-run arrays of valid AABB tread bounds.');
+    const anchors = data.anchors.filter(a => ['spawn', 'weapon', 'armor', 'major_item'].includes(a.role));
+    const roomCode = room => String.fromCharCode(65 + data.rooms.indexOf(room));
+    const corners = b => [[b[0][0], b[0][1]], [b[1][0], b[0][1]], [b[1][0], b[1][1]], [b[0][0], b[1][1]]];
+    const footprintOf = shape => shape.footprint || corners(boundsOf(shape));
+    const center = b => [(b[0][0] + b[1][0]) / 2, (b[0][1] + b[1][1]) / 2];
+    const area = b => (b[1][0] - b[0][0]) * (b[1][1] - b[0][1]);
+    const near = (a, b) => Math.abs(a - b) < 2;
+    const nearestLevel = z => levels.reduce((best, candidate) => Math.abs(candidate - z) < Math.abs(best - z) ? candidate : best);
+    const elevation = z => `${z > 0 ? '+' : ''}${z}`;
+    const staticSolids = data.solids.filter(solid => solid.owner == null && solid.purpose !== 6 && !rampSolidIds.has(solid.id));
+    const localPads = staticSolids.filter(s => s.purpose === 1 && !levels.some(z => near(s.bounds[1][2],z)));
+    const contextForHeight = z => [...levels].reverse().find(level => level <= z);
+    const floorFor = anchor => {
+      const feet = anchor.floor_z ?? anchor.origin[2]-24;
+      const exact = levels.find(z => near(feet,z));
+      if (exact !== undefined) return exact;
+      const pad = localPads.find(s => near(s.bounds[1][2],feet) &&
+        anchor.origin[0] >= s.bounds[0][0] && anchor.origin[0] <= s.bounds[1][0] &&
+        anchor.origin[1] >= s.bounds[0][1] && anchor.origin[1] <= s.bounds[1][1]);
+      return pad ? contextForHeight(feet) : undefined;
+    };
+    const roomForSolid = solid => data.rooms.find(room => footprintOf(solid).every(point =>
+      point[0] >= room.bounds[0][0] && point[0] <= room.bounds[1][0] &&
+      point[1] >= room.bounds[0][1] && point[1] <= room.bounds[1][1]));
+    const node = (name, attributes, parent, text) => {
+      const el = document.createElementNS(ns, name);
+      for (const [key, value] of Object.entries(attributes || {})) el.setAttribute(key, value);
+      if (text !== undefined) el.textContent = text;
+      if (parent) parent.appendChild(el);
+      return el;
+    };
+    const floors = z => [
+      ...data.rooms.filter(r => near(r.bounds[0][2], z)).map(r => ({bounds:r.bounds, room:r})),
+      ...staticSolids.filter(s => s.purpose === 1 && near(s.bounds[1][2], z)).map(s => ({...s, room:roomForSolid(s)})),
+      ...localPads.filter(s => contextForHeight(s.bounds[1][2]) === z).map(s => ({...s,room:roomForSolid(s),surfaceZ:s.bounds[1][2]}))
+    ];
+    const passages = z => data.connections.flatMap(c => c.volumes.filter(b => near(b[0][2], z)).map(bounds => ({bounds, connection:c})));
+    const slabs = z => [...floors(z), ...passages(z)];
+    const shortNames = {
+      weapon_rocketlauncher:'RL', weapon_railgun:'RG', weapon_grenadelauncher:'GL',
+      weapon_chaingun:'CG', weapon_hyperblaster:'HB', weapon_supershotgun:'SSG', weapon_shotgun:'SG',
+      item_quad:'Quad', item_health_mega:'Mega', item_armor_combat:'CA', item_armor_body:'BA', item_armor_jacket:'JA'
+    };
+    root.querySelector('[data-layout-name]').textContent = data.name;
+    selector.append(new Option('All floors · separated', 'stacked'));
+    levels.forEach((z, i) => selector.append(new Option(`Plan · ${levelNames[i]} units`, String(z))));
+    for (const kind of ['lift','teleporter','drop']) root.querySelector(`[data-key-${kind}]`).hidden = !mechanisms.some(mechanism => mechanism.kind === kind);
+    root.querySelector('[data-key-ramp]').hidden = !ramps.length;
+    root.querySelector('[data-key-liquid]').hidden = !liquids.length;
+    if (drops.length) {
+      root.querySelector('[data-key-drop]').hidden = false;
+      root.querySelector('[data-drop-name]').textContent = 'Candidate descent';
+    }
+    if (mechanisms.some(mechanism => mechanism.kind === 'drop' && /candidate/i.test(mechanism.label || '')))
+      root.querySelector('[data-drop-name]').textContent = 'Candidate drop';
+    for (const room of data.rooms) {
+      const span = document.createElement('span');
+      span.textContent = `${roomCode(room)} · ${room.name}${(data.sky_room_ids || []).includes(room.id) ? ' · open sky' : ''}`;
+      root.querySelector('[data-layout-rooms]').append(span);
+    }
+    let lastWidth = 0;
+    function draw() {
+      const width = Math.max(280, stage.getBoundingClientRect().width);
+      lastWidth = width;
+      const stacked = selector.value === 'stacked';
+      root.querySelector('[data-key-context]').hidden = stacked;
+      const active = stacked ? levels : [Number(selector.value)];
+      const height = stacked ? Math.max(width < 500 ? 420 : 530, Math.min(710, width * 1.04)) : Math.max(350, Math.min(620, width * .94));
+      const allPoints = levels.flatMap(z => slabs(z).flatMap(footprintOf));
+      const yIso = p => -.25 * (p[0] + p[1]);
+      const isoSpan = Math.max(...allPoints.map(yIso)) - Math.min(...allPoints.map(yIso));
+      const levelStep = isoSpan * (width < 500 ? 1.18 : .95);
+      const levelPosition = z => {
+        let index = levels.findIndex(value => value >= z);
+        if (levels.length === 1) return 0;
+        if (index === -1) index = levels.length - 1;
+        if (index === 0) return (z - levels[0]) / (levels[1] - levels[0]);
+        return index - 1 + (z - levels[index - 1]) / (levels[index] - levels[index - 1]);
+      };
+      const raw = (p, z) => stacked ? [.72 * (p[0] - p[1]), yIso(p) - levelPosition(z) * levelStep] : [p[0], -p[1]];
+      const extent = active.flatMap(z => slabs(z).flatMap(shape => footprintOf(shape).map(p => raw(p, stacked ? shape.surfaceZ ?? z : z))));
+      for (const liquid of liquids) if (active.some(z => liquid.bounds[0][2] <= z && liquid.bounds[1][2] > z))
+        extent.push(...corners(liquid.bounds).map(p => raw(p,stacked ? liquid.bounds[1][2] : active[0])));
+      for (const ceiling of overheads) if (active.includes(ceiling.context))
+        extent.push(...corners(ceiling.bounds).map(p => raw(p,stacked ? ceiling.bounds[0][2] : active[0])));
+      const activeRamps = ramps.filter(ramp => stacked || active.includes(ramp.base_floor) || active.includes(ramp.to[2]));
+      for (const ramp of activeRamps) extent.push(...ramp.surface.map(point => raw(point, stacked ? point[2] : active[0])));
+      const activeDrops = drops.filter(drop => stacked || [drop.from[2],drop.to[2]].some(z => active.includes(z)));
+      for (const drop of activeDrops) for (const point of [drop.from,drop.departure,drop.to]) {
+        if (stacked || active.includes(point[2])) extent.push(raw(point, point[2]));
+      }
+      for (const mechanism of mechanisms) for (const point of [mechanism.from, mechanism.to]) {
+        if (stacked || active.includes(nearestLevel(point[2]))) {
+          extent.push(raw(point, point[2]));
+          if (mechanism.kind === 'lift') extent.push(...corners(mechanism.bounds).map(p => raw(p, point[2])));
+        }
+      }
+      const activeRooms = data.rooms.filter(room => active.some(z => floors(z).some(floor => floor.room === room)));
+      // Every plan uses the complete authored envelope. Changing floors must
+      // not silently enlarge a small upper platform or shift shared XY points.
+      const planPoints = [...data.rooms.map(room => room.bounds),
+        ...data.connections.flatMap(connection => connection.volumes)].flatMap(corners);
+      if (!stacked) extent.splice(0, extent.length, ...planPoints.map(p => raw(p, active[0])));
+      const xmin = Math.min(...extent.map(p => p[0])), xmax = Math.max(...extent.map(p => p[0]));
+      const ymin = Math.min(...extent.map(p => p[1])), ymax = Math.max(...extent.map(p => p[1]));
+      const scale = Math.min((width - 38) / (xmax - xmin), (height - 62) / (ymax - ymin));
+      const project = (p, z) => {
+        const q = raw(p, z);
+        return [(width - (xmax - xmin) * scale) / 2 + (q[0] - xmin) * scale,
+          (height - (ymax - ymin) * scale) / 2 + (q[1] - ymin) * scale];
+      };
+      stage.replaceChildren();
+      const svg = node('svg', {class:'layout-map', viewBox:`0 0 ${width} ${height}`, width, height,
+        'data-world-scale':scale, 'data-level-step':levelStep,
+        'data-projection':stacked ? 'separated' : 'orthographic-xy',
+        role:'img', 'aria-label':`${data.name} analytical layout, ${stacked ? 'stacked floors' : levelNames[levels.indexOf(active[0])]}`}, stage);
+      node('title', {}, svg, `${data.name} · floor layout`);
+      node('desc', {}, svg, data.description || `${data.rooms.length} unequal rooms, ${data.connections.length} passage routes and ${runs.length} explicit stair runs. Arrows point uphill. This is an analytical layout diagram.`);
+      if (drops.length) node('desc', {}, svg, 'Drop markers show a geometric candidate horizontal departure followed by vertical descent, not a native momentum trajectory. Ordinary returns use the navigation graph. Native probe status refers only to separate world-collision movement evidence; gameplay and harmless falls remain untested.');
+      const defs = node('defs', {}, svg);
+      const marker = node('marker', {id:'recipe-layout-v2-arrow', viewBox:'0 0 10 10', refX:8, refY:5,
+        markerWidth:5, markerHeight:5, orient:'auto'}, defs);
+      node('path', {d:'M 0 0 L 10 5 L 0 10 z', fill:'var(--viz-series-5)'}, marker);
+      const teleportMarker = node('marker', {id:'recipe-layout-v2-teleport-arrow', viewBox:'0 0 10 10', refX:8, refY:5,
+        markerWidth:5, markerHeight:5, orient:'auto'}, defs);
+      node('path', {d:'M 0 0 L 10 5 L 0 10 z', fill:'var(--viz-series-6)'}, teleportMarker);
+      const liftMarker = node('marker', {id:'recipe-layout-v2-lift-arrow', viewBox:'0 0 10 10', refX:8, refY:5,
+        markerWidth:5, markerHeight:5, orient:'auto-start-reverse'}, defs);
+      node('path', {d:'M 0 0 L 10 5 L 0 10 z', fill:'var(--viz-series-5)'}, liftMarker);
+      const dropMarker = node('marker', {id:'recipe-layout-v2-drop-arrow', viewBox:'0 0 10 10', refX:8, refY:5,
+        markerWidth:5, markerHeight:5, orient:'auto'}, defs);
+      node('path', {d:'M 0 0 L 10 5 L 0 10 z', fill:'var(--viz-series-6)'}, dropMarker);
+      const polygon = (shape, z, attrs, parent) => node('polygon', {
+        points:footprintOf(shape).map(p => project(p, z).join(',')).join(' '), ...attrs
+      }, parent);
+      const labels = [];
+      const occupied = [];
+      const queueLabel = (text, x, y, options = {}) => labels.push({text, x, y, ...options});
+      if (!stacked) {
+        const unitLength = [1024,512,256,128,64,32,16,8,4,2,1].find(units => units * scale <= Math.min(120,width * .25)) || 1;
+        const scaleGroup = node('g', {'data-plan-scale':unitLength}, svg);
+        node('line', {x1:20,y1:height-13,x2:20+unitLength*scale,y2:height-13,
+          stroke:'var(--foreground)','stroke-width':1.5,'data-scale-bar':true}, scaleGroup);
+        for (const x of [20,20+unitLength*scale]) node('line', {x1:x,y1:height-17,x2:x,y2:height-9,
+          stroke:'var(--foreground)','stroke-width':1}, scaleGroup);
+        const scaleLabel = node('text', {x:20,y:height-24,'text-anchor':'start'}, scaleGroup, `${unitLength} units`);
+        const directionLabel = node('text', {x:width-12,y:height-24,'text-anchor':'end'}, scaleGroup, '+Y up');
+        for (const text of [scaleLabel,directionLabel]) {
+          const b=text.getBBox(); occupied.push({x:b.x,y:b.y,width:b.width,height:b.height+18});
+        }
+      }
+      if (!stacked) for (const room of data.rooms) polygon(room.bounds, active[0], {
+        fill:'none', stroke:'var(--border)', 'stroke-width':1, 'data-room-outline':room.id,
+        ...(activeRooms.includes(room) ? {} : {'stroke-dasharray':'3 4','data-other-floor-room':true})
+      }, svg);
+      for (const z of active) {
+        const group = node('g', {'data-level':z}, svg);
+        for (const floor of floors(z)) polygon(floor, stacked ? floor.surfaceZ ?? z : z, {
+          fill:'var(--viz-series-1)', 'fill-opacity':floor.surfaceZ === undefined ? .13 : .45, stroke:'var(--border)', 'stroke-width':1,
+          'data-floor-surface':z, 'data-room':floor.room?.id ?? '',
+          ...(floor.surfaceZ === undefined ? {} : {'data-local-platform':floor.id,'data-surface-z':floor.surfaceZ}),
+          ...(floor.footprint ? {'data-solid-id':floor.id, 'data-footprint-vertices':floor.footprint.length} : {})
+        }, group);
+        for (const passage of passages(z)) polygon(passage.bounds, z, {
+          fill:'var(--viz-series-1)', 'fill-opacity':.28, stroke:'var(--border)', 'stroke-width':1,
+          'data-route':passage.connection.id,
+          'data-tooltip':`${roomCode(data.rooms.find(r => r.id === passage.connection.from))} ↔ ${roomCode(data.rooms.find(r => r.id === passage.connection.to))} · ${z} units`
+        }, group);
+        const clipId = `recipe-layout-v2-floor-clip-${levels.indexOf(z)}`;
+        const floorClip = node('clipPath', {id:clipId,clipPathUnits:'userSpaceOnUse'}, defs);
+        for (const floor of slabs(z)) polygon(floor,z,{},floorClip);
+        const blockers = node('g', {'clip-path':`url(#${clipId})`,'data-blocker-layer':z}, group);
+        for (const solid of staticSolids) {
+          const b = solid.bounds;
+          const owner = roomForSolid(solid);
+          if (owner && !floors(z).some(floor => floor.room === owner)) continue;
+          if (solid.purpose !== 1 && solid.purpose !== 2 && b[0][2] <= z && b[1][2] > z)
+            polygon(solid, z, {fill:'var(--foreground)', 'fill-opacity':.3, stroke:'var(--border)', 'stroke-width':.8,
+              'data-solid-id':solid.id ?? '', ...(solid.footprint ? {'data-footprint-vertices':solid.footprint.length} : {})}, blockers);
+        }
+        for (const liquid of liquids.filter(l => l.bounds[0][2] <= z && l.bounds[1][2] > z)) {
+          const b = liquid.bounds, surface = b[1][2];
+          polygon(b, stacked ? surface : z, {fill:'var(--viz-series-6)', 'fill-opacity':.35,
+            stroke:'var(--viz-series-6)', 'stroke-width':1, 'stroke-dasharray':'3 3',
+            'data-liquid-id':liquid.id, 'data-liquid-level':z, 'data-liquid-contents':liquid.contents,
+            'data-liquid-surface':surface,
+            'data-tooltip':`${liquid.contents} · surface ${surface} · up to ${surface-b[0][2]} units above the volume bed`}, group);
+          const p = project(center(b),stacked ? surface : z);
+          queueLabel(`${liquid.contents} · up to ${surface-b[0][2]} deep`,p[0],p[1],{kind:'liquid',priority:1,z});
+        }
+        for (const room of data.rooms) {
+          const local = floors(z).filter(f => f.room === room).map(f => f.bounds).sort((a, b) => area(b) - area(a));
+          if (!local.length) continue;
+          const b = local[0];
+          const p = project([b[0][0] + Math.min(48, (b[1][0] - b[0][0]) / 3), b[1][1] - Math.min(48, (b[1][1] - b[0][1]) / 3)], z);
+          queueLabel(roomCode(room), p[0], p[1], {kind:'room', priority:0, room:room.id, z});
+        }
+        for (const ceiling of overheads.filter(value => value.context === z)) {
+          const underside=ceiling.bounds[0][2];
+          polygon(ceiling.bounds, stacked ? underside : z, {
+            fill:'var(--foreground)', 'fill-opacity':.25, stroke:'var(--foreground)', 'stroke-width':1,
+            'data-overhead-context':z, 'data-overhead-underside':underside,
+            'data-tooltip':`${ceiling.label} · underside ${underside} · local bed ${z}`
+          }, group);
+          const p=project(center(ceiling.bounds),stacked?underside:z);
+          queueLabel(`${ceiling.label} · ${underside}`,p[0],p[1],{kind:'overhead',priority:-.5,z});
+        }
+        if (stacked) {
+          const points = slabs(z).flatMap(shape => footprintOf(shape).map(p => project(p, z)));
+          const top = Math.min(...points.map(p => p[1]));
+          queueLabel(`${levelNames[levels.indexOf(z)]}`, width / 2, Math.max(17, top - 17), {kind:'floor', priority:-1, fixed:true, z});
+        }
+      }
+      const stairLayer = node('g', {'data-stair-layer':true}, svg);
+      let visibleRuns = 0;
+      for (const run of runs) {
+        if (!run.steps.length) continue;
+        const low = run.steps[0][0][2], high = run.steps.at(-1)[1][2];
+        if (!stacked && !near(low, active[0]) && !near(high, active[0])) continue;
+        visibleRuns++;
+        const z = active[0];
+        const group = node('g', {'data-stair-run':run.id, 'data-low':low, 'data-high':high,
+          'data-tooltip':`${run.name} · ${low} → ${high} units · ${run.steps.length} treads`}, stairLayer);
+        for (const b of run.steps) polygon(b, stacked ? b[1][2] : z, {
+          fill:'var(--viz-series-5)', 'fill-opacity':.16, stroke:'var(--foreground)', 'stroke-opacity':.3, 'stroke-width':.6
+        }, group);
+        const a = project(center(run.steps[0]), stacked ? run.steps[0][1][2] : z);
+        const b = project(center(run.steps.at(-1)), stacked ? high : z);
+        node('line', {x1:a[0], y1:a[1], x2:b[0], y2:b[1], stroke:'var(--viz-series-5)',
+          'stroke-width':1.6, 'marker-end':'url(#recipe-layout-v2-arrow)', 'data-up-arrow':run.id}, group);
+        if (!stacked && width > 500) queueLabel(`S${run.id}`, (a[0] + b[0]) / 2, (a[1] + b[1]) / 2, {kind:'stair', priority:3});
+      }
+      const rampLayer = node('g', {'data-ramp-layer':true}, svg);
+      for (const ramp of activeRamps) {
+        const description = `${ramp.code} · ${elevation(ramp.from[2])} → ${elevation(ramp.to[2])} units · continuous ramp · ${ramp.width} wide · ${ramp.rise} rise / ${ramp.run} run`;
+        const group = node('g', {'data-ramp':ramp.id, 'data-ramp-code':ramp.code, 'data-solid-id':ramp.solid_id,
+          'data-low':ramp.from[2], 'data-high':ramp.to[2], 'data-base-floor':ramp.base_floor, 'data-tooltip':description}, rampLayer);
+        node('polygon', {points:ramp.surface.map(point => project(point, stacked ? point[2] : active[0]).join(',')).join(' '),
+          fill:'var(--viz-series-5)', 'fill-opacity':.23, stroke:'var(--foreground)', 'stroke-opacity':.6, 'stroke-width':1,
+          'data-ramp-surface':ramp.id}, group);
+        const [from,to] = [ramp.from,ramp.to].map(point => project(point, stacked ? point[2] : active[0]));
+        node('line', {x1:from[0],y1:from[1],x2:to[0],y2:to[1],stroke:'var(--viz-series-5)',
+          'stroke-width':1.8,'marker-end':'url(#recipe-layout-v2-arrow)','data-ramp-up-arrow':ramp.id}, group);
+        queueLabel(`${ramp.code} ${elevation(ramp.from[2])}→${elevation(ramp.to[2])}`,
+          (from[0]+to[0])/2,(from[1]+to[1])/2,{kind:'ramp',priority:-.4,ramp:ramp.id});
+      }
+      const mechanismLayer = node('g', {'data-mechanism-layer':true}, svg);
+      const visibleMechanisms = [];
+      for (const mechanism of mechanisms) {
+        const fromLevel = nearestLevel(mechanism.from[2]), toLevel = nearestLevel(mechanism.to[2]);
+        if (!stacked && !active.includes(fromLevel) && !active.includes(toLevel)) continue;
+        visibleMechanisms.push(mechanism);
+        const isLift = mechanism.kind === 'lift';
+        const color = isLift ? 'var(--viz-series-5)' : 'var(--viz-series-6)';
+        const description = `${mechanism.label || mechanism.code} · ${mechanism.from[2]} ${isLift ? '↔' : '→'} ${mechanism.to[2]} units${isLift ? ' · wait + ride' : ''}`;
+        const group = node('g', {'data-mechanism':mechanism.id, 'data-mechanism-kind':mechanism.kind,
+          'data-mechanism-code':mechanism.code, 'data-from-level':fromLevel, 'data-to-level':toLevel,
+          'data-from-z':mechanism.from[2], 'data-to-z':mechanism.to[2], 'data-tooltip':description}, mechanismLayer);
+        const [from, to] = [mechanism.from, mechanism.to].map(point => project(point, stacked ? point[2] : active[0]));
+        if (stacked || (active.includes(fromLevel) && active.includes(toLevel))) {
+          node('line', {x1:from[0],y1:from[1],x2:to[0],y2:to[1],stroke:color,'stroke-width':1.8,
+            'stroke-dasharray':isLift ? '5 4' : '3 5',
+            'marker-end':`url(#recipe-layout-v2-${isLift ? 'lift' : 'teleport'}-arrow)`,
+            ...(isLift ? {'marker-start':'url(#recipe-layout-v2-lift-arrow)'} : {}),
+            'data-mechanism-link':mechanism.id,'data-direction':isLift ? 'bidirectional-stateful' : 'one-way'}, group);
+        }
+        for (const [endpoint, point, level, otherLevel] of [['from',mechanism.from,fromLevel,toLevel],['to',mechanism.to,toLevel,fromLevel]]) {
+          if (!stacked && !active.includes(level)) continue;
+          const actualZ = stacked ? point[2] : active[0];
+          const [x,y] = project(point, actualZ);
+          const endpointGroup = node('g', {'data-mechanism-station':endpoint,'data-station-level':level,
+            'data-station-z':point[2], 'data-tooltip':description}, group);
+          if (isLift) {
+            polygon(mechanism.bounds, actualZ, {fill:color,'fill-opacity':.22,stroke:color,'stroke-width':1.5,
+              'stroke-dasharray':'4 3','data-lift-footprint':mechanism.id}, endpointGroup);
+            node('rect', {x:x-4,y:y-4,width:8,height:8,fill:'var(--background)',stroke:color,'stroke-width':1.6}, endpointGroup);
+          } else if (mechanism.kind === 'drop') {
+            node('path', {d:endpoint === 'from' ? `M${x-6} ${y-4}L${x+6} ${y-4}L${x} ${y+6}Z` :
+              `M${x} ${y-5}L${x+5} ${y}L${x} ${y+5}L${x-5} ${y}Z`,
+              fill:endpoint === 'from' ? color : 'var(--background)',stroke:color,'stroke-width':1.7,
+              'data-drop-endpoint':endpoint}, endpointGroup);
+          } else {
+            node('circle', {cx:x,cy:y,r:endpoint === 'from' ? 6 : 5,fill:endpoint === 'from' ? color : 'var(--background)',
+              stroke:color,'stroke-width':1.7,'data-teleport-endpoint':endpoint}, endpointGroup);
+          }
+          occupied.push({x:x-8,y:y-8,width:16,height:16});
+          const label = isLift ? `${mechanism.code} · ${point[2]}` :
+            mechanism.kind === 'drop' ? `${mechanism.code}${endpoint === 'to' ? ' landing' : ` ↓ ${elevation(otherLevel)}`}` :
+            `${mechanism.code}${endpoint === 'to' ? ' exit' : ` → ${elevation(otherLevel)}`}`;
+          queueLabel(label,x,y,{kind:'mechanism',priority:-.5,mechanism:mechanism.id});
+        }
+      }
+      const dropLayer = node('g', {'data-drop-layer':true}, svg);
+      for (const drop of activeDrops) {
+        const description = `${drop.code} · ${drop.label} · ${drop.from[2]} → ${drop.to[2]} units · geometric candidate, not a ballistic trajectory`;
+        const group = node('g', {'data-drop':drop.id, 'data-drop-code':drop.code,
+          'data-from-z':drop.from[2], 'data-to-z':drop.to[2], 'data-tooltip':description}, dropLayer);
+        const points = Object.fromEntries(['from','departure','to'].map(endpoint =>
+          [endpoint,project(drop[endpoint], stacked ? drop[endpoint][2] : active[0])]));
+        for (const [kind,start,end,visible] of [
+          ['departure','from','departure',stacked || active.includes(drop.from[2])],
+          ['descent','departure','to',stacked]]) {
+          if (!visible) continue;
+          const a = points[start], b = points[end];
+          node('line', {x1:a[0],y1:a[1],x2:b[0],y2:b[1],stroke:'var(--viz-series-6)',
+            'stroke-width':1.9,'stroke-dasharray':kind === 'descent' ? '5 4' : '2 3',
+            'marker-end':'url(#recipe-layout-v2-drop-arrow)', 'data-drop-segment':kind,
+            'data-segment-from':start,'data-segment-to':end,'data-direction':'one-way'}, group);
+        }
+        for (const endpoint of ['from','departure','to']) {
+          const point = drop[endpoint];
+          if (!stacked && !active.includes(point[2])) continue;
+          const [x,y] = points[endpoint];
+          const station = node('g', {'data-drop-station':endpoint,'data-station-level':point[2],
+            'data-station-z':point[2], 'data-point-x':x,'data-point-y':y,
+            'data-tooltip':`${description} · ${endpoint === 'from' ? 'takeoff' : endpoint === 'to' ? 'landing' : 'clear of ledge'}`}, group);
+          if (endpoint === 'from') node('rect', {x:x-4,y:y-4,width:8,height:8,fill:'var(--background)',
+            stroke:'var(--viz-series-6)','stroke-width':1.7}, station);
+          else node('path', {d:endpoint === 'departure' ? `M${x-5} ${y-3}L${x+5} ${y-3}L${x} ${y+5}Z` :
+            `M${x} ${y-5}L${x+5} ${y}L${x} ${y+5}L${x-5} ${y}Z`,
+            fill:endpoint === 'departure' ? 'var(--viz-series-6)' : 'var(--background)',
+            stroke:'var(--viz-series-6)','stroke-width':1.7}, station);
+          occupied.push({x:x-7,y:y-7,width:14,height:14});
+          if (endpoint !== 'departure') queueLabel(endpoint === 'from' ? `${drop.code} ↓ ${elevation(drop.to[2])}` : `${drop.code} landing`,
+            x,y,{kind:'drop',priority:-.6,drop:drop.id,endpoint});
+        }
+      }
+      const anchorLayer = node('g', {'data-anchor-layer':true}, svg);
+      for (const anchor of anchors) {
+        const z = floorFor(anchor);
+        if (z === undefined || !active.includes(z)) continue;
+        const feet = anchor.floor_z ?? anchor.origin[2]-24;
+        const [x, y] = project(anchor.origin, stacked ? feet : z);
+        const label = `${anchor.class.replaceAll('_', ' ')} · ${feet} units`;
+        const attrs = {'data-tooltip':label, 'data-anchor':anchor.entity, 'data-role':anchor.role, 'data-anchor-level':z,'data-anchor-feet':feet};
+        if (anchor.role === 'spawn') node('circle', {cx:x, cy:y, r:3.8, fill:'var(--background)', stroke:'var(--foreground)', 'stroke-width':1.3, ...attrs}, anchorLayer);
+        else if (anchor.role === 'major_item') node('circle', {cx:x, cy:y, r:5, fill:'var(--viz-series-4)', ...attrs}, anchorLayer);
+        else if (anchor.role === 'armor') node('path', {d:`M${x} ${y - 5}L${x + 5} ${y}L${x} ${y + 5}L${x - 5} ${y}Z`, fill:'var(--viz-series-3)', ...attrs}, anchorLayer);
+        else node('rect', {x:x - 3.7, y:y - 3.7, width:7.4, height:7.4, fill:'var(--viz-series-2)', ...attrs}, anchorLayer);
+        occupied.push({x:x - 6, y:y - 6, width:12, height:12});
+        if (anchor.role !== 'spawn') queueLabel((shortNames[anchor.class] || anchor.class.replace(/^weapon_|^item_/, ''))+(near(feet,z) ? '' : ` ${elevation(feet)}`), x, y,
+          {kind:'pickup', priority:anchor.role === 'major_item' ? -.6 : 2, major:anchor.role === 'major_item', anchor:anchor.entity});
+      }
+      const labelLayer = node('g', {'data-label-layer':true}, svg);
+      const intersects = (a, b) => a.x < b.x + b.width + 3 && a.x + a.width + 3 > b.x && a.y < b.y + b.height + 3 && a.y + a.height + 3 > b.y;
+      const within = box => box.x >= 3 && box.y >= 3 && box.x + box.width <= width - 3 && box.y + box.height <= height - 3;
+      for (const label of labels.sort((a, b) => a.priority - b.priority)) {
+        const text = node('text', {'text-anchor':'middle', class:label.kind === 'floor' ? 'floor-label' : '',
+          'data-label-kind':label.kind, 'data-label-room':label.room ?? '', 'data-label-anchor':label.anchor ?? '',
+          'data-label-mechanism':label.mechanism ?? '', 'data-label-ramp':label.ramp ?? '',
+          'data-label-drop':label.drop ?? '', 'data-drop-label-endpoint':label.endpoint ?? ''}, labelLayer, label.text);
+        const offsets = label.fixed ? [[0,0]] : label.kind === 'room' ? [[0,0],[0,15],[13,0],[-13,0],[0,-15]] : (label.major || ['mechanism','ramp','drop'].includes(label.kind)) ?
+          [[0,-11],[0,20],[0,-25],[0,33],[28,-10],[-28,-10],[28,22],[-28,22],[42,4],[-42,4],[42,-25],[-42,-25],[42,34],[-42,34],[0,-43],[0,49]] :
+          [[0,-11],[0,20],[18,4],[-18,4],[23,-10],[-23,-10],[23,19],[-23,19],[0,-25],[0,33]];
+        let placed = false;
+        for (const [dx,dy] of offsets) {
+          text.setAttribute('x', label.x + dx); text.setAttribute('y', label.y + dy);
+          const bbox = text.getBBox();
+          if (within(bbox) && (label.fixed || !occupied.some(box => intersects(box, bbox)))) {
+            if ((label.major || ['mechanism','ramp','drop'].includes(label.kind)) && Math.hypot(dx,dy) > 35) {
+              const leader = node('line',{x1:label.x,y1:label.y,x2:label.x+dx,y2:label.y+dy-4,
+                stroke:'var(--border)','stroke-width':1,'data-label-leader':label.major ? `pickup-${label.anchor}` : label.mechanism ?? (label.drop ? `drop-${label.drop}` : `ramp-${label.ramp}`)});
+              labelLayer.insertBefore(leader,text);
+            }
+            occupied.push({x:bbox.x, y:bbox.y, width:bbox.width, height:bbox.height}); placed = true; break;
+          }
+        }
+        if (!placed) text.remove();
+      }
+      const players = Array.isArray(data.players) ? data.players.join('–') : data.players;
+      const mechanismCounts = (stacked ? mechanisms : visibleMechanisms).reduce((counts, mechanism) => {
+        counts[mechanism.kind] = (counts[mechanism.kind] || 0) + 1; return counts;
+      }, {});
+      const mechanismDetail = Object.entries(mechanismCounts).map(([kind,count]) =>
+        `${count} ${kind === 'teleporter' ? 'one-way teleporter' : kind}${count === 1 ? '' : 's'}`).join(' · ');
+      detail.textContent = stacked ? `${players ? `${players} players · ` : ''}${data.rooms.length} rooms · ${data.connections.length} passage routes · ${runs.length} stair runs` :
+        `${levelNames[levels.indexOf(active[0])]} units · ${visibleRuns} stair runs · ${anchors.filter(a => a.role === 'spawn' && near(floorFor(a), active[0])).length} spawn positions`;
+      if (stacked && localLevels.length) detail.textContent += ` · ${mainLevels.length} main floors + local bed`;
+      if (mechanismDetail) detail.textContent += ` · ${mechanismDetail}`;
+      if (activeRamps.length) detail.textContent += ` · ${activeRamps.length} continuous ramp${activeRamps.length === 1 ? '' : 's'}`;
+      if (activeDrops.length) {
+        const checked = activeDrops.every(drop => data.drop_evidence?.drops.some(value => value.id === drop.id && value.ordinary_return_verified));
+        const probed = data.native_drop_evidence?.world_only === true && data.native_drop_evidence?.gameplay_tested === false &&
+          data.native_drop_evidence?.diagram_is_native_trajectory === false && activeDrops.every(drop =>
+            data.native_drop_evidence.drops.some(value => value.id === drop.id && value.probe_count === 2));
+        detail.textContent += ` · ${activeDrops.length} candidate descent${activeDrops.length === 1 ? '' : 's'} · Ordinary return ${checked ? 'graph checked' : 'audit pending'} · ${probed ? 'Native world movement probed; gameplay untested' : 'Runtime untested'}`;
+      }
+    }
+    selector.addEventListener('change', draw);
+    new ResizeObserver(() => {
+      if (Math.abs(stage.getBoundingClientRect().width - lastWidth) > 1) draw();
+    }).observe(stage);
+    draw();
+  })();
+  </script>
+</div>

@@ -1,0 +1,86 @@
+{
+  "schema_version": 1,
+  "id": "weft-native-motif-turning-v1",
+  "study": "docs/Q2_NATIVE_MOTIF_TURNING.md",
+  "protocol": "out/native-motif-turning/protocol.json",
+  "record": "out/native-motif-turning/record.json",
+  "bsp_sha256": "980b22bf6aaedb032df1f04db5cc46d864d72f961a9852809486fbd64abf50f0",
+  "layout_sha256": "aaddb7862052e2c3b0264ef99952f356f78dffd45ef23eb70e31eb3e7de6adf7",
+  "protocol_sha256": "07ee02088ccc15b147fd014735c4c16d3fb5640eb99c705879cdc80d293e1110",
+  "original_circuit_record_sha256": "cc6af5ee0eb7bd72b4144ebb339708f12210cd9a0b628f6fa44b61c4f89cd855",
+  "scope": {
+    "engine": "Official Quake II3.19 CM/Pmove",
+    "world_only": true,
+    "gameplay_tested": false,
+    "human_or_optimality_tested": false,
+    "model_weights_trained": false,
+    "motifs": ["Weft rotation0 crosswalk height128", "Weft rotation1 horseshoe height128"]
+  },
+  "protocol_control": {
+    "new_native_runs": 0,
+    "existing_raw_traces": 8,
+    "original_strict_results_modified": false,
+    "original_strict_successes": 0,
+    "separate_physical_contract_successes": 2,
+    "physical_full_support_failures": 4,
+    "unchanged_final_pocket_failures": 2,
+    "gate_definition": "Actual128-wide stairs admit±48 full-hull cross lanes. Entry/exit axial tolerance±12. Continuous reconstructed upper support/clearance, ordered gates and unchanged9-state128ms finishing dwell are required."
+  },
+  "new_factorial": {
+    "motifs": 2,
+    "directions": 2,
+    "literal_forwardmove": [200, 400],
+    "native_wish_speed": [200, 300],
+    "corner_pause_frames": [0, 24],
+    "native_first_attempts": 16,
+    "native_frame_total": 9268,
+    "physical_circuit_successes": 16,
+    "physical_circuit_failures": 0,
+    "retained_station_diagnostic_failures": 5,
+    "same_active_commands_within_pairs": true,
+    "same_acceptance_within_pairs": true,
+    "new_inputs_adapted_or_repeated": false,
+    "geometry_changed": false,
+    "all_paused_corners_reached_zero_velocity": true,
+    "all_finishes_zero_velocity": true,
+    "all_final_hull_to_wall_gap": 0.125,
+    "test_controls_passed": 11
+  },
+  "timing_provenance": {
+    "fixed_before_control_and_new_runs": true,
+    "informed_by_prior_experiments": true,
+    "blind_or_optimized": false,
+    "sources": ["Prior Weft stationary-start and steady native frames", "Prior Ravel grounded release coasts", "Pinned original PM_Friction, PM_Accelerate and PM_SnapPosition semantics"],
+    "measured_prior_stop_frames_input200_400": [18, 22],
+    "nominal_signed_coordinate_transfer_is_assumption": true
+  },
+  "learnings": [
+    {
+      "id": "separate-physical-gates-from-historical-results",
+      "finding": "A declared physical gate contract resolves narrow checkpoint misses separately from full-footprint loss and final-position error. Preserve original results when changing interpretation.",
+      "limit": "The2/8 protocol control changes acceptance, not inputs; historical0/8 is not a timing-only comparator."
+    },
+    {
+      "id": "derive-timing-before-changing-architecture",
+      "finding": "Both fixed rolling and24-frame release policies complete these exact circuits after earlier empirically derived turn timings, without enlarging geometry.",
+      "limit": "Only these starts, two motifs, directions and inputs; no robust general traversal or human claim."
+    },
+    {
+      "id": "alignment-time-tradeoff",
+      "finding": "Corner releases reduce final lateral offsets in all eight pairs, from4.125–21.5 units to0–2.125, with688–752ms added to completed dwell.",
+      "limit": "Same active counts and scoring within pairs. Pauses change coast and restart velocity; no optimality or gameplay advantage claim."
+    },
+    {
+      "id": "wall-adjacent-recovery-is-specific",
+      "finding": "Every accepted final hull is0.125 unit from the room wall and stationary. Record available stopping boundaries when interpreting precision.",
+      "limit": "No equivalent open-space stopping or individual collision callback attribution is established."
+    },
+    {
+      "id": "point-station-versus-bounded-dwell",
+      "finding": "Five nominal station-crossing diagnostics fail while their complete physical routes and declared bounded-pocket dwells pass. Retain both semantic outcomes.",
+      "limit": "A bounded finishing pocket intentionally permits stopping short of its nominal centerline plane."
+    }
+  ],
+  "next_test": "Predeclare an open-space stopping or bounded starting-lane/turn perturbation study on frozen geometry; test other rotations and rises separately before generalization.",
+  "limits": ["Upper proofs are feet128 projected chords and conservative floor rectangles, not native internal substeps", "Stair cross-band containment is not constant full-footprint support on one tread height", "No game module, pickup, damage, dynamic entity, client, input device, rendering, opponent or human test"]
+}

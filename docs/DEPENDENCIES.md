@@ -346,7 +346,7 @@ alone.
   depends on it beyond the presence of the `.qm` files.
 - **`lupdate`**, used by `scripts/extract_translations.py --check` to validate
   dry-run extraction in tests and CI. Also optional.
-- **Python 3**, required for the pinned xatlas build adaptation, validation and packaging scripts, and for the
+- **Python 3**, required for the pinned xatlas build adaptation, the Map Generator's game profile header, validation and packaging scripts, and for the
   documentation, layout, credits, and translation-extraction tests registered in
   `meson.build`.
 - **Markdown and Pygments** (`scripts/requirements-docs.txt`), used by
@@ -381,6 +381,50 @@ portable read/save behavior remains where available. See [credits](CREDITS.md#pa
 These are deliberate decisions to write code rather than add a library. Each one
 is recorded with the specification it was implemented from, so the choice can be
 audited and, if it ever stops paying off, reversed knowingly.
+
+### llama.cpp and ggml (optional)
+
+- Source: [llama.cpp](https://github.com/ggml-org/llama.cpp) with its bundled
+  [ggml](https://github.com/ggml-org/ggml), MIT, pinned at
+  `c1d0e7a004015f23bc0233470b747b596f29b264` (2026-08-25), the revision
+  Quake-MapGen used.
+- Linked only with `meson setup -Dggml=enabled` (default `disabled`), as the
+  static libraries `llama`, `ggml`, `ggml-cpu` and `ggml-base`, from the folder
+  `-Dggml_prefix` names (default `external/ai/ggml`, Git-ignored).
+- Built by `scripts/build_ggml.py`: a clean checkout at the pinned revision,
+  CPU only, no OpenMP, no llamafile SGEMM, no native instructions, no GPU
+  backends, `--config` matching the Meson build type's C runtime.
+- Used by the Local GGUF connector (`core/ai_gguf_runtime`) and by
+  Quake-MapGen's optional ggml ranker. Not bundled in releases yet.
+
+### Claude Code and Codex (user-installed)
+
+The Claude Code and Codex connectors run tools the user installs and signs in
+to; VibeStudio bundles neither and reads none of their credentials. Their
+documented command-line interfaces are the integration surface
+([Claude Code CLI reference](https://code.claude.com/docs/en/cli-reference),
+[Codex](https://github.com/openai/codex)). Versions checked: Claude Code
+2.1.304 and Codex CLI 0.153.4 (2026-10-22).
+
+### Map Generator — `src/mapgen/`
+
+Quake-MapGen's generator library is imported source, not a dependency: it is
+developed in VibeStudio from now on. Its MIT licence is kept in
+`src/mapgen/LICENSE` and installed with the application;
+`src/mapgen/UPSTREAM.json` records the imported revision and every file's
+upstream SHA-256. Upstream linked ggml for its layout ranker and llama.cpp for
+optional GGUF planning. By default VibeStudio links neither: the ranker is
+plain C++ with ggml's accumulation order, and models plan through the studio's
+AI connectors. Builds made with `-Dggml=enabled` link both, for the optional
+ggml ranker and the Local GGUF connector (see
+[llama.cpp and ggml](#llamacpp-and-ggml-optional)).
+Python 3 generates its game profile header at build time. Its research tools
+add no build dependency: the recipe and portfolio programs build against the
+same library, the Python tools need Python 3.10 or newer and its standard
+library, and the Quake Live atlas tests run only when Shapely is installed. The
+native movement and teleport harnesses link GPL Quake II 3.19 source from a
+local checkout and are never built by Meson or shipped. See
+[credits](CREDITS.md#map-generator-quake-mapgen-2026-10-22).
 
 ### ZIP filename mapping — `src/core/package_zip.cpp`
 
@@ -495,9 +539,9 @@ The runtime stack and required dependencies are unchanged.
 
 ## Optional Service Integrations
 
-- [OpenAI API](https://platform.openai.com/docs/quickstart): optional, user-configured integration for prompt-based automation. VibeStudio now has the first OpenAI connector scaffold for configuration, credential discovery through redacted environment references, model routing, and manifest-backed no-write experiments. Core editing, packaging, compiling, and launching work without an API key.
-- [OpenAI Responses API](https://platform.openai.com/docs/api-reference/responses): intended future API surface for model responses and tool-using workflows once network invocation is enabled.
-- [OpenAI function calling / tools](https://developers.openai.com/api/docs/guides/tools): active architectural pattern for safe VibeStudio tool descriptors; provider calls remain future work.
+- [OpenAI API](https://platform.openai.com/docs/quickstart): optional, user-configured integration for prompt-based automation. After opt-in, the OpenAI connector answers text questions through Chat Completions and draws pictures through the Images API over Qt Network, with its key read from an environment variable and redacted everywhere. Core editing, packaging, compiling, and launching work without an API key.
+- [OpenAI Responses API](https://platform.openai.com/docs/api-reference/responses): a possible future surface for tool-using workflows; text questions use Chat Completions today.
+- [OpenAI function calling / tools](https://developers.openai.com/api/docs/guides/tools): the pattern for VibeStudio's safe tool descriptors; models do not call tools yet.
 - [Claude API](https://platform.claude.com/docs/en/home): optional connector target for reasoning, coding, review, long-context, and agentic planning workflows.
 - [Gemini API](https://ai.google.dev/api): optional connector target for multimodal and large-context workflows.
 - [ElevenLabs API](https://elevenlabs.io/docs/overview/intro): optional, user-configured connector; its [Sound Effects API](https://elevenlabs.io/docs/api-reference/text-to-sound-effects/convert) makes sounds for the Sound Generator and `asset audio-generate`, reached through Qt Network with no SDK or new dependency, its MP3 answers decoded by the existing dr_mp3. Voice, speech-to-text, and narration remain targets.

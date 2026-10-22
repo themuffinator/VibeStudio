@@ -1,0 +1,139 @@
+{
+  "schema": "qmg.experiment_record",
+  "schema_version": 1,
+  "id": "r1s-mp-player-start",
+  "title": "R1-s entity safety (2): one info_player_start in every Quake 1 deathmatch, duel and CTF map",
+  "game": "q1",
+  "kind": "output",
+  "sub_lane": "mp",
+  "cause": "A Quake 1 or Quake 2 server started with `map <name>` while deathmatch and coop are 0 puts every client at an info_player_start and aborts without one: Quake 1 error 'PutClientInServer: no info_player_start on level' (progs1996 SelectSpawnPoint 6064-6081; quakec/client.qc:672-686; quakec_ctf/client.qc:552-563), Quake 2 gi.error 'Couldn't find spawn point' (game/p_client.c:885-908; ctf/p_client.c:918-941). Generated MP maps had none. One cause: append one info_player_start per Q1/Q2 MP map at a supported, non-overlapping, lit station.",
+  "hypothesis": "A Quake 1 multiplayer map loaded with `map <name>` while deathmatch is 0 aborts without an info_player_start (cited in the cause). One start at a supported, clear, lit station removes the abort, and because deathmatch spawn selection never reads it (spawn_selection_proof in the change record), it changes no match spawn; nothing else in the map changes.",
+  "expected_mechanism": "Implementation: src/entities.cpp add_multiplayer_player_start (public; declared in include/qmg/entities.hpp) appends one PlacementRole::player_start when the switch is on, the game is Quake 1 or Quake 2 and the mode is not single-player. EntityAllocator::populate calls it last (after the lights and the Quake 1 camera); the compact Quake 2 builder (src/mp_motifs.cpp) now calls populate_before_station_binding() and adds the start after its station binding, spawn refinement and motif lights, so no earlier placement moves or is renumbered. Repair re-runs populate, so the start survives repair. With the switch off, both paths run the old code exactly (the new call returns before any work). Station: feet on the room floor, origin 24 units above it (player box -16 -16 -24 / 16 16 32 in both games), on a 32-unit lattice 32 units in from the walls; the 32 x 32 x 56 box inside the room, overlapping no layout solid and no placement volume, >= 64 units on x or y from every other point placement (lights and the Quake 1 camera included); a light of its room in clear view preferred; nearest the room centre; the start room first. No station anywhere is a std::runtime_error, never a silent omission. Yaw faces the room centre.",
+  "switch": {
+    "name": "r1s.mp_player_start",
+    "default": "off",
+    "qmg_args_on": "--switch r1s.mp_player_start=on"
+  },
+  "declared_scope": {
+    "file": "out/phase2/changes/r1s-mp-player-start/declared_scope.json",
+    "rule": "a case may change if and only if its resolved game is quake1 or quake2 and its resolved mode is deathmatch, duel or capture_the_flag (src/entities.cpp add_multiplayer_player_start: the start is added when the switch is on, spec.game is quake1 or quake2 and spec.mode is not single_player); resolved game and mode read from the previous baseline's (baseline-1) reports, since the switch does not change prompt parsing",
+    "case_count_all_games": 224,
+    "case_count_this_game": 86,
+    "fixed_sets": [
+      "BENCH-v1",
+      "MP-PORTFOLIO",
+      "SPAN-PORTFOLIO",
+      "LATTICE-PORTFOLIO",
+      "SPLICE-PORTFOLIO"
+    ]
+  },
+  "runs": {
+    "baseline": {
+      "baseline_id": "baseline-1",
+      "generation_outputs": "out/phase2/r1s-q1-intermission/flip-gen/default"
+    },
+    "switch_off": {
+      "out_dir": "out/phase2/r1s-mp-player-start/gen/off",
+      "byte_identical_to_baseline": true
+    },
+    "switch_on": {
+      "out_dir": "out/phase2/r1s-mp-player-start/gen/on",
+      "qmg_extra": "--switch r1s.mp_player_start=on"
+    },
+    "switch_on_compiled": {
+      "out_dir": "out/phase2/r1s-mp-player-start/compile-on",
+      "policy": "v1",
+      "jobs": 8,
+      "tool_threads": 2,
+      "light_budget_seconds": 1020,
+      "repeat": 2
+    },
+    "qmg_sha256": "2068e7c8e9854cdba8f8d516ac061e88528de14ea4aaa1ed60da337b2b15e59c",
+    "runner_sha256": "d061a4b0c8f6b638d76b7ca1df7b4347e1837e851aae37c609858a10bc6d1773",
+    "compare_sha256": "a738936725a4fb6abfd935bdb6019aa5f3443c41e6df63d9b10e886b0adf118b"
+  },
+  "scope_diff": {
+    "off_vs_baseline_differences": 0,
+    "out_of_scope_differences": 0,
+    "in_scope_differences_all_games": 224,
+    "method": "compare.py a738936 unmodified, on a normalized copy of the on-run that discounts exactly the D7 identity fields ($.switches, layout_sha256) (scripts/normalize_switched.py, logic copied from r1s-q1-intermission); raw comparison kept (235 out-of-scope BENCH cases, all identity-field-only, scripts/check_generation.py)",
+    "in_scope_difference_shape": "every in-scope .map is its switch-off .map with one info_player_start block appended as the last entity (224/224); report changes are counts and lists that grow by that placement (entity counts, manifest entries, visibility placements and segment tests, player navigation bindings, lighting samples, critical samples and their readable counts, average brightness); no finding, validation issue, repair, quality, rank score, spawn-safety or timing field changed"
+  },
+  "before": {
+    "maps_with_info_player_start": "0/86",
+    "maps_where_map_load_with_deathmatch_0_aborts": "86/86 (static reading)"
+  },
+  "after": {
+    "maps_with_exactly_one_info_player_start_in_compiled_entity_lump": "86/86",
+    "maps_where_map_load_with_deathmatch_0_aborts": "0/86 (static reading)",
+    "start_inside_a_brush": 0,
+    "start_player_box_points_inside_a_brush": 0,
+    "start_overlapping_another_entity": 0,
+    "gates": {
+      "G1_generated": {
+        "reference_pass": 86,
+        "on_pass": 86,
+        "new_failures": []
+      },
+      "G2_intent_match": {
+        "reference_pass": 47,
+        "on_pass": 47,
+        "new_failures": []
+      },
+      "G3_leak_free_compile": {
+        "reference_pass": 86,
+        "on_pass": 86,
+        "new_failures": []
+      },
+      "G4_full_vis": {
+        "reference_pass": 86,
+        "on_pass": 86,
+        "new_failures": []
+      },
+      "G5_final_light": {
+        "reference_pass": 86,
+        "on_pass": 86,
+        "new_failures": []
+      },
+      "G6_aas_valid": {
+        "reference_pass": 0,
+        "on_pass": 0,
+        "new_failures": []
+      },
+      "G7_mode_entities": {
+        "reference_pass": 47,
+        "on_pass": 47,
+        "new_failures": []
+      },
+      "G8_determinism": {
+        "reference_pass": 86,
+        "on_pass": 86,
+        "new_failures": []
+      }
+    }
+  },
+  "verdict": "accepted",
+  "evidence_level": "compiler output (BSP entity lumps); static analysis for in-solid/overlap, for the spawn-selection proof and for the `map` abort reading",
+  "evidence_notes": "Presence, origin and angle are read from the compiled BSP entity lumps (compiler output). In-solid and overlap are static analysis of the .map brushes and entities. That spawn selection is unchanged and that the `map` load no longer aborts are static analysis of the id code; no engine was run.",
+  "failures_and_counterexamples_kept": [
+    "scope and identity checks passed (224 in scope, 0 out of scope, 224/224 maps = off map + one appended start), but the farthest station is a corner: 3 Quake 2 compact maps (bench/q2-duel-c1, bench/q2-showcase-vague, bench/q2-tdm-x-mech-slime-2) got a start with no light in view (brightness 0), a new error-severity unlit_critical_placement finding and quality lighting_errors +1, and in 32 maps the start became the darkest sample (minimum_brightness_milli fell). Kept: out/phase2/r1s-mp-player-start/gen-variant-a/report-field-census.json, out/phase2/r1s-mp-player-start/gen-variant-a/generation-check.json, out/phase2/changes/r1s-mp-player-start/variants/a/logs/generate-measure.log",
+    "raw compare.py runs (identity fields counted): out/phase2/r1s-mp-player-start/gen/compare-off-vs-on-raw-*.json",
+    "first in-scope compile, bench/q2-tdm-c2 (Quake 2): final light 1158.248 s > 1020 s budget under heavy foreign load (G5 fail); the side-by-side recheck measured off 682.583 s / on 675.899 s, both G5 pass: out/phase2/r1s-mp-player-start/compile-on/bench/q2-tdm-c2, out/phase2/r1s-mp-player-start/g5-recheck"
+  ],
+  "default_flip": {
+    "separate_commit": "pending D1; recorded as change r1s-mp-player-start-flip under out/phase2/changes",
+    "flip_change_id": "r1s-mp-player-start-flip",
+    "flipped_qmg_sha256": "e268607629685f371b74baf2a07266e312fdce3a587db86f9823713860985829",
+    "checks": "flipped default vs baseline-1: 224 in-scope differences, 0 out of scope over 459 cases; flipped default reproduces the switch-on run (459 maps byte-identical, reports differ only in $.switches and layout_sha256); --switch r1s.mp_player_start=off reproduces baseline-1 (459 maps byte-identical, identity fields only); ctest 88/89 passed, 1 opt-in skipped (tests/test_r1s_intermission.cpp now pins r1s.mp_player_start off)",
+    "new_baseline_id": "baseline-2",
+    "new_baseline_summary_sha256": "934470e3233774d00bbbad85769775cae4aa7e77095677358f382c4965a62a1b",
+    "new_baseline_composite_sha256": "cbd84d7b207f7677cd74e616fcd39679dc5a0bbdc34663440d6bd4780c563de0",
+    "portfolio_baselines": [
+      "baseline-2-mp-portfolio",
+      "baseline-2-span-portfolio",
+      "baseline-2-lattice-portfolio",
+      "baseline-2-splice-portfolio"
+    ]
+  },
+  "notes": "Change record: out/phase2/changes/r1s-mp-player-start/record.json (spawn_selection_proof, rejected_variant)."
+}

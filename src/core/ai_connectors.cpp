@@ -235,6 +235,7 @@ QVector<AiConnectorDescriptor> aiConnectorDescriptors()
 				QCoreApplication::translate("VibeStudioAiConnectors", "Makes sound effects through the Sound Effects API (eleven_text_to_sound_v2 by default) with the ELEVENLABS_API_KEY credential."),
 				QCoreApplication::translate("VibeStudioAiConnectors", "Narration, voice, and speech-to-text remain design stubs."),
 			},
+			true,
 			true),
 		connector(
 			QStringLiteral("meshy"),
@@ -273,6 +274,76 @@ QVector<AiConnectorDescriptor> aiConnectorDescriptors()
 				QCoreApplication::translate("VibeStudioAiConnectors", "Makes images through a Stable Diffusion web UI on this machine (AUTOMATIC1111 or Forge at http://127.0.0.1:7860 by default), or an OpenAI-compatible image server at an address ending in /v1."),
 			},
 			false,
+			true),
+		connector(
+			QStringLiteral("local-gguf"),
+			QCoreApplication::translate("VibeStudioAiConnectors", "Local GGUF Model (ggml)"),
+			QStringLiteral("Local"),
+			QStringLiteral("in-process"),
+			QCoreApplication::translate("VibeStudioAiConnectors", "A .gguf model file on this machine; no account or key."),
+			QCoreApplication::translate("VibeStudioAiConnectors", "Runs inside VibeStudio through llama.cpp and ggml; nothing leaves this machine."),
+			{
+				QStringLiteral("reasoning"),
+				QStringLiteral("coding"),
+				QStringLiteral("local-offline"),
+			},
+			{
+				QCoreApplication::translate("VibeStudioAiConnectors", "Answers text questions with a GGUF language model run on the CPU: name the .gguf file as the model in Settings. Structured requests are held to their schema by a grammar."),
+				QCoreApplication::translate("VibeStudioAiConnectors", "Needs a build configured with -Dggml=enabled (scripts/build_ggml.py builds the pinned llama.cpp)."),
+			},
+			false,
+			true),
+		connector(
+			QStringLiteral("claude-code"),
+			QCoreApplication::translate("VibeStudioAiConnectors", "Claude Code"),
+			QStringLiteral("Anthropic"),
+			QStringLiteral("harness"),
+			QCoreApplication::translate("VibeStudioAiConnectors", "The Claude Code command-line tool, signed in with your Claude subscription (claude auth login); no API key."),
+			QCoreApplication::translate("VibeStudioAiConnectors", "Cloud connector through your own login; requests go to Anthropic as Claude Code sends them, after the same review as any cloud request."),
+			{
+				QStringLiteral("reasoning"),
+				QStringLiteral("coding"),
+				QStringLiteral("cost-usage"),
+			},
+			{
+				QCoreApplication::translate("VibeStudioAiConnectors", "Runs claude -p in an empty folder with its tools, MCP servers, hooks and memory off, so it only answers; claude-opus-5-5 unless another model is named in Settings."),
+				QCoreApplication::translate("VibeStudioAiConnectors", "Finds claude on PATH or in its usual install folders; set its path as the endpoint to choose another. ANTHROPIC_API_KEY is not passed on, so your login answers."),
+			},
+			true,
+			true),
+		connector(
+			QStringLiteral("codex"),
+			QCoreApplication::translate("VibeStudioAiConnectors", "Codex"),
+			QStringLiteral("OpenAI"),
+			QStringLiteral("harness"),
+			QCoreApplication::translate("VibeStudioAiConnectors", "The Codex command-line tool, signed in with your ChatGPT plan (codex login); no API key."),
+			QCoreApplication::translate("VibeStudioAiConnectors", "Cloud connector through your own login; requests go to OpenAI as Codex sends them, after the same review as any cloud request."),
+			{
+				QStringLiteral("reasoning"),
+				QStringLiteral("coding"),
+				QStringLiteral("cost-usage"),
+			},
+			{
+				QCoreApplication::translate("VibeStudioAiConnectors", "Runs codex exec in an empty folder with a read-only sandbox and no saved session; Codex's own default model unless one is named in Settings."),
+				QCoreApplication::translate("VibeStudioAiConnectors", "Finds codex on PATH or in its usual install folders; set its path as the endpoint to choose another."),
+			},
+			true,
+			true),
+		connector(
+			QStringLiteral("custom-command"),
+			QCoreApplication::translate("VibeStudioAiConnectors", "Custom Command"),
+			QStringLiteral("Custom"),
+			QStringLiteral("harness"),
+			QCoreApplication::translate("VibeStudioAiConnectors", "Any program that answers a prompt, with whatever login it has."),
+			QCoreApplication::translate("VibeStudioAiConnectors", "User-defined command; treated as leaving this machine, so it needs cloud connectors allowed and shows the same review first."),
+			{
+				QStringLiteral("reasoning"),
+				QStringLiteral("coding"),
+			},
+			{
+				QCoreApplication::translate("VibeStudioAiConnectors", "Set the command line as the endpoint, with {model}, {prompt_file}, {system_file}, {schema_file} and {answer_file} where they go; without {prompt_file} the prompt is sent on standard input, and without {answer_file} the answer is read from standard output."),
+			},
+			true,
 			true),
 		connector(
 			QStringLiteral("custom-http"),
@@ -388,6 +459,34 @@ QVector<AiModelDescriptor> aiModelDescriptors()
 			QCoreApplication::translate("VibeStudioAiConnectors", "Local runtime default model"),
 			QCoreApplication::translate("VibeStudioAiConnectors", "User-supplied local model or service for AI-free-friendly experimentation."),
 			{QStringLiteral("reasoning"), QStringLiteral("coding"), QStringLiteral("embeddings"), QStringLiteral("tool-calls"), QStringLiteral("streaming"), QStringLiteral("local-offline")},
+			true),
+		model(
+			QStringLiteral("local-gguf-default"),
+			QStringLiteral("local-gguf"),
+			QCoreApplication::translate("VibeStudioAiConnectors", "Local GGUF model file"),
+			QCoreApplication::translate("VibeStudioAiConnectors", "The .gguf file named in Settings, run inside VibeStudio for reasoning and structured plans."),
+			{QStringLiteral("reasoning"), QStringLiteral("coding"), QStringLiteral("local-offline")},
+			true),
+		model(
+			QStringLiteral("claude-code-default"),
+			QStringLiteral("claude-code"),
+			QCoreApplication::translate("VibeStudioAiConnectors", "Claude Code model"),
+			QCoreApplication::translate("VibeStudioAiConnectors", "claude-opus-5-5, or the Claude model or alias (opus, sonnet) named in Settings, answered through your Claude login."),
+			{QStringLiteral("reasoning"), QStringLiteral("coding"), QStringLiteral("cost-usage")},
+			true),
+		model(
+			QStringLiteral("codex-default"),
+			QStringLiteral("codex"),
+			QCoreApplication::translate("VibeStudioAiConnectors", "Codex model"),
+			QCoreApplication::translate("VibeStudioAiConnectors", "Codex's default model, or the one named in Settings, answered through your ChatGPT login."),
+			{QStringLiteral("reasoning"), QStringLiteral("coding"), QStringLiteral("cost-usage")},
+			true),
+		model(
+			QStringLiteral("custom-command-default"),
+			QStringLiteral("custom-command"),
+			QCoreApplication::translate("VibeStudioAiConnectors", "Custom command model"),
+			QCoreApplication::translate("VibeStudioAiConnectors", "Whatever the command runs; the model named in Settings fills {model}."),
+			{QStringLiteral("reasoning"), QStringLiteral("coding")},
 			true),
 		model(
 			QStringLiteral("custom-http-default"),
@@ -518,6 +617,14 @@ AiCredentialStatus aiCredentialStatusForConnector(const QString& connectorId, co
 		return status;
 	}
 
+	if (connector.endpointKind == QStringLiteral("harness")) {
+		// The tool keeps its own login; VibeStudio never reads it (ai test-connection checks it).
+		status.source = QStringLiteral("tool-login");
+		status.configured = true;
+		status.redactedValue = QCoreApplication::translate("VibeStudioAiConnectors", "the tool's own login");
+		return status;
+	}
+
 	status.lookupKey = aiCredentialEnvironmentVariableForConnector(connector.id, preferences);
 	if (status.lookupKey.trimmed().isEmpty()) {
 		status.source = QStringLiteral("not-configured");
@@ -623,7 +730,7 @@ QString aiAutomationPreferencesText(const AiAutomationPreferences& preferences)
 	lines << preferredConnectorText(QCoreApplication::translate("VibeStudioAiConnectors", "3D connector"), normalized.preferredThreeDConnectorId);
 	lines << preferredConnectorText(QCoreApplication::translate("VibeStudioAiConnectors", "Embeddings connector"), normalized.preferredEmbeddingsConnectorId);
 	lines << preferredConnectorText(QCoreApplication::translate("VibeStudioAiConnectors", "Local connector"), normalized.preferredLocalConnectorId);
-	lines << preferredModelText(QCoreApplication::translate("VibeStudioAiConnectors", "Text model"), normalized.preferredTextModelId);
+	lines << preferredModelText(QCoreApplication::translate("VibeStudioAiConnectors", "Workflow text model"), normalized.preferredTextModelId);
 	lines << preferredModelText(QCoreApplication::translate("VibeStudioAiConnectors", "Coding model"), normalized.preferredCodingModelId);
 	lines << preferredModelText(QCoreApplication::translate("VibeStudioAiConnectors", "Vision model"), normalized.preferredVisionModelId);
 	lines << preferredModelText(QCoreApplication::translate("VibeStudioAiConnectors", "Image model"), normalized.preferredImageModelId);
@@ -644,7 +751,7 @@ QString aiConnectorSummaryText(const AiConnectorDescriptor& connector)
 	lines << QCoreApplication::translate("VibeStudioAiConnectors", "Provider: %1").arg(connector.providerFamily);
 	lines << QCoreApplication::translate("VibeStudioAiConnectors", "Endpoint: %1").arg(connector.endpointKind);
 	lines << QCoreApplication::translate("VibeStudioAiConnectors", "Location: %1").arg(connector.cloudBased ? QCoreApplication::translate("VibeStudioAiConnectors", "cloud") : QCoreApplication::translate("VibeStudioAiConnectors", "local/offline"));
-	lines << QCoreApplication::translate("VibeStudioAiConnectors", "Implemented: %1").arg(connector.implemented ? QCoreApplication::translate("VibeStudioAiConnectors", "yes") : QCoreApplication::translate("VibeStudioAiConnectors", "design stub"));
+	lines << QCoreApplication::translate("VibeStudioAiConnectors", "Status: %1").arg(connector.implemented ? QCoreApplication::translate("VibeStudioAiConnectors", "Available") : QCoreApplication::translate("VibeStudioAiConnectors", "Planned"));
 	lines << QCoreApplication::translate("VibeStudioAiConnectors", "Capabilities: %1").arg(connector.capabilities.join(QStringLiteral(", ")));
 	lines << QCoreApplication::translate("VibeStudioAiConnectors", "Authentication: %1").arg(connector.authRequirement);
 	lines << QCoreApplication::translate("VibeStudioAiConnectors", "Privacy: %1").arg(connector.privacyNote);

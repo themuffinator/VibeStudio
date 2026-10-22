@@ -1,0 +1,308 @@
+{
+  "schema": "qmg.experiment_record",
+  "schema_version": 1,
+  "id": "r1s-sp-coop-starts",
+  "title": "R1-s entity safety (3): three info_player_coop beside the start of every Quake 2 single-player map",
+  "game": "q2",
+  "kind": "output",
+  "sub_lane": "sp",
+  "cause": "With coop set, every co-op player is put at a spawn spot and the spot is telefragged clear: Quake 1 SelectSpawnPoint cycles through the info_player_coop entities and then the info_player_start (progs1996 SelectSpawnPoint 6014-6030; quakec/client.qc:562-572; quakec_ctf/client.qc:526-530) and PutClientInServer calls spawn_tdeath on it (progs1996 6166-6169, spawn_tdeath 10219-10250; quakec/client.qc:807); Quake 2 SelectCoopSpawnPoint gives client N >= 1 the Nth info_player_coop whose targetname matches the (empty) spawnpoint and falls back to the info_player_start (game/p_client.c:831-866, 875-908), and PutClientInServer KillBox-es the spot (game/p_client.c:1247). Generated single-player maps had no info_player_coop, so co-op players 2 and up land on the one start and telefrag. One cause: append three info_player_coop beside the start of every Q1/Q2 single-player map at supported, clear, lit stations facing the start's way.",
+  "hypothesis": "A Quake 2 single-player map played in co-op puts every co-op player on the one info_player_start, where each spawn telefrags the player before (cited in the cause). Three info_player_coop at supported, clear, lit stations beside the start give players 2 to 4 a spot each; single-player play never reads them, so nothing else in the map or its single-player analyses changes.",
+  "expected_mechanism": "src/entities.cpp add_single_player_coop_starts (public; include/qmg/entities.hpp) appends kSinglePlayerCoopStarts = 3 PlacementRole::coop_start (new D8 role, appended to the enum) when the switch is on, the game is Quake 1 or Quake 2 and the mode is single-player. EntityAllocator::populate calls it last, after the lights, the Quake 1 camera and the (multiplayer-only) map start, so no earlier placement moves or is renumbered; repair re-runs populate, so the starts survive repair; with the switch off the call returns before any work. Station: start_stations() of change r1s-mp-player-start (feet on the room floor, origin 24 units above it, 32-unit lattice 32 units in from the walls, the 32 x 32 x 56 player box inside the room and overlapping no layout solid or placement volume, >= 64 units on x or y from every other point placement, recomputed after each start so the three keep clear of each other); the start room first, a lit station (a light of the room in clear view) before an unlit one, the station nearest the info_player_start; the rooms joined to the start room only when it has no clear station left; fewer than three stations is a std::runtime_error. Yaw = the start's yaw. Classname from the profiles (classnames.coop_start: info_player_coop in Q1 and Q2; Q3 mapping only, refused by the map builder, validator and visibility analysis). No targetname (direct loads). Analyses: lighting samples them as critical (like the start); navigation treats them as spawns (bound and reachable from the start); visibility samples them at the standing eye but leaves them out of single-player room exposure and spawn safety; quality timing still runs from the start only; the ranker does not count them.",
+  "switch": {
+    "name": "r1s.sp_coop_starts",
+    "default": "off",
+    "qmg_args_on": "--switch r1s.sp_coop_starts=on"
+  },
+  "declared_scope": {
+    "file": "out/phase2/changes/r1s-sp-coop-starts/declared_scope.json",
+    "sha256": "04d3bb6eaefdf761cd2ac8f2e2fe671d7d5de201369104b9fbced2895e667ef9",
+    "declared_at": "2026-10-15T22:22:14+00:00",
+    "rule": "a case may change if and only if its resolved game is quake1 or quake2 and its resolved mode is single_player (src/entities.cpp add_single_player_coop_starts: the coop starts are added when the switch is on, spec.game is quake1 or quake2 and spec.mode is single_player); resolved game and mode read from the previous baseline's (baseline-2) reports, since the switch does not change prompt parsing",
+    "sub_lane_note": "The sub-lane is taken from the resolved mode (Quake 1 and Quake 2 single-player maps), as r1s-mp-player-start took its MP scope from the resolved deathmatch/duel/CTF mode (which held the SP-path cases resolving to deathmatch). BENCH-v1 cases whose path is a multiplayer path but whose prompt resolves to single_player are therefore in scope; they are listed in mp_path_cases_in_scope. SP-path cases that resolve to a multiplayer mode are out of scope (sp_path_cases_out_of_scope). No MP-sub-lane output change is in flight: r1s-mp-player-start is flipped and recorded as baseline-2.",
+    "case_count_all_games": 109,
+    "case_count_this_game": 53,
+    "case_ids": [
+      "q2-coop-c1",
+      "q2-coop-s1",
+      "q2-coop-s2",
+      "q2-coop-s3",
+      "q2-coop-v1",
+      "q2-coop-v2",
+      "q2-coop-v3",
+      "q2-coop-x-item-1",
+      "q2-coop-x-mech-door-1",
+      "q2-coop-x-mech-door-2",
+      "q2-coop-x-mech-drop-1",
+      "q2-coop-x-mech-drop-2",
+      "q2-coop-x-mech-lava-1",
+      "q2-coop-x-mech-lift-1",
+      "q2-coop-x-mech-lift-2",
+      "q2-coop-x-mech-ramp-1",
+      "q2-coop-x-mech-ramp-2",
+      "q2-coop-x-mech-slime-1",
+      "q2-coop-x-mech-teleporter-1",
+      "q2-coop-x-mech-water-1",
+      "q2-coop-x-sp-progression-1",
+      "q2-coop-x-sp-progression-2",
+      "q2-ctf-v3",
+      "q2-duel-v3",
+      "q2-sp-c2",
+      "q2-sp-s1",
+      "q2-sp-s2",
+      "q2-sp-s3",
+      "q2-sp-v1",
+      "q2-sp-v2",
+      "q2-sp-v3",
+      "q2-sp-x-item-1",
+      "q2-sp-x-landmark-1",
+      "q2-sp-x-mech-door-1",
+      "q2-sp-x-mech-drop-1",
+      "q2-sp-x-mech-lava-1",
+      "q2-sp-x-mech-lava-2",
+      "q2-sp-x-mech-lift-1",
+      "q2-sp-x-mech-lift-2",
+      "q2-sp-x-mech-ramp-1",
+      "q2-sp-x-mech-ramp-2",
+      "q2-sp-x-mech-slime-1",
+      "q2-sp-x-mech-teleporter-1",
+      "q2-sp-x-mech-water-1",
+      "q2-sp-x-mood-1",
+      "q2-sp-x-sp-progression-1",
+      "q2-sp-x-sp-progression-2",
+      "q2-sp-x-sp-progression-3",
+      "q2-sp-x-sp-progression-4",
+      "q2-tdm-s2",
+      "q2-tdm-s3",
+      "q2-tdm-v2",
+      "q2-tdm-v3"
+    ],
+    "mp_path_cases_in_scope_this_game": [
+      {
+        "set": "bench",
+        "id": "q2-duel-v3",
+        "path": "q2-duel",
+        "resolved": "quake2/single_player"
+      },
+      {
+        "set": "bench",
+        "id": "q2-tdm-v2",
+        "path": "q2-tdm",
+        "resolved": "quake2/single_player"
+      },
+      {
+        "set": "bench",
+        "id": "q2-tdm-v3",
+        "path": "q2-tdm",
+        "resolved": "quake2/single_player"
+      },
+      {
+        "set": "bench",
+        "id": "q2-tdm-s2",
+        "path": "q2-tdm",
+        "resolved": "quake2/single_player"
+      },
+      {
+        "set": "bench",
+        "id": "q2-tdm-s3",
+        "path": "q2-tdm",
+        "resolved": "quake2/single_player"
+      },
+      {
+        "set": "bench",
+        "id": "q2-ctf-v3",
+        "path": "q2-ctf",
+        "resolved": "quake2/single_player"
+      }
+    ],
+    "fixed_sets": [
+      "BENCH-v1",
+      "MP-PORTFOLIO",
+      "SPAN-PORTFOLIO",
+      "LATTICE-PORTFOLIO",
+      "SPLICE-PORTFOLIO"
+    ]
+  },
+  "build": {
+    "cmd": "cmake --build --preset windows-clang",
+    "exit": 0
+  },
+  "ctest": {
+    "cmd": "ctest --preset windows-clang -j 8",
+    "passed": 89,
+    "total": 90,
+    "failed": [],
+    "skipped": [
+      "qmg_rc_benchmark (opt-in)"
+    ]
+  },
+  "compiler_fixtures": {
+    "required": "yes (serialization change: a new entity class)",
+    "result": "qmg_q1_qbsp, qmg_q2_qbsp, qmg_q3_*_compilers, qmg_q2_compact_* and qmg_determinism_matrix passed at the default; the switch-on serialization was compiled by the real compilers on all 109 in-scope cases"
+  },
+  "runs": {
+    "baseline": {
+      "baseline_id": "baseline-2",
+      "generation_outputs": "out/phase2/r1s-mp-player-start/flip-gen/default",
+      "composite": "out/benchmark-v1/baseline-2/composite.json",
+      "composite_sha256": "cbd84d7b207f7677cd74e616fcd39679dc5a0bbdc34663440d6bd4780c563de0"
+    },
+    "switch_off": {
+      "out_dir": "out/phase2/r1s-sp-coop-starts/gen/off",
+      "byte_identical_to_baseline": true,
+      "summary_sha256": "4ba71d54e4ff89b9e247ded83243477287ef18afeec4ecdc08c67997316303c1"
+    },
+    "switch_on": {
+      "out_dir": "out/phase2/r1s-sp-coop-starts/gen/on",
+      "qmg_extra": "--switch r1s.sp_coop_starts=on",
+      "summary_sha256": "6711b9c84983f52e83e14adca7f3d8fd9cd1a545b75dee6aa45fed507634b4ab"
+    },
+    "switch_on_compiled": {
+      "out_dir": "out/phase2/r1s-sp-coop-starts/compile-on/bench",
+      "policy": "v1",
+      "jobs": 8,
+      "tool_threads": 2,
+      "light_budget_seconds": 1020,
+      "repeat": 2,
+      "summary_sha256": "ec624f01cd5c7b637d4769374bef1bf09c69bcbb5eeca6a86b40ad440cb100e3"
+    },
+    "qmg_sha256": "5b384bc4eefe4dce9c71afd68893ca9f6ba8d82c393cad7c0a673a60803ffc69",
+    "runner_sha256": "d061a4b0c8f6b638d76b7ca1df7b4347e1837e851aae37c609858a10bc6d1773",
+    "compare_sha256": "a738936725a4fb6abfd935bdb6019aa5f3443c41e6df63d9b10e886b0adf118b"
+  },
+  "scope_diff": {
+    "command": "python -B tools/benchmark/compare.py <off-run> <on-run (identity fields discounted)> --generate-only --scope declared_scope.json",
+    "off_vs_baseline_differences": 0,
+    "out_of_scope_differences": 0,
+    "in_scope_differences_all_games": 109,
+    "in_scope_differences_this_game": 53,
+    "other_sub_lane_byte_differences": 0,
+    "cases_compared": 459,
+    "method": "compare.py a738936 unmodified, on a normalized copy of the on-run that discounts exactly the D7 identity fields ($.switches, layout_sha256) (scripts/normalize_switched.py, logic copied from r1s-q1-intermission); raw comparison kept (301 out-of-scope BENCH and 49 portfolio cases, all identity-field-only, scripts/check_generation.py)",
+    "in_scope_difference_shape": "every in-scope .map is its switch-off .map with three info_player_coop blocks appended as the last entities (109/109); report changes are counts and lists that grow by those placements (entity counts, manifest entries, visibility placements and segment tests, navigation bindings for the player and both monster sizes, lighting samples, critical samples and their readable counts, average brightness); no finding, validation issue, repair, quality, rank score, minimum brightness, spawn-safety or timing field changed",
+    "json": "out/phase2/r1s-sp-coop-starts/gen/compare-off-vs-on-bench.json"
+  },
+  "portfolios": {
+    "required": "rerun for the zero-difference check (no portfolio case is in scope: all are Quake 2 deathmatch)",
+    "result": "49/49 portfolio maps byte-identical with the switch on; reports identity fields only"
+  },
+  "before": {
+    "maps_with_info_player_coop": "0/53",
+    "co_op_players_2_to_4_spawning_on_the_one_start": "53/53 maps (static reading)"
+  },
+  "after": {
+    "maps_with_exactly_three_info_player_coop_in_compiled_entity_lump": "53/53",
+    "compiled_coop_with_targetname": 0,
+    "coop_starts_checked": 159,
+    "coop_origin_inside_a_brush": 0,
+    "coop_player_box_points_inside_a_brush": 0,
+    "coop_without_solid_floor_1_unit_below_the_feet": 0,
+    "coop_closer_than_64_units_to_another_point_entity_or_overlapping_a_brush_entity": 0,
+    "minimum_chebyshev_separation_to_another_point_entity": 64.0,
+    "coop_facing_the_start": "53/53 maps (check_compiled.py compares every coop angle with the start's)",
+    "lighting_all_three_critical_and_readable": "53/53",
+    "navigation_all_three_bound_for_player_and_monsters": "53/53",
+    "co_op_players_2_to_4_spawning_on_the_one_start": "0/53 maps (static reading)",
+    "gates": {
+      "G1_generated": {
+        "reference_pass": 53,
+        "on_pass": 53,
+        "new_failures": [],
+        "new_passes": []
+      },
+      "G2_intent_match": {
+        "reference_pass": 25,
+        "on_pass": 25,
+        "new_failures": [],
+        "new_passes": []
+      },
+      "G3_leak_free_compile": {
+        "reference_pass": 53,
+        "on_pass": 53,
+        "new_failures": [],
+        "new_passes": []
+      },
+      "G4_full_vis": {
+        "reference_pass": 53,
+        "on_pass": 53,
+        "new_failures": [],
+        "new_passes": []
+      },
+      "G5_final_light": {
+        "reference_pass": 53,
+        "on_pass": 53,
+        "new_failures": [],
+        "new_passes": []
+      },
+      "G6_aas_valid": {
+        "reference_pass": 0,
+        "on_pass": 0,
+        "new_failures": [],
+        "new_passes": []
+      },
+      "G7_mode_entities": {
+        "reference_pass": 25,
+        "on_pass": 47,
+        "new_failures": [],
+        "new_passes": [
+          "bench/q2-coop-c1",
+          "bench/q2-coop-s1",
+          "bench/q2-coop-s2",
+          "bench/q2-coop-s3",
+          "bench/q2-coop-v1",
+          "bench/q2-coop-v2",
+          "bench/q2-coop-v3",
+          "bench/q2-coop-x-item-1",
+          "bench/q2-coop-x-mech-door-1",
+          "bench/q2-coop-x-mech-door-2",
+          "bench/q2-coop-x-mech-drop-1",
+          "bench/q2-coop-x-mech-drop-2",
+          "bench/q2-coop-x-mech-lava-1",
+          "bench/q2-coop-x-mech-lift-1",
+          "bench/q2-coop-x-mech-lift-2",
+          "bench/q2-coop-x-mech-ramp-1",
+          "bench/q2-coop-x-mech-ramp-2",
+          "bench/q2-coop-x-mech-slime-1",
+          "bench/q2-coop-x-mech-teleporter-1",
+          "bench/q2-coop-x-mech-water-1",
+          "bench/q2-coop-x-sp-progression-1",
+          "bench/q2-coop-x-sp-progression-2"
+        ]
+      },
+      "G8_determinism": {
+        "reference_pass": 53,
+        "on_pass": 53,
+        "new_failures": [],
+        "new_passes": []
+      }
+    },
+    "reported_gates_G9_G15_changes": {
+      "G9_request_accounting": {},
+      "G10_conflict_surfaced": {},
+      "G11_error_findings": {},
+      "G12_materials": {},
+      "G13_lighting_readability": {},
+      "G14_engine_smoke": {},
+      "G15_q3_entity_reachability": {}
+    }
+  },
+  "verdict": "accepted",
+  "evidence_level": "compiler output (BSP entity lumps); static analysis for in-solid, floor support, overlap and the co-op spawn-selection reading",
+  "evidence_notes": "Presence, origin, angle and the absent targetname are read from the compiled BSP entity lumps (compiler output). In-solid, floor support and overlap are static analysis of the .map brushes and entities. That co-op players 2 to 4 now get their own spot and that single player never reads the entities is static analysis of the id code; no engine was run.",
+  "failures_and_counterexamples_kept": [
+    "raw compare.py runs (identity fields counted): out/phase2/r1s-sp-coop-starts/gen/compare-off-vs-on-raw-*.json",
+    "G7 still fails on the 4 multiplayer-path cases that resolve to single player (q1-dm-v3, q1-duel-v3, q2-ctf-v3, q2-duel-v3): they now carry coop starts, but their G7 contract is the multiplayer one; mode resolution is R1-a..R1-d, not this cause",
+    "G7's coop check counts info_player_coop >= 1; the strict contract (>= player_max - 1, R1-g) is not yet measured: three starts serve four players"
+  ],
+  "default_flip": {
+    "separate_commit": "pending D1; recorded as change r1s-sp-coop-starts-flip under out/phase2/changes",
+    "flip_change_id": "r1s-sp-coop-starts-flip",
+    "flipped_qmg_sha256": "b4360ba9240a89305325daa2bd98b000f68da8c2d7512ec2d506a88a0b943eb2",
+    "checks": "flipped default vs baseline-2: 109 in-scope differences, 0 out of scope over 459 cases; flipped default reproduces the switch-on run (459 maps byte-identical, reports differ only in $.switches and layout_sha256); --switch r1s.sp_coop_starts=off reproduces baseline-2 (459 maps byte-identical, identity fields only); ctest 89/90 passed, 1 opt-in skipped (tests/test_r1s_intermission.cpp now also pins r1s.sp_coop_starts off)",
+    "new_baseline_id": "baseline-3",
+    "new_baseline_summary_sha256": "ec624f01cd5c7b637d4769374bef1bf09c69bcbb5eeca6a86b40ad440cb100e3",
+    "new_baseline_composite_sha256": "485a507b0e1d5a8423600517738b18441460952eea878afcffb806d26b0eece1",
+    "portfolio_baselines": "unchanged (no portfolio case in scope; baseline-2-*-portfolio stay current)"
+  },
+  "notes": "Change record: out/phase2/changes/r1s-sp-coop-starts/record.json. Generation check: out/phase2/r1s-sp-coop-starts/gen/generation-check.json; compiled entity safety: out/phase2/r1s-sp-coop-starts/compile-on-entity-safety.json."
+}

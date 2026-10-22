@@ -216,10 +216,23 @@ TextureGenerationDialog::TextureGenerationDialog(QWidget* parent, TextureGenerat
 	m_previewRequest = new QPushButton(tr("Preview Re&quest…"));
 	m_previewRequest->setAccessibleName(tr("Preview the image request"));
 	m_previewRequest->setToolTip(tr("Show exactly what would be sent to the image model, without sending it."));
+	m_aiSettings = new QPushButton(tr("AI Settings…"));
+	m_aiSettings->setObjectName(QStringLiteral("textureGenerationAiSettings"));
+	m_aiSettings->setAccessibleName(tr("Open AI settings"));
+	m_aiSettings->setToolTip(tr("Choose the connector, model, and endpoint in Settings > AI and Automation."));
+	connect(m_aiSettings, &QPushButton::clicked, this, [this] {
+		if (m_hooks.openAiSettings) {
+			m_hooks.openAiSettings();
+		}
+	});
 	sourceLayout->addWidget(m_modelSource);
 	sourceLayout->addWidget(m_sourceStatus);
 	sourceLayout->addWidget(m_restyle);
-	sourceLayout->addWidget(m_previewRequest, 0, Qt::AlignLeft);
+	auto* modelButtons = new QHBoxLayout;
+	modelButtons->addWidget(m_previewRequest);
+	modelButtons->addWidget(m_aiSettings);
+	modelButtons->addStretch(1);
+	sourceLayout->addLayout(modelButtons);
 	sourceLayout->addWidget(m_pictureSource);
 	sourceLayout->addLayout(pictureRow);
 	formLayout->addWidget(source);
@@ -366,6 +379,7 @@ void TextureGenerationDialog::refreshSourceStatus()
 	const bool model = m_modelSource->isChecked();
 	m_restyle->setEnabled(model && m_hooks.currentTexture);
 	m_previewRequest->setEnabled(model && !m_busy);
+	m_aiSettings->setVisible(model && m_hooks.openAiSettings);
 	m_picture->setEnabled(!model);
 	refreshMissingTextures();
 }
@@ -374,11 +388,14 @@ void TextureGenerationDialog::refreshMissingTextures()
 {
 	const QStringList names = m_hooks.missingTextures ? m_hooks.missingTextures() : QStringList();
 	const QSignalBlocker blocker(m_missing);
+	// Kept across a refresh (one follows every AI settings change), while the name is still missing.
+	const QString chosen = m_missing->currentData().toString();
 	m_missing->clear();
 	m_missing->addItem(names.isEmpty() ? tr("No missing textures to make") : tr("Choose one of %n", nullptr, int(names.size())), QString());
 	for (const QString& name : names) {
 		m_missing->addItem(name, name);
 	}
+	m_missing->setCurrentIndex(std::max(0, m_missing->findData(chosen)));
 	m_missing->setEnabled(!names.isEmpty());
 }
 
@@ -774,7 +791,8 @@ void TextureGenerationDialog::showRequestPreview()
 	dialog.resize(760, 520);
 	auto* layout = new QVBoxLayout(&dialog);
 	auto* explanation = new QLabel(built ? tr("Nothing has been sent. This is the request Generate would send, without your API key. %1").arg(aiImageConnectionBlockText(connection))
-										 : error);
+		: connection.ready()			 ? error
+										 : aiImageConnectionBlockText(connection));
 	explanation->setWordWrap(true);
 	layout->addWidget(explanation);
 	auto* text = new QPlainTextEdit;

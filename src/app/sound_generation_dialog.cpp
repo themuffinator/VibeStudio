@@ -193,10 +193,23 @@ SoundGenerationDialog::SoundGenerationDialog(QWidget* parent, SoundGenerationDia
 	m_previewRequest = new QPushButton(tr("Preview Re&quest…"));
 	m_previewRequest->setAccessibleName(tr("Preview the sound request"));
 	m_previewRequest->setToolTip(tr("Show exactly what would be sent to the sound model, without sending it."));
+	m_aiSettings = new QPushButton(tr("AI Settings…"));
+	m_aiSettings->setObjectName(QStringLiteral("soundGenerationAiSettings"));
+	m_aiSettings->setAccessibleName(tr("Open AI settings"));
+	m_aiSettings->setToolTip(tr("Choose the connector, model, and endpoint in Settings > AI and Automation."));
+	connect(m_aiSettings, &QPushButton::clicked, this, [this] {
+		if (m_hooks.openAiSettings) {
+			m_hooks.openAiSettings();
+		}
+	});
 	sourceLayout->addWidget(m_synthSource);
 	sourceLayout->addWidget(m_modelSource);
 	sourceLayout->addWidget(m_sourceStatus);
-	sourceLayout->addWidget(m_previewRequest, 0, Qt::AlignLeft);
+	auto* modelButtons = new QHBoxLayout;
+	modelButtons->addWidget(m_previewRequest);
+	modelButtons->addWidget(m_aiSettings);
+	modelButtons->addStretch(1);
+	sourceLayout->addLayout(modelButtons);
 	formLayout->addWidget(source);
 
 	auto* actions = new QHBoxLayout;
@@ -352,6 +365,7 @@ void SoundGenerationDialog::refreshSourceStatus()
 	}
 	m_sourceStatus->setAccessibleDescription(m_sourceStatus->text());
 	m_previewRequest->setEnabled(m_modelSource->isChecked() && !m_busy);
+	m_aiSettings->setVisible(m_modelSource->isChecked() && m_hooks.openAiSettings);
 }
 
 SoundGenerationSpec SoundGenerationDialog::specFromControls() const
@@ -719,7 +733,8 @@ void SoundGenerationDialog::showRequestPreview()
 	auto* layout = new QVBoxLayout(&dialog);
 	auto* explanation = new QLabel(built ? tr("Nothing has been sent. This is the request Generate would send for each variant, without your API key. %1")
 												.arg(aiSoundConnectionBlockText(connection))
-										 : error);
+		: connection.ready()			 ? error
+										 : aiSoundConnectionBlockText(connection));
 	explanation->setWordWrap(true);
 	layout->addWidget(explanation);
 	auto* text = new QPlainTextEdit;

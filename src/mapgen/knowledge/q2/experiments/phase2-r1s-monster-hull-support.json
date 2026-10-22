@@ -1,0 +1,256 @@
+{
+  "schema": "qmg.experiment_record",
+  "schema_version": 1,
+  "id": "r1s-monster-hull-support",
+  "title": "R1-s entity safety (5), audit gap 6: hull-aware support test for single-player monsters, behind the default-off switch r1s.monster_hull_support (D7), monster boxes from the profiles (D10)",
+  "game": "quake2",
+  "kind": "output",
+  "sub_lane": "sp",
+  "cause": "Single-player monsters were placed by a point test: supported_point() lifts a slot only when its origin lies over a solid (src/entities.cpp, before this change :51-64 and :253-262), so at high intensity the y = 68% slots of a platform room put large monsters' boxes into the platform's side or over its edge. One cause: test each monster with its class's real spawn box and move (or leave out) the ones whose box is not clear and fully supported.",
+  "hypothesis": "Each quake2 monster class sets its own spawn box (monster_soldier, monster_infantry, monster_gunner and monster_berserk ('-16 -16 -24' '16 16 32'), monster_gladiator ('-32 -32 -24' '32 32 64')). walkmonster_start_go M_droptofloor()s the monster with its box (MASK_MONSTERSOLID); a box that starts in solid stays, and M_walkmove(self, 0, 0) then fails, \"in solid\" (game/g_monster.c:310-322, 671-680). CM_TestBoxInBrush counts a box that only touches a brush face as inside it (qcommon/cmodel.c:1103-1150), and M_CheckBottom refuses a spot whose bottom corner hangs more than STEPSIZE over an edge (game/m_move.c:37-97). So a monster whose box meets a brush, touches one, or hangs over a support edge is stuck or cannot walk. Testing the class box at the slot and moving the unsafe monsters to the nearest clear, fully supported station of their room removes every such monster and changes nothing else: maps whose slots are all safe keep their bytes.",
+  "expected_mechanism": "src/entities.cpp support_monster_hulls (public; include/qmg/entities.hpp) runs right after populate_single_player() when the switch is on and the layout is a Quake 1 or Quake 2 single-player layout. Boxes: game_profile::monster_hull(), compiled from monster_hulls in data/profiles/q2/generator-current.json (cited to the id source; tools/profiles/check_profiles.py --resolve: 0 unresolved). A slot holds its monster when the footprint is inside the room 8 units from its walls, the highest solid top under it (or the floor) is one solid brush strictly containing the footprint, and the fall column from the spawn origin (32 above the support) to rest, 1 unit wider and higher, meets no layout solid and stays under the ceiling. Otherwise the monster moves, keeping class, facing and id, to the nearest such station on a 16-unit lattice through its slot (ties: lower x step, then lower y step) that also keeps 16 units from every other entity's box; with none it is left out. With the switch on the validator reports an unsafe box as placement_in_solid, so repair re-runs the allocator. With the switch off the function returns before any work.",
+  "switch": {
+    "name": "r1s.monster_hull_support",
+    "default": "off",
+    "qmg_args_on": "--switch r1s.monster_hull_support=on"
+  },
+  "declared_scope": {
+    "file": "out/phase2/changes/r1s-monster-hull-support/declared_scope.json",
+    "sha256": "cb9ca3190fc76c5584b4cbe8803e134f4546af690f9459eee6bcef52007e9b82",
+    "declared_at": "2026-10-16T00:28:13+00:00",
+    "rule": "a case may change only if its resolved game is quake1 or quake2 and its resolved mode is single_player (src/entities.cpp support_monster_hulls: monsters are tested with their class box and moved only when the switch is on, spec.game is quake1 or quake2 and spec.mode is single_player); within that set a case changes only when a monster's box is unsafe at its slot, so the declared scope is an upper bound; resolved game and mode read from the previous baseline's (baseline-3) reports, since the switch does not change prompt parsing",
+    "cases_all_games": 109,
+    "cases_this_game": 53,
+    "prediction": {
+      "file": "out/phase2/changes/r1s-monster-hull-support/prediction.json",
+      "sha256": "13cec4ccd4b2df95a0309b3ad2491ab69bcc77b74867fc1b7a8e2763119e2813",
+      "written_at": "2026-10-16T00:33:04+00:00",
+      "predicted_to_change": [],
+      "rule": "an in-scope case changes iff its baseline-3 map holds an unsafe monster box"
+    }
+  },
+  "build": {
+    "cmd": "cmake --build --preset windows-clang",
+    "exit": 0,
+    "warnings": 0
+  },
+  "ctest": {
+    "cmd": "ctest --preset windows-clang -j 8",
+    "passed": 91,
+    "total": 92,
+    "failed": [],
+    "skipped": [
+      "qmg_rc_benchmark (opt-in)"
+    ],
+    "new_tests": [
+      "qmg_r1s_monster_hull_support_tests"
+    ]
+  },
+  "compiler_fixtures": {
+    "required": "yes (serialization: monster origins change)",
+    "result": "qmg_q1_qbsp, qmg_q2_qbsp, qmg_q3_*_compilers, qmg_q2_compact_* and qmg_determinism_matrix passed at the default; the switch-on maps were compiled by the real compilers (ericw-tools qbsp, full vis, final light) on all 109 in-scope BENCH-v1 cases and the 6 audit probes"
+  },
+  "runs": {
+    "baseline": {
+      "baseline_id": "baseline-3",
+      "generation_outputs": "out/phase2/r1s-sp-coop-starts/flip-gen/default",
+      "composite": "out/benchmark-v1/baseline-3/composite.json",
+      "composite_sha256": "485a507b0e1d5a8423600517738b18441460952eea878afcffb806d26b0eece1"
+    },
+    "switch_off": {
+      "out_dir": "out/phase2/r1s-monster-hull-support/gen/off",
+      "byte_identical_to_baseline": true
+    },
+    "switch_on": {
+      "out_dir": "out/phase2/r1s-monster-hull-support/gen/on",
+      "qmg_extra": "--switch r1s.monster_hull_support=on"
+    },
+    "switch_on_compiled": {
+      "out_dir": "out/phase2/r1s-monster-hull-support/compile-on/bench",
+      "policy": "v1",
+      "jobs": 8,
+      "light_budget_seconds": 1020,
+      "repeat": 2,
+      "summary_sha256": "c80561da96de7ced84e8dbb4576b444d6e1d5a6822aaab5a090bdf9acc5f823b"
+    },
+    "probes": {
+      "manifest": "out/phase2/r1s-monster-hull-support/probes/probe-manifest.json (untracked)",
+      "ids": [
+        "audit-brutal-q2-32",
+        "audit-seed5-q2-8",
+        "brutal-q2-8"
+      ],
+      "generated": "out/phase2/r1s-monster-hull-support/probes/gen/{before,off,on}",
+      "compiled": "out/phase2/r1s-monster-hull-support/probes/compile-before (qmg-before.exe), out/phase2/r1s-monster-hull-support/probes/compile-on (switch on)"
+    },
+    "sweep": {
+      "out_dir": "out/phase2/r1s-monster-hull-support/probes/sweep/{before,off,on}",
+      "requests": "\"brutal single player level\", --game q2 --mode sp, rooms 2, 3, 4, 5, 6, 8, 10, 12, 16, 24, 32 x seeds 1-5 (55 maps per side)"
+    }
+  },
+  "scope_diff": {
+    "command": "python -B tools/benchmark/compare.py <off-run> <on-run (identity fields discounted)> --generate-only --scope declared_scope.json",
+    "off_vs_baseline_differences": 0,
+    "cases_compared": 459,
+    "out_of_scope_differences": 0,
+    "in_scope_differences_all_games": 0,
+    "in_scope_differences_this_game": 0,
+    "other_sub_lane_byte_differences": 0,
+    "maps_byte_identical_off_vs_on": 459,
+    "prediction_held": true,
+    "method": "compare.py a738936 unmodified, raw and on a normalized copy of the on-run that discounts exactly $.switches and layout_sha256 (scripts/normalize_switched.py); scripts/check_generation.py checks map identity, monster-only changes and the static monster-box check"
+  },
+  "portfolios": {
+    "required": "rerun for the zero-difference check (no portfolio case is in scope)",
+    "result": "49/49 portfolio maps byte-identical with the switch on; reports identity fields only"
+  },
+  "before": {
+    "bench_v1_in_scope_monsters_unsafe": "0/557 (static .map check of baseline-3's maps; no BENCH-v1 single-player request reaches the intensity (>= 0.625) that fills the y = 68% slots: 106 of 109 plan intensity 50, 3 plan 25)",
+    "audit_probes_static": {
+      "cases": 3,
+      "cases_with_unsafe": 2,
+      "monsters": 166,
+      "large": 33,
+      "embedded": 10,
+      "touching": 15,
+      "unsupported": 6,
+      "no_floor": 0,
+      "unsafe": 21,
+      "large_unsafe": 7,
+      "unknown_class": 0
+    },
+    "audit_probes_compiled_bsp": {
+      "cases": 3,
+      "monsters": 166,
+      "in_solid": 15,
+      "unsupported": 21,
+      "no_floor": 0,
+      "unsafe": 21,
+      "check_bottom_quick": 145,
+      "cases_with_unsafe": 2
+    },
+    "brutal_sweep_static": {
+      "cases": 55,
+      "cases_with_unsafe": 54,
+      "monsters": 2220,
+      "large": 465,
+      "embedded": 87,
+      "touching": 120,
+      "unsupported": 160,
+      "no_floor": 0,
+      "unsafe": 280,
+      "large_unsafe": 109,
+      "unknown_class": 0
+    }
+  },
+  "after": {
+    "bench_v1_in_scope_monsters_unsafe_compiled_bsp": "0/557",
+    "bench_v1_entity_lumps_match_map": "109/109 (both games)",
+    "audit_probes_static": {
+      "cases": 3,
+      "cases_with_unsafe": 0,
+      "monsters": 166,
+      "large": 33,
+      "embedded": 0,
+      "touching": 0,
+      "unsupported": 0,
+      "no_floor": 0,
+      "unsafe": 0,
+      "large_unsafe": 0,
+      "unknown_class": 0
+    },
+    "audit_probes_compiled_bsp": {
+      "cases": 3,
+      "monsters": 166,
+      "in_solid": 0,
+      "unsupported": 0,
+      "no_floor": 0,
+      "unsafe": 0,
+      "check_bottom_quick": 166,
+      "cases_with_unsafe": 0
+    },
+    "brutal_sweep_static": {
+      "cases": 55,
+      "cases_with_unsafe": 0,
+      "monsters": 2220,
+      "large": 465,
+      "embedded": 0,
+      "touching": 0,
+      "unsupported": 0,
+      "no_floor": 0,
+      "unsafe": 0,
+      "large_unsafe": 0,
+      "unknown_class": 0
+    },
+    "monsters_left_out": 0,
+    "gates_bench_in_scope": {
+      "G1_generated": {
+        "reference_pass": 109,
+        "on_pass": 109,
+        "new_failures": 0
+      },
+      "G2_intent_match": {
+        "reference_pass": 52,
+        "on_pass": 52,
+        "new_failures": 0
+      },
+      "G3_leak_free_compile": {
+        "reference_pass": 109,
+        "on_pass": 109,
+        "new_failures": 0
+      },
+      "G4_full_vis": {
+        "reference_pass": 109,
+        "on_pass": 109,
+        "new_failures": 0
+      },
+      "G5_final_light": {
+        "reference_pass": 109,
+        "on_pass": 109,
+        "new_failures": 0
+      },
+      "G6_aas_valid": {
+        "reference_pass": 0,
+        "on_pass": 0,
+        "new_failures": 0
+      },
+      "G7_mode_entities": {
+        "reference_pass": 97,
+        "on_pass": 97,
+        "new_failures": 0
+      },
+      "G8_determinism": {
+        "reference_pass": 109,
+        "on_pass": 109,
+        "new_failures": 0
+      }
+    },
+    "reported_gates_G9_G15_changes": {
+      "G9_request_accounting": {},
+      "G10_conflict_surfaced": {},
+      "G11_error_findings": {},
+      "G12_materials": {},
+      "G13_lighting_readability": {},
+      "G14_engine_smoke": {},
+      "G15_q3_entity_reachability": {}
+    }
+  },
+  "verdict": "accepted",
+  "evidence_level": "compiler output (BSP entity lumps; the compiled collision hulls and brushes tested as the engine tests them) plus static analysis (.map brush geometry; the id-source reading)",
+  "evidence_notes": "Entity-lump monsters equal the .map's (compiler output). In-solid and CheckBottom were evaluated against the compiled BSP by reimplementing the engine tests (Quake 1 clip hulls 1/2 and hull 0; Quake 2 brush sides with bevels), which is static analysis of compiler output, not an engine run. The .map check is independent static analysis. That an unsafe monster is stuck in game is read from the id code; no engine was run.",
+  "failures_and_counterexamples_kept": [
+    "BENCH-v1 does not exercise the defect: 0 of the in-scope maps hold an unsafe monster today, so the switch changes no BENCH-v1 byte; the effect is measured on the audit probes and the brutal sweep (outside the fixed sets)",
+    "the static .map check also counts face contact as unsafe for Quake 1, where the engine's hull test accepts it; the compiled-BSP counts use each engine's own rule (both are kept)",
+    "raw compare.py runs (identity fields counted): out/phase2/r1s-monster-hull-support/gen/compare-off-vs-on-raw-*.json"
+  ],
+  "default_flip": {
+    "separate_commit": "pending D1; recorded as change r1s-monster-hull-support-flip under out/phase2/changes",
+    "flip_change_id": "r1s-monster-hull-support-flip",
+    "flipped_qmg_sha256": "70e542b17fe7fe23963ae8ba5db8af45dd35b2bcc51ecd16bbf8dec2fc450f95",
+    "checks": "flipped default vs baseline-3: 0 differences over 459 cases (maps and reports byte-identical; 0 in scope, 0 out of scope); flipped default reproduces the pre-flip switch-on run (459 maps byte-identical, reports differ only in $.switches and layout_sha256) and the 6 switch-on audit probes (identity fields only); --switch r1s.monster_hull_support=off reproduces baseline-3 (459 maps byte-identical, identity fields only); ctest 91/92 passed, 1 opt-in skipped (tests/test_r1s_monster_hull_support.cpp follows the new registered default); ledger_check 0 errors",
+    "new_baseline_id": "baseline-4",
+    "baselines_index": "tools/benchmark/baselines/index.json (label r1s-monster-hull-support)",
+    "composite": "out/benchmark-v1/baseline-4/composite.json"
+  },
+  "notes": "Change record: out/phase2/changes/r1s-monster-hull-support/record.json. Generation check: out/phase2/r1s-monster-hull-support/gen/generation-check.json; compiled checks: out/phase2/r1s-monster-hull-support/compile-on-bench-check.json, out/phase2/r1s-monster-hull-support/probes/compile-probes-check.json; static checks: out/phase2/r1s-monster-hull-support/probes/probes-monster-hulls.json, out/phase2/r1s-monster-hull-support/probes/sweep-monster-hulls.json, out/phase2/r1s-monster-hull-support/before/baseline3-bench-monster-hulls.json."
+}

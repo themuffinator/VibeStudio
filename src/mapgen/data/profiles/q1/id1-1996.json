@@ -1,0 +1,1107 @@
+{
+  "schema": "qmg.game_profile",
+  "schema_version": 1,
+  "profile_kind": "module",
+  "game": "quake1",
+  "module": "q1-id1-1996",
+  "title": "Quake shipped id1 progs.dat (1996) on the WinQuake engine",
+  "evidence_level": "static analysis",
+  "sources": {
+    "progs1996": {
+      "description": "The shipped id1 progs.dat (1996, version 6, CRC 5927, 413,116 bytes, sha256 f2619787f9aa0f057246eea1665b622b4691b5c5a800b1a46133d1fe8b771580). No QuakeC source for it is local; facts are cited by function and statement index, rendered by tools/profiles/progs_disasm.py.",
+      "identity": "sha256 f2619787f9aa0f057246eea1665b622b4691b5c5a800b1a46133d1fe8b771580",
+      "kind": "progs_statements"
+    },
+    "q1src": {
+      "description": "id Software GPL Quake source release (Quake-master): WinQuake engine (spawnflag filtering, physics cvars).",
+      "identity": "Quake-master/WinQuake",
+      "kind": "file_lines"
+    }
+  },
+  "runtime": {
+    "name": "id1 1996 progs.dat under a NetQuake (WinQuake) engine",
+    "version": {
+      "value": "progs version 6, CRC 5927",
+      "basis": "progs_disassembly",
+      "cite": [
+        "progs1996:@header|version 6 crc 5927"
+      ]
+    },
+    "note": "Whether this binary is v1.01 or v1.06 could not be determined."
+  },
+  "starting_inventory": {
+    "value": [
+      "shotgun",
+      "axe"
+    ],
+    "basis": "progs_disassembly",
+    "cite": [
+      "progs1996:SetNewParms:5636-5637|BITOR IT_SHOTGUN(=1), IT_AXE(=4096)"
+    ]
+  },
+  "movement": {
+    "gravity": {
+      "value": 800,
+      "unit": "u/s^2",
+      "cite": [
+        "q1src:WinQuake/sv_phys.c:44|cvar_t sv_gravity = {\"sv_gravity\",\"800\",false,true};"
+      ]
+    },
+    "max_ground_speed": {
+      "value": 320,
+      "unit": "u/s",
+      "cite": [
+        "q1src:WinQuake/sv_user.c:167|cvar_t sv_maxspeed = {\"sv_maxspeed\", \"320\", false, true};"
+      ]
+    },
+    "accelerate": {
+      "value": 10,
+      "unit": "1/s",
+      "cite": [
+        "q1src:WinQuake/sv_user.c:168|cvar_t sv_accelerate = {\"sv_accelerate\", \"10\"};"
+      ]
+    },
+    "friction": {
+      "value": 4,
+      "unit": "1/s",
+      "cite": [
+        "q1src:WinQuake/sv_phys.c:42|cvar_t sv_friction = {\"sv_friction\",\"4\",false,true};"
+      ]
+    },
+    "edge_friction": {
+      "value": 2,
+      "unit": "multiplier",
+      "cite": [
+        "q1src:WinQuake/sv_user.c:27|cvar_t sv_edgefriction = {\"edgefriction\", \"2\"};"
+      ]
+    },
+    "stop_speed": {
+      "value": 100,
+      "unit": "u/s",
+      "cite": [
+        "q1src:WinQuake/sv_phys.c:43|cvar_t sv_stopspeed = {\"sv_stopspeed\",\"100\"};"
+      ]
+    },
+    "max_velocity": {
+      "value": 2000,
+      "unit": "u/s per axis",
+      "cite": [
+        "q1src:WinQuake/sv_phys.c:45|cvar_t sv_maxvelocity = {\"sv_maxvelocity\",\"2000\"};"
+      ]
+    },
+    "step_height": {
+      "value": 18,
+      "unit": "u",
+      "cite": [
+        "q1src:WinQuake/sv_phys.c:957|#define STEPSIZE 18"
+      ]
+    },
+    "jump_velocity": {
+      "value": 270,
+      "unit": "u/s",
+      "basis": "progs_disassembly",
+      "cite": [
+        "progs1996:PlayerJump:6384-6386|ADD_F 0, 270"
+      ],
+      "note": "Jump requires FL_JUMPRELEASED, so it must be released between hops."
+    },
+    "eye_height": {
+      "value": 22,
+      "unit": "u",
+      "basis": "progs_disassembly",
+      "cite": [
+        "progs1996:PutClientInServer:6153-6154|STOREP_V '0 0 22' -> *0"
+      ]
+    },
+    "player_mins": {
+      "value": [
+        -16,
+        -16,
+        -24
+      ],
+      "unit": "u",
+      "basis": "progs_disassembly",
+      "cite": [
+        "progs1996:PutClientInServer:6149-6151|VEC_HULL_MIN",
+        "progs1996:@global:VEC_HULL_MIN|'-16 -16 -24'"
+      ]
+    },
+    "player_maxs": {
+      "value": [
+        16,
+        16,
+        32
+      ],
+      "unit": "u",
+      "basis": "progs_disassembly",
+      "cite": [
+        "progs1996:PutClientInServer:6149-6151|VEC_HULL_MAX",
+        "progs1996:@global:VEC_HULL_MAX|'16 16 32'"
+      ]
+    }
+  },
+  "spawnflags": [
+    {
+      "name": "NOT_EASY",
+      "bit": 256,
+      "scope": "every entity",
+      "tested_when": "deathmatch == 0 and skill == 0",
+      "effect": "removed at map load",
+      "cite": [
+        "q1src:WinQuake/server.h:180|#define SPAWNFLAG_NOT_EASY 256",
+        "q1src:WinQuake/pr_edict.c:941-943|else if ((current_skill == 0 && ((int)ent->v.spawnflags & SPAWNFLAG_NOT_EASY))"
+      ],
+      "note": "Co-op also runs with deathmatch 0, so no spawnflag separates co-op from single player."
+    },
+    {
+      "name": "NOT_MEDIUM",
+      "bit": 512,
+      "scope": "every entity",
+      "tested_when": "deathmatch == 0 and skill == 1",
+      "effect": "removed at map load",
+      "cite": [
+        "q1src:WinQuake/server.h:181|#define SPAWNFLAG_NOT_MEDIUM 512",
+        "q1src:WinQuake/pr_edict.c:941-943|else if ((current_skill == 0 && ((int)ent->v.spawnflags & SPAWNFLAG_NOT_EASY))"
+      ],
+      "note": "Co-op also runs with deathmatch 0, so no spawnflag separates co-op from single player."
+    },
+    {
+      "name": "NOT_HARD",
+      "bit": 1024,
+      "scope": "every entity",
+      "tested_when": "deathmatch == 0 and skill >= 2",
+      "effect": "removed at map load; nightmare (skill 3) uses the NOT_HARD set",
+      "cite": [
+        "q1src:WinQuake/server.h:182|#define SPAWNFLAG_NOT_HARD 1024",
+        "q1src:WinQuake/pr_edict.c:941-943|else if ((current_skill == 0 && ((int)ent->v.spawnflags & SPAWNFLAG_NOT_EASY))"
+      ],
+      "note": "Co-op also runs with deathmatch 0, so no spawnflag separates co-op from single player."
+    },
+    {
+      "name": "NOT_DEATHMATCH",
+      "bit": 2048,
+      "scope": "every entity",
+      "tested_when": "deathmatch != 0",
+      "effect": "removed at map load; skill flags are not tested in deathmatch",
+      "cite": [
+        "q1src:WinQuake/server.h:183|#define SPAWNFLAG_NOT_DEATHMATCH 2048",
+        "q1src:WinQuake/pr_edict.c:931-937|if (deathmatch.value)"
+      ],
+      "note": "Co-op also runs with deathmatch 0, so no spawnflag separates co-op from single player."
+    },
+    {
+      "name": "DOOR_GOLD_KEY",
+      "bit": 8,
+      "scope": "func_door",
+      "tested_when": "always",
+      "effect": "the door needs the gold key (IT_KEY2, item_key2)",
+      "cite": [
+        "progs1996:func_door:9290-9294|BITAND 0, DOOR_GOLD_KEY(=8)"
+      ]
+    },
+    {
+      "name": "DOOR_SILVER_KEY",
+      "bit": 16,
+      "scope": "func_door",
+      "tested_when": "always",
+      "effect": "the door needs the silver key (IT_KEY1, item_key1)",
+      "cite": [
+        "progs1996:func_door:9285-9289|BITAND 0, DOOR_SILVER_KEY(=16)"
+      ]
+    }
+  ],
+  "respawn_rules": [
+    {
+      "id": "weapon",
+      "cite": [
+        "progs1996:weapon_touch:2119"
+      ],
+      "cases": [
+        {
+          "id": "deathmatch_1",
+          "when": "deathmatch == 1",
+          "behaviour": "respawn",
+          "seconds": 30,
+          "cite": [
+            "progs1996:weapon_touch:2277-2281|ADD_F time(=0), SVC_INTERMISSION(=30)"
+          ]
+        },
+        {
+          "id": "leave",
+          "when": "deathmatch == 2 or coop",
+          "behaviour": "stays",
+          "cite": [
+            "progs1996:weapon_touch:2129-2134|OR 0, coop(=0)",
+            "progs1996:weapon_touch:2271-2272|IFNOT leave(=0) goto 2273"
+          ]
+        },
+        {
+          "id": "other",
+          "when": "deathmatch 0 (single player) or deathmatch >= 3",
+          "behaviour": "removed",
+          "cite": [
+            "progs1996:weapon_touch:2277-2283|EQ_F deathmatch(=0), TRUE(=1)"
+          ],
+          "note": "think is set to SUB_regen without a nextthink, so the item never returns."
+        }
+      ]
+    },
+    {
+      "id": "armor",
+      "cite": [
+        "progs1996:armor_touch:1949"
+      ],
+      "cases": [
+        {
+          "id": "deathmatch_1",
+          "when": "deathmatch == 1",
+          "behaviour": "respawn",
+          "seconds": 20,
+          "cite": [
+            "progs1996:armor_touch:1999-2003|ADD_F time(=0), 20"
+          ]
+        },
+        {
+          "id": "other",
+          "when": "deathmatch != 1",
+          "behaviour": "removed",
+          "cite": [
+            "progs1996:armor_touch:1999-2005|EQ_F deathmatch(=0), TRUE(=1)"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "health",
+      "cite": [
+        "progs1996:health_touch:1840"
+      ],
+      "cases": [
+        {
+          "id": "deathmatch",
+          "when": "deathmatch != 0 and deathmatch != 2",
+          "behaviour": "respawn",
+          "seconds": 20,
+          "cite": [
+            "progs1996:health_touch:1910-1915|NE_F deathmatch(=0), FL_SWIM(=2)"
+          ]
+        },
+        {
+          "id": "other",
+          "when": "deathmatch 0 or 2",
+          "behaviour": "removed",
+          "cite": [
+            "progs1996:health_touch:1910-1917|IFNOT deathmatch(=0) goto 1916"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "mega_health",
+      "cite": [
+        "progs1996:item_megahealth_rot:1921"
+      ],
+      "cases": [
+        {
+          "id": "deathmatch_1",
+          "when": "deathmatch == 1",
+          "behaviour": "respawn_after_rot",
+          "delay_seconds": 5,
+          "rot_hp_per_second": 1,
+          "seconds": 20,
+          "cite": [
+            "progs1996:health_touch:1895-1908|STOREP_FNC item_megahealth_rot -> *0",
+            "progs1996:health_touch:1902-1904|ADD_F time(=0), MOVETYPE_FLY(=5)",
+            "progs1996:item_megahealth_rot:1925-1933|SUB_F 0, TRUE(=1)",
+            "progs1996:item_megahealth_rot:1941-1945|ADD_F time(=0), 20"
+          ],
+          "note": "The rot runs on the item: 5 s after pickup it removes 1 HP per second from the picker while health > max_health, then respawns 20 s later."
+        },
+        {
+          "id": "other",
+          "when": "deathmatch != 1",
+          "behaviour": "removed",
+          "cite": [
+            "progs1996:item_megahealth_rot:1941-1947|EQ_F deathmatch(=0), TRUE(=1)"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ammo",
+      "cite": [
+        "progs1996:ammo_touch:2389"
+      ],
+      "cases": [
+        {
+          "id": "deathmatch_1",
+          "when": "deathmatch == 1",
+          "behaviour": "respawn",
+          "seconds": 30,
+          "cite": [
+            "progs1996:ammo_touch:2488-2492|ADD_F time(=0), SVC_INTERMISSION(=30)"
+          ]
+        },
+        {
+          "id": "other",
+          "when": "deathmatch != 1",
+          "behaviour": "removed",
+          "cite": [
+            "progs1996:ammo_touch:2488-2494|EQ_F deathmatch(=0), TRUE(=1)"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "powerup",
+      "cite": [
+        "progs1996:powerup_touch:2937"
+      ],
+      "cases": [
+        {
+          "id": "deathmatch_long",
+          "when": "deathmatch != 0, invulnerability or invisibility",
+          "behaviour": "respawn",
+          "seconds": 300,
+          "cite": [
+            "progs1996:powerup_touch:2959-2968|MUL_F 60, MOVETYPE_FLY(=5)"
+          ]
+        },
+        {
+          "id": "deathmatch_short",
+          "when": "deathmatch != 0, quad damage or biosuit",
+          "behaviour": "respawn",
+          "seconds": 60,
+          "cite": [
+            "progs1996:powerup_touch:2970-2972|ADD_F time(=0), 60"
+          ]
+        },
+        {
+          "id": "other",
+          "when": "deathmatch == 0",
+          "behaviour": "removed",
+          "cite": [
+            "progs1996:powerup_touch:2955-2955|IFNOT deathmatch(=0) goto 2975"
+          ]
+        }
+      ]
+    }
+  ],
+  "items": [
+    {
+      "classname": "weapon_supershotgun",
+      "kind": "weapon",
+      "tier": "pickup",
+      "respawn": "weapon",
+      "cite": [
+        "progs1996:weapon_supershotgun:2287"
+      ]
+    },
+    {
+      "classname": "weapon_nailgun",
+      "kind": "weapon",
+      "tier": "pickup",
+      "respawn": "weapon",
+      "cite": [
+        "progs1996:weapon_nailgun:2304"
+      ]
+    },
+    {
+      "classname": "weapon_supernailgun",
+      "kind": "weapon",
+      "tier": "pickup",
+      "respawn": "weapon",
+      "cite": [
+        "progs1996:weapon_supernailgun:2321"
+      ]
+    },
+    {
+      "classname": "weapon_grenadelauncher",
+      "kind": "weapon",
+      "tier": "pickup",
+      "respawn": "weapon",
+      "cite": [
+        "progs1996:weapon_grenadelauncher:2338"
+      ]
+    },
+    {
+      "classname": "weapon_rocketlauncher",
+      "kind": "weapon",
+      "tier": "pickup",
+      "respawn": "weapon",
+      "cite": [
+        "progs1996:weapon_rocketlauncher:2355"
+      ]
+    },
+    {
+      "classname": "weapon_lightning",
+      "kind": "weapon",
+      "tier": "pickup",
+      "respawn": "weapon",
+      "cite": [
+        "progs1996:weapon_lightning:2372"
+      ]
+    },
+    {
+      "classname": "item_shells",
+      "kind": "ammo",
+      "tier": "ammo",
+      "respawn": "ammo",
+      "cite": [
+        "progs1996:item_shells:2498"
+      ],
+      "spawnflags": [
+        {
+          "bit": 1,
+          "name": "large box",
+          "cite": [
+            "progs1996:item_shells:2501|BITAND 0, WEAPON_BIG2(=1)",
+            "progs1996:@global:WEAPON_BIG2|1"
+          ]
+        }
+      ]
+    },
+    {
+      "classname": "item_spikes",
+      "kind": "ammo",
+      "tier": "ammo",
+      "respawn": "ammo",
+      "cite": [
+        "progs1996:item_spikes:2528"
+      ],
+      "spawnflags": [
+        {
+          "bit": 1,
+          "name": "large box",
+          "cite": [
+            "progs1996:item_spikes:2531|BITAND 0, WEAPON_BIG2(=1)",
+            "progs1996:@global:WEAPON_BIG2|1"
+          ]
+        }
+      ]
+    },
+    {
+      "classname": "item_rockets",
+      "kind": "ammo",
+      "tier": "ammo",
+      "respawn": "ammo",
+      "cite": [
+        "progs1996:item_rockets:2558"
+      ],
+      "spawnflags": [
+        {
+          "bit": 1,
+          "name": "large box",
+          "cite": [
+            "progs1996:item_rockets:2561|BITAND 0, WEAPON_BIG2(=1)",
+            "progs1996:@global:WEAPON_BIG2|1"
+          ]
+        }
+      ]
+    },
+    {
+      "classname": "item_cells",
+      "kind": "ammo",
+      "tier": "ammo",
+      "respawn": "ammo",
+      "cite": [
+        "progs1996:item_cells:2588"
+      ],
+      "spawnflags": [
+        {
+          "bit": 1,
+          "name": "large box",
+          "cite": [
+            "progs1996:item_cells:2591|BITAND 0, WEAPON_BIG2(=1)",
+            "progs1996:@global:WEAPON_BIG2|1"
+          ]
+        }
+      ]
+    },
+    {
+      "classname": "item_armor1",
+      "kind": "armor",
+      "tier": "light",
+      "respawn": "armor",
+      "amount": {
+        "value": 100,
+        "cite": [
+          "progs1996:armor_touch:1961|STORE_F 100 -> value(=0)"
+        ]
+      },
+      "cite": [
+        "progs1996:item_armor1:2021"
+      ]
+    },
+    {
+      "classname": "item_armor2",
+      "kind": "armor",
+      "tier": "medium",
+      "respawn": "armor",
+      "amount": {
+        "value": 150,
+        "cite": [
+          "progs1996:armor_touch:1967|STORE_F 150 -> value(=0)"
+        ]
+      },
+      "cite": [
+        "progs1996:item_armor2:2036"
+      ]
+    },
+    {
+      "classname": "item_armorInv",
+      "kind": "armor",
+      "tier": "heavy",
+      "respawn": "armor",
+      "amount": {
+        "value": 200,
+        "cite": [
+          "progs1996:armor_touch:1973|STORE_F 200 -> value(=0)"
+        ]
+      },
+      "cite": [
+        "progs1996:item_armorInv:2051"
+      ]
+    },
+    {
+      "classname": "item_health",
+      "kind": "health",
+      "tier": "by_spawnflags",
+      "respawn": "health",
+      "cite": [
+        "progs1996:item_health:1785"
+      ],
+      "variants": [
+        {
+          "spawnflags": 0,
+          "tier": "medium",
+          "respawn": "health",
+          "amount": {
+            "value": 25,
+            "cite": [
+              "progs1996:item_health:1830-1831|STOREP_F 25 -> *0"
+            ]
+          },
+          "cite": [
+            "progs1996:item_health:1785"
+          ]
+        },
+        {
+          "spawnflags": 1,
+          "tier": "rotten",
+          "respawn": "health",
+          "amount": {
+            "value": 15,
+            "cite": [
+              "progs1996:item_health:1799-1800|STOREP_F 15 -> *0"
+            ]
+          },
+          "cite": [
+            "progs1996:item_health:1787-1789|BITAND 0, H_ROTTEN(=1)",
+            "progs1996:@global:H_ROTTEN|1"
+          ]
+        },
+        {
+          "spawnflags": 2,
+          "tier": "mega",
+          "respawn": "mega_health",
+          "amount": {
+            "value": 100,
+            "cite": [
+              "progs1996:item_health:1816-1817|STOREP_F 100 -> *0"
+            ]
+          },
+          "cite": [
+            "progs1996:item_health:1804-1806|BITAND 0, H_MEGA(=2)",
+            "progs1996:@global:H_MEGA|2"
+          ]
+        }
+      ]
+    },
+    {
+      "classname": "item_artifact_super_damage",
+      "kind": "powerup",
+      "tier": "powerup",
+      "respawn": "powerup",
+      "cite": [
+        "progs1996:item_artifact_super_damage:3102"
+      ]
+    },
+    {
+      "classname": "item_artifact_invulnerability",
+      "kind": "powerup",
+      "tier": "powerup",
+      "respawn": "powerup",
+      "cite": [
+        "progs1996:item_artifact_invulnerability:3029"
+      ]
+    },
+    {
+      "classname": "item_artifact_invisibility",
+      "kind": "powerup",
+      "tier": "powerup",
+      "respawn": "powerup",
+      "cite": [
+        "progs1996:item_artifact_invisibility:3077"
+      ]
+    },
+    {
+      "classname": "item_artifact_envirosuit",
+      "kind": "powerup",
+      "tier": "powerup",
+      "respawn": "powerup",
+      "cite": [
+        "progs1996:item_artifact_envirosuit:3054"
+      ]
+    },
+    {
+      "classname": "item_key1",
+      "kind": "key",
+      "tier": "key",
+      "respawn": "none",
+      "cite": [
+        "progs1996:item_key1:2770",
+        "progs1996:func_door:9285-9289|BITAND 0, DOOR_SILVER_KEY(=16)"
+      ],
+      "note": "Silver key: opens a func_door with spawnflag 16."
+    },
+    {
+      "classname": "item_key2",
+      "kind": "key",
+      "tier": "key",
+      "respawn": "none",
+      "cite": [
+        "progs1996:item_key2:2813",
+        "progs1996:func_door:9290-9294|BITAND 0, DOOR_GOLD_KEY(=8)"
+      ],
+      "note": "Gold key: opens a func_door with spawnflag 8."
+    },
+    {
+      "classname": "item_sigil",
+      "kind": "other",
+      "tier": "episode_rune",
+      "respawn": "none",
+      "cite": [
+        "progs1996:item_sigil:2888"
+      ]
+    }
+  ],
+  "classnames": [
+    {
+      "classname": "info_player_start",
+      "role": "player_start",
+      "cite": [
+        "progs1996:info_player_start:6171"
+      ]
+    },
+    {
+      "classname": "info_player_start2",
+      "role": "player_start",
+      "cite": [
+        "progs1996:info_player_start2:6172"
+      ],
+      "note": "Used instead of info_player_start when serverflags is nonzero (episode return)."
+    },
+    {
+      "classname": "info_player_deathmatch",
+      "role": "deathmatch_spawn",
+      "cite": [
+        "progs1996:info_player_deathmatch:6174"
+      ]
+    },
+    {
+      "classname": "info_player_coop",
+      "role": "coop_start",
+      "cite": [
+        "progs1996:info_player_coop:6175"
+      ]
+    },
+    {
+      "classname": "info_intermission",
+      "role": "intermission",
+      "cite": [
+        "progs1996:info_intermission:5584"
+      ]
+    },
+    {
+      "classname": "info_teleport_destination",
+      "role": "teleporter_destination",
+      "cite": [
+        "progs1996:info_teleport_destination:10344"
+      ]
+    },
+    {
+      "classname": "info_notnull",
+      "role": "target_point",
+      "cite": [
+        "progs1996:info_notnull:11095"
+      ]
+    },
+    {
+      "classname": "info_null",
+      "role": "target_point",
+      "cite": [
+        "progs1996:info_null:11092"
+      ]
+    },
+    {
+      "classname": "trigger_teleport",
+      "role": "teleporter",
+      "cite": [
+        "progs1996:trigger_teleport:10368"
+      ]
+    },
+    {
+      "classname": "trigger_changelevel",
+      "role": "level_exit",
+      "cite": [
+        "progs1996:trigger_changelevel:5966"
+      ]
+    },
+    {
+      "classname": "trigger_multiple",
+      "role": "trigger",
+      "cite": [
+        "progs1996:trigger_multiple:9970"
+      ]
+    },
+    {
+      "classname": "trigger_once",
+      "role": "trigger",
+      "cite": [
+        "progs1996:trigger_once:10029"
+      ]
+    },
+    {
+      "classname": "trigger_push",
+      "role": "trigger",
+      "cite": [
+        "progs1996:trigger_push:10519"
+      ]
+    },
+    {
+      "classname": "trigger_secret",
+      "role": "secret",
+      "cite": [
+        "progs1996:trigger_secret:10036"
+      ]
+    },
+    {
+      "classname": "func_door",
+      "role": "mover",
+      "cite": [
+        "progs1996:func_door:9170"
+      ]
+    },
+    {
+      "classname": "func_door_secret",
+      "role": "mover",
+      "cite": [
+        "progs1996:func_door_secret:9615"
+      ]
+    },
+    {
+      "classname": "func_plat",
+      "role": "mover",
+      "cite": [
+        "progs1996:func_plat:10759"
+      ]
+    },
+    {
+      "classname": "func_train",
+      "role": "mover",
+      "cite": [
+        "progs1996:func_train:10970"
+      ]
+    },
+    {
+      "classname": "func_button",
+      "role": "mover",
+      "cite": [
+        "progs1996:func_button:9794"
+      ]
+    },
+    {
+      "classname": "light",
+      "role": "light",
+      "cite": [
+        "progs1996:light:11117"
+      ]
+    },
+    {
+      "classname": "monster_army",
+      "role": "monster",
+      "cite": [
+        "progs1996:monster_army:14927"
+      ]
+    },
+    {
+      "classname": "monster_dog",
+      "role": "monster",
+      "cite": [
+        "progs1996:monster_dog:16104"
+      ]
+    },
+    {
+      "classname": "monster_ogre",
+      "role": "monster",
+      "cite": [
+        "progs1996:monster_ogre:12701"
+      ]
+    },
+    {
+      "classname": "monster_ogre_marksman",
+      "role": "monster",
+      "cite": [
+        "progs1996:monster_ogre_marksman:12754"
+      ]
+    },
+    {
+      "classname": "monster_knight",
+      "role": "monster",
+      "cite": [
+        "progs1996:monster_knight:14418"
+      ]
+    },
+    {
+      "classname": "monster_hell_knight",
+      "role": "monster",
+      "cite": [
+        "progs1996:monster_hell_knight:18991"
+      ]
+    },
+    {
+      "classname": "monster_demon1",
+      "role": "monster",
+      "cite": [
+        "progs1996:monster_demon1:13074"
+      ]
+    },
+    {
+      "classname": "monster_shalrath",
+      "role": "monster",
+      "cite": [
+        "progs1996:monster_shalrath:19826"
+      ]
+    },
+    {
+      "classname": "monster_shambler",
+      "role": "monster",
+      "cite": [
+        "progs1996:monster_shambler:13943"
+      ]
+    },
+    {
+      "classname": "monster_wizard",
+      "role": "monster",
+      "cite": [
+        "progs1996:monster_wizard:15559"
+      ]
+    },
+    {
+      "classname": "monster_zombie",
+      "role": "monster",
+      "cite": [
+        "progs1996:monster_zombie:17049"
+      ]
+    },
+    {
+      "classname": "monster_fish",
+      "role": "monster",
+      "cite": [
+        "progs1996:monster_fish:19408"
+      ]
+    },
+    {
+      "classname": "monster_tarbaby",
+      "role": "monster",
+      "cite": [
+        "progs1996:monster_tarbaby:18116"
+      ]
+    },
+    {
+      "classname": "monster_enforcer",
+      "role": "monster",
+      "cite": [
+        "progs1996:monster_enforcer:20433"
+      ]
+    },
+    {
+      "classname": "monster_boss",
+      "role": "monster",
+      "cite": [
+        "progs1996:monster_boss:17582"
+      ]
+    },
+    {
+      "classname": "monster_oldone",
+      "role": "monster",
+      "cite": [
+        "progs1996:monster_oldone:20898"
+      ]
+    }
+  ],
+  "mode_contracts": [
+    {
+      "mode": "single_player",
+      "runtime": "deathmatch 0, coop 0",
+      "entities": [
+        {
+          "classname": "info_player_start",
+          "requirement": "required",
+          "min": 1,
+          "selection": "the first one found",
+          "cite": [
+            "progs1996:SelectSpawnPoint:6074-6080|\"PutClientInServer: no info_player_start on level\"?"
+          ]
+        },
+        {
+          "classname": "info_player_start2",
+          "requirement": "used_if_present",
+          "selection": "when serverflags is nonzero",
+          "cite": [
+            "progs1996:SelectSpawnPoint:6064-6071|\"info_player_start2\"?"
+          ]
+        }
+      ],
+      "failure": "error 'PutClientInServer: no info_player_start on level'",
+      "cite": [
+        "progs1996:SelectSpawnPoint:6007"
+      ]
+    },
+    {
+      "mode": "cooperative",
+      "runtime": "coop 1 (deathmatch 0)",
+      "entities": [
+        {
+          "classname": "info_player_coop",
+          "requirement": "used_if_present",
+          "selection": "cycled from the last one used",
+          "cite": [
+            "progs1996:SelectSpawnPoint:6014-6030|\"info_player_coop\"?"
+          ]
+        },
+        {
+          "classname": "info_player_start",
+          "requirement": "fallback",
+          "cite": [
+            "progs1996:SelectSpawnPoint:6014-6030|\"info_player_start\"?"
+          ]
+        }
+      ],
+      "cite": [
+        "progs1996:SelectSpawnPoint:6007"
+      ],
+      "note": "Skill flags apply exactly as in single player; weapons stay and no item respawns."
+    },
+    {
+      "mode": "deathmatch",
+      "runtime": "deathmatch 1",
+      "entities": [
+        {
+          "classname": "info_player_deathmatch",
+          "requirement": "required",
+          "min": 1,
+          "selection": "sequential from the last spot used, skipping spots with a player within 32 units",
+          "cite": [
+            "progs1996:SelectSpawnPoint:6031-6063|\"info_player_deathmatch\"?"
+          ]
+        }
+      ],
+      "cite": [
+        "progs1996:SelectSpawnPoint:6007"
+      ],
+      "note": "No fallback: with no info_player_deathmatch the search loop has no exit (static reading)."
+    },
+    {
+      "mode": "intermission",
+      "runtime": "any",
+      "entities": [
+        {
+          "classname": "info_intermission",
+          "requirement": "optional",
+          "selection": "a random one of up to four",
+          "cite": [
+            "progs1996:FindIntermission:5672-5698|\"info_intermission\"?"
+          ]
+        }
+      ],
+      "fallback_chain": [
+        "info_player_start",
+        "testplayerstart"
+      ],
+      "failure": "objerror 'FindIntermission: no spot'",
+      "cite": [
+        "progs1996:FindIntermission:5699-5714|\"FindIntermission: no spot\"?"
+      ]
+    },
+    {
+      "mode": "level_exit",
+      "runtime": "single player and coop",
+      "entities": [
+        {
+          "classname": "trigger_changelevel",
+          "requirement": "required_for_exit",
+          "selection": "brush trigger with a 'map' key",
+          "cite": [
+            "progs1996:trigger_changelevel:5966-5970|\"chagnelevel trigger doesn't have map\"?"
+          ]
+        }
+      ],
+      "cite": [
+        "progs1996:trigger_changelevel:5966"
+      ]
+    }
+  ],
+  "quirks": [
+    {
+      "id": "fish_counted_twice",
+      "effect": "each monster_fish adds 2 to total_monsters",
+      "cite": [
+        "progs1996:swimmonster_start:8682|total_monsters",
+        "progs1996:swimmonster_start_go:8606|total_monsters"
+      ]
+    }
+  ],
+  "digest_corrections": [
+    {
+      "claim": "weapons 30 s, armor 20 s",
+      "encoded": "only when deathmatch == 1; deathmatch >= 3 never respawns them",
+      "path": "respawn_rules[id=weapon].cases[id=deathmatch_1].when"
+    },
+    {
+      "claim": "Mega Health 20 s after it decays",
+      "encoded": "holds, only when deathmatch == 1; 5 s delay, 1 HP/s rot, then 20 s",
+      "path": "respawn_rules[id=mega_health].cases[id=deathmatch_1].seconds"
+    },
+    {
+      "claim": "(omitted) ammo and biosuit",
+      "encoded": "ammo 30 s (deathmatch == 1); biosuit 60 s",
+      "path": "respawn_rules[id=ammo].cases[id=deathmatch_1].seconds"
+    },
+    {
+      "claim": "rotten health heals 5-10",
+      "encoded": "heals 15",
+      "path": "items[classname=item_health].variants[spawnflags=1].amount"
+    },
+    {
+      "claim": "skill flags",
+      "encoded": "tested only when deathmatch == 0 (SP and coop); 2048 only when deathmatch != 0",
+      "path": "spawnflags[name=NOT_EASY].tested_when"
+    },
+    {
+      "claim": "intermission classname info_player_intermission",
+      "encoded": "info_intermission",
+      "path": "mode_contracts[mode=intermission].entities[classname=info_intermission].requirement"
+    },
+    {
+      "claim": "weapon list",
+      "encoded": "weapon_supershotgun is a valid classname",
+      "path": "items[classname=weapon_supershotgun].tier"
+    }
+  ],
+  "notes": [
+    "Every 1996 value is read from the compiled progs by disassembly, not from QuakeC text.",
+    "No value here was measured at runtime."
+  ]
+}

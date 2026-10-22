@@ -1,0 +1,808 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Quake-MapGen human playtest session record",
+  "description": "One human playtest session under docs/PLAYTEST_PROTOCOL.md. A record with status 'planned' is a run sheet and carries evidence_level 'none'. Only a validated record with status 'completed' or 'partial', entered in the RC ledger with the user's approval, is human-play evidence. Unobserved values are null, never 0, false or a guess. Records live under the gitignored out/playtest/ tree and are never committed or packaged.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "schema_version",
+    "session_id",
+    "protocol",
+    "status",
+    "evidence_level",
+    "date",
+    "user_approval",
+    "participants",
+    "map",
+    "build",
+    "runtime",
+    "conditions",
+    "landmark_points",
+    "recordings",
+    "answers",
+    "events",
+    "landmark_checks",
+    "observations",
+    "counterexamples",
+    "ratings",
+    "rule_ids",
+    "deviations",
+    "ledger",
+    "notes"
+  ],
+  "properties": {
+    "schema": {"const": "qmg.playtest_session"},
+    "schema_version": {"const": 1},
+    "session_id": {"type": "string", "pattern": "^pt-[0-9]{8}-[0-9]{2}$"},
+    "protocol": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "sha256"],
+      "properties": {
+        "path": {"const": "docs/PLAYTEST_PROTOCOL.md"},
+        "sha256": {"anyOf": [{"$ref": "#/$defs/sha256"}, {"type": "null"}]}
+      }
+    },
+    "status": {"enum": ["planned", "completed", "partial", "aborted"]},
+    "evidence_level": {"enum": ["none", "human play"]},
+    "date": {"anyOf": [{"$ref": "#/$defs/date"}, {"type": "null"}]},
+    "user_approval": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["given", "date"],
+      "properties": {
+        "given": {"type": ["boolean", "null"]},
+        "date": {"anyOf": [{"$ref": "#/$defs/date"}, {"type": "null"}]}
+      }
+    },
+    "participants": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "roles", "experience", "consent", "withdrawn"],
+        "properties": {
+          "id": {"$ref": "#/$defs/participant_id"},
+          "roles": {
+            "type": "array",
+            "uniqueItems": true,
+            "items": {"enum": ["lead", "player", "recorder", "observer", "reviewer"]}
+          },
+          "experience": {"anyOf": [{"enum": ["new", "casual", "regular", "competitive"]}, {"type": "null"}]},
+          "consent": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["given", "date", "recorded_by", "demos", "screenshots", "notes"],
+            "properties": {
+              "given": {"type": ["boolean", "null"]},
+              "date": {"anyOf": [{"$ref": "#/$defs/date"}, {"type": "null"}]},
+              "recorded_by": {"anyOf": [{"$ref": "#/$defs/participant_id"}, {"type": "null"}]},
+              "demos": {"type": ["boolean", "null"]},
+              "screenshots": {"type": ["boolean", "null"]},
+              "notes": {"type": ["boolean", "null"]}
+            }
+          },
+          "withdrawn": {"type": "boolean"}
+        }
+      }
+    },
+    "map": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "game",
+        "path",
+        "source",
+        "resolved_mode",
+        "module",
+        "load_name",
+        "map_sha256",
+        "bsp_sha256",
+        "report_sha256",
+        "aas_sha256",
+        "arena_sha256",
+        "entity_variant_sha256",
+        "prompt_sha256",
+        "seed",
+        "bench_case_id",
+        "hero_id"
+      ],
+      "properties": {
+        "game": {"enum": ["quake1", "quake2", "quake3"]},
+        "path": {"$ref": "#/$defs/path_id"},
+        "source": {"enum": ["generated", "stock_control", "recipe"]},
+        "resolved_mode": {"anyOf": [{"type": "string", "minLength": 1}, {"type": "null"}]},
+        "module": {"anyOf": [{"type": "string", "minLength": 1}, {"type": "null"}]},
+        "load_name": {"type": "string", "pattern": "^[A-Za-z0-9_./-]+$"},
+        "map_sha256": {"anyOf": [{"$ref": "#/$defs/sha256"}, {"type": "null"}]},
+        "bsp_sha256": {"anyOf": [{"$ref": "#/$defs/sha256"}, {"type": "null"}]},
+        "report_sha256": {"anyOf": [{"$ref": "#/$defs/sha256"}, {"type": "null"}]},
+        "aas_sha256": {"anyOf": [{"$ref": "#/$defs/sha256"}, {"type": "null"}]},
+        "arena_sha256": {"anyOf": [{"$ref": "#/$defs/sha256"}, {"type": "null"}]},
+        "entity_variant_sha256": {"anyOf": [{"$ref": "#/$defs/sha256"}, {"type": "null"}]},
+        "prompt_sha256": {"anyOf": [{"$ref": "#/$defs/sha256"}, {"type": "null"}]},
+        "seed": {"anyOf": [{"type": "integer", "minimum": 0}, {"type": "null"}]},
+        "bench_case_id": {"anyOf": [{"type": "string", "minLength": 1}, {"type": "null"}]},
+        "hero_id": {"anyOf": [{"type": "string", "minLength": 1}, {"type": "null"}]}
+      },
+      "allOf": [
+        {
+          "if": {"properties": {"source": {"const": "generated"}}, "required": ["source"]},
+          "then": {
+            "properties": {
+              "map_sha256": {"$ref": "#/$defs/sha256"},
+              "report_sha256": {"$ref": "#/$defs/sha256"},
+              "seed": {"type": "integer"},
+              "prompt_sha256": {"$ref": "#/$defs/sha256"}
+            }
+          }
+        }
+      ]
+    },
+    "build": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["qmg_sha256", "generator_version", "compiler"],
+      "properties": {
+        "qmg_sha256": {"anyOf": [{"$ref": "#/$defs/sha256"}, {"type": "null"}]},
+        "generator_version": {"anyOf": [{"type": "string", "minLength": 1}, {"type": "null"}]},
+        "compiler": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["tool", "version", "sha256", "args"],
+            "properties": {
+              "tool": {"type": "string", "minLength": 1},
+              "version": {"anyOf": [{"type": "string", "minLength": 1}, {"type": "null"}]},
+              "sha256": {"$ref": "#/$defs/sha256"},
+              "args": {"type": "array", "items": {"type": "string"}}
+            }
+          }
+        }
+      }
+    },
+    "runtime": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "engine",
+        "game_module",
+        "windowed",
+        "network",
+        "load_command",
+        "settings",
+        "settings_capture",
+        "dmflags",
+        "skill",
+        "mode_check",
+        "bots"
+      ],
+      "properties": {
+        "engine": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["name", "version", "sha256"],
+          "properties": {
+            "name": {"anyOf": [{"type": "string", "minLength": 1}, {"type": "null"}]},
+            "version": {"anyOf": [{"type": "string", "minLength": 1}, {"type": "null"}]},
+            "sha256": {"anyOf": [{"$ref": "#/$defs/sha256"}, {"type": "null"}]}
+          }
+        },
+        "game_module": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["name", "sha256"],
+          "properties": {
+            "name": {"anyOf": [{"type": "string", "minLength": 1}, {"type": "null"}]},
+            "sha256": {"anyOf": [{"$ref": "#/$defs/sha256"}, {"type": "null"}]}
+          }
+        },
+        "windowed": {"const": true},
+        "network": {"anyOf": [{"enum": ["loopback", "lan", "internet"]}, {"type": "null"}]},
+        "load_command": {"anyOf": [{"type": "string", "minLength": 1}, {"type": "null"}]},
+        "settings": {"type": "object", "additionalProperties": {"$ref": "#/$defs/setting_value"}},
+        "settings_capture": {"anyOf": [{"$ref": "#/$defs/local_path"}, {"type": "null"}]},
+        "dmflags": {"anyOf": [{"type": "integer", "minimum": 0}, {"type": "null"}]},
+        "skill": {"$ref": "#/$defs/skill"},
+        "mode_check": {"anyOf": [{"type": "string", "minLength": 1}, {"type": "null"}]},
+        "bots": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["name", "skill"],
+            "properties": {
+              "name": {"type": "string", "minLength": 1},
+              "skill": {"anyOf": [{"type": "number"}, {"type": "null"}]}
+            }
+          }
+        }
+      }
+    },
+    "conditions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "description",
+          "player_count",
+          "team_sizes",
+          "bot_count",
+          "skill",
+          "starts_exchanged",
+          "sides_swapped",
+          "time_box_minutes",
+          "minutes_played",
+          "variant_label"
+        ],
+        "properties": {
+          "id": {"$ref": "#/$defs/condition_id"},
+          "description": {"type": "string", "minLength": 1},
+          "player_count": {"type": "integer", "minimum": 1, "maximum": 64},
+          "team_sizes": {
+            "anyOf": [{"type": "array", "items": {"type": "integer", "minimum": 1}}, {"type": "null"}]
+          },
+          "bot_count": {"anyOf": [{"type": "integer", "minimum": 0}, {"type": "null"}]},
+          "skill": {"$ref": "#/$defs/skill"},
+          "starts_exchanged": {"type": ["boolean", "null"]},
+          "sides_swapped": {"type": ["boolean", "null"]},
+          "time_box_minutes": {"anyOf": [{"type": "number", "exclusiveMinimum": 0}, {"type": "null"}]},
+          "minutes_played": {"anyOf": [{"type": "number", "minimum": 0}, {"type": "null"}]},
+          "variant_label": {"anyOf": [{"type": "string", "minLength": 1}, {"type": "null"}]}
+        }
+      }
+    },
+    "landmark_points": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["point_id", "intended", "entity_ref", "space_ref"],
+        "properties": {
+          "point_id": {"type": "string", "pattern": "^L[0-9]{1,3}$"},
+          "intended": {"type": "string", "minLength": 1},
+          "entity_ref": {"anyOf": [{"type": "string", "minLength": 1}, {"type": "null"}]},
+          "space_ref": {"anyOf": [{"type": "string", "minLength": 1}, {"type": "null"}]}
+        }
+      }
+    },
+    "recordings": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["demos", "screenshots"],
+      "properties": {
+        "demos": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["path", "sha256", "condition_id", "recorded_by", "participant_id"],
+            "properties": {
+              "path": {"$ref": "#/$defs/local_path"},
+              "sha256": {"$ref": "#/$defs/sha256"},
+              "condition_id": {"$ref": "#/$defs/condition_id"},
+              "recorded_by": {"enum": ["client", "server"]},
+              "participant_id": {"anyOf": [{"$ref": "#/$defs/participant_id"}, {"type": "null"}]}
+            }
+          }
+        },
+        "screenshots": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["path", "sha256", "view", "command", "condition_id"],
+            "properties": {
+              "path": {"$ref": "#/$defs/local_path"},
+              "sha256": {"$ref": "#/$defs/sha256"},
+              "view": {"type": "string", "minLength": 1},
+              "command": {"enum": ["screenshot", "screenshotJPEG"]},
+              "condition_id": {"anyOf": [{"$ref": "#/$defs/condition_id"}, {"type": "null"}]}
+            }
+          }
+        }
+      }
+    },
+    "answers": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "question_id",
+          "condition_id",
+          "participant_id",
+          "skill",
+          "value",
+          "unit",
+          "source",
+          "observation_ids"
+        ],
+        "properties": {
+          "question_id": {"$ref": "#/$defs/question_id"},
+          "condition_id": {"anyOf": [{"$ref": "#/$defs/condition_id"}, {"type": "null"}]},
+          "participant_id": {"anyOf": [{"$ref": "#/$defs/participant_id"}, {"type": "null"}]},
+          "skill": {"$ref": "#/$defs/skill"},
+          "value": {"type": ["string", "number", "boolean", "null"]},
+          "unit": {"anyOf": [{"type": "string", "minLength": 1}, {"type": "null"}]},
+          "source": {"enum": ["player_report", "observer", "demo_review"]},
+          "observation_ids": {"type": "array", "items": {"$ref": "#/$defs/observation_id"}}
+        }
+      }
+    },
+    "events": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "condition_id",
+          "participant_id",
+          "kind",
+          "time_s",
+          "seconds_after_spawn",
+          "entity_ref",
+          "space_ref",
+          "source"
+        ],
+        "properties": {
+          "condition_id": {"$ref": "#/$defs/condition_id"},
+          "participant_id": {"anyOf": [{"$ref": "#/$defs/participant_id"}, {"type": "null"}]},
+          "kind": {
+            "enum": [
+              "death",
+              "spawn_death",
+              "pickup",
+              "capture",
+              "flag_return",
+              "telefrag",
+              "stuck",
+              "fall",
+              "lost",
+              "secret_found",
+              "key_used",
+              "exit_reached",
+              "match_end"
+            ]
+          },
+          "time_s": {"anyOf": [{"type": "number", "minimum": 0}, {"type": "null"}]},
+          "seconds_after_spawn": {"anyOf": [{"type": "number", "minimum": 0}, {"type": "null"}]},
+          "entity_ref": {"anyOf": [{"type": "string", "minLength": 1}, {"type": "null"}]},
+          "space_ref": {"anyOf": [{"type": "string", "minLength": 1}, {"type": "null"}]},
+          "source": {"enum": ["demo_review", "observer", "player_report"]}
+        }
+      }
+    },
+    "landmark_checks": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "point_id",
+          "condition_id",
+          "participant_id",
+          "intended",
+          "answer",
+          "recognised",
+          "observation_ids"
+        ],
+        "properties": {
+          "point_id": {"type": "string", "pattern": "^L[0-9]{1,3}$"},
+          "condition_id": {"$ref": "#/$defs/condition_id"},
+          "participant_id": {"$ref": "#/$defs/participant_id"},
+          "intended": {"type": "string", "minLength": 1},
+          "answer": {"anyOf": [{"type": "string"}, {"type": "null"}]},
+          "recognised": {"type": ["boolean", "null"]},
+          "observation_ids": {"type": "array", "items": {"$ref": "#/$defs/observation_id"}}
+        }
+      }
+    },
+    "observations": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "condition_id",
+          "time_s",
+          "demo_path",
+          "entity_refs",
+          "space_refs",
+          "observation",
+          "interpretation",
+          "proposed_rule",
+          "recorded_by",
+          "source"
+        ],
+        "properties": {
+          "id": {"$ref": "#/$defs/observation_id"},
+          "condition_id": {"anyOf": [{"$ref": "#/$defs/condition_id"}, {"type": "null"}]},
+          "time_s": {"anyOf": [{"type": "number", "minimum": 0}, {"type": "null"}]},
+          "demo_path": {"anyOf": [{"$ref": "#/$defs/local_path"}, {"type": "null"}]},
+          "entity_refs": {"type": "array", "items": {"type": "string", "minLength": 1}},
+          "space_refs": {"type": "array", "items": {"type": "string", "minLength": 1}},
+          "observation": {"type": "string", "minLength": 1},
+          "interpretation": {"anyOf": [{"type": "string", "minLength": 1}, {"type": "null"}]},
+          "proposed_rule": {"anyOf": [{"type": "string", "minLength": 1}, {"type": "null"}]},
+          "recorded_by": {"anyOf": [{"$ref": "#/$defs/participant_id"}, {"type": "null"}]},
+          "source": {"enum": ["observer", "player_report", "demo_review"]}
+        }
+      }
+    },
+    "counterexamples": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "text", "observation_ids", "rule_ids"],
+        "properties": {
+          "id": {"type": "string", "pattern": "^X[0-9]{1,4}$"},
+          "text": {"type": "string", "minLength": 1},
+          "observation_ids": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/observation_id"}},
+          "rule_ids": {"type": "array", "items": {"type": "string", "minLength": 1}}
+        }
+      }
+    },
+    "ratings": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["rater", "condition_id", "scores", "basis"],
+        "properties": {
+          "rater": {"$ref": "#/$defs/participant_id"},
+          "condition_id": {"anyOf": [{"$ref": "#/$defs/condition_id"}, {"type": "null"}]},
+          "scores": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "navigation",
+              "spaces",
+              "verticality",
+              "items",
+              "sightlines",
+              "theme",
+              "fun",
+              "spawns",
+              "encounters",
+              "progression",
+              "fairness"
+            ],
+            "properties": {
+              "navigation": {"$ref": "#/$defs/rating"},
+              "spaces": {"$ref": "#/$defs/rating"},
+              "verticality": {"$ref": "#/$defs/rating"},
+              "items": {"$ref": "#/$defs/rating"},
+              "sightlines": {"$ref": "#/$defs/rating"},
+              "theme": {"$ref": "#/$defs/rating"},
+              "fun": {"$ref": "#/$defs/rating"},
+              "spawns": {"$ref": "#/$defs/rating"},
+              "encounters": {"$ref": "#/$defs/rating"},
+              "progression": {"$ref": "#/$defs/rating"},
+              "fairness": {"$ref": "#/$defs/rating"}
+            }
+          },
+          "basis": {
+            "type": "object",
+            "propertyNames": {
+              "enum": [
+                "navigation",
+                "spaces",
+                "verticality",
+                "items",
+                "sightlines",
+                "theme",
+                "fun",
+                "spawns",
+                "encounters",
+                "progression",
+                "fairness"
+              ]
+            },
+            "additionalProperties": {"type": "array", "items": {"$ref": "#/$defs/observation_id"}}
+          }
+        },
+        "allOf": [
+          {
+            "if": {
+              "properties": {
+                "scores": {"properties": {"navigation": {"type": "integer"}}, "required": ["navigation"]}
+              },
+              "required": ["scores"]
+            },
+            "then": {
+              "properties": {"basis": {"required": ["navigation"], "properties": {"navigation": {"minItems": 1}}}},
+              "required": ["basis"]
+            }
+          },
+          {
+            "if": {
+              "properties": {"scores": {"properties": {"spaces": {"type": "integer"}}, "required": ["spaces"]}},
+              "required": ["scores"]
+            },
+            "then": {
+              "properties": {"basis": {"required": ["spaces"], "properties": {"spaces": {"minItems": 1}}}},
+              "required": ["basis"]
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "scores": {"properties": {"verticality": {"type": "integer"}}, "required": ["verticality"]}
+              },
+              "required": ["scores"]
+            },
+            "then": {
+              "properties": {
+                "basis": {"required": ["verticality"], "properties": {"verticality": {"minItems": 1}}}
+              },
+              "required": ["basis"]
+            }
+          },
+          {
+            "if": {
+              "properties": {"scores": {"properties": {"items": {"type": "integer"}}, "required": ["items"]}},
+              "required": ["scores"]
+            },
+            "then": {
+              "properties": {"basis": {"required": ["items"], "properties": {"items": {"minItems": 1}}}},
+              "required": ["basis"]
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "scores": {"properties": {"sightlines": {"type": "integer"}}, "required": ["sightlines"]}
+              },
+              "required": ["scores"]
+            },
+            "then": {
+              "properties": {"basis": {"required": ["sightlines"], "properties": {"sightlines": {"minItems": 1}}}},
+              "required": ["basis"]
+            }
+          },
+          {
+            "if": {
+              "properties": {"scores": {"properties": {"theme": {"type": "integer"}}, "required": ["theme"]}},
+              "required": ["scores"]
+            },
+            "then": {
+              "properties": {"basis": {"required": ["theme"], "properties": {"theme": {"minItems": 1}}}},
+              "required": ["basis"]
+            }
+          },
+          {
+            "if": {
+              "properties": {"scores": {"properties": {"fun": {"type": "integer"}}, "required": ["fun"]}},
+              "required": ["scores"]
+            },
+            "then": {
+              "properties": {"basis": {"required": ["fun"], "properties": {"fun": {"minItems": 1}}}},
+              "required": ["basis"]
+            }
+          },
+          {
+            "if": {
+              "properties": {"scores": {"properties": {"spawns": {"type": "integer"}}, "required": ["spawns"]}},
+              "required": ["scores"]
+            },
+            "then": {
+              "properties": {"basis": {"required": ["spawns"], "properties": {"spawns": {"minItems": 1}}}},
+              "required": ["basis"]
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "scores": {"properties": {"encounters": {"type": "integer"}}, "required": ["encounters"]}
+              },
+              "required": ["scores"]
+            },
+            "then": {
+              "properties": {"basis": {"required": ["encounters"], "properties": {"encounters": {"minItems": 1}}}},
+              "required": ["basis"]
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "scores": {"properties": {"progression": {"type": "integer"}}, "required": ["progression"]}
+              },
+              "required": ["scores"]
+            },
+            "then": {
+              "properties": {
+                "basis": {"required": ["progression"], "properties": {"progression": {"minItems": 1}}}
+              },
+              "required": ["basis"]
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "scores": {"properties": {"fairness": {"type": "integer"}}, "required": ["fairness"]}
+              },
+              "required": ["scores"]
+            },
+            "then": {
+              "properties": {"basis": {"required": ["fairness"], "properties": {"fairness": {"minItems": 1}}}},
+              "required": ["basis"]
+            }
+          }
+        ]
+      }
+    },
+    "rule_ids": {"type": "array", "items": {"type": "string", "minLength": 1}},
+    "deviations": {"type": "array", "items": {"type": "string", "minLength": 1}},
+    "ledger": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["entered", "entry_id", "entered_on", "user_approved"],
+      "properties": {
+        "entered": {"type": "boolean"},
+        "entry_id": {"anyOf": [{"type": "string", "minLength": 1}, {"type": "null"}]},
+        "entered_on": {"anyOf": [{"$ref": "#/$defs/date"}, {"type": "null"}]},
+        "user_approved": {"type": ["boolean", "null"]}
+      }
+    },
+    "notes": {"anyOf": [{"type": "string"}, {"type": "null"}]}
+  },
+  "allOf": [
+    {
+      "if": {"properties": {"status": {"const": "planned"}}, "required": ["status"]},
+      "then": {
+        "properties": {
+          "evidence_level": {"const": "none"},
+          "answers": {"maxItems": 0},
+          "events": {"maxItems": 0},
+          "landmark_checks": {"maxItems": 0},
+          "ratings": {"maxItems": 0},
+          "ledger": {"properties": {"entered": {"const": false}}}
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {"status": {"enum": ["completed", "partial", "aborted"]}},
+        "required": ["status"]
+      },
+      "then": {
+        "properties": {
+          "evidence_level": {"const": "human play"},
+          "date": {"$ref": "#/$defs/date"},
+          "user_approval": {"properties": {"given": {"const": true}, "date": {"$ref": "#/$defs/date"}}},
+          "protocol": {"properties": {"sha256": {"$ref": "#/$defs/sha256"}}},
+          "map": {"properties": {"bsp_sha256": {"$ref": "#/$defs/sha256"}}},
+          "runtime": {
+            "properties": {
+              "engine": {"properties": {"name": {"type": "string"}, "sha256": {"$ref": "#/$defs/sha256"}}},
+              "game_module": {"properties": {"name": {"type": "string"}, "sha256": {"$ref": "#/$defs/sha256"}}},
+              "load_command": {"type": "string"}
+            }
+          },
+          "participants": {
+            "minItems": 1,
+            "items": {
+              "if": {"properties": {"withdrawn": {"const": false}}, "required": ["withdrawn"]},
+              "then": {
+                "properties": {
+                  "consent": {
+                    "properties": {
+                      "given": {"const": true},
+                      "date": {"$ref": "#/$defs/date"},
+                      "recorded_by": {"$ref": "#/$defs/participant_id"}
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "conditions": {"minItems": 1}
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {"ledger": {"properties": {"entered": {"const": true}}, "required": ["entered"]}},
+        "required": ["ledger"]
+      },
+      "then": {
+        "properties": {
+          "status": {"enum": ["completed", "partial"]},
+          "ledger": {
+            "properties": {
+              "entry_id": {"type": "string"},
+              "entered_on": {"$ref": "#/$defs/date"},
+              "user_approved": {"const": true}
+            }
+          }
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "date": {"type": "string", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"},
+    "participant_id": {"type": "string", "pattern": "^P[0-9]{1,3}$"},
+    "condition_id": {"type": "string", "pattern": "^C[0-9]{1,3}$"},
+    "observation_id": {"type": "string", "pattern": "^O[0-9]{1,4}$"},
+    "local_path": {
+      "description": "Path relative to the repository root, under the gitignored out/playtest/ tree; no segment starts with a dot.",
+      "type": "string",
+      "pattern": "^out/playtest/(?:[A-Za-z0-9_-][A-Za-z0-9._-]*/)*[A-Za-z0-9_-][A-Za-z0-9._-]*$"
+    },
+    "path_id": {
+      "enum": [
+        "q1-sp",
+        "q1-coop",
+        "q1-dm",
+        "q1-duel",
+        "q1-tdm",
+        "q1-ctf-threewave",
+        "q2-sp",
+        "q2-coop",
+        "q2-dm",
+        "q2-duel",
+        "q2-tdm",
+        "q2-ctf",
+        "q3-botarena",
+        "q3-ffa",
+        "q3-tourney",
+        "q3-tdm",
+        "q3-ctf"
+      ]
+    },
+    "question_id": {
+      "enum": [
+        "all.landmark_where",
+        "all.lost",
+        "all.movement_failure",
+        "all.readability",
+        "sp.pistol_start_completion",
+        "sp.secrets_found",
+        "sp.secret_hints_noticed",
+        "sp.keys_and_locks",
+        "sp.resources",
+        "sp.encounters",
+        "sp.exit_recognised",
+        "coop.start_spread",
+        "coop.respawn",
+        "coop.blocking",
+        "coop.resource_sharing",
+        "dm.spawn_deaths",
+        "dm.item_control",
+        "dm.routes",
+        "dm.dead_travel",
+        "dm.congestion",
+        "tdm.spawn_deaths",
+        "tdm.team_spawn_safety",
+        "tdm.item_control_by_team",
+        "tdm.side_fairness",
+        "duel.spawn_deaths",
+        "duel.item_timing",
+        "duel.loser_recovery",
+        "duel.start_fairness",
+        "ctf.carrier_routes",
+        "ctf.side_swap_fairness",
+        "ctf.base_defence",
+        "ctf.respawn_distance",
+        "botarena.bot_item_reach",
+        "botarena.bot_stuck",
+        "botarena.match_end",
+        "botarena.bot_pressure"
+      ]
+    },
+    "rating": {
+      "description": "Anchored rating from docs/PLAYTEST_PROTOCOL.md section 10; null when not evaluated.",
+      "anyOf": [{"type": "integer", "minimum": 1, "maximum": 5}, {"type": "null"}]
+    },
+    "skill": {"anyOf": [{"type": "integer", "minimum": 0, "maximum": 3}, {"type": "null"}]},
+    "setting_value": {"type": ["string", "number", "boolean", "null"]}
+  }
+}

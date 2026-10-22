@@ -1,0 +1,712 @@
+{
+  "schema_version": 1,
+  "id": "route-diversity-study-v1",
+  "date": "2026-09-13",
+  "status": "local_static_research_runtime_and_human_validation_pending",
+  "scope": "Quake II deathmatch; additional reference study after Switchback",
+  "archive_root": "E:\\Development\\q2maparchive-wip\\maps",
+  "manifest": {
+    "project_relative_path": "out/map-study/manifest.json",
+    "sha256": "434ed06e37447872df92f0eb9a35c7a0d40b59c5cae77709493d544801d87c02"
+  },
+  "extractor_version": "q2-study-v1",
+  "tool_hashes": {
+    "tools/map_study/binary.py": "2b76559a71365eaab41e6876ff7da94fe938994b4a5199d63620b8b60918daf1",
+    "tools/map_study/features.py": "9fd18f7ed3d9f5299d38d63d328daa3a20fd9bcc249e969054ba8a7c707ba535"
+  },
+  "methods": [
+    "Verify current BSP bytes and local readme/metadata bytes against recorded SHA-256.",
+    "Inspect fresh top-down upward-world-surface plans, all heights and three dominant height slices, plus embedded gameplay anchors.",
+    "Read original author notes and historical review notes where available.",
+    "Preserve measurements, spatial interpretations, historical opinions and untested hypotheses as separate evidence types."
+  ],
+  "references": [
+    {
+      "map": "q2rdm2",
+      "title": "The Chastity Belt Duel",
+      "authors": [
+        "German 'JaLisK0' Garcia"
+      ],
+      "partition": "reference",
+      "split_group": "52d56ae05d40c3fb",
+      "bsp": {
+        "archive_relative_path": "q2rmappack/pack/maps/q2rdm2.bsp",
+        "sha256": "d6ee3b39d4e557e7ad5cd39d2bf955e8251edd7e491f2033eee80500791d7199",
+        "verified_current_bytes": true
+      },
+      "analysis_record": {
+        "project_relative_path": "out/map-study/records/q2rdm2-5bb0fec44f.json",
+        "sha256": "88d8842e6480b6752b42f33139ab72678bedea4e575bdbc083bb9323b324911b"
+      },
+      "source_evidence": [
+        {
+          "kind": "metadata",
+          "path": "q2rmappack/pack/maps/ref/q2rdm2.ref",
+          "sha256": "a7ed922e8f0a6980e6e45764ef5c7cfe25a80788a30ec5d2832453d85a853c5a"
+        },
+        {
+          "kind": "readme",
+          "path": "q2rmappack/pack/docs/q2rdm2.txt",
+          "sha256": "842c2f34ee6852302d35a79636b5ee87603b74cd7bdb5c24ea4d03736a632d1e"
+        }
+      ],
+      "archive_mode_labels": [
+        "2v2",
+        "duel",
+        "ffa"
+      ],
+      "archive_capacity_label": [
+        2,
+        4
+      ],
+      "archive_theme_labels": [
+        "gothic"
+      ],
+      "measured_descriptors": {
+        "combat_height_p90_p10": 318.8,
+        "combat_height_bands_128": 3,
+        "sampled_world_sightline_p50": 189.43515139147195,
+        "sampled_world_sightline_p90": 724.5756201171876,
+        "spawn_count": 10,
+        "weapon_types": 6,
+        "major_item_count": 1,
+        "world_diagonal": 2964.882683703538,
+        "upward_surface_area": 3508854.093708883
+      },
+      "dominant_upward_surfaces": [
+        {
+          "z_rounded": -288,
+          "area": 687954.2180595086
+        },
+        {
+          "z_rounded": 272,
+          "area": 471168.0
+        },
+        {
+          "z_rounded": 32,
+          "area": 373118.85595703125
+        },
+        {
+          "z_rounded": -224,
+          "area": 209276.11669921875
+        },
+        {
+          "z_rounded": 240,
+          "area": 201216.0
+        },
+        {
+          "z_rounded": -160,
+          "area": 192033.2125321105
+        }
+      ],
+      "spawn_los": {
+        "invalid_eye_entities": [],
+        "tested_pairs": 45,
+        "visible_pairs": [
+          [
+            8,
+            17
+          ]
+        ]
+      },
+      "entity_movers": {
+        "func_door": 2
+      },
+      "entity_teleporter_link_count": 0,
+      "aas": {
+        "path": "q2rmappack/pack/maps/q2rdm2.aas",
+        "sha256": "c0220dc195f486c16569656994c570d401d880899f982b280f99e167e033cc57",
+        "reachabilities": 0,
+        "bsp_association_verified": false
+      },
+      "local_analytical_diagram": {
+        "project_relative_path": "out/route-diversity-study/q2rdm2-floors.png",
+        "sha256": "201a85ccf408a125af7a5a0474b1ec4d689f52bca2aad903f5628a1bdc22f53e",
+        "not_engine_render": true
+      },
+      "observations": {
+        "measured": [
+          "Two Combat Armors share origin z=-176, separated by 1579.9746833414767 units in Euclidean space.",
+          "Mega origin z=48; rocket launcher origin z=-272."
+        ],
+        "plan_interpretation": "Unequal plan extensions and partial routes separate lateral destination choices from the choice to gain elevation.",
+        "hypothesis": "Separate lateral resource destinations from vertical commitments; do not put every reward on one upper circuit.",
+        "historical_evidence": "Author readme describes a duel map and prohibits using the level as the base of additional levels.",
+        "capacity_conflict": {
+          "archive": [
+            2,
+            4
+          ],
+          "author_recommended": [
+            2,
+            2
+          ]
+        },
+        "item_origin_heights": {
+          "combat_armor": [
+            -176,
+            -176
+          ],
+          "mega_health": [
+            48
+          ],
+          "rocket_launcher": [
+            -272
+          ]
+        },
+        "armor_euclidean_separation": 1579.9746833414767
+      }
+    },
+    {
+      "map": "q2rdm7",
+      "title": "Reclamation",
+      "authors": [
+        "Corey 'Kamarov' Peters"
+      ],
+      "partition": "reference",
+      "split_group": "c3a05cfde155d55e",
+      "bsp": {
+        "archive_relative_path": "q2rmappack/pack/maps/q2rdm7.bsp",
+        "sha256": "9220bcea7b7cf4f3f0ac5c6a1d106251954408d3b562f52e977c8eb8909f0095",
+        "verified_current_bytes": true
+      },
+      "analysis_record": {
+        "project_relative_path": "out/map-study/records/q2rdm7-69a49cb855.json",
+        "sha256": "749d9a417a30376dd75661d039624f7fa126d2174426943bbab4a8ce5dad21fa"
+      },
+      "source_evidence": [
+        {
+          "kind": "metadata",
+          "path": "q2rmappack/pack/maps/ref/q2rdm7.ref",
+          "sha256": "cebed7b4142f2fe75efe30e20505d66517e389ccdc39d7ab3d7a712688c2d6d6"
+        },
+        {
+          "kind": "readme",
+          "path": "q2rmappack/pack/docs/q2rdm7.txt",
+          "sha256": "58c472c81cc1a1e4e88dbf9d451c02ba4ef0f14564f9ea3723c109e290299db8"
+        }
+      ],
+      "archive_mode_labels": [
+        "duel",
+        "ffa"
+      ],
+      "archive_capacity_label": [
+        2,
+        4
+      ],
+      "archive_theme_labels": [
+        "q2mine"
+      ],
+      "measured_descriptors": {
+        "combat_height_p90_p10": 224.0,
+        "combat_height_bands_128": 2,
+        "sampled_world_sightline_p50": 162.91740238538054,
+        "sampled_world_sightline_p90": 456.5369116794922,
+        "spawn_count": 4,
+        "weapon_types": 6,
+        "major_item_count": 0,
+        "world_diagonal": 2352.6538206884584,
+        "upward_surface_area": 2214880.8029333246
+      },
+      "dominant_upward_surfaces": [
+        {
+          "z_rounded": -320,
+          "area": 659456.0
+        },
+        {
+          "z_rounded": -48,
+          "area": 552396.802734375
+        },
+        {
+          "z_rounded": -272,
+          "area": 480768.0
+        },
+        {
+          "z_rounded": -192,
+          "area": 200704.0
+        },
+        {
+          "z_rounded": 80,
+          "area": 194560.0
+        },
+        {
+          "z_rounded": -232,
+          "area": 19968.0
+        }
+      ],
+      "spawn_los": {
+        "invalid_eye_entities": [],
+        "tested_pairs": 6,
+        "visible_pairs": []
+      },
+      "entity_movers": {
+        "func_rotating": 2
+      },
+      "entity_teleporter_link_count": 2,
+      "aas": {
+        "path": "q2rmappack/pack/maps/q2rdm7.aas",
+        "sha256": "984983f8b3e302922a9db6979a6f2f9bb182d451770ec1e94aefa21e4ecbb91e",
+        "reachabilities": 0,
+        "bsp_association_verified": false
+      },
+      "local_analytical_diagram": {
+        "project_relative_path": "out/route-diversity-study/q2rdm7-floors.png",
+        "sha256": "bc46023f0d00e3754c7073c07276720d7d741aefc20054d4d3db3570ab9e3b02",
+        "not_engine_render": true
+      },
+      "observations": {
+        "measured": [
+          "Rocket launcher and railgun origins z=-256.",
+          "Combat Armor, super shotgun and hyperblaster origins z=-32.",
+          "Jacket Armor and grenade launcher origins z=-176."
+        ],
+        "plan_interpretation": "Upper and lower route footprints differ; an intermediate equipment route exists between their dominant item heights.",
+        "hypothesis": "Place useful weapons and recovery resources below upper control; test whether the intermediate return makes control contestable.",
+        "historical_evidence": "Archived player reports use the recorded alias kamq2dm3, praise fast weapon/armor contests, but disagree over size and health scarcity. Settings and tested BSP revision are unknown.",
+        "item_origin_heights": {
+          "rocket_launcher": [
+            -256
+          ],
+          "railgun": [
+            -256
+          ],
+          "combat_armor": [
+            -32
+          ],
+          "super_shotgun": [
+            -32
+          ],
+          "hyperblaster": [
+            -32
+          ],
+          "jacket_armor": [
+            -176
+          ],
+          "grenade_launcher": [
+            -176
+          ]
+        }
+      }
+    },
+    {
+      "map": "mktriple",
+      "title": "The Triple Towers",
+      "authors": [
+        "Martin 'Killer' Kilcoyne"
+      ],
+      "partition": "reference",
+      "split_group": "6935e105c43580a4",
+      "bsp": {
+        "archive_relative_path": "mktriple/pack/maps/mktriple.bsp",
+        "sha256": "a95ab315c35520f6c638e4db55c8f96696c7452446e6fac0ecea96f8f2e65c10",
+        "verified_current_bytes": true
+      },
+      "analysis_record": {
+        "project_relative_path": "out/map-study/records/mktriple-ee82d7f35e.json",
+        "sha256": "481dac3a5c5c260e7fda9c87116abead3654d7ce266cc6c02a4fdcd0f63ed3ca"
+      },
+      "source_evidence": [
+        {
+          "kind": "metadata",
+          "path": "mktriple/pack/maps/ref/mktriple.ref",
+          "sha256": "792de707e314c21575de9d8a2ed708fd615ba6cae01a7889ab58a5095df13158"
+        },
+        {
+          "kind": "readme",
+          "path": "mktriple/pack/docs/mktriple-readme.txt",
+          "sha256": "e58b3612d22541638110289a2bfca208115a5b3ed14b7ea130ced6f3bf68ef24"
+        }
+      ],
+      "archive_mode_labels": [
+        "ffa",
+        "duel"
+      ],
+      "archive_capacity_label": [
+        2,
+        6
+      ],
+      "archive_theme_labels": [
+        "q2jail"
+      ],
+      "measured_descriptors": {
+        "combat_height_p90_p10": 205.60000000000008,
+        "combat_height_bands_128": 4,
+        "sampled_world_sightline_p50": 206.38906191581208,
+        "sampled_world_sightline_p90": 556.0711500897828,
+        "spawn_count": 10,
+        "weapon_types": 7,
+        "major_item_count": 3,
+        "world_diagonal": 3129.882150087726,
+        "upward_surface_area": 2427836.042232946
+      },
+      "dominant_upward_surfaces": [
+        {
+          "z_rounded": 0,
+          "area": 1304640.0
+        },
+        {
+          "z_rounded": 192,
+          "area": 574848.0
+        },
+        {
+          "z_rounded": -128,
+          "area": 92160.0
+        },
+        {
+          "z_rounded": -68,
+          "area": 83071.90138669031
+        },
+        {
+          "z_rounded": 416,
+          "area": 55296.0
+        },
+        {
+          "z_rounded": 352,
+          "area": 47104.0
+        }
+      ],
+      "spawn_los": {
+        "invalid_eye_entities": [],
+        "tested_pairs": 45,
+        "visible_pairs": [
+          [
+            11,
+            18
+          ],
+          [
+            11,
+            35
+          ],
+          [
+            11,
+            179
+          ],
+          [
+            18,
+            29
+          ],
+          [
+            18,
+            179
+          ],
+          [
+            25,
+            166
+          ],
+          [
+            27,
+            29
+          ],
+          [
+            27,
+            164
+          ],
+          [
+            29,
+            164
+          ]
+        ]
+      },
+      "entity_movers": {
+        "func_plat": 3,
+        "func_rotating": 1
+      },
+      "entity_teleporter_link_count": 0,
+      "aas": {
+        "path": "mktriple/pack/maps/mktriple.aas",
+        "sha256": "68d7da838a7b7aee4ea9a9b556ceff15fea966502425f842141396abb160e55a",
+        "reachabilities": 0,
+        "bsp_association_verified": false
+      },
+      "local_analytical_diagram": {
+        "project_relative_path": "out/route-diversity-study/mktriple-floors.png",
+        "sha256": "0d064568bc1a5164fd671195569dc53962044b09ed052c91e51e180d5f206c9e",
+        "not_engine_render": true
+      },
+      "observations": {
+        "measured": [
+          "Three func_plat entities.",
+          "Dominant upward surface heights z=0 and z=192; four occupied 128-unit combat-anchor bands."
+        ],
+        "plan_interpretation": "Repeated octagonal rooms have upper and lower routes; the upper grenade position is near the lower chaingun junction.",
+        "hypothesis": "Shared architectural motifs may aid learning when their route roles differ; local overlooks need a useful lower destination and counterplay.",
+        "historical_evidence": "Author describes three two-level octagonal rooms, three elevators, one stair route and grenade fire through a hole over the chaingun intersection.",
+        "counterexample": "Repeated forms and some visible spawn pairs do not alone establish bad gameplay."
+      }
+    },
+    {
+      "map": "grdm1",
+      "title": "Paranoia",
+      "authors": [
+        "John  'Yogi' Hughes"
+      ],
+      "partition": "reference",
+      "split_group": "8d01619059837b27",
+      "bsp": {
+        "archive_relative_path": "grdm/pack/maps/grdm1.bsp",
+        "sha256": "bce6bf3114b5ceba45fc3ec4002c5e635764ce9558dbb246d725cebcc59b7c4c",
+        "verified_current_bytes": true
+      },
+      "analysis_record": {
+        "project_relative_path": "out/map-study/records/grdm1-0c5778c4c5.json",
+        "sha256": "4553b0bf0d8ed29c118ca50d675762c59302896761ea9ddbd383ce233f9fe838"
+      },
+      "source_evidence": [
+        {
+          "kind": "metadata",
+          "path": "grdm/pack/maps/ref/grdm1.ref",
+          "sha256": "92ef00624e6b90a0e710a1bef6fca0804569dadecd632faa688a22cdbdf3a1c8"
+        },
+        {
+          "kind": "pack_author_readme",
+          "path": "grdm/pack/docs/grdm-readme.txt",
+          "sha256": "94c5da644f65827330dc02431c3e7be06a757d74dc3f8504f28113ab41efb880"
+        }
+      ],
+      "archive_mode_labels": [
+        "duel",
+        "ffa"
+      ],
+      "archive_capacity_label": [
+        2,
+        5
+      ],
+      "archive_theme_labels": [
+        "gothic",
+        "night"
+      ],
+      "measured_descriptors": {
+        "combat_height_p90_p10": 255.2,
+        "combat_height_bands_128": 3,
+        "sampled_world_sightline_p50": 189.8566427456243,
+        "sampled_world_sightline_p90": 558.2200869319477,
+        "spawn_count": 4,
+        "weapon_types": 5,
+        "major_item_count": 0,
+        "world_diagonal": 2767.956271671435,
+        "upward_surface_area": 2238365.0932626515
+      },
+      "dominant_upward_surfaces": [
+        {
+          "z_rounded": 192,
+          "area": 438784.0002441406
+        },
+        {
+          "z_rounded": 64,
+          "area": 386752.0
+        },
+        {
+          "z_rounded": 128,
+          "area": 356480.0
+        },
+        {
+          "z_rounded": 0,
+          "area": 272131.9961013608
+        },
+        {
+          "z_rounded": 384,
+          "area": 115968.0029296875
+        },
+        {
+          "z_rounded": -64,
+          "area": 68349.26955241337
+        }
+      ],
+      "spawn_los": {
+        "invalid_eye_entities": [],
+        "tested_pairs": 6,
+        "visible_pairs": [
+          [
+            28,
+            65
+          ]
+        ]
+      },
+      "entity_movers": {},
+      "entity_teleporter_link_count": 6,
+      "aas": {
+        "path": "grdm/pack/maps/grdm1.aas",
+        "sha256": "707b0534fa0c01ab983f0dd12b36c716579a0b5128b540213da6c4fa7e5d24dd",
+        "reachabilities": 0,
+        "bsp_association_verified": false
+      },
+      "local_analytical_diagram": {
+        "project_relative_path": "out/route-diversity-study/grdm1-floors.png",
+        "sha256": "1c13b2594dc017b344ba3fb9794f210381d9391ee6d0fdf669e6bc00d4206447",
+        "not_engine_render": true
+      },
+      "observations": {
+        "measured": [
+          "Rocket origin z=-44, railgun and chaingun origins z=88, grenade launcher origin z=152, Combat Armor origin z=216.",
+          "Six embedded teleporter links; no classified movers."
+        ],
+        "plan_interpretation": "Unequal spaces and changing widths step through local elevations rather than form a complete repeated floor.",
+        "hypothesis": "Make a route sequence recognizable through local spatial identity and destination cues within a common theme.",
+        "historical_evidence": "The pack author credits John Hughes for Paranoia and declares shared theme plus custom sounds and textures; rendered cue effectiveness is untested.",
+        "capacity_conflict": {
+          "archive": [
+            2,
+            5
+          ],
+          "author_stated": [
+            1,
+            3
+          ]
+        },
+        "item_origin_heights": {
+          "rocket_launcher": [
+            -44
+          ],
+          "railgun": [
+            88
+          ],
+          "chaingun": [
+            88
+          ],
+          "grenade_launcher": [
+            152
+          ],
+          "combat_armor": [
+            216
+          ]
+        }
+      }
+    }
+  ],
+  "proposed_rules": [
+    {
+      "id": "route-role-separation",
+      "extends": [
+        "purposeful-loops",
+        "distributed-economy"
+      ],
+      "principle": "Give alternative routes different approach, resource or exposure roles.",
+      "mechanism": "Players can rotate or retreat without meeting the same threat at the same shared choke.",
+      "generator_action": "Name two contests and a recovery destination before drawing rooms; audit shared physical approaches to each alternative.",
+      "counterexample": "A second route may be longer yet tactically useful; a larger graph cycle count does not prove useful alternatives.",
+      "ablation": {
+        "change_only": "Close one outer bypass while preserving items and remaining geometry.",
+        "measure": [
+          "forced central crossings",
+          "route use between contests",
+          "forced backtracks",
+          "interceptions at shared junction"
+        ]
+      },
+      "status": "design_hypothesis"
+    },
+    {
+      "id": "local-floor-purpose",
+      "extends": [
+        "useful-verticality",
+        "counterplay"
+      ],
+      "principle": "Require every added floor to supply a destination, approach, overlook with counterplay, or return route.",
+      "mechanism": "Added height changes decisions without repeating the entire floor plan.",
+      "generator_action": "Annotate each platform purpose and both ascent/descent; omit unused global third floors.",
+      "counterexample": "Coarse 128-unit bands are not gameplay floors; a repeated balcony may still provide a useful return.",
+      "ablation": {
+        "change_only": "Close the local third-floor return doorway, retaining platform and item.",
+        "measure": [
+          "return journeys",
+          "time spent on floor",
+          "retreat failures",
+          "control reversals"
+        ]
+      },
+      "status": "design_hypothesis"
+    },
+    {
+      "id": "split-control-benefits",
+      "extends": [
+        "distributed-economy",
+        "spawn-recovery",
+        "counterplay"
+      ],
+      "principle": "Make upper control relinquish or expose access to some weapon, armor or recovery resource.",
+      "mechanism": "Lower positions retain useful destinations and a possible route back into contention.",
+      "generator_action": "Place one strong weapon or useful recovery destination below an upper contest and verify reachability from disadvantaged spawns.",
+      "counterexample": "A low resource visible from the dominant position may reinforce its control instead of countering it.",
+      "ablation": {
+        "change_only": "Move one strong weapon between validated upper/lower sockets.",
+        "measure": [
+          "time to useful weapon",
+          "upper hold duration",
+          "uncontested resource circuits",
+          "weapon choices"
+        ]
+      },
+      "status": "design_hypothesis"
+    },
+    {
+      "id": "junction-identity",
+      "extends": [
+        "navigation-legibility",
+        "coherent-theme"
+      ],
+      "principle": "Give decisions recognizable spatial cues before texture variation.",
+      "mechanism": "Local silhouettes and destination cues let players learn return journeys while retaining tactical occlusion.",
+      "generator_action": "Vary opening direction, width and ceiling profile within one coherent theme; use landmarks visible at decision points.",
+      "counterexample": "Maximum visibility can aid orientation while exposing too many routes to one controlling position.",
+      "ablation": {
+        "change_only": "Change one junction silhouette accent or one material/light cue with geometry otherwise fixed.",
+        "measure": [
+          "first-time wrong turns",
+          "destination recognition",
+          "ability to retrace without a map"
+        ]
+      },
+      "status": "design_hypothesis"
+    },
+    {
+      "id": "capacity-sensitive-tightness",
+      "extends": [
+        "capacity-fit",
+        "space-rhythm",
+        "range-variety"
+      ],
+      "principle": "Shorten uninteresting travel while keeping contrasting encounter spaces and recovery opportunities.",
+      "mechanism": "Compactness creates more encounters only when circulation and recovery support the intended load.",
+      "generator_action": "Retain a wider lateral combat space alongside a close route; test low and high player loads separately.",
+      "counterexample": "Historical Reclamation reviewers disagreed about whether its compactness and sparse health were desirable.",
+      "ablation": {
+        "change_only": "Keep the map fixed and vary only player load in separate sessions.",
+        "measure": [
+          "encounter intervals",
+          "congestion",
+          "empty travel",
+          "deaths soon after respawn"
+        ]
+      },
+      "status": "design_hypothesis"
+    }
+  ],
+  "promotion_policy": "No new rule promoted to validated. Require a documented mechanism, counterexample, paired procedural ablation and repeated runtime/human evidence across different layouts. Keep generated examples out of the reference calibration profile.",
+  "safety_and_rights": {
+    "reference_geometry_or_assets_copied": false,
+    "external_code_incorporated": false,
+    "engine_launched": false,
+    "input_automation": false,
+    "model_weights_trained": false,
+    "rights_review_completed": false
+  },
+  "limitations": [
+    "All selected AAS files have zero reachability records and unverified source BSP association. Floor surfaces, anchor bins and entity targets cannot prove traversability.",
+    "Floor diagrams include inaccessible trim and omit entity submodel geometry; selected height slices may hide routes.",
+    "Static world LOS and Euclidean distances are descriptive proxies, not spawn safety or traversal times.",
+    "Actual material, lighting, sound and landmark readability was not tested in engine.",
+    "Historical Reclamation reviews use its recorded alias, but lack settings and exact tested-BSP provenance.",
+    "The current core includes same-node XY distance and cross-node endpoint approaches; Manhattan/node-center cost remains a heuristic rather than elapsed engine traversal time. Historical artifacts retain the earlier timing estimates."
+  ],
+  "evidence_issues": [
+    {
+      "id": "capacity-label-conflicts",
+      "maps": [
+        "grdm1",
+        "q2rdm2"
+      ],
+      "action": "Preserve archive and author labels separately; verify revision/mode/load before using as training or playtest labels. Existing profile unchanged."
+    }
+  ],
+  "new_unrelated_code_defects": []
+}

@@ -1,0 +1,261 @@
+{
+  "archive_maps": 460,
+  "benchmark_path": "out/map-study-baseline-final/benchmark.json",
+  "benchmark_sha256": "1f1e2ffad7a5ffac09849ae159384ca48ed7df022c5c72dd2d7598ff7d9c65d1",
+  "curriculum_maps": 26,
+  "evidence_gaps": [
+    "All 454 AAS sidecars contain zero reachability records and cannot establish traversable routes.",
+    "CTF reference profiles have only three independent groups, below the five-group comparison minimum.",
+    "Seven maps have unresolved authors; 426 records have metadata issues.",
+    "Source-file presence does not establish authored origin or training permission.",
+    "Nineteen maps have unsupported pickup classes; they remain in the inventory but are excluded from reference-profile calibration pending game-module/entity review."
+  ],
+  "extractor_version": "q2-study-v1",
+  "facts": [
+    {
+      "cohort": "duel",
+      "generated_cases": [
+        {
+          "bsp_sha256": "c20098c2eca3fb5665f09373e4851bc7ee0b9b1c87359ba00513103df2675dc4",
+          "id": "duel_industrial_104729",
+          "value": 112.0
+        },
+        {
+          "bsp_sha256": "7d8eb18da33a9ee6ec09c5aee9f79c7bf74c94f182d1f9358273db822402d549",
+          "id": "duel_industrial_130363",
+          "value": 96.0
+        }
+      ],
+      "id": "combat-elevation",
+      "interpretation": "The two high-verticality duel blockouts use much less combat-anchor height spread than the reference band. This is a development target, not proof that a specific height is optimal.",
+      "metric": "combat_height_p90_p10",
+      "next_controlled_experiment": "Create reachable multi-level combat routes and move selected resources/approaches onto them; compare the same topology before and after, retaining hull/route gates.",
+      "reference_author_family_groups": 50,
+      "reference_group_median_distribution": {
+        "count": 50,
+        "max": 817.4999999999999,
+        "min": 158.4,
+        "p10": 222.4,
+        "p50": 319.6,
+        "p90": 452.7300000000001
+      },
+      "rule_ids": [
+        "useful-verticality"
+      ],
+      "status": "measured_static_observation"
+    },
+    {
+      "cohort": "duel",
+      "generated_cases": [
+        {
+          "bsp_sha256": "c20098c2eca3fb5665f09373e4851bc7ee0b9b1c87359ba00513103df2675dc4",
+          "id": "duel_industrial_104729",
+          "value": 2
+        },
+        {
+          "bsp_sha256": "7d8eb18da33a9ee6ec09c5aee9f79c7bf74c94f182d1f9358273db822402d549",
+          "id": "duel_industrial_130363",
+          "value": 2
+        },
+        {
+          "bsp_sha256": "0739d66267f3ffc74abbb285c05c35dfa8bb98d6b66676fd4f9da693c53f177b",
+          "id": "duel_gothic_104729",
+          "value": 2
+        },
+        {
+          "bsp_sha256": "b0851fa9a1aae0a31e13356c4f7d808d1918938e3f2a83a42832ea1a64ea486b",
+          "id": "duel_gothic_130363",
+          "value": 2
+        }
+      ],
+      "id": "duel-respawn-options",
+      "interpretation": "Generated duel spawn count equals player count; reference group medians typically provide more possible respawn positions.",
+      "metric": "spawn_count",
+      "next_controlled_experiment": "Hold two-player capacity fixed while varying validated spawn alternatives; measure recovery and immediate deaths from every spawn.",
+      "reference_author_family_groups": 50,
+      "reference_group_median_distribution": {
+        "count": 50,
+        "max": 16.0,
+        "min": 4.0,
+        "p10": 5.0,
+        "p50": 7.0,
+        "p90": 9.100000000000001
+      },
+      "rule_ids": [
+        "spawn-recovery",
+        "capacity-fit"
+      ],
+      "status": "measured_static_observation"
+    },
+    {
+      "cohort": "duel",
+      "generated_cases": [
+        {
+          "bsp_sha256": "c20098c2eca3fb5665f09373e4851bc7ee0b9b1c87359ba00513103df2675dc4",
+          "id": "duel_industrial_104729",
+          "value": 0
+        },
+        {
+          "bsp_sha256": "7d8eb18da33a9ee6ec09c5aee9f79c7bf74c94f182d1f9358273db822402d549",
+          "id": "duel_industrial_130363",
+          "value": 0
+        },
+        {
+          "bsp_sha256": "0739d66267f3ffc74abbb285c05c35dfa8bb98d6b66676fd4f9da693c53f177b",
+          "id": "duel_gothic_104729",
+          "value": 0
+        },
+        {
+          "bsp_sha256": "b0851fa9a1aae0a31e13356c4f7d808d1918938e3f2a83a42832ea1a64ea486b",
+          "id": "duel_gothic_130363",
+          "value": 0
+        }
+      ],
+      "id": "major-item-contests",
+      "interpretation": "The generated duel cases have no item in the extractor major-item category (quad, invulnerability, megahealth, body armor or power armor). This does not mean they lack all armor or health.",
+      "metric": "major_item_count",
+      "next_controlled_experiment": "Introduce a mode-appropriate major resource at a contestable location, then compare concentrated versus distributed control routes with fixed counts and timers.",
+      "reference_author_family_groups": 50,
+      "reference_group_median_distribution": {
+        "count": 50,
+        "max": 3.5,
+        "min": 0.0,
+        "p10": 1.0,
+        "p50": 2.0,
+        "p90": 3.0
+      },
+      "rule_ids": [
+        "distributed-economy",
+        "counterplay"
+      ],
+      "status": "measured_static_observation"
+    },
+    {
+      "cohort": "dm_small",
+      "generated_cases": [
+        {
+          "bsp_sha256": "f1628c555f1e5f0f6e6683d0982aa305c15961913fcd27a7d14bd2f809487923",
+          "id": "ffa_small_104729",
+          "value": 5136.928265023758
+        },
+        {
+          "bsp_sha256": "b99fdc2851f60d4c1aea7d058408649574d53c54225da385c28e14332f03305e",
+          "id": "ffa_small_130363",
+          "value": 5161.3827604625485
+        }
+      ],
+      "id": "small-ffa-extent",
+      "interpretation": "The four-player generated maps have greater world extent than the reference band. Bounds do not measure usable area or traversal cost.",
+      "metric": "world_diagonal",
+      "next_controlled_experiment": "Compare smaller inter-room spacing and varied room proportions at the same capacity; time actual encounters and decision-free travel.",
+      "reference_author_family_groups": 47,
+      "reference_group_median_distribution": {
+        "count": 47,
+        "max": 346406.69741216034,
+        "min": 1695.5872349212177,
+        "p10": 2364.5185253701766,
+        "p50": 2808.774821875189,
+        "p90": 3845.0627290278653
+      },
+      "rule_ids": [
+        "capacity-fit",
+        "space-rhythm"
+      ],
+      "status": "measured_static_observation"
+    },
+    {
+      "cohort": "duel",
+      "generated_cases": [
+        {
+          "bsp_sha256": "c20098c2eca3fb5665f09373e4851bc7ee0b9b1c87359ba00513103df2675dc4",
+          "id": "duel_industrial_104729",
+          "value": 293.3333333333333
+        },
+        {
+          "bsp_sha256": "7d8eb18da33a9ee6ec09c5aee9f79c7bf74c94f182d1f9358273db822402d549",
+          "id": "duel_industrial_130363",
+          "value": 294.15642097360376
+        },
+        {
+          "bsp_sha256": "0739d66267f3ffc74abbb285c05c35dfa8bb98d6b66676fd4f9da693c53f177b",
+          "id": "duel_gothic_104729",
+          "value": 336.0
+        },
+        {
+          "bsp_sha256": "b0851fa9a1aae0a31e13356c4f7d808d1918938e3f2a83a42832ea1a64ea486b",
+          "id": "duel_gothic_130363",
+          "value": 349.6
+        }
+      ],
+      "id": "range-rhythm",
+      "interpretation": "Sampled median sightlines are longer in the generated cases. These capped horizontal point rays cannot establish player exposure or weapon balance.",
+      "metric": "sampled_world_sightline_p50",
+      "next_controlled_experiment": "Add selected line breaks and alternative approaches; measure encounter ranges and weapon choices without maximizing occlusion.",
+      "reference_author_family_groups": 50,
+      "reference_group_median_distribution": {
+        "count": 50,
+        "max": 1143.0269518683901,
+        "min": 104.72814310578019,
+        "p10": 140.64633514063704,
+        "p50": 170.2651967600608,
+        "p90": 226.01465648036927
+      },
+      "rule_ids": [
+        "range-variety",
+        "space-rhythm"
+      ],
+      "status": "measured_static_observation"
+    },
+    {
+      "cohort": "duel",
+      "generated_cases": [
+        {
+          "bsp_sha256": "c20098c2eca3fb5665f09373e4851bc7ee0b9b1c87359ba00513103df2675dc4",
+          "id": "duel_industrial_104729",
+          "value": 1.488548965048175
+        },
+        {
+          "bsp_sha256": "7d8eb18da33a9ee6ec09c5aee9f79c7bf74c94f182d1f9358273db822402d549",
+          "id": "duel_industrial_130363",
+          "value": 1.4954414459297531
+        },
+        {
+          "bsp_sha256": "0739d66267f3ffc74abbb285c05c35dfa8bb98d6b66676fd4f9da693c53f177b",
+          "id": "duel_gothic_104729",
+          "value": 1.474076060907626
+        },
+        {
+          "bsp_sha256": "b0851fa9a1aae0a31e13356c4f7d808d1918938e3f2a83a42832ea1a64ea486b",
+          "id": "duel_gothic_130363",
+          "value": 1.484051938649855
+        }
+      ],
+      "id": "material-hierarchy",
+      "interpretation": "Generated blockout material distributions are simpler than the references, as expected. Texture entropy is not an aesthetic rating.",
+      "metric": "texture_area_entropy_bits",
+      "next_controlled_experiment": "After layout improvements, compare coherent material-role and landmark passes in engine; judge recognition/coherence, not texture count.",
+      "reference_author_family_groups": 50,
+      "reference_group_median_distribution": {
+        "count": 50,
+        "max": 5.0480148684512,
+        "min": 1.2071807718414425,
+        "p10": 2.6814429287744623,
+        "p50": 3.553611545712026,
+        "p90": 4.242456106495878
+      },
+      "rule_ids": [
+        "coherent-theme",
+        "navigation-legibility"
+      ],
+      "status": "measured_static_observation"
+    }
+  ],
+  "manifest_sha256": "434ed06e37447872df92f0eb9a35c7a0d40b59c5cae77709493d544801d87c02",
+  "neural_weights_trained": false,
+  "observed_on": "2026-09-10",
+  "profile_sha256": "4f833d1a09eab67c719175310e101befcc9ad43d330985e7bc7a7d645f65d935",
+  "qbsp_sha256": "fad5a4dc4daf42773ad9a812349b2667221bec47a920cad10cb821ae442c8eb8",
+  "qmg_sha256": "8eea67aa3510326cde23c52fe8adb07f81c9f27cc0fce0aaf28798896062aad8",
+  "runtime_playtested": false,
+  "schema_version": 1
+}

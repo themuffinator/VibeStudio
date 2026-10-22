@@ -145,8 +145,9 @@ this tab. See [Build and launch](build-and-launch.md).
 **Open AI Settings** opens **Settings** > **AI and Automation**. **AI-free mode**
 is on by default: no AI feature runs and nothing is sent anywhere. To use the
 Assistant or AI-assisted generation, clear **AI-free mode**, choose a connector
-and model, and select **Allow cloud AI connectors** if the model is not on your
-computer. See [AI assistant](ai.md).
+and model under **Text Model**, and select **Allow cloud AI connectors** if the
+model is not on your computer or you use Claude Code, Codex or Custom Command.
+See [AI assistant](ai.md).
 
 ## Command line and finishing
 

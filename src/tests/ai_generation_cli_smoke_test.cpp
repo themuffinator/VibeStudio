@@ -6,6 +6,9 @@
 #include "core/project_manifest.h"
 #include "core/studio_settings.h"
 
+#include "qmg/prompt.hpp"
+#include "qmg/semantic_plan.hpp"
+
 #include <QCoreApplication>
 #include <QDir>
 #include <QFile>
@@ -45,11 +48,12 @@ int main(int argc, char** argv)
 {
 	QCoreApplication app(argc, argv);
 	QTemporaryDir temp;
-	if (!temp.isValid() || argc != 2) {
-		std::cerr << "usage: ai_generation_cli_smoke_test <vibestudio executable>\n";
+	if (!temp.isValid() || argc < 2 || argc > 3) {
+		std::cerr << "usage: ai_generation_cli_smoke_test <vibestudio executable> [<fake_ai_harness executable>]\n";
 		return EXIT_FAILURE;
 	}
 	const QString cli = QString::fromLocal8Bit(argv[1]);
+	const QString harness = argc == 3 ? QFileInfo(QString::fromLocal8Bit(argv[2])).absoluteFilePath() : QString();
 	const QString settings = temp.filePath(QStringLiteral("cli.ini"));
 	const auto run = [&](const QStringList& arguments) {
 		QProcess process;
@@ -80,6 +84,31 @@ int main(int argc, char** argv)
 		temp.filePath(QStringLiteral("plan.json"))});
 	expect(plan.exitCode == 0 && QFileInfo::exists(temp.filePath(QStringLiteral("plan.json"))) && plan.json.contains(QStringLiteral("plan")),
 		"map plan writes the plan", plan.output);
+
+	// A level by Quake-MapGen: a Quake III CTF map in brush primitives, its report, and its plan.
+	const QString ctf = temp.filePath(QStringLiteral("maps/forts.map"));
+	const QString ctfReport = temp.filePath(QStringLiteral("maps/forts.json"));
+	Run mapgen = run({QStringLiteral("map"), QStringLiteral("generate"), QStringLiteral("--generator"), QStringLiteral("quake-mapgen"), QStringLiteral("--prompt"),
+		QStringLiteral("Quake 3 capture the flag, 6 rooms, seed 7"), QStringLiteral("--format"), QStringLiteral("q3-brush-primitives"), QStringLiteral("--output"), ctf,
+		QStringLiteral("--report"), ctfReport});
+	const QJsonObject qmgReport = mapgen.json.value(QStringLiteral("quakeMapgen")).toObject();
+	expect(mapgen.exitCode == 0 && QFileInfo::exists(ctf) && QFileInfo::exists(ctfReport) && mapgen.json.value(QStringLiteral("generator")).toString() == QStringLiteral("quake-mapgen")
+			&& mapgen.json.value(QStringLiteral("dialect")).toString() == QStringLiteral("q3-brush-primitives") && qmgReport.value(QStringLiteral("schema_version")).toInt() == 4
+			&& qmgReport.value(QStringLiteral("mode")).toString() == QStringLiteral("capture_the_flag"),
+		"map generate --generator quake-mapgen writes a CTF map and its report", mapgen.output);
+	Run mapgenPlan = run({QStringLiteral("map"), QStringLiteral("plan"), QStringLiteral("--generator"), QStringLiteral("quake-mapgen"), QStringLiteral("--prompt"),
+		QStringLiteral("Quake 1 single-player castle, 6 rooms")});
+	expect(mapgenPlan.exitCode == 0 && mapgenPlan.json.value(QStringLiteral("plan")).toObject().value(QStringLiteral("room_roles")).toArray().size() == 6,
+		"map plan --generator quake-mapgen prints the semantic plan", mapgenPlan.output);
+	Run studioOnly = run({QStringLiteral("map"), QStringLiteral("generate"), QStringLiteral("--generator"), QStringLiteral("quake-mapgen"), QStringLiteral("--prompt"),
+		QStringLiteral("Quake 2 deathmatch"), QStringLiteral("--theme"), QStringLiteral("hell"), QStringLiteral("--dry-run")});
+	expect(studioOnly.exitCode == 2 && studioOnly.output.contains(QStringLiteral("--theme")), "the studio generator's options are refused for Quake-MapGen", studioOnly.output);
+	Run wrongFormat = run({QStringLiteral("map"), QStringLiteral("generate"), QStringLiteral("--prompt"), QStringLiteral("Quake 2 deathmatch"), QStringLiteral("--format"),
+		QStringLiteral("q2-valve220"), QStringLiteral("--dry-run")});
+	expect(wrongFormat.exitCode == 2 && wrongFormat.output.contains(QStringLiteral("quake-mapgen")), "Quake-MapGen's options need --generator quake-mapgen", wrongFormat.output);
+	Run mapgenModel = run({QStringLiteral("map"), QStringLiteral("generate"), QStringLiteral("--generator"), QStringLiteral("quake-mapgen"), QStringLiteral("--prompt"),
+		QStringLiteral("Quake 2 deathmatch"), QStringLiteral("--planner"), QStringLiteral("ai"), QStringLiteral("--output"), temp.filePath(QStringLiteral("maps/ai.map"))});
+	expect(mapgenModel.exitCode == 5 && mapgenModel.output.contains(QStringLiteral("AI-free")), "Quake-MapGen asks no model in AI-free mode", mapgenModel.output);
 
 	// Edits from a saved proposal: one sound action, one the map refuses.
 	const auto action = [](const QString& kind, const QStringList& targets) {
@@ -156,6 +185,37 @@ int main(int argc, char** argv)
 	Run ready = run({QStringLiteral("ai"), QStringLiteral("status")});
 	expect(ready.json.value(QStringLiteral("textConnection")).toObject().value(QStringLiteral("state")).toString() == QStringLiteral("ready"),
 		"with AI allowed and no project open, the local model is ready", ready.output);
+	if (!harness.isEmpty()) {
+		// Quake-MapGen planned through Claude Code and the user's own login; the fake tool stands in.
+		const std::string prompt = "Quake 2 deathmatch, 4 rooms, seed 3";
+		qputenv("FAKE_HARNESS_ANSWER", QByteArray::fromStdString(qmg::render_semantic_plan(qmg::make_rule_semantic_plan(qmg::PromptParser {}.parse(prompt)))));
+		const QStringList harnessLevel {QStringLiteral("map"), QStringLiteral("generate"), QStringLiteral("--generator"), QStringLiteral("quake-mapgen"), QStringLiteral("--prompt"),
+			QString::fromStdString(prompt), QStringLiteral("--planner"), QStringLiteral("ai"), QStringLiteral("--provider"), QStringLiteral("claude-code"), QStringLiteral("--endpoint"),
+			harness, QStringLiteral("--output"), temp.filePath(QStringLiteral("maps/claude.map"))};
+		Run cloudOff = run(harnessLevel);
+		expect(cloudOff.exitCode == 5 && cloudOff.output.contains(QStringLiteral("cloud")), "a login harness needs cloud connectors allowed", cloudOff.output);
+		Run cloud = run({QStringLiteral("--set-ai-cloud"), QStringLiteral("on")});
+		expect(cloud.exitCode == 0, "cloud connectors are allowed", cloud.output);
+		Run unconfirmed = run(harnessLevel);
+		expect(unconfirmed.exitCode == 5 && unconfirmed.output.contains(QStringLiteral("Anthropic")) && unconfirmed.output.contains(QStringLiteral("--yes")),
+			"a harness request names where it goes and waits for --yes", unconfirmed.output);
+		Run planned = run(harnessLevel + QStringList {QStringLiteral("--yes")});
+		const QJsonObject planner = planned.json.value(QStringLiteral("quakeMapgen")).toObject().value(QStringLiteral("planner")).toObject();
+		expect(planned.exitCode == 0 && QFileInfo::exists(temp.filePath(QStringLiteral("maps/claude.map")))
+				&& planned.json.value(QStringLiteral("ai")).toObject().value(QStringLiteral("connector")).toString() == QStringLiteral("claude-code")
+				&& planner.value(QStringLiteral("requested_backend")).toString() == QStringLiteral("connector")
+				&& planner.value(QStringLiteral("used_backend")).toString() == QStringLiteral("vibestudio/claude-code")
+				&& planner.value(QStringLiteral("model")).toObject().value(QStringLiteral("model_id")).toString() == QStringLiteral("claude-opus-5-5"),
+			"map generate --planner ai --provider claude-code plans the level through the harness with claude-opus-5-5", planned.output);
+		qputenv("FAKE_HARNESS_ANSWER", "OK");
+		Run test = run({QStringLiteral("ai"), QStringLiteral("test-connection"), QStringLiteral("--provider"), QStringLiteral("codex"), QStringLiteral("--endpoint"), harness});
+		expect(test.exitCode == 0 && test.json.value(QStringLiteral("login")).toObject().value(QStringLiteral("signedIn")).toBool()
+				&& test.json.value(QStringLiteral("connection")).toObject().value(QStringLiteral("transport")).toString() == QStringLiteral("harness"),
+			"ai test-connection checks the Codex login and asks it", test.output);
+		Run status = run({QStringLiteral("ai"), QStringLiteral("status")});
+		expect(status.json.value(QStringLiteral("runtimes")).toObject().value(QStringLiteral("harnesses")).toArray().size() == 3, "ai status lists the harnesses", status.output);
+		run({QStringLiteral("--set-ai-cloud"), QStringLiteral("off")});
+	}
 	{
 		// The project the GUI last opened, as the CLI reads it from the settings.
 		StudioSettings studio(settings);

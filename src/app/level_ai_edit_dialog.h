@@ -39,6 +39,8 @@ struct LevelAiEditDialogHooks {
 	// The Activity panel: a task starts, then ends.
 	std::function<QString(const QString& title, const QString& detail)> beginTask;
 	std::function<void(const QString& task, bool succeeded, bool cancelled, const QString& summary)> endTask;
+	// Opens Settings > AI and Automation, where the connector, model, and endpoint are chosen.
+	std::function<void()> openAiSettings;
 	// Where proposals are saved and loaded.
 	std::function<QString()> proposalFolder;
 };
@@ -93,6 +95,7 @@ private:
 	QPlainTextEdit* m_instruction = nullptr;
 	QLabel* m_connectionStatus = nullptr;
 	QPushButton* m_previewRequest = nullptr;
+	QPushButton* m_aiSettings = nullptr;
 	QPushButton* m_loadProposal = nullptr;
 	QPushButton* m_ask = nullptr;
 	QPushButton* m_cancel = nullptr;

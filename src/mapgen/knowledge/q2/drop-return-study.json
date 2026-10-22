@@ -1,0 +1,596 @@
+{
+  "schema_version": 1,
+  "study": "drop-return-study",
+  "date": "2026-09-13",
+  "status": "one demonstrated geometric ordinary return; not a shortest path, native trajectory, damage or gameplay certification",
+  "study_document": "docs/Q2_DROP_RETURN_STUDY.md",
+  "archive_root": "E:/Development/q2maparchive-wip/maps",
+  "reference": {
+    "map": "gladdm1",
+    "title": "Violent & Funky",
+    "authors": [
+      "Todd 'Mr.CleaN' Rose"
+    ],
+    "artifact_id": "gladdm1-9325547e4a",
+    "bsp_sha256": "6f6af2acdd5108b3dea18ae181358dc81708b6540aab5a0a6417f3c98a4feec1",
+    "geometry_sha256": "d8456576b997477ccd32b861d28c8c024e53bf5ec7ddc5b067f1cf8e426e8e44",
+    "partition": "reference",
+    "split_group": "1e97e74979f0d55d",
+    "issues": [
+      "malformed metadata line 12"
+    ],
+    "bsp_path": "E:/Development/q2maparchive-wip/maps/gladdm1/pack/maps/gladdm1.bsp",
+    "evidence_files": [
+      {
+        "kind": "metadata",
+        "path": "E:/Development/q2maparchive-wip/maps/gladdm1/pack/maps/ref/gladdm1.ref",
+        "sha256": "4a56db22f1dc9071f4b6f206388602ff922b9556b99da6c218152b4ddeded6fa"
+      },
+      {
+        "kind": "readme",
+        "path": "E:/Development/q2maparchive-wip/maps/gladdm1/pack/docs/gladdm1-readme.txt",
+        "sha256": "0ff597213699003fa8ba1b862748bde0aecda5961e5ab34940dc5a4193d2d01b"
+      }
+    ],
+    "capacity": {
+      "archive": [
+        2,
+        5
+      ],
+      "author": [
+        2,
+        4
+      ],
+      "author_preference": "duel",
+      "mod_context": "Authored for The Gladiators and described as also supporting stock Q2 DM; runtime equivalence not inferred."
+    },
+    "rights": "unreviewed for training; readme restrictions retained; no geometry/assets incorporated into generation"
+  },
+  "previous_observation_closed": {
+    "study": "knowledge/q2/continuous-movement-study.json",
+    "map": "gladdm1",
+    "observation": "Complete ordinary path from the drop landing back to the upper departure ledge was previously unverified."
+  },
+  "previous_observations_unchanged": [
+    "trdm05a landing-to-ramp return remains unverified.",
+    "trdm05 versus trdm05a readme revision equivalence remains unverified."
+  ],
+  "drop_candidate": {
+    "standing_origins": [
+      [
+        704,
+        512,
+        408
+      ],
+      [
+        656,
+        512,
+        408
+      ],
+      [
+        656,
+        512,
+        136
+      ]
+    ],
+    "departure_foot_z": 384,
+    "landing_foot_z": 112,
+    "height": 272,
+    "horizontal_departure": 48,
+    "exact_piecewise_sweeps_clear": true,
+    "ballistic_trajectory_verified": false,
+    "damage_verified": false
+  },
+  "return_route": {
+    "waypoints": [
+      {
+        "xy": [
+          656,
+          512
+        ],
+        "foot_z": 112,
+        "foot_z_exact": "112",
+        "standing_origin": [
+          656,
+          512,
+          136
+        ],
+        "support_brush": 343
+      },
+      {
+        "xy": [
+          320,
+          512
+        ],
+        "foot_z": 0,
+        "foot_z_exact": "0",
+        "standing_origin": [
+          320,
+          512,
+          24
+        ],
+        "support_brush": 17
+      },
+      {
+        "xy": [
+          -160,
+          512
+        ],
+        "foot_z": 128,
+        "foot_z_exact": "128",
+        "standing_origin": [
+          -160,
+          512,
+          152
+        ],
+        "support_brush": 289
+      },
+      {
+        "xy": [
+          -160,
+          1120
+        ],
+        "foot_z": 256,
+        "foot_z_exact": "256",
+        "standing_origin": [
+          -160,
+          1120,
+          280
+        ],
+        "support_brush": 156
+      },
+      {
+        "xy": [
+          800,
+          1120
+        ],
+        "foot_z": 256,
+        "foot_z_exact": "256",
+        "standing_origin": [
+          800,
+          1120,
+          280
+        ],
+        "support_brush": 118
+      },
+      {
+        "xy": [
+          800,
+          512
+        ],
+        "foot_z": 384,
+        "foot_z_exact": "384",
+        "standing_origin": [
+          800,
+          512,
+          408
+        ],
+        "support_brush": 24
+      },
+      {
+        "xy": [
+          704,
+          512
+        ],
+        "foot_z": 384,
+        "foot_z_exact": "384",
+        "standing_origin": [
+          704,
+          512,
+          408
+        ],
+        "support_brush": 24
+      }
+    ],
+    "planar_length": 3088.0,
+    "positive_climb": 384,
+    "additional_descent": 112,
+    "poses": 554,
+    "segments": 553,
+    "collision_epsilon": 0,
+    "standing_hull_dimensions": [
+      32,
+      32,
+      56
+    ],
+    "world_brushes": 345,
+    "player_collision_mask": 33619971,
+    "mechanism_entities": 0,
+    "complete_ordinary_geometric_return": true,
+    "all_poses_clear": true,
+    "all_segments_clear": true,
+    "continuous_support_segments": 515,
+    "bounded_step_pairs": 19,
+    "authored_16_unit_descents": 7,
+    "authored_16_unit_ascents": 8,
+    "stored_plane_join_adjustments": [
+      {
+        "phase": "west ordinary climb",
+        "foot_delta": 0.0003295418669891303,
+        "foot_delta_exact": "2148383/6519302144",
+        "original_diagonal_blocker": 290,
+        "from_xy": [
+          -160,
+          624
+        ],
+        "to_xy": [
+          -160,
+          624.0009765625
+        ],
+        "from_pose": 198,
+        "intermediate_pose": 199,
+        "to_pose": 200
+      },
+      {
+        "phase": "east ordinary climb",
+        "foot_delta": 2.402917206501605e-05,
+        "foot_delta_exact": "128367468/5342151100865",
+        "original_diagonal_blocker": 25,
+        "from_xy": [
+          800,
+          1040
+        ],
+        "to_xy": [
+          800,
+          1039.9999761650097
+        ],
+        "from_pose": 439,
+        "intermediate_pose": 440,
+        "to_pose": 441
+      },
+      {
+        "phase": "east ordinary climb",
+        "foot_delta": 0.00032552082310728994,
+        "foot_delta_exact": "10610843/32596510720",
+        "original_diagonal_blocker": 26,
+        "from_xy": [
+          800,
+          872
+        ],
+        "to_xy": [
+          800,
+          871.9990664124078
+        ],
+        "from_pose": 472,
+        "intermediate_pose": 473,
+        "to_pose": 474
+      },
+      {
+        "phase": "east ordinary climb",
+        "foot_delta": 2.8147307172882582e-05,
+        "foot_delta_exact": "448/15916265",
+        "original_diagonal_blocker": 27,
+        "from_xy": [
+          800,
+          848
+        ],
+        "to_xy": [
+          800,
+          847.9999577790379
+        ],
+        "from_pose": 479,
+        "intermediate_pose": 480,
+        "to_pose": 481
+      }
+    ],
+    "ramp_support_brushes": [
+      25,
+      26,
+      27,
+      290
+    ],
+    "raw_audit": "out/drop-return-study/gladdm1-return-audit.json"
+  },
+  "support_method": {
+    "exact_primitives": [
+      "convex_polyhedron",
+      "model_brushes",
+      "support_height",
+      "intersects_aabb",
+      "intersects_swept_aabb",
+      "_vertices"
+    ],
+    "candidate_search": "The previous conservative expanded-plane probe proposes support-brush IDs only. Exact clipping and collision checks certify each accepted pose/segment.",
+    "continuous_contact": "Each non-step segment has one convex solid reaching the moving bottom rectangle at both endpoints. Their convex interpolation proves a contact for the whole segment; the independent exact hull sweep excludes positive-volume penetration.",
+    "bounded_steps": "Supported source and destination, <=18 units of height difference and <=8 units horizontal travel; two exact clear translation legs. Intermediate poses may be airborne.",
+    "support_knots": "Exact compiled convex vertex coordinates plus leading/trailing 16-unit hull offsets; 8-unit sample grid supplements them without replacing full sweeps.",
+    "runtime_verified": false
+  },
+  "width_stations": [
+    {
+      "name": "drop landing / east tread",
+      "route_xy": [
+        656,
+        512
+      ],
+      "foot_z": 112,
+      "foot_z_exact": "112",
+      "support_brush": 343,
+      "transverse_axis": "Y",
+      "support_brush_transverse_span": 256,
+      "tested_clear_center_offsets": [
+        -112,
+        112
+      ],
+      "tested_center_span": 224,
+      "clear_lateral_sweep_count": 28
+    },
+    {
+      "name": "central crosswalk",
+      "route_xy": [
+        320,
+        512
+      ],
+      "foot_z": 0,
+      "foot_z_exact": "0",
+      "support_brush": 17,
+      "transverse_axis": "Y",
+      "support_brush_transverse_span": 256,
+      "tested_clear_center_offsets": [
+        -112,
+        112
+      ],
+      "tested_center_span": 224,
+      "clear_lateral_sweep_count": 28
+    },
+    {
+      "name": "west stair",
+      "route_xy": [
+        48,
+        512
+      ],
+      "foot_z": 64,
+      "foot_z_exact": "64",
+      "support_brush": 317,
+      "transverse_axis": "Y",
+      "support_brush_transverse_span": 256,
+      "tested_clear_center_offsets": [
+        -112,
+        112
+      ],
+      "tested_center_span": 224,
+      "clear_lateral_sweep_count": 28
+    },
+    {
+      "name": "west climbing ramp",
+      "route_xy": [
+        -160,
+        832
+      ],
+      "foot_z": 197.33333517631178,
+      "foot_z_exact": "3140809656/15916265",
+      "support_brush": 290,
+      "transverse_axis": "X",
+      "support_brush_transverse_span": 192,
+      "tested_clear_center_offsets": [
+        -80,
+        80
+      ],
+      "tested_center_span": 160,
+      "clear_lateral_sweep_count": 20
+    },
+    {
+      "name": "north connector",
+      "route_xy": [
+        320,
+        1120
+      ],
+      "foot_z": 256,
+      "foot_z_exact": "256",
+      "support_brush": 154,
+      "transverse_axis": "Y",
+      "support_brush_transverse_span": 192,
+      "tested_clear_center_offsets": [
+        -80,
+        80
+      ],
+      "tested_center_span": 160,
+      "clear_lateral_sweep_count": 20
+    },
+    {
+      "name": "east climbing ramp",
+      "route_xy": [
+        800,
+        832
+      ],
+      "foot_z": 325.3333472394434,
+      "foot_z_exact": "5178091768/15916265",
+      "support_brush": 27,
+      "transverse_axis": "X",
+      "support_brush_transverse_span": 192,
+      "tested_clear_center_offsets": [
+        -80,
+        80
+      ],
+      "tested_center_span": 160,
+      "clear_lateral_sweep_count": 20
+    }
+  ],
+  "width_limits": "Transverse standing-hull clearance and support at six stations, including continuous lateral sweeps between successful poses. This is not a minimum-width certificate for the whole return or an engine strafe test. Adjacent stair treads share longitudinal support; no full footprint on one 24-unit tread is claimed.",
+  "exposure": {
+    "source_eye": [
+      704,
+      512,
+      430
+    ],
+    "route_eye_offset_above_foot": 46,
+    "sample_spacing_xy": 64,
+    "mask": 3,
+    "visible": 21,
+    "count": 50,
+    "phases": [
+      {
+        "phase": "interior stairs and crosswalk",
+        "visible": 6,
+        "samples": 13
+      },
+      {
+        "phase": "west ordinary climb",
+        "visible": 0,
+        "samples": 10
+      },
+      {
+        "phase": "north upper connector",
+        "visible": 3,
+        "samples": 15
+      },
+      {
+        "phase": "east ordinary climb",
+        "visible": 9,
+        "samples": 9
+      },
+      {
+        "phase": "armor-shelf approach",
+        "visible": 3,
+        "samples": 3
+      }
+    ],
+    "limits": "Fixed-source omnidirectional point LOS against model-zero solid/window brushes. No view direction, player occlusion, weapon splash, sound, anticipation, live combat or exposure duration is simulated."
+  },
+  "engine_source_evidence": [
+    {
+      "path": "E:/_SOURCE/_CODE/Quake-2-master/qcommon/pmove.c",
+      "sha256": "8861daaeff7efd7bc6d3c5e65ef99801567f3e06eb14020787206d39dd0038a8",
+      "locations": {
+        "step_size_line": 25,
+        "minimum_step_normal_line": 111,
+        "step_slide_move_line": 271,
+        "categorize_position_line": 671,
+        "standing_hull_lines": [
+          980,
+          1025
+        ]
+      }
+    },
+    {
+      "path": "E:/_SOURCE/_CODE/Quake-2-master/game/p_client.c",
+      "sha256": "d4bad9aa34ec3d2c667eaf64c0d84c7a555e8162b8252c245fde4a54e343ae3f",
+      "locations": {
+        "player_trace_line": 1537,
+        "client_think_line": 1570,
+        "pmove_call_line": 1633
+      }
+    },
+    {
+      "path": "E:/_SOURCE/_CODE/Quake-2-master/game/p_view.c",
+      "sha256": "915358415b8088552f7ace5d0a822f122d99b4fe2b9fdb553b9aca460712efcf",
+      "locations": {
+        "falling_damage_line": 501
+      }
+    },
+    {
+      "path": "E:/_SOURCE/_CODE/Quake-2-master/game/g_phys.c",
+      "sha256": "31e3b813814c249734550d262d2b4766184849563960c0d9715005a6e5743481",
+      "locations": {
+        "fly_move_line": 183,
+        "add_gravity_line": 322
+      }
+    },
+    {
+      "path": "E:/_SOURCE/_CODE/Quake-2-master/game/q_shared.h",
+      "sha256": "c552978e0efed7d7f2daf3cef50af5b7b248555021e93a3347cc73d46d25389c",
+      "locations": {
+        "contents_lines": [
+          338,
+          366
+        ],
+        "collision_masks_lines": [
+          387,
+          393
+        ]
+      }
+    }
+  ],
+  "analysis_tools": [
+    {
+      "path": "out/drop-return-study/audit_return.py",
+      "sha256": "216241cdcba52b655d154817b777ce3b595814f0b84f0b49692af82a7e41f4eb"
+    },
+    {
+      "path": "tools/map_study/binary.py",
+      "sha256": "2b76559a71365eaab41e6876ff7da94fe938994b4a5199d63620b8b60918daf1"
+    },
+    {
+      "path": "tools/map_recipes/geometry.py",
+      "sha256": "dcfcc3413468cad9993476736edfae5f13eb03e26035fc39d73f83aa5a90742b"
+    },
+    {
+      "path": "out/continuous-movement-study/probe_slopes.py",
+      "sha256": "99282f5c80822cd402004e539513b35e6b16017d56bccd71f6505fcf280abd1e"
+    },
+    {
+      "path": "out/drop-return-study/measure_context.py",
+      "sha256": "1bedf6cb66d1fe529c644e83b4a3f05588e58a6429b72bfe246ada769f085502"
+    }
+  ],
+  "rules": [
+    {
+      "id": "DR1",
+      "rule": "Certify the complete ordinary path from the landing to the original upper endpoint; a ramp elsewhere is not enough."
+    },
+    {
+      "id": "DR2",
+      "rule": "Record return commitment separately from reachability: extra descent, ascent, route length, resource opportunities and exposure."
+    },
+    {
+      "id": "DR3",
+      "rule": "A hidden recovery section can lead to an exposed re-entry; evaluate final approaches from plausible control positions."
+    },
+    {
+      "id": "DR4",
+      "rule": "Separate continuous convex support certificates, bounded step pairs, and full hull collision sweeps."
+    },
+    {
+      "id": "DR5",
+      "rule": "Treat local width bands as diagnostics and add turning/contested-travel tests."
+    }
+  ],
+  "single_change_tests": [
+    "Remove only the drop edge and preserve ordinary reachability.",
+    "Move only one landing sightline screen and remeasure fixed vantage rays.",
+    "Add only a second final approach and compare interceptions.",
+    "Replace one return stair with a same-endpoint ramp while retaining topology and resources."
+  ],
+  "limitations": [
+    "No shortest-return search or optimality claim.",
+    "No engine Pmove, ballistic fall, falling-damage, velocity or live collision test.",
+    "No competitive capacity or balance certification.",
+    "Six transverse stations do not certify minimum width everywhere.",
+    "Fixed-eye point LOS is not global safety, exposure duration, sound or combat simulation.",
+    "Shared-boundary support contacts may be lower-dimensional at individual joins; intermediate step poses may be airborne."
+  ],
+  "profile_or_partition_changes": false,
+  "archive_writes": false,
+  "reference_geometry_or_assets_in_generation": false,
+  "weight_training": false,
+  "evidence_outputs": [
+    {
+      "path": "out/drop-return-study/audit_return.py",
+      "sha256": "216241cdcba52b655d154817b777ce3b595814f0b84f0b49692af82a7e41f4eb"
+    },
+    {
+      "path": "out/drop-return-study/draw_plan.py",
+      "sha256": "5db35907b467d7c9a7fdd589f797b6eef3b83661ce8cd3caf03352366b5fb1c0"
+    },
+    {
+      "path": "out/drop-return-study/gladdm1-context.json",
+      "sha256": "eee2e3c4918fc5bde9c84997dd273c7f2d7a47aca9d7428163641088894faa20"
+    },
+    {
+      "path": "out/drop-return-study/gladdm1-drop-return.png",
+      "sha256": "8d0a7c6bd8b74197e704becc421b879ce7df422f2d1f61510133278f0d52335a"
+    },
+    {
+      "path": "out/drop-return-study/gladdm1-return-audit.json",
+      "sha256": "b783afc7944572b0ec0aca0d87f1f76d25edd085f1e446ef51f07d777fe29a0b"
+    },
+    {
+      "path": "out/drop-return-study/measure_context.py",
+      "sha256": "1bedf6cb66d1fe529c644e83b4a3f05588e58a6429b72bfe246ada769f085502"
+    },
+    {
+      "path": "out/drop-return-study/write_record.py",
+      "sha256": "993468da47abd4a85fd647cac9067b8c853355cb704e2cbc1404925c0566bbaa"
+    }
+  ]
+}

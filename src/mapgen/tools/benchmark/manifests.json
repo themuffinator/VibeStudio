@@ -1,0 +1,79 @@
+{
+  "schema": "qmg.benchmark.manifest_registry",
+  "schema_version": 1,
+  "created": "2026-10-15",
+  "change_id": "x1-bench",
+  "description": "sha256 of every frozen fixed-set file. run.py refuses a registered manifest whose bytes differ from this registry. A new set version gets a new file and a new row.",
+  "manifests": [
+    {
+      "set": "BENCH-v1",
+      "path": "tools/benchmark/rc1-v1.json",
+      "sha256": "4de23ee55d7bd709b74bd85839bc518656433cccd86fb373cbd63aa1006c7203",
+      "frozen": true,
+      "cases_sha256": "6334c371cfcff3811a3a8ba31efd9ea409008bac904f596052493acd8ee9ce2b",
+      "cases": 411
+    },
+    {
+      "set": "CONTRA-v1",
+      "path": "tools/benchmark/contra-v1.json",
+      "sha256": "564b43a3b6753a35ab7a785aaf6ea8a8406bc930dbde316627635929d5ee6ccb",
+      "frozen": true
+    },
+    {
+      "set": "PARSE-MATRIX-v1",
+      "path": "tools/benchmark/parse-matrix-v1.json",
+      "sha256": "b6118fbf1e9c15287d5c6f08c3f7fe1b40a2c1594be4ccfe059ad4f8dcbd7bd2",
+      "frozen": true
+    },
+    {
+      "set": "SEAL-LIST",
+      "path": "tools/benchmark/sealed.json",
+      "sha256": "43ccd72165a97cab16777feb6e75be7d1d3419875303af058509c4dae1a575be",
+      "frozen": false
+    },
+    {
+      "set": "HEROES",
+      "path": "tools/benchmark/heroes.json",
+      "sha256": "33aa68a8bf6c2d68c82f336022c74ba29821cefaeb44d82f9f900db2ecfc72c2",
+      "frozen": false
+    },
+    {
+      "set": "MP-PORTFOLIO",
+      "path": "tools/benchmark/portfolios/mp-portfolio.json",
+      "sha256": "7e4e22f91380a53deb1fd00f4c85d689ea1e752d03f08f326da16f2952d28c70",
+      "frozen": true,
+      "cases_sha256": "90aee786f1a362e1cd35c14b19686bcb9f50a9f5a8e9715c7d900b0320b28ddd",
+      "cases": 11
+    },
+    {
+      "set": "SPAN-PORTFOLIO",
+      "path": "tools/benchmark/portfolios/span-portfolio.json",
+      "sha256": "c3bee7bc9a9b19a17e1191ee2e264d2fa18adf1c0b95dffe34bbe172c293bc77",
+      "frozen": true,
+      "cases_sha256": "8750b472951d4e92fdc38f4fd1e52fd91a708e8b653d69c32cdbf0179b357416",
+      "cases": 14
+    },
+    {
+      "set": "LATTICE-PORTFOLIO",
+      "path": "tools/benchmark/portfolios/lattice-portfolio.json",
+      "sha256": "d1c27a5ab25544c8597ae1cf797abd54741e72fc5430627b28b39a914b72d226",
+      "frozen": true,
+      "cases_sha256": "6b336358b34d9bbc06ec79e1fc10cab2e8121dee3231cee8754d84e08a4f8bc0",
+      "cases": 15
+    },
+    {
+      "set": "SPLICE-PORTFOLIO",
+      "path": "tools/benchmark/portfolios/splice-portfolio.json",
+      "sha256": "09bb690bb6897f8aa720ea33e2d83c4f6c0dcef1a84d77cda94d2f3d307b4a16",
+      "frozen": true,
+      "cases_sha256": "5354e33cc8b34fd59fac991ae0c661a5146612b1b7fbbad103955bc422bc0698",
+      "cases": 9
+    }
+  ],
+  "draft": {
+    "set": "draft-v0",
+    "path": "tools/benchmark/draft-v0.json",
+    "sha256": "056889a0bdf7f74fad66c5afc493d3da9217becd834b0af6774954c54edea3d7",
+    "frozen": true
+  }
+}

@@ -1,10 +1,12 @@
 #pragma once
 
-// The Level Generator: a prompt and options in, a sealed level out, planned
-// by the rules or by the configured text model (core/level_generation.h).
-// The layout preview, plan, and notes are reviewed before anything is opened
-// or written; the shell supplies consent, the editor, and activity through
-// hooks, so the dialog never edits shell state itself.
+// The Level Generator: a prompt and options in, a sealed level out, built by
+// the studio's cell generator (core/level_generation.h) or by Quake-MapGen
+// (core/level_mapgen.h), and planned by the rules or by the configured text
+// model. The layout preview, plan, notes, and Quake-MapGen's analysis are
+// reviewed before anything is opened or written; the shell supplies consent,
+// the editor, and activity through hooks, so the dialog never edits shell
+// state itself.
 
 #include "core/ai_transport.h"
 #include "core/level_generation.h"
@@ -18,6 +20,7 @@
 
 class QCheckBox;
 class QComboBox;
+class QFormLayout;
 class QLabel;
 class QPlainTextEdit;
 class QProgressBar;
@@ -41,6 +44,8 @@ struct LevelGenerationDialogHooks {
 	// The Activity panel: a task starts, then ends.
 	std::function<QString(const QString& title, const QString& detail)> beginTask;
 	std::function<void(const QString& task, bool succeeded, bool cancelled, const QString& summary)> endTask;
+	// Opens Settings > AI and Automation, where the connector, model, and endpoint are chosen.
+	std::function<void()> openAiSettings;
 	// Where Save As starts.
 	std::function<QString()> saveFolder;
 };
@@ -70,8 +75,16 @@ private:
 	struct Work;
 
 	LevelGenerationSpec specFromControls() const;
+	// Quake-MapGen's spec: only what the controls set, so the description supplies the rest.
+	LevelGenerationSpec mapgenSpecFromControls() const;
+	[[nodiscard]] bool mapgenSelected() const;
+	// Shows the controls the chosen generator reads, with its ranges and the game's formats.
+	void updateGeneratorControls();
+	void generateWithMapgen();
 	void askModel(const LevelGenerationSpec& spec, const AiTextConnection& connection, const QString& previousAnswer, const QStringList& problems, int attempt);
 	void build(const LevelGenerationSpec& spec, const LevelSemanticPlan* plan, const QStringList& planWarnings);
+	// Runs a generator on a worker thread, then shows what it built.
+	void runInBackground(const QString& status, std::function<LevelGenerationResult()> job, const QStringList& planWarnings);
 	void showResult(const LevelGenerationResult& result, const QStringList& planWarnings);
 	void setBusy(bool busy, const QString& status);
 	void finishTask(bool succeeded, bool cancelled, const QString& summary);
@@ -79,6 +92,7 @@ private:
 	void showRequestPreview();
 	void saveAs();
 	void savePlan();
+	void saveReport();
 	void openInLevels();
 
 	LevelGenerationDialogHooks m_hooks;
@@ -90,10 +104,14 @@ private:
 	bool m_busy = false;
 
 	QPlainTextEdit* m_prompt = nullptr;
+	QFormLayout* m_options = nullptr;
+	QComboBox* m_generator = nullptr;
 	QComboBox* m_game = nullptr;
 	QComboBox* m_mode = nullptr;
+	QComboBox* m_format = nullptr;
 	QComboBox* m_theme = nullptr;
 	QComboBox* m_verticality = nullptr;
+	QComboBox* m_intensity = nullptr;
 	QComboBox* m_liquid = nullptr;
 	QComboBox* m_monsters = nullptr;
 	QSpinBox* m_rooms = nullptr;
@@ -105,6 +123,7 @@ private:
 	QRadioButton* m_modelPlanner = nullptr;
 	QLabel* m_plannerStatus = nullptr;
 	QPushButton* m_previewRequest = nullptr;
+	QPushButton* m_aiSettings = nullptr;
 	QPushButton* m_generate = nullptr;
 	QPushButton* m_newSeed = nullptr;
 	QPushButton* m_cancel = nullptr;
@@ -118,9 +137,12 @@ private:
 	QPlainTextEdit* m_planText = nullptr;
 	QPlainTextEdit* m_notesText = nullptr;
 	QPlainTextEdit* m_mapText = nullptr;
+	QPlainTextEdit* m_analysisText = nullptr;
+	QPlainTextEdit* m_reportText = nullptr;
 	QPushButton* m_open = nullptr;
 	QPushButton* m_save = nullptr;
 	QPushButton* m_savePlan = nullptr;
+	QPushButton* m_saveReport = nullptr;
 };
 
 } // namespace vibestudio

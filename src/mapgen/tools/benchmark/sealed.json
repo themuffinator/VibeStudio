@@ -1,0 +1,19 @@
+{
+  "schema": "qmg.benchmark.sealed",
+  "schema_version": 1,
+  "created": "2026-10-15",
+  "change_id": "x1-bench",
+  "description": "Sealed cases. run.py refuses to generate a sealed case, or any case whose prompt has the same normalized sha256, unless --hero-run is given. Only the prompt is checked in routine work, through the 'qmg brief' dry run, which generates nothing.",
+  "prompt_normalization": "sha256 of the UTF-8 prompt after str.strip(), lower-casing and collapsing runs of whitespace to one space",
+  "sealed": [
+    {
+      "id": "q2-showcase-hero",
+      "manifest": "tools/benchmark/rc1-v1.json",
+      "seed": 4242,
+      "prompt_sha256": "57c0a1201208a61c4498ed3769754894cbbd23a0691d1056bd7e6213a2bfa2c0",
+      "normalized_prompt_sha256": "b7177dba4963d53d7367acf788e2cc446ccebf42d5fed061d1da087d89939616",
+      "reason": "D26 hero seal",
+      "baseline": "Its draft-v0 output (out/benchmark-draft/q2-showcase-hero) is baseline-0 evidence and may be re-evaluated read-only; it is not generated again outside the hero run."
+    }
+  ]
+}

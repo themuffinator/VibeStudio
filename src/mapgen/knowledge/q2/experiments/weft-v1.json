@@ -1,0 +1,4173 @@
+{
+  "schema_version": 1,
+  "id": "weft-v1",
+  "date": "2026-09-13",
+  "map": "qmg_weft",
+  "status": "default_q2_dm_duel_integration_fixed_compiled_portfolio_and_preview_gates_complete",
+  "study": "docs/Q2_WEFT_STUDY.md",
+  "regimen": "docs/MP_COMPACT_LAYOUT_REGIMEN.md",
+  "construction": "Ordinary default GenerationPipeline; rules/v1 planner, six candidates, eight repair passes, existing ggml ranker. Display title only.",
+  "request_case": "rooms6-seed42",
+  "candidate_seed": 15755400384260043881,
+  "construction_contract": {
+    "map": "qmg_weft",
+    "status": "default_pipeline_fixed_compiled_portfolio_preview_and_dedicated_initialization_gates_complete",
+    "request_case": "rooms6-seed42",
+    "default_candidates": 6,
+    "scope": "Q2 deathmatch and duel; other engine/mode layouts retain legacy construction",
+    "source": "src/mp_motifs.cpp",
+    "rooms": 6,
+    "connections": 7,
+    "main_floor_levels": [
+      0,
+      128
+    ],
+    "ordinary_stair_runs": 8,
+    "ordinary_treads": 64,
+    "typed_gameplay_anchors": 22,
+    "ordinary_spawn_anchor_pairs": 132,
+    "structural_changes": "Unequal packed rooms; short face passages; rotated crosswalks and partial horseshoes with two ordinary accesses; offset barriers.",
+    "artifact_gate_record": "knowledge/q2/experiments/weft-v1.json",
+    "limits": "Generated default-pipeline blockouts and local compiled checks do not establish full native circuits, rendered readability, spawn diversity or multiplayer balance."
+  },
+  "primary_comparison": {
+    "schema_version": 1,
+    "cases": [
+      {
+        "id": "rooms4-seed17",
+        "prompt": "Quake 2 duel industrial arena for 2 players with 4 rooms, vertical combat, tight connected loops, seed 17",
+        "source_sha256": "d547edcc18b347b59e6318b6cf6803c097d52ba1c9b5d2dbbf038e3b963e39bd",
+        "bsp_sha256": "bcbfda18226e9d805693fc4ef9b6609dd82348eace75a8ac4a8cae3dfc6c6ebe",
+        "candidate_seed": "1663341875487337594",
+        "rooms": 4,
+        "passages": 5,
+        "cycle_rank": 2,
+        "room_graph_signature": "c19c0a86fe758007ac91a6345a5894efe52cd27eca809c9a0780ac92c6860a88",
+        "motif_colored_room_graph_signature": "e372f224bff9eec773e2c507f834bc7284d66193cb942a929470968ff0fdc232",
+        "motifs": {
+          "raised_crosswalk": 2,
+          "offset_barrier": 1,
+          "horseshoe_gallery": 1
+        },
+        "levels": [
+          0,
+          128
+        ],
+        "old_compiled_xy_envelope_area": 4767552.0,
+        "new_compiled_xy_envelope_area": 3097344.0,
+        "envelope_reduction_fraction": 0.3503282187588096,
+        "old_anchor_center_failures": 0,
+        "new_anchor_center_failures": 0,
+        "ordinary_pairs": 26,
+        "single_passage_closures_losing_pairs": 0,
+        "old_spawn_pair_los_fraction": 0.0,
+        "initial_spawn_pair_los_fraction": 0.0,
+        "new_spawn_pair_los_fraction": 0.0,
+        "final_score": {
+          "structural_errors": 0,
+          "leak_errors": 0,
+          "navigation_errors": 0,
+          "visibility_errors": 0,
+          "lighting_errors": 0,
+          "timing_errors": 0,
+          "warnings": 2
+        },
+        "final_findings": {
+          "navigation": [],
+          "visibility": [],
+          "lighting": [
+            {
+              "id": 1,
+              "severity": "warning",
+              "code": "excessive_connection_contrast",
+              "sample": null,
+              "connection": 1,
+              "observed": 92659,
+              "threshold": 80000
+            },
+            {
+              "id": 2,
+              "severity": "warning",
+              "code": "excessive_connection_contrast",
+              "sample": null,
+              "connection": 3,
+              "observed": 91368,
+              "threshold": 80000
+            }
+          ],
+          "quality": []
+        },
+        "spawn_refinement_control": {
+          "same_candidate_seed": true,
+          "compiled_solid_signatures_equal": true,
+          "nonspawn_entities_equal": true
+        }
+      },
+      {
+        "id": "rooms4-seed42",
+        "prompt": "Quake 2 duel industrial arena for 2 players with 4 rooms, vertical combat, tight connected loops, seed 42",
+        "source_sha256": "659dc8f56578df4d5bb23ea7544bbf015c1cad68455dc5dae836f97f35eccfc1",
+        "bsp_sha256": "d5612736e3e7c94a19f7773271891e0bf7b25c1020abfccbac50c19c07daf760",
+        "candidate_seed": "15755400384260043881",
+        "rooms": 4,
+        "passages": 5,
+        "cycle_rank": 2,
+        "room_graph_signature": "c19c0a86fe758007ac91a6345a5894efe52cd27eca809c9a0780ac92c6860a88",
+        "motif_colored_room_graph_signature": "87e4602fac593d7db6f22db307f5b048d4ca5483979f25f21649b83b1e8fb5c0",
+        "motifs": {
+          "offset_barrier": 1,
+          "horseshoe_gallery": 1,
+          "raised_crosswalk": 2
+        },
+        "levels": [
+          0,
+          128
+        ],
+        "old_compiled_xy_envelope_area": 4769792.0,
+        "new_compiled_xy_envelope_area": 3040512.0,
+        "envelope_reduction_fraction": 0.3625483039931301,
+        "old_anchor_center_failures": 0,
+        "new_anchor_center_failures": 0,
+        "ordinary_pairs": 26,
+        "single_passage_closures_losing_pairs": 0,
+        "old_spawn_pair_los_fraction": 0.0,
+        "initial_spawn_pair_los_fraction": 0.0,
+        "new_spawn_pair_los_fraction": 0.0,
+        "final_score": {
+          "structural_errors": 0,
+          "leak_errors": 0,
+          "navigation_errors": 0,
+          "visibility_errors": 0,
+          "lighting_errors": 0,
+          "timing_errors": 0,
+          "warnings": 3
+        },
+        "final_findings": {
+          "navigation": [],
+          "visibility": [],
+          "lighting": [
+            {
+              "id": 1,
+              "severity": "warning",
+              "code": "excessive_connection_contrast",
+              "sample": null,
+              "connection": 1,
+              "observed": 95953,
+              "threshold": 80000
+            },
+            {
+              "id": 2,
+              "severity": "warning",
+              "code": "excessive_connection_contrast",
+              "sample": null,
+              "connection": 2,
+              "observed": 93020,
+              "threshold": 80000
+            },
+            {
+              "id": 3,
+              "severity": "warning",
+              "code": "excessive_connection_contrast",
+              "sample": null,
+              "connection": 5,
+              "observed": 93020,
+              "threshold": 80000
+            }
+          ],
+          "quality": []
+        },
+        "spawn_refinement_control": {
+          "same_candidate_seed": true,
+          "compiled_solid_signatures_equal": true,
+          "nonspawn_entities_equal": true
+        }
+      },
+      {
+        "id": "rooms4-seed99",
+        "prompt": "Quake 2 duel industrial arena for 2 players with 4 rooms, vertical combat, tight connected loops, seed 99",
+        "source_sha256": "48f3bc672b493f2d24a63fc8631c04124e65b73e679c74966017623690df31d8",
+        "bsp_sha256": "3fb2abf9f73e40ce95dad6fe1f8d6904eb74f1b885f6a2d458c1913627834781",
+        "candidate_seed": "1663341875487337676",
+        "rooms": 4,
+        "passages": 5,
+        "cycle_rank": 2,
+        "room_graph_signature": "c19c0a86fe758007ac91a6345a5894efe52cd27eca809c9a0780ac92c6860a88",
+        "motif_colored_room_graph_signature": "87e4602fac593d7db6f22db307f5b048d4ca5483979f25f21649b83b1e8fb5c0",
+        "motifs": {
+          "raised_crosswalk": 2,
+          "offset_barrier": 1,
+          "horseshoe_gallery": 1
+        },
+        "levels": [
+          0,
+          128
+        ],
+        "old_compiled_xy_envelope_area": 4647552.0,
+        "new_compiled_xy_envelope_area": 3095296.0,
+        "envelope_reduction_fraction": 0.3339943264755295,
+        "old_anchor_center_failures": 1,
+        "new_anchor_center_failures": 0,
+        "ordinary_pairs": 26,
+        "single_passage_closures_losing_pairs": 0,
+        "old_spawn_pair_los_fraction": 0.0,
+        "initial_spawn_pair_los_fraction": 0.0,
+        "new_spawn_pair_los_fraction": 0.0,
+        "final_score": {
+          "structural_errors": 0,
+          "leak_errors": 0,
+          "navigation_errors": 0,
+          "visibility_errors": 0,
+          "lighting_errors": 0,
+          "timing_errors": 0,
+          "warnings": 3
+        },
+        "final_findings": {
+          "navigation": [],
+          "visibility": [],
+          "lighting": [
+            {
+              "id": 1,
+              "severity": "warning",
+              "code": "excessive_connection_contrast",
+              "sample": null,
+              "connection": 1,
+              "observed": 138703,
+              "threshold": 80000
+            },
+            {
+              "id": 2,
+              "severity": "warning",
+              "code": "excessive_connection_contrast",
+              "sample": null,
+              "connection": 3,
+              "observed": 145665,
+              "threshold": 80000
+            },
+            {
+              "id": 3,
+              "severity": "warning",
+              "code": "excessive_connection_contrast",
+              "sample": null,
+              "connection": 5,
+              "observed": 138703,
+              "threshold": 80000
+            }
+          ],
+          "quality": []
+        },
+        "spawn_refinement_control": {
+          "same_candidate_seed": true,
+          "compiled_solid_signatures_equal": true,
+          "nonspawn_entities_equal": true
+        }
+      },
+      {
+        "id": "rooms6-seed17",
+        "prompt": "Quake 2 deathmatch industrial arena for 6 players with 6 rooms, vertical combat, tight connected loops, seed 17",
+        "source_sha256": "c7f61bcb97389951558ac0602460f5f9a8002dafbf64a511f4b171ccf0b2dfdc",
+        "bsp_sha256": "9ee7f9199735ef325677c7e2fa21079502d313d3fb6c6ce880c3b89b6f6c51b6",
+        "candidate_seed": "17",
+        "rooms": 6,
+        "passages": 7,
+        "cycle_rank": 2,
+        "room_graph_signature": "b897699bd3cb2ed446bd97ff46315ea1ddad3af6cc6c2b384bbf9c2615e99de1",
+        "motif_colored_room_graph_signature": "2dcda0f7bdb4bb5162dcfca239bc48542cbbe98546ac9ea0192238f5cf26c9f6",
+        "motifs": {
+          "offset_barrier": 2,
+          "horseshoe_gallery": 2,
+          "raised_crosswalk": 2
+        },
+        "levels": [
+          0,
+          128
+        ],
+        "old_compiled_xy_envelope_area": 7715840.0,
+        "new_compiled_xy_envelope_area": 4717056.0,
+        "envelope_reduction_fraction": 0.38865295288652957,
+        "old_anchor_center_failures": 0,
+        "new_anchor_center_failures": 0,
+        "ordinary_pairs": 132,
+        "single_passage_closures_losing_pairs": 0,
+        "old_spawn_pair_los_fraction": 0.0,
+        "initial_spawn_pair_los_fraction": 0.0,
+        "new_spawn_pair_los_fraction": 0.0,
+        "final_score": {
+          "structural_errors": 0,
+          "leak_errors": 0,
+          "navigation_errors": 0,
+          "visibility_errors": 0,
+          "lighting_errors": 0,
+          "timing_errors": 0,
+          "warnings": 5
+        },
+        "final_findings": {
+          "navigation": [],
+          "visibility": [],
+          "lighting": [
+            {
+              "id": 1,
+              "severity": "warning",
+              "code": "unreadable_sample",
+              "sample": 15,
+              "connection": null,
+              "observed": 0,
+              "threshold": 500
+            },
+            {
+              "id": 2,
+              "severity": "warning",
+              "code": "excessive_connection_contrast",
+              "sample": null,
+              "connection": 1,
+              "observed": 127453,
+              "threshold": 80000
+            },
+            {
+              "id": 3,
+              "severity": "warning",
+              "code": "excessive_connection_contrast",
+              "sample": null,
+              "connection": 2,
+              "observed": 119376,
+              "threshold": 80000
+            },
+            {
+              "id": 4,
+              "severity": "warning",
+              "code": "excessive_connection_contrast",
+              "sample": null,
+              "connection": 3,
+              "observed": 84192,
+              "threshold": 80000
+            },
+            {
+              "id": 5,
+              "severity": "warning",
+              "code": "excessive_connection_contrast",
+              "sample": null,
+              "connection": 4,
+              "observed": 85341,
+              "threshold": 80000
+            }
+          ],
+          "quality": []
+        },
+        "spawn_refinement_control": {
+          "same_candidate_seed": true,
+          "compiled_solid_signatures_equal": true,
+          "nonspawn_entities_equal": true
+        }
+      },
+      {
+        "id": "rooms6-seed42",
+        "prompt": "Quake 2 deathmatch industrial arena for 6 players with 6 rooms, vertical combat, tight connected loops, seed 42",
+        "source_sha256": "a00415003b3a72aaa206ad38d8ea02f5a12296441b70d746539bda41b31aa3c6",
+        "bsp_sha256": "76eb1573b36ee4d44f54548841662a2624feb5fd72f2e75641bdfad561a5950b",
+        "candidate_seed": "15755400384260043881",
+        "rooms": 6,
+        "passages": 7,
+        "cycle_rank": 2,
+        "room_graph_signature": "b897699bd3cb2ed446bd97ff46315ea1ddad3af6cc6c2b384bbf9c2615e99de1",
+        "motif_colored_room_graph_signature": "5f95da5852f5888e02fd6e4ae0b2556c2e18f99e09ea09e236b754d2b474a389",
+        "motifs": {
+          "horseshoe_gallery": 2,
+          "offset_barrier": 2,
+          "raised_crosswalk": 2
+        },
+        "levels": [
+          0,
+          128
+        ],
+        "old_compiled_xy_envelope_area": 7220928.0,
+        "new_compiled_xy_envelope_area": 4547072.0,
+        "envelope_reduction_fraction": 0.3702925718134844,
+        "old_anchor_center_failures": 0,
+        "new_anchor_center_failures": 0,
+        "ordinary_pairs": 132,
+        "single_passage_closures_losing_pairs": 0,
+        "old_spawn_pair_los_fraction": 0.0,
+        "initial_spawn_pair_los_fraction": 0.0,
+        "new_spawn_pair_los_fraction": 0.0,
+        "final_score": {
+          "structural_errors": 0,
+          "leak_errors": 0,
+          "navigation_errors": 0,
+          "visibility_errors": 0,
+          "lighting_errors": 0,
+          "timing_errors": 0,
+          "warnings": 2
+        },
+        "final_findings": {
+          "navigation": [],
+          "visibility": [],
+          "lighting": [
+            {
+              "id": 1,
+              "severity": "warning",
+              "code": "excessive_connection_contrast",
+              "sample": null,
+              "connection": 1,
+              "observed": 110966,
+              "threshold": 80000
+            },
+            {
+              "id": 2,
+              "severity": "warning",
+              "code": "excessive_connection_contrast",
+              "sample": null,
+              "connection": 3,
+              "observed": 96839,
+              "threshold": 80000
+            }
+          ],
+          "quality": []
+        },
+        "spawn_refinement_control": {
+          "same_candidate_seed": true,
+          "compiled_solid_signatures_equal": true,
+          "nonspawn_entities_equal": true
+        }
+      },
+      {
+        "id": "rooms6-seed99",
+        "prompt": "Quake 2 deathmatch industrial arena for 6 players with 6 rooms, vertical combat, tight connected loops, seed 99",
+        "source_sha256": "e2a715d21c046ad191a011bf79d9cdbf02469f17d1a73ae15138daadf68f8fcd",
+        "bsp_sha256": "80d38c656af563317e88c2c5cbb4e99939e28f3dfdbe143610e005239b2401d4",
+        "candidate_seed": "8709371129873690807",
+        "rooms": 6,
+        "passages": 7,
+        "cycle_rank": 2,
+        "room_graph_signature": "b897699bd3cb2ed446bd97ff46315ea1ddad3af6cc6c2b384bbf9c2615e99de1",
+        "motif_colored_room_graph_signature": "e7a2e16b18827d1ecf97885ed7b6813bd4e49eb08057d290087c2f290bba6e76",
+        "motifs": {
+          "offset_barrier": 2,
+          "horseshoe_gallery": 2,
+          "raised_crosswalk": 2
+        },
+        "levels": [
+          0,
+          128
+        ],
+        "old_compiled_xy_envelope_area": 7460544.0,
+        "new_compiled_xy_envelope_area": 4353024.0,
+        "envelope_reduction_fraction": 0.4165272666443627,
+        "old_anchor_center_failures": 1,
+        "new_anchor_center_failures": 0,
+        "ordinary_pairs": 132,
+        "single_passage_closures_losing_pairs": 0,
+        "old_spawn_pair_los_fraction": 0.0,
+        "initial_spawn_pair_los_fraction": 0.13333333333333333,
+        "new_spawn_pair_los_fraction": 0.0,
+        "final_score": {
+          "structural_errors": 0,
+          "leak_errors": 0,
+          "navigation_errors": 0,
+          "visibility_errors": 0,
+          "lighting_errors": 0,
+          "timing_errors": 0,
+          "warnings": 2
+        },
+        "final_findings": {
+          "navigation": [],
+          "visibility": [],
+          "lighting": [
+            {
+              "id": 1,
+              "severity": "warning",
+              "code": "excessive_connection_contrast",
+              "sample": null,
+              "connection": 1,
+              "observed": 129616,
+              "threshold": 80000
+            },
+            {
+              "id": 2,
+              "severity": "warning",
+              "code": "excessive_connection_contrast",
+              "sample": null,
+              "connection": 2,
+              "observed": 118817,
+              "threshold": 80000
+            }
+          ],
+          "quality": []
+        },
+        "spawn_refinement_control": {
+          "same_candidate_seed": true,
+          "compiled_solid_signatures_equal": true,
+          "nonspawn_entities_equal": true
+        }
+      },
+      {
+        "id": "rooms8-seed17",
+        "prompt": "Quake 2 deathmatch industrial arena for 6 players with 8 rooms, vertical combat, tight connected loops, seed 17",
+        "source_sha256": "88c3dad0ded1144dccb17c3eb8de16aa75f92d5c559fe3bba25de23e5c2e837a",
+        "bsp_sha256": "34d8dd10a28ef858f324a24db4e82a33b39a9e72228bfb9ffff61ccb02082af1",
+        "candidate_seed": "17",
+        "rooms": 8,
+        "passages": 12,
+        "cycle_rank": 5,
+        "room_graph_signature": "108a4c0d50e4940372bbdacfbb487016348eb8493661abc78e74082e2e8688ef",
+        "motif_colored_room_graph_signature": "896ca1034672ff0426c7a5aa9babbec6df004bade4d6e7e7cc70e5627141e7f2",
+        "motifs": {
+          "offset_barrier": 3,
+          "raised_crosswalk": 3,
+          "horseshoe_gallery": 2
+        },
+        "levels": [
+          0,
+          128
+        ],
+        "old_compiled_xy_envelope_area": 10504064.0,
+        "new_compiled_xy_envelope_area": 6967296.0,
+        "envelope_reduction_fraction": 0.3367047268561959,
+        "old_anchor_center_failures": 0,
+        "new_anchor_center_failures": 0,
+        "ordinary_pairs": 162,
+        "single_passage_closures_losing_pairs": 0,
+        "old_spawn_pair_los_fraction": 0.0,
+        "initial_spawn_pair_los_fraction": 0.0,
+        "new_spawn_pair_los_fraction": 0.0,
+        "final_score": {
+          "structural_errors": 0,
+          "leak_errors": 0,
+          "navigation_errors": 0,
+          "visibility_errors": 0,
+          "lighting_errors": 0,
+          "timing_errors": 0,
+          "warnings": 8
+        },
+        "final_findings": {
+          "navigation": [],
+          "visibility": [],
+          "lighting": [
+            {
+              "id": 1,
+              "severity": "warning",
+              "code": "unreadable_sample",
+              "sample": 22,
+              "connection": null,
+              "observed": 300,
+              "threshold": 500
+            },
+            {
+              "id": 2,
+              "severity": "warning",
+              "code": "excessive_connection_contrast",
+              "sample": null,
+              "connection": 1,
+              "observed": 123948,
+              "threshold": 80000
+            },
+            {
+              "id": 3,
+              "severity": "warning",
+              "code": "excessive_connection_contrast",
+              "sample": null,
+              "connection": 2,
+              "observed": 120403,
+              "threshold": 80000
+            },
+            {
+              "id": 4,
+              "severity": "warning",
+              "code": "excessive_connection_contrast",
+              "sample": null,
+              "connection": 3,
+              "observed": 129559,
+              "threshold": 80000
+            },
+            {
+              "id": 5,
+              "severity": "warning",
+              "code": "excessive_connection_contrast",
+              "sample": null,
+              "connection": 5,
+              "observed": 95969,
+              "threshold": 80000
+            },
+            {
+              "id": 6,
+              "severity": "warning",
+              "code": "excessive_connection_contrast",
+              "sample": null,
+              "connection": 8,
+              "observed": 98776,
+              "threshold": 80000
+            },
+            {
+              "id": 7,
+              "severity": "warning",
+              "code": "excessive_connection_contrast",
+              "sample": null,
+              "connection": 10,
+              "observed": 115324,
+              "threshold": 80000
+            },
+            {
+              "id": 8,
+              "severity": "warning",
+              "code": "excessive_connection_contrast",
+              "sample": null,
+              "connection": 12,
+              "observed": 127243,
+              "threshold": 80000
+            }
+          ],
+          "quality": []
+        },
+        "spawn_refinement_control": {
+          "same_candidate_seed": true,
+          "compiled_solid_signatures_equal": true,
+          "nonspawn_entities_equal": true
+        }
+      },
+      {
+        "id": "rooms8-seed42",
+        "prompt": "Quake 2 deathmatch industrial arena for 6 players with 8 rooms, vertical combat, tight connected loops, seed 42",
+        "source_sha256": "d399aad51bd226f918113d3f4b2aa61825995f0efb0b01328d3e9b68a6771de5",
+        "bsp_sha256": "2b48e57ae7cd7e0a298d2783ed4fa28d9e81407a0091ce770c69bd77e58be395",
+        "candidate_seed": "15755400384260043881",
+        "rooms": 8,
+        "passages": 13,
+        "cycle_rank": 6,
+        "room_graph_signature": "9b1aa00f47e447d359d3405d466dd77828a6a6e381e2e6f1b0b9b7b81de5e2cd",
+        "motif_colored_room_graph_signature": "9a437159c8c812410a12556ddb2432be71e313e6fc620c004d715e49d69a7da6",
+        "motifs": {
+          "raised_crosswalk": 3,
+          "offset_barrier": 3,
+          "horseshoe_gallery": 2
+        },
+        "levels": [
+          0,
+          128
+        ],
+        "old_compiled_xy_envelope_area": 10302336.0,
+        "new_compiled_xy_envelope_area": 7037952.0,
+        "envelope_reduction_fraction": 0.3168586231316859,
+        "old_anchor_center_failures": 0,
+        "new_anchor_center_failures": 0,
+        "ordinary_pairs": 162,
+        "single_passage_closures_losing_pairs": 0,
+        "old_spawn_pair_los_fraction": 0.0,
+        "initial_spawn_pair_los_fraction": 0.06666666666666667,
+        "new_spawn_pair_los_fraction": 0.0,
+        "final_score": {
+          "structural_errors": 0,
+          "leak_errors": 0,
+          "navigation_errors": 0,
+          "visibility_errors": 0,
+          "lighting_errors": 0,
+          "timing_errors": 0,
+          "warnings": 8
+        },
+        "final_findings": {
+          "navigation": [],
+          "visibility": [],
+          "lighting": [
+            {
+              "id": 1,
+              "severity": "warning",
+              "code": "excessive_connection_contrast",
+              "sample": null,
+              "connection": 1,
+              "observed": 89298,
+              "threshold": 80000
+            },
+            {
+              "id": 2,
+              "severity": "warning",
+              "code": "excessive_connection_contrast",
+              "sample": null,
+              "connection": 3,
+              "observed": 97304,
+              "threshold": 80000
+            },
+            {
+              "id": 3,
+              "severity": "warning",
+              "code": "excessive_connection_contrast",
+              "sample": null,
+              "connection": 4,
+              "observed": 94050,
+              "threshold": 80000
+            },
+            {
+              "id": 4,
+              "severity": "warning",
+              "code": "excessive_connection_contrast",
+              "sample": null,
+              "connection": 5,
+              "observed": 84363,
+              "threshold": 80000
+            },
+            {
+              "id": 5,
+              "severity": "warning",
+              "code": "excessive_connection_contrast",
+              "sample": null,
+              "connection": 8,
+              "observed": 83663,
+              "threshold": 80000
+            },
+            {
+              "id": 6,
+              "severity": "warning",
+              "code": "excessive_connection_contrast",
+              "sample": null,
+              "connection": 11,
+              "observed": 89414,
+              "threshold": 80000
+            },
+            {
+              "id": 7,
+              "severity": "warning",
+              "code": "excessive_connection_contrast",
+              "sample": null,
+              "connection": 12,
+              "observed": 85176,
+              "threshold": 80000
+            },
+            {
+              "id": 8,
+              "severity": "warning",
+              "code": "excessive_connection_contrast",
+              "sample": null,
+              "connection": 13,
+              "observed": 99906,
+              "threshold": 80000
+            }
+          ],
+          "quality": []
+        },
+        "spawn_refinement_control": {
+          "same_candidate_seed": true,
+          "compiled_solid_signatures_equal": true,
+          "nonspawn_entities_equal": true
+        }
+      },
+      {
+        "id": "rooms8-seed99",
+        "prompt": "Quake 2 deathmatch industrial arena for 6 players with 8 rooms, vertical combat, tight connected loops, seed 99",
+        "source_sha256": "45fcce5e2c1c742e565bf77d21b91ece556722dcc03a35a1d52a96ba84a3d67c",
+        "bsp_sha256": "afdc8fc6c39f6036082a1cdc898ac1fbe328e53d96c11b13297dc44a7f07f1cb",
+        "candidate_seed": "99",
+        "rooms": 8,
+        "passages": 13,
+        "cycle_rank": 6,
+        "room_graph_signature": "9b1aa00f47e447d359d3405d466dd77828a6a6e381e2e6f1b0b9b7b81de5e2cd",
+        "motif_colored_room_graph_signature": "33e0d6ab54ef137cd374d377b62202ee22a1057e1d34a61b68254fc17f8b717f",
+        "motifs": {
+          "offset_barrier": 3,
+          "raised_crosswalk": 3,
+          "horseshoe_gallery": 2
+        },
+        "levels": [
+          0,
+          128
+        ],
+        "old_compiled_xy_envelope_area": 10016768.0,
+        "new_compiled_xy_envelope_area": 6544384.0,
+        "envelope_reduction_fraction": 0.3466571253322429,
+        "old_anchor_center_failures": 1,
+        "new_anchor_center_failures": 0,
+        "ordinary_pairs": 162,
+        "single_passage_closures_losing_pairs": 0,
+        "old_spawn_pair_los_fraction": 0.0,
+        "initial_spawn_pair_los_fraction": 0.0,
+        "new_spawn_pair_los_fraction": 0.0,
+        "final_score": {
+          "structural_errors": 0,
+          "leak_errors": 0,
+          "navigation_errors": 0,
+          "visibility_errors": 0,
+          "lighting_errors": 0,
+          "timing_errors": 0,
+          "warnings": 6
+        },
+        "final_findings": {
+          "navigation": [],
+          "visibility": [],
+          "lighting": [
+            {
+              "id": 1,
+              "severity": "warning",
+              "code": "excessive_connection_contrast",
+              "sample": null,
+              "connection": 1,
+              "observed": 88670,
+              "threshold": 80000
+            },
+            {
+              "id": 2,
+              "severity": "warning",
+              "code": "excessive_connection_contrast",
+              "sample": null,
+              "connection": 2,
+              "observed": 84485,
+              "threshold": 80000
+            },
+            {
+              "id": 3,
+              "severity": "warning",
+              "code": "excessive_connection_contrast",
+              "sample": null,
+              "connection": 8,
+              "observed": 87411,
+              "threshold": 80000
+            },
+            {
+              "id": 4,
+              "severity": "warning",
+              "code": "excessive_connection_contrast",
+              "sample": null,
+              "connection": 11,
+              "observed": 97933,
+              "threshold": 80000
+            },
+            {
+              "id": 5,
+              "severity": "warning",
+              "code": "excessive_connection_contrast",
+              "sample": null,
+              "connection": 12,
+              "observed": 97038,
+              "threshold": 80000
+            },
+            {
+              "id": 6,
+              "severity": "warning",
+              "code": "excessive_connection_contrast",
+              "sample": null,
+              "connection": 13,
+              "observed": 108491,
+              "threshold": 80000
+            }
+          ],
+          "quality": []
+        },
+        "spawn_refinement_control": {
+          "same_candidate_seed": true,
+          "compiled_solid_signatures_equal": true,
+          "nonspawn_entities_equal": true
+        }
+      }
+    ],
+    "structural_variety": [
+      {
+        "rooms": 4,
+        "distinct_unlabelled_graphs": 1,
+        "distinct_motif_colored_graphs": 2
+      },
+      {
+        "rooms": 6,
+        "distinct_unlabelled_graphs": 1,
+        "distinct_motif_colored_graphs": 3
+      },
+      {
+        "rooms": 8,
+        "distinct_unlabelled_graphs": 2,
+        "distinct_motif_colored_graphs": 3
+      }
+    ],
+    "limits": [
+      "Nine fixed requests use the default six-candidate selector; no hand-selected candidate replacement.",
+      "Before/after generation changes geometry and placement policy together; smaller envelopes are descriptive, not proven better play.",
+      "A changed seed/fingerprint is not a new topology; room graph signatures ignore within-room circulation.",
+      "Colored signatures preserve motif identity, not exact usable routes or tactics.",
+      "The two additional verticality controls are separate from this matched nine-case comparison.",
+      "Spawn LOS is static and position-specific; human respawn selection and match safety remain untested."
+    ]
+  },
+  "semantic_controls": [
+    {
+      "case": "rooms6-seed42-low",
+      "levels": [
+        0
+      ],
+      "verification": "out/mp-portfolio/generated/rooms6-seed42-low/verification.json"
+    },
+    {
+      "case": "rooms6-seed42-high",
+      "levels": [
+        0,
+        128,
+        192
+      ],
+      "verification": "out/mp-portfolio/generated/rooms6-seed42-high/verification.json"
+    }
+  ],
+  "validation": {
+    "configured_ctest_gates": 42,
+    "nonoverlapping_ctest_waves": [
+      4,
+      38
+    ],
+    "primary_full_compiles": 9,
+    "separate_semantic_full_compiles": 2,
+    "duplicate_hero_full_compiles": 1,
+    "primary_viewer_states": 162,
+    "semantic_viewer_states": 36,
+    "hero_viewer_states": 18,
+    "prior_recipe_map_parity": 8,
+    "cli_map_and_report_parity": true,
+    "dedicated_initialization_gates": 16,
+    "native_weft_movement_tested": false,
+    "client_rendering_tested": false,
+    "multiplayer_playtested": false
+  },
+  "knowledge": {
+    "q2_rule_cards": 42,
+    "native_recovery_record": "knowledge/q2/native-recovery-study.json",
+    "native_recovery_profiles": 8,
+    "native_recovery_successes": 5,
+    "native_recovery_failures_retained": 3,
+    "native_recovery_scope": "Frozen Ravel BSP; fixed approaches followed by bounded pause/turn-burst profiles. Onward doorway journey untested.",
+    "prior_ql_atlas_maps": 6,
+    "prior_ql_atlas_orthographics": 64,
+    "profile_retrained": false,
+    "model_weights_trained": false,
+    "reference_geometry_copied": false
+  },
+  "limits": [
+    "Smaller compiled XY envelopes are descriptive; not a demonstrated gameplay-quality improvement.",
+    "Graph topology remains limited: 4/6-room sets each share one unlabelled graph, 8-room set has two.",
+    "Compiled node and tread centers plus ordinary graph reachability do not prove full native circuits.",
+    "Spawn LOS is static and position-specific; player-count spawn policy still limits respawn diversity.",
+    "Primary set retains39 analytical lighting warnings, Weft2; rendered readability is untested.",
+    "The inherited ranker still uses a1280-unit room-spacing heuristic; dense32-player refinement cost remains to profile.",
+    "Default integration covers only Q2 deathmatch/duel; mechanisms, liquids, other modes and engines need separate contracts."
+  ],
+  "next_trials": [
+    "Native complete upper/lower motif circuits across rotations and elevations",
+    "Increase topology families beyond rectangular room partitions",
+    "Match item/spawn contact and human route-control observations"
+  ],
+  "cleanup": {
+    "schema_version": 1,
+    "status": "single_cleanup_attempt_rejected_by_automatic_approval_review",
+    "reason": "blocked by policy",
+    "paths": [
+      "E:/Repositories/Quake-MapGen/.agents/tmp/weft-viewer-v1",
+      "E:/Repositories/Quake-MapGen/.agents/tmp/weft-engine-v1"
+    ],
+    "preflight": {
+      "exact_paths_within_project": true,
+      "ancestors_and_descendants_have_no_reparse_points": true,
+      "preview_process_finished": true,
+      "dedicated_process_exited_normally": true,
+      "dedicated_processes_remaining": 0,
+      "viewer_entries": 1,
+      "viewer_bytes": 738,
+      "engine_entries": 26,
+      "engine_bytes": 2132679
+    },
+    "deletion_command_executed": false,
+    "retry_attempted": false,
+    "historically_blocked_paths_retried": false,
+    "evidence_retained": "out/weft and out/mp-portfolio"
+  },
+  "hash_scope": "Current delivery sources and outputs, excluding this self-referential record and post-record check. Historical manifests are unchanged.",
+  "evidence_files": [
+    {
+      "path": "build/windows-clang/qmg.exe",
+      "sha256": "c5d3a974536508b3ad86c3b602b5a92573c48437a8754f56b4344e5c2d9d6adf",
+      "bytes": 10852352
+    },
+    {
+      "path": "build/windows-clang/qmg_core.lib",
+      "sha256": "986f479a271d27e7c9b9a263ac1f0c16f2b5c14cdca43b5517502ce1ea9b073d",
+      "bytes": 50560830
+    },
+    {
+      "path": "CMakeLists.txt",
+      "sha256": "2e383b0ac54df4571f6b2c4bffa13c6fc0265cece36649ce8764eaa37da6010e",
+      "bytes": 28803
+    },
+    {
+      "path": "CMakePresets.json",
+      "sha256": "3c1d02aa5aad6942dd4b3e4c6d4d1eacc8be6d884bf943c2f611a14414a8f7fa",
+      "bytes": 1600
+    },
+    {
+      "path": "docs/MAP_DESIGN_PLAYBOOK.md",
+      "sha256": "41f02dc018e60d1f1ebb1dcc1099329fd57b2f78b6e3b490abbbe18cf87a62b7",
+      "bytes": 30888
+    },
+    {
+      "path": "docs/MP_COMPACT_LAYOUT_REGIMEN.md",
+      "sha256": "7a175e61e2c1da44b2d09c72de1fca7e57542efc2473f56a601fb6c0fe62b081",
+      "bytes": 15837
+    },
+    {
+      "path": "docs/Q2_NATIVE_RECOVERY_STUDY.md",
+      "sha256": "46bfb4f1bd4da2e2ca9b63e71c7150d57c0f97b5145a2ba2462b80003b13f080",
+      "bytes": 9322
+    },
+    {
+      "path": "docs/Q2_WEFT_STUDY.md",
+      "sha256": "2ff93b0fdc827a8642383f59a8fe20f4269bf8044f9cb3d3efebf3f4bf86b23d",
+      "bytes": 13655
+    },
+    {
+      "path": "docs/ROADMAP.md",
+      "sha256": "f849477003d64be9c309d3f7043837b8177998483c32e3258ee4d209ba8c9201",
+      "bytes": 18194
+    },
+    {
+      "path": "docs/VALIDATION.md",
+      "sha256": "61b55fef6739468c24840fcbbf1996b30554dd3ce279dc24f1274a85c4a5652d",
+      "bytes": 34227
+    },
+    {
+      "path": "include/qmg/construction.hpp",
+      "sha256": "4c2c867fda4dc4e439e7d74b53d9b2ef13b4e90fb38d573212faaf4caed4548d",
+      "bytes": 7423
+    },
+    {
+      "path": "include/qmg/entities.hpp",
+      "sha256": "8692ce30cf0ac59b3026349479d1c0a8646ccef3fa67996df3a4b585e2eed724",
+      "bytes": 156
+    },
+    {
+      "path": "include/qmg/generator.hpp",
+      "sha256": "cdc6dd284bdd7987c9411dbf93ec70b6407158d665820ef314c20995fc2b033a",
+      "bytes": 571
+    },
+    {
+      "path": "include/qmg/ggml_ranker.hpp",
+      "sha256": "4a998d37ebd9f600985fd3f678112aac3e49b95bcd56d8b12b7c4535dfa0688b",
+      "bytes": 461
+    },
+    {
+      "path": "include/qmg/layout.hpp",
+      "sha256": "55be6c6bcaf9d13cfd282a860d2a1f7df32f6c0a2c427d89472805a5f371b2d4",
+      "bytes": 23251
+    },
+    {
+      "path": "include/qmg/layout_fingerprint.hpp",
+      "sha256": "3301093beff5e80ecc8667f7c71baaaa4e786e43aec57f7eac44902f4d2c5de1",
+      "bytes": 401
+    },
+    {
+      "path": "include/qmg/leak.hpp",
+      "sha256": "8e0ad0a029ea4afa578efca487b1fed26de2b937495df54d52c0da20f7ae39cd",
+      "bytes": 8729
+    },
+    {
+      "path": "include/qmg/lighting.hpp",
+      "sha256": "9b69a8d89c6ee41045b7292283e70ffea864abfcac0f09ee697c80c723ea1b75",
+      "bytes": 4366
+    },
+    {
+      "path": "include/qmg/llama_text_model.hpp",
+      "sha256": "bea6baef7754cf2d9af5030d2387aafdb62f7e6f518e4cc324a91ec59ade2d4d",
+      "bytes": 796
+    },
+    {
+      "path": "include/qmg/map_builder.hpp",
+      "sha256": "525d60e3825b24ac85c86eb9a292d0561727e46318e988286beb1fa85c5ad6cc",
+      "bytes": 1983
+    },
+    {
+      "path": "include/qmg/map_document.hpp",
+      "sha256": "417c827cd617bf4ab276256e78b61cb967df7c3da3a50f882d9df3115b2d319a",
+      "bytes": 5058
+    },
+    {
+      "path": "include/qmg/map_document_writer.hpp",
+      "sha256": "a7c029134ab9cfab4e57586ca2c812e0d3bea4bb6fd05f4dec64dacc20e27c54",
+      "bytes": 485
+    },
+    {
+      "path": "include/qmg/map_parser.hpp",
+      "sha256": "559ee2f2bd72751f45776569dd2e12d5bd8f3d4a7b067ef9c2c7a85ae53312ca",
+      "bytes": 1567
+    },
+    {
+      "path": "include/qmg/map_writer.hpp",
+      "sha256": "b38627c00c0c9aaffbb361fc111e9fc3f36a6da017616dd81b6544adc8c81560",
+      "bytes": 768
+    },
+    {
+      "path": "include/qmg/mp_motifs.hpp",
+      "sha256": "3695ad5ba8cb134689fde3b5952f5bc99b9be42540d1158242eb86d95bab69a4",
+      "bytes": 351
+    },
+    {
+      "path": "include/qmg/navigation.hpp",
+      "sha256": "f05c1a1cf36436730c097864cd677d7e6e645de9faa6d34778bf98c696058039",
+      "bytes": 10010
+    },
+    {
+      "path": "include/qmg/pipeline.hpp",
+      "sha256": "8e676a08cbb74dfa36da95dedf722b1eb5e357f5fa61d87cf2158b02336c9d00",
+      "bytes": 1583
+    },
+    {
+      "path": "include/qmg/prompt.hpp",
+      "sha256": "bead7aaf975cb66c053c27aaa2ffd2f98df961a0bb1a58dc88cb6c448694ffdf",
+      "bytes": 612
+    },
+    {
+      "path": "include/qmg/quake2_mechanisms.hpp",
+      "sha256": "79077734698c1ceb6b497167c10eccf1db7580e0fb8a02111c12ae75f9f7a26b",
+      "bytes": 954
+    },
+    {
+      "path": "include/qmg/quality.hpp",
+      "sha256": "563e620f5c7ece0f8223fc21aefd53eebd35e80e6d825c3bf0eac5125240eb89",
+      "bytes": 13808
+    },
+    {
+      "path": "include/qmg/repair.hpp",
+      "sha256": "4ad9851edf9b3a5f7d96568e778b44115e81588b7c24a3c5913904a3f8f2836b",
+      "bytes": 207
+    },
+    {
+      "path": "include/qmg/report.hpp",
+      "sha256": "45348430b150a54fe6ed6cea79f86464223ab3d2547cdf552f9f5044780386d5",
+      "bytes": 276
+    },
+    {
+      "path": "include/qmg/semantic_plan.hpp",
+      "sha256": "d835856a3046bef2eac360b24f3e3ba75d13d7926d5fd478d0c3478c6ece2192",
+      "bytes": 1922
+    },
+    {
+      "path": "include/qmg/semantic_planner.hpp",
+      "sha256": "b7bd5d622f75ef2950b44429cc41a590d641eb0beac431cb4ece2ce25a7bb55e",
+      "bytes": 1335
+    },
+    {
+      "path": "include/qmg/sha256.hpp",
+      "sha256": "af2d8aae235ec28c49ca18dc0c90900df7c7852e5ccbe381154073a315fac076",
+      "bytes": 247
+    },
+    {
+      "path": "include/qmg/text_model.hpp",
+      "sha256": "9709a6a0cf656935232db431ba209a37434cfddd4a1d36b7d2490b32793bde4a",
+      "bytes": 1161
+    },
+    {
+      "path": "include/qmg/types.hpp",
+      "sha256": "adb65da47cbf15108407d394d70a238a7024f0e3bc8347624d2d959641956cac",
+      "bytes": 1545
+    },
+    {
+      "path": "include/qmg/validator.hpp",
+      "sha256": "1e27f25997deb096e129285fdc099539b60fc543827bbc68a96c53d2fd0a7c4c",
+      "bytes": 700
+    },
+    {
+      "path": "include/qmg/visibility.hpp",
+      "sha256": "68aafb5198492a1b3e056137722b320583d2e843b93b047960bf0784436863af",
+      "bytes": 7216
+    },
+    {
+      "path": "knowledge/q2/iteration-roadmap.json",
+      "sha256": "3a50d08de6a5edbb4f573a7effda4aa3fc38b4331abde592389b2e0272417749",
+      "bytes": 17451
+    },
+    {
+      "path": "knowledge/q2/native-recovery-study.json",
+      "sha256": "ba49aba1272715b14863bed14ad75eb07af8369fbe6be0000f522e40574a07f4",
+      "bytes": 42255
+    },
+    {
+      "path": "knowledge/q2/rules.json",
+      "sha256": "e9a6ceb794559cf4921ea9e4082610ed2d3182f906d779b54e3b8fdb8c715c4f",
+      "bytes": 64084
+    },
+    {
+      "path": "out/mp-portfolio/baseline/roadmap-before.json",
+      "sha256": "1388c7e091cc93d63806aa12b48c597a2e6e88e6ac6e2af25376b38bbd874f50",
+      "bytes": 15053
+    },
+    {
+      "path": "out/mp-portfolio/baseline/rooms4-seed17-compiled-analysis.json",
+      "sha256": "745ef78859782c02406a92424a759ec5d757e398bd6d72c908d43f4085545f77",
+      "bytes": 16315
+    },
+    {
+      "path": "out/mp-portfolio/baseline/rooms4-seed17-qbsp.log",
+      "sha256": "6c1cf59f24401bb64285b95d01abd42e943fdb069fa2243b2b09cb2209baba99",
+      "bytes": 1875
+    },
+    {
+      "path": "out/mp-portfolio/baseline/rooms4-seed17-verification.json",
+      "sha256": "ded6342739218d95ff194f5f9db8bf1ab70eb777a588008d3d934db65281b5db",
+      "bytes": 5711
+    },
+    {
+      "path": "out/mp-portfolio/baseline/rooms4-seed17.bsp",
+      "sha256": "7663c948c6dbc0b1303309ddfb554655292893b95a8b49b9530227bab18c19b3",
+      "bytes": 36544
+    },
+    {
+      "path": "out/mp-portfolio/baseline/rooms4-seed17.content.json",
+      "sha256": "bb08ab5cb4d41ab87e018db2f8c028028bc381f5ff2e05202a125f42f5b61641",
+      "bytes": 896
+    },
+    {
+      "path": "out/mp-portfolio/baseline/rooms4-seed17.log",
+      "sha256": "7eab7189ea72d5390e70f161cea92f9ff7c38a07e0673726466d3ebfbc2f0f52",
+      "bytes": 243
+    },
+    {
+      "path": "out/mp-portfolio/baseline/rooms4-seed17.map",
+      "sha256": "db6a32f5be9752bdd5e72afe37c3b0610e7d4429107d0732adefaa72c119ff5e",
+      "bytes": 38837
+    },
+    {
+      "path": "out/mp-portfolio/baseline/rooms4-seed17.prt",
+      "sha256": "97ed5c67fa0dff844f9731dfe93c7571026afa768616363eec9cdd3d82ec9103",
+      "bytes": 5406
+    },
+    {
+      "path": "out/mp-portfolio/baseline/rooms4-seed17.qmg.json",
+      "sha256": "05af8c53ee03fe881fc7c7eb53c83741b7a566ea4275d6ab397fccc7e052153c",
+      "bytes": 24471
+    },
+    {
+      "path": "out/mp-portfolio/baseline/rooms4-seed17.texinfo.json",
+      "sha256": "9790bce84d9459f2ee44d792530e95a97646df8922f29965c15d6b6117cf8c13",
+      "bytes": 103
+    },
+    {
+      "path": "out/mp-portfolio/baseline/rooms4-seed42-compiled-analysis.json",
+      "sha256": "e0c7d1c04bda6e82db2f8ea98b79e55070276ca043eea0b725120a4aac35e0f1",
+      "bytes": 16402
+    },
+    {
+      "path": "out/mp-portfolio/baseline/rooms4-seed42-qbsp.log",
+      "sha256": "b3b27814344bed845b88f470e406210ccf78a68bcdbe964576ac72408131c014",
+      "bytes": 1875
+    },
+    {
+      "path": "out/mp-portfolio/baseline/rooms4-seed42-verification.json",
+      "sha256": "a3b6894739079e5d176a12a8501eeaadd7e254ad2bf11060ba5aa02c597576e2",
+      "bytes": 5708
+    },
+    {
+      "path": "out/mp-portfolio/baseline/rooms4-seed42.bsp",
+      "sha256": "39cabc850b664b00e7b9e4560a1d445f2f4e6aab1e4d9d66c9130a871440d162",
+      "bytes": 36532
+    },
+    {
+      "path": "out/mp-portfolio/baseline/rooms4-seed42.content.json",
+      "sha256": "4236134f2930c9932a9b2a37ff8f7096aa273a932cf04d3a3577f87780793abf",
+      "bytes": 860
+    },
+    {
+      "path": "out/mp-portfolio/baseline/rooms4-seed42.log",
+      "sha256": "96ef1d15727aeff7e9443dadfa8af505c45d257a759ff223e7693701bd66a880",
+      "bytes": 243
+    },
+    {
+      "path": "out/mp-portfolio/baseline/rooms4-seed42.map",
+      "sha256": "b651ad36bc073c12c852320f9047f0808a76edce963efe50a93bf3bd1e9725b7",
+      "bytes": 38302
+    },
+    {
+      "path": "out/mp-portfolio/baseline/rooms4-seed42.prt",
+      "sha256": "bff97fa82ebb0e418b4d96fee73fc6f07c17d68702c2e368a47ca01557aacde3",
+      "bytes": 5838
+    },
+    {
+      "path": "out/mp-portfolio/baseline/rooms4-seed42.qmg.json",
+      "sha256": "d7282609779442298a057a7d8b8216899c29a98fc54db3f452f29b31aef5e71c",
+      "bytes": 24582
+    },
+    {
+      "path": "out/mp-portfolio/baseline/rooms4-seed42.texinfo.json",
+      "sha256": "9790bce84d9459f2ee44d792530e95a97646df8922f29965c15d6b6117cf8c13",
+      "bytes": 103
+    },
+    {
+      "path": "out/mp-portfolio/baseline/rooms4-seed99-compiled-analysis.json",
+      "sha256": "ca387958fe7dc56c884c2c0241dd48f2da8a18d893098adb08275485a3cba53d",
+      "bytes": 16259
+    },
+    {
+      "path": "out/mp-portfolio/baseline/rooms4-seed99-qbsp.log",
+      "sha256": "d751e91d5159fb9af259f64b30395f5554029b8c9a8f3fa54bb44f8af436026e",
+      "bytes": 1875
+    },
+    {
+      "path": "out/mp-portfolio/baseline/rooms4-seed99-verification.json",
+      "sha256": "32b48f5180d924fa954b70bbdea244ab4e443d79b68f2b993d25c78711eab7ab",
+      "bytes": 5756
+    },
+    {
+      "path": "out/mp-portfolio/baseline/rooms4-seed99.bsp",
+      "sha256": "b016ef0a54bdd7382a6e623aed72a1855b4cb5197face2ed5055d1f957d06bd8",
+      "bytes": 35252
+    },
+    {
+      "path": "out/mp-portfolio/baseline/rooms4-seed99.content.json",
+      "sha256": "4236134f2930c9932a9b2a37ff8f7096aa273a932cf04d3a3577f87780793abf",
+      "bytes": 860
+    },
+    {
+      "path": "out/mp-portfolio/baseline/rooms4-seed99.log",
+      "sha256": "57ae865399dcfe1124a730713bebe2b7412e528bf8f53f9454804e859ba0ad4b",
+      "bytes": 243
+    },
+    {
+      "path": "out/mp-portfolio/baseline/rooms4-seed99.map",
+      "sha256": "b403ea7b7409407965f8ab7c11dfb4f296916223099ef3975acc7520455d38b2",
+      "bytes": 38240
+    },
+    {
+      "path": "out/mp-portfolio/baseline/rooms4-seed99.prt",
+      "sha256": "fbfc7c95cc00968460b9a7aab987c7b64de23d1e9bfa89bca06056b07ada1e7d",
+      "bytes": 5745
+    },
+    {
+      "path": "out/mp-portfolio/baseline/rooms4-seed99.qmg.json",
+      "sha256": "a0c08e0f5eee041276ce8bf542300272f0e443b3b8da8c3d369823863196628c",
+      "bytes": 25551
+    },
+    {
+      "path": "out/mp-portfolio/baseline/rooms4-seed99.texinfo.json",
+      "sha256": "9790bce84d9459f2ee44d792530e95a97646df8922f29965c15d6b6117cf8c13",
+      "bytes": 103
+    },
+    {
+      "path": "out/mp-portfolio/baseline/rooms6-seed17-compiled-analysis.json",
+      "sha256": "e4e15051809ad987807ca98923434ac353ee7db48f27869880f06504da6927f6",
+      "bytes": 18291
+    },
+    {
+      "path": "out/mp-portfolio/baseline/rooms6-seed17-qbsp.log",
+      "sha256": "7c7b93152f8623535585b61789b06d6bce2d59ccd383ad065cfe26e6cacfbceb",
+      "bytes": 1875
+    },
+    {
+      "path": "out/mp-portfolio/baseline/rooms6-seed17-verification.json",
+      "sha256": "aac73ee627e53382bc85e6958ecd4a710b5596bd085934908e60fa46c2a49d82",
+      "bytes": 8191
+    },
+    {
+      "path": "out/mp-portfolio/baseline/rooms6-seed17.bsp",
+      "sha256": "0985e522856d12010f65865e0985534483867fb533473efd4f1a318966571a11",
+      "bytes": 54572
+    },
+    {
+      "path": "out/mp-portfolio/baseline/rooms6-seed17.content.json",
+      "sha256": "a797ab58050f6f12901e3a4f18b14bac8a22fa941a1125a30bb6d1b1cfcb1b4f",
+      "bytes": 1361
+    },
+    {
+      "path": "out/mp-portfolio/baseline/rooms6-seed17.log",
+      "sha256": "10955b1405106f4ac07b3aaf19ba622ad01120a59594d100e2ee15b393fe6a3f",
+      "bytes": 249
+    },
+    {
+      "path": "out/mp-portfolio/baseline/rooms6-seed17.map",
+      "sha256": "ad5eeace90f697fd3c2923ad4ac84ef917fc1c8b8a04576b41820273195a8320",
+      "bytes": 58138
+    },
+    {
+      "path": "out/mp-portfolio/baseline/rooms6-seed17.prt",
+      "sha256": "1ce6ad45afd44a1250be6680071493a7bf2745edf2690d225733c77e2e3307fd",
+      "bytes": 9706
+    },
+    {
+      "path": "out/mp-portfolio/baseline/rooms6-seed17.qmg.json",
+      "sha256": "d6386240cfb7d6040c847224cc7a755e6f8e0b1c72336cbb20fd063dcca47a91",
+      "bytes": 34107
+    },
+    {
+      "path": "out/mp-portfolio/baseline/rooms6-seed17.texinfo.json",
+      "sha256": "9790bce84d9459f2ee44d792530e95a97646df8922f29965c15d6b6117cf8c13",
+      "bytes": 103
+    },
+    {
+      "path": "out/mp-portfolio/baseline/rooms6-seed42-compiled-analysis.json",
+      "sha256": "def4376d9f558860463147da216e2bf5c4830f5546da547aa5c6acdf0fbbe492",
+      "bytes": 18246
+    },
+    {
+      "path": "out/mp-portfolio/baseline/rooms6-seed42-qbsp.log",
+      "sha256": "1f5a2ce7dd33e131dff881d780c2c36f1049f711452af57121ab6feb68dbf008",
+      "bytes": 1875
+    },
+    {
+      "path": "out/mp-portfolio/baseline/rooms6-seed42-verification.json",
+      "sha256": "cf08beb2f2dc22eba3c651bd9fcb2b2f72767c687ddc01388fcee12deaf145b0",
+      "bytes": 8192
+    },
+    {
+      "path": "out/mp-portfolio/baseline/rooms6-seed42.bsp",
+      "sha256": "60aca94c3783ff52f45d77b9d8e45a5decdc8189ebf162c9976357b6bf0cb532",
+      "bytes": 53272
+    },
+    {
+      "path": "out/mp-portfolio/baseline/rooms6-seed42.content.json",
+      "sha256": "1727b40ce32d8d3349abd90aa32392819400448b847eb1987891afe64d686a36",
+      "bytes": 1285
+    },
+    {
+      "path": "out/mp-portfolio/baseline/rooms6-seed42.log",
+      "sha256": "1bae067137b4690f5a3b4f63092a690f58dca0a38807aec83f3a0b6e9eaf6920",
+      "bytes": 249
+    },
+    {
+      "path": "out/mp-portfolio/baseline/rooms6-seed42.map",
+      "sha256": "8fb644e0d28d99ed3353ed993b039403a97bc9cfd8df7daff3ab47d6ffe81bd0",
+      "bytes": 58627
+    },
+    {
+      "path": "out/mp-portfolio/baseline/rooms6-seed42.prt",
+      "sha256": "9b0fae11cf46f342aa838b05c510ad82235e70b3a780c372bc761a5ab1a230fe",
+      "bytes": 8546
+    },
+    {
+      "path": "out/mp-portfolio/baseline/rooms6-seed42.qmg.json",
+      "sha256": "35a09a0ca153198fe6985e6a20595804a00ecd59a407d7624b315bf18425aafb",
+      "bytes": 35123
+    },
+    {
+      "path": "out/mp-portfolio/baseline/rooms6-seed42.texinfo.json",
+      "sha256": "9790bce84d9459f2ee44d792530e95a97646df8922f29965c15d6b6117cf8c13",
+      "bytes": 103
+    },
+    {
+      "path": "out/mp-portfolio/baseline/rooms6-seed99-compiled-analysis.json",
+      "sha256": "761fb0bcafec4d4fc87e726efe914964deeff7b8aa66ffb4e1575eb6216adeb6",
+      "bytes": 18353
+    },
+    {
+      "path": "out/mp-portfolio/baseline/rooms6-seed99-qbsp.log",
+      "sha256": "d3b054ffa9c1ea8dbc3dc58fea3a378b82a973efa27320fb2a0f052de647945a",
+      "bytes": 1875
+    },
+    {
+      "path": "out/mp-portfolio/baseline/rooms6-seed99-verification.json",
+      "sha256": "69fc7b6c570767f6cbe24faa7f38775658a2e65596b1a379781fa18836cac5f4",
+      "bytes": 8244
+    },
+    {
+      "path": "out/mp-portfolio/baseline/rooms6-seed99.bsp",
+      "sha256": "1e787d5b5bb312506e31a2500d61c49b5e1cffd1b32e4b3b88ea1e45849365cc",
+      "bytes": 51568
+    },
+    {
+      "path": "out/mp-portfolio/baseline/rooms6-seed99.content.json",
+      "sha256": "c63f8507a0b7ce80c9c3d2a23ee73277683c6aa93f4a5b06f8054cfda244fd3a",
+      "bytes": 1231
+    },
+    {
+      "path": "out/mp-portfolio/baseline/rooms6-seed99.log",
+      "sha256": "b83a083d3097943b67157a889800969203c00ae75543e82affbb930d6414323c",
+      "bytes": 249
+    },
+    {
+      "path": "out/mp-portfolio/baseline/rooms6-seed99.map",
+      "sha256": "5a2427cb8857409e4e5a0cbe557b1bdc26b508926a1b46c7bbc8b78c3e78c735",
+      "bytes": 58664
+    },
+    {
+      "path": "out/mp-portfolio/baseline/rooms6-seed99.prt",
+      "sha256": "b904a12dd4cb984d6028b35f0bc5a063c0b0f130e4f6a7169b317bad9389fb91",
+      "bytes": 7589
+    },
+    {
+      "path": "out/mp-portfolio/baseline/rooms6-seed99.qmg.json",
+      "sha256": "59fb531689fd1f3154bffbfc28d869dad0c167f8ddec4ec05505e94283a96f01",
+      "bytes": 37831
+    },
+    {
+      "path": "out/mp-portfolio/baseline/rooms6-seed99.texinfo.json",
+      "sha256": "9790bce84d9459f2ee44d792530e95a97646df8922f29965c15d6b6117cf8c13",
+      "bytes": 103
+    },
+    {
+      "path": "out/mp-portfolio/baseline/rooms8-seed17-compiled-analysis.json",
+      "sha256": "47202de7b7555b4ea183b117567ac992e9063a1d4fd80e4143464fa75ee369fa",
+      "bytes": 19250
+    },
+    {
+      "path": "out/mp-portfolio/baseline/rooms8-seed17-qbsp.log",
+      "sha256": "8a54617a1ec0fbe69629b4e9c87201874f5b77f10faa854131a98dde00613c33",
+      "bytes": 1875
+    },
+    {
+      "path": "out/mp-portfolio/baseline/rooms8-seed17-verification.json",
+      "sha256": "be29f575517a53a0fb4caaf8a82631df1fd725196d28bdac7462069bbe897001",
+      "bytes": 9600
+    },
+    {
+      "path": "out/mp-portfolio/baseline/rooms8-seed17.bsp",
+      "sha256": "f6651ea931cecdcaf1f4a3a18305ca0305e8c153abab47331903e356c7decd96",
+      "bytes": 69600
+    },
+    {
+      "path": "out/mp-portfolio/baseline/rooms8-seed17.content.json",
+      "sha256": "ef721fa7cb1c7abdef584f8a44b67c06097d00a0baa3a350bfeb40253bc73b51",
+      "bytes": 1658
+    },
+    {
+      "path": "out/mp-portfolio/baseline/rooms8-seed17.log",
+      "sha256": "8ace6d9680178becddc06df11e8f2a064018917adb348ecbc7d22b9f2ad08518",
+      "bytes": 249
+    },
+    {
+      "path": "out/mp-portfolio/baseline/rooms8-seed17.map",
+      "sha256": "c6e841f817407f7dbe585eb463508bbf27fa454b3f609d7efb256d35a469b7bd",
+      "bytes": 78567
+    },
+    {
+      "path": "out/mp-portfolio/baseline/rooms8-seed17.prt",
+      "sha256": "acc6e1c0d5a2497c1cd46ae70fdfaec88358e7492b501f5528742ec93aa58aae",
+      "bytes": 12358
+    },
+    {
+      "path": "out/mp-portfolio/baseline/rooms8-seed17.qmg.json",
+      "sha256": "ec4fdf0a7a3826fa0235a4d41a6508d571380ee9c8a3e3c81c9c2e7061380fd5",
+      "bytes": 45965
+    },
+    {
+      "path": "out/mp-portfolio/baseline/rooms8-seed17.texinfo.json",
+      "sha256": "9790bce84d9459f2ee44d792530e95a97646df8922f29965c15d6b6117cf8c13",
+      "bytes": 103
+    },
+    {
+      "path": "out/mp-portfolio/baseline/rooms8-seed42-compiled-analysis.json",
+      "sha256": "1c4dda71f1d63902472843ab5cb0c660e77ba88299f66aac7e044dff362f3da4",
+      "bytes": 19092
+    },
+    {
+      "path": "out/mp-portfolio/baseline/rooms8-seed42-qbsp.log",
+      "sha256": "4a3a743e5e3f5b157d80d498092a7e7fa9fbd483fce7d60356d2215464e7dba5",
+      "bytes": 1875
+    },
+    {
+      "path": "out/mp-portfolio/baseline/rooms8-seed42-verification.json",
+      "sha256": "17c23163e1cc34e01dff7bf4e10738c181dccc04d5a94caa0dc84113b9b64555",
+      "bytes": 9597
+    },
+    {
+      "path": "out/mp-portfolio/baseline/rooms8-seed42.bsp",
+      "sha256": "c9f962e8c8b9223e6d54989ebe5df6c105f7f038179d1922fd9284ee245df5fc",
+      "bytes": 72180
+    },
+    {
+      "path": "out/mp-portfolio/baseline/rooms8-seed42.content.json",
+      "sha256": "2c3b109d0f16da03f5f2f9456bc44b602b19187f31ae30c80b15fb5edba93b83",
+      "bytes": 2178
+    },
+    {
+      "path": "out/mp-portfolio/baseline/rooms8-seed42.log",
+      "sha256": "73ee6bb27ad9f12cdf239addf1ffd55788aa1979d4a5aa1bc7eb8c916c99df1c",
+      "bytes": 249
+    },
+    {
+      "path": "out/mp-portfolio/baseline/rooms8-seed42.map",
+      "sha256": "9a7b897748100ad50b5538db9d401c4866815343cbdaec65efa8b0f956791728",
+      "bytes": 76291
+    },
+    {
+      "path": "out/mp-portfolio/baseline/rooms8-seed42.prt",
+      "sha256": "0af33eea48e107b4d1d4c3726c4ebe1a573783f350e82ccd6d9b2dac2e65fdf9",
+      "bytes": 13653
+    },
+    {
+      "path": "out/mp-portfolio/baseline/rooms8-seed42.qmg.json",
+      "sha256": "138990731fcd2653279456b80b407e99d3d154a06d7c498fc1c73005e92b7387",
+      "bytes": 43533
+    },
+    {
+      "path": "out/mp-portfolio/baseline/rooms8-seed42.texinfo.json",
+      "sha256": "9790bce84d9459f2ee44d792530e95a97646df8922f29965c15d6b6117cf8c13",
+      "bytes": 103
+    },
+    {
+      "path": "out/mp-portfolio/baseline/rooms8-seed99-compiled-analysis.json",
+      "sha256": "ad2236e11760eb3dcb82810fbdac2df825c0a39946bdf1f16d87b4a8ce0a1e2e",
+      "bytes": 19215
+    },
+    {
+      "path": "out/mp-portfolio/baseline/rooms8-seed99-qbsp.log",
+      "sha256": "d7fc2db0a5d895c7550154d5d7adf812605452f9e1018b169b84391c5f6ced85",
+      "bytes": 1875
+    },
+    {
+      "path": "out/mp-portfolio/baseline/rooms8-seed99-verification.json",
+      "sha256": "6d3cb6b5aa7492dd92d975e0ef8845ec19e24eacf447b706f3fc8a93cda0e916",
+      "bytes": 9646
+    },
+    {
+      "path": "out/mp-portfolio/baseline/rooms8-seed99.bsp",
+      "sha256": "644b4298361c58cd367ac4520ff139c1f2d3c2bb81b336f5fe958e9872a8bdfc",
+      "bytes": 67432
+    },
+    {
+      "path": "out/mp-portfolio/baseline/rooms8-seed99.content.json",
+      "sha256": "20cc7de0bd98ab31a3523ccab604ef5323f48bd57e2621ef7a594bb7215b6132",
+      "bytes": 1602
+    },
+    {
+      "path": "out/mp-portfolio/baseline/rooms8-seed99.log",
+      "sha256": "e44570916df44e15f9acdec9411405406ae3bbfd0c2321518997a2fc43a44b03",
+      "bytes": 249
+    },
+    {
+      "path": "out/mp-portfolio/baseline/rooms8-seed99.map",
+      "sha256": "d0b13533b435bdfecb273a8ca85606fc8eaf53b6b88577be35406f059389b6f0",
+      "bytes": 77996
+    },
+    {
+      "path": "out/mp-portfolio/baseline/rooms8-seed99.prt",
+      "sha256": "1bda288a625933f4ea35566748d8addf920c048c9ea4aacba9e6d5f8eb87c0e1",
+      "bytes": 11223
+    },
+    {
+      "path": "out/mp-portfolio/baseline/rooms8-seed99.qmg.json",
+      "sha256": "3e7a8320da23e431f9d15eb448dd645a2e443124e79fd5d86eacbd014e1fa0e8",
+      "bytes": 47995
+    },
+    {
+      "path": "out/mp-portfolio/baseline/rooms8-seed99.texinfo.json",
+      "sha256": "da1bf9c5ae1729d1bc7191dc14dc0d5dc9ccbc0c9411296d95798ca6f6f7d359",
+      "bytes": 103
+    },
+    {
+      "path": "out/mp-portfolio/baseline/rules-before.json",
+      "sha256": "248498df9f9eb6a05eed3222d5dabe52b6c7e748a2fddae4eeca186aca126d56",
+      "bytes": 59109
+    },
+    {
+      "path": "out/mp-portfolio/baseline/source-pins.json",
+      "sha256": "43478b145f26a87717465b0a6e056eb6221fd4552720c1f16f60945746f9886b",
+      "bytes": 792
+    },
+    {
+      "path": "out/mp-portfolio/cases.json",
+      "sha256": "1be628bc9ca2a40c0feec50a8d6242dce46634f8366501926c2ccf2aaca7869e",
+      "bytes": 2624
+    },
+    {
+      "path": "out/mp-portfolio/comparison.json",
+      "sha256": "f45714be01855f90fd552dac28ced30bdc0c67478da3e23a87be6ae90a003d39",
+      "bytes": 28194
+    },
+    {
+      "path": "out/mp-portfolio/configured-tests.json",
+      "sha256": "96a375ae1c520f14a2560597dce4eb4037a73e5363f6351d8b18a6e4a73b9db0",
+      "bytes": 30040
+    },
+    {
+      "path": "out/mp-portfolio/core-tests.log",
+      "sha256": "f47d091c4e535182ebb10469f64e3fc9e8083d2549a98a1d8db821ab1b2dd053",
+      "bytes": 2842
+    },
+    {
+      "path": "out/mp-portfolio/export-parity/export-controls.json",
+      "sha256": "889bea7f976934802d0230fc93d230a68e4e73626bc036b86cc159ae0744c3d8",
+      "bytes": 1746
+    },
+    {
+      "path": "out/mp-portfolio/export-parity/layout.json",
+      "sha256": "a1fc2e454914abac43de8c43895c4def85031228c5b21054fd417b7ca002e1b5",
+      "bytes": 17159
+    },
+    {
+      "path": "out/mp-portfolio/export-parity/parity.json",
+      "sha256": "3d82ad6654f8bc148006054abf2b0d17e745d88a4e5fa8c137d1df5331acc9ef",
+      "bytes": 1120
+    },
+    {
+      "path": "out/mp-portfolio/export-parity/qmg_weft.map",
+      "sha256": "a00415003b3a72aaa206ad38d8ea02f5a12296441b70d746539bda41b31aa3c6",
+      "bytes": 95651
+    },
+    {
+      "path": "out/mp-portfolio/export-parity/qmg_weft.qmg.json",
+      "sha256": "a6ce260373cf54125df2a1fe7648b4c4d8758a6d4af3c3cd9532f48e980b6d6d",
+      "bytes": 83147
+    },
+    {
+      "path": "out/mp-portfolio/export-parity-cli/qmg_weft.map",
+      "sha256": "a00415003b3a72aaa206ad38d8ea02f5a12296441b70d746539bda41b31aa3c6",
+      "bytes": 95651
+    },
+    {
+      "path": "out/mp-portfolio/export-parity-cli/qmg_weft.qmg.json",
+      "sha256": "a6ce260373cf54125df2a1fe7648b4c4d8758a6d4af3c3cd9532f48e980b6d6d",
+      "bytes": 83147
+    },
+    {
+      "path": "out/mp-portfolio/final-cli-parity/generate.log",
+      "sha256": "fc701a019cde4d0faa75d3e9130f49aea3484325d19be67cca875b10b6a66169",
+      "bytes": 252
+    },
+    {
+      "path": "out/mp-portfolio/final-cli-parity/parity.json",
+      "sha256": "0eace2ce581adc4ec104ebc5ae3f21f85d3f2397b00d969cb87c66e6cfb5f8ba",
+      "bytes": 11407
+    },
+    {
+      "path": "out/mp-portfolio/final-cli-parity/qmg_weft.map",
+      "sha256": "a00415003b3a72aaa206ad38d8ea02f5a12296441b70d746539bda41b31aa3c6",
+      "bytes": 95651
+    },
+    {
+      "path": "out/mp-portfolio/final-cli-parity/qmg_weft.qmg.json",
+      "sha256": "79121f9acbe4c6e295a6f1e341550c0209b258e606b34c65687fda56f6a85f98",
+      "bytes": 83147
+    },
+    {
+      "path": "out/mp-portfolio/generated/rooms4-seed17/compiled-analysis.json",
+      "sha256": "067c7a778687e86531408fd17cb25d1f9e1608fa611598b7780570b68cd37707",
+      "bytes": 16600
+    },
+    {
+      "path": "out/mp-portfolio/generated/rooms4-seed17/floor-0.png",
+      "sha256": "95c4d45c8ce389f85eaaed37714225cf75e06ea45215744f6f7fe35587b1ff3c",
+      "bytes": 26037
+    },
+    {
+      "path": "out/mp-portfolio/generated/rooms4-seed17/floor-128.png",
+      "sha256": "02544e9625aa5ae021c736cd90c5883774454976733813cf6c6c2f3cfdd0a45a",
+      "bytes": 29236
+    },
+    {
+      "path": "out/mp-portfolio/generated/rooms4-seed17/index.html",
+      "sha256": "6afa504ae289ae6be9004e7c57c0620d900da5fd800814cc3e456945ea45d04d",
+      "bytes": 102926
+    },
+    {
+      "path": "out/mp-portfolio/generated/rooms4-seed17/layout.json",
+      "sha256": "e48a9a6b99ee081434748dafd781266b3fbfe5d0059c712e5fbb3491068bb347",
+      "bytes": 12556
+    },
+    {
+      "path": "out/mp-portfolio/generated/rooms4-seed17/overview-mobile-light.png",
+      "sha256": "ff4990068874b2c73a54b2ab662a8d332ae51eff87c56aabc4bb78adffeea787",
+      "bytes": 36438
+    },
+    {
+      "path": "out/mp-portfolio/generated/rooms4-seed17/overview.png",
+      "sha256": "f2479fdbf9e6a75c7bafe30afde25c94d771cd0454c1de3d5dc3f8e693c4e66c",
+      "bytes": 77377
+    },
+    {
+      "path": "out/mp-portfolio/generated/rooms4-seed17/preview-checks.json",
+      "sha256": "0739d00373afb0e9ef71dd2f0e04d90f4addfd70917f9bf4b4786386e269fc06",
+      "bytes": 27746
+    },
+    {
+      "path": "out/mp-portfolio/generated/rooms4-seed17/qmg_rooms4-seed17-light.log",
+      "sha256": "d5a389bf1063f4cade3b6ac1b9ca1b5b2890b23019cd8b4ef979509e00235e93",
+      "bytes": 2186
+    },
+    {
+      "path": "out/mp-portfolio/generated/rooms4-seed17/qmg_rooms4-seed17-qbsp.log",
+      "sha256": "66dfba5ab13e7ce0bcca1ad4ab0314b84af2484e82db5a921cee64e483150962",
+      "bytes": 1951
+    },
+    {
+      "path": "out/mp-portfolio/generated/rooms4-seed17/qmg_rooms4-seed17-vis.log",
+      "sha256": "64c321166816d04c074298dd05a0b57181b373c43ded53504029bdd3f70c52e6",
+      "bytes": 1283
+    },
+    {
+      "path": "out/mp-portfolio/generated/rooms4-seed17/qmg_rooms4-seed17.bsp",
+      "sha256": "bcbfda18226e9d805693fc4ef9b6609dd82348eace75a8ac4a8cae3dfc6c6ebe",
+      "bytes": 301108
+    },
+    {
+      "path": "out/mp-portfolio/generated/rooms4-seed17/qmg_rooms4-seed17.content.json",
+      "sha256": "97ef945bc1ea709e635ccd14e632cd082c6cf6d32e8b4f35bd700c9d3e2fcf49",
+      "bytes": 2264
+    },
+    {
+      "path": "out/mp-portfolio/generated/rooms4-seed17/qmg_rooms4-seed17.map",
+      "sha256": "d547edcc18b347b59e6318b6cf6803c097d52ba1c9b5d2dbbf038e3b963e39bd",
+      "bytes": 66631
+    },
+    {
+      "path": "out/mp-portfolio/generated/rooms4-seed17/qmg_rooms4-seed17.prt",
+      "sha256": "b4d76e99013ce589c33b09210123209b69d5ec7ee5f29bdc954b71910452a8d5",
+      "bytes": 13306
+    },
+    {
+      "path": "out/mp-portfolio/generated/rooms4-seed17/qmg_rooms4-seed17.qmg.json",
+      "sha256": "46860e21ea7d4adce372ea3ba7e304d0b3d6045302bf87a35d507fb32401b9f0",
+      "bytes": 62396
+    },
+    {
+      "path": "out/mp-portfolio/generated/rooms4-seed17/qmg_rooms4-seed17.texinfo.json",
+      "sha256": "9790bce84d9459f2ee44d792530e95a97646df8922f29965c15d6b6117cf8c13",
+      "bytes": 103
+    },
+    {
+      "path": "out/mp-portfolio/generated/rooms4-seed17/rooms4-seed17-layout.html",
+      "sha256": "f4a4db3819a9bcf18c7d2e051ccba7af963f04fe2eedb4b264efa15f5f217f40",
+      "bytes": 50129
+    },
+    {
+      "path": "out/mp-portfolio/generated/rooms4-seed17/verification.json",
+      "sha256": "5944c9965c95ec10bd63377702b7b69497eee037aae1b7e88541b320b84eba76",
+      "bytes": 28992
+    },
+    {
+      "path": "out/mp-portfolio/generated/rooms4-seed42/compiled-analysis.json",
+      "sha256": "c5db9935fd2c39450ed3fe3881eed448703d7d7e5159d07d7e4686d3be0e34e1",
+      "bytes": 16460
+    },
+    {
+      "path": "out/mp-portfolio/generated/rooms4-seed42/floor-0.png",
+      "sha256": "a62e426d59e00bea7dd6f09ee63e9a989b8e4b854c757f754184d38132d199d7",
+      "bytes": 25745
+    },
+    {
+      "path": "out/mp-portfolio/generated/rooms4-seed42/floor-128.png",
+      "sha256": "91fbff01fef430dde8c09d79b83cfca02a67411514f802c4eba1f0623a09db0e",
+      "bytes": 29180
+    },
+    {
+      "path": "out/mp-portfolio/generated/rooms4-seed42/index.html",
+      "sha256": "9188aec9c462a69955bf90b2097e5d49459197b527a28d65198deb7616a22682",
+      "bytes": 102850
+    },
+    {
+      "path": "out/mp-portfolio/generated/rooms4-seed42/layout.json",
+      "sha256": "0a50fd04eba0b355f82602e829b25e6f01e25436032ddefcbfe5fbc4b377ca8d",
+      "bytes": 12482
+    },
+    {
+      "path": "out/mp-portfolio/generated/rooms4-seed42/overview-mobile-light.png",
+      "sha256": "11612050c73fbc8719d8d530fd4d8d0f1fea4f681d0fb5131416c7dd3dee8f24",
+      "bytes": 35911
+    },
+    {
+      "path": "out/mp-portfolio/generated/rooms4-seed42/overview.png",
+      "sha256": "8264ff7228960a7136f6b7013370ae34aa83a2e3c87b3e48117dda179358f244",
+      "bytes": 76423
+    },
+    {
+      "path": "out/mp-portfolio/generated/rooms4-seed42/preview-checks.json",
+      "sha256": "f1a9656d1a6c76e7c66a8b2f175bbd1dff06251363e27dade6389468d896b13c",
+      "bytes": 27694
+    },
+    {
+      "path": "out/mp-portfolio/generated/rooms4-seed42/qmg_rooms4-seed42-light.log",
+      "sha256": "383db8e7249860df13447ce147a8db06eded5a5010b8c4bc8145ffae04035973",
+      "bytes": 2186
+    },
+    {
+      "path": "out/mp-portfolio/generated/rooms4-seed42/qmg_rooms4-seed42-qbsp.log",
+      "sha256": "168cdf43981ccb837f1f9cb9bc12d591bf549bbd7e85c75bcce2ce44f4acc837",
+      "bytes": 1951
+    },
+    {
+      "path": "out/mp-portfolio/generated/rooms4-seed42/qmg_rooms4-seed42-vis.log",
+      "sha256": "a3f14f364f3767afdfd8610e5e92c8e81e09700a5e49bc7783c3c818905a2ec5",
+      "bytes": 1283
+    },
+    {
+      "path": "out/mp-portfolio/generated/rooms4-seed42/qmg_rooms4-seed42.bsp",
+      "sha256": "d5612736e3e7c94a19f7773271891e0bf7b25c1020abfccbac50c19c07daf760",
+      "bytes": 295252
+    },
+    {
+      "path": "out/mp-portfolio/generated/rooms4-seed42/qmg_rooms4-seed42.content.json",
+      "sha256": "93b557295f316ba1252d686d243c127bb9873bf3cfcb26d78514cc9e5827df53",
+      "bytes": 2418
+    },
+    {
+      "path": "out/mp-portfolio/generated/rooms4-seed42/qmg_rooms4-seed42.map",
+      "sha256": "659dc8f56578df4d5bb23ea7544bbf015c1cad68455dc5dae836f97f35eccfc1",
+      "bytes": 65796
+    },
+    {
+      "path": "out/mp-portfolio/generated/rooms4-seed42/qmg_rooms4-seed42.prt",
+      "sha256": "151ff5f64a639341c841d423a8868ab1d7d35789e3e35f743766677adb54c266",
+      "bytes": 14119
+    },
+    {
+      "path": "out/mp-portfolio/generated/rooms4-seed42/qmg_rooms4-seed42.qmg.json",
+      "sha256": "d34a7563c6121b5f3a5e75f77ff61c55e435196b90a06cf836e7f484e88a6f18",
+      "bytes": 60416
+    },
+    {
+      "path": "out/mp-portfolio/generated/rooms4-seed42/qmg_rooms4-seed42.texinfo.json",
+      "sha256": "9c000e3b3e1617ca2e9b0022233509bc9671879387559a3f0ee3d3a184e1fe3c",
+      "bytes": 103
+    },
+    {
+      "path": "out/mp-portfolio/generated/rooms4-seed42/rooms4-seed42-layout.html",
+      "sha256": "1f6e0a01eb746aa3b6014c815a27a23424367fdb1081718b7fea796a67005d31",
+      "bytes": 50053
+    },
+    {
+      "path": "out/mp-portfolio/generated/rooms4-seed42/verification.json",
+      "sha256": "1b4d1552868bf986fcf4034c848c1374430f0d5bff60bb1caa934a44805f9d91",
+      "bytes": 28846
+    },
+    {
+      "path": "out/mp-portfolio/generated/rooms4-seed99/compiled-analysis.json",
+      "sha256": "2b68f3db4a089e454ce83389871629b8a79d6ab83b3690d33ea55ab22f174a75",
+      "bytes": 16385
+    },
+    {
+      "path": "out/mp-portfolio/generated/rooms4-seed99/floor-0.png",
+      "sha256": "1ee19bc00e6cb1248bfef860bac7bb9c01806d8bcb71ab8ae56abcb9937c0756",
+      "bytes": 26319
+    },
+    {
+      "path": "out/mp-portfolio/generated/rooms4-seed99/floor-128.png",
+      "sha256": "3b097ec316af96f70c131d5f5c06e4c4116faf61ebeb467aabeffeca6c5d293f",
+      "bytes": 29048
+    },
+    {
+      "path": "out/mp-portfolio/generated/rooms4-seed99/index.html",
+      "sha256": "2c605c6226434761cd7809734049ea6bcc0756c5ebbc273f9eeb99ad27e24772",
+      "bytes": 102821
+    },
+    {
+      "path": "out/mp-portfolio/generated/rooms4-seed99/layout.json",
+      "sha256": "017dc8749a84950c112efaab25aab61ac5f6a79e563d1f89ddde875439a07ede",
+      "bytes": 12452
+    },
+    {
+      "path": "out/mp-portfolio/generated/rooms4-seed99/overview-mobile-light.png",
+      "sha256": "e42a40a273446f5ad55ef4f8bb50113c1266a3886965dcea065e5482dc312889",
+      "bytes": 36988
+    },
+    {
+      "path": "out/mp-portfolio/generated/rooms4-seed99/overview.png",
+      "sha256": "301466872beb56ff78682339775c38f75f86280b2b93f00cebdd3f8b4416dc97",
+      "bytes": 79387
+    },
+    {
+      "path": "out/mp-portfolio/generated/rooms4-seed99/preview-checks.json",
+      "sha256": "f6634b9bd79f94fa64d1cd99696ff5dac85bc841fd9575f4440b98661eb1125f",
+      "bytes": 27686
+    },
+    {
+      "path": "out/mp-portfolio/generated/rooms4-seed99/qmg_rooms4-seed99-light.log",
+      "sha256": "a75a70f3970a13ebb8d2faa7d2307eaf521912f1fd483fa38535471184339fb3",
+      "bytes": 2186
+    },
+    {
+      "path": "out/mp-portfolio/generated/rooms4-seed99/qmg_rooms4-seed99-qbsp.log",
+      "sha256": "bf0caba5e9c21a200b94ceabf8b8fca5d23465dc2b81856cf154933dcbc5f366",
+      "bytes": 1951
+    },
+    {
+      "path": "out/mp-portfolio/generated/rooms4-seed99/qmg_rooms4-seed99-vis.log",
+      "sha256": "859d93d110d5568868cef086a66955e1634280ab4e62d39620c510cb70ad82bd",
+      "bytes": 1283
+    },
+    {
+      "path": "out/mp-portfolio/generated/rooms4-seed99/qmg_rooms4-seed99.bsp",
+      "sha256": "3fb2abf9f73e40ce95dad6fe1f8d6904eb74f1b885f6a2d458c1913627834781",
+      "bytes": 296360
+    },
+    {
+      "path": "out/mp-portfolio/generated/rooms4-seed99/qmg_rooms4-seed99.content.json",
+      "sha256": "0e1e3b5586a028a2de045732a5560e150700109feb53e5c6da20ca3bde143ea6",
+      "bytes": 2605
+    },
+    {
+      "path": "out/mp-portfolio/generated/rooms4-seed99/qmg_rooms4-seed99.map",
+      "sha256": "48f3bc672b493f2d24a63fc8631c04124e65b73e679c74966017623690df31d8",
+      "bytes": 65989
+    },
+    {
+      "path": "out/mp-portfolio/generated/rooms4-seed99/qmg_rooms4-seed99.prt",
+      "sha256": "f4b836d5c00c2ad1bdea402ae59e65ce5e93d9c4f8e85efe5394e9c3acfcae92",
+      "bytes": 13792
+    },
+    {
+      "path": "out/mp-portfolio/generated/rooms4-seed99/qmg_rooms4-seed99.qmg.json",
+      "sha256": "2ccbccfe69844a4af7e8719d7b5e3865a7c57d17fec41f392cb8060a7ede9240",
+      "bytes": 61966
+    },
+    {
+      "path": "out/mp-portfolio/generated/rooms4-seed99/qmg_rooms4-seed99.texinfo.json",
+      "sha256": "9c000e3b3e1617ca2e9b0022233509bc9671879387559a3f0ee3d3a184e1fe3c",
+      "bytes": 103
+    },
+    {
+      "path": "out/mp-portfolio/generated/rooms4-seed99/rooms4-seed99-layout.html",
+      "sha256": "52355aba6a4a308500270e3ee821d6fe7dd91e0af7722a31b96fe7341c6d7211",
+      "bytes": 50024
+    },
+    {
+      "path": "out/mp-portfolio/generated/rooms4-seed99/verification.json",
+      "sha256": "7fe41baca86dee9e3165f5cb51c137c0835b6470b9f8084d548681a4251415d7",
+      "bytes": 28947
+    },
+    {
+      "path": "out/mp-portfolio/generated/rooms6-seed17/compiled-analysis.json",
+      "sha256": "9f99711efd794387749acb89ce6abab2b6c2efa5ea3b85e449d846955b9116a9",
+      "bytes": 18344
+    },
+    {
+      "path": "out/mp-portfolio/generated/rooms6-seed17/floor-0.png",
+      "sha256": "b65aeeacf0bea916aae900940616020711fb2a8d856c0f47bb24df73e0af3d25",
+      "bytes": 31334
+    },
+    {
+      "path": "out/mp-portfolio/generated/rooms6-seed17/floor-128.png",
+      "sha256": "c2062a9550459e5c19b3238aa44675444bb581bec6f6f7e31c9aa78ed0d83b4b",
+      "bytes": 35813
+    },
+    {
+      "path": "out/mp-portfolio/generated/rooms6-seed17/index.html",
+      "sha256": "2dfd1d1cf2477ed28684e12930bcf13dfede6d25f4ac59b24b3c4f224b1db5a8",
+      "bytes": 111844
+    },
+    {
+      "path": "out/mp-portfolio/generated/rooms6-seed17/layout.json",
+      "sha256": "84497ae71c31fb78361f70d48426f549900b0a52f7fb926e5a6e8903024d00ff",
+      "bytes": 17175
+    },
+    {
+      "path": "out/mp-portfolio/generated/rooms6-seed17/overview-mobile-light.png",
+      "sha256": "43de817c442c10e89a52cf11f2b94983d0eab05d663d26452c2f8dad83770751",
+      "bytes": 41570
+    },
+    {
+      "path": "out/mp-portfolio/generated/rooms6-seed17/overview.png",
+      "sha256": "cf3622ba952bb689e9705cee067381edf400544e579efa6b96288b70f718bbf4",
+      "bytes": 83868
+    },
+    {
+      "path": "out/mp-portfolio/generated/rooms6-seed17/preview-checks.json",
+      "sha256": "9410ce96830d1ab9d75aade94f8cbf6f275c9c5444e4dc24283558dbb7c8ebfb",
+      "bytes": 30816
+    },
+    {
+      "path": "out/mp-portfolio/generated/rooms6-seed17/qmg_rooms6-seed17-light.log",
+      "sha256": "bb8252ddcb01fe121121eabc761e42f4b7241002c06ad793a0ac768b87d9713c",
+      "bytes": 2187
+    },
+    {
+      "path": "out/mp-portfolio/generated/rooms6-seed17/qmg_rooms6-seed17-qbsp.log",
+      "sha256": "83a5d7aa0b3f7ef3339526a12e10cd2ef79353b5824fd4a81334640a88b7944b",
+      "bytes": 1951
+    },
+    {
+      "path": "out/mp-portfolio/generated/rooms6-seed17/qmg_rooms6-seed17-vis.log",
+      "sha256": "39da61ee04ce56fa433af0ce1ce02f70ba6bb6f2a4944eb6b75b0fc76065bd50",
+      "bytes": 1286
+    },
+    {
+      "path": "out/mp-portfolio/generated/rooms6-seed17/qmg_rooms6-seed17.bsp",
+      "sha256": "9ee7f9199735ef325677c7e2fa21079502d313d3fb6c6ce880c3b89b6f6c51b6",
+      "bytes": 434956
+    },
+    {
+      "path": "out/mp-portfolio/generated/rooms6-seed17/qmg_rooms6-seed17.content.json",
+      "sha256": "eb371fdece7f30ba3bf7229c7651432867e641f5702722d05066679236d6f2a4",
+      "bytes": 3311
+    },
+    {
+      "path": "out/mp-portfolio/generated/rooms6-seed17/qmg_rooms6-seed17.map",
+      "sha256": "c7f61bcb97389951558ac0602460f5f9a8002dafbf64a511f4b171ccf0b2dfdc",
+      "bytes": 95723
+    },
+    {
+      "path": "out/mp-portfolio/generated/rooms6-seed17/qmg_rooms6-seed17.prt",
+      "sha256": "9a3f587f1d1e7b5fd3808600149f2ae65bb90581834235f3cde9789b136bdcc1",
+      "bytes": 19527
+    },
+    {
+      "path": "out/mp-portfolio/generated/rooms6-seed17/qmg_rooms6-seed17.qmg.json",
+      "sha256": "067d32bfb13d4591b2606e6d9e1fde0131f2debc510ecedf3a42c317615453e2",
+      "bytes": 83371
+    },
+    {
+      "path": "out/mp-portfolio/generated/rooms6-seed17/qmg_rooms6-seed17.texinfo.json",
+      "sha256": "9c000e3b3e1617ca2e9b0022233509bc9671879387559a3f0ee3d3a184e1fe3c",
+      "bytes": 103
+    },
+    {
+      "path": "out/mp-portfolio/generated/rooms6-seed17/rooms6-seed17-layout.html",
+      "sha256": "851560d7a237b5d0ba3fe8e9ec3ef7e7d29d2163deca886f3e6d3f3f1571166f",
+      "bytes": 55767
+    },
+    {
+      "path": "out/mp-portfolio/generated/rooms6-seed17/verification.json",
+      "sha256": "a631394ad45727067015ff19984f6a107e219705fb49d6eee3fae84ae8d1cfc3",
+      "bytes": 39502
+    },
+    {
+      "path": "out/mp-portfolio/generated/rooms6-seed42/compiled-analysis.json",
+      "sha256": "79fc2af9aa739be7a153d96133514a6c30150e1065dfa8413232e2ae1709dbbb",
+      "bytes": 18618
+    },
+    {
+      "path": "out/mp-portfolio/generated/rooms6-seed42/floor-0.png",
+      "sha256": "367730860602746135c485c57f676f2b7c35b8a138826f2fc50b0607559a6873",
+      "bytes": 31308
+    },
+    {
+      "path": "out/mp-portfolio/generated/rooms6-seed42/floor-128.png",
+      "sha256": "3ff2af9dc53ce6af701e96e03e41bef52ecf1137a6a382f8d1717d4938a636a6",
+      "bytes": 32191
+    },
+    {
+      "path": "out/mp-portfolio/generated/rooms6-seed42/index.html",
+      "sha256": "b024ee7f8f110d14ce7be8175960ca509c732428e50c3d7c58b645bb449abcd5",
+      "bytes": 111870
+    },
+    {
+      "path": "out/mp-portfolio/generated/rooms6-seed42/layout.json",
+      "sha256": "7d7ea8feed977b75b9cea70d43d5350135e199107788b027a40f6721d6866130",
+      "bytes": 17201
+    },
+    {
+      "path": "out/mp-portfolio/generated/rooms6-seed42/overview-mobile-light.png",
+      "sha256": "2fe2ebed4d1676377a5e708da440aca0fc8df8ef25b31f1fbb62aa6d0fa5f9f1",
+      "bytes": 41575
+    },
+    {
+      "path": "out/mp-portfolio/generated/rooms6-seed42/overview.png",
+      "sha256": "a0f4adf2d75526e56937b8bf13e75d0ccb3c4e9dfd73fe7c68d4d4e131810c94",
+      "bytes": 88090
+    },
+    {
+      "path": "out/mp-portfolio/generated/rooms6-seed42/preview-checks.json",
+      "sha256": "51c20d46159655d420f090be59d7978554d50398bb3d9e3a13c006c630cb740c",
+      "bytes": 30742
+    },
+    {
+      "path": "out/mp-portfolio/generated/rooms6-seed42/qmg_rooms6-seed42-light.log",
+      "sha256": "40c4ec2734def0da792184e50e77029d915f09a7a91cfabf30b0616bd7952e94",
+      "bytes": 2187
+    },
+    {
+      "path": "out/mp-portfolio/generated/rooms6-seed42/qmg_rooms6-seed42-qbsp.log",
+      "sha256": "00672ff4286b1916da66518ee14e1e8b526a6bd1a413edb3a44c4f9a488e53c5",
+      "bytes": 1951
+    },
+    {
+      "path": "out/mp-portfolio/generated/rooms6-seed42/qmg_rooms6-seed42-vis.log",
+      "sha256": "53e41798df31253591a95df952696d9e7d31318680f628bf555db46fba6945ab",
+      "bytes": 1286
+    },
+    {
+      "path": "out/mp-portfolio/generated/rooms6-seed42/qmg_rooms6-seed42.bsp",
+      "sha256": "76eb1573b36ee4d44f54548841662a2624feb5fd72f2e75641bdfad561a5950b",
+      "bytes": 407556
+    },
+    {
+      "path": "out/mp-portfolio/generated/rooms6-seed42/qmg_rooms6-seed42.content.json",
+      "sha256": "768646f36cf9f48d528a820d9d3460c993814284869cccca71069fce15af783d",
+      "bytes": 3307
+    },
+    {
+      "path": "out/mp-portfolio/generated/rooms6-seed42/qmg_rooms6-seed42.map",
+      "sha256": "a00415003b3a72aaa206ad38d8ea02f5a12296441b70d746539bda41b31aa3c6",
+      "bytes": 95651
+    },
+    {
+      "path": "out/mp-portfolio/generated/rooms6-seed42/qmg_rooms6-seed42.prt",
+      "sha256": "16ef7d6d96a0f93ad29ba7576f99b2b3983184dc2dbbdad17345d0c7bb7e93f4",
+      "bytes": 20613
+    },
+    {
+      "path": "out/mp-portfolio/generated/rooms6-seed42/qmg_rooms6-seed42.qmg.json",
+      "sha256": "79121f9acbe4c6e295a6f1e341550c0209b258e606b34c65687fda56f6a85f98",
+      "bytes": 83147
+    },
+    {
+      "path": "out/mp-portfolio/generated/rooms6-seed42/qmg_rooms6-seed42.texinfo.json",
+      "sha256": "9790bce84d9459f2ee44d792530e95a97646df8922f29965c15d6b6117cf8c13",
+      "bytes": 103
+    },
+    {
+      "path": "out/mp-portfolio/generated/rooms6-seed42/rooms6-seed42-layout.html",
+      "sha256": "34d2a120be4c9264dba209d8b5652a5c5122e705dc4e412f01afe1efdbe5e0e0",
+      "bytes": 55793
+    },
+    {
+      "path": "out/mp-portfolio/generated/rooms6-seed42/verification.json",
+      "sha256": "09f2baa5c9243ad4398a4d11d2b1619f936eb7babd5b25117439232ba8227917",
+      "bytes": 38511
+    },
+    {
+      "path": "out/mp-portfolio/generated/rooms6-seed42-high/compiled-analysis.json",
+      "sha256": "703c700fdce5e0a600c6032732122750df86a9d7e19b94e82547bc7883618acd",
+      "bytes": 18389
+    },
+    {
+      "path": "out/mp-portfolio/generated/rooms6-seed42-high/floor-0.png",
+      "sha256": "8be10fc5a1763eb3364d3d534023bd2a465e8e954affd4e989a5f06dfb030e4f",
+      "bytes": 33915
+    },
+    {
+      "path": "out/mp-portfolio/generated/rooms6-seed42-high/floor-128.png",
+      "sha256": "d60352946ba37f9e8be08e8265959821f7a30e93d097a1abc8f73f7c379c7686",
+      "bytes": 29274
+    },
+    {
+      "path": "out/mp-portfolio/generated/rooms6-seed42-high/floor-192.png",
+      "sha256": "34d682ac3a071b3bfbd1ce0919944dc6e2b6979a300d8a0111882ba98cabba58",
+      "bytes": 29785
+    },
+    {
+      "path": "out/mp-portfolio/generated/rooms6-seed42-high/index.html",
+      "sha256": "c7fd8d68c1760ec2baf45f27159471ba900b2bad3bb1d9e167b853b6e6ba11e1",
+      "bytes": 120031
+    },
+    {
+      "path": "out/mp-portfolio/generated/rooms6-seed42-high/layout.json",
+      "sha256": "91072b630dc962e285cde833d9cf38653a12eb89d674bbcd87ee3cbb503a857c",
+      "bytes": 22433
+    },
+    {
+      "path": "out/mp-portfolio/generated/rooms6-seed42-high/overview-mobile-light.png",
+      "sha256": "4a3bc4965d0b36bfacb673817a1c9a2a1b84d388576dbd570946a1ce0c0e373e",
+      "bytes": 50415
+    },
+    {
+      "path": "out/mp-portfolio/generated/rooms6-seed42-high/overview.png",
+      "sha256": "a43a0e05f8d98df44c48388b83221c656fb01c1fa125871f85203639dd179006",
+      "bytes": 107274
+    },
+    {
+      "path": "out/mp-portfolio/generated/rooms6-seed42-high/preview-checks.json",
+      "sha256": "7915f79e8ce415b7034c9a760de5642bfa0fcdeaceaedcf613f6051700df1913",
+      "bytes": 39960
+    },
+    {
+      "path": "out/mp-portfolio/generated/rooms6-seed42-high/qmg_rooms6-seed42-high-light.log",
+      "sha256": "df48dab4fca253a829c5ec2df5836b7ef36c402d406b4dae2d510d60256bb40a",
+      "bytes": 2227
+    },
+    {
+      "path": "out/mp-portfolio/generated/rooms6-seed42-high/qmg_rooms6-seed42-high-qbsp.log",
+      "sha256": "45285d2d52df5121ee532c68553d86d0fe5b3af12897f4484df1510229b5acd5",
+      "bytes": 1991
+    },
+    {
+      "path": "out/mp-portfolio/generated/rooms6-seed42-high/qmg_rooms6-seed42-high-vis.log",
+      "sha256": "eb89f9af1406b4a76d661f19b1d35d84024c03bcc0e1ba1e87694e5dd0ff3db8",
+      "bytes": 1317
+    },
+    {
+      "path": "out/mp-portfolio/generated/rooms6-seed42-high/qmg_rooms6-seed42-high.bsp",
+      "sha256": "5ea3f3398849b393d8233a468622b560c835e79d520f3d5a8ffc23b58f15656a",
+      "bytes": 461352
+    },
+    {
+      "path": "out/mp-portfolio/generated/rooms6-seed42-high/qmg_rooms6-seed42-high.content.json",
+      "sha256": "2c5da5f34726e4420a63531e75132f613eacc44a2ce4d90493a13388a86f9c7a",
+      "bytes": 4884
+    },
+    {
+      "path": "out/mp-portfolio/generated/rooms6-seed42-high/qmg_rooms6-seed42-high.map",
+      "sha256": "3f40d4c46848a482837462ea55be6d4f6caedeab2331a1e722983840045dedeb",
+      "bytes": 113786
+    },
+    {
+      "path": "out/mp-portfolio/generated/rooms6-seed42-high/qmg_rooms6-seed42-high.prt",
+      "sha256": "753867c85482e5c43e6f41f8fb476422a1d54b4062cfbde14c7951e5d78a2726",
+      "bytes": 29684
+    },
+    {
+      "path": "out/mp-portfolio/generated/rooms6-seed42-high/qmg_rooms6-seed42-high.qmg.json",
+      "sha256": "44ca33cc828c729fe921cb6d7216a392223407dd13ca6802e5bd8c6ebd3c11d3",
+      "bytes": 104689
+    },
+    {
+      "path": "out/mp-portfolio/generated/rooms6-seed42-high/qmg_rooms6-seed42-high.texinfo.json",
+      "sha256": "9c000e3b3e1617ca2e9b0022233509bc9671879387559a3f0ee3d3a184e1fe3c",
+      "bytes": 103
+    },
+    {
+      "path": "out/mp-portfolio/generated/rooms6-seed42-high/rooms6-seed42-high-layout.html",
+      "sha256": "5c684d9f5e1a536c5cc72b8f422d903069c53348c68fdb0304db24a48f642c6a",
+      "bytes": 61139
+    },
+    {
+      "path": "out/mp-portfolio/generated/rooms6-seed42-high/verification.json",
+      "sha256": "b9f6ed6de3166c5d356ae2fe0837284269c89e0a9e9c9d91469a41ea623026e1",
+      "bytes": 48461
+    },
+    {
+      "path": "out/mp-portfolio/generated/rooms6-seed42-low/compiled-analysis.json",
+      "sha256": "e96999a208ee6d5700437fdef01a683daf1786080b87219cb7114b5a7858372b",
+      "bytes": 17435
+    },
+    {
+      "path": "out/mp-portfolio/generated/rooms6-seed42-low/floor-0.png",
+      "sha256": "59881785bf0ea4e9e8be442757214cd42aa3322ec08af7f84a006e073dcc562f",
+      "bytes": 24437
+    },
+    {
+      "path": "out/mp-portfolio/generated/rooms6-seed42-low/index.html",
+      "sha256": "fbad08a92741d2e611d0f6ba9788bd788fd9493be5b42dc08e867f04fd182824",
+      "bytes": 93527
+    },
+    {
+      "path": "out/mp-portfolio/generated/rooms6-seed42-low/layout.json",
+      "sha256": "ebc1dd1a1106bdf6dbc0069724552388c7224fdfc7ad5f9426451371c510e10f",
+      "bytes": 5699
+    },
+    {
+      "path": "out/mp-portfolio/generated/rooms6-seed42-low/overview-mobile-light.png",
+      "sha256": "fd5b9b1af45ec22ad57b840f17f1404f137b70a9cb051682ca818779e750d7e8",
+      "bytes": 24669
+    },
+    {
+      "path": "out/mp-portfolio/generated/rooms6-seed42-low/overview.png",
+      "sha256": "17568d33d25238d91c2172985da4a277de5802beec51eddcaedd92ecadc23ce0",
+      "bytes": 40993
+    },
+    {
+      "path": "out/mp-portfolio/generated/rooms6-seed42-low/preview-checks.json",
+      "sha256": "2ad67bf62605d865532674d3b5f2973299c6a57b3c526669387d50fac194eeec",
+      "bytes": 12486
+    },
+    {
+      "path": "out/mp-portfolio/generated/rooms6-seed42-low/qmg_rooms6-seed42-low-light.log",
+      "sha256": "3a38cfff14b5eecbb4a38ba4b3eec359f400d7261e26e379d9d241ea3db20b7e",
+      "bytes": 2218
+    },
+    {
+      "path": "out/mp-portfolio/generated/rooms6-seed42-low/qmg_rooms6-seed42-low-qbsp.log",
+      "sha256": "38aa19b2e61b5f6ade7667c0262032e60dffa521eab18bcc2de25af7ba050361",
+      "bytes": 1983
+    },
+    {
+      "path": "out/mp-portfolio/generated/rooms6-seed42-low/qmg_rooms6-seed42-low-vis.log",
+      "sha256": "49b789322354dc1840eda6566560be8571798408573371d4ed26405ee9dfb2ae",
+      "bytes": 1306
+    },
+    {
+      "path": "out/mp-portfolio/generated/rooms6-seed42-low/qmg_rooms6-seed42-low.bsp",
+      "sha256": "1277561acfe659e0d6a4e060aa23cfef3cc00d071643a999200aea278aa63f28",
+      "bytes": 309680
+    },
+    {
+      "path": "out/mp-portfolio/generated/rooms6-seed42-low/qmg_rooms6-seed42-low.content.json",
+      "sha256": "a9d5933cde82b14f3125e010896f6bcd2bf110ddb9230e5f6f3bf10370f65742",
+      "bytes": 901
+    },
+    {
+      "path": "out/mp-portfolio/generated/rooms6-seed42-low/qmg_rooms6-seed42-low.map",
+      "sha256": "c917ecea8eff517c5e5f194623676fcbcf1711961107d502a94118bfe0ae7634",
+      "bytes": 56600
+    },
+    {
+      "path": "out/mp-portfolio/generated/rooms6-seed42-low/qmg_rooms6-seed42-low.prt",
+      "sha256": "5021a9d03a2764b9f8c86ade7a108a8484b38eadb09526bc7c589a239af8ec2f",
+      "bytes": 4356
+    },
+    {
+      "path": "out/mp-portfolio/generated/rooms6-seed42-low/qmg_rooms6-seed42-low.qmg.json",
+      "sha256": "a712f69db014b0598b61e7ce0434c168ea57475f6042653798fe516c3bc76365",
+      "bytes": 23511
+    },
+    {
+      "path": "out/mp-portfolio/generated/rooms6-seed42-low/qmg_rooms6-seed42-low.texinfo.json",
+      "sha256": "27f8e9f0c928f5361654db1ea4530672383039206d6e0d87fd57745976c0d2cd",
+      "bytes": 81
+    },
+    {
+      "path": "out/mp-portfolio/generated/rooms6-seed42-low/rooms6-seed42-low-layout.html",
+      "sha256": "04c3d6940c42449bfd35154a0f0f118e3f490f41f4e5ad8568d05bb64ac8dd74",
+      "bytes": 43838
+    },
+    {
+      "path": "out/mp-portfolio/generated/rooms6-seed42-low/verification.json",
+      "sha256": "477c475b99cf83dca3ee333ae41e801668e9e5929ee51ccfa8d467ef34e53410",
+      "bytes": 17762
+    },
+    {
+      "path": "out/mp-portfolio/generated/rooms6-seed99/compiled-analysis.json",
+      "sha256": "5c470856f352f0ec12c9efe3ce4ed6b6c401e4b46d402f8a78e97497a66c72f7",
+      "bytes": 18346
+    },
+    {
+      "path": "out/mp-portfolio/generated/rooms6-seed99/floor-0.png",
+      "sha256": "f3c107f6004f1bf1dfed3c2c5482e01814476b604f9ded2f52674a3a56110750",
+      "bytes": 31333
+    },
+    {
+      "path": "out/mp-portfolio/generated/rooms6-seed99/floor-128.png",
+      "sha256": "ea14ff7a625e75a25bab628e62897f85d4521218722234d7bca64434a32580ad",
+      "bytes": 35751
+    },
+    {
+      "path": "out/mp-portfolio/generated/rooms6-seed99/index.html",
+      "sha256": "0351c40d6e8ffe83e9b9c105491813a5b5fdf545e935a0b85002e5fc0bce90fe",
+      "bytes": 111807
+    },
+    {
+      "path": "out/mp-portfolio/generated/rooms6-seed99/layout.json",
+      "sha256": "411a77295949e79a18fbc2bf0dba3fb24e9841ab5afad3c04483159326ad09a5",
+      "bytes": 17138
+    },
+    {
+      "path": "out/mp-portfolio/generated/rooms6-seed99/overview-mobile-light.png",
+      "sha256": "0732f0b3b52e228f91e454fa4ba0e285bbd79796848db0693576103e9bf359b1",
+      "bytes": 41097
+    },
+    {
+      "path": "out/mp-portfolio/generated/rooms6-seed99/overview.png",
+      "sha256": "dc53a156c1eddb60463024a0bf47970c77b99b607be7b61cbe0cd2e56533e1d5",
+      "bytes": 86675
+    },
+    {
+      "path": "out/mp-portfolio/generated/rooms6-seed99/preview-checks.json",
+      "sha256": "4447b7e768c0045701a080e0e7be532be8eba38f715aaeffb036ce06d8ebf23b",
+      "bytes": 30760
+    },
+    {
+      "path": "out/mp-portfolio/generated/rooms6-seed99/qmg_rooms6-seed99-light.log",
+      "sha256": "6cf347ace861c5e5f29a113d3cc93459281a79101f6d81f0bdb11737d12f1297",
+      "bytes": 2187
+    },
+    {
+      "path": "out/mp-portfolio/generated/rooms6-seed99/qmg_rooms6-seed99-qbsp.log",
+      "sha256": "8c6546da68cb2461d786e2d42858c7d4bd0f216940a57ee1dbd7759f702d3236",
+      "bytes": 1951
+    },
+    {
+      "path": "out/mp-portfolio/generated/rooms6-seed99/qmg_rooms6-seed99-vis.log",
+      "sha256": "5d65bd8f77dbfbbbc35fa48a2d77acac82a8fad9293c9695f3914ba9edbefa83",
+      "bytes": 1286
+    },
+    {
+      "path": "out/mp-portfolio/generated/rooms6-seed99/qmg_rooms6-seed99.bsp",
+      "sha256": "80d38c656af563317e88c2c5cbb4e99939e28f3dfdbe143610e005239b2401d4",
+      "bytes": 413808
+    },
+    {
+      "path": "out/mp-portfolio/generated/rooms6-seed99/qmg_rooms6-seed99.content.json",
+      "sha256": "fc3d919dc70a0226b877c4b763a4b43e85b3dcd43f9d26e12921035c0c021282",
+      "bytes": 3378
+    },
+    {
+      "path": "out/mp-portfolio/generated/rooms6-seed99/qmg_rooms6-seed99.map",
+      "sha256": "e2a715d21c046ad191a011bf79d9cdbf02469f17d1a73ae15138daadf68f8fcd",
+      "bytes": 95709
+    },
+    {
+      "path": "out/mp-portfolio/generated/rooms6-seed99/qmg_rooms6-seed99.prt",
+      "sha256": "52a16d44d927d6f1ec955787f3caee5dfeca61844e489463506365c9c592ef40",
+      "bytes": 21369
+    },
+    {
+      "path": "out/mp-portfolio/generated/rooms6-seed99/qmg_rooms6-seed99.qmg.json",
+      "sha256": "3240bef39ec19c2fe5c04b4bc559d2e907e5416dbe2b3c4de77a73f2d2044d68",
+      "bytes": 84146
+    },
+    {
+      "path": "out/mp-portfolio/generated/rooms6-seed99/qmg_rooms6-seed99.texinfo.json",
+      "sha256": "9790bce84d9459f2ee44d792530e95a97646df8922f29965c15d6b6117cf8c13",
+      "bytes": 103
+    },
+    {
+      "path": "out/mp-portfolio/generated/rooms6-seed99/rooms6-seed99-layout.html",
+      "sha256": "ec72a7a7687d23b9d757089cad3184e95a8ead40cd54daca5cb645ef6a7ee1f2",
+      "bytes": 55730
+    },
+    {
+      "path": "out/mp-portfolio/generated/rooms6-seed99/verification.json",
+      "sha256": "f9ad8a7e93dfecfd3b5063ea7203d4f50d2222240a8b331ddeee087321e01436",
+      "bytes": 38847
+    },
+    {
+      "path": "out/mp-portfolio/generated/rooms8-seed17/compiled-analysis.json",
+      "sha256": "743e3d9b6d7b9a7f497678c80ea509e77e96101184342cf5c764908b90adb738",
+      "bytes": 19480
+    },
+    {
+      "path": "out/mp-portfolio/generated/rooms8-seed17/floor-0.png",
+      "sha256": "c9a4f9d1f0646496d50a1faaa72a90c3c2a4661bb909a1dd14303534ad1253b1",
+      "bytes": 35820
+    },
+    {
+      "path": "out/mp-portfolio/generated/rooms8-seed17/floor-128.png",
+      "sha256": "3a879ac5ad89a03b892d5db2413944ab82d0640ee16e4d2700528193381cbe32",
+      "bytes": 39500
+    },
+    {
+      "path": "out/mp-portfolio/generated/rooms8-seed17/index.html",
+      "sha256": "d66a7c0471982d33f539be2d3d3a25a5779d3b298cb8f3baed60dfacf0b083f8",
+      "bytes": 120118
+    },
+    {
+      "path": "out/mp-portfolio/generated/rooms8-seed17/layout.json",
+      "sha256": "5f969e48bbe913ad9ddcc76ebcca45b6060f0900c9b6100d39bd71123f370f6f",
+      "bytes": 21902
+    },
+    {
+      "path": "out/mp-portfolio/generated/rooms8-seed17/overview-mobile-light.png",
+      "sha256": "f46c8eb7625cba11d38471e6c4fe625cb3b573c51cca9580b04632c8dbdfa00c",
+      "bytes": 44504
+    },
+    {
+      "path": "out/mp-portfolio/generated/rooms8-seed17/overview.png",
+      "sha256": "23085873fd76d4883e39e57c86328c9aa3a7355d53231eeab7cffba8faf887a3",
+      "bytes": 90514
+    },
+    {
+      "path": "out/mp-portfolio/generated/rooms8-seed17/preview-checks.json",
+      "sha256": "9689f7c15d30d3bb674c81efe5a17381ccfaa7ada1e6ec6489a69131478419b7",
+      "bytes": 33878
+    },
+    {
+      "path": "out/mp-portfolio/generated/rooms8-seed17/qmg_rooms8-seed17-light.log",
+      "sha256": "e6f44a6eb38697d6d1b0eb1910f740a75ddfe54d08aa1b9d87ead10d4895a13d",
+      "bytes": 2187
+    },
+    {
+      "path": "out/mp-portfolio/generated/rooms8-seed17/qmg_rooms8-seed17-qbsp.log",
+      "sha256": "4a8b5a366f03569581d8b49660232db16c4066f0ad1e104078de49cdd1854ce3",
+      "bytes": 1951
+    },
+    {
+      "path": "out/mp-portfolio/generated/rooms8-seed17/qmg_rooms8-seed17-vis.log",
+      "sha256": "313799af1e7a470656652041a50150c95734c6bda18372bbbff6e28cbb648a63",
+      "bytes": 1287
+    },
+    {
+      "path": "out/mp-portfolio/generated/rooms8-seed17/qmg_rooms8-seed17.bsp",
+      "sha256": "34d8dd10a28ef858f324a24db4e82a33b39a9e72228bfb9ffff61ccb02082af1",
+      "bytes": 584620
+    },
+    {
+      "path": "out/mp-portfolio/generated/rooms8-seed17/qmg_rooms8-seed17.content.json",
+      "sha256": "e4b8bb578e8fa34379563c73bdb535ca131872df560bef1bceda2a3fd886ffa7",
+      "bytes": 4366
+    },
+    {
+      "path": "out/mp-portfolio/generated/rooms8-seed17/qmg_rooms8-seed17.map",
+      "sha256": "88c3dad0ded1144dccb17c3eb8de16aa75f92d5c559fe3bba25de23e5c2e837a",
+      "bytes": 136839
+    },
+    {
+      "path": "out/mp-portfolio/generated/rooms8-seed17/qmg_rooms8-seed17.prt",
+      "sha256": "ea2032d07caa9d6e9f411c3d8d60b7c1317833914e07f2071264add3281b868a",
+      "bytes": 27757
+    },
+    {
+      "path": "out/mp-portfolio/generated/rooms8-seed17/qmg_rooms8-seed17.qmg.json",
+      "sha256": "9bc9b083fc60881f92183fd860249bd5388e954d7b6ba691a313c1fb0dd7b780",
+      "bytes": 106929
+    },
+    {
+      "path": "out/mp-portfolio/generated/rooms8-seed17/qmg_rooms8-seed17.texinfo.json",
+      "sha256": "9790bce84d9459f2ee44d792530e95a97646df8922f29965c15d6b6117cf8c13",
+      "bytes": 103
+    },
+    {
+      "path": "out/mp-portfolio/generated/rooms8-seed17/rooms8-seed17-layout.html",
+      "sha256": "63317c095da0caa604300eb178f7a721122f4a2c69ae1692d40cc8019c852e34",
+      "bytes": 61041
+    },
+    {
+      "path": "out/mp-portfolio/generated/rooms8-seed17/verification.json",
+      "sha256": "193d47a194bbf7718ecf4b92bdd4d9cf197c5770cdd195c40fb8fd87b20923d6",
+      "bytes": 49983
+    },
+    {
+      "path": "out/mp-portfolio/generated/rooms8-seed42/compiled-analysis.json",
+      "sha256": "bb72115a0c48aa36f7dd0482a99d602fb5de325eadee039ee7171c8001c939ef",
+      "bytes": 19453
+    },
+    {
+      "path": "out/mp-portfolio/generated/rooms8-seed42/floor-0.png",
+      "sha256": "bc81b79ef2a60b600c281be09729592fc49bda0cef707cbd693000cc6b176135",
+      "bytes": 36082
+    },
+    {
+      "path": "out/mp-portfolio/generated/rooms8-seed42/floor-128.png",
+      "sha256": "465d24124cb8de9808c8be9ed29421a4732de194adff74f3a00133bc049288de",
+      "bytes": 38412
+    },
+    {
+      "path": "out/mp-portfolio/generated/rooms8-seed42/index.html",
+      "sha256": "6a675dff1c171ad689ca6129cc7d095bc9144329eaf0299af371a5d4714f64ca",
+      "bytes": 120467
+    },
+    {
+      "path": "out/mp-portfolio/generated/rooms8-seed42/layout.json",
+      "sha256": "ed0667e617d668f4c734dc8b9b113a1541af96ee02c4252f9e77933db8e18d4f",
+      "bytes": 22128
+    },
+    {
+      "path": "out/mp-portfolio/generated/rooms8-seed42/overview-mobile-light.png",
+      "sha256": "3194962566fcf5ebc26be7a0faa4c78370e91b4a5eb3742f6e26eb6ed41c445c",
+      "bytes": 44295
+    },
+    {
+      "path": "out/mp-portfolio/generated/rooms8-seed42/overview.png",
+      "sha256": "ec2693f70cb596f21986c942d349b05d1faea7967625f852efa52bbb08e8e4bb",
+      "bytes": 91458
+    },
+    {
+      "path": "out/mp-portfolio/generated/rooms8-seed42/preview-checks.json",
+      "sha256": "3cecf79817bc579fc03d28aa332121e0e6757d0eebb3d83f72f9bb6d4e479b2b",
+      "bytes": 33930
+    },
+    {
+      "path": "out/mp-portfolio/generated/rooms8-seed42/qmg_rooms8-seed42-light.log",
+      "sha256": "f8b2771e5e2cba6880107c6a4ced6f5f73ab2354ba493b27a161f17cdb4402e9",
+      "bytes": 2187
+    },
+    {
+      "path": "out/mp-portfolio/generated/rooms8-seed42/qmg_rooms8-seed42-qbsp.log",
+      "sha256": "82f2b2e7528383b266b16d95f07a7da480089ddbb9b7007bc1550d853addfd80",
+      "bytes": 1951
+    },
+    {
+      "path": "out/mp-portfolio/generated/rooms8-seed42/qmg_rooms8-seed42-vis.log",
+      "sha256": "82f326d965ad7bcab616b9cfae05c8c5600297ecc59dfb9320650d1560cc1fc0",
+      "bytes": 1287
+    },
+    {
+      "path": "out/mp-portfolio/generated/rooms8-seed42/qmg_rooms8-seed42.bsp",
+      "sha256": "2b48e57ae7cd7e0a298d2783ed4fa28d9e81407a0091ce770c69bd77e58be395",
+      "bytes": 595748
+    },
+    {
+      "path": "out/mp-portfolio/generated/rooms8-seed42/qmg_rooms8-seed42.content.json",
+      "sha256": "f508461c592a28489077a010400aa43d5385edbb8186a05c815d529b91dbfb89",
+      "bytes": 4238
+    },
+    {
+      "path": "out/mp-portfolio/generated/rooms8-seed42/qmg_rooms8-seed42.map",
+      "sha256": "d399aad51bd226f918113d3f4b2aa61825995f0efb0b01328d3e9b68a6771de5",
+      "bytes": 141800
+    },
+    {
+      "path": "out/mp-portfolio/generated/rooms8-seed42/qmg_rooms8-seed42.prt",
+      "sha256": "d25f298bc5c27dfe0ecb353a175c173d46769bead406cfd5f6bc5105117863ca",
+      "bytes": 29243
+    },
+    {
+      "path": "out/mp-portfolio/generated/rooms8-seed42/qmg_rooms8-seed42.qmg.json",
+      "sha256": "eb4432e13545c55700c589b23468aed21589a93771039ae2a4f4c812d5abd000",
+      "bytes": 106741
+    },
+    {
+      "path": "out/mp-portfolio/generated/rooms8-seed42/qmg_rooms8-seed42.texinfo.json",
+      "sha256": "9c000e3b3e1617ca2e9b0022233509bc9671879387559a3f0ee3d3a184e1fe3c",
+      "bytes": 103
+    },
+    {
+      "path": "out/mp-portfolio/generated/rooms8-seed42/rooms8-seed42-layout.html",
+      "sha256": "c56df36d7df4424927494ab7e59b66576a8e8117224c9b0fa2c0b4dd7a93e93a",
+      "bytes": 61270
+    },
+    {
+      "path": "out/mp-portfolio/generated/rooms8-seed42/verification.json",
+      "sha256": "3c11fd3a9ef40251a3818c628d553701b9def4fa7cf53dc522f0c7c7d12e00b6",
+      "bytes": 50574
+    },
+    {
+      "path": "out/mp-portfolio/generated/rooms8-seed99/compiled-analysis.json",
+      "sha256": "c23d3e6217e6ca9b8d601768aa11f7d3c79974b1359b8fecc151b205751ccf20",
+      "bytes": 19600
+    },
+    {
+      "path": "out/mp-portfolio/generated/rooms8-seed99/floor-0.png",
+      "sha256": "98459a5565520e268195a6286dc8176867d88013a155a049f2ee739f9b401492",
+      "bytes": 36560
+    },
+    {
+      "path": "out/mp-portfolio/generated/rooms8-seed99/floor-128.png",
+      "sha256": "22c5a699e8cabf44cf777efed07dfcb9dcd9834ac410968bd8b6754a8b060e26",
+      "bytes": 39312
+    },
+    {
+      "path": "out/mp-portfolio/generated/rooms8-seed99/index.html",
+      "sha256": "46d00212c59557d6c1116de402282df1fa4b42b565ec425d7c5cd47f3d82fcc2",
+      "bytes": 120531
+    },
+    {
+      "path": "out/mp-portfolio/generated/rooms8-seed99/layout.json",
+      "sha256": "286a012b507d05e88f247c4c7cd67cb8133bf52e273bdadbabbc874169d6490f",
+      "bytes": 22192
+    },
+    {
+      "path": "out/mp-portfolio/generated/rooms8-seed99/overview-mobile-light.png",
+      "sha256": "c4e070b334531f280d2be24e68afd02c6373647f6674895b68ff289b9db6024b",
+      "bytes": 44679
+    },
+    {
+      "path": "out/mp-portfolio/generated/rooms8-seed99/overview.png",
+      "sha256": "916a55095c04576e89ae3b42f2404d5c848c966718936e2191152c3e3989b329",
+      "bytes": 94892
+    },
+    {
+      "path": "out/mp-portfolio/generated/rooms8-seed99/preview-checks.json",
+      "sha256": "88d8137471003f72f5238d38d9aba1b1cad6693cbe9085fcdf1a537ce1c75441",
+      "bytes": 33754
+    },
+    {
+      "path": "out/mp-portfolio/generated/rooms8-seed99/qmg_rooms8-seed99-light.log",
+      "sha256": "14e29ee2376f8f390e958bdf7a3dc67b07fc0edf7105634fc796643b80e38c3f",
+      "bytes": 2187
+    },
+    {
+      "path": "out/mp-portfolio/generated/rooms8-seed99/qmg_rooms8-seed99-qbsp.log",
+      "sha256": "432c6d350a36cba29c995a97d0863f071439788f716e1fb6f2f9ee33d3cceb8a",
+      "bytes": 1951
+    },
+    {
+      "path": "out/mp-portfolio/generated/rooms8-seed99/qmg_rooms8-seed99-vis.log",
+      "sha256": "395ad4633137f6c0b64bafb0ac12d409460167c8b1a7f430797232c39eb58d5a",
+      "bytes": 1288
+    },
+    {
+      "path": "out/mp-portfolio/generated/rooms8-seed99/qmg_rooms8-seed99.bsp",
+      "sha256": "afdc8fc6c39f6036082a1cdc898ac1fbe328e53d96c11b13297dc44a7f07f1cb",
+      "bytes": 561472
+    },
+    {
+      "path": "out/mp-portfolio/generated/rooms8-seed99/qmg_rooms8-seed99.content.json",
+      "sha256": "d1188047311a700fdad5e505e0df182fc638c9dcbd003af44674df122c6fe456",
+      "bytes": 4678
+    },
+    {
+      "path": "out/mp-portfolio/generated/rooms8-seed99/qmg_rooms8-seed99.map",
+      "sha256": "45fcce5e2c1c742e565bf77d21b91ece556722dcc03a35a1d52a96ba84a3d67c",
+      "bytes": 141667
+    },
+    {
+      "path": "out/mp-portfolio/generated/rooms8-seed99/qmg_rooms8-seed99.prt",
+      "sha256": "25bdb1192971fcb6bd9d73ae862855b6f5300031e3f35702f24b976427830621",
+      "bytes": 29062
+    },
+    {
+      "path": "out/mp-portfolio/generated/rooms8-seed99/qmg_rooms8-seed99.qmg.json",
+      "sha256": "c6470b79ed7533593596342f0c576e52f97e60b8687ca7859a5ddd293c912874",
+      "bytes": 108263
+    },
+    {
+      "path": "out/mp-portfolio/generated/rooms8-seed99/qmg_rooms8-seed99.texinfo.json",
+      "sha256": "9c000e3b3e1617ca2e9b0022233509bc9671879387559a3f0ee3d3a184e1fe3c",
+      "bytes": 103
+    },
+    {
+      "path": "out/mp-portfolio/generated/rooms8-seed99/rooms8-seed99-layout.html",
+      "sha256": "a365666a2918b27a05512a3bd26c995aefbcdeb5c994806fcd3c610c922814fa",
+      "bytes": 61334
+    },
+    {
+      "path": "out/mp-portfolio/generated/rooms8-seed99/verification.json",
+      "sha256": "9da5211fc8cd7d4db80d385e54f40e0dfdb167f51707db6b04b747bc935a617a",
+      "bytes": 50021
+    },
+    {
+      "path": "out/mp-portfolio/index.html",
+      "sha256": "339004ebba56e2ff80a5f665527eb632e1f2aa9783fbd177d999e802ddca0cc2",
+      "bytes": 4310
+    },
+    {
+      "path": "out/mp-portfolio/package.json",
+      "sha256": "3317f4397680bcfcacdd9a1bcd6f21cfb2c8c454ece7148730a75db940d2a934",
+      "bytes": 469
+    },
+    {
+      "path": "out/mp-portfolio/package.py",
+      "sha256": "d7c6ed97737cb1352244516082f3ed87cb9e87efd9c5d71c446524c3f0be4f9f",
+      "bytes": 6577
+    },
+    {
+      "path": "out/mp-portfolio/prompts/rooms4-seed17.txt",
+      "sha256": "153bcf22c45d7e218e203b7e45b4d32f867400d94dc09f360edb1707a5d1176b",
+      "bytes": 107
+    },
+    {
+      "path": "out/mp-portfolio/prompts/rooms4-seed42.txt",
+      "sha256": "6a59244ade8e4ffe311d0dfd5757d765329f70c0e29bb2ea0df9338f2dd1f11e",
+      "bytes": 107
+    },
+    {
+      "path": "out/mp-portfolio/prompts/rooms4-seed99.txt",
+      "sha256": "7b390b72e87bdabe6ccf5eb3235a4b6c2c8217a0fcdb6b47a0bf8fad422e35be",
+      "bytes": 107
+    },
+    {
+      "path": "out/mp-portfolio/prompts/rooms6-seed17.txt",
+      "sha256": "35104636b1f0f0f78f1170cc3a8e055ab2cbab4a120974840d3b485b11c5bc52",
+      "bytes": 113
+    },
+    {
+      "path": "out/mp-portfolio/prompts/rooms6-seed42-high.txt",
+      "sha256": "ba353f967901499644e4815c80005ddd7c702171c3ede6cdcdfa408354e918b3",
+      "bytes": 111
+    },
+    {
+      "path": "out/mp-portfolio/prompts/rooms6-seed42-low.txt",
+      "sha256": "40148214a305efd58924ed7f3fd9a5ad8a5bf4c96933b2cb4934d89ff01b4208",
+      "bytes": 113
+    },
+    {
+      "path": "out/mp-portfolio/prompts/rooms6-seed42.txt",
+      "sha256": "801dd41dd670099e3acf7917604d90c09bb03a01d7d84672d0175da78aa43e22",
+      "bytes": 113
+    },
+    {
+      "path": "out/mp-portfolio/prompts/rooms6-seed99.txt",
+      "sha256": "2d608d2f3ea1441165324024c2423fe3e2b097ad62d507047ce07e74ec08d0a9",
+      "bytes": 113
+    },
+    {
+      "path": "out/mp-portfolio/prompts/rooms8-seed17.txt",
+      "sha256": "4322fa34ea8ba362a19adcde638de7f55df2f3c37d3ccda8c0b4fdd5b0926559",
+      "bytes": 113
+    },
+    {
+      "path": "out/mp-portfolio/prompts/rooms8-seed42.txt",
+      "sha256": "cdfd2328ec3918478444603797f67247144a2f36a08add71f32306401b11aac6",
+      "bytes": 113
+    },
+    {
+      "path": "out/mp-portfolio/prompts/rooms8-seed99.txt",
+      "sha256": "b965930bf25f63512396ec63d0986f892633984343c42c12f61e3077a4886405",
+      "bytes": 113
+    },
+    {
+      "path": "out/mp-portfolio/qmg_compact_portfolio.zip",
+      "sha256": "fb0b82e74de9915f5a2332a454c68b32411f935e205af9842694cea80c0ab0fc",
+      "bytes": 3605392
+    },
+    {
+      "path": "out/mp-portfolio/README.md",
+      "sha256": "f5cb2d338fc66ccca66e53b04063c41208aa424d15073a373455de9f44f7b263",
+      "bytes": 1643
+    },
+    {
+      "path": "out/mp-portfolio/recipe-parity/counterweight/flow.json",
+      "sha256": "66c555290df0d554ffecec95b1ed9a057a9c32e592acd5dc9022ef78c828687b",
+      "bytes": 13151
+    },
+    {
+      "path": "out/mp-portfolio/recipe-parity/counterweight/generate.log",
+      "sha256": "ccdb6b7fd8fa343707056aabb2a400518b8c5f51a23fbce51ca5adb2852c3799",
+      "bytes": 95
+    },
+    {
+      "path": "out/mp-portfolio/recipe-parity/counterweight/layout.json",
+      "sha256": "bd66531fcd779f52693da104a4b5663559cd996514bb546c6c357983176a17ee",
+      "bytes": 9548
+    },
+    {
+      "path": "out/mp-portfolio/recipe-parity/counterweight/qmg_counterweight.map",
+      "sha256": "92767c3918617b065fe3b6f3676f969c352ced0e53ecbd5ff8f047e8fb9c5a6c",
+      "bytes": 101638
+    },
+    {
+      "path": "out/mp-portfolio/recipe-parity/counterweight/qmg_counterweight.qmg.json",
+      "sha256": "58836792eac7a2f0c645e84b407536e06b66357eb4ffe0d54112b7af0cfa779f",
+      "bytes": 69301
+    },
+    {
+      "path": "out/mp-portfolio/recipe-parity/fold/features.json",
+      "sha256": "a418c15dc91fa9db7c3a07593212d24b0a1c1a224ab5f35e2ce71552bb70b955",
+      "bytes": 2211
+    },
+    {
+      "path": "out/mp-portfolio/recipe-parity/fold/flow.json",
+      "sha256": "ef32abfcf7667227283ad644297e3e2a66b8a52190cd7c6720e94eea108b8ed2",
+      "bytes": 13161
+    },
+    {
+      "path": "out/mp-portfolio/recipe-parity/fold/generate.log",
+      "sha256": "7c250dcc1bbc5238b0d089f926201140627282561a74dd5165c70b9603cdbbd8",
+      "bytes": 86
+    },
+    {
+      "path": "out/mp-portfolio/recipe-parity/fold/layout.json",
+      "sha256": "4e44001f128063c144809892a7fde50622eea6329d0742412ac5e3c0e65a171a",
+      "bytes": 9285
+    },
+    {
+      "path": "out/mp-portfolio/recipe-parity/fold/qmg_fold.map",
+      "sha256": "0b9b02ff34d482d1757aebb3f8c1bbc21b67981d7fa9899e715f59179b5a46ac",
+      "bytes": 107518
+    },
+    {
+      "path": "out/mp-portfolio/recipe-parity/fold/qmg_fold.qmg.json",
+      "sha256": "a4f6ee583b0a9ed6e912429d5656eec1ad7b6f8ac1297332783f8a41c75e61da",
+      "bytes": 72226
+    },
+    {
+      "path": "out/mp-portfolio/recipe-parity/lockyard/features.json",
+      "sha256": "12174d152b64cec8ad2ef1bccd505de7413243ef192950ce78b353ed569b25ec",
+      "bytes": 1641
+    },
+    {
+      "path": "out/mp-portfolio/recipe-parity/lockyard/flow.json",
+      "sha256": "40a3a0ace1a502488b4ab261d440f15551de270e2d8681e6b1c68848af48115a",
+      "bytes": 13161
+    },
+    {
+      "path": "out/mp-portfolio/recipe-parity/lockyard/generate.log",
+      "sha256": "598fa910577d0622c121c4826101e4eb48a5b2f2af8dbd85a72de27924c28ddc",
+      "bytes": 90
+    },
+    {
+      "path": "out/mp-portfolio/recipe-parity/lockyard/layout.json",
+      "sha256": "becacb47faf580655f84c63030610fd85faf46d21ee8b3ba69c66f75ead4cab6",
+      "bytes": 9419
+    },
+    {
+      "path": "out/mp-portfolio/recipe-parity/lockyard/qmg_lockyard.map",
+      "sha256": "ac766bf4ea086d8f8ae55fa98b7c4b2c017e4c0727724c9bdfedc72112f4ec7b",
+      "bytes": 118114
+    },
+    {
+      "path": "out/mp-portfolio/recipe-parity/lockyard/qmg_lockyard.qmg.json",
+      "sha256": "154598660c8fa8f97dfe2b203cd569124ce518922667d655dbe9040bb43ed3e3",
+      "bytes": 72209
+    },
+    {
+      "path": "out/mp-portfolio/recipe-parity/parity.json",
+      "sha256": "8e45b0ccfcfc05a9b4f786bc4db5a42e39d75ee0bd1f1deab8d722cb4c99bf29",
+      "bytes": 19144
+    },
+    {
+      "path": "out/mp-portfolio/recipe-parity/ravel/flow.json",
+      "sha256": "1ef44c35acee5bb33811e19bc49d84db487158d3b9830cc86ed0c275617ddf17",
+      "bytes": 13153
+    },
+    {
+      "path": "out/mp-portfolio/recipe-parity/ravel/generate.log",
+      "sha256": "55531ab7ad82f96b1836fa9ee4695fd81157e489e914f66682ffa3bb73f093da",
+      "bytes": 87
+    },
+    {
+      "path": "out/mp-portfolio/recipe-parity/ravel/layout.json",
+      "sha256": "0e33a315685c2f854c4f3eb4ff8b86b785a37e8744096dc67ce8756dc2690132",
+      "bytes": 7771
+    },
+    {
+      "path": "out/mp-portfolio/recipe-parity/ravel/qmg_ravel.map",
+      "sha256": "3af5b50fc6c0e82b4ae250dcc165b54b075789ad3cd95985cfb2f057e8891197",
+      "bytes": 98089
+    },
+    {
+      "path": "out/mp-portfolio/recipe-parity/ravel/qmg_ravel.qmg.json",
+      "sha256": "5e85afc1a419ee509e049a74c6713825913a8de14b3441fc90cd0e1dba79af50",
+      "bytes": 59662
+    },
+    {
+      "path": "out/mp-portfolio/recipe-parity/spillway/flow.json",
+      "sha256": "d4d1dbc52aebc47bf571353ee54ee7a6520ed4666c7dcbc9478f203f7d5e8ca4",
+      "bytes": 13158
+    },
+    {
+      "path": "out/mp-portfolio/recipe-parity/spillway/generate.log",
+      "sha256": "e0fd73cf98a519bc17c5d84dd6bb0f3421117f8434719f227e5c389675fbba35",
+      "bytes": 90
+    },
+    {
+      "path": "out/mp-portfolio/recipe-parity/spillway/layout.json",
+      "sha256": "e7fc46568b64e8059eb111b8b16623378826b3dc8ef4957096fffa5a5029c45d",
+      "bytes": 10237
+    },
+    {
+      "path": "out/mp-portfolio/recipe-parity/spillway/qmg_spillway.map",
+      "sha256": "2de31a79a02b4aca151d7bd4c5c106734aacf9826d8487adfab39a951c89d433",
+      "bytes": 125660
+    },
+    {
+      "path": "out/mp-portfolio/recipe-parity/spillway/qmg_spillway.qmg.json",
+      "sha256": "6943dd7844636fb0b6f4947a155cbb1ed2e9af94debfe399ab3b17d073922e4d",
+      "bytes": 74976
+    },
+    {
+      "path": "out/mp-portfolio/recipe-parity/switchback/flow.json",
+      "sha256": "0ccdf53537f85eee3d65fa8b26cec0d2d646463103e9666c4ccf6b9264c454b5",
+      "bytes": 13156
+    },
+    {
+      "path": "out/mp-portfolio/recipe-parity/switchback/generate.log",
+      "sha256": "5d257c20f7e46537a00a922a045e69184d21c3ab3f694409b739c9fd3b885454",
+      "bytes": 92
+    },
+    {
+      "path": "out/mp-portfolio/recipe-parity/switchback/layout.json",
+      "sha256": "3678e04e1c06c7a28890c18a2a5d27577e3c33d1a0a1c465c95fd25ba9f8ee87",
+      "bytes": 11782
+    },
+    {
+      "path": "out/mp-portfolio/recipe-parity/switchback/qmg_switchback.map",
+      "sha256": "dbc21872eaccdb4d3c55178b14c76936294ef5ca10a8c7cd8038b0726780a506",
+      "bytes": 126893
+    },
+    {
+      "path": "out/mp-portfolio/recipe-parity/switchback/qmg_switchback.qmg.json",
+      "sha256": "45974391036b09974c10c1ea29a2a0dbbd87166d29381082a154775bd590c84d",
+      "bytes": 79495
+    },
+    {
+      "path": "out/mp-portfolio/recipe-parity/talus/flow.json",
+      "sha256": "ce201d6bcbb9f8d255394e6eb9b8d685a4a0c2ce0f8c9b872c72b20f6c7218d7",
+      "bytes": 13162
+    },
+    {
+      "path": "out/mp-portfolio/recipe-parity/talus/generate.log",
+      "sha256": "4bbbb946df961030bce1e639cac77cd1a01e4268ac39ce4e41d0c1fffc105d7e",
+      "bytes": 87
+    },
+    {
+      "path": "out/mp-portfolio/recipe-parity/talus/layout.json",
+      "sha256": "212df836dd2ca78babd5d8916e45fb83e3e33780313188036677f0baaddcf5ef",
+      "bytes": 8957
+    },
+    {
+      "path": "out/mp-portfolio/recipe-parity/talus/qmg_talus.map",
+      "sha256": "4583964d19748a00b2686d2b30b48fa4131c852534786d0f75cc5574119f37a6",
+      "bytes": 104239
+    },
+    {
+      "path": "out/mp-portfolio/recipe-parity/talus/qmg_talus.qmg.json",
+      "sha256": "18e85cada43b8b2c403e1ffb4c67d0f4f72614e348e44f3f7e2650ce906ecc9e",
+      "bytes": 74910
+    },
+    {
+      "path": "out/mp-portfolio/recipe-parity/undercut/flow.json",
+      "sha256": "95b05ae46f4015c229584550caeea26a7e2b9f04545ac55cb831f94c9b1d2abc",
+      "bytes": 13154
+    },
+    {
+      "path": "out/mp-portfolio/recipe-parity/undercut/generate.log",
+      "sha256": "c7fe6c0443047d1357238f4d08684056a20166c4288369c5d76dec112cca130b",
+      "bytes": 90
+    },
+    {
+      "path": "out/mp-portfolio/recipe-parity/undercut/layout.json",
+      "sha256": "0a42d82e46f8d38f29f406b51244b5512aa31c3fd25ae8c92561a6d1b6e8fccb",
+      "bytes": 10166
+    },
+    {
+      "path": "out/mp-portfolio/recipe-parity/undercut/qmg_undercut.map",
+      "sha256": "b8d564eb8b125b43caf5d718e4908082cb4f430a5160c75c56957905e612bcd7",
+      "bytes": 105907
+    },
+    {
+      "path": "out/mp-portfolio/recipe-parity/undercut/qmg_undercut.qmg.json",
+      "sha256": "b7c084a5bfff7e72fce5d070cada77d3a529d673f44929e93abc78f0737cdb7b",
+      "bytes": 81841
+    },
+    {
+      "path": "out/mp-portfolio/remaining-tests.log",
+      "sha256": "af7d11ac000214563287e065befcbe48f10f1a4cd6d31ec4f083f4e340d143a0",
+      "bytes": 4508
+    },
+    {
+      "path": "out/mp-portfolio/revisions/initial/rooms4-seed17/compiled-analysis.json",
+      "sha256": "57ef1dcb65e6f93866f160414a1f22c9fda6e445cd8127e450b61dab9500668f",
+      "bytes": 16592
+    },
+    {
+      "path": "out/mp-portfolio/revisions/initial/rooms4-seed17/layout.json",
+      "sha256": "3dc4c4dcd46f66e73c78a4ee94962d26c3783664ce83f1f37c5b0f7242a00de5",
+      "bytes": 12550
+    },
+    {
+      "path": "out/mp-portfolio/revisions/initial/rooms4-seed17/qmg_rooms4-seed17-qbsp.log",
+      "sha256": "c1616457ce2377d751007a4fbc8e769f8972a9daf40a4ca236ed87a454ba1cbd",
+      "bytes": 1983
+    },
+    {
+      "path": "out/mp-portfolio/revisions/initial/rooms4-seed17/qmg_rooms4-seed17.bsp",
+      "sha256": "6048e4069ccf7c6019af7717bb34c0ed60b9854139e94b527ff353bc9896baaf",
+      "bytes": 71800
+    },
+    {
+      "path": "out/mp-portfolio/revisions/initial/rooms4-seed17/qmg_rooms4-seed17.content.json",
+      "sha256": "97ef945bc1ea709e635ccd14e632cd082c6cf6d32e8b4f35bd700c9d3e2fcf49",
+      "bytes": 2264
+    },
+    {
+      "path": "out/mp-portfolio/revisions/initial/rooms4-seed17/qmg_rooms4-seed17.map",
+      "sha256": "d547edcc18b347b59e6318b6cf6803c097d52ba1c9b5d2dbbf038e3b963e39bd",
+      "bytes": 66631
+    },
+    {
+      "path": "out/mp-portfolio/revisions/initial/rooms4-seed17/qmg_rooms4-seed17.prt",
+      "sha256": "b4d76e99013ce589c33b09210123209b69d5ec7ee5f29bdc954b71910452a8d5",
+      "bytes": 13306
+    },
+    {
+      "path": "out/mp-portfolio/revisions/initial/rooms4-seed17/qmg_rooms4-seed17.qmg.json",
+      "sha256": "9f200258ef6d47a9b86fe5b9a0ebd762294b42396e4372fa9127b9ec3e3e3579",
+      "bytes": 62396
+    },
+    {
+      "path": "out/mp-portfolio/revisions/initial/rooms4-seed17/qmg_rooms4-seed17.texinfo.json",
+      "sha256": "9790bce84d9459f2ee44d792530e95a97646df8922f29965c15d6b6117cf8c13",
+      "bytes": 103
+    },
+    {
+      "path": "out/mp-portfolio/revisions/initial/rooms4-seed17/verification.json",
+      "sha256": "95b99ec49e45378bbabfa4b54713bac4a12c82f77fa0442fba41bccc80732b99",
+      "bytes": 28994
+    },
+    {
+      "path": "out/mp-portfolio/revisions/initial/rooms4-seed42/compiled-analysis.json",
+      "sha256": "dd845d792aa186bdba8ee2504339b9f2e25d309712591ab0746c93d3f2f9e765",
+      "bytes": 16452
+    },
+    {
+      "path": "out/mp-portfolio/revisions/initial/rooms4-seed42/layout.json",
+      "sha256": "a338d5f9a466a7f177f0680a28e42ca14b1149189d18fa7e16bc81e9e45c3161",
+      "bytes": 12476
+    },
+    {
+      "path": "out/mp-portfolio/revisions/initial/rooms4-seed42/qmg_rooms4-seed42-qbsp.log",
+      "sha256": "0ccbad60a1b8c0965e1dc70b910306cd34de297a5bcbb1b9bf2f83f043b05275",
+      "bytes": 1983
+    },
+    {
+      "path": "out/mp-portfolio/revisions/initial/rooms4-seed42/qmg_rooms4-seed42.bsp",
+      "sha256": "9dc685002bfbe2bc994353380915d06c55fd430a52a03b7035eb562b406e52a2",
+      "bytes": 70812
+    },
+    {
+      "path": "out/mp-portfolio/revisions/initial/rooms4-seed42/qmg_rooms4-seed42.content.json",
+      "sha256": "93b557295f316ba1252d686d243c127bb9873bf3cfcb26d78514cc9e5827df53",
+      "bytes": 2418
+    },
+    {
+      "path": "out/mp-portfolio/revisions/initial/rooms4-seed42/qmg_rooms4-seed42.map",
+      "sha256": "659dc8f56578df4d5bb23ea7544bbf015c1cad68455dc5dae836f97f35eccfc1",
+      "bytes": 65796
+    },
+    {
+      "path": "out/mp-portfolio/revisions/initial/rooms4-seed42/qmg_rooms4-seed42.prt",
+      "sha256": "151ff5f64a639341c841d423a8868ab1d7d35789e3e35f743766677adb54c266",
+      "bytes": 14119
+    },
+    {
+      "path": "out/mp-portfolio/revisions/initial/rooms4-seed42/qmg_rooms4-seed42.qmg.json",
+      "sha256": "41152c6a42da81641a02dcc4aa662ec0a5745749be749e9ec7b6e8945aa70446",
+      "bytes": 60416
+    },
+    {
+      "path": "out/mp-portfolio/revisions/initial/rooms4-seed42/qmg_rooms4-seed42.texinfo.json",
+      "sha256": "9c000e3b3e1617ca2e9b0022233509bc9671879387559a3f0ee3d3a184e1fe3c",
+      "bytes": 103
+    },
+    {
+      "path": "out/mp-portfolio/revisions/initial/rooms4-seed42/verification.json",
+      "sha256": "e2dd7740ce0a6163f8c696c489451e02ec8867a9a5db73464aba5f102f989996",
+      "bytes": 28848
+    },
+    {
+      "path": "out/mp-portfolio/revisions/initial/rooms4-seed99/compiled-analysis.json",
+      "sha256": "c695d516369e0f265aa50c37ba63b487d112118353977346040db3843fcc4f71",
+      "bytes": 16377
+    },
+    {
+      "path": "out/mp-portfolio/revisions/initial/rooms4-seed99/layout.json",
+      "sha256": "72c064bad8b0530f30015a7dc5b5f2fdfc712872fb097794b058ccd047b6b302",
+      "bytes": 12446
+    },
+    {
+      "path": "out/mp-portfolio/revisions/initial/rooms4-seed99/qmg_rooms4-seed99-qbsp.log",
+      "sha256": "b891a7ed8c9ff02daf1dca818454dd8e80f4c89d06f42f1fca96347a75860947",
+      "bytes": 1983
+    },
+    {
+      "path": "out/mp-portfolio/revisions/initial/rooms4-seed99/qmg_rooms4-seed99.bsp",
+      "sha256": "7624e1996c7730a9dcbf396bcb51814127047fec61935a9cc623118d7d8e82fc",
+      "bytes": 71116
+    },
+    {
+      "path": "out/mp-portfolio/revisions/initial/rooms4-seed99/qmg_rooms4-seed99.content.json",
+      "sha256": "0e1e3b5586a028a2de045732a5560e150700109feb53e5c6da20ca3bde143ea6",
+      "bytes": 2605
+    },
+    {
+      "path": "out/mp-portfolio/revisions/initial/rooms4-seed99/qmg_rooms4-seed99.map",
+      "sha256": "48f3bc672b493f2d24a63fc8631c04124e65b73e679c74966017623690df31d8",
+      "bytes": 65989
+    },
+    {
+      "path": "out/mp-portfolio/revisions/initial/rooms4-seed99/qmg_rooms4-seed99.prt",
+      "sha256": "f4b836d5c00c2ad1bdea402ae59e65ce5e93d9c4f8e85efe5394e9c3acfcae92",
+      "bytes": 13792
+    },
+    {
+      "path": "out/mp-portfolio/revisions/initial/rooms4-seed99/qmg_rooms4-seed99.qmg.json",
+      "sha256": "57d7c13dd3ab34f3057b7a3aa65c4efb90065063b2192eb87050568422f3d29f",
+      "bytes": 61966
+    },
+    {
+      "path": "out/mp-portfolio/revisions/initial/rooms4-seed99/qmg_rooms4-seed99.texinfo.json",
+      "sha256": "9c000e3b3e1617ca2e9b0022233509bc9671879387559a3f0ee3d3a184e1fe3c",
+      "bytes": 103
+    },
+    {
+      "path": "out/mp-portfolio/revisions/initial/rooms4-seed99/verification.json",
+      "sha256": "e29f1f9e2d0af8edd94a5cb3d809a388b9f9cc8c522150c034faa536f3d20669",
+      "bytes": 28949
+    },
+    {
+      "path": "out/mp-portfolio/revisions/initial/rooms6-seed17/compiled-analysis.json",
+      "sha256": "e7bbd9942d13d46e038cb9ffc96a6019807086dd3ff9d1b01d226b82092ea380",
+      "bytes": 18336
+    },
+    {
+      "path": "out/mp-portfolio/revisions/initial/rooms6-seed17/layout.json",
+      "sha256": "9017b9b33a9b0ecca9c5f918a60aeaef45f509a2af67b3b317bd49bb8b6916b1",
+      "bytes": 17169
+    },
+    {
+      "path": "out/mp-portfolio/revisions/initial/rooms6-seed17/qmg_rooms6-seed17-qbsp.log",
+      "sha256": "fc7e48855405a24b101d5751e587234d8d9b2b667067638ce3fa79c52455ae6d",
+      "bytes": 1983
+    },
+    {
+      "path": "out/mp-portfolio/revisions/initial/rooms6-seed17/qmg_rooms6-seed17.bsp",
+      "sha256": "6de1e0c248647f1baabd593dca1948e09fa81853302e7dec29a6391ff1394822",
+      "bytes": 103748
+    },
+    {
+      "path": "out/mp-portfolio/revisions/initial/rooms6-seed17/qmg_rooms6-seed17.content.json",
+      "sha256": "eb371fdece7f30ba3bf7229c7651432867e641f5702722d05066679236d6f2a4",
+      "bytes": 3311
+    },
+    {
+      "path": "out/mp-portfolio/revisions/initial/rooms6-seed17/qmg_rooms6-seed17.map",
+      "sha256": "c7f61bcb97389951558ac0602460f5f9a8002dafbf64a511f4b171ccf0b2dfdc",
+      "bytes": 95723
+    },
+    {
+      "path": "out/mp-portfolio/revisions/initial/rooms6-seed17/qmg_rooms6-seed17.prt",
+      "sha256": "9a3f587f1d1e7b5fd3808600149f2ae65bb90581834235f3cde9789b136bdcc1",
+      "bytes": 19527
+    },
+    {
+      "path": "out/mp-portfolio/revisions/initial/rooms6-seed17/qmg_rooms6-seed17.qmg.json",
+      "sha256": "2a4a65b11c1a2ca4211671a831dbed7582a999a995f9eadf52bdcadf60821bf7",
+      "bytes": 83371
+    },
+    {
+      "path": "out/mp-portfolio/revisions/initial/rooms6-seed17/qmg_rooms6-seed17.texinfo.json",
+      "sha256": "9c000e3b3e1617ca2e9b0022233509bc9671879387559a3f0ee3d3a184e1fe3c",
+      "bytes": 103
+    },
+    {
+      "path": "out/mp-portfolio/revisions/initial/rooms6-seed17/verification.json",
+      "sha256": "7b60dd0906b1c21fc7a32d64bd75edfa4e53308282dbe1ed932214c6cef86dd8",
+      "bytes": 39504
+    },
+    {
+      "path": "out/mp-portfolio/revisions/initial/rooms6-seed42/compiled-analysis.json",
+      "sha256": "78dc9ffb852b898a6c3fa794a7c1c0dd859ac425fbdf7b8efc570997457fe194",
+      "bytes": 18610
+    },
+    {
+      "path": "out/mp-portfolio/revisions/initial/rooms6-seed42/layout.json",
+      "sha256": "67f309c21219670d22f0f52b32e10b2fbe64b28a0be65fbd1823cdf5cea72077",
+      "bytes": 17195
+    },
+    {
+      "path": "out/mp-portfolio/revisions/initial/rooms6-seed42/qmg_rooms6-seed42-qbsp.log",
+      "sha256": "90248c598dbb5b232f5eb88ecac4eb209a8cf819856a5104626d0b3f73ba1bf6",
+      "bytes": 1983
+    },
+    {
+      "path": "out/mp-portfolio/revisions/initial/rooms6-seed42/qmg_rooms6-seed42.bsp",
+      "sha256": "9b62b7a8a82d2046364d83efbf07fdf117e4d0d2c02d73271761b65f34ddad5b",
+      "bytes": 99528
+    },
+    {
+      "path": "out/mp-portfolio/revisions/initial/rooms6-seed42/qmg_rooms6-seed42.content.json",
+      "sha256": "768646f36cf9f48d528a820d9d3460c993814284869cccca71069fce15af783d",
+      "bytes": 3307
+    },
+    {
+      "path": "out/mp-portfolio/revisions/initial/rooms6-seed42/qmg_rooms6-seed42.map",
+      "sha256": "a00415003b3a72aaa206ad38d8ea02f5a12296441b70d746539bda41b31aa3c6",
+      "bytes": 95651
+    },
+    {
+      "path": "out/mp-portfolio/revisions/initial/rooms6-seed42/qmg_rooms6-seed42.prt",
+      "sha256": "16ef7d6d96a0f93ad29ba7576f99b2b3983184dc2dbbdad17345d0c7bb7e93f4",
+      "bytes": 20613
+    },
+    {
+      "path": "out/mp-portfolio/revisions/initial/rooms6-seed42/qmg_rooms6-seed42.qmg.json",
+      "sha256": "a6ce260373cf54125df2a1fe7648b4c4d8758a6d4af3c3cd9532f48e980b6d6d",
+      "bytes": 83147
+    },
+    {
+      "path": "out/mp-portfolio/revisions/initial/rooms6-seed42/qmg_rooms6-seed42.texinfo.json",
+      "sha256": "9790bce84d9459f2ee44d792530e95a97646df8922f29965c15d6b6117cf8c13",
+      "bytes": 103
+    },
+    {
+      "path": "out/mp-portfolio/revisions/initial/rooms6-seed42/verification.json",
+      "sha256": "7bfbc4971355aa7c8f74763b173e593e8a3387f49ba551e4ee67704329ae3d57",
+      "bytes": 38513
+    },
+    {
+      "path": "out/mp-portfolio/revisions/initial/rooms6-seed99/compiled-analysis.json",
+      "sha256": "97ce6b4f685d07e317d01829d511565bde478b4e09e4a069a38ae6ae83ffa478",
+      "bytes": 18447
+    },
+    {
+      "path": "out/mp-portfolio/revisions/initial/rooms6-seed99/layout.json",
+      "sha256": "4017cea6468d7f9b2cab805c8313bf73c974cf94790073b80dae252fb2cbe1c0",
+      "bytes": 17131
+    },
+    {
+      "path": "out/mp-portfolio/revisions/initial/rooms6-seed99/qmg_rooms6-seed99-qbsp.log",
+      "sha256": "37b1675d8f0904f80cef0a2a2d94cf518a64406339f9eac33451dd49fe0540fc",
+      "bytes": 1983
+    },
+    {
+      "path": "out/mp-portfolio/revisions/initial/rooms6-seed99/qmg_rooms6-seed99.bsp",
+      "sha256": "2b707435f1371df246d6e34babe47f9d2606b6640874c78f00170e11d16ca48b",
+      "bytes": 99936
+    },
+    {
+      "path": "out/mp-portfolio/revisions/initial/rooms6-seed99/qmg_rooms6-seed99.content.json",
+      "sha256": "fc3d919dc70a0226b877c4b763a4b43e85b3dcd43f9d26e12921035c0c021282",
+      "bytes": 3378
+    },
+    {
+      "path": "out/mp-portfolio/revisions/initial/rooms6-seed99/qmg_rooms6-seed99.map",
+      "sha256": "ebf1bfbaa9d4c6457b772ffaac98407266f94e3fcb193b9622b12d5aac326dc4",
+      "bytes": 95708
+    },
+    {
+      "path": "out/mp-portfolio/revisions/initial/rooms6-seed99/qmg_rooms6-seed99.prt",
+      "sha256": "52a16d44d927d6f1ec955787f3caee5dfeca61844e489463506365c9c592ef40",
+      "bytes": 21369
+    },
+    {
+      "path": "out/mp-portfolio/revisions/initial/rooms6-seed99/qmg_rooms6-seed99.qmg.json",
+      "sha256": "2f9a76389c3105696e8f46233d09a297ea2edc5d383da01bb18e8bb10257e5f7",
+      "bytes": 85147
+    },
+    {
+      "path": "out/mp-portfolio/revisions/initial/rooms6-seed99/qmg_rooms6-seed99.texinfo.json",
+      "sha256": "9790bce84d9459f2ee44d792530e95a97646df8922f29965c15d6b6117cf8c13",
+      "bytes": 103
+    },
+    {
+      "path": "out/mp-portfolio/revisions/initial/rooms6-seed99/verification.json",
+      "sha256": "e2c4a6fc1496586057f76a23bbaba88ce3e1d7f7d7388dfe451dc1d08bfb1954",
+      "bytes": 40406
+    },
+    {
+      "path": "out/mp-portfolio/revisions/initial/rooms8-seed17/compiled-analysis.json",
+      "sha256": "79ce515c071cc02e052d9323dca6a02e768c06c69064da1eb4ba93f06a6b05bb",
+      "bytes": 19472
+    },
+    {
+      "path": "out/mp-portfolio/revisions/initial/rooms8-seed17/layout.json",
+      "sha256": "ff4d8ec4496ca5a5f19b9594553c20512f1bb1573a3972f4b9e672793db7b0f6",
+      "bytes": 21895
+    },
+    {
+      "path": "out/mp-portfolio/revisions/initial/rooms8-seed17/qmg_rooms8-seed17-qbsp.log",
+      "sha256": "70a3b58c8a0fef70009f57b978c7e62938a1653efbd938ac2689836fb792aa2e",
+      "bytes": 1983
+    },
+    {
+      "path": "out/mp-portfolio/revisions/initial/rooms8-seed17/qmg_rooms8-seed17.bsp",
+      "sha256": "9642483f4f82889471f6a211d1e337f8afa5168f45a895d6c8b55c90856153be",
+      "bytes": 140020
+    },
+    {
+      "path": "out/mp-portfolio/revisions/initial/rooms8-seed17/qmg_rooms8-seed17.content.json",
+      "sha256": "e4b8bb578e8fa34379563c73bdb535ca131872df560bef1bceda2a3fd886ffa7",
+      "bytes": 4366
+    },
+    {
+      "path": "out/mp-portfolio/revisions/initial/rooms8-seed17/qmg_rooms8-seed17.map",
+      "sha256": "88c3dad0ded1144dccb17c3eb8de16aa75f92d5c559fe3bba25de23e5c2e837a",
+      "bytes": 136839
+    },
+    {
+      "path": "out/mp-portfolio/revisions/initial/rooms8-seed17/qmg_rooms8-seed17.prt",
+      "sha256": "ea2032d07caa9d6e9f411c3d8d60b7c1317833914e07f2071264add3281b868a",
+      "bytes": 27757
+    },
+    {
+      "path": "out/mp-portfolio/revisions/initial/rooms8-seed17/qmg_rooms8-seed17.qmg.json",
+      "sha256": "4279f539e219b974cb4c9f09fe936c90b074abbf8f2076a111d4e9153791c4fb",
+      "bytes": 106929
+    },
+    {
+      "path": "out/mp-portfolio/revisions/initial/rooms8-seed17/qmg_rooms8-seed17.texinfo.json",
+      "sha256": "9790bce84d9459f2ee44d792530e95a97646df8922f29965c15d6b6117cf8c13",
+      "bytes": 103
+    },
+    {
+      "path": "out/mp-portfolio/revisions/initial/rooms8-seed17/verification.json",
+      "sha256": "bf0c6908e13c9da78c6d7b9be1bbae0d4fe9ca1140f2964315516d0e9f5a58e6",
+      "bytes": 49985
+    },
+    {
+      "path": "out/mp-portfolio/revisions/initial/rooms8-seed42/compiled-analysis.json",
+      "sha256": "5b3418967bd8dea22df11350b9f2033fe6714319bf5d5b3ae935c5a2a0b59d33",
+      "bytes": 19510
+    },
+    {
+      "path": "out/mp-portfolio/revisions/initial/rooms8-seed42/layout.json",
+      "sha256": "f10a5badaf95c4a31f0ce13709bdae8d9fd204400f7476c09ffc345645122523",
+      "bytes": 22121
+    },
+    {
+      "path": "out/mp-portfolio/revisions/initial/rooms8-seed42/qmg_rooms8-seed42-qbsp.log",
+      "sha256": "13f5b8dad75578fccfb639d68f9bba2e67dcbc30c885c2c05791f2fde835ff71",
+      "bytes": 1983
+    },
+    {
+      "path": "out/mp-portfolio/revisions/initial/rooms8-seed42/qmg_rooms8-seed42.bsp",
+      "sha256": "595f7c986cc333817144651c681cb687a280ffb6784ea803b8b0bfd711f0482d",
+      "bytes": 141900
+    },
+    {
+      "path": "out/mp-portfolio/revisions/initial/rooms8-seed42/qmg_rooms8-seed42.content.json",
+      "sha256": "f508461c592a28489077a010400aa43d5385edbb8186a05c815d529b91dbfb89",
+      "bytes": 4238
+    },
+    {
+      "path": "out/mp-portfolio/revisions/initial/rooms8-seed42/qmg_rooms8-seed42.map",
+      "sha256": "fc54aa5d75b3dd94766d21e4231b31dc08a7430d7108fc52cfbb9d9f7f116454",
+      "bytes": 141800
+    },
+    {
+      "path": "out/mp-portfolio/revisions/initial/rooms8-seed42/qmg_rooms8-seed42.prt",
+      "sha256": "d25f298bc5c27dfe0ecb353a175c173d46769bead406cfd5f6bc5105117863ca",
+      "bytes": 29243
+    },
+    {
+      "path": "out/mp-portfolio/revisions/initial/rooms8-seed42/qmg_rooms8-seed42.qmg.json",
+      "sha256": "41ab5a30c4202bc6fabb0cad7c193937f0326abb849a1c728b21be3c20f20e39",
+      "bytes": 107145
+    },
+    {
+      "path": "out/mp-portfolio/revisions/initial/rooms8-seed42/qmg_rooms8-seed42.texinfo.json",
+      "sha256": "9c000e3b3e1617ca2e9b0022233509bc9671879387559a3f0ee3d3a184e1fe3c",
+      "bytes": 103
+    },
+    {
+      "path": "out/mp-portfolio/revisions/initial/rooms8-seed42/verification.json",
+      "sha256": "2d5a28a95f02eb82a4ad4dc7734731ff922b331503eb7247cdaedfd98273b98f",
+      "bytes": 51216
+    },
+    {
+      "path": "out/mp-portfolio/revisions/initial/rooms8-seed99/compiled-analysis.json",
+      "sha256": "97742cb48b2c55ca37fc9e385b0b02b1c3c83a2a525df50c84a838cf0f306025",
+      "bytes": 19592
+    },
+    {
+      "path": "out/mp-portfolio/revisions/initial/rooms8-seed99/layout.json",
+      "sha256": "27cc85ac83dd6dae63f3bd116e7e4001bee18542f2ba3bf0f70329bed49cc383",
+      "bytes": 22185
+    },
+    {
+      "path": "out/mp-portfolio/revisions/initial/rooms8-seed99/qmg_rooms8-seed99-qbsp.log",
+      "sha256": "0ddb339cac538c4dec6bc6c98a7a8f4594c16bb7c41228d7ba452791599e6fac",
+      "bytes": 1983
+    },
+    {
+      "path": "out/mp-portfolio/revisions/initial/rooms8-seed99/qmg_rooms8-seed99.bsp",
+      "sha256": "6566cdbf8de29fd75ff92b417b76bf04dc0490aff40aa3b23b4ddacbfa487f8b",
+      "bytes": 137512
+    },
+    {
+      "path": "out/mp-portfolio/revisions/initial/rooms8-seed99/qmg_rooms8-seed99.content.json",
+      "sha256": "d1188047311a700fdad5e505e0df182fc638c9dcbd003af44674df122c6fe456",
+      "bytes": 4678
+    },
+    {
+      "path": "out/mp-portfolio/revisions/initial/rooms8-seed99/qmg_rooms8-seed99.map",
+      "sha256": "45fcce5e2c1c742e565bf77d21b91ece556722dcc03a35a1d52a96ba84a3d67c",
+      "bytes": 141667
+    },
+    {
+      "path": "out/mp-portfolio/revisions/initial/rooms8-seed99/qmg_rooms8-seed99.prt",
+      "sha256": "25bdb1192971fcb6bd9d73ae862855b6f5300031e3f35702f24b976427830621",
+      "bytes": 29062
+    },
+    {
+      "path": "out/mp-portfolio/revisions/initial/rooms8-seed99/qmg_rooms8-seed99.qmg.json",
+      "sha256": "7092e5181a84d1f3b6bbd86659d97283afad850408fa82567e78e58144ff9a67",
+      "bytes": 108263
+    },
+    {
+      "path": "out/mp-portfolio/revisions/initial/rooms8-seed99/qmg_rooms8-seed99.texinfo.json",
+      "sha256": "9c000e3b3e1617ca2e9b0022233509bc9671879387559a3f0ee3d3a184e1fe3c",
+      "bytes": 103
+    },
+    {
+      "path": "out/mp-portfolio/revisions/initial/rooms8-seed99/verification.json",
+      "sha256": "8c1c59221ca56020faa36d71a578e50fb8a6a01e5439a90a6801797116abf5fe",
+      "bytes": 50023
+    },
+    {
+      "path": "out/mp-portfolio/semantic-controls.json",
+      "sha256": "a2675249b7aa5c5f0c3c4940fda979a03e136951d92330ba2f74ba5520023283",
+      "bytes": 597
+    },
+    {
+      "path": "out/mp-portfolio/update_knowledge.py",
+      "sha256": "bd0a3e25870cf41e65c2e94aeb540d6ff127f331e4f4430fe535a0471113776a",
+      "bytes": 9421
+    },
+    {
+      "path": "out/native-recovery/comparison.json",
+      "sha256": "93f18fc6b7d55b5975b0ce0f93dd76c510d141e125eb79f0e37849bc41c4ac03",
+      "bytes": 5835
+    },
+    {
+      "path": "out/native-recovery/experiment.log",
+      "sha256": "23e151116e9308b61b0618fa778b9bb14d6be817d166b2eeb22d67999f31967f",
+      "bytes": 3975
+    },
+    {
+      "path": "out/native-recovery/pocket-support.json",
+      "sha256": "76d131532fc047119e2235bfa68c7c435910ba98e865c7da193fa84c2646f384",
+      "bytes": 7028
+    },
+    {
+      "path": "out/native-recovery/protocol.json",
+      "sha256": "e3c8ca56f7513616af5b5216d7052c9a90c22e274964be5c24508c5020c1d23b",
+      "bytes": 20349
+    },
+    {
+      "path": "out/native-recovery/ravel-recovery-f200-continue/commands.txt",
+      "sha256": "00c952608e87d0585791713f004ca211a78147681be76360e59f9a48bf3f07d6",
+      "bytes": 6228
+    },
+    {
+      "path": "out/native-recovery/ravel-recovery-f200-continue/frames.ndjson",
+      "sha256": "b907e243b877e471c68d1e770c419a4fed63845e3c834a03fa7c7681e42f53ba",
+      "bytes": 120585
+    },
+    {
+      "path": "out/native-recovery/ravel-recovery-f200-continue/native-stderr.txt",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    {
+      "path": "out/native-recovery/ravel-recovery-f200-continue/recovery.json",
+      "sha256": "3f4184ff803c7e7618adaf8c9cb1e8c03b22400a16c97f25df3e01976d14fbd1",
+      "bytes": 1218
+    },
+    {
+      "path": "out/native-recovery/ravel-recovery-f200-continue/result.json",
+      "sha256": "2331b26b45784fc6191e2ef6072bf7c05c11899727db97ff9bd4a972284e97a5",
+      "bytes": 3194
+    },
+    {
+      "path": "out/native-recovery/ravel-recovery-f200-continue/trial.json",
+      "sha256": "5b8a71f5314eca080e966f60509e81c1e1eaec6a53c357f8580d0b06958bd2a9",
+      "bytes": 1876
+    },
+    {
+      "path": "out/native-recovery/ravel-recovery-f200-north8-release/commands.txt",
+      "sha256": "6f64678ef02792e5662670f12a9495851c795fd7164f888ec0600dfb330e9540",
+      "bytes": 5476
+    },
+    {
+      "path": "out/native-recovery/ravel-recovery-f200-north8-release/frames.ndjson",
+      "sha256": "9b3bb10b5c032bd48facd8d715979fd31e8b1252304a46c56001f890662552ef",
+      "bytes": 119943
+    },
+    {
+      "path": "out/native-recovery/ravel-recovery-f200-north8-release/native-stderr.txt",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    {
+      "path": "out/native-recovery/ravel-recovery-f200-north8-release/recovery.json",
+      "sha256": "7c13fff976262a5d745d7f65bab71ae9fed8ae5275400128f460d0a3f39e7c39",
+      "bytes": 1924
+    },
+    {
+      "path": "out/native-recovery/ravel-recovery-f200-north8-release/result.json",
+      "sha256": "d214fa1c220acc2607c2d2489df283a2ec7e95324e573cb54495f7c041b58042",
+      "bytes": 3243
+    },
+    {
+      "path": "out/native-recovery/ravel-recovery-f200-north8-release/trial.json",
+      "sha256": "81172a13c61d5f8ddfdbd894e9fcee9cf1a396da26c48265068f7a1182b040db",
+      "bytes": 2013
+    },
+    {
+      "path": "out/native-recovery/ravel-recovery-f200-release/commands.txt",
+      "sha256": "74370ded76a57d4bdb0abf1b694940834cbb1fdacd0357bc754ba8abee880328",
+      "bytes": 5716
+    },
+    {
+      "path": "out/native-recovery/ravel-recovery-f200-release/frames.ndjson",
+      "sha256": "1ad39a1b33ec72494cd8cf0fb001bb5dce470f662f809052ddf15e358fa03c7c",
+      "bytes": 119032
+    },
+    {
+      "path": "out/native-recovery/ravel-recovery-f200-release/native-stderr.txt",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    {
+      "path": "out/native-recovery/ravel-recovery-f200-release/recovery.json",
+      "sha256": "9d4185d42c7dd7bd63633042371fd35537b6852b74262423fa4ff7a0d427035f",
+      "bytes": 1905
+    },
+    {
+      "path": "out/native-recovery/ravel-recovery-f200-release/result.json",
+      "sha256": "d86d058ee27d03af660fd32bb3f8666f672dc312f25d1862f711a9d3b46e96f5",
+      "bytes": 3233
+    },
+    {
+      "path": "out/native-recovery/ravel-recovery-f200-release/trial.json",
+      "sha256": "1cb7d85f0e3e877c423439b865999569c2e9c05019a650160ac08f8bbe545653",
+      "bytes": 1872
+    },
+    {
+      "path": "out/native-recovery/ravel-recovery-f200-south8-release/commands.txt",
+      "sha256": "0d766c3715ee7512100df58cbb11d74686099568c3d1467ec8da5ac475089204",
+      "bytes": 5732
+    },
+    {
+      "path": "out/native-recovery/ravel-recovery-f200-south8-release/frames.ndjson",
+      "sha256": "b45376f8d7c84ae581e371c8091d59979c1b15c971a9821a33f36578a4870f1e",
+      "bytes": 120213
+    },
+    {
+      "path": "out/native-recovery/ravel-recovery-f200-south8-release/native-stderr.txt",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    {
+      "path": "out/native-recovery/ravel-recovery-f200-south8-release/recovery.json",
+      "sha256": "00d89fd283c0340e21aea31a9ffb517fc41839b37707e86d6236d86a4b59b9f0",
+      "bytes": 1931
+    },
+    {
+      "path": "out/native-recovery/ravel-recovery-f200-south8-release/result.json",
+      "sha256": "392272421364ff729b7ea1527945a7cb482953b591bfdef8213b9196d137293c",
+      "bytes": 3244
+    },
+    {
+      "path": "out/native-recovery/ravel-recovery-f200-south8-release/trial.json",
+      "sha256": "1585ab5e2601b026698a88cfb041c7d221e7e4478465c1d4666e6f9ddcb835b8",
+      "bytes": 2015
+    },
+    {
+      "path": "out/native-recovery/ravel-recovery-f400-continue/commands.txt",
+      "sha256": "76f437b1288681a1afc3c762e1d23c4ec6ceeb69a74bc4aab5f68238b9321bf9",
+      "bytes": 6168
+    },
+    {
+      "path": "out/native-recovery/ravel-recovery-f400-continue/frames.ndjson",
+      "sha256": "95cecb5cda9f6f86c04ca89d95b09adab6698e0f17aae27bf9d972164c326cfe",
+      "bytes": 119520
+    },
+    {
+      "path": "out/native-recovery/ravel-recovery-f400-continue/native-stderr.txt",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    {
+      "path": "out/native-recovery/ravel-recovery-f400-continue/recovery.json",
+      "sha256": "69312e1550c95e90bdef3e4d6337a4af5e73f086ecfa11451613ff6e6431e16c",
+      "bytes": 1220
+    },
+    {
+      "path": "out/native-recovery/ravel-recovery-f400-continue/result.json",
+      "sha256": "35f3d5555b4aecc7920f4c45aad33e75f8dd2902ef4de5e6e17ee0bbdcb93ae0",
+      "bytes": 3201
+    },
+    {
+      "path": "out/native-recovery/ravel-recovery-f400-continue/trial.json",
+      "sha256": "1a80382ffb2a2869823b867b139af7ba0fb322f0ba90dcea7ec4c5c93b8aa3f9",
+      "bytes": 1876
+    },
+    {
+      "path": "out/native-recovery/ravel-recovery-f400-north8-release/commands.txt",
+      "sha256": "5e6654b63bae563f3b17c67bb381f982affff3f9b0623df9d095e99769f1e2ba",
+      "bytes": 5416
+    },
+    {
+      "path": "out/native-recovery/ravel-recovery-f400-north8-release/frames.ndjson",
+      "sha256": "58c2bcbb230318057469f5d99d73b9479cd5695eb71fd6f4cc2479b2d73c273c",
+      "bytes": 119484
+    },
+    {
+      "path": "out/native-recovery/ravel-recovery-f400-north8-release/native-stderr.txt",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    {
+      "path": "out/native-recovery/ravel-recovery-f400-north8-release/recovery.json",
+      "sha256": "346de9dac16bae37141dc6ca9400552c00437aed7f40859a6339c3cbae6c7a6e",
+      "bytes": 1223
+    },
+    {
+      "path": "out/native-recovery/ravel-recovery-f400-north8-release/result.json",
+      "sha256": "e9dd104c8d13bfd555fba64985641b8bf88e71b4237db1c85d5230a51181779e",
+      "bytes": 3207
+    },
+    {
+      "path": "out/native-recovery/ravel-recovery-f400-north8-release/trial.json",
+      "sha256": "fbe7448ecbed458c61d682089fd3a170bc5860fb28645f5a252db526ba6d534e",
+      "bytes": 2013
+    },
+    {
+      "path": "out/native-recovery/ravel-recovery-f400-release/commands.txt",
+      "sha256": "759ec094843e3d20a1fc6b136e458200b3949046478919dca42b3030e93a7f5a",
+      "bytes": 5656
+    },
+    {
+      "path": "out/native-recovery/ravel-recovery-f400-release/frames.ndjson",
+      "sha256": "a97754069461cdce165e451730effaac50bf3e48c724887e4e62cb4a358d01fc",
+      "bytes": 117898
+    },
+    {
+      "path": "out/native-recovery/ravel-recovery-f400-release/native-stderr.txt",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    {
+      "path": "out/native-recovery/ravel-recovery-f400-release/recovery.json",
+      "sha256": "9295dd87927fe2a1bd16d23fb3a16cf1ac40eb6850251eb03b8310d27e388dce",
+      "bytes": 1907
+    },
+    {
+      "path": "out/native-recovery/ravel-recovery-f400-release/result.json",
+      "sha256": "c63b6518e71c4e51d4bb03c185dd7d6bbaaf5193d5e3c3a52262a19feb93e304",
+      "bytes": 3200
+    },
+    {
+      "path": "out/native-recovery/ravel-recovery-f400-release/trial.json",
+      "sha256": "f47702fd954363fe6ffd27179af58115a94410c9baeeb97550be169346eeb36c",
+      "bytes": 1872
+    },
+    {
+      "path": "out/native-recovery/ravel-recovery-f400-south8-release/commands.txt",
+      "sha256": "749223ccf089570b1e40600b8ee5ef5a7f279298fa3026ce68f1501896396358",
+      "bytes": 5672
+    },
+    {
+      "path": "out/native-recovery/ravel-recovery-f400-south8-release/frames.ndjson",
+      "sha256": "4e3f567df68bd766ee4864465cc601e7d84bb31d294eec9937d3f0641937e6d8",
+      "bytes": 119551
+    },
+    {
+      "path": "out/native-recovery/ravel-recovery-f400-south8-release/native-stderr.txt",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    {
+      "path": "out/native-recovery/ravel-recovery-f400-south8-release/recovery.json",
+      "sha256": "f4072fb29ac45701c6d204384dbc29585e573be6d0d0070395be17ea6319142c",
+      "bytes": 1941
+    },
+    {
+      "path": "out/native-recovery/ravel-recovery-f400-south8-release/result.json",
+      "sha256": "8a564d6b483b7ff0046d01056224c73ae4878e730ec09e37f067e2ffdeb1c55a",
+      "bytes": 3207
+    },
+    {
+      "path": "out/native-recovery/ravel-recovery-f400-south8-release/trial.json",
+      "sha256": "7241edd6494e9c34aa487208f72bf714f14edc8f9c4d56b900f45c632a1c3298",
+      "bytes": 2015
+    },
+    {
+      "path": "out/native-recovery/tests.log",
+      "sha256": "b051606f344600b89f8505c9e11539d9db967a40c6f6915573e097bc6e1a114d",
+      "bytes": 985
+    },
+    {
+      "path": "out/ql-atlas/atlas.json",
+      "sha256": "f0b908e01243f62ddad535d7db3a8f614ca8c25ddb963fb62e7d72c96062a869",
+      "bytes": 22940
+    },
+    {
+      "path": "out/ql-atlas/package.json",
+      "sha256": "1f2771a784164752ae8b644d9fbae42f303d9b254495e6aa190b4b2812ad1d7a",
+      "bytes": 337
+    },
+    {
+      "path": "out/weft/cleanup-status.json",
+      "sha256": "73716da9753d0c726cbed5d71b2c1b8fc4086e8d19180058ef4ea518e774cd6b",
+      "bytes": 800
+    },
+    {
+      "path": "out/weft/compiled-analysis.json",
+      "sha256": "79fc2af9aa739be7a153d96133514a6c30150e1065dfa8413232e2ae1709dbbb",
+      "bytes": 18618
+    },
+    {
+      "path": "out/weft/engine-smoke/authored-entities.ent",
+      "sha256": "7422875870908cf23a8f22fd1f1f3f1f9ac4c1231530dfcb5f9485e0f4d0206b",
+      "bytes": 3328
+    },
+    {
+      "path": "out/weft/engine-smoke/engine-smoke.json",
+      "sha256": "25ac2716d6d034f4adab05ed337f4eec67f25f6e8d279d79a84b9383f04388da",
+      "bytes": 6319
+    },
+    {
+      "path": "out/weft/engine-smoke/engine.log",
+      "sha256": "c550bab5ef27a1461aa1a8d55bd3fdc3beb3e1f4d6d07e80839556df85da8d4c",
+      "bytes": 2758
+    },
+    {
+      "path": "out/weft/engine-smoke/profile.cfg",
+      "sha256": "45236acd5d7ddca87d0a4652f079fa977cea3c91667851e181209a193d209d2b",
+      "bytes": 242
+    },
+    {
+      "path": "out/weft/engine-smoke/stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    {
+      "path": "out/weft/engine-smoke/stdout.log",
+      "sha256": "046a9c7ac556075aec3fed5f42d877242cbf81b999cc7473877a3b89d32bb1d7",
+      "bytes": 2191
+    },
+    {
+      "path": "out/weft/floor-0.png",
+      "sha256": "8fd4caf86e497bc6f75c28b9dc86106263b5f6ab4ae3dd16ff10e44d0bbeb9c4",
+      "bytes": 29140
+    },
+    {
+      "path": "out/weft/floor-128.png",
+      "sha256": "53f39d04d0bb3b49de94128d23fe8e45631ad2430a39db7b21250e01f9b8041c",
+      "bytes": 30011
+    },
+    {
+      "path": "out/weft/index.html",
+      "sha256": "54369cdbd5479c5365ac0e8586cabe6a7cd61c2cda5d4c97685df3b8731be4a1",
+      "bytes": 111807
+    },
+    {
+      "path": "out/weft/layout.json",
+      "sha256": "72650518c27ec0c5614ec65246fe73abbe3a513ae5709923b8c4bad3a9123e50",
+      "bytes": 17165
+    },
+    {
+      "path": "out/weft/overview-mobile-light.png",
+      "sha256": "37a30f3ba2cf31b71f4352b94c5aa94ed1f3b8155b531e380e49ff907c1284be",
+      "bytes": 39206
+    },
+    {
+      "path": "out/weft/overview.png",
+      "sha256": "4d82215e634b4a504096d697891c6f7e56f8ae7ca983967ba9f2550ab5daf112",
+      "bytes": 85866
+    },
+    {
+      "path": "out/weft/preview-checks.json",
+      "sha256": "356160a7a122b2ff5c1f910586c368abde00a33c670f31516350b0e343cf4898",
+      "bytes": 30554
+    },
+    {
+      "path": "out/weft/qmg_weft-light.log",
+      "sha256": "eb5b4dba508fd40c6a598d2f11610d22903e0d3f01491b1bec735fb7a0a08a2c",
+      "bytes": 2023
+    },
+    {
+      "path": "out/weft/qmg_weft-qbsp.log",
+      "sha256": "d9c3b4b987d713c652fc17cdb27a05bb3ff6930806f40437e633aa0120f1b077",
+      "bytes": 1787
+    },
+    {
+      "path": "out/weft/qmg_weft-vis.log",
+      "sha256": "27a3f9a6a6301eb885a5ce1891b6c01c7944aaab9bedbbae1f38530f5b15fed3",
+      "bytes": 1163
+    },
+    {
+      "path": "out/weft/qmg_weft.bsp",
+      "sha256": "980b22bf6aaedb032df1f04db5cc46d864d72f961a9852809486fbd64abf50f0",
+      "bytes": 407556
+    },
+    {
+      "path": "out/weft/qmg_weft.content.json",
+      "sha256": "768646f36cf9f48d528a820d9d3460c993814284869cccca71069fce15af783d",
+      "bytes": 3307
+    },
+    {
+      "path": "out/weft/qmg_weft.map",
+      "sha256": "a00415003b3a72aaa206ad38d8ea02f5a12296441b70d746539bda41b31aa3c6",
+      "bytes": 95651
+    },
+    {
+      "path": "out/weft/qmg_weft.prt",
+      "sha256": "16ef7d6d96a0f93ad29ba7576f99b2b3983184dc2dbbdad17345d0c7bb7e93f4",
+      "bytes": 20613
+    },
+    {
+      "path": "out/weft/qmg_weft.qmg.json",
+      "sha256": "79121f9acbe4c6e295a6f1e341550c0209b258e606b34c65687fda56f6a85f98",
+      "bytes": 83147
+    },
+    {
+      "path": "out/weft/qmg_weft.texinfo.json",
+      "sha256": "9790bce84d9459f2ee44d792530e95a97646df8922f29965c15d6b6117cf8c13",
+      "bytes": 103
+    },
+    {
+      "path": "out/weft/qmg_weft.zip",
+      "sha256": "46a57329e631340d84cfd673b1969227fb9b8d4dda0eeac26f1d013cb3c4b18d",
+      "bytes": 323254
+    },
+    {
+      "path": "out/weft/README.md",
+      "sha256": "9375ea8d73502782c73241d2cf10bebd539ceedb4552dd4caf3d6336a751470d",
+      "bytes": 1049
+    },
+    {
+      "path": "out/weft/record_evidence.py",
+      "sha256": "604aa8de90ec15eb86e937ec895a9b7480f8a35e5701b6ed2981ead3ef0e7fda",
+      "bytes": 12797
+    },
+    {
+      "path": "out/weft/verification.json",
+      "sha256": "e5aadaff2ff73c665ff12444a4287d39c7877c963bda112159074f6aa19c7c7f",
+      "bytes": 38502
+    },
+    {
+      "path": "out/weft/weft-layout.html",
+      "sha256": "b133b1f385c9e899809167624de72cf365e8b3a1c4b37ab035c72bd838b56ec5",
+      "bytes": 55757
+    },
+    {
+      "path": "README.md",
+      "sha256": "708be0cfe87f6d377419adefc06fffc79a10c09a32055e540310cdd0d5cc1c56",
+      "bytes": 24281
+    },
+    {
+      "path": "src/construction.cpp",
+      "sha256": "e269fe175663a7ba128423d5966532290b38df0ed5044afac04e2517ab5741df",
+      "bytes": 47496
+    },
+    {
+      "path": "src/entities.cpp",
+      "sha256": "840d3fbf0cea92cc9973082298087385a76796b767a733b3694ff4bee56706a5",
+      "bytes": 16989
+    },
+    {
+      "path": "src/generator.cpp",
+      "sha256": "c795115119d33b20a0027e29fe1b3b6b6267d9cc1697ce05b22fe3dd99ddae08",
+      "bytes": 12616
+    },
+    {
+      "path": "src/ggml_ranker.cpp",
+      "sha256": "af7cd272eda823fa9890be2a780d82a91ceaadf2891199f04c4cad367e05d03c",
+      "bytes": 8078
+    },
+    {
+      "path": "src/layout_fingerprint.cpp",
+      "sha256": "ed5575638eb0966da718b25f2bcbdd1509f5fecd5b761074fe688be9e42e76f4",
+      "bytes": 7971
+    },
+    {
+      "path": "src/leak.cpp",
+      "sha256": "33073a8555f87a384db74ee871bccb7ce437f62ef902e950c5fde85c8e9a4985",
+      "bytes": 61645
+    },
+    {
+      "path": "src/lighting.cpp",
+      "sha256": "fbcf964198b3ae8c31afdcccbbb68016cff0661c4c1683130fea202362bf0f12",
+      "bytes": 23182
+    },
+    {
+      "path": "src/llama_text_model.cpp",
+      "sha256": "97351b9713110adc95947a05225035da23dfd32735ab220c5b2b4ac969833e34",
+      "bytes": 15861
+    },
+    {
+      "path": "src/main.cpp",
+      "sha256": "668ba1517df580fbd5082cf655b364030ae757d837385c06c4cae0c91eb2d33f",
+      "bytes": 27359
+    },
+    {
+      "path": "src/map_builder.cpp",
+      "sha256": "ade14d009bc1ec061a0c39a30b2da0092600570668e74bdc3519aa1d91a96dcf",
+      "bytes": 80063
+    },
+    {
+      "path": "src/map_document.cpp",
+      "sha256": "657848b1a5b074096d3ecbd6e8da97588e56037d09fabb3e0fa1b23ddd0e212d",
+      "bytes": 35187
+    },
+    {
+      "path": "src/map_document_writer.cpp",
+      "sha256": "8681b8aeb26ebc1d869d11c62c2d302dcdaa7724d1637f41d5cbfab49799068d",
+      "bytes": 13355
+    },
+    {
+      "path": "src/map_parser.cpp",
+      "sha256": "085a286bcefe1ca9175884d27538a358ebb8a4591d47a04497b9ca9bfdda407d",
+      "bytes": 28912
+    },
+    {
+      "path": "src/map_writer.cpp",
+      "sha256": "49575e8fd3d0d77f560dd3021f07406380d589e81cc0ac2a6121b5ca67085cc7",
+      "bytes": 6053
+    },
+    {
+      "path": "src/mp_motifs.cpp",
+      "sha256": "036125ffdcfffa4d780228b468cd0f93109cb8f4f18fe130329c909bcac4065a",
+      "bytes": 20100
+    },
+    {
+      "path": "src/navigation.cpp",
+      "sha256": "fbab7a31deafacebb72f4c8717b106c44eba2b7571a2c43247935467923add00",
+      "bytes": 111678
+    },
+    {
+      "path": "src/pipeline.cpp",
+      "sha256": "9f6916d0b0aaa8896e070929c92025038563fd95ec31a8979e53f7c3f9f92c44",
+      "bytes": 5318
+    },
+    {
+      "path": "src/prompt.cpp",
+      "sha256": "fefb2764507970e3ef14a18af955dbfd98b8e5aff2ab671b11afbadb0ce90b55",
+      "bytes": 9740
+    },
+    {
+      "path": "src/quality.cpp",
+      "sha256": "9d9f69776614e7b8d26b1b2499f23608c59b70a27053c95b28b38a046021bc38",
+      "bytes": 54964
+    },
+    {
+      "path": "src/repair.cpp",
+      "sha256": "f8c734e65dcc6dedd4e93cb9f17f896814f2c0a3406885f62d8d95634cf875c5",
+      "bytes": 20071
+    },
+    {
+      "path": "src/report.cpp",
+      "sha256": "913db0fe107024bdddf688a2481fa8e1c9b6146f63d4d10b4bc431760b8b2006",
+      "bytes": 34021
+    },
+    {
+      "path": "src/semantic_plan.cpp",
+      "sha256": "061ee9250a245c494d0e76b7dd99644b7a4b2cc5979330dc38fcae0c4b0cb3a7",
+      "bytes": 33999
+    },
+    {
+      "path": "src/semantic_planner.cpp",
+      "sha256": "782353fc920d15c209e1ce0452de4814607d1d1537d61a51e10dd91ff23ebb5d",
+      "bytes": 14624
+    },
+    {
+      "path": "src/sha256.cpp",
+      "sha256": "b8abfe6207b3460f08edd26927191509dedc5c78aee915f6eed637c85506f01b",
+      "bytes": 6866
+    },
+    {
+      "path": "src/types.cpp",
+      "sha256": "6c8e52554b20f6082dc9a41d68c6c3b056cb4f364faf1a612205b7517dae8c37",
+      "bytes": 3140
+    },
+    {
+      "path": "src/validator.cpp",
+      "sha256": "992a03360a4aa3300692217e1de52e3fb28867577b6f474c2f83e0441d47cef3",
+      "bytes": 31357
+    },
+    {
+      "path": "src/visibility.cpp",
+      "sha256": "93c57d17ad89894a7959ebd5a5f5cdde1295dc8a5413ac53d846595c7a7be8af",
+      "bytes": 58865
+    },
+    {
+      "path": "tests/recipe_preview_check.cjs",
+      "sha256": "18ea0423c1ce4c9b75622a843a3cc03e2ee371161fa5f553014ceed72b1a6617",
+      "bytes": 27396
+    },
+    {
+      "path": "tests/test_mp_motifs.cpp",
+      "sha256": "dbb7fb23c9d364cfb9acff0f09b650141e5e5417d017dcd8ff2c8f2c06a60d98",
+      "bytes": 13051
+    },
+    {
+      "path": "tests/test_mp_portfolio.py",
+      "sha256": "4e30856520c12ac3e2cc128b39eac814fe23fcc34416a114e44048efd821d9c5",
+      "bytes": 4194
+    },
+    {
+      "path": "tests/test_native_recovery.py",
+      "sha256": "990a608e82f89b76a211c13234ec148421d4975bc14c567c9073df002a67b4b2",
+      "bytes": 2915
+    },
+    {
+      "path": "tools/map_recipes/engine_smoke.py",
+      "sha256": "7f886dcf892858d8d65251121d6235b786c49191be61c898ca4b40fa43a633a5",
+      "bytes": 13991
+    },
+    {
+      "path": "tools/map_recipes/gate_audit.py",
+      "sha256": "cf02b7fabe2e9241203d89b662e85bb7064f050fd281ff841324896442ba2559",
+      "bytes": 5655
+    },
+    {
+      "path": "tools/map_recipes/geometry.py",
+      "sha256": "dcfcc3413468cad9993476736edfae5f13eb03e26035fc39d73f83aa5a90742b",
+      "bytes": 19674
+    },
+    {
+      "path": "tools/map_recipes/layout-view-v2.html",
+      "sha256": "44114d19e5a84bd002e30b2b9243fb4e5f54d16008fa22e271ac2bcc36c9b3ad",
+      "bytes": 36118
+    },
+    {
+      "path": "tools/map_recipes/packing_audit.py",
+      "sha256": "7ac251edd70ed2835478b78e019e4aa23edd7492b5e13d50fa517e8c231e658a",
+      "bytes": 4859
+    },
+    {
+      "path": "tools/map_recipes/README.md",
+      "sha256": "ba7392c50d15d32f911f0a0a8896ecf82965775ebfe775f646db7874686e8cf1",
+      "bytes": 11005
+    },
+    {
+      "path": "tools/map_recipes/render_layout.py",
+      "sha256": "07d3d70e635e918a3dcbbdc3f01723df549a220170464cc92156064fe39b26bb",
+      "bytes": 23462
+    },
+    {
+      "path": "tools/mp_portfolio/compare.py",
+      "sha256": "f1a965a25fa655e7a0f11978f9ca7f31a5ed5fd7bfff3314e4907e0a079b8700",
+      "bytes": 6975
+    },
+    {
+      "path": "tools/mp_portfolio/compile.ps1",
+      "sha256": "34a821120bef1be0ca659e8fa612d0dc9a32e931aadb42f03fe997bb2eefaed5",
+      "bytes": 2922
+    },
+    {
+      "path": "tools/mp_portfolio/export.cpp",
+      "sha256": "767cbe09f3eef04102b3248a39ff014b3bf677cd8a58a19f523d75ffae67388e",
+      "bytes": 22558
+    },
+    {
+      "path": "tools/mp_portfolio/inspect.py",
+      "sha256": "60a06fb80b519fa735e622cfca9df07912500c0e36cd840f1937287561c0ceb7",
+      "bytes": 10160
+    },
+    {
+      "path": "tools/mp_portfolio/README.md",
+      "sha256": "bdcd6159dcba89e8ce6fe66131b3d6d5f0510777189a41d23caf19e3bb36e2d5",
+      "bytes": 3753
+    },
+    {
+      "path": "tools/native_movement/recovery.py",
+      "sha256": "a54e206f62c3bc97032553fde956fd5f2816fce5f2776232c893a438f8893ef1",
+      "bytes": 18731
+    }
+  ]
+}

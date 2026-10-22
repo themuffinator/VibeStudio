@@ -1,0 +1,463 @@
+{
+  "schema": "qmg.game_profile",
+  "schema_version": 1,
+  "profile_kind": "generator",
+  "game": "quake3",
+  "module": "generator-current",
+  "title": "Current generator tables for quake3 (byte-equivalent to the pre-X2 code)",
+  "evidence_level": "static analysis",
+  "modules": [
+    "q3-baseq3-1.32b"
+  ],
+  "sources": {
+    "repo": {
+      "description": "This repository (plan and audit records).",
+      "identity": "Quake-MapGen working tree",
+      "kind": "file_lines"
+    },
+    "q3src": {
+      "description": "id Software GPL source release of Quake III Arena (Quake-III-Arena-master): code/game, code/botlib, code/bspc, code/q3_ui.",
+      "identity": "code/game/q_shared.h:29 Q3_VERSION \"Q3 1.32b\"",
+      "kind": "file_lines"
+    }
+  },
+  "origin": "Copied verbatim from src/map_builder.cpp (solid_material, liquid_material, variant_class, classname_for) and src/entities.cpp (add_lighting, weapon_variant_count, monster_variant_count) before change x2-profiles. They mirror current behaviour and are not id-source facts; known_defects lists where they disagree with the module profiles.",
+  "solid_materials": {
+    "floor": {
+      "value": "base_floor/clang_floor",
+      "cite": [
+        "generator-current:map_builder.solid_material"
+      ]
+    },
+    "platform": {
+      "value": "base_floor/clang_floor",
+      "cite": [
+        "generator-current:map_builder.solid_material"
+      ]
+    },
+    "stair": {
+      "value": "base_floor/clang_floor",
+      "cite": [
+        "generator-current:map_builder.solid_material"
+      ]
+    },
+    "ramp": {
+      "value": "base_floor/clang_floor",
+      "cite": [
+        "generator-current:map_builder.solid_material"
+      ]
+    },
+    "ceiling": {
+      "value": "base_trim/pewter_shiney",
+      "cite": [
+        "generator-current:map_builder.solid_material"
+      ]
+    },
+    "trigger": {
+      "value": "common/trigger",
+      "cite": [
+        "generator-current:map_builder.solid_material"
+      ]
+    },
+    "wall": {
+      "value": "base_wall/comp3text",
+      "cite": [
+        "generator-current:map_builder.solid_material"
+      ]
+    },
+    "arch": {
+      "value": "base_wall/comp3text",
+      "cite": [
+        "generator-current:map_builder.solid_material"
+      ]
+    },
+    "curve": {
+      "value": "base_wall/comp3text",
+      "cite": [
+        "generator-current:map_builder.solid_material"
+      ]
+    },
+    "door": {
+      "value": "base_wall/comp3text",
+      "cite": [
+        "generator-current:map_builder.solid_material"
+      ]
+    },
+    "lift": {
+      "value": "base_wall/comp3text",
+      "cite": [
+        "generator-current:map_builder.solid_material"
+      ]
+    },
+    "hidden": {
+      "value": "common/caulk",
+      "cite": [
+        "generator-current:map_builder.solid_material"
+      ]
+    },
+    "liquid": {
+      "value": null,
+      "cite": [
+        "generator-current:map_builder.solid_material"
+      ],
+      "note": "A solid brush cannot take the liquid role (map build error invalid_material_role)."
+    }
+  },
+  "liquid_materials": {
+    "solid": {
+      "value": null,
+      "cite": [
+        "generator-current:map_builder.liquid_material"
+      ],
+      "note": "Solid contents take a solid material (map build error invalid_liquid_contract)."
+    },
+    "water": {
+      "value": "qmg/water",
+      "cite": [
+        "generator-current:map_builder.liquid_material"
+      ]
+    },
+    "slime": {
+      "value": "qmg/slime",
+      "cite": [
+        "generator-current:map_builder.liquid_material"
+      ]
+    },
+    "lava": {
+      "value": "qmg/lava",
+      "cite": [
+        "generator-current:map_builder.liquid_material"
+      ]
+    }
+  },
+  "classnames": {
+    "player_start": {
+      "value": "info_player_deathmatch",
+      "cite": [
+        "generator-current:map_builder.classname_for"
+      ]
+    },
+    "deathmatch_spawn": {
+      "value": "info_player_deathmatch",
+      "cite": [
+        "generator-current:map_builder.classname_for"
+      ]
+    },
+    "health": {
+      "value": "item_health",
+      "cite": [
+        "generator-current:map_builder.classname_for"
+      ]
+    },
+    "armor": {
+      "value": "item_armor_body",
+      "cite": [
+        "generator-current:map_builder.classname_for"
+      ]
+    },
+    "light": {
+      "value": "light",
+      "cite": [
+        "generator-current:map_builder.classname_for"
+      ]
+    },
+    "exit_trigger": {
+      "value": "trigger_multiple",
+      "cite": [
+        "generator-current:map_builder.classname_for"
+      ]
+    },
+    "exit_destination": {
+      "value": "target_relay",
+      "cite": [
+        "generator-current:map_builder.classname_for"
+      ]
+    },
+    "door": {
+      "value": "func_door",
+      "cite": [
+        "generator-current:map_builder.classname_for"
+      ]
+    },
+    "door_trigger": {
+      "value": "trigger_multiple",
+      "cite": [
+        "generator-current:map_builder.classname_for"
+      ]
+    },
+    "door_destination": {
+      "value": "target_position",
+      "cite": [
+        "generator-current:map_builder.classname_for"
+      ]
+    },
+    "lift": {
+      "value": "func_plat",
+      "cite": [
+        "generator-current:map_builder.classname_for"
+      ]
+    },
+    "lift_trigger": {
+      "value": "trigger_multiple",
+      "cite": [
+        "generator-current:map_builder.classname_for"
+      ]
+    },
+    "lift_destination": {
+      "value": "target_position",
+      "cite": [
+        "generator-current:map_builder.classname_for"
+      ]
+    },
+    "teleporter_trigger": {
+      "value": "trigger_teleport",
+      "cite": [
+        "generator-current:map_builder.classname_for"
+      ]
+    },
+    "teleporter_destination": {
+      "value": "misc_teleporter_dest",
+      "cite": [
+        "generator-current:map_builder.classname_for"
+      ]
+    },
+    "intermission": {
+      "value": "info_player_intermission",
+      "cite": [
+        "q3src:code/game/g_main.c:942|ent = G_Find (NULL, FOFS(classname), \"info_player_intermission\");"
+      ],
+      "note": "Added by change r1s-q1-intermission to keep the PlacementRole partition complete. Mapping only: no Quake 3 intermission placement is generated yet, and the map builder refuses one (Quake 2 and Quake 3 intermission points are a later R1-s cause)."
+    },
+    "coop_start": {
+      "value": "info_player_deathmatch",
+      "cite": [
+        "q3src:code/game/g_spawn.c:199-201|{\"info_player_deathmatch\", SP_info_player_deathmatch},"
+      ],
+      "note": "Added by change r1s-sp-coop-starts to keep the PlacementRole partition complete. Mapping only: Quake 3 has no co-op mode and no info_player_coop (its spawn table, cited, holds info_player_start, info_player_deathmatch and info_player_intermission), so no Quake 3 coop start is generated and the map builder, the validator and the visibility analysis refuse one. The value is the entity Quake 3 makes of a start, a classname the baseq3 profile catalogues."
+    }
+  },
+  "team_classnames": {
+    "team_initial_spawn": {
+      "red": {
+        "value": "team_CTF_redplayer",
+        "cite": [
+          "generator-current:map_builder.classname_for",
+          "q3src:code/game/g_team.c:990-992|classname = \"team_CTF_redplayer\";",
+          "q3src:code/game/g_spawn.c:256|{\"team_CTF_redplayer\", SP_team_CTF_redplayer},"
+        ],
+        "note": "Change r1s-q3-ctf-team-begin (switch r1s.q3_ctf_team_begin): with the switch on, every Quake 3 CTF map gets ceil(target_players / 2) of these team-begin spots per team in the team's base. A client in TEAM_BEGIN (on entering the game or joining a team) spawns at a free spot of this class, and when none is free at the class's first spot, where it telefrags whoever stands there (cited SelectRandomTeamSpawnPoint), so one spot per team telefrags a team that begins together."
+      },
+      "blue": {
+        "value": "team_CTF_blueplayer",
+        "cite": [
+          "generator-current:map_builder.classname_for",
+          "q3src:code/game/g_team.c:993-994|classname = \"team_CTF_blueplayer\";",
+          "q3src:code/game/g_spawn.c:257|{\"team_CTF_blueplayer\", SP_team_CTF_blueplayer},"
+        ],
+        "note": "Change r1s-q3-ctf-team-begin (switch r1s.q3_ctf_team_begin): with the switch on, every Quake 3 CTF map gets ceil(target_players / 2) of these team-begin spots per team in the team's base. A client in TEAM_BEGIN (on entering the game or joining a team) spawns at a free spot of this class, and when none is free at the class's first spot, where it telefrags whoever stands there (cited SelectRandomTeamSpawnPoint), so one spot per team telefrags a team that begins together."
+      }
+    },
+    "team_respawn": {
+      "red": {
+        "value": "team_CTF_redspawn",
+        "cite": [
+          "generator-current:map_builder.classname_for"
+        ]
+      },
+      "blue": {
+        "value": "team_CTF_bluespawn",
+        "cite": [
+          "generator-current:map_builder.classname_for"
+        ]
+      }
+    },
+    "flag": {
+      "red": {
+        "value": "team_CTF_redflag",
+        "cite": [
+          "generator-current:map_builder.classname_for"
+        ]
+      },
+      "blue": {
+        "value": "team_CTF_blueflag",
+        "cite": [
+          "generator-current:map_builder.classname_for"
+        ]
+      }
+    }
+  },
+  "variants": {
+    "weapon": {
+      "value": [
+        "weapon_shotgun",
+        "weapon_machinegun",
+        "weapon_grenadelauncher",
+        "weapon_rocketlauncher",
+        "weapon_lightning",
+        "weapon_railgun",
+        "weapon_plasmagun"
+      ],
+      "cite": [
+        "generator-current:map_builder.variant_class",
+        "generator-current:entities.weapon_variant_count"
+      ],
+      "note": "Order is significant: a placement's variant index selects from this list."
+    },
+    "monster": {
+      "value": [],
+      "unsupported_reason": "stock Quake 3 has no monster placement mapping",
+      "cite": [
+        "generator-current:map_builder.variant_class",
+        "generator-current:entities.monster_variant_count"
+      ]
+    }
+  },
+  "lighting": {
+    "balanced": {
+      "brightness": {
+        "value": 450,
+        "cite": [
+          "generator-current:entities.add_lighting"
+        ]
+      },
+      "color": {
+        "value": [
+          920,
+          880,
+          760
+        ],
+        "cite": [
+          "generator-current:entities.add_lighting"
+        ]
+      }
+    },
+    "low_key": {
+      "brightness": {
+        "value": 300,
+        "cite": [
+          "generator-current:entities.add_lighting"
+        ]
+      },
+      "color": {
+        "value": [
+          560,
+          620,
+          720
+        ],
+        "cite": [
+          "generator-current:entities.add_lighting"
+        ]
+      }
+    },
+    "high_contrast": {
+      "brightness": {
+        "value": 600,
+        "cite": [
+          "generator-current:entities.add_lighting"
+        ]
+      },
+      "odd_room_color": {
+        "value": [
+          1000,
+          720,
+          480
+        ],
+        "cite": [
+          "generator-current:entities.add_lighting"
+        ],
+        "note": "Rooms whose id is odd."
+      },
+      "even_room_color": {
+        "value": [
+          480,
+          660,
+          1000
+        ],
+        "cite": [
+          "generator-current:entities.add_lighting"
+        ],
+        "note": "Rooms whose id is even."
+      }
+    }
+  },
+  "uncompiled": {
+    "analysis_spawn_eye_offset_z": {
+      "value": 0,
+      "unit": "u",
+      "cite": [
+        "generator-current:src/visibility.cpp:player_spawn_eye_offset"
+      ],
+      "note": "Height added to player-spawn origins for the visibility analysis; still a literal in src/visibility.cpp (not read from this file)."
+    },
+    "spawn_refinement_eye_offset_z": {
+      "value": 22,
+      "unit": "u",
+      "cite": [
+        "generator-current:src/spawn_refinement.cpp:eye",
+        "generator-current:src/mp_motifs.cpp:refine_spawn_visibility"
+      ],
+      "note": "Literal +22 eye used by the spawn refinement passes; not read from this file."
+    }
+  },
+  "known_defects": [
+    {
+      "id": "q3-weapons-omit-bfg",
+      "check": "computed",
+      "kind": "generator_omits_catalogue_weapon",
+      "classnames": [
+        "weapon_bfg"
+      ],
+      "detail": "The weapon variants leave out weapon_bfg.",
+      "cite": [
+        "generator-current:map_builder.variant_class"
+      ]
+    },
+    {
+      "id": "q3-machinegun-slot",
+      "check": "computed",
+      "kind": "generator_places_starting_weapon",
+      "classnames": [
+        "weapon_machinegun"
+      ],
+      "detail": "weapon_machinegun takes a weapon slot, though every player spawns with it.",
+      "cite": [
+        "repo:docs/RC_PHASE1_AUDIT_AND_PLAN.md:833|- The Q3 machinegun takes a weapon slot, though players spawn with it."
+      ]
+    },
+    {
+      "id": "q3-analysis-eye-offset",
+      "check": "computed",
+      "kind": "analysis_eye_offset_differs",
+      "detail": "The visibility analysis adds 0 to Quake III spawn origins; DEFAULT_VIEWHEIGHT is 26.",
+      "cite": [
+        "generator-current:src/visibility.cpp:player_spawn_eye_offset"
+      ]
+    },
+    {
+      "id": "q3-liquid-shaders-absent",
+      "check": "declared",
+      "kind": "material_absent",
+      "values": [
+        "qmg/water",
+        "qmg/slime",
+        "qmg/lava"
+      ],
+      "detail": "No qmg/* shader ships (Phase-1 audit). Not re-checked here.",
+      "cite": [
+        "repo:docs/RC_PHASE1_AUDIT_AND_PLAN.md:837|- The `qmg/*` Q3 shaders do not exist."
+      ]
+    },
+    {
+      "id": "q3-comp3text-wall",
+      "check": "declared",
+      "kind": "material_role",
+      "values": [
+        "base_wall/comp3text"
+      ],
+      "detail": "Listed by the plan's registry negative controls as a wall material to reject. Not re-checked here.",
+      "cite": [
+        "repo:docs/RC_PHASE1_AUDIT_AND_PLAN.md:862|comp3text as a wall"
+      ]
+    }
+  ]
+}

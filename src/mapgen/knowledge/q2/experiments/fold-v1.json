@@ -1,0 +1,1256 @@
+{
+  "schema_version": 1,
+  "id": "fold-v1",
+  "date": "2026-09-13",
+  "status": "compiled_static_and_dedicated_initialization_validated_playtesting_pending",
+  "map": "qmg_fold",
+  "intended_mode": "stock_q2_deathmatch",
+  "intended_players": [
+    4,
+    6
+  ],
+  "construction": "Original explicit qmg_core recipe; automatic motif selection and trained weights remain pending",
+  "recipe": "tools/map_recipes/fold.cpp",
+  "study": "docs/Q2_FOLD_STUDY.md",
+  "testing_regimen": "docs/MP_COMPACT_LAYOUT_REGIMEN.md",
+  "local_artifacts": "out/fold",
+  "canonical_layout_sha256": "3d14936d3382b25f1aedfdf387d49b4e226c43b260a73a3480a4ac5bc94d4153",
+  "artifact_hashes": {
+    "source_sha256": "0b9b02ff34d482d1757aebb3f8c1bbc21b67981d7fa9899e715f59179b5a46ac",
+    "bsp_sha256": "0957907667208b6aea4fa7f5826377c7a107ea4b4b2518e819c13bc6b0b4bdd0",
+    "recipe_sha256": "d3cba899927f85862572a96c1388df5925d85bcad6f2640e2be45ec07ed3b936",
+    "recipe_support_sha256": "7e28421def97aec11df14f40f369f9ce2e0eff65beff9249318d9bb4883c8d94",
+    "core_sha256": "a0653a842e37671dc3599fa255e9e3dfa73b64f303dc81c258b51a46a2e62322",
+    "profile_sha256": "4f833d1a09eab67c719175310e101befcc9ad43d330985e7bc7a7d645f65d935",
+    "features_sha256": "a418c15dc91fa9db7c3a07593212d24b0a1c1a224ab5f35e2ce71552bb70b955"
+  },
+  "evidence_files": [
+    {
+      "path": "CMakeLists.txt",
+      "sha256": "89e1ee99a9f8f11077f3c62158916e1cb124e091b55a55469f23e66637b904dc",
+      "bytes": 24585
+    },
+    {
+      "path": "docs/MAP_DESIGN_PLAYBOOK.md",
+      "sha256": "c332003437ac74b34594049b23ee63f3019934f4a9baed131a2aff18641b6bdf",
+      "bytes": 21568
+    },
+    {
+      "path": "docs/MP_COMPACT_LAYOUT_REGIMEN.md",
+      "sha256": "b09f7a15c7ef2bf4051029dff1b6d01ffed31c57826c724f8750feadd60ff034",
+      "bytes": 7846
+    },
+    {
+      "path": "docs/MP_SPATIAL_PATTERNS.md",
+      "sha256": "802b918e48aa1d618513e4b685a0a94717d340d0034676e866ff8a6973330374",
+      "bytes": 14170
+    },
+    {
+      "path": "docs/Q2_FOLD_STUDY.md",
+      "sha256": "72a831d6a7414bf07ae1b4b14b96a097f206b45b955eaa46537b13600f501de1",
+      "bytes": 8528
+    },
+    {
+      "path": "docs/ROADMAP.md",
+      "sha256": "2f6bb7a9e9fa244d142a7e6223ec7d36be7d72e826b9508807caab3bf22c9c51",
+      "bytes": 12360
+    },
+    {
+      "path": "docs/VALIDATION.md",
+      "sha256": "40ab1536db064dcc2581bc245511f382f332b3db81033d3cd8f30a99a1e5b77c",
+      "bytes": 25261
+    },
+    {
+      "path": "knowledge/mp/spatial-patterns.json",
+      "sha256": "afcf3f505d67e5eb0fe191b80571bdb2d0c7923f2462637b98033bd543f71bfd",
+      "bytes": 68864
+    },
+    {
+      "path": "knowledge/q2/iteration-roadmap.json",
+      "sha256": "1d7b46404299bef97b07f198c99f52bfadea473a53d6504d363567313a21c2e0",
+      "bytes": 10403
+    },
+    {
+      "path": "knowledge/q2/rules.json",
+      "sha256": "0440d93603e4d08be56a1c80b41438e8c1c19be218c380663911affefc7dcf23",
+      "bytes": 42955
+    },
+    {
+      "path": "out/fold/cleanup-status.json",
+      "sha256": "034fa6d1ba7471190e2ea8224a228e61352cd65e823e27a0e0081d10b314118f",
+      "bytes": 594
+    },
+    {
+      "path": "out/fold/comparison-to-undercut.json",
+      "sha256": "e7f89f7c4dc0dcb98e16b3004074cae2bfd815e187f999450f4e37cd3baa49bc",
+      "bytes": 1388
+    },
+    {
+      "path": "out/fold/comparison.log",
+      "sha256": "381d4fb17b4f9ad5f464a264a1366d8c5e71d007773e3005fbd91e171a0f4009",
+      "bytes": 77
+    },
+    {
+      "path": "out/fold/compiled-analysis.json",
+      "sha256": "59372f0b550cb7e10bf5010941f15f9e4d6f073e3169aeef4b14e12289e12148",
+      "bytes": 22057
+    },
+    {
+      "path": "out/fold/ctest-focused.log",
+      "sha256": "b0b933fe96120b6076960eae915fae7f46822e9aa098664cd8b4eed884380417",
+      "bytes": 1484
+    },
+    {
+      "path": "out/fold/design-controls/resource-gap/compiled-analysis.json",
+      "sha256": "07e4c500387b93dfb6ed7283bfb60121813cf6764dcea8587982ce4dac0a054e",
+      "bytes": 22054
+    },
+    {
+      "path": "out/fold/design-controls/resource-gap/qmg_fold.map",
+      "sha256": "a226b7f042fc54e4f7d2643b692e1a1a1b613a6cbd7739edf3461272dd67a8b1",
+      "bytes": 107516
+    },
+    {
+      "path": "out/fold/design-controls/resource-gap/qmg_fold.zip",
+      "sha256": "2d470b299137028fe1f5c76d3f415dd56b1b9cec4fdbaf86f6484409ae6a8675",
+      "bytes": 131895
+    },
+    {
+      "path": "out/fold/design-controls/resource-gap/README.json",
+      "sha256": "b9e6f73e331bdbcfa26740e5d2fbf18311b09959c5526dcd67cb55dcb7bb8de6",
+      "bytes": 1107
+    },
+    {
+      "path": "out/fold/design-controls/resource-gap/verification.json",
+      "sha256": "9cbf3a99463bcf60c052217854dc60aa8c012e77569674c6bfcba120528a0e9f",
+      "bytes": 8866
+    },
+    {
+      "path": "out/fold/engine-smoke/authored-entities.ent",
+      "sha256": "809b58a6825bebcc1f460561d6398664ebf3ad4e13e52954b980119817f65ee0",
+      "bytes": 7023
+    },
+    {
+      "path": "out/fold/engine-smoke/engine-smoke.json",
+      "sha256": "fc1a47f7df182f25d7c98008744005ff5167fb807ce7de863355b57bf584b468",
+      "bytes": 6572
+    },
+    {
+      "path": "out/fold/engine-smoke/engine.log",
+      "sha256": "b0f1534dcb70057f9bbc244d8c1efa98c441486ea797490ebde7ee38706bf0bc",
+      "bytes": 2749
+    },
+    {
+      "path": "out/fold/engine-smoke/profile.cfg",
+      "sha256": "57d87183b24cadc5ab77ffaf22fa812b296bec4d486b2251abc5c0dac3d50a3a",
+      "bytes": 242
+    },
+    {
+      "path": "out/fold/engine-smoke/stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    {
+      "path": "out/fold/engine-smoke/stdout.log",
+      "sha256": "2a054f5a2a1b71504f66e3c015022b748d317e48b7538011afe213feed1f26ac",
+      "bytes": 2176
+    },
+    {
+      "path": "out/fold/features.json",
+      "sha256": "a418c15dc91fa9db7c3a07593212d24b0a1c1a224ab5f35e2ce71552bb70b955",
+      "bytes": 2211
+    },
+    {
+      "path": "out/fold/floor-0.png",
+      "sha256": "8209559a7aefe1a3d32cd5736af5bd59a9609e4ffa1983353701cb4c34515e16",
+      "bytes": 31995
+    },
+    {
+      "path": "out/fold/floor-128.png",
+      "sha256": "45adbb87790762204809c66b9e98fbbbaa4a970616d20b672e70db7b3fc0ef5e",
+      "bytes": 29621
+    },
+    {
+      "path": "out/fold/flow.json",
+      "sha256": "ef32abfcf7667227283ad644297e3e2a66b8a52190cd7c6720e94eea108b8ed2",
+      "bytes": 13161
+    },
+    {
+      "path": "out/fold/fold-layout.html",
+      "sha256": "1ac1eb1eb5190b52fd5e356e501b12255a2e1ea3a40cd05bf6273e3dd72fcac2",
+      "bytes": 45549
+    },
+    {
+      "path": "out/fold/generation.log",
+      "sha256": "7c250dcc1bbc5238b0d089f926201140627282561a74dd5165c70b9603cdbbd8",
+      "bytes": 86
+    },
+    {
+      "path": "out/fold/geometry-display-check.cjs",
+      "sha256": "0bf16423f52a8429d6abea5b06d8e1a02b104f7a8dd62781c8af087c759e514a",
+      "bytes": 6308
+    },
+    {
+      "path": "out/fold/geometry-display-checks.json",
+      "sha256": "e2dd343724d7549f0854a34e8b850332629205a8c3ea0a2f6798982c53c8a2f9",
+      "bytes": 11253
+    },
+    {
+      "path": "out/fold/index.html",
+      "sha256": "8dde22f70f50bd8257c850b29230949d012d0d43ceef3ee2af8f2133f902390c",
+      "bytes": 97247
+    },
+    {
+      "path": "out/fold/item-placement-comparison.json",
+      "sha256": "4923c4800e245dddbf7c862bcc3325f549e79480dbf8e0ca54f4ab7b28844af2",
+      "bytes": 1364
+    },
+    {
+      "path": "out/fold/layout.json",
+      "sha256": "4e44001f128063c144809892a7fde50622eea6329d0742412ac5e3c0e65a171a",
+      "bytes": 9285
+    },
+    {
+      "path": "out/fold/light.log",
+      "sha256": "246f5550b3184a430dc9494c06552f99806795595559e966a45b8bd268a0d0eb",
+      "bytes": 2022
+    },
+    {
+      "path": "out/fold/overview-mobile-light.png",
+      "sha256": "7d92504d67562d1a4d390fb2541e929376400429e2709cbe2dc93521deaae47b",
+      "bytes": 47211
+    },
+    {
+      "path": "out/fold/overview.png",
+      "sha256": "78bb4edde0341a7cd3feb26a4aed3bfd74431099c075036433c26786e763bdb6",
+      "bytes": 99400
+    },
+    {
+      "path": "out/fold/packing-comparison.json",
+      "sha256": "2dd807ce36e248d6cbc1734d6c7a87199143146a5af020eb8b0b605be4a30802",
+      "bytes": 2323
+    },
+    {
+      "path": "out/fold/packing.log",
+      "sha256": "2dd807ce36e248d6cbc1734d6c7a87199143146a5af020eb8b0b605be4a30802",
+      "bytes": 2323
+    },
+    {
+      "path": "out/fold/preview-checks.json",
+      "sha256": "a397852605b2cb0a21501104aae103cb1712a60e39499b64bf0fadf0909e8558",
+      "bytes": 35008
+    },
+    {
+      "path": "out/fold/preview-controls/counterweight/floor-0.png",
+      "sha256": "e2106f77bab43af3d9aea8c9a5ce30bb121cc6d7e2d728cdd8307263d5a30b31",
+      "bytes": 28455
+    },
+    {
+      "path": "out/fold/preview-controls/counterweight/floor-128.png",
+      "sha256": "a78195eec52a255cdd1016f96d710a01f7d56f107278f7ebab8748fa8822ca74",
+      "bytes": 29587
+    },
+    {
+      "path": "out/fold/preview-controls/counterweight/floor-256.png",
+      "sha256": "fc3410cbf41dae87368af3754705262eaaf586a62f008a0f81e15080f60f35af",
+      "bytes": 24299
+    },
+    {
+      "path": "out/fold/preview-controls/counterweight/overview-mobile-light.png",
+      "sha256": "56aa7ee1fdc121b8579af6a7554df02cbed8017c9bede7b0e34f4170882cfc8a",
+      "bytes": 51891
+    },
+    {
+      "path": "out/fold/preview-controls/counterweight/overview.png",
+      "sha256": "80d662c799751fdd6d896eb1fec1927110a8301e9bc9a6e406d2ea898322bf02",
+      "bytes": 101700
+    },
+    {
+      "path": "out/fold/preview-controls/counterweight/preview-checks.json",
+      "sha256": "bdbc1a2e6bff44f07557d00c7b03e1e4891042ce400b2d21075292195d085a77",
+      "bytes": 59966
+    },
+    {
+      "path": "out/fold/preview-controls/undercut/floor-0.png",
+      "sha256": "d8a3ff1372415283082fab3add1383b907f905cdac115fd5172afa4540ecd676",
+      "bytes": 28691
+    },
+    {
+      "path": "out/fold/preview-controls/undercut/floor-128.png",
+      "sha256": "c6c3e6c388046bbd8f447e2258181f4f44e237438739da7fa30bf9c321e8fe18",
+      "bytes": 31536
+    },
+    {
+      "path": "out/fold/preview-controls/undercut/floor-256.png",
+      "sha256": "119999f8ca7fa9e8f0d587b72ff5fea1ac9f9b11a795cfadee63d8462ef23e04",
+      "bytes": 22611
+    },
+    {
+      "path": "out/fold/preview-controls/undercut/overview-mobile-light.png",
+      "sha256": "e4cfb77ec42d3fc1a09074fa14c82e45e53feb5602af0eb0277af41f18fb121a",
+      "bytes": 56308
+    },
+    {
+      "path": "out/fold/preview-controls/undercut/overview.png",
+      "sha256": "895be2bb897881f5f6fc9c2db8e7f14388f5e6bdf1ed8a2b133d604d67c20c5a",
+      "bytes": 104941
+    },
+    {
+      "path": "out/fold/preview-controls/undercut/preview-checks.json",
+      "sha256": "66e932f7bed08ef93b9b22b8d3b6fd915bd504d51ba1da5c4768a9a84b6d90a1",
+      "bytes": 82832
+    },
+    {
+      "path": "out/fold/preview-export.log",
+      "sha256": "459328bbbc7695af36f84fb14f8fb807d4aa0be9345d2c6e33eb9f41587dd491",
+      "bytes": 56
+    },
+    {
+      "path": "out/fold/qbsp.log",
+      "sha256": "244a7307d685335202dc06b8c13c650fdd02103abaff74095aa24ce3eace203d",
+      "bytes": 1787
+    },
+    {
+      "path": "out/fold/qmg_fold.bsp",
+      "sha256": "0957907667208b6aea4fa7f5826377c7a107ea4b4b2518e819c13bc6b0b4bdd0",
+      "bytes": 343020
+    },
+    {
+      "path": "out/fold/qmg_fold.content.json",
+      "sha256": "6db6917d3cfef25fd0184140fb581a778a2b4ee2a6407f0e1b7a598b07eee00e",
+      "bytes": 3397
+    },
+    {
+      "path": "out/fold/qmg_fold.map",
+      "sha256": "0b9b02ff34d482d1757aebb3f8c1bbc21b67981d7fa9899e715f59179b5a46ac",
+      "bytes": 107518
+    },
+    {
+      "path": "out/fold/qmg_fold.prt",
+      "sha256": "f216c3d1c181a76ca5aa4f64dfab43bb323e8e976edea7759d48cba479c9ea5b",
+      "bytes": 26648
+    },
+    {
+      "path": "out/fold/qmg_fold.qmg.json",
+      "sha256": "a4f6ee583b0a9ed6e912429d5656eec1ad7b6f8ac1297332783f8a41c75e61da",
+      "bytes": 72226
+    },
+    {
+      "path": "out/fold/qmg_fold.texinfo.json",
+      "sha256": "e0328c9dc534808bd54ea76eb118ed89eb1afe49c6571fcc52ebc343d51b5ca5",
+      "bytes": 514
+    },
+    {
+      "path": "out/fold/qmg_fold.zip",
+      "sha256": "86e6bf94dfd60ca1ea5ad452ff19f4749a842b62dc92d03a787d6df0becb20d2",
+      "bytes": 131921
+    },
+    {
+      "path": "out/fold/recipe-build.log",
+      "sha256": "74e2a876c9c79382e85cf0b92559255c70b11000979459b725b981ecb811e469",
+      "bytes": 530
+    },
+    {
+      "path": "out/fold/reference-comparison.json",
+      "sha256": "4371304a2824dd18c1cf43384712b07ebaa30060cf3d5916bb848ef7387898c6",
+      "bytes": 6239
+    },
+    {
+      "path": "out/fold/regression-build.log",
+      "sha256": "981e77a862a13f2a795f7a923f591acef30418702d2f7a4ece4e3879082c84d9",
+      "bytes": 945
+    },
+    {
+      "path": "out/fold/verification.json",
+      "sha256": "aec6283f9b521272937011319710cfcada1556e9352207896b9bdeaa4a9c6d62",
+      "bytes": 8866
+    },
+    {
+      "path": "out/fold/verification.log",
+      "sha256": "b2cf2e9e04c294fc9b75fb319ea24dfa3789df41e829a6fc9789c3bf5d312d16",
+      "bytes": 1005
+    },
+    {
+      "path": "out/fold/vis.log",
+      "sha256": "40db68b0a8df1b5d58b25b30f338ceb30f35210de170cd3dfbe913e2beed58b3",
+      "bytes": 1163
+    },
+    {
+      "path": "out/mp-spatial-patterns/aerowalk-plans.png",
+      "sha256": "fd2715691715ec7126f64efb2ee5fae02f40b1d7f8aa8a95acc561fc47f7b103",
+      "bytes": 74136
+    },
+    {
+      "path": "out/mp-spatial-patterns/auh2dm1-crate-detours.png",
+      "sha256": "3d771838294e2239762141351d4cafd60ff5f2661c552fa15fe47fafb7beeda2",
+      "bytes": 51026
+    },
+    {
+      "path": "out/mp-spatial-patterns/auh2dm1-plans.png",
+      "sha256": "a0fda652ab85b1c4c3c5b95c9fce0a37e20effeb846a8e31911238c3a99c23e2",
+      "bytes": 76875
+    },
+    {
+      "path": "out/mp-spatial-patterns/bloodrun-plans.png",
+      "sha256": "80e0dc5698a6230e15f80a450269fbf5c3a2c75d54c8bb2c753486aab4550972",
+      "bytes": 73919
+    },
+    {
+      "path": "out/mp-spatial-patterns/bloodrun-upper-horseshoe.png",
+      "sha256": "ee81f9ae3ff7adfdfe3debbb511818fe2608ce4f6e28eadf5ebd78e09bb26043",
+      "bytes": 44163
+    },
+    {
+      "path": "out/mp-spatial-patterns/campgrounds-plans.png",
+      "sha256": "3f1974f7973bbd3ce3abfb8432dd296bd9e0ee129dda7acd173145e2f19986c9",
+      "bytes": 86113
+    },
+    {
+      "path": "out/mp-spatial-patterns/deepinside-plans.png",
+      "sha256": "207343c157858977b1e84dfb8613ecc5cffdf94a43ce2f4ee0281b1166e2a0cf",
+      "bytes": 82621
+    },
+    {
+      "path": "out/mp-spatial-patterns/draw_focus.py",
+      "sha256": "77fc4e2b3b85d81c3e75bda60901815792f6188f0fef29774817c9844bb2755a",
+      "bytes": 3997
+    },
+    {
+      "path": "out/mp-spatial-patterns/focused-measurements.json",
+      "sha256": "710d194a5116f4be5fb31e3f148423c6888bb3656b7a774ea3331baff87c7da8",
+      "bytes": 30074
+    },
+    {
+      "path": "out/mp-spatial-patterns/furiousheights-plans.png",
+      "sha256": "f07596bf31994de7624ebe241851d1eb68fda471de3be4a9f1c322427d3b6c5f",
+      "bytes": 80123
+    },
+    {
+      "path": "out/mp-spatial-patterns/inspect_patterns.py",
+      "sha256": "1574a88bd601cfd98d0b61e0b3a4e00ab8c0534a6170f13d4e993f7b634e9779",
+      "bytes": 6556
+    },
+    {
+      "path": "out/mp-spatial-patterns/lostworld-plans.png",
+      "sha256": "fb3135a75a1770ca86a3bd8de51d60b32d047e3e2cbb4ef0e4e84a627cf68051",
+      "bytes": 72792
+    },
+    {
+      "path": "out/mp-spatial-patterns/measure_patterns.py",
+      "sha256": "47fa892f566fe31953e506537c9e19589af29d8480a13787afef796118b108f6",
+      "bytes": 7579
+    },
+    {
+      "path": "out/mp-spatial-patterns/raw-observations.json",
+      "sha256": "1be314f8361db13a1309c5583d98eddb839c4828819bc40ceb8323adf90f0482",
+      "bytes": 280016
+    },
+    {
+      "path": "out/mp-spatial-patterns/toxicity-plans.png",
+      "sha256": "5379a86d812d87b6a5375cb190f7c3739312fd97cc3accb5d18ceb40bbeb71c9",
+      "bytes": 75066
+    },
+    {
+      "path": "out/mp-spatial-patterns/write_record.py",
+      "sha256": "3095746cf59e3be27b04370a0ef2918e50e65bb4f95dc3a948157c4516c6ba75",
+      "bytes": 14424
+    },
+    {
+      "path": "out/ql-atlas/atlas.json",
+      "sha256": "f0b908e01243f62ddad535d7db3a8f614ca8c25ddb963fb62e7d72c96062a869",
+      "bytes": 22940
+    },
+    {
+      "path": "out/ql-atlas/index.html",
+      "sha256": "f444a1c90b7d69dcb6e27efb7bcc2c120c7fc0096c44fff7b8053a8be1f03049",
+      "bytes": 402800
+    },
+    {
+      "path": "out/ql-atlas/maps/aerowalk.json",
+      "sha256": "fc77ecd501298e60b6f27c06a946d3cd7683c194679feb1969972981c586de7f",
+      "bytes": 132852
+    },
+    {
+      "path": "out/ql-atlas/maps/bloodrun.json",
+      "sha256": "8de28e06effd7baee3bcf787849095a58a11b7f5d81de56204c509817945ee9e",
+      "bytes": 174786
+    },
+    {
+      "path": "out/ql-atlas/maps/campgrounds.json",
+      "sha256": "fa2dce56280fa314a8477f671e915a0e0dc728f192d5a99fda048ca439cb39c6",
+      "bytes": 232263
+    },
+    {
+      "path": "out/ql-atlas/maps/furiousheights.json",
+      "sha256": "a5cb3d66de1105c09c67dd616e13155a271d4730e5b9156bed8b9817a8ac9461",
+      "bytes": 239882
+    },
+    {
+      "path": "out/ql-atlas/maps/lostworld.json",
+      "sha256": "f3080588c86dbb2e04dfce9f4b1ae61c744e0a240767692419fef436490bbf20",
+      "bytes": 202082
+    },
+    {
+      "path": "out/ql-atlas/maps/toxicity.json",
+      "sha256": "9dcfd0918a3d5b52c5ae8a52c123aa9adb1626f3051a20602f296960f6435273",
+      "bytes": 211425
+    },
+    {
+      "path": "out/ql-atlas/mobile-light.png",
+      "sha256": "6576f183979f81fc565e04bc71a344a425854644959282d12fec2da95844d989",
+      "bytes": 45634
+    },
+    {
+      "path": "out/ql-atlas/orthographics/aerowalk/all-heights-common.png",
+      "sha256": "5a443093bd71fa98af88e8aa70f4673d67d4855e5162db93e7a4d668cc82c7ef",
+      "bytes": 58077
+    },
+    {
+      "path": "out/ql-atlas/orthographics/aerowalk/all-heights-fit.png",
+      "sha256": "30d8ac2a15c53ccecc72fe9baf8c05b3537ddd114fda9e5956489bf49e4482bb",
+      "bytes": 64373
+    },
+    {
+      "path": "out/ql-atlas/orthographics/aerowalk/z--128-to-0.png",
+      "sha256": "d2fd2b6fc072a71ede5dee7c72d90aae0d42d2cf85f791c9bb27ed2578587d82",
+      "bytes": 25049
+    },
+    {
+      "path": "out/ql-atlas/orthographics/aerowalk/z-0-to-128.png",
+      "sha256": "684135587245bf1407690f4d8eea7773efebfefeb10d5f2d57f77a2bbe01e3ac",
+      "bytes": 38935
+    },
+    {
+      "path": "out/ql-atlas/orthographics/aerowalk/z-128-to-256.png",
+      "sha256": "10941b4fa0d7a5ea93530d1bc9eeec34ca68d970b52591294aad35282dab86dc",
+      "bytes": 29270
+    },
+    {
+      "path": "out/ql-atlas/orthographics/aerowalk/z-256-to-384.png",
+      "sha256": "29e07665fdfff04780f90d53bd24951d090de812a2f1fb5611bf365058f69ac3",
+      "bytes": 36426
+    },
+    {
+      "path": "out/ql-atlas/orthographics/aerowalk/z-384-to-512.png",
+      "sha256": "aa3b3314898220f925fdfffacb919d00553caeace92ee9baa96ee678261cbe94",
+      "bytes": 26251
+    },
+    {
+      "path": "out/ql-atlas/orthographics/aerowalk/z-512-to-640.png",
+      "sha256": "6f30fd9a7270a1e8a0b624ed7f60426040523a1354c5a95c9831d912916d4f79",
+      "bytes": 25276
+    },
+    {
+      "path": "out/ql-atlas/orthographics/bloodrun/all-heights-common.png",
+      "sha256": "98ac9b1e72dbf9917aecfb3324de051f00f6b17c2ed56c62760460ba000c25b6",
+      "bytes": 75296
+    },
+    {
+      "path": "out/ql-atlas/orthographics/bloodrun/all-heights-fit.png",
+      "sha256": "374e46d5e2989df09bd53a6bebf664d59aca97ce914baa9c7cc3f2e94cf920c6",
+      "bytes": 78608
+    },
+    {
+      "path": "out/ql-atlas/orthographics/bloodrun/z--128-to-0.png",
+      "sha256": "8c25cd821fd7b7b841563f31f2cead8f2c29364b5ab7561ed54e9c84620da6a4",
+      "bytes": 23740
+    },
+    {
+      "path": "out/ql-atlas/orthographics/bloodrun/z--384-to--256.png",
+      "sha256": "4462218893cf1b4177355fcfdb2e7771a9c9c6a0556ee3f96cb5e5179c8c5100",
+      "bytes": 23475
+    },
+    {
+      "path": "out/ql-atlas/orthographics/bloodrun/z-0-to-128.png",
+      "sha256": "ed18979c7eb17619015c30d0300cb94b80189575f41cce5629a64e7e950ae1de",
+      "bytes": 37840
+    },
+    {
+      "path": "out/ql-atlas/orthographics/bloodrun/z-128-to-256.png",
+      "sha256": "ff40cf16974d8597cbea59be9993e25bb2d1a85ac6bbe0be057f13cec91ecd1a",
+      "bytes": 25664
+    },
+    {
+      "path": "out/ql-atlas/orthographics/bloodrun/z-256-to-384.png",
+      "sha256": "e2bbc586348c60d760e1c62f634e2bef2b983b5a8dc40243d2d67aedf4e7e665",
+      "bytes": 31534
+    },
+    {
+      "path": "out/ql-atlas/orthographics/bloodrun/z-384-to-512.png",
+      "sha256": "c868660a153dfe500924bef6cab9f9ab00844626d0481fe541e026beb3f1c51e",
+      "bytes": 31852
+    },
+    {
+      "path": "out/ql-atlas/orthographics/bloodrun/z-512-to-640.png",
+      "sha256": "69889a5f20d44557988d9fada9930044616cb000c600d3f235db79382455db46",
+      "bytes": 37405
+    },
+    {
+      "path": "out/ql-atlas/orthographics/bloodrun/z-640-to-768.png",
+      "sha256": "c98086ef100095e9f12385dcd0fcd1fd7e7ccef9cc4b7f282b8c65ee9dfc1957",
+      "bytes": 27411
+    },
+    {
+      "path": "out/ql-atlas/orthographics/bloodrun/z-768-to-896.png",
+      "sha256": "a5059a918d50f8b2f70eebba4bd8f46dffc96952375fcf9d9db635a25a92113f",
+      "bytes": 26204
+    },
+    {
+      "path": "out/ql-atlas/orthographics/campgrounds/all-heights-common.png",
+      "sha256": "7d8fe0ac6191093d9b5ef5e62f4c84a81d3850257791faa8d3229319b1f59db4",
+      "bytes": 78978
+    },
+    {
+      "path": "out/ql-atlas/orthographics/campgrounds/all-heights-fit.png",
+      "sha256": "4d584c3d8afbc6dd52b945342905ce344fcf53b03e93fda49eb5d67789ccfb48",
+      "bytes": 78500
+    },
+    {
+      "path": "out/ql-atlas/orthographics/campgrounds/z--128-to-0.png",
+      "sha256": "ce957d3774e68f79b11945885cc8161f019666c708c7d1e3b1239f91dede67be",
+      "bytes": 24312
+    },
+    {
+      "path": "out/ql-atlas/orthographics/campgrounds/z-0-to-128.png",
+      "sha256": "ea1a7358c40524e9518d99482956fe0922820521b35abb12a4c555c1e4281b16",
+      "bytes": 36380
+    },
+    {
+      "path": "out/ql-atlas/orthographics/campgrounds/z-128-to-256.png",
+      "sha256": "0b5dbedab789ab5f0ecbc067a9ac5980772f60e8390fbbc8d40766bddd26168e",
+      "bytes": 28981
+    },
+    {
+      "path": "out/ql-atlas/orthographics/campgrounds/z-256-to-384.png",
+      "sha256": "9ac5f718136235c3e0dc71b0467d0d269597a2202ca1e46ca52070167b8bec49",
+      "bytes": 42093
+    },
+    {
+      "path": "out/ql-atlas/orthographics/campgrounds/z-384-to-512.png",
+      "sha256": "86c9f16cacacccdd50c3a33150c8fd6f209d4b1d6d7b6170bf5a4830187b9a57",
+      "bytes": 27661
+    },
+    {
+      "path": "out/ql-atlas/orthographics/campgrounds/z-512-to-640.png",
+      "sha256": "0c89bd00514130d9d6a3a1a0519d5d4cc594d0dd1fa3b5f9ddfbb0055e17073b",
+      "bytes": 43273
+    },
+    {
+      "path": "out/ql-atlas/orthographics/campgrounds/z-640-to-768.png",
+      "sha256": "8ba81fcd9eedcf1efbd4814bfb68caf29bf64b76a3e416dbaa591c265bf4fafe",
+      "bytes": 26750
+    },
+    {
+      "path": "out/ql-atlas/orthographics/campgrounds/z-768-to-896.png",
+      "sha256": "9e0dc0a61c591e4ed0a0319d0eccd76962110b9d048865d67aab895c258e1045",
+      "bytes": 26482
+    },
+    {
+      "path": "out/ql-atlas/orthographics/campgrounds/z-896-to-1024.png",
+      "sha256": "5ecb99157e233087f8daf693f872de116d8c48a4cad3a88d0700b4fa945d9e4a",
+      "bytes": 23947
+    },
+    {
+      "path": "out/ql-atlas/orthographics/furiousheights/all-heights-common.png",
+      "sha256": "8d43f2119de9228510c6c61ad5b0ba7f5cdaf6f9f9186582c7dd85ad7dafabc8",
+      "bytes": 81620
+    },
+    {
+      "path": "out/ql-atlas/orthographics/furiousheights/all-heights-fit.png",
+      "sha256": "7fc49e55a317bd048ed923f2c9aee2cc626e18df15c7d71ccf9d7f1a808ecd2b",
+      "bytes": 82294
+    },
+    {
+      "path": "out/ql-atlas/orthographics/furiousheights/z--128-to-0.png",
+      "sha256": "84211afcf6715a5b2f7020aa301d63aaa9747b5edfc3bd2e64a96a67aa81b4c8",
+      "bytes": 30372
+    },
+    {
+      "path": "out/ql-atlas/orthographics/furiousheights/z-0-to-128.png",
+      "sha256": "1df53cd75360d0855ac89c5a98cd5620906ffc550936991c21ca7bd484e38ec8",
+      "bytes": 41730
+    },
+    {
+      "path": "out/ql-atlas/orthographics/furiousheights/z-1024-to-1152.png",
+      "sha256": "76c103fc7bf57793e300bc4dfb6ac3eac3d4fd1b9ad2566fd4bdf4b135b27c20",
+      "bytes": 24572
+    },
+    {
+      "path": "out/ql-atlas/orthographics/furiousheights/z-1152-to-1280.png",
+      "sha256": "6c6e5ddeaff89f15e08add50ee62ff7b421954cf9475d7c1d9cfcdc37a3e198e",
+      "bytes": 23904
+    },
+    {
+      "path": "out/ql-atlas/orthographics/furiousheights/z-128-to-256.png",
+      "sha256": "fb547880c01777395092eb8237c80338b221d08fcdb7275c7b741ea71d60b560",
+      "bytes": 31097
+    },
+    {
+      "path": "out/ql-atlas/orthographics/furiousheights/z-1280-to-1408.png",
+      "sha256": "35dfe94cb25be69f14fcca295441380f05b0a11b5c33d6f32b9ce42bdfe431b3",
+      "bytes": 23940
+    },
+    {
+      "path": "out/ql-atlas/orthographics/furiousheights/z-256-to-384.png",
+      "sha256": "d39efa9e2a4e4c96f7572497d77307baffbc75657c04e935b41d006f51dfd266",
+      "bytes": 26975
+    },
+    {
+      "path": "out/ql-atlas/orthographics/furiousheights/z-384-to-512.png",
+      "sha256": "03cde16633dccf0104081e98cb10a0d090313c9914208ac384c5adea0329dfad",
+      "bytes": 42034
+    },
+    {
+      "path": "out/ql-atlas/orthographics/furiousheights/z-512-to-640.png",
+      "sha256": "ba170f647e0f722bea9a089633610dfcfcf8574b30d76b10864de5d097ceee55",
+      "bytes": 25161
+    },
+    {
+      "path": "out/ql-atlas/orthographics/furiousheights/z-640-to-768.png",
+      "sha256": "e2034eaf378a4c6dd3311bd1a5ef8ebbb996fbe96fb67c35e78bdbe2da3c2c1e",
+      "bytes": 27284
+    },
+    {
+      "path": "out/ql-atlas/orthographics/furiousheights/z-768-to-896.png",
+      "sha256": "135163ca2499010bdbf4fb6adef1d057d8e468a199e389f8ace3d4e83e6d5b32",
+      "bytes": 25087
+    },
+    {
+      "path": "out/ql-atlas/orthographics/furiousheights/z-896-to-1024.png",
+      "sha256": "feee9a0c5adf53986a767c31755d900b0ba1f9039968109f9757793cfaf61659",
+      "bytes": 25413
+    },
+    {
+      "path": "out/ql-atlas/orthographics/lostworld/all-heights-common.png",
+      "sha256": "b62e38b95b197f37d368f7235f37141de8a3256fd99e62ea54593d253305e57b",
+      "bytes": 78466
+    },
+    {
+      "path": "out/ql-atlas/orthographics/lostworld/all-heights-fit.png",
+      "sha256": "0cfbc5087b0631ea9832fe2d319041e1d5bcb620a85dbf958c27f5b4c10d2c23",
+      "bytes": 81230
+    },
+    {
+      "path": "out/ql-atlas/orthographics/lostworld/z--128-to-0.png",
+      "sha256": "1e6e6c92533b385ececd00b8bd967f035b3e68fe6dfc32973c2076aece9a8644",
+      "bytes": 23647
+    },
+    {
+      "path": "out/ql-atlas/orthographics/lostworld/z--256-to--128.png",
+      "sha256": "b1c079b231bc232a0795ca17831bb1cb0daca4a72f5d74eb102a3ff45b858c95",
+      "bytes": 30277
+    },
+    {
+      "path": "out/ql-atlas/orthographics/lostworld/z-0-to-128.png",
+      "sha256": "3db28133f09dae36195569bf4e6be333ab2edb1231a063d84dd67a95e67abbc2",
+      "bytes": 25591
+    },
+    {
+      "path": "out/ql-atlas/orthographics/lostworld/z-128-to-256.png",
+      "sha256": "f93c5e73f29aa2e998379fde4a5d06a327577a25b08a5f00105dc12196fbb259",
+      "bytes": 37459
+    },
+    {
+      "path": "out/ql-atlas/orthographics/lostworld/z-256-to-384.png",
+      "sha256": "dc825488bc2bc3554c6fdc817340c038d723298e5f54dd45cc35950f822376f1",
+      "bytes": 33472
+    },
+    {
+      "path": "out/ql-atlas/orthographics/lostworld/z-384-to-512.png",
+      "sha256": "91d3a62d73fb9908ca190a55b38192bcf989cf02173fd0e55c8f23ad5d9b84c2",
+      "bytes": 40430
+    },
+    {
+      "path": "out/ql-atlas/orthographics/lostworld/z-512-to-640.png",
+      "sha256": "87e81db62f1a54e8ed99e4a866811abe5288fa5917b98956f6303c9403ae0c42",
+      "bytes": 28636
+    },
+    {
+      "path": "out/ql-atlas/orthographics/lostworld/z-640-to-768.png",
+      "sha256": "cca8218be53a8ab4cd7bc55b24d1a3ade4aa88bc78b263bba3b3ee2a0b9ee8f6",
+      "bytes": 27466
+    },
+    {
+      "path": "out/ql-atlas/orthographics/lostworld/z-768-to-896.png",
+      "sha256": "51d7d67a114d1982b1e75d27c1123953da17bda7646ac67d5ebf7fae58d15c98",
+      "bytes": 28454
+    },
+    {
+      "path": "out/ql-atlas/orthographics/lostworld/z-896-to-1024.png",
+      "sha256": "eac11ca73c7771608b6ec4e3685fe3f6057e1d49b5cf3df601b6fec7650560bf",
+      "bytes": 25451
+    },
+    {
+      "path": "out/ql-atlas/orthographics/toxicity/all-heights-common.png",
+      "sha256": "e50927fd7401da1fc934e08928f41dffa35c984da0b31b04f58df9715ec97fb1",
+      "bytes": 64236
+    },
+    {
+      "path": "out/ql-atlas/orthographics/toxicity/all-heights-fit.png",
+      "sha256": "88fa0f4374bed65aff40f048d2d5e32d0f634dd66b648212d7e490a64b3c0dc9",
+      "bytes": 75012
+    },
+    {
+      "path": "out/ql-atlas/orthographics/toxicity/z-1024-to-1152.png",
+      "sha256": "0f5daea92810cb839986c312691026cfa11f63b49bdb9b3ea605ba017b020c00",
+      "bytes": 34487
+    },
+    {
+      "path": "out/ql-atlas/orthographics/toxicity/z-1152-to-1280.png",
+      "sha256": "6c1cf85f819d2494d7a5c20a34aef9a7aa3ecc4bed9240d82ad77c5d8bac5535",
+      "bytes": 41460
+    },
+    {
+      "path": "out/ql-atlas/orthographics/toxicity/z-1280-to-1408.png",
+      "sha256": "4b1edb7e61ce5d4a050a01bfd8ddfcfe91638836b0c69784214cc90155012cea",
+      "bytes": 32019
+    },
+    {
+      "path": "out/ql-atlas/orthographics/toxicity/z-1408-to-1536.png",
+      "sha256": "142490ff4a08676569aad1511302e37ad743f9ad89064ca04a62147854a5c373",
+      "bytes": 33162
+    },
+    {
+      "path": "out/ql-atlas/orthographics/toxicity/z-768-to-896.png",
+      "sha256": "9a4d785a195caacbecca993dba3d81100f5a84d12f4892f48d3596ed61cc595b",
+      "bytes": 23794
+    },
+    {
+      "path": "out/ql-atlas/orthographics/toxicity/z-896-to-1024.png",
+      "sha256": "ec8ecd0a0f06584f5a3e375d055f44d3c0297f100b0b6983bc63eba41f687d49",
+      "bytes": 35348
+    },
+    {
+      "path": "out/ql-atlas/package.json",
+      "sha256": "1f2771a784164752ae8b644d9fbae42f303d9b254495e6aa190b4b2812ad1d7a",
+      "bytes": 337
+    },
+    {
+      "path": "out/ql-atlas/preview-checks.json",
+      "sha256": "2b781825bc404926adf2dfe5c274d558a6c95945316c04550efdb5e52523e69f",
+      "bytes": 395077
+    },
+    {
+      "path": "out/ql-atlas/ql-orthographic-atlas.zip",
+      "sha256": "6daae9fecc5dd3208e6f56918612238a79af306976c8247f205bc13d1488a2df",
+      "bytes": 2529282
+    },
+    {
+      "path": "out/ql-atlas/ql-reference-atlas.html",
+      "sha256": "1735004173e8b09f23af8ea9a1f2b19d34110aa78cd7c873f662948c47fe93fa",
+      "bytes": 310104
+    },
+    {
+      "path": "out/ql-atlas/README.md",
+      "sha256": "7c4f5d91969d1e6e3afac7df1d05dfe9443e6f25ec49c1c92e21166fbf01ab28",
+      "bytes": 3941
+    },
+    {
+      "path": "README.md",
+      "sha256": "055398e8818f307feecda68171518a401e44ace2279ac2240c1e5a87fdc00248",
+      "bytes": 18036
+    },
+    {
+      "path": "tests/recipe_preview_check.cjs",
+      "sha256": "005f8aa09374831d2b0801066147f96cbc2c5c87a4e59dc9da2cefdfb3021f4d",
+      "bytes": 21200
+    },
+    {
+      "path": "tests/test_fold_audit.py",
+      "sha256": "3566105a710772003847a83ef7b49916c540cbe5570d5e41c8f820f3fdb5310f",
+      "bytes": 10279
+    },
+    {
+      "path": "tests/test_packing_audit.py",
+      "sha256": "bcde7c57a4df935a16c3910f1d9315b17287e8897e6ac621ba5c67ad7c9e1ab6",
+      "bytes": 2160
+    },
+    {
+      "path": "tests/test_ql_atlas.py",
+      "sha256": "445195caa43fa337c1a2875228b34fa69396a7f002863dd0000b6fe9faff2b2e",
+      "bytes": 5016
+    },
+    {
+      "path": "tests/test_recipe_geometry.py",
+      "sha256": "26217fc78f4e8cb344be216d6afe52043d0e7ef9dda7c416cdb70a09dc4cb017",
+      "bytes": 23659
+    },
+    {
+      "path": "tools/map_recipes/build.ps1",
+      "sha256": "e80e23d11cb78e2c3d04880ebf27f45b8e57493b1691fc3b8f46d87d847d0ce7",
+      "bytes": 3677
+    },
+    {
+      "path": "tools/map_recipes/drop_audit.py",
+      "sha256": "f9c284ad85ead67913dcf3a51945bb21be994fa4968b60f60bbb876cd581f2de",
+      "bytes": 15605
+    },
+    {
+      "path": "tools/map_recipes/engine_smoke.py",
+      "sha256": "7f886dcf892858d8d65251121d6235b786c49191be61c898ca4b40fa43a633a5",
+      "bytes": 13991
+    },
+    {
+      "path": "tools/map_recipes/fold.cpp",
+      "sha256": "d3cba899927f85862572a96c1388df5925d85bcad6f2640e2be45ec07ed3b936",
+      "bytes": 12181
+    },
+    {
+      "path": "tools/map_recipes/fold_audit.py",
+      "sha256": "5a979b5d3f2de11f9232eeb0e457bd3ae9820165dccc1adc37431b34f3606e5c",
+      "bytes": 7501
+    },
+    {
+      "path": "tools/map_recipes/geometry.py",
+      "sha256": "dcfcc3413468cad9993476736edfae5f13eb03e26035fc39d73f83aa5a90742b",
+      "bytes": 19674
+    },
+    {
+      "path": "tools/map_recipes/inspect.py",
+      "sha256": "f262b339123858db431161cb2feaabd9c5b13b27f8287a5e3ff67122f4ce86ed",
+      "bytes": 20830
+    },
+    {
+      "path": "tools/map_recipes/layout-view-v2.html",
+      "sha256": "737198b33dfbe29352e763c5e7aa7353e93e53672ec882bbb50d316c39647e60",
+      "bytes": 32550
+    },
+    {
+      "path": "tools/map_recipes/packing_audit.py",
+      "sha256": "7ac251edd70ed2835478b78e019e4aa23edd7492b5e13d50fa517e8c231e658a",
+      "bytes": 4859
+    },
+    {
+      "path": "tools/map_recipes/recipe_support.hpp",
+      "sha256": "7e28421def97aec11df14f40f369f9ce2e0eff65beff9249318d9bb4883c8d94",
+      "bytes": 26042
+    },
+    {
+      "path": "tools/map_recipes/render_layout.py",
+      "sha256": "7fe79627262bfeb6885ed65206c8a96142479a21a4dfbfcd4cf2d12f12879876",
+      "bytes": 14673
+    },
+    {
+      "path": "tools/ql_atlas/__init__.py",
+      "sha256": "8c9899259a7985fcf833eaf0447870b41459713d3ce0bc6d35113745c149770a",
+      "bytes": 78
+    },
+    {
+      "path": "tools/ql_atlas/__main__.py",
+      "sha256": "ada9db5d139ccae6036e5966f9f6572e7241b1b0c71ce696069615ea46ae5567",
+      "bytes": 12300
+    },
+    {
+      "path": "tools/ql_atlas/atlas-view.html",
+      "sha256": "67d8e5e7fd63485a31d331b62e6955fe6a5732a1a6d4dd378eec92935b72facb",
+      "bytes": 10642
+    },
+    {
+      "path": "tools/ql_atlas/bsp.py",
+      "sha256": "9348a5126591d6204a42bc3278e9bcc392a6790141877f765f8803f96fd0c9d5",
+      "bytes": 10151
+    },
+    {
+      "path": "tools/ql_atlas/package.py",
+      "sha256": "a522933039c7686b439ab950c4d066cd14d2cd3d9b17c8e0851e05031fa4f0bb",
+      "bytes": 2885
+    },
+    {
+      "path": "tools/ql_atlas/preview_check.cjs",
+      "sha256": "4fe118014addbaac9b75b26989932a0e7f0ce6bcf91388cc28d228964c41280b",
+      "bytes": 6775
+    },
+    {
+      "path": "tools/ql_atlas/README.md",
+      "sha256": "d7f623ad8226fb32ce723883c3169d83e0437aab76e30a5f7f889bf1b86d1fc9",
+      "bytes": 3884
+    }
+  ],
+  "spatial_contract": {
+    "rooms": 5,
+    "short_passage_connections": 9,
+    "main_floor_levels": [
+      0,
+      128
+    ],
+    "local_quad_crate_height": 64,
+    "main_stair_runs": 4,
+    "main_treads_per_run": 8,
+    "crate_treads": 4,
+    "tread_run": 36,
+    "tread_rise": 16,
+    "passage_seam": 48,
+    "features": [
+      "Unequal adjoining spaces wrap around an offset indoor atrium",
+      "Partial galleries preserve separate upper and lower paths",
+      "West-attached horseshoe core with three joined lower segments",
+      "Offset barrier crates and explicitly stepped local pickup platform",
+      "Optional one-way teleporter with dry ordinary alternatives",
+      "Shallow 24-unit water basin beneath part of a gallery, with a dry bypass"
+    ],
+    "courtyard_status": "Open-sky courtyard and deeper liquid paths remain future fixtures"
+  },
+  "packing": {
+    "record": "out/fold/packing-comparison.json",
+    "descriptor": "exact_axis_aligned_room_and_passage_xy_union",
+    "maps": [
+      {
+        "map": "qmg_undercut",
+        "layout_path": "out/undercut/layout.json",
+        "layout_sha256": "0a42d82e46f8d38f29f406b51244b5512aa31c3fd25ae8c92561a6d1b6e8fccb",
+        "canonical_layout_sha256": "6774db296af3b4ab82c253ce46fd0d8f19e6eac9e3e56cd6980ae2403377cd5c",
+        "bounds_xy": [
+          [
+            -1008,
+            -832
+          ],
+          [
+            1024,
+            1008
+          ]
+        ],
+        "width": 2032,
+        "depth": 1840,
+        "envelope_area": 3738880,
+        "projected_volume_union_area": 2288128,
+        "envelope_coverage_fraction": 0.6119821978774392,
+        "edge_connected_uncovered_area": 984320,
+        "enclosed_uncovered_area": 466432,
+        "uncovered_area": 1450752,
+        "rectangles": 16,
+        "exact_partition_cells": 234
+      },
+      {
+        "map": "qmg_fold",
+        "layout_path": "out/fold/layout.json",
+        "layout_sha256": "4e44001f128063c144809892a7fde50622eea6329d0742412ac5e3c0e65a171a",
+        "canonical_layout_sha256": "3d14936d3382b25f1aedfdf387d49b4e226c43b260a73a3480a4ac5bc94d4153",
+        "bounds_xy": [
+          [
+            -896,
+            -832
+          ],
+          [
+            896,
+            832
+          ]
+        ],
+        "width": 1792,
+        "depth": 1664,
+        "envelope_area": 2981888,
+        "projected_volume_union_area": 2825984,
+        "envelope_coverage_fraction": 0.9477163461538461,
+        "edge_connected_uncovered_area": 16896,
+        "enclosed_uncovered_area": 139008,
+        "uncovered_area": 155904,
+        "rectangles": 14,
+        "exact_partition_cells": 195
+      }
+    ],
+    "envelope_reduction_fraction": 0.2024649092776446,
+    "limits": [
+      "All-height authored room/passage boxes are projected without subtracting internal solids.",
+      "This is gross volume packing, not usable floor area, hull clearance, travel time or map quality.",
+      "Uncovered areas may be intentional structure, courtyards or sightline separation. No quality threshold is assigned.",
+      "Connectivity of uncovered cells uses shared edges; corner contact is not a connection.",
+      "Do not compare these coverage fractions with QL rendered-surface coverage as if their denominators and geometry were identical."
+    ]
+  },
+  "metrics": {
+    "spawn_count": 8,
+    "weapon_count": 7,
+    "weapon_types": 7,
+    "major_item_count": 2,
+    "combat_height_p90_p10": 128.0,
+    "combat_height_bands_128": 2,
+    "spawn_nearest_weapon_euclidean_p50": 329.4941859591652,
+    "spawn_nearest_weapon_euclidean_p90": 423.19776534569246,
+    "spawn_pair_world_los_fraction": 0.0,
+    "major_item_min_euclidean_separation": 1033.9516429698247,
+    "world_diagonal": 2555.746466299034,
+    "upward_surface_area": 3753856.0,
+    "texture_area_entropy_bits": 2.864678661699086,
+    "texture_top_area_fraction": 0.2710695060400135,
+    "sky_surface_area_fraction": 0.0,
+    "sampled_world_sightline_p50": 268.9073591306743,
+    "sampled_world_sightline_p90": 737.3523804664972
+  },
+  "controlled_item_revision": {
+    "status": "matched_authored_item_relocation_static_descriptors",
+    "unchanged_worldspawn_and_brush_blocks": 179,
+    "unchanged_nonworld_entities": 89,
+    "changes": [
+      {
+        "source_entity": 14,
+        "classname": "weapon_hyperblaster",
+        "from": "816 272 152",
+        "to": "704 -752 152"
+      },
+      {
+        "source_entity": 33,
+        "classname": "ammo_cells",
+        "from": "816 208 152",
+        "to": "704 -688 152"
+      }
+    ],
+    "before_map_sha256": "a226b7f042fc54e4f7d2643b692e1a1a1b613a6cbd7739edf3461272dd67a8b1",
+    "after_map_sha256": "0b9b02ff34d482d1757aebb3f8c1bbc21b67981d7fa9899e715f59179b5a46ac",
+    "before_package_sha256": "2d470b299137028fe1f5c76d3f415dd56b1b9cec4fdbaf86f6484409ae6a8675",
+    "metrics": {
+      "spawn_nearest_weapon_euclidean_p50": {
+        "before": 393.4941859591652,
+        "after": 329.4941859591652
+      },
+      "spawn_nearest_weapon_euclidean_p90": {
+        "before": 714.7057482271741,
+        "after": 423.19776534569246
+      }
+    },
+    "limits": [
+      "Only two authored point origins changed; no geometry, spawns, other items, materials or lights changed.",
+      "Distances are straight-line descriptors, not measured native recovery or a gameplay improvement.",
+      "The retained first-pass package has static checks only; final BSP additionally passes dedicated initialization."
+    ]
+  },
+  "validation": {
+    "sealed_full_vis_lit": true,
+    "affected_ctest_gates": 12,
+    "full_configured_suite_rerun": false,
+    "synthetic_tests": {
+      "recipe_geometry": 24,
+      "drop": 11,
+      "packing": 7,
+      "fold": 12,
+      "ql_atlas": 12
+    },
+    "gameplay_anchors": 33,
+    "required_dry_graph_pairs": 264,
+    "ordinary_edge_kinds": [
+      "walk",
+      "step",
+      "door"
+    ],
+    "anchor_hull_world_pairs": 5874,
+    "compiled_stair_tread_poses": 36,
+    "selected_continuous_flat_segments": 8,
+    "selected_world_pair_checks": 1424,
+    "swept_sat_fallback_calls": 0,
+    "support_method": "Full-footprint swept XY rectangle on a common convex floor brush per selected flat segment",
+    "spawn_eye_pairs": 28,
+    "visible_spawn_eye_pairs": 0,
+    "invalid_spawn_eyes": 0,
+    "dedicated_initialization_gates": 16,
+    "dedicated_bsp_sha256": "0957907667208b6aea4fa7f5826377c7a107ea4b4b2518e819c13bc6b0b4bdd0",
+    "dedicated_scheduled_frames": 40,
+    "dedicated_server_frame_ms": 100,
+    "dedicated_initial_settling_frames": 2,
+    "viewer_states": {
+      "out/fold/preview-checks.json": 18,
+      "out/fold/geometry-display-checks.json": 18,
+      "out/ql-atlas/preview-checks.json": 696
+    },
+    "prior_viewer_compatibility_states": 48,
+    "earlier_published_maps_byte_identical": [
+      "switchback",
+      "spillway",
+      "counterweight",
+      "talus",
+      "undercut"
+    ],
+    "review_encoding": "Explicit UTF-8 JSON read confirms punctuation is correct; a default Windows code-page read caused a false encoding report"
+  },
+  "cross_game_research": {
+    "record": "knowledge/mp/spatial-patterns.json",
+    "document": "docs/MP_SPATIAL_PATTERNS.md",
+    "reference_count": 9,
+    "atlas": "out/ql-atlas/atlas.json",
+    "package": "out/ql-atlas/ql-orthographic-atlas.zip",
+    "quake_live_maps": [
+      "Campgrounds",
+      "Blood Run",
+      "Aerowalk",
+      "Furious Heights",
+      "Toxicity",
+      "Lost World"
+    ],
+    "orthographic_images": 64,
+    "fitted_overviews": 6,
+    "common_scale_overviews": 6,
+    "height_band_images": 52,
+    "common_world_span": 2688,
+    "height_band_units": 128,
+    "bands_are_certified_floors": false,
+    "source_identity": "Local QL-preSteam IBSP47; exact release dates and current Steam revision equivalence unverified",
+    "geometry_transferred_into_fold": false,
+    "q2_profile_retrained": false,
+    "q2_rule_cards": 31,
+    "native_transfer": "Q2 player hull, stair, liquid and teleporter behavior recorded separately from QL geometry observations"
+  },
+  "caught_failures": [
+    {
+      "observed": "32-unit face-to-face seams leave no eroded passage area; overlapping passages violate the contract",
+      "correction": "48-unit seams with explicit face-to-face endpoints"
+    },
+    {
+      "observed": "Default Q2 water material is absent in local assets and zero flags omit deliberate water surface semantics",
+      "correction": "Existing e3u2/water2 plus explicit WATER=32, WARP|TRANS33=24, value=0; exact compiled water corners and contents checked"
+    },
+    {
+      "observed": "Initial southern Wash Bay resource gap",
+      "correction": "Only hyperblaster and cells moved; 179 world brush blocks and 89 other nonworld entities unchanged"
+    },
+    {
+      "observed": "Liquid and intermediate prop levels require different analytical presentation from solids and main floors",
+      "correction": "Render water separately with actual surface height; retain crate and Quad at local height64 without inventing a third floor"
+    }
+  ],
+  "limits": [
+    "No native player traversal, teleporter activation, complete wet crossing, air/damage, engine rendering or competitive playtest was performed.",
+    "Water queries are stationary content samples. Two submerged standing samples imply waterlevel2 under inspected source, not measured speed or safe exit.",
+    "Teleporter checks establish authored target binding and supported clear source/arrival hulls, not activation or survival.",
+    "Required graph reachability does not independently certify the complete compiled world along every route; compiled continuous audits cover eight selected flat segments.",
+    "Gross envelope coverage improved while median/p90 sampled sightlines and straight-line nearest-weapon distances remain longer than Undercut.",
+    "All nine openings remain local chokepoints; only one center-to-center connection meets the visibility-readability descriptor.",
+    "Atlas rendered surfaces include inaccessible trim and exterior tops, exclude entity-submodel floors, and do not establish collision, navigation, LOS or gameplay quality.",
+    "All authored QL mode variants are retained; filters and runtime settled item positions are not evaluated.",
+    "Automatic planner motif selection, training datasets and model weights were not changed.",
+    "Compiler output bytes are not claimed deterministic; retained verification, viewer and engine evidence bind the delivered BSP."
+  ],
+  "next_trials": {
+    "status": "defined_not_executed",
+    "protocol": "docs/MP_COMPACT_LAYOUT_REGIMEN.md",
+    "conditions": [
+      "Matched basin wet/dry journeys",
+      "Teleporter enabled/disabled with first movement and occupied-exit outcomes",
+      "Single gallery-screen intervention",
+      "Crate pickup and complete ordinary returns",
+      "2/4/6-player resource control, crowding, upper/lower route use",
+      "Separate open-sky courtyard and deeper-liquid fixtures"
+    ]
+  },
+  "unrelated_issues": [
+    "Default liquid material/metadata need explicit asset validation",
+    "Conservative narrow-tread and short-passage erosion contracts",
+    "Normal Windows client startup requests focus",
+    "Campgrounds reference has invalid unused lightmap UV values; ignored by the geometry-only reader with full source hash retained"
+  ],
+  "cleanup": {
+    "status": "automatic_approval_review_rejected_cleanup",
+    "reason": "blocked by policy",
+    "action": "Remove the three task-created temporary test directories after validating absolute project-local paths and absence of reparse points",
+    "paths": [
+      ".agents/tmp/fold-engine",
+      ".agents/tmp/fold-viewer",
+      ".agents/tmp/ql-atlas"
+    ],
+    "command_executed": false,
+    "retried": false,
+    "older_blocked_directories_retried": false,
+    "delivery_directories": [
+      "out/fold",
+      "out/ql-atlas",
+      "out/mp-spatial-patterns"
+    ],
+    "useful_engine_and_preview_evidence_retained_in_delivery": true
+  }
+}

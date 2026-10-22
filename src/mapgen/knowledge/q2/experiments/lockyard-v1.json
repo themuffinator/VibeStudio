@@ -1,0 +1,1151 @@
+{
+  "schema_version": 1,
+  "id": "lockyard-v1",
+  "date": "2026-09-13",
+  "status": "compiled_and_dedicated_initialization_validated_with_bounded_native_world_movement",
+  "map": "qmg_lockyard",
+  "intended_mode": "stock_q2_deathmatch",
+  "intended_players": [
+    4,
+    6
+  ],
+  "construction": "Original explicit qmg_core recipe; automatic motif selection and model-weight training remain pending",
+  "recipe": "tools/map_recipes/lockyard.cpp",
+  "study": "docs/Q2_LOCKYARD_STUDY.md",
+  "testing_regimen": "docs/MP_COMPACT_LAYOUT_REGIMEN.md",
+  "local_artifacts": "out/lockyard",
+  "canonical_layout_sha256": "8a8d1fdd8d0f426ef8fa2d6498d8dbcdee913895ae3124c8a60b8f87417db9e0",
+  "artifact_hashes": {
+    "source_sha256": "ac766bf4ea086d8f8ae55fa98b7c4b2c017e4c0727724c9bdfedc72112f4ec7b",
+    "bsp_sha256": "66799ef3829a28d04759c33be72d3ac131f17c86b3cb6e3f5eae933d34445f60",
+    "recipe_sha256": "1811ae0ce8863a635d9deff0407c502e3fde7e2005569d714d83dd62192480a2",
+    "recipe_support_sha256": "8b1321145e9fa896c71ad86be44025b6400992f11d07ceb0052683b23ed6600c",
+    "core_sha256": "a0653a842e37671dc3599fa255e9e3dfa73b64f303dc81c258b51a46a2e62322",
+    "profile_sha256": "4f833d1a09eab67c719175310e101befcc9ad43d330985e7bc7a7d645f65d935",
+    "features_sha256": "12174d152b64cec8ad2ef1bccd505de7413243ef192950ce78b353ed569b25ec"
+  },
+  "current_documentation": [
+    "README.md",
+    "THIRD_PARTY.md",
+    "docs/ROADMAP.md",
+    "docs/VALIDATION.md",
+    "docs/MAP_DESIGN_PLAYBOOK.md",
+    "docs/MP_COMPACT_LAYOUT_REGIMEN.md",
+    "docs/Q2_LOCKYARD_STUDY.md",
+    "docs/Q2_COURTYARD_LIQUID_STUDY.md",
+    "tools/map_recipes/README.md",
+    "tools/native_movement/README.md"
+  ],
+  "evidence_files": [
+    {
+      "path": "CMakeLists.txt",
+      "sha256": "b1c52f54e44f987cfc4eb99759e275ab6dcd1e87d0e2217bbb14b8df819f64bc",
+      "bytes": 26226
+    },
+    {
+      "path": "README.md",
+      "sha256": "a39e356c8a90202cf008b8d0b4eca511c912e17fd18e843d67e17f22b0f30b7c",
+      "bytes": 19803
+    },
+    {
+      "path": "THIRD_PARTY.md",
+      "sha256": "31fe7d6c335cdcc4e9324c3711681e057ab63b11dfb8e47ea966f05ac1e2dfdb",
+      "bytes": 12007
+    },
+    {
+      "path": "docs/MAP_DESIGN_PLAYBOOK.md",
+      "sha256": "3852b040a982086bba4a28b6274013f29109c8f90c9f3eb37657f1e5ecf11901",
+      "bytes": 24817
+    },
+    {
+      "path": "docs/MP_COMPACT_LAYOUT_REGIMEN.md",
+      "sha256": "09f2d0f9512b8248f75c41106e0ab7fb75b3cb1e916d2aae2af1bcbcb4300ca7",
+      "bytes": 10027
+    },
+    {
+      "path": "docs/Q2_COURTYARD_LIQUID_STUDY.md",
+      "sha256": "1787bf70e72000cbc24821dba33518bea9a4d0f91bccb4a7af8e73bcb9beea50",
+      "bytes": 11728
+    },
+    {
+      "path": "docs/Q2_LOCKYARD_STUDY.md",
+      "sha256": "7d6ad2864ba23ea15b55c295122442dd48970bd9583b41fbcf1aef5abd2662ce",
+      "bytes": 8998
+    },
+    {
+      "path": "docs/ROADMAP.md",
+      "sha256": "f3cdf3cc25b1901e183f3a03b516f8a183daa6da6b8d06bd248a9d438d35f3ca",
+      "bytes": 14019
+    },
+    {
+      "path": "docs/VALIDATION.md",
+      "sha256": "b54173be9e98bc6c372f22113d38d24d25ccdf1e977e845bf2e5159ed6527dc3",
+      "bytes": 28312
+    },
+    {
+      "path": "knowledge/q2/courtyard-liquid-study.json",
+      "sha256": "6f32e3c3794e51ddaf128e53b83133a17d5c6962005a2b70fded960fa6cca781",
+      "bytes": 27709
+    },
+    {
+      "path": "knowledge/q2/iteration-roadmap.json",
+      "sha256": "b3eb1f5bbc545a8173cd08f58f6dc26044d150431609b2ef1c15f56637e6636d",
+      "bytes": 12869
+    },
+    {
+      "path": "knowledge/q2/rules.json",
+      "sha256": "5f265169d00a768c331bc6dd1ffdd020d0f4b300f487b2b45ad39315bc2be4ed",
+      "bytes": 52216
+    },
+    {
+      "path": "out/courtyard-liquid-study/audit_court.py",
+      "sha256": "0f839b4d254c8db0ba3f54f50470cc6c1bf6e5f396b6d9d942ce43670c3151ba",
+      "bytes": 6015
+    },
+    {
+      "path": "out/courtyard-liquid-study/audit_wet_route.py",
+      "sha256": "e08982b798254bb6ac9adf8101f37646b4ea9dda8825e83720059b3b867eda8b",
+      "bytes": 14842
+    },
+    {
+      "path": "out/courtyard-liquid-study/gladdm1-basin-plans.png",
+      "sha256": "64c70a82268459a1a133d3d79279a3a3bdb43449233fc7a2917cbe3261db4533",
+      "bytes": 69581
+    },
+    {
+      "path": "out/courtyard-liquid-study/gladdm1-court-plans.png",
+      "sha256": "620ed436cf019110e68b6656dd41b2eabe9e855ba74cca9200a6c3cd45ddfcbe",
+      "bytes": 73033
+    },
+    {
+      "path": "out/courtyard-liquid-study/gladdm1-wet-context.json",
+      "sha256": "bca4261c959f8427c2a7c58085381bbfb4e040216c7b52373d1eff03e9ed1024",
+      "bytes": 182001
+    },
+    {
+      "path": "out/courtyard-liquid-study/gladdm1-wet-route-audit.json",
+      "sha256": "7cbfacf70a49f30da7a5216e7abc66cde44811f76789feec1fea600728619a3d",
+      "bytes": 218274
+    },
+    {
+      "path": "out/courtyard-liquid-study/manhunt-court-audit.json",
+      "sha256": "8bd10e8bafab292283a04409ab015007fb7d8c4ebe8b189fffc04a5f75c0752d",
+      "bytes": 16377
+    },
+    {
+      "path": "out/courtyard-liquid-study/manhunt-plans.png",
+      "sha256": "03691b354aa073ba8eb808efb58b1fd437d4ae9b698aca0357865df2fb18d7cd",
+      "bytes": 105004
+    },
+    {
+      "path": "out/courtyard-liquid-study/measure_wet_context.py",
+      "sha256": "a616993b75c8ed5e3ff43aa12a351966e19f40c527c99b5598331cc1fd4631cf",
+      "bytes": 4879
+    },
+    {
+      "path": "out/courtyard-liquid-study/render_references.py",
+      "sha256": "c31604f7a8feb4271dc90eeab04ee50033eaffad632461e787f7cd1e1ef044c3",
+      "bytes": 1352
+    },
+    {
+      "path": "out/courtyard-liquid-study/write_record.py",
+      "sha256": "c324cb59aedc139efaf383a7efdc02a6b072adcbae5c34ed417d1de8f4c51bd7",
+      "bytes": 15038
+    },
+    {
+      "path": "out/lockyard/cleanup-status.json",
+      "sha256": "24db9a7f131e96d5c212bd213661382714c183023bcc98c1b8e581d87c9ef778",
+      "bytes": 890
+    },
+    {
+      "path": "out/lockyard/comparison-to-fold.json",
+      "sha256": "31f7dcf6ba46a77068d23796982f153541089979d3b70848013a92edf46e419a",
+      "bytes": 1378
+    },
+    {
+      "path": "out/lockyard/comparison.log",
+      "sha256": "08f6d44ab111efec91cd8a4517dea56af6175bd7fe092bb71a11eda1a54be875",
+      "bytes": 81
+    },
+    {
+      "path": "out/lockyard/compiled-analysis.json",
+      "sha256": "53fb810e550acc153f03051b24d416560ca1351cdcaf717263638f39e277472c",
+      "bytes": 21955
+    },
+    {
+      "path": "out/lockyard/ctest-focused.log",
+      "sha256": "ceee14ac5178f83047a298373443d1df5e1c27f372c006813165717ce9ffc6ea",
+      "bytes": 2055
+    },
+    {
+      "path": "out/lockyard/design-controls/dry-deadend/README.md",
+      "sha256": "289e406ec872f6b568f58d5c4c640266159e0a1bd0e9166262deefd6421af148",
+      "bytes": 698
+    },
+    {
+      "path": "out/lockyard/design-controls/dry-deadend/layout.json",
+      "sha256": "fca09affe7db5366e217beb0b67dd9b2407c3d349aad5d31cff70f2d9ee34419",
+      "bytes": 9350
+    },
+    {
+      "path": "out/lockyard/design-controls/dry-deadend/ordinary-gate-dependencies.json",
+      "sha256": "910bb53f375dce4becb914afbf0c5ce86e8e52f3b5e97921b6561aac0a14b970",
+      "bytes": 6890
+    },
+    {
+      "path": "out/lockyard/design-controls/dry-deadend/qmg_lockyard.map",
+      "sha256": "9b03b52394f905e2f6a7164fd50bc972545ee57aedc2617ce32cb1f658518010",
+      "bytes": 114949
+    },
+    {
+      "path": "out/lockyard/design-controls/dry-deadend/qmg_lockyard.qmg.json",
+      "sha256": "9114cc48cf321dc1a5cbdca56e4fdd2e486d30848fcba6474204a546cfea007b",
+      "bytes": 71898
+    },
+    {
+      "path": "out/lockyard/design-controls/north-major-cluster/compiled-analysis.json",
+      "sha256": "1933d0859e6e8e9a1c9bf23616f63a0d5bd43e3dae390214f4cc78d95057f7e7",
+      "bytes": 21693
+    },
+    {
+      "path": "out/lockyard/design-controls/north-major-cluster/features.json",
+      "sha256": "0983a5543d375f130f65b2d76ff95e2d6fc59bf081f122bf2c9cea48c61bc17e",
+      "bytes": 1641
+    },
+    {
+      "path": "out/lockyard/design-controls/north-major-cluster/layout.json",
+      "sha256": "1b2981ace44c611c426e75db2effcd034824b7766123de0b53feb29e4cc4c966",
+      "bytes": 9417
+    },
+    {
+      "path": "out/lockyard/design-controls/north-major-cluster/lockyard.cpp",
+      "sha256": "160cee6cc3db297f2e5d872066adaaff1dcaa4342fdc1b0aec7fdd3f4828f520",
+      "bytes": 8668
+    },
+    {
+      "path": "out/lockyard/design-controls/north-major-cluster/qmg_lockyard.bsp",
+      "sha256": "bde3ed2cdb9b4e121e3192153492a548a4c6909b09b009025b9d661b2c372cc7",
+      "bytes": 421600
+    },
+    {
+      "path": "out/lockyard/design-controls/north-major-cluster/qmg_lockyard.map",
+      "sha256": "923f0679fb29622bbe57e21580bf9b6871b8ecadaeca7039063c82ec06def06a",
+      "bytes": 118112
+    },
+    {
+      "path": "out/lockyard/design-controls/north-major-cluster/qmg_lockyard.qmg.json",
+      "sha256": "421d03dca664fe38f3fc6463fcfe20ff496fa360e952c1cf3420d0941b4547c7",
+      "bytes": 72209
+    },
+    {
+      "path": "out/lockyard/dry-return-comparison.json",
+      "sha256": "a08e3d2eb5f55fb242977eec3a7902c8876388f2329ad334734448292466fde9",
+      "bytes": 1827
+    },
+    {
+      "path": "out/lockyard/engine-smoke/authored-entities.ent",
+      "sha256": "e005bccbfae04afa85d3f2d7fb9c7fff937c3563e6eea7695286825028b9d17f",
+      "bytes": 10482
+    },
+    {
+      "path": "out/lockyard/engine-smoke/engine-smoke.json",
+      "sha256": "d5946fa1e2ea749904dda1bf83584fb9e73734ee989783a7b15a953ddbf5daff",
+      "bytes": 6570
+    },
+    {
+      "path": "out/lockyard/engine-smoke/engine.log",
+      "sha256": "01968462d7b5f6e975b32135a9788544857b0d288f63bfa58f053384fbe7feb8",
+      "bytes": 2777
+    },
+    {
+      "path": "out/lockyard/engine-smoke/profile.cfg",
+      "sha256": "be1ac45eccd4f6925d7e90eda5d372dd6071464ed5e9c8611494193f6a0485e7",
+      "bytes": 246
+    },
+    {
+      "path": "out/lockyard/engine-smoke/stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    {
+      "path": "out/lockyard/engine-smoke/stdout.log",
+      "sha256": "8882774f46d6e503eb6f28f0daa2bd4b4bf5d44c40962de39f8ba93de6fa47b8",
+      "bytes": 2220
+    },
+    {
+      "path": "out/lockyard/features.json",
+      "sha256": "12174d152b64cec8ad2ef1bccd505de7413243ef192950ce78b353ed569b25ec",
+      "bytes": 1641
+    },
+    {
+      "path": "out/lockyard/floor--128.png",
+      "sha256": "9a3ea1849b28bc69f99b99eccaa0a5f6c9703ee2598b84679af6087d8d797467",
+      "bytes": 24870
+    },
+    {
+      "path": "out/lockyard/floor-0.png",
+      "sha256": "b6113d984e7956ec7fa1c93792bb1838ded517aebe9835e39f37212f9b223fc3",
+      "bytes": 27665
+    },
+    {
+      "path": "out/lockyard/floor-128.png",
+      "sha256": "231d9c7a3c8c3e29523f4ba48424ef01d5920ed9d0aa8e3129c32d39850db8c6",
+      "bytes": 27401
+    },
+    {
+      "path": "out/lockyard/flow.json",
+      "sha256": "40a3a0ace1a502488b4ab261d440f15551de270e2d8681e6b1c68848af48115a",
+      "bytes": 13161
+    },
+    {
+      "path": "out/lockyard/generation.log",
+      "sha256": "598fa910577d0622c121c4826101e4eb48a5b2f2af8dbd85a72de27924c28ddc",
+      "bytes": 90
+    },
+    {
+      "path": "out/lockyard/index.html",
+      "sha256": "d79182142657f9b91a2904dee308a3f7af878a6b322980f0c1451c0357fa3f5a",
+      "bytes": 100135
+    },
+    {
+      "path": "out/lockyard/item-placement-comparison.json",
+      "sha256": "c78b0bb6ca18f423254c7789c938d4095fd9d1d938705ceac41c94cb6b8dbe42",
+      "bytes": 857
+    },
+    {
+      "path": "out/lockyard/layout.json",
+      "sha256": "becacb47faf580655f84c63030610fd85faf46d21ee8b3ba69c66f75ead4cab6",
+      "bytes": 9419
+    },
+    {
+      "path": "out/lockyard/light.log",
+      "sha256": "857681a15c2eac0c8841d6390ae0bc43485fe156bc1f197b3e741145cb693273",
+      "bytes": 2194
+    },
+    {
+      "path": "out/lockyard/lockyard-layout.html",
+      "sha256": "66b311cac8a721cb7a3854fd198a16bd0a8d882ca18ea994d2b362e2cb6aeded",
+      "bytes": 47992
+    },
+    {
+      "path": "out/lockyard/ordinary-gate-dependencies-closed-10.json",
+      "sha256": "b919ddf702cb14be29b890db653b0bd4597fe1eb32c30189b77936a96c4bee3c",
+      "bytes": 7989
+    },
+    {
+      "path": "out/lockyard/ordinary-gate-dependencies.json",
+      "sha256": "6b753bc6f5b6102ce57571d2097aca5bd6cd97c01bd6592771f2b7ac1dcb2f05",
+      "bytes": 3783
+    },
+    {
+      "path": "out/lockyard/overview-mobile-light.png",
+      "sha256": "cf62e394f069ef2546fcc5b7a2e202684e4ff2af7a80ef21ccbffe991b7e5423",
+      "bytes": 52415
+    },
+    {
+      "path": "out/lockyard/overview.png",
+      "sha256": "87038107f6c7c8e21eae21b2104f6b8f6c35bde04043c8896bbff8c664f536d8",
+      "bytes": 108675
+    },
+    {
+      "path": "out/lockyard/packing-comparison.json",
+      "sha256": "0361970bb08cd7e9468e6b48512aba82f4b6c33c513ea3aa8f4e1ba4e1c35866",
+      "bytes": 2321
+    },
+    {
+      "path": "out/lockyard/packing.log",
+      "sha256": "0361970bb08cd7e9468e6b48512aba82f4b6c33c513ea3aa8f4e1ba4e1c35866",
+      "bytes": 2321
+    },
+    {
+      "path": "out/lockyard/preview-checks.json",
+      "sha256": "576af5a5db0976ee0e5e7375637fd291bcb4b19605cf946e3b8ebe6b83e9f7a9",
+      "bytes": 34618
+    },
+    {
+      "path": "out/lockyard/preview-controls/fold/compiled-analysis.json",
+      "sha256": "59372f0b550cb7e10bf5010941f15f9e4d6f073e3169aeef4b14e12289e12148",
+      "bytes": 22057
+    },
+    {
+      "path": "out/lockyard/preview-controls/fold/floor-0.png",
+      "sha256": "2397ac14b42b82b8a010abf35294a348cfa8e6e154c8e475add65ec04e50a6f1",
+      "bytes": 32055
+    },
+    {
+      "path": "out/lockyard/preview-controls/fold/floor-128.png",
+      "sha256": "6a55fd4a47e3191a3e2a6110fa4122db01ac7c4ae0114d1ac34f293652f813bf",
+      "bytes": 28869
+    },
+    {
+      "path": "out/lockyard/preview-controls/fold/fold-layout.html",
+      "sha256": "f0e619185a23106c2b00c8d608fd326e655817f8f8bb55e9d8de094a214c40d1",
+      "bytes": 47046
+    },
+    {
+      "path": "out/lockyard/preview-controls/fold/index.html",
+      "sha256": "85422b252b6bf11f0ab32ac1e9e05a04fac029da0b9d884597b09625beec3dc1",
+      "bytes": 98887
+    },
+    {
+      "path": "out/lockyard/preview-controls/fold/layout.json",
+      "sha256": "4e44001f128063c144809892a7fde50622eea6329d0742412ac5e3c0e65a171a",
+      "bytes": 9285
+    },
+    {
+      "path": "out/lockyard/preview-controls/fold/overview-mobile-light.png",
+      "sha256": "e8f8386b6bd466ee8a05003d08eb45769891d4af71b84f0a5d0351e1baf342d2",
+      "bytes": 46879
+    },
+    {
+      "path": "out/lockyard/preview-controls/fold/overview.png",
+      "sha256": "0cf2cdd0fd0c7579687e48f84e6d78144d8067d01d6e4c13eb7392e5c366feff",
+      "bytes": 99081
+    },
+    {
+      "path": "out/lockyard/preview-controls/fold/preview-checks.json",
+      "sha256": "d802c95ee8875db03d31e4d181b7cfe3e26862c65386bdbbe57fb6435521baec",
+      "bytes": 35148
+    },
+    {
+      "path": "out/lockyard/preview-controls/fold/qmg_fold.bsp",
+      "sha256": "0957907667208b6aea4fa7f5826377c7a107ea4b4b2518e819c13bc6b0b4bdd0",
+      "bytes": 343020
+    },
+    {
+      "path": "out/lockyard/preview-controls/fold/verification.json",
+      "sha256": "aec6283f9b521272937011319710cfcada1556e9352207896b9bdeaa4a9c6d62",
+      "bytes": 8866
+    },
+    {
+      "path": "out/lockyard/preview-controls/undercut/compiled-analysis.json",
+      "sha256": "127ff99b18fd2f28de20490074f4302c77673b817d5bdb55440f894d634c3c3b",
+      "bytes": 22229
+    },
+    {
+      "path": "out/lockyard/preview-controls/undercut/floor-0.png",
+      "sha256": "2597fd4a3177a78cdee7278b1bb0941c9349a46fdc5a4f7ffa125f540138e11e",
+      "bytes": 28688
+    },
+    {
+      "path": "out/lockyard/preview-controls/undercut/floor-128.png",
+      "sha256": "c6c3e6c388046bbd8f447e2258181f4f44e237438739da7fa30bf9c321e8fe18",
+      "bytes": 31536
+    },
+    {
+      "path": "out/lockyard/preview-controls/undercut/floor-256.png",
+      "sha256": "119999f8ca7fa9e8f0d587b72ff5fea1ac9f9b11a795cfadee63d8462ef23e04",
+      "bytes": 22611
+    },
+    {
+      "path": "out/lockyard/preview-controls/undercut/index.html",
+      "sha256": "bbe2b3d11e1ac63221d9ff95e784b2e025f570ad47305183680aa58ef0a024c4",
+      "bytes": 100171
+    },
+    {
+      "path": "out/lockyard/preview-controls/undercut/layout.json",
+      "sha256": "0a42d82e46f8d38f29f406b51244b5512aa31c3fd25ae8c92561a6d1b6e8fccb",
+      "bytes": 10166
+    },
+    {
+      "path": "out/lockyard/preview-controls/undercut/overview-mobile-light.png",
+      "sha256": "8dd24089147c3649f0b937c7f71f40c17eff03b1736564a2f968831e98aae0e4",
+      "bytes": 56750
+    },
+    {
+      "path": "out/lockyard/preview-controls/undercut/overview.png",
+      "sha256": "895be2bb897881f5f6fc9c2db8e7f14388f5e6bdf1ed8a2b133d604d67c20c5a",
+      "bytes": 104941
+    },
+    {
+      "path": "out/lockyard/preview-controls/undercut/preview-checks.json",
+      "sha256": "70c0c5f65fc9edc00ee9fadb59a11c7d98791838cc15c5c47b9ec37e50947351",
+      "bytes": 82850
+    },
+    {
+      "path": "out/lockyard/preview-controls/undercut/qmg_undercut.bsp",
+      "sha256": "aea795986b4e1861e8e6d8d4308094345dfe1171b7a4c0a9fc4afc6a0de5a3f8",
+      "bytes": 315544
+    },
+    {
+      "path": "out/lockyard/preview-controls/undercut/undercut-layout.html",
+      "sha256": "7ce58410d2a08c2593d4f250f0e69214cde13a2ed93ff2f5e6b844fe9036df18",
+      "bytes": 48108
+    },
+    {
+      "path": "out/lockyard/preview-controls/undercut/verification.json",
+      "sha256": "87992bbef346ba6094a73728e77295df411dfcccb5da7909b45a3e2a1655cca5",
+      "bytes": 12149
+    },
+    {
+      "path": "out/lockyard/preview-export.log",
+      "sha256": "5a30dab9ef840430687d5bf304c4bc08157079d0b2f5fb43cd853a7a0e5b5a0f",
+      "bytes": 64
+    },
+    {
+      "path": "out/lockyard/prior-source-regression.json",
+      "sha256": "3007208b975feb80206a6c46b4672232e89dccebed3fe99da77b5060a3702aa1",
+      "bytes": 941
+    },
+    {
+      "path": "out/lockyard/qbsp.log",
+      "sha256": "1854ca8ae29fe763bb5a6e5811c3990aae049a1184b0832c6da5b5defeaafbde",
+      "bytes": 1819
+    },
+    {
+      "path": "out/lockyard/qmg_lockyard.bsp",
+      "sha256": "66799ef3829a28d04759c33be72d3ac131f17c86b3cb6e3f5eae933d34445f60",
+      "bytes": 421604
+    },
+    {
+      "path": "out/lockyard/qmg_lockyard.content.json",
+      "sha256": "51a3f70da5f95dcb79a25c76fe371d766ceacaaefccf48bcbb1cbe2ac96b09a6",
+      "bytes": 4635
+    },
+    {
+      "path": "out/lockyard/qmg_lockyard.map",
+      "sha256": "ac766bf4ea086d8f8ae55fa98b7c4b2c017e4c0727724c9bdfedc72112f4ec7b",
+      "bytes": 118114
+    },
+    {
+      "path": "out/lockyard/qmg_lockyard.prt",
+      "sha256": "8377baee5fa7a857daeb442b9315f74555fd30d1bbc303733b0d50b61e7b5106",
+      "bytes": 29188
+    },
+    {
+      "path": "out/lockyard/qmg_lockyard.qmg.json",
+      "sha256": "154598660c8fa8f97dfe2b203cd569124ce518922667d655dbe9040bb43ed3e3",
+      "bytes": 72209
+    },
+    {
+      "path": "out/lockyard/qmg_lockyard.texinfo.json",
+      "sha256": "c495dffcdbbfd8c281128bdb4045f88e223890116cb21ea49e4ccac9b6db495a",
+      "bytes": 548
+    },
+    {
+      "path": "out/lockyard/qmg_lockyard.zip",
+      "sha256": "048c3e741538543991553a474265874b38a1ead69ba18fada3ac896325e83d00",
+      "bytes": 170140
+    },
+    {
+      "path": "out/lockyard/recipe-build.log",
+      "sha256": "71aa391ec7d7e291b419a7f40fba91919e14ac2394ab4e8b66ed126e267d70f6",
+      "bytes": 23
+    },
+    {
+      "path": "out/lockyard/reference-comparison.json",
+      "sha256": "32ba00175851d004ff31bddf9ac2465cb09662f9eb0aff5ab982add152f19f48",
+      "bytes": 6238
+    },
+    {
+      "path": "out/lockyard/regression-preflight.log",
+      "sha256": "b254e831249f6186fcfe1e07c0bc387b58100a62b504be734f66afaa1acaa953",
+      "bytes": 1603
+    },
+    {
+      "path": "out/lockyard/verification.json",
+      "sha256": "6ab2c9ba842206db80a03eb64494e98868cf0007dac0ffcd9b73def6bc15a4ff",
+      "bytes": 32090
+    },
+    {
+      "path": "out/lockyard/verification.log",
+      "sha256": "44726109f718ee5e9c07ce1284dbc095737b6202984ef44c0efe6d67b06950ce",
+      "bytes": 1010
+    },
+    {
+      "path": "out/lockyard/verify-evidence.py",
+      "sha256": "8193165abe041dcf340428ecdc2f9569f93698ec295062c59d665d097c71f63c",
+      "bytes": 4884
+    },
+    {
+      "path": "out/lockyard/vis.log",
+      "sha256": "347e3f66950c94636803508d72873dbbd4af6fd939a0192ff802bb26cd5f3802",
+      "bytes": 1188
+    },
+    {
+      "path": "out/native-movement/artifact-manifest.json",
+      "sha256": "fdab265b7f618e949babffce40ef4c8b5fabc426c1380b64e7915fee41a9d067",
+      "bytes": 32940
+    },
+    {
+      "path": "tests/recipe_preview_check.cjs",
+      "sha256": "2e087f67b0806b61674f4d1a6c49547ef2159a7b6e90d2819e6f5e4f5749dd1f",
+      "bytes": 24618
+    },
+    {
+      "path": "tests/test_gate_audit.py",
+      "sha256": "8f0ac8a2202fc6329ccb25033a018c414ee8635784cdd53d54e96d70531259fa",
+      "bytes": 3185
+    },
+    {
+      "path": "tests/test_lockyard_audit.py",
+      "sha256": "20c4dc8dca07737403329b95ed07985c1b2ec82951b7447e80eae925302d8a59",
+      "bytes": 10391
+    },
+    {
+      "path": "tests/test_native_movement.py",
+      "sha256": "f23404a3e84ae0e87e0c899b16f7b2b2bdf98c808da3972305181ca969dacb78",
+      "bytes": 9149
+    },
+    {
+      "path": "tests/test_recipe_environment.cpp",
+      "sha256": "42205e904b4f967e08c8877026d130b31c8cf2543f06a21d3024a6a7db026ea7",
+      "bytes": 4241
+    },
+    {
+      "path": "tools/map_recipes/README.md",
+      "sha256": "12868660c560f372e1e92e513be17a64077b1c6d1287746d3ea645cf2d8db6bf",
+      "bytes": 5314
+    },
+    {
+      "path": "tools/map_recipes/build.ps1",
+      "sha256": "d148883a844bcf3f37f7bafa21f5e571e9d2f50639d7c814bbfa2286dd36216c",
+      "bytes": 3688
+    },
+    {
+      "path": "tools/map_recipes/gate_audit.py",
+      "sha256": "cf02b7fabe2e9241203d89b662e85bb7064f050fd281ff841324896442ba2559",
+      "bytes": 5655
+    },
+    {
+      "path": "tools/map_recipes/inspect.py",
+      "sha256": "40ad3b710b7256ce6f078a9d161ccb3a4833255902cc349502c918a6b831cb71",
+      "bytes": 21936
+    },
+    {
+      "path": "tools/map_recipes/layout-view-v2.html",
+      "sha256": "e3c7fd67690c3688192a8264d23601d20e45369c8959737541399998d9786241",
+      "bytes": 34023
+    },
+    {
+      "path": "tools/map_recipes/lockyard.cpp",
+      "sha256": "1811ae0ce8863a635d9deff0407c502e3fde7e2005569d714d83dd62192480a2",
+      "bytes": 8670
+    },
+    {
+      "path": "tools/map_recipes/lockyard_audit.py",
+      "sha256": "300ed04982fd76082eac1adc6cfe4643eb4a6ae46e5ea398aa0db1963bd3e73d",
+      "bytes": 15891
+    },
+    {
+      "path": "tools/map_recipes/recipe_support.hpp",
+      "sha256": "8b1321145e9fa896c71ad86be44025b6400992f11d07ceb0052683b23ed6600c",
+      "bytes": 30269
+    },
+    {
+      "path": "tools/map_recipes/render_layout.py",
+      "sha256": "2ddf294f8ebdb6d7b828238563d14d45b5e15091c914071012da175cca95c146",
+      "bytes": 17175
+    },
+    {
+      "path": "tools/native_movement/CMakeLists.txt",
+      "sha256": "d0960a5ecf0e5cd50d80a2ae68b65a4f47dc014ffb87049210cb0c6235db8e1a",
+      "bytes": 1856
+    },
+    {
+      "path": "tools/native_movement/CMakePresets.json",
+      "sha256": "fa3ea01f168dea374b0571e48cf5df7914413e090e0244eb2d212056828cbe7e",
+      "bytes": 427
+    },
+    {
+      "path": "tools/native_movement/README.md",
+      "sha256": "21bb02e3b6f0ef2461187132f640b70e0a23bdc7db21f30fec63b5b97e3c80ac",
+      "bytes": 10358
+    },
+    {
+      "path": "tools/native_movement/build.py",
+      "sha256": "717626eb046ef7cb3db741f5b01ead54d371c63ae1bc16cf7c40b4be7cb2384e",
+      "bytes": 2934
+    },
+    {
+      "path": "tools/native_movement/experiment.py",
+      "sha256": "6c34a26ada986ebdffcdf45adbc3cd7759e19d40b19b0b37ed2625972399cfd9",
+      "bytes": 11358
+    },
+    {
+      "path": "tools/native_movement/harness.c",
+      "sha256": "b74c0aa004ab7f7671745285552e190c2d5428d9a9f7973a4a08563e56ed8abb",
+      "bytes": 9188
+    },
+    {
+      "path": "tools/native_movement/manifest.py",
+      "sha256": "d7d69458ba500fc1d0a70f53b570912f43d6052dbc2b76a2e76c8f21edd4975b",
+      "bytes": 4039
+    },
+    {
+      "path": "tools/native_movement/reference.json",
+      "sha256": "b1ec942ca5126b5cf535cf3e0ca049901401c454e30684ae94241d3d88678d40",
+      "bytes": 1204
+    },
+    {
+      "path": "tools/native_movement/run.py",
+      "sha256": "58177a70d4b12a9687d65f2fb1e1f2c9c72e4e05e1e9df10da8d17b26da5a8c2",
+      "bytes": 16756
+    }
+  ],
+  "evidence_verifier": "out/lockyard/verify-evidence.py",
+  "evidence_check_output": "out/lockyard/evidence-checks.json",
+  "snapshot_policy": "This record binds current delivery bytes. Its own hash and post-manifest verification output are excluded to avoid circular hashes. Earlier experiment and reference context pins remain historical as-read snapshots, not promises that evolving tools/docs remain unchanged.",
+  "spatial_contract": {
+    "organization": "Outdoor spine and bent dry perimeter; asymmetrical unequal spaces",
+    "rooms": 6,
+    "connections": 10,
+    "main_combat_floor_levels": [
+      0,
+      128
+    ],
+    "local_culvert_bed": -128,
+    "ordinary_stair_runs": [
+      8,
+      8,
+      8,
+      8
+    ],
+    "wet_stair_profiles": [
+      8,
+      8
+    ],
+    "tread_depth": 36,
+    "tread_rise": 16,
+    "optional_teleporters": 0,
+    "water_bounds": [
+      [
+        -224,
+        -736,
+        -128
+      ],
+      [
+        736,
+        -304,
+        -16
+      ]
+    ],
+    "water_maximum_depth": 112,
+    "water_depth_varies_over_treads": true,
+    "water_compiled_contents": [
+      402653216
+    ],
+    "water_surface_flags": 24,
+    "water_surface_value": 0,
+    "low_roof_underside": -40,
+    "bed_to_roof_clearance": 88,
+    "sky_roof": [
+      [
+        -384,
+        -224,
+        512
+      ],
+      [
+        384,
+        512,
+        536
+      ]
+    ],
+    "sky_environment": "unit1_",
+    "sky_is_sealed_solid": true,
+    "partial_gallery": "Court north and east; selected lower and upper routes share XY at0/128",
+    "ordinary_graph_excludes_liquid_and_optional_mechanisms": true,
+    "articulation_rooms": 0,
+    "local_chokepoint_openings": 10,
+    "center_to_center_visibility_readable_connections": 2,
+    "quality_findings": {
+      "structural_errors": 0,
+      "leak_errors": 0,
+      "navigation_errors": 0,
+      "visibility_errors": 0,
+      "lighting_errors": 0,
+      "timing_errors": 0,
+      "warnings": 0
+    }
+  },
+  "packing": {
+    "schema_version": 1,
+    "method": "exact_axis_aligned_room_and_passage_xy_union",
+    "units": "map units; areas in square map units",
+    "maps": [
+      {
+        "map": "qmg_fold",
+        "layout_path": "out/fold/layout.json",
+        "layout_sha256": "4e44001f128063c144809892a7fde50622eea6329d0742412ac5e3c0e65a171a",
+        "canonical_layout_sha256": "3d14936d3382b25f1aedfdf387d49b4e226c43b260a73a3480a4ac5bc94d4153",
+        "bounds_xy": [
+          [
+            -896,
+            -832
+          ],
+          [
+            896,
+            832
+          ]
+        ],
+        "width": 1792,
+        "depth": 1664,
+        "envelope_area": 2981888,
+        "projected_volume_union_area": 2825984,
+        "envelope_coverage_fraction": 0.9477163461538461,
+        "edge_connected_uncovered_area": 16896,
+        "enclosed_uncovered_area": 139008,
+        "uncovered_area": 155904,
+        "rectangles": 14,
+        "exact_partition_cells": 195
+      },
+      {
+        "map": "qmg_lockyard",
+        "layout_path": "out/lockyard/layout.json",
+        "layout_sha256": "becacb47faf580655f84c63030610fd85faf46d21ee8b3ba69c66f75ead4cab6",
+        "canonical_layout_sha256": "8a8d1fdd8d0f426ef8fa2d6498d8dbcdee913895ae3124c8a60b8f87417db9e0",
+        "bounds_xy": [
+          [
+            -1008,
+            -768
+          ],
+          [
+            1008,
+            960
+          ]
+        ],
+        "width": 2016,
+        "depth": 1728,
+        "envelope_area": 3483648,
+        "projected_volume_union_area": 3168768,
+        "envelope_coverage_fraction": 0.9096119929453262,
+        "edge_connected_uncovered_area": 141312,
+        "enclosed_uncovered_area": 173568,
+        "uncovered_area": 314880,
+        "rectangles": 16,
+        "exact_partition_cells": 195
+      }
+    ],
+    "limits": [
+      "All-height authored room/passage boxes are projected without subtracting internal solids.",
+      "This is gross volume packing, not usable floor area, hull clearance, travel time or map quality.",
+      "Uncovered areas may be intentional structure, courtyards or sightline separation. No quality threshold is assigned.",
+      "Connectivity of uncovered cells uses shared edges; corner contact is not a connection.",
+      "Do not compare these coverage fractions with QL rendered-surface coverage as if their denominators and geometry were identical."
+    ]
+  },
+  "metrics": {
+    "spawn_count": 8,
+    "weapon_count": 7,
+    "weapon_types": 7,
+    "major_item_count": 2,
+    "combat_height_p90_p10": 128.0,
+    "combat_height_bands_128": 2,
+    "spawn_nearest_weapon_euclidean_p50": 402.96016257501697,
+    "spawn_nearest_weapon_euclidean_p90": 521.315331891329,
+    "spawn_pair_world_los_fraction": 0.0,
+    "major_item_min_euclidean_separation": 1000.3519380697975,
+    "world_diagonal": 2808.489985739668,
+    "upward_surface_area": 4008192.0,
+    "texture_area_entropy_bits": 3.0818158352772174,
+    "texture_top_area_fraction": 0.26564283142989364,
+    "sky_surface_area_fraction": 0.03338797798197968,
+    "sampled_world_sightline_p50": 239.2,
+    "sampled_world_sightline_p90": 758.9333333333334
+  },
+  "comparison_to_previous": {
+    "baseline": "Fold",
+    "candidate": "Lockyard",
+    "baseline_available": true,
+    "metrics": {
+      "combat_height_p90_p10": {
+        "before": 128.0,
+        "after": 128.0
+      },
+      "combat_height_bands_128": {
+        "before": 2,
+        "after": 2
+      },
+      "world_diagonal": {
+        "before": 2555.746466299034,
+        "after": 2808.489985739668
+      },
+      "upward_surface_area": {
+        "before": 3753856.0,
+        "after": 4008192.0
+      },
+      "sampled_world_sightline_p50": {
+        "before": 268.9073591306743,
+        "after": 239.2
+      },
+      "sampled_world_sightline_p90": {
+        "before": 737.3523804664972,
+        "after": 758.9333333333334
+      },
+      "spawn_pair_world_los_fraction": {
+        "before": 0.0,
+        "after": 0.0
+      }
+    },
+    "room_connections": {
+      "before": 9,
+      "after": 10
+    },
+    "room_graph_cycle_rank": {
+      "before": 5,
+      "after": 5
+    },
+    "articulation_rooms": {
+      "before": 0,
+      "after": 0
+    },
+    "limits": [
+      "Multiple design variables changed; this is not a controlled causal comparison.",
+      "Current costs include endpoint approaches but remain Manhattan/node-center estimates. Earlier artifacts use a different timing basis; do not compare their costs or call them measured travel time.",
+      "Point LOS is not a match, spawn-safety guarantee or rendered lighting check."
+    ]
+  },
+  "controlled_item_revision": {
+    "status": "matched_single_authored_item_origin_change",
+    "unchanged_worldspawn_and_brush_blocks": 189,
+    "unchanged_nonworld_entities": 132,
+    "changes": [
+      {
+        "source_entity": 19,
+        "classname": "item_quad",
+        "from": "256 848 152",
+        "to": "-512 -352 152"
+      }
+    ],
+    "before_map_sha256": "923f0679fb29622bbe57e21580bf9b6871b8ecadaeca7039063c82ec06def06a",
+    "after_map_sha256": "ac766bf4ea086d8f8ae55fa98b7c4b2c017e4c0727724c9bdfedc72112f4ec7b",
+    "major_item_min_euclidean_separation": {
+      "before": 463.724055878062,
+      "after": 1000.3519380697975
+    },
+    "limits": [
+      "Only the Quad origin changes; all other source properties, brush faces, items and lights are identical.",
+      "Distance and distributed destination roles are descriptive; multiplayer control and balance are not measured."
+    ]
+  },
+  "controlled_graph_intervention": {
+    "schema_version": 1,
+    "status": "matched_final_graph_intervention",
+    "canonical_layout_sha256": "8a8d1fdd8d0f426ef8fa2d6498d8dbcdee913895ae3124c8a60b8f87417db9e0",
+    "unchanged": [
+      "serialized final layout",
+      "items and spawns",
+      "all graph edges except nodes belonging to the closed passages"
+    ],
+    "method": "remove one passage node set from directed serialized ordinary graph",
+    "required_pairs": 264,
+    "conditions": [
+      {
+        "record": "out/lockyard/ordinary-gate-dependencies.json",
+        "sha256": "6b753bc6f5b6102ce57571d2097aca5bd6cd97c01bd6592771f2b7ac1dcb2f05",
+        "baseline_closed_connections": [],
+        "baseline_missing_pairs": 0,
+        "additional_connection_6_closure_lost_pairs": 0
+      },
+      {
+        "record": "out/lockyard/ordinary-gate-dependencies-closed-10.json",
+        "sha256": "b919ddf702cb14be29b890db653b0bd4597fe1eb32c30189b77936a96c4bee3c",
+        "baseline_closed_connections": [
+          10
+        ],
+        "baseline_missing_pairs": 0,
+        "additional_connection_6_closure_lost_pairs": 57
+      }
+    ],
+    "early_control": {
+      "record": "out/lockyard/design-controls/dry-deadend/ordinary-gate-dependencies.json",
+      "lost_pairs_on_connection_6_closure": 51,
+      "scope": "Earlier unfinished source with two lighting warnings; other changes exist, not a single-variable compiled control."
+    },
+    "limits": [
+      "The same room may contain disconnected surfaces; room adjacency alone does not prove a dry return.",
+      "Node removal is an analytical route-dependency experiment, not a compiled doorway closure.",
+      "One-way edges remain one-way. Jumps, drops, lifts, teleports and liquid travel are excluded.",
+      "An optional pickup recess may intentionally depend on one exit. No universal quality threshold is assigned."
+    ]
+  },
+  "validation": {
+    "sealed_full_vis_lit": true,
+    "affected_ctest_gates": 17,
+    "ctest_log": "out/lockyard/ctest-focused.log",
+    "full_configured_suite_rerun": false,
+    "new_python_cases": {
+      "passage_dependencies": 6,
+      "lockyard_compiled_audit": 14,
+      "native_movement": 12
+    },
+    "optional_native_test_dependencies_present": true,
+    "environment_cpp_fixture": "tests/test_recipe_environment.cpp",
+    "required_dry_graph_pairs": 264,
+    "gameplay_anchors": 33,
+    "anchor_hull_world_pairs": 6204,
+    "compiled_stair_tread_poses": 32,
+    "selected_flat_segments": 5,
+    "wet_tread_support_poses": 16,
+    "wet_piecewise_route_intervals": 19,
+    "selected_world_pair_checks": 10528,
+    "swept_sat_fallback_calls": 0,
+    "support_method": "Selected flat routes use full-footprint common convex floors; wet flat intervals use bounded coplanar floor-union coverage; artificial step translations may leave support. Exact hull clearance checked in both directions.",
+    "emergence_columns": 2,
+    "blocked_surfacing_negative_case": true,
+    "selected_sky_rays": 3,
+    "directed_dry_station_return_edges": [
+      9,
+      9
+    ],
+    "entire_compiled_dry_return_swept": false,
+    "visible_spawn_eye_pairs": 0,
+    "spawn_eye_pairs": 28,
+    "dedicated_initialization_gates": 16,
+    "dedicated_bsp_sha256": "66799ef3829a28d04759c33be72d3ac131f17c86b3cb6e3f5eae933d34445f60",
+    "dedicated_engine": "Q2REPRO r4580~aeeb335f",
+    "dedicated_scheduled_frames": 40,
+    "dedicated_frame_ms": 100,
+    "dedicated_initial_settling_frames": 2,
+    "viewer_states": 24,
+    "prior_viewer_compatibility_states": 42,
+    "analytical_images_are_engine_renders": false,
+    "earlier_published_maps_byte_identical": [
+      "switchback",
+      "spillway",
+      "counterweight",
+      "talus",
+      "undercut",
+      "fold"
+    ]
+  },
+  "native_world_movement": {
+    "record": "out/native-movement/artifact-manifest.json",
+    "manifest_sha256": "fdab265b7f618e949babffce40ef4c8b5fabc426c1380b64e7915fee41a9d067",
+    "retained_artifact_files": 147,
+    "current_trials": 16,
+    "complete": 14,
+    "failed_level_inputs_retained": 2,
+    "source": "Unmodified external id Software Quake II3.19 CM/Pmove portable C",
+    "compiled_collision": "Native model0 CM_BoxTrace and CM_PointContents; no dynamic entities",
+    "time_resolution_ms": 16,
+    "settle_ms_excluded": 128,
+    "goal": "First declared-lane and height arrival with standing hull, waterlevel0 and grounded",
+    "fold": {
+      "comparison": "out/native-movement/fold-comparison.json",
+      "matched_level_forward400_ms": {
+        "wet": 1680,
+        "drained": 1424
+      },
+      "matched_level_forward200_ms": {
+        "wet": 2560,
+        "drained": 2128
+      },
+      "control_unchanged_compiled_solids": 178,
+      "control_unchanged_nonworld_source_entities": 91
+    },
+    "lockyard": {
+      "comparison": "out/native-movement/lockyard-comparison.json",
+      "wet_level_forward200_and400": "Fail before low roof; traces retained",
+      "constant_pitch30_forward400_ms": {
+        "wet": 6400,
+        "drained": 3920
+      },
+      "constant_pitch30_forward200_ms": {
+        "wet": 10048,
+        "drained": 5904
+      },
+      "wet_phased_pitch30_ms": {
+        "forward400": 6672,
+        "forward200": 9664
+      },
+      "successful_waterlevel_sequence": [
+        0,
+        1,
+        2,
+        3,
+        2,
+        1,
+        0
+      ],
+      "jump_or_upmove_used": false,
+      "control_unchanged_compiled_solids": 188,
+      "control_unchanged_nonworld_source_entities": 133,
+      "control_removed_water_brushes": 1
+    },
+    "limits": [
+      "Fixed scripted inputs, not optimal or human journey times.",
+      "Drained controls preserve the same solid tunnel, not the actual alternative dry perimeter.",
+      "No game module, oxygen, damage, sound, pickups, moving entities, teleporter activation, rendering or multiplayer interaction.",
+      "These3.19 movement results do not establish full Q2REPRO movement equivalence.",
+      "Full command-budget callback counts are separate from first-goal timings. Endpoint waterlevel duration bins are not continuous breath measurements."
+    ],
+    "distribution": "Optional private combined GPL executable remains outside map/core packages; sources remain external and hash-pinned."
+  },
+  "reference_research": {
+    "record": "knowledge/q2/courtyard-liquid-study.json",
+    "document": "docs/Q2_COURTYARD_LIQUID_STUDY.md",
+    "maps": [
+      "Manhunt",
+      "Violent & Funky (gladdm1)"
+    ],
+    "reference_artifacts": 11,
+    "patterns": [
+      "faceted upper horseshoe with viewpoint-specific open sky",
+      "deep basin with ramp, shallow shelf, dry lip and sideways exit",
+      "blocked and clear surfacing columns",
+      "bridge-covered court view versus lateral sky view"
+    ],
+    "native_reference_map_movement_tested": false,
+    "earlier_ql_atlas": "out/ql-atlas/atlas.json",
+    "earlier_ql_atlas_map_count": 6,
+    "ql_revision_scope": "Previously studied local preSteam revisions, not a new current-Steam validation",
+    "geometry_copied": false,
+    "q2_profile_retrained": false,
+    "q2_rule_cards": 36,
+    "new_cards": [
+      "sky-viewpoints-not-roof-count",
+      "surfacing-clearance-and-exit-turn",
+      "ordinary-passage-dependency",
+      "dive-commitment-and-recovery",
+      "measured-liquid-cost"
+    ]
+  },
+  "caught_failures": [
+    {
+      "observed": "Room adjacency merged disconnected dry culvert stations and hid the Boiler-Winding passage dependency.",
+      "correction": "Added Court-west-station opening, explicit passage closure audit and matched final graph control."
+    },
+    {
+      "observed": "Both major items clustered north before Winding had a contested destination.",
+      "correction": "Moved only Quad origin; all189 world brush blocks and132 other nonworld entities unchanged."
+    },
+    {
+      "observed": "Level-view native swimming stalls ahead of the submerged roof despite a clear deeper geometric route.",
+      "correction": "Retained failed inputs; explicit constant and phased dive commands demonstrate complete wet-to-dry recovery."
+    },
+    {
+      "observed": "Local bed, water and low roof can collapse onto the wrong floor in an analytical projection.",
+      "correction": "Bind local bed and auxiliary wet stairs to exact final features; independently check projections and major-item labels across floor/size/theme states."
+    }
+  ],
+  "limits": [
+    "Lockyard is larger than Fold, with lower gross coverage; this is spatial variety and a bounded connectivity repair, not uniformly tighter play.",
+    "Many design variables differ from Fold; only the recorded item, graph and water interventions have narrow matched controls.",
+    "Static LOS, width, light and distance descriptors are not spawn safety, visual readability or MP balance.",
+    "Native culvert success does not establish dive discoverability, oxygen safety, exit ambush survival or tactical shortcut superiority.",
+    "Required graph reachability does not certify the entire compiled world along every journey.",
+    "Core planner motif selection, reference profile admission and model weights were not changed.",
+    "No client input, full-screen game, OS capture or engine render-target validation occurred."
+  ],
+  "next_trials": [
+    "Measure the actual dry perimeter between the same stations with native commands and complete arrival predicates.",
+    "Test underwater visibility, light and entry cues using engine-written images on a non-hijacking windowed client path.",
+    "Run full-game oxygen/damage, pickup and first-time dive-discovery checks.",
+    "Run matched2/4/6-player route use, exit-threat, recovery and major-item control observations.",
+    "Apply native harness to the existing matched Talus ramp/stair fixture.",
+    "Integrate accepted construction motifs into the default fixed prompt/seed portfolio only after their evidence gates."
+  ],
+  "unrelated_issues": [
+    "Core placement_in_solid rejects point lights in liquid bounds; native underwater lights are valid. Lockyard uses dry/above-water lights.",
+    "Conservative tread/passages and default liquid material-role validation remain outstanding.",
+    "Normal Windows client startup requests foreground/focus; a non-hijacking rendering path remains needed.",
+    "Reference author versus archive player-count conflicts are retained instead of silently resolved."
+  ],
+  "cleanup": {
+    "lockyard": "out/lockyard/cleanup-status.json",
+    "native_movement": "out/native-movement/cleanup-status.json",
+    "status": "Automatic approval review rejected both first cleanup attempts as blocked by policy. Paths retained; no retry or parent deletion.",
+    "private_native_dependency_retained": true
+  }
+}

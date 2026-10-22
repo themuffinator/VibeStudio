@@ -1,0 +1,427 @@
+{
+  "schema_version": 1,
+  "id": "talus-bench-ramp-versus-stairs-v1",
+  "date": "2026-09-13",
+  "status": "controlled_compiled_static_and_dedicated_initialization_validated_native_paired_movement_pending",
+  "study": "docs/Q2_RAMP_STAIR_COMPARISON.md",
+  "recipe": "tools/map_recipes/talus_stairs.cpp",
+  "audit": "tools/map_recipes/ramp_stair_comparison.py",
+  "purpose": "Matched original ascent fixture for learning what changes when a continuous ramp becomes explicit treads.",
+  "baseline": {
+    "map": "qmg_talus",
+    "files_sha256": {
+      "layout.json": "212df836dd2ca78babd5d8916e45fb83e3e33780313188036677f0baaddcf5ef",
+      "flow.json": "ce201d6bcbb9f8d255394e6eb9b8d685a4a0c2ce0f8c9b872c72b20f6c7218d7",
+      "qmg_talus.map": "4583964d19748a00b2686d2b30b48fa4131c852534786d0f75cc5574119f37a6",
+      "qmg_talus.bsp": "6ac8fb109af4062fc08b51c5bc766edb36fd728f5afc7d2461f127c821329b03",
+      "qmg_talus.qmg.json": "18e85cada43b8b2c403e1ffb4c67d0f4f72614e348e44f3f7e2650ce906ecc9e",
+      "verification.json": "99373980f65e4a9fd5713a06845eb461094aab9c4d1bdaabfd76d22c847ada63"
+    }
+  },
+  "variant": {
+    "map": "qmg_talus_stairs",
+    "layout_sha256": "f02dae9dedf94d3b24992c98c51a64360ccbe2cefea04e7a91c17dafc18e6602",
+    "map_sha256": "39429344c545a08f508298ed17caafb19724f53f401e3e6b5cec2abc7f72b6e4",
+    "bsp_sha256": "b41c235f024f351c903c4da813512478ed50f75b285b9e75ff411f06d7daf740"
+  },
+  "intervention": {
+    "removed": "Bench surface rises from 8 to 128: 120 rise over 480 run",
+    "added": "Eight treads, each 60 units deep with a 16-unit rise",
+    "bounds": [
+      [
+        -736,
+        -160,
+        0
+      ],
+      [
+        -576,
+        320,
+        128
+      ]
+    ],
+    "landing_heights": [
+      0,
+      128
+    ],
+    "width": 160,
+    "material": "e2u1/mine04_1",
+    "post_lowering_material_control": {
+      "changed_top_faces": 8,
+      "final_material": "e2u1/mine04_1",
+      "shared_palette_outputs_overridden": {
+        "e1u1/stairs1_1": 7,
+        "e1u1/grate1_5": 1
+      },
+      "method": "Native MapParser and validated MapDocumentWriter; exact six-plane box identity and unique eight-box match",
+      "typed_material_role": "ramp",
+      "actual_final_source_materials_verified": true,
+      "nonintervention_planes_projections_materials_metadata_unchanged": true
+    },
+    "headworks_ramp_unchanged": true,
+    "source_identity": {
+      "unchanged_source_brush_blocks": 173,
+      "removed_brushes": 1,
+      "added_brushes": 8,
+      "unchanged_nonworld_entities": 81,
+      "world_property_exceptions": [
+        "message"
+      ],
+      "method": "Exact complete generated source brush strings: planes, materials, projections and metadata"
+    },
+    "compiled_identity": {
+      "unchanged_brushes": 173,
+      "removed_brushes": 1,
+      "added_brushes": 8,
+      "unchanged_nonworld_entities": 81,
+      "all_added_brushside_materials": "e2u1/mine04_1",
+      "method": "Exact stored outward planes, full texinfo values and brush contents; indices normalized"
+    }
+  },
+  "held_controls": [
+    "All 173 nonintervention source brush blocks and compiled brush plane/full-texinfo/contents signatures",
+    "All 81 nonworld entities: 33 gameplay anchors and 48 light entities",
+    "Six rooms, nine connections, every existing stair run and the Headworks ramp",
+    "Bench combined footprint and floor-0/floor-128 landings",
+    "Actual final source and BSP ascent materials, core library, compiler binaries and compile settings"
+  ],
+  "validation": {
+    "focused_test": {
+      "name": "qmg_talus_stairs_layout",
+      "passed": true,
+      "elapsed_seconds": 0.46
+    },
+    "compiled": {
+      "sealed": true,
+      "full_vis": true,
+      "lit": true,
+      "all_world_brush_contents_solid": true,
+      "gameplay_anchors": 33,
+      "standing_hull_checks": 5973,
+      "negative_controls": {
+        "source_entity_change_rejected": true,
+        "source_intervention_material_change_rejected": true,
+        "artifact_files_modified": false
+      }
+    },
+    "required_ordinary_pairs": {
+      "baseline": 264,
+      "variant": 264,
+      "edge_kinds": [
+        "walk",
+        "step",
+        "door"
+      ]
+    },
+    "bench_stair_geometry": {
+      "lateral_lanes": 3,
+      "rise": 16,
+      "run": 60,
+      "width": 160,
+      "hull": [
+        32,
+        32,
+        56
+      ],
+      "continuous_segments_both_directions_including_landing_turns": 166,
+      "segment_world_brush_pairs": 30046,
+      "positive_volume_collisions": 0,
+      "full_footprint_supported_before_and_after_each_step": true,
+      "method": "Stored compiled convex geometry; all swept envelopes separate or touch brush bounds, requiring no SAT fallback"
+    },
+    "unchanged_headworks_compiled_ramp_audit": true,
+    "baseline_both_compiled_ramps_audited": true,
+    "dedicated_initialization": {
+      "baseline": {
+        "path": "out/talus/engine-smoke/engine-smoke.json",
+        "sha256": "004122bbc979bbb78be0e4983a71f4a57ae51414d2d0281fc448851d1f4c6f8f",
+        "kind": "dedicated_engine_initialization_smoke",
+        "ok": true,
+        "bsp_sha256": "6ac8fb109af4062fc08b51c5bc766edb36fd728f5afc7d2461f127c821329b03",
+        "engine": "Q2REPRO r4580~aeeb335f",
+        "dependency_hashes": {
+          "q2reproded.exe": "6a41422ad60fc3e8679192feb45a9b56da225a29e8d4d09e2a9cd87d824c3053",
+          "gamex86_64.dll": "9f59a9f0c0c69e746cc0eec708920d8f5a52fcf843e74dee099af601a023a036"
+        },
+        "proves_player_movement": false
+      },
+      "variant": {
+        "path": "out/talus-stairs/engine-smoke/engine-smoke.json",
+        "sha256": "0bca26b6b7b5112cc05aa814cfe451eb7101e5dd04f661c97ae595a7c8a3729e",
+        "kind": "dedicated_engine_initialization_smoke",
+        "ok": true,
+        "bsp_sha256": "b41c235f024f351c903c4da813512478ed50f75b285b9e75ff411f06d7daf740",
+        "engine": "Q2REPRO r4580~aeeb335f",
+        "dependency_hashes": {
+          "q2reproded.exe": "6a41422ad60fc3e8679192feb45a9b56da225a29e8d4d09e2a9cd87d824c3053",
+          "gamex86_64.dll": "9f59a9f0c0c69e746cc0eec708920d8f5a52fcf843e74dee099af601a023a036"
+        },
+        "proves_player_movement": false
+      }
+    },
+    "dedicated_checks_passed_per_map": 16,
+    "player_movement_measured": false
+  },
+  "observations": [
+    {
+      "id": "talus-pair-ordinary-routes",
+      "evidence": "typed_graph_and_compiled_static",
+      "observation": "Both ascent designs preserve all 264 walk/step/door-only anchor journeys and zero articulation rooms.",
+      "limit": "A conservative supported route is not native stepping or competitive flow."
+    },
+    {
+      "id": "talus-pair-material-control",
+      "evidence": "native_source_and_compiled_material_audit",
+      "observation": "The helper changed eight tread-top textures automatically. A native parser/writer correction and compiled material gate removed the extra authored variable.",
+      "rule_candidate": "For geometry comparisons, audit final face materials and contents after lowering; a shared typed material role is insufficient.",
+      "limit": "Changed orientation/subdivision still changes baked lighting and shading."
+    },
+    {
+      "id": "talus-pair-proxy-bias",
+      "evidence": "typed_graph_cost_comparison",
+      "baseline_local_cost": 1578000,
+      "variant_local_cost": 1648000,
+      "baseline_step_edges": 1,
+      "variant_step_edges": 8,
+      "extra_step_penalty_cost": 70000,
+      "observation": "The local ordinary cost difference equals seven added configured step penalties; 49 of 200 broader quality-cost rows change in both directions.",
+      "rule_candidate": "Expose route policy, node changes and transition penalties before interpreting a movement comparison.",
+      "limit": "No cost units are seconds; optional jump/drop links affect broader rows."
+    },
+    {
+      "id": "talus-pair-fixed-eye-occlusion",
+      "evidence": "paired_compiled_static_world_rays",
+      "paired_queries": 48,
+      "changed_queries": 3,
+      "observation": "At all three lower approach eyes looking straight uphill, first static-world obstruction changes from approximately 200 to 168 units.",
+      "eye_offset_from_feet": 46,
+      "rule_candidate": "Use fixed supported origins and directions for exposure comparisons; face-center sampling populations move when geometry is subdivided.",
+      "limit": "This local occlusion result does not rank cover, aim, pursuit or encounter outcomes."
+    }
+  ],
+  "graph_comparison": {
+    "baseline": {
+      "nodes": 106,
+      "edges": 359,
+      "edge_kinds": {
+        "walk": 194,
+        "step": 82,
+        "jump": 18,
+        "drop": 65
+      },
+      "ordinary_pairs": 264,
+      "ordinary_policy": [
+        "door",
+        "step",
+        "walk"
+      ],
+      "runtime_verified": false
+    },
+    "variant": {
+      "nodes": 113,
+      "edges": 387,
+      "edge_kinds": {
+        "walk": 194,
+        "step": 98,
+        "jump": 22,
+        "drop": 73
+      },
+      "ordinary_pairs": 264,
+      "ordinary_policy": [
+        "door",
+        "step",
+        "walk"
+      ],
+      "runtime_verified": false
+    }
+  },
+  "global_descriptors": {
+    "combat_height_p90_p10": {
+      "baseline": 256.0,
+      "variant": 256.0
+    },
+    "combat_height_bands_128": {
+      "baseline": 3,
+      "variant": 3
+    },
+    "world_diagonal": {
+      "baseline": 2793.5010291746808,
+      "variant": 2793.5010291746808
+    },
+    "upward_surface_area": {
+      "baseline": 3590519.256023718,
+      "variant": 3588155.628011859
+    },
+    "sampled_world_sightline_p50": {
+      "baseline": 227.97122625454296,
+      "variant": 201.82337649086284
+    },
+    "sampled_world_sightline_p90": {
+      "baseline": 561.1858785713143,
+      "variant": 568.8000222535363
+    },
+    "spawn_pair_world_los_fraction": {
+      "baseline": 0.0,
+      "variant": 0.0
+    }
+  },
+  "global_descriptor_limit": "Rendered face-center populations differ after subdivision; global sightline statistics are not matched fixed-ray measurements.",
+  "paired_quality_cost_rows": {
+    "total": 200,
+    "unchanged": 151,
+    "increased": 24,
+    "decreased": 25,
+    "delta_min": -574000,
+    "delta_max": 70000,
+    "policy": "Full quality graph including optional jump/drop links; ordinary route proof is separate"
+  },
+  "pending": [
+    "Paired native ascent/descent with matched start pose, velocity, movement configuration and engine build",
+    "Separate walk/run repetitions, ground-contact and velocity telemetry, landing turns and accidental falls",
+    "Controlled camera/aim, pursuit, sound and opponent exposure observations",
+    "Resolve the conservative StairRunSpec default-32 support policy without treating it as native impossibility"
+  ],
+  "rights_and_learning": {
+    "kind": "original_authored_geometry_and_derived_measurements",
+    "archive_geometry_copied": false,
+    "archive_assets_copied": false,
+    "stock_material_references_only": true,
+    "existing_profile_rights_partitions_changed": false,
+    "trained_weights": false,
+    "default_planner_promoted": false
+  },
+  "implementation_sha256": {
+    "tools/map_recipes/talus.cpp": "7c1cf9837662a6bcb588907ca28e3d7450aee6828e358ca097329a2007291e7a",
+    "tools/map_recipes/talus_stairs.cpp": "e76f0eb1a377bc018d1d3da35f75de0f85e6838aab00db81a9c1d3b565f4f0fa",
+    "tools/map_recipes/recipe_support.hpp": "9520a6227baac389d32d290211f35e44ccdb3cfd21306ceab7aabe9f3b93170b",
+    "tools/map_recipes/ramp_stair_comparison.py": "711bb6b48e3676a909bfb907799417d51f65373bf86a6295e0ba2f2bfb488dd8",
+    "tools/map_recipes/ramp_audit.py": "1a6e17dd124db8ba030cc56927f6cb4b1c7ebecbfbadcf529165efded3103cdc",
+    "tools/map_recipes/geometry.py": "dcfcc3413468cad9993476736edfae5f13eb03e26035fc39d73f83aa5a90742b",
+    "tools/map_study/features.py": "9fd18f7ed3d9f5299d38d63d328daa3a20fd9bcc249e969054ba8a7c707ba535",
+    "build/windows-clang/qmg_core.lib": "a0653a842e37671dc3599fa255e9e3dfa73b64f303dc81c258b51a46a2e62322",
+    "build/windows-clang/qmg_talus_stairs_recipe.exe": "2391c22abf40c1d5ca7fb7d9ca3597460798fd81f70f0d1f67b6259ce8a1d72d"
+  },
+  "compiler": {
+    "qbsp.exe": {
+      "sha256": "fad5a4dc4daf42773ad9a812349b2667221bec47a920cad10cb821ae442c8eb8",
+      "arguments": [
+        "-q2bsp",
+        "-leaktest",
+        "-noallowupgrade",
+        "-lowpriority",
+        "0",
+        "-nodefaultpaths",
+        "-path",
+        "E:\\_SOURCE\\_ASSETS\\Q2",
+        "-nolog",
+        "-nocolor",
+        "-quiet",
+        "E:\\Repositories\\Quake-MapGen\\out\\talus-stairs\\qmg_talus_stairs.map",
+        "E:\\Repositories\\Quake-MapGen\\out\\talus-stairs\\qmg_talus_stairs.bsp"
+      ]
+    },
+    "vis.exe": {
+      "sha256": "01be572845e05c87b01a0b667e590ac49bdaba23369af8529fe82fcfbc4fe6cf",
+      "arguments": [
+        "-threads",
+        "2",
+        "-nostate",
+        "-lowpriority",
+        "0",
+        "-nodefaultpaths",
+        "-path",
+        "E:\\_SOURCE\\_ASSETS\\Q2",
+        "-nolog",
+        "-nocolor",
+        "-quiet",
+        "E:\\Repositories\\Quake-MapGen\\out\\talus-stairs\\qmg_talus_stairs.bsp"
+      ]
+    },
+    "light.exe": {
+      "sha256": "8e4fe9821f73c2d5c8a13655be20d3a71f357e76171de37c02413f4da3131a2f",
+      "arguments": [
+        "-extra4",
+        "-bounce",
+        "1",
+        "-soft",
+        "-threads",
+        "2",
+        "-lowpriority",
+        "0",
+        "-nodefaultpaths",
+        "-path",
+        "E:\\_SOURCE\\_ASSETS\\Q2",
+        "-nolog",
+        "-nocolor",
+        "-quiet",
+        "E:\\Repositories\\Quake-MapGen\\out\\talus-stairs\\qmg_talus_stairs.bsp"
+      ]
+    }
+  },
+  "evidence_files": [
+    {
+      "path": "out/talus-stairs/comparison.json",
+      "sha256": "cfea8e40e6b5d1836581bb86fbd7247dfb127cbd0b9d37bc5ed5412af48a20ae"
+    },
+    {
+      "path": "out/talus-stairs/comparison.log",
+      "sha256": "25255b8b44e01817d99f18eac90feba7c47d2ecc0ebe8098970c59a546e27799"
+    },
+    {
+      "path": "out/talus-stairs/compiled-analysis.json",
+      "sha256": "8f25a34d1af461c12cd83e6848fe281259e848d2eee9709e4d8d78ae17c21081"
+    },
+    {
+      "path": "out/talus-stairs/layout.json",
+      "sha256": "88d3b6e1c836ab5bbdf031e995c6ed07018ca6c35dbfd231afb0a80e6ead4463"
+    },
+    {
+      "path": "out/talus-stairs/flow.json",
+      "sha256": "55a7250a6150b8d224b9aa2d94719ecc13c8ab636034c7d0d57cd9ee8dadf48c"
+    },
+    {
+      "path": "out/talus-stairs/qmg_talus_stairs.map",
+      "sha256": "39429344c545a08f508298ed17caafb19724f53f401e3e6b5cec2abc7f72b6e4"
+    },
+    {
+      "path": "out/talus-stairs/qmg_talus_stairs.bsp",
+      "sha256": "b41c235f024f351c903c4da813512478ed50f75b285b9e75ff411f06d7daf740"
+    },
+    {
+      "path": "out/talus-stairs/qmg_talus_stairs.qmg.json",
+      "sha256": "72977e426291f0925a772b1b2ab411e6ab8851520bb7b501b628a139215ceae4"
+    },
+    {
+      "path": "out/talus-stairs/qbsp.log",
+      "sha256": "7ee92c32ff5b37f279cabcb562ef618c8dda7364e17f0cc1655b77e6e4e1ee86"
+    },
+    {
+      "path": "out/talus-stairs/vis.log",
+      "sha256": "26c61ca434838f7ccd574ab90e8127f1215cade66b263b935e3c1d3c6526173b"
+    },
+    {
+      "path": "out/talus-stairs/light.log",
+      "sha256": "fda4f052bc9319cd201ed87439593e19aa70016128ef5759a0e9ab4e617f63c5"
+    },
+    {
+      "path": "out/talus-stairs/engine-smoke/engine-smoke.json",
+      "sha256": "0bca26b6b7b5112cc05aa814cfe451eb7101e5dd04f661c97ae595a7c8a3729e"
+    },
+    {
+      "path": "out/talus/engine-smoke/engine-smoke.json",
+      "sha256": "004122bbc979bbb78be0e4983a71f4a57ae51414d2d0281fc448851d1f4c6f8f"
+    },
+    {
+      "path": "docs/Q2_RAMP_STAIR_COMPARISON.md",
+      "sha256": "a01b9cf126eb883d13b0275998af255f62c6f24a106473461d275761da83dde4"
+    }
+  ],
+  "limits": [
+    "One authored ascent geometry intervention with exact held source/BSP controls; no controlled human or engine-movement outcome.",
+    "The ramp begins with an 8-unit surface lip; the stairs begin at 16. Their lower/upper landings and footprint match, while the internal support profile intentionally differs.",
+    "Step sweeps prove conservative geometric translations, not native stepping, acceleration, friction, camera/aim rhythm, sound or pursuit.",
+    "More stair edges add configured step penalties and change graph anchors; proxy cost increases cannot be interpreted as slower real travel.",
+    "Global rendered-face sightline samples can shift after compiler subdivision; these descriptors are not matched encounter observations.",
+    "The geometry intervention changes face orientations, subdivisions and lightmaps; identical material names, fixed light entities and compiler flags cannot hold the rendered image or bounced illumination constant.",
+    "Dedicated smoke validates initialization only. No paired client movement, input or screenshot test was run; unchanged placements do not prove unchanged spawn safety during play."
+  ]
+}

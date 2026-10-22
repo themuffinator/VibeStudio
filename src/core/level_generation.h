@@ -70,6 +70,27 @@ struct LevelGenerationSpec {
 	QStringList availableTextures;
 	// Quake: the WAD for worldspawn's "wad" key.
 	QString wad;
+
+	// Which generator builds the level: empty or "studio" for the cell
+	// generator below (all four games), or "quake-mapgen" for the Quake-MapGen
+	// pipeline (core/level_mapgen.h: Quake, Quake II and Quake III Arena,
+	// with capture the flag and an analysis report). The fields below are
+	// Quake-MapGen's alone; its mode may also be "ctf".
+	QString generator;
+	// q1-valve220, q2-valve220, q3-legacy, or q3-brush-primitives; empty
+	// follows the game.
+	QString format;
+	// quiet, balanced, or intense; empty reads the prompt.
+	QString intensity;
+	// Layouts drawn and ranked, 1 to 64.
+	int candidates = 6;
+	// Validation and repair passes, 0 to 64.
+	int repairIterations = 8;
+	// Stage switches as name=on|off, each name once.
+	QStringList switches;
+	// How candidate layouts are ranked: scalar (the default), or ggml in a
+	// build with -Dggml=enabled; both give the same scores.
+	QString ranker;
 };
 
 // Fills what the spec leaves empty from its prompt and defaults, the same
@@ -259,6 +280,8 @@ struct LevelGenerationStatistics {
 struct LevelGenerationResult {
 	bool ok = false;
 	QString error;
+	// studio, or quake-mapgen.
+	QString generator = QStringLiteral("studio");
 	LevelGenerationSpec spec;
 	LevelSemanticPlan plan;
 	LevelLayout layout;
@@ -273,6 +296,12 @@ struct LevelGenerationResult {
 	LevelGenerationStatistics statistics;
 	QStringList notes;
 	QStringList warnings;
+	// Quake-MapGen: the map dialect written, its schema v4 report as written,
+	// and that report's navigation, visibility, lighting, and quality
+	// analysis as lines to read.
+	QString dialect;
+	QByteArray generatorReport;
+	QStringList analysis;
 };
 
 // Steps 3-5 for a plan; with no plan, the rules planner makes one. The plan is

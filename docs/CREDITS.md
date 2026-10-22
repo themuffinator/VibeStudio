@@ -1530,6 +1530,65 @@ VibeStudio's existing PAK, WAD and ZIP/PK3 code, credited under
 - [Meshy API documentation](https://docs.meshy.ai/en), planned as an optional provider reference for prompt/image-to-3D, AI texturing, and rapid placeholder asset workflows.
 - [OpenAI Images API](https://platform.openai.com/docs/api-reference/images) and [structured outputs](https://platform.openai.com/docs/guides/structured-outputs), [Claude structured outputs](https://platform.claude.com/docs/en/build-with-claude/structured-outputs), [Gemini image generation](https://ai.google.dev/gemini-api/docs/image-generation) and [generateContent](https://ai.google.dev/api/generate-content), and the [Stable Diffusion web UI API](https://github.com/AUTOMATIC1111/stable-diffusion-webui/wiki/API) (AGPL-3.0 project; only its documented HTTP interface is used), reviewed 2026-10-06: the request and answer shapes of `src/core/ai_transport.*` structured output and `src/core/ai_image_transport.*`. Original implementations; no client code copied.
 
+## Text Connectors: Harnesses And GGUF (2026-10-22)
+
+- [llama.cpp](https://github.com/ggml-org/llama.cpp) and
+  [ggml](https://github.com/ggml-org/ggml) (MIT), pinned at
+  `c1d0e7a004015f23bc0233470b747b596f29b264`, linked only in builds with
+  `-Dggml=enabled`; `scripts/build_ggml.py` builds them with the options
+  Quake-MapGen's `CMakeLists.txt` used. `src/core/ai_gguf_runtime.cpp` is
+  derived from Quake-MapGen's `src/llama_text_model.cpp` (MIT, the working tree
+  of 2026-10-16): backend start-up, batches, chat templates, tokenizing, token
+  pieces and grammar-constrained greedy decoding, with conversations, free
+  text, cancellation and a model cache added. `src/core/ai_json_grammar.cpp`
+  writes grammars in llama.cpp's GBNF syntax (`grammars/README.md` at the
+  pinned revision); the conversion is original.
+- [Claude Code](https://code.claude.com/docs/en/cli-reference) (Anthropic) and
+  [Codex CLI](https://github.com/openai/codex) (OpenAI, Apache-2.0): their
+  documented command-line options, JSON result and JSONL event formats, and
+  status commands, reviewed 2026-10-22 against Claude Code 2.1.304 and Codex
+  CLI 0.153.4, are the interface of `src/core/ai_harness.cpp`. Neither tool is
+  bundled, linked or modified; no code is copied.
+
+## Map Generator (Quake-MapGen, 2026-10-22)
+
+- [Quake-MapGen](https://github.com/themuffinator/Quake-MapGen) (MIT, copyright
+  2026 Quake-MapGen contributors), commit `1252548ad68f44df63d56f1c6c068c4fc6f6330c`
+  (2026-08-26) plus its uncommitted work up to 2026-10-16, imported on
+  2026-10-22 into `src/mapgen`: `include/qmg`, `src` (without `main.cpp` and
+  `llama_text_model.cpp`), `data/profiles`, `schemas/semantic-plan-v1.schema.json`,
+  `grammars/semantic-plan-v1.gbnf`, the C++ unit tests and golden maps in
+  `tests`, `LICENSE` and `.clang-format`. `src/mapgen/UPSTREAM.json` lists each
+  file's upstream SHA-256. `src/mapgen/generate_profile_tables.py` ports its
+  `cmake/GenerateGameProfileTables.cmake`. VibeStudio's changes (the ggml-free
+  `LayoutRanker`, connector-named planner models, the JSON Schema and first
+  request, prompt overrides, the rules fallback, the optional ggml ranker
+  (`QMG_HAVE_GGML`) and GGUF planning through the Local GGUF connector) are
+  marked `VibeStudio:` and listed in `src/mapgen/VIBESTUDIO.md`. The licence
+  is installed with the application.
+- Quake-MapGen's research tooling, from the same working tree and imported the
+  same day into `src/mapgen/tools`, `knowledge`, `docs` and `tests`: the map
+  recipes, multiplayer portfolio tools, map study, benchmark, asset registry,
+  profile and Quake Live atlas tools, the knowledge base, the study documents
+  and their tests (MIT; each file's upstream SHA-256 is in
+  `src/mapgen/UPSTREAM.json`). The native movement and teleport harnesses are
+  kept as source only: they link GPL Quake II 3.19 code from a local checkout
+  into private test programs, and Meson never builds or ships them.
+- The scalar ranker reproduces the result of `ggml_mul_mat` in
+  [ggml](https://github.com/ggml-org/ggml) (MIT) as bundled with
+  [llama.cpp](https://github.com/ggml-org/llama.cpp) (MIT) at
+  `c1d0e7a004015f23bc0233470b747b596f29b264`
+  (`ggml/src/ggml-cpu/vec.cpp`, `ggml_vec_dot_f32`, reviewed 2026-10-22): an
+  8-element float dot product accumulated with fused multiply-adds. The
+  scalar ranker copies and links no ggml or llama.cpp code. The optional ggml
+  ranker, in builds made with `-Dggml=enabled`, links ggml as described under
+  [Text Connectors: Harnesses And GGUF](#text-connectors-harnesses-and-gguf-2026-10-22).
+- Format and gameplay behaviour in the imported code was checked upstream
+  against the official [Quake](https://github.com/id-Software/Quake),
+  [Quake II](https://github.com/id-Software/Quake-2) and
+  [Quake III Arena](https://github.com/id-Software/Quake-III-Arena) source
+  releases (GPL-2.0, referenced, not copied), as its `THIRD_PARTY.md` records.
+
 ## Generative Level, Texture, And Sound Design (2026-10-06)
 
 - [Quake-MapGen](https://github.com/themuffinator/Quake-MapGen) (MIT), `main` at

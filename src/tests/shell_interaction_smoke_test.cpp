@@ -36,6 +36,9 @@ using vibestudio::tests::setObjectSelected;
 #include "vibestudio_config.h"
 #include "tests/render_test_support.h"
 
+#include "qmg/prompt.hpp"
+#include "qmg/semantic_plan.hpp"
+
 #include <QAbstractButton>
 #include <QAction>
 #include <QApplication>
@@ -58,6 +61,7 @@ using vibestudio::tests::setObjectSelected;
 #include <QEnterEvent>
 #include <QFile>
 #include <QFileDialog>
+#include <QFormLayout>
 #include <QInputDialog>
 #include <QDropEvent>
 #include <QMimeData>
@@ -83,6 +87,7 @@ using vibestudio::tests::setObjectSelected;
 #include <QStatusBar>
 #include <QTabBar>
 #include <QToolBar>
+#include <QStandardItemModel>
 #include <QToolButton>
 #include <QTabWidget>
 #include <QTemporaryDir>
@@ -4613,9 +4618,45 @@ void checkAssistant(ApplicationShell& shell, const Fixtures& fixtures)
 	check(saved.connectorModels.value(QStringLiteral("local-offline")) == QStringLiteral("test-model")
 			&& saved.connectorEndpoints.value(QStringLiteral("local-offline")) == provider.baseUrl(QStringLiteral("/v1")),
 		"The Assistant Model fields should save the connector's model and endpoint.");
+	// A harness names its program and keeps its own login; a GGUF model is a file.
+	if (textConnector && textModel && textEndpoint) {
+		auto* credential = child<QLabel>(shell, "aiTextCredential");
+		// Each field sits in a row with its Browse button; the row is the form's field.
+		QWidget* endpointRow = textEndpoint->parentWidget();
+		auto* form = endpointRow && endpointRow->parentWidget() ? qobject_cast<QFormLayout*>(endpointRow->parentWidget()->layout()) : nullptr;
+		auto* browseProgram = child<QToolButton>(shell, "aiTextEndpointBrowse");
+		auto* browseModel = child<QToolButton>(shell, "aiTextModelBrowse");
+		textConnector->setCurrentIndex(textConnector->findData(QStringLiteral("claude-code")));
+		settle();
+		const auto* label = form ? qobject_cast<QLabel*>(form->labelForField(endpointRow)) : nullptr;
+		check(label && label->text() == QStringLiteral("Program") && !endpointRow->isHidden() && credential && credential->text().contains(QStringLiteral("login"))
+				&& textModel->placeholderText() == QStringLiteral("claude-opus-5-5") && browseProgram && !browseProgram->isHidden() && browseModel && browseModel->isHidden(),
+			"For Claude Code the fields ask for its program, with Browse, and say its own login answers.");
+		textConnector->setCurrentIndex(textConnector->findData(QStringLiteral("local-gguf")));
+		settle();
+		check(endpointRow->isHidden() && textModel->accessibleName() == QStringLiteral("GGUF model file") && browseModel && !browseModel->isHidden(),
+			"For a GGUF model the model field takes the file, with Browse, and the endpoint row is hidden.");
+		textConnector->setCurrentIndex(textConnector->findData(QStringLiteral("local-offline")));
+		settle();
+		check(!endpointRow->isHidden() && label && label->text() == QStringLiteral("Endpoint") && browseProgram && browseProgram->isHidden(),
+			"Back on the local runtime the endpoint returns, typed rather than browsed.");
+	}
 	// Saving any other preference keeps what the form does not show. Opening
-	// Settings shows what is stored, the AI mode set above included.
+	// Settings shows what is stored, the AI mode set above included; an earlier
+	// check may have left Settings open, so another page comes first.
+	trigger(shell, "shell.mode.workspace");
 	trigger(shell, "shell.mode.settings");
+	// With cloud connectors off, Reasoning stays open and greys only what would leave the machine.
+	for (QComboBox* combo : shell.findChildren<QComboBox*>()) {
+		if (combo->accessibleName() == QStringLiteral("Reasoning")) {
+			auto* items = qobject_cast<QStandardItemModel*>(combo->model());
+			const int claude = combo->findData(QStringLiteral("claude"));
+			const int local = combo->findData(QStringLiteral("local-offline"));
+			check(combo->isEnabled() && items && claude > 0 && local > 0 && !items->item(claude)->isEnabled()
+					&& items->item(claude)->text().contains(QStringLiteral("needs cloud connectors")) && items->item(local)->isEnabled(),
+				"Reasoning should grey cloud connectors, saying why, while cloud connectors are off.");
+		}
+	}
 	for (QCheckBox* box : shell.findChildren<QCheckBox*>()) {
 		if (box->accessibleName() == QStringLiteral("Text to speech")) {
 			box->click();
@@ -8529,6 +8570,15 @@ void checkGenerators(ApplicationShell& shell, const Fixtures& fixtures)
 	modelPlanner->setChecked(true);
 	settle();
 	check(plannerStatus->text().contains(QStringLiteral("AI-free")), "In AI-free mode the planner status should say why the model cannot plan.");
+	auto* levelAiSettings = child<QPushButton>(shell, "levelGenerationAiSettings");
+	check(levelAiSettings && !levelAiSettings->isHidden(), "With the text model chosen, AI Settings should be one click away.");
+	if (levelAiSettings) {
+		levelAiSettings->click();
+		settle();
+		check(currentPage(shell) == Settings, "AI Settings should open Settings.");
+		levelDialog->show();
+		settle();
+	}
 	generate->click();
 	settle();
 	check(status->text().contains(QStringLiteral("AI-free")) && levelDialog->result().plan.planner == QStringLiteral("rules/v1"),
@@ -8553,7 +8603,8 @@ void checkGenerators(ApplicationShell& shell, const Fixtures& fixtures)
 	plan.insert(QStringLiteral("title"), QStringLiteral("Fake Model Keep"));
 	provider.answer(200, FakeAiProvider::openAiAnswer(QString::fromUtf8(QJsonDocument(plan).toJson(QJsonDocument::Compact))));
 	levelDialog->refreshPlannerStatus();
-	check(plannerStatus->text().contains(QStringLiteral("plan-model")), "The planner status should name the local model.");
+	check(plannerStatus->text().contains(QStringLiteral("plan-model")) && modelPlanner->text().contains(QStringLiteral("plan-model")),
+		"The planner status and the choice itself should name the local model.");
 	generate->click();
 	check(QTest::qWaitFor([&] { return !levelDialog->busy() && levelDialog->result().plan.planner.startsWith(QStringLiteral("ai:local-offline")); }, 30000),
 		"The text model should plan the level.");
@@ -8561,6 +8612,39 @@ void checkGenerators(ApplicationShell& shell, const Fixtures& fixtures)
 	const QJsonObject sent = provider.exchanges().isEmpty() ? QJsonObject() : QJsonDocument::fromJson(provider.exchanges().last().body).object();
 	check(sent.value(QStringLiteral("response_format")).toObject().value(QStringLiteral("type")).toString() == QStringLiteral("json_schema"),
 		"The plan request should ask for structured output.");
+
+	// Quake-MapGen, by its rules and then by the same local model.
+	auto* generator = child<QComboBox>(shell, "levelGenerationGenerator");
+	auto* format = child<QComboBox>(shell, "levelGenerationFormat");
+	QPushButton* saveReport = nullptr;
+	for (QPushButton* button : levelDialog->findChildren<QPushButton*>()) {
+		if (button->accessibleName() == QStringLiteral("Save the Quake-MapGen report as JSON")) {
+			saveReport = button;
+		}
+	}
+	check(generator && format && saveReport, "The Level Generator should offer Quake-MapGen.");
+	if (generator && format && saveReport) {
+		generator->setCurrentIndex(generator->findData(QStringLiteral("quake-mapgen")));
+		settle();
+		check(format->isVisibleTo(levelDialog) && !saveReport->isVisibleTo(levelDialog), "Quake-MapGen should show its map formats; its report button waits for a result.");
+		rulesPlanner->setChecked(true);
+		prompt->setPlainText(QStringLiteral("Quake 2 deathmatch, 6 rooms, industrial, seed 42"));
+		generate->click();
+		check(QTest::qWaitFor([&] { return !levelDialog->busy() && levelDialog->result().generator == QStringLiteral("quake-mapgen"); }, 60000),
+			"Quake-MapGen should build the level by its rules.");
+		check(levelDialog->result().ok && levelDialog->result().plan.planner == QStringLiteral("quake-mapgen:rules/v1") && !levelDialog->result().analysis.isEmpty()
+				&& saveReport->isVisibleTo(levelDialog) && saveReport->isEnabled() && open->isEnabled() && !preview->pixmap().isNull(),
+			"Its level, analysis and report should be ready to review.");
+		snapshotWidget(levelDialog, "level-generator-quake-mapgen");
+		const qmg::PromptSpec request = qmg::PromptParser {}.parse("Quake 2 deathmatch, 6 rooms, industrial, seed 42");
+		provider.answer(200, FakeAiProvider::openAiAnswer(QString::fromStdString(qmg::render_semantic_plan(qmg::make_rule_semantic_plan(request)))));
+		modelPlanner->setChecked(true);
+		generate->click();
+		check(QTest::qWaitFor([&] { return !levelDialog->busy() && levelDialog->result().plan.planner == QStringLiteral("quake-mapgen:vibestudio/local-offline"); }, 60000),
+			"The local text model should plan for Quake-MapGen.");
+		generator->setCurrentIndex(generator->findData(QStringLiteral("studio")));
+		settle();
+	}
 	levelDialog->close();
 	settle();
 	// The generated level is still open, unsaved; later checks open other

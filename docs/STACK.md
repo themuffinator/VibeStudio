@@ -306,8 +306,8 @@ library or new dependency was introduced. See [Level Editor](LEVEL_EDITOR.md).
 | Linked model assemblies | `core/model_assembly`, `core/model_assembly_document`, `core/model_assembly_recovery`, `ModelAssemblyDialog`, `model assembly` CLI | Active, incomplete | Separate schema-1 `.assembly.json` graph retains file/package references, nested tags, local transforms and independent frame playback settings. Bounded immutable model snapshots share pose/tag interpolation and the software viewport; explicit pose and sampled-animation baking enter ordinary mesh/package/level workflows. `core/model_assembly_animation` preflights frame storage, validates topology across samples and retains clip FPS in optional mesh schema 6. Relative source references, bounded history and guarded writes share existing services. Checksummed recovery records retain recipe/selection/time, with a coalescing worker, session lease and verified GUI/CLI restore/discard. Native engine timing configuration, animated-bake engine acceptance and maximum-assembly performance remain open. No new library or renderer. |
 | Model preview widget | `ModelViewport` (`app/model_viewport_render.cpp`) on the 3D renderer, presented with `QPainter` | Active | Orthographic and perspective cameras with reversed depth. World-space geometry uploads once per mesh revision and stays cached on the device; per-corner flags carry hover and selection. Skins sample bilinear and repeating; translucent skins peel up to four layers and composite them. Wireframe is an instanced, antialiased line pass with the former CPU coverage formula; picking reads a triangle-ID target. Camera requests coalesce behind one running job; document and material changes retire stale output. The Levels camera, modeller views and Doom preview share it. |
 | AI connector layer | Provider-neutral connector/model metadata plus manifest-backed workflow experiments | Active experimental | Lets users route reasoning, coding, image, audio, voice, 3D, and agentic workflows through OpenAI, Claude, Gemini, ElevenLabs, Meshy, local/offline models, or future connectors while keeping credentials redacted and outputs staged. |
-| First AI provider | OpenAI connector scaffold, with future provider calls following [Responses](https://platform.openai.com/docs/api-reference/responses) and [tools/function calling](https://developers.openai.com/api/docs/guides/tools) patterns | Active experimental | OpenAI is implemented for configuration, credential discovery, model routing, safe tool descriptors, and no-write first experiments; network invocation remains opt-in future work. |
-| Generative AI | Native Qt Network transports: structured JSON output for OpenAI-compatible endpoints, Claude and Gemini; image generation through OpenAI's Images API, Gemini image output and the Stable Diffusion web UI API; sound effects through ElevenLabs' API; deterministic level, texture and sound generators and schema-checked map edits that use them | Active experimental | Level plans, map edits, textures and sounds come from the user's chosen providers (or local runtimes) through the same opt-in, consent, preview and redaction rules as the Assistant, while the rules planner, picture-based texture path, saved proposals and the sound synthesizer keep every generator complete without AI. No new dependencies. |
+| First AI provider | OpenAI connector scaffold, with future provider calls following [Responses](https://platform.openai.com/docs/api-reference/responses) and [tools/function calling](https://developers.openai.com/api/docs/guides/tools) patterns | Active experimental | Text questions, structured output and pictures are sent over Qt Network after opt-in; tool calling through the Responses API remains planned. |
+| Generative AI | Native Qt Network transports: structured JSON output for OpenAI-compatible endpoints, Claude and Gemini; image generation through OpenAI's Images API, Gemini image output and the Stable Diffusion web UI API; sound effects through ElevenLabs' API; deterministic level, texture and sound generators and schema-checked map edits that use them | Active experimental | Level plans, map edits, textures and sounds come from the user's chosen providers (or local runtimes) through the same opt-in, consent, preview and redaction rules as the Assistant, while the rules planner, picture-based texture path, saved proposals and the sound synthesizer keep every generator complete without AI. Text can also reach Claude Code and Codex through the user's own login, a custom command, or an optional in-process GGUF runtime (`-Dggml=enabled`). No new required dependencies. |
 | Tests | Meson tests, Qt Test, focused executable tests, parser fixtures, and deterministic parser fuzzing | Active | Scales from smoke tests to parser safety, CLI parity, package safety, and editor regression coverage. Fuzzing: `src/core/parser_fuzz.{h,cpp}` generates the corpus and the `parser-fuzz-smoke` and `corrupt-fixture-smoke` tests run it. Qt Test: `shell-interaction-smoke` links the `vibestudio_app` static library and drives the real window offscreen; a Qt install without the Test module skips that one test. |
 | Packaging | PakFu-style scripts, Qt deployment tools, GitHub Actions artifacts | Portable staging and Windows runtime/source pairing active | Windows tooling verifies the selected Qt runtime, original notices, captured build and matching source ZIP. macOS/Linux native deployment, signing, clean-machine acceptance and release publication remain open. |
 
@@ -1087,6 +1087,29 @@ can mutate user projects.
 AI-free mode must remain complete. Core editing, package management, compiler
 orchestration, validation, CLI use, and launching must work without API keys or
 cloud services.
+
+Level generation has two generators. The studio's cell generator lives in
+`core/level_generation`. Quake-MapGen (decided 2026-10-22) is imported as
+in-tree C++20 source in `src/mapgen` and built by Meson as a library with no
+Qt. Its upstream ggml layout ranker became plain float arithmetic that
+reproduces ggml's scores exactly; builds made with `-Dggml=enabled` can still
+rank through ggml. Its llama.cpp/GGUF planner backend was not imported as it
+was: a model plans through the studio's own text connectors (local
+OpenAI-compatible servers included), including the Local GGUF connector,
+whose runtime (`core/ai_gguf_runtime`) is derived from that backend, behind
+the same consent and AI-free rules. Neither ggml nor llama.cpp is a required
+VibeStudio dependency.
+
+Text connectors have three transports (decided 2026-10-22): HTTP; command-line
+harnesses (Claude Code and Codex through the user's own subscription login, and
+a custom command), run as separate processes in empty folders with their tools
+off, without the environment variables that would redirect or re-bill
+requests, and ended with every process they started on cancel or timeout (a
+job object on Windows, a process group on Unix); and an optional in-process
+GGUF runtime on the pinned llama.cpp and ggml,
+linked only with `-Dggml=enabled` (default off, so CI and ordinary builds are
+unchanged) and built by `scripts/build_ggml.py`. All three sit behind
+`AiChatClient`, so every text pipeline gets them without its own code.
 
 ## External Compiler Stack
 

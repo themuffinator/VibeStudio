@@ -20,6 +20,7 @@ building, testing, running and packaging.
 | Qt Linguist tools, optional | `lrelease` compiles the translation catalogues; without it the build still succeeds. `lupdate` is used by the translation check in the full validation run. |
 | ALSA development files, Linux, optional | For the synchronised recording backend, such as `libasound2-dev` on Debian and Ubuntu. Without them, that backend is left out. |
 | An OpenGL 3.3 or Vulkan 1.0 driver, for running | The 3D views and many tests draw with it. No Vulkan SDK is needed to build: the Vulkan headers are in the source, and the loader is opened at run time. On Linux without a GPU, Mesa's `mesa-vulkan-drivers` (lavapipe) works; on Windows, `python scripts/install_software_vulkan.py` puts lavapipe and a Vulkan loader in `build/software-vulkan` (it needs 7-Zip) and prints the two settings that use them. |
+| CMake 3.28 or newer, optional | Only for `-Dggml=enabled`: `scripts/build_ggml.py` builds llama.cpp with it, and clones llama.cpp from GitHub unless you give `--source`. |
 | glslang, optional | Only when you change the shaders in `src/core/shaders`: `python scripts/build_render_shaders.py` regenerates `src/core/render_shader_data.inc` with `glslangValidator` (Vulkan SDK, or `glslang-tools` on Debian and Ubuntu). |
 
 Meson finds Qt through `qmake6`, so put your Qt installation's `bin` folder on PATH, or make Qt
@@ -106,6 +107,36 @@ change it later with `meson configure builddir -Daudio_playback=disabled`.
 | `compiler_tools` | `disabled` | Reserved for building the external compilers from their submodules; it has no effect yet. |
 | `update_channel` | `dev` | `stable`, `beta` or `dev`, recorded in the build and shown in its reports. |
 | `github_repo` | `themuffinator/VibeStudio` | The repository, as owner/name, recorded in the build and shown in its reports. |
+| `ggml` | `disabled` | Links llama.cpp and ggml for the **Local GGUF Model (ggml)** connector and Quake-MapGen's ggml ranker. Build them first (below). Release packages are built without it. |
+| `ggml_prefix` | empty | Where `scripts/build_ggml.py` installed llama.cpp; empty uses `external/ai/ggml`. |
+
+### Build with ggml
+
+The `ggml` option needs the pinned llama.cpp, built with CMake for the same
+compiler and C runtime as VibeStudio. The script builds and installs it into
+`external/ai/ggml`, which Git ignores:
+
+```sh
+python scripts/build_ggml.py --config Debug
+meson setup builddir-ggml -Dggml=enabled
+```
+
+Match `--config` to the Meson build type: `Debug` for the default `debug`,
+`Release` for `debugoptimized` and `release`. Both install into the same
+folder by default, so give each its own with `--prefix`, and pass that folder
+to Meson as `-Dggml_prefix`; the script prints the `meson setup` line to use.
+Without `--source`, the script clones llama.cpp at the pinned revision; give
+`--source <folder>` to build an existing clean checkout of that revision.
+
+On Windows, build llama.cpp with the same compiler as VibeStudio: set `CC` and
+`CXX` to `clang-cl` if that is what `scripts/meson_build.ps1` picked, or run the
+script from the same Developer PowerShell for MSVC.
+
+To test the build with a small chat model, set `VIBESTUDIO_TEST_GGUF` to its
+`.gguf` path and run `meson test -C builddir-ggml ai-gguf-smoke`; without it,
+that test is skipped. The released packages are built without ggml. Builds
+without it lose nothing else: **Local/Offline Runtime** can still reach
+llama.cpp's own server.
 
 ## Run from the build folder
 

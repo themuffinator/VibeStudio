@@ -1,0 +1,2373 @@
+{
+  "schema_version": 1,
+  "id": "relay-v1",
+  "created_utc": "2026-09-14T01:01:04.902468+00:00",
+  "map": "qmg_relay",
+  "study": "docs/Q2_RELAY_STUDY.md",
+  "package": {
+    "entries": 30,
+    "sha256": "c43e1370bdd87313a06a405bade5abab324f8230885a810d50c86bd7c73cb0f2",
+    "bytes": 558972
+  },
+  "source_snapshot": "out/relay/final-source",
+  "validation": {
+    "ok": true,
+    "baseline": {
+      "retained_files": 79,
+      "unchanged_default_core_files": 60
+    },
+    "knowledge": {
+      "previous_cards_preserved": 54,
+      "new_cards": 3,
+      "total_cards": 57
+    },
+    "compiled": {
+      "rooms": 6,
+      "ordinary_passages": 10,
+      "world_brushes": 143,
+      "gameplay_anchors": 33,
+      "ordinary_pairs": 264,
+      "single_passage_node_removals": 10,
+      "lost_pairs": 0,
+      "tread_centers": 16,
+      "graph_node_centers": 51,
+      "static_paths": 4,
+      "passing_static_paths": 4,
+      "arrival_spawn_visible_rays": 1,
+      "arrival_spawn_rays": 8,
+      "arrival_resource_visible": false,
+      "quality_score": {
+        "structural_errors": 0,
+        "leak_errors": 0,
+        "navigation_errors": 0,
+        "visibility_errors": 0,
+        "lighting_errors": 0,
+        "timing_errors": 0,
+        "warnings": 12
+      },
+      "layout_sha256": "7e072a7c0f6fb7e4121dfa36f848580d602c7887f0f1945bb8c0cca315adad51",
+      "bsp_sha256": "5a79c583841829e5acd714a5009db441f4a9d2e3cd8902c448b9a4ec3aa2b594"
+    },
+    "visuals": {
+      "preview_states": 18,
+      "analytical_captures": 4,
+      "arrival_figure_sha256": "9adba07953f370d3698314f9c909ff68bf21c996a4296ad9e3d5f433a737ac08"
+    },
+    "research": {
+      "native": {
+        "ok": true,
+        "development_trials_rederived": 8,
+        "relay_trials_rederived": 4,
+        "retained_startup_failures": 8,
+        "native_ClientThink_states": 1603,
+        "bound_files_verified": 154
+      },
+      "relay_native_first_successes": 4,
+      "reference_bound_files": 29,
+      "reference_controls": 12,
+      "reference_results": {
+        "reference_maps": 2,
+        "fixed_paths": 7,
+        "passing_paths": 3,
+        "intended_onward_paths": 4,
+        "passing_onward_paths": 3,
+        "tested_legs": 21,
+        "passing_legs": 15,
+        "initial_geometric_settles_passed": 2,
+        "standing_stations": 6,
+        "supported_stations": 6,
+        "stations_connected_by_selected_routes": 5,
+        "facing_rays": 18,
+        "clear_facing_rays": 9,
+        "clear_facing_rays_from_reached_stations": 6,
+        "authored_resource_rays": 12,
+        "clear_authored_resource_rays": 6,
+        "selected_torn_glory_shared_xy_length": 336,
+        "source_trigger_disjoint_checks": 34,
+        "native_archive_attempts": 0,
+        "pickup_contacts_tested": 0
+      }
+    },
+    "logs": {
+      "first_ctest_passed": 57,
+      "first_ctest_failed": 3,
+      "final_ctest_passed": 60,
+      "launcher_fix_scope": "Three existing Python tests now use module discovery; no default generation change.",
+      "dedicated_checks": 16,
+      "scheduled_post_spawn_frames": 40,
+      "cleanup_status": "retained_after_automatic_approval_review_rejection"
+    }
+  },
+  "construction_contract": {
+    "map": "qmg_relay",
+    "status": "original_fixed_recipe_static_routes_and_first_stock_game_module_departures_complete",
+    "sources": [
+      "tools/map_recipes/relay.cpp",
+      "tools/map_recipes/arrival_audit.py"
+    ],
+    "scope": "Six adjoining unequal rooms with an optional one-way teleporter, offset arrival partition and ordinary same-resource bypass. This is a fixed recipe; no default generator, semantic planner, ranker or model-weight change.",
+    "identity_seed": 20260924,
+    "rooms": 6,
+    "connections": 10,
+    "main_floor_levels": [
+      0,
+      128
+    ],
+    "ordinary_stair_runs": 2,
+    "ordinary_treads": 16,
+    "typed_gameplay_anchors": 33,
+    "spawns": 8,
+    "ordinary_spawn_anchor_pairs": 264,
+    "fixed_static_paths": 4,
+    "passing_static_paths": 4,
+    "native_first_trials": 4,
+    "native_completed_initial_departures": 4,
+    "artifact_gate_record": "knowledge/q2/experiments/relay-v1.json",
+    "reference_record": "knowledge/q2/teleporter-arrival-study.json",
+    "native_record": "out/native-teleport/summary.json",
+    "limits": "Nine visibility and three lighting warnings remain. One of eight arrival-to-spawn rays is clear. Static paths begin at off-disc stations; native journeys end after initial departure and sampled dwell, before onward resource pickup. No human matches or general procedural coverage claim."
+  },
+  "reference": "knowledge/q2/teleporter-arrival-study.json",
+  "native": "out/native-teleport/summary.json",
+  "cleanup": {
+    "schema_version": 1,
+    "status": "retained_after_automatic_approval_review_rejection",
+    "review_reason": "blocked by policy",
+    "retry": false,
+    "task_scratch_attempts": 1,
+    "agent_cache_attempts": 1,
+    "preflight": "out/relay/cleanup-preflight.json",
+    "paths": [
+      {
+        "path": "E:/Repositories/Quake-MapGen/.agents/tmp/relay-viewer-v1",
+        "exists": true
+      },
+      {
+        "path": "E:/Repositories/Quake-MapGen/.agents/tmp/relay-engine-v1",
+        "exists": true
+      },
+      {
+        "path": "E:/Repositories/Quake-MapGen/.agents/tmp/relay-native-v1",
+        "exists": true
+      },
+      {
+        "path": "E:/Repositories/Quake-MapGen/tools/native_teleport/__pycache__",
+        "exists": true
+      }
+    ],
+    "scope": "One exact native PowerShell removal attempt for the three newly preflighted Relay scratch directories; one separate native-agent cache removal attempt. Both automatic approval reviews rejected execution. No blocked historical paths or parents were retried."
+  },
+  "evidence_files": [
+    {
+      "path": "docs/Q2_TRAVERSAL_STUDY.md",
+      "sha256": "0240b92f973fb1883c0a4c9c2fda1f5dc92181c884e3dec2896f6a8fef3eed12",
+      "bytes": 9755
+    },
+    {
+      "path": "knowledge/q2/traversal-study.json",
+      "sha256": "0194e174c4508da4550b36ffc1aa135424018fd8e1c215d459598ebf214f9712",
+      "bytes": 22846
+    },
+    {
+      "path": "out/map-study/manifest.json",
+      "sha256": "434ed06e37447872df92f0eb9a35c7a0d40b59c5cae77709493d544801d87c02",
+      "bytes": 1303666
+    },
+    {
+      "path": "out/map-study/records/card2dm1-edeff59a84.json",
+      "sha256": "95df094436b77a86036a4875f2da4dbe3eda51d196124eff0f77e952a760e567",
+      "bytes": 33170
+    },
+    {
+      "path": "out/map-study/records/ztn2dm1-10f206acab.json",
+      "sha256": "ce7355cac2c6d0df823d6851d349dd4443afc00dbed25c7fddcfabfebb8c3f0d",
+      "bytes": 30824
+    },
+    {
+      "path": "out/native-teleport/build-01-0.log",
+      "sha256": "03da06d6ea616dec2bffbde036106ba43088676d32cceda7edbdac348987b55d",
+      "bytes": 456
+    },
+    {
+      "path": "out/native-teleport/build-01-1.log",
+      "sha256": "7db83fb8e375d8b0ba64b5d51a6bc99bb9ba4db641da238dead38bea1b904cf4",
+      "bytes": 71744
+    },
+    {
+      "path": "out/native-teleport/build-02-0.log",
+      "sha256": "b791eaf69eb143dabd245d97f3777e874ac2f9ee73d2be9f538f6c3f2cb5a780",
+      "bytes": 153
+    },
+    {
+      "path": "out/native-teleport/build-02-1.log",
+      "sha256": "3e192ff34591c229517b6f07a4c9d193578d67dcb8c1311ffb806ddbdbb8177f",
+      "bytes": 63192
+    },
+    {
+      "path": "out/native-teleport/build-03-0.log",
+      "sha256": "1689bc0152e0b131092842cfb76b86e0b3acdeac9e287e2b38a3cf6ef87614ca",
+      "bytes": 153
+    },
+    {
+      "path": "out/native-teleport/build-03-1.log",
+      "sha256": "eccf17a47ec845c06fed51d0e3cf7375454c1082858fb0b57e97d52644ee84b7",
+      "bytes": 123
+    },
+    {
+      "path": "out/native-teleport/build-attempt-01.json",
+      "sha256": "b85f4d341c683f36363944a2e4a3893e5cf9c136a1e1f2480f295117b3130ac9",
+      "bytes": 13401
+    },
+    {
+      "path": "out/native-teleport/build-attempt-02.json",
+      "sha256": "00be90f5f7e245ef5d2cb02432efe45fc7f70fba7964ea3a1aa36a6542724c04",
+      "bytes": 14032
+    },
+    {
+      "path": "out/native-teleport/build-attempt-03.json",
+      "sha256": "084dba40d58fb4ba624cfa39932ae8641ffdc020c4128d89d4759bb1a22b6504",
+      "bytes": 14180
+    },
+    {
+      "path": "out/native-teleport/build03-execution.log",
+      "sha256": "fbb38ae058015dae0e549ed002eb57ced7a47416f35927572a86833631e31606",
+      "bytes": 172
+    },
+    {
+      "path": "out/native-teleport/development-execution.log",
+      "sha256": "cb37440afd04869ed9d1bf61e7b9ff06181f9859ef2ba56e34c2b427bbd2b745",
+      "bytes": 3735
+    },
+    {
+      "path": "out/native-teleport/development-protocol.json",
+      "sha256": "5eabf79c34ee8cffed4859def1a5b5b84cc244f7342f9e4a38f6f71da9c2cc62",
+      "bytes": 6953
+    },
+    {
+      "path": "out/native-teleport/development-v1/comparison.json",
+      "sha256": "6f341bdca7618d56f1d5530f2583cecdc68f17cb784e0bcbc2c75b9f46019185",
+      "bytes": 4243
+    },
+    {
+      "path": "out/native-teleport/development-v1/counterweight-clear-f200-yaw0/commands.txt",
+      "sha256": "562d2500214d6c2c91807f819c4e40af457da84c913e6c636e5895dc9079965d",
+      "bytes": 2016
+    },
+    {
+      "path": "out/native-teleport/development-v1/counterweight-clear-f200-yaw0/events.ndjson",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    {
+      "path": "out/native-teleport/development-v1/counterweight-clear-f200-yaw0/native-stderr.txt",
+      "sha256": "62e98897e45a34316f94b5a79fedcf8c0fb588c4108bbe579a4f194db1850a33",
+      "bytes": 65
+    },
+    {
+      "path": "out/native-teleport/development-v1/counterweight-clear-f200-yaw0/result.json",
+      "sha256": "83da20e0651667c83063a22331a4608869c74b33102644a4ab5533e66b838532",
+      "bytes": 404
+    },
+    {
+      "path": "out/native-teleport/development-v1/counterweight-clear-f200-yaw0/trial.json",
+      "sha256": "6b4ece54f19b561ec0db5f86477f2f3d337adccb585ef0492a29c135ccb90827",
+      "bytes": 595
+    },
+    {
+      "path": "out/native-teleport/development-v1/counterweight-clear-f200-yaw90/commands.txt",
+      "sha256": "562d2500214d6c2c91807f819c4e40af457da84c913e6c636e5895dc9079965d",
+      "bytes": 2016
+    },
+    {
+      "path": "out/native-teleport/development-v1/counterweight-clear-f200-yaw90/events.ndjson",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    {
+      "path": "out/native-teleport/development-v1/counterweight-clear-f200-yaw90/native-stderr.txt",
+      "sha256": "62e98897e45a34316f94b5a79fedcf8c0fb588c4108bbe579a4f194db1850a33",
+      "bytes": 65
+    },
+    {
+      "path": "out/native-teleport/development-v1/counterweight-clear-f200-yaw90/result.json",
+      "sha256": "c4583501c9c4acaec163045951507647ed59c023b3f08f553607c4c19c854b39",
+      "bytes": 405
+    },
+    {
+      "path": "out/native-teleport/development-v1/counterweight-clear-f200-yaw90/trial.json",
+      "sha256": "0b8dc2714cee6826b83b489c6fe70b54fcbc8045cfbc58a1bc5672d2ac053e28",
+      "bytes": 597
+    },
+    {
+      "path": "out/native-teleport/development-v1/counterweight-clear-f400-yaw0/commands.txt",
+      "sha256": "eba37e3132f354aea909ed930a11a524857daa2fd702c6d0e45b35ce82d40511",
+      "bytes": 2016
+    },
+    {
+      "path": "out/native-teleport/development-v1/counterweight-clear-f400-yaw0/events.ndjson",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    {
+      "path": "out/native-teleport/development-v1/counterweight-clear-f400-yaw0/native-stderr.txt",
+      "sha256": "62e98897e45a34316f94b5a79fedcf8c0fb588c4108bbe579a4f194db1850a33",
+      "bytes": 65
+    },
+    {
+      "path": "out/native-teleport/development-v1/counterweight-clear-f400-yaw0/result.json",
+      "sha256": "759fec7358c835c661be76c72d7002c00f39a6a6a28af145886b1c913e528800",
+      "bytes": 404
+    },
+    {
+      "path": "out/native-teleport/development-v1/counterweight-clear-f400-yaw0/trial.json",
+      "sha256": "0a61d2f63b85d6fa4386f64d20c01c819df9e4cd8f25113bbd42411c747f620a",
+      "bytes": 595
+    },
+    {
+      "path": "out/native-teleport/development-v1/counterweight-clear-f400-yaw90/commands.txt",
+      "sha256": "eba37e3132f354aea909ed930a11a524857daa2fd702c6d0e45b35ce82d40511",
+      "bytes": 2016
+    },
+    {
+      "path": "out/native-teleport/development-v1/counterweight-clear-f400-yaw90/events.ndjson",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    {
+      "path": "out/native-teleport/development-v1/counterweight-clear-f400-yaw90/native-stderr.txt",
+      "sha256": "62e98897e45a34316f94b5a79fedcf8c0fb588c4108bbe579a4f194db1850a33",
+      "bytes": 65
+    },
+    {
+      "path": "out/native-teleport/development-v1/counterweight-clear-f400-yaw90/result.json",
+      "sha256": "adbc7e3709645bb3c5f8403aa42994311a484031327b5ca83ffcb219f46c10ad",
+      "bytes": 405
+    },
+    {
+      "path": "out/native-teleport/development-v1/counterweight-clear-f400-yaw90/trial.json",
+      "sha256": "87338c2aa235bae16f35fec06ac324bf41e9290485157067d2eef8c3b4c02d9a",
+      "bytes": 597
+    },
+    {
+      "path": "out/native-teleport/development-v1/counterweight-missing-target/commands.txt",
+      "sha256": "562d2500214d6c2c91807f819c4e40af457da84c913e6c636e5895dc9079965d",
+      "bytes": 2016
+    },
+    {
+      "path": "out/native-teleport/development-v1/counterweight-missing-target/events.ndjson",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    {
+      "path": "out/native-teleport/development-v1/counterweight-missing-target/native-stderr.txt",
+      "sha256": "62e98897e45a34316f94b5a79fedcf8c0fb588c4108bbe579a4f194db1850a33",
+      "bytes": 65
+    },
+    {
+      "path": "out/native-teleport/development-v1/counterweight-missing-target/result.json",
+      "sha256": "e0cb48335e0b9af712628f4f7869fdfd3b61c3d0f13e448f17bdd9d539d27710",
+      "bytes": 400
+    },
+    {
+      "path": "out/native-teleport/development-v1/counterweight-missing-target/trial.json",
+      "sha256": "2b705978b2e3e3be046bb970f637e9bf10114c2cb634d508c1b205ff5df090e0",
+      "bytes": 592
+    },
+    {
+      "path": "out/native-teleport/development-v1/counterweight-occupied-player/commands.txt",
+      "sha256": "562d2500214d6c2c91807f819c4e40af457da84c913e6c636e5895dc9079965d",
+      "bytes": 2016
+    },
+    {
+      "path": "out/native-teleport/development-v1/counterweight-occupied-player/events.ndjson",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    {
+      "path": "out/native-teleport/development-v1/counterweight-occupied-player/native-stderr.txt",
+      "sha256": "62e98897e45a34316f94b5a79fedcf8c0fb588c4108bbe579a4f194db1850a33",
+      "bytes": 65
+    },
+    {
+      "path": "out/native-teleport/development-v1/counterweight-occupied-player/result.json",
+      "sha256": "71a582fb62010ee12f718a4365dc39db70b2bfd2ffac92c7d8928cc039488587",
+      "bytes": 404
+    },
+    {
+      "path": "out/native-teleport/development-v1/counterweight-occupied-player/trial.json",
+      "sha256": "7b0251bb341cec72f5d2bd96170493d0f266dcde76fb7b900918a4f4393ad032",
+      "bytes": 596
+    },
+    {
+      "path": "out/native-teleport/development-v1/counterweight-occupied-unkillable/commands.txt",
+      "sha256": "562d2500214d6c2c91807f819c4e40af457da84c913e6c636e5895dc9079965d",
+      "bytes": 2016
+    },
+    {
+      "path": "out/native-teleport/development-v1/counterweight-occupied-unkillable/events.ndjson",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    {
+      "path": "out/native-teleport/development-v1/counterweight-occupied-unkillable/native-stderr.txt",
+      "sha256": "62e98897e45a34316f94b5a79fedcf8c0fb588c4108bbe579a4f194db1850a33",
+      "bytes": 65
+    },
+    {
+      "path": "out/native-teleport/development-v1/counterweight-occupied-unkillable/result.json",
+      "sha256": "9525066782f4f4d01d3797e042577a9e98d8a76b856dd0ed565613b4b247c125",
+      "bytes": 417
+    },
+    {
+      "path": "out/native-teleport/development-v1/counterweight-occupied-unkillable/trial.json",
+      "sha256": "0cf69253ad8e82588add49f9fb13a64d734421db2a0bf6aeb12fb47d3cb755ce",
+      "bytes": 609
+    },
+    {
+      "path": "out/native-teleport/development-v1/counterweight-trigger-near-miss/commands.txt",
+      "sha256": "562d2500214d6c2c91807f819c4e40af457da84c913e6c636e5895dc9079965d",
+      "bytes": 2016
+    },
+    {
+      "path": "out/native-teleport/development-v1/counterweight-trigger-near-miss/events.ndjson",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    {
+      "path": "out/native-teleport/development-v1/counterweight-trigger-near-miss/native-stderr.txt",
+      "sha256": "62e98897e45a34316f94b5a79fedcf8c0fb588c4108bbe579a4f194db1850a33",
+      "bytes": 65
+    },
+    {
+      "path": "out/native-teleport/development-v1/counterweight-trigger-near-miss/result.json",
+      "sha256": "3aed45f4b3f09099202dcad33c70b0399e0ea6bfcd4b5e0237c96572ba65f87b",
+      "bytes": 403
+    },
+    {
+      "path": "out/native-teleport/development-v1/counterweight-trigger-near-miss/trial.json",
+      "sha256": "6ee46407b52731f619946c0dbda0c04cf37fd636320d4efb781460902af24a34",
+      "bytes": 596
+    },
+    {
+      "path": "out/native-teleport/development-v2/comparison.json",
+      "sha256": "05424454727017a245fdb289a4fb36da3196e58cf7d2576a197553777ad7c02d",
+      "bytes": 52533
+    },
+    {
+      "path": "out/native-teleport/development-v2/counterweight-clear-f200-yaw0/commands.txt",
+      "sha256": "562d2500214d6c2c91807f819c4e40af457da84c913e6c636e5895dc9079965d",
+      "bytes": 2016
+    },
+    {
+      "path": "out/native-teleport/development-v2/counterweight-clear-f200-yaw0/events.ndjson",
+      "sha256": "2f76e041dd58c938c4d7539e4409e01c96b2c61bfdba4613087e31f5b7eecc95",
+      "bytes": 209297
+    },
+    {
+      "path": "out/native-teleport/development-v2/counterweight-clear-f200-yaw0/native-stderr.txt",
+      "sha256": "04fa09702022976077114409f3112cf5f9950d9ad5038803a977a3e2577268cc",
+      "bytes": 167
+    },
+    {
+      "path": "out/native-teleport/development-v2/counterweight-clear-f200-yaw0/result.json",
+      "sha256": "32bca1837a3cc9da38c2c259cb3d697ffa851d23731abcb6e1b4188e9f4e1bb9",
+      "bytes": 5791
+    },
+    {
+      "path": "out/native-teleport/development-v2/counterweight-clear-f200-yaw0/trial.json",
+      "sha256": "6b4ece54f19b561ec0db5f86477f2f3d337adccb585ef0492a29c135ccb90827",
+      "bytes": 595
+    },
+    {
+      "path": "out/native-teleport/development-v2/counterweight-clear-f200-yaw90/commands.txt",
+      "sha256": "562d2500214d6c2c91807f819c4e40af457da84c913e6c636e5895dc9079965d",
+      "bytes": 2016
+    },
+    {
+      "path": "out/native-teleport/development-v2/counterweight-clear-f200-yaw90/events.ndjson",
+      "sha256": "a77e6f033fb64a0ce58607849e290293888f405048a28e5ffd47add096c5b12a",
+      "bytes": 212117
+    },
+    {
+      "path": "out/native-teleport/development-v2/counterweight-clear-f200-yaw90/native-stderr.txt",
+      "sha256": "04fa09702022976077114409f3112cf5f9950d9ad5038803a977a3e2577268cc",
+      "bytes": 167
+    },
+    {
+      "path": "out/native-teleport/development-v2/counterweight-clear-f200-yaw90/result.json",
+      "sha256": "d73b19dff80e54cd4c7b006f65fc9453551c43d557986f2104f1345b28a6e551",
+      "bytes": 5797
+    },
+    {
+      "path": "out/native-teleport/development-v2/counterweight-clear-f200-yaw90/trial.json",
+      "sha256": "0b8dc2714cee6826b83b489c6fe70b54fcbc8045cfbc58a1bc5672d2ac053e28",
+      "bytes": 597
+    },
+    {
+      "path": "out/native-teleport/development-v2/counterweight-clear-f400-yaw0/commands.txt",
+      "sha256": "eba37e3132f354aea909ed930a11a524857daa2fd702c6d0e45b35ce82d40511",
+      "bytes": 2016
+    },
+    {
+      "path": "out/native-teleport/development-v2/counterweight-clear-f400-yaw0/events.ndjson",
+      "sha256": "56cfec58bca47c0704ac5a07eeac44140a6e64b9eb4804bd795368cfcd14f34d",
+      "bytes": 209461
+    },
+    {
+      "path": "out/native-teleport/development-v2/counterweight-clear-f400-yaw0/native-stderr.txt",
+      "sha256": "04fa09702022976077114409f3112cf5f9950d9ad5038803a977a3e2577268cc",
+      "bytes": 167
+    },
+    {
+      "path": "out/native-teleport/development-v2/counterweight-clear-f400-yaw0/result.json",
+      "sha256": "f98761b1f564f8f10f2e2f32ffdf3557f822c265b61d841366605c3c859266b3",
+      "bytes": 5774
+    },
+    {
+      "path": "out/native-teleport/development-v2/counterweight-clear-f400-yaw0/trial.json",
+      "sha256": "0a61d2f63b85d6fa4386f64d20c01c819df9e4cd8f25113bbd42411c747f620a",
+      "bytes": 595
+    },
+    {
+      "path": "out/native-teleport/development-v2/counterweight-clear-f400-yaw90/commands.txt",
+      "sha256": "eba37e3132f354aea909ed930a11a524857daa2fd702c6d0e45b35ce82d40511",
+      "bytes": 2016
+    },
+    {
+      "path": "out/native-teleport/development-v2/counterweight-clear-f400-yaw90/events.ndjson",
+      "sha256": "bea5f0b6f603925a4d54610203db36f024c5f03946ce87d0d8430fa229ae53f4",
+      "bytes": 211306
+    },
+    {
+      "path": "out/native-teleport/development-v2/counterweight-clear-f400-yaw90/native-stderr.txt",
+      "sha256": "04fa09702022976077114409f3112cf5f9950d9ad5038803a977a3e2577268cc",
+      "bytes": 167
+    },
+    {
+      "path": "out/native-teleport/development-v2/counterweight-clear-f400-yaw90/result.json",
+      "sha256": "25f9f345c7f95c47d096dd9289ef8e6cce8fd9eeb5fed9fefdc9d7d00b7672d9",
+      "bytes": 5780
+    },
+    {
+      "path": "out/native-teleport/development-v2/counterweight-clear-f400-yaw90/trial.json",
+      "sha256": "87338c2aa235bae16f35fec06ac324bf41e9290485157067d2eef8c3b4c02d9a",
+      "bytes": 597
+    },
+    {
+      "path": "out/native-teleport/development-v2/counterweight-missing-target/commands.txt",
+      "sha256": "562d2500214d6c2c91807f819c4e40af457da84c913e6c636e5895dc9079965d",
+      "bytes": 2016
+    },
+    {
+      "path": "out/native-teleport/development-v2/counterweight-missing-target/events.ndjson",
+      "sha256": "a2f660ffa17bc84104749c4f45af1b195937572f9b8a576039c6fbe7ecfe3584",
+      "bytes": 206790
+    },
+    {
+      "path": "out/native-teleport/development-v2/counterweight-missing-target/native-stderr.txt",
+      "sha256": "c52b480088a1983b18c54fe9ec28d840ad2dd387d6b50127030b9f44f15a2b9d",
+      "bytes": 599
+    },
+    {
+      "path": "out/native-teleport/development-v2/counterweight-missing-target/result.json",
+      "sha256": "1872e24114d9fdbc0e47571f785486cb7fd703b09482cb1b5937e43ab6e713f7",
+      "bytes": 461
+    },
+    {
+      "path": "out/native-teleport/development-v2/counterweight-missing-target/trial.json",
+      "sha256": "2b705978b2e3e3be046bb970f637e9bf10114c2cb634d508c1b205ff5df090e0",
+      "bytes": 592
+    },
+    {
+      "path": "out/native-teleport/development-v2/counterweight-occupied-player/commands.txt",
+      "sha256": "562d2500214d6c2c91807f819c4e40af457da84c913e6c636e5895dc9079965d",
+      "bytes": 2016
+    },
+    {
+      "path": "out/native-teleport/development-v2/counterweight-occupied-player/events.ndjson",
+      "sha256": "b4dd8f29c75b534298d3bc66ad02b8d498121b5c902ba36dba93bf5ea4f1bfcc",
+      "bytes": 361875
+    },
+    {
+      "path": "out/native-teleport/development-v2/counterweight-occupied-player/native-stderr.txt",
+      "sha256": "255682f1889cdea42f3c0d66a131ab656c4a0f799640cce937034289a8f9d208",
+      "bytes": 279
+    },
+    {
+      "path": "out/native-teleport/development-v2/counterweight-occupied-player/result.json",
+      "sha256": "35aaf0548a953ebbf7c063cacc54f609c1db1d2e362944409067ab8758930b44",
+      "bytes": 9876
+    },
+    {
+      "path": "out/native-teleport/development-v2/counterweight-occupied-player/trial.json",
+      "sha256": "7b0251bb341cec72f5d2bd96170493d0f266dcde76fb7b900918a4f4393ad032",
+      "bytes": 596
+    },
+    {
+      "path": "out/native-teleport/development-v2/counterweight-occupied-unkillable/commands.txt",
+      "sha256": "562d2500214d6c2c91807f819c4e40af457da84c913e6c636e5895dc9079965d",
+      "bytes": 2016
+    },
+    {
+      "path": "out/native-teleport/development-v2/counterweight-occupied-unkillable/events.ndjson",
+      "sha256": "a4b09869a3328c76f6fb928c1bb67116906f799814ae6814c7f097e8c3d4b3d2",
+      "bytes": 303785
+    },
+    {
+      "path": "out/native-teleport/development-v2/counterweight-occupied-unkillable/native-stderr.txt",
+      "sha256": "2ee956c66a3a7d6037569cedd393c2ad5df49d562d4f31c2e26ea9f7e8fabfe1",
+      "bytes": 192
+    },
+    {
+      "path": "out/native-teleport/development-v2/counterweight-occupied-unkillable/result.json",
+      "sha256": "37cdb39204ad862982973003ed2029fe3d74901936bd6c1a6c823c73ff63e408",
+      "bytes": 8397
+    },
+    {
+      "path": "out/native-teleport/development-v2/counterweight-occupied-unkillable/trial.json",
+      "sha256": "0cf69253ad8e82588add49f9fb13a64d734421db2a0bf6aeb12fb47d3cb755ce",
+      "bytes": 609
+    },
+    {
+      "path": "out/native-teleport/development-v2/counterweight-trigger-near-miss/commands.txt",
+      "sha256": "562d2500214d6c2c91807f819c4e40af457da84c913e6c636e5895dc9079965d",
+      "bytes": 2016
+    },
+    {
+      "path": "out/native-teleport/development-v2/counterweight-trigger-near-miss/events.ndjson",
+      "sha256": "bccc634d8fdcc54ffd316ad015f0e2c926ec9aeec09ddea30363ee00965df19f",
+      "bytes": 206530
+    },
+    {
+      "path": "out/native-teleport/development-v2/counterweight-trigger-near-miss/native-stderr.txt",
+      "sha256": "04fa09702022976077114409f3112cf5f9950d9ad5038803a977a3e2577268cc",
+      "bytes": 167
+    },
+    {
+      "path": "out/native-teleport/development-v2/counterweight-trigger-near-miss/result.json",
+      "sha256": "9deaaa5261d508761de4a041d20022c964123f57ce25ceb8bb14fe0ff3363a15",
+      "bytes": 464
+    },
+    {
+      "path": "out/native-teleport/development-v2/counterweight-trigger-near-miss/trial.json",
+      "sha256": "6ee46407b52731f619946c0dbda0c04cf37fd636320d4efb781460902af24a34",
+      "bytes": 596
+    },
+    {
+      "path": "out/native-teleport/development-v2-declaration.log",
+      "sha256": "a40fb05bbb8c7892f4bdc4e7216cf5eb10be09851fe6e75fad1d904ea1eaa440",
+      "bytes": 137
+    },
+    {
+      "path": "out/native-teleport/development-v2-execution.log",
+      "sha256": "905d59ae68a23803ea8895a956e38daeac18f759126db9c3472c7017aa37e9c5",
+      "bytes": 5294
+    },
+    {
+      "path": "out/native-teleport/development-v2-protocol.json",
+      "sha256": "ffb5e358f809ef70ee5f069f26dda6ff7ccac75e22e456a0fb8884d6816a1d9a",
+      "bytes": 7311
+    },
+    {
+      "path": "out/native-teleport/import-contract-reference.json",
+      "sha256": "b5acc10ab5ff0676f8c473f2753dd3584674cb216ba85391361319991e8e8977",
+      "bytes": 310
+    },
+    {
+      "path": "out/native-teleport/python-controls-final.log",
+      "sha256": "d9157014375f8cef10c2854eaa46fcb45bddaee01ba285305e8f4412d0b109f3",
+      "bytes": 2936
+    },
+    {
+      "path": "out/native-teleport/python-controls.log",
+      "sha256": "0e1452f229057b4c6dc1a52719f031d7f5763d4a70c83c4b3e719fe9221708a7",
+      "bytes": 2778
+    },
+    {
+      "path": "out/native-teleport/record.json",
+      "sha256": "9370b8ca6c51fe4e11d9b315bc4ae9d76fd2b675058571e08d0d51f599cb6f44",
+      "bytes": 28547
+    },
+    {
+      "path": "out/native-teleport/relay-declaration.log",
+      "sha256": "0703517442b51963f32dd32829ba879bbadcc7cfaba87547aa6ee7e6e1b7cf6d",
+      "bytes": 137
+    },
+    {
+      "path": "out/native-teleport/relay-execution.log",
+      "sha256": "e0ec1465f043fc93d7e2c5ce6b4c2170c9a691eb4f82a00b7fb276019363f111",
+      "bytes": 3824
+    },
+    {
+      "path": "out/native-teleport/relay-protocol.json",
+      "sha256": "3aed145e12495776d769a06b31b5c4b788c57cc9b342368e5912e50f5fc9a7d1",
+      "bytes": 10941
+    },
+    {
+      "path": "out/native-teleport/relay-v1/comparison.json",
+      "sha256": "be2732aa038ee67030e749995aec0efb7bd460d93c415d8bfe2618ed8f9ddde2",
+      "bytes": 41340
+    },
+    {
+      "path": "out/native-teleport/relay-v1/relay-east-f200/commands.txt",
+      "sha256": "516c2ae624f28b998eaa0e347c180884f7b93a7ebfa8b1422d5856fb9dfaf895",
+      "bytes": 2888
+    },
+    {
+      "path": "out/native-teleport/relay-v1/relay-east-f200/events.ndjson",
+      "sha256": "96cc93e59af5031503365af79fb63f6f88dc5e54875b933e977fec2cf78c855e",
+      "bytes": 300234
+    },
+    {
+      "path": "out/native-teleport/relay-v1/relay-east-f200/native-stderr.txt",
+      "sha256": "5fda88efb5b20df3b6f0df2da321411672637e5b02c7ad6b16734c374b142e6e",
+      "bytes": 160
+    },
+    {
+      "path": "out/native-teleport/relay-v1/relay-east-f200/process.json",
+      "sha256": "5b7d737c3a6f7a9754618d5a0f15c5713634ff16f7ccf986f5f0b962035b9820",
+      "bytes": 360
+    },
+    {
+      "path": "out/native-teleport/relay-v1/relay-east-f200/result.json",
+      "sha256": "c4d30c0495658bc86da2ab4de978f9dd8bee7e25169819116777c7b199dc9cf2",
+      "bytes": 8393
+    },
+    {
+      "path": "out/native-teleport/relay-v1/relay-east-f200/trial.json",
+      "sha256": "b84ae58c015214e95b5c57f2b2aaec43653190eee2d32c23a0bd92e56fd395c9",
+      "bytes": 1087
+    },
+    {
+      "path": "out/native-teleport/relay-v1/relay-east-f400/commands.txt",
+      "sha256": "97c3fa41bd4c4d8f1d584c5b70096cf0dd89dc40dd912b35611b7bdc53952951",
+      "bytes": 2456
+    },
+    {
+      "path": "out/native-teleport/relay-v1/relay-east-f400/events.ndjson",
+      "sha256": "56bf542fdd5d81039f50d37cf4d59ce3fa2bc278643229fee195ec357137bb93",
+      "bytes": 257936
+    },
+    {
+      "path": "out/native-teleport/relay-v1/relay-east-f400/native-stderr.txt",
+      "sha256": "5fda88efb5b20df3b6f0df2da321411672637e5b02c7ad6b16734c374b142e6e",
+      "bytes": 160
+    },
+    {
+      "path": "out/native-teleport/relay-v1/relay-east-f400/process.json",
+      "sha256": "5b7d737c3a6f7a9754618d5a0f15c5713634ff16f7ccf986f5f0b962035b9820",
+      "bytes": 360
+    },
+    {
+      "path": "out/native-teleport/relay-v1/relay-east-f400/result.json",
+      "sha256": "c90ed2e0765608d51267aef3ac09d9b95dc90f5b0c0d787dc024df64c0635e35",
+      "bytes": 8393
+    },
+    {
+      "path": "out/native-teleport/relay-v1/relay-east-f400/trial.json",
+      "sha256": "4248dd57526abd8759e4266eb4ce0640221e51b480730b968c2b9398dc4201ee",
+      "bytes": 1086
+    },
+    {
+      "path": "out/native-teleport/relay-v1/relay-west-f200/commands.txt",
+      "sha256": "5e58f94665fc189f7af22bfb34d1bbaf3097770f68ab772f11b1f51f5c72b515",
+      "bytes": 3031
+    },
+    {
+      "path": "out/native-teleport/relay-v1/relay-west-f200/events.ndjson",
+      "sha256": "a2ad2ae21e69ca0375e2be36bd1290281c2b88ba90f809d1c7fb0e1effee0772",
+      "bytes": 307633
+    },
+    {
+      "path": "out/native-teleport/relay-v1/relay-west-f200/native-stderr.txt",
+      "sha256": "5fda88efb5b20df3b6f0df2da321411672637e5b02c7ad6b16734c374b142e6e",
+      "bytes": 160
+    },
+    {
+      "path": "out/native-teleport/relay-v1/relay-west-f200/process.json",
+      "sha256": "5b7d737c3a6f7a9754618d5a0f15c5713634ff16f7ccf986f5f0b962035b9820",
+      "bytes": 360
+    },
+    {
+      "path": "out/native-teleport/relay-v1/relay-west-f200/result.json",
+      "sha256": "4f7fce11615ce2e75ff6414291b20feff2426604915101530a6abcdd965ba83b",
+      "bytes": 8393
+    },
+    {
+      "path": "out/native-teleport/relay-v1/relay-west-f200/trial.json",
+      "sha256": "ee6aa2bcbe927674316be0d6b12cc8cb3cfe85e7e2b13b18811cdefb2ee644da",
+      "bytes": 1080
+    },
+    {
+      "path": "out/native-teleport/relay-v1/relay-west-f400/commands.txt",
+      "sha256": "8a566cab97d5fac685bcf93b1a38c449524b07437de7fe9bc7d04258cfd76adc",
+      "bytes": 2564
+    },
+    {
+      "path": "out/native-teleport/relay-v1/relay-west-f400/events.ndjson",
+      "sha256": "49f9d2826e099b3c83434f5266e734aedfdae57e7752df62f3a5f797f35495b0",
+      "bytes": 262742
+    },
+    {
+      "path": "out/native-teleport/relay-v1/relay-west-f400/native-stderr.txt",
+      "sha256": "5fda88efb5b20df3b6f0df2da321411672637e5b02c7ad6b16734c374b142e6e",
+      "bytes": 160
+    },
+    {
+      "path": "out/native-teleport/relay-v1/relay-west-f400/process.json",
+      "sha256": "5b7d737c3a6f7a9754618d5a0f15c5713634ff16f7ccf986f5f0b962035b9820",
+      "bytes": 360
+    },
+    {
+      "path": "out/native-teleport/relay-v1/relay-west-f400/result.json",
+      "sha256": "6e54b9df7a99c029668402fb899b2034bf5646d90c767281a46af60c3eb9aa6e",
+      "bytes": 8393
+    },
+    {
+      "path": "out/native-teleport/relay-v1/relay-west-f400/trial.json",
+      "sha256": "6fe9aa578e809d7c38fdf504b722b8ff8cd55abd773c2a85a8af20d8b4cb6b7a",
+      "bytes": 1092
+    },
+    {
+      "path": "out/native-teleport/revisions/development-v1/build.py",
+      "sha256": "2fac677f2a26f07c593b615667c4ce633a560f84f3b00b22d904f705300d82ee",
+      "bytes": 4245
+    },
+    {
+      "path": "out/native-teleport/revisions/development-v1/CMakeLists.txt",
+      "sha256": "0d10a71e2ab336641be2dd993ab8da85071957ca600dc2643a0df05965e590ad",
+      "bytes": 1701
+    },
+    {
+      "path": "out/native-teleport/revisions/development-v1/CMakePresets.json",
+      "sha256": "c0453ec4e2651c7cd1a0a007cdb25eac6dd1bf1c0b670a9961e400116c05b2b9",
+      "bytes": 427
+    },
+    {
+      "path": "out/native-teleport/revisions/development-v1/host.c",
+      "sha256": "d6a9d81d7b0a4313c8f84b434abca1817aa4060eb5756925e0ad9ce82c680ee8",
+      "bytes": 18172
+    },
+    {
+      "path": "out/native-teleport/revisions/development-v1/README.md",
+      "sha256": "be21261c67d1789ed08d4145f95d4e825d4d689ceafb383c5ad60f8efc9e38c8",
+      "bytes": 1802
+    },
+    {
+      "path": "out/native-teleport/revisions/development-v1/reference.json",
+      "sha256": "ab11146cb0eb501f6a33c586601032b2384f60d4fa24eaa4c2f49a9e69cc40aa",
+      "bytes": 11984
+    },
+    {
+      "path": "out/native-teleport/revisions/development-v1/run.py",
+      "sha256": "cf59997b021a9e1fa9b5c0e5a7f4d04ec6ab0b316ade64847535cf11601f3188",
+      "bytes": 9646
+    },
+    {
+      "path": "out/native-teleport/revisions/development-v1/server_bridge.c",
+      "sha256": "3bf1174ba323c89b1c0451e12efed483a4967e7c46e44d558a0d77879606ffa9",
+      "bytes": 865
+    },
+    {
+      "path": "out/native-teleport/summary-release.log",
+      "sha256": "07b0113ebfe7b55eebdbc3407c742142d86f327937c47314b5909c0677887e20",
+      "bytes": 148
+    },
+    {
+      "path": "out/native-teleport/summary.json",
+      "sha256": "e821269ef479d79e60bd4b27aba2f6c0f5988b1e70614b6ab8bc10e60853a4d4",
+      "bytes": 5979
+    },
+    {
+      "path": "out/native-teleport/verification-final.log",
+      "sha256": "c2721c9e4ca432189fa8e7691b5a948bcaa224361d935a4a535b13f84eac879c",
+      "bytes": 235
+    },
+    {
+      "path": "out/native-teleport/verification-initial.log",
+      "sha256": "ea3f43d4c4c02115a40b1245831133c069f394912b4a3d9280e89eb5c239f070",
+      "bytes": 203
+    },
+    {
+      "path": "out/native-teleport/verification-review.log",
+      "sha256": "ea3f43d4c4c02115a40b1245831133c069f394912b4a3d9280e89eb5c239f070",
+      "bytes": 203
+    },
+    {
+      "path": "out/relay/arrival-audit.json",
+      "sha256": "81fcf42378a21354a6ef8fbb3c7c962286c55ea8420d364ef8ce53b99d075b52",
+      "bytes": 45550
+    },
+    {
+      "path": "out/relay/arrival-routes-record.json",
+      "sha256": "1da86f96aa8dcccc2ceb5fe6bfa15bd8518c2d077024547073510d141ed20d79",
+      "bytes": 1261
+    },
+    {
+      "path": "out/relay/arrival-routes.png",
+      "sha256": "9adba07953f370d3698314f9c909ff68bf21c996a4296ad9e3d5f433a737ac08",
+      "bytes": 251890
+    },
+    {
+      "path": "out/relay/audit-protocol.json",
+      "sha256": "eb393fb681811fbc6ceed5ce8204f2c3c92cabdf6ad77cc3e534f4f159841cb7",
+      "bytes": 1762
+    },
+    {
+      "path": "out/relay/build-all.log",
+      "sha256": "71aa391ec7d7e291b419a7f40fba91919e14ac2394ab4e8b66ed126e267d70f6",
+      "bytes": 23
+    },
+    {
+      "path": "out/relay/cleanup-preflight.json",
+      "sha256": "54c6c8afb9b4ef138102b6ec71b82c4540b9c5efa8a473d9e035c6696a7cdf79",
+      "bytes": 864
+    },
+    {
+      "path": "out/relay/cleanup-record.json",
+      "sha256": "e453b1cf57a286a285c66420654de953bb24e3235b479a4dcd514bc8973c6a32",
+      "bytes": 1014
+    },
+    {
+      "path": "out/relay/compiled-analysis.json",
+      "sha256": "30a30fa315e50a1b47b9cb98f614fb10987ab8b013edc098b74b6281a40bb814",
+      "bytes": 22273
+    },
+    {
+      "path": "out/relay/configure-final.log",
+      "sha256": "71e42cd51cf8601dd07ad767c53f4861a46b70b6876670532bdede1fcae0c019",
+      "bytes": 480
+    },
+    {
+      "path": "out/relay/configure-v2.log",
+      "sha256": "71e42cd51cf8601dd07ad767c53f4861a46b70b6876670532bdede1fcae0c019",
+      "bytes": 480
+    },
+    {
+      "path": "out/relay/ctest-final.log",
+      "sha256": "532ceb9c479b0309fe93054332d5bb39598504c04c7fd14bb8d6867064ea480f",
+      "bytes": 8043
+    },
+    {
+      "path": "out/relay/ctest-v2.log",
+      "sha256": "37a5261bef7937aeb539c9a511818d2bce4e6dd8f90b32eba4f3d57e3382dbf7",
+      "bytes": 7095
+    },
+    {
+      "path": "out/relay/design-notes.md",
+      "sha256": "1c24a450e125fe4ec02c3af64d547aea706bf1adeb5460101c507c15041e2a6c",
+      "bytes": 7797
+    },
+    {
+      "path": "out/relay/design-protocol-v2.json",
+      "sha256": "eeb5d0f47dc716b6155d2688f40c2e2b1131f1b2a5646a6076e64e361369cc3b",
+      "bytes": 1128
+    },
+    {
+      "path": "out/relay/design-protocol.json",
+      "sha256": "fb7c959b4a788de26495cc37fe64f5ec7d87625fe03940b527d8f198041e6ff6",
+      "bytes": 3498
+    },
+    {
+      "path": "out/relay/engine-smoke/authored-entities.ent",
+      "sha256": "035ebac821a2d6fc12fcb64c1af2518fcccc9e79363a05f9b34c8701387694cf",
+      "bytes": 5691
+    },
+    {
+      "path": "out/relay/engine-smoke/engine-smoke.json",
+      "sha256": "89432a9b9b05dd96a04e3155d9fb04d6945d75e7012b50c83d6806e03cb14842",
+      "bytes": 6610
+    },
+    {
+      "path": "out/relay/engine-smoke/engine.log",
+      "sha256": "1bbff75da9e1effea27f9413d27d3e8c8bcf65c699ff56d8e9bcb499596da572",
+      "bytes": 2765
+    },
+    {
+      "path": "out/relay/engine-smoke/profile.cfg",
+      "sha256": "7cb602d0108f71f9fddb3d7b3a55d2dfbf14808928f6debbfd7bd421df8eeda1",
+      "bytes": 243
+    },
+    {
+      "path": "out/relay/engine-smoke/stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    {
+      "path": "out/relay/engine-smoke/stdout.log",
+      "sha256": "503de1c9f987f05e395efedc01350f001dcc799696e3cd95c47b72c98f916717",
+      "bytes": 2202
+    },
+    {
+      "path": "out/relay/features.json",
+      "sha256": "d3fab7f584ade07ca3309cfdc73a89a83c53a229f4980a7849094cb5460893dc",
+      "bytes": 1422
+    },
+    {
+      "path": "out/relay/final-source/CMakeLists.txt",
+      "sha256": "aa596d8ad923cebf70124dab4e9f9478528d422d6f25e474cfbb891843c01615",
+      "bytes": 33467
+    },
+    {
+      "path": "out/relay/final-source/docs/MAP_DESIGN_PLAYBOOK.md",
+      "sha256": "67b05f61c03b57c01ef36002593d8ce6ec284b814f98ef21bab4edd1dd5e0d0d",
+      "bytes": 36953
+    },
+    {
+      "path": "out/relay/final-source/docs/MP_COMPACT_LAYOUT_REGIMEN.md",
+      "sha256": "92fde1ec2acd4a730db4bc85b2e56889d8587161fc4c5e3f35b1393e10165507",
+      "bytes": 21874
+    },
+    {
+      "path": "out/relay/final-source/docs/Q2_MECHANISMS.md",
+      "sha256": "da704b138dbfbb688f66fcc78df8e6174c2b91f4b81ed52ff6ece78fa7350596",
+      "bytes": 5716
+    },
+    {
+      "path": "out/relay/final-source/docs/Q2_NATIVE_TELEPORT.md",
+      "sha256": "df0e6de698fe4ccd6f84b4a1374d129fc7ebb61f72a5396a9cd704f9a0e3fb39",
+      "bytes": 10773
+    },
+    {
+      "path": "out/relay/final-source/docs/Q2_RELAY_STUDY.md",
+      "sha256": "f0c79b59ee5426a2d1f6b6ece247d0c49534f3d1a52c8387e37cc5e4870ed23d",
+      "bytes": 11852
+    },
+    {
+      "path": "out/relay/final-source/docs/Q2_TELEPORTER_ARRIVAL_STUDY.md",
+      "sha256": "4d79e4daff58de46c48fb63e9113be15e5f76ce018d028014b4580cbbf4aa88b",
+      "bytes": 12505
+    },
+    {
+      "path": "out/relay/final-source/docs/ROADMAP.md",
+      "sha256": "9167636cba577000897c1d0b1c0168c33daabdc1e4968b745ca541a93365cacb",
+      "bytes": 24378
+    },
+    {
+      "path": "out/relay/final-source/docs/VALIDATION.md",
+      "sha256": "f1db355e17a90fe39bc89dee63467b61158882f5e6afd25fdcce1c903fd8bb1e",
+      "bytes": 43705
+    },
+    {
+      "path": "out/relay/final-source/include/qmg/construction.hpp",
+      "sha256": "4c2c867fda4dc4e439e7d74b53d9b2ef13b4e90fb38d573212faaf4caed4548d",
+      "bytes": 7423
+    },
+    {
+      "path": "out/relay/final-source/include/qmg/entities.hpp",
+      "sha256": "8692ce30cf0ac59b3026349479d1c0a8646ccef3fa67996df3a4b585e2eed724",
+      "bytes": 156
+    },
+    {
+      "path": "out/relay/final-source/include/qmg/generator.hpp",
+      "sha256": "cdc6dd284bdd7987c9411dbf93ec70b6407158d665820ef314c20995fc2b033a",
+      "bytes": 571
+    },
+    {
+      "path": "out/relay/final-source/include/qmg/ggml_ranker.hpp",
+      "sha256": "946dd439c9914134cb67a52d01b9ea118b11b4cacdd5f76b8cefe530bd83ee68",
+      "bytes": 1774
+    },
+    {
+      "path": "out/relay/final-source/include/qmg/layout.hpp",
+      "sha256": "55be6c6bcaf9d13cfd282a860d2a1f7df32f6c0a2c427d89472805a5f371b2d4",
+      "bytes": 23251
+    },
+    {
+      "path": "out/relay/final-source/include/qmg/layout_fingerprint.hpp",
+      "sha256": "3301093beff5e80ecc8667f7c71baaaa4e786e43aec57f7eac44902f4d2c5de1",
+      "bytes": 401
+    },
+    {
+      "path": "out/relay/final-source/include/qmg/leak.hpp",
+      "sha256": "8e0ad0a029ea4afa578efca487b1fed26de2b937495df54d52c0da20f7ae39cd",
+      "bytes": 8729
+    },
+    {
+      "path": "out/relay/final-source/include/qmg/lighting.hpp",
+      "sha256": "9b69a8d89c6ee41045b7292283e70ffea864abfcac0f09ee697c80c723ea1b75",
+      "bytes": 4366
+    },
+    {
+      "path": "out/relay/final-source/include/qmg/llama_text_model.hpp",
+      "sha256": "bea6baef7754cf2d9af5030d2387aafdb62f7e6f518e4cc324a91ec59ade2d4d",
+      "bytes": 796
+    },
+    {
+      "path": "out/relay/final-source/include/qmg/map_builder.hpp",
+      "sha256": "525d60e3825b24ac85c86eb9a292d0561727e46318e988286beb1fa85c5ad6cc",
+      "bytes": 1983
+    },
+    {
+      "path": "out/relay/final-source/include/qmg/map_document.hpp",
+      "sha256": "417c827cd617bf4ab276256e78b61cb967df7c3da3a50f882d9df3115b2d319a",
+      "bytes": 5058
+    },
+    {
+      "path": "out/relay/final-source/include/qmg/map_document_writer.hpp",
+      "sha256": "a7c029134ab9cfab4e57586ca2c812e0d3bea4bb6fd05f4dec64dacc20e27c54",
+      "bytes": 485
+    },
+    {
+      "path": "out/relay/final-source/include/qmg/map_parser.hpp",
+      "sha256": "559ee2f2bd72751f45776569dd2e12d5bd8f3d4a7b067ef9c2c7a85ae53312ca",
+      "bytes": 1567
+    },
+    {
+      "path": "out/relay/final-source/include/qmg/map_writer.hpp",
+      "sha256": "b38627c00c0c9aaffbb361fc111e9fc3f36a6da017616dd81b6544adc8c81560",
+      "bytes": 768
+    },
+    {
+      "path": "out/relay/final-source/include/qmg/mp_motifs.hpp",
+      "sha256": "9388de083f546b13b946f078976e9da81d9d5a7f2dc40100a1194257020e7926",
+      "bytes": 428
+    },
+    {
+      "path": "out/relay/final-source/include/qmg/navigation.hpp",
+      "sha256": "f05c1a1cf36436730c097864cd677d7e6e645de9faa6d34778bf98c696058039",
+      "bytes": 10010
+    },
+    {
+      "path": "out/relay/final-source/include/qmg/pipeline.hpp",
+      "sha256": "8e676a08cbb74dfa36da95dedf722b1eb5e357f5fa61d87cf2158b02336c9d00",
+      "bytes": 1583
+    },
+    {
+      "path": "out/relay/final-source/include/qmg/prompt.hpp",
+      "sha256": "bead7aaf975cb66c053c27aaa2ffd2f98df961a0bb1a58dc88cb6c448694ffdf",
+      "bytes": 612
+    },
+    {
+      "path": "out/relay/final-source/include/qmg/quake2_mechanisms.hpp",
+      "sha256": "79077734698c1ceb6b497167c10eccf1db7580e0fb8a02111c12ae75f9f7a26b",
+      "bytes": 954
+    },
+    {
+      "path": "out/relay/final-source/include/qmg/quality.hpp",
+      "sha256": "563e620f5c7ece0f8223fc21aefd53eebd35e80e6d825c3bf0eac5125240eb89",
+      "bytes": 13808
+    },
+    {
+      "path": "out/relay/final-source/include/qmg/repair.hpp",
+      "sha256": "4ad9851edf9b3a5f7d96568e778b44115e81588b7c24a3c5913904a3f8f2836b",
+      "bytes": 207
+    },
+    {
+      "path": "out/relay/final-source/include/qmg/report.hpp",
+      "sha256": "45348430b150a54fe6ed6cea79f86464223ab3d2547cdf552f9f5044780386d5",
+      "bytes": 276
+    },
+    {
+      "path": "out/relay/final-source/include/qmg/semantic_plan.hpp",
+      "sha256": "d835856a3046bef2eac360b24f3e3ba75d13d7926d5fd478d0c3478c6ece2192",
+      "bytes": 1922
+    },
+    {
+      "path": "out/relay/final-source/include/qmg/semantic_planner.hpp",
+      "sha256": "b7bd5d622f75ef2950b44429cc41a590d641eb0beac431cb4ece2ce25a7bb55e",
+      "bytes": 1335
+    },
+    {
+      "path": "out/relay/final-source/include/qmg/sha256.hpp",
+      "sha256": "af2d8aae235ec28c49ca18dc0c90900df7c7852e5ccbe381154073a315fac076",
+      "bytes": 247
+    },
+    {
+      "path": "out/relay/final-source/include/qmg/spawn_refinement.hpp",
+      "sha256": "429b07e6b4474ea2f6a73e2dfab8be0783c420f903e9465942e78301f91886d3",
+      "bytes": 1625
+    },
+    {
+      "path": "out/relay/final-source/include/qmg/text_model.hpp",
+      "sha256": "9709a6a0cf656935232db431ba209a37434cfddd4a1d36b7d2490b32793bde4a",
+      "bytes": 1161
+    },
+    {
+      "path": "out/relay/final-source/include/qmg/types.hpp",
+      "sha256": "5dc2f7132b770fd80a9aa17d8ae5d94ffefbbc8cf33d3668596ac8c9537479bf",
+      "bytes": 1870
+    },
+    {
+      "path": "out/relay/final-source/include/qmg/upper_links.hpp",
+      "sha256": "5980508f20396615b2368ca1d14ed233800c2cc9b4896f0f8e0491a8ad034d56",
+      "bytes": 1660
+    },
+    {
+      "path": "out/relay/final-source/include/qmg/validator.hpp",
+      "sha256": "1e27f25997deb096e129285fdc099539b60fc543827bbc68a96c53d2fd0a7c4c",
+      "bytes": 700
+    },
+    {
+      "path": "out/relay/final-source/include/qmg/visibility.hpp",
+      "sha256": "68aafb5198492a1b3e056137722b320583d2e843b93b047960bf0784436863af",
+      "bytes": 7216
+    },
+    {
+      "path": "out/relay/final-source/knowledge/q2/experiments/hinge-v1.json",
+      "sha256": "16c7bdd0a2023d15496ca28f7f881ff9f497622e2c4ab1c9158603ddc9095dc1",
+      "bytes": 211986
+    },
+    {
+      "path": "out/relay/final-source/knowledge/q2/iteration-roadmap.json",
+      "sha256": "7ecd0727bb28043caaacfd1f6e228172ffb3bd6a51d8c51d139ca01366ddf706",
+      "bytes": 31034
+    },
+    {
+      "path": "out/relay/final-source/knowledge/q2/rules.json",
+      "sha256": "bd5950b00c6fbec1ceec3b68cfa229f2b1843c2ed0557f0da1d1b1faf3b69d03",
+      "bytes": 95258
+    },
+    {
+      "path": "out/relay/final-source/knowledge/q2/teleporter-arrival-study.json",
+      "sha256": "0c37cc9170fc2ad2f7e16f1346548882d3636247afe6b3bad644727fb6c63b5d",
+      "bytes": 10430
+    },
+    {
+      "path": "out/relay/final-source/LICENSE",
+      "sha256": "d35347ea259490f387f8b8fa7bafd1a76ac79b233bfd9ea20caa7c3c545dd7e8",
+      "bytes": 1082
+    },
+    {
+      "path": "out/relay/final-source/README.md",
+      "sha256": "3f64a0af448a8dbc834f123081ead092d90cd4f86335043d2d057be912cf1edf",
+      "bytes": 29994
+    },
+    {
+      "path": "out/relay/final-source/src/construction.cpp",
+      "sha256": "e269fe175663a7ba128423d5966532290b38df0ed5044afac04e2517ab5741df",
+      "bytes": 47496
+    },
+    {
+      "path": "out/relay/final-source/src/entities.cpp",
+      "sha256": "840d3fbf0cea92cc9973082298087385a76796b767a733b3694ff4bee56706a5",
+      "bytes": 16989
+    },
+    {
+      "path": "out/relay/final-source/src/generator.cpp",
+      "sha256": "c795115119d33b20a0027e29fe1b3b6b6267d9cc1697ce05b22fe3dd99ddae08",
+      "bytes": 12616
+    },
+    {
+      "path": "out/relay/final-source/src/ggml_ranker.cpp",
+      "sha256": "f7a1162be864c2f7167230fd5e473bc7e503c67b4b324c778fb395f09c3f546b",
+      "bytes": 12487
+    },
+    {
+      "path": "out/relay/final-source/src/layout_fingerprint.cpp",
+      "sha256": "8a856a2dfe8e70b62030f827491c6be65d24adc238d2803457b48fdba07a827a",
+      "bytes": 8376
+    },
+    {
+      "path": "out/relay/final-source/src/leak.cpp",
+      "sha256": "33073a8555f87a384db74ee871bccb7ce437f62ef902e950c5fde85c8e9a4985",
+      "bytes": 61645
+    },
+    {
+      "path": "out/relay/final-source/src/lighting.cpp",
+      "sha256": "fbcf964198b3ae8c31afdcccbbb68016cff0661c4c1683130fea202362bf0f12",
+      "bytes": 23182
+    },
+    {
+      "path": "out/relay/final-source/src/llama_text_model.cpp",
+      "sha256": "97351b9713110adc95947a05225035da23dfd32735ab220c5b2b4ac969833e34",
+      "bytes": 15861
+    },
+    {
+      "path": "out/relay/final-source/src/main.cpp",
+      "sha256": "668ba1517df580fbd5082cf655b364030ae757d837385c06c4cae0c91eb2d33f",
+      "bytes": 27359
+    },
+    {
+      "path": "out/relay/final-source/src/map_builder.cpp",
+      "sha256": "ade14d009bc1ec061a0c39a30b2da0092600570668e74bdc3519aa1d91a96dcf",
+      "bytes": 80063
+    },
+    {
+      "path": "out/relay/final-source/src/map_document.cpp",
+      "sha256": "657848b1a5b074096d3ecbd6e8da97588e56037d09fabb3e0fa1b23ddd0e212d",
+      "bytes": 35187
+    },
+    {
+      "path": "out/relay/final-source/src/map_document_writer.cpp",
+      "sha256": "8681b8aeb26ebc1d869d11c62c2d302dcdaa7724d1637f41d5cbfab49799068d",
+      "bytes": 13355
+    },
+    {
+      "path": "out/relay/final-source/src/map_parser.cpp",
+      "sha256": "085a286bcefe1ca9175884d27538a358ebb8a4591d47a04497b9ca9bfdda407d",
+      "bytes": 28912
+    },
+    {
+      "path": "out/relay/final-source/src/map_writer.cpp",
+      "sha256": "49575e8fd3d0d77f560dd3021f07406380d589e81cc0ac2a6121b5ca67085cc7",
+      "bytes": 6053
+    },
+    {
+      "path": "out/relay/final-source/src/mp_motifs.cpp",
+      "sha256": "aed3e4e033453e54be781ca90744514062626efc4d6afc02d050ad2a8fd0b465",
+      "bytes": 24893
+    },
+    {
+      "path": "out/relay/final-source/src/navigation.cpp",
+      "sha256": "fbab7a31deafacebb72f4c8717b106c44eba2b7571a2c43247935467923add00",
+      "bytes": 111678
+    },
+    {
+      "path": "out/relay/final-source/src/pipeline.cpp",
+      "sha256": "9f6916d0b0aaa8896e070929c92025038563fd95ec31a8979e53f7c3f9f92c44",
+      "bytes": 5318
+    },
+    {
+      "path": "out/relay/final-source/src/prompt.cpp",
+      "sha256": "2d8d00cd16109c8a56523b0875b408562a24d85ee3b5f9345b58d9dbdd102de9",
+      "bytes": 13412
+    },
+    {
+      "path": "out/relay/final-source/src/quality.cpp",
+      "sha256": "9d9f69776614e7b8d26b1b2499f23608c59b70a27053c95b28b38a046021bc38",
+      "bytes": 54964
+    },
+    {
+      "path": "out/relay/final-source/src/repair.cpp",
+      "sha256": "f8c734e65dcc6dedd4e93cb9f17f896814f2c0a3406885f62d8d95634cf875c5",
+      "bytes": 20071
+    },
+    {
+      "path": "out/relay/final-source/src/report.cpp",
+      "sha256": "3bf5115411adfb02af5a2b677f8a4f273e5609b1261ef468def3591bf0d19741",
+      "bytes": 34179
+    },
+    {
+      "path": "out/relay/final-source/src/semantic_plan.cpp",
+      "sha256": "dbc139bb8df6e8149ab110dbc7780c7d21919445e62749c7c08f44f4adb2cbd5",
+      "bytes": 34521
+    },
+    {
+      "path": "out/relay/final-source/src/semantic_planner.cpp",
+      "sha256": "1aff0eb81ff10b59bc71d6fbe210cd8f733ebc075e5c3dfa47b70779c023881b",
+      "bytes": 14961
+    },
+    {
+      "path": "out/relay/final-source/src/sha256.cpp",
+      "sha256": "b8abfe6207b3460f08edd26927191509dedc5c78aee915f6eed637c85506f01b",
+      "bytes": 6866
+    },
+    {
+      "path": "out/relay/final-source/src/spawn_refinement.cpp",
+      "sha256": "1b585eb7ab4a598acd1b76e52bf94d7120a3c8f5408b64acc6c10ea9a6192cc8",
+      "bytes": 14905
+    },
+    {
+      "path": "out/relay/final-source/src/types.cpp",
+      "sha256": "fd3f6d2a30aac90b05fd7a13f4726cca37b61bd6251e267f6a64aec095c125a4",
+      "bytes": 4039
+    },
+    {
+      "path": "out/relay/final-source/src/upper_links.cpp",
+      "sha256": "0d74de2d508f13c85549b572f0dca5da638f9b3f6f19048d3215888a2d57a65b",
+      "bytes": 19469
+    },
+    {
+      "path": "out/relay/final-source/src/validator.cpp",
+      "sha256": "992a03360a4aa3300692217e1de52e3fb28867577b6f474c2f83e0441d47cef3",
+      "bytes": 31357
+    },
+    {
+      "path": "out/relay/final-source/src/visibility.cpp",
+      "sha256": "93c57d17ad89894a7959ebd5a5f5cdde1295dc8a5413ac53d846595c7a7be8af",
+      "bytes": 58865
+    },
+    {
+      "path": "out/relay/final-source/tests/recipe_preview_check.cjs",
+      "sha256": "18ea0423c1ce4c9b75622a843a3cc03e2ee371161fa5f553014ceed72b1a6617",
+      "bytes": 27396
+    },
+    {
+      "path": "out/relay/final-source/tests/test_arrival_audit.py",
+      "sha256": "29ff84a8206a3d53bbde931c9fe3b75addfb6ae25ddabfdc1b61c5c4f70ef949",
+      "bytes": 5562
+    },
+    {
+      "path": "out/relay/final-source/tests/test_arrival_bindings.py",
+      "sha256": "60a3dc74686096713d9eca00e76d7d32bfd0798f14388c976c75d43f17b60ba6",
+      "bytes": 8685
+    },
+    {
+      "path": "out/relay/final-source/tests/test_native_teleport.py",
+      "sha256": "9b154733263ffb09c1abdbe265986df721539dfd16d5853cfd78c8ec94b73604",
+      "bytes": 7559
+    },
+    {
+      "path": "out/relay/final-source/tests/test_teleporter_arrivals.py",
+      "sha256": "6173700372688dbc2d64c8feba75e10f4462259b6b781a5111c4dd643b16e888",
+      "bytes": 3660
+    },
+    {
+      "path": "out/relay/final-source/THIRD_PARTY.md",
+      "sha256": "91d23041257c9f337b391f9f1594cab10cbdd3573059441f6ad4c89bc8e6eda1",
+      "bytes": 14241
+    },
+    {
+      "path": "out/relay/final-source/tools/map_recipes/__init__.py",
+      "sha256": "e2a47cc3b82003778eaa95cee9e07bac1b079612df6610b71e05e9364f30634b",
+      "bytes": 81
+    },
+    {
+      "path": "out/relay/final-source/tools/map_recipes/arrival_audit.py",
+      "sha256": "91e337f19586a6af29f2da10ddbfa31f85ca862fea43d38b88de84b18103e3aa",
+      "bytes": 15323
+    },
+    {
+      "path": "out/relay/final-source/tools/map_recipes/build.ps1",
+      "sha256": "2a9986ad3019b3ea5125ec0ef3fbaa42cab3916bdd6de2b945053748633793d4",
+      "bytes": 3696
+    },
+    {
+      "path": "out/relay/final-source/tools/map_recipes/counterweight.cpp",
+      "sha256": "b6a667f8d876873fdf4699d31e0eefba1c168f674a8eba5ab0546ecb6e390898",
+      "bytes": 7406
+    },
+    {
+      "path": "out/relay/final-source/tools/map_recipes/drop_audit.py",
+      "sha256": "f9c284ad85ead67913dcf3a51945bb21be994fa4968b60f60bbb876cd581f2de",
+      "bytes": 15605
+    },
+    {
+      "path": "out/relay/final-source/tools/map_recipes/ENGINE_SMOKE.md",
+      "sha256": "e4ec4a710800073f0d296c545c779f5382f610c9d5783e2dedf880850bc8d475",
+      "bytes": 5198
+    },
+    {
+      "path": "out/relay/final-source/tools/map_recipes/engine_smoke.py",
+      "sha256": "7f886dcf892858d8d65251121d6235b786c49191be61c898ca4b40fa43a633a5",
+      "bytes": 13991
+    },
+    {
+      "path": "out/relay/final-source/tools/map_recipes/fold.cpp",
+      "sha256": "d3cba899927f85862572a96c1388df5925d85bcad6f2640e2be45ec07ed3b936",
+      "bytes": 12181
+    },
+    {
+      "path": "out/relay/final-source/tools/map_recipes/fold_audit.py",
+      "sha256": "5a979b5d3f2de11f9232eeb0e457bd3ae9820165dccc1adc37431b34f3606e5c",
+      "bytes": 7501
+    },
+    {
+      "path": "out/relay/final-source/tools/map_recipes/gate_audit.py",
+      "sha256": "cf02b7fabe2e9241203d89b662e85bb7064f050fd281ff841324896442ba2559",
+      "bytes": 5655
+    },
+    {
+      "path": "out/relay/final-source/tools/map_recipes/geometry.py",
+      "sha256": "dcfcc3413468cad9993476736edfae5f13eb03e26035fc39d73f83aa5a90742b",
+      "bytes": 19674
+    },
+    {
+      "path": "out/relay/final-source/tools/map_recipes/inspect.py",
+      "sha256": "545d45472596133851326174eb3752cfdb3d41ead495f1c684bc7142b28b3253",
+      "bytes": 23811
+    },
+    {
+      "path": "out/relay/final-source/tools/map_recipes/layout-view-v2.html",
+      "sha256": "44114d19e5a84bd002e30b2b9243fb4e5f54d16008fa22e271ac2bcc36c9b3ad",
+      "bytes": 36118
+    },
+    {
+      "path": "out/relay/final-source/tools/map_recipes/layout-view.html",
+      "sha256": "d209818410559fbe595cf988389f1172b168968968298e33b3efbd126d7560dc",
+      "bytes": 8289
+    },
+    {
+      "path": "out/relay/final-source/tools/map_recipes/lockyard.cpp",
+      "sha256": "1811ae0ce8863a635d9deff0407c502e3fde7e2005569d714d83dd62192480a2",
+      "bytes": 8670
+    },
+    {
+      "path": "out/relay/final-source/tools/map_recipes/lockyard_audit.py",
+      "sha256": "300ed04982fd76082eac1adc6cfe4643eb4a6ae46e5ea398aa0db1963bd3e73d",
+      "bytes": 15891
+    },
+    {
+      "path": "out/relay/final-source/tools/map_recipes/packing_audit.py",
+      "sha256": "7ac251edd70ed2835478b78e019e4aa23edd7492b5e13d50fa517e8c231e658a",
+      "bytes": 4859
+    },
+    {
+      "path": "out/relay/final-source/tools/map_recipes/ramp_audit.py",
+      "sha256": "1a6e17dd124db8ba030cc56927f6cb4b1c7ebecbfbadcf529165efded3103cdc",
+      "bytes": 19492
+    },
+    {
+      "path": "out/relay/final-source/tools/map_recipes/ramp_stair_comparison.py",
+      "sha256": "711bb6b48e3676a909bfb907799417d51f65373bf86a6295e0ba2f2bfb488dd8",
+      "bytes": 30392
+    },
+    {
+      "path": "out/relay/final-source/tools/map_recipes/ravel.cpp",
+      "sha256": "ed62c7416d1296dcab6d3ddedc656b62ce28733dc40415fe0220f81cd35c6198",
+      "bytes": 6169
+    },
+    {
+      "path": "out/relay/final-source/tools/map_recipes/ravel_audit.py",
+      "sha256": "a25628bc6647efd4e67dd2ce21e2e29b9f620ee9b446d699ca75ad18da2f1d6d",
+      "bytes": 7472
+    },
+    {
+      "path": "out/relay/final-source/tools/map_recipes/README.md",
+      "sha256": "ba7392c50d15d32f911f0a0a8896ecf82965775ebfe775f646db7874686e8cf1",
+      "bytes": 11005
+    },
+    {
+      "path": "out/relay/final-source/tools/map_recipes/recipe_support.hpp",
+      "sha256": "8b1321145e9fa896c71ad86be44025b6400992f11d07ceb0052683b23ed6600c",
+      "bytes": 30269
+    },
+    {
+      "path": "out/relay/final-source/tools/map_recipes/relay.cpp",
+      "sha256": "1fa6f0cce4626d67de3469eff7f4f736a6808ac91675c06eb7efd9301b6818e7",
+      "bytes": 10273
+    },
+    {
+      "path": "out/relay/final-source/tools/map_recipes/render_layout.py",
+      "sha256": "07d3d70e635e918a3dcbbdc3f01723df549a220170464cc92156064fe39b26bb",
+      "bytes": 23462
+    },
+    {
+      "path": "out/relay/final-source/tools/map_recipes/spillway.cpp",
+      "sha256": "2a563e6e16c8a32840203249c3e8d0522aa0def918c8b0c8e32b13d02813f7b3",
+      "bytes": 7312
+    },
+    {
+      "path": "out/relay/final-source/tools/map_recipes/switchback.cpp",
+      "sha256": "c8fcc482f2e3f17aeaea6cb8d727f19c40d9081b74a259c4478758d236776c2d",
+      "bytes": 8008
+    },
+    {
+      "path": "out/relay/final-source/tools/map_recipes/talus.cpp",
+      "sha256": "7c1cf9837662a6bcb588907ca28e3d7450aee6828e358ca097329a2007291e7a",
+      "bytes": 7449
+    },
+    {
+      "path": "out/relay/final-source/tools/map_recipes/talus_stairs.cpp",
+      "sha256": "e76f0eb1a377bc018d1d3da35f75de0f85e6838aab00db81a9c1d3b565f4f0fa",
+      "bytes": 8654
+    },
+    {
+      "path": "out/relay/final-source/tools/map_recipes/undercut.cpp",
+      "sha256": "0587d571fc222af766948b01e9ea7132e49667563cd7b857ba724fb25c09c487",
+      "bytes": 7149
+    },
+    {
+      "path": "out/relay/final-source/tools/map_study/__init__.py",
+      "sha256": "8305d2a7bfc81ff83b9b4aa85beb1fd5284c049667cc61c8c80f53b5e94b3b74",
+      "bytes": 124
+    },
+    {
+      "path": "out/relay/final-source/tools/map_study/__main__.py",
+      "sha256": "75027cb0d9f5f53a12afd3a7604045f31bae283419ce2daf65e3add3db210866",
+      "bytes": 17851
+    },
+    {
+      "path": "out/relay/final-source/tools/map_study/binary.py",
+      "sha256": "2b76559a71365eaab41e6876ff7da94fe938994b4a5199d63620b8b60918daf1",
+      "bytes": 15999
+    },
+    {
+      "path": "out/relay/final-source/tools/map_study/corpus.py",
+      "sha256": "907aab1f4ee3fe055faeca378acf0d91464b2a5a8b5cda2aadd983996470da92",
+      "bytes": 11513
+    },
+    {
+      "path": "out/relay/final-source/tools/map_study/features.py",
+      "sha256": "9fd18f7ed3d9f5299d38d63d328daa3a20fd9bcc249e969054ba8a7c707ba535",
+      "bytes": 14456
+    },
+    {
+      "path": "out/relay/final-source/tools/map_study/interlocking_topology.py",
+      "sha256": "44897a19f77253374c4d55d8dd2042b0375206675a610d9a6f71483bf3644ef5",
+      "bytes": 15461
+    },
+    {
+      "path": "out/relay/final-source/tools/map_study/raised_resource_circuit.py",
+      "sha256": "a1436e01ec22f79d103c63febb7d391b8b300e84b712ab86b205973a2f5daa90",
+      "bytes": 14972
+    },
+    {
+      "path": "out/relay/final-source/tools/map_study/ranking_features.py",
+      "sha256": "d903d5156dc49d42f206d207ee72f5b47d2cb074f828ef8ac70963c1bdf7683b",
+      "bytes": 11673
+    },
+    {
+      "path": "out/relay/final-source/tools/map_study/render.py",
+      "sha256": "3aebb2df3cc99f70813ddcde7a4169bef79190e1d8ab145c9c17f39497a13c9c",
+      "bytes": 10983
+    },
+    {
+      "path": "out/relay/final-source/tools/map_study/spawn_separation.py",
+      "sha256": "cb896d1d140fe6289202d2f48c0257431ba0f7853aa2e8df586d3a1d800e8614",
+      "bytes": 9986
+    },
+    {
+      "path": "out/relay/final-source/tools/map_study/teleporter_arrivals.py",
+      "sha256": "e7a91d7f26a1c0e2619b176f2a962089688573910a954bcdb732fab9daa64d45",
+      "bytes": 16187
+    },
+    {
+      "path": "out/relay/final-source/tools/map_study/upper_connections.py",
+      "sha256": "9c4bc4e37ed20065d8195cbb9b7a2300338b77783d7fc6f3f041f19ccad3ac2f",
+      "bytes": 5745
+    },
+    {
+      "path": "out/relay/final-source/tools/mp_portfolio/braid_compare.py",
+      "sha256": "824754d225238b576fcd64ab567871dad9223445a851a9ec918c7dbe74162458",
+      "bytes": 24702
+    },
+    {
+      "path": "out/relay/final-source/tools/mp_portfolio/compare.py",
+      "sha256": "f1a965a25fa655e7a0f11978f9ca7f31a5ed5fd7bfff3314e4907e0a079b8700",
+      "bytes": 6975
+    },
+    {
+      "path": "out/relay/final-source/tools/mp_portfolio/compile.ps1",
+      "sha256": "34a821120bef1be0ca659e8fa612d0dc9a32e931aadb42f03fe997bb2eefaed5",
+      "bytes": 2922
+    },
+    {
+      "path": "out/relay/final-source/tools/mp_portfolio/export.cpp",
+      "sha256": "3a899ed9ffa65e0ff8c6726c9a53db89178a9f96774b36229267abbbe8a0ccbf",
+      "bytes": 22742
+    },
+    {
+      "path": "out/relay/final-source/tools/mp_portfolio/hinge_compare.py",
+      "sha256": "78fcf3f48671bdfa2e87cb322a9a0e495dbc1342e8834d54c2f7b4f0935fc24d",
+      "bytes": 28101
+    },
+    {
+      "path": "out/relay/final-source/tools/mp_portfolio/inspect.py",
+      "sha256": "60a06fb80b519fa735e622cfca9df07912500c0e36cd840f1937287561c0ceb7",
+      "bytes": 10160
+    },
+    {
+      "path": "out/relay/final-source/tools/mp_portfolio/ranking_compare.py",
+      "sha256": "3c00f39819d0d348697e3b4532da9ce169d317f812197a5346bddf98c3bdfcfb",
+      "bytes": 8557
+    },
+    {
+      "path": "out/relay/final-source/tools/mp_portfolio/README.md",
+      "sha256": "78b8c872642ba8f8398f14641dd96f136053151782b2190717248c1f21347482",
+      "bytes": 8737
+    },
+    {
+      "path": "out/relay/final-source/tools/mp_portfolio/topology_compare.py",
+      "sha256": "3ddf54a06d5538342fb677019665bb9246a878efcfe307b7cba4021a1379a091",
+      "bytes": 9295
+    },
+    {
+      "path": "out/relay/final-source/tools/mp_portfolio/trace_candidates.cpp",
+      "sha256": "d8416738be7d92b8f37b71d69346c592901510547dc4965e02b480a440ba34d5",
+      "bytes": 7070
+    },
+    {
+      "path": "out/relay/final-source/tools/mp_portfolio/upper_link_controls.py",
+      "sha256": "2220b7705700d2af282cf31fa2976ba7399b1870129b406ef49c75e3218c54ce",
+      "bytes": 6738
+    },
+    {
+      "path": "out/relay/final-source/tools/native_teleport/build.py",
+      "sha256": "2fac677f2a26f07c593b615667c4ce633a560f84f3b00b22d904f705300d82ee",
+      "bytes": 4245
+    },
+    {
+      "path": "out/relay/final-source/tools/native_teleport/CMakeLists.txt",
+      "sha256": "0d10a71e2ab336641be2dd993ab8da85071957ca600dc2643a0df05965e590ad",
+      "bytes": 1701
+    },
+    {
+      "path": "out/relay/final-source/tools/native_teleport/CMakePresets.json",
+      "sha256": "c0453ec4e2651c7cd1a0a007cdb25eac6dd1bf1c0b670a9961e400116c05b2b9",
+      "bytes": 427
+    },
+    {
+      "path": "out/relay/final-source/tools/native_teleport/development_v2.py",
+      "sha256": "b32c791c5ae65441ae1135519db92fff79344ff87447e33d651288d5a7e1bda2",
+      "bytes": 2095
+    },
+    {
+      "path": "out/relay/final-source/tools/native_teleport/host.c",
+      "sha256": "9f29fa9b66ec4342414fe7fd4ff3e5587c6a685f369709be019a772c0b933b15",
+      "bytes": 18250
+    },
+    {
+      "path": "out/relay/final-source/tools/native_teleport/README.md",
+      "sha256": "be21261c67d1789ed08d4145f95d4e825d4d689ceafb383c5ad60f8efc9e38c8",
+      "bytes": 1802
+    },
+    {
+      "path": "out/relay/final-source/tools/native_teleport/reference.json",
+      "sha256": "ab11146cb0eb501f6a33c586601032b2384f60d4fa24eaa4c2f49a9e69cc40aa",
+      "bytes": 11984
+    },
+    {
+      "path": "out/relay/final-source/tools/native_teleport/relay.py",
+      "sha256": "176459ac92936e80cf69a52514b8f351aca4b97597cb206c47b4b50c9805c89c",
+      "bytes": 13131
+    },
+    {
+      "path": "out/relay/final-source/tools/native_teleport/release.py",
+      "sha256": "0d17a7be67ef073c5d942fd36bd058ce13569938639b477e0881617683822dea",
+      "bytes": 4931
+    },
+    {
+      "path": "out/relay/final-source/tools/native_teleport/run.py",
+      "sha256": "cf59997b021a9e1fa9b5c0e5a7f4d04ec6ab0b316ade64847535cf11601f3188",
+      "bytes": 9646
+    },
+    {
+      "path": "out/relay/final-source/tools/native_teleport/server_bridge.c",
+      "sha256": "3bf1174ba323c89b1c0451e12efed483a4967e7c46e44d558a0d77879606ffa9",
+      "bytes": 865
+    },
+    {
+      "path": "out/relay/final-source/tools/native_teleport/verify.py",
+      "sha256": "94dca8213c0eafdb1f3f56b671b6b68ef0c3af953298c7930a8959d03516741d",
+      "bytes": 17350
+    },
+    {
+      "path": "out/relay/floor-0.png",
+      "sha256": "87bbf89cd08605d4ba71eb8673a0c8d1a0d552003cb03235ec119266439cf70f",
+      "bytes": 33537
+    },
+    {
+      "path": "out/relay/floor-128.png",
+      "sha256": "65f2c9e6da3b03e2597ddaedc93fdd96399110ae6056ebbe22bcd68e0bbb5910",
+      "bytes": 25294
+    },
+    {
+      "path": "out/relay/flow.json",
+      "sha256": "68821184a33b1ee257e31e0efa4b091094766ccaf382c7550c3e325973af2d3d",
+      "bytes": 13154
+    },
+    {
+      "path": "out/relay/generation-v1.log",
+      "sha256": "25118d01b4413fe29042b280f2b4df2bd5788d15178b2e9f316c1dfe45e4c9f2",
+      "bytes": 74
+    },
+    {
+      "path": "out/relay/generation-v2.log",
+      "sha256": "a9cf877064ff21f3191c73260b8715480911dbf7003e3d3824f8dfaec458fd1f",
+      "bytes": 87
+    },
+    {
+      "path": "out/relay/index.html",
+      "sha256": "1b573e95c65c2edaf9da444874d23247699e2b7b4bbf4396487f2e7370f4782e",
+      "bytes": 95603
+    },
+    {
+      "path": "out/relay/knowledge-update-record.json",
+      "sha256": "5142eb8bad350a6b36a22915d5803e77f64ee131d0c43e98ba0ba9780d01c1c4",
+      "bytes": 1119
+    },
+    {
+      "path": "out/relay/layout.json",
+      "sha256": "e9a538aeb4b370b4173ff0eb598834b2d744e660152dd47fe1ccb125f3db98d2",
+      "bytes": 5450
+    },
+    {
+      "path": "out/relay/native-evidence-verification.log",
+      "sha256": "c2721c9e4ca432189fa8e7691b5a948bcaa224361d935a4a535b13f84eac879c",
+      "bytes": 235
+    },
+    {
+      "path": "out/relay/overview-mobile-light.png",
+      "sha256": "f991ff210fbdda4a8b70917948316f0e4d1e2ac01dc1b6cd2cfc74692c9de075",
+      "bytes": 37585
+    },
+    {
+      "path": "out/relay/overview.png",
+      "sha256": "5ac23ef97f85613a9634b03a47846ff0b995c48205d6a2f388bb38e6ae9ae72c",
+      "bytes": 69716
+    },
+    {
+      "path": "out/relay/package.json",
+      "sha256": "263b31be3b556cb424bcad37776e57f16a51e90ed61abe2a3e8888ee2d378e5a",
+      "bytes": 5717
+    },
+    {
+      "path": "out/relay/preview-checks.json",
+      "sha256": "0bcb41bb93a79b644165b8352cf5a88886e0bca11c4f4ab4c26a292cb14d7674",
+      "bytes": 28879
+    },
+    {
+      "path": "out/relay/qmg_relay-light.log",
+      "sha256": "3aa73a79f68fda16177cde1fe93c3052c39860b493ebe1b35cd2e67942e343a3",
+      "bytes": 2030
+    },
+    {
+      "path": "out/relay/qmg_relay-qbsp.log",
+      "sha256": "8317c03fb9c38c166dc0c7f9d31df39beddff87f2973d5effa2ccd23db793317",
+      "bytes": 1795
+    },
+    {
+      "path": "out/relay/qmg_relay-vis.log",
+      "sha256": "10cc5fe05089c9c11f2fb4bd3a216346c82d4aeeae80a3a8f722ae710b8c03a1",
+      "bytes": 1166
+    },
+    {
+      "path": "out/relay/qmg_relay.bsp",
+      "sha256": "5a79c583841829e5acd714a5009db441f4a9d2e3cd8902c448b9a4ec3aa2b594",
+      "bytes": 274500
+    },
+    {
+      "path": "out/relay/qmg_relay.content.json",
+      "sha256": "75bc6fff606c717ce0acdbe8ae07692d9b9f9a44ec65c2a64c9ab3ff250491dd",
+      "bytes": 2000
+    },
+    {
+      "path": "out/relay/qmg_relay.map",
+      "sha256": "862dc782181d8bc0696e30be88426030f73ee61a8434e71eb3957e90cd83146f",
+      "bytes": 85365
+    },
+    {
+      "path": "out/relay/qmg_relay.prt",
+      "sha256": "fa5b635df476520e3e18ef1786907b183f5da127fa44acd87ec9327a9182dc26",
+      "bytes": 9949
+    },
+    {
+      "path": "out/relay/qmg_relay.qmg.json",
+      "sha256": "78d91e16b3ec1b18d7877433a835f8e8e04c744918e0eac0e6dd8740e29100b4",
+      "bytes": 39837
+    },
+    {
+      "path": "out/relay/qmg_relay.texinfo.json",
+      "sha256": "6b7808676cc9024c61212e36a5d31fc7b44b3fd2e55f3c76cab91b39eeac8cf2",
+      "bytes": 316
+    },
+    {
+      "path": "out/relay/qmg_relay.zip",
+      "sha256": "c43e1370bdd87313a06a405bade5abab324f8230885a810d50c86bd7c73cb0f2",
+      "bytes": 558972
+    },
+    {
+      "path": "out/relay/README.md",
+      "sha256": "b36de432b435ec819a3e9d13cfd56058430ef80e54a1189be51f7ceed9d6c0de",
+      "bytes": 4077
+    },
+    {
+      "path": "out/relay/record_evidence.py",
+      "sha256": "e5ad2de9bf7157ce3a8cffb8519c93ae9a23e0ba794177aa88e89465d1192dd7",
+      "bytes": 18828
+    },
+    {
+      "path": "out/relay/reference-audit-verification.log",
+      "sha256": "0bf0a70b97da3ded9883e912ad363c94754ac84608a54676615ee7d0f6c54bb7",
+      "bytes": 1366
+    },
+    {
+      "path": "out/relay/reference-comparison.json",
+      "sha256": "9cd0826fc970d48a7969d698b8f8e1609c625c165867122b20b0775ea0af32f3",
+      "bytes": 6251
+    },
+    {
+      "path": "out/relay/reference-record-verification.log",
+      "sha256": "28d1a5eb3e738d3a531591bf040fecdd0395262ae9d0a60041dc351f6497de29",
+      "bytes": 917
+    },
+    {
+      "path": "out/relay/relay-layout.html",
+      "sha256": "2f41ac98f28134997fbf0eccc76432469ac775be14a8c1f1461e2d9c0b371df3",
+      "bytes": 45220
+    },
+    {
+      "path": "out/relay/render_arrival_routes.py",
+      "sha256": "2f3196f675847db7b3c10f1e1b0dc029c6dbcd76a064c1ac8156f3aa2c8e4ed1",
+      "bytes": 12231
+    },
+    {
+      "path": "out/relay/reproduce.ps1",
+      "sha256": "82c5b4aa3a8a50224e6772c25abfc1107c364d1335e8e3c3e9d71f8bad299d35",
+      "bytes": 2407
+    },
+    {
+      "path": "out/relay/revisions/v1/design-protocol.json",
+      "sha256": "fb7c959b4a788de26495cc37fe64f5ec7d87625fe03940b527d8f198041e6ff6",
+      "bytes": 3498
+    },
+    {
+      "path": "out/relay/revisions/v1/generation-v1.log",
+      "sha256": "25118d01b4413fe29042b280f2b4df2bd5788d15178b2e9f316c1dfe45e4c9f2",
+      "bytes": 74
+    },
+    {
+      "path": "out/relay/revisions/v1/relay.cpp",
+      "sha256": "7c01181d2dbec13a6baeedcd6a945a8452f406c81d5e43b916a9eff7db515ac9",
+      "bytes": 10272
+    },
+    {
+      "path": "out/relay/update_knowledge.py",
+      "sha256": "d4c72761ee83eca74eaaf6fe813dc857c4e6d94f9f9fd42a54b2af06cfbe2421",
+      "bytes": 14118
+    },
+    {
+      "path": "out/relay/verification.json",
+      "sha256": "6eec8c30883296d0f39929121fb7416bdfc144623f53997310263f8738c94dab",
+      "bytes": 30710
+    },
+    {
+      "path": "out/relay-baseline/capture.py",
+      "sha256": "69252d195d184b91c6a06ec3f50ba10c764e48b1ec6f40f5540391228455f743",
+      "bytes": 2148
+    },
+    {
+      "path": "out/relay-baseline/record.json",
+      "sha256": "b9927b0e230fad8f842b4081b8acb58781ea1af2a93707475c5a1dc628134cbf",
+      "bytes": 18882
+    },
+    {
+      "path": "out/relay-baseline/source/CMakeLists.txt",
+      "sha256": "c28aaa2e5c57a636c4b9970f4c87827c75ce814db20dfb6230ce1eb164392f72",
+      "bytes": 32712
+    },
+    {
+      "path": "out/relay-baseline/source/docs/MAP_DESIGN_PLAYBOOK.md",
+      "sha256": "389c3d8b05be73e3c1b7a2221e3be087b75acd856705a9593cfb7c1aa74dd2e9",
+      "bytes": 35870
+    },
+    {
+      "path": "out/relay-baseline/source/docs/MP_COMPACT_LAYOUT_REGIMEN.md",
+      "sha256": "96730fb00b96bd1f1d8ad93cf713596ec58fc13c0857a4941a90debf5dde9680",
+      "bytes": 20663
+    },
+    {
+      "path": "out/relay-baseline/source/docs/Q2_MECHANISMS.md",
+      "sha256": "da704b138dbfbb688f66fcc78df8e6174c2b91f4b81ed52ff6ece78fa7350596",
+      "bytes": 5716
+    },
+    {
+      "path": "out/relay-baseline/source/docs/ROADMAP.md",
+      "sha256": "fb84a83b098c0409742841abaa5f58487adcfcc88eca38c214faa1195a6a222a",
+      "bytes": 23166
+    },
+    {
+      "path": "out/relay-baseline/source/docs/VALIDATION.md",
+      "sha256": "294b9b55d451dcd0bd7e7eada0d7774e61d0ea4198af68fb4481a01e49946cc2",
+      "bytes": 41738
+    },
+    {
+      "path": "out/relay-baseline/source/include/qmg/construction.hpp",
+      "sha256": "4c2c867fda4dc4e439e7d74b53d9b2ef13b4e90fb38d573212faaf4caed4548d",
+      "bytes": 7423
+    },
+    {
+      "path": "out/relay-baseline/source/include/qmg/entities.hpp",
+      "sha256": "8692ce30cf0ac59b3026349479d1c0a8646ccef3fa67996df3a4b585e2eed724",
+      "bytes": 156
+    },
+    {
+      "path": "out/relay-baseline/source/include/qmg/generator.hpp",
+      "sha256": "cdc6dd284bdd7987c9411dbf93ec70b6407158d665820ef314c20995fc2b033a",
+      "bytes": 571
+    },
+    {
+      "path": "out/relay-baseline/source/include/qmg/ggml_ranker.hpp",
+      "sha256": "946dd439c9914134cb67a52d01b9ea118b11b4cacdd5f76b8cefe530bd83ee68",
+      "bytes": 1774
+    },
+    {
+      "path": "out/relay-baseline/source/include/qmg/layout.hpp",
+      "sha256": "55be6c6bcaf9d13cfd282a860d2a1f7df32f6c0a2c427d89472805a5f371b2d4",
+      "bytes": 23251
+    },
+    {
+      "path": "out/relay-baseline/source/include/qmg/layout_fingerprint.hpp",
+      "sha256": "3301093beff5e80ecc8667f7c71baaaa4e786e43aec57f7eac44902f4d2c5de1",
+      "bytes": 401
+    },
+    {
+      "path": "out/relay-baseline/source/include/qmg/leak.hpp",
+      "sha256": "8e0ad0a029ea4afa578efca487b1fed26de2b937495df54d52c0da20f7ae39cd",
+      "bytes": 8729
+    },
+    {
+      "path": "out/relay-baseline/source/include/qmg/lighting.hpp",
+      "sha256": "9b69a8d89c6ee41045b7292283e70ffea864abfcac0f09ee697c80c723ea1b75",
+      "bytes": 4366
+    },
+    {
+      "path": "out/relay-baseline/source/include/qmg/llama_text_model.hpp",
+      "sha256": "bea6baef7754cf2d9af5030d2387aafdb62f7e6f518e4cc324a91ec59ade2d4d",
+      "bytes": 796
+    },
+    {
+      "path": "out/relay-baseline/source/include/qmg/map_builder.hpp",
+      "sha256": "525d60e3825b24ac85c86eb9a292d0561727e46318e988286beb1fa85c5ad6cc",
+      "bytes": 1983
+    },
+    {
+      "path": "out/relay-baseline/source/include/qmg/map_document.hpp",
+      "sha256": "417c827cd617bf4ab276256e78b61cb967df7c3da3a50f882d9df3115b2d319a",
+      "bytes": 5058
+    },
+    {
+      "path": "out/relay-baseline/source/include/qmg/map_document_writer.hpp",
+      "sha256": "a7c029134ab9cfab4e57586ca2c812e0d3bea4bb6fd05f4dec64dacc20e27c54",
+      "bytes": 485
+    },
+    {
+      "path": "out/relay-baseline/source/include/qmg/map_parser.hpp",
+      "sha256": "559ee2f2bd72751f45776569dd2e12d5bd8f3d4a7b067ef9c2c7a85ae53312ca",
+      "bytes": 1567
+    },
+    {
+      "path": "out/relay-baseline/source/include/qmg/map_writer.hpp",
+      "sha256": "b38627c00c0c9aaffbb361fc111e9fc3f36a6da017616dd81b6544adc8c81560",
+      "bytes": 768
+    },
+    {
+      "path": "out/relay-baseline/source/include/qmg/mp_motifs.hpp",
+      "sha256": "9388de083f546b13b946f078976e9da81d9d5a7f2dc40100a1194257020e7926",
+      "bytes": 428
+    },
+    {
+      "path": "out/relay-baseline/source/include/qmg/navigation.hpp",
+      "sha256": "f05c1a1cf36436730c097864cd677d7e6e645de9faa6d34778bf98c696058039",
+      "bytes": 10010
+    },
+    {
+      "path": "out/relay-baseline/source/include/qmg/pipeline.hpp",
+      "sha256": "8e676a08cbb74dfa36da95dedf722b1eb5e357f5fa61d87cf2158b02336c9d00",
+      "bytes": 1583
+    },
+    {
+      "path": "out/relay-baseline/source/include/qmg/prompt.hpp",
+      "sha256": "bead7aaf975cb66c053c27aaa2ffd2f98df961a0bb1a58dc88cb6c448694ffdf",
+      "bytes": 612
+    },
+    {
+      "path": "out/relay-baseline/source/include/qmg/quake2_mechanisms.hpp",
+      "sha256": "79077734698c1ceb6b497167c10eccf1db7580e0fb8a02111c12ae75f9f7a26b",
+      "bytes": 954
+    },
+    {
+      "path": "out/relay-baseline/source/include/qmg/quality.hpp",
+      "sha256": "563e620f5c7ece0f8223fc21aefd53eebd35e80e6d825c3bf0eac5125240eb89",
+      "bytes": 13808
+    },
+    {
+      "path": "out/relay-baseline/source/include/qmg/repair.hpp",
+      "sha256": "4ad9851edf9b3a5f7d96568e778b44115e81588b7c24a3c5913904a3f8f2836b",
+      "bytes": 207
+    },
+    {
+      "path": "out/relay-baseline/source/include/qmg/report.hpp",
+      "sha256": "45348430b150a54fe6ed6cea79f86464223ab3d2547cdf552f9f5044780386d5",
+      "bytes": 276
+    },
+    {
+      "path": "out/relay-baseline/source/include/qmg/semantic_plan.hpp",
+      "sha256": "d835856a3046bef2eac360b24f3e3ba75d13d7926d5fd478d0c3478c6ece2192",
+      "bytes": 1922
+    },
+    {
+      "path": "out/relay-baseline/source/include/qmg/semantic_planner.hpp",
+      "sha256": "b7bd5d622f75ef2950b44429cc41a590d641eb0beac431cb4ece2ce25a7bb55e",
+      "bytes": 1335
+    },
+    {
+      "path": "out/relay-baseline/source/include/qmg/sha256.hpp",
+      "sha256": "af2d8aae235ec28c49ca18dc0c90900df7c7852e5ccbe381154073a315fac076",
+      "bytes": 247
+    },
+    {
+      "path": "out/relay-baseline/source/include/qmg/spawn_refinement.hpp",
+      "sha256": "429b07e6b4474ea2f6a73e2dfab8be0783c420f903e9465942e78301f91886d3",
+      "bytes": 1625
+    },
+    {
+      "path": "out/relay-baseline/source/include/qmg/text_model.hpp",
+      "sha256": "9709a6a0cf656935232db431ba209a37434cfddd4a1d36b7d2490b32793bde4a",
+      "bytes": 1161
+    },
+    {
+      "path": "out/relay-baseline/source/include/qmg/types.hpp",
+      "sha256": "5dc2f7132b770fd80a9aa17d8ae5d94ffefbbc8cf33d3668596ac8c9537479bf",
+      "bytes": 1870
+    },
+    {
+      "path": "out/relay-baseline/source/include/qmg/upper_links.hpp",
+      "sha256": "5980508f20396615b2368ca1d14ed233800c2cc9b4896f0f8e0491a8ad034d56",
+      "bytes": 1660
+    },
+    {
+      "path": "out/relay-baseline/source/include/qmg/validator.hpp",
+      "sha256": "1e27f25997deb096e129285fdc099539b60fc543827bbc68a96c53d2fd0a7c4c",
+      "bytes": 700
+    },
+    {
+      "path": "out/relay-baseline/source/include/qmg/visibility.hpp",
+      "sha256": "68aafb5198492a1b3e056137722b320583d2e843b93b047960bf0784436863af",
+      "bytes": 7216
+    },
+    {
+      "path": "out/relay-baseline/source/knowledge/q2/experiments/hinge-v1.json",
+      "sha256": "16c7bdd0a2023d15496ca28f7f881ff9f497622e2c4ab1c9158603ddc9095dc1",
+      "bytes": 211986
+    },
+    {
+      "path": "out/relay-baseline/source/knowledge/q2/iteration-roadmap.json",
+      "sha256": "6709ca74643db2651f943ba36374eb252fe3f15f624551358f82f31c5693857c",
+      "bytes": 27370
+    },
+    {
+      "path": "out/relay-baseline/source/knowledge/q2/rules.json",
+      "sha256": "6a8e877242a22df12531dd6612aacf6872c75ea6f0b9f613eee2490570fd3d22",
+      "bytes": 89923
+    },
+    {
+      "path": "out/relay-baseline/source/README.md",
+      "sha256": "fcb2e3c38a554822c5dd7545fc012651add9812767234c0ab7573144a01a6cbf",
+      "bytes": 28808
+    },
+    {
+      "path": "out/relay-baseline/source/src/construction.cpp",
+      "sha256": "e269fe175663a7ba128423d5966532290b38df0ed5044afac04e2517ab5741df",
+      "bytes": 47496
+    },
+    {
+      "path": "out/relay-baseline/source/src/entities.cpp",
+      "sha256": "840d3fbf0cea92cc9973082298087385a76796b767a733b3694ff4bee56706a5",
+      "bytes": 16989
+    },
+    {
+      "path": "out/relay-baseline/source/src/generator.cpp",
+      "sha256": "c795115119d33b20a0027e29fe1b3b6b6267d9cc1697ce05b22fe3dd99ddae08",
+      "bytes": 12616
+    },
+    {
+      "path": "out/relay-baseline/source/src/ggml_ranker.cpp",
+      "sha256": "f7a1162be864c2f7167230fd5e473bc7e503c67b4b324c778fb395f09c3f546b",
+      "bytes": 12487
+    },
+    {
+      "path": "out/relay-baseline/source/src/layout_fingerprint.cpp",
+      "sha256": "8a856a2dfe8e70b62030f827491c6be65d24adc238d2803457b48fdba07a827a",
+      "bytes": 8376
+    },
+    {
+      "path": "out/relay-baseline/source/src/leak.cpp",
+      "sha256": "33073a8555f87a384db74ee871bccb7ce437f62ef902e950c5fde85c8e9a4985",
+      "bytes": 61645
+    },
+    {
+      "path": "out/relay-baseline/source/src/lighting.cpp",
+      "sha256": "fbcf964198b3ae8c31afdcccbbb68016cff0661c4c1683130fea202362bf0f12",
+      "bytes": 23182
+    },
+    {
+      "path": "out/relay-baseline/source/src/llama_text_model.cpp",
+      "sha256": "97351b9713110adc95947a05225035da23dfd32735ab220c5b2b4ac969833e34",
+      "bytes": 15861
+    },
+    {
+      "path": "out/relay-baseline/source/src/main.cpp",
+      "sha256": "668ba1517df580fbd5082cf655b364030ae757d837385c06c4cae0c91eb2d33f",
+      "bytes": 27359
+    },
+    {
+      "path": "out/relay-baseline/source/src/map_builder.cpp",
+      "sha256": "ade14d009bc1ec061a0c39a30b2da0092600570668e74bdc3519aa1d91a96dcf",
+      "bytes": 80063
+    },
+    {
+      "path": "out/relay-baseline/source/src/map_document.cpp",
+      "sha256": "657848b1a5b074096d3ecbd6e8da97588e56037d09fabb3e0fa1b23ddd0e212d",
+      "bytes": 35187
+    },
+    {
+      "path": "out/relay-baseline/source/src/map_document_writer.cpp",
+      "sha256": "8681b8aeb26ebc1d869d11c62c2d302dcdaa7724d1637f41d5cbfab49799068d",
+      "bytes": 13355
+    },
+    {
+      "path": "out/relay-baseline/source/src/map_parser.cpp",
+      "sha256": "085a286bcefe1ca9175884d27538a358ebb8a4591d47a04497b9ca9bfdda407d",
+      "bytes": 28912
+    },
+    {
+      "path": "out/relay-baseline/source/src/map_writer.cpp",
+      "sha256": "49575e8fd3d0d77f560dd3021f07406380d589e81cc0ac2a6121b5ca67085cc7",
+      "bytes": 6053
+    },
+    {
+      "path": "out/relay-baseline/source/src/mp_motifs.cpp",
+      "sha256": "aed3e4e033453e54be781ca90744514062626efc4d6afc02d050ad2a8fd0b465",
+      "bytes": 24893
+    },
+    {
+      "path": "out/relay-baseline/source/src/navigation.cpp",
+      "sha256": "fbab7a31deafacebb72f4c8717b106c44eba2b7571a2c43247935467923add00",
+      "bytes": 111678
+    },
+    {
+      "path": "out/relay-baseline/source/src/pipeline.cpp",
+      "sha256": "9f6916d0b0aaa8896e070929c92025038563fd95ec31a8979e53f7c3f9f92c44",
+      "bytes": 5318
+    },
+    {
+      "path": "out/relay-baseline/source/src/prompt.cpp",
+      "sha256": "2d8d00cd16109c8a56523b0875b408562a24d85ee3b5f9345b58d9dbdd102de9",
+      "bytes": 13412
+    },
+    {
+      "path": "out/relay-baseline/source/src/quality.cpp",
+      "sha256": "9d9f69776614e7b8d26b1b2499f23608c59b70a27053c95b28b38a046021bc38",
+      "bytes": 54964
+    },
+    {
+      "path": "out/relay-baseline/source/src/repair.cpp",
+      "sha256": "f8c734e65dcc6dedd4e93cb9f17f896814f2c0a3406885f62d8d95634cf875c5",
+      "bytes": 20071
+    },
+    {
+      "path": "out/relay-baseline/source/src/report.cpp",
+      "sha256": "3bf5115411adfb02af5a2b677f8a4f273e5609b1261ef468def3591bf0d19741",
+      "bytes": 34179
+    },
+    {
+      "path": "out/relay-baseline/source/src/semantic_plan.cpp",
+      "sha256": "dbc139bb8df6e8149ab110dbc7780c7d21919445e62749c7c08f44f4adb2cbd5",
+      "bytes": 34521
+    },
+    {
+      "path": "out/relay-baseline/source/src/semantic_planner.cpp",
+      "sha256": "1aff0eb81ff10b59bc71d6fbe210cd8f733ebc075e5c3dfa47b70779c023881b",
+      "bytes": 14961
+    },
+    {
+      "path": "out/relay-baseline/source/src/sha256.cpp",
+      "sha256": "b8abfe6207b3460f08edd26927191509dedc5c78aee915f6eed637c85506f01b",
+      "bytes": 6866
+    },
+    {
+      "path": "out/relay-baseline/source/src/spawn_refinement.cpp",
+      "sha256": "1b585eb7ab4a598acd1b76e52bf94d7120a3c8f5408b64acc6c10ea9a6192cc8",
+      "bytes": 14905
+    },
+    {
+      "path": "out/relay-baseline/source/src/types.cpp",
+      "sha256": "fd3f6d2a30aac90b05fd7a13f4726cca37b61bd6251e267f6a64aec095c125a4",
+      "bytes": 4039
+    },
+    {
+      "path": "out/relay-baseline/source/src/upper_links.cpp",
+      "sha256": "0d74de2d508f13c85549b572f0dca5da638f9b3f6f19048d3215888a2d57a65b",
+      "bytes": 19469
+    },
+    {
+      "path": "out/relay-baseline/source/src/validator.cpp",
+      "sha256": "992a03360a4aa3300692217e1de52e3fb28867577b6f474c2f83e0441d47cef3",
+      "bytes": 31357
+    },
+    {
+      "path": "out/relay-baseline/source/src/visibility.cpp",
+      "sha256": "93c57d17ad89894a7959ebd5a5f5cdde1295dc8a5413ac53d846595c7a7be8af",
+      "bytes": 58865
+    },
+    {
+      "path": "out/relay-baseline/source/THIRD_PARTY.md",
+      "sha256": "67f02524a4f5baabf69b92cda70f99e42daa9c94caa6bb613651b7fd7888ac1c",
+      "bytes": 13267
+    },
+    {
+      "path": "out/relay-baseline/source/tools/map_recipes/build.ps1",
+      "sha256": "2a9986ad3019b3ea5125ec0ef3fbaa42cab3916bdd6de2b945053748633793d4",
+      "bytes": 3696
+    },
+    {
+      "path": "out/relay-baseline/source/tools/map_recipes/engine_smoke.py",
+      "sha256": "7f886dcf892858d8d65251121d6235b786c49191be61c898ca4b40fa43a633a5",
+      "bytes": 13991
+    },
+    {
+      "path": "out/relay-baseline/source/tools/map_recipes/inspect.py",
+      "sha256": "545d45472596133851326174eb3752cfdb3d41ead495f1c684bc7142b28b3253",
+      "bytes": 23811
+    },
+    {
+      "path": "out/relay-baseline/source/tools/map_recipes/layout-view-v2.html",
+      "sha256": "44114d19e5a84bd002e30b2b9243fb4e5f54d16008fa22e271ac2bcc36c9b3ad",
+      "bytes": 36118
+    },
+    {
+      "path": "out/relay-baseline/source/tools/map_recipes/recipe_support.hpp",
+      "sha256": "8b1321145e9fa896c71ad86be44025b6400992f11d07ceb0052683b23ed6600c",
+      "bytes": 30269
+    },
+    {
+      "path": "out/relay-baseline/source/tools/map_recipes/render_layout.py",
+      "sha256": "07d3d70e635e918a3dcbbdc3f01723df549a220170464cc92156064fe39b26bb",
+      "bytes": 23462
+    },
+    {
+      "path": "out/relay-baseline/source/tools/mp_portfolio/compile.ps1",
+      "sha256": "34a821120bef1be0ca659e8fa612d0dc9a32e931aadb42f03fe997bb2eefaed5",
+      "bytes": 2922
+    },
+    {
+      "path": "out/relay-baseline/source/tools/mp_portfolio/inspect.py",
+      "sha256": "60a06fb80b519fa735e622cfca9df07912500c0e36cd840f1937287561c0ceb7",
+      "bytes": 10160
+    },
+    {
+      "path": "out/teleporter-arrival-study/arrival-departures.png",
+      "sha256": "b51e73381fd14af2b82cf68d9825e26da977b66237456eead2ab05f90fd1a81a",
+      "bytes": 75766
+    },
+    {
+      "path": "out/teleporter-arrival-study/audit.json",
+      "sha256": "508b425d4ca6c8aa4b66b84be676ceb9f5d1ccf0df7136c13c9931c456b07e04",
+      "bytes": 108696
+    },
+    {
+      "path": "out/teleporter-arrival-study/controls.log",
+      "sha256": "aa2d664910e0697523738dd237179802d70c5ac1fa7d10e80ddfc66ae94da442",
+      "bytes": 1756
+    },
+    {
+      "path": "out/teleporter-arrival-study/protocol-v1.json",
+      "sha256": "584900ad28e6cccd3fe6e9e9cc8c973993bad45bfaeed308f5f5d57ff7c3f3b3",
+      "bytes": 9398
+    },
+    {
+      "path": "out/teleporter-arrival-study/record_evidence.py",
+      "sha256": "f297f5278760150e058ad07eae920f60ce9bf9b4db0c0f6c91c73d575d0ebb2b",
+      "bytes": 12068
+    },
+    {
+      "path": "out/teleporter-arrival-study/render.py",
+      "sha256": "72a5e07f545e11a18d24b970bc3807786dd4a965db7a1622ec67cfca186e63d5",
+      "bytes": 4851
+    },
+    {
+      "path": "out/teleporter-arrival-study/source-trigger-exclusions.json",
+      "sha256": "34af96e4fca5475573b6d013b6d5e9cb1c75f6c44b69c2e345131600043607e6",
+      "bytes": 11997
+    },
+    {
+      "path": "out/traversal-study/card2dm1-traversal.png",
+      "sha256": "b789a21b6b64503aefe519d5b7a5dbc199f19ca57a0157c0c816382136dd54a0",
+      "bytes": 83967
+    },
+    {
+      "path": "out/traversal-study/mechanic-inventory.json",
+      "sha256": "ce0dcc1013f3ba580d7cfed8d3e29c3b436d0d6c9322dae046d65d657d4dff4e",
+      "bytes": 12445
+    },
+    {
+      "path": "out/traversal-study/ztn2dm1-traversal.png",
+      "sha256": "84d0edd71cb7bb436f1eaacf3d0c333d19c26a9d0cbbeb08995cef2a841bef99",
+      "bytes": 87010
+    }
+  ],
+  "limits": "Fixed original recipe, analytical geometry and four initial stock-game departures. No default generator training, onward native pickup, safe-arrival or multiplayer balance claim."
+}

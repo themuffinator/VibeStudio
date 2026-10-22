@@ -1,0 +1,118 @@
+<div id="ql-reference-atlas">
+  <style>
+    #ql-reference-atlas { color:var(--foreground); width:100%; }
+    #ql-reference-atlas .atlas-stage { width:100%; }
+    #ql-reference-atlas .atlas-stage svg { display:block; width:100%; }
+    #ql-reference-atlas .atlas-map-text { fill:var(--foreground); paint-order:stroke; stroke:var(--background); stroke-width:3px; stroke-linejoin:round; }
+    #ql-reference-atlas .atlas-legend { display:flex; flex-wrap:wrap; gap:6px 16px; }
+    #ql-reference-atlas .atlas-title { margin:0 0 10px; }
+    #ql-reference-atlas .atlas-detail { margin-top:8px; overflow-wrap:anywhere; }
+    #ql-reference-atlas .atlas-key { display:inline-block; margin-right:5px; }
+  </style>
+  <h3 class="atlas-title">Quake Live · local preSteam atlas</h3>
+  <div class="viz-controls">
+    <label class="form-label">Map<select class="form-select" data-atlas-map></select></label>
+    <label class="form-label">Height<select class="form-select" data-atlas-band></select></label>
+    <label class="form-label">Scale<select class="form-select" data-atlas-scale><option value="fit">Fit map</option><option value="common">Common scale</option></select></label>
+  </div>
+  <div class="atlas-stage" data-atlas-stage></div>
+  <div class="atlas-legend text-small">
+    <span><span class="atlas-key" style="color:var(--viz-series-1)">■</span>Upward surfaces</span>
+    <span><span class="atlas-key" style="color:var(--viz-series-2)">■</span>Water</span>
+    <span><span class="atlas-key" style="color:var(--viz-series-3)">■</span>Slime</span>
+    <span><span class="atlas-key" style="color:var(--viz-series-6)">■</span>Lava</span>
+    <span>□ Weapon · ◇ Armor / powerup · ○ Other item / spawn</span>
+    <span>◆ T teleport · △ J push · ⇢ Target link</span>
+  </div>
+  <div class="atlas-detail text-small" data-atlas-detail aria-live="polite"></div>
+  <div class="text-small">Static surfaces include trim / exterior tops · All authored mode variants · Nearby surface bands for markers · No native navigation or engine rendering</div>
+  <script type="application/json" id="ql-reference-atlas-data">__ATLAS_DATA__</script>
+  <script>
+  (() => {
+    const root=document.getElementById('ql-reference-atlas');
+    const data=JSON.parse(document.getElementById('ql-reference-atlas-data').textContent);
+    const mapSelect=root.querySelector('[data-atlas-map]');
+    const bandSelect=root.querySelector('[data-atlas-band]');
+    const scaleSelect=root.querySelector('[data-atlas-scale]');
+    const stage=root.querySelector('[data-atlas-stage]');
+    const detail=root.querySelector('[data-atlas-detail]');
+    const NS='http://www.w3.org/2000/svg';
+    const color={surface:'var(--viz-series-1)',water:'var(--viz-series-2)',slime:'var(--viz-series-3)',lava:'var(--viz-series-6)'};
+    const short={weapon_rocketlauncher:'RL',weapon_railgun:'RG',weapon_lightning:'LG',weapon_shotgun:'SG',weapon_grenadelauncher:'GL',weapon_plasmagun:'PG',weapon_machinegun:'MG',weapon_bfg:'BFG',item_health_mega:'MH',item_armor_body:'RA',item_armor_combat:'YA',item_armor_jacket:'GA',item_quad:'Quad'};
+    const svgNode=(tag,attrs={},text)=>{const el=document.createElementNS(NS,tag);Object.entries(attrs).forEach(([k,v])=>el.setAttribute(k,v));if(text!==undefined)el.textContent=text;return el;};
+    for(const map of data.maps){const option=document.createElement('option');option.value=map.map;option.textContent=map.title;mapSelect.append(option);}
+    const current=()=>data.maps.find(map=>map.map===mapSelect.value);
+    function bands(){bandSelect.replaceChildren();const all=document.createElement('option');all.value='all';all.textContent='All heights';bandSelect.append(all);for(const band of current().bands){const option=document.createElement('option');option.value=band;option.textContent=`Z ${band*128} to ${(band+1)*128}`;bandSelect.append(option);} }
+    function draw(){
+      const map=current(), band=bandSelect.value;
+      const width=Math.max(280,Math.floor(stage.getBoundingClientRect().width));
+      const height=width, pad=28;
+      const span=scaleSelect.value==='common'?data.common_span:Math.max(map.bounds[2]-map.bounds[0],map.bounds[3]-map.bounds[1]);
+      const scale=(width-2*pad)/span;
+      const center=[(map.bounds[0]+map.bounds[2])/2,(map.bounds[1]+map.bounds[3])/2];
+      const xy=point=>[width/2+(point[0]-center[0])*scale,height/2-(point[1]-center[1])*scale];
+      const visible=context=>band==='all'||context.band===Number(band);
+      const svg=svgNode('svg',{viewBox:`0 0 ${width} ${height}`,height,role:'img','aria-labelledby':'ql-atlas-title ql-atlas-desc','data-units-per-pixel':1/scale,'data-map':map.map,'data-band':band,'data-scale':scaleSelect.value});
+      svg.append(svgNode('title',{id:'ql-atlas-title'},`${map.title}, ${band==='all'?'all projected heights':`height slab ${Number(band)*128} to ${(Number(band)+1)*128}`}`));
+      svg.append(svgNode('desc',{id:'ql-atlas-desc'},'Actual model-zero upward rendered surfaces projected orthographically from above. Curved patches are sampled. Height slabs are not certified floors. Authored all-mode item origins and direct teleport/push target relations are shown. No native collision, navigation, engine rendering or runtime trajectory is established.'));
+      const defs=svgNode('defs');const marker=svgNode('marker',{id:'ql-atlas-arrow',viewBox:'0 0 6 6',refX:5,refY:3,markerWidth:5,markerHeight:5,orient:'auto'});marker.append(svgNode('path',{d:'M0,0 L6,3 L0,6 Z',fill:'var(--muted-foreground)'}));defs.append(marker);svg.append(defs);
+      for(const group of map.surfaces){
+        if(band!=='all'&&group.band!==Number(band))continue;
+        const opacity=group.kind==='surface'?(band==='all'?.3+.35*(group.band-map.bands[0])/Math.max(1,map.bands.at(-1)-map.bands[0]):.65):.85;
+        for(const polygon of group.polygons){
+          const path=polygon.map(ring=>ring.map((p,i)=>`${i?'L':'M'}${xy(p).map(x=>x.toFixed(3)).join(',')}`).join(' ')+' Z').join(' ');
+          svg.append(svgNode('path',{d:path,fill:color[group.kind],'fill-opacity':opacity,'fill-rule':'evenodd',stroke:'var(--border)','stroke-width':.35,'data-surface-band':group.band,'data-surface-kind':group.kind}));
+        }
+      }
+      const labels=[];let teleIndex=0,pushIndex=0;
+      const linkCodes=new Map(map.annotations.filter(p=>['teleport','push'].includes(p.kind)).map(p=>[p.id,p.kind==='teleport'?`T${++teleIndex}`:`J${++pushIndex}`]));
+      for(const link of map.links){
+        if(visible(link.from_context)&&visible(link.to_context)){
+          const a=xy(link.from),b=xy(link.to);
+          svg.append(svgNode('line',{x1:a[0],y1:a[1],x2:b[0],y2:b[1],stroke:'var(--muted-foreground)','stroke-width':1,'stroke-dasharray':'3 4','marker-end':'url(#ql-atlas-arrow)','data-target-link':`${link.source}:${link.target_entity}`}));
+        }
+        if(visible(link.to_context)){
+          const [x,y]=xy(link.to);
+          svg.append(svgNode('circle',{cx:x,cy:y,r:3,fill:'var(--background)',stroke:'var(--foreground)','stroke-width':1,'data-destination':link.target_entity,'data-tooltip':`${linkCodes.get(link.source)} target: ${link.target_class}; XYZ ${link.to.join(', ')}`}));
+          labels.push({text:`${linkCodes.get(link.source)} out`,x,y,priority:0});
+        }
+      }
+      let visibleAnnotations=0;
+      for(const point of map.annotations){
+        if(!visible(point.band_context))continue;
+        visibleAnnotations++;
+        const [x,y]=xy(point.origin),special=['teleport','push'].includes(point.kind),major=/armor_(body|combat|jacket)$|health_mega|item_quad/.test(point.class);
+        const r=special?4:major?4:point.kind==='weapon'?3.5:2.5;
+        const attrs={fill:special?'var(--viz-series-4)':major?'var(--viz-series-5)':'var(--background)',stroke:'var(--foreground)','stroke-width':1,'data-annotation':point.id,'data-origin-z':point.origin[2],'data-context-band':point.band_context.band,'data-tooltip':`#${point.id} ${point.class}; authored XYZ ${point.origin.join(', ')}; band context: ${point.band_context.basis}${point.band_context.surface_z!==undefined?`; surface Z ${point.band_context.surface_z.toFixed(3)}`:''}${Object.keys(point.properties).length?'; '+JSON.stringify(point.properties):''}`};
+        if(point.kind==='weapon')svg.append(svgNode('rect',{...attrs,x:x-r,y:y-r,width:r*2,height:r*2}));
+        else if(point.kind==='push')svg.append(svgNode('polygon',{...attrs,points:`${x},${y-r} ${x+r},${y+r} ${x-r},${y+r}`}));
+        else if(special||major)svg.append(svgNode('polygon',{...attrs,points:`${x},${y-r} ${x+r},${y} ${x},${y+r} ${x-r},${y}`}));
+        else svg.append(svgNode('circle',{...attrs,cx:x,cy:y,r}));
+        const text=special?linkCodes.get(point.id):short[point.class];
+        if(text)labels.push({text,x,y,priority:special?0:major?1:2});
+      }
+      const length=2**Math.floor(Math.log2(span/4));
+      const bar=length*scale;
+      svg.append(svgNode('line',{x1:pad,y1:height-14,x2:pad+bar,y2:height-14,stroke:'var(--foreground)','stroke-width':2,'data-scale-bar':length}));
+      svg.append(svgNode('text',{x:pad,y:height-22,class:'atlas-map-text text-small','data-fixed-label':''},`${length} units`));
+      svg.append(svgNode('text',{x:width-pad,y:16,'text-anchor':'end',class:'atlas-map-text text-small','data-fixed-label':''},'+Y ↑'));
+      stage.replaceChildren(svg);
+      const occupied=[...svg.querySelectorAll('[data-fixed-label]')].map(n=>n.getBBox());
+      for(const label of labels.sort((a,b)=>a.priority-b.priority)){
+        const el=svgNode('text',{class:'atlas-map-text text-small'},label.text);svg.append(el);let kept=false;
+        for(const [dx,dy,anchor] of [[7,-7,'start'],[7,14,'start'],[-7,-7,'end'],[-7,14,'end'],[0,-13,'middle'],[0,20,'middle']]){
+          el.setAttribute('x',label.x+dx);el.setAttribute('y',label.y+dy);el.setAttribute('text-anchor',anchor);
+          const b=el.getBBox();
+          if(b.x<4||b.y<4||b.x+b.width>width-4||b.y+b.height>height-4)continue;
+          if(occupied.some(a=>b.x<a.x+a.width+3&&b.x+b.width+3>a.x&&b.y<a.y+a.height+3&&b.y+b.height+3>a.y))continue;
+          occupied.push(b);kept=true;break;
+        }
+        if(!kept)el.remove();
+      }
+      detail.textContent=`${map.title} · ${band==='all'?'All heights':`Z ${Number(band)*128}–${(Number(band)+1)*128}`} · ${visibleAnnotations} authored markers · ${scaleSelect.value==='common'?'Common':'Fitted'} scale`;
+    }
+    mapSelect.addEventListener('change',()=>{bands();draw();});bandSelect.addEventListener('change',draw);scaleSelect.addEventListener('change',draw);
+    bands();new ResizeObserver(draw).observe(stage);draw();
+  })();
+  </script>
+</div>

@@ -1,5 +1,6 @@
 #include "app/level_generation_dialog.h"
 
+#include "core/level_mapgen.h"
 #include "core/studio_settings.h"
 
 #include <QCheckBox>
@@ -23,6 +24,7 @@
 #include <QShortcut>
 #include <QSpinBox>
 #include <QSplitter>
+#include <QStandardItemModel>
 #include <QTabWidget>
 #include <QThread>
 #include <QToolButton>
@@ -34,6 +36,8 @@ namespace vibestudio {
 
 struct LevelGenerationDialog::Work {
 	std::atomic_bool discard = false;
+	// Stops a Quake-MapGen text model waiting for its answer.
+	std::shared_ptr<std::atomic_bool> cancelled = std::make_shared<std::atomic_bool>(false);
 	QThread* thread = nullptr;
 	LevelGenerationResult result;
 };
@@ -53,6 +57,19 @@ QComboBox* choiceBox(const QString& accessibleName, const QVector<QPair<QString,
 QString choice(const QComboBox* box)
 {
 	return box ? box->currentData().toString() : QString();
+}
+
+// Enables or disables the item holding `data`, with why when it is off.
+void setChoiceEnabled(QComboBox* box, const QString& data, bool enabled, const QString& whyNot)
+{
+	auto* model = qobject_cast<QStandardItemModel*>(box->model());
+	const int index = box->findData(data);
+	if (!model || index < 0) {
+		return;
+	}
+	QStandardItem* item = model->item(index);
+	item->setEnabled(enabled);
+	item->setToolTip(enabled ? QString() : whyNot);
 }
 
 QPlainTextEdit* readOnlyText(const QString& objectName, const QString& accessibleName)
@@ -100,9 +117,20 @@ LevelGenerationDialog::LevelGenerationDialog(QWidget* parent, LevelGenerationDia
 	formLayout->addWidget(m_prompt);
 
 	auto* options = new QFormLayout;
+	m_options = options;
 	options->setFieldGrowthPolicy(QFormLayout::AllNonFixedFieldsGrow);
-	m_game = choiceBox(tr("Game"), {{tr("Quake"), QStringLiteral("quake")}, {tr("Quake II"), QStringLiteral("quake2")}, {tr("Quake III Arena"), QStringLiteral("quake3")},
-								   {tr("Doom"), QStringLiteral("doom")}});
+	m_generator = choiceBox(tr("Generator"), {{tr("Studio blockout"), QStringLiteral("studio")}, {tr("Quake-MapGen"), levelMapgenGeneratorId()}});
+	m_generator->setObjectName(QStringLiteral("levelGenerationGenerator"));
+	m_generator->setItemData(0, tr("Rooms and corridors on a grid of sealed cells, with themed textures, liquids, and monsters. Quake, Quake II, Quake III Arena, and Doom."),
+		Qt::ToolTipRole);
+	m_generator->setItemData(1, tr("Quake-MapGen: ranked layouts with stairs, raised crossings, and passages, checked for navigation, visibility, and lighting before the map is "
+								   "written. Quake, Quake II, and Quake III Arena, with capture the flag. It reads the theme from the description."),
+		Qt::ToolTipRole);
+	m_generator->setToolTip(tr("Which generator builds the level. Hover over each for what it makes."));
+	options->addRow(tr("Ge&nerator:"), m_generator);
+	// The open map's or installation's game when there is one; otherwise the description names it.
+	m_game = choiceBox(tr("Game"), {{tr("From the description"), QString()}, {tr("Quake"), QStringLiteral("quake")}, {tr("Quake II"), QStringLiteral("quake2")},
+								   {tr("Quake III Arena"), QStringLiteral("quake3")}, {tr("Doom"), QStringLiteral("doom")}});
 	m_game->setObjectName(QStringLiteral("levelGenerationGame"));
 	const QString game = m_hooks.defaultGame ? m_hooks.defaultGame() : QString();
 	if (const int index = m_game->findData(game); index >= 0) {
@@ -110,8 +138,12 @@ LevelGenerationDialog::LevelGenerationDialog(QWidget* parent, LevelGenerationDia
 	}
 	options->addRow(tr("&Game:"), m_game);
 	m_mode = choiceBox(tr("Mode"), {{tr("From the description"), QString()}, {tr("Single player"), QStringLiteral("single-player")},
-								   {tr("Deathmatch"), QStringLiteral("deathmatch")}, {tr("Duel"), QStringLiteral("duel")}});
+								   {tr("Deathmatch"), QStringLiteral("deathmatch")}, {tr("Duel"), QStringLiteral("duel")}, {tr("Capture the flag"), QStringLiteral("ctf")}});
 	options->addRow(tr("&Mode:"), m_mode);
+	m_format = choiceBox(tr("Map format"), {});
+	m_format->setObjectName(QStringLiteral("levelGenerationFormat"));
+	m_format->setToolTip(tr("How the map file writes its brushes. Quake III Arena takes classic brushes or brush primitives."));
+	options->addRow(tr("Map &format:"), m_format);
 	m_theme = choiceBox(tr("Theme"), {{tr("From the description"), QString()}, {tr("Base"), QStringLiteral("base")}, {tr("Medieval"), QStringLiteral("medieval")},
 									 {tr("Metal"), QStringLiteral("metal")}, {tr("Hell"), QStringLiteral("hell")}, {tr("Cave"), QStringLiteral("cave")}});
 	options->addRow(tr("&Theme:"), m_theme);
@@ -123,6 +155,10 @@ LevelGenerationDialog::LevelGenerationDialog(QWidget* parent, LevelGenerationDia
 	m_verticality = choiceBox(tr("Verticality"), {{tr("From the description"), QString()}, {tr("Flat"), QStringLiteral("flat")}, {tr("Low"), QStringLiteral("low")},
 												 {tr("Medium"), QStringLiteral("medium")}, {tr("High"), QStringLiteral("high")}});
 	options->addRow(tr("&Verticality:"), m_verticality);
+	m_intensity = choiceBox(tr("Intensity"), {{tr("From the description"), QString()}, {tr("Quiet"), QStringLiteral("quiet")}, {tr("Balanced"), QStringLiteral("balanced")},
+												 {tr("Intense"), QStringLiteral("intense")}});
+	m_intensity->setToolTip(tr("How much combat the plan asks for: fewer encounters, or more."));
+	options->addRow(tr("&Intensity:"), m_intensity);
 	m_liquid = choiceBox(tr("Liquid in pits"), {{tr("From the description"), QString()}, {tr("Water"), QStringLiteral("water")}, {tr("Slime"), QStringLiteral("slime")},
 											   {tr("Lava"), QStringLiteral("lava")}});
 	options->addRow(tr("&Liquid:"), m_liquid);
@@ -173,10 +209,23 @@ LevelGenerationDialog::LevelGenerationDialog(QWidget* parent, LevelGenerationDia
 	m_previewRequest = new QPushButton(tr("Preview Re&quest…"));
 	m_previewRequest->setAccessibleName(tr("Preview the plan request"));
 	m_previewRequest->setToolTip(tr("Show exactly what would be sent to the text model, without sending it."));
+	m_aiSettings = new QPushButton(tr("AI Settings…"));
+	m_aiSettings->setObjectName(QStringLiteral("levelGenerationAiSettings"));
+	m_aiSettings->setAccessibleName(tr("Open AI settings"));
+	m_aiSettings->setToolTip(tr("Choose the connector, model, and endpoint in Settings > AI and Automation."));
+	connect(m_aiSettings, &QPushButton::clicked, this, [this] {
+		if (m_hooks.openAiSettings) {
+			m_hooks.openAiSettings();
+		}
+	});
 	plannerLayout->addWidget(m_rulesPlanner);
 	plannerLayout->addWidget(m_modelPlanner);
 	plannerLayout->addWidget(m_plannerStatus);
-	plannerLayout->addWidget(m_previewRequest, 0, Qt::AlignLeft);
+	auto* modelButtons = new QHBoxLayout;
+	modelButtons->addWidget(m_previewRequest);
+	modelButtons->addWidget(m_aiSettings);
+	modelButtons->addStretch(1);
+	plannerLayout->addLayout(modelButtons);
 	formLayout->addWidget(planner);
 
 	auto* actions = new QHBoxLayout;
@@ -246,9 +295,18 @@ LevelGenerationDialog::LevelGenerationDialog(QWidget* parent, LevelGenerationDia
 	m_mapText = readOnlyText(QStringLiteral("levelGenerationMapText"), tr("Generated map text"));
 	m_mapText->setFont(QFontDatabase::systemFont(QFontDatabase::FixedFont));
 	m_mapText->setLineWrapMode(QPlainTextEdit::NoWrap);
+	m_analysisText = readOnlyText(QStringLiteral("levelGenerationAnalysis"), tr("Navigation, visibility, lighting, and quality analysis"));
+	m_reportText = readOnlyText(QStringLiteral("levelGenerationReport"), tr("Quake-MapGen report"));
+	m_reportText->setFont(QFontDatabase::systemFont(QFontDatabase::FixedFont));
+	m_reportText->setLineWrapMode(QPlainTextEdit::NoWrap);
 	m_detailTabs->addTab(m_planText, tr("Plan"));
 	m_detailTabs->addTab(m_notesText, tr("Notes"));
+	m_detailTabs->addTab(m_analysisText, tr("Analysis"));
 	m_detailTabs->addTab(m_mapText, tr("Map"));
+	m_detailTabs->addTab(m_reportText, tr("Report"));
+	// Quake-MapGen's own tabs appear with its results.
+	m_detailTabs->setTabVisible(m_detailTabs->indexOf(m_analysisText), false);
+	m_detailTabs->setTabVisible(m_detailTabs->indexOf(m_reportText), false);
 	m_detailTabs->setVisible(false);
 	reviewLayout->addWidget(m_detailTabs, 1);
 	splitter->addWidget(review);
@@ -266,9 +324,13 @@ LevelGenerationDialog::LevelGenerationDialog(QWidget* parent, LevelGenerationDia
 	m_savePlan = buttons->addButton(tr("Save &Plan…"), QDialogButtonBox::ActionRole);
 	m_savePlan->setAccessibleName(tr("Save the level plan as JSON"));
 	m_savePlan->setToolTip(tr("Keep the plan to edit by hand or build again: vibestudio --cli map generate --plan."));
-	for (QPushButton* button : {m_open, m_save, m_savePlan}) {
+	m_saveReport = buttons->addButton(tr("Save R&eport…"), QDialogButtonBox::ActionRole);
+	m_saveReport->setAccessibleName(tr("Save the Quake-MapGen report as JSON"));
+	m_saveReport->setToolTip(tr("Keep the plan, ranking, repairs, and analysis Quake-MapGen recorded, as its .qmg.json report."));
+	for (QPushButton* button : {m_open, m_save, m_savePlan, m_saveReport}) {
 		button->setEnabled(false);
 	}
+	m_saveReport->setVisible(false);
 	root->addWidget(buttons);
 
 	connect(buttons, &QDialogButtonBox::rejected, this, &LevelGenerationDialog::reject);
@@ -289,17 +351,27 @@ LevelGenerationDialog::LevelGenerationDialog(QWidget* parent, LevelGenerationDia
 	connect(m_open, &QPushButton::clicked, this, &LevelGenerationDialog::openInLevels);
 	connect(m_save, &QPushButton::clicked, this, &LevelGenerationDialog::saveAs);
 	connect(m_savePlan, &QPushButton::clicked, this, &LevelGenerationDialog::savePlan);
+	connect(m_saveReport, &QPushButton::clicked, this, &LevelGenerationDialog::saveReport);
+	connect(m_generator, &QComboBox::currentIndexChanged, this, [this] {
+		updateGeneratorControls();
+		refreshPlannerStatus();
+	});
+	connect(m_game, &QComboBox::currentIndexChanged, this, &LevelGenerationDialog::updateGeneratorControls);
 	auto* shortcut = new QShortcut(QKeySequence(Qt::CTRL | Qt::Key_Return), this);
 	connect(shortcut, &QShortcut::activated, this, &LevelGenerationDialog::generate);
+	updateGeneratorControls();
 	refreshPlannerStatus();
 }
 
 LevelGenerationDialog::~LevelGenerationDialog()
 {
 	m_work->discard = true;
-	if (m_work->thread) {
-		m_work->thread->disconnect(this);
-		m_work->thread->wait();
+	m_work->cancelled->store(true);
+	if (QThread* thread = m_work->thread) {
+		thread->disconnect(this);
+		thread->wait();
+		delete thread;
+		m_work->thread = nullptr;
 	}
 }
 
@@ -321,13 +393,132 @@ const LevelGenerationResult& LevelGenerationDialog::result() const
 void LevelGenerationDialog::refreshPlannerStatus()
 {
 	const bool model = m_modelPlanner->isChecked();
+	// The radio names the model it would ask, so the choice says who plans.
+	const AiTextConnection connection = resolveAiTextConnection(StudioSettings().aiAutomationPreferences());
+	m_modelPlanner->setText(connection.ready() ? tr("The &text model: %1").arg(aiTextConnectionLabel(connection)) : tr("The &text model"));
+	m_aiSettings->setVisible(model && m_hooks.openAiSettings);
 	if (model) {
-		const AiTextConnection connection = resolveAiTextConnection(StudioSettings().aiAutomationPreferences());
 		m_plannerStatus->setText(aiTextConnectionBlockText(connection));
+	} else if (mapgenSelected()) {
+		m_plannerStatus->setText(tr("Quake-MapGen's rules plan the level here, the same way every time for the same description and seed."));
 	} else {
 		m_plannerStatus->setText(tr("The rules plan the level here, the same way every time for the same description and seed."));
 	}
 	m_previewRequest->setEnabled(model && !m_busy);
+}
+
+bool LevelGenerationDialog::mapgenSelected() const
+{
+	return choice(m_generator) == levelMapgenGeneratorId();
+}
+
+void LevelGenerationDialog::updateGeneratorControls()
+{
+	const bool mapgen = mapgenSelected();
+	// Quake-MapGen builds no Doom levels; the studio generator has no capture the flag.
+	setChoiceEnabled(m_game, QStringLiteral("doom"), !mapgen, tr("Quake-MapGen builds Quake, Quake II, and Quake III Arena levels."));
+	if (mapgen && choice(m_game) == QStringLiteral("doom")) {
+		m_game->setCurrentIndex(0);
+	}
+	setChoiceEnabled(m_mode, QStringLiteral("ctf"), mapgen, tr("Capture the flag needs Quake-MapGen."));
+	if (!mapgen && choice(m_mode) == QStringLiteral("ctf")) {
+		m_mode->setCurrentIndex(0);
+	}
+	const QString game = choice(m_game);
+	const QString format = choice(m_format);
+	m_format->blockSignals(true);
+	m_format->clear();
+	// With the game left to the description, the format follows whichever game it names.
+	const QStringList formats = game.isEmpty() ? QStringList() : levelMapgenFormatIds(game);
+	if (formats.isEmpty()) {
+		m_format->addItem(tr("The game's own"), QString());
+	}
+	for (const QString& id : formats) {
+		if (id == QStringLiteral("q3-legacy")) {
+			m_format->addItem(tr("Classic brushes"), id);
+		} else if (id == QStringLiteral("q3-brush-primitives")) {
+			m_format->addItem(tr("Brush primitives"), id);
+		} else {
+			m_format->addItem(tr("Valve 220"), id);
+		}
+	}
+	m_format->setCurrentIndex(std::max(0, m_format->findData(format)));
+	m_format->setEnabled(m_format->count() > 1);
+	m_format->blockSignals(false);
+	// Each generator's own controls; Quake-MapGen reads the theme from the description.
+	m_options->setRowVisible(m_format, mapgen);
+	m_options->setRowVisible(m_intensity, mapgen);
+	m_options->setRowVisible(m_theme, !mapgen);
+	m_options->setRowVisible(m_liquid, !mapgen);
+	m_options->setRowVisible(m_monsters, !mapgen);
+	m_projectTextures->setVisible(!mapgen);
+	m_rooms->setMaximum(mapgen ? 32 : 16);
+}
+
+LevelGenerationSpec LevelGenerationDialog::mapgenSpecFromControls() const
+{
+	LevelGenerationSpec spec;
+	spec.generator = levelMapgenGeneratorId();
+	spec.prompt = m_prompt->toPlainText().trimmed();
+	spec.game = choice(m_game);
+	spec.mode = choice(m_mode);
+	spec.format = choice(m_format);
+	spec.rooms = m_rooms->value();
+	spec.verticality = choice(m_verticality);
+	spec.intensity = choice(m_intensity);
+	spec.players = m_players->value();
+	spec.seed = m_seedFromPrompt->isChecked() ? -1 : m_seed->value();
+	return spec;
+}
+
+void LevelGenerationDialog::generateWithMapgen()
+{
+	const LevelGenerationSpec spec = mapgenSpecFromControls();
+	if (const QString problem = levelMapgenSpecProblem(spec); !problem.isEmpty()) {
+		m_status->setText(problem);
+		return;
+	}
+	const QString about = spec.prompt.isEmpty() ? m_game->currentText() : spec.prompt.left(80);
+	if (m_rulesPlanner->isChecked()) {
+		if (m_hooks.beginTask) {
+			m_task = m_hooks.beginTask(tr("Generate Level"), tr("Quake-MapGen is planning \"%1\" by its rules.").arg(about));
+		}
+		runInBackground(tr("Planning, laying out, building, and analysing the level…"), [spec] { return generateMapgenLevel(spec); }, {});
+		return;
+	}
+	if (spec.prompt.isEmpty()) {
+		m_status->setText(tr("Describe the level for the text model to plan."));
+		m_prompt->setFocus();
+		return;
+	}
+	const AiTextConnection connection = resolveAiTextConnection(StudioSettings().aiAutomationPreferences());
+	refreshPlannerStatus();
+	if (!connection.ready()) {
+		m_status->setText(aiTextConnectionBlockText(connection));
+		return;
+	}
+	if (!connection.local && m_hooks.confirmSend) {
+		AiChatRequest request;
+		AiHttpRequest http;
+		QString error;
+		if (!levelMapgenPlanAiRequest(spec, connection, &request, &error) || !buildAiHttpRequest(request, QString(), &http, &error)) {
+			m_status->setText(error);
+			return;
+		}
+		if (!m_hooks.confirmSend(connection.connectorId, connection.displayName, connection.endpoint, http)) {
+			m_status->setText(tr("Nothing was sent."));
+			return;
+		}
+	}
+	if (m_hooks.beginTask) {
+		m_task = m_hooks.beginTask(tr("Generate Level"), tr("Asking %1 to plan \"%2\" for Quake-MapGen.").arg(aiTextConnectionLabel(connection), about));
+	}
+	auto model = std::make_shared<LevelMapgenModel>();
+	model->connection = connection;
+	model->apiKey = aiTextConnectionApiKey(connection);
+	model->cancelled = m_work->cancelled;
+	runInBackground(tr("Asking %1 for a plan, then building and analysing the level…").arg(connection.displayName),
+		[spec, model] { return generateMapgenLevel(spec, model.get()); }, {});
 }
 
 LevelGenerationSpec LevelGenerationDialog::specFromControls() const
@@ -343,15 +534,21 @@ LevelGenerationSpec LevelGenerationDialog::specFromControls() const
 	spec.monsters = choice(m_monsters);
 	spec.players = m_players->value();
 	spec.seed = m_seedFromPrompt->isChecked() ? -1 : m_seed->value();
+	// The game the description chose, when Game leaves it to the description.
+	spec = normalizedLevelGenerationSpec(spec);
 	if (m_projectTextures->isChecked() && m_hooks.availableTextures) {
 		spec.availableTextures = m_hooks.availableTextures(spec.game);
 	}
-	return normalizedLevelGenerationSpec(spec);
+	return spec;
 }
 
 void LevelGenerationDialog::generate()
 {
 	if (m_busy) {
+		return;
+	}
+	if (mapgenSelected()) {
+		generateWithMapgen();
 		return;
 	}
 	const LevelGenerationSpec spec = specFromControls();
@@ -389,7 +586,7 @@ void LevelGenerationDialog::generate()
 		}
 	}
 	if (m_hooks.beginTask) {
-		m_task = m_hooks.beginTask(tr("Generate Level"), tr("Asking %1 (%2) for a plan.").arg(connection.displayName, connection.model));
+		m_task = m_hooks.beginTask(tr("Generate Level"), tr("Asking %1 for a plan.").arg(aiTextConnectionLabel(connection)));
 	}
 	askModel(spec, connection, QString(), {}, 0);
 }
@@ -435,12 +632,18 @@ void LevelGenerationDialog::askModel(const LevelGenerationSpec& spec, const AiTe
 
 void LevelGenerationDialog::build(const LevelGenerationSpec& spec, const LevelSemanticPlan* plan, const QStringList& planWarnings)
 {
-	setBusy(true, tr("Laying out and building the level…"));
-	const auto work = m_work;
-	work->discard = false;
 	const bool hasPlan = plan != nullptr;
 	const LevelSemanticPlan planCopy = hasPlan ? *plan : LevelSemanticPlan();
-	QThread* thread = QThread::create([work, spec, planCopy, hasPlan] { work->result = generateLevel(spec, hasPlan ? &planCopy : nullptr); });
+	runInBackground(tr("Laying out and building the level…"), [spec, planCopy, hasPlan] { return generateLevel(spec, hasPlan ? &planCopy : nullptr); }, planWarnings);
+}
+
+void LevelGenerationDialog::runInBackground(const QString& status, std::function<LevelGenerationResult()> job, const QStringList& planWarnings)
+{
+	setBusy(true, status);
+	const auto work = m_work;
+	work->discard = false;
+	work->cancelled->store(false);
+	QThread* thread = QThread::create([work, job = std::move(job)] { work->result = job(); });
 	work->thread = thread;
 	connect(thread, &QThread::finished, this, [this, work, thread, planWarnings] {
 		thread->deleteLater();
@@ -458,13 +661,25 @@ void LevelGenerationDialog::build(const LevelGenerationSpec& spec, const LevelSe
 void LevelGenerationDialog::showResult(const LevelGenerationResult& result, const QStringList& planWarnings)
 {
 	m_result = result;
+	const bool mapgen = result.generator == levelMapgenGeneratorId();
+	m_savePlan->setVisible(!mapgen);
+	m_saveReport->setVisible(mapgen);
+	m_detailTabs->setTabVisible(m_detailTabs->indexOf(m_analysisText), mapgen);
+	m_detailTabs->setTabVisible(m_detailTabs->indexOf(m_reportText), mapgen);
+	m_analysisText->setPlainText(result.analysis.join(QLatin1Char('\n')));
+	m_reportText->setPlainText(QString::fromUtf8(result.generatorReport.left(1024 * 1024)));
 	for (QPushButton* button : {m_open, m_save, m_savePlan}) {
 		button->setEnabled(result.ok);
+	}
+	// A layout that failed validation still has its report to read.
+	m_saveReport->setEnabled(!result.generatorReport.isEmpty());
+	if (mapgen && m_seedFromPrompt->isChecked() && result.spec.seed >= 0) {
+		m_seed->setValue(int(std::clamp<qint64>(result.spec.seed, 0, 999999999)));
 	}
 	if (!result.ok) {
 		const QString message = tr("The level could not be built: %1").arg(result.error);
 		setBusy(false, message);
-		finishTask(false, false, message);
+		finishTask(false, m_work->cancelled->load(), message);
 		return;
 	}
 	m_preview = renderLevelLayoutPreview(result, QSize(900, 900));
@@ -502,6 +717,7 @@ void LevelGenerationDialog::setBusy(bool busy, const QString& status)
 	for (QPushButton* button : {m_open, m_save, m_savePlan}) {
 		button->setEnabled(!busy && m_result.ok);
 	}
+	m_saveReport->setEnabled(!busy && !m_result.generatorReport.isEmpty());
 }
 
 void LevelGenerationDialog::finishTask(bool succeeded, bool cancelled, const QString& summary)
@@ -521,8 +737,10 @@ void LevelGenerationDialog::cancelGeneration()
 		m_client->cancel();
 		return;
 	}
-	// The build itself is quick; its result is dropped.
+	// The build itself is quick; its result is dropped. A Quake-MapGen text
+	// model stops waiting for its answer.
 	m_work->discard = true;
+	m_work->cancelled->store(true);
 	m_status->setText(tr("Cancelling…"));
 }
 
@@ -565,19 +783,26 @@ void LevelGenerationDialog::keyPressEvent(QKeyEvent* event)
 
 void LevelGenerationDialog::showRequestPreview()
 {
-	const LevelGenerationSpec spec = specFromControls();
 	const AiTextConnection connection = resolveAiTextConnection(StudioSettings().aiAutomationPreferences());
 	AiHttpRequest http;
 	QString error;
-	const bool built = buildAiHttpRequest(levelPlanAiRequest(spec, connection.connectorId, connection.model, connection.endpoint), QString(), &http, &error);
+	bool built = false;
+	if (mapgenSelected()) {
+		AiChatRequest request;
+		built = levelMapgenPlanAiRequest(mapgenSpecFromControls(), connection, &request, &error) && buildAiHttpRequest(request, QString(), &http, &error);
+	} else {
+		const LevelGenerationSpec spec = specFromControls();
+		built = buildAiHttpRequest(levelPlanAiRequest(spec, connection.connectorId, connection.model, connection.endpoint), QString(), &http, &error);
+	}
 	QDialog dialog(this);
 	dialog.setObjectName(QStringLiteral("levelGenerationRequestPreview"));
 	dialog.setWindowTitle(tr("Plan Request"));
 	dialog.setAccessibleName(dialog.windowTitle());
 	dialog.resize(760, 560);
 	auto* layout = new QVBoxLayout(&dialog);
-	auto* explanation = new QLabel(built ? tr("Nothing has been sent. This is the request Generate would send, without your API key. %1").arg(aiTextConnectionBlockText(connection))
-										 : error);
+	auto* explanation = new QLabel(built ? QStringLiteral("%1 %2").arg(aiTextRequestPreviewNote(connection, tr("Generate")), aiTextConnectionBlockText(connection))
+		: connection.ready()			 ? error
+										 : aiTextConnectionBlockText(connection));
 	explanation->setWordWrap(true);
 	layout->addWidget(explanation);
 	auto* text = readOnlyText(QStringLiteral("levelGenerationRequestText"), tr("The plan request"));
@@ -634,6 +859,25 @@ void LevelGenerationDialog::savePlan()
 		return;
 	}
 	m_status->setText(tr("Saved the plan to %1.").arg(QDir::toNativeSeparators(path)));
+}
+
+void LevelGenerationDialog::saveReport()
+{
+	if (m_result.generatorReport.isEmpty()) {
+		return;
+	}
+	const QString folder = m_hooks.saveFolder ? m_hooks.saveFolder() : QString();
+	const QString path = QFileDialog::getSaveFileName(this, tr("Save Quake-MapGen Report"),
+		QDir(folder).filePath(QFileInfo(m_result.suggestedFileName).completeBaseName() + QStringLiteral(".qmg.json")), tr("Quake-MapGen report (*.json)"));
+	if (path.isEmpty()) {
+		return;
+	}
+	QSaveFile file(path);
+	if (!file.open(QIODevice::WriteOnly) || file.write(m_result.generatorReport) != m_result.generatorReport.size() || !file.commit()) {
+		m_status->setText(tr("Could not save %1: %2").arg(QDir::toNativeSeparators(path), file.errorString()));
+		return;
+	}
+	m_status->setText(tr("Saved the report to %1.").arg(QDir::toNativeSeparators(path)));
 }
 
 void LevelGenerationDialog::openInLevels()

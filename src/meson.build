@@ -5,6 +5,43 @@ conf.set('VIBESTUDIO_UPDATE_CHANNEL', get_option('update_channel'))
 conf.set10('VIBESTUDIO_HAVE_AUDIO_PLAYBACK', qt6_multimedia_dep.found())
 conf.set10('VIBESTUDIO_HAVE_AUDIO_DUPLEX', pa_enabled)
 
+# Optional llama.cpp/ggml (-Dggml=enabled): the static libraries scripts/build_ggml.py installs.
+ggml_option = get_option('ggml')
+ggml_dep = dependency('', required: false)
+ggml_revision = ''
+if not ggml_option.disabled()
+  ggml_root = get_option('ggml_prefix') != '' ? get_option('ggml_prefix') : meson.project_source_root() / 'external' / 'ai' / 'ggml'
+  ggml_cpp = meson.get_compiler('cpp')
+  ggml_libraries = []
+  ggml_found = true
+  foreach name : ['llama', 'ggml', 'ggml-cpu', 'ggml-base']
+    library = ggml_cpp.find_library(name, dirs: [ggml_root / 'lib'], static: true, required: ggml_option)
+    ggml_found = ggml_found and library.found()
+    ggml_libraries += library
+  endforeach
+  if ggml_found
+    if host_machine.system() == 'windows'
+      ggml_libraries += ggml_cpp.find_library('advapi32')
+    elif host_machine.system() != 'darwin'
+      ggml_libraries += [dependency('threads'), ggml_cpp.find_library('dl', required: false), ggml_cpp.find_library('m', required: false)]
+    endif
+    # A system include flag rather than include_directories(), which refuses absolute paths inside
+    # the source tree (the default prefix is external/ai/ggml).
+    ggml_include = ggml_root / 'include'
+    if ggml_cpp.get_id() == 'clang-cl'
+      ggml_include_args = ['/imsvc' + ggml_include]
+    elif ggml_cpp.get_id() == 'msvc'
+      ggml_include_args = ['/external:I' + ggml_include, '/external:W0']
+    else
+      ggml_include_args = ['-isystem', ggml_include]
+    endif
+    ggml_dep = declare_dependency(compile_args: ggml_include_args, dependencies: ggml_libraries)
+    ggml_revision = 'c1d0e7a004015f23bc0233470b747b596f29b264'
+  endif
+endif
+conf.set10('VIBESTUDIO_HAVE_GGML', ggml_dep.found())
+conf.set_quoted('VIBESTUDIO_GGML_REVISION', ggml_revision)
+
 configure_file(
   input: 'vibestudio_config.h.in',
   output: 'vibestudio_config.h',
@@ -12,6 +49,9 @@ configure_file(
 )
 
 vibestudio_includes = include_directories('.')
+
+# The Quake-MapGen level generator (src/mapgen), linked into core by core/level_mapgen.
+subdir('mapgen')
 
 install_headers('core/texture_document.h', subdir: 'vibestudio/core')
 install_headers('core/texture_paint.h', subdir: 'vibestudio/core')
@@ -167,11 +207,16 @@ core_sources = files(
   'core/material_library.cpp',
   'core/material_graph.cpp',
   'core/ai_connectors.cpp',
+  'core/ai_gguf_runtime.cpp',
+  'core/ai_harness.cpp',
+  'core/ai_json_grammar.cpp',
   'core/ai_transport.cpp',
+  'core/process_tree.cpp',
   'core/ai_image_transport.cpp',
   'core/texture_generation.cpp',
   'core/level_generation.cpp',
   'core/level_generation_build.cpp',
+  'core/level_mapgen.cpp',
   'core/level_ai_edit.cpp',
   'core/ai_audio_transport.cpp',
   'core/sound_generation.cpp',
@@ -406,13 +451,13 @@ vibestudio_core = static_library(
   'vibestudio_core',
   core_sources,
   include_directories: [vibestudio_includes, include_directories('../external/audio/r8brain-free-src', '../external/audio/dr_libs', '../external/graphics/vulkan-headers/include', is_system: true)],
-  dependencies: [qt6_core_dep, audio_threads_dep, xiph_decoder_dep, audio_meter_dep, xatlas_dep],
+  dependencies: [qt6_core_dep, audio_threads_dep, xiph_decoder_dep, audio_meter_dep, xatlas_dep, mapgen_dep, ggml_dep],
   install: true,
 )
 
 vibestudio_core_dep = declare_dependency(
   include_directories: vibestudio_includes,
-  dependencies: [qt6_core_dep, audio_threads_dep, xiph_decoder_dep, audio_meter_dep, xatlas_dep],
+  dependencies: [qt6_core_dep, audio_threads_dep, xiph_decoder_dep, audio_meter_dep, xatlas_dep, mapgen_dep, ggml_dep],
   link_with: [vibestudio_core],
 )
 
@@ -477,8 +522,10 @@ install_headers('core/package_storage.h', 'core/package_copy.h', 'core/package_c
 install_headers(files('core/advanced_studio.h', 'core/ai_connectors.h', 'core/ai_transport.h', 'core/ai_workflows.h', 'core/asset_tools.h', 'core/bsp_inspect.h', 'core/build_pipeline.h', 'core/compiler_artifact_validation.h', 'core/compiler_known_issues.h', 'core/compiler_profiles.h', 'core/compiler_registry.h', 'core/compiler_runner.h', 'core/deflate.h', 'core/document_watch.h', 'core/quake_map_preflight.h', 'core/editor_profiles.h', 'core/entity_definitions.h', 'core/game_installation.h', 'core/idtech_image.h', 'core/level_editor_controls.h', 'core/level_gestures.h', 'core/level_camera_keys.h', 'core/level_map.h', 'core/localization.h', 'core/map_assets.h', 'core/map_geometry.h', 'core/map_preview_mesh.h', 'core/map_render.h', 'core/model_mesh.h', 'core/operation_state.h', 'core/package_archive.h', 'core/package_compare.h', 'core/package_preview.h', 'core/package_staging.h', 'core/package_directory.h', 'core/package_browser.h', 'core/parser_fuzz.h', 'core/project_manifest.h', 'core/studio_semantics.h', 'core/studio_manifest.h', 'core/studio_query.h', 'core/studio_settings.h'), subdir: 'vibestudio/core')
 
 install_headers('core/ai_image_transport.h', subdir: 'vibestudio/core')
+install_headers('core/ai_harness.h', 'core/ai_gguf_runtime.h', 'core/ai_json_grammar.h', 'core/process_tree.h', subdir: 'vibestudio/core')
 install_headers('core/texture_generation.h', subdir: 'vibestudio/core')
 install_headers('core/level_generation.h', subdir: 'vibestudio/core')
+install_headers('core/level_mapgen.h', subdir: 'vibestudio/core')
 install_headers('core/level_ai_edit.h', subdir: 'vibestudio/core')
 install_headers('core/ai_audio_transport.h', subdir: 'vibestudio/core')
 install_headers('core/sound_generation.h', subdir: 'vibestudio/core')
@@ -1383,6 +1430,45 @@ level_generation_smoke_test = executable(
 
 test('level-generation-smoke', level_generation_smoke_test, timeout: 120)
 
+# Quake-MapGen through core/level_mapgen: upstream byte parity, overrides, the
+# editor document and preview, stage switches, and planning by a fake model.
+level_mapgen_smoke_test = executable(
+  'level_mapgen_smoke_test',
+  ['tests/level_mapgen_smoke_test.cpp'],
+  include_directories: vibestudio_includes,
+  dependencies: [vibestudio_core_dep],
+  install: false,
+)
+
+test('level-mapgen-smoke', level_mapgen_smoke_test, timeout: 300)
+
+# Text connectors beyond HTTP: Claude Code, Codex and custom-command harnesses run against a fake
+# tool, the GGUF connector without a runtime, and schema grammars.
+fake_ai_harness = executable(
+  'fake_ai_harness',
+  ['tests/fake_ai_harness.cpp'],
+  dependencies: [qt6_core_dep],
+  install: false,
+)
+ai_harness_smoke_test = executable(
+  'ai_harness_smoke_test',
+  ['tests/ai_harness_smoke_test.cpp'],
+  include_directories: vibestudio_includes,
+  dependencies: [vibestudio_core_dep],
+  install: false,
+)
+test('ai-harness-smoke', ai_harness_smoke_test, args: [fake_ai_harness], timeout: 180)
+
+# A real GGUF model through llama.cpp/ggml; skipped unless -Dggml=enabled and VIBESTUDIO_TEST_GGUF.
+ai_gguf_smoke_test = executable(
+  'ai_gguf_smoke_test',
+  ['tests/ai_gguf_smoke_test.cpp'],
+  include_directories: vibestudio_includes,
+  dependencies: [vibestudio_core_dep],
+  install: false,
+)
+test('ai-gguf-smoke', ai_gguf_smoke_test, timeout: 900)
+
 # Map edits a model proposes: the schema, the map summary it sees, checks
 # against the map, applying through undoable edits, and a fake model.
 level_ai_edit_smoke_test = executable(
@@ -1418,7 +1504,7 @@ ai_generation_cli_smoke_test = executable(
   install: false,
 )
 
-test('ai-generation-cli-smoke', ai_generation_cli_smoke_test, args: [vibestudio], timeout: 180)
+test('ai-generation-cli-smoke', ai_generation_cli_smoke_test, args: [vibestudio, fake_ai_harness], timeout: 240)
 
 ai_workflows_smoke_test = executable(
   'ai_workflows_smoke_test',

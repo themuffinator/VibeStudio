@@ -1,0 +1,83 @@
+{
+  "schema_version": 1,
+  "id": "weft-native-motif-circuits-v1",
+  "status": "completed_fixed_profile_experiment_with_retained_failures",
+  "study": "docs/Q2_NATIVE_MOTIF_CIRCUITS.md",
+  "protocol_path": "out/native-motif-circuits/protocol.json",
+  "evidence": "out/native-motif-circuits/record.json",
+  "bsp_sha256": "980b22bf6aaedb032df1f04db5cc46d864d72f961a9852809486fbd64abf50f0",
+  "layout_sha256": "aaddb7862052e2c3b0264ef99952f356f78dffd45ef23eb70e31eb3e7de6adf7",
+  "protocol_sha256": "3423e5bd2380326e1fb61f26614bcd188c7a128b3d42a8d88eb17bed604c116b",
+  "scope": {
+    "game_reference": "official Quake II3.19 portable C CM/Pmove",
+    "world_only": true,
+    "game_module_tested": false,
+    "client_or_input_devices": false,
+    "human_or_optimality_tested": false,
+    "model_weights_trained": false,
+    "motifs": ["rotation0_crosswalk_height128", "rotation1_horseshoe_height128"]
+  },
+  "protocol": {
+    "primary_trials": 8,
+    "directions": ["forward", "reverse"],
+    "literal_forwardmove": [200, 400],
+    "nominal_speed_for_timing": [200, 300],
+    "fixed_before_execution": true,
+    "adaptive_steering": false,
+    "retuned_or_repeated": false,
+    "timestep_ms": 16,
+    "settling_frames": 8,
+    "moving_phases": 3,
+    "zero_input_finish_frames": 128,
+    "goal_dwell_samples": 9,
+    "goal_dwell_first_to_last_ms": 128,
+    "goal_maximum_horizontal_speed": 10,
+    "goal_maximum_absolute_vertical_speed": 10,
+    "goal_grounded_standing_dry": true,
+    "ordered_gate_count": 6,
+    "exit_gate_cross_half_width": 24,
+    "actual_stair_full_hull_center_half_width": 48
+  },
+  "results": {
+    "circuit_passes": 0,
+    "retained_circuit_failures": 8,
+    "broad_native_station_passes": 8,
+    "all_reached_ascent_and_both_upper_corners": true,
+    "all_contacted_intermediate_second_stair_treads": true,
+    "all_eventually_grounded_on_lower_floor": true,
+    "whole_descent_within_full_hull_stair_band": 4,
+    "partial_edge_footprint_descent": 4,
+    "complete_sideways_stair_footprint_departures_observed": 0,
+    "late_goal_pocket_dwell_without_valid_circuit": 2,
+    "test_controls_passed": 10
+  },
+  "learnings": [
+    {
+      "id": "checkpoint-width-is-a-protocol-margin",
+      "finding": "Four routes miss the24-unit upper-exit cross margin while staying in the actual48-unit full-hull stair band. Failure does not establish untraversable geometry.",
+      "scope": "This strict retained protocol and these four Weft routes only."
+    },
+    {
+      "id": "grounded-is-not-full-footprint-support",
+      "finding": "Four routes continue through grounded stair contacts with partial support at an outer edge; compile full footprint coverage separately from native ground contact.",
+      "scope": "Exact compiled AABB support unions at recorded native frame ends; no subframe trajectory claim."
+    },
+    {
+      "id": "complete-route-before-endpoint",
+      "finding": "All eight broad station results pass, but every complete ordered route fails. Two later low-speed pocket dwells do not erase their earlier failures.",
+      "scope": "Nine16ms frame-end samples span128ms; fixed input only."
+    },
+    {
+      "id": "stair-bottom-clear-center-space",
+      "finding": "The64-unit wall-to-first-riser gap leaves a32-unit deep clear stopping-center strip for a32-unit hull.",
+      "scope": "Measured selected Weft stair bottoms, not a universal minimum dimension or recommendation."
+    },
+    {
+      "id": "turn-carry-over-needs-controlled-comparison",
+      "finding": "Fixed phase reversals produce different second-stair offsets. Validate gate meaning and test finite corner timing/braking profiles on unchanged geometry before changing architecture.",
+      "scope": "Cause of direction-dependent differences is not isolated in this experiment."
+    }
+  ],
+  "next_test": "Predeclare a gate-validity control and finite turn/braking profiles on unchanged geometry; separately measure full footprint support and bounded recovery. Retain this eight-failure record.",
+  "untested": ["other motif rotations", "192-unit rises", "48-unit horseshoe legs", "other player profiles", "human steering", "populated multiplayer combat", "damage", "rendered readability"]
+}

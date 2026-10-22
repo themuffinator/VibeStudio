@@ -1,0 +1,540 @@
+{
+  "schema_version": 1,
+  "id": "undercut-v1",
+  "date": "2026-09-13",
+  "status": "compiled_static_and_dedicated_initialization_validated_playtesting_pending",
+  "map": "qmg_undercut",
+  "intended_mode": "stock_q2_deathmatch",
+  "intended_players": [
+    4,
+    6
+  ],
+  "construction": "Original explicit qmg_core recipe; default-planner motif selection and trained weights remain pending",
+  "recipe": "tools/map_recipes/undercut.cpp",
+  "study": "docs/Q2_UNDERCUT_STUDY.md",
+  "local_artifacts": "out/undercut",
+  "canonical_layout_sha256": "6774db296af3b4ab82c253ce46fd0d8f19e6eac9e3e56cd6980ae2403377cd5c",
+  "artifact_hashes": {
+    "source_sha256": "b8d564eb8b125b43caf5d718e4908082cb4f430a5160c75c56957905e612bcd7",
+    "bsp_sha256": "aea795986b4e1861e8e6d8d4308094345dfe1171b7a4c0a9fc4afc6a0de5a3f8",
+    "recipe_sha256": "0587d571fc222af766948b01e9ea7132e49667563cd7b857ba724fb25c09c487",
+    "recipe_support_sha256": "9520a6227baac389d32d290211f35e44ccdb3cfd21306ceab7aabe9f3b93170b",
+    "core_sha256": "a0653a842e37671dc3599fa255e9e3dfa73b64f303dc81c258b51a46a2e62322",
+    "profile_sha256": "4f833d1a09eab67c719175310e101befcc9ad43d330985e7bc7a7d645f65d935"
+  },
+  "evidence_files": [
+    {
+      "path": "out/undercut/cleanup-status.json",
+      "sha256": "884aa9fdb20652308fae86415d0d05587f0f1dd1f15f228754a48378f987e7e6"
+    },
+    {
+      "path": "out/undercut/comparison-to-talus.json",
+      "sha256": "3b547647316e4673f87634cc964a10d238249cc12dd1213ad582c1fe68590da2"
+    },
+    {
+      "path": "out/undercut/comparison.log",
+      "sha256": "642902c857e9deea0f4b67d54b6e3958dc4d735c4c78a3fe2ee40226ac3c7083"
+    },
+    {
+      "path": "out/undercut/compiled-analysis.json",
+      "sha256": "127ff99b18fd2f28de20490074f4302c77673b817d5bdb55440f894d634c3c3b"
+    },
+    {
+      "path": "out/undercut/ctest-focused.log",
+      "sha256": "7157a33e06ef397c3e91f8c68e0947ca944d38295a08e68f3ce9a4b74628f4d4"
+    },
+    {
+      "path": "out/undercut/engine-smoke/authored-entities.ent",
+      "sha256": "17b5583fdee935395cee2fd95cee2f5a48f7089b1e4b7691e5d9834be80fa5c3"
+    },
+    {
+      "path": "out/undercut/engine-smoke/engine-smoke.json",
+      "sha256": "6d703b690ad634538ef169dac0861a19eb0d209851d3beffdea3c6a9b51f04ee"
+    },
+    {
+      "path": "out/undercut/engine-smoke/engine.log",
+      "sha256": "c79828ca7cf6eef5f229578af0f1727a7d5d4b42589471e2cce3acecbdd2239d"
+    },
+    {
+      "path": "out/undercut/engine-smoke/profile.cfg",
+      "sha256": "062166c44ea1bca68949a24e58e7f50d68d0ff96b7428089dad2c72359959759"
+    },
+    {
+      "path": "out/undercut/engine-smoke/stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "out/undercut/engine-smoke/stdout.log",
+      "sha256": "66753470047d51ca33b3825f80ca4c40a7f8137f8d2f38778d37afe2b9e1924a"
+    },
+    {
+      "path": "out/undercut/floor-0.png",
+      "sha256": "2597fd4a3177a78cdee7278b1bb0941c9349a46fdc5a4f7ffa125f540138e11e"
+    },
+    {
+      "path": "out/undercut/floor-128.png",
+      "sha256": "c6c3e6c388046bbd8f447e2258181f4f44e237438739da7fa30bf9c321e8fe18"
+    },
+    {
+      "path": "out/undercut/floor-256.png",
+      "sha256": "119999f8ca7fa9e8f0d587b72ff5fea1ac9f9b11a795cfadee63d8462ef23e04"
+    },
+    {
+      "path": "out/undercut/flow.json",
+      "sha256": "95b05ae46f4015c229584550caeea26a7e2b9f04545ac55cb831f94c9b1d2abc"
+    },
+    {
+      "path": "out/undercut/generation.log",
+      "sha256": "c7fe6c0443047d1357238f4d08684056a20166c4288369c5d76dec112cca130b"
+    },
+    {
+      "path": "out/undercut/index.html",
+      "sha256": "19cf25cf88becf1b8ba582f8c3cb6a774219bf63f8ad4bea29f5162fb5a285df"
+    },
+    {
+      "path": "out/undercut/layout.json",
+      "sha256": "0a42d82e46f8d38f29f406b51244b5512aa31c3fd25ae8c92561a6d1b6e8fccb"
+    },
+    {
+      "path": "out/undercut/light.log",
+      "sha256": "55c5116a34021a219aa7a462c5861386daecab822cdb6c3a75534a35ab7071ad"
+    },
+    {
+      "path": "out/undercut/overview-mobile-light.png",
+      "sha256": "e4cfb77ec42d3fc1a09074fa14c82e45e53feb5602af0eb0277af41f18fb121a"
+    },
+    {
+      "path": "out/undercut/overview.png",
+      "sha256": "895be2bb897881f5f6fc9c2db8e7f14388f5e6bdf1ed8a2b133d604d67c20c5a"
+    },
+    {
+      "path": "out/undercut/preview-checks.json",
+      "sha256": "ce92a5e0b6fb5d8300d85926ad6caea12a347357bc8e973c7996a9d544627d5e"
+    },
+    {
+      "path": "out/undercut/preview-controls/counterweight/floor-0.png",
+      "sha256": "e2106f77bab43af3d9aea8c9a5ce30bb121cc6d7e2d728cdd8307263d5a30b31"
+    },
+    {
+      "path": "out/undercut/preview-controls/counterweight/floor-128.png",
+      "sha256": "a78195eec52a255cdd1016f96d710a01f7d56f107278f7ebab8748fa8822ca74"
+    },
+    {
+      "path": "out/undercut/preview-controls/counterweight/floor-256.png",
+      "sha256": "fc3410cbf41dae87368af3754705262eaaf586a62f008a0f81e15080f60f35af"
+    },
+    {
+      "path": "out/undercut/preview-controls/counterweight/overview-mobile-light.png",
+      "sha256": "56aa7ee1fdc121b8579af6a7554df02cbed8017c9bede7b0e34f4170882cfc8a"
+    },
+    {
+      "path": "out/undercut/preview-controls/counterweight/overview.png",
+      "sha256": "80d662c799751fdd6d896eb1fec1927110a8301e9bc9a6e406d2ea898322bf02"
+    },
+    {
+      "path": "out/undercut/preview-controls/counterweight/preview-checks.json",
+      "sha256": "af67dc61ebcecedfd45bb71e01d718c7ab0a78eec47b8a4be6f809d3065c6660"
+    },
+    {
+      "path": "out/undercut/preview-controls/talus/floor-0.png",
+      "sha256": "0dec5c00fd611bc1cedfd35f5a242cdf7f3bdd0cf147c935c64bcf605d857a51"
+    },
+    {
+      "path": "out/undercut/preview-controls/talus/floor-128.png",
+      "sha256": "1c1b830c5f935087b8216e0d2f54c8efe135d479d797e40d8cef469303664551"
+    },
+    {
+      "path": "out/undercut/preview-controls/talus/floor-256.png",
+      "sha256": "e60e2a4427d81b5cf54e87701e070ae40a565ede22fb6d5e0b3848b2af4f075e"
+    },
+    {
+      "path": "out/undercut/preview-controls/talus/overview-mobile-light.png",
+      "sha256": "66620186e367bd386661d732ccf354276f397a505367169f85a03870a8b587f9"
+    },
+    {
+      "path": "out/undercut/preview-controls/talus/overview.png",
+      "sha256": "51f16964556be3bc407918b1abb5d323e6880e5ab53eaef57d2acf8bee5d0837"
+    },
+    {
+      "path": "out/undercut/preview-controls/talus/preview-checks.json",
+      "sha256": "fe6f570dd103cea3ea49011d91d4ba2db99fbcbebbe6170f5a5fa3224f732c67"
+    },
+    {
+      "path": "out/undercut/preview-export.log",
+      "sha256": "ee377cc134aefc36d540965f12a0e4dfaea8de874e233d70f710e02eca36a401"
+    },
+    {
+      "path": "out/undercut/qbsp.log",
+      "sha256": "188d1aabc95658a095b2d156416a800ccbb6701e317a4a174af2d5ba8b80fd4b"
+    },
+    {
+      "path": "out/undercut/qmg_undercut.bsp",
+      "sha256": "aea795986b4e1861e8e6d8d4308094345dfe1171b7a4c0a9fc4afc6a0de5a3f8"
+    },
+    {
+      "path": "out/undercut/qmg_undercut.content.json",
+      "sha256": "ca0eeae13afe5ef3d5373990e426931a861ee0e8df04a912f426e13688c9c498"
+    },
+    {
+      "path": "out/undercut/qmg_undercut.map",
+      "sha256": "b8d564eb8b125b43caf5d718e4908082cb4f430a5160c75c56957905e612bcd7"
+    },
+    {
+      "path": "out/undercut/qmg_undercut.prt",
+      "sha256": "d14c7594785c2e901dee9ec03e0caa4a264ce3dc1157e9f85fd0d775811ee872"
+    },
+    {
+      "path": "out/undercut/qmg_undercut.qmg.json",
+      "sha256": "b7c084a5bfff7e72fce5d070cada77d3a529d673f44929e93abc78f0737cdb7b"
+    },
+    {
+      "path": "out/undercut/qmg_undercut.texinfo.json",
+      "sha256": "58f2d78c1044a16ec2b8d73f7bf44bac7bc5145b55ff40c79a8ab9e796a3544e"
+    },
+    {
+      "path": "out/undercut/qmg_undercut.zip",
+      "sha256": "ef8bfbd3efbbd77e0391de95e6cec1fcfb2ecc255c6e1ad71e21bb2b8f8bc26d"
+    },
+    {
+      "path": "out/undercut/recipe-build.log",
+      "sha256": "6adb85da53b1953e1ac22e4b80ebc1b887b2dfca91d74419e2b32933ecea84e5"
+    },
+    {
+      "path": "out/undercut/reference-comparison.json",
+      "sha256": "3876f41a1cbe1e650704a4ccebbc95fd053a54eec00176eb255414c55d32e383"
+    },
+    {
+      "path": "out/undercut/undercut-layout.html",
+      "sha256": "bc9a3af192e145c7de274acdff315065aff0752fc5286cf205e99837ed3a88a3"
+    },
+    {
+      "path": "out/undercut/verification.json",
+      "sha256": "87992bbef346ba6094a73728e77295df411dfcccb5da7909b45a3e2a1655cca5"
+    },
+    {
+      "path": "out/undercut/verification.log",
+      "sha256": "6e47679b212592781a7b60a8e0d52d5a032eea2141e01607c6ce3937a0550310"
+    },
+    {
+      "path": "out/undercut/vis.log",
+      "sha256": "68fcb0c8b61f08e17f8685554beb8f91e757a78a35dae981094ada45994c260c"
+    }
+  ],
+  "implementation_evidence": [
+    {
+      "path": "CMakeLists.txt",
+      "sha256": "7dae55ca189de43b969ed1b2a51bafc68ebfa139cbee6faf6dfe1e5b7c7c482e"
+    },
+    {
+      "path": "tools/map_recipes/undercut.cpp",
+      "sha256": "0587d571fc222af766948b01e9ea7132e49667563cd7b857ba724fb25c09c487"
+    },
+    {
+      "path": "tools/map_recipes/recipe_support.hpp",
+      "sha256": "9520a6227baac389d32d290211f35e44ccdb3cfd21306ceab7aabe9f3b93170b"
+    },
+    {
+      "path": "tools/map_recipes/build.ps1",
+      "sha256": "2d0794d37b4027d67302030cd95805ec7293214f8c0447304bfdc8fa752d2ae6"
+    },
+    {
+      "path": "tools/map_recipes/inspect.py",
+      "sha256": "15faca3a27a742de17159dafe111f32e921d6f9002f4484c26c0b04e2eae6fdc"
+    },
+    {
+      "path": "tools/map_recipes/drop_audit.py",
+      "sha256": "f9c284ad85ead67913dcf3a51945bb21be994fa4968b60f60bbb876cd581f2de"
+    },
+    {
+      "path": "tools/map_recipes/geometry.py",
+      "sha256": "dcfcc3413468cad9993476736edfae5f13eb03e26035fc39d73f83aa5a90742b"
+    },
+    {
+      "path": "tools/map_recipes/layout-view-v2.html",
+      "sha256": "74a9ab88437fa3690c4a32be0319cc73547a953cd7a889dcc8609dae900aa990"
+    },
+    {
+      "path": "tools/map_recipes/render_layout.py",
+      "sha256": "01493ccd513ff53b9a3d5384db0bba7e364f72c70b1c2dbaf2fe270568cd15db"
+    },
+    {
+      "path": "tests/test_drop_audit.py",
+      "sha256": "b7d6d2261f8c9cb8ca5a67ff8daa6ea19fc25f2a94aa7ab8b578047998dafbcc"
+    },
+    {
+      "path": "tests/test_recipe_geometry.py",
+      "sha256": "26217fc78f4e8cb344be216d6afe52043d0e7ef9dda7c416cdb70a09dc4cb017"
+    },
+    {
+      "path": "tests/recipe_preview_check.cjs",
+      "sha256": "7927866e2690c0fb73a787b7710a4f2f80cb5ff2499a00880ead0057e0e0caaf"
+    }
+  ],
+  "research": [
+    {
+      "path": "docs/Q2_UNDERCUT_STUDY.md",
+      "sha256": "114c04b8fb2a713cfe00a0d7692fe0187e531ca2527d88831b4346ea6b0082a7"
+    },
+    {
+      "path": "docs/Q2_DROP_RETURN_STUDY.md",
+      "sha256": "b96cb7594dd5bc5c2a0fc3cec4bcf53e0773468fc9238f58c339a7a104593eb5"
+    },
+    {
+      "path": "knowledge/q2/drop-return-study.json",
+      "sha256": "d89cab564fa58facf5509aa7f3063031b182bb63ed402cf6ec5525d91e8536ca"
+    },
+    {
+      "path": "docs/Q2_RAMP_STAIR_COMPARISON.md",
+      "sha256": "a01b9cf126eb883d13b0275998af255f62c6f24a106473461d275761da83dde4"
+    },
+    {
+      "path": "knowledge/q2/ramp-stair-comparison.json",
+      "sha256": "e26304ea658560a70c8ab775d51fb1ea740a00c37645a4ccb8410f5429c847ea"
+    },
+    {
+      "path": "out/talus-stairs/comparison.json",
+      "sha256": "cfea8e40e6b5d1836581bb86fbd7247dfb127cbd0b9d37bc5ed5412af48a20ae"
+    },
+    {
+      "path": "out/talus-stairs/qmg_talus_ascent_pair.zip",
+      "sha256": "f3b5df889c4dd79e3fdfeffa2846be2877f4b91b077278356783cbe937ad0f7f"
+    },
+    {
+      "path": "out/talus-stairs/engine-smoke/engine-smoke.json",
+      "sha256": "0bca26b6b7b5112cc05aa814cfe451eb7101e5dd04f661c97ae595a7c8a3729e"
+    },
+    {
+      "path": "docs/MAP_DESIGN_PLAYBOOK.md",
+      "sha256": "47140c127926ad648d77411d657a9fa8c633c073ce1388f23d6eeafd51d4d59b"
+    },
+    {
+      "path": "knowledge/q2/rules.json",
+      "sha256": "f2cb63daaef75fd8565e16f2ecb254dd5fa02a7f6dc63b0a40fbf3d8d9a4e661"
+    },
+    {
+      "path": "knowledge/q2/iteration-roadmap.json",
+      "sha256": "acf34b9eea04ab5abad75344f76ec94c975217e70359c6347553b506b56a6253"
+    }
+  ],
+  "learning": {
+    "new_rules": [
+      "return-route-burden",
+      "drop-information-before-commitment",
+      "matched-surface-controls"
+    ],
+    "rule_count": 26,
+    "profile_modified": false,
+    "model_weights_trained": false,
+    "archive_geometry_copied": false,
+    "generated_map_added_to_reference_profile": false
+  },
+  "design_contract": {
+    "rooms": 5,
+    "connections": 8,
+    "floor_levels": [
+      0,
+      128,
+      256
+    ],
+    "three_floor_space": "Sluice",
+    "other_spaces_have_two_local_floors": true,
+    "stair_runs": 6,
+    "treads_per_run": 8,
+    "tread_run": 36,
+    "tread_rise": 16,
+    "candidate_descents": 2,
+    "descent_height": 128,
+    "cycle_rank": 4,
+    "maximum_room_incidence": 4,
+    "articulation_rooms": 0,
+    "required_circulation_uses_no_jump_drop_lift_or_teleporter": true,
+    "doors_authored": 0
+  },
+  "validation": {
+    "focused_ctest": {
+      "log": "out/undercut/ctest-focused.log",
+      "passed": 8,
+      "failed": 0,
+      "suites": [
+        "qmg_recipe_geometry_tests",
+        "qmg_drop_audit_tests",
+        "qmg_switchback_layout",
+        "qmg_spillway_layout",
+        "qmg_counterweight_layout",
+        "qmg_talus_layout",
+        "qmg_talus_stairs_layout",
+        "qmg_undercut_layout"
+      ],
+      "geometry_cases": 24,
+      "drop_cases": 11,
+      "full_configured_suite_rerun": false,
+      "final_talus_stairs_material_correction_test": "knowledge/q2/ramp-stair-comparison.json"
+    },
+    "gameplay_anchors": 33,
+    "ordinary_anchor_pairs": 264,
+    "ordinary_edge_kinds": [
+      "walk",
+      "step",
+      "door"
+    ],
+    "compiled_world_collision_brushes": 178,
+    "anchor_hull_checks": 5874,
+    "compiled_stair_support_and_hull_samples": 48,
+    "drop_audit": {
+      "record": "out/undercut/verification.json",
+      "candidate_count": 2,
+      "swept_segments": 4,
+      "world_brush_pair_checks": 712,
+      "narrow_phase_sat_calls": 0,
+      "collision_epsilon": 0,
+      "full_footprint_takeoff_and_landing_support": true,
+      "both_landing_eye_rays_clear": true,
+      "ordinary_return_edge_counts": [
+        12,
+        10
+      ],
+      "ordinary_return_edge_policy": [
+        "walk",
+        "step",
+        "door"
+      ],
+      "compiled_entire_returns_swept": false,
+      "ballistic_trajectory_tested": false,
+      "fall_damage_tested": false
+    },
+    "layout_analysis": {
+      "structural_errors": 0,
+      "leak_errors": 0,
+      "navigation_errors": 0,
+      "visibility_errors": 0,
+      "lighting_errors": 0,
+      "timing_errors": 0,
+      "warnings": 0
+    },
+    "compiled_spawn_los": {
+      "tested_pairs": 28,
+      "visible_pairs": [],
+      "invalid_eye_entities": []
+    },
+    "sealed": true,
+    "full_vis": true,
+    "lighting": "extra4, one bounce, soft shadows; no empty lightmaps",
+    "preview_states": 24,
+    "prior_viewer_compatibility_states": 48,
+    "engine_initialization_checks": 16,
+    "engine_initialization_ok": true,
+    "scheduled_post_spawn_server_frames": 40,
+    "initial_settling_frames": 2,
+    "native_player_traversal_tested": false,
+    "rendered_engine_tested": false,
+    "human_playtested": false
+  },
+  "metrics": {
+    "spawn_count": 8,
+    "weapon_count": 7,
+    "weapon_types": 7,
+    "major_item_count": 2,
+    "combat_height_p90_p10": 256.0,
+    "combat_height_bands_128": 3,
+    "spawn_nearest_weapon_euclidean_p50": 268.19260181133836,
+    "spawn_nearest_weapon_euclidean_p90": 340.2001584455533,
+    "spawn_pair_world_los_fraction": 0.0,
+    "major_item_min_euclidean_separation": 917.0387123780544,
+    "world_diagonal": 2864.357519584453,
+    "upward_surface_area": 3121152.0,
+    "texture_area_entropy_bits": 2.912948164831524,
+    "texture_top_area_fraction": 0.2580157671754466,
+    "sky_surface_area_fraction": 0.0,
+    "sampled_world_sightline_p50": 172.722616417834,
+    "sampled_world_sightline_p90": 585.8884758402824
+  },
+  "comparison": "out/undercut/comparison-to-talus.json",
+  "observed_tradeoffs": [
+    "Compared with Talus, the median sampled sightline and straight-line spawn-to-nearest-weapon distance decrease. The world diagonal and sightline p90 increase. This is not uniformly tighter or a measured improvement in recovery.",
+    "Several room, topology, resource and traversal variables changed. These descriptive differences are not a controlled causal comparison.",
+    "Three connected central floors create varied choices, but may still concentrate Sluice resource control. Native traffic and matches must establish that balance."
+  ],
+  "reference_learning": {
+    "record": "knowledge/q2/drop-return-study.json",
+    "map": "gladdm1",
+    "initial_drop": 272,
+    "demonstrated_return_plan_length": 3088,
+    "return_total_ascent": 384,
+    "return_additional_descent": 112,
+    "clear_continuous_hull_segments": 553,
+    "continuously_supported_segments": 515,
+    "segments_in_bounded_step_pairs": 38,
+    "shortest_return_claimed": false,
+    "runtime_verified": false,
+    "lesson": "Inspect complete return burden and exposure phases, including the visible final climb, rather than recording only binary reachability."
+  },
+  "controlled_fixture": {
+    "record": "knowledge/q2/ramp-stair-comparison.json",
+    "package": "out/talus-stairs/qmg_talus_ascent_pair.zip",
+    "unchanged_source_and_compiled_brushes": 173,
+    "unchanged_nonworld_entities": 81,
+    "intervention": "One Bench ramp replaced by eight material-matched treads within the same footprint and flat landings",
+    "ordinary_anchor_pairs_per_map": 264,
+    "fixed_origin_ray_pairs": 48,
+    "changed_rays": 3,
+    "native_paired_movement_tested": false
+  },
+  "caught_failures": [
+    {
+      "kind": "authoring_geometry_and_probes",
+      "observed": "Initial faceted corner aggregate, local stair/deck overlap and center probes invalidated placements or checks. One bent passage had edge-only contact.",
+      "correction": "Use actual room footprint and clear placement/support locations, remove overlapping gallery section, and give the bend a 16-unit volume overlap."
+    },
+    {
+      "kind": "spawn_and_drop_information",
+      "observed": "An elevated spawn view and the takeoff lip hid or exposed unintended tested points.",
+      "correction": "Move the upper Sluice spawn, add the Crown upper screen and retain full-footprint takeoffs with clear landing-eye rays."
+    },
+    {
+      "kind": "viewer_floor_ownership",
+      "observed": "Using the aggregate bounding box of a faceted room assigned inactive-floor blockers incorrectly.",
+      "correction": "Use actual footprint vertices for room ownership; verify all three floor filters and prior-map compatibility."
+    }
+  ],
+  "next_trials": {
+    "status": "defined_not_executed",
+    "protocol": "docs/Q2_UNDERCUT_STUDY.md",
+    "conditions": [
+      "2x2 drop availability with ordinary stairs fixed",
+      "single landing-screen intervention with matched attack/defense starts",
+      "native descent damage, cover access, pickup contact and full return measured separately",
+      "2/4/6-player resource control, repeated deaths and peripheral route use",
+      "windowed engine-written screenshot orientation review"
+    ]
+  },
+  "limits": [
+    "Multiple design variables changed; this is not a controlled causal comparison.",
+    "Current costs include endpoint approaches but remain Manhattan/node-center estimates. Earlier artifacts use a different timing basis; do not compare their costs or call them measured travel time.",
+    "Point LOS is not a match, spawn-safety guarantee or rendered lighting check.",
+    "The candidate holds feet height during horizontal departure, then descends vertically. Native acceleration, gravity, momentum and air control are not simulated.",
+    "A clear geometric drop is not evidence of a harmless fall, safe landing, usable combat escape or measured travel time.",
+    "All model-zero player-mask brushes, including the supporting ledge, remain in exact sweeps. Dynamic actors, mover states and occupied landings are untested.",
+    "Takeoff and landing have full-footprint compiled flat support and clear standing hulls. Airborne intermediate poses are not described as grounded.",
+    "The ordinary return is independently searched on the serialized typed graph with exact local endpoint binding and no snapping. Its entire route is not independently swept in the compiled world.",
+    "Jump, drop, lift and teleporter edges are excluded from every return. Door activation, where present, still depends on the source navigation contract.",
+    "StairRunSpec defaults to 32-unit treads; the separate-tread erosion policy is conservative. The gladdm1 certificate supports 24-unit treads via neighboring support and bounded steps, not a native minimum-width rule.",
+    "Normal Windows Q2REPRO client startup requests focus; only dedicated initialization ran. Engine-rendered orientation review remains pending.",
+    "All eight affected CTest suites passed; the full configured suite was not rerun this iteration.",
+    "Compiler output bytes are not claimed deterministic. Final viewer and dedicated smoke bind the delivered BSP."
+  ],
+  "cleanup": {
+    "status": "automatic_review_rejected",
+    "reason": "blocked by policy",
+    "attempted_action": "Remove only the current project-local Undercut and Talus-stairs temporary test directories",
+    "paths": [
+      ".agents/tmp/undercut-engine",
+      ".agents/tmp/undercut-viewer",
+      ".agents/tmp/talus-stairs-engine"
+    ],
+    "command_executed": false,
+    "retried": false,
+    "delivery_directory": "out/undercut",
+    "comparison_directory": "out/talus-stairs",
+    "useful_engine_and_preview_evidence_retained_in_delivery": true
+  }
+}

@@ -1,0 +1,340 @@
+{
+  "schema_version": 1,
+  "reference": "id Software Quake II 3.19",
+  "source_url": "https://github.com/id-Software/Quake-2",
+  "license": "GPL-2.0-or-later; optional private combined executable only",
+  "dependencies": [
+    {
+      "relative_path": "game/g_ai.c",
+      "sha256": "6b00d707b108203acde3e6927494231b45f991d0ee1599886127d0d3226c8aff"
+    },
+    {
+      "relative_path": "game/g_chase.c",
+      "sha256": "25648f0ce1bd11454faf8e43e75f55f17376495d532da7df16d8ee04fa8dc3dc"
+    },
+    {
+      "relative_path": "game/g_cmds.c",
+      "sha256": "dc0e265097f463728c70c2cbf60325db9b92931503027cd6048deeafda640da0"
+    },
+    {
+      "relative_path": "game/g_combat.c",
+      "sha256": "ee8badcf891215ae3e627a987dadde2e4bf11eb19095e3fca9e1b60c0c658f38"
+    },
+    {
+      "relative_path": "game/g_func.c",
+      "sha256": "aa12e2ef06f30bba957adb46cc9caecf843c575041ca5287abec5ecaad2c7873"
+    },
+    {
+      "relative_path": "game/g_items.c",
+      "sha256": "4d55d1d1c83ff7552326efabc520ca07b1107ef37cd7a877af409eddcd6cdc77"
+    },
+    {
+      "relative_path": "game/g_main.c",
+      "sha256": "558f05adc5adac93bdc6151f5157b009ac87c255f788240a2a9f41755e3c8fd4"
+    },
+    {
+      "relative_path": "game/g_misc.c",
+      "sha256": "d39e96f6e8793ea768c56df820edcd987d90c9f43b7c3c7037e6ed7cd92413ee"
+    },
+    {
+      "relative_path": "game/g_monster.c",
+      "sha256": "6baf247deec1f53040f4b38302f918e255096f43de262ed7b95d739eec125cab"
+    },
+    {
+      "relative_path": "game/g_phys.c",
+      "sha256": "31e3b813814c249734550d262d2b4766184849563960c0d9715005a6e5743481"
+    },
+    {
+      "relative_path": "game/g_save.c",
+      "sha256": "2e5904205be8aa92c564b20aaf0d31bdb73d7f2e0c4f15ab0934a1e3361cd62d"
+    },
+    {
+      "relative_path": "game/g_spawn.c",
+      "sha256": "4c401dfb37076aa1186bf1b321d4606a997a1324fd4c2c3afb933d0a045a0eff"
+    },
+    {
+      "relative_path": "game/g_svcmds.c",
+      "sha256": "6646afb330cc83ef3de98146243e48eb0029917426c5c85e5a9e9c0b847dda04"
+    },
+    {
+      "relative_path": "game/g_target.c",
+      "sha256": "e66801c5ec863fb280c5df31bbeb2d388815b33feb9a769bd6b91f9f92e8494f"
+    },
+    {
+      "relative_path": "game/g_trigger.c",
+      "sha256": "8b68089f68cbd686b4fb13e6f37497c62c23554054ce801d8b4046849acdad9c"
+    },
+    {
+      "relative_path": "game/g_turret.c",
+      "sha256": "776f68766acce51a1f75f1b72cf71d82e8ef30425abedd2ab26bf9c8ca0c08e1"
+    },
+    {
+      "relative_path": "game/g_utils.c",
+      "sha256": "441b5eeb751763171e507e262cf4a8d525db72c5d98a271edd591f0a6dbb6f22"
+    },
+    {
+      "relative_path": "game/g_weapon.c",
+      "sha256": "ef25ff12da0e65ffb77623101530362e866b03e80cc922e30c461a47b1e8aa1f"
+    },
+    {
+      "relative_path": "game/m_actor.c",
+      "sha256": "d614e9d027bb6ca9e09694461aab731416f2442de235e1f32f7f4ff46471593d"
+    },
+    {
+      "relative_path": "game/m_berserk.c",
+      "sha256": "b2865145a1a22b6047805c7704ab1212e90a21616b3d21b08eecaee214f88361"
+    },
+    {
+      "relative_path": "game/m_boss2.c",
+      "sha256": "c9348d358ae949952e61650a099fdbc57084defb78dfc3ef45e4d26636683ee8"
+    },
+    {
+      "relative_path": "game/m_boss3.c",
+      "sha256": "da05cb04906c0f85a5a87be494de319334ba942cae37322c4f5912ee04e15c57"
+    },
+    {
+      "relative_path": "game/m_boss31.c",
+      "sha256": "c620232f2e28c6c8e5a32a43885fe82ba9ae405cd24858c770aa91c33da4f27c"
+    },
+    {
+      "relative_path": "game/m_boss32.c",
+      "sha256": "a1a1da79940480231ea00584b65042fc1b454fd01fc74f55b550a7b1c91303ad"
+    },
+    {
+      "relative_path": "game/m_brain.c",
+      "sha256": "a641c8e79735ef803bfacfcb7cedd07976e1c70fd3c3bf4449210e1b018fbe52"
+    },
+    {
+      "relative_path": "game/m_chick.c",
+      "sha256": "bfab2d7c065a0d724690cb870bf6d7795246ca68bdf361fe579caaf0a389df36"
+    },
+    {
+      "relative_path": "game/m_flash.c",
+      "sha256": "0a10115e01c33d008db24911cd8897bec9120d728d0f18a27a54cd7181f19324"
+    },
+    {
+      "relative_path": "game/m_flipper.c",
+      "sha256": "1f2df0ce2c4da49f2c4885d2d3b0e7eee4db0e8b961b582a8c6e068c26573e7c"
+    },
+    {
+      "relative_path": "game/m_float.c",
+      "sha256": "641a7547f68a71aa0d18119ddef3445781768d48578cb8de0114b399b1fde000"
+    },
+    {
+      "relative_path": "game/m_flyer.c",
+      "sha256": "3e66271bc9da5b1fdad27d588d7f38d7d33c13ce8548c7ce028b36a8a34686a4"
+    },
+    {
+      "relative_path": "game/m_gladiator.c",
+      "sha256": "a174ad502c17473a891898de0a7e80b2e2a01587276b23f11019054e3fbf5cd8"
+    },
+    {
+      "relative_path": "game/m_gunner.c",
+      "sha256": "72c295b49f7518f766423ebea18849c5b4686cd97d42fb38eed34474e0143080"
+    },
+    {
+      "relative_path": "game/m_hover.c",
+      "sha256": "e3a6ca713a655b7b9ac1a533d10a971d5d0498d01c5737956086de5378fadbaa"
+    },
+    {
+      "relative_path": "game/m_infantry.c",
+      "sha256": "acf0c4684c0def6422134b290b68fd7415ab7878b2ae8225b69f97339d97d3ab"
+    },
+    {
+      "relative_path": "game/m_insane.c",
+      "sha256": "40442dfb2e78f40d3f781648cbfa3b6b0a0aab1f44948e414bc6584c2a5d7737"
+    },
+    {
+      "relative_path": "game/m_medic.c",
+      "sha256": "356cc8d5850d177b77670ab8d8d1ad20f180d82afa0e7650c3bb284d66888872"
+    },
+    {
+      "relative_path": "game/m_move.c",
+      "sha256": "d0e5858e385db1d6397581b2f79f31c401b807717769a30be4d99d21ebc27081"
+    },
+    {
+      "relative_path": "game/m_mutant.c",
+      "sha256": "91317ed8b8febb578325a8c85102f1ed5d817e4ae52f5f3c9b673afac2506a69"
+    },
+    {
+      "relative_path": "game/m_parasite.c",
+      "sha256": "c6c3691a0a72acf93ac889e81312642bac62c3b8118fc965e67922223772a05a"
+    },
+    {
+      "relative_path": "game/m_soldier.c",
+      "sha256": "4c2f258311095e79c04124c3177b21be45083a20cb3d98713dd844d9e756a1ff"
+    },
+    {
+      "relative_path": "game/m_supertank.c",
+      "sha256": "7af4bc417199d7c8c26f9c35d59f4dd7df9d5d0008ba76c99eb8d5af7be3b627"
+    },
+    {
+      "relative_path": "game/m_tank.c",
+      "sha256": "d2c039e121cd9fcf71b2c98f07ad7781ebd90f8d0370f353a3843b0224768d25"
+    },
+    {
+      "relative_path": "game/p_client.c",
+      "sha256": "d4bad9aa34ec3d2c667eaf64c0d84c7a555e8162b8252c245fde4a54e343ae3f"
+    },
+    {
+      "relative_path": "game/p_hud.c",
+      "sha256": "df67a4c0246e2c34f4127c9b2b985bf87aefb190dae455e84e1a18fc6b3ecf83"
+    },
+    {
+      "relative_path": "game/p_trail.c",
+      "sha256": "1c51498fb7697d89e3da397989460808a9f43503c951fe698a50dfc449d51885"
+    },
+    {
+      "relative_path": "game/p_view.c",
+      "sha256": "915358415b8088552f7ace5d0a822f122d99b4fe2b9fdb553b9aca460712efcf"
+    },
+    {
+      "relative_path": "game/p_weapon.c",
+      "sha256": "6ea1fe950206e780da1b746cc33e01e953bdb39a8c934da3fc92bfe483ffa3a1"
+    },
+    {
+      "relative_path": "game/q_shared.c",
+      "sha256": "ebdbc0a79a2eae288630647cc3f5542f0d5bc2aa6f2d8c04781c6aaebfbe0e60"
+    },
+    {
+      "relative_path": "game/g_local.h",
+      "sha256": "eb04d914a532f0baa87a12e00bc2e39a3d3a8ee1576bcdf87ea5af419919e095"
+    },
+    {
+      "relative_path": "game/game.h",
+      "sha256": "c5427be9d385cd0d4183be925f83d5435ff0f1d31f54c5ce63d6a90f3bf8a303"
+    },
+    {
+      "relative_path": "game/m_actor.h",
+      "sha256": "f540433320d4176da18716ff4dcd75c8d94251c5138a3714ba160d9cdafd9b9f"
+    },
+    {
+      "relative_path": "game/m_berserk.h",
+      "sha256": "b0fd4a30d71a94ec0fd6777c14b24540dc122632e206fa6e33c69339df30513d"
+    },
+    {
+      "relative_path": "game/m_boss2.h",
+      "sha256": "edd5dce4694d47420fd660fe0d80ede95fbd258a9974990da03e6f8d8d628524"
+    },
+    {
+      "relative_path": "game/m_boss31.h",
+      "sha256": "7816fc92e693ecb97d4304c88b33318cd181cd9ed2d00094f1150c87fa31d0e7"
+    },
+    {
+      "relative_path": "game/m_boss32.h",
+      "sha256": "fe3b794e8d33547c8ef74e676f36c6405f5b52ae0a6fb276fdd3bdfdf45e9c50"
+    },
+    {
+      "relative_path": "game/m_brain.h",
+      "sha256": "9f853800b03775eaed0153bdb7e5ae6082031bfd00cd80c07dc773a1e44aa81f"
+    },
+    {
+      "relative_path": "game/m_chick.h",
+      "sha256": "6d91f7798bddaeff491e5c02a7730daa8445adca4d2028ae9393f5f69242899c"
+    },
+    {
+      "relative_path": "game/m_flipper.h",
+      "sha256": "3cab4dcd2a063042d5c096bb450d66d7f1e420eb287191e043b27f017ddccaaf"
+    },
+    {
+      "relative_path": "game/m_float.h",
+      "sha256": "b48e4e70e241b2cdbb4545703d04524f7779a2638e0effd6127fe730d822fd45"
+    },
+    {
+      "relative_path": "game/m_flyer.h",
+      "sha256": "c8eb5f8c64fda3f9dba5930d6ec1520967f9204634429a17d11a4e46a646af31"
+    },
+    {
+      "relative_path": "game/m_gladiator.h",
+      "sha256": "c208243d77b872555f8d9a0409b62964efc12051c2857b380aa682b67bd1bae9"
+    },
+    {
+      "relative_path": "game/m_gunner.h",
+      "sha256": "c1f90e743e4c5c75a062a47a0fc4c4ed6590db24c81489f69e738f9dfdefea2c"
+    },
+    {
+      "relative_path": "game/m_hover.h",
+      "sha256": "85e53d1b4cebf2aac9418062d6ed14b545bd04bda4a1f06caeee3d343d7f0f8c"
+    },
+    {
+      "relative_path": "game/m_infantry.h",
+      "sha256": "fd6f184a75a48c2a90d99d46ca3404009b91267aafe82567e789e4a38739709a"
+    },
+    {
+      "relative_path": "game/m_insane.h",
+      "sha256": "254f486db7683ab4c3d1faac36a6292d3bfc1fb6830399be39838b85a9147b21"
+    },
+    {
+      "relative_path": "game/m_medic.h",
+      "sha256": "b800648492123baa9bd8860c8706925554fe26b4997d74b32cfadf2898801910"
+    },
+    {
+      "relative_path": "game/m_mutant.h",
+      "sha256": "4ba445bbf5fe20213ef643e4ec6c4e5915fb791116418baee9a77ed2145e2378"
+    },
+    {
+      "relative_path": "game/m_parasite.h",
+      "sha256": "1ae3cf27d596d12127a3abacab5e15944fb303ce32806b6403da96e8da2aa0b5"
+    },
+    {
+      "relative_path": "game/m_player.h",
+      "sha256": "9944e67c2f7bf3bbfd8b268c64f6a485a4a5a4790fb192bb8cecc469a1a5aff0"
+    },
+    {
+      "relative_path": "game/m_soldier.h",
+      "sha256": "1b4ec8a19e1bccf545c516085588ded4f8a8f05661ebac15434609a10773c127"
+    },
+    {
+      "relative_path": "game/m_supertank.h",
+      "sha256": "558548b6879a200acb759dcaef1e7c49ee451150d44c8f959b27c8a433f48d48"
+    },
+    {
+      "relative_path": "game/m_tank.h",
+      "sha256": "687a712a6cb05f648ab2cfa815a670dbb0bb188592066de8c0c3f550cb1f8d7b"
+    },
+    {
+      "relative_path": "game/q_shared.h",
+      "sha256": "c552978e0efed7d7f2daf3cef50af5b7b248555021e93a3347cc73d46d25389c"
+    },
+    {
+      "relative_path": "game/game.dsp",
+      "sha256": "c01e39f3f1d5e624ad2d2b205a37f65ab6d9f1fe9c686995907d33de74187bd6"
+    },
+    {
+      "relative_path": "server/sv_world.c",
+      "sha256": "f423eaa292289205f0a265d4a75c2bdf0085b184ce056e410820f2bb54adbfa7"
+    },
+    {
+      "relative_path": "server/server.h",
+      "sha256": "2ac4044c8c495a4eec1328792b7f99b4d651645393caada33b62eabc62b22a61"
+    },
+    {
+      "relative_path": "qcommon/pmove.c",
+      "sha256": "8861daaeff7efd7bc6d3c5e65ef99801567f3e06eb14020787206d39dd0038a8"
+    },
+    {
+      "relative_path": "qcommon/cmodel.c",
+      "sha256": "c956c5717bdf7d327f7c05f512d70dd9f2ef354d35c9c2fbf408fc716e107785"
+    },
+    {
+      "relative_path": "qcommon/md4.c",
+      "sha256": "7c070a8204ff23f112767532f0a0c23c8730c6409ce84bf09ba1b77e27d7743e"
+    },
+    {
+      "relative_path": "qcommon/qcommon.h",
+      "sha256": "f66fc292c1a195b5e1de35cf1410b86e7d5c5cbc0bb5b76be37e19a2cdafdd46"
+    },
+    {
+      "relative_path": "qcommon/qfiles.h",
+      "sha256": "3a3e55d65897a83150531c72d2b1087a2d632e9cb73782e382c17643c580a11e"
+    },
+    {
+      "relative_path": "readme.txt",
+      "sha256": "07895b5f72d8a1cf9000017f8a9d803fa9a968752a273371bd9f60bb790f7dab"
+    },
+    {
+      "relative_path": "gnu.txt",
+      "sha256": "70402dc11b4b91b2e2b4821592ff9cb31ff2f4c6f3dedae15efde5395c7ee170"
+    }
+  ]
+}

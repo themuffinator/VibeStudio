@@ -1,0 +1,257 @@
+{
+  "schema": "qmg.experiment_record",
+  "schema_version": 1,
+  "id": "r1s-q3-ctf-team-begin",
+  "title": "R1-s entity safety (4): ceil(target_players / 2) team_CTF_redplayer and team_CTF_blueplayer team-begin spots in each base of every Quake 3 CTF map",
+  "game": "q3",
+  "kind": "output",
+  "sub_lane": "mp",
+  "cause": "A Quake 3 client that enters a CTF game or joins a team is in TEAM_BEGIN (code/game/g_client.c:1013; code/game/g_cmds.c:599-600), and ClientSpawn takes its spot from SelectCTFSpawnPoint (code/game/g_client.c:1076-1081): SelectRandomTeamSpawnPoint searches team_CTF_redplayer or team_CTF_blueplayer, keeps the spots SpotWouldTelefrag finds free and, when none is free, returns the class's first spot anyway (code/game/g_team.c:983-1024); ClientSpawn then G_KillBox-es whoever stands there (code/game/g_client.c:1205; code/game/g_utils.c:525-545). Generated CTF maps had one begin spot per team, so when a match starts the second player of each team telefrags the first.",
+  "hypothesis": "With ceil(target_players / 2) begin spots per team, each at least 64 units on x or y from every other entity, every player of a full team finds a free begin spot at a match start, so no begin telefrag occurs; nothing else in the map changes. A full team is ceil(target_players / 2) players under automatic team assignment (PickTeam joins the smaller team, code/game/g_client.c:566-583); players who pick a team by hand can stack one team beyond that unless g_teamForceBalance is set (code/game/g_cmds.c:547-560), and the extra players then get the class's first spot back, as before.",
+  "expected_mechanism": "src/entities.cpp add_quake3_ctf_team_begin_spots (public; include/qmg/entities.hpp, with quake3_ctf_team_begin_spots_per_team = ceil(max(target_players, 2) / 2)) appends PlacementRole::team_initial_spawn placements (existing role; classnames team_CTF_redplayer / team_CTF_blueplayer from data/profiles/q3/generator-current.json, now cited to code/game/g_team.c:990-994 and code/game/g_spawn.c:256-257), red first, after every other placement, when the switch is on and the layout is Quake 3 CTF: in the room that holds the team's flag (joined rooms of the team's half only when the base is full), at the supported, clear, lit start_stations() nearest the team's existing begin spot, facing the base centre. The validator's ctf_spawn_contract counts the spots per team when the switch is on. The team_CTF_*spawn respawn spots, the deathmatch fallback spots and every other placement stay as they were.",
+  "switch": {
+    "name": "r1s.q3_ctf_team_begin",
+    "default": "off",
+    "qmg_args_on": "--switch r1s.q3_ctf_team_begin=on"
+  },
+  "declared_scope": {
+    "file": "out/phase2/changes/r1s-q3-ctf-team-begin/declared_scope.json",
+    "sha256": "5591e5047ce030f1a24dcda6df62a8e28cba1fe04add6922da5a63e575fdd82b",
+    "declared_at": "2026-10-15T23:14:17+00:00",
+    "rule": "a case may change if and only if its resolved game is quake3 and its resolved mode is capture_the_flag (src/entities.cpp add_quake3_ctf_team_begin_spots: the team-begin spots are added when the switch is on, spec.game is quake3 and spec.mode is capture_the_flag); resolved game and mode read from the previous baseline's (baseline-3) reports, since the switch does not change prompt parsing",
+    "sub_lane_note": "MP sub-lane. Every in-scope case is a Quake 3 CTF map, and every one is on the q3-ctf path, so the path-based and the resolved-mode readings of docs/CHANGE_PROTOCOL.md agree (see sp_path_cases_in_scope and q3_ctf_path_cases_out_of_scope). No other output change is in flight: r1s-sp-coop-starts is flipped and recorded as baseline-3.",
+    "case_count": 25,
+    "case_ids": [
+      "q3-ctf-c1",
+      "q3-ctf-c2",
+      "q3-ctf-s1",
+      "q3-ctf-s2",
+      "q3-ctf-s3",
+      "q3-ctf-v1",
+      "q3-ctf-v2",
+      "q3-ctf-v3",
+      "q3-ctf-x-forbidden-1",
+      "q3-ctf-x-item-1",
+      "q3-ctf-x-landmark-1",
+      "q3-ctf-x-mech-drop-1",
+      "q3-ctf-x-mech-drop-2",
+      "q3-ctf-x-mech-jumppad-1",
+      "q3-ctf-x-mech-launchpad-1",
+      "q3-ctf-x-mech-lava-1",
+      "q3-ctf-x-mech-lift-1",
+      "q3-ctf-x-mech-lift-2",
+      "q3-ctf-x-mech-ramp-1",
+      "q3-ctf-x-mech-teleporter-1",
+      "q3-ctf-x-mech-teleporter-2",
+      "q3-ctf-x-mech-water-1",
+      "q3-ctf-x-mech-water-2",
+      "q3-ctf-x-mood-1",
+      "q3-ctf-x-parse-1"
+    ],
+    "predicted_added_entities_histogram": {
+      "4": 24,
+      "6": 1
+    },
+    "fixed_sets": [
+      "BENCH-v1",
+      "MP-PORTFOLIO",
+      "SPAN-PORTFOLIO",
+      "LATTICE (span manifest)",
+      "SPLICE (span manifest)"
+    ]
+  },
+  "build": {
+    "cmd": "cmake --build --preset windows-clang",
+    "exit": 0
+  },
+  "ctest": {
+    "cmd": "ctest --preset windows-clang -j 8",
+    "passed": 90,
+    "total": 91,
+    "failed": [],
+    "skipped": [
+      "qmg_rc_benchmark (opt-in placeholder, QMG_RC_BENCHMARK=OFF)"
+    ]
+  },
+  "compiler_fixtures": {
+    "required": "yes (serialization change: more entities of an existing class)",
+    "result": "qmg_q1_qbsp, qmg_q2_qbsp, qmg_q3_legacy_compilers, qmg_q3_brush_primitives_compilers, qmg_q2_compact_* and qmg_determinism_matrix passed at the default; the switch-on serialization was compiled by q3map2 (BSP, full VIS, final light) and BSPC (AAS) on all 25 in-scope cases (after.gates)"
+  },
+  "runs": {
+    "baseline": {
+      "baseline_id": "baseline-3",
+      "generation_outputs": "out/phase2/r1s-sp-coop-starts/flip-gen/default",
+      "composite": "out/benchmark-v1/baseline-3/composite.json",
+      "composite_sha256": "485a507b0e1d5a8423600517738b18441460952eea878afcffb806d26b0eece1"
+    },
+    "switch_off": {
+      "out_dir": "out/phase2/r1s-q3-ctf-team-begin/gen/off",
+      "byte_identical_to_baseline": true,
+      "cases_compared": 459
+    },
+    "switch_on": {
+      "out_dir": "out/phase2/r1s-q3-ctf-team-begin/gen/on",
+      "qmg_extra": "--switch r1s.q3_ctf_team_begin=on"
+    },
+    "switch_on_compiled": {
+      "out_dir": "out/phase2/r1s-q3-ctf-team-begin/compile-on/bench",
+      "policy": "v1",
+      "jobs": 8,
+      "tool_threads": 2,
+      "light_budget_seconds": 1020,
+      "repeat": 2,
+      "summary_sha256": "ac887c2b7d36ff3049b7f0632a6bc2c9bf6075e369552ebd79775e5c3ba1ce55"
+    },
+    "qmg_sha256": "c1b7016ea39a1ae117694413c940118dd815725f528217823b7154c48e766e68",
+    "runner_sha256": "d061a4b0c8f6b638d76b7ca1df7b4347e1837e851aae37c609858a10bc6d1773",
+    "compare_sha256": "a738936725a4fb6abfd935bdb6019aa5f3443c41e6df63d9b10e886b0adf118b"
+  },
+  "scope_diff": {
+    "command": "python -B tools/benchmark/compare.py <off-run> <on-run (identity fields discounted)> --generate-only --scope declared_scope.json",
+    "off_vs_baseline_differences": 0,
+    "out_of_scope_differences": 0,
+    "in_scope_differences": 25,
+    "other_sub_lane_byte_differences": 0,
+    "cases_compared": 459,
+    "method": "compare.py a738936 unmodified, on a normalized copy of the on-run that discounts exactly the D7 identity fields ($.switches, layout_sha256) (scripts/normalize_switched.py, logic copied from r1s-sp-coop-starts); raw comparison kept (every out-of-scope raw difference is identity-field-only, scripts/check_generation.py)",
+    "in_scope_difference_shape": "every in-scope .map is its switch-off .map with the declared team-begin blocks appended, red first (25/25); report changes are entity, spawn, sample, binding and timing counts plus the spawn-safety and timing findings of the new spawns; rank_score, validation and repair passes unchanged (25/25)",
+    "json": "out/phase2/r1s-q3-ctf-team-begin/gen/compare-off-vs-on-bench.json"
+  },
+  "portfolios": {
+    "required": "rerun for the zero-difference check (no portfolio case is in scope: all are Quake 2 deathmatch or duel)",
+    "result": "49/49 portfolio maps byte-identical with the switch on; reports identity fields only"
+  },
+  "before": {
+    "team_begin_spots_per_team": "1 in each of the 25 maps (team_CTF_redplayer 1, team_CTF_blueplayer 1)",
+    "needed_per_team": "ceil(T / 2): 3 in 24 maps (T = 6), 4 in 1 map (q3-ctf-s2, T = 8)",
+    "players_2_and_up_of_a_team_telefragging_at_team_begin": "25/25 maps (static reading)"
+  },
+  "after": {
+    "maps_with_ceil_half_begin_spots_per_team_in_compiled_entity_lump": "25/25",
+    "entity_lump_begin_spots_equal_to_map": "25/25",
+    "entity_lump_respawn_spots_equal_to_map": "25/25",
+    "begin_spots_checked": 152,
+    "new_begin_spots": 102,
+    "begin_origin_inside_a_brush": 0,
+    "begin_player_box_points_inside_a_brush": 0,
+    "begin_without_solid_floor_within_32_units_below_the_feet": 0,
+    "begin_closer_than_64_units_to_another_point_entity_or_overlapping_a_brush_entity": 0,
+    "minimum_chebyshev_separation_to_another_point_entity": 64.0,
+    "every_begin_spot_in_its_flag_room": "25/25",
+    "new_spots_facing_the_base_centre": "25/25",
+    "new_spots_on_the_floor": "102/102 drop 0 (feet on the floor); the 50 existing spots stand 8 units above it, as before",
+    "aas_detail_equal_to_reference": "25/25 (entities do not change the AAS geometry)",
+    "players_2_and_up_of_a_team_telefragging_at_team_begin": "0/25 maps (static reading)",
+    "gates": {
+      "G1_generated": {
+        "reference_pass": 25,
+        "on_pass": 25,
+        "new_failures": [],
+        "new_passes": []
+      },
+      "G2_intent_match": {
+        "reference_pass": 25,
+        "on_pass": 25,
+        "new_failures": [],
+        "new_passes": []
+      },
+      "G3_leak_free_compile": {
+        "reference_pass": 25,
+        "on_pass": 25,
+        "new_failures": [],
+        "new_passes": []
+      },
+      "G4_full_vis": {
+        "reference_pass": 25,
+        "on_pass": 25,
+        "new_failures": [],
+        "new_passes": []
+      },
+      "G5_final_light": {
+        "reference_pass": 25,
+        "on_pass": 25,
+        "new_failures": [],
+        "new_passes": []
+      },
+      "G6_aas_valid": {
+        "reference_pass": 25,
+        "on_pass": 25,
+        "new_failures": [],
+        "new_passes": []
+      },
+      "G7_mode_entities": {
+        "reference_pass": 25,
+        "on_pass": 25,
+        "new_failures": [],
+        "new_passes": []
+      },
+      "G8_determinism": {
+        "reference_pass": 25,
+        "on_pass": 25,
+        "new_failures": [],
+        "new_passes": []
+      }
+    },
+    "reported_gates_G9_G15_changes": {
+      "G9_request_accounting": {},
+      "G10_conflict_surfaced": {},
+      "G11_error_findings": {},
+      "G12_materials": {},
+      "G13_lighting_readability": {},
+      "G14_engine_smoke": {},
+      "G15_q3_entity_reachability": {}
+    },
+    "G11_detail_changes": {
+      "q3-ctf-x-mech-teleporter-2": {
+        "reference": [
+          "fail",
+          "11 error-severity analysis finding(s): {'navigation.player:unbound_placement': 1, 'quality:unreachable_timing_target': 10}",
+          {
+            "navigation.player:unbound_placement": 1,
+            "quality:unreachable_timing_target": 10
+          }
+        ],
+        "on": [
+          "fail",
+          "15 error-severity analysis finding(s): {'navigation.player:unbound_placement': 1, 'quality:unreachable_timing_target': 14}",
+          {
+            "navigation.player:unbound_placement": 1,
+            "quality:unreachable_timing_target": 14
+          }
+        ]
+      }
+    },
+    "analysis_finding_deltas": {
+      "quality:timing_too_early:warning:+": 5,
+      "quality:timing_too_late:warning:+": 247,
+      "quality:unreachable_timing_target:error:+": 4,
+      "quality:unreachable_timing_target:warning:+": 12,
+      "visibility:hostile_line_of_sight:warning:+": 146,
+      "visibility:no_cover_opportunity:warning:+": 51,
+      "visibility:wide_crossfire:warning:+": 13
+    }
+  },
+  "verdict": "accepted",
+  "evidence_level": "compiler output (BSP entity lumps; q3map2 and BSPC AAS ran on every in-scope case); static analysis for in-solid, floor support, overlap and the team-begin spawn-selection reading",
+  "evidence_notes": "Presence, origin and angle are read from the compiled IBSP v46 entity lumps (compiler output). In-solid, floor support and overlap are static analysis of the .map brushes and entities. That every player of a full team now finds a free begin spot is static analysis of the id code (SelectRandomTeamSpawnPoint, SpotWouldTelefrag, PickTeam); no engine was run, so the plan's engine-runtime row (0 telefrags at team begin with bots to capacity, H2) is not claimed.",
+  "failures_and_counterexamples_kept": [
+    "raw compare.py runs (identity fields counted): out/phase2/r1s-q3-ctf-team-begin/gen/compare-off-vs-on-raw-*.json",
+    "q3-ctf-x-mech-teleporter-2: G11 already failed in the reference (flag placement 17 is unbound: navigation.player unbound_placement, and every spawn gets quality unreachable_timing_target for it); the 4 new begin spots add 4 more of the same quality error (10 -> 14), G11 status unchanged (fail). The defect is the flag's, not the new spots' (every new spot binds to a navigation node)",
+    "the new spots are active team spawns, so the visibility spawn-safety warnings (hostile_line_of_sight +146, no_cover_opportunity +51, wide_crossfire +13) and the quality timing warnings (timing_too_late +247, timing_too_early +5, unreachable_timing_target warning +12) grow with them over the 25 cases; no visibility or lighting error is added",
+    "run.py G7 counts team_CTF_redplayer/blueplayer >= 1, so it passed before and after (25/25); the strict ceil(player_max / 2) contract (R1-g) is measured here by check_compiled.py, not yet by G7",
+    "the deathmatch fallback spots (info_player_deathmatch, one in each base) are left as they are; Quake 3 CTF reads them only when a team has no team spot at all (code/game/g_team.c:1038-1040)",
+    "flip counterexample (change r1s-q3-ctf-team-begin-flip): with the switch on, qmg_tests' dense_spawn_allocation fixture (Quake 3 CTF, 2 rooms, 32 players, 'vertical dense arena') fails closed on seeds 10 and 12 of 16: add_quake3_ctf_team_begin_spots throws 'the blue base and the rooms of its half joined to it have fewer than 16 supported, clear stations' (each 2-room base already holds 16 respawn spots, the flag, items and a deathmatch spot; a 2-room map has no other room in the team's half). The uncaught exception stopped qmg_tests without output until its 1200 s timeout. Envelope over 'vertical dense arena', 3 room counts x 7 player counts x 16 seeds: only 2 rooms x 32 players fails (2/16); 'capture the flag map' at 2 rooms x 32 players: 2/16 (seeds 10, 12); 'flat open capture the flag arena': 0/16. Evidence: out/phase2/changes/r1s-q3-ctf-team-begin-flip/ctest/ctest-1.log, out/phase2/changes/r1s-q3-ctf-team-begin-flip/logs/qmg_tests-standalone-1.log, out/phase2/changes/r1s-q3-ctf-team-begin-flip/evidence/"
+  ],
+  "default_flip": {
+    "separate_commit": "pending D1; recorded as change r1s-q3-ctf-team-begin-flip under out/phase2/changes",
+    "status": "failed",
+    "flip_change_id": "r1s-q3-ctf-team-begin-flip",
+    "flipped_qmg_sha256": "624fa5c2517846f880e50de29659080b63fc01e90436fc4761c6e57c132ab910",
+    "checks": "ctest after the flip: 89 passed, 1 failed (qmg_tests, timeout 1200 s: uncaught std::runtime_error from add_quake3_ctf_team_begin_spots in dense_spawn_allocation, seeds 10 and 12), 1 opt-in skipped; reproduced standalone (no output, killed after 500 s) and through the CLI",
+    "reverted": "default_on set back to false (src/switches.cpp and tests/test_r1s_q3_ctf_team_begin.cpp restored from the flip's before/ copies); the reverted qmg differs from the measured one only in the PE timestamp and debug GUID bytes",
+    "new_baseline_id": null,
+    "baseline_note": "no baseline-4 recorded; baseline-3 stays current"
+  },
+  "notes": "Change record: out/phase2/changes/r1s-q3-ctf-team-begin/record.json. Generation check: out/phase2/r1s-q3-ctf-team-begin/gen/generation-check.json; report deltas: out/phase2/r1s-q3-ctf-team-begin/gen/report-deltas.json; compiled entity safety: out/phase2/r1s-q3-ctf-team-begin/compile-on-entity-safety.json; reported gates: out/phase2/r1s-q3-ctf-team-begin/compile-on-reported-gates.json.",
+  "verdict_note": "Accepted on every declared fixed set (25/25 in scope, 0 out of scope, compiled lumps 25/25, G1-G8 no regression). The default flip failed on a counterexample outside the fixed sets (see failures_and_counterexamples_kept), so the switch stays off: flipping would turn 2 of 16 passing dense 2-room, 32-player generations into errors. A revised variant (more station capacity in a crowded base, or a documented fallback) needs its own experiment record before a flip."
+}

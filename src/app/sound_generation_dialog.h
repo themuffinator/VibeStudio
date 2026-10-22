@@ -48,6 +48,8 @@ struct SoundGenerationDialogHooks {
 	std::function<void(const QStringList& paths)> written;
 	std::function<QString(const QString& title, const QString& detail)> beginTask;
 	std::function<void(const QString& task, bool succeeded, bool cancelled, const QString& summary)> endTask;
+	// Opens Settings > AI and Automation, where the connector, model, and endpoint are chosen.
+	std::function<void()> openAiSettings;
 };
 
 class SoundGenerationDialog final : public QDialog {
@@ -116,6 +118,7 @@ private:
 	QRadioButton* m_modelSource = nullptr;
 	QLabel* m_sourceStatus = nullptr;
 	QPushButton* m_previewRequest = nullptr;
+	QPushButton* m_aiSettings = nullptr;
 	QPushButton* m_generate = nullptr;
 	QPushButton* m_cancel = nullptr;
 	QLabel* m_status = nullptr;

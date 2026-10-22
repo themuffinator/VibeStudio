@@ -1,0 +1,753 @@
+{
+  "schema": "qmg.benchmark.id_set",
+  "schema_version": 1,
+  "set": "BENCH-v1-PR",
+  "created": "2026-10-15",
+  "frozen": true,
+  "change_id": "x1-ctest-integration",
+  "description": "PR-time subset of BENCH-v1 for the opt-in, hash-gated rc-benchmark CTest (docs/RC_PHASE1_AUDIT_AND_PLAN.md 9.1, D11(1)). Run by tools/benchmark/rc_benchmark.py; the file's sha256 is pinned in cmake/QmgBenchmarkTests.cmake. A changed subset gets a new file, a new set name and a new pin; this file is not edited.",
+  "base_manifest": {
+    "path": "tools/benchmark/rc1-v1.json",
+    "sha256": "4de23ee55d7bd709b74bd85839bc518656433cccd86fb373cbd63aa1006c7203"
+  },
+  "selection_rule": "For each path in the base manifest's `paths` order, the first case in manifest order of each core category (vague, specific, contradictory) among the draft-v0 core cases (no `added_in`; ids starting with `q2-showcase-` excluded). Sealed cases (sealed.json, by id or normalized-prompt sha256) are never selected.",
+  "ids": [
+    "q1-sp-v1",
+    "q1-sp-s1",
+    "q1-sp-c1",
+    "q1-coop-v1",
+    "q1-coop-s1",
+    "q1-coop-c1",
+    "q1-dm-v1",
+    "q1-dm-s1",
+    "q1-dm-c1",
+    "q1-duel-v1",
+    "q1-duel-s1",
+    "q1-duel-c1",
+    "q1-tdm-v1",
+    "q1-tdm-s1",
+    "q1-tdm-c1",
+    "q1-ctf-threewave-v1",
+    "q1-ctf-threewave-s1",
+    "q1-ctf-threewave-c1",
+    "q2-sp-v1",
+    "q2-sp-s1",
+    "q2-sp-c1",
+    "q2-coop-v1",
+    "q2-coop-s1",
+    "q2-coop-c1",
+    "q2-dm-v1",
+    "q2-dm-s1",
+    "q2-dm-c1",
+    "q2-duel-v1",
+    "q2-duel-s1",
+    "q2-duel-c1",
+    "q2-tdm-v1",
+    "q2-tdm-s1",
+    "q2-tdm-c1",
+    "q2-ctf-v1",
+    "q2-ctf-s1",
+    "q2-ctf-c1",
+    "q3-botarena-v1",
+    "q3-botarena-s1",
+    "q3-botarena-c1",
+    "q3-ffa-v1",
+    "q3-ffa-s1",
+    "q3-ffa-c1",
+    "q3-tourney-v1",
+    "q3-tourney-s1",
+    "q3-tourney-c1",
+    "q3-tdm-v1",
+    "q3-tdm-s1",
+    "q3-tdm-c1",
+    "q3-ctf-v1",
+    "q3-ctf-s1",
+    "q3-ctf-c1"
+  ],
+  "expected": {
+    "rule": "Regression check against the recorded baseline: for every case, each gate G1-G8 recorded as `pass` must still be `pass`. A recorded fail, n/a or not-run gate that now passes is an improvement (reported, not failed). G9-G15 are reported columns and are not compared.",
+    "baseline": {
+      "id": "baseline-0",
+      "summary_sha256": "b8097c9a87b88aa62138d42ff8e7a7bc8a9cbaffdcbf02efa404f9a33c7032fc",
+      "qmg_sha256": "815bb58dad1390c17142cb02f26e19738c5bf250ef6ed44612a3cc6afeeeba0b",
+      "runner_sha256": "d061a4b0c8f6b638d76b7ca1df7b4347e1837e851aae37c609858a10bc6d1773",
+      "policy": "v1",
+      "source": "result.json gate statuses of the baseline run (local, git-ignored); only these statuses are tracked here"
+    },
+    "gates": [
+      "G1_generated",
+      "G2_intent_match",
+      "G3_leak_free_compile",
+      "G4_full_vis",
+      "G5_final_light",
+      "G6_aas_valid",
+      "G7_mode_entities",
+      "G8_determinism"
+    ],
+    "cases": {
+      "q1-sp-v1": {
+        "all_hard_gates": true,
+        "gates": {
+          "G1_generated": "pass",
+          "G2_intent_match": "pass",
+          "G3_leak_free_compile": "pass",
+          "G4_full_vis": "pass",
+          "G5_final_light": "pass",
+          "G6_aas_valid": "n/a",
+          "G7_mode_entities": "pass",
+          "G8_determinism": "pass"
+        }
+      },
+      "q1-sp-s1": {
+        "all_hard_gates": true,
+        "gates": {
+          "G1_generated": "pass",
+          "G2_intent_match": "pass",
+          "G3_leak_free_compile": "pass",
+          "G4_full_vis": "pass",
+          "G5_final_light": "pass",
+          "G6_aas_valid": "n/a",
+          "G7_mode_entities": "pass",
+          "G8_determinism": "pass"
+        }
+      },
+      "q1-sp-c1": {
+        "all_hard_gates": true,
+        "gates": {
+          "G1_generated": "pass",
+          "G2_intent_match": "pass",
+          "G3_leak_free_compile": "pass",
+          "G4_full_vis": "pass",
+          "G5_final_light": "pass",
+          "G6_aas_valid": "n/a",
+          "G7_mode_entities": "pass",
+          "G8_determinism": "pass"
+        }
+      },
+      "q1-coop-v1": {
+        "all_hard_gates": false,
+        "gates": {
+          "G1_generated": "pass",
+          "G2_intent_match": "fail",
+          "G3_leak_free_compile": "pass",
+          "G4_full_vis": "pass",
+          "G5_final_light": "pass",
+          "G6_aas_valid": "n/a",
+          "G7_mode_entities": "fail",
+          "G8_determinism": "pass"
+        }
+      },
+      "q1-coop-s1": {
+        "all_hard_gates": false,
+        "gates": {
+          "G1_generated": "pass",
+          "G2_intent_match": "fail",
+          "G3_leak_free_compile": "pass",
+          "G4_full_vis": "pass",
+          "G5_final_light": "pass",
+          "G6_aas_valid": "n/a",
+          "G7_mode_entities": "fail",
+          "G8_determinism": "pass"
+        }
+      },
+      "q1-coop-c1": {
+        "all_hard_gates": false,
+        "gates": {
+          "G1_generated": "pass",
+          "G2_intent_match": "fail",
+          "G3_leak_free_compile": "pass",
+          "G4_full_vis": "pass",
+          "G5_final_light": "pass",
+          "G6_aas_valid": "n/a",
+          "G7_mode_entities": "fail",
+          "G8_determinism": "pass"
+        }
+      },
+      "q1-dm-v1": {
+        "all_hard_gates": true,
+        "gates": {
+          "G1_generated": "pass",
+          "G2_intent_match": "pass",
+          "G3_leak_free_compile": "pass",
+          "G4_full_vis": "pass",
+          "G5_final_light": "pass",
+          "G6_aas_valid": "n/a",
+          "G7_mode_entities": "pass",
+          "G8_determinism": "pass"
+        }
+      },
+      "q1-dm-s1": {
+        "all_hard_gates": true,
+        "gates": {
+          "G1_generated": "pass",
+          "G2_intent_match": "pass",
+          "G3_leak_free_compile": "pass",
+          "G4_full_vis": "pass",
+          "G5_final_light": "pass",
+          "G6_aas_valid": "n/a",
+          "G7_mode_entities": "pass",
+          "G8_determinism": "pass"
+        }
+      },
+      "q1-dm-c1": {
+        "all_hard_gates": true,
+        "gates": {
+          "G1_generated": "pass",
+          "G2_intent_match": "pass",
+          "G3_leak_free_compile": "pass",
+          "G4_full_vis": "pass",
+          "G5_final_light": "pass",
+          "G6_aas_valid": "n/a",
+          "G7_mode_entities": "pass",
+          "G8_determinism": "pass"
+        }
+      },
+      "q1-duel-v1": {
+        "all_hard_gates": true,
+        "gates": {
+          "G1_generated": "pass",
+          "G2_intent_match": "pass",
+          "G3_leak_free_compile": "pass",
+          "G4_full_vis": "pass",
+          "G5_final_light": "pass",
+          "G6_aas_valid": "n/a",
+          "G7_mode_entities": "pass",
+          "G8_determinism": "pass"
+        }
+      },
+      "q1-duel-s1": {
+        "all_hard_gates": true,
+        "gates": {
+          "G1_generated": "pass",
+          "G2_intent_match": "pass",
+          "G3_leak_free_compile": "pass",
+          "G4_full_vis": "pass",
+          "G5_final_light": "pass",
+          "G6_aas_valid": "n/a",
+          "G7_mode_entities": "pass",
+          "G8_determinism": "pass"
+        }
+      },
+      "q1-duel-c1": {
+        "all_hard_gates": true,
+        "gates": {
+          "G1_generated": "pass",
+          "G2_intent_match": "pass",
+          "G3_leak_free_compile": "pass",
+          "G4_full_vis": "pass",
+          "G5_final_light": "pass",
+          "G6_aas_valid": "n/a",
+          "G7_mode_entities": "pass",
+          "G8_determinism": "pass"
+        }
+      },
+      "q1-tdm-v1": {
+        "all_hard_gates": false,
+        "gates": {
+          "G1_generated": "pass",
+          "G2_intent_match": "fail",
+          "G3_leak_free_compile": "pass",
+          "G4_full_vis": "pass",
+          "G5_final_light": "pass",
+          "G6_aas_valid": "n/a",
+          "G7_mode_entities": "n/a",
+          "G8_determinism": "pass"
+        }
+      },
+      "q1-tdm-s1": {
+        "all_hard_gates": false,
+        "gates": {
+          "G1_generated": "pass",
+          "G2_intent_match": "fail",
+          "G3_leak_free_compile": "pass",
+          "G4_full_vis": "pass",
+          "G5_final_light": "pass",
+          "G6_aas_valid": "n/a",
+          "G7_mode_entities": "n/a",
+          "G8_determinism": "pass"
+        }
+      },
+      "q1-tdm-c1": {
+        "all_hard_gates": false,
+        "gates": {
+          "G1_generated": "pass",
+          "G2_intent_match": "fail",
+          "G3_leak_free_compile": "pass",
+          "G4_full_vis": "pass",
+          "G5_final_light": "pass",
+          "G6_aas_valid": "n/a",
+          "G7_mode_entities": "n/a",
+          "G8_determinism": "pass"
+        }
+      },
+      "q1-ctf-threewave-v1": {
+        "all_hard_gates": false,
+        "gates": {
+          "G1_generated": "pass",
+          "G2_intent_match": "fail",
+          "G3_leak_free_compile": "pass",
+          "G4_full_vis": "pass",
+          "G5_final_light": "pass",
+          "G6_aas_valid": "n/a",
+          "G7_mode_entities": "fail",
+          "G8_determinism": "pass"
+        }
+      },
+      "q1-ctf-threewave-s1": {
+        "all_hard_gates": false,
+        "gates": {
+          "G1_generated": "pass",
+          "G2_intent_match": "fail",
+          "G3_leak_free_compile": "pass",
+          "G4_full_vis": "pass",
+          "G5_final_light": "pass",
+          "G6_aas_valid": "n/a",
+          "G7_mode_entities": "fail",
+          "G8_determinism": "pass"
+        }
+      },
+      "q1-ctf-threewave-c1": {
+        "all_hard_gates": false,
+        "gates": {
+          "G1_generated": "pass",
+          "G2_intent_match": "fail",
+          "G3_leak_free_compile": "pass",
+          "G4_full_vis": "pass",
+          "G5_final_light": "pass",
+          "G6_aas_valid": "n/a",
+          "G7_mode_entities": "fail",
+          "G8_determinism": "pass"
+        }
+      },
+      "q2-sp-v1": {
+        "all_hard_gates": true,
+        "gates": {
+          "G1_generated": "pass",
+          "G2_intent_match": "pass",
+          "G3_leak_free_compile": "pass",
+          "G4_full_vis": "pass",
+          "G5_final_light": "pass",
+          "G6_aas_valid": "n/a",
+          "G7_mode_entities": "pass",
+          "G8_determinism": "pass"
+        }
+      },
+      "q2-sp-s1": {
+        "all_hard_gates": true,
+        "gates": {
+          "G1_generated": "pass",
+          "G2_intent_match": "pass",
+          "G3_leak_free_compile": "pass",
+          "G4_full_vis": "pass",
+          "G5_final_light": "pass",
+          "G6_aas_valid": "n/a",
+          "G7_mode_entities": "pass",
+          "G8_determinism": "pass"
+        }
+      },
+      "q2-sp-c1": {
+        "all_hard_gates": false,
+        "gates": {
+          "G1_generated": "pass",
+          "G2_intent_match": "fail",
+          "G3_leak_free_compile": "pass",
+          "G4_full_vis": "pass",
+          "G5_final_light": "pass",
+          "G6_aas_valid": "n/a",
+          "G7_mode_entities": "fail",
+          "G8_determinism": "pass"
+        }
+      },
+      "q2-coop-v1": {
+        "all_hard_gates": false,
+        "gates": {
+          "G1_generated": "pass",
+          "G2_intent_match": "fail",
+          "G3_leak_free_compile": "pass",
+          "G4_full_vis": "pass",
+          "G5_final_light": "pass",
+          "G6_aas_valid": "n/a",
+          "G7_mode_entities": "fail",
+          "G8_determinism": "pass"
+        }
+      },
+      "q2-coop-s1": {
+        "all_hard_gates": false,
+        "gates": {
+          "G1_generated": "pass",
+          "G2_intent_match": "fail",
+          "G3_leak_free_compile": "pass",
+          "G4_full_vis": "pass",
+          "G5_final_light": "pass",
+          "G6_aas_valid": "n/a",
+          "G7_mode_entities": "fail",
+          "G8_determinism": "pass"
+        }
+      },
+      "q2-coop-c1": {
+        "all_hard_gates": false,
+        "gates": {
+          "G1_generated": "pass",
+          "G2_intent_match": "fail",
+          "G3_leak_free_compile": "pass",
+          "G4_full_vis": "pass",
+          "G5_final_light": "pass",
+          "G6_aas_valid": "n/a",
+          "G7_mode_entities": "fail",
+          "G8_determinism": "pass"
+        }
+      },
+      "q2-dm-v1": {
+        "all_hard_gates": true,
+        "gates": {
+          "G1_generated": "pass",
+          "G2_intent_match": "pass",
+          "G3_leak_free_compile": "pass",
+          "G4_full_vis": "pass",
+          "G5_final_light": "pass",
+          "G6_aas_valid": "n/a",
+          "G7_mode_entities": "pass",
+          "G8_determinism": "pass"
+        }
+      },
+      "q2-dm-s1": {
+        "all_hard_gates": true,
+        "gates": {
+          "G1_generated": "pass",
+          "G2_intent_match": "pass",
+          "G3_leak_free_compile": "pass",
+          "G4_full_vis": "pass",
+          "G5_final_light": "pass",
+          "G6_aas_valid": "n/a",
+          "G7_mode_entities": "pass",
+          "G8_determinism": "pass"
+        }
+      },
+      "q2-dm-c1": {
+        "all_hard_gates": true,
+        "gates": {
+          "G1_generated": "pass",
+          "G2_intent_match": "pass",
+          "G3_leak_free_compile": "pass",
+          "G4_full_vis": "pass",
+          "G5_final_light": "pass",
+          "G6_aas_valid": "n/a",
+          "G7_mode_entities": "pass",
+          "G8_determinism": "pass"
+        }
+      },
+      "q2-duel-v1": {
+        "all_hard_gates": true,
+        "gates": {
+          "G1_generated": "pass",
+          "G2_intent_match": "pass",
+          "G3_leak_free_compile": "pass",
+          "G4_full_vis": "pass",
+          "G5_final_light": "pass",
+          "G6_aas_valid": "n/a",
+          "G7_mode_entities": "pass",
+          "G8_determinism": "pass"
+        }
+      },
+      "q2-duel-s1": {
+        "all_hard_gates": true,
+        "gates": {
+          "G1_generated": "pass",
+          "G2_intent_match": "pass",
+          "G3_leak_free_compile": "pass",
+          "G4_full_vis": "pass",
+          "G5_final_light": "pass",
+          "G6_aas_valid": "n/a",
+          "G7_mode_entities": "pass",
+          "G8_determinism": "pass"
+        }
+      },
+      "q2-duel-c1": {
+        "all_hard_gates": true,
+        "gates": {
+          "G1_generated": "pass",
+          "G2_intent_match": "pass",
+          "G3_leak_free_compile": "pass",
+          "G4_full_vis": "pass",
+          "G5_final_light": "pass",
+          "G6_aas_valid": "n/a",
+          "G7_mode_entities": "pass",
+          "G8_determinism": "pass"
+        }
+      },
+      "q2-tdm-v1": {
+        "all_hard_gates": false,
+        "gates": {
+          "G1_generated": "pass",
+          "G2_intent_match": "fail",
+          "G3_leak_free_compile": "pass",
+          "G4_full_vis": "pass",
+          "G5_final_light": "pass",
+          "G6_aas_valid": "n/a",
+          "G7_mode_entities": "n/a",
+          "G8_determinism": "pass"
+        }
+      },
+      "q2-tdm-s1": {
+        "all_hard_gates": false,
+        "gates": {
+          "G1_generated": "pass",
+          "G2_intent_match": "fail",
+          "G3_leak_free_compile": "pass",
+          "G4_full_vis": "pass",
+          "G5_final_light": "pass",
+          "G6_aas_valid": "n/a",
+          "G7_mode_entities": "n/a",
+          "G8_determinism": "pass"
+        }
+      },
+      "q2-tdm-c1": {
+        "all_hard_gates": false,
+        "gates": {
+          "G1_generated": "pass",
+          "G2_intent_match": "fail",
+          "G3_leak_free_compile": "pass",
+          "G4_full_vis": "pass",
+          "G5_final_light": "pass",
+          "G6_aas_valid": "n/a",
+          "G7_mode_entities": "n/a",
+          "G8_determinism": "pass"
+        }
+      },
+      "q2-ctf-v1": {
+        "all_hard_gates": true,
+        "gates": {
+          "G1_generated": "pass",
+          "G2_intent_match": "pass",
+          "G3_leak_free_compile": "pass",
+          "G4_full_vis": "pass",
+          "G5_final_light": "pass",
+          "G6_aas_valid": "n/a",
+          "G7_mode_entities": "pass",
+          "G8_determinism": "pass"
+        }
+      },
+      "q2-ctf-s1": {
+        "all_hard_gates": true,
+        "gates": {
+          "G1_generated": "pass",
+          "G2_intent_match": "pass",
+          "G3_leak_free_compile": "pass",
+          "G4_full_vis": "pass",
+          "G5_final_light": "pass",
+          "G6_aas_valid": "n/a",
+          "G7_mode_entities": "pass",
+          "G8_determinism": "pass"
+        }
+      },
+      "q2-ctf-c1": {
+        "all_hard_gates": true,
+        "gates": {
+          "G1_generated": "pass",
+          "G2_intent_match": "pass",
+          "G3_leak_free_compile": "pass",
+          "G4_full_vis": "pass",
+          "G5_final_light": "pass",
+          "G6_aas_valid": "n/a",
+          "G7_mode_entities": "pass",
+          "G8_determinism": "pass"
+        }
+      },
+      "q3-botarena-v1": {
+        "all_hard_gates": false,
+        "gates": {
+          "G1_generated": "pass",
+          "G2_intent_match": "fail",
+          "G3_leak_free_compile": "pass",
+          "G4_full_vis": "pass",
+          "G5_final_light": "pass",
+          "G6_aas_valid": "pass",
+          "G7_mode_entities": "pass",
+          "G8_determinism": "pass"
+        }
+      },
+      "q3-botarena-s1": {
+        "all_hard_gates": false,
+        "gates": {
+          "G1_generated": "pass",
+          "G2_intent_match": "fail",
+          "G3_leak_free_compile": "pass",
+          "G4_full_vis": "pass",
+          "G5_final_light": "pass",
+          "G6_aas_valid": "pass",
+          "G7_mode_entities": "pass",
+          "G8_determinism": "pass"
+        }
+      },
+      "q3-botarena-c1": {
+        "all_hard_gates": false,
+        "gates": {
+          "G1_generated": "pass",
+          "G2_intent_match": "fail",
+          "G3_leak_free_compile": "pass",
+          "G4_full_vis": "pass",
+          "G5_final_light": "pass",
+          "G6_aas_valid": "pass",
+          "G7_mode_entities": "pass",
+          "G8_determinism": "pass"
+        }
+      },
+      "q3-ffa-v1": {
+        "all_hard_gates": true,
+        "gates": {
+          "G1_generated": "pass",
+          "G2_intent_match": "pass",
+          "G3_leak_free_compile": "pass",
+          "G4_full_vis": "pass",
+          "G5_final_light": "pass",
+          "G6_aas_valid": "pass",
+          "G7_mode_entities": "pass",
+          "G8_determinism": "pass"
+        }
+      },
+      "q3-ffa-s1": {
+        "all_hard_gates": true,
+        "gates": {
+          "G1_generated": "pass",
+          "G2_intent_match": "pass",
+          "G3_leak_free_compile": "pass",
+          "G4_full_vis": "pass",
+          "G5_final_light": "pass",
+          "G6_aas_valid": "pass",
+          "G7_mode_entities": "pass",
+          "G8_determinism": "pass"
+        }
+      },
+      "q3-ffa-c1": {
+        "all_hard_gates": true,
+        "gates": {
+          "G1_generated": "pass",
+          "G2_intent_match": "pass",
+          "G3_leak_free_compile": "pass",
+          "G4_full_vis": "pass",
+          "G5_final_light": "pass",
+          "G6_aas_valid": "pass",
+          "G7_mode_entities": "pass",
+          "G8_determinism": "pass"
+        }
+      },
+      "q3-tourney-v1": {
+        "all_hard_gates": false,
+        "gates": {
+          "G1_generated": "pass",
+          "G2_intent_match": "fail",
+          "G3_leak_free_compile": "pass",
+          "G4_full_vis": "pass",
+          "G5_final_light": "pass",
+          "G6_aas_valid": "pass",
+          "G7_mode_entities": "pass",
+          "G8_determinism": "pass"
+        }
+      },
+      "q3-tourney-s1": {
+        "all_hard_gates": false,
+        "gates": {
+          "G1_generated": "pass",
+          "G2_intent_match": "fail",
+          "G3_leak_free_compile": "pass",
+          "G4_full_vis": "pass",
+          "G5_final_light": "pass",
+          "G6_aas_valid": "pass",
+          "G7_mode_entities": "pass",
+          "G8_determinism": "pass"
+        }
+      },
+      "q3-tourney-c1": {
+        "all_hard_gates": false,
+        "gates": {
+          "G1_generated": "pass",
+          "G2_intent_match": "fail",
+          "G3_leak_free_compile": "pass",
+          "G4_full_vis": "pass",
+          "G5_final_light": "pass",
+          "G6_aas_valid": "pass",
+          "G7_mode_entities": "pass",
+          "G8_determinism": "pass"
+        }
+      },
+      "q3-tdm-v1": {
+        "all_hard_gates": false,
+        "gates": {
+          "G1_generated": "pass",
+          "G2_intent_match": "fail",
+          "G3_leak_free_compile": "pass",
+          "G4_full_vis": "pass",
+          "G5_final_light": "pass",
+          "G6_aas_valid": "pass",
+          "G7_mode_entities": "n/a",
+          "G8_determinism": "pass"
+        }
+      },
+      "q3-tdm-s1": {
+        "all_hard_gates": false,
+        "gates": {
+          "G1_generated": "pass",
+          "G2_intent_match": "fail",
+          "G3_leak_free_compile": "pass",
+          "G4_full_vis": "pass",
+          "G5_final_light": "pass",
+          "G6_aas_valid": "pass",
+          "G7_mode_entities": "n/a",
+          "G8_determinism": "pass"
+        }
+      },
+      "q3-tdm-c1": {
+        "all_hard_gates": false,
+        "gates": {
+          "G1_generated": "pass",
+          "G2_intent_match": "fail",
+          "G3_leak_free_compile": "pass",
+          "G4_full_vis": "pass",
+          "G5_final_light": "pass",
+          "G6_aas_valid": "pass",
+          "G7_mode_entities": "n/a",
+          "G8_determinism": "pass"
+        }
+      },
+      "q3-ctf-v1": {
+        "all_hard_gates": true,
+        "gates": {
+          "G1_generated": "pass",
+          "G2_intent_match": "pass",
+          "G3_leak_free_compile": "pass",
+          "G4_full_vis": "pass",
+          "G5_final_light": "pass",
+          "G6_aas_valid": "pass",
+          "G7_mode_entities": "pass",
+          "G8_determinism": "pass"
+        }
+      },
+      "q3-ctf-s1": {
+        "all_hard_gates": true,
+        "gates": {
+          "G1_generated": "pass",
+          "G2_intent_match": "pass",
+          "G3_leak_free_compile": "pass",
+          "G4_full_vis": "pass",
+          "G5_final_light": "pass",
+          "G6_aas_valid": "pass",
+          "G7_mode_entities": "pass",
+          "G8_determinism": "pass"
+        }
+      },
+      "q3-ctf-c1": {
+        "all_hard_gates": true,
+        "gates": {
+          "G1_generated": "pass",
+          "G2_intent_match": "pass",
+          "G3_leak_free_compile": "pass",
+          "G4_full_vis": "pass",
+          "G5_final_light": "pass",
+          "G6_aas_valid": "pass",
+          "G7_mode_entities": "pass",
+          "G8_determinism": "pass"
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,628 @@
+{
+  "schema_version": 1,
+  "id": "traversal-study-v1",
+  "date": "2026-09-13",
+  "status": "static_reference_and_source_study_runtime_pending",
+  "archive_root": "E:\\Development\\q2maparchive-wip\\maps",
+  "manifest": {
+    "project_relative_path": "out/map-study/manifest.json",
+    "sha256": "434ed06e37447872df92f0eb9a35c7a0d40b59c5cae77709493d544801d87c02"
+  },
+  "references": [
+    {
+      "map": "ztn2dm1",
+      "title": "Painkiller",
+      "authors": [
+        "Sten 'ztn' Uusvali"
+      ],
+      "partition": "reference",
+      "split_group": "50259728799005a8",
+      "bsp": {
+        "archive_relative_path": "ztn2dm1/pack/maps/ztn2dm1.bsp",
+        "sha256": "2f8a3bab196b20193057919d600e91eca6a97322e8e0a3429abe2115f71ef0dc",
+        "current_bytes_verified": true
+      },
+      "analysis_record": {
+        "project_relative_path": "out/map-study/records/ztn2dm1-10f206acab.json",
+        "sha256": "ce7355cac2c6d0df823d6851d349dd4443afc00dbed25c7fddcfabfebb8c3f0d"
+      },
+      "source_evidence": [
+        {
+          "kind": "metadata",
+          "path": "ztn2dm1/pack/maps/ref/ztn2dm1.ref",
+          "sha256": "096c3a5727e2638d669a3dd0d74912295b43fe2d36430cb2fae5378460778654"
+        },
+        {
+          "kind": "readme",
+          "path": "ztn2dm1/pack/docs/ztn2dm1-readme.txt",
+          "sha256": "cc2e8d993fbbf7c48eabb2487125a3ff794ad1964da488307e1368ab7860b7fe"
+        }
+      ],
+      "archive_theme_labels": [
+        "q2base"
+      ],
+      "descriptive_metrics": {
+        "combat_height_p90_p10": 225.59999999999997,
+        "combat_height_bands_128": 3,
+        "sampled_world_sightline_p50": 146.4035747689616,
+        "sampled_world_sightline_p90": 586.0938525841624,
+        "spawn_count": 5,
+        "weapon_count": 7,
+        "weapon_types": 7,
+        "major_item_count": 1
+      },
+      "lifts": [
+        {
+          "entity": 104,
+          "authored_properties": {
+            "height": "192",
+            "speed": "250",
+            "accel": "500",
+            "wait": "0.2",
+            "delay": "2",
+            "lip": "0",
+            "spawnflags": "1",
+            "angle": "-1"
+          },
+          "authored_model_bound_dimensions": [
+            96.00213623046875,
+            112.0,
+            24.0
+          ],
+          "runtime_cycle_seconds": null,
+          "note": "Bounds include the full submodel, not a validated standing footprint."
+        },
+        {
+          "entity": 105,
+          "authored_properties": {
+            "height": "256",
+            "speed": "250",
+            "accel": "500",
+            "wait": "0.2",
+            "delay": "2",
+            "lip": "0",
+            "spawnflags": "1",
+            "angle": "-1"
+          },
+          "authored_model_bound_dimensions": [
+            112.0,
+            96.00146484375,
+            24.0
+          ],
+          "runtime_cycle_seconds": null,
+          "note": "Bounds include the full submodel, not a validated standing footprint."
+        }
+      ],
+      "teleporters": [
+        {
+          "source_entity": 11,
+          "destination_entity": 12,
+          "target": "t1",
+          "matching_destination_count": 1,
+          "origin_xy_displacement": 902.0155209307653,
+          "origin_z_change": 132.0,
+          "exit_angle_degrees": 180.0,
+          "authored_inverse_edge_present": false,
+          "route_time_saved": null,
+          "occupied_exit_safe": null
+        },
+        {
+          "source_entity": 14,
+          "destination_entity": 15,
+          "target": "t2",
+          "matching_destination_count": 1,
+          "origin_xy_displacement": 1389.3307741499143,
+          "origin_z_change": 260.0,
+          "exit_angle_degrees": 90.0,
+          "authored_inverse_edge_present": false,
+          "route_time_saved": null,
+          "occupied_exit_safe": null
+        }
+      ],
+      "mover_class_counts": {
+        "func_plat": 2
+      },
+      "aas": {
+        "kind": "aas",
+        "path": "ztn2dm1/pack/maps/ztn2dm1.aas",
+        "sha256": "4de559fa5eb9e4c86af4d3bc4851cafba88f85b681bd433661c51555fc3ca38b",
+        "reachabilities": 0,
+        "bsp_association_verified": false
+      },
+      "diagram": {
+        "project_relative_path": "out/traversal-study/ztn2dm1-traversal.png",
+        "sha256": "84d0edd71cb7bb436f1eaacf3d0c333d19c26a9d0cbbeb08995cef2a841bef99"
+      },
+      "observations": {
+        "plan_interpretation": "Two directed teleporters arrive at different upper approaches. Unequal local floor footprints and separated lift approaches suggest distinct ascent choices, whose actual usability remains unverified.",
+        "resource_observation": "Rockets, chaingun and Body Armor have origin z=272; rail has z=80 and Combat Armor z=16.",
+        "author_evidence": "Author recommends 2-4 players and duel play and credits playtesting; no new runtime result is inferred.",
+        "capacity": {
+          "archive": [
+            2,
+            4
+          ],
+          "author": [
+            2,
+            4
+          ],
+          "conflict": false
+        },
+        "hypothesis": "Separate ascent arrival positions can offer different approaches to upper control, but may instead feed predictable fire."
+      }
+    },
+    {
+      "map": "card2dm1",
+      "title": "Torn Glory",
+      "authors": [
+        "Dan 'CardO' Shannon"
+      ],
+      "partition": "reference",
+      "split_group": "edeff59a840ff1a0",
+      "bsp": {
+        "archive_relative_path": "card2dm1/pack/maps/card2dm1.bsp",
+        "sha256": "fff80700ce171e611066bdd09b84bc2d0bb421ca736fe1eaf6b3dec7398b2c7f",
+        "current_bytes_verified": true
+      },
+      "analysis_record": {
+        "project_relative_path": "out/map-study/records/card2dm1-edeff59a84.json",
+        "sha256": "95df094436b77a86036a4875f2da4dbe3eda51d196124eff0f77e952a760e567"
+      },
+      "source_evidence": [
+        {
+          "kind": "metadata",
+          "path": "card2dm1/pack/maps/ref/card2dm1.ref",
+          "sha256": "817d528d752f186db2cdd8c7f433683151cfc7d8e0723f477fa364a90c402f25"
+        },
+        {
+          "kind": "readme",
+          "path": "card2dm1/pack/docs/card2dm1-readme.txt",
+          "sha256": "8799ad17302304d5276adc60432c9cc24d2b8fdd58d1f90add5feaa31ebf42c3"
+        }
+      ],
+      "archive_theme_labels": [
+        "lundoom"
+      ],
+      "descriptive_metrics": {
+        "combat_height_p90_p10": 320.20000000000005,
+        "combat_height_bands_128": 4,
+        "sampled_world_sightline_p50": 162.73869997198716,
+        "sampled_world_sightline_p90": 543.2292498184809,
+        "spawn_count": 7,
+        "weapon_count": 5,
+        "weapon_types": 4,
+        "major_item_count": 1
+      },
+      "lifts": [
+        {
+          "entity": 136,
+          "authored_properties": {
+            "height": "160",
+            "speed": "200",
+            "accel": "500",
+            "lip": "0",
+            "angle": "-2"
+          },
+          "authored_model_bound_dimensions": [
+            176.00049209594727,
+            240.0,
+            32.0
+          ],
+          "runtime_cycle_seconds": null,
+          "note": "Bounds include the full submodel, not a validated standing footprint."
+        }
+      ],
+      "teleporters": [
+        {
+          "source_entity": 17,
+          "destination_entity": 67,
+          "target": "dest1",
+          "matching_destination_count": 1,
+          "origin_xy_displacement": 1012.5927118047018,
+          "origin_z_change": 328.0,
+          "exit_angle_degrees": 273.0,
+          "authored_inverse_edge_present": false,
+          "route_time_saved": null,
+          "occupied_exit_safe": null
+        }
+      ],
+      "mover_class_counts": {
+        "func_door_rotating": 6,
+        "func_plat": 1,
+        "func_rotating": 1
+      },
+      "aas": {
+        "kind": "aas",
+        "path": "card2dm1/pack/maps/card2dm1.aas",
+        "sha256": "6b08fbf5ec6b2ac9d3c49486385b12b961787de2220d065b17d5a1320d3d0a6b",
+        "reachabilities": 0,
+        "bsp_association_verified": false
+      },
+      "diagram": {
+        "project_relative_path": "out/traversal-study/card2dm1-traversal.png",
+        "sha256": "b789a21b6b64503aefe519d5b7a5dbc199f19ca57a0157c0c816382136dd54a0"
+      },
+      "observations": {
+        "plan_interpretation": "A faceted Mega-health space, segmented transitions and unequal floor footprints coexist with one lower-to-upper teleport and a separate lift.",
+        "resource_observation": "Two rocket launchers and Combat Armor have origin z=-368; rail/Jacket Armor z=-208; chaingun z=-528.",
+        "author_evidence": "Readme recommends duel or 3-4 FFA and forbids using the level as a base.",
+        "capacity": {
+          "archive": [
+            2,
+            6
+          ],
+          "author_modes": {
+            "duel": [
+              2,
+              2
+            ],
+            "ffa": [
+              3,
+              4
+            ]
+          },
+          "conflict": true
+        },
+        "mechanism_classification": "Six func_door_rotating submodels are small screens controlled by a shared button target, not evidence of six navigable doorways.",
+        "hypothesis": "A one-way height shortcut can trade travel for predictable orientation and arrival commitment."
+      },
+      "screen_mechanisms": {
+        "entities": [
+          186,
+          187,
+          188,
+          189,
+          190,
+          191
+        ],
+        "targetname": "screens",
+        "controller_entity": 2,
+        "controller_class": "func_button",
+        "model_bound_dimensions": [
+          [
+            8,
+            64,
+            64
+          ],
+          [
+            64,
+            8,
+            64
+          ]
+        ],
+        "navigation_gate_claim": false
+      }
+    },
+    {
+      "map": "koldduel1",
+      "title": "Bio Rust",
+      "authors": [
+        "kold"
+      ],
+      "partition": "reference",
+      "split_group": "b9d84011fea88d9d",
+      "bsp": {
+        "archive_relative_path": "koldduel1/pack/maps/koldduel1.bsp",
+        "sha256": "f176d92ef81b288dd9dc33336106d33ee9bfd13bf9acd6a985f8d88e0c7186dc",
+        "current_bytes_verified": true
+      },
+      "analysis_record": {
+        "project_relative_path": "out/map-study/records/koldduel1-b9d84011fe.json",
+        "sha256": "ea2729ca12cee89b9e570090799e833b071b8feb2d609bc51eacd59626099697"
+      },
+      "source_evidence": [
+        {
+          "kind": "metadata",
+          "path": "koldduel1/pack/maps/ref/koldduel1.ref",
+          "sha256": "c03c835dfc95cd55ca891421b044c0a3b9a9936641787564c7ee26e38bde8336"
+        },
+        {
+          "kind": "readme",
+          "path": "koldduel1/pack/docs/koldduel1-readme.txt",
+          "sha256": "3cb16b840fbf44d238e99d94616994363872c9fa6dc0e06cc2dffbd93b6f6a11"
+        }
+      ],
+      "archive_theme_labels": [
+        "q2waste",
+        "q2factory"
+      ],
+      "descriptive_metrics": {
+        "combat_height_p90_p10": 208.0,
+        "combat_height_bands_128": 3,
+        "sampled_world_sightline_p50": 140.8556708123603,
+        "sampled_world_sightline_p90": 516.0000000000005,
+        "spawn_count": 6,
+        "weapon_count": 6,
+        "weapon_types": 5,
+        "major_item_count": 1
+      },
+      "lifts": [
+        {
+          "entity": 88,
+          "authored_properties": {
+            "height": "256",
+            "speed": "250",
+            "accel": "550",
+            "spawnflags": "1",
+            "sounds": "1"
+          },
+          "authored_model_bound_dimensions": [
+            128.0,
+            128.0,
+            288.0
+          ],
+          "runtime_cycle_seconds": null,
+          "note": "Bounds include the full submodel, not a validated standing footprint."
+        },
+        {
+          "entity": 89,
+          "authored_properties": {
+            "height": "193",
+            "speed": "250",
+            "accel": "550",
+            "spawnflags": "1",
+            "sounds": "1"
+          },
+          "authored_model_bound_dimensions": [
+            64.0,
+            128.0,
+            224.0
+          ],
+          "runtime_cycle_seconds": null,
+          "note": "Bounds include the full submodel, not a validated standing footprint."
+        },
+        {
+          "entity": 90,
+          "authored_properties": {
+            "height": "192",
+            "speed": "250",
+            "accel": "550",
+            "spawnflags": "1",
+            "sounds": "1"
+          },
+          "authored_model_bound_dimensions": [
+            128.0,
+            128.0,
+            208.0
+          ],
+          "runtime_cycle_seconds": null,
+          "note": "Bounds include the full submodel, not a validated standing footprint."
+        }
+      ],
+      "teleporters": [],
+      "mover_class_counts": {
+        "func_plat": 3,
+        "func_rotating": 1
+      },
+      "aas": {
+        "kind": "aas",
+        "path": "koldduel1/pack/maps/koldduel1.aas",
+        "sha256": "eef0f6bf47c8bcf680a933423f067f9aade16c7e0c19aa24bc4ce8c266fc3451",
+        "reachabilities": 0,
+        "bsp_association_verified": false
+      },
+      "diagram": {
+        "project_relative_path": "out/traversal-study/koldduel1-traversal.png",
+        "sha256": "0f140b752c2f76ee998c96d9075554ec8ce5ac4d0c89d301cb996168910bb3cc"
+      },
+      "observations": {
+        "plan_interpretation": "Chamfered encounters, unequal upper/lower paths and three spatially separated lift approaches; an ordinary bypass or drop is not proved by the plan.",
+        "resource_observation": "Super shotguns have origins z=-32 and z=224; Combat Armors z=208; Mega Health z=80.",
+        "author_evidence": "Readme calls this a small duel map and reports weeks of testing/tweaking; archive capacity is broader.",
+        "capacity": {
+          "archive": [
+            2,
+            6
+          ],
+          "author_duel": [
+            2,
+            2
+          ],
+          "conflict": true
+        },
+        "hypothesis": "Several physical ascent locations may distribute access while imposing observable waiting/exposure costs."
+      }
+    }
+  ],
+  "local_source_semantics": {
+    "scope": "Read-only original baseq2 source reference; behavior must be checked against the actual target game module. No source code incorporated.",
+    "files": [
+      {
+        "path": "E:\\_SOURCE\\_CODE\\Quake-2-master\\game\\g_misc.c",
+        "sha256": "d39e96f6e8793ea768c56df820edcd987d90c9f43b7c3c7037e6ed7cd92413ee",
+        "functions": [
+          {
+            "name": "teleporter_touch",
+            "line": 1783
+          },
+          {
+            "name": "SP_misc_teleporter",
+            "line": 1830
+          },
+          {
+            "name": "SP_misc_teleporter_dest",
+            "line": 1866
+          }
+        ],
+        "observed_behavior": [
+          "Only player clients are accepted; targetname lookup supplies the destination.",
+          "Player velocity is cleared, a short teleport hold is set, destination angles apply, and player origin receives a +10 Z offset.",
+          "The destination invokes KillBox."
+        ]
+      },
+      {
+        "path": "E:\\_SOURCE\\_CODE\\Quake-2-master\\game\\g_func.c",
+        "sha256": "aa12e2ef06f30bba957adb46cc9caecf843c575041ca5287abec5ecaad2c7873",
+        "functions": [
+          {
+            "name": "plat_hit_top",
+            "line": 358
+          },
+          {
+            "name": "plat_blocked",
+            "line": 407
+          },
+          {
+            "name": "Touch_Plat_Center",
+            "line": 436
+          },
+          {
+            "name": "plat_spawn_inside_trigger",
+            "line": 451
+          },
+          {
+            "name": "SP_func_plat",
+            "line": 513
+          }
+        ],
+        "observed_behavior": [
+          "The top callback schedules descent three seconds later; continued top-trigger occupancy postpones descent by one second.",
+          "Authored speed/acceleration values are scaled; zero lip takes the default.",
+          "Blocking players/monsters receive damage and cause movement reversal."
+        ]
+      },
+      {
+        "path": "E:\\_SOURCE\\_CODE\\Quake-2-master\\game\\g_utils.c",
+        "sha256": "441b5eeb751763171e507e262cf4a8d525db72c5d98a271edd591f0a6dbb6f22",
+        "functions": [
+          {
+            "name": "KillBox",
+            "line": 549
+          }
+        ],
+        "observed_behavior": [
+          "The destination hull is traced and overlapping entities receive telefrag damage; failure remains possible for surviving solid occupants."
+        ]
+      }
+    ]
+  },
+  "local_inventory": {
+    "project_relative_path": "out/traversal-study/mechanic-inventory.json",
+    "sha256": "ce0dcc1013f3ba580d7cfed8d3e29c3b436d0d6c9322dae046d65d657d4dff4e"
+  },
+  "proposed_rules": [
+    {
+      "id": "stateful-lift-route",
+      "principle": "Treat lift travel as waiting, boarding, rising and leaving, with attacker control assessed in each phase.",
+      "original_design_action": "Provide a supported landing, a meaningful waiting position and an ordinary alternative where required by the movement contract.",
+      "counterexample": "A lift can shorten graph distance yet be slower or unavailable when a player needs it.",
+      "ablation": "Close only the ordinary alternative while preserving lift properties and items.",
+      "measure": [
+        "wait time by platform state",
+        "ride time",
+        "time leaving the landing",
+        "exposure by phase",
+        "attacker upper/waiting-area control"
+      ],
+      "status": "design_hypothesis"
+    },
+    {
+      "id": "directed-teleport-commitment",
+      "principle": "Give a one-way teleport a deliberate destination orientation and a useful follow-on route.",
+      "original_design_action": "Use a unique target, validate the effective arrival hull and ensure the facing leads into usable movement space.",
+      "counterexample": "The shortcut may clear momentum and repeatedly deliver players to predictable fire.",
+      "ablation": "Disable only the link, holding geometry, resources and starts constant.",
+      "measure": [
+        "actual journey time",
+        "post-arrival deaths",
+        "shortcut use",
+        "subsequent item circuit"
+      ],
+      "status": "design_hypothesis"
+    },
+    {
+      "id": "teleport-occupancy-contract",
+      "principle": "Treat occupied exits and rapid repeated arrivals as explicit gameplay cases.",
+      "original_design_action": "Test the exact module behavior for an occupied arrival hull, paired arrivals, destination control and escape.",
+      "counterexample": "A clear plan-view marker does not prove safe arrival or prevent telefrags.",
+      "ablation": "Keep exit geometry fixed; compare occupancy and approach conditions under matched starts.",
+      "measure": [
+        "telefrag outcomes",
+        "blocked arrival failures",
+        "time to leave",
+        "pursuer/defender opportunities"
+      ],
+      "status": "design_hypothesis"
+    },
+    {
+      "id": "committed-drop",
+      "principle": "A drop needs an intentional landing and a documented return journey.",
+      "original_design_action": "Validate directed hull traversal, landing support, damage and pursuit; distinguish required from optional drops.",
+      "counterexample": "Projected upper/lower overlap may conceal solid geometry or leave no survivable landing.",
+      "ablation": "Close only an optional drop while preserving ordinary routes.",
+      "measure": [
+        "landing failures",
+        "fall damage",
+        "time to regain control",
+        "return cost",
+        "pursuit success"
+      ],
+      "status": "design_hypothesis"
+    },
+    {
+      "id": "purposeful-faceting",
+      "principle": "Use beveled or segmented boundaries to change approach angles and silhouettes while preserving combat room.",
+      "original_design_action": "Bevel selected original corners and check the resulting playable cross-section and movement at full speed.",
+      "counterexample": "Cosmetic facets may add brush count or snag points without changing a useful decision.",
+      "ablation": "Change one corner between square and beveled with routes/items otherwise fixed.",
+      "measure": [
+        "visible approaches",
+        "encounter angles",
+        "hull clearance",
+        "snag events"
+      ],
+      "status": "design_hypothesis"
+    }
+  ],
+  "validation_contract": [
+    "Compile/leak/VIS/light; typed movement and structural checks.",
+    "Analyze required ordinary connectivity with special edges disabled, then analyze special directed edges independently.",
+    "Windowed engine tests for every lift state, blocked motion, exit support, teleporter facing and occupied destinations.",
+    "Record source/BSP/module hashes, rules, player familiarity, movement settings and actual timings.",
+    "Use engine-written screenshots; follow project user-input permission requirements."
+  ],
+  "limitations": [
+    "All selected AAS sidecars contain zero reachabilities and unverified BSP association.",
+    "Upward surfaces include inaccessible trim; diagrams do not validate movers, usable standing footprints, drops or ordinary bypasses.",
+    "Authored entity properties are not actual timings; original source semantics can differ from a mod or installed engine.",
+    "No map-specific engine traversal, telefrag or player-control result was collected.",
+    "Descriptive heights, sightlines, displacement and mechanism counts are not quality scores."
+  ],
+  "capacity_issues": [
+    {
+      "map": "card2dm1",
+      "archive": [
+        2,
+        6
+      ],
+      "author": "duel or 3-4 FFA",
+      "profile_changed": false
+    },
+    {
+      "map": "koldduel1",
+      "archive": [
+        2,
+        6
+      ],
+      "author": "duel",
+      "profile_changed": false
+    }
+  ],
+  "preserved_prior_capacity_conflicts": {
+    "record": "knowledge/q2/route-diversity-study.json",
+    "maps": [
+      "q2rdm2",
+      "grdm1"
+    ]
+  },
+  "rights_and_execution": {
+    "geometry_copied": false,
+    "assets_copied": false,
+    "external_code_incorporated": false,
+    "engine_launched": false,
+    "input_control": false,
+    "model_weights_trained": false,
+    "training_rights_review_completed": false
+  },
+  "new_unrelated_repository_defects": []
+}

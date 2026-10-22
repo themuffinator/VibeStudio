@@ -1,0 +1,306 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "qmg.game_profile/1",
+  "title": "Quake-MapGen game profile (qmg.game_profile v1)",
+  "description": "One file per (game, module) holds id-source facts: movement constants and eye height, spawnflag semantics, entity keys, respawn rules keyed by mode and settings, the item catalogue with tiers, classnames and mode-entity contracts. One generator file per game holds the tables the generator uses today, compiled into a generated header (cmake/GenerateGameProfileTables.cmake). Every value carries a citation: <root>:<path>:<line>[-<line>][|<token>] for source files, progs1996:<function>:<statement>[-<statement>][|<token>] (or progs1996:@global:<name>, progs1996:@header) for the disassembled 1996 Quake progs, or generator-current[:<site>] for a value that only mirrors current generator behaviour. tools/profiles/check_profiles.py validates this schema, citation coverage, the facts fixture tests/fixtures/profiles/facts.json, the generator cross-checks and, with --resolve, every citation token against the local id source.",
+  "type": "object",
+  "required": ["schema", "schema_version", "profile_kind", "game", "module", "title", "evidence_level", "sources"],
+  "properties": {
+    "schema": {"const": "qmg.game_profile"},
+    "schema_version": {"const": 1},
+    "profile_kind": {"enum": ["module", "generator"]},
+    "game": {"enum": ["quake1", "quake2", "quake3"]},
+    "module": {"type": "string", "pattern": "^(q[123]-[a-z0-9.-]+|generator-current)$"},
+    "title": {"type": "string", "minLength": 1},
+    "evidence_level": {"$ref": "#/$defs/evidence_level"},
+    "sources": {"type": "object", "minProperties": 1, "additionalProperties": {"$ref": "#/$defs/source"}}
+  },
+  "oneOf": [
+    {"$ref": "#/$defs/module_profile"},
+    {"$ref": "#/$defs/generator_profile"}
+  ],
+  "$defs": {
+    "evidence_level": {
+      "description": "D34 evidence-level names; every profile value is static analysis.",
+      "enum": ["static analysis", "compiler output", "AAS routing", "native movement trial", "engine initialization",
+               "engine runtime with bots", "engine rendering", "human play"]
+    },
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["description", "identity", "kind"],
+      "properties": {
+        "description": {"type": "string", "minLength": 1},
+        "identity": {"type": "string", "minLength": 1},
+        "kind": {"enum": ["file_lines", "progs_statements"]}
+      }
+    },
+    "cite": {
+      "type": "string",
+      "pattern": "^(?:[a-z][a-z0-9]*:[^:|\\s][^:|]*:[0-9]+(?:-[0-9]+)?(?:\\|.+)?|progs1996:(?:@header|@global:[A-Za-z_][A-Za-z0-9_]*|[A-Za-z_][A-Za-z0-9_]*:[0-9]+(?:-[0-9]+)?)(?:\\|.+)?|generator-current(?::[^|]+)?)$"
+    },
+    "cites": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/cite"}},
+    "note": {"type": "string", "minLength": 1},
+    "fact": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["value", "cite"],
+      "properties": {
+        "value": {},
+        "unit": {"type": "string"},
+        "basis": {"enum": ["progs_disassembly", "engine_assumed"]},
+        "cite": {"$ref": "#/$defs/cites"},
+        "note": {"$ref": "#/$defs/note"},
+        "unsupported_reason": {"type": "string", "minLength": 1}
+      }
+    },
+    "string_fact": {"allOf": [{"$ref": "#/$defs/fact"}, {"properties": {"value": {"type": "string", "pattern": "^[A-Za-z0-9_*+/.-]+$"}}}]},
+    "nullable_string_fact": {"allOf": [{"$ref": "#/$defs/fact"}, {"properties": {"value": {"type": ["string", "null"], "pattern": "^[A-Za-z0-9_*+/.-]+$"}}}]},
+    "integer_fact": {"allOf": [{"$ref": "#/$defs/fact"}, {"properties": {"value": {"type": "integer"}}}]},
+    "color_fact": {"allOf": [{"$ref": "#/$defs/fact"}, {"properties": {"value": {"type": "array", "minItems": 3, "maxItems": 3, "items": {"type": "integer", "minimum": 0, "maximum": 1000}}}}]},
+    "classname_list_fact": {"allOf": [{"$ref": "#/$defs/fact"}, {"properties": {"value": {"type": "array", "items": {"type": "string", "pattern": "^[A-Za-z0-9_]+$"}}}}]},
+    "hull_vector": {"type": "array", "minItems": 3, "maxItems": 3, "items": {"type": "integer", "minimum": -4096, "maximum": 4096}},
+    "hull_fact": {
+      "description": "A spawn box relative to its origin: a monster class's (change r1s-monster-hull-support) or the box the engine drops a pickup with (change r1s-sp-pickup-hull-support); mins and maxs in map units, as the id source sets them.",
+      "allOf": [{"$ref": "#/$defs/fact"}, {"properties": {"value": {
+        "type": "object", "additionalProperties": false, "required": ["mins", "maxs"],
+        "properties": {"mins": {"$ref": "#/$defs/hull_vector"}, "maxs": {"$ref": "#/$defs/hull_vector"}}
+      }}}]
+    },
+    "spawnflag": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "bit", "scope", "tested_when", "effect", "cite"],
+      "properties": {
+        "name": {"type": "string", "pattern": "^[A-Z][A-Z0-9_]*$"},
+        "bit": {"type": "integer", "minimum": 1},
+        "scope": {"type": "string"},
+        "tested_when": {"type": "string"},
+        "effect": {"type": "string"},
+        "basis": {"enum": ["progs_disassembly", "engine_assumed"]},
+        "cite": {"$ref": "#/$defs/cites"},
+        "note": {"$ref": "#/$defs/note"}
+      }
+    },
+    "entity_key": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["key", "scope", "effect", "cite"],
+      "properties": {
+        "key": {"type": "string", "pattern": "^[a-z0-9_]+$"},
+        "scope": {"type": "string"},
+        "effect": {"type": "string"},
+        "tokens": {"type": "array", "items": {"type": "string"}},
+        "cite": {"$ref": "#/$defs/cites"},
+        "note": {"$ref": "#/$defs/note"}
+      }
+    },
+    "respawn_case": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "when", "behaviour", "cite"],
+      "properties": {
+        "id": {"type": "string", "pattern": "^[a-z0-9_]+$"},
+        "when": {"type": "string"},
+        "behaviour": {"enum": ["respawn", "stays", "removed", "respawn_after_rot", "not_respawned", "delayed_first_spawn", "auto_return", "relocated", "team_flag"]},
+        "seconds": {"type": "number", "minimum": 0},
+        "seconds_from": {"const": "quantity"},
+        "seconds_range": {"type": "array", "minItems": 2, "maxItems": 2, "items": {"type": "number"}},
+        "delay_seconds": {"type": "number", "minimum": 0},
+        "rot_hp_per_second": {"type": "number", "minimum": 0},
+        "cite": {"$ref": "#/$defs/cites"},
+        "note": {"$ref": "#/$defs/note"}
+      }
+    },
+    "respawn_rule": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "cite", "cases"],
+      "properties": {
+        "id": {"type": "string", "pattern": "^[a-z0-9_]+$"},
+        "cite": {"$ref": "#/$defs/cites"},
+        "cases": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/respawn_case"}},
+        "note": {"$ref": "#/$defs/note"}
+      }
+    },
+    "kind": {"enum": ["weapon", "ammo", "armor", "health", "powerup", "holdable", "key", "flag", "tech", "other"]},
+    "tier": {"enum": ["pickup", "starting", "special", "ammo", "shard", "light", "medium", "heavy", "power_armor", "small", "rotten", "large",
+                      "mega", "by_spawnflags", "powerup", "utility", "holdable", "key", "episode_rune", "flag", "tech"]},
+    "team": {"enum": [1, 2, "red", "blue"]},
+    "item": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["classname", "kind", "tier", "respawn", "cite"],
+      "properties": {
+        "classname": {"type": "string", "pattern": "^[A-Za-z0-9_]+$"},
+        "kind": {"$ref": "#/$defs/kind"},
+        "tier": {"$ref": "#/$defs/tier"},
+        "respawn": {"type": "string", "pattern": "^[a-z0-9_]+$"},
+        "team": {"$ref": "#/$defs/team"},
+        "amount": {"$ref": "#/$defs/integer_fact"},
+        "quantity": {"$ref": "#/$defs/integer_fact"},
+        "duration": {"$ref": "#/$defs/integer_fact"},
+        "spawnflags": {
+          "type": "array",
+          "items": {
+            "type": "object", "additionalProperties": false, "required": ["bit", "name", "cite"],
+            "properties": {"bit": {"type": "integer", "minimum": 1}, "name": {"type": "string"}, "cite": {"$ref": "#/$defs/cites"}}
+          }
+        },
+        "variants": {
+          "type": "array",
+          "items": {
+            "type": "object", "additionalProperties": false, "required": ["spawnflags", "tier", "respawn", "amount", "cite"],
+            "properties": {
+              "spawnflags": {"type": "integer", "minimum": 0},
+              "tier": {"$ref": "#/$defs/tier"},
+              "respawn": {"type": "string", "pattern": "^[a-z0-9_]+$"},
+              "amount": {"$ref": "#/$defs/integer_fact"},
+              "cite": {"$ref": "#/$defs/cites"}
+            }
+          }
+        },
+        "cite": {"$ref": "#/$defs/cites"},
+        "note": {"$ref": "#/$defs/note"}
+      }
+    },
+    "classname": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["classname", "role", "cite"],
+      "properties": {
+        "classname": {"type": "string", "pattern": "^[A-Za-z0-9_]+$"},
+        "role": {"enum": ["player_start", "deathmatch_spawn", "coop_start", "intermission", "team_start", "team_respawn", "mover", "trigger",
+                          "jump_pad", "level_exit", "objective", "unit_state", "teleporter", "teleporter_destination", "target_point",
+                          "relay", "light", "monster", "removed", "secret", "decoration", "bot_hint"]},
+        "team": {"$ref": "#/$defs/team"},
+        "cite": {"$ref": "#/$defs/cites"},
+        "note": {"$ref": "#/$defs/note"}
+      }
+    },
+    "contract_entity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["classname", "requirement", "cite"],
+      "properties": {
+        "classname": {"type": "string", "pattern": "^[A-Za-z0-9_]+$"},
+        "requirement": {"enum": ["required", "optional", "fallback", "used_if_present", "required_for_exit"]},
+        "min": {"type": "integer", "minimum": 1},
+        "team": {"$ref": "#/$defs/team"},
+        "selection": {"type": "string"},
+        "cite": {"$ref": "#/$defs/cites"}
+      }
+    },
+    "mode_contract": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["mode", "runtime", "entities", "cite"],
+      "properties": {
+        "mode": {"enum": ["single_player", "cooperative", "deathmatch", "team_deathmatch", "capture_the_flag", "tournament", "bot_arena",
+                          "intermission", "level_exit"]},
+        "runtime": {"type": "string"},
+        "entities": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/contract_entity"}},
+        "fallback_chain": {"type": "array", "items": {"type": "string"}},
+        "failure": {"type": "string"},
+        "cite": {"$ref": "#/$defs/cites"},
+        "note": {"$ref": "#/$defs/note"}
+      }
+    },
+    "digest_correction": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["claim", "encoded", "path"],
+      "properties": {"claim": {"type": "string"}, "encoded": {"type": "string"}, "path": {"type": "string"}}
+    },
+    "module_profile": {
+      "properties": {
+        "profile_kind": {"const": "module"},
+        "module": {"pattern": "^q[123]-"},
+        "schema": true, "schema_version": true, "game": true, "title": true, "evidence_level": true, "sources": true,
+        "runtime": {
+          "type": "object", "additionalProperties": false, "required": ["name", "version"],
+          "properties": {"name": {"type": "string"}, "version": {"$ref": "#/$defs/fact"}, "note": {"$ref": "#/$defs/note"}}
+        },
+        "starting_inventory": {"$ref": "#/$defs/fact"},
+        "movement": {
+          "type": "object",
+          "required": ["gravity", "max_ground_speed", "jump_velocity", "step_height", "eye_height"],
+          "additionalProperties": {"$ref": "#/$defs/fact"}
+        },
+        "spawnflags": {"type": "array", "items": {"$ref": "#/$defs/spawnflag"}},
+        "entity_keys": {"type": "array", "items": {"$ref": "#/$defs/entity_key"}},
+        "respawn_rules": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/respawn_rule"}},
+        "items": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/item"}},
+        "classnames": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/classname"}},
+        "mode_contracts": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/mode_contract"}},
+        "quirks": {
+          "type": "array",
+          "items": {"type": "object", "additionalProperties": false, "required": ["id", "effect", "cite"],
+                    "properties": {"id": {"type": "string"}, "effect": {"type": "string"}, "cite": {"$ref": "#/$defs/cites"}}}
+        },
+        "digest_corrections": {"type": "array", "items": {"$ref": "#/$defs/digest_correction"}},
+        "notes": {"type": "array", "items": {"type": "string"}}
+      },
+      "required": ["runtime", "movement", "spawnflags", "respawn_rules", "items", "classnames", "mode_contracts", "digest_corrections"],
+      "additionalProperties": false
+    },
+    "lighting_preset": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["brightness"],
+      "properties": {
+        "brightness": {"$ref": "#/$defs/integer_fact"},
+        "color": {"$ref": "#/$defs/color_fact"},
+        "odd_room_color": {"$ref": "#/$defs/color_fact"},
+        "even_room_color": {"$ref": "#/$defs/color_fact"}
+      },
+      "oneOf": [{"required": ["color"]}, {"required": ["odd_room_color", "even_room_color"]}]
+    },
+    "known_defect": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "check", "kind", "detail", "cite"],
+      "properties": {
+        "id": {"type": "string", "pattern": "^q[123]-[a-z0-9-]+$"},
+        "check": {"enum": ["computed", "declared"]},
+        "kind": {"enum": ["generator_omits_catalogue_weapon", "generator_places_starting_weapon", "module_specific_classname",
+                          "classname_removed_in_module", "analysis_eye_offset_differs", "material_not_stock", "material_flags",
+                          "material_absent", "material_role"]},
+        "classnames": {"type": "array", "items": {"type": "string"}},
+        "values": {"type": "array", "items": {"type": "string"}},
+        "modules_with": {"type": "array", "items": {"type": "string"}},
+        "detail": {"type": "string"},
+        "cite": {"$ref": "#/$defs/cites"}
+      }
+    },
+    "generator_profile": {
+      "properties": {
+        "profile_kind": {"const": "generator"},
+        "module": {"const": "generator-current"},
+        "schema": true, "schema_version": true, "game": true, "title": true, "evidence_level": true, "sources": true,
+        "modules": {"type": "array", "minItems": 1, "items": {"type": "string", "pattern": "^q[123]-"}},
+        "origin": {"type": "string"},
+        "solid_materials": {"type": "object", "additionalProperties": {"$ref": "#/$defs/nullable_string_fact"}},
+        "liquid_materials": {"type": "object", "additionalProperties": {"$ref": "#/$defs/nullable_string_fact"}},
+        "classnames": {"type": "object", "additionalProperties": {"$ref": "#/$defs/string_fact"}},
+        "team_classnames": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "object", "additionalProperties": false, "required": ["red", "blue"],
+            "properties": {"red": {"$ref": "#/$defs/string_fact"}, "blue": {"$ref": "#/$defs/string_fact"}}
+          }
+        },
+        "variants": {"type": "object", "additionalProperties": {"$ref": "#/$defs/classname_list_fact"}},
+        "monster_hulls": {"description": "One hull_fact per classname of variants.monster, keyed by classname (required when that list is not empty).",
+                          "type": "object", "additionalProperties": {"$ref": "#/$defs/hull_fact"}},
+        "pickup_hulls": {"description": "One hull_fact per pickup classname the generator emits (every classname of variants.weapon, classnames.health and classnames.armor), keyed by classname: the box the engine drops the item with (change r1s-sp-pickup-hull-support; required for quake1 and quake2).",
+                         "type": "object", "additionalProperties": {"$ref": "#/$defs/hull_fact"}},
+        "lighting": {"type": "object", "additionalProperties": {"$ref": "#/$defs/lighting_preset"}},
+        "uncompiled": {"type": "object", "additionalProperties": {"$ref": "#/$defs/fact"}},
+        "known_defects": {"type": "array", "items": {"$ref": "#/$defs/known_defect"}}
+      },
+      "required": ["modules", "origin", "solid_materials", "liquid_materials", "classnames", "team_classnames", "variants", "lighting", "known_defects"],
+      "additionalProperties": false
+    }
+  }
+}

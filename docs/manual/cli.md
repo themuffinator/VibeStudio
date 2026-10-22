@@ -98,7 +98,7 @@ list, and `--json` adds whether each command supports `--json`, `--dry-run` and 
 | `localization` | Language targets and translation catalogue status |
 | `accessibility` | Accessibility settings, speech voices and a speech test |
 | `diagnostics` | Support bundles and crash reports |
-| `ai` | Optional AI: status, connectors and reviewable proposals |
+| `ai` | Optional AI: status, connectors, connection tests, questions (`ai ask`), pictures (`ai image`) and rule-based proposals |
 | `extension` | Extension manifests |
 | `about`, `credits` | Version and credits, and credits validation |
 
@@ -141,6 +141,22 @@ vibestudio --cli build list
 vibestudio --cli build plan quake-full --input ./maps/start.map
 vibestudio --cli build run quake-full --input ./maps/start.map --watch
 ```
+
+Ask a model through your Claude Code login, or build a level with Quake-MapGen:
+
+```sh
+vibestudio --cli ai test-connection --provider claude-code --json
+vibestudio --cli ai ask --provider claude-code --model sonnet --prompt "why does qbsp report a leak?" --context-file build/qbsp.log --yes
+vibestudio --cli map generate --generator quake-mapgen --prompt "Quake 2 deathmatch, 8 rooms" --output maps/qmg.map --report maps/qmg.json
+```
+
+`--provider` takes a connector ID from the table in [Use a cloud provider](ai.md#use-a-cloud-provider),
+such as `openai`, `claude`, `gemini`, `elevenlabs`, `local-offline` or `custom-http`; text commands
+also take `claude-code`, `codex`, `custom-command` and `local-gguf`. For `claude-code`, `codex` and
+`custom-command`, `--endpoint` is the program or command line; for `local-gguf`, `--model` is the
+`.gguf` file. Map generation adds `--generator quake-mapgen` for Quake-MapGen, and `--ranker ggml`
+ranks its layouts through ggml in builds made with `-Dggml=enabled`; the default, `scalar`, gives the
+same scores. AI is off until you allow it; see [AI assistant](ai.md).
 
 Write a diagnostics bundle to `./diagnostics/vibestudio-diagnostics.json` for a bug report:
 

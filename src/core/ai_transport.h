@@ -1,7 +1,15 @@
 #pragma once
 
-// Provider-neutral text generation over HTTP: what the studio asks a model,
-// how each provider family wants that asked, and how its answer is read back.
+// Provider-neutral text generation: what the studio asks a model, how each
+// provider family wants that asked, and how its answer is read back. Three
+// transports carry a request, chosen by the connector (aiTextTransport):
+//  - HTTP to a provider or a local server (below);
+//  - a command-line harness, Claude Code or Codex signed in with the user's
+//    own subscription, or a custom command (core/ai_harness.h);
+//  - a GGUF model run inside the studio by llama.cpp and ggml, in builds
+//    with -Dggml=enabled (core/ai_gguf_runtime.h).
+// Every text pipeline sends through AiChatClient, so each works with any of
+// them unchanged.
 //
 // Three wire formats cover the connectors that answer in text:
 //  - OpenAI-compatible Chat Completions (`POST {base}/chat/completions`), used
@@ -67,13 +75,39 @@ struct AiChatRequest {
 	// What the schema describes, as OpenAI asks for one: letters, digits, _
 	// and -. Empty names it "answer".
 	QString responseSchemaName;
+	// A GBNF grammar the answer must follow, for runtimes that constrain
+	// decoding (the Local GGUF connector). Without one, a responseSchema is
+	// turned into a grammar there (core/ai_json_grammar.h); other transports
+	// ignore it.
+	QString grammar;
 };
 
-// The HTTP request a provider adapter makes of an AiChatRequest.
+// What a request becomes before it goes: the HTTP request a provider adapter
+// makes, or for the other transports the run that answers it. It is what a
+// person reviews before anything is sent (describeAiHttpRequest).
 struct AiHttpRequest {
 	QUrl url;
 	QList<QPair<QByteArray, QByteArray>> headers;
+	// The HTTP body, or a harness's standard input.
 	QByteArray body;
+	// A harness: the program and its arguments ("{dir}" is the run's empty
+	// folder), the files written there first, and the environment variables
+	// not passed on.
+	QStringList command;
+	QList<QPair<QString, QByteArray>> files;
+	QStringList removedEnvironment;
+	// The Local GGUF connector: the model file run in the studio.
+	QString modelFile;
+};
+
+// How a connector's text requests travel.
+enum class AiTextTransport {
+	None,
+	Http,
+	// A command-line tool: Claude Code, Codex, or a custom command.
+	Harness,
+	// A GGUF model run inside the studio.
+	Gguf,
 };
 
 enum class AiChatFailure {
@@ -100,6 +134,12 @@ struct AiChatResponse {
 	int outputTokens = -1;
 	// The model that answered, as the provider reported it.
 	QString model;
+	// The Local GGUF connector: the model file's SHA-256 and the settings it
+	// ran with, so a report can name exactly what answered.
+	QString modelSha256;
+	int contextTokens = 0;
+	int threads = 0;
+	QString sampling;
 	int httpStatus = 0;
 	AiChatFailure failure = AiChatFailure::None;
 	// The provider's own words about a failure, secrets removed.
@@ -107,8 +147,10 @@ struct AiChatResponse {
 	qint64 elapsedMsecs = 0;
 };
 
-// Connectors that answer text through one of the three wire formats.
+// Connectors that answer text: through one of the three wire formats, a
+// harness, or the GGUF runtime (present or not in this build).
 [[nodiscard]] bool aiConnectorHasChatTransport(const QString& connectorId);
+[[nodiscard]] AiTextTransport aiTextTransport(const QString& connectorId);
 [[nodiscard]] QString aiDefaultEndpoint(const QString& connectorId);
 // A model to start from, or empty where the user must name one: model lists
 // change faster than releases, so only a connector with a stable default
@@ -166,6 +208,10 @@ enum class AiTextConnectionBlock {
 	CloudNotAllowed,
 	NoModel,
 	NoCredential,
+	// A harness's program was not found.
+	NoProgram,
+	// This build has no GGUF runtime.
+	NoRuntime,
 };
 
 // Where the studio's text questions go, set up how, and what stops them.
@@ -173,8 +219,11 @@ struct AiTextConnection {
 	QString connectorId;
 	QString displayName;
 	QString model;
-	// The endpoint in effect: the configured one, else the default.
+	// The endpoint in effect: the configured one, else the default. For a
+	// harness, what was configured (a program, or a custom command line).
 	QString endpoint;
+	// A harness: the program found or configured.
+	QString program;
 	// The endpoint is on this machine; nothing leaves it.
 	bool local = false;
 	QString credentialVariable;
@@ -196,6 +245,23 @@ struct AiTextConnection {
 [[nodiscard]] QString aiTextConnectionBlockId(AiTextConnectionBlock block);
 // What stops the connection, and where to fix it.
 [[nodiscard]] QString aiTextConnectionBlockText(const AiTextConnection& connection);
+// Where a request goes, as a person reads it: a host, the provider a
+// harness reaches ("Anthropic"), or "this machine".
+[[nodiscard]] QString aiTextConnectionDestinationText(const AiTextConnection& connection);
+// The connection named for a sentence: "Claude Code (claude-opus-5-5)",
+// "Codex" when the tool picks its own model, "Local GGUF Model (ggml) with
+// model.gguf".
+[[nodiscard]] QString aiTextConnectionLabel(const AiTextConnection& connection);
+// The first sentence of a request preview: nothing was sent or run, and what the record shows
+// (a request without the API key, the command a tool would run, what a model here would read).
+// `action` is the button that would send it.
+[[nodiscard]] QString aiTextRequestPreviewNote(const AiTextConnection& connection, const QString& action);
+// Whether a connector's text requests stay on this machine: a GGUF model, or
+// an HTTP endpoint here.
+[[nodiscard]] bool aiTextConnectorRunsLocally(const QString& connectorId, const AiAutomationPreferences& preferences);
+// Why a text connector cannot be used as things are set (AI-free mode, cloud
+// connectors off, no GGUF runtime in this build); empty when it can.
+[[nodiscard]] QString aiTextConnectorUnavailableReason(const QString& connectorId, const AiAutomationPreferences& preferences);
 // Why nothing is sent while the open project's manifest turns AI off, for
 // the text, image, and sound connections alike.
 [[nodiscard]] QString aiProjectAiFreeText();
@@ -231,7 +297,9 @@ public:
 	AiChatClient& operator=(const AiChatClient&) = delete;
 
 	// Starts the request; `done` runs once, with the answer or the failure,
-	// from the event loop. Returns false, and says why, when nothing started.
+	// from the event loop: an HTTP reply, a harness's process, or a GGUF
+	// model on a worker thread. Returns false, and says why, when nothing
+	// started.
 	bool send(const AiChatRequest& request, const QString& apiKey, Callback done, QString* error = nullptr);
 	// Stops the request in flight; `done` then runs with Cancelled.
 	void cancel();
@@ -241,6 +309,9 @@ public:
 	[[nodiscard]] int timeoutMsecs() const;
 
 private:
+	bool sendHarness(const AiChatRequest& request, Callback done, QString* error);
+	bool sendGguf(const AiChatRequest& request, Callback done, QString* error);
+
 	struct State;
 	std::unique_ptr<State> m_state;
 };

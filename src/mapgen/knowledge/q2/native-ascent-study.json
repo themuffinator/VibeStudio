@@ -1,0 +1,1392 @@
+{
+  "schema_version": 1,
+  "id": "talus-native-ascent-v1",
+  "date": "2026-09-13",
+  "status": "bounded_native_movement_evidence_no_multiplayer_ranking",
+  "native_reference": "Official Quake II 3.19 portable C CM/Pmove; model 0 only",
+  "native_build_record_sha256": "b19bf77b1987f3035d60b46a3147eb33501184e41dc1f56c0af6253978d76a7a",
+  "native_executable_sha256": "ce4e7d365a7949ec4d2d252b9eda534f1373574255b4e1c6e25fa2090e328aac",
+  "primary_trials": 24,
+  "deterministic_repeat_trials": 8,
+  "successful_trials": 32,
+  "failed_trials": 0,
+  "analysis_tests_passed": 5,
+  "trials": [
+    {
+      "id": "talus-ramp-down-f200-x600-r1",
+      "success": true,
+      "bsp_sha256": "6ac8fb109af4062fc08b51c5bc766edb36fd728f5afc7d2461f127c821329b03",
+      "movement_time_ms": 2928,
+      "goal_frame": 191
+    },
+    {
+      "id": "talus-ramp-down-f200-x656-r1",
+      "success": true,
+      "bsp_sha256": "6ac8fb109af4062fc08b51c5bc766edb36fd728f5afc7d2461f127c821329b03",
+      "movement_time_ms": 2928,
+      "goal_frame": 191
+    },
+    {
+      "id": "talus-ramp-down-f200-x656-r2",
+      "success": true,
+      "bsp_sha256": "6ac8fb109af4062fc08b51c5bc766edb36fd728f5afc7d2461f127c821329b03",
+      "movement_time_ms": 2928,
+      "goal_frame": 191
+    },
+    {
+      "id": "talus-ramp-down-f200-x712-r1",
+      "success": true,
+      "bsp_sha256": "6ac8fb109af4062fc08b51c5bc766edb36fd728f5afc7d2461f127c821329b03",
+      "movement_time_ms": 2928,
+      "goal_frame": 191
+    },
+    {
+      "id": "talus-ramp-down-f400-x600-r1",
+      "success": true,
+      "bsp_sha256": "6ac8fb109af4062fc08b51c5bc766edb36fd728f5afc7d2461f127c821329b03",
+      "movement_time_ms": 1968,
+      "goal_frame": 131
+    },
+    {
+      "id": "talus-ramp-down-f400-x656-r1",
+      "success": true,
+      "bsp_sha256": "6ac8fb109af4062fc08b51c5bc766edb36fd728f5afc7d2461f127c821329b03",
+      "movement_time_ms": 1968,
+      "goal_frame": 131
+    },
+    {
+      "id": "talus-ramp-down-f400-x656-r2",
+      "success": true,
+      "bsp_sha256": "6ac8fb109af4062fc08b51c5bc766edb36fd728f5afc7d2461f127c821329b03",
+      "movement_time_ms": 1968,
+      "goal_frame": 131
+    },
+    {
+      "id": "talus-ramp-down-f400-x712-r1",
+      "success": true,
+      "bsp_sha256": "6ac8fb109af4062fc08b51c5bc766edb36fd728f5afc7d2461f127c821329b03",
+      "movement_time_ms": 1968,
+      "goal_frame": 131
+    },
+    {
+      "id": "talus-ramp-up-f200-x600-r1",
+      "success": true,
+      "bsp_sha256": "6ac8fb109af4062fc08b51c5bc766edb36fd728f5afc7d2461f127c821329b03",
+      "movement_time_ms": 2976,
+      "goal_frame": 194
+    },
+    {
+      "id": "talus-ramp-up-f200-x656-r1",
+      "success": true,
+      "bsp_sha256": "6ac8fb109af4062fc08b51c5bc766edb36fd728f5afc7d2461f127c821329b03",
+      "movement_time_ms": 2976,
+      "goal_frame": 194
+    },
+    {
+      "id": "talus-ramp-up-f200-x656-r2",
+      "success": true,
+      "bsp_sha256": "6ac8fb109af4062fc08b51c5bc766edb36fd728f5afc7d2461f127c821329b03",
+      "movement_time_ms": 2976,
+      "goal_frame": 194
+    },
+    {
+      "id": "talus-ramp-up-f200-x712-r1",
+      "success": true,
+      "bsp_sha256": "6ac8fb109af4062fc08b51c5bc766edb36fd728f5afc7d2461f127c821329b03",
+      "movement_time_ms": 2976,
+      "goal_frame": 194
+    },
+    {
+      "id": "talus-ramp-up-f400-x600-r1",
+      "success": true,
+      "bsp_sha256": "6ac8fb109af4062fc08b51c5bc766edb36fd728f5afc7d2461f127c821329b03",
+      "movement_time_ms": 1984,
+      "goal_frame": 132
+    },
+    {
+      "id": "talus-ramp-up-f400-x656-r1",
+      "success": true,
+      "bsp_sha256": "6ac8fb109af4062fc08b51c5bc766edb36fd728f5afc7d2461f127c821329b03",
+      "movement_time_ms": 1984,
+      "goal_frame": 132
+    },
+    {
+      "id": "talus-ramp-up-f400-x656-r2",
+      "success": true,
+      "bsp_sha256": "6ac8fb109af4062fc08b51c5bc766edb36fd728f5afc7d2461f127c821329b03",
+      "movement_time_ms": 1984,
+      "goal_frame": 132
+    },
+    {
+      "id": "talus-ramp-up-f400-x712-r1",
+      "success": true,
+      "bsp_sha256": "6ac8fb109af4062fc08b51c5bc766edb36fd728f5afc7d2461f127c821329b03",
+      "movement_time_ms": 1984,
+      "goal_frame": 132
+    },
+    {
+      "id": "talus-stairs-down-f200-x600-r1",
+      "success": true,
+      "bsp_sha256": "b41c235f024f351c903c4da813512478ed50f75b285b9e75ff411f06d7daf740",
+      "movement_time_ms": 2976,
+      "goal_frame": 194
+    },
+    {
+      "id": "talus-stairs-down-f200-x656-r1",
+      "success": true,
+      "bsp_sha256": "b41c235f024f351c903c4da813512478ed50f75b285b9e75ff411f06d7daf740",
+      "movement_time_ms": 2976,
+      "goal_frame": 194
+    },
+    {
+      "id": "talus-stairs-down-f200-x656-r2",
+      "success": true,
+      "bsp_sha256": "b41c235f024f351c903c4da813512478ed50f75b285b9e75ff411f06d7daf740",
+      "movement_time_ms": 2976,
+      "goal_frame": 194
+    },
+    {
+      "id": "talus-stairs-down-f200-x712-r1",
+      "success": true,
+      "bsp_sha256": "b41c235f024f351c903c4da813512478ed50f75b285b9e75ff411f06d7daf740",
+      "movement_time_ms": 2976,
+      "goal_frame": 194
+    },
+    {
+      "id": "talus-stairs-down-f400-x600-r1",
+      "success": true,
+      "bsp_sha256": "b41c235f024f351c903c4da813512478ed50f75b285b9e75ff411f06d7daf740",
+      "movement_time_ms": 2064,
+      "goal_frame": 137
+    },
+    {
+      "id": "talus-stairs-down-f400-x656-r1",
+      "success": true,
+      "bsp_sha256": "b41c235f024f351c903c4da813512478ed50f75b285b9e75ff411f06d7daf740",
+      "movement_time_ms": 2064,
+      "goal_frame": 137
+    },
+    {
+      "id": "talus-stairs-down-f400-x656-r2",
+      "success": true,
+      "bsp_sha256": "b41c235f024f351c903c4da813512478ed50f75b285b9e75ff411f06d7daf740",
+      "movement_time_ms": 2064,
+      "goal_frame": 137
+    },
+    {
+      "id": "talus-stairs-down-f400-x712-r1",
+      "success": true,
+      "bsp_sha256": "b41c235f024f351c903c4da813512478ed50f75b285b9e75ff411f06d7daf740",
+      "movement_time_ms": 2064,
+      "goal_frame": 137
+    },
+    {
+      "id": "talus-stairs-up-f200-x600-r1",
+      "success": true,
+      "bsp_sha256": "b41c235f024f351c903c4da813512478ed50f75b285b9e75ff411f06d7daf740",
+      "movement_time_ms": 2976,
+      "goal_frame": 194
+    },
+    {
+      "id": "talus-stairs-up-f200-x656-r1",
+      "success": true,
+      "bsp_sha256": "b41c235f024f351c903c4da813512478ed50f75b285b9e75ff411f06d7daf740",
+      "movement_time_ms": 2976,
+      "goal_frame": 194
+    },
+    {
+      "id": "talus-stairs-up-f200-x656-r2",
+      "success": true,
+      "bsp_sha256": "b41c235f024f351c903c4da813512478ed50f75b285b9e75ff411f06d7daf740",
+      "movement_time_ms": 2976,
+      "goal_frame": 194
+    },
+    {
+      "id": "talus-stairs-up-f200-x712-r1",
+      "success": true,
+      "bsp_sha256": "b41c235f024f351c903c4da813512478ed50f75b285b9e75ff411f06d7daf740",
+      "movement_time_ms": 2976,
+      "goal_frame": 194
+    },
+    {
+      "id": "talus-stairs-up-f400-x600-r1",
+      "success": true,
+      "bsp_sha256": "b41c235f024f351c903c4da813512478ed50f75b285b9e75ff411f06d7daf740",
+      "movement_time_ms": 1984,
+      "goal_frame": 132
+    },
+    {
+      "id": "talus-stairs-up-f400-x656-r1",
+      "success": true,
+      "bsp_sha256": "b41c235f024f351c903c4da813512478ed50f75b285b9e75ff411f06d7daf740",
+      "movement_time_ms": 1984,
+      "goal_frame": 132
+    },
+    {
+      "id": "talus-stairs-up-f400-x656-r2",
+      "success": true,
+      "bsp_sha256": "b41c235f024f351c903c4da813512478ed50f75b285b9e75ff411f06d7daf740",
+      "movement_time_ms": 1984,
+      "goal_frame": 132
+    },
+    {
+      "id": "talus-stairs-up-f400-x712-r1",
+      "success": true,
+      "bsp_sha256": "b41c235f024f351c903c4da813512478ed50f75b285b9e75ff411f06d7daf740",
+      "movement_time_ms": 1984,
+      "goal_frame": 132
+    }
+  ],
+  "intervention_identity": {
+    "files_sha256": {
+      "out/talus/qmg_talus.map": "4583964d19748a00b2686d2b30b48fa4131c852534786d0f75cc5574119f37a6",
+      "out/talus/qmg_talus.bsp": "6ac8fb109af4062fc08b51c5bc766edb36fd728f5afc7d2461f127c821329b03",
+      "out/talus-stairs/qmg_talus_stairs.map": "39429344c545a08f508298ed17caafb19724f53f401e3e6b5cec2abc7f72b6e4",
+      "out/talus-stairs/qmg_talus_stairs.bsp": "b41c235f024f351c903c4da813512478ed50f75b285b9e75ff411f06d7daf740"
+    },
+    "source": {
+      "unchanged_source_brush_blocks": 173,
+      "removed_brushes": 1,
+      "added_brushes": 8,
+      "unchanged_nonworld_entities": 81,
+      "world_property_exceptions": [
+        "message"
+      ],
+      "method": "Exact complete generated source brush strings: planes, materials, projections and metadata"
+    },
+    "compiled": {
+      "unchanged_brushes": 173,
+      "removed_brushes": 1,
+      "added_brushes": 8,
+      "unchanged_nonworld_entities": 81,
+      "all_added_brushside_materials": "e2u1/mine04_1",
+      "method": "Exact stored outward planes, full texinfo values and brush contents; indices normalized"
+    },
+    "historical_static_comparison_sha256": "cfea8e40e6b5d1836581bb86fbd7247dfb127cbd0b9d37bc5ed5412af48a20ae"
+  },
+  "protocol": {
+    "lanes_x": [
+      -712,
+      -656,
+      -600
+    ],
+    "lower_station_y": -208,
+    "upper_station_y": 368,
+    "flat_floor_heights": [
+      0,
+      128
+    ],
+    "maximum_grounded_goal_overshoot": 32,
+    "start_clearance_z": 0.125,
+    "settle_frames": 8,
+    "timestep_ms": 16,
+    "gravity": 800,
+    "standing_hull": [
+      32,
+      32,
+      56
+    ],
+    "phase_frames": 400
+  },
+  "grounded_goal_times_ms": [
+    {
+      "direction": "up",
+      "forwardmove": 400,
+      "ramp": 1984,
+      "stairs": 1984,
+      "stairs_minus_ramp_ms": 0
+    },
+    {
+      "direction": "up",
+      "forwardmove": 200,
+      "ramp": 2976,
+      "stairs": 2976,
+      "stairs_minus_ramp_ms": 0
+    },
+    {
+      "direction": "down",
+      "forwardmove": 400,
+      "ramp": 1968,
+      "stairs": 2064,
+      "stairs_minus_ramp_ms": 96
+    },
+    {
+      "direction": "down",
+      "forwardmove": 200,
+      "ramp": 2928,
+      "stairs": 2976,
+      "stairs_minus_ramp_ms": 48
+    }
+  ],
+  "findings": [
+    "Both uphill times tie in all three matched lanes at both literal inputs.",
+    "The stair descent grounded goal is 96/48ms later for forward400/200; planar crossing differs by 0/16ms.",
+    "Stair ascent has eight16-unit feet changes with zero stored vertical velocity; position and velocity require separate measurements.",
+    "Native deterministic repetitions are byte-identical; human turning, pursuit, camera/aim response and multiplayer encounters remain untested."
+  ],
+  "verification": {
+    "schema_version": 1,
+    "status": "passed",
+    "independently_rederived_native_goals": 32,
+    "complete_command_budgets": 32,
+    "primary_vertical_profiles": 24,
+    "identical_full_frame_repeats": 8,
+    "three_lane_times_match": true,
+    "same_pair_inputs_endpoints_stance_gravity_timestep": true,
+    "historical_native_artifact_hashes_unchanged": 147,
+    "historical_native_source_hashes_unchanged": 13,
+    "study_local_links_checked": 5,
+    "no_copied_binary_assets_maps_or_external_sources": true,
+    "grounded_goal_times_ms": [
+      {
+        "direction": "up",
+        "forwardmove": 400,
+        "ramp": 1984,
+        "stairs": 1984,
+        "stairs_minus_ramp_ms": 0
+      },
+      {
+        "direction": "up",
+        "forwardmove": 200,
+        "ramp": 2976,
+        "stairs": 2976,
+        "stairs_minus_ramp_ms": 0
+      },
+      {
+        "direction": "down",
+        "forwardmove": 400,
+        "ramp": 1968,
+        "stairs": 2064,
+        "stairs_minus_ramp_ms": 96
+      },
+      {
+        "direction": "down",
+        "forwardmove": 200,
+        "ramp": 2928,
+        "stairs": 2976,
+        "stairs_minus_ramp_ms": 48
+      }
+    ]
+  },
+  "limits": [
+    "Synthetic fixed commands on an unchanged native 3.19 world-only baseline; no input devices or game client.",
+    "Literal forward400/200 inputs are not measured human running/walking and may encounter native wishspeed limits.",
+    "No jumping, strafing, turning, opponents, weapons, camera smoothing, sound or damage simulation.",
+    "Times resolve to one 16ms command. Eight settle frames are excluded; all 400 movement frames are retained.",
+    "Airborne duration bins classify command-end grounded flags, not subframe exact flight duration.",
+    "A single isolated support-profile intervention with specific lanes/inputs does not establish fastest movement or multiplayer preference.",
+    "The local combined GPL dependency remains private; no external implementation/assets/binaries are copied into the evidence."
+  ],
+  "artifact_files": [
+    {
+      "path": "docs/Q2_NATIVE_ASCENT_STUDY.md",
+      "bytes": 9168,
+      "sha256": "1f4394ead9dbce4a81beb8a5dc10c9b0f690d18531517c7ca1ca6f75be87987a"
+    },
+    {
+      "path": "knowledge/q2/ramp-stair-comparison.json",
+      "bytes": 17286,
+      "sha256": "e26304ea658560a70c8ab775d51fb1ea740a00c37645a4ccb8410f5429c847ea"
+    },
+    {
+      "path": "out/native-ascent/comparison.json",
+      "bytes": 136133,
+      "sha256": "114637683b338b1443b510b7e1122a7d7bed50290641a8d75fe45744ca47da59"
+    },
+    {
+      "path": "out/native-ascent/experiment.log",
+      "bytes": 2568,
+      "sha256": "88b01a55997134085027f154436e0ee38d41b162f71a6e4145ba2639b0131b53"
+    },
+    {
+      "path": "out/native-ascent/talus-ramp-down-f200-x600-r1/commands.txt",
+      "bytes": 8128,
+      "sha256": "72a57133de5f0c269775b63cea2040195495ac916795616dcbb5c6791dbac31d"
+    },
+    {
+      "path": "out/native-ascent/talus-ramp-down-f200-x600-r1/frames.ndjson",
+      "bytes": 156460,
+      "sha256": "9396bc809d7346dce7e815eaf99d6caf6a762cf3e3cd6c1ea73f50e42b24a303"
+    },
+    {
+      "path": "out/native-ascent/talus-ramp-down-f200-x600-r1/native-stderr.txt",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "out/native-ascent/talus-ramp-down-f200-x600-r1/result.json",
+      "bytes": 3429,
+      "sha256": "008b2ea69eb7960122e9876c4398efceae7274f85b6a8a1f2df3a14c2f52e93c"
+    },
+    {
+      "path": "out/native-ascent/talus-ramp-down-f200-x600-r1/trial.json",
+      "bytes": 714,
+      "sha256": "96d5794712ad1afb5d2689ec5c64673dcd716915b15ef94da8759454a088caad"
+    },
+    {
+      "path": "out/native-ascent/talus-ramp-down-f200-x600-r1/vertical-profile.json",
+      "bytes": 50928,
+      "sha256": "77198d0ce10c3b5939a0ade04d22d80002ac0bef4e9ece4acace3ee47016ebd3"
+    },
+    {
+      "path": "out/native-ascent/talus-ramp-down-f200-x656-r1/commands.txt",
+      "bytes": 8128,
+      "sha256": "72a57133de5f0c269775b63cea2040195495ac916795616dcbb5c6791dbac31d"
+    },
+    {
+      "path": "out/native-ascent/talus-ramp-down-f200-x656-r1/frames.ndjson",
+      "bytes": 156460,
+      "sha256": "4950d8328afa9ee706e13eff32d4aad749270d6fba8a830bbad163aace42dad9"
+    },
+    {
+      "path": "out/native-ascent/talus-ramp-down-f200-x656-r1/native-stderr.txt",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "out/native-ascent/talus-ramp-down-f200-x656-r1/result.json",
+      "bytes": 3429,
+      "sha256": "63cfa10399c34507f83d6e8c8935c1daa3057e3bfec0334c01818d598267f83c"
+    },
+    {
+      "path": "out/native-ascent/talus-ramp-down-f200-x656-r1/trial.json",
+      "bytes": 714,
+      "sha256": "33e98af890019a8ebf27b64a8640d142f36849f32ce71cbf2af581442b64006d"
+    },
+    {
+      "path": "out/native-ascent/talus-ramp-down-f200-x656-r1/vertical-profile.json",
+      "bytes": 50928,
+      "sha256": "4d458a0fa27f71c8c09b8cfa583fda63a5998111a3594f355043e813737d0a5a"
+    },
+    {
+      "path": "out/native-ascent/talus-ramp-down-f200-x656-r2/commands.txt",
+      "bytes": 8128,
+      "sha256": "72a57133de5f0c269775b63cea2040195495ac916795616dcbb5c6791dbac31d"
+    },
+    {
+      "path": "out/native-ascent/talus-ramp-down-f200-x656-r2/frames.ndjson",
+      "bytes": 156460,
+      "sha256": "4950d8328afa9ee706e13eff32d4aad749270d6fba8a830bbad163aace42dad9"
+    },
+    {
+      "path": "out/native-ascent/talus-ramp-down-f200-x656-r2/native-stderr.txt",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "out/native-ascent/talus-ramp-down-f200-x656-r2/result.json",
+      "bytes": 3207,
+      "sha256": "e76f71706cdf0667716c070e8973819298a26ca824facc760963d9f9a7ae12cc"
+    },
+    {
+      "path": "out/native-ascent/talus-ramp-down-f200-x656-r2/trial.json",
+      "bytes": 714,
+      "sha256": "78f0047788c71807311c8627ee365bfd85ccff967f51de2be1c0d0536753b1df"
+    },
+    {
+      "path": "out/native-ascent/talus-ramp-down-f200-x712-r1/commands.txt",
+      "bytes": 8128,
+      "sha256": "72a57133de5f0c269775b63cea2040195495ac916795616dcbb5c6791dbac31d"
+    },
+    {
+      "path": "out/native-ascent/talus-ramp-down-f200-x712-r1/frames.ndjson",
+      "bytes": 156460,
+      "sha256": "1031d28c6d6a2a49eb93201174874cc1da360553060e169edb3a7c6a05a1372f"
+    },
+    {
+      "path": "out/native-ascent/talus-ramp-down-f200-x712-r1/native-stderr.txt",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "out/native-ascent/talus-ramp-down-f200-x712-r1/result.json",
+      "bytes": 3429,
+      "sha256": "998ebcb783d795b30fc595926e5fc09843cf31152ba60c0ad098d15c43ab0e01"
+    },
+    {
+      "path": "out/native-ascent/talus-ramp-down-f200-x712-r1/trial.json",
+      "bytes": 714,
+      "sha256": "d8094f063bebbbd19c6660c67e9676b45a111bab25c73fec2c8504c1e93305fd"
+    },
+    {
+      "path": "out/native-ascent/talus-ramp-down-f200-x712-r1/vertical-profile.json",
+      "bytes": 50928,
+      "sha256": "4ee6abb263b98636bc65aa47962a07353e80227f22411b1b2fd7055d59fbc154"
+    },
+    {
+      "path": "out/native-ascent/talus-ramp-down-f400-x600-r1/commands.txt",
+      "bytes": 8128,
+      "sha256": "474f6685a6ab9031285d5983520030f9663b6652799de9c25314267505fce3c9"
+    },
+    {
+      "path": "out/native-ascent/talus-ramp-down-f400-x600-r1/frames.ndjson",
+      "bytes": 156073,
+      "sha256": "3a30121deb5e531abd4fa6febddf60ef6306310a841c1c23b8208637c95b5c9c"
+    },
+    {
+      "path": "out/native-ascent/talus-ramp-down-f400-x600-r1/native-stderr.txt",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "out/native-ascent/talus-ramp-down-f400-x600-r1/result.json",
+      "bytes": 3428,
+      "sha256": "67cd43231770c694308d50cb47345bf4e97f96e6dd7caf33fcf7491a1bf75d21"
+    },
+    {
+      "path": "out/native-ascent/talus-ramp-down-f400-x600-r1/trial.json",
+      "bytes": 714,
+      "sha256": "f73e2722d138fc42cf7d5544d527cab95b6f5dfc56bd7f00f783f1b952a4cacc"
+    },
+    {
+      "path": "out/native-ascent/talus-ramp-down-f400-x600-r1/vertical-profile.json",
+      "bytes": 34071,
+      "sha256": "d61bff372a6113172dd9fbee414b7db51e05e64d6bbe11ba3129432a8c9ad664"
+    },
+    {
+      "path": "out/native-ascent/talus-ramp-down-f400-x656-r1/commands.txt",
+      "bytes": 8128,
+      "sha256": "474f6685a6ab9031285d5983520030f9663b6652799de9c25314267505fce3c9"
+    },
+    {
+      "path": "out/native-ascent/talus-ramp-down-f400-x656-r1/frames.ndjson",
+      "bytes": 156073,
+      "sha256": "004afa3bd2825dafb7ae376333a3458f5e91c45f50147099491bdc21a395ef65"
+    },
+    {
+      "path": "out/native-ascent/talus-ramp-down-f400-x656-r1/native-stderr.txt",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "out/native-ascent/talus-ramp-down-f400-x656-r1/result.json",
+      "bytes": 3428,
+      "sha256": "cc233decedd4a8f7811e75addab79ec90655484887672bbfe4b228400a9b6add"
+    },
+    {
+      "path": "out/native-ascent/talus-ramp-down-f400-x656-r1/trial.json",
+      "bytes": 714,
+      "sha256": "07d1f773bb3e27c439420b8311565fe3a6707973246c259aebe6f848529fb4c8"
+    },
+    {
+      "path": "out/native-ascent/talus-ramp-down-f400-x656-r1/vertical-profile.json",
+      "bytes": 34071,
+      "sha256": "1335bec7c81c44cca03438c0b4672e93e1f443673823f7bf7e4e16eed2c643cc"
+    },
+    {
+      "path": "out/native-ascent/talus-ramp-down-f400-x656-r2/commands.txt",
+      "bytes": 8128,
+      "sha256": "474f6685a6ab9031285d5983520030f9663b6652799de9c25314267505fce3c9"
+    },
+    {
+      "path": "out/native-ascent/talus-ramp-down-f400-x656-r2/frames.ndjson",
+      "bytes": 156073,
+      "sha256": "004afa3bd2825dafb7ae376333a3458f5e91c45f50147099491bdc21a395ef65"
+    },
+    {
+      "path": "out/native-ascent/talus-ramp-down-f400-x656-r2/native-stderr.txt",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "out/native-ascent/talus-ramp-down-f400-x656-r2/result.json",
+      "bytes": 3206,
+      "sha256": "87e4dcb39e2731bc25dfb352642cf61c75697cb8207c2923d95833075ac7d948"
+    },
+    {
+      "path": "out/native-ascent/talus-ramp-down-f400-x656-r2/trial.json",
+      "bytes": 714,
+      "sha256": "fe661f0ae54320d655ffcf60add070782a2032157617c359d83787603edbebf9"
+    },
+    {
+      "path": "out/native-ascent/talus-ramp-down-f400-x712-r1/commands.txt",
+      "bytes": 8128,
+      "sha256": "474f6685a6ab9031285d5983520030f9663b6652799de9c25314267505fce3c9"
+    },
+    {
+      "path": "out/native-ascent/talus-ramp-down-f400-x712-r1/frames.ndjson",
+      "bytes": 156073,
+      "sha256": "dd28ce80a0750b2b5a56311a367b1531ced072bd5ce7751cae84e2e9f3825ca7"
+    },
+    {
+      "path": "out/native-ascent/talus-ramp-down-f400-x712-r1/native-stderr.txt",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "out/native-ascent/talus-ramp-down-f400-x712-r1/result.json",
+      "bytes": 3428,
+      "sha256": "e37573ed9d5a16812270ac8096b864a8db19c85fde3489c39d8b89b8a4eb76f9"
+    },
+    {
+      "path": "out/native-ascent/talus-ramp-down-f400-x712-r1/trial.json",
+      "bytes": 714,
+      "sha256": "db353d44649cd70df7c432bf303a453dbddf5cf8514efd4db21b228c486aa684"
+    },
+    {
+      "path": "out/native-ascent/talus-ramp-down-f400-x712-r1/vertical-profile.json",
+      "bytes": 34071,
+      "sha256": "0dae7d5abe4d6e484c4bc67ebd00f1c5ffd19d347385b00d1f2dff2c726dc2b3"
+    },
+    {
+      "path": "out/native-ascent/talus-ramp-up-f200-x600-r1/commands.txt",
+      "bytes": 7728,
+      "sha256": "215ac601ace04a323b2e69c7f3d0143bc1c876ed0b19c9dd55ba880853fcef30"
+    },
+    {
+      "path": "out/native-ascent/talus-ramp-up-f200-x600-r1/frames.ndjson",
+      "bytes": 156500,
+      "sha256": "1a1e36aa3a3287b1bad396c67faccbe21fffa843bbb6ad1590cd4c8e285a3362"
+    },
+    {
+      "path": "out/native-ascent/talus-ramp-up-f200-x600-r1/native-stderr.txt",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "out/native-ascent/talus-ramp-up-f200-x600-r1/result.json",
+      "bytes": 3426,
+      "sha256": "2a356a711206e6684dcd927171c8454b7aa1a2aafc2a3835371bc33a7a926918"
+    },
+    {
+      "path": "out/native-ascent/talus-ramp-up-f200-x600-r1/trial.json",
+      "bytes": 710,
+      "sha256": "3cda2651c8d9481f9f28e6bf0a76e17b3e75e56cf6b5c1ad499df1204d79390a"
+    },
+    {
+      "path": "out/native-ascent/talus-ramp-up-f200-x600-r1/vertical-profile.json",
+      "bytes": 48628,
+      "sha256": "4eb5147ac210d03dee3756055e992f3e52bbb3ec561380b31c65a7da4da64eb0"
+    },
+    {
+      "path": "out/native-ascent/talus-ramp-up-f200-x656-r1/commands.txt",
+      "bytes": 7728,
+      "sha256": "215ac601ace04a323b2e69c7f3d0143bc1c876ed0b19c9dd55ba880853fcef30"
+    },
+    {
+      "path": "out/native-ascent/talus-ramp-up-f200-x656-r1/frames.ndjson",
+      "bytes": 156500,
+      "sha256": "f8c1e32786d8ecf277645364ef03c93d7f34c02fc96d25114e8780780244617d"
+    },
+    {
+      "path": "out/native-ascent/talus-ramp-up-f200-x656-r1/native-stderr.txt",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "out/native-ascent/talus-ramp-up-f200-x656-r1/result.json",
+      "bytes": 3426,
+      "sha256": "66afd73e7ad172823949b936813abcdd1427b6187acc6a7a1674171e270f5d7a"
+    },
+    {
+      "path": "out/native-ascent/talus-ramp-up-f200-x656-r1/trial.json",
+      "bytes": 710,
+      "sha256": "1a3d63a42f13e0edabff530ad0bcd70374bb2b651c1311ffa1c76187cf168989"
+    },
+    {
+      "path": "out/native-ascent/talus-ramp-up-f200-x656-r1/vertical-profile.json",
+      "bytes": 48628,
+      "sha256": "22da57f70c23a253d74b2057b4993f212ccf93e48171c47f8ae4a3561f5aac0b"
+    },
+    {
+      "path": "out/native-ascent/talus-ramp-up-f200-x656-r2/commands.txt",
+      "bytes": 7728,
+      "sha256": "215ac601ace04a323b2e69c7f3d0143bc1c876ed0b19c9dd55ba880853fcef30"
+    },
+    {
+      "path": "out/native-ascent/talus-ramp-up-f200-x656-r2/frames.ndjson",
+      "bytes": 156500,
+      "sha256": "f8c1e32786d8ecf277645364ef03c93d7f34c02fc96d25114e8780780244617d"
+    },
+    {
+      "path": "out/native-ascent/talus-ramp-up-f200-x656-r2/native-stderr.txt",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "out/native-ascent/talus-ramp-up-f200-x656-r2/result.json",
+      "bytes": 3204,
+      "sha256": "46bcb750406777cf1fbf7ef17456fc554ab809cb6ceeeb7808a71eb008df2818"
+    },
+    {
+      "path": "out/native-ascent/talus-ramp-up-f200-x656-r2/trial.json",
+      "bytes": 710,
+      "sha256": "614f26f91d3a4e7856e20e45d99d15959e68fe7828d02ebb29e8dbfda14dd7a0"
+    },
+    {
+      "path": "out/native-ascent/talus-ramp-up-f200-x712-r1/commands.txt",
+      "bytes": 7728,
+      "sha256": "215ac601ace04a323b2e69c7f3d0143bc1c876ed0b19c9dd55ba880853fcef30"
+    },
+    {
+      "path": "out/native-ascent/talus-ramp-up-f200-x712-r1/frames.ndjson",
+      "bytes": 156500,
+      "sha256": "3884551f1d368a94f5525abbf272474a565f018d30b83648908fddcbcdba01d1"
+    },
+    {
+      "path": "out/native-ascent/talus-ramp-up-f200-x712-r1/native-stderr.txt",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "out/native-ascent/talus-ramp-up-f200-x712-r1/result.json",
+      "bytes": 3426,
+      "sha256": "e13f3c825db1aa0a4724aee7afde5397a56c1c780620abaa23304822804c7810"
+    },
+    {
+      "path": "out/native-ascent/talus-ramp-up-f200-x712-r1/trial.json",
+      "bytes": 710,
+      "sha256": "420b1f9ad5fc4707e860660fa84709149d88ab8dfc648a9334dfa771994fc660"
+    },
+    {
+      "path": "out/native-ascent/talus-ramp-up-f200-x712-r1/vertical-profile.json",
+      "bytes": 48628,
+      "sha256": "b90406e1a76c89462e9002400ebf80e3bb20404e1fcab1e870d82b6d6a862936"
+    },
+    {
+      "path": "out/native-ascent/talus-ramp-up-f400-x600-r1/commands.txt",
+      "bytes": 7728,
+      "sha256": "3cd3165b559b5b0d21dd64c834acbe09e0380033b700bbc0d853ad8acd316989"
+    },
+    {
+      "path": "out/native-ascent/talus-ramp-up-f400-x600-r1/frames.ndjson",
+      "bytes": 156385,
+      "sha256": "a70b9c86af827d1f31346cda2f1b4a1b2a9e62a0030a3317e598b742a953985a"
+    },
+    {
+      "path": "out/native-ascent/talus-ramp-up-f400-x600-r1/native-stderr.txt",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "out/native-ascent/talus-ramp-up-f400-x600-r1/result.json",
+      "bytes": 3426,
+      "sha256": "512bfb4da16512d8e74d0b31ec5df26c4ef10ee1e75fe8f57306a058f7feae6e"
+    },
+    {
+      "path": "out/native-ascent/talus-ramp-up-f400-x600-r1/trial.json",
+      "bytes": 710,
+      "sha256": "d49df8a1434f7081a2097fde66db2fee7b502b6307662cfdf4b2340ddccc844d"
+    },
+    {
+      "path": "out/native-ascent/talus-ramp-up-f400-x600-r1/vertical-profile.json",
+      "bytes": 32723,
+      "sha256": "db9a7e1b836d6a016da80079237c97de84156469e2cb7d52b4655f3b66726463"
+    },
+    {
+      "path": "out/native-ascent/talus-ramp-up-f400-x656-r1/commands.txt",
+      "bytes": 7728,
+      "sha256": "3cd3165b559b5b0d21dd64c834acbe09e0380033b700bbc0d853ad8acd316989"
+    },
+    {
+      "path": "out/native-ascent/talus-ramp-up-f400-x656-r1/frames.ndjson",
+      "bytes": 156385,
+      "sha256": "99bd429d31fab6f657b486a1bf3fdd97b66c85086e890b2c4a5af6f28f4a35c7"
+    },
+    {
+      "path": "out/native-ascent/talus-ramp-up-f400-x656-r1/native-stderr.txt",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "out/native-ascent/talus-ramp-up-f400-x656-r1/result.json",
+      "bytes": 3426,
+      "sha256": "06e5b2625ccb0b993ef36469ce697fc5d9b8d038edf61bec38c53622ad05f6dd"
+    },
+    {
+      "path": "out/native-ascent/talus-ramp-up-f400-x656-r1/trial.json",
+      "bytes": 710,
+      "sha256": "47d5d3eb043d031ae1665c7204b2c053200b723f16548c62a0bdc2fc148ab0ad"
+    },
+    {
+      "path": "out/native-ascent/talus-ramp-up-f400-x656-r1/vertical-profile.json",
+      "bytes": 32723,
+      "sha256": "a58354b306d53a20bd9f91318f9df25b6ed9c8eab65c2b9dbe733ff275d279f7"
+    },
+    {
+      "path": "out/native-ascent/talus-ramp-up-f400-x656-r2/commands.txt",
+      "bytes": 7728,
+      "sha256": "3cd3165b559b5b0d21dd64c834acbe09e0380033b700bbc0d853ad8acd316989"
+    },
+    {
+      "path": "out/native-ascent/talus-ramp-up-f400-x656-r2/frames.ndjson",
+      "bytes": 156385,
+      "sha256": "99bd429d31fab6f657b486a1bf3fdd97b66c85086e890b2c4a5af6f28f4a35c7"
+    },
+    {
+      "path": "out/native-ascent/talus-ramp-up-f400-x656-r2/native-stderr.txt",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "out/native-ascent/talus-ramp-up-f400-x656-r2/result.json",
+      "bytes": 3204,
+      "sha256": "0a58ea852171080fb730a8fad8e2bd3ff4640d7b75d9ce0065986ae1ee653981"
+    },
+    {
+      "path": "out/native-ascent/talus-ramp-up-f400-x656-r2/trial.json",
+      "bytes": 710,
+      "sha256": "a30bab84d4eba06719c46479a1d02cc7b78229b239d1164834a56e076b53bf6b"
+    },
+    {
+      "path": "out/native-ascent/talus-ramp-up-f400-x712-r1/commands.txt",
+      "bytes": 7728,
+      "sha256": "3cd3165b559b5b0d21dd64c834acbe09e0380033b700bbc0d853ad8acd316989"
+    },
+    {
+      "path": "out/native-ascent/talus-ramp-up-f400-x712-r1/frames.ndjson",
+      "bytes": 156385,
+      "sha256": "f584a2a20bb3d0c48fed71256a561d7aa0c23f63fd25317ebdd4f9eff8b8adca"
+    },
+    {
+      "path": "out/native-ascent/talus-ramp-up-f400-x712-r1/native-stderr.txt",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "out/native-ascent/talus-ramp-up-f400-x712-r1/result.json",
+      "bytes": 3426,
+      "sha256": "60d79478c38641017b67b088b0f02bc6f8fef2a3222cbf6b4be84fe7b83815fa"
+    },
+    {
+      "path": "out/native-ascent/talus-ramp-up-f400-x712-r1/trial.json",
+      "bytes": 710,
+      "sha256": "fe1ca0570c47f051f4219ea986f8961067402c97979963d21a6370fb925c8f40"
+    },
+    {
+      "path": "out/native-ascent/talus-ramp-up-f400-x712-r1/vertical-profile.json",
+      "bytes": 32723,
+      "sha256": "0a2cb9adce16b47b78479fb754a7e6c15e18a68134434a204b5840b3cd2e3bba"
+    },
+    {
+      "path": "out/native-ascent/talus-stairs-down-f200-x600-r1/commands.txt",
+      "bytes": 8128,
+      "sha256": "72a57133de5f0c269775b63cea2040195495ac916795616dcbb5c6791dbac31d"
+    },
+    {
+      "path": "out/native-ascent/talus-stairs-down-f200-x600-r1/frames.ndjson",
+      "bytes": 156378,
+      "sha256": "e23b194d261fa9d0db2160d111345af0632aa17275480a6663f2babbdd77a22b"
+    },
+    {
+      "path": "out/native-ascent/talus-stairs-down-f200-x600-r1/native-stderr.txt",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "out/native-ascent/talus-stairs-down-f200-x600-r1/result.json",
+      "bytes": 3450,
+      "sha256": "7883a34f910c1d0f2ce235106c21a87011c2dbacd79dcb7a3f839b22477589b8"
+    },
+    {
+      "path": "out/native-ascent/talus-stairs-down-f200-x600-r1/trial.json",
+      "bytes": 730,
+      "sha256": "6bf241267c84fbea7d61dff5dffbd38b75d5439e981584989da803d00515d2af"
+    },
+    {
+      "path": "out/native-ascent/talus-stairs-down-f200-x600-r1/vertical-profile.json",
+      "bytes": 50269,
+      "sha256": "21e0d27a108842eaabff8970fe12b98c951196d1528d083e54779a56f82d11ee"
+    },
+    {
+      "path": "out/native-ascent/talus-stairs-down-f200-x656-r1/commands.txt",
+      "bytes": 8128,
+      "sha256": "72a57133de5f0c269775b63cea2040195495ac916795616dcbb5c6791dbac31d"
+    },
+    {
+      "path": "out/native-ascent/talus-stairs-down-f200-x656-r1/frames.ndjson",
+      "bytes": 156378,
+      "sha256": "6ce755f7bfbfc90ab6da08137236fac689ce6b5260489792b70c1371467680f4"
+    },
+    {
+      "path": "out/native-ascent/talus-stairs-down-f200-x656-r1/native-stderr.txt",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "out/native-ascent/talus-stairs-down-f200-x656-r1/result.json",
+      "bytes": 3450,
+      "sha256": "28a35f1618b6b4aa29b99d2d55895b3936fc3237c12a72d67075d23c91a94f2a"
+    },
+    {
+      "path": "out/native-ascent/talus-stairs-down-f200-x656-r1/trial.json",
+      "bytes": 730,
+      "sha256": "fcebe9e3932d35e73f387da0cd0c0a75cc081ae72556871f5123e201a8580247"
+    },
+    {
+      "path": "out/native-ascent/talus-stairs-down-f200-x656-r1/vertical-profile.json",
+      "bytes": 50269,
+      "sha256": "58e63c6705ab8532b7943bf5e2bacfd3824c3bed24310ccbd05c32facf5e6f72"
+    },
+    {
+      "path": "out/native-ascent/talus-stairs-down-f200-x656-r2/commands.txt",
+      "bytes": 8128,
+      "sha256": "72a57133de5f0c269775b63cea2040195495ac916795616dcbb5c6791dbac31d"
+    },
+    {
+      "path": "out/native-ascent/talus-stairs-down-f200-x656-r2/frames.ndjson",
+      "bytes": 156378,
+      "sha256": "6ce755f7bfbfc90ab6da08137236fac689ce6b5260489792b70c1371467680f4"
+    },
+    {
+      "path": "out/native-ascent/talus-stairs-down-f200-x656-r2/native-stderr.txt",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "out/native-ascent/talus-stairs-down-f200-x656-r2/result.json",
+      "bytes": 3226,
+      "sha256": "6975f2c60d5150bb89ec5efbdbb48b23ece1bee39195e26fd115cac10435f439"
+    },
+    {
+      "path": "out/native-ascent/talus-stairs-down-f200-x656-r2/trial.json",
+      "bytes": 730,
+      "sha256": "a3fae10814d426bee0b485906fd931a5702865adcb49d6a3a313919bf448f826"
+    },
+    {
+      "path": "out/native-ascent/talus-stairs-down-f200-x712-r1/commands.txt",
+      "bytes": 8128,
+      "sha256": "72a57133de5f0c269775b63cea2040195495ac916795616dcbb5c6791dbac31d"
+    },
+    {
+      "path": "out/native-ascent/talus-stairs-down-f200-x712-r1/frames.ndjson",
+      "bytes": 156378,
+      "sha256": "5c1e0532286fada7e41271220a10cafb26443b84be1cb4cf4927f189b0aa96b3"
+    },
+    {
+      "path": "out/native-ascent/talus-stairs-down-f200-x712-r1/native-stderr.txt",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "out/native-ascent/talus-stairs-down-f200-x712-r1/result.json",
+      "bytes": 3450,
+      "sha256": "76d4d650354eea24f949a4a657650d5e5b84c7700b2836b4842156069b7b3004"
+    },
+    {
+      "path": "out/native-ascent/talus-stairs-down-f200-x712-r1/trial.json",
+      "bytes": 730,
+      "sha256": "9310ce82c47a6beeb887e2e5f669ca5a3d8e7f968e6e2f40fcafa596fb12c8cc"
+    },
+    {
+      "path": "out/native-ascent/talus-stairs-down-f200-x712-r1/vertical-profile.json",
+      "bytes": 50269,
+      "sha256": "3d45fb76d788a59dd7f27ac4fa5c9939325275a99d6eea2f983a7a79a6e95f2b"
+    },
+    {
+      "path": "out/native-ascent/talus-stairs-down-f400-x600-r1/commands.txt",
+      "bytes": 8128,
+      "sha256": "474f6685a6ab9031285d5983520030f9663b6652799de9c25314267505fce3c9"
+    },
+    {
+      "path": "out/native-ascent/talus-stairs-down-f400-x600-r1/frames.ndjson",
+      "bytes": 156010,
+      "sha256": "6d5d610622857922bf07d23426e90bde37f18517a90c5bb514b574c3537f78e8"
+    },
+    {
+      "path": "out/native-ascent/talus-stairs-down-f400-x600-r1/native-stderr.txt",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "out/native-ascent/talus-stairs-down-f400-x600-r1/result.json",
+      "bytes": 3448,
+      "sha256": "ed99bcd972a0bf812c0f49b1c50863e6f7b7137ce458a238a74cef888f14b892"
+    },
+    {
+      "path": "out/native-ascent/talus-stairs-down-f400-x600-r1/trial.json",
+      "bytes": 730,
+      "sha256": "448fdc73cbad547a64dcfd61cfa6aa2f6e4bbc681565a368def762e23aced9e6"
+    },
+    {
+      "path": "out/native-ascent/talus-stairs-down-f400-x600-r1/vertical-profile.json",
+      "bytes": 35191,
+      "sha256": "b63371989d8c5c6f666290b995ad60f2320868da76d049ffcbf5206652d9660c"
+    },
+    {
+      "path": "out/native-ascent/talus-stairs-down-f400-x656-r1/commands.txt",
+      "bytes": 8128,
+      "sha256": "474f6685a6ab9031285d5983520030f9663b6652799de9c25314267505fce3c9"
+    },
+    {
+      "path": "out/native-ascent/talus-stairs-down-f400-x656-r1/frames.ndjson",
+      "bytes": 156010,
+      "sha256": "689db9d2f4fcec1b8b24c356eca0b910b50718f47556d42bdd3bfd5bba8b4f0e"
+    },
+    {
+      "path": "out/native-ascent/talus-stairs-down-f400-x656-r1/native-stderr.txt",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "out/native-ascent/talus-stairs-down-f400-x656-r1/result.json",
+      "bytes": 3448,
+      "sha256": "6d2be3c4a2cc273b7ceaafed62f03924f41bcf6ae0e0ff2fd4e884cc335d2d6b"
+    },
+    {
+      "path": "out/native-ascent/talus-stairs-down-f400-x656-r1/trial.json",
+      "bytes": 730,
+      "sha256": "819bd1e23ecac8d61004e85e2ea637aae39cd6d6c4961fa387fcc19590f26efb"
+    },
+    {
+      "path": "out/native-ascent/talus-stairs-down-f400-x656-r1/vertical-profile.json",
+      "bytes": 35191,
+      "sha256": "d61a5d5dca21fe782e8ea6b33d6e5e800387e08959570f2d9a494862f5768737"
+    },
+    {
+      "path": "out/native-ascent/talus-stairs-down-f400-x656-r2/commands.txt",
+      "bytes": 8128,
+      "sha256": "474f6685a6ab9031285d5983520030f9663b6652799de9c25314267505fce3c9"
+    },
+    {
+      "path": "out/native-ascent/talus-stairs-down-f400-x656-r2/frames.ndjson",
+      "bytes": 156010,
+      "sha256": "689db9d2f4fcec1b8b24c356eca0b910b50718f47556d42bdd3bfd5bba8b4f0e"
+    },
+    {
+      "path": "out/native-ascent/talus-stairs-down-f400-x656-r2/native-stderr.txt",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "out/native-ascent/talus-stairs-down-f400-x656-r2/result.json",
+      "bytes": 3224,
+      "sha256": "c77b9909b1e6630d24ef8c42b8bedaca99e49d202dcf1f18315f069f609351d9"
+    },
+    {
+      "path": "out/native-ascent/talus-stairs-down-f400-x656-r2/trial.json",
+      "bytes": 730,
+      "sha256": "20c7310ca1c11c41760dc204682f275a4d9def77e91c83d1235b9e2d91aeeb15"
+    },
+    {
+      "path": "out/native-ascent/talus-stairs-down-f400-x712-r1/commands.txt",
+      "bytes": 8128,
+      "sha256": "474f6685a6ab9031285d5983520030f9663b6652799de9c25314267505fce3c9"
+    },
+    {
+      "path": "out/native-ascent/talus-stairs-down-f400-x712-r1/frames.ndjson",
+      "bytes": 156010,
+      "sha256": "50dacc0501ff319b729b3017225da98578e25c61e9a8f4fbb81be46fec4ca4fa"
+    },
+    {
+      "path": "out/native-ascent/talus-stairs-down-f400-x712-r1/native-stderr.txt",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "out/native-ascent/talus-stairs-down-f400-x712-r1/result.json",
+      "bytes": 3448,
+      "sha256": "a69aa5e86d301d098bc78be3ec0665580177caf8d0831174d8c09cb5ac7b893f"
+    },
+    {
+      "path": "out/native-ascent/talus-stairs-down-f400-x712-r1/trial.json",
+      "bytes": 730,
+      "sha256": "e4629683a62e07943caca4e87b89362df582510055fe9388d32f8f8cf3d94eb4"
+    },
+    {
+      "path": "out/native-ascent/talus-stairs-down-f400-x712-r1/vertical-profile.json",
+      "bytes": 35191,
+      "sha256": "965767149fbc5e185b9e8738ebc9bb1d55ec9de24d5154cf11efbd076f1f8aef"
+    },
+    {
+      "path": "out/native-ascent/talus-stairs-up-f200-x600-r1/commands.txt",
+      "bytes": 7728,
+      "sha256": "215ac601ace04a323b2e69c7f3d0143bc1c876ed0b19c9dd55ba880853fcef30"
+    },
+    {
+      "path": "out/native-ascent/talus-stairs-up-f200-x600-r1/frames.ndjson",
+      "bytes": 156234,
+      "sha256": "ed7de9f0335c4f72de8342187e23c1e9d260a26bf6cb090b3669d5a89c7c8ff6"
+    },
+    {
+      "path": "out/native-ascent/talus-stairs-up-f200-x600-r1/native-stderr.txt",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "out/native-ascent/talus-stairs-up-f200-x600-r1/result.json",
+      "bytes": 3444,
+      "sha256": "3042db328a6e53342c78bd59cd3d6850db4e6812a9dc132badfe5f0d21e60072"
+    },
+    {
+      "path": "out/native-ascent/talus-stairs-up-f200-x600-r1/trial.json",
+      "bytes": 726,
+      "sha256": "d7b9ae360e417c35c6b4edcdbf9c9678df9b4dbb04b08f3aab857dd55d8bebde"
+    },
+    {
+      "path": "out/native-ascent/talus-stairs-up-f200-x600-r1/vertical-profile.json",
+      "bytes": 48127,
+      "sha256": "14adce99b11c11aacf3871a7b2c751db4661c0da5eeb0d79a739d4e80ecea51f"
+    },
+    {
+      "path": "out/native-ascent/talus-stairs-up-f200-x656-r1/commands.txt",
+      "bytes": 7728,
+      "sha256": "215ac601ace04a323b2e69c7f3d0143bc1c876ed0b19c9dd55ba880853fcef30"
+    },
+    {
+      "path": "out/native-ascent/talus-stairs-up-f200-x656-r1/frames.ndjson",
+      "bytes": 156234,
+      "sha256": "f759e2fa7346bc20c616370a4d072eb923110d3cf80785675eac01547fcc75bb"
+    },
+    {
+      "path": "out/native-ascent/talus-stairs-up-f200-x656-r1/native-stderr.txt",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "out/native-ascent/talus-stairs-up-f200-x656-r1/result.json",
+      "bytes": 3444,
+      "sha256": "4c5d44845ecc8ec979433a88545a47bd057b104aeaffbce5d8904213b217c58c"
+    },
+    {
+      "path": "out/native-ascent/talus-stairs-up-f200-x656-r1/trial.json",
+      "bytes": 726,
+      "sha256": "3e10a99deb809e130b1294b21b8a84c7c6d66c888e2cb22f3716034bd0a7b516"
+    },
+    {
+      "path": "out/native-ascent/talus-stairs-up-f200-x656-r1/vertical-profile.json",
+      "bytes": 48127,
+      "sha256": "3d7b2492bfaf19f367238e22e76022591cf7431e41b2655b6a4cb30840281915"
+    },
+    {
+      "path": "out/native-ascent/talus-stairs-up-f200-x656-r2/commands.txt",
+      "bytes": 7728,
+      "sha256": "215ac601ace04a323b2e69c7f3d0143bc1c876ed0b19c9dd55ba880853fcef30"
+    },
+    {
+      "path": "out/native-ascent/talus-stairs-up-f200-x656-r2/frames.ndjson",
+      "bytes": 156234,
+      "sha256": "f759e2fa7346bc20c616370a4d072eb923110d3cf80785675eac01547fcc75bb"
+    },
+    {
+      "path": "out/native-ascent/talus-stairs-up-f200-x656-r2/native-stderr.txt",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "out/native-ascent/talus-stairs-up-f200-x656-r2/result.json",
+      "bytes": 3220,
+      "sha256": "ed969d846669675dd04e888901832efcfda30265e1d8d8b7042f02a2439fedec"
+    },
+    {
+      "path": "out/native-ascent/talus-stairs-up-f200-x656-r2/trial.json",
+      "bytes": 726,
+      "sha256": "31501e59cdb5920e6e9a62f123946e8a603d4ba4ad831b6f2d8d32410c59587b"
+    },
+    {
+      "path": "out/native-ascent/talus-stairs-up-f200-x712-r1/commands.txt",
+      "bytes": 7728,
+      "sha256": "215ac601ace04a323b2e69c7f3d0143bc1c876ed0b19c9dd55ba880853fcef30"
+    },
+    {
+      "path": "out/native-ascent/talus-stairs-up-f200-x712-r1/frames.ndjson",
+      "bytes": 156234,
+      "sha256": "7fc7274185340b73429a72785596d85d0696e1add46c98a8eb341fdba71606e1"
+    },
+    {
+      "path": "out/native-ascent/talus-stairs-up-f200-x712-r1/native-stderr.txt",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "out/native-ascent/talus-stairs-up-f200-x712-r1/result.json",
+      "bytes": 3444,
+      "sha256": "c644da50dce2b2e74739080c61025ec70c5bad619bce0b26e1ad4e3420741d95"
+    },
+    {
+      "path": "out/native-ascent/talus-stairs-up-f200-x712-r1/trial.json",
+      "bytes": 726,
+      "sha256": "916b0cb93693ecafe23394efb834bbbd684fdb1778f80a755b26dc9008828285"
+    },
+    {
+      "path": "out/native-ascent/talus-stairs-up-f200-x712-r1/vertical-profile.json",
+      "bytes": 48127,
+      "sha256": "16af51dca93adc2762bfa1fca0d9bd5e5b93e2e6cf0e49ce770d07e41444726b"
+    },
+    {
+      "path": "out/native-ascent/talus-stairs-up-f400-x600-r1/commands.txt",
+      "bytes": 7728,
+      "sha256": "3cd3165b559b5b0d21dd64c834acbe09e0380033b700bbc0d853ad8acd316989"
+    },
+    {
+      "path": "out/native-ascent/talus-stairs-up-f400-x600-r1/frames.ndjson",
+      "bytes": 156093,
+      "sha256": "942e6a5ea7a0740950750f1355efa17c3ed80713def98853309809f9e755cff8"
+    },
+    {
+      "path": "out/native-ascent/talus-stairs-up-f400-x600-r1/native-stderr.txt",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "out/native-ascent/talus-stairs-up-f400-x600-r1/result.json",
+      "bytes": 3444,
+      "sha256": "65ef8d82ee911d5245d4869c7685dfa283ffe2ebbdf5fc48950dd0fca073b1d9"
+    },
+    {
+      "path": "out/native-ascent/talus-stairs-up-f400-x600-r1/trial.json",
+      "bytes": 726,
+      "sha256": "6366a45ffbabba1eb2877a34379eb469318fb9914f97b0d074632b8460553a7f"
+    },
+    {
+      "path": "out/native-ascent/talus-stairs-up-f400-x600-r1/vertical-profile.json",
+      "bytes": 32283,
+      "sha256": "757c8b5a6a961c3c374debfdb5f5673045c965c520cd75e9258bbd8ad89191f0"
+    },
+    {
+      "path": "out/native-ascent/talus-stairs-up-f400-x656-r1/commands.txt",
+      "bytes": 7728,
+      "sha256": "3cd3165b559b5b0d21dd64c834acbe09e0380033b700bbc0d853ad8acd316989"
+    },
+    {
+      "path": "out/native-ascent/talus-stairs-up-f400-x656-r1/frames.ndjson",
+      "bytes": 156093,
+      "sha256": "53291dbb773e5c9d0d759e032b933b9d7a4124d77b5d6ecaf994443fb4bb70b2"
+    },
+    {
+      "path": "out/native-ascent/talus-stairs-up-f400-x656-r1/native-stderr.txt",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "out/native-ascent/talus-stairs-up-f400-x656-r1/result.json",
+      "bytes": 3444,
+      "sha256": "905c312cf17a1f816cce89743d52fec56e881d42d83fae2ff60b9105bef333e5"
+    },
+    {
+      "path": "out/native-ascent/talus-stairs-up-f400-x656-r1/trial.json",
+      "bytes": 726,
+      "sha256": "f696570d95e70fcc3eac61ab1b1e9d14a87c2191c5ea59c6d4af45e9e4094fb3"
+    },
+    {
+      "path": "out/native-ascent/talus-stairs-up-f400-x656-r1/vertical-profile.json",
+      "bytes": 32283,
+      "sha256": "63a98172b105c3fe58e7f426814b9e21bcf874d3a08b836e4477a5eb50a013bb"
+    },
+    {
+      "path": "out/native-ascent/talus-stairs-up-f400-x656-r2/commands.txt",
+      "bytes": 7728,
+      "sha256": "3cd3165b559b5b0d21dd64c834acbe09e0380033b700bbc0d853ad8acd316989"
+    },
+    {
+      "path": "out/native-ascent/talus-stairs-up-f400-x656-r2/frames.ndjson",
+      "bytes": 156093,
+      "sha256": "53291dbb773e5c9d0d759e032b933b9d7a4124d77b5d6ecaf994443fb4bb70b2"
+    },
+    {
+      "path": "out/native-ascent/talus-stairs-up-f400-x656-r2/native-stderr.txt",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "out/native-ascent/talus-stairs-up-f400-x656-r2/result.json",
+      "bytes": 3220,
+      "sha256": "984aaa2c06f709455a36939a15d92ed183a25725ead399ed648fdb15cca315a6"
+    },
+    {
+      "path": "out/native-ascent/talus-stairs-up-f400-x656-r2/trial.json",
+      "bytes": 726,
+      "sha256": "fbb5e75b91eda166e89ef5dbbe874e1139795dfb0dc881903727d3e88745d95c"
+    },
+    {
+      "path": "out/native-ascent/talus-stairs-up-f400-x712-r1/commands.txt",
+      "bytes": 7728,
+      "sha256": "3cd3165b559b5b0d21dd64c834acbe09e0380033b700bbc0d853ad8acd316989"
+    },
+    {
+      "path": "out/native-ascent/talus-stairs-up-f400-x712-r1/frames.ndjson",
+      "bytes": 156093,
+      "sha256": "04c27b6ae769a0d5aed316612db8ca707ac380072a51647885f7b4b037aebf97"
+    },
+    {
+      "path": "out/native-ascent/talus-stairs-up-f400-x712-r1/native-stderr.txt",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "out/native-ascent/talus-stairs-up-f400-x712-r1/result.json",
+      "bytes": 3444,
+      "sha256": "c5a95d2b42bd523e7237b53cd0f426cd7d67cadc219616ff2e94f17dfb409743"
+    },
+    {
+      "path": "out/native-ascent/talus-stairs-up-f400-x712-r1/trial.json",
+      "bytes": 726,
+      "sha256": "cbd86ee367e7fe4848a8e282583223a571c682892128e4992360a47218398ef0"
+    },
+    {
+      "path": "out/native-ascent/talus-stairs-up-f400-x712-r1/vertical-profile.json",
+      "bytes": 32283,
+      "sha256": "5dd6f75e318e219b0bd63778b4c6bba3c737e1337583dea7a6622adcf5fc191e"
+    },
+    {
+      "path": "out/native-ascent/tests.log",
+      "bytes": 962,
+      "sha256": "d93e7a722258279c5942a1cb1a6dc1537ea8702ee72e9f08e78413dc49810b85"
+    },
+    {
+      "path": "out/native-ascent/verification.json",
+      "bytes": 1131,
+      "sha256": "d0c9b8df288c2fcfcc996cb0307d9df0f51b7111493403bfb7ff6f36d6a2c8c1"
+    },
+    {
+      "path": "out/native-ascent/verify_evidence.py",
+      "bytes": 11266,
+      "sha256": "b1deb19bd9941a295b118ded7fb64417888e92cd862a4957ee1beb5d5cc9baff"
+    },
+    {
+      "path": "out/native-movement/artifact-manifest.json",
+      "bytes": 32940,
+      "sha256": "fdab265b7f618e949babffce40ef4c8b5fabc426c1380b64e7915fee41a9d067"
+    },
+    {
+      "path": "out/native-movement/build-provenance.json",
+      "bytes": 3665,
+      "sha256": "b19bf77b1987f3035d60b46a3147eb33501184e41dc1f56c0af6253978d76a7a"
+    },
+    {
+      "path": "out/talus/qmg_talus.bsp",
+      "bytes": 337604,
+      "sha256": "6ac8fb109af4062fc08b51c5bc766edb36fd728f5afc7d2461f127c821329b03"
+    },
+    {
+      "path": "out/talus/qmg_talus.map",
+      "bytes": 104239,
+      "sha256": "4583964d19748a00b2686d2b30b48fa4131c852534786d0f75cc5574119f37a6"
+    },
+    {
+      "path": "out/talus-stairs/comparison.json",
+      "bytes": 155609,
+      "sha256": "cfea8e40e6b5d1836581bb86fbd7247dfb127cbd0b9d37bc5ed5412af48a20ae"
+    },
+    {
+      "path": "out/talus-stairs/qmg_talus_stairs.bsp",
+      "bytes": 341892,
+      "sha256": "b41c235f024f351c903c4da813512478ed50f75b285b9e75ff411f06d7daf740"
+    },
+    {
+      "path": "out/talus-stairs/qmg_talus_stairs.map",
+      "bytes": 108108,
+      "sha256": "39429344c545a08f508298ed17caafb19724f53f401e3e6b5cec2abc7f72b6e4"
+    },
+    {
+      "path": "tests/test_native_ascent.py",
+      "bytes": 3580,
+      "sha256": "14173f27a00bda84d13e6b82075da44ad1418d76b3708a8989a650fa2d1d1284"
+    },
+    {
+      "path": "tools/native_movement/ascent.py",
+      "bytes": 13495,
+      "sha256": "3c3f806623bb8a1457a91ace728f84a65e6f485bee8e762c62b4c10a128a8cdc"
+    },
+    {
+      "path": "tools/native_movement/reference.json",
+      "bytes": 1204,
+      "sha256": "b1ec942ca5126b5cf535cf3e0ca049901401c454e30684ae94241d3d88678d40"
+    },
+    {
+      "path": "tools/native_movement/run.py",
+      "bytes": 16756,
+      "sha256": "58177a70d4b12a9687d65f2fb1e1f2c9c72e4e05e1e9df10da8d17b26da5a8c2"
+    }
+  ]
+}
