@@ -1,7 +1,9 @@
-#include "app/model_viewport.h"
+#include "app/model_viewport_p.h"
 #include "core/model_collision.h"
 #include "core/model_tags.h"
 #include "core/model_surface_selection.h"
+#include "core/model_joint_tools.h"
+#include "core/model_skeleton.h"
 
 #include <QApplication>
 #include <QPainter>
@@ -81,6 +83,7 @@ void ModelViewport::setEditSelection(int surface, const QSet<int> &vertices)
 	m_editVertices = std::move(valid);
 	if (!m_editVertices.isEmpty())
 	{
+		m_editJoint.clear();
 		m_editTag.clear();
 		m_editCollision.clear();
 	}
@@ -100,6 +103,7 @@ void ModelViewport::setEditSurfaces(int active, const QSet<int> &surfaces)
 	m_editSurfaces = surfaces;
 	if (!surfaces.isEmpty())
 	{
+		m_editJoint.clear();
 		m_editTag.clear();
 		m_editCollision.clear();
 	}
@@ -156,6 +160,7 @@ void ModelViewport::setEditTag(const QString &name)
 	m_editTag = valid;
 	if (!valid.isEmpty())
 	{
+		m_editJoint.clear();
 		m_editCollision.clear();
 		m_editVertices.clear();
 		m_editSurfaces.clear();
@@ -169,6 +174,11 @@ void ModelViewport::setEditTag(const QString &name)
 }
 bool ModelViewport::tagPose(const QString &name, ModelTag *result) const
 {
+	if ((m_editMoveActive || m_mirroredJointPreview) && !m_editJoint.isEmpty() && m_presentedRaster &&
+		m_presentedRaster->editJoint == m_editJoint && m_presentedRaster->frame == m_frame && result)
+	{
+		if (const auto tag = findModelTag(m_presentedRaster->mesh, name, m_frame)) { *result = *tag; return true; }
+	}
 	const auto tag = findModelTag(m_mesh, name, m_frame);
 	if (!tag || !result)
 	{
@@ -341,6 +351,17 @@ bool ModelViewport::editPivot(ModelVec3 *pivot) const
 			return true;
 		}
 		return modelTransformPivot({pose.centre}, {0}, m_transformPivot, m_customTransformPivot, pivot);
+	}
+	if (pivot && !m_editJoint.isEmpty())
+	{
+		ModelJointMatrix pose;
+		if (!m_showJoints || !jointPose(m_editJoint, &pose)) return false;
+		if (m_editMoveActive)
+		{
+			*pivot = add(m_editTransform.pivot, modelBasisToWorld(m_editTransform.translation, m_editTransform.basis));
+			return true;
+		}
+		return modelTransformPivot({modelJointTranslation(pose)}, {0}, m_transformPivot, m_customTransformPivot, pivot);
 	}
 	if (pivot && !m_editTag.isEmpty())
 	{
@@ -616,7 +637,7 @@ bool ModelViewport::beginEditTransform(const QPointF &point)
 	// Semantic gesture requests retain their pause-before-edit contract. Pointer
 	// navigation skips this entry point while smooth playback hides the handles.
 	if (m_playing && (m_interpolateAnimation || m_nativeMdl) && m_moveGizmo && !m_looking && finite(point) &&
-		(!m_editSurfaces.isEmpty() || !m_editVertices.isEmpty() || !m_editTag.isEmpty() || !m_editCollision.isEmpty()))
+		(!m_editSurfaces.isEmpty() || !m_editVertices.isEmpty() || !m_editTag.isEmpty() || !m_editCollision.isEmpty() || !m_editJoint.isEmpty()))
 	{
 		pause();
 	}
@@ -691,6 +712,7 @@ bool ModelViewport::beginEditTransform(const QPointF &point)
 		return false;
 	}
 	m_editMoveActive = true;
+	m_jointPreviewError.clear();
 	m_editMoveTravelled = false;
 	m_editTransformValid = true;
 	m_transformHandle = handle;
@@ -802,9 +824,15 @@ bool ModelViewport::updateEditTransform(const QPointF &point)
 		valid = box && sampleModelCollisionBox(*box, m_frame, m_frame, 0, &pose) && transformModelCollisionBox(pose, candidate, &transformed);
 	}
 	m_editMoveTravelled = true;
+	if (valid && !m_editJoint.isEmpty())
+	{
+		ModelJointMatrix delta;
+		valid = modelJointTransformDelta(candidate, &delta);
+	}
 	m_editTransformValid = valid;
 	if (valid)
 	{
+		m_jointPreviewError.clear();
 		m_editTransform = candidate;
 		invalidateProjection();
 	}
@@ -905,6 +933,7 @@ QVector<ModelViewport::TagOverlay> ModelViewport::projectTagOverlays() const
 
 void ModelViewport::paintEditOverlays(QPainter &painter)
 {
+	paintJointOverlays(painter);
 	struct Annotation
 	{
 		QPointF anchor;
@@ -913,6 +942,15 @@ void ModelViewport::paintEditOverlays(QPainter &painter)
 	};
 	QVector<Annotation> annotations;
 	QVector<QRectF> occupied;
+	if (m_showJoints && !m_raster.image.isNull())
+	{
+		const auto centre = jointScreenPosition(m_editJoint);
+		if (finite(centre) && jointVisible(m_editJoint))
+		{
+			annotations.append({centre, m_editJoint, 0});
+			occupied.append(QRectF(centre - QPointF(10, 10), QSizeF(20, 20)));
+		}
+	}
 	painter.save();
 	painter.setRenderHint(QPainter::Antialiasing, false);
 	const QColor accent = palette().color(QPalette::Highlight);

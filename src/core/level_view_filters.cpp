@@ -1,5 +1,7 @@
 #include "core/level_view_filters.h"
 
+#include "core/entity_builtin_catalogue.h"
+
 #include <QCoreApplication>
 #include <QSet>
 
@@ -28,9 +30,15 @@ struct FilterEntry {
 
 constexpr FilterEntry kQuakeFilters[] = {
 	{"world", QT_TRANSLATE_NOOP("VibeStudioLevelViewFilters", "World Brushes"),
-		QT_TRANSLATE_NOOP("VibeStudioLevelViewFilters", "Brushes and patches that belong to worldspawn.")},
+		QT_TRANSLATE_NOOP("VibeStudioLevelViewFilters", "Worldspawn, func_group and func_detail with their brushes and patches, the world as Radiant counts it.")},
+	{"entities", QT_TRANSLATE_NOOP("VibeStudioLevelViewFilters", "Entities"),
+		QT_TRANSLATE_NOOP("VibeStudioLevelViewFilters", "Every entity but worldspawn, func_group and func_detail: point entities, and brush entities such as doors and triggers.")},
+	{"brushes", QT_TRANSLATE_NOOP("VibeStudioLevelViewFilters", "Brushes"),
+		QT_TRANSLATE_NOOP("VibeStudioLevelViewFilters", "Every brush, whether it belongs to the world or to an entity. Patches are not brushes.")},
 	{"brush-entities", QT_TRANSLATE_NOOP("VibeStudioLevelViewFilters", "Brush Entities"),
-		QT_TRANSLATE_NOOP("VibeStudioLevelViewFilters", "Doors, platforms, func_groups and every other entity made of brushes.")},
+		QT_TRANSLATE_NOOP("VibeStudioLevelViewFilters", "Doors, platforms, triggers and every other entity made of brushes, other than func_group and func_detail.")},
+	{"func-groups", QT_TRANSLATE_NOOP("VibeStudioLevelViewFilters", "Func Groups"),
+		QT_TRANSLATE_NOOP("VibeStudioLevelViewFilters", "func_group entities with their brushes and patches. Scene groups have their own visibility.")},
 	{"patches", QT_TRANSLATE_NOOP("VibeStudioLevelViewFilters", "Patches"),
 		QT_TRANSLATE_NOOP("VibeStudioLevelViewFilters", "Quake III curved surfaces.")},
 	{"detail", QT_TRANSLATE_NOOP("VibeStudioLevelViewFilters", "Detail"),
@@ -46,7 +54,7 @@ constexpr FilterEntry kQuakeFilters[] = {
 	{"liquids", QT_TRANSLATE_NOOP("VibeStudioLevelViewFilters", "Liquids"),
 		QT_TRANSLATE_NOOP("VibeStudioLevelViewFilters", "Water, slime and lava brushes.")},
 	{"point-entities", QT_TRANSLATE_NOOP("VibeStudioLevelViewFilters", "Point Entities"),
-		QT_TRANSLATE_NOOP("VibeStudioLevelViewFilters", "Every entity with no brushes of its own.")},
+		QT_TRANSLATE_NOOP("VibeStudioLevelViewFilters", "Point entities such as player starts, items and monsters, but not lights and models, which have filters of their own.")},
 	{"lights", QT_TRANSLATE_NOOP("VibeStudioLevelViewFilters", "Lights"),
 		QT_TRANSLATE_NOOP("VibeStudioLevelViewFilters", "Entities whose class begins with light.")},
 	{"triggers", QT_TRANSLATE_NOOP("VibeStudioLevelViewFilters", "Triggers"),
@@ -153,6 +161,37 @@ bool classStarts(const QString& className, std::initializer_list<const char*> pr
 	return false;
 }
 
+bool isLightClass(const QString& className)
+{
+	return classStarts(className, {"light"});
+}
+
+bool isModelClass(const QString& className)
+{
+	return classStarts(className, {"misc_model", "misc_gamemodel"});
+}
+
+// Whether the built-in Quake, Quake II or Quake III catalogue defines a class
+// as made of brushes. An entity of such a class is a brush entity even before
+// it has brushes, as Radiant's entity classes make it a container; a class no
+// catalogue knows is judged by whether it owns brushes or patches. No class is
+// a point class in one catalogue and a brush class in another.
+bool isBuiltinBrushClass(const QString& className)
+{
+	static const QSet<QString> classes = [] {
+		QSet<QString> names;
+		for (const BuiltinEntityGame game : {BuiltinEntityGame::Quake, BuiltinEntityGame::Quake2, BuiltinEntityGame::Quake3}) {
+			for (const EntityClassDefinition& definition : builtinEntityDefinitions(game).classes) {
+				if (definition.kind == EntityClassKind::Brush) {
+					names.insert(definition.className.toLower());
+				}
+			}
+		}
+		return names;
+	}();
+	return classes.contains(className.trimmed().toLower());
+}
+
 int worldEntityId(const LevelMapDocument& document)
 {
 	for (const LevelMapEntity& entity : document.entities) {
@@ -187,6 +226,35 @@ QString doomCategoryOf(const LevelMapDocument& document, int type)
 }
 
 } // namespace
+
+QVector<LevelViewFilter> levelViewFilterKinds()
+{
+	QVector<LevelViewFilter> kinds;
+	for (const FilterEntry& entry : kQuakeFilters) {
+		kinds.push_back({QString::fromLatin1(entry.id), translated(entry.title), translated(entry.description)});
+	}
+	return kinds;
+}
+
+QString levelViewFilterCommandId(const QString& filterId)
+{
+	// Doom categories are numbered from the open map's thing table.
+	if (filterId.isEmpty() || filterId.contains(QLatin1Char(':'))) {
+		return QString();
+	}
+	QString id = QStringLiteral("map.filter");
+	for (const QString& part : filterId.split(QLatin1Char('-'), Qt::SkipEmptyParts)) {
+		id += part.left(1).toUpper() + part.mid(1);
+	}
+	return id;
+}
+
+bool levelViewFilterWorldClass(const QString& className)
+{
+	const QString name = className.trimmed();
+	return name.compare(QStringLiteral("worldspawn"), Qt::CaseInsensitive) == 0 || name.compare(QStringLiteral("func_group"), Qt::CaseInsensitive) == 0
+		|| name.startsWith(QStringLiteral("func_detail"), Qt::CaseInsensitive);
+}
 
 QVector<LevelViewFilter> levelViewFilters(const LevelMapDocument& document)
 {
@@ -260,6 +328,8 @@ QVector<LevelMapSelectionRef> levelViewFilterMatches(const LevelMapDocument& doc
 		owners.insert(patch.entityId);
 	}
 	if (filterId == QLatin1String("world")) {
+		// Worldspawn's own brushes and patches, then the func_group and
+		// func_detail entities, whose brushes and patches go with them.
 		for (const LevelMapBrush& brush : document.brushes) {
 			if (brush.entityId == world) {
 				matches.push_back({LevelMapSelectionKind::QuakeBrush, brush.id});
@@ -269,6 +339,17 @@ QVector<LevelMapSelectionRef> levelViewFilterMatches(const LevelMapDocument& doc
 			if (patch.entityId == world) {
 				matches.push_back({LevelMapSelectionKind::QuakePatch, patch.id});
 			}
+		}
+		for (const LevelMapEntity& entity : document.entities) {
+			if (entity.id != world && levelViewFilterWorldClass(entity.className)) {
+				matches.push_back({LevelMapSelectionKind::Entity, entity.id});
+			}
+		}
+		return matches;
+	}
+	if (filterId == QLatin1String("brushes")) {
+		for (const LevelMapBrush& brush : document.brushes) {
+			matches.push_back({LevelMapSelectionKind::QuakeBrush, brush.id});
 		}
 		return matches;
 	}
@@ -306,14 +387,20 @@ QVector<LevelMapSelectionRef> levelViewFilterMatches(const LevelMapDocument& doc
 		if (entity.id == world) {
 			continue;
 		}
-		const bool ownsGeometry = owners.contains(entity.id);
+		// A brush entity owns brushes or patches, or has a brush class.
+		const bool brushEntity = owners.contains(entity.id) || isBuiltinBrushClass(entity.className);
+		const bool worldClass = levelViewFilterWorldClass(entity.className);
 		bool match = false;
-		if (filterId == QLatin1String("brush-entities")) {
-			match = ownsGeometry;
+		if (filterId == QLatin1String("entities")) {
+			match = !worldClass;
+		} else if (filterId == QLatin1String("brush-entities")) {
+			match = brushEntity && !worldClass;
+		} else if (filterId == QLatin1String("func-groups")) {
+			match = entity.className.trimmed().compare(QStringLiteral("func_group"), Qt::CaseInsensitive) == 0;
 		} else if (filterId == QLatin1String("point-entities")) {
-			match = !ownsGeometry;
+			match = !brushEntity && !worldClass && !isLightClass(entity.className) && !isModelClass(entity.className);
 		} else if (filterId == QLatin1String("lights")) {
-			match = classStarts(entity.className, {"light"});
+			match = isLightClass(entity.className);
 		} else if (filterId == QLatin1String("triggers")) {
 			match = classStarts(entity.className, {"trigger_"});
 		} else if (filterId == QLatin1String("monsters")) {
@@ -325,7 +412,7 @@ QVector<LevelMapSelectionRef> levelViewFilterMatches(const LevelMapDocument& doc
 		} else if (filterId == QLatin1String("paths")) {
 			match = classStarts(entity.className, {"path_"});
 		} else if (filterId == QLatin1String("models")) {
-			match = classStarts(entity.className, {"misc_model", "misc_gamemodel"});
+			match = isModelClass(entity.className);
 		}
 		if (match) {
 			matches.push_back({LevelMapSelectionKind::Entity, entity.id});
@@ -356,6 +443,49 @@ QVector<LevelMapSelectionRef> levelViewFilteredObjects(const LevelMapDocument& d
 		}
 	}
 	return objects;
+}
+
+QStringList levelViewFiltersInverted(const LevelMapDocument& document, const QStringList& hiddenFilterIds)
+{
+	const QVector<LevelViewFilter> offered = levelViewFilters(document);
+	QSet<QString> offeredIds;
+	for (const LevelViewFilter& filter : offered) {
+		offeredIds.insert(filter.id);
+	}
+	QStringList inverted;
+	for (const QString& id : hiddenFilterIds) {
+		if (!offeredIds.contains(id) && !inverted.contains(id)) {
+			inverted << id;
+		}
+	}
+	for (const LevelViewFilter& filter : offered) {
+		if (!hiddenFilterIds.contains(filter.id)) {
+			inverted << filter.id;
+		}
+	}
+	return inverted;
+}
+
+QString levelViewFiltersSettingsKey()
+{
+	return QStringLiteral("levelView/filtersOff");
+}
+
+QStringList levelViewFiltersFromSaved(const QByteArray& saved)
+{
+	QStringList ids;
+	for (const QString& part : QString::fromUtf8(saved).split(QLatin1Char(','), Qt::SkipEmptyParts)) {
+		const QString id = part.trimmed();
+		if (!id.isEmpty() && !ids.contains(id)) {
+			ids << id;
+		}
+	}
+	return ids;
+}
+
+QByteArray levelViewFiltersSavedValue(const QStringList& hiddenFilterIds)
+{
+	return levelViewFiltersFromSaved(hiddenFilterIds.join(QLatin1Char(',')).toUtf8()).join(QLatin1Char(',')).toUtf8();
 }
 
 } // namespace vibestudio

@@ -3,6 +3,7 @@
 #include "app/level_prefab_dialog.h"
 #include "app/model_viewport.h"
 #include "app/studio_theme.h"
+#include "core/level_scene.h"
 #include "tests/level_material_test_helpers.h"
 #include "tests/model_viewport_test_helpers.h"
 #include <QAccessible>
@@ -80,6 +81,13 @@ int main(int argc, char **argv)
 	}
 	selection << LevelMapSelectionRef{LevelMapSelectionKind::Entity, source.entities.last().id};
 	setLevelMapSelection(&source, selection);
+	QString assemblyGroup, detailGroup;
+	ok &= expect(createLevelSceneNode(&source,LevelSceneNodeKind::Group,QStringLiteral("Assembly"),{},&assemblyGroup,&error) &&
+		createLevelSceneNode(&source,LevelSceneNodeKind::Group,QStringLiteral("Detail"),assemblyGroup,&detailGroup,&error),"prefab group fixture",error);
+	QStringList members;
+	for (const auto& ref : selection) { members << levelMapSelectionRefId(ref); }
+	ok &= expect(assignLevelSceneObjects(&source,assemblyGroup,members,&error) &&
+		assignLevelSceneObjects(&source,detailGroup,{members.first()},&error),"prefab nested membership",error);
 	const auto original = serializeLevelMap(source).bytes;
 	PackageArchive archive;
 	ok &= expect(archive.load(temp.filePath(QStringLiteral("assets")), &error), "package assets", error);
@@ -142,7 +150,8 @@ int main(int argc, char **argv)
 		auto *apply = dialog.findChild<QDialogButtonBox *>()->button(QDialogButtonBox::Ok);
 		ok &= expect(preview && preview->hasMesh() && preview->hasSkin() && preview->reducedMotion(), "shared textured model renderer");
 		ok &= expect(dialog.previewDocument().brushes.size() == 2 && dialog.previewDocument().patches.size() == 1 &&
-						 dialog.previewDocument().entities.size() == 2 && serializeLevelMap(target).bytes == targetBytes,
+						 dialog.previewDocument().entities.size() == 2 && dialog.previewDocument().scene.nodes.size() == 2 &&
+						 validateLevelScene(dialog.previewDocument(),dialog.previewDocument().scene,&error) && serializeLevelMap(target).bytes == targetBytes,
 					 "immutable candidate contains complete assembly");
 		ok &= expect(position->layoutDirection() == Qt::LeftToRight && !position->accessibleDescription().isEmpty() &&
 						 position->focusPolicy() != Qt::NoFocus &&

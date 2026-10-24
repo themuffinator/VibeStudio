@@ -36,6 +36,9 @@ current package or staged plan; the recipe does not remember a package path.
 6. Save the assembly source. **Reload Inputs** reads fresh model and linked-skin snapshots.
    Staging and palette changes refresh the current package context.
 
+To edit an existing Quake III player, **Open Player…** builds the whole assembly
+from the package in one step; see [Opening a Quake III player](#opening-a-quake-iii-player).
+
 **Play** uses elapsed time; the time field also samples exact times while paused.
 Reduced motion disables automatic playback and retains manual sampling. The
 displayed time always describes the completed composed pose. Reflected tags
@@ -96,7 +99,8 @@ cannot collapse different surfaces from one part into the same native name.
 Their normal mesh/native export, package staging and level-placement workflows
 then apply. Bakes do not publish a companion `.skin` file or retain a live skin
 link. Original model, skin, package and recipe inputs are protected by write
-guards. Player-bundle publication, live skin selection in ordinary model browsers
+guards. [Native player packages](#native-player-packages) publish linked skins
+and further skins as `.skin` files. Live skin selection in ordinary model browsers
 or level instances, source-port hiding directives and full shader effects remain
 separate work.
 
@@ -167,6 +171,13 @@ the draft. Source-port extensions require their own explicit support. Limits
 are 19,998 bytes, 1–1,024 frames per clip, 0–count loop frames, 0.001–1,000 FPS
 and adjusted ranges within the modeller's 1,024-pose limit.
 
+**Import from Package…** reads an `animation.cfg` entry of the current package or
+folder instead, with the same rules and limits. It lists every `animation.cfg` in
+the package by path; a path that appears more than once shows its entry number, so
+each choice is exact. The package is not changed, and **Apply** makes the import one
+undoable edit. On the command line, `animation-set --config-entry PATH` reads the
+entry from `--package`; a repeated path needs `--config-entry-index N`.
+
 **Apply and Export…** commits the configuration, then writes a `.cfg` derivative
 using the normal overwrite and input-protection guards. Export retains settings
 but normalizes whitespace/comments and writes all 31 rows in native order.
@@ -181,8 +192,7 @@ Export the original lower/upper models with matching poses and attachment tags
 for use with this configuration. A composed bake has different frame numbering
 and must not reuse the original configuration automatically. Package the native
 configuration through the existing file import/staging workflow, or publish the
-complete [native player package](#native-player-packages). Direct config import
-from a package entry, generated flag and
+complete [native player package](#native-player-packages). Generated flag and
 backward-walk runtime slots, source-port dialects, Quake/Quake II game-code
 configuration and original-engine gameplay acceptance remain separate work.
 
@@ -197,8 +207,8 @@ vibestudio --cli model assembly ./player-native.assembly.json \
   --operation animation-clear --output ./player-ordinary.assembly.json --json
 ```
 
-`animation-set` requires `--config`, `--lower-part` and `--upper-part` for a new
-binding. For an existing binding, supply only the configuration or choices to
+`animation-set` requires `--config` (or `--config-entry`), `--lower-part` and
+`--upper-part` for a new binding. For an existing binding, supply only the configuration or choices to
 change; slot names are exact native identifiers. `inspect --time`, `bake` and
 `bake-animation` use the saved native selections. JSON retains configuration,
 input fingerprints, actual frame samples and normalization notes. Native
@@ -208,13 +218,101 @@ Native operations share package contexts, dry runs and guarded writes with other
 assembly operations. The loose `--config` path resolves from the CLI working
 directory.
 
+## Opening A Quake III Player
+
+**Open Player…** opens a Quake III player of the current package or folder as a
+new, unsaved assembly, ready to edit and to publish again with
+[Player Package…](#native-player-packages). It lists every `models/players/<name>/`
+folder that holds player files. Each entry shows its complete skins, detail levels
+and custom sounds, and says why a player cannot be opened. Choose a player and one
+of its complete skins, then **Open**. Unsaved changes to the current assembly are
+offered for saving first, as with **Open…**.
+
+The new assembly has three package parts:
+
+- `lower` is the root and reads `lower.md3`;
+- `upper` sits on lower's `tag_torso` and reads `upper.md3`;
+- `head` sits on upper's `tag_head` and reads `head.md3`.
+
+Each part has an identity transform and links its `<part>_<skin>.skin` from the
+package, so the preview shows the chosen skin. The models keep their own frames
+and attachment tags. Native animation comes from the player's `animation.cfg`,
+read with the import rules above, and previews `LEGS_IDLE` and `TORSO_STAND`.
+
+**Player Package…** is filled in from the package as well:
+
+- the player ID, the chosen skin ID, `head` as the head part, and
+  `icon_<skin>.tga` as the icon;
+- every other complete skin, with its `.skin` files and icon;
+- **Team skins** on when both red and blue are complete;
+- the custom sounds found under `sound/player/<name>/`.
+
+These settings last for the session. They are not saved in the assembly source.
+
+A player cannot be opened when `lower.md3`, `upper.md3`, `head.md3` or
+`animation.cfg` is missing or repeated, or when no skin has all three `.skin` files.
+A package part must name a unique path, so a repeated model path cannot be used.
+Paths match without regard to case, as the game's filesystem does. The notes after
+opening name what was left out:
+
+- incomplete skins, which the game could not load either;
+- detail levels (`lower_1.md3` and so on): the assembly uses the full-detail models,
+  and **Detail levels** can generate new ones;
+- a skin without an icon (the game shows its default model for it), and skins that
+  will reuse the package icon;
+- a player name that does not fit Player Package's ID rules.
+
+Opening reads entry metadata and `animation.cfg` only. No package file is changed,
+the assembly can only be saved outside the package or folder, and Player Package
+refuses to publish over it. Reviewing a player that VibeStudio published reproduces
+the same models, skins, icons, `animation.cfg`, sounds and dependencies byte for
+byte. Only the receipt differs, because it records the new sources. Skins are
+listed `default` first, then by name.
+
+The importer reads the base player layout from the original
+[`cg_players.c`](https://github.com/id-Software/Quake-III-Arena/blob/master/code/cgame/cg_players.c).
+It does not read Team Arena's `models/players/characters/` and
+`models/players/heads/` folders, separate head models, team folder skins or
+`icon_<skin>.skin`.
+
+```sh
+vibestudio --cli model assembly --operation players --package ./mymod.pk3 --json
+vibestudio --cli model assembly --new --from-player myplayer --skin-name blue \
+  --package ./mymod.pk3 --output ./myplayer.assembly.json --json
+vibestudio --cli model assembly ./myplayer.assembly.json --operation animation-set \
+  --package ./mymod.pk3 --config-entry models/players/other/animation.cfg \
+  --output ./myplayer-other.assembly.json --json
+```
+
+`--operation players` takes only `--package` and lists each player with its
+models, `animation.cfg`, skins, icons, detail levels, sounds and problems.
+`--from-player NAME` needs `--new`, `--package` and `--output`. It also takes
+`--skin-name` (by default `default`, else the first complete skin), `--name`,
+`--overwrite` and `--dry-run`, and refuses every part-editing option. Like any
+assembly edit, it writes the source only when the parts resolve. JSON reports
+`operation` as `open-player` and adds `player`: the listing, the notes and
+`publication`. `publication.arguments` holds
+the `player-review` options that publish the player again, for example:
+
+```sh
+vibestudio --cli model assembly ./myplayer.assembly.json --operation player-review \
+  --package ./mymod.pk3 --player-name myplayer --skin-name blue --head-part head \
+  --icon models/players/myplayer/icon_blue.tga --icon-kind package \
+  --skin-variants default --variant-skin default:lower=package:models/players/myplayer/lower_default.skin \
+  --variant-skin default:upper=package:models/players/myplayer/upper_default.skin \
+  --variant-skin default:head=package:models/players/myplayer/head_default.skin --json
+```
+
 ## Native Player Packages
 
-**Player Package…** publishes a non-team Quake III player from a resolved assembly.
-Configure **Native Animation…**, then use exactly three distinct parts: lower as
-the root, upper on lower's `tag_torso`, and a single-pose head on upper's `tag_head`.
-Merge accessories into those parts first. Choose a player ID, skin ID, head part
-and icon, then **Review Package**. The review lists every virtual path, role, byte
+**Player Package…** publishes a Quake III player from a resolved assembly: its
+models, every skin with its icon (including the red and blue team skins), detail
+levels and custom sounds. Configure **Native Animation…**, then use exactly three
+distinct parts: lower as the root, upper on lower's `tag_torso`, and a single-pose
+head on upper's `tag_head`. Upper must also have a `tag_weapon`, where the game
+holds the player's weapon. Merge accessories into those parts first. Choose a
+player ID, skin ID, head part and icon, then any more skins, detail levels and
+sounds (below), then **Review Package**. The review lists every virtual path, role, byte
 count and SHA-256, followed by target limitations. Selecting a file with the
 keyboard or pointer shows its complete path and hash in Details. Long names keep
 both ends visible when elided. Changing an option clears the
@@ -236,11 +334,16 @@ The package contains:
   native poses, surface materials and complete attachment tracks. Local transforms
   and inherited scale are baked into each part's vertices, normals, frame origins
   and tags. These remain separate animated models; no sampled composite is used.
-- `lower_<skin>.skin`, `upper_<skin>.skin`, `head_<skin>.skin` with normalized native
-  surface names and the resolved primary assignments, including linked `.skin`
-  overrides. Alternate material slots remain in the models.
-- `animation.cfg` with the original frame mapping, and `icon_<skin>.tga`, converted
-  through the Texture Editor's export service without changing the input image.
+- `lower_<skin>.skin`, `upper_<skin>.skin`, `head_<skin>.skin` for every skin, with
+  normalized native surface names. The package's own skin uses the resolved primary
+  assignments, including linked `.skin` overrides. Alternate material slots remain
+  in the models.
+- `animation.cfg` with the original frame mapping, and `icon_<skin>.tga` for every
+  skin, converted through the Texture Editor's export service without changing the
+  input image.
+- `lower_1.md3`, `lower_2.md3` and the same for upper and head when detail levels
+  are chosen.
+- `sound/player/<player>/<name>.wav` for each custom sound.
 - Referenced shader scripts and material images/videos, collected from every
   retained material slot through shared dependency validation. The captured bytes
   are checked again for a complete dependency closure before publication.
@@ -268,9 +371,8 @@ Unresolved, duplicate, unreadable or truncated dependencies block review. Limits
 are 4,096 output entries and 256 MiB total; individual source reads use the normal
 64 MiB modeller limit and shader scanning keeps its shared bounds.
 
-Select the result in non-team play as `<player>/<skin>`. Team variants, custom
-sounds, generated LODs and gameplay validation are separate work. The game supplies
-default player sounds. Whole referenced shader scripts are retained; review their
+Select the result in non-team play as `<player>/<skin>`. Gameplay validation is
+separate work. Whole referenced shader scripts are retained; review their
 other declarations for conflicts in the target game. Shader-language behavior,
 video decoding, procedural aiming and runtime tag interpolation are not certified
 by dependency closure. Editable collision boxes and custom clip metadata stay in
@@ -278,10 +380,75 @@ the source project, with normal exporter notes in the review. The package can be
 opened in the Package Manager for normal inspection and deployment workflows;
 publication does not modify the active project package or launch a game.
 
+### Skins and team skins
+
+A package publishes its own skin (the **Skin ID**, `default` unless changed) and
+any more skins listed under **More skins**. Each skin gets a `.skin` file per part
+and an icon. For each part, a skin takes, in order:
+
+1. a `.skin` file given for that part (a file, or `package:PATH` for a package entry);
+2. for the package's own skin, the part's linked assembly skin;
+3. the part's stored [skin variant](MODEL_SKIN_VARIANTS.md) of the same name;
+4. otherwise the part's own materials. The review notes every part this applies to.
+
+An empty **Icon** cell reuses the package icon. Every skin is checked before
+publication: its `.skin` must cover every surface of the part, and so of the part's
+detail levels, which keep the part's surface names.
+
+Team games use the red and blue skins whichever skin a player chooses: cgame looks
+for `lower_red.skin` (then `lower_<skin>_red.skin`) and `icon_red.tga`, and falls
+back to the game's default team model when a skin or icon is missing. **Team skins
+(red and blue)** adds red and blue when they are not listed. A team skin in which
+every part keeps its own materials is refused, because both teams would look the
+same: give at least one part a red or blue skin variant or `.skin` file. The
+optional engine oracle checks these lookups against the original
+`CG_RegisterClientModelname` (see [engine acceptance](MODEL_ENGINE_ACCEPTANCE.md)).
+
+### Completeness checks
+
+- Upper without `tag_weapon` is refused: the game would draw every held weapon at
+  the torso origin.
+- Upper without `tag_flag` is noted: a carried CTF flag then trails behind the
+  player instead of being held, as with the original id models.
+- Tags on the head are noted as unused; the head sits on upper's `tag_head`.
+- Missing custom sounds are noted: the game plays its default model's sounds
+  for each one.
+
+### Detail levels
+
+**Detail levels** chooses **None**, **Generate** (one or two levels per part, each
+keeping a share of the level above's triangles) or **Each part's stored detail
+levels** (the recipe a part's editable source stores, see
+[detail levels](MODEL_LOD.md); parts without one are noted). Levels are made in
+each part's own space and then placed like the part, so they keep its baked
+transform. Quake III reads tags from the base model only. Every level is checked
+as `model lod` checks a set: the base's frames and surface names, and the Quake
+III MD3 limits. A part read from a package cannot use hand-made levels.
+
+### Custom sounds
+
+**Custom sounds** lists the 13 sounds Quake III registers per player (`death1`,
+`death2`, `death3`, `jump1`, `pain25_1`, `pain50_1`, `pain75_1`, `pain100_1`,
+`falling1`, `gasp`, `drown`, `fall1` and `taunt`, from `cg_customSoundNames`). Each
+is published as `sound/player/<player>/<name>.wav`. A mono Microsoft PCM WAV is kept
+as it is (the game resamples other rates as it loads); any other audio the studio
+reads, including stereo WAV, MP3, FLAC and Vorbis, is converted to 22,050 Hz mono
+16-bit PCM with the Audio Editor's Quake III delivery. Unknown names, repeated
+names, unreadable audio and files over 16 MiB are refused.
+
+Receipt schema 2 records each skin's source per part and its icon, the detail
+levels with their triangle counts and the sounds with their source hashes. A
+single-skin package without detail levels or sounds keeps the schema 1 receipt.
+
 ```sh
 vibestudio --cli model assembly ./player.assembly.json --operation player-review \
   --player-name myplayer --skin-name default --head-part head \
   --icon ./icon.png --package ./assets --json
+vibestudio --cli model assembly ./player.assembly.json --operation player-review \
+  --player-name myplayer --head-part head --icon ./icon.png --package ./assets \
+  --team-variants --variant-skin blue:head=./head_blue.skin \
+  --variant-icon blue=package:textures/players/myplayer/icon_blue.tga \
+  --lod-levels 2 --lod-ratio 0.5 --sound death1=./sounds/death1.ogg --json
 vibestudio --cli model assembly ./player.assembly.json --operation player-export \
   --player-name myplayer --head-part head --icon textures/player/icon.tga \
   --icon-kind package --icon-entry-index 7 --package ./assets.vibepackage \
@@ -297,6 +464,15 @@ path. Text and JSON include dependencies and per-file hashes; export JSON includ
 `write.outputCommitted`, `dryRun`, `determinismVerified`, output hash, backup and
 recovery information, including publication failures. Each CLI invocation prepares
 its own current snapshot; a prior `player-review` is not a durable authorization token.
+
+More skins: `--skin-variants a,b` adds skins that use each part's stored skin
+variant of that name (else its own materials); `--team-variants` adds red and blue;
+repeated `--variant-skin NAME:ROLE=PATH` (ROLE is `lower`, `upper` or `head`) and
+`--variant-icon NAME=PATH` give a skin's `.skin` files and icon, which also add the
+skin. Detail levels: `--lod-levels 1-2` with `--lod-ratio 0.05-0.95` (default 0.5),
+or `--lod-recipes`. Sounds: repeated `--sound NAME=PATH`. A PATH starting with
+`package:` names a package entry; other paths are files resolved from the working
+directory. JSON adds `skins`, `teamSkins` and `sounds`.
 
 ## Baking And Studio Handoff
 

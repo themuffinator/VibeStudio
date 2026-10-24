@@ -1,4 +1,5 @@
 #include "app/level_surface_worker.h"
+#include "core/level_face_clipboard.h"
 #include "core/level_materials.h"
 #include "core/package_staging.h"
 #include <QCoreApplication>
@@ -24,12 +25,13 @@ bool LevelSurfaceWorker::start(LevelSurfaceWork request)
 	auto work = std::make_shared<Work>();
 	m_work = work;
 	work->result.token = request.token;
-	work->result.pasted = request.clipboard.ready();
+	work->result.pasted = request.clipboard.ready() || !request.faceClipboardText.isEmpty();
 	work->result.strokeResult = request.stroke || request.startStroke;
 	work->result.finishedStroke = request.finishStroke;
 	m_thread = QThread::create([work, request = std::move(request)]() mutable {
 		const auto cancelled = [work] { return work->cancelled.load(); };
 		try {
+			if (!request.faceClipboardText.isEmpty() && !parseLevelFaceClipboard(request.faceClipboardText, &request.clipboard, &work->result.error, cancelled)) { return; }
 			const auto describePlan = [&](const LevelSurfaceEditPlan& plan) {
 				work->result.changedFaces = plan.faceCount(); work->result.changedPatches = plan.patchCount();
 				work->result.convertedFaces = plan.convertedFaceCount(); work->result.edgeOnFaces = plan.edgeOnFaceCount();

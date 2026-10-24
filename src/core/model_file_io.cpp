@@ -10,6 +10,7 @@
 #include <QTemporaryFile>
 
 #include <algorithm>
+#include <filesystem>
 
 namespace vibestudio
 {
@@ -88,8 +89,20 @@ bool modelPathsReferToSameFile(const QString &first, const QString &second)
 	{
 		return false;
 	}
-	return sameResolved(QDir::cleanPath(QFileInfo(first).absoluteFilePath()), QDir::cleanPath(QFileInfo(second).absoluteFilePath())) ||
-		   sameResolved(resolvedDestination(first), resolvedDestination(second));
+	if (sameResolved(QDir::cleanPath(QFileInfo(first).absoluteFilePath()), QDir::cleanPath(QFileInfo(second).absoluteFilePath())) ||
+		sameResolved(resolvedDestination(first), resolvedDestination(second)))
+	{
+		return true;
+	}
+#ifdef Q_OS_WIN
+	const auto native = [](const QString &path) { return std::filesystem::path(path.toStdWString()); };
+#else
+	const auto native = [](const QString &path) { return std::filesystem::path(QFile::encodeName(path).constData()); };
+#endif
+	// Canonical paths resolve symbolic links; filesystem identity also recognises
+	// hard links. An absent/inaccessible second path is not evidence of an alias.
+	std::error_code error;
+	return std::filesystem::equivalent(native(first), native(second), error) && !error;
 }
 
 bool readModelFile(const QString &path, QByteArray *bytes, QString *error, const ModelWorkControl &control)
@@ -173,6 +186,29 @@ ModelWriteTarget inspectModelWriteTarget(const QString &path, const ModelWorkCon
 	return target;
 }
 
+bool validateModelWriteTarget(const ModelWriteTarget &target, QString *error, const ModelWorkControl &control)
+{
+	if (error)
+	{
+		error->clear();
+	}
+	if (!target.isValid())
+	{
+		return fail(error, target.error);
+	}
+	const auto current = inspectModelWriteTarget(target.path, control);
+	if (!current.isValid())
+	{
+		return fail(error, current.error);
+	}
+	if (current.existed != target.existed || current.sha256 != target.sha256 || !sameResolved(current.resolvedPath, target.resolvedPath))
+	{
+		return fail(error, QCoreApplication::translate("VibeStudioModelDocument",
+													 "The model destination changed after it was reviewed. No output was committed."));
+	}
+	return true;
+}
+
 bool writeModelFile(const ModelWriteTarget &target, const QByteArray &bytes, QString *error, const ModelWorkControl &control)
 {
 	if (error)
@@ -187,22 +223,7 @@ bool writeModelFile(const ModelWriteTarget &target, const QByteArray &bytes, QSt
 													 "A reviewed destination and nonempty model output no larger than 64 MiB are required.")
 					   : target.error);
 	}
-	const auto unchanged = [&]
-	{
-		const auto current = inspectModelWriteTarget(target.path, control);
-		if (!current.isValid())
-		{
-			return fail(error, current.error);
-		}
-		if (current.existed != target.existed || current.sha256 != target.sha256 ||
-			!sameResolved(current.resolvedPath, target.resolvedPath))
-		{
-			return fail(error,
-						QCoreApplication::translate("VibeStudioModelDocument",
-													"The model destination changed after it was reviewed. No output was committed."));
-		}
-		return true;
-	};
+	const auto unchanged = [&] { return validateModelWriteTarget(target, error, control); };
 	if (!unchanged())
 	{
 		return false;

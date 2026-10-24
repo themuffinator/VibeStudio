@@ -1,4 +1,5 @@
 #pragma once
+#include "core/model_vertex_identity.h"
 
 // Internal helpers shared by the mesh tool implementation files. Every helper
 // works on a candidate copy; applyModelEdit validates and commits the result.
@@ -76,7 +77,12 @@ bool reserveCapacity(const ModelMesh &mesh, int surface, qint64 addedVertices, q
 // Area-weighted normals for these vertices in every pose (or one pose). Seam
 // copies that currently share one normal stay smooth across the seam; copies
 // with different normals keep their hard edge.
-bool refreshNormals(ModelSurface *surface, const QSet<int> &vertices, ModelWorkProgress &work, int onlyFrame = -1);
+// Topology tools call the three-argument form: on skinned surfaces skin
+// reconciliation then rebinds the refreshed normals and poses them from the
+// skeleton in retained skeletal poses. Position tools pass their frame scope
+// and keep their own per-pose normals.
+bool refreshNormals(ModelSurface *surface, const QSet<int> &vertices, ModelWorkProgress &work);
+bool refreshNormals(ModelSurface *surface, const QSet<int> &vertices, ModelWorkProgress &work, int onlyFrame);
 // Seam marks must name existing edges; marks on removed edges are dropped.
 void pruneSeams(ModelSurface *surface);
 // Removes candidates that no triangle references any more. Vertices that were
@@ -119,9 +125,14 @@ bool shadeFaces(ModelMesh *mesh, const ModelEdit &edit, ModelSelection *selectio
 bool bisectFaces(ModelMesh *mesh, const ModelEdit &edit, ModelSelection *selection, QString *error, ModelWorkProgress &work);
 bool symmetrize(ModelMesh *mesh, const ModelEdit &edit, ModelSelection *selection, QString *error, ModelWorkProgress &work);
 bool loopCut(ModelMesh *mesh, const ModelEdit &edit, ModelSelection *selection, QString *error, ModelWorkProgress &work);
+bool slideEdges(ModelMesh *mesh, const ModelEdit &edit, ModelSelection *selection, QString *error, const ModelWorkControl &control);
 bool addPrimitive(ModelMesh *mesh, const ModelEdit &edit, ModelSelection *selection, QString *error, ModelWorkProgress &work);
 bool decimate(ModelMesh *mesh, const ModelEdit &edit, ModelSelection *selection, QString *error, ModelWorkProgress &work);
 bool bevelVertices(ModelMesh *mesh, const ModelEdit &edit, ModelSelection *selection, QString *error, ModelWorkProgress &work);
+bool bevelEdges(ModelMesh *mesh, const ModelEdit &edit, ModelSelection *selection, QString *error, const ModelWorkControl &control);
+bool knifeFaces(ModelMesh *mesh, const ModelEdit &edit, ModelSelection *selection, QString *error, const ModelWorkControl &control, ModelEditReport *report);
+bool spinGeometry(ModelMesh *mesh, const ModelEdit &edit, ModelSelection *selection, QString *error, const ModelWorkControl &control, ModelEditReport *report);
+bool ripGeometry(ModelMesh *mesh, const ModelEdit &edit, ModelSelection *selection, QString *error, const ModelWorkControl &control, ModelEditReport *report);
 bool solidify(ModelMesh *mesh, const ModelEdit &edit, ModelSelection *selection, QString *error, ModelWorkProgress &work);
 bool projectUvs(ModelMesh *mesh, const ModelEdit &edit, ModelSelection *selection, QString *error, ModelWorkProgress &work);
 } // namespace vibestudio::model_tools

@@ -1,30 +1,45 @@
 #include "app/model_editor_dialog.h"
+#include "core/model_lod.h"
+#include "app/dialog_screen_fit.h"
+#include "app/locale_number.h"
 #include "app/model_editor_tools.h"
 #include "app/studio_sidebar.h"
 #include "core/model_surfaces.h"
 
 #include "app/model_recovery_dialog.h"
 #include "app/model_recovery_writer.h"
+#include "app/model_skeletal_working_set_dialog.h"
 #include "app/model_uv_view.h"
 #include "app/model_viewport.h"
+#include "app/status_line_label.h"
+#include "app/studio_icons.h"
+#include "app/studio_layout.h"
+#include "app/wrapping_action_button.h"
+#include "app/wrapping_check_box.h"
 #include "core/model_tags.h"
 #include "core/model_transform_axes.h"
+#include "core/model_joint_tools.h"
+#include "core/model_skeleton.h"
 #include "core/studio_settings.h"
 
 #include <QAbstractTableModel>
 #include <QAction>
 #include <QCheckBox>
+#include <QClipboard>
 #include <QCloseEvent>
 #include <QComboBox>
 #include <QCoreApplication>
 #include <QDir>
 #include <QDoubleSpinBox>
+#include <QElapsedTimer>
 #include <QEvent>
 #include <QFileDialog>
 #include <QFileInfo>
 #include <QFormLayout>
+#include <QGuiApplication>
 #include <QHeaderView>
 #include <QItemSelectionModel>
+#include <QKeyEvent>
 #include <QLabel>
 #include <QLineEdit>
 #include <QMenu>
@@ -53,6 +68,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <memory>
 
 namespace vibestudio
 {
@@ -64,6 +80,7 @@ class ModelComponentView final : public QTableView
 		m_wholeSurfaces = enabled;
 		updateSurfaceMinimum();
 	}
+	[[nodiscard]] bool wholeSurfaceMode() const { return m_wholeSurfaces; }
 
   protected:
 	void changeEvent(QEvent *event) override
@@ -75,8 +92,31 @@ class ModelComponentView final : public QTableView
 			updateSurfaceMinimum();
 		}
 	}
+	void resizeEvent(QResizeEvent *event) override
+	{
+		QTableView::resizeEvent(event);
+		fitSurfaceColumns();
+	}
+	void keyPressEvent(QKeyEvent *event) override
+	{
+		// Copy takes the value as the C locale writes it (the edit role), so
+		// it pastes into files and the command line unchanged; the cell shows
+		// it the user's way.
+		if (event == QKeySequence::Copy && currentIndex().isValid())
+		{
+			QGuiApplication::clipboard()->setText(currentIndex().data(Qt::EditRole).toString());
+			event->accept();
+			return;
+		}
+		QTableView::keyPressEvent(event);
+	}
 
   private:
+	// Surfaces mode keeps each surface's name and both counts in view without
+	// scrolling the table: it is at least as wide as the three headings, and
+	// the name column takes what the counts leave (a long name elides, whole
+	// in its tooltip; material paths scroll). The editor refits the outliner
+	// page to this minimum. Other modes set none.
 	void updateSurfaceMinimum()
 	{
 		if (!m_wholeSurfaces || !model() || model()->columnCount() < 3)
@@ -84,11 +124,17 @@ class ModelComponentView final : public QTableView
 			setMinimumWidth(0);
 			return;
 		}
-		// Keep identity and both counts visible at large text sizes. Long names
-		// and material paths still use elision/tooltips and horizontal scrolling.
-		const int nameWidth = std::max(horizontalHeader()->sectionSizeHint(0), fontMetrics().horizontalAdvance(QString(24, 'n')));
-		setColumnWidth(0, std::min(columnWidth(0), nameWidth));
-		setMinimumWidth(columnWidth(0) + columnWidth(1) + columnWidth(2) + 2 * frameWidth() + style()->pixelMetric(QStyle::PM_ScrollBarExtent));
+		setMinimumWidth(horizontalHeader()->sectionSizeHint(0) + columnWidth(1) + columnWidth(2) + 2 * frameWidth() +
+						style()->pixelMetric(QStyle::PM_ScrollBarExtent));
+		fitSurfaceColumns();
+	}
+	void fitSurfaceColumns()
+	{
+		if (!m_wholeSurfaces || !model() || model()->columnCount() < 3)
+			return;
+		const int heading = horizontalHeader()->sectionSizeHint(0);
+		const int room = viewport()->width() - columnWidth(1) - columnWidth(2);
+		setColumnWidth(0, std::clamp(room, heading, std::max(heading, sizeHintForColumn(0))));
 	}
 	bool m_wholeSurfaces = false;
 };
@@ -120,6 +166,7 @@ class ModelComponentTable final : public QAbstractTableModel
 		}
 		const bool sameSurface = surface == m_surface && surface >= 0 && surface < m_mesh.surfaces.size() && surface < mesh.surfaces.size();
 		const bool reset = mode != m_mode || m_mesh.surfaces.size() != mesh.surfaces.size() || tags != m_tags || boxes != m_boxes ||
+			m_mesh.skeleton.joints.constData() != mesh.skeleton.joints.constData() ||
 			(mode != 5 && (!sameSurface || m_mesh.surfaces.at(surface).vertexCount != mesh.surfaces.at(surface).vertexCount ||
 			m_mesh.surfaces.at(surface).triangles.constData() != mesh.surfaces.at(surface).triangles.constData()));
 		const bool dataChanged = frame != m_frame || m_mesh.surfaces.constData() != mesh.surfaces.constData() ||
@@ -133,6 +180,8 @@ class ModelComponentTable final : public QAbstractTableModel
 		m_surface = surface;
 		m_frame = frame;
 		m_mode = mode;
+		m_jointFrame = {};
+		if (mode == 6) modelJointFrame(mesh, frame, &m_jointFrame);
 		m_tags = tags;
 		m_boxes = boxes;
 		if (mode == 2)
@@ -157,7 +206,7 @@ class ModelComponentTable final : public QAbstractTableModel
 			return 0;
 		}
 		const auto &s = m_mesh.surfaces[m_surface];
-		return m_mode == 5 ? m_mesh.surfaces.size() : m_mode == 4	 ? m_boxes.size()
+		return m_mode == 6 ? m_mesh.skeleton.joints.size() : m_mode == 5 ? m_mesh.surfaces.size() : m_mode == 4 ? m_boxes.size()
 			   : m_mode == 3 ? m_tags.size()
 			   : m_mode == 2 ? m_edges.size()
 			   : m_mode == 1 ? s.vertexCount
@@ -167,9 +216,25 @@ class ModelComponentTable final : public QAbstractTableModel
 	QVariant data(const QModelIndex &index, int role) const override
 	{
 		if (!index.isValid() || index.row() >= rowCount() || index.column() >= columnCount() ||
-			(role != Qt::DisplayRole && role != Qt::ToolTipRole))
+			(role != Qt::DisplayRole && role != Qt::ToolTipRole && role != Qt::EditRole))
 		{
 			return {};
+		}
+		// Coordinates and lengths read as the user's region writes them, as
+		// the fields beside the table do; the edit role (and so Copy) keeps
+		// the C locale.
+		const QVariant value = cell(index);
+		if (value.typeId() == QMetaType::Double)
+			return role == Qt::EditRole ? QString::number(value.toDouble(), 'g', 7) : localeNumber(value.toDouble(), 7);
+		return value;
+	}
+	QVariant cell(const QModelIndex &index) const
+	{
+		if (m_mode == 6)
+		{
+			if (index.column() == 0) return m_mesh.skeleton.joints[index.row()].name;
+			if (index.row() >= m_jointFrame.pose.size()) return QCoreApplication::translate("VibeStudioModelEditor", "Unavailable");
+			return double(m_jointFrame.pose[index.row()].m[(index.column() - 1) * 4 + 3]);
 		}
 		if (m_mode == 5)
 		{
@@ -192,7 +257,7 @@ class ModelComponentTable final : public QAbstractTableModel
 			ModelCollisionBox pose;
 			if (!sampleModelCollisionBox(box, m_frame, m_frame, 0, &pose)) return {};
 			const float values[]{pose.centre.x, pose.centre.y, pose.centre.z};
-			return QString::number(values[index.column() - 1], 'g', 7);
+			return double(values[index.column() - 1]);
 		}
 		if (m_mode == 3)
 		{
@@ -206,7 +271,7 @@ class ModelComponentTable final : public QAbstractTableModel
 				return tag->name;
 			}
 			const float values[]{tag->origin.x, tag->origin.y, tag->origin.z};
-			return QString::number(values[index.column() - 1], 'g', 7);
+			return double(values[index.column() - 1]);
 		}
 		if (index.column() == 0)
 		{
@@ -218,7 +283,7 @@ class ModelComponentTable final : public QAbstractTableModel
 			const auto p = surface.frames[m_frame].positions[index.row()];
 			const auto uv = surface.texCoords[index.row()];
 			const float values[] = {p.x, p.y, p.z, uv.u, uv.v};
-			return QString::number(values[index.column() - 1], 'g', 7);
+			return double(values[index.column() - 1]);
 		}
 		if (m_mode == 2)
 		{
@@ -236,7 +301,7 @@ class ModelComponentTable final : public QAbstractTableModel
 				return m_edgeUses.value(edge);
 			}
 			const auto a = surface.frames[m_frame].positions[edge.first], b = surface.frames[m_frame].positions[edge.second];
-			return QString::number(std::hypot(double(a.x) - b.x, double(a.y) - b.y, double(a.z) - b.z), 'g', 7);
+			return std::hypot(double(a.x) - b.x, double(a.y) - b.y, double(a.z) - b.z);
 		}
 		const auto t = surface.triangles[index.row()];
 		const int values[] = {t.a, t.b, t.c};
@@ -244,10 +309,23 @@ class ModelComponentTable final : public QAbstractTableModel
 	}
 	QVariant headerData(int section, Qt::Orientation orientation, int role) const override
 	{
-		if (role != Qt::DisplayRole || orientation != Qt::Horizontal)
+		if (orientation != Qt::Horizontal || (role != Qt::DisplayRole && role != Qt::ToolTipRole && role != Qt::AccessibleTextRole))
 		{
 			return {};
 		}
+		// A face's corners and an edge's ends are headed A, B and C; the
+		// tooltip and the spoken name say what each holds.
+		if (role != Qt::DisplayRole && (m_mode == 0 || m_mode == 2) && section >= 1 && section <= (m_mode == 0 ? 3 : 2))
+		{
+			const QStringList corners{QCoreApplication::translate("VibeStudioModelEditor", "First vertex index"),
+				QCoreApplication::translate("VibeStudioModelEditor", "Second vertex index"),
+				QCoreApplication::translate("VibeStudioModelEditor", "Third vertex index")};
+			return corners.value(section - 1);
+		}
+		return heading(section);
+	}
+	QString heading(int section) const
+	{
 		if (m_mode == 5)
 		{
 			const QStringList labels{QCoreApplication::translate("VibeStudioModelEditor", "Surface"),
@@ -258,6 +336,7 @@ class ModelComponentTable final : public QAbstractTableModel
 		}
 		if (section == 0)
 		{
+			if (m_mode == 6) return QCoreApplication::translate("VibeStudioModelEditor", "Joint");
 			if (m_mode == 4)
 			{
 				return QCoreApplication::translate("VibeStudioModelEditor", "Box");
@@ -283,6 +362,8 @@ class ModelComponentTable final : public QAbstractTableModel
 	}
 
 	ModelEdge edge(int row) const { return m_edges.value(row, {-1, -1}); }
+	QString joint(int row) const { return row >= 0 && row < m_mesh.skeleton.joints.size() ? m_mesh.skeleton.joints[row].name : QString{}; }
+	int jointRow(const QString &name) const { return modelJointIndex(m_mesh.skeleton, name, Qt::CaseSensitive); }
 	QString tag(int row) const { return m_tags.value(row); }
 	int tagRow(const QString &name) const { return m_tags.indexOf(name); }
 	QString collision(int row) const { return m_boxes.value(row); }
@@ -295,6 +376,7 @@ class ModelComponentTable final : public QAbstractTableModel
 
   private:
 	ModelMesh m_mesh;
+	ModelJointFrame m_jointFrame;
 	int m_surface = -1, m_frame = 0;
 	int m_mode = 0;
 	QVector<ModelEdge> m_edges;
@@ -309,17 +391,22 @@ ModelEditorDialog::ModelEditorDialog(QWidget *parent) : QDialog(parent)
 	setWindowTitle(QCoreApplication::translate("VibeStudioModelEditor", "Mesh Editor"));
 	setAccessibleName(QCoreApplication::translate("VibeStudioModelEditor", "Model mesh editor"));
 	setAttribute(Qt::WA_DeleteOnClose);
-	resize(1280, 850);
 	auto *layout = new QVBoxLayout(this);
-	auto *toolbar = new QToolBar(QCoreApplication::translate("VibeStudioModelEditor", "Mesh document actions"));
-	m_toolbar = toolbar;
-	toolbar->setObjectName(QStringLiteral("meshDocumentActions"));
-	toolbar->setAccessibleName(toolbar->windowTitle());
-	toolbar->setToolButtonStyle(Qt::ToolButtonTextOnly);
+	// The page around the editor has its own margins: the chrome stays slim.
+	layout->setContentsMargins(4, 0, 4, 2);
+	layout->setSpacing(4);
+	// The document commands make up the Model menu at the front of the editor's
+	// menu bar (model_editor_tools.cpp), as Blender's image and text editors
+	// name theirs after the document, and Undo and Redo lead the editing
+	// header: neither takes a row of its own from the views.
+	m_modelMenu = new QMenu(QCoreApplication::translate("VibeStudioModelEditor", "M&odel"), this);
+	m_modelMenu->setObjectName(QStringLiteral("meshMenuModel"));
+	m_modelMenu->setToolTipsVisible(true);
 	const auto action = [&](const QString &label, const QString &name, auto callback)
 	{
-		auto *result = toolbar->addAction(label);
+		auto *result = new QAction(label, this);
 		result->setObjectName(name);
+		m_documentActions << result;
 		connect(result, &QAction::triggered, this,
 				[this, callback]()
 				{
@@ -330,16 +417,23 @@ ModelEditorDialog::ModelEditorDialog(QWidget *parent) : QDialog(parent)
 				});
 		return result;
 	};
-	action(QCoreApplication::translate("VibeStudioModelEditor", "Open / Import…"), QStringLiteral("openMesh"), [this]() { open(); });
-	action(QCoreApplication::translate("VibeStudioModelImportRepair", "Repair Import…"), QStringLiteral("repairImportMesh"), [this]() { chooseRepairImport(); });
+	m_modelMenu->addAction(
+		action(QCoreApplication::translate("VibeStudioModelEditor", "Open / Import…"), QStringLiteral("openMesh"), [this]() { open(); }));
+	m_modelMenu->addAction(action(QCoreApplication::translate("VibeStudioModelImportRepair", "Repair Import…"),
+		QStringLiteral("repairImportMesh"), [this]() { chooseRepairImport(); }));
+	m_modelMenu->addAction(
+		action(QCoreApplication::translate("VibeStudioModelEditor", "Recover…"), QStringLiteral("recoverMesh"), [this]() { chooseRecovery(); }));
+	m_modelMenu->addSeparator();
 	auto *saveAction =
 		action(QCoreApplication::translate("VibeStudioModelEditor", "Save"), QStringLiteral("saveMesh"), [this]() { save(); });
+	saveAction->setIcon(studioIcon(QStringLiteral("save")));
 	saveAction->setShortcut(QKeySequence::Save);
 	saveAction->setShortcutContext(Qt::WidgetWithChildrenShortcut);
 	addAction(saveAction);
-	action(QCoreApplication::translate("VibeStudioModelEditor", "Save As…"), QStringLiteral("saveMeshAs"), [this]() { save(true); });
-	action(QCoreApplication::translate("VibeStudioModelEditor", "Recover…"), QStringLiteral("recoverMesh"), [this]() { chooseRecovery(); });
-	toolbar->addSeparator();
+	m_modelMenu->addAction(saveAction);
+	m_modelMenu->addAction(
+		action(QCoreApplication::translate("VibeStudioModelEditor", "Save As…"), QStringLiteral("saveMeshAs"), [this]() { save(true); }));
+	m_modelMenu->addSeparator();
 	m_undo = action(QCoreApplication::translate("VibeStudioModelEditor", "Undo"), QStringLiteral("undoMesh"),
 					[this]()
 					{
@@ -358,21 +452,22 @@ ModelEditorDialog::ModelEditorDialog(QWidget *parent) : QDialog(parent)
 					});
 	m_undo->setShortcut(QKeySequence::Undo);
 	m_redo->setShortcut(QKeySequence::Redo);
+	m_undo->setIcon(studioIcon(QStringLiteral("undo")));
+	m_redo->setIcon(studioIcon(QStringLiteral("redo")));
 	for (auto *a : {m_undo, m_redo})
 	{
 		a->setShortcutContext(Qt::WidgetWithChildrenShortcut);
 		addAction(a);
 	}
-	toolbar->addSeparator();
-	action(QCoreApplication::translate("VibeStudioModelEditor", "Export MDL…"), QStringLiteral("exportMeshMdl"),
-		   [this]() { exportModel(QStringLiteral("mdl")); });
-	action(QCoreApplication::translate("VibeStudioModelEditor", "Export MD2…"), QStringLiteral("exportMeshMd2"),
-		   [this]() { exportModel(QStringLiteral("md2")); });
-	action(QCoreApplication::translate("VibeStudioModelEditor", "Export MD3…"), QStringLiteral("exportMeshMd3"),
-		   [this]() { exportModel(QStringLiteral("md3")); });
-	action(QCoreApplication::translate("VibeStudioModelEditor", "Export OBJ Frame…"), QStringLiteral("exportMeshObj"),
-		   [this]() { exportModel(QStringLiteral("obj")); });
-	// The skeletal and idTech 4 formats share one menu so the header stays narrow.
+	m_modelMenu->addAction(action(QCoreApplication::translate("VibeStudioModelEditor", "Export MDL…"), QStringLiteral("exportMeshMdl"),
+		[this]() { exportModel(QStringLiteral("mdl")); }));
+	m_modelMenu->addAction(action(QCoreApplication::translate("VibeStudioModelEditor", "Export MD2…"), QStringLiteral("exportMeshMd2"),
+		[this]() { exportModel(QStringLiteral("md2")); }));
+	m_modelMenu->addAction(action(QCoreApplication::translate("VibeStudioModelEditor", "Export MD3…"), QStringLiteral("exportMeshMd3"),
+		[this]() { exportModel(QStringLiteral("md3")); }));
+	m_modelMenu->addAction(action(QCoreApplication::translate("VibeStudioModelEditor", "Export OBJ Frame…"), QStringLiteral("exportMeshObj"),
+		[this]() { exportModel(QStringLiteral("obj")); }));
+	// The skeletal and idTech 4 formats share one submenu.
 	auto *otherFormats = new QMenu(QCoreApplication::translate("VibeStudioModelEditor", "Export Other Format"), this);
 	otherFormats->setObjectName(QStringLiteral("meshExportFormatsMenu"));
 	otherFormats->menuAction()->setObjectName(QStringLiteral("exportMeshOtherFormat"));
@@ -397,7 +492,17 @@ ModelEditorDialog::ModelEditorDialog(QWidget *parent) : QDialog(parent)
 											 "Doom 3, Quake 4, Prey and Quake Wars meshes; a model without joints gets one origin joint."));
 	formatAction(QCoreApplication::translate("VibeStudioModelEditor", "MD5 Animation of Clip…"), QStringLiteral("exportMeshMd5Anim"),
 				 QStringLiteral("md5anim"),
-				 QCoreApplication::translate("VibeStudioModelEditor", "The skeletal clip the current frame belongs to, as an md5anim."));
+				 QCoreApplication::translate("VibeStudioModelEditor",
+											 "Choose a skeletal clip and its whole frame rate, then write it as an md5anim."));
+	{
+		auto *allClips = otherFormats->addAction(QCoreApplication::translate("VibeStudioModelEditor", "MD5 Animations of All Clips…"));
+		allClips->setObjectName(QStringLiteral("exportMeshMd5AnimAll"));
+		const auto tip = QCoreApplication::translate("VibeStudioModelEditor",
+													 "Write every skeletal clip as its own md5anim, named after the clip, into a folder.");
+		allClips->setToolTip(tip);
+		allClips->setStatusTip(tip);
+		connect(allClips, &QAction::triggered, this, [this]() { exportMd5Animation(true); });
+	}
 	formatAction(QCoreApplication::translate("VibeStudioModelEditor", "Inter-Quake Model (IQM)…"), QStringLiteral("exportMeshIqm"),
 				 QStringLiteral("iqm"),
 				 QCoreApplication::translate("VibeStudioModelEditor",
@@ -406,22 +511,23 @@ ModelEditorDialog::ModelEditorDialog(QWidget *parent) : QDialog(parent)
 				 QStringLiteral("ase"),
 				 QCoreApplication::translate("VibeStudioModelEditor",
 											 "The current frame as a static ASCII Scene Export for Doom 3, Quake 4 or q3map2 misc_model."));
-	toolbar->addAction(otherFormats->menuAction());
-	if (auto *button = qobject_cast<QToolButton *>(toolbar->widgetForAction(otherFormats->menuAction())))
-	{
-		button->setPopupMode(QToolButton::InstantPopup);
-		button->setAccessibleName(otherFormats->title());
-	}
+	otherFormats->setToolTipsVisible(true);
+	m_modelMenu->addMenu(otherFormats);
+	m_documentActions << otherFormats->menuAction();
+	m_modelMenu->addSeparator();
 	m_stage = action(QCoreApplication::translate("VibeStudioModelEditor", "Stage in Package"), QStringLiteral("stageMesh"),
 					 [this]() { stage(false); });
 	m_place = action(QCoreApplication::translate("VibeStudioModelEditor", "Stage and Place"), QStringLiteral("placeMesh"),
 					 [this]() { stage(true); });
-	layout->addWidget(toolbar);
-	m_context = new QLabel;
-	m_context->setWordWrap(true);
-	m_context->setTextFormat(Qt::PlainText);
+	m_modelMenu->addAction(m_stage);
+	m_modelMenu->addAction(m_place);
+	// The package and level the model hands off to: one line in the status
+	// strip, cut in the middle when long, with both paths in its tooltip.
+	auto *context = new StatusLineLabel;
+	context->setElideMode(Qt::ElideMiddle);
+	m_context = context;
+	m_context->setObjectName(QStringLiteral("meshContext"));
 	m_context->setAccessibleName(QCoreApplication::translate("VibeStudioModelEditor", "Model project context"));
-	layout->addWidget(m_context);
 	auto *splitter = new QSplitter;
 	m_editingControls = splitter;
 	splitter->setObjectName(QStringLiteral("meshEditingControls"));
@@ -439,21 +545,25 @@ ModelEditorDialog::ModelEditorDialog(QWidget *parent) : QDialog(parent)
 	m_selectionMode->addItems(
 		{QCoreApplication::translate("VibeStudioModelEditor", "Faces"), QCoreApplication::translate("VibeStudioModelEditor", "Vertices"),
 		 QCoreApplication::translate("VibeStudioModelEditor", "Edges"), QCoreApplication::translate("VibeStudioModelEditor", "Tags"),
-		 QCoreApplication::translate("VibeStudioModelEditor", "Collision"), QCoreApplication::translate("VibeStudioModelEditor", "Surfaces")});
+		 QCoreApplication::translate("VibeStudioModelEditor", "Collision"), QCoreApplication::translate("VibeStudioModelEditor", "Surfaces"),
+		 QCoreApplication::translate("VibeStudioModelEditor", "Joints")});
 	componentLayout->addWidget(m_surface);
 	componentLayout->addWidget(m_selectionMode);
 	m_table = new ModelComponentView;
 	m_table->setObjectName(QStringLiteral("meshComponents"));
 	m_table->setAccessibleName(QCoreApplication::translate("VibeStudioModelEditor", "Mesh components"));
 	m_table->setAccessibleDescription(QCoreApplication::translate(
-		"VibeStudioModelEditor", "Select rows to edit faces, vertices, edges, tags, collision boxes, or whole surfaces. Shift extends a range; Control "
-								 "adds or removes rows. Tags and Collision modes select one named item."));
+		"VibeStudioModelEditor", "Select rows to edit faces, vertices, edges, tags, collision boxes, surfaces, or joints. Shift extends a range; Control "
+								 "adds or removes rows. Tags, Collision and Joints modes select one named item."));
 	m_components = new ModelComponentTable(this);
 	m_table->setModel(m_components);
 	m_table->setItemDelegate(new ModelComponentDelegate(m_table));
 	m_table->setSelectionBehavior(QAbstractItemView::SelectRows);
 	m_table->setSelectionMode(QAbstractItemView::ExtendedSelection);
 	m_table->setEditTriggers(QAbstractItemView::NoEditTriggers);
+	// The arrow keys move between rows. Tab leaves the table: QTableView's own
+	// Tab walks every cell and wraps round, which holds keyboard focus.
+	m_table->setTabKeyNavigation(false);
 	m_table->verticalHeader()->hide();
 	m_table->horizontalHeader()->setSectionResizeMode(QHeaderView::Interactive);
 	m_table->horizontalHeader()->setResizeContentsPrecision(64);
@@ -481,8 +591,8 @@ ModelEditorDialog::ModelEditorDialog(QWidget *parent) : QDialog(parent)
 	auto *centre = new QWidget;
 	auto *centreLayout = new QVBoxLayout(centre);
 	centreLayout->setContentsMargins(0, 0, 0, 0);
-	auto *views = new QToolBar;
-	views->setAccessibleName(QCoreApplication::translate("VibeStudioModelEditor", "Mesh view controls"));
+	// The shading and view choices join the editing header, which the
+	// interaction layer builds (model_editor_tools.cpp).
 	m_renderMode = new QComboBox;
 	m_renderMode->setObjectName(QStringLiteral("meshRenderMode"));
 	m_renderMode->setAccessibleName(QCoreApplication::translate("VibeStudioModelEditor", "Mesh rendering"));
@@ -493,7 +603,6 @@ ModelEditorDialog::ModelEditorDialog(QWidget *parent) : QDialog(parent)
 	m_renderMode->setToolTip(QCoreApplication::translate("VibeStudioModelEditor",
 														 "Material mode loads each surface's image from the staged package. "
 														 "Missing images use the checker; shader effects are not rendered."));
-	views->addWidget(m_renderMode);
 	m_viewPreset = new QComboBox;
 	m_viewPreset->setObjectName(QStringLiteral("meshViewPreset"));
 	m_viewPreset->setAccessibleName(QCoreApplication::translate("VibeStudioModelEditor", "View preset"));
@@ -502,9 +611,9 @@ ModelEditorDialog::ModelEditorDialog(QWidget *parent) : QDialog(parent)
 							QCoreApplication::translate("VibeStudioModelEditor", "Front (XZ)"),
 							QCoreApplication::translate("VibeStudioModelEditor", "Side (YZ)"),
 							QCoreApplication::translate("VibeStudioModelEditor", "Perspective")});
-	views->addWidget(m_viewPreset);
-	auto *frameView = views->addAction(QCoreApplication::translate("VibeStudioModelEditor", "Frame Model"));
-	centreLayout->addWidget(views);
+	auto *frameView = new QAction(QCoreApplication::translate("VibeStudioModelEditor", "Frame Model"), this);
+	frameView->setObjectName(QStringLiteral("meshFrameModel"));
+	frameView->setIcon(studioIcon(QStringLiteral("frame")));
 	auto *moveRow = new QWidget;
 	auto *transformRows = new QVBoxLayout(moveRow);
 	transformRows->setContentsMargins(0, 0, 0, 0);
@@ -513,8 +622,9 @@ ModelEditorDialog::ModelEditorDialog(QWidget *parent) : QDialog(parent)
 	transformRows->addLayout(moveTools);
 	const auto labelled = [](const QString &text, QWidget *field)
 	{
+		// Label above field, as the sidebar forms wrap their rows.
 		auto *row = new QWidget;
-		auto *line = new QHBoxLayout(row);
+		auto *line = new QVBoxLayout(row);
 		line->setContentsMargins(0, 0, 0, 0);
 		auto *label = new QLabel(text);
 		label->setBuddy(field);
@@ -523,7 +633,7 @@ ModelEditorDialog::ModelEditorDialog(QWidget *parent) : QDialog(parent)
 		return row;
 	};
 	moveTools->setContentsMargins(0, 0, 0, 0);
-	m_moveGizmo = new QCheckBox(QCoreApplication::translate("VibeStudioModelEditor", "Gizmo"));
+	m_moveGizmo = new WrappingCheckBox(QCoreApplication::translate("VibeStudioModelEditor", "Gizmo"));
 	m_moveGizmo->setObjectName(QStringLiteral("meshMoveGizmo"));
 	m_moveGizmo->setChecked(true);
 	m_moveGizmo->setAccessibleName(m_moveGizmo->text());
@@ -542,7 +652,7 @@ ModelEditorDialog::ModelEditorDialog(QWidget *parent) : QDialog(parent)
 															"or empty space inside the dashed circle for trackball rotation. The centre moves in the view "
 															"plane in Move, or scales uniformly in Scale. Pivots are set in Geometry."));
 	moveTools->addWidget(m_transformTool);
-	m_snapTranslation = new QCheckBox(QCoreApplication::translate("VibeStudioModelEditor", "Snap"));
+	m_snapTranslation = new WrappingCheckBox(QCoreApplication::translate("VibeStudioModelEditor", "Snap"));
 	m_snapTranslation->setObjectName(QStringLiteral("meshSnapTranslation"));
 	m_snapTranslation->setAccessibleName(QCoreApplication::translate("VibeStudioModelEditor", "Snap transforms"));
 	m_snapTranslation->setToolTip(QCoreApplication::translate(
@@ -578,7 +688,7 @@ ModelEditorDialog::ModelEditorDialog(QWidget *parent) : QDialog(parent)
 	m_scaleGrid->setAccessibleName(QCoreApplication::translate("VibeStudioModelEditor", "Scale snap step relative to one"));
 	m_scaleGrid->setSuffix(QStringLiteral("×"));
 	moveTools->addWidget(labelled(QCoreApplication::translate("VibeStudioModelEditor", "Scale step"), m_scaleGrid));
-	m_xrayVertices = new QCheckBox(QCoreApplication::translate("VibeStudioModelEditor", "X-ray Vertices"));
+	m_xrayVertices = new WrappingCheckBox(QCoreApplication::translate("VibeStudioModelEditor", "X-ray Vertices"));
 	m_xrayVertices->setObjectName(QStringLiteral("meshXrayVertices"));
 	m_xrayVertices->setAccessibleName(m_xrayVertices->text());
 	m_xrayVertices->setToolTip(QCoreApplication::translate("VibeStudioModelEditor",
@@ -586,7 +696,7 @@ ModelEditorDialog::ModelEditorDialog(QWidget *parent) : QDialog(parent)
 														   "points use hollow dotted markers. Wireframe always shows through the mesh."));
 	auto *overlayOptions = new QVBoxLayout;
 	overlayOptions->addWidget(m_xrayVertices);
-	m_showTags = new QCheckBox(QCoreApplication::translate("VibeStudioModelEditor", "Show Tags"));
+	m_showTags = new WrappingCheckBox(QCoreApplication::translate("VibeStudioModelEditor", "Show Tags"));
 	m_showTags->setObjectName(QStringLiteral("meshShowTags"));
 	m_showTags->setAccessibleName(m_showTags->text());
 	m_showTags->setToolTip(QCoreApplication::translate(
@@ -598,37 +708,6 @@ ModelEditorDialog::ModelEditorDialog(QWidget *parent) : QDialog(parent)
 	transformRows->addLayout(overlayOptions);
 	moveTools->addStretch();
 	moveRow->setObjectName(QStringLiteral("meshTransformControls"));
-	m_materialRow = new QWidget;
-	m_materialRow->setObjectName(QStringLiteral("meshMaterialState"));
-	auto *materialRow = new QVBoxLayout(m_materialRow);
-	materialRow->setContentsMargins(0, 0, 0, 0);
-	m_materialStatus = new QLabel;
-	m_materialStatus->setObjectName(QStringLiteral("meshMaterialStatus"));
-	m_materialStatus->setTextFormat(Qt::PlainText);
-	m_materialStatus->setWordWrap(true);
-	materialRow->addWidget(m_materialStatus);
-	m_materialProgress = new QProgressBar;
-	m_materialProgress->setObjectName(QStringLiteral("meshMaterialProgress"));
-	m_materialProgress->setAccessibleName(QCoreApplication::translate("VibeStudioModelEditor", "Material image loading"));
-	materialRow->addWidget(m_materialProgress);
-	auto *materialActions = new QHBoxLayout;
-	auto *reload = new QPushButton(QCoreApplication::translate("VibeStudioModelEditor", "Reload Images"));
-	reload->setObjectName(QStringLiteral("reloadMeshMaterials"));
-	reload->setToolTip(QCoreApplication::translate("VibeStudioModelEditor", "Reload material images from the current package snapshot."));
-	connect(reload, &QPushButton::clicked, this, [this] { reloadMaterials(); });
-	materialActions->addWidget(reload);
-	m_materialCancel = new QPushButton(QCoreApplication::translate("VibeStudioModelEditor", "Cancel"));
-	m_materialCancel->setObjectName(QStringLiteral("cancelMeshMaterials"));
-	connect(m_materialCancel, &QPushButton::clicked, this, [this] { m_materialLoader->cancel(); });
-	materialActions->addWidget(m_materialCancel);
-	auto *details = new QPushButton(QCoreApplication::translate("VibeStudioModelEditor", "Details…"));
-	details->setObjectName(QStringLiteral("meshMaterialDetails"));
-	connect(details, &QPushButton::clicked, this, [this] { showMaterialDetails(); });
-	materialActions->addWidget(details);
-	materialActions->addStretch();
-	materialRow->addLayout(materialActions);
-	// Material loading stays in sight above the views, whichever tab is open.
-	centreLayout->addWidget(m_materialRow);
 	auto *viewTabs = new QTabWidget;
 	viewTabs->setObjectName(QStringLiteral("meshViewTabs"));
 	viewTabs->setAccessibleName(QCoreApplication::translate("VibeStudioModelEditor", "Model view"));
@@ -658,13 +737,16 @@ ModelEditorDialog::ModelEditorDialog(QWidget *parent) : QDialog(parent)
 			});
 	centreLayout->addWidget(viewTabs, 1);
 	auto *timeline = new QToolBar;
+	// The profile's timeline flag finds the transport by this name.
+	timeline->setObjectName(QStringLiteral("meshTimeline"));
 	timeline->setAccessibleName(QCoreApplication::translate("VibeStudioModelEditor", "Animation transport"));
 	m_frame = new QComboBox;
 	m_frame->setObjectName(QStringLiteral("meshFrame"));
 	m_frame->setAccessibleName(QCoreApplication::translate("VibeStudioModelEditor", "Animation frame"));
 	timeline->addWidget(m_frame);
-	auto *play = timeline->addAction(QCoreApplication::translate("VibeStudioModelEditor", "Play / Pause"));
-	connect(play, &QAction::triggered, m_preview, &ModelViewport::togglePlayback);
+	m_play = timeline->addAction(QCoreApplication::translate("VibeStudioModelEditor", "Play / Pause"));
+	m_play->setObjectName(QStringLiteral("meshTimelinePlay"));
+	connect(m_play, &QAction::triggered, m_preview, &ModelViewport::togglePlayback);
 	centreLayout->addWidget(timeline);
 	splitter->addWidget(centre);
 	auto *tabs = new StudioSidebar(QCoreApplication::translate("VibeStudioModelEditor", "Mesh properties"), StudioSidebar::TabEdge::Leading);
@@ -706,7 +788,8 @@ ModelEditorDialog::ModelEditorDialog(QWidget *parent) : QDialog(parent)
 	};
 	const auto button = [&](QFormLayout *form, const QString &label, const QString &name, ModelEditKind kind)
 	{
-		auto *control = new QPushButton(label);
+		// Captions wrap in a narrow sidebar instead of widening it.
+		auto *control = new WrappingActionButton(label, 2);
 		control->setObjectName(name);
 		control->setProperty("requiresMeshComponents", kind != ModelEditKind::Transform && kind != ModelEditKind::SetMaterial &&
 			kind != ModelEditKind::SetMd2SkinSize && kind != ModelEditKind::DuplicateFrame && kind != ModelEditKind::DeleteFrame && kind != ModelEditKind::RenameFrame);
@@ -800,7 +883,7 @@ ModelEditorDialog::ModelEditorDialog(QWidget *parent) : QDialog(parent)
 	m_weldDistance->setSingleStep(0.01);
 	m_weldDistance->setAccessibleName(QCoreApplication::translate("VibeStudioModelEditor", "Weld distance in model units"));
 	geometry->addRow(QCoreApplication::translate("VibeStudioModelEditor", "Weld Distance"), m_weldDistance);
-	m_preserveSeams = new QCheckBox(QCoreApplication::translate("VibeStudioModelEditor", "Preserve Seams"));
+	m_preserveSeams = new WrappingCheckBox(QCoreApplication::translate("VibeStudioModelEditor", "Preserve Seams"));
 	m_preserveSeams->setObjectName(QStringLiteral("meshPreserveSeams"));
 	m_preserveSeams->setChecked(true);
 	m_preserveSeams->setAccessibleName(QCoreApplication::translate("VibeStudioModelEditor", "Preserve UV and normal seams when welding"));
@@ -831,7 +914,7 @@ ModelEditorDialog::ModelEditorDialog(QWidget *parent) : QDialog(parent)
 	surface->addRow(QCoreApplication::translate("VibeStudioModelEditor", "Material"), m_material);
 	m_assignMaterial = button(surface, QCoreApplication::translate("VibeStudioModelEditor", "Assign Material"), QStringLiteral("assignMeshMaterial"),
 		   ModelEditKind::SetMaterial);
-	auto *show = new QPushButton(QCoreApplication::translate("VibeStudioModelEditor", "Show Material"));
+	auto *show = new WrappingActionButton(QCoreApplication::translate("VibeStudioModelEditor", "Show Material"), 2);
 	m_showMaterial = show;
 	show->setObjectName("showMeshMaterial");
 	show->setAccessibleName(show->text());
@@ -907,10 +990,22 @@ ModelEditorDialog::ModelEditorDialog(QWidget *parent) : QDialog(parent)
 								 "The editable source retains authoring metadata. Level placement currently requires MD3."));
 	connect(m_virtualPath, &QLineEdit::textChanged, this, [this] { refreshContext(); });
 	handoffPage->addRow(QCoreApplication::translate("VibeStudioModelEditor", "Package path"), m_virtualPath);
-	m_replace = new QCheckBox(QCoreApplication::translate("VibeStudioModelEditor", "Replace existing entry"));
+	m_replace = new WrappingCheckBox(QCoreApplication::translate("VibeStudioModelEditor", "Replace existing entry"));
 	handoffPage->addRow(m_replace);
+	addStrictExportControl(handoffPage);
 	values(handoffPage, QCoreApplication::translate("VibeStudioModelEditor", "Level origin"), QStringLiteral("meshPlacement"), m_placement,
 		   3, 0);
+	// Staging sits beside the package path and level origin it uses, as well
+	// as in the Model menu.
+	for (const auto &[command, name] : {std::pair{m_stage, QStringLiteral("stageMeshButton")}, std::pair{m_place, QStringLiteral("placeMeshButton")}})
+	{
+		auto *control = new WrappingActionButton(command->text(), 2);
+		control->setObjectName(name);
+		control->setEnabled(command->isEnabled());
+		connect(control, &QPushButton::clicked, command, &QAction::trigger);
+		connect(command, &QAction::changed, control, [control, command = command] { control->setEnabled(command->isEnabled()); });
+		handoffPage->addRow(control);
+	}
 	addHealthControls(page(QStringLiteral("health")));
 	addSkeletonControls(page(QStringLiteral("skeleton")));
 	// The Tool, Materials, View and Add pages hold controls built above, and
@@ -921,50 +1016,138 @@ ModelEditorDialog::ModelEditorDialog(QWidget *parent) : QDialog(parent)
 	for (const auto &id : {QStringLiteral("tool"), QStringLiteral("view"), QStringLiteral("add")})
 		tabs->addPage(m_sidebarPages.value(id));
 	splitter->addWidget(tabs);
+	for (auto *sidebar : {m_leadingSidebar, m_trailingSidebar})
+	{
+		connect(sidebar, &StudioSidebar::foldedChanged, this,
+				[this, sidebar](bool folded)
+				{
+					// An opened sidebar stays open: the other folds when the
+					// editor would outgrow its page, or the views keep too little.
+					if (!folded)
+					{
+						keepSidebarsInRoom(sidebar);
+						if (isVisible())
+							queueViewsFit(sidebar);
+					}
+				});
+	}
 	splitter->setStretchFactor(1, 1);
 	splitter->setSizes({260, 620, 330});
 	layout->addWidget(splitter, 1);
-	m_status = new QLabel;
+	// One status strip under the panels: the last message, the package and
+	// level, the recovery state and the export report. Each line elides rather
+	// than wrapping, so a long message never takes height from the views, and
+	// its tooltip holds the whole text.
+	auto *statusRow = new QHBoxLayout;
+	m_status = new StatusLineLabel;
 	m_status->setObjectName(QStringLiteral("meshStatus"));
-	m_status->setTextFormat(Qt::PlainText);
-	m_status->setWordWrap(true);
 	m_status->setAccessibleName(QCoreApplication::translate("VibeStudioModelEditor", "Mesh editor status"));
-	layout->addWidget(m_status);
-	auto *recoveryRow = new QHBoxLayout;
-	m_recoveryEnabled = new QCheckBox(QCoreApplication::translate("VibeStudioModelEditor", "Keep local recovery copies"));
+	statusRow->addWidget(m_status, 3);
+	statusRow->addWidget(createDivider(Qt::Vertical));
+	statusRow->addWidget(m_context, 2);
+	statusRow->addWidget(createDivider(Qt::Vertical));
+	m_recoveryEnabled = new QAction(QCoreApplication::translate("VibeStudioModelEditor", "Keep Local Recovery Copies"), this);
 	m_recoveryEnabled->setObjectName(QStringLiteral("meshRecoveryEnabled"));
-	m_recoveryEnabled->setAccessibleName(m_recoveryEnabled->text());
+	m_recoveryEnabled->setCheckable(true);
 	m_recoveryEnabled->setToolTip(QCoreApplication::translate(
 		"VibeStudioModelEditor",
 		"Checks unsaved edits every five seconds. Copies stay on this device. Turning this off keeps existing copies."));
+	m_recoveryEnabled->setStatusTip(m_recoveryEnabled->toolTip());
 	m_recoveryEnabled->setChecked(StudioSettings().modelRecoveryEnabled());
-	recoveryRow->addWidget(m_recoveryEnabled);
-	m_recoveryStatus = new QLabel;
+	m_modelMenu->addSeparator();
+	m_modelMenu->addAction(m_recoveryEnabled);
+	m_recoveryStatus = new StatusLineLabel;
 	m_recoveryStatus->setObjectName(QStringLiteral("meshRecoveryStatus"));
-	m_recoveryStatus->setTextFormat(Qt::PlainText);
-	m_recoveryStatus->setWordWrap(true);
 	m_recoveryStatus->setAccessibleName(QCoreApplication::translate("VibeStudioModelEditor", "Local mesh recovery status"));
-	recoveryRow->addWidget(m_recoveryStatus, 1);
-	layout->addLayout(recoveryRow);
+	if (!m_recoveryEnabled->isChecked())
+		m_recoveryStatus->setText(QCoreApplication::translate("VibeStudioModelEditor", "Automatic recovery is off. Existing copies are retained."));
+	statusRow->addWidget(m_recoveryStatus, 1);
+	createDocumentBudget(statusRow);
+	// In Material shading, the material images' state joins the strip, as a
+	// running job does in Blender's status bar: one eliding line, the progress
+	// bar and Cancel while images load, and an Images menu (Reload Images,
+	// Details…). In sight whichever view tab is open, it takes no height from
+	// the views, it leaves the other lines room to be read, and each of its
+	// buttons is a Tab stop of its own, so nothing folds out of the keyboard's
+	// reach.
+	m_materialRow = new QWidget;
+	m_materialRow->setObjectName(QStringLiteral("meshMaterialState"));
+	m_materialRow->setAccessibleName(QCoreApplication::translate("VibeStudioModelEditor", "Material images"));
+	auto *materialRow = new QHBoxLayout(m_materialRow);
+	materialRow->setContentsMargins(0, 0, 0, 0);
+	materialRow->addWidget(createDivider(Qt::Vertical));
+	m_materialStatus = new StatusLineLabel;
+	m_materialStatus->setObjectName(QStringLiteral("meshMaterialStatus"));
+	m_materialStatus->setAccessibleName(QCoreApplication::translate("VibeStudioModelEditor", "Material image status"));
+	materialRow->addWidget(m_materialStatus, 1);
+	m_materialProgress = new QProgressBar;
+	m_materialProgress->setObjectName(QStringLiteral("meshMaterialProgress"));
+	m_materialProgress->setAccessibleName(QCoreApplication::translate("VibeStudioModelEditor", "Material image loading"));
+	m_materialProgress->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
+	materialRow->addWidget(m_materialProgress);
+	const auto materialAction = [materialRow](const QString &text, const QString &name)
+	{
+		auto *button = new QToolButton;
+		button->setText(text);
+		button->setObjectName(name);
+		button->setAccessibleName(text);
+		button->setToolButtonStyle(Qt::ToolButtonTextOnly);
+		button->setAutoRaise(true);
+		// Each is a Tab stop of its own, as push buttons are.
+		button->setFocusPolicy(Qt::StrongFocus);
+		materialRow->addWidget(button);
+		return button;
+	};
+	m_materialCancel = materialAction(QCoreApplication::translate("VibeStudioModelEditor", "Cancel"), QStringLiteral("cancelMeshMaterials"));
+	m_materialCancel->setToolTip(QCoreApplication::translate("VibeStudioModelEditor", "Stop loading material images."));
+	connect(m_materialCancel, &QToolButton::clicked, this, [this] { m_materialLoader->cancel(); });
+	auto *images = materialAction(QCoreApplication::translate("VibeStudioModelEditor", "Images"), QStringLiteral("meshMaterialActions"));
+	images->setAccessibleName(QCoreApplication::translate("VibeStudioModelEditor", "Material image actions"));
+	images->setToolTip(QCoreApplication::translate("VibeStudioModelEditor", "Reload the material images, or show each surface's image and any problem."));
+	images->setPopupMode(QToolButton::InstantPopup);
+	auto *imageMenu = new QMenu(images);
+	imageMenu->setObjectName(QStringLiteral("meshMaterialMenu"));
+	auto *reload = imageMenu->addAction(QCoreApplication::translate("VibeStudioModelEditor", "Reload Images"));
+	reload->setObjectName(QStringLiteral("reloadMeshMaterials"));
+	reload->setToolTip(QCoreApplication::translate("VibeStudioModelEditor", "Reload material images from the current package snapshot."));
+	reload->setStatusTip(reload->toolTip());
+	connect(reload, &QAction::triggered, this, [this] { reloadMaterials(); });
+	auto *details = imageMenu->addAction(QCoreApplication::translate("VibeStudioModelEditor", "Details…"));
+	details->setObjectName(QStringLiteral("meshMaterialDetails"));
+	details->setToolTip(QCoreApplication::translate("VibeStudioModelEditor", "Show each surface's material image and any problem."));
+	details->setStatusTip(details->toolTip());
+	connect(details, &QAction::triggered, this, [this] { showMaterialDetails(); });
+	imageMenu->setToolTipsVisible(true);
+	images->setMenu(imageMenu);
+	// Shown with Material shading; the bar and Cancel only while images load.
+	m_materialProgress->hide();
+	m_materialCancel->setEnabled(false);
+	m_materialCancel->hide();
+	m_materialRow->hide();
+	statusRow->addWidget(m_materialRow, 2);
+	addExportReportButton(statusRow);
+	layout->addLayout(statusRow);
 	m_materialLoader = new ModelMaterialWorker(this);
 	m_materialLoader->started = [this, details]
 	{
 		m_surfaceImages.clear();
 		m_materialAssets = {};
 		m_materialStatus->setText(QCoreApplication::translate("VibeStudioModelEditor", "Loading material images…"));
-		m_materialStatus->setAccessibleName(m_materialStatus->text());
+		m_materialLoadClock.start();
 		details->setEnabled(false);
 		m_materialProgress->setAccessibleDescription(m_materialStatus->text());
-		m_materialProgress->setRange(0, 0);
+		setBusyProgress(m_materialProgress, studioReducedMotion(), m_materialStatus->text());
 		m_materialProgress->show();
 		m_materialCancel->setEnabled(true);
+		m_materialCancel->show();
 		applyMaterialImages();
 	};
 	m_materialLoader->progress = [this](int done, int total)
 	{
-		m_materialProgress->setRange(0, total);
 		if (total > 0)
 		{
+			m_materialProgress->setRange(0, total);
+			m_materialProgress->setFormat(QStringLiteral("%p%"));
 			m_materialProgress->setValue(done);
 		}
 	};
@@ -987,17 +1170,21 @@ ModelEditorDialog::ModelEditorDialog(QWidget *parent) : QDialog(parent)
 				}
 			}
 		}
+		// Loading runs in the background: a failure is announced, and so is
+		// a load long enough for the user to have turned to something else.
+		const bool longLoad = m_materialLoadClock.isValid() && m_materialLoadClock.elapsed() >= 1500;
 		m_materialStatus->setText(
 			!result.error.isEmpty() ? result.error
 			: result.assets.cancelled
-				? QCoreApplication::translate("VibeStudioModelEditor", "Material loading cancelled. Reload Images to try again.")
-				: QCoreApplication::translate("VibeStudioModelEditor", "Material images: %1/%2 ready · %3 problems")
+				? QCoreApplication::translate("VibeStudioModelEditor", "Material loading cancelled. Choose Images > Reload Images to try again.")
+				: QCoreApplication::translate("VibeStudioModelEditor", "Material images: %L1/%L2 ready · %3")
 					  .arg(result.assets.readyCount())
 					  .arg(result.assets.requestedMaterials)
-					  .arg(result.assets.problemCount()));
-		m_materialStatus->setAccessibleName(m_materialStatus->text());
+					  .arg(QCoreApplication::translate("VibeStudioModelEditor", "%Ln problem(s)", nullptr, int(result.assets.problemCount()))),
+			!result.error.isEmpty() ? LiveStatus::Problem : longLoad ? LiveStatus::Finished : LiveStatus::Update);
 		m_materialProgress->hide();
 		m_materialCancel->setEnabled(false);
+		m_materialCancel->hide();
 		details->setEnabled(true);
 		applyMaterialImages();
 	};
@@ -1006,15 +1193,29 @@ ModelEditorDialog::ModelEditorDialog(QWidget *parent) : QDialog(parent)
 	m_recovery = new ModelRecoveryWriter(m_recoveryDirectory, this);
 	m_recovery->finished = [this](const QString &path, const QString &error)
 	{
+		// A copy written every few seconds is not worth announcing; a failure
+		// is, once. The timer retries a failed copy every few seconds, so the
+		// same failure again is read on the line but not announced until a
+		// copy has been written since.
+		const bool newProblem = !error.isEmpty() && error != m_recoveryProblem;
+		if (!error.isEmpty())
+		{
+			m_recoveryProblem = error;
+		}
+		else if (!path.isEmpty())
+		{
+			m_recoveryProblem.clear();
+		}
 		m_recoveryStatus->setText(error.isEmpty() ? QCoreApplication::translate("VibeStudioModelEditor", "Recovery copy updated.")
-												  : QCoreApplication::translate("VibeStudioModelEditor", "Recovery failed: %1").arg(error));
+												  : QCoreApplication::translate("VibeStudioModelEditor", "Recovery failed: %1").arg(error),
+								  newProblem ? LiveStatus::Problem : LiveStatus::Update);
 		m_recoveryStatus->setToolTip(path);
 		if (!error.isEmpty())
 		{
 			m_recoveryRequestedRevision = 0;
 		}
 	};
-	connect(m_recoveryEnabled, &QCheckBox::toggled, this,
+	connect(m_recoveryEnabled, &QAction::toggled, this,
 			[this](bool enabled)
 			{
 				StudioSettings settings;
@@ -1204,6 +1405,9 @@ ModelEditorDialog::ModelEditorDialog(QWidget *parent) : QDialog(parent)
 					refreshTransformAxes();
 				}
 			});
+	// Space or Play or Pause under reduced motion says why nothing plays; the
+	// view has announced it.
+	connect(m_preview, &ModelViewport::playbackRefused, this, [this](const QString &reason) { m_status->setText(reason); });
 	connect(m_preview, &ModelViewport::playbackChanged, this,
 			[this](bool playing)
 			{
@@ -1296,24 +1500,22 @@ ModelEditorDialog::ModelEditorDialog(QWidget *parent) : QDialog(parent)
 	connect(m_preview, &ModelViewport::editTransformActiveChanged, this,
 			[this](bool active)
 			{
-				// A resize cancels the drag, so the wrapped status line keeps its
-				// height while a gesture runs instead of reflowing the viewport.
+				// A resize cancels the drag; the status is one eliding line, so a
+				// message never reflows the viewport during a gesture.
 				if (active)
 				{
-					m_status->setFixedHeight(m_status->height());
 					m_status->setText(QCoreApplication::translate(
 						"VibeStudioModelEditor", "Transforming selection. Release to validate and apply; Escape cancels."));
 					return;
 				}
-				m_status->setMinimumHeight(0);
-				m_status->setMaximumHeight(QWIDGETSIZE_MAX);
 				if (!m_refreshing && !m_working)
 				{
 					refreshSelection();
-					m_status->setText(m_preview->editTransformValid()
-										  ? QCoreApplication::translate("VibeStudioModelEditor", "Transform preview ended.")
-										  : QCoreApplication::translate("VibeStudioModelEditor",
-																		"Invalid transform cancelled. The source is unchanged."));
+					const bool valid = m_preview->editTransformValid();
+					m_status->setText(valid ? QCoreApplication::translate("VibeStudioModelEditor", "Transform preview ended.")
+											: QCoreApplication::translate("VibeStudioModelEditor",
+																		  "Invalid transform cancelled. The source is unchanged."),
+									  valid ? LiveStatus::Update : LiveStatus::Problem);
 				}
 			});
 	connect(m_preview, &ModelViewport::editTransformPreviewChanged, this,
@@ -1335,7 +1537,7 @@ ModelEditorDialog::ModelEditorDialog(QWidget *parent) : QDialog(parent)
 															  "Rotation preview: X %1°, Y %2°, Z %3°. Release to apply; Escape cancels.")
 								: QCoreApplication::translate("VibeStudioModelEditor",
 															  "Scale preview: X %1×, Y %2×, Z %3×. Release to apply; Escape cancels.");
-				m_status->setText(pattern.arg(values.x, 0, 'g', 7).arg(values.y, 0, 'g', 7).arg(values.z, 0, 'g', 7));
+				m_status->setText(pattern.arg(localeNumber(values.x, 7), localeNumber(values.y, 7), localeNumber(values.z, 7)));
 			});
 	connect(m_preview, &ModelViewport::editTransformRequested, this,
 			[this](const ModelTransform &transform)
@@ -1344,6 +1546,7 @@ ModelEditorDialog::ModelEditorDialog(QWidget *parent) : QDialog(parent)
 				{
 					return;
 				}
+				if (!m_document.selection().joint.isEmpty()) { applyJointTransform(transform); return; }
 				ModelEdit edit;
 				edit.selection = m_document.selection();
 				edit.kind = !edit.selection.collision.isEmpty() ? ModelEditKind::TransformCollisionBox
@@ -1436,8 +1639,13 @@ ModelEditorDialog::ModelEditorDialog(QWidget *parent) : QDialog(parent)
 	buildToolPages();
 	fitSidebarPages();
 	applyProfile(StudioSettings(StudioSettings::AccessMode::ReadOnly).modelEditorProfileId(), false);
+	// The views start with the preferences the shell recorded.
+	refreshPlaybackActions();
 	if (auto *editing = qobject_cast<QSplitter *>(m_editingControls))
 		editing->setSizes({std::max(260, m_leadingSidebar->minimumSizeHint().width()), 620, std::max(330, m_trailingSidebar->minimumSizeHint().width())});
+	// The studio shows the editor in a page that sizes it; on its own it opens
+	// within the screen.
+	fitDialogToScreen(this, QSize(1280, 850));
 }
 
 const ModelDocument &ModelEditorDialog::document() const { return m_document; }
@@ -1449,17 +1657,27 @@ void ModelEditorDialog::cancelOperation()
 		m_cancelWork();
 	}
 }
-bool ModelEditorDialog::performWork(const QString &title, ModelDocumentJob job, QString *error, bool durableWrite)
+bool ModelEditorDialog::performWork(const QString &title, ModelDocumentJob job, QString *error, bool durableWrite, WorkKind kind)
 {
+	// A preview is not announced: the modal tool says whether it can apply
+	// when the user confirms or cancels it.
+	const bool announce = kind == WorkKind::Operation;
 	if (m_working)
 	{
+		const auto busy = QCoreApplication::translate("VibeStudioModelEditor", "Wait for the current model operation to finish.");
 		if (error)
 		{
-			*error = QCoreApplication::translate("VibeStudioModelEditor", "Wait for the current model operation to finish.");
+			*error = busy;
+		}
+		if (announce)
+		{
+			announceStatus(m_status, busy, LiveStatus::Problem);
 		}
 		return false;
 	}
 	m_working = true;
+	QElapsedTimer elapsed;
+	elapsed.start();
 	m_uv->finishMove(false);
 	m_preview->pause();
 	const QPointer<QWidget> previousFocus = focusWidget();
@@ -1467,7 +1685,7 @@ bool ModelEditorDialog::performWork(const QString &title, ModelDocumentJob job, 
 	const bool recoveryTimerActive = m_recoveryTimer->isActive();
 	m_recoveryTimer->stop();
 	QVector<QPair<QAction *, bool>> actionStates;
-	for (auto *action : m_toolbar->actions())
+	for (auto *action : std::as_const(m_documentActions))
 	{
 		actionStates.append({action, action->isEnabled()});
 		action->setEnabled(false);
@@ -1501,6 +1719,15 @@ bool ModelEditorDialog::performWork(const QString &title, ModelDocumentJob job, 
 	{
 		refresh();
 	}
+	// Every document operation ends here, so this is where a screen reader
+	// hears that one failed or was refused, and that a long one finished
+	// (as the studio's own long tasks are announced, and read aloud under
+	// the same speech event). The caller's status line, set after this, may
+	// say more; within the same pass the later message is the one announced.
+	if (announce && !success && error && !error->isEmpty())
+		announceStatus(m_status, *error, LiveStatus::Problem);
+	else if (announce && success && elapsed.elapsed() >= 1500)
+		announceStatus(m_status, QCoreApplication::translate("VibeStudioModelEditor", "%1 finished.").arg(title), LiveStatus::Finished);
 	if (m_closeAfterWork)
 	{
 		m_closeAfterWork = false;
@@ -1525,14 +1752,22 @@ ModelEditorDialog::~ModelEditorDialog()
 bool ModelEditorDialog::setMesh(const ModelMesh &mesh, QString *error)
 {
 	const auto sourcePath = mesh.sourcePath;
+	// A dense skeletal model from a package, a design or an assembly bake
+	// fits the editable budget the way an import does.
+	const auto fitted = std::make_shared<ModelImportReport>();
 	if (!performWork(
 			QCoreApplication::translate("VibeStudioModelEditor", "Prepare Mesh"),
-			[mesh](ModelDocument &candidate, QString *failure, const ModelWorkControl &control)
-			{ return candidate.setMesh(mesh, failure, control); }, error))
+			[mesh, fitted](ModelDocument &candidate, QString *failure, const ModelWorkControl &control)
+			{
+				auto prepared = mesh;
+				return fitEditableModelBudget(&prepared, fitted.get(), failure, control) && candidate.setMesh(prepared, failure, control);
+			}, error))
 	{
 		return false;
 	}
 	retireRecovery();
+	clearExportReport();
+	m_historyNoticeShown = false;
 	m_recoverySourcePath = sourcePath;
 	m_previewMaterialSlots.clear();
 	m_lastSkinBindings.clear();
@@ -1542,11 +1777,14 @@ bool ModelEditorDialog::setMesh(const ModelMesh &mesh, QString *error)
 	m_surfaceImages.clear();
 	m_materialAssets = {};
 	refresh(false);
+	reportOpenedModel(*fitted);
 	return true;
 }
-bool ModelEditorDialog::applyEdit(const ModelEdit &edit, QString *error)
+bool ModelEditorDialog::applyEdit(const ModelEdit &edit, QString *error, ModelEditReport *report)
 {
 	const auto before = m_document.revisionFingerprint();
+	const int discarded = m_document.discardedHistorySteps();
+	ModelEditReport pending;
 	m_preview->finishEditMove(false);
 	m_uv->finishMove(false);
 	const auto title = edit.kind == ModelEditKind::UnwrapUv ? QCoreApplication::translate("VibeStudioModelEditor", "Unwrap and Pack UVs")
@@ -1554,8 +1792,8 @@ bool ModelEditorDialog::applyEdit(const ModelEdit &edit, QString *error)
 					   : edit.kind == ModelEditKind::PackUvAround ? QCoreApplication::translate("ModelUvObstacles", "Pack Around Unselected")
 															: QCoreApplication::translate("VibeStudioModelEditor", "Edit Mesh");
 	if (!performWork(
-			title, [edit](ModelDocument &candidate, QString *failure, const ModelWorkControl &control)
-			{ return candidate.edit(edit, failure, control); }, error))
+			title, [edit, &pending](ModelDocument &candidate, QString *failure, const ModelWorkControl &control)
+			{ return candidate.edit(edit, failure, control, &pending); }, error))
 	{
 		return false;
 	}
@@ -1568,13 +1806,48 @@ bool ModelEditorDialog::applyEdit(const ModelEdit &edit, QString *error)
 		m_skinBindingsDetails->setEnabled(false);
 	}
 	refresh();
+	// Say how skin weights followed the edit; surface edits also confirm
+	// the weights they kept.
+	const auto skinNotice = modelSkinProvenanceSummary(pending.skin, isModelSurfaceEdit(edit.kind));
+	if (!skinNotice.isEmpty())
+		m_status->setText(skinNotice);
+	noteHistoryTrim(discarded);
+	if (report) *report = std::move(pending);
 	return true;
 }
 void ModelEditorDialog::setAccessibility(bool highContrast, bool reducedMotion)
 {
 	m_highContrast = highContrast;
-	m_preview->setHighContrast(highContrast);
-	m_preview->setReducedMotion(reducedMotion);
+	// Every view of the four, not only the interactive one.
+	auto views = panes();
+	if (!views.contains(m_preview))
+		views.append(m_preview);
+	for (auto *pane : std::as_const(views))
+	{
+		if (!pane)
+			continue;
+		pane->setHighContrast(highContrast);
+		pane->setReducedMotion(reducedMotion);
+	}
+	refreshPlaybackActions();
+}
+void ModelEditorDialog::refreshPlaybackActions()
+{
+	// As on the Models page: reduced motion turns the Play / Pause button off
+	// and says why. The profile's Play or Pause command stays on, so its key
+	// and command search get the same answer in the status line and from the
+	// screen reader (ModelViewport::togglePlayback) instead of nothing.
+	const bool reduced = m_preview->reducedMotion();
+	const auto blocked = QCoreApplication::translate("VibeStudioModelEditor",
+													 "Playback is off because reduced motion is on. Page Up and Page Down still step frames.");
+	m_play->setEnabled(!reduced);
+	for (auto *action : {m_play, m_tools ? m_tools->action(QStringLiteral("meshPlay")) : nullptr})
+	{
+		if (!action)
+			continue;
+		action->setToolTip(reduced ? blocked : action->text());
+		action->setStatusTip(reduced ? blocked : QString());
+	}
 }
 void ModelEditorDialog::refresh(bool keepView)
 {
@@ -1594,7 +1867,11 @@ void ModelEditorDialog::refresh(bool keepView)
 	refreshMdlControls();
 	const auto selected = m_document.selection();
 	const int frame = std::clamp(m_frame->currentIndex(), 0, int(mesh.frames.size()) - 1);
-	if (!selected.surfaces.isEmpty())
+	if (!selected.joint.isEmpty())
+	{
+		m_selectionMode->setCurrentIndex(6);
+	}
+	else if (!selected.surfaces.isEmpty())
 	{
 		m_selectionMode->setCurrentIndex(5);
 	}
@@ -1618,7 +1895,7 @@ void ModelEditorDialog::refresh(bool keepView)
 	{
 		m_selectionMode->setCurrentIndex(0);
 	}
-	m_table->setSelectionMode((m_selectionMode->currentIndex() == 3 || m_selectionMode->currentIndex() == 4) ? QAbstractItemView::SingleSelection
+	m_table->setSelectionMode((m_selectionMode->currentIndex() == 3 || m_selectionMode->currentIndex() == 4 || m_selectionMode->currentIndex() == 6) ? QAbstractItemView::SingleSelection
 																   : QAbstractItemView::ExtendedSelection);
 	m_surface->setEnabled(m_selectionMode->currentIndex() < 3 || m_selectionMode->currentIndex() == 5);
 	if (meshChanged)
@@ -1644,7 +1921,16 @@ void ModelEditorDialog::refresh(bool keepView)
 		// Size once for the new columns. Pose updates retain the user's widths
 		// instead of repeatedly measuring delegate text in header timer events.
 		m_table->resizeColumnsToContents();
-		static_cast<ModelComponentView *>(m_table)->setWholeSurfaceMode(m_selectionMode->currentIndex() == 5);
+		auto *view = static_cast<ModelComponentView *>(m_table);
+		const bool wasWhole = view->wholeSurfaceMode();
+		view->setWholeSurfaceMode(m_selectionMode->currentIndex() == 5);
+		// The outliner page grows to keep surface names and counts in view,
+		// and narrows again after.
+		if (m_tools && (wasWhole || view->wholeSurfaceMode()))
+		{
+			fitSidebarPages();
+			queueViewsFit();
+		}
 	}
 	if (tableReset || selected != m_presentedSelection)
 	{
@@ -1656,7 +1942,7 @@ void ModelEditorDialog::refresh(bool keepView)
 				QItemSelectionRange(m_components->index(first, 0), m_components->index(last, m_components->columnCount() - 1)));
 		};
 		const auto &chosen = mode == 5 ? selected.surfaces : mode == 1 ? selected.vertices : selected.faces;
-		const qsizetype selectedCount = mode == 4	? !selected.collision.isEmpty()
+		const qsizetype selectedCount = mode == 6 ? !selected.joint.isEmpty() : mode == 4 ? !selected.collision.isEmpty()
 										: mode == 3 ? !selected.tag.isEmpty()
 										: mode == 2 ? selected.edges.size()
 													: chosen.size();
@@ -1667,7 +1953,7 @@ void ModelEditorDialog::refresh(bool keepView)
 			int first = -1;
 			for (int row = 0; row < count; ++row)
 			{
-				const bool active = mode == 4	? m_components->collision(row) == selected.collision
+				const bool active = mode == 6 ? m_components->joint(row) == selected.joint : mode == 4 ? m_components->collision(row) == selected.collision
 									: mode == 3 ? m_components->tag(row) == selected.tag
 									: mode == 2 ? selected.edges.contains(m_components->edge(row))
 												: chosen.contains(row);
@@ -1689,7 +1975,11 @@ void ModelEditorDialog::refresh(bool keepView)
 		else
 		{
 			QVector<int> rows;
-			if (mode == 4 && !selected.collision.isEmpty())
+			if (mode == 6 && !selected.joint.isEmpty())
+			{
+				rows.append(m_components->jointRow(selected.joint));
+			}
+			else if (mode == 4 && !selected.collision.isEmpty())
 			{
 				rows.append(m_components->collisionRow(selected.collision));
 			}
@@ -1752,6 +2042,7 @@ void ModelEditorDialog::refresh(bool keepView)
 	refreshMaterial();
 	m_undo->setEnabled(m_document.canUndo());
 	m_redo->setEnabled(m_document.canRedo());
+	refreshDocumentBudget();
 	setWindowModified(m_document.isModified());
 	setWindowTitle(QCoreApplication::translate("VibeStudioModelEditor", "Mesh Editor — %1[*]")
 					   .arg(m_document.path().isEmpty() ? QCoreApplication::translate("VibeStudioModelEditor", "Unsaved source")
@@ -1814,7 +2105,11 @@ void ModelEditorDialog::selectFromTable()
 		}
 		for (int row = range.top(); row <= range.bottom(); ++row)
 		{
-			if (mode == 5)
+			if (mode == 6)
+			{
+				selected.joint = m_components->joint(row);
+			}
+			else if (mode == 5)
 			{
 				selected.surfaces.insert(row);
 			}
@@ -1940,7 +2235,7 @@ void ModelEditorDialog::refreshSelection()
 	m_preview->setVertexPicking(m_selectionMode->currentIndex() == 1);
 	const bool tagMode = m_selectionMode->currentIndex() == 3;
 	const bool collisionMode = m_selectionMode->currentIndex() == 4;
-	findChild<QPushButton *>(QStringLiteral("selectAllMeshComponents"))->setEnabled(!tagMode && !collisionMode);
+	findChild<QPushButton *>(QStringLiteral("selectAllMeshComponents"))->setEnabled(!tagMode && !collisionMode && m_selectionMode->currentIndex() != 6);
 	m_preview->setCollisionPicking(collisionMode);
 	if (collisionMode)
 	{
@@ -1969,29 +2264,31 @@ void ModelEditorDialog::refreshSelection()
 	}
 	for (auto *button : findChildren<QPushButton *>())
 		if (button->property("requiresMeshComponents").toBool())
-			button->setEnabled(m_selectionMode->currentIndex() != 5);
+			button->setEnabled(m_selectionMode->currentIndex() < 5);
 	m_xrayVertices->setEnabled(m_selectionMode->currentIndex() == 1);
 	refreshUv();
 	refreshTags();
 	refreshHealth();
 	refreshCollision();
-	m_status->setText(QCoreApplication::translate("VibeStudioModelEditor", "%1 vertices · %2 triangles · %3 frames · "
-																		   "Selected: %4 vertices, %5 faces, %6 edges")
-						  .arg(mesh.vertexCount)
-						  .arg(mesh.triangleCount)
-						  .arg(mesh.frameCount)
-						  .arg(selected.vertices.size())
-						  .arg(selected.faces.size())
-						  .arg(selected.edges.size()));
+	// One fragment per count, so each takes its own plural form.
+	m_status->setText(
+		QCoreApplication::translate("VibeStudioModelEditor", "%1 · %2 · %3 · Selected: %4, %5, %6", "model counts, then selection counts")
+			.arg(QCoreApplication::translate("VibeStudioModelEditor", "%Ln vert(ex)(ices)", nullptr, int(mesh.vertexCount)),
+				 QCoreApplication::translate("VibeStudioModelEditor", "%Ln triangle(s)", nullptr, int(mesh.triangleCount)),
+				 QCoreApplication::translate("VibeStudioModelEditor", "%Ln frame(s)", nullptr, int(mesh.frameCount)),
+				 QCoreApplication::translate("VibeStudioModelEditor", "%Ln vert(ex)(ices)", nullptr, int(selected.vertices.size())),
+				 QCoreApplication::translate("VibeStudioModelEditor", "%Ln face(s)", nullptr, int(selected.faces.size())),
+				 QCoreApplication::translate("VibeStudioModelEditor", "%Ln edge(s)", nullptr, int(selected.edges.size()))));
 	if (m_selectionMode->currentIndex() == 5)
 	{
-		m_status->setText(QCoreApplication::translate("VibeStudioModelEditor", "Selected: %1 surfaces · active: %2 · one common transform pivot")
-			.arg(selected.surfaces.size()).arg(mesh.surfaces[selected.surface].name));
+		m_status->setText(QCoreApplication::translate("VibeStudioModelEditor", "Selected: %Ln surface(s) · active: %1 · one common transform pivot",
+													  nullptr, int(selected.surfaces.size()))
+							  .arg(mesh.surfaces[selected.surface].name));
 	}
 	if (tagTarget)
 	{
 		m_status->setText(
-			QCoreApplication::translate("VibeStudioModelEditor", "Selected tag: %1 · frame %2 · move and rotate; edit poses in Animation")
+			QCoreApplication::translate("VibeStudioModelEditor", "Selected tag: %1 · frame %L2 · move and rotate; edit poses in Animation")
 				.arg(selected.tag)
 				.arg(m_frame->currentIndex()));
 	}
@@ -2002,6 +2299,7 @@ void ModelEditorDialog::refreshSelection()
 			? QCoreApplication::translate("VibeStudioModelEditor", "Selected animated collision box: %1 · current/all-frame scope · chosen move/rotate axes · local scale")
 			: QCoreApplication::translate("VibeStudioModelEditor", "Selected collision box: %1 · chosen axes for move/rotate · local scale · static across all frames")).arg(selected.collision));
 	}
+	refreshJointSelection();
 	refreshTransformAxes();
 }
 void ModelEditorDialog::configureTransformAxes(ModelEdit &edit) const
@@ -2118,7 +2416,6 @@ void ModelEditorDialog::showMaterialDetails()
 	dialog.setObjectName(QStringLiteral("meshMaterialDetailsDialog"));
 	dialog.setWindowTitle(QCoreApplication::translate("VibeStudioModelEditor", "Model Material Details"));
 	dialog.setAccessibleName(dialog.windowTitle());
-	dialog.resize(680, 460);
 	auto *layout = new QVBoxLayout(&dialog);
 	auto *text = new QPlainTextEdit;
 	text->setReadOnly(true);
@@ -2128,6 +2425,7 @@ void ModelEditorDialog::showMaterialDetails()
 	auto *close = new QPushButton(QCoreApplication::translate("VibeStudioModelEditor", "Close"));
 	connect(close, &QPushButton::clicked, &dialog, &QDialog::accept);
 	layout->addWidget(close);
+	fitDialogToScreen(&dialog, QSize(680, 460));
 	dialog.exec();
 }
 ModelEdit ModelEditorDialog::operation(ModelEditKind kind) const
@@ -2204,6 +2502,7 @@ ModelEdit ModelEditorDialog::operation(ModelEditKind kind) const
 }
 void ModelEditorDialog::execute(ModelEditKind kind)
 {
+	if (kind == ModelEditKind::Transform && !m_document.selection().joint.isEmpty()) { executeJointTransform(); return; }
 	QString error;
 	if (!applyEdit(operation(kind), &error))
 	{
@@ -2216,6 +2515,7 @@ void ModelEditorDialog::refreshContext()
 	{
 		return;
 	}
+	syncDeliveryContext();
 	const auto current = context ? context() : ModelDesignContext{};
 	m_context->setText(
 		QCoreApplication::translate("VibeStudioModelEditor", "Package: %1 · Level: %2")
@@ -2276,13 +2576,21 @@ bool ModelEditorDialog::save(bool saveAs)
 	}
 	retireRecovery();
 	refresh();
+	// The status line goes back to the counts, so the save is only spoken.
+	announceStatus(m_status, QCoreApplication::translate("VibeStudioModelEditor", "Saved %1.").arg(QFileInfo(path).fileName()), LiveStatus::Result);
+	// A packed source is not diff-friendly and older builds cannot read it.
+	if (const auto packed = modelSourceSaveNotice(m_document, QLocale()); !packed.isEmpty())
+	{
+		m_status->setText(packed);
+	}
 	return true;
 }
 void ModelEditorDialog::open()
 {
 	const auto path = QFileDialog::getOpenFileName(
 		this, QCoreApplication::translate("VibeStudioModelEditor", "Open or Import Model"), {},
-		QCoreApplication::translate("VibeStudioModelEditor", "Editable meshes and models (*.mesh.json *.model.json *.obj *.mdl *.md2 *.md3)"));
+		QCoreApplication::translate("VibeStudioModelEditor", "Editable meshes and models (*.mesh.json *.model.json *.obj *.mdl *.md2 *.md3 *.mdc "
+															 "*.md5mesh *.iqm *.mdr *.mds *.mdm *.glm);;All files (*)"));
 	if (path.isEmpty())
 	{
 		return;
@@ -2296,9 +2604,11 @@ bool ModelEditorDialog::openSource(const QString &path, QString *error)
 	if (!error) { error = &localError; }
 	error->clear();
 	if (m_working || path.isEmpty() || !maybeSave()) { return false; }
+	// The worker fills the receipt of a skeletal import re-baked to fit.
+	const auto imported = std::make_shared<ModelImportReport>();
 	if (!performWork(
 			QCoreApplication::translate("VibeStudioModelEditor", "Open or Import Model"),
-			[path](ModelDocument &candidate, QString *failure, const ModelWorkControl &control)
+			[path, imported](ModelDocument &candidate, QString *failure, const ModelWorkControl &control)
 			{
 				if (path.endsWith(QStringLiteral(".mesh.json"), Qt::CaseInsensitive))
 				{
@@ -2307,7 +2617,8 @@ bool ModelEditorDialog::openSource(const QString &path, QString *error)
 				QByteArray bytes;
 				ModelMesh mesh;
 				return readModelFile(path, &bytes, failure, control) &&
-					   importEditableModel(path, bytes, &mesh, failure, nullptr, control) && candidate.setMesh(mesh, failure, control);
+					   importEditableModel(path, bytes, &mesh, ModelImportOptions{}, imported.get(), failure, nullptr, control) &&
+					   candidate.setMesh(mesh, failure, control);
 			},
 			error))
 	{
@@ -2315,6 +2626,8 @@ bool ModelEditorDialog::openSource(const QString &path, QString *error)
 		return false;
 	}
 	retireRecovery();
+	clearExportReport();
+	m_historyNoticeShown = false;
 	m_recoverySourcePath = path;
 	m_previewMaterialSlots.clear();
 	m_lastSkinBindings.clear();
@@ -2324,73 +2637,35 @@ bool ModelEditorDialog::openSource(const QString &path, QString *error)
 	m_surfaceImages.clear();
 	m_materialAssets = {};
 	refresh(false);
+	reportOpenedModel(*imported);
 	return true;
 }
-void ModelEditorDialog::exportModel(const QString &format)
+void ModelEditorDialog::reportOpenedModel(const ModelImportReport &imported)
 {
-	if (m_working)
+	QString text;
+	if (imported.rebaked)
 	{
-		return;
+		// The summary, then why clips were left out: the report's lines after
+		// the working set, the budget and the room left.
+		text = QCoreApplication::translate("VibeStudioModelEditor",
+										   "The skeletal frames were re-baked to fit the editable budget; the skeleton keeps every "
+										   "clip. %1. %2 Use Skeleton > Working Set to choose the clips.")
+				   .arg(modelSkeletalWorkingSetSummary(imported.workingSet),
+						modelSkeletalWorkingSetLines(imported.workingSet, QLocale()).mid(3).join(QLatin1Char(' ')));
 	}
-	const auto path = QFileDialog::getSaveFileName(
-		this, QCoreApplication::translate("VibeStudioModelEditor", "Export Model"), {},
-		format == QStringLiteral("mdl")		  ? QCoreApplication::translate("VibeStudioModelEditor", "Quake model (*.mdl)")
-		: format == QStringLiteral("md2")	  ? QCoreApplication::translate("VibeStudioModelEditor", "Quake II model (*.md2)")
-		: format == QStringLiteral("md3")	  ? QCoreApplication::translate("VibeStudioModelEditor", "Quake III model (*.md3)")
-		: format == QStringLiteral("md5mesh") ? QCoreApplication::translate("VibeStudioModelEditor", "Doom 3 MD5 mesh (*.md5mesh)")
-		: format == QStringLiteral("md5anim") ? QCoreApplication::translate("VibeStudioModelEditor", "Doom 3 MD5 animation (*.md5anim)")
-		: format == QStringLiteral("iqm")	  ? QCoreApplication::translate("VibeStudioModelEditor", "Inter-Quake Model (*.iqm)")
-		: format == QStringLiteral("ase")	  ? QCoreApplication::translate("VibeStudioModelEditor", "ASCII scene export (*.ase)")
-											  : QCoreApplication::translate("VibeStudioModelEditor", "Wavefront OBJ (*.obj)"));
-	if (path.isEmpty())
+	if (m_document.sourceBytes() > modelDocumentMaxSourceBytes)
 	{
-		return;
+		// Opening is allowed, so the model can be inspected, exported and reduced.
+		const auto notice = QCoreApplication::translate("VibeStudioModelEditor",
+														"The source would be %1, over the 64 MiB limit, so it cannot be saved or "
+														"recovered yet. Delete clips, frames, curve keys or embedded skins until it fits.")
+								.arg(modelMebibytesText(m_document.sourceBytes(), QLocale()));
+		text = text.isEmpty() ? notice : text + QLatin1Char(' ') + notice;
 	}
-	QString error;
-	qint64 written = 0;
-	ModelExportReport report;
-	int frame = m_frame->currentIndex();
-	if (format == QStringLiteral("md5anim"))
+	if (!text.isEmpty())
 	{
-		// The clip that the current frame was baked from, else the first.
-		frame = std::max(0, m_document.mesh().skeleton.bakedClipForFrame.value(frame, 0));
+		m_status->setText(text);
 	}
-	if (!performWork(
-			QCoreApplication::translate("VibeStudioModelEditor", "Export Model"),
-			[path, format, frame, &written, &report](ModelDocument &candidate, QString *failure, const ModelWorkControl &control)
-			{
-				// Review the destination before preparation so a competing write during
-				// export cannot be silently accepted as the file the user approved.
-				const auto target = inspectModelWriteTarget(path, control);
-				if (!target.isValid())
-				{
-					*failure = target.error;
-					return false;
-				}
-				if (modelPathsReferToSameFile(path, candidate.path()))
-				{
-					*failure =
-						QCoreApplication::translate("VibeStudioModelEditor", "Choose an export path separate from the editable source.");
-					return false;
-				}
-				const auto bytes = exportEditableModel(candidate.mesh(), format, frame, failure, control, &report);
-				if (bytes.isEmpty() || !writeModelFile(target, bytes, failure, control))
-				{
-					return false;
-				}
-				written = bytes.size();
-				return true;
-			},
-			&error, true))
-	{
-		m_status->setText(error);
-		return;
-	}
-	m_status->setText(
-		QCoreApplication::translate("VibeStudioModelEditor", "Exported %1 bytes to %2. The editable source is saved separately.")
-			.arg(written)
-			.arg(path) +
-		QLatin1Char(' ') + report.notes.join(QLatin1Char(' ')) + nativeUvStatus());
 }
 void ModelEditorDialog::stage(bool place)
 {
@@ -2410,33 +2685,103 @@ void ModelEditorDialog::stage(bool place)
 	const bool replace = m_replace->isChecked();
 	QByteArray bytes;
 	ModelExportReport report;
+	const auto suffix = QFileInfo(path).suffix().toLower();
+	ModelExportOptions options;
+	// An md5anim stages one clip at a whole frame rate: the clip the package
+	// path names (walk.md5anim) or the current frame belongs to, confirmed in
+	// the same chooser as exporting.
+	if (suffix == QStringLiteral("md5anim") && !chooseMd5Animation(false, QFileInfo(path).completeBaseName(), &options))
+	{
+		return;
+	}
+	// Staging checks the same delivery target and strictness as exporting.
+	options.target = deliveryTarget(suffix);
+	options.strict = strictExport();
+	// An MD3 whose source stores detail levels stages them with it, in one
+	// package operation (core/model_lod.h, core/model_design.h): as many as the
+	// delivery target loads, so a target that loads fewer still stages the model.
+	auto recipe = suffix == QStringLiteral("md3") ? m_document.mesh().detailLevels : QVector<ModelLodRecipeLevel>{};
+	const int stored = int(recipe.size());
+	ModelTargetProfile md3Target;
+	const bool md3 = suffix == QStringLiteral("md3") && findModelTargetProfile(suffix, options.target, &md3Target);
+	if (md3 && recipe.size() > std::max(0, md3Target.limits.detailLevels))
+		recipe.resize(std::max(0, md3Target.limits.detailLevels));
+	if (!recipe.isEmpty() && !handoffFiles)
+	{
+		m_status->setText(QCoreApplication::translate("VibeStudioModelEditor", "This model stores detail levels, which cannot be staged here. Export them with Detail Levels…."));
+		return;
+	}
+	// The detail files the package already holds beside the model, which the
+	// game loads with it unless this staging replaces them.
+	const auto packageFiles = md3 && readPackageFiles ? readPackageFiles(modelLodSiblingPaths(path)) : QHash<QString, QByteArray>{};
+	const auto baseDirectory = m_document.path().isEmpty() ? QString() : QFileInfo(m_document.path()).absolutePath();
+	ModelLodSet levels;
+	ModelLodSiblingReview siblings;
 	if (!performWork(
 			QCoreApplication::translate("VibeStudioModelEditor", "Prepare Model Handoff"),
-			[path, &bytes, &report](ModelDocument &candidate, QString *failure, const ModelWorkControl &control)
+			[suffix, options, recipe, baseDirectory, path, md3, md3Target, packageFiles, &bytes, &report, &levels, &siblings](
+				ModelDocument &candidate, QString *failure, const ModelWorkControl &control)
 			{
-				bytes = exportEditableModel(candidate.mesh(), QFileInfo(path).suffix(), 0, failure, control, &report);
-				return !bytes.isEmpty();
+				bytes = exportEditableModel(candidate.mesh(), suffix, options, failure, control, &report);
+				if (bytes.isEmpty())
+					return false;
+				if (!recipe.isEmpty() &&
+					!prepareModelLodFiles(candidate.mesh(), recipe, baseDirectory, path, options.target, options.strict, &levels, failure, control))
+					return false;
+				return !md3 || reviewModelLodSiblings(candidate.mesh(), path, int(recipe.size()), modelLodMemoryReader(packageFiles), md3Target, &siblings,
+													  failure, control);
 			},
 			&error))
 	{
-		m_status->setText(error);
+		presentRefusedExport(suffix, report, error);
 		return;
 	}
+	// What the package keeps beside the model comes first in the report, then
+	// the stored levels the target does not load.
+	QStringList notes = modelLodSiblingLines(siblings);
+	if (stored > recipe.size())
+	{
+		notes << (recipe.isEmpty() ? QCoreApplication::translate("VibeStudioModelEditor", "The source stores %n detail level(s), and %1 loads none beside the model, so only the model was staged.", nullptr, stored).arg(md3Target.label)
+								   : QCoreApplication::translate("VibeStudioModelEditor", "The source stores %n detail level(s); %1 loads %2, so the levels past it were not staged.", nullptr, stored)
+										 .arg(md3Target.label)
+										 .arg(recipe.size()));
+	}
+	report.notes = notes + report.notes;
+	const auto siblingStatus = siblings.isEmpty() ? QString() : QLatin1Char(' ') + modelLodSiblingSummary(siblings);
 	if (context && context().packagePath != package)
 	{
 		m_status->setText(QCoreApplication::translate(
-			"VibeStudioModelEditor", "The active package changed while preparing the model. Review the destination and stage again."));
+							  "VibeStudioModelEditor", "The active package changed while preparing the model. Review the destination and stage again."),
+						  LiveStatus::Problem);
+		return;
+	}
+	if (!recipe.isEmpty())
+	{
+		QVector<ModelStagedFile> files;
+		for (const auto &file : std::as_const(levels.files))
+			files.append({file.path, file.bytes});
+		if (!handoffFiles(files, place, origin, replace, &error))
+		{
+			m_status->setText(error);
+			return;
+		}
+		const int staged = int(files.size());
+		presentExportReport((place ? QCoreApplication::translate("VibeStudioModelEditor", "Model and %n detail level(s) staged and placed. Save the package and level separately.", nullptr, staged - 1)
+								   : QCoreApplication::translate("VibeStudioModelEditor", "Model and %n detail level(s) staged as one package step. Review and save the package plan.", nullptr, staged - 1)) +
+								siblingStatus + nativeUvStatus(),
+							report);
 		return;
 	}
 	if (!handoff(bytes, path, place, origin, replace, &error))
 	{
-		m_status->setText(error);
+		m_status->setText(error, LiveStatus::Problem);
 		return;
 	}
-	m_status->setText((place ? QCoreApplication::translate("VibeStudioModelEditor", "Model staged and placed. Save the "
-																					"package and level separately.")
-							 : QCoreApplication::translate("VibeStudioModelEditor", "Model staged. Review and save the package plan.")) +
-					  nativeUvStatus() + QLatin1Char(' ') + report.notes.join(QLatin1Char(' ')));
+	presentExportReport((place ? QCoreApplication::translate("VibeStudioModelEditor", "Model staged and placed. Save the "
+																					  "package and level separately.")
+							   : QCoreApplication::translate("VibeStudioModelEditor", "Model staged. Review and save the package plan.")) +
+							siblingStatus + nativeUvStatus(),
+						report);
 }
 bool ModelEditorDialog::requestClose(std::function<void()> afterDeferredClose)
 {
@@ -2512,6 +2857,14 @@ void ModelEditorDialog::checkpointRecovery()
 	{
 		return;
 	}
+	if (m_document.sourceBytes() > modelDocumentMaxSourceBytes)
+	{
+		// The writer would refuse it; say why before trying.
+		m_recoveryStatus->setText(QCoreApplication::translate("VibeStudioModelEditor",
+															  "Recovery copies are paused: the source would be %1, over the 64 MiB limit.")
+									  .arg(modelMebibytesText(m_document.sourceBytes())));
+		return;
+	}
 	ModelRecoverySnapshot snapshot;
 	snapshot.mesh = m_document.mesh();
 	snapshot.selection = m_document.selection();
@@ -2558,7 +2911,9 @@ void ModelEditorDialog::chooseRecovery()
 		return;
 	}
 	retireRecovery(restored->record.id);
+	clearExportReport();
 	m_document = std::move(restored->document);
+	m_historyNoticeShown = false;
 	m_previewMaterialSlots.clear();
 	m_lastSkinBindings.clear();
 	m_skinBindingsDetails->setEnabled(false);
@@ -2576,7 +2931,7 @@ void ModelEditorDialog::chooseRecovery()
 		}
 		m_frame->setCurrentIndex(restored->record.frame);
 		QSignalBlocker modeBlocker(m_selectionMode);
-		m_selectionMode->setCurrentIndex(!m_document.selection().surfaces.isEmpty() ? 5 : !m_document.selection().collision.isEmpty() ? 4
+		m_selectionMode->setCurrentIndex(!m_document.selection().joint.isEmpty() ? 6 : !m_document.selection().surfaces.isEmpty() ? 5 : !m_document.selection().collision.isEmpty() ? 4
 										 : !m_document.selection().tag.isEmpty()	 ? 3
 										 : !m_document.selection().edges.isEmpty()	 ? 2
 																					 : (m_document.selection().vertices.isEmpty() ? 0 : 1));
@@ -2584,7 +2939,7 @@ void ModelEditorDialog::chooseRecovery()
 	refresh(false);
 	checkpointRecovery();
 	m_status->setText(
-		QCoreApplication::translate("VibeStudioModelEditor", "Recovered an unsaved draft. Save it to an editable mesh source."));
+		QCoreApplication::translate("VibeStudioModelEditor", "Recovered an unsaved draft. Save it to an editable mesh source."), LiveStatus::Result);
 }
 
 } // namespace vibestudio

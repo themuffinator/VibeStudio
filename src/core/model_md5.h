@@ -19,22 +19,37 @@
 
 namespace vibestudio {
 
+struct ModelExportReport;
+
 struct ModelMd5ExportOptions {
 	// The "commandline" header value; Doom 3 writes the exporter's options.
 	QString commandLine;
 	// md5anim frame rate when a clip has none.
 	int defaultFrameRate = 24;
+	// An explicit md5anim frame rate (1 to 100,000) that replaces the clip's
+	// own; zero keeps the clip's. A clip whose rate is not a whole number is
+	// refused unless this is set.
+	int frameRate = 0;
 };
 
 // md5mesh text for every surface. A model without a skeleton gets one
 // "origin" joint at the model origin, with its first frame as the bind pose.
-// Each surface's shader is its first skin path, else its name.
+// Each surface's shader is its first skin path, else its name. MD5 joints
+// hold rotation and translation only: a joint's bind scale, shear or
+// reflection moves into its weight offsets, so the bind-pose mesh is exact.
+// The report notes that, the surfaces whose material is named after them,
+// and how far Doom 3's rebuilt normals differ from the model's.
 [[nodiscard]] QByteArray exportModelMd5Mesh(const ModelMesh& mesh, const ModelMd5ExportOptions& options = {}, QString* error = nullptr,
-	const ModelWorkControl& control = {});
+	const ModelWorkControl& control = {}, ModelExportReport* report = nullptr);
 // md5anim text for skeleton.clips[clipIndex]. Needs a skeleton; every joint
-// component is animated, so the file round-trips exactly.
+// component is animated, so the file round-trips exactly. A pose whose
+// influencing joint is scaled, sheared or mirrored differently from its bind
+// pose is refused, naming the joint, clip and frame, because the md5mesh
+// carries only the bind stretch. A rate that is not a whole number from 1 to
+// 100,000 is refused unless options.frameRate is set. The report names the
+// clip, its frame count and the rate written.
 [[nodiscard]] QByteArray exportModelMd5Anim(const ModelMesh& mesh, int clipIndex, const ModelMd5ExportOptions& options = {},
-	QString* error = nullptr, const ModelWorkControl& control = {});
+	QString* error = nullptr, const ModelWorkControl& control = {}, ModelExportReport* report = nullptr);
 
 // One `model` declaration from a Doom 3 .def file.
 struct Doom3ModelDecl {

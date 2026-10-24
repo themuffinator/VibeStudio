@@ -18,9 +18,11 @@ class LevelScenePanel final : public QWidget {
 	explicit LevelScenePanel(LevelMapDocument* document, QWidget* parent = nullptr);
 	void refresh();
 	void refreshSelection();
+	void setSelectionUndoEnabled(bool enabled) { m_selectionUndo = enabled; }
   Q_SIGNALS:
 	void sceneChanged();
 	void selectionChanged();
+	void contextRequested(const QString& id, bool closeAll);
 
   private:
 	QString currentId() const;
@@ -32,6 +34,7 @@ class LevelScenePanel final : public QWidget {
 	QString m_source, m_mapName;
 	QByteArray m_hash;
 	bool m_refreshing = false;
+	bool m_selectionUndo = false;
 	QTreeWidget* m_tree = nullptr;
 	QLineEdit* m_name = nullptr;
 	QComboBox* m_parent = nullptr;
@@ -44,10 +47,13 @@ class LevelScenePanel final : public QWidget {
 	QPushButton* m_remove = nullptr;
 	QPushButton* m_assign = nullptr;
 	QPushButton* m_reset = nullptr;
-	// Linked copies of the chosen group (core/level_linked_groups.h).
+	// Linked groups of the chosen group (core/level_linked_groups.h).
 	QPushButton* m_linkCopy = nullptr;
 	QPushButton* m_unlink = nullptr;
 	QPushButton* m_updateLinks = nullptr;
 	QPushButton* m_selectLinks = nullptr;
+	QPushButton* m_openGroup = nullptr;
+	QPushButton* m_closeGroup = nullptr;
+	QLabel* m_context = nullptr;
 };
 } // namespace vibestudio

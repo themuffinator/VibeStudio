@@ -16,11 +16,16 @@
 
 namespace vibestudio {
 
+struct ModelExportReport;
+
 // One frame as an ASE scene: one GEOMOBJECT and one material per surface,
 // with mapping coordinates and per-face normals. The material's BITMAP is
 // the surface's first skin path (else its name) written under a /base/
 // folder, because Doom 3 names a model's material from the path after base/;
-// q3map2 reads the same name.
-[[nodiscard]] QByteArray exportModelAse(const ModelMesh& mesh, int frameIndex, QString* error = nullptr, const ModelWorkControl& control = {});
+// q3map2 reads the same name. The report lists surfaces left out because the
+// frame holds no drawable geometry for them, and surfaces named as their own
+// material.
+[[nodiscard]] QByteArray exportModelAse(const ModelMesh& mesh, int frameIndex, QString* error = nullptr, const ModelWorkControl& control = {},
+	ModelExportReport* report = nullptr);
 
 } // namespace vibestudio

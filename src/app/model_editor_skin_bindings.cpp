@@ -1,5 +1,7 @@
 #include "app/model_editor_dialog.h"
+#include "app/dialog_screen_fit.h"
 #include "app/model_skin_source_dialog.h"
+#include "app/wrapping_action_button.h"
 
 #include <QCoreApplication>
 #include <QDialogButtonBox>
@@ -16,9 +18,9 @@ namespace vibestudio
 {
 void ModelEditorDialog::addSkinBindingControls(QFormLayout *surface)
 {
-	m_skinBindingsFile = new QPushButton(QCoreApplication::translate("VibeStudioModelEditor", "Apply .skin File…"));
-	m_skinBindingsPackage = new QPushButton(QCoreApplication::translate("VibeStudioModelEditor", "Apply Package .skin…"));
-	m_skinBindingsDetails = new QPushButton(QCoreApplication::translate("VibeStudioModelEditor", "Last Skin Import Details…"));
+	m_skinBindingsFile = new WrappingActionButton(QCoreApplication::translate("VibeStudioModelEditor", "Apply .skin File…"), 2);
+	m_skinBindingsPackage = new WrappingActionButton(QCoreApplication::translate("VibeStudioModelEditor", "Apply Package .skin…"), 2);
+	m_skinBindingsDetails = new WrappingActionButton(QCoreApplication::translate("VibeStudioModelEditor", "Last Skin Import Details…"), 2);
 	m_skinBindingsFile->setObjectName(QStringLiteral("applyMeshSkinFile"));
 	m_skinBindingsPackage->setObjectName(QStringLiteral("applyMeshPackageSkin"));
 	m_skinBindingsDetails->setObjectName(QStringLiteral("meshSkinBindingDetails"));
@@ -65,7 +67,7 @@ void ModelEditorDialog::addSkinBindingControls(QFormLayout *surface)
 		auto *buttons = new QDialogButtonBox(QDialogButtonBox::Close);
 		connect(buttons, &QDialogButtonBox::rejected, &dialog, &QDialog::reject);
 		layout->addWidget(buttons);
-		dialog.resize(760, 480);
+		fitDialogToScreen(&dialog, QSize(760, 480));
 		dialog.exec();
 	});
 }

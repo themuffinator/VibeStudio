@@ -1,5 +1,30 @@
 # Support Matrix
 
+Animation range copying/reversal is available within one rig through the GUI
+and `model curve-transfer`, including automatic TRS capture, cubic boundary
+slopes, reversed step directions, selected channels and reviewed destination
+motion. Cross-document animation exchange/retargeting and original-engine
+acceptance remain open. See [range transfer](MODEL_ANIMATION_CURVES.md#transfer-or-reverse-a-range).
+
+Skeleton authoring is **Partial**: add, rename, reparent and unused-leaf
+deletion preserve model-space poses, and numeric vertex weights update retained
+skeletal frames through shared GUI/CLI operations. Source save/reopen, recovery
+and MD5/IQM export keep the authored data or report what their formats cannot
+hold. Independent frame edits are protected;
+bind/pose transforms and dense clip authoring use **Edit Skeletal Animation**
+and `model pose`. Bone overlays and viewport joint handles share those operations.
+Dense skeletal models open with a [working set](MODEL_SKELETAL_WORKING_SET.md)
+of clips baked into editable frames, chosen in **Working Set…** or with
+`--clips`; clips outside it stay editable through the skeletal tools.
+[Influence inspection/selection, explicit binding and weight repair](MODEL_SKINNING.md)
+share those document services. [Staged weight painting](MODEL_WEIGHT_PAINT.md)
+and [mirrored/spatial transfer](MODEL_WEIGHT_TRANSFER.md) are available, alongside
+[two-bone IK](MODEL_IK.md) and [persistent animation curves](MODEL_ANIMATION_CURVES.md).
+Stored curve keys can be selected across joint channels, retimed, duplicated,
+removed and reduced with bounded continuous error through GUI and CLI.
+Original-engine acceptance remains open.
+See [Skeleton authoring](MODEL_RIG.md).
+
 Session metering supports stereo pre/post track, bus and master sample peaks,
 RMS, held maxima, per-channel over-range counts and phase correlation. The GUI
 shows live playback readings; **Analyze Range** and `asset audio-session meters`
@@ -391,13 +416,13 @@ is new and tested on synthetic files only; see
 | Quake III MD3 (`IDP3` version 15) | Full | Decodes: per-frame mins, maxs, local origin, radius and name; `numTags x numFrames` tags with name, origin and a 3x3 axis; and a surface chain walked by each surface's own `ofsEnd` with every hop bounds-checked, giving per-surface shader names, float STs, `int32` triangles and `int16` XYZ at 1/64 unit steps, with normals unpacked from the 16-bit lat/long pair. Does not: nothing assembles a multi-part model from the tags — there is no tag following and no head/upper/lower attachment; shader names are treated as texture paths only, with no `.shader` script parsed and `shaderIndex` unused. Surfaces with fewer frames than the model have their last frame repeated, with a warning. If no surface survives the walk, geometry is unavailable and "No MD3 surface could be decoded." is recorded. |
 | MDC (`IDPC` version 2) | Partial | Base and compressed frames (`MDC_DIST_SCALE` offsets with the 256-entry normal table), shaders, STs, triangles and tags with compressed angles. Read only; export MD3, which RTCW and ET also load. |
 | MDR (`RDM5` version 2) | Partial | Per-frame model-space bone matrices, including compressed frames, weighted vertices of the first level of detail, and tags. The file has no hierarchy or bind pose: joints are roots and the first frame is the bind pose. Read only. |
-| IQM (`INTERQUAKEMODEL` version 2) | Partial | Meshes, positions, UVs, normals, blend indices and weights, joints, poses, animations with their rates, and bounds; static meshes too. Written with joints, weights and every skeletal clip. |
+| IQM (`INTERQUAKEMODEL` version 2) | Partial | Meshes, positions, UVs, normals, blend indices and weights, joints, poses, animations with their rates, and bounds; static meshes too. Written with joints, weights and every skeletal clip; influences past four, 8-bit weights and 16-bit pose channels are reported with the largest vertex movement they cause. |
 | Hexen II MDL (`RAPO` version 50) | Partial | Quake MDL with separate texture-coordinate indices: poses, frame groups, indexed skins and model flags. Read only. |
 | Heretic II FM (`header` chunks) | Partial | Frames, skins and GL-command texture coordinates (without the half-texel offset); each mesh node becomes a surface. Read only. |
 | MDS (`MDSW` version 4) | Partial | Bones with absolute rotations and parent distances, weights, frames, bone and named tags, at the full level of detail. Torso blending is a run-time effect and is not applied. Read only. |
 | MDM (`MDMW` version 3) and MDX (`MDXW` version 2) | Partial | MDM surfaces and weights skinned against the MDX found beside the mesh (or `animations/human/base/body.mdx`); an MDX alone opens as a skeleton with frames. An MDM without its MDX is refused. Read only. |
 | Ghoul 2 GLM (`2LGM`) and GLA (`2LGA`), version 6 | Partial | GLM surfaces of the first level of detail, the surface hierarchy, off and bolt surfaces (bolts as tags) and up to four weights per vertex, against the GLA the mesh names; a GLA alone opens as a skeleton. A GLM without its GLA, or a Jedi Outcast mesh with only a Jedi Academy skeleton, is refused. Read only. |
-| MD5 (`MD5Version 10`) | Partial | `.md5mesh` joints, meshes, weights and shaders; `.md5anim` hierarchy, base frame, bounds and frames at their rate; every animation beside the mesh and those named by Doom 3 `.def` model declarations. Both written back. |
+| MD5 (`MD5Version 10`) | Partial | `.md5mesh` joints, meshes, weights and shaders; `.md5anim` hierarchy, base frame, bounds and frames at their rate; every animation beside the mesh and those named by Doom 3 `.def` model declarations. Both written back: bind scale moves into the weight offsets, poses that scale a joint apart from its bind pose are refused, and an md5anim needs a whole frame rate. |
 | LightWave LWO (`LWO2`, `LWOB`) | Partial | The first layer: points, polygons, UV maps, smoothing angles and surface names as materials, as Doom 3 and Quake 4 load them. Read only. |
 | ASCII Scene Export (`*3DSMAX_ASCIIEXPORT`) | Partial | Objects, materials, mapping and normals; the first mesh of each object; sub-materials split into surfaces as q3map2 does. Written as one static frame. |
 | KVX voxels | Partial | The first mip level, meshed into faces the way GZDoom meshes slabs, coloured from the file's palette and placed as VOXELDEF places them. Read only. |
@@ -410,8 +435,8 @@ is new and tested on synthetic files only; see
 | 3D viewport | Full | `ModelViewport` draws on the studio's 3D renderer (OpenGL or Vulkan) and presents the frame with `QPainter` overlays: orthographic/perspective projection, a depth buffer, perspective-correct repeating bilinear textures, near-plane clipping that retains UVs, peeled alpha compositing and exact nearest-surface picking through a triangle-ID target, built around the idTech Z-up convention. Selection hatches and edges respect occlusion; wireframe intentionally shows the whole mesh. Wireframe, flat-shaded and textured modes; orbit, pan and zoom by mouse and keyboard; per-triangle hover reporting. Backface culling, grid, axes and edge overlays exist on the widget but are not wired to shell controls. |
 | Skin resolution | Partial | `resolveModelSkin` collects the mesh and surface skin paths, normalises them, and tries the literal path plus the stem with each of `pcx`, `tga`, `jpg`, `png`, `wal` and `lmp`, matching package entries exactly and then case-insensitively. The first that decodes wins. If nothing resolves it falls back to the first embedded skin, which only MDL has. There is no directory scanning, fuzzy matching or lookup outside the open package. |
 | Animations | Partial | Native model previews infer default ranges from consecutive frame-name stems; editable sources retain indexed clips. The mesh editor and CLI add/rename/range/delete clips, copy full poses and generate validated in-between frames across every surface and attachment. Session-only Smooth preview blends positions, normal directions and rigid tags, including the selected clip's end-to-start loop, at an elapsed-time FPS rate. Pause/step restores exact poses and reduced motion disables playback. Game-specific timing/configuration, attached-model assembly and original-engine acceptance remain open. See [Mesh Editing](MODEL_MESH.md). |
-| Skeletal animation | Partial | MD5, IQM, MDS, MDM/MDX, MDR, Ghoul 2 and Half-Life skeletons keep their joints, weights, clips and skeletal tags, and are posed into frames for preview, editing and frame-based export (up to 8,192 frames). Bind-pose edits re-bind the moved vertices; topology edits transfer weights from the nearest original vertex; `.mesh.json` version 8 saves the skeleton. Joint editing, weight painting and pose mode are planned. |
-| Export | Partial | `exportModelFrameObj` writes one OBJ frame with groups, UVs and normals; editable export adds primary material assignments but no MTL companion. Shared authoring writes MDL, MD2 and MD3 with target limits and quantization checks, MD5 mesh and animation and IQM with joints and weights, and ASE as one static frame. MDL retains indexed skins, native groups/times and header metadata, with exact all-pose seam sharing. Its palette remains external. Schema-4 MDL and schema-3 ordinary sources/recovery retain authoring metadata; native output receives resolved UVs. MD3 retains tags; MDL/MD2 reject tags and MD2/MD3 reject embedded skins. Original-engine MDL acceptance remains open. |
+| Skeletal animation | Partial | MD5, IQM, MDS, MDM/MDX, MDR, Ghoul 2 and Half-Life skeletons retain joints, weights, clips and skeletal tags. Native preview bakes up to 8,192 frames; editable sources have a smaller budget. GUI/CLI tools author joint hierarchies, numeric weights, bind transforms, dense joint poses and clips, with parent-relative interpolation and protected independent edits. `.mesh.json` version 8 retains the skeleton. Bone overlays, depth-aware picking and shared viewport/numeric joint transforms are available; staged weight painting is available; mirrored/spatial transfer is available; curves and IK remain planned. |
+| Export | Partial | `exportModelFrameObj` writes one OBJ frame with groups, UVs and normals; editable export adds primary material assignments but no MTL companion. Shared authoring writes MDL, MD2 and MD3 with quantization checks, MD5 mesh and animation and IQM with joints and weights, and ASE as one static frame; every MDL, MD2, MD3, IQM and MD5 export is first checked against a [delivery target](MODEL_TARGETS.md) (original engines by default, or the target saved with the project; QuakeSpasm, FTE, DarkPlaces, Q2PRO, ioquake3, Quake3e, Return to Castle Wolfenstein, Enemy Territory and GZDoom where their limits differ), which reports every limit exceeded, with the faces or vertices concerned, before anything is written; Prepare for Target applies the suggested splits, joins, reductions and moves as one undo step. MD3 [detail levels](MODEL_LOD.md) can be generated or hand-made, stored with the source, checked for the frames and surface names the engine needs, inspected in existing sets, and staged with the model. The MD5, IQM and ASE files are checked by an independent reader, not yet by the engines. MDL retains indexed skins, native groups/times and header metadata, with exact all-pose seam sharing. Its palette remains external. Schema-4 MDL and schema-3 ordinary sources/recovery retain authoring metadata; native output receives resolved UVs. MD3 retains tags; MDL/MD2 reject tags and MD2/MD3 reject embedded skins. Original-engine MDL acceptance remains open. |
 | CLI | Full | `model inspect` prints `modelMeshSummaryText` or JSON for a loose file or a package entry, with `--palette` for MDL's indexed skins. `model export` takes `--frame`, `--material`, `--output`, `--overwrite` and `--dry-run`, and exits 5 (`unavailable`) when geometry is unavailable, which is what animation-only MDX, GLA and `.md5anim` files return. `model formats` lists every format with its engines, games and companions. |
 | Hardening | Full | Every read is range-checked. Caps: 8192 frames, 2048 surfaces, 1048576 vertices and triangles per surface, 1024 skins, 8192 tags, 1024 skin-group frames, and roughly 4M vertex slots per model. Non-finite scale or translate is an error; a file past any cap is rejected rather than decoded. |
 
@@ -640,6 +665,7 @@ or a Radiant header comment selects idTech3; an explicit hint overrides it.
 | Undo/redo | Full | Every edit below is one undo command, with a saved-depth marker so "modified" versus "saved" is reported rather than guessed; the Levels History tab jumps to any step. |
 | Add and delete | Full for Quake-family maps; things only for Doom | Point entities and box brushes (in the map's own face format) are added; entities, brushes and patches are deleted, an entity taking its brushes. Doom and Hexen things are added, duplicated and deleted; vertices, linedefs and sectors are not. `worldspawn` is never deleted. |
 | Duplicate and clipboard | Full for Quake-family maps | Copies keep their source text as a template. The clipboard carries plain `.map` text: entity blocks and bare brush blocks, as TrenchBroom and Radiant exchange. |
+| TrenchBroom layers and groups | Partial | Quake-family maps open with TrenchBroom's `func_group` layers, groups and linked groups (`_tb_type`, `_tb_id`, `_tb_name`, `_tb_layer`, `_tb_group`, `_tb_linked_group_id`, `_tb_transformation`, `_tb_protected_properties`) read into the scene, and save back in that form when they opened with it or **Save As** / `--scene-format trenchbroom` chooses it. Group visibility and locks stay in VibeStudio's scene note only; clipboard and prefab text is not converted. See [Level Scene Organization](LEVEL_SCENE.md#trenchbroom-map-keys). |
 | Move, rotate and flip | Shared brush texture policy | Numeric/viewport moves, numeric/quick rotation and flips use exact classic/Valve/primitive texture lock, with explicit map-wide Valve conversion when needed. Texture Lock defaults on and persists; CLI defaults match. Numeric and quarter-turn rotations share model-style entity orientation. Binary Doom/Hexen rotation handles shared vertices, integer rounding, collapse checks and node invalidation. Quake mirrors preserve winding; Connected Doom/Hexen/UDMF mirroring retains sidedef ownership. UDMF transforms preserve fractional coordinates and untouched source spans through cancellable workers. Per-object snap and duplicate/paste offsets need a separate texture-policy audit. |
 | Brush components | Bounded authoring | Vertex, edge and face selection/movement in a dedicated draft editor and CLI. Convex reconstruction splits bent faces; collapse requires an explicit option. Classic/Valve 220/brushDef/brushDef3 retain source material syntax, flags and comments. Limits: 128 faces, 256 vertices, ±32768 units. Focused geometry/GUI checks and synthetic q3map2-to-PK3 validation passed. Deformed-face texture lock and physical interaction acceptance remain. See [Level Editor](LEVEL_EDITOR.md). |
 | Clip | Full for Quake-family brushes | A plane cuts the selected brushes, keeping one side or both as two brushes. Each piece is the brush's own face lines, less those the cut leaves without an edge, plus a face on the plane written in the brush's format (classic, Valve 220 with paraxial axes, `brushDef`, or `brushDef3`), with the texture and Quake II/III flags of its most used face. Brushes the plane misses stay as they are; brushes written on shared lines are refused. |
@@ -651,7 +677,7 @@ or a Radiant header comment selects idTech3; an explicit hint overrides it.
 | Resize | Shared brush texture policy | Bounds resize maps brush planes, patch controls, origins and things. Source texture parameters stay fixed by default. Texture Scale Lock (GUI) or `--texture-lock on` stretches UVs with the geometry in all four brush dialects, refusing unrepresentable classic mappings unless map-wide Valve conversion is enabled. Numeric controls and viewport handles share the preference and atomic undo service. |
 | Snap to grid | Full | Each selected entity, brush, patch, thing or vertex moves by its own amount. |
 | Face alignment | Full for classic and Valve 220 faces | A click on a face in the Levels 3D preview opens it in the Inspector, which lists a selected brush's faces by the way they face, each with its texture, shift, rotation, and scale editable in place, and `map edit --select brush:N --set face2.shiftx=16` does the same. Only the edited face's line is rewritten, and a face whose line another brush's face shares, as in a compact file, refuses the edit; a Valve 220 face shifts through its axis offsets and turns its axes about the face. A brushDef face takes a new texture, but its texture matrix is shown, not edited. A face whose numbers are not all after its name on its line (too few, or carried to the next line) refuses a number edit rather than dropping it on save; comments by the numbers are stepped over. Numbers are written to six places, so a scale too small to survive that, or any value past a million, is refused. A brush that writes two faces on one line keeps them: it refuses moves, turns, flips, resizes, and copies, as it already refused clip, hollow, and carve, because save-back would write one face over the other. |
-| Apply texture | Full for Quake-family maps | One texture on every face of the selected brushes (a brush entity's included) and on the selected patches, each name rewritten in place. Doom walls and flats take Replace Texture instead. |
+| Apply texture | Full for Quake-family maps | One texture on every face of the selected brushes (a brush entity's included) and on the selected patches, each name rewritten in place. Doom walls and flats take Find and Replace Textures instead. |
 | Replace texture | Full | Brush faces, patches, and Doom wall textures and flats, across the map or the selection. |
 | Target links | Full | `target`, `killtarget`, `pathtarget`, `combattarget` and `deathtarget` to `targetname`, drawn in the viewport and in `map render --links`. On Doom-format maps the links are tags: a line with a special and a tag points at each sector carrying the tag (`levelMapTagLinks`), drawn as Doom Builder's association arrows, and Select Targets and Select Sources follow them; Hexen lines are not read as tag links yet. Connect Entities (Levels and `map connect`) makes the selected entities target the one picked last. That entity keeps its `targetname`; without one it takes the name a source already targets, so that link keeps firing (Radiant's "prioritize existing target key"), or else `t<N>`. Select Targets and Select Sources follow the links. |
 
@@ -794,11 +820,36 @@ automatic loudness matching and cross-file transactional rollback are unsupporte
 
 ## Native Quake III Player Packages
 
-The modeller reviews and publishes non-team lower/upper/head player PK3s with
-complete native animation poses/tags, primary `.skin` assignments, configuration,
-a converted TGA icon and captured material dependencies. GUI and CLI share
-validation, cancellation, input protection and deterministic atomic output.
-Exactly three native roles, a single-pose head and an open asset context are
-required. Team variants, custom sounds, LOD generation, shader-language/video
-certification and gameplay acceptance remain open. See the precise
+Partial. The modeller reviews and publishes lower/upper/head player PK3s with
+complete native animation poses/tags, a `.skin` set and TGA icon for every skin
+(including the red and blue team skins, from `.skin` files or the parts' stored
+[skin variants](MODEL_SKIN_VARIANTS.md)), configuration, optional generated or
+stored detail levels (`lower_1.md3`, `lower_2.md3` and so on), the 13 custom player
+sounds converted to mono PCM WAV where needed, and captured material dependencies.
+Review refuses an upper part without `tag_weapon` and skins that miss a surface,
+and notes a missing `tag_flag` and default sounds. GUI and CLI share validation,
+cancellation, input protection and deterministic atomic output. Exactly three
+native roles, a single-pose head and an open asset context are required. The
+optional engine oracle checks player and team skin lookup against the original
+loader functions; shader-language/video certification and gameplay acceptance in
+the game remain open. See the precise
 [target limits](MODEL_ASSEMBLY.md#native-player-packages).
+
+An existing player in a package or folder opens as a new assembly (**Open Player…**
+or `model assembly --new --from-player`): its three models as package parts, a
+linked skin, native animation from its `animation.cfg`, and Player Package
+settings for its other skins, icons and sounds. Reviewing a VibeStudio-published
+player again reproduces its files byte for byte in the tests. Detail levels, Team
+Arena character and head folders, and the publication settings are not kept in
+the assembly source. See [Opening a Quake III player](MODEL_ASSEMBLY.md#opening-a-quake-iii-player).
+
+## Model Skin Variants
+
+Partial. Editable sources keep named skin variants (schema 14), edited in **Skin
+Variants…** or with `model skin-variants` as one undo step. `model skin-export` and
+the dialog write a variant, or any model's primary materials, as a Quake III
+`.skin`, and a variant as a Doom 3 skin declaration; variants that a
+material-to-material Doom 3 skin cannot express are refused. Doom 3 output is
+checked by VibeStudio's readers only. Choosing a variant in model browsers or on
+placed models, MD3 skin-number shader lists and staging variant skins with a model
+are planned. See [Skin Variants](MODEL_SKIN_VARIANTS.md).

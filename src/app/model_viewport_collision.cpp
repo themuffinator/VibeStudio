@@ -28,6 +28,7 @@ void ModelViewport::setEditCollision(const QString &name)
 	m_editCollision = valid;
 	if (!valid.isEmpty())
 	{
+		m_editJoint.clear();
 		m_editTag.clear();
 		m_editVertices.clear();
 		m_editSurfaces.clear();

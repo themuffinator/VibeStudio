@@ -1,5 +1,6 @@
 #include "app/model_viewport.h"
 
+#include "app/studio_accessibility.h"
 #include "core/model_tags.h"
 
 #include <QTimer>
@@ -206,6 +207,14 @@ void ModelViewport::togglePlayback()
 	if (m_playing)
 	{
 		pause();
+	}
+	else if (m_reducedMotion && m_hasMesh && canAnimate())
+	{
+		// The key or command gets the answer the disabled Play button's
+		// tooltip gives, so a keyboard user learns why nothing moves.
+		const QString reason = tr("Playback is off because reduced motion is on. Page Up and Page Down still step frames.");
+		announceStatus(this, reason, LiveStatus::Problem);
+		Q_EMIT playbackRefused(reason);
 	}
 	else
 	{

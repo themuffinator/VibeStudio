@@ -69,6 +69,25 @@ bool transformModelUvIslands(const ModelSurface &source, const QSet<int> &faces,
 					"ModelUvTransform", "Select complete UV islands. Use Select Islands to expand the current components first."));
 		}
 	}
+	for (auto it = transform.islandScales.cbegin(); it != transform.islandScales.cend(); ++it)
+	{
+		if (!work.step()) return false;
+		if (it.key() < 0 || it.key() >= selected.size() || !selected[it.key()] || !std::isfinite(it.value()) ||
+			it.value() <= 0)
+			return fail(QCoreApplication::translate("ModelUvTransform", "Island scales must be positive finite factors for selected islands."));
+	}
+	if (!source.skinning.isEmpty())
+	{
+		if (source.skinning.first.size() != source.vertexCount || source.skinning.count.size() != source.vertexCount)
+			return fail(QCoreApplication::translate("ModelUvTransform", "Every UV corner must retain its complete skin influences."));
+		for (int v = 0; v < source.vertexCount; ++v)
+		{
+			if (!work.step()) return false;
+			if (source.skinning.first[v] < 0 || source.skinning.count[v] < 0 || source.skinning.count[v] > 64 ||
+				qint64(source.skinning.first[v]) + source.skinning.count[v] > source.skinning.influences.size())
+				return fail(QCoreApplication::translate("ModelUvTransform", "Every UV corner must retain its complete skin influences."));
+		}
+	}
 	// Unselected faces retain their original indices. Otherwise the first selected
 	// island owns the original; later islands sharing that index receive copies.
 	QVector<int> owners(source.vertexCount, -2);
@@ -130,6 +149,7 @@ bool transformModelUvIslands(const ModelSurface &source, const QSet<int> &faces,
 		if (!selected[island])
 			continue;
 		const auto &chart = topology.islands[island];
+		const double factor = transform.islandScales.value(island, 1);
 		auto lo = coordinate(chart.vertices.first()), hi = lo;
 		for (int vertex : chart.vertices)
 		{
@@ -151,6 +171,16 @@ bool transformModelUvIslands(const ModelSurface &source, const QSet<int> &faces,
 			{
 				target = candidate.texCoords.size();
 				candidate.texCoords.append(source.texCoords[vertex]);
+				if (!source.topologyVertices.isEmpty())
+					candidate.topologyVertices.append(source.topologyVertices[vertex]);
+				appendModelVertexOriginCopy(&candidate, vertex);
+				if (!source.skinning.isEmpty())
+				{
+					candidate.skinning.first.append(candidate.skinning.influences.size());
+					candidate.skinning.count.append(source.skinning.count[vertex]);
+					for (int n = 0; n < source.skinning.count[vertex]; ++n)
+						candidate.skinning.influences.append(source.skinning.influences[source.skinning.first[vertex] + n]);
+				}
 				for (int frame = 0; frame < source.frames.size(); ++frame)
 				{
 					if (!work.step())
@@ -161,7 +191,7 @@ bool transformModelUvIslands(const ModelSurface &source, const QSet<int> &faces,
 			}
 			mapped[vertex] = target;
 			const auto uv = coordinate(vertex);
-			const double u = (uv.u - pivotU) * transform.scale.u, v = (uv.v - pivotV) * transform.scale.v;
+			const double u = (uv.u - pivotU) * transform.scale.u * factor, v = (uv.v - pivotV) * transform.scale.v * factor;
 			const double newU = u * cosine - v * sine + pivotU + transform.offset.u;
 			const double newV = u * sine + v * cosine + pivotV + transform.offset.v;
 			if (!bounded(newU) || !bounded(newV))

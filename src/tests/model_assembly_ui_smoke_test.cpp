@@ -139,6 +139,10 @@ int main(int argc, char **argv)
 				 "branch removal and undo preserve descendants");
 	const auto beforePlayback = modelAssemblyFingerprint(editor.document().assembly());
 	const double startTime = editor.timeSeconds();
+	// Playback holds its next sample while a frame renders, and this test's
+	// first frame waits for the GPU renderer to start (the shell starts it at
+	// launch). Measure playback from a drawn view, not from renderer start-up.
+	ok &= expect(tests::settleModelViewport(*viewport), "the assembly view has drawn before playback");
 	play->setChecked(true);
 	QEventLoop playback;
 	QTimer::singleShot(300, &playback, &QEventLoop::quit);

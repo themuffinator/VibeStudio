@@ -80,6 +80,7 @@ void ApplicationShell::adoptLevelMapDocument(LevelMapDocument document)
 {
 	retireLevelRecovery();
 	m_levelMapDocument = std::move(document);
+	m_levelMapDocument.insertionVisibility = m_levelControls.insertionVisibility;
 	++m_levelMapLoadSerial;
 	m_leakTrailPath.clear();
 	m_levelMapViewportKey.clear();
@@ -208,7 +209,17 @@ bool ApplicationShell::saveLevelDocument(const QString& path, bool overwrite, QS
 		statusBar()->showMessage(message);
 		return false;
 	}
+	const QString previousSourceKey = QStringLiteral("%1|%2").arg(snapshot.sourcePath,snapshot.mapName);
+	const bool preserveViewport = m_levelMapViewportSourceKey == previousSourceKey
+		&& m_levelMapDocument.revision == snapshot.revision && m_levelMapDocument.sourcePath == snapshot.sourcePath
+		&& m_levelMapDocument.mapName == snapshot.mapName;
 	adoptLevelDocumentSave(&m_levelMapDocument, report);
+	if (preserveViewport) {
+		// First save / Save As rebinds this document. Keep its component picks,
+		// tool and camera just as for an ordinary edit; draft publication still
+		// checks the changed save identity and cancels any pending gesture.
+		m_levelMapViewportSourceKey = QStringLiteral("%1|%2").arg(m_levelMapDocument.sourcePath,m_levelMapDocument.mapName);
+	}
 	copyLevelBookmarksAfterSave();
 	for (int index = 0; index < m_codeTabs.size(); ++index) {
 		if (mapWriteIdentity(m_codeTabs.at(index).path) == target) {
@@ -271,13 +282,29 @@ bool ApplicationShell::saveLevelMapAsFromUi()
 								 ? m_levelMapDocument.mapName
 								 : QFileInfo(m_levelMapDocument.sourcePath).completeBaseName() + QStringLiteral("-edited");
 	const QString suggested = QDir(directory).filePath(basename + QLatin1Char('.') + suffix);
-	const QString output = QFileDialog::getSaveFileName(this, tr("Save Level Map As"), suggested,
-														suffix == QStringLiteral("wad") ? tr("Doom WAD (*.wad)") : tr("Level map (*.map)"));
+	if (suffix == QStringLiteral("wad")) {
+		const QString output = QFileDialog::getSaveFileName(this, tr("Save Level Map As"), suggested, tr("Doom WAD (*.wad)"));
+		// QFileDialog has already confirmed replacement of an existing destination.
+		return !output.isEmpty() && saveLevelDocument(output, true);
+	}
+	// The second type also writes the layers and groups as TrenchBroom's
+	// func_group entities, so TrenchBroom opens the map with the same groups
+	// (core/level_scene_trenchbroom.h). Later saves keep the choice.
+	const QString plainType = tr("Level map (*.map)");
+	const QString trenchBroomType = tr("Level map with TrenchBroom groups (*.map)");
+	QString chosenType = m_levelMapDocument.sceneStorage == LevelSceneStorage::TrenchBroom ? trenchBroomType : plainType;
+	const QString output =
+		QFileDialog::getSaveFileName(this, tr("Save Level Map As"), suggested, plainType + QStringLiteral(";;") + trenchBroomType, &chosenType);
 	if (output.isEmpty()) {
 		return false;
 	}
-	// QFileDialog has already confirmed replacement of an existing destination.
-	return saveLevelDocument(output, true);
+	const LevelSceneStorage previous = m_levelMapDocument.sceneStorage;
+	m_levelMapDocument.sceneStorage = chosenType == trenchBroomType ? LevelSceneStorage::TrenchBroom : LevelSceneStorage::VibeStudio;
+	if (!saveLevelDocument(output, true)) {
+		m_levelMapDocument.sceneStorage = previous;
+		return false;
+	}
+	return true;
 }
 
 void ApplicationShell::checkpointLevelDocument()

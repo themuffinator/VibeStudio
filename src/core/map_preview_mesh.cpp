@@ -1,4 +1,5 @@
 #include "core/map_preview_mesh.h"
+#include "core/level_visibility.h"
 #include "core/level_model_appearance.h"
 #include "core/level_scene.h"
 #include "core/doom_preview_geometry.h"
@@ -201,7 +202,7 @@ QString levelModelSurfaceMaterialKey(const QString& modelPath, int surfaceIndex)
 LevelMapPreviewMesh buildLevelMapPreviewMesh(const LevelMapDocument& document, const LevelMapPreviewMeshOptions& options)
 {
 	LevelMapPreviewMesh preview;
-	const auto hidden = levelSceneHiddenObjects(document);
+	const auto hidden = levelMapHiddenObjects(document);
 	ModelMesh& mesh = preview.mesh;
 	mesh.sourcePath = document.sourcePath;
 	mesh.formatId = QStringLiteral("level-map-preview");

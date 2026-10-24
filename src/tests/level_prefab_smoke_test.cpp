@@ -140,7 +140,7 @@ int main(int argc, char **argv)
 		}
 	}
 	auto malformed = QJsonDocument::fromJson(bytes).object();
-	malformed.insert(QStringLiteral("version"), 2);
+	malformed.insert(QStringLiteral("version"), 3);
 	ok &= expect(!parseLevelPrefab(QJsonDocument(malformed).toJson(), &prefab, &error), "future schema rejected");
 	malformed.insert(QStringLiteral("version"), 1);
 	malformed.insert(QStringLiteral("description"), 17);

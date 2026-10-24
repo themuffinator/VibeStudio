@@ -2,9 +2,10 @@
 // the studio and TrenchBroom arrangements and names, the built-in classes
 // standing in for missing definitions, the Shapes tab adding an arch and
 // turning a brush into stairs, the Inspector's Transform fields, the View
-// tab's region hiding what lies outside, and placing a class, a model and a
-// sound and applying a texture from their browsers. Semantic widget calls
-// only: no input injection, screen capture or game launches.
+// tab's region hiding what lies outside, linked groups in the plan view and
+// the 3D camera, and placing a class, a model and a sound and applying a
+// texture from their browsers. Semantic widget calls only: no input
+// injection, screen capture or game launches.
 
 #include "app/application_shell.h"
 #include "app/level_object_list.h"
@@ -30,11 +31,13 @@
 #include <QEventLoop>
 #include <QFile>
 #include <QFont>
+#include <QImage>
 #include <QLabel>
 #include <QKeyEvent>
 #include <QLineEdit>
 #include <QListWidget>
 #include <QMouseEvent>
+#include <QPixmap>
 #include <QScrollArea>
 #include <QSpinBox>
 #include <QStatusBar>
@@ -67,11 +70,11 @@ void drain(int milliseconds = 30)
 	loop.exec(QEventLoop::ExcludeUserInputEvents);
 }
 
-bool until(const std::function<bool()>& ready)
+bool until(const std::function<bool()>& ready, qint64 milliseconds = 30000)
 {
 	QElapsedTimer elapsed;
 	elapsed.start();
-	while (!ready() && elapsed.elapsed() < 30000) {
+	while (!ready() && elapsed.elapsed() < milliseconds) {
 		drain();
 	}
 	return ready();
@@ -269,6 +272,124 @@ bool tilesWhole(ApplicationShell& shell, const char* label)
 		ok &= expect(shown >= 4 && cut.isEmpty(), "every tile shows whole",
 			QStringLiteral("%1, %2: %3 shown; %4").arg(QString::fromLatin1(label), name).arg(shown).arg(cut.join(QStringLiteral(", "))));
 	}
+	return ok;
+}
+
+// Puts the box in a new scene group called Crate as the Scene tab does: name
+// it, New Group, then Assign with the box selected. True once the box, now
+// the group, is selected again.
+bool groupBox(ApplicationShell& shell, int box)
+{
+	auto* name = shell.findChild<QLineEdit*>(QStringLiteral("levelSceneName"));
+	auto* newGroup = shell.findChild<QAbstractButton*>(QStringLiteral("levelSceneNewGroup"));
+	auto* assign = shell.findChild<QAbstractButton*>(QStringLiteral("levelSceneAssign"));
+	auto* tree = shell.findChild<QTreeWidget*>(QStringLiteral("levelSceneTree"));
+	if (!name || !newGroup || !assign || !tree) {
+		return false;
+	}
+	name->setText(QStringLiteral("Crate"));
+	newGroup->click();
+	drain();
+	for (QTreeWidgetItemIterator it(tree); *it; ++it) {
+		if ((*it)->text(0) == QStringLiteral("Crate")) {
+			tree->setCurrentItem(*it);
+			break;
+		}
+	}
+	const QString selector = QStringLiteral("brush:%1").arg(box);
+	select(shell, selector);
+	assign->click();
+	drain();
+	return select(shell, selector);
+}
+
+// With the crate and its linked duplicate made, the 3D camera draws the
+// selected crate's link set over its picture as the plan views do, and says
+// so; with the floor selected it draws none of it until Show > Linked Groups
+// boxes every linked group. The camera's frames go under
+// VIBESTUDIO_TEST_SNAPSHOTS, named with `suffix`.
+bool cameraLinkedGroups(ApplicationShell& shell, int box, const QString& suffix)
+{
+	const QString label = suffix.isEmpty() ? QStringLiteral("at 100% text") : suffix;
+	auto* preview = shell.findChild<ModelViewport*>(QStringLiteral("mapPreview3D"));
+	auto* toggle = shell.findChild<QAction*>(QStringLiteral("map.toggle3D"));
+	auto* showAll = shell.findChild<QAction*>(QStringLiteral("levelMapShowLinkedGroups"));
+	if (!expect(preview && toggle && showAll && select(shell, QStringLiteral("brush:%1").arg(box)), "the camera, the Show toggle and the crate are there",
+			label)) {
+		return false;
+	}
+	if (!toggle->isChecked()) {
+		toggle->trigger();
+	}
+	// Settled: the camera's rebuilt mesh, with the floor and both crates,
+	// drawn. Until its build starts, the view still holds the mesh it had.
+	// One repaint is asked for; the camera repaints itself as its frame comes
+	// in. (level-geometry-cache-ui-smoke covers a camera repainting all along.)
+	preview->update();
+	const auto settled = [preview] {
+		return preview->isEnabled() && preview->hasMesh() && preview->mesh().triangleCount >= 36 && !preview->isRendering();
+	};
+	bool ok = expect(until(settled, 120000), "the camera builds and draws the map with both crates",
+		QStringLiteral("%1: %2 triangles").arg(label).arg(preview->mesh().triangleCount));
+	const QString shots = qEnvironmentVariable("VIBESTUDIO_TEST_SNAPSHOTS");
+	const auto save = [&shots, &suffix](const QImage& image, const QString& name) {
+		if (!shots.isEmpty()) {
+			image.save(QDir(shots).filePath(name + suffix + QStringLiteral(".png")));
+		}
+	};
+	const QString description = preview->accessibleDescription();
+	ok &= expect(description.contains(QStringLiteral("Arrows run from the selected linked group to the 1 other group")),
+		"the camera says it draws the crate's link set", label + QStringLiteral(": ") + description);
+	const LevelLinkedGroupDisplay display = preview->linkedGroups();
+	const QImage with = preview->grab().toImage();
+	const ModelViewport::LinkedGroupPaint painted = preview->linkedGroupPaint();
+	ok &= expect(painted.boxes == 2 && painted.arrows == 1 && painted.names >= 1,
+		"the camera boxes both crates, names them and draws an arrow from the selected one",
+		QStringLiteral("%1: %2 boxes, %3 names, %4 arrows").arg(label).arg(painted.boxes).arg(painted.names).arg(painted.arrows));
+	// Taking the overlay away changes the picture, and putting it back
+	// restores it exactly: the boxes are drawn over the frame, not into it.
+	preview->setLinkedGroups({});
+	const QImage without = preview->grab().toImage();
+	preview->setLinkedGroups(display);
+	const QImage again = preview->grab().toImage();
+	int changed = 0;
+	if (with.size() == without.size()) {
+		for (int y = 0; y < with.height(); ++y) {
+			for (int x = 0; x < with.width(); ++x) {
+				changed += with.pixel(x, y) != without.pixel(x, y) ? 1 : 0;
+			}
+		}
+	}
+	ok &= expect(changed > 200 && with == again, "the linked-group overlay draws over the camera's frame",
+		QStringLiteral("%1: %2 pixels changed, %3").arg(label).arg(changed).arg(with == again ? QStringLiteral("restored") : QStringLiteral("not restored")));
+	save(with, QStringLiteral("linked-groups-camera"));
+	if (auto* plan = shell.findChild<MapViewport*>(QStringLiteral("mapViewport"))) {
+		save(plan->grab().toImage(), QStringLiteral("linked-groups-plan-beside-camera"));
+	}
+
+	const int floor = brushNamed(shell.levelDocument(), QStringLiteral("studio/floor"));
+	if (expect(select(shell, QStringLiteral("brush:%1").arg(floor)), "the floor can be selected", label)) {
+		preview->grab();
+		ok &= expect(!preview->linkedGroups().drawsAnything() && preview->linkedGroupPaint().boxes == 0
+				&& !preview->accessibleDescription().contains(QStringLiteral("Arrows run from the selected linked group")),
+			"with the floor selected the camera draws no linked groups", label + QStringLiteral(": ") + preview->accessibleDescription());
+		showAll->trigger();
+		drain();
+		const QImage all = preview->grab().toImage();
+		const ModelViewport::LinkedGroupPaint boxed = preview->linkedGroupPaint();
+		ok &= expect(showAll->isChecked() && boxed.boxes == 2 && boxed.arrows == 0 && boxed.names == 0
+				&& preview->accessibleDescription().contains(QStringLiteral("Every linked group is boxed: 2 in all.")),
+			"Show > Linked Groups boxes every linked group in the camera too",
+			QStringLiteral("%1: %2 boxes, %3 names, %4 arrows; %5").arg(label).arg(boxed.boxes).arg(boxed.names).arg(boxed.arrows)
+				.arg(preview->accessibleDescription()));
+		save(all, QStringLiteral("linked-groups-camera-all"));
+		showAll->trigger();
+		drain();
+		ok &= expect(!showAll->isChecked() && !preview->linkedGroups().drawsAnything(), "turning Show > Linked Groups off again clears the camera",
+			label);
+	}
+	toggle->trigger();
+	drain();
 	return ok;
 }
 
@@ -533,8 +654,8 @@ int main(int argc, char** argv)
 		auto* newGroup = shell.findChild<QAbstractButton*>(QStringLiteral("levelSceneNewGroup"));
 		auto* assign = shell.findChild<QAbstractButton*>(QStringLiteral("levelSceneAssign"));
 		auto* tree = shell.findChild<QTreeWidget*>(QStringLiteral("levelSceneTree"));
-		auto* linkCopy = shell.findChild<QAction*>(QStringLiteral("map.createLinkedCopy"));
-		auto* toolsRow = shell.findChild<QAbstractButton*>(QStringLiteral("levelToolsRow-map.createLinkedCopy"));
+		auto* linkCopy = shell.findChild<QAction*>(QStringLiteral("map.createLinkedDuplicate"));
+		auto* toolsRow = shell.findChild<QAbstractButton*>(QStringLiteral("levelToolsRow-map.createLinkedDuplicate"));
 		const auto findRow = [tree](const QString& text) -> QTreeWidgetItem* {
 			for (QTreeWidgetItemIterator it(tree); tree && *it; ++it) {
 				if ((*it)->text(0) == text) {
@@ -544,17 +665,10 @@ int main(int argc, char** argv)
 			return nullptr;
 		};
 		if (expect(name && newGroup && assign && tree && linkCopy && toolsRow && select(shell, QStringLiteral("brush:%1").arg(box)),
-				"the scene controls and the linked copy command are there")) {
-			ok &= expect(!linkCopy->isEnabled(), "a linked copy needs a group");
-			name->setText(QStringLiteral("Crate"));
-			newGroup->click();
-			drain();
-			tree->setCurrentItem(findRow(QStringLiteral("Crate")));
-			select(shell, QStringLiteral("brush:%1").arg(box));
-			assign->click();
-			drain();
-			select(shell, QStringLiteral("brush:%1").arg(box));
-			ok &= expect(linkCopy->isEnabled(), "a box in a group can be copied linked");
+				"the scene controls and Create Linked Duplicate are there")) {
+			ok &= expect(!linkCopy->isEnabled(), "a linked duplicate needs a group");
+			groupBox(shell, box);
+			ok &= expect(linkCopy->isEnabled(), "a box in a group can have a linked duplicate");
 			const int steps = static_cast<int>(shell.levelDocument().undoStack.size());
 			linkCopy->trigger();
 			drain();
@@ -567,47 +681,82 @@ int main(int argc, char** argv)
 			QTreeWidgetItem* copyRow = findRow(QStringLiteral("Crate 2"));
 			ok &= expect(copies.size() == 2 && copyRow && copyRow->text(1).contains(QStringLiteral("Linked"))
 					&& document.undoStack.size() == steps + 1,
-				"Create Linked Copy makes Crate 2, linked, in one step", shell.statusBar()->currentMessage());
-			// A new size for the original: the copy, 64 units along, takes it on.
+				"Create Linked Duplicate makes Crate 2, linked, in one step", shell.statusBar()->currentMessage());
+			// With a linked group selected, the plan view draws arrows to the
+			// groups it is linked with and says so.
+			if (auto* plan = shell.findChild<MapViewport*>(QStringLiteral("mapViewport")); plan && select(shell, QStringLiteral("brush:%1").arg(box))) {
+				drain();
+				ok &= expect(plan->accessibleDescription().contains(QStringLiteral("Arrows run from the selected linked group to the 1 other group")),
+					"the plan view outlines the link set and says so", plan->accessibleDescription());
+				if (const QString shots = qEnvironmentVariable("VIBESTUDIO_TEST_SNAPSHOTS"); !shots.isEmpty()) {
+					plan->grab().save(QDir(shots).filePath(QStringLiteral("linked-groups-plan.png")));
+				}
+			}
+			// The 3D camera draws and says the same.
+			if (copies.size() == 2) {
+				ok &= cameraLinkedGroups(shell, box, QString());
+			}
 			auto* sizeX = shell.findChild<QDoubleSpinBox*>(QStringLiteral("levelTransformSizeX"));
-			if (copies.size() == 2 && sizeX && select(shell, QStringLiteral("brush:%1").arg(box))) {
-				sizeX->setValue(96);
+			QAction* undo = shell.findChild<QAction*>(QStringLiteral("map.undo"));
+			const auto copyBox = [&shell, &copies](double* width, double* start) {
+				const LevelSceneNode* copyNode = levelSceneNode(shell.levelDocument().scene, copies.last());
+				for (const LevelMapBrush& brush : shell.levelDocument().brushes) {
+					if (copyNode && copyNode->objects.contains(QStringLiteral("brush:%1").arg(brush.id))) {
+						*width = brush.maxs.x - brush.mins.x;
+						*start = brush.mins.x;
+					}
+				}
+			};
+			const auto resize = [&](double width) {
+				sizeX->setValue(width);
 				QMetaObject::invokeMethod(sizeX, "editingFinished", Qt::DirectConnection);
 				drain();
-				const LevelSceneNode* copyNode = levelSceneNode(shell.levelDocument().scene, copies.last());
+			};
+			if (copies.size() == 2 && sizeX && undo && select(shell, QStringLiteral("brush:%1").arg(box))) {
+				// Resized whole while closed, the original alone scales, as in
+				// TrenchBroom: its frame keeps the scale.
+				resize(96);
 				double copyWidth = 0;
 				double copyStart = 0;
-				for (const LevelMapBrush& brush : shell.levelDocument().brushes) {
-					if (copyNode && copyNode->objects.contains(QStringLiteral("brush:%1").arg(brush.id))) {
-						copyWidth = brush.maxs.x - brush.mins.x;
-						copyStart = brush.mins.x;
-					}
-				}
-				ok &= expect(std::abs(copyWidth - 96) < 1e-6 && std::abs(copyStart - 64) < 1e-6, "the copy takes on the original's new size in its own place",
-					QStringLiteral("%1 from %2").arg(copyWidth).arg(copyStart));
-				auto* selectCopies = shell.findChild<QAction*>(QStringLiteral("map.selectLinkedCopies"));
-				if (selectCopies) {
-					selectCopies->trigger();
+				copyBox(&copyWidth, &copyStart);
+				ok &= expect(std::abs(copyWidth - 64) < 1e-6
+						&& levelLinkFrameText(levelSceneNode(shell.levelDocument().scene, crate)->linkFrame) == QStringLiteral("Scaled or sheared"),
+					"a closed linked group resized whole scales alone", QString::number(copyWidth));
+				undo->trigger();
+				drain();
+				// Inside the open group a new size is shared: the copy, 64 units
+				// along, takes it on in its own place.
+				shell.findChild<QAction*>(QStringLiteral("map.openGroup"))->trigger();
+				drain();
+				ok &= expect(shell.levelDocument().openSceneGroups.contains(crate) && select(shell, QStringLiteral("brush:%1").arg(box)),
+					"open the original crate");
+				resize(96);
+				copyBox(&copyWidth, &copyStart);
+				ok &= expect(std::abs(copyWidth - 96) < 1e-6 && std::abs(copyStart - 64) < 1e-6,
+					"the copy takes on the original's new size in its own place", QStringLiteral("%1 from %2").arg(copyWidth).arg(copyStart));
+				undo->trigger();
+				drain();
+				copyBox(&copyWidth, &copyStart);
+				ok &= expect(std::abs(copyWidth - 64) < 1e-6, "one undo returns both crates to their old size", QString::number(copyWidth));
+				shell.findChild<QAction*>(QStringLiteral("map.closeAllGroups"))->trigger();
+				drain();
+				ok &= expect(select(shell, QStringLiteral("brush:%1").arg(box)), "select the closed crate again");
+				auto* selectLinked = shell.findChild<QAction*>(QStringLiteral("map.selectLinkedGroups"));
+				if (selectLinked) {
+					selectLinked->trigger();
 					drain();
 				}
-				ok &= expect(shell.levelDocument().selection.size() == 2, "Select Linked Copies selects both crates",
+				ok &= expect(shell.levelDocument().selection.size() == 2, "Select Linked Groups selects both crates",
 					QString::number(shell.levelDocument().selection.size()));
-				shell.findChild<QAction*>(QStringLiteral("map.undo"))->trigger();
-				drain();
-				for (const LevelMapBrush& brush : shell.levelDocument().brushes) {
-					if (copyNode && copyNode->objects.contains(QStringLiteral("brush:%1").arg(brush.id))) {
-						copyWidth = brush.maxs.x - brush.mins.x;
-					}
-				}
-				ok &= expect(std::abs(copyWidth - 64) < 1e-6, "one undo returns both crates to their old size", QString::number(copyWidth));
 			} else {
 				ok &= expect(false, "the size field and the copy are there");
 			}
-			// Back to the plain box for the checks that follow.
-			for (int step = 0; step < 3; ++step) {
+			// Back to the plain box for the checks that follow; group navigation
+			// may have added selection steps on the way.
+			for (int step = 0; step < 8 && !shell.levelDocument().scene.nodes.isEmpty(); ++step) {
 				shell.findChild<QAction*>(QStringLiteral("map.undo"))->trigger();
+				drain();
 			}
-			drain();
 			ok &= expect(shell.levelDocument().scene.nodes.isEmpty(), "undo takes the group and the copy away");
 		}
 	}
@@ -778,6 +927,17 @@ int main(int argc, char** argv)
 		if (expect(until([&] { return large.levelDocument().sourcePath == path; }), "the map opens at 200% text", path)) {
 			ok &= pagesFit(large, "at 200% text, right to left");
 			ok &= tilesWhole(large, "at 200% text, right to left");
+			// The linked crates through the camera, at 200% text in high
+			// contrast, right to left.
+			const int crate = brushNamed(large.levelDocument(), QStringLiteral("studio/box"));
+			auto* linkCopy = large.findChild<QAction*>(QStringLiteral("map.createLinkedDuplicate"));
+			if (expect(linkCopy && groupBox(large, crate) && linkCopy->isEnabled(), "the crate can be linked at 200% text")) {
+				linkCopy->trigger();
+				drain();
+				ok &= cameraLinkedGroups(large, crate, QStringLiteral("-200-high-contrast-rtl"));
+			} else {
+				ok = false;
+			}
 		} else {
 			ok = false;
 		}

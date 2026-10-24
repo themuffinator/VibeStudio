@@ -20,7 +20,11 @@ bool ApplicationShell::applyLevelSurfaceEdit(const LevelSurfaceEditPlan &plan, Q
 }
 void ApplicationShell::editLevelMapSurfacesFromUi()
 {
-	const auto faces = levelMapSelectedSurfaces(m_levelMapDocument);
+	if (levelSurfaceGeometryBusy()) { return; }
+	QVector<LevelSurfaceFace> faces;
+	for (const auto& target : levelSurfaceSelectionTargets()) {
+		if (target.kind == LevelMaterialKind::BrushFace) { faces.append({target.objectId,target.faceIndex}); }
+	}
 	if (faces.isEmpty()) {
 		return;
 	}
@@ -35,7 +39,7 @@ void ApplicationShell::editLevelMapSurfacesFromUi()
 	}
 	LevelSurfaceDialog dialog(m_levelMapDocument, faces, archive, activePaletteId(), this);
 	const auto inspected = inspectedLevelMapSurface();
-	if (m_levelMapDocument.selection.size() == 1 && faces.contains(inspected)) {
+	if (!levelComponentsActive() && m_levelMapDocument.selection.size() == 1 && faces.contains(inspected)) {
 		dialog.setSelectedFaces({inspected});
 	}
 	const auto load = m_levelMapLoadSerial, revision = m_levelMapDocument.revision;
@@ -43,9 +47,12 @@ void ApplicationShell::editLevelMapSurfacesFromUi()
 	const auto packageRevision = m_packageStaging.revision();
 	const auto reload = m_levelPreviewReload;
 	const auto palette = activePaletteId();
-	dialog.setApplyHandler([this, load, revision, selection, packageRevision, reload, palette](const auto &plan, QString *error) {
+	const auto components = levelComponentSelectionToken();
+	const auto targets = levelSurfaceSelectionTargets();
+	dialog.setApplyHandler([this, load, revision, selection, packageRevision, reload, palette, components, targets](const auto &plan, QString *error) {
 		if (load != m_levelMapLoadSerial || revision != m_levelMapDocument.revision || selection != m_levelMapDocument.selection ||
-			packageRevision != m_packageStaging.revision() || reload != m_levelPreviewReload || palette != activePaletteId()) {
+			packageRevision != m_packageStaging.revision() || reload != m_levelPreviewReload || palette != activePaletteId()
+			|| targets != levelSurfaceSelectionTargets() || components != levelComponentSelectionToken() || levelSurfaceGeometryBusy()) {
 			if (error) {
 				*error = tr("The map, selection or package changed during the preview. Reopen Surface Alignment from the current map.");
 			}

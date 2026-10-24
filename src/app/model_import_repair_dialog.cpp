@@ -1,4 +1,5 @@
 #include "app/model_import_repair_dialog.h"
+#include "app/dialog_screen_fit.h"
 #include "app/model_viewport.h"
 #include <QAbstractTableModel>
 #include <QComboBox>
@@ -88,7 +89,6 @@ ModelImportRepairDialog::ModelImportRepairDialog(const ModelImportRepairPlan &pl
 	setObjectName("modelImportRepairDialog");
 	setWindowTitle(Text::tr("Review Import Repair"));
 	setAccessibleName(windowTitle());
-	resize(1180, 800);
 	auto *layout = new QVBoxLayout(this);
 	auto *summary = new QLabel(Text::tr("Faces removed: %1 · Normals rebuilt: %2 · +Z fallbacks: %3 · Seams removed: %4")
 								   .arg(plan.removedFaces)
@@ -206,6 +206,7 @@ ModelImportRepairDialog::ModelImportRepairDialog(const ModelImportRepairPlan &pl
 	buttons->button(QDialogButtonBox::Cancel)->setDefault(true);
 	layout->addWidget(buttons);
 	table->setFocus();
+	fitDialogToScreen(this, QSize(1180, 800));
 }
 QString ModelImportRepairDialog::outputPath() const
 {

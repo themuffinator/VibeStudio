@@ -17,6 +17,15 @@ void key(LevelEditorControls& controls, const char* command, const QStringList& 
 	controls.keys.push_back({id, keys});
 }
 
+// Drops an inherited key a scheme's own sources do not confirm, so the
+// command keeps no key instead of reading as "the key does something else".
+void unbind(LevelEditorControls& controls, const char* command)
+{
+	const QString id = QString::fromLatin1(command);
+	controls.keys.erase(std::remove_if(controls.keys.begin(), controls.keys.end(),
+		[&id](const LevelEditorKeyBinding& binding) { return binding.commandId == id; }), controls.keys.end());
+}
+
 LevelEditorControls baseControls()
 {
 	LevelEditorControls controls;
@@ -54,7 +63,33 @@ void wasd(CameraViewControls& camera)
 
 } // namespace
 
+static LevelEditorControls familiarLevelControlsWithoutNudges(const QString& id);
+
 LevelEditorControls familiarLevelControls(const QString& id)
+{
+	LevelEditorControls controls = familiarLevelControlsWithoutNudges(id);
+	// Every familiar scheme names its nudge keys (core/level_nudge.h), as the
+	// plan views already used them: Radiant-style schemes, whose arrows drive
+	// the camera, nudge with Alt held; the others with the bare arrows. A key
+	// the scheme gives another command stays with it.
+	const QString held = controls.plan.arrowsDriveCamera ? QStringLiteral("Alt+") : QString();
+	const QVector<QPair<const char*, QString>> nudges {{"map.nudgeLeft", QStringLiteral("Left")}, {"map.nudgeRight", QStringLiteral("Right")},
+		{"map.nudgeForward", QStringLiteral("Up")}, {"map.nudgeBack", QStringLiteral("Down")}};
+	for (const auto& nudge : nudges) {
+		const QString wanted = held + nudge.second;
+		const QString command = QString::fromLatin1(nudge.first);
+		bool taken = false;
+		for (const LevelEditorKeyBinding& binding : std::as_const(controls.keys)) {
+			taken = taken || (binding.commandId != command && binding.keys.contains(wanted, Qt::CaseInsensitive));
+		}
+		if (!taken) {
+			key(controls, nudge.first, {wanted});
+		}
+	}
+	return controls;
+}
+
+static LevelEditorControls familiarLevelControlsWithoutNudges(const QString& id)
 {
 	LevelEditorControls controls = baseControls();
 	auto& plan = controls.plan;
@@ -172,6 +207,8 @@ LevelEditorControls familiarLevelControls(const QString& id)
 		key(controls, "map.hideSelection", {});
 		key(controls, "map.showAll", {});
 		key(controls, "map.selectSimilar", {});
+		// Q3Radiant's End levelling is not confirmed by the QeRadiant manual.
+		unbind(controls, "map.levelCamera");
 		return controls;
 	}
 	if (id == QLatin1String("q3radiant")) {
@@ -217,6 +254,27 @@ LevelEditorControls familiarLevelControls(const QString& id)
 		// Independent adaptation of Xonotic NetRadiant b4b295d7 (GPL-2.0-or-later):
 		// radiant/{camwindow,xywindow,selection,mainframe,grid}.cpp. See credits.
 		controls = netRadiantCustomLevelControls();
+		// Fresh insertion states are audited for NRC, not this baseline.
+		controls.insertionVisibility = LevelInsertionVisibility::PreserveAndReveal;
+		// Clone displacement and component eligibility were audited only for NRC.
+		controls.nudgeAfterDuplicate = true;
+		controls.duplicateRequiresObjectMode = false;
+		// Component deletion fallback and mixed patch picks are audited for NRC.
+		controls.deleteObjectsWithoutComponents = false;
+		controls.deleteIgnoresPatchPoints = false;
+		controls.entityConnectionMode = LevelEntityConnectionMode::SourcesToLast;
+		// Consuming volume commands are audited specifically for NRC.
+		controls.regionSelection = LevelRegionSelectionPolicy::Bounds;
+		// gridChangeEnablesSnap stays: NetRadiant b4b295d7 grid.cpp GridPrev,
+		// GridNext and setGridPower turn snapping on as NRC does.
+		// The grid-snapped quick-turn pivot was audited for NRC 449778b3 only.
+		controls.quickTurnSnapsPivot = false;
+		// Ctrl quick clip was audited for NRC, not this NetRadiant baseline.
+		plan.quickClipModifiers = Qt::NoModifier;
+		// Standalone Ctrl+U wrapping was likewise audited only for NRC.
+		key(controls, "map.wrapMerge", {});
+		camera.clipViewAxis = false;
+		camera.clipDragStyle = CameraClipDragStyle::Surface;
 		// NetRadiant b4b295d7 surfacedialog.cpp pastes values, not seamless UVs.
 		camera.surfaceWrapFaceButton = Qt::NoButton;
 		camera.surfaceValuesButton = camera.surfaceValuesOnlyButton = camera.surfaceWrapOnlyButton = Qt::NoButton;
@@ -228,6 +286,11 @@ LevelEditorControls familiarLevelControls(const QString& id)
 		camera.orbitButton = Qt::NoButton;
 		camera.panButtons.clear();
 		key(controls, "map.duplicateSelection", {QStringLiteral("Space")});
+		key(controls, "map.duplicateUnique", {});
+		key(controls, "map.killConnectEntities", {});
+		key(controls, "map.selectConnectedEntities", {});
+		key(controls, "map.selectAllOfType", {});
+		key(controls, "map.selectTextured", {});
 		key(controls, "map.deleteSelection", {QStringLiteral("Backspace"), QStringLiteral("Z")});
 		key(controls, "map.selectNone", {QStringLiteral("Escape"), QStringLiteral("C")});
 		key(controls, "map.selectAll", {});
@@ -236,6 +299,31 @@ LevelEditorControls familiarLevelControls(const QString& id)
 		key(controls, "map.zoomOut", {QStringLiteral("Ins")});
 		key(controls, "map.frameSelection", {QStringLiteral("`"), QStringLiteral("Ctrl+Shift+Tab")});
 		key(controls, "map.redo", {QStringLiteral("Ctrl+Y")});
+		// Rounding each point on Ctrl+G was audited for NRC only.
+		key(controls, "map.snapToGrid", {QStringLiteral("Ctrl+G")});
+		// NRC's component-mode, patch-matrix, detail-flag, texture-lock, Centre,
+		// Move Primitives and layer keys were audited against NRC 449778b3 only, so this baseline
+		// leaves those commands without keys rather than claiming them. K for
+		// Set Entity Colour stays: NetRadiant b4b295d7 entity.cpp binds its
+		// EntityColor command to K too. The view filter keys (Alt+1 World and
+		// the rest) stay as well: b4b295d7 filters.cpp ConstructFilters binds
+		// the same ones. So do End for Level Camera and Tab as the free-focus
+		// key: b4b295d7 camwindow.cpp binds CenterView and CameraFreeFocus too.
+		const QStringList nrcOnly{QStringLiteral("map.vertexTool"), QStringLiteral("map.edgeTool"), QStringLiteral("map.faceTool"),
+			QStringLiteral("map.patchInsertRows"), QStringLiteral("map.patchInsertColumns"), QStringLiteral("map.patchDeleteLastRows"),
+			QStringLiteral("map.patchDeleteLastColumns"), QStringLiteral("map.patchInvert"), QStringLiteral("map.patchTranspose"),
+			QStringLiteral("map.thickenPatch"), QStringLiteral("map.patchSmoothColumns"), QStringLiteral("map.surfaceFlipV"), QStringLiteral("map.textureLock"),
+			QStringLiteral("map.makeDetail"), QStringLiteral("map.makeStructural"), QStringLiteral("map.centerOnSelection"),
+			QStringLiteral("map.movePrimitivesToEntity"), QStringLiteral("map.roundToGrid"), QStringLiteral("map.moveToLayer"),
+			QStringLiteral("map.expandSelectionToLayers"),
+			// The texture step keys, their turn direction, the 45° increment and
+			// the origin anchor were audited against NRC 449778b3 only.
+			QStringLiteral("map.surfaceRotateLeft"), QStringLiteral("map.surfaceRotateRight"), QStringLiteral("map.surfaceScaleStepUp"),
+			QStringLiteral("map.surfaceScaleStepDown"), QStringLiteral("map.surfaceScaleStepLeft"), QStringLiteral("map.surfaceScaleStepRight")};
+		controls.keys.erase(std::remove_if(controls.keys.begin(), controls.keys.end(),
+			[&nrcOnly](const LevelEditorKeyBinding& binding) { return nrcOnly.contains(binding.commandId); }), controls.keys.end());
+		controls.surfaceRotationStep = LevelEditorControls{}.surfaceRotationStep;
+		controls.surfaceRotateAboutOrigin = false;
 		return controls;
 	}
 	if (id == QLatin1String("sledge")) {
@@ -349,6 +437,8 @@ LevelEditorControls familiarLevelControls(const QString& id)
 		key(controls, "map.gridLarger", {QStringLiteral("]")});
 		key(controls, "map.zoomIn", {QStringLiteral("Del")});
 		key(controls, "map.zoomOut", {QStringLiteral("Ins")});
+		// GtkRadiant's End levelling still needs a DarkRadiant audit.
+		unbind(controls, "map.levelCamera");
 		return controls;
 	}
 	if (id == QLatin1String("doom-builder") || id == QLatin1String("ultimate-doom-builder")) {
@@ -389,9 +479,10 @@ LevelEditorControls familiarLevelControls(const QString& id)
 		key(controls, "map.invertSelection", {QStringLiteral("Ctrl+I")});
 		key(controls, "map.zoomIn", {QStringLiteral("=")});
 		key(controls, "map.zoomOut", {QStringLiteral("-")});
-		// VibeStudio's current grid tops out at 256; do not mislabel 512/1024.
-		for (int digit = 1, units = 2; units <= 256; ++digit, units *= 2) {
-			controls.keys.push_back({QStringLiteral("map.grid%1").arg(units), {QString::number(digit)}});
+		// Eureka bindings.cfg f9512818: GRID_Set 2 to 1024 on the digits 1 to
+		// 9 and then 0. Key facts only; see docs/CREDITS.md.
+		for (int digit = 1, units = 2; units <= 1024; ++digit, units *= 2) {
+			controls.keys.push_back({QStringLiteral("map.grid%1").arg(units), {QString::number(digit % 10)}});
 		}
 		return controls;
 	}

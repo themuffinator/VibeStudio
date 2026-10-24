@@ -51,6 +51,7 @@ using vibestudio::tests::setObjectSelected;
 #include <QColorDialog>
 #include <QComboBox>
 #include <QDialog>
+#include <QDialogButtonBox>
 #include <QDockWidget>
 #include <QJsonArray>
 #include <QJsonDocument>
@@ -121,6 +122,7 @@ using namespace vibestudio;
 namespace {
 
 int g_failures = 0;
+const char* g_currentCheck = "startup";
 // Whether OpenGL or Vulkan draws here. The few checks that click into a 3D
 // view need one; Linux CI always has one (see render_test_support.h).
 bool drawsIn3D = true;
@@ -128,7 +130,7 @@ bool drawsIn3D = true;
 void check(bool condition, const char* message)
 {
 	if (!condition) {
-		std::cerr << "FAIL: " << message << "\n";
+		std::cerr << "FAIL: [" << g_currentCheck << "] " << message << "\n";
 		++g_failures;
 	}
 }
@@ -617,6 +619,17 @@ void settleImage(ImagePreviewView* preview)
 	}
 }
 
+bool settleModel(ModelViewport* preview)
+{
+	return preview && QTest::qWaitFor([preview] {
+		// Render only the owned Qt widget, then wait for the current projection.
+		// Picking deliberately refuses input while an older frame is rendering.
+		QImage image(preview->size(), QImage::Format_ARGB32_Premultiplied);
+		preview->render(&image);
+		return !preview->isRendering();
+	}, 5000);
+}
+
 // Modal prompts would block a scripted run. This answers the next modal
 // dialog once it is actually showing, retrying for a few seconds so it works
 // whether the dialog opens straight away or after some work.
@@ -645,6 +658,19 @@ void whenNamedDialogShows(const QString& name, std::function<void(QWidget*)> ans
 		if (attempts > 0) {
 			whenNamedDialogShows(name, answer, attempts - 1);
 		}
+	});
+}
+
+// Launch preparation is asynchronous and has its own modal progress dialog.
+// Wait for the requested confirmation without cancelling that preparation.
+void whenTitledDialogShows(const QString& title, std::function<void(QWidget*)> answer, int attempts = 300)
+{
+	QTimer::singleShot(10, [title, answer, attempts]() {
+		if (QWidget* modal = QApplication::activeModalWidget(); modal && modal->isVisible() && modal->windowTitle() == title) {
+			answer(modal);
+			return;
+		}
+		if (attempts > 0) { whenTitledDialogShows(title, answer, attempts - 1); }
 	});
 }
 
@@ -871,6 +897,67 @@ QAction* action(ApplicationShell& shell, const char* commandId)
 	return shell.findChild<QAction*>(QString::fromLatin1(commandId));
 }
 
+int stagedOperationCount(ApplicationShell& shell)
+{
+	auto staging = tests::StagingRows(shell.findChild<PackageStagingView*>(QStringLiteral("packageStagingSummary")));
+	if (!staging) { return -1; }
+	int count = 0;
+	for (int row = 0; row < staging->count(); ++row) {
+		count += !staging->item(row)->data(Qt::UserRole + 5).toString().isEmpty();
+	}
+	return count;
+}
+
+// Closing a progress dialog can leave Qt's offscreen platform with no active
+// window. This fixture has no window manager to restore its owner, so reactivate
+// the owned shell before shortcuts. Never displace a dialog or popup.
+void restoreOffscreenActivation(ApplicationShell& shell)
+{
+	if (QGuiApplication::platformName() == QLatin1String("offscreen")
+		&& !QApplication::activeWindow() && !QApplication::activeModalWidget()
+		&& !QApplication::activePopupWidget()) {
+		shell.activateWindow();
+		check(QTest::qWaitForWindowActive(&shell, 2000), "The owned offscreen shell should regain activation after a dialog closes.");
+	}
+}
+
+// Fixture transitions deliberately discard the disposable package's edit and
+// undo history. Scope the responder to this open only, so it cannot answer a
+// later guard test or mistake a worker progress dialog for a confirmation.
+void openPackageFixture(ApplicationShell& shell, const QString& path)
+{
+	QTimer discard;
+	QObject::connect(&discard, &QTimer::timeout, &shell, [] {
+		auto* box = qobject_cast<QMessageBox*>(QApplication::activeModalWidget());
+		if (box && box->windowTitle() == QStringLiteral("Save Package Draft?") && box->button(QMessageBox::Discard)) {
+			box->button(QMessageBox::Discard)->click();
+		}
+	});
+	discard.start(10);
+	shell.openPathFromCommandLine(path);
+	discard.stop();
+	settle();
+	restoreOffscreenActivation(shell);
+}
+
+void openMapFixture(ApplicationShell& shell, const QString& path)
+{
+	QTimer discard;
+	QObject::connect(&discard, &QTimer::timeout, &shell, [] {
+		auto* box = qobject_cast<QMessageBox*>(QApplication::activeModalWidget());
+		if (box && box->windowTitle() == QStringLiteral("Unsaved Map Edits")) {
+			for (auto* button : box->buttons()) {
+				if (box->buttonRole(button) == QMessageBox::DestructiveRole) { button->click(); return; }
+			}
+		}
+	});
+	discard.start(10);
+	shell.openPathFromCommandLine(path);
+	discard.stop();
+	settle();
+	restoreOffscreenActivation(shell);
+}
+
 // Runs a command the way its menu item would.
 bool trigger(ApplicationShell& shell, const char* commandId)
 {
@@ -879,6 +966,7 @@ bool trigger(ApplicationShell& shell, const char* commandId)
 		std::cerr << "Command unavailable: " << commandId << "\n";
 		return false;
 	}
+	restoreOffscreenActivation(shell);
 	target->trigger();
 	settle();
 	return true;
@@ -888,6 +976,7 @@ bool trigger(ApplicationShell& shell, const char* commandId)
 // as a real key press would.
 void press(ApplicationShell& shell, int key, Qt::KeyboardModifiers modifiers = Qt::NoModifier)
 {
+	restoreOffscreenActivation(shell);
 	QWidget* target = QApplication::focusWidget();
 	if (!target) {
 		target = &shell;
@@ -1019,6 +1108,7 @@ bool checkSelected(const char* name)
 #define RUN_CHECK(name, ...) \
 	do { \
 		if (checkSelected(#name)) { \
+			g_currentCheck = #name; \
 			name(__VA_ARGS__); \
 		} \
 	} while (false)
@@ -1095,6 +1185,20 @@ void checkFindAndEscape(ApplicationShell& shell, const Fixtures& fixtures)
 	check(chipText(shell, QStringLiteral("Package status")).contains(QStringLiteral("assets.pk3")), "The package chip should name the open package.");
 
 	check(trigger(shell, "shell.mode.textures"), "Ctrl+4 should switch to Textures.");
+	if (!focusIsOn(shell, Textures)) {
+		auto* focused = QApplication::focusWidget();
+		auto* host = page(shell, Textures);
+		auto* entries = shell.findChild<QWidget*>(QStringLiteral("textureEntries"));
+		std::cerr << "Focus diagnostic: page=" << currentPage(shell)
+			<< " focus=" << (focused ? focused->objectName().toStdString() : "<none>")
+			<< " class=" << (focused ? focused->metaObject()->className() : "<none>")
+			<< " isPage=" << (focused == host)
+			<< " shellActive=" << shell.isActiveWindow()
+			<< " activeWindow=" << (QApplication::activeWindow() ? QApplication::activeWindow()->metaObject()->className() : "<none>")
+			<< " modal=" << (QApplication::activeModalWidget() ? QApplication::activeModalWidget()->metaObject()->className() : "<none>")
+			<< " entriesVisible=" << (entries && entries->isVisible())
+			<< " entriesEnabled=" << (entries && entries->isEnabled()) << std::endl;
+	}
 	check(focusIsOn(shell, Textures), "Switching surfaces should move keyboard focus onto the new page.");
 	press(shell, Qt::Key_F, Qt::ControlModifier);
 	auto* filter = child<QLineEdit>(shell, "textureFilter");
@@ -1114,8 +1218,9 @@ void checkPackageKeysStayOnPackages(ApplicationShell& shell)
 	auto* filter = child<QLineEdit>(shell, "packageFilter");
 	auto entries = tests::PackageRows(child<PackageEntryView>(shell, "packageEntries"));
 	QAction* saveAs = action(shell, "package.saveAs");
-	check(filter && entries && saveAs, "The package page should expose its filter, entry list, and Save As.");
-	if (!filter || !entries || !saveAs) {
+	QAction* undoStage = action(shell, "package.unstageLast");
+	check(filter && entries && saveAs && undoStage, "The package page should expose its filter, entry list, Save As and staged undo.");
+	if (!filter || !entries || !saveAs || !undoStage) {
 		return;
 	}
 	filter->setText(QStringLiteral("metal_panel"));
@@ -1123,17 +1228,18 @@ void checkPackageKeysStayOnPackages(ApplicationShell& shell)
 	check(entries->count() >= 1, "Filtering should find the metal panel texture.");
 	entries->setCurrentRow(0);
 	settle();
-	check(!saveAs->isEnabled(), "Nothing is staged yet.");
+	// Save As can clone an unchanged archive. Staged undo tracks edits.
+	check(!undoStage->isEnabled(), "Nothing is staged yet.");
 
 	// Del on another page must leave the package alone.
 	trigger(shell, "shell.mode.levels");
 	press(shell, Qt::Key_Delete);
-	check(!saveAs->isEnabled(), "Del on the Levels page must not stage a package deletion.");
+	check(!undoStage->isEnabled(), "Del on the Levels page must not stage a package deletion.");
 
 	trigger(shell, "shell.mode.packages");
 	entries->setFocus();
 	press(shell, Qt::Key_Delete);
-	check(saveAs->isEnabled(), "Del in the package entry list should stage the deletion.");
+	check(undoStage->isEnabled() && saveAs->isEnabled(), "Del in the package entry list should stage the deletion.");
 	check(chipText(shell, QStringLiteral("Package status")).contains(QStringLiteral("staged")), "The package chip should report staged changes.");
 
 	// The Preview tab shows pixels for an image and text for a script.
@@ -1479,7 +1585,11 @@ void checkListsAndRecents(ApplicationShell& shell, const Fixtures& fixtures)
 			staging->setFocus();
 			staging->setCurrentRow(operationRow);
 			press(shell, Qt::Key_Delete);
-			check(!saveAs->isEnabled(), "Delete in the staging list should unstage the change.");
+			bool staged = false;
+			for (int row = 0; row < staging->count(); ++row) {
+				staged |= !staging->item(row)->data(Qt::UserRole + 5).toString().isEmpty();
+			}
+			check(!staged, "Delete in the staging list should unstage the change.");
 		}
 	}
 }
@@ -1618,8 +1728,10 @@ void checkMapContextMenu(ApplicationShell& shell)
 	});
 	Q_EMIT map->customContextMenuRequested(QPoint(4, 4));
 	settle();
-	check(*idle == QStringList({QStringLiteral("Add Entity Here…"), QStringLiteral("Add Brush Here…"), QStringLiteral("Replace Texture…"), QStringLiteral("Zoom to Fit")}),
-		"With nothing selected the map menu should only offer its whole-map actions.");
+	check(idle->contains(QStringLiteral("Add Entity Here…")) && idle->contains(QStringLiteral("Add Brush Here…"))
+			&& idle->contains(QStringLiteral("Find and Replace Textures…")) && idle->contains(QStringLiteral("Zoom to Fit"))
+			&& !idle->contains(QStringLiteral("Move…")) && !idle->contains(QStringLiteral("Delete Selection")),
+		"An empty selection should offer creation and whole-map actions without selection-only edits.");
 
 	// The objects list offers the same menu for its selection.
 	setObjectCurrentRow(objects, player);
@@ -1734,7 +1846,13 @@ void checkMapAddDelete(ApplicationShell& shell)
 
 	// Add Brush Here asks for a size and texture and adds a selected box.
 	whenDialogShows([](QWidget* dialog) {
-		static_cast<QDialog*>(dialog)->accept();
+		auto* buttons = dialog->findChild<QDialogButtonBox*>();
+		auto* add = buttons ? buttons->button(QDialogButtonBox::Ok) : nullptr;
+		const bool ready = add && QTest::qWaitFor([add] { return add->isEnabled(); },5000);
+		check(ready, "The primitive preview should become ready before adding the brush.");
+		if (ready) {
+			add->click();
+		} else { static_cast<QDialog*>(dialog)->reject(); }
 	});
 	whenMenuShows([](QMenu* menu) {
 		QAction* add = menuAction(menu, QStringLiteral("Add Brush Here…"));
@@ -1969,7 +2087,7 @@ void checkTargetLinks(ApplicationShell& shell)
 		settle();
 		const int linksBefore = map->targetLinkCount();
 		check(trigger(shell, "map.connectEntities") && map->targetLinkCount() == linksBefore + 1
-				&& shell.statusBar()->currentMessage().startsWith(QStringLiteral("Connected: the selected entities now target lamp")),
+				&& shell.statusBar()->currentMessage() == QStringLiteral("Connected through target to lamp."),
 			"Connect Entities should make the player start target the light.");
 		trigger(shell, "map.undo");
 		check(map->targetLinkCount() == linksBefore, "Undo should take the link back.");
@@ -1987,27 +2105,30 @@ void checkReplaceTexture(ApplicationShell& shell)
 {
 	ensureActive(shell, "checkReplaceTexture");
 	trigger(shell, "shell.mode.levels");
-	// The dialog counts the uses before anything changes, and Replace makes
-	// one undoable edit.
-	auto counted = std::make_shared<QString>();
-	whenDialogShows([counted](QWidget* dialog) {
-		auto* from = dialog->findChild<QComboBox*>(QStringLiteral("replaceTextureFrom"));
-		auto* to = dialog->findChild<QComboBox*>(QStringLiteral("replaceTextureTo"));
-		auto* count = dialog->findChild<QLabel*>(QStringLiteral("replaceTextureCount"));
-		if (!from || !to || !count) {
-			static_cast<QDialog*>(dialog)->reject();
-			return;
-		}
-		from->setCurrentText(QStringLiteral("base/floor"));
-		to->setCurrentText(QStringLiteral("base/metal"));
-		*counted = count->text();
-		static_cast<QDialog*>(dialog)->accept();
-	});
-	check(trigger(shell, "map.replaceTexture"), "Replace Texture should be available for the open map.");
+	// Find and Replace Textures is modeless: it counts the uses before
+	// anything changes, Replace makes one undoable edit, and it stays open.
+	check(trigger(shell, "map.replaceTexture"), "Find and Replace Textures should be available for the open map.");
 	settle();
-	check(counted->startsWith(QStringLiteral("2 ")), "The dialog should count both floor faces before replacing.");
+	auto* dialog = shell.findChild<QDialog*>(QStringLiteral("replaceTextureDialog"));
+	auto* from = dialog ? dialog->findChild<QComboBox*>(QStringLiteral("replaceTextureFrom")) : nullptr;
+	auto* to = dialog ? dialog->findChild<QComboBox*>(QStringLiteral("replaceTextureTo")) : nullptr;
+	auto* count = dialog ? dialog->findChild<QLabel*>(QStringLiteral("replaceTextureCount")) : nullptr;
+	auto* apply = dialog ? dialog->findChild<QPushButton*>(QStringLiteral("replaceTextureApply")) : nullptr;
+	check(dialog && dialog->isVisible() && !dialog->isModal() && from && to && count && apply, "Find and Replace Textures should open as a modeless window.");
+	if (!dialog || !from || !to || !count || !apply) {
+		return;
+	}
+	from->setCurrentText(QStringLiteral("base/floor"));
+	to->setCurrentText(QStringLiteral("base/metal"));
+	check(QTest::qWaitFor([count, apply] { return count->text().startsWith(QStringLiteral("2 ")) && apply->isEnabled(); }, 5000),
+		"The dialog should count both floor faces before replacing.");
+	apply->click();
+	settle();
 	check(shell.statusBar()->currentMessage().startsWith(QStringLiteral("Replaced base/floor with base/metal")),
 		"Replace should report what it changed.");
+	check(dialog->isVisible(), "Find and Replace Textures should stay open after Replace.");
+	dialog->close();
+	ensureActive(shell, "checkReplaceTexture");
 	trigger(shell, "map.undo");
 	check(action(shell, "map.undo") && !action(shell, "map.undo")->isEnabled(), "Undo should put the floor texture back.");
 
@@ -2020,18 +2141,6 @@ void checkReplaceTexture(ApplicationShell& shell)
 	if (brick < 0) {
 		return;
 	}
-	auto prefilled = std::make_shared<QString>();
-	whenDialogShows([prefilled](QWidget* dialog) {
-		auto* from = dialog->findChild<QComboBox*>(QStringLiteral("replaceTextureFrom"));
-		auto* to = dialog->findChild<QComboBox*>(QStringLiteral("replaceTextureTo"));
-		if (!from || !to) {
-			static_cast<QDialog*>(dialog)->reject();
-			return;
-		}
-		*prefilled = to->currentText();
-		from->setCurrentText(QStringLiteral("base/wall"));
-		static_cast<QDialog*>(dialog)->accept();
-	});
 	whenMenuShows([](QMenu* menu) {
 		QAction* use = menuAction(menu, QStringLiteral("Use in Open Map…"));
 		if (use && use->isEnabled()) {
@@ -2042,9 +2151,16 @@ void checkReplaceTexture(ApplicationShell& shell)
 	});
 	Q_EMIT textures->customContextMenuRequested(textures->visualItemRect(textures->item(brick)).center());
 	settle();
-	check(*prefilled == QStringLiteral("base/brick_wall"), "Use in Open Map should name the texture the way the map does.");
+	const QString prefilled = to->currentText();
+	check(dialog->isVisible() && prefilled == QStringLiteral("base/brick_wall"), "Use in Open Map should name the texture the way the map does.");
+	from->setCurrentText(QStringLiteral("base/wall"));
+	check(QTest::qWaitFor([apply] { return apply->isEnabled(); }, 5000), "The wall texture should be replaceable.");
+	apply->click();
+	settle();
 	check(currentPage(shell) == Levels && shell.statusBar()->currentMessage().startsWith(QStringLiteral("Replaced base/wall with base/brick_wall")),
 		"Use in Open Map should replace the chosen texture and show Levels.");
+	dialog->close();
+	ensureActive(shell, "checkReplaceTexture");
 
 	// In open map lists only the textures the map now uses, with a count.
 	trigger(shell, "shell.mode.textures");
@@ -2399,7 +2515,7 @@ void checkMapSelectionAndResize(ApplicationShell& shell)
 	check(history->count() == steps && map->selectionExtent() == QSizeF(128.0, 128.0), "A cancelled resize should leave the map as it was.");
 
 	// [ and ] halve and double the grid.
-	const int grid = map->gridSize();
+	const double grid = map->gridSize();
 	ensureActive(shell, "checkMapSelectionAndResize: grid");
 	map->setFocus(Qt::OtherFocusReason);
 	settle();
@@ -2497,7 +2613,7 @@ void checkMapClip(ApplicationShell& shell)
 	// keeps the -x half of the floor.
 	map->setClipLine(QPointF(0.0, -100.0), QPointF(0.0, 100.0));
 	press(shell, Qt::Key_Return);
-	check(shell.statusBar()->currentMessage().startsWith(QStringLiteral("Clipped 1 brush")) && map->clipMode() && !map->hasClipLine(),
+	check(QTest::qWaitFor([&] { return map->clipMode() && !map->hasClipLine() && map->selectionExtent() == QSizeF(64.0,128.0); }, 5000),
 		"Enter should clip the floor, keep the tool on, and clear the line.");
 	check(map->selectionExtent() == QSizeF(64.0, 128.0), "The clipped floor should be the 64-wide half.");
 	trigger(shell, "map.undo");
@@ -2511,12 +2627,13 @@ void checkMapClip(ApplicationShell& shell)
 	check(map->clipKeep() == LevelMapClipKeep::Both, "Tab twice should keep both parts.");
 	map->setClipLine(QPointF(0.0, -100.0), QPointF(0.0, 100.0));
 	press(shell, Qt::Key_Return);
-	check(shell.statusBar()->currentMessage().startsWith(QStringLiteral("Split 1 brush")) && map->selectionSet().size() == 2,
+	check(QTest::qWaitFor([&] { return map->selectionSet().size() == 2 && !map->hasClipLine(); }, 5000),
 		"Enter should split the floor in two and select both halves.");
 	trigger(shell, "map.undo");
 
-	// A line is drawn in the view's own axes, so another view drops it.
+	// The shared clip plane stays in world space when changing projection.
 	map->setClipLine(QPointF(0.0, -100.0), QPointF(0.0, 100.0));
+	const auto worldClip = map->clipState();
 	QComboBox* projection = nullptr;
 	for (QComboBox* combo : shell.findChildren<QComboBox*>()) {
 		if (combo->accessibleName() == QStringLiteral("Map projection")) {
@@ -2526,7 +2643,7 @@ void checkMapClip(ApplicationShell& shell)
 	if (projection) {
 		projection->setCurrentIndex(1);
 		settle();
-		check(map->clipMode() && !map->hasClipLine(), "Changing the view should drop the clip line and keep the tool on.");
+		check(map->clipMode() && map->clipState() == worldClip, "Changing the view should retain the world-space clip plane and keep the tool on.");
 		projection->setCurrentIndex(0);
 		settle();
 	}
@@ -2552,8 +2669,7 @@ void checkMapClip(ApplicationShell& shell)
 		keep->setCurrentIndex(0);
 		static_cast<QDialog*>(dialog)->accept();
 	});
-	check(trigger(shell, "map.clipSelection") && shell.statusBar()->currentMessage().startsWith(QStringLiteral("Clipped 1 brush"))
-			&& map->selectionExtent() == QSizeF(128.0, 96.0),
+	check(trigger(shell, "map.clipSelection") && QTest::qWaitFor([&] { return map->selectionExtent() == QSizeF(128.0, 96.0); }, 5000),
 		"Clip Selection… at y 32 keeping below should leave the floor 96 deep.");
 	trigger(shell, "map.undo");
 
@@ -2576,6 +2692,10 @@ void checkMapClip(ApplicationShell& shell)
 	selectFloor();
 	check(trigger(shell, "map.carve") && shell.statusBar()->currentMessage().contains(QStringLiteral("do not overlap")),
 		"Carve with a lone brush should say it overlaps nothing.");
+	// Numeric clipping uses the shared tool. Leave it before testing ordinary
+	// camera object picking; a click in that tool edits the clip plane.
+	if (map->clipMode()) { trigger(shell, "map.clipTool"); }
+	check(!map->clipMode(), "The clip tool should be off before ordinary camera picking.");
 
 	// 3D Preview shows the map's brushes in place of the 2D view, and the
 	// same command brings the 2D view back.
@@ -2583,24 +2703,44 @@ void checkMapClip(ApplicationShell& shell)
 	check(preview && trigger(shell, "map.toggle3D") && preview->isVisible() && !map->isVisible() && preview->hasMesh()
 			&& preview->mesh().triangleCount == 12 && action(shell, "map.toggle3D")->isChecked(),
 		"3D Preview should show the floor brush's twelve triangles in place of the 2D view.");
+	check(preview && trigger(shell, "map.frameSelection") && settleModel(preview),
+		"Selection framing should place the floor in the camera before picking it.");
 	snapshot(shell, "levels-3d-preview");
 	check(child<QAbstractButton>(shell, "levelMapShowButton") && !child<QAbstractButton>(shell, "levelMapShowButton")->isEnabled()
-			&& child<QAbstractButton>(shell, "levelMapZoomSelection") && !child<QAbstractButton>(shell, "levelMapZoomSelection")->isEnabled(),
-		"The 2D view's Show menu and Zoom to Selection should wait while the 3D preview shows.");
+			&& child<QAbstractButton>(shell, "levelMapZoomSelection") && child<QAbstractButton>(shell, "levelMapZoomSelection")->isEnabled(),
+		"Plan display options should wait in the camera while shared selection framing remains available.");
 	if (preview) {
 		// The selected floor is lit in 3D; selecting something else unlights it,
 		// and a click on the floor in the preview selects it again.
-		check(preview->highlightedTriangleCount() == 12, "The selected floor brush should be lit in the 3D preview.");
+		check(QTest::qWaitFor([preview] { return preview->highlightedTriangleCount() == 12; },5000),
+			"The selected floor brush should be lit in the 3D preview.");
 		objects->clearSelection();
 		setObjectCurrentRow(objects, rowWithData(objects, Qt::UserRole, QStringLiteral("entity:1")));
 		settle();
 		check(preview->highlightedTriangleCount() == 0, "Selecting an entity should leave no brush lit.");
-		const QPointF middle = QPointF(preview->rect().center());
+		restoreOffscreenActivation(shell);
+		preview->setFocus(Qt::OtherFocusReason);
+		check(settleModel(preview), "The camera projection should be ready before selecting the floor.");
+		// The selected player entity has resize handles over the view centre.
+		// Pick an interior point of the fixture floor outside that manipulator.
+		QPointF middle;
+		check(preview->projectToView({40,40,0}, &middle) && QRectF(preview->rect()).contains(middle)
+			&& preview->selectionResizeHandleAt(middle) < 0, "The floor pick should be visible and outside the selected entity's resize handles.");
 		QMouseEvent pressEvent(QEvent::MouseButtonPress, middle, preview->mapToGlobal(middle), Qt::LeftButton, Qt::LeftButton, Qt::NoModifier);
 		QCoreApplication::sendEvent(preview, &pressEvent);
+		const bool resizeIntercepted = preview->isResizingSelection();
 		QMouseEvent releaseEvent(QEvent::MouseButtonRelease, middle, preview->mapToGlobal(middle), Qt::LeftButton, Qt::NoButton, Qt::NoModifier);
 		QCoreApplication::sendEvent(preview, &releaseEvent);
 		settle();
+		check(settleModel(preview), "The picked camera selection should finish rendering.");
+		if (drawsIn3D && (currentPath(objects) != QStringLiteral("brush:0") || preview->highlightedTriangleCount() != 12)) {
+			std::cerr << "Camera pick diagnostic: selector=" << currentPath(objects).toStdString()
+				<< " highlighted=" << preview->highlightedTriangleCount() << " triangles=" << preview->mesh().triangleCount
+				<< " componentMode=" << static_cast<int>(map->componentMode())
+				<< " resizeIntercepted=" << resizeIntercepted << " clipMode=" << preview->clipMode()
+				<< " brushTool=" << preview->brushDrawTool() << " surfaceTool=" << static_cast<int>(preview->surfaceTool())
+				<< " status=" << shell.statusBar()->currentMessage().toStdString() << std::endl;
+		}
 		check(!drawsIn3D
 				|| (currentPath(objects) == QStringLiteral("brush:0") && preview->highlightedTriangleCount() == 12
 					&& shell.statusBar()->currentMessage().startsWith(QStringLiteral("Selected brush:0, face "))),
@@ -2805,7 +2945,7 @@ void checkViewerControls(ApplicationShell& shell)
 	auto* modelGrid = child<QCheckBox>(shell, "modelShowGrid");
 	auto* edges = child<QCheckBox>(shell, "modelShowEdges");
 	auto* culling = child<QCheckBox>(shell, "modelCullBackfaces");
-	auto* speed = child<QSpinBox>(shell, "modelFramesPerSecond");
+	auto* speed = child<QDoubleSpinBox>(shell, "modelFramesPerSecond");
 	check(models && model && modelGrid && edges && culling && speed, "The model view bar should expose its display switches and speed.");
 	if (models && model && modelGrid && edges && culling && speed) {
 		models->setCurrentRow(0);
@@ -3505,8 +3645,7 @@ void checkCodeLineEditing(ApplicationShell& shell)
 void checkAudioBrowser(ApplicationShell& shell, const Fixtures& fixtures)
 {
 	ensureActive(shell, "checkAudioBrowser");
-	shell.openPathFromCommandLine(fixtures.soundWad);
-	settle();
+	openPackageFixture(shell, fixtures.soundWad);
 	check(currentPage(shell) == Packages, "A Doom WAD with no maps should open as a package, not a map.");
 	check(trigger(shell, "shell.mode.audio"), "The Audio surface should open.");
 	auto* entries = child<QListWidget>(shell, "audioEntries");
@@ -3525,7 +3664,8 @@ void checkAudioBrowser(ApplicationShell& shell, const Fixtures& fixtures)
 	entries->setCurrentRow(tone);
 	settle();
 	check(waveform->hasPeaks() && waveform->durationMs() == 1000, "A DMX sound should draw a one-second waveform.");
-	check(time->text() == QStringLiteral("0:00.00 / 0:01.00"), "The time readout should show the playhead and the length.");
+	check(time->text() == QStringLiteral("Stopped · 0:00.00 / 0:01.00") && time->accessibleDescription() == QStringLiteral("Stopped"),
+		"The time readout should show the playback state, playhead and length.");
 	check(play->isEnabled() == (VIBESTUDIO_HAVE_AUDIO_PLAYBACK != 0) && !stop->isEnabled(),
 		"Play should be offered when the build can play, and Stop only once something plays.");
 	check(play->shortcut() == QKeySequence(Qt::Key_Space), "Space should play and pause.");
@@ -3534,15 +3674,15 @@ void checkAudioBrowser(ApplicationShell& shell, const Fixtures& fixtures)
 	QTest::mouseClick(waveform, Qt::LeftButton, Qt::NoModifier, QPoint(qRound(waveform->xForTime(500)), waveform->height() / 3));
 	settle();
 	check(std::abs(waveform->playhead() - 500) <= 8 && waveform->hasFocus(), "A click in the waveform should move the playhead and focus it.");
-	check(time->text().endsWith(QStringLiteral(" / 0:01.00")) && time->text() != QStringLiteral("0:00.00 / 0:01.00"),
+	check(time->text().endsWith(QStringLiteral(" / 0:01.00")) && !time->text().endsWith(QStringLiteral("0:00.00 / 0:01.00")),
 		"The time readout should follow the playhead.");
 	press(shell, Qt::Key_End);
-	check(waveform->playhead() == 1000 && time->text() == QStringLiteral("0:01.00 / 0:01.00"), "End should move the playhead to the end.");
+	check(waveform->playhead() == 1000 && time->text() == QStringLiteral("Stopped · 0:01.00 / 0:01.00"), "End should move the playhead to the end.");
 	press(shell, Qt::Key_Home);
 	press(shell, Qt::Key_Right);
 	check(waveform->playhead() == 20, "Right should step the playhead a fiftieth of the sound.");
 	press(shell, Qt::Key_PageDown);
-	check(waveform->playhead() == 120 && time->text() == QStringLiteral("0:00.12 / 0:01.00"), "Page Down should step it a tenth.");
+	check(waveform->playhead() == 120 && time->text() == QStringLiteral("Stopped · 0:00.12 / 0:01.00"), "Page Down should step it a tenth.");
 	check(waveform->accessibleDescription().contains(QStringLiteral("playhead at")), "The waveform should tell a screen reader where the playhead is.");
 	snapshot(shell, "audio-dmx");
 
@@ -3562,7 +3702,7 @@ void checkAudioBrowser(ApplicationShell& shell, const Fixtures& fixtures)
 	check(!waveform->hasPeaks() && !play->isEnabled(), "A PC speaker sound should have no waveform and nothing to play.");
 	entries->setCurrentRow(tone);
 	settle();
-	check(waveform->playhead() == 0 && time->text() == QStringLiteral("0:00.00 / 0:01.00"), "Another sound should start from the top.");
+	check(waveform->playhead() == 0 && time->text() == QStringLiteral("Stopped · 0:00.00 / 0:01.00"), "Another sound should start from the top.");
 
 	// Real playback needs an audio device and makes a sound, so it runs only
 	// when VIBESTUDIO_TEST_PLAYBACK is set, and then at zero volume.
@@ -3641,8 +3781,7 @@ void checkLooseAssetsAndStagedGuard(ApplicationShell& shell, const Fixtures& fix
 {
 	ensureActive(shell, "checkLooseAssetsAndStagedGuard");
 	// Stage a deletion in the open package.
-	shell.openPathFromCommandLine(fixtures.package);
-	settle();
+	openPackageFixture(shell, fixtures.package);
 	auto entries = tests::PackageRows(child<PackageEntryView>(shell, "packageEntries"));
 	auto* filter = child<QLineEdit>(shell, "packageFilter");
 	QAction* saveAs = action(shell, "package.saveAs");
@@ -3660,7 +3799,7 @@ void checkLooseAssetsAndStagedGuard(ApplicationShell& shell, const Fixtures& fix
 	check(saveAs->isEnabled(), "Del should stage a deletion to test the guard with.");
 	entries->setFocus();
 	press(shell, Qt::Key_Z, Qt::ControlModifier);
-	check(!saveAs->isEnabled(), "Ctrl+Z on the Packages page should take the staged change back out of the plan.");
+	check(stagedOperationCount(shell) == 0, "Ctrl+Z on the Packages page should take the staged change back out of the plan.");
 	filter->setText(QStringLiteral("metal_panel"));
 	settle();
 	entries->setCurrentRow(0);
@@ -3673,7 +3812,7 @@ void checkLooseAssetsAndStagedGuard(ApplicationShell& shell, const Fixtures& fix
 	// Opening something that replaces the package asks first; Cancel keeps it.
 	auto asked = std::make_shared<bool>(false);
 	whenDialogShows([asked](QWidget* dialog) {
-		*asked = withoutMnemonic(dialog->windowTitle()) == QStringLiteral("Discard Staged Changes");
+		*asked = withoutMnemonic(dialog->windowTitle()) == QStringLiteral("Save Package Draft?");
 		clickButton(dialog, QStringLiteral("Cancel"));
 	});
 	shell.openPathFromCommandLine(fixtures.looseTexture);
@@ -3692,7 +3831,7 @@ void checkLooseAssetsAndStagedGuard(ApplicationShell& shell, const Fixtures& fix
 	auto* textures = child<QListWidget>(shell, "textureEntries");
 	check(currentPage(shell) == Textures && currentPath(textures) == QStringLiteral("stone.tga"),
 		"A loose texture should open on the Textures surface, selected.");
-	check(!saveAs->isEnabled(), "The discarded plan should be gone.");
+	check(stagedOperationCount(shell) == 0, "The discarded plan should be gone.");
 	auto* preview = shell.findChild<ImagePreviewView*>(QStringLiteral("texturePreview"));
 	settleImage(preview);
 	check(preview && preview->hasImage(), "The loose texture should be decoded and shown.");
@@ -3997,11 +4136,23 @@ void checkInstallationPalette(ApplicationShell& shell, const Fixtures& fixtures)
 		settleImage(preview);
 		check(preview->hasImage() && preview->image().pixel(3, 2) == qRgb(250, 5, 64),
 			"A PWAD with no PLAYPAL should decode with the selected installation's IWAD palette.");
-		bool labelled = false;
-		for (QLabel* label : page(shell, Textures)->findChildren<QLabel*>()) {
-			labelled = labelled || label->text() == QStringLiteral("Palette read from the game installation: PLAYPAL in doom2.wad");
-		}
+		const auto paletteSourceReady = [&] {
+			for (QLabel* label : page(shell, Textures)->findChildren<QLabel*>()) {
+				if (label->text() == QStringLiteral("Palette read from the game installation: PLAYPAL in doom2.wad")) { return true; }
+			}
+			return false;
+		};
+		const bool labelled = QTest::qWaitFor(paletteSourceReady, 5000);
 		check(labelled, "The readout should say the palette came from the game installation.");
+		if (!labelled) {
+			for (QLabel* label : page(shell, Textures)->findChildren<QLabel*>()) {
+				if (label->accessibleName() == QStringLiteral("Palette source")) { std::cerr << "Palette source: " << label->text().toStdString() << '\n'; }
+			}
+		}
+		trigger(shell, "shell.mode.packages");
+		trigger(shell, "shell.mode.textures");
+		check(QTest::qWaitFor(paletteSourceReady, 5000) && preview->hasImage() && preview->image().pixel(3, 2) == qRgb(250, 5, 64),
+			"Returning to Textures should retain the decoded installation palette and its source label.");
 	}
 	settings.setSelectedGameInstallation(previous);
 	settings.sync();
@@ -4511,9 +4662,15 @@ void checkCameraDepth(ApplicationShell& shell, const Fixtures& fixtures)
 	// and the box sits squarely behind it.
 	camera->setShowEdges(false);
 	camera->setCameraView(ModelVec3 {0.0f, 0.0f, 96.0f}, 0.0, 0.0);
-	settle();
-	const auto colours = [camera](const QRect& area) {
-		const QImage image = camera->grab().toImage();
+	// Resize handles deliberately remain visible as an editing overlay.
+	// This check isolates mesh occlusion while retaining the selected faces.
+	camera->clearSelectionResizeBox();
+	check(settleModel(camera), "The occlusion fixture should finish rendering its camera view.");
+	QImage occlusionImage;
+	const auto colours = [camera, &occlusionImage](const QRect& area) {
+		QImage image(camera->size(), QImage::Format_ARGB32_Premultiplied);
+		camera->render(&image);
+		occlusionImage = image;
 		QSet<QRgb> seen;
 		for (int y = area.top(); y <= area.bottom(); ++y) {
 			for (int x = area.left(); x <= area.right(); ++x) {
@@ -4525,8 +4682,15 @@ void checkCameraDepth(ApplicationShell& shell, const Fixtures& fixtures)
 	const QPoint centre = camera->rect().center();
 	check(colours(QRect(centre - QPoint(10, 10), QSize(21, 21))) == 1, "A selected brush behind a wall should not show through it.");
 	camera->setShowEdges(true);
-	settle();
-	check(colours(QRect(centre.x() - 60, centre.y(), 121, 1)) == 1, "The edges of a brush behind a wall should not show through it.");
+	check(settleModel(camera), "The occlusion fixture should finish rendering its edges.");
+	const int edgeColours = colours(QRect(centre.x() - 60, centre.y(), 121, 1));
+	check(edgeColours == 1, "The edges of a brush behind a wall should not show through it.");
+	if (edgeColours != 1) {
+		std::cerr << "Occlusion edge colours: " << edgeColours << "; viewport: " << camera->width() << 'x' << camera->height()
+			<< "; highlighted: " << camera->highlightedTriangleCount() << "; mode: " << static_cast<int>(camera->renderMode()) << '\n';
+	}
+	const QString capture = qEnvironmentVariable("VIBESTUDIO_TEST_DEPTH_CAPTURE");
+	if (!capture.isEmpty()) { check(occlusionImage.save(capture), "The owned occlusion render should save."); }
 	camera->setShowEdges(false);
 
 	combo->setCurrentIndex(combo->findData(QStringLiteral("vibestudio-default")));
@@ -5041,16 +5205,21 @@ void checkEditorProfiles(ApplicationShell& shell, const Fixtures& fixtures)
 	drag(map, Qt::LeftButton, Qt::NoModifier, corner, corner + QPoint(80, -60));
 	check(brushCount() == brushes + 1 && shell.statusBar()->currentMessage().startsWith(QStringLiteral("Drew brush:")),
 		"A left drag over empty space should draw a brush, as TrenchBroom does.");
-	// Hiding in TrenchBroom's one view hides in the camera too, and the clip
-	// tool brings the 2D view, where its line is drawn.
+	// Hiding in TrenchBroom's one view hides in the camera too. Clipping now
+	// shares the plane between views and can stay in the camera.
 	trigger(shell, "map.toggle3D");
+	check(QTest::qWaitFor([&] { return camera->mesh().triangleCount == brushCount() * 12; }, 5000),
+		"The camera should receive the newly drawn box before testing visibility.");
 	const int shownTriangles = camera->mesh().triangleCount;
 	trigger(shell, "map.hideSelection");
-	check(camera->isVisible() && camera->mesh().triangleCount < shownTriangles, "Hiding the drawn brush should take it out of the 3D view.");
+	check(QTest::qWaitFor([&] { return camera->isVisible() && camera->mesh().triangleCount < shownTriangles; }, 5000),
+		"Hiding the drawn brush should take it out of the 3D view.");
 	trigger(shell, "map.showAll");
-	check(camera->mesh().triangleCount == shownTriangles, "Show All Hidden should bring it back in the 3D view.");
+	check(QTest::qWaitFor([&] { return camera->mesh().triangleCount == shownTriangles; }, 5000),
+		"Show All Hidden should bring it back in the 3D view.");
 	trigger(shell, "map.clipTool");
-	check(map->isVisible() && !camera->isVisible() && map->clipMode(), "The clip tool should bring the 2D view forward from the 3D one.");
+	check(camera->isVisible() && !map->isVisible() && map->clipMode() && camera->clipMode(),
+		"The clip tool should stay in the camera with the shared plane active in both views.");
 	trigger(shell, "map.clipTool");
 	// A left drag on the selection in the camera moves it, one undo step.
 	if (auto* objects = child<LevelObjectList>(shell, "levelMapObjects")) {
@@ -5062,14 +5231,15 @@ void checkEditorProfiles(ApplicationShell& shell, const Fixtures& fixtures)
 		}
 		settle();
 	}
-	trigger(shell, "map.toggle3D");
+	if (!camera->isVisible()) { trigger(shell, "map.toggle3D"); }
 	trigger(shell, "map.frameSelection");
-	settle();
+	check(settleModel(camera), "The framed selection should finish rendering before a move begins.");
 	check(camera->isVisible(), "The camera should be showing for the move check.");
 	drag(camera, Qt::LeftButton, Qt::NoModifier, camera->rect().center(), camera->rect().center() + QPoint(90, 0));
 	check(!drawsIn3D || (shell.statusBar()->currentMessage().startsWith(QStringLiteral("Moved")) && !camera->isMovingSelection()),
 		"A left drag on the selection in TrenchBroom's camera should move it.");
 	trigger(shell, "map.undo");
+	camera->setFocus(Qt::OtherFocusReason);
 	press(shell, Qt::Key_Space);
 	const LevelMapVec3 centreBefore = map->worldPositionAt(QPointF(map->rect().center()), 0.0);
 	drag(map, Qt::RightButton, Qt::NoModifier, map->rect().center(), map->rect().center() + QPoint(50, 30));
@@ -5232,15 +5402,16 @@ void checkEditorProfiles(ApplicationShell& shell, const Fixtures& fixtures)
 	// left click selects rather than pans.
 	drag(map, Qt::MiddleButton, Qt::NoModifier, map->rect().center(), map->rect().center() + QPoint(30, 20));
 	check(map->cursor().shape() != Qt::OpenHandCursor, "A middle-button pan should not leave the view in hand mode.");
-	trigger(shell, "map.undo");
-	trigger(shell, "map.undo");
-	trigger(shell, "map.undo");
-	if (!previousMap.isEmpty() && !sameFile(previousMap, fixtures.map)) {
+	// Profile selection history is also undoable, so a fixed count of three
+	// undos no longer reliably removes just the brushes made in this check.
+	// Restore the saved disposable fixture after verifying each edit above.
+	if (!previousMap.isEmpty()) {
 		if (nameField) {
 			nameField->setCurrentText(previousName);
 		}
-		shell.openPathFromCommandLine(previousMap);
-		settle();
+		openMapFixture(shell, previousMap);
+	} else {
+		openMapFixture(shell, fixtures.map);
 	}
 }
 
@@ -5929,7 +6100,7 @@ void checkShortcutRules(ApplicationShell& shell)
 	const auto both = capture(QStringLiteral("Reset Editor Zoom"), [](QKeySequenceEdit* edit) {
 		QTest::keyClick(edit, Qt::Key_Z, Qt::ControlModifier);
 	});
-	check(both.second && both.first.contains(QStringLiteral("Undo Staged Change")) && both.first.contains(QStringLiteral("Undo Map Edit")),
+	check(both.second && both.first.contains(QStringLiteral("Undo Package Edit")) && both.first.contains(QStringLiteral("Undo Map Edit")),
 		"Ctrl+Z for a window-wide command should name both page commands it would be taken from.");
 	const auto nested = capture(QStringLiteral("Undo Map Edit"), [](QKeySequenceEdit* edit) {
 		QTest::keyClick(edit, Qt::Key_PageUp, Qt::ControlModifier);
@@ -6123,10 +6294,10 @@ void checkMultiEntityKeys(ApplicationShell& shell, const Fixtures& fixtures)
 	check(row(QStringLiteral("origin")) && differs(row(QStringLiteral("origin"))), "Undo should put the key back on both.");
 
 	// Brushes are still shown one at a time, and the inspector says so.
-	// The brush current, so the last one selected, and the entity added.
-	setObjectCurrentRow(objects, rowWithData(objects, Qt::UserRole, QStringLiteral("brush:0")));
+	// Selection order determines the primary object. Add the brush last.
+	setObjectCurrentRow(objects, rowWithData(objects, Qt::UserRole, QStringLiteral("entity:1")));
 	settle();
-	setObjectSelected(objects, rowWithData(objects, Qt::UserRole, QStringLiteral("entity:1")), true);
+	setObjectCurrentRow(objects, rowWithData(objects, Qt::UserRole, QStringLiteral("brush:0")), QItemSelectionModel::Select);
 	settle();
 	check(inspector->topLevelItemCount() > 0 && inspector->topLevelItem(0)->text(0).startsWith(QStringLiteral("The last of 2 selected objects"))
 			&& inspector->accessibleDescription().startsWith(QStringLiteral("The last of 2")),
@@ -6147,8 +6318,8 @@ void checkMultiEntityKeys(ApplicationShell& shell, const Fixtures& fixtures)
 void checkPlaceHistory(ApplicationShell& shell, const Fixtures& fixtures)
 {
 	ensureActive(shell, "checkPlaceHistory");
-	// Changes earlier checks staged are let go first, so opening the package
-	// asks nothing.
+	// Remove staged operations; opening the fixture below also discards the
+	// retained package undo history.
 	unstageAll(shell);
 	// Edits left on whatever map is open are let go.
 	whenDialogShows([](QWidget* modal) {
@@ -6163,8 +6334,7 @@ void checkPlaceHistory(ApplicationShell& shell, const Fixtures& fixtures)
 	});
 	shell.openPathFromCommandLine(fixtures.map);
 	settle();
-	shell.openPathFromCommandLine(fixtures.package);
-	settle();
+	openPackageFixture(shell, fixtures.package);
 	shell.openPathFromCommandLine(fixtures.project);
 	settle();
 	const QString path = QDir(fixtures.project).filePath(QStringLiteral("progs/place_sample.qc"));
@@ -6574,19 +6744,7 @@ void checkDropNames(ApplicationShell& shell, const Fixtures& fixtures)
 	check(*asked == QStringLiteral("Dropped Files Already In The Package"), "Two dropped files landing on one name should ask about the clash first.");
 
 	// Onto a Doom WAD: the open package's staged changes are let go first.
-	whenDialogShows([](QWidget* modal) {
-		if (auto* box = qobject_cast<QMessageBox*>(modal)) {
-			for (QAbstractButton* button : box->buttons()) {
-				if (box->buttonRole(button) == QMessageBox::AcceptRole || box->buttonRole(button) == QMessageBox::DestructiveRole
-					|| box->buttonRole(button) == QMessageBox::YesRole) {
-					button->click();
-					return;
-				}
-			}
-		}
-	});
-	shell.openPathFromCommandLine(fixtures.soundWad);
-	settle();
+	openPackageFixture(shell, fixtures.soundWad);
 	writeFile(source.filePath(QStringLiteral("longtexturename.lmp")), QByteArrayLiteral("long"));
 	writeFile(source.filePath(QStringLiteral("short.lmp")), QByteArrayLiteral("short"));
 	dropOnEntries({QUrl::fromLocalFile(source.filePath(QStringLiteral("longtexturename.lmp"))), QUrl::fromLocalFile(source.filePath(QStringLiteral("short.lmp")))});
@@ -6629,8 +6787,9 @@ void checkLevelTextures(ApplicationShell& shell, const Fixtures& fixtures)
 	};
 	// Textures applied earlier in the run lead; the map's own follow by use.
 	const QStringList before = names();
-	check(before.contains(QStringLiteral("base/wall")) && before.indexOf(QStringLiteral("base/wall")) < before.indexOf(QStringLiteral("base/floor")),
-		"The map's textures should be listed, the most used first.");
+	const int wallIndex = before.indexOf(QStringLiteral("base/wall")), floorIndex = before.indexOf(QStringLiteral("base/floor"));
+	check(wallIndex >= 0 && floorIndex >= 0 && (wallIndex < floorIndex || textures->item(floorIndex)->toolTip().contains(QStringLiteral("applied lately"))),
+		"The map's textures should be listed by use, with recently applied textures allowed to lead.");
 	// The room's brush takes base/floor on every face.
 	for (int row = 0; row < objects->model()->rowCount(); ++row) {
 		if (objectIndex(objects, row).data(Qt::DisplayRole).toString().startsWith(QStringLiteral("Brush 0"))) {
@@ -6638,15 +6797,31 @@ void checkLevelTextures(ApplicationShell& shell, const Fixtures& fixtures)
 		}
 	}
 	settle();
+	const auto beforeApply = serializeLevelMap(shell.levelDocument()).bytes;
+	const auto undoDepth = shell.levelDocument().undoStack.size();
+	QString appliedStatus;
 	if (QListWidgetItem* floor = textures->item(names().indexOf(QStringLiteral("base/floor")))) {
 		emit textures->itemActivated(floor);
+		// The operation reports synchronously; later preview/status updates may
+		// replace that message while the texture list catches up.
+		appliedStatus = shell.statusBar()->currentMessage();
 		settle();
 	}
-	check(names().first() == QStringLiteral("base/floor") && !names().contains(QStringLiteral("base/wall"))
-			&& shell.statusBar()->currentMessage().startsWith(QStringLiteral("Applied base/floor")),
-		"Enter on a texture should put it on the selection, and the one it covered, used nowhere now, should go."); 
+	const auto brush = std::find_if(shell.levelDocument().brushes.cbegin(),shell.levelDocument().brushes.cend(),
+		[](const auto& candidate) { return candidate.id == 0; });
+	check(brush != shell.levelDocument().brushes.cend() && !brush->faces.isEmpty()
+		&& std::all_of(brush->faces.cbegin(),brush->faces.cend(),[](const auto& face) { return face.textureName == QStringLiteral("base/floor"); })
+		&& shell.levelDocument().undoStack.size() == undoDepth+1,
+		"Enter on a texture changes every selected brush face in one undo step.");
+	if (!appliedStatus.startsWith(QStringLiteral("Applied base/floor"))) {
+		std::cerr << "Texture activation status: " << appliedStatus.toStdString() << '\n';
+	}
+	check(appliedStatus.startsWith(QStringLiteral("Applied base/floor")),"Texture activation reports the applied material.");
+	check(waitFor([&] { return !names().isEmpty() && names().first() == QStringLiteral("base/floor") && !names().contains(QStringLiteral("base/wall")); }),
+		"The refreshed texture list drops a replaced material that is no longer used or recent.");
 	// Undone, the walls come back, and the texture applied lately still leads.
 	trigger(shell, "map.undo");
+	check(serializeLevelMap(shell.levelDocument()).bytes == beforeApply,"Texture browser application has exact map undo.");
 	check(names().first() == QStringLiteral("base/floor") && names().indexOf(QStringLiteral("base/floor")) < names().indexOf(QStringLiteral("base/wall"))
 			&& textures->item(0)->toolTip().contains(QStringLiteral("applied lately")),
 		"A texture applied lately should lead the list, ahead of one used more."); 
@@ -7593,8 +7768,7 @@ void checkShaderQuery(ApplicationShell& shell, const Fixtures& fixtures)
 void checkPackageQuery(ApplicationShell& shell, const Fixtures& fixtures)
 {
 	ensureActive(shell, "checkPackageQuery");
-	shell.openPathFromCommandLine(fixtures.package);
-	settle();
+	openPackageFixture(shell, fixtures.package);
 	auto* filter = child<QLineEdit>(shell, "packageFilter");
 	auto entries = tests::PackageRows(child<PackageEntryView>(shell, "packageEntries"));
 	check(filter && entries, "Packages should have its filter and entry list.");
@@ -7625,8 +7799,7 @@ void checkPackageQuery(ApplicationShell& shell, const Fixtures& fixtures)
 		"ext=, size> and folder: together should list the texture images only.");
 	// Enter selects every entry kept and hands focus to the list.
 	filter->setFocus(Qt::OtherFocusReason);
-	QTest::keyClick(filter, Qt::Key_Return);
-	settle();
+	press(shell, Qt::Key_Return);
 	QStringList selected;
 	for (const auto* item : entries->selectedItems()) {
 		selected << item->data(Qt::UserRole).toString();
@@ -7709,6 +7882,9 @@ void checkPackageQuery(ApplicationShell& shell, const Fixtures& fixtures)
 	buildStoredZip(fresh, {{QStringLiteral("textures/wide.tga"), buildTarga(64, 32, flat)}, {QStringLiteral("textures/small.tga"), buildTarga(16, 16, flat)}});
 	textureFilter->setText(QStringLiteral("w=64"));
 	shell.openPathFromCommandLine(fresh);
+	// Thumbnail work is lazy: make the Textures page visible after the package
+	// open, which initially switches to Packages.
+	trigger(shell, "shell.mode.textures");
 	check(waitFor([&images]() { return images() == QStringList {QStringLiteral("textures/wide.tga")}; }),
 		"A filter on width should keep an image once its thumbnail is made.");
 	textureFilter->clear();
@@ -7855,8 +8031,8 @@ void checkObjectQuery(ApplicationShell& shell, const Fixtures& fixtures)
 		// the focus asked for arrives when it is.
 		shell.activateWindow();
 		(void)QTest::qWaitForWindowActive(&shell, 2000);
-		check(filter->text() == QStringLiteral("kind=entity light=300") && kept(false) == QStringList {QStringLiteral("entity:2")}
-				&& waitFor([filter]() { return filter->hasFocus(); }),
+		check(waitFor([&] { return filter->text() == QStringLiteral("kind=entity light=300") && kept(false) == QStringList {QStringLiteral("entity:2")}
+				&& filter->hasFocus(); }),
 			"Find Objects With This Value should filter the objects by light=300 and put focus in the filter.");
 	}
 	// A query used is offered again: Down in the empty field lists it.
@@ -7934,7 +8110,8 @@ void checkObjectQuery(ApplicationShell& shell, const Fixtures& fixtures)
 			});
 			emit inspector->customContextMenuRequested(inspector->visualItemRect(lightLevel).center());
 			settle();
-			check(filter->text() == QStringLiteral("kind=sector light=%1").arg(lightLevel->text(1)) && kept(false) == QStringList {QStringLiteral("sector:0")},
+			const QString expected = QStringLiteral("kind=sector light=%1").arg(lightLevel->text(1));
+			check(waitFor([&] { return filter->text() == expected && kept(false) == QStringList {QStringLiteral("sector:0")}; }),
 				"A sector's light level should query its kind and light, and keep only the sector.");
 		}
 	}
@@ -8283,7 +8460,7 @@ void checkBuildLoop(ApplicationShell& shell, const Fixtures& fixtures)
 		check(stagedMap && action(shell, "package.saveAs") && action(shell, "package.saveAs")->isEnabled(),
 			"Add to Package should stage maps/test.bsp for Save As.");
 		unstageAll(shell);
-		check(!action(shell, "package.saveAs")->isEnabled(), "Unstaging should leave nothing to save.");
+		check(stagedOperationCount(shell) == 0, "Unstaging should leave no staged operations.");
 		trigger(shell, "shell.mode.build");
 	}
 
@@ -8331,9 +8508,9 @@ void checkBuildLoop(ApplicationShell& shell, const Fixtures& fixtures)
 	if (launch) {
 		auto allowed = std::make_shared<bool>(false);
 		auto confirmed = std::make_shared<bool>(false);
-		whenDialogShows([allowed, confirmed](QWidget* dialog) {
+		whenTitledDialogShows(QStringLiteral("Allow Test Maps"), [allowed, confirmed](QWidget* dialog) {
 			*allowed = withoutMnemonic(dialog->windowTitle()) == QStringLiteral("Allow Test Maps");
-			whenDialogShows([confirmed](QWidget* next) {
+			whenTitledDialogShows(QStringLiteral("Launch Game"), [confirmed](QWidget* next) {
 				*confirmed = true;
 				clickButton(next, QStringLiteral("Launch"));
 			});
@@ -8368,7 +8545,7 @@ void checkBuildLoop(ApplicationShell& shell, const Fixtures& fixtures)
 	ensureActive(shell, "checkBuildLoop: build and launch");
 	check(child<QAbstractButton>(shell, "buildAndLaunch") != nullptr, "The Build page should offer Build and Launch.");
 	auto launchedAgain = std::make_shared<bool>(false);
-	whenDialogShows([launchedAgain](QWidget* dialog) {
+	whenTitledDialogShows(QStringLiteral("Launch Game"), [launchedAgain](QWidget* dialog) {
 		*launchedAgain = withoutMnemonic(dialog->windowTitle()) == QStringLiteral("Launch Game");
 		clickButton(dialog, QStringLiteral("Launch"));
 	}, 3000);

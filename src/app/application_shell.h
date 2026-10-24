@@ -14,6 +14,7 @@
 #include "core/level_navigation.h"
 #include "core/level_sidebar.h"
 #include "core/level_map.h"
+#include "core/level_visibility.h"
 #include "core/level_document.h"
 #include "core/level_materials.h"
 #include "core/level_surface.h"
@@ -90,9 +91,18 @@ class QTreeWidgetItem;
 namespace vibestudio {
 
 struct LevelMapComponentSet;
+struct LevelSurfaceFacePicks;
+struct LevelSurfaceFaceTransformReport;
 enum class LevelPatchMatrixOperation;
 
+enum class LevelObjectSelectionMode;
 struct LevelPlacementRequest;
+struct LevelPastePlacement;
+enum class LevelNudgeDirection;
+class LevelSweepDialog;
+class LevelSweepGizmo;
+class LevelFindReplaceDialog;
+struct LevelComponentTransformRequest;
 struct LevelShapeRequest;
 struct LevelBuildWorkspace;
 
@@ -202,6 +212,7 @@ struct StudioModeDescriptor {
 };
 
 QVector<StudioModeDescriptor> studioModeDescriptors();
+enum class LevelClipboardPlacement { Profile, Original, Cursor, Camera };
 
 class ApplicationShell final : public QMainWindow {
 	Q_OBJECT
@@ -559,6 +570,13 @@ private:
 	void toggleLevelViewMaximized();
 	void restoreLevelViewWorkspace(bool focus = false);
 	void equalizeLevelViews();
+	// Show Top, Front and Side View (app/level_plan_pane_actions.cpp): which
+	// plan panes the three-plan layouts show. One always stays shown.
+	void registerLevelPlanPaneCommands();
+	bool showLevelPlanPane(int index, bool shown);
+	void applyLevelPlanPaneVisibility();
+	void moveLevelActivePlanToShownPane();
+	void refreshLevelPlanPaneActions();
 	QWidget* buildLevelAuthoringBar();
 	// The tool toggles that lead the authoring bar: one tool is always on,
 	// Select by default. The tool settings row shows only for a tool that has
@@ -617,10 +635,63 @@ private:
 	void refreshLevelEditingCommands();
 	void tieLevelMapSelectionFromUi(const QString& className);
 	void selectLevelMapRegionFromUi(LevelMapRegionSelection mode);
+	[[nodiscard]] bool canSelectLevelMapRegion(LevelMapRegionSelection mode) const;
+	void refreshLevelRegionSelectionCommands();
+	bool m_levelRegionSelectionBusy = false;
+	void selectLevelMapObjectsFromUi(LevelObjectSelectionMode mode);
+	// anyMapFormat admits Doom maps too, for Expand Selection to Layers.
+	[[nodiscard]] bool canSelectLevelMapObjects(bool sourceLines, bool includeComponents = false, bool anyMapFormat = false) const;
+	[[nodiscard]] bool canSelectLevelMapType() const;
+	[[nodiscard]] bool canSelectLevelMapTextured() const;
+	// An empty material uses the current paint material; Find and Replace
+	// Textures passes its Find text, and `withinSelection` for its scope.
+	void selectLevelMapTexturedFromUi(const QString& material = QString(), bool withinSelection = false);
+	void reconcileLevelTexturedSelection(bool checkFilters = true);
+	void refreshLevelTexturedSelectionViews();
+	// Faces picked by Select Textured join component transforms in Face mode
+	// without selecting their brushes, as NRC's face mode transforms them.
+	[[nodiscard]] LevelSurfaceFacePicks levelComponentFacePicks() const;
+	[[nodiscard]] QVector<LevelMapComponentSet> levelComponentTransformSets(QString* error = nullptr) const;
+	// Keep the picks on their transformed faces; undo and redo restore the
+	// recorded picks whose geometry matches the map again.
+	void adoptLevelTexturedFaces(const QVector<LevelSurfaceFace>& before, const QHash<int, QByteArray>& beforeGeometry,
+		const LevelSurfaceFaceTransformReport& report);
+	void refreshLevelObjectSelectionCommands();
+	bool m_levelObjectSelectionBusy = false;
 	void setLevelMapDetailFromUi(bool detail);
 	void dropLevelMapSelectionToFloorFromUi();
 	void intersectLevelMapSelectionFromUi();
 	void moveLevelMapSelectionToWorldFromUi();
+	// Move Primitives to Entity (last- or first-selected target), Move Selected
+	// to World and Explode Entity (core/level_entity_ownership.h).
+	void moveLevelMapPrimitivesToEntityFromUi(bool lastSelected);
+	void moveLevelMapSelectedPrimitivesToWorldFromUi();
+	void explodeLevelMapEntitiesFromUi(bool renameTargetNames);
+	// Set Entity Colour (NetRadiant Custom's K) and Normalise Entity Colour,
+	// one undo step each through core/level_entity_colour.h.
+	void setLevelMapEntityColourFromUi();
+	void normaliseLevelMapEntityColourFromUi();
+	void refreshLevelEntityColourCommands();
+	// Layer commands (level_scene_layer_actions.cpp, core/level_scene_layers.h):
+	// Expand Selection to Layers runs through selectLevelMapObjectsFromUi; Move
+	// to Layer is a popup at the pointer and a submenu of the view context menu.
+	void registerLevelSceneLayerCommands();
+	void refreshLevelSceneLayerCommands();
+	QMenu* buildLevelMoveToLayerMenu(QWidget* parent);
+	void showLevelMoveToLayerPopup();
+	void moveLevelSelectionToLayerFromUi(const QString& layerId);
+	// TrenchBroom's Create <class> commands, one per class of the loaded entity
+	// definitions (level_entity_create_actions.cpp, core/level_entity_create.h):
+	// registered again whenever the classes change, enabled for the open map
+	// and selection. `placement`, when given, replaces the pointer's.
+	void refreshLevelEntityCreateCommands();
+	void createLevelEntityFromUi(const QString& className, const LevelPastePlacement* placement = nullptr);
+	// Create Entity…: type a class, then create it as its own command would.
+	void showLevelEntityCreatePicker();
+	// Where a cursor paste and a created point entity go: the camera's ray
+	// through the pointer, or the active plan view's plane under it, each at
+	// the middle of the view when the pointer is elsewhere.
+	bool levelCursorPlacement(LevelPastePlacement* placement, QString* error);
 	[[nodiscard]] QStringList levelBrushEntityClasses() const;
 	[[nodiscard]] EntityDefinitionCatalogue levelEntityCatalogue() const;
 	QMenu* buildLevelBrushEntityMenu(QWidget* parent);
@@ -654,6 +725,28 @@ private:
 	void refreshLevelViewFilters();
 	void applyLevelViewFilters();
 	void setLevelViewFilter(const QString& filterId, bool shown);
+	// View > Filters: a checkable command per kind, Invert Filters and Show
+	// Every Kind, sharing the View tab's switched-off list
+	// (level_view_filter_actions.cpp, core/level_view_filters.h).
+	void registerLevelViewFilterCommands();
+	void refreshLevelViewFilterCommands();
+	void invertLevelViewFilters();
+	void resetLevelViewFilters();
+	void applyLevelViewFilterState(const QStringList& hiddenFilterIds);
+	// View > Camera: Level Camera, Focus Camera on Selection, Reset Camera
+	// Zoom and the held free-focus key. They move only the level camera
+	// (level_camera_focus_actions.cpp, core/level_camera_focus.h).
+	void registerLevelCameraFocusCommands();
+	void refreshLevelCameraFocusCommands();
+	[[nodiscard]] bool levelCameraFocusReady() const;
+	bool levelCameraFocusBounds(LevelMapVec3* mins, LevelMapVec3* maxs, bool* remembered) const;
+	void levelLevelMapCamera();
+	void focusLevelCameraOnSelection();
+	void resetLevelCameraZoom();
+	bool handleLevelCameraFocusEvent(QObject* watched, QEvent* event);
+	void beginLevelCameraFreeFocus(int key);
+	void applyLevelCameraFreeFocus();
+	void endLevelCameraFreeFocus();
 	// Models, Sounds and Prefabs tabs (level_asset_browsers.cpp).
 	void buildLevelModelBrowser(SidebarPage* page);
 	void buildLevelSoundBrowser(SidebarPage* page);
@@ -712,13 +805,15 @@ private:
 	};
 	bool m_levelTextureDragMode = false;
 	std::optional<LevelTextureDrag> m_levelTextureDrag;
-	// Linked groups (core/level_linked_groups.h): the scene group holding the
-	// selection, and the commands acting on it.
+	// Linked groups (core/level_linked_groups.h): the scene group the
+	// selection holds, the commands acting on linked groups, and what the last
+	// edit's updates could not do.
 	QString levelSelectionSceneGroup() const;
-	void createLinkedLevelCopyFromUi();
-	void selectLinkedLevelCopiesFromUi();
-	void updateLinkedLevelCopiesFromUi();
-	void unlinkLevelCopyFromUi();
+	void createLinkedLevelDuplicateFromUi();
+	void selectLinkedLevelGroupsFromUi();
+	void updateLinkedLevelGroupsFromUi();
+	void separateLinkedLevelGroupsFromUi();
+	void showLevelLinkedGroupNotices();
 	void curveLevelMapLinedefsFromUi();
 	QWidget* buildLevelRegionPanel();
 	void refreshLevelRegionPanel();
@@ -737,12 +832,22 @@ private:
 	// (level_geometry_actions.cpp).
 	void registerLevelGeometryCommands();
 	void refreshLevelGeometryCommands();
+	QString levelSelectedClosedGroup() const;
+	void changeLevelGroupContext(const QString& id, bool closeAll = false);
 	[[nodiscard]] static QStringList levelPatchMatrixCommandIds();
 	// `mode` is a MapViewport::ComponentMode cast to an int; 0 leaves it.
-	void setLevelComponentMode(int mode);
-	void moveLevelComponentsFromViewport(const QVector<LevelMapComponentSet>& sets, const LevelMapVec3& delta);
+	void setLevelComponentMode(int mode, bool convertSelection = true);
+	void selectLevelComponentTopology(int operation, int target = 0, bool touching = false);
+	void removeLevelComponentsFromUi();
 	void shareLevelComponentPicks(MapViewport* from);
 	void snapLevelMapVerticesFromUi();
+	// Radiant's Snap To Grid: rounds every point of the selection, or only the
+	// picked components (level_grid_round_actions.cpp).
+	void roundLevelMapSelectionToGridFromUi();
+	// The component UV lock settings for a component edit, and the status note
+	// for faces whose UVs were fitted rather than kept exactly.
+	void applyLevelComponentUvSettings(LevelComponentTransformRequest* request) const;
+	QString levelComponentUvFitNote(int fittedFaces) const;
 	void hollowLevelMapTouchingFromUi();
 	void makeLevelRoomFromUi();
 	void selectLevelWholeEntitiesFromUi();
@@ -799,7 +904,13 @@ private:
 	void cycleLevelMapView();
 	void stepLevelMapProjection();
 	void showLevelMapProjection(int index);
-	void setLevelMapGridUnits(int units);
+	void setLevelMapGridUnits(double units);
+	// The working grid the views use: the grid list's choice, never finer than
+	// the open map can store (level_grid_actions.cpp).
+	[[nodiscard]] double levelMapGridUnits() const;
+	// Greys out the grids finer than the open map can store and moves a finer
+	// choice to 1 unit.
+	void refreshLevelMapGridChoices();
 	void frameLevelMapSelection();
 	void isolateLevelMapSelection();
 	// The depth axis is the drawing view's; -1 means the active 2D view's.
@@ -834,7 +945,12 @@ private:
 	// The inspector for several selected entities: every key any of them
 	// sets, a value that differs across them marked as such; an edit sets it
 	// on all of them. Called by refreshEntityInspector() on a cleared grid.
-	void refreshMultiEntityInspector(const QVector<int>& entityIds, const QString& previousKey);
+	void refreshMultiEntityInspector(const QVector<int>& entityIds, const QString& previousKey, int previousColumn);
+	void refreshEntityProtectionControls(const QString& previousKey, int previousColumn);
+	void refreshLevelProtectedPropertyCommands();
+	void applyEntityProtectionCheck(QTreeWidgetItem* item);
+	void addProtectedEntityPropertyFromUi();
+	void clearProtectedEntityPropertiesFromUi();
 	// The Quake-family entities selected in Levels, the primary last.
 	[[nodiscard]] QVector<int> selectedLevelMapEntityIds() const;
 	// What the inspector is, for screen readers, while one object is shown.
@@ -888,6 +1004,10 @@ private:
 	void capLevelMapPatchFromUi();
 	void editLevelMapBrushComponentsFromUi();
 	void deleteLevelMapSelectionFromUi();
+	[[nodiscard]] bool canDeleteLevelMapSelection(bool componentsOnly = false) const;
+	void refreshLevelDeletionCommands();
+	void runLevelDeletionFromUi(bool componentsOnly);
+	bool m_levelDeletionBusy = false;
 	// Selects every entity of the primary entity's class, or every thing of
 	// the primary thing's type.
 	void selectSimilarLevelMapObjects();
@@ -903,24 +1023,85 @@ private:
 	// Right-click menu on a build problem: show it, copy it, copy them all.
 	void showBuildProblemMenu(const QPoint& globalPosition, QListWidgetItem* item);
 	// Copies the selection one grid step right and down in the view.
-	void duplicateLevelMapSelectionFromUi();
+	void duplicateLevelMapSelectionFromUi(LevelDuplicateMode mode = LevelDuplicateMode::Ordinary);
 	void placeLevelMapObjectsFromUi(bool paste);
-	std::function<bool(const LevelMapDocument&, QString*)> levelPlacementCommitter();
+	bool canDuplicateLevelMapSelection(LevelDuplicateMode mode = LevelDuplicateMode::Ordinary) const;
+	std::function<bool(const LevelMapDocument&, QString*)> levelPlacementCommitter(bool readOnly = false);
 	bool runLevelPlacementFromUi(const LevelPlacementRequest& request, QString* error);
+	bool levelComponentsActive() const;
+	QString levelComponentSelectionToken() const;
+	bool applyLevelComponentTransform(const LevelComponentTransformRequest& request, QString* error = nullptr, LevelMapComponentReport* report = nullptr);
+	void transformLevelComponentsFromUi(int operation = 0);
+	void setLevelComponentTool(int tool);
+	void refreshLevelComponentGizmos();
+	void editLevelComponentGizmoOptions();
 	// Snaps each selected object to the viewport's grid.
 	void snapLevelMapSelectionFromUi();
 	// Turns the selection a quarter turn as the view shows it: about z in the
 	// top view, and about the axis each side view looks along.
 	void rotateLevelMapSelectionFromUi(bool counterclockwise);
+	// World-axis Flip X/Y/Z and Rotate X/Y/Z (app/level_axis_transform_actions.cpp).
+	void registerLevelAxisTransformCommands();
+	void refreshLevelAxisTransformCommands();
+	void applyLevelAxisTransformFromUi(const QString& commandId);
+	// A quick turn's pivot: invalid for the exact centre (or a custom component
+	// pivot); the grid-rounded centre when the profile and Snap ask for it.
+	[[nodiscard]] LevelMapVec3 levelQuickTurnPivotFromUi() const;
+	// A flip's pivot: invalid for the exact centre (or a custom component
+	// pivot); the half-grid-rounded centre when the profile and Snap ask for it.
+	[[nodiscard]] LevelMapVec3 levelFlipPivotFromUi() const;
+	bool turnLevelMapSelectionQuarter(int axis, int quarterTurns, QString* error);
+	// View-relative Roll, Yaw (Rotate 90° Left/Right) and Pitch, and Flip
+	// Horizontal and Vertical (core/level_quick_transform.h), from `source` or
+	// the last focused view; a turn rotates the sweep destination while the
+	// Sweep tool is on.
+	void applyLevelViewTransformFromUi(const QString& commandId, QWidget* source = nullptr);
+	// Directional and depth nudges (app/level_nudge_actions.cpp, core/
+	// level_nudge.h): one grid step (eight with Shift where that chord is
+	// free) for the sweep destination, the component pivot, the picked
+	// components or the selection, from `source` or the last focused view.
+	void registerLevelNudgeCommands();
+	void refreshLevelNudgeCommands();
+	void nudgeLevelSelectionFromUi(const QString& commandId, int steps = 1, QWidget* source = nullptr);
+	// The Levels views claim their nudge keys ahead of window-wide commands.
+	bool handleLevelNudgeKey(QObject* watched, QEvent* event);
+	[[nodiscard]] QString levelNudgeCommandForKey(QKeyCombination combination, int* steps) const;
+	// The world axis a nudge or Duplicate and Move along `direction` takes from
+	// `source` or the last focused view: the plan view's, or the camera's where
+	// the profile nudges camera-relative. Activates the plan view it uses;
+	// `camera` reports a camera-relative axis. Invalid for a degenerate view.
+	[[nodiscard]] LevelMapVec3 levelNudgeAxisFromUi(LevelNudgeDirection direction, QWidget* source, MapViewport** plan = nullptr, bool* camera = nullptr);
+	// Duplicate and Move (TrenchBroom's Ctrl+arrows), Move to Camera and
+	// NetRadiant Custom's Repeat Transforms (app/level_duplicate_move_actions.cpp).
+	void registerLevelDuplicateMoveCommands();
+	void refreshLevelDuplicateMoveCommands();
+	void duplicateMoveLevelSelectionFromUi(const QString& commandId, QWidget* source = nullptr);
+	void moveLevelSelectionToCameraFromUi();
+	void repeatLevelMapTransformsFromUi();
+	// Where Paste to Camera and Move to Camera centre things: the perspective
+	// camera's eye, or the orbit view's visible focus centre.
+	bool levelCameraAnchor(LevelMapVec3* point, QString* error) const;
+	// Point-entity sizes from the loaded definitions, for placement bounds.
+	void fillLevelPlacementEntityBounds(LevelPastePlacement* placement) const;
 	void rotateLevelMapSelectionPreciselyFromUi();
 	void editLevelUdmfPropertiesFromUi();
 	void editLevelMapSurfacesFromUi();
 	LevelSurfaceFace inspectedLevelMapSurface() const;
-	// Faces picked in the camera with the face-pick keys, of brushes still
-	// selected; the Surfaces tab's Picked Faces target, else the Inspector's face.
+	// Component mode is authoritative, including an empty result. In object
+	// mode use camera face picks, with the Inspector as an explicit-face fallback.
 	[[nodiscard]] QVector<LevelSurfaceFace> levelPickedSurfaceFaces() const;
 	[[nodiscard]] QVector<LevelSurfaceFace> levelSurfaceFaceTargets() const;
+	[[nodiscard]] QVector<LevelMaterialTarget> levelSurfaceSelectionTargets() const;
+	[[nodiscard]] bool levelSurfaceGeometryBusy() const;
 	QVector<LevelSurfaceFace> m_levelPickedFaces;
+	// Material-query picks do not select their brush parents or component handles.
+	QVector<LevelSurfaceFace> m_levelTexturedFaces;
+	QHash<int, QByteArray> m_levelTexturedGeometry;
+	QSet<int> m_levelTexturedPatches;
+	quint64 m_levelTexturedLoadSerial = 0;
+	quint64 m_levelTexturedRevision = 0;
+	// Pick states on either side of each picked-face transform, newest last.
+	QVector<QPair<QVector<LevelSurfaceFace>, QHash<int, QByteArray>>> m_levelTexturedHistory;
 	// The selection the last face pick left; picks hold only while it stands.
 	QVector<LevelMapSelectionRef> m_levelPickedSelection;
 	QWidget* buildLevelSurfaceTools();
@@ -928,6 +1109,8 @@ private:
 	void refreshLevelSurfaceTools();
 	void startLevelSurfaceBatch();
 	std::function<bool()> levelSurfaceContextGuard() const;
+	bool startLevelSurfacePaste(const QVector<LevelMaterialTarget>& targets, const LevelSurfacePasteOptions& options,
+		const QString& faceText, QString* error);
 	// Mirrors the selection along the view's horizontal or vertical axis.
 	void flipLevelMapSelectionFromUi(bool horizontal);
 	// Asks for the selection's new size along each axis, kept against its
@@ -944,6 +1127,7 @@ private:
 	// ones selected now: every entity but worldspawn, brush, and patch, or
 	// every Doom thing, leaving hidden objects out.
 	void selectAllLevelMapObjects(bool invert = false);
+	bool setLevelMapUserSelection(const QVector<LevelMapSelectionRef>& selection, QString* error = nullptr, bool reveal = false);
 	void selectNoLevelMapObjects();
 	// Puts a texture on every face of the selected brushes and on the selected
 	// patches; with none given, asks for one, offering the texture current on
@@ -967,7 +1151,8 @@ private:
 	// Joins the selected Doom vertices into the last one picked.
 	void mergeLevelMapVerticesFromUi();
 	// Connect Entities: the selection's entities target the primary.
-	void connectLevelMapEntitiesFromUi();
+	LevelEntityConnectionRequest levelEntityConnectionRequest(bool kill = false) const;
+	void connectLevelMapEntitiesFromUi(bool kill = false);
 	// Make Door: asks for the door, track, and ceiling textures, keeping the
 	// last answers for the next door.
 	void makeLevelMapDoorsFromUi();
@@ -1005,6 +1190,14 @@ private:
 	// Carves the selected brushes out of every brush they overlap.
 	void carveLevelMapSelectionFromUi();
 	void mergeLevelMapBrushesFromUi();
+	void wrapLevelMapFromUi(bool withPoints = false);
+	void sweepLevelFacesFromUi(bool inViews = false);
+	void toggleLevelSweepTool();
+	void stepLevelSweepToolScale(int direction);
+	void commitLevelSweepTool();
+	[[nodiscard]] bool levelSweepToolActive() const;
+	[[nodiscard]] bool levelSweepToolReady() const;
+	QString levelSweepReadout(const QString& fallback = {}) const;
 	// Asks for a wall thickness, a grid step to begin with, and hollows the
 	// selected brushes.
 	void hollowLevelMapSelectionFromUi();
@@ -1026,6 +1219,29 @@ private:
 	void setLevelMap3D(bool enabled);
 	void connectLevelCameraResize();
 	void refreshLevelCameraResize();
+	void connectLevelCameraComponents();
+	bool snapLevelVertex(const LevelMapSelectionRef& target, int vertex, QString* error = nullptr);
+	void snapLevelVertexFromUi();
+	void setLevelComponentSplit(bool enabled);
+	void setLevelVertexInsertion(bool enabled);
+	bool m_levelVertexInsertion = false;
+	void setLevelComponentExtrusion(int mode);
+	void extrudeLevelFacesPreciselyFromUi();
+	int m_levelComponentExtrusion = 0;
+	int m_levelComponentTool = 0;
+	LevelMapVec3 m_levelComponentPivot;
+	quint64 m_levelComponentPivotLoad = 0;
+	std::function<void()> m_levelComponentsRefresh;
+	void refreshLevelCameraComponents();
+	void connectLevelClipper();
+	void startLevelQuickClip();
+	void editLevelClipperPreferences();
+	LevelMapClipOptions levelClipOptions() const;
+	LevelClipperPreferences m_levelClipPreferences;
+	bool m_levelQuickClip = false;
+	std::function<void()> m_levelClipPreferencesChanged;
+	std::function<void()> m_levelClipRefresh;
+	std::function<void()> m_levelClipCommit;
 	QWidget* buildLevelBrushTools();
 	void connectLevelCameraBrush();
 	void refreshLevelCameraBrush();
@@ -1035,10 +1251,18 @@ private:
 	void showLevelMaterialDetails();
 	// Marks the selected objects' triangles in the 3D preview.
 	void refreshLevelMap3DHighlight();
-	// Steps the Levels grid one size smaller or larger: 1 to 256 units.
+	// Hands the 3D camera the linked-group boxes the main plan view solved,
+	// with the groups in use and the Show > Linked Groups choice.
+	void refreshLevelCameraLinkedGroups();
+	// Steps the Levels grid one size smaller or larger: 0.125 to 1024 units,
+	// or 1 to 1024 on binary Doom and Hexen maps.
 	void stepLevelMapGrid(int direction);
 	// Hide the selection from the view, or bring every hidden object back.
 	void hideLevelMapSelection();
+	void changeLevelVisibility(LevelVisibilityOperation operation);
+	[[nodiscard]] bool canChangeLevelVisibility(LevelVisibilityOperation operation) const;
+	void refreshLevelVisibilityCommands();
+	bool m_levelVisibilityBusy = false;
 	void showAllLevelMapObjects();
 	// Asks which texture to replace with which, across the map or only the
 	// selection, showing how many uses will change.
@@ -1047,6 +1271,23 @@ private:
 	// `replacement` pre-fills the texture to use instead, as when a texture is
 	// chosen on the Textures surface.
 	void showReplaceTextureDialog(const QString& replacement = QString());
+	// Reveal Material and the modeless Find and Replace Textures window
+	// (level_find_replace_actions.cpp, core/level_material_find.h).
+	void revealLevelMapMaterialFromUi();
+	void refreshLevelMaterialFindCommands();
+	// Picked faces, and query-picked whole patches still selected.
+	void levelMaterialPicks(QVector<LevelSurfaceFace>* faces, QVector<int>* patches) const;
+	void refreshLevelFindReplaceDialog();
+	void findLevelMaterialFromDialog();
+	void replaceLevelMaterialFromDialog();
+	// While the window is open, a texture-browser pick fills its focused
+	// field instead of applying; false when it is closed.
+	bool fillLevelFindReplaceField(const QString& material);
+	QPointer<LevelFindReplaceDialog> m_levelFindReplaceDialog;
+	QTimer* m_levelFindReplaceRefresh = nullptr;
+	int m_levelFindReplaceScope = 0;
+	quint64 m_levelFindReplaceNamesSerial = ~quint64(0);
+	quint64 m_levelFindReplaceNamesRevision = ~quint64(0);
 	// The name the open map would use for a package texture entry: without
 	// its extension, with or without the "textures/" folder as the map's own
 	// names have it, and a bare lump name for a Doom map.
@@ -1054,8 +1295,11 @@ private:
 	// Map objects on the clipboard as .map text, interchangeable with other
 	// Quake-family editors.
 	bool copyLevelMapSelectionToClipboard();
+	bool copyLevelObjectsToClipboard(bool cut, QString* error);
+	bool canCutLevelMapSelection() const;
+	bool m_levelClipboardBusy = false;
 	void cutLevelMapSelection();
-	void pasteLevelMapFromClipboard();
+	void pasteLevelMapFromClipboard(LevelClipboardPlacement mode = LevelClipboardPlacement::Profile);
 	// Removes the key on the inspector's current row from the selected entity.
 	void removeEntityInspectorKey();
 	void undoLevelMapEditFromUi();
@@ -1715,6 +1959,20 @@ private:
 	QStringList m_levelFiltersOff;
 	QString m_levelFilterFormatKey;
 	QHash<QString, QCheckBox*> m_levelFilterBoxes;
+	// View > Camera: the last selection the camera focus falls back to (for
+	// the map load it came from), and the held free focus while it lasts.
+	struct LevelCameraFocusState {
+		QVector<LevelMapSelectionRef> lastSelection;
+		quint64 lastSelectionSerial = 0;
+		bool held = false;
+		bool applying = false;
+		int key = 0;
+		int offset = 0;
+		double wheel = 0.0;
+		LevelMapVec3 mins;
+		LevelMapVec3 maxs;
+		QVector<QMetaObject::Connection> connections;
+	} m_levelCameraFocus;
 	// Models tab.
 	QTreeWidget* m_levelModelList = nullptr;
 	QLineEdit* m_levelModelFilter = nullptr;
@@ -1816,6 +2074,8 @@ private:
 	MapViewport* m_levelMapViewport = nullptr;
 	QComboBox* m_levelMapProjection = nullptr;
 	QComboBox* m_levelMapGrid = nullptr;
+	// The finest grid the lists last allowed; 0 until the first refresh.
+	double m_levelMapGridFinest = 0.0;
 	QCheckBox* m_levelMapSnap = nullptr;
 	// Display switches, checkable items of the view bar's Show menu.
 	QAction* m_levelMapShowThings = nullptr;
@@ -1824,6 +2084,7 @@ private:
 	QAction* m_levelMapShowVertices = nullptr;
 	QAction* m_levelMapShowLabels = nullptr;
 	QAction* m_levelMapShowLinks = nullptr;
+	QAction* m_levelMapShowLinkedGroups = nullptr;
 	// The toolbar holds the sector switch through this action; only Doom maps
 	// have sectors, so it is hidden for the others.
 	ElidedLabel* m_levelMapHover = nullptr;
@@ -2219,6 +2480,7 @@ private:
 	LevelViewMaximizeState m_levelMaximized;
 	QWidget* m_levelLastFocusedView = nullptr;
 	LevelViewLinks m_levelViewLinks;
+	LevelPlanPanes m_levelPlanPanes;
 	QToolButton* m_levelViewLayoutButton = nullptr;
 	QToolButton* m_levelBookmarksButton = nullptr;
 	LevelViewBookmarks m_levelBookmarks;
@@ -2238,6 +2500,8 @@ private:
 	QString m_levelControlsProfileId;
 	QToolButton* m_levelControlsButton = nullptr;
 	QDialog* m_levelControlsDialog = nullptr;
+	QPointer<LevelSweepDialog> m_levelSweepDialog;
+	QPointer<LevelSweepGizmo> m_levelSweepGizmo;
 	QString m_lastDrawnBrushTexture;
 	ModelViewport* m_levelMap3D = nullptr;
 	QToolButton* m_levelMap3DButton = nullptr;
@@ -2365,6 +2629,15 @@ private:
 	int m_pendingDefinitionPosition = -1;
 	QVector<CodeSymbol> m_definitionMatches;
 	QuickOpenDialog* m_definitionPicker = nullptr;
+	// Create <class> commands registered now, and what they were made from.
+	QStringList m_levelEntityCreateCommandIds;
+	QString m_levelEntityCreateKey;
+	// The enabling state last applied to them: -1 until the first refresh.
+	int m_levelEntityCreateState = -1;
+	QuickOpenDialog* m_levelEntityCreatePicker = nullptr;
+	// The pointer placement when the picker opened, since the picker takes
+	// the pointer off the view.
+	std::shared_ptr<LevelPastePlacement> m_levelEntityCreatePickerPlacement;
 	// Where the user was: a page, and on it the open file and caret (Code),
 	// the selection while the map is unchanged (Levels), or the current row
 	// (Textures, Models, Audio).

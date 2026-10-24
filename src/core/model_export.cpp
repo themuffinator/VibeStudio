@@ -1,15 +1,18 @@
 #include "core/model_ase.h"
 #include "core/model_iqm.h"
 #include "core/model_md5.h"
+#include "core/model_skeletal_export.h"
 #include "core/model_skeleton.h"
 #include "core/model_document.h"
 #include "core/model_collision.h"
 #include "core/model_mdl.h"
+#include "core/model_targets.h"
 
 #include <QCoreApplication>
 #include <QFileInfo>
 #include <QHash>
 #include <QRegularExpression>
+#include <QSet>
 #include <QtEndian>
 
 #include <algorithm>
@@ -70,7 +73,10 @@ bool collapsed(ModelVec3 a, ModelVec3 b, ModelVec3 c)
 // No compiler implementation is copied. Each face is an independent GL strip;
 // STs and GL commands both sample texel centres. Software-compatible exports
 // keep UVs inside the skin because ref_soft indexes pixels without wrapping.
-QByteArray md2(const ModelMesh &mesh, QString *error, const ModelWorkControl &control, ModelExportReport *report)
+bool over(qint64 value, qint64 maximum) { return maximum > 0 && value > maximum; }
+
+QByteArray md2(const ModelMesh &mesh, const ModelTargetLimits &limits, QString *error, const ModelWorkControl &control,
+			   ModelExportReport *report)
 {
 	ModelWorkProgress work(control, ModelWorkPhase::Serializing, error);
 	ModelExportReport result;
@@ -78,24 +84,30 @@ QByteArray md2(const ModelMesh &mesh, QString *error, const ModelWorkControl &co
 	{
 		return {};
 	}
-	if (mesh.surfaces.size() != 1 || mesh.frames.size() > 512 || !mesh.tags.isEmpty() || !mesh.embeddedSkins.isEmpty())
+	if (mesh.surfaces.size() != 1 || over(mesh.frames.size(), limits.frames) || !mesh.tags.isEmpty() || !mesh.embeddedSkins.isEmpty())
 	{
 		return failure(error, QCoreApplication::translate("VibeStudioModelDocument",
-														  "MD2 requires one surface, at most 512 frames, and no attachment tags or "
-														  "embedded skins. Keep these in the editable source or export MD3."));
+														  "MD2 requires one surface, at most %1 frames for the delivery target, and no "
+														  "attachment tags or embedded skins. Keep these in the editable source or export MD3.")
+								  .arg(limits.frames));
 	}
 	const auto &surface = mesh.surfaces[0];
 	const int width = mesh.md2SkinSize.width(), height = mesh.md2SkinSize.height();
-	if (width > 640 || height > 480)
+	if (over(width, limits.skinWidth) || over(height, limits.skinHeight))
 	{
 		return failure(error, QCoreApplication::translate("VibeStudioModelDocument",
-														  "MD2 export targets Quake II's original renderers. Set skin dimensions at most "
-														  "640 by 480 pixels and use matching PCX images."));
+														  "The delivery target loads MD2 skins of at most %1 by %2 pixels. Resize the skin "
+														  "and use matching PCX images.")
+								  .arg(limits.skinWidth)
+								  .arg(limits.skinHeight));
 	}
-	if (surface.triangles.size() > 4096 || surface.skinPaths.size() > 32 || surface.vertexCount > 32767)
+	if (over(surface.triangles.size(), limits.triangles) || over(surface.skinPaths.size(), limits.skins) || surface.vertexCount > 32767)
 	{
 		return failure(error, QCoreApplication::translate("VibeStudioModelDocument",
-														  "MD2 supports at most 4096 triangles, 32 skin slots, and 32767 UV vertices."));
+														  "The delivery target allows at most %1 triangles and %2 skin slots, and MD2 "
+														  "indexes at most 32767 UV vertices.")
+								  .arg(limits.triangles)
+								  .arg(limits.skins));
 	}
 	for (const auto &path : surface.skinPaths)
 	{
@@ -118,41 +130,25 @@ QByteArray md2(const ModelMesh &mesh, QString *error, const ModelWorkControl &co
 	// Recombine only exact all-pose position/normal duplicates, allowing UV seams
 	// to share MD2 XYZ indices. Keep distinct ST indices to preserve authoring
 	// corner identity even when coordinates quantize to the same texel.
-	QHash<QByteArray, int> positions;
 	QVector<int> representative, positionIndex;
+	if (!modelMd2PositionIndex(mesh, &positionIndex, &representative, error, control))
+	{
+		return {};
+	}
+	if (over(representative.size(), limits.vertices))
+	{
+		return failure(error, QCoreApplication::translate("VibeStudioModelDocument",
+														  "MD2 stores %1 position/normal vertices after sharing exact UV seams across all "
+														  "poses; the delivery target allows %2. Reduce geometry or hard-normal splits.")
+								  .arg(representative.size())
+								  .arg(limits.vertices));
+	}
 	QVector<QPair<int, int>> st;
 	for (int v = 0; v < surface.vertexCount; ++v)
 	{
 		if (!work.step())
 		{
 			return {};
-		}
-		QByteArray key(mesh.frames.size() * 24, '\0');
-		for (int f = 0; f < mesh.frames.size(); ++f)
-		{
-			if (!work.step())
-			{
-				return {};
-			}
-			vector(key, f * 24, surface.frames[f].positions[v]);
-			vector(key, f * 24 + 12, surface.frames[f].normals[v]);
-		}
-		const auto found = positions.constFind(key);
-		if (found == positions.cend())
-		{
-			positionIndex << representative.size();
-			positions.insert(key, representative.size());
-			representative << v;
-			if (representative.size() > 2048)
-			{
-				return failure(error, QCoreApplication::translate("VibeStudioModelDocument",
-																  "MD2 exceeds 2048 position/normal vertices after sharing exact UV seams "
-																  "across all poses. Reduce geometry or hard-normal splits."));
-			}
-		}
-		else
-		{
-			positionIndex << found.value();
 		}
 		const auto uv = surface.texCoords[v];
 		if (uv.u < 0 || uv.u > 1 || uv.v < 0 || uv.v > 1)
@@ -166,6 +162,26 @@ QByteArray md2(const ModelMesh &mesh, QString *error, const ModelWorkControl &co
 		const int t = std::clamp(int(std::lround(double(uv.v) * height - 0.5)), 0, height - 1);
 		st << qMakePair(s, t);
 		result.maxUvError = std::max({result.maxUvError, std::abs((s + 0.5) / width - uv.u), std::abs((t + 0.5) / height - uv.v)});
+	}
+	if (limits.renderVertices > 0)
+	{
+		// Engines such as Q2PRO build one drawn vertex per position and texel.
+		QSet<qint64> drawn;
+		for (const auto &face : surface.triangles)
+		{
+			for (int v : {face.a, face.b, face.c})
+			{
+				drawn.insert((qint64(positionIndex[v]) << 32) | (qint64(st[v].first) << 16) | st[v].second);
+			}
+		}
+		if (over(drawn.size(), limits.renderVertices))
+		{
+			return failure(error, QCoreApplication::translate("VibeStudioModelDocument",
+															  "The delivery target builds %1 drawn vertices for this MD2, one per distinct position "
+															  "and texel, and holds at most %2. Reduce geometry or UV splits.")
+									  .arg(drawn.size())
+									  .arg(limits.renderVertices));
+		}
 	}
 	const int vertices = representative.size(), triangles = surface.triangles.size();
 	const int frameSize = 40 + 4 * vertices, skinOffset = 68;
@@ -311,6 +327,8 @@ QByteArray md2(const ModelMesh &mesh, QString *error, const ModelWorkControl &co
 						.arg(result.maxPositionError, 0, 'g', 6)
 						.arg(result.maxNormalAngleDegrees, 0, 'g', 6)
 						.arg(result.maxUvError, 0, 'g', 6);
+	// Guidance for every MD2; the clips and frame origins it actually leaves
+	// out are reported with exportEditableModel's shared notes.
 	result.notes << QCoreApplication::translate(
 		"VibeStudioModelDocument", "Surface names, frame origins, custom animation ranges/FPS and seam marks remain in the editable source. "
 								   "MD2 animation groups are inferred from frame names. Supply matching PCX skins through the package.");
@@ -332,7 +350,7 @@ QByteArray md2(const ModelMesh &mesh, QString *error, const ModelWorkControl &co
 // https://github.com/id-Software/Quake-III-Arena/blob/master/code/renderer/tr_model.c
 // No upstream implementation is copied. All frames, UVs, skin references and
 // attachment tags are emitted. Float positions are rounded to 1/64 units.
-QByteArray md3(const ModelMesh &mesh, QString *error, const ModelWorkControl &control)
+QByteArray md3(const ModelMesh &mesh, const ModelTargetLimits &limits, QString *error, const ModelWorkControl &control)
 {
 	ModelWorkProgress work(control, ModelWorkPhase::Serializing, error);
 	if (!work.check())
@@ -400,12 +418,21 @@ QByteArray md3(const ModelMesh &mesh, QString *error, const ModelWorkControl &co
 					"MD3 surface names collide after Quake III's case and suffix normalization. Rename the surfaces before export."));
 		}
 		engineSurfaceNames.insert(engineName);
-		if (!asciiName(surface.name, 64) || surface.vertexCount > 1000 || surface.triangles.size() > 2000)
+		if (!asciiName(surface.name, 64))
 		{
-			return failure(error,
-						   QCoreApplication::translate("VibeStudioModelDocument", "Quake III-compatible MD3 surfaces need names up to 63 "
-																				  "ASCII characters, at most 1000 vertices, and at most "
-																				  "2000 triangles. Split larger surfaces before export."));
+			return failure(error, QCoreApplication::translate("VibeStudioModelDocument",
+															  "MD3 surface names must fit 63 printable ASCII characters."));
+		}
+		if (over(surface.vertexCount, limits.vertices) || over(surface.triangles.size(), limits.triangles))
+		{
+			return failure(error, QCoreApplication::translate("VibeStudioModelDocument",
+															  "The delivery target draws MD3 surfaces of at most %1 vertices and %2 triangles; "
+															  "surface \"%3\" has %4 and %5. Split larger surfaces before export.")
+									  .arg(limits.vertices)
+									  .arg(limits.triangles)
+									  .arg(surface.name)
+									  .arg(surface.vertexCount)
+									  .arg(surface.triangles.size()));
 		}
 		for (const auto &material : surface.skinPaths)
 		{
@@ -614,119 +641,524 @@ QByteArray md3(const ModelMesh &mesh, QString *error, const ModelWorkControl &co
 	}
 	return bytes;
 }
-} // namespace
 
-QStringList modelExportFormatIds()
+// An omission is a note about data the target format does not hold; strict
+// exports refuse while there is one.
+void omit(ModelExportReport *report, const QString &note)
 {
-	return {QStringLiteral("mdl"), QStringLiteral("md2"), QStringLiteral("md3"), QStringLiteral("obj"), QStringLiteral("md5mesh"),
-			QStringLiteral("md5anim"), QStringLiteral("iqm"), QStringLiteral("ase")};
+	report->notes << note;
+	report->omissions << note;
 }
 
-QByteArray exportEditableModel(const ModelMesh &mesh, const QString &format, int frame, QString *error, const ModelWorkControl &control,
-							   ModelExportReport *report)
+// The first few names, then how many more there are.
+QString listed(const QStringList &names, int shown = 8)
 {
+	if (names.size() <= shown)
+	{
+		return names.join(QStringLiteral(", "));
+	}
+	const int more = int(names.size()) - shown;
+	return QCoreApplication::translate("VibeStudioModelDocument", "%1 and %n more", nullptr, more).arg(names.mid(0, shown).join(QStringLiteral(", ")));
+}
+
+QString formatTitle(const QString &format)
+{
+	if (format == QStringLiteral("md5mesh"))
+	{
+		return QCoreApplication::translate("VibeStudioModelDocument", "MD5 mesh");
+	}
+	if (format == QStringLiteral("md5anim"))
+	{
+		return QCoreApplication::translate("VibeStudioModelDocument", "MD5 animation");
+	}
+	return format.toUpper();
+}
+
+// The clips a reader of a format without a clip table (MDL, MD2, MD3) does not
+// rebuild from the frame names: renamed or regrouped clips, and clips with a
+// frame rate.
+QStringList clipsLostByFrameNames(const ModelMesh &mesh)
+{
+	const auto rebuilt = modelAnimationsFromFrameNames(mesh.frames);
+	QStringList lost;
+	for (const auto &clip : mesh.animations)
+	{
+		const bool kept = !(clip.framesPerSecond > 0) &&
+						  std::any_of(rebuilt.cbegin(), rebuilt.cend(), [&clip](const ModelAnimation &candidate)
+									  { return candidate.name == clip.name && candidate.firstFrame == clip.firstFrame && candidate.frameCount == clip.frameCount; });
+		if (!kept && !lost.contains(clip.name))
+		{
+			lost << clip.name;
+		}
+	}
+	return lost;
+}
+
+// Frames whose origin was authored: neither unset (zero) nor the centre of the
+// frame's bounds, which the MDL and MD2 readers give every frame.
+int authoredFrameOrigins(const ModelMesh &mesh)
+{
+	int authored = 0;
+	for (int f = 0; f < mesh.frames.size(); ++f)
+	{
+		const auto origin = mesh.frames.at(f).origin;
+		if (origin.x == 0 && origin.y == 0 && origin.z == 0)
+		{
+			continue;
+		}
+		const double infinity = std::numeric_limits<double>::infinity();
+		double mins[3]{infinity, infinity, infinity}, maxs[3]{-infinity, -infinity, -infinity};
+		for (const auto &surface : mesh.surfaces)
+		{
+			for (const auto &p : surface.frames.value(f).positions)
+			{
+				const double values[]{p.x, p.y, p.z};
+				for (int axis = 0; axis < 3; ++axis)
+				{
+					mins[axis] = std::min(mins[axis], values[axis]);
+					maxs[axis] = std::max(maxs[axis], values[axis]);
+				}
+			}
+		}
+		const double values[]{origin.x, origin.y, origin.z};
+		bool centred = mins[0] <= maxs[0];
+		for (int axis = 0; centred && axis < 3; ++axis)
+		{
+			// The readers rebuild the bounds from stored positions, within their precision.
+			centred = std::abs(values[axis] - (mins[axis] + maxs[axis]) * 0.5) <= 1e-3 + 1e-4 * (maxs[axis] - mins[axis]);
+		}
+		authored += !centred;
+	}
+	return authored;
+}
+
+// What MDL, MD2, MD3 and OBJ leave in the editable source besides their own
+// notes: clips the frame names do not rebuild (none of them has a clip table),
+// frame origins MDL, MD2 and OBJ do not store, and the skeleton, since all four
+// store vertex positions only.
+void appendVertexFormatNotes(const ModelMesh &mesh, const QString &format, ModelExportReport *report)
+{
+	const QString title = formatTitle(format);
+	const bool md3 = format == QStringLiteral("md3");
+	if (format != QStringLiteral("obj"))
+	{
+		const auto lost = clipsLostByFrameNames(mesh);
+		if (!lost.isEmpty())
+		{
+			omit(report, QCoreApplication::translate("VibeStudioModelDocument",
+													 "%1 has no animation clip table: readers rebuild clips from the frame names, so the names, "
+													 "ranges or frame rates of these clips stay in the editable source (%n): %2. Name each clip's "
+													 "frames after it (stand1, stand2 and so on), and set playback rates in the target game's "
+													 "animation files.",
+													 nullptr, int(lost.size()))
+							 .arg(title, listed(lost)));
+		}
+		else if (md3 && !mesh.animations.isEmpty())
+		{
+			report->notes << QCoreApplication::translate(
+				"VibeStudioModelDocument", "MD3 keeps every frame pose, frame name and attachment tag. It has no clip table, so readers rebuild "
+										   "the clips from the frame names; configure animation ranges and timing for the target game separately.");
+		}
+	}
+	if (!md3)
+	{
+		const int origins = authoredFrameOrigins(mesh);
+		if (origins > 0)
+		{
+			omit(report, QCoreApplication::translate("VibeStudioModelDocument",
+													 "%1 stores no frame origins, and readers place each one at the centre of the frame's bounds. "
+													 "Frames whose authored origin stays in the editable source: %n. Export MD3 to keep them.",
+													 nullptr, origins)
+							 .arg(title));
+		}
+	}
+	if (!mesh.skeleton.isEmpty())
+	{
+		omit(report, QCoreApplication::translate("VibeStudioModelDocument",
+												 "%1 stores vertex positions only, so the skeleton stays in the editable source: its joints (%n), "
+												 "weights and skeletal clips. Export MD5 or IQM to keep the skeleton.",
+												 nullptr, int(mesh.skeleton.joints.size()))
+						 .arg(title));
+		// Vertex formats write the baked frames, so clips outside the
+		// working set have no motion in the file at all.
+		QStringList outside;
+		for (int clip = 0; clip < mesh.skeleton.clips.size(); ++clip)
+		{
+			if (!mesh.skeleton.clips[clip].frames.isEmpty() && !mesh.skeleton.bakedClipForFrame.contains(clip))
+			{
+				outside << mesh.skeleton.clips[clip].name;
+			}
+		}
+		if (!outside.isEmpty())
+		{
+			omit(report, QCoreApplication::translate("VibeStudioModelDocument",
+													 "%1 writes only the frames of the skeletal working set, so these clips are not in the file: %2. "
+													 "Add them with Skeleton > Working Set or model pose --operation working-set, or export MD5 "
+													 "or IQM, which write every clip.")
+							 .arg(title, outside.join(QStringLiteral(", "))));
+		}
+	}
+}
+
+// What an MD5, IQM or ASE export leaves in the editable source: attachments,
+// collision, MDL settings, embedded skins, alternate material slots, frames a
+// format cannot animate, and baked frames that no longer follow the skeleton.
+// `clip` is the md5anim clip, else -1. False only on cancellation.
+bool appendSourceNotes(const ModelMesh &mesh, const QString &format, int clip, ModelExportReport *report, QString *error,
+					   const ModelWorkControl &control)
+{
+	const bool md5mesh = format == QStringLiteral("md5mesh"), md5anim = format == QStringLiteral("md5anim");
+	const bool iqm = format == QStringLiteral("iqm"), ase = format == QStringLiteral("ase");
+	const QString title = formatTitle(format);
+	const auto &skeleton = mesh.skeleton;
+	if (!md5anim)
+	{
+		QStringList tags;
+		for (const auto &tag : skeleton.tags)
+		{
+			if (!tags.contains(tag.name)) { tags << tag.name; }
+		}
+		for (const auto &tag : mesh.tags)
+		{
+			if (!tags.contains(tag.name)) { tags << tag.name; }
+		}
+		if (!tags.isEmpty())
+		{
+			const int count = int(tags.size());
+			omit(report, (md5mesh ? QCoreApplication::translate("VibeStudioModelDocument",
+																"MD5 meshes have no attachment tags, so these stay in the editable source (%n): %1. "
+																"Doom 3 attaches entities to joints by name; add joints at the attachment points, "
+																"or export MD3 to keep the tags.",
+																nullptr, count)
+						   : iqm   ? QCoreApplication::translate("VibeStudioModelDocument",
+																 "IQM has no attachment tags, so these stay in the editable source (%n): %1. Attach "
+																 "to joints in the game code, or export MD3 to keep the tags.",
+																 nullptr, count)
+								   : QCoreApplication::translate("VibeStudioModelDocument",
+																 "ASE stores static geometry only, so its attachment tags stay in the editable "
+																 "source (%n): %1. Export MD3 to keep the tags.",
+																 nullptr, count))
+							 .arg(listed(tags)));
+		}
+		if (!mesh.collisionBoxes.isEmpty())
+		{
+			omit(report, modelCollisionOmissionNote());
+		}
+		if (mesh.mdl.enabled)
+		{
+			omit(report, QCoreApplication::translate(
+							 "VibeStudioModelDocument",
+							 "MDL native groups, timing, palette and header settings remain in the editable source; %1 does not store them.")
+							 .arg(title));
+		}
+		if (!mesh.embeddedSkins.isEmpty())
+		{
+			omit(report, QCoreApplication::translate("VibeStudioModelDocument",
+													 "%1 names materials by path, so export the embedded skins as textures and assign their paths "
+													 "as materials. Embedded skin images that stay in the editable source: %n.",
+													 nullptr, int(mesh.embeddedSkins.size()))
+							 .arg(title));
+		}
+		QStringList alternates;
+		for (const auto &surface : mesh.surfaces)
+		{
+			const auto assigned = std::count_if(surface.skinPaths.cbegin(), surface.skinPaths.cend(),
+												[](const QString &path) { return !path.trimmed().isEmpty(); });
+			if (assigned > 1) { alternates << surface.name; }
+		}
+		if (!alternates.isEmpty())
+		{
+			omit(report, QCoreApplication::translate("VibeStudioModelDocument",
+													 "Surfaces with alternate material slots that %1 cannot hold, so only the first slot of each "
+													 "is written (%n): %2. Provide the alternates as skin files for the target game.",
+													 nullptr, int(alternates.size()))
+							 .arg(title, listed(alternates)));
+		}
+	}
+	if (ase && mesh.frames.size() > 1)
+	{
+		omit(report, QCoreApplication::translate("VibeStudioModelDocument",
+												 "ASE holds one static frame; Doom 3, Quake 4 and q3map2 misc_model read it as a static model."));
+	}
+	if (ase && !skeleton.isEmpty())
+	{
+		omit(report, QCoreApplication::translate("VibeStudioModelDocument",
+												 "ASE stores no joints or weights, so the skeleton's %n joint(s) and its clips stay in the "
+												 "editable source. Export MD5 or IQM to keep them.",
+												 nullptr, int(skeleton.joints.size())));
+	}
+	if (ase)
+	{
+		return true;
+	}
+	if (skeleton.isEmpty())
+	{
+		// lupdate stalls on arithmetic in a plural count, so it is hoisted.
+		const int later = int(mesh.frames.size()) - 1;
+		if (md5mesh && later > 0)
+		{
+			omit(report, QCoreApplication::translate("VibeStudioModelDocument",
+													 "An md5mesh holds one pose and this model animates by frames, so it writes the first frame "
+													 "and leaves out %n later frame(s). Export MD3 for vertex animation, or add joints and "
+													 "skeletal clips.",
+													 nullptr, later));
+		}
+		if (iqm && mesh.frames.size() > 1)
+		{
+			omit(report, QCoreApplication::translate(
+							 "VibeStudioModelDocument",
+							 "IQM animates through joints; this model has none, so the first frame is written as a static mesh."));
+		}
+		return true;
+	}
+	if (md5mesh)
+	{
+		return true;
+	}
+	ModelSkeletalFrameAudit audit;
+	if (!auditModelSkeletalFrames(mesh, &audit, error, control))
+	{
+		return false;
+	}
+	QStringList editedClips;
+	int edited = 0;
+	for (int index = 0; index < audit.editedFrames.size(); ++index)
+	{
+		const int frameClip = audit.editedFrameClips.at(index);
+		if (md5anim && frameClip != clip) { continue; }
+		++edited;
+		const auto name = skeleton.clips.at(frameClip).name;
+		if (!editedClips.contains(name)) { editedClips << name; }
+	}
+	if (edited > 0)
+	{
+		omit(report, QCoreApplication::translate("VibeStudioModelDocument",
+												 "Baked frames that differ from the poses the skeleton produces (%n, in %1): edits made apart "
+												 "from the skeleton, or a bind-pose edit the clips do not show yet. %2 writes the "
+												 "skeleton's poses, so these differences are not exported; export MD3 to keep the edited frames.",
+												 nullptr, edited)
+						 .arg(listed(editedClips), title));
+	}
+	// Frames added or removed by frame edits are no clip sample; the clips no
+	// longer know their frames, so an md5anim reports them too, whichever clip
+	// it writes.
+	if (!audit.unmappedFrames.isEmpty())
+	{
+		QStringList frames;
+		for (int frame : audit.unmappedFrames) { frames << mesh.frames.at(frame).name; }
+		omit(report, QCoreApplication::translate("VibeStudioModelDocument",
+												 "Frames that are not samples of a skeletal clip, added or rearranged with frame edits (%n): %1. "
+												 "%2 writes the skeletal clips, so these frames are not exported; export MD3 to keep them.",
+												 nullptr, int(audit.unmappedFrames.size()))
+						 .arg(listed(frames), title));
+	}
+	if (md5anim && clip >= 0 && clip < skeleton.clips.size() && !skeleton.clips.at(clip).frames.isEmpty())
+	{
+		bool sampled = false;
+		for (int frame = 0; frame < mesh.frames.size() && !sampled; ++frame)
+		{
+			sampled = modelSkeletalClipForFrame(mesh, frame) == clip;
+		}
+		if (!sampled)
+		{
+			omit(report, QCoreApplication::translate("VibeStudioModelDocument",
+													 "No baked frame is a sample of clip \"%1\" any more (frames were added or removed with frame "
+													 "edits), so edits to its frames cannot be checked. The md5anim writes the clip as the skeleton "
+													 "holds it.")
+							 .arg(skeleton.clips.at(clip).name));
+		}
+	}
+	QStringList changed;
+	for (const auto &animation : mesh.animations)
+	{
+		if (!audit.changedAnimations.contains(animation.name)) { continue; }
+		// An md5anim matches the frame animation by its clip's name, or by the
+		// clip its frames are samples of.
+		bool relevant = !md5anim || animation.name == skeleton.clips.at(clip).name;
+		for (int frame = animation.firstFrame; md5anim && !relevant && frame < animation.firstFrame + animation.frameCount; ++frame)
+		{
+			relevant = modelSkeletalClipForFrame(mesh, frame) == clip;
+		}
+		if (relevant && !changed.contains(animation.name)) { changed << animation.name; }
+	}
+	if (!changed.isEmpty())
+	{
+		omit(report, QCoreApplication::translate("VibeStudioModelDocument",
+												 "Frame animations that no longer match a skeletal clip's name, length or rate (%n): %1. %2 "
+												 "writes the skeletal clips' names and rates; change clips with Edit Skeletal Animation.",
+												 nullptr, int(changed.size()))
+						 .arg(listed(changed), title));
+	}
+	return true;
+}
+
+// The export itself; `report` is fresh and the caller applies strictness and
+// the delivery target's preflight. `limits` are the target's; `validated`
+// says the caller has already validated the mesh.
+QByteArray exportNative(const ModelMesh &mesh, const QString &format, const ModelExportOptions &options, const ModelTargetLimits &limits,
+						bool validated, QString *error, const ModelWorkControl &control, ModelExportReport *report)
+{
+	const int frame = options.frame;
 	if (format.compare(QStringLiteral("mdl"), Qt::CaseInsensitive) == 0)
 	{
-		return exportModelMdl(mesh, error, control, report);
-	}
-	if (report)
-	{
-		*report = {};
+		auto result = exportModelMdl(mesh, limits, error, control, report);
+		if (!result.isEmpty())
+		{
+			appendVertexFormatNotes(mesh, QStringLiteral("mdl"), report);
+		}
+		return result;
 	}
 	if (error)
 	{
 		error->clear();
 	}
-	const auto errors = validateEditableModel(mesh, control);
-	if (!errors.isEmpty())
+	if (!validated)
 	{
-		return failure(error, errors.join(QLatin1Char('\n')));
+		const auto errors = validateEditableModel(mesh, control);
+		if (!errors.isEmpty())
+		{
+			return failure(error, errors.join(QLatin1Char('\n')));
+		}
 	}
-	if (format.compare(QStringLiteral("md5mesh"), Qt::CaseInsensitive) == 0 || format.compare(QStringLiteral("md5anim"), Qt::CaseInsensitive) == 0 ||
-		format.compare(QStringLiteral("iqm"), Qt::CaseInsensitive) == 0)
+	const QString id = format.toLower();
+	if (id == QStringLiteral("md5mesh") || id == QStringLiteral("md5anim") || id == QStringLiteral("iqm"))
 	{
 		// Skeletal exports pose the edited bind pose: vertices moved there are
 		// rebound to their joints first, and untouched ones keep their offsets.
 		ModelMesh prepared = mesh;
 		const int bindFrame = modelBindPoseFrame(prepared);
+		int rebound = 0;
 		if (!prepared.skeleton.isEmpty() && bindFrame >= 0)
 		{
-			rebindModelSkinning(&prepared, bindFrame);
+			rebound = rebindModelSkinning(&prepared, bindFrame);
 		}
-		if (format.compare(QStringLiteral("md5mesh"), Qt::CaseInsensitive) == 0)
+		const auto reboundNote = [&]()
 		{
-			auto result = exportModelMd5Mesh(prepared, {}, error, control);
-			if (!result.isEmpty() && report && prepared.skeleton.isEmpty())
+			if (rebound > 0)
+			{
+				report->notes << QCoreApplication::translate("VibeStudioModelDocument",
+															 "Bind-pose edits to %n vertex(es) were re-bound to their joints for this "
+															 "export, so every clip follows them.",
+															 nullptr, rebound);
+			}
+		};
+		QByteArray result;
+		int clip = -1;
+		if (id == QStringLiteral("md5mesh"))
+		{
+			result = exportModelMd5Mesh(prepared, {}, error, control, report);
+			if (!result.isEmpty() && prepared.skeleton.isEmpty())
 			{
 				report->notes << QCoreApplication::translate("VibeStudioModelDocument",
 															 "The model has no joints, so the md5mesh binds every vertex to one origin joint.");
 			}
-			return result;
+			if (!result.isEmpty())
+			{
+				reboundNote();
+			}
 		}
-		if (format.compare(QStringLiteral("md5anim"), Qt::CaseInsensitive) == 0)
+		else if (id == QStringLiteral("md5anim"))
 		{
-			if (prepared.skeleton.isEmpty() || prepared.skeleton.clips.isEmpty())
+			const auto &clips = prepared.skeleton.clips;
+			if (prepared.skeleton.isEmpty() || clips.isEmpty())
 			{
 				return failure(error, QCoreApplication::translate("VibeStudioModelDocument",
 																  "An md5anim needs a skeletal clip; this model animates by frames."));
 			}
-			// For md5anim the frame argument names the clip.
-			return exportModelMd5Anim(prepared, std::clamp(frame, 0, int(prepared.skeleton.clips.size()) - 1), {}, error, control);
+			clip = options.clip;
+			if (clip < 0)
+			{
+				// The clip the frame is a sample of, as the editor shows it.
+				if (frame < 0 || frame >= mesh.frames.size())
+				{
+					return failure(error, QCoreApplication::translate("VibeStudioModelDocument",
+																	  "Select a valid frame or skeletal clip for MD5 animation export."));
+				}
+				clip = modelSkeletalClipForFrame(mesh, frame);
+				if (clip < 0 && clips.size() == 1)
+				{
+					clip = 0;
+				}
+				if (clip < 0)
+				{
+					return failure(error, QCoreApplication::translate("VibeStudioModelDocument",
+																	  "Frame %1 is not a sample of a skeletal clip, and the model has %n "
+																	  "clip(s). Choose the clip to write as an md5anim: %2.",
+																	  nullptr, int(clips.size()))
+											  .arg(QString::number(frame), modelSkeletalClipSummaries(prepared.skeleton).join(QStringLiteral("; "))));
+				}
+			}
+			if (clip >= clips.size())
+			{
+				return failure(error, QCoreApplication::translate("VibeStudioModelDocument",
+																  "The model has %n skeletal clip(s), so there is no clip %1. Choose one of: %2.",
+																  nullptr, int(clips.size()))
+										  .arg(QString::number(clip), modelSkeletalClipSummaries(prepared.skeleton).join(QStringLiteral("; "))));
+			}
+			ModelMd5ExportOptions md5;
+			md5.frameRate = options.md5FrameRate;
+			result = exportModelMd5Anim(prepared, clip, md5, error, control, report);
 		}
-		auto result = exportModelIqm(prepared, error, control);
-		if (!result.isEmpty() && report && prepared.skeleton.isEmpty() && prepared.frames.size() > 1)
+		else
 		{
-			report->notes << QCoreApplication::translate("VibeStudioModelDocument",
-														 "IQM animates through joints; this model has none, so the first frame is written as a static mesh.");
+			result = exportModelIqm(prepared, limits, error, control, report);
+			if (!result.isEmpty())
+			{
+				reboundNote();
+			}
+		}
+		if (!result.isEmpty() && !appendSourceNotes(mesh, id, clip, report, error, control))
+		{
+			return {};
 		}
 		return result;
 	}
-	if (format.compare(QStringLiteral("ase"), Qt::CaseInsensitive) == 0)
+	if (id == QStringLiteral("ase"))
 	{
 		if (frame < 0 || frame >= mesh.frames.size())
 		{
 			return failure(error, QCoreApplication::translate("VibeStudioModelDocument", "Select a valid frame for ASE export."));
 		}
-		auto result = exportModelAse(mesh, frame, error, control);
-		if (!result.isEmpty() && report && mesh.frames.size() > 1)
+		auto result = exportModelAse(mesh, frame, error, control, report);
+		if (!result.isEmpty() && !appendSourceNotes(mesh, id, -1, report, error, control))
 		{
-			report->notes << QCoreApplication::translate("VibeStudioModelDocument",
-														 "ASE holds one static frame; Doom 3, Quake 4 and q3map2 misc_model read it as a static model.");
+			return {};
 		}
 		return result;
 	}
-	if (format.compare(QStringLiteral("md3"), Qt::CaseInsensitive) == 0)
+	if (id == QStringLiteral("md3"))
 	{
-		const auto result = md3(mesh, error, control);
-		if (!result.isEmpty() && report && !mesh.collisionBoxes.isEmpty()) { report->notes << modelCollisionOmissionNote(); }
-		if (!result.isEmpty() && report && mesh.mdl.enabled)
+		const auto result = md3(mesh, limits, error, control);
+		if (!result.isEmpty() && !mesh.collisionBoxes.isEmpty()) { omit(report, modelCollisionOmissionNote()); }
+		if (!result.isEmpty() && mesh.mdl.enabled)
 		{
-			report->notes << QCoreApplication::translate(
+			omit(report, QCoreApplication::translate(
 				"VibeStudioModelDocument",
-				"MDL native groups, timing, palette and header settings remain in the editable source; MD3 does not store them.");
+				"MDL native groups, timing, palette and header settings remain in the editable source; MD3 does not store them."));
 		}
-		if (!result.isEmpty() && report && !mesh.animations.isEmpty())
+		if (!result.isEmpty())
 		{
-			report->notes << QCoreApplication::translate(
-				"VibeStudioModelDocument",
-				"MD3 preserves frame poses and attachment tags, but custom animation clip names, ranges and FPS remain "
-				"in the editable source. Configure animation ranges and timing separately for the target game.");
+			appendVertexFormatNotes(mesh, id, report);
 		}
 		return result;
 	}
-	if (format.compare(QStringLiteral("md2"), Qt::CaseInsensitive) == 0)
+	if (id == QStringLiteral("md2"))
 	{
-		const auto result = md2(mesh, error, control, report);
-		if (!result.isEmpty() && report && !mesh.collisionBoxes.isEmpty()) { report->notes << modelCollisionOmissionNote(); }
-		if (!result.isEmpty() && report && mesh.mdl.enabled)
+		const auto result = md2(mesh, limits, error, control, report);
+		if (!result.isEmpty() && !mesh.collisionBoxes.isEmpty()) { omit(report, modelCollisionOmissionNote()); }
+		if (!result.isEmpty() && mesh.mdl.enabled)
 		{
-			report->notes << QCoreApplication::translate(
+			omit(report, QCoreApplication::translate(
 				"VibeStudioModelDocument",
-				"MDL native groups, timing, palette and header settings remain in the editable source; MD2 does not store them.");
+				"MDL native groups, timing, palette and header settings remain in the editable source; MD2 does not store them."));
+		}
+		if (!result.isEmpty())
+		{
+			appendVertexFormatNotes(mesh, id, report);
 		}
 		return result;
 	}
-	if (format.compare(QStringLiteral("obj"), Qt::CaseInsensitive) == 0)
+	if (id == QStringLiteral("obj"))
 	{
 		if (frame < 0 || frame >= mesh.frames.size())
 		{
@@ -753,7 +1185,7 @@ QByteArray exportEditableModel(const ModelMesh &mesh, const QString &format, int
 		if (!mesh.collisionBoxes.isEmpty())
 		{
 			result.prepend(QStringLiteral("# Collision boxes remain in the mesh source; export collision brushes separately.\n"));
-			if (report) { report->notes << modelCollisionOmissionNote(); }
+			omit(report, modelCollisionOmissionNote());
 		}
 		for (const auto &surface : mesh.surfaces)
 		{
@@ -774,32 +1206,130 @@ QByteArray exportEditableModel(const ModelMesh &mesh, const QString &format, int
 		{
 			result.prepend(QStringLiteral(
 				"# Attachment tags are omitted: OBJ stores geometry only. Retain the mesh source or use MD3 for attachments.\n"));
-			if (report)
-			{
-				report->notes << QCoreApplication::translate("VibeStudioModelDocument",
-															 "OBJ exports geometry only; attachment tags are omitted. The editable source "
-															 "retains them. Use MD3 to export attachments.");
-			}
+			omit(report, QCoreApplication::translate("VibeStudioModelDocument",
+													 "OBJ exports geometry only; attachment tags are omitted. The editable source "
+													 "retains them. Use MD3 to export attachments."));
 		}
-		if (report && (mesh.frames.size() > 1 || !mesh.animations.isEmpty()))
+		// One frame holds every pose a one-frame model has, so only other frames,
+		// and the clips across them, are left out.
+		if (mesh.frames.size() > 1)
 		{
-			report->notes << QCoreApplication::translate(
+			omit(report, QCoreApplication::translate(
 				"VibeStudioModelDocument",
-				"OBJ exports only the selected frame. Other poses and animation clips remain in the editable source.");
+				"OBJ exports only the selected frame. Other poses and animation clips remain in the editable source."));
 		}
+		appendVertexFormatNotes(mesh, id, report);
 		if (mesh.mdl.enabled)
 		{
 			result.prepend(QStringLiteral("# MDL indexed skins, native groups and header settings remain in the mesh source.\n"));
-			if (report)
-			{
-				report->notes << QCoreApplication::translate(
-					"VibeStudioModelDocument",
-					"OBJ omits MDL indexed skins, native groups and header settings. Retain the editable source or export MDL.");
-			}
+			omit(report, QCoreApplication::translate(
+				"VibeStudioModelDocument",
+				"OBJ omits MDL indexed skins, native groups and header settings. Retain the editable source or export MDL."));
 		}
 		return result.toUtf8();
 	}
 	return failure(error, QCoreApplication::translate("VibeStudioModelDocument",
-													  "Editable model export supports MDL, MD2, MD3, or a single OBJ frame."));
+													  "Editable model export supports MDL, MD2, MD3, MD5 mesh or animation, IQM, ASE, or a "
+													  "single OBJ frame."));
+}
+} // namespace
+
+QStringList modelExportFormatIds()
+{
+	return {QStringLiteral("mdl"), QStringLiteral("md2"), QStringLiteral("md3"), QStringLiteral("obj"), QStringLiteral("md5mesh"),
+			QStringLiteral("md5anim"), QStringLiteral("iqm"), QStringLiteral("ase")};
+}
+
+QByteArray exportEditableModel(const ModelMesh &mesh, const QString &format, int frame, QString *error, const ModelWorkControl &control,
+							   ModelExportReport *report)
+{
+	ModelExportOptions options;
+	options.frame = frame;
+	return exportEditableModel(mesh, format, options, error, control, report);
+}
+
+QByteArray exportEditableModel(const ModelMesh &mesh, const QString &format, const ModelExportOptions &options, QString *error,
+							   const ModelWorkControl &control, ModelExportReport *report)
+{
+	if (report)
+	{
+		*report = {};
+	}
+	const QString id = format.toLower();
+	ModelTargetProfile profile;
+	const bool targeted = findModelTargetProfile(id, options.target, &profile);
+	if (!options.target.trimmed().isEmpty() && !targeted)
+	{
+		const auto choices = modelTargetChoices(id);
+		return failure(error, choices.isEmpty()
+								  ? QCoreApplication::translate("VibeStudioModelDocument",
+																"%1 export has no delivery targets; leave the target out.")
+										.arg(formatTitle(id))
+								  : QCoreApplication::translate("VibeStudioModelDocument",
+																"There is no %1 delivery target called \"%2\". Choose one of: %3.")
+										.arg(formatTitle(id), options.target.trimmed(), choices));
+	}
+	// The preflight: every limit of the delivery target, before writing.
+	ModelTargetReport target;
+	if (targeted)
+	{
+		const auto errors = validateEditableModel(mesh, control);
+		if (!errors.isEmpty())
+		{
+			return failure(error, errors.join(QLatin1Char('\n')));
+		}
+		if (!assessModelTarget(mesh, profile, &target, error, control))
+		{
+			return {};
+		}
+		if (!target.ready())
+		{
+			QStringList items;
+			for (const auto &line : modelTargetIssueLines(target))
+			{
+				items << QStringLiteral("- ") + line;
+			}
+			const int blockers = int(target.issues.size());
+			failure(error, QCoreApplication::translate("VibeStudioModelDocument",
+													   "Nothing was written: the model exceeds %n limit(s) of the %1 delivery target %2.",
+													   nullptr, blockers)
+								   .arg(formatTitle(id), profile.label) +
+							   QLatin1Char('\n') + items.join(QLatin1Char('\n')));
+			if (report)
+			{
+				report->target = std::move(target);
+			}
+			return {};
+		}
+	}
+	ModelExportReport result;
+	QByteArray bytes = exportNative(mesh, format, options, profile.limits, targeted, error, control, &result);
+	if (bytes.isEmpty())
+	{
+		return {};
+	}
+	result.target = std::move(target);
+	if (options.strict && !result.omissions.isEmpty())
+	{
+		QStringList items;
+		for (const auto &omission : std::as_const(result.omissions))
+		{
+			items << QStringLiteral("- ") + omission;
+		}
+		failure(error, QCoreApplication::translate("VibeStudioModelDocument",
+												   "Strict export refused: the output would leave out %n item(s) the editable source holds.",
+												   nullptr, int(result.omissions.size())) +
+						   QLatin1Char('\n') + items.join(QLatin1Char('\n')));
+		if (report)
+		{
+			*report = std::move(result);
+		}
+		return {};
+	}
+	if (report)
+	{
+		*report = std::move(result);
+	}
+	return bytes;
 }
 } // namespace vibestudio

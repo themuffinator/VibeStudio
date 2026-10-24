@@ -14,6 +14,7 @@ bool setLevelSceneLocked(LevelMapDocument* document, const QString& id, bool loc
 
 // Scene-only edits may change names, visibility and lock flags, but cannot move
 // or remove protected nodes/members in the same operation as unlocking them.
+// Inside a guarded edit, `before` stands for the document the edit began with.
 bool validateLevelSceneOrganizationEdit(const LevelMapDocument& before, const LevelSceneState& after, QString* error);
 
 // Authoring entry points call this before touching any document state. With no

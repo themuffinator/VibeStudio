@@ -8,6 +8,7 @@
 #include "core/game_asset_register.h"
 #include "core/level_materials.h"
 #include "core/map_assets.h"
+#include "core/model_lod.h"
 #include "core/model_mesh.h"
 #include "core/level_model_appearance.h"
 
@@ -239,7 +240,7 @@ static LevelDependencyReport inspectDependencies(const LevelMapDocument& documen
 	report.mapPath = document.sourcePath;
 	report.mapName = document.mapName;
 	report.packagePath = archive.sourcePath();
-	report.limitations << QCoreApplication::translate("VibeStudioLevelDependencies", "Checks explicit map references, native model materials, MD3 misc_model compiler skins and remaps, and images in referenced Quake III shaders. Compiler overrides on other model formats, secondary shader references, game-code assets, and dynamically selected files require a separate review.");
+	report.limitations << QCoreApplication::translate("VibeStudioLevelDependencies", "Checks explicit map references, native model materials, MD3 detail levels beside their models, MD3 misc_model compiler skins and remaps, and images in referenced Quake III shaders. Compiler overrides on other model formats, secondary shader references, game-code assets, and dynamically selected files require a separate review.");
 	report.limitations << QCoreApplication::translate("VibeStudioLevelDependencies", "An asset subset contains resolved files and whole shader scripts. It does not include the map, compiled BSP, or game installation.");
 	if (!archive.isOpen() || document.format == LevelMapFormat::Unknown) {
 		report.complete = false;
@@ -518,6 +519,10 @@ static LevelDependencyReport inspectDependencies(const LevelMapDocument& documen
 	quint64 walBytes = 0;
 	int modelsRead = 0;
 	int appearancesRead = 0;
+	// MD3 models with detail levels beside them, and each level's model and
+	// number, so a level is checked against the model it ships with.
+	QHash<QString, ModelMesh> lodBases;
+	QHash<QString, QPair<QString, int>> lodLevels;
 	ModelWorkControl modelControl; modelControl.cancelled = [&] { return !tick(); };
 	for (int index = 0; index < pending.size(); ++index) {
 		total = scriptWork + static_cast<int>(pending.size());
@@ -620,7 +625,9 @@ static LevelDependencyReport inspectDependencies(const LevelMapDocument& documen
 				}
 			}
 		}
-		if (dependency.kind == QStringLiteral("model") && dependency.status == LevelDependencyStatus::Resolved) {
+		// A detail level is an optional companion of its model: its own materials
+		// are reviewed like the model's.
+		if ((dependency.kind == QStringLiteral("model") || dependency.kind == QStringLiteral("model-lod")) && dependency.status == LevelDependencyStatus::Resolved) {
 			QByteArray bytes; QString error;
 			if (++modelsRead > maxModels || dependency.sizeBytes > static_cast<quint64>(maxModelBytes) || dependency.sizeBytes > maxAllModelBytes - modelBytes) {
 				report.complete = false;
@@ -638,6 +645,38 @@ static LevelDependencyReport inspectDependencies(const LevelMapDocument& documen
 					if (!model.geometryAvailable || !model.error.isEmpty() || !warnings.isEmpty()) {
 						report.complete = false;
 						dependency.note = QCoreApplication::translate("VibeStudioLevelDependencies", "Model material coverage is incomplete: %1").arg(!model.error.isEmpty() ? model.error : warnings.join(QLatin1Char(';')));
+					}
+					// Quake III loads name_1.md3 and on beside an MD3 when they exist
+					// (R_RegisterModel); the ones the package has ship with it.
+					if (dependency.kind == QStringLiteral("model") && model.format == ModelMeshFormat::Quake3Md3) {
+						for (int level = 1; level <= modelLodMaxLevels; ++level) {
+							const QString sibling = modelLodPath(dependency.resolvedPath, level);
+							if (files.contains(keyFor(sibling))) {
+								enqueue(QStringLiteral("model-lod"), sibling, dependency.selectors, dependency.resolvedPath);
+								lodBases.insert(keyFor(dependency.resolvedPath), model);
+								lodLevels.insert(keyFor(sibling), {keyFor(dependency.resolvedPath), level});
+							}
+						}
+					}
+					// A level whose frames or surfaces do not match its model is read
+					// wrongly by the game (R_AddMD3Surfaces checks frames against the
+					// base only), so it ships as a warning with the reason.
+					const auto level = lodLevels.constFind(keyFor(dependency.resolvedPath));
+					if (dependency.kind == QStringLiteral("model-lod") && level != lodLevels.cend() && lodBases.contains(level->first)) {
+						ModelTargetProfile quake3;
+						findModelTargetProfile(QStringLiteral("md3"), {}, &quake3);
+						quake3.limits.detailLevels = modelLodMaxLevels;
+						ModelLodValidation validation;
+						if (validateModelLodSet(lodBases.value(level->first), {model}, quake3, &validation, nullptr, modelControl, {level->second})) {
+							QStringList problems;
+							for (const auto& finding : std::as_const(validation.findings)) {
+								if (finding.code == QStringLiteral("frames") || finding.code == QStringLiteral("surface-names") || finding.code == QStringLiteral("surfaces")) { problems << finding.message; }
+							}
+							if (!problems.isEmpty()) {
+								const QString mismatch = QCoreApplication::translate("VibeStudioLevelDependencies", "This detail level does not match its model: %1 Write the detail levels again with the model, or remove this file.").arg(problems.join(QLatin1Char(' ')));
+								dependency.note = dependency.note.isEmpty() ? mismatch : dependency.note + QLatin1Char(' ') + mismatch;
+							}
+						}
 					}
 					const auto variants = modelAppearances.value(nameKey);
 					const auto nativeSelectors = nativeModelSelectors.value(nameKey);

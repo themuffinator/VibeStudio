@@ -1,4 +1,5 @@
 #pragma once
+#include "core/level_component_selection.h"
 
 // Interactive 2D map viewport.
 //
@@ -15,9 +16,15 @@
 // release, so the owner decides what becomes a single undo command.
 
 #include "core/level_brush.h"
+#include "core/level_scene.h"
 #include "core/level_editor_controls.h"
 #include "core/level_navigation.h"
 #include "core/level_map.h"
+#include "core/level_surface.h"
+#include "app/level_clip_state.h"
+#include "app/level_component_gizmo.h"
+#include "app/level_linked_group_boxes.h"
+#include "app/level_vertex_insertion.h"
 #include "core/map_geometry.h"
 #include "core/map_geometry_cache.h"
 #include "app/map_viewport_scene_index.h"
@@ -101,13 +108,14 @@ public:
 	// refresh driven by the document's primary fields cannot silently collapse
 	// a set the user built here.
 	void setSelection(LevelMapSelectionKind kind, int objectId);
-	void setSelectionSet(const QVector<LevelMapSelectionRef>& selection);
+	void setSelectionSet(const QVector<LevelMapSelectionRef>& selection, bool revealTemporarilyHidden = true);
 	[[nodiscard]] QVector<LevelMapSelectionRef> selectionSet() const;
 	[[nodiscard]] LevelMapSelectionKind selectionKind() const;
 	[[nodiscard]] int selectedObjectId() const;
 
-	void setGridSize(int units);
-	[[nodiscard]] int gridSize() const;
+	// The working grid in map units, 0.125 to 4096.
+	void setGridSize(double units);
+	[[nodiscard]] double gridSize() const;
 	// Grid snapping for drags and nudges. On by default; off moves by the raw
 	// pointer delta instead.
 	void setSnapToGrid(bool enabled);
@@ -126,6 +134,13 @@ public:
 	// Links that touch the selection are drawn heavier either way.
 	void setShowTargetLinks(bool show);
 	[[nodiscard]] bool showTargetLinks() const;
+	// Every linked group's box, not only the sets of the selected or open
+	// groups, which are drawn either way.
+	void setShowLinkedGroups(bool show);
+	[[nodiscard]] bool showLinkedGroups() const;
+	// Each linked group's box as this view solved it, which the 3D camera
+	// draws too (see app/level_linked_group_boxes.h).
+	[[nodiscard]] const QVector<LevelLinkedGroupBox>& linkedGroupBoxes() const { return m_linkedGroupBoxes; }
 	[[nodiscard]] int targetLinkCount() const;
 	// Doom tag links (see levelMapTagLinks) the view knows, and how many it
 	// draws now: those touching the selection, or all while links are shown.
@@ -160,7 +175,13 @@ public:
 	// The map position under `viewPoint`, snapped to the grid while snapping
 	// is on. The axis the projection hides, z in the top view, takes
 	// `hiddenAxisValue`.
-	[[nodiscard]] LevelMapVec3 worldPositionAt(const QPointF& viewPoint, double hiddenAxisValue) const;
+	[[nodiscard]] LevelMapVec3 worldPositionAt(const QPointF& viewPoint, double hiddenAxisValue, bool snap = true) const;
+	// Native local events and semantic callers share this anchor. Leaving the
+	// pane resets commands to its centre; no global cursor query is needed.
+	void rememberCommandPointer(const QPointF& point) { m_lastPointerPosition = point; m_hasCommandPointer = QRectF(rect()).contains(point); }
+	[[nodiscard]] QPointF commandPosition() const {
+		return m_hasCommandPointer && QRectF(rect()).contains(m_lastPointerPosition) ? m_lastPointerPosition : QPointF(width()*0.5, height()*0.5);
+	}
 	// Where a point of the view's plane, in map units, is drawn, in widget
 	// pixels.
 	[[nodiscard]] QPointF viewPointFor(double x, double y) const;
@@ -189,6 +210,9 @@ public:
 	// Everything under a point of the view, the nearest the viewer first:
 	// the stack a Radiant-style click steps down.
 	[[nodiscard]] QVector<LevelMapSelectionRef> objectsAt(const QPointF& viewPoint) const;
+	void selectSceneObjects(const QVector<LevelMapSelectionRef>& hits, LevelScenePick mode);
+	bool openGroupAt(const QPointF& viewPoint);
+	[[nodiscard]] const LevelSceneSelectionContext& sceneSelectionContext() const { return m_sceneContext; }
 
 	[[nodiscard]] bool isDragging() const;
 	// Cancels a drag, resize, or rubber band in progress and restores the
@@ -214,11 +238,10 @@ public:
 	[[nodiscard]] QPointF resizeHandlePosition(int edges) const;
 	[[nodiscard]] bool isResizing() const;
 
-	// Clip mode: a drag across the view draws the clip line, on the grid while
-	// snapping is on, for a plane square to the view, and the part a cut would
-	// take away is hatched. Tab chooses what stays (one side, the other, or
-	// both as two brushes), Enter asks for the cut through clipRequested(),
-	// and Escape leaves the mode. Clicks draw rather than select until then.
+	// Shared world-space clip mode. Clicks place up to three points; an initial
+	// drag places two. Existing points can move in this pane's visible axes.
+	// Tab cycles kept sides, Enter requests the checked cut, Backspace removes
+	// a point, Escape cancels a drag or exits. No document is changed here.
 	void setClipMode(bool enabled);
 	[[nodiscard]] bool clipMode() const;
 	void setClipKeep(LevelMapClipKeep keep);
@@ -228,11 +251,23 @@ public:
 	// them.
 	void setClipLine(const QPointF& from, const QPointF& to);
 	void clearClipLine();
-	// The drawn line as the three points clipLevelMapSelection() takes: its
-	// ends, and a step from the first toward the viewer, so the plane's front
-	// is the side to the right of the line as it was drawn. False with no
-	// line.
+	// Two points extrude toward the originating viewer; a third point replaces
+	// that extrusion. False for an incomplete or degenerate plane.
 	bool clipPlanePoints(LevelMapVec3* a, LevelMapVec3* b, LevelMapVec3* c) const;
+	[[nodiscard]] const LevelClipState& clipState() const { return m_clipState; }
+	bool setClipState(const LevelClipState& state);
+	void setClipPreview(const LevelClipPreview& preview);
+	[[nodiscard]] const LevelClipPreview& clipPreview() const { return m_clipPreview; }
+	[[nodiscard]] QPointF clipPointPosition(int index) const;
+	[[nodiscard]] int clipPointAt(const QPointF& position) const;
+	bool beginClipPoint(const QPointF& position);
+	bool moveClipPoint(const QPointF& position);
+	void finishClipPoint(bool accept);
+	void removeLastClipPoint();
+	void requestClip();
+	void setClipPreferences(const LevelClipperPreferences& preferences) { m_clipPreferences = preferences; }
+	bool beginQuickClipPoint(const QPointF& position, Qt::KeyboardModifiers modifiers);
+	bool activateClipDoubleClick();
 
 	// Draw Sector mode, for Doom maps: each click puts a corner down, on an
 	// existing vertex near the pointer or else on the grid while snapping is
@@ -270,7 +305,23 @@ public:
 	// the document: it asks through componentMoveRequested() on release.
 	// Escape drops the picks, then leaves the mode.
 	enum class ComponentMode { Off, Vertices, Edges, Faces };
+	struct ComponentHandle {
+		LevelMapSelectionRef object;
+		int component = -1;
+		LevelMapVec3 position;
+		QString geometryKey;
+	};
 	void setComponentMode(ComponentMode mode);
+	bool pickComponentAt(const QPointF& point, LevelComponentPick operation = LevelComponentPick::Replace, bool preservePicked = false);
+	bool pickComponentBand(const QRectF& band, LevelComponentPick operation = LevelComponentPick::Replace);
+	bool cycleComponentAt(const QPointF& point, int steps = 1);
+	bool cycleComponentSelection(int steps = 1);
+	// Returns true when the configured gesture is consumed, even on empty space.
+	bool componentCycleWheel(const QPointF& point, int delta, Qt::KeyboardModifiers modifiers);
+	void selectComponentHandles(LevelComponentPick operation);
+	[[nodiscard]] const QVector<ComponentHandle>& componentHandles() const { return m_componentHandles; }
+	[[nodiscard]] const QSet<int>& pickedComponentHandles() const { return m_pickedHandles; }
+	[[nodiscard]] bool componentHandlesLimited() const { return m_componentHandlesLimited; }
 	[[nodiscard]] ComponentMode componentMode() const { return m_componentMode; }
 	[[nodiscard]] int componentHandleCount() const { return static_cast<int>(m_componentHandles.size()); }
 	[[nodiscard]] int pickedComponentCount() const { return static_cast<int>(m_pickedHandles.size()); }
@@ -280,8 +331,54 @@ public:
 	// The picked handles as objects and positions, so panes can share them.
 	[[nodiscard]] QVector<QPair<LevelMapSelectionRef, LevelMapVec3>> pickedComponentPositions() const;
 	void setPickedComponentPositions(const QVector<QPair<LevelMapSelectionRef, LevelMapVec3>>& picks);
+	// Exact solved IDs for commands and pane synchronisation; equal centres
+	// need not identify equal edges/faces. Invalid sets leave picks untouched.
+	bool setPickedComponentHandles(const QSet<int>& handles);
+	bool setPickedComponents(const QVector<LevelMapComponentSet>& sets);
+	// Preflight an additive whole-patch query without rebuilding or losing picks.
+	[[nodiscard]] bool canAddComponentPatches(const QVector<int>& patches) const;
+	void setTexturedSurfaceFaces(const QVector<LevelSurfaceFace>& faces);
+	[[nodiscard]] const QVector<LevelSurfaceFace>& texturedSurfaceFaces() const { return m_texturedFaces; }
+	bool queryComponentSelection(const LevelComponentSelectionRequest& request,
+		QVector<LevelMapComponentSet>* output, QString* error = nullptr) const;
 	void pickAllComponents();
-	[[nodiscard]] bool isMovingComponents() const { return m_componentDragging; }
+	[[nodiscard]] bool isMovingComponents() const { return m_componentDragging || m_componentGizmo->active() || m_vertexInsertion->active(); }
+	// A shell nudge's move of the picked handles by `planeDelta` in this view's
+	// plane, as an arrow key makes it: split and extrusion apply, and the edit
+	// arrives through componentMoveRequested() as one undo step. False, doing
+	// nothing, without picked handles or while a component tool other than
+	// Move is chosen; true, doing nothing, during a drag or band.
+	bool nudgeComponents(const QPointF& planeDelta);
+	// True while the view uses `key` itself ahead of shell commands: its
+	// temporary pan key, a profile's arrow pan keys, and any key during a
+	// drag, band or resize.
+	[[nodiscard]] bool keepsKey(int key, Qt::KeyboardModifiers modifiers) const;
+	[[nodiscard]] LevelVertexInsertion* vertexInsertion() const { return m_vertexInsertion; }
+	[[nodiscard]] std::shared_ptr<const LevelVertexInsertionData> vertexInsertionData() const { return m_componentInsertionData; }
+	bool beginVertexInsertion(const QPointF& point, Qt::KeyboardModifiers modifiers = Qt::NoModifier);
+	bool hoverVertexInsertion(const QPointF& point, Qt::KeyboardModifiers modifiers = Qt::NoModifier);
+	[[nodiscard]] LevelComponentGizmo* componentGizmo() const { return m_componentGizmo; }
+	[[nodiscard]] LevelComponentGizmoFrame componentGizmoFrame() const;
+	bool beginComponentTransform(const QPointF& point);
+	bool updateComponentTransform(const QPointF& point) { return m_componentGizmo->updateDrag(point); }
+	void finishComponentTransform(bool commit) { m_componentGizmo->finish(commit); }
+	void setComponentSplit(bool enabled);
+	[[nodiscard]] bool componentSplit() const { return m_componentSplit; }
+	void setComponentExtrusion(int mode, const LevelMapVec3& normal = {}, const QVector<LevelMapVec3>& vertices = {});
+	[[nodiscard]] int componentExtrusion() const { return m_componentExtrusion; }
+	[[nodiscard]] double componentExtrusionDistance() const { return m_componentExtrusionDistance; }
+	bool armComponentMove(const QPointF& point, Qt::KeyboardModifiers modifiers);
+	[[nodiscard]] bool canSnapPickedVertex() const;
+	bool requestVertexSnapAt(const QPointF& point);
+	[[nodiscard]] bool componentMoveArmed() const { return m_componentNativeArmed; }
+	bool beginComponentMove(const QPointF& point, Qt::KeyboardModifiers modifiers = Qt::NoModifier);
+	bool updateComponentMove(const QPointF& point) { return updateComponentMove(point,m_componentDragModifiers); }
+	bool updateComponentMove(const QPointF& point, Qt::KeyboardModifiers modifiers);
+	bool updateComponentModifiers(int key, Qt::KeyboardModifiers modifiers, bool pressed);
+	void finishComponentMove(bool commit);
+	[[nodiscard]] LevelMapVec3 componentMoveDelta() const;
+	[[nodiscard]] bool componentPreviewPending() const { return m_componentPending; }
+	void setComponentPreview(const LevelMapVec3& delta, const QVector<QPair<LevelMapVec3,LevelMapVec3>>& edges, const QString& error = {});
 	// Region drawing, after Radiant's Region Set XY: a drag over the view,
 	// anywhere, draws the box the region keeps across this view, asked for
 	// through regionDrawRequested(), and the mode ends. Escape leaves it.
@@ -300,6 +397,7 @@ public:
 	int hideSelection();
 	void showAllHidden();
 	[[nodiscard]] int hiddenCount() const;
+	[[nodiscard]] int temporaryHiddenCount() const;
 	// Objects the display filters hide (core/level_view_filters.h), on top of
 	// the ones hidden by hand; Show All leaves them hidden. An entity takes its
 	// brushes and patches with it, as when it is hidden by hand.
@@ -328,6 +426,7 @@ public:
 	[[nodiscard]] QSize minimumSizeHint() const override;
 
 Q_SIGNALS:
+	void texturedSelectionClearRequested();
 	void renderCompleted();
 	// Primary selectionKind is a LevelMapSelectionKind cast to an int.
 	void selectionChanged(int selectionKind, int objectId);
@@ -346,6 +445,8 @@ Q_SIGNALS:
 	// resizeLevelMapSelection().
 	void resizeRequested(const vibestudio::LevelMapVec3& mins, const vibestudio::LevelMapVec3& maxs);
 	void clipModeChanged(bool enabled);
+	void clipStateChanged();
+	void quickClipRequested();
 	void drawModeChanged(bool enabled);
 	void shapeDrawModeChanged(bool enabled);
 	void shearModeChanged(bool enabled);
@@ -358,6 +459,12 @@ Q_SIGNALS:
 	// Move the picked components by `delta`, in world units; expected to be
 	// one undo command, for example with moveLevelMapComponents().
 	void componentMoveRequested(const QVector<vibestudio::LevelMapComponentSet>& sets, const vibestudio::LevelMapVec3& delta);
+	void componentMoveActiveChanged(bool active);
+	void vertexSnapRequested(const vibestudio::LevelMapSelectionRef& object, int vertex);
+	void componentMovePreviewChanged(const vibestudio::LevelMapVec3& delta);
+	// An arrow-key nudge in Face mode with no picked handles but faces picked
+	// by Select Textured; `delta` is one grid step (Shift: eight) in world units.
+	void texturedFacesMoveRequested(const vibestudio::LevelMapVec3& delta);
 	void regionDrawModeChanged(bool enabled);
 	// The box drawn, in this view's plane units (its drawn axes).
 	void regionDrawRequested(const QRectF& planeBox);
@@ -385,11 +492,13 @@ Q_SIGNALS:
 	// Radiant's arrow keys drive the 3D camera from here: a step forward
 	// (negative back) in map units, or a turn in degrees.
 	void cameraDriveRequested(double forward, double turnDegrees);
+	void groupContextRequested(const QString& id);
 
 protected:
 	bool event(QEvent* event) override;
 	void paintEvent(QPaintEvent* event) override;
 	void mousePressEvent(QMouseEvent* event) override;
+	void mouseDoubleClickEvent(QMouseEvent* event) override;
 	void mouseMoveEvent(QMouseEvent* event) override;
 	void mouseReleaseEvent(QMouseEvent* event) override;
 	void dragEnterEvent(QDragEnterEvent* event) override;
@@ -420,7 +529,6 @@ private:
 	bool revealSelected(const QVector<LevelMapSelectionRef>& selection);
 	// Forgets hidden objects an edit took out of the map, so the hidden count
 	// and Show All never stand for something that is not there.
-	void forgetVanishedHidden();
 	void updateWorldBounds();
 	[[nodiscard]] QPointF worldToView(double x, double y) const;
 	[[nodiscard]] QPointF viewToWorld(const QPointF& point) const;
@@ -431,6 +539,14 @@ private:
 	void paintLeakTrail(QPainter& painter, const Palette& palette) const;
 	void paintTargetLinks(QPainter& painter, const Palette& palette) const;
 	void paintTagLinks(QPainter& painter, const Palette& palette) const;
+	// Linked groups (core/level_linked_groups.h): each one's box, found when
+	// the scene is rebuilt; the groups in use, open or holding the selection
+	// whole; and their boxes, names and arrows to the groups they are linked
+	// with, as TrenchBroom draws them. The rules are shared with the 3D
+	// camera in app/level_linked_group_boxes.h.
+	void rebuildLinkedGroupBoxes();
+	[[nodiscard]] QSet<QString> linkedGroupsInUse() const;
+	void paintLinkedGroups(QPainter& painter, const Palette& palette) const;
 	[[nodiscard]] bool tagLinkShown(const LevelMapTagLink& link) const;
 	[[nodiscard]] MapViewportHit hitTest(const QPointF& viewPoint) const;
 	void paintGrid(QPainter& painter, const Palette& palette) const;
@@ -547,6 +663,8 @@ private:
 	quint64 m_sceneRevision = 0;
 	bool m_activePane = false;
 	QVector<MapBrushGeometry> m_brushGeometry;
+	QVector<LevelSurfaceFace> m_texturedFaces;
+	QSet<QPair<int, int>> m_texturedFaceKeys;
 	MapBrushGeometryCache m_brushGeometryCache;
 	QVector<DoomSectorOutline> m_sectorOutlines;
 	MapViewportSceneIndex m_sourceIndex;
@@ -591,6 +709,7 @@ private:
 	bool m_handMode = false;
 	bool m_panHoldActive = false;
 	QPointF m_lastPointerPosition;
+	bool m_hasCommandPointer = false;
 	Qt::MouseButton m_panButton = Qt::NoButton;
 	bool m_rightArmed = false;
 	QPointF m_rightPressView;
@@ -629,7 +748,7 @@ private:
 	QRectF m_worldBounds;
 	QPointF m_worldCenter;
 	double m_zoom = 1.0;
-	int m_gridSize = 64;
+	double m_gridSize = 64;
 	bool m_snapToGrid = true;
 	bool m_showGrid = true;
 	bool m_showThings = true;
@@ -640,12 +759,16 @@ private:
 	QVector<QVector<LevelMapVec3>> m_portals;
 	QVector<LevelMapTargetLink> m_targetLinks;
 	QVector<LevelMapTagLink> m_tagLinks;
+	QVector<LevelLinkedGroupBox> m_linkedGroupBoxes;
 	LevelMapDocument m_sourceDocument;
+	LevelSceneSelectionContext m_sceneContext;
 	// (kind, id) of each hidden object.
 	QSet<QPair<int, int>> m_hidden;
+	QSet<QString> m_effectiveHidden;
 	QSet<QString> m_sceneHidden;
 	QSet<QPair<int, int>> m_filtered;
 	bool m_showTargetLinks = true;
+	bool m_showLinkedGroups = false;
 	bool m_highContrast = false;
 	bool m_reducedMotion = false;
 	bool m_panning = false;
@@ -673,12 +796,14 @@ private:
 	// same click would open.
 	bool m_swallowContextMenu = false;
 	bool m_clipMode = false;
-	LevelMapClipKeep m_clipKeep = LevelMapClipKeep::Back;
+	LevelClipperPreferences m_clipPreferences;
+	LevelClipState m_clipState;
+	LevelClipState m_clipBefore;
+	LevelClipPreview m_clipPreview;
+	int m_clipGrabbed = -1;
+	bool m_clipAdding = false;
+	bool m_clipChanging = false;
 	bool m_clipDrawing = false;
-	bool m_hasClipLine = false;
-	// The line's ends in the drawing plane.
-	QPointF m_clipFrom;
-	QPointF m_clipTo;
 	// A palette drag over the view, and where it would drop.
 	bool m_dropActive = false;
 	QPointF m_dropPoint;
@@ -697,20 +822,35 @@ private:
 	void paintShearPreview(QPainter& painter, const Palette& palette) const;
 	[[nodiscard]] QString shearSummary() const;
 	// Vertex editing (map_viewport_components.cpp).
-	struct ComponentHandle {
-		LevelMapSelectionRef object;
-		int component = -1;
-		LevelMapVec3 position;
-	};
 	ComponentMode m_componentMode = ComponentMode::Off;
+	LevelComponentGizmo* m_componentGizmo = nullptr;
+	LevelVertexInsertion* m_vertexInsertion = nullptr;
+	std::shared_ptr<LevelVertexInsertionData> m_componentInsertionData;
+	bool m_componentHandlesLimited = false;
 	QVector<ComponentHandle> m_componentHandles;
+	QVector<LevelComponentSelectionTopology> m_componentSelectionTopology;
 	QSet<int> m_pickedHandles;
+	LevelComponentCycleCursor m_componentCycle;
 	// Picks to find again after the next rebuild, by object and position:
 	// where a requested move takes them, else where they were.
 	QVector<QPair<LevelMapSelectionRef, LevelMapVec3>> m_componentRepick;
 	QVector<QPair<LevelMapSelectionRef, LevelMapVec3>> m_componentRepickFallback;
 	bool m_componentArmed = false;
+	bool m_componentNativeArmed = false, m_componentWorldDrag = false;
+	LevelComponentDrag m_componentAxisDrag;
+	LevelMapVec3 m_componentAxisDelta;
+	QPointF m_componentLastPoint, m_componentNativePress;
+	Qt::KeyboardModifiers m_componentDragModifiers = Qt::NoModifier, m_componentNativeModifiers = Qt::NoModifier;
 	bool m_componentDragging = false;
+	bool m_componentSplit = false;
+	int m_componentExtrusion = 0;
+	double m_componentExtrusionDistance = 0;
+	LevelMapVec3 m_componentExtrusionNormal;
+	QVector<LevelMapVec3> m_componentExtrusionVertices;
+	bool m_componentPending = false;
+	bool m_componentReleasePending = false;
+	QString m_componentError;
+	QVector<QPair<LevelMapVec3,LevelMapVec3>> m_componentPreviewEdges;
 	bool m_componentBanding = false;
 	int m_componentGrabbed = -1;
 	QPointF m_componentGrabPlane;

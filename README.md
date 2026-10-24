@@ -167,6 +167,9 @@ borrowed idea, format, pattern and line of code is credited here and in full in
 [docs/CREDITS.md](docs/CREDITS.md), with upstream links, licences and pinned
 revisions.
 
+Public Qt stylesheet APIs also inform the startup and theme lifecycle;
+see the [Qt source review](docs/CREDITS.md#core-technology).
+
 | Upstream | Used for | Licence | Pinned revision |
 | --- | --- | --- | --- |
 | [PakFu](https://github.com/themuffinator/PakFu) | Package, archive, format and installation reference; DDS/FTX/SWL codecs | GPL-3.0 | `13111e4c` |
@@ -226,6 +229,29 @@ reimplemented with nothing copied), [Xash3D FWGS](https://github.com/FWGS/xash3d
 and picomodel, all read 2026-10-08. The modeller's controls profiles follow the
 documented behaviour (never the code) of Blender, Autodesk 3ds Max and
 MilkShape 3D. See [Native Model Formats And Modeller Profiles](docs/CREDITS.md#native-model-formats-and-modeller-profiles-2026-10-08).
+
+The modeller's delivery targets and its independent MD5, IQM and ASE writer
+oracle read model limits and file conventions from the GPL sources of
+[Quake](https://github.com/id-Software/Quake), [QuakeSpasm](https://github.com/sezero/quakespasm),
+[FTE QuakeWorld](https://github.com/fte-team/fteqw), [DarkPlaces](https://github.com/DarkPlacesEngine/DarkPlaces),
+[Quake II](https://github.com/id-Software/Quake-2), [Yamagi Quake II](https://github.com/yquake2/yquake2),
+[Q2PRO](https://github.com/q2pro/q2pro) (preserved upstream), [Quake III Arena](https://github.com/id-Software/Quake-III-Arena),
+[ioquake3](https://github.com/ioquake/ioq3), [Quake3e](https://github.com/ec-/Quake3e),
+[Return to Castle Wolfenstein](https://github.com/id-Software/RTCW-SP) (single player and
+[multiplayer](https://github.com/id-Software/RTCW-MP)), [Enemy Territory](https://github.com/id-Software/Enemy-Territory),
+[GZDoom](https://github.com/ZDoom/gzdoom) and
+[Doom 3](https://github.com/id-Software/DOOM-3), the [IQM](https://github.com/lsalzman/iqm)
+specification (MIT) and q3map2 in [q3mapx](https://github.com/themuffinator/q3mapx), all
+reviewed 2026-10-22. They supplied facts and conventions only; no engine code is
+copied. See [Model Delivery Targets And The Skeletal Writer Oracle](docs/CREDITS.md#model-delivery-targets-and-the-skeletal-writer-oracle-2026-10-22).
+
+Quake III player package team skins, custom sounds, detail levels and the
+`tag_weapon` check, opening an existing player as an assembly, and skin variants'
+`.skin` files and Doom 3 skin declarations,
+follow behaviour in the GPL sources of [Quake III Arena](https://github.com/id-Software/Quake-III-Arena)
+(`cg_players.c`, `cg_weapons.c`, `tr_model.c`, `snd_mem.c`) and
+[Doom 3](https://github.com/id-Software/DOOM-3) (`DeclSkin.cpp`, `DeclManager.cpp`), reviewed 2026-10-22.
+No code is copied. See [Model Skin Bindings](docs/CREDITS.md#model-skin-bindings).
 
 The materials module (Materials page and `material` commands) reimplements
 surface rules read in the GPL sources of [Quake III Arena](https://github.com/id-Software/Quake-III-Arena),
@@ -318,7 +344,7 @@ License (2015). Reference, review and preserved notices are in
 - The Levels sidebars follow the pattern of [Blender's sidebar](https://docs.blender.org/manual/en/latest/interface/window_system/regions.html#sidebar)
   and [VibeRadiant's tabbed asset browser](https://github.com/themuffinator/VibeRadiant/blob/f2fb5340333099dc8767c8d08f7e4757b8d23a02/radiant/assetbrowser.cpp)
   (GPL-2.0, `f2fb534`); the Shapes tab and level tools follow the behaviour of Hammer, J.A.C.K., Sledge, TrenchBroom
-  (including its linked groups), NetRadiant Custom and
+  (including its linked groups, [object correspondence](docs/CREDITS.md#linked-object-correspondence), [protected properties](docs/CREDITS.md#protected-entity-properties), [linked extraction](docs/CREDITS.md#linked-group-extraction) and [repeat workflow](docs/CREDITS.md#repeatable-object-commands)), NetRadiant Custom and
   [Q3Radiant](https://github.com/id-Software/Quake-III-Arena/blob/dbe4ddb10315479fc00086f08e25d968b4b43c49/q3radiant/SELECT.CPP).
   The built-in entity catalogues record facts from id Software's GPL Quake, Quake II and Quake III Arena game and
   tool sources and the ericw-tools qbsp documentation, in VibeStudio's own words. Original code throughout; see
@@ -410,7 +436,16 @@ proportional editing, the 3D cursor and Adjust Last Operation) follows the
 documented behaviour of [Blender](https://www.blender.org/) (GPL-2.0-or-later,
 reviewed 2026-10-07; no code used), and decimation implements Garland and
 Heckbert's [quadric error metric](https://doi.org/10.1145/258734.258849)
-(SIGGRAPH 1997). See [Blender-Style Mesh Editing](docs/CREDITS.md#blender-style-mesh-editing-2026-10-07).
+(SIGGRAPH 1997). Knife interaction follows the [Blender knife manual](https://docs.blender.org/manual/en/dev/modeling/meshes/editing/mesh/knife_topology_tool.html)
+(CC-BY-SA-4.0, reviewed 2026-10-21; behaviour only). Texel-density matching
+references [Average Island Scale](https://docs.blender.org/manual/en/3.3/modeling/meshes/uv/editing.html#average-island-scale)
+(3.3 manual, CC-BY-SA-4.0, reviewed 2026-10-21; original implementation).
+Spin references the [Blender 4.0 Spin manual](https://docs.blender.org/manual/en/4.0/modeling/meshes/tools/spin.html)
+(CC-BY-SA-4.0, reviewed 2026-10-21; behaviour only, original implementation).
+Rip references the [Blender 4.5 Rip manual](https://docs.blender.org/manual/en/4.5/modeling/meshes/editing/vertex/rip_vertices.html)
+and [Rip and Fill](https://docs.blender.org/manual/en/4.5/modeling/meshes/editing/vertex/rip_vertices_fill.html)
+(CC-BY-SA-4.0, reviewed 2026-10-21; behaviour only, original implementation).
+See [Blender-Style Mesh Editing](docs/CREDITS.md#blender-style-mesh-editing-2026-10-07).
 
 Automatic mesh UV charting and packing use Jonathan Young's
 [xatlas](https://github.com/jpcy/xatlas/tree/f700c7790aaa030e794b52ba7791a05c085faf0c),
@@ -714,6 +749,85 @@ The credits are a maintenance requirement, not a courtesy footer: a change that
 borrows or derives code, assets, documentation, algorithms, formats, UI
 patterns or compiler changes from another project updates this section and
 [docs/CREDITS.md](docs/CREDITS.md) in the same change.
+
+Brush corner insertion/removal, edge/face splitting, plane extrusion and shared component tools follow the behaviour of
+[TrenchBroom 2026.2](https://trenchbroom.github.io/manual/latest/#vertex_editing)
+(GPL-3.0; reviewed 2026-10-18); see the
+[topology credits](docs/CREDITS.md#brush-topology-authoring).
+Direct edge/face insertion also references
+[TrenchBroom v2026.2's VertexTool](https://github.com/TrenchBroom/TrenchBroom/blob/v2026.2/lib/TbUiLib/src/VertexTool.cpp)
+(GPL-3.0-or-later, reviewed 2026-10-19; original implementation).
+Component drag constraints and labelled movement traces also reference its
+[MoveHandleDragTracker](https://github.com/TrenchBroom/TrenchBroom/blob/v2026.2/lib/TbUiLib/include/ui/MoveHandleDragTracker.h)
+(same tag/licence/date; [details](docs/CREDITS.md#component-drag-constraints)).
+Exact vertex quick snapping references
+[VertexToolController.cpp](https://github.com/TrenchBroom/TrenchBroom/blob/v2026.2/lib/TbUiLib/src/VertexToolController.cpp)
+at the same tag, licence and review date; VibeStudio's implementation is original.
+
+Shared clipper point editing follows [TrenchBroom's clip tool](https://trenchbroom.github.io/manual/latest/#clipping)
+and [NetRadiant Custom's clipper](https://github.com/Garux/netradiant-custom/blob/449778b3840f8f2062daab15c87cb012f2ac945c/radiant/clippertool.cpp)
+(GPL-2.0-or-later, revision `449778b3840f8f2062daab15c87cb012f2ac945c`;
+behaviour only, reviewed 2026-10-18/19), including quick clipping, cut materials
+reset/point preferences, one-point/no-change wrapping and standalone/component
+Wrap/Merge behaviour in
+[csg.cpp](https://github.com/Garux/netradiant-custom/blob/449778b3840f8f2062daab15c87cb012f2ac945c/radiant/csg.cpp);
+see [clipper credits](docs/CREDITS.md#shared-clipper).
+NRC's dominant-view and outer-face camera clip-plane behaviour follows the same
+pinned, compatible sources. Modified point dragging follows
+[`TranslateFreeXY_Z`](https://github.com/Garux/netradiant-custom/blob/449778b3840f8f2062daab15c87cb012f2ac945c/radiant/selection_mtable_translate.h)
+(GPL-2.0-or-later, reviewed 2026-10-19); shared geometry services and tests are original.
+
+Closed-group picking and nested editing contexts follow
+[TrenchBroom 2026.2's groups](https://trenchbroom.github.io/manual/latest/#groups)
+(GPL-3.0; behaviour only, reviewed 2026-10-18); see
+[group context credits](docs/CREDITS.md#group-editing-context).
+Group duplication and clipboard/prefab hierarchy transfer use the same 2026.2
+behavioural reference; their implementation is original. Linked groups follow
+TrenchBroom 2026.2's names, frames, nesting and update rules (GPL-3.0-or-later;
+behaviour only, reviewed 2026-10-23); see
+[linked group credits](docs/CREDITS.md#linked-group-frames-nesting-and-commands).
+Maps keep TrenchBroom's layers, groups and linked groups through its `_tb_` map
+keys, implemented from the documented format in the TrenchBroom 2026.2 manual
+(GPL-3.0-or-later; no code used, read 2026-10-23); see
+[TrenchBroom map key credits](docs/CREDITS.md#trenchbroom-map-keys).
+Object-selection undo follows the same release's non-modifying command model;
+see [selection-history credits](docs/CREDITS.md#selection-history).
+Cursor-paste corner placement adapts [TrenchBroom’s Grid](https://github.com/TrenchBroom/TrenchBroom/blob/4c756be1a54a28d921d18c77716a5f170bdc31d0/lib/TbMdlLib/src/Grid.cpp) (GPL-3.0-or-later); camera placement follows NRC (GPL-2.0-or-later). See [clipboard credits](docs/CREDITS.md#clipboard-placement). Face clipboard dispatch and attribute rotation follow the same pinned TB release; [face clipboard credits](docs/CREDITS.md#face-clipboard-attributes) record the reviewed sources and limits. Object ownership and Cut eligibility use the same reference; see [object clipboard credits](docs/CREDITS.md#object-clipboard-ownership-and-cut). Profile-specific volume selection follows the same TB/NRC revisions; see [brush-volume credits](docs/CREDITS.md#brush-volume-selection).
+
+Component selection, drill-selection workflow, transforms, direct manipulators and separate UV lock follow behaviour from TrenchBroom
+2026.2 and NetRadiant Custom; see [component transform credits](docs/CREDITS.md#component-transforms-and-uv-lock).
+
+The [level editor command catalogue](docs/plans/level-editor-commands.md) records
+TrenchBroom and NRC command metadata with pinned source links; see its
+[licence and source credits](docs/CREDITS.md#level-editor-command-catalogue).
+
+**Sweep Faces** follows [TrenchBroom 2026.2's sweep behaviour](https://github.com/TrenchBroom/TrenchBroom/blob/4c756be1a54a28d921d18c77716a5f170bdc31d0/lib/TbUiLib/src/SweepToolUtils.cpp)
+(Jackson Palmer and Kristian Duske, GPL-3.0-or-later; reviewed 2026-10-19).
+The geometry and viewport-control implementations are original; see
+[sweep credits and controller references](docs/CREDITS.md#brush-face-sweep).
+
+Hierarchy and source-line selection follow the same pinned TB release; see
+[selection command credits](docs/CREDITS.md#hierarchy-and-source-line-selection)
+for sources, licence and adaptations.
+
+Temporary visibility, including group inheritance, layer transfers and profile-specific insertion/clone states,
+follows the pinned TB and NRC references; see
+[visibility credits](docs/CREDITS.md#temporary-level-visibility) for pinned
+sources, compatible licences and the remaining parity limits.
+
+Duplicate placement, NRC's optional grid nudge/object-mode restriction and unique
+cloning with partial owners and target-name remapping follow
+the same pinned editors; [duplicate credits](docs/CREDITS.md#duplicate-placement)
+record the sources and licences.
+
+NRC's pairwise entity naming and KillConnect rules are recorded in the
+[entity connection credits](docs/CREDITS.md#nrc-entity-connections). NRC's additive direct-link selection is credited in the
+[connected-entity selection review](docs/CREDITS.md#nrc-connected-entity-selection), and
+[type selection and surface targeting review](docs/CREDITS.md#nrc-type-selection).
+The additive material query, independent viewport face picks and staged deselection follow the
+[NRC textured-surface review](docs/CREDITS.md#nrc-textured-surface-query).
+Component deletion and clip-point priority follow the pinned
+[TB/NRC deletion review](docs/CREDITS.md#level-deletion-policy).
 
 ## License
 

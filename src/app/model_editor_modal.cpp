@@ -1,8 +1,11 @@
 #include "app/model_editor_tools.h"
+#include "app/locale_number.h"
 
 #include "app/model_editor_dialog.h"
 #include "app/model_viewport.h"
+#include "app/viewport_hud.h"
 #include "core/model_collision.h"
+#include "core/model_edge_slide.h"
 #include "core/model_geometric_topology.h"
 #include "core/model_tags.h"
 #include "core/model_transform_axes.h"
@@ -11,9 +14,11 @@
 #include <QCheckBox>
 #include <QComboBox>
 #include <QCoreApplication>
+#include <QCursor>
 #include <QDoubleSpinBox>
 #include <QKeyEvent>
 #include <QLabel>
+#include <QLocale>
 #include <QMenu>
 #include <QMenuBar>
 #include <QMouseEvent>
@@ -36,6 +41,8 @@ struct Text
 	Q_DECLARE_TR_FUNCTIONS(VibeStudioModelTools)
 };
 using V = ModelVec3;
+bool isSpin(ModelModalOperator op) { return op == ModelModalOperator::Spin || op == ModelModalOperator::SpinDuplicate; }
+bool isRip(ModelModalOperator op) { return op == ModelModalOperator::Rip || op == ModelModalOperator::RipFill; }
 double dot(V a, V b)
 {
 	return double(a.x) * b.x + double(a.y) * b.y + double(a.z) * b.z;
@@ -134,13 +141,53 @@ double ModelEditorTools::worldPerPixel(const ModelVec3 &at)
 
 void ModelEditorTools::startModalAtPointer(ModelModalOperator op)
 {
-	beginModal(op, pointerInViewport());
+	const QPointF local = m_viewport->mapFromGlobal(QCursor::pos());
+	beginModal(op, pointerInViewport(), m_viewport->rect().contains(local.toPoint()));
 }
 
-bool ModelEditorTools::beginModal(ModelModalOperator op, const QPointF &pointer)
+bool ModelEditorTools::loopCutSeed(ModelEdge *edge, int *surface) const
+{
+	// The selection's edges (vertex pairs and face sides count too), less quad
+	// diagonals, must come down to one geometric edge.
+	const auto selection = selectionFor(ModelEditKind::LoopCut);
+	const auto &mesh = m_editor->m_document.mesh();
+	if (selection.edges.isEmpty() || selection.surface < 0 || selection.surface >= mesh.surfaces.size())
+		return false;
+	const auto &active = mesh.surfaces[selection.surface];
+	ModelQuadTopology quads;
+	if (!buildModelQuadTopology(active, std::clamp(m_editor->m_frame->currentIndex(), 0, std::max(0, int(active.frames.size()) - 1)),
+								ModelMeshToolOptions{}.maxAngle, &quads))
+		return false;
+	QSet<ModelEdge> geometric;
+	ModelEdge first{-1, -1};
+	for (const auto candidate : selection.edges)
+	{
+		const auto key = quads.geometry.geometricEdge(candidate.first, candidate.second);
+		if (quads.diagonals.contains(key))
+			continue;
+		if (geometric.isEmpty() || candidate < first)
+			first = candidate;
+		geometric.insert(key);
+	}
+	if (geometric.size() != 1)
+		return false;
+	*edge = first;
+	*surface = selection.surface;
+	return true;
+}
+
+bool ModelEditorTools::beginModal(ModelModalOperator op, const QPointF &pointer, bool pointerOverView)
 {
 	if (m_modal || m_editor->m_working || op == ModelModalOperator::None)
 		return false;
+	if (!m_editor->m_document.selection().joint.isEmpty() &&
+		(op == ModelModalOperator::Move || op == ModelModalOperator::Rotate || op == ModelModalOperator::Scale))
+	{
+		m_editor->m_transformTool->setCurrentIndex(op == ModelModalOperator::Move ? 0 : op == ModelModalOperator::Rotate ? 1 : 2);
+		m_editor->m_moveGizmo->setChecked(true);
+		showBanner(Text::tr("Joint transform tool selected. Use its viewport handles, or enter exact values in Geometry. Escape cancels a handle drag."));
+		return true;
+	}
 	const auto &mesh = m_editor->m_document.mesh();
 	auto modal = std::make_unique<Modal>();
 	modal->op = op;
@@ -151,6 +198,11 @@ bool ModelEditorTools::beginModal(ModelModalOperator op, const QPointF &pointer)
 	const bool components = !selection.faces.isEmpty() || !selection.vertices.isEmpty() || !selection.edges.isEmpty();
 	const bool transform = op == ModelModalOperator::Move || op == ModelModalOperator::Rotate || op == ModelModalOperator::Scale;
 	QString refusal;
+	if (isRip(op) && !initialiseRip(*modal, &refusal))
+	{
+		showBanner(Text::tr("Rip refused"), refusal, LiveStatus::Problem);
+		return false;
+	}
 	if (transform && !components && selection.tag.isEmpty() && selection.collision.isEmpty() && selection.surfaces.isEmpty())
 		refusal = Text::tr("Select something to transform first.");
 	if (transform && op == ModelModalOperator::Scale && !selection.tag.isEmpty())
@@ -174,15 +226,74 @@ bool ModelEditorTools::beginModal(ModelModalOperator op, const QPointF &pointer)
 		if (modal->selection.faces.isEmpty())
 			refusal = op == ModelModalOperator::Inset ? Text::tr("Inset needs selected faces.") : Text::tr("Duplicate needs selected faces.");
 	}
+	if (isSpin(op))
+	{
+		modal->cuts = 8;
+		modal->selection = selectionFor(ModelEditKind::Extrude);
+		if (modal->selection.faces.isEmpty() && op == ModelModalOperator::Spin)
+			modal->selection = selectionFor(ModelEditKind::ExtrudeEdges);
+		if (!modal->selection.faces.isEmpty())
+		{
+			modal->selection.vertices.clear(); modal->selection.edges.clear();
+		}
+		else if (modal->selection.edges.isEmpty() || op == ModelModalOperator::SpinDuplicate)
+			refusal = Text::tr("Spin needs selected faces or open border edges; duplication needs faces.");
+	}
 	if (op == ModelModalOperator::ShrinkFatten && !components)
 		refusal = Text::tr("Select the vertices, edges or faces to shrink or fatten.");
 	if (op == ModelModalOperator::BevelVertices && !components)
 		refusal = Text::tr("Select the vertices to bevel.");
+	if (op == ModelModalOperator::BevelEdges)
+	{
+		modal->selection = selectionFor(ModelEditKind::BevelEdges);
+		if (modal->selection.edges.isEmpty())
+			refusal = Text::tr("Select edges between two faces to bevel.");
+	}
+	if (op == ModelModalOperator::Knife)
+	{
+		modal->selection = selectionFor(ModelEditKind::Knife);
+		if (modal->selection.surface < 0 || modal->selection.surface >= mesh.surfaces.size())
+			refusal = Text::tr("Choose a surface to cut.");
+		else initialiseKnife(*modal);
+	}
+	if (op == ModelModalOperator::EdgeSlide)
+	{
+		modal->selection = selectionFor(ModelEditKind::SlideEdges);
+		ModelEdgeSlidePlan plan;
+		const auto &surface = mesh.surfaces[modal->selection.surface];
+		if (planModelEdgeSlide(surface, modal->selection.edges, frame, ModelMeshToolOptions{}.maxAngle, &plan, &refusal))
+		{
+			double longest = 0;
+			for (const auto &entry : plan.vertices)
+			{
+				QPointF origin;
+				if (!m_viewport->projectToView(surface.frames[frame].positions[entry.vertex], &origin))
+					continue;
+				for (int side = 0; side < 2; ++side)
+				{
+					QPointF target;
+					if (entry.rails[side] < 0 || !m_viewport->projectToView(surface.frames[frame].positions[entry.rails[side]], &target))
+						continue;
+					modal->guides.append(QLineF(origin, target));
+					const QPointF direction = (target - origin) * (side == 0 ? 1 : -1);
+					const double pixels = std::hypot(direction.x(), direction.y());
+					if (pixels > longest && pixels > 4)
+					{
+						longest = pixels;
+						modal->slideVector = direction / pixels;
+						modal->slidePixels = std::max(32.0, pixels);
+					}
+				}
+			}
+		}
+	}
 	if (!refusal.isEmpty())
 	{
-		showBanner(refusal);
+		showBanner(refusal, {}, LiveStatus::Problem);
 		return false;
 	}
+	// A fresh preview needs the viewport; F9 can reopen the retained operation.
+	m_lastPanel->hide();
 	// Pivot: the editor's pivot choice, or the selection's centre.
 	V pivot{};
 	const int pivotMode = m_editor->m_pivotMode->currentIndex();
@@ -204,6 +315,7 @@ bool ModelEditorTools::beginModal(ModelModalOperator op, const QPointF &pointer)
 		if (!selectionCentre(&pivot))
 			pivot = m_cursor;
 	}
+	if (isSpin(op)) pivot = m_cursor;
 	modal->pivot = pivot;
 	if (!m_viewport->projectToView(pivot, &modal->pivotScreen))
 		modal->pivotScreen = QPointF(m_viewport->width() / 2.0, m_viewport->height() / 2.0);
@@ -224,7 +336,7 @@ bool ModelEditorTools::beginModal(ModelModalOperator op, const QPointF &pointer)
 		if (length(modal->normal) <= 0)
 			modal->normal = {0, 0, 1};
 	}
-	const bool moveLike = op == ModelModalOperator::Move || op == ModelModalOperator::Duplicate || (op == ModelModalOperator::Extrude && modal->edges);
+	const bool moveLike = op == ModelModalOperator::Move || isRip(op) || op == ModelModalOperator::Duplicate || (op == ModelModalOperator::Extrude && modal->edges);
 	if (moveLike && components && frame >= 0)
 	{
 		const int surfaceIndex = modal->selection.surface;
@@ -265,9 +377,27 @@ bool ModelEditorTools::beginModal(ModelModalOperator op, const QPointF &pointer)
 			}
 		}
 	}
+	if (op == ModelModalOperator::LoopCut)
+	{
+		// One selected edge seeds the cut, so the keyboard alone can run it;
+		// otherwise the edge under a pointer that is over the view.
+		if (loopCutSeed(&modal->seedEdge, &modal->seedSurface))
+		{
+			modal->hoverEdge = modal->seedEdge;
+			modal->hoverSurface = modal->seedSurface;
+			modal->hoverFromSelection = true;
+		}
+		else if (pointerOverView)
+		{
+			modal->hoverEdge = edgeNear(pointer, &modal->hoverSurface);
+		}
+	}
 	m_modal = std::move(modal);
 	m_viewport->setFocus(Qt::OtherFocusReason);
 	updateModalPreview();
+	// The operator's prompt and keys are announced once as it starts; the
+	// readouts that follow the pointer and typed values are not.
+	announceStatus(m_editor->m_status, modalText(), LiveStatus::Result);
 	return true;
 }
 
@@ -276,6 +406,13 @@ QString ModelEditorTools::modalText() const
 	if (!m_modal)
 		return {};
 	const auto &m = *m_modal;
+	if (m.op == ModelModalOperator::Knife)
+	{
+		const auto status = Text::tr("Knife · %n segment(s) · %1", nullptr, m.edit.tool.knife.segments.size())
+			.arg(m.knife.through ? Text::tr("Cut through") : Text::tr("Visible faces"));
+		return status + QLatin1Char('\n') + m.error + QLatin1Char('\n') +
+			Text::tr("Click or Insert adds a point · arrows move the point · Enter applies the preview · Esc cancels · N or right-click starts a new path · Backspace undoes a point · C toggles cut through · S toggles selected faces · A constrains angles; type degrees · Shift snaps midpoints · Ctrl ignores snapping");
+	}
 	QString name;
 	switch (m.op)
 	{
@@ -306,6 +443,25 @@ QString ModelEditorTools::modalText() const
 	case ModelModalOperator::BevelVertices:
 		name = Text::tr("Bevel Vertices");
 		break;
+	case ModelModalOperator::BevelEdges:
+		name = Text::tr("Bevel Edges");
+		break;
+	case ModelModalOperator::Knife:
+		name = Text::tr("Knife");
+		break;
+	case ModelModalOperator::Spin:
+		name = Text::tr("Spin");
+		break;
+	case ModelModalOperator::SpinDuplicate:
+		name = Text::tr("Spin Duplicates");
+		break;
+	case ModelModalOperator::Rip:
+	case ModelModalOperator::RipFill:
+		name = m.ripFill ? Text::tr("Rip and Fill") : Text::tr("Rip");
+		break;
+	case ModelModalOperator::EdgeSlide:
+		name = Text::tr("Edge Slide");
+		break;
 	case ModelModalOperator::None:
 		break;
 	}
@@ -316,26 +472,40 @@ QString ModelEditorTools::modalText() const
 	case ModelModalOperator::Move:
 	case ModelModalOperator::Duplicate:
 	case ModelModalOperator::Extrude:
-		value = Text::tr("D: %1, %2, %3").arg(e.translation.x, 0, 'f', 3).arg(e.translation.y, 0, 'f', 3).arg(e.translation.z, 0, 'f', 3);
+	case ModelModalOperator::Rip:
+	case ModelModalOperator::RipFill:
+		value = Text::tr("D: %1").arg(localeNumberList({e.translation.x, e.translation.y, e.translation.z}, 3, 'f'));
 		break;
 	case ModelModalOperator::Rotate:
-		value = Text::tr("%1°").arg(e.rotation.x + e.rotation.y + e.rotation.z, 0, 'f', 2);
+		value = Text::tr("%1°").arg(localeNumber(e.rotation.x + e.rotation.y + e.rotation.z, 2, 'f'));
+		break;
+	case ModelModalOperator::Spin:
+	case ModelModalOperator::SpinDuplicate:
+		value = Text::tr("%1° · steps %2").arg(localeNumber(e.tool.spinAngle, 2, 'f')).arg(e.tool.spinSteps);
 		break;
 	case ModelModalOperator::Scale:
-		value = Text::tr("Scale %1, %2, %3").arg(e.scale.x, 0, 'f', 3).arg(e.scale.y, 0, 'f', 3).arg(e.scale.z, 0, 'f', 3);
+		value = Text::tr("Scale %1").arg(localeNumberList({e.scale.x, e.scale.y, e.scale.z}, 3, 'f'));
 		break;
 	case ModelModalOperator::Inset:
-		value = Text::tr("Thickness %1").arg(e.tool.insetThickness, 0, 'f', 3);
+		value = Text::tr("Thickness %1").arg(localeNumber(e.tool.insetThickness, 3, 'f'));
 		break;
 	case ModelModalOperator::ShrinkFatten:
-		value = Text::tr("Distance %1").arg(e.tool.offset, 0, 'f', 3);
+		value = Text::tr("Distance %1").arg(localeNumber(e.tool.offset, 3, 'f'));
 		break;
 	case ModelModalOperator::BevelVertices:
-		value = Text::tr("Width %1").arg(e.tool.bevelWidth, 0, 'f', 3);
+		value = Text::tr("Width %1").arg(localeNumber(e.tool.bevelWidth, 3, 'f'));
+		break;
+	case ModelModalOperator::BevelEdges:
+		value = Text::tr("Width %1 · segments %2").arg(localeNumber(e.tool.bevelWidth, 3, 'f')).arg(e.tool.bevelSegments);
+		break;
+	case ModelModalOperator::EdgeSlide:
+		value = Text::tr("Rail fraction %1").arg(localeNumber(e.tool.slide, 4, 'f'));
 		break;
 	case ModelModalOperator::LoopCut:
-		value = m.hoverEdge.first >= 0 ? Text::tr("%n cut(s)", nullptr, m.cuts) : Text::tr("Point at an edge between quads");
+		value = m.hoverEdge.first >= 0 ? Text::tr("%n cut(s)", nullptr, m.cuts)
+									   : Text::tr("Select one edge between quads, or point at one");
 		break;
+	case ModelModalOperator::Knife:
 	case ModelModalOperator::None:
 		break;
 	}
@@ -350,31 +520,55 @@ QString ModelEditorTools::modalText() const
 	if (!constraint.isEmpty())
 		parts << constraint;
 	if (!m.typed.isEmpty())
-		parts << Text::tr("typed %1").arg(m.typed);
+		parts << Text::tr("typed %1").arg(QString(m.typed).replace(QLatin1Char('.'), QLocale().decimalPoint()));
 	if (m.snapped)
 		parts << Text::tr("snapped to a vertex");
+	if (isRip(m.op))
+		parts << (m.ripOpposite ? Text::tr("opposite side of face %1") : Text::tr("side of face %1")).arg(m.ripFace);
+	if (m.op == ModelModalOperator::LoopCut && m.hoverEdge.first >= 0)
+		parts << (m.hoverFromSelection ? Text::tr("across the selected edge %1:%2") : Text::tr("across edge %1:%2"))
+					 .arg(m.hoverEdge.first)
+					 .arg(m.hoverEdge.second);
 	if (m.edit.kind == ModelEditKind::WeightedTransform)
-		parts << Text::tr("proportional %1").arg(m_radius->value());
+		parts << Text::tr("proportional %1").arg(localeNumber(m_radius->value()));
 	auto status = parts.join(QStringLiteral("  ·  "));
 	if (!m.valid && !m.error.isEmpty())
 		status += QStringLiteral("\n") + m.error;
-	const QString hints = m.op == ModelModalOperator::LoopCut
-							  ? Text::tr("Wheel or +/- sets the cuts · click confirms · Esc cancels")
+	// Adjust Last Operation by the profile's key, or by the View menu where the
+	// profile gives it none (3ds Max, MilkShape 3D).
+	const QString adjust = commandKeys(QStringLiteral("meshAdjustLast"));
+	const QString hints = isRip(m.op)
+		? Text::tr("X/Y/Z constrain (Shift: plane) · type distance · B swaps side · F toggles fill · Ctrl snaps · Shift is precise · Enter confirms · Esc cancels")
+		: isSpin(m.op)
+		? Text::tr("Type degrees · X/Y/Z choose an axis · wheel or Page Up/Down sets steps · Ctrl snaps · Enter confirms · Esc cancels") + QStringLiteral(" · ") +
+			  (adjust.isEmpty() ? Text::tr("View > Adjust Last Operation then sets the centre and axis") : Text::tr("%1 adjusts the centre and axis").arg(adjust))
+		: m.op == ModelModalOperator::LoopCut
+							  ? Text::tr("Wheel, +/-, Page Up/Down or a typed number sets the cuts · moving the pointer picks another edge · Enter or click confirms · Esc cancels")
+							  : m.op == ModelModalOperator::BevelEdges
+							  ? Text::tr("Type width · wheel or Page Up/Down sets segments · Ctrl snaps · Shift is precise · Enter confirms · Esc cancels") + QStringLiteral(" · ") +
+									(adjust.isEmpty() ? Text::tr("View > Adjust Last Operation then sets the roundness") : Text::tr("%1 adjusts roundness").arg(adjust))
+							  : m.op == ModelModalOperator::EdgeSlide
+							  ? Text::tr("Follow the rails or type a signed fraction · Ctrl snaps to tenths · Shift is precise · Enter confirms · Esc cancels")
 							  : Text::tr("X/Y/Z constrain (Shift: plane) · type a value · Ctrl snaps · Shift is precise · Enter or click confirms · Esc cancels");
 	return status + QStringLiteral("\n") + hints;
 }
 
 void ModelEditorTools::moveModal(const QPointF &pointer, Qt::KeyboardModifiers modifiers)
 {
-	if (!m_modal)
+	if (!m_modal || m_editor->m_working)
 		return;
+	if (m_modal->op == ModelModalOperator::Knife)
+	{
+		moveKnife(pointer, modifiers);
+		return;
+	}
 	auto &m = *m_modal;
 	// Shift slows the pointer to a tenth, from wherever it was pressed.
 	const QPointF delta = pointer - m.lastActual;
 	m.lastActual = pointer;
 	m.pointer += held(modifiers, m_controls.transform.precisionModifiers) ? delta * 0.1 : delta;
 	m.modifiers = modifiers;
-	if (m.op == ModelModalOperator::Rotate)
+	if (m.op == ModelModalOperator::Rotate || isSpin(m.op))
 	{
 		const QPointF offset = m.pointer - m.pivotScreen;
 		if (QLineF(m.pointer, m.pivotScreen).length() > 2)
@@ -384,15 +578,21 @@ void ModelEditorTools::moveModal(const QPointF &pointer, Qt::KeyboardModifiers m
 			m.lastAngle = current;
 		}
 	}
-	if (m.op == ModelModalOperator::LoopCut)
+	// Only a pointer that moves picks the edge, so a selected edge stays the
+	// seed while modifier keys are pressed and released. Away from every
+	// edge the cut goes back to the selected one.
+	if (m.op == ModelModalOperator::LoopCut && !delta.isNull())
 	{
 		int surface = -1;
-		const auto edge = edgeNear(pointer, &surface);
-		if (edge != m.hoverEdge || surface != m.hoverSurface)
+		auto edge = edgeNear(pointer, &surface);
+		m.hoverFromSelection = edge.first < 0 && m.seedEdge.first >= 0;
+		if (m.hoverFromSelection)
 		{
-			m.hoverEdge = edge;
-			m.hoverSurface = surface;
+			edge = m.seedEdge;
+			surface = m.seedSurface;
 		}
+		m.hoverEdge = edge;
+		m.hoverSurface = surface;
 	}
 	if (!m.pending)
 	{
@@ -411,9 +611,10 @@ void ModelEditorTools::moveModal(const QPointF &pointer, Qt::KeyboardModifiers m
 
 void ModelEditorTools::constrainModal(int axis, bool plane)
 {
-	if (!m_modal || axis < 0 || axis > 2)
+	if (!m_modal || m_editor->m_working || m_modal->op == ModelModalOperator::Knife || m_modal->op == ModelModalOperator::EdgeSlide || m_modal->op == ModelModalOperator::BevelEdges || axis < 0 || axis > 2)
 		return;
 	auto &m = *m_modal;
+	if (isSpin(m.op)) plane = false;
 	if (m.axis == axis && m.plane == plane)
 	{
 		// Second press: the selection's own axes; third: free again.
@@ -440,7 +641,7 @@ void ModelEditorTools::constrainModal(int axis, bool plane)
 		{
 			m.local = false;
 			m.axis = -1;
-			showBanner(error);
+			showBanner(error, {}, LiveStatus::Problem);
 		}
 	}
 	updateModalPreview();
@@ -448,9 +649,10 @@ void ModelEditorTools::constrainModal(int axis, bool plane)
 
 void ModelEditorTools::typeModal(const QString &text)
 {
-	if (!m_modal)
+	if (!m_modal || m_editor->m_working)
 		return;
 	auto &m = *m_modal;
+	if (m.op == ModelModalOperator::Knife && !m.knifeAngle) return;
 	if (m.op == ModelModalOperator::LoopCut)
 	{
 		bool ok = false;
@@ -479,15 +681,32 @@ void ModelEditorTools::typeModal(const QString &text)
 	}
 	if (m.typed == QStringLiteral("-"))
 		m.typed = QStringLiteral("-");
+	if (m.op == ModelModalOperator::Knife)
+	{
+		bool ok = false;
+		const double angle = m.typed.toDouble(&ok);
+		if (ok && angle >= 1 && angle <= 180) m.knifeAngleStep = angle;
+		moveKnife(m.lastActual, m.modifiers);
+		return;
+	}
 	updateModalPreview();
 }
 
 void ModelEditorTools::adjustModal(int steps)
 {
-	if (!m_modal || steps == 0)
+	if (!m_modal || m_editor->m_working || steps == 0)
 		return;
+	if (m_modal->op == ModelModalOperator::Knife)
+	{
+		if (m_modal->knifeAngle) setKnifeAngleSnap(true, std::clamp(m_modal->knifeAngleStep + steps * 5, 1.0, 180.0));
+		return;
+	}
 	if (m_modal->op == ModelModalOperator::LoopCut)
 		m_modal->cuts = std::clamp(m_modal->cuts + steps, 1, 64);
+	else if (m_modal->op == ModelModalOperator::BevelEdges)
+		m_modal->cuts = std::clamp(m_modal->cuts + steps, 1, 32);
+	else if (isSpin(m_modal->op))
+		m_modal->cuts = std::clamp(m_modal->cuts + steps, 1, 256);
 	else if (m_proportional->isChecked())
 		m_radius->setValue(std::max(0.01, m_radius->value() * std::pow(1.1, steps)));
 	updateModalPreview();
@@ -495,8 +714,13 @@ void ModelEditorTools::adjustModal(int steps)
 
 void ModelEditorTools::updateModalPreview()
 {
-	if (!m_modal)
+	if (!m_modal || m_editor->m_working)
 		return;
+	if (m_modal->op == ModelModalOperator::Knife)
+	{
+		updateKnifePreview();
+		return;
+	}
 	auto &m = *m_modal;
 	const auto &mesh = m_editor->m_document.mesh();
 	const int frame = std::clamp(m_editor->m_frame->currentIndex(), 0, int(mesh.frames.size()) - 1);
@@ -682,10 +906,28 @@ void ModelEditorTools::updateModalPreview()
 		}
 		break;
 	}
+	case ModelModalOperator::Spin:
+	case ModelModalOperator::SpinDuplicate:
+	{
+		edit = toolEdit(ModelEditKind::Spin);
+		edit.selection = m.selection;
+		double degrees = hasTyped ? typed : std::clamp(m.angle * 180 / std::numbers::pi, -360.0, 360.0);
+		const auto axis = m.axis >= 0 ? axisDirection(m.axis) : scale(forward, -1);
+		if (!hasTyped && dot(axis, forward) > 0) degrees = -degrees;
+		if (snapping) degrees = snapValue(degrees, m_editor->m_rotationGrid->value());
+		edit.tool.point = {m.pivot.x, m.pivot.y, m.pivot.z};
+		edit.tool.normal = {axis.x, axis.y, axis.z};
+		edit.tool.spinAngle = degrees; edit.tool.spinSteps = m.cuts;
+		edit.tool.spinDuplicate = m.op == ModelModalOperator::SpinDuplicate;
+		m.editReady = std::abs(degrees) > 1e-9;
+		break;
+	}
 	case ModelModalOperator::Extrude:
 	case ModelModalOperator::Duplicate:
+	case ModelModalOperator::Rip:
+	case ModelModalOperator::RipFill:
 	{
-		const auto kind = m.op == ModelModalOperator::Duplicate ? ModelEditKind::DuplicateFaces
+		const auto kind = isRip(m.op) ? ModelEditKind::Rip : m.op == ModelModalOperator::Duplicate ? ModelEditKind::DuplicateFaces
 						  : m.edges							 ? ModelEditKind::ExtrudeEdges
 															 : ModelEditKind::Extrude;
 		edit = toolEdit(kind);
@@ -720,7 +962,13 @@ void ModelEditorTools::updateModalPreview()
 				delta = {float(snapValue(delta.x, grid)), float(snapValue(delta.y, grid)), float(snapValue(delta.z, grid))};
 		}
 		edit.translation = delta;
-		m.editReady = length(delta) > 1e-6;
+		if (isRip(m.op))
+		{
+			edit.tool.ripFace = m.ripFace;
+			edit.tool.ripOpposite = m.ripOpposite;
+			edit.tool.ripFill = m.ripFill;
+		}
+		m.editReady = isRip(m.op) || length(delta) > 1e-6;
 		break;
 	}
 	case ModelModalOperator::Inset:
@@ -749,16 +997,31 @@ void ModelEditorTools::updateModalPreview()
 		break;
 	}
 	case ModelModalOperator::BevelVertices:
+	case ModelModalOperator::BevelEdges:
 	{
-		edit = toolEdit(ModelEditKind::BevelVertices);
+		edit = toolEdit(m.op == ModelModalOperator::BevelEdges ? ModelEditKind::BevelEdges : ModelEditKind::BevelVertices);
 		edit.selection = m.selection;
 		double width = hasTyped ? typed : (QLineF(m.pointer, m.pivotScreen).length() - m.startDistance) * wpp;
 		if (snapping)
 			width = snapValue(width, grid);
-		edit.tool.bevelWidth = std::max(0.0, width);
-		m.editReady = edit.tool.bevelWidth > 1e-6;
+		edit.tool.bevelWidth = m.op == ModelModalOperator::BevelEdges && hasTyped ? width : std::max(0.0, width);
+		if (m.op == ModelModalOperator::BevelEdges)
+			edit.tool.bevelSegments = m.cuts;
+		m.editReady = std::abs(edit.tool.bevelWidth) > 1e-6;
 		if (!m.editReady && !hasTyped)
 			m.error = Text::tr("Move the pointer away from the selection to widen the bevel.");
+		break;
+	}
+	case ModelModalOperator::EdgeSlide:
+	{
+		edit = toolEdit(ModelEditKind::SlideEdges);
+		edit.selection = m.selection;
+		const QPointF delta = m.pointer - m.start;
+		double fraction = hasTyped ? typed : std::clamp(QPointF::dotProduct(delta, m.slideVector) / m.slidePixels, -.9999, .9999);
+		if (snapping)
+			fraction = snapValue(fraction, .1);
+		edit.tool.slide = fraction;
+		m.editReady = fraction != 0;
 		break;
 	}
 	case ModelModalOperator::LoopCut:
@@ -805,6 +1068,7 @@ void ModelEditorTools::updateModalPreview()
 			m.error = Text::tr("No quads run across this edge.");
 		break;
 	}
+	case ModelModalOperator::Knife:
 	case ModelModalOperator::None:
 		break;
 	}
@@ -823,29 +1087,71 @@ void ModelEditorTools::updateModalPreview()
 		auto copy = mesh;
 		ModelSelection resulting;
 		QString error;
-		if (applyModelEdit(&copy, edit, &resulting, &error))
+		ModelEditReport report;
+		const bool ready = m.op == ModelModalOperator::BevelEdges || isSpin(m.op) || isRip(m.op)
+			? m_editor->performWork(isRip(m.op) ? Text::tr("Previewing rip…") : isSpin(m.op) ? Text::tr("Previewing spin…") : Text::tr("Previewing edge bevel…"),
+				[&copy, &resulting, &report, edit](ModelDocument &, QString *failure, const ModelWorkControl &control) {
+					return applyModelEdit(&copy, edit, &resulting, failure, control, &report);
+				}, &error, false, ModelEditorDialog::WorkKind::Preview)
+			: applyModelEdit(&copy, edit, &resulting, &error);
+		if (ready)
 		{
 			m.valid = true;
 			m.preview = std::move(copy);
 			m.previewSelection = resulting;
-			showPreview(m.preview, m.previewSelection);
+			m.report = std::move(report);
+			showPreview(m.preview, m.previewSelection, isSpin(m.op) || isRip(m.op) ? &m.report : nullptr);
 			m.previewShown = true;
 		}
 		else
+		{
 			m.error = error;
+			if (isRip(m.op) && m.previewShown)
+			{
+				restoreDocumentView();
+				m.previewShown = false;
+			}
+		}
 	}
 	else if (m.previewShown)
 	{
 		restoreDocumentView();
 		m.previewShown = false;
 	}
-	showBanner(modalText());
+	if (isRip(m.op))
+	{
+		auto summary = m.ripFill ? Text::tr("Rip and Fill") : Text::tr("Rip");
+		if (!m.valid && !m.error.isEmpty()) summary = Text::tr("Rip preview refused");
+		showBanner(summary, modalText(), LiveStatus::Update);
+	}
+	else if (isSpin(m.op))
+	{
+		auto summary = Text::tr("Spin · %1° · steps %2").arg(localeNumber(m.edit.tool.spinAngle, 2, 'f')).arg(m.edit.tool.spinSteps);
+		if (!m.valid && !m.error.isEmpty()) summary = Text::tr("Spin preview refused");
+		showBanner(summary, modalText(), LiveStatus::Update);
+	}
+	else if (m.op == ModelModalOperator::EdgeSlide || m.op == ModelModalOperator::BevelEdges)
+	{
+		auto summary = m.op == ModelModalOperator::EdgeSlide
+			? Text::tr("Edge Slide: %1").arg(localeNumber(m.edit.tool.slide, 4, 'f'))
+			: Text::tr("Bevel Edges: %1 · segments %2").arg(localeNumber(m.edit.tool.bevelWidth, 3, 'f')).arg(m.edit.tool.bevelSegments);
+		if (!m.valid && !m.error.isEmpty())
+		{
+			if (m.op == ModelModalOperator::BevelEdges && m.editReady)
+				summary = Text::tr("Bevel refused");
+			else if (m.op != ModelModalOperator::BevelEdges)
+				summary += QLatin1Char('\n') + m.error;
+		}
+		showBanner(summary, modalText(), LiveStatus::Update);
+	}
+	else
+		showBanner(modalText(), {}, LiveStatus::Update);
 	m_viewport->update();
 }
 
-void ModelEditorTools::showPreview(const ModelMesh &mesh, const ModelSelection &selection)
+void ModelEditorTools::showPreview(const ModelMesh &mesh, const ModelSelection &selection, const ModelEditReport *report)
 {
-	m_viewport->setMesh(displayMesh(mesh), true);
+	m_viewport->setMesh(displayMesh(mesh, report), true);
 	int base = 0;
 	for (int s = 0; s < selection.surface && s < mesh.surfaces.size(); ++s)
 		base += mesh.surfaces[s].triangles.size();
@@ -882,16 +1188,30 @@ void ModelEditorTools::restoreDocumentView()
 
 bool ModelEditorTools::finishModal(bool commit, QString *error)
 {
-	if (!m_modal)
+	if (!m_modal || m_editor->m_working)
 		return false;
+	if (commit && m_modal->op == ModelModalOperator::Knife)
+	{
+		if (m_modal->pending || !knifeContextUnchanged()) { m_modal->pending = false; updateKnifePreview(); }
+		if (!m_modal->valid || !m_modal->editReady)
+		{
+			if (error) *error = m_modal->error.isEmpty() ? Text::tr("Add a knife segment before applying.") : m_modal->error;
+			showBanner(Text::tr("Knife refused"), modalText(), LiveStatus::Problem);
+			return false;
+		}
+	}
 	auto modal = std::move(m_modal);
 	m_modal.reset();
 	m_viewport->update();
 	if (!commit || !modal->valid || !modal->editReady)
 	{
-		if (modal->previewShown)
+		if (modal->previewShown || modal->op == ModelModalOperator::Knife)
 			restoreDocumentView();
-		showBanner(commit && !modal->error.isEmpty() ? modal->error : QString());
+		if (commit && !modal->error.isEmpty() && (modal->op == ModelModalOperator::BevelEdges || isSpin(modal->op) || isRip(modal->op)))
+			showBanner(isRip(modal->op) ? Text::tr("Rip refused") : isSpin(modal->op) ? Text::tr("Spin refused") : Text::tr("Bevel refused"), modal->error,
+					   LiveStatus::Problem);
+		else
+			showBanner(commit && !modal->error.isEmpty() ? modal->error : QString(), {}, LiveStatus::Problem);
 		if (error && commit)
 			*error = modal->error.isEmpty() ? Text::tr("Nothing to apply.") : modal->error;
 		return false;
@@ -905,18 +1225,23 @@ bool ModelEditorTools::finishModal(bool commit, QString *error)
 			*error = failure;
 		return false;
 	}
-	if (modal->op == ModelModalOperator::LoopCut)
+	if (modal->op == ModelModalOperator::LoopCut || modal->op == ModelModalOperator::Knife)
 		setSelectionMode(2);
+	if (isSpin(modal->op)) setSelectionMode(m_editor->m_document.selection().faces.isEmpty() ? 2 : 0);
+	if (isRip(modal->op)) setSelectionMode(m_editor->m_document.selection().edges.isEmpty() ? 1 : 2);
 	return true;
 }
 
 bool ModelEditorTools::eventFilter(QObject *watched, QEvent *event)
 {
-	if (watched != m_viewport || m_forwarding)
+	if (watched != m_viewport)
+		return handleControlKey(watched, event);
+	if (m_forwarding)
 		return false;
 	switch (event->type())
 	{
 	case QEvent::Resize:
+	case QEvent::LayoutDirectionChange:
 		placeOverlays();
 		return false;
 	case QEvent::ShortcutOverride:
@@ -996,6 +1321,9 @@ bool ModelEditorTools::handleKey(QKeyEvent *event)
 
 bool ModelEditorTools::handleModalKey(QKeyEvent *event)
 {
+	if (m_editor->m_working)
+		return true;
+	if (m_modal->op == ModelModalOperator::Knife) return handleKnifeKey(event);
 	const int key = event->key();
 	const auto modifiers = event->modifiers();
 	if (key == Qt::Key_Escape)
@@ -1021,7 +1349,10 @@ bool ModelEditorTools::handleModalKey(QKeyEvent *event)
 		m_modal->individual = !m_modal->individual;
 		updateModalPreview();
 	}
-	else if (key == Qt::Key_O && m_modal->op != ModelModalOperator::LoopCut)
+	else if (isRip(m_modal->op) && (key == Qt::Key_B || key == Qt::Key_F))
+		setRipOptions(key == Qt::Key_B ? !m_modal->ripOpposite : m_modal->ripOpposite,
+			key == Qt::Key_F ? !m_modal->ripFill : m_modal->ripFill);
+	else if (key == Qt::Key_O && !isRip(m_modal->op) && !isSpin(m_modal->op) && m_modal->op != ModelModalOperator::LoopCut && m_modal->op != ModelModalOperator::EdgeSlide && m_modal->op != ModelModalOperator::BevelEdges)
 	{
 		m_proportional->toggle();
 		updateModalPreview();
@@ -1052,6 +1383,15 @@ bool ModelEditorTools::handleMouse(QMouseEvent *event)
 	m_pointer = point;
 	if (m_modal)
 	{
+		if (m_modal->op == ModelModalOperator::Knife)
+		{
+			if (event->type() == QEvent::MouseMove) moveModal(point, event->modifiers());
+			else if (event->type() == QEvent::MouseButtonPress && event->button() == Qt::LeftButton)
+				addKnifePoint(point, event->modifiers());
+			else if (event->type() == QEvent::MouseButtonPress && event->button() == Qt::RightButton)
+				newKnifePath();
+			return true;
+		}
 		if (event->type() == QEvent::MouseMove)
 			moveModal(point, event->modifiers());
 		else if (event->type() == QEvent::MouseButtonRelease && m_toolDragging && event->button() == Qt::LeftButton)
@@ -1361,43 +1701,92 @@ bool ModelEditorTools::handleMouse(QMouseEvent *event)
 	}
 }
 
-QPointF ModelEditorTools::gizmoCentre() const
+ModelNavigationGizmo ModelEditorTools::navigationGizmo()
 {
-	return QPointF(m_viewport->width() - 52, 104);
-}
-
-int ModelEditorTools::gizmoAxisAt(const QPointF &point, bool *positive)
-{
-	if (!m_viewport->hasMesh())
-		return -1;
-	const auto forward = m_viewport->viewForward();
-	const QPointF centre = gizmoCentre();
+	ModelNavigationGizmo gizmo;
 	QPointF origin;
-	if (!m_viewport->projectToView(m_cursor, &origin))
-		return -1;
-	int best = -1;
-	double bestDepth = 1e9;
+	if (!m_showGizmo || !m_viewport->hasMesh() || !m_viewport->projectToView(m_cursor, &origin))
+		return gizmo;
+	// The heads-up font sets the size, so the gizmo grows with the text; the
+	// letters fit inside their bubbles.
+	QFont font = viewportHudFont(m_viewport->font());
+	font.setBold(true);
+	const QFontMetricsF metrics(font, m_viewport);
+	double letters = 0;
+	for (const auto &letter : {QStringLiteral("X"), QStringLiteral("Y"), QStringLiteral("Z")})
+		letters = std::max(letters, metrics.horizontalAdvance(letter));
+	constexpr double minimum = 12, margin = 8, gap = 6;
+	const double natural = std::max({minimum, std::ceil(metrics.height() * 0.65), std::ceil(letters / 2 + 3)});
+	const QRectF view(m_viewport->rect());
+	const bool rtl = m_viewport->layoutDirection() == Qt::RightToLeft;
+	// What the gizmo keeps clear of: the heads-up tags and the banner along the
+	// top, Adjust Last Operation along the bottom.
+	const auto hud = m_viewport->hudLayout();
+	QVector<QRectF> above{hud.leading.bounds, hud.trailing.bounds};
+	if (m_banner->isVisible())
+		above << QRectF(m_banner->geometry());
+	const QRectF panel = m_lastPanel->isVisible() ? QRectF(m_lastPanel->geometry()) : QRectF();
+	// A small view takes a smaller gizmo, down to the minimum target size.
+	for (double bubble = natural;; bubble = std::max(minimum, std::floor(bubble * 0.85)))
+	{
+		// Arms three bubbles long, then the bubble and a rim.
+		const double radius = bubble * 4 + 4;
+		QRectF box(rtl ? view.left() + margin : view.right() - margin - radius * 2, view.top() + margin, radius * 2, radius * 2);
+		for (int pass = 0; pass < 8; ++pass)
+		{
+			bool moved = false;
+			for (const auto &obstacle : std::as_const(above))
+			{
+				if (!obstacle.isEmpty() && box.intersects(obstacle.adjusted(-gap, -gap, gap, gap)))
+				{
+					box.moveTop(obstacle.bottom() + gap);
+					moved = true;
+				}
+			}
+			if (!moved)
+				break;
+		}
+		const bool underPanel = !panel.isEmpty() && box.left() < panel.right() && box.right() > panel.left();
+		const double bottom = underPanel ? panel.top() - gap : view.bottom() - margin;
+		const bool fits = box.left() >= view.left() + margin - 0.5 && box.right() <= view.right() - margin + 0.5 && box.bottom() <= bottom;
+		if (fits)
+		{
+			gizmo.bounds = box;
+			gizmo.bubbleRadius = bubble;
+			break;
+		}
+		if (bubble <= minimum)
+			return gizmo;
+	}
+	const QPointF centre = gizmo.bounds.center();
+	const double arm = gizmo.bubbleRadius * 3;
+	const auto forward = m_viewport->viewForward();
 	for (int axis = 0; axis < 3; ++axis)
 	{
 		QPointF tip;
 		if (!m_viewport->projectToView(add(m_cursor, scale(axisVector(axis), worldPerPixel(m_cursor) * 40)), &tip))
 			continue;
-		QPointF direction = tip - origin;
-		const double l = std::hypot(direction.x(), direction.y());
-		direction = l > 1e-6 ? direction / 40.0 : QPointF();
-		for (bool sign : {true, false})
+		// About a unit long for an axis across the view, shorter as it turns away.
+		const QPointF direction = (tip - origin) / 40.0;
+		for (const bool positive : {true, false})
+			gizmo.bubbles.append({axis, positive, centre + direction * arm * (positive ? 1 : -1), dot(axisVector(axis), forward) * (positive ? 1 : -1)});
+	}
+	std::sort(gizmo.bubbles.begin(), gizmo.bubbles.end(), [](const auto &a, const auto &b) { return a.depth > b.depth; });
+	return gizmo;
+}
+
+int ModelEditorTools::gizmoAxisAt(const QPointF &point, bool *positive)
+{
+	const auto gizmo = navigationGizmo();
+	int best = -1;
+	double bestDepth = 1e9;
+	for (const auto &bubble : std::as_const(gizmo.bubbles))
+	{
+		if (QLineF(bubble.at, point).length() <= gizmo.bubbleRadius && bubble.depth < bestDepth)
 		{
-			const QPointF bubble = centre + direction * 34 * (sign ? 1 : -1);
-			if (QLineF(bubble, point).length() <= 10)
-			{
-				const double depth = dot(axisVector(axis), forward) * (sign ? 1 : -1);
-				if (depth < bestDepth)
-				{
-					bestDepth = depth;
-					best = axis;
-					*positive = sign;
-				}
-			}
+			bestDepth = bubble.depth;
+			best = bubble.axis;
+			*positive = bubble.positive;
 		}
 	}
 	return best;
@@ -1447,7 +1836,9 @@ void ModelEditorTools::paintOverlay(QPainter &painter)
 	if (m_modal)
 	{
 		const auto &m = *m_modal;
-		if (m.op == ModelModalOperator::LoopCut)
+		if (m.op == ModelModalOperator::Knife)
+			paintKnife(painter);
+		else if (m.op == ModelModalOperator::LoopCut || m.op == ModelModalOperator::EdgeSlide)
 		{
 			painter.setPen(QPen(QColor(250, 210, 80), 2));
 			for (const auto &line : m.guides)
@@ -1491,61 +1882,51 @@ void ModelEditorTools::paintOverlay(QPainter &painter)
 		}
 	}
 	// Navigation gizmo: click an axis to look along it.
-	if (m_showGizmo && m_viewport->hasMesh())
+	const auto gizmo = navigationGizmo();
+	m_paintedGizmo = gizmo.bounds;
+	if (!gizmo.bounds.isEmpty())
 	{
-		const auto forward = m_viewport->viewForward();
-		const QPointF centre = gizmoCentre();
-		QPointF origin;
-		if (m_viewport->projectToView(m_cursor, &origin))
+		const QPointF centre = gizmo.bounds.center();
+		const double r = gizmo.bubbleRadius;
+		QColor backdrop = m_viewport->palette().window().color();
+		backdrop.setAlpha(90);
+		painter.setPen(Qt::NoPen);
+		painter.setBrush(backdrop);
+		painter.drawEllipse(centre, gizmo.bounds.width() / 2, gizmo.bounds.height() / 2);
+		QFont font = viewportHudFont(m_viewport->font());
+		font.setBold(true);
+		// A gizmo shrunk to fit a small view keeps its letters inside the bubbles.
+		const QFontMetricsF metrics(font, m_viewport);
+		const double letters = std::max({metrics.horizontalAdvance(QStringLiteral("X")), metrics.horizontalAdvance(QStringLiteral("Y")),
+										 metrics.horizontalAdvance(QStringLiteral("Z")), metrics.capHeight()});
+		if (letters > r * 2 - 6 && letters > 0)
 		{
-			struct Bubble
+			if (font.pointSizeF() > 0)
+				font.setPointSizeF(std::max(6.0, font.pointSizeF() * (r * 2 - 6) / letters));
+			else
+				font.setPixelSize(std::max(8, int(font.pixelSize() * (r * 2 - 6) / letters)));
+		}
+		painter.setFont(font);
+		for (const auto &bubble : gizmo.bubbles)
+		{
+			QColor colour = axisColours[bubble.axis];
+			if (bubble.positive)
 			{
-				int axis;
-				bool positive;
-				QPointF at;
-				double depth;
-			};
-			QVector<Bubble> bubbles;
-			for (int axis = 0; axis < 3; ++axis)
-			{
-				QPointF tip;
-				if (!m_viewport->projectToView(add(m_cursor, scale(axisVector(axis), worldPerPixel(m_cursor) * 40)), &tip))
-					continue;
-				const QPointF direction = (tip - origin) / 40.0;
-				for (bool positive : {true, false})
-					bubbles.append({axis, positive, centre + direction * 34 * (positive ? 1 : -1),
-									dot(axisVector(axis), forward) * (positive ? 1 : -1)});
+				painter.setPen(QPen(colour, 2));
+				painter.drawLine(centre, bubble.at);
+				painter.setPen(Qt::NoPen);
+				painter.setBrush(colour);
+				painter.drawEllipse(bubble.at, r, r);
+				painter.setPen(Qt::black);
+				painter.drawText(QRectF(bubble.at - QPointF(r, r), QSizeF(r * 2, r * 2)), Qt::AlignCenter, QStringLiteral("XYZ").mid(bubble.axis, 1));
 			}
-			std::sort(bubbles.begin(), bubbles.end(), [](const Bubble &a, const Bubble &b) { return a.depth > b.depth; });
-			QColor backdrop = m_viewport->palette().window().color();
-			backdrop.setAlpha(90);
-			painter.setPen(Qt::NoPen);
-			painter.setBrush(backdrop);
-			painter.drawEllipse(centre, 48, 48);
-			for (const auto &bubble : bubbles)
+			else
 			{
-				QColor colour = axisColours[bubble.axis];
-				if (bubble.positive)
-				{
-					painter.setPen(QPen(colour, 2));
-					painter.drawLine(centre, bubble.at);
-					painter.setPen(Qt::NoPen);
-					painter.setBrush(colour);
-					painter.drawEllipse(bubble.at, 9, 9);
-					painter.setPen(Qt::black);
-					QFont font = painter.font();
-					font.setBold(true);
-					font.setPixelSize(11);
-					painter.setFont(font);
-					painter.drawText(QRectF(bubble.at - QPointF(9, 9), QSizeF(18, 18)), Qt::AlignCenter, QStringLiteral("XYZ").mid(bubble.axis, 1));
-				}
-				else
-				{
-					colour.setAlpha(150);
-					painter.setPen(QPen(colour, 1.5));
-					painter.setBrush(colour.darker(160));
-					painter.drawEllipse(bubble.at, 7, 7);
-				}
+				// The far end of an axis: smaller and darker, the same target size.
+				colour.setAlpha(150);
+				painter.setPen(QPen(colour, 1.5));
+				painter.setBrush(colour.darker(160));
+				painter.drawEllipse(bubble.at, r * 0.75, r * 0.75);
 			}
 		}
 	}

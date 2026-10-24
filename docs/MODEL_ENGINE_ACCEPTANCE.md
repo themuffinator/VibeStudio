@@ -37,6 +37,63 @@ through the matching decoder can hide a shared mistake. The optional
 palettes, QuakeC and maps, builds through the real studio CLI and external map
 compilers, and starts an FTE dedicated server against independent fixture copies.
 
+## Independent MD5, IQM And ASE Reader
+
+`model-skeletal-writer-oracle` checks the MD5, IQM and ASE writers without any
+VibeStudio decoder. `src/tests/model_skeletal_writer_oracle_test.cpp` defines
+two fixtures by numbers alone (joint translations, rotations about stated axes,
+scales, bind positions, weights, UVs and counter-clockwise faces): a rigid
+three-joint arm with two clips, and the same arm bent about an oblique axis with
+a mirrored, non-uniform scale on its tip joint in the bind pose and every pose.
+It builds each through the editor's model API, exports it with
+`exportEditableModel` (md5mesh, one md5anim per clip, IQM and an ASE of the bind
+pose) and writes a `definition.json` beside the files.
+
+`src/tests/model_skeletal_writer_oracle.py` (standard library only) then parses
+every file itself and poses it as the engine would:
+
+- MD5 from the Doom 3 GPL release: `w = sqrt(|1 - x² - y² - z²|)`
+  (`idQuat::CalcW`), the row vector `offset * ToMat3()` (`idJointMat`),
+  md5anim components selected by the hierarchy flags and concatenated child
+  then parent, and clockwise faces (`cross(c - a, b - a)` in
+  `R_DeriveFacePlanes`).
+- IQM from the specification and reference demo: `M = T * R * S`, frame
+  matrices `base[parent] * pose * inverse(base[joint])` concatenated down the
+  hierarchy, byte blend weights and clockwise faces.
+- ASE from Doom 3's `Model_ase.cpp` and q3map2: counter-clockwise `A B C`
+  faces, `TVERT` v read as `1 - v`, and the material name each game derives
+  (Doom 3 from `*BITMAP` after its first complete `base` folder, lower case
+  and without its extension; q3map2 from `*MATERIAL_NAME` when it starts with
+  `models/` or `textures/`).
+
+It compares the bind pose, every clip frame, the frame bounds, the hierarchy,
+the clip names, lengths and rates, the IQM weights, the winding and the
+materials with poses it computes from the definition by linear blend skinning.
+IQM's byte weights may each be a step from the exact weight, so its tolerance
+grows by one step per influence times the distance between the positions the
+influences give a vertex; every other position must match within 0.001 units
+(0.005 for IQM's 16-bit channels).
+
+Seven negative controls run the same checks on broken copies and must fail the
+targeted check while an unrelated one still passes: an md5mesh with flipped
+winding, a reader that takes `w` as negative, an md5mesh with two joints
+swapped, an IQM with flipped winding, an IQM with two joints swapped, a reader
+that applies the IQM rotations conjugated, and an ASE with flipped faces.
+
+The test needs Python; without it the executable exits 77 and Meson reports
+the test as skipped. With `VIBESTUDIO_MODELLER_EVIDENCE` set, the fixtures,
+exported files and a `receipt.json` (each file's SHA-256, every check and every
+control) are kept in its `skeletal-writer-oracle` folder. To run the reader on
+kept files:
+
+```sh
+python src/tests/model_skeletal_writer_oracle.py --fixtures .agents/tmp/modeller-rc/evidence/skeletal-writer-oracle --receipt ./receipt.json
+```
+
+This verifies the files against the engines' published conventions. It is not
+an engine run: no exported MD5, IQM or ASE model has yet been loaded in Doom 3,
+Quake 4, ioquake3, FTE or q3map2.
+
 ## Face Orientation
 
 Editable meshes and OBJ use counter-clockwise front faces:
@@ -277,11 +334,16 @@ and platform release packages remain outside this evidence.
 `src/tests/model_player_bundle_engine_oracle.py` accepts a user-supplied original
 Quake III source checkout, an optimized VibeStudio CLI and the original
 `PlayerBundleFixture` retained by the core suite when `VIBESTUDIO_MODELLER_EVIDENCE`
-is set. It exports default/custom-skin PK3s through the CLI, checks archive hashes
-and native MD3 byte layouts independently, and compiles original player discovery,
-skin/token parsing, animation parsing and TGA decoding functions with small
+is set. It exports default, custom-skin and team-skin PK3s through the CLI, checks
+archive hashes and native MD3 byte layouts (including upper's `tag_head` and
+`tag_weapon`) independently, and compiles original player discovery, skin/token
+parsing, animation parsing and TGA decoding functions with small
 filesystem/renderer shims. Missing model, skin, configuration and icon cases must
-fail. Pixel checks cover the icon and both quadrant textures in full.
+fail. Team cases load the player as a red and a blue team member, check that each
+part gets its `<role>_red.skin` or `<role>_blue.skin` material, and fail when a team
+skin or team icon is missing (the game would fall back to its default team model).
+Pixel checks cover the icon and both quadrant textures in full. Run on 2026-10-22
+against the original source: 20 cases passed.
 
 ```powershell
 python src/tests/model_player_bundle_engine_oracle.py `

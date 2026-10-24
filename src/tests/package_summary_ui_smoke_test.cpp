@@ -229,25 +229,32 @@ bool worker(QApplication& app, const QString& path, int scale, bool cancel)
 	std::mutex mutex; std::condition_variable gate; bool release = false;
 	std::atomic_bool reached{false}, stopped{false}, onWorker{false};
 	bool tick = false, visible = false, captured = false;
-	QElapsedTimer elapsed; elapsed.start();
+	// The visibility deadline runs from the moment the UI first sees the worker
+	// held at the gate, not from opening the dialog, so a loaded machine that is
+	// slow to build the dialog does not use up the window. The gate outlasts it,
+	// so only a UI that stops dispatching timers leaves the worker unreleased.
+	constexpr int VisibleDeadlineMs = 20000;
+	constexpr auto GateLimit = std::chrono::seconds(60);
+	QElapsedTimer elapsed;
 	PackageReadControl control;
 	control.isCancelled = [&] { return stopped.load(); };
 	control.progress = [&](const QString& phase, qint64, qint64) {
 		if (phase != QStringLiteral("Preparing package summaries") || reached.exchange(true)) { return; }
 		std::cerr << "Summary preparation gate reached" << std::endl;
 		onWorker = QThread::currentThread() != app.thread();
-		std::unique_lock lock(mutex); gate.wait_for(lock, std::chrono::seconds(5), [&] { return release; });
+		std::unique_lock lock(mutex); gate.wait_for(lock, GateLimit, [&] { return release; });
 	};
 	QTimer timer;
 	QObject::connect(&timer, &QTimer::timeout, [&] {
 		if (!reached || tick) { return; }
+		if (!elapsed.isValid()) { elapsed.start(); }
 		auto* dialog = qobject_cast<QDialog*>(app.activeModalWidget());
 		auto* status = dialog ? dialog->findChild<QLabel*>(QStringLiteral("packageOperationSummary")) : nullptr;
 		auto* details = dialog ? dialog->findChild<QPlainTextEdit*>(QStringLiteral("packageOperationDetails")) : nullptr;
 		visible = status && status->text().contains(QStringLiteral("Records checked:"))
 			&& details && details->toPlainText().contains(QStringLiteral("Preparing package summaries"))
 			&& status->contentsRect().height() >= status->fontMetrics().lineSpacing() * 2;
-		if (!visible && elapsed.elapsed() < 3000) { return; }
+		if (!visible && elapsed.elapsed() < VisibleDeadlineMs) { return; }
 		auto* button = dialog ? dialog->findChild<QPushButton*>(QStringLiteral("cancelPackageOperation")) : nullptr;
 		visible = visible && button && button->isEnabled() && !button->accessibleName().isEmpty();
 		std::cerr << "UI timer releasing summary gate, visible=" << visible << std::endl;

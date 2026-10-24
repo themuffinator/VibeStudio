@@ -2,6 +2,7 @@
 #include "core/model_surface_selection.h"
 #include "core/model_collision.h"
 #include "core/model_tags.h"
+#include "core/model_joint_tools.h"
 #include "core/studio_settings.h"
 
 #include <QCoreApplication>
@@ -149,7 +150,8 @@ bool readEdges(const QJsonValue &value, const ModelSurface &surface, QSet<ModelE
 }
 bool validSelection(const ModelRecoverySnapshot &snapshot)
 {
-	if (!validModelSurfaceSelection(snapshot.mesh, snapshot.selection) || !validModelTagSelection(snapshot.mesh, snapshot.selection) || !validModelCollisionSelection(snapshot.mesh, snapshot.selection))
+	if (!validModelSurfaceSelection(snapshot.mesh, snapshot.selection) || !validModelTagSelection(snapshot.mesh, snapshot.selection) ||
+		!validModelCollisionSelection(snapshot.mesh, snapshot.selection) || !validModelJointSelection(snapshot.mesh, snapshot.selection))
 	{
 		return false;
 	}
@@ -256,22 +258,66 @@ QString writeModelRecovery(const ModelRecoverySnapshot &snapshot, const QString 
 	{
 		return reject(QCoreApplication::translate("VibeStudioModelRecovery", "The model recovery context is invalid."));
 	}
-	auto object = editableModelJson(snapshot.mesh, error, control);
-	if (object.isEmpty())
+	// The payload is the editable source (readable while it fits, packed
+	// otherwise) plus the selection. Every source within the limit stays
+	// recoverable: when the selection would push the payload over, the copy
+	// keeps only the active surface and named selections, as the component
+	// selection is not model data.
+	// The automatic form first; the other one when that passes the limit, as
+	// short decimals can beat packed arrays.
+	ModelSourceEncoding encoding = ModelSourceEncoding::Automatic;
+	bool packed = false;
+	const auto payloadFor = [&](bool components) -> QByteArray
+	{
+		auto object = editableModelJson(snapshot.mesh, error, control, encoding);
+		if (object.isEmpty())
+		{
+			return {};
+		}
+		// Packed sources carry "packedArrays"; their version names the newest feature.
+		packed = object.contains(QStringLiteral("packedArrays"));
+		object.insert(QStringLiteral("recoverySelection"),
+					  QJsonObject{{QStringLiteral("surface"), snapshot.selection.surface},
+								  {QStringLiteral("surfaces"), components ? indices(snapshot.selection.surfaces) : QJsonArray{}},
+								  {QStringLiteral("vertices"), components ? indices(snapshot.selection.vertices) : QJsonArray{}},
+								  {QStringLiteral("faces"), components ? indices(snapshot.selection.faces) : QJsonArray{}},
+								  {QStringLiteral("edges"), components ? edgeIndices(snapshot.selection.edges) : QJsonArray{}},
+								  {QStringLiteral("tag"), snapshot.selection.tag},
+								  {QStringLiteral("collision"), snapshot.selection.collision},
+								  {QStringLiteral("joint"), snapshot.selection.joint}});
+		return QJsonDocument(object).toJson(QJsonDocument::Compact);
+	};
+	auto payload = payloadFor(true);
+	if (!payload.isEmpty() && payload.size() > modelDocumentMaxSourceBytes)
+	{
+		const bool first = packed;
+		const auto firstSize = payload.size();
+		payload.clear();
+		encoding = first ? ModelSourceEncoding::Readable : ModelSourceEncoding::Packed;
+		payload = payloadFor(true);
+		if (!payload.isEmpty() && payload.size() > firstSize)
+		{
+			// Neither fits; keep the smaller form for the selection fallback.
+			encoding = first ? ModelSourceEncoding::Packed : ModelSourceEncoding::Readable;
+			payload = payloadFor(true);
+		}
+	}
+	if (!payload.isEmpty() && payload.size() > modelDocumentMaxSourceBytes &&
+		(!snapshot.selection.vertices.isEmpty() || !snapshot.selection.faces.isEmpty() || !snapshot.selection.edges.isEmpty() ||
+		 !snapshot.selection.surfaces.isEmpty()))
+	{
+		payload = payloadFor(false);
+	}
+	if (payload.isEmpty())
 	{
 		return {};
 	}
-	object.insert(QStringLiteral("recoverySelection"), QJsonObject{{QStringLiteral("surface"), snapshot.selection.surface},
-		{QStringLiteral("surfaces"), indices(snapshot.selection.surfaces)},
-																   {QStringLiteral("vertices"), indices(snapshot.selection.vertices)},
-																   {QStringLiteral("faces"), indices(snapshot.selection.faces)},
-																   {QStringLiteral("edges"), edgeIndices(snapshot.selection.edges)},
-																   {QStringLiteral("tag"), snapshot.selection.tag},
-																   {QStringLiteral("collision"), snapshot.selection.collision}});
-	const auto payload = QJsonDocument(object).toJson(QJsonDocument::Compact);
 	if (payload.size() > modelDocumentMaxSourceBytes)
 	{
-		return reject(QCoreApplication::translate("VibeStudioModelRecovery", "The model recovery copy exceeds 64 MiB."));
+		return reject(QCoreApplication::translate("VibeStudioModelRecovery",
+												  "The model recovery copy would be %1, over the 64 MiB limit. Reduce the source to "
+												  "resume recovery copies.")
+						  .arg(modelMebibytesText(payload.size())));
 	}
 	if (interrupted(cancelled, error))
 	{
@@ -443,6 +489,9 @@ ModelRecoveryRecord inspectModelRecovery(const QString &path, ModelRecoverySnaps
 		return reject(QCoreApplication::translate("VibeStudioModelRecovery", "The recovered collision selection is invalid."));
 	}
 	candidate.selection.collision = selection.value(QStringLiteral("collision")).toString();
+	if (selection.contains(QStringLiteral("joint")) && !selection.value(QStringLiteral("joint")).isString())
+		return reject(QCoreApplication::translate("ModelJointTools", "The recovered joint selection is invalid."));
+	candidate.selection.joint = selection.value(QStringLiteral("joint")).toString();
 	const auto &geometry = candidate.mesh.surfaces.at(surface);
 	if ((selection.contains(QStringLiteral("surfaces")) &&
 		 !readIndices(selection.value(QStringLiteral("surfaces")), candidate.mesh.surfaces.size(), &candidate.selection.surfaces)) ||
@@ -451,7 +500,7 @@ ModelRecoveryRecord inspectModelRecovery(const QString &path, ModelRecoverySnaps
 		!readIndices(selection.value(QStringLiteral("faces")), geometry.triangles.size(), &candidate.selection.faces) ||
 		!readEdges(selection.value(QStringLiteral("edges")), geometry, &candidate.selection.edges) ||
 		record.frame >= candidate.mesh.frames.size() || !validModelSurfaceSelection(candidate.mesh, candidate.selection) || !validModelTagSelection(candidate.mesh, candidate.selection) ||
-		!validModelCollisionSelection(candidate.mesh, candidate.selection))
+		!validModelCollisionSelection(candidate.mesh, candidate.selection) || !validModelJointSelection(candidate.mesh, candidate.selection))
 	{
 		return reject(QCoreApplication::translate("VibeStudioModelRecovery", "The recovered component selection is invalid."));
 	}

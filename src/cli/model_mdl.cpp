@@ -363,7 +363,7 @@ ModelMdlCliResult runModelMdl(const QStringList &arguments)
 		{
 			return failure(1, QCoreApplication::translate("ModelMdlCli", "The output already exists; use --overwrite to replace it."));
 		}
-		if (!seen.contains("--dry-run") && !document.save(output, seen.contains("--overwrite"), &error))
+		if (!document.save(output, seen.contains("--overwrite"), &error, {}, seen.contains("--dry-run")))
 		{
 			return failure(1, error);
 		}

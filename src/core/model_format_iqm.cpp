@@ -29,8 +29,10 @@
 
 #include "core/model_iqm.h"
 
+#include "core/model_document.h"
 #include "core/model_formats_p.h"
 #include "core/model_skeleton.h"
+#include "core/model_targets.h"
 
 #include <QCoreApplication>
 #include <QHash>
@@ -858,8 +860,17 @@ void decodeIqm(const QByteArray& bytes, ModelMesh* mesh, const ModelWorkControl&
 // Writer
 // ---------------------------------------------------------------------------
 
-QByteArray exportModelIqm(const ModelMesh& mesh, QString* error, const ModelWorkControl& control)
+QByteArray exportModelIqm(const ModelMesh& mesh, QString* error, const ModelWorkControl& control, ModelExportReport* report)
 {
+	ModelTargetProfile format;
+	findModelTargetProfile(QStringLiteral("iqm"), {}, &format);
+	return exportModelIqm(mesh, format.limits, error, control, report);
+}
+
+QByteArray exportModelIqm(const ModelMesh& mesh, const ModelTargetLimits& limits, QString* error, const ModelWorkControl& control,
+	ModelExportReport* report)
+{
+	ModelExportReport result;
 	QString problem;
 	ModelWorkProgress work(control, ModelWorkPhase::Serializing, &problem);
 	const auto fail = [error](const QString& message) {
@@ -880,6 +891,22 @@ QByteArray exportModelIqm(const ModelMesh& mesh, QString* error, const ModelWork
 		if (skeleton.joints.size() > 256) {
 			return fail(QCoreApplication::translate("VibeStudioModelMesh", "The IQM writer stores joint indexes in one byte, so it writes at most 256 joints; the model has %1.")
 				.arg(skeleton.joints.size()));
+		}
+		if (limits.joints > 0 && skeleton.joints.size() > limits.joints) {
+			return fail(QCoreApplication::translate("VibeStudioModelMesh", "The delivery target loads IQM models with at most %1 joints; the model has %2.")
+				.arg(limits.joints)
+				.arg(skeleton.joints.size()));
+		}
+	}
+	for (const ModelSurface& surface : mesh.surfaces) {
+		if ((limits.vertices > 0 && surface.vertexCount > limits.vertices) || (limits.triangles > 0 && surface.triangles.size() > limits.triangles)) {
+			return fail(QCoreApplication::translate("VibeStudioModelMesh",
+				"The delivery target draws IQM meshes of at most %1 vertices and %2 triangles; surface \"%3\" has %4 and %5.")
+							.arg(limits.vertices)
+							.arg(limits.triangles)
+							.arg(surface.name)
+							.arg(surface.vertexCount)
+							.arg(surface.triangles.size()));
 		}
 	}
 	const QVector<int> parents = modelJointParents(skeleton);
@@ -938,11 +965,22 @@ QByteArray exportModelIqm(const ModelMesh& mesh, QString* error, const ModelWork
 		const ModelSkeletalClip* clip = nullptr;
 		int firstFrame = 0;
 	};
+	// Per written surface: the joints and weights stored for each vertex, four
+	// slots each, and the surface as a reader rebuilds it from them.
+	QVector<QVector<int>> storedJoints;
+	QVector<QVector<float>> storedWeights;
+	QVector<ModelSurface> readBack;
+	// The same with the kept influences' exact weights, before 8-bit rounding.
+	QVector<QVector<int>> exactJoints;
+	QVector<QVector<float>> exactWeights;
+	QVector<ModelSurface> exactBack;
 	QVector<WrittenClip> clips;
 	QVector<const QVector<ModelJointMatrix>*> framePoses;
+	QStringList emptyClips;
 	if (skeletal) {
 		for (const ModelSkeletalClip& clip : skeleton.clips) {
 			if (clip.frames.isEmpty()) {
+				emptyClips << clip.name;
 				continue;
 			}
 			clips.append(WrittenClip{&clip, int(framePoses.size())});
@@ -953,6 +991,12 @@ QByteArray exportModelIqm(const ModelMesh& mesh, QString* error, const ModelWork
 	}
 	const int jointCount = skeleton.joints.size();
 	const qint64 frameCount = framePoses.size();
+	storedJoints.resize(written.size());
+	storedWeights.resize(written.size());
+	readBack.resize(written.size());
+	exactJoints.resize(written.size());
+	exactWeights.resize(written.size());
+	exactBack.resize(written.size());
 	if (frameCount * qint64(std::max(jointCount, 1)) > kIqmMaxPoseSlots) {
 		return fail(QCoreApplication::translate("VibeStudioModelMesh", "The model has more animation frames than the IQM writer handles at once."));
 	}
@@ -971,6 +1015,8 @@ QByteArray exportModelIqm(const ModelMesh& mesh, QString* error, const ModelWork
 	// over 65535 steps, as the reference exporter quantizes them.
 	QVector<float> channelOffset(jointCount * 10, 0.0f);
 	QVector<float> channelScale(jointCount * 10, 0.0f);
+	// The channel values a reader rebuilds from the 16-bit steps.
+	QVector<float> restoredChannels(channels.size(), 0.0f);
 	if (frameCount > 0) {
 		for (int joint = 0; joint < jointCount; ++joint) {
 			for (int channel = 0; channel < 10; ++channel) {
@@ -1122,8 +1168,15 @@ QByteArray exportModelIqm(const ModelMesh& mesh, QString* error, const ModelWork
 			// which ioquake3 leaves in the bind pose.
 			QByteArray indexes;
 			QByteArray weights;
-			for (const Written& entry : written) {
+			QStringList unskinned;
+			QString droppedSurface;
+			int droppedVertex = -1;
+			for (int entryIndex = 0; entryIndex < written.size(); ++entryIndex) {
+				const Written& entry = written.at(entryIndex);
 				const ModelSurfaceSkinning& skinning = entry.surface->skinning;
+				if (!entry.skinned) {
+					unskinned << entry.surface->name;
+				}
 				for (int vertex = 0; vertex < entry.surface->vertexCount; ++vertex) {
 					if (!work.step()) { return fail(problem); }
 					QVector<ModelJointInfluence> influences;
@@ -1139,6 +1192,19 @@ QByteArray exportModelIqm(const ModelMesh& mesh, QString* error, const ModelWork
 					std::stable_sort(influences.begin(), influences.end(),
 						[](const ModelJointInfluence& a, const ModelJointInfluence& b) { return a.weight > b.weight; });
 					if (influences.size() > 4) {
+						// Report the share of the vertex's weight the dropped influences carried.
+						double all = 0.0;
+						double dropped = 0.0;
+						for (int slot = 0; slot < influences.size(); ++slot) {
+							all += influences.at(slot).weight;
+							dropped += slot >= 4 ? influences.at(slot).weight : 0.0;
+						}
+						++result.reducedInfluenceVertices;
+						if (all > 0.0 && dropped / all > result.maxDroppedWeight) {
+							result.maxDroppedWeight = dropped / all;
+							droppedSurface = entry.surface->name;
+							droppedVertex = vertex;
+						}
 						influences.resize(4);
 					}
 					double sum = 0.0;
@@ -1158,8 +1224,66 @@ QByteArray exportModelIqm(const ModelMesh& mesh, QString* error, const ModelWork
 						const bool used = slot < influences.size() && quantized[slot] > 0;
 						indexes.append(char(used ? influences.at(slot).joint : 0));
 						weights.append(char(used ? quantized[slot] : 0));
+						if (slot < influences.size()) {
+							result.maxWeightError = std::max(result.maxWeightError,
+								std::abs(double(used ? quantized[slot] : 0) / 255.0 - double(influences.at(slot).weight) / sum));
+						}
+						storedJoints[entryIndex].append(used ? influences.at(slot).joint : 0);
+						storedWeights[entryIndex].append(used ? float(quantized[slot]) / 255.0f : 0.0f);
+						exactJoints[entryIndex].append(slot < influences.size() ? influences.at(slot).joint : 0);
+						exactWeights[entryIndex].append(slot < influences.size() ? float(double(influences.at(slot).weight) / sum) : 0.0f);
 					}
 				}
+			}
+			// What a reader rebuilds from the file: one bind position per vertex,
+			// expressed in each stored joint's bind space with the stored weights,
+			// as the decoder does. A skinned vertex left without weights follows
+			// the first joint there. The same rebuild with the kept influences'
+			// exact weights separates the layout's own error from 8-bit rounding.
+			for (int entryIndex = 0; entryIndex < written.size(); ++entryIndex) {
+				const Written& entry = written.at(entryIndex);
+				if (!entry.skinned) {
+					continue;
+				}
+				for (int vertex = 0; vertex < entry.surface->vertexCount; ++vertex) {
+					if (storedWeights.at(entryIndex).at(vertex * 4) <= 0.0f) {
+						storedWeights[entryIndex][vertex * 4] = 1.0f;
+					}
+					if (exactWeights.at(entryIndex).at(vertex * 4) <= 0.0f) {
+						exactWeights[entryIndex][vertex * 4] = 1.0f;
+					}
+				}
+				readBack[entryIndex] = *entry.surface;
+				exactBack[entryIndex] = *entry.surface;
+				if (!modelSkinningFromBindPose(skeleton, entry.bind.positions, entry.bind.normals, storedJoints.at(entryIndex), storedWeights.at(entryIndex),
+						4, &readBack[entryIndex].skinning, &problem)
+					|| !modelSkinningFromBindPose(skeleton, entry.bind.positions, entry.bind.normals, exactJoints.at(entryIndex),
+						exactWeights.at(entryIndex), 4, &exactBack[entryIndex].skinning, &problem)) {
+					return fail(problem);
+				}
+			}
+			if (result.reducedInfluenceVertices > 0) {
+				const QString note = QCoreApplication::translate("VibeStudioModelMesh",
+					"Vertices with more than four joint influences: %n. IQM keeps the strongest four and rescales them to sum to one; the "
+					"dropped influences carried up to %1% of a vertex's weight (vertex %2 of surface \"%3\"). Use Skin Weights and Binding > "
+					"Reduce and normalise weights with a limit of 4 to review the change before exporting.",
+					nullptr, result.reducedInfluenceVertices)
+										 .arg(result.maxDroppedWeight * 100.0, 0, 'f', 2)
+										 .arg(QString::number(droppedVertex), droppedSurface);
+				result.notes << note;
+				result.omissions << note;
+			}
+			if (!unskinned.isEmpty()) {
+				result.notes << QCoreApplication::translate("VibeStudioModelMesh",
+					"Surfaces without joint influences (%n): %1. IQM gives them zero blend weights, so they keep their bind position in every "
+					"pose, as in the editor.",
+					nullptr, int(unskinned.size()))
+									.arg(unskinned.join(QStringLiteral(", ")));
+			}
+			if (unskinned.size() < written.size()) {
+				result.notes << QCoreApplication::translate("VibeStudioModelMesh",
+					"IQM stores blend weights in steps of 1/255; the largest weight change is %1.")
+									.arg(result.maxWeightError, 0, 'g', 4);
 			}
 			beginArray(3);
 			out.append(indexes);
@@ -1235,28 +1359,84 @@ QByteArray exportModelIqm(const ModelMesh& mesh, QString* error, const ModelWork
 			for (qint64 frame = 0; frame < frameCount; ++frame) {
 				if (!work.step()) { return fail(problem); }
 				for (int joint = 0; joint < jointCount; ++joint) {
+					float stored[10];
+					float restored[10];
 					for (int channel = 0; channel < 10; ++channel) {
 						const float scale = channelScale.at(joint * 10 + channel);
 						const float value = channels.at(int((frame * jointCount + joint) * 10 + channel));
 						const double steps = scale > 0.0f ? (double(value) - double(channelOffset.at(joint * 10 + channel))) / double(scale) : 0.0;
-						appendU16(out, quint16(std::clamp<long>(std::lround(steps), 0, 65535)));
+						const quint16 step = quint16(std::clamp<long>(std::lround(steps), 0, 65535));
+						appendU16(out, step);
+						// The value a reader rebuilds, as the decoder and ioquake3 do.
+						stored[channel] = value;
+						restored[channel] = channelOffset.at(joint * 10 + channel);
+						restored[channel] += float(step) * scale;
+						restoredChannels[int((frame * jointCount + joint) * 10 + channel)] = restored[channel];
 					}
+					const double translation = std::sqrt(std::pow(double(restored[0]) - stored[0], 2) + std::pow(double(restored[1]) - stored[1], 2)
+						+ std::pow(double(restored[2]) - stored[2], 2));
+					// The angle between the two rotations from the chord between the unit
+					// quaternions, which stays exact for tiny angles.
+					double a[4], b[4], lengthA = 0.0, lengthB = 0.0, dot = 0.0;
+					for (int component = 0; component < 4; ++component) {
+						a[component] = stored[3 + component];
+						b[component] = restored[3 + component];
+						lengthA += a[component] * a[component];
+						lengthB += b[component] * b[component];
+						dot += a[component] * b[component];
+					}
+					double chord = 0.0;
+					for (int component = 0; component < 4 && lengthA > 0.0 && lengthB > 0.0; ++component) {
+						const double difference = a[component] / std::sqrt(lengthA) - (dot < 0.0 ? -1.0 : 1.0) * b[component] / std::sqrt(lengthB);
+						chord += difference * difference;
+					}
+					const double rotation = 4.0 * std::asin(std::min(1.0, std::sqrt(chord) / 2.0)) * 180.0 / 3.14159265358979323846;
+					double scaleError = 0.0;
+					for (int channel = 7; channel < 10; ++channel) {
+						scaleError = std::max(scaleError, std::abs(double(restored[channel]) - stored[channel]));
+					}
+					result.maxJointTranslationError = std::max(result.maxJointTranslationError, translation);
+					result.maxJointRotationDegrees = std::max(result.maxJointRotationDegrees, rotation);
+					result.maxJointScaleError = std::max(result.maxJointScaleError, scaleError);
 				}
 			}
+			result.notes << QCoreApplication::translate("VibeStudioModelMesh",
+				"IQM stores each joint pose channel in 16-bit steps between its smallest and largest value. Largest changes: %1 units of "
+				"joint translation, %2 degrees of rotation and %3 of scale.")
+								.arg(result.maxJointTranslationError, 0, 'g', 4)
+								.arg(result.maxJointRotationDegrees, 0, 'g', 4)
+								.arg(result.maxJointScaleError, 0, 'g', 4);
 
 			// iqmbounds per frame, from the skinned vertices when that stays
-			// within the vertex budget; ioquake3 tolerates their absence.
+			// within the vertex budget; ioquake3 tolerates their absence. The
+			// same pass poses the reader's view (stored weights, rebuilt
+			// channels) to measure how far the file moves each vertex, and the
+			// same view with exact weights and channels, which is what the layout
+			// itself loses: one bind position and four influences per vertex, and
+			// no joint shear.
 			if (totalVertices * frameCount <= model_formats::kMaxVertexSlots) {
 				alignTo4(out);
 				const qint64 boundsOffset = out.size();
 				bool boundsOk = true;
 				QByteArray boundsBlock;
+				QString worstSurface, layoutSurface;
+				int worstVertex = -1, worstFrame = -1, layoutVertex = -1, layoutFrame = -1;
 				for (qint64 frame = 0; frame < frameCount && boundsOk; ++frame) {
 					if (!work.step()) { return fail(problem); }
+					QVector<ModelJointMatrix> local(jointCount), exactLocal(jointCount);
+					for (int joint = 0; joint < jointCount; ++joint) {
+						const float* c = restoredChannels.constData() + (frame * jointCount + joint) * 10;
+						local[joint] = modelJointMatrix(ModelQuat{c[3], c[4], c[5], c[6]}, ModelVec3{c[0], c[1], c[2]}, ModelVec3{c[7], c[8], c[9]});
+						const float* e = channels.constData() + (frame * jointCount + joint) * 10;
+						exactLocal[joint] = modelJointMatrix(ModelQuat{e[3], e[4], e[5], e[6]}, ModelVec3{e[0], e[1], e[2]}, ModelVec3{e[7], e[8], e[9]});
+					}
+					const QVector<ModelJointMatrix> rebuilt = modelJointsToModelSpace(parents, local);
+					const QVector<ModelJointMatrix> exact = modelJointsToModelSpace(parents, exactLocal);
 					bool have = false;
 					ModelVec3 mins{0.0f, 0.0f, 0.0f}, maxs{0.0f, 0.0f, 0.0f};
 					double xyRadius = 0.0, radius = 0.0;
-					for (const Written& entry : written) {
+					for (int entryIndex = 0; entryIndex < written.size(); ++entryIndex) {
+						const Written& entry = written.at(entryIndex);
 						ModelFrameGeometry posed;
 						const QVector<ModelVec3>* positions = &entry.bind.positions;
 						if (entry.skinned) {
@@ -1265,6 +1445,33 @@ QByteArray exportModelIqm(const ModelMesh& mesh, QString* error, const ModelWork
 								break;
 							}
 							positions = &posed.positions;
+							const auto distance = [&posed](const ModelFrameGeometry& reader, int vertex) {
+								const ModelVec3& a = posed.positions.at(vertex);
+								const ModelVec3& b = reader.positions.at(vertex);
+								return std::sqrt(std::pow(double(a.x) - b.x, 2) + std::pow(double(a.y) - b.y, 2) + std::pow(double(a.z) - b.z, 2));
+							};
+							ModelFrameGeometry reader;
+							if (rebuilt.size() == jointCount && skinModelSurface(readBack.at(entryIndex), rebuilt, &reader)) {
+								for (int vertex = 0; vertex < posed.positions.size() && vertex < reader.positions.size(); ++vertex) {
+									if (const double moved = distance(reader, vertex); moved > result.maxPositionError) {
+										result.maxPositionError = moved;
+										worstSurface = entry.surface->name;
+										worstVertex = vertex;
+										worstFrame = int(frame);
+									}
+								}
+							}
+							ModelFrameGeometry unrounded;
+							if (exact.size() == jointCount && skinModelSurface(exactBack.at(entryIndex), exact, &unrounded)) {
+								for (int vertex = 0; vertex < posed.positions.size() && vertex < unrounded.positions.size(); ++vertex) {
+									if (const double moved = distance(unrounded, vertex); moved > result.maxLayoutError) {
+										result.maxLayoutError = moved;
+										layoutSurface = entry.surface->name;
+										layoutVertex = vertex;
+										layoutFrame = int(frame);
+									}
+								}
+							}
 						}
 						for (const ModelVec3& p : *positions) {
 							mins = have ? vecMin(mins, p) : p;
@@ -1289,6 +1496,42 @@ QByteArray exportModelIqm(const ModelMesh& mesh, QString* error, const ModelWork
 					out.append(boundsBlock);
 				}
 				problem.clear();
+				// The clip and frame within it that baked frame `frame` belongs to.
+				const auto clipFrame = [&clips](int frame) {
+					int clipIndex = 0;
+					while (clipIndex + 1 < clips.size() && clips.at(clipIndex + 1).firstFrame <= frame) {
+						++clipIndex;
+					}
+					return qMakePair(clips.at(clipIndex).clip->name, frame - clips.at(clipIndex).firstFrame);
+				};
+				if (worstFrame >= 0) {
+					// Mostly the format's own 8-bit weights and 16-bit channels, which
+					// grow with the distance between a vertex's influences.
+					const auto [clip, clipFrameIndex] = clipFrame(worstFrame);
+					result.notes << QCoreApplication::translate("VibeStudioModelMesh",
+						"IQM's stored weights and pose channels move skinned vertices by up to %1 units over the clips (vertex %2 of surface "
+						"\"%3\" in frame %4 of clip \"%5\").")
+												 .arg(result.maxPositionError, 0, 'g', 4)
+												 .arg(QString::number(worstVertex), worstSurface, QString::number(clipFrameIndex), clip);
+				}
+				if (layoutFrame >= 0 && result.maxLayoutError > 1.0 / 64.0) {
+					// Beyond the precision of MD3, the finest game format here, before
+					// any rounding: the motion itself differs, which rebinding can fix.
+					const auto [clip, clipFrameIndex] = clipFrame(layoutFrame);
+					const QString note = QCoreApplication::translate("VibeStudioModelMesh",
+						"Before any rounding, IQM's layout already moves skinned vertices by up to %1 units, more than MD3's 1/64-unit "
+						"precision (vertex %2 of surface \"%3\" in frame %4 of clip \"%5\"). IQM stores one bind position and four "
+						"influences per vertex and no joint shear, so influences whose offsets disagree (as MD5 weights may) deform "
+						"differently; rebind those vertices, or export MD3 to keep the exact motion.")
+												 .arg(result.maxLayoutError, 0, 'g', 4)
+												 .arg(QString::number(layoutVertex), layoutSurface, QString::number(clipFrameIndex), clip);
+					result.notes << note;
+					result.omissions << note;
+				}
+			} else {
+				result.notes << QCoreApplication::translate("VibeStudioModelMesh",
+					"The clips hold more than %1 vertex positions, so IQM's vertex error and bounds were not computed.")
+									.arg(model_formats::kMaxVertexSlots);
 			}
 		}
 	}
@@ -1300,6 +1543,16 @@ QByteArray exportModelIqm(const ModelMesh& mesh, QString* error, const ModelWork
 	}
 	if (error) {
 		error->clear();
+	}
+	if (!emptyClips.isEmpty()) {
+		const QString note = QCoreApplication::translate("VibeStudioModelMesh", "Clips that hold no frames were not written (%n): %1.", nullptr,
+			int(emptyClips.size()))
+								 .arg(emptyClips.join(QStringLiteral(", ")));
+		result.notes << note;
+		result.omissions << note;
+	}
+	if (report) {
+		*report = std::move(result);
 	}
 	return out;
 }

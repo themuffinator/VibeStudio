@@ -1,14 +1,84 @@
 #include "app/studio_accessibility.h"
 
 #include <QAccessible>
+#include <QApplication>
 #include <QCoreApplication>
+#include <QElapsedTimer>
+#include <QLabel>
+#include <QPointer>
+#include <QProgressBar>
 #include <QStatusBar>
+#include <QTextDocumentFragment>
 #include <QTimer>
 #include <QtGlobal>
 
 #include <algorithm>
+#include <utility>
 
 namespace vibestudio {
+
+namespace {
+
+AccessibilityPreferences& recordedPreferences()
+{
+	static AccessibilityPreferences preferences;
+	return preferences;
+}
+
+StatusAnnouncementListener& announcementListener()
+{
+	static StatusAnnouncementListener listener;
+	return listener;
+}
+
+struct PendingAnnouncement {
+	QPointer<QObject> source;
+	QString message;
+	LiveStatus kind = LiveStatus::Update;
+	bool scheduled = false;
+};
+
+PendingAnnouncement& pendingAnnouncement()
+{
+	static PendingAnnouncement pending;
+	return pending;
+}
+
+struct LastAnnouncement {
+	QString message;
+	QElapsedTimer clock;
+};
+
+LastAnnouncement& lastAnnouncement()
+{
+	static LastAnnouncement last;
+	return last;
+}
+
+void settleAnnouncement()
+{
+	const PendingAnnouncement settled = std::exchange(pendingAnnouncement(), PendingAnnouncement{});
+	if (settled.message.isEmpty()) {
+		return;
+	}
+	LastAnnouncement& last = lastAnnouncement();
+	if (last.message == settled.message && last.clock.isValid() && last.clock.elapsed() < 2000) {
+		return;
+	}
+	last.message = settled.message;
+	last.clock.start();
+	if (studioAccessibilityPreferences().screenReaderAnnouncements) {
+		// A dialog that reported and then closed in the same pass leaves its
+		// message to the window that is active now.
+		QObject* source = settled.source ? settled.source.data() : static_cast<QObject*>(QApplication::activeWindow());
+		announceToScreenReader(source, settled.message, settled.kind == LiveStatus::Problem);
+	}
+	if (const StatusAnnouncementListener listener = announcementListener()) {
+		listener(settled.message, settled.kind);
+	}
+}
+
+} // namespace
 
 bool announceToScreenReader(QObject* source, const QString& message, bool assertive)
 {
@@ -25,6 +95,82 @@ bool announceToScreenReader(QObject* source, const QString& message, bool assert
 	Q_UNUSED(assertive);
 	return false;
 #endif
+}
+
+void recordStudioAccessibilityPreferences(const AccessibilityPreferences& preferences)
+{
+	recordedPreferences() = preferences;
+}
+
+const AccessibilityPreferences& studioAccessibilityPreferences()
+{
+	return recordedPreferences();
+}
+
+bool studioReducedMotion()
+{
+	return recordedPreferences().reducedMotion;
+}
+
+void setLiveStatus(QLabel* label, const QString& text, LiveStatus kind)
+{
+	if (!label) {
+		return;
+	}
+	label->setText(text);
+	// The description is what a screen reader reads, so markup is dropped.
+	const bool rich = label->textFormat() == Qt::RichText || (label->textFormat() == Qt::AutoText && Qt::mightBeRichText(text));
+	const QString spoken = rich ? QTextDocumentFragment::fromHtml(text).toPlainText() : text;
+	label->setAccessibleDescription(spoken);
+	announceStatus(label, spoken, kind);
+}
+
+bool announceStatus(QObject* source, const QString& message, LiveStatus kind)
+{
+	const QString text = message.simplified();
+	if (kind == LiveStatus::Update || text.isEmpty()) {
+		return false;
+	}
+	// A result and a long task's end rank alike; a problem outranks both.
+	const auto rank = [](LiveStatus status) { return status == LiveStatus::Problem ? 2 : 1; };
+	PendingAnnouncement& pending = pendingAnnouncement();
+	if (pending.message.isEmpty() || rank(kind) >= rank(pending.kind)) {
+		const bool longTask = !pending.message.isEmpty() && pending.kind == LiveStatus::Finished && kind == LiveStatus::Result;
+		pending.source = source;
+		pending.message = text;
+		pending.kind = longTask ? LiveStatus::Finished : kind;
+	}
+	if (!pending.scheduled) {
+		if (!QCoreApplication::instance()) {
+			settleAnnouncement();
+			return true;
+		}
+		pending.scheduled = true;
+		QTimer::singleShot(0, QCoreApplication::instance(), settleAnnouncement);
+	}
+	return true;
+}
+
+void setStatusAnnouncementListener(StatusAnnouncementListener listener)
+{
+	announcementListener() = std::move(listener);
+}
+
+void setBusyProgress(QProgressBar* bar, bool reducedMotion, const QString& text)
+{
+	if (!bar) {
+		return;
+	}
+	// A range of zero to zero is Qt's marquee, which never stops moving; one
+	// step that stays at zero is still and keeps the text in view.
+	if (reducedMotion) {
+		bar->setRange(0, 1);
+		bar->setValue(0);
+		bar->setTextVisible(true);
+	} else {
+		bar->setRange(0, 0);
+	}
+	bar->setFormat(text);
 }
 
 void applyStatusMessageDuration(QStatusBar* statusBar, MessageDuration duration)

@@ -1,5 +1,7 @@
+#include "core/audio_export.h"
 #include "core/package_draft.h"
 #include "tests/model_player_bundle_test_helpers.h"
+#include "tests/model_output_test_helpers.h"
 #include "tests/model_skin_source_test_helpers.h"
 
 #include <QCoreApplication>
@@ -7,8 +9,11 @@
 #include <QJsonArray>
 #include <QProcess>
 #include <QTemporaryDir>
+#include <QtEndian>
 
+#include <algorithm>
 #include <cmath>
+#include <functional>
 #include <iostream>
 
 using namespace vibestudio;
@@ -91,7 +96,7 @@ int main(int argc, char **argv)
 		"prepare linked native player bundle");
 	if (!ok)
 	{
-		std::cerr << error.toStdString();
+		std::cerr << qPrintable(error);
 		return 1;
 	}
 	ok &= expect(bundle.files.size() == 12 && bundle.dependencies.canExport() && bundle.dependencies.resolvedPaths.size() == 3,
@@ -149,7 +154,7 @@ int main(int argc, char **argv)
 	ok &= expect(written.succeeded() && written.outputCommitted && written.determinismVerified && written.entryCount == 12,
 				 "atomic reproducibility-verified PK3 publication");
 	if (!written.succeeded())
-		std::cerr << packageWriteReportText(written).toStdString();
+		std::cerr << qPrintable(packageWriteReportText(written));
 	PackageArchive archive;
 	ok &= expect(archive.load(path("player.pk3"), &error), "published player opens in shared package reader");
 	for (const auto &item : bundle.files)
@@ -194,6 +199,20 @@ int main(int argc, char **argv)
 				 "backup paths cannot overwrite protected source");
 	ok &= expect(!writeModelPlayerBundle(bundle, path("assets/forbidden.pk3"), false, true).succeeded(),
 				 "source asset directory protected in dry run too");
+	const auto protectedTexture = path("assets/textures/player/a.tga");
+	const auto textureBytes = q3Read(protectedTexture);
+	for (const QString &suffix : {QString(), QStringLiteral(".bak"), QStringLiteral(".vibestudio-save.lock")})
+		for (bool dryRun : {true, false})
+		{
+			const auto output = path(QStringLiteral("alias-%1-%2.pk3").arg(suffix.size()).arg(dryRun));
+			const auto alias = output + suffix;
+			ok &= expect(!textureBytes.isEmpty() && modelTestHardLink(protectedTexture, alias),
+						 "prepare player output/backup/lock hard-link fixtures");
+			const auto refused = writeModelPlayerBundle(bundle, output, true, dryRun);
+			ok &= expect(!refused.succeeded() && !refused.outputCommitted && q3Read(protectedTexture) == textureBytes &&
+						 q3Read(alias) == textureBytes && (suffix.isEmpty() || !QFileInfo::exists(output)),
+						 "player package dry and real writes protect folder input aliases at every publication path");
+		}
 	for (const QString &name : {QString(), QStringLiteral("../bad"), QStringLiteral("con"), QString(25, 'a')})
 	{
 		auto options = fixture.options;
@@ -281,7 +300,7 @@ int main(int argc, char **argv)
 		if (payload)
 			*payload = QJsonDocument::fromJson(bytes).object();
 		if (p.exitCode() != exitCode)
-			std::cerr << bytes.toStdString() << p.readAllStandardError().toStdString();
+			std::cerr << bytes.constData() << p.readAllStandardError().constData();
 		return p.exitStatus() == QProcess::NormalExit && p.exitCode() == exitCode;
 	};
 	const QStringList cli{"--player-name", "synthetic", "--head-part", "head", "--icon", fixture.iconPath, "--package", path("assets")};
@@ -334,6 +353,225 @@ int main(int argc, char **argv)
 					 q3Read(path("lower.skin")) != originalSkin,
 				 "reviewed snapshot remains stable and never rewrites a changed external skin");
 	q3Write(path("lower.skin"), originalSkin);
+	// The earlier checks rewrote package files, so read the folder again.
+	auto current = fixture.context;
+	auto reloaded = std::make_shared<PackageArchive>();
+	ok &= expect(reloaded->load(path("assets"), &error), "reload the asset folder");
+	current.archive = reloaded;
+	// Completeness: cgame holds weapons on upper's tag_weapon.
+	auto weaponless = fixture.resolved;
+	for (auto &input : weaponless.inputs)
+		if (input.part == "upper")
+			input.mesh.tags.erase(std::remove_if(input.mesh.tags.begin(), input.mesh.tags.end(), [](const auto &tag) { return tag.name == "tag_weapon"; }),
+								  input.mesh.tags.end());
+	ok &= expect(!prepareModelPlayerBundle(fixture.assembly, weaponless, current, fixture.options, fixture.sourcePath, &unchanged, &error) &&
+					 error.contains("tag_weapon"),
+				 "upper without tag_weapon is refused");
+	ok &= expect(bundle.notes.join(' ').contains("tag_flag") && bundle.notes.join(' ').contains("non-team") &&
+					 bundle.notes.join(' ').contains("default model's sounds") && bundle.skins == QStringList{"default"},
+				 "the review notes the missing tag_flag, the missing team skins and the default sounds");
+	const auto entry = [](const ModelPlayerBundle &item, const QString &path) -> const ModelPlayerBundleFile * {
+		for (const auto &candidate : item.files)
+			if (candidate.path == path)
+				return &candidate;
+		return nullptr;
+	};
+	const QString players = "models/players/synthetic/";
+
+	// Team skins: red from upper's stored skin variant, blue from a head .skin
+	// file and a package icon. Parts without either keep their own materials.
+	auto teamOptions = fixture.options;
+	teamOptions.teamVariants = true;
+	ok &= expect(!prepareModelPlayerBundle(fixture.assembly, fixture.resolved, current, teamOptions, fixture.sourcePath, &unchanged, &error) &&
+					 error.contains("red"),
+				 "team skins identical to the model's own materials are refused");
+	ModelMesh upper;
+	ok &= expect(parseEditableModel(q3Read(path("upper.mesh.json")), &upper, &error), "read the upper source");
+	upper.skinVariants = {ModelSkinVariant{"red", {{"body_1", "textures/player/b.tga"}}}};
+	ok &= expect(q3Write(path("upper.mesh.json"), QJsonDocument(editableModelJson(upper)).toJson()) &&
+					 q3Write(path("blue_head.skin"), "body,textures/player/b.tga\n") && q3Write(path("wrong.skin"), "arm,textures/player/b.tga\n"),
+				 "store a red variant on upper and write a blue head skin");
+	ModelAssemblyResolved teamInputs;
+	ok &= expect(resolveModelAssembly(fixture.assembly, current, &teamInputs, &error), "resolve the parts again");
+	teamOptions.variants = {ModelPlayerSkinVariant{"blue", {std::nullopt, std::nullopt, ModelPlayerReference{"blue_head.skin"}},
+												   ModelPlayerReference{"textures/player/a.tga", ModelAssemblySource::Package, -1}}};
+	ModelPlayerBundle team, again;
+	ok &= expect(prepareModelPlayerBundle(fixture.assembly, teamInputs, current, teamOptions, fixture.sourcePath, &team, &error) &&
+					 prepareModelPlayerBundle(fixture.assembly, teamInputs, current, teamOptions, fixture.sourcePath, &again, &error),
+				 "prepare the team package twice");
+	if (!ok)
+		std::cerr << qPrintable(error) << '\n';
+	ok &= expect(team.files.size() == 20 && team.skins == QStringList({"default", "blue", "red"}), "three skin sets and three icons are published");
+	bool deterministic = team.files.size() == again.files.size();
+	for (int i = 0; deterministic && i < team.files.size(); ++i)
+		deterministic = team.files[i].path == again.files[i].path && team.files[i].sha256 == again.files[i].sha256;
+	ok &= expect(deterministic, "the team package is deterministic");
+	for (const QString &role : {QStringLiteral("lower"), QStringLiteral("upper"), QStringLiteral("head")})
+		for (const QString &skin : {QStringLiteral("default"), QStringLiteral("red"), QStringLiteral("blue")})
+			ok &= expect(entry(team, players + role + '_' + skin + ".skin") && entry(team, players + "icon_" + skin + ".tga"),
+						 "every role has every skin and every skin its icon");
+	const auto skinMaterial = [&](const QString &role, const QString &skin) {
+		const auto *model = entry(team, players + role + ".md3");
+		const auto *file = entry(team, players + role + '_' + skin + ".skin");
+		ModelMesh decoded;
+		ModelSkinBindingPlan plan;
+		return model && file && importEditableModel(model->path, model->bytes, &decoded, &error) &&
+					   planModelSkinBindings(decoded, file->bytes, &plan, &error) && plan.assignments.size() == 1
+				   ? plan.assignments[0].material
+				   : QString();
+	};
+	ok &= expect(skinMaterial("upper", "red") == "textures/player/b.tga" && skinMaterial("upper", "default") == "textures/player/a.tga" &&
+					 skinMaterial("head", "blue") == "textures/player/b.tga" && skinMaterial("lower", "red") == "models/player/body" &&
+					 skinMaterial("head", "red") == "textures/player/a.tga",
+				 "each skin covers every surface with its variant, file, linked or own material");
+	const auto *redIcon = entry(team, players + "icon_red.tga"), *defaultIcon = entry(team, players + "icon_default.tga"),
+			   *blueIcon = entry(team, players + "icon_blue.tga");
+	ok &= expect(redIcon && defaultIcon && blueIcon && redIcon->bytes == defaultIcon->bytes &&
+					 decodeIdTechImage("icon.tga", blueIcon->bytes, {}).image.size() == QSize(32, 32),
+				 "the red icon reuses the package icon and the blue icon converts its own image");
+	ok &= expect(team.receipt.value("schemaVersion").toInt() == 2 && team.receipt.value("skins").toArray().size() == 3 &&
+					 team.receipt.value("teamSkins").toBool() && bundle.receipt.value("schemaVersion").toInt() == 1 && !bundle.receipt.contains("skins"),
+				 "schema 2 receipts record skins while a single-skin package keeps schema 1");
+	ok &= expect(team.notes.join(' ').contains("own materials of lower, head") && team.notes.join(' ').contains("Team games use the red and blue skins"),
+				 "the review says which parts keep their own materials in a team skin");
+	const auto teamWritten = writeModelPlayerBundle(team, path("team.pk3"), false, false);
+	ok &= expect(teamWritten.succeeded() && teamWritten.entryCount == 20, "the team package publishes");
+	for (const auto &[name, change] : QVector<QPair<QString, std::function<void(ModelPlayerBundleOptions &)>>>{
+			 {"duplicate", [](auto &o) { o.variants[0].name = "Default"; }},
+			 {"invalid", [](auto &o) { o.variants[0].name = "blue team"; }},
+			 {"long", [](auto &o) { o.variants[0].name = QString(25, 'b'); }},
+			 {"uncovered", [&](auto &o) { o.variants[0].skins[2] = ModelPlayerReference{"wrong.skin"}; }},
+			 {"missing", [](auto &o) { o.variants[0].skins[1] = ModelPlayerReference{"missing.skin"}; }}})
+	{
+		auto options = teamOptions;
+		change(options);
+		ok &= expect(!prepareModelPlayerBundle(fixture.assembly, teamInputs, current, options, fixture.sourcePath, &unchanged, &error),
+					 qPrintable(QStringLiteral("refuse a %1 skin").arg(name)));
+	}
+
+	// Detail levels: made in each part's own space, then placed like the part.
+	auto detailOptions = fixture.options;
+	detailOptions.detailLevels = ModelPlayerDetailLevels::Generated;
+	ModelPlayerBundle detailed;
+	ok &= expect(prepareModelPlayerBundle(fixture.assembly, teamInputs, current, detailOptions, fixture.sourcePath, &detailed, &error) &&
+					 detailed.files.size() == 18 && detailed.receipt.value("detailLevels").toArray().size() == 6,
+				 "two generated levels per part are published");
+	for (const QString &role : {QStringLiteral("lower"), QStringLiteral("upper"), QStringLiteral("head")})
+	{
+		ModelMesh base;
+		const auto *baseFile = entry(detailed, players + role + ".md3");
+		ok &= expect(baseFile && importEditableModel(baseFile->path, baseFile->bytes, &base, &error), "decode the base part");
+		for (int level = 1; level <= 2; ++level)
+		{
+			const auto *file = entry(detailed, players + role + QStringLiteral("_%1.md3").arg(level));
+			ModelMesh decoded;
+			bool same = file && importEditableModel(file->path, file->bytes, &decoded, &error) && decoded.frames.size() == base.frames.size() &&
+						decoded.surfaces.size() == base.surfaces.size() && decoded.surfaces[0].name == base.surfaces[0].name;
+			for (int frame = 0; same && frame < base.frames.size(); ++frame)
+				for (int v = 0; same && v < base.surfaces[0].frames[frame].positions.size(); ++v)
+					same = distance(base.surfaces[0].frames[frame].positions[v], decoded.surfaces[0].frames[frame].positions[v]) < .05;
+			ok &= expect(same, "each level keeps the base's frames, surface names and baked placement");
+		}
+	}
+	detailOptions.lodLevels = 3;
+	ok &= expect(!prepareModelPlayerBundle(fixture.assembly, teamInputs, current, detailOptions, fixture.sourcePath, &unchanged, &error),
+				 "Quake III loads two detail levels, so a third is refused");
+	ModelMesh lower;
+	ok &= expect(parseEditableModel(q3Read(path("lower.mesh.json")), &lower, &error) &&
+					 q3Write(path("lower_detail.mesh.json"), QJsonDocument(editableModelJson(lower)).toJson()),
+				 "write a hand-made lower level");
+	ModelLodRecipeLevel handMade;
+	handMade.generated = false;
+	handMade.source = "lower_detail.mesh.json";
+	lower.detailLevels = {handMade};
+	ok &= expect(q3Write(path("lower.mesh.json"), QJsonDocument(editableModelJson(lower)).toJson()), "store the recipe on lower");
+	ModelAssemblyResolved recipeInputs;
+	detailOptions.detailLevels = ModelPlayerDetailLevels::Stored;
+	ModelPlayerBundle stored;
+	ok &= expect(resolveModelAssembly(fixture.assembly, current, &recipeInputs, &error) &&
+					 prepareModelPlayerBundle(fixture.assembly, recipeInputs, current, detailOptions, fixture.sourcePath, &stored, &error) &&
+					 stored.files.size() == 13 && entry(stored, players + "lower_1.md3") && !entry(stored, players + "upper_1.md3") &&
+					 stored.notes.join(' ').contains("No detail levels are stored for upper"),
+				 "stored recipes publish their levels and parts without one are noted");
+	ok &= expect(std::any_of(stored.protectedPaths.cbegin(), stored.protectedPaths.cend(),
+							 [&](const auto &item) { return modelPathsReferToSameFile(item, path("lower_detail.mesh.json")); }),
+				 "hand-made levels are protected inputs");
+	handMade.source = "head.mesh.json";
+	lower.detailLevels = {handMade};
+	ok &= expect(q3Write(path("lower.mesh.json"), QJsonDocument(editableModelJson(lower)).toJson()) &&
+					 resolveModelAssembly(fixture.assembly, current, &recipeInputs, &error) &&
+					 !prepareModelPlayerBundle(fixture.assembly, recipeInputs, current, detailOptions, fixture.sourcePath, &unchanged, &error) &&
+					 error.contains("would not load correctly"),
+				 "a level without the base's frames is refused");
+	lower.detailLevels.clear();
+	ok &= expect(q3Write(path("lower.mesh.json"), QJsonDocument(editableModelJson(lower)).toJson()) &&
+					 resolveModelAssembly(fixture.assembly, current, &recipeInputs, &error),
+				 "restore lower");
+
+	// Custom sounds: mono PCM WAV is kept, other audio converted for Quake III.
+	AudioClip stereo;
+	stereo.channels = 2;
+	stereo.sampleRate = 44100;
+	for (int i = 0; i < 4410; ++i)
+		stereo.samples << float(std::sin(i * .05) * .5) << float(std::sin(i * .07) * .25);
+	AudioClip mono = stereo;
+	mono.channels = 1;
+	mono.sampleRate = 11025;
+	mono.samples.resize(2205);
+	AudioWavOptions eightBit;
+	eightBit.format = AudioWavFormat::Pcm8;
+	const auto monoBytes = encodeAudioWav(mono, eightBit, &error);
+	ok &= expect(q3Write(path("death.wav"), encodeAudioWav(stereo, &error)) && q3Write(path("jump.wav"), monoBytes) &&
+					 q3Write(path("noise.wav"), "not a sound") && q3Write(path("big.wav"), QByteArray(17 * 1024 * 1024, '\0')),
+				 "write sound fixtures");
+	auto soundOptions = fixture.options;
+	soundOptions.sounds = {{"death1", ModelPlayerReference{"death.wav"}}, {"jump1", ModelPlayerReference{"jump.wav"}}};
+	ModelPlayerBundle voiced, voicedAgain;
+	ok &= expect(prepareModelPlayerBundle(fixture.assembly, recipeInputs, current, soundOptions, fixture.sourcePath, &voiced, &error) &&
+					 prepareModelPlayerBundle(fixture.assembly, recipeInputs, current, soundOptions, fixture.sourcePath, &voicedAgain, &error) &&
+					 voiced.files.size() == 14,
+				 "custom sounds are published beside the model");
+	const auto *death = entry(voiced, "sound/player/synthetic/death1.wav");
+	const auto *jump = entry(voiced, "sound/player/synthetic/jump1.wav");
+	const auto converted = death ? decodeAudioClip("death1.wav", death->bytes) : AudioClipResult{};
+	ok &= expect(death && converted.succeeded() && converted.clip.channels == 1 && converted.clip.sampleRate == 22050 && death->bytes.size() > 36 &&
+					 qFromLittleEndian<quint16>(death->bytes.constData() + 20) == 1 && qFromLittleEndian<quint16>(death->bytes.constData() + 34) == 16,
+				 "stereo audio is converted to 22,050 Hz mono 16-bit PCM");
+	ok &= expect(jump && jump->bytes == monoBytes, "a mono PCM WAV is kept as it is");
+	const auto *deathAgain = entry(voicedAgain, "sound/player/synthetic/death1.wav");
+	ok &= expect(death && deathAgain && deathAgain->sha256 == death->sha256, "sound conversion is deterministic");
+	ok &= expect(voiced.notes.join(' ').contains("converted") && voiced.notes.join(' ').contains("Custom sounds packaged: 2 of 13") &&
+					 voiced.receipt.value("sounds").toArray().size() == 2,
+				 "the review and receipt record each sound");
+	for (const auto &sound : QVector<ModelPlayerSound>{{"scream", ModelPlayerReference{"death.wav"}},
+													   {"death1", ModelPlayerReference{"noise.wav"}},
+													   {"death1", ModelPlayerReference{"big.wav"}},
+													   {"death1", ModelPlayerReference{"missing.wav"}}})
+	{
+		auto options = fixture.options;
+		options.sounds = {sound};
+		ok &= expect(!prepareModelPlayerBundle(fixture.assembly, recipeInputs, current, options, fixture.sourcePath, &unchanged, &error),
+					 "unknown, unreadable, oversized and missing sounds are refused");
+	}
+	auto doubled = soundOptions;
+	doubled.sounds[1].name = "death1";
+	ok &= expect(!prepareModelPlayerBundle(fixture.assembly, recipeInputs, current, doubled, fixture.sourcePath, &unchanged, &error),
+				 "a sound listed twice is refused");
+
+	// The CLI shares the options.
+	ok &= expect(process(cli + QStringList{"--operation", "player-review", "--team-variants", "--variant-skin", "blue:head=" + path("blue_head.skin"),
+										  "--variant-icon", "blue=package:textures/player/a.tga", "--sound", "death1=" + path("death.wav"), "--sound",
+										  "jump1=" + path("jump.wav"), "--lod-levels", "1"},
+						 0, &payload) &&
+					 payload.value("files").toArray().size() == 25 && payload.value("skins").toArray().size() == 3 &&
+					 payload.value("teamSkins").toBool() && payload.value("sounds").toArray().size() == 2,
+				 "CLI reviews team skins, a level per part and custom sounds");
+	ok &= expect(process(cli + QStringList{"--operation", "player-review", "--variant-skin", "blue:arm=" + path("blue_head.skin")}, 2) &&
+					 process(cli + QStringList{"--operation", "player-review", "--variant-icon", "blue=a.png", "--variant-icon", "blue=b.png"}, 2) &&
+					 process(cli + QStringList{"--operation", "player-review", "--lod-ratio", "0.5"}, 2) &&
+					 process(cli + QStringList{"--operation", "player-review", "--lod-levels", "1", "--lod-recipes"}, 2) &&
+					 process(cli + QStringList{"--operation", "player-review", "--sound", "scream=" + path("death.wav")}, 4),
+				 "CLI refuses malformed, repeated, conflicting and unknown player options");
 	const auto evidence = qEnvironmentVariable("VIBESTUDIO_MODELLER_EVIDENCE");
 	if (!evidence.isEmpty())
 	{

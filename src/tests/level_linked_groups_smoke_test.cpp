@@ -1,9 +1,11 @@
-// Linked groups: a copy made with createLinkedLevelGroup takes on every edit
-// to its original's content, and the original every edit to the copy's, each
-// keeping its place; moving a whole copy moves only it; each edit and its
-// propagation are one undo step; links survive saving; locked copies are left
-// alone; copies changed in different ways at once are left for Update Linked
-// Copies; and the CLI's editor scene link, update-links and unlink do the same.
+// Linked groups: a linked duplicate made with createLinkedLevelGroup takes on
+// every edit to its source's content, and the source every edit to the
+// duplicate's, each keeping its place; moving a whole group moves only it;
+// each edit and its propagation are one undo step; links survive saving;
+// locked groups are left alone; groups changed in different ways at once are
+// left for Update Linked Groups; and the CLI's editor scene
+// create-linked-duplicate, select-linked-groups, update-linked-groups and
+// separate-linked-groups do the same.
 // With the CLI path as the argument the CLI is run too.
 
 #include "core/level_document.h"
@@ -361,23 +363,23 @@ int main(int argc, char** argv)
 			return QPointF(1e9, 1e9);
 		};
 		const auto framed = [](const LevelSceneNode* frame, QPointF point) {
-			// Mirror across x first, then quarter turns anticlockwise.
-			if (frame->linkMirror) {
-				point.setY(-point.y());
-			}
-			for (int turn = 0; turn < frame->linkTurn; ++turn) {
-				point = QPointF(-point.y(), point.x());
-			}
-			return point;
+			// The frame's linear part, seen in plan.
+			const auto& m = frame->linkFrame;
+			return QPointF(m[0] * point.x() + m[1] * point.y(), m[4] * point.x() + m[5] * point.y());
+		};
+		const auto determinant = [](const LevelSceneNode* frame) {
+			const auto& m = frame->linkFrame;
+			return m[0] * (m[5] * m[10] - m[6] * m[9]) - m[1] * (m[4] * m[10] - m[6] * m[8]) + m[2] * (m[4] * m[9] - m[5] * m[8]);
 		};
 		const auto samePoint = [](QPointF a, QPointF b) { return std::abs(a.x() - b.x()) < 0.01 && std::abs(a.y() - b.y()) < 0.01; };
 		const auto sourceBounds = bounds(source);
 		ok &= expect(setLevelMapSelection(&ell, members(turned), &error) && rotateLevelMapSelection(&ell, 2, 1, &error), "turn the copy", error);
 		const auto turnedBounds = bounds(turned);
-		ok &= expect(node(ell, turned)->linkTurn != 0 && node(ell, source)->linkTurn == 0
+		ok &= expect(levelLinkFrameText(node(ell, turned)->linkFrame) == QStringLiteral("Turned 90 degrees")
+				&& levelLinkFrameText(node(ell, source)->linkFrame).isEmpty()
 				&& std::abs((turnedBounds.second.x - turnedBounds.first.x) - 64) < 0.01 && std::abs((turnedBounds.second.y - turnedBounds.first.y) - 96) < 0.01
 				&& std::abs(bounds(source).first.x - sourceBounds.first.x) < 0.01 && std::abs(bounds(source).second.y - sourceBounds.second.y) < 0.01,
-			"a whole copy turned a quarter turn turns alone", QString::number(node(ell, turned)->linkTurn));
+			"a whole copy turned a quarter turn turns alone", levelLinkFrameText(node(ell, turned)->linkFrame));
 		// An edit to the original reaches the turned copy turned.
 		ok &= expect(moveLevelMapObject(&ell, QStringLiteral("brush"), shortArm, 0, 16, 0, &error), "lengthen the L", error);
 		ok &= expect(samePoint(armOffset(turned, QStringLiteral("studio/short")),
@@ -385,7 +387,9 @@ int main(int argc, char** argv)
 			"the edit arrives turned into the copy's frame");
 		// Mirrored as a whole, the copy mirrors alone; an edit then arrives mirrored.
 		ok &= expect(setLevelMapSelection(&ell, members(turned), &error) && flipLevelMapSelection(&ell, 0, &error), "mirror the copy", error);
-		ok &= expect(node(ell, turned)->linkMirror && !node(ell, source)->linkMirror, "a whole copy mirrored mirrors alone");
+		ok &= expect(determinant(node(ell, turned)) < 0 && determinant(node(ell, source)) > 0
+				&& levelLinkFrameText(node(ell, turned)->linkFrame) == QStringLiteral("Mirrored"),
+			"a whole copy mirrored mirrors alone", levelLinkFrameText(node(ell, turned)->linkFrame));
 		ok &= expect(moveLevelMapObject(&ell, QStringLiteral("brush"), longArm, 8, 0, 0, &error), "shift the long arm", error);
 		ok &= expect(samePoint(armOffset(turned, QStringLiteral("studio/short")),
 					 framed(node(ell, turned), armOffset(source, QStringLiteral("studio/short"))))
@@ -394,7 +398,7 @@ int main(int argc, char** argv)
 		// The frame is saved with the link.
 		LevelMapDocument again;
 		ok &= expect(loadLevelMapBytes({QStringLiteral("ell.map"), {}, {}}, serializeLevelMap(ell).bytes, &again, &error)
-				&& node(again, turned)->linkTurn == node(ell, turned)->linkTurn && node(again, turned)->linkMirror,
+				&& node(again, turned)->linkFrame == node(ell, turned)->linkFrame && determinant(node(again, turned)) < 0,
 			"turns and mirrors are saved", error);
 		// One undo of the last edit puts both copies back.
 		const auto shortBefore = armOffset(source, QStringLiteral("studio/long"));
@@ -430,24 +434,40 @@ int main(int argc, char** argv)
 			return QJsonDocument::fromJson(out).object();
 		};
 		const QString linked = temp.filePath(QStringLiteral("linked.map"));
-		const QJsonObject made = run({QStringLiteral("link"), input, QStringLiteral("--id"), cliGroup, QStringLiteral("--offset"),
+		const QJsonObject made = run({QStringLiteral("create-linked-duplicate"), input, QStringLiteral("--id"), cliGroup, QStringLiteral("--offset"),
 			QStringLiteral("64,0,0"), QStringLiteral("--output"), linked});
 		const QString cliCopy = made.value(QStringLiteral("createdId")).toString();
 		LevelMapDocument result;
 		ok &= expect(!cliCopy.isEmpty() && loadLevelMap({linked, {}, {}}, &result, &error)
 				&& levelLinkedGroupNodes(result.scene, cliGroup).size() == 2,
-			"editor scene link makes a linked copy", error);
+			"editor scene create-linked-duplicate links a duplicate", error);
 		const QJsonArray nodes = made.value(QStringLiteral("scene")).toObject().value(QStringLiteral("nodes")).toArray();
 		ok &= expect(nodes.size() == 2 && !nodes.at(0).toObject().value(QStringLiteral("link")).toString().isEmpty(),
 			"the JSON report names the link");
+		const auto firstObjects = nodes.at(0).toObject().value(QStringLiteral("linkObjects")).toObject();
+		const auto secondObjects = nodes.at(1).toObject().value(QStringLiteral("linkObjects")).toObject();
+		ok &= expect(made.value(QStringLiteral("scene")).toObject().value(QStringLiteral("version")).toInt() == 6
+			&& firstObjects.size() == 1 && secondObjects.size() == 1 && firstObjects.begin().value() == secondObjects.begin().value(),
+			"CLI diagnostics expose persistent correspondence for linked objects");
+		const QJsonObject chosen = run({QStringLiteral("select-linked-groups"), linked, QStringLiteral("--id"), cliGroup});
+		ok &= expect(chosen.value(QStringLiteral("linkedGroups")).toArray().size() == 2
+				&& chosen.value(QStringLiteral("selection")).toArray().size() == 2,
+			"editor scene select-linked-groups selects the whole link set");
 		const QString unlinked = temp.filePath(QStringLiteral("unlinked.map"));
-		run({QStringLiteral("unlink"), linked, QStringLiteral("--id"), cliCopy, QStringLiteral("--output"), unlinked});
+		const QJsonObject separated = run({QStringLiteral("separate-linked-groups"), linked, QStringLiteral("--id"), cliCopy,
+			QStringLiteral("--output"), unlinked});
 		LevelMapDocument separate;
-		ok &= expect(loadLevelMap({unlinked, {}, {}}, &separate, &error) && levelLinkedGroupNodes(separate.scene, cliGroup).isEmpty(),
-			"editor scene unlink separates the copies", error);
+		ok &= expect(loadLevelMap({unlinked, {}, {}}, &separate, &error) && levelLinkedGroupNodes(separate.scene, cliGroup).isEmpty()
+				&& separated.value(QStringLiteral("separated")).toInt() == 1,
+			"editor scene separate-linked-groups separates them", error);
 		const QString refreshed = temp.filePath(QStringLiteral("refreshed.map"));
-		const QJsonObject refresh = run({QStringLiteral("update-links"), linked, QStringLiteral("--id"), cliGroup, QStringLiteral("--output"), refreshed});
-		ok &= expect(refresh.value(QStringLiteral("updated")).toInt() == 1, "editor scene update-links reports the copies it updated");
+		const QJsonObject refresh = run({QStringLiteral("update-linked-groups"), linked, QStringLiteral("--id"), cliGroup, QStringLiteral("--output"), refreshed});
+		ok &= expect(refresh.value(QStringLiteral("updated")).toInt() == 1, "editor scene update-linked-groups reports the groups it updated");
+		// The earlier names still work.
+		const QJsonObject older = run({QStringLiteral("update-links"), linked, QStringLiteral("--id"), cliGroup, QStringLiteral("--output"),
+			temp.filePath(QStringLiteral("older.map"))});
+		ok &= expect(older.value(QStringLiteral("operation")).toString() == QStringLiteral("update-linked-groups"),
+			"update-links is still accepted", older.value(QStringLiteral("operation")).toString());
 	}
 
 	if (ok) {

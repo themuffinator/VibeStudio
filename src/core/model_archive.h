@@ -5,6 +5,12 @@
 
 namespace vibestudio
 {
+// Check all destinations against one bounded package protection snapshot.
+// Folder identity capture runs on the caller's worker and honours model work
+// cancellation/progress. Refusal never authorises a partially checked output.
+bool validateModelArchiveOutputs(const PackageArchiveReader *archive, const QStringList &paths, QString *error,
+								 const ModelWorkControl &control = {});
+
 // Read-only adapter for model geometry, palettes and material images. Every
 // read verifies the entire exact entry before publishing bytes, never a prefix
 // or a fallback after checksum failure. Names must identify one physical row.

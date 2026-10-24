@@ -73,11 +73,14 @@ int main(int argc, char** argv)
 	ok &= expect(connect(QStringLiteral("actions-boolean"), QStringLiteral("int value;\n")) && client.supportsCodeActions() && !client.supportsCodeActionResolve(), "boolean capability supports immediate edits only");
 	client.stop(); wait([&]() { return client.state() == QStringLiteral("stopped"); });
 	if (app.arguments().size() > 1) {
+		// The CLI's --timeout-ms budget also covers starting this fixture as the
+		// server process, which took longer than 1.2 s in a debug build on a busy
+		// machine; only the hanging fixture is meant to reach the limit.
 		const auto run = [&](const QString& mode, const QStringList& extra, int expected) {
 			QProcess process; process.setWorkingDirectory(temp.path());
 			process.start(app.arguments()[1], QStringList {QStringLiteral("--cli"), QStringLiteral("code"), QStringLiteral("language-server"), path, QStringLiteral("--server"), app.applicationFilePath(), QStringLiteral("--server-args"),
-				QString::fromUtf8(QJsonDocument(QJsonArray {QStringLiteral("--fixture"), mode}).toJson(QJsonDocument::Compact)), QStringLiteral("--root"), temp.path(), QStringLiteral("--line"), QStringLiteral("1"), QStringLiteral("--column"), QStringLiteral("5"), QStringLiteral("--code-actions"), QStringLiteral("--timeout-ms"), QStringLiteral("1200"), QStringLiteral("--json")} + extra);
-			const bool finished = process.waitForFinished(10000); const auto output = process.readAllStandardOutput();
+				QString::fromUtf8(QJsonDocument(QJsonArray {QStringLiteral("--fixture"), mode}).toJson(QJsonDocument::Compact)), QStringLiteral("--root"), temp.path(), QStringLiteral("--line"), QStringLiteral("1"), QStringLiteral("--column"), QStringLiteral("5"), QStringLiteral("--code-actions"), QStringLiteral("--timeout-ms"), QStringLiteral("6000"), QStringLiteral("--json")} + extra);
+			const bool finished = process.waitForFinished(30000); const auto output = process.readAllStandardOutput();
 			ok &= expect(finished && process.exitCode() == expected, qPrintable(QStringLiteral("CLI %1 expected %2 got %3: %4").arg(mode).arg(expected).arg(process.exitCode()).arg(QString::fromUtf8(output))));
 			const auto json = QJsonDocument::fromJson(output); ok &= expect(json.isObject(), "code actions CLI emits JSON"); return json.object().value(QStringLiteral("languageServer")).toObject();
 		};

@@ -20,6 +20,12 @@ CameraKeyMotion cameraPointerDriveMotion(const QPointF& normalizedPosition);
 // Portable keys shared by preferences, diagnostics and the viewport. "none"
 // disables a binding; direction keys are unmodified, toggles may use modifiers.
 bool normalizeCameraKey(const QString& input, bool toggle, QString* normalized, QString* error = nullptr);
+// The held free-focus key: one unmodified key as above, except that Tab is
+// allowed, since the key only acts while mouse look holds the pointer.
+bool normalizeCameraFocusKey(const QString& input, QString* normalized, QString* error = nullptr);
+// True when `key` is the profile's free-focus key, pressed without modifiers,
+// on a perspective camera.
+bool cameraFocusKeyMatches(const CameraViewControls& controls, int key, Qt::KeyboardModifiers modifiers);
 QStringList cameraKeyProblems(const CameraViewControls& controls);
 QHash<int, CameraKeyMotion> cameraKeyMotions(const CameraViewControls& controls, bool looking,
 	Qt::MouseButton pressedButton = Qt::NoButton, Qt::KeyboardModifiers pressModifiers = Qt::NoModifier,

@@ -1,6 +1,8 @@
 #include "core/model_transform_axes.h"
 #include "core/model_collision.h"
 #include "core/model_document.h"
+#include "core/model_joint_tools.h"
+#include "core/model_skeleton.h"
 #include "core/model_surface_selection.h"
 #include "core/model_tags.h"
 
@@ -96,8 +98,20 @@ bool resolveModelTransformAxes(const ModelMesh &mesh, const ModelEdit &edit, Mod
 	const int reference = edit.axesFrame >= 0 ? edit.axesFrame : edit.frame >= 0 ? edit.frame : edit.pivotFrame;
 	const auto &selected = edit.selection;
 	if (reference < 0 || reference >= mesh.frames.size() || !validModelSurfaceSelection(mesh, selected) ||
-		!validModelTagSelection(mesh, selected) || !validModelCollisionSelection(mesh, selected))
+		!validModelTagSelection(mesh, selected) || !validModelCollisionSelection(mesh, selected) || !validModelJointSelection(mesh, selected))
 		return fail(error, Text::tr("Choose a valid selection and reference pose for transform axes."));
+	if (!selected.joint.isEmpty())
+	{
+		ModelJointFrame frame;
+		if (!modelJointFrame(mesh, reference, &frame, error)) return false;
+		const int joint = modelJointIndex(mesh.skeleton, selected.joint, Qt::CaseSensitive);
+		const auto &matrix = frame.pose[joint];
+		if (!basis({matrix.m[0], matrix.m[4], matrix.m[8]}, {matrix.m[1], matrix.m[5], matrix.m[9]},
+			{matrix.m[2], matrix.m[6], matrix.m[10]}, &candidate))
+			return fail(error, Text::tr("The selected joint does not provide usable transform axes. Choose model or custom axes."));
+		*result = candidate;
+		return true;
+	}
 	if (!selected.tag.isEmpty())
 	{
 		const auto tag = findModelTag(mesh, selected.tag, reference);

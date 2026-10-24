@@ -1,5 +1,6 @@
 #include "core/model_uv_mapping.h"
 #include "core/model_topology.h"
+#include "core/model_vertex_origins.h"
 #include <QCoreApplication>
 #include <array>
 
@@ -41,6 +42,9 @@ bool applyModelUvMapping(const ModelSurface &source, const QVector<int> &faces, 
 				return false;
 			}
 			candidate.texCoords.append(uv[v]);
+			if (!candidate.topologyVertices.isEmpty())
+				candidate.topologyVertices.append(candidate.topologyVertices[sourceVertices[v]]);
+			appendModelVertexOriginCopy(&candidate, old);
 			for (int f = 0; f < candidate.frames.size(); ++f)
 			{
 				if (!work.step())

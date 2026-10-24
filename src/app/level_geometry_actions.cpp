@@ -17,6 +17,8 @@
 #include "core/level_patch_tools.h"
 #include "core/level_prefab.h"
 #include "core/level_selection_tools.h"
+#include "core/level_scene.h"
+#include "core/level_textured_selection.h"
 #include "core/package_staging.h"
 
 #include <QAction>
@@ -132,25 +134,138 @@ void ApplicationShell::registerLevelGeometryCommands()
 	// mode on, or off when the views are in it already: the views, not the
 	// action's check mark, which the page refresh resets on the way in.
 	const QString components = tr("Vertex Editing");
+	const QString groups = tr("Groups");
+	add(QStringLiteral("map.wrapMerge"),tr("Wrap/Merge"),
+		tr("Build a convex hull, filling gaps. Whole brushes are replaced; picked components form a new brush and retain the originals. Uses current material and any placed clipper points."),
+		QStringLiteral("cube"),tr("Geometry"),[this] { wrapLevelMapFromUi(); });
+	add(QStringLiteral("map.wrapMergePoints"),tr("Wrap/Merge with Points…"),
+		tr("Preview a convex hull with up to three extra XYZ points. Picked components retain their original objects."),
+		QStringLiteral("cube"),tr("Geometry"),[this] { wrapLevelMapFromUi(true); });
+	add(QStringLiteral("map.openGroup"),tr("Open Group"),tr("Edit the selected group's contents. Objects outside it remain visible and protected."),
+		QStringLiteral("folder-open"),groups,[this] { changeLevelGroupContext(levelSelectedClosedGroup()); });
+	add(QStringLiteral("map.closeGroup"),tr("Close Group"),tr("Return to the parent group and select the group just closed."),
+		QStringLiteral("folder"),groups,[this] { changeLevelGroupContext({}); });
+	add(QStringLiteral("map.closeAllGroups"),tr("Close All Groups"),tr("Return to the map and restore the previous creation destination."),
+		QStringLiteral("folder"),groups,[this] { changeLevelGroupContext({},true); });
 	const auto mode = [this](int componentMode) {
 		const int current = m_levelMapViewport ? static_cast<int>(m_levelMapViewport->componentMode()) : 0;
 		setLevelComponentMode(current == componentMode ? 0 : componentMode);
 	};
 	add(QStringLiteral("map.vertexTool"), tr("Edit Vertices"),
-		tr("Show the selected brushes' vertices and patches' control points as handles in the 2D views: pick and drag them, or nudge them with the "
+		tr("Show the selected brushes' vertices and patches' control points in the plan views and camera: pick and drag them, or nudge them in a plan view with the "
 		   "arrow keys, as Radiant's vertex mode and TrenchBroom's vertex tool do. Escape drops the picks, then leaves the mode."),
 		QStringLiteral("vertex-tool"), components, [mode]() { mode(1); }, true);
 	add(QStringLiteral("map.edgeTool"), tr("Edit Edges"),
-		tr("Show the selected brushes' edges as handles in the 2D views and move them, as Radiant's edge mode does."), QStringLiteral("edge-tool"),
+		tr("Show the selected brushes' edges as handles in the plan views and camera and move them, as Radiant's edge mode does."), QStringLiteral("edge-tool"),
 		components, [mode]() { mode(2); }, true);
 	add(QStringLiteral("map.faceTool"), tr("Edit Faces"),
-		tr("Show the selected brushes' faces as handles in the 2D views and move them, pushing or pulling a face to grow or shrink its brush, as "
-		   "Radiant's face mode does."),
+		tr("Show the selected brushes' faces as handles in the plan views and camera and move them, pushing or pulling a face to grow or shrink its brush, as "
+		   "Radiant's face mode does. Faces picked by Select Textured move, rotate and scale with them without selecting their brushes."),
 		QStringLiteral("face-tool"), components, [mode]() { mode(3); }, true);
+	const QString componentSelection = tr("Component Selection");
+	const auto cycleComponent = [this](int steps) {
+		for (auto* view : std::as_const(m_levelPlanViews)) { view->finishComponentMove(false); }
+		if (m_levelMap3D) { m_levelMap3D->finishComponentMove(false); }
+		const bool camera = m_levelMap3D && levelMap3DShowing() && (m_levelLastFocusedView == m_levelMap3D || !levelMap2DShowing());
+		const bool cycled = camera ? m_levelMap3D->cycleComponentSelection(steps) : m_levelMapViewport && m_levelMapViewport->cycleComponentSelection(steps);
+		if (!cycled) { statusBar()->showMessage(tr("No eligible component handles at this position. Move to a handle or select fewer objects."),5000); }
+	};
+	add(QStringLiteral("map.nextComponent"),tr("Next Overlapping Component"),tr("Cycle towards the next depth at the last component pick in the active view. Coincident geometry stays together. Tab in a viewport also cycles."),
+		QStringLiteral("select-box"),componentSelection,[cycleComponent] { cycleComponent(1); });
+	add(QStringLiteral("map.previousComponent"),tr("Previous Overlapping Component"),tr("Cycle towards the previous depth at the last component pick in the active view. Shift+Tab in a viewport also cycles."),
+		QStringLiteral("select-box"),componentSelection,[cycleComponent] { cycleComponent(-1); });
+	add(QStringLiteral("map.componentTouchingEdges"),tr("Select Touching Edges"),tr("Convert picked components to edges incident to any pick. Patch control points are retained."),
+		QStringLiteral("edge-tool"),componentSelection,[this] { selectLevelComponentTopology(0,2,true); });
+	add(QStringLiteral("map.componentTouchingFaces"),tr("Select Touching Faces"),tr("Convert picked components to faces incident to any pick. Patch control points are retained."),
+		QStringLiteral("face-tool"),componentSelection,[this] { selectLevelComponentTopology(0,3,true); });
+	add(QStringLiteral("map.growComponents"),tr("Grow Component Selection"),tr("Add one neighbour step within each picked brush or patch. Faces connect across edges; patch points connect along rows and columns."),
+		QStringLiteral("select-box"),componentSelection,[this] { selectLevelComponentTopology(1); });
+	add(QStringLiteral("map.shrinkComponents"),tr("Shrink Component Selection"),tr("Remove the selection's boundary by one neighbour step. An entirely selected closed brush remains selected; patch borders erode."),
+		QStringLiteral("select-box"),componentSelection,[this] { selectLevelComponentTopology(2); });
+	add(QStringLiteral("map.connectedComponents"),tr("Select Connected Components"),tr("Select all components connected to the picks within each brush or patch. Other objects remain unchanged."),
+		QStringLiteral("select-box"),componentSelection,[this] { selectLevelComponentTopology(3); });
+	add(QStringLiteral("map.componentMoveTool"),tr("Move Components"),tr("Drag picked components or the camera's XYZ handles."),QStringLiteral("move"),components,[this] { setLevelComponentTool(0); },true);
+	add(QStringLiteral("map.componentRotateTool"),tr("Rotate Components"),tr("Drag an XYZ rotation ring around the shared component pivot."),QStringLiteral("rotate"),components,[this] { setLevelComponentTool(1); },true);
+	add(QStringLiteral("map.componentScaleTool"),tr("Scale Components"),tr("Drag an axis handle, or All for uniform scale, around the shared component pivot."),QStringLiteral("resize"),components,[this] { setLevelComponentTool(2); },true);
+	add(QStringLiteral("map.componentShearTool"),tr("Shear Components"),tr("Drag X/Y to displace X with distance along Y; the other labelled pairs work in the same way."),QStringLiteral("resize"),components,[this] { setLevelComponentTool(3); },true);
+	add(QStringLiteral("map.componentPivotTool"),tr("Move Component Pivot"),tr("Drag XYZ or Pivot to reposition the shared pivot without editing geometry."),QStringLiteral("vertex-tool"),components,[this] { setLevelComponentTool(4); },true);
+	add(QStringLiteral("map.componentResetPivot"),tr("Reset Component Pivot"),tr("Use the centre of the picked corners' combined bounds."),QStringLiteral("vertex-tool"),components,[this] { m_levelComponentPivot = {}; refreshLevelComponentGizmos(); refreshLevelGeometryCommands(); });
+	add(QStringLiteral("map.componentGizmoOptions"),tr("Component Manipulator Options…"),tr("Set rotation, scale and shear snapping, or enter a shared pivot."),QStringLiteral("settings"),components,[this] { editLevelComponentGizmoOptions(); });
+	add(QStringLiteral("map.snapPickedVertex"),tr("Snap Picked Vertex…"),tr("Move one picked geometric vertex exactly onto another existing brush vertex, merging corners when valid."),QStringLiteral("vertex-tool"),components,[this] { snapLevelVertexFromUi(); });
+	add(QStringLiteral("map.transformComponents"), tr("Transform Components…"),
+		tr("Move, rotate, scale or shear picked components around a shared or custom pivot, with optional snapping and UV lock. In face mode this includes faces picked by Select Textured."),
+		QStringLiteral("vertex-tool"), components, [this] { transformLevelComponentsFromUi(); });
+	add(QStringLiteral("map.componentUvLock"), tr("Lock Component UVs"),
+		tr("Preserve each surviving corner's texture coordinates during component moves, transforms and rounding. Separate from object Texture Lock. "
+		   "Where no single projection can keep every corner, Fit UVs When Lock Fails decides between fitting and refusing."),
+		QStringLiteral("image"), components, [this] {
+			m_settings.setLevelComponentUvLock(!m_settings.levelComponentUvLock());
+			if (m_levelComponentsRefresh) { m_levelComponentsRefresh(); }
+			refreshLevelGeometryCommands();
+			statusBar()->showMessage(m_settings.levelComponentUvLock() ? tr("Component UV lock on: component edits keep corner texture coordinates.")
+																	  : tr("Component UV lock off: textures stay in their stored frame during component edits."),
+				4000);
+		}, true);
+	// NRC TextureVertexLock fits three corners and lets the rest drift (brush.cpp
+	// vertexModeBuildHull at 449778b3, GPL-2.0-or-later); TB's UV Lock never
+	// refuses either. Workflow reference only; see docs/CREDITS.md.
+	add(QStringLiteral("map.componentUvFit"), tr("Fit UVs When Lock Fails"),
+		tr("With Lock Component UVs on, a face no single projection can follow, such as a side made into a trapezoid, keeps three corners' "
+		   "texture coordinates, preferring corners the edit did not move, and the others drift. Off refuses such edits instead."),
+		QStringLiteral("image"), components, [this] {
+			m_settings.setLevelComponentUvFit(!m_settings.levelComponentUvFit());
+			if (m_levelComponentsRefresh) { m_levelComponentsRefresh(); }
+			refreshLevelGeometryCommands();
+			statusBar()->showMessage(m_settings.levelComponentUvFit() ? tr("Locked UVs that cannot stay exact are fitted to three corners.")
+																	 : tr("Edits whose locked UVs cannot stay exact are refused."),
+				4000);
+		}, true);
+	add(QStringLiteral("map.componentXray"), tr("X-ray Component Handles"),
+		tr("Show and pick camera component handles through surfaces. Turn off to pick only visible handles."),
+		QStringLiteral("vertex-tool"), components, [this] {
+			if (m_levelMap3D) { m_levelMap3D->setComponentXray(!m_levelMap3D->componentXray()); }
+			refreshLevelGeometryCommands();
+		}, true);
+	add(QStringLiteral("map.splitComponents"), tr("Split Edge/Face"),
+		tr("Drag selected edge midpoints or face centres to create new corners. Preview the convex result before release; existing corners are preserved."),
+		QStringLiteral("vertex-tool"), components, [this] {
+			setLevelComponentSplit(m_levelMapViewport && !m_levelMapViewport->componentSplit());
+		}, true);
+	add(QStringLiteral("map.insertVertexTool"), tr("Insert Vertex"),
+		tr("Drag from a grid point on an edge or face to add a convex corner. Shared geometry is edited together; release waits for validation."),
+		QStringLiteral("vertex-tool"), components, [this] { setLevelVertexInsertion(!m_levelVertexInsertion); }, true);
+	add(QStringLiteral("map.extrudeFaces"), tr("Extrude Faces"),
+		tr("Move picked brush planes along their normals. Drag a face handle or the camera's N axis; every original face must survive."),
+		QStringLiteral("face-tool"), components, [this] { setLevelComponentExtrusion(m_levelComponentExtrusion ? 0 : 1); }, true);
+	add(QStringLiteral("map.extrudeSplit"), tr("Split Extrusion"),
+		tr("Create a separate brush when pulling outward, or divide the original brush when pushing inward."),
+		QStringLiteral("clip"), components, [this] { setLevelComponentExtrusion(m_levelComponentExtrusion == 2 ? 1 : 2); }, true);
+	add(QStringLiteral("map.extrudePrecisely"), tr("Extrude Faces Precisely…"),
+		tr("Set an exact signed distance along the first picked face's outward normal. Uses the shared checked extrusion and Texture Lock setting."),
+		QStringLiteral("face-tool"), components, [this] { extrudeLevelFacesPreciselyFromUi(); });
+	add(QStringLiteral("map.sweepFaces"),tr("Sweep Faces…"),
+		tr("Join picked face profiles through an arc, straight or S-bend path, with rotation, taper and repeated sections. Preview before creating new brushes."),
+		QStringLiteral("face-tool"),components,[this]{sweepLevelFacesFromUi();});
+	add(QStringLiteral("map.sweepTool"),tr("Sweep Tool"),
+		tr("Move, rotate and scale a destination cap in the level views. Create Sweep applies the checked draft as one undo step."),
+		QStringLiteral("face-tool"),components,[this]{toggleLevelSweepTool();},true);
+	add(QStringLiteral("map.sweepApply"),tr("Create Sweep"),tr("Create the checked sweep and retain the source faces."),
+		QStringLiteral("face-tool"),components,[this]{commitLevelSweepTool();});
+	add(QStringLiteral("map.sweepDecreaseScale"),tr("Decrease Sweep Scale"),tr("Move the destination's scale handle inward by one grid step."),
+		QStringLiteral("scale"),components,[this]{stepLevelSweepToolScale(-1);});
+	add(QStringLiteral("map.sweepIncreaseScale"),tr("Increase Sweep Scale"),tr("Move the destination's scale handle outward by one grid step."),
+		QStringLiteral("scale"),components,[this]{stepLevelSweepToolScale(1);});
+	add(QStringLiteral("map.removeComponents"), tr("Remove Selected Components"),
+		tr("Remove the vertices of the picked brush components. Every affected brush must remain three-dimensional; Undo restores the edit."),
+		QStringLiteral("vertex-tool"), components, [this]() { removeLevelComponentsFromUi(); });
 	add(QStringLiteral("map.snapVertices"), tr("Snap Vertices to Grid"),
 		tr("Round every vertex of the selected brushes onto the grid and rebuild them, as TrenchBroom's Snap Vertices does, to clean up brushes "
 		   "left off the grid."),
 		QStringLiteral("grid"), components, [this]() { snapLevelMapVerticesFromUi(); });
+	add(QStringLiteral("map.roundToGrid"), tr("Round Selection to Grid"),
+		tr("Round every brush vertex, patch control point and point-entity origin of the selection onto the grid, or only the picked components "
+		   "in a component mode, as Radiant's Snap To Grid does. One undo step; brushes the grid would collapse are left as they were."),
+		QStringLiteral("grid"), tr("Brush Tools"), [this]() { roundLevelMapSelectionToGridFromUi(); });
 	const QString geometry = tr("Brush Tools");
 	add(QStringLiteral("map.hollowTouching"), tr("Hollow Touching…"),
 		tr("Hollow the selected brushes into walls that meet without overlapping, as NetRadiant Custom's wrapped hollow does."),
@@ -211,6 +326,10 @@ void ApplicationShell::refreshLevelGeometryCommands()
 	}
 	const LevelMapDocument& document = m_levelMapDocument;
 	const bool textMap = document.format == LevelMapFormat::QuakeMap || document.format == LevelMapFormat::Quake3Map;
+	m_commands->setEnabled(QStringLiteral("map.duplicateUnique"),canDuplicateLevelMapSelection(LevelDuplicateMode::MakeUnique));
+	for (const auto& id : {QStringLiteral("map.duplicateSelection"),QStringLiteral("map.duplicateWithOffset")}) {
+		m_commands->setEnabled(id,canDuplicateLevelMapSelection());
+	}
 	bool brushes = false;
 	bool primitives = false;
 	bool owned = false;
@@ -224,6 +343,37 @@ void ApplicationShell::refreshLevelGeometryCommands()
 		m_commands->setEnabled(id, textMap);
 	}
 	m_commands->setEnabled(QStringLiteral("map.snapVertices"), textMap && brushes);
+	const auto picked = m_levelMapViewport ? m_levelMapViewport->pickedComponents() : QVector<LevelMapComponentSet>{};
+	for (const auto& id : {QStringLiteral("map.wrapMerge"),QStringLiteral("map.wrapMergePoints")}) {
+		m_commands->setEnabled(id,textMap && (levelComponentsActive() ? !picked.isEmpty() && !m_levelMapViewport->componentHandlesLimited() : levelMapSelectionClippable()));
+	}
+	for (const auto& id : {QStringLiteral("map.nextComponent"),QStringLiteral("map.previousComponent")}) {
+		m_commands->setEnabled(id,textMap && levelComponentsActive() && m_levelMapViewport->componentHandleCount() && !m_levelMapViewport->componentHandlesLimited());
+	}
+	for (const auto& id : {QStringLiteral("map.componentTouchingEdges"),QStringLiteral("map.componentTouchingFaces"),QStringLiteral("map.growComponents"),QStringLiteral("map.shrinkComponents"),QStringLiteral("map.connectedComponents")}) {
+		m_commands->setEnabled(id,textMap && levelComponentsActive() && !picked.isEmpty() && !m_levelMapViewport->componentHandlesLimited());
+	}
+	const QStringList tools{QStringLiteral("map.componentMoveTool"),QStringLiteral("map.componentRotateTool"),QStringLiteral("map.componentScaleTool"),QStringLiteral("map.componentShearTool"),QStringLiteral("map.componentPivotTool")};
+	for (int tool = 0; tool < tools.size(); ++tool) {
+		m_commands->setEnabled(tools[tool],textMap && levelComponentsActive());
+		if (auto* action = m_commands->action(tools[tool])) { const QSignalBlocker blocker(action); action->setChecked(tool == m_levelComponentTool && levelComponentsActive()); }
+	}
+	m_commands->setEnabled(QStringLiteral("map.componentResetPivot"),textMap && m_levelComponentPivot.valid);
+	m_commands->setEnabled(QStringLiteral("map.componentGizmoOptions"),textMap);
+	m_commands->setEnabled(QStringLiteral("map.snapPickedVertex"),textMap && m_levelMapViewport && m_levelMapViewport->canSnapPickedVertex());
+	m_commands->setEnabled(QStringLiteral("map.transformComponents"), textMap && levelComponentsActive() && (!picked.isEmpty() || !levelComponentFacePicks().faces.isEmpty()));
+	m_commands->setEnabled(QStringLiteral("map.componentUvLock"), textMap);
+	if (auto* action = m_commands->action(QStringLiteral("map.componentUvLock"))) {
+		const QSignalBlocker blocker(action); action->setChecked(m_settings.levelComponentUvLock());
+	}
+	m_commands->setEnabled(QStringLiteral("map.componentUvFit"), textMap);
+	if (auto* action = m_commands->action(QStringLiteral("map.componentUvFit"))) {
+		const QSignalBlocker blocker(action); action->setChecked(m_settings.levelComponentUvFit());
+	}
+	// Doom-format maps fall back to Snap Selection to Grid.
+	m_commands->setEnabled(QStringLiteral("map.roundToGrid"), document.format != LevelMapFormat::Unknown
+		&& (levelComponentsActive() ? !picked.isEmpty() || !levelComponentFacePicks().faces.isEmpty() : !document.selection.isEmpty()));
+	refreshLevelDeletionCommands();
 	m_commands->setEnabled(QStringLiteral("map.hollowTouching"), textMap && levelMapSelectionClippable());
 	m_commands->setEnabled(QStringLiteral("map.makeRoom"), textMap && levelMapSelectionClippable());
 	m_commands->setEnabled(QStringLiteral("map.selectWholeEntities"), textMap && owned);
@@ -242,6 +392,36 @@ void ApplicationShell::refreshLevelGeometryCommands()
 	m_commands->setEnabled(QStringLiteral("map.replaceWithPrefab"), textMap && (primitives || brushes));
 	// The mode commands show the views' mode, whichever way it was left.
 	const int componentMode = m_levelMapViewport ? static_cast<int>(m_levelMapViewport->componentMode()) : 0;
+	const bool sweepSource=textMap && componentMode==3 && !picked.isEmpty()
+		&& std::all_of(picked.cbegin(),picked.cend(),[](const auto& set){return set.object.kind==LevelMapSelectionKind::QuakeBrush && set.kind==LevelBrushComponent::Face;});
+	m_commands->setEnabled(QStringLiteral("map.sweepFaces"),sweepSource || levelSweepToolActive());
+	m_commands->setEnabled(QStringLiteral("map.sweepTool"),sweepSource || levelSweepToolActive());
+	m_commands->setChecked(QStringLiteral("map.sweepTool"),levelSweepToolActive());
+	m_commands->setEnabled(QStringLiteral("map.sweepApply"),levelSweepToolReady());
+	m_commands->setEnabled(QStringLiteral("map.sweepDecreaseScale"),levelSweepToolActive());
+	m_commands->setEnabled(QStringLiteral("map.sweepIncreaseScale"),levelSweepToolActive());
+	m_commands->setEnabled(QStringLiteral("map.openGroup"), !levelSelectedClosedGroup().isEmpty());
+	m_commands->setEnabled(QStringLiteral("map.closeGroup"), !document.openSceneGroups.isEmpty());
+	m_commands->setEnabled(QStringLiteral("map.closeAllGroups"), !document.openSceneGroups.isEmpty());
+	m_commands->setEnabled(QStringLiteral("map.extrudeFaces"), textMap && brushes);
+	m_commands->setEnabled(QStringLiteral("map.extrudeSplit"), textMap && m_levelComponentExtrusion != 0);
+	m_commands->setEnabled(QStringLiteral("map.extrudePrecisely"), textMap && componentMode == 3 && !picked.isEmpty()
+		&& std::all_of(picked.cbegin(),picked.cend(),[](const auto& set) { return set.object.kind == LevelMapSelectionKind::QuakeBrush && set.kind == LevelBrushComponent::Face && set.components.size() == 1; }));
+	for (const auto& id : {QStringLiteral("map.extrudeFaces"),QStringLiteral("map.extrudeSplit")}) {
+		if (auto* action = m_commands->action(id)) { const QSignalBlocker blocker(action); action->setChecked(id.endsWith(QStringLiteral("Split")) ? m_levelComponentExtrusion == 2 : m_levelComponentExtrusion != 0); }
+	}
+	m_commands->setEnabled(QStringLiteral("map.splitComponents"), textMap && (componentMode == 2 || componentMode == 3));
+	m_commands->setEnabled(QStringLiteral("map.insertVertexTool"), textMap && brushes);
+	if (auto* action = m_commands->action(QStringLiteral("map.insertVertexTool"))) {
+		const QSignalBlocker blocker(action); action->setChecked(m_levelVertexInsertion);
+	}
+	if (auto* action = m_commands->action(QStringLiteral("map.splitComponents"))) {
+		const QSignalBlocker blocker(action); action->setChecked(m_levelMapViewport && m_levelMapViewport->componentSplit());
+	}
+	m_commands->setEnabled(QStringLiteral("map.componentXray"), textMap && componentMode && levelMap3DShowing());
+	if (auto* action = m_commands->action(QStringLiteral("map.componentXray"))) {
+		const QSignalBlocker blocker(action); action->setChecked(m_levelMap3D && m_levelMap3D->componentXray());
+	}
 	const QStringList modes {QStringLiteral("map.vertexTool"), QStringLiteral("map.edgeTool"), QStringLiteral("map.faceTool")};
 	for (int index = 0; index < modes.size(); ++index) {
 		if (QAction* action = m_commands->action(modes.at(index))) {
@@ -253,37 +433,54 @@ void ApplicationShell::refreshLevelGeometryCommands()
 		const QSignalBlocker blocker(action);
 		action->setChecked(m_levelMapViewport && m_levelMapViewport->regionDrawMode());
 	}
+	// Picks, the sweep tool and the component tool decide what a nudge moves,
+	// and the sweep tool what a view-relative turn or flip may act on.
+	refreshLevelNudgeCommands();
+	refreshLevelAxisTransformCommands();
 }
 
 // ---------------------------------------------------------------------------
 // Vertex editing
 
-void ApplicationShell::setLevelComponentMode(int mode)
+void ApplicationShell::setLevelComponentMode(int mode, bool convertSelection)
 {
+	if (mode < 0 || mode > 3) { return; }
+	QVector<LevelMapComponentSet> converted;
+	const bool converting = convertSelection && mode && levelComponentsActive() && static_cast<int>(m_levelMapViewport->componentMode()) != mode;
+	if (converting) {
+		LevelComponentSelectionRequest request; request.target = static_cast<LevelBrushComponent>(mode-1); QString error;
+		if (!m_levelMapViewport->queryComponentSelection(request,&converted,&error)) { statusBar()->showMessage(error,6000); return; }
+	}
+	for (auto* view : std::as_const(m_levelPlanViews)) { view->finishComponentMove(false); }
+	if (m_levelMap3D) { m_levelMap3D->finishComponentMove(false); }
 	const bool textMap = m_levelMapDocument.format == LevelMapFormat::QuakeMap || m_levelMapDocument.format == LevelMapFormat::Quake3Map;
 	if (mode != 0 && !textMap) {
 		statusBar()->showMessage(tr("Open a Quake-family map to edit brush vertices and patch control points."));
 		mode = 0;
 	}
 	if (mode != 0) {
-		// The other plan tools give way, and the handles live in the 2D views.
+		// Construction and material tools give way to shared component editing.
+		m_levelPickedFaces.clear();
 		if (m_levelMapViewport && m_levelMapViewport->clipMode()) {
 			setLevelMapClipMode(false);
 		}
 		setLevelShearMode(false);
 		setLevelRegionDrawMode(false);
-		if (!levelMap2DShowing()) {
-			setLevelMap3D(false);
-		}
+		if (m_levelMap3D) { m_levelMap3D->setSurfaceTool(ModelViewportSurfaceTool::None); }
 	}
 	for (MapViewport* view : std::as_const(m_levelPlanViews)) {
 		const QSignalBlocker blocker(view);
 		view->setComponentMode(static_cast<MapViewport::ComponentMode>(mode));
+		if (converting) { view->setPickedComponents(converted); }
 	}
+	if (levelMap3DShowing()) { refreshLevelMap3DHighlight(); }
+	else { refreshLevelCameraComponents(); refreshLevelCameraResize(); }
 	refreshLevelGeometryCommands();
 	refreshLevelToolShelf();
+	refreshLevelSurfaceTools();
 	if (mode != 0) {
-		if (m_levelMapViewport) {
+		if (levelMap3DShowing() && !levelMap2DShowing()) { m_levelMap3D->setFocus(Qt::ShortcutFocusReason); }
+		else if (m_levelMapViewport) {
 			m_levelMapViewport->setFocus(Qt::ShortcutFocusReason);
 		}
 		const int handles = m_levelMapViewport ? m_levelMapViewport->componentHandleCount() : 0;
@@ -291,38 +488,93 @@ void ApplicationShell::setLevelComponentMode(int mode)
 				? tr("Vertex editing on: select brushes or patches to show their handles. Escape leaves.")
 				: tr("Vertex editing on: %n handle(s). Click or band them, then drag or use the arrow keys; Escape leaves.", nullptr, handles),
 			6000);
+		if (converting) { statusBar()->showMessage(tr("Selection converted: %n component(s).",nullptr,m_levelMapViewport->pickedComponentCount()),6000); }
+		else if (const auto faces = static_cast<int>(levelComponentFacePicks().faces.size()); faces > 0) {
+			statusBar()->showMessage(tr("Face editing includes %n face(s) picked by Select Textured. Use the arrow keys, the manipulator or Transform Components; Escape drops the picks.",nullptr,faces),6000);
+		}
 	}
 }
 
-void ApplicationShell::moveLevelComponentsFromViewport(const QVector<LevelMapComponentSet>& sets, const LevelMapVec3& delta)
+void ApplicationShell::selectLevelComponentTopology(int operation, int target, bool touching)
 {
-	LevelMapComponentReport report;
-	QString error;
-	// Dragging a vertex onto another merges them, as in TrenchBroom; Undo
-	// brings a merged corner back.
-	if (!moveLevelMapComponents(&m_levelMapDocument, sets, delta, true, &report, &error)) {
-		statusBar()->showMessage(tr("Could not move the components: %1").arg(error), 6000);
-		// The views find their picks where they were.
-		for (MapViewport* view : std::as_const(m_levelPlanViews)) {
-			view->updateDocument(view->displayDocument());
-		}
-		refreshLevelMapWorkbench();
-		return;
+	if (!levelComponentsActive()) { return; }
+	LevelComponentSelectionRequest request;
+	request.operation = static_cast<LevelComponentSelectionOperation>(operation);
+	request.target = static_cast<LevelBrushComponent>(std::max(1,target)-1); request.touching = touching;
+	QVector<LevelMapComponentSet> picked; QString error;
+	if (!m_levelMapViewport->queryComponentSelection(request,&picked,&error)) { statusBar()->showMessage(error,6000); return; }
+	for (auto* view : std::as_const(m_levelPlanViews)) { view->finishComponentMove(false); }
+	if (m_levelMap3D) { m_levelMap3D->finishComponentMove(false); }
+	if (operation == 0) { setLevelComponentMode(target,false); }
+	m_levelMapViewport->setPickedComponents(picked); shareLevelComponentPicks(m_levelMapViewport);
+	statusBar()->showMessage(tr("Selected %n component(s).",nullptr,m_levelMapViewport->pickedComponentCount()),6000);
+}
+
+void ApplicationShell::setLevelComponentSplit(bool enabled)
+{
+	if (enabled) { m_levelComponentExtrusion = 0; m_levelComponentTool = 0; }
+	for (auto* view : std::as_const(m_levelPlanViews)) { view->setComponentSplit(enabled); }
+	refreshLevelCameraComponents(); refreshLevelGeometryCommands();
+	statusBar()->showMessage(enabled ? tr("Split: drag an edge midpoint or face centre outward to create a corner. Escape cancels the drag.")
+		: tr("Component movement restored."),6000);
+}
+
+void ApplicationShell::setLevelVertexInsertion(bool enabled)
+{
+	for (auto* view : std::as_const(m_levelPlanViews)) { view->finishComponentMove(false); }
+	if (m_levelMap3D) { m_levelMap3D->finishComponentMove(false); }
+	if (enabled) {
+		setLevelComponentMode(1); m_levelComponentTool = 0; m_levelComponentExtrusion = 0;
+		for (auto* view : std::as_const(m_levelPlanViews)) { view->setComponentSplit(false); }
 	}
-	if (report.brushes + report.patches == 0) {
-		return;
+	m_levelVertexInsertion = enabled;
+	refreshLevelCameraComponents(); refreshLevelGeometryCommands(); refreshLevelToolShelf();
+	statusBar()->showMessage(enabled ? tr("Insert Vertex: drag outward from an edge or face grid point. Alt constrains to Z; numeric insertion is in Edit Brush Components.") : tr("Component movement restored."),6000);
+}
+
+void ApplicationShell::setLevelComponentExtrusion(int mode)
+{
+	if (mode && m_levelMapViewport && m_levelMapViewport->componentMode() != MapViewport::ComponentMode::Faces) { setLevelComponentMode(3); }
+	m_levelComponentExtrusion = std::clamp(mode,0,2);
+	if (mode) { m_levelComponentTool = 0; }
+	for (auto* view : std::as_const(m_levelPlanViews)) { view->setComponentSplit(false); }
+	refreshLevelCameraComponents(); refreshLevelGeometryCommands();
+	statusBar()->showMessage(mode ? tr("Extrude: pick a face, then drag its handle along the normal. Split Extrusion creates separate solids; numeric editing is available in Geometry.")
+		: tr("Component movement restored."),6000);
+}
+
+void ApplicationShell::extrudeLevelFacesPreciselyFromUi()
+{
+	if (!m_levelMapViewport || m_levelMapViewport->pickedComponents().isEmpty()) { return; }
+	QDialog dialog(this); dialog.setObjectName(QStringLiteral("extrudeFacesDialog")); dialog.setWindowTitle(tr("Extrude Faces Precisely"));
+	auto* form = new QFormLayout(&dialog); form->setRowWrapPolicy(QFormLayout::WrapLongRows);
+	const auto reference = m_levelMapViewport->pickedComponents().first();
+	if (reference.components.isEmpty()) { return; }
+	auto* face = new QLabel(tr("Brush %1 · Face %2").arg(reference.object.objectId).arg(reference.components.first()),&dialog);
+	face->setObjectName(QStringLiteral("extrudeReference")); face->setAccessibleName(tr("Reference face")); face->setWordWrap(true);
+	face->setToolTip(tr("The first selected brush in document order supplies the extrusion normal. The camera's N axis shows this direction."));
+	face->setAccessibleDescription(face->toolTip()); form->addRow(tr("Reference face"),face);
+	auto* distance = new QDoubleSpinBox(&dialog); distance->setObjectName(QStringLiteral("extrudeDistance"));
+	distance->setRange(-32768,32768); distance->setDecimals(6); distance->setSingleStep(m_levelMapViewport->gridSize());
+	distance->setValue(m_levelMapViewport->gridSize()); distance->setAccessibleName(tr("Extrusion distance"));
+	distance->setToolTip(tr("Positive moves outward along the reference face's normal; negative moves inward. Exact values are not snapped."));
+	distance->setAccessibleDescription(distance->toolTip()); form->addRow(tr("Distance"),distance);
+	auto* split = new QCheckBox(tr("Split into separate brushes"),&dialog); split->setObjectName(QStringLiteral("extrudeSeparate"));
+	split->setChecked(m_levelComponentExtrusion == 2); form->addRow(split);
+	auto* state = new QLabel(tr("Uses the current Texture Lock setting. Invalid or locked geometry leaves every brush unchanged."),&dialog);
+	state->setWordWrap(true); form->addRow(state);
+	auto* buttons = new QDialogButtonBox(QDialogButtonBox::Cancel,&dialog);
+	auto* apply = buttons->addButton(tr("Extrude"),QDialogButtonBox::AcceptRole); apply->setObjectName(QStringLiteral("extrudeApply"));
+	form->addRow(buttons); connect(buttons,&QDialogButtonBox::rejected,&dialog,&QDialog::reject);
+	connect(apply,&QPushButton::clicked,&dialog,&QDialog::accept);
+	distance->setFocus(Qt::OtherFocusReason);
+	if (dialog.exec() != QDialog::Accepted) { return; }
+	// Retire the modal window's focus/grab lifecycle before starting a checked
+	// viewport transaction; closing the dialog must not cancel its own request.
+	setLevelComponentExtrusion(split->isChecked() ? 2 : 1);
+	if (!m_levelMap3D->requestComponentExtrusion(distance->value())) {
+		statusBar()->showMessage(tr("The camera or face selection is not ready. Wait for the map preview and try again."),6000);
 	}
-	recordActivity(tr("Level map components moved"), tr("%n object(s)", nullptr, report.brushes + report.patches), QStringLiteral("level-map"),
-		OperationState::Warning, tr("Unsaved map edit"));
-	refreshLevelMapWorkbench();
-	QString message = tr("Moved the picked components of %n object(s) by %1, %2, %3.", nullptr, report.brushes + report.patches)
-						  .arg(delta.x, 0, 'g', 8)
-						  .arg(delta.y, 0, 'g', 8)
-						  .arg(delta.z, 0, 'g', 8);
-	if (report.collapsedVertices > 0) {
-		message += QLatin1Char(' ') + tr("%n vertex(es) merged; Undo brings them back.", nullptr, report.collapsedVertices);
-	}
-	statusBar()->showMessage(message, 5000);
 }
 
 void ApplicationShell::shareLevelComponentPicks(MapViewport* from)
@@ -330,12 +582,17 @@ void ApplicationShell::shareLevelComponentPicks(MapViewport* from)
 	if (!from) {
 		return;
 	}
-	const auto picks = from->pickedComponentPositions();
+	const auto picks = from->pickedComponents();
 	for (MapViewport* view : std::as_const(m_levelPlanViews)) {
 		if (view != from) {
-			view->setPickedComponentPositions(picks);
+			view->setPickedComponents(picks);
 		}
 	}
+	if (levelMap3DShowing()) { refreshLevelMap3DHighlight(); }
+	else { refreshLevelCameraComponents(); }
+	refreshLevelGeometryCommands();
+	refreshLevelSurfaceTools();
+	refreshLevelObjectSelectionCommands();
 }
 
 void ApplicationShell::snapLevelMapVerticesFromUi()
@@ -354,7 +611,7 @@ void ApplicationShell::snapLevelMapVerticesFromUi()
 			brushes << brush.id;
 		}
 	}
-	const double grid = m_levelMapViewport ? std::max(1, m_levelMapViewport->gridSize()) : 8;
+	const double grid = m_levelMapViewport ? m_levelMapViewport->gridSize() : 8.0;
 	int snapped = 0;
 	QStringList skipped;
 	QString error;
@@ -380,7 +637,8 @@ void ApplicationShell::hollowLevelMapTouchingFromUi()
 		statusBar()->showMessage(tr("Select brushes, or a brush entity, to hollow."));
 		return;
 	}
-	const int grid = m_levelMapViewport ? std::max(1, m_levelMapViewport->gridSize()) : 8;
+	// The prompt takes whole units, so a grid finer than 1 offers 1.
+	const int grid = m_levelMapViewport ? std::max(1, qRound(m_levelMapViewport->gridSize())) : 8;
 	bool ok = false;
 	const int thickness = QInputDialog::getInt(this, tr("Hollow Touching"), tr("Wall thickness (units)"), grid, 1, 4096, 1, &ok);
 	if (!ok) {
@@ -406,7 +664,7 @@ void ApplicationShell::makeLevelRoomFromUi()
 		statusBar()->showMessage(tr("Select brushes, or a brush entity, to make rooms of."));
 		return;
 	}
-	const int grid = m_levelMapViewport ? std::max(1, m_levelMapViewport->gridSize()) : 8;
+	const double grid = m_levelMapViewport ? m_levelMapViewport->gridSize() : 8.0;
 	int hollowed = 0;
 	QString error;
 	QStringList skipped;
@@ -483,8 +741,8 @@ void ApplicationShell::thickenLevelPatchesFromUi()
 	auto* thickness = new QDoubleSpinBox;
 	thickness->setObjectName(QStringLiteral("levelThickenAmount"));
 	thickness->setRange(-4096, 4096);
-	thickness->setDecimals(2);
-	thickness->setValue(m_levelMapViewport ? std::max(1, m_levelMapViewport->gridSize()) : 8);
+	thickness->setDecimals(3);
+	thickness->setValue(m_levelMapViewport ? m_levelMapViewport->gridSize() : 8.0);
 	thickness->setAccessibleName(tr("Thickness in map units"));
 	thickness->setToolTip(tr("How far behind the surface the copy goes; negative thickens in front of it."));
 	auto* direction = new QComboBox;
@@ -704,7 +962,7 @@ void ApplicationShell::selectLevelRegionObjects()
 		return;
 	}
 	QString error;
-	if (!setLevelMapSelection(&m_levelMapDocument, picked, &error)) {
+	if (!setLevelMapUserSelection(picked, &error)) {
 		statusBar()->showMessage(error, 5000);
 		return;
 	}

@@ -1,4 +1,5 @@
 #include "app/model_skin_source_dialog.h"
+#include "app/dialog_screen_fit.h"
 
 #include <QAbstractTableModel>
 #include <QComboBox>
@@ -124,7 +125,6 @@ ModelSkinSourceDialog::ModelSkinSourceDialog(QVector<PackageEntry> entries, int 
 		: bindings ? QCoreApplication::translate("VibeStudioModelSkinSource", "Apply Package Skin Assignments")
 							: QCoreApplication::translate("VibeStudioModelSkinSource", "Import Package Texture"));
 	setAccessibleName(windowTitle());
-	resize(820, 530);
 	auto *layout = new QVBoxLayout(this);
 	auto *form = new QFormLayout;
 	form->setRowWrapPolicy(QFormLayout::WrapLongRows);
@@ -222,6 +222,7 @@ ModelSkinSourceDialog::ModelSkinSourceDialog(QVector<PackageEntry> entries, int 
 		filter->setText(QStringLiteral(".skin"));
 	}
 	filter->setFocus();
+	fitDialogToScreen(this, QSize(820, 530));
 }
 ModelSkinSourceReference ModelSkinSourceDialog::reference() const
 {

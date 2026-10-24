@@ -146,8 +146,11 @@ int main(int argc, char **argv)
 					 decoded.md2SkinSize == mesh.md2SkinSize && decoded.surfaces[0].skinPaths == mesh.surfaces[0].skinPaths &&
 					 compareCorners(mesh, decoded, report.maxPositionError, report.maxUvError),
 				 "editable reimport preserves all frames, corner geometry, UV splits, skin slots and dimensions");
+	// The fixture's clip "poses" does not come back from the frame names
+	// idle01 and idle02, so MD2 reports leaving it out.
 	ok &= expect(report.storedVertices == 4 && report.maxUvError <= 0.002501 && report.maxNormalAngleDegrees < 1e-4 &&
-					 report.notes.size() == 2,
+					 report.notes.size() == 3 && report.omissions.size() == 1 && report.omissions.first().contains(QStringLiteral("poses")) &&
+					 decoded.animations.size() == 1 && decoded.animations.first().name == QStringLiteral("idle"),
 				 "export reports measured loss and metadata limitations");
 	ModelMesh stable;
 	ok &= expect(importEditableModel(QStringLiteral("panel.md2"), exportEditableModel(decoded, "md2", 0, &error), &stable, &error) &&
@@ -407,7 +410,8 @@ int main(int argc, char **argv)
 			return done && process.exitStatus() == QProcess::NormalExit && process.exitCode() == expected && jsonOutput.isObject();
 		};
 		ok &= expect(cli({"model", "build", input, "--output", output, "--dry-run"}, 0) && !QFileInfo::exists(output) &&
-						 result.value("storedVertices").toInt() == 4 && result.value("exportNotes").toArray().size() == 2,
+						 result.value("storedVertices").toInt() == 4 && result.value("exportNotes").toArray().size() == 3 &&
+						 result.value("exportOmissions").toArray().size() == 1,
 					 "CLI dry-run validates and reports target precision without writing");
 		ok &= expect(cli({"model", "build", input, "--output", output}, 0) && cli({"model", "build", input, "--output", output}, 1),
 					 "CLI writes native MD2 and protects existing output");

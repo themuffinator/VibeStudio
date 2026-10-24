@@ -327,6 +327,26 @@ bool runUntranslatedLogSmoke(QCoreApplication& app, const QString& directory)
 	return ok;
 }
 
+// A language whose catalog has not translated a count yet still writes it in
+// English's plural forms, not as the source's "vert(ex)(ices)": English's
+// catalog is installed beneath every other language's. Without compiled
+// catalogs (no lrelease) there is nothing to check.
+bool runPluralFallbackSmoke(QCoreApplication& app)
+{
+	bool ok = true;
+	const TranslationLoadResult german = installStudioTranslations(app, QStringLiteral("de"));
+	if (!german.fallbackCatalogPath.isEmpty()) {
+		const QString one = QCoreApplication::translate("VibeStudioModelEditor", "%Ln vert(ex)(ices)", nullptr, 1);
+		const QString two = QCoreApplication::translate("VibeStudioModelEditor", "%Ln vert(ex)(ices)", nullptr, 2);
+		ok &= expect(one.startsWith(QLatin1Char('1')) && two.startsWith(QLatin1Char('2')) && !one.contains(QLatin1Char('('))
+				&& !two.contains(QLatin1Char('(')) && one != two,
+			"A count the German catalog leaves untranslated should take a plural form, not the source's markup.");
+	}
+	const TranslationLoadResult english = installStudioTranslations(app, QStringLiteral("en"));
+	ok &= expect(english.fallbackCatalogPath.isEmpty(), "English needs no fallback beneath its own catalog.");
+	return ok;
+}
+
 } // namespace
 
 int main(int argc, char** argv)
@@ -337,6 +357,7 @@ int main(int argc, char** argv)
 	ok &= runParseRobustnessSmoke();
 	ok &= runSummarySmoke();
 	ok &= runInterfaceFontSmoke();
+	ok &= runPluralFallbackSmoke(app);
 
 	QTemporaryDir temporary;
 	ok &= expect(temporary.isValid(), "Crash bookkeeping needs a temporary directory.");

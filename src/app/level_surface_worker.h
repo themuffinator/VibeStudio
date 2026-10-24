@@ -17,6 +17,7 @@ struct LevelSurfaceWork {
 	QVector<LevelMaterialTarget> pasteTargets;
 	QVector<LevelSurfaceRequest> adjustments;
 	LevelSurfaceClipboard clipboard;
+	QString faceClipboardText; // Plain .map faces; parsed on the worker.
 	LevelSurfacePasteOptions paste;
 	std::shared_ptr<const PackageArchiveReader> archive;
 	std::shared_ptr<const PackageStagingModel> staging;

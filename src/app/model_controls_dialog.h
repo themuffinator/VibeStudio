@@ -23,7 +23,9 @@ class ModelControlsDialog final : public QDialog
   public:
 	explicit ModelControlsDialog(const ModelEditorControls &controls, QWidget *parent = nullptr);
 	[[nodiscard]] const ModelEditorControls &controls() const { return m_controls; }
-	// Sets the keys of one command, as the key field does.
+	// Sets the keys of one command, as the key field does. The panel focus
+	// keys (modelEditorFocusKeys) are refused: they always move focus
+	// between panels.
 	void setCommandKeys(const QString &commandId, const QStringList &keys);
 	void resetToProfile();
 
@@ -32,7 +34,12 @@ class ModelControlsDialog final : public QDialog
 	QTableWidget *m_keys = nullptr;
 	QLineEdit *m_filter = nullptr;
 	QKeySequenceEdit *m_keyEdit = nullptr;
+	// Keys the key field cannot record: Tab and Shift+Tab move focus out of
+	// it and Esc ends recording, so they are picked here instead.
+	QComboBox *m_specialKey = nullptr;
 	QLabel *m_problems = nullptr;
+	// Why the last key change was refused (a reserved focus key), if it was.
+	QString m_refusal;
 	struct Gesture
 	{
 		QComboBox *button = nullptr;

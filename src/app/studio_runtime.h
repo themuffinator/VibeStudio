@@ -24,6 +24,11 @@ struct TranslationLoadResult {
 	QString requestedLocale;
 	QString resolvedLocale;
 	QString catalogPath;
+	// For a language other than English, the English catalog installed
+	// beneath its own, empty when none was found: a message the language's
+	// catalog has not translated yet still takes English's plural forms
+	// ("1 vertex", "2 vertices") rather than the source's "vert(ex)(ices)".
+	QString fallbackCatalogPath;
 	bool rightToLeft = false;
 	QStringList searchedPaths;
 	QStringList warnings;

@@ -1,4 +1,5 @@
 #include "core/doom_preview_geometry.h"
+#include "core/level_visibility.h"
 #include "core/level_scene.h"
 
 #include <QCoreApplication>
@@ -28,7 +29,7 @@ double xAt(const Edge& edge, double y) { return edge.a.x() + (edge.b.x() - edge.
 DoomPreviewGeometry buildDoomPreviewGeometry(const LevelMapDocument& document, const LevelMapPreviewMeshOptions& options)
 {
 	DoomPreviewGeometry result;
-	const auto hidden = levelSceneHiddenObjects(document);
+	const auto hidden = levelMapHiddenObjects(document);
 	QHash<int, const LevelMapDoomVertex*> vertices;
 	QHash<int, const LevelMapDoomSidedef*> sides;
 	QHash<int, const LevelMapDoomSector*> sectors;

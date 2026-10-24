@@ -29,7 +29,23 @@ bool addLevelMapBrushPrimitive(LevelMapDocument *document, const LevelBrushPrimi
 // Adds one convex brush per point set to worldspawn, in the face style of
 // the map's first brush, as a single undo step that selects them all. Every
 // point must be a corner of its hull. Failure leaves the map unchanged.
+struct LevelHullInsertionOptions {
+	// None uses worldspawn/current creation context. A brush, patch or brush
+	// entity chooses its native owner and scene membership; brushes also choose
+	// their face dialect. Sources remain intact.
+	LevelMapSelectionRef destination;
+	bool keepSelection = false;
+};
 bool addLevelMapBrushHulls(LevelMapDocument *document, const QVector<QVector<LevelMapVec3>> &hulls, const QString &texture,
 						   const QString &description, const QString &undoDescription, QVector<int> *brushIds = nullptr,
-						   QString *error = nullptr);
+						   QString *error = nullptr, const LevelHullInsertionOptions& options = {});
+struct LevelBrushHullInsertion {
+	QVector<LevelMapVec3> vertices;
+	LevelMapSelectionRef destination;
+};
+// One transaction across different native owners, scene groups and face dialects.
+// Used by sweep profiles; all sources remain intact. Up to 4096 generated hulls.
+bool addLevelMapBrushHullBatch(LevelMapDocument* document, const QVector<LevelBrushHullInsertion>& hulls,
+	const QString& texture, const QString& description, const QString& undoDescription,
+	QVector<int>* brushIds = nullptr, QString* error = nullptr, bool keepSelection = false);
 } // namespace vibestudio

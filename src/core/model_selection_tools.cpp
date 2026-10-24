@@ -206,6 +206,53 @@ ModelSelection fromFaces(const Context &c, int surface, const QSet<int> &faces, 
 	}
 	return result;
 }
+// The loop or ring through one geometric edge of the quad view, in `mode`
+// (face mode gives the face loop across it). `walked` collects the geometric
+// edges of the walk: a seed on them would give the same loop or ring again.
+// The topology is the caller's, so many seeds share one build.
+bool growEdgeLoop(const Context &c, const ModelQuadTopology &quads, int surface, ModelEdge geometric, bool ring, ModelSelectionMode mode,
+				  ModelSelection *selected, QSet<ModelEdge> *walked, QString *error)
+{
+	if (!c.topology.edgeFaces.contains(geometric))
+		return fail(error, Text::tr("The picked edge is not part of this surface."));
+	if (quads.diagonals.contains(geometric))
+		return fail(error, Text::tr("The picked edge is hidden inside a quad. Pick a quad side instead."));
+	*selected = {surface, {}, {}};
+	const bool faceLoop = mode == ModelSelectionMode::Faces;
+	QVector<ModelEdge> walk;
+	if (ring || faceLoop)
+	{
+		QVector<int> elements;
+		walk = modelEdgeRing(quads, geometric, nullptr, &elements);
+		if (faceLoop)
+		{
+			for (int element : std::as_const(elements))
+			{
+				for (int face : quads.elements[element].faces)
+				{
+					if (face >= 0)
+						selected->faces.insert(face);
+				}
+			}
+			if (selected->faces.isEmpty())
+				return fail(error, Text::tr("No quads run across the picked edge."));
+		}
+		else
+			*selected = fromEdges(c, surface, QSet<ModelEdge>(walk.cbegin(), walk.cend()), mode);
+	}
+	else
+	{
+		walk = modelEdgeLoop(quads, geometric);
+		*selected = fromEdges(c, surface, QSet<ModelEdge>(walk.cbegin(), walk.cend()), mode);
+	}
+	if (walked)
+	{
+		walked->insert(geometric);
+		for (auto edge : std::as_const(walk))
+			walked->insert(edge);
+	}
+	return true;
+}
 // Faces reached from `seeds` through geometric (or, delimited, unmarked indexed) edges.
 QSet<int> linkedFaces(const Context &c, const QSet<int> &seeds, bool delimitSeams)
 {
@@ -516,34 +563,8 @@ bool selectModelComponents(const ModelMesh &mesh, const ModelSelection &current,
 		ModelQuadTopology quads;
 		if (!buildModelQuadTopology(surface, request.frame, request.maxAngle, &quads, error, control))
 			return false;
-		if (quads.diagonals.contains(geometric))
-			return fail(error, Text::tr("The picked edge is hidden inside a quad. Pick a quad side instead."));
-		const bool faceLoop = mode == ModelSelectionMode::Faces;
-		if (request.operation == ModelSelectOperation::Ring || faceLoop)
-		{
-			QVector<int> elements;
-			const auto ring = modelEdgeRing(quads, geometric, nullptr, &elements);
-			if (faceLoop)
-			{
-				for (int element : std::as_const(elements))
-				{
-					for (int face : quads.elements[element].faces)
-					{
-						if (face >= 0)
-							selected.faces.insert(face);
-					}
-				}
-				if (selected.faces.isEmpty())
-					return fail(error, Text::tr("No quads run across the picked edge."));
-			}
-			else
-				selected = fromEdges(c, s, QSet<ModelEdge>(ring.cbegin(), ring.cend()), mode);
-		}
-		else
-		{
-			const auto loop = modelEdgeLoop(quads, geometric);
-			selected = fromEdges(c, s, QSet<ModelEdge>(loop.cbegin(), loop.cend()), mode);
-		}
+		if (!growEdgeLoop(c, quads, s, geometric, request.operation == ModelSelectOperation::Ring, mode, &selected, nullptr, error))
+			return false;
 		break;
 	}
 	case ModelSelectOperation::ShortestPath:
@@ -1092,5 +1113,120 @@ bool selectModelComponents(const ModelMesh &mesh, const ModelSelection &current,
 	selected.surface = s;
 	*result = std::move(selected);
 	return work.check();
+}
+
+QStringList modelEdgeLoopRefusalLines(const ModelEdgeLoopsResult &result)
+{
+	QStringList lines;
+	for (const auto &refusal : result.refused)
+		lines << Text::tr("Edge %1:%2: %3").arg(refusal.edge.first).arg(refusal.edge.second).arg(refusal.reason);
+	return lines;
+}
+
+bool selectModelEdgeLoops(const ModelMesh &mesh, const ModelSelection &current, const ModelSelectRequest &request, const QVector<ModelEdge> &seeds,
+						  ModelEdgeLoopsResult *result, QString *error, const ModelWorkControl &control)
+{
+	if (error)
+		error->clear();
+	if (!result)
+		return fail(error, Text::tr("Select a valid surface."));
+	*result = {};
+	const bool ring = request.operation == ModelSelectOperation::Ring;
+	if (!ring && request.operation != ModelSelectOperation::Loop)
+		return fail(error, Text::tr("Only loops and rings grow from selected edges."));
+	if (current.surface < 0 || current.surface >= mesh.surfaces.size())
+		return fail(error, Text::tr("Select a valid surface."));
+	const auto &surface = mesh.surfaces[current.surface];
+	if (request.frame < 0 || request.frame >= surface.frames.size())
+		return fail(error, Text::tr("Choose an existing animation pose."));
+	ModelWorkProgress work(control, ModelWorkPhase::Editing, error);
+	// The given seeds; else the selected edges; else, as in vertex mode, the
+	// edges whose two vertices are selected.
+	const bool fromVertices = seeds.isEmpty() && current.edges.isEmpty();
+	QVector<ModelEdge> ordered;
+	if (!fromVertices)
+	{
+		for (const auto seed : seeds.isEmpty() ? QVector<ModelEdge>(current.edges.cbegin(), current.edges.cend()) : seeds)
+			ordered.append(modelEdge(seed.first, seed.second));
+	}
+	else if (!current.vertices.isEmpty())
+	{
+		for (const auto &t : surface.triangles)
+		{
+			if (!work.step())
+				return false;
+			for (const auto &[a, b] : {qMakePair(t.a, t.b), qMakePair(t.b, t.c), qMakePair(t.c, t.a)})
+			{
+				if (current.vertices.contains(a) && current.vertices.contains(b))
+					ordered.append(modelEdge(a, b));
+			}
+		}
+	}
+	std::sort(ordered.begin(), ordered.end());
+	ordered.erase(std::unique(ordered.begin(), ordered.end()), ordered.end());
+	const auto noSeeds = [&]
+	{ return fail(error, ring ? Text::tr("Select edges first; each grows to its ring.") : Text::tr("Select edges first; each grows to its loop.")); };
+	if (ordered.isEmpty())
+		return noSeeds();
+	// One topology for every seed: a selection of thousands of edges costs
+	// one build plus the walks, not a build per seed.
+	ModelQuadTopology quads;
+	if (!buildModelQuadTopology(surface, request.frame, request.maxAngle, &quads, error, control))
+		return false;
+	const Context c(surface, quads.geometry, request.frame);
+	ModelSelection joined{current.surface, {}, {}};
+	QSet<ModelEdge> walked;
+	for (const auto seed : std::as_const(ordered))
+	{
+		if (!work.step())
+			return false;
+		if (seed.first < 0 || seed.second >= surface.vertexCount)
+		{
+			result->seeds.append(seed);
+			result->refused.append({seed, Text::tr("The picked edge is not part of this surface.")});
+			continue;
+		}
+		const auto geometric = c.topology.geometricEdge(seed.first, seed.second);
+		// Selected vertices across a quad's hidden diagonal name no edge of
+		// the quad view, so they seed nothing rather than a refusal.
+		if (fromVertices && quads.diagonals.contains(geometric))
+			continue;
+		result->seeds.append(seed);
+		// An edge on a loop or ring already grown gives the same one again.
+		if (walked.contains(geometric))
+		{
+			result->grown.append(seed);
+			continue;
+		}
+		ModelSelection grown;
+		QString reason;
+		if (!growEdgeLoop(c, quads, current.surface, geometric, ring, request.mode, &grown, &walked, &reason))
+		{
+			result->refused.append({seed, reason});
+			continue;
+		}
+		joined.faces += grown.faces;
+		joined.vertices += grown.vertices;
+		joined.edges += grown.edges;
+		result->grown.append(seed);
+	}
+	if (result->seeds.isEmpty())
+		return noSeeds();
+	if (result->grown.isEmpty())
+	{
+		const auto lines = modelEdgeLoopRefusalLines(*result);
+		return fail(error, (ring ? Text::tr("No selected edge has a ring.") : Text::tr("No selected edge has a loop.")) + QLatin1Char(' ') +
+							   lines.join(QLatin1Char(' ')));
+	}
+	if (request.extend)
+	{
+		joined.faces += current.faces;
+		joined.vertices += current.vertices;
+		joined.edges += current.edges;
+	}
+	if (!work.check())
+		return false;
+	result->selection = std::move(joined);
+	return true;
 }
 } // namespace vibestudio

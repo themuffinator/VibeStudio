@@ -3,6 +3,7 @@
 // and MilkShape 3D users, hiding and isolating, and the commands profiles add
 // (Border and Element levels, flatten, snap to grid, frame stepping).
 #include "app/model_editor_tools.h"
+#include "app/locale_number.h"
 
 #include "app/model_editor_dialog.h"
 #include "app/model_viewport.h"
@@ -33,7 +34,7 @@ struct Text
 int selectedCount(const ModelSelection &selection)
 {
 	return int(selection.faces.size() + selection.vertices.size() + selection.edges.size() + selection.surfaces.size() +
-			   (selection.tag.isEmpty() ? 0 : 1) + (selection.collision.isEmpty() ? 0 : 1));
+			   (selection.tag.isEmpty() ? 0 : 1) + (selection.collision.isEmpty() ? 0 : 1) + (selection.joint.isEmpty() ? 0 : 1));
 }
 } // namespace
 
@@ -60,17 +61,22 @@ void ModelEditorTools::applyControls(const ModelEditorControls &controls)
 		}
 		return keys;
 	};
+	// A command keyed to Tab listens only while the view has focus, so Tab
+	// still moves through every other control.
 	for (auto it = m_actions.cbegin(); it != m_actions.cend(); ++it)
 	{
 		if (modelEditorCommandForId(it.key()))
+		{
 			it.value()->setShortcuts(keysFor(modelEditorCommandKeys(m_controls, it.key())));
+			scopeShortcuts(it.value());
+		}
 	}
 	for (const auto &id : {QStringLiteral("openMesh"), QStringLiteral("saveMesh"), QStringLiteral("undoMesh"), QStringLiteral("redoMesh")})
 	{
 		if (auto *action = m_editor->findChild<QAction *>(id))
 		{
 			action->setShortcuts(keysFor(modelEditorCommandKeys(m_controls, id)));
-			action->setShortcutContext(Qt::WidgetWithChildrenShortcut);
+			scopeShortcuts(action);
 			if (!m_editor->actions().contains(action))
 				m_editor->addAction(action);
 		}
@@ -91,10 +97,11 @@ void ModelEditorTools::applyControls(const ModelEditorControls &controls)
 	}
 	ModelEditorProfile profile;
 	static_cast<void>(modelEditorProfileForId(m_controls.profileId, &profile));
-	m_viewport->setControlsHelp(profile.description);
+	m_viewport->setControlsHelp(profile.description + QLatin1Char(' ') + keyboardHelp());
 	if (m_controls.transform.style == ModelTransformStyle::Modal)
 		setLastingTool(LastingTool::None);
 	m_borderMode = m_elementMode = false;
+	refreshKeyHints();
 	refreshHeader();
 }
 
@@ -158,6 +165,8 @@ bool ModelEditorTools::pointerOnSelection(const QPointF &point) const
 	const auto selection = m_editor->m_document.selection();
 	if (selectedCount(selection) == 0)
 		return false;
+	// Joints use the shared handles; mesh-style pointer-following is separate.
+	if (!selection.joint.isEmpty()) return false;
 	if (m_controls.layout.family == QLatin1String("milkshape"))
 		return true;
 	QRectF bounds;
@@ -245,7 +254,7 @@ bool ModelEditorTools::hasHidden() const
 	return false;
 }
 
-ModelMesh ModelEditorTools::displayMesh(const ModelMesh &mesh) const
+ModelMesh ModelEditorTools::displayMesh(const ModelMesh &mesh, const ModelEditReport *report) const
 {
 	if (!hasHidden())
 		return mesh;
@@ -255,7 +264,15 @@ ModelMesh ModelEditorTools::displayMesh(const ModelMesh &mesh) const
 		if (it.key() < 0 || it.key() >= display.surfaces.size())
 			continue;
 		auto &triangles = display.surfaces[it.key()].triangles;
-		for (int face : it.value())
+		QSet<int> hidden = it.value();
+		if (report && report->sourceFaces.contains(it.key()))
+		{
+			hidden.clear();
+			const auto &sources = report->sourceFaces[it.key()];
+			for (int face = 0; face < sources.size(); ++face)
+				if (it.value().contains(sources[face])) hidden.insert(face);
+		}
+		for (int face : hidden)
 		{
 			// A collapsed triangle keeps every index stable but covers nothing,
 			// so it neither draws nor picks.
@@ -353,12 +370,13 @@ void ModelEditorTools::hideSelection(bool unselected)
 	}
 	if (count == 0)
 	{
-		showBanner(unselected ? Text::tr("Everything is selected; nothing to hide.") : Text::tr("Select something to hide first."));
+		showBanner(unselected ? Text::tr("Everything is selected; nothing to hide.") : Text::tr("Select something to hide first."), {},
+				   LiveStatus::Problem);
 		return;
 	}
 	applySelection(unselected ? selection : ModelSelection{selection.surface, {}, {}});
 	applyHidden();
-	showBanner(Text::tr("%1 face(s) hidden. Reveal Hidden shows them again.").arg(count));
+	showBanner(Text::tr("%Ln face(s) hidden. Reveal Hidden shows them again.", nullptr, int(count)));
 }
 
 void ModelEditorTools::revealHidden()
@@ -424,53 +442,9 @@ void ModelEditorTools::buildProfileActions()
 				  showBanner(Text::tr("Element: click a face to select its whole connected piece."));
 			  });
 	addAction(QStringLiteral("meshModeObject"), Text::tr("Object (Surface) Select Mode"), {}, [this] { setSelectionMode(5); });
-	addAction(QStringLiteral("meshModeTag"), Text::tr("Tag and Joint Mode"), {}, [this] { setSelectionMode(3); });
-	addAction(QStringLiteral("meshSelectLoop"), Text::tr("Select Edge Loops of Selection"), {},
-			  [this]
-			  {
-				  const auto selection = m_editor->m_document.selection();
-				  if (selection.edges.isEmpty())
-				  {
-					  showBanner(Text::tr("Select edges first; each grows to its loop."));
-					  return;
-				  }
-				  auto result = selection;
-				  for (auto edge : selection.edges)
-				  {
-					  ModelSelectRequest request;
-					  request.operation = ModelSelectOperation::Loop;
-					  request.mode = ModelSelectionMode::Edges;
-					  request.edge = edge;
-					  request.extend = true;
-					  ModelSelection grown;
-					  if (selectModelComponents(m_editor->m_document.mesh(), result, request, &grown))
-						  result = grown;
-				  }
-				  applySelection(result);
-			  });
-	addAction(QStringLiteral("meshSelectRing"), Text::tr("Select Edge Rings of Selection"), {},
-			  [this]
-			  {
-				  const auto selection = m_editor->m_document.selection();
-				  if (selection.edges.isEmpty())
-				  {
-					  showBanner(Text::tr("Select edges first; each grows to its ring."));
-					  return;
-				  }
-				  auto result = selection;
-				  for (auto edge : selection.edges)
-				  {
-					  ModelSelectRequest request;
-					  request.operation = ModelSelectOperation::Ring;
-					  request.mode = ModelSelectionMode::Edges;
-					  request.edge = edge;
-					  request.extend = true;
-					  ModelSelection grown;
-					  if (selectModelComponents(m_editor->m_document.mesh(), result, request, &grown))
-						  result = grown;
-				  }
-				  applySelection(result);
-			  });
+	addAction(QStringLiteral("meshModeTag"), Text::tr("Tag and Joint Mode"), {}, [this] { setSelectionMode(m_editor->m_document.mesh().skeleton.isEmpty() ? 3 : 6); });
+	addAction(QStringLiteral("meshSelectLoop"), Text::tr("Select Edge Loops of Selection"), {}, [this] { selectEdgeLoops(false); });
+	addAction(QStringLiteral("meshSelectRing"), Text::tr("Select Edge Rings of Selection"), {}, [this] { selectEdgeLoops(true); });
 	addAction(QStringLiteral("meshHide"), Text::tr("Hide Selected"), {}, [this] { hideSelection(false); });
 	addAction(QStringLiteral("meshHideUnselected"), Text::tr("Hide Unselected"), {}, [this] { hideSelection(true); });
 	addAction(QStringLiteral("meshReveal"), Text::tr("Reveal Hidden"), {}, [this] { revealHidden(); });
@@ -516,7 +490,7 @@ void ModelEditorTools::buildProfileActions()
 					  ModelVec3 centre{};
 					  if (!selectionCentre(&centre))
 					  {
-						  showBanner(Text::tr("Select the vertices to flatten first."));
+						  showBanner(Text::tr("Select the vertices to flatten first."), {}, LiveStatus::Problem);
 						  return;
 					  }
 					  auto edit = toolEdit(ModelEditKind::Transform);
@@ -526,7 +500,7 @@ void ModelEditorTools::buildProfileActions()
 					  edit.scale = {axis == 0 ? 0.0f : 1.0f, axis == 1 ? 0.0f : 1.0f, axis == 2 ? 0.0f : 1.0f};
 					  QString error;
 					  if (!runTool(edit, &error))
-						  showBanner(error);
+						  showBanner(error, {}, LiveStatus::Problem);
 				  });
 	}
 	addAction(QStringLiteral("meshSnapSelectionToGrid"), Text::tr("Snap Selection to Grid"), {},
@@ -550,7 +524,7 @@ void ModelEditorTools::buildProfileActions()
 				  const int frame = std::clamp(m_editor->m_frame->currentIndex(), 0, std::max(0, int(surface.frames.size()) - 1));
 				  if (vertices.isEmpty() || surface.frames.isEmpty())
 				  {
-					  showBanner(Text::tr("Select the vertices to snap first."));
+					  showBanner(Text::tr("Select the vertices to snap first."), {}, LiveStatus::Problem);
 					  return;
 				  }
 				  // One undoable edit per vertex would flood history; snap through
@@ -582,13 +556,13 @@ void ModelEditorTools::buildProfileActions()
 					  QString error;
 					  if (!runTool(edit, &error))
 					  {
-						  showBanner(error);
+						  showBanner(error, {}, LiveStatus::Problem);
 						  break;
 					  }
 					  moved += it.value().size();
 				  }
 				  applySelection(selection);
-				  showBanner(Text::tr("%1 vertices snapped to the %2-unit grid.").arg(moved).arg(grid));
+				  showBanner(Text::tr("%Ln vert(ex)(ices) snapped to the %1-unit grid.", nullptr, int(moved)).arg(localeNumber(grid)));
 			  });
 	addAction(QStringLiteral("meshShowUvEditor"), Text::tr("Texture Coordinate Editor"), {},
 			  [this]
@@ -605,6 +579,9 @@ void ModelEditorTools::buildProfileActions()
 	addAction(QStringLiteral("meshViewUser"), Text::tr("User View"), {}, [this] { m_editor->m_viewPreset->setCurrentIndex(0); });
 	addAction(QStringLiteral("meshToggleQuadView"), Text::tr("Toggle Four Views"), {}, [this] { m_editor->toggleFourViews(); });
 	addAction(QStringLiteral("meshMaximizeView"), Text::tr("Maximise View"), {}, [this] { m_editor->toggleMaximisedView(); });
+	// The keyboard's way to the pane a click would make active.
+	addAction(QStringLiteral("meshNextView"), Text::tr("Next View"), {}, [this] { m_editor->stepActivePane(1); });
+	addAction(QStringLiteral("meshPreviousView"), Text::tr("Previous View"), {}, [this] { m_editor->stepActivePane(-1); });
 	addAction(QStringLiteral("meshToggleSidebars"), Text::tr("Toggle Sidebars"), {}, [this] { m_editor->toggleSidebars(); });
 	addAction(QStringLiteral("meshToggleToolShelf"), Text::tr("Toggle Tool Shelf"), {},
 			  [this]
@@ -641,7 +618,7 @@ void ModelEditorTools::buildProfileActions()
 				  if (m_editor->m_copyFramePose && m_editor->m_copyFramePose->isEnabled())
 					  m_editor->m_copyFramePose->click();
 				  else
-					  showBanner(Text::tr("Choose a different source frame in Animation to copy its pose here."));
+					  showBanner(Text::tr("Choose a different source frame in Animation to copy its pose here."), {}, LiveStatus::Problem);
 			  });
 	addAction(QStringLiteral("meshTypeIn"), Text::tr("Numeric Transform"), {}, [this] { m_editor->showSidebarPage(QStringLiteral("item")); });
 }

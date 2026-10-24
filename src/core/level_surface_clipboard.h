@@ -2,6 +2,7 @@
 
 #include "core/level_surface.h"
 #include "core/level_material_paint.h"
+#include <optional>
 
 namespace vibestudio {
 // A portable value, independent of source document lifetime and object IDs.
@@ -19,7 +20,7 @@ private:
 	LevelMapBrushFace m_face;
 	bool m_ready = false;
 };
-enum class LevelSurfacePasteMode { Parameters, Project, Seamless, RadiantValues, RadiantProject };
+enum class LevelSurfacePasteMode { Parameters, Project, Seamless, RadiantValues, RadiantProject, Attributes };
 struct LevelSurfacePasteOptions {
 	// Parameters reproduces the stored values in the same mapping family.
 	// Project preserves the source's world-space UV function on each target.
@@ -27,11 +28,17 @@ struct LevelSurfacePasteOptions {
 	// RadiantValues keeps Valve axes and transfers primitive texel density.
 	// RadiantProject copies classic/Valve values, projects primitive matrices
 	// and patch UVs, and permits the native edge-on brush mapping result.
+	// Attributes copies face-relative values, retains the target's orientation
+	// basis and contents, and only replaces explicitly supplied surface flags.
 	LevelSurfacePasteMode mode = LevelSurfacePasteMode::Parameters;
 	bool mappingOnly = false; // Keep each target's material and flags.
 	// Apply values/material to selected brushes and patches too. Explicit hit
 	// faces also receive copied flags; other selected faces retain their flags.
 	bool includeSelection = false;
+	// A captured component/surface selection, including an explicitly empty
+	// selection. Unset uses the document's whole-object selection. These remain
+	// selected targets, not explicit hits, so they retain their original flags.
+	std::optional<QVector<LevelMaterialTarget>> selectionTargets;
 	QHash<QString, QSize> materialSizes; // Normalized material keys; source/targets.
 	// If projection needs explicit axes, convert every classic face in the map
 	// in this same plan, preserving unpasted surfaces and respecting their locks.

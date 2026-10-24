@@ -1,4 +1,5 @@
 #include "core/model_assembly.h"
+#include "core/model_archive.h"
 #include "core/package_archive.h"
 
 #include <QCoreApplication>
@@ -49,8 +50,11 @@ bool exportModelAssemblyQ3Animation(const ModelAssembly &assembly, const ModelAs
 	const auto target = inspectModelWriteTarget(path, control);
 	if (!target.isValid())
 		return fail(error, target.error);
-	bool protectedInput = modelPathsReferToSameFile(path, sourcePath) ||
-						  (archive && (archive->protectsInputPath(target.path) || archive->protectsInputPath(target.resolvedPath)));
+	if (!validateModelArchiveOutputs(archive.get(), {target.path, target.resolvedPath}, error, control))
+	{
+		return false;
+	}
+	bool protectedInput = modelPathsReferToSameFile(path, sourcePath);
 	for (const auto &input : resolved.inputs)
 		protectedInput |= modelAssemblyInputProtectsPath(input, path);
 	if (protectedInput || (target.existed && !overwrite))

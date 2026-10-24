@@ -217,6 +217,22 @@ struct ModelEditorControlRow {
 [[nodiscard]] QStringList modelEditorCommandKeys(const ModelEditorControls& controls, const QString& commandId);
 // Every command with its keys under these controls.
 [[nodiscard]] QVector<ModelEditorKeyBinding> modelEditorEffectiveKeys(const ModelEditorControls& controls);
+// The keys kept for moving keyboard focus between the editor's panels in
+// every profile: Ctrl+Tab to the next panel and Ctrl+Shift+Tab to the
+// previous one, as in the code editor where Tab types a tab. On macOS they
+// are Control+Tab and Control+Shift+Tab (Qt's Meta): Qt's Ctrl is Command
+// there, and the system keeps Command+Tab. No command may take a key that
+// combines Tab with that modifier; overrides that try are skipped with a
+// warning. Portable text.
+[[nodiscard]] QStringList modelEditorFocusKeys(bool forward);
+// "Ctrl+Tab and Ctrl+Shift+Tab always move keyboard focus between panels.",
+// in the platform's own key names, for refusals and warnings.
+[[nodiscard]] QString modelEditorFocusKeyText();
+[[nodiscard]] bool isModelEditorFocusKey(const QString& key);
+// Plain Tab or Shift+Tab. A command may take these (Blender's edit-mode
+// Tab); the editor then listens for them only while a view itself has
+// keyboard focus, so Tab still moves through every other control.
+[[nodiscard]] bool isModelEditorTabKey(const QString& key);
 
 [[nodiscard]] QString modelViewLayoutId(ModelViewLayout layout);
 bool modelViewLayoutForId(const QString& id, ModelViewLayout* out);

@@ -162,6 +162,35 @@ int main(int argc, char** argv) {
 						 included.contains(names.indexOf(QStringLiteral("VS_SCENE"))),
 					 "WAD map subset keeps scene metadata with its map", error);
 	}
+	const auto groups = temp.filePath(QStringLiteral("groups.map")), moved = temp.filePath(QStringLiteral("groups-moved.map"));
+	result = run({"create",input,"--kind","group","--name","Assembly","--output",groups});
+	const auto groupId = result.value(QStringLiteral("createdId")).toString();
+	run({"assign",groups,"--id",groupId,"--objects","brush:0,brush:1","--output",groups,"--overwrite"});
+	const auto grouped = read(groups);
+	result = run({"select",groups,"--objects","brush:1"});
+	ok &= expect(result.value(QStringLiteral("selection")).toArray().size() == 2,"CLI selects closed group as unit");
+	result = run({"select",groups,"--context",groupId,"--objects","brush:0,brush:2"});
+	ok &= expect(result.value(QStringLiteral("selection")).toArray() == QJsonArray{"brush:0"}
+		&& result.value(QStringLiteral("openGroups")).toArray() == QJsonArray{groupId},"CLI open context isolates direct objects");
+	result = run({"select",groups,"--objects","brush:0,brush:1","--selection","brush:0,brush:1","--mode","toggle"});
+	ok &= expect(result.value(QStringLiteral("selection")).toArray().isEmpty() && read(groups) == grouped,"CLI band toggles group once without writing");
+	result = run({"select",groups,"--objects","brush:1","--selection","brush:0","--mode","toggle"});
+	ok &= expect(result.value(QStringLiteral("selection")).toArray().isEmpty(),"CLI initial selection names group units");
+	LevelMapDocument expectedMove;
+	ok &= loadLevelMap({groups,{},{}},&expectedMove,&error);
+	setLevelMapSelection(&expectedMove,{{LevelMapSelectionKind::QuakeBrush,0},{LevelMapSelectionKind::QuakeBrush,1}});
+	ok &= moveLevelMapSelection(&expectedMove,-8,0,0,{true,false},&error);
+	result = run({"translate",groups,"--objects","brush:0","--offset","-8,0,0","--output",moved,"--dry-run"});
+	ok &= expect(!QFile::exists(moved) && result.value(QStringLiteral("dryRun")).toBool(),"group translate dry run stays read-only");
+	run({"translate",groups,"--objects","brush:0","--offset","-8,0,0","--output",moved});
+	ok &= expect(read(moved) == serializeLevelMap(expectedMove).bytes && read(groups) == grouped,"CLI translates whole group through shared texture lock and persistence");
+	const auto refusedContext = temp.filePath(QStringLiteral("refused-context.map"));
+	run({"translate",groups,"--context",groupId,"--objects","brush:0,brush:2","--offset","8,0,0","--output",refusedContext},1);
+	ok &= expect(!QFile::exists(refusedContext),"mixed outside-context CLI move cannot publish partial output");
+	run({"select",groups,"--objects","brush:0","--mode","surprise"},1);
+	run({"select",groups,"--objects","brush:0","--context",groupId,"--context",groupId},1);
+	run({"translate",groups,"--objects","brush:0","--offset","nan,0,0","--output",refusedContext},1);
+	run({"select",groups,"--objects","brush:99999"},1);
 	std::cout << (ok ? "Level scene CLI smoke passed\n" : "Level scene CLI smoke failed\n");
 	return ok ? 0 : 1;
 }

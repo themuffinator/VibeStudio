@@ -1,4 +1,5 @@
 #include "core/model_mesh_tools_p.h"
+#include "core/model_vertex_origins.h"
 
 #include <algorithm>
 #include <cmath>
@@ -139,6 +140,11 @@ bool symmetrize(ModelMesh *mesh, const ModelEdit &edit, ModelSelection *selectio
 	const auto &options = edit.tool;
 	const int axis = options.axis, frame = options.referenceFrame;
 	const double sign = options.positiveToNegative ? 1 : -1;
+	// Skin reconciliation applies the map; refuse unknown or conflicting names
+	// before any geometry changes.
+	QMap<QString, QString> joints;
+	if (!options.mirrorJoints.isEmpty() && !completeModelMirrorJointMap(mesh->skeleton, options.mirrorJoints, &joints, error))
+		return false;
 	auto &surface = mesh->surfaces[selection->surface];
 	const double threshold = std::max(options.mergeThreshold, modelScale(surface, frame) * 1e-9);
 	ModelGeometricTopology topology;
@@ -180,11 +186,13 @@ bool symmetrize(ModelMesh *mesh, const ModelEdit &edit, ModelSelection *selectio
 				derived.insert(face);
 		}
 		chosen = derived;
-		// Cut points lie exactly on the plane in every pose.
+		// Cut points lie exactly on the plane in every pose. Skinned cut points
+		// follow the skeleton in retained skeletal poses instead.
 		for (int v : created)
 		{
 			for (auto &pose : surface.frames)
 				(axis == 0 ? pose.positions[v].x : axis == 1 ? pose.positions[v].y : pose.positions[v].z) = 0.0f;
+			markModelVertexOriginRepose(&surface, v);
 		}
 	}
 	QVector<bool> drop(surface.triangles.size(), false);
@@ -237,7 +245,9 @@ bool symmetrize(ModelMesh *mesh, const ModelEdit &edit, ModelSelection *selectio
 	{
 		for (auto &pose : surface.frames)
 			(axis == 0 ? pose.positions[v].x : axis == 1 ? pose.positions[v].y : pose.positions[v].z) = 0.0f;
+		markModelVertexOriginRepose(&surface, v);
 	}
+	QHash<int, int> mirrorIdentities;
 	const auto reflected = [&](int v)
 	{
 		if (centre.contains(v))
@@ -245,6 +255,9 @@ bool symmetrize(ModelMesh *mesh, const ModelEdit &edit, ModelSelection *selectio
 		if (mirror.contains(v))
 			return mirror.value(v);
 		const int copy = appendCopy(&surface, v);
+		detachModelVertexIdentity(&surface, copy, &mirrorIdentities);
+		// Skinned copies take the source's weights through the joint mirror map.
+		mirrorModelVertexOrigin(&surface, copy, axis);
 		for (auto &pose : surface.frames)
 		{
 			auto &p = pose.positions[copy];
@@ -374,6 +387,7 @@ bool loopCut(ModelMesh *mesh, const ModelEdit &edit, ModelSelection *selection, 
 	if (!reserveCapacity(*mesh, selection->surface, newVertices, newTriangles, error))
 		return false;
 	QHash<QPair<ModelEdge, int>, int> points;
+	QHash<QPair<int, int>, int> pointIdentities;
 	const auto pointAt = [&](int u, int v, int ringIndex, int k)
 	{
 		const auto key = qMakePair(modelEdge(u, v), k);
@@ -383,6 +397,12 @@ bool loopCut(ModelMesh *mesh, const ModelEdit &edit, ModelSelection *selection, 
 		const double s = fractions[k - 1];
 		const double t = bottom[ringIndex] == ring[ringIndex].first ? s : 1 - s;
 		const int created = appendLerp(&surface, low, high, t);
+		if (!surface.topologyVertices.isEmpty())
+		{
+			const auto identityKey = qMakePair(ringIndex, k);
+			if (!pointIdentities.contains(identityKey)) pointIdentities.insert(identityKey, created);
+			surface.topologyVertices[created] = pointIdentities.value(identityKey);
+		}
 		points.insert(key, created);
 		return created;
 	};

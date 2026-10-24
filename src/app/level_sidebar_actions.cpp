@@ -33,6 +33,7 @@
 #include <QSet>
 #include <QSignalBlocker>
 #include <QSplitter>
+#include <QStandardItemModel>
 #include <QStatusBar>
 #include <QToolButton>
 #include <QTreeWidget>
@@ -335,6 +336,7 @@ QWidget* ApplicationShell::buildLevelViewOptions()
 		{m_levelMapShowVertices, QStringLiteral("levelViewShowVertices")},
 		{m_levelMapShowLabels, QStringLiteral("levelViewShowLabels")},
 		{m_levelMapShowLinks, QStringLiteral("levelViewShowLinks")},
+		{m_levelMapShowLinkedGroups, QStringLiteral("levelViewShowLinkedGroups")},
 		{m_levelPreviewTextured, QStringLiteral("levelViewTextured")},
 	};
 	for (const auto& [action, name] : toggles) {
@@ -356,8 +358,19 @@ QWidget* ApplicationShell::buildLevelViewOptions()
 	grid->setAccessibleName(tr("Grid size"));
 	grid->setToolTip(tr("Grid spacing in world units, the same setting as the view bar's grid."));
 	if (m_levelMapGrid) {
+		const auto* bar = qobject_cast<const QStandardItemModel*>(m_levelMapGrid->model());
 		for (int index = 0; index < m_levelMapGrid->count(); ++index) {
-			grid->addItem(tr("%n unit(s)", nullptr, m_levelMapGrid->itemData(index).toInt()), m_levelMapGrid->itemData(index));
+			const double units = m_levelMapGrid->itemData(index).toDouble();
+			if (units < 1.0) {
+				grid->addItem(tr("%1 units").arg(levelEditorGridSizeText(units)), units);
+			} else {
+				grid->addItem(tr("%n unit(s)", nullptr, static_cast<int>(units)), units);
+			}
+			// A grid the open map cannot store is greyed out here too.
+			auto* items = qobject_cast<QStandardItemModel*>(grid->model());
+			if (bar && items && bar->item(index) && !bar->item(index)->isEnabled() && items->item(index)) {
+				items->item(index)->setEnabled(false);
+			}
 		}
 		grid->setCurrentIndex(m_levelMapGrid->currentIndex());
 		connect(grid, &QComboBox::currentIndexChanged, this, [this](int index) {
@@ -368,6 +381,11 @@ QWidget* ApplicationShell::buildLevelViewOptions()
 		connect(m_levelMapGrid, &QComboBox::currentIndexChanged, grid, [grid](int index) {
 			const QSignalBlocker blocker(grid);
 			grid->setCurrentIndex(index);
+		});
+		// A choice here is a grid command, as one from the view bar is: it
+		// follows the profile's snap policy (level_grid_actions.cpp).
+		connect(grid, &QComboBox::activated, this, [this, grid](int index) {
+			setLevelMapGridUnits(grid->itemData(index).toDouble());
 		});
 	}
 	auto* gridLabel = new QLabel(tr("Grid"));
@@ -451,6 +469,13 @@ QWidget* ApplicationShell::buildLevelLayoutOptions()
 		tiles->addTile(tile);
 	}
 	layout->addWidget(tiles);
+	// Which plan panes the three-plan layouts show; unavailable in the other
+	// layouts and for the last shown pane (app/level_plan_pane_actions.cpp).
+	for (const auto& id : {QStringLiteral("map.showTopView"), QStringLiteral("map.showFrontView"), QStringLiteral("map.showSideView")}) {
+		if (QAction* action = m_commands->action(id)) {
+			layout->addWidget(actionCheckBox(action, QStringLiteral("levelLayoutPane-") + id.section(QLatin1Char('.'), 1), this));
+		}
+	}
 	// One per line, as in Navigation: side by side they outgrow a narrow sidebar.
 	layout->addSpacing(4);
 	for (const auto& id : {QStringLiteral("map.maximizeView"), QStringLiteral("map.equalizeViews")}) {
@@ -861,6 +886,20 @@ void ApplicationShell::registerLevelSidebarCommands()
 	}
 	add(QStringLiteral("map.sidebar.reset"), tr("Reset Sidebars"), tr("Put every Levels sidebar tab back where the editor profile places it."),
 		QStringLiteral("refresh"), [this]() { resetLevelSidebars(); });
+	// Direct routes to two Map tab sections, so the statistics and the
+	// worldspawn keys can be reached from the palette or a key without
+	// opening the tab and finding the section. Each brings the section up
+	// expanded with keyboard focus in its list.
+	add(QStringLiteral("map.statistics"), tr("Show Map Statistics"),
+		tr("Open the Map tab's Statistics: entity, brush, face, patch and texture counts, bounds and issues."), QStringLiteral("report"), [this]() {
+			setMode(StudioMode::Levels);
+			showLevelSidebarPage(QStringLiteral("map"), QStringLiteral("map.statistics"), true);
+		});
+	add(QStringLiteral("map.worldspawn"), tr("Show Worldspawn Keys"),
+		tr("Open the Map tab's Worldspawn list to add or change worldspawn keys; each change is one undo step."), QStringLiteral("key"), [this]() {
+			setMode(StudioMode::Levels);
+			showLevelSidebarPage(QStringLiteral("map"), QStringLiteral("map.worldspawn"), true);
+		});
 }
 
 void ApplicationShell::refreshLevelEntityClassInfo()

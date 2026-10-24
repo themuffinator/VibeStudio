@@ -55,6 +55,874 @@ and cross-platform build integration in the same change.
 
 ## Evidence And Remaining Gaps
 
+The [production plan](plans/modeller-production.md) tracks the remaining mesh,
+UV, animation, rigging, target-delivery and acceptance work. Joint hierarchy
+and numeric weight authoring now share document transactions through the GUI
+and `model rig`; bind/pose transforms and dense clips use **Edit Skeletal
+Animation** and `model pose`. Bone overlays, named selection and viewport poses
+now use the shared transform handles. See [Skeleton authoring](MODEL_RIG.md).
+[Influence inspection, explicit binding and repair](MODEL_SKINNING.md) use the
+same document services. [Staged weight painting](MODEL_WEIGHT_PAINT.md) adds
+brush/row authoring and recipe replay. [Mirrored/spatial transfer](MODEL_WEIGHT_TRANSFER.md)
+adds joint mapping, locks and bounded seam-aware correspondence. [Two-bone IK](MODEL_IK.md)
+adds target/pole placement and protected dense pose updates. [Animation curves](MODEL_ANIMATION_CURVES.md)
+add persistent TRS keys, tangent editing, reviewed sampling and batch key tools. Richer animation tools,
+real-project and cross-platform acceptance remain open.
+
+**Delivery targets, detail levels, skin variants and Quake III player packages
+(2026-10-23).** Gaps FMT-06, ATT-LOD-02, UVSKIN-10 and ATT-PLAYER-01 to 03.
+Status: Partial. Everything is checked against VibeStudio's own decoders, the public
+engine sources and one Quake III loader oracle; nothing has engine or
+real-project acceptance yet.
+
+Delivery targets go beyond the preflight. Prepare for Target
+(core/model_target_prepare, the Mesh Editor review, `model prepare`) applies
+split, join, decimate, fit and influence fixes through the editor's own edits
+and is adopted as one undo step (ModelDocument::adopt), refusing a review of an
+older revision; removing unused vertices is a listed fix, and skin variants
+follow split and joined surfaces. Issues name their exact faces or vertices, and
+choosing one selects them. New targets cover RTCW single player and multiplayer,
+Enemy Territory, Q2PRO MD2, MD3, MD5 mesh and MD5 animation, and GZDoom MD3 and
+IQM, each limit cited in docs/MODEL_TARGETS.md and docs/CREDITS.md. Targets and
+the strict setting are saved per project (an unreadable manifest is never
+replaced) or suggested by the game installation, which the editor and the CLI
+now choose by the rule releases use. The Mesh Editor summarises and checks MD5
+targets for skeletal models.
+
+Detail levels are owned by the source as a recipe (editable source version 13):
+generated or hand-made levels, validated the way Quake III reads a set (frames
+against the base, surface names for .skin binding, each level against its
+target), reviewed in Mesh > Clean Up > Detail Levels…, exported, or staged in
+one package operation with as many levels as the target loads. Existing sets can
+be inspected on disk or in packages (`model lod --inspect`); RTCW and ET MDC
+files are probed for every level. Every way of writing or staging an MD3 now
+names older detail files left beside it and says whether the game would read
+them wrongly; the level dependency review lists detail levels and flags
+mismatched ones. R_ComputeLOD switch distances are reported.
+
+Skin variants (editable source version 14) are edited as one undo step,
+previewed, and written as Quake III .skin files or Doom 3 skin declarations that
+compare materials by Doom 3's canonical names. Player Package publishes a .skin
+set and icon for every skin, red and blue team skins, detail levels and the 13
+custom sounds, and refuses an upper part without tag_weapon; the optional oracle
+against the original cg_players.c passed 20 cases. Open Player… and `model
+assembly --new --from-player` open an existing player from a package or folder
+as a new assembly, and republishing reproduces its files byte for byte.
+
+**Mesh Editor at 200% text, announcements, high contrast, reduced motion and
+localisation (2026-10-23).** The modeller's large-text, screen-reader,
+high-contrast, reduced-motion and localisation milestone (A11Y-2, A11Y-9,
+A11Y-3, A11Y-5, A11Y-6). It is GUI only, with no CLI change.
+
+Layout: one menu row (a Model menu first) and one eliding status strip. In
+Material shading the strip also holds the material images' state: a line, a
+progress bar and Cancel while loading, and an Images menu with Reload Images and
+Details…. Sidebars follow the text scale and wrap. A sidebar folds when the
+views would get less than 45% of the width, and a sidebar the user opens stays
+open. The timeline follows the profile flag. Modeller dialogs are bounded to the
+screen and scroll their bodies above their buttons. model-editor-layout-ui-smoke
+measures 1280x720, 1366x768 and 1600x1000 pages at 100% and 200% text, dark and
+both high-contrast themes, LTR and RTL, with strings a third longer, and opens
+19 dialogs on a 1280x720 screen. At 1280x720 and 200% the editor's minimum is
+about 800-930 by 555 px and the views keep 53-55% of the width.
+
+Screen readers: status lines, summaries and dialog statuses keep stable names
+and carry their text in the accessible description. Results (polite), long-task
+ends (polite, read aloud under Long tasks that finish) and problems (assertive)
+are announced through announceToScreenReader, gated by the user's setting. Modal
+previews, readouts and counts are not announced, and a recovery failure is
+announced once per new failure.
+
+High contrast and reduced motion: every modeller preview follows the applied
+theme and the recorded reduced-motion setting. Busy bars stand still, and Play
+answers with the reason.
+
+Localisation: more than 40 count messages use %Ln plural forms, and display
+numbers use the locale while edit roles, Copy, files and the CLI stay in the C
+locale. Other languages fall back to English plural forms, and
+english_plurals.py lints the modeller sources for count-before-plural literals.
+
+Evidence: model-editor-layout-ui-smoke, model-accessibility-ui-smoke,
+model-locale-ui-smoke and the updated suites. The full model* run passed
+154/155; the one failure is the known core model-skeletal-export-smoke, which
+passes on current main. All of this is offscreen; no screen reader or
+real-device review has been done.
+
+**Skeletal working set, source size and undo accounting (2026-10-22).** A
+skeletal model over 1,024 frames or 1,048,576 frame vertices is re-baked from
+its skeleton into a working set (the bind pose plus the clips that fit three
+quarters of the frame-vertex budget) rather than refused, with a receipt naming
+the clips left out. **Skeleton** > **Working Set…**, `model pose --operation
+working-set` and `model import --clips` change it through one undoable,
+recoverable edit, refused with the cause named when leaving frames hold their
+own data. Clips outside the working set stay exact, are previewed one sample at
+a time by the IK, curve, key and range-transfer tools, and are exported in full
+by MD5 and IQM. Sources write shortest round-trip floats and pack bulk arrays as
+version 12 when readable JSON would pass 64 MiB; one serialiser serves saves,
+recovery, the CLI and bakes. Undo history counts skeletons, curves, skinning and
+topology through a shared-block ledger, trims only the oldest undo steps and has
+an **Undo history limit** (64 MiB by default). model-skeletal-working-set-smoke,
+model-skeletal-working-set-ui-smoke, model-source-budget-smoke,
+model-history-budget-smoke and model-history-budget-ui-smoke pass. Evidence is
+synthetic; clips longer than the whole budget cannot play in the main viewport
+and version 12 sources do not diff line by line.
+
+**Mesh Editor keyboard access (2026-10-22)** removes the Tab keyboard trap. In
+every controls profile Ctrl+Tab and Ctrl+Shift+Tab (Control+Tab on macOS) move
+between panels and cannot be given to a command; commands bound to Tab or
+Shift+Tab work only while the view has focus. The document actions and tool
+shelf are single Tab stops with arrow keys, tables leave on Tab, F9 enters
+**Adjust Last Operation** and Esc returns to the view. Key hints, banners and
+descriptions name the active profile's keys. **Select Edge Loops/Rings of
+Selection** grow every selected edge in one worker pass (`model select --select
+loop|ring` with `--edges` or `--vertices`), Loop Cut starts on the selected
+edge, the UV view pans and zooms from the keyboard, Next/Previous View step
+through four views, and the navigation gizmo keeps clear of the HUD at 200% text
+and right to left. model-editor-keyboard-ui-smoke drives real key presses in
+four profiles at 100% LTR and 200% RTL, with mutation checks;
+model-edge-loops-smoke and model-navigation-gizmo-ui-smoke cover the core
+operator and the gizmo. The same lane fixed model-uv-islands-ui-smoke
+(activation is restored after a delayed progress dialog) and
+model-assembly-ui-smoke (the check now waits for the first GPU frame). The
+lane's full modeller suite passed 144 of 144. No physical keyboard, screen
+reader or macOS run has been made, and the gizmo has no accessible objects.
+
+**Lossless skeletal export and delivery targets (2026-10-22).** MD5, IQM and ASE
+exports write or report everything they cannot hold. The md5mesh moves joint
+bind scale, shear and mirroring into its weight offsets so the bind mesh decodes
+exactly; md5anim refuses poses that rescale an influencing joint and needs a
+whole frame rate; IQM reports influences reduced to four, 8-bit and 16-bit
+rounding and its layout loss. MDL, MD2 and MD3 keep the clips their frame names
+rebuild and report the rest. **Export Report…** lists every note, and `--strict`
+or **Refuse exports that leave data out** refuses lossy writes. `model build`
+gains `--clip`, `--all-clips --output-dir` and `--md5-frame-rate`. Thirteen
+[delivery targets](MODEL_TARGETS.md) read from public engine sources preflight
+MDL, MD2, MD3, IQM and MD5 limits through `model targets`, `--target` and the
+**Delivery targets** button, and Quake III detail sets stop at the two levels
+the game loads. model-skeletal-export-smoke, model-targets-smoke, their GUI
+suites and model-skeletal-writer-oracle (a standard-library Python reader with
+seven negative controls) pass; the lane's full modeller suite passed 145 of 146,
+the failure being the assembly playback timing check fixed in the keyboard lane.
+Nothing has been loaded in an engine. **Prepare for target**, saved targets and
+RTCW/ET, GZDoom and Q2PRO targets remain open.
+
+**Skin-weight provenance (2026-10-22)** removes the nearest-vertex guess from
+skin reconciliation on skeletal models (MD5, IQM, MDS, MDM, MDR, Ghoul 2,
+Half-Life). Every mesh, UV, surface and frame edit records each vertex's
+origin; reconciliation copies, interpolates, mirrors through a joint map,
+rebinds or blends influences from that record, and refuses an edit that cannot
+derive a skinned vertex's weights. Frame edits keep the frame-to-clip map.
+**Symmetrize Skin Weights** and **Bind New Geometry** confirm joint maps and
+primitive bindings, with `--joint-map`, `--keep-joint-names`, `--bind-joint`,
+`--bind nearest-bones` and `--new-surface` on the command line and a
+`skinProvenance` report in `model tool`, `model surfaces` and `model edit`.
+model-skin-provenance-smoke (326 checks), model-skin-provenance-sweep-smoke
+(1,185, every edit kind on fixtures where a nearest-vertex guess fails) and
+model-skin-provenance-ui-smoke (132) pass, and mutants of each review fix are
+caught. Merges blend equally, position tools still make edited frames
+independent, widened blends are reported rather than pruned, and the GUI suite
+ran at 200% text but not at 2x device pixels. See
+[skin provenance](MODEL_SKIN_PROVENANCE.md).
+
+**Persistent connectivity (2026-10-21)** passed sixty focused suites and three
+GUI reruns at 2x device pixels: 63 executions with zero failures. All 494
+scoped source/build inputs and 61 executables remained stable throughout the
+final interval. Source version 11 keeps detached coincident vertices separate,
+retains UV/normal-copy connectivity through geometry builders and compaction,
+and includes the metadata in source validation, revision identity, history,
+recovery and assembly baking. Explicit weld/merge reconnects vertices; joins
+and independent primitives/copies preserve separate islands.
+
+The new suite passed 416 connectivity checks. Rip passed 133 core/CLI and 183
+GUI checks at each scale; assembly animation passed 63 checks. Zero-distance
+Rip, F9 return to coincidence, cancellation, filled-gap refusal and actual CLI
+save/reload passed. Ordinary and hold-next skeletal curves coexist with v11.
+Twenty-four owned renders cover 1x/2x, dark and both high-visibility themes,
+100/200% text, expanded translation and RTL; four final images were reviewed.
+The surrounding shell remains crowded at 200% expanded text.
+
+Evidence is under `.agents/tmp/modeller-topology-identity/evidence/`, including
+`milestone.json`, scoped hashes, suite results, renders and documentation checks.
+Documentation/site, CLI/build validation, 427 English plurals and all 48
+catalogues passed. The unrelated missing `core/level_textured_selection.h`
+installation entry remains. This is synthetic Windows acceptance, with native
+authoring metadata loss, older generic nearest-vertex skin reconciliation,
+branched junctions, real projects/engines, physical accessibility and clean
+cross-platform acceptance still open (the skin-weight provenance milestone above
+has since closed the nearest-vertex reconciliation). The full production goal
+remains active.
+
+**Rip and Rip and Fill (2026-10-21)** passed fifty-seven focused suites and
+three GUI reruns at actual 2x device pixels: sixty executions with no failures.
+The new suites supply 131 core/CLI checks and 153 GUI checks per scale. All
+491 scoped modeller source/build inputs stayed unchanged during compilation;
+those inputs and 58 executables remained stable through accepted testing.
+Evidence and hashes are retained in
+`.agents/tmp/modeller-rip/evidence/milestone.json`.
+
+Fixtures cover either side of vertex/edge rips, optional fill, longer chains,
+UV corner splits, independent poses, unequal joint weights and offsets,
+bind/animated references, capacity overflow, malformed geometry, one-shot
+early/middle/late cancellation, source-face provenance, recovery and
+MDL/MD2/MD3/MD5/IQM exports. The actual CLI agrees with the document service,
+validates dry runs and protects existing outputs. GUI checks cover worker
+responsiveness, reentrant edit refusal, invalid-preview restoration, F9,
+single-step undo/redo, resulting component selection and all four profiles.
+
+Eighteen owned Qt renders cover open/filled rips and the scrolling adjustment
+panel at 1x/2x, dark/both high-visibility themes, 100/200% text, expanded
+translations and RTL. Four representative final images were reviewed. The
+surrounding shell remains crowded at 200% expanded text; physical keyboard
+and screen-reader review remains open. These are synthetic Windows checks,
+not original-engine, real-project or clean cross-platform acceptance.
+
+See [Rip](MODEL_RIP.md) for side selection, pose/rig and UV semantics.
+The persistent-connectivity milestone above supersedes this checkpoint's
+coincident-separation limit. Branched rip junctions, distant self-intersection
+prevention and maximum-size latency
+remain open, along with the broader mesh/UV, animation and delivery gates.
+The repository-wide source-layout check still reports the unrelated
+`core/level_textured_selection.h` missing from Meson's header list. The full
+production goal remains active.
+
+**Spin and radial copies (2026-10-21)** passed fifty-five focused mesh,
+document, worker, recovery, native-format, skeletal and GUI suites, plus Spin,
+edge-bevel and shared mesh-tool GUI suites at actual 2x device pixels: fifty-eight
+executions with no failures. The new suites supply 100 core/CLI checks and 174
+GUI checks per scale. All 482 scoped modeller source/build inputs remained
+unchanged during compilation; those inputs and 56 executables stayed unchanged
+through the accepted tests. Evidence
+and hashes are retained in `.agents/tmp/modeller-spin/evidence/milestone.json`.
+
+Fixtures cover partial and closed face sweeps, axis poles, open borders, radial
+copies, oblique axes, every retained pose, actual joint ownership and weights,
+independent baked frames, ambiguous frame-map refusal, capacity admission,
+one-shot cancellation, F9/undo, recovery and MDL/MD2/MD3/MD5/IQM export. A small
+four-vertex, two-pose profile produced a closed 256-step ring with 2,056 vertices
+in 3 ms during acceptance; this is not maximum-size latency acceptance.
+
+Eighteen new owned widget renders cover previews, copies and the scrolling
+eleven-field adjustment panel at 1x/2x, dark/both high-contrast themes,
+100/200% text, expanded translations and RTL. Representative final images were
+reviewed at both scales. Semantic tests verify post-confirmation component mode
+and selection. The wider shell remains crowded at 200% expanded text; physical
+keyboard and screen-reader review remains open.
+
+Manual generation, documentation/site links, CLI/build checks, all 48 translation
+catalogues and 421 English plural messages passed. The repository-wide source
+layout check separately reports the concurrently added
+`core/level_textured_selection.h` missing from Meson's install list; that
+unrelated level-editor work was preserved. See [Spin](MODEL_SPIN.md) for
+closure, skinning and UV semantics. Rip, richer bevel junctions, broader UV and
+animation workflows, real projects/engines, maximum-size performance and clean
+cross-platform acceptance remain open. The full production goal is not complete.
+
+**Package hard-link protection (2026-10-21)** passed sixty-two focused package,
+modeller, CLI, worker, recovery and GUI suites with no failures. All 661 scoped
+model/package source and build inputs and 63 executables remained unchanged
+through the accepted run. Evidence, test definitions and source/binary hashes
+are retained in `.agents/tmp/modeller-package-protection/evidence/milestone.json`
+and its adjacent files.
+
+The final layout check required registering the new private identity header in
+Meson. This manifest-only follow-up reconfigured with no compilation or linking;
+all accepted executable hashes and behaviour sources remained identical. Its
+tested/final manifest hashes and successful validation are recorded separately.
+
+The original executable accepted `model skin` destinations hard-linked to its
+source archive or a file inside its source folder. Both dry runs accepted those
+paths; real writes atomically replaced the alias while leaving the original
+source bytes intact. The corrected executable refuses all four cases and
+preserves both paths. MDL skin imports and surface bindings also cover folder,
+archive and portable-draft input aliases through the shared package policy.
+
+Forty-five new identity checks exercise Unicode paths, native and forced-portable
+comparisons, independent outputs, folder descendants, cache invalidation, bounded
+path/metadata admission, one-shot cancellation, draft round trips, publication
+and extraction. A 512-file index serves 256 subsequent alias queries without a
+full rescan. The existing 20,000-root/512-query path test remains passing. These
+are synthetic checks, not maximum-size or network-filesystem latency acceptance.
+
+Modeller frame, assembly and player export checks now forward worker progress
+and cancellation to package protection. Frame tests cancel during folder identity
+capture in dry and real runs, retaining output bytes; a completed check permits
+an independent output. Player tests protect linked output, backup and save-lock
+paths. Ordinary explicit package in-place replacement retains its existing policy.
+No GUI control, dependency or setup preference was added.
+
+Validation covers the Windows build and its native and forced-portable identity
+paths. Native macOS/Linux, ReFS/network filesystems, physical accessibility,
+real projects and engine acceptance remain open. Captured identities are transient
+and bounded by logical metadata admission, not a process-memory ceiling. The
+checks cannot interrupt a blocking filesystem call or reserve paths against
+external changes. This resolves the package alias gap identified below, without
+closing the production release gates.
+
+**Source-save and CLI output protection (2026-10-21)** passed forty-four
+focused core, CLI, native-format, document-worker, recovery and GUI suites.
+All 478 scoped source/build inputs and 45 executables remained unchanged during
+the accepted run. Evidence is in
+`.agents/tmp/modeller-output-safety/evidence/milestone.json`; reproduction,
+raw results, source/binary hashes and test definitions are retained beside it.
+
+The new save suite supplies 88 checks, including actual CLI dispatch for seven
+authoring commands, native import/export, in-place saves, hard-link source
+aliases, cancellation, concurrent edits, source removal, undo/redo, no-write
+dry runs and output limits. A valid 1,048,576-frame-vertex fixture exceeds the
+64 MiB serialised source budget and is refused before publication in both modes.
+Four auxiliary-input suites now cover 24 refusal cases across dry/real writes,
+direct paths, alternate spellings and independent hard-link fixtures. Stroke
+recipes, joint maps, replacement curves and knife path inputs remain intact
+even with explicit overwrite. The shared file service also checks Unicode
+hard-link identity and unchanged/stale read-only destination reviews.
+
+Dry runs share complete source-save preparation and preserve document identity,
+dirty state, selection and undo history. They do not acquire writer locks, test
+write permissions or reserve a destination. Real writes retain their publication
+checks; a noncooperating writer can still race the final existing-file replacement.
+No new GUI controls, dependency or setup preference were added. These fixtures
+do not establish clean cross-platform or real-project acceptance.
+
+The output audit also found a separate integration gap at that milestone: package-wide provenance
+checks in `PackageInputProtectionSet` compared absolute/canonical paths and their
+ancestors, without filesystem hard-link identity. Package/draft-backed modeller
+operations still shared that policy. The package hard-link milestone above adds
+the common service fix and dedicated alias tests; the earlier milestone did not
+establish that coverage.
+
+**UV texel density (2026-10-21)** passed fifty-seven focused core, CLI,
+document, recovery, native-format, UV, material and GUI suites, plus five GUI
+suites at actual 2x device pixels: sixty-two executions with no failures.
+The new suites provide 92 core/CLI checks and 242 GUI checks per scale.
+Measurements cover square/rectangular textures, summed area ratios, mirrored
+and collapsed UVs, reference poses and complete-island selection. Adjustment
+covers individual/relative density, stored float precision, unchanged islands,
+all-pose attributes, exact coincident-corner skin influences, source round trips,
+undo/recovery, cancellation and native MDL/MD2/MD3/MD5/IQM exports. MDL/MD2 base-tile
+and native skin-path restrictions remain enforced.
+
+The real editor uses original resolved package dimensions; a 2048 × 1024
+synthetic material verifies the handoff into the review dialog. Snapshot-owned
+worker previews cannot apply after a document replacement. Thirty-six owned
+widget renders cover settings, measurements, original/result UVs and compact
+layouts at 1x/2x, dark and both high-contrast themes, 100/200% text, translation
+expansion and RTL. Actions stack on narrow displays; result columns scroll at
+readable widths, full measurements remain copyable, and status stays compact.
+Tests cover 900 × 600 and 500 × 600 logical windows. Semantic Qt interaction
+does not replace physical keyboard or native screen-reader acceptance.
+
+Related regression fixes preserve exact skin influences during shared UV island
+transforms and prevent `model curve-transfer` from overwriting its input or a
+file alias. The latter was reproduced on a disposable source before repair;
+its suite now has 76 checks, including four source-protection checks.
+
+A synthetic 2,048-island, 8,192-vertex, two-pose fixture exercises one batched
+adjustment; the accepted timing is recorded in
+`.agents/tmp/modeller-uv-density/evidence/milestone.json`. It is not a maximum-size
+latency bound. All 476 scoped source/build inputs and 58 executables remained
+stable during acceptance; the shared checkout is not frozen. See
+[texture density](MODEL_UV_DENSITY.md) for measurement semantics, material loading,
+precision, packing and export limits. Multi-material matching, texture
+painting/baking, broader mesh/animation tools, the source/output policy audit of
+other specialised authoring commands, real-project/native-engine delivery,
+maximum-size performance and clean cross-platform acceptance remain open.
+The full production goal remains active.
+
+**Knife paths (2026-10-21)** passed forty-four focused core, CLI, document,
+recovery, native-format and GUI suites, plus knife, bevel, edge-slide and the
+existing mesh-tool GUI suites at actual 2x device pixels: forty-eight executions
+with no failures. New tests supply 202 core/CLI checks and 312 GUI checks at
+each scale. Coverage includes finite/interior endpoints, closed/disconnected
+paths, crossing/overlapping constraints, continuous depth occlusion, perspective
+near-plane clipping, seam-copy conformity, hidden child-face provenance,
+all-pose/UV/skin interpolation, native MDL/MD2/MD3/MD5/IQM round trips, undo,
+recovery, capacity refusal and early/mid/late cancellation.
+
+The worker preview preserves the source until confirmation, rejects reentrant
+edits and remains editable after refusal or cancellation. Snapping prefers
+vertices/path anchors, handles silhouettes with depth-checked nearby samples
+and refreshes after resize. Changes to the view, displayed pose, mesh or hidden
+faces cannot confirm stale previews, even without pointer motion. Refusal and
+cancellation retain the newer document, visibility and undo history.
+F9 replays visibility/selection scope with the original hidden-face mapping.
+Forty-two new owned widget renders cover visible/through cuts, adjustment,
+refusal, hidden faces, multiple paths and perspective views at 1x/2x, dark/both
+high-contrast themes, 100/200% text, expanded translations and RTL.
+Representative final states were visually reviewed at both device scales.
+
+These tests also exposed existing shared issues: the model tool CLI permitted
+overwriting its own input, failed skeletal reconciliation could publish a
+changed caller selection, and enlarged adjustment labels could exceed the
+panel width. Source-alias rejection, delayed selection publication, bounded
+label wrapping and a compact accessible operation heading now cover those
+cases. The overall studio shell is still crowded with 200% expanded text;
+broader responsive-layout and physical keyboard/screen-reader acceptance remain
+open.
+
+A synthetic two-pose plane with thirty crossing segments expanded from four
+to 289 vertices in 170 ms during acceptance. This is a regression observation,
+not an isolated or maximum-size latency benchmark. Evidence is retained in
+`.agents/tmp/modeller-knife/evidence/milestone.json`. All 468 scoped source/build
+inputs and 45 executables remained unchanged across the accepted interval;
+this does not freeze the concurrently edited checkout. See [knife cutting](MODEL_KNIFE.md)
+for projection coordinates, authoring controls and conservative limits.
+Rip, richer bevel junctions, UV/animation workflows, native-engine and
+real-project acceptance, maximum-size performance and clean cross-platform
+validation remain open. The production goal is not complete.
+
+**Edge bevels (2026-10-21)** passed forty-two focused core, CLI, document,
+recovery, native-format and GUI suites, plus the bevel, edge-slide and existing
+mesh-tool GUI suites at actual 2x device pixels: forty-five executions with no
+failures. New tests supply 252 core/CLI checks and 147 GUI checks at each scale.
+They cover selected-edge combinations, joined corners, segment/roundness
+variants, seams, reversed winding, open sheet ends, all-pose fold refusal,
+interpolated skin weights, cancellation, deterministic output, undo/recovery,
+native MDL/MD2/MD3/MD5/IQM round trips and the real CLI route.
+
+Bevel previews run through the cancellable worker, reject reentrant edits and
+commit only on confirmation. F9 provides width, segments, roundness, UV repeat
+size and quad pairing settings. A new preview hides the previous adjustment
+panel; compact refusal messages preserve the viewport, with detailed reasons
+in tooltips and accessible descriptions. Twenty-four new owned widget renders
+cover pointer, typed, adjustment and refusal states at 1x/2x, dark/both high
+contrast themes, 100/200% text, expanded translations and RTL. Representative
+states were visually reviewed at both scales. Semantic control checks do not
+replace physical keyboard or screen-reader acceptance.
+
+A synthetic two-pose fixture bevelled 1,536 edges across 128 cubes, expanding
+3,072 input vertices to 31,744 result vertices in 132 ms. This is an observed
+regression run, not an isolated or maximum-size latency benchmark. Evidence is
+retained in `.agents/tmp/modeller-edge-bevel/evidence/milestone.json`. All 462
+scoped source/build inputs and 43 executables remained unchanged across the
+accepted runs; the entire concurrently edited checkout is not frozen.
+The build, documentation, localisation and render evidence identifies its
+Windows/Qt/Vulkan environment. A missing `map select-type` CLI documentation
+entry and three missing English plural entries from concurrent level-editor
+work were also corrected. Final checks cover 302 registered CLI commands,
+22 manual pages, 48 compiled catalogues and 416 English plural messages.
+
+See [edge bevels](MODEL_EDGE_BEVEL.md) for width semantics, UV packing and
+conservative junction limits. Richer junction profiles, knife, UV correction,
+animation layers/retargeting, maximum-size performance, real-project/engine,
+physical accessibility and clean cross-platform acceptance remain open.
+
+Automatic approval review rejected removal of the generated site, compiled
+catalogues and crashed-test caches as "blocked by policy". Verified paths and
+the rejection are recorded in this milestone's `evidence/cleanup.json`; the
+disposable files remain in the project temporary area.
+
+**Edge sliding and adjustment history (2026-10-21)** passed thirty-eight
+focused core, CLI, document, recovery, native-format and GUI suites, plus the
+new edge-slide and existing mesh-tool GUI suites at actual 2x device pixels.
+The new tests supply 69 core/CLI checks and 129 GUI checks at each scale.
+Coverage includes open and closed chains, winding direction, one-sided borders,
+disconnected selections, UV seams, hard normals, skin influences, other authored
+metadata, frame/reference scope, fold rejection in later poses, cancellation,
+undo/recovery, native MD2/MD3 exports and the real CLI route.
+
+Adjust Last Operation now replays inside a candidate document, keeps signal
+senders alive during refresh, restores accepted values after refusal and cannot
+undo an earlier operation after a zero/no-op edit. Its fields scroll within a
+bounded panel. Render review also found that expanded modal hints obscured the
+mesh; the edge-slide banner now shows a compact value, with detailed controls
+in tooltips and accessible descriptions. Thirty widget renders cover pointer,
+typed, fraction/distance adjustment and refusal states at 1x/2x, with dark/both
+high-contrast themes, 100/200% text, expansion and RTL. Semantic checks confirm
+field reachability and focus; physical keyboard/screen-reader review remains open.
+
+A 16,641-vertex, two-pose grid slide took 84 ms in the accepted synthetic run;
+this is not a maximum-size latency benchmark. Evidence is retained in
+`.agents/tmp/modeller-edge-slide/evidence/milestone.json`. All 458 scoped
+source/build inputs and 39 executables remained unchanged across acceptance;
+this is not a frozen identity of the entire concurrently edited checkout.
+The build, 300-command CLI documentation, offline guide, 22-page documentation
+site and 48 translation catalogues passed their checks. An unrelated stale
+level-connection message expectation in the build validator was corrected;
+an earlier concurrent level enum build failure was resolved before acceptance.
+Stale mesh-tool documentation about hiding geometry and skeletal authoring was
+also corrected. See [edge sliding](MODEL_EDGE_SLIDE.md) for supported rails and
+limits. Richer bevel junctions, knife, UV correction, richer animation/retargeting,
+real-project/engine and cross-platform acceptance remain open.
+
+Automatic approval review rejected removal of this milestone's generated site,
+compiled catalogue copies and a crashed-test icon cache as "blocked by policy".
+They remain in `.agents/tmp/modeller-edge-slide/`; the verified cleanup targets
+and rejection are recorded with the evidence. No alternate deletion was tried.
+
+**Animation range transfer and reversal (2026-10-21)** passed thirty-nine
+focused core, CLI, document, recovery, native-format and GUI suites, plus the
+new transfer and existing curve-editor GUI suites at actual 2x device pixels.
+New tests supply 72 core/CLI checks and 124 GUI checks at each scale. Coverage
+includes mixed interpolation/tangent modes, exact cropped boundaries, one-sided
+step limits and isolated knot values, same-clip overlap, unkeyed source/target
+capture, parent/child rebaking, rate matching, protected mesh edits, cancellation
+during curve work, undo/recovery, native exports and actual CLI/editor routes.
+Schema 10 retains hold-next segments; ordinary curves remain schema 9.
+
+A 1,023-sample, seven-joint reversal with six skinned vertices took 33 ms in
+the accepted regression run. This does not establish large-mesh or maximum-key
+latency. Fifty new widget renders cover the range form, multi-track
+selection, destination reports, original/result poses and step graph at 1x/2x,
+with dark/both high-contrast themes, 100/200% text, expanded translations and RTL.
+The initial compact-window check exposed a minimum-height problem; scrolling
+track/preview pages and a screen-bounded initial size fix it. Checks now include
+900 × 600 logical windows with accessible Review/Apply at both device scales.
+Representative states were inspected at both scales. Tests use owned Qt render
+targets and offscreen Vulkan without OS input or capture. Physical keyboard
+and screen-reader acceptance remains open.
+
+Evidence is retained in `.agents/tmp/modeller-curve-transfer/evidence/milestone.json`.
+All 454 scoped source/build inputs and 40 tested executables remained unchanged
+across final acceptance. Earlier evidence records a concurrent Meson addition
+for level-editor duplication. Its local `slots` variable conflicted with Qt's
+macro and was renamed to `namespaceSlots` to restore the build; this unrelated
+fix is included in the final identity. Build, 300-command CLI documentation,
+source layout, credits, changelog, translation extraction, 412 English plurals,
+all 48 catalogue compiles and the 22-page documentation build passed.
+Scoped source and binary hashes do not establish a frozen whole-checkout release.
+Cross-document animation exchange, retargeting,
+layers, persistent constraints, long-chain IK, mesh/UV work, original-engine and
+real-project acceptance and clean cross-platform release validation remain open.
+The production goal is active.
+
+Disposable site/catalogue cleanup was rejected by automatic approval review
+("blocked by policy") after exact-path and link checks. These outputs remain
+under `.agents/tmp/modeller-curve-transfer`; `evidence/cleanup.json` records the
+rejection. Evidence logs and owned renders are intentionally retained.
+
+**Batch animation key tools (2026-10-21)** passed thirty-seven focused core,
+CLI, document, recovery, native-format and GUI suites, plus the new GUI suite
+at actual 2x device pixels. New tests supply 72 core/CLI checks and 146 GUI
+checks at each scale. Multi-joint/channel selection supports retiming,
+duplication, removal and continuous-error reduction through one document
+transaction and one combined hierarchy/skin rebake. Coverage includes key
+collisions, rounding, free tangent scaling, parent/child motion, step anchors,
+unselected boundaries, tiny cubic extrema, deterministic mixed-curve comparisons,
+undo/recovery, source schema 9, native exports and actual CLI/editor routes.
+A single 50,001-key linear curve reduced in 9 ms in the accepted run; this is
+a narrow scalar fixture, not a maximum-size mesh or animation latency bound.
+
+Thirty owned widget renders cover dark/both high-contrast themes, 100/200%
+text, expanded translations and RTL at 1x/2x device pixels. Representative
+selection, operation, results and posed previews were inspected. Reports expose
+the largest continuous scalar change; this does not bound world-space skin or
+attachment displacement. Physical keyboard and screen-reader review remains open.
+The Windows clang-cl 20.1.7/C++20/Qt 6.10.1 build treats warnings as errors;
+offscreen Vulkan and QWidget-owned render targets avoid OS input and capture.
+
+Evidence is retained in `.agents/tmp/modeller-key-tools/evidence/milestone.json`.
+All 444 scoped modeller/CLI/build inputs were unchanged across the accepted
+regression and 2x runs. Source hashes, before/after Meson manifests and three
+executable hashes identify those runs in the shared checkout. Validation and
+catalogue results are recorded alongside the test logs. Build validation,
+documentation for 299 CLI commands, source layout, credits, changelog and
+translation extraction passed. All 48 catalogues compile and 412 English plural
+messages validate; the offline guide and 22-page site were built. New
+translations remain unfinished. The numerical review found an absolute derivative cutoff that could
+miss very small cubic extrema; normalised stationary-point solving and regression
+fixtures repair it in both range validation and difference bounds.
+The later transfer milestone above adds time reversal. Curve clipboard/layers,
+persistent constraints, long-chain IK,
+retargeting, mesh/UV workflows, real-project and original-engine acceptance and
+clean macOS/Linux release validation remain open. The production goal is active.
+
+Automatic approval review rejected removal of the verified disposable site and
+compiled catalogue with "blocked by policy". Both remain under
+`.agents/tmp/modeller-key-tools`; `evidence/cleanup.json` records the checked
+absolute targets, absence of links and rejection. No alternative deletion was attempted.
+
+**Skeletal animation curves (2026-10-21)** passed thirty-five focused core, CLI,
+document, recovery, native-format and GUI suites, plus the new GUI suite at actual
+2x device pixels. New tests supply 89 core/CLI checks and 124 GUI checks at each
+scale. Coverage includes step/linear/cubic evaluation, automatic/clamped/free/flat
+tangents, continuous extrema and scale validation, multi-turn rotations, exact
+capture preservation, near-gimbal float matrices, parent/child curves, sparse key
+changes, protected sampled edits, rename, explicit baking, undo/recovery, strict
+schema-9 persistence, native export and the real CLI/editor routes. A six-vertex,
+seven-joint, 1,023-sample capture took 7 ms in the accepted regression run; this
+does not establish maximum-size performance.
+
+The Windows clang-cl 20.1.7/C++20/Qt 6.10.1 build treats warnings as errors.
+Twenty-four curve widget renders cover dark/both high-contrast themes, 100/200%
+text, expanded translations and RTL at 1x/2x device pixels. Representative keys,
+graph/tangent and pose views were inspected. Offscreen Vulkan and QWidget-owned
+render targets were used without OS input or screen capture. Physical keyboard
+and screen-reader acceptance remains open.
+
+Evidence is retained in `.agents/tmp/modeller-curves/evidence/milestone.json`,
+including accepted results, source/build identity, renderer and validation logs.
+The final audit found 433 of 434 recorded inputs unchanged; the shared
+`src/meson.build` changed concurrently after acceptance. The audit records both
+manifest hashes and the tested executable hashes rather than claiming the
+entire current checkout was tested. Build validation, documentation for 298
+CLI commands, source layout, credits, changelog and translation extraction passed;
+all 48 catalogues compile and 412 English plural messages validate. New
+translations remain unfinished. The offline guide and 22-page site were built.
+The first compile found narrowing in a test fixture; focused tests then exposed
+near-gimbal decomposition instability, which was repaired before acceptance.
+Batch retiming and reduction are covered by the later milestone above. Layers,
+persistent constraints, long-chain IK,
+retargeting, mesh/UV gaps, real-project and original-engine acceptance and clean
+macOS/Linux release validation remain open. The production goal is not complete.
+
+Automatic approval review rejected removal of the verified disposable site and
+compiled catalogue with "blocked by policy". They remain under
+`.agents/tmp/modeller-curves`; `evidence/cleanup.json` records the preflight and
+rejection. No alternative deletion was attempted.
+
+**Two-bone inverse kinematics (2026-10-21)** passed thirty-three focused core,
+CLI, document, recovery, native-format and GUI suites, plus the new GUI suite at
+actual 2x device pixels. New tests supply 80 core/CLI checks and 129 GUI checks
+at each scale. They cover analytic bends, complete folds, opposite directions,
+unreachable inner/outer reach, explicit clamping, moving roots, side branches,
+end orientation, affine scale/shear preservation, exact no-op history,
+independent skin/normal/tag protection, retained unpreviewed clips, cancellation,
+source/recovery persistence, IQM/MD3 round trips and MD5 clip export. The actual
+CLI route and editor Apply/undo/redo are exercised. A six-vertex, seven-joint,
+1,023-sample fixture completed in 5 ms in the accepted regression run; this is
+not maximum-size model latency acceptance.
+
+The Windows clang-cl 20.1.7/C++20/Qt 6.10.1 build treats warnings as errors.
+Offscreen GUI tests use Vulkan 1.4.325 on an NVIDIA GeForce RTX 4060 Laptop GPU,
+driver 591.74. Thirty IK widget renders were generated; representative settings,
+pose and result views were reviewed at both scales with dark/both high-contrast
+themes, 200% text, expanded translations and RTL. Results can scroll to keep
+long headers and numeric values readable. No OS input or capture was used.
+Physical keyboard and screen-reader acceptance remains open.
+
+The build validator, documentation for 297 CLI commands, source layout,
+documentation, credits, changelog and translation extraction passed. All 48
+catalogues compile, and 412 English plural messages validate. New translations
+remain unfinished. The offline guide and 22-page documentation site were
+regenerated. Evidence in `.agents/tmp/modeller-ik/evidence/milestone.json`
+identifies the 422 tested source inputs, three executable hashes, accepted
+results and renderer. These checks cover the recorded shared checkout, not
+later concurrent changes.
+
+Initial test fixtures were corrected to provide a manual tag on every frame
+and to exclude non-orthonormal attachment axes from the affine-pose fixture.
+Translation extraction briefly encountered a partially written Hindi catalogue
+in the shared checkout; the catalogue subsequently parsed and extraction passed
+on retry. No unresolved unrelated repository issue was found. Curves,
+persistent constraints, long-chain IK, retargeting, target/pole viewport handles,
+real projects, original-engine playback and clean cross-platform release gates
+remain open. This increment does not complete the production goal.
+
+Automatic approval review rejected cleanup of the verified generated documentation
+site and reused compiled catalogue with "blocked by policy". These disposable
+outputs remain in `.agents/tmp/modeller-ik`; `evidence/cleanup.json` records the
+preflight and rejection. No alternative deletion was attempted.
+
+**Mirrored and spatial weight transfer (2026-10-21)** passed thirty-two focused
+core, CLI, persistence, native-format and GUI suites, plus the new GUI suite at
+actual 2x device pixels. The new suites supply 94 core/CLI checks and 161 GUI
+checks at each scale. They cover frozen one-way/bidirectional mirrors on all
+axes, offset planes, triangle interpolation, different topology, component
+scope, joint mapping, locked float weights, seam ambiguity/normal filtering,
+unmatched vertices, cancellation, no-op history, recovery and native export.
+The actual CLI route and editor Apply/undo/redo are exercised. A 16,391-vertex
+fixture completed the transfer in 30 ms in the final regression run; this is
+one synthetic measurement, not a maximum-size latency guarantee.
+
+The Windows clang-cl 20.1.7/C++20/Qt 6.10.1 build treats warnings as errors.
+Offscreen GUI tests use Vulkan 1.4.325 on an NVIDIA GeForce RTX 4060 Laptop GPU,
+driver 591.74. Thirty weight-transfer widget renders were generated, with
+representative visual review at both scales across dark/both high-contrast
+themes, 200% text, expanded translations and RTL. Wrapped-label geometry is
+asserted. Review also exposed and fixed an existing viewport HUD issue that
+detached leading counts from their labels in RTL layouts. Test fixtures were
+corrected to distinguish intentional seam ambiguity from invalid geometry and
+to avoid reading a surface reference after rebaking. No OS input or screen
+capture was used; no unrelated unresolved repository issue was found.
+
+The build validator, documentation for 296 CLI commands, source layout,
+documentation, credits, changelog, translation extraction and 412 English
+plural messages passed; all 48 catalogues compile. New translations remain
+unfinished. The offline guide and 22-page site were generated. Evidence in
+`.agents/tmp/modeller-transfer/evidence/milestone.json` identifies the accepted
+results, 411 modeller source hashes, integration registrations, executable
+hashes, renderer and images. It covers the tested shared checkout, not later
+concurrent changes. Cross-document retargeting, UV correspondence, richer
+animation tools, worst-case performance, physical accessibility, original
+engines, real projects and clean macOS/Linux packages remain open. This
+increment does not complete the modeller production goal.
+
+Automatic approval review rejected removal of verified disposable generated
+catalogues and documentation output with "blocked by policy". They remain in
+`.agents/tmp/modeller-transfer`; `evidence/cleanup.json` records the rejection.
+No alternative deletion was attempted.
+
+**Staged weight painting (2026-10-21)** passed thirty focused core, CLI,
+document, native-format and GUI suites, plus the new GUI suite at actual 2x
+device pixels. The new suites supply 78 core/CLI checks and 164 GUI checks at
+each scale. Fixtures cover replace/add/subtract/smooth, continuous brush
+coverage, depth and row masks, locked influences, explicit remainder joints,
+ordered recipe replay, imported offsets, normal preservation, cancellation,
+late refusal, no-op history, undo/redo, recovery, source round trips and native
+export handoff. The CLI tests exercise the actual executable route.
+
+The Windows clang-cl 20.1.7/C++20/Qt 6.10.1 build treats warnings as errors.
+Offscreen GUI tests use Vulkan 1.4.325 on an NVIDIA GeForce RTX 4060 Laptop GPU
+(driver 591.74). Twenty-six owned weight-paint widget renders were generated;
+representative states were visually reviewed at both scales across dark and
+both high-contrast themes, 200% text, expanded translations and RTL. Geometry
+assertions cover wrapped label heights. Review fixed clipped settings, a row
+mask lost by rapid undo/redo, and unchanged strokes that acquired rounding
+changes during rebaking. No OS input or screen capture was used.
+
+The build validator, documentation for 295 CLI routes, source layout, credits,
+changelog, documentation, translation extraction and all 412 English plural
+messages passed; all 48 catalogues compile. New translations remain unfinished.
+The offline guide and 22-page documentation site were generated. Evidence in
+`.agents/tmp/modeller-weight-paint/evidence/milestone.json` identifies accepted
+results, the renderer, 405 unchanged modeller source hashes and five executable
+hashes. It covers the tested shared checkout; subsequent changes need their own
+validation. No unresolved unrelated repository issue was found.
+
+Mirrored weight transfer, seam-aware transfer, tablet pressure, shaded weight
+heatmaps, deformation during a drag, richer animation tools, maximum-size
+latency, physical accessibility, real-project/native-engine acceptance and
+clean macOS/Linux acceptance remain open. Disposable generated catalogues and
+documentation output remain under `.agents/tmp/modeller-weight-paint` after
+the cleanup attempt; `evidence/cleanup.json` records the unresolved outcome.
+This milestone does not complete the modeller production goal.
+
+**Skin weights and binding (2026-10-20)** passed twenty-seven focused core,
+CLI, document, native-format and GUI regression suites, plus the new binding
+GUI suite at 1x and actual 2x device pixels. The new core/CLI suite supplies
+93 checks; the final GUI suite supplies 92 at each scale. Analytic fixtures
+cover distance/rigid binding, rotated and non-uniform bind transforms, posed
+normals, imported offsets, duplicate influences, reduction, unbinding, stale
+inspection, late cancellation/refusal, undo/redo, recovery, source round trips
+and MD5/IQM/MD3 export handoff. CLI tests include the actual executable route.
+
+The Windows clang-cl 20.1.7/C++20/Qt 6.10.1 build uses warnings as errors and
+Vulkan 1.4.325 on an NVIDIA GeForce RTX 4060 Laptop GPU (driver 591.74).
+Twenty owned-widget renders were reviewed across dark and both high-contrast
+themes, 200% text, expanded translations, RTL and actual 1x/2x pixels. Review
+added a keyboard-accessible detail field so narrow columns cannot hide the
+selected row's full weights. Tests wait for the final editor render before
+recording the selection handoff. No OS input or screen capture was used.
+
+The build validator, documentation for 293 CLI routes, source layout, credits,
+changelog, English plurals and translation extraction passed; all 48 catalogues
+compile. New translations remain unfinished. Documentation describes exact
+binding/repair limits and package, export, collision and level handoffs.
+Evidence is in `.agents/tmp/modeller-binding/evidence/milestone.json`.
+Production modeller sources and executables stayed unchanged through the
+accepted runs; a final UI-test-only change waits for completed rendering and
+was rerun at both scales. The evidence records the corresponding source and
+binary hashes. Subsequent shared-checkout changes are outside this audit.
+
+Initial test failures exposed a stale object compiled during a report-header
+change and an overly broad preservation assertion that included intentionally
+changed skinning. A consistent rebuild and corrected assertion resolved them;
+no unresolved unrelated repository failure was found. Maximum-size binding
+latency, real projects, native-engine playback, physical accessibility and
+clean macOS/Linux acceptance remain open. This increment does not complete
+the modeller production goal.
+
+Automatic approval review rejected cleanup of the verified disposable binding
+catalogues, documentation output, crash leftovers and helper scripts with
+"blocked by policy". They remain under `.agents/tmp/modeller-binding`, with
+`evidence/cleanup.json` recording the rejection; no alternative deletion was tried.
+
+**Joint viewport authoring (2026-10-20)** passed thirty suite executions:
+twenty-six functional core, CLI, persistence, native-format and GUI suites,
+three existing performance suites, and the new GUI suite at actual 2x device
+pixels. The new suites supply 61 core/CLI checks and 135 GUI checks per scale.
+They cover bind/pose previews, descendants, oriented transforms and pivots,
+selection/depth visibility, attachment/skin agreement, atomic refusal,
+cancellation, undo/redo, recovery, matrix CLI validation and IQM/MD3 export.
+
+The tested Windows clang-cl 20.1.7/C++20/Qt 6.10.1 build uses warnings as errors
+and Vulkan 1.4.325 on an NVIDIA GeForce RTX 4060 Laptop GPU. Twenty-six owned
+widget renders were reviewed at 1x/2x across dark and both high-contrast themes,
+200% text, expanded translations, RTL, orthographic/perspective transforms
+and four views. Review corrected overlapping joint/attachment/gizmo labels;
+tests also corrected mirrored preview cancellation on resize and refusal of
+sheared rigid attachments. Test calls use Qt object APIs and render targets,
+without OS input or screen capture.
+
+The build validator, documentation for 290 CLI routes, source layout, credits,
+changelog, English plurals and translation extraction passed. All 48 catalogues
+compile; new translations remain unfinished. The offline guide and 22-page
+site were regenerated. The source-layout check initially caught unregistered
+files in concurrent level-editor work; its final recheck passed after that
+registration landed. No unresolved unrelated failure was found in this audit.
+
+Evidence in `.agents/tmp/modeller-bones/evidence/milestone.json` identifies
+source/executable hashes, accepted tests, renderer and reviewed images.
+Modeller sources remained unchanged through the build/tests, and executables
+remained unchanged through the tests. The shared checkout continues to change,
+so this does not certify subsequent unrelated work. Dense-mesh latency tests
+passed, but maximum-size skeletal dragging, physical keyboard/pointer and
+screen-reader acceptance, original-engine playback, real projects and clean
+macOS/Linux packages remain open. G/R/S chooses joint handles; the mesh modal
+pointer-following and typed-value workflow remains unsupported for joints.
+Automatic approval review blocked removal of verified disposable helpers,
+compiled catalogues and temporary documentation output; the task directory
+retains them with `evidence/cleanup.json` recording the rejection.
+This milestone does not complete the modeller goal.
+
+**Bind and skeletal pose authoring (2026-10-20)** passed eighteen focused
+core, CLI, persistence, native-format and GUI suites, followed by the new GUI
+suite at actual 2x device pixels. The new authoring suite supplies 101 checks;
+the dialog/worker suite supplies 81 at each scale. Tests cover analytic joint
+motion and parent-relative interpolation, compensated bind transforms,
+clip management, auxiliary-track remapping, atomic refusal, cancellation,
+undo/redo, recovery, save/reopen and MD5/IQM/MD3 export handoff.
+
+The Windows clang-cl 20.1.7/C++20/Qt 6.10.1 build treats warnings as errors.
+Eighteen owned widget renders cover dark and both high-contrast themes,
+200% text, expanded translations, RTL, and controls above/below the scroll
+fold. Visual review corrected clipped operation names and bidi ordering of
+technical clip labels. Normal validation also exposed and repaired inverse
+bind direction handling and a transposed normal-matrix helper; analytic
+rotation/non-uniform-scale checks replace an ineffective assertion.
+
+The general build validator, help documentation for 290 CLI routes, source
+layout, credits, documentation and translation-source extraction passed.
+All 48 catalogues compile; the new translations remain unfinished. The offline
+guide and 22-page documentation site were regenerated. A concurrent level CLI
+compile error in `map select-region` was corrected to use supported
+`QJsonObject` iterators. The repository-wide English plural check still found
+two new level-editor messages without forms, outside this modeller increment.
+
+Accepted source/executable hashes, results and renders are recorded under
+`.agents/tmp/modeller-pose/evidence/milestone.json`; the audit explicitly scopes
+them to the shared, changing checkout. Automatic approval review blocked
+deletion of verified disposable helpers and documentation output, which remain
+in that task directory with a cleanup record. Bone viewport tools, influence
+painting/binding, animation curves/IK, real projects, engine playback, physical
+accessibility and native cross-platform packages remain release gates. This
+increment does not complete the modeller goal.
+
+**Joint and weight authoring (2026-10-20)** passed fourteen focused suites on
+an isolated Windows clang-cl 20.1.7/C++20/Qt 6.10.1 optimised build with warnings
+treated as errors. The new core/CLI suite supplies 68 checks; the new GUI suite
+supplies 70 at each of 1x and 2x device pixels. Tests cover analytic deformation,
+MD5/IQM round trips with native quantisation tolerance, hierarchy remapping,
+selection expansion, influence limits, cancellation, atomic refusal, undo/redo,
+save/reopen, recovery and actual editor worker adoption. Owned widget renders
+cover dark/both high-contrast themes, expanded translations, RTL and 200% text.
+
+The general build validator, help documentation for 287 CLI routes, source
+layout, credits, documentation, English plurals and source extraction passed.
+All 48 source catalogues compile; new translations remain unfinished. The
+offline guide was regenerated and the 22-page documentation site built without
+broken links. Evidence and hashes are retained under
+`.agents/tmp/modeller-rig/evidence/milestone.json`.
+
+Initial validation exposed two fixture assumptions (UUID recovery identifiers
+and IQM weight quantisation) and large-text horizontal overflow, all corrected.
+The shared build directory was concurrently receiving level-editor work; final
+verification used `.agents/tmp/modeller-rig/build` and separate logs. The wider
+build validator also held an obsolete clipper text expectation, now corrected
+to check the resulting selection. This is scoped evidence in a shared source
+checkout, not a frozen whole-repository release. Engine gameplay, real projects,
+physical accessibility and clean cross-platform packages remain open.
+
 **Placed MD3 appearances** share compiler skin/default-skin/remap resolution
 between Levels, its background camera worker, dependency subset export and CLI
 review, including immutable staged package inputs. Instance cache keys prevent
@@ -2176,7 +3044,9 @@ conflict check. The existing modeller suites pass with the new layout,
 including 200% text, RTL, expanded translations and both high-contrast themes.
 
 Still open: no decoder has been run against real game files; no MD5, IQM or ASE
-export has been loaded in Doom 3, Quake 4, ioquake3, VibeMap3 or q3map2; joints and
-weights cannot be edited; levels of detail beyond the first, game animation
+export has been loaded in Doom 3, Quake 4, ioquake3, VibeMap3 or q3map2. The later
+[skeleton authoring increments](MODEL_RIG.md) add joint, numeric weight and pose
+edits, followed by [staged weight painting](MODEL_WEIGHT_PAINT.md). Levels of
+detail beyond the first, game animation
 scripts and run-time blending are not read; and the profiles have not been
 reviewed by users of the editors they follow.

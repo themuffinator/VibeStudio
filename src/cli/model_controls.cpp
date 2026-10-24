@@ -207,8 +207,13 @@ ModelToolsCliResult runModelControls(const QStringList &arguments)
 			return fail(1, error);
 		result.lines << Text::tr("Restored the %1 defaults.").arg(profileId);
 	}
+	// The settings keep only what applies, so what an imported file asks for
+	// and no profile can take (Ctrl+Tab, an unknown command) is reported here.
+	QStringList importWarnings;
 	if (importing)
 	{
+		ModelEditorControls applied;
+		applyModelEditorControlOverrides(modelEditorControlsForProfile(profileId), importedOverrides, &applied, &importWarnings);
 		if (!settings.setModelEditorControlOverrides(profileId, importedOverrides, &error))
 			return fail(1, error);
 		result.lines << Text::tr("Imported controls for %1 from %2.").arg(profileId, args.values.value(QStringLiteral("--import")));
@@ -227,6 +232,8 @@ ModelToolsCliResult runModelControls(const QStringList &arguments)
 	const QJsonObject overrides = args.flags.contains(QStringLiteral("--defaults")) ? QJsonObject{} : settings.modelEditorControlOverrides(profileId);
 	ModelEditorControls controls = base;
 	applyModelEditorControlOverrides(base, overrides, &controls, &warnings);
+	warnings = importWarnings + warnings;
+	warnings.removeDuplicates();
 	const QStringList problems = modelEditorControlProblems(controls);
 
 	if (args.values.contains(QStringLiteral("--export")))

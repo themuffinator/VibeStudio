@@ -1,4 +1,5 @@
 #pragma once
+#include "core/level_component_selection.h"
 
 // GPU-rendered model viewport.
 //
@@ -26,8 +27,14 @@
 #include "core/model_mdl.h"
 #include "core/model_pose.h"
 #include "core/model_transform.h"
+#include "app/level_component_gizmo.h"
+#include "app/level_linked_group_boxes.h"
+#include "app/level_vertex_insertion.h"
 #include "core/model_trackball.h"
 #include "app/model_vertex_overlay.h"
+#include "app/level_clip_state.h"
+#include "app/viewport_hud.h"
+#include "core/level_clip_drag.h"
 
 #include <QBrush>
 #include <QElapsedTimer>
@@ -184,6 +191,15 @@ public:
 	[[nodiscard]] QString tagAt(const QPointF& point, double tolerance = 9.0);
 	[[nodiscard]] QPointF tagScreenPosition(const QString& name);
 	[[nodiscard]] bool tagPose(const QString& name, ModelTag* result) const;
+	void setShowJoints(bool show);
+	void setJointPicking(bool enabled);
+	void setXrayJoints(bool enabled);
+	void setEditJoint(const QString& name);
+	void setJointDescendants(bool enabled);
+	[[nodiscard]] QString jointAt(const QPointF& point, double tolerance = 9) const;
+	[[nodiscard]] QPointF jointScreenPosition(const QString& name) const;
+	[[nodiscard]] bool jointVisible(const QString& name) const;
+	[[nodiscard]] bool jointPose(const QString& name, ModelJointMatrix* result) const;
 	void setVertexPicking(bool enabled);
 	void setXrayVertices(bool enabled);
 	void setTransformGizmo(bool enabled, ModelTransformTool tool, double moveGrid = 0, double angleGrid = 0, double scaleGrid = 0);
@@ -213,8 +229,11 @@ public:
 	void finishEditMove(bool commit);
 	[[nodiscard]] bool editingMove() const;
 	[[nodiscard]] ModelVec3 editMoveDelta() const;
+	// Both start from the preferences the shell recorded (the current theme,
+	// studioReducedMotion()), so a preview in any dialog follows them.
 	void setHighContrast(bool enabled);
 	void setReducedMotion(bool enabled);
+	[[nodiscard]] bool highContrast() const { return m_highContrast; }
 	[[nodiscard]] bool reducedMotion() const;
 
 	void setFrame(int frame);
@@ -233,6 +252,9 @@ public:
 
 	void play();
 	void pause();
+	// What Space and the profile's Play or Pause command do. Under reduced
+	// motion, a request to play is answered rather than ignored: the reason is
+	// announced and playbackRefused() carries it to the host's status line.
 	void togglePlayback();
 	[[nodiscard]] bool isPlaying() const;
 	void setFramesPerSecond(double fps);
@@ -308,6 +330,95 @@ public:
 	// The step a dragged selection snaps to, in mesh units; 0 moves freely.
 	void setMoveGrid(double units);
 	[[nodiscard]] bool isMovingSelection() const;
+	// Native level component handles. Identity and topology belong to the owner;
+	// this view only selects, constrains a drag and displays its validated wire.
+	void setComponentHandles(int mode, const QVector<ModelVec3>& positions, const QSet<int>& picked, bool limited = false, const QVector<QString>& geometryKeys = {});
+	void setGroupContext(const QString& label);
+	// Linked groups through the camera, drawn as the Levels 2D views draw
+	// them (app/level_linked_group_boxes.h, model_viewport_linked_groups.cpp):
+	// each box of a link set in use, solid for the groups in use and dashed
+	// for the others, dash-dotted while out of sync, named where the name
+	// fits, with arrows from the groups in use to the rest of their sets; and
+	// every linked group, fainter, with `showAll`. The accessible description
+	// says what the 2D views say. An empty display costs nothing to paint.
+	void setLinkedGroups(const LevelLinkedGroupDisplay& display);
+	[[nodiscard]] const LevelLinkedGroupDisplay& linkedGroups() const { return m_linkedGroups; }
+	// What the last paint drew of them, for tests and automation.
+	struct LinkedGroupPaint {
+		int boxes = 0;
+		int names = 0;
+		int arrows = 0;
+	};
+	[[nodiscard]] LinkedGroupPaint linkedGroupPaint() const { return m_linkedGroupPaint; }
+	void setTexturedSurfaceCount(int count);
+	[[nodiscard]] int texturedSurfaceCount() const { return m_texturedSurfaceCount; }
+	bool activateGroupAt(const QPointF& point);
+	[[nodiscard]] int componentMode() const { return m_componentMode; }
+	void setComponentSplit(bool enabled);
+	[[nodiscard]] bool componentSplit() const { return m_componentSplit; }
+	void setComponentExtrusion(int mode, const LevelMapVec3& normal = {}, const QVector<LevelMapVec3>& vertices = {});
+	[[nodiscard]] int componentExtrusion() const { return m_componentExtrusion; }
+	[[nodiscard]] double componentExtrusionDistance() const { return m_componentExtrusionDistance; }
+	bool requestComponentExtrusion(double distance);
+	[[nodiscard]] const QSet<int>& pickedComponents() const { return m_componentPicks; }
+	void setComponentXray(bool enabled);
+	[[nodiscard]] bool componentXray() const { return m_componentXray; }
+	[[nodiscard]] QPointF componentScreenPosition(int index);
+	[[nodiscard]] int componentAt(const QPointF& point);
+	bool pickComponentAt(const QPointF& point, bool toggle = false);
+	bool pickComponentAt(const QPointF& point, LevelComponentPick operation);
+	bool cycleComponentAt(const QPointF& point, int steps = 1);
+	bool cycleComponentSelection(int steps = 1);
+	bool componentCycleWheel(const QPointF& point, int delta, Qt::KeyboardModifiers modifiers);
+	bool pickComponentBand(const QRectF& band, bool toggle = false);
+	bool pickComponentBand(const QRectF& band, LevelComponentPick operation);
+	void selectAllComponents();
+	void escapeComponents();
+	[[nodiscard]] std::array<QPointF,4> componentMoveHandles();
+	[[nodiscard]] int componentMoveHandleAt(const QPointF& point);
+	bool armComponentMove(const QPointF& point, Qt::KeyboardModifiers modifiers);
+	bool requestVertexSnapAt(const QPointF& point);
+	[[nodiscard]] bool componentMoveArmed() const { return m_componentNativeArmed; }
+	bool beginComponentMove(const QPointF& point, Qt::KeyboardModifiers modifiers = Qt::NoModifier);
+	bool updateComponentMove(const QPointF& point) { return updateComponentMove(point,m_componentDragModifiers); }
+	bool updateComponentMove(const QPointF& point, Qt::KeyboardModifiers modifiers);
+	bool updateComponentModifiers(int key, Qt::KeyboardModifiers modifiers, bool pressed);
+	void finishComponentMove(bool commit);
+	[[nodiscard]] bool isMovingComponents() const { return m_componentMoving || m_componentGizmo->active() || m_vertexInsertion->active(); }
+	[[nodiscard]] LevelVertexInsertion* vertexInsertion() const { return m_vertexInsertion; }
+	bool beginVertexInsertion(const QPointF& point, Qt::KeyboardModifiers modifiers = Qt::NoModifier);
+	bool hoverVertexInsertion(const QPointF& point, Qt::KeyboardModifiers modifiers = Qt::NoModifier);
+	[[nodiscard]] LevelComponentGizmo* componentGizmo() const { return m_componentGizmo; }
+	[[nodiscard]] LevelComponentGizmoFrame componentGizmoFrame(const LevelMapVec3& pivot = {});
+	bool beginComponentTransform(const QPointF& point);
+	bool updateComponentTransform(const QPointF& point) { return m_componentGizmo->updateDrag(point); }
+	void finishComponentTransform(bool commit) { m_componentGizmo->finish(commit); }
+	[[nodiscard]] ModelVec3 componentMoveDelta() const { return m_componentDelta; }
+	[[nodiscard]] bool componentPreviewPending() const { return m_componentPending; }
+	// A response to componentMovePreviewChanged. Stale deltas are ignored;
+	// a release while validation is pending waits, and Escape still cancels.
+	void setComponentPreview(ModelVec3 delta, const QVector<QPair<ModelVec3,ModelVec3>>& edges, const QString& error);
+	void setClipMode(bool enabled);
+	[[nodiscard]] bool clipMode() const { return m_clipMode; }
+	[[nodiscard]] const LevelClipState& clipState() const { return m_clipState; }
+	bool setClipState(const LevelClipState& state);
+	void setClipPreview(const LevelClipPreview& preview);
+	[[nodiscard]] const LevelClipPreview& clipPreview() const { return m_clipPreview; }
+	// Resolve a visible mesh triangle to a real brush face. The owner snaps the
+	// point on that face, or returns its exact source plane for Match Face.
+	void setClipSurfaceResolver(std::function<bool(int,LevelMapVec3*,LevelClipState*)> resolver) { m_clipSurfaceResolver = std::move(resolver); }
+	void setClipBoundsResolver(std::function<bool(LevelMapVec3*,LevelMapVec3*)> resolver) { m_clipBoundsResolver = std::move(resolver); }
+	[[nodiscard]] QPointF clipPointPosition(int index);
+	[[nodiscard]] int clipPointAt(const QPointF& position);
+	bool beginClipPoint(const QPointF& position);
+	bool moveClipPoint(const QPointF& position, Qt::KeyboardModifiers modifiers = Qt::NoModifier);
+	bool updateClipPointModifiers(int key, Qt::KeyboardModifiers modifiers, bool pressed);
+	void finishClipPoint(bool accept);
+	bool matchClipFace(const QPointF& position);
+	void removeLastClipPoint();
+	void requestClip();
+	void setClipPreferences(const LevelClipperPreferences& preferences) { m_clipPreferences = preferences; }
+	bool activateClipDoubleClick();
 	// Externally owned scene selection. This opt-in tool never edits mesh/source
 	// state: the owner applies the requested bounds through its document service.
 	void setSelectionResizeBox(const ResizeBox& box, const QHash<int,BoxResizePoint>& pointOrigins = {}, int axes = 7);
@@ -368,6 +479,10 @@ public:
 	// point's widget position (false behind a perspective camera or with no
 	// mesh), and the direction the camera looks into the scene.
 	[[nodiscard]] ModelPickRay viewRay(const QPointF& point);
+	void rememberCommandPointer(const QPointF& point) { m_commandPointer = point; m_hasCommandPointer = QRectF(rect()).contains(point); }
+	[[nodiscard]] QPointF commandPosition() const {
+		return m_hasCommandPointer && QRectF(rect()).contains(m_commandPointer) ? m_commandPointer : QPointF(width()*0.5, height()*0.5);
+	}
 	bool projectToView(const ModelVec3& point, QPointF* screen);
 	[[nodiscard]] ModelVec3 viewForward();
 	// The camera's screen-right and screen-up directions in model space.
@@ -386,11 +501,16 @@ public:
 	// pane (model_viewport_mirror.cpp); empty shows none.
 	void setViewLabel(const QString& label);
 	[[nodiscard]] QString viewLabel() const { return m_viewLabel; }
+	// Where the heads-up tags go at the current size, font and direction, as
+	// paintHud places them. Overlays such as the modeller's navigation gizmo
+	// keep clear of these bounds.
+	[[nodiscard]] ViewportHudLayout hudLayout() const;
 
 	[[nodiscard]] QSize sizeHint() const override;
 	[[nodiscard]] QSize minimumSizeHint() const override;
 
 Q_SIGNALS:
+	void texturedSelectionClearRequested();
 	void surfaceToolChanged();
 	void surfaceStrokeBegan();
 	void surfaceTouched(int triangle);
@@ -406,18 +526,23 @@ Q_SIGNALS:
 	void frameChanged(int frame);
 	void animationChanged(const QString& name);
 	void playbackChanged(bool playing);
+	// A request to play that reduced motion turned down, with the reason.
+	void playbackRefused(const QString& reason);
 	void mdlPlaybackChanged();
 	void viewChanged();
 	void hoverChanged(const QString& summary);
 	// A left click that did not turn into an orbit, landing on a triangle;
 	// indexes as in ModelViewportHit.
 	void triangleClicked(int surface, int triangle);
+	void groupActivationRequested(int triangle);
 	// Every left click that did not drag, with what its keys ask for
 	// (`pick` is a ModelViewportPick); -1 for the triangle over empty space.
 	void trianglePicked(int surface, int triangle, int pick);
 	void edgePicked(int surface, int a, int b, int pick);
 	void vertexPicked(int surface, int vertex, int pick);
 	void tagPicked(const QString& name, int pick);
+	void jointPicked(const QString& name, int pick);
+	void jointPreviewRejected(const QString& message);
 	void collisionPicked(const QString& name, int pick);
 	void editTransformActiveChanged(bool active);
 	void editTransformPreviewChanged();
@@ -439,10 +564,20 @@ Q_SIGNALS:
 	void brushDrawActiveChanged(bool active);
 	void brushDrawPreviewChanged();
 	void brushDrawRequested(const vibestudio::ResizeBox& box);
+	void componentPicksChanged();
+	void componentModeExitRequested();
+	void componentMoveActiveChanged(bool active);
+	void vertexSnapRequested(int handle);
+	void componentMovePreviewChanged(const vibestudio::ModelVec3& delta);
+	void componentMoveRequested(const vibestudio::ModelVec3& delta);
+	void clipStateChanged();
+	void clipModeChanged(bool enabled);
+	void clipRequested();
 
 protected:
 	void paintEvent(QPaintEvent* event) override;
 	void mousePressEvent(QMouseEvent* event) override;
+	void mouseDoubleClickEvent(QMouseEvent* event) override;
 	void mouseMoveEvent(QMouseEvent* event) override;
 	void mouseReleaseEvent(QMouseEvent* event) override;
 	void wheelEvent(QWheelEvent* event) override;
@@ -454,6 +589,57 @@ protected:
 	void leaveEvent(QEvent* event) override;
 
 private:
+	void paintClip(QPainter& painter);
+	[[nodiscard]] QString clipSummary() const;
+	bool chooseCameraClipAxis(LevelClipState* state,bool preserveAxis);
+	void startClipPointDrag(const QPointF& position);
+	void updateClipReadout();
+	bool m_clipMode = false;
+	LevelClipperPreferences m_clipPreferences;
+	bool m_clipAdding = false;
+	bool m_clipChanging = false;
+	int m_clipGrabbed = -1;
+	QPointF m_clipPress, m_clipLastPoint;
+	LevelClipPointDrag m_clipPointDrag;
+	QString m_clipMovementMessage;
+	LevelClipState m_clipState, m_clipBefore;
+	LevelClipPreview m_clipPreview;
+	std::function<bool(int,LevelMapVec3*,LevelClipState*)> m_clipSurfaceResolver;
+	std::function<bool(LevelMapVec3*,LevelMapVec3*)> m_clipBoundsResolver;
+	void paintComponents(QPainter& painter);
+	[[nodiscard]] QString componentSummary() const;
+	bool componentVisible(int index);
+	bool componentPivot(ModelVec3* result) const;
+	void announceComponentPicks();
+	int m_componentMode = 0;
+	bool m_componentSplit = false;
+	int m_componentExtrusion = 0;
+	bool m_componentNumeric = false;
+	bool m_groupContextPicking = false;
+	QString m_groupContextLabel;
+	int m_texturedSurfaceCount = 0;
+	double m_componentExtrusionDistance = 0;
+	LevelMapVec3 m_componentExtrusionNormal;
+	QVector<LevelMapVec3> m_componentExtrusionVertices;
+	bool m_componentHandlesLimited = false;
+	LevelComponentGizmo* m_componentGizmo = nullptr;
+	LevelVertexInsertion* m_vertexInsertion = nullptr;
+	QVector<ModelVec3> m_componentPositions;
+	QSet<int> m_componentPicks;
+	LevelComponentCycleCursor m_componentCycle;
+	bool m_componentXray = false, m_componentMoving = false, m_componentPending = false;
+	bool m_componentReleasePending = false, m_componentValid = false, m_componentBanding = false;
+	QPointF m_componentPress, m_componentBandEnd;
+	LevelComponentPick m_componentBandOperation = LevelComponentPick::Replace;
+	QVector<QString> m_componentGeometryKeys;
+	ModelMoveDrag m_componentDrag;
+	bool m_componentNativeArmed = false, m_componentWorldDrag = false;
+	LevelComponentDrag m_componentAxisDrag;
+	QPointF m_componentLastPoint, m_componentNativePress;
+	Qt::KeyboardModifiers m_componentDragModifiers = Qt::NoModifier, m_componentNativeModifiers = Qt::NoModifier;
+	ModelVec3 m_componentDelta;
+	QString m_componentError;
+	QVector<QPair<ModelVec3,ModelVec3>> m_componentPreviewEdges;
 	void paintBrushDraw(QPainter& painter);
 	[[nodiscard]] QString brushDrawSummary(bool describeControls = true) const;
 	bool m_brushDrawTool = false, m_brushDrawing = false, m_brushDrawValid = false;
@@ -480,6 +666,13 @@ public:
 	struct CollisionOverlay {
 		QString name;
 		QVector<QLineF> edges;
+	};
+	struct JointOverlay {
+		QString name;
+		QPointF centre;
+		QVector<QLineF> segments;
+		double depth = 0;
+		bool visible = false, affected = false;
 	};
 	// Camera basis in model space. `eye` points from the model centre towards
 	// the camera, so a face is turned towards the viewer when its normal has a
@@ -590,6 +783,10 @@ private:
 	[[nodiscard]] static std::shared_ptr<const GpuFlags> buildGpuFlags(const RasterWork& work);
 	static void renderGpu(RasterWork& work);
 	static void renderVertexOverlay(RasterWork& work);
+	static void prepareJointPreview(RasterWork& work);
+	static void renderJointOverlays(RasterWork& work);
+	void paintJointOverlays(QPainter& painter);
+	[[nodiscard]] QString jointSummary() const;
 	// The hovered triangle's outline in widget coordinates, clipped to the
 	// perspective camera's near plane; empty when it cannot be seen.
 	[[nodiscard]] QPolygonF triangleOutline(int triangle) const;
@@ -597,8 +794,10 @@ private:
 	// Corner readouts in the style of idStudio's model view: render mode in the
 	// top-left; file, frame, and geometry counts in the top-right.
 	void paintHud(QPainter& painter, const Palette& palette) const;
+	[[nodiscard]] ViewportHudLayout hudLayoutFor(const QPaintDevice* device) const;
 	void paintEditOverlays(QPainter& painter);
 	void paintSelectionResize(QPainter& painter);
+	void paintLinkedGroups(QPainter& painter, const Palette& palette);
 	[[nodiscard]] BoxResizeRay selectionResizeRay(const QPointF& point) const;
 	[[nodiscard]] QString selectionResizeSummary(bool describeControls = true) const;
 	[[nodiscard]] QVector<TagOverlay> projectTagOverlays() const;
@@ -638,6 +837,10 @@ private:
 	std::shared_ptr<const ModelVertexProjection> m_rasterVertices;
 	QVector<TagOverlay> m_rasterTags;
 	QVector<CollisionOverlay> m_rasterCollision;
+	QVector<JointOverlay> m_rasterJoints;
+	QString m_editJoint, m_jointPreviewError;
+	bool m_showJoints = false, m_jointPicking = false, m_xrayJoints = true, m_jointDescendants = true;
+	bool m_mirroredJointPreview = false;
 	bool m_showCollision = false;
 	bool m_collisionPicking = false;
 	QString m_editCollision;
@@ -741,6 +944,8 @@ private:
 	QElapsedTimer m_driveClock;
 	// Where a left press began, so a release close by counts as a click.
 	QPointF m_pressPoint;
+	QPointF m_commandPointer;
+	bool m_hasCommandPointer = false;
 	// One flag per triangle in the flattened list.
 	QVector<bool> m_highlighted;
 	int m_highlightCount = 0;
@@ -790,6 +995,8 @@ private:
 	QPointF m_rotationTangent;
 	double m_scaleReference = 1;
 	std::function<void(QPainter&)> m_overlayPainter;
+	LevelLinkedGroupDisplay m_linkedGroups;
+	LinkedGroupPaint m_linkedGroupPaint;
 };
 
 QString modelViewportRenderModeDisplayName(ModelViewportRenderMode mode);

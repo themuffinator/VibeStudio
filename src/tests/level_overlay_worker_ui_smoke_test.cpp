@@ -1,4 +1,5 @@
 #include "app/map_viewport_overlay_worker.h"
+#include "app/studio_theme.h"
 #include "tests/map_viewport_test_helpers.h"
 #include <QApplication>
 #include <QDir>
@@ -7,6 +8,7 @@
 #include <QPainter>
 #include <QThread>
 #include <QTranslator>
+#include <QVector3D>
 #include <cmath>
 #include <iostream>
 
@@ -46,6 +48,43 @@ MapViewportOverlayRequest fixture()
 	request.key.view.minor = qRgb(70,70,70); request.key.view.major = qRgb(120,120,120); request.key.view.axis = qRgb(255,255,255);
 	return request;
 }
+// A high-contrast plan view paints with the studio's high-contrast tokens; with
+// no theme applied the studio is dark, so these are High Contrast Dark. Grid
+// lines mix the input background toward the text colour.
+struct PlanColors { QColor background, gridMinor, gridMajor, axis, entity, selection; };
+PlanColors highContrastPlanColors()
+{
+	const auto c = studioThemeTokens(StudioTheme::HighContrastDark,UiDensity::Standard,100).colors;
+	const auto mix = [&](double amount) {
+		return QColor::fromRgbF(c.input.redF() + (c.text.redF() - c.input.redF()) * amount,
+			c.input.greenF() + (c.text.greenF() - c.input.greenF()) * amount,c.input.blueF() + (c.text.blueF() - c.input.blueF()) * amount);
+	};
+	return {c.input,mix(0.28),mix(0.48),c.text,c.info,c.selection};
+}
+// The entity fixture as a high-contrast MapViewport widget draws it.
+MapViewportOverlayRequest widgetFixture()
+{
+	auto request = fixture(); const auto colors = highContrastPlanColors();
+	request.key.selectionColor = colors.selection.rgba();
+	request.key.view.minor = colors.gridMinor.rgba(); request.key.view.major = colors.gridMajor.rgba(); request.key.view.axis = colors.axis.rgba();
+	return request;
+}
+// True when a region holds member-ring ink: pixels whose offset from the
+// background points nearer the selection colour than the entity colour drawn
+// beneath the rings.
+bool hasSelectionInk(const QImage& region)
+{
+	const auto colors = highContrastPlanColors();
+	const auto offset = [&](const QColor& color) {
+		return QVector3D(float(color.redF() - colors.background.redF()),float(color.greenF() - colors.background.greenF()),float(color.blueF() - colors.background.blueF()));
+	};
+	const auto selection = offset(colors.selection).normalized(), entity = offset(colors.entity).normalized();
+	for (int y = 0; y < region.height(); ++y) { for (int x = 0; x < region.width(); ++x) {
+		const auto ink = offset(region.pixelColor(x,y));
+		if (ink.length() > 0.3f && QVector3D::dotProduct(ink.normalized(),selection) > QVector3D::dotProduct(ink.normalized(),entity)) { return true; }
+	} }
+	return false;
+}
 // Reference positions are derived directly from the known entity fixture, with
 // no scene index, production projection helper, marker cache or image renderer.
 QImage expectedMembers(const MapViewportOverlayRequest& request)
@@ -65,9 +104,10 @@ QImage expectedMembers(const MapViewportOverlayRequest& request)
 }
 QImage memberReference(const MapViewportOverlayRequest& request)
 {
-	auto image = imageFor(request.key.view.viewport,request.key.view.pixelRatio); image.fill(Qt::black);
+	const auto colors = highContrastPlanColors();
+	auto image = imageFor(request.key.view.viewport,request.key.view.pixelRatio); image.fill(colors.background);
 	QPainter painter(&image); painter.setRenderHint(QPainter::Antialiasing); painter.setBrush(Qt::NoBrush);
-	painter.setPen(QPen(Qt::cyan,1.5));
+	painter.setPen(QPen(colors.entity,1.5));
 	// Quake point-entity diamonds are base geometry; Show Things controls Doom
 	// things. Include the diamond beneath the independently drawn member ring.
 	for (const auto& entity : request.document.entities) {
@@ -217,7 +257,7 @@ int main(int argc, char** argv)
 
 	// Actual widget: entity-only scenes exercise this worker independently of
 	// the brush worker, including live primary/handles and combined busy status.
-	request = fixture(); request.key.showGrid = false;
+	request = widgetFixture(); request.key.showGrid = false;
 	MapViewport view; view.resize(request.key.view.viewport); view.setHighContrast(true); view.setReducedMotion(true);
 	view.setShowGrid(false); view.setShowLabels(false); view.setShowThings(false); view.setDocument(request.document); view.setSelectionSet(request.selection);
 	ok &= view.restoreNavigationState({0,{0,0},1});
@@ -248,25 +288,22 @@ int main(int argc, char** argv)
 	view.setShowGrid(true); request.key.view.pixelRatio = 1.25; image = imageFor(view.size(),1.25);
 	ok &= tests::settleMapViewport(view,&image);
 	MapGridFrame grid; ok &= renderMapGrid(request.key.view,&grid);
-	auto gridReference = imageFor(view.size(),1.25); gridReference.fill(Qt::black);
+	auto gridReference = imageFor(view.size(),1.25); gridReference.fill(highContrastPlanColors().background);
 	{ QPainter painter(&gridReference); painter.drawImage(QPointF(0,0),grid.image); }
 	ok &= expect(image.copy(QRect(45,100,100,100)) == gridReference.copy(QRect(45,100,100,100)),
 		"widget background grid preserves fractional physical placement outside the scene");
 	view.setShowGrid(false); view.resize(1601,1403); view.restoreNavigationState({0,{0,0},1}); image = imageFor(view.size(),2);
-	view.render(&image); auto fallback = fixture(); fallback.key.view.viewport = view.size(); fallback.key.view.pixelRatio = 2;
+	view.render(&image); auto fallback = widgetFixture(); fallback.key.view.viewport = view.size(); fallback.key.view.pixelRatio = 2;
 	ok &= expect(!view.isOverlayRendering() && channelDifference(image.copy(memberRegion(2,view.size())),memberReference(fallback).copy(memberRegion(2,view.size()))) <= 4,
 		"physical targets above the image ceiling retain complete ordinary member rendering");
 	view.resize(request.key.view.viewport); view.restoreNavigationState({0,{0,0},1});
 	image = imageFor(view.size(),1); ok &= tests::settleMapViewport(view,&image);
 	if (!capture.isEmpty()) { ok &= image.save(QDir(capture).filePath("overlay-worker-selected.png")); }
+	ok &= expect(hasSelectionInk(image.copy(memberRegion(1))),"selected member ring shows selection ink before removal");
 	// Remove a member while enough remain to keep the async path active. The old
 	// member ring must disappear before any event-loop delivery can replace it.
 	auto changedSelection = request.selection; changedSelection.removeAt(30); view.setSelectionSet(changedSelection); view.render(&image);
-	const auto retired = image.copy(memberRegion(1));
-	bool retiredInk = false;
-	for (int y = 0; y < retired.height(); ++y) { for (int x = 0; x < retired.width(); ++x) {
-		const auto color = retired.pixelColor(x,y); retiredInk |= color.red() > 80 && color.blue() > 80 && color.green() < 40;
-	} }
+	const bool retiredInk = hasSelectionInk(image.copy(memberRegion(1)));
 	ok &= expect(view.isOverlayRendering() && !retiredInk,"selection mutation immediately clears retired member highlights");
 	ok &= sameAsFresh(view);
 	const auto start = view.navigationState();

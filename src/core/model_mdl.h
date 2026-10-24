@@ -8,6 +8,7 @@ namespace vibestudio
 {
 struct ModelExportReport;
 struct ModelEdit;
+struct ModelTargetLimits;
 enum class ModelEditKind;
 
 inline constexpr qint64 modelMdlMaxSkinPixels = 16 * 1024 * 1024;
@@ -80,6 +81,15 @@ enum class ModelMdlFrameChange
 // inside a group divide the preceding pose's hold time without extending it.
 bool changeModelMdlFrames(ModelMesh *mesh, ModelMdlFrameChange change, int frame, int count = 1, QString *error = nullptr);
 
+// Checks the original Quake limits (the default delivery target).
 QByteArray exportModelMdl(const ModelMesh &mesh, QString *error = nullptr, const ModelWorkControl &control = {},
 						  ModelExportReport *report = nullptr);
+// Checks the count and skin limits of a delivery target (core/model_targets.h).
+QByteArray exportModelMdl(const ModelMesh &mesh, const ModelTargetLimits &limits, QString *error = nullptr,
+						  const ModelWorkControl &control = {}, ModelExportReport *report = nullptr);
+// The vertices the MDL writer stores after sharing seams and exact duplicates,
+// and those plus one copy per seam vertex (as FTE draws them). The mesh needs
+// MDL settings, one surface and UVs inside the tile. False on cancellation or
+// a mesh the writer cannot lay out.
+bool modelMdlVertexCounts(const ModelMesh &mesh, int *stored, int *render, QString *error = nullptr, const ModelWorkControl &control = {});
 } // namespace vibestudio

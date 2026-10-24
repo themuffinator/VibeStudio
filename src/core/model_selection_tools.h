@@ -94,4 +94,34 @@ struct ModelSelectRequest
 bool selectModelComponents(const ModelMesh &mesh, const ModelSelection &current, const ModelSelectRequest &request, ModelSelection *result,
 						   QString *error = nullptr, const ModelWorkControl &control = {});
 QString modelSelectOperationName(ModelSelectOperation operation);
+
+// Blender's Select Loops > Edge Loops and Edge Rings: every seed edge grows to
+// its loop or ring (request.operation Loop or Ring, in request.mode) and the
+// results are joined, so edges already selected grow without pointing at
+// anything. Empty `seeds` take them from `current`: its edges, or without
+// any, each edge whose two vertices are selected (leaving out quad
+// diagonals, which are no edge of the quad view). The editor and
+// `model select` both seed this way. Seeds run in sorted order, and one that
+// an earlier seed's loop or ring already holds adds nothing. A seed with no
+// loop or ring (a quad diagonal, an edge of no quad, an edge outside the
+// surface) is skipped and listed in `refused` with the reason. The call
+// fails only when no seed grows. request.extend keeps `current` as well, as
+// the editor does. The quad topology is built once for all seeds.
+struct ModelEdgeLoopRefusal
+{
+	ModelEdge edge{-1, -1};
+	QString reason;
+};
+struct ModelEdgeLoopsResult
+{
+	ModelSelection selection;
+	// Every seed used, in order; `grown` and `refused` split them.
+	QVector<ModelEdge> seeds;
+	QVector<ModelEdge> grown;
+	QVector<ModelEdgeLoopRefusal> refused;
+};
+bool selectModelEdgeLoops(const ModelMesh &mesh, const ModelSelection &current, const ModelSelectRequest &request, const QVector<ModelEdge> &seeds,
+						  ModelEdgeLoopsResult *result, QString *error = nullptr, const ModelWorkControl &control = {});
+// One line per refused seed ("Edge 4:5: reason"), as the editor and the CLI report them.
+QStringList modelEdgeLoopRefusalLines(const ModelEdgeLoopsResult &result);
 } // namespace vibestudio

@@ -26,7 +26,9 @@ QStringList LevelSurfaceTools::commandIds()
 		QStringLiteral("map.surfaceFitU"), QStringLiteral("map.surfaceFitV"),
 		QStringLiteral("map.surfaceJustifyLeft"), QStringLiteral("map.surfaceJustifyRight"),
 		QStringLiteral("map.surfaceJustifyTop"), QStringLiteral("map.surfaceJustifyBottom"),
-		QStringLiteral("map.surfaceNatural"), QStringLiteral("map.surfaceFaceAligned")};
+		QStringLiteral("map.surfaceNatural"), QStringLiteral("map.surfaceFaceAligned"),
+		QStringLiteral("map.surfaceScaleStepLeft"), QStringLiteral("map.surfaceScaleStepRight"),
+		QStringLiteral("map.surfaceScaleStepDown"), QStringLiteral("map.surfaceScaleStepUp")};
 }
 LevelSurfaceTools::LevelSurfaceTools(QWidget* parent) : QScrollArea(parent)
 {
@@ -52,7 +54,8 @@ LevelSurfaceTools::LevelSurfaceTools(QWidget* parent) : QScrollArea(parent)
 	m_target->setSizeAdjustPolicy(QComboBox::AdjustToMinimumContentsLengthWithIcon);
 	m_target->setMinimumContentsLength(12);
 	m_target->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Fixed);
-	m_target->setToolTip(tr("Selection includes faces and patches in selected brushes, patches and entities; quick adjustments change both, and parameter paste changes patch materials while preserving their UVs. Picked Faces uses the faces picked in the camera with your profile's face-pick keys, or else the current face in the Inspector."));
+	m_target->setToolTip(tr("Selection includes selected objects in object mode, or picked brush faces in Face mode, plus independent Select Textured faces and whole patches. Vertex/Edge picks alone have no surface targets. Picked Faces uses independent, component or camera face picks, then the current face in the Inspector."));
+	m_target->setAccessibleDescription(m_target->toolTip());
 	target->addWidget(m_target);
 	m_summary = new QLabel; m_summary->setObjectName(QStringLiteral("surfaceQuickSummary"));
 	m_summary->setWordWrap(true); m_summary->setTextFormat(Qt::PlainText);
@@ -84,14 +87,14 @@ LevelSurfaceTools::LevelSurfaceTools(QWidget* parent) : QScrollArea(parent)
 	clipboard->addLayout(clipboardRow);
 	m_pasteMode = new QComboBox; m_pasteMode->setObjectName(QStringLiteral("surfacePasteMode"));
 	m_pasteMode->setAccessibleName(tr("Surface paste mapping"));
-	m_pasteMode->addItems({tr("Matching-format parameters"), tr("World projection"), tr("Seamless wrap"), tr("Radiant values"), tr("Radiant projection")});
+	m_pasteMode->addItems({tr("Matching-format parameters"), tr("World projection"), tr("Seamless wrap"), tr("Radiant values"), tr("Radiant projection"), tr("Face attributes")});
 	m_pasteMode->setSizeAdjustPolicy(QComboBox::AdjustToMinimumContentsLengthWithIcon); m_pasteMode->setMinimumContentsLength(12);
 	m_pasteMode->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Fixed);
-	m_pasteMode->setToolTip(tr("Parameters reuse native values; Radiant values retains each Valve face's axes. Radiant projection copies classic/Valve parameters, projects primitive matrices and patch UVs, and can leave perpendicular faces edge-on. World projection keeps world UVs in any brush format. Seamless wrap turns mapping around the shared edge; a single wrapped face becomes the next source."));
+	m_pasteMode->setToolTip(tr("Face attributes retains contents, rotates each Valve target's existing axes and copies primitive matrices without rescaling. Parameters reuse native values; Radiant values retains each Valve face's axes. Radiant projection copies classic/Valve parameters, projects primitive matrices and patch UVs, and can leave perpendicular faces edge-on. World projection keeps world UVs in any brush format. Seamless wrap turns mapping around the shared edge; a single wrapped face becomes the next source."));
 	clipboard->addWidget(m_pasteMode);
 	m_mappingOnly = new QCheckBox; m_mappingOnly->setObjectName(QStringLiteral("surfacePasteMappingOnly"));
 	m_mappingOnly->setAccessibleName(tr("Keep target materials and flags"));
-	m_mappingOnly->setToolTip(tr("Transfer only mapping. Primitive mappings retain texel density using the source and target image dimensions. Radiant values keeps Valve axes and leaves patches unchanged. Radiant projection changes patch UVs while retaining materials."));
+	m_mappingOnly->setToolTip(tr("Transfer only mapping. Face attributes copies raw primitive matrices; other primitive transfer modes retain texel density using source and target image dimensions. Radiant values keeps Valve axes and leaves patches unchanged. Radiant projection changes patch UVs while retaining materials."));
 	auto* mappingLabel = new QLabel(tr("&Keep materials and flags")); mappingLabel->setWordWrap(true); mappingLabel->setBuddy(m_mappingOnly);
 	mappingLabel->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Preferred);
 	auto* mappingRow = new QHBoxLayout; mappingRow->addWidget(m_mappingOnly); mappingRow->addWidget(mappingLabel, 1); clipboard->addLayout(mappingRow);
@@ -132,10 +135,29 @@ LevelSurfaceTools::LevelSurfaceTools(QWidget* parent) : QScrollArea(parent)
 	m_shift = step(tr("Shift step (texels)"), QStringLiteral("surfaceQuickShift"), 8, 4096, {});
 	pair(0, tr("U −"), tr("U +")); pair(2, tr("V −"), tr("V +"));
 	m_rotation = step(tr("Rotation step"), QStringLiteral("surfaceQuickRotation"), 15, 180, QStringLiteral("°"));
+	{
+		// Where Rotate − and + turn: the middle of each face, or the texture
+		// origin as Radiant's Surface Inspector does. Editor profiles choose
+		// the default (NetRadiant Custom: 45° about the texture origin).
+		auto* label = new QLabel(tr("Rotate about")); label->setWordWrap(true); adjust->addWidget(label);
+		m_rotationAnchor = new QComboBox;
+		m_rotationAnchor->setObjectName(QStringLiteral("surfaceQuickRotationAnchor"));
+		m_rotationAnchor->setAccessibleName(tr("Rotate about"));
+		m_rotationAnchor->addItems({tr("Face centre"), tr("Texture origin")});
+		m_rotationAnchor->setSizeAdjustPolicy(QComboBox::AdjustToMinimumContentsLengthWithIcon);
+		m_rotationAnchor->setMinimumContentsLength(12);
+		m_rotationAnchor->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Fixed);
+		m_rotationAnchor->setToolTip(tr("Face centre keeps the middle of each face's texture in place. Texture origin keeps the offsets, so the texture turns about the point where the world origin projects onto the face (coordinate 0,0 on a patch), as Radiant's Surface Inspector turns it."));
+		m_rotationAnchor->setAccessibleDescription(m_rotationAnchor->toolTip());
+		label->setBuddy(m_rotationAnchor); adjust->addWidget(m_rotationAnchor);
+	}
 	pair(4, tr("Rotate −"), tr("Rotate +"));
 	m_scale = step(tr("Size step"), QStringLiteral("surfaceQuickScale"), 10, 1000, QStringLiteral(" %"));
-	m_scale->setToolTip(tr("Grow multiplies texture size by 1 + percent / 100; shrink divides by that factor. Rotation and scaling keep the face centre fixed."));
+	m_scale->setToolTip(tr("Grow multiplies texture size by 1 + percent / 100; shrink divides by that factor. Both keep the face centre fixed."));
 	pair(6, tr("U ÷"), tr("U ×")); pair(8, tr("V ÷"), tr("V ×"));
+	m_scaleStep = step(tr("Scale step"), QStringLiteral("surfaceQuickScaleStep"), 0.5, 100, {});
+	m_scaleStep->setToolTip(tr("Scale U and V − and + subtract this amount from, or add it to, each face's texture scale value about the texture origin, as Radiant's Surface Inspector does; a scale that would reach zero flips sign instead. Patches have no scale value: + multiplies their texture coordinates by the step and − divides them by it."));
+	pair(22, tr("Scale U −"), tr("Scale U +")); pair(24, tr("Scale V −"), tr("Scale V +"));
 	pair(10, tr("Fit 1 × 1"), tr("Centre"));
 	pair(12, tr("Flip U"), tr("Flip V"));
 	pair(14, tr("Fit U"), tr("Fit V"));
@@ -198,12 +220,16 @@ void LevelSurfaceTools::bindCommands(StudioCommandRegistry& commands)
 	}
 }
 bool LevelSurfaceTools::singleFace() const { return m_target->currentIndex() == 1; }
-void LevelSurfaceTools::setTargetSummary(int faces, LevelSurfaceFace inspected, int patches)
+void LevelSurfaceTools::setTargetSummary(int faces, LevelSurfaceFace inspected, int patches, bool components)
 {
-	m_summary->setText(singleFace() ? (faces > 1 ? tr("%n picked face(s)", nullptr, faces)
+	QString text = components && faces == 0 && (singleFace() || patches == 0) ? tr("No brush-face components selected.")
+		: singleFace() ? (faces > 1 ? tr("%n picked face(s)", nullptr, faces)
 		: faces == 1 ? tr("Brush %1 · Face %2").arg(inspected.brushId).arg(inspected.faceIndex + 1)
-		: tr("Pick faces in the camera, or a face in the Inspector.")) : tr("%n brush face(s) selected", nullptr, faces));
-	if (!singleFace() && patches > 0) { m_summary->setText(m_summary->text() + QLatin1Char('\n') + tr("%n patch(es) selected", nullptr, patches)); }
+		: tr("Pick faces in the camera, or a face in the Inspector.")) : tr("%n brush face(s) selected", nullptr, faces);
+	if (!singleFace() && patches > 0) { text += QLatin1Char('\n') + tr("%n patch(es) selected", nullptr, patches); }
+	if (text == m_summary->text()) { return; }
+	m_summary->setText(text); m_summary->setAccessibleDescription(text);
+	QAccessibleEvent changed(m_summary,QAccessible::DescriptionChanged); QAccessible::updateAccessibility(&changed);
 }
 void LevelSurfaceTools::setStatus(const QString& text, bool busy)
 {
@@ -223,7 +249,7 @@ void LevelSurfaceTools::setClipboardSummary(const LevelSurfaceClipboard& clipboa
 LevelSurfacePasteOptions LevelSurfaceTools::pasteOptions() const
 {
 	LevelSurfacePasteOptions result;
-	result.mode = m_pasteMode->currentIndex() == 4 ? LevelSurfacePasteMode::RadiantProject : m_pasteMode->currentIndex() == 3 ? LevelSurfacePasteMode::RadiantValues : m_pasteMode->currentIndex() == 2 ? LevelSurfacePasteMode::Seamless
+	result.mode = m_pasteMode->currentIndex() == 5 ? LevelSurfacePasteMode::Attributes : m_pasteMode->currentIndex() == 4 ? LevelSurfacePasteMode::RadiantProject : m_pasteMode->currentIndex() == 3 ? LevelSurfacePasteMode::RadiantValues : m_pasteMode->currentIndex() == 2 ? LevelSurfacePasteMode::Seamless
 		: m_pasteMode->currentIndex() == 1 ? LevelSurfacePasteMode::Project : LevelSurfacePasteMode::Parameters;
 	result.mappingOnly = m_mappingOnly->isChecked();
 	result.allowValve220 = (result.mode == LevelSurfacePasteMode::Project || result.mode == LevelSurfacePasteMode::Seamless) && m_allowValve->isChecked(); return result;
@@ -237,7 +263,7 @@ LevelSurfaceRequest LevelSurfaceTools::request(const QString& command) const
 		result.x = index == 0 ? -m_shift->value() : index == 1 ? m_shift->value() : 0;
 		result.y = index == 2 ? -m_shift->value() : index == 3 ? m_shift->value() : 0;
 	} else if (index < 6) {
-		result.operation = LevelSurfaceOperation::Rotate;
+		result.operation = rotatesAboutOrigin() ? LevelSurfaceOperation::RadiantRotate : LevelSurfaceOperation::Rotate;
 		result.degrees = m_rotation->value() * (index == 4 ? -1 : 1);
 	} else if (index < 10) {
 		result.operation = LevelSurfaceOperation::Scale;
@@ -263,7 +289,19 @@ LevelSurfaceRequest LevelSurfaceTools::request(const QString& command) const
 	} else if (index == 20 || index == 21) {
 		result.operation = index == 20 ? LevelSurfaceOperation::Natural : LevelSurfaceOperation::FaceAligned;
 		result.x = result.y = m_defaultScale;
+	} else if (index >= 22 && index <= 25) {
+		// U −, U +, V −, V +: NetRadiant Custom's TexScaleLeft, Right, Down, Up.
+		result.operation = LevelSurfaceOperation::RadiantScale;
+		const double amount = m_scaleStep->value() * (index % 2 ? 1 : -1);
+		result.x = index < 24 ? amount : 0;
+		result.y = index < 24 ? 0 : amount;
 	}
 	return result;
+}
+bool LevelSurfaceTools::rotatesAboutOrigin() const { return m_rotationAnchor->currentIndex() == 1; }
+void LevelSurfaceTools::setProfileSteps(double rotationDegrees, bool aboutOrigin)
+{
+	m_rotation->setValue(rotationDegrees);
+	m_rotationAnchor->setCurrentIndex(aboutOrigin ? 1 : 0);
 }
 } // namespace vibestudio

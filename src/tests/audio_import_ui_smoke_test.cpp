@@ -126,8 +126,15 @@ int main(int argc, char** argv)
 					}
 				}
 			});
+			// Export WAV stays disabled until the asynchronous browser preview
+			// confirms that the selected sound is editable.
+			auto* exportButton = browser->findChild<QPushButton*>(QStringLiteral("audioBrowserExportWav"));
+			ok &= expect(exportButton && waitUntil([&] { return exportButton->isEnabled(); }),
+			             "browser preview enables WAV export for the compressed sound");
 			picker.start(100);
-			browser->findChild<QPushButton*>(QStringLiteral("audioBrowserExportWav"))->click();
+			if (exportButton) {
+				exportButton->click();
+			}
 			picker.stop();
 			QPointer<QProgressDialog> progress =
 			    browser->findChild<QProgressDialog*>(QStringLiteral("audioBrowserExportProgress"));

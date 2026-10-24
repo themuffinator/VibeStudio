@@ -19,13 +19,24 @@ struct LevelSurfaceFace {
 // (a patch: its natural spread along the surface); FaceAligned projects in
 // the surface's own plane instead. Later values keep the earlier ones' numbers,
 // which the dialog and the command line store.
-enum class LevelSurfaceOperation { Shift, Scale, Rotate, Fit, Align, Natural, FaceAligned };
+//
+// Rotate turns each face's mapping about its centre and RadiantRotate about
+// the texture origin (where the world origin projects; a patch: coordinate
+// 0,0), both with NetRadiant Custom's turn for each face format: a classic
+// face adds to its rotation, a Valve 220 face also turns its axes about their
+// own normal, a brush-primitive matrix turns the plane coordinates it maps,
+// and a patch turns its coordinates in texels. RadiantScale is NetRadiant
+// Custom's additive scale step about the texture origin: x and y are added to
+// each face's texture scale values (levelSurfaceRadiantScaleStep()), and a
+// patch multiplies its coordinates by a positive step or divides them by a
+// negative one, as that editor does.
+enum class LevelSurfaceOperation { Shift, Scale, Rotate, Fit, Align, Natural, FaceAligned, RadiantScale, RadiantRotate };
 enum class LevelSurfaceAlignment { Keep, Minimum, Center, Maximum };
 struct LevelSurfaceRequest {
 	LevelSurfaceOperation operation = LevelSurfaceOperation::Fit;
 	// Texels for shift, size multipliers for scale (negative mirrors), repeats
 	// for fit (0 keeps that axis), map units per texel for Natural and
-	// FaceAligned.
+	// FaceAligned, scale increments for RadiantScale (0 keeps that axis).
 	double x = 1, y = 1;
 	double degrees = 0;
 	LevelSurfaceAlignment alignU = LevelSurfaceAlignment::Center;
@@ -35,6 +46,12 @@ struct LevelSurfaceRequest {
 // The map units per texel a reset mapping uses: 0.5 for Quake III, as its
 // Radiant editors default to, and 1 for Quake and Quake II.
 double levelSurfaceDefaultScale(const LevelMapDocument& document);
+
+// A texture scale value after one Radiant scale step: value + increment, or
+// -value where the sum would come within 1e-5 of zero, so a step mirrors the
+// texture instead of collapsing it (NetRadiant Custom's Texdef_Scale). A
+// legacy zero scale counts as one, as q3map2 reads it.
+double levelSurfaceRadiantScaleStep(double value, double increment);
 
 // Selected brushes, including brushes owned by selected entities. Patches
 // are listed by levelMapSelectedPatchIds() (core/level_patch_tools.h).
@@ -95,7 +112,10 @@ bool prepareLevelSurfaceEdits(const LevelMapDocument &document, const QVector<Le
 bool prepareLevelSurfaceEdits(const LevelMapDocument &document, const QVector<LevelSurfaceFace> &faces, const QVector<int> &patches,
 							  const QVector<LevelSurfaceRequest> &requests, const QHash<QString, QSize> &textureSizes,
 							  LevelSurfaceEditPlan *plan, QString *error = nullptr, const std::function<bool()> &cancelled = {});
-// Whether `operation` needs the material's image size on this face or patch.
+// Whether `operation` may need the material's image size on a patch or a
+// brush-primitive face (`repeatsCoordinates`), or on a classic or Valve 220
+// face, so callers can resolve it first. A turn needs it only on a patch and
+// a Radiant scale step only on a brush-primitive face.
 bool levelSurfaceOperationNeedsSize(LevelSurfaceOperation operation, bool repeatsCoordinates);
 // Lightweight, source-validated commit. All changed faces are one undo step.
 // A no-op leaves revision, undo, redo and the saved state unchanged.

@@ -39,11 +39,12 @@ void ApplicationShell::showLevelPrefab(bool capture, bool stage, const QString &
 		dialog.setPlacement(placement);
 	}
 	const auto load = m_levelMapLoadSerial, revision = m_levelMapDocument.revision;
+	const auto history = m_levelMapDocument.historyRevision;
 	const auto selection = m_levelMapDocument.selection;
 	const auto packageRevision = m_packageStaging.revision(), reload = m_levelPreviewReload;
 	const auto palette = activePaletteId();
-	dialog.setGuard([this, load, revision, selection, packageRevision, reload, palette](QString *error) {
-		if (load != m_levelMapLoadSerial || revision != m_levelMapDocument.revision || selection != m_levelMapDocument.selection ||
+	dialog.setGuard([this, load, revision, history, selection, packageRevision, reload, palette](QString *error) {
+		if (load != m_levelMapLoadSerial || revision != m_levelMapDocument.revision || history != m_levelMapDocument.historyRevision || selection != m_levelMapDocument.selection ||
 			packageRevision != m_packageStaging.revision() || reload != m_levelPreviewReload || palette != activePaletteId()) {
 			if (error) {
 				*error = tr("The map, selection or package changed while this prefab preview was open. Reopen it from the current state.");

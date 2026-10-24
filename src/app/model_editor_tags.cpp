@@ -1,6 +1,8 @@
 #include "app/model_editor_dialog.h"
+#include "app/locale_number.h"
 
 #include "app/model_viewport.h"
+#include "app/wrapping_action_button.h"
 #include "core/model_tags.h"
 
 #include <QComboBox>
@@ -24,7 +26,7 @@ void ModelEditorDialog::addTagControls(QFormLayout *animation)
 	auto *form = new QFormLayout(group);
 	form->setFieldGrowthPolicy(QFormLayout::AllNonFixedFieldsGrow);
 	form->setRowWrapPolicy(QFormLayout::WrapAllRows);
-	m_tagSummary = new QLabel;
+	m_tagSummary = new LiveStatusLabel;
 	m_tagSummary->setObjectName(QStringLiteral("meshTagSummary"));
 	m_tagSummary->setAccessibleName(QCoreApplication::translate("VibeStudioModelEditor", "Selected attachment pose"));
 	m_tagSummary->setTextFormat(Qt::PlainText);
@@ -43,7 +45,7 @@ void ModelEditorDialog::addTagControls(QFormLayout *animation)
 	form->addRow(QCoreApplication::translate("VibeStudioModelEditor", "Name"), m_tagName);
 	const auto button = [&](const QString &label, const QString &name, ModelEditKind kind, bool selected)
 	{
-		auto *control = new QPushButton(label);
+		auto *control = new WrappingActionButton(label, 2);
 		control->setObjectName(name);
 		control->setAccessibleName(label);
 		connect(control, &QPushButton::clicked, this, [this, kind] { executeTag(kind); });
@@ -86,7 +88,7 @@ void ModelEditorDialog::addTagControls(QFormLayout *animation)
 		m_tagOrigin[axis] = field;
 		form->addRow(label, field);
 	}
-	auto *centre = new QPushButton(QCoreApplication::translate("VibeStudioModelEditor", "Use Selection Centre"));
+	auto *centre = new WrappingActionButton(QCoreApplication::translate("VibeStudioModelEditor", "Use Selection Centre"), 2);
 	centre->setObjectName(QStringLiteral("meshTagUseSelectionCentre"));
 	centre->setAccessibleName(centre->text());
 	centre->setToolTip(QCoreApplication::translate(
@@ -175,13 +177,9 @@ void ModelEditorDialog::refreshTags()
 	QStringList axes;
 	for (int row = 0; row < 3; ++row)
 	{
-		axes << QStringLiteral("%1: %2, %3, %4")
-					.arg(QChar('X' + row))
-					.arg(tag->axis[row * 3], 0, 'g', 5)
-					.arg(tag->axis[row * 3 + 1], 0, 'g', 5)
-					.arg(tag->axis[row * 3 + 2], 0, 'g', 5);
+		axes << QStringLiteral("%1: %2").arg(QChar('X' + row), localeNumberList({tag->axis[row * 3], tag->axis[row * 3 + 1], tag->axis[row * 3 + 2]}, 5));
 	}
-	m_tagSummary->setText(QCoreApplication::translate("VibeStudioModelEditor", "%1 · frame %2\nLocal axes\n%3")
+	m_tagSummary->setText(QCoreApplication::translate("VibeStudioModelEditor", "%1 · frame %L2\nLocal axes\n%3")
 							  .arg(name)
 							  .arg(frame)
 							  .arg(axes.join(QLatin1Char('\n'))));

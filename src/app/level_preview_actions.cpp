@@ -194,7 +194,7 @@ void ApplicationShell::refreshLevelMap3D()
 			applyPendingLevelBookmarkCamera();
 			refreshLevelCameraMarker();
 			if (m_levelMapHover && levelMap3DShowing()) {
-				m_levelMapHover->setText(m_levelMap3D->hoverSummary());
+				m_levelMapHover->setText(levelSweepReadout(m_levelMap3D->hoverSummary()));
 			}
 			QString status = tr("Materials %1/%2 · Models %3/%4")
 								 .arg(result.assets.readyCount())
@@ -228,6 +228,13 @@ void ApplicationShell::refreshLevelMap3D()
 				  request.options.paletteId)
 					 .toUtf8());
 	// Hidden IDs, not only their count: two equally sized isolates differ.
+	// Doom keeps record arrays intact, so visible-array ids alone cannot
+	// distinguish temporary sector/line hiding. Include explicit session state.
+	QStringList hiddenIds(request.document.hiddenObjects.cbegin(),request.document.hiddenObjects.cend()); hiddenIds.sort();
+	for (const auto& id : hiddenIds) { hash.addData(id.toUtf8()); hash.addData(QByteArrayView("\0",1)); }
+	hash.addData(QByteArrayView("shown",5));
+	QStringList shownIds(request.document.shownObjects.cbegin(),request.document.shownObjects.cend()); shownIds.sort();
+	for (const auto& id : shownIds) { hash.addData(id.toUtf8()); hash.addData(QByteArrayView("\0",1)); }
 	if (filtered) {
 		const auto add = [&hash](char kind, int id) { hash.addData(QByteArray(1, kind) + QByteArray::number(id) + ','); };
 		for (const auto &brush : request.document.brushes) {

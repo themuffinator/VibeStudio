@@ -1,5 +1,141 @@
 # Accessibility And Localization
 
+**Rip** and **Rip and Fill** are named menu/search commands in every modeller
+profile. Typed offsets, axis/plane constraints, side/fill toggles and six
+labelled numeric fields plus two F9 switches support keyboard authoring.
+Compact status exposes full guidance and refusals through accessible text.
+Numeric fields keep left-to-right direction in RTL layouts and scroll within
+the viewport. Strings use `ModelRip`, `ModelMeshPoseBinding`,
+`VibeStudioModelTools`, `VibeStudioModelControls` and `ModelToolsCli`.
+**Rip** previews a zero-distance split immediately and can be confirmed without
+pointer movement. Cancelling restores connectivity. A zero-width fill has an
+accessible refusal; disabling fill restores the open-split preview. Connectivity
+diagnostics use the `ModelVertexIdentity` translation context.
+Semantic tests cover enlarged text, both high-visibility themes and translation
+expansion; physical keyboard and screen-reader acceptance remains open.
+See [Rip](MODEL_RIP.md).
+
+**Spin** and **Spin Duplicates** are named menu/search commands in every editor
+profile. Typed degrees, axis keys and Page Up/Down provide semantic keyboard
+controls; the compact status exposes full instructions and refusals through
+tooltips and accessible descriptions. F9 has nine labelled numeric fields and
+two checkboxes in the existing scrolling panel. Numbers remain left-to-right
+under RTL layouts. Strings use `ModelSpin`, `VibeStudioModelTools` and
+`ModelToolsCli`. Owned Qt tests exercise enlarged text, both high-contrast
+themes and translation expansion; physical keyboard and screen-reader
+acceptance remains open. See [Spin](MODEL_SPIN.md).
+
+**Edge Slide** uses the existing named menu/search/profile command, semantic
+modal preview, typed values and textual status. Rail guides supplement the
+signed fraction; axis constraints and proportional editing do not change the
+path. **Adjust Last Operation** exposes native mode, amount and pairing-angle
+fields, including fixed reference-pose distance. The panel stays within the
+viewport and scrolls long forms while keeping part of the view visible;
+rejected adjustments restore accepted values. The compact preview status keeps
+the model visible, with detailed controls in tooltips and accessible descriptions.
+Strings use `ModelEdgeSlide`,
+`VibeStudioModelTools` and existing CLI/control contexts. The workflow uses the
+current text scale, theme and layout direction. Physical keyboard and
+screen-reader acceptance remains separate from owned Qt tests. See
+[edge sliding](MODEL_EDGE_SLIDE.md).
+
+**Transfer Animation Range** uses native multi-selection joint/channel lists
+with Select All/Clear actions, labelled clip/range fields, scrollable range,
+track-selection and preview pages,
+textual interval/rate summaries and a virtual result table with full row details.
+Review and Apply remain outside the scrollers; the initial size respects the
+available screen area. Semantic Qt checks and owned renders cover a 900 × 600
+logical window with 200% text, expanded translations and RTL. Settings invalidate reviewed
+results, and close cancels the worker. Original/result previews share the camera
+and destination sample. `ModelCurveTransfer`, `ModelCurveTransferDialog` and
+`ModelCurveTransferCli` are extracted for translation. Physical keyboard and
+screen-reader acceptance remains open. See
+[range transfer](MODEL_ANIMATION_CURVES.md#transfer-or-reverse-a-range).
+
+**Edit Animation Keys** uses virtual native key/result tables with named controls,
+extended row selection, inclusive range and Select All actions, and a scrollable
+operation form. Full result-row text remains available in a read-only detail
+field. Selection counts, continuous error and review status are textual; Apply
+requires a current successful review. Preview uses a static sample and shared
+camera. `ModelCurveKeyTools`, `ModelCurveKeysDialog` and `ModelCurveKeysCli`
+participate in translation extraction. Physical input and screen-reader
+acceptance remain separate from semantic Qt/render checks. See
+[key groups](MODEL_ANIMATION_CURVES.md#edit-groups-of-keys).
+
+**Animation Curves** combines a virtual native key table, labelled numeric fields
+and a graph with named accessible value editing. Scale channels advertise a
+positive range. Keyboard graph controls have numeric equivalents; selected keys
+use thicker diamond outlines and tangent handles use squares and dashed lines.
+Time stays left to right in RTL layouts. Forms scroll, labels wrap and Review/Apply
+remain outside the scroller. Capture/review work is cancellable; draft changes
+invalidate Apply. Strings use `ModelAnimationCurves`, `ModelAnimationCurvesCli`,
+`ModelAnimationCurvesDialog`, `ModelAnimationCurveView` and existing editor
+contexts. Semantic Qt checks and owned renders cover scaling, high contrast,
+expanded translations and RTL; physical keyboard/screen-reader acceptance remains
+open. See [animation curves](MODEL_ANIMATION_CURVES.md).
+
+**Two-Bone Inverse Kinematics** uses labelled native clip/joint/sample controls,
+numeric target and pole fields, a scrollable settings form and a virtual result
+table with a full selected-row detail field. Reach status includes words and
+numbers. Review is cancellable; changing settings invalidates Apply and results.
+The preview is static and shares the modeller camera profile. Strings use
+`ModelIk`, `ModelIkCli`, `ModelIkDialog` and the existing editor/skeletal
+contexts. Physical keyboard and screen-reader acceptance remains open. See
+[inverse kinematics](MODEL_IK.md).
+
+**Transfer Skin Weights** uses native focusable controls, wrapped labels and a
+scrollable form; joint mapping, locks and before/after weights use native tables.
+A read-only detail field exposes full numeric rows independently of column width.
+Preview comparison, explicit Review/Apply and cancellable work keep status visible.
+`ModelWeightTransfer`, `ModelWeightTransferDialog` and `ModelWeightTransferCli`
+participate in translation extraction. Viewport statistics isolate each translated
+count and source label so RTL paragraphs cannot detach a leading number from its
+label. Physical screen-reader acceptance remains
+open. See [weight transfer](MODEL_WEIGHT_TRANSFER.md).
+
+**Paint Skin Weights** provides a native accessible vertex table and **Paint
+rows** as a keyboard alternative to brush dragging. Weight rings use both
+colour and arc length; numeric values, counts, totals and status messages remain
+available. Settings scroll, labels wrap, and the preview uses static poses unless
+the user selects another frame. Cancellable workers prepare and review strokes;
+local undo/redo precedes the explicit batch Apply. Translations use
+`ModelWeightPaintDialog`, `ModelWeightPaint`, `ModelWeightPaintCli` and existing
+skinning/editor contexts. Physical keyboard and screen-reader acceptance remains
+open. See [weight painting](MODEL_WEIGHT_PAINT.md).
+
+**Skin Weights and Binding…** uses native labelled, focusable controls, a
+scrollable form with wrapped rows, and a virtual accessible weight table.
+Issue names and numeric sums explain status without colour. Review and Apply
+are separate actions; changed options retire the previous review. Workers
+expose progress/cancellation and Close cancels an active review. Preview frame
+selection allows deformation review without animation or pointer input.
+Translations use `ModelSkinningDialog`, `ModelSkinningTools`,
+`ModelSkinningCli` and the editor's existing context. Physical keyboard and
+screen-reader acceptance remains open. See [the binding workflow](MODEL_SKINNING.md).
+
+**Edit Skeleton** uses labelled Qt controls, accessible names/descriptions,
+a scrollable form, wrapped rows and translated summaries. Numeric origins
+stack vertically for large text. The existing worker exposes progress and
+cancellation. Owned-widget tests cover high-contrast themes, 200% text and
+expanded RTL strings; physical keyboard and screen-reader acceptance remains
+open. See [Skeleton authoring](MODEL_RIG.md).
+
+**Edit Skeletal Animation** follows the same native-control and worker contract.
+Only applicable fields appear for each operation; technical indices and XYZ
+values use left-to-right controls in RTL layouts. Clip ranges are local to the
+selected clip and every control exposes its meaning to assistive technology.
+Transform axes stack vertically and the form scrolls while Apply/Cancel remain
+visible. Physical accessibility acceptance remains open.
+
+Joint viewport tools use the same labelled transform, snapping, axes and pivot
+controls. The Skeleton hierarchy and Joints table provide keyboard selection;
+Geometry provides numeric transforms. The selected joint has a square outline,
+with thicker affected bones. X-ray state, descendant scope and bind/current-pose
+semantics have text equivalents. Show joints, X-ray joints and Transform children
+are native focusable checkboxes. Preview deformation runs off the UI thread,
+reports protected edits, and keeps bone overlays aligned with the completed
+render. Owned-widget tests do not replace native screen-reader acceptance.
+
 Asset authoring stays inside Models, Textures and Audio as native accessible
 tabs with translated browser/workspace labels. Editor titles and unsaved markers
 are exposed as tab text, with full titles in tooltips. Keyboard focus follows the
@@ -255,6 +391,15 @@ a menu takes focus, and restoration returns focus to that pane. The workspace
 suite exercises direct Qt focus, visibility, state and rendered menus at 100%
 and 200% high-contrast RTL with expanded text. Physical keyboard and native
 screen-reader acceptance remain unverified.
+
+**Show Top/Front/Side View** are checkable commands in the same Layout menu,
+View menu and command search, mirrored by keyboard-focusable check boxes in the
+Layout section of the View tab. Check state, not colour, says which plan panes
+show; the last shown pane's command and check box are disabled rather than
+refusing later, and the status bar names the panes left. Hiding the focused
+pane moves focus and the active plan to the next shown pane. Labels are
+translatable and follow the reading direction; `level-plan-panes-ui-smoke`
+covers 100% and 200% high-contrast RTL with expanded text.
 
 Plan and shared Models camera status tags keep the view identity first, use at
 most two rows and elide overflow within the pane. Their leading/trailing corners
@@ -741,7 +886,7 @@ checks exercise 100%/200%, high contrast, expanded labels and RTL without
 horizontal panel scrolling. Single-face wrapping announces the clipboard's new
 source after successful publication. A named mapping-only checkbox has a wrapping
 buddy label and keyboard focus. Selection summaries include patch material targets.
-The 84 shared gesture preferences include remappable wrap, selected-value and
+The 98 shared preferences include duplicate nudging, quick clipping, camera clip-plane and point-movement policies, component lasso/cycling, movement and quick-snap policy, and remappable wrap, selected-value and
 mapping-only button/modifier fields with explicit conflict feedback. Radiant
 projection adds remappable full/mapping-only gestures and a named panel mode;
 the result announces actual edge-on brush mappings in text. Patch projection
@@ -757,6 +902,14 @@ accessible description; Surfaces retains the detailed wrapped status.
 The semantic stroke suite renders controls at 100% and 200%, including expanded
 translations and RTL; no operating-system input or screen capture is used.
 Native assistive-technology acceptance remains open.
+
+Component conversion, Grow, Shrink and Connected commands use standard named
+Qt actions and focusable Tools buttons. Selection counts update the viewport's
+accessible description and status text. Mode changes retain compatible picks;
+there is no pointer-only requirement for these commands. Errors and handle-limit
+refusals are text, and pending component edits are cancelled before picks change.
+New messages use the `LevelComponentSelection`, `LevelComponentSelectionCli`,
+`ApplicationShell`, `MapViewport` and `VibeStudioLevelTools` translation contexts.
 
 The detailed Surface Alignment dialog uses labelled numeric
 controls, per-axis alignment selectors and explicit Apply/Cancel actions.
@@ -1186,6 +1339,9 @@ surfaces. It explains retained Undo/Redo and draft saving plus export/reopen to
 start fresh history; no new control, preference or gesture is introduced.
 Installation palette reads use the same worker controls. Automated tests verify
 that the UI event loop runs during reads and that closing waits for cancellation.
+The browser retains the resolved palette source for the current preview,
+including a family inferred from its image format. Returning to the page must
+preserve that source text rather than announce loading after decoding completed.
 Extraction exposes the current file and byte progress; its named Cancel action
 stops within that file and its report distinguishes completed outputs from the
 discarded partial file. The same widget tests render this dialog at 100% and
@@ -1358,7 +1514,12 @@ plainly not the full-strength text colour, so a control that is waiting never
 looks ready. The `highContrast` flag also reaches every
 painted widget: the map viewport, the model viewport, the image/palette/waveform
 asset views, the composition, pipeline, and timeline charts, and the code
-syntax highlighter.
+syntax highlighter. A model viewport starts from the theme that is applied
+(`currentStudioTheme().highContrast`), so the preview in every modeller dialog
+(animation curves, curve keys, curve transfer, two-bone IK, skinning, weight
+painting, weight transfer and the Prop Designer) draws the high-visibility
+palette without the dialog passing it on; the shell's own setters still
+override it for the views it updates live.
 
 `studio-theme-smoke` checks all four explicit themes against WCAG 2.2 contrast
 ratios on every run: body and secondary text against the frame, page, panel,
@@ -1423,6 +1584,10 @@ Status no longer depends on hue:
   patches with a dash-dot stroke, so shape and stroke carry the meaning.
 - A colour key's swatch sits beside its numbers, never instead of them, and the
   colour picker is an extra: Enter edits the numbers from the keyboard.
+  **Set Entity Colour…** opens the standard Qt colour dialog, named and
+  described for how many entities it will change, and its result is written as
+  numbers in the status bar; the remembered colour is the `levels/entityColour`
+  preference described in the initial setup guide.
 - An entity value's suggestions (targetnames for a target, choices from the
   definition) open as a list the keyboard moves through, and are also in the
   editor's accessible description, so they are heard without opening the list.
@@ -1485,6 +1650,27 @@ into the map viewport, both when a model is shown and when preferences change.
 The model workbench's Play/Pause button is disabled under reduced motion, and
 its tooltip explains why and that Page Up and Page Down still step frames.
 
+The shell also records the preferences it applies
+(`recordStudioAccessibilityPreferences()` in `app/studio_accessibility`), so
+widgets built later start with them:
+
+- Every model viewport starts still when reduced motion is on
+  (`studioReducedMotion()`), so the previews in the modeller's dialogs never
+  start playback. A request to play (Space in a view, or a host's play
+  command) is answered rather than ignored: `ModelViewport::togglePlayback()`
+  announces the workbench's explanation as a problem and emits
+  `playbackRefused()` with it.
+- The Mesh Editor's **Play / Pause** on the timeline is disabled, with that
+  explanation as its tooltip and status tip, and every one of the four views
+  stops. Its **Play or Pause** command stays enabled with the same tooltip, so
+  the profile's key (Blender's Space, 3ds Max's /) and command search show the
+  explanation in the status strip and announce it, instead of a disabled
+  shortcut swallowing the key in silence.
+- The modeller's busy bars stand still: a model operation whose length is not
+  known yet, material image loading and the recovery scan show an empty bar
+  that names the work (`setBusyProgress()`, as `LoadingPane` does) instead of
+  Qt's moving marquee. A bar takes its real range once the total is known.
+
 Everything else in the shell is static, so there is nothing further for the
 setting to suppress yet. The blinking text cursor has its own switch, **Stop the
 text cursor blinking**, since some readers want the cursor still without losing
@@ -1541,6 +1727,10 @@ Required behavior:
 - [x] Every command in the shell command registry is reachable from the menu
   bar, the command palette, and — where `core/studio_semantics.h` declares one —
   a keyboard shortcut, all generated from that one registry.
+- [x] Every Levels command also has a translatable label and one-line summary
+  in `core/studio_semantics.cpp`, so `ui semantics`, editor profiles and the
+  palette describe it in the user's language; `level-palette-coverage-ui-smoke`
+  checks this with expanded translations and right-to-left layout at 200%.
 - [ ] Bring the remaining per-surface controls into the same command registry.
 - [ ] No keyboard traps in modals, dock widgets, editors, setup flow, or preview
   panes.
@@ -2026,12 +2216,45 @@ The UI functionality round makes the keyboard reach further:
   `killtarget` link is dashed, the selection's links are heavier, and the
   viewport's accessible description adds "Arrows show N target links between
   entities".
+- Linked groups are never colour alone either, in the 2D views or the 3D
+  camera: the selected or open group's box is solid and heavier, the rest of
+  its link set dashed, each box carries its group's name, a group out of sync
+  is dash-dotted and labelled "out of sync" as well as taking the warning
+  colour, and arrows have arrowheads. Both views' accessible descriptions add
+  "Arrows run from the selected linked group to the N other groups it is
+  linked with" and how many are out of sync, and, with **Show > Linked
+  Groups**, "Every linked group is boxed: N in all"; the views share one
+  helper for the boxes, styles and text (`app/level_linked_group_boxes.h`).
+  In the camera, edges and arrows sit on a dark band so they read over bright
+  surfaces, high-contrast mode uses its own link and warning colours and
+  heavier lines, names keep clear of the heads-up readouts and of each other
+  (a name that does not fit is left out rather than overlapped), and group
+  names are bidi-isolated in right-to-left layouts. `level-sidebar-ui-smoke`
+  checks the camera's description and drawing at 100% text and at 200% text
+  in high contrast, right to left, and saves the frames under
+  `VIBESTUDIO_TEST_SNAPSHOTS`.
+  The **Scene** tree's kind column reads "Linked" or "Linked, out of sync", and
+  its tooltip names the frame in words ("Turned 30 degrees", "Mirrored",
+  "Scaled or sheared"). Conflict and lock notices go to the status bar and
+  **Activity** as text. All of it is translatable.
 - The Levels **History** rows read as "Step 2: Delete entity:3, current,
   saved" (or applied, or undone), so the undo position and the save point are
   spoken, not only drawn; Enter on a row goes to that step.
-- The Replace Texture dialog names its fields ("Texture to replace", "Texture
-  to use instead") and its live count ("Uses that will change"), so a screen
-  reader hears what Replace will do before it is pressed.
+  In the TB profile the same list includes object selections and group navigation.
+  All positions with the saved contents carry the textual **saved** state, even
+  when their selections differ. Selection-only steps leave save warnings clear.
+  Offscreen semantic checks cover 100%/200% text, high visibility, expanded RTL
+  strings, accessible names and list activation; native input/screen-reader
+  acceptance remains outstanding.
+- The modeless Find and Replace Textures window names its fields ("Texture to
+  find", "Texture to use instead", "Where to find and replace") and its live
+  summary ("What Find or Replace will do", announced as it changes), so a
+  screen reader hears what Find or Replace will do before either is pressed.
+  Which field a texture pick fills is said in words ("Picking a texture fills
+  Find."), not by a highlight, and an unavailable scope keeps its place in the
+  list with the reason as its tooltip. Reveal Material's status tip, also the
+  Tools tab button's accessible description, names two materials when a mixed
+  selection makes it unavailable.
 - The empty Levels page's **Recent maps** list is labelled and reads each row
   as "name, in folder"; Enter opens the map.
 - Enter on a Levels objects-list row frames the object in the view without
@@ -2039,8 +2262,14 @@ The UI functionality round makes the keyboard reach further:
 - Ctrl+A, Ctrl+I, and Ctrl+Shift+A on Levels select every object that is not
   hidden (worldspawn aside), invert the selection, and clear it, and the status
   bar says how many objects are selected.
-- [ and ] on Levels halve and double the grid (View menu: Smaller Grid and
-  Larger Grid), and the status bar says the new size in words.
+- [ and ] on Levels halve and double the grid, from 0.125 to 1024 units (View menu: Smaller Grid and
+  Larger Grid), and the status bar says the new size in words. Arrow keys in
+  the view-bar and View tab grid lists choose a size too. On binary Doom and
+  Hexen maps the sizes below 1 unit are disabled list items, which the
+  keyboard skips, and the status bar says why the grid stops at 1. The view's status lines say how far apart a
+  fine grid's lines are drawn when zoomed out. In the NetRadiant
+  profiles, where a grid change also ticks **Snap**, the status bar says so,
+  so the change is not shown by the check box alone.
 - H and Shift+H on Levels hide the selection and show everything again. A
   hidden object's row says "hidden" in its text and its accessible name, not
   only by being dimmed, and the viewport's description counts hidden objects.
@@ -2064,6 +2293,79 @@ The UI functionality round makes the keyboard reach further:
   in the status bar and can be undone.
 
 `shell-interaction-smoke` presses these keys against the real window in CI.
+
+### Modeller Status And Announcements
+
+Qt reads a label's accessible name instead of its text once a name is set, so
+a status line named "Mesh editor status" used to be heard by its name alone.
+The modeller's status lines keep their fixed names, so they can be found, and
+carry what they say as their accessible description, which tells assistive
+technology when they change (`LiveStatusLabel` and `setLiveStatus()` in
+`app/studio_accessibility`). That covers the Mesh Editor's status, project
+context, recovery and material lines, the collision, skeleton and tag
+summaries, the model operation's progress window, and the status lines of the
+Prop Designer, skinning, Quake III animation, assembly, animation curve, curve
+key, curve transfer, two-bone IK, weight painting, weight transfer, texel
+density, symmetrize and primitive binding dialogs. The tool banner over the
+views is described by a refusal's reason or a tool's keys.
+
+What is worth telling is also announced, through `announceStatus()`, which
+uses the studio's announcement (`announceToScreenReader()`) when **Announce
+results to screen readers** is on and reads it aloud when speech is on:
+
+- Results, politely: an export (a collision map and exported or imported
+  controls included), a stage, a collision placement, a save, a recovered
+  draft, a delivery target check, a tool's response to a key (X-ray on, a
+  selection mode, faces hidden), a modal operator's prompt and keys as it
+  starts, the active view, a sidebar folding for the views, and a change of
+  the delivery targets (MD3 moving over its limits or back).
+- Long tasks that finished (`LiveStatus::Finished`), politely: a model
+  operation that took 1.5 seconds or more, and material images that took as
+  long to load (a failed load is a problem). A result the operation reports
+  in the same pass ("Exported …") takes the place of "… finished." and keeps
+  this kind.
+- Problems, assertively: every refused or failed document operation (the edit
+  the document turned down, with its reason), a refused rip, spin, knife or
+  bevel with its reason when the user confirms it, a refused transform, an
+  invalid transform that was cancelled, a refused export or collision
+  placement, a controls file that could not be written or read, a refused
+  Quake MDL header, playback refused under reduced motion, the dialogs'
+  failures, and a recovery copy that could not be written. A recovery failure
+  is announced when it first happens or changes; the timer's retries every
+  five seconds with the same failure are read on the line only, and a retired
+  copy that cannot be removed is reported once.
+- Nothing for updates: the counts after an edit, the selection, readouts
+  that follow the pointer or typed values in a modal operator or in **Adjust
+  Last Operation**, and a modal tool's live preview, refused or not
+  (`performWork` with `WorkKind::Preview`), which runs at every pointer move
+  or typed digit.
+
+Messages from one pass of the event loop settle into one, a problem
+outranking a result, so a refused edit that two layers report is heard once;
+the same words within two seconds are not repeated. Speech reads problems
+under **Failures, warnings, and cancellations**, a long task's end under
+**Long tasks that finish** (as the studio's own long tasks are read), and
+other results under **Status bar messages**, which is off by default.
+
+The delivery targets button describes each format's line from its menu, not
+only the short summary. The animation curve graph names the selected key in
+its accessible name ("key 3 of 8, frame 12"), and its description gives the
+channel, value, curve and tangents before its help; Left and Right re-announce
+it. Its value range is the channel's (scale stays above zero): dragging a
+key, adding one, editing it and a screen reader's value change all stay
+within it, and the curves dialog's value field uses the same range. The
+component table's corner
+columns are headed A, B and C on screen, and their tooltips and spoken names
+say "First vertex index", "Second vertex index" and "Third vertex index".
+
+`model-accessibility-ui-smoke` checks these in the dark theme at 100% text and
+in high-contrast light at 200% text, right to left, with longer strings: among
+them a spin typed past a full turn, which is silent until confirmed, and a
+recovery folder that cannot be written, announced once over retries more than
+two seconds apart. It also checks the curve graph's range against the curves
+dialog's value field, and the previews, busy bars and play requests under high
+contrast and reduced motion. A physical NVDA or Narrator review remains
+release work.
 
 ## MVP Release Audit Status
 
@@ -2515,6 +2817,38 @@ plural that is marked for later translation needs `QT_TRANSLATE_N_NOOP`: lupdate
 files a `QT_TRANSLATE_NOOP` literal as a plain string, with no plural forms to
 fill in.
 
+`%Ln` is the same count written the user's way ("1.024" in German), and the
+script treats it as `%n`. Without `--write` it also checks the modeller's
+sources (`src/app/model_*`) for a message that puts a count before a fixed
+English plural, which reads "1 vertices" and cannot be translated into
+languages with more plural forms: a placeholder followed, directly or after
+one word, by plural markup ("%1 face(s)"), a listed plural noun ("%1
+vertices") or any other word ending in "s" ("%1 collision brushes") fails
+the check, unless that word is listed as not counted (a verb after a name, as
+in "%1 uses %2", or a unit after a measure, as in "%1 degrees"). The check is
+a heuristic over string literals: a count phrased another way can still slip
+through. The modeller splits a line of counts into one message per count
+("%Ln vert(ex)(ices)", "%Ln triangle(s)"), joined by a translatable pattern,
+so each count takes its own form.
+
+Every language other than English installs English's catalog beneath its own
+(`installStudioTranslations`, reported as `fallbackCatalogPath`), so a count
+its catalog has not translated yet reads "1 vertex" and "2 vertices" in
+English, not the source text's "vert(ex)(ices)". `studio-runtime-smoke`
+checks this with the German catalog.
+
+**Modeller numbers.** Coordinates, weights, lengths, rates and readouts in the
+modeller's status lines, banners, tables, curve graph and accessible text are
+written with `localeNumber()` (`app/locale_number.h`): the user's decimal
+separator, with no group separator, as the spin boxes beside them write
+them. Numbers in a row are set apart with semicolons where the region writes a
+decimal comma ("0,5; 1; 2"). The component table's edit role, and so Copy,
+keep the C locale, as do saved files, edit fields that are parsed back and
+command-line output. The Quake MDL page's **Eye position** (x,y,z) and **Size
+hint** fields hold the file's values and keep a full stop for decimals in
+every region; their tooltips and the refusal say so. `model-locale-ui-smoke`
+checks German numbers, playback rates and Polish plural forms.
+
 **The other shipped catalogs list every source string, untranslated.**
 `python scripts/extract_translations.py --write` runs lupdate over `src/` into
 every catalog, with relative source locations and `-no-obsolete`. As a result,
@@ -2630,7 +2964,13 @@ A pseudo-localization catalog (`en_XA`) ships beside these targets.
 ## Testing And Acceptance
 
 Models > Mesh Editor uses a virtualized standard Qt table for keyboard component
-selection, named numeric controls, scrollable Geometry/Surface/Animation/Handoff
+selection, named numeric controls, a one-line source size and undo history
+summary, elided when translations or text scale leave too little room, whose
+tooltip and accessible description give the full sentences (and
+say in words when a source is over its limit), a labelled, described and
+keyboard-focusable **Undo history limit** spin box in **Model** > **Undo History
+Limit…** without a mnemonic (Alt+H
+belongs to the Blender profile), Undo and Redo tooltips with the steps available, scrollable Geometry/Surface/Animation/Handoff
 inspectors, standard undo/save shortcuts, and text error/status messages. The
 component mode includes Edges with textual endpoint, length, and face-count
 columns. Split and weld controls have accessible names and explanations; welding
@@ -2868,8 +3208,10 @@ The recovery chooser additionally has 100% dark and 200% high-contrast dark
 RTL/expanded-label renders, with damaged-copy, cancellation, and restoration
 checks through widget APIs.
 
-Mesh Material mode has named textual status and progress, plus focusable Cancel,
-Reload Images, and Details controls. Missing images use the checker and a textual
+Mesh Material mode has named textual status and progress in the status strip,
+plus a focusable Cancel while images load and a focusable **Images** menu
+button (accessible name "Material image actions") holding Reload Images and
+Details. Missing images use the checker and a textual
 problem count. Details presents read-only source paths, dimensions, and limitations;
 colour is not the sole signal. Material UI fixtures render normal scale and 200%
 high-contrast light with RTL and 50% expanded labels, and verify 3D/UV updates using
@@ -3193,10 +3535,545 @@ marks the active pane with a border as well as its accent colour. Controls
 profiles change keys and gestures only: every command keeps its menu entry,
 command search (<kbd>F3</kbd> or the profile's key) and keyboard route, and
 **Customise Controls…** lists every binding in labelled tables, reports
-collisions in text, and offers **Reset**. The status line keeps its height
-during a viewport drag, so wrapped translated text cannot cancel the gesture.
+collisions in text, and offers **Reset**. The status strip's lines (message,
+package and level, recovery) elide instead of wrapping, and the label's text
+stays whole. A line cut short shows the whole message in its tooltip, and is
+a <kbd>Tab</kbd> stop that shows it when focused, so it can be read without a
+pointer; a line shown whole is no Tab stop. A translated message therefore
+never changes the view's height or cancels a drag in it.
+
+At 200% text and with translations a third longer, the editor fits a 1280x720
+page without scrolling, in every profile, theme and direction. The document
+commands are one **Model** menu (<kbd>Alt</kbd>+<kbd>O</kbd>); the menu bar and
+the editing header fold what does not fit into their overflow buttons; the
+sidebar pages are at least 18 average characters wide, so their width follows
+the text scale; their buttons, check boxes, notes, summaries and form row
+labels wrap rather than widening the page (a wrapped row label keeps the height
+of its lines); and their choices shrink to ten characters with the whole entry
+in the list. When the views would keep less than 45% of the width, the
+properties sidebar folds to its tabs and the status strip and screen reader say
+so. A sidebar the user opens stays open: where both no longer fit, or the views
+would keep less than 45%, the other one folds, with the same announcement. A new
+text scale or theme refits the pages. The tool shelf's
+icons follow the text scale. `model-editor-layout-ui-smoke` checks the page
+fit, the views' share, the chrome's height and every shown label, button and
+check box for clipping at 1280x720, 1366x768 and 1600x1000, with every sidebar
+page opened in turn, at 100% dark, 200%
+high-contrast light right to left with longer strings, and 200% high-contrast
+dark in English, and saves renders under `VIBESTUDIO_MODELLER_EVIDENCE`. See
+[Large text and small screens](MODELLER_PROFILES.md#large-text-and-small-screens).
+
+Modeller dialogs open within the screen they appear on: `fitDialogToScreen`
+bounds each preferred size to the screen's available area (less 20 px each side)
+and never below the dialog's minimum, so **Apply**, **OK** and **Cancel** stay
+reachable on a 1366x768 laptop or a 1920x1080 screen at 150% scaling. Dialogs
+whose content outgrows that (**Customise Controls…**, **Animation Curves…**,
+**Edit Animation Keys…**) scroll their content above buttons that stay in view,
+and ask for the width that content needs, so it never scrolls sideways where
+the screen has room. The same test opens nineteen modeller dialogs at 200% text
+on a 1280x720 screen, in English and with longer strings, and checks that each
+one and its buttons fit and that no shown label, button or check box is cut
+short. See [Dialogs on small screens](MODELLER_PROFILES.md#dialogs-on-small-screens).
 Profile, sidebar and format strings use the `VibeStudioModelControls`,
 `VibeStudioModelSidebar`, `VibeStudioModelSkeleton` and `VibeStudioModelMesh`
 contexts. `model-profiles-ui-smoke` runs each profile at 100% dark and at 200%
 high-contrast light right to left. Real-device keyboard and screen-reader review
 remains part of the [modeller gate](MODELLER_RELEASE.md).
+
+No profile traps keyboard focus in the Mesh Editor. <kbd>Ctrl</kbd>+<kbd>Tab</kbd>
+and <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>Tab</kbd> (<kbd>Control</kbd>+<kbd>Tab</kbd>
+and <kbd>Control</kbd>+<kbd>Shift</kbd>+<kbd>Tab</kbd> on macOS, where the system
+keeps <kbd>Command</kbd>+<kbd>Tab</kbd>) move to the next or previous panel in
+every profile, are named in the view's accessible description and the
+controls reference, and cannot be given to a command. Where a profile binds
+<kbd>Tab</kbd> or <kbd>Shift</kbd>+<kbd>Tab</kbd> (Blender's edit-mode toggle),
+the key runs the command only while the view itself has focus; the editing
+header and **Adjust Last Operation** keep ordinary Tab order, and the tool
+shelf is one Tab stop, with the arrow keys, <kbd>Home</kbd> and <kbd>End</kbd>
+between its buttons. The component table and
+the controls tables move between rows with the arrow keys and leave on
+<kbd>Tab</kbd> instead of cycling every cell. A focused setting in
+**Adjust Last Operation** keeps the keys it uses (<kbd>Space</kbd> toggles a
+check box rather than Blender's Play), and keys it does not use stop at the
+panel. <kbd>F9</kbd> moves focus into **Adjust Last Operation** and <kbd>Esc</kbd>
+returns it to the view. The **Customise Controls** key field lets Tab, Shift+Tab
+and Esc leave or stop it; **Special key** binds those keys on purpose. Header
+and shelf tooltips and accessible descriptions name the keys the active profile
+and the user's changes give each command, while accessible names stay key-free;
+the empty **Adjust Last Operation** panel, the **Spin** and **Bevel Edges** hints
+and the **Blender Navigation** description name the profile's own keys or the
+**View** menu entry, never a key the profile does not give.
+`model-editor-keyboard-ui-smoke` drives all of this with real key presses
+through Qt's shortcut map for the four profiles, at 100% dark left to right and
+at 200% high-contrast light right to left. See [Mesh Tools](MODEL_TOOLS.md#keyboard-focus).
+
+The Mesh Editor's pointer gestures have keyboard routes through the same
+services. **Select Edge Loops of Selection** and **Select Edge Rings of
+Selection** (<kbd>Alt</kbd>+<kbd>L</kbd> and <kbd>Alt</kbd>+<kbd>R</kbd> outside
+MilkShape 3D) grow edges picked in the component table, naming each edge that
+has no loop or ring; `model select --edges` does the same. **Loop Cut** starts
+across the one selected edge between quads and confirms with <kbd>Enter</kbd>.
+The **UV** view pans with the arrow keys and zooms with <kbd>+</kbd> and
+<kbd>-</kbd>. In four views, **Next View** and **Previous View**
+(<kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>Page Down</kbd> and <kbd>Page Up</kbd>)
+move the active pane with keyboard focus and announce its name. The navigation
+gizmo sits in the trailing top corner, below the heads-up tags and the tool
+banner and clear of **Adjust Last Operation** (bottom leading corner). It is
+sized from the heads-up font, with click targets at least 24 px across, and it
+hides when the view has no room. `model-editor-keyboard-ui-smoke` covers the
+keyboard routes, and `model-navigation-gizmo-ui-smoke` checks the gizmo
+against the heads-up tags at 100% and 200% text in both directions, in 800x600
+and 500x400 views and a four-view pane, with renders under
+`VIBESTUDIO_MODELLER_EVIDENCE`.
+
+## Brush topology controls
+
+The component editor's **Insert Vertex** XYZ fields and **Remove Selected
+Components** button use labelled, focusable Qt controls within its scrollable
+properties pane. Tooltips and accessible descriptions explain geometric
+constraints; wrapped status text reports refusals and inserted/removed counts.
+Local undo restores mode and selection. The Levels command also appears in
+Geometry, Tools and command search. Existing text scale, high-visibility,
+RTL and reduced-motion settings apply. Direct widget tests cover these
+controls; physical input and screen-reader acceptance remain release gates.
+
+Plan and camera component tools expose picked counts, validation progress and refusal
+reasons through translated status and accessible descriptions. Vertex circles,
+edge diamonds, face squares, filled selection markers and labelled XYZ axes
+avoid relying on colour alone. Labels size to the active font; RTL keeps axis
+letters readable. Ctrl+A selects handles and Escape cancels/clears/exits;
+numeric component and patch dialogs remain the keyboard alternatives. The
+X-ray command is available in Geometry, Tools and command search. Direct
+semantic tests render 100% high-contrast light and 200% high-contrast dark with
+expanded text and RTL, without injecting input or capturing the desktop.
+
+**Split Edge/Face** is a checked command in Geometry and command search.
+Plan and camera drags display pending, valid and refused states and preserve
+the original map until the checked candidate commits. **Split Selected
+Edges/Faces** in the numeric brush editor exposes keyboard-focusable Qt
+controls, translated names/descriptions and the existing XYZ movement fields.
+Successful splits select the new vertices. Semantic tests cover local undo
+and cross-pane state; physical input and screen-reader acceptance remain open.
+
+**Extrude Faces** and **Split Extrusion** expose checked command state. The
+camera labels its constrained axis **N**; plan/camera status reports the signed
+distance, checking state and any refusal. **Extrude Faces Precisely…** offers a
+named reference face, keyboard-focusable distance field, separate-brush checkbox and translated
+**Extrude** action. Labels wrap for enlarged text and translated strings; the
+dialog inherits RTL, high-visibility and reduced-motion settings. Closing the
+dialog retires its focus lifecycle before starting the checked operation.
+Semantic tests cover exact numeric entry, cross-pane selection and undo;
+physical input and screen-reader acceptance remain release gates.
+
+The shared clipper uses numbered points, hatching and dashed result wires.
+Translated status and accessible descriptions distinguish checking, checked
+and refused cuts. **Clip Selection…** offers an axis/position definition or
+nine named XYZ fields, **Keep**, **Preview**, **Clip** and **Cancel** through
+standard Qt controls. Backspace removes a point; Escape cancels a point drag
+or leaves the tool. Native input and screen-reader acceptance remain open;
+semantic tests exercise numeric preview, shared state and scaled/RTL rendering.
+**Quick Clip** and **Clipper Options…** are named commands. The options use
+labelled, focusable Qt controls and mnemonics for material selection, custom
+names, point/side resets, two-point entry and double-click action. Invalid
+material input stays in the dialog with an inline diagnostic. Quick previews
+announce their one-shot mode. Numeric clipping includes a cut-material button;
+keyboard users can configure and apply the same operation without a gesture.
+The optional wrap/merge checkbox describes gap-filling in its tooltip and
+accessible description. **One point (wrap/merge)** exposes three named XYZ
+fields and hides the unused point rows. The checked preview and completion
+message explicitly distinguish a hull from a cut. Numeric axis/position mode
+explains that actual points are required when wrapping is enabled. Scaled,
+expanded-translation and RTL option layouts are covered by offscreen semantic
+tests; native input and assistive-technology acceptance remain open.
+
+The NRC camera-plane policy is a named, focusable choice in the existing
+**Customize Gestures… > 3D Camera** form, with a per-profile default and explicit
+On/Off overrides (`camera.clipViewAxis`). It shares the standard scalable,
+scrollable RTL gesture layout and CLI import/export path. Invalid camera-plane
+choices report translated diagnostics; the checked preview, retained-side wire
+and normal direction remain shared with plan views. Exact camera and axis/sign
+CLI routes provide a non-pointer reproduction path. Owned 100%/200% camera
+renders and semantic cancellation/undo checks do not establish physical-input
+or assistive-technology acceptance.
+
+`camera.clipDragStyle` uses the same named gesture form for surface-only,
+world-axis and view-axis point movement. During modified dragging, translated
+readout/accessibility text identifies the numbered point and its movement axis,
+or explains an unresolvable projection. Modifier changes update the readout
+without requiring pointer movement. Numeric XYZ clipping remains the keyboard
+alternative. Cancellation and profile/grid/view changes discard the draft;
+these semantic checks do not establish physical-input or screen-reader acceptance.
+
+**Wrap/Merge with Points…** uses a scrollable Qt form with named material,
+point-count, XYZ and source/result controls, buddies, focusable actions and
+selectable textual validation. Numeric coordinates stay left-to-right inside
+RTL layouts. Invalidated geometry clears the old preview and disables Apply;
+preparation shows progress, respects reduced motion and cancels on close.
+Controls support high-contrast themes and translation expansion. The shared
+service and dialog strings use `LevelWrap` and `LevelWrapDialog` contexts.
+Owned offscreen checks cover 100%/200% high contrast, expanded RTL, accessible
+names/focus and stale selection refusal. Physical keyboard and screen-reader
+acceptance remain open.
+
+Group editing exposes translated **Open Group**, **Close Group** and **Close All
+Groups** commands in command search and **Tools > Groups**, with named native
+Open/Close buttons in Scene. A wrapping breadcrumb, the tree's explicit **Open**
+state and viewport labels identify the context without relying on colour.
+**Create in** is disabled while a group is open; status explains outside-edit
+refusals and restores the previous destination on close. The shared context
+updates camera accessibility descriptions. Semantic UI coverage includes nested
+navigation, outliner selection, pending-draft cancellation and 100%/200% text
+with expanded RTL labels. Physical keyboard and screen-reader acceptance remain
+open gates.
+
+Hierarchy-preserving prefab transfer uses the existing asynchronous capture and
+placement dialog, with translated metadata and capacity messages; linked
+groups now take any placement rotation, so no rotation refusal is shown. Its semantic UI fixture includes nested groups in export, staged
+package insertion and the accepted one-step candidate. Owned widget renders at
+100% and 200% text cover high-contrast and expanded RTL labels. Group counts are
+available in inspection JSON. Physical input and screen-reader acceptance are
+still outstanding.
+
+**Transform Components…** uses standard, named Qt operation/axis selectors,
+numeric XYZ fields, a shared/custom pivot, grid and UV-policy checkboxes.
+Numeric fields remain left-to-right within RTL layouts. A wrapping form inside
+a scroll area accommodates enlarged or expanded labels; errors remain selectable
+text and keep the editable dialog open. Shared placement progress exposes
+cancellation. Stale component picks are rejected even when object selection did
+not change. Semantic tests cover all four operation pages, accessible names,
+focusable numeric controls, 100%/200% text, high contrast and expanded RTL.
+Native keyboard, screen-reader and non-Windows acceptance remain open gates.
+
+Direct component manipulators label rotation/scale axes, uniform scale, shear
+axis pairs and the pivot, alongside colour. Their translated accessible
+descriptions and status distinguish pending validation, valid previews and
+refusals. **Transform Components…** supplies a numeric alternative to geometry
+gestures; **Component Manipulator Options…** supplies named pivot/step fields,
+wrapping labels and a scrollable form. Numbers stay left-to-right in RTL layouts.
+These semantic controls and owned renders do not establish native pointer,
+keyboard or screen-reader parity with the reference editors.
+
+Component depth cycling provides local Tab/Shift+Tab, remappable named commands
+and independently configurable plan/camera wheel chords. Cycle announcements
+include the overlap ordinal and XYZ coordinates. The chosen handle is drawn
+last, with its existing larger filled shape, so unselected overlapping depths
+cannot obscure it. Object resize handles are hidden in component mode.
+High-contrast plan canvases use the studio's light/dark
+background, text, selection and status colours; the light theme no longer
+renders a black plan background. Owned widget renders and semantic command
+tests cover 100%/200% text and expanded RTL labels. Native keyboard and assistive
+technology acceptance remain open.
+
+Direct **Insert Vertex** is a named, checkable command in Geometry and Tools.
+The two profile insertion modifiers use the existing accessible gesture editor.
+A plus inside a diamond distinguishes the candidate from existing vertex
+handles; pending/refused/valid states also use text and symbols. Coordinates,
+incident-brush counts and validation/cancellation state appear in translated
+viewport descriptions and status text. No animation is required. The existing
+**Edit Brush Components…** numeric fields and `map insert-vertices` remain
+keyboard/automation alternatives. Offscreen semantic checks cover cancellation,
+selection handoff and owned renders at 100%/200% with high visibility, expanded
+strings and RTL; native screen-reader/pointer acceptance remains unverified.
+
+World-axis component dragging announces the active plane/axis and relative,
+absolute or disabled grid in translated viewport descriptions. Absolute vertex
+snapping reports all three coordinates, including an off-screen axis. The two
+profile switches use the existing labelled gesture editor, and numeric
+component tools remain the keyboard alternative. No new animation is required.
+
+**Snap Picked Vertex…** exposes a named, keyboard-focusable target selector
+with brush/vertex IDs and coordinates. Its full choice stays in the tooltip
+and accessible description when text is elided. The wrapping form follows RTL;
+stale source state and geometry errors keep the dialogue open with an accessible
+explanation. Semantic tests cover 100%/200% text, high contrast and expanded RTL.
+Shared movement traces label each axis and distance, use high-contrast palette
+colours and distinguish pending geometry with dashes. Label placement avoids
+overlap and viewport clipping; the existing accessible status retains the full
+displacement when a small viewport cannot fit every label. No new animation or
+operating-system input control is introduced. Native assistive-technology
+acceptance remains outstanding.
+**Sweep Faces…** provides named keyboard-focusable material, path, segment,
+iteration, transform and preview controls in a wrapping, scrollable form.
+Validation and omitted-section details remain text-accessible, with the current
+preview content named for assistive technology. Reduced motion uses a static
+busy indicator; high-contrast previews and inherited RTL layout are supported.
+Owned-widget tests cover 100%/200% text and expanded RTL strings. Native
+screen-reader and keyboard acceptance still require real platform testing.
+
+**Sweep Tool** shares the same numeric controls with the destination handles
+in each map view. Its compact palette offers named scale buttons and an optional
+textured preview. The active view's accessible description includes destination
+XYZ, scale, rotation and validation state; leaving the tool restores its prior
+description. Move/Scale labels and labelled rotation axes accompany high-contrast
+cap outlines, with dashes for pending work. Enter applies only checked geometry;
+Escape cancels a drag, resets the transform, then leaves the tool. Named command
+shortcuts can replace the viewport defaults. Numeric controls remain the
+keyboard-accessible alternative to dragging; native screen-reader and physical
+keyboard acceptance are still outstanding.
+
+Distance labels also reserve space below both possible HUD rows. The plan's
+primary object label temporarily yields to the active drag/insertion readout;
+selection rings remain, and the object label returns when the edit ends.
+
+The entity inspector's **Protected** column pairs native check states with
+**Local**, **Shared** and **Mixed** labels and an accessible per-key description.
+Native Tab/Shift+Tab navigation reaches the property cells. Space and Enter
+operate the focused protection cell; spawnflag checks retain
+their separate column and semantics. Protection refresh retains the focused key
+and column. Missing protected keys have explicit **Not set** accessible text.
+Locked selections disable the check boxes. **Add Protected Property…** uses
+labelled native fields and standard acceptance/cancellation; **Clear Protected
+Properties** follows linked selection eligibility. All new text is translatable.
+Owned-widget checks exercise 100%/200% text, high contrast and expanded RTL;
+native keyboard and screen-reader acceptance remain outstanding.
+
+**Extract Linked Groups** is exposed in command search and **Tools > Groups**,
+with eligibility derived from the open linked group and partial selection. Its
+background preparation uses a named native progress bar, a labelled Cancel
+button and translated phase/status messages. Cancellation and stale selection
+discard the candidate; no drag gesture is required. One undo also restores the
+editing context and selection. Owned Qt semantic tests and renders cover
+100%/200% text, high contrast, expanded translations and RTL. They do not replace
+physical keyboard, native screen-reader or macOS/Linux acceptance.
+
+**Repeat Last Commands**, **Clear Repeatable Commands** and **Copy Repeat Recipe**
+have translated labels and descriptions in Edit, the command palette and Tools.
+Their Tools rows expose accessible names, tooltips and Tab focus. Replay uses the
+existing named progress/cancellation controls. Clear changes transient state and
+invalidates pending preparation without altering map contents. Owned widget tests
+cover action eligibility, TB shortcut hints, undo, save/reopen, 100%/200% scaling,
+high contrast and expanded RTL text. Physical keyboard and screen-reader
+acceptance on native platforms remain unverified.
+
+**Paste at Original Position**, **Paste at Cursor** and **Paste to Camera** use
+localised Edit/search actions and named, focusable **Tools > Clipboard** rows.
+The existing cancellable placement dialogue supplies progress and failure text.
+Keyboard invocation uses the remembered active pane and its centre when the
+pointer has left it. No global cursor lookup is required. Owned offscreen widget
+checks cover 100%/200% text, expanded translations, RTL and high contrast; native
+screen-reader and platform input acceptance remain open.
+
+
+### Face clipboard controls
+
+**Copy Map Selection**, **Paste Map Content**, **Copy Surface** and
+**Surfaces > Face attributes** use existing native actions and combo controls,
+accessible names, keyboard focus and localised status messages. Copy policy is
+listed in the profile control reference. Background parsing reports errors and
+cancellation through the existing surface status; map/face-selection changes
+invalidate pending work. Offscreen widget checks cover scaling and expanded RTL;
+native assistive-technology acceptance remains open. No input interception is
+needed for the shared command path.
+
+### Object clipboard progress
+
+Object **Copy Map Selection** and **Cut Map Objects** use the shared cancellable
+worker dialogue with **Operation phase**, **Operation progress** and **Cancel
+operation** accessible names. Errors, stale-context refusals and counts are
+localisable. Cut availability follows component/clipper tool state and never
+invokes component deletion. The same actions serve menus, search, shortcuts and
+context menus; semantic offscreen tests cover those tool transitions. Native
+screen-reader/input and cross-platform acceptance remain unverified.
+
+
+### Region-selection progress
+
+**Select by Region** uses the shared native action and cancellable worker dialogue,
+with localised profile-specific tooltips describing source removal. The controls
+reference explains convex versus bounds tests. **Operation phase**, **Operation
+progress** and **Cancel operation** retain accessible names, roles and keyboard
+focus. Offscreen semantic tests exercise component/clipper restrictions, stale
+selection/filter/tool changes, 100%/200% text, high contrast, expanded translations
+and RTL. Native assistive-technology and physical-input acceptance remain open.
+
+### Hierarchy and source-line selection
+
+The source-line dialog has a mnemonic label, an accessible editable field,
+Select/Cancel controls, a default Select action and an inline validation message.
+Select remains disabled until the input is valid; the tooltip and accessible
+description identify the loaded-source reference. Labels and messages are
+translatable, long rows wrap, and the existing cancellable worker exposes
+progress. The shared parser accepts localised decimal digits. Owned offscreen tests cover 100%/200% text, high-visibility colours,
+translation expansion and RTL without OS input or screen capture. Native
+screen-reader and keyboard acceptance still require platform testing.
+
+### Temporary visibility controls
+
+Hide, Show All and Isolate expose the shared worker's translated phase, progress
+and cancellation controls. Status messages distinguish temporary hiding from
+saved scene visibility and filters. Context-menu hints use the active profile's
+shortcut rather than hard-coded H/Shift+H. Selection and visibility publication
+share one guarded transaction; cancellation preserves the previous state.
+Owned offscreen semantic tests cover all three primary profiles at 100%/200%
+text, high visibility and expanded RTL, plus dense-map progress/cancellation.
+The 200% expanded-RTL shell capture at 1600 × 1000 exposed transform-field
+clipping, addressed by the responsive layout below. Crowded viewport/status text
+remains open; passing the visibility transactions does not establish whole-shell
+accessibility acceptance.
+Native keyboard and screen-reader acceptance remains open.
+
+### Responsive level transform fields
+
+The Inspector's Centre/Size fields use native spin boxes with their full numeric
+size hints. Wide panels show a matrix; narrower panels stack axis rows, moving
+axis labels above the fields when needed. The same editors survive reflow,
+preserving focus and pending text. Tab order follows Centre X/Y/Z then Size X/Y/Z,
+and each field has an accessible name, description and buddy label. Captions and
+the selection note wrap. Shared studio sidebars expose a horizontal scrollbar
+when a native control's minimum width cannot fit, retaining access at extreme
+pane widths instead of silently clipping controls. The fallback scrollbar has
+a translated accessible name/description and participates in keyboard focus.
+
+Owned offscreen checks cover TB, NRC and default profiles at 100%/200%, expanded
+RTL, Arabic numeric formatting, four pane widths, live 125%/150%/175%/200%
+scaling, high-contrast light/dark themes, focus order, pending text, one normal
+authoring commit and exact undo. These checks do not establish native physical
+keyboard, assistive-technology or macOS/Linux acceptance.
+
+### Inherited temporary visibility
+
+Existing visibility commands retain their accessible names and shortcuts. Hidden
+counts describe effective objects, including inherited hiding, and **Show All
+Hidden** remains enabled for a shown override even when no object is currently
+hidden. Object-list activation can reveal one child while its siblings stay
+hidden. Plan panes and camera publish the same resolved state. Saved scene
+visibility and filters remain separate controls, as the status message explains.
+
+Scene **Move to parent** and **Assign selection** update shown exceptions when
+changing layers. An object made hidden is removed from selection; one undo
+restores the scene, selection and visibility. Plan panes and the camera update
+from the same state. No new input gesture or accessibility control is required.
+
+The profile controls reference adds a translated **New and duplicated objects**
+row describing preserved/revealed or fresh/inherited visibility. Profile changes
+preserve existing states and invalidate stale authoring previews. Owned Qt tests
+exercise the existing profile combo, direct duplication and offset preview,
+with all plan panes and the camera sharing the result.
+
+### Duplicate placement controls
+
+**Customize Gestures…** adds an **Editing** tab with a labelled, focusable nudge
+choice and an explicit profile-default option. The controls reference describes
+placement and selection-mode requirements. Strings use existing Qt translation
+contexts; the form follows the same wrapping, scaling, high-visibility and RTL
+behaviour as other gesture fields. NRC duplicate actions update enablement when
+entering or leaving vertex, edge or face mode. Owned-widget tests cover both
+placement policies, undo/redo, Repeat, camera focus and pending-work rejection.
+
+**Duplicate, Make Unique** is a separate translated QAction with a descriptive
+tooltip, command-search entry, Edit and level-tool routes, and NRC's Shift+Space
+binding. It is disabled during component editing and for Doom maps. It shares
+the accessible placement progress/cancellation path and per-profile nudge choice.
+Owned-widget tests exercise target renaming and partial owners at both 100% and
+200% text scale, including high contrast and expanded RTL translations.
+
+### Entity connection actions
+
+Connect and KillConnect use translated QActions shared by Edit, Tools, context
+menus and command search. Tools buttons have accessible names and keyboard
+focus; enabled state follows selected owners and the current game. The delayed
+placement dialog supplies a named Connecting phase and cancellation. Errors,
+redundant connections and successful edits have text status. Native screen-reader
+and physical-input acceptance remain open; enlarged expanded-RTL shell crowding
+is a separate existing limitation.
+
+**Select Connected Entities** shares the named, focusable Tools buttons and
+translated QAction routes, plus the accessible selection progress/cancel dialog.
+NRC's Ctrl+Shift+E binding is scoped to Levels and appears in the controls
+reference; TB's existing key is preserved. Status text reports the total
+selection with a translatable plural. It adds no setup form or external service.
+Owned-widget acceptance covers all three profiles at 100%/200% text scale,
+including high contrast and expanded RTL strings; physical keys and native
+screen readers still require separate acceptance.
+
+**Select All of Type** adds a translated, named QAction shared by Edit, Select,
+Tools, context menus and command search. Its Tools button uses the existing
+keyboard-focus and accessible-button path. NRC Shift+A is scoped to Levels;
+vertex and edge modes disable the inapplicable command. The existing texture
+browser and labelled material picker supply the query material. Plural status
+text distinguishes object results from face results, and the named selection
+task exposes progress and cancellation. Face results are validated against the
+complete visible handle set before replacing picks. Native input/screen-reader
+acceptance and enlarged expanded-RTL shell layout remain separate open work.
+
+Active face components now supply the existing Surfaces target control,
+adjustment commands, Copy/Paste Surface and detailed alignment face list.
+The target tooltip explains component, camera and Inspector precedence; empty
+or non-face component selections disable surface authoring instead of silently
+targeting whole brushes. Pick and mode changes refresh command state and cancel
+pending work. The shared focusable controls, progress/cancel status and numeric
+fields remain localisable. Owned-widget tests exercise TB/NRC/default at
+100%/200%, high contrast and expanded RTL. This does not close the separate
+native keyboard, screen-reader or whole-shell crowding acceptance gates.
+
+Shell startup defers the application stylesheet while constructing page trees,
+then restores it before item-view polish and row layout. Theme and scaled font
+preservation are asserted across the same six profile/scale scenarios; theme,
+progress, localisation, texture accessibility, model-shell and general shell
+regressions cover the shared surfaces. This does not close the existing 200%
+expanded-RTL crowding or native assistive-technology acceptance gaps.
+
+### Edge bevel controls
+
+[Bevel Edges](MODEL_EDGE_BEVEL.md) exposes a translated command in every modeller
+profile, numeric width/segments/roundness controls and a cancellable preparation
+worker. The compact preview status leaves geometry visible; tooltips and
+accessible descriptions carry full key guidance. F9 uses the existing bounded
+scroll area, focusable labelled fields and left-to-right numbers in RTL layouts.
+No motion or colour cue is required to interpret acceptance or refusal. Physical
+keyboard and native screen-reader acceptance remain open.
+
+### Knife controls
+
+[Knife](MODEL_KNIFE.md) offers a named translated command in every profile and
+a semantic keyboard crosshair: arrows, Alt for a one-pixel step, Insert to add
+points, N for another path, Backspace to undo a point, Enter to apply and Esc to
+cancel. C/S/A toggle cut-through, selected-face scope and angle constraints.
+Preview preparation is cancellable; an invalid confirmation keeps the editable
+draft. Compact status, dashed refusal guides and snap/anchor shapes avoid
+colour-only feedback. Tooltips and accessible descriptions carry the detailed
+controls and refusal reason. F9 exposes labelled, focusable Qt checkboxes for
+visibility and selection scope. Automated semantic and owned-widget render
+checks supplement the still-open native keyboard/screen-reader review.
+
+Adjustment panels show the operation name as their compact heading, retaining
+the full **Adjust Last Operation** heading as an accessible name and tooltip.
+Their form labels wrap within the scroll viewport so enlarged translated text
+does not force controls beyond the panel; controls and labels can be scrolled
+fully into view.
+
+### Texture density controls
+
+[Texel Density](MODEL_UV_DENSITY.md) provides labelled, focusable Qt controls,
+textual island states, selectable full measurement details and original/result
+UV comparisons. Dimensions and numeric density remain left-to-right in RTL.
+Settings scroll on small displays; results use a virtual table with horizontal
+scrolling. Worker preparation exposes progress and cancellation. Apply requires
+a fresh validated preview; refusal reasons remain visible and accessible.
+Translated source strings and plural measurements use the normal catalogues.
+Automated checks supplement the separate native screen-reader/keyboard gate.
+
+### Material-selection CLI output
+
+The read-only **map select-textured** query uses localizable help, validation
+errors and separate plural counts for added independent faces and whole patches.
+JSON retains stable technical selectors and source/geometry hashes for automation.
+The viewport action is available through named menus, Tools and command search;
+NRC alone assigns Ctrl+Shift+A. Independent faces use dashed plan outlines as
+well as camera highlights and localisable counts in viewport readouts and
+accessible descriptions. The Surfaces target summary announces description
+changes, including whole patches in component mode. Select None clears picks
+before leaving component mode and clearing whole objects. Owned offscreen Qt
+tests exercise these controls; native input and screen-reader acceptance remain
+open, together with the known 200% expanded-RTL layout crowding.
+
+### Level deletion controls
+
+Delete Selection and Remove Selected Components share command enablement with
+the viewport's component state. Profile controls explain empty component picks,
+mixed patch points and clip-point priority. Background deletion uses the normal
+translated operation title, phase, progress role and focusable Cancel control;
+fast operations avoid flashing a progress window. Cancellation preserves picks
+as well as map history. Automated offscreen checks cover normal and 200% text,
+high contrast and expanded RTL strings; physical input and screen-reader
+acceptance remain separate production gates.

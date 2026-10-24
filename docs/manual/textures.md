@@ -79,6 +79,9 @@ depends on the palette. The **Palette** list on the toolbar decides it:
 The line under the preview always says where the palette came from. If no real
 palette is found, VibeStudio uses a generated stand-in palette and says so:
 indexed colours will not match the game. The stand-ins contain no game data.
+When neither the project nor package names a palette family, **Automatic** can
+infer it from the selected image, such as a Doom flat, before checking the
+installation. Its resolved source stays visible when you return to the browser.
 
 ## Use a texture in the open map
 

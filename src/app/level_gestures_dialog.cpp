@@ -58,7 +58,7 @@ LevelGesturesDialog::LevelGesturesDialog(StudioSettings& settings, const QString
 			: field.kind == LevelGestureFieldKind::ToggleKey || field.kind == LevelGestureFieldKind::HoldKey ? 3 : 0;
 	};
 	std::stable_sort(fields.begin(), fields.end(), [&](const LevelGestureField& a, const LevelGestureField& b) { return rank(a) < rank(b); });
-	for (const auto& section : {QStringLiteral("plan"), QStringLiteral("camera"), QStringLiteral("camera-keys")}) {
+	for (const auto& section : {QStringLiteral("plan"), QStringLiteral("camera"), QStringLiteral("camera-keys"), QStringLiteral("editing")}) {
 		auto* scroll = new QScrollArea(tabs); scroll->setWidgetResizable(true);
 		auto* page = new QWidget(scroll);
 		auto* form = new QFormLayout(page);
@@ -94,7 +94,9 @@ LevelGesturesDialog::LevelGesturesDialog(StudioSettings& settings, const QString
 				auto* editor = new QKeySequenceEdit(page);
 				editor->setObjectName(QStringLiteral("gestureKey.") + field.id);
 				editor->setAccessibleName(tr("%1 key").arg(field.label));
-				editor->setAccessibleDescription(field.kind == LevelGestureFieldKind::HoldKey
+				editor->setAccessibleDescription(field.id == QLatin1String("camera.focusHoldKey")
+					? tr("Hold one unmodified key during mouse look to keep the selection in view; the wheel moves nearer or farther. Tab is accepted because it acts only during mouse look.")
+					: field.kind == LevelGestureFieldKind::HoldKey
 					? tr("Hold one unmodified key for temporary navigation. Releasing it, changing profile or losing focus stops the temporary mode.")
 					: field.kind == LevelGestureFieldKind::MotionKey
 					? tr("One unmodified direction key. Use None to disable it. Fly keys follow the mouse-look requirement and take priority over drive keys while active.")
@@ -117,7 +119,8 @@ LevelGesturesDialog::LevelGesturesDialog(StudioSettings& settings, const QString
 			connect(combo, &QComboBox::currentIndexChanged, this, [this] { m_loadError.clear(); validateDraft(); });
 		}
 		scroll->setWidget(page);
-		tabs->addTab(scroll, section == QStringLiteral("plan") ? tr("2D Plan") : section == QStringLiteral("camera") ? tr("3D Camera") : tr("Camera Keys"));
+		tabs->addTab(scroll, section == QStringLiteral("plan") ? tr("2D Plan") : section == QStringLiteral("camera") ? tr("3D Camera")
+			: section == QStringLiteral("camera-keys") ? tr("Camera Keys") : tr("Editing"));
 	}
 	layout->addWidget(tabs, 1);
 	m_showOverlaps = new QToolButton(this);

@@ -1,5 +1,10 @@
 #include "core/model_document.h"
+#include "core/model_lod.h"
+#include "core/model_skin_variants.h"
+#include "core/model_vertex_identity.h"
+#include "core/model_geometric_topology.h"
 #include "core/model_skeleton.h"
+#include "core/model_joint_tools.h"
 #include "core/model_source_decode.h"
 #include "core/model_geometry_helpers.h"
 #include "core/model_surface_selection.h"
@@ -35,6 +40,7 @@
 #include <QRegularExpression>
 
 #include <algorithm>
+#include <atomic>
 #include <cmath>
 #include <limits>
 #include <numbers>
@@ -65,8 +71,9 @@ ModelVec3 normal(ModelVec3 a)
 	const auto length = std::sqrt(lengthSquared(a));
 	return length > 1e-20 ? multiply(a, static_cast<float>(1 / length)) : ModelVec3{0, 0, 1};
 }
-QJsonArray xyz(ModelVec3 p) { return {p.x, p.y, p.z}; }
-QJsonArray uv(ModelTexCoord p) { return {p.u, p.v}; }
+// Floats print as their shortest round-trip decimal (core/model_source_encoding.h).
+QJsonArray xyz(ModelVec3 p) { return {modelSourceNumber(p.x), modelSourceNumber(p.y), modelSourceNumber(p.z)}; }
+QJsonArray uv(ModelTexCoord p) { return {modelSourceNumber(p.u), modelSourceNumber(p.v)}; }
 bool readNumbers(const QJsonValue &value, int count, float *numbers)
 {
 	if (!value.isArray())
@@ -107,54 +114,13 @@ bool nameOk(const QString &name, bool allowEmpty = false)
 	return (allowEmpty || !name.isEmpty()) && name.size() <= 128 &&
 		   std::none_of(name.cbegin(), name.cend(), [](QChar c) { return c.isNull() || c.category() == QChar::Other_Control; });
 }
-QByteArray digest(const ModelMesh &mesh, QString *error, const ModelWorkControl &control)
-{
-	return modelStateFingerprint(mesh, error, control);
-}
-qint64 storageBytes(const ModelMesh &mesh)
-{
-	qint64 bytes = modelMdlStorageBytes(mesh);
-	for (const auto &surface : mesh.surfaces)
-	{
-		bytes += surface.triangles.size() * qint64(sizeof(ModelTriangle));
-		bytes += surface.texCoords.size() * qint64(sizeof(ModelTexCoord));
-		bytes += surface.uvSeams.size() * qint64(sizeof(ModelEdge) + 3 * sizeof(void *));
-		for (const auto &frame : surface.frames)
-		{
-			bytes += (frame.positions.size() + frame.normals.size()) * qint64(sizeof(ModelVec3));
-		}
-	}
-	for (const auto &skin : mesh.embeddedSkins)
-	{
-		bytes += skin.image.sizeInBytes();
-	}
-	for (const auto &tag : mesh.tags)
-	{
-		bytes += sizeof(ModelTag) + tag.name.size() * qint64(sizeof(QChar));
-	}
-	for (const auto &frame : mesh.frames)
-	{
-		bytes += sizeof(ModelFrameInfo) + frame.name.size() * qint64(sizeof(QChar));
-	}
-	for (const auto &clip : mesh.animations)
-	{
-		bytes += sizeof(ModelAnimation) + clip.name.size() * qint64(sizeof(QChar));
-	}
-	for (const auto &box : mesh.collisionBoxes)
-	{
-		bytes += sizeof(ModelCollisionBox) + box.name.size() * qint64(sizeof(QChar)) + box.framePoses.size() * qint64(sizeof(ModelCollisionPose));
-	}
-	return bytes;
-}
-qint64 selectionBytes(const ModelSelection &selection)
-{
-	// Include a conservative per-entry hash-node estimate in retained history.
-	return qint64(selection.vertices.size() + selection.faces.size() + selection.surfaces.size()) * (sizeof(int) + 3 * sizeof(void *)) +
-		   qint64(selection.edges.size()) * (sizeof(ModelEdge) + 3 * sizeof(void *)) +
-		   (selection.tag.size() + selection.collision.size()) * qint64(sizeof(QChar));
-}
 bool recalculate(ModelSurface *surface, ModelWorkProgress &work, int onlyFrame = -1)
 {
+	// Normals recomputed in every pose are rebound on skinned surfaces and
+	// posed from the skeleton in retained skeletal poses.
+	if (onlyFrame < 0)
+		for (int v = 0; v < surface->vertexCount; ++v)
+			markModelVertexOriginNormals(surface, v);
 	for (int f = 0; f < surface->frames.size(); ++f)
 	{
 		if (!work.step())
@@ -260,6 +226,7 @@ bool compact(ModelSurface *surface, ModelSelection *selection, ModelWorkProgress
 	QVector<int> mapping(surface->vertexCount, -1);
 	const auto indices = sorted(used);
 	QVector<ModelTexCoord> coords;
+	QVector<int> identities;
 	for (int i : indices)
 	{
 		if (!work.step())
@@ -268,6 +235,8 @@ bool compact(ModelSurface *surface, ModelSelection *selection, ModelWorkProgress
 		}
 		mapping[i] = coords.size();
 		coords << surface->texCoords[i];
+		if (!surface->topologyVertices.isEmpty())
+			identities << surface->topologyVertices[i];
 	}
 	for (auto &frame : surface->frames)
 	{
@@ -336,7 +305,10 @@ bool compact(ModelSurface *surface, ModelSelection *selection, ModelWorkProgress
 	}
 	surface->uvSeams = std::move(seams);
 	surface->texCoords = std::move(coords);
+	surface->topologyVertices = std::move(identities);
+	compactModelVertexIdentities(surface);
 	surface->vertexCount = surface->texCoords.size();
+	rebuildModelVertexOrigins(surface, surface->editOrigins, indices);
 	return work.check();
 }
 } // namespace
@@ -367,6 +339,14 @@ QStringList validateEditableModel(const ModelMesh &mesh, const ModelWorkControl 
 	{
 		errors << QCoreApplication::translate("VibeStudioModelDocument", "MD2 skin dimensions must be between 1 and 8192 pixels.");
 	}
+	// The detail levels the source owns (core/model_lod.h).
+	QString recipeError;
+	if (!validateModelLodRecipe(mesh.detailLevels, modelLodMaxLevels, &recipeError))
+	{
+		errors << recipeError;
+	}
+	// Named skins the source owns (core/model_skin_variants.h).
+	errors += validateModelSkinVariants(mesh);
 	QSet<QString> surfaceNames;
 	for (const auto &surface : mesh.surfaces)
 	{
@@ -401,6 +381,9 @@ QStringList validateEditableModel(const ModelMesh &mesh, const ModelWorkControl 
 												  "frame vertices.");
 			return errors;
 		}
+		QString identityError;
+		if (!validateModelVertexIdentities(surface, &identityError, control))
+			return {identityError};
 		for (const auto &t : surface.triangles)
 		{
 			if (!work.step())
@@ -610,6 +593,11 @@ QStringList validateEditableModel(const ModelMesh &mesh, const ModelWorkControl 
 	}
 	errors += validateModelMdl(mesh, control);
 	errors += validateModelCollision(mesh, control);
+	if (hasModelAnimationCurves(mesh))
+	{
+		QString problem;
+		if (!validateModelSkeleton(mesh, &problem, control)) errors << problem;
+	}
 	if (!work.check())
 	{
 		return {cancelError};
@@ -676,10 +664,23 @@ void updateEditableModelMetadata(ModelMesh *mesh)
 bool importEditableModel(const QString &virtualPath, const QByteArray &bytes, ModelMesh *mesh, QString *error, const IdTechPalette *palette,
 						 const ModelWorkControl &control)
 {
+	return importEditableModel(virtualPath, bytes, mesh, ModelImportOptions{}, nullptr, error, palette, control);
+}
+
+bool importEditableModel(const QString &virtualPath, const QByteArray &bytes, ModelMesh *mesh, const ModelImportOptions &options,
+						 ModelImportReport *report, QString *error, const IdTechPalette *palette, const ModelWorkControl &control)
+{
 	if (error)
 	{
 		error->clear();
 	}
+	if (report)
+	{
+		*report = {};
+	}
+	const QString notSkeletal = QCoreApplication::translate("VibeStudioModelDocument",
+															"Choosing a working set of clips applies only to importing a skeletal model. "
+															"An editable source changes its working set as a skeletal edit.");
 	if (!modelWorkCheckpoint(control, ModelWorkPhase::Reading, 0, 0, error))
 	{
 		return false;
@@ -689,7 +690,12 @@ bool importEditableModel(const QString &virtualPath, const QByteArray &bytes, Mo
 		return fail(error, QCoreApplication::translate("VibeStudioModelDocument", "Model import requires an output and at most 64 MiB "
 																				  "of source data."));
 	}
-	if (virtualPath.endsWith(QStringLiteral(".mesh.json"), Qt::CaseInsensitive))
+	const bool source = virtualPath.endsWith(QStringLiteral(".mesh.json"), Qt::CaseInsensitive);
+	if (options.chooseWorkingSet && (source || virtualPath.endsWith(QStringLiteral(".model.json"), Qt::CaseInsensitive)))
+	{
+		return fail(error, notSkeletal);
+	}
+	if (source)
 	{
 		return parseEditableModel(bytes, mesh, error, control);
 	}
@@ -718,14 +724,39 @@ bool importEditableModel(const QString &virtualPath, const QByteArray &bytes, Mo
 	{
 		return fail(error, result.error);
 	}
-	if (!result.skeleton.isEmpty() && result.frames.size() > modelDocumentMaxFrames)
+	if (options.chooseWorkingSet && result.skeleton.isEmpty())
 	{
-		// The skeleton keeps every clip; only the frames to edit are limited.
+		return fail(error, notSkeletal);
+	}
+	if (options.chooseWorkingSet)
+	{
+		// The skeleton keeps every clip; only the frames to edit, the working
+		// set, are limited (core/model_skeletal_working_set.h).
+		QVector<int> chosen;
 		QString bakeError;
-		if (!rebakeModelSkeleton(&result, &bakeError, control, modelDocumentMaxFrames))
+		ModelSkeletalWorkingSetPlan plan;
+		if (!modelSkeletalClipIndexes(result.skeleton, options.workingSet, &chosen, &bakeError))
+		{
+			if (report)
+			{
+				report->unresolvedClips = true;
+			}
+			return fail(error, bakeError);
+		}
+		if (!fitModelSkeletalWorkingSet(&result, &chosen, &plan, &bakeError, control))
 		{
 			return fail(error, bakeError);
 		}
+		if (report)
+		{
+			report->rebaked = true;
+			report->chosen = true;
+			report->workingSet = std::move(plan);
+		}
+	}
+	else if (!fitEditableModelBudget(&result, report, error, control))
+	{
+		return false;
 	}
 	const auto errors = validateEditableModel(result, control);
 	if (!errors.isEmpty())
@@ -741,7 +772,53 @@ bool importEditableModel(const QString &virtualPath, const QByteArray &bytes, Mo
 	return true;
 }
 
-QJsonObject editableModelJson(const ModelMesh &mesh, QString *error, const ModelWorkControl &control)
+bool fitEditableModelBudget(ModelMesh *mesh, ModelImportReport *report, QString *error, const ModelWorkControl &control)
+{
+	if (report)
+	{
+		*report = {};
+	}
+	if (!mesh)
+	{
+		return fail(error, QCoreApplication::translate("VibeStudioModelDocument", "Fitting a model to the editable budget requires a model."));
+	}
+	qint64 vertices = 0;
+	for (const auto &surface : mesh->surfaces)
+	{
+		vertices += surface.vertexCount;
+	}
+	const auto frames = qint64(mesh->frames.size());
+	if (mesh->skeleton.isEmpty() || (frames <= modelDocumentMaxFrames && vertices * frames <= modelDocumentMaxFrameVertices))
+	{
+		return true;
+	}
+	ModelSkeletalWorkingSetPlan plan;
+	if (!fitModelSkeletalWorkingSet(mesh, nullptr, &plan, error, control))
+	{
+		return false;
+	}
+	updateEditableModelMetadata(mesh);
+	if (report)
+	{
+		report->rebaked = true;
+		report->workingSet = std::move(plan);
+	}
+	return true;
+}
+
+namespace
+{
+// The oldest readable version that holds everything `mesh` uses.
+int readableSourceVersion(const ModelMesh &mesh)
+{
+	const bool timed = std::any_of(mesh.animations.cbegin(), mesh.animations.cend(), [](const auto &clip) { return clip.framesPerSecond > 0; });
+	const bool collisionAnimation = std::any_of(mesh.collisionBoxes.cbegin(), mesh.collisionBoxes.cend(), [](const auto &box) { return !box.framePoses.isEmpty(); });
+	const bool explicitTopology = std::any_of(mesh.surfaces.cbegin(), mesh.surfaces.cend(), [](const auto &s) { return !s.topologyVertices.isEmpty(); });
+	return !mesh.skinVariants.isEmpty() ? 14 : !mesh.detailLevels.isEmpty() ? 13 : explicitTopology ? 11 : hasModelAnimationCurves(mesh) ? modelAnimationCurveVersion(mesh) : !mesh.skeleton.isEmpty() ? 8 : collisionAnimation ? 7 : timed ? 6 : !mesh.collisionBoxes.isEmpty() ? 5 : mesh.mdl.enabled ? 4 : 3;
+}
+// Packed sources (version 12) store the bulk arrays as base64 strings of
+// little-endian 32-bit words; the rest of the source is the same JSON.
+QJsonObject sourceJson(const ModelMesh &mesh, QString *error, const ModelWorkControl &control, bool packed)
 {
 	if (error)
 	{
@@ -762,6 +839,30 @@ QJsonObject editableModelJson(const ModelMesh &mesh, QString *error, const Model
 		QJsonArray triangles, coords, poses, seams;
 		auto seamEdges = surface.uvSeams.values();
 		std::sort(seamEdges.begin(), seamEdges.end());
+		if (packed)
+		{
+			for (const auto &pose : surface.frames)
+			{
+				if (!work.step())
+				{
+					return {};
+				}
+				poses << QJsonObject{{QStringLiteral("positions"), packModelSourceVectors(pose.positions)},
+									 {QStringLiteral("normals"), packModelSourceVectors(pose.normals)}};
+			}
+			QJsonObject surfaceObject{{QStringLiteral("name"), surface.name},
+									  {QStringLiteral("materials"), QJsonArray::fromStringList(surface.skinPaths)},
+									  {QStringLiteral("triangles"), packModelSourceTriangles(surface.triangles)},
+									  {QStringLiteral("uvs"), packModelSourceTexCoords(surface.texCoords)},
+									  {QStringLiteral("uvSeams"), packModelSourceEdges(seamEdges)},
+									  {QStringLiteral("frames"), poses}};
+			if (!surface.topologyVertices.isEmpty())
+			{
+				surfaceObject.insert(QStringLiteral("topologyVertices"), packModelSourceIntegers(surface.topologyVertices));
+			}
+			surfaces.append(surfaceObject);
+			continue;
+		}
 		for (auto edge : seamEdges)
 		{
 			if (!work.step())
@@ -811,10 +912,21 @@ QJsonObject editableModelJson(const ModelMesh &mesh, QString *error, const Model
 			}
 			poses << QJsonObject{{QStringLiteral("positions"), positions}, {QStringLiteral("normals"), normals}};
 		}
-		surfaces << QJsonObject{
+		QJsonObject surfaceObject{
 			{QStringLiteral("name"), surface.name},	  {QStringLiteral("materials"), QJsonArray::fromStringList(surface.skinPaths)},
 			{QStringLiteral("triangles"), triangles}, {QStringLiteral("uvs"), coords},
 			{QStringLiteral("uvSeams"), seams},		  {QStringLiteral("frames"), poses}};
+		if (!surface.topologyVertices.isEmpty())
+		{
+			QJsonArray identities;
+			for (int identity : surface.topologyVertices)
+			{
+				if (!work.step()) return {};
+				identities.append(identity);
+			}
+			surfaceObject.insert(QStringLiteral("topologyVertices"), identities);
+		}
+		surfaces.append(surfaceObject);
 	}
 	for (const auto &frame : mesh.frames)
 	{
@@ -852,7 +964,7 @@ QJsonObject editableModelJson(const ModelMesh &mesh, QString *error, const Model
 			{
 				return {};
 			}
-			axis << n;
+			axis << modelSourceNumber(n);
 		}
 		tags << QJsonObject{{QStringLiteral("name"), tag.name},
 							{QStringLiteral("frame"), tag.frameIndex},
@@ -891,10 +1003,8 @@ QJsonObject editableModelJson(const ModelMesh &mesh, QString *error, const Model
 	{
 		return {};
 	}
-	const bool timed = std::any_of(mesh.animations.cbegin(), mesh.animations.cend(), [](const auto &clip) { return clip.framesPerSecond > 0; });
-	const bool collisionAnimation = std::any_of(mesh.collisionBoxes.cbegin(), mesh.collisionBoxes.cend(), [](const auto &box) { return !box.framePoses.isEmpty(); });
 	QJsonObject result{{QStringLiteral("schema"), QStringLiteral("vibestudio.mesh")},
-					   {QStringLiteral("version"), !mesh.skeleton.isEmpty() ? 8 : collisionAnimation ? 7 : timed ? 6 : !mesh.collisionBoxes.isEmpty() ? 5 : mesh.mdl.enabled ? 4 : 3},
+					   {QStringLiteral("version"), packed ? std::max(modelSourcePackedVersion, readableSourceVersion(mesh)) : readableSourceVersion(mesh)},
 					   {QStringLiteral("md2SkinSize"), QJsonArray{mesh.md2SkinSize.width(), mesh.md2SkinSize.height()}},
 					   {QStringLiteral("source"), mesh.sourcePath},
 					   {QStringLiteral("surfaces"), surfaces},
@@ -902,6 +1012,10 @@ QJsonObject editableModelJson(const ModelMesh &mesh, QString *error, const Model
 					   {QStringLiteral("animations"), animations},
 					   {QStringLiteral("tags"), tags},
 					   {QStringLiteral("skins"), skins}};
+	if (packed)
+	{
+		result.insert(QStringLiteral("packedArrays"), QString(modelSourcePackedArrays));
+	}
 	if (mesh.mdl.enabled)
 	{
 		result.insert(QStringLiteral("mdl"), modelMdlSettingsJson(mesh.mdl));
@@ -914,9 +1028,137 @@ QJsonObject editableModelJson(const ModelMesh &mesh, QString *error, const Model
 	}
 	if (!mesh.skeleton.isEmpty())
 	{
-		result.insert(QStringLiteral("skeleton"), modelSkeletonJson(mesh));
+		const auto skeleton = modelSkeletonJson(mesh, packed, control);
+		if (skeleton.isEmpty())
+		{
+			work.check();
+			return {};
+		}
+		result.insert(QStringLiteral("skeleton"), skeleton);
+	}
+	if (!mesh.detailLevels.isEmpty())
+	{
+		result.insert(QStringLiteral("detailLevels"), modelLodRecipeJson(mesh.detailLevels));
+	}
+	if (!mesh.skinVariants.isEmpty())
+	{
+		result.insert(QStringLiteral("skinVariants"), modelSkinVariantsJson(mesh.skinVariants));
 	}
 	return work.check() ? result : QJsonObject{};
+}
+
+bool readableFits(const ModelMesh &mesh)
+{
+	return modelSourceReadableBulkLength(mesh, modelDocumentMaxSourceBytes) <= modelDocumentMaxSourceBytes;
+}
+QString sourceLimitError(qint64 bytes)
+{
+	return QCoreApplication::translate("VibeStudioModelDocument",
+									   "The source would be %1, over the 64 MiB limit for sources and recovery copies. Delete frames, "
+									   "clips, curve keys or embedded skins, or bake fewer clips into the skeletal working set.")
+		.arg(modelMebibytesText(bytes));
+}
+// The size the source limit applies to, from the exact packed size: the
+// readable size instead when the packed form passes the limit and the readable
+// form is smaller. The two differ only in the bulk arrays, the version number
+// and the "packedArrays" field.
+bool limitedSourceBytes(const ModelMesh &mesh, qint64 packed, qint64 *bytes, QString *error, const ModelWorkControl &control)
+{
+	*bytes = packed;
+	if (packed <= modelDocumentMaxSourceBytes)
+	{
+		return true;
+	}
+	qint64 delta = 0;
+	if (!modelSourceReadableBulkDelta(mesh, &delta, error, control))
+	{
+		return false;
+	}
+	// ,"packedArrays":"base64-le32", and version 12's two digits.
+	const qint64 field = 1 + (2 + 12) + 1 + (2 + modelSourcePackedArrays.size());
+	const qint64 readable = packed + delta - field - (2 - (readableSourceVersion(mesh) >= 10 ? 2 : 1));
+	*bytes = std::min(packed, readable);
+	return true;
+}
+} // namespace
+
+QString modelMebibytesText(qint64 bytes, const QLocale &locale)
+{
+	return QCoreApplication::translate("VibeStudioModelDocument", "%1 MiB").arg(locale.toString(double(bytes) / (1024.0 * 1024.0), 'f', 1));
+}
+
+QJsonObject modelSourceSaveJson(const ModelDocument &document)
+{
+	return QJsonObject{{QStringLiteral("bytes"), document.savedSourceBytes()},
+					   {QStringLiteral("encoding"),
+						document.savedSourceEncoding() == ModelSourceEncoding::Packed ? QStringLiteral("packed") : QStringLiteral("readable")},
+					   {QStringLiteral("limitBytes"), modelDocumentMaxSourceBytes}};
+}
+
+QString modelSourceSaveNotice(const ModelDocument &document, const QLocale &locale)
+{
+	if (document.savedSourceEncoding() != ModelSourceEncoding::Packed)
+	{
+		return {};
+	}
+	return QCoreApplication::translate("VibeStudioModelDocument",
+									   "Packed the bulk arrays (source version 12): the readable source would pass the 64 MiB limit. "
+									   "The source is %1, and older VibeStudio builds cannot read it.")
+		.arg(modelMebibytesText(document.savedSourceBytes(), locale));
+}
+
+QJsonObject editableModelJson(const ModelMesh &mesh, QString *error, const ModelWorkControl &control, ModelSourceEncoding encoding)
+{
+	const bool packed = encoding == ModelSourceEncoding::Packed || (encoding == ModelSourceEncoding::Automatic && !readableFits(mesh));
+	return sourceJson(mesh, error, control, packed);
+}
+
+QByteArray serializeEditableModel(const ModelMesh &mesh, QString *error, const ModelWorkControl &control, ModelSourceEncoding encoding,
+								  ModelSourceEncoding *written)
+{
+	const bool automatic = encoding == ModelSourceEncoding::Automatic;
+	bool packed = encoding == ModelSourceEncoding::Packed || (automatic && !readableFits(mesh));
+	const auto write = [&](bool form) -> QByteArray
+	{
+		const auto json = sourceJson(mesh, error, control, form);
+		return json.isEmpty() ? QByteArray() : QJsonDocument(json).toJson(QJsonDocument::Compact);
+	};
+	auto bytes = write(packed);
+	if (bytes.isEmpty())
+	{
+		return {};
+	}
+	qint64 smallest = bytes.size();
+	if (automatic && bytes.size() > modelDocumentMaxSourceBytes)
+	{
+		// The estimate leaves out names and settings, and whole numbers can be
+		// shorter as decimals than packed; the bytes decide.
+		bytes.clear();
+		packed = !packed;
+		bytes = write(packed);
+		if (bytes.isEmpty())
+		{
+			return {};
+		}
+		smallest = std::min<qint64>(smallest, bytes.size());
+	}
+	if (bytes.size() > modelDocumentMaxSourceBytes)
+	{
+		fail(error, sourceLimitError(smallest));
+		return {};
+	}
+	if (written)
+	{
+		*written = packed ? ModelSourceEncoding::Packed : ModelSourceEncoding::Readable;
+	}
+	return bytes;
+}
+
+qint64 projectEditableModelBytes(const ModelMesh &mesh, QString *error, const ModelWorkControl &control)
+{
+	const auto packed = summarizeModelState(mesh, error, control).packedSourceBytes;
+	qint64 bytes = -1;
+	return packed >= 0 && limitedSourceBytes(mesh, packed, &bytes, error, control) ? bytes : -1;
 }
 
 bool decodeEditableModelSource(const QByteArray &bytes, ModelMesh *mesh, QString *error, const ModelWorkControl &control)
@@ -951,7 +1193,8 @@ bool decodeEditableModelSource(const QByteArray &bytes, ModelMesh *mesh, QString
 		(root.value(QStringLiteral("version")) != QJsonValue(1) && root.value(QStringLiteral("version")) != QJsonValue(2) &&
 		 root.value(QStringLiteral("version")) != QJsonValue(3) && root.value(QStringLiteral("version")) != QJsonValue(4) &&
 		 root.value(QStringLiteral("version")) != QJsonValue(5) && root.value(QStringLiteral("version")) != QJsonValue(6) &&
-		 root.value(QStringLiteral("version")) != QJsonValue(7) && root.value(QStringLiteral("version")) != QJsonValue(8)) ||
+		 root.value(QStringLiteral("version")) != QJsonValue(7) && root.value(QStringLiteral("version")) != QJsonValue(8) && root.value(QStringLiteral("version")) != QJsonValue(9) && root.value(QStringLiteral("version")) != QJsonValue(10) && root.value(QStringLiteral("version")) != QJsonValue(11) &&
+		 root.value(QStringLiteral("version")) != QJsonValue(modelSourcePackedVersion) && root.value(QStringLiteral("version")) != QJsonValue(13) && root.value(QStringLiteral("version")) != QJsonValue(14)) ||
 		!root.value(QStringLiteral("source")).isString())
 	{
 		return malformed();
@@ -975,6 +1218,15 @@ bool decodeEditableModelSource(const QByteArray &bytes, ModelMesh *mesh, QString
 	result.geometryAvailable = true;
 	result.formatId = QStringLiteral("mesh");
 	result.version = root.value(QStringLiteral("version")).toInt();
+	// Version 12 is always packed and declares how; later versions, which name
+	// newer features, are packed when they carry the same field.
+	const bool packedArrays = result.version == modelSourcePackedVersion ||
+		(result.version > modelSourcePackedVersion && root.contains(QStringLiteral("packedArrays")));
+	if (packedArrays != root.contains(QStringLiteral("packedArrays")) ||
+		(packedArrays && root.value(QStringLiteral("packedArrays")) != QJsonValue(QString(modelSourcePackedArrays))))
+	{
+		return malformed();
+	}
 	if (result.version >= 3 || root.contains(QStringLiteral("md2SkinSize")))
 	{
 		const auto size = root.value(QStringLiteral("md2SkinSize")).toArray();
@@ -1023,12 +1275,15 @@ bool decodeEditableModelSource(const QByteArray &bytes, ModelMesh *mesh, QString
 		frame.name = object.value(QStringLiteral("name")).toString();
 		result.frames << frame;
 	}
-	if (result.version == 5 || result.version == 7 || ((result.version == 6 || result.version == 8) && root.contains(QStringLiteral("collisionBoxes"))))
+	if (result.version == 5 || result.version == 7 || ((result.version == 6 || result.version >= 8) && root.contains(QStringLiteral("collisionBoxes"))))
 	{
 		if (!parseModelCollision(root.value(QStringLiteral("collisionBoxes")), &result, error, control)) return false;
 	}
 	else if (root.contains(QStringLiteral("collisionBoxes"))) return malformed();
 	qint64 vertexCount = 0, triangleCount = 0;
+	// Version 12 bulk arrays may be packed strings
+	// (core/model_source_encoding.h); frames and materials stay arrays.
+	const auto bulk = [&](const QJsonValue &field) { return field.isArray() || (packedArrays && field.isString()); };
 	for (const auto &value : surfaces)
 	{
 		if (!work.step())
@@ -1037,50 +1292,104 @@ bool decodeEditableModelSource(const QByteArray &bytes, ModelMesh *mesh, QString
 		}
 		const auto object = value.toObject();
 		ModelSurface surface;
-		for (const auto *key : {"triangles", "uvs", "frames", "materials"})
+		if (!bulk(object.value(QStringLiteral("triangles"))) || !bulk(object.value(QStringLiteral("uvs"))) ||
+			!object.value(QStringLiteral("frames")).isArray() || !object.value(QStringLiteral("materials")).isArray())
 		{
-			if (!work.step())
-			{
-				return false;
-			}
-			if (!object.value(QLatin1String(key)).isArray())
-			{
-				return malformed();
-			}
+			return malformed();
 		}
 		if (!object.value(QStringLiteral("name")).isString())
 		{
 			return malformed();
 		}
 		surface.name = object.value(QStringLiteral("name")).toString();
-		const auto coords = object.value(QStringLiteral("uvs")).toArray(), triangles = object.value(QStringLiteral("triangles")).toArray(),
-				   poses = object.value(QStringLiteral("frames")).toArray();
-		vertexCount += coords.size();
-		triangleCount += triangles.size();
+		const auto coordsValue = object.value(QStringLiteral("uvs")), trianglesValue = object.value(QStringLiteral("triangles"));
+		const auto poses = object.value(QStringLiteral("frames")).toArray();
+		if (coordsValue.isString())
+		{
+			if (!unpackModelSourceTexCoords(coordsValue, modelDocumentMaxVertices, &surface.texCoords) ||
+				std::any_of(surface.texCoords.cbegin(), surface.texCoords.cend(), [](auto p) { return !finite(p.u) || !finite(p.v); }))
+			{
+				return malformed();
+			}
+		}
+		else if (coordsValue.toArray().size() > modelDocumentMaxVertices)
+		{
+			return malformed();
+		}
+		else
+		{
+			for (const auto &coord : coordsValue.toArray())
+			{
+				if (!work.step())
+				{
+					return false;
+				}
+				float n[2];
+				if (!readNumbers(coord, 2, n))
+				{
+					return malformed();
+				}
+				surface.texCoords << ModelTexCoord{n[0], n[1]};
+			}
+		}
+		if (trianglesValue.isString())
+		{
+			if (!unpackModelSourceTriangles(trianglesValue, modelDocumentMaxTriangles, &surface.triangles))
+			{
+				return malformed();
+			}
+		}
+		else if (trianglesValue.toArray().size() > modelDocumentMaxTriangles)
+		{
+			return malformed();
+		}
+		vertexCount += surface.texCoords.size();
+		triangleCount += trianglesValue.isString() ? surface.triangles.size() : trianglesValue.toArray().size();
 		if (vertexCount > modelDocumentMaxVertices || triangleCount > modelDocumentMaxTriangles ||
 			vertexCount * frames.size() > modelDocumentMaxFrameVertices || poses.size() != frames.size())
 		{
 			return malformed();
 		}
-		for (const auto &coord : coords)
+		surface.vertexCount = surface.texCoords.size();
+		const auto identities = object.value(QStringLiteral("topologyVertices"));
+		if (!identities.isUndefined())
 		{
-			if (!work.step())
+			QVector<int> labels;
+			if (result.version < 11 || !bulk(identities))
+				return malformed();
+			if (identities.isString())
 			{
-				return false;
+				if (!unpackModelSourceIntegers(identities, surface.vertexCount, &labels)) return malformed();
 			}
-			float n[2];
-			if (!readNumbers(coord, 2, n))
+			else
+			{
+				for (const auto &value : identities.toArray())
+				{
+					if (!work.step()) return false;
+					const int identity = value.toInt(-1);
+					if (value != QJsonValue(identity)) return malformed();
+					labels.append(identity);
+				}
+			}
+			if (labels.size() != surface.vertexCount ||
+				std::any_of(labels.cbegin(), labels.cend(), [&](int identity) { return identity < 0 || identity >= surface.vertexCount; }))
+				return malformed();
+			surface.topologyVertices = std::move(labels);
+		}
+		const auto seamsValue = object.value(QStringLiteral("uvSeams"));
+		const qint64 triangles = trianglesValue.isString() ? surface.triangles.size() : trianglesValue.toArray().size();
+		if ((result.version >= 2 && !bulk(seamsValue)) || (!seamsValue.isUndefined() && !bulk(seamsValue)) ||
+			(seamsValue.isArray() && seamsValue.toArray().size() > triangles * 3))
+		{
+			return malformed();
+		}
+		QVector<QPair<int, int>> seamEdges;
+		if (seamsValue.isString())
+		{
+			if (!unpackModelSourceEdges(seamsValue, triangles * 3, &seamEdges))
 			{
 				return malformed();
 			}
-			surface.texCoords << ModelTexCoord{n[0], n[1]};
-		}
-		surface.vertexCount = surface.texCoords.size();
-		const auto seamsValue = object.value(QStringLiteral("uvSeams"));
-		if ((result.version >= 2 && !seamsValue.isArray()) || (!seamsValue.isUndefined() && !seamsValue.isArray()) ||
-			seamsValue.toArray().size() > triangles.size() * 3)
-		{
-			return malformed();
 		}
 		for (const auto &seam : seamsValue.toArray())
 		{
@@ -1089,19 +1398,29 @@ bool decodeEditableModelSource(const QByteArray &bytes, ModelMesh *mesh, QString
 				return false;
 			}
 			const auto edge = seam.toArray();
-			if (edge.size() != 2 || edge[0].toInt(-1) < 0 || edge[1].toInt(-1) <= edge[0].toInt(-1) ||
-				edge[0] != QJsonValue(edge[0].toInt(-1)) || edge[1] != QJsonValue(edge[1].toInt(-1)) ||
-				surface.uvSeams.contains({edge[0].toInt(), edge[1].toInt()}))
+			if (edge.size() != 2 || edge[0] != QJsonValue(edge[0].toInt(-1)) || edge[1] != QJsonValue(edge[1].toInt(-1)))
 			{
 				return malformed();
 			}
-			surface.uvSeams.insert({edge[0].toInt(), edge[1].toInt()});
+			seamEdges.append({edge[0].toInt(), edge[1].toInt()});
+		}
+		for (const auto &edge : seamEdges)
+		{
+			if (!work.step())
+			{
+				return false;
+			}
+			if (edge.first < 0 || edge.second <= edge.first || surface.uvSeams.contains(edge))
+			{
+				return malformed();
+			}
+			surface.uvSeams.insert(edge);
 		}
 		if (root.value(QStringLiteral("version")) == QJsonValue(1) && !surface.uvSeams.isEmpty())
 		{
 			return malformed();
 		}
-		for (const auto &triangle : triangles)
+		for (const auto &triangle : trianglesValue.toArray())
 		{
 			if (!work.step())
 			{
@@ -1141,16 +1460,26 @@ bool decodeEditableModelSource(const QByteArray &bytes, ModelMesh *mesh, QString
 				{
 					return false;
 				}
-				if (!pose.value(QLatin1String(key)).isArray())
-				{
-					return malformed();
-				}
-				const auto array = pose.value(QLatin1String(key)).toArray();
-				if (array.size() != coords.size())
-				{
-					return malformed();
-				}
+				const auto field = pose.value(QLatin1String(key));
 				auto &target = key[0] == 'p' ? frame.positions : frame.normals;
+				if (!bulk(field))
+				{
+					return malformed();
+				}
+				if (field.isString())
+				{
+					if (!unpackModelSourceVectors(field, surface.vertexCount, &target) || target.size() != surface.vertexCount ||
+						std::any_of(target.cbegin(), target.cend(), [](const ModelVec3 &p) { return !finite(p); }))
+					{
+						return malformed();
+					}
+					continue;
+				}
+				const auto array = field.toArray();
+				if (array.size() != surface.vertexCount)
+				{
+					return malformed();
+				}
 				for (const auto &item : array)
 				{
 					if (!work.step())
@@ -1288,16 +1617,36 @@ bool decodeEditableModelSource(const QByteArray &bytes, ModelMesh *mesh, QString
 		}
 		result.embeddedSkins << skin;
 	}
-	if (result.version >= 8)
+	if (result.version >= 8 && (result.version < 11 || root.contains(QStringLiteral("skeleton"))))
 	{
 		if (!root.value(QStringLiteral("skeleton")).isObject())
 		{
 			return malformed();
 		}
 		QString skeletonError;
-		if (!modelSkeletonFromJson(root.value(QStringLiteral("skeleton")).toObject(), &result, &skeletonError))
+		if (!modelSkeletonFromJson(root.value(QStringLiteral("skeleton")).toObject(), &result, &skeletonError, packedArrays))
 		{
 			return fail(error, skeletonError);
+		}
+		if (result.version < modelAnimationCurveVersion(result)) return malformed();
+	}
+	// Version 13 adds the detail-level recipe. Version 12 is the number another
+	// encoding of the bulk arrays takes, so the recipe starts after it.
+	if (root.contains(QStringLiteral("detailLevels")))
+	{
+		QString recipeError;
+		if (result.version < 13 || !parseModelLodRecipe(root.value(QStringLiteral("detailLevels")), &result.detailLevels, &recipeError))
+		{
+			return recipeError.isEmpty() ? malformed() : fail(error, recipeError);
+		}
+	}
+	// Version 14 adds named skin variants.
+	if (root.contains(QStringLiteral("skinVariants")))
+	{
+		QString variantError;
+		if (result.version < 14 || !parseModelSkinVariants(root.value(QStringLiteral("skinVariants")), &result.skinVariants, &variantError))
+		{
+			return variantError.isEmpty() ? malformed() : fail(error, variantError);
 		}
 	}
 	updateEditableModelMetadata(&result);
@@ -1326,32 +1675,73 @@ bool parseEditableModel(const QByteArray &bytes, ModelMesh *mesh, QString *error
 namespace
 {
 bool applyModelEditUnreconciled(ModelMesh *mesh, const ModelEdit &edit, ModelSelection *resultingSelection, QString *error,
-								const ModelWorkControl &control);
+								const ModelWorkControl &control, ModelEditReport *report);
 }
 
 bool applyModelEdit(ModelMesh *mesh, const ModelEdit &edit, ModelSelection *resultingSelection, QString *error,
-					const ModelWorkControl &control)
+					const ModelWorkControl &control, ModelEditReport *report)
 {
-	// Skeletal models keep their joints and influences through every edit:
-	// vertices an edit creates take the weights of the nearest original one.
-	if (!mesh || mesh->skeleton.isEmpty())
-		return applyModelEditUnreconciled(mesh, edit, resultingSelection, error, control);
+	ModelEditReport pending;
+	// Skeleton, skin and weight edits write influences directly. Every other
+	// edit carries per-vertex provenance (core/model_vertex_origins.h) and
+	// derives the resulting influences from what the tool actually did.
+	if (!mesh || mesh->skeleton.isEmpty() || isModelRigEdit(edit.kind) || isModelSkeletalEdit(edit.kind) || isModelSkinEdit(edit.kind) || edit.kind == ModelEditKind::PaintSkinWeights || edit.kind == ModelEditKind::TransferSkinWeights)
+	{
+		const bool ok = applyModelEditUnreconciled(mesh, edit, resultingSelection, error, control, report ? &pending : nullptr);
+		if (ok && report) *report = std::move(pending);
+		return ok;
+	}
+	ModelSkinReconcileOptions options;
+	options.mirrorJoints = edit.tool.mirrorJoints;
+	options.keepJointNames = edit.tool.keepJointNames;
+	options.centreTolerance = std::max(edit.tool.mergeThreshold, 1e-4);
+	options.newGeometry = edit.tool.newGeometryBinding;
+	options.bindJoint = edit.tool.bindJoint;
+	if (modelEditSkinHandling(edit.kind) == ModelEditSkinHandling::Frames)
+	{
+		// Frames that follow the skeleton stay in their clips; frame edits on
+		// independent frames keep every other frame's clip mapping.
+		const auto refusal = modelSkeletalFrameEditRefusal(*mesh, edit.kind, edit.frame);
+		if (!refusal.isEmpty())
+			return fail(error, refusal);
+		options.frameOrigins = modelSkeletalFrameOrigins(*mesh, edit.kind, edit.frame, edit.inbetweenCount);
+	}
 	const ModelMesh before = *mesh;
-	if (!applyModelEditUnreconciled(mesh, edit, resultingSelection, error, control))
-		return false;
-	QString problem;
-	if (!reconcileModelSkinning(before, mesh, &problem))
+	ModelSelection pendingSelection;
+	seedModelVertexOrigins(mesh);
+	if (!applyModelEditUnreconciled(mesh, edit, resultingSelection ? &pendingSelection : nullptr, error, control, report ? &pending : nullptr))
 	{
 		*mesh = before;
-		return fail(error, QCoreApplication::translate("VibeStudioModelDocument", "The edit would leave the skeleton inconsistent: %1").arg(problem));
+		return false;
 	}
+	QString problem;
+	if (!reconcileModelSkinningFromOrigins(before, mesh, options, &pending.skin, &problem, control))
+	{
+		*mesh = before;
+		return fail(error, problem);
+	}
+	// Retained skeletal poses of derived vertices were posed from the skeleton.
+	const bool posed = std::any_of(pending.skin.cbegin(), pending.skin.cend(), [](const ModelSkinProvenance &entry)
+		{ return entry.interpolated > 0 || entry.mirrored > 0 || entry.rebound > 0 || entry.merged > 0 || entry.bound > 0; });
+	if (posed)
+	{
+		const auto errors = validateEditableModel(*mesh, control);
+		if (!errors.isEmpty())
+		{
+			*mesh = before;
+			return fail(error, errors.join(QLatin1Char('\n')));
+		}
+		updateEditableModelMetadata(mesh);
+	}
+	if (resultingSelection) *resultingSelection = std::move(pendingSelection);
+	if (report) *report = std::move(pending);
 	return true;
 }
 
 namespace
 {
 bool applyModelEditUnreconciled(ModelMesh *mesh, const ModelEdit &edit, ModelSelection *resultingSelection, QString *error,
-								const ModelWorkControl &control)
+								const ModelWorkControl &control, ModelEditReport *report)
 {
 	if (error)
 	{
@@ -1375,6 +1765,27 @@ bool applyModelEditUnreconciled(ModelMesh *mesh, const ModelEdit &edit, ModelSel
 		return false;
 	if (!isModelMeshToolEdit(edit.kind) && !(edit.tool == ModelMeshToolOptions{}))
 		return fail(error, QCoreApplication::translate("ModelMeshTools", "Mesh tool settings apply only to mesh tools."));
+	if (edit.kind != ModelEditKind::SetUvDensity && !(edit.uvDensity == ModelUvDensityOptions{}))
+		return fail(error, QCoreApplication::translate("ModelUvDensity", "Density settings apply only to UV density operations."));
+	if (!isModelRigEdit(edit.kind) && (!edit.rig.joint.isEmpty() || !edit.rig.name.isEmpty() || !edit.rig.parent.isEmpty() ||
+		edit.rig.origin.x != 0 || edit.rig.origin.y != 0 || edit.rig.origin.z != 0 || edit.rig.weight != 1))
+		return fail(error, QCoreApplication::translate("ModelRig", "Joint options apply only to skeleton authoring operations."));
+	if (!isModelSkeletalEdit(edit.kind) && !defaultModelSkeletalOptions(edit.skeletal))
+		return fail(error, QCoreApplication::translate("ModelSkeletalEdit", "Skeletal pose and clip options apply only to skeletal authoring operations."));
+	if (edit.kind != ModelEditKind::SolveTwoBoneIk && !(edit.ik == ModelIkOptions{}))
+		return fail(error, QCoreApplication::translate("ModelIk", "Inverse kinematics settings apply only to inverse kinematics."));
+	if (edit.kind != ModelEditKind::EditAnimationCurves && !(edit.curves == ModelCurveEditOptions{}))
+		return fail(error, QCoreApplication::translate("ModelAnimationCurves", "Curve settings apply only to animation curve operations."));
+	if (edit.kind != ModelEditKind::TransferAnimationCurves && !(edit.curveTransfer == ModelCurveTransferOptions{}))
+		return fail(error, QCoreApplication::translate("ModelDocument", "Animation range transfer settings require a curve transfer operation."));
+	if (edit.kind != ModelEditKind::EditCurveKeys && !(edit.curveKeys == ModelCurveKeyOptions{}))
+		return fail(error, QCoreApplication::translate("ModelCurveKeyTools", "Batch key settings apply only to batch key operations."));
+	if (!isModelSkinEdit(edit.kind) && !(edit.skin == ModelSkinOptions{}))
+		return fail(error, QCoreApplication::translate("ModelSkinningTools", "Skinning options apply only to skinning operations."));
+	if (edit.kind != ModelEditKind::TransferSkinWeights && !(edit.weightTransfer == ModelWeightTransferOptions{}))
+		return fail(error, QCoreApplication::translate("ModelWeightTransfer", "Weight transfer options apply only to weight transfer."));
+	if (edit.kind != ModelEditKind::PaintSkinWeights && !edit.weightStrokes.isEmpty())
+		return fail(error, QCoreApplication::translate("ModelWeightPaint", "Weight strokes apply only to weight painting."));
 	if (edit.kind != ModelEditKind::UpdateCollisionBox && edit.collisionFields != 7)
 		return fail(error, QCoreApplication::translate("VibeStudioModelDocument", "Collision field masks apply only to box updates."));
 	const bool frameOperation = edit.kind == ModelEditKind::DuplicateFrame || edit.kind == ModelEditKind::DeleteFrame ||
@@ -1425,6 +1836,7 @@ bool applyModelEditUnreconciled(ModelMesh *mesh, const ModelEdit &edit, ModelSel
 	}
 	if (!edit.selection.surfaces.isEmpty() && edit.kind != ModelEditKind::Transform && edit.kind != ModelEditKind::JoinSurfaces &&
 		!frameOperation && !isModelAnimationEdit(edit.kind) && !isModelMdlEdit(edit.kind) &&
+		!isModelSkeletalEdit(edit.kind) && !isModelSkinEdit(edit.kind) && !(isModelRigEdit(edit.kind) && edit.kind != ModelEditKind::SetJointWeight) &&
 		edit.kind != ModelEditKind::SetMd2SkinSize && edit.kind != ModelEditKind::ApplySkinBindings && edit.kind != ModelEditKind::SetMaterialSlots)
 	{
 		return fail(error, QCoreApplication::translate("ModelSurfaceSelection", "This operation requires component selection. Switch to Faces, Vertices or Edges first."));
@@ -1434,13 +1846,22 @@ bool applyModelEditUnreconciled(ModelMesh *mesh, const ModelEdit &edit, ModelSel
 		return fail(error, QCoreApplication::translate("VibeStudioModelDocument",
 													   "Select an existing attachment or collision box without mixing it with mesh components."));
 	}
+	if (!validModelJointSelection(*mesh, edit.selection))
+		return fail(error, QCoreApplication::translate("ModelJointTools", "Select an existing joint without mixing it with other components."));
+	if (!edit.selection.joint.isEmpty() && !isModelSkeletalEdit(edit.kind) &&
+		!(isModelRigEdit(edit.kind) && edit.kind != ModelEditKind::SetJointWeight) && !frameOperation &&
+		!isModelAnimationEdit(edit.kind) && !isModelMdlEdit(edit.kind) && edit.kind != ModelEditKind::SetMd2SkinSize &&
+		edit.kind != ModelEditKind::ApplySkinBindings && edit.kind != ModelEditKind::SetMaterialSlots)
+		return fail(error, QCoreApplication::translate("ModelJointTools", "A joint is selected. Select mesh components before editing geometry or UVs."));
 	if (!edit.selection.collision.isEmpty() && !isModelCollisionEdit(edit.kind) && !isModelAnimationEdit(edit.kind) && !frameOperation &&
+		!isModelSkeletalEdit(edit.kind) && !(isModelRigEdit(edit.kind) && edit.kind != ModelEditKind::SetJointWeight) &&
 		edit.kind != ModelEditKind::SetMd2SkinSize && edit.kind != ModelEditKind::ApplySkinBindings && edit.kind != ModelEditKind::SetMaterialSlots && !isModelMdlEdit(edit.kind))
 	{
 		return fail(error, QCoreApplication::translate("VibeStudioModelDocument",
 					"Select mesh components before editing geometry or UVs. A collision box is selected."));
 	}
 	if (!edit.selection.tag.isEmpty() && !isModelTagEdit(edit.kind) && !isModelAnimationEdit(edit.kind) && !frameOperation &&
+		!isModelSkeletalEdit(edit.kind) && !(isModelRigEdit(edit.kind) && edit.kind != ModelEditKind::SetJointWeight) &&
 		edit.kind != ModelEditKind::SetMd2SkinSize && edit.kind != ModelEditKind::ApplySkinBindings && edit.kind != ModelEditKind::SetMaterialSlots && !isModelMdlEdit(edit.kind) && !isModelCollisionEdit(edit.kind))
 	{
 		return fail(error,
@@ -1502,11 +1923,17 @@ bool applyModelEditUnreconciled(ModelMesh *mesh, const ModelEdit &edit, ModelSel
 	auto candidate = *mesh;
 	auto selection = edit.selection;
 	const bool surfaceTransform = edit.kind == ModelEditKind::Transform && !selection.surfaces.isEmpty();
-	if (surfaceTransform || isModelSurfaceEdit(edit.kind) || isModelTagEdit(edit.kind) || isModelAnimationEdit(edit.kind) || isModelMdlEdit(edit.kind) || isModelCollisionEdit(edit.kind) ||
-		isModelMeshToolEdit(edit.kind))
+	if (edit.kind == ModelEditKind::SetUvDensity || surfaceTransform || isModelSurfaceEdit(edit.kind) || isModelTagEdit(edit.kind) || isModelAnimationEdit(edit.kind) || isModelMdlEdit(edit.kind) || isModelCollisionEdit(edit.kind) ||
+		isModelMeshToolEdit(edit.kind) || isModelRigEdit(edit.kind) || isModelSkeletalEdit(edit.kind) || isModelSkinEdit(edit.kind) || edit.kind == ModelEditKind::PaintSkinWeights || edit.kind == ModelEditKind::TransferSkinWeights)
 	{
-		if (!(surfaceTransform ? applyModelSurfaceTransform(&candidate, edit, error, control)
-			  : isModelMeshToolEdit(edit.kind) ? applyModelMeshToolEdit(&candidate, edit, &selection, error, control)
+		if (!(edit.kind == ModelEditKind::SetUvDensity ? applyModelUvDensity(&candidate, edit, &selection, error, control)
+			  : surfaceTransform ? applyModelSurfaceTransform(&candidate, edit, error, control)
+			  : edit.kind == ModelEditKind::TransferSkinWeights ? applyModelWeightTransfer(&candidate, edit, error, control)
+			  : edit.kind == ModelEditKind::PaintSkinWeights ? applyModelWeightPaint(&candidate, edit, error, control)
+			  : isModelSkinEdit(edit.kind) ? applyModelSkinEdit(&candidate, edit, error, control)
+			  : isModelSkeletalEdit(edit.kind) ? applyModelSkeletalEdit(&candidate, edit, error, control)
+			  : isModelRigEdit(edit.kind) ? applyModelRigEdit(&candidate, edit, error, control)
+			  : isModelMeshToolEdit(edit.kind) ? applyModelMeshToolEdit(&candidate, edit, &selection, error, control, report)
 			  : isModelSurfaceEdit(edit.kind) ? applyModelSurfaceEdit(&candidate, edit, &selection, error, control)
 			  : isModelCollisionEdit(edit.kind) ? applyModelCollisionEdit(&candidate, edit, &selection, error, control)
 			  : isModelTagEdit(edit.kind) ? applyModelTagEdit(&candidate, edit, &selection, error, control)
@@ -1515,6 +1942,12 @@ bool applyModelEditUnreconciled(ModelMesh *mesh, const ModelEdit &edit, ModelSel
 		{
 			return false;
 		}
+		if ((isModelRigEdit(edit.kind) || isModelSkeletalEdit(edit.kind)) && !validateModelSkeleton(candidate, error, control))
+			return false;
+		if (edit.kind == ModelEditKind::RenameJoint && selection.joint == edit.rig.joint)
+			selection.joint = edit.rig.name;
+		if (!selection.joint.isEmpty() && modelJointIndex(candidate.skeleton, selection.joint, Qt::CaseSensitive) < 0)
+			selection.joint.clear();
 		const auto errors = validateEditableModel(candidate, control);
 		if (!errors.isEmpty())
 		{
@@ -1586,6 +2019,9 @@ bool applyModelEditUnreconciled(ModelMesh *mesh, const ModelEdit &edit, ModelSel
 		}
 		const int index = surface.texCoords.size();
 		surface.texCoords << surface.texCoords[old];
+		if (!surface.topologyVertices.isEmpty())
+			surface.topologyVertices << surface.topologyVertices[old];
+		appendModelVertexOriginCopy(&surface, old);
 		for (auto &frame : surface.frames)
 		{
 			if (!work.step())
@@ -1674,6 +2110,8 @@ bool applyModelEditUnreconciled(ModelMesh *mesh, const ModelEdit &edit, ModelSel
 		{
 			return false;
 		}
+		if (edit.kind == ModelEditKind::DuplicateFaces && !materialiseModelVertexIdentities(&surface, error, control))
+			return false;
 		ModelTransformBasis axes;
 		if (!resolveModelTransformAxes(candidate, edit, &axes, error, control))
 			return false;
@@ -1723,6 +2161,7 @@ bool applyModelEditUnreconciled(ModelMesh *mesh, const ModelEdit &edit, ModelSel
 			return false;
 		}
 		QMap<int, int> copies;
+		QHash<int, int> copiedIdentities;
 		// Face operations use only their faces; an unrelated vertex selection
 		// must not add disconnected vertices to a duplicated region.
 		vertices = selectedVertices(surface, {selection.surface, {}, selection.faces});
@@ -1738,6 +2177,7 @@ bool applyModelEditUnreconciled(ModelMesh *mesh, const ModelEdit &edit, ModelSel
 				return false;
 			}
 			copies.insert(old, added);
+			detachModelVertexIdentity(&surface, added, &copiedIdentities);
 			for (auto &frame : surface.frames)
 			{
 				if (!work.step())
@@ -1820,6 +2260,10 @@ bool applyModelEditUnreconciled(ModelMesh *mesh, const ModelEdit &edit, ModelSel
 		// Unselected neighbouring triangles are split along touched edges too,
 		// preserving a conforming triangle mesh rather than creating T-junctions.
 		QMap<ModelEdge, int> midpoints;
+		QHash<ModelEdge, int> midpointIdentities;
+		ModelGeometricTopology connectivity;
+		if (!surface.topologyVertices.isEmpty() && !buildModelGeometricTopology(surface, &connectivity, error, control))
+			return false;
 		QVector<ModelEdge> edgesToSplit;
 		if (splitEdges)
 		{
@@ -1861,6 +2305,13 @@ bool applyModelEditUnreconciled(ModelMesh *mesh, const ModelEdit &edit, ModelSel
 				}
 				surface.texCoords << ModelTexCoord{(surface.texCoords[a].u + surface.texCoords[b].u) * 0.5f,
 												   (surface.texCoords[a].v + surface.texCoords[b].v) * 0.5f};
+				if (!surface.topologyVertices.isEmpty())
+				{
+					const auto geometric = connectivity.geometricEdge(a, b);
+					if (!midpointIdentities.contains(geometric)) midpointIdentities.insert(geometric, index);
+					surface.topologyVertices.append(midpointIdentities.value(geometric));
+				}
+				appendModelVertexOriginBlend(&surface, {{a, 0.5}, {b, 0.5}});
 				for (auto &frame : surface.frames)
 				{
 					if (!work.step())
@@ -2118,6 +2569,7 @@ bool applyModelEditUnreconciled(ModelMesh *mesh, const ModelEdit &edit, ModelSel
 				}
 			}
 		}
+		rebuildModelVertexOrigins(&repaired, surface.editOrigins, origins);
 		surface = std::move(repaired);
 		selection = std::move(remapped);
 		break;
@@ -2587,14 +3039,36 @@ bool applyModelEditUnreconciled(ModelMesh *mesh, const ModelEdit &edit, ModelSel
 }
 } // namespace
 
-qint64 ModelDocument::State::estimatedBytes() const
+namespace
 {
-	qint64 result = storageBytes(mesh) + selectionBytes(selection);
+std::atomic<qint64> historyLimit{modelDocumentDefaultHistoryBytes};
+} // namespace
+
+void setModelDocumentHistoryLimit(qint64 bytes) { historyLimit.store(std::max<qint64>(bytes, 1024 * 1024)); }
+qint64 modelDocumentHistoryLimit() { return historyLimit.load(); }
+
+void ModelDocument::State::visitMemory(ModelMemoryVisitor &visitor) const
+{
+	visitor.mesh(mesh);
+	visitor.set(selection.vertices);
+	visitor.set(selection.faces);
+	visitor.set(selection.edges);
+	visitor.set(selection.surfaces);
+	visitor.string(selection.tag);
+	visitor.string(selection.collision);
+	visitor.string(selection.joint);
+	visitor.bytes(digest);
 	for (const auto &surface : topology)
 	{
-		result += surface.storageBytes();
+		visitor.topology(surface);
 	}
-	return result;
+}
+
+bool ModelDocument::summarize(State *state, QString *error, const ModelWorkControl &control)
+{
+	auto summary = summarizeModelState(state->mesh, error, control);
+	state->digest = std::move(summary.fingerprint);
+	return !state->digest.isEmpty() && limitedSourceBytes(state->mesh, summary.packedSourceBytes, &state->sourceBytes, error, control);
 }
 
 bool ModelDocument::prepareTopology(State *state, QString *error, const ModelWorkControl &control)
@@ -2607,7 +3081,6 @@ bool ModelDocument::prepareTopology(State *state, QString *error, const ModelWor
 			return false;
 		}
 	}
-	state->bytes = state->estimatedBytes();
 	return true;
 }
 
@@ -2630,8 +3103,7 @@ bool ModelDocument::setMesh(const ModelMesh &mesh, QString *error, const ModelWo
 	}
 	State candidate{mesh, {}, {}, 0, {}};
 	updateEditableModelMetadata(&candidate.mesh);
-	candidate.digest = digest(candidate.mesh, error, control);
-	if (candidate.digest.isEmpty() || !prepareTopology(&candidate, error, control))
+	if (!summarize(&candidate, error, control) || !prepareTopology(&candidate, error, control))
 	{
 		return false;
 	}
@@ -2642,6 +3114,11 @@ bool ModelDocument::setMesh(const ModelMesh &mesh, QString *error, const ModelWo
 	m_sourceFingerprint.clear();
 	m_undo.clear();
 	m_redo.clear();
+	m_history.clear();
+	m_discarded = 0;
+	m_savedBytes = 0;
+	m_savedEncoding = ModelSourceEncoding::Readable;
+	updateLive();
 	return true;
 }
 bool ModelDocument::load(const QString &path, QString *error, const ModelWorkControl &control)
@@ -2654,8 +3131,14 @@ bool ModelDocument::load(const QString &path, QString *error, const ModelWorkCon
 	}
 	ModelMesh candidate;
 	ModelDocument loaded;
-	if (!parseEditableModel(bytes, &candidate, error, control) || !modelWorkCheckpoint(control, ModelWorkPhase::Validating, 0, 0, error) ||
-		!loaded.setMesh(candidate, error, control) || !modelWorkCheckpoint(control, ModelWorkPhase::Validating, 1, 1, error))
+	if (!parseEditableModel(bytes, &candidate, error, control) || !modelWorkCheckpoint(control, ModelWorkPhase::Validating, 0, 0, error))
+	{
+		return false;
+	}
+	// Hand-made detail levels are held absolute while the source is open, so
+	// saving it to another folder keeps them (core/model_lod.h).
+	absoluteModelLodSources(&candidate.detailLevels, QFileInfo(path).absolutePath());
+	if (!loaded.setMesh(candidate, error, control) || !modelWorkCheckpoint(control, ModelWorkPhase::Validating, 1, 1, error))
 	{
 		return false;
 	}
@@ -2685,7 +3168,7 @@ bool ModelDocument::restoreDraft(const ModelMesh &mesh, const ModelSelection &se
 	*this = std::move(candidate);
 	return true;
 }
-bool ModelDocument::save(const QString &path, bool overwrite, QString *error, const ModelWorkControl &control)
+bool ModelDocument::save(const QString &path, bool overwrite, QString *error, const ModelWorkControl &control, bool dryRun)
 {
 	if (error)
 	{
@@ -2731,19 +3214,24 @@ bool ModelDocument::save(const QString &path, bool overwrite, QString *error, co
 	{
 		return false;
 	}
-	const auto json = editableModelJson(m_state.mesh, error, control);
-	if (json.isEmpty())
+	// The file stores hand-made detail levels relative to its own folder.
+	auto stored = m_state.mesh;
+	relativeModelLodSources(&stored.detailLevels, QFileInfo(path).absolutePath());
+	auto encoding = ModelSourceEncoding::Readable;
+	const auto bytes = serializeEditableModel(stored, error, control, ModelSourceEncoding::Automatic, &encoding);
+	if (bytes.isEmpty() || !modelWorkCheckpoint(control, ModelWorkPhase::Serializing, bytes.size(), bytes.size(), error))
 	{
 		return false;
 	}
-	const auto bytes = QJsonDocument(json).toJson(QJsonDocument::Compact);
-	if (!modelWorkCheckpoint(control, ModelWorkPhase::Serializing, bytes.size(), bytes.size(), error))
+	if (dryRun)
 	{
-		return false;
-	}
-	if (bytes.size() > modelDocumentMaxSourceBytes)
-	{
-		return fail(error, QCoreApplication::translate("VibeStudioModelDocument", "The serialized model exceeds the 64 MiB source limit."));
+		if (!validateModelWriteTarget(target, error, control))
+		{
+			return false;
+		}
+		m_savedBytes = bytes.size();
+		m_savedEncoding = encoding;
+		return true;
 	}
 	// Finish fallible preparation before publication. Afterwards only adopt the
 	// already-allocated identity; a committed file must remain a successful save.
@@ -2756,41 +3244,134 @@ bool ModelDocument::save(const QString &path, bool overwrite, QString *error, co
 	m_resolvedPath = target.resolvedPath;
 	m_savedDigest = m_state.digest;
 	m_sourceFingerprint = sourceFingerprint;
+	m_savedBytes = bytes.size();
+	m_savedEncoding = encoding;
 	return true;
 }
-bool ModelDocument::edit(const ModelEdit &operation, QString *error, const ModelWorkControl &control)
+bool ModelDocument::edit(const ModelEdit &operation, QString *error, const ModelWorkControl &control, ModelEditReport *report)
 {
 	State candidate = m_state;
-	if (!applyModelEdit(&candidate.mesh, operation, &candidate.selection, error, control))
+	ModelEditReport pending;
+	if (!applyModelEdit(&candidate.mesh, operation, &candidate.selection, error, control, report ? &pending : nullptr))
 	{
 		return false;
 	}
-	candidate.digest = digest(candidate.mesh, error, control);
-	if (candidate.digest.isEmpty())
+	if (!summarize(&candidate, error, control))
 	{
 		return false;
 	}
 	if (candidate.digest == m_state.digest)
 	{
 		m_state.selection = candidate.selection;
-		m_state.bytes = m_state.estimatedBytes();
+		updateLive();
+		if (report) *report = std::move(pending);
 		return true;
 	}
+	// Every state stays saveable and recoverable. An edit may still shrink a
+	// source that is already over, so the way back under stays open.
+	if (candidate.sourceBytes > modelDocumentMaxSourceBytes && candidate.sourceBytes > m_state.sourceBytes)
+	{
+		return fail(error, QCoreApplication::translate("VibeStudioModelDocument",
+													   "This edit would make the source %1, over the 64 MiB limit for sources and recovery "
+													   "copies, so nothing changed. Delete frames, clips, curve keys or embedded skins first, "
+													   "or bake fewer clips into the skeletal working set.")
+							   .arg(modelMebibytesText(candidate.sourceBytes)));
+	}
 	if (!prepareTopology(&candidate, error, control)) { return false; }
+	remember(m_state);
 	m_undo << m_state;
+	for (const auto &state : std::as_const(m_redo))
+	{
+		forget(state);
+	}
 	m_redo.clear();
 	m_state = std::move(candidate);
+	updateLive();
+	trimHistory();
+	if (report) *report = std::move(pending);
+	return true;
+}
+bool ModelDocument::adopt(const ModelMesh &mesh, const ModelSelection &selection, const QByteArray &baseRevision, QString *error,
+						  const ModelWorkControl &control)
+{
+	if (error)
+	{
+		error->clear();
+	}
+	if (baseRevision != m_state.digest)
+	{
+		return fail(error, QCoreApplication::translate("VibeStudioModelDocument",
+													   "The model changed after the review was prepared. Review it again before applying."));
+	}
+	const auto errors = validateEditableModel(mesh, control);
+	if (!errors.isEmpty())
+	{
+		return fail(error, errors.join(QLatin1Char('\n')));
+	}
+	State candidate{mesh, selection, {}, 0, {}};
+	updateEditableModelMetadata(&candidate.mesh);
+	if (!summarize(&candidate, error, control))
+	{
+		return false;
+	}
+	if (candidate.digest == m_state.digest)
+	{
+		return true;
+	}
+	// The same source limit as an edit: adopting may shrink a source that is
+	// already over, but never grow one past it.
+	if (candidate.sourceBytes > modelDocumentMaxSourceBytes && candidate.sourceBytes > m_state.sourceBytes)
+	{
+		return fail(error, QCoreApplication::translate("VibeStudioModelDocument",
+													   "Applying this would make the source %1, over the 64 MiB limit for sources and recovery "
+													   "copies, so nothing changed.")
+							   .arg(modelMebibytesText(candidate.sourceBytes)));
+	}
+	if (!prepareTopology(&candidate, error, control))
+	{
+		return false;
+	}
+	// The selection must name components of the adopted model; otherwise the
+	// adopted model keeps an empty selection of its first surface.
+	bool selectionFits = selection.surface >= 0 && selection.surface < candidate.mesh.surfaces.size() && selection.edges.isEmpty() &&
+						 validModelSurfaceSelection(candidate.mesh, selection) && validModelTagSelection(candidate.mesh, selection) &&
+						 validModelCollisionSelection(candidate.mesh, selection) && validModelJointSelection(candidate.mesh, selection);
+	if (selectionFits)
+	{
+		const auto &surface = candidate.mesh.surfaces.at(selection.surface);
+		selectionFits = std::none_of(selection.vertices.cbegin(), selection.vertices.cend(), [&](int i) { return i < 0 || i >= surface.vertexCount; }) &&
+						std::none_of(selection.faces.cbegin(), selection.faces.cend(), [&](int i) { return i < 0 || i >= surface.triangles.size(); });
+	}
+	if (!selectionFits)
+	{
+		candidate.selection = {};
+	}
+	remember(m_state);
+	m_undo << m_state;
+	for (const auto &state : std::as_const(m_redo))
+	{
+		forget(state);
+	}
+	m_redo.clear();
+	m_state = std::move(candidate);
+	updateLive();
 	trimHistory();
 	return true;
 }
+// Undo and redo only move through history and never discard a step. History
+// bytes exclude the live state, so a walk can count blocks again and pass the
+// limit by at most one state's size; the next edit or limit change trims.
 bool ModelDocument::undo()
 {
 	if (m_undo.isEmpty())
 	{
 		return false;
 	}
+	remember(m_state);
 	m_redo << m_state;
+	forget(m_undo.last());
 	m_state = m_undo.takeLast();
+	updateLive();
 	return true;
 }
 bool ModelDocument::redo()
@@ -2799,8 +3380,11 @@ bool ModelDocument::redo()
 	{
 		return false;
 	}
+	remember(m_state);
 	m_undo << m_state;
+	forget(m_redo.last());
 	m_state = m_redo.takeLast();
+	updateLive();
 	return true;
 }
 bool ModelDocument::canUndo() const { return !m_undo.isEmpty(); }
@@ -2821,7 +3405,8 @@ void ModelDocument::setSelection(const ModelSelection &selection)
 	{
 		return;
 	}
-	if (!validModelSurfaceSelection(m_state.mesh, selection) || !validModelTagSelection(m_state.mesh, selection) || !validModelCollisionSelection(m_state.mesh, selection))
+	if (!validModelSurfaceSelection(m_state.mesh, selection) || !validModelTagSelection(m_state.mesh, selection) ||
+		!validModelCollisionSelection(m_state.mesh, selection) || !validModelJointSelection(m_state.mesh, selection))
 	{
 		return;
 	}
@@ -2843,27 +3428,42 @@ void ModelDocument::setSelection(const ModelSelection &selection)
 		}
 	}
 	m_state.selection = selection;
-	m_state.bytes = m_state.estimatedBytes();
+	updateLive();
+}
+void ModelDocument::remember(const State &state)
+{
+	m_history.add([&state](ModelMemoryVisitor &visitor) { state.visitMemory(visitor); });
+}
+void ModelDocument::forget(const State &state)
+{
+	m_history.remove([&state](ModelMemoryVisitor &visitor) { state.visitMemory(visitor); });
+}
+void ModelDocument::updateLive()
+{
+	m_history.setLive([this](ModelMemoryVisitor &visitor) { m_state.visitMemory(visitor); });
 }
 qint64 ModelDocument::historyBytes() const
 {
-	qint64 result = 0;
-	for (const auto &state : m_undo)
-	{
-		result += state.bytes;
-	}
-	for (const auto &state : m_redo)
-	{
-		result += state.bytes;
-	}
-	return result;
+	return m_history.retainedBytes() + qint64(m_undo.size() + m_redo.size()) * qint64(sizeof(State));
 }
+int ModelDocument::undoSteps() const { return int(m_undo.size()); }
+int ModelDocument::redoSteps() const { return int(m_redo.size()); }
+int ModelDocument::discardedHistorySteps() const { return m_discarded; }
+qint64 ModelDocument::sourceBytes() const { return m_state.sourceBytes; }
+qint64 ModelDocument::savedSourceBytes() const { return m_savedBytes; }
+ModelSourceEncoding ModelDocument::savedSourceEncoding() const { return m_savedEncoding; }
+void ModelDocument::enforceHistoryLimit() { trimHistory(); }
 void ModelDocument::trimHistory()
 {
-	while (m_undo.size() > 100 || (m_undo.size() > 1 && historyBytes() > 64 * 1024 * 1024))
+	// The oldest undo steps go first, and the step before the current one
+	// always stays. Redo steps are newer work than any undo step, so they are
+	// never discarded here; an edit replaces them.
+	const auto limit = modelDocumentHistoryLimit();
+	while (m_undo.size() > 1 && (m_undo.size() + m_redo.size() > modelDocumentMaxHistorySteps || historyBytes() > limit))
 	{
+		forget(m_undo.first());
 		m_undo.removeFirst();
+		++m_discarded;
 	}
 }
-
 } // namespace vibestudio

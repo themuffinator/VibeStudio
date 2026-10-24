@@ -27,7 +27,8 @@ struct MapRenderOptions {
 	int width = 1024;
 	int height = 1024;
 	int margin = 24;
-	int gridSize = 64;
+	// Map units; fractional grids such as 0.125 are fine.
+	double gridSize = 64;
 	bool showGrid = true;
 	bool showThings = true;
 	bool showEntities = true;

@@ -1,4 +1,6 @@
 #include "app/model_controls_dialog.h"
+#include "app/dialog_screen_fit.h"
+#include "app/wrapping_check_box.h"
 
 #include <QBoxLayout>
 #include <QCheckBox>
@@ -12,6 +14,7 @@
 #include <QLineEdit>
 #include <QPushButton>
 #include <QScrollArea>
+#include <QSignalBlocker>
 #include <QTabWidget>
 #include <QTableWidget>
 
@@ -56,7 +59,9 @@ ModelControlsDialog::ModelControlsDialog(const ModelEditorControls &controls, QW
 	static_cast<void>(modelEditorProfileForId(controls.profileId, &profile));
 	setWindowTitle(Text::tr("Customise %1 Controls").arg(profile.displayName));
 	setAccessibleName(windowTitle());
-	auto *layout = new QVBoxLayout(this);
+	// The content scrolls on a small screen; the buttons stay in view.
+	auto *outer = new QVBoxLayout(this);
+	auto *layout = addScrollingDialogBody(outer);
 	auto *intro = new QLabel(Text::tr("Changes are saved for this profile only; anything you leave alone keeps following it."));
 	intro->setWordWrap(true);
 	layout->addWidget(intro);
@@ -78,14 +83,15 @@ ModelControlsDialog::ModelControlsDialog(const ModelEditorControls &controls, QW
 	connect(reset, &QPushButton::clicked, this, [this] { resetToProfile(); });
 	connect(buttons, &QDialogButtonBox::accepted, this, &QDialog::accept);
 	connect(buttons, &QDialogButtonBox::rejected, this, &QDialog::reject);
-	layout->addWidget(buttons);
-	resize(760, 640);
+	outer->addWidget(buttons);
+	fitDialogToScreen(this, QSize(760, 640));
 	load();
 }
 
 void ModelControlsDialog::resetToProfile()
 {
 	m_controls = modelEditorControlsForProfile(m_controls.profileId);
+	m_refusal.clear();
 	load();
 }
 
@@ -93,17 +99,26 @@ void ModelControlsDialog::setCommandKeys(const QString &commandId, const QString
 {
 	if (!modelEditorCommandForId(commandId))
 		return;
+	QStringList kept, refused;
+	for (const auto &key : keys)
+		(isModelEditorFocusKey(key) ? refused : kept) << key;
+	m_refusal = refused.isEmpty() ? QString() : Text::tr("No command can take %1: %2").arg(nativeKeys(refused), modelEditorFocusKeyText());
+	if (!refused.isEmpty() && kept.isEmpty())
+	{
+		refreshProblems();
+		return;
+	}
 	bool replaced = false;
 	for (auto &binding : m_controls.keys)
 	{
 		if (binding.commandId == commandId)
 		{
-			binding.keys = keys;
+			binding.keys = kept;
 			replaced = true;
 		}
 	}
 	if (!replaced)
-		m_controls.keys.append({commandId, keys});
+		m_controls.keys.append({commandId, kept});
 	refreshKeys();
 	refreshProblems();
 }
@@ -127,6 +142,9 @@ QWidget *ModelControlsDialog::buildKeys()
 	m_keys->setEditTriggers(QAbstractItemView::NoEditTriggers);
 	m_keys->setSelectionBehavior(QAbstractItemView::SelectRows);
 	m_keys->setSelectionMode(QAbstractItemView::SingleSelection);
+	// Arrows move between commands; Tab goes on to the key field rather than
+	// cycling every cell.
+	m_keys->setTabKeyNavigation(false);
 	m_keys->horizontalHeader()->setSectionResizeMode(QHeaderView::ResizeToContents);
 	m_keys->horizontalHeader()->setStretchLastSection(true);
 	column->addWidget(m_keys, 1);
@@ -136,7 +154,25 @@ QWidget *ModelControlsDialog::buildKeys()
 	m_keyEdit->setObjectName(QStringLiteral("modelControlsKeyEdit"));
 	m_keyEdit->setAccessibleName(Text::tr("New key"));
 	m_keyEdit->setMaximumSequenceLength(1);
+	// Tab and Shift+Tab leave the field and Esc ends recording, so the field
+	// never holds keyboard focus; Special key records those keys instead.
+	m_keyEdit->setFinishingKeyCombinations({QKeyCombination(Qt::Key_Tab), QKeyCombination(Qt::Key_Backtab),
+											QKeyCombination(Qt::ShiftModifier, Qt::Key_Tab), QKeyCombination(Qt::ShiftModifier, Qt::Key_Backtab),
+											QKeyCombination(Qt::Key_Escape)});
+	m_keyEdit->setToolTip(Text::tr("Press the new key. Tab and Shift+Tab move on and Esc stops recording; choose those keys from Special key."));
+	m_keyEdit->setAccessibleDescription(m_keyEdit->toolTip());
 	label->setBuddy(m_keyEdit);
+	m_specialKey = new QComboBox;
+	m_specialKey->setObjectName(QStringLiteral("modelControlsSpecialKey"));
+	m_specialKey->setAccessibleName(Text::tr("Special key"));
+	m_specialKey->setToolTip(Text::tr("Puts a key the key field cannot record into it: Tab, Shift+Tab or Esc."));
+	m_specialKey->setAccessibleDescription(m_specialKey->toolTip());
+	m_specialKey->addItem(Text::tr("Special key"));
+	for (const auto *key : {"Tab", "Shift+Tab", "Esc"})
+	{
+		const auto sequence = QKeySequence::fromString(QString::fromLatin1(key), QKeySequence::PortableText);
+		m_specialKey->addItem(sequence.toString(QKeySequence::NativeText), sequence.toString(QKeySequence::PortableText));
+	}
 	auto *assign = new QPushButton(Text::tr("Assign"));
 	assign->setObjectName(QStringLiteral("modelControlsAssign"));
 	auto *add = new QPushButton(Text::tr("Add"));
@@ -145,14 +181,37 @@ QWidget *ModelControlsDialog::buildKeys()
 	clear->setObjectName(QStringLiteral("modelControlsClearKeys"));
 	auto *restore = new QPushButton(Text::tr("Profile Keys"));
 	restore->setObjectName(QStringLiteral("modelControlsRestoreKeys"));
-	row->addWidget(label);
+	// The label, the key fields and their commands take a line each, so a
+	// long translation or large text never widens the dialog past the screen.
+	label->setWordWrap(true);
+	column->addWidget(label);
 	row->addWidget(m_keyEdit, 1);
-	row->addWidget(assign);
-	row->addWidget(add);
-	row->addWidget(clear);
-	row->addWidget(restore);
+	row->addWidget(m_specialKey);
 	column->addLayout(row);
+	auto *commands = new QHBoxLayout;
+	commands->addWidget(assign);
+	commands->addWidget(add);
+	commands->addWidget(clear);
+	commands->addWidget(restore);
+	commands->addStretch();
+	column->addLayout(commands);
 	connect(m_filter, &QLineEdit::textChanged, this, [this] { refreshKeys(); });
+	connect(m_specialKey, &QComboBox::currentIndexChanged, this,
+			[this](int index)
+			{
+				if (index > 0)
+					m_keyEdit->setKeySequence(QKeySequence::fromString(m_specialKey->currentData().toString(), QKeySequence::PortableText));
+			});
+	// A recorded key replaces a special one, so the chooser goes back to its prompt.
+	connect(m_keyEdit, &QKeySequenceEdit::keySequenceChanged, this,
+			[this](const QKeySequence &sequence)
+			{
+				if (m_specialKey->currentIndex() > 0 && sequence.toString(QKeySequence::PortableText) != m_specialKey->currentData().toString())
+				{
+					const QSignalBlocker blocker(m_specialKey);
+					m_specialKey->setCurrentIndex(0);
+				}
+			});
 	connect(assign, &QPushButton::clicked, this,
 			[this]
 			{
@@ -231,12 +290,13 @@ QWidget *ModelControlsDialog::buildMouse()
 		line->addWidget(gesture.modifiers);
 		line->addWidget(gesture.button, 1);
 		gesture.button->setAccessibleName(label);
-		gesture.modifiers->setAccessibleName(Text::tr("%1 keys").arg(label));
+		gesture.modifiers->setAccessibleName(Text::tr("Modifier keys for %1").arg(label));
 		form->addRow(label, row);
 	};
 	const auto check = [&](QCheckBox **box, const QString &name, const QString &text)
 	{
-		*box = new QCheckBox(text);
+		// Long captions wrap rather than widening the dialog.
+		*box = new WrappingCheckBox(text);
 		(*box)->setObjectName(name);
 		connect(*box, &QCheckBox::toggled, this, [this] { store(); });
 		form->addRow(*box);
@@ -275,14 +335,19 @@ QWidget *ModelControlsDialog::buildTransforms()
 {
 	auto *page = new QWidget;
 	auto *form = new QFormLayout(page);
+	form->setRowWrapPolicy(QFormLayout::WrapLongRows);
 	m_style = new QComboBox;
 	m_style->setObjectName(QStringLiteral("modelControlsStyle"));
 	m_style->setAccessibleName(Text::tr("Transform style"));
+	// The styles are whole sentences: the box shows the start of one and its
+	// list each in full, so a long translation never widens the dialog.
+	m_style->setSizeAdjustPolicy(QComboBox::AdjustToMinimumContentsLengthWithIcon);
+	m_style->setMinimumContentsLength(24);
 	m_style->addItem(Text::tr("Keys start a transform that follows the pointer (Blender)"), modelTransformStyleId(ModelTransformStyle::Modal));
 	m_style->addItem(Text::tr("Keys pick a lasting tool (3ds Max, MilkShape 3D)"), modelTransformStyleId(ModelTransformStyle::ToolMode));
 	connect(m_style, &QComboBox::currentIndexChanged, this, [this] { store(); });
 	form->addRow(Text::tr("Transforms"), m_style);
-	m_dragSelection = new QCheckBox(Text::tr("With a tool, dragging the selection transforms it"));
+	m_dragSelection = new WrappingCheckBox(Text::tr("With a tool, dragging the selection transforms it"));
 	m_dragSelection->setObjectName(QStringLiteral("modelControlsDragSelection"));
 	connect(m_dragSelection, &QCheckBox::toggled, this, [this] { store(); });
 	form->addRow(m_dragSelection);
@@ -316,7 +381,7 @@ QWidget *ModelControlsDialog::buildTransforms()
 	}
 	const auto check = [&](QCheckBox **box, const QString &name, const QString &text)
 	{
-		*box = new QCheckBox(text);
+		*box = new WrappingCheckBox(text);
 		(*box)->setObjectName(name);
 		connect(*box, &QCheckBox::toggled, this, [this] { store(); });
 		form->addRow(*box);
@@ -468,7 +533,9 @@ void ModelControlsDialog::refreshKeys()
 
 void ModelControlsDialog::refreshProblems()
 {
-	const auto problems = modelEditorControlProblems(m_controls);
+	auto problems = modelEditorControlProblems(m_controls);
+	if (!m_refusal.isEmpty())
+		problems.prepend(m_refusal);
 	m_problems->setText(problems.isEmpty() ? Text::tr("No conflicts.") : problems.join(QLatin1Char('\n')));
 	m_problems->setProperty("state", problems.isEmpty() ? QStringLiteral("ok") : QStringLiteral("warning"));
 }

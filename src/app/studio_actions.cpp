@@ -4,6 +4,7 @@
 #include "app/studio_layout.h"
 
 #include "core/editor_profiles.h"
+#include "core/level_entity_create.h"
 
 #include <QAbstractItemView>
 #include <QAbstractButton>
@@ -524,6 +525,26 @@ QAction* StudioCommandRegistry::registerCommand(const StudioCommandRegistration&
 	return action;
 }
 
+void StudioCommandRegistry::unregisterCommand(const QString& commandId)
+{
+	QAction* action = m_actions.take(commandId);
+	if (!action) {
+		return;
+	}
+	m_registrations.removeIf([&commandId](const StudioCommandRegistration& registration) {
+		return registration.commandId == commandId;
+	});
+	m_shortcutScopes.remove(normalizedToken(commandId));
+	m_shortcuts.remove(commandId);
+	m_sequences.remove(commandId);
+	action->setShortcuts({});
+	action->setEnabled(false);
+	// A menu may be running this very action; it goes once control returns
+	// to the event loop, and menus and bound buttons drop it then.
+	action->deleteLater();
+	installShortcuts();
+}
+
 QAction* StudioCommandRegistry::action(const QString& commandId) const
 {
 	return m_actions.value(commandId, nullptr);
@@ -660,10 +681,18 @@ void StudioCommandRegistry::installShortcuts()
 		QString commandId;
 		QList<QPointer<QWidget>> scopes;
 		bool preferred = false;
+		bool claims = false;
 	};
 	QHash<QString, QVector<Owner>> owners;
-	auto clashWith = [&owners](const QString& key, const QList<QPointer<QWidget>>& scopes) -> Owner {
+	// A command whose surfaces claim its keys (setShortcutScopeClaims) shares
+	// them with any other command: the surfaces run it while it is enabled,
+	// and the other command keeps the key everywhere else. Two such commands
+	// still clash where their surfaces meet.
+	auto clashWith = [&owners](const QString& key, const QList<QPointer<QWidget>>& scopes, bool claims) -> Owner {
 		for (const Owner& owner : owners.value(key)) {
+			if (owner.claims != claims) {
+				continue;
+			}
 			if (scopesOverlap(owner.scopes, scopes)) {
 				return owner;
 			}
@@ -707,6 +736,9 @@ void StudioCommandRegistry::installShortcuts()
 			}
 		}
 
+		// Only a command with live surfaces can claim its keys there; without
+		// them it would be window-wide and meet the other owner everywhere.
+		const bool claims = !scopes.isEmpty() && m_scopeClaims.contains(normalizedToken(registration->commandId));
 		const auto user = m_userShortcuts.constFind(normalizedToken(registration->commandId));
 		const bool userKeys = user != m_userShortcuts.constEnd() && shortcutRemappable(registration->commandId);
 		const bool preferredKeys = userKeys || (shortcutRemappable(registration->commandId) && overrides.contains(normalizedToken(registration->commandId)));
@@ -729,7 +761,7 @@ void StudioCommandRegistry::installShortcuts()
 			if (seenHere.contains(key)) {
 				continue;
 			}
-			const Owner owner = clashWith(key, scopes);
+			const Owner owner = clashWith(key, scopes, claims);
 			if (!owner.commandId.isEmpty()) {
 				// Sequences claimed by an earlier command win; a duplicate is
 				// recorded and skipped rather than silently shadowing its owner.
@@ -742,7 +774,7 @@ void StudioCommandRegistry::installShortcuts()
 				continue;
 			}
 			seenHere.insert(key);
-			owners[key].push_back({registration->commandId, scopes, preferredKeys});
+			owners[key].push_back({registration->commandId, scopes, preferredKeys, claims});
 			accepted << sequence;
 			acceptedText << sequence.toString(QKeySequence::PortableText);
 		}
@@ -807,10 +839,20 @@ void StudioCommandRegistry::setUserShortcuts(const QHash<QString, QStringList>& 
 QHash<QString, QStringList> StudioCommandRegistry::userShortcuts() const
 {
 	QHash<QString, QStringList> shortcuts;
+	QSet<QString> registered;
 	for (const StudioCommandRegistration& registration : m_registrations) {
-		const auto found = m_userShortcuts.constFind(normalizedToken(registration.commandId));
+		const QString token = normalizedToken(registration.commandId);
+		registered.insert(token);
+		const auto found = m_userShortcuts.constFind(token);
 		if (found != m_userShortcuts.constEnd()) {
 			shortcuts.insert(registration.commandId, found.value());
+		}
+	}
+	// A key given to Create light stays while a map whose definitions have
+	// no light is open, so saving other keys then does not lose it.
+	for (auto it = m_userShortcuts.cbegin(); it != m_userShortcuts.cend(); ++it) {
+		if (!registered.contains(it.key()) && levelEntityCreateClassForCommand(it.key())) {
+			shortcuts.insert(it.key(), it.value());
 		}
 	}
 	return shortcuts;
@@ -920,6 +962,20 @@ void StudioCommandRegistry::setShortcutScopes(const QString& commandId, const QL
 	// Keyed like the registry so the documented kebab-case ids and the shell's
 	// camelCase ids name the same command.
 	m_shortcutScopes.insert(normalizedToken(commandId), guarded);
+	installShortcuts();
+}
+
+void StudioCommandRegistry::setShortcutScopeClaims(const QString& commandId, bool claims)
+{
+	const QString token = normalizedToken(commandId);
+	if (claims == m_scopeClaims.contains(token)) {
+		return;
+	}
+	if (claims) {
+		m_scopeClaims.insert(token);
+	} else {
+		m_scopeClaims.remove(token);
+	}
 	installShortcuts();
 }
 

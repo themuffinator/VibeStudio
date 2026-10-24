@@ -4,6 +4,7 @@
 
 #include <QDateTime>
 #include <functional>
+#include <optional>
 
 namespace vibestudio
 {
@@ -32,6 +33,9 @@ struct LevelDocumentSaveRequest {
 	bool keepBackup = true;
 	// Empty selects <destination folder>/.vibestudio/map-backups.
 	QString backupDirectory;
+	// How to write the scene; empty keeps the document's. A save that writes
+	// carries the choice on to the document (adoptLevelDocumentSave).
+	std::optional<LevelSceneStorage> sceneStorage;
 	std::function<bool()> isCancelled;
 };
 

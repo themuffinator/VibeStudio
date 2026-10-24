@@ -72,11 +72,8 @@ ModelImportRepairCliResult runModelImportRepair(const QStringList &arguments)
 			return fail(1, Text::tr("A repaired copy requires a new destination. The input and existing files cannot be replaced."));
 		if (dry)
 		{
-			const auto json = editableModelJson(plan.mesh, &error);
-			if (json.isEmpty())
+			if (serializeEditableModel(plan.mesh, &error).isEmpty())
 				return fail(4, error);
-			if (QJsonDocument(json).toJson(QJsonDocument::Compact).size() > modelDocumentMaxSourceBytes)
-				return fail(4, Text::tr("The repaired copy exceeds the 64 MiB source limit."));
 		}
 		else
 		{

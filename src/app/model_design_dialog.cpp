@@ -1,5 +1,6 @@
 #include "app/model_design_dialog.h"
 
+#include "app/dialog_screen_fit.h"
 #include "app/model_viewport.h"
 
 #include <QAction>
@@ -38,7 +39,6 @@ ModelDesignDialog::ModelDesignDialog(QWidget* parent) : QDialog(parent)
 	setWindowTitle(QCoreApplication::translate("VibeStudioModelDesignDialog", "Model Design"));
 	setAccessibleName(QCoreApplication::translate("VibeStudioModelDesignDialog", "Model design editor"));
 	setAttribute(Qt::WA_DeleteOnClose);
-	resize(1220, 800);
 	auto* layout = new QVBoxLayout(this);
 	auto* tools = new QToolBar(QCoreApplication::translate("VibeStudioModelDesignDialog", "Model design actions"));
 	tools->setAccessibleName(QCoreApplication::translate("VibeStudioModelDesignDialog", "Model design actions"));
@@ -310,7 +310,7 @@ ModelDesignDialog::ModelDesignDialog(QWidget* parent) : QDialog(parent)
 	splitter->setStretchFactor(1, 1);
 	splitter->setSizes({200, 580, 410});
 	layout->addWidget(splitter, 1);
-	m_status = new QLabel;
+	m_status = new LiveStatusLabel;
 	m_status->setObjectName(QStringLiteral("designStatus"));
 	m_status->setWordWrap(true);
 	m_status->setTextFormat(Qt::PlainText);
@@ -339,6 +339,7 @@ ModelDesignDialog::ModelDesignDialog(QWidget* parent) : QDialog(parent)
 	part.origin.z = 32;
 	initial.parts << part;
 	setDesign(initial);
+	fitDialogToScreen(this, QSize(1220, 800));
 }
 
 bool ModelDesignDialog::setDesign(const ModelDesign& design, QString* error)
@@ -397,7 +398,7 @@ void ModelDesignDialog::commit(ModelDesign next, int selected, bool refreshField
 void ModelDesignDialog::addPart(const QString& primitive)
 {
 	if (m_design.parts.size() >= 32) {
-		m_status->setText(QCoreApplication::translate("VibeStudioModelDesignDialog", "A design can contain at most 32 parts."));
+		m_status->setText(QCoreApplication::translate("VibeStudioModelDesignDialog", "A design can contain at most 32 parts."), LiveStatus::Problem);
 		return;
 	}
 	ModelDesign next = m_design;
@@ -429,7 +430,7 @@ void ModelDesignDialog::removePart()
 {
 	const int index = m_parts->currentRow();
 	if (index < 0 || m_design.parts.size() <= 1) {
-		m_status->setText(QCoreApplication::translate("VibeStudioModelDesignDialog", "Keep at least one part in the design."));
+		m_status->setText(QCoreApplication::translate("VibeStudioModelDesignDialog", "Keep at least one part in the design."), LiveStatus::Problem);
 		return;
 	}
 	ModelDesign next = m_design;
@@ -631,7 +632,7 @@ bool ModelDesignDialog::saveDesign()
 {
 	const auto errors = validateModelDesign(m_design);
 	if (!errors.isEmpty()) {
-		m_status->setText(errors.join(QLatin1Char('\n')));
+		m_status->setText(errors.join(QLatin1Char('\n')), LiveStatus::Problem);
 		return false;
 	}
 	const QString path =
@@ -643,14 +644,14 @@ bool ModelDesignDialog::saveDesign()
 	}
 	QString error;
 	if (!saveModelDesignBytes(path, QJsonDocument(modelDesignJson(m_design)).toJson(), true, &error)) {
-		m_status->setText(error);
+		m_status->setText(error, LiveStatus::Problem);
 		return false;
 	}
 	m_path = path;
 	m_savedDesign = modelDesignJson(m_design);
 	m_dirty = false;
 	refreshPreview();
-	m_status->setText(QCoreApplication::translate("VibeStudioModelDesignDialog", "Saved design: %1").arg(path));
+	m_status->setText(QCoreApplication::translate("VibeStudioModelDesignDialog", "Saved design: %1").arg(path), LiveStatus::Result);
 	return true;
 }
 bool ModelDesignDialog::confirmDiscard()
@@ -687,7 +688,7 @@ void ModelDesignDialog::openDesign()
 	ModelDesign design;
 	QString error;
 	if (!loadModelDesign(path, &design, &error) || !setDesign(design, &error)) {
-		m_status->setText(error);
+		m_status->setText(error, LiveStatus::Problem);
 		return;
 	}
 	m_path = path;
@@ -697,7 +698,7 @@ void ModelDesignDialog::exportDesign(const QString& format)
 	QString error;
 	const QByteArray bytes = exportModelDesign(m_design, format, &error);
 	if (bytes.isEmpty()) {
-		m_status->setText(error);
+		m_status->setText(error, LiveStatus::Problem);
 		return;
 	}
 	const QString path = QFileDialog::getSaveFileName(
@@ -708,10 +709,10 @@ void ModelDesignDialog::exportDesign(const QString& format)
 		return;
 	}
 	if (!saveModelDesignBytes(path, bytes, true, &error, m_path)) {
-		m_status->setText(error);
+		m_status->setText(error, LiveStatus::Problem);
 		return;
 	}
-	m_status->setText(QCoreApplication::translate("VibeStudioModelDesignDialog", "Exported model: %1").arg(path));
+	m_status->setText(QCoreApplication::translate("VibeStudioModelDesignDialog", "Exported model: %1").arg(path), LiveStatus::Result);
 }
 void ModelDesignDialog::stage(bool place)
 {
@@ -719,7 +720,8 @@ void ModelDesignDialog::stage(bool place)
 	refreshContext();
 	if (previous != m_contextKey) {
 		m_status->setText(QCoreApplication::translate("VibeStudioModelDesignDialog",
-		                                              "The package or level changed. Review the current context before staging again."));
+		                                              "The package or level changed. Review the current context before staging again."),
+		                  LiveStatus::Problem);
 		return;
 	}
 	if (!handoff) {
@@ -728,7 +730,7 @@ void ModelDesignDialog::stage(bool place)
 	QString error;
 	const LevelMapVec3 origin{m_placement[0]->value(), m_placement[1]->value(), m_placement[2]->value(), true};
 	if (!handoff(m_design, m_virtualPath->text(), place, origin, m_replace->isChecked(), &error)) {
-		m_status->setText(error);
+		m_status->setText(error, LiveStatus::Problem);
 		return;
 	}
 	m_status->setText(
@@ -736,7 +738,8 @@ void ModelDesignDialog::stage(bool place)
 	                                        "Staged %1 and placed it in the level. Save the map and package to keep both changes.")
 	                .arg(m_virtualPath->text())
 	          : QCoreApplication::translate("VibeStudioModelDesignDialog", "Staged %1. Review and save the package plan in Packages.")
-	                .arg(m_virtualPath->text()));
+	                .arg(m_virtualPath->text()),
+	    LiveStatus::Result);
 }
 
 } // namespace vibestudio

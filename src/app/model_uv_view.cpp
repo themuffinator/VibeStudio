@@ -1,4 +1,5 @@
 #include "app/model_uv_view.h"
+#include "app/locale_number.h"
 
 #include "core/model_transform.h"
 
@@ -24,6 +25,39 @@ namespace
 bool finite(QPointF p) { return std::isfinite(p.x()) && std::isfinite(p.y()); }
 double squared(QPointF p) { return QPointF::dotProduct(p, p); }
 QPointF unavailable() { return {std::numeric_limits<double>::quiet_NaN(), std::numeric_limits<double>::quiet_NaN()}; }
+// Keyboard camera steps, as ModelViewport's arrow pan and the wheel's zoom.
+constexpr double kKeyPan = 24, kFineKeyPan = 4, kKeyZoom = 1.2;
+// The camera key a press is, if any: arrows pan (Shift pans finely) and
+// + or - zoom about the centre; the keypad's keys count too.
+enum class CameraKey
+{
+	None,
+	Pan,
+	ZoomIn,
+	ZoomOut
+};
+CameraKey cameraKey(const QKeyEvent *event)
+{
+	const auto modifiers = event->modifiers() & ~Qt::KeypadModifier;
+	if (modifiers != Qt::NoModifier && modifiers != Qt::ShiftModifier)
+		return CameraKey::None;
+	switch (event->key())
+	{
+	case Qt::Key_Left:
+	case Qt::Key_Right:
+	case Qt::Key_Up:
+	case Qt::Key_Down:
+		return CameraKey::Pan;
+	case Qt::Key_Plus:
+	case Qt::Key_Equal:
+		return CameraKey::ZoomIn;
+	case Qt::Key_Minus:
+	case Qt::Key_Underscore:
+		return CameraKey::ZoomOut;
+	default:
+		return CameraKey::None;
+	}
+}
 } // namespace
 struct ModelUvView::Work
 {
@@ -270,8 +304,8 @@ QString ModelUvView::summary() const
 		QCoreApplication::translate(
 			"VibeStudioModelUvView",
 			"UV layout for %1. Islands: %2; marked seams: %3. Dotted edges mark seams; hatching, dashed edges and square points show "
-			"selection. Middle-drag pans, wheel zooms, F frames the selection, Home frames all UVs. Drag the centre square to "
-			"move UVs; Escape cancels. Numeric UV controls are in Surface.")
+			"selection. Middle-drag or the arrow keys pan (Shift+arrows in small steps), the wheel or + and - zoom, F frames the "
+			"selection, Home frames all UVs. Drag the centre square to move UVs; Escape cancels. Numeric UV controls are in Surface.")
 			.arg(m_surface.name)
 			.arg(m_topology ? m_topology->islands.size() : 0)
 			.arg(m_surface.uvSeams.size());
@@ -282,8 +316,8 @@ QString ModelUvView::summary() const
 	if (m_moving)
 	{
 		text += QLatin1Char(' ') + QCoreApplication::translate("VibeStudioModelUvView", "UV move preview: U %1, V %2.")
-									   .arg(m_delta.u, 0, 'g', 7)
-									   .arg(m_delta.v, 0, 'g', 7);
+									   .arg(localeNumber(m_delta.u, 7))
+									   .arg(localeNumber(m_delta.v, 7));
 	}
 	return text;
 }
@@ -610,6 +644,25 @@ void ModelUvView::keyPressEvent(QKeyEvent *event)
 		event->accept();
 		return;
 	}
+	// The same camera the middle drag and the wheel move, without a pointer.
+	switch (cameraKey(event))
+	{
+	case CameraKey::Pan:
+	{
+		const double step = event->modifiers().testFlag(Qt::ShiftModifier) ? kFineKeyPan : kKeyPan;
+		const int key = event->key();
+		panView(QPointF(key == Qt::Key_Left ? step : key == Qt::Key_Right ? -step : 0, key == Qt::Key_Up ? step : key == Qt::Key_Down ? -step : 0));
+		event->accept();
+		return;
+	}
+	case CameraKey::ZoomIn:
+	case CameraKey::ZoomOut:
+		zoomAt(QPointF(width() / 2.0, height() / 2.0), cameraKey(event) == CameraKey::ZoomIn ? kKeyZoom : 1 / kKeyZoom);
+		event->accept();
+		return;
+	case CameraKey::None:
+		break;
+	}
 	QLabel::keyPressEvent(event);
 }
 void ModelUvView::focusOutEvent(QFocusEvent *event)
@@ -625,7 +678,7 @@ bool ModelUvView::event(QEvent *event)
 	{
 		const auto *key = static_cast<QKeyEvent *>(event);
 		if ((m_moving && key->key() == Qt::Key_Escape) ||
-			(key->modifiers() == Qt::NoModifier && (key->key() == Qt::Key_F || key->key() == Qt::Key_Home)))
+			(key->modifiers() == Qt::NoModifier && (key->key() == Qt::Key_F || key->key() == Qt::Key_Home)) || cameraKey(key) != CameraKey::None)
 		{
 			event->accept();
 			return true;

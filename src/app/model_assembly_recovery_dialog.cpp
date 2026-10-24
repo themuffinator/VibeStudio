@@ -1,4 +1,5 @@
 #include "app/model_assembly_recovery_dialog.h"
+#include "app/dialog_screen_fit.h"
 #include "app/model_document_work.h"
 
 #include <QCloseEvent>
@@ -25,7 +26,6 @@ class RecoveryDialog final : public QDialog
 		setObjectName(QStringLiteral("assemblyRecoveryDialog"));
 		setWindowTitle(QCoreApplication::translate("ModelAssemblyRecovery", "Assembly Recoveries"));
 		setAccessibleName(windowTitle());
-		resize(720, 560);
 		auto *layout = new QVBoxLayout(this);
 		m_status = new QLabel;
 		m_status->setTextFormat(Qt::PlainText);
@@ -61,6 +61,7 @@ class RecoveryDialog final : public QDialog
 		connect(m_discard, &QPushButton::clicked, this, [this] { discard(); });
 		selection();
 		QTimer::singleShot(0, this, [this] { refresh(); });
+		fitDialogToScreen(this, QSize(720, 560));
 	}
 	std::optional<RecoveredAssemblyDraft> result;
 
@@ -180,9 +181,8 @@ class RecoveryDialog final : public QDialog
 		{
 			const auto &record = m_scan.records[i];
 			auto *item = new QListWidgetItem(record.isValid()
-												 ? QCoreApplication::translate("ModelAssemblyRecovery", "%1 — %2 — %3 parts")
+												 ? QCoreApplication::translate("ModelAssemblyRecovery", "%1 — %2 — %Ln part(s)", nullptr, int(record.parts))
 													   .arg(record.title, record.writtenUtc.toLocalTime().toString(Qt::ISODate))
-													   .arg(record.parts)
 												 : QCoreApplication::translate("ModelAssemblyRecovery", "Unavailable — %1").arg(record.id),
 											 m_list);
 			item->setToolTip(record.isValid() ? record.sourcePath : record.error);
@@ -192,12 +192,13 @@ class RecoveryDialog final : public QDialog
 			}
 		}
 		m_list->setCurrentRow(selectionRow >= 0 ? selectionRow : (m_scan.records.isEmpty() ? -1 : 0));
+		const int recoveryCount = int(m_scan.records.size());
 		m_status->setText(
 			m_scan.limited
 				? QCoreApplication::translate("ModelAssemblyRecovery", "Recovery scan limit reached. Some copies could not be verified.")
 				: QCoreApplication::translate("ModelAssemblyRecovery",
-											  "%1 recovery copies. Automatic storage is limited to 32 copies and 32 MiB.")
-					  .arg(m_scan.records.size()));
+											  "%Ln recovery cop(y)(ies). Automatic storage is limited to 32 copies and 32 MiB.", nullptr,
+											  recoveryCount));
 		selection();
 	}
 	void restore()

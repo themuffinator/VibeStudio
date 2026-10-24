@@ -274,7 +274,7 @@ int main(int argc, char **argv)
 	}
 	ModelEditorDialog editor;
 	editor.setAttribute(Qt::WA_DeleteOnClose, false);
-	editor.findChild<QCheckBox *>("meshRecoveryEnabled")->setChecked(false);
+	editor.findChild<QAction *>("meshRecoveryEnabled")->setChecked(false);
 	ok &= expect(editor.setMesh(original, &error), "open UV editor fixture");
 	editor.resize(1440, 960);
 	editor.show();
@@ -362,7 +362,7 @@ int main(int argc, char **argv)
 		applyStudioTheme(app, studioThemeTokens(StudioTheme::HighContrastDark, UiDensity::Standard, 200));
 		ModelEditorDialog expanded;
 		expanded.setAttribute(Qt::WA_DeleteOnClose, false);
-		expanded.findChild<QCheckBox *>("meshRecoveryEnabled")->setChecked(false);
+		expanded.findChild<QAction *>("meshRecoveryEnabled")->setChecked(false);
 		expanded.setLayoutDirection(Qt::RightToLeft);
 		expanded.resize(1700, 1100);
 		expanded.setMesh(original, &error);

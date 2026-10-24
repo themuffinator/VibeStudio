@@ -9,7 +9,12 @@ project-aware game management.
 - Steam and GOG detection are active as read-only candidate scans. Detected
   candidates are shown for confirmation/import in the GUI and through
   `--detect-installations` or `install detect`; candidates are not saved until
-  the user confirms them.
+  the user confirms them. A candidate's executable is searched for at the
+  root and at most two folders below it (shallowest first), so a folder that
+  only shares a name hint, such as a large modern install in the same Steam
+  library, is never walked file by file. On a machine with DOOM Eternal and
+  Quake Champions in its libraries this took the Steam scan from about 3.8 s
+  to 0.25 s with the same candidates.
 - Profiles store a stable ID, game key, engine family, display name,
   installation root, optional executable, base/mod package paths, palette
   default, compiler-profile default, read-only state, hidden state, and

@@ -36,6 +36,10 @@ int main(int argc, char** argv)
 	for (const auto& profile : editorProfileDescriptors()) {
 		QJsonObject normalized; LevelEditorControls effective;
 		const auto values = levelGestureValues(profile.controls);
+		const bool cloneInPlace = profile.id == "trenchbroom" || profile.id == "netradiant-custom";
+		ok &= expect(profile.controls.nudgeAfterDuplicate != cloneInPlace
+			&& profile.controls.duplicateRequiresObjectMode == (profile.id == "netradiant-custom"),"audited duplicate defaults are confined to TB and NRC",profile.id);
+		ok &= expect((profile.controls.plan.quickClipModifiers != Qt::NoModifier) == (profile.id == "netradiant-custom"),"quick clip defaults only to the audited NRC profile",profile.id);
 		ok &= expect(values.size() == levelGestureFields().size(), "every profile exposes every supported field", profile.id);
 		ok &= expect(applyLevelGestureOverrides(profile.controls, values, &effective, &normalized, &error), "base profile is valid", profile.id + error);
 		ok &= expect(normalized.isEmpty() && levelGestureValues(effective) == values, "unchanged values normalize to defaults", profile.id);
@@ -139,7 +143,38 @@ int main(int argc, char** argv)
 		{"camera.driveKeys.up", "PgUp"}, {"camera.lookToggleKey", "Ctrl+Space"}};
 	EditorProfileDescriptor hammer; editorProfileForId("hammer", &hammer);
 	LevelEditorControls keyed; QJsonObject normalizedKeys;
-	ok &= expect(levelGestureFields().size() == 84 && applyLevelGestureOverrides(hammer.controls, cameraKeys, &keyed, &normalizedKeys, &error), "84 shared pointer and key preferences", error);
+	ok &= expect(levelGestureFields().size() == 102, "102 shared pointer, editing (incl. grid snap, quick-turn and flip pivot policies), clipper (incl. camera clip-point drag style), component insertion, movement, selection and key preferences");
+	ok &= expect(trenchBroomLevelControls().plan.componentAxisDrag && trenchBroomLevelControls().camera.componentAxisDrag
+		&& !base.plan.componentAxisDrag && !base.camera.componentAxisDrag,"native world-axis dragging is a TB profile default");
+	ok &= expect(trenchBroomLevelControls().plan.componentInsertModifiers == Qt::ShiftModifier
+		&& trenchBroomLevelControls().camera.componentInsertModifiers == Qt::ShiftModifier,"TB vertex insertion chords");
+	LevelEditorControls cycled; QJsonObject cycleChanges;
+	ok &= expect(trenchBroomLevelControls().plan.componentQuickSnapModifiers == (Qt::AltModifier|Qt::ShiftModifier)
+		&& trenchBroomLevelControls().camera.componentQuickSnapModifiers == (Qt::AltModifier|Qt::ShiftModifier),"TB exact vertex quick snap chord");
+	ok &= expect(applyLevelGestureOverrides(trenchBroomLevelControls(),{{"plan.componentQuickSnapModifiers","ctrl+shift+alt"},{"camera.componentQuickSnapModifiers","none"}},&cycled,&cycleChanges,&error)
+		&& cycled.plan.componentQuickSnapModifiers == (Qt::ControlModifier|Qt::AltModifier|Qt::ShiftModifier) && cycled.camera.componentQuickSnapModifiers == Qt::NoModifier,"quick snap remaps and disables",error);
+	ok &= expect(!applyLevelGestureOverrides(trenchBroomLevelControls(),{{"plan.componentQuickSnapModifiers","ctrl"}},nullptr,nullptr,&error),"quick snap refuses selection conflict");
+	ok &= expect(applyLevelGestureOverrides(trenchBroomLevelControls(),{{"plan.toggleModifiers","shift+alt"}},&cycled,&cycleChanges,&error)
+		&& cycled.plan.componentQuickSnapModifiers == Qt::NoModifier,"existing customised selection takes priority over new quick snap",error);
+	ok &= expect(applyLevelGestureOverrides(trenchBroomLevelControls(),{{"plan.componentAxisDrag","off"},{"camera.componentAxisDrag","off"}},&cycled,&cycleChanges,&error)
+		&& !cycled.plan.componentAxisDrag && !cycled.camera.componentAxisDrag,"world-axis dragging can be disabled independently",error);
+	ok &= expect(base.plan.componentInsertModifiers == Qt::NoModifier && base.camera.componentInsertModifiers == Qt::NoModifier,"NRC retains no insertion chord");
+	ok &= expect(applyLevelGestureOverrides(trenchBroomLevelControls(),{{"plan.componentInsertModifiers","ctrl+shift"},{"camera.componentInsertModifiers","none"}},&cycled,&cycleChanges,&error)
+		&& cycled.plan.componentInsertModifiers == (Qt::ControlModifier|Qt::ShiftModifier) && cycled.camera.componentInsertModifiers == Qt::NoModifier,"insertion chords remap and disable",error);
+	ok &= expect(base.plan.quickClipModifiers == Qt::ControlModifier && trenchBroomLevelControls().plan.quickClipModifiers == Qt::NoModifier,"quick clip is a source-audited NRC default");
+	ok &= expect(applyLevelGestureOverrides(base,{{"plan.toggleModifiers","ctrl"}},&cycled,&cycleChanges,&error)
+		&& cycled.plan.quickClipModifiers == Qt::NoModifier && cycleChanges.value("plan.quickClipModifiers") == "none","older Ctrl selection override retains priority",error);
+	ok &= expect(!applyLevelGestureOverrides(base,{{"plan.toggleModifiers","ctrl"},{"plan.quickClipModifiers","ctrl"}},nullptr,nullptr,&error),"explicit selection/quick-clip conflict fails");
+	ok &= expect(applyLevelGestureOverrides(base,{{"plan.quickClipModifiers","alt"}},&cycled,&cycleChanges,&error)
+		&& cycled.plan.quickClipModifiers == Qt::AltModifier,"quick clip can be remapped",error);
+	ok &= expect(applyLevelGestureOverrides(trenchBroomLevelControls(),{{"plan.componentCycleWheelModifiers","ctrl+alt"},{"camera.componentCycleWheelModifiers","none"}},&cycled,&cycleChanges,&error)
+		&& cycled.plan.componentCycleWheelModifiers == (Qt::ControlModifier|Qt::AltModifier) && cycled.camera.componentCycleWheelModifiers == Qt::NoModifier,"component cycle chords are configurable",error);
+	QString cycleProfile; QJsonObject parsedCycle;
+	ok &= expect(parseLevelGestures(serializeLevelGestures("trenchbroom",cycleChanges),&cycleProfile,&parsedCycle,&error) && parsedCycle == cycleChanges,"component cycle preference export round trip",error);
+	ok &= expect(applyLevelGestureOverrides(trenchBroomLevelControls(),{{"camera.fieldOfViewWheelModifiers","alt"}},&cycled,&cycleChanges,&error)
+		&& cycled.camera.componentCycleWheelModifiers == Qt::NoModifier,"older FOV override retains its wheel binding",error);
+	ok &= expect(!applyLevelGestureOverrides(trenchBroomLevelControls(),{{"camera.fieldOfViewWheelModifiers","alt"},{"camera.componentCycleWheelModifiers","ctrl+alt"}},nullptr,nullptr,&error),"explicit FOV and component cycle conflicts rejected");
+	ok &= expect(applyLevelGestureOverrides(hammer.controls, cameraKeys, &keyed, &normalizedKeys, &error), "shared pointer and key preferences", error);
 	ok &= expect(normalizedKeys.value("camera.flyKeys.forward") == "I", "movement key uses portable canonical spelling");
 	ok &= expect(cameraKeyMotions(keyed.camera, false).size() == 1 && cameraKeyMotions(keyed.camera, false).value(Qt::Key_PageUp).up == 1,
 		"drive keys stay active before looking");
@@ -324,10 +359,41 @@ int main(int argc, char** argv)
 		ok &= expect(keyResult.value("values").toObject().value("camera.flyKeys.forward") == "I", "CLI applies camera key transaction");
 		ok &= expect(!keyResult.value("shortcutWarnings").toArray().isEmpty(), "CLI reports camera overlaps with saved command keys");
 		QHash<QString, QString> fieldTypes;
+		const auto beforeNudge = bytes(settingsPath);
+		const auto previewNudge = cli({"gestures","nrc","--set","editing.nudgeAfterDuplicate=on","--dry-run"},0);
+		ok &= expect(bytes(settingsPath) == beforeNudge && previewNudge.value("values").toObject().value("editing.nudgeAfterDuplicate") == "on",
+			"duplicate nudge dry run preserves settings");
+		cli({"gestures","netradiant-custom","--set","editing.nudgeAfterDuplicate=on"},0);
+		ok &= expect(cli({"gestures","nrc"},0).value("values").toObject().value("editing.nudgeAfterDuplicate") == "on"
+			&& cli({"gestures","trenchbroom"},0).value("values").toObject().value("editing.nudgeAfterDuplicate") == "off",
+			"duplicate nudge persists per canonical profile");
+		const auto nudgedSettings = bytes(settingsPath);
+		cli({"gestures","nrc","--set","editing.nudgeAfterDuplicate=invalid"},4);
+		ok &= expect(bytes(settingsPath) == nudgedSettings,"invalid nudge policy leaves preferences unchanged");
+		const auto nudgeFile = temp.filePath("nudge.json");
+		cli({"gestures","nrc","--output",nudgeFile},0);
+		cli({"gestures","nrc","--set","editing.nudgeAfterDuplicate=default"},0);
+		ok &= expect(cli({"gestures","nrc"},0).value("values").toObject().value("editing.nudgeAfterDuplicate") == "off","nudge reset restores source default");
+		cli({"gestures","nrc","--input",nudgeFile},0);
+		ok &= expect(cli({"gestures","nrc"},0).value("values").toObject().value("editing.nudgeAfterDuplicate") == "on","portable nudge preference round trip");
+		cli({"gestures","nrc","--reset"},0);
+		const auto clipMovement = cli({"gestures", "netradiant-custom", "--set", "camera.clipDragStyle=view"},0).value("values").toObject();
+		ok &= expect(clipMovement.value("camera.clipDragStyle") == "view", "CLI persists view-axis clip movement");
+		cli({"gestures", "netradiant-custom", "--reset"},0);
 		for (const auto& field : keyResult.value("fields").toArray()) { const auto item = field.toObject(); fieldTypes.insert(item.value("id").toString(), item.value("type").toString()); }
-		ok &= expect(fieldTypes.size() == 84 && fieldTypes.value("plan.panButtons") == "choice"
+		ok &= expect(fieldTypes.size() == 102 && fieldTypes.value("plan.panButtons") == "choice"
 			&& fieldTypes.value("camera.flyKeys.forward") == "motion-key" && fieldTypes.value("camera.lookToggleKey") == "toggle-key"
 			&& fieldTypes.value("plan.panHoldKey") == "hold-key" && fieldTypes.value("camera.lookHoldKey") == "hold-key", "CLI describes all field types");
+		const auto lasso = cli({"gestures", "trenchbroom", "--set", "plan.componentBandToggles=off", "--set", "camera.componentBandToggles=off"}, 0).value("values").toObject();
+		ok &= expect(lasso.value("plan.componentBandToggles") == "off" && lasso.value("camera.componentBandToggles") == "off", "CLI stores both component lasso policies");
+		cli({"gestures", "trenchbroom", "--reset"}, 0);
+		const auto lassoDefaults = cli({"gestures", "trenchbroom"}, 0).value("values").toObject();
+		const auto cycleValues = cli({"gestures","trenchbroom","--set","plan.componentCycleWheelModifiers=ctrl+alt","--set","camera.componentCycleWheelModifiers=none"},0).value("values").toObject();
+		ok &= expect(cycleValues.value("plan.componentCycleWheelModifiers") == "ctrl+alt" && cycleValues.value("camera.componentCycleWheelModifiers") == "none","CLI persists both cycle preferences");
+		cli({"gestures","trenchbroom","--reset"},0);
+		const auto cycleDefaults = cli({"gestures","trenchbroom"},0).value("values").toObject();
+		ok &= expect(cycleDefaults.value("plan.componentCycleWheelModifiers") == "alt" && cycleDefaults.value("camera.componentCycleWheelModifiers") == "alt","CLI reset restores cycle chords");
+		ok &= expect(lassoDefaults.value("plan.componentBandToggles") == "on" && lassoDefaults.value("camera.componentBandToggles") == "on", "CLI restores TB lasso defaults");
 		const auto keyedBytes = bytes(settingsPath);
 		cli({"gestures", "hammer", "--set", "camera.flyKeys.back=I"}, 4);
 		ok &= expect(bytes(settingsPath) == keyedBytes, "duplicate CLI direction preserves previous bindings");

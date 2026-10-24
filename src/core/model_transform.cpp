@@ -315,6 +315,28 @@ bool modelMoveDragDelta(const ModelMoveDrag &drag, ModelPickRay ray, ModelVec3 *
 	return snapModelTranslation({float(point[0]), float(point[1]), float(point[2])}, drag.grid, translation);
 }
 
+bool beginModelAxisMoveDrag(ModelVec3 pivot, ModelVec3 viewDirection, ModelVec3 axis, ModelPickRay ray, ModelMoveDrag* result)
+{
+	if (!result || !finite(vector(pivot))) { return false; }
+	ModelMoveDrag drag; drag.origin = vector(pivot); drag.axis = vector(axis); drag.normal = vector(viewDirection);
+	if (!normalize(&drag.axis) || !normalize(&drag.normal)) { return false; }
+	const double along = dot(drag.normal,drag.axis);
+	for (int i = 0; i < 3; ++i) { drag.normal[i] -= drag.axis[i]*along; }
+	if (!normalize(&drag.normal) || !intersect(drag,ray,&drag.start)) { return false; }
+	drag.constraint = ModelMoveConstraint::X;
+	*result = drag; return true;
+}
+
+bool modelAxisMoveDragDistance(const ModelMoveDrag& drag, ModelPickRay ray, double* distance)
+{
+	Vector point;
+	if (!distance || !intersect(drag,ray,&point)) { return false; }
+	for (int i = 0; i < 3; ++i) { point[i] -= drag.start[i]; }
+	const double value = dot(point,drag.axis);
+	if (!std::isfinite(value)) { return false; }
+	*distance = value; return true;
+}
+
 bool beginModelRotateDrag(ModelVec3 pivot, int axis, ModelPickRay ray, double grid, ModelRotateDrag *result)
 {
 	ModelVec3 checked;

@@ -1,5 +1,6 @@
 #include "tests/map_viewport_test_helpers.h"
 #include "tests/level_geometry_test_helpers.h"
+#include "app/studio_theme.h"
 #include "app/wire_lines.h"
 #include "core/level_patch.h"
 #include <QApplication>
@@ -30,19 +31,27 @@ QImage imageFor(const QWidget& widget, double ratio)
 }
 QImage overlayReference(const QWidget& host, const MapViewport& view, double ratio, const LevelMapDocument& document)
 {
-	auto image = imageFor(host,ratio); image.fill(Qt::black);
+	// A high-contrast plan view paints with the studio's high-contrast tokens;
+	// with no theme applied the studio is dark, so these are High Contrast Dark.
+	// Grid lines mix the input background toward the text colour.
+	const auto tokens = studioThemeTokens(StudioTheme::HighContrastDark,UiDensity::Standard,100).colors;
+	const auto mix = [&](double amount) {
+		return QColor::fromRgbF(tokens.input.redF() + (tokens.text.redF() - tokens.input.redF()) * amount,
+			tokens.input.greenF() + (tokens.text.greenF() - tokens.input.greenF()) * amount,tokens.input.blueF() + (tokens.text.blueF() - tokens.input.blueF()) * amount);
+	};
+	auto image = imageFor(host,ratio); image.fill(tokens.input);
 	QPainter painter(&image); painter.setRenderHint(QPainter::Antialiasing); painter.setBrush(Qt::NoBrush);
 	painter.translate(view.mapTo(&host,QPoint()));
 	const auto nav = view.navigationState();
 	MapGridView grid; grid.viewport = view.size(); grid.center = nav.center; grid.zoom = nav.zoom; grid.units = view.gridSize();
-	const auto lines = mapGridLines(grid); const QColor colors[] = {QColor(70,70,70),QColor(120,120,120),Qt::white};
+	const auto lines = mapGridLines(grid); const QColor colors[] = {mix(0.28),mix(0.48),tokens.text};
 	for (int i = 0; i < 3; ++i) { painter.setPen(QPen(colors[i],i == 2 ? 2.0 : 1.0)); painter.drawLines(lines[i]); }
 	for (int i = 0; i < document.entities.size(); ++i) {
 		const auto& point = document.entities.at(i).origin;
 		const QPointF center(view.width() * 0.5 + (point.x-nav.center.x())*nav.zoom,view.height() * 0.5 - (point.y-nav.center.y())*nav.zoom);
-		painter.setPen(QPen(Qt::cyan,1.5));
+		painter.setPen(QPen(tokens.info,1.5));
 		painter.drawPolygon(QPolygonF{center+QPointF(0,-5),center+QPointF(5,0),center+QPointF(0,5),center+QPointF(-5,0)});
-		if (i < document.entities.size()-1) { painter.setPen(QPen(Qt::magenta,2)); painter.drawEllipse(center,8,8); }
+		if (i < document.entities.size()-1) { painter.setPen(QPen(tokens.selection,2)); painter.drawEllipse(center,8,8); }
 	}
 	return image;
 }

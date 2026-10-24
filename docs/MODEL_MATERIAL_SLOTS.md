@@ -30,6 +30,8 @@ export order nor package state. It is a session choice per surface name and slot
 index. Reordering bindings keeps the index, so the visible material can change.
 Out-of-range indices clamp after removal; removed or renamed surfaces reset
 their preview choice. Opening or restoring a source resets all choices to zero.
+To keep a named alternative appearance with the source, use **Skin Variants…**
+([skin variants](MODEL_SKIN_VARIANTS.md)).
 
 Material resolution uses the same immutable package/staging snapshot, palette,
 bounded shader lookup, progress, Cancel, Reload Images and Details as primary
@@ -132,10 +134,11 @@ and retains alternate slots; select preview zero to inspect that result.
 External `.skin` files, shaders, texture contents and project references are not
 rewritten automatically. Review dependencies after changing paths or order.
 
-This is ordered binding authoring and static image preview. It does not provide
-a project-wide named variant system, per-face material assignment within one
-surface, runtime skin switching, animated shader simulation, or automatic
-texture rebaking. Separate faces into surfaces when they require independent
+This is ordered binding authoring and static image preview. Named skins such as
+red and blue, which the source keeps and writes as `.skin` files or Doom 3 skin
+declarations, are [skin variants](MODEL_SKIN_VARIANTS.md). Material slots do not
+provide per-face material assignment within one surface, runtime skin switching,
+animated shader simulation, or automatic texture rebaking. Separate faces into surfaces when they require independent
 bindings. [The release gate](MODELLER_RELEASE.md) remains open for full production
 interaction, clean packages and cross-platform acceptance.
 

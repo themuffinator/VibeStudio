@@ -1,4 +1,5 @@
 #include "app/model_surface_dialog.h"
+#include "app/dialog_screen_fit.h"
 
 #include <QCheckBox>
 #include <QComboBox>
@@ -116,7 +117,7 @@ ModelSurfaceDialog::ModelSurfaceDialog(const ModelMesh &mesh, const ModelSelecti
 	connect(m_name, &QLineEdit::textChanged, this, [this] { refresh(); });
 	connect(m_sources, &QTreeWidget::itemChanged, this, [this] { refresh(); });
 	connect(m_adopt, &QCheckBox::toggled, this, [this] { refresh(); });
-	resize(fontMetrics().averageCharWidth() * 86, fontMetrics().height() * 29);
+	fitDialogToScreen(this, QSize(fontMetrics().averageCharWidth() * 86, fontMetrics().height() * 29));
 	refresh(true);
 	m_operation->setFocus(Qt::OtherFocusReason);
 }
@@ -230,24 +231,22 @@ void ModelSurfaceDialog::refresh(bool operationChanged)
 	}
 	if (separate)
 		summary = all ? Text::tr("Every face is selected: rename the existing surface without creating an empty surface.")
-					  : Text::tr("Move %1 selected faces to a new surface; copy shared boundary vertices and keep their exact attributes.")
-							.arg(m_selection.faces.size());
+					  : Text::tr("Move %Ln selected face(s) to a new surface; copy shared boundary vertices and keep their exact attributes.",
+								 nullptr, int(m_selection.faces.size()));
 	else if (duplicate)
 		summary = Text::tr("Copy the complete surface, including unused vertices, every pose, UVs, seams and material slots.");
 	else if (kind == ModelEditKind::DeleteSurface)
-		summary = Text::tr("Delete %1 and its %2 triangles from every pose. Undo restores the surface.")
-					  .arg(source.name)
-					  .arg(source.triangles.size());
+		summary = Text::tr("Delete %1 and its %Ln triangle(s) from every pose. Undo restores the surface.", nullptr, int(source.triangles.size()))
+					  .arg(source.name);
 	else if (kind == ModelEditKind::RenameSurface)
 		summary = Text::tr("Rename %1. External .skin files and other name-based references may need updating.").arg(source.name);
 	if (move)
 		summary.prepend(
-			Text::tr("Move %1 selected faces. %2\n")
-				.arg(m_selection.faces.size())
+			Text::tr("Move %Ln selected face(s). %1\n", nullptr, int(m_selection.faces.size()))
 				.arg(all ? Text::tr("The empty source surface will be removed.") : Text::tr("Shared boundary vertices will be copied.")));
 	if (join)
-		summary.prepend(Text::tr("Join %1 surfaces without welding vertices.\n").arg(request.surfaces.size()));
-	summary.prepend(Text::tr("Source: %1 · %2 poses\n").arg(source.name).arg(m_mesh.frames.size()));
+		summary.prepend(Text::tr("Join %Ln surface(s) without welding vertices.\n", nullptr, int(request.surfaces.size())));
+	summary.prepend(Text::tr("Source: %1 · %Ln pose(s)\n", nullptr, int(m_mesh.frames.size())).arg(source.name));
 	if (!problem.isEmpty())
 		summary += QLatin1Char('\n') + problem;
 	m_summary->setText(summary);

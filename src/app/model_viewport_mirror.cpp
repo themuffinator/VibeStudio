@@ -23,7 +23,9 @@ void ModelViewport::mirrorDisplayFrom(const ModelViewport& source)
 	// Mesh copies share their arrays until either side changes, so equal
 	// buffers mean an unchanged mesh and the costly rebuild can be skipped.
 	const bool meshChanged = m_hasMesh != source.m_hasMesh || m_mesh.surfaces.constData() != source.m_mesh.surfaces.constData()
-		|| m_mesh.frames.constData() != source.m_mesh.frames.constData() || m_mesh.surfaces.size() != source.m_mesh.surfaces.size();
+		|| m_mesh.frames.constData() != source.m_mesh.frames.constData() || m_mesh.surfaces.size() != source.m_mesh.surfaces.size()
+		|| m_mesh.skeleton.joints.constData() != source.m_mesh.skeleton.joints.constData()
+		|| m_mesh.skeleton.clips.constData() != source.m_mesh.skeleton.clips.constData() || m_mesh.tags.constData() != source.m_mesh.tags.constData();
 	const bool hadMesh = m_hasMesh;
 	if (meshChanged) {
 		m_mesh = source.m_mesh;
@@ -64,6 +66,11 @@ void ModelViewport::mirrorDisplayFrom(const ModelViewport& source)
 	m_selectedEdges = source.m_selectedEdges;
 	m_editSurface = source.m_editSurface;
 	m_editTag = source.m_editTag;
+	m_editJoint = source.m_editJoint;
+	m_showJoints = source.m_showJoints;
+	m_jointPicking = source.m_jointPicking;
+	m_xrayJoints = source.m_xrayJoints;
+	m_jointDescendants = source.m_jointDescendants;
 	m_showTags = source.m_showTags;
 	m_editVertices = source.m_editVertices;
 	m_editSurfaces = source.m_editSurfaces;
@@ -79,6 +86,10 @@ void ModelViewport::mirrorDisplayFrom(const ModelViewport& source)
 		m_radius = source.m_radius;
 		frameModel();
 	}
+	// Framing a newly opened mirror cancels local gestures. Copy the shared
+	// joint preview afterwards so its first image has the same pose.
+	m_mirroredJointPreview = (source.m_editMoveActive || source.m_mirroredJointPreview) && !source.m_editJoint.isEmpty();
+	m_editTransform = m_mirroredJointPreview ? source.m_editTransform : ModelTransform{};
 	invalidateProjection();
 	// Keep the last image until the new one is ready, so syncing never flickers.
 	invalidateRaster(false);

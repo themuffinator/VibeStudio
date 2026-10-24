@@ -1,5 +1,7 @@
 #include "app/model_recovery_dialog.h"
 
+#include "app/dialog_screen_fit.h"
+#include "app/studio_accessibility.h"
 #include "app/studio_runtime.h"
 
 #include <QCloseEvent>
@@ -10,6 +12,7 @@
 #include <QFileInfo>
 #include <QLabel>
 #include <QListWidget>
+#include <QLocale>
 #include <QMessageBox>
 #include <QPlainTextEdit>
 #include <QProgressBar>
@@ -32,7 +35,6 @@ class RecoveryDialog final : public QDialog
 		setObjectName(QStringLiteral("modelRecoveryDialog"));
 		setWindowTitle(QCoreApplication::translate("VibeStudioModelRecovery", "Recover Mesh Documents"));
 		setAccessibleName(windowTitle());
-		resize(std::max(720, fontMetrics().averageCharWidth() * 70), std::max(480, fontMetrics().lineSpacing() * 24));
 		auto *layout = new QVBoxLayout(this);
 		auto *location = new QLabel(QDir::toNativeSeparators(m_directory));
 		location->setTextFormat(Qt::PlainText);
@@ -46,7 +48,9 @@ class RecoveryDialog final : public QDialog
 		m_list->setWordWrap(true);
 		layout->addWidget(m_list, 1);
 		m_progress = new QProgressBar;
-		m_progress->setRange(0, 0);
+		m_progress->setObjectName(QStringLiteral("modelRecoveryProgress"));
+		// The scan has no known length; under reduced motion the bar stays still.
+		setBusyProgress(m_progress, studioReducedMotion(), QCoreApplication::translate("VibeStudioModelRecovery", "Checking recovery copies…"));
 		m_progress->setAccessibleName(QCoreApplication::translate("VibeStudioModelRecovery", "Recovery progress"));
 		layout->addWidget(m_progress);
 		m_details = new QPlainTextEdit;
@@ -68,6 +72,7 @@ class RecoveryDialog final : public QDialog
 		connect(m_restore, &QPushButton::clicked, this, [this] { restore(); });
 		connect(m_discard, &QPushButton::clicked, this, [this] { discard(); });
 		connect(m_list, &QListWidget::currentRowChanged, this, [this] { showSelection(); });
+		fitDialogToScreen(this, QSize(std::max(720, fontMetrics().averageCharWidth() * 70), std::max(480, fontMetrics().lineSpacing() * 24)));
 		auto result = std::make_shared<ModelRecoveryScan>();
 		start(
 			QCoreApplication::translate("VibeStudioModelRecovery", "Reading local recovery copies…"),
@@ -222,9 +227,9 @@ class RecoveryDialog final : public QDialog
 			record->isValid()
 				? QCoreApplication::translate(
 					  "VibeStudioModelRecovery",
-					  "%1 bytes · %2\nRestoring opens an unsaved draft. The original source and recovery copy remain unchanged.%3")
-					  .arg(record->payloadBytes)
-					  .arg(record->sourcePath.isEmpty() ? QCoreApplication::translate("VibeStudioModelRecovery", "Unsaved source")
+					  "%1 · %2\nRestoring opens an unsaved draft. The original source and recovery copy remain unchanged.%3")
+					  .arg(QLocale().formattedDataSize(record->payloadBytes),
+						   record->sourcePath.isEmpty() ? QCoreApplication::translate("VibeStudioModelRecovery", "Unsaved source")
 														: QDir::toNativeSeparators(record->sourcePath),
 						   live ? QCoreApplication::translate("VibeStudioModelRecovery",
 															  "\nThe owning studio is still running; discarding this copy is disabled.")

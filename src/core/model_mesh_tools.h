@@ -22,7 +22,12 @@
 // the options' reference pose; every other pose follows the same topology.
 
 #include "core/model_mesh.h"
+#include "core/model_knife.h"
+#include "core/model_vertex_origins.h"
 #include "core/model_work.h"
+
+#include <QMap>
+#include <QString>
 
 #include <array>
 
@@ -31,6 +36,7 @@ namespace vibestudio
 enum class ModelEditKind;
 struct ModelEdit;
 struct ModelSelection;
+struct ModelEditReport;
 
 enum class ModelMergeMode
 {
@@ -105,11 +111,20 @@ struct ModelMeshToolOptions
 	// Loop Cut: 1-64 parallel cuts; one cut may slide between -1 and 1.
 	int cuts = 1;
 	double slide = 0;
+	// Edge Slide: offset is a signed distance in the reference pose instead
+	// of slide's signed fraction. Other poses follow the same rail fraction.
+	bool slideByDistance = false;
 	// Symmetrize mirror axis (0 X, 1 Y, 2 Z) and which half is copied.
 	int axis = 0;
 	bool positiveToNegative = true;
 	// Vertices this close to the mirror plane join both halves.
 	double mergeThreshold = 0.001;
+	// Symmetrize on skinned surfaces: mirror partners by joint name (both
+	// directions apply; unlisted joints on the mirror plane keep their name).
+	// Off-centre joints without a partner are refused unless keepJointNames
+	// binds the mirrored half to the same joints. See core/model_vertex_origins.h.
+	QMap<QString, QString> mirrorJoints{};
+	bool keepJointNames = false;
 	// Bisect plane through point with this normal.
 	std::array<double, 3> normal{0, 0, 1};
 	ModelBisectKeep keep = ModelBisectKeep::Both;
@@ -117,6 +132,14 @@ struct ModelMeshToolOptions
 	ModelPrimitive primitive = ModelPrimitive::Cube;
 	std::array<double, 3> size{32, 32, 32};
 	int segments = 16, rings = 8;
+	// Add Primitive on a skeletal model: how the new vertices follow the
+	// skeleton (rigidly to bindJoint, or the nearest bones). Without a binding,
+	// adding to a skinned surface is refused. See core/model_vertex_origins.h.
+	ModelNewGeometryBinding newGeometryBinding = ModelNewGeometryBinding::None;
+	QString bindJoint{};
+	// Add Primitive into a new surface with this name (using the active
+	// surface's materials) instead of the active surface.
+	QString newSurface{};
 	// Beautify, edge rotation and quad pairing: largest normal difference.
 	double maxAngle = 40;
 	// Auto Smooth: edges sharper than this angle keep hard normals.
@@ -133,6 +156,10 @@ struct ModelMeshToolOptions
 	bool preserveBoundary = true;
 	// Bevel Vertices: distance of the new corner points along each edge.
 	double bevelWidth = 2;
+	// Edge bevel: neighbouring-edge offset, 1-32 cross-section segments and
+	// quadratic roundness (0 straight chamfer, 1 rounded). New bands use tile size.
+	int bevelSegments = 1;
+	double bevelRoundness = 1;
 	// Solidify: shell thickness behind the faces (negative grows outward).
 	double solidifyThickness = 4;
 	// UV projection: model units per texture repeat (64 matches a 64-unit
@@ -142,6 +169,16 @@ struct ModelMeshToolOptions
 	double uvTileSize = 64;
 	std::array<double, 3> uvAxisU{1, 0, 0}, uvAxisV{0, 0, 1};
 	bool uvFit = false;
+	ModelKnifeOptions knife;
+	// Spin around point/normal: extrude a face region or boundary edges, or
+	// duplicate faces. Close joins a complete turn (and omits its duplicate cap).
+	double spinAngle = 90;
+	int spinSteps = 8;
+	bool spinDuplicate = false, spinClose = true;
+	// Rip selected vertices/edges toward the incident side face, optionally
+	// bridge the opening. The translation is carried by ModelEdit::translation.
+	int ripFace = -1;
+	bool ripFill = false, ripOpposite = false;
 	bool operator==(const ModelMeshToolOptions &) const = default;
 };
 
@@ -150,7 +187,7 @@ bool isModelMeshToolEdit(ModelEditKind kind);
 bool isModelMeshShapeEdit(ModelEditKind kind);
 // Candidate-only operation; applyModelEdit validates and commits the document.
 bool applyModelMeshToolEdit(ModelMesh *candidate, const ModelEdit &edit, ModelSelection *selection, QString *error,
-							const ModelWorkControl &control = {});
+							const ModelWorkControl &control = {}, ModelEditReport *report = nullptr);
 
 // Proportional falloff weight for a normalized distance (0 at the selection,
 // 1 at the radius). Shared by the viewport preview and the committed edit.

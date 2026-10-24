@@ -266,6 +266,7 @@ bool ModelViewport::GeometryKey::matches(const GeometryKey& other) const
 	}
 	if (editMoveActive
 		&& (editSurface != other.editSurface || editTagEmpty != other.editTagEmpty || !sameTransform(editTransform, other.editTransform)
+			|| editJoint != other.editJoint || jointDescendants != other.jointDescendants
 			|| editSurfaces != other.editSurfaces || editVertices != other.editVertices)) {
 		return false;
 	}

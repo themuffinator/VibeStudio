@@ -1,6 +1,9 @@
 #include "core/model_mesh_tools.h"
 
 #include "core/model_mesh_tools_p.h"
+#include "core/model_vertex_identity.h"
+#include "core/model_skeleton.h"
+#include "core/model_vertex_origins.h"
 #include "core/model_transform_axes.h"
 
 #include <algorithm>
@@ -77,6 +80,9 @@ int appendCopy(ModelSurface *surface, int source)
 	const int index = surface->texCoords.size();
 	const auto uv = surface->texCoords[source];
 	surface->texCoords.append(uv);
+	if (!surface->topologyVertices.isEmpty())
+		surface->topologyVertices.append(surface->topologyVertices[source]);
+	appendModelVertexOriginCopy(surface, source);
 	for (auto &frame : surface->frames)
 	{
 		const auto p = frame.positions[source], n = frame.normals[source];
@@ -97,6 +103,9 @@ int appendBlend(ModelSurface *surface, const QVector<QPair<int, double>> &weight
 	}
 	const int index = surface->texCoords.size();
 	surface->texCoords.append({float(u), float(v)});
+	if (!surface->topologyVertices.isEmpty())
+		surface->topologyVertices.append(index);
+	appendModelVertexOriginBlend(surface, weights);
 	for (auto &frame : surface->frames)
 	{
 		P3 p{0, 0, 0}, n{0, 0, 0};
@@ -162,7 +171,9 @@ QSet<ModelEdge> surfaceEdgeSet(const ModelSurface &surface)
 	return edges;
 }
 
-bool refreshNormals(ModelSurface *surface, const QSet<int> &vertices, ModelWorkProgress &work, int onlyFrame)
+namespace
+{
+bool refreshNormalsIn(ModelSurface *surface, const QSet<int> &vertices, ModelWorkProgress &work, int onlyFrame, bool topologyEdit)
 {
 	if (vertices.isEmpty())
 		return work.check();
@@ -176,6 +187,10 @@ bool refreshNormals(ModelSurface *surface, const QSet<int> &vertices, ModelWorkP
 		if (vertex >= 0 && vertex < surface->vertexCount)
 			groups.insert(topology.group(vertex));
 	}
+	if (topologyEdit)
+		for (int group : std::as_const(groups))
+			for (int copy : topology.copies[group])
+				markModelVertexOriginNormals(surface, copy);
 	for (int face = 0; face < surface->triangles.size(); ++face)
 	{
 		if (!work.step())
@@ -236,6 +251,17 @@ bool refreshNormals(ModelSurface *surface, const QSet<int> &vertices, ModelWorkP
 	}
 	return work.check();
 }
+} // namespace
+
+bool refreshNormals(ModelSurface *surface, const QSet<int> &vertices, ModelWorkProgress &work)
+{
+	return refreshNormalsIn(surface, vertices, work, -1, true);
+}
+
+bool refreshNormals(ModelSurface *surface, const QSet<int> &vertices, ModelWorkProgress &work, int onlyFrame)
+{
+	return refreshNormalsIn(surface, vertices, work, onlyFrame, false);
+}
 
 void pruneSeams(ModelSurface *surface)
 {
@@ -269,11 +295,17 @@ bool compactUnused(ModelSurface *surface, const QSet<int> &candidates, ModelSele
 	if (!removed)
 		return work.check();
 	QVector<ModelTexCoord> coords;
+	QVector<int> identities, kept;
 	coords.reserve(next);
+	kept.reserve(next);
 	for (int i = 0; i < surface->vertexCount; ++i)
 	{
 		if (mapping[i] >= 0)
+		{
 			coords.append(surface->texCoords[i]);
+			kept.append(i);
+			if (!surface->topologyVertices.isEmpty()) identities.append(surface->topologyVertices[i]);
+		}
 	}
 	for (auto &frame : surface->frames)
 	{
@@ -303,7 +335,10 @@ bool compactUnused(ModelSurface *surface, const QSet<int> &candidates, ModelSele
 	}
 	surface->uvSeams = std::move(seams);
 	surface->texCoords = std::move(coords);
+	surface->topologyVertices = std::move(identities);
+	compactModelVertexIdentities(surface);
 	surface->vertexCount = next;
+	rebuildModelVertexOrigins(surface, surface->editOrigins, kept);
 	if (selection)
 	{
 		QSet<int> vertices;
@@ -460,6 +495,7 @@ bool splitSurfaceEdges(ModelSurface *surface, const ModelGeometricTopology &topo
 					   QHash<ModelEdge, int> *created, QVector<int> *faceSource, ModelWorkProgress &work)
 {
 	QHash<ModelEdge, int> points;
+	QHash<ModelEdge, int> identities;
 	auto keys = cuts.keys();
 	std::sort(keys.begin(), keys.end());
 	for (auto edge : std::as_const(keys))
@@ -469,7 +505,14 @@ bool splitSurfaceEdges(ModelSurface *surface, const ModelGeometricTopology &topo
 		int a = edge.first, b = edge.second;
 		if (topology.group(a) > topology.group(b))
 			std::swap(a, b);
-		points.insert(edge, appendLerp(surface, a, b, cuts.value(edge)));
+		const int added = appendLerp(surface, a, b, cuts.value(edge));
+		if (!surface->topologyVertices.isEmpty())
+		{
+			const auto geometric = topology.geometricEdge(a, b);
+			if (!identities.contains(geometric)) identities.insert(geometric, added);
+			surface->topologyVertices[added] = identities.value(geometric);
+		}
+		points.insert(edge, added);
 	}
 	const auto at = [&](int a, int b) { return points.value(modelEdge(a, b), -1); };
 	QVector<ModelTriangle> triangles;
@@ -735,6 +778,9 @@ bool pokeFaces(ModelMesh *mesh, const ModelEdit &edit, ModelSelection *selection
 			if (offset != 0)
 				surface.frames[frame].positions[centre] = vec(position(surface, frame, centre) + n * offset);
 		}
+		// A lifted centre leaves its blend: skinned, it is rebound there.
+		if (offset != 0)
+			markModelVertexOriginRepose(&surface, centre);
 		surface.triangles[face] = {t.a, t.b, centre};
 		result << face << surface.triangles.size() << surface.triangles.size() + 1;
 		surface.triangles.append({t.b, t.c, centre});
@@ -1003,6 +1049,11 @@ bool mergeVertices(ModelMesh *mesh, const ModelEdit &edit, ModelSelection *selec
 		if (groups.size() < 2)
 			continue;
 		++merged;
+		if (!surface.topologyVertices.isEmpty())
+		{
+			const int identity = surface.topologyVertices[it.value().first()];
+			for (int v : it.value()) surface.topologyVertices[v] = identity;
+		}
 		const auto centreIn = [&](int f)
 		{
 			P3 sum{0, 0, 0};
@@ -1021,6 +1072,16 @@ bool mergeVertices(ModelMesh *mesh, const ModelEdit &edit, ModelSelection *selec
 			for (int v : it.value())
 				surface.frames[f].positions[v] = vec(target);
 		}
+		// Skinned members share one equal blend of the positions they merged
+		// (each position's copies split its part), so the merged vertices keep
+		// one weight set and follow the skeleton where the tool put them.
+		QHash<int, int> copiesAt;
+		for (int v : it.value())
+			++copiesAt[topology.group(v)];
+		QVector<QPair<int, double>> parts;
+		for (int v : it.value())
+			parts.append({v, 1.0 / (double(groups.size()) * copiesAt.value(topology.group(v)))});
+		mergeModelVertexOrigins(&surface, parts, it.value());
 	}
 	if (merged == 0)
 		return fail(error, Text::tr("The selected vertices already coincide. Select vertices at different positions to merge."));
@@ -1417,9 +1478,11 @@ bool extrudeEdges(ModelMesh *mesh, const ModelEdit &edit, ModelSelection *select
 	if (!reserveCapacity(*mesh, selection->surface, endpoints.size(), qint64(borders.size()) * 2, error))
 		return false;
 	QHash<int, int> copies;
+	QHash<int, int> copiedIdentities;
 	for (int v : sortedValues(endpoints))
 	{
 		const int copy = appendCopy(&surface, v);
+		detachModelVertexIdentity(&surface, copy, &copiedIdentities);
 		for (auto &frame : surface.frames)
 			frame.positions[copy] = vec(point(frame.positions[copy]) + offset);
 		copies.insert(v, copy);
@@ -1517,10 +1580,15 @@ bool isModelMeshToolEdit(ModelEditKind kind)
 	case ModelEditKind::Bisect:
 	case ModelEditKind::Symmetrize:
 	case ModelEditKind::LoopCut:
+	case ModelEditKind::SlideEdges:
 	case ModelEditKind::AddPrimitive:
 	case ModelEditKind::Decimate:
 	case ModelEditKind::BevelVertices:
+	case ModelEditKind::BevelEdges:
+	case ModelEditKind::Knife:
+	case ModelEditKind::Spin:
 	case ModelEditKind::Solidify:
+	case ModelEditKind::Rip:
 	case ModelEditKind::ProjectUvMapping:
 		return true;
 	default:
@@ -1530,11 +1598,11 @@ bool isModelMeshToolEdit(ModelEditKind kind)
 
 bool isModelMeshShapeEdit(ModelEditKind kind)
 {
-	return kind == ModelEditKind::ShrinkFatten || kind == ModelEditKind::SmoothVertices || kind == ModelEditKind::WeightedTransform;
+	return kind == ModelEditKind::ShrinkFatten || kind == ModelEditKind::SmoothVertices || kind == ModelEditKind::WeightedTransform || kind == ModelEditKind::SlideEdges;
 }
 
 bool applyModelMeshToolEdit(ModelMesh *candidate, const ModelEdit &edit, ModelSelection *selection, QString *error,
-							const ModelWorkControl &control)
+							const ModelWorkControl &control, ModelEditReport *report)
 {
 	using namespace model_tools;
 	if (error)
@@ -1545,6 +1613,30 @@ bool applyModelMeshToolEdit(ModelMesh *candidate, const ModelEdit &edit, ModelSe
 	if (!candidate || !selection || selection->surface < 0 || selection->surface >= candidate->surfaces.size())
 		return fail(error, Text::tr("Select a valid surface."));
 	const auto &options = edit.tool;
+	if (edit.kind != ModelEditKind::Rip && (options.ripFace != -1 || options.ripFill || options.ripOpposite))
+		return fail(error, Text::tr("Rip settings apply only to the rip tool."));
+	if (edit.kind != ModelEditKind::Spin && (options.spinAngle != 90 || options.spinSteps != 8 || options.spinDuplicate || !options.spinClose))
+		return fail(error, Text::tr("Spin settings apply only to the spin tool."));
+	if (edit.kind != ModelEditKind::Knife && !(options.knife == ModelKnifeOptions{}))
+		return fail(error, Text::tr("Knife settings apply only to the knife tool."));
+	if (edit.kind != ModelEditKind::SlideEdges && options.slideByDistance)
+		return fail(error, Text::tr("Slide distance mode applies only to edge sliding."));
+	if (edit.kind != ModelEditKind::Symmetrize && (!options.mirrorJoints.isEmpty() || options.keepJointNames))
+		return fail(error, Text::tr("Joint mirror maps apply only to Symmetrize."));
+	if (edit.kind != ModelEditKind::AddPrimitive &&
+		(options.newGeometryBinding != ModelNewGeometryBinding::None || !options.bindJoint.isEmpty() || !options.newSurface.isEmpty()))
+		return fail(error, Text::tr("New geometry bindings and new surfaces apply only to Add Primitive."));
+	if (int(options.newGeometryBinding) < 0 || int(options.newGeometryBinding) > int(ModelNewGeometryBinding::NearestBones) ||
+		(options.newGeometryBinding == ModelNewGeometryBinding::Joint) == options.bindJoint.isEmpty())
+		return fail(error, Text::tr("Binding new geometry to a joint needs exactly one joint name; other bindings take none."));
+	if (options.newGeometryBinding != ModelNewGeometryBinding::None && candidate->skeleton.isEmpty())
+		return fail(error, Text::tr("Binding new geometry needs a skeleton. This model has no joints."));
+	if (options.newGeometryBinding == ModelNewGeometryBinding::Joint && modelJointIndex(candidate->skeleton, options.bindJoint, Qt::CaseSensitive) < 0)
+		return fail(error, Text::tr("The skeleton has no joint named %1 to bind the new geometry to.").arg(options.bindJoint));
+	if (options.bevelSegments < 1 || options.bevelSegments > 32 || !std::isfinite(options.bevelRoundness) ||
+		options.bevelRoundness < 0 || options.bevelRoundness > 1 ||
+		(edit.kind != ModelEditKind::BevelEdges && (options.bevelSegments != 1 || options.bevelRoundness != 1)))
+		return fail(error, Text::tr("Edge bevel needs 1–32 segments and roundness from zero to one; these settings apply only to edge bevels."));
 	if (options.referenceFrame < 0 || options.referenceFrame >= candidate->frames.size())
 		return fail(error, Text::tr("Choose an existing reference pose."));
 	if (!isModelMeshShapeEdit(edit.kind) && edit.kind != ModelEditKind::ShadeFlat && edit.kind != ModelEditKind::ShadeSmooth &&
@@ -1568,6 +1660,15 @@ bool applyModelMeshToolEdit(ModelMesh *candidate, const ModelEdit &edit, ModelSe
 		!finiteIn(options.ratio, 0, 1) || options.targetTriangles < 0 || !finiteIn(options.bevelWidth, 0, 1000000) ||
 		!finiteIn(options.solidifyThickness, -1000000, 1000000) || !finiteIn(options.uvTileSize, 0.001, 1000000))
 		return fail(error, Text::tr("A tool setting is outside its supported range."));
+	// These tools write complete skin influences themselves; marking the
+	// surface's edit provenance authored tells skin reconciliation to keep them.
+	const int edited = selection->surface;
+	const auto authored = [&](bool applied)
+	{
+		if (applied)
+			markModelSurfaceOriginsAuthored(&candidate->surfaces[edited]);
+		return applied;
+	};
 	switch (edit.kind)
 	{
 	case ModelEditKind::RotateEdges:
@@ -1604,12 +1705,23 @@ bool applyModelMeshToolEdit(ModelMesh *candidate, const ModelEdit &edit, ModelSe
 		return symmetrize(candidate, edit, selection, error, work);
 	case ModelEditKind::LoopCut:
 		return loopCut(candidate, edit, selection, error, work);
+	case ModelEditKind::SlideEdges:
+		return slideEdges(candidate, edit, selection, error, control);
 	case ModelEditKind::AddPrimitive:
-		return addPrimitive(candidate, edit, selection, error, work);
+		return materialiseModelVertexIdentities(&candidate->surfaces[selection->surface], error, control) &&
+			addPrimitive(candidate, edit, selection, error, work);
 	case ModelEditKind::Decimate:
 		return decimate(candidate, edit, selection, error, work);
 	case ModelEditKind::BevelVertices:
 		return bevelVertices(candidate, edit, selection, error, work);
+	case ModelEditKind::BevelEdges:
+		return authored(bevelEdges(candidate, edit, selection, error, control));
+	case ModelEditKind::Knife:
+		return authored(knifeFaces(candidate, edit, selection, error, control, report));
+	case ModelEditKind::Spin:
+		return authored(spinGeometry(candidate, edit, selection, error, control, report));
+	case ModelEditKind::Rip:
+		return authored(ripGeometry(candidate, edit, selection, error, control, report));
 	case ModelEditKind::Solidify:
 		return solidify(candidate, edit, selection, error, work);
 	case ModelEditKind::ProjectUvMapping:

@@ -16,6 +16,7 @@
 #include <QPainterPath>
 #include <QScopedValueRollback>
 #include <QScrollArea>
+#include <QScrollBar>
 #include <QSplitter>
 #include <QStackedWidget>
 #include <QToolButton>
@@ -1101,7 +1102,12 @@ SidebarPage::SidebarPage(const QString& pageId, const QString& iconName, const Q
 	m_scroll->setObjectName(QStringLiteral("sidebarPageScroll"));
 	m_scroll->setFrameShape(QFrame::NoFrame);
 	m_scroll->setWidgetResizable(true);
-	m_scroll->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+	// Responsive forms usually fit the pane. Retain a scroll fallback when a
+	// native control's minimum width exceeds an unusually narrow sidebar.
+	m_scroll->setHorizontalScrollBarPolicy(Qt::ScrollBarAsNeeded);
+	m_scroll->horizontalScrollBar()->setFocusPolicy(Qt::StrongFocus);
+	m_scroll->horizontalScrollBar()->setAccessibleName(tr("Scroll sidebar horizontally"));
+	m_scroll->horizontalScrollBar()->setAccessibleDescription(tr("Move across sidebar controls when the pane is too narrow."));
 	m_scroll->setWidget(m_content);
 	m_rootLayout->addWidget(m_scroll, 1);
 }

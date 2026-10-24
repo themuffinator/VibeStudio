@@ -140,7 +140,10 @@ permission.
 
 Detection looks in common Steam library folders, including extra libraries listed by Steam, and in
 common GOG folders. It recognises a game by its folder name, its program and its data files, such as
-`id1/pak0.pak` for Quake. Detection only reads; nothing is saved until you import a candidate.
+`id1/pak0.pak` for Quake. It looks for the program in the game folder and up to two folders below
+it, such as `bin/x64`; for a program kept deeper, add the installation with
+`install add <root> --install-executable <path>`. Detection only reads; nothing is saved until you
+import a candidate.
 
 ### Add an installation by hand
 

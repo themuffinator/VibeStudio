@@ -220,6 +220,7 @@ bool insetFaces(ModelMesh *mesh, const ModelEdit &edit, ModelSelection *selectio
 	}
 	// Create inner copies.
 	QHash<QPair<int, int>, int> inner;
+	QHash<int, QHash<int, int>> innerIdentities;
 	QSet<int> touched;
 	auto keys = corners.keys();
 	std::sort(keys.begin(), keys.end());
@@ -229,6 +230,7 @@ bool insetFaces(ModelMesh *mesh, const ModelEdit &edit, ModelSelection *selectio
 			return false;
 		const int vertex = corners.value(key).vertex;
 		const int copy = appendCopy(&surface, vertex);
+		detachModelVertexIdentity(&surface, copy, &innerIdentities[individual ? corners.value(key).face : -1]);
 		const auto perFrame = offsets.value(key);
 		for (int frame = 0; frame < surface.frames.size(); ++frame)
 			surface.frames[frame].positions[copy] = vec(position(surface, frame, vertex) + perFrame[frame]);
@@ -255,6 +257,9 @@ bool insetFaces(ModelMesh *mesh, const ModelEdit &edit, ModelSelection *selectio
 			for (int v : std::as_const(interior))
 				surface.frames[frame].positions[v] = vec(position(surface, frame, v) + lift);
 		}
+		// Skinned interior vertices are rebound where they rose.
+		for (int v : std::as_const(interior))
+			markModelVertexOriginRepose(&surface, v);
 		touched += interior;
 	}
 	// Region faces use the inner copies; rims join each border to its copy.
@@ -714,6 +719,9 @@ bool shadeFaces(ModelMesh *mesh, const ModelEdit &edit, ModelSelection *selectio
 				for (int v : {t.a, t.b, t.c})
 					surface.frames[frame].normals[v] = vec(n);
 			}
+			// Skinned corners rebind the new normals and pose them from the skeleton.
+			for (int v : {t.a, t.b, t.c})
+				markModelVertexOriginNormals(&surface, v);
 		}
 		pruneSeams(&surface);
 		return work.check();
@@ -803,6 +811,9 @@ bool shadeFaces(ModelMesh *mesh, const ModelEdit &edit, ModelSelection *selectio
 					surface.frames[frame].normals[v] = vec(unit(sum));
 			}
 		}
+		for (auto it = selectedCorners.cbegin(); it != selectedCorners.cend(); ++it)
+			for (int v : it.value())
+				markModelVertexOriginNormals(&surface, v);
 		return work.check();
 	}
 	// Auto Smooth: corners smooth across edges flatter than the angle and stay
@@ -911,6 +922,7 @@ bool shadeFaces(ModelMesh *mesh, const ModelEdit &edit, ModelSelection *selectio
 				if (length(sum) > 1e-12)
 					surface.frames[frame].normals[index] = vec(unit(sum));
 			}
+			markModelVertexOriginNormals(&surface, index);
 		}
 	}
 	pruneSeams(&surface);
@@ -983,11 +995,13 @@ bool solidify(ModelMesh *mesh, const ModelEdit &edit, ModelSelection *selection,
 		offsets.insert(v, perFrame);
 	}
 	QHash<int, int> back;
+	QHash<int, int> backIdentities;
 	for (int v : sortedValues(vertices))
 	{
 		if (!work.step())
 			return false;
 		const int copy = appendCopy(&surface, v);
+		detachModelVertexIdentity(&surface, copy, &backIdentities);
 		for (int frame = 0; frame < surface.frames.size(); ++frame)
 		{
 			auto &pose = surface.frames[frame];
@@ -1023,6 +1037,8 @@ bool solidify(ModelMesh *mesh, const ModelEdit &edit, ModelSelection *selection,
 			for (int v : {topFrom, topTo, backFrom, backTo})
 				surface.frames[frame].normals[v] = vec(n);
 		}
+		for (int v : {topFrom, topTo, backFrom, backTo})
+			markModelVertexOriginNormals(&surface, v);
 	}
 	selection->faces = result;
 	selection->vertices.clear();

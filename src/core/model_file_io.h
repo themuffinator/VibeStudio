@@ -20,6 +20,9 @@ struct ModelWriteTarget
 bool modelPathsReferToSameFile(const QString &first, const QString &second);
 bool readModelFile(const QString &path, QByteArray *bytes, QString *error = nullptr, const ModelWorkControl &control = {});
 ModelWriteTarget inspectModelWriteTarget(const QString &path, const ModelWorkControl &control = {});
+// Recheck a review without creating files or reserving the destination. The
+// writer repeats this check during publication; a dry run cannot reserve it.
+bool validateModelWriteTarget(const ModelWriteTarget &target, QString *error = nullptr, const ModelWorkControl &control = {});
 // The reviewed identity is rechecked before publication. New destinations use
 // an atomic no-replace rename; existing destinations use QSaveFile, a writer
 // lock, and a final content/path check. A noncooperating writer can still race

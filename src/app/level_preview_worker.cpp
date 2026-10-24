@@ -70,7 +70,13 @@ struct LevelPreviewWorker::Work {
 };
 LevelPreviewWorker::LevelPreviewWorker(QObject *parent) : QObject(parent)
 {
+	// Precise, as the camera's own fly and drive timers are: a coarse timer on
+	// Windows is a low-priority WM_TIMER that only arrives once the message
+	// queue is empty, so while paints outlast their update requests (a slow
+	// camera, a busy machine) the debounce never fired and the camera waited
+	// for its rebuild indefinitely.
 	m_timer = new QTimer(this);
+	m_timer->setTimerType(Qt::PreciseTimer);
 	m_timer->setInterval(100);
 	connect(m_timer, &QTimer::timeout, this, [this] {
 		if (m_work && m_work->serial == m_serial && progress) {
@@ -78,6 +84,7 @@ LevelPreviewWorker::LevelPreviewWorker(QObject *parent) : QObject(parent)
 		}
 	});
 	m_debounce = new QTimer(this);
+	m_debounce->setTimerType(Qt::PreciseTimer);
 	m_debounce->setSingleShot(true);
 	m_debounce->setInterval(60);
 	connect(m_debounce, &QTimer::timeout, this, &LevelPreviewWorker::startPending);

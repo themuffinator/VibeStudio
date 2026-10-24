@@ -299,7 +299,10 @@ LevelMapSaveReport writeLevelDocument(const LevelMapDocument& document, const Le
 	if (cancelled(request.isCancelled, &error)) {
 		return stop(error);
 	}
-	const auto serialized = serializeLevelMap(document);
+	if (document.format != LevelMapFormat::DoomWad) {
+		report.sceneStorage = request.sceneStorage.value_or(document.sceneStorage);
+	}
+	const auto serialized = serializeLevelMap(document, report.sceneStorage);
 	report.warnings = serialized.warnings;
 	report.staleLumps = serialized.staleLumps;
 	if (!serialized.succeeded()) {
@@ -394,6 +397,7 @@ void adoptLevelDocumentSave(LevelMapDocument* document, const LevelMapSaveReport
 	document->sourcePath = report.outputPath;
 	document->outputPath = report.outputPath;
 	document->sourceContentHash = report.contentHash;
+	document->sceneStorage = report.sceneStorage;
 	if (document->format != LevelMapFormat::DoomWad) {
 		document->mapName = QFileInfo(report.outputPath).fileName();
 	}

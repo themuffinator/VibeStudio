@@ -1222,6 +1222,17 @@ flags a deprecation inside Qt 6.10.1's own `qguiapplication.h` and
 `qapplication.h`, which `build_release.py`'s warnings-as-errors build cannot
 pass. The image carries the 2022 toolset alongside, and Qt's `msvc2022_64` kit
 targets it.
+The top-level `meson.build` gives cl `/bigobj`, because `application_shell.cpp`
+exceeds COFF's default section count, and `/external:anglebrackets
+/external:W0`, because Meson passes `is_system` include directories to cl as
+plain `/I` and warnings inside bundled headers such as `dr_flac.h` otherwise
+fail the warnings-as-errors build. clang-cl needs neither. On Apple silicon,
+Apple clang 21 (Xcode 26) declares `__yield` only in `<arm_acle.h>`, which Qt
+6.10.1's `qyieldcpu.h` calls without including, so every Qt include failed;
+configure checks whether Qt's headers compile and, only if they do not, adds
+`-include arm_acle.h` to C++ compiles. The Linux PR job removes unused
+preinstalled SDKs before building, since its debug-information build otherwise
+fills the runner's disk while linking the tests.
 These tools do not bundle external compiler executables or sign artifacts.
 
 **Release pipeline (2026-10-07).** `VERSION` (Semantic Versioning 2.0) and

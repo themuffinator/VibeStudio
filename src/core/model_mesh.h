@@ -35,6 +35,7 @@
 #include <QVector>
 
 #include <functional>
+#include <array>
 
 namespace vibestudio {
 
@@ -119,8 +120,9 @@ struct ModelJointInfluence {
 	float weight = 0.0f;
 	// The vertex position in the joint's bind space.
 	ModelVec3 offset;
-	// The vertex normal in the joint's bind space; zero when the format stores
-	// none, in which case baked normals are rebuilt from the faces.
+	// The normal direction in joint bind space. Its length can retain inverse
+	// bind scale: skinning blends transformed vectors and normalizes the sum.
+	// Zero means no stored normal, so baked normals are rebuilt from faces.
 	ModelVec3 normalOffset;
 };
 
@@ -143,6 +145,24 @@ struct ModelSkeletalTag {
 	ModelJointMatrix offset;
 };
 
+// Step holds the left value between keys; StepNext holds the right value.
+// Exact key times always return that key's own value, so reversing a step is lossless.
+enum class ModelCurveInterpolation { Step, Linear, Cubic, StepNext };
+enum class ModelCurveTangent { Auto, Clamped, Free, Flat };
+struct ModelPoseCurveKey {
+	int frame = 0;
+	double value = 0, inSlope = 0, outSlope = 0;
+	ModelCurveInterpolation interpolation = ModelCurveInterpolation::Linear;
+	ModelCurveTangent tangent = ModelCurveTangent::Clamped;
+	bool operator==(const ModelPoseCurveKey &) const = default;
+};
+struct ModelPoseCurves {
+	QString joint;
+	// Parent-local tx/ty/tz, rx/ry/rz (degrees, X then Y then Z), sx/sy/sz.
+	// All nine channels are present. Samples outside the key range hold endpoints.
+	std::array<QVector<ModelPoseCurveKey>, 9> channels;
+	bool operator==(const ModelPoseCurves &) const = default;
+};
 struct ModelSkeletalClip {
 	QString name;
 	// The file the clip came from when it is not the mesh file (an md5anim,
@@ -156,6 +176,8 @@ struct ModelSkeletalClip {
 	// Optional per-frame bounds from the file, parallel to `frames`.
 	QVector<ModelVec3> frameMins;
 	QVector<ModelVec3> frameMaxs;
+	// Editable source curves; native exporters consume the validated dense frames.
+	QVector<ModelPoseCurves> curves{};
 };
 
 struct ModelSkeleton {
@@ -192,6 +214,35 @@ struct ModelFrameGeometry {
 	QVector<ModelVec3> normals;
 };
 
+// Transient edit provenance (see core/model_vertex_origins.h): which vertices
+// of the model before an edit each vertex came from, with their blend weights.
+// Only an edit in progress on a skeletal model fills it; applyModelEdit
+// consumes and clears it, so documents, history, recovery and files never
+// carry it.
+struct ModelVertexOrigin {
+	// A surface and vertex of the model before the edit.
+	int surface = -1;
+	int vertex = -1;
+	double weight = 1.0;
+	// Mirrored through these model planes: 1 X, 2 Y, 4 Z.
+	quint8 mirror = 0;
+	bool operator==(const ModelVertexOrigin&) const = default;
+};
+// Parallel to a surface's vertices: vertex v came from sources[first[v]] ..
+// sources[first[v] + count[v] - 1]. No sources marks new geometry.
+struct ModelSurfaceOrigins {
+	bool tracked = false;
+	// Set by edge bevel, knife, spin and rip, which write the surface's
+	// complete influences themselves; the vectors below are then empty.
+	bool authored = false;
+	QVector<int> first;
+	QVector<int> count;
+	QVector<ModelVertexOrigin> sources;
+	// ModelVertexOriginFlag bits per vertex.
+	QVector<quint8> flags;
+	[[nodiscard]] bool isEmpty() const { return !tracked; }
+};
+
 struct ModelSurface {
 	int index = -1;
 	QString name;
@@ -208,6 +259,14 @@ struct ModelSurface {
 	QSet<QPair<int, int>> uvSeams{};
 	// Joint influences for skeletal models, parallel to the vertices.
 	ModelSurfaceSkinning skinning{};
+	// Optional authoring connectivity, parallel to indexed vertices. Equal
+	// identities may connect only when every pose position also matches.
+	// UV/normal copies retain identity; detached geometry receives a new one.
+	// Empty preserves legacy position-inferred adjacency. Labels are local
+	// to this surface and are stored in editable mesh version 11.
+	QVector<int> topologyVertices{};
+	// Transient: filled only while applyModelEdit reconciles a skeletal model.
+	ModelSurfaceOrigins editOrigins{};
 };
 
 struct ModelFrameInfo {
@@ -293,6 +352,38 @@ struct ModelMdlSettings {
 	QVector<ModelMdlFrameGroup> frameGroups{};
 };
 
+// A detail level the editable source owns (core/model_lod.h). Quake III loads
+// name_1.md3, name_2.md3 and so on beside name.md3; a generated level reduces
+// the level above it, and a hand-made level is another model file.
+struct ModelLodRecipeLevel {
+	// 1 for name_1.md3, up to the detail levels the delivery target loads.
+	int level = 1;
+	// Generated: keep `ratio` (0.05-0.95) of the previous level's triangles,
+	// or reduce the whole model to `targetTriangles` when that is set.
+	bool generated = true;
+	double ratio = 0.5;
+	int targetTriangles = 0;
+	bool preserveBoundary = true;
+	// Hand-made: the level's model (an editable source or a native model),
+	// absolute or relative to the base source's folder.
+	QString source{};
+	bool operator==(const ModelLodRecipeLevel&) const = default;
+};
+
+// A named skin the editable source owns (core/model_skin_variants.h), such as
+// red or blue: the material of each surface it binds, by surface name. Every
+// other surface keeps its primary material (skin slot 0).
+struct ModelSkinVariantBinding {
+	QString surface;
+	QString material;
+	bool operator==(const ModelSkinVariantBinding&) const = default;
+};
+struct ModelSkinVariant {
+	QString name;
+	QVector<ModelSkinVariantBinding> bindings{};
+	bool operator==(const ModelSkinVariant&) const = default;
+};
+
 struct ModelMesh {
 	QString sourcePath;
 	ModelMeshFormat format = ModelMeshFormat::Unknown;
@@ -328,6 +419,12 @@ struct ModelMesh {
 	// Companion files the decode read besides the model itself (md5anim, MDX,
 	// GLA, Half-Life texture or sequence files), in the order read.
 	QStringList companionPaths{};
+	// The detail levels an editable source owns, in level order; empty when
+	// it records none (decoded game models never carry a recipe).
+	QVector<ModelLodRecipeLevel> detailLevels{};
+	// Named skins an editable source owns, in the order the artist made them;
+	// empty for decoded game models.
+	QVector<ModelSkinVariant> skinVariants{};
 
 	[[nodiscard]] bool isValid() const;
 	// Bounds across every frame, used to frame the model in a viewport.
@@ -424,6 +521,12 @@ QImage resolveModelSkin(const PackageArchiveReader& archive, const ModelMesh& me
 
 QStringList modelMeshSummaryLines(const ModelMesh& mesh);
 QString modelMeshSummaryText(const ModelMesh& mesh);
+
+// The clips the MDL, MD2 and MD3 readers infer from frame names: consecutive
+// frames sharing a name stem with a trailing number ("stand1", "stand2"), with
+// no frame rate. Exporters compare a model's clips with these to tell whether
+// its clip names and ranges come back from a file that has no clip table.
+[[nodiscard]] QVector<ModelAnimation> modelAnimationsFromFrameNames(const QVector<ModelFrameInfo>& frames);
 
 // Wavefront OBJ export of one frame, so a model can leave the studio for an
 // external modeller. Returns an empty string when the frame has no geometry.

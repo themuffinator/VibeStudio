@@ -4,6 +4,7 @@
 
 #include <QCoreApplication>
 #include <QElapsedTimer>
+#include <QHash>
 #include <QMap>
 #include <QPair>
 #include <QSet>
@@ -203,8 +204,16 @@ bool runControlsSmoke()
 	ok &= expect(standard.layout == LevelViewLayout::Single2D && !standard.camera.perspective && standard.plan.emptyDrag == PlanEmptyDrag::BoxSelect
 			&& standard.plan.panButtons == QVector<Qt::MouseButton> {Qt::MiddleButton} && standard.defaultGridUnits == 64,
 		"Expected the VibeStudio plan and camera defaults to remain familiar.");
-	ok &= expect(standard.keys.size() == 1 && standard.keys.first().commandId == QStringLiteral("map.maximizeView")
-		&& standard.keys.first().keys == QStringList{QStringLiteral("Ctrl+Space")}, "The default profile exposes its viewport-local maximize shortcut.");
+	// Besides Ctrl+Space, the default profile names only its plan-view nudge
+	// arrows (core/level_nudge.h).
+	const QHash<QString, QStringList> standardKeys {{QStringLiteral("map.maximizeView"), {QStringLiteral("Ctrl+Space")}},
+		{QStringLiteral("map.nudgeLeft"), {QStringLiteral("Left")}}, {QStringLiteral("map.nudgeRight"), {QStringLiteral("Right")}},
+		{QStringLiteral("map.nudgeForward"), {QStringLiteral("Up")}}, {QStringLiteral("map.nudgeBack"), {QStringLiteral("Down")}}};
+	bool standardKeysMatch = standard.keys.size() == standardKeys.size();
+	for (const auto& binding : standard.keys) {
+		standardKeysMatch = standardKeysMatch && standardKeys.value(binding.commandId) == binding.keys;
+	}
+	ok &= expect(standardKeysMatch, "The default profile exposes its viewport-local maximize shortcut and its nudge arrows.");
 	ok &= expect(levelEditorControlsForProfile(QStringLiteral("quark")).layout == LevelViewLayout::FourViews,
 		"Expected QuArK's controls to be routed to real views.");
 
@@ -275,8 +284,11 @@ bool runControlsSmoke()
 			&& editorProfileBindingKeys(binding) == QStringList {QStringLiteral("Space")},
 		"Expected TrenchBroom's Space to cycle the map view.");
 	ok &= expect(editorProfileBindingForAction(radiantProfile, QStringLiteral("map.duplicateSelection"), &binding) && binding.implemented
-			&& editorProfileBindingKeys(binding) == QStringList {QStringLiteral("Space"), QStringLiteral("Shift+Space")},
+			&& editorProfileBindingKeys(binding) == QStringList {QStringLiteral("Space")},
 		"Expected Radiant's Space to clone the selection.");
+	ok &= expect(editorProfileBindingForAction(radiantProfile, QStringLiteral("map.duplicateUnique"), &binding) && binding.implemented
+			&& editorProfileBindingKeys(binding) == QStringList {QStringLiteral("Shift+Space")},
+		"Expected NRC Shift+Space to make a unique clone.");
 	ok &= expect(editorProfileBindingForAction(radiantProfile, QStringLiteral("map.grid16"), &binding) && binding.implemented
 			&& editorProfileBindingKeys(binding) == QStringList {QStringLiteral("5")},
 		"Expected Radiant's digits to set the grid, 5 for 16 units.");

@@ -1,8 +1,11 @@
 #include "core/model_topology.h"
+#include "core/model_vertex_identity.h"
+#include "core/model_vertex_origins.h"
 
 #include <QCoreApplication>
 #include <QMap>
 
+#include <algorithm>
 #include <array>
 #include <bit>
 #include <cmath>
@@ -158,6 +161,7 @@ bool weldModelSurface(ModelSurface *surface, const QSet<int> &vertices, double d
 											 "Welding requires at least two vertices and a distance of zero or 0.000001–1,000,000 units."));
 	}
 	auto chosen = vertices.values().toVector();
+	if (!validateModelVertexIdentities(*surface, error, control)) return false;
 	std::sort(chosen.begin(), chosen.end());
 	if (chosen.first() < 0 || chosen.last() >= surface->vertexCount)
 	{
@@ -167,7 +171,7 @@ bool weldModelSurface(ModelSurface *surface, const QSet<int> &vertices, double d
 	std::iota(mapping.begin(), mapping.end(), 0);
 	std::map<Cell, QVector<int>> cells;
 	qint64 comparisons = 0;
-	bool exhausted = false;
+	bool exhausted = false, weightsDiffer = false;
 	const auto compatible = [&](int a, int b)
 	{
 		if (++comparisons > 4194304 || !work.step())
@@ -193,6 +197,12 @@ bool weldModelSurface(ModelSurface *surface, const QSet<int> &vertices, double d
 			{
 				return false;
 			}
+		}
+		// Different skin weights are a seam too: welding would have to average them.
+		if (preserveSeams && !sameModelSkinWeights(*surface, a, b))
+		{
+			weightsDiffer = true;
+			return false;
 		}
 		return true;
 	};
@@ -254,6 +264,12 @@ bool weldModelSurface(ModelSurface *surface, const QSet<int> &vertices, double d
 	}
 	if (!merged)
 	{
+		if (weightsDiffer)
+		{
+			return fail(error, QT_TRANSLATE_NOOP("VibeStudioModelDocument",
+												 "The vertices within this distance have different skin weights. Turn off Preserve Seams (--merge-seams on the command line) to "
+												 "weld them with averaged weights, or paint matching weights first."));
+		}
 		return fail(error,
 					QT_TRANSLATE_NOOP("VibeStudioModelDocument",
 									  "No vertices can weld within this distance in every frame while respecting the seam setting."));
@@ -334,6 +350,48 @@ bool weldModelSurface(ModelSurface *surface, const QSet<int> &vertices, double d
 	{
 		return false;
 	}
+	auto identities = surface->topologyVertices;
+	if (!identities.isEmpty())
+	{
+		// Welding is an explicit connectivity change. Unify the identities of
+		// accepted pairs, including their retained UV/normal corner copies.
+		QVector<int> roots(surface->vertexCount);
+		std::iota(roots.begin(), roots.end(), 0);
+		const auto root = [&](int v)
+		{
+			while (roots[v] != v) { roots[v] = roots[roots[v]]; v = roots[v]; }
+			return v;
+		};
+		for (int v : chosen)
+		{
+			if (!work.step()) return false;
+			const int a = root(identities[v]), b = root(identities[mapping[v]]);
+			if (a != b) roots[std::max(a, b)] = std::min(a, b);
+		}
+		for (int &identity : identities)
+		{
+			if (!work.step()) return false;
+			identity = root(identity);
+		}
+	}
+	if (!work.check()) return false;
+	// A skinned anchor that absorbs vertices with other weights takes their
+	// equal blend; anchors whose welded vertices share its weights keep their own.
+	QMap<int, QVector<int>> welded;
+	for (int vertex : chosen)
+		if (mapping[vertex] != vertex)
+			welded[mapping[vertex]].append(vertex);
+	for (auto it = welded.cbegin(); it != welded.cend(); ++it)
+	{
+		if (!work.step()) return false;
+		if (std::all_of(it.value().cbegin(), it.value().cend(), [&](int vertex) { return sameModelSkinWeights(*surface, it.key(), vertex); }))
+			continue;
+		QVector<QPair<int, double>> parts{{it.key(), 1.0 / (it.value().size() + 1)}};
+		for (int vertex : it.value())
+			parts.append({vertex, 1.0 / (it.value().size() + 1)});
+		mergeModelVertexOrigins(surface, parts, {it.key()});
+	}
+	surface->topologyVertices = std::move(identities);
 	surface->triangles = std::move(triangles);
 	surface->uvSeams = std::move(seams);
 	*vertexMap = std::move(mapping);

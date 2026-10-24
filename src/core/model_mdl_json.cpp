@@ -49,7 +49,7 @@ QJsonArray timesJson(const QVector<float> &times)
 	QJsonArray result;
 	for (float time : times)
 	{
-		result << time;
+		result << modelSourceNumber(time);
 	}
 	return result;
 }
@@ -84,10 +84,10 @@ QJsonObject modelMdlSettingsJson(const ModelMdlSettings &settings)
 	return {{QStringLiteral("skinSize"), QJsonArray{settings.skinSize.width(), settings.skinSize.height()}},
 			{QStringLiteral("palette"), QString::fromLatin1(settings.palette.toBase64())},
 			{QStringLiteral("paletteGenerated"), settings.paletteGenerated},
-			{QStringLiteral("eyePosition"), QJsonArray{settings.eyePosition.x, settings.eyePosition.y, settings.eyePosition.z}},
+			{QStringLiteral("eyePosition"), QJsonArray{modelSourceNumber(settings.eyePosition.x), modelSourceNumber(settings.eyePosition.y), modelSourceNumber(settings.eyePosition.z)}},
 			{QStringLiteral("flags"), double(settings.flags)},
 			{QStringLiteral("syncType"), settings.syncType},
-			{QStringLiteral("size"), settings.size},
+			{QStringLiteral("size"), modelSourceNumber(settings.size)},
 			{QStringLiteral("frameGroups"), groups}};
 }
 

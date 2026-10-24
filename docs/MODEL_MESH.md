@@ -454,8 +454,9 @@ neighbours without moving UVs, poses, or normals. Clearing marks does not weld
 already split indices. These operations share document undo, source saves, and
 recovery. Splits, subdivision, duplication, deletion, and welding remap marks.
 
-Middle-drag pans the UV view, the wheel zooms around the pointer, **F** frames
-the selection, and **Home** frames all UVs. Toolbar actions provide both framing
+Middle-drag or the arrow keys pan the UV view (Shift+arrows in 4 px steps),
+the wheel zooms around the pointer and + and - zoom about the centre, **F**
+frames the selection, and **Home** frames all UVs. Toolbar actions provide both framing
 commands. The texture repeats beyond the unit tile and retains its aspect ratio.
 Drag the centre square with **Move** enabled to preview a UV offset; release
 validates one undo step. Escape, focus loss, resize, and selection/source changes
@@ -574,9 +575,11 @@ Material Slots** reviews additions, replacement, removal, reordering and clearin
 as one undoable all-pose edit. See [Material Slots](MODEL_MATERIAL_SLOTS.md) for
 limits, embedded MDL handling, export semantics and the matching `model slots` CLI.
 
-Material images load on a separate worker with progress, Cancel, Reload Images,
-and per-surface Details. A newer source or material binding retires older work;
-Cancel stays cancelled until Reload Images or a binding change. The shared level
+Material images load on a separate worker. Their state sits in the Mesh
+Editor's status strip in Material shading: a progress bar and Cancel while they
+load, and an **Images** menu with Reload Images and per-surface Details. A
+newer source or material binding retires older work; Cancel stays cancelled
+until Reload Images or a binding change. The shared level
 resolver follows Quake III `qer_editorimage`, then the first usable shader-stage
 image. These are static images; shader lighting, blending, animation, deformation,
 and texture-coordinate effects are not simulated. Unsafe paths, duplicate names,
@@ -610,7 +613,12 @@ retain a rate in the editable source in one undo step; zero means unspecified.
 Add Clip also uses that field. FPS edits do not resample geometry or change
 native MDL group timing. Native game animation timing needs separate configuration.
 Reduced motion
-disables automatic playback while retaining explicit frame selection. Clip editing,
+disables automatic playback while retaining explicit frame selection: the
+timeline's **Play / Pause** is disabled, with a tooltip that says why and that
+Page Up and Page Down still step frames. The **Play or Pause** command keeps
+its key and command search entry, and like Space in a view it answers with the
+same reason in the status strip and to the screen reader. Every preview in the
+modeller's dialogs starts still. Clip editing,
 Copy Full Pose and insertion are disabled during playback.
 
 **Smooth preview** starts enabled in the mesh editor and is also session-only.
@@ -739,27 +747,96 @@ in a file comment. Smooth preview blends attachment poses as described above.
 The [assembly editor](MODEL_ASSEMBLY.md) consumes these named tags. Original-engine
 acceptance and the remaining assembly release work stay on the release gate.
 
-Undo/redo restores mesh data and component selection. History retains at most
-100 edits and trims older states once estimated geometry, topology indexes and selection storage exceeds 64 MiB, keeping
-one preceding state even when that single state exceeds the target. The count
-includes positions, normals, triangles, UVs, seam marks, frame/clip metadata and names,
-tag poses/names, collision boxes/names, embedded image bytes, and a per-entry
-selection estimate plus cached edge/incidence and complete-selection storage; it is not
-a measurement of the process's total memory. Returning to the saved state clears
+Undo/redo restores mesh data and component selection. History keeps at most
+100 steps and at most the **Undo history limit** of memory: 64 MiB unless the
+Mesh Editor's setting changes it (`model/historyBudgetMiB`, 16–4,096 MiB). The
+limit applies to each open document, including the copies tool dialogs such as
+weight painting keep while they stage work. When an edit fills history, the
+oldest undo steps go first, and history always keeps the step before the current
+one, even when that step alone is over the limit. Redo steps are newer work than
+any undo step, so history never discards them: **Undo** and **Redo** only move
+through history. History memory excludes the current model, so stepping back from
+large steps to a small earlier state can pass the limit by up to one step's size;
+the next edit replaces the redo steps and trims again. Lowering **Undo history
+limit** applies when the value is committed (Enter, leaving the field or a step
+button), discards the oldest undo steps at once and says so; typing a larger
+value never trims on the way.
+
+History memory is measured rather than estimated per state
+(`core/model_document_memory.h`). Undo states share every array an edit did not
+change, through Qt's implicit sharing, so the accounting counts each heap block
+once, keyed by its address, however many states hold it, and charges history
+only for blocks the current state does not share. A step therefore costs what it
+changed: moving vertices in one frame of the 16-frame maximum grid holds that
+frame's positions and normals, about 1.7 MiB with their spare capacity, so a
+64 MiB limit keeps about 39 such steps where the earlier per-state estimate of
+the whole model kept one. A skeletal weight edit that re-bakes every baked frame
+holds those frames and the replaced influences. A pose edit on a clip outside the
+working set holds only that clip's changed joint matrices. The count covers
+positions, normals, triangles, UVs, seams, topology identities, frame and clip
+metadata, tags, collision, embedded skins, MDL data, the skeleton (joints, every
+clip's joint matrices, bounds and curves), skinning influences, selections and
+cached topology indexes, plus each step's own record. It is the memory history
+holds beyond the current model, not the process's total. The Mesh Editor shows
+the source size, the steps kept and the memory they hold in its recovery row
+(the full account is the summary's tooltip and accessible description) and in
+the **Undo** and **Redo** tooltips, and says once per document when history
+discarded steps, including after **Adjust Last Operation** and a working-set
+change. The Animation Curves dialog keeps its 256 newest drafts and
+still compares them with the stored curve. Returning to the saved state clears
 the modified marker.
 
 Internal revision fingerprints stream ordered geometry into SHA-256 with an
-8 KiB buffer and retain source metadata identity. This avoids building a full
-JSON geometry tree merely to detect changes. Source saves, recovery payloads and
-external-change checks continue to use their existing serialized formats and
-file checksums; internal revisions are not interchangeable with file hashes.
+8 KiB buffer and hash the rest of the source in its packed form, so skeletal
+clips and influences cost a few strings rather than millions of JSON numbers.
+The same pass gives the exact size of the packed source. When that passes the
+source limit, the exact readable size is measured too, from the packed size and
+the bulk arrays' numbers, without writing the readable source. This avoids building a full JSON geometry tree merely to detect
+changes. Source saves, recovery payloads and external-change checks use the
+serialised source and file checksums; internal revisions are not
+interchangeable with file hashes.
 
 ## Sources, Import, And Export
 
 Save writes an atomic `.mesh.json` authoring document. It stores every surface's
 triangles, UVs, positions and normals for every frame, material references,
 frame names and origins, animation ranges, and attachment tags. Schema identifier
-is `vibestudio.mesh`. Sources with a skeleton use version `8`, which adds a
+is `vibestudio.mesh`. Numbers are written as the shortest decimal that reads back
+as the same float, for example `-8.864461` where earlier versions wrote the
+`-8.864460945129395` of the widened double; both forms load the same float, and
+readable sources are about half their earlier size. Negative zero is written as
+zero, as JSON numbers are.
+
+A source whose readable arrays would pass the 64 MiB limit is written as version
+`12`, which declares `"packedArrays": "base64-le32"` and stores its bulk arrays as
+one base64 string of little-endian 32-bit values each: every surface's
+`triangles`, `uvs`, `uvSeams` and `topologyVertices`, every frame's `positions`
+and `normals`, every skeletal clip's `frames` (all of its joint matrices, frame
+after frame, twelve floats each), `mins` and `maxs`, and every skinned surface's
+`count` and `influences` (the joint index, then the weight, offset and normal
+offset as seven floats). Names, joints, tags, curves, collision, skins and
+settings stay readable JSON. A version 12 reader accepts either form for each of
+these fields; strings in earlier versions, partial items, invalid base64 and
+non-finite floats are refused. Packed arrays also store negative zero as zero,
+so a source loads the same model whichever form it was written in. A document
+that fits keeps its readable form and version below, so ordinary sources stay
+easy to compare. Persistent connectivity uses version `11`. A surface may
+store `topologyVertices`, one integer per indexed vertex in the range
+`0..vertexCount-1`. Equal identities connect only when positions match in
+every stored pose. UV and normal copies share an identity; detached regions
+and duplicated geometry retain separate identities at coincident positions.
+Labels are surface-local; their numeric values have no user-facing meaning.
+Absent identities retain legacy position-inferred adjacency. A present array
+must be complete and is rejected in versions before 11. Skeleton, curve, MDL,
+animation and collision data remain optional according to the source content.
+Game-format derivatives generally cannot retain this authoring metadata;
+keep the `.mesh.json` source to preserve intentional separation on reopening.
+
+Without explicit connectivity, sources with editable skeletal curves use
+version `9` (or `10` for hold-next keys),
+which stores nine parent-local channels per joint alongside dense clip samples.
+See [animation curves](MODEL_ANIMATION_CURVES.md) for validation and explicit
+baking. Sources with a skeleton but no curves use version `8`, which adds a
 `skeleton` object: joints with their bind matrices, per-surface skinning, clips
 of model-space joint matrices and skeletal tags (see
 [skeletons](MODEL_FORMATS.md#skeletons)). Animated collision tracks use version `7`. Otherwise,
@@ -771,7 +848,7 @@ Native MDL metadata uses version `4`; sources with collision use version `5`,
 with optional retained MDL metadata. See [Collision Authoring](MODEL_COLLISION.md).
 Each surface includes `uvSeams`, an array of
 unique existing indexed edge pairs in ascending endpoint order. New saves use
-model-level `md2SkinSize: [width, height]` in versions 3–7. Versions 1 and 2
+model-level `md2SkinSize: [width, height]` in versions 3–12. Versions 1 and 2
 remain readable, defaulting to 256 by 256 pixels; version 1 has no seam marks. Older studio
 versions may not read the new schema. Geometry bounds and counts are derived on load.
 The original game file is not adopted as the authoring save target. Saving back
@@ -801,7 +878,44 @@ parts of the view refresh still need a responsiveness audit at authoring limits.
 
 Sources are limited to 64 MiB, 32 surfaces, 65,536 vertices, 131,072 triangles,
 1,024 frames, 1,024 clips, and 1,048,576 total frame vertices. All frames share topology and
-UV indices. Imported UV seams are not welded implicitly. Native models with
+UV indices.
+
+The 64 MiB limit applies to the size a source can be saved in: the packed size,
+or the readable size when the packed form is over the limit and the readable
+one is smaller. Short decimals can beat base64 for whole-number geometry and
+near-identity joint matrices, so such a source is saved readable rather than
+refused. Every edit projects the size exactly, in the same pass as the revision
+fingerprint. The automatic encoding writes readable JSON while it fits, and
+tries the other form when the first passes the limit. An edit that would take a source over the limit is refused with its
+size and changes nothing, unless it makes a source that is already over the
+limit smaller, so a model opened over the limit can be reduced. Such a model
+opens with a notice and can be inspected and exported, but saving refuses with
+its size and recovery copies pause and say why. Saves, recovery copies,
+`model import`, `model edit`, collision outputs, import repairs and editable
+assembly bakes write sources through one serialiser, so the CLI and the editor
+write the same bytes. `model import` and `model edit` report `source` (`bytes`,
+`encoding`, `limitBytes`), and the skeletal writers (`model pose`, `model rig`,
+`model skinning`, `model ik`, `model curves`, `model curve-keys`,
+`model curve-transfer`, `model weight-paint`, `model weight-transfer` and
+`model skin`) report the same object as `outputSource`; the text adds
+a line when the source was packed, and so does the Mesh Editor's status line
+after a save. A recovery copy whose component selection would not fit
+beside a source near the limit keeps the model, the active surface and the named
+attachment, collision or joint selection, and leaves the vertex, face, edge and
+surface selection out.
+
+At the geometry limits, a realistic vertex-animated grid (fractional positions
+across ±4,096 units, unit normals at arbitrary angles, 1,048,576 frame vertices)
+saves in 34.7 MiB packed; its readable form would be 71.0 MiB, and 122.2 MiB with
+the 17-digit numbers of earlier versions, which could not be saved. A 64-joint
+skinned model with 40 clips of 45 frames in its skeleton, 745,472 baked frame
+vertices and curves on two clips saves in 33.7 MiB packed (67.2 MiB readable,
+117.7 MiB before). `model-source-budget-smoke` measures both, saves, reopens and
+recovers them bit-exactly, and covers the refusal. It also checks that the
+readable size follows exactly from the packed one for varied numbers, and that
+a 360,000-pose skeleton whose packed form passes the limit is measured, edited,
+saved and recovered in its readable form.
+ Imported UV seams are not welded implicitly. Native models with
 decoder errors or warnings cannot be imported as editable sources.
 Topology expansion checks vertex and frame-storage limits before appending
 poses; this also bounds temporary working geometry. A dense edit may need a
@@ -954,14 +1068,16 @@ validation, undo, recovery and cancellation.
 MDL sources use schema 4 for native settings and exact Base64 indexed arrays,
 schema 5 with static collision, schema 6 with saved clip FPS, or schema 7 with
 animated collision. Sources without these features remain schema 3;
-schemas 1–7 continue to open. Preview images
+schemas 1–9 continue to open. Preview images
 are derived from indices and the source palette. The palette itself is external
 to the exported MDL, so game colours depend on the target installation.
 
-Export MDL targets original Quake's renderers: one surface, 256 total poses,
-1,024 stored vertices, 2,048 triangles, 32 skin slots, no attachment tags, and
-15-character printable ASCII pose names. Skin width must be divisible by four,
-height at most 480, and each image at most 307,200 pixels. UVs must stay within
+Export MDL targets original Quake's renderers by default: one surface, 256
+total poses, 1,024 stored vertices, 2,048 triangles, 32 skin slots, no
+attachment tags, and 15-character printable ASCII pose names. Skin width must be
+divisible by four, height at most 480, and each image at most 307,200 pixels.
+QuakeSpasm, FTE and DarkPlaces allow more; choose them as the
+[delivery target](MODEL_TARGETS.md) to export to their limits. UVs must stay within
 0–1 and round to texel centres. Exact all-pose position/normal duplicates share
 storage; compatible half-width UV seams use the native seam bit and per-triangle
 front/back flag. Mixed seam directions are split deterministically. Packing
@@ -981,9 +1097,10 @@ changes the dimensions through undo/history and recovery. Imported MD2 dimension
 are retained; new meshes and older source schemas default to 256 by 256. These
 settings describe the matching PCX skin; changing them does not resize an image.
 
-The target is the original Quake II renderers: one surface, 512 frames, 2,048
-position/normal vertices, 4,096 triangles, 32 skin slots, and skins at most
-640 by 480 pixels. Skin paths must be safe package-relative PCX names of at most
+The default target is the original Quake II renderers: one surface, 512
+frames, 2,048 position/normal vertices, 4,096 triangles, 32 skin slots, and
+skins at most 640 by 480 pixels. The Q2PRO [delivery target](MODEL_TARGETS.md)
+allows 1,024 frames, 6,144 triangles and 6,144 drawn vertices. Skin paths must be safe package-relative PCX names of at most
 63 printable ASCII characters; frame names allow 15. Attachment tags, embedded
 images, and multi-surface output are refused. Exact position/normal duplicates
 across **every** pose can share XYZ indices while retaining separate UV indices.
@@ -1012,9 +1129,11 @@ files with no GL stream can still be edited; export creates a complete stream.
 Source-port-specific limits, optimized output strips, and preservation of differing
 GL-only geometry remain open.
 
-MD3 export includes all frames, materials, and tags. It targets original Quake
-III renderer limits of 1,000 vertices and 2,000 triangles per surface, rather
-than the looser nominal file-format limits. Model coordinates must quantize to
+MD3 export includes all frames, materials, and tags. It targets the Quake III
+renderer's working limits of 999 vertices and 1,999 triangles per surface
+(`RB_CheckOverflow` drops the game at 1,000 and 2,000, and ioquake3 refuses them
+at load), rather than the looser nominal file-format limits; see
+[delivery targets](MODEL_TARGETS.md). Model coordinates must quantize to
 1/64 units within -512 through 511.984375; triangles that collapse at that
 precision are rejected in every frame. Frame names must fit 15 printable ASCII
 characters and surface, material, and tag names 63. No fields are silently
@@ -1060,8 +1179,9 @@ MD2, MD3 and OBJ preserve resolved UV corners and split indices, but do not stor
 the marks or split geometry merely because an edge is marked. Move or detach
 selected faces/islands to create independent UV corners when needed by export.
 
-Stage in Package and Stage and Place share the primitive designer's package/map
-service. The package-path extension selects MD2 or MD3. Automatic placement
+**Stage in Package** and **Stage and Place** (in the **Model** menu and on the
+**Export** page, beside the package path and level origin they use) share the
+primitive designer's package/map service. The package-path extension selects MD2 or MD3. Automatic placement
 requires MD3 and adds an undoable Quake III `misc_model`; MD2 can be staged in a
 folder, PAK, ZIP or PK3, but requires game-specific placement/code integration. Package replacement remains explicit. Save the editable source,
 package plan, and map separately. Dependency review and compiler handoff follow
@@ -1074,7 +1194,9 @@ for it to finish. The editor then resolves unsaved changes and continues the
 studio close. Cancel in the unsaved prompt keeps both open and withdraws that
 close request. An in-progress move preview is cancelled before closing.
 
-Keep local recovery copies is enabled by default. Every five seconds the editor
+**Model > Keep Local Recovery Copies** is enabled by default; the status strip
+shows the recovery state, and when the preference is off it says so. Every
+five seconds the editor
 checks for unsaved changes and sends the latest mesh, selection, and frame to a
 background writer. Copies live in the application data folder's `model-recovery`
 directory, shown by Recover. An explicit settings file keeps them beside that
@@ -1188,7 +1310,18 @@ syntax; duplicates are rejected across both forms.
 Material assignment uses
 `--material path`; frame naming uses `--name`. Authoring write commands support JSON and
 dry-run. Existing outputs require `--overwrite`; source fingerprint checks
-still apply when editing a loaded source in place. `model build` accepts either
+still apply when editing a loaded source in place. Dry runs now use the complete
+document-save preparation: source contents/resolved path, destination rules,
+editable validation, serialisation and the 64 MiB byte limit. They recheck the
+destination after preparation without creating directories, staging files or
+locks, and do not change the document's path, saved fingerprint, dirty state or
+undo/redo history. Dry runs do not reserve a destination or test write permissions.
+Ordinary source saving remains supported; a different hard-link name for that
+source is refused. Protected import/export and auxiliary-input paths recognise
+hard links as well as canonical aliases. Save-preparation failures use the
+ordinary output-failure status (1 for mesh authoring and build commands);
+operation validation still uses 4. Collision keeps its existing failure status 4.
+`model build` accepts either
 source type, infers MD2/MD3/OBJ from the output extension (or `--format`), and uses
 `--frame N` for OBJ. Its JSON reports `authoringSeams` and
 `seamMarksExported: false`; text output explains source-only marks when present.

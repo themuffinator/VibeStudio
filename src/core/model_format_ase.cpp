@@ -43,6 +43,7 @@
 //   and (when the file has normals) a normal within Doom 3's r_slopNormal
 //   (0.02). Doom 3's position and UV "slop" merges are not applied.
 #include "core/model_ase.h"
+#include "core/model_document.h"
 #include "core/model_formats_p.h"
 
 #include <QCoreApplication>
@@ -1387,7 +1388,7 @@ bool finiteVec(const ModelVec3& v)
 
 } // namespace
 
-QByteArray exportModelAse(const ModelMesh& mesh, int frameIndex, QString* error, const ModelWorkControl& control)
+QByteArray exportModelAse(const ModelMesh& mesh, int frameIndex, QString* error, const ModelWorkControl& control, ModelExportReport* report)
 {
 	ModelWorkProgress work(control, ModelWorkPhase::Serializing, error);
 	if (!work.check()) { return {}; }
@@ -1407,9 +1408,11 @@ QByteArray exportModelAse(const ModelMesh& mesh, int frameIndex, QString* error,
 		return failWith(QCoreApplication::translate("VibeStudioModelMesh", "The model has no frame %1 to export.").arg(frameIndex));
 	}
 	QVector<const ModelSurface*> surfaces;
+	QStringList skipped;
 	for (const ModelSurface& surface : mesh.surfaces) {
 		if (surface.triangles.isEmpty() || surface.vertexCount <= 0 || frameIndex >= surface.frames.size()
 			|| surface.frames.at(frameIndex).positions.size() != surface.vertexCount || surface.texCoords.size() != surface.vertexCount) {
+			skipped << surface.name;
 			continue;
 		}
 		surfaces.append(&surface);
@@ -1423,6 +1426,7 @@ QByteArray exportModelAse(const ModelMesh& mesh, int frameIndex, QString* error,
 
 	QStringList nodeNames;
 	QStringList materialNames;
+	QStringList unnamed;
 	QSet<QString> usedNames;
 	for (int index = 0; index < surfaces.size(); ++index) {
 		const ModelSurface& surface = *surfaces.at(index);
@@ -1442,6 +1446,7 @@ QByteArray exportModelAse(const ModelMesh& mesh, int frameIndex, QString* error,
 		}
 		if (material.isEmpty()) {
 			material = unique;
+			unnamed << unique;
 		}
 		material.replace(QLatin1Char('\\'), QLatin1Char('/'));
 		materialNames.append(material);
@@ -1590,6 +1595,24 @@ QByteArray exportModelAse(const ModelMesh& mesh, int frameIndex, QString* error,
 		out += QStringLiteral("}") + newline;
 	}
 	if (!work.check()) { return {}; }
+	if (report) {
+		ModelExportReport result;
+		if (!skipped.isEmpty()) {
+			const QString note = QCoreApplication::translate("VibeStudioModelMesh",
+				"Surfaces not written because frame %1 holds no drawable faces or complete geometry for them (%n): %2.", nullptr,
+				int(skipped.size()))
+									 .arg(QString::number(frameIndex), skipped.join(QStringLiteral(", ")));
+			result.notes << note;
+			result.omissions << note;
+		}
+		if (!unnamed.isEmpty()) {
+			result.notes << QCoreApplication::translate("VibeStudioModelMesh",
+				"Surfaces without a material take their own name as the ASE material (%n): %1. Assign materials before shipping the model.",
+				nullptr, int(unnamed.size()))
+								.arg(unnamed.join(QStringLiteral(", ")));
+		}
+		*report = std::move(result);
+	}
 	return out.toUtf8();
 }
 

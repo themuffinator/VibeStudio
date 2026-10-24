@@ -485,6 +485,14 @@ BrushEditorDialog::BrushEditorDialog(const LevelMapBrush &brush, double grid, QW
 	fields->addWidget(move);
 	connect(move, &QPushButton::clicked, this,
 			[this, delta, snap]() { moveSelected({delta[0]->value(), delta[1]->value(), delta[2]->value(), true}, snap->value()); });
+	m_split = new QPushButton(tr("Split Selected Edges/Faces"), properties);
+	m_split->setObjectName(QStringLiteral("brushComponentSplit"));
+	m_split->setAccessibleName(m_split->text());
+	m_split->setToolTip(tr("Add corners at selected edge midpoints or face centres, offset by the movement above. Preview the result before Apply."));
+	m_split->setAccessibleDescription(m_split->toolTip());
+	fields->addWidget(m_split);
+	connect(m_split, &QPushButton::clicked, this,
+		[this, delta, snap]() { splitSelected({delta[0]->value(),delta[1]->value(),delta[2]->value(),true},snap->value()); });
 	auto *snapButton = new QPushButton(tr("Snap Selected"), properties);
 	snapButton->setObjectName(QStringLiteral("brushComponentSnap"));
 	fields->addWidget(snapButton);
@@ -494,6 +502,34 @@ BrushEditorDialog::BrushEditorDialog(const LevelMapBrush &brush, double grid, QW
 	m_allowCollapse->setToolTip(tr("Allow merged or interior vertices to disappear from the convex "
 								   "result. Undo restores them."));
 	fields->addWidget(m_allowCollapse);
+	m_remove = new QPushButton(tr("Remove Selected Components"), properties);
+	m_remove->setObjectName(QStringLiteral("brushComponentRemove"));
+	m_remove->setAccessibleName(tr("Remove selected brush components"));
+	m_remove->setToolTip(tr("Remove selected vertices, or every vertex of the selected edges or faces. The remaining brush must enclose a volume."));
+	m_remove->setAccessibleDescription(m_remove->toolTip());
+	fields->addWidget(m_remove);
+	connect(m_remove, &QPushButton::clicked, this, [this]() { removeSelected(); });
+	auto *insertForm = new QFormLayout;
+	insertForm->setRowWrapPolicy(QFormLayout::WrapLongRows);
+	std::array<QDoubleSpinBox *, 3> position{};
+	for (int i = 0; i < 3; ++i) {
+		position[i] = new QDoubleSpinBox(properties);
+		position[i]->setObjectName(QStringLiteral("brushComponentInsert%1").arg(i));
+		position[i]->setAccessibleName(tr("New vertex %1").arg(QStringLiteral("XYZ").mid(i, 1)));
+		position[i]->setRange(-32768, 32768);
+		position[i]->setDecimals(4);
+		insertForm->addRow(position[i]->accessibleName(), position[i]);
+	}
+	fields->addLayout(insertForm);
+	auto *insert = new QPushButton(tr("Insert Vertex"), properties);
+	insert->setObjectName(QStringLiteral("brushComponentInsert"));
+	insert->setAccessibleName(tr("Insert brush vertex at coordinates"));
+	insert->setToolTip(tr("Add a corner at the entered coordinates, snapped to the grid. A point inside the brush or on an existing flat face or edge cannot form a new corner."));
+	insert->setAccessibleDescription(insert->toolTip());
+	fields->addWidget(insert);
+	connect(insert, &QPushButton::clicked, this, [this, position, snap]() {
+		insertVertex({position[0]->value(), position[1]->value(), position[2]->value(), true}, snap->value());
+	});
 	m_table = new QTableWidget(properties);
 	m_table->setObjectName(QStringLiteral("brushComponents"));
 	m_table->setAccessibleName(tr("Brush components"));
@@ -617,6 +653,8 @@ void BrushEditorDialog::syncSelection(const QVector<int> &selection)
 	m_refreshing = true;
 	m_view->setSelection(selection);
 	m_selection = m_view->selection();
+	m_remove->setEnabled(!m_selection.isEmpty());
+	m_split->setEnabled(!m_selection.isEmpty() && m_kind != LevelBrushComponent::Vertex);
 	m_table->clearSelection();
 	for (int id : m_selection) {
 		m_table->selectionModel()->select(m_table->model()->index(id, 0), QItemSelectionModel::Select | QItemSelectionModel::Rows);
@@ -734,6 +772,76 @@ bool BrushEditorDialog::moveSelected(const LevelMapVec3 &delta, double grid)
 						  .arg(report.facesBefore)
 						  .arg(report.facesAfter)
 						  .arg(report.collapsedVertices));
+	return true;
+}
+
+void BrushEditorDialog::adoptTopologyEdit(const LevelMapBrush &draft, const LevelBrushEditReport &report,
+										const QVector<LevelMapVec3> &pickPositions)
+{
+	m_undo << state();
+	if (m_undo.size() > 200) {
+		m_undo.removeFirst();
+	}
+	m_redo.clear();
+	m_brush = draft;
+	m_kind = LevelBrushComponent::Vertex;
+	m_selection.clear();
+	levelBrushTopology(m_brush, &m_topology);
+	for (int i = 0; i < m_topology.vertices.size(); ++i) {
+		const auto &p = m_topology.vertices[i];
+		if (std::any_of(pickPositions.cbegin(), pickPositions.cend(), [&](const auto &q) {
+				return std::abs(p.x - q.x) < 0.02 && std::abs(p.y - q.y) < 0.02 && std::abs(p.z - q.z) < 0.02;
+			})) {
+			m_selection << i;
+		}
+	}
+	refresh();
+	m_status->setText(tr("Brush updated: %1 → %2 vertices, %3 → %4 faces; %5 inserted, %6 removed, %7 collapsed.")
+		.arg(report.verticesBefore).arg(report.verticesAfter).arg(report.facesBefore).arg(report.facesAfter)
+		.arg(report.insertedVertices).arg(report.removedVertices).arg(report.collapsedVertices));
+}
+
+bool BrushEditorDialog::removeSelected()
+{
+	auto draft = m_brush;
+	LevelBrushEditReport report;
+	QString error;
+	if (!removeLevelBrushComponents(&draft, m_kind, m_selection, &report, &error)) {
+		m_status->setText(error);
+		return false;
+	}
+	adoptTopologyEdit(draft, report, {});
+	return true;
+}
+
+bool BrushEditorDialog::splitSelected(const LevelMapVec3 &delta, double grid)
+{
+	auto draft = m_brush;
+	LevelBrushEditReport report;
+	QString error;
+	if (!splitLevelBrushComponents(&draft,m_kind,m_selection,delta,grid,m_allowCollapse->isChecked(),&report,&error)) {
+		m_status->setText(error); return false;
+	}
+	if (!report.changed) { return true; }
+	QVector<LevelMapVec3> positions;
+	for (int id : m_selection) {
+		auto p = componentCenter(id); p.x += delta.x; p.y += delta.y; p.z += delta.z;
+		positions.append(snapLevelMapPosition(p,grid));
+	}
+	adoptTopologyEdit(draft,report,positions);
+	return true;
+}
+
+bool BrushEditorDialog::insertVertex(const LevelMapVec3 &position, double grid)
+{
+	auto draft = m_brush;
+	LevelBrushEditReport report;
+	QString error;
+	if (!insertLevelBrushVertices(&draft, {position}, grid, m_allowCollapse->isChecked(), &report, &error)) {
+		m_status->setText(error);
+		return false;
+	}
+	adoptTopologyEdit(draft, report, {snapLevelMapPosition(position, grid)});
 	return true;
 }
 } // namespace vibestudio

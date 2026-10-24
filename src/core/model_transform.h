@@ -82,6 +82,8 @@ struct ModelMoveDrag
 bool beginModelMoveDrag(ModelVec3 pivot, ModelVec3 viewDirection, ModelMoveConstraint constraint, ModelPickRay ray, double grid,
 						ModelMoveDrag *result);
 bool modelMoveDragDelta(const ModelMoveDrag &drag, ModelPickRay ray, ModelVec3 *translation);
+bool beginModelAxisMoveDrag(ModelVec3 pivot, ModelVec3 viewDirection, ModelVec3 axis, ModelPickRay ray, ModelMoveDrag* result);
+bool modelAxisMoveDragDistance(const ModelMoveDrag& drag, ModelPickRay ray, double* distance);
 
 struct ModelRotateDrag
 {

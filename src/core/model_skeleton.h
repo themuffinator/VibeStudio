@@ -81,6 +81,8 @@ namespace vibestudio {
 [[nodiscard]] int modelJointIndex(const ModelSkeleton& skeleton, const QString& name, Qt::CaseSensitivity sensitivity = Qt::CaseInsensitive);
 // The bind pose of every joint, in joint order.
 [[nodiscard]] QVector<ModelJointMatrix> modelSkeletonBindPose(const ModelSkeleton& skeleton);
+// The inverse of each joint's bind matrix, in joint order.
+[[nodiscard]] QVector<ModelJointMatrix> modelSkeletonInverseBindPose(const ModelSkeleton& skeleton);
 
 // --- Validation ------------------------------------------------------------
 
@@ -88,7 +90,7 @@ namespace vibestudio {
 // clip frame has one matrix per joint, every skinned surface has one
 // influence range per vertex naming existing joints with finite weights, and
 // tags name existing joints. False with the first problem otherwise.
-[[nodiscard]] bool validateModelSkeleton(const ModelMesh& mesh, QString* error = nullptr);
+[[nodiscard]] bool validateModelSkeleton(const ModelMesh& mesh, QString* error = nullptr, const ModelWorkControl& control = {});
 // Scales each vertex's weights to sum to one and drops zero-weight
 // influences. Returns how many vertices needed it.
 int normalizeModelSkinningWeights(ModelSurfaceSkinning* skinning);
@@ -118,6 +120,12 @@ struct ModelSkeletonBakeOptions {
 	bool includeBindPose = true;
 	// Clip names to bake, in skeleton order; empty bakes every clip.
 	QStringList clips;
+	// When set, bake the clips `clipIndexes` names instead of `clips`; an
+	// empty list bakes no clip. The skeletal working set
+	// (core/model_skeletal_working_set.h) names clips by index because names
+	// may repeat.
+	bool byIndex = false;
+	QVector<int> clipIndexes;
 	// The most frames to write; clips past it are left out with a warning.
 	int maxFrames = 8192;
 	// The most vertex positions (vertices times frames) to write, which bounds
@@ -157,22 +165,28 @@ struct ModelSkeletonBakeOptions {
 // joints and weights stay, and untouched vertices keep their offsets exactly.
 // Returns how many vertices were rebound.
 int rebindModelSkinning(ModelMesh* mesh, int frame, double tolerance = 1e-4);
-// After an edit that changed a skinned surface's vertices: each vertex of
-// `after` takes the influences of the `before` vertex at the same bind
-// position, or else of the nearest one, then is rebound to its own position.
-// Surfaces are matched by index. Also keeps skeleton.bakedClipForFrame in
-// step with the frame list (frames the edit added are marked -2: edited, not
-// from a clip). False only when the result cannot be made consistent.
-bool reconcileModelSkinning(const ModelMesh& before, ModelMesh* after, QString* error = nullptr);
-// Rebinds from the bind frame, then bakes the bind pose and the same clips
-// again, so every frame follows the edited bind pose.
+// Rebinds one vertex so that `position` and `normal` are its bind pose: its
+// joints and weights stay, each offset becomes the position in that joint's
+// bind space. `inverseBind` comes from modelSkeletonInverseBindPose.
+void rebindModelSkinVertex(ModelSurfaceSkinning* skinning, int vertex, const QVector<ModelJointMatrix>& inverseBind,
+	const ModelVec3& position, const ModelVec3& normal);
+// Edits that change a skinned surface's vertices reconcile its influences from
+// per-vertex edit provenance: see reconcileModelSkinningFromOrigins in
+// core/model_vertex_origins.h.
+// Rebinds from the bind frame, then bakes the bind pose and the clips again,
+// so every frame follows the edited bind pose: exactly the clip indexes
+// `clips` holds when given (the bind pose alone when none has poses), else
+// every clip that fits `maxFrames` and `maxVertexSlots` in skeleton order.
 bool rebakeModelSkeleton(ModelMesh* mesh, QString* error = nullptr, const ModelWorkControl& control = {},
-	int maxFrames = 8192);
+	int maxFrames = 8192, qint64 maxVertexSlots = 4LL * 1024LL * 1024LL, const QVector<int>* clips = nullptr);
 
 // The skeleton and each surface's influences as JSON for editable sources
 // (.mesh.json version 8), and back. Reading checks counts and indexes and
-// leaves `mesh` unchanged on failure.
-[[nodiscard]] QJsonObject modelSkeletonJson(const ModelMesh& mesh);
-bool modelSkeletonFromJson(const QJsonObject& object, ModelMesh* mesh, QString* error = nullptr);
+// leaves `mesh` unchanged on failure. `packed` writes clip matrices, bounds
+// and influences as packed arrays (version 12, core/model_source_encoding.h);
+// `packedArrays` lets the reader accept them. Writing checks `control` for
+// cancellation per clip frame and returns an empty object when cancelled.
+[[nodiscard]] QJsonObject modelSkeletonJson(const ModelMesh& mesh, bool packed = false, const ModelWorkControl& control = {});
+bool modelSkeletonFromJson(const QJsonObject& object, ModelMesh* mesh, QString* error = nullptr, bool packedArrays = false);
 
 } // namespace vibestudio

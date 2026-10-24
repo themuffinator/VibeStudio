@@ -15,7 +15,11 @@ def main():
     parser.add_argument('--binary', type=Path, required=True)
     parser.add_argument('--compiler', type=Path, required=True)
     parser.add_argument('--output-root', type=Path, required=True)
+    parser.add_argument('--group-context', action='store_true', help='Exercise nested group selection and isolated translation before compilation')
+    parser.add_argument('--group-transfer', action='store_true', help='Duplicate a nested assembly and capture/place its prefab before compilation')
     args = parser.parse_args()
+    if args.group_context and args.group_transfer:
+        parser.error('Choose one group workflow per output directory')
     repo = Path(__file__).resolve().parents[2]
     root = args.output_root.resolve()
     assert root.is_relative_to(repo / '.agents' / 'tmp')
@@ -47,6 +51,8 @@ def main():
     walls = [((-272, -272, -16), (272, 272, 0)), ((-272, -272, 256), (272, 272, 272)),
              ((-272, -272, 0), (-256, 272, 256)), ((256, -272, 0), (272, 272, 256)),
              ((-256, -272, 0), (256, -256, 256)), ((-256, 256, 0), (256, 272, 256))]
+    if args.group_context or args.group_transfer:
+        walls.append(((0, 0, 0), (32, 32, 64)))
     source = base / 'maps/original.map'
     source.write_text('{\n"classname" "worldspawn"\n' + '\n'.join(box(lo, hi, 'textures/scene/checker') for lo, hi in walls)
                       + '\n}\n{\n"classname" "info_player_deathmatch"\n"origin" "0 0 32"\n}\n'
@@ -59,6 +65,58 @@ def main():
     run('scene-hide', ['editor', 'scene', 'visibility', scene, '--id', node, '--visible', 'false', '--output', scene, '--overwrite'])
     run('scene-lock', ['editor', 'scene', 'lock', scene, '--id', node, '--locked', 'true', '--output', scene, '--overwrite'])
     assert scene.read_bytes().startswith(source.read_bytes())
+    if args.group_context or args.group_transfer:
+        group = run('group-create', ['editor', 'scene', 'create', scene, '--kind', 'group', '--name', 'Assembly', '--output', scene, '--overwrite'])['createdId']
+        child = run('group-child', ['editor', 'scene', 'create', scene, '--kind', 'group', '--name', 'Pillar', '--parent', group, '--output', scene, '--overwrite'])['createdId']
+        run('group-light', ['editor', 'scene', 'assign', scene, '--id', group, '--objects', 'entity:2', '--output', scene, '--overwrite'])
+        run('group-pillar', ['editor', 'scene', 'assign', scene, '--id', child, '--objects', 'brush:6', '--output', scene, '--overwrite'])
+        selected = run('group-selection', ['editor', 'scene', 'select', scene, '--objects', 'brush:6'])['selection']
+        assert set(selected) == {'entity:2', 'brush:6'}
+    if args.group_context:
+        run('group-context-move', ['editor', 'scene', 'translate', scene, '--context', group, '--objects', 'brush:6', '--offset', '16,0,0', '--output', scene, '--overwrite'])
+        run('group-whole-move', ['editor', 'scene', 'translate', scene, '--objects', 'brush:6', '--offset', '0,16,0', '--output', scene, '--overwrite'])
+        # Independently author the expected result; compiled geometry must match
+        # this control rather than merely proving the compiler accepts a file.
+        translated = box((16, 16, 0), (48, 48, 64), 'textures/scene/checker').splitlines()
+        # Classic axial projection at 0.5 scale: translating by (16,16,0)
+        # subtracts 32 from U on every face and adds 32 to V on horizontal faces.
+        for face in range(6):
+            translated[face+1] = translated[face+1].replace(' 0 0 0 0.5 0.5 0 0 0',
+                                                           f' -32 {32 if face >= 4 else 0} 0 0.5 0.5 0 0 0')
+        expected = source.read_text(encoding='utf-8').replace(box((0, 0, 0), (32, 32, 64), 'textures/scene/checker'), '\n'.join(translated))
+        expected = expected.replace('"origin" "0 0 180"', '"origin" "0 16 180"')
+        source.write_text(expected, encoding='utf-8')
+    if args.group_transfer:
+        run('group-array', ['map', 'duplicate', scene, '--object', 'brush:6', '--object', 'entity:2', '--delta', '64,0,0',
+                            '--copies', '2', '--output', scene, '--overwrite'])
+        prefab = root / 'assembly.vprefab'
+        captured = run('group-prefab-export', ['map', 'export-prefab', scene, '--object', 'brush:6', '--object', 'entity:2',
+                       '--name', 'Pillar and light', '--anchor', '0,0,0', '--output', prefab, '--overwrite'])
+        assert captured['prefab']['groups'] == 2 and json.loads(prefab.read_text(encoding='utf-8'))['version'] == 2
+        placed = run('group-prefab-insert', ['map', 'insert-prefab', scene, '--prefab', prefab, '--position', '0,128,0',
+                     '--output', scene, '--overwrite'])
+        assert placed['prefab']['groups'] == 2
+        hierarchy = run('group-transfer-inspect', ['editor', 'scene', 'list', scene])['scene']['nodes']
+        assert len(hierarchy) == 9 and len({node['id'] for node in hierarchy}) == 9
+        # Independently author all three additional pillars and lights. Classic
+        # axial texture coordinates retain world alignment under texture lock.
+        additions = []
+        new_walls = []
+        lights = []
+        for x, y in [(64, 0), (128, 0), (0, 128)]:
+            lo, hi = (x, y, 0), (x+32, y+32, 64)
+            lines = box(lo, hi, 'textures/scene/checker').splitlines()
+            for face in range(6):
+                u = -2*(y if face < 2 else x)
+                v = 2*y if face >= 4 else 0
+                lines[face+1] = lines[face+1].replace(' 0 0 0 0.5 0.5 0 0 0', f' {u} {v} 0 0.5 0.5 0 0 0')
+            additions.append('\n'.join(lines))
+            new_walls.append((lo, hi))
+            lights.append('{\n"classname" "light"\n' + f'"origin" "{x} {y} 180"\n"light" "350"\n' + '}\n')
+        original_world = '\n'.join(box(lo, hi, 'textures/scene/checker') for lo, hi in walls)
+        expected = source.read_text(encoding='utf-8').replace(original_world, original_world+'\n'+'\n'.join(additions))
+        source.write_text(expected+''.join(lights), encoding='utf-8')
+        walls.extend(new_walls)
     prefix = [args.compiler.resolve(), '-game', 'quake3', '-fs_basepath', root / 'game', '-fs_homepath', root / 'home', '-fs_game', 'baseq3', '-threads', '2']
     for name, path in [('baseline', source), ('scene', scene)]:
         output = run(name + '-bsp', prefix + ['-meta', path], cli=False)
@@ -73,7 +131,7 @@ def main():
     assert original_bsp[:8] == scene_bsp[:8] == b'IBSP' + struct.pack('<i', 46)
     for index in range(1, 14):
         assert lump(original_bsp, index) == lump(scene_bsp, index), ('compiled geometry differs', index)
-    assert len(lump(scene_bsp, 8)) // 12 == 6
+    assert len(lump(scene_bsp, 8)) // 12 == len(walls)
     surfaces = [struct.unpack_from('<12i', lump(scene_bsp, 13), at) for at in range(0, len(lump(scene_bsp, 13)), 104)]
     assert any(surface[2] == 3 for surface in surfaces), 'hidden placed model must still be baked'
     for stage, options in [('vis', ['-vis', '-fast']), ('light', ['-light', '-fast'])]:
@@ -93,7 +151,10 @@ def main():
     with zipfile.ZipFile(package) as archive:
         assert archive.testzip() is None and archive.read('maps/scene.map') == scene.read_bytes()
         assert archive.read('models/scene/prop.md3') == (base / 'models/scene/prop.md3').read_bytes()
-    verified = {'stepsPassed': len(steps), 'identicalGeometryLumps': list(range(1, 14)), 'compiledBrushes': 6,
+    verified = {'stepsPassed': len(steps), 'groupContext': args.group_context, 'groupTransfer': args.group_transfer,
+                'identicalGeometryLumps': list(range(1, 14)), 'compiledBrushes': len(walls),
+                'applicationSha256': hashlib.sha256(args.binary.read_bytes()).hexdigest(),
+                'compilerSha256': hashlib.sha256(args.compiler.read_bytes()).hexdigest(),
                 'modelSurfaces': sum(surface[2] == 3 for surface in surfaces), 'validation': validation,
                 'mapSha256': hashlib.sha256(scene.read_bytes()).hexdigest(), 'packageSha256': hashlib.sha256(package.read_bytes()).hexdigest()}
     (root / 'verified.json').write_text(json.dumps(verified, indent=2), encoding='utf-8')

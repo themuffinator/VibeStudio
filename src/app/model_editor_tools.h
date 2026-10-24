@@ -16,12 +16,14 @@
 // (https://docs.blender.org/manual/en/latest/modeling/meshes/index.html);
 // no Blender code is used.
 
+#include "app/studio_accessibility.h"
 #include "core/model_document.h"
 #include "core/model_editor_controls.h"
 #include "core/model_selection_tools.h"
 
 #include <QHash>
 #include <QLineF>
+#include <QMap>
 #include <QObject>
 #include <QPointF>
 #include <QPointer>
@@ -39,6 +41,7 @@ class QComboBox;
 class QDoubleSpinBox;
 class QFormLayout;
 class QFrame;
+class QScrollArea;
 class QKeyEvent;
 class QLabel;
 class QMenu;
@@ -54,6 +57,28 @@ namespace vibestudio
 class ModelEditorDialog;
 class ModelViewport;
 
+// The navigation gizmo as it is painted and clicked: in the view's trailing
+// top corner (the left one in a right-to-left layout), below the heads-up
+// tags and the tool banner and clear of Adjust Last Operation, sized from the
+// heads-up font. Every axis bubble is a click target at least 24 px across;
+// a view too small for that shows no gizmo.
+struct ModelNavigationGizmo
+{
+	// The backdrop; empty while the gizmo is off or has no room.
+	QRectF bounds;
+	double bubbleRadius = 0;
+	struct Bubble
+	{
+		int axis = 0;
+		bool positive = true;
+		QPointF at;
+		// Larger is farther from the eye.
+		double depth = 0;
+	};
+	// Far to near, as painted; a click takes the nearest bubble it touches.
+	QVector<Bubble> bubbles;
+};
+
 enum class ModelModalOperator
 {
 	None,
@@ -65,7 +90,14 @@ enum class ModelModalOperator
 	ShrinkFatten,
 	Duplicate,
 	LoopCut,
-	BevelVertices
+	BevelVertices,
+	EdgeSlide,
+	BevelEdges,
+	Knife,
+	Spin,
+	SpinDuplicate,
+	Rip,
+	RipFill
 };
 
 class ModelEditorTools final : public QObject
@@ -85,8 +117,12 @@ class ModelEditorTools final : public QObject
 	[[nodiscard]] ModelEdit toolEdit(ModelEditKind kind) const;
 
 	// Modal operators. The pointer is in viewport coordinates; tests drive the
-	// same entry points the keyboard and mouse use.
-	bool beginModal(ModelModalOperator op, const QPointF &pointer);
+	// same entry points the keyboard and mouse use. `pointerOverView` false
+	// marks the view's centre standing in for a pointer outside the view.
+	// Loop Cut starts on the one selected edge between quads when there is
+	// one, else on the edge under the pointer; a pointer that moves onto
+	// another edge takes over until it leaves every edge.
+	bool beginModal(ModelModalOperator op, const QPointF &pointer, bool pointerOverView = true);
 	void moveModal(const QPointF &pointer, Qt::KeyboardModifiers modifiers = Qt::NoModifier);
 	// Axis 0-2: the first press constrains to the world axis, the second to the
 	// selection's axis and the third clears it. A plane constraint excludes it.
@@ -99,12 +135,25 @@ class ModelEditorTools final : public QObject
 	[[nodiscard]] QString modalText() const;
 	[[nodiscard]] bool modalPreviewValid() const;
 	[[nodiscard]] const ModelMesh *modalPreview() const;
+	// Knife semantic controls also support keyboard-only authoring and tests.
+	bool addKnifePoint(const QPointF &point, Qt::KeyboardModifiers modifiers = Qt::NoModifier);
+	void newKnifePath();
+	void undoKnifePoint();
+	void setKnifeThrough(bool through);
+	void setKnifeSelectedOnly(bool selectedOnly);
+	void setKnifeAngleSnap(bool enabled, double degrees = 45);
+	void setRipOptions(bool opposite, bool fill);
 
 	// Region selection in viewport coordinates: shift extends, subtract removes.
 	bool selectRegion(const QPolygonF &region, bool extend, bool subtract);
 	bool selectCircle(const QPointF &centre, double radius, bool subtract);
 	// Click gestures: Alt (loop), Ctrl+Alt (ring), Ctrl (shortest path), L (linked).
 	bool pickLoop(const QPointF &point, bool ring, bool extend);
+	// Select Edge Loops / Rings of Selection: each selected edge (in vertex
+	// mode, each edge between selected vertices) grows to its loop or ring
+	// through selectModelEdgeLoops, with no pointer involved; seeds without
+	// one are named in the banner's details.
+	bool selectEdgeLoops(bool ring);
 	bool pickPath(const QPointF &point);
 	bool pickLinked(const QPointF &point, bool subtract);
 
@@ -113,16 +162,36 @@ class ModelEditorTools final : public QObject
 	bool placeCursor(const QPointF &point);
 	// Aligns the view along +/- an axis (0 X, 1 Y, 2 Z), as the gizmo does.
 	void alignView(int axis, bool positive);
+	[[nodiscard]] ModelNavigationGizmo navigationGizmo();
 	void frameSelection();
 
 	[[nodiscard]] QMenuBar *menuBar() const { return m_menuBar; }
 	[[nodiscard]] QWidget *lastOperationPanel() const;
+	// Keyboard focus (model_editor_keyboard.cpp). Ctrl+Tab and Ctrl+Shift+Tab
+	// (Control+Tab on macOS, modelEditorFocusKeys) move to the first control
+	// of the next or previous panel in reading order, in every profile, so a
+	// view whose profile takes Tab never traps focus. F9 puts focus in Adjust
+	// Last Operation; Esc there returns it to the view.
+	void focusPanel(bool forward);
+	// The panels Ctrl+Tab visits, in reading order: the leading sidebar, the
+	// editing header (with the view controls), tool shelf, the views, timeline
+	// and trailing sidebar. Anything else in the editor (the status strip and
+	// its material images' state included) counts as one more panel after
+	// them.
+	[[nodiscard]] QList<QWidget *> focusPanels() const;
 	[[nodiscard]] QAction *action(const QString &objectName) const;
 	void showOperatorSearch();
-	// Refreshes the export budget and the last-operation panel after any document change.
+	// Refreshes the delivery-target summary and the last-operation panel after
+	// any document change or target choice.
 	void documentChanged();
-	// Writes name.md3 and its Quake III detail levels name_1.md3, name_2.md3.
+	// Writes name.md3 and its Quake III detail levels name_1.md3, name_2.md3 for
+	// the selected MD3 delivery target. The whole set is prepared first; when a
+	// file exists, one confirmation names every file to be replaced, and Cancel
+	// writes nothing.
 	bool exportDetailLevels(const QString &basePath, int levels, double ratio, QString *error = nullptr);
+	// The same for a recipe (core/model_lod.h); hand-made levels resolve
+	// against the source's folder.
+	bool exportDetailLevels(const QString &basePath, const QVector<ModelLodRecipeLevel> &recipe, QString *error = nullptr);
 	[[nodiscard]] QString budgetSummary() const;
 	// Searchable commands, as the operator search lists them.
 	[[nodiscard]] QList<QAction *> searchableActions() const;
@@ -158,7 +227,7 @@ class ModelEditorTools final : public QObject
 	[[nodiscard]] const QHash<int, QSet<int>> &hiddenFaces() const { return m_hiddenFaces; }
 	// The display copy of a mesh with hidden faces collapsed, so face indices
 	// stay stable while nothing hidden draws or picks.
-	[[nodiscard]] ModelMesh displayMesh(const ModelMesh &mesh) const;
+	[[nodiscard]] ModelMesh displayMesh(const ModelMesh &mesh, const ModelEditReport *report = nullptr) const;
 
   protected:
 	bool eventFilter(QObject *watched, QEvent *event) override;
@@ -169,6 +238,8 @@ class ModelEditorTools final : public QObject
 	{
 		ModelModalOperator op = ModelModalOperator::None;
 		QPointF start, pointer, pivotScreen, lastActual;
+		QPointF slideVector{1, 0};
+		double slidePixels = 200;
 		ModelVec3 pivot{}, normal{};
 		int axis = -1;
 		bool plane = false, local = false;
@@ -185,18 +256,42 @@ class ModelEditorTools final : public QObject
 		bool previewShown = false, pending = false;
 		ModelEdge hoverEdge{-1, -1};
 		int hoverSurface = -1, cuts = 1;
+		// Loop Cut runs on the selected edge (the seed) while the pointer is
+		// over no other edge.
+		bool hoverFromSelection = false;
+		ModelEdge seedEdge{-1, -1};
+		int seedSurface = -1;
+		int ripFace = -1;
+		bool ripOpposite = false, ripFill = false;
 		QVector<QLineF> guides;
 		// Vertex snapping: other vertices on screen and the moving selection's points.
 		QVector<QPointF> snapScreen;
 		QVector<ModelVec3> snapWorld, selectedPoints;
 		bool snapped = false;
 		QPointF snapPoint;
+		ModelKnifeOptions knife;
+		QVector<QPolygonF> knifePaths;
+		QVector<ModelEdge> knifeSnapEdges;
+		QVector<int> knifeSnapVertices;
+		QPolygonF knifeProjection;
+		QByteArray knifeRevision;
+		QPointF knifeHover;
+		bool knifeAngle = false;
+		double knifeAngleStep = 45;
+		ModelEditReport report;
 	};
 	struct LastOperation
 	{
 		ModelEdit edit;
 		QByteArray revision;
 		QString title;
+	};
+	// A header button that names a command's keys in its tooltip and
+	// accessible description, refreshed whenever the profile's keys change.
+	struct KeyHint
+	{
+		QPointer<QToolButton> button;
+		QString command, name, detail;
 	};
 	enum class Region
 	{
@@ -217,14 +312,18 @@ class ModelEditorTools final : public QObject
 	QFrame *m_lastPanel = nullptr;
 	QLabel *m_lastTitle = nullptr;
 	QWidget *m_lastFields = nullptr;
+	QScrollArea *m_lastScroll = nullptr;
 	QToolButton *m_modeButtons[3]{};
 	QToolButton *m_proportional = nullptr, *m_xray = nullptr, *m_mirror[3]{};
 	QComboBox *m_falloff = nullptr;
 	QDoubleSpinBox *m_radius = nullptr;
 	QCheckBox *m_connected = nullptr;
 	QToolButton *m_budget = nullptr;
+	// The delivery targets as last shown, so a change can be announced.
+	QString m_budgetState;
 	QComboBox *m_snapElement = nullptr;
 	QHash<QString, QAction *> m_actions;
+	QVector<KeyHint> m_keyHints;
 	std::unique_ptr<Modal> m_modal;
 	ModelEditorControls m_controls = modelEditorControlsForProfile(defaultModelEditorProfileId());
 	LastingTool m_lastingTool = LastingTool::None;
@@ -243,11 +342,25 @@ class ModelEditorTools final : public QObject
 	QHash<int, int> m_hiddenTriangleCounts;
 	LastOperation m_last;
 	bool m_hasLast = false;
+	// The joint mirror map last confirmed for Symmetrize on a skinned surface.
+	QMap<QString, QString> m_mirrorJoints;
+	bool m_keepJointNames = false;
+	// The binding last confirmed for Add Primitive on a skinned surface (None
+	// for an unskinned new surface), and whether a bound primitive got its own
+	// surface.
+	ModelNewGeometryBinding m_primitiveBinding = ModelNewGeometryBinding::Joint;
+	QString m_primitiveJoint;
+	bool m_primitiveNewSurface = false;
+	// Document refreshes during an adjustment must not delete its signal sender.
+	bool m_adjustingLast = false;
 	ModelVec3 m_cursor{};
 	bool m_blenderNavigation = true;
 	bool m_forwarding = false;
 	bool m_swallowRelease = false;
 	bool m_showGizmo = true;
+	// Where the gizmo was last painted, so overlay moves repaint the view only
+	// when the gizmo has to move with them.
+	QRectF m_paintedGizmo;
 	// Region selection gesture state.
 	Region m_region = Region::None;
 	bool m_regionArmed = false, m_regionDragging = false, m_circleMode = false;
@@ -267,21 +380,66 @@ class ModelEditorTools final : public QObject
 	QAction *addAction(const QString &name, const QString &text, const QString &shortcut, std::function<void()> run,
 					   const QString &icon = {});
 	QMenu *menu(const QString &title, const QStringList &actions);
+	// Keyboard focus and key hints (model_editor_keyboard.cpp).
+	void buildFocusActions();
+	// A command keyed to Tab or Shift+Tab listens only while the view itself
+	// has focus; every other command listens anywhere in its area.
+	void scopeShortcuts(QAction *action);
+	void refreshKeyHints();
+	[[nodiscard]] QString keyboardHelp() const;
+	// The native text of a command's keys under the current controls; empty
+	// when the profile gives it none.
+	[[nodiscard]] QString commandKeys(const QString &command) const;
+	// Each tool bar (document actions, tool shelf) is one Tab stop: the arrow
+	// keys, Home and End move between its buttons and Enter or Space runs one.
+	void makeToolBarKeyboardReachable(QToolBar *bar);
+	void refreshToolBarStop(QToolBar *bar, QToolButton *preferred = nullptr);
+	void focusLastOperation();
+	// Keys of the Adjust Last Operation settings and the tool bar buttons:
+	// what a focused control uses itself (Space in a check box, letters in a
+	// choice, arrows between buttons) wins over the view's commands, and
+	// Esc in a setting returns to the view.
+	bool handleControlKey(QObject *watched, QEvent *event);
 	void refreshHeader();
 	void refreshLastPanel();
 	void placeOverlays();
-	void showBanner(const QString &text);
+	// The banner over the view, echoed on the status line. A message that
+	// answers a key or a click is announced politely; a readout that follows
+	// the pointer or typing passes LiveStatus::Update and is not; a refusal
+	// passes LiveStatus::Problem and is announced with its reason.
+	void showBanner(const QString &text, const QString &details = {}, LiveStatus kind = LiveStatus::Result);
 	void paintOverlay(QPainter &painter);
 	[[nodiscard]] int selectionMode() const;
 	void setSelectionMode(int mode);
 	[[nodiscard]] ModelSelection selectionFor(ModelEditKind kind) const;
 	void selectOperation(ModelSelectOperation operation, std::function<void(ModelSelectRequest &)> configure = {});
 	void runKind(ModelEditKind kind, std::function<void(ModelEdit &)> configure = {});
+	// Symmetrize on a skinned surface with off-centre joints: confirm the joint
+	// mirror map first; elsewhere the edit's map is cleared. Used by the menu,
+	// Repeat Last and F9 replays on another plane. False when the user cancels.
+	bool confirmMirrorJoints(ModelEdit &edit);
+	// Whether an F9 change to a Symmetrize edit changes which joints sit off
+	// the mirror plane (a new axis or merge distance).
+	[[nodiscard]] bool mirrorPlaneChanged(const ModelEdit &before, const ModelEdit &after) const;
+	// Add Primitive on a skinned surface: choose how the new vertices follow
+	// the skeleton first; elsewhere the edit's binding is cleared. Used by the
+	// menu and Repeat Last. False when the user cancels.
+	bool confirmPrimitiveBinding(ModelEdit &edit);
 	void addPrimitive(ModelPrimitive primitive);
 	void startModalAtPointer(ModelModalOperator op);
+	// The one geometric edge between quads the selection names, as Loop Cut's seed.
+	bool loopCutSeed(ModelEdge *edge, int *surface) const;
 	void updateModalPreview();
 	void restoreDocumentView();
-	void showPreview(const ModelMesh &mesh, const ModelSelection &selection);
+	void showPreview(const ModelMesh &mesh, const ModelSelection &selection, const ModelEditReport *report = nullptr);
+	void initialiseKnife(Modal &modal);
+	bool initialiseRip(Modal &modal, QString *error);
+	void moveKnife(const QPointF &point, Qt::KeyboardModifiers modifiers);
+	void updateKnifePreview();
+	bool knifeContextUnchanged() const;
+	bool handleKnifeKey(QKeyEvent *event);
+	void paintKnife(QPainter &painter);
+	void remapHiddenAfterEdit(const ModelEdit &edit, const ModelEditReport &report);
 	[[nodiscard]] QPointF pointerInViewport() const;
 	[[nodiscard]] bool selectionCentre(ModelVec3 *centre) const;
 	[[nodiscard]] double worldPerPixel(const ModelVec3 &at);
@@ -300,6 +458,5 @@ class ModelEditorTools final : public QObject
 	void applyHidden();
 	[[nodiscard]] ModelSelection withoutHidden(const ModelSelection &selection) const;
 	[[nodiscard]] int gizmoAxisAt(const QPointF &point, bool *positive);
-	[[nodiscard]] QPointF gizmoCentre() const;
 };
 } // namespace vibestudio

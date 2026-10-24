@@ -1,5 +1,6 @@
 #include "core/model_assembly_animation.h"
 #include "core/model_recovery.h"
+#include "core/model_vertex_identity.h"
 #include "tests/model_assembly_test_helpers.h"
 #include "tests/model_mdl_test_helpers.h"
 
@@ -105,6 +106,21 @@ int main(int argc, char **argv)
 		ok &= expect(exact, "sampled positions, normals, seams and materials agree at every output time");
 	}
 	const auto baked = bytes(animation.mesh);
+	{
+		auto explicitInputs = resolved;
+		for (auto &part : explicitInputs.inputs)
+			for (auto &surface : part.mesh.surfaces)
+				ok &= expect(materialiseModelVertexIdentities(&surface, &error), "materialise assembly input connectivity");
+		ModelAssemblyAnimation explicitBake;
+		ok &= expect(bakeModelAssemblyAnimation(recipe, explicitInputs, options, &explicitBake, &error), "bake explicit source connectivity");
+		bool retained = explicitBake.mesh.surfaces.size() == animation.mesh.surfaces.size();
+		for (const auto &surface : explicitBake.mesh.surfaces)
+			retained &= surface.topologyVertices == QVector<int>{0,1,2};
+		ModelMesh reloaded;
+		ok &= expect(retained && editableModelJson(explicitBake.mesh).value("version").toInt() == 11 &&
+			parseEditableModel(bytes(explicitBake.mesh), &reloaded, &error) && bytes(reloaded) == bytes(explicitBake.mesh),
+			"assembly version 11 retains connectivity and timing through source reload");
+	}
 	ModelMesh parsed;
 	ok &= expect(editableModelJson(animation.mesh).value("version").toInt() == 6 && parseEditableModel(baked, &parsed, &error) &&
 					 bytes(parsed) == baked,

@@ -146,11 +146,13 @@ void verifyThingDuplication(const LevelMapDocument& original) {
 	auto groupedResult = prepareLevelPlacement(grouped, request);
 	if (expect(groupedResult.succeeded, "array copies inherit source scene group", groupedResult.error)) {
 		auto map = groupedResult.document;
-		expect(levelSceneNode(map.scene, group)->objects.size() == 4 && validateLevelScene(map, map.scene, &error), "array scene metadata valid", error);
+		expect(levelSceneNode(map.scene, group)->objects.size() == 1 && map.scene.nodes.size() == 4 && validateLevelScene(map, map.scene, &error), "array scene metadata valid", error);
 		expect(undoLevelMapEdit(&map, &error) && map.scene == sceneBefore && map.selection == grouped.selection, "array scene undo exact", error);
 		expect(redoLevelMapEdit(&map, &error) && map.scene == groupedResult.document.scene, "array scene redo exact", error);
 	}
 	expect(setLevelSceneLocked(&grouped, group, true, &error), "lock array source", error);
+	expect(openLevelSceneGroup(&grouped,group,&error),"open locked array source",error);
+	selectLevelMapObject(&grouped,"thing:0");
 	const auto lockedBefore = serializeLevelMap(grouped).bytes;
 	auto denied = prepareLevelPlacement(grouped, request);
 	expect(!denied.succeeded && denied.error.contains("Unlock") && serializeLevelMap(grouped).bytes == lockedBefore,

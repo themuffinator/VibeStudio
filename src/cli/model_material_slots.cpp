@@ -112,15 +112,7 @@ ModelMaterialSlotsCliResult runModelMaterialSlots(const QStringList &arguments)
 			return fail(1, target.error);
 		if (target.existed && !seen.contains("--overwrite"))
 			return fail(1, Text::tr("The output already exists; use --overwrite to replace it."));
-		if (dry)
-		{
-			const auto json = editableModelJson(document.mesh(), &error);
-			if (json.isEmpty())
-				return fail(4, error);
-			if (QJsonDocument(json).toJson(QJsonDocument::Compact).size() > modelDocumentMaxSourceBytes)
-				return fail(4, Text::tr("The edited model exceeds the 64 MiB source limit."));
-		}
-		else if (!document.save(output, seen.contains("--overwrite"), &error))
+		if (!document.save(output, seen.contains("--overwrite"), &error, {}, dry))
 			return fail(1, error);
 	}
 	ModelMaterialSlotsCliResult result;

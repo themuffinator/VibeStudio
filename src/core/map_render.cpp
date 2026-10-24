@@ -1,5 +1,6 @@
 #include "core/level_scene.h"
 #include "core/map_render.h"
+#include "core/level_visibility.h"
 
 #include <QCoreApplication>
 #include <QDir>
@@ -417,7 +418,7 @@ QHash<int, int> entityIndexById(const LevelMapDocument& document)
 
 void collectDoomScene(const LevelMapDocument& document, const MapRenderOptions& options, RenderScene* scene)
 {
-	const auto hidden = levelSceneHiddenObjects(document);
+	const auto hidden = levelMapHiddenObjects(document);
 	if (options.showSectorFill && !document.doomSectors.isEmpty() && !document.doomLinedefs.isEmpty()) {
 		const QVector<DoomSectorOutline> outlines = buildDoomSectorOutlines(document);
 		for (const DoomSectorOutline& outline : outlines) {
@@ -519,7 +520,7 @@ void collectDoomScene(const LevelMapDocument& document, const MapRenderOptions& 
 
 void collectQuakeScene(const LevelMapDocument& document, const MapRenderOptions& options, RenderScene* scene)
 {
-	const auto hidden = levelSceneHiddenObjects(document);
+	const auto hidden = levelMapHiddenObjects(document);
 	const QHash<int, int> entityById = entityIndexById(document);
 
 	if (!document.brushes.isEmpty()) {
@@ -887,10 +888,10 @@ QString renderLevelMapSvg(const LevelMapDocument& document, const MapRenderOptio
 
 	// Grid.
 	if (options.showGrid) {
-		if (options.gridSize <= 0) {
+		if (!std::isfinite(options.gridSize) || options.gridSize <= 0) {
 			local.warnings << QCoreApplication::translate("VibeStudioMapRender", "Grid size must be greater than zero; the grid was skipped.");
 		} else {
-			const double grid = static_cast<double>(options.gridSize);
+			const double grid = options.gridSize;
 			const double estimated = ((worldRight - worldLeft) / grid) + ((worldTop - worldBottom) / grid) + 4.0;
 			if (estimated > static_cast<double>(kMaxGridLines)) {
 				local.warnings << QCoreApplication::translate("VibeStudioMapRender", "Grid skipped: %1 world units per pixel would need too many lines.").arg(svgNumber(local.unitsPerPixel));

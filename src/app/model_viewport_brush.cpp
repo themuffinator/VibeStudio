@@ -22,6 +22,8 @@ QString planeName(int axis)
 
 void ModelViewport::setBrushDrawTool(bool enabled)
 {
+	if (enabled && m_clipMode) { setClipMode(false); }
+	if (enabled && m_componentMode) { setComponentHandles(0,{},{}); Q_EMIT componentModeExitRequested(); }
 	if (m_brushDrawTool == enabled) { return; }
 	finishBrushDraw(false);
 	if (enabled) {

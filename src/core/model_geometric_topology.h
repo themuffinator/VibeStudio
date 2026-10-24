@@ -6,7 +6,10 @@
 // so index adjacency stops at every UV seam. Blender instead keeps one vertex
 // and stores UVs per face corner. Edit-mode tools that walk loops and rings,
 // find region borders or smooth shapes therefore treat indices whose positions
-// are equal in every animation pose as one geometric vertex. Tools that create
+// are equal in every animation pose as one geometric vertex. Explicit source
+// identities additionally prevent detached coincident vertices from joining.
+// UV/normal copies keep an identity; separate regions receive new identities.
+// Tools that create
 // geometry still write separate indices on each side, so seams survive.
 //
 // idTech model formats store triangles only. The quad view pairs neighbouring
@@ -31,7 +34,7 @@ namespace vibestudio
 {
 struct ModelGeometricTopology
 {
-	// The lowest index sharing every pose position with each vertex index.
+	// The lowest index sharing every pose position and (when present) identity.
 	// Group ids are vertex indices, so index-space containers can hold them.
 	QVector<int> vertexGroup;
 	// Index copies of each group (ascending); empty for non-representatives.
@@ -73,9 +76,10 @@ struct ModelQuadTopology
 // opposite winding pair when their normals differ by at most maxAngleDegrees in
 // the reference frame and their union is a strictly convex quad. Flat,
 // rectangular candidates whose shared edge is the longest side of both
-// triangles pair first; ties fall to the lower face indices.
+// triangles pair first; ties fall to the lower face indices. Protected indexed
+// edges (including their geometric seam copies) cannot become quad diagonals.
 bool buildModelQuadTopology(const ModelSurface &surface, int frame, double maxAngleDegrees, ModelQuadTopology *result,
-							QString *error = nullptr, const ModelWorkControl &control = {});
+							QString *error = nullptr, const ModelWorkControl &control = {}, const QSet<ModelEdge> &protectedEdges = {});
 
 // Walks over geometric edges of the quad view. Both return canonical group
 // pairs in walk order and never include quad diagonals. A loop crosses a vertex

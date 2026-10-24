@@ -18,6 +18,7 @@
 #include <QStatusBar>
 #include <QTemporaryDir>
 #include <QTimer>
+#include <algorithm>
 #include <cmath>
 #include <iostream>
 
@@ -71,6 +72,12 @@ int main(int argc, char** argv)
 	auto* side = shell.findChild<MapViewport*>("mapViewport2");
 	if (!camera || !top || !front || !side) { return 1; }
 	bool ok = expect(until([&] { return shell.levelDocument().brushes.size() == 2 && camera->hasMesh() && camera->isEnabled(); }),"map and camera load");
+	// The TrenchBroom profile records selection changes in map history, so
+	// count content edits rather than every undo entry.
+	const auto contentEdits = [&] {
+		const auto& stack = shell.levelDocument().undoStack;
+		return std::count_if(stack.cbegin(),stack.cend(),[](const auto& command) { return command.commandKind != QStringLiteral("selection"); });
+	};
 	auto choose = [&](int id) {
 		const QVector<LevelMapSelectionRef> selected{{LevelMapSelectionKind::QuakeBrush,id}};
 		top->setSelectionSet(selected); top->selectionSetChanged(selected);
@@ -94,7 +101,7 @@ int main(int argc, char** argv)
 	const auto gestureSize = camera->size();
 	const auto gestureView = camera->navigationState();
 	ok &= expect(camera->beginSelectionResize(start) && camera->updateSelectionResize(end),"shell camera begins snapped resize");
-	ok &= expect(serializeLevelMap(shell.levelDocument()).bytes == original && shell.levelDocument().undoStack.isEmpty(),"preview leaves shared document untouched");
+	ok &= expect(serializeLevelMap(shell.levelDocument()).bytes == original && contentEdits() == 0,"preview leaves shared document untouched");
 	ok &= until([&] { camera->render(&image); return !camera->isRendering(); });
 	if (!expect(camera->isResizingSelection() && camera->selectionResizeBox() == to,"completed preview retains the pending gesture",
 		QStringLiteral("active=%1 size=%2x%3->%4x%5 viewSame=%6 enabled=%7")
@@ -108,7 +115,7 @@ int main(int argc, char** argv)
 		ok &= frame.save(QDir(output).filePath("camera-resize-workspace.png"));
 	}
 	camera->finishSelectionResize(true);
-	ok &= expect(serializeLevelMap(shell.levelDocument()).bytes == expectedBytes && shell.levelDocument().undoStack.size() == 1,
+	ok &= expect(serializeLevelMap(shell.levelDocument()).bytes == expectedBytes && contentEdits() == 1,
 		"camera release commits the shared resize result as one undo step",shell.statusBar()->currentMessage());
 	for (auto* view : {top,front,side}) {
 		ok &= expect(serializeLevelMap(view->displayDocument()).bytes == expectedBytes,"camera commit refreshes each plan pane");
@@ -141,7 +148,7 @@ int main(int argc, char** argv)
 	ok &= expect(until([&] { return shell.levelDocument().sourcePath == lockedPath && camera->isEnabled(); }) && !camera->isResizingSelection(),
 		"document replacement cancels the old camera gesture");
 	choose(0);
-	ok &= expect(noHandles(*camera) && shell.levelDocument().undoStack.isEmpty(),"locked geometry has no resize affordance or accidental edit");
+	ok &= expect(noHandles(*camera) && contentEdits() == 0,"locked geometry has no resize affordance or accidental edit");
 	const auto doomPath = temp.filePath("things.wad");
 	{
 		const auto text = tests::udmf::textmap() + QByteArray("\r\nthing { x = 192.25; y = 128.25; height = 0.5; type = 1; }\r\n");
@@ -167,7 +174,7 @@ int main(int argc, char** argv)
 	ok &= expect(camera->beginSelectionResize(camera->selectionResizeHandles()[1]) && camera->updateSelectionResize(doomEnd),"Doom thing spacing previews");
 	camera->finishSelectionResize(true);
 	const bool doomExact = serializeLevelMap(shell.levelDocument()).bytes == serializeLevelMap(expectedDoom).bytes;
-	ok &= expect(doomExact && shell.levelDocument().undoStack.size() == 1,"Doom camera resize shares the lossless native transaction");
+	ok &= expect(doomExact && contentEdits() == 1,"Doom camera resize shares the lossless native transaction");
 	ok &= shell.saveLevelDocument(temp.filePath("resized-things.wad"),false,&error);
 	std::cout << QJsonDocument(QJsonObject{{"ok",ok},{"undoRedoExact",serializeLevelMap(saved).bytes == expectedBytes},
 		{"planPanes",3},{"savedBrushes",saved.brushes.size()},{"udmfThingResizeExact",doomExact}}).toJson(QJsonDocument::Compact).constData() << '\n';

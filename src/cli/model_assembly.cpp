@@ -3,6 +3,7 @@
 #include "core/model_assembly_animation.h"
 #include "core/model_assembly_recovery.h"
 #include "core/model_player_bundle.h"
+#include "core/model_player_import.h"
 #include "core/package_draft.h"
 
 #include <QCoreApplication>
@@ -19,7 +20,7 @@ ModelAssemblyCliResult runModelAssembly(const QStringList &arguments)
 {
 	const auto fail = [](int code, const QString &message) { return ModelAssemblyCliResult{code, message, {}, {}}; };
 	const QSet<QString> globals{"--settings-file", "--locale", "--catalog-root"};
-	const QSet<QString> flags{"--cli", "--json", "--quiet", "--verbose", "--overwrite", "--dry-run", "--new", "--clear-skin"};
+	const QSet<QString> flags{"--cli", "--json", "--quiet", "--verbose", "--overwrite", "--dry-run", "--new", "--clear-skin", "--team-variants", "--lod-recipes"};
 	const QSet<QString> options{"--input",
 								"--output",
 								"--operation",
@@ -55,7 +56,12 @@ ModelAssemblyCliResult runModelAssembly(const QStringList &arguments)
 								"--upper-animation",
 								"--skin",
 								"--skin-kind",
-								"--skin-entry-index", "--player-name", "--skin-name", "--head-part", "--icon", "--icon-kind", "--icon-entry-index"};
+								"--skin-entry-index", "--player-name", "--skin-name", "--head-part", "--icon", "--icon-kind", "--icon-entry-index",
+								"--skin-variants", "--variant-skin", "--variant-icon", "--sound", "--lod-levels", "--lod-ratio",
+								"--from-player", "--config-entry", "--config-entry-index"};
+	// Player options that may be given more than once, kept in order.
+	const QSet<QString> repeatable{"--variant-skin", "--variant-icon", "--sound"};
+	QHash<QString, QStringList> repeated;
 	QSet<QString> seen;
 	QHash<QString, QString> values;
 	QStringList positional;
@@ -69,7 +75,7 @@ ModelAssemblyCliResult runModelAssembly(const QStringList &arguments)
 		}
 		const int equal = arg.indexOf('=');
 		const auto key = equal < 0 ? arg : arg.left(equal);
-		if (seen.contains(key))
+		if (seen.contains(key) && !repeatable.contains(key))
 		{
 			return fail(2, QCoreApplication::translate("ModelAssemblyCli", "Repeated option: %1").arg(key));
 		}
@@ -95,11 +101,62 @@ ModelAssemblyCliResult runModelAssembly(const QStringList &arguments)
 		{
 			return fail(2, QCoreApplication::translate("ModelAssemblyCli", "Missing value for %1.").arg(key));
 		}
-		values.insert(key, value);
+		if (repeatable.contains(key))
+			repeated[key].append(value);
+		else
+			values.insert(key, value);
 	}
 	const bool fresh = seen.contains("--new"), dryRun = seen.contains("--dry-run"), overwrite = seen.contains("--overwrite");
-	const auto operation = values.value("--operation", fresh ? QStringLiteral("add") : QStringLiteral("inspect"));
+	// --new --from-player NAME opens a package player as a new assembly.
+	const bool fromPlayer = seen.contains("--from-player");
+	const auto operation =
+		fromPlayer ? QStringLiteral("open-player") : values.value("--operation", fresh ? QStringLiteral("add") : QStringLiteral("inspect"));
 	const bool player = operation == "player-review" || operation == "player-export";
+	// A package, a folder or a portable .vibepackage draft, read-only.
+	const auto loadPackage = [](const QString &path, std::shared_ptr<const PackageArchiveReader> *result, QString *error) {
+		PackageArchive archive;
+		if (path.endsWith(".vibepackage", Qt::CaseInsensitive))
+		{
+			PackageStagingModel staging;
+			if (!PackageDraft::load(path, &staging, error))
+				return false;
+			archive = packagePlannedArchive(staging, error);
+			if (!archive.isOpen())
+				return false;
+		}
+		else if (!archive.load(path, error))
+			return false;
+		*result = std::make_shared<PackageArchive>(std::move(archive));
+		return true;
+	};
+	if (operation == "players")
+	{
+		QSet<QString> allowed{"--cli", "--json", "--quiet", "--verbose", "--operation", "--package"};
+		allowed.unite(globals);
+		if (positional.size() != 2 || !(seen - allowed).isEmpty() || !values.contains("--package"))
+			return fail(2, QCoreApplication::translate("ModelAssemblyCli",
+													   "players lists the Quake III players in --package PATH and takes no assembly source."));
+		QString error;
+		std::shared_ptr<const PackageArchiveReader> archive;
+		QVector<ModelQ3PlayerListing> players;
+		if (!loadPackage(values.value("--package"), &archive, &error))
+			return fail(1, error);
+		if (!listModelQ3Players(*archive, &players, &error))
+			return fail(4, error);
+		ModelAssemblyCliResult result;
+		QJsonArray items;
+		result.lines << QCoreApplication::translate("ModelAssemblyCli", "%n player(s) in %1.", nullptr, int(players.size()))
+							.arg(QFileInfo(values.value("--package")).absoluteFilePath());
+		for (const auto &item : players)
+		{
+			items.append(modelQ3PlayerListingJson(item));
+			result.lines += modelQ3PlayerListingText(item);
+		}
+		result.payload = {{"operation", operation},
+						  {"package", QFileInfo(values.value("--package")).absoluteFilePath()},
+						  {"players", items}};
+		return result;
+	}
 	if (QSet<QString>{"recoveries", "recover", "discard"}.contains(operation))
 	{
 		QSet<QString> allowed{"--cli", "--json", "--quiet", "--verbose", "--operation", "--directory"};
@@ -195,17 +252,20 @@ ModelAssemblyCliResult runModelAssembly(const QStringList &arguments)
 		return result;
 	}
 	if (!QSet<QString>{"inspect", "add", "update", "remove", "bake", "bake-animation", "animation-set", "animation-export",
-					   "animation-clear", "player-review", "player-export"}
+					   "animation-clear", "player-review", "player-export", "open-player"}
 			 .contains(operation) ||
 		positional.size() != (fresh || values.contains("--input") ? 2 : 3) || (fresh && values.contains("--input")) ||
-		(fresh && operation != "add"))
+		(fresh && operation != "add" && operation != "open-player") || (fromPlayer && (!fresh || seen.contains("--operation"))))
 	{
 		return fail(
 			2, QCoreApplication::translate(
 				   "ModelAssemblyCli", "Use model assembly <source.assembly.json> with inspect, add, update, remove, bake, bake-animation, "
-									   "animation-set, animation-export, animation-clear, player-review or player-export; --new starts an assembly with add."));
+									   "animation-set, animation-export, animation-clear, player-review or player-export; --new starts an assembly with add, "
+									   "and --new --from-player NAME opens a package player; --operation players lists them."));
 	}
 	QSet<QString> allowed{"--input", "--operation", "--package", "--palette"};
+	if (fromPlayer)
+		allowed.unite({"--from-player", "--skin-name"});
 	if (operation == "inspect" || operation == "bake" || operation == "bake-animation")
 	{
 		allowed << "--time";
@@ -216,13 +276,15 @@ ModelAssemblyCliResult runModelAssembly(const QStringList &arguments)
 	}
 	if (operation == "animation-set")
 	{
-		allowed.unite({"--config", "--lower-part", "--upper-part", "--lower-animation", "--upper-animation"});
+		allowed.unite({"--config", "--config-entry", "--config-entry-index", "--lower-part", "--upper-part", "--lower-animation",
+					   "--upper-animation"});
 	}
 	if (operation != "inspect" && operation != "player-review")
 	{
 		allowed << "--output" << "--overwrite" << "--dry-run";
 	}
-	if (player) allowed.unite({"--player-name", "--skin-name", "--head-part", "--icon", "--icon-kind", "--icon-entry-index"});
+	if (player) allowed.unite({"--player-name", "--skin-name", "--head-part", "--icon", "--icon-kind", "--icon-entry-index", "--skin-variants",
+							   "--variant-skin", "--variant-icon", "--sound", "--lod-levels", "--lod-ratio", "--team-variants", "--lod-recipes"});
 	if (fresh)
 	{
 		allowed << "--new" << "--name";
@@ -259,6 +321,12 @@ ModelAssemblyCliResult runModelAssembly(const QStringList &arguments)
 	{
 		return fail(2, QCoreApplication::translate("ModelAssemblyCli", "--palette requires --package; --kind requires --model."));
 	}
+	if ((fromPlayer && !values.contains("--package")) || (values.contains("--config") && values.contains("--config-entry")) ||
+		(values.contains("--config-entry") && !values.contains("--package")) ||
+		(values.contains("--config-entry-index") && !values.contains("--config-entry")))
+		return fail(2, QCoreApplication::translate("ModelAssemblyCli",
+												   "--from-player and --config-entry read from --package. Use --config FILE or --config-entry PATH "
+												   "(with an optional --config-entry-index N), not both."));
 	if (((values.contains("--skin-kind") || values.contains("--skin-entry-index")) && !values.contains("--skin")) ||
 		(seen.contains("--clear-skin") && values.contains("--skin")))
 		return fail(2, QCoreApplication::translate("ModelAssemblyCli",
@@ -279,11 +347,99 @@ ModelAssemblyCliResult runModelAssembly(const QStringList &arguments)
 			return fail(2, QCoreApplication::translate("ModelAssemblyCli", "Player operations require --player-name, --head-part, --icon and --package. Icon kind is file|package; an entry index must be nonnegative and package-only."));
 		playerOptions.iconKind = kind == "file" ? ModelAssemblySource::File : ModelAssemblySource::Package;
 		if (playerOptions.iconKind == ModelAssemblySource::File) playerOptions.iconSource = QFileInfo(playerOptions.iconSource).absoluteFilePath();
+		// "package:PATH" names a package entry; anything else is a file here.
+		const auto reference = [](const QString &text) {
+			auto result = modelPlayerReference(text);
+			if (result.sourceKind == ModelAssemblySource::File)
+				result.source = QFileInfo(result.source).absoluteFilePath();
+			return result;
+		};
+		const auto variant = [&](const QString &name) -> ModelPlayerSkinVariant & {
+			for (auto &item : playerOptions.variants)
+				if (item.name == name)
+					return item;
+			playerOptions.variants.append(ModelPlayerSkinVariant{name, {}, {}});
+			return playerOptions.variants.last();
+		};
+		const auto usage = [&] {
+			return fail(2, QCoreApplication::translate("ModelAssemblyCli", "Use --skin-variants NAME,NAME, --variant-skin NAME:lower|upper|head=PATH, --variant-icon NAME=PATH and --sound NAME=PATH; PATH is a file or package:PATH, and each skin role, icon and sound is given once."));
+		};
+		if (values.contains("--skin-variants"))
+			for (const auto &name : values.value("--skin-variants").split(','))
+			{
+				if (name.trimmed().isEmpty() || std::any_of(playerOptions.variants.cbegin(), playerOptions.variants.cend(), [&](const auto &item) { return item.name == name.trimmed(); }))
+					return usage();
+				variant(name.trimmed());
+			}
+		for (const auto &item : repeated.value("--variant-skin"))
+		{
+			const int colon = item.indexOf(':'), equal = item.indexOf('=', colon + 1);
+			const QStringList roles{"lower", "upper", "head"};
+			const int role = colon > 0 && equal > colon + 1 ? int(roles.indexOf(item.mid(colon + 1, equal - colon - 1))) : -1;
+			if (role < 0 || equal + 1 >= item.size())
+				return usage();
+			auto &skin = variant(item.left(colon)).skins[role];
+			if (skin)
+				return usage();
+			skin = reference(item.mid(equal + 1));
+		}
+		for (const auto &item : repeated.value("--variant-icon"))
+		{
+			const int equal = item.indexOf('=');
+			if (equal <= 0 || equal + 1 >= item.size())
+				return usage();
+			auto &icon = variant(item.left(equal)).icon;
+			if (icon)
+				return usage();
+			icon = reference(item.mid(equal + 1));
+		}
+		for (const auto &item : repeated.value("--sound"))
+		{
+			const int equal = item.indexOf('=');
+			if (equal <= 0 || equal + 1 >= item.size())
+				return usage();
+			playerOptions.sounds.append({item.left(equal), reference(item.mid(equal + 1))});
+		}
+		playerOptions.teamVariants = seen.contains("--team-variants");
+		if ((values.contains("--lod-levels") && seen.contains("--lod-recipes")) || (values.contains("--lod-ratio") && !values.contains("--lod-levels")))
+			return fail(2, QCoreApplication::translate("ModelAssemblyCli", "Use --lod-levels N (with an optional --lod-ratio) or --lod-recipes, not both."));
+		if (seen.contains("--lod-recipes"))
+			playerOptions.detailLevels = ModelPlayerDetailLevels::Stored;
+		if (values.contains("--lod-levels"))
+		{
+			bool levelsValid = false, ratioValid = true;
+			playerOptions.detailLevels = ModelPlayerDetailLevels::Generated;
+			playerOptions.lodLevels = values.value("--lod-levels").toInt(&levelsValid);
+			if (values.contains("--lod-ratio"))
+				playerOptions.lodRatio = values.value("--lod-ratio").toDouble(&ratioValid);
+			if (!levelsValid || !ratioValid)
+				return fail(2, QCoreApplication::translate("ModelAssemblyCli", "--lod-levels takes 1 or 2 and --lod-ratio 0.05 to 0.95."));
+		}
 	}
 	QString error;
+	// The package is read before the assembly: a player and an animation.cfg
+	// entry come from it. It is never written.
+	std::shared_ptr<const PackageArchiveReader> package;
+	if (values.contains("--package"))
+	{
+		if (!loadPackage(values.value("--package"), &package, &error))
+			return fail(1, error);
+		if (values.contains("--output") && package->protectsInputPath(values.value("--output")))
+			return fail(2, QCoreApplication::translate("ModelAssemblyCli", "Write outside the assembly's input package or portable draft."));
+	}
 	ModelAssemblyDocument document;
 	const auto source = fresh ? QString() : values.value("--input", positional.value(2));
-	if (fresh)
+	ModelQ3PlayerImport imported;
+	if (fromPlayer)
+	{
+		if (!importModelQ3Player(*package, values.value("--from-player"), values.value("--skin-name"), &imported, &error))
+			return fail(4, error);
+		if (values.contains("--name"))
+			imported.assembly.name = values.value("--name");
+		if (!document.setAssembly(imported.assembly, QDir::currentPath(), &error))
+			return fail(4, error);
+	}
+	else if (fresh)
 	{
 		ModelAssembly assembly;
 		assembly.name = values.value("--name", QCoreApplication::translate("ModelAssemblyCli", "Assembly"));
@@ -300,9 +456,27 @@ ModelAssemblyCliResult runModelAssembly(const QStringList &arguments)
 	if (operation == "animation-set")
 	{
 		auto binding = document.assembly().q3Animation.value_or(ModelAssemblyQ3Animation{});
-		if (!document.assembly().q3Animation && !values.contains("--config"))
-			return fail(2, QCoreApplication::translate("ModelAssemblyCli",
-													   "A new native animation binding requires --config, --lower-part and --upper-part."));
+		if (!document.assembly().q3Animation && !values.contains("--config") && !values.contains("--config-entry"))
+			return fail(2, QCoreApplication::translate("ModelAssemblyCli", "A new native animation binding requires --config or --config-entry, "
+																		   "--lower-part and --upper-part."));
+		if (values.contains("--config-entry"))
+		{
+			qsizetype index = -1, selected = -1;
+			if (values.contains("--config-entry-index"))
+			{
+				bool valid = false;
+				index = values.value("--config-entry-index").toLongLong(&valid);
+				if (!valid || index < 0)
+					return fail(2, QCoreApplication::translate("ModelAssemblyCli", "--config-entry-index must be a nonnegative integer."));
+			}
+			QByteArray bytes;
+			if (!readModelQ3AnimationEntry(*package, values.value("--config-entry"), index, &bytes, &selected, &error) ||
+				!parseModelQ3Animation(bytes, &binding.config, &error, &configNotes))
+				return fail(4, error);
+			configNotes.prepend(QCoreApplication::translate("ModelAssemblyCli", "Native animation read from package entry %1 (%2).")
+									.arg(selected)
+									.arg(package->entries()[selected].virtualPath));
+		}
 		if (values.contains("--config"))
 		{
 			if (modelPathsReferToSameFile(values.value("--config"), values.value("--output")))
@@ -463,34 +637,7 @@ ModelAssemblyCliResult runModelAssembly(const QStringList &arguments)
 	ModelAssemblyContext context;
 	context.directory = document.directory();
 	context.paletteId = values.value("--palette");
-	if (values.contains("--package"))
-	{
-		PackageArchive archive;
-		const auto path = values.value("--package");
-		if (path.endsWith(".vibepackage", Qt::CaseInsensitive))
-		{
-			PackageStagingModel staging;
-			if (!PackageDraft::load(path, &staging, &error))
-			{
-				return fail(1, error);
-			}
-			archive = packagePlannedArchive(staging, &error);
-			if (!archive.isOpen())
-			{
-				return fail(1, error);
-			}
-		}
-		else if (!archive.load(path, &error))
-		{
-			return fail(1, error);
-		}
-		context.archive = std::make_shared<PackageArchive>(std::move(archive));
-		if (values.contains("--output") && context.archive->protectsInputPath(values.value("--output")))
-		{
-			return fail(2,
-						QCoreApplication::translate("ModelAssemblyCli", "Write outside the assembly's input package or portable draft."));
-		}
-	}
+	context.archive = package;
 	double seconds = 0;
 	if (values.contains("--time"))
 	{
@@ -640,6 +787,11 @@ ModelAssemblyCliResult runModelAssembly(const QStringList &arguments)
 		}
 	}
 	result.lines += operation.startsWith("bake") ? report.notes : pose.notes;
+	if (fromPlayer)
+	{
+		result.payload.insert("player", modelQ3PlayerImportJson(imported));
+		result.lines += modelQ3PlayerImportText(imported);
+	}
 	if (operation == "bake-animation")
 	{
 		result.payload.insert(

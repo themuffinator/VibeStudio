@@ -1,5 +1,6 @@
 #include "app/model_editor_dialog.h"
 #include "app/model_surface_dialog.h"
+#include "app/wrapping_action_button.h"
 
 #include <QCoreApplication>
 #include <QFormLayout>
@@ -10,7 +11,7 @@ namespace vibestudio
 {
 void ModelEditorDialog::addSurfaceControls(QFormLayout *surface)
 {
-	auto *manage = new QPushButton(QCoreApplication::translate("VibeStudioModelEditor", "Manage Surfaces…"));
+	auto *manage = new WrappingActionButton(QCoreApplication::translate("VibeStudioModelEditor", "Manage Surfaces…"), 2);
 	manage->setObjectName("manageMeshSurfaces");
 	manage->setAccessibleName(manage->text());
 	manage->setAccessibleDescription(QCoreApplication::translate(

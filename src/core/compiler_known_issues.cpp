@@ -133,16 +133,6 @@ QStringList lightProfile()
 	return {QStringLiteral("vibemap2-light")};
 }
 
-QStringList allCompileTools()
-{
-	return {QStringLiteral("vibemap2-bsp"), QStringLiteral("vibemap2-vis"), QStringLiteral("vibemap2-light")};
-}
-
-QStringList allCompileProfiles()
-{
-	return {QStringLiteral("vibemap2-bsp"), QStringLiteral("vibemap2-vis"), QStringLiteral("vibemap2-light")};
-}
-
 QStringList bsputilTool()
 {
 	return {QStringLiteral("vibemap2-bsputil")};

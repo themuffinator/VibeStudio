@@ -1,4 +1,5 @@
 #include "core/model_assembly_animation.h"
+#include "core/model_archive.h"
 #include "core/package_archive.h"
 
 #include <QCoreApplication>
@@ -23,6 +24,7 @@ bool fail(QString *error, const QString &message)
 bool sameLayout(const ModelSurface &a, const ModelSurface &b)
 {
 	return a.name == b.name && a.vertexCount == b.vertexCount && a.skinPaths == b.skinPaths && a.uvSeams == b.uvSeams &&
+		   a.topologyVertices == b.topologyVertices &&
 		   std::equal(a.texCoords.cbegin(), a.texCoords.cend(), b.texCoords.cbegin(), b.texCoords.cend(),
 					  [](const auto &x, const auto &y) { return x.u == y.u && x.v == y.v; }) &&
 		   std::equal(a.triangles.cbegin(), a.triangles.cend(), b.triangles.cbegin(), b.triangles.cend(),
@@ -198,8 +200,11 @@ bool exportModelAssemblyAnimation(const ModelAssembly &assembly, const ModelAsse
 	{
 		return fail(error, target.error);
 	}
-	bool protectedInput = modelPathsReferToSameFile(path, sourcePath) ||
-						  (archive && (archive->protectsInputPath(target.path) || archive->protectsInputPath(target.resolvedPath)));
+	if (!validateModelArchiveOutputs(archive.get(), {target.path, target.resolvedPath}, error, control))
+	{
+		return false;
+	}
+	bool protectedInput = modelPathsReferToSameFile(path, sourcePath);
 	for (const auto &input : resolved.inputs)
 	{
 		protectedInput |= modelAssemblyInputProtectsPath(input, path);
@@ -219,16 +224,10 @@ bool exportModelAssemblyAnimation(const ModelAssembly &assembly, const ModelAsse
 	QByteArray bytes;
 	if (editable)
 	{
-		const auto object = editableModelJson(animation.mesh, error, control);
-		if (object.isEmpty())
+		bytes = serializeEditableModel(animation.mesh, error, control);
+		if (bytes.isEmpty())
 		{
 			return false;
-		}
-		bytes = QJsonDocument(object).toJson(QJsonDocument::Compact);
-		if (bytes.size() > modelDocumentMaxSourceBytes)
-		{
-			return fail(error, QCoreApplication::translate("VibeStudioModelAssemblyAnimation",
-														   "The editable animation exceeds the 64 MiB source limit."));
 		}
 		details.storedVertices = animation.mesh.vertexCount;
 	}

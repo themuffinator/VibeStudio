@@ -1,6 +1,8 @@
 #include "app/model_editor_dialog.h"
+#include "app/locale_number.h"
 #include "app/model_uv_view.h"
 #include "app/model_viewport.h"
+#include "app/wrapping_action_button.h"
 
 #include <QComboBox>
 #include <QCoreApplication>
@@ -46,7 +48,7 @@ void ModelEditorDialog::addMdlControls(QFormLayout *page)
 	const auto button =
 		[&](QFormLayout *form, const char *id, const QString &title, const QString &description, std::function<void()> action)
 	{
-		auto *value = new QPushButton(title);
+		auto *value = new WrappingActionButton(title, 2);
 		value->setObjectName(QString::fromLatin1(id));
 		value->setAccessibleName(title);
 		value->setAccessibleDescription(description);
@@ -430,7 +432,7 @@ void ModelEditorDialog::refreshMdlControls()
 		QStringList ends;
 		for (float time : native.intervals)
 		{
-			ends << QString::number(time, 'g', 7);
+			ends << localeNumber(time, 7);
 		}
 		m_mdlTiming->setText(
 			native.intervals.isEmpty()
@@ -438,7 +440,7 @@ void ModelEditorDialog::refreshMdlControls()
 				: QCoreApplication::translate(
 					  "VibeStudioModelEditor",
 					  "Cumulative ends: %1 s. Original GLQuake uses the first interval; software Quake uses the stored times.")
-					  .arg(ends.join(QStringLiteral(", "))));
+					  .arg(ends.join(localeNumberSeparator())));
 	}
 	else
 	{
@@ -462,11 +464,11 @@ void ModelEditorDialog::refreshMdlControls()
 		}
 	}
 	m_mdlSummary->setText(
-		enabled ? QCoreApplication::translate("VibeStudioModelEditor", "%1 × %2 · %3 skins · %4 native frames · %5")
+		enabled ? QCoreApplication::translate("VibeStudioModelEditor", "%L1 × %L2 · %3 · %4 · %5")
 					  .arg(mesh.mdl.skinSize.width())
 					  .arg(mesh.mdl.skinSize.height())
-					  .arg(mesh.embeddedSkins.size())
-					  .arg(mesh.mdl.frameGroups.size())
+					  .arg(QCoreApplication::translate("VibeStudioModelEditor", "%Ln skin(s)", nullptr, int(mesh.embeddedSkins.size())),
+						   QCoreApplication::translate("VibeStudioModelEditor", "%Ln native frame(s)", nullptr, int(mesh.mdl.frameGroups.size())))
 					  .arg(mesh.mdl.paletteGenerated ? QCoreApplication::translate("VibeStudioModelEditor", "Generated palette")
 													 : QCoreApplication::translate("VibeStudioModelEditor", "Imported palette"))
 				: QCoreApplication::translate("VibeStudioModelEditor", "MDL settings are created when the first indexed skin is added."));
@@ -509,15 +511,20 @@ void ModelEditorDialog::executeMdl(ModelEditKind kind)
 		}
 		if (!parsed)
 		{
-			m_status->setText(QCoreApplication::translate(
-				"VibeStudioModelEditor", "Use unsigned 32-bit flags, finite x,y,z eye coordinates and a nonnegative size hint."));
+			// These fields hold the file's own values, so they keep a full stop
+			// for decimals whatever the region format (the commas separate x, y
+			// and z); the refusal says so.
+			m_status->setText(QCoreApplication::translate("VibeStudioModelEditor",
+														  "Use unsigned 32-bit flags, an eye position as x,y,z and a nonnegative "
+														  "size hint, with a full stop for decimals (0.5)."),
+							  LiveStatus::Problem);
 			return;
 		}
 	}
 	QString error;
 	if (!applyEdit(edit, &error))
 	{
-		m_status->setText(error);
+		m_status->setText(error, LiveStatus::Problem);
 	}
 }
 

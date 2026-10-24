@@ -1427,6 +1427,20 @@ bool StudioSettings::setLevelViewLayoutPreference(const QString& id)
 	return !isReadOnly();
 }
 
+LevelPlanPanes StudioSettings::levelPlanPanes() const
+{
+	LevelPlanPanes panes;
+	levelPlanPanesForId(m_settings->value(QStringLiteral("levels/planPanes"), QStringLiteral("all")).toString(), &panes);
+	return panes;
+}
+
+bool StudioSettings::setLevelPlanPanes(const LevelPlanPanes& panes)
+{
+	if (levelPlanPanesShownCount(panes) == 0 || isReadOnly()) { return false; }
+	writeValue(QStringLiteral("levels/planPanes"), levelPlanPanesId(panes));
+	return !isReadOnly();
+}
+
 LevelViewLinks StudioSettings::levelViewLinks() const
 {
 	const auto values = m_settings->value(QStringLiteral("levels/viewLinks")).toMap();
@@ -1453,6 +1467,58 @@ void StudioSettings::setLevelTextureLock(bool enabled)
 	writeValue(QStringLiteral("levels/textureLock"), enabled);
 }
 
+bool StudioSettings::levelComponentUvLock() const
+{
+	return m_settings->value(QStringLiteral("levels/componentUvLock"), false).toBool();
+}
+
+LevelClipperPreferences StudioSettings::levelClipperPreferences() const
+{
+	LevelClipperPreferences result;
+	updateLevelClipperPreferences(QJsonObject::fromVariantMap(m_settings->value(QStringLiteral("levels/clipper")).toMap()),&result);
+	return result;
+}
+bool StudioSettings::setLevelClipperPreferences(const LevelClipperPreferences& preferences)
+{
+	if (preferences.material < LevelClipMaterial::Inherit || preferences.material > LevelClipMaterial::Custom
+		|| preferences.doubleClick < LevelClipDoubleClick::None || preferences.doubleClick > LevelClipDoubleClick::Split) { return false; }
+	auto check = preferences; const auto values = levelClipperPreferencesJson(preferences);
+	if (!updateLevelClipperPreferences(values,&check)) { return false; }
+	writeValue(QStringLiteral("levels/clipper"),values.toVariantMap()); sync(); return status() == QSettings::NoError;
+}
+
+void StudioSettings::setLevelComponentUvLock(bool enabled)
+{
+	writeValue(QStringLiteral("levels/componentUvLock"), enabled);
+}
+
+bool StudioSettings::levelComponentUvFit() const
+{
+	return m_settings->value(QStringLiteral("levels/componentUvFit"), true).toBool();
+}
+
+void StudioSettings::setLevelComponentUvFit(bool enabled)
+{
+	writeValue(QStringLiteral("levels/componentUvFit"), enabled);
+}
+
+std::array<double,3> StudioSettings::levelComponentTransformSteps() const
+{
+	std::array<double,3> result{15,.125,.125};
+	const QStringList keys{QStringLiteral("levels/componentAngleStep"),QStringLiteral("levels/componentScaleStep"),QStringLiteral("levels/componentShearStep")};
+	for (int i = 0; i < 3; ++i) {
+		bool valid = false; const double value = m_settings->value(keys[i],result[i]).toDouble(&valid);
+		if (valid && std::isfinite(value) && value >= 0 && value <= (i == 0 ? 360 : 1)) { result[i] = value; }
+	}
+	return result;
+}
+bool StudioSettings::setLevelComponentTransformSteps(const std::array<double,3>& steps)
+{
+	for (int i = 0; i < 3; ++i) { if (!std::isfinite(steps[i]) || steps[i] < 0 || steps[i] > (i == 0 ? 360 : 1)) { return false; } }
+	writeValue(QStringLiteral("levels/componentAngleStep"),steps[0]); writeValue(QStringLiteral("levels/componentScaleStep"),steps[1]); writeValue(QStringLiteral("levels/componentShearStep"),steps[2]);
+	return status() == QSettings::NoError;
+}
+
 bool StudioSettings::levelTextureScaleLock() const
 {
 	return m_settings->value(QStringLiteral("levels/textureScaleLock"), false).toBool();
@@ -1471,6 +1537,34 @@ bool StudioSettings::levelAllowValve220() const
 void StudioSettings::setLevelAllowValve220(bool enabled)
 {
 	writeValue(QStringLiteral("levels/allowValve220"), enabled);
+}
+
+std::array<double,3> StudioSettings::levelEntityColour() const
+{
+	// Stored as "r g b" fractions, as the _color key is written.
+	const std::array<double,3> white {1.0, 1.0, 1.0};
+	const QStringList parts = m_settings->value(QStringLiteral("levels/entityColour")).toString().split(QLatin1Char(' '), Qt::SkipEmptyParts);
+	if (parts.size() != 3) {
+		return white;
+	}
+	std::array<double,3> read {};
+	for (int index = 0; index < 3; ++index) {
+		bool valid = false;
+		read[index] = parts.at(index).toDouble(&valid);
+		if (!valid || !std::isfinite(read[index]) || read[index] < 0.0 || read[index] > 1.0) {
+			return white;
+		}
+	}
+	return read;
+}
+
+void StudioSettings::setLevelEntityColour(const std::array<double,3>& unit)
+{
+	QStringList parts;
+	for (const double channel : unit) {
+		parts << QString::number(std::isfinite(channel) ? std::clamp(channel, 0.0, 1.0) : 1.0, 'g', 6);
+	}
+	writeValue(QStringLiteral("levels/entityColour"), parts.join(QLatin1Char(' ')));
 }
 
 void StudioSettings::setLevelRecoveryEnabled(bool enabled)
@@ -1526,6 +1620,16 @@ bool StudioSettings::modelRecoveryEnabled() const
 void StudioSettings::setModelRecoveryEnabled(bool enabled)
 {
 	writeValue(QStringLiteral("model/recoveryEnabled"), enabled);
+}
+
+int StudioSettings::modelHistoryBudgetMiB() const
+{
+	return std::clamp(m_settings->value(QStringLiteral("model/historyBudgetMiB"), 64).toInt(), 16, 4096);
+}
+
+void StudioSettings::setModelHistoryBudgetMiB(int mib)
+{
+	writeValue(QStringLiteral("model/historyBudgetMiB"), std::clamp(mib, 16, 4096));
 }
 
 QStringList StudioSettings::packagePublicationDirectories() const

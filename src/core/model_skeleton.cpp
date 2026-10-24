@@ -1,4 +1,6 @@
 #include "core/model_skeleton.h"
+#include "core/model_animation_curves.h"
+#include "core/model_source_encoding.h"
 
 #include <QCoreApplication>
 #include <QHash>
@@ -179,8 +181,8 @@ ModelVec3 modelJointTransformNormal(const ModelJointMatrix& a, const ModelVec3& 
 	const double c22 = double(m[0]) * m[5] - double(m[1]) * m[4];
 	const double det = determinant3(a);
 	const double sign = det < 0 ? -1.0 : 1.0;
-	const ModelVec3 out{float(sign * (c00 * n.x + c10 * n.y + c20 * n.z)), float(sign * (c01 * n.x + c11 * n.y + c21 * n.z)),
-		float(sign * (c02 * n.x + c12 * n.y + c22 * n.z))};
+	const ModelVec3 out{float(sign * (c00 * n.x + c01 * n.y + c02 * n.z)), float(sign * (c10 * n.x + c11 * n.y + c12 * n.z)),
+		float(sign * (c20 * n.x + c21 * n.y + c22 * n.z))};
 	return normalized(out);
 }
 
@@ -412,8 +414,10 @@ QVector<ModelJointMatrix> modelSkeletonBindPose(const ModelSkeleton& skeleton)
 
 // --- Validation ------------------------------------------------------------
 
-bool validateModelSkeleton(const ModelMesh& mesh, QString* error)
+bool validateModelSkeleton(const ModelMesh& mesh, QString* error, const ModelWorkControl& control)
 {
+	ModelWorkProgress work(control, ModelWorkPhase::Validating, error);
+	if (!work.check()) return false;
 	const auto fail = [error](const QString& message) {
 		if (error) { *error = message; }
 		return false;
@@ -421,6 +425,7 @@ bool validateModelSkeleton(const ModelMesh& mesh, QString* error)
 	const ModelSkeleton& skeleton = mesh.skeleton;
 	QSet<QString> names;
 	for (int index = 0; index < skeleton.joints.size(); ++index) {
+		if (!work.step()) return false;
 		const ModelJoint& joint = skeleton.joints.at(index);
 		if (joint.parent < -1 || joint.parent >= index) {
 			return fail(QCoreApplication::translate("VibeStudioModelSkeleton", "Joint %1 (%2) names a parent that does not come before it.").arg(index).arg(joint.name));
@@ -436,11 +441,13 @@ bool validateModelSkeleton(const ModelMesh& mesh, QString* error)
 	}
 	for (const ModelSkeletalClip& clip : skeleton.clips) {
 		for (int frame = 0; frame < clip.frames.size(); ++frame) {
+			if (!work.step()) return false;
 			if (clip.frames.at(frame).size() != skeleton.joints.size()) {
 				return fail(QCoreApplication::translate("VibeStudioModelSkeleton", "Frame %1 of clip \"%2\" has %3 joint pose(s) for %4 joint(s).")
 					.arg(frame).arg(clip.name).arg(clip.frames.at(frame).size()).arg(skeleton.joints.size()));
 			}
 			for (const ModelJointMatrix& matrix : clip.frames.at(frame)) {
+				if (!work.step()) return false;
 				if (!modelJointMatrixIsFinite(matrix)) {
 					return fail(QCoreApplication::translate("VibeStudioModelSkeleton", "Frame %1 of clip \"%2\" has a joint pose that is not a finite number.").arg(frame).arg(clip.name));
 				}
@@ -488,7 +495,7 @@ bool validateModelSkeleton(const ModelMesh& mesh, QString* error)
 			}
 		}
 	}
-	return true;
+	return validateModelAnimationCurves(mesh, error, control);
 }
 
 int normalizeModelSkinningWeights(ModelSurfaceSkinning* skinning)
@@ -650,7 +657,9 @@ bool modelSkinningFromBindPose(const ModelSkeleton& skeleton, const QVector<Mode
 			influence.weight = weight;
 			influence.offset = modelJointTransformPoint(inverseBind.at(joint), positions.at(vertex));
 			if (!normals.isEmpty()) {
-				influence.normalOffset = modelJointTransformNormal(inverseBind.at(joint), normals.at(vertex));
+				// Skinning blends transformed direction vectors, then normalizes.
+				// Keep the inverse-bind magnitude so bind scale cancels exactly.
+				influence.normalOffset = modelJointTransformVector(inverseBind.at(joint), normals.at(vertex));
 			}
 			skinning.influences.append(influence);
 		}
@@ -692,7 +701,7 @@ bool bakeModelSkeleton(ModelMesh* mesh, const ModelSkeletonBakeOptions& options,
 		return fail(QCoreApplication::translate("VibeStudioModelSkeleton", "The model has no skeleton to bake."));
 	}
 	QString problem;
-	if (!validateModelSkeleton(*mesh, &problem)) {
+	if (!validateModelSkeleton(*mesh, &problem, control)) {
 		return fail(problem);
 	}
 	ModelWorkProgress work(control, ModelWorkPhase::Validating, error);
@@ -724,7 +733,8 @@ bool bakeModelSkeleton(ModelMesh* mesh, const ModelSkeletonBakeOptions& options,
 	QStringList skipped;
 	for (int clipIndex = 0; clipIndex < skeleton.clips.size(); ++clipIndex) {
 		const ModelSkeletalClip& clip = skeleton.clips.at(clipIndex);
-		if (!options.clips.isEmpty() && !options.clips.contains(clip.name, Qt::CaseInsensitive)) {
+		if (options.byIndex ? !options.clipIndexes.contains(clipIndex)
+							: !options.clips.isEmpty() && !options.clips.contains(clip.name, Qt::CaseInsensitive)) {
 			continue;
 		}
 		if (clip.frames.isEmpty()) {
@@ -866,133 +876,6 @@ double distanceBetween(const ModelVec3& a, const ModelVec3& b)
 	return lengthOf(subtract(a, b));
 }
 
-// Rebinds one vertex so that `position` and `normal` are its bind pose.
-void rebindVertex(ModelSurfaceSkinning& skinning, int vertex, const QVector<ModelJointMatrix>& inverseBind, const ModelVec3& position,
-	const ModelVec3& normal)
-{
-	const int first = skinning.first.at(vertex);
-	const int count = skinning.count.at(vertex);
-	double sum = 0;
-	for (int index = first; index < first + count; ++index) {
-		sum += skinning.influences.at(index).weight;
-	}
-	// The weighted sum of one shared point is that point times the weights'
-	// sum, so dividing by it reproduces the position even when the file's
-	// weights do not add up to one.
-	const float scale = sum > 1e-6 ? float(1.0 / sum) : 1.0f;
-	for (int index = first; index < first + count; ++index) {
-		ModelJointInfluence& influence = skinning.influences[index];
-		if (influence.joint < 0 || influence.joint >= inverseBind.size()) {
-			continue;
-		}
-		influence.offset = modelJointTransformPoint(inverseBind.at(influence.joint), scaled(position, scale));
-		influence.normalOffset = modelJointTransformNormal(inverseBind.at(influence.joint), normal);
-	}
-}
-
-QVector<ModelJointMatrix> inverseBindPose(const ModelSkeleton& skeleton)
-{
-	QVector<ModelJointMatrix> inverse;
-	inverse.reserve(skeleton.joints.size());
-	for (const ModelJoint& joint : skeleton.joints) {
-		inverse.append(modelJointInverse(joint.bind));
-	}
-	return inverse;
-}
-
-// Nearest-point lookup over a uniform grid, for weight transfer.
-class PointGrid final {
-public:
-	explicit PointGrid(const QVector<ModelVec3>& points)
-		: m_points(points)
-	{
-		if (points.isEmpty()) {
-			return;
-		}
-		ModelVec3 low = points.first(), high = points.first();
-		for (const ModelVec3& p : points) {
-			low = {std::min(low.x, p.x), std::min(low.y, p.y), std::min(low.z, p.z)};
-			high = {std::max(high.x, p.x), std::max(high.y, p.y), std::max(high.z, p.z)};
-		}
-		m_low = low;
-		const double extent = std::max({double(high.x - low.x), double(high.y - low.y), double(high.z - low.z), 1e-6});
-		m_cell = std::max(1e-6, extent / std::max(1.0, std::cbrt(double(points.size()))));
-		for (int index = 0; index < points.size(); ++index) {
-			m_cells[key(cellOf(points.at(index)))].append(index);
-			m_exact.insert(exactKey(points.at(index)), index);
-		}
-	}
-	[[nodiscard]] int nearest(const ModelVec3& point) const
-	{
-		if (m_points.isEmpty()) {
-			return -1;
-		}
-		const auto exact = m_exact.constFind(exactKey(point));
-		if (exact != m_exact.cend()) {
-			return exact.value();
-		}
-		const auto centre = cellOf(point);
-		int best = -1;
-		double bestDistance = std::numeric_limits<double>::max();
-		for (int ring = 0; ring < 64; ++ring) {
-			for (int x = -ring; x <= ring; ++x) {
-				for (int y = -ring; y <= ring; ++y) {
-					for (int z = -ring; z <= ring; ++z) {
-						if (std::max({std::abs(x), std::abs(y), std::abs(z)}) != ring) {
-							continue;
-						}
-						const auto found = m_cells.constFind(key({centre[0] + x, centre[1] + y, centre[2] + z}));
-						if (found == m_cells.cend()) {
-							continue;
-						}
-						for (int index : found.value()) {
-							const double d = distanceBetween(point, m_points.at(index));
-							if (d < bestDistance) {
-								bestDistance = d;
-								best = index;
-							}
-						}
-					}
-				}
-			}
-			// Anything in a further ring is at least `ring` cells away.
-			if (best >= 0 && bestDistance <= ring * m_cell) {
-				break;
-			}
-		}
-		if (best < 0) {
-			for (int index = 0; index < m_points.size(); ++index) {
-				const double d = distanceBetween(point, m_points.at(index));
-				if (d < bestDistance) {
-					bestDistance = d;
-					best = index;
-				}
-			}
-		}
-		return best;
-	}
-
-private:
-	using Cell = std::array<int, 3>;
-	[[nodiscard]] Cell cellOf(const ModelVec3& p) const
-	{
-		return {int(std::floor((p.x - m_low.x) / m_cell)), int(std::floor((p.y - m_low.y) / m_cell)), int(std::floor((p.z - m_low.z) / m_cell))};
-	}
-	static quint64 key(const Cell& cell)
-	{
-		return (quint64(quint32(cell[0]) & 0x1fffff) << 42) | (quint64(quint32(cell[1]) & 0x1fffff) << 21) | quint64(quint32(cell[2]) & 0x1fffff);
-	}
-	static QString exactKey(const ModelVec3& p)
-	{
-		return QStringLiteral("%1 %2 %3").arg(double(p.x), 0, 'g', 9).arg(double(p.y), 0, 'g', 9).arg(double(p.z), 0, 'g', 9);
-	}
-	QVector<ModelVec3> m_points;
-	ModelVec3 m_low;
-	double m_cell = 1.0;
-	QHash<quint64, QVector<int>> m_cells;
-	QHash<QString, int> m_exact;
-};
-
 } // namespace
 
 int modelBindPoseFrame(const ModelMesh& mesh)
@@ -1022,7 +905,7 @@ int rebindModelSkinning(ModelMesh* mesh, int frame, double tolerance)
 		return 0;
 	}
 	const QVector<ModelJointMatrix> bind = modelSkeletonBindPose(mesh->skeleton);
-	const QVector<ModelJointMatrix> inverse = inverseBindPose(mesh->skeleton);
+	const QVector<ModelJointMatrix> inverse = modelSkeletonInverseBindPose(mesh->skeleton);
 	int rebound = 0;
 	for (ModelSurface& surface : mesh->surfaces) {
 		ModelSurfaceSkinning& skinning = surface.skinning;
@@ -1042,77 +925,48 @@ int rebindModelSkinning(ModelMesh* mesh, int frame, double tolerance)
 			if (samePosition && alignment > 0.9999) {
 				continue;
 			}
-			rebindVertex(skinning, vertex, inverse, target.positions.at(vertex), normal);
+			rebindModelSkinVertex(&skinning, vertex, inverse, target.positions.at(vertex), normal);
 			++rebound;
 		}
 	}
 	return rebound;
 }
 
-bool reconcileModelSkinning(const ModelMesh& before, ModelMesh* after, QString* error)
+void rebindModelSkinVertex(ModelSurfaceSkinning* skinning, int vertex, const QVector<ModelJointMatrix>& inverseBind,
+	const ModelVec3& position, const ModelVec3& normal)
 {
-	if (!after || after->skeleton.isEmpty()) {
-		return true;
+	const int first = skinning->first.at(vertex);
+	const int count = skinning->count.at(vertex);
+	double sum = 0;
+	for (int index = first; index < first + count; ++index) {
+		sum += skinning->influences.at(index).weight;
 	}
-	// Frames added or removed by an edit no longer come from a clip.
-	if (after->skeleton.bakedClipForFrame.size() != after->frames.size()) {
-		QVector<int> map(after->frames.size(), -2);
-		for (int index = 0; index < after->frames.size(); ++index) {
-			if (after->frames.at(index).name == QLatin1String("bindpose")) {
-				map[index] = -1;
-			}
-		}
-		after->skeleton.bakedClipForFrame = map;
-	}
-	const int beforeBind = std::max(0, modelBindPoseFrame(before));
-	const int afterBind = std::max(0, modelBindPoseFrame(*after));
-	const QVector<ModelJointMatrix> inverse = inverseBindPose(after->skeleton);
-	for (int index = 0; index < after->surfaces.size(); ++index) {
-		ModelSurface& surface = after->surfaces[index];
-		if (!surface.skinning.isEmpty() && surface.skinning.first.size() == surface.vertexCount && surface.skinning.count.size() == surface.vertexCount) {
+	// The weighted sum of one shared point is that point times the weights'
+	// sum, so dividing by it reproduces the position even when the file's
+	// weights do not add up to one.
+	const float scale = sum > 1e-6 ? float(1.0 / sum) : 1.0f;
+	for (int index = first; index < first + count; ++index) {
+		ModelJointInfluence& influence = skinning->influences[index];
+		if (influence.joint < 0 || influence.joint >= inverseBind.size()) {
 			continue;
 		}
-		const bool sourceSkinned = index < before.surfaces.size() && !before.surfaces.at(index).skinning.isEmpty()
-			&& before.surfaces.at(index).skinning.first.size() == before.surfaces.at(index).vertexCount;
-		if (!sourceSkinned || surface.frames.isEmpty() || before.surfaces.at(index).frames.isEmpty()) {
-			// A new surface, or one that never followed the skeleton.
-			surface.skinning = {};
-			continue;
-		}
-		const ModelSurface& source = before.surfaces.at(index);
-		const QVector<ModelVec3>& sourcePositions = source.frames.at(std::min(beforeBind, int(source.frames.size()) - 1)).positions;
-		const ModelFrameGeometry& targetFrame = surface.frames.at(std::min(afterBind, int(surface.frames.size()) - 1));
-		const PointGrid grid(sourcePositions);
-		ModelSurfaceSkinning skinning;
-		skinning.first.reserve(surface.vertexCount);
-		skinning.count.reserve(surface.vertexCount);
-		for (int vertex = 0; vertex < surface.vertexCount; ++vertex) {
-			const ModelVec3 position = targetFrame.positions.value(vertex);
-			const int nearest = grid.nearest(position);
-			skinning.first.append(skinning.influences.size());
-			if (nearest >= 0 && nearest < source.skinning.first.size()) {
-				const int first = source.skinning.first.at(nearest);
-				for (int at = first; at < first + source.skinning.count.at(nearest); ++at) {
-					skinning.influences.append(source.skinning.influences.at(at));
-				}
-			}
-			skinning.count.append(skinning.influences.size() - skinning.first.last());
-			const bool sameVertex = nearest >= 0 && distanceBetween(position, sourcePositions.value(nearest)) <= 1e-6;
-			if (!sameVertex && skinning.count.last() > 0) {
-				rebindVertex(skinning, vertex, inverse, position, targetFrame.normals.value(vertex));
-			}
-		}
-		surface.skinning = skinning;
+		influence.offset = modelJointTransformPoint(inverseBind.at(influence.joint), scaled(position, scale));
+		influence.normalOffset = modelJointTransformVector(inverseBind.at(influence.joint), normal);
 	}
-	QString problem;
-	if (!validateModelSkeleton(*after, &problem)) {
-		if (error) { *error = problem; }
-		return false;
-	}
-	return true;
 }
 
-bool rebakeModelSkeleton(ModelMesh* mesh, QString* error, const ModelWorkControl& control, int maxFrames)
+QVector<ModelJointMatrix> modelSkeletonInverseBindPose(const ModelSkeleton& skeleton)
+{
+	QVector<ModelJointMatrix> inverse;
+	inverse.reserve(skeleton.joints.size());
+	for (const ModelJoint& joint : skeleton.joints) {
+		inverse.append(modelJointInverse(joint.bind));
+	}
+	return inverse;
+}
+
+bool rebakeModelSkeleton(ModelMesh* mesh, QString* error, const ModelWorkControl& control, int maxFrames, qint64 maxVertexSlots,
+	const QVector<int>* clips)
 {
 	if (!mesh || mesh->skeleton.isEmpty()) {
 		if (error) { *error = QCoreApplication::translate("VibeStudioModelSkeleton", "The model has no skeleton to bake."); }
@@ -1125,6 +979,16 @@ bool rebakeModelSkeleton(ModelMesh* mesh, QString* error, const ModelWorkControl
 	ModelSkeletonBakeOptions options;
 	options.includeBindPose = mesh->skeleton.bakedClipForFrame.contains(-1) || mesh->skeleton.clips.isEmpty();
 	options.maxFrames = std::max(1, maxFrames);
+	options.maxVertexSlots = std::max<qint64>(1, maxVertexSlots);
+	if (clips) {
+		options.byIndex = true;
+		options.clipIndexes = *clips;
+		// With no chosen poses the bind pose is the one editable frame.
+		const bool posed = std::any_of(clips->cbegin(), clips->cend(), [mesh](int clip) {
+			return clip >= 0 && clip < mesh->skeleton.clips.size() && !mesh->skeleton.clips.at(clip).frames.isEmpty();
+		});
+		options.includeBindPose = options.includeBindPose || !posed;
+	}
 	ModelMesh candidate = *mesh;
 	if (!bakeModelSkeleton(&candidate, options, error, control)) {
 		return false;
@@ -1139,7 +1003,7 @@ QJsonArray matrixJson(const ModelJointMatrix& matrix)
 {
 	QJsonArray array;
 	for (float value : matrix.m) {
-		array.append(double(value));
+		array.append(modelSourceNumber(value));
 	}
 	return array;
 }
@@ -1163,7 +1027,7 @@ QJsonArray vectorsJson(const QVector<ModelVec3>& vectors)
 {
 	QJsonArray array;
 	for (const ModelVec3& v : vectors) {
-		array.append(QJsonArray{double(v.x), double(v.y), double(v.z)});
+		array.append(QJsonArray{modelSourceNumber(v.x), modelSourceNumber(v.y), modelSourceNumber(v.z)});
 	}
 	return array;
 }
@@ -1187,8 +1051,9 @@ bool readVectors(const QJsonValue& value, int count, QVector<ModelVec3>* out)
 
 } // namespace
 
-QJsonObject modelSkeletonJson(const ModelMesh& mesh)
+QJsonObject modelSkeletonJson(const ModelMesh& mesh, bool packed, const ModelWorkControl& control)
 {
+	ModelWorkProgress work(control, ModelWorkPhase::Serializing);
 	const ModelSkeleton& skeleton = mesh.skeleton;
 	QJsonObject object;
 	object.insert(QStringLiteral("sourceFormat"), skeleton.sourceFormat);
@@ -1206,22 +1071,31 @@ QJsonObject modelSkeletonJson(const ModelMesh& mesh)
 	object.insert(QStringLiteral("tags"), tags);
 	QJsonArray clips;
 	for (const ModelSkeletalClip& clip : skeleton.clips) {
+		// Packed sources hold a clip's frames as one string of matrices.
 		QJsonArray frames;
-		for (const QVector<ModelJointMatrix>& pose : clip.frames) {
+		for (const QVector<ModelJointMatrix>& pose : packed ? QVector<QVector<ModelJointMatrix>>{} : clip.frames) {
+			if (!work.step()) {
+				return {};
+			}
 			QJsonArray values;
 			for (const ModelJointMatrix& matrix : pose) {
 				for (float value : matrix.m) {
-					values.append(double(value));
+					values.append(modelSourceNumber(value));
 				}
 			}
 			frames.append(values);
 		}
 		QJsonObject entry{{QStringLiteral("name"), clip.name}, {QStringLiteral("source"), clip.sourcePath},
-			{QStringLiteral("framesPerSecond"), clip.framesPerSecond}, {QStringLiteral("loops"), clip.loops}, {QStringLiteral("frames"), frames}};
-		if (!clip.frameMins.isEmpty()) {
-			entry.insert(QStringLiteral("mins"), vectorsJson(clip.frameMins));
-			entry.insert(QStringLiteral("maxs"), vectorsJson(clip.frameMaxs));
+			{QStringLiteral("framesPerSecond"), clip.framesPerSecond}, {QStringLiteral("loops"), clip.loops},
+			{QStringLiteral("frames"), packed ? packModelSourceMatrices(clip.frames) : QJsonValue(frames)}};
+		if (!work.check()) {
+			return {};
 		}
+		if (!clip.frameMins.isEmpty()) {
+			entry.insert(QStringLiteral("mins"), packed ? packModelSourceVectors(clip.frameMins) : QJsonValue(vectorsJson(clip.frameMins)));
+			entry.insert(QStringLiteral("maxs"), packed ? packModelSourceVectors(clip.frameMaxs) : QJsonValue(vectorsJson(clip.frameMaxs)));
+		}
+		if (!clip.curves.isEmpty()) entry.insert(QStringLiteral("curves"), modelClipCurvesJson(clip.curves));
 		clips.append(entry);
 	}
 	object.insert(QStringLiteral("clips"), clips);
@@ -1236,15 +1110,20 @@ QJsonObject modelSkeletonJson(const ModelMesh& mesh)
 		if (surface.isEmpty()) {
 			continue;
 		}
+		if (packed) {
+			skinning.append(QJsonObject{{QStringLiteral("surface"), index}, {QStringLiteral("count"), packModelSourceIntegers(surface.count)},
+				{QStringLiteral("influences"), packModelSourceInfluences(surface.influences)}});
+			continue;
+		}
 		QJsonArray counts, influences;
 		for (int count : surface.count) {
 			counts.append(count);
 		}
 		for (const ModelJointInfluence& influence : surface.influences) {
 			influences.append(influence.joint);
-			for (double value : {double(influence.weight), double(influence.offset.x), double(influence.offset.y), double(influence.offset.z),
-					 double(influence.normalOffset.x), double(influence.normalOffset.y), double(influence.normalOffset.z)}) {
-				influences.append(value);
+			for (float value : {influence.weight, influence.offset.x, influence.offset.y, influence.offset.z, influence.normalOffset.x,
+					 influence.normalOffset.y, influence.normalOffset.z}) {
+				influences.append(modelSourceNumber(value));
 			}
 		}
 		skinning.append(QJsonObject{{QStringLiteral("surface"), index}, {QStringLiteral("count"), counts}, {QStringLiteral("influences"), influences}});
@@ -1253,7 +1132,7 @@ QJsonObject modelSkeletonJson(const ModelMesh& mesh)
 	return object;
 }
 
-bool modelSkeletonFromJson(const QJsonObject& object, ModelMesh* mesh, QString* error)
+bool modelSkeletonFromJson(const QJsonObject& object, ModelMesh* mesh, QString* error, bool packedArrays)
 {
 	const auto fail = [error](const QString& message) {
 		if (error) { *error = message; }
@@ -1300,7 +1179,16 @@ bool modelSkeletonFromJson(const QJsonObject& object, ModelMesh* mesh, QString* 
 		clip.sourcePath = entry.value(QStringLiteral("source")).toString();
 		clip.framesPerSecond = entry.value(QStringLiteral("framesPerSecond")).toDouble();
 		clip.loops = entry.value(QStringLiteral("loops")).toBool(true);
-		const QJsonArray frames = entry.value(QStringLiteral("frames")).toArray();
+		const QJsonValue framesValue = entry.value(QStringLiteral("frames"));
+		if (packedArrays && framesValue.isString()) {
+			if (!unpackModelSourceMatrices(framesValue, int(skeleton.joints.size()), 16LL * 1024 * 1024 - matrices, &clip.frames)) {
+				return fail(malformed);
+			}
+			matrices += qint64(clip.frames.size()) * skeleton.joints.size();
+		} else if (!framesValue.isArray()) {
+			return fail(malformed);
+		}
+		const QJsonArray frames = framesValue.toArray();
 		for (const QJsonValue& frameValue : frames) {
 			const QJsonArray values = frameValue.toArray();
 			if (values.size() != skeleton.joints.size() * 12) {
@@ -1319,11 +1207,17 @@ bool modelSkeletonFromJson(const QJsonObject& object, ModelMesh* mesh, QString* 
 			}
 			clip.frames.append(pose);
 		}
+		const auto bounds = [&](const QJsonValue& value, QVector<ModelVec3>* out) {
+			if (packedArrays && value.isString()) {
+				return unpackModelSourceVectors(value, clip.frames.size(), out) && out->size() == clip.frames.size();
+			}
+			return readVectors(value, int(clip.frames.size()), out);
+		};
 		if (entry.contains(QStringLiteral("mins"))
-			&& (!readVectors(entry.value(QStringLiteral("mins")), clip.frames.size(), &clip.frameMins)
-				|| !readVectors(entry.value(QStringLiteral("maxs")), clip.frames.size(), &clip.frameMaxs))) {
+			&& (!bounds(entry.value(QStringLiteral("mins")), &clip.frameMins) || !bounds(entry.value(QStringLiteral("maxs")), &clip.frameMaxs))) {
 			return fail(malformed);
 		}
+		if (entry.contains(QStringLiteral("curves")) && !modelClipCurvesFromJson(entry.value(QStringLiteral("curves")), int(clip.frames.size()), &clip.curves, error)) return false;
 		skeleton.clips.append(clip);
 	}
 	for (const QJsonValue& value : object.value(QStringLiteral("bakedClipForFrame")).toArray()) {
@@ -1342,8 +1236,29 @@ bool modelSkeletonFromJson(const QJsonObject& object, ModelMesh* mesh, QString* 
 			return fail(malformed);
 		}
 		ModelSurface& surface = result.surfaces[index];
-		const QJsonArray counts = entry.value(QStringLiteral("count")).toArray();
-		const QJsonArray influences = entry.value(QStringLiteral("influences")).toArray();
+		const QJsonValue countValue = entry.value(QStringLiteral("count")), influenceValue = entry.value(QStringLiteral("influences"));
+		if (packedArrays && countValue.isString() && influenceValue.isString()) {
+			ModelSurfaceSkinning skinning;
+			qint64 total = 0;
+			if (!unpackModelSourceIntegers(countValue, surface.vertexCount, &skinning.count) || skinning.count.size() != surface.vertexCount
+				|| !unpackModelSourceInfluences(influenceValue, qint64(surface.vertexCount) * 64, &skinning.influences)) {
+				return fail(malformed);
+			}
+			for (int n : skinning.count) {
+				if (n < 0 || n > 64) {
+					return fail(malformed);
+				}
+				skinning.first.append(int(total));
+				total += n;
+			}
+			if (total != skinning.influences.size()) {
+				return fail(malformed);
+			}
+			surface.skinning = skinning;
+			continue;
+		}
+		const QJsonArray counts = countValue.toArray();
+		const QJsonArray influences = influenceValue.toArray();
 		if (counts.size() != surface.vertexCount || influences.size() % 8 != 0) {
 			return fail(malformed);
 		}

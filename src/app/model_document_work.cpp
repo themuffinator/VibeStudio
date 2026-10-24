@@ -1,5 +1,7 @@
 #include "app/model_document_work.h"
+#include "app/studio_accessibility.h"
 
+#include <QApplication>
 #include <QCloseEvent>
 #include <QCoreApplication>
 #include <QDialog>
@@ -80,8 +82,9 @@ class ProgressDialog final : public QDialog
 		const bool cancelled = m_work->cancelled.load(std::memory_order_relaxed);
 		const auto status = cancelled ? QCoreApplication::translate("VibeStudioModelEditor", "Cancelling model operation…")
 									  : phaseText(m_work->phase.load(std::memory_order_relaxed));
-		m_status->setText(status);
-		m_status->setAccessibleName(status);
+		// The name stays "Model operation status"; the phase is its
+		// description, as on every other modeller status line.
+		setLiveStatus(m_status, status);
 		m_progress->setAccessibleDescription(status);
 		setAccessibleDescription(status);
 		if (cancelled)
@@ -91,10 +94,16 @@ class ProgressDialog final : public QDialog
 		}
 		const auto total = m_work->total.load(std::memory_order_relaxed);
 		const auto done = m_work->completed.load(std::memory_order_relaxed);
-		m_progress->setRange(0, total > 0 ? 1000 : 0);
 		if (total > 0)
 		{
+			m_progress->setRange(0, 1000);
+			m_progress->setFormat(QStringLiteral("%p%"));
 			m_progress->setValue(int(std::clamp(double(done) / double(total), 0.0, 1.0) * 1000));
+		}
+		else
+		{
+			// No total yet: a still bar under reduced motion.
+			setBusyProgress(m_progress, studioReducedMotion(), status);
 		}
 	}
 
@@ -174,7 +183,18 @@ bool runModelTask(QWidget *parent, const QString &title, ModelTask task, QString
 	}
 	thread->wait();
 	delete thread;
+	// Only while the progress surface itself holds activation: a user who
+	// moved to another application or window during the work keeps it.
+	const bool hadActivation = progress.isVisible() && QApplication::activeWindow() == &progress;
 	progress.hide();
+	// Closing the progress surface can leave no window active (the offscreen
+	// platform and some window managers do not hand activation back to its
+	// parent), and keyboard focus would then go nowhere. Return activation
+	// to the window that ran the work, so the caller's focus comes back.
+	if (hadActivation && parent && parent->window()->isVisible() && !parent->window()->isActiveWindow())
+	{
+		parent->window()->activateWindow();
+	}
 	if (cancelAction)
 	{
 		*cancelAction = {};

@@ -12,6 +12,7 @@ class QCheckBox;
 class QComboBox;
 class QDoubleSpinBox;
 class QLabel;
+class QPushButton;
 class QTableWidget;
 
 namespace vibestudio
@@ -71,6 +72,9 @@ class BrushEditorDialog final : public QDialog
 	const LevelMapBrush &brush() const { return m_brush; }
 	void selectComponents(LevelBrushComponent kind, const QVector<int> &selection);
 	bool moveSelected(const LevelMapVec3 &delta, double grid = 0);
+	bool splitSelected(const LevelMapVec3 &delta, double grid = 0);
+	bool removeSelected();
+	bool insertVertex(const LevelMapVec3 &position, double grid = 0);
 	void undo();
 	void redo();
 	// A failed commit keeps the draft open, including its local undo history.
@@ -90,6 +94,7 @@ class BrushEditorDialog final : public QDialog
 	void restore(const State &state);
 	void refresh();
 	void syncSelection(const QVector<int> &selection);
+	void adoptTopologyEdit(const LevelMapBrush &draft, const LevelBrushEditReport &report, const QVector<LevelMapVec3> &pickPositions);
 	LevelMapVec3 componentCenter(int id) const;
 	LevelMapBrush m_brush;
 	LevelBrushTopology m_topology;
@@ -102,6 +107,8 @@ class BrushEditorDialog final : public QDialog
 	QComboBox *m_mode = nullptr;
 	QTableWidget *m_table = nullptr;
 	QCheckBox *m_allowCollapse = nullptr;
+	QPushButton *m_remove = nullptr;
+	QPushButton *m_split = nullptr;
 	QLabel *m_status = nullptr;
 	QAction *m_undoAction = nullptr;
 	QAction *m_redoAction = nullptr;

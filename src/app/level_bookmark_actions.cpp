@@ -131,8 +131,11 @@ bool ApplicationShell::restoreLevelViewState(const LevelViewState& state, QStrin
 	setLevelMap3D(state.cameraVisible);
 	for (int i = 0; i < 3; ++i) { m_levelPlanViews[i]->restoreNavigationState(state.plans[i]); }
 	if (m_levelMapProjection) {
+		// The saved active plan may sit in a pane Show Top/Front/Side View
+		// hides; the layout then made the next shown pane active.
+		const int active = static_cast<int>(m_levelPlanViews.indexOf(m_levelMapViewport));
 		const QSignalBlocker block(m_levelMapProjection);
-		m_levelMapProjection->setCurrentIndex(state.plans[state.activePlan].projection);
+		m_levelMapProjection->setCurrentIndex(state.plans[active >= 0 ? active : state.activePlan].projection);
 	}
 	m_levelBookmarkCamera = state.camera;
 	m_levelBookmarkCameraPending = true;

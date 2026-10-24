@@ -67,6 +67,82 @@ void multiply(LevelMapBrushFace *face, double x, double y)
 		}
 	}
 }
+// NetRadiant Custom's texture turn for each face format, about the texture
+// origin: offsets stay, so the UV where the world origin projects stays put.
+// `radiantAngle` keeps a stored rotation in that editor's range (fmod by
+// 360); otherwise it wraps to -180..180, as the centre turn writes it.
+// Workflow reference: NRC radiant/brush_primit.cpp Texdef_Rotate,
+// Valve220_rotate and BPTexdef_Rotate at 449778b3 (GPL-2.0-or-later).
+// Original implementation; see docs/CREDITS.md.
+bool turn(LevelMapBrushFace *face, double degrees, bool radiantAngle, QString *error)
+{
+	const auto trig = rotateLevelVector({1, 0, 0, true}, 2, degrees); // cos, sin
+	if (face->explicitTextureMatrix) {
+		// The rows map the plane's own coordinates; turning those turns the
+		// texture rigidly on the face, whatever the image's proportions.
+		for (int row : {0, 3}) {
+			const double s = face->textureMatrix[row], t = face->textureMatrix[row + 1];
+			face->textureMatrix[row] = s * trig.x + t * trig.y;
+			face->textureMatrix[row + 1] = t * trig.x - s * trig.y;
+		}
+		return true;
+	}
+	if (face->explicitTextureAxes) {
+		// About the axes' own normal by the opposite angle, which reads as the
+		// classic rotation it adds to; the projection direction is kept.
+		const LevelMapVec3 u = face->uAxis, v = face->vAxis;
+		LevelMapVec3 k{u.y * v.z - u.z * v.y, u.z * v.x - u.x * v.z, u.x * v.y - u.y * v.x, true};
+		const double length = std::sqrt(k.x * k.x + k.y * k.y + k.z * k.z);
+		if (!std::isfinite(length) || length < 1e-12) {
+			return fail(error, SurfaceText::tr("The face's Valve 220 texture axes are parallel. Reset its mapping before turning it."));
+		}
+		k = {k.x / length, k.y / length, k.z / length, true};
+		const double c = trig.x, s = -trig.y;
+		const auto rotate = [&k, c, s](const LevelMapVec3 &a) {
+			const double along = k.x * a.x + k.y * a.y + k.z * a.z;
+			return LevelMapVec3{a.x * c + (k.y * a.z - k.z * a.y) * s + k.x * along * (1 - c),
+								a.y * c + (k.z * a.x - k.x * a.z) * s + k.y * along * (1 - c),
+								a.z * c + (k.x * a.y - k.y * a.x) * s + k.z * along * (1 - c), true};
+		};
+		face->uAxis = rotate(u);
+		face->vAxis = rotate(v);
+	}
+	face->rotation = radiantAngle ? std::fmod(face->rotation + degrees, 360.0) : std::remainder(face->rotation + degrees, 360.0);
+	return true;
+}
+// NetRadiant Custom's additive scale step about the texture origin. A
+// brush-primitive matrix stores no scale; as that editor does, read one from
+// each row's length in texels and rescale the row by the old scale over the
+// new one, keeping its offset.
+// Workflow reference: NRC radiant/brush_primit.cpp Texdef_Scale and
+// BPTexdef_Scale at 449778b3 (GPL-2.0-or-later). Original implementation;
+// see docs/CREDITS.md.
+bool radiantScale(LevelMapBrushFace *face, double x, double y, QSize imageSize, QString *error)
+{
+	if (!face->explicitTextureMatrix) {
+		face->scaleX = levelSurfaceRadiantScaleStep(face->scaleX, x);
+		face->scaleY = levelSurfaceRadiantScaleStep(face->scaleY, y);
+		return true;
+	}
+	const auto row = [face](int first, double texels, bool negative, double increment) {
+		if (increment == 0) {
+			return true;
+		}
+		const double length = std::hypot(face->textureMatrix[first], face->textureMatrix[first + 1]) * texels;
+		if (!std::isfinite(length) || length < 1e-12) {
+			return false;
+		}
+		const double scale = negative ? -1 / length : 1 / length;
+		const double factor = std::abs(scale + increment) > 1e-5 ? scale / (scale + increment) : -1.0;
+		face->textureMatrix[first] *= factor;
+		face->textureMatrix[first + 1] *= factor;
+		return true;
+	};
+	if (!row(0, imageSize.width(), face->textureMatrix[0] < 0, x) || !row(3, imageSize.height(), face->textureMatrix[4] < 0, y)) {
+		return fail(error, SurfaceText::tr("The face's texture matrix is collapsed. Reset its mapping before scaling it."));
+	}
+	return true;
+}
 bool writable(LevelMapBrushFace *face)
 {
 	// Match the map writer's precision before checking for a collapsed UV map.
@@ -111,15 +187,18 @@ bool editFace(LevelMapBrushFace *face, const MapFacePolygon &polygon, const Leve
 	if (!original.valid || !polygon.isValid()) {
 		return fail(error, SurfaceText::tr("The face has no valid winding or texture projection."));
 	}
+	const bool turning = request.operation == LevelSurfaceOperation::Rotate || request.operation == LevelSurfaceOperation::RadiantRotate;
 	if ((request.operation == LevelSurfaceOperation::Shift && request.x == 0 && request.y == 0) ||
 		(request.operation == LevelSurfaceOperation::Scale && request.x == 1 && request.y == 1) ||
-		(request.operation == LevelSurfaceOperation::Rotate && std::remainder(request.degrees, 360.0) == 0) ||
+		(request.operation == LevelSurfaceOperation::RadiantScale && request.x == 0 && request.y == 0) ||
+		(turning && std::remainder(request.degrees, 360.0) == 0) ||
 		(request.operation == LevelSurfaceOperation::Align && request.alignU == LevelSurfaceAlignment::Keep &&
 		 request.alignV == LevelSurfaceAlignment::Keep)) {
 		return true;
 	}
 	const bool matrix = face->explicitTextureMatrix;
-	const bool needsSize = levelSurfaceOperationNeedsSize(request.operation, matrix);
+	// A matrix turns its plane coordinates, so only a patch turn needs texels.
+	const bool needsSize = levelSurfaceOperationNeedsSize(request.operation, matrix) && !(matrix && turning);
 	if (needsSize && (imageSize.width() <= 0 || imageSize.height() <= 0)) {
 		return fail(error, SurfaceText::tr("Material %1 needs a known image size. Open its package or provide an explicit texture size.")
 							   .arg(face->textureName));
@@ -181,31 +260,21 @@ bool editFace(LevelMapBrushFace *face, const MapFacePolygon &polygon, const Leve
 		const auto moved = levelTextureProjection(*face).at(center);
 		offset(face, anchor.x() - moved.x(), anchor.y() - moved.y());
 	} else if (request.operation == LevelSurfaceOperation::Rotate) {
-		const auto trig = rotateLevelVector({1, 0, 0, true}, 2, -request.degrees);
-		if (matrix) {
-			// Rotate in texel space, so a non-square image does not stretch.
-			const auto before = face->textureMatrix;
-			for (int i = 0; i < 3; ++i) {
-				face->textureMatrix[i] = trig.x * before[i] - trig.y * before[i + 3] * imageSize.height() / imageSize.width();
-				face->textureMatrix[i + 3] = trig.y * before[i] * imageSize.width() / imageSize.height() + trig.x * before[i + 3];
-			}
-		} else {
-			if (face->explicitTextureAxes) {
-				const auto &p = polygon.plane;
-				const auto turn = [&](const LevelMapVec3 &v) {
-					const double along = p.normalX * v.x + p.normalY * v.y + p.normalZ * v.z;
-					return LevelMapVec3{v.x * trig.x + (p.normalY * v.z - p.normalZ * v.y) * trig.y + p.normalX * along * (1 - trig.x),
-										v.y * trig.x + (p.normalZ * v.x - p.normalX * v.z) * trig.y + p.normalY * along * (1 - trig.x),
-										v.z * trig.x + (p.normalX * v.y - p.normalY * v.x) * trig.y + p.normalZ * along * (1 - trig.x),
-										true};
-				};
-				face->uAxis = turn(face->uAxis);
-				face->vAxis = turn(face->vAxis);
-			}
-			face->rotation = std::remainder(face->rotation + request.degrees, 360.0);
+		// The Radiant turn, then the offset that keeps the face centre's UV, so
+		// both anchors turn every face format the same way round.
+		if (!turn(face, request.degrees, false, error)) {
+			return false;
 		}
 		const auto moved = levelTextureProjection(*face).at(center);
 		offset(face, anchor.x() - moved.x(), anchor.y() - moved.y());
+	} else if (request.operation == LevelSurfaceOperation::RadiantRotate) {
+		if (!turn(face, request.degrees, true, error)) {
+			return false;
+		}
+	} else if (request.operation == LevelSurfaceOperation::RadiantScale) {
+		if (!radiantScale(face, request.x, request.y, imageSize, error)) {
+			return false;
+		}
 	} else if (request.operation == LevelSurfaceOperation::Fit) {
 		// A repeat count of zero keeps that axis as it is.
 		const auto extent = maximum - minimum;
@@ -245,14 +314,18 @@ bool editPatch(LevelMapPatch *patch, const LevelSurfaceRequest &request, QSize i
 	if (count == 0 || patch->controlU.size() != count || patch->controlV.size() != count) {
 		return fail(error, SurfaceText::tr("The patch has no texture coordinates."));
 	}
+	const bool turning = request.operation == LevelSurfaceOperation::Rotate || request.operation == LevelSurfaceOperation::RadiantRotate;
 	if ((request.operation == LevelSurfaceOperation::Shift && request.x == 0 && request.y == 0) ||
 		(request.operation == LevelSurfaceOperation::Scale && request.x == 1 && request.y == 1) ||
-		(request.operation == LevelSurfaceOperation::Rotate && std::remainder(request.degrees, 360.0) == 0) ||
+		(request.operation == LevelSurfaceOperation::RadiantScale && request.x == 0 && request.y == 0) ||
+		(turning && std::remainder(request.degrees, 360.0) == 0) ||
 		(request.operation == LevelSurfaceOperation::Align && request.alignU == LevelSurfaceAlignment::Keep &&
 		 request.alignV == LevelSurfaceAlignment::Keep)) {
 		return true;
 	}
-	if (levelSurfaceOperationNeedsSize(request.operation, true) && (imageSize.width() <= 0 || imageSize.height() <= 0)) {
+	// A Radiant scale step multiplies coordinates, so it needs no image.
+	if (levelSurfaceOperationNeedsSize(request.operation, true) && request.operation != LevelSurfaceOperation::RadiantScale
+		&& (imageSize.width() <= 0 || imageSize.height() <= 0)) {
 		return fail(error, SurfaceText::tr("Material %1 needs a known image size. Open its package or provide an explicit texture size.")
 							   .arg(patch->textureName));
 	}
@@ -279,14 +352,30 @@ bool editPatch(LevelMapPatch *patch, const LevelSurfaceRequest &request, QSize i
 			patch->controlV[i] = centreV + (patch->controlV[i] - centreV) / request.y;
 		}
 		break;
-	case LevelSurfaceOperation::Rotate: {
+	case LevelSurfaceOperation::Rotate:
+	case LevelSurfaceOperation::RadiantRotate: {
 		// In texels, so a non-square image keeps its proportions; the same
-		// turn a classic face's rotation makes, as Radiant turns patches.
+		// turn a classic face's rotation makes, as Radiant turns patches
+		// (NRC Patch::RotateTexture, about coordinate 0,0 for RadiantRotate).
+		const bool origin = request.operation == LevelSurfaceOperation::RadiantRotate;
+		const double pivotU = origin ? 0.0 : centreU, pivotV = origin ? 0.0 : centreV;
 		const auto trig = rotateLevelVector({1, 0, 0, true}, 2, request.degrees);
 		for (int i = 0; i < count; ++i) {
-			const double u = (patch->controlU[i] - centreU) * width, v = (patch->controlV[i] - centreV) * height;
-			patch->controlU[i] = centreU + (trig.x * u - trig.y * v) / width;
-			patch->controlV[i] = centreV + (trig.y * u + trig.x * v) / height;
+			const double u = (patch->controlU[i] - pivotU) * width, v = (patch->controlV[i] - pivotV) * height;
+			patch->controlU[i] = pivotU + (trig.x * u - trig.y * v) / width;
+			patch->controlV[i] = pivotV + (trig.y * u + trig.x * v) / height;
+		}
+		break;
+	}
+	case LevelSurfaceOperation::RadiantScale: {
+		// A patch stores no scale. NetRadiant Custom (Patch_convertScale at
+		// 449778b3, GPL-2.0-or-later) multiplies its coordinates by a positive
+		// step and divides them by a negative one's size, about 0,0.
+		const auto factor = [](double step) { return step > 0 ? step : step < 0 ? -1 / step : 1.0; };
+		const double factorU = factor(request.x), factorV = factor(request.y);
+		for (int i = 0; i < count; ++i) {
+			patch->controlU[i] *= factorU;
+			patch->controlV[i] *= factorV;
 		}
 		break;
 	}
@@ -344,7 +433,8 @@ bool levelSurfaceOperationNeedsSize(LevelSurfaceOperation operation, bool repeat
 {
 	if (repeatsCoordinates) {
 		return operation == LevelSurfaceOperation::Shift || operation == LevelSurfaceOperation::Rotate || operation == LevelSurfaceOperation::Natural
-			|| operation == LevelSurfaceOperation::FaceAligned;
+			|| operation == LevelSurfaceOperation::FaceAligned || operation == LevelSurfaceOperation::RadiantRotate
+			|| operation == LevelSurfaceOperation::RadiantScale;
 	}
 	return operation == LevelSurfaceOperation::Fit || operation == LevelSurfaceOperation::Align;
 }
@@ -352,6 +442,15 @@ bool levelSurfaceOperationNeedsSize(LevelSurfaceOperation operation, bool repeat
 double levelSurfaceDefaultScale(const LevelMapDocument& document)
 {
 	return document.format == LevelMapFormat::Quake3Map ? 0.5 : 1.0;
+}
+
+double levelSurfaceRadiantScaleStep(double value, double increment)
+{
+	if (increment == 0) {
+		return value;
+	}
+	const double scale = value == 0 ? 1.0 : value;
+	return std::abs(scale + increment) > 1e-5 ? scale + increment : -scale;
 }
 
 QVector<LevelSurfaceFace> levelMapSelectedSurfaces(const LevelMapDocument &document)
@@ -422,7 +521,7 @@ bool prepareLevelSurfaceEdits(const LevelMapDocument &document, const QVector<Le
 			 (request.x < 0 || request.y < 0 || (request.x < 1e-6 && request.y < 1e-6) || (request.x > 0 && request.x < 1e-6) ||
 			  (request.y > 0 && request.y < 1e-6))) ||
 			(reset && (request.x < 1e-6 || request.y < 1e-6)) ||
-			request.operation < LevelSurfaceOperation::Shift || request.operation > LevelSurfaceOperation::FaceAligned ||
+			request.operation < LevelSurfaceOperation::Shift || request.operation > LevelSurfaceOperation::RadiantRotate ||
 			request.alignU < LevelSurfaceAlignment::Keep || request.alignU > LevelSurfaceAlignment::Maximum ||
 			request.alignV < LevelSurfaceAlignment::Keep || request.alignV > LevelSurfaceAlignment::Maximum) {
 			return fail(error, SurfaceText::tr(

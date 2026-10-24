@@ -20,8 +20,14 @@ bool claims(const CameraViewControls& controls, const QKeyCombination& key, bool
 {
 	return cameraLookToggleMatches(controls, key.key(), key.keyboardModifiers())
 		|| navigationHoldKeyMatches(controls.lookHoldKey, key.key(), key.keyboardModifiers())
+		|| (looking && cameraFocusKeyMatches(controls, key.key(), key.keyboardModifiers()))
 		|| cameraKeyMotions(controls, looking, Qt::NoButton, Qt::NoModifier, key.keyboardModifiers()).contains(key.key())
 		|| (looking && cameraKeyMotions(controls, false, controls.lookButton, controls.lookModifiers, key.keyboardModifiers()).contains(key.key()));
+}
+int singleKey(const QString& binding)
+{
+	const auto sequence = QKeySequence::fromString(binding, QKeySequence::PortableText);
+	return sequence.count() == 1 ? sequence[0].key() : 0;
 }
 }
 
@@ -57,6 +63,28 @@ bool normalizeCameraKey(const QString& input, bool toggle, QString* normalized, 
 	return true;
 }
 
+bool normalizeCameraFocusKey(const QString& input, QString* normalized, QString* error)
+{
+	if (error) { error->clear(); }
+	const auto sequence = QKeySequence::fromString(input.trimmed(), QKeySequence::PortableText);
+	// Tab can never be lost to the camera: the key only acts during mouse
+	// look, and Escape always ends mouse look first.
+	if (input.size() <= 64 && sequence.count() == 1 && sequence[0].key() == Qt::Key_Tab && sequence[0].keyboardModifiers() == Qt::NoModifier) {
+		if (normalized) { *normalized = sequence.toString(QKeySequence::PortableText); }
+		return true;
+	}
+	if (normalizeCameraKey(input, false, normalized, error)) {
+		return true;
+	}
+	// The movement-key wording would mislead here: this key does not move.
+	return fail(error, QCoreApplication::translate("LevelCameraKeys", "Use one unmodified key to hold camera focus, or none to disable it. Escape, modifier keys and lock keys are reserved."));
+}
+
+bool cameraFocusKeyMatches(const CameraViewControls& controls, int key, Qt::KeyboardModifiers modifiers)
+{
+	return controls.perspective && navigationHoldKeyMatches(controls.focusHoldKey, key, modifiers);
+}
+
 QStringList cameraKeyProblems(const CameraViewControls& controls)
 {
 	QStringList problems;
@@ -84,6 +112,20 @@ QStringList cameraKeyProblems(const CameraViewControls& controls)
 	}
 	if (!controls.lookHoldKey.isEmpty() && controls.lookHoldKey == controls.lookToggleKey) {
 		problems << QCoreApplication::translate("LevelCameraKeys", "Hold and toggle mouse look must use different keys.");
+	}
+	if (!controls.focusHoldKey.isEmpty()) {
+		QString error;
+		if (!normalizeCameraFocusKey(controls.focusHoldKey, nullptr, &error)) { problems << error; }
+		// It acts during mouse look, where the movement keys and both
+		// mouse-look keys keep their own meaning.
+		const int focus = singleKey(controls.focusHoldKey);
+		QStringList others = controls.flyKeys.all() + controls.driveKeys.all();
+		others << controls.lookHoldKey;
+		const auto toggle = QKeySequence::fromString(controls.lookToggleKey, QKeySequence::PortableText);
+		const bool toggleClashes = toggle.count() == 1 && toggle[0].key() == focus && toggle[0].keyboardModifiers() == Qt::NoModifier;
+		if (focus != 0 && (toggleClashes || std::any_of(others.cbegin(), others.cend(), [focus](const QString& key) { return !key.isEmpty() && singleKey(key) == focus; }))) {
+			problems << QCoreApplication::translate("LevelCameraKeys", "The camera focus key must differ from the movement and mouse-look keys.");
+		}
 	}
 	// Modal profiles can reuse a drive key for another fly direction: the fly
 	// binding wins while mouse look is active, then the drive binding resumes.

@@ -10,6 +10,7 @@
 #include <QThread>
 #include <QTranslator>
 
+#include <algorithm>
 #include <cstdlib>
 #include <iostream>
 
@@ -78,6 +79,50 @@ bool red(const QImage &image, const QPoint &point)
 	const auto color = image.pixelColor(point);
 	return color.red() > 50 && color.red() > color.blue() * 2;
 }
+
+bool consistentStrokePicks(ModelViewport& viewport)
+{
+	// Sample subpixel silhouette/occlusion boundaries before the stroke, then
+	// require the held gesture to resolve exactly the same source triangles.
+	// No shell worker is attached: all hits belong to this owned test widget.
+	QVector<QPair<QPointF, int>> samples;
+	for (int y = 80; y < 440; y += 3) {
+		for (int x = 80; x < 440; x += 3) {
+			for (double offset : {0.0, 0.25, 0.75}) {
+				const QPointF point(x+offset,y+offset); const auto hit = viewport.hitAt(point);
+				samples.append({point,hit.valid ? hit.triangle : -1});
+			}
+		}
+	}
+	const auto first = std::find_if(samples.cbegin(),samples.cend(),[](const auto& sample) { return sample.second >= 0; });
+	if (!expect(first != samples.cend(),"stroke oracle contains visible surfaces")) { return false; }
+	viewport.setMaterialGesturesEnabled(true);
+	int touched = -1;
+	const auto connection = QObject::connect(&viewport,&ModelViewport::materialStrokeTouched,&viewport,
+		[&](int triangle,CameraMaterialGesture) { touched = triangle; });
+	bool ok = expect(viewport.beginMaterialStroke(first->first,Qt::MiddleButton,Qt::ShiftModifier),"stroke oracle begins");
+	const auto check = [&] {
+		int mismatch = 0;
+		for (const auto& sample : samples) {
+			touched = -1;
+			const bool hit = viewport.extendMaterialStroke(sample.first,Qt::ShiftModifier);
+			mismatch += touched != sample.second || hit != (sample.second >= 0);
+		}
+		if (mismatch) { std::cerr << "Stroke picking mismatches: " << mismatch << '\n'; }
+		return expect(mismatch == 0,"held stroke and initial picking agree at pixel boundaries");
+	};
+	ok &= check();
+	auto preview = viewport.mesh();
+	std::reverse(preview.surfaces.begin(),preview.surfaces.end());
+	viewport.setMaterialStrokePreview(preview,{}, {},0);
+	ok &= expect(tests::settleModelViewport(viewport),"regrouped stroke preview renders");
+	ok &= check();
+	viewport.finishMaterialStroke(false);
+	QObject::disconnect(connection);
+	viewport.setMaterialGesturesEnabled(false);
+	ok &= expect(tests::settleModelViewport(viewport),"cancel restores original stroke frame");
+	return ok;
+}
 } // namespace
 
 int main(int argc, char **argv)
@@ -124,6 +169,8 @@ int main(int argc, char **argv)
 		viewport.setMesh(crossing(perspective));
 		CameraViewControls controls;
 		controls.perspective = perspective;
+		controls.surfaceValuesButton = Qt::MiddleButton;
+		controls.surfaceValuesModifiers = Qt::ShiftModifier;
 		viewport.setCameraControls(controls);
 		if (perspective)
 		{
@@ -166,6 +213,8 @@ int main(int argc, char **argv)
 		viewport.render(&image);
 		ok &= expect(!red(image, rear), "selected mesh remains occluded by foreground geometry");
 		viewport.setHighlightedTriangles({});
+		ok &= expect(tests::settleModelViewport(viewport),"stroke oracle starts from a completed frame");
+		ok &= consistentStrokePicks(viewport);
 	}
 	auto clipped = crossing(true);
 	clipped.surfaces.resize(1);
@@ -180,6 +229,7 @@ int main(int argc, char **argv)
 	viewport.render(&image);
 	ok &= expect(red(image, {256, 250}) && viewport.hitAt({256, 250}).surface == 0,
 				 "near-plane clipping retains texture coordinates and picking");
+	ok &= consistentStrokePicks(viewport);
 	const auto unselected = image.copy();
 	ok &= expect(!viewport.edgeAt({256, 112}).valid && viewport.edgeAt({158, 246}).valid && viewport.edgeAt({158, 246}).a == 0 &&
 					 viewport.edgeAt({158, 246}).b == 1,

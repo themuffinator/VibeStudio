@@ -2,18 +2,35 @@
 #include "app/level_surface_tools.h"
 #include "app/level_surface_worker.h"
 #include "app/model_viewport.h"
+#include "app/map_viewport.h"
 #include "app/studio_actions.h"
+#include "core/editor_profiles.h"
 #include "core/level_patch_tools.h"
+#include "core/level_face_clipboard.h"
+#include <QClipboard>
+#include <QGuiApplication>
 #include <QStatusBar>
 #include <QTabWidget>
 #include <QTimer>
 #include <QTreeWidget>
+#include <algorithm>
 
 namespace vibestudio {
+bool ApplicationShell::levelSurfaceGeometryBusy() const
+{
+	return m_levelQuickClip || std::any_of(m_levelPlanViews.cbegin(),m_levelPlanViews.cend(),[](const auto* view) {
+		return view && (view->clipMode() || view->isDrawingBrush() || view->isDragging() || view->isMovingComponents());
+	}) || (m_levelMap3D && (m_levelMap3D->isDrawingBrush() || m_levelMap3D->isResizingSelection()
+		|| m_levelMap3D->isMovingSelection() || m_levelMap3D->isMovingComponents()));
+}
 QWidget* ApplicationShell::buildLevelSurfaceTools()
 {
 	m_levelSurfaceTools = new LevelSurfaceTools;
 	m_levelSurfaceTools->bindCommands(*m_commands);
+	// The profile's texture rotation step and anchor; a later profile change
+	// brings its own (applyLevelEditorProfile).
+	const auto controls = m_levelControlsApplied ? m_levelControls : levelEditorControlsForProfile(m_settings.selectedEditorProfileId());
+	m_levelSurfaceTools->setProfileSteps(controls.surfaceRotationStep, controls.surfaceRotateAboutOrigin);
 	m_levelSurfaceTools->targetChanged = [this] { cancelLevelSurfaceEdits(); refreshLevelSurfaceTools(); };
 	m_levelSurfaceTools->cancelRequested = [this] { cancelLevelSurfaceEdits(); };
 	connect(m_entityInspector, &QTreeWidget::currentItemChanged, this, [this] {
@@ -88,7 +105,8 @@ void ApplicationShell::registerLevelSurfaceCommands()
 		tr("Shrink Texture V"), tr("Grow Texture V"), tr("Fit Texture 1 × 1"), tr("Centre Texture"),
 		tr("Flip Texture U"), tr("Flip Texture V"), tr("Fit Texture Width"), tr("Fit Texture Height"),
 		tr("Justify Texture Left"), tr("Justify Texture Right"), tr("Justify Texture Top"), tr("Justify Texture Bottom"),
-		tr("Natural Texture Mapping"), tr("Align Texture to Face")};
+		tr("Natural Texture Mapping"), tr("Align Texture to Face"),
+		tr("Texture Scale U −"), tr("Texture Scale U +"), tr("Texture Scale V −"), tr("Texture Scale V +")};
 	const auto ids = LevelSurfaceTools::commandIds();
 	for (int i = 0; i < ids.size(); ++i) {
 		StudioCommandRegistration command;
@@ -111,13 +129,13 @@ void ApplicationShell::registerLevelSurfaceCommands()
 		command.commandId = paste ? QStringLiteral("map.pasteSurface") : QStringLiteral("map.copySurface");
 		command.label = paste ? tr("Paste Surface") : tr("Copy Surface");
 		command.group = StudioCommandGroup::Edit; command.menuSection = tr("Surface Clipboard"); command.iconName = QStringLiteral("image");
-		command.statusTip = paste ? tr("Paste the copied material, mapping and flags onto the Surfaces target.") : tr("Copy the inspected brush face's material, mapping and flags.");
+		command.statusTip = paste ? tr("Paste the copied material, mapping and flags onto the Surfaces target.") : tr("Copy selected face components, or the inspected brush face, with material, mapping and flags.");
 		command.handler = [this, paste] {
 			if (!m_levelSurfaceTools) { return; }
 			setMode(StudioMode::Levels); showLevelSidebarPage(QStringLiteral("surfaces"));
 			QString error; bool done = false;
 			if (paste) {
-				auto targets = levelSurfacePasteSelectionTargets(m_levelMapDocument);
+				auto targets = levelSurfaceSelectionTargets();
 				if (m_levelSurfaceTools->singleFace()) {
 					QVector<LevelMaterialTarget> faces;
 					for (const auto& face : levelSurfaceFaceTargets()) {
@@ -127,7 +145,13 @@ void ApplicationShell::registerLevelSurfaceCommands()
 					targets = faces;
 				}
 				done = pasteLevelSurfaceTargets(targets, m_levelSurfaceTools->pasteOptions(), &error);
-			} else { done = copyLevelSurfaceSettings(inspectedLevelMapSurface(), &error); }
+			} else {
+				const auto picked = levelPickedSurfaceFaces();
+				const auto faces = levelComponentsActive() || !picked.isEmpty() ? picked : QVector<LevelSurfaceFace>{inspectedLevelMapSurface()};
+				const auto text = levelFaceSelectionText(m_levelMapDocument, faces, &error);
+				done = !text.isEmpty() && copyLevelSurfaceSettings(faces.last(), &error);
+				if (done) { QGuiApplication::clipboard()->setText(text); }
+			}
 			if (!done) { m_levelSurfaceTools->setStatus(error, levelSurfaceEditsPending()); statusBar()->showMessage(error, 6000); }
 		};
 		m_commands->registerCommand(command);
@@ -143,17 +167,22 @@ std::function<bool()> ApplicationShell::levelSurfaceContextGuard() const
 	const auto scene = m_levelMapDocument.scene;
 	const auto active = m_levelMapDocument.activeSceneNode;
 	const auto saved = m_levelMapDocument.savedUndoDepth;
+	const auto history = m_levelMapDocument.historyRevision;
 	const auto package = m_packageStaging.revision(), reload = m_levelPreviewReload;
 	const auto palette = activePaletteId();
 	const bool single = m_levelSurfaceTools->singleFace();
 	const auto inspected = levelSurfaceFaceTargets();
-	return [this, load, revision, path, output, hash, selection, scene, active, saved, package, reload, palette, single, inspected] {
+	const auto picked = levelPickedSurfaceFaces();
+	const auto targets = levelSurfaceSelectionTargets();
+	const auto components = levelComponentSelectionToken();
+	return [this, load, revision, path, output, hash, selection, scene, active, saved, history, package, reload, palette, single, inspected, picked, targets, components] {
 		return load == m_levelMapLoadSerial && revision == m_levelMapDocument.revision && path == m_levelMapDocument.sourcePath
 			&& output == m_levelMapDocument.outputPath && hash == m_levelMapDocument.sourceContentHash
 			&& selection == m_levelMapDocument.selection && scene == m_levelMapDocument.scene && active == m_levelMapDocument.activeSceneNode
-			&& saved == m_levelMapDocument.savedUndoDepth && package == m_packageStaging.revision()
+			&& saved == m_levelMapDocument.savedUndoDepth && history == m_levelMapDocument.historyRevision && package == m_packageStaging.revision()
 			&& reload == m_levelPreviewReload && palette == activePaletteId() && single == m_levelSurfaceTools->singleFace()
-			&& (!single || inspected == levelSurfaceFaceTargets());
+			&& (!single || inspected == levelSurfaceFaceTargets()) && picked == levelPickedSurfaceFaces()
+			&& targets == levelSurfaceSelectionTargets() && components == levelComponentSelectionToken() && !levelSurfaceGeometryBusy();
 	};
 }
 
@@ -165,27 +194,30 @@ void ApplicationShell::refreshLevelSurfaceTools()
 		m_levelSurfaceTools->setStatus(tr("The map, selection, target or package changed. Pending surface adjustments were cancelled."), false);
 	}
 	const auto inspected = inspectedLevelMapSurface();
-	const auto pasteTargets = levelSurfacePasteSelectionTargets(m_levelMapDocument);
-	int faces = 0, patches = 0; bool includesInspected = false;
+	const auto pasteTargets = levelSurfaceSelectionTargets();
+	int faces = 0, patches = 0;
 	for (const auto& target : pasteTargets) {
 		patches += target.kind == LevelMaterialKind::Patch;
 		if (target.kind == LevelMaterialKind::BrushFace) {
-			++faces; includesInspected |= target.objectId == inspected.brushId && target.faceIndex == inspected.faceIndex;
+			++faces;
 		}
 	}
+	m_commands->setEnabled(QStringLiteral("map.alignSurfaces"), faces > 0 && faces <= 16384 && !levelSurfaceGeometryBusy());
 	if (m_levelSurfaceTools->singleFace()) { faces = static_cast<int>(levelSurfaceFaceTargets().size()); }
 	const auto faceTargets = levelSurfaceFaceTargets();
-	m_levelSurfaceTools->setTargetSummary(faces, faceTargets.size() == 1 ? faceTargets.first() : inspected, patches);
+	m_levelSurfaceTools->setTargetSummary(faces, faceTargets.size() == 1 ? faceTargets.first() : inspected, patches, levelComponentsActive());
 	m_levelSurfaceTools->setDefaultScale(levelSurfaceDefaultScale(m_levelMapDocument));
 	// Quick adjustments reach the selected patches too, unless the target is
 	// the one inspected face.
 	const int quickPatches = m_levelSurfaceTools->singleFace() ? 0 : patches;
 	const bool editable = (m_levelMapDocument.format == LevelMapFormat::QuakeMap || m_levelMapDocument.format == LevelMapFormat::Quake3Map)
-		&& (faces > 0 || quickPatches > 0) && faces <= 16384 && quickPatches <= 256;
+		&& (faces > 0 || quickPatches > 0) && faces <= 16384 && quickPatches <= 256 && !levelSurfaceGeometryBusy();
 	for (const auto& id : LevelSurfaceTools::commandIds()) { m_commands->setEnabled(id, editable); }
-	m_commands->setEnabled(QStringLiteral("map.copySurface"), inspected.brushId >= 0 && inspected.faceIndex >= 0 && !levelSurfaceEditsPending());
+	const bool copyReady = levelComponentsActive() || !levelPickedSurfaceFaces().isEmpty() ? !faceTargets.isEmpty() && faceTargets.size() <= 16384
+		: inspected.brushId >= 0 && inspected.faceIndex >= 0;
+	m_commands->setEnabled(QStringLiteral("map.copySurface"), copyReady && !levelSurfaceEditsPending() && !levelSurfaceGeometryBusy());
 	const bool pasteEditable = m_levelSurfaceTools->singleFace() ? editable : !pasteTargets.isEmpty() && pasteTargets.size() <= 16384;
-	m_commands->setEnabled(QStringLiteral("map.pasteSurface"), pasteEditable && m_levelSurfaceClipboard.ready() && !levelSurfaceEditsPending());
+	m_commands->setEnabled(QStringLiteral("map.pasteSurface"), pasteEditable && m_levelSurfaceClipboard.ready() && !levelSurfaceEditsPending() && !levelSurfaceGeometryBusy());
 	m_levelSurfaceTools->setClipboardSummary(m_levelSurfaceClipboard);
 }
 
@@ -214,6 +246,7 @@ bool ApplicationShell::queueLevelSurfaceEdit(const LevelSurfaceRequest& request,
 {
 	if (error) { error->clear(); }
 	if (!m_levelSurfaceTools || !m_levelSurfaceWorker) { return false; }
+	if (levelSurfaceGeometryBusy()) { if (error) { *error = tr("Finish the active geometry tool before adjusting surfaces."); } return false; }
 	// Repeated commands in the same burst reuse the captured targets. A
 	// large map must not be rescanned for every auto-repeat event.
 	if (!m_levelSurfaceCurrent || !m_levelSurfaceCurrent()) { refreshLevelSurfaceTools(); }
@@ -221,8 +254,11 @@ bool ApplicationShell::queueLevelSurfaceEdit(const LevelSurfaceRequest& request,
 	if (m_levelSurfacePasting) { return fail(tr("Wait for the surface paste to finish or cancel it before queuing adjustments.")); }
 	if (m_levelSurfacePending.size() >= 64) { return fail(tr("The surface queue is full. Wait for the pending batch or cancel it.")); }
 	if (!m_levelSurfaceCurrent) {
-		m_levelSurfaceFaces = levelMapSelectedSurfaces(m_levelMapDocument);
-		m_levelSurfacePatches = levelMapSelectedPatchIds(m_levelMapDocument);
+		m_levelSurfaceFaces.clear(); m_levelSurfacePatches.clear();
+		for (const auto& target : levelSurfaceSelectionTargets()) {
+			if (target.kind == LevelMaterialKind::BrushFace) { m_levelSurfaceFaces.append({target.objectId,target.faceIndex}); }
+			else if (target.kind == LevelMaterialKind::Patch) { m_levelSurfacePatches.append(target.objectId); }
+		}
 		if (m_levelSurfaceTools->singleFace()) {
 			m_levelSurfaceFaces = levelSurfaceFaceTargets();
 			m_levelSurfacePatches.clear();
@@ -258,7 +294,7 @@ void ApplicationShell::startLevelSurfaceBatch()
 bool ApplicationShell::copyLevelSurfaceSettings(LevelSurfaceFace face, QString* error)
 {
 	if (error) { error->clear(); }
-	if (levelSurfaceEditsPending() || (m_levelMap3D && (m_levelMap3D->surfaceStrokeActive() || m_levelMap3D->isDrawingBrush()
+	if (levelSurfaceEditsPending() || levelSurfaceGeometryBusy() || (m_levelMap3D && (m_levelMap3D->surfaceStrokeActive() || m_levelMap3D->isDrawingBrush()
 		|| m_levelMap3D->isResizingSelection() || m_levelMap3D->isMovingSelection()))) {
 		if (error) { *error = tr("Finish or cancel the pending level edit before copying a surface."); } return false;
 	}
@@ -292,12 +328,17 @@ bool ApplicationShell::pasteLevelSurfaceSettings(const QVector<LevelSurfaceFace>
 }
 bool ApplicationShell::pasteLevelSurfaceTargets(const QVector<LevelMaterialTarget>& targets, const LevelSurfacePasteOptions& options, QString* error)
 {
+	return startLevelSurfacePaste(targets, options, {}, error);
+}
+bool ApplicationShell::startLevelSurfacePaste(const QVector<LevelMaterialTarget>& targets, const LevelSurfacePasteOptions& options,
+	const QString& faceText, QString* error)
+{
 	if (error) { error->clear(); }
 	const auto fail = [error](const QString& message) { if (error) { *error = message; } return false; };
 	if (!m_levelSurfaceTools || !m_levelSurfaceWorker) { return fail(tr("Surface tools are unavailable.")); }
-	if (!m_levelSurfaceClipboard.ready()) { return fail(tr("Copy a brush surface before pasting.")); }
+	if (faceText.isEmpty() && !m_levelSurfaceClipboard.ready()) { return fail(tr("Copy a brush surface before pasting.")); }
 	if (targets.isEmpty() || targets.size() > 16384) { return fail(tr("Select between 1 and 16,384 surfaces for paste.")); }
-	if (levelSurfaceEditsPending() || (m_levelMap3D && (m_levelMap3D->surfaceStrokeActive() || m_levelMap3D->isDrawingBrush()
+	if (levelSurfaceEditsPending() || levelSurfaceGeometryBusy() || (m_levelMap3D && (m_levelMap3D->surfaceStrokeActive() || m_levelMap3D->isDrawingBrush()
 		|| m_levelMap3D->isResizingSelection() || m_levelMap3D->isMovingSelection()))) {
 		return fail(tr("Finish or cancel the pending level edit before pasting a surface."));
 	}
@@ -305,11 +346,13 @@ bool ApplicationShell::pasteLevelSurfaceTargets(const QVector<LevelMaterialTarge
 	if (!archive && m_packageArchive.isOpen()) { archive = std::make_shared<const PackageArchive>(m_packageArchive); }
 	LevelSurfaceWork work; work.document = m_levelMapDocument; work.pasteTargets = targets;
 	work.clipboard = m_levelSurfaceClipboard; work.paste = options; work.archive = std::move(archive); work.palette = activePaletteId();
+	if (options.includeSelection) { work.paste.selectionTargets = levelSurfaceSelectionTargets(); }
 	work.clipboardArchive = m_levelSurfaceClipboardArchive; work.clipboardPalette = m_levelSurfaceClipboardPalette; work.clipboardContextCaptured = true;
 	work.clipboardStaging = m_levelSurfaceClipboardStaging;
 	if (m_packageStaging.isLoaded()) { work.staging = std::make_shared<const PackageStagingModel>(m_packageStaging); }
 	work.clipboardEngineFamily = m_levelSurfaceClipboardEngineFamily;
 	work.clipboardFormat = m_levelSurfaceClipboardFormat;
+	if (!faceText.isEmpty()) { work.faceClipboardText = faceText; work.clipboard = {}; work.clipboardContextCaptured = false; }
 	work.token = ++m_levelSurfaceToken; m_levelSurfaceCurrent = levelSurfaceContextGuard(); m_levelSurfacePasting = true;
 	if (!m_levelSurfaceWorker->start(std::move(work))) { cancelLevelSurfaceEdits(); return fail(tr("The surface worker is still finishing a previous operation.")); }
 	showLevelSidebarPage(QStringLiteral("surfaces"));

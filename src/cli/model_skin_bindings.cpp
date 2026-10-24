@@ -163,19 +163,7 @@ ModelSkinBindingsCliResult runModelSkinBindings(const QStringList &arguments)
 		return fail(1, Text::tr("The output already exists; use --overwrite to replace it."));
 	}
 	const bool dry = seen.contains("--dry-run");
-	if (dry)
-	{
-		const auto json = editableModelJson(document.mesh(), &error);
-		if (json.isEmpty())
-		{
-			return fail(4, error);
-		}
-		if (QJsonDocument(json).toJson(QJsonDocument::Compact).size() > modelDocumentMaxSourceBytes)
-		{
-			return fail(4, Text::tr("The assigned model exceeds the 64 MiB source limit."));
-		}
-	}
-	if (!dry && !document.save(output, seen.contains("--overwrite"), &error))
+	if (!document.save(output, seen.contains("--overwrite"), &error, {}, dry))
 	{
 		return fail(1, error);
 	}
@@ -198,6 +186,9 @@ ModelSkinBindingsCliResult runModelSkinBindings(const QStringList &arguments)
 	result.lines << (dry ? Text::tr("Skin assignments validated; no files written.")
 						 : Text::tr("Saved skin assignments to %1.").arg(QFileInfo(output).absoluteFilePath()));
 	result.lines += modelSkinBindingPlanText(plan);
+	result.payload.insert("outputSource", modelSourceSaveJson(document));
+	if (const auto packed = modelSourceSaveNotice(document); !packed.isEmpty())
+		result.lines << packed;
 	return result;
 }
 } // namespace vibestudio::cli

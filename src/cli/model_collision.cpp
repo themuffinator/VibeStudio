@@ -334,7 +334,7 @@ ModelCollisionCliResult runModelCollision(const QStringList &arguments)
 		{
 			return fail(4, error);
 		}
-		bytes = QJsonDocument(editableModelJson(document.mesh(), &error)).toJson(QJsonDocument::Compact);
+		bytes = serializeEditableModel(document.mesh(), &error);
 	}
 	else if (exportMap || place)
 	{
@@ -427,7 +427,8 @@ ModelCollisionCliResult runModelCollision(const QStringList &arguments)
 	{
 		return fail(4, Text::tr("The source changed on disk. Reopen it before saving."));
 	}
-	if (!dry && !(edit ? document.save(output, overwrite, &error) : writeModelFile(target, bytes, &error)))
+	if (!(edit ? document.save(output, overwrite, &error, {}, dry)
+			   : dry ? validateModelWriteTarget(target, &error) : writeModelFile(target, bytes, &error)))
 	{
 		return fail(4, error);
 	}

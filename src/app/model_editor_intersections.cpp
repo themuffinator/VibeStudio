@@ -1,5 +1,6 @@
 #include "app/model_editor_dialog.h"
 #include "app/model_viewport.h"
+#include "app/wrapping_action_button.h"
 
 #include <QAbstractListModel>
 #include <QComboBox>
@@ -76,7 +77,7 @@ void ModelEditorDialog::addIntersectionControls(QFormLayout *form)
 	m_intersectionScope->setAccessibleDescription(
 		Text::tr("Scan all surfaces, including contacts between surfaces, in all stored poses or the current pose."));
 	form->addRow(Text::tr("Scan poses"), m_intersectionScope);
-	m_intersectionInspect = new QPushButton(Text::tr("Inspect Intersections"));
+	m_intersectionInspect = new WrappingActionButton(Text::tr("Inspect Intersections"), 2);
 	m_intersectionInspect->setObjectName(QStringLiteral("inspectMeshIntersections"));
 	m_intersectionInspect->setToolTip(
 		Text::tr("Find face crossings and coplanar area overlaps throughout the mesh. Shared boundary edges and isolated point contacts "
@@ -106,9 +107,9 @@ void ModelEditorDialog::addIntersectionControls(QFormLayout *form)
 		label->setMinimumWidth(0);
 		label->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Preferred);
 	}
-	m_intersectionFirst = new QPushButton(Text::tr("Show First Face"));
+	m_intersectionFirst = new WrappingActionButton(Text::tr("Show First Face"), 2);
 	m_intersectionFirst->setObjectName(QStringLiteral("showMeshIntersectionFirst"));
-	m_intersectionSecond = new QPushButton(Text::tr("Show Second Face"));
+	m_intersectionSecond = new WrappingActionButton(Text::tr("Show Second Face"), 2);
 	m_intersectionSecond->setObjectName(QStringLiteral("showMeshIntersectionSecond"));
 	for (auto *button : {m_intersectionFirst, m_intersectionSecond})
 	{

@@ -5,6 +5,7 @@
 #include "core/package_staging.h"
 #include "tests/model_mdl_test_helpers.h"
 #include "tests/model_skin_source_test_helpers.h"
+#include "tests/model_output_test_helpers.h"
 
 #include <QCoreApplication>
 #include <QDir>
@@ -216,6 +217,19 @@ int main(int argc, char **argv)
 					 2),
 				 "CLI refuses overwriting a package input even with overwrite");
 	QByteArray protectedBytes, wadAfter;
+	for (const auto &variant : QStringList{"archive", "folder", "draft"})
+		for (bool dry : {true, false})
+		{
+			const auto inputPath = variant == "archive" ? path("skins.wad") : variant == "folder" ? QDir(directory).filePath("skin.lmp") : draftManifest;
+			const auto inputBytes = tests::modelTestReadFile(inputPath);
+			const auto linkedOutput = QDir(temporary.path()).filePath(QStringLiteral("%1-%2-alias.mesh.json").arg(variant).arg(dry));
+			ok &= expect(tests::modelTestHardLink(inputPath, linkedOutput), "create independent package input hard-link fixture");
+			const auto packagePath = variant == "archive" ? path("skins.wad") : variant == "folder" ? directory : path("skins.vibepackage");
+			auto linkedArgs = skinArgs + QStringList{"--package", packagePath, "--entry-index", "0", "--output", linkedOutput, "--overwrite"};
+			if (dry) linkedArgs.append("--dry-run");
+			ok &= expect(run(linkedArgs, 2) && tests::modelTestReadFile(inputPath) == inputBytes && tests::modelTestReadFile(linkedOutput) == inputBytes,
+				"MDL CLI protects archive, folder and draft hard-link aliases in dry and real writes");
+		}
 	ok &= expect(readModelFile(QDir(directory).filePath("protected.mesh.json"), &protectedBytes, &error) && protectedBytes == "protected" &&
 					 readModelFile(path("skins.wad"), &wadAfter, &error) && wadAfter == wad &&
 					 readModelFile(path("source.mesh.json"), &afterSampling, &error) && afterSampling == beforeSampling,

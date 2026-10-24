@@ -331,7 +331,7 @@ int main(int argc, char** argv)
 	for (MapViewport* view : views) {
 		capture(view, QStringLiteral("vertex-picks-%1").arg(static_cast<int>(view->projection())));
 	}
-	const int grid = std::max(1, top->gridSize());
+	const double grid = top->gridSize();
 	const qsizetype steps = document().undoStack.size();
 	key(top, Qt::Key_Right);
 	expect(until([&] { return brushById(document(), 0) && near(brushById(document(), 0)->maxs.x, 64 + grid); }) && document().undoStack.size() == steps + 1,

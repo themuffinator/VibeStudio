@@ -41,7 +41,7 @@ bool nameOk(const QString &name)
 }
 QJsonArray xyz(ModelVec3 p)
 {
-	return {p.x, p.y, p.z};
+	return {modelSourceNumber(p.x), modelSourceNumber(p.y), modelSourceNumber(p.z)};
 }
 bool vector(const QJsonValue &value, ModelVec3 *result)
 {
@@ -276,7 +276,7 @@ QStringList validateModelCollision(const ModelMesh &mesh, const ModelWorkControl
 bool validModelCollisionSelection(const ModelMesh &mesh, const ModelSelection &selection)
 {
 	return selection.collision.isEmpty() ||
-		   (selection.surfaces.isEmpty() && selection.tag.isEmpty() && selection.vertices.isEmpty() && selection.faces.isEmpty() &&
+		   (selection.joint.isEmpty() && selection.surfaces.isEmpty() && selection.tag.isEmpty() && selection.vertices.isEmpty() && selection.faces.isEmpty() &&
 			selection.edges.isEmpty() && findModelCollisionBox(mesh, selection.collision));
 }
 bool isModelCollisionEdit(ModelEditKind kind)
@@ -604,7 +604,7 @@ bool parseModelCollision(const QJsonValue &value, ModelMesh *mesh, QString *erro
 }
 QString modelCollisionOmissionNote()
 {
-	return Text::tr("Collision boxes remain in the editable mesh source. MDL, MD2, MD3 and OBJ do not export these volumes. Export or "
+	return Text::tr("Collision boxes remain in the editable mesh source. Native model formats do not export these volumes. Export or "
 					"place collision brushes separately and compile the map.");
 }
 bool exportModelCollisionMap(const ModelMesh &mesh, const ModelCollisionExport &request, ModelCollisionMap *result, QString *error,

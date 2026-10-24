@@ -1,7 +1,12 @@
 #include "app/model_editor_dialog.h"
+#include "app/locale_number.h"
 
 #include "app/model_uv_view.h"
+#include "app/model_uv_density_dialog.h"
+#include "app/model_editor_tools.h"
 #include "app/model_viewport.h"
+#include "app/wrapping_action_button.h"
+#include "app/wrapping_check_box.h"
 
 #include <QAction>
 #include <QCheckBox>
@@ -47,6 +52,9 @@ QWidget *ModelEditorDialog::createUvView()
 	auto *selection =
 		action(QCoreApplication::translate("VibeStudioModelEditor", "Frame Selection"), QStringLiteral("frameMeshUvSelection"));
 	auto *islands = action(QCoreApplication::translate("VibeStudioModelEditor", "Select Islands"), QStringLiteral("selectMeshUvIslands"));
+	auto *density = action(QCoreApplication::translate("ModelUvDensityDialog", "Texel Density…"), QStringLiteral("inspectMeshUvDensity"));
+	density->setToolTip(QCoreApplication::translate("ModelUvDensityDialog", "Measure and match UV island texture density using original image dimensions."));
+	connect(density, &QAction::triggered, this, &ModelEditorDialog::editUvDensity);
 	islands->setToolTip(QCoreApplication::translate(
 		"VibeStudioModelEditor",
 		"Expand selected faces, vertices, or edges to their UV islands. Marked seams and split edges separate islands."));
@@ -135,8 +143,8 @@ QWidget *ModelEditorDialog::createUvView()
 			{
 				m_status->setText(
 					QCoreApplication::translate("VibeStudioModelEditor", "UV move preview: U %1, V %2. Release to apply; Escape cancels.")
-						.arg(u, 0, 'g', 7)
-						.arg(v, 0, 'g', 7));
+						.arg(localeNumber(u, 7))
+						.arg(localeNumber(v, 7)));
 			});
 	connect(m_uv, &ModelUvView::moveActiveChanged, this,
 			[this](bool active)
@@ -195,7 +203,7 @@ void ModelEditorDialog::addUvControls(QFormLayout *surface)
 		"Match your texture dimensions; this does not resize images or change export skin dimensions."));
 	m_uvAtlasHeight->setAccessibleDescription(m_uvAtlasHeight->toolTip());
 	surface->addRow(QCoreApplication::translate("VibeStudioModelEditor", "Atlas Height"), m_uvAtlasHeight);
-	m_uvAtlasSquare = new QCheckBox(QCoreApplication::translate("VibeStudioModelEditor", "Same as width"));
+	m_uvAtlasSquare = new WrappingCheckBox(QCoreApplication::translate("VibeStudioModelEditor", "Same as width"));
 	m_uvAtlasSquare->setObjectName(QStringLiteral("meshUvAtlasSquare"));
 	m_uvAtlasSquare->setChecked(true);
 	m_uvAtlasSquare->setAccessibleName(QCoreApplication::translate("VibeStudioModelEditor", "Keep atlas height equal to width"));
@@ -226,12 +234,12 @@ void ModelEditorDialog::addUvControls(QFormLayout *surface)
 	connect(m_uvAtlasResolution, &QSpinBox::valueChanged, this, updatePadding);
 	connect(m_uvAtlasHeight, &QSpinBox::valueChanged, this, updatePadding);
 	connect(m_uvAtlasSquare, &QCheckBox::toggled, this, updatePadding);
-	m_uvUnwrap = new QPushButton(QCoreApplication::translate("VibeStudioModelEditor", "Unwrap and Pack Faces"));
+	m_uvUnwrap = new WrappingActionButton(QCoreApplication::translate("VibeStudioModelEditor", "Unwrap and Pack Faces"), 2);
 	m_uvUnwrap->setObjectName(QStringLiteral("unwrapMeshUv"));
 	m_uvUnwrap->setToolTip(QCoreApplication::translate(
 		"VibeStudioModelEditor", "Create UV charts from selected faces in the displayed pose, honour marked seams, and pack one atlas. All "
 								 "animation poses retain their geometry. Undo restores the previous mapping."));
-	m_uvPack = new QPushButton(QCoreApplication::translate("VibeStudioModelEditor", "Pack Selected UVs"));
+	m_uvPack = new WrappingActionButton(QCoreApplication::translate("VibeStudioModelEditor", "Pack Selected UVs"), 2);
 	m_uvPack->setObjectName(QStringLiteral("packMeshUv"));
 	m_uvPack->setToolTip(QCoreApplication::translate(
 		"VibeStudioModelEditor",
@@ -256,7 +264,7 @@ void ModelEditorDialog::addUvControls(QFormLayout *surface)
 		"Pack Around Unselected can fit all moving islands with one shared scale, or keep their current texel scale and fail if they do not fit. Orientation and relative density are preserved."));
 	m_uvObstacleScale->setAccessibleDescription(m_uvObstacleScale->toolTip());
 	surface->addRow(QCoreApplication::translate("ModelUvObstacles", "Fixed-region packing"), m_uvObstacleScale);
-	m_uvPackAround = new QPushButton(QCoreApplication::translate("ModelUvObstacles", "Pack Around Unselected"));
+	m_uvPackAround = new WrappingActionButton(QCoreApplication::translate("ModelUvObstacles", "Pack Around Unselected"), 2);
 	m_uvPackAround->setObjectName(QStringLiteral("packMeshUvAround"));
 	m_uvPackAround->setAccessibleName(m_uvPackAround->text());
 	m_uvPackAround->setToolTip(QCoreApplication::translate("ModelUvObstacles",
@@ -298,7 +306,7 @@ void ModelEditorDialog::addUvControls(QFormLayout *surface)
 					value->setEnabled(index == int(ModelUvPivot::Custom));
 				}
 			});
-	m_uvSnap = new QCheckBox(QCoreApplication::translate("VibeStudioModelEditor", "Snap UV Offset"));
+	m_uvSnap = new WrappingCheckBox(QCoreApplication::translate("VibeStudioModelEditor", "Snap UV Offset"));
 	m_uvSnap->setObjectName(QStringLiteral("meshUvSnap"));
 	m_uvSnap->setAccessibleName(m_uvSnap->text());
 	m_uvSnap->setToolTip(QCoreApplication::translate(
@@ -322,7 +330,7 @@ void ModelEditorDialog::addUvControls(QFormLayout *surface)
 	connect(m_uvGrid, &QDoubleSpinBox::valueChanged, this, [this] { refreshUv(); });
 	const auto button = [&](const QString &label, const QString &name, ModelEditKind kind)
 	{
-		auto *item = new QPushButton(label);
+		auto *item = new WrappingActionButton(label, 2);
 		item->setObjectName(name);
 		item->setProperty("requiresMeshComponents", true);
 		surface->addRow(item);
@@ -367,6 +375,37 @@ void ModelEditorDialog::refreshUv()
 	m_uv->setPickMode(m_selectionMode->currentIndex() == 0 && m_uvPickIslands->isChecked() ? 3 : m_selectionMode->currentIndex());
 	m_uv->setMoveEnabled(meshMode && m_uvMove->isChecked(), m_uvSnap->isChecked() ? m_uvGrid->value() : 0);
 	m_uv->setSource(surface, selected, image);
+}
+
+void ModelEditorDialog::editUvDensity()
+{
+	if (m_working || m_document.mesh().surfaces.isEmpty()) return;
+	m_preview->finishEditTransform(false); m_preview->pause(); m_uv->finishMove(false);
+	if (m_tools) m_tools->finishModal(false);
+	const auto revision = m_document.revisionFingerprint();
+	const auto selected = m_document.selection();
+	QSize size;
+	QString name;
+	QImage texture;
+	if (m_preview->mdlPlaybackActive()) texture = m_preview->mdlPlaybackSkin();
+	else if (!m_mdlPreview.isNull()) texture = m_mdlPreview;
+	if (!texture.isNull()) { size = texture.size(); name = modelPreviewSurfaceMaterialKey(selected.surface); }
+	else
+	{
+		texture = m_surfaceImages.value(selected.surface);
+		for (const auto &material : m_materialAssets.materials)
+			if (material.key == modelPreviewSurfaceMaterialKey(selected.surface)) { size = material.sourceSize; name = material.imagePath; break; }
+	}
+	if (texture.isNull()) texture = m_checker;
+	ModelUvDensityDialog dialog(m_document.mesh(), selected, m_preview->frame(), texture, size, name, this);
+	if (dialog.exec() != QDialog::Accepted) return;
+	if (revision != m_document.revisionFingerprint())
+	{
+		m_status->setText(QCoreApplication::translate("ModelUvDensityDialog", "The model changed while reviewing density. Reopen Texel Density."));
+		return;
+	}
+	QString error;
+	if (!applyEdit(dialog.edit(), &error)) m_status->setText(error);
 }
 
 void ModelEditorDialog::selectUvIslands()

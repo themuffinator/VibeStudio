@@ -1,11 +1,16 @@
 #include "app/model_editor_tools.h"
+#include "app/locale_number.h"
 
 #include "app/model_editor_dialog.h"
+#include "app/model_primitive_binding_dialog.h"
+#include "app/model_symmetrize_joints_dialog.h"
 #include "app/model_viewport.h"
 #include "app/studio_icons.h"
+#include "app/studio_layout.h"
 #include "core/model_geometric_topology.h"
 #include "core/model_file_io.h"
 #include "core/model_lod.h"
+#include "core/model_targets.h"
 #include "core/model_transform_axes.h"
 
 #include <QAction>
@@ -18,6 +23,7 @@
 #include <QCursor>
 #include <QDoubleSpinBox>
 #include <QFileDialog>
+#include <QFileInfo>
 #include <QFormLayout>
 #include <QFrame>
 #include <QKeyEvent>
@@ -26,10 +32,12 @@
 #include <QListWidget>
 #include <QMenu>
 #include <QMenuBar>
+#include <QMessageBox>
 #include <QMouseEvent>
 #include <QPainter>
 #include <QPushButton>
 #include <QScrollArea>
+#include <QScopedValueRollback>
 #include <QSignalBlocker>
 #include <QSpinBox>
 #include <QStackedWidget>
@@ -106,6 +114,7 @@ ModelEditorTools::ModelEditorTools(ModelEditorDialog *editor) : QObject(editor),
 	buildMenus();
 	buildHeader();
 	buildOverlays();
+	makeToolBarKeyboardReachable(m_shelf);
 	m_viewport->setMouseTracking(true);
 	m_viewport->installEventFilter(this);
 	m_viewport->setOverlayPainter([this](QPainter &painter) { paintOverlay(painter); });
@@ -143,7 +152,7 @@ QAction *ModelEditorTools::addAction(const QString &name, const QString &text, c
 	for (const auto &part : portable)
 		keys.append(QKeySequence::fromString(part, QKeySequence::PortableText));
 	action->setShortcuts(keys);
-	action->setShortcutContext(Qt::WidgetWithChildrenShortcut);
+	scopeShortcuts(action);
 	connect(action, &QAction::triggered, this,
 			[this, run]()
 			{
@@ -285,6 +294,10 @@ void ModelEditorTools::buildActions()
 			  [this] { startModalAtPointer(ModelModalOperator::Duplicate); }, QStringLiteral("copy"));
 	addAction(QStringLiteral("meshLoopCut"), Text::tr("Loop Cut"), QStringLiteral("Ctrl+R"),
 			  [this] { startModalAtPointer(ModelModalOperator::LoopCut); }, QStringLiteral("loop-cut"));
+	addAction(QStringLiteral("meshEdgeSlide"), Text::tr("Edge Slide"), {},
+			  [this] { startModalAtPointer(ModelModalOperator::EdgeSlide); });
+	addAction(QStringLiteral("meshKnife"), Text::tr("Knife"), QStringLiteral("K"),
+			  [this] { startModalAtPointer(ModelModalOperator::Knife); }, QStringLiteral("loop-cut"));
 	// Mesh / vertex / edge / face tools.
 	addAction(QStringLiteral("meshMergeCentre"), Text::tr("Merge at Center"), {}, [this] { runKind(ModelEditKind::MergeVertices); },
 			  QStringLiteral("merge"));
@@ -312,6 +325,11 @@ void ModelEditorTools::buildActions()
 			  QStringLiteral("rotate"));
 	addAction(QStringLiteral("meshExtrudeEdges"), Text::tr("Extrude Edges"), {},
 			  [this] { startModalAtPointer(ModelModalOperator::Extrude); });
+	addAction(QStringLiteral("meshSpin"), Text::tr("Spin"), {}, [this] { startModalAtPointer(ModelModalOperator::Spin); });
+	addAction(QStringLiteral("meshRip"), Text::tr("Rip"), {}, [this] { startModalAtPointer(ModelModalOperator::Rip); });
+	addAction(QStringLiteral("meshRipFill"), Text::tr("Rip and Fill"), {}, [this] { startModalAtPointer(ModelModalOperator::RipFill); });
+	addAction(QStringLiteral("meshSpinDuplicate"), Text::tr("Spin Duplicates"), {},
+			  [this] { startModalAtPointer(ModelModalOperator::SpinDuplicate); });
 	addAction(QStringLiteral("meshSubdivide"), Text::tr("Subdivide"), {}, [this] { m_editor->execute(ModelEditKind::Subdivide); });
 	addAction(QStringLiteral("meshSplitEdges"), Text::tr("Split Edges"), {}, [this] { m_editor->execute(ModelEditKind::SplitEdges); });
 	addAction(QStringLiteral("meshMarkSeam"), Text::tr("Mark Seam"), {}, [this] { m_editor->execute(ModelEditKind::MarkUvSeams); });
@@ -362,6 +380,8 @@ void ModelEditorTools::buildActions()
 	}
 	addAction(QStringLiteral("meshBevelVertices"), Text::tr("Bevel Vertices"), QStringLiteral("Ctrl+Shift+B"),
 			  [this] { startModalAtPointer(ModelModalOperator::BevelVertices); });
+	addAction(QStringLiteral("meshBevelEdges"), Text::tr("Bevel Edges"), QStringLiteral("Ctrl+B"),
+			  [this] { startModalAtPointer(ModelModalOperator::BevelEdges); });
 	addAction(QStringLiteral("meshSolidify"), Text::tr("Solidify"), {},
 			  [this] { runKind(ModelEditKind::Solidify, [](ModelEdit &e) { e.tool.solidifyThickness = 2; }); });
 	// UV mapping (U), as Blender's UV menu. Projections split UVs only where
@@ -389,21 +409,38 @@ void ModelEditorTools::buildActions()
 	addAction(QStringLiteral("meshUvViewBounds"), Text::tr("Project From View (Bounds)"), {},
 			  [projectUvs] { projectUvs(ModelUvProjection::View, true); });
 	addAction(QStringLiteral("meshUnwrap"), Text::tr("Unwrap and Pack"), {}, [this] { m_editor->execute(ModelEditKind::UnwrapUv); });
+	addAction(QStringLiteral("meshUvDensity"), Text::tr("Texel Density…"), {}, [this] { m_editor->editUvDensity(); });
 	addAction(QStringLiteral("meshPackIslands"), Text::tr("Pack Islands"), {}, [this] { m_editor->execute(ModelEditKind::PackUv); });
 	addAction(QStringLiteral("meshExportLods"), Text::tr("Export Quake III Detail Levels…"), {},
 			  [this]
 			  {
+				  ModelTargetProfile target;
+				  findModelTargetProfile(QStringLiteral("md3"), m_editor->deliveryTarget(QStringLiteral("md3")), &target);
+				  const int levels = std::min({2, modelLodMaxLevels, std::max(0, target.limits.detailLevels)});
+				  if (levels < 1)
+				  {
+					  m_editor->m_status->setText(Text::tr("%1 loads no detail levels beside the model.").arg(target.label));
+					  return;
+				  }
 				  const auto path = QFileDialog::getSaveFileName(m_editor, Text::tr("Export Quake III Detail Levels"), {},
 																 Text::tr("Quake III model (*.md3)"));
 				  if (path.isEmpty())
 					  return;
 				  QString error;
-				  exportDetailLevels(path, 2, 0.5, &error);
+				  // The levels the source stores, else two halvings.
+				  const auto &recipe = m_editor->m_document.mesh().detailLevels;
+				  if (recipe.isEmpty())
+					  exportDetailLevels(path, levels, 0.5, &error);
+				  else
+					  exportDetailLevels(path, recipe, &error);
 			  },
 			  QStringLiteral("export"));
+	addAction(QStringLiteral("meshDetailLevels"), Text::tr("Detail Levels…"), {}, [this] { m_editor->reviewDetailLevels(); });
 	addAction(QStringLiteral("meshDecimate"), Text::tr("Decimate (Half)"), {}, [this] { runKind(ModelEditKind::Decimate); });
-	addAction(QStringLiteral("meshDecimateMd3"), Text::tr("Decimate to MD3 Budget (2,000 Triangles)"), {},
-			  [this] { runKind(ModelEditKind::Decimate, [](ModelEdit &e) { e.tool.targetTriangles = 2000; }); });
+	// The Quake III working limit: RB_CheckOverflow drops a surface of 2,000.
+	addAction(QStringLiteral("meshDecimateMd3"), Text::tr("Decimate to MD3 Budget (1,999 Triangles)"), {},
+			  [this] { runKind(ModelEditKind::Decimate, [](ModelEdit &e) { e.tool.targetTriangles = 1999; }); });
+	addAction(QStringLiteral("meshCheckTargets"), Text::tr("Check Delivery Targets…"), {}, [this] { m_editor->checkDeliveryTargets(); });
 	// Add (Shift+A).
 	const QVector<QPair<ModelPrimitive, QString>> primitives{
 		{ModelPrimitive::Plane, QStringLiteral("Plane")},		  {ModelPrimitive::Cube, QStringLiteral("Cube")},
@@ -443,7 +480,7 @@ void ModelEditorTools::buildActions()
 				  edit.transformSpace = ModelTransformSpace::World;
 				  QString error;
 				  if (!runTool(edit, &error))
-					  showBanner(error);
+					  showBanner(error, {}, LiveStatus::Problem);
 			  });
 	addAction(QStringLiteral("meshPivotCursor"), Text::tr("Pivot at 3D Cursor"), {},
 			  [this]
@@ -509,8 +546,15 @@ void ModelEditorTools::buildActions()
 	addAction(QStringLiteral("meshAdjustLast"), Text::tr("Adjust Last Operation"), QStringLiteral("F9"),
 			  [this]
 			  {
-				  m_lastPanel->setVisible(!m_lastPanel->isVisible() || !m_hasLast);
+				  const bool show = !m_lastPanel->isVisible() || !m_hasLast;
+				  const bool focused = m_lastPanel->isAncestorOf(QApplication::focusWidget());
+				  m_lastPanel->setVisible(show);
 				  refreshLastPanel();
+				  // F9 takes keyboard focus to the settings and back to the view.
+				  if (show)
+					  focusLastOperation();
+				  else if (focused)
+					  m_viewport->setFocus(Qt::ShortcutFocusReason);
 			  });
 	addAction(QStringLiteral("meshRepeatLast"), Text::tr("Repeat Last"), QStringLiteral("Shift+R"),
 			  [this]
@@ -519,9 +563,14 @@ void ModelEditorTools::buildActions()
 					  return;
 				  auto edit = m_last.edit;
 				  edit.selection = selectionFor(edit.kind);
+				  // The joint map and binding were confirmed for the last target:
+				  // confirm them again for this one, as the menu does.
+				  if ((edit.kind == ModelEditKind::Symmetrize && !confirmMirrorJoints(edit)) ||
+					  (edit.kind == ModelEditKind::AddPrimitive && !confirmPrimitiveBinding(edit)))
+					  return;
 				  QString error;
 				  if (!runTool(edit, &error))
-					  showBanner(error);
+					  showBanner(error, {}, LiveStatus::Problem);
 			  },
 			  QStringLiteral("repeat"));
 	// Context menus opened from the keyboard.
@@ -548,6 +597,7 @@ void ModelEditorTools::buildActions()
 	addAction(QStringLiteral("meshUvMenu"), Text::tr("UV Mapping Menu"), QStringLiteral("U"),
 			  [this] { m_menuBar->findChild<QMenu *>(QStringLiteral("meshMenuUv"))->popup(QCursor::pos()); });
 	buildProfileActions();
+	buildFocusActions();
 }
 
 void ModelEditorTools::buildMenus()
@@ -556,6 +606,10 @@ void ModelEditorTools::buildMenus()
 	m_menuBar->setObjectName(QStringLiteral("meshMenuBar"));
 	m_menuBar->setNativeMenuBar(false);
 	m_menuBar->setAccessibleName(Text::tr("Mesh Editor menus"));
+	// A menu bar's own policy keeps every menu in view, so at large text sizes
+	// it would hold the editor wider than the window (right to left, as wide
+	// as its parent). Menus that do not fit move under its overflow button.
+	m_menuBar->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Fixed);
 	const auto named = [](QMenu *menu, const QString &name)
 	{
 		menu->setObjectName(name);
@@ -567,12 +621,17 @@ void ModelEditorTools::buildMenus()
 												 QStringLiteral("meshViewPerspective"), {}, QStringLiteral("meshOrbitLeft"), QStringLiteral("meshOrbitRight"),
 												 QStringLiteral("meshOrbitUp"), QStringLiteral("meshOrbitDown"), {}, QStringLiteral("meshToggleXray"),
 												 QStringLiteral("meshToggleNavigationGizmo"), QStringLiteral("meshBlenderNavigation"), {},
-												 QStringLiteral("meshOperatorSearch"), QStringLiteral("meshAdjustLast")}),
+												 QStringLiteral("meshOperatorSearch"), QStringLiteral("meshAdjustLast"), {},
+												 QStringLiteral("meshFocusNextPanel"), QStringLiteral("meshFocusPreviousPanel"), {},
+												 QStringLiteral("meshToggleQuadView"), QStringLiteral("meshMaximizeView"),
+												 QStringLiteral("meshNextView"), QStringLiteral("meshPreviousView")}),
 					   QStringLiteral("meshMenuView"));
 	auto *shading = named(menu(Text::tr("Shading"), {QStringLiteral("meshShadingWire"), QStringLiteral("meshShadingSolid"),
 													 QStringLiteral("meshShadingMaterial"), QStringLiteral("meshShadingChecker")}),
 						  QStringLiteral("meshMenuShading"));
 	view->insertMenu(m_actions.value(QStringLiteral("meshToggleXray")), shading);
+	// The document's own menu leads, as Blender's image editor leads with Image.
+	m_menuBar->addMenu(m_editor->m_modelMenu);
 	m_menuBar->addMenu(view);
 	auto *similar = named(menu(Text::tr("Select Similar"), {QStringLiteral("meshSelectSimilarNormal"), QStringLiteral("meshSelectSimilarArea"),
 															 QStringLiteral("meshSelectSimilarCoplanar"), {}, QStringLiteral("meshSelectSimilarLength"),
@@ -588,7 +647,8 @@ void ModelEditorTools::buildMenus()
 													 QStringLiteral("meshSelectMore"), QStringLiteral("meshSelectLess"), {},
 													 QStringLiteral("meshSelectLinked"), QStringLiteral("meshSelectLinkedPick"),
 													 QStringLiteral("meshSelectLinkedSeams"), {}, QStringLiteral("meshSelectLoopPick"),
-													 QStringLiteral("meshSelectRingPick"), QStringLiteral("meshSelectBoundary"), {},
+													 QStringLiteral("meshSelectRingPick"), QStringLiteral("meshSelectLoop"),
+													 QStringLiteral("meshSelectRing"), QStringLiteral("meshSelectBoundary"), {},
 													 QStringLiteral("meshSelectSharp"), QStringLiteral("meshSelectNonManifold"),
 													 QStringLiteral("meshSelectLoose"), {}, QStringLiteral("meshSelectRandom"),
 													 QStringLiteral("meshSelectChecker"), QStringLiteral("meshSelectMirror")}),
@@ -620,11 +680,11 @@ void ModelEditorTools::buildMenus()
 						   QStringLiteral("meshMenuSymmetrize"));
 	auto *cleanup = named(menu(Text::tr("Clean Up"), {QStringLiteral("meshDecimate"), QStringLiteral("meshDecimateMd3"),
 													  QStringLiteral("meshBeautify"), QStringLiteral("meshMergeDistance"), {},
-													  QStringLiteral("meshExportLods")}),
+													  QStringLiteral("meshCheckTargets"), QStringLiteral("meshDetailLevels"), QStringLiteral("meshExportLods")}),
 						  QStringLiteral("meshMenuCleanUp"));
 	auto *mesh = named(menu(Text::tr("&Mesh"), {QStringLiteral("meshMove"), QStringLiteral("meshRotate"), QStringLiteral("meshScale"),
 												 QStringLiteral("meshShrinkFatten"), QStringLiteral("meshSmooth"), {},
-												 QStringLiteral("meshDuplicate"), QStringLiteral("meshExtrude"), QStringLiteral("meshBisect"), {},
+												 QStringLiteral("meshDuplicate"), QStringLiteral("meshExtrude"), QStringLiteral("meshKnife"), QStringLiteral("meshBisect"), {},
 												 QStringLiteral("meshToggleProportional"), QStringLiteral("meshCycleFalloff"), {},
 												 QStringLiteral("meshRepeatLast"), QStringLiteral("meshAdjustLast")}),
 					   QStringLiteral("meshMenuMesh"));
@@ -637,23 +697,26 @@ void ModelEditorTools::buildMenus()
 	mesh->addMenu(cleanup);
 	m_menuBar->addMenu(mesh);
 	m_menuBar->addMenu(named(menu(Text::tr("&Vertex"), {QStringLiteral("meshMakeFace"), QStringLiteral("meshBevelVertices"), QStringLiteral("meshMergeCentre"),
+														 QStringLiteral("meshRip"), QStringLiteral("meshRipFill"),
 														 QStringLiteral("meshMergeCursor"), QStringLiteral("meshDissolveVertices"),
 														 QStringLiteral("meshSmooth"), QStringLiteral("meshMergeDistance")}),
 							 QStringLiteral("meshMenuVertex")));
 	m_menuBar->addMenu(named(menu(Text::tr("&Edge"), {QStringLiteral("meshLoopCut"), QStringLiteral("meshRotateEdge"), QStringLiteral("meshExtrudeEdges"),
-													   QStringLiteral("meshSplitEdges"), QStringLiteral("meshBridge"), QStringLiteral("meshFillHoles"), {},
+													   QStringLiteral("meshRip"), QStringLiteral("meshRipFill"),
+													   QStringLiteral("meshSpin"), QStringLiteral("meshEdgeSlide"), QStringLiteral("meshBevelEdges"), QStringLiteral("meshSplitEdges"), QStringLiteral("meshBridge"), QStringLiteral("meshFillHoles"), {},
 													   QStringLiteral("meshMarkSeam"), QStringLiteral("meshClearSeam"), {},
-													   QStringLiteral("meshSelectLoopPick"), QStringLiteral("meshSelectRingPick")}),
+													   QStringLiteral("meshSelectLoopPick"), QStringLiteral("meshSelectRingPick"),
+													   QStringLiteral("meshSelectLoop"), QStringLiteral("meshSelectRing")}),
 							 QStringLiteral("meshMenuEdge")));
 	m_menuBar->addMenu(named(menu(Text::tr("&Face"), {QStringLiteral("meshExtrude"), QStringLiteral("meshInset"), QStringLiteral("meshInsetIndividual"),
-													   QStringLiteral("meshPoke"), QStringLiteral("meshSolidify"), QStringLiteral("meshSubdivide"), QStringLiteral("meshDissolveFaces"),
+													   QStringLiteral("meshSpin"), QStringLiteral("meshSpinDuplicate"), QStringLiteral("meshPoke"), QStringLiteral("meshSolidify"), QStringLiteral("meshSubdivide"), QStringLiteral("meshDissolveFaces"),
 													   QStringLiteral("meshBeautify"), QStringLiteral("meshMakeFace"), {}, QStringLiteral("meshFlip"),
 													   QStringLiteral("meshShadeSmooth"), QStringLiteral("meshShadeFlat"), QStringLiteral("meshAutoSmooth"), {},
 													   QStringLiteral("meshDeleteFaces")}),
 							 QStringLiteral("meshMenuFace")));
 	m_menuBar->addMenu(named(menu(Text::tr("&UV"), {QStringLiteral("meshUnwrap"), {}, QStringLiteral("meshUvCube"), QStringLiteral("meshUvCylinder"),
 													 QStringLiteral("meshUvSphere"), {}, QStringLiteral("meshUvView"), QStringLiteral("meshUvViewBounds"), {},
-													 QStringLiteral("meshMarkSeam"), QStringLiteral("meshClearSeam"), {}, QStringLiteral("meshPackIslands")}),
+													 QStringLiteral("meshMarkSeam"), QStringLiteral("meshClearSeam"), {}, QStringLiteral("meshUvDensity"), QStringLiteral("meshPackIslands")}),
 							 QStringLiteral("meshMenuUv")));
 	if (auto *layout = qobject_cast<QBoxLayout *>(m_editor->layout()))
 		layout->insertWidget(0, m_menuBar);
@@ -681,31 +744,41 @@ void ModelEditorTools::buildHeader()
 		}
 	} headerRow{bar};
 	auto *row = &headerRow;
-	const auto toolButton = [&](const QString &name, const QString &icon, const QString &tip, bool checkable)
+	// Undo and Redo lead the header, one click away whatever the profile.
+	bar->addAction(m_editor->m_undo);
+	bar->addAction(m_editor->m_redo);
+	auto *historyDivider = new QFrame;
+	historyDivider->setFrameShape(QFrame::VLine);
+	row->addWidget(historyDivider);
+	// Tooltips and accessible descriptions name the command's keys in the
+	// current profile (refreshKeyHints); accessible names stay key-free.
+	const auto toolButton = [&](const QString &name, const QString &icon, const QString &title, const QString &detail, const QString &command)
 	{
 		auto *button = new QToolButton;
 		button->setObjectName(name);
 		button->setIcon(studioIcon(icon, StudioIconTone::Navigation));
-		button->setToolTip(tip);
-		button->setAccessibleName(tip);
-		button->setCheckable(checkable);
+		button->setToolTip(title);
+		button->setAccessibleName(title);
+		button->setCheckable(true);
 		button->setAutoRaise(true);
 		button->setFocusPolicy(Qt::TabFocus);
 		row->addWidget(button);
+		m_keyHints.append({button, command, title, detail});
 		return button;
 	};
 	const QString modes[3]{QStringLiteral("vertex-mode"), QStringLiteral("edge-mode"), QStringLiteral("face-mode")};
-	const QString modeTips[3]{Text::tr("Vertex select mode (1)"), Text::tr("Edge select mode (2)"), Text::tr("Face select mode (3)")};
+	const QString modeNames[3]{Text::tr("Vertex select mode"), Text::tr("Edge select mode"), Text::tr("Face select mode")};
+	const QString modeCommands[3]{QStringLiteral("meshModeVertex"), QStringLiteral("meshModeEdge"), QStringLiteral("meshModeFace")};
 	for (int i = 0; i < 3; ++i)
 	{
-		m_modeButtons[i] = toolButton(QStringLiteral("meshSelectMode%1").arg(i), modes[i], modeTips[i], true);
+		m_modeButtons[i] = toolButton(QStringLiteral("meshSelectMode%1").arg(i), modes[i], modeNames[i], {}, modeCommands[i]);
 		connect(m_modeButtons[i], &QToolButton::clicked, this, [this, i] { setSelectionMode(i == 2 ? 0 : i + 1); });
 	}
 	auto *divider = new QFrame;
 	divider->setFrameShape(QFrame::VLine);
 	row->addWidget(divider);
-	m_xray = toolButton(QStringLiteral("meshXray"), QStringLiteral("eye"),
-						Text::tr("X-ray (Alt+Z): box, circle and lasso selection and vertex picking reach hidden components"), true);
+	m_xray = toolButton(QStringLiteral("meshXray"), QStringLiteral("eye"), Text::tr("X-ray"),
+						Text::tr("Box, circle and lasso selection and vertex picking reach hidden components."), QStringLiteral("meshToggleXray"));
 	connect(m_xray, &QToolButton::toggled, this,
 			[this](bool on)
 			{
@@ -716,8 +789,18 @@ void ModelEditorTools::buildHeader()
 	auto *divider2 = new QFrame;
 	divider2->setFrameShape(QFrame::VLine);
 	row->addWidget(divider2);
-	m_proportional = toolButton(QStringLiteral("meshProportional"), QStringLiteral("proportional"),
-								Text::tr("Proportional editing (O): move, rotate and scale nearby vertices with a falloff"), true);
+	// Shading, the view preset and Frame Model follow the selection
+	// controls, so they stay in view before the proportional settings fold
+	// into the overflow menu.
+	row->addWidget(m_editor->m_renderMode);
+	row->addWidget(m_editor->m_viewPreset);
+	if (auto *frame = m_editor->findChild<QAction *>(QStringLiteral("meshFrameModel")))
+		bar->addAction(frame);
+	auto *viewDivider = new QFrame;
+	viewDivider->setFrameShape(QFrame::VLine);
+	row->addWidget(viewDivider);
+	m_proportional = toolButton(QStringLiteral("meshProportional"), QStringLiteral("proportional"), Text::tr("Proportional editing"),
+								Text::tr("Move, rotate and scale nearby vertices with a falloff."), QStringLiteral("meshToggleProportional"));
 	m_falloff = new QComboBox;
 	m_falloff->setObjectName(QStringLiteral("meshProportionalFalloff"));
 	m_falloff->setAccessibleName(Text::tr("Proportional falloff"));
@@ -750,7 +833,7 @@ void ModelEditorTools::buildHeader()
 				m_falloff->setEnabled(on);
 				m_radius->setEnabled(on);
 				m_connected->setEnabled(on);
-				showBanner(on ? Text::tr("Proportional editing on (%1, radius %2).").arg(m_falloff->currentText()).arg(m_radius->value())
+				showBanner(on ? Text::tr("Proportional editing on (%1, radius %2).").arg(m_falloff->currentText(), localeNumber(m_radius->value()))
 							  : Text::tr("Proportional editing off."));
 			});
 	m_falloff->setEnabled(false);
@@ -776,7 +859,7 @@ void ModelEditorTools::buildHeader()
 	}
 	m_budget = new QToolButton;
 	m_budget->setObjectName(QStringLiteral("meshExportBudget"));
-	m_budget->setAccessibleName(Text::tr("Export budget"));
+	m_budget->setAccessibleName(Text::tr("Delivery targets"));
 	m_budget->setToolButtonStyle(Qt::ToolButtonTextBesideIcon);
 	m_budget->setPopupMode(QToolButton::InstantPopup);
 	m_budget->setAutoRaise(true);
@@ -788,14 +871,14 @@ void ModelEditorTools::buildHeader()
 	search->setToolButtonStyle(Qt::ToolButtonTextBesideIcon);
 	search->setAutoRaise(true);
 	row->addWidget(search);
-	// The editing header sits above the gizmo row; the overlay toggles join the
-	// gizmo row, so the viewport keeps the height the old checkbox row used.
+	// The editing header heads the column of views, above material loading
+	// and the 3D and UV tabs; the overlay toggles join the gizmo settings on
+	// the Tool page.
 	row->addStretch();
 	auto *tabs = m_viewArea->parentWidget() ? m_viewArea->parentWidget()->parentWidget() : nullptr;
-	auto *moveRow = m_editor->m_moveGizmo->parentWidget();
 	auto *centre = tabs ? tabs->parentWidget() : nullptr;
 	if (auto *layout = centre ? qobject_cast<QBoxLayout *>(centre->layout()) : nullptr)
-		layout->insertWidget(std::max(0, layout->indexOf(moveRow) >= 0 ? layout->indexOf(moveRow) : layout->indexOf(tabs)), m_header);
+		layout->insertWidget(0, m_header);
 	auto *rows = m_editor->m_moveGizmo->parentWidget() ? qobject_cast<QVBoxLayout *>(m_editor->m_moveGizmo->parentWidget()->layout()) : nullptr;
 	auto *transformRow = rows && rows->count() > 0 ? qobject_cast<QBoxLayout *>(rows->itemAt(0)->layout()) : nullptr;
 	if (transformRow)
@@ -819,25 +902,22 @@ void ModelEditorTools::buildShelf()
 	m_shelf->setAccessibleName(Text::tr("Mesh tools"));
 	m_shelf->setOrientation(Qt::Vertical);
 	m_shelf->setToolButtonStyle(Qt::ToolButtonIconOnly);
-	m_shelf->setIconSize(QSize(20, 20));
+	// The glyphs grow with the text scale, as the sidebar tabs do.
+	setBaseIconSize(m_shelf, QSize(20, 20));
 }
 
 void ModelEditorTools::buildOverlays()
 {
 	for (const auto &name : {QStringLiteral("meshSelectBox"), QStringLiteral("meshCursorToSelected"), QString(), QStringLiteral("meshMove"),
 							 QStringLiteral("meshRotate"), QStringLiteral("meshScale"), QString(), QStringLiteral("meshExtrude"),
-							 QStringLiteral("meshInset"), QStringLiteral("meshLoopCut"), QStringLiteral("meshSmooth"),
+							 QStringLiteral("meshInset"), QStringLiteral("meshLoopCut"), QStringLiteral("meshKnife"), QStringLiteral("meshSmooth"),
 							 QStringLiteral("meshShrinkFatten"), QStringLiteral("meshMergeCentre"), QString(), QStringLiteral("meshAddCube"),
 							 QStringLiteral("meshSymmetrizePositiveX"), QStringLiteral("meshToggleProportional")})
 	{
 		if (name.isEmpty())
 			m_shelf->addSeparator();
 		else if (auto *entry = m_actions.value(name))
-		{
 			m_shelf->addAction(entry);
-			const auto shortcut = entry->shortcut().toString(QKeySequence::NativeText);
-			entry->setToolTip(shortcut.isEmpty() ? plain(entry->text()) : QStringLiteral("%1 (%2)").arg(plain(entry->text()), shortcut));
-		}
 	}
 	m_banner = new QLabel(m_viewport);
 	m_banner->setObjectName(QStringLiteral("meshOperatorBanner"));
@@ -854,6 +934,8 @@ void ModelEditorTools::buildOverlays()
 	m_lastPanel->setFrameShape(QFrame::StyledPanel);
 	m_lastPanel->setAutoFillBackground(true);
 	m_lastPanel->setAccessibleName(Text::tr("Adjust last operation"));
+	// Keys a setting leaves unused stop here rather than reach the view.
+	m_lastPanel->installEventFilter(this);
 	auto *layout = new QVBoxLayout(m_lastPanel);
 	layout->setContentsMargins(8, 6, 8, 8);
 	m_lastTitle = new QLabel;
@@ -861,9 +943,16 @@ void ModelEditorTools::buildOverlays()
 	auto title = m_lastTitle->font();
 	title.setBold(true);
 	m_lastTitle->setFont(title);
+	m_lastTitle->setWordWrap(true);
 	layout->addWidget(m_lastTitle);
+	m_lastScroll = new QScrollArea;
+	m_lastScroll->setObjectName(QStringLiteral("meshLastOperationScroll"));
+	m_lastScroll->setAccessibleName(Text::tr("Operation settings"));
+	m_lastScroll->setWidgetResizable(true);
+	m_lastScroll->setFrameShape(QFrame::NoFrame);
+	layout->addWidget(m_lastScroll);
 	m_lastFields = new QWidget;
-	layout->addWidget(m_lastFields);
+	m_lastScroll->setWidget(m_lastFields);
 	m_lastPanel->hide();
 }
 
@@ -873,12 +962,44 @@ void ModelEditorTools::placeOverlays()
 	m_banner->setFixedWidth(std::max(160, width));
 	m_banner->adjustSize();
 	m_banner->move((m_viewport->width() - m_banner->width()) / 2, 8);
-	m_lastPanel->adjustSize();
-	m_lastPanel->move(8, std::max(8, m_viewport->height() - m_lastPanel->height() - 8));
+	// Newly populated fields must be visible before taking their size hints.
+	// Keep long forms inside the viewport, with keyboard-accessible scrolling.
+	m_lastFields->ensurePolished();
+	const auto margins = m_lastPanel->layout()->contentsMargins();
+	const int availableWidth = std::max(1, m_viewport->width() - 16);
+	const int panelWidth = std::min(availableWidth, std::max(260, m_lastFields->sizeHint().width() + margins.left() + margins.right() + 24));
+	const int contentWidth = std::max(1, panelWidth - margins.left() - margins.right());
+	// A long form label must wrap within the scrolling viewport instead of
+	// making the whole row wider than a narrow, enlarged-text editor pane.
+	const int labelWidth = std::max(1, contentWidth - m_lastScroll->style()->pixelMetric(QStyle::PM_ScrollBarExtent) - 4);
+	for (auto *label : m_lastFields->findChildren<QLabel *>())
+		label->setMaximumWidth(labelWidth);
+	const int fieldsHeight = m_lastFields->hasHeightForWidth() ? m_lastFields->heightForWidth(contentWidth) : m_lastFields->sizeHint().height();
+	const int titleHeight = std::max(m_lastTitle->sizeHint().height(), m_lastTitle->heightForWidth(contentWidth));
+	const int panelHeight = fieldsHeight + titleHeight + margins.top() + margins.bottom() + m_lastPanel->layout()->spacing() + 8;
+	m_lastPanel->setMaximumSize(availableWidth, std::max(1, (m_viewport->height() - 16) * 2 / 3));
+	m_lastPanel->resize(panelWidth, std::min(panelHeight, m_lastPanel->maximumHeight()));
+	m_lastPanel->layout()->activate();
+	// The bottom leading corner, the right one in a right-to-left layout; the
+	// navigation gizmo keeps to the trailing top corner.
+	const bool rtl = m_viewport->layoutDirection() == Qt::RightToLeft;
+	m_lastPanel->move(rtl ? std::max(8, m_viewport->width() - m_lastPanel->width() - 8) : 8,
+					  std::max(8, m_viewport->height() - m_lastPanel->height() - 8));
+	// The gizmo moves clear of the banner and the panel; a large mesh is not
+	// repainted when it stays where it was.
+	if (navigationGizmo().bounds != m_paintedGizmo)
+		m_viewport->update();
 }
 
-void ModelEditorTools::showBanner(const QString &text)
+void ModelEditorTools::showBanner(const QString &text, const QString &details, LiveStatus kind)
 {
+	// The banner's accessible name stays "Tool status"; its description is
+	// the details (a refusal's reason, a tool's keys), or else what it says.
+	// The status line below says it too.
+	m_banner->setAccessibleDescription(details.isEmpty() ? text : details);
+	m_banner->setToolTip(details);
+	m_viewport->setToolTip(details);
+	m_editor->m_status->setToolTip(details);
 	if (text.isEmpty())
 	{
 		m_banner->hide();
@@ -889,6 +1010,12 @@ void ModelEditorTools::showBanner(const QString &text)
 	m_banner->raise();
 	placeOverlays();
 	m_editor->m_status->setText(text);
+	// From the status line, which is always shown; the banner comes and goes.
+	announceStatus(m_editor->m_status,
+				   kind == LiveStatus::Problem && !details.isEmpty() && details != text
+					   ? Text::tr("%1: %2", "a refusal and its reason").arg(text, details)
+					   : text,
+				   kind);
 }
 
 void ModelEditorTools::setBlenderNavigation(bool enabled)
@@ -919,13 +1046,20 @@ void ModelEditorTools::setBlenderNavigation(bool enabled)
 	controls.selection.emptyDragBoxSelects = enabled;
 	controls.navigation.emulateMiddleButton = enabled;
 	applyControls(controls);
-	m_viewport->setControlsHelp(enabled ? Text::tr("Blender navigation: middle-drag orbits, Shift+middle-drag pans and the wheel zooms "
-												   "(Alt+left-drag also orbits). Click selects, Shift+click toggles, Alt+click selects a loop, "
-												   "Ctrl+click a shortest path, drag a box to select; Shift+right-click places the 3D cursor. "
-												   "G, R and S move, rotate and scale; E extrudes, I insets; X, Y or Z constrains; type a value; "
-												   "Enter confirms and Escape cancels. F3 searches every command.")
-										: Text::tr("Studio navigation: drag to orbit, Shift or Ctrl+drag pans and the wheel zooms. Click selects, "
-												   "Ctrl+click toggles; B starts a box selection. G, R and S move, rotate and scale; F3 searches commands."));
+	// The navigation this switches, then keys as the profile gives them: 3ds
+	// Max and MilkShape 3D give the modal Move, Rotate and Scale no key, and
+	// F3 is not Search Commands there.
+	QStringList help{enabled ? Text::tr("Blender navigation: middle-drag orbits, Shift+middle-drag pans and the wheel zooms (Alt+left-drag also "
+										"orbits), and dragging from empty space draws a selection box.")
+							 : Text::tr("Studio navigation: drag to orbit, Shift or Ctrl+drag pans and the wheel zooms.")};
+	const QString move = commandKeys(QStringLiteral("meshMove")), rotate = commandKeys(QStringLiteral("meshRotate")),
+				  scale = commandKeys(QStringLiteral("meshScale")), search = commandKeys(QStringLiteral("meshOperatorSearch"));
+	if (!move.isEmpty() && !rotate.isEmpty() && !scale.isEmpty())
+		help << Text::tr("%1, %2 and %3 move, rotate and scale; X, Y or Z constrains, type a value, Enter confirms and Esc cancels.")
+					.arg(move, rotate, scale);
+	help << (search.isEmpty() ? Text::tr("View > Search Commands finds every command.") : Text::tr("%1 searches every command.").arg(search));
+	help << keyboardHelp();
+	m_viewport->setControlsHelp(help.join(QLatin1Char(' ')));
 }
 
 int ModelEditorTools::selectionMode() const
@@ -1017,7 +1151,7 @@ ModelSelection ModelEditorTools::selectionFor(ModelEditKind kind) const
 							kind == ModelEditKind::ShadeAutoSmooth || kind == ModelEditKind::Bisect || kind == ModelEditKind::Symmetrize ||
 							kind == ModelEditKind::Decimate || kind == ModelEditKind::Extrude || kind == ModelEditKind::DuplicateFaces ||
 							kind == ModelEditKind::DeleteFaces || kind == ModelEditKind::FlipFaces || kind == ModelEditKind::Subdivide ||
-							kind == ModelEditKind::Solidify || kind == ModelEditKind::ProjectUvMapping;
+							kind == ModelEditKind::Solidify || kind == ModelEditKind::ProjectUvMapping || kind == ModelEditKind::Knife;
 	if (needsFaces && selection.faces.isEmpty())
 	{
 		QSet<int> vertices = selection.vertices;
@@ -1039,7 +1173,7 @@ ModelSelection ModelEditorTools::selectionFor(ModelEditKind kind) const
 		}
 		return faces;
 	}
-	if ((kind == ModelEditKind::RotateEdges || kind == ModelEditKind::LoopCut || kind == ModelEditKind::ExtrudeEdges) && selection.edges.isEmpty())
+	if ((kind == ModelEditKind::RotateEdges || kind == ModelEditKind::LoopCut || kind == ModelEditKind::ExtrudeEdges || kind == ModelEditKind::SlideEdges || kind == ModelEditKind::BevelEdges) && selection.edges.isEmpty())
 	{
 		ModelSelection edges{selection.surface, {}, {}};
 		for (int face : std::as_const(selection.faces))
@@ -1056,6 +1190,18 @@ ModelSelection ModelEditorTools::selectionFor(ModelEditKind kind) const
 					if (selection.vertices.contains(a) && selection.vertices.contains(b))
 						edges.edges.insert(modelEdge(a, b));
 				}
+			}
+		}
+		if (kind == ModelEditKind::BevelEdges)
+		{
+			ModelQuadTopology topology;
+			if (buildModelQuadTopology(surface, std::max(0, m_editor->m_frame->currentIndex()), ModelMeshToolOptions{}.maxAngle, &topology))
+			{
+				for (auto i = edges.edges.begin(); i != edges.edges.end();)
+					if (topology.diagonals.contains(topology.geometry.geometricEdge(i->first, i->second)))
+						i = edges.edges.erase(i);
+					else
+						++i;
 			}
 		}
 		return edges;
@@ -1090,19 +1236,33 @@ ModelEdit ModelEditorTools::toolEdit(ModelEditKind kind) const
 	return edit;
 }
 
-bool ModelEditorTools::runTool(const ModelEdit &edit, QString *error)
+bool ModelEditorTools::runTool(const ModelEdit &operation, QString *error)
 {
+	auto edit = operation;
+	if (edit.kind == ModelEditKind::Knife) edit.tool.knife.hiddenFaces = m_hiddenFaces;
+	const auto before = m_editor->m_document.revisionFingerprint();
 	QString failure;
-	if (!m_editor->applyEdit(edit, &failure))
+	ModelEditReport report;
+	if (!m_editor->applyEdit(edit, &failure, &report))
 	{
 		if (error)
 			*error = failure;
-		showBanner(failure);
+		if (edit.kind == ModelEditKind::BevelEdges || edit.kind == ModelEditKind::Knife || edit.kind == ModelEditKind::Spin || edit.kind == ModelEditKind::Rip)
+			showBanner(edit.kind == ModelEditKind::Rip ? Text::tr("Rip refused") : edit.kind == ModelEditKind::Spin ? Text::tr("Spin refused") : edit.kind == ModelEditKind::Knife ? Text::tr("Knife refused") : Text::tr("Bevel refused"), failure,
+					   LiveStatus::Problem);
+		else
+			showBanner(failure, {}, LiveStatus::Problem);
 		return false;
 	}
-	m_last = {edit, m_editor->m_document.revisionFingerprint(), {}};
-	m_hasLast = true;
-	showBanner({});
+	remapHiddenAfterEdit(edit, report);
+	const auto after = m_editor->m_document.revisionFingerprint();
+	if (after != before)
+	{
+		m_last = {edit, after, {}};
+		m_hasLast = true;
+	}
+	// Interpolated, mirrored, rebound, merged or bound skin weights are named.
+	showBanner(modelSkinProvenanceSummary(report.skin));
 	refreshLastPanel();
 	return true;
 }
@@ -1112,8 +1272,38 @@ void ModelEditorTools::runKind(ModelEditKind kind, std::function<void(ModelEdit 
 	auto edit = toolEdit(kind);
 	if (configure)
 		configure(edit);
+	if (kind == ModelEditKind::Symmetrize && !confirmMirrorJoints(edit))
+		return;
 	QString error;
 	runTool(edit, &error);
+}
+
+bool ModelEditorTools::confirmMirrorJoints(ModelEdit &edit)
+{
+	const auto &mesh = m_editor->m_document.mesh();
+	const int surface = edit.selection.surface;
+	// The same tolerance as the edit's own check for joints on the plane.
+	const double tolerance = std::max(edit.tool.mergeThreshold, 1e-4);
+	if (mesh.skeleton.isEmpty() || surface < 0 || surface >= mesh.surfaces.size() || mesh.surfaces[surface].skinning.isEmpty() ||
+		modelOffCentreJoints(mesh, surface, edit.tool.axis, tolerance).isEmpty())
+	{
+		// Every joint keeps its name across this plane: a map confirmed for
+		// another plane or surface must not travel with a repeat or F9 replay.
+		edit.tool.mirrorJoints.clear();
+		edit.tool.keepJointNames = false;
+		return true;
+	}
+	ModelSymmetrizeJointsDialog dialog(mesh, surface, edit.tool.axis, m_mirrorJoints, m_keepJointNames, tolerance, m_editor);
+	if (dialog.exec() != QDialog::Accepted)
+	{
+		showBanner(Text::tr("Symmetrize cancelled. No change was made."));
+		return false;
+	}
+	m_mirrorJoints = dialog.mirrorJoints();
+	m_keepJointNames = dialog.keepJointNames();
+	edit.tool.mirrorJoints = m_mirrorJoints;
+	edit.tool.keepJointNames = m_keepJointNames;
+	return true;
 }
 
 void ModelEditorTools::addPrimitive(ModelPrimitive primitive)
@@ -1130,9 +1320,53 @@ void ModelEditorTools::addPrimitive(ModelPrimitive primitive)
 	edit.tool.segments = primitive == ModelPrimitive::Grid ? 4 : primitive == ModelPrimitive::UvSphere || primitive == ModelPrimitive::Torus ? 16 : 12;
 	edit.tool.rings = primitive == ModelPrimitive::IcoSphere ? 2 : primitive == ModelPrimitive::Grid ? 4 : 8;
 	edit.tool.axis = 2;
+	if (!confirmPrimitiveBinding(edit))
+		return;
 	QString error;
 	if (runTool(edit, &error))
 		setSelectionMode(0);
+}
+
+bool ModelEditorTools::mirrorPlaneChanged(const ModelEdit &before, const ModelEdit &after) const
+{
+	if (before.tool.axis != after.tool.axis)
+		return true;
+	const auto &mesh = m_editor->m_document.mesh();
+	const int surface = after.selection.surface;
+	return modelOffCentreJoints(mesh, surface, after.tool.axis, std::max(before.tool.mergeThreshold, 1e-4)) !=
+		   modelOffCentreJoints(mesh, surface, after.tool.axis, std::max(after.tool.mergeThreshold, 1e-4));
+}
+
+bool ModelEditorTools::confirmPrimitiveBinding(ModelEdit &edit)
+{
+	const auto &mesh = m_editor->m_document.mesh();
+	const int surface = edit.selection.surface;
+	if (mesh.skeleton.isEmpty() || surface < 0 || surface >= mesh.surfaces.size() || mesh.surfaces[surface].skinning.isEmpty())
+	{
+		// An unskinned target takes plain geometry: a binding or new surface
+		// confirmed for an earlier target must not travel with a repeat.
+		edit.tool.newGeometryBinding = ModelNewGeometryBinding::None;
+		edit.tool.bindJoint.clear();
+		edit.tool.newSurface.clear();
+		return true;
+	}
+	const auto selected = m_editor->m_document.selection().joint;
+	// The dialog proposes an unused name for a new surface every time.
+	ModelPrimitiveBindingDialog dialog(mesh, surface, selected.isEmpty() ? m_primitiveJoint : selected, m_primitiveBinding,
+		m_primitiveNewSurface, m_editor);
+	if (dialog.exec() != QDialog::Accepted)
+	{
+		showBanner(Text::tr("Add Primitive cancelled. No change was made."));
+		return false;
+	}
+	m_primitiveBinding = dialog.binding();
+	m_primitiveNewSurface = !dialog.newSurface().isEmpty() && dialog.binding() != ModelNewGeometryBinding::None;
+	if (!dialog.joint().isEmpty())
+		m_primitiveJoint = dialog.joint();
+	edit.tool.newGeometryBinding = dialog.binding();
+	edit.tool.bindJoint = dialog.joint();
+	edit.tool.newSurface = dialog.newSurface();
+	return true;
 }
 
 bool ModelEditorTools::select(ModelSelectRequest request, QString *error)
@@ -1143,7 +1377,7 @@ bool ModelEditorTools::select(ModelSelectRequest request, QString *error)
 		const auto message = Text::tr("Selection operators work in vertex, edge and face modes.");
 		if (error)
 			*error = message;
-		showBanner(message);
+		showBanner(message, {}, LiveStatus::Problem);
 		return false;
 	}
 	request.mode = mode == 0 ? ModelSelectionMode::Faces : mode == 1 ? ModelSelectionMode::Vertices : ModelSelectionMode::Edges;
@@ -1154,7 +1388,7 @@ bool ModelEditorTools::select(ModelSelectRequest request, QString *error)
 	{
 		if (error)
 			*error = failure;
-		showBanner(failure);
+		showBanner(failure, {}, LiveStatus::Problem);
 		return false;
 	}
 	applySelection(result);
@@ -1267,7 +1501,7 @@ void ModelEditorTools::setCursor3d(const ModelVec3 &point)
 {
 	m_cursor = point;
 	m_viewport->update();
-	m_editor->m_status->setText(Text::tr("3D cursor at %1, %2, %3.").arg(point.x, 0, 'g', 6).arg(point.y, 0, 'g', 6).arg(point.z, 0, 'g', 6));
+	m_editor->m_status->setText(Text::tr("3D cursor at %1.").arg(localeNumberList({point.x, point.y, point.z})));
 }
 
 ModelVec3 ModelEditorTools::cursor3d() const
@@ -1359,10 +1593,49 @@ bool ModelEditorTools::pickLoop(const QPointF &point, bool ring, bool extend)
 	QString error;
 	if (!selectModelComponents(m_editor->m_document.mesh(), current, request, &result, &error))
 	{
-		showBanner(error);
+		showBanner(error, {}, LiveStatus::Problem);
 		return false;
 	}
 	applySelection(result);
+	return true;
+}
+
+bool ModelEditorTools::selectEdgeLoops(bool ring)
+{
+	const int mode = selectionMode();
+	const auto &mesh = m_editor->m_document.mesh();
+	const auto current = m_editor->m_document.selection();
+	if (mode > 2 || current.surface < 0 || current.surface >= mesh.surfaces.size())
+	{
+		showBanner(Text::tr("Selection operators work in vertex, edge and face modes."));
+		return false;
+	}
+	ModelSelectRequest request;
+	request.operation = ring ? ModelSelectOperation::Ring : ModelSelectOperation::Loop;
+	request.mode = mode == 0 ? ModelSelectionMode::Faces : mode == 1 ? ModelSelectionMode::Vertices : ModelSelectionMode::Edges;
+	request.frame = std::max(0, m_editor->m_frame->currentIndex());
+	request.extend = true;
+	// The service seeds from the selected edges, or in vertex mode the edges
+	// between selected vertices, as `model select` does. A large selection
+	// runs on the worker, with progress and Cancel.
+	ModelEdgeLoopsResult loops;
+	QString error;
+	if (!m_editor->performWork(
+			ring ? Text::tr("Selecting edge rings…") : Text::tr("Selecting edge loops…"),
+			[current, request, &loops](ModelDocument &candidate, QString *problem, const ModelWorkControl &control)
+			{ return selectModelEdgeLoops(candidate.mesh(), current, request, {}, &loops, problem, control); },
+			&error))
+	{
+		showBanner(error, {}, LiveStatus::Problem);
+		return false;
+	}
+	applySelection(loops.selection);
+	if (loops.refused.isEmpty())
+		showBanner({});
+	else
+		showBanner(ring ? Text::tr("Kept %n selected edge(s) without a ring.", nullptr, int(loops.refused.size()))
+						: Text::tr("Kept %n selected edge(s) without a loop.", nullptr, int(loops.refused.size())),
+				   modelEdgeLoopRefusalLines(loops).join(QLatin1Char('\n')));
 	return true;
 }
 
@@ -1410,7 +1683,7 @@ bool ModelEditorTools::pickPath(const QPointF &point)
 	QString error;
 	if (!selectModelComponents(m_editor->m_document.mesh(), current, request, &result, &error))
 	{
-		showBanner(error);
+		showBanner(error, {}, LiveStatus::Problem);
 		return false;
 	}
 	applySelection(result);
@@ -1620,6 +1893,22 @@ QVector<LastField> lastFields(const ModelEdit &edit)
 	case ModelEditKind::DuplicateFaces:
 	case ModelEditKind::ExtrudeEdges:
 		return vector3(Text::tr("Offset"), &E::translation, -100000, 100000);
+	case ModelEditKind::Spin:
+		return QVector<LastField>{
+			{Text::tr("Angle"), -360, 360, 3, [](const E &e) { return e.tool.spinAngle; }, [](E &e, double v) { e.tool.spinAngle = v; }},
+			{Text::tr("Steps"), 1, 256, 0, [](const E &e) { return double(e.tool.spinSteps); }, [](E &e, double v) { e.tool.spinSteps = int(v); }},
+			{Text::tr("Duplicate selection"), 0, 1, 0, [](const E &e) { return double(e.tool.spinDuplicate); }, [](E &e, double v) { e.tool.spinDuplicate = v > .5; }, true},
+			{Text::tr("Close full turn"), 0, 1, 0, [](const E &e) { return double(e.tool.spinClose); }, [](E &e, double v) { e.tool.spinClose = v > .5; }, true},
+			{Text::tr("Units per texture repeat"), .001, 100000, 3, [](const E &e) { return e.tool.uvTileSize; }, [](E &e, double v) { e.tool.uvTileSize = v; }}}
+			+ array3(Text::tr("Centre"), &ModelMeshToolOptions::point, -100000, 100000)
+			+ array3(Text::tr("Axis"), &ModelMeshToolOptions::normal, -1, 1);
+	case ModelEditKind::Rip:
+		return vector3(Text::tr("Offset"), &E::translation, -100000, 100000) + QVector<LastField>{
+			{Text::tr("Side face"), 0, 131071, 0, [](const E &e) { return double(e.tool.ripFace); }, [](E &e, double v) { e.tool.ripFace = int(v); }},
+			{Text::tr("Opposite side"), 0, 1, 0, [](const E &e) { return double(e.tool.ripOpposite); }, [](E &e, double v) { e.tool.ripOpposite = v > .5; }, true},
+			{Text::tr("Fill gap"), 0, 1, 0, [](const E &e) { return double(e.tool.ripFill); }, [](E &e, double v) { e.tool.ripFill = v > .5; }, true},
+			{Text::tr("Units per texture repeat"), .001, 1000000, 3, [](const E &e) { return e.tool.uvTileSize; }, [](E &e, double v) { e.tool.uvTileSize = v; }},
+			{Text::tr("Quad pairing angle"), 0, 180, 1, [](const E &e) { return e.tool.maxAngle; }, [](E &e, double v) { e.tool.maxAngle = v; }}};
 	case ModelEditKind::InsetFaces:
 		return {{Text::tr("Thickness"), 0, 100000, 3, [](const E &e) { return e.tool.insetThickness; }, [](E &e, double v) { e.tool.insetThickness = v; }},
 				{Text::tr("Depth"), -100000, 100000, 3, [](const E &e) { return e.tool.insetDepth; }, [](E &e, double v) { e.tool.insetDepth = v; }},
@@ -1641,6 +1930,24 @@ QVector<LastField> lastFields(const ModelEdit &edit)
 	case ModelEditKind::LoopCut:
 		return {{Text::tr("Number of cuts"), 1, 64, 0, [](const E &e) { return double(e.tool.cuts); }, [](E &e, double v) { e.tool.cuts = int(v); }},
 				{Text::tr("Slide (one cut)"), -1, 1, 3, [](const E &e) { return e.tool.slide; }, [](E &e, double v) { e.tool.slide = v; }}};
+	case ModelEditKind::Knife:
+		return {{Text::tr("Cut through"), 0, 1, 0, [](const E &e) { return double(e.tool.knife.through); },
+			[](E &e, double v) { e.tool.knife.through = v > .5; }, true},
+			{Text::tr("Selected faces only"), 0, 1, 0, [](const E &e) { return double(e.tool.knife.selectedOnly); },
+			[](E &e, double v) { e.tool.knife.selectedOnly = v > .5; }, true}};
+	case ModelEditKind::SlideEdges:
+		return {{Text::tr("Mode"), 0, 1, 0, [](const E &e) { return double(e.tool.slideByDistance); },
+				 [](E &e, double v) {
+					 const double amount = e.tool.slideByDistance ? e.tool.offset : e.tool.slide;
+					 e.tool.slideByDistance = v > 0.5;
+					 if (e.tool.slideByDistance) e.tool.offset = amount;
+					 else e.tool.slide = std::clamp(amount, -.9999, .9999);
+				 }, false, {Text::tr("Fraction of rail"), Text::tr("Distance in reference pose")}, true},
+				{edit.tool.slideByDistance ? Text::tr("Distance") : Text::tr("Fraction"),
+				 edit.tool.slideByDistance ? -1000000.0 : -.9999, edit.tool.slideByDistance ? 1000000.0 : .9999, 4,
+				 [](const E &e) { return e.tool.slideByDistance ? e.tool.offset : e.tool.slide; },
+				 [](E &e, double v) { if (e.tool.slideByDistance) e.tool.offset = v; else e.tool.slide = v; }},
+				{Text::tr("Quad pairing angle"), 0, 180, 1, [](const E &e) { return e.tool.maxAngle; }, [](E &e, double v) { e.tool.maxAngle = v; }}};
 	case ModelEditKind::MergeVertices:
 		return {{Text::tr("Merge"), 0, 2, 0, [](const E &e) { return double(int(e.tool.merge)); }, [](E &e, double v) { e.tool.merge = ModelMergeMode(int(v)); },
 				 false, {Text::tr("At Center"), Text::tr("At Cursor"), Text::tr("Collapse")}}};
@@ -1671,6 +1978,12 @@ QVector<LastField> lastFields(const ModelEdit &edit)
 								   false, {QStringLiteral("X"), QStringLiteral("Y"), QStringLiteral("Z")}}};
 	case ModelEditKind::BevelVertices:
 		return {{Text::tr("Width"), 0.000001, 100000, 3, [](const E &e) { return e.tool.bevelWidth; }, [](E &e, double v) { e.tool.bevelWidth = v; }}};
+	case ModelEditKind::BevelEdges:
+		return {{Text::tr("Width"), 0, 1000000, 4, [](const E &e) { return e.tool.bevelWidth; }, [](E &e, double v) { e.tool.bevelWidth = v; }},
+				{Text::tr("Segments"), 1, 32, 0, [](const E &e) { return double(e.tool.bevelSegments); }, [](E &e, double v) { e.tool.bevelSegments = int(v); }},
+				{Text::tr("Roundness"), 0, 1, 3, [](const E &e) { return e.tool.bevelRoundness; }, [](E &e, double v) { e.tool.bevelRoundness = v; }},
+				{Text::tr("Units per texture repeat"), .001, 1000000, 3, [](const E &e) { return e.tool.uvTileSize; }, [](E &e, double v) { e.tool.uvTileSize = v; }},
+				{Text::tr("Quad pairing angle"), 0, 180, 1, [](const E &e) { return e.tool.maxAngle; }, [](E &e, double v) { e.tool.maxAngle = v; }}};
 	case ModelEditKind::Solidify:
 		return {{Text::tr("Thickness"), -100000, 100000, 3, [](const E &e) { return e.tool.solidifyThickness; },
 				 [](E &e, double v) { e.tool.solidifyThickness = v; }},
@@ -1725,6 +2038,8 @@ QString kindTitle(ModelEditKind kind)
 		return Text::tr("Smooth Vertices");
 	case ModelEditKind::LoopCut:
 		return Text::tr("Loop Cut");
+	case ModelEditKind::SlideEdges:
+		return Text::tr("Edge Slide");
 	case ModelEditKind::MergeVertices:
 		return Text::tr("Merge");
 	case ModelEditKind::BeautifyFaces:
@@ -1753,6 +2068,14 @@ QString kindTitle(ModelEditKind kind)
 		return Text::tr("Shade Smooth");
 	case ModelEditKind::BevelVertices:
 		return Text::tr("Bevel Vertices");
+	case ModelEditKind::BevelEdges:
+		return Text::tr("Bevel Edges");
+	case ModelEditKind::Knife:
+		return Text::tr("Knife");
+	case ModelEditKind::Spin:
+		return Text::tr("Spin");
+	case ModelEditKind::Rip:
+		return Text::tr("Rip");
 	case ModelEditKind::Solidify:
 		return Text::tr("Solidify");
 	case ModelEditKind::ProjectUvMapping:
@@ -1765,23 +2088,46 @@ QString kindTitle(ModelEditKind kind)
 
 void ModelEditorTools::refreshLastPanel()
 {
-	if (!m_lastPanel)
+	if (!m_lastPanel || m_adjustingLast)
 		return;
+	// A rebuild keeps keyboard focus on the same field rather than losing it
+	// with the deleted one.
+	int focusedField = -1;
+	for (auto *widget = QApplication::focusWidget(); widget && m_lastFields && m_lastFields->isAncestorOf(widget); widget = widget->parentWidget())
+	{
+		if (widget->property("lastOperationField").isValid())
+		{
+			focusedField = widget->property("lastOperationField").toInt();
+			break;
+		}
+	}
 	delete m_lastFields;
 	m_lastFields = new QWidget;
-	m_lastPanel->layout()->addWidget(m_lastFields);
 	auto *form = new QFormLayout(m_lastFields);
 	form->setContentsMargins(0, 4, 0, 0);
+	form->setRowWrapPolicy(QFormLayout::WrapLongRows);
+	form->setFieldGrowthPolicy(QFormLayout::AllNonFixedFieldsGrow);
 	if (!m_hasLast)
 	{
 		m_lastTitle->setText(Text::tr("No operation to adjust yet"));
-		form->addRow(new QLabel(Text::tr("Run a tool, then press F9 to change its settings.")));
+		// The profile's key, or the menu where the profile gives it none.
+		const QString keys = commandKeys(QStringLiteral("meshAdjustLast"));
+		auto *hint = new QLabel(keys.isEmpty() ? Text::tr("Run a tool, then choose View > Adjust Last Operation to change its settings.")
+											   : Text::tr("Run a tool, then press %1 to change its settings.").arg(keys));
+		hint->setObjectName(QStringLiteral("meshLastOperationHint"));
+		form->addRow(hint);
+		m_lastScroll->setWidget(m_lastFields);
 		placeOverlays();
+		if (focusedField >= 0)
+			m_viewport->setFocus(Qt::OtherFocusReason);
 		return;
 	}
 	const bool current = m_last.revision == m_editor->m_document.revisionFingerprint();
-	m_lastTitle->setText(current ? Text::tr("Adjust Last Operation — %1").arg(kindTitle(m_last.edit.kind))
-								 : Text::tr("%1 (the mesh has changed since)").arg(kindTitle(m_last.edit.kind)));
+	const auto title = current ? Text::tr("Adjust Last Operation — %1").arg(kindTitle(m_last.edit.kind))
+							   : Text::tr("%1 (the mesh has changed since)").arg(kindTitle(m_last.edit.kind));
+	m_lastTitle->setText(current ? kindTitle(m_last.edit.kind) : title);
+	m_lastTitle->setAccessibleName(title);
+	m_lastTitle->setToolTip(title);
 	const auto fields = lastFields(m_last.edit);
 	if (fields.isEmpty())
 		form->addRow(new QLabel(Text::tr("This operation has no settings.")));
@@ -1791,27 +2137,53 @@ void ModelEditorTools::refreshLastPanel()
 		QWidget *editor = nullptr;
 		const auto apply = [this, index](double value)
 		{
-			if (!m_hasLast || m_last.revision != m_editor->m_document.revisionFingerprint())
+			if (m_adjustingLast || m_editor->m_working || !m_hasLast || m_last.revision != m_editor->m_document.revisionFingerprint())
 				return;
+			const QScopedValueRollback<bool> adjusting(m_adjustingLast, true);
 			auto edit = m_last.edit;
 			const auto changed = lastFields(edit)[index];
 			changed.set(edit, value);
-			if (!m_editor->m_document.undo())
-				return;
-			QString error;
-			if (!m_editor->applyEdit(edit, &error))
+			// The joint mirror map was confirmed for the last plane. A new axis,
+			// or a merge distance that moves joints on or off the plane, needs it
+			// confirmed again; cancelling keeps the last result.
+			if (edit.kind == ModelEditKind::Symmetrize && mirrorPlaneChanged(m_last.edit, edit) && !confirmMirrorJoints(edit))
 			{
-				m_editor->m_document.redo();
-				m_editor->m_presentedMeshRevision.clear();
-				m_editor->refresh();
-				showBanner(error);
+				QMetaObject::invokeMethod(this, &ModelEditorTools::refreshLastPanel, Qt::QueuedConnection);
 				return;
 			}
-			m_last.edit = edit;
-			m_last.revision = m_editor->m_document.revisionFingerprint();
-			showBanner({});
+			QString error;
+			QByteArray base;
+			ModelEditReport report;
+			const int discarded = m_editor->m_document.discardedHistorySteps();
+			// Undo and replay inside the worker's candidate. Failure or cancellation
+			// leaves the live document and both history stacks untouched.
+			const bool applied = m_editor->performWork(Text::tr("Adjust Last Operation"),
+				[edit, &base, &report](ModelDocument &candidate, QString *failure, const ModelWorkControl &control)
+				{
+					if (!candidate.undo())
+						return false;
+					base = candidate.revisionFingerprint();
+					return candidate.edit(edit, failure, control, &report);
+				}, &error);
+			if (applied)
+			{
+				remapHiddenAfterEdit(edit, report);
+				m_last.edit = edit;
+				m_last.revision = m_editor->m_document.revisionFingerprint();
+				// A zero/no-op replay removed this history entry. Never let another
+				// adjustment undo the preceding, unrelated operation instead.
+				m_hasLast = m_last.revision != base;
+			}
+			m_editor->m_presentedMeshRevision.clear();
+			m_editor->refresh();
+			m_editor->noteHistoryTrim(discarded);
+			if (!error.isEmpty() && (edit.kind == ModelEditKind::BevelEdges || edit.kind == ModelEditKind::Knife || edit.kind == ModelEditKind::Spin || edit.kind == ModelEditKind::Rip))
+				showBanner(edit.kind == ModelEditKind::Rip ? Text::tr("Rip refused") : edit.kind == ModelEditKind::Spin ? Text::tr("Spin refused") : edit.kind == ModelEditKind::Knife ? Text::tr("Knife refused") : Text::tr("Bevel refused"), error,
+						   LiveStatus::Problem);
+			else
+				showBanner(applied ? modelSkinProvenanceSummary(report.skin) : error, {}, applied ? LiveStatus::Update : LiveStatus::Problem);
 			// Rebuilt after this signal returns, since it deletes the sender.
-			if (changed.rebuild)
+			if (changed.rebuild || !applied || !m_hasLast)
 				QMetaObject::invokeMethod(this, &ModelEditorTools::refreshLastPanel, Qt::QueuedConnection);
 		};
 		if (field.toggle)
@@ -1825,6 +2197,9 @@ void ModelEditorTools::refreshLastPanel()
 		{
 			auto *combo = new QComboBox;
 			combo->addItems(field.choices);
+			combo->setSizeAdjustPolicy(QComboBox::AdjustToMinimumContentsLengthWithIcon);
+			combo->setMinimumContentsLength(10);
+			combo->setToolTip(field.choices.value(int(field.get(m_last.edit))));
 			combo->setCurrentIndex(int(field.get(m_last.edit)));
 			connect(combo, &QComboBox::currentIndexChanged, this, [apply](int value) { apply(value); });
 			editor = combo;
@@ -1842,9 +2217,28 @@ void ModelEditorTools::refreshLastPanel()
 		}
 		editor->setEnabled(current);
 		editor->setAccessibleName(field.label);
+		editor->setProperty("lastOperationField", index);
+		// Esc in a field returns keyboard focus to the view.
+		editor->installEventFilter(this);
 		form->addRow(field.label, editor);
+		if (auto *label = qobject_cast<QLabel *>(form->labelForField(editor)))
+			label->setWordWrap(true);
 	}
+	m_lastScroll->setWidget(m_lastFields);
 	placeOverlays();
+	if (focusedField >= 0)
+	{
+		QWidget *target = m_viewport;
+		for (auto *widget : m_lastFields->findChildren<QWidget *>())
+		{
+			if (widget->property("lastOperationField").isValid() && widget->property("lastOperationField").toInt() == focusedField && widget->isEnabled())
+			{
+				target = widget;
+				break;
+			}
+		}
+		target->setFocus(Qt::OtherFocusReason);
+	}
 }
 
 QList<QAction *> ModelEditorTools::searchableActions() const
@@ -1855,9 +2249,9 @@ QList<QAction *> ModelEditorTools::searchableActions() const
 		if (!entry->objectName().endsWith(QStringLiteral("Menu")))
 			result.append(entry);
 	}
-	for (auto *entry : m_editor->m_toolbar->actions())
+	for (auto *entry : std::as_const(m_editor->m_documentActions))
 	{
-		// A menu on the toolbar is searched through its entries.
+		// A submenu is searched through its entries.
 		const auto entries = entry->menu() ? entry->menu()->actions() : QList<QAction *>{entry};
 		for (auto *item : entries)
 		{
@@ -1865,6 +2259,9 @@ QList<QAction *> ModelEditorTools::searchableActions() const
 				result.append(item);
 		}
 	}
+	// The Model menu's recovery preference, which has no other place now.
+	if (m_editor->m_recoveryEnabled)
+		result.append(m_editor->m_recoveryEnabled);
 	std::sort(result.begin(), result.end(), [](QAction *a, QAction *b) { return plain(a->text()).localeAwareCompare(plain(b->text())) < 0; });
 	return result;
 }
@@ -1940,18 +2337,86 @@ void ModelEditorTools::showOperatorSearch()
 }
 namespace
 {
-struct FormatBudget
+enum class TargetState
 {
-	QString name;
-	int vertices, triangles, frames, surfaces;
-	bool perSurface;
+	Ready,
+	// Only an upper bound exceeds a limit; Check Delivery Targets counts exactly.
+	Check,
+	Over,
 };
-QVector<FormatBudget> formatBudgets()
+struct TargetSummary
 {
-	// Original renderer limits enforced by the exporters (see Editable Meshes).
-	return {{QStringLiteral("MD3"), 1000, 2000, 1024, 32, true},
-			{QStringLiteral("MD2"), 2048, 4096, 512, 1, false},
-			{QStringLiteral("MDL"), 1024, 2048, 256, 1, false}};
+	ModelTargetProfile profile;
+	ModelTargetReport report;
+	TargetState state = TargetState::Ready;
+};
+// The selected delivery target of each format the header summarises, checked
+// by counts only so the summary stays live; exports run the full preflight.
+QVector<TargetSummary> targetSummaries(const ModelEditorDialog &editor, const ModelMesh &mesh)
+{
+	QStringList formats{QStringLiteral("md3"), QStringLiteral("md2"), QStringLiteral("mdl")};
+	// The skeletal formats for skeletal models: IQM, and the MD5 mesh and
+	// animation files (Q2PRO's MD5 replacement limits, for one).
+	if (!mesh.skeleton.isEmpty())
+		formats << QStringLiteral("iqm") << QStringLiteral("md5mesh") << QStringLiteral("md5anim");
+	QVector<TargetSummary> result;
+	for (const auto &format : std::as_const(formats))
+	{
+		TargetSummary summary;
+		// MD3's frame scan (coordinate range and 1/64-unit precision) is quick
+		// on most models, so the summary runs it whole and stays exact.
+		qint64 positions = 0;
+		for (const auto &surface : mesh.surfaces)
+			positions += qint64(surface.vertexCount) * mesh.frames.size();
+		const bool scan = format == QStringLiteral("md3") && positions <= modelTargetLiveScanPositions;
+		const auto depth = scan ? ModelTargetDepth::Full : ModelTargetDepth::Counts;
+		if (!findModelTargetProfile(format, editor.deliveryTarget(format), &summary.profile) ||
+			!assessModelTarget(mesh, summary.profile, &summary.report, nullptr, {}, depth))
+			continue;
+		// Unchecked limits or an upper bound over its limit leave the state open.
+		const bool bounded = !summary.report.unchecked.isEmpty() ||
+							 std::any_of(summary.report.measures.cbegin(), summary.report.measures.cend(),
+										 [](const ModelTargetMeasure &measure) { return measure.upperBound && measure.value > measure.maximum; });
+		summary.state = !summary.report.ready() ? TargetState::Over : bounded ? TargetState::Check : TargetState::Ready;
+		result.append(std::move(summary));
+	}
+	return result;
+}
+QString stateWord(TargetState state)
+{
+	return state == TargetState::Ready ? Text::tr("ready") : state == TargetState::Check ? Text::tr("check") : Text::tr("over");
+}
+// The format's name in the summary: MD5 mesh and MD5 animation by name.
+QString formatLabel(const QString &format)
+{
+	return format == QStringLiteral("md5mesh")	 ? Text::tr("MD5 Mesh")
+		   : format == QStringLiteral("md5anim") ? Text::tr("MD5 Animation")
+												 : format.toUpper();
+}
+// The header chip's parts: one per format, with the MD5 mesh and animation
+// files as one "MD5" part showing the worse of the two.
+QStringList chipParts(const QVector<TargetSummary> &summaries)
+{
+	QStringList parts;
+	int md5 = -1;
+	TargetState md5State = TargetState::Ready;
+	for (const auto &summary : summaries)
+	{
+		if (summary.profile.format.startsWith(QStringLiteral("md5")))
+		{
+			md5State = std::max(md5State, summary.state);
+			if (md5 < 0)
+			{
+				md5 = int(parts.size());
+				parts << QString();
+			}
+			continue;
+		}
+		parts << Text::tr("%1 %2").arg(summary.profile.format.toUpper(), stateWord(summary.state));
+	}
+	if (md5 >= 0)
+		parts[md5] = Text::tr("MD5 %1").arg(stateWord(md5State));
+	return parts;
 }
 } // namespace
 
@@ -1962,16 +2427,7 @@ void ModelEditorTools::setSnapToVertices(bool vertices)
 
 QString ModelEditorTools::budgetSummary() const
 {
-	const auto &mesh = m_editor->m_document.mesh();
-	QStringList parts;
-	for (const auto &budget : formatBudgets())
-	{
-		bool fits = mesh.frames.size() <= budget.frames && mesh.surfaces.size() <= budget.surfaces;
-		for (const auto &surface : mesh.surfaces)
-			fits &= surface.vertexCount <= budget.vertices && surface.triangles.size() <= budget.triangles;
-		parts << (fits ? Text::tr("%1 fits").arg(budget.name) : Text::tr("%1 over").arg(budget.name));
-	}
-	return parts.join(QStringLiteral(" · "));
+	return chipParts(targetSummaries(*m_editor, m_editor->m_document.mesh())).join(QStringLiteral(" · "));
 }
 
 void ModelEditorTools::documentChanged()
@@ -2003,94 +2459,213 @@ void ModelEditorTools::documentChanged()
 	const auto &mesh = m_editor->m_document.mesh();
 	bool all = true;
 	auto *menu = m_budget->menu();
+	// The target submenus are children of the menu; clear() keeps them.
+	qDeleteAll(menu->findChildren<QMenu *>(QString(), Qt::FindDirectChildrenOnly));
 	menu->clear();
-	for (const auto &budget : formatBudgets())
+	QStringList parts, lines;
+	const auto summaries = targetSummaries(*m_editor, mesh);
+	parts = chipParts(summaries);
+	for (const auto &summary : summaries)
 	{
-		QStringList problems;
-		if (mesh.frames.size() > budget.frames)
-			problems << Text::tr("%1 frames (limit %2)").arg(mesh.frames.size()).arg(budget.frames);
-		if (mesh.surfaces.size() > budget.surfaces)
-			problems << Text::tr("%1 surfaces (limit %2)").arg(mesh.surfaces.size()).arg(budget.surfaces);
-		int worstVertices = 0, worstTriangles = 0;
-		for (const auto &surface : mesh.surfaces)
-		{
-			worstVertices = std::max(worstVertices, surface.vertexCount);
-			worstTriangles = std::max(worstTriangles, int(surface.triangles.size()));
-			if (surface.vertexCount > budget.vertices)
-				problems << Text::tr("%1: %2 vertices (limit %3)").arg(surface.name).arg(surface.vertexCount).arg(budget.vertices);
-			if (surface.triangles.size() > budget.triangles)
-				problems << Text::tr("%1: %2 triangles (limit %3)").arg(surface.name).arg(surface.triangles.size()).arg(budget.triangles);
-		}
-		const bool fits = problems.isEmpty();
-		all &= fits;
-		const auto line = fits ? Text::tr("%1 fits: largest surface %2 of %3 vertices, %4 of %5 triangles")
-									 .arg(budget.name)
-									 .arg(worstVertices)
-									 .arg(budget.vertices)
-									 .arg(worstTriangles)
-									 .arg(budget.triangles)
-							   : Text::tr("%1 over: %2").arg(budget.name, problems.join(QStringLiteral("; ")));
-		auto *entry = menu->addAction(studioIcon(fits ? QStringLiteral("success") : QStringLiteral("warning")), line);
+		const auto format = formatLabel(summary.profile.format);
+		all &= summary.state == TargetState::Ready;
+		const int blockers = int(summary.report.issues.size());
+		const auto headroom = modelTargetMeasureLines(summary.report).join(QStringLiteral("; "));
+		QStringList names;
+		for (const auto &limit : summary.report.unchecked)
+			names << modelTargetLimitName(limit);
+		const auto unchecked = names.join(QStringLiteral(", "));
+		const auto line = summary.state == TargetState::Over
+							  ? Text::tr("%1 · %2: %n blocker(s)", nullptr, blockers).arg(format, summary.profile.label)
+						  : summary.state == TargetState::Check && !summary.report.unchecked.isEmpty()
+							  ? Text::tr("%1 · %2: check, the model is too large to check %3 as you edit; Check Delivery Targets checks it")
+									.arg(format, summary.profile.label, unchecked)
+						  : summary.state == TargetState::Check
+							  ? Text::tr("%1 · %2: check, a count before sharing is over its limit: %3").arg(format, summary.profile.label, headroom)
+						  : headroom.isEmpty() ? Text::tr("%1 · %2: ready").arg(format, summary.profile.label)
+											   : Text::tr("%1 · %2: ready, largest %3").arg(format, summary.profile.label, headroom);
+		lines << line;
+		auto *entry = menu->addAction(studioIcon(summary.state == TargetState::Ready ? QStringLiteral("success") : QStringLiteral("warning")), line);
 		entry->setEnabled(false);
+		for (const auto &issue : summary.report.issues)
+		{
+			auto *item = menu->addAction(QStringLiteral("    ") + issue.message);
+			// An issue about one surface selects what it names there, so the
+			// fix starts there: its faces or vertices, else the surface.
+			item->setEnabled(issue.surface >= 0 && issue.surface < mesh.surfaces.size());
+			if (!item->isEnabled())
+				continue;
+			const auto &name = mesh.surfaces.at(issue.surface).name;
+			item->setToolTip(!issue.faces.isEmpty()	   ? Text::tr("Select the %n face(s) concerned on surface \"%1\". %2", nullptr, int(issue.faces.size())).arg(name, issue.fix)
+							 : !issue.vertices.isEmpty() ? Text::tr("Select the %n vertex(es) concerned on surface \"%1\". %2", nullptr, int(issue.vertices.size())).arg(name, issue.fix)
+														 : Text::tr("Select surface \"%1\". %2").arg(name, issue.fix));
+			item->setStatusTip(item->toolTip());
+			// Queued: selecting refreshes the editor, which rebuilds this menu.
+			connect(item, &QAction::triggered, this, [this, issue] { m_editor->selectTargetIssue(issue); }, Qt::QueuedConnection);
+		}
+		// Prepare for Target, where it has something to do: blockers, or joint
+		// influences past what the format keeps.
+		const bool crowded = std::any_of(summary.report.measures.cbegin(), summary.report.measures.cend(), [](const ModelTargetMeasure &measure)
+										 { return measure.limit == QStringLiteral("influences") && measure.value > measure.maximum; });
+		// No fix applies to an md5anim's limits (joints and frames).
+		if ((summary.state != TargetState::Ready || crowded) && summary.profile.format != QStringLiteral("md5anim"))
+		{
+			auto *prepare = menu->addAction(studioIcon(QStringLiteral("apply")), QStringLiteral("    ") + Text::tr("Prepare for %1 · %2…").arg(format, summary.profile.label));
+			prepare->setObjectName(QStringLiteral("meshPrepareTarget-%1").arg(summary.profile.format));
+			prepare->setToolTip(Text::tr("Review the splits, joins, reductions and moves that fit the model to %1, then apply them as one undo step.")
+									.arg(summary.profile.label));
+			prepare->setStatusTip(prepare->toolTip());
+			connect(prepare, &QAction::triggered, this, [this, id = summary.profile.format] { m_editor->prepareForTarget(id); }, Qt::QueuedConnection);
+		}
 	}
 	menu->addSeparator();
+	// One exclusive choice of delivery target per format; the MD5 files are
+	// written from skeletal models only.
+	QStringList targetFormats{QStringLiteral("md3"), QStringLiteral("md2"), QStringLiteral("mdl"), QStringLiteral("iqm")};
+	if (!mesh.skeleton.isEmpty())
+		targetFormats << QStringLiteral("md5mesh") << QStringLiteral("md5anim");
+	for (const auto &format : std::as_const(targetFormats))
+	{
+		const auto label = formatLabel(format);
+		// The submenu says where the choice comes from unless it was made here.
+		const auto origin = m_editor->deliveryTargetOrigin(format);
+		auto *choices = menu->addMenu(origin == ModelDeliveryOrigin::Explicit ? Text::tr("%1 Delivery Target").arg(label)
+																			   : Text::tr("%1 Delivery Target (%2)").arg(label, modelDeliveryOriginName(origin)));
+		choices->menuAction()->setObjectName(QStringLiteral("meshTargetMenu-%1").arg(format));
+		auto *group = new QActionGroup(choices);
+		const auto selected = m_editor->deliveryTarget(format);
+		for (const auto &profile : modelTargetProfiles(format))
+		{
+			auto *choice = choices->addAction(profile.isDefault ? Text::tr("%1 (default)").arg(profile.label) : profile.label);
+			choice->setObjectName(QStringLiteral("meshTarget-%1-%2").arg(format, profile.id));
+			choice->setCheckable(true);
+			choice->setChecked(profile.id == selected);
+			choice->setToolTip(profile.description);
+			choice->setStatusTip(profile.description);
+			group->addAction(choice);
+			// Queued: choosing rebuilds this menu, which deletes the action.
+			connect(
+				choice, &QAction::triggered, this, [this, format, id = profile.id] { m_editor->setDeliveryTarget(format, id); },
+				Qt::QueuedConnection);
+		}
+	}
+	auto *save = menu->addAction(Text::tr("Save Targets with the Project"));
+	save->setObjectName(QStringLiteral("meshSaveDeliveryTargets"));
+	save->setEnabled(bool(m_editor->saveDeliveryPreferences) && !m_editor->m_deliveryContext.projectRoot.isEmpty());
+	save->setToolTip(save->isEnabled() ? Text::tr("Save each format's target and the strict-export setting with %1; exports, stages and model build use them there.")
+											 .arg(m_editor->m_deliveryContext.projectRoot)
+									   : Text::tr("Open a project to save delivery targets with it."));
+	save->setStatusTip(save->toolTip());
+	connect(save, &QAction::triggered, this, [this] { m_editor->saveDeliveryTargetsToProject(); }, Qt::QueuedConnection);
+	menu->addSeparator();
+	menu->addAction(m_actions.value(QStringLiteral("meshCheckTargets")));
 	menu->addAction(m_actions.value(QStringLiteral("meshDecimateMd3")));
+	menu->addAction(m_actions.value(QStringLiteral("meshDetailLevels")));
 	menu->addAction(m_actions.value(QStringLiteral("meshExportLods")));
 	m_budget->setIcon(studioIcon(all ? QStringLiteral("success") : QStringLiteral("warning")));
-	m_budget->setText(budgetSummary());
-	m_budget->setToolTip(Text::tr("Export budget against the original idTech renderers' limits. Open for details."));
-	m_budget->setAccessibleDescription(m_budget->text());
+	m_budget->setText(parts.join(QStringLiteral(" · ")));
+	m_budget->setToolTip(Text::tr("Delivery targets: the selected engine for each format, checked as you edit (counts, and MD3's frame scan "
+								  "unless the model is very large). Open to choose targets or check every limit."));
+	// A screen reader hears each format's line from the menu, and hears when
+	// an edit or a new target moves a format over its limits or back.
+	m_budget->setAccessibleDescription(lines.join(QStringLiteral("; ")));
+	const auto budget = m_budget->text();
+	if (!m_budgetState.isEmpty() && budget != m_budgetState)
+		announceStatus(m_budget, Text::tr("Delivery targets: %1").arg(budget), LiveStatus::Result);
+	m_budgetState = budget;
 	if (m_hasLast && m_lastPanel && m_lastPanel->isVisible())
 		refreshLastPanel();
 }
 
 bool ModelEditorTools::exportDetailLevels(const QString &basePath, int levels, double ratio, QString *error)
 {
-	QStringList written;
+	// More levels than any target loads keep the target's own refusal.
+	return exportDetailLevels(basePath, modelLodGeneratedRecipe(std::clamp(levels, 0, modelLodMaxLevels + 1), ratio), error);
+}
+
+bool ModelEditorTools::exportDetailLevels(const QString &basePath, const QVector<ModelLodRecipeLevel> &recipe, QString *error)
+{
 	QString failure;
-	const bool ok = m_editor->performWork(
-		Text::tr("Export Detail Levels"),
-		[basePath, levels, ratio, &written](ModelDocument &candidate, QString *problem, const ModelWorkControl &control)
-		{
-			QVector<ModelLodLevel> lods;
-			if (!buildModelLods(candidate.mesh(), levels, ratio, &lods, problem, control))
-				return false;
-			QVector<QPair<QString, QByteArray>> files{{basePath, exportEditableModel(candidate.mesh(), QStringLiteral("md3"), 0, problem, control)}};
-			for (int level = 0; level < lods.size(); ++level)
-				files.append({modelLodPath(basePath, level + 1), exportEditableModel(lods[level].mesh, QStringLiteral("md3"), 0, problem, control)});
-			for (const auto &[path, bytes] : files)
-			{
-				if (bytes.isEmpty())
-					return false;
-				if (modelPathsReferToSameFile(path, candidate.path()))
-				{
-					*problem = Text::tr("Choose an export path separate from the editable source.");
-					return false;
-				}
-			}
-			for (const auto &[path, bytes] : files)
-			{
-				const auto target = inspectModelWriteTarget(path, control);
-				if (!target.isValid())
-				{
-					*problem = target.error;
-					return false;
-				}
-				if (!writeModelFile(target, bytes, problem, control))
-					return false;
-				written << path;
-			}
-			return true;
-		},
-		&failure, true);
-	if (!ok)
+	const auto finish = [&](const QString &message)
 	{
 		if (error)
-			*error = failure;
-		showBanner(failure);
+			*error = message;
+		showBanner(message, {}, LiveStatus::Problem);
 		return false;
+	};
+	// Prepare the whole set first: every file's bytes, the delivery target's
+	// preflight and every destination's review.
+	ModelLodSet set;
+	const auto target = m_editor->deliveryTarget(QStringLiteral("md3"));
+	const QStringList inputs{m_editor->m_recoverySourcePath};
+	const auto revision = m_editor->m_document.revisionFingerprint();
+	const bool strict = m_editor->strictExport();
+	const auto baseDirectory = m_editor->m_document.path().isEmpty() ? QString() : QFileInfo(m_editor->m_document.path()).absolutePath();
+	if (!m_editor->performWork(
+			Text::tr("Prepare Detail Levels"),
+			[basePath, recipe, baseDirectory, target, inputs, strict, &set](ModelDocument &candidate, QString *problem, const ModelWorkControl &control)
+			{
+				return prepareModelLodSet(candidate.mesh(), recipe, baseDirectory, basePath, target, inputs + QStringList{candidate.path()}, strict, &set,
+										  problem, control);
+			},
+			&failure))
+		return finish(failure);
+	bool overwrite = false;
+	const auto existing = set.existing();
+	if (!existing.isEmpty())
+	{
+		// Hand-made detail files can sit beside the base name; never replace
+		// one without asking, and name every file that would be replaced.
+		QMessageBox confirm(QMessageBox::Question, Text::tr("Replace Detail Levels"),
+							Text::tr("Files of this detail set that already exist and would be replaced (%n): %1. Replace them?", nullptr,
+									 int(existing.size()))
+								.arg(existing.join(QStringLiteral(", "))),
+							QMessageBox::Yes | QMessageBox::Cancel, m_editor);
+		confirm.setObjectName(QStringLiteral("meshLodReplaceConfirm"));
+		confirm.setDefaultButton(QMessageBox::Cancel);
+		confirm.button(QMessageBox::Yes)->setText(Text::tr("Replace"));
+		confirm.setAccessibleName(confirm.windowTitle());
+		if (confirm.exec() != QMessageBox::Yes)
+		{
+			m_editor->m_status->setText(Text::tr("Nothing was written; the existing detail files are unchanged."));
+			if (error)
+				*error = m_editor->m_status->text();
+			return false;
+		}
+		if (revision != m_editor->m_document.revisionFingerprint())
+			return finish(Text::tr("The model changed while confirming. Export the detail levels again."));
+		overwrite = true;
 	}
-	m_editor->m_status->setText(Text::tr("Exported %n model file(s): %1", nullptr, int(written.size())).arg(written.join(QStringLiteral(", "))));
+	if (!m_editor->performWork(
+			Text::tr("Export Detail Levels"),
+			[&set, overwrite](ModelDocument &, QString *problem, const ModelWorkControl &control) { return publishModelLodSet(&set, overwrite, problem, control); },
+			&failure, true))
+		return finish(failure);
+	// One report for the set, as model lod prints it: each file's decimation
+	// and export notes, prefixed with its name.
+	QStringList written;
+	ModelExportReport combined;
+	for (const auto &file : std::as_const(set.files))
+	{
+		written << file.path;
+		const auto name = QFileInfo(file.path).fileName();
+		for (const auto &note : file.notes + file.exportNotes)
+		{
+			combined.notes << Text::tr("%1: %2").arg(name, note);
+			if (file.exportOmissions.contains(note))
+				combined.omissions << combined.notes.last();
+		}
+	}
+	// Detail files past the set (or MDC files) stay and still load with the
+	// model: they come first in the report, and the status says so.
+	combined.notes = modelLodSiblingLines(set.stale) + combined.notes;
+	combined.target.format = QStringLiteral("md3");
+	combined.target.target = set.target;
+	combined.target.label = set.targetLabel;
+	m_editor->presentExportReport(Text::tr("Exported %n model file(s) for %1: %2.", nullptr, int(written.size()))
+										  .arg(set.targetLabel, written.join(QStringLiteral(", "))) +
+									  (set.stale.isEmpty() ? QString() : QLatin1Char(' ') + modelLodSiblingSummary(set.stale)),
+								  combined);
 	return true;
 }
 } // namespace vibestudio

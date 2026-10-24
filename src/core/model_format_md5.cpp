@@ -31,8 +31,10 @@
 // modelQuatFromXyzNegativeW / modelQuatToXyzNegativeW in core/model_skeleton.h
 // encode exactly that, so joint matrices here equal Doom 3's idJointMat.
 
+#include "core/model_document.h"
 #include "core/model_formats_p.h"
 #include "core/model_md5.h"
+#include "core/model_skeletal_export.h"
 #include "core/model_skeleton.h"
 
 #include <QCoreApplication>
@@ -1458,6 +1460,35 @@ ModelVec3 md5RotationOf(const ModelJointMatrix& matrix)
 	return modelQuatToXyzNegativeW(modelJointRotation(matrix));
 }
 
+// The largest angle, in degrees, between a pose's normals and the ones Doom 3
+// rebuilds from its faces (weldedFaceNormals, as the decoder does). Vertices
+// without a normal are skipped.
+double rebuiltNormalAngle(const ModelSurface& surface, const ModelFrameGeometry& geometry, int* worstVertex)
+{
+	const QVector<ModelVec3> rebuilt = weldedFaceNormals(surface, geometry.positions);
+	double worst = 0.0;
+	for (int vertex = 0; vertex < rebuilt.size() && vertex < geometry.normals.size(); ++vertex) {
+		const ModelVec3& a = geometry.normals.at(vertex);
+		const ModelVec3& b = rebuilt.at(vertex);
+		const double length = std::sqrt(double(a.x) * a.x + double(a.y) * a.y + double(a.z) * a.z);
+		if (!(length > 1e-12) || !std::isfinite(length)) {
+			continue;
+		}
+		// atan2 of the cross and dot products stays exact for tiny angles.
+		const ModelVec3 cross = vecCross(a, b);
+		const double sine = std::sqrt(double(cross.x) * cross.x + double(cross.y) * cross.y + double(cross.z) * cross.z);
+		const double cosine = double(a.x) * b.x + double(a.y) * b.y + double(a.z) * b.z;
+		const double angle = std::atan2(sine, cosine) * 180.0 / 3.14159265358979323846;
+		if (angle > worst) {
+			worst = angle;
+			if (worstVertex) {
+				*worstVertex = vertex;
+			}
+		}
+	}
+	return worst;
+}
+
 } // namespace
 
 // ---------------------------------------------------------------------------
@@ -1579,7 +1610,7 @@ void decodeMd5Mesh(const QString& path, const QByteArray& bytes, ModelMesh* mesh
 			const int first = skinning.first.at(vertex);
 			for (int influence = first; influence < first + skinning.count.at(vertex); ++influence) {
 				ModelJointInfluence& target = skinning.influences[influence];
-				target.normalOffset = modelJointTransformNormal(inverseBind.at(target.joint), bind.normals.at(vertex));
+				target.normalOffset = modelJointTransformVector(inverseBind.at(target.joint), bind.normals.at(vertex));
 			}
 		}
 		surface.frames.append(std::move(bind));
@@ -1684,7 +1715,8 @@ void decodeMd5Anim(const QString& path, const QByteArray& bytes, ModelMesh* mesh
 // Writers
 // ---------------------------------------------------------------------------
 
-QByteArray exportModelMd5Mesh(const ModelMesh& mesh, const ModelMd5ExportOptions& options, QString* error, const ModelWorkControl& control)
+QByteArray exportModelMd5Mesh(const ModelMesh& mesh, const ModelMd5ExportOptions& options, QString* error, const ModelWorkControl& control,
+	ModelExportReport* report)
 {
 	const auto fail = [error](const QString& message) {
 		if (error) {
@@ -1719,12 +1751,32 @@ QByteArray exportModelMd5Mesh(const ModelMesh& mesh, const ModelMd5ExportOptions
 		return fail(QCoreApplication::translate("VibeStudioModelMesh", "The model has %1 joints; MD5 files written here hold up to %2.")
 			.arg(joints.size()).arg(kMaxJoints));
 	}
+	// MD5 joints hold a rotation and a translation. A bind matrix with scale,
+	// shear or a reflection is rigid * stretch, so its offsets are written
+	// as stretch * offset and Doom 3's rigid joint reaches the same point.
+	// Rigid joints keep their offsets untouched.
+	QVector<ModelJointMatrix> bindStretch(joints.size(), modelJointIdentity());
+	QVector<bool> stretched(joints.size(), false);
+	QStringList stretchedNames;
+	for (int index = 0; index < joints.size(); ++index) {
+		if (!modelJointIsRigid(joints.at(index).bind)) {
+			stretched[index] = true;
+			bindStretch[index] = modelJointStretch(joints.at(index).bind);
+			stretchedNames << joints.at(index).name;
+		}
+	}
 	bool invertible = true;
-	const ModelJointMatrix rootInverse = modelJointInverse(joints.first().bind, &invertible);
+	const ModelJointMatrix rootInverse =
+		modelJointInverse(stretched.first() ? modelJointRigidPart(joints.first().bind) : joints.first().bind, &invertible);
 	if (!invertible) {
 		return fail(QCoreApplication::translate("VibeStudioModelMesh", "Joint %1 (%2) has a bind pose that cannot be inverted.")
 			.arg(QStringLiteral("0"), joints.first().name));
 	}
+	const QVector<ModelJointMatrix> bindPose = skeletal ? modelSkeletonBindPose(mesh.skeleton) : QVector<ModelJointMatrix>{};
+	QStringList unnamedShaders;
+	double normalAngle = 0.0;
+	QString normalSurface;
+	int normalVertex = -1;
 
 	struct OutWeight {
 		int joint = 0;
@@ -1761,6 +1813,28 @@ QByteArray exportModelMd5Mesh(const ModelMesh& mesh, const ModelMd5ExportOptions
 		OutMesh out;
 		out.surface = &surface;
 		out.shader = !surface.skinPaths.isEmpty() && !surface.skinPaths.first().isEmpty() ? surface.skinPaths.first() : surface.name;
+		if (out.shader == surface.name && (surface.skinPaths.isEmpty() || surface.skinPaths.first().isEmpty())) {
+			unnamedShaders << surface.name;
+		}
+		if (report) {
+			// Doom 3 stores no normals; compare the model's with the rebuilt ones.
+			ModelFrameGeometry bind;
+			if (skinned) {
+				QString problem;
+				if (!skinModelSurface(surface, bindPose, &bind, &problem)) {
+					return fail(problem);
+				}
+			} else if (still) {
+				bind = *still;
+			}
+			int vertex = -1;
+			const double angle = rebuiltNormalAngle(surface, bind, &vertex);
+			if (angle > normalAngle) {
+				normalAngle = angle;
+				normalSurface = surface.name;
+				normalVertex = vertex;
+			}
+		}
 		out.first.reserve(surface.vertexCount);
 		out.count.reserve(surface.vertexCount);
 		for (int vertex = 0; vertex < surface.vertexCount; ++vertex) {
@@ -1777,7 +1851,9 @@ QByteArray exportModelMd5Mesh(const ModelMesh& mesh, const ModelMd5ExportOptions
 				const int first = surface.skinning.first.at(vertex);
 				for (int index = first; index < first + count; ++index) {
 					const ModelJointInfluence& influence = surface.skinning.influences.at(index);
-					out.weights.append({influence.joint, influence.weight, influence.offset});
+					const ModelVec3 offset =
+						stretched.at(influence.joint) ? modelJointTransformVector(bindStretch.at(influence.joint), influence.offset) : influence.offset;
+					out.weights.append({influence.joint, influence.weight, offset});
 				}
 				out.count.append(count);
 				continue;
@@ -1900,10 +1976,37 @@ QByteArray exportModelMd5Mesh(const ModelMesh& mesh, const ModelMd5ExportOptions
 	if (!work.check()) {
 		return fail(progressError);
 	}
+	if (report) {
+		ModelExportReport result;
+		result.maxNormalAngleDegrees = normalAngle;
+		if (!stretchedNames.isEmpty()) {
+			result.notes << QCoreApplication::translate("VibeStudioModelMesh",
+				"MD5 joints hold rotation and translation only, so the bind scale, shear or mirroring of these joints moved into the weight "
+				"offsets (%n): %1. The bind-pose mesh is unchanged; each md5anim must keep the same joint scale.",
+				nullptr, int(stretchedNames.size()))
+								.arg(stretchedNames.join(QStringLiteral(", ")));
+		}
+		if (!unnamedShaders.isEmpty()) {
+			result.notes << QCoreApplication::translate("VibeStudioModelMesh",
+				"Surfaces without a material take their own name as the MD5 shader (%n): %1. Assign materials before shipping the model.",
+				nullptr, int(unnamedShaders.size()))
+								.arg(unnamedShaders.join(QStringLiteral(", ")));
+		}
+		if (normalAngle > 0.5) {
+			result.notes << QCoreApplication::translate("VibeStudioModelMesh",
+				"MD5 stores no vertex normals: Doom 3 rebuilds smooth normals from the faces, joining vertices that share a position. The "
+				"model's normals differ from the rebuilt ones by up to %1 degrees (vertex %2 of surface \"%3\"); carry hard edges and "
+				"edited normals in a normal map.")
+								.arg(normalAngle, 0, 'f', 2)
+								.arg(QString::number(normalVertex), normalSurface);
+		}
+		*report = std::move(result);
+	}
 	return writer.take();
 }
 
-QByteArray exportModelMd5Anim(const ModelMesh& mesh, int clipIndex, const ModelMd5ExportOptions& options, QString* error, const ModelWorkControl& control)
+QByteArray exportModelMd5Anim(const ModelMesh& mesh, int clipIndex, const ModelMd5ExportOptions& options, QString* error, const ModelWorkControl& control,
+	ModelExportReport* report)
 {
 	const auto fail = [error](const QString& message) {
 		if (error) {
@@ -1938,18 +2041,131 @@ QByteArray exportModelMd5Anim(const ModelMesh& mesh, int clipIndex, const ModelM
 	}
 	const QVector<int> parents = modelJointParents(skeleton);
 	const int jointCount = int(skeleton.joints.size());
+	QStringList notes;
+	QStringList omissions;
 
+	// The frame rate first: an md5anim stores a whole number of frames per
+	// second, which Doom 3 divides into the clip's length.
+	int frameRate = 0;
+	const bool unspecifiedRate = !(clip.framesPerSecond > 0.0) || !std::isfinite(clip.framesPerSecond);
+	if (options.frameRate > 0) {
+		if (options.frameRate > kMaxFrameRate) {
+			return fail(QCoreApplication::translate("VibeStudioModelMesh", "An md5anim frame rate must be a whole number from 1 to %1.").arg(kMaxFrameRate));
+		}
+		frameRate = options.frameRate;
+		if (!unspecifiedRate && std::abs(clip.framesPerSecond - frameRate) > 1e-6) {
+			notes << QCoreApplication::translate("VibeStudioModelMesh",
+				"Clip \"%1\" plays at %2 frames per second; the md5anim is written at the chosen %3, which changes its playback speed.")
+						 .arg(clip.name)
+						 .arg(clip.framesPerSecond, 0, 'g', 6)
+						 .arg(frameRate);
+		}
+	} else if (unspecifiedRate) {
+		frameRate = options.defaultFrameRate >= 1 && options.defaultFrameRate <= kMaxFrameRate ? options.defaultFrameRate : 24;
+		notes << QCoreApplication::translate("VibeStudioModelMesh",
+			"Clip \"%1\" has no frame rate, so the md5anim is written at %2 frames per second. Set the clip's rate in Edit Skeletal Animation "
+			"to choose another.")
+					 .arg(clip.name)
+					 .arg(frameRate);
+	} else {
+		const double whole = std::round(clip.framesPerSecond);
+		if (std::abs(clip.framesPerSecond - whole) > 1e-6 || whole < 1.0 || whole > double(kMaxFrameRate)) {
+			return fail(QCoreApplication::translate("VibeStudioModelMesh",
+				"Clip \"%1\" plays at %2 frames per second, but an md5anim stores a whole number from 1 to %3. Give the clip a whole-number "
+				"rate in Edit Skeletal Animation, or choose an MD5 frame rate for the export.")
+							.arg(clip.name)
+							.arg(clip.framesPerSecond, 0, 'g', 6)
+							.arg(kMaxFrameRate));
+		}
+		frameRate = int(whole);
+	}
+
+	// MD5 joints hold rotation and translation; the md5mesh carries each
+	// joint's bind stretch in its weight offsets. A joint that moves vertices
+	// must keep that stretch in every pose, and the rigid part of each pose is
+	// what Doom 3 concatenates. Rigid poses are written as they are.
+	QVector<bool> influencing(jointCount, false);
+	QStringList unskinned;
+	for (const ModelSurface& surface : mesh.surfaces) {
+		if (surface.vertexCount <= 0) {
+			continue;
+		}
+		if (surface.skinning.isEmpty()) {
+			unskinned << surface.name;
+			continue;
+		}
+		for (int vertex = 0; vertex < surface.skinning.count.size(); ++vertex) {
+			if (surface.skinning.count.at(vertex) == 0) {
+				unskinned << surface.name;
+				break;
+			}
+		}
+		for (const ModelJointInfluence& influence : surface.skinning.influences) {
+			influencing[influence.joint] = true;
+		}
+	}
+	if (!unskinned.isEmpty()) {
+		// The md5mesh binds geometry without influences to the first joint.
+		influencing[0] = true;
+	}
+	QVector<ModelJointMatrix> bindStretch(jointCount, modelJointIdentity());
+	for (int joint = 0; joint < jointCount; ++joint) {
+		if (!modelJointIsRigid(skeleton.joints.at(joint).bind)) {
+			bindStretch[joint] = modelJointStretch(skeleton.joints.at(joint).bind);
+		}
+	}
+	const ModelJointMatrix rootBind = modelJointRigidPart(skeleton.joints.first().bind);
+	bool rigidified = false;
+	bool rootMoves = false;
 	QVector<QVector<ModelJointMatrix>> locals;
 	locals.reserve(clip.frames.size());
-	for (const QVector<ModelJointMatrix>& frame : clip.frames) {
+	for (int frameIndex = 0; frameIndex < clip.frames.size(); ++frameIndex) {
 		if (!work.step()) {
 			return fail(progressError);
+		}
+		QVector<ModelJointMatrix> frame = clip.frames.at(frameIndex);
+		for (int joint = 0; joint < jointCount && joint < frame.size(); ++joint) {
+			const ModelJointMatrix& pose = frame.at(joint);
+			const bool rigid = modelJointIsRigid(pose);
+			if (influencing.at(joint)) {
+				const double distance = modelJointMatrixDistance(rigid ? modelJointIdentity() : modelJointStretch(pose), bindStretch.at(joint));
+				if (distance > kModelJointStretchTolerance) {
+					return fail(QCoreApplication::translate("VibeStudioModelMesh",
+						"MD5 joints hold rotation and translation only. Joint \"%1\" is scaled, sheared or mirrored differently from its bind pose "
+						"in frame %2 of clip \"%3\" (by up to %4), which Doom 3 cannot reproduce. Remove the clip's scale keys, move the scale "
+						"into the bind pose, or export IQM or MD3, which keep joint scale.")
+									.arg(skeleton.joints.at(joint).name)
+									.arg(frameIndex)
+									.arg(clip.name)
+									.arg(distance, 0, 'g', 4));
+				}
+			}
+			if (!rigid) {
+				frame[joint] = modelJointRigidPart(pose);
+				rigidified = true;
+			}
+			if (joint == 0 && !unskinned.isEmpty() && modelJointMatrixDistance(modelJointRigidPart(pose), rootBind) > kModelJointStretchTolerance) {
+				rootMoves = true;
+			}
 		}
 		QVector<ModelJointMatrix> local = modelJointsToLocalSpace(parents, frame);
 		if (local.size() != jointCount) {
 			return fail(QCoreApplication::translate("VibeStudioModelMesh", "Clip \"%1\" does not fit the joint hierarchy.").arg(clip.name));
 		}
 		locals.append(std::move(local));
+	}
+	if (rigidified) {
+		notes << QCoreApplication::translate("VibeStudioModelMesh",
+			"MD5 joints hold rotation and translation only; the joint scale clip \"%1\" shares with the bind pose stays in the md5mesh "
+			"weight offsets. Export the md5mesh from the same model.")
+					 .arg(clip.name);
+	}
+	if (rootMoves) {
+		omissions << QCoreApplication::translate("VibeStudioModelMesh",
+			"Surfaces with vertices that have no joint influences (%n): %1. The md5mesh binds them to joint \"%2\", which moves in clip \"%3\", "
+			"so in the game they follow it while the editor keeps them still. Bind them with Skin Weights and Binding to choose their joints.",
+			nullptr, int(unskinned.size()))
+						 .arg(unskinned.join(QStringLiteral(", ")), skeleton.joints.first().name, clip.name);
 	}
 
 	// Bounds from the clip, else from the skinned geometry (unskinned surfaces
@@ -2004,12 +2220,6 @@ QByteArray exportModelMd5Anim(const ModelMesh& mesh, int clipIndex, const ModelM
 		mins.append(low);
 		maxs.append(high);
 	}
-
-	int frameRate = options.defaultFrameRate > 0 ? options.defaultFrameRate : 24;
-	if (std::isfinite(clip.framesPerSecond) && clip.framesPerSecond >= 1.0 && clip.framesPerSecond <= double(kMaxFrameRate)) {
-		frameRate = int(std::lround(clip.framesPerSecond));
-	}
-	frameRate = std::min(frameRate, kMaxFrameRate);
 
 	// The layout idMD5Anim::LoadAnim reads. Every joint animates all six
 	// components (flags 63, components 6i .. 6i + 5), so no value depends on
@@ -2094,6 +2304,22 @@ QByteArray exportModelMd5Anim(const ModelMesh& mesh, int clipIndex, const ModelM
 	}
 	if (!work.check()) {
 		return fail(progressError);
+	}
+	if (report) {
+		ModelExportReport result;
+		result.clip = clipIndex;
+		result.clipName = clip.name;
+		result.clipFrames = int(clip.frames.size());
+		result.frameRate = frameRate;
+		result.notes << QCoreApplication::translate("VibeStudioModelMesh", "Skeletal clip %1 \"%2\": %n frame(s) at %3 frames per second.", nullptr,
+			int(clip.frames.size()))
+							.arg(clipIndex)
+							.arg(clip.name)
+							.arg(frameRate);
+		result.notes += notes;
+		result.notes += omissions;
+		result.omissions = omissions;
+		*report = std::move(result);
 	}
 	return writer.take();
 }

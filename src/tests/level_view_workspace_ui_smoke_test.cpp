@@ -313,7 +313,9 @@ int main(int argc, char** argv)
 			focus(front); maximize->trigger(); action("map.viewSide")->trigger(); settle();
 			ok &= expect(!maximize->isChecked() && side->isVisible() && side->hasFocus(), "projection change restores and focuses destination pane");
 			focus(camera); maximize->trigger(); action("map.clipTool")->trigger(); settle();
-			ok &= expect(!maximize->isChecked() && side->isVisible() && side->clipMode(), "plan tool restores visible editing surface");
+			ok &= expect(maximize->isChecked() && camera->isVisible() && camera->clipMode() && !side->isVisible()
+				&& top->clipMode() && front->clipMode() && side->clipMode(),
+				"camera clipper retains maximised view and synchronises hidden plan state");
 			action("map.clipTool")->trigger(); action("map.layout.four-views")->trigger();
 			focus(front); maximize->trigger(); action("map.layout.single-2d")->trigger(); settle();
 			ok &= expect(!maximize->isChecked() && !maximize->isEnabled() && !equalize->isEnabled(), "single-view layout leaves no stale restore state");

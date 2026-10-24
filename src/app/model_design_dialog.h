@@ -1,5 +1,6 @@
 #pragma once
 
+#include "app/live_status_label.h"
 #include "core/model_design.h"
 
 #include <QDialog>
@@ -73,7 +74,7 @@ class ModelDesignDialog final : public QDialog
 	bool m_dirty = false, m_refreshing = false;
 	QListWidget* m_parts = nullptr;
 	ModelViewport* m_preview = nullptr;
-	QLabel* m_status = nullptr;
+	LiveStatusLabel* m_status = nullptr;
 	QLabel* m_contextLabel = nullptr;
 	QLabel* m_selectionStatus = nullptr;
 	QLineEdit* m_name = nullptr;

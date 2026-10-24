@@ -7,6 +7,9 @@
 #include <QJsonArray>
 #include <QMap>
 #include <QFileInfo>
+#include <QHash>
+
+#include <algorithm>
 
 // Format/matching references: id Software's Quake III Arena renderer,
 // tr_image.c (CommaParse/RE_RegisterSkin), tr_model.c and tr_mesh.c;
@@ -363,6 +366,92 @@ bool readModelSkinBindings(const PackageArchiveReader &archive, const ModelSkinS
 		return false;
 	}
 	*input = std::move(candidate);
+	return true;
+}
+
+QString modelQ3SkinSurfaceName(const QString &surfaceName)
+{
+	auto name = surfaceName.toLower();
+	if (name.size() > 2 && name[name.size() - 2] == '_')
+	{
+		name.chop(2);
+	}
+	return name;
+}
+
+bool writeModelQ3Skin(const ModelMesh &mesh, QByteArray *bytes, QString *error, const ModelWorkControl &control)
+{
+	if (error)
+	{
+		error->clear();
+	}
+	if (!bytes)
+	{
+		return fail(error, Text::tr("No output was given for the skin."));
+	}
+	// A record is "name","shader": printable ASCII up to 63 bytes, without the
+	// quotes and commas CommaParse splits on.
+	const auto token = [](const QString &text)
+	{
+		return !text.isEmpty() && text.size() <= 63 &&
+			   std::all_of(text.cbegin(), text.cend(),
+						   [](QChar c) { return c.unicode() >= 32 && c.unicode() < 127 && c != QLatin1Char('"') && c != QLatin1Char(','); });
+	};
+	QString text;
+	QHash<QString, int> written;
+	for (int index = 0; index < mesh.surfaces.size(); ++index)
+	{
+		if (!modelWorkCheckpoint(control, ModelWorkPhase::Serializing, index, mesh.surfaces.size(), error))
+		{
+			return false;
+		}
+		const auto &surface = mesh.surfaces[index];
+		const auto name = modelQ3SkinSurfaceName(surface.name);
+		const auto material = surface.skinPaths.value(0);
+		if (!token(name) || name.contains(QStringLiteral("tag_")))
+		{
+			return fail(error, Text::tr("Surface %1 cannot be named in a Quake III skin. Rename it with up to 63 printable ASCII characters, "
+										"without quotes, commas or tag_.")
+								   .arg(surface.name));
+		}
+		if (material.isEmpty())
+		{
+			return fail(error, Text::tr("Surface %1 has no material for the skin to name. Assign one first.").arg(surface.name));
+		}
+		if (!token(material))
+		{
+			return fail(error, Text::tr("The material of surface %1 cannot be written to a Quake III skin: %2. Use a package path of up to "
+										"63 printable ASCII characters, without quotes or commas.")
+								   .arg(surface.name, material));
+		}
+		const auto previous = written.constFind(name);
+		if (previous != written.cend())
+		{
+			if (mesh.surfaces[*previous].skinPaths.value(0) != material)
+			{
+				return fail(error, Text::tr("Surfaces %1 and %2 share the engine name %3, so a Quake III skin cannot give them different "
+											"materials. Rename one of them or give them the same material.")
+									   .arg(mesh.surfaces[*previous].name, surface.name, name));
+			}
+			continue;
+		}
+		written.insert(name, index);
+		text += QStringLiteral("\"%1\",\"%2\"\n").arg(name, material);
+	}
+	const auto candidate = text.toLatin1();
+	ModelSkinBindingPlan plan;
+	if (!planModelSkinBindings(mesh, candidate, &plan, error, control))
+	{
+		return false;
+	}
+	for (const auto &assignment : plan.assignments)
+	{
+		if (assignment.material != mesh.surfaces[assignment.surface].skinPaths.value(0))
+		{
+			return fail(error, Text::tr("The written skin would not give surface %1 its material. Check its name.").arg(assignment.name));
+		}
+	}
+	*bytes = candidate;
 	return true;
 }
 

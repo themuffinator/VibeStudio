@@ -17,6 +17,7 @@
 #include <QIcon>
 #include <QList>
 #include <QPointer>
+#include <QSet>
 #include <QString>
 #include <QStringList>
 #include <QVector>
@@ -70,6 +71,11 @@ public:
 	explicit StudioCommandRegistry(QWidget* host);
 
 	QAction* registerCommand(const StudioCommandRegistration& registration);
+	// Takes a command out again, for commands generated from data that
+	// changes, such as the Create <class> commands of the loaded entity
+	// definitions. Its action leaves menus once control returns to the event
+	// loop; keys the user gave it are kept for when it is registered again.
+	void unregisterCommand(const QString& commandId);
 	[[nodiscard]] QAction* action(const QString& commandId) const;
 	[[nodiscard]] QStringList commandIds() const;
 	[[nodiscard]] QVector<StudioCommandRegistration> registrations() const;
@@ -91,6 +97,14 @@ public:
 	// Used for keys that mean something different, or something destructive,
 	// outside their own surface, such as Del staging a package deletion.
 	void setShortcutScopes(const QString& commandId, const QList<QWidget*>& scopes);
+	// Marks a scoped command whose surfaces claim its keys themselves (they
+	// accept the ShortcutOverride and run the command while it is enabled),
+	// as the Levels views do for the nudge commands. Its keys are installed
+	// beside any other command's, such as Go Back's window-wide Alt+Left,
+	// instead of taking them away or being refused: inside its surfaces the
+	// enabled command wins, and elsewhere, or while it is disabled, the other
+	// command keeps the key.
+	void setShortcutScopeClaims(const QString& commandId, bool claims);
 	// Embedded documents keep their local keys; identical shell keys remain
 	// available in menus and resume when focus leaves the document.
 	void setShortcutFocusSurface(QWidget* surface);
@@ -108,7 +122,9 @@ public:
 	// command whose built-in key it was, rather than refused.
 	void setUserShortcuts(const QHash<QString, QStringList>& shortcuts);
 	// Keyed by registered command id; entries for commands that are not
-	// registered are left out.
+	// registered are left out, except Create <class> commands (core/
+	// level_entity_create.h), whose classes come and go with the loaded entity
+	// definitions: their keys stay, under the registry's token for the id.
 	[[nodiscard]] QHash<QString, QStringList> userShortcuts() const;
 	[[nodiscard]] bool hasUserShortcut(const QString& commandId) const;
 	// The keys a command gets without the user's own: the profile's, then the
@@ -153,6 +169,8 @@ private:
 	QHash<QString, QList<QKeySequence>> m_sequences;
 	QPointer<QWidget> m_shortcutFocusSurface;
 	QHash<QString, QList<QPointer<QWidget>>> m_shortcutScopes;
+	// Normalized ids of commands whose surfaces claim their keys.
+	QSet<QString> m_scopeClaims;
 	QString m_editorProfileId;
 	QHash<QString, QStringList> m_userShortcuts;
 	QStringList m_conflicts;

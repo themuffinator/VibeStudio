@@ -5,8 +5,10 @@
 #include "app/application_shell.h"
 #include "app/level_object_list.h"
 #include "app/level_object_model.h"
+#include "app/level_transform_layout.h"
 #include "app/map_viewport.h"
 #include "app/model_viewport.h"
+#include "app/studio_actions.h"
 #include "app/studio_icons.h"
 #include "app/studio_layout.h"
 #include "app/studio_sidebar.h"
@@ -15,6 +17,7 @@
 #include "core/level_placement.h"
 #include "core/level_view_filters.h"
 
+#include <QAction>
 #include <QCheckBox>
 #include <QComboBox>
 #include <QCoreApplication>
@@ -431,14 +434,15 @@ QWidget* ApplicationShell::buildLevelFilterOptions()
 	auto* layout = new QVBoxLayout(m_levelFilterPanel);
 	layout->setContentsMargins(0, 0, 0, 0);
 	layout->setSpacing(4);
-	const QString saved = QString::fromUtf8(m_settings.shellLayoutState(QStringLiteral("levelView/filtersOff")));
-	m_levelFiltersOff = saved.split(QLatin1Char(','), Qt::SkipEmptyParts);
+	m_levelFiltersOff = levelViewFiltersFromSaved(m_settings.shellLayoutState(levelViewFiltersSettingsKey()));
 	refreshLevelViewFilters();
 	return m_levelFilterPanel;
 }
 
 void ApplicationShell::refreshLevelViewFilters()
 {
+	// The View > Filters commands follow the open map's format either way.
+	refreshLevelViewFilterCommands();
 	if (!m_levelFilterPanel) {
 		return;
 	}
@@ -471,29 +475,31 @@ void ApplicationShell::refreshLevelViewFilters()
 			m_levelFilterBoxes.insert(filter.id, box);
 		}
 		if (!filters.isEmpty()) {
-			auto* showAll = new QToolButton;
-			showAll->setObjectName(QStringLiteral("levelFiltersShowAll"));
-			showAll->setText(tr("Show Every Kind"));
-			showAll->setIcon(studioIcon(QStringLiteral("eye")));
-			showAll->setToolButtonStyle(Qt::ToolButtonTextBesideIcon);
-			showAll->setAutoRaise(true);
-			showAll->setFocusPolicy(Qt::TabFocus);
-			setBaseIconSize(showAll, QSize(16, 16));
-			connect(showAll, &QToolButton::clicked, this, [this]() {
-				for (QCheckBox* box : std::as_const(m_levelFilterBoxes)) {
-					const QSignalBlocker blocker(box);
-					box->setChecked(true);
+			// Each button is its View > Filters command, so its key, tooltip and
+			// enabled state match the menu and command search.
+			const auto commandButton = [this, layout](const QString& name, const QString& commandId, const QString& text, const QString& icon,
+										   const QString& accessibleName, void (ApplicationShell::*slot)()) {
+				auto* button = new QToolButton;
+				if (QAction* action = m_commands ? m_commands->action(commandId) : nullptr) {
+					button->setDefaultAction(action);
+				} else {
+					button->setText(text);
+					button->setIcon(studioIcon(icon));
+					connect(button, &QToolButton::clicked, this, slot);
 				}
-				m_levelFiltersOff.clear();
-				m_settings.setShellLayoutState(QStringLiteral("levelView/filtersOff"), QByteArray());
-				applyLevelViewFilters();
-				synchronizeLevelPlanViews();
-				refreshLevelMapObjectHiddenMarks();
-				if (levelMap3DShowing()) {
-					refreshLevelMap3D();
-				}
-			});
-			layout->addWidget(showAll);
+				button->setObjectName(name);
+				button->setAccessibleName(accessibleName);
+				button->setAccessibleDescription(button->toolTip());
+				button->setToolButtonStyle(Qt::ToolButtonTextBesideIcon);
+				button->setAutoRaise(true);
+				button->setFocusPolicy(Qt::TabFocus);
+				setBaseIconSize(button, QSize(16, 16));
+				layout->addWidget(button);
+			};
+			commandButton(QStringLiteral("levelFiltersShowAll"), QStringLiteral("map.resetFilters"), tr("Show Every Kind"), QStringLiteral("eye"),
+				tr("Show every kind of object"), &ApplicationShell::resetLevelViewFilters);
+			commandButton(QStringLiteral("levelFiltersInvert"), QStringLiteral("map.invertFilters"), tr("Invert Filters"), QStringLiteral("refresh"),
+				tr("Invert the view filters"), &ApplicationShell::invertLevelViewFilters);
 		}
 	}
 	// Counts are said with each kind, for the open map, while the tab shows.
@@ -529,6 +535,7 @@ void ApplicationShell::applyLevelViewFilters()
 	}
 	const QSignalBlocker blocker(m_levelMapViewport);
 	m_levelMapViewport->setFilteredObjects(filtered);
+	refreshLevelTexturedSelectionViews();
 }
 
 QWidget* ApplicationShell::buildLevelRegionPanel()
@@ -791,18 +798,15 @@ void ApplicationShell::saveLevelRegionAs()
 
 void ApplicationShell::setLevelViewFilter(const QString& filterId, bool shown)
 {
+	QStringList off = m_levelFiltersOff;
 	if (shown) {
-		m_levelFiltersOff.removeAll(filterId);
-	} else if (!m_levelFiltersOff.contains(filterId)) {
-		m_levelFiltersOff << filterId;
+		off.removeAll(filterId);
+	} else if (!off.contains(filterId)) {
+		off << filterId;
 	}
-	m_settings.setShellLayoutState(QStringLiteral("levelView/filtersOff"), m_levelFiltersOff.join(QLatin1Char(',')).toUtf8());
-	applyLevelViewFilters();
-	synchronizeLevelPlanViews();
-	refreshLevelMapObjectHiddenMarks();
-	if (levelMap3DShowing()) {
-		refreshLevelMap3D();
-	}
+	// Saves the list and brings the check boxes, the View > Filters commands
+	// and every view up to date.
+	applyLevelViewFilterState(off);
 	LevelViewFilter filter;
 	if (levelViewFilterForId(m_levelMapDocument, filterId, &filter)) {
 		statusBar()->showMessage(shown ? tr("%1 shown again.").arg(filter.title) : tr("%1 hidden from the views; the map is unchanged.").arg(filter.title), 4000);
@@ -813,18 +817,12 @@ QWidget* ApplicationShell::buildLevelTransformPanel()
 {
 	auto* panel = new QWidget;
 	panel->setObjectName(QStringLiteral("levelTransformPanel"));
-	auto* grid = new QGridLayout(panel);
-	grid->setContentsMargins(0, 0, 0, 0);
-	grid->setHorizontalSpacing(4);
-	grid->setVerticalSpacing(4);
+	panel->setAccessibleName(tr("Selection transform"));
+	QSizePolicy policy(QSizePolicy::Expanding,QSizePolicy::Preferred); policy.setHeightForWidth(true); panel->setSizePolicy(policy);
 	const QStringList axes {tr("X"), tr("Y"), tr("Z")};
-	for (int axis = 0; axis < 3; ++axis) {
-		auto* heading = new QLabel(axes.at(axis));
-		heading->setObjectName(QStringLiteral("sidebarFieldLabel"));
-		heading->setAlignment(Qt::AlignCenter);
-		grid->addWidget(heading, 0, axis + 1);
-	}
-	const auto field = [this, grid](bool size, int axis) {
+	LevelTransformLayout::Labels headings;
+	LevelTransformLayout::Fields fields;
+	const auto field = [this](bool size, int axis) {
 		auto* spin = new QDoubleSpinBox;
 		spin->setObjectName(QStringLiteral("levelTransform%1%2").arg(size ? QStringLiteral("Size") : QStringLiteral("Centre")).arg(QChar(u'X' + axis)));
 		spin->setRange(size ? 0.0 : -131072.0, 131072.0);
@@ -832,34 +830,40 @@ QWidget* ApplicationShell::buildLevelTransformPanel()
 		spin->setKeyboardTracking(false);
 		spin->setButtonSymbols(QAbstractSpinBox::NoButtons);
 		spin->setAlignment(Qt::AlignRight);
-		spin->setMinimumWidth(40);
-		spin->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Fixed);
+		spin->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
 		const QString axisName = QStringList {tr("X"), tr("Y"), tr("Z")}.at(axis);
 		spin->setAccessibleName(size ? tr("Size along %1").arg(axisName) : tr("Centre %1").arg(axisName));
 		spin->setToolTip(size ? tr("The selection's size along %1, in map units. A new size keeps its lower corner where it is.").arg(axisName)
 							  : tr("Where the middle of the selection is along %1, in map units. A new value moves it there.").arg(axisName));
+		spin->setAccessibleDescription(spin->toolTip());
 		connect(spin, &QDoubleSpinBox::editingFinished, this, [this, size, axis]() { applyLevelTransformField(size, axis); });
-		grid->addWidget(spin, size ? 2 : 1, axis + 1);
 		(size ? m_levelSizeFields : m_levelPositionFields)[axis] = spin;
+		return spin;
 	};
 	auto* centre = new QLabel(tr("Centre"));
 	centre->setObjectName(QStringLiteral("sidebarFieldLabel"));
 	auto* size = new QLabel(tr("Size"));
 	size->setObjectName(QStringLiteral("sidebarFieldLabel"));
-	grid->addWidget(centre, 1, 0);
-	grid->addWidget(size, 2, 0);
-	for (int axis = 0; axis < 3; ++axis) {
-		field(false, axis);
-		field(true, axis);
+	centre->setWordWrap(true); size->setWordWrap(true);
+	for (int row = 0; row < 2; ++row) {
+		for (int axis = 0; axis < 3; ++axis) {
+			fields[row][axis] = field(row == 1,axis);
+			auto* heading = new QLabel(axes.at(axis));
+			heading->setObjectName(QStringLiteral("sidebarFieldLabel"));
+			heading->setAlignment(Qt::AlignCenter); heading->setWordWrap(true);
+			heading->setBuddy(fields[row][axis]); headings[row][axis] = heading;
+		}
 	}
-	grid->setColumnStretch(1, 1);
-	grid->setColumnStretch(2, 1);
-	grid->setColumnStretch(3, 1);
+	centre->setBuddy(fields[0][0]); size->setBuddy(fields[1][0]);
 	m_levelTransformNote = new QLabel;
 	m_levelTransformNote->setProperty("sidebarHint", true);
 	m_levelTransformNote->setObjectName(QStringLiteral("levelTransformNote"));
 	m_levelTransformNote->setWordWrap(true);
-	grid->addWidget(m_levelTransformNote, 3, 0, 1, 4);
+	new LevelTransformLayout(panel,{centre,size},headings,fields,m_levelTransformNote);
+	QWidget* previous = nullptr;
+	for (const auto& row : fields) { for (auto* spin : row) {
+		if (previous) { QWidget::setTabOrder(previous,spin); } previous = spin;
+	} }
 	refreshLevelTransformPanel();
 	return panel;
 }

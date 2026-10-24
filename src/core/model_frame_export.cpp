@@ -1,5 +1,6 @@
 #include "core/model_frame_export.h"
 
+#include "core/model_archive.h"
 #include "core/model_file_io.h"
 #include "core/model_collision.h"
 #include "core/package_archive.h"
@@ -18,7 +19,7 @@ bool fail(QString *error, const QString &message)
 	}
 	return false;
 }
-bool protect(const ModelWriteTarget &target, const ModelFrameExportRequest &request, QString *error)
+bool protect(const ModelWriteTarget &target, const ModelFrameExportRequest &request, QString *error, const ModelWorkControl &control)
 {
 	for (const auto &source : request.protectedFiles)
 	{
@@ -29,14 +30,7 @@ bool protect(const ModelWriteTarget &target, const ModelFrameExportRequest &requ
 													"An exported model cannot replace its source or package. Choose another output path."));
 		}
 	}
-	if (request.sourceArchive &&
-		(request.sourceArchive->protectsInputPath(target.path) || request.sourceArchive->protectsInputPath(target.resolvedPath)))
-	{
-		return fail(error, QCoreApplication::translate(
-							   "VibeStudioModelExport",
-							   "Export outside the source package, folder or draft. Use package staging to change its contents."));
-	}
-	return true;
+	return validateModelArchiveOutputs(request.sourceArchive.get(), {target.path, target.resolvedPath}, error, control);
 }
 } // namespace
 
@@ -64,7 +58,7 @@ static ModelFrameExportResult prepareAndWriteFrame(const ModelMesh &mesh, const 
 			result.error = target.error;
 			return result;
 		}
-		if (!protect(target, request, &result.error))
+		if (!protect(target, request, &result.error, control))
 		{
 			return result;
 		}
@@ -119,7 +113,7 @@ static ModelFrameExportResult prepareAndWriteFrame(const ModelMesh &mesh, const 
 	}
 	if (!request.outputPath.isEmpty() && !request.dryRun)
 	{
-		if (!protect(target, request, &result.error) || !writeModelFile(target, result.bytes, &result.error, control))
+		if (!protect(target, request, &result.error, control) || !writeModelFile(target, result.bytes, &result.error, control))
 		{
 			return result;
 		}
@@ -130,10 +124,13 @@ static ModelFrameExportResult prepareAndWriteFrame(const ModelMesh &mesh, const 
 
 ModelFrameExportResult exportModelFrame(const ModelMesh &mesh, const ModelFrameExportRequest &request, const ModelWorkControl &control)
 {
-	auto result = prepareAndWriteFrame(mesh, request, control);
+	bool cancelled = false;
+	ModelWorkControl work = control;
+	work.cancelled = [&] { return cancelled = cancelled || (control.cancelled && control.cancelled()); };
+	auto result = prepareAndWriteFrame(mesh, request, work);
 	// Publication is the durable boundary: cancellation after a successful
 	// commit must not tell the caller that the completed file was discarded.
-	if (!result.written && !modelWorkCheckpoint(control, ModelWorkPhase::Serializing, 1, 1, &result.error))
+	if (!result.written && !modelWorkCheckpoint(work, ModelWorkPhase::Serializing, 1, 1, &result.error))
 	{
 		result.cancelled = true;
 		result.bytes.clear();

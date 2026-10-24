@@ -35,6 +35,17 @@ bool readModelSkinBindings(const PackageArchiveReader &archive, const ModelSkinS
 // Surface matching follows Quake III's lowercase and trailing _x normalization.
 bool planModelSkinBindings(const ModelMesh &mesh, const QByteArray &bytes, ModelSkinBindingPlan *plan, QString *error = nullptr,
 						   const ModelWorkControl &control = {});
+// The name Quake III binds a surface by: lower case, with a final underscore
+// and character dropped (R_LoadMD3, so body_1 is body).
+[[nodiscard]] QString modelQ3SkinSurfaceName(const QString &surfaceName);
+// The Quake III .skin of `mesh`'s primary materials (skin slot 0): one
+// "surface","shader" record per engine surface name, in surface order.
+// Surfaces that share an engine name are written once and must share a
+// material. Refuses surface names and materials a .skin cannot hold and
+// surfaces without a material; the written text plans (planModelSkinBindings)
+// to exactly the primary materials. For a skin variant, apply it first
+// (applyModelSkinVariant in core/model_skin_variants.h).
+bool writeModelQ3Skin(const ModelMesh &mesh, QByteArray *bytes, QString *error = nullptr, const ModelWorkControl &control = {});
 QJsonObject modelSkinBindingPlanJson(const ModelSkinBindingPlan &plan);
 QStringList modelSkinBindingPlanText(const ModelSkinBindingPlan &plan);
 } // namespace vibestudio

@@ -26,7 +26,7 @@ bool validModelSurfaceSelection(const ModelMesh &mesh, const ModelSelection &sel
 {
 	return selection.surfaces.isEmpty() ||
 		   (selection.surfaces.contains(selection.surface) && selection.vertices.isEmpty() && selection.faces.isEmpty() &&
-			selection.edges.isEmpty() && selection.tag.isEmpty() && selection.collision.isEmpty() &&
+			selection.edges.isEmpty() && selection.tag.isEmpty() && selection.collision.isEmpty() && selection.joint.isEmpty() &&
 			std::all_of(selection.surfaces.cbegin(), selection.surfaces.cend(),
 						[&](int index) { return index >= 0 && index < mesh.surfaces.size(); }));
 }

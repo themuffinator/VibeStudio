@@ -1,8 +1,10 @@
 #pragma once
 
 #include "core/level_map.h"
+#include <QPair>
 #include <QPointF>
 #include <QSize>
+#include <QVector>
 #include <utility>
 
 namespace vibestudio
@@ -27,6 +29,13 @@ LevelTextureProjection wrappedLevelTextureProjection(const LevelMapBrushFace& so
 // explicit permission to convert the target face to Valve 220 axes.
 bool setLevelTextureProjection(LevelMapBrushFace* face, const LevelTextureProjection& projection,
 	bool allowValve220, QString* error = nullptr);
+// The closest mapping a classic face (axial projection, one rotation, two
+// scales, no shear) can hold for `projection` on the face's plane: the
+// least-squares texture axes, with offsets that fit `anchors` (world points on
+// the plane and the texture coordinates they should keep) on average. Returns
+// an invalid projection when the axes collapse or no anchor is given.
+LevelTextureProjection nearestClassicLevelTextureProjection(const LevelMapBrushFace& face, const LevelTextureProjection& projection,
+	const QVector<QPair<LevelMapVec3, QPointF>>& anchors);
 // Empty for no brush faces, otherwise classic, valve220, brushDef, brushDef3
 // or mixed. Clipboard and prefab insertion share the same compatibility rule.
 QString levelMapBrushDialect(const LevelMapDocument& document);

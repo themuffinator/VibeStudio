@@ -27,12 +27,15 @@ void put32(QByteArray& bytes, qsizetype at, qint32 value)
 {
 	qToLittleEndian<qint32>(value, bytes.data() + at);
 }
-QByteArray udmfFixture()
+// UDMF 1.1 requires the namespace statement, so the smallest loadable TEXTMAP
+// holds only that; an empty lump is refused (checked below).
+QByteArray udmfFixture(const QByteArray& textmap = "namespace = \"zdoom\";\n")
 {
 	QByteArray bytes(12 + 3 * 16, '\0'); bytes.replace(0, 4, "PWAD"); put32(bytes, 4, 3); put32(bytes, 8, 12);
-	for (int i = 0; i < 3; ++i) { put32(bytes, 12 + i * 16, 12); }
+	for (int i = 0; i < 3; ++i) { put32(bytes, 12 + i * 16, qint32(bytes.size())); }
+	put32(bytes, 12 + 16 + 4, qint32(textmap.size()));
 	bytes.replace(20, 5, "MAP01"); bytes.replace(36, 7, "TEXTMAP"); bytes.replace(52, 6, "ENDMAP");
-	return bytes;
+	return bytes + textmap;
 }
 } // namespace
 
@@ -124,6 +127,8 @@ int main(int argc, char** argv)
 			ok &= expect(!loadLevelMapBytes(wadRequest, wad, &kept, &error) && stop && unchanged(), "binary/UDMF cancellation preserves current text document");
 		}
 	}
+	ok &= expect(!loadLevelMapBytes({temp.filePath(QStringLiteral("empty-textmap.wad")), {}, {}}, udmfFixture({}), &kept, &error)
+		&& error.contains(QStringLiteral("namespace")) && unchanged(), "empty TEXTMAP refused without touching the current document", error);
 
 	// Overlapping payloads are legal, but their total copied size must be bounded
 	// before allocation. This one-MiB file advertises 513 MiB of repeated data.

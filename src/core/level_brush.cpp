@@ -231,14 +231,16 @@ bool levelBrushTopology(const LevelMapBrush &brush, LevelBrushTopology *topology
 	return true;
 }
 
-bool createLevelBrushHull(const QVector<LevelMapVec3> &points, const QString &texture, LevelMapBrush *brush, QString *error)
+namespace {
+bool createHull(const QVector<LevelMapVec3> &points, const QString &texture, LevelMapBrush *brush, bool envelope, QString *error)
 {
 	if (error) {
 		error->clear();
 	}
-	if (!brush || points.size() < 4 || points.size() > kLevelBrushComponentMaxVertices ||
+	if (!brush || points.size() < 4 || points.size() > (envelope ? 4096 : kLevelBrushComponentMaxVertices) ||
 		std::any_of(points.cbegin(), points.cend(), [](const auto &p) { return !finite(p); })) {
-		return fail(error, QT_TRANSLATE_NOOP("LevelBrush", "A brush hull needs 4 to 256 finite vertices within ±32768 units."));
+		return fail(error, envelope ? QT_TRANSLATE_NOOP("LevelBrush", "A convex envelope needs 4 to 4096 finite points within ±32768 units.")
+			: QT_TRANSLATE_NOOP("LevelBrush", "A brush hull needs 4 to 256 finite vertices within ±32768 units."));
 	}
 	QVector<Triangle> planes;
 	if (!hull(points, &planes, error)) {
@@ -259,9 +261,15 @@ bool createLevelBrushHull(const QVector<LevelMapVec3> &points, const QString &te
 	if (!levelBrushTopology(candidate, &topology, error)) {
 		return false;
 	}
-	// No input point may disappear or be replaced by an unrelated solver
-	// intersection: primitive controls describe the actual solid, not a guess.
+	// Primitive controls must survive as corners; envelopes may absorb interior
+	// points. Neither may create corners unrelated to the supplied coordinates.
 	for (const auto &p : points) {
+		if (envelope) {
+			if (std::any_of(topology.geometry.faces.cbegin(),topology.geometry.faces.cend(),[&](const auto& f) { return planeDistanceToPoint(f.plane,p) > epsilon; })) {
+				return fail(error, QT_TRANSLATE_NOOP("LevelBrush", "The convex envelope could not contain every input point accurately."));
+			}
+			continue;
+		}
 		if (std::none_of(topology.vertices.cbegin(), topology.vertices.cend(), [&](const auto &v) { return close(p, v); })) {
 			return fail(error,
 						QT_TRANSLATE_NOOP("LevelBrush",
@@ -280,6 +288,17 @@ bool createLevelBrushHull(const QVector<LevelMapVec3> &points, const QString &te
 	candidate.boundsSolved = true;
 	*brush = std::move(candidate);
 	return true;
+}
+} // namespace
+
+bool createLevelBrushHull(const QVector<LevelMapVec3> &points, const QString &texture, LevelMapBrush *brush, QString *error)
+{
+	return createHull(points,texture,brush,false,error);
+}
+
+bool createLevelBrushEnvelope(const QVector<LevelMapVec3> &points, const QString &texture, LevelMapBrush *brush, QString *error)
+{
+	return createHull(points,texture,brush,true,error);
 }
 
 QVector<int> levelBrushComponentVertices(const LevelBrushTopology &topology, LevelBrushComponent kind, const QVector<int> &components)
@@ -307,49 +326,146 @@ QVector<int> levelBrushComponentVertices(const LevelBrushTopology &topology, Lev
 	return result;
 }
 
-bool moveLevelBrushComponents(LevelMapBrush *brush, LevelBrushComponent kind, const QVector<int> &components, const LevelMapVec3 &delta,
-							  double grid, bool allowCollapse, LevelBrushEditReport *report, QString *error)
+namespace
 {
-	if (error) {
-		error->clear();
+struct UvLockPolicy {
+	bool enabled = false, fit = false, allowValve220 = false;
+};
+struct UvSample {
+	LevelMapVec3 point;
+	QPointF uv;
+	bool moved = false;
+};
+
+// The three corners a fitted UV lock keeps exactly: corners the edit left in
+// place where they span a stable triangle (at least a quarter of the best
+// squared extent), so seams with unchanged neighbours hold; otherwise the
+// widest triangle. Empty when the face is too narrow to fit.
+QVector<int> fittedUvCorners(const QVector<UvSample>& samples)
+{
+	const auto pick = [&samples](const auto& value, const QVector<int>& taken) {
+		int best = -1, still = -1;
+		double bestValue = 0, stillValue = 0;
+		for (int i = 0; i < samples.size(); ++i) {
+			if (taken.contains(i)) { continue; }
+			const double v = value(i);
+			if (v > bestValue) { bestValue = v; best = i; }
+			if (!samples[i].moved && v > stillValue) { stillValue = v; still = i; }
+		}
+		return still >= 0 && stillValue >= 0.25 * bestValue ? still : best;
+	};
+	int a = 0;
+	for (int i = 0; i < samples.size(); ++i) {
+		if (!samples[i].moved) { a = i; break; }
 	}
-	if (report) {
-		*report = {};
+	const int b = pick([&](int i) { const auto d = sub(samples[i].point, samples[a].point); return dot(d, d); }, {a});
+	if (b < 0) { return {}; }
+	const auto e = sub(samples[b].point, samples[a].point);
+	const int c = pick([&](int i) { const auto n = cross(e, sub(samples[i].point, samples[a].point)); return dot(n, n); }, {a, b});
+	if (c < 0) { return {}; }
+	return {a, b, c};
+}
+
+// Exact UV lock solves one planar projection from three corners and checks
+// every other corner of the face against it. With the fit policy, a
+// deformation no single projection can follow keeps three corners exactly and
+// lets the rest drift, and a classic face that cannot hold the result takes
+// the nearest classic mapping. Workflow reference: NRC Brush::vertexModeBuildHull
+// with TextureVertexLock (Texdef_from_ST) at 449778b3 (GPL-2.0-or-later) and
+// TB's UV Lock at 4c756be1 (GPL-3.0-or-later). Original implementation; see
+// docs/CREDITS.md.
+bool lockComponentFace(const LevelMapBrushFace& source, LevelMapBrushFace* target, const LevelBrushTopology& before,
+	const QVector<LevelMapVec3>& points, const QVector<int>& sourceIndices, const MapPlane& plane, const UvLockPolicy& uv,
+	bool* fitted, QString* error)
+{
+	const auto projection = levelTextureProjection(source);
+	if (!projection.valid) { return fail(error,QT_TRANSLATE_NOOP("LevelBrush","The source face has no valid UV projection to lock.")); }
+	QVector<UvSample> samples;
+	for (qsizetype i = 0; i < before.vertices.size(); ++i) {
+		if (sourceIndices[i] < 0) { continue; }
+		const auto& p = points[sourceIndices[i]];
+		if (std::abs(planeDistanceToPoint(plane,p)) < 0.001) {
+			const auto moved = sub(p,before.vertices[i]);
+			samples.append({p,projection.at(before.vertices[i]),dot(moved,moved) > 1e-12});
+		}
 	}
-	if (!brush || !finite(delta) || !std::isfinite(grid) || grid < 0 || grid > coordinateLimit) {
-		return fail(error, QT_TRANSLATE_NOOP("LevelBrush", "Use finite movement within ±32768 "
-														   "units and a grid from 0 to 32768."));
-	}
-	LevelBrushTopology before;
-	if (!levelBrushTopology(*brush, &before, error)) {
-		return false;
-	}
-	const auto selected = levelBrushComponentVertices(before, kind, components);
-	if (selected.isEmpty()) {
-		return fail(error, QT_TRANSLATE_NOOP("LevelBrush", "Select existing brush components to move."));
-	}
-	auto points = before.vertices;
-	bool changed = false;
-	for (int i : selected) {
-		const auto move = [grid](double value, double amount) {
-			return grid > 0 ? std::round((value + amount) / grid) * grid : value + amount;
+	if (samples.size() < 3) { return fail(error,QT_TRANSLATE_NOOP("LevelBrush","The deformed face has too few corresponding corners for UV lock.")); }
+	const auto solve = [&](int ia, int ib, int ic, LevelTextureProjection* out) {
+		const auto a = samples[ia].point;
+		const auto e = sub(samples[ib].point,a), f = sub(samples[ic].point,a), n = cross(e,f);
+		const double area = dot(n,n);
+		if (area < 1e-16) { return false; }
+		const auto u = cross(f,n), v = cross(n,e);
+		const auto axis = [&](double origin, double alongE, double alongF) {
+			return LevelMapVec3{(u.x*(alongE-origin)+v.x*(alongF-origin))/area,
+				(u.y*(alongE-origin)+v.y*(alongF-origin))/area,(u.z*(alongE-origin)+v.z*(alongF-origin))/area,true};
 		};
-		points[i] = {move(points[i].x, delta.x), move(points[i].y, delta.y), move(points[i].z, delta.z), true};
-		if (!finite(points[i])) {
-			return fail(error, QT_TRANSLATE_NOOP("LevelBrush", "The moved vertex would lie outside ±32768 units."));
-		}
-		const auto difference = sub(points[i], before.vertices[i]);
-		changed |= dot(difference, difference) > 1e-14;
-	}
-	LevelBrushEditReport result;
-	result.verticesBefore = result.verticesAfter = static_cast<int>(points.size());
-	result.facesBefore = result.facesAfter = static_cast<int>(brush->faces.size());
-	if (!changed) {
-		if (report) {
-			*report = result;
-		}
+		LevelTextureProjection locked;
+		locked.valid = true; locked.normalizedCoordinates = projection.normalizedCoordinates;
+		locked.u = axis(samples[ia].uv.x(),samples[ib].uv.x(),samples[ic].uv.x());
+		locked.v = axis(samples[ia].uv.y(),samples[ib].uv.y(),samples[ic].uv.y());
+		locked.offsetU = samples[ia].uv.x()-dot(locked.u,a);
+		locked.offsetV = samples[ia].uv.y()-dot(locked.v,a);
+		*out = locked;
 		return true;
+	};
+	int b = 1, c = 2; double longest = 0, area = 0;
+	const auto a = samples[0].point;
+	for (int i = 1; i < samples.size(); ++i) {
+		const auto e = sub(samples[i].point,a); const double length = dot(e,e);
+		if (length > longest) { longest = length; b = i; }
 	}
+	const auto e = sub(samples[b].point,a);
+	for (int i = 1; i < samples.size(); ++i) {
+		const auto n = cross(e,sub(samples[i].point,a)); const double value = dot(n,n);
+		if (value > area) { area = value; c = i; }
+	}
+	LevelTextureProjection locked;
+	if (area < 1e-16 || !solve(0,b,c,&locked)) { return fail(error,QT_TRANSLATE_NOOP("LevelBrush","The deformed face is too narrow for stable UV lock.")); }
+	QVector<int> anchors{0,b,c};
+	const bool exact = std::all_of(samples.cbegin(),samples.cend(),[&locked](const auto& sample) {
+		const auto uv = locked.at(sample.point);
+		return std::abs(uv.x()-sample.uv.x()) <= 1e-5+1e-9*std::abs(sample.uv.x())
+			&& std::abs(uv.y()-sample.uv.y()) <= 1e-5+1e-9*std::abs(sample.uv.y());
+	});
+	if (!exact) {
+		if (!uv.fit) {
+			return fail(error,QT_TRANSLATE_NOOP("LevelBrush","This deformation cannot keep every corner's UV coordinates in one planar projection. Disable component UV lock or use a different transform."));
+		}
+		anchors = fittedUvCorners(samples);
+		if (anchors.size() != 3 || !solve(anchors[0],anchors[1],anchors[2],&locked)) {
+			return fail(error,QT_TRANSLATE_NOOP("LevelBrush","The deformed face is too narrow for stable UV lock."));
+		}
+		*fitted = true;
+	}
+	QString problem;
+	if (!setLevelTextureProjection(target,locked,uv.allowValve220,&problem)) {
+		if (!uv.fit || target->explicitTextureAxes || target->explicitTextureMatrix) {
+			if (error) { *error = problem; }
+			return false;
+		}
+		QVector<QPair<LevelMapVec3,QPointF>> pins;
+		for (int index : std::as_const(anchors)) { pins.append({samples[index].point,samples[index].uv}); }
+		const auto nearest = nearestClassicLevelTextureProjection(*target,locked,pins);
+		if (!nearest.valid || !setLevelTextureProjection(target,nearest,false,nullptr)) {
+			if (error) { *error = problem; }
+			return false;
+		}
+		*fitted = true;
+	}
+	target->textureParametersDirty = true;
+	return true;
+}
+
+// Rebuild all topology edits through the same validation and face inheritance.
+// sourceIndices maps each original vertex to its candidate point, or -1 when
+// explicitly removed. New points have no source vertex. This implementation
+// is original; insertion/removal behaviour follows TrenchBroom's vertex tool
+// (2026.2 manual). See docs/CREDITS.md, Brush topology authoring.
+bool rebuildBrush(LevelMapBrush *brush, const LevelBrushTopology &before, const QVector<LevelMapVec3> &points,
+				  const QVector<int> &sourceIndices, int firstInserted, bool allowCollapse,
+				  LevelBrushEditReport result, LevelBrushEditReport *report, QString *error, const UvLockPolicy &uv = {})
+{
 	QVector<Triangle> planes;
 	if (!hull(points, &planes, error)) {
 		return false;
@@ -362,7 +478,7 @@ bool moveLevelBrushComponents(LevelMapBrush *brush, LevelBrushComponent kind, co
 		for (int f = 0; f < before.faces.size(); ++f) {
 			int shared = 0;
 			for (int v : before.faces[f]) {
-				if (std::abs(planeDistanceToPoint(plane.plane, points[v])) < 0.001) {
+				if (sourceIndices[v] >= 0 && std::abs(planeDistanceToPoint(plane.plane, points[sourceIndices[v]])) < 0.001) {
 					++shared;
 				}
 			}
@@ -382,6 +498,9 @@ bool moveLevelBrushComponents(LevelMapBrush *brush, LevelBrushComponent kind, co
 			face.planeNormal = {plane.plane.normalX, plane.plane.normalY, plane.plane.normalZ, true};
 			face.planeDistance = -plane.plane.distance;
 		}
+		bool fitted = false;
+		if (uv.enabled && !lockComponentFace(brush->faces[donor],&face,before,points,sourceIndices,plane.plane,uv,&fitted,error)) { return false; }
+		result.fittedFaces += fitted ? 1 : 0;
 		candidate.faces << face;
 	}
 	// Keep inherited source faces adjacent and ordering deterministic.
@@ -393,6 +512,14 @@ bool moveLevelBrushComponents(LevelMapBrush *brush, LevelBrushComponent kind, co
 	for (const auto &p : points) {
 		if (std::none_of(after.vertices.cbegin(), after.vertices.cend(), [&](const auto &v) { return close(p, v); })) {
 			++result.collapsedVertices;
+		}
+	}
+	// Every inserted point must become a real corner. A redundant point on
+	// an existing edge/face would disappear when saved as supporting planes.
+	for (int i = firstInserted; i >= 0 && i < points.size(); ++i) {
+		if (std::none_of(after.vertices.cbegin(), after.vertices.cend(), [&](const auto &v) { return close(points[i], v); })) {
+			return fail(error, QT_TRANSLATE_NOOP("LevelBrush", "An inserted vertex must become a distinct corner of the convex brush. "
+															   "Move it outside the existing face or edge."));
 		}
 	}
 	// Distinct source vertices may coalesce onto one surviving corner.
@@ -429,13 +556,191 @@ bool moveLevelBrushComponents(LevelMapBrush *brush, LevelBrushComponent kind, co
 	}
 	return true;
 }
+} // namespace
 
-bool moveLevelMapComponents(LevelMapDocument *document, const QVector<LevelMapComponentSet> &sets, const LevelMapVec3 &delta, bool allowCollapse,
+bool moveLevelBrushComponents(LevelMapBrush *brush, LevelBrushComponent kind, const QVector<int> &components, const LevelMapVec3 &delta,
+							  double grid, bool allowCollapse, LevelBrushEditReport *report, QString *error)
+{
+	if (!finite(delta)) { return fail(error,QT_TRANSLATE_NOOP("LevelBrush","Use finite movement within ±32768 units.")); }
+	LevelTextureAffine matrix; matrix.translation = delta;
+	return transformLevelBrushComponents(brush,kind,components,matrix,grid,allowCollapse,false,false,report,error);
+}
+
+bool transformLevelBrushComponents(LevelMapBrush *brush, LevelBrushComponent kind, const QVector<int> &components,
+	const LevelTextureAffine& matrix, double grid, bool allowCollapse, bool textureLock, bool allowValve220,
+	LevelBrushEditReport* report, QString* error, bool fitUvLock)
+{
+	if (error) {
+		error->clear();
+	}
+	if (report) {
+		*report = {};
+	}
+	const auto validVector = [](const auto& p) { return p.valid && std::isfinite(p.x) && std::isfinite(p.y) && std::isfinite(p.z); };
+	if (!brush || !validVector(matrix.translation) || !std::all_of(matrix.columns.cbegin(),matrix.columns.cend(),validVector) ||
+		!std::isfinite(grid) || grid < 0 || grid > coordinateLimit) {
+		return fail(error, QT_TRANSLATE_NOOP("LevelBrush", "Use a finite component transform and a grid from 0 to 32768."));
+	}
+	LevelBrushTopology before;
+	if (!levelBrushTopology(*brush, &before, error)) {
+		return false;
+	}
+	const auto selected = levelBrushComponentVertices(before, kind, components);
+	if (selected.isEmpty()) {
+		return fail(error, QT_TRANSLATE_NOOP("LevelBrush", "Select existing brush components to move."));
+	}
+	auto points = before.vertices;
+	bool changed = false;
+	for (int i : selected) {
+		points[i] = transformedLevelComponentPoint(points[i],matrix,grid);
+		if (!finite(points[i])) {
+			return fail(error, QT_TRANSLATE_NOOP("LevelBrush", "The moved vertex would lie outside ±32768 units."));
+		}
+		const auto difference = sub(points[i], before.vertices[i]);
+		changed |= dot(difference, difference) > 1e-14;
+	}
+	LevelBrushEditReport result;
+	result.verticesBefore = result.verticesAfter = static_cast<int>(points.size());
+	result.facesBefore = result.facesAfter = static_cast<int>(brush->faces.size());
+	if (!changed) {
+		if (report) {
+			*report = result;
+		}
+		return true;
+	}
+	QVector<int> sourceIndices(before.vertices.size());
+	std::iota(sourceIndices.begin(), sourceIndices.end(), 0);
+	return rebuildBrush(brush, before, points, sourceIndices, -1, allowCollapse, result, report, error, {textureLock, fitUvLock, allowValve220});
+}
+
+bool removeLevelBrushComponents(LevelMapBrush *brush, LevelBrushComponent kind, const QVector<int> &components,
+								LevelBrushEditReport *report, QString *error)
+{
+	if (error) {
+		error->clear();
+	}
+	if (report) {
+		*report = {};
+	}
+	if (!brush) {
+		return fail(error, QT_TRANSLATE_NOOP("LevelBrush", "Choose a brush to edit."));
+	}
+	LevelBrushTopology before;
+	if (!levelBrushTopology(*brush, &before, error)) {
+		return false;
+	}
+	const auto selected = levelBrushComponentVertices(before, kind, components);
+	if (selected.isEmpty()) {
+		return fail(error, QT_TRANSLATE_NOOP("LevelBrush", "Select existing brush components to remove."));
+	}
+	QVector<LevelMapVec3> points;
+	QVector<int> sourceIndices(before.vertices.size(), -1);
+	for (int i = 0; i < before.vertices.size(); ++i) {
+		if (!selected.contains(i)) {
+			sourceIndices[i] = static_cast<int>(points.size());
+			points << before.vertices[i];
+		}
+	}
+	LevelBrushEditReport result;
+	result.verticesBefore = static_cast<int>(before.vertices.size());
+	result.facesBefore = static_cast<int>(brush->faces.size());
+	result.removedVertices = static_cast<int>(selected.size());
+	return rebuildBrush(brush, before, points, sourceIndices, -1, false, result, report, error);
+}
+
+bool insertLevelBrushVertices(LevelMapBrush *brush, const QVector<LevelMapVec3> &positions, double grid,
+							  bool allowCollapse, LevelBrushEditReport *report, QString *error)
+{
+	if (error) {
+		error->clear();
+	}
+	if (report) {
+		*report = {};
+	}
+	if (!brush || !std::isfinite(grid) || grid < 0 || grid > coordinateLimit
+		|| positions.isEmpty() || positions.size() > kLevelBrushComponentMaxVertices) {
+		return fail(error, QT_TRANSLATE_NOOP("LevelBrush", "Choose 1 to 256 new vertices and a finite grid from 0 to 32768."));
+	}
+	LevelBrushTopology before;
+	if (!levelBrushTopology(*brush, &before, error)) {
+		return false;
+	}
+	if (before.vertices.size() + positions.size() > kLevelBrushComponentMaxVertices) {
+		return fail(error, QT_TRANSLATE_NOOP("LevelBrush", "The insertion exceeds the component editor's 256-vertex limit."));
+	}
+	QVector<LevelMapVec3> points = before.vertices;
+	for (const auto &position : positions) {
+		if (!finite(position)) {
+			return fail(error, QT_TRANSLATE_NOOP("LevelBrush", "New vertices must be finite and within ±32768 units."));
+		}
+		const auto snapped = snapLevelMapPosition(position, grid);
+		if (!finite(snapped)) {
+			return fail(error, QT_TRANSLATE_NOOP("LevelBrush", "The snapped vertex would lie outside ±32768 units."));
+		}
+		if (std::any_of(points.cbegin(), points.cend(), [&](const auto &p) { return close(p, snapped); })) {
+			return fail(error, QT_TRANSLATE_NOOP("LevelBrush", "A new vertex coincides with an existing or another new vertex."));
+		}
+		points << snapped;
+	}
+	QVector<int> sourceIndices(before.vertices.size());
+	std::iota(sourceIndices.begin(), sourceIndices.end(), 0);
+	LevelBrushEditReport result;
+	result.verticesBefore = static_cast<int>(before.vertices.size());
+	result.facesBefore = static_cast<int>(brush->faces.size());
+	result.insertedVertices = static_cast<int>(positions.size());
+	return rebuildBrush(brush, before, points, sourceIndices, result.verticesBefore, allowCollapse, result, report, error);
+}
+
+bool splitLevelBrushComponents(LevelMapBrush *brush, LevelBrushComponent kind, const QVector<int> &components,
+	const LevelMapVec3 &delta, double grid, bool allowCollapse, LevelBrushEditReport *report, QString *error)
+{
+	if (error) { error->clear(); }
+	if (report) { *report = {}; }
+	if (!brush || !finite(delta) || !std::isfinite(grid) || grid < 0 || grid > coordinateLimit
+		|| (kind != LevelBrushComponent::Edge && kind != LevelBrushComponent::Face) || components.isEmpty()) {
+		return fail(error, QT_TRANSLATE_NOOP("LevelBrush", "Choose edges or faces to split, a finite movement and a grid from 0 to 32768."));
+	}
+	LevelBrushTopology topology;
+	if (!levelBrushTopology(*brush, &topology, error)) { return false; }
+	const auto count = kind == LevelBrushComponent::Edge ? topology.edges.size() : topology.faces.size();
+	QSet<int> seen;
+	QVector<LevelMapVec3> positions;
+	for (int id : components) {
+		if (id < 0 || id >= count || seen.contains(id)) {
+			return fail(error, QT_TRANSLATE_NOOP("LevelBrush", "A component to split is missing or named twice."));
+		}
+		seen.insert(id);
+		const auto vertices = levelBrushComponentVertices(topology, kind, {id});
+		LevelMapVec3 center{0, 0, 0, true};
+		for (int index : vertices) {
+			center.x += topology.vertices[index].x;
+			center.y += topology.vertices[index].y;
+			center.z += topology.vertices[index].z;
+		}
+		const double size = static_cast<double>(vertices.size());
+		positions << LevelMapVec3{center.x / size + delta.x, center.y / size + delta.y, center.z / size + delta.z, true};
+	}
+	if (grid == 0 && delta.x == 0 && delta.y == 0 && delta.z == 0) {
+		if (report) {
+			report->verticesBefore = report->verticesAfter = static_cast<int>(topology.vertices.size());
+			report->facesBefore = report->facesAfter = static_cast<int>(brush->faces.size());
+		}
+		return true;
+	}
+	return insertLevelBrushVertices(brush, positions, grid, allowCollapse, report, error);
+}
+
+namespace
+{
+enum class ComponentEdit { Remove, Split };
+bool editMapComponents(LevelMapDocument *document, const QVector<LevelMapComponentSet> &sets, const LevelMapVec3 &delta, bool allowCollapse, ComponentEdit operation,
 							LevelMapComponentReport *report, QString *error)
 {
+	if (report) { *report = {}; }
+	if (error) { error->clear(); }
 	LevelMapComponentReport staged;
 	if (const auto guarded = guardLevelSceneEdit(document, error, [&](LevelMapDocument *candidate) {
-			return moveLevelMapComponents(candidate, sets, delta, allowCollapse, report ? &staged : nullptr, error);
+			return editMapComponents(candidate, sets, delta, allowCollapse, operation, report ? &staged : nullptr, error);
 		});
 		guarded.has_value()) {
 		if (*guarded && report) {
@@ -443,34 +748,30 @@ bool moveLevelMapComponents(LevelMapDocument *document, const QVector<LevelMapCo
 		}
 		return *guarded;
 	}
-	if (error) {
-		error->clear();
-	}
-	if (report) {
-		*report = {};
-	}
 	if (!document || (document->format != LevelMapFormat::QuakeMap && document->format != LevelMapFormat::Quake3Map)) {
 		return fail(error, QT_TRANSLATE_NOOP("LevelBrush", "Open a Quake-family map to edit brush and patch components."));
 	}
 	if (sets.isEmpty() || sets.size() > 256 || !finite(delta)) {
 		return fail(error, QT_TRANSLATE_NOOP("LevelBrush", "Choose components of 1 to 256 brushes and patches, and a finite movement."));
 	}
-	LevelMapDocument working = *document;
-	const quint64 revision = working.revision;
 	LevelMapComponentReport result;
-	QMap<int, LevelMapPatch> patches;
+	QMap<int, LevelMapBrush> brushes;
 	QSet<int> seenBrushes;
 	for (const auto &set : sets) {
+		detail::placementCancellationCheckpoint();
+		if (operation == ComponentEdit::Remove) { detail::placementCheckpoint(LevelPlacementPhase::Deleting, seenBrushes.size(), sets.size()); }
 		if (set.object.kind == LevelMapSelectionKind::QuakeBrush) {
-			const auto found = std::find_if(working.brushes.cbegin(), working.brushes.cend(), [&set](const auto &b) { return b.id == set.object.objectId; });
-			if (found == working.brushes.cend() || seenBrushes.contains(set.object.objectId)) {
+			const auto found = std::find_if(document->brushes.cbegin(), document->brushes.cend(), [&set](const auto &b) { return b.id == set.object.objectId; });
+			if (found == document->brushes.cend() || seenBrushes.contains(set.object.objectId)) {
 				return fail(error, QT_TRANSLATE_NOOP("LevelBrush", "A brush to edit is missing or named twice."));
 			}
 			seenBrushes.insert(set.object.objectId);
 			LevelMapBrush moved = *found;
 			LevelBrushEditReport edit;
 			QString problem;
-			if (!moveLevelBrushComponents(&moved, set.kind, set.components, delta, 0, allowCollapse, &edit, &problem)) {
+			const bool edited = operation == ComponentEdit::Split ? splitLevelBrushComponents(&moved, set.kind, set.components, delta, 0, allowCollapse, &edit, &problem)
+				: removeLevelBrushComponents(&moved, set.kind, set.components, &edit, &problem);
+			if (!edited) {
 				if (error) {
 					*error = QCoreApplication::translate("LevelBrush", "Brush %1: %2").arg(set.object.objectId).arg(problem);
 				}
@@ -479,54 +780,50 @@ bool moveLevelMapComponents(LevelMapDocument *document, const QVector<LevelMapCo
 			if (!edit.changed) {
 				continue;
 			}
-			if (!replaceLevelMapBrushGeometry(&working, set.object.objectId, moved, &problem)) {
-				if (error) {
-					*error = QCoreApplication::translate("LevelBrush", "Brush %1: %2").arg(set.object.objectId).arg(problem);
-				}
-				return false;
-			}
+			brushes.insert(set.object.objectId,moved);
 			++result.brushes;
 			result.collapsedVertices += edit.collapsedVertices;
+			result.removedVertices += edit.removedVertices;
+			result.insertedVertices += edit.insertedVertices;
 		} else if (set.object.kind == LevelMapSelectionKind::QuakePatch) {
-			const auto found = std::find_if(working.patches.cbegin(), working.patches.cend(), [&set](const auto &p) { return p.id == set.object.objectId; });
-			if (found == working.patches.cend() || patches.contains(set.object.objectId)) {
-				return fail(error, QT_TRANSLATE_NOOP("LevelBrush", "A patch to edit is missing or named twice."));
+			if (operation == ComponentEdit::Split) {
+				return fail(error, QT_TRANSLATE_NOOP("LevelBrush", "Split brush edges or faces; use the patch matrix tools to insert control points."));
 			}
-			LevelMapPatch moved = *found;
-			QString problem;
-			if (!moveLevelPatchPoints(&moved, set.components, delta, 0, &problem)) {
-				if (error) {
-					*error = QCoreApplication::translate("LevelBrush", "Patch %1: %2").arg(set.object.objectId).arg(problem);
-				}
-				return false;
-			}
-			patches.insert(set.object.objectId, moved);
+			return fail(error, QT_TRANSLATE_NOOP("LevelBrush", "Remove patch rows or columns with the patch matrix tools; individual control points cannot be removed."));
 		} else {
 			return fail(error, QT_TRANSLATE_NOOP("LevelBrush", "Only brushes and patches have components to move."));
 		}
 	}
-	if (!patches.isEmpty()) {
-		const quint64 before = working.revision;
-		if (!replaceLevelMapPatches(&working, patches, error)) {
-			return false;
-		}
-		result.patches = working.revision != before ? static_cast<int>(patches.size()) : 0;
-	}
-	const int steps = static_cast<int>(working.revision - revision);
-	if (steps == 0) {
-		return true;
-	}
-	if (steps > 1
-		&& !collapseLevelMapUndoSteps(&working, steps,
-			QCoreApplication::translate("LevelBrush", "Move components of %n object(s)", nullptr, result.brushes + result.patches),
-			QCoreApplication::translate("LevelBrush", "Put the components back"), error)) {
+	if (!replaceLevelMapComponentGeometry(document,brushes,{},
+		operation == ComponentEdit::Split ? QCoreApplication::translate("LevelBrush", "Split components of %n brush(es)", nullptr, result.brushes)
+			: QCoreApplication::translate("LevelBrush", "Remove components of %n brush(es)", nullptr, result.brushes),error)) {
 		return false;
 	}
-	*document = std::move(working);
 	if (report) {
 		*report = result;
 	}
 	return true;
+}
+} // namespace
+
+bool moveLevelMapComponents(LevelMapDocument *document, const QVector<LevelMapComponentSet> &sets, const LevelMapVec3 &delta, bool allowCollapse,
+							LevelMapComponentReport *report, QString *error)
+{
+	if (report) { *report = {}; }
+	LevelComponentTransformRequest request; request.delta = delta; request.allowCollapse = allowCollapse;
+	return transformLevelMapComponents(document,sets,request,report,error);
+}
+
+bool removeLevelMapComponents(LevelMapDocument *document, const QVector<LevelMapComponentSet> &sets,
+							  LevelMapComponentReport *report, QString *error)
+{
+	return editMapComponents(document, sets, {0, 0, 0, true}, false, ComponentEdit::Remove, report, error);
+}
+
+bool splitLevelMapComponents(LevelMapDocument *document, const QVector<LevelMapComponentSet> &sets, const LevelMapVec3 &delta,
+	bool allowCollapse, LevelMapComponentReport *report, QString *error)
+{
+	return editMapComponents(document, sets, delta, allowCollapse, ComponentEdit::Split, report, error);
 }
 
 bool snapLevelMapBrushVertices(LevelMapDocument *document, const QVector<int> &brushIds, double grid, int *snapped, QStringList *skipped,

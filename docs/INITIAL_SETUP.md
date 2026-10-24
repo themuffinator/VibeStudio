@@ -1,5 +1,80 @@
 # Initial Setup Flow
 
+**Rip** and **Rip and Fill** use the active mesh, reference pose, control
+profile, language and accessibility preferences. Find both in **Vertex**,
+**Edge** and command search. The studio and Blender profiles use **V/Alt+V**;
+other profiles retain their existing shortcuts. Side selection follows the
+starting pointer and can be swapped before confirmation. No connector or
+additional setup is needed. **Rip** can be confirmed without moving; editable
+source version 11 preserves the split when positions coincide. Keep that source
+for future editing because game formats generally lack connectivity identities.
+See [Rip](MODEL_RIP.md).
+
+**Spin** and **Spin Duplicates** use the current mesh, 3D cursor, view, editor
+profile, language and accessibility settings. Both are in **Face** and command
+search; ordinary Spin is also in **Edge**. They start with eight steps and
+full-turn closure enabled, use the view axis until constrained, and run
+offline without another setup step or connector. See [Spin](MODEL_SPIN.md).
+
+**Edge Slide** uses the current mesh, frame scope, camera, editor profile,
+language and accessibility settings. Find it in **Edge** or command search;
+its binding can be customised in any profile. It runs offline and adds no
+dependency or source schema. See [edge sliding](MODEL_EDGE_SLIDE.md).
+
+**Transfer Animation Range** works offline with the current rig and existing
+clips, camera, theme and language. Create/resize a destination with **Edit
+Skeletal Animation** when needed. Stored curves or sampled TRS motion can be
+reused without another setup step. Rate matching needs positive rates on both
+clips. Exact reversed steps use source schema 10; no dependency or connector
+is added. See [range transfer](MODEL_ANIMATION_CURVES.md#transfer-or-reverse-a-range).
+
+**Edit Animation Keys** works offline with the current camera, language, theme
+and text scale. Capture curves first, then select keys across existing joint
+channels. GUI review needs a previewable clip; `model curve-keys` also supports
+complete retained clips outside that preview budget. No new setup, dependency,
+cloud connector or source schema is required. See
+[key groups](MODEL_ANIMATION_CURVES.md#edit-groups-of-keys).
+
+**Animation Curves** works offline with the current skeleton, retained clips,
+camera profile, language, theme and text scale. Create a clip with **Edit Skeletal
+Animation** before capturing keys. The GUI requires editable preview frames;
+`model curves` also handles complete retained clips outside that budget. It adds
+no setup option, dependency or AI connector. See [animation curves](MODEL_ANIMATION_CURVES.md).
+
+**Two-Bone Inverse Kinematics** works offline with the current skeleton and
+retained clips, camera profile, language, theme and text scale. A three-joint
+chain and a previewable clip enable the GUI workflow; `model ik` also handles
+retained clips outside the preview budget. No extra setup, dependency or AI
+connector is required. See [inverse kinematics](MODEL_IK.md).
+
+**Transfer Skin Weights** needs no additional setup, connector or dependency.
+It uses the current model's retained bind frame and skeleton, modeller camera
+profile, language, theme, text scale and reduced-motion preferences. Core transfer
+and CLI use work offline. Source/destination and joint maps are explicit per edit;
+no game install or project configuration is silently changed. See
+[weight transfer](MODEL_WEIGHT_TRANSFER.md).
+
+**Paint Skin Weights** uses the current modeller camera profile, language,
+theme and text scale. It works offline, requires no additional setup or AI
+connector, and has a `model weight-paint` CLI equivalent. Bind the target surface
+first; brush radius, falloff, locks and the vertex mask are local review choices.
+
+**Skin Weights and Binding…** and `model skinning` use the current model's
+retained joints and bind frame, existing theme/language/profile settings and
+offline document workers. No account, AI connector or additional setup is needed.
+Add a first joint through **Edit Skeleton** before binding a new static model.
+
+Skeleton authoring requires no connector, account or extra first-run option.
+**Models** > **Mesh Editor** > **Skeleton** > **Edit Skeleton** follows existing
+theme, text scale, language and modeller profiles. Joint/weight operations work
+in AI-free mode and through `model rig`.
+**Edit Skeletal Animation** adds bind transforms, skeletal clips and sampled
+poses through the same settings and worker. `model pose` supplies automation;
+no additional first-run option, account or AI connector is required.
+Joint viewport controls also work offline through existing profiles. Show joints,
+X-ray and descendant scope are session choices in Skeleton; joint selection uses
+the hierarchy or component table. There is no additional setup requirement.
+
 Asset editors open as tabs inside the main studio window by default; no
 first-run option or separate-window preference is required. Existing language,
 text scale, theme and editor profiles apply to these embedded surfaces. Switching
@@ -230,6 +305,13 @@ groups across GUI/CLI authoring and asset placement. Unlock the supplying node
 before editing or moving its members; builds, packages, inspection and copying
 remain available. Lock state travels with the map and supports Undo/Redo.
 
+Group editing requires no new preference or connector. Closed groups select as
+units; **Open Group**, **Close Group** and **Close All Groups** are available in
+command search and **Tools > Groups**, with Open/Close buttons in Scene. Opening
+a group temporarily fixes **Create in** to it; closing restores the previous
+destination. The session context is not saved and adds no undo step. See
+[Edit a group](manual/levels.md#edit-a-group).
+
 Map opening needs no new setting, provider or tool installation. Open/Reload
 shows phase progress and cancellation while the existing document is retained.
 For WADs, marker choices appear after the first successful load; a marker can
@@ -267,7 +349,10 @@ Levels' **Layout** choice starts at **Follow Editor Profile**. Users can choose
 four views or another arrangement without changing familiar gestures and keys.
 The preference and each layout's splitter sizes persist locally; no extra
 dependency or online service is needed. CLI `editor layout` shares this setting.
-See [Four-View Workspace](LEVEL_EDITOR.md#four-view-workspace).
+Three-plan layouts start with the Top, Front and Side panes all shown; **Show
+Top/Front/Side View** and `editor layout --panes` save a smaller set, keeping at
+least one. See [Four-View Workspace](LEVEL_EDITOR.md#four-view-workspace) and
+[Plan Pane Visibility](LEVEL_EDITOR.md#plan-pane-visibility).
 
 Plan centres, plan zoom and camera-follow start independent. Enable each in
 Levels' Layout menu or configure the same defaults with `editor view-links`.
@@ -281,6 +366,12 @@ for material/model preview and dependency review. A package draft is required
 for **Stage Selection as Prefab**. Placement inherits the editor's texture-lock
 preference; it never silently converts brush dialects. Save the map and publish
 required assets before compiling. See [Reusable Prefabs](LEVEL_EDITOR.md#reusable-prefabs).
+
+Complete group hierarchies now travel with duplicate, copy/paste and prefab
+placement without additional setup. Grouped prefabs use version 2; flat version 1
+assets still load. Pasted groups join the current creation context and retain
+their visibility and locks. Linked groups in a prefab turn and move their frames
+with its placement, at any rotation.
 
 Camera entity placement needs no setup or provider. Select a class in **Create**,
 show the camera and choose **Place at Camera Surface** while aiming at geometry.
@@ -793,6 +884,9 @@ choices sit on Settings > Appearance and Language beside it.
   typeface (any installed family) with optional WCAG 1.4.12 text spacing.
   The shell uses the native UI typeface with a 10.5-point body text baseline;
   the text scale applies to this baseline throughout setup and the workbench.
+  At 200% the Mesh Editor fits a 1280x720 page and the modeller's dialogs a
+  1280x720 screen, measured offscreen
+  ([layout record](MODELLER_PROFILES.md#large-text-and-small-screens)).
 - [x] Choose theme: system, dark, light, high-contrast dark, high-contrast
   light.
   System follows the platform colour scheme with Qt 6.5 or later, and the
@@ -806,7 +900,10 @@ choices sit on Settings > Appearance and Language beside it.
   cursor.
 - [x] Choose reduced motion and a steady text cursor.
 - [x] Choose how long status messages stay, screen reader announcements, and
-  taskbar alerts for finished work.
+  taskbar alerts for finished work. Announcements also cover the Mesh
+  Editor's and the modeller dialogs' results and refusals; with speech on,
+  their refusals are read as failures, a long operation's end as a long task
+  that finished, and their other results as status messages.
 - [x] Enable or skip OS-backed TTS, and choose its events, voice, rate, pitch,
   and volume.
 - [x] Test TTS output if enabled: **Say Test Phrase**, or
@@ -1195,14 +1292,17 @@ independent Animation FPS and Smooth preview controls. Save schema-4 sources, Ex
 stage a `.mdl` package path. Automatic placement still requires MD3. These are
 document/session controls, with no new first-run preference or external tool.
 Material images load in the background from the open package and its staged edits, and
-fall back to the checker. Package undo and palette changes refresh them. Cancel,
-Reload Images, and Details expose loading and missing-image diagnostics. No extra
+fall back to the checker. Package undo and palette changes refresh them. In the
+status strip, Cancel and the **Images** menu's Reload Images and Details expose
+loading and missing-image diagnostics. No extra
 connector, renderer, or preference is needed. Animation
 playback follows reduced-motion settings. The shared preview renders on a worker
 and shows when it is updating; model or material changes retire older work.
-It draws with the shared 3D renderer (OpenGL or Vulkan). Keep local recovery copies defaults on and checks
-unsaved mesh changes every five seconds. Its checkbox persists under
-`model/recoveryEnabled`; turning it off retains existing copies. Recover shows
+It draws with the shared 3D renderer (OpenGL or Vulkan). **Model > Keep Local Recovery Copies** defaults on and checks
+unsaved mesh changes every five seconds. The menu check persists under
+`model/recoveryEnabled`; turning it off retains existing copies. **Undo history
+limit** (16–4,096 MiB, 64 by default) persists under `model/historyBudgetMiB` and
+applies to every open mesh document. Recover shows
 the local folder and restores a verified copy as an unsaved draft. Import,
 editing, saves, and exports run in the background with progress and cancellation
 for longer operations; controls unlock when the operation finishes. No connector
@@ -1428,6 +1528,330 @@ as unavailable instances and block dependency export. To place an animated pose,
 bake it as a static MD3 through Assemblies; the pinned compiler reads frame zero.
 No cloud service, new preference or first-run step is required. See
 [Placed Model Appearances](LEVEL_MODEL_APPEARANCE.md).
+
+## Brush topology tools
+
+Brush corner insertion, edge/face splitting and component removal need no additional setup,
+connector or compiler. They use the current level grid and accessibility
+preferences. Open **Edit Brush Components…** for numeric insertion and local
+undo, or pick components in the plan views or camera to remove or split them through Geometry.
+**Split Edge/Face** starts off, applies to the current editing session and
+returns to vertex editing after a successful split. It requires no AI service.
+See [brush corners](manual/levels.md#add-and-remove-brush-corners).
+
+**Extrude Faces** and **Split Extrusion** also start off and last for the
+current session. They use the current grid and **Texture Lock** preference;
+**Extrude Faces Precisely…** provides exact signed distance entry. No new
+preference, connector, compiler or setup step is required. See
+[face extrusion](manual/levels.md#extrude-brush-faces).
+
+**Sweep Faces…** needs no additional setup or connector. Pick brush faces, then
+set a destination in its local numeric preview. It starts with eight segments,
+one iteration, whole-unit alignment and the current material. Its settings
+last for that dialog; source objects remain until a later explicit edit.
+Package material previews use the existing resolver. See
+[sweeping faces](manual/levels.md#sweep-selected-faces).
+
+The camera uses the same component tools and grid, including in a single 3D
+layout. X-ray component handles start off and can be toggled for the current
+session. Geometry checking runs locally in a bounded worker; no connector,
+download, compiler or additional setup is required. See
+[camera components](manual/levels.md#move-components-in-the-camera).
+
+The shared clipper needs no additional setup. Plan and camera points use the
+current grid; numeric XYZ editing is available through **Clip Selection…**.
+Drafts and geometry checking stay local. By default, the selected keep side
+lasts for the session and points clear after applying. **Clipper Options…**
+saves the material policy, custom/caulk name, independent point/side resets,
+two-point plan entry, double-click action and optional wrap/merge fallback under
+`levels/clipper`. Wrap/merge is off by default across profiles. When enabled,
+new hull faces use the current material even with a custom cut/caulk material;
+**Clip Selection… > One point (wrap/merge)** supplies numeric entry.
+Standalone **Wrap/Merge** and **Wrap/Merge with Points…** need no extra setup,
+connector or enabled fallback preference. The NRC profile assigns Ctrl+U;
+other profiles expose the same commands for custom key binding. Component mode
+keeps source brushes/patches and adds a hull with the current material. The
+numeric preview can change that material and uses available package/staging
+assets through the existing resolver. Core authoring remains complete offline.
+`editor clipper` reads and updates the same settings; CLI changes take effect
+when the studio next loads its settings. Quick clip uses Ctrl+left-click in
+the NRC profile, with `plan.quickClipModifiers` for remapping or disabling it.
+Existing custom selection bindings retain priority. See
+[clipping](manual/levels.md#clip-brushes-across-views).
+
+The NRC profile also enables `camera.clipViewAxis`: two camera points choose a
+view-dependent plane and correct parallel segments or outer-face-only planes.
+It requires no connector, package or additional setup. **Customize Gestures… >
+3D Camera** and `editor gestures` can override it; the other profiles keep their
+previous defaults. Policy changes cancel an active point drag, while established
+three-point planes remain intact. Geometry checking, persistence and undo remain
+local and available in AI-free mode.
+
+NRC also defaults `camera.clipDragStyle` to `world`: hold Shift or Alt after
+pressing a clip point for axis/vertical movement, with Ctrl returning to brush
+surfaces. The same per-profile form and `editor gestures` support axial `view`
+movement or `surface` to disable modified movement. Other profiles retain
+surface-only defaults. This setting needs no new setup page or external service.
+
+**Transform Components…** is available locally with no connector or extra setup.
+**Lock Component UVs** is a separate persistent setting (`levels/componentUvLock`),
+off by default; it does not change object **Texture Lock**. The transform dialog
+can override UV lock and explicitly permit map-wide Valve 220 conversion for one
+operation. It uses the existing placement worker, undo, save and compiler/package
+handoff. See [component transforms](manual/levels.md#transform-picked-components).
+
+Direct component manipulators need no additional setup. **Component Manipulator
+Options…** stores `levels/componentAngleStep` (15°), `levels/componentScaleStep`
+(0.125) and `levels/componentShearStep` (0.125). Zero disables that step. These
+preferences are local and independent of the map grid. The shared custom pivot
+is temporary editing state, cleared on map load or leaving component mode.
+First save and Save As retain component mode and picks, but cancel pending drafts.
+
+**Set Entity Colour…** needs no setup either. It remembers the colour it last
+wrote, or the last result of **Normalise Entity Colour**, in `levels/entityColour`
+("r g b" fractions, white until one is chosen) and opens on it when the entity
+picked last has no `_color` yet, as NetRadiant Custom does.
+
+Component selection reuses the profile's toggle key and provides additive and
+subtractive alternatives while a component mode is active. The TrenchBroom
+profile starts with plain-lasso toggling; other profiles retain replacement.
+**Customize Editor Gestures…** stores `plan.componentBandToggles` and
+`camera.componentBandToggles` through the existing per-profile preferences and
+portable gesture import/export. Reset restores the selected profile's defaults.
+No new setup step, connector or compiler is required.
+
+Component mode conversion and **Component Selection** commands are available
+in every interaction profile without setup. They operate on temporary editing
+state; maps and geometry history change only when an edit is committed. The
+read-only CLI query `map select-components` works in AI-free and headless use.
+
+Component cycling defaults to Alt+wheel in both plan and camera views, with
+Tab/Shift+Tab and named commands as keyboard alternatives. Per-profile
+`plan.componentCycleWheelModifiers` and `camera.componentCycleWheelModifiers`
+use the same GUI, CLI and portable gesture persistence. `none` disables wheel
+cycling. An existing custom FOV wheel chord takes priority on migration and
+disables a conflicting newly introduced camera cycle chord. Explicit conflicts
+are rejected. No new first-run step is required.
+
+Direct vertex insertion uses the existing component tools and grid preferences.
+The TB profile defaults `plan.componentInsertModifiers` and
+`camera.componentInsertModifiers` to `shift`; other profiles default to `none`.
+Both are editable through gesture preferences, portable import/export and
+`editor gestures`. `none` disables the chord while retaining **Insert Vertex**
+in Geometry/command search. Existing vertex selection takes priority over the
+insertion chord. No extra first-run page or cloud connection is required.
+
+The TB profile also defaults `plan.componentAxisDrag` and
+`camera.componentAxisDrag` to `on`. These two gesture preferences independently
+select world-axis dragging with live constraints and snapping, including vertex
+insertion. Reset restores the profile default; existing profiles keep their
+previous movement policy. The portable profile and CLI use the same settings.
+
+`plan.componentQuickSnapModifiers` and `camera.componentQuickSnapModifiers`
+default to `shift+alt` in TB and `none` elsewhere. The gesture editor, portable
+profiles and CLI customise both independently of movement policy. Older custom
+selection chords take priority over the inherited quick-snap default; explicit
+conflicts are refused. **Snap Picked Vertex…** remains a keyboard alternative
+in every profile. No new setup page or dependency is required.
+
+**Sweep Tool** uses the current grid and component rotation step, with **Y** as
+its TrenchBroom-profile shortcut. Its local **Create Sweep**, **Decrease Sweep
+Scale** and **Increase Sweep Scale** defaults are Enter, `[` and `]` while a
+map view has focus. User shortcut overrides replace those local defaults,
+including explicit unbinding. Changing the profile or shortcuts closes an open
+sweep draft; the normal stale-context guard protects the map. The numeric sweep
+dialog and CLI remain available in every profile without AI or new setup steps.
+
+Protected entity properties use the current map, project and editor profile.
+**Add Protected Property…**, **Clear Protected Properties** and the inspector's
+**Protected** column are available without extra setup, AI or cloud services.
+The commands have no new default shortcut and remain discoverable through
+command search and **Tools > Groups**. Their dialogue inherits text scaling,
+theme and layout direction. Existing linked maps need **Update Linked Groups**
+to establish correspondence before protecting properties; the original map is
+preserved if that validation fails.
+
+**Extract Linked Groups** uses the existing map, group context and editor profile.
+It needs no additional setup, AI connector or default shortcut. Open a linked
+group and select a proper subset, then use **Tools > Groups** or command search.
+The cancellable progress surface inherits the current theme, text scaling and
+layout direction. Legacy link sets need correspondence established by **Update
+Linked Groups** first. The CLI offers the same extraction service and normal
+output safeguards for automation.
+
+**Create Linked Duplicate**, **Select Linked Groups**, **Update Linked Groups** and
+**Separate Linked Groups** need no setup, AI connector or cloud service. The
+TrenchBroom profile binds **Create Linked Duplicate** to Ctrl+Shift+D, as
+TrenchBroom does; every profile reaches the commands through command search and
+**Tools > Groups**, and the Outliner's **Scene** section has buttons for them.
+Linked groups out of sync are shown by text and line style as well as colour.
+
+**Repeat Last Commands**, **Clear Repeatable Commands** and **Copy Repeat Recipe**
+need no extra setup or AI connector. The TB profile assigns Ctrl+R and
+Ctrl+Shift+R to repeat and clear. Ctrl+B selects siblings; Ctrl+Alt+B runs the compiler. Other profiles
+leave these commands unassigned; saved user shortcuts still take precedence.
+Repeat uses the current Texture Lock and Valve 220 conversion preferences. Its
+recorded sequence belongs to the current document session and survives Save As,
+but is cleared when a map is reopened. The CLI uses a project-local JSON recipe.
+
+Clipboard placement needs no extra setup or AI connector. **Paste Map Content**
+uses cursor placement for the TB profile and original coordinates elsewhere.
+Explicit original/cursor/camera commands remain in every profile. TB adds
+Ctrl+Alt+V for original position; NRC adds Shift+V for camera placement. Existing
+shortcut overrides take precedence. Loaded entity definitions supply point
+bounds; unknown classes use the normal 16-unit marker. Placement uses the current
+grid, Texture Lock and scene destination. See [Clipboard placement](LEVEL_PASTE.md).
+
+
+Face clipboard dispatch also needs no setup. TB **Copy Map Selection** copies
+picked faces, otherwise objects. Other profiles expose **Copy Surface** for face
+text. All profiles recognise it during normal paste and retain target contents.
+Sampling remains session-local. See [Face clipboard](LEVEL_PASTE.md#face-clipboard).
+
+Object copy/cut needs no additional setup. Copy retains selected brush-entity
+children's ownership and asset paths. Cut is disabled while component/clipper
+tools are active and uses cancellable background preparation. CLI object export
+uses explicit files rather than the desktop clipboard. See
+[Copy and cut objects](LEVEL_PASTE.md#copy-and-cut-objects).
+
+
+**Select by Region** requires no extra setup. Profile choice changes its source
+removal behaviour: TB Inside/Touching/Tall consume selected brushes; NRC Inside
+consumes all selected objects and Touching retains them. Other profiles retain
+geometry. Tooltips and the profile controls reference expose this choice.
+Loaded entity definitions supply point-entity bounds. See
+[Select by brush volume](manual/levels.md#select-by-brush-volume).
+
+The TrenchBroom level profile includes object picks and group opening/closing in
+Undo/Redo. They leave the map's saved contents unchanged. NRC and default profiles
+keep these actions outside history. The Controls reference lists this policy;
+choosing a different profile retains existing map edits and history. Face and
+component selection history is still Partial.
+
+Hierarchy/source-line selection needs no additional setup or AI service.
+The TB profile binds Select Siblings to Ctrl+B; compiler execution moves to
+Ctrl+Alt+B. Existing user shortcut overrides win. Source-line selection uses the
+text at last open, with input validation and the same group/filter restrictions
+in GUI and CLI. Saving and reopening refreshes source positions.
+
+Temporary visibility needs no additional setup. TB records Hide, Show All,
+Isolate and object-list reveal in non-content undo; NRC and default controls
+keep them outside history. The current profile and user bindings appear in
+context menus. Reopening a map clears temporary hiding; saved Scene visibility
+and view filters have separate controls. TB targets closed groups as containers;
+NRC/default target current members. Explicitly revealed children keep their
+siblings hidden. New authoring in a temporarily hidden destination is revealed
+in every profile. See [temporary visibility](manual/levels.md#temporary-visibility).
+
+The Inspector's Transform fields adapt automatically to sidebar width, text scale,
+theme and reading direction. Narrow panels stack the axis fields; wide panels use
+a compact matrix. No additional preference is needed. Resizing retains pending
+numeric edits and focus, with Centre X/Y/Z followed by Size X/Y/Z in tab order.
+Sidebars retain a horizontal scroll fallback when a native control cannot fit
+the chosen pane width; this also applies to shared sidebars in other studio modules.
+
+Temporary visibility follows layer transfers and duplication without additional
+setup. Moving to another layer resets shown exceptions. TB and default
+duplicate/array creation preserve explicit attributes and reveal inserted roots;
+NRC creates fresh inherited states for both new objects and copies. The selected
+editor profile supplies this policy when opening, creating or recovering a map.
+Changing profiles preserves existing visibility and undo history and invalidates
+pending placement. No separate setup control is required. See
+[temporary visibility](manual/levels.md#temporary-visibility).
+
+### Duplicate placement preferences
+
+The selected level profile supplies duplicate placement immediately: TB and NRC
+start copies in place; VibeStudio Default retains its grid nudge. After setup,
+**Customize Gestures…** > **Editing** changes the nudge per profile, with the
+existing reset and import/export controls. The setting is local and works in
+AI-free mode. It does not alter project assets, compiler inputs or saved maps
+until a duplicate is committed. NRC requires object mode before duplication is
+enabled. **Shift+Space** invokes **Duplicate, Make Unique**, which copies partial
+entity owners and remaps copied names and target references. The command is also
+available from Edit, the level tools and command search in other profiles.
+
+### Entity connection context
+
+No extra setup or connector is required. The NRC profile assigns Ctrl+K to
+Connect and Shift+K to KillConnect. KillConnect requires the project's game (or
+selected installation, then map inference) to be Quake, Nexuiz or Xonotic.
+Quake II/III and Doom disable it. Choose the correct project game before
+connecting entities; the CLI can state the context explicitly with `--game`.
+
+NRC assigns Ctrl+Shift+E to **Select Connected Entities** immediately after
+profile selection. Other profiles expose the same action through menus, Tools
+and command search, and TB keeps its existing Complete Tall key. No connector,
+cloud service or additional setup choice is needed. The command only changes
+the current selection and follows the selected profile's history policy.
+
+NRC also assigns Shift+A to **Select All of Type**. The current texture-browser
+or material-picker value supplies material fallback and face matching; no
+additional setup control or connector is required. Other profiles can invoke
+the same named command while retaining their existing class-selection keys.
+The action works offline and changes selection only.
+
+Component-face picks also feed surface adjustments, alignment and clipboard
+operations through the existing controls. No new setup option or connector is
+needed. While component mode is active, empty picks and vertex/edge selections
+have no surface-edit targets; leave the tool for whole-object surface editing.
+The active profile retains its ordinary Copy policy. Surface edits use normal
+map undo and saving, so compilation and packaging continue to consume the saved
+map and shared asset paths.
+
+Shell page construction applies the saved stylesheet before the initial row
+layout and preferences refresh, avoiding repeated styling of intermediate page
+trees. Existing theme and text-scale choices remain authoritative; the startup
+optimisation introduces no setup control or external service.
+
+### Edge bevel defaults
+
+[Bevel Edges](MODEL_EDGE_BEVEL.md) needs no connector or extra setup. VibeStudio
+and Blender assign Ctrl+B; vertex bevel keeps Ctrl+Shift+B. All profiles expose
+the named command through the Edge menu and command search. Initial settings are
+one segment, full quadratic roundness, 64 units per texture repeat and a
+40-degree quad pairing limit; the CLI width defaults to 2 model units. Width,
+segments, roundness, tile size and pairing angle can be replayed through F9.
+Topology always covers all retained poses, using the displayed pose for distances.
+
+### Knife defaults
+
+[Knife](MODEL_KNIFE.md) needs no connector or extra setup. VibeStudio and Blender
+assign **K**; all profiles expose **Mesh → Knife** and command search. It starts
+in visible-face mode on the active surface, without a selected-face restriction.
+Angle snapping starts disabled, with a 45° increment when enabled. The current
+view and displayed pose define the path; every retained pose receives the cut.
+F9 replays visibility and selected-face scope. No persistent preference or source
+schema change is introduced.
+
+### Texture density defaults
+
+[Texel Density](MODEL_UV_DENSITY.md) needs no connector or extra setup. Every
+modeller profile exposes the named command in the UV menu. Resolved materials
+supply original image dimensions; missing dimensions start at an explicit
+512 × 512, which users should replace with their intended texture size. The
+displayed pose is the initial reference. Component selections expand to whole
+islands; an empty selection initially chooses every island on the active surface.
+The initial target is 1 pixel per model unit with **Match each island** selected.
+No persistent preference or source schema change is introduced.
+
+### Textured surface selection
+
+**Select Textured** needs no connector or additional setup. NRC assigns
+**Ctrl+Shift+A**; other profiles expose the named command without replacing
+their existing shortcuts. It uses the current Levels material and transient
+independent face picks, with matching patches selected as whole objects.
+No persistent preference or map schema changes are introduced. See
+[the level workflow](manual/levels.md#select-textured-surfaces).
+
+### Level deletion policy
+
+The selected editor profile also controls Delete Selection. NRC uses selected
+objects when component mode has no picks, and preserves patch points during
+mixed component deletion. TB requires component picks and removes the last clip
+point while clipping. These defaults appear in the editor controls reference;
+no connector, extra dependency or map schema change is required. Other profiles
+retain their existing shortcut bindings. See [component editing](manual/levels.md).
 
 ## AI connectors without API keys
 

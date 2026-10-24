@@ -47,8 +47,8 @@ void ApplicationShell::addLevelMapBrushFromUi(const QPointF &viewPoint)
 		statistics.mins.valid && statistics.maxs.valid ? (component(statistics.mins) + component(statistics.maxs)) / 2 : 0;
 	const auto point = viewPoint.x() < 0 ? QPointF(m_levelMapViewport->rect().center()) : viewPoint;
 	const auto center = m_levelMapViewport->worldPositionAt(point, hidden);
-	const int grid = std::max(1, m_levelMapViewport->gridSize());
-	const double size = std::max(64, grid * 2);
+	const double grid = m_levelMapViewport->gridSize();
+	const double size = std::max(64.0, grid * 2);
 	request.mins = {snapLevelMapCoordinate(center.x - size / 2, grid), snapLevelMapCoordinate(center.y - size / 2, grid),
 					snapLevelMapCoordinate(center.z - size / 2, grid), true};
 	request.maxs = {request.mins.x + size, request.mins.y + size, request.mins.z + size, true};

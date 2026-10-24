@@ -3,7 +3,6 @@
 #include <QCryptographicHash>
 #include <QCoreApplication>
 #include <QDir>
-#include <QDirIterator>
 #include <QFile>
 #include <QFileInfo>
 #include <QRegularExpression>
@@ -196,12 +195,28 @@ QString findExecutablePath(const QString& rootPath, const QStringList& executabl
 		}
 	}
 
-	QDirIterator iterator(rootPath, executableNames, QDir::Files, QDirIterator::Subdirectories);
-	while (iterator.hasNext()) {
-		const QFileInfo info(iterator.next());
-		if (info.isFile()) {
-			return info.absoluteFilePath();
+	// Game and source-port executables sit at the installation root or a
+	// folder or two below it (bin/x64, rerelease). Search those levels only,
+	// shallowest first: a folder that merely shares a name hint, such as a
+	// modern multi-gigabyte install in the same Steam library, must not be
+	// walked file by file while the scan runs.
+	constexpr int ExecutableSearchDepth = 2;
+	QStringList folders {root.absolutePath()};
+	for (int depth = 0; depth <= ExecutableSearchDepth && !folders.isEmpty(); ++depth) {
+		QStringList children;
+		for (const QString& folder : folders) {
+			const QDir directory(folder);
+			const QFileInfoList matches = directory.entryInfoList(executableNames, QDir::Files);
+			if (!matches.isEmpty()) {
+				return matches.front().absoluteFilePath();
+			}
+			if (depth < ExecutableSearchDepth) {
+				for (const QFileInfo& child : directory.entryInfoList(QDir::Dirs | QDir::NoDotAndDotDot | QDir::NoSymLinks)) {
+					children.push_back(child.absoluteFilePath());
+				}
+			}
 		}
+		folders = children;
 	}
 	return {};
 }

@@ -1,11 +1,13 @@
 #include "core/level_editor_controls.h"
 
+#include "core/level_map.h"
 #include "core/studio_semantics.h"
 
 #include <QCoreApplication>
 #include <QHash>
 #include <QKeySequence>
 #include <QSet>
+#include <algorithm>
 #include <cmath>
 #include <tuple>
 
@@ -117,6 +119,58 @@ bool CameraFlyKeys::isEmpty() const
 	return all().isEmpty();
 }
 
+// Workflow reference: NRC radiant/grid.cpp GridPower (GRIDPOWER_0125 to
+// GRIDPOWER_1024) at 449778b3 (GPL-2.0-or-later) and TB Grid (MinSize -3,
+// a 0.125-unit grid) at 4c756be1 (GPL-3.0-or-later). Facts only; original
+// implementation, see docs/CREDITS.md.
+const QVector<double>& levelEditorGridSizes()
+{
+	static const QVector<double> sizes{0.125, 0.25, 0.5, 1, 2, 4, 8, 16, 32, 64, 128, 256, 512, 1024};
+	return sizes;
+}
+
+bool levelEditorGridSizeSupported(double units)
+{
+	return std::isfinite(units) && levelEditorGridSizes().contains(units);
+}
+
+double levelEditorFinestGridUnits(const LevelMapDocument& document)
+{
+	// The binary Doom and Hexen lumps write each coordinate as a 16-bit
+	// integer, so a finer grid would place points the save then rounds.
+	const bool wholeUnits = document.format == LevelMapFormat::DoomWad && document.doomFormat != LevelMapDoomFormat::Udmf;
+	return wholeUnits ? 1.0 : kLevelEditorFinestGridUnits;
+}
+
+double levelEditorSteppedGridUnits(double units, int direction, double finest)
+{
+	const QVector<double>& sizes = levelEditorGridSizes();
+	if (!std::isfinite(finest) || finest < sizes.first()) {
+		finest = sizes.first();
+	}
+	if (!std::isfinite(units) || units <= 0.0) {
+		units = std::max(finest, 16.0);
+	}
+	// The next listed size past `units` in the asked direction, so an
+	// unlisted size steps from where it is.
+	if (direction < 0) {
+		const auto finer = std::find_if(sizes.crbegin(), sizes.crend(), [units](double size) { return size < units; });
+		return finer != sizes.crend() && *finer >= finest ? *finer : std::max(units, finest);
+	}
+	const auto coarser = std::find_if(sizes.cbegin(), sizes.cend(), [units](double size) { return size > units; });
+	return coarser != sizes.cend() ? std::max(*coarser, finest) : std::max(units, finest);
+}
+
+QString levelEditorGridSizeText(double units)
+{
+	return QString::number(units, 'g', 6);
+}
+
+QString levelEditorGridCommandId(double units)
+{
+	return QStringLiteral("map.grid%1").arg(levelEditorGridSizeText(units));
+}
+
 LevelEditorControls vibeStudioLevelControls()
 {
 	// The Levels page as it has always behaved: a 2D plan first, a rubber
@@ -126,6 +180,14 @@ LevelEditorControls vibeStudioLevelControls()
 	controls.layout = LevelViewLayout::Single2D;
 	controls.defaultGridUnits = 64;
 	controls.keys = {bind("map.maximizeView", {QStringLiteral("Ctrl+Space")})};
+	// The arrows nudge in the plan views (Shift: eight steps); the orbiting
+	// camera keeps them for turning and panning (core/level_nudge.h).
+	controls.keys += {
+		bind("map.nudgeLeft", {QStringLiteral("Left")}),
+		bind("map.nudgeRight", {QStringLiteral("Right")}),
+		bind("map.nudgeForward", {QStringLiteral("Up")}),
+		bind("map.nudgeBack", {QStringLiteral("Down")}),
+	};
 	// The camera's defaults are this view: Shift or Ctrl with the left
 	// button pans, so 3D clicks only ever replace the selection.
 	return controls;
@@ -139,6 +201,33 @@ LevelEditorControls trenchBroomLevelControls()
 	LevelEditorControls controls;
 	controls.layout = LevelViewLayout::Single3D;
 	controls.defaultGridUnits = 16;
+	controls.pasteAtCursor = true;
+	// TB MapWindow::duplicateSelection copies nodes without displacement.
+	// v2026.2 / 4c756be1 (GPL-3.0-or-later), see docs/CREDITS.md.
+	controls.nudgeAfterDuplicate = false;
+	controls.copyFaceAttributes = true;
+	controls.undoObjectSelection = true;
+	// TB MapWindow::deleteSelection at 4c756be1 (GPL-3.0-or-later).
+	controls.deleteRemovesClipPoint = true;
+	controls.inheritGroupVisibility = true;
+	controls.regionSelection = LevelRegionSelectionPolicy::TrenchBroom;
+	// TB MapViewBase::makeStructural at 4c756be1 (GPL-3.0-or-later) also moves
+	// brushes out of brush entities. Workflow reference; see docs/CREDITS.md.
+	controls.makeStructuralLeavesEntities = true;
+	// TB MapViewBase::rotate turns about grid.referencePoint(selection bounds)
+	// at 4c756be1 (GPL-3.0-or-later). Workflow reference; see docs/CREDITS.md.
+	controls.quickTurnSnapsPivot = true;
+	// TB MapViewBase::flip mirrors about the half-grid reference point at
+	// 4c756be1 (GPL-3.0-or-later). Workflow reference; see docs/CREDITS.md.
+	controls.flipSnapsPivot = true;
+	controls.plan.componentBandToggles = true;
+	controls.camera.componentBandToggles = true;
+	controls.plan.componentInsertModifiers = Qt::ShiftModifier;
+	controls.camera.componentInsertModifiers = Qt::ShiftModifier;
+	controls.plan.componentAxisDrag = true;
+	controls.camera.componentAxisDrag = true;
+	controls.plan.componentQuickSnapModifiers = Qt::AltModifier|Qt::ShiftModifier;
+	controls.camera.componentQuickSnapModifiers = Qt::AltModifier|Qt::ShiftModifier;
 
 	PlanViewControls& plan = controls.plan;
 	plan.panButtons = {Qt::RightButton, Qt::MiddleButton};
@@ -172,24 +261,84 @@ LevelEditorControls trenchBroomLevelControls()
 		bind("map.deleteSelection", {QStringLiteral("Del"), QStringLiteral("Backspace")}),
 		bind("map.selectAll", {QStringLiteral("Ctrl+A")}),
 		bind("map.selectNone", {QStringLiteral("Ctrl+Shift+A")}),
+		bind("map.selectInside", {QStringLiteral("Ctrl+E")}),
+		bind("map.selectSiblings", {QStringLiteral("Ctrl+B")}),
+		bind("map.selectTouching", {QStringLiteral("Ctrl+T")}),
+		bind("map.selectCompleteTall", {QStringLiteral("Ctrl+Shift+E")}),
 		bind("map.invertSelection", {QStringLiteral("Ctrl+Alt+A")}),
 		bind("map.isolateSelection", {QStringLiteral("Ctrl+I")}),
 		bind("map.hideSelection", {QStringLiteral("Ctrl+Alt+I")}),
 		bind("map.showAll", {QStringLiteral("Ctrl+Shift+I")}),
 		bind("map.clipTool", {QStringLiteral("C")}),
+		bind("map.sweepTool", {QStringLiteral("Y")}),
 		bind("map.gridSmaller", {QStringLiteral("-"), QStringLiteral("[")}),
 		bind("map.gridLarger", {QStringLiteral("+"), QStringLiteral("="), QStringLiteral("]")}),
 		bind("map.toggleSnap", {QStringLiteral("Alt+0")}),
 		bind("map.cycleView", {QStringLiteral("Space")}),
 		bind("map.frameSelection", {QStringLiteral("Ctrl+U")}),
+		// TB ActionManager "Controls/Map view/Reset camera zoom" at 4c756be1
+		// (GPL-3.0-or-later). Key facts only; see docs/CREDITS.md.
+		bind("map.resetCameraZoom", {QStringLiteral("Ctrl+Alt+Z")}),
 		bind("map.carve", {QStringLiteral("Ctrl+K")}),
 		bind("map.hollowSelection", {QStringLiteral("Ctrl+Shift+K")}),
+		// TB ActionManager "Controls/Map view/Make structural" at 4c756be1.
+		bind("map.makeStructural", {QStringLiteral("Alt+S")}),
 		bind("map.undo", {QStringLiteral("Ctrl+Z")}),
 		bind("map.redo", {QStringLiteral("Ctrl+Shift+Z"), QStringLiteral("Ctrl+Y")}),
 		// W, D, and X fly the camera here, so the commands that had them give
 		// them up.
 		bind("map.previewWireframe", {}),
 		bind("map.drawSector", {}),
+		// TB ActionManager.cpp at 4c756be1 (GPL-3.0-or-later): the Vertex,
+		// Edge and Face tools, Snap Vertices to Grid and Create Linked
+		// Duplicate. Key facts only; see docs/CREDITS.md. F takes the plan
+		// views' own framing key, which TrenchBroom keeps on Ctrl+U.
+		bind("map.vertexTool", {QStringLiteral("V")}),
+		bind("map.edgeTool", {QStringLiteral("E")}),
+		bind("map.faceTool", {QStringLiteral("F")}),
+		bind("map.snapVertices", {QStringLiteral("Ctrl+Alt+Shift+V")}),
+		bind("map.createLinkedDuplicate", {QStringLiteral("Ctrl+Shift+D")}),
+		// TB ActionManager "Menu/Edit/UV Lock" at 4c756be1 has U; the camera
+		// flies on W, S, A, D, Q and X here, so U stays free.
+		bind("map.componentUvLock", {QStringLiteral("U")}),
+		// TB ActionManager "Controls/Map view/Move objects ..." at 4c756be1
+		// (GPL-3.0-or-later): the arrows move along the view, Page Up and Page
+		// Down along its depth axis, or Z in the camera (core/level_nudge.h).
+		// Key facts only; see docs/CREDITS.md. Doom maps keep Page Up and Page
+		// Down for Raise Floor and Lower Floor, since nudges stay in the plane.
+		bind("map.nudgeLeft", {QStringLiteral("Left")}),
+		bind("map.nudgeRight", {QStringLiteral("Right")}),
+		bind("map.nudgeForward", {QStringLiteral("Up")}),
+		bind("map.nudgeBack", {QStringLiteral("Down")}),
+		bind("map.nudgeDepthUp", {QStringLiteral("PgUp")}),
+		bind("map.nudgeDepthDown", {QStringLiteral("PgDown")}),
+		// TB ActionManager "Controls/Map view/Roll, Yaw and Pitch objects
+		// clockwise/counter-clockwise" and "Flip objects horizontally/
+		// vertically" at 4c756be1 (GPL-3.0-or-later): view-relative quarter
+		// turns and flips (core/level_quick_transform.h). Key facts only; see
+		// docs/CREDITS.md. The views claim them while the command can act, so
+		// Go Back, Go Forward and Find keep them everywhere else.
+		bind("map.rollClockwise", {QStringLiteral("Alt+Up")}),
+		bind("map.rollCounterclockwise", {QStringLiteral("Alt+Down")}),
+		bind("map.rotateRight", {QStringLiteral("Alt+Left")}),
+		bind("map.rotateLeft", {QStringLiteral("Alt+Right")}),
+		bind("map.pitchClockwise", {QStringLiteral("Alt+PgUp")}),
+		bind("map.pitchCounterclockwise", {QStringLiteral("Alt+PgDown")}),
+		bind("map.flipHorizontal", {QStringLiteral("Ctrl+F")}),
+		bind("map.flipVertical", {QStringLiteral("Ctrl+Alt+F")}),
+		// TB ActionManager "Controls/Map view/Duplicate and move objects ..." at
+		// 4c756be1 (GPL-3.0-or-later): Ctrl+arrows copy the selection and move the
+		// copies along the view, Ctrl+Page Up and Down along its depth axis, or Z
+		// in the camera (core/level_nudge.h). Key facts only; see docs/CREDITS.md.
+		// The views claim them while a copy can be made, so Ctrl+arrows still pan
+		// a plan view with nothing selected, and Doom maps keep Ctrl+Page Up and
+		// Down for Raise Ceiling and Lower Ceiling.
+		bind("map.duplicateMoveLeft", {QStringLiteral("Ctrl+Left")}),
+		bind("map.duplicateMoveRight", {QStringLiteral("Ctrl+Right")}),
+		bind("map.duplicateMoveForward", {QStringLiteral("Ctrl+Up")}),
+		bind("map.duplicateMoveBack", {QStringLiteral("Ctrl+Down")}),
+		bind("map.duplicateMoveDepthUp", {QStringLiteral("Ctrl+PgUp")}),
+		bind("map.duplicateMoveDepthDown", {QStringLiteral("Ctrl+PgDown")}),
 	};
 	controls.keys += gridDigitKeys();
 	return controls;
@@ -197,6 +346,7 @@ LevelEditorControls trenchBroomLevelControls()
 
 LevelEditorControls netRadiantCustomLevelControls()
 {
+	// See NRC select.cpp: Inside consumes the selection; Touching adds to it.
 	// NetRadiant Custom's defaults: the camera beside a 2D view, a 16-unit
 	// grid; Shift selects, the right button pans the 2D view and toggles
 	// mouse look in the camera, the middle button aims the camera from the
@@ -204,8 +354,37 @@ LevelEditorControls netRadiantCustomLevelControls()
 	LevelEditorControls controls;
 	controls.layout = LevelViewLayout::CameraAndPlan;
 	controls.defaultGridUnits = 16;
+	controls.regionSelection = LevelRegionSelectionPolicy::Radiant;
+	controls.insertionVisibility = LevelInsertionVisibility::FreshInherited;
+	// NRC select.cpp Selection_Clone / NudgeAfterClone at 449778b3
+	// (GPL-2.0-or-later): primitive mode only; optional nudge defaults off.
+	controls.nudgeAfterDuplicate = false;
+	controls.duplicateRequiresObjectMode = true;
+	// NRC select.cpp deleteSelection / csg.cpp CSG_DeleteComponents at
+	// 449778b3 (GPL-2.0-or-later). Workflow reference; see docs/CREDITS.md.
+	controls.deleteObjectsWithoutComponents = true;
+	controls.deleteIgnoresPatchPoints = true;
+	controls.entityConnectionMode = LevelEntityConnectionMode::RadiantTarget;
+	// NRC radiant/grid.cpp GridPrev, GridNext and setGridPower at 449778b3
+	// (GPL-2.0-or-later) set g_grid_snap before choosing a size; workflow
+	// reference only, see docs/CREDITS.md.
+	controls.gridChangeEnablesSnap = true;
+	// NRC radiant/selection.cpp rotateSelected(snapOrigin) at 449778b3
+	// (GPL-2.0-or-later) snaps the pivot of every quick turn to the snap grid
+	// unless the pivot is custom. Workflow reference; see docs/CREDITS.md.
+	controls.quickTurnSnapsPivot = true;
+	// NRC radiant/surfacedialog.h si_globals_t and select.cpp Texdef_Rotate at
+	// 449778b3 (GPL-2.0-or-later): the Surface Inspector's rotate increment is
+	// 45° and texture turns keep the texture origin. Key facts only; see
+	// docs/CREDITS.md.
+	controls.surfaceRotationStep = 45;
+	controls.surfaceRotateAboutOrigin = true;
 
 	PlanViewControls& plan = controls.plan;
+	// selection_mtor_clip.h at 449778b3840f8f2062daab15c87cb012f2ac945c.
+	plan.quickClipModifiers = Qt::ControlModifier;
+	controls.camera.clipViewAxis = true;
+	controls.camera.clipDragStyle = CameraClipDragStyle::WorldAxes;
 	plan.panButtons = {Qt::RightButton};
 	plan.zoomDragButton = Qt::RightButton;
 	plan.zoomDragModifiers = Qt::AltModifier;
@@ -249,9 +428,15 @@ LevelEditorControls netRadiantCustomLevelControls()
 	camera.flyKeys = {QStringLiteral("W"), QStringLiteral("S"), QStringLiteral("A"), QStringLiteral("D"), QString(), QString(), QString(), QString()};
 	camera.flyNeedsLook = true;
 	camera.driveKeys = {QStringLiteral("Up"), QStringLiteral("Down"), QStringLiteral("A"), QStringLiteral("D"), QString(), QString(), QStringLiteral("Left"), QStringLiteral("Right")};
+	// NRC camwindow.cpp CameraFreeFocus at 449778b3 (GPL-2.0-or-later): Tab
+	// held in free move keeps the selection framed. It acts only during mouse
+	// look here, so Tab still moves keyboard focus everywhere else. Key facts
+	// only; see docs/CREDITS.md.
+	camera.focusHoldKey = QStringLiteral("Tab");
 
 	controls.keys = {
-		bind("map.duplicateSelection", {QStringLiteral("Space"), QStringLiteral("Shift+Space")}),
+		bind("map.duplicateSelection", {QStringLiteral("Space")}),
+		bind("map.duplicateUnique", {QStringLiteral("Shift+Space")}),
 		bind("map.deleteSelection", {QStringLiteral("Del"), QStringLiteral("Backspace"), QStringLiteral("Z")}),
 		bind("map.selectAll", {QStringLiteral("Ctrl+A")}),
 		bind("map.selectNone", {QStringLiteral("C")}),
@@ -269,13 +454,106 @@ LevelEditorControls netRadiantCustomLevelControls()
 		// NetRadiant Custom mainframe.cpp, pinned revision 68ecbed.
 		bind("map.maximizeView", {QStringLiteral("F12")}),
 		bind("map.frameSelection", {QStringLiteral("`")}),
+		// NRC camwindow.cpp CenterView at 449778b3 (GPL-2.0-or-later) levels
+		// the camera on End. Key facts only; see docs/CREDITS.md.
+		bind("map.levelCamera", {QStringLiteral("End")}),
 		bind("map.carve", {QStringLiteral("Shift+U")}),
-		bind("map.snapToGrid", {QStringLiteral("Ctrl+G")}),
+		// NRC radiant/csg.cpp CSGWrapMerge at 449778b3840f8f2062daab15c87cb012f2ac945c.
+		bind("map.wrapMerge", {QStringLiteral("Ctrl+U")}),
+		// NRC select.cpp Selection_SnapToGrid at 449778b3 rounds each vertex,
+		// control point and origin (or only the picked components) on Ctrl+G,
+		// so Snap Selection to Grid, which moves whole objects, gives it up.
+		bind("map.roundToGrid", {QStringLiteral("Ctrl+G")}),
+		bind("map.snapToGrid", {}),
 		bind("map.connectEntities", {QStringLiteral("Ctrl+K")}),
+		bind("map.killConnectEntities", {QStringLiteral("Shift+K")}),
+		// NRC entity.cpp EntityMovePrimitivesToLast at 449778b3; the first-selected
+		// variant and Ungroup Primitives have no default key there either.
+		bind("map.movePrimitivesToEntity", {QStringLiteral("Ctrl+M")}),
+		// NRC entity.cpp EntityColorSet at 449778b3 has K; EntityColorNormalize
+		// has no default key there.
+		bind("map.setEntityColour", {QStringLiteral("K")}),
+		bind("map.selectConnectedEntities", {QStringLiteral("Ctrl+Shift+E")}),
+		bind("map.selectAllOfType", {QStringLiteral("Shift+A")}),
+		bind("map.selectTextured", {QStringLiteral("Ctrl+Shift+A")}),
+		bind("map.selectSimilar", {}),
 		bind("map.undo", {QStringLiteral("Ctrl+Z")}),
 		bind("map.redo", {QStringLiteral("Ctrl+Shift+Z"), QStringLiteral("Ctrl+Y")}),
 		// W is a camera key in mouse look.
 		bind("map.previewWireframe", {}),
+		// NRC 449778b3 (GPL-2.0-or-later): tools.cpp DragVertices, DragEdges
+		// and DragFaces; patchmanip.cpp's patch matrix, Invert, Transpose and
+		// Thicken and Smooth Columns keys and InvertCurveTextureY;
+		// brushmanip.cpp MakeDetail, MakeStructural and TogTexLock;
+		// xywindow.cpp CenterXYView. Key facts only; see docs/CREDITS.md.
+		// Ctrl+Shift+I (flip texture X) and Ctrl+W (smooth rows) stay unbound:
+		// the studio keeps them for Initialize Project Manifest and Close
+		// Package, window-wide keys a profile key would take everywhere.
+		bind("map.vertexTool", {QStringLiteral("V")}),
+		bind("map.edgeTool", {QStringLiteral("E")}),
+		bind("map.faceTool", {QStringLiteral("F")}),
+		bind("map.patchInsertRows", {QStringLiteral("Ctrl+Num++")}),
+		bind("map.patchInsertColumns", {QStringLiteral("Ctrl+Shift+Num++")}),
+		bind("map.patchDeleteLastRows", {QStringLiteral("Ctrl+Num+-")}),
+		bind("map.patchDeleteLastColumns", {QStringLiteral("Ctrl+Shift+Num+-")}),
+		bind("map.patchInvert", {QStringLiteral("Ctrl+I")}),
+		bind("map.patchTranspose", {QStringLiteral("Ctrl+Shift+M")}),
+		bind("map.thickenPatch", {QStringLiteral("Ctrl+T")}),
+		bind("map.patchSmoothColumns", {QStringLiteral("Ctrl+Shift+W")}),
+		bind("map.surfaceFlipV", {QStringLiteral("Shift+I")}),
+		// NRC radiant/select.cpp TexRotateClock, TexRotateCounter and
+		// TexScaleUp/Down/Left/Right at 449778b3 (GPL-2.0-or-later): Shift+Page
+		// Down subtracts the rotate increment and Shift+Page Up adds it, and
+		// Ctrl+arrows add or subtract the scale increment, ahead of the 2D
+		// view's Ctrl+arrow panning. Key facts only; see docs/CREDITS.md.
+		bind("map.surfaceRotateLeft", {QStringLiteral("Shift+PgDown")}),
+		bind("map.surfaceRotateRight", {QStringLiteral("Shift+PgUp")}),
+		bind("map.surfaceScaleStepUp", {QStringLiteral("Ctrl+Up")}),
+		bind("map.surfaceScaleStepDown", {QStringLiteral("Ctrl+Down")}),
+		bind("map.surfaceScaleStepLeft", {QStringLiteral("Ctrl+Left")}),
+		bind("map.surfaceScaleStepRight", {QStringLiteral("Ctrl+Right")}),
+		bind("map.textureLock", {QStringLiteral("Shift+T")}),
+		bind("map.makeDetail", {QStringLiteral("Alt+D")}),
+		bind("map.makeStructural", {QStringLiteral("Alt+S")}),
+		bind("map.centerOnSelection", {QStringLiteral("Ctrl+Shift+Tab")}),
+		// NRC layerswindow.cpp Layers_registerCommands at 449778b3 puts the
+		// layers menu on Shift+Q and Expand Selection to Layers on Ctrl+Q,
+		// which is the studio's Quit, so the expansion takes Ctrl+Shift+Q.
+		bind("map.moveToLayer", {QStringLiteral("Shift+Q")}),
+		bind("map.expandSelectionToLayers", {QStringLiteral("Ctrl+Shift+Q")}),
+		// NRC radiant/select.cpp SelectNudgeLeft/Right/Up/Down and
+		// MoveSelectionUP/DOWN at 449778b3 (GPL-2.0-or-later): Alt+arrows nudge
+		// in the last plan view's axes from any view, the keypad's plus and
+		// minus along world Z, ahead of Go Back and view zoom. Key facts only;
+		// see docs/CREDITS.md.
+		bind("map.nudgeLeft", {QStringLiteral("Alt+Left")}),
+		bind("map.nudgeRight", {QStringLiteral("Alt+Right")}),
+		bind("map.nudgeForward", {QStringLiteral("Alt+Up")}),
+		bind("map.nudgeBack", {QStringLiteral("Alt+Down")}),
+		bind("map.nudgeWorldUp", {QStringLiteral("Num++")}),
+		bind("map.nudgeWorldDown", {QStringLiteral("Num+-")}),
+		// NRC radiant/select.cpp "MoveToCamera" and "RepeatTransforms" at 449778b3
+		// (GPL-2.0-or-later): Ctrl+Shift+V centres the selection on the camera and
+		// Ctrl+R repeats the recorded transforms on a copy (core/level_paste.h,
+		// core/level_repeat.h). Key facts only; see docs/CREDITS.md. Its Alt+R
+		// (Reset Transforms) stays off a menu-bar mnemonic chord here.
+		bind("map.moveToCamera", {QStringLiteral("Ctrl+Shift+V")}),
+		bind("map.repeatTransforms", {QStringLiteral("Ctrl+R")}),
+		// NRC radiant/filters.cpp ConstructFilters at 449778b3
+		// (GPL-2.0-or-later): the Filter menu's keys, for the kinds VibeStudio
+		// filters. Key facts only; see docs/CREDITS.md. Ctrl+P (Patches) stays
+		// unbound: the studio keeps it for Go to File, a window-wide key.
+		bind("map.filterWorld", {QStringLiteral("Alt+1")}),
+		bind("map.filterEntities", {QStringLiteral("Alt+2")}),
+		bind("map.filterLiquids", {QStringLiteral("Alt+5")}),
+		bind("map.filterCaulk", {QStringLiteral("Alt+6")}),
+		bind("map.filterClip", {QStringLiteral("Alt+7")}),
+		bind("map.filterPaths", {QStringLiteral("Alt+8")}),
+		bind("map.filterLights", {QStringLiteral("Alt+0")}),
+		bind("map.filterDetail", {QStringLiteral("Ctrl+D")}),
+		bind("map.filterHint", {QStringLiteral("Ctrl+H")}),
+		bind("map.filterModels", {QStringLiteral("Shift+M")}),
+		bind("map.filterTriggers", {QStringLiteral("Ctrl+Shift+T")}),
 	};
 	controls.keys += gridDigitKeys();
 	return controls;
@@ -359,6 +637,10 @@ LevelEditorControls gtkRadiantLevelControls()
 		bind("map.gridLarger", {QStringLiteral("]")}),
 		bind("map.nextProjection", {QStringLiteral("Ctrl+Tab")}),
 		bind("map.frameSelection", {QStringLiteral("Ctrl+Shift+Tab")}),
+		// The Radiant family's Center on End: Q3Radiant MainFrm.cpp
+		// ID_VIEW_CENTER at dbe4ddb1, kept by GtkRadiant's and NetRadiant's
+		// CenterView (b4b295d7 camwindow.cpp). Key facts only; see docs/CREDITS.md.
+		bind("map.levelCamera", {QStringLiteral("End")}),
 		bind("map.toggle3D", {QStringLiteral("Ctrl+Shift+C")}),
 		bind("map.carve", {QStringLiteral("Shift+U")}),
 		bind("map.snapToGrid", {QStringLiteral("Ctrl+G")}),
@@ -368,6 +650,15 @@ LevelEditorControls gtkRadiantLevelControls()
 		bind("map.redo", {QStringLiteral("Ctrl+Y")}),
 		// C sinks the camera.
 		bind("map.previewWireframe", {}),
+		// The Radiant family's nudge keys, which NetRadiant Custom keeps from
+		// GtkRadiant (radiant/select.cpp at 449778b3): Alt+arrows in the plan
+		// view's axes, the keypad's plus and minus along world Z.
+		bind("map.nudgeLeft", {QStringLiteral("Alt+Left")}),
+		bind("map.nudgeRight", {QStringLiteral("Alt+Right")}),
+		bind("map.nudgeForward", {QStringLiteral("Alt+Up")}),
+		bind("map.nudgeBack", {QStringLiteral("Alt+Down")}),
+		bind("map.nudgeWorldUp", {QStringLiteral("Num++")}),
+		bind("map.nudgeWorldDown", {QStringLiteral("Num+-")}),
 	};
 	controls.keys += gridDigitKeys();
 	return controls;
@@ -428,6 +719,105 @@ QString levelViewLayoutDisplayName(LevelViewLayout layout)
 	return QCoreApplication::translate("VibeStudioLevelControls", "One view, 2D first");
 }
 
+int levelPlanPanesShownCount(const LevelPlanPanes& panes)
+{
+	return static_cast<int>(std::count(panes.shown.cbegin(), panes.shown.cend(), true));
+}
+
+bool setLevelPlanPaneShown(LevelPlanPanes* panes, int index, bool shown)
+{
+	if (!panes || index < 0 || index >= static_cast<int>(panes->shown.size())) {
+		return false;
+	}
+	auto& pane = panes->shown[static_cast<std::size_t>(index)];
+	if (!shown && pane && levelPlanPanesShownCount(*panes) <= 1) {
+		return false;
+	}
+	pane = shown;
+	return true;
+}
+
+QString levelPlanPaneId(int index)
+{
+	switch (index) {
+	case 0:
+		return QStringLiteral("top");
+	case 1:
+		return QStringLiteral("front");
+	case 2:
+		return QStringLiteral("side");
+	default:
+		break;
+	}
+	return {};
+}
+
+QString levelPlanPanesId(const LevelPlanPanes& panes)
+{
+	QStringList ids;
+	for (int i = 0; i < static_cast<int>(panes.shown.size()); ++i) {
+		if (panes.shown[static_cast<std::size_t>(i)]) {
+			ids << levelPlanPaneId(i);
+		}
+	}
+	return ids.join(QLatin1Char(','));
+}
+
+bool levelPlanPanesForId(const QString& id, LevelPlanPanes* panes)
+{
+	const QString trimmed = id.trimmed();
+	if (trimmed == QStringLiteral("all")) {
+		if (panes) {
+			*panes = LevelPlanPanes {};
+		}
+		return true;
+	}
+	LevelPlanPanes parsed;
+	parsed.shown = {false, false, false};
+	const QStringList parts = trimmed.split(QLatin1Char(','));
+	for (const QString& part : parts) {
+		int index = -1;
+		for (int i = 0; i < 3; ++i) {
+			if (part.trimmed() == levelPlanPaneId(i)) {
+				index = i;
+			}
+		}
+		if (index < 0 || parsed.shown[static_cast<std::size_t>(index)]) {
+			return false;
+		}
+		parsed.shown[static_cast<std::size_t>(index)] = true;
+	}
+	if (levelPlanPanesShownCount(parsed) == 0) {
+		return false;
+	}
+	if (panes) {
+		*panes = parsed;
+	}
+	return true;
+}
+
+int levelPlanPaneNextShown(const LevelPlanPanes& panes, int from)
+{
+	const int count = static_cast<int>(panes.shown.size());
+	const int start = ((from % count) + count) % count;
+	for (int step = 0; step < count; ++step) {
+		const int index = (start + step) % count;
+		if (panes.shown[static_cast<std::size_t>(index)]) {
+			return index;
+		}
+	}
+	return 0;
+}
+
+QString levelViewSplitterStatePrefix(LevelViewLayout layout, const LevelPlanPanes& panes)
+{
+	QString prefix = QStringLiteral("levelViews/%1/").arg(levelViewLayoutId(layout));
+	if (levelViewLayoutHasThreePlans(layout) && levelPlanPanesShownCount(panes) < static_cast<int>(panes.shown.size())) {
+		prefix += levelPlanPanesId(panes).replace(QLatin1Char(','), QLatin1Char('-')) + QLatin1Char('/');
+	}
+	return prefix;
+}
+
 QString planEmptyDragId(PlanEmptyDrag drag)
 {
 	switch (drag) {
@@ -482,6 +872,64 @@ QVector<LevelEditorControlRow> levelEditorControlRows(const LevelEditorControls&
 
 	row(layout, QCoreApplication::translate("VibeStudioLevelControls", "Views"), levelViewLayoutDisplayName(controls.layout));
 	row(layout, QCoreApplication::translate("VibeStudioLevelControls", "Grid"), QCoreApplication::translate("VibeStudioLevelControls", "%1 units").arg(controls.defaultGridUnits));
+	row(layout, QCoreApplication::translate("VibeStudioLevelControls", "Changing the grid"),
+		controls.gridChangeEnablesSnap ? QCoreApplication::translate("VibeStudioLevelControls", "Turns Snap on")
+			: QCoreApplication::translate("VibeStudioLevelControls", "Leaves Snap as it was"));
+	row(layout, QCoreApplication::translate("VibeStudioLevelControls", "Quick-turn pivot"),
+		controls.quickTurnSnapsPivot ? QCoreApplication::translate("VibeStudioLevelControls", "Selection centre rounded to the grid while Snap is on")
+			: QCoreApplication::translate("VibeStudioLevelControls", "Exact selection centre"));
+	row(layout, QCoreApplication::translate("VibeStudioLevelControls", "Flip pivot"),
+		controls.flipSnapsPivot ? QCoreApplication::translate("VibeStudioLevelControls", "Selection centre rounded to half the grid while Snap is on")
+			: QCoreApplication::translate("VibeStudioLevelControls", "Exact selection centre"));
+	row(layout, QCoreApplication::translate("VibeStudioLevelControls", "Texture rotation step"),
+		controls.surfaceRotateAboutOrigin
+			? QCoreApplication::translate("VibeStudioLevelControls", "%1° about the texture origin").arg(controls.surfaceRotationStep)
+			: QCoreApplication::translate("VibeStudioLevelControls", "%1° about each face centre").arg(controls.surfaceRotationStep));
+	row(layout, QCoreApplication::translate("VibeStudioLevelControls", "Paste placement"),
+		controls.pasteAtCursor ? QCoreApplication::translate("VibeStudioLevelControls", "Cursor") :
+			QCoreApplication::translate("VibeStudioLevelControls", "Original position"));
+	row(layout, QCoreApplication::translate("VibeStudioLevelControls", "Duplicate placement"),
+		controls.nudgeAfterDuplicate ? QCoreApplication::translate("VibeStudioLevelControls", "One grid step right and down in the active plan")
+			: QCoreApplication::translate("VibeStudioLevelControls", "Original position"));
+	row(layout, QCoreApplication::translate("VibeStudioLevelControls", "Duplicate selection mode"),
+		controls.duplicateRequiresObjectMode ? QCoreApplication::translate("VibeStudioLevelControls", "Object mode only")
+			: QCoreApplication::translate("VibeStudioLevelControls", "Selected objects, including while editing their components"));
+	row(layout, QCoreApplication::translate("VibeStudioLevelControls", "Entity connections"),
+		controls.entityConnectionMode == LevelEntityConnectionMode::RadiantTarget
+			? QCoreApplication::translate("VibeStudioLevelControls", "Two objects, source name first; KillConnect uses the active game")
+			: QCoreApplication::translate("VibeStudioLevelControls", "Multiple sources, destination name first"));
+	row(layout, QCoreApplication::translate("VibeStudioLevelControls", "Copy selection"),
+		controls.copyFaceAttributes ? QCoreApplication::translate("VibeStudioLevelControls", "Picked face attributes, otherwise objects") :
+			QCoreApplication::translate("VibeStudioLevelControls", "Objects; use Copy Surface for face attributes"));
+	row(layout, QCoreApplication::translate("VibeStudioLevelControls", "Delete in component mode"),
+		controls.deleteObjectsWithoutComponents ? QCoreApplication::translate("VibeStudioLevelControls", "Picked brush components; objects when no components are picked")
+			: QCoreApplication::translate("VibeStudioLevelControls", "Picked brush components; no object fallback"));
+	row(layout, QCoreApplication::translate("VibeStudioLevelControls", "Patch points during deletion"),
+		controls.deleteIgnoresPatchPoints ? QCoreApplication::translate("VibeStudioLevelControls", "Keep patch points and remove picked brush components")
+			: QCoreApplication::translate("VibeStudioLevelControls", "Deselect patch points before removing brush components"));
+	row(layout, QCoreApplication::translate("VibeStudioLevelControls", "Delete command in clip mode"),
+		controls.deleteRemovesClipPoint ? QCoreApplication::translate("VibeStudioLevelControls", "Remove the last clip point")
+			: QCoreApplication::translate("VibeStudioLevelControls", "Finish clipping before deleting map objects"));
+	row(layout, QCoreApplication::translate("VibeStudioLevelControls", "Object selection history"),
+		controls.undoObjectSelection ? QCoreApplication::translate("VibeStudioLevelControls", "Undo and redo object picks and group navigation without changing map contents")
+			: QCoreApplication::translate("VibeStudioLevelControls", "Selection and group navigation stay outside undo history"));
+	row(layout, QCoreApplication::translate("VibeStudioLevelControls", "Temporary visibility"),
+		controls.undoObjectSelection ? QCoreApplication::translate("VibeStudioLevelControls", "Hide, Show All, Isolate and object-list reveal are non-content undo steps")
+			: QCoreApplication::translate("VibeStudioLevelControls", "Hide, Show All and Isolate stay outside undo history"));
+	row(layout, QCoreApplication::translate("VibeStudioLevelControls", "New and duplicated objects"),
+		controls.insertionVisibility == LevelInsertionVisibility::FreshInherited
+			? QCoreApplication::translate("VibeStudioLevelControls", "Fresh temporary visibility; hidden parents still hide new objects")
+			: QCoreApplication::translate("VibeStudioLevelControls", "Reveal inserted roots; copies retain independently hidden descendants"));
+	row(layout, QCoreApplication::translate("VibeStudioLevelControls", "Select by region"),
+		controls.regionSelection == LevelRegionSelectionPolicy::TrenchBroom
+			? QCoreApplication::translate("VibeStudioLevelControls", "Each brush's volume; removes selection brushes in one undo step")
+			: controls.regionSelection == LevelRegionSelectionPolicy::Radiant
+				? QCoreApplication::translate("VibeStudioLevelControls", "Each brush's bounds; Inside removes selected objects, Touching adds matches")
+				: QCoreApplication::translate("VibeStudioLevelControls", "Combined selection bounds; keeps geometry"));
+	row(layout, QCoreApplication::translate("VibeStudioLevelControls", "Make Structural"),
+		controls.makeStructuralLeavesEntities
+			? QCoreApplication::translate("VibeStudioLevelControls", "Clear detail and move the brushes out of brush entities to the world or current group")
+			: QCoreApplication::translate("VibeStudioLevelControls", "Clear detail; brushes of other brush entities stay in them"));
 
 	const PlanViewControls& p = controls.plan;
 	row(plan, QCoreApplication::translate("VibeStudioLevelControls", "Pan"), buttonsText(p.panButtons, Qt::NoModifier, drag));
@@ -593,6 +1041,10 @@ QVector<LevelEditorControlRow> levelEditorControlRows(const LevelEditorControls&
 		row(camera, QCoreApplication::translate("VibeStudioLevelControls", "Temporary mouse look"),
 			QCoreApplication::translate("VibeStudioLevelControls", "Hold %1 and move the pointer; release to restore the previous mode").arg(c.lookHoldKey));
 	}
+	if (c.perspective && !c.focusHoldKey.isEmpty()) {
+		row(camera, QCoreApplication::translate("VibeStudioLevelControls", "Keep the selection in view"),
+			QCoreApplication::translate("VibeStudioLevelControls", "Hold %1 during mouse look; the wheel moves nearer or farther").arg(c.focusHoldKey));
+	}
 	if (c.lookPanUsesButtons) {
 		row(camera, QCoreApplication::translate("VibeStudioLevelControls", "Navigate during mouse look"),
 			QCoreApplication::translate("VibeStudioLevelControls", "Right mouse pans; left+right moves along the view"));
@@ -683,8 +1135,8 @@ QVector<LevelEditorControlRow> levelEditorControlRows(const LevelEditorControls&
 QStringList levelEditorControlProblems(const LevelEditorControls& controls)
 {
 	QStringList problems;
-	if (controls.defaultGridUnits < 1 || controls.defaultGridUnits > 256 || (controls.defaultGridUnits & (controls.defaultGridUnits - 1)) != 0) {
-		problems << QCoreApplication::translate("VibeStudioLevelControls", "The default grid must be a supported power of two from 1 to 256.");
+	if (!levelEditorGridSizeSupported(controls.defaultGridUnits)) {
+		problems << QCoreApplication::translate("VibeStudioLevelControls", "The default grid must be a listed size from 0.125 to 1024 units.");
 	}
 	if (!std::isfinite(controls.camera.fieldOfViewDegrees) || controls.camera.fieldOfViewDegrees < 15 || controls.camera.fieldOfViewDegrees > 150) {
 		problems << QCoreApplication::translate("VibeStudioLevelControls", "The field of view must be between 15 and 150 degrees.");
@@ -772,6 +1224,15 @@ QStringList levelEditorControlProblems(const LevelEditorControls& controls)
 	}
 	if (!plan.panHoldKey.isEmpty() && owners.contains(QKeySequence::fromString(plan.panHoldKey, QKeySequence::PortableText).toString(QKeySequence::PortableText).toLower())) {
 		problems << QCoreApplication::translate("VibeStudioLevelControls", "The temporary plan-pan key also belongs to a command.");
+	}
+	if (!camera.focusHoldKey.isEmpty()) {
+		const auto focus = QKeySequence::fromString(camera.focusHoldKey, QKeySequence::PortableText);
+		if (!camera.perspective || focus.count() != 1 || focus[0].key() == Qt::Key_unknown || focus[0].keyboardModifiers() != Qt::NoModifier) {
+			problems << QCoreApplication::translate("VibeStudioLevelControls", "The camera focus key needs a perspective camera and one unmodified key.");
+		}
+		if (owners.contains(focus.toString(QKeySequence::PortableText).toLower())) {
+			problems << QCoreApplication::translate("VibeStudioLevelControls", "The camera focus key also belongs to a command.");
+		}
 	}
 	for (const auto& keys : {camera.flyKeys, camera.driveKeys}) {
 		QSet<QString> directions;

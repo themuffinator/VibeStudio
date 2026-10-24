@@ -14,6 +14,7 @@
 #include <cmath>
 #include <cstdlib>
 #include <iostream>
+#include <limits>
 #include <thread>
 
 using namespace vibestudio;
@@ -1828,7 +1829,7 @@ bool runClipSmoke(const QDir& root)
 		"The brushDef3 brush should keep 32 to 64, closed by a plane facing -x.");
 
 	// With a clean brush and one on shared lines selected together, the clean
-	// one is cut and the other is left whole, with its reason reported.
+	// neither may change when one cannot be safely rewritten.
 	const QString mixedPath = root.filePath(QStringLiteral("clip-mixed.map"));
 	ok &= expect(writeFile(mixedPath, QByteArrayLiteral("{\n\"classname\" \"worldspawn\"\n{\n"
 				"( 1 0 64 ) ( 0 0 64 ) ( 0 1 64 ) TOP 0 0 0 1 1\n( 0 1 0 ) ( 0 0 0 ) ( 1 0 0 ) BOTTOM 0 0 0 1 1\n"
@@ -1843,9 +1844,50 @@ bool runClipSmoke(const QDir& root)
 	axisPlanePoints(0, 32.0, &a, &b, &c);
 	ok &= expect(loadLevelMap({mixedPath, {}, QStringLiteral("idtech2")}, &mixed, &error)
 			&& setLevelMapSelection(&mixed, {{LevelMapSelectionKind::QuakeBrush, 0}, {LevelMapSelectionKind::QuakeBrush, 1}}, &error)
-			&& clipLevelMapSelection(&mixed, a, b, c, LevelMapClipKeep::Back, &clipped, &error, &skipped) && clipped == 1
-			&& skipped.size() == 1 && skipped.first().contains(QStringLiteral("Brush 1")),
-		"Clipping a clean brush beside one on shared lines should cut the first and report the second.");
+			&& !clipLevelMapSelection(&mixed, a, b, c, LevelMapClipKeep::Back, &clipped, &error, &skipped) && clipped == 0
+			&& skipped.isEmpty() && error.contains(QStringLiteral("Brush 1")) && mixed.undoStack.isEmpty()
+			&& serializeLevelMap(mixed).bytes == mixed.originalText.toUtf8() && mixed.brushes.size() == 2,
+		"An unsafe brush refuses the entire cut without changing geometry, text or history.");
+
+	// Removing a whole brush also removes its now-empty owner, and undo/redo
+	// must restore both the exact source and the entity selection.
+	LevelMapDocument removed;
+	ok &= expect(loadLevelMap({path, {}, QStringLiteral("idtech2")}, &removed, &error)
+		&& setLevelMapSelection(&removed, {{LevelMapSelectionKind::Entity, 2}}, &error), "Select the door owner for a whole-side cut.");
+	const auto beforeRemoval = serializeLevelMap(removed).bytes;
+	const auto ownersBefore = removed.entities.size();
+	axisPlanePoints(0, 500.0, &a, &b, &c);
+	ok &= expect(clipLevelMapSelection(&removed, a, b, c, LevelMapClipKeep::Front, &clipped, &error) && clipped == 1
+		&& removed.brushes.size() == 1 && removed.entities.size() == ownersBefore-1 && removed.selection.isEmpty(),
+		"A wholly discarded brush and its empty owner should be removed.");
+	ok &= expect(undoLevelMapEdit(&removed, &error) && serializeLevelMap(removed).bytes == beforeRemoval
+		&& removed.selection == QVector<LevelMapSelectionRef>{{LevelMapSelectionKind::Entity, 2}}
+		&& redoLevelMapEdit(&removed, &error) && removed.selection.isEmpty(), "Whole-side cuts restore text and selection through undo/redo.");
+	LevelMapDocument kept;
+	ok &= expect(loadLevelMap({path, {}, QStringLiteral("idtech2")}, &kept, &error)
+		&& setLevelMapSelection(&kept, {{LevelMapSelectionKind::QuakeBrush, 0}, {LevelMapSelectionKind::QuakeBrush, 1}}, &error), "Select kept and cut brushes.");
+	axisPlanePoints(0, 160.0, &a, &b, &c);
+	ok &= expect(clipLevelMapSelection(&kept, a, b, c, LevelMapClipKeep::Back, &clipped, &error) && clipped == 1
+		&& kept.selection.contains({LevelMapSelectionKind::QuakeBrush, 0}) && kept.selection.size() == 2,
+		"An untouched brush on the kept side remains selected alongside the new piece.");
+	// Tangency is side-specific: retaining the interior is a no-op, while
+	// retaining the exterior removes the whole solid. Invalid keep modes and
+	// collinear/non-finite planes must leave source/history unchanged.
+	LevelMapDocument tangent;
+	ok &= expect(loadLevelMap({path, {}, QStringLiteral("idtech2")}, &tangent, &error)
+		&& setLevelMapSelection(&tangent, {{LevelMapSelectionKind::QuakeBrush, 1}}, &error), "Select the door for tangent and invalid plane checks.");
+	const auto tangentText = serializeLevelMap(tangent).bytes;
+	axisPlanePoints(0, 192.0, &a, &b, &c);
+	ok &= expect(!clipLevelMapSelection(&tangent,a,b,c,LevelMapClipKeep::Back,&clipped,&error) && clipped == 0
+		&& serializeLevelMap(tangent).bytes == tangentText && tangent.undoStack.isEmpty(), "Keeping the interior of a tangent brush is a no-op.");
+	ok &= expect(!clipLevelMapSelection(&tangent,a,b,c,static_cast<LevelMapClipKeep>(91),&clipped,&error)
+		&& !clipLevelMapSelection(&tangent,a,a,c,LevelMapClipKeep::Front,&clipped,&error)
+		&& serializeLevelMap(tangent).bytes == tangentText && tangent.undoStack.isEmpty(), "Invalid clip mode and degenerate plane are atomic refusals.");
+	auto nonFinite = c; nonFinite.x = std::numeric_limits<double>::quiet_NaN();
+	ok &= expect(!clipLevelMapSelection(&tangent,a,b,nonFinite,LevelMapClipKeep::Front,&clipped,&error)
+		&& serializeLevelMap(tangent).bytes == tangentText && tangent.undoStack.isEmpty(), "A non-finite clip point is refused without a partial edit.");
+	ok &= expect(clipLevelMapSelection(&tangent,a,b,c,LevelMapClipKeep::Front,&clipped,&error) && clipped == 1
+		&& tangent.brushes.size() == 1 && tangent.selection.isEmpty(), "Keeping the exterior of a tangent brush removes it completely.");
 
 	// A brush written on shared lines is left alone, with a reason.
 	const QString compactPath = root.filePath(QStringLiteral("clip-compact.map"));
@@ -3979,11 +4021,19 @@ bool runMultiMoveSmoke(const QDir& root)
 	ok &= expect(!moveLevelMapSelectionSnapped(&wad, 3.0, -2.0, 0.0, 64.0, &error), "A delta that snaps to zero should fail.");
 	ok &= expect(wad.undoStack.isEmpty(), "A rejected move should not push an undo command.");
 
-	// Sectors are selectable but have no position of their own.
+	// A sector moves its boundary once, even though it has no stored position.
 	ok &= expect(!wad.doomSectors.isEmpty(), "The Doom fixture should have a sector.");
 	ok &= expect(selectLevelMapObject(&wad, QStringLiteral("sector:0"), &error), "Selecting a sector should work.");
-	ok &= expect(!moveLevelMapSelection(&wad, 16.0, 0.0, 0.0, &error), "Moving a sector-only selection should fail.");
-	ok &= expect(wad.undoStack.isEmpty(), "A selection with nothing movable should not push an undo command.");
+	const auto sectorBefore = serializeLevelMap(wad).bytes;
+	ok &= expect(moveLevelMapSelection(&wad, 16.0, 0.0, 0.0, &error), "Moving a sector-only selection should move its boundary.");
+	ok &= expect(wad.undoStack.size() == 1 && nearly(wad.doomVertices.at(0).x,16.0) && nearly(wad.doomVertices.at(1).x,144.0),
+		"Sector boundary endpoints should move exactly once in one undo step.");
+	ok &= expect(undoLevelMapEdit(&wad,&error) && serializeLevelMap(wad).bytes == sectorBefore,"Sector movement undo should restore exact WAD bytes.");
+	ok &= expect(moveLevelMapObject(&wad,"sector",0,-16,0,0,&error) && nearly(wad.doomVertices.at(0).x,-16.0),
+		"The single-object sector route should use the same boundary move.");
+	ok &= expect(undoLevelMapEdit(&wad,&error) && serializeLevelMap(wad).bytes == sectorBefore,"Single-object sector undo should restore exact WAD bytes.");
+	ok &= expect(!moveLevelMapObject(&wad,"sector",0,40000,0,0,&error) && serializeLevelMap(wad).bytes == sectorBefore && wad.undoStack.isEmpty(),
+		"An out-of-range sector move should leave no partial movement or undo.");
 	clearLevelMapSelection(&wad);
 	ok &= expect(!moveLevelMapSelection(&wad, 16.0, 0.0, 0.0, &error), "Moving an empty selection should fail.");
 	return ok;

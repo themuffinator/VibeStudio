@@ -496,9 +496,9 @@ void ApplicationShell::addLevelShapeAtViewCentre()
 		return;
 	}
 	const LevelMapVec3 centre = m_levelMapViewport->worldPositionAt(QPointF(m_levelMapViewport->rect().center()), levelMapHiddenAxisValue());
-	const int grid = std::max(1, m_levelMapViewport->gridSize());
+	const double grid = m_levelMapViewport->gridSize();
 	// Shapes of several brushes need room for their walls and steps.
-	const double size = levelShapeIsCompound(m_levelShape) ? std::max(128, grid * 4) : std::max(64, grid * 2);
+	const double size = levelShapeIsCompound(m_levelShape) ? std::max(128.0, grid * 4) : std::max(64.0, grid * 2);
 	const LevelMapVec3 mins {snapLevelMapCoordinate(centre.x - size / 2, grid), snapLevelMapCoordinate(centre.y - size / 2, grid),
 		snapLevelMapCoordinate(centre.z - size / 2, grid), true};
 	const LevelMapVec3 maxs {mins.x + size, mins.y + size, mins.z + size, true};
@@ -538,7 +538,7 @@ void ApplicationShell::addLevelSectorShapeAtViewCentre()
 		return;
 	}
 	const LevelMapVec3 middle = m_levelMapViewport->worldPositionAt(QPointF(m_levelMapViewport->rect().center()), 0.0);
-	const int grid = std::max(1, m_levelMapViewport->gridSize());
+	const double grid = m_levelMapViewport->gridSize();
 	const double centreX = snapLevelMapCoordinate(middle.x, grid);
 	const double centreY = snapLevelMapCoordinate(middle.y, grid);
 	const double halfWidth = m_levelShapeWidth->value() / 2.0;

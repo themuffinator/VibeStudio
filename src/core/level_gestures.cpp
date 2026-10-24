@@ -1,4 +1,5 @@
 #include "core/level_gestures.h"
+#include "core/level_component_selection.h"
 #include "core/editor_profiles.h"
 #include "core/level_camera_keys.h"
 
@@ -45,6 +46,9 @@ QVector<Field> fields()
 	Options pans = planButtons;
 	pans << LevelGestureOption{"right+middle", QCoreApplication::translate("LevelGestures", "Right or middle"), Qt::RightButton | Qt::MiddleButton};
 	const Options booleans {{"off", QCoreApplication::translate("LevelGestures", "Off"), 0}, {"on", QCoreApplication::translate("LevelGestures", "On"), 1}};
+	const Options clipDrag {{"surface", QCoreApplication::translate("LevelGestures", "Surface only"), int(CameraClipDragStyle::Surface)},
+		{"world", QCoreApplication::translate("LevelGestures", "World XY / Z"), int(CameraClipDragStyle::WorldAxes)},
+		{"view", QCoreApplication::translate("LevelGestures", "Axial view / depth"), int(CameraClipDragStyle::ViewAxes)}};
 	Options modifiers;
 	const QVector<LevelGestureOption> modifierNames {{"ctrl", QCoreApplication::translate("LevelGestures", "Ctrl"), Qt::ControlModifier},
 		{"shift", QCoreApplication::translate("LevelGestures", "Shift"), Qt::ShiftModifier},
@@ -63,7 +67,19 @@ QVector<Field> fields()
 		{"dolly", QCoreApplication::translate("LevelGestures", "Move along view"), int(CameraWheel::Dolly)},
 		{"dolly-to-pointer", QCoreApplication::translate("LevelGestures", "Move toward pointer"), int(CameraWheel::DollyToPointer)}};
 	QVector<Field> result;
-	const auto plan = [&]<typename T>(const QString& id, const QString& label, T PlanViewControls::*member, const Options& choices) {
+	result << Field{{QStringLiteral("editing.nudgeAfterDuplicate"), QCoreApplication::translate("LevelGestures", "Nudge duplicated objects one grid step right and down"), QStringLiteral("editing"), booleans},
+		[](const LevelEditorControls& c) { return c.nudgeAfterDuplicate ? QStringLiteral("on") : QStringLiteral("off"); },
+		[](LevelEditorControls& c, const QString& value) { c.nudgeAfterDuplicate = value == QLatin1String("on"); }};
+	result << Field{{QStringLiteral("editing.gridChangeEnablesSnap"), QCoreApplication::translate("LevelGestures", "Choosing or stepping the grid turns Snap on"), QStringLiteral("editing"), booleans},
+		[](const LevelEditorControls& c) { return c.gridChangeEnablesSnap ? QStringLiteral("on") : QStringLiteral("off"); },
+		[](LevelEditorControls& c, const QString& value) { c.gridChangeEnablesSnap = value == QLatin1String("on"); }};
+	result << Field{{QStringLiteral("editing.quickTurnSnapsPivot"), QCoreApplication::translate("LevelGestures", "Quick turns pivot on the grid point nearest the selection's centre while Snap is on"), QStringLiteral("editing"), booleans},
+		[](const LevelEditorControls& c) { return c.quickTurnSnapsPivot ? QStringLiteral("on") : QStringLiteral("off"); },
+		[](LevelEditorControls& c, const QString& value) { c.quickTurnSnapsPivot = value == QLatin1String("on"); }};
+	result << Field{{QStringLiteral("editing.flipSnapsPivot"), QCoreApplication::translate("LevelGestures", "Flips mirror about the selection's centre rounded to half the grid while Snap is on"), QStringLiteral("editing"), booleans},
+		[](const LevelEditorControls& c) { return c.flipSnapsPivot ? QStringLiteral("on") : QStringLiteral("off"); },
+		[](LevelEditorControls& c, const QString& value) { c.flipSnapsPivot = value == QLatin1String("on"); }};
+	const auto plan =[&]<typename T>(const QString& id, const QString& label, T PlanViewControls::*member, const Options& choices) {
 		result << Field{{QStringLiteral("plan.") + id, label, QStringLiteral("plan"), choices},
 			[member, choices](const LevelEditorControls& c) { for (const auto& choice : choices) { if (choice.value == valueOf(c.plan.*member)) { return choice.id; } } return QString(); },
 			[member, choices](LevelEditorControls& c, const QString& value) { for (const auto& choice : choices) { if (choice.id == value) { c.plan.*member = fromValue<T>(choice.value); return; } } }};
@@ -74,6 +90,7 @@ QVector<Field> fields()
 			[member, choices](LevelEditorControls& c, const QString& value) { for (const auto& choice : choices) { if (choice.id == value) { c.camera.*member = fromValue<T>(choice.value); return; } } }};
 	};
 	plan(QStringLiteral("panButtons"), QCoreApplication::translate("LevelGestures", "Pan buttons"), &PlanViewControls::panButtons, pans);
+	plan(QStringLiteral("quickClipModifiers"), QCoreApplication::translate("LevelGestures", "Quick clip with left button (None disables)"), &PlanViewControls::quickClipModifiers, modifiers);
 	plan(QStringLiteral("zoomDragButton"), QCoreApplication::translate("LevelGestures", "Zoom drag button"), &PlanViewControls::zoomDragButton, planButtons);
 	plan(QStringLiteral("zoomDragModifiers"), QCoreApplication::translate("LevelGestures", "Zoom drag modifiers"), &PlanViewControls::zoomDragModifiers, modifiers);
 	plan(QStringLiteral("toggleModifiers"), QCoreApplication::translate("LevelGestures", "Toggle selection modifiers"), &PlanViewControls::toggleModifiers, modifiers);
@@ -82,6 +99,11 @@ QVector<Field> fields()
 	plan(QStringLiteral("emptyDrag"), QCoreApplication::translate("LevelGestures", "Empty-space drag"), &PlanViewControls::emptyDrag, empty);
 	plan(QStringLiteral("emptyDragWithSelection"), QCoreApplication::translate("LevelGestures", "Empty-space drag with selection"), &PlanViewControls::emptyDragWithSelection, empty);
 	plan(QStringLiteral("clickCyclesStack"), QCoreApplication::translate("LevelGestures", "Click cycles overlapping objects"), &PlanViewControls::clickCyclesStack, booleans);
+	plan(QStringLiteral("componentBandToggles"), QCoreApplication::translate("LevelGestures", "Plain component lasso toggles; toggle modifier adds"), &PlanViewControls::componentBandToggles, booleans);
+	plan(QStringLiteral("componentInsertModifiers"), QCoreApplication::translate("LevelGestures", "Insert vertex from edge or face (None disables)"), &PlanViewControls::componentInsertModifiers, modifiers);
+	plan(QStringLiteral("componentAxisDrag"), QCoreApplication::translate("LevelGestures", "World-axis component dragging with live constraints and snapping"), &PlanViewControls::componentAxisDrag, booleans);
+	plan(QStringLiteral("componentQuickSnapModifiers"), QCoreApplication::translate("LevelGestures", "Snap picked vertex to clicked vertex (None disables)"), &PlanViewControls::componentQuickSnapModifiers, modifiers);
+	plan(QStringLiteral("componentCycleWheelModifiers"), QCoreApplication::translate("LevelGestures", "Cycle overlapping components with wheel (None disables)"), &PlanViewControls::componentCycleWheelModifiers, modifiers);
 	plan(QStringLiteral("plainClickSelects"), QCoreApplication::translate("LevelGestures", "Plain click selects"), &PlanViewControls::plainClickSelects, booleans);
 	plan(QStringLiteral("cycleModifiers"), QCoreApplication::translate("LevelGestures", "Cycle overlapping objects modifiers"), &PlanViewControls::cycleModifiers, modifiers);
 	plan(QStringLiteral("middleButtonDrivesCamera"), QCoreApplication::translate("LevelGestures", "Middle button aims or places camera"), &PlanViewControls::middleButtonDrivesCamera, booleans);
@@ -104,6 +126,13 @@ QVector<Field> fields()
 	camera(QStringLiteral("wheel"), QCoreApplication::translate("LevelGestures", "Mouse wheel"), &CameraViewControls::wheel, wheel);
 	camera(QStringLiteral("fieldOfViewWheelModifiers"), QCoreApplication::translate("LevelGestures", "Field-of-view wheel modifiers"), &CameraViewControls::fieldOfViewWheelModifiers, modifiers);
 	camera(QStringLiteral("toggleModifiers"), QCoreApplication::translate("LevelGestures", "Toggle selection modifiers"), &CameraViewControls::toggleModifiers, modifiers);
+	camera(QStringLiteral("componentBandToggles"), QCoreApplication::translate("LevelGestures", "Plain component lasso toggles; toggle modifier adds"), &CameraViewControls::componentBandToggles, booleans);
+	camera(QStringLiteral("componentInsertModifiers"), QCoreApplication::translate("LevelGestures", "Insert vertex from edge or face (None disables)"), &CameraViewControls::componentInsertModifiers, modifiers);
+	camera(QStringLiteral("componentAxisDrag"), QCoreApplication::translate("LevelGestures", "World-axis component dragging with live constraints and snapping"), &CameraViewControls::componentAxisDrag, booleans);
+	camera(QStringLiteral("clipViewAxis"), QCoreApplication::translate("LevelGestures", "Two-point clip plane follows the camera with outer-face correction"), &CameraViewControls::clipViewAxis, booleans);
+	camera(QStringLiteral("clipDragStyle"), QCoreApplication::translate("LevelGestures", "Clip-point movement after pressing Shift or Alt (Ctrl returns to surfaces)"), &CameraViewControls::clipDragStyle, clipDrag);
+	camera(QStringLiteral("componentQuickSnapModifiers"), QCoreApplication::translate("LevelGestures", "Snap picked vertex to clicked vertex (None disables)"), &CameraViewControls::componentQuickSnapModifiers, modifiers);
+	camera(QStringLiteral("componentCycleWheelModifiers"), QCoreApplication::translate("LevelGestures", "Cycle overlapping components with wheel (None disables)"), &CameraViewControls::componentCycleWheelModifiers, modifiers);
 	camera(QStringLiteral("faceModifiers"), QCoreApplication::translate("LevelGestures", "Face selection modifiers"), &CameraViewControls::faceModifiers, modifiers);
 	camera(QStringLiteral("materialSampleButton"), QCoreApplication::translate("LevelGestures", "Sample material button"), &CameraViewControls::materialSampleButton, planButtons);
 	camera(QStringLiteral("materialSampleModifiers"), QCoreApplication::translate("LevelGestures", "Sample material modifiers"), &CameraViewControls::materialSampleModifiers, modifiers);
@@ -141,6 +170,9 @@ QVector<Field> fields()
 	result << Field{{QStringLiteral("camera.lookHoldKey"), QCoreApplication::translate("LevelGestures", "Hold for mouse look"), QStringLiteral("camera-keys"), noKey, LevelGestureFieldKind::HoldKey},
 		[](const LevelEditorControls& c) { return c.camera.lookHoldKey.isEmpty() ? QStringLiteral("none") : c.camera.lookHoldKey; },
 		[](LevelEditorControls& c, const QString& value) { c.camera.lookHoldKey = value == QLatin1String("none") ? QString() : value; }};
+	result << Field{{QStringLiteral("camera.focusHoldKey"), QCoreApplication::translate("LevelGestures", "Hold during mouse look to keep the selection in view"), QStringLiteral("camera-keys"), noKey, LevelGestureFieldKind::HoldKey},
+		[](const LevelEditorControls& c) { return c.camera.focusHoldKey.isEmpty() ? QStringLiteral("none") : c.camera.focusHoldKey; },
+		[](LevelEditorControls& c, const QString& value) { c.camera.focusHoldKey = value == QLatin1String("none") ? QString() : value; }};
 	const auto movement = [&](const QString& id, const QString& label, QString CameraFlyKeys::*member) {
 		for (bool fly : {true, false}) {
 			const auto group = fly ? QStringLiteral("camera.flyKeys.") : QStringLiteral("camera.driveKeys.");
@@ -197,7 +229,7 @@ QJsonObject levelGestureValues(const LevelEditorControls& controls)
 bool levelGestureFieldAvailable(const QString& id, const LevelEditorControls& controls)
 {
 	return controls.camera.perspective || !(id == QLatin1String("plan.middleButtonDrivesCamera") || id == QLatin1String("plan.arrowsDriveCamera")
-		|| id.startsWith(QLatin1String("camera.look")) || id == QLatin1String("camera.wheel") || id == QLatin1String("camera.fieldOfViewWheelModifiers")
+		|| id.startsWith(QLatin1String("camera.look")) || id == QLatin1String("camera.focusHoldKey") || id == QLatin1String("camera.wheel") || id == QLatin1String("camera.fieldOfViewWheelModifiers")
 		|| id.startsWith(QLatin1String("camera.flyKeys.")) || id.startsWith(QLatin1String("camera.driveKeys."))
 		|| id == QLatin1String("plan.fixedCameraSteps") || id == QLatin1String("camera.discreteDriveKeys") || id.startsWith(QLatin1String("camera.drive"))
 		|| id == QLatin1String("camera.dragMovesSelection") || id == QLatin1String("camera.flyNeedsLook")
@@ -223,7 +255,9 @@ bool applyLevelGestureOverrides(const LevelEditorControls& base, const QJsonObje
 			}
 		} else {
 			QString keyError;
-			if (!normalizeCameraKey(value, field->info.kind == LevelGestureFieldKind::ToggleKey, &value, &keyError)) {
+			const bool focusKey = field->info.id == QLatin1String("camera.focusHoldKey");
+			if (!(focusKey ? normalizeCameraFocusKey(value, &value, &keyError)
+					: normalizeCameraKey(value, field->info.kind == LevelGestureFieldKind::ToggleKey, &value, &keyError))) {
 				return fail(error, QCoreApplication::translate("LevelGestures", "%1: %2").arg(field->info.label, keyError));
 			}
 		}
@@ -307,8 +341,42 @@ bool applyLevelGestureOverrides(const LevelEditorControls& base, const QJsonObje
 	};
 	preserveBeforeProject(QStringLiteral("camera.surfaceProject"), candidate.camera.surfaceProjectButton, candidate.camera.surfaceProjectModifiers);
 	preserveBeforeProject(QStringLiteral("camera.surfaceProjectOnly"), candidate.camera.surfaceProjectOnlyButton, candidate.camera.surfaceProjectOnlyModifiers);
+	const auto wheelConflict = [](const CameraViewControls& camera) {
+		return camera.componentCycleWheelModifiers != Qt::NoModifier && camera.fieldOfViewWheelModifiers != Qt::NoModifier
+			&& (camera.componentCycleWheelModifiers & camera.fieldOfViewWheelModifiers) == camera.fieldOfViewWheelModifiers;
+	};
+	// Preserve older custom FOV bindings when introducing this optional gesture.
+	if (overrides.contains(QStringLiteral("camera.fieldOfViewWheelModifiers"))
+		&& !overrides.contains(QStringLiteral("camera.componentCycleWheelModifiers")) && wheelConflict(candidate.camera)) {
+		candidate.camera.componentCycleWheelModifiers = Qt::NoModifier;
+		cleaned.insert(QStringLiteral("camera.componentCycleWheelModifiers"),QStringLiteral("none"));
+	}
+	const auto quickClipConflict = [](const PlanViewControls& plan) {
+		const auto keys = plan.quickClipModifiers;
+		return keys != Qt::NoModifier && (keys == plan.bandModifiers || keys == plan.cycleModifiers
+			|| (plan.toggleModifiers != Qt::NoModifier && (keys & plan.toggleModifiers) == plan.toggleModifiers)
+			|| (plan.addModifiers != Qt::NoModifier && (keys & plan.addModifiers) == plan.addModifiers));
+	};
+	// Earlier preference files may already use Ctrl for selection. Introducing
+	// quick clip must not silently take that custom binding away.
+	if (!overrides.contains(QStringLiteral("plan.quickClipModifiers")) && quickClipConflict(candidate.plan)) {
+		candidate.plan.quickClipModifiers = Qt::NoModifier; cleaned.insert(QStringLiteral("plan.quickClipModifiers"),QStringLiteral("none"));
+	}
+	const auto resolveVertexSnap = [&](auto& controls,const QString& prefix,Qt::KeyboardModifiers add) {
+		const auto key = controls.componentQuickSnapModifiers;
+		if (key == Qt::NoModifier || !levelComponentPickOperation(key,controls.toggleModifiers,add,false,controls.componentBandToggles)) { return; }
+		const auto field = prefix+QStringLiteral(".componentQuickSnapModifiers");
+		if (!overrides.contains(field)) { controls.componentQuickSnapModifiers = Qt::NoModifier; cleaned.insert(field,QStringLiteral("none")); }
+	};
+	resolveVertexSnap(candidate.plan,QStringLiteral("plan"),candidate.plan.addModifiers);
+	resolveVertexSnap(candidate.camera,QStringLiteral("camera"),Qt::NoModifier);
 	const auto& p = candidate.plan; const auto& c = candidate.camera;
 	auto problems = levelEditorControlProblems(candidate);
+	if ((p.componentQuickSnapModifiers != Qt::NoModifier && levelComponentPickOperation(p.componentQuickSnapModifiers,p.toggleModifiers,p.addModifiers,false,p.componentBandToggles))
+		|| (c.componentQuickSnapModifiers != Qt::NoModifier && levelComponentPickOperation(c.componentQuickSnapModifiers,c.toggleModifiers,Qt::NoModifier,false,c.componentBandToggles))) {
+		problems << QCoreApplication::translate("LevelGestures","Vertex quick snapping conflicts with a component selection click.");
+	}
+	if (quickClipConflict(p)) { problems << QCoreApplication::translate("LevelGestures","Quick clip conflicts with a plan selection gesture."); }
 	problems.append(cameraKeyProblems(candidate.camera));
 	if ((c.fastModifiers & c.slowModifiers) != Qt::NoModifier) {
 		problems << QCoreApplication::translate("LevelGestures", "Fast and slow flight must use different modifiers.");
@@ -324,6 +392,9 @@ bool applyLevelGestureOverrides(const LevelEditorControls& base, const QJsonObje
 	}
 	if (p.cycleModifiers != Qt::NoModifier && (p.cycleModifiers == p.toggleModifiers || p.cycleModifiers == p.addModifiers || p.cycleModifiers == p.bandModifiers)) {
 		problems << QCoreApplication::translate("LevelGestures", "Cycle selection conflicts with another plan selection gesture.");
+	}
+	if (wheelConflict(c)) {
+		problems << QCoreApplication::translate("LevelGestures", "Component cycling conflicts with the field-of-view wheel gesture.");
 	}
 	if (!c.plainClickSelects && c.toggleModifiers == Qt::NoModifier) {
 		problems << QCoreApplication::translate("LevelGestures", "The camera needs a click gesture that can select objects.");

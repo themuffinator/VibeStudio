@@ -1,4 +1,5 @@
 #include "core/model_archive.h"
+#include "core/package_protection_p.h"
 
 #include <QCoreApplication>
 #include <algorithm>
@@ -16,6 +17,45 @@ bool fail(QString *error, const QString &message)
 	return false;
 }
 } // namespace
+bool validateModelArchiveOutputs(const PackageArchiveReader *archive, const QStringList &paths, QString *error,
+								 const ModelWorkControl &control)
+{
+	if (!archive)
+	{
+		return true;
+	}
+	PackageReadControl readControl;
+	readControl.isCancelled = control.cancelled;
+	readControl.progress = [&](const QString &, qint64 done, qint64 total)
+	{
+		if (control.progress)
+		{
+			control.progress(ModelWorkPhase::Validating, done, total);
+		}
+	};
+	PackageInputProtectionSet inputs(PackageInputProtectionSet::pathCeiling, PackageInputProtectionSet::byteCeiling, error,
+									 readControl);
+	if (!archive->visitProtectedInputPaths([&](const QString &input) { return inputs.add(input); }, error, readControl) ||
+		!inputs.finish())
+	{
+		return false;
+	}
+	for (const auto &path : paths)
+	{
+		bool protectedPath = false;
+		if (!inputs.check(path, &protectedPath))
+		{
+			return false;
+		}
+		if (protectedPath)
+		{
+			return fail(error, QCoreApplication::translate(
+				"VibeStudioModelExport", "Write outside the model's input package, folder or draft. Use package staging to change its contents."));
+		}
+	}
+	return true;
+}
+
 ModelArchiveReader::ModelArchiveReader(const PackageArchiveReader &source, ModelWorkControl control)
 	: m_source(source), m_control(std::move(control)), m_entries(source.entries())
 {

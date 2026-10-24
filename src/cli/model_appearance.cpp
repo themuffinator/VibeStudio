@@ -79,7 +79,7 @@ ModelAppearanceCliResult runModelAppearance(const QStringList &arguments)
 	IdTechPaletteResolution palette;
 	const bool mdl = detectModelMeshFormat(path, bytes) == ModelMeshFormat::QuakeMdl;
 	if (mdl) { palette = resolveIdTechPalette(archive, values.value("--palette", QStringLiteral("quake"))); }
-	if (!importEditableModel(path, bytes, &mesh, &error, mdl ? &palette.palette : nullptr)) { return fail(4, error); }
+	if (!importEditableModel(QFileInfo(path).absoluteFilePath(), bytes, &mesh, &error, mdl ? &palette.palette : nullptr)) { return fail(4, error); }
 	ModelAppearanceSnapshot snapshot;
 	if (!prepareModelAppearance(mesh, appearance, &archive, &snapshot, &error)) { return fail(4, error); }
 	LevelPreviewAssetOptions limits;

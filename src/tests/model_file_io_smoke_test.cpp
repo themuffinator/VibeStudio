@@ -1,4 +1,5 @@
 #include "core/model_file_io.h"
+#include "tests/model_output_test_helpers.h"
 
 #include <QCoreApplication>
 #include <QDir>
@@ -133,6 +134,17 @@ int main(int argc, char **argv)
 	ok &= expect(!inspectModelWriteTarget(temporary.path()).isValid(), "directory destinations are refused");
 	ok &= expect(modelPathsReferToSameFile(nested, QDir(QFileInfo(nested).absolutePath()).filePath(QStringLiteral("./output.mesh.json"))),
 				 "source protection resolves alternate spellings");
+	const auto alias = QDir(temporary.path()).filePath(QString::fromUtf8("alias-\xc3\xa9.mesh.json"));
+	ok &= expect(tests::modelTestHardLink(nested, alias), "create independent hard-link fixture");
+	ok &= expect(modelPathsReferToSameFile(nested, alias) && modelPathsReferToSameFile(alias, nested),
+				 "source protection recognises hard links with native Unicode paths in either order");
+	ok &= expect(!modelPathsReferToSameFile(nested, appeared) && !modelPathsReferToSameFile(nested, cancelledNewPath) &&
+					 !modelPathsReferToSameFile(QString(), nested),
+				 "distinct, missing and empty paths are not mistaken for source aliases");
+	ok &= expect(!validateModelWriteTarget(existing, &error) && !error.isEmpty() && read(nested) == second,
+				 "read-only target validation detects a stale review without changing bytes");
+	ok &= expect(validateModelWriteTarget(inspectModelWriteTarget(nested), &error) && error.isEmpty(),
+				 "read-only target validation accepts a current review and clears prior errors");
 	const auto leftovers =
 		QDir(temporary.path()).entryList({QStringLiteral("*.lock"), QStringLiteral(".vibestudio-model-*")}, QDir::Files | QDir::Hidden);
 	const auto nestedLeftovers =

@@ -8,16 +8,18 @@
 #include "tests/model_viewport_test_helpers.h"
 #include "tests/render_test_support.h"
 
+#include <QAction>
 #include <QApplication>
 #include <QComboBox>
 #include <QFont>
 #include <QLabel>
+#include <QMenu>
 #include <QPlainTextEdit>
 #include <QPolygonF>
 #include <QProgressBar>
-#include <QPushButton>
 #include <QTemporaryDir>
 #include <QThread>
+#include <QToolButton>
 #include <QTranslator>
 
 #include <cstdlib>
@@ -179,9 +181,12 @@ int main(int argc, char **argv)
 		auto *mode = editor->findChild<QComboBox *>(QStringLiteral("meshRenderMode"));
 		auto *status = editor->findChild<QLabel *>(QStringLiteral("meshMaterialStatus"));
 		auto *progress = editor->findChild<QProgressBar *>(QStringLiteral("meshMaterialProgress"));
-		auto *reload = editor->findChild<QPushButton *>(QStringLiteral("reloadMeshMaterials"));
-		auto *cancel = editor->findChild<QPushButton *>(QStringLiteral("cancelMeshMaterials"));
-		auto *details = editor->findChild<QPushButton *>(QStringLiteral("meshMaterialDetails"));
+		// Cancel shows while images load; Reload Images and Details sit in the
+		// line's Images menu.
+		auto *cancel = editor->findChild<QToolButton *>(QStringLiteral("cancelMeshMaterials"));
+		auto *images = editor->findChild<QToolButton *>(QStringLiteral("meshMaterialActions"));
+		auto *reload = editor->findChild<QAction *>(QStringLiteral("reloadMeshMaterials"));
+		auto *details = editor->findChild<QAction *>(QStringLiteral("meshMaterialDetails"));
 		auto *uv = editor->findChild<QLabel *>(QStringLiteral("meshUvPreview"));
 		auto *preview = editor->findChild<ModelViewport *>(QStringLiteral("meshPreview"));
 		preview->setShowGrid(false);
@@ -189,8 +194,11 @@ int main(int argc, char **argv)
 		preview->setOrbit(0, 80);
 		editor->setMaterialSource({original, QStringLiteral("base"), {}});
 		mode->setCurrentIndex(3);
-		ok &= expect(editor->materialLoading() && progress->isVisible() && cancel->isEnabled() && !status->accessibleName().isEmpty(),
+		ok &= expect(editor->materialLoading() && progress->isVisible() && cancel->isEnabled() && cancel->isVisible() &&
+						 !status->accessibleName().isEmpty(),
 					 "material work exposes loading, progress, accessible status and Cancel");
+		ok &= expect(images && images->menu() && images->menu()->actions().contains(reload) && images->menu()->actions().contains(details),
+					 "the Images menu holds Reload Images and Details");
 		ok &= expect(settle(*editor) && colorPixels(uv->pixmap().toImage(), false) > 10000, "loaded material updates the UV background");
 		ok &= expect(tests::settleModelViewport(*preview), "material raster finishes");
 		QImage image(preview->size(), QImage::Format_RGB32);
@@ -214,11 +222,12 @@ int main(int argc, char **argv)
 		ok &= expect(settle(*editor) && colorPixels(uv->pixmap().toImage(), false) > 10000 &&
 						 editor->document().revisionFingerprint() == fingerprint && !editor->document().isModified(),
 					 "package undo refreshes materials without modifying the mesh document");
-		reload->click();
+		reload->trigger();
 		cancel->click();
-		ok &= expect(status->text().contains(QStringLiteral("cancelled")) && !cancel->isEnabled() && !progress->isVisible(),
+		ok &= expect(status->text().contains(QStringLiteral("cancelled")) && !cancel->isEnabled() && !cancel->isVisible() &&
+						 !progress->isVisible() && images->isVisible() && reload->isEnabled(),
 					 "Cancel exposes a persistent reload action");
-		reload->click();
+		reload->trigger();
 		ok &= expect(settle(*editor) && status->text().contains(QStringLiteral("1/1")), "Reload retries cancelled loading");
 		bool detailShown = false;
 		QTimer::singleShot(0, editor,
@@ -234,15 +243,12 @@ int main(int argc, char **argv)
 								   dialog->accept();
 							   }
 						   });
-		details->click();
+		details->trigger();
 		ok &= expect(detailShown, "Details exposes read-only material diagnostics");
 		app.processEvents();
-		for (auto *button : {reload, cancel, details})
-		{
-			ok &= expect(button->focusPolicy() != Qt::NoFocus && button->width() >= button->minimumSizeHint().width() &&
-							 editor->rect().contains(QRect(button->mapTo(editor, QPoint()), button->size())),
-						 "material actions remain visible and focusable at scaled RTL expanded text");
-		}
+		ok &= expect(images->isVisible() && images->focusPolicy() != Qt::NoFocus && images->width() >= images->sizeHint().width() &&
+						 editor->rect().contains(QRect(images->mapTo(editor, QPoint()), images->size())),
+					 "material actions remain visible and focusable at scaled RTL expanded text");
 		const auto evidence = qEnvironmentVariable("VIBESTUDIO_MODELLER_EVIDENCE");
 		if (!evidence.isEmpty())
 		{

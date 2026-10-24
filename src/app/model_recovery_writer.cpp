@@ -92,12 +92,14 @@ void ModelRecoveryWriter::removeRetired()
 		QString error;
 		if (removeModelRecovery(m_directory, *it, &error))
 		{
+			m_reported.remove(*it);
 			it = m_removals.erase(it);
 		}
 		else
 		{
-			if (finished)
+			if (finished && !m_reported.contains(*it))
 			{
+				m_reported.insert(*it);
 				finished({}, error);
 			}
 			++it;

@@ -14,6 +14,7 @@
 #include <QFont>
 #include <QLabel>
 #include <QListWidget>
+#include <QMenu>
 #include <QMessageBox>
 #include <QPlainTextEdit>
 #include <QPushButton>
@@ -141,8 +142,10 @@ int main(int argc, char **argv)
 		editor.checkpointRecovery();
 		const auto path = editor.recoveryPath();
 		ok &= expect(settle(editor) && inspectModelRecovery(path).isValid(), "editor checkpoints unsaved geometry in the background");
-		auto *enabled = editor.findChild<QCheckBox *>(QStringLiteral("meshRecoveryEnabled"));
-		ok &= expect(enabled && !enabled->accessibleName().isEmpty(), "recovery preference is accessible");
+		auto *enabled = editor.findChild<QAction *>(QStringLiteral("meshRecoveryEnabled"));
+		auto *menu = editor.findChild<QMenu *>(QStringLiteral("meshMenuModel"));
+		ok &= expect(enabled && enabled->isCheckable() && !enabled->text().isEmpty() && menu && menu->actions().contains(enabled),
+					 "the recovery preference is a named check in the Model menu");
 		enabled->setChecked(false);
 		ok &= expect(!StudioSettings().modelRecoveryEnabled() && QFileInfo::exists(path),
 					 "disabling persists the preference and keeps committed copies");

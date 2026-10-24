@@ -1,4 +1,6 @@
 #include "app/model_assembly_dialog.h"
+#include "app/locale_number.h"
+#include "app/dialog_screen_fit.h"
 
 #include <QCoreApplication>
 #include <QDialogButtonBox>
@@ -70,7 +72,6 @@ void ModelAssemblyDialog::chooseAnimationBake(bool exporting)
 	dialog.setWindowTitle(exporting ? QCoreApplication::translate("ModelAssemblyDialog", "Export Assembly Animation")
 									: QCoreApplication::translate("ModelAssemblyDialog", "Bake Assembly Animation"));
 	dialog.setAccessibleName(dialog.windowTitle());
-	dialog.resize(620, 600);
 	auto *layout = new QVBoxLayout(&dialog);
 	auto *scroll = new QScrollArea;
 	scroll->setWidgetResizable(true);
@@ -162,6 +163,7 @@ void ModelAssemblyDialog::chooseAnimationBake(bool exporting)
 	connect(fps, &QDoubleSpinBox::valueChanged, &dialog, update);
 	connect(name, &QLineEdit::textChanged, &dialog, update);
 	update();
+	fitDialogToScreen(&dialog, QSize(620, 600));
 	if (dialog.exec() != QDialog::Accepted)
 	{
 		return;
@@ -191,8 +193,9 @@ void ModelAssemblyDialog::chooseAnimationBake(bool exporting)
 	}
 	report(QCoreApplication::translate(
 			   "ModelAssemblyDialog",
-			   "Opened %1 baked poses in the Mesh Editor at %2 FPS. The assembly and its original inputs remain editable.")
-			   .arg(options().frameCount)
-			   .arg(options().framesPerSecond));
+			   "Opened %Ln baked pose(s) in the Mesh Editor at %1 FPS. The assembly and its original inputs remain editable.", nullptr,
+			   int(options().frameCount))
+			   .arg(localeNumber(options().framesPerSecond)),
+		   LiveStatus::Result);
 }
 } // namespace vibestudio

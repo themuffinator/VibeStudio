@@ -58,8 +58,14 @@ class GeometryHash
 
 QByteArray modelStateFingerprint(const ModelMesh &mesh, QString *error, const ModelWorkControl &control)
 {
+	return summarizeModelState(mesh, error, control).fingerprint;
+}
+
+ModelStateSummary summarizeModelState(const ModelMesh &mesh, QString *error, const ModelWorkControl &control)
+{
 	// Keep metadata identity tied to the source serializer, including MDL
 	// settings, indexed skins, material paths, poses, clips and attachment tags.
+	// The packed form keeps skeletal clips and influences in a few strings.
 	// Geometry is streamed separately: constructing millions of tiny JSON
 	// arrays merely to detect an edit is unnecessary allocation and latency.
 	ModelMesh metadata = mesh;
@@ -70,14 +76,20 @@ QByteArray modelStateFingerprint(const ModelMesh &mesh, QString *error, const Mo
 		surface.uvSeams.clear();
 		surface.frames.clear();
 	}
-	const auto json = editableModelJson(metadata, error, control);
+	const auto json = editableModelJson(metadata, error, control, ModelSourceEncoding::Packed);
 	if (json.isEmpty())
 	{
 		return {};
 	}
 	const auto bytes = QJsonDocument(json).toJson(QJsonDocument::Compact);
+	ModelStateSummary summary;
+	summary.packedSourceBytes = bytes.size();
+	for (const auto &surface : mesh.surfaces)
+	{
+		summary.packedSourceBytes += modelSourcePackedSurfaceLength(surface);
+	}
 	QCryptographicHash hash(QCryptographicHash::Sha256);
-	static constexpr char domain[] = "VibeStudio model revision 1";
+	static constexpr char domain[] = "VibeStudio model revision 2";
 	hash.addData(QByteArrayView(domain, sizeof(domain)));
 	GeometryHash geometry(hash, control, error);
 	if (!geometry.count(bytes.size()) || !geometry.flush())
@@ -156,6 +168,11 @@ QByteArray modelStateFingerprint(const ModelMesh &mesh, QString *error, const Mo
 			}
 		}
 	}
-	return geometry.flush() ? hash.result() : QByteArray{};
+	if (!geometry.flush())
+	{
+		return {};
+	}
+	summary.fingerprint = hash.result();
+	return summary;
 }
 } // namespace vibestudio

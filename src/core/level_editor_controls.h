@@ -1,4 +1,7 @@
 #pragma once
+#include "core/level_region_selection_types.h"
+#include "core/level_visibility_types.h"
+#include "core/level_entity_connection_types.h"
 
 // How the level editor's views answer the mouse and keyboard under an editor
 // profile: which button pans, what a drag over empty space does, how the 3D
@@ -16,7 +19,11 @@
 #include <QVector>
 #include <Qt>
 
+#include <array>
+
 namespace vibestudio {
+
+struct LevelMapDocument;
 
 // How the Levels page arranges its views.
 enum class LevelViewLayout {
@@ -47,6 +54,12 @@ enum class PlanEmptyDrag {
 };
 
 struct PlanViewControls {
+	Qt::KeyboardModifiers componentQuickSnapModifiers = Qt::NoModifier; // Exact click chord; None disables.
+	bool componentAxisDrag = false; // World planes, live Shift axis and Ctrl vertex snapping; Alt ignored in 2D.
+	Qt::KeyboardModifiers componentInsertModifiers = Qt::NoModifier; // None disables; named tool remains available.
+	Qt::KeyboardModifiers quickClipModifiers = Qt::NoModifier; // None disables one-shot clipping.
+	Qt::KeyboardModifiers componentCycleWheelModifiers = Qt::AltModifier; // None disables.
+	bool componentBandToggles = false;
 	// Buttons that pan by dragging. The right button pans only once the drag
 	// moves, so a right click still opens the context menu.
 	QVector<Qt::MouseButton> panButtons {Qt::MiddleButton};
@@ -119,7 +132,16 @@ struct CameraFlyKeys {
 	[[nodiscard]] bool isEmpty() const;
 };
 
+enum class CameraClipDragStyle { Surface, WorldAxes, ViewAxes };
+
 struct CameraViewControls {
+	CameraClipDragStyle clipDragStyle = CameraClipDragStyle::Surface;
+	bool clipViewAxis = false; // NRC dominant-view two-point plane with outer-face/parallel fixups.
+	Qt::KeyboardModifiers componentQuickSnapModifiers = Qt::NoModifier;
+	bool componentAxisDrag = false; // World planes, live Alt vertical / Shift axis / Ctrl vertex snapping.
+	Qt::KeyboardModifiers componentInsertModifiers = Qt::NoModifier;
+	Qt::KeyboardModifiers componentCycleWheelModifiers = Qt::AltModifier; // None disables.
+	bool componentBandToggles = false;
 	// A first-person perspective camera, as TrenchBroom and Radiant have;
 	// otherwise the orthographic view orbits the map's centre.
 	bool perspective = false;
@@ -138,6 +160,11 @@ struct CameraViewControls {
 	// Optional viewport-local free-look toggle (Hammer's Z, Godot's Shift+F).
 	QString lookToggleKey;
 	QString lookHoldKey;
+	// Held during mouse look, the camera keeps the selection framed along its
+	// view and the wheel moves it nearer or farther (Radiant's free focus).
+	// One unmodified key; Tab is allowed here because it only acts while
+	// mouse look holds the pointer (core/level_camera_focus.h).
+	QString focusHoldKey;
 	// In free look, right mouse pans and left+right dollies (Sledge).
 	// Otherwise Ctrl pans and Shift dollies (Radiant-style adaptation).
 	bool lookPanUsesButtons = false;
@@ -210,10 +237,45 @@ struct LevelEditorKeyBinding {
 
 struct LevelEditorControls {
 	LevelViewLayout layout = LevelViewLayout::Single2D;
-	int defaultGridUnits = 64;
+	// One of levelEditorGridSizes().
+	double defaultGridUnits = 64;
 	PlanViewControls plan;
 	CameraViewControls camera;
 	QVector<LevelEditorKeyBinding> keys;
+	bool pasteAtCursor = false;
+	bool nudgeAfterDuplicate = true;
+	bool duplicateRequiresObjectMode = false;
+	bool deleteObjectsWithoutComponents = false;
+	bool deleteIgnoresPatchPoints = false;
+	bool deleteRemovesClipPoint = false;
+	LevelEntityConnectionMode entityConnectionMode = LevelEntityConnectionMode::SourcesToLast;
+	bool copyFaceAttributes = false;
+	bool undoObjectSelection = false;
+	bool inheritGroupVisibility = false;
+	LevelInsertionVisibility insertionVisibility = LevelInsertionVisibility::PreserveAndReveal;
+	LevelRegionSelectionPolicy regionSelection = LevelRegionSelectionPolicy::Bounds;
+	// TrenchBroom's Make Structural also moves the selected brushes out of
+	// brush entities to the world or current group (core/level_entity_ownership.h).
+	bool makeStructuralLeavesEntities = false;
+	// Radiant's grid commands turn snapping back on whenever they choose or
+	// step the working grid, even when the size does not change.
+	bool gridChangeEnablesSnap = false;
+	// NetRadiant Custom and TrenchBroom round a quick turn's pivot (Rotate
+	// 90° Left/Right, Rotate X/Y/Z) to the grid while Snap is on, so on-grid
+	// geometry stays on the grid; otherwise it turns about the exact centre
+	// (core/level_quick_transform.h). A custom component pivot always wins.
+	bool quickTurnSnapsPivot = false;
+	// TrenchBroom mirrors a flip about the selection's centre rounded to half
+	// the grid while Snap is on, so an off-grid selection's on-grid sides stay
+	// on the grid and an on-grid one flips in place; otherwise flips mirror
+	// about the exact centre (core/level_quick_transform.h levelFlipPivot()).
+	bool flipSnapsPivot = false;
+	// The Surfaces tab's Rotation step and Rotate about choice when the
+	// profile is applied: NetRadiant Custom's Surface Inspector turns 45°
+	// about the texture origin (core/level_surface.h RadiantRotate); the
+	// default turns 15° about each face centre.
+	double surfaceRotationStep = 15;
+	bool surfaceRotateAboutOrigin = false;
 };
 
 // One row of a controls reference: where, what, and how. `section` is a
@@ -225,6 +287,29 @@ struct LevelEditorControlRow {
 	QString gesture;
 	QString section;
 };
+
+// The working grid sizes every Levels route offers, finest first: 0.125, 0.25
+// and 0.5 units, then powers of two from 1 to 1024 units, as NetRadiant
+// Custom's Grid menu has them (TrenchBroom stops at 256, GtkRadiant 1.6 at 1
+// and 256). Every size is exact in binary floating point, so comparing sizes
+// with == is safe. The view bar, the View tab, the map.grid<N> commands,
+// Smaller/Larger Grid and profile validation share it.
+[[nodiscard]] const QVector<double>& levelEditorGridSizes();
+[[nodiscard]] bool levelEditorGridSizeSupported(double units);
+inline constexpr double kLevelEditorFinestGridUnits = 0.125;
+// The finest grid a map can use. Binary Doom and Hexen maps store whole-unit
+// coordinates, so their grid stops at 1 unit; Quake-family maps, UDMF and an
+// empty document go down to 0.125.
+[[nodiscard]] double levelEditorFinestGridUnits(const LevelMapDocument& document);
+// The listed size one step finer (direction < 0) or coarser than `units`,
+// never finer than `finest`; `units` itself when it is already at that end.
+// An unlisted `units` steps from the nearest listed size.
+[[nodiscard]] double levelEditorSteppedGridUnits(double units, int direction, double finest = kLevelEditorFinestGridUnits);
+// A size as the grid lists, the HUD, command ids and messages print it:
+// "0.125", "16" (C-locale digits, so ids and saved settings stay stable).
+[[nodiscard]] QString levelEditorGridSizeText(double units);
+// The shell command that chooses a listed size: map.grid0.125 to map.grid1024.
+[[nodiscard]] QString levelEditorGridCommandId(double units);
 
 // The controls of each profile that has them. A profile without its own
 // controls uses the VibeStudio ones.
@@ -257,6 +342,39 @@ enum class CameraFreeLookMotion { Look, Pan, Dolly };
 [[nodiscard]] bool levelViewLayoutHasThreePlans(LevelViewLayout layout);
 bool levelViewLayoutForId(const QString& id, LevelViewLayout* layout);
 [[nodiscard]] QString levelViewLayoutDisplayName(LevelViewLayout layout);
+
+// Which plan panes the three-plan layouts (Four Views, Camera Above Plans,
+// Camera Beside Plans) show: NetRadiant Custom's XY (Top), XZ (Front) and YZ
+// (Side) window toggles, applied to the fixed panes. Index 0 is Top, 1 Front
+// and 2 Side, the MapViewportProjection order. One pane always stays shown;
+// one-plan layouts ignore the choice. A view preference: never map data.
+//
+// Workflow reference: NRC xywindow.cpp ToggleView/ToggleFrontView/
+// ToggleSideView (XYVIS/XZVIS/YZVIS) at 449778b3 (GPL-2.0-or-later). Original
+// Qt implementation; see docs/CREDITS.md.
+struct LevelPlanPanes {
+	std::array<bool, 3> shown {true, true, true};
+	[[nodiscard]] bool operator==(const LevelPlanPanes& other) const = default;
+};
+[[nodiscard]] int levelPlanPanesShownCount(const LevelPlanPanes& panes);
+// Shows or hides pane 0-2. Refuses an index out of range and hiding the last
+// shown pane, leaving the panes as they were.
+bool setLevelPlanPaneShown(LevelPlanPanes* panes, int index, bool shown);
+// "top", "front" or "side" for 0-2; empty otherwise.
+[[nodiscard]] QString levelPlanPaneId(int index);
+// The shown panes in pane order, joined with commas: "top,front,side".
+[[nodiscard]] QString levelPlanPanesId(const LevelPlanPanes& panes);
+// Reads a comma-separated list of pane ids in any order, or "all". Refuses an
+// empty list, an unknown id and a repeated one, leaving `panes` untouched.
+bool levelPlanPanesForId(const QString& id, LevelPlanPanes* panes);
+// The first shown pane at `from` or after it, wrapping past Side to Top.
+[[nodiscard]] int levelPlanPaneNextShown(const LevelPlanPanes& panes, int from);
+// The settings prefix that keeps a layout's splitter proportions:
+// "levelViews/four-views/" with every pane shown (the key saved before pane
+// choices existed), "levelViews/four-views/front-side/" when Top is hidden.
+// Each pane combination keeps its own proportions.
+[[nodiscard]] QString levelViewSplitterStatePrefix(LevelViewLayout layout, const LevelPlanPanes& panes);
+
 [[nodiscard]] QString planEmptyDragId(PlanEmptyDrag drag);
 [[nodiscard]] QString cameraWheelId(CameraWheel wheel);
 

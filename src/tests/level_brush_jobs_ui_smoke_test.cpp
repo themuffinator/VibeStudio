@@ -24,6 +24,7 @@
 #include <QTemporaryDir>
 #include <QTimer>
 #include <QTranslator>
+#include <algorithm>
 #include <iostream>
 
 using namespace vibestudio;
@@ -167,6 +168,12 @@ int main(int argc, char** argv)
 			expect(shell.saveLevelDocument(path, true, &error), "save scale result", error);
 		}
 	} else {
+		// The TrenchBroom profile records selection changes as non-content undo
+		// steps; publication checks count only the edits that change the map.
+		const auto contentEdits = [&] {
+			const auto& stack = shell.levelDocument().undoStack;
+			return std::count_if(stack.cbegin(), stack.cend(), [](const auto& command) { return command.commandKind != QStringLiteral("selection"); });
+		};
 		const auto original = serializeLevelMap(shell.levelDocument()).bytes;
 		QTimer::singleShot(0, &shell, [&] { shell.createLevelDocument(create, &error); });
 		expect(!shell.applyLevelBrushPrimitive(request.primitive, &error) && error.contains("changed") &&
@@ -179,7 +186,8 @@ int main(int argc, char** argv)
 		expect(shell.levelDocument().brushes.size() == 1 && shell.statusBar()->currentMessage().contains("changed") &&
 			serializeLevelMap(shell.levelDocument()).bytes == first, "selection change rejects in-flight plan creation");
 		plan->brushDrawRequested({128, 128, 0, true}, {192, 192, 64, true});
-		expect(shell.levelDocument().brushes.size() == 2 && shell.levelDocument().undoStack.size() == 2, "plan creation publishes once");
+		expect(shell.levelDocument().brushes.size() == 2 && contentEdits() == 2
+			&& shell.levelDocument().undoStack.last().commandKind != QStringLiteral("selection"), "plan creation publishes once");
 		shell.findChild<QAction*>("map.undo")->trigger();
 		expect(serializeLevelMap(shell.levelDocument()).bytes == first, "plan creation exact undo");
 		expect(shell.saveLevelDocument(temp.filePath("first.map"), false, &error), "save shell fixture", error);
@@ -221,7 +229,7 @@ int main(int argc, char** argv)
 			expect(handled && accepted == (change == 2), "numeric preview acceptance state");
 			expect(serializeLevelMap(shell.levelDocument()).bytes == (change == 2 ? preview : before), "publish exact preview or preserve source");
 		}
-		expect(shell.levelDocument().brushes.size() == 2 && shell.levelDocument().undoStack.size() == 1 &&
+		expect(shell.levelDocument().brushes.size() == 2 && contentEdits() == 1 &&
 			levelSceneMembership(shell.levelDocument().scene, "brush:1") == layer, "numeric reuse preserves destination and one undo");
 		expect(shell.saveLevelDocument(path, true, &error), "save numeric candidate", error);
 	}

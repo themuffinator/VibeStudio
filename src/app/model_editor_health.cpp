@@ -1,4 +1,5 @@
 #include "app/model_editor_dialog.h"
+#include "app/wrapping_action_button.h"
 
 #include <QComboBox>
 #include <QCoreApplication>
@@ -72,7 +73,7 @@ std::array<int, 6> counts(const ModelTopologyHealth &health)
 
 void ModelEditorDialog::addHealthControls(QFormLayout *form)
 {
-	m_healthInspect = new QPushButton(QCoreApplication::translate("VibeStudioModelEditor", "Inspect Surface"));
+	m_healthInspect = new WrappingActionButton(QCoreApplication::translate("VibeStudioModelEditor", "Inspect Surface"), 2);
 	m_healthInspect->setObjectName(QStringLiteral("inspectMeshTopology"));
 	m_healthInspect->setToolTip(QCoreApplication::translate("VibeStudioModelEditor",
 															"Inspect indexed topology on the active surface. Coincident seam copies "
@@ -103,12 +104,12 @@ void ModelEditorDialog::addHealthControls(QFormLayout *form)
 	m_healthDetail->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Preferred);
 	m_healthDetail->setMinimumWidth(0);
 	form->addRow(m_healthDetail);
-	m_healthSelect = new QPushButton(QCoreApplication::translate("VibeStudioModelEditor", "Select Findings"));
+	m_healthSelect = new WrappingActionButton(QCoreApplication::translate("VibeStudioModelEditor", "Select Findings"), 2);
 	m_healthSelect->setObjectName(QStringLiteral("selectMeshHealthFinding"));
 	m_healthSelect->setToolTip(QCoreApplication::translate(
 		"VibeStudioModelEditor", "Select the affected faces, vertices, or edges in the component table and both previews."));
 	form->addRow(m_healthSelect);
-	m_healthRepair = new QPushButton(QCoreApplication::translate("VibeStudioModelEditor", "Split Disconnected Fans"));
+	m_healthRepair = new WrappingActionButton(QCoreApplication::translate("VibeStudioModelEditor", "Split Disconnected Fans"), 2);
 	m_healthRepair->setObjectName(QStringLiteral("repairMeshHealthFinding"));
 	m_healthRepair->setToolTip(QCoreApplication::translate(
 		"VibeStudioModelEditor", "Repair every finding of this category on the active surface in one undo step. The current component "
@@ -184,10 +185,10 @@ void ModelEditorDialog::refreshHealth()
 	m_healthDetail->setText(category >= 0 ? findingDetails()[category] : QString());
 	m_healthDetail->setAccessibleName(m_healthDetail->text());
 	m_healthStatus->setText(
-		current ? QCoreApplication::translate("VibeStudioModelEditor",
-											  "%1 edges · %2 face components\nRepair scope: entire active surface, all poses.")
-					  .arg(m_health.edges.size())
-					  .arg(m_health.faceComponents)
+		current ? QCoreApplication::translate("VibeStudioModelEditor", "%1 · %2\nRepair scope: entire active surface, all poses.",
+											  "edge count, then face component count")
+					  .arg(QCoreApplication::translate("VibeStudioModelEditor", "%Ln edge(s)", nullptr, int(m_health.edges.size())),
+						   QCoreApplication::translate("VibeStudioModelEditor", "%Ln face component(s)", nullptr, int(m_health.faceComponents)))
 				: QCoreApplication::translate("VibeStudioModelEditor", "Inspect the active surface to update topology findings."));
 	m_healthStatus->setAccessibleDescription(m_healthStatus->text());
 	refreshIntersections();

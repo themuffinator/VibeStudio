@@ -7,8 +7,11 @@
 #include "app/studio_sound_cues.h"
 #include "app/studio_speech.h"
 #include "app/level_surface_worker.h"
+#include "app/level_surface_tools.h"
 #include "app/level_texture_audit_panel.h"
 #include "core/level_placement.h"
+#include "core/level_nudge.h"
+#include "core/level_quick_transform.h"
 #include "core/level_build_workspace.h"
 #include "core/level_build_deployment.h"
 #include "app/level_scene_panel.h"
@@ -91,10 +94,12 @@
 #include "core/compiler_runner.h"
 #include "core/editor_profiles.h"
 #include "core/level_map.h"
+#include "core/level_entity_colour.h"
 #include "core/texture_handoff.h"
 #include "core/localization.h"
 #include "core/package_preview.h"
 #include "core/project_manifest.h"
+#include "core/level_face_clipboard.h"
 #include "core/game_asset_register.h"
 #include "core/project_content.h"
 #include "core/release_notes.h"
@@ -950,12 +955,23 @@ ApplicationShell::ApplicationShell(QWidget* parent, std::unique_ptr<AudioPlaybac
 			noteTaskOutcome(task);
 		}
 		m_accessibilityAnnouncementsReady = true;
+		// What the editors announce is read aloud as well: their refusals and
+		// failures as problems, a long operation's end as a long task that
+		// finished (as noteTaskOutcome reads the studio's own), and their
+		// other results as status messages.
+		setStatusAnnouncementListener([this](const QString& message, LiveStatus kind) {
+			const QString event = kind == LiveStatus::Problem ? QStringLiteral("task-problems")
+				: kind == LiveStatus::Finished ? QStringLiteral("task-results")
+				: QStringLiteral("status-messages");
+			speakEvent(event, message);
+		});
 	});
 	timing.mark("ready");
 }
 
 ApplicationShell::~ApplicationShell()
 {
+	setStatusAnnouncementListener({});
 	disconnect(qApp, &QApplication::focusChanged, this, nullptr);
 	delete m_levelSurfaceWorker; m_levelSurfaceWorker = nullptr;
 	delete m_levelTextureAudit; m_levelTextureAudit = nullptr;
@@ -1191,57 +1207,8 @@ constexpr int kMultiValueRole = Qt::UserRole + 12;
 // "face:<brush>:<face>:<field>"; on a face's group, "face:<brush>:<face>".
 constexpr int kFieldPathRole = Qt::UserRole + 11;
 
-// A colour key's value: "r g b", sometimes with a brightness after it, in
-// 0-255 or in 0-1 fractions, the two ways Quake-family tools write colours.
-struct EntityColorValue {
-	QColor color;
-	bool fractions = false;
-	QString rest;
-};
-
-bool parseEntityColor(const QString& value, EntityColorValue* parsed)
-{
-	const QStringList parts = value.split(QRegularExpression(QStringLiteral(R"(\s+)")), Qt::SkipEmptyParts);
-	if (parts.size() < 3) {
-		return false;
-	}
-	double channels[3] {0.0, 0.0, 0.0};
-	for (int index = 0; index < 3; ++index) {
-		bool ok = false;
-		channels[index] = parts.at(index).toDouble(&ok);
-		if (!ok || !std::isfinite(channels[index]) || channels[index] < 0.0) {
-			return false;
-		}
-	}
-	parsed->fractions = channels[0] <= 1.0 && channels[1] <= 1.0 && channels[2] <= 1.0;
-	const double scale = parsed->fractions ? 255.0 : 1.0;
-	const auto channel = [scale](double value) {
-		return std::clamp(static_cast<int>(std::lround(value * scale)), 0, 255);
-	};
-	parsed->color = QColor(channel(channels[0]), channel(channels[1]), channel(channels[2]));
-	parsed->rest = parts.mid(3).join(QLatin1Char(' '));
-	return true;
-}
-
-// Writes a colour back the way the key had it.
-QString formatEntityColor(const QColor& color, bool fractions, const QString& rest)
-{
-	const auto channel = [fractions](int value) {
-		if (!fractions) {
-			return QString::number(value);
-		}
-		QString text = QString::number(static_cast<double>(value) / 255.0, 'f', 3);
-		while (text.contains(QLatin1Char('.')) && (text.endsWith(QLatin1Char('0')) || text.endsWith(QLatin1Char('.')))) {
-			text.chop(1);
-		}
-		return text;
-	};
-	QString value = QStringLiteral("%1 %2 %3").arg(channel(color.red()), channel(color.green()), channel(color.blue()));
-	if (!rest.isEmpty()) {
-		value += QLatin1Char(' ') + rest;
-	}
-	return value;
-}
+// Colour keys are read and written by core/level_entity_colour.h, shared
+// with Set Entity Colour and the `map entity-colour` command.
 
 // Only the Value column of a property row is editable. A row with
 // suggestions gets a completer that opens with all of them, so a target can be
@@ -1781,6 +1748,20 @@ void ApplicationShell::buildUi()
 	setCentralWidget(root);
 	timing.mark("frame");
 
+	// Construct each page before installing the application stylesheet on its
+	// finished widget tree. Reparenting intermediate styled trees repeatedly
+	// resolves their fonts, palettes and rules. Restore before polishing rows or
+	// recording layout metrics, including on an early exit. Public Qt APIs only;
+	// see the Qt stylesheet lifecycle review in docs/CREDITS.md.
+	const auto pageStyleSheet = qApp->styleSheet();
+	const auto restorePageStyle = [&]() {
+		if (!pageStyleSheet.isEmpty() && qApp->styleSheet().isEmpty()) {
+			qApp->setStyleSheet(pageStyleSheet);
+		}
+	};
+	auto pageStyleGuard = qScopeGuard(restorePageStyle);
+	if (!pageStyleSheet.isEmpty()) { qApp->setStyleSheet({}); }
+
 	m_modeStack->addWidget(buildWorkspacePage());
 	timing.mark("workspace");
 	m_modeStack->addWidget(buildLevelsPage());
@@ -1803,6 +1784,9 @@ void ApplicationShell::buildUi()
 	timing.mark("settings");
 	buildSidePanel();
 	timing.mark("sidePanel");
+	restorePageStyle();
+	pageStyleGuard.dismiss();
+	timing.mark("pageStyles");
 
 	// Lists of paths and names elide instead of scrolling sideways.
 	for (QAbstractItemView* list : QList<QAbstractItemView*>{m_recentProjects, m_gameInstallations, m_packageEntries, m_textureEntries, m_modelEntries,
@@ -2696,6 +2680,7 @@ QWidget* ApplicationShell::buildLevelsPage()
 	m_levelScenePanel = new LevelScenePanel(&m_levelMapDocument);
 	sidebarContent.scene = m_levelScenePanel;
 	connect(m_levelScenePanel, &LevelScenePanel::sceneChanged, this, &ApplicationShell::refreshLevelMapWorkbench);
+	connect(m_levelScenePanel,&LevelScenePanel::contextRequested,this,&ApplicationShell::changeLevelGroupContext);
 	connect(m_levelScenePanel, &LevelScenePanel::selectionChanged, this, [this] { refreshLevelMapWorkbench(); frameLevelMapSelection(); });
 	// Create: what the map can place, to put in the middle of the view or drag
 	// onto it, the way idStudio's entity browser works.
@@ -2747,13 +2732,14 @@ QWidget* ApplicationShell::buildLevelsPage()
 	setBaseIconSize(m_levelMapTextures, QSize(56, 56));
 	connect(m_levelMapTextures, &QListWidget::itemActivated, this, [this](QListWidgetItem* item) {
 		const QString texture = item ? item->data(Qt::UserRole).toString() : QString();
-		if (!texture.isEmpty()) {
+		// While Find and Replace Textures is open a pick fills it, as in NRC.
+		if (!texture.isEmpty() && !fillLevelFindReplaceField(texture)) {
 			applyLevelMapTextureFromUi(texture);
 		}
 	});
 	connect(m_levelMapTextures, &QListWidget::currentItemChanged, this, [this](QListWidgetItem* item) {
 		const auto material = item ? item->data(Qt::UserRole).toString() : QString();
-		if (!material.isEmpty()) { chooseLevelPaintMaterial(material); }
+		if (!material.isEmpty()) { chooseLevelPaintMaterial(material); fillLevelFindReplaceField(material); }
 	});
 	connect(m_levelMapTextures, &QListWidget::customContextMenuRequested, this, [this](const QPoint& position) {
 		showLevelMapTextureMenu(position);
@@ -2794,8 +2780,8 @@ QWidget* ApplicationShell::buildLevelsPage()
 	m_levelMapGrid->setObjectName(QStringLiteral("levelMapGrid"));
 	m_levelMapGrid->setAccessibleName(tr("Grid size"));
 	m_levelMapGrid->setToolTip(tr("Grid spacing in world units."));
-	for (const int gridSize : {1, 2, 4, 8, 16, 32, 64, 128, 256}) {
-		m_levelMapGrid->addItem(tr("Grid %1").arg(gridSize), gridSize);
+	for (const double gridSize : levelEditorGridSizes()) {
+		m_levelMapGrid->addItem(tr("Grid %1").arg(levelEditorGridSizeText(gridSize)), gridSize);
 	}
 	m_levelMapGrid->setCurrentIndex(m_levelMapGrid->findData(levelEditorControlsForProfile(m_settings.selectedEditorProfileId()).defaultGridUnits));
 	viewportBar->addWidget(m_levelMapGrid);
@@ -2830,7 +2816,9 @@ QWidget* ApplicationShell::buildLevelsPage()
 	m_levelMapShowLabels = addShowToggle(QStringLiteral("levelMapShowLabels"), tr("Labels"), tr("Name entities and things beside their markers."), false);
 	m_levelMapShowLinks = addShowToggle(QStringLiteral("levelMapShowLinks"), tr("Target Links"),
 		tr("Draw arrows from each entity's target and killtarget keys to the entities they name. The selection's links are drawn either way."), true);
-	auto* showButton = createToolButton(QStringLiteral("eye"), tr("Show"), tr("Choose what the map view draws: markers, sector fill, grid, vertices, labels, and target links."), true);
+	m_levelMapShowLinkedGroups = addShowToggle(QStringLiteral("levelMapShowLinkedGroups"), tr("Linked Groups"),
+		tr("Draw a box around every linked group. The link sets of the selected or open groups are drawn either way, with arrows."), false);
+	auto* showButton = createToolButton(QStringLiteral("eye"), tr("Show"), tr("Choose what the map view draws: markers, sector fill, grid, vertices, labels, target links and linked groups."), true);
 	showButton->setObjectName(QStringLiteral("levelMapShowButton"));
 	showButton->setAccessibleName(tr("Map display options"));
 	showButton->setMenu(showMenu);
@@ -2960,17 +2948,26 @@ QWidget* ApplicationShell::buildLevelsPage()
 	m_levelMap3D->setRenderMode(ModelViewportRenderMode::FlatShaded);
 	connect(m_levelMap3D, &ModelViewport::hoverChanged, this, [this](const QString& summary) {
 		if (m_levelMapHover && levelMap3DShowing()) {
-			m_levelMapHover->setText(summary.isEmpty() ? m_levelMap3D->hoverSummary() : summary);
+			m_levelMapHover->setText(levelSweepReadout(summary.isEmpty() ? m_levelMap3D->hoverSummary() : summary));
 		}
 	});
 	connect(m_levelMap3D, &ModelViewport::trianglePicked, this, [this](int, int triangle, int pick) {
 		pickLevelMap3D(triangle, pick);
+	});
+	connect(m_levelMap3D,&ModelViewport::groupActivationRequested,this,[this](int triangle) {
+		const auto context = levelSceneSelectionContext(m_levelMapDocument);
+		const auto object = triangle >= 0 && triangle < m_levelMap3DOwners.size() ? levelMapSelectionRefId(m_levelMap3DOwners[triangle]) : QString{};
+		const auto group = context.closedGroups.value(object);
+		if (!group.isEmpty()) { changeLevelGroupContext(group); }
+		else if (!context.openGroup.isEmpty() && !context.allowedObjects.contains(object)) { changeLevelGroupContext({}); }
 	});
 	connect(m_levelMap3D, &ModelViewport::contextMenuRequested, this, &ApplicationShell::showLevelMap3DContextMenu);
 	// A selection dragged in the camera moves as one undo step, as a drag in
 	// the 2D view does.
 	connect(m_levelMap3D, &ModelViewport::moveRequested, this, &ApplicationShell::moveLevelMapSelectionFromViewport);
 	connectLevelCameraResize();
+	connectLevelCameraComponents();
+	connectLevelClipper();
 	connectLevelCameraBrush();
 	// The 2D view draws where the camera stands and looks.
 	connect(m_levelMap3D, &ModelViewport::viewChanged, this, &ApplicationShell::refreshLevelCameraMarker);
@@ -2985,7 +2982,9 @@ QWidget* ApplicationShell::buildLevelsPage()
 		}
 		const LevelMapSelectionRef owner = m_levelMap3DOwners.at(triangle);
 		QString error;
-		if (!setLevelMapSelection(&m_levelMapDocument, {owner}, &error)) {
+		const auto context = levelSceneSelectionContext(m_levelMapDocument);
+		if (!context.allowedObjects.contains(levelMapSelectionRefId(owner))) { return; }
+		if (!setLevelMapUserSelection(pickLevelSceneObjects(context,{}, {owner},LevelScenePick::Replace), &error)) {
 			statusBar()->showMessage(error);
 			return;
 		}
@@ -2993,12 +2992,14 @@ QWidget* ApplicationShell::buildLevelsPage()
 		// A brush picked on one of its faces opens that face in the Inspector,
 		// as picking a face does in Radiant.
 		const int face = m_levelMap3DFaces.value(triangle, -1);
-		if (owner.kind == LevelMapSelectionKind::QuakeBrush && face >= 0) {
+		if (owner.kind == LevelMapSelectionKind::QuakeBrush && face >= 0 && !context.closedGroups.contains(levelMapSelectionRefId(owner))) {
 			m_inspectorFocus = QStringLiteral("face:%1:%2").arg(owner.objectId).arg(face);
 			showLevelSidebarPage(QStringLiteral("inspector"));
 		}
 		refreshLevelMapWorkbench();
-		statusBar()->showMessage(face >= 0 && owner.kind == LevelMapSelectionKind::QuakeBrush
+		const auto* group = levelSceneNode(m_levelMapDocument.scene,context.closedGroups.value(levelMapSelectionRefId(owner)));
+		statusBar()->showMessage(group ? tr("Selected group %1. Open Group to edit its contents.").arg(group->name)
+			: face >= 0 && owner.kind == LevelMapSelectionKind::QuakeBrush
 				? tr("Selected %1, face %2; its texture and alignment are in the Inspector.").arg(levelMapSelectionRefId(owner)).arg(face + 1)
 				: tr("Selected %1.").arg(levelMapSelectionRefId(owner)));
 	});
@@ -3047,27 +3048,33 @@ QWidget* ApplicationShell::buildLevelsPage()
 	m_entityInspector->setObjectName("entityInspector");
 	m_entityInspector->setAccessibleName(tr("Entity inspector"));
 	m_entityInspector->setAccessibleDescription(entityInspectorDescription());
-	m_entityInspector->setColumnCount(2);
-	m_entityInspector->setHeaderLabels({tr("Key"), tr("Value")});
+	m_entityInspector->setColumnCount(3);
+	m_entityInspector->setHeaderLabels({tr("Key"), tr("Value"), tr("Protected")});
+	m_entityInspector->setColumnHidden(2, true);
 	m_entityInspector->setRootIsDecorated(true);
 	m_entityInspector->setIndentation(14);
 	m_entityInspector->setUniformRowHeights(true);
 	m_entityInspector->setAlternatingRowColors(true);
 	m_entityInspector->setEditTriggers(QAbstractItemView::NoEditTriggers);
+	m_entityInspector->setTabKeyNavigation(true);
 	m_entityInspector->setItemDelegate(new PropertyValueDelegate(m_entityInspector));
-	m_entityInspector->header()->setStretchLastSection(true);
+	m_entityInspector->header()->setStretchLastSection(false);
+	m_entityInspector->header()->setSectionResizeMode(1, QHeaderView::Stretch);
+	m_entityInspector->header()->setSectionResizeMode(2, QHeaderView::ResizeToContents);
 	m_entityInspector->header()->setSectionResizeMode(0, QHeaderView::Interactive);
 	m_entityInspector->setColumnWidth(0, 132);
 	m_entityInspector->installEventFilter(this);
-	connect(m_entityInspector, &QTreeWidget::itemDoubleClicked, this, [this](QTreeWidgetItem* item, int) {
+	connect(m_entityInspector, &QTreeWidget::itemDoubleClicked, this, [this](QTreeWidgetItem* item, int column) {
+		if (column == 2) { return; }
 		// A colour key opens a colour picker; Enter still edits the numbers.
 		if (item && item->flags().testFlag(Qt::ItemIsEditable) && item->data(1, kColorKeyRole).toBool()) {
-			EntityColorValue current;
-			if (parseEntityColor(item->text(1), &current)) {
-				const QColor chosen = QColorDialog::getColor(current.color, this, tr("Colour for %1").arg(item->data(0, Qt::UserRole).toString()));
-				if (chosen.isValid() && chosen != current.color) {
-					// Setting the text goes through the inspector's own edit path.
-					item->setText(1, formatEntityColor(chosen, current.fractions, current.rest));
+			LevelEntityColour current;
+			if (parseLevelEntityColour(item->text(1), &current)) {
+				const QColor chosen = QColorDialog::getColor(current.color(), this, tr("Colour for %1").arg(item->data(0, Qt::UserRole).toString()));
+				if (chosen.isValid() && chosen != current.color()) {
+					// Setting the text goes through the inspector's own edit path,
+					// in the key's own form (0-1 or 0-255) with its trailing text.
+					item->setText(1, formatLevelEntityColourLike({chosen.redF(), chosen.greenF(), chosen.blueF()}, &current));
 				}
 				return;
 			}
@@ -3273,13 +3280,28 @@ QWidget* ApplicationShell::buildLevelsPage()
 
 	connect(m_levelMapProjection, &QComboBox::currentIndexChanged, this, [this]() {
 		if (levelViewLayoutHasThreePlans(m_levelViewLayout)) {
-			activateLevelPlanViewport(m_levelPlanViews.value(m_levelMapProjection->currentIndex()));
+			// Choosing a plan whose pane Show Top/Front/Side View hid brings
+			// the pane back; a refusal leaves the active plan in the list.
+			const int index = m_levelMapProjection->currentIndex();
+			if (index >= 0 && index < static_cast<int>(m_levelPlanPanes.shown.size()) && !m_levelPlanPanes.shown[static_cast<std::size_t>(index)]
+				&& !showLevelPlanPane(index, true)) {
+				const QSignalBlocker blocker(m_levelMapProjection);
+				m_levelMapProjection->setCurrentIndex(static_cast<int>(m_levelMapViewport->projection()));
+				return;
+			}
+			activateLevelPlanViewport(m_levelPlanViews.value(index));
 			m_levelMapViewport->setFocus(Qt::OtherFocusReason);
 		}
 		refreshLevelMapViewport();
 	});
 	connect(m_levelMapGrid, &QComboBox::currentIndexChanged, this, [this]() {
 		refreshLevelMapViewport();
+		refreshCommandEnablement();
+	});
+	// A choice from the list is a grid command too, so it follows the
+	// profile's snap policy and says what it did.
+	connect(m_levelMapGrid, &QComboBox::activated, this, [this](int index) {
+		setLevelMapGridUnits(m_levelMapGrid->itemData(index).toDouble());
 	});
 	connect(m_levelMapShowThings, &QAction::toggled, this, [this]() {
 		refreshLevelMapViewport();
@@ -3290,7 +3312,7 @@ QWidget* ApplicationShell::buildLevelsPage()
 	connect(m_levelMapSnap, &QCheckBox::toggled, this, [this]() {
 		refreshLevelMapViewport();
 	});
-	for (QAction* toggle : {m_levelMapShowGrid, m_levelMapShowVertices, m_levelMapShowLabels, m_levelMapShowLinks}) {
+	for (QAction* toggle : {m_levelMapShowGrid, m_levelMapShowVertices, m_levelMapShowLabels, m_levelMapShowLinks, m_levelMapShowLinkedGroups}) {
 		connect(toggle, &QAction::toggled, this, [this]() {
 			refreshLevelMapViewport();
 		});
@@ -3302,7 +3324,8 @@ QWidget* ApplicationShell::buildLevelsPage()
 	connect(m_levelMapProjection, &QComboBox::currentIndexChanged, this, saveViewState);
 	connect(m_levelMapGrid, &QComboBox::currentIndexChanged, this, saveViewState);
 	connect(m_levelMapSnap, &QCheckBox::toggled, this, saveViewState);
-	for (QAction* toggle : {m_levelMapShowThings, m_levelMapShowSectors, m_levelMapShowGrid, m_levelMapShowVertices, m_levelMapShowLabels, m_levelMapShowLinks}) {
+	for (QAction* toggle : {m_levelMapShowThings, m_levelMapShowSectors, m_levelMapShowGrid, m_levelMapShowVertices, m_levelMapShowLabels, m_levelMapShowLinks,
+			 m_levelMapShowLinkedGroups}) {
 		connect(toggle, &QAction::toggled, this, saveViewState);
 	}
 	return assembleStudioPage(header, toolBar, stack);
@@ -3313,7 +3336,7 @@ void ApplicationShell::restoreLevelMapViewState()
 	// Each value is checked before it is used, so a hand-edited or older
 	// settings file falls back to the defaults.
 	bool ok = false;
-	const int grid = QString::fromUtf8(m_settings.shellLayoutState(QStringLiteral("levelMapGrid"))).toInt(&ok);
+	const double grid = QString::fromUtf8(m_settings.shellLayoutState(QStringLiteral("levelMapGrid"))).toDouble(&ok);
 	if (const int index = ok ? m_levelMapGrid->findData(grid) : -1; index >= 0) {
 		m_levelMapGrid->setCurrentIndex(index);
 	}
@@ -3328,7 +3351,8 @@ void ApplicationShell::restoreLevelMapViewState()
 	const QByteArray shown = m_settings.shellLayoutState(QStringLiteral("levelMapShow"));
 	if (!shown.isEmpty()) {
 		const QList<QByteArray> on = shown.split(',');
-		for (QAction* toggle : {m_levelMapShowThings, m_levelMapShowSectors, m_levelMapShowGrid, m_levelMapShowVertices, m_levelMapShowLabels, m_levelMapShowLinks}) {
+		for (QAction* toggle : {m_levelMapShowThings, m_levelMapShowSectors, m_levelMapShowGrid, m_levelMapShowVertices, m_levelMapShowLabels, m_levelMapShowLinks,
+				 m_levelMapShowLinkedGroups}) {
 			toggle->setChecked(on.contains(toggle->objectName().toUtf8()));
 		}
 	}
@@ -3336,11 +3360,12 @@ void ApplicationShell::restoreLevelMapViewState()
 
 void ApplicationShell::saveLevelMapViewState()
 {
-	m_settings.setShellLayoutState(QStringLiteral("levelMapGrid"), QByteArray::number(m_levelMapGrid->currentData().toInt()));
+	m_settings.setShellLayoutState(QStringLiteral("levelMapGrid"), QByteArray::number(m_levelMapGrid->currentData().toDouble(), 'g', 6));
 	m_settings.setShellLayoutState(QStringLiteral("levelMapSnap"), m_levelMapSnap->isChecked() ? QByteArrayLiteral("on") : QByteArrayLiteral("off"));
 	m_settings.setShellLayoutState(QStringLiteral("levelMapProjection"), QByteArray::number(m_levelMapProjection->currentIndex()));
 	QList<QByteArray> on;
-	for (QAction* toggle : {m_levelMapShowThings, m_levelMapShowSectors, m_levelMapShowGrid, m_levelMapShowVertices, m_levelMapShowLabels, m_levelMapShowLinks}) {
+	for (QAction* toggle : {m_levelMapShowThings, m_levelMapShowSectors, m_levelMapShowGrid, m_levelMapShowVertices, m_levelMapShowLabels, m_levelMapShowLinks,
+			 m_levelMapShowLinkedGroups}) {
 		if (toggle->isChecked()) {
 			on << toggle->objectName().toUtf8();
 		}
@@ -7529,6 +7554,7 @@ void ApplicationShell::loadLevelMapPath(const QString& path)
 	retireLevelRecovery();
 	++m_levelMapLoadSerial;
 	m_levelMapDocument = document;
+	m_levelMapDocument.insertionVisibility = m_levelControls.insertionVisibility;
 	m_levelPreparedBrushGeometry = std::move(opened.geometry);
 	m_levelMapViewportKey.clear();
 	m_levelMapNamesPath.clear();
@@ -7910,15 +7936,27 @@ void ApplicationShell::showLevelSelectionMessage(const QString& message)
 
 void ApplicationShell::refreshLevelMapWorkbench()
 {
+	reconcileLevelSceneContext(&m_levelMapDocument);
+	reconcileLevelTexturedSelection(false);
+	// Every GUI selection route shares the same units and editing boundary,
+	// including query results, related objects, undo and newly created content.
+	setLevelMapSelection(&m_levelMapDocument,pickLevelSceneObjects(levelSceneSelectionContext(m_levelMapDocument),{},m_levelMapDocument.selection,LevelScenePick::Replace));
+	if (m_levelComponentsRefresh) { m_levelComponentsRefresh(); }
+	if (m_levelClipRefresh) { m_levelClipRefresh(); }
 	refreshBuiltinEntityDefinitions();
 	// These values belong only to this refresh; edits, undo, reloads and
 	// package updates always reach the controls through the current document.
 	const auto summary = levelMapInspectionSummary(m_levelMapDocument);
 	const auto textureUses = levelMapTextureUsage(m_levelMapDocument);
-	if (m_levelScenePanel) { m_levelScenePanel->refresh(); }
+	if (m_levelScenePanel) {
+		m_levelScenePanel->setSelectionUndoEnabled(m_levelControls.undoObjectSelection);
+		m_levelScenePanel->refresh();
+	}
 	refreshLevelBookmarkContext();
 	refreshLevelMaterialTools(&textureUses);
 	if (m_audioEditorDialog) { m_audioEditorDialog->refreshContext(); }
+	// Linked groups an edit could not update say so here, after any edit.
+	showLevelLinkedGroupNotices();
 	refreshLevelMapViewport();
 	refreshLevelMapPalette();
 	refreshLevelMapTextures(&textureUses);
@@ -8104,9 +8142,25 @@ void ApplicationShell::refreshLevelMapSelection(const LevelMapInspectionSummary*
 		// The list is the source of truth for this direction: replace the whole
 		// set so deselecting in the list clears it in the document and in the
 		// viewport, instead of leaving a stale primary behind.
-		const auto selection = m_levelMapObjects ? m_levelMapObjects->selectedReferences() : QVector<LevelMapSelectionRef>();
+		const auto requested = m_levelMapObjects ? m_levelMapObjects->selectedReferences() : QVector<LevelMapSelectionRef>();
+		const auto context = levelSceneSelectionContext(m_levelMapDocument);
+		// A list deselection removes its whole unit, even when other rows of
+		// that group remain selected. Newly selected rows win on a replacement.
+		QSet<QString> oldKeys, newKeys;
+		for (const auto& ref : m_levelMapDocument.selection) { oldKeys.insert(levelMapSelectionRefId(ref)); }
+		for (const auto& ref : requested) { newKeys.insert(levelMapSelectionRefId(ref)); }
+		QVector<LevelMapSelectionRef> removed, added;
+		for (const auto& ref : m_levelMapDocument.selection) { if (!newKeys.contains(levelMapSelectionRefId(ref))) { removed << ref; } }
+		for (const auto& ref : requested) { if (!oldKeys.contains(levelMapSelectionRefId(ref))) { added << ref; } }
+		auto selection = pickLevelSceneObjects(context,{},m_levelMapDocument.selection,LevelScenePick::Replace);
+		selection = pickLevelSceneObjects(context,selection,removed,LevelScenePick::Toggle);
+		selection = pickLevelSceneObjects(context,selection,added,LevelScenePick::Add);
 		QString error;
-		setLevelMapSelection(&m_levelMapDocument, selection, &error);
+		setLevelMapUserSelection(selection, &error, true);
+		if (m_levelMapObjects) {
+			const QSignalBlocker listBlocker(m_levelMapObjects);
+			m_levelMapObjects->setSelectedReferences(m_levelMapDocument.selection,levelMapPrimarySelection(m_levelMapDocument));
+		}
 		if (m_levelMapViewport) {
 			const QSignalBlocker viewportBlocker(m_levelMapViewport);
 			const int hiddenBefore = m_levelMapViewport->hiddenCount();
@@ -8114,6 +8168,7 @@ void ApplicationShell::refreshLevelMapSelection(const LevelMapInspectionSummary*
 			if (m_levelMapViewport->hiddenCount() != hiddenBefore) {
 				// Selecting a hidden row showed its object again.
 				refreshLevelMapObjectHiddenMarks();
+				if (levelMap3DShowing()) { refreshLevelMap3D(); }
 			}
 		}
 	}
@@ -8339,7 +8394,7 @@ void ApplicationShell::moveSelectedLevelMapObject()
 	// The whole selection moves, as a drag or Snap to Grid moves it, starting
 	// from one grid step along x.
 	const int count = static_cast<int>(m_levelMapDocument.selection.size());
-	const int grid = m_levelMapViewport ? std::max(1, m_levelMapViewport->gridSize()) : 16;
+	const double grid = m_levelMapViewport ? m_levelMapViewport->gridSize() : 16.0;
 	bool ok = false;
 	const QString deltaText = QInputDialog::getText(this, tr("Move Selection"), tr("Move %n object(s) by x,y,z", nullptr, count),
 		QLineEdit::Normal, QStringLiteral("%1,0,0").arg(grid), &ok);
@@ -8657,24 +8712,6 @@ void ApplicationShell::refreshLevelMapPalette()
 		none->setFlags(Qt::ItemIsEnabled);
 	}
 	applyTreeFilter(m_levelMapPalette, m_levelMapPaletteFilter);
-}
-
-void ApplicationShell::deleteLevelMapSelectionFromUi()
-{
-	if (m_levelMapDocument.selection.isEmpty()) {
-		statusBar()->showMessage(tr("Select map objects before deleting them."));
-		return;
-	}
-	const QVector<LevelMapSelectionRef> selection = m_levelMapDocument.selection;
-	QString error;
-	if (!deleteLevelMapSelection(&m_levelMapDocument, &error)) {
-		statusBar()->showMessage(tr("Could not delete: %1").arg(error));
-		return;
-	}
-	const QString what = selection.size() == 1 ? levelMapSelectionRefId(selection.first()) : tr("%n objects", nullptr, static_cast<int>(selection.size()));
-	recordActivity(tr("Level map objects deleted"), what, QStringLiteral("level-map"), OperationState::Warning, tr("Unsaved map edit"));
-	refreshLevelMapWorkbench();
-	statusBar()->showMessage(tr("Deleted %1. Undo restores it. Use Save Map to update the file after a change check and backup.").arg(what));
 }
 
 void ApplicationShell::showKeyboardShortcuts()
@@ -9299,7 +9336,7 @@ void ApplicationShell::selectLevelMapObjectsUsingTexture(const QString& texture,
 							: tr("Nothing in the map uses %1.").arg(texture));
 		return;
 	}
-	setLevelMapSelection(&m_levelMapDocument, objects);
+	setLevelMapUserSelection(objects);
 	refreshLevelMapWorkbench();
 	QString message = tr("Selected the %n object(s) that use %1.", nullptr, static_cast<int>(objects.size())).arg(texture);
 	if (leftHidden > 0) {
@@ -9350,107 +9387,12 @@ QString ApplicationShell::mapTextureNameForEntry(const QString& virtualPath, boo
 	return name;
 }
 
-void ApplicationShell::showReplaceTextureDialog(const QString& replacement)
-{
-	if (m_levelMapDocument.format == LevelMapFormat::Unknown || m_levelMapDocument.textureReferences.isEmpty()) {
-		statusBar()->showMessage(tr("Open a map that uses textures to replace one."));
-		return;
-	}
-	const QVector<LevelMapTextureUse> usage = levelMapTextureUsage(m_levelMapDocument);
-	QStringList names;
-	for (const LevelMapTextureUse& use : usage) {
-		names << use.name;
-	}
-	// Start from what the selection shows: a brush's first texture, or a
-	// sector's floor.
-	QString preset = names.value(0);
-	for (const LevelMapBrush& brush : m_levelMapDocument.brushes) {
-		if (m_levelMapDocument.selectionKind == LevelMapSelectionKind::QuakeBrush && brush.id == m_levelMapDocument.selectedObjectId
-			&& !brush.faces.isEmpty()) {
-			preset = brush.faces.first().textureName;
-		}
-	}
-	for (const LevelMapDoomSector& sector : m_levelMapDocument.doomSectors) {
-		if (m_levelMapDocument.selectionKind == LevelMapSelectionKind::DoomSector && sector.id == m_levelMapDocument.selectedObjectId) {
-			preset = sector.floorTexture;
-		}
-	}
-
-	QDialog dialog(this);
-	dialog.setObjectName(QStringLiteral("replaceTextureDialog"));
-	dialog.setWindowTitle(tr("Replace Texture"));
-	dialog.setAccessibleName(tr("Replace Texture"));
-	auto* layout = new QVBoxLayout(&dialog);
-	auto* form = new QFormLayout;
-	auto* from = new QComboBox(&dialog);
-	from->setObjectName(QStringLiteral("replaceTextureFrom"));
-	from->setEditable(true);
-	from->addItems(names);
-	from->setCurrentText(preset);
-	from->setAccessibleName(tr("Texture to replace"));
-	auto* to = new QComboBox(&dialog);
-	to->setObjectName(QStringLiteral("replaceTextureTo"));
-	to->setEditable(true);
-	to->addItems(names);
-	to->setCurrentText(replacement);
-	to->setAccessibleName(tr("Texture to use instead"));
-	form->addRow(tr("Replace"), from);
-	form->addRow(tr("With"), to);
-	layout->addLayout(form);
-	auto* selectionOnly = new QCheckBox(tr("Only the selected objects"), &dialog);
-	selectionOnly->setObjectName(QStringLiteral("replaceTextureSelectionOnly"));
-	selectionOnly->setEnabled(!m_levelMapDocument.selection.isEmpty());
-	selectionOnly->setToolTip(tr("Selected brushes and patches and those of selected entities, or selected linedefs' sides and selected sectors."));
-	layout->addWidget(selectionOnly);
-	auto* count = new QLabel(&dialog);
-	count->setObjectName(QStringLiteral("replaceTextureCount"));
-	count->setAccessibleName(tr("Uses that will change"));
-	layout->addWidget(count);
-	auto* buttons = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel, &dialog);
-	buttons->button(QDialogButtonBox::Ok)->setText(tr("Replace"));
-	layout->addWidget(buttons);
-	connect(buttons, &QDialogButtonBox::accepted, &dialog, &QDialog::accept);
-	connect(buttons, &QDialogButtonBox::rejected, &dialog, &QDialog::reject);
-	// The count follows every change, so the user sees what Replace will do.
-	const auto refreshCount = [this, from, to, selectionOnly, count, buttons]() {
-		int uses = 0;
-		for (const LevelMapTextureUse& use : levelMapTextureUsage(m_levelMapDocument, selectionOnly->isChecked())) {
-			if (use.name.compare(from->currentText().trimmed(), Qt::CaseInsensitive) == 0) {
-				uses = use.count;
-			}
-		}
-		count->setText(uses == 0 ? tr("Nothing in scope uses this texture.") : tr("%n use(s) will change.", nullptr, uses));
-		buttons->button(QDialogButtonBox::Ok)->setEnabled(uses > 0 && !to->currentText().trimmed().isEmpty());
-	};
-	connect(from, &QComboBox::currentTextChanged, &dialog, refreshCount);
-	connect(to, &QComboBox::currentTextChanged, &dialog, refreshCount);
-	connect(selectionOnly, &QCheckBox::toggled, &dialog, refreshCount);
-	refreshCount();
-	// With the replacement given, the choice left is what to replace.
-	if (replacement.isEmpty()) {
-		to->setFocus(Qt::OtherFocusReason);
-	} else {
-		from->setFocus(Qt::OtherFocusReason);
-	}
-	if (dialog.exec() != QDialog::Accepted) {
-		return;
-	}
-	int replaced = 0;
-	QString error;
-	const QString source = from->currentText().trimmed();
-	const QString target = to->currentText().trimmed();
-	if (!replaceLevelMapTexture(&m_levelMapDocument, source, target, selectionOnly->isChecked(), &replaced, &error)) {
-		statusBar()->showMessage(tr("Could not replace the texture: %1").arg(error));
-		return;
-	}
-	recordActivity(tr("Level map texture replaced"), tr("%1 to %2").arg(source, target), QStringLiteral("level-map"),
-		OperationState::Warning, tr("Unsaved map edit"));
-	refreshLevelMapWorkbench();
-	statusBar()->showMessage(tr("Replaced %1 with %2 on %n use(s).", nullptr, replaced).arg(source, target));
-}
-
 void ApplicationShell::selectAllLevelMapObjects(bool invert)
 {
+	if (levelComponentsActive()) {
+		m_levelMapViewport->selectComponentHandles(invert ? LevelComponentPick::Toggle : LevelComponentPick::Replace);
+		return;
+	}
 	if (m_levelMapDocument.format == LevelMapFormat::Unknown) {
 		statusBar()->showMessage(tr("Open a map to select its objects."));
 		return;
@@ -9458,27 +9400,40 @@ void ApplicationShell::selectAllLevelMapObjects(bool invert)
 	const QVector<LevelMapSelectionRef> all = levelMapSelectAllObjects(m_levelMapDocument, invert, [this](const LevelMapSelectionRef& ref) {
 		return !m_levelMapViewport || !m_levelMapViewport->isHidden(ref.kind, ref.objectId);
 	});
-	setLevelMapSelection(&m_levelMapDocument, all);
+	setLevelMapUserSelection(all);
 	refreshLevelMapWorkbench();
 	statusBar()->showMessage(tr("Selected %n map object(s).", nullptr, static_cast<int>(all.size())));
 }
 
 void ApplicationShell::selectNoLevelMapObjects()
 {
+	if (!m_levelTexturedFaces.isEmpty() || !m_levelPickedFaces.isEmpty()
+		|| (levelComponentsActive() && m_levelMapViewport->pickedComponentCount() > 0)) {
+		m_levelTexturedFaces.clear(); m_levelTexturedGeometry.clear(); m_levelPickedFaces.clear();
+		if (levelComponentsActive()) { m_levelMapViewport->selectComponentHandles(LevelComponentPick::Subtract); }
+		refreshLevelTexturedSelectionViews(); refreshLevelMap3DHighlight(); refreshLevelSurfaceTools(); refreshCommandEnablement();
+		statusBar()->showMessage(tr("Surface and component picks cleared. Whole objects remain selected.")); return;
+	}
+	if (levelComponentsActive()) {
+		setLevelComponentMode(0);
+		return;
+	}
 	if (m_levelMapDocument.selection.isEmpty()) {
 		return;
 	}
-	setLevelMapSelection(&m_levelMapDocument, {});
+	setLevelMapUserSelection({});
 	refreshLevelMapWorkbench();
 	statusBar()->showMessage(tr("Nothing selected."));
 }
 
 void ApplicationShell::applyLevelMapTextureFromUi(const QString& texture)
 {
-	if (m_levelMapDocument.selection.isEmpty()) {
+	const auto targets = levelSurfaceSelectionTargets();
+	if (targets.isEmpty() || levelSurfaceGeometryBusy() || levelSurfaceEditsPending()) {
 		statusBar()->showMessage(tr("Select brushes, patches, or brush entities to texture."));
 		return;
 	}
+	const auto validate = levelPlacementCommitter(true);
 	QString name = texture.trimmed();
 	if (name.isEmpty()) {
 		// The texture current on the Textures surface comes first, in the map's
@@ -9506,10 +9461,14 @@ void ApplicationShell::applyLevelMapTextureFromUi(const QString& texture)
 	}
 	int applied = 0;
 	QString error;
-	if (!applyLevelMapTexture(&m_levelMapDocument, name, &applied, &error)) {
+	LevelMaterialPaintPlan plan;
+	if (targets != levelSurfaceSelectionTargets() || !validate(m_levelMapDocument,&error)
+		|| !prepareLevelMaterialPaint(m_levelMapDocument,targets,name,&plan,&error)
+		|| !commitLevelMaterialPaint(&m_levelMapDocument,plan,&error)) {
 		statusBar()->showMessage(tr("Could not apply the texture: %1").arg(error));
 		return;
 	}
+	applied = plan.changedCount();
 	rememberLevelMaterial(name);
 	recordActivity(tr("Level map texture applied"), name, QStringLiteral("level-map"), OperationState::Warning, tr("Unsaved map edit"));
 	refreshLevelMapWorkbench();
@@ -9593,7 +9552,7 @@ void ApplicationShell::addLevelMapSectorFromUi()
 	}
 	// A square four grid steps across, around the middle of the view, to
 	// start from.
-	const int grid = m_levelMapViewport ? std::max(1, m_levelMapViewport->gridSize()) : 64;
+	const double grid = m_levelMapViewport ? m_levelMapViewport->gridSize() : 64.0;
 	LevelMapVec3 middle {0.0, 0.0, 0.0, true};
 	if (m_levelMapViewport) {
 		middle = m_levelMapViewport->worldPositionAt(QPointF(m_levelMapViewport->rect().center()), 0.0);
@@ -9763,19 +9722,6 @@ void ApplicationShell::makeLevelMapDoorsFromUi()
 	statusBar()->showMessage(tr("Made %n door(s); use one from outside to open it.", nullptr, doors));
 }
 
-void ApplicationShell::connectLevelMapEntitiesFromUi()
-{
-	QString name;
-	QString error;
-	if (!connectLevelMapEntities(&m_levelMapDocument, &name, &error)) {
-		statusBar()->showMessage(tr("Could not connect: %1").arg(error));
-		return;
-	}
-	recordActivity(tr("Level map entities connected"), name, QStringLiteral("level-map"), OperationState::Warning, tr("Unsaved map edit"));
-	refreshLevelMapWorkbench();
-	statusBar()->showMessage(tr("Connected: the selected entities now target %1, the one picked last.").arg(name));
-}
-
 void ApplicationShell::selectLinkedLevelMapEntities(bool targets)
 {
 	const QVector<LevelMapSelectionRef> linked = levelMapLinkedEntities(m_levelMapDocument, targets);
@@ -9785,7 +9731,7 @@ void ApplicationShell::selectLinkedLevelMapEntities(bool targets)
 					      : (targets ? tr("The selection targets no entity.") : tr("No entity targets the selection.")));
 		return;
 	}
-	setLevelMapSelection(&m_levelMapDocument, linked);
+	setLevelMapUserSelection(linked);
 	refreshLevelMapWorkbench();
 	const int count = static_cast<int>(linked.size());
 	if (doom) {
@@ -9869,7 +9815,8 @@ void ApplicationShell::hollowLevelMapSelectionFromUi()
 		statusBar()->showMessage(tr("Select brushes, or a brush entity, to hollow."));
 		return;
 	}
-	const int grid = m_levelMapViewport ? std::max(1, m_levelMapViewport->gridSize()) : 8;
+	// The prompt takes whole units, so a grid finer than 1 offers 1.
+	const int grid = m_levelMapViewport ? std::max(1, qRound(m_levelMapViewport->gridSize())) : 8;
 	bool ok = false;
 	const int thickness = QInputDialog::getInt(this, tr("Hollow"), tr("Wall thickness (units)"), grid, 1, 4096, 1, &ok);
 	if (!ok) {
@@ -9902,15 +9849,22 @@ void ApplicationShell::setLevelMapClipMode(bool enabled)
 		}
 		return;
 	}
-	// The clip line is drawn in the 2D view, so a single 3D view gives way
-	// to it, as Draw Sector's does.
-	if (enabled && !levelMap2DShowing()) {
-		setLevelMap3D(false);
-	}
-	m_levelMapViewport->setClipMode(enabled);
 	if (enabled) {
-		m_levelMapViewport->setFocus(Qt::ShortcutFocusReason);
+		setLevelComponentMode(0); setLevelMaterialTool(0);
+		for (auto* view : std::as_const(m_levelPlanViews)) { view->setDrawMode(false); view->setShapeDrawMode(false); }
 	}
+	const bool entering = enabled && !m_levelMapViewport->clipMode();
+	if (!enabled) { m_levelQuickClip = false; }
+	for (auto* view : std::as_const(m_levelPlanViews)) {
+		const QSignalBlocker blocker(view); view->setClipMode(enabled);
+	}
+	if (m_levelMap3D) { const QSignalBlocker blocker(m_levelMap3D); m_levelMap3D->setClipMode(enabled); }
+	if (entering && m_levelClipPreferences.resetSide) { m_levelMapViewport->setClipKeep(LevelMapClipKeep::Back); }
+	if (auto* action = m_commands->action(QStringLiteral("map.clipTool"))) { const QSignalBlocker blocker(action); action->setChecked(enabled); }
+	if (m_levelClipRefresh) { m_levelClipRefresh(); }
+	refreshLevelDeletionCommands();
+	refreshLevelToolShelf();
+	statusBar()->showMessage(enabled ? tr("Clip: place or move points in any view; Tab chooses sides; Enter applies the checked preview.") : tr("Clip tool off."));
 }
 
 bool ApplicationShell::levelMapSelectionClippable() const
@@ -9932,28 +9886,17 @@ bool ApplicationShell::levelMapSelectionClippable() const
 
 bool ApplicationShell::applyLevelMapClip(const LevelMapVec3& a, const LevelMapVec3& b, const LevelMapVec3& c, LevelMapClipKeep keep)
 {
-	int clipped = 0;
-	QString error;
-	QStringList skipped;
-	if (!clipLevelMapSelection(&m_levelMapDocument, a, b, c, keep, &clipped, &error, &skipped)) {
-		statusBar()->showMessage(tr("Could not clip: %1").arg(error));
-		return false;
-	}
-	const bool both = keep == LevelMapClipKeep::Both;
-	recordActivity(both ? tr("Level map brushes split") : tr("Level map brushes clipped"), tr("%n brush(es)", nullptr, clipped),
-		QStringLiteral("level-map"), OperationState::Warning, tr("Unsaved map edit"));
-	refreshLevelMapWorkbench();
-	statusBar()->showMessage((both ? tr("Split %n brush(es) in two.", nullptr, clipped) : tr("Clipped %n brush(es).", nullptr, clipped))
-		+ levelMapSkippedNote(skipped));
-	return true;
+	if (!m_levelMapViewport || !m_levelClipCommit) { return false; }
+	LevelClipState state; state.points = {a,b,c}; state.keep = keep;
+	if (!state.plane(nullptr,nullptr,nullptr)) { statusBar()->showMessage(tr("Choose three finite clip points that are not in a line.")); return false; }
+	setLevelMapClipMode(true); m_levelMapViewport->setClipState(state); m_levelClipCommit(); return true;
 }
 
 void ApplicationShell::clipLevelMapSelectionFromViewport(const LevelMapVec3& a, const LevelMapVec3& b, const LevelMapVec3& c, int keep)
 {
-	if (applyLevelMapClip(a, b, c, static_cast<LevelMapClipKeep>(keep)) && m_levelMapViewport) {
-		// The line has done its work; the tool stays on for the next cut.
-		m_levelMapViewport->clearClipLine();
-	}
+	Q_UNUSED(a); Q_UNUSED(b); Q_UNUSED(c);
+	if (!m_levelMapViewport || !m_levelClipCommit) { return; }
+	m_levelMapViewport->setClipKeep(static_cast<LevelMapClipKeep>(keep)); m_levelClipCommit();
 }
 
 void ApplicationShell::clipLevelMapSelectionFromUi()
@@ -9965,7 +9908,7 @@ void ApplicationShell::clipLevelMapSelectionFromUi()
 	LevelMapVec3 low;
 	LevelMapVec3 high;
 	levelMapSelectionBounds(m_levelMapDocument, &low, &high);
-	const int grid = m_levelMapViewport ? std::max(1, m_levelMapViewport->gridSize()) : 16;
+	const double grid = m_levelMapViewport ? m_levelMapViewport->gridSize() : 16.0;
 
 	QDialog dialog(this);
 	dialog.setObjectName(QStringLiteral("clipSelectionDialog"));
@@ -9973,6 +9916,9 @@ void ApplicationShell::clipLevelMapSelectionFromUi()
 	dialog.setAccessibleName(tr("Clip Selection"));
 	auto* layout = new QVBoxLayout(&dialog);
 	auto* form = new QFormLayout;
+	auto* planeMode = new QComboBox(&dialog);
+	planeMode->setObjectName(QStringLiteral("clipPlaneMode")); planeMode->setAccessibleName(tr("Plane definition"));
+	planeMode->addItems({tr("Axis and position"),tr("Three points"),tr("One point (wrap/merge)")}); form->addRow(tr("Plane"),planeMode);
 	auto* axis = new QComboBox(&dialog);
 	axis->setObjectName(QStringLiteral("clipAxis"));
 	axis->addItem(tr("x (a plane square to x)"));
@@ -10005,37 +9951,94 @@ void ApplicationShell::clipLevelMapSelectionFromUi()
 		}
 	});
 	form->addRow(tr("Position"), position);
+	auto* pointEditor = new QWidget(&dialog);
+	auto* pointGrid = new QGridLayout(pointEditor); pointGrid->setContentsMargins(0,0,0,0);
+	std::array<std::array<QDoubleSpinBox*,3>,3> coordinates{};
+	LevelMapVec3 initialA{0,0,0,true}; double* initialAxes[]{&initialA.x,&initialA.y,&initialA.z}; *initialAxes[viewAxis] = position->value();
+	auto initialB = initialA, initialC = initialA; double* initialBAxes[]{&initialB.x,&initialB.y,&initialB.z}; double* initialCAxes[]{&initialC.x,&initialC.y,&initialC.z};
+	*initialBAxes[(viewAxis+1)%3] += 64; *initialCAxes[(viewAxis+2)%3] += 64;
+	const bool hasPlane = m_levelMapViewport && m_levelMapViewport->clipPlanePoints(&initialA,&initialB,&initialC);
+	const bool hasOnePoint = m_levelMapViewport && m_levelMapViewport->clipState().points.size() == 1;
+	if (hasOnePoint) { initialA = m_levelMapViewport->clipState().points.first(); }
+	const LevelMapVec3 initialPoints[]{initialA,initialB,initialC};
+	for (int j = 0; j < 3; ++j) { pointGrid->addWidget(new QLabel(QString(QLatin1Char("XYZ"[j])),pointEditor),0,j+1); }
+	for (int i = 0; i < 3; ++i) {
+		pointGrid->addWidget(new QLabel(tr("Point %1").arg(i+1),pointEditor),i+1,0);
+		const double values[]{initialPoints[i].x,initialPoints[i].y,initialPoints[i].z};
+		for (int j = 0; j < 3; ++j) {
+			auto* value = new QDoubleSpinBox(pointEditor); coordinates[i][j] = value;
+			value->setObjectName(QStringLiteral("clipPoint%1%2").arg(i+1).arg(QLatin1Char("XYZ"[j])));
+			value->setAccessibleName(tr("Point %1 %2").arg(i+1).arg(QLatin1Char("XYZ"[j])));
+			value->setRange(-1048576,1048576); value->setDecimals(6); value->setSingleStep(grid); value->setValue(values[j]); pointGrid->addWidget(value,i+1,j+1);
+		}
+	}
+	form->addRow(pointEditor);
+	const auto showDefinition = [form,axis,position,pointEditor,pointGrid](int mode) {
+		form->setRowVisible(axis,mode == 0); form->setRowVisible(position,mode == 0); pointEditor->setVisible(mode != 0);
+		for (int row = 2; row <= 3; ++row) { for (int column = 0; column < 4; ++column) { pointGrid->itemAtPosition(row,column)->widget()->setVisible(mode != 2); } }
+	};
+	connect(planeMode,&QComboBox::currentIndexChanged,&dialog,showDefinition);
+	planeMode->setCurrentIndex(hasOnePoint ? 2 : hasPlane ? 1 : 0); showDefinition(planeMode->currentIndex());
 	auto* keep = new QComboBox(&dialog);
 	keep->setObjectName(QStringLiteral("clipKeep"));
-	keep->addItem(tr("The part below the plane"), static_cast<int>(LevelMapClipKeep::Back));
-	keep->addItem(tr("The part above the plane"), static_cast<int>(LevelMapClipKeep::Front));
+	keep->addItem(tr("Back (below for an axis plane)"), static_cast<int>(LevelMapClipKeep::Back));
+	keep->addItem(tr("Front (above for an axis plane)"), static_cast<int>(LevelMapClipKeep::Front));
 	keep->addItem(tr("Both parts, as two brushes"), static_cast<int>(LevelMapClipKeep::Both));
 	keep->setAccessibleName(tr("Keep"));
+	if (hasPlane) { keep->setCurrentIndex(int(m_levelMapViewport->clipKeep())); }
 	form->addRow(tr("Keep"), keep);
+	auto* cutMaterial = new QPushButton(&dialog); cutMaterial->setObjectName(QStringLiteral("clipCutMaterial")); cutMaterial->setAccessibleName(tr("Cut material options"));
+	const auto refreshCutMaterial = [this,cutMaterial] {
+		const auto options = levelClipOptions(); cutMaterial->setText(options.cutTexture.isEmpty() ? tr("Each brush's majority material…") : tr("%1…").arg(options.cutTexture));
+	};
+	refreshCutMaterial(); connect(cutMaterial,&QPushButton::clicked,&dialog,[this,refreshCutMaterial] { editLevelClipperPreferences(); refreshCutMaterial(); });
+	form->addRow(tr("Cut material"),cutMaterial);
 	layout->addLayout(form);
-	auto* buttons = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel, &dialog);
-	buttons->button(QDialogButtonBox::Ok)->setText(tr("Clip"));
+	const auto stateFromControls = [planeMode,axis,position,coordinates,keep] {
+		LevelClipState state; state.keep = LevelMapClipKeep(keep->currentData().toInt());
+		if (planeMode->currentIndex() != 0) {
+			for (const auto& row : coordinates) { state.points << LevelMapVec3{row[0]->value(),row[1]->value(),row[2]->value(),true}; if (planeMode->currentIndex() == 2) { break; } }
+		} else {
+			const int chosen = axis->currentIndex(); LevelMapVec3 a{0,0,0,true}; double* first[]{&a.x,&a.y,&a.z}; *first[chosen] = position->value();
+			auto b = a, c = a; double* next[]{&b.x,&b.y,&b.z}; double* after[]{&c.x,&c.y,&c.z};
+			*next[(chosen+1)%3] += 1; *after[(chosen+2)%3] += 1; state.points = {a,b,c};
+		}
+		return state;
+	};
+	auto* validation = new QLabel(&dialog); validation->setObjectName(QStringLiteral("clipValidation"));
+	validation->setWordWrap(true); validation->setAccessibleName(tr("Clip plane validation")); layout->addWidget(validation);
+	auto* buttons = new QDialogButtonBox(QDialogButtonBox::Cancel, &dialog);
+	auto* clip = buttons->addButton(tr("Clip"),QDialogButtonBox::AcceptRole); clip->setObjectName(QStringLiteral("clipApply")); clip->setDefault(true);
+	auto* preview = buttons->addButton(tr("Preview"),QDialogButtonBox::ActionRole);
+	preview->setObjectName(QStringLiteral("clipPreview")); preview->setAccessibleName(tr("Preview the cut in all views"));
+	const auto validate = [this,stateFromControls,validation,clip,preview,planeMode] {
+		const bool wrap = m_levelClipPreferences.wrapMerge;
+		const bool actual = !wrap || planeMode->currentIndex() != 0;
+		const bool valid = actual && stateFromControls().actionable(wrap);
+		validation->setText(valid ? QString{} : !actual ? tr("Wrap/merge needs actual points. Choose one point or three points.")
+			: planeMode->currentIndex() == 2 ? tr("Enable wrap/merge in Clipper Options to use one point.") : tr("Choose three different points that are not in a line."));
+		clip->setText(wrap ? tr("Apply") : tr("Clip"));
+		clip->setEnabled(valid); preview->setEnabled(valid);
+	};
+	connect(cutMaterial,&QPushButton::clicked,&dialog,validate);
+	connect(planeMode,&QComboBox::currentIndexChanged,&dialog,validate);
+	connect(axis,&QComboBox::currentIndexChanged,&dialog,validate); connect(position,&QDoubleSpinBox::valueChanged,&dialog,validate);
+	for (const auto& row : coordinates) { for (auto* value : row) { connect(value,&QDoubleSpinBox::valueChanged,&dialog,validate); } }
+	validate();
+	connect(preview,&QPushButton::clicked,&dialog,[&dialog] { dialog.done(2); });
 	connect(buttons, &QDialogButtonBox::accepted, &dialog, &QDialog::accept);
 	connect(buttons, &QDialogButtonBox::rejected, &dialog, &QDialog::reject);
 	layout->addWidget(buttons);
-	position->setFocus(Qt::OtherFocusReason);
-	position->selectAll();
-	if (dialog.exec() != QDialog::Accepted) {
+	auto* initialFocus = planeMode->currentIndex() != 0 ? coordinates[0][0] : position;
+	initialFocus->setFocus(Qt::OtherFocusReason); initialFocus->selectAll();
+	const int result = dialog.exec();
+	if (result != QDialog::Accepted && result != 2) {
 		return;
 	}
-	// Three points on the plane, stepping along the next two axes in the
-	// order that puts its front up the chosen one: above is the front.
-	const int chosen = axis->currentIndex();
-	LevelMapVec3 a {0.0, 0.0, 0.0, true};
-	double* first[3] {&a.x, &a.y, &a.z};
-	*first[chosen] = position->value();
-	LevelMapVec3 b = a;
-	LevelMapVec3 c = a;
-	double* bAxes[3] {&b.x, &b.y, &b.z};
-	double* cAxes[3] {&c.x, &c.y, &c.z};
-	*bAxes[(chosen + 1) % 3] += 1.0;
-	*cAxes[(chosen + 2) % 3] += 1.0;
-	applyLevelMapClip(a, b, c, static_cast<LevelMapClipKeep>(keep->currentData().toInt()));
+	const auto state = stateFromControls();
+	if (!state.actionable(m_levelClipPreferences.wrapMerge) || (m_levelClipPreferences.wrapMerge && planeMode->currentIndex() == 0)) { return; }
+	setLevelMapClipMode(true); m_levelMapViewport->setClipState(state);
+	if (result == QDialog::Accepted) { m_levelClipCommit(); }
 }
 
 void ApplicationShell::setLevelMap3D(bool enabled)
@@ -10057,16 +10060,14 @@ void ApplicationShell::setLevelMap3D(bool enabled)
 	if (!show2D && m_levelMapViewport) {
 		// Whatever the 2D view was in the middle of stops, its tools with it.
 		m_levelMapViewport->cancelInteraction();
-		m_levelMapViewport->setClipMode(false);
 		m_levelMapViewport->setDrawMode(false);
 	}
 	m_levelMap3D->setVisible(enabled);
 	if (m_levelPreviewStatus) { m_levelPreviewStatus->setVisible(enabled); }
 	m_levelMapViewport->setVisible(show2D);
-	if (levelViewLayoutHasThreePlans(m_levelViewLayout)) {
-		for (auto* view : m_levelPlanViews) { view->show(); }
-	}
-	if (m_levelViewLayout == LevelViewLayout::CameraAbovePlans || m_levelViewLayout == LevelViewLayout::CameraBesidePlans) { m_levelMapUpperViews->setVisible(enabled); }
+	// Three-plan layouts show the plan panes the user chose and hide a row or
+	// column the camera and those panes leave empty (level_plan_pane_actions.cpp).
+	applyLevelPlanPaneVisibility();
 	// Projection and display flags belong to plans; grid, snap and framing
 	// also drive camera authoring, including a maximized camera pane.
 	for (QWidget* control : std::initializer_list<QWidget*> {m_levelMapProjection,
@@ -10090,7 +10091,7 @@ void ApplicationShell::setLevelMap3D(bool enabled)
 		m_levelMapViewport->setFocus(Qt::OtherFocusReason);
 	}
 	if (m_levelMapHover) {
-		m_levelMapHover->setText(enabled && !show2D ? m_levelMap3D->hoverSummary() : m_levelMapViewport->hoverSummary());
+		m_levelMapHover->setText(levelSweepReadout(enabled && !show2D ? m_levelMap3D->hoverSummary() : m_levelMapViewport->hoverSummary()));
 	}
 	refreshLevelCameraMarker();
 	refreshCommandEnablement();
@@ -10136,9 +10137,24 @@ void ApplicationShell::applyLevelEditorProfile(bool profileChanged, bool preserv
 	}();
 	LevelViewLayout effectiveLayout = profile.controls.layout;
 	levelViewLayoutForId(m_settings.levelViewLayoutPreference(), &effectiveLayout);
-	const bool layoutChanged = profileChanged || !m_levelControlsApplied || m_levelViewLayout != effectiveLayout;
+	// Plan panes chosen elsewhere (`editor layout --panes`, imported settings)
+	// apply with the layout. The old combination's proportions are kept first.
+	const LevelPlanPanes planPanes = m_settings.levelPlanPanes();
+	const bool panesChanged = !preserveWorkspace && planPanes != m_levelPlanPanes;
+	if (panesChanged) {
+		if (m_levelControlsApplied) {
+			restoreLevelViewWorkspace();
+			saveLevelViewSplitters();
+		}
+		m_levelPlanPanes = planPanes;
+	}
+	const bool layoutChanged = profileChanged || !m_levelControlsApplied || m_levelViewLayout != effectiveLayout
+		|| (panesChanged && levelViewLayoutHasThreePlans(effectiveLayout));
+	const bool firstApplication = !m_levelControlsApplied;
 	QString gestureError;
 	m_levelControls = m_settings.effectiveLevelEditorControls(profile.id, &gestureError);
+	setLevelMapInsertionVisibility(&m_levelMapDocument,m_levelControls.insertionVisibility);
+	if (m_levelScenePanel) { m_levelScenePanel->setSelectionUndoEnabled(m_levelControls.undoObjectSelection); }
 	m_levelControlsProfileName = profile.lineage;
 	m_levelControlsApplied = true;
 	refreshLevelViewportShortcuts();
@@ -10153,6 +10169,11 @@ void ApplicationShell::applyLevelEditorProfile(bool profileChanged, bool preserv
 	}
 	if (layoutChanged && !preserveWorkspace) {
 		applyLevelViewLayout(effectiveLayout);
+	}
+	if ((profileChanged || firstApplication) && m_levelSurfaceTools) {
+		// And its own texture rotation step and anchor (NRC: 45° about the
+		// texture origin); gesture edits leave the Surfaces tab's values alone.
+		m_levelSurfaceTools->setProfileSteps(m_levelControls.surfaceRotationStep, m_levelControls.surfaceRotateAboutOrigin);
 	}
 	if (profileChanged && m_levelMapGrid) {
 		// A new profile brings its own grid, as a fresh start in that editor
@@ -10215,7 +10236,12 @@ void ApplicationShell::cycleLevelMapView()
 		statusBar()->showMessage(tr("View: %1").arg(m_levelMapProjection->currentText()), 2000);
 		return;
 	}
-	if (m_levelMapProjection->currentIndex() >= m_levelMapProjection->count() - 1) {
+	// After the last plan comes 3D: Side, or the last shown pane of a
+	// three-plan layout without its camera.
+	const int current = m_levelMapProjection->currentIndex();
+	const bool lastPlan = levelViewLayoutHasThreePlans(m_levelViewLayout) ? levelPlanPaneNextShown(m_levelPlanPanes, current + 1) <= current
+		: current >= m_levelMapProjection->count() - 1;
+	if (lastPlan) {
 		setLevelMap3D(true);
 		statusBar()->showMessage(tr("View: 3D"), 2000);
 		return;
@@ -10228,12 +10254,22 @@ void ApplicationShell::stepLevelMapProjection()
 	if (!m_levelMapProjection) {
 		return;
 	}
-	showLevelMapProjection((m_levelMapProjection->currentIndex() + 1) % std::max(1, m_levelMapProjection->count()));
+	int next = (m_levelMapProjection->currentIndex() + 1) % std::max(1, m_levelMapProjection->count());
+	// Three-plan layouts step through the panes they show.
+	if (levelViewLayoutHasThreePlans(m_levelViewLayout)) {
+		next = levelPlanPaneNextShown(m_levelPlanPanes, next);
+	}
+	showLevelMapProjection(next);
 }
 
 void ApplicationShell::showLevelMapProjection(int index)
 {
 	if (!m_levelMapProjection || index < 0 || index >= m_levelMapProjection->count()) {
+		return;
+	}
+	// Top, Front and Side View bring back a pane Show Top/Front/Side View hid.
+	if (levelViewLayoutHasThreePlans(m_levelViewLayout) && index < static_cast<int>(m_levelPlanPanes.shown.size())
+		&& !m_levelPlanPanes.shown[static_cast<std::size_t>(index)] && !showLevelPlanPane(index, true)) {
 		return;
 	}
 	m_levelMapProjection->setCurrentIndex(index);
@@ -10246,18 +10282,6 @@ void ApplicationShell::showLevelMapProjection(int index)
 		setLevelMap3D(false);
 	}
 	statusBar()->showMessage(tr("View: %1").arg(m_levelMapProjection->currentText()), 2000);
-}
-
-void ApplicationShell::setLevelMapGridUnits(int units)
-{
-	if (!m_levelMapGrid) {
-		return;
-	}
-	const int index = m_levelMapGrid->findData(units);
-	if (index >= 0) {
-		m_levelMapGrid->setCurrentIndex(index);
-		statusBar()->showMessage(tr("Grid: %1 units.").arg(units), 2000);
-	}
 }
 
 void ApplicationShell::frameLevelMapSelection()
@@ -10296,19 +10320,7 @@ void ApplicationShell::frameLevelMapSelection()
 
 void ApplicationShell::isolateLevelMapSelection()
 {
-	if (!m_levelMapViewport || m_levelMapDocument.selection.isEmpty()) {
-		statusBar()->showMessage(tr("Select what to keep in view first."));
-		return;
-	}
-	const QVector<LevelMapSelectionRef> keep = m_levelMapDocument.selection;
-	// Everything else is what Invert Selection would pick; that is hidden,
-	// and the selection comes back.
-	selectAllLevelMapObjects(true);
-	const int hidden = m_levelMapDocument.selection.isEmpty() ? 0 : m_levelMapViewport->hideSelection();
-	QString error;
-	setLevelMapSelection(&m_levelMapDocument, keep, &error);
-	refreshLevelMapWorkbench();
-	statusBar()->showMessage(tr("Isolated the selection: %n other object(s) hidden. Show All Hidden brings them back.", nullptr, hidden));
+	changeLevelVisibility(LevelVisibilityOperation::Isolate);
 }
 
 QString ApplicationShell::levelBrushMaterial() const
@@ -10390,13 +10402,21 @@ void ApplicationShell::pickLevelMap3D(int triangle, int pick)
 		// A plain click on nothing clears the selection, as a click on empty
 		// space in the 2D view does.
 		if (mode == ModelViewportPick::Replace && !m_levelMapDocument.selection.isEmpty()) {
-			setLevelMapSelection(&m_levelMapDocument, {}, &error);
+			setLevelMapUserSelection({}, &error);
 			refreshLevelMapWorkbench();
 		}
 		return;
 	}
 	const LevelMapSelectionRef owner = m_levelMap3DOwners.at(triangle);
 	const int face = m_levelMap3DFaces.value(triangle, -1);
+	const auto context = levelSceneSelectionContext(m_levelMapDocument);
+	const auto object = levelMapSelectionRefId(owner);
+	if (!context.allowedObjects.contains(object)) { return; }
+	if (context.closedGroups.contains(object) && mode != ModelViewportPick::Replace) {
+		const auto operation = mode == ModelViewportPick::Toggle || mode == ModelViewportPick::FaceToggle ? LevelScenePick::Toggle : LevelScenePick::Replace;
+		setLevelMapUserSelection(pickLevelSceneObjects(context,m_levelMapDocument.selection,{owner},operation),&error);
+		m_levelPickedFaces.clear(); refreshLevelMapWorkbench(); return;
+	}
 	if (mode == ModelViewportPick::Replace) {
 		// triangleClicked() has settled it.
 		return;
@@ -10442,11 +10462,11 @@ void ApplicationShell::pickLevelMap3D(int triangle, int pick)
 			break;
 		}
 	}
-	if (!setLevelMapSelection(&m_levelMapDocument, selection, &error)) {
+	const bool picksFace = (mode == ModelViewportPick::Face || mode == ModelViewportPick::FaceToggle) && owner.kind == LevelMapSelectionKind::QuakeBrush && face >= 0;
+	if (!(picksFace ? setLevelMapSelection(&m_levelMapDocument, selection, &error) : setLevelMapUserSelection(selection, &error))) {
 		statusBar()->showMessage(error);
 		return;
 	}
-	const bool picksFace = (mode == ModelViewportPick::Face || mode == ModelViewportPick::FaceToggle) && owner.kind == LevelMapSelectionKind::QuakeBrush && face >= 0;
 	if (picksFace) {
 		m_levelPickedSelection = m_levelMapDocument.selection;
 	}
@@ -10636,6 +10656,13 @@ void ApplicationShell::showLevelControlsReference()
 
 void ApplicationShell::refreshLevelMap3DHighlight()
 {
+	refreshLevelTexturedSelectionViews();
+	if (m_levelMap3D) {
+		QStringList names;
+		for (const auto& id : m_levelMapDocument.openSceneGroups) { if (const auto* node = levelSceneNode(m_levelMapDocument.scene,id)) { names << node->name; } }
+		m_levelMap3D->setGroupContext(names.join(QStringLiteral(" / ")));
+	}
+	refreshLevelCameraLinkedGroups();
 	// Faces picked in the camera go once the selection changes another way,
 	// even if it later comes back to the same objects.
 	if (!m_levelPickedFaces.isEmpty() && m_levelMapDocument.selection != m_levelPickedSelection) {
@@ -10666,68 +10693,58 @@ void ApplicationShell::refreshLevelMap3DHighlight()
 	}
 	// A brush with picked faces lights only those faces.
 	const QVector<LevelSurfaceFace> picked = levelPickedSurfaceFaces();
+	const bool componentFaces = levelComponentsActive() && m_levelMapViewport->componentMode() == MapViewport::ComponentMode::Faces;
 	QSet<int> facedBrushes;
+	QSet<QPair<int,int>> pickedKeys;
 	for (const LevelSurfaceFace& face : picked) {
-		facedBrushes.insert(face.brushId);
+		pickedKeys.insert({face.brushId,face.faceIndex});
 	}
+	if (!levelComponentsActive()) { for (const auto& face : m_levelPickedFaces) { facedBrushes.insert(face.brushId); } }
 	QVector<int> triangles;
 	for (int triangle = 0; triangle < m_levelMap3DOwners.size(); ++triangle) {
 		const LevelMapSelectionRef& owner = m_levelMap3DOwners.at(triangle);
-		if (owner.kind == LevelMapSelectionKind::QuakeBrush && facedBrushes.contains(owner.objectId)) {
-			if (picked.contains(LevelSurfaceFace {owner.objectId, m_levelMap3DFaces.value(triangle, -1)})) {
+		if (owner.kind == LevelMapSelectionKind::QuakeBrush) {
+			if (pickedKeys.contains({owner.objectId,m_levelMap3DFaces.value(triangle,-1)})
+				|| (!componentFaces && !facedBrushes.contains(owner.objectId) && lit.contains({static_cast<int>(owner.kind),owner.objectId}))) {
 				triangles.push_back(triangle);
 			}
 			continue;
 		}
-		if (lit.contains({static_cast<int>(owner.kind), owner.objectId})) {
+		if ((!componentFaces || (owner.kind == LevelMapSelectionKind::QuakePatch && m_levelTexturedPatches.contains(owner.objectId)))
+			&& lit.contains({static_cast<int>(owner.kind), owner.objectId})) {
 			triangles.push_back(triangle);
 		}
 	}
 	m_levelMap3D->setHighlightedTriangles(triangles);
+	refreshLevelCameraComponents();
 	refreshLevelCameraResize();
 	refreshLevelCameraBrush();
 }
 
-void ApplicationShell::stepLevelMapGrid(int direction)
+void ApplicationShell::refreshLevelCameraLinkedGroups()
 {
-	if (!m_levelMapGrid) {
+	if (!m_levelMap3D || !m_levelMapViewport) {
 		return;
 	}
-	const int index = std::clamp(m_levelMapGrid->currentIndex() + (direction < 0 ? -1 : 1), 0, m_levelMapGrid->count() - 1);
-	if (index == m_levelMapGrid->currentIndex()) {
-		statusBar()->showMessage(direction < 0 ? tr("The grid is already at its finest, %1 unit.").arg(m_levelMapGrid->currentData().toInt())
-						       : tr("The grid is already at its coarsest, %1 units.").arg(m_levelMapGrid->currentData().toInt()));
+	// Maps without linked groups skip the scene context entirely.
+	const QVector<LevelLinkedGroupBox>& boxes = m_levelMapViewport->linkedGroupBoxes();
+	if (boxes.isEmpty()) {
+		m_levelMap3D->setLinkedGroups({});
 		return;
 	}
-	m_levelMapGrid->setCurrentIndex(index);
-	refreshCommandEnablement();
-	statusBar()->showMessage(tr("Grid: %1 units.").arg(m_levelMapGrid->currentData().toInt()));
+	m_levelMap3D->setLinkedGroups(levelLinkedGroupDisplay(boxes, m_levelMapDocument.openSceneGroups,
+		levelSceneSelectionContext(m_levelMapDocument).groupSelections, m_levelMapDocument.selection,
+		m_levelMapShowLinkedGroups && m_levelMapShowLinkedGroups->isChecked()));
 }
 
 void ApplicationShell::hideLevelMapSelection()
 {
-	if (!m_levelMapViewport) {
-		return;
-	}
-	const int hidden = m_levelMapViewport->hideSelection();
-	if (hidden == 0) {
-		statusBar()->showMessage(tr("Select entities, brushes, patches, or things to hide them."));
-		return;
-	}
-	refreshLevelMapWorkbench();
-	statusBar()->showMessage(tr("Hid %n object(s); Shift+H shows everything again.", nullptr, hidden));
+	changeLevelVisibility(LevelVisibilityOperation::HideSelected);
 }
 
 void ApplicationShell::showAllLevelMapObjects()
 {
-	if (!m_levelMapViewport || m_levelMapViewport->hiddenCount() == 0) {
-		statusBar()->showMessage(tr("Nothing is hidden."));
-		return;
-	}
-	const int hidden = m_levelMapViewport->hiddenCount();
-	m_levelMapViewport->showAllHidden();
-	refreshLevelMapWorkbench();
-	statusBar()->showMessage(tr("Showed %n hidden object(s).", nullptr, hidden));
+	changeLevelVisibility(LevelVisibilityOperation::ShowAll);
 }
 
 bool ApplicationShell::copyFocusedTextSelection()
@@ -10751,120 +10768,41 @@ bool ApplicationShell::copyFocusedTextSelection()
 bool ApplicationShell::copyLevelMapSelectionToClipboard()
 {
 	QString error;
-	const QString text = levelMapSelectionText(m_levelMapDocument, &error);
+	const auto faces = m_levelControls.copyFaceAttributes ? levelPickedSurfaceFaces() : QVector<LevelSurfaceFace>{};
+	if (faces.isEmpty()) {
+		if (copyLevelObjectsToClipboard(false, &error)) { return true; }
+		statusBar()->showMessage(tr("Could not copy: %1").arg(error));
+		return false;
+	}
+	const QString text = levelFaceSelectionText(m_levelMapDocument, faces, &error);
 	if (text.isEmpty()) {
 		statusBar()->showMessage(error.isEmpty() ? tr("Select entities, brushes, or patches of a Quake-family map to copy them.")
 							 : tr("Could not copy: %1").arg(error));
 		return false;
 	}
 	QGuiApplication::clipboard()->setText(text);
-	statusBar()->showMessage(tr("Copied %n map object(s) as .map text.", nullptr, static_cast<int>(m_levelMapDocument.selection.size())));
+	statusBar()->showMessage(tr("Copied %n face attribute record(s). Paste uses the last face and retains target contents.", nullptr, static_cast<int>(faces.size())));
 	return true;
 }
 
 void ApplicationShell::cutLevelMapSelection()
 {
-	if (!levelMapSelectionIsDeletable(m_levelMapDocument)) {
-		statusBar()->showMessage(tr("Select entities other than worldspawn, brushes, or patches to cut them."));
-		return;
-	}
-	if (copyLevelMapSelectionToClipboard()) {
-		deleteLevelMapSelectionFromUi();
-	}
-}
-
-void ApplicationShell::pasteLevelMapFromClipboard()
-{
 	QString error;
-	LevelPlacementRequest request;
-	request.operation = LevelPlacementOperation::Paste;
-	request.text = QGuiApplication::clipboard()->text();
-	request.textures = {m_settings.levelTextureLock(), m_settings.levelAllowValve220()};
-	if (!runLevelPlacementFromUi(request, &error)) {
-		statusBar()->showMessage(tr("Could not paste: %1").arg(error));
-		return;
-	}
-	const int count = static_cast<int>(m_levelMapDocument.selection.size());
-	recordActivity(tr("Level map objects pasted"), tr("%n object(s)", nullptr, count), QStringLiteral("level-map"),
-		OperationState::Warning, tr("Unsaved map edit"));
-	refreshLevelMapWorkbench();
-	statusBar()->showMessage(tr("Pasted %n map object(s); they are selected.", nullptr, count));
+	if (!copyLevelObjectsToClipboard(true, &error)) { statusBar()->showMessage(tr("Could not cut: %1").arg(error)); }
 }
 
 void ApplicationShell::rotateLevelMapSelectionFromUi(bool counterclockwise)
 {
-	if (m_levelMapDocument.selection.isEmpty() || !m_levelMapViewport) {
-		statusBar()->showMessage(tr("Select map objects before turning them."));
-		return;
-	}
-	// Counterclockwise on screen is a positive turn about the axis pointing at
-	// the viewer: +z in the top view, +x in the side view, and -y in the front
-	// view, whose screen shows x to the right and z up.
-	int axis = 2;
-	int turns = counterclockwise ? 1 : -1;
-	switch (m_levelMapViewport->projection()) {
-	case MapViewportProjection::TopXY:
-		break;
-	case MapViewportProjection::FrontXZ:
-		axis = 1;
-		turns = -turns;
-		break;
-	case MapViewportProjection::SideZY:
-		axis = 0;
-		break;
-	}
-	QString error;
-	LevelMapRotationRequest rotation;
-	rotation.axis = axis;
-	rotation.degrees = 90.0 * turns;
-	rotation.textureLock = m_settings.levelTextureLock();
-	rotation.allowValve220 = m_settings.levelAllowValve220();
-	LevelPlacementRequest request;
-	request.operation = LevelPlacementOperation::Rotate;
-	request.rotation = rotation;
-	if (!runLevelPlacementFromUi(request, &error)) {
-		statusBar()->showMessage(tr("Could not turn the selection: %1").arg(error));
-		return;
-	}
-	recordActivity(tr("Level map selection turned"), counterclockwise ? tr("90° left") : tr("90° right"), QStringLiteral("level-map"),
-		OperationState::Warning, tr("Unsaved map edit"));
-	refreshLevelMapWorkbench();
-	statusBar()->showMessage(counterclockwise ? tr("Turned the selection 90° left.") : tr("Turned the selection 90° right."));
+	// Yaw: about the active plan view's depth axis, or world Z from the camera
+	// (app/level_axis_transform_actions.cpp, core/level_quick_transform.h).
+	applyLevelViewTransformFromUi(counterclockwise ? QStringLiteral("map.rotateLeft") : QStringLiteral("map.rotateRight"));
 }
 
 void ApplicationShell::flipLevelMapSelectionFromUi(bool horizontal)
 {
-	if (m_levelMapDocument.selection.isEmpty() || !m_levelMapViewport) {
-		statusBar()->showMessage(tr("Select map objects before flipping them."));
-		return;
-	}
-	// The view's horizontal and vertical axes: x and y from the top, x and z
-	// from the front, y and z from the side.
-	int axis = 0;
-	switch (m_levelMapViewport->projection()) {
-	case MapViewportProjection::TopXY:
-		axis = horizontal ? 0 : 1;
-		break;
-	case MapViewportProjection::FrontXZ:
-		axis = horizontal ? 0 : 2;
-		break;
-	case MapViewportProjection::SideZY:
-		axis = horizontal ? 1 : 2;
-		break;
-	}
-	QString error;
-	LevelPlacementRequest request;
-	request.operation = LevelPlacementOperation::Mirror;
-	request.axis = axis;
-	request.textures = {m_settings.levelTextureLock(), m_settings.levelAllowValve220()};
-	if (!runLevelPlacementFromUi(request, &error)) {
-		statusBar()->showMessage(tr("Could not flip the selection: %1").arg(error));
-		return;
-	}
-	recordActivity(tr("Level map selection flipped"), horizontal ? tr("horizontal") : tr("vertical"), QStringLiteral("level-map"),
-		OperationState::Warning, tr("Unsaved map edit"));
-	refreshLevelMapWorkbench();
-	statusBar()->showMessage(horizontal ? tr("Flipped the selection horizontally.") : tr("Flipped the selection vertically."));
+	// Along the active plan view's screen axes, or the camera's right axis and
+	// world Z (app/level_axis_transform_actions.cpp).
+	applyLevelViewTransformFromUi(horizontal ? QStringLiteral("map.flipHorizontal") : QStringLiteral("map.flipVertical"));
 }
 
 bool ApplicationShell::levelMapSelectionResizable() const
@@ -10919,6 +10857,7 @@ void ApplicationShell::resizeLevelMapSelectionFromViewport(const LevelMapVec3& m
 
 void ApplicationShell::resizeLevelMapSelectionFromUi()
 {
+	if (levelComponentsActive()) { transformLevelComponentsFromUi(2); return; }
 	LevelMapVec3 low;
 	LevelMapVec3 high;
 	if (!levelMapSelectionResizable() || !levelMapSelectionBounds(m_levelMapDocument, &low, &high)) {
@@ -10928,7 +10867,7 @@ void ApplicationShell::resizeLevelMapSelectionFromUi()
 		return;
 	}
 	const bool doom = m_levelMapDocument.format == LevelMapFormat::DoomWad;
-	const double grid = m_levelMapViewport ? std::max(1, m_levelMapViewport->gridSize()) : 16.0;
+	const double grid = m_levelMapViewport ? m_levelMapViewport->gridSize() : 16.0;
 	const double from[3] {low.x, low.y, low.z};
 	const double size[3] {high.x - low.x, high.y - low.y, high.z - low.z};
 
@@ -11036,7 +10975,7 @@ void ApplicationShell::snapLevelMapSelectionFromUi()
 		statusBar()->showMessage(tr("Select map objects before snapping them to the grid."));
 		return;
 	}
-	const int grid = std::max(1, m_levelMapViewport->gridSize());
+	const double grid = m_levelMapViewport->gridSize();
 	QString error;
 	LevelPlacementRequest request;
 	request.operation = LevelPlacementOperation::Snap;
@@ -11053,14 +10992,14 @@ void ApplicationShell::snapLevelMapSelectionFromUi()
 	statusBar()->showMessage(tr("Snapped %n object(s) to the %1-unit grid.", nullptr, moved).arg(grid));
 }
 
-void ApplicationShell::duplicateLevelMapSelectionFromUi()
+void ApplicationShell::duplicateLevelMapSelectionFromUi(LevelDuplicateMode mode)
 {
-	if (m_levelMapDocument.selection.isEmpty() || !m_levelMapViewport) {
-		statusBar()->showMessage(tr("Select map objects before duplicating them."));
+	if (!canDuplicateLevelMapSelection(mode) || !m_levelMapViewport) {
+		statusBar()->showMessage(tr("Select duplicable map objects and use the selection mode required by your profile."));
 		return;
 	}
 	// One grid step right and down on screen, whichever plane the view shows.
-	const double step = std::max(1, m_levelMapViewport->gridSize());
+	const double step = m_levelControls.nudgeAfterDuplicate ? m_levelMapViewport->gridSize() : 0.0;
 	double dx = 0.0;
 	double dy = 0.0;
 	double dz = 0.0;
@@ -11081,6 +11020,7 @@ void ApplicationShell::duplicateLevelMapSelectionFromUi()
 	QString error;
 	LevelPlacementRequest request;
 	request.offset = {dx, dy, dz, true};
+	request.duplicateMode = mode;
 	request.textures = {m_settings.levelTextureLock(), m_settings.levelAllowValve220()};
 	if (!runLevelPlacementFromUi(request, &error)) {
 		statusBar()->showMessage(tr("Could not duplicate: %1").arg(error));
@@ -11173,7 +11113,7 @@ void ApplicationShell::selectLevelMapObjectsByTexture(const QString& texture)
 							: tr("Nothing in the map uses %1.").arg(name));
 		return;
 	}
-	setLevelMapSelection(&m_levelMapDocument, objects);
+	setLevelMapUserSelection(objects);
 	refreshLevelMapWorkbench();
 	QString message = tr("Selected %n object(s) using %1.", nullptr, static_cast<int>(objects.size())).arg(name);
 	if (leftHidden > 0) {
@@ -11222,7 +11162,7 @@ void ApplicationShell::selectSimilarLevelMapObjects()
 	int leftHidden = 0;
 	selection = visibleLevelMapObjects(selection, &leftHidden);
 	selection.push_back({document.selectionKind, document.selectedObjectId});
-	setLevelMapSelection(&document, selection);
+	setLevelMapUserSelection(selection);
 	refreshLevelMapWorkbench();
 	QString message = tr("Selected %n object(s) of %1.", nullptr, static_cast<int>(selection.size())).arg(what);
 	if (leftHidden > 0) {
@@ -14390,6 +14330,8 @@ void ApplicationShell::applyPreferencesToUi()
 {
 	const AccessibilityPreferences preferences = m_settings.accessibilityPreferences();
 	QLocale::setDefault(regionFormatLocale(preferences.formatLocaleName, preferences.localeName));
+	// For previews, busy bars and announcements in dialogs opened from here on.
+	recordStudioAccessibilityPreferences(preferences);
 	m_messageDuration = preferences.messageDuration;
 	applySpeechPreferences();
 
@@ -15010,6 +14952,8 @@ void ApplicationShell::buildCommands()
 	add(QStringLiteral("map.flipVertical"), StudioCommandGroup::Edit, tr("Flip &Vertical"),
 		tr("Mirror the selection top to bottom as the view shows it."), QStringLiteral("compare"), false, false, false,
 		[this]() { flipLevelMapSelectionFromUi(false); });
+	registerLevelAxisTransformCommands();
+	registerLevelNudgeCommands();
 	add(QStringLiteral("map.resizeSelection"), StudioCommandGroup::Edit, tr("Resi&ze Selection…"),
 		tr("Fit the selection to a new size. Texture Scale Lock stretches brush textures with it; otherwise their source parameters stay fixed. Viewport handles use the same setting."),
 		QStringLiteral("resize"), false, false, false, [this]() { resizeLevelMapSelectionFromUi(); });
@@ -15043,16 +14987,31 @@ void ApplicationShell::buildCommands()
 		tr("Hide the selected map objects from the view without changing the map."), QStringLiteral("eye"), false, false, false,
 		[this]() { hideLevelMapSelection(); });
 	add(QStringLiteral("map.showAll"), StudioCommandGroup::View, tr("Show &All Hidden"),
-		tr("Bring every hidden map object back into the view."), QStringLiteral("eye"), false, false, false,
+		tr("Clear temporary hiding. Saved scene visibility and view filters remain in effect."), QStringLiteral("eye"), false, false, false,
 		[this]() { showAllLevelMapObjects(); });
 	add(QStringLiteral("map.selectMatching"), StudioCommandGroup::Edit, tr("Select Matchin&g Objects"),
 		tr("Select every object the Objects filter keeps: by name, or by properties such as tag=3 or class=light."), QStringLiteral("filter"), false, false, false,
 		[this]() { selectMatchingLevelMapObjects(); });
-	add(QStringLiteral("map.selectAll"), StudioCommandGroup::Edit, tr("Select &All Map Objects"),
-		tr("Select every entity, brush, and patch, or every Doom thing, that is not hidden."), QStringLiteral("check"), false, false, false,
+	add(QStringLiteral("map.selectAll"), StudioCommandGroup::Edit, tr("Select &All"),
+		tr("Select all available component handles in component mode, or all visible map objects."), QStringLiteral("check"), false, false, false,
 		[this]() { selectAllLevelMapObjects(); });
+	add(QStringLiteral("map.selectSiblings"), StudioCommandGroup::Edit, tr("Select Si&blings"),
+		tr("Select objects sharing the selected objects' parents, respecting groups, layers, visibility and locks."), QStringLiteral("check"), false, false, false,
+		[this]() { selectLevelMapObjectsFromUi(LevelObjectSelectionMode::Siblings); });
+	add(QStringLiteral("map.selectConnectedEntities"), StudioCommandGroup::Edit, tr("Select Connected Entities"),
+		tr("Add direct incoming and outgoing target/targetname connections to the current selection. Hidden results are skipped."), QStringLiteral("link"), false, false, false,
+		[this]() { selectLevelMapObjectsFromUi(LevelObjectSelectionMode::ConnectedEntities); });
+	add(QStringLiteral("map.selectAllOfType"), StudioCommandGroup::Edit, tr("Select All of Type"),
+		tr("Select every selected owner's class, or brushes and patches using the current material. In face mode, select matching faces of selected brushes."), QStringLiteral("filter"), false, false, false,
+		[this]() { selectLevelMapObjectsFromUi(LevelObjectSelectionMode::RadiantType); });
+	add(QStringLiteral("map.selectTextured"), StudioCommandGroup::Edit, tr("Select Textured"),
+		tr("Add visible faces and whole patches using the current material, preserving object and component picks."), QStringLiteral("filter"), false, false, false,
+		[this]() { selectLevelMapTexturedFromUi(); });
+	add(QStringLiteral("map.selectSourceLines"), StudioCommandGroup::Edit, tr("Select by Source &Line Number…"),
+		tr("Select objects at line numbers in the source text at last open. Save and reopen to refresh line numbers."), QStringLiteral("filter"), false, false, false,
+		[this]() { selectLevelMapObjectsFromUi(LevelObjectSelectionMode::SourceLines); });
 	add(QStringLiteral("map.selectNone"), StudioCommandGroup::Edit, tr("Select &None"),
-		tr("Clear the map selection."), QStringLiteral("close"), false, false, false,
+		tr("Clear surface and component picks, then leave component mode, then clear whole-object selection."), QStringLiteral("close"), false, false, false,
 		[this]() { selectNoLevelMapObjects(); });
 	add(QStringLiteral("map.selectConnectedGeometry"), StudioCommandGroup::Edit, tr("Select Connected &Geometry"),
 		tr("Expand Doom vertices, linedefs or sectors to all geometry joined by vertices. Selected things remain selected."), QStringLiteral("check"), false, false, false,
@@ -15068,7 +15027,7 @@ void ApplicationShell::buildCommands()
 			statusBar()->showMessage(tr("Connected geometry selected: %1 objects.").arg(m_levelMapDocument.selection.size()));
 		});
 	add(QStringLiteral("map.invertSelection"), StudioCommandGroup::Edit, tr("&Invert Selection"),
-		tr("Select the map objects that are not selected, and drop the ones that are."), QStringLiteral("refresh"), false, false, false,
+		tr("Invert component picks in component mode, or invert the map object selection."), QStringLiteral("refresh"), false, false, false,
 		[this]() { selectAllLevelMapObjects(true); });
 	add(QStringLiteral("map.applyTexture"), StudioCommandGroup::Edit, tr("Appl&y Texture…"),
 		tr("Put a texture on every face of the selected brushes and on the selected patches."), QStringLiteral("image"), false, false, false,
@@ -15080,8 +15039,14 @@ void ApplicationShell::buildCommands()
 		tr("Choose the material of a camera surface without changing the map."), QStringLiteral("image"), false, false, false,
 		[this]() { setMode(StudioMode::Levels); setLevelMaterialTool(2); });
 	add(QStringLiteral("map.clipTool"), StudioCommandGroup::Edit, tr("C&lip Tool"),
-		tr("Drag a line across brushes in the viewport to cut them; Tab chooses what stays and Enter cuts."), QStringLiteral("clip"), false, false, false,
+		tr("Place or move clip points in any view; Tab chooses sides and Enter applies the checked cut."), QStringLiteral("clip"), false, false, false,
 		[this]() { setLevelMapClipMode(!(m_levelMapViewport && m_levelMapViewport->clipMode())); });
+	add(QStringLiteral("map.quickClip"), StudioCommandGroup::Edit, tr("Quick Clip"),
+		tr("Start a one-shot clip; a successful cut exits the tool."), QStringLiteral("clip"), false, false, false,
+		[this]() { setMode(StudioMode::Levels); startLevelQuickClip(); });
+	add(QStringLiteral("map.clipperOptions"), StudioCommandGroup::Edit, tr("Clipper Options…"),
+		tr("Choose the cut material, point and side resets, and double-click action."), QStringLiteral("settings"), false, false, false,
+		[this]() { setMode(StudioMode::Levels); editLevelClipperPreferences(); });
 	add(QStringLiteral("map.drawSector"), StudioCommandGroup::Edit, tr("Draw &Sector"),
 		tr("Click the corners of a sector in the Doom viewport; the first corner again, or Enter, closes the shape."), QStringLiteral("edit"), false,
 		false, false, [this]() { setLevelMapDrawMode(!(m_levelMapViewport && m_levelMapViewport->drawMode())); });
@@ -15095,8 +15060,11 @@ void ApplicationShell::buildCommands()
 		tool->setCheckable(true);
 	}
 	add(QStringLiteral("map.connectEntities"), StudioCommandGroup::Edit, tr("Co&nnect Entities"),
-		tr("Make the selected entities target the one picked last, naming it if it has no targetname, as Radiant's Connect Entities does."),
+		tr("Connect to the entity picked last. NRC requires two objects and prefers the source's existing target value."),
 		QStringLiteral("link"), false, false, false, [this]() { connectLevelMapEntitiesFromUi(); });
+	add(QStringLiteral("map.killConnectEntities"), StudioCommandGroup::Edit, tr("KillConnect Entities"),
+		tr("Set killtarget from the first picked entity to the second using NRC naming rules. Requires Quake, Nexuiz or Xonotic."),
+		QStringLiteral("link"), false, false, false, [this]() { connectLevelMapEntitiesFromUi(true); });
 	add(QStringLiteral("map.selectTargets"), StudioCommandGroup::Edit, tr("Select &Targets"),
 		tr("Select the entities the selected entities target."), QStringLiteral("link"), false, false, false,
 		[this]() { selectLinkedLevelMapEntities(true); });
@@ -15169,7 +15137,7 @@ void ApplicationShell::buildCommands()
 		tr("Preview an exact convex union and choose sources for conflicting materials, UVs and flags."), QStringLiteral("cube"), false, false, false,
 		[this]() { mergeLevelMapBrushesFromUi(); });
 	add(QStringLiteral("map.clipSelection"), StudioCommandGroup::Edit, tr("Cl&ip Selection…"),
-		tr("Cut the selected brushes with a plane square to x, y, or z, keeping one side or both."), QStringLiteral("clip"), false, false, false,
+		tr("Preview or cut with an exact axis plane or three XYZ points, keeping one side or both."), QStringLiteral("clip"), false, false, false,
 		[this]() { clipLevelMapSelectionFromUi(); });
 	// The tool is a mode, so its menu item shows whether it is on.
 	if (QAction* tool = m_commands->action(QStringLiteral("map.clipTool"))) {
@@ -15191,6 +15159,7 @@ void ApplicationShell::buildCommands()
 		m_commands->action(command)->setCheckable(true);
 		m_commands->action(command)->setChecked(m_settings.levelViewLayoutPreference() == id);
 	}
+	registerLevelPlanPaneCommands();
 	add(QStringLiteral("map.maximizeView"), StudioCommandGroup::View, tr("Maximize Active View"),
 		tr("Temporarily enlarge the focused level pane. Repeat to restore the previous pane sizes."), QStringLiteral("map"), false, false, false,
 		[this] { toggleLevelViewMaximized(); });
@@ -15264,6 +15233,7 @@ void ApplicationShell::buildCommands()
 	add(QStringLiteral("map.frameSelection"), StudioCommandGroup::View, tr("&Frame Selection"),
 		tr("Frame the selection in the 2D view and turn the 3D camera to it."), QStringLiteral("crosshair"), false, false, false,
 		[this]() { frameLevelMapSelection(); });
+	registerLevelCameraFocusCommands();
 	add(QStringLiteral("map.toggleGrid"), StudioCommandGroup::View, tr("Show &Grid"),
 		tr("Show or hide the grid lines in the 2D view."), QStringLiteral("grid"), false, false, false,
 		[this]() {
@@ -15279,17 +15249,36 @@ void ApplicationShell::buildCommands()
 				statusBar()->showMessage(m_levelMapSnap->isChecked() ? tr("Snap to grid on.") : tr("Snap to grid off."), 2000);
 			}
 		});
-	for (const int units : {1, 2, 4, 8, 16, 32, 64, 128, 256}) {
-		add(QStringLiteral("map.grid%1").arg(units), StudioCommandGroup::View, tr("Grid %1").arg(units),
-			tr("Set the Levels grid to %n unit(s).", nullptr, units), QStringLiteral("grid"), false, false, false,
-			[this, units]() { setLevelMapGridUnits(units); });
+	// Checked while it is the working grid, as TrenchBroom's Set Grid Size
+	// items and NetRadiant Custom's Grid menu radio items are; choosing the
+	// checked one again keeps it checked and still runs the command.
+	auto* gridChoices = new QActionGroup(this);
+	gridChoices->setExclusionPolicy(QActionGroup::ExclusionPolicy::Exclusive);
+	for (const double units : levelEditorGridSizes()) {
+		const QString size = levelEditorGridSizeText(units);
+		QString summary;
+		if (units < 1.0) {
+			summary = tr("Set the Levels grid to %1 units. Doom and Hexen maps stop at 1 unit.").arg(size);
+		} else {
+			summary = tr("Set the Levels grid to %n unit(s).", nullptr, static_cast<int>(units));
+		}
+		add(levelEditorGridCommandId(units), StudioCommandGroup::View, tr("Grid %1").arg(size), summary, QStringLiteral("grid"), false, false,
+			false, [this, units]() { setLevelMapGridUnits(units); });
+		if (QAction* choice = m_commands->action(levelEditorGridCommandId(units))) {
+			choice->setCheckable(true);
+			gridChoices->addAction(choice);
+		}
 	}
+	registerLevelViewFilterCommands();
 	add(QStringLiteral("map.isolateSelection"), StudioCommandGroup::View, tr("&Isolate Selection"),
 		tr("Hide everything but the selection; Show All Hidden brings it back."), QStringLiteral("eye"), false, false, false,
 		[this]() { isolateLevelMapSelection(); });
-	add(QStringLiteral("map.replaceTexture"), StudioCommandGroup::Edit, tr("&Replace Texture…"),
-		tr("Replace every use of one texture with another, across the map or only the selection."), QStringLiteral("image"), false, false, false,
-		[this]() { showReplaceTextureDialog(); });
+	add(QStringLiteral("map.replaceTexture"), StudioCommandGroup::Edit, tr("Find and &Replace Textures…"),
+		tr("Find or replace a texture across the map, the selected objects or the picked faces. The window stays open; picking a texture fills its focused field."),
+		QStringLiteral("image"), false, false, false, [this]() { showReplaceTextureDialog(); });
+	add(QStringLiteral("map.revealMaterial"), StudioCommandGroup::Edit, tr("Reveal Material"),
+		tr("Show the selection's single material on the Textures tab and make it the current material."), QStringLiteral("image"), false, false, false,
+		[this]() { revealLevelMapMaterialFromUi(); });
 	add(QStringLiteral("map.cutSelection"), StudioCommandGroup::Edit, tr("Cu&t Map Objects"),
 		tr("Copy the selected map objects as .map text, then delete them."), QStringLiteral("trash"), false, false, false,
 		[this]() {
@@ -15298,16 +15287,25 @@ void ApplicationShell::buildCommands()
 				cutLevelMapSelection();
 			}
 		});
-	add(QStringLiteral("map.copySelection"), StudioCommandGroup::Edit, tr("&Copy Map Objects"),
-		tr("Copy the selected entities, brushes, and patches as .map text that Quake-family editors paste."), QStringLiteral("copy"), false, false, false,
+	add(QStringLiteral("map.copySelection"), StudioCommandGroup::Edit, tr("&Copy Map Selection"),
+		tr("Copy selected objects as .map text. In the TrenchBroom profile, picked faces copy face attributes."), QStringLiteral("copy"), false, false, false,
 		[this]() {
 			if (!copyFocusedTextSelection()) {
 				copyLevelMapSelectionToClipboard();
 			}
 		});
-	add(QStringLiteral("map.paste"), StudioCommandGroup::Edit, tr("&Paste Map Objects"),
-		tr("Add the entities and brushes in .map text from the clipboard, at their own coordinates."), QStringLiteral("import"), false, false, false,
+	add(QStringLiteral("map.paste"), StudioCommandGroup::Edit, tr("&Paste Map Content"),
+		tr("Paste objects at the cursor in the TrenchBroom profile, or at their original position otherwise. Face text pastes attributes onto picked faces or selected brushes, retaining contents."), QStringLiteral("import"), false, false, false,
 		[this]() { pasteLevelMapFromClipboard(); });
+	add(QStringLiteral("map.pasteAtOriginal"), StudioCommandGroup::Edit, tr("Paste at Original Position"),
+		tr("Paste clipboard objects at their saved coordinates, in any editor profile. Face text pastes attributes onto the face selection."), QStringLiteral("import"), false, false, false,
+		[this]() { pasteLevelMapFromClipboard(LevelClipboardPlacement::Original); });
+	add(QStringLiteral("map.pasteAtCursor"), StudioCommandGroup::Edit, tr("Paste at Cursor"),
+		tr("Place clipboard objects against the active view's cursor plane or brush surface. Outside the pane, use its centre."), QStringLiteral("import"), false, false, false,
+		[this]() { pasteLevelMapFromClipboard(LevelClipboardPlacement::Cursor); });
+	add(QStringLiteral("map.pasteToCamera"), StudioCommandGroup::Edit, tr("Paste to Camera"),
+		tr("Move the pasted assembly's centre to the camera, or the orbit view's focus centre, with a grid-snapped translation."), QStringLiteral("import"), false, false, false,
+		[this]() { pasteLevelMapFromClipboard(LevelClipboardPlacement::Camera); });
 	add(QStringLiteral("map.pasteWithOffset"), StudioCommandGroup::Edit, tr("Paste with Offset…"),
 		tr("Preview clipboard objects at an explicit offset, with package materials and one undo step."), QStringLiteral("import"), false, false, false,
 		[this]() { placeLevelMapObjectsFromUi(true); });
@@ -15315,13 +15313,16 @@ void ApplicationShell::buildCommands()
 		tr("Move each selected object onto the grid by its own amount: an entity's origin, a brush's corner, a thing's position."), QStringLiteral("grid"), false, false, false,
 		[this]() { snapLevelMapSelectionFromUi(); });
 	add(QStringLiteral("map.duplicateSelection"), StudioCommandGroup::Edit, tr("D&uplicate Selection"),
-		tr("Copy the selected entities, brushes, and patches one grid step over. Undo removes the copies."), QStringLiteral("copy"), false, false, false,
+		tr("Copy selected objects using the profile's duplicate placement. Undo removes the copies."), QStringLiteral("copy"), false, false, false,
 		[this]() { duplicateLevelMapSelectionFromUi(); });
+	add(QStringLiteral("map.duplicateUnique"), StudioCommandGroup::Edit, tr("Duplicate, Make Unique"),
+		tr("Copy selected objects into new entity owners and rename copied target names and references together. Requires object mode."), QStringLiteral("copy"), false, false, false,
+		[this]() { duplicateLevelMapSelectionFromUi(LevelDuplicateMode::MakeUnique); });
 	add(QStringLiteral("map.duplicateWithOffset"), StudioCommandGroup::Edit, tr("Duplicate with Offset…"),
 		tr("Preview copies at an explicit offset, preserving texture alignment and entity ownership."), QStringLiteral("copy"), false, false, false,
 		[this]() { placeLevelMapObjectsFromUi(false); });
 	add(QStringLiteral("map.deleteSelection"), StudioCommandGroup::Edit, tr("&Delete Selection"),
-		tr("Delete the selected entities, brushes, and patches from the open map. Undo restores them."), QStringLiteral("trash"), false, false, true,
+		tr("Delete selected objects or picked brush components using the editor profile. TrenchBroom removes the last clip point while clipping. Geometry deletion is one undo step."), QStringLiteral("trash"), false, false, true,
 		[this]() { deleteLevelMapSelectionFromUi(); });
 	add(QStringLiteral("shell.focusSearch"), StudioCommandGroup::Edit, tr("&Find"),
 		tr("Search the current work surface: its filter, the code editor's find bar, or the Workspace search."), QStringLiteral("search"), false, false, false,
@@ -17260,8 +17261,14 @@ void ApplicationShell::installShortcutScopes()
 				|| registration.commandId == QLatin1String("map.toggle3D")
 				|| registration.commandId == QLatin1String("map.maximizeView")
 				|| registration.commandId == QLatin1String("map.equalizeViews");
-			m_commands->setShortcutScopes(registration.commandId, viewNavigation && !levelViews.isEmpty()
+			// The nudge keys and the view-relative turn and flip keys act in the
+			// views, which claim them ahead of window-wide keys such as Go Back's
+			// Alt+Left and Find's Ctrl+F (app/level_nudge_actions.cpp).
+			const bool nudge = levelNudgeCommandForId(registration.commandId) || levelViewTransformForCommand(registration.commandId)
+				|| levelDuplicateMoveCommandForId(registration.commandId);
+			m_commands->setShortcutScopes(registration.commandId, (viewNavigation || nudge) && !levelViews.isEmpty()
 				? levelViews : QList<QWidget*>{page(StudioMode::Levels)});
+			if (nudge) { m_commands->setShortcutScopeClaims(registration.commandId, !levelViews.isEmpty()); }
 		}
 	}
 }
@@ -17415,7 +17422,7 @@ void ApplicationShell::refreshSurfaceStates()
 				parts << tr("%n entities", nullptr, static_cast<int>(m_levelMapDocument.entities.size()));
 				parts << tr("%n brushes", nullptr, static_cast<int>(m_levelMapDocument.brushes.size()));
 			}
-			if (!m_levelMapDocument.undoStack.isEmpty() && m_levelMapDocument.savedUndoDepth != m_levelMapDocument.undoStack.size()) {
+			if (levelMapHasUnsavedEdits()) {
 				parts << tr("unsaved edits");
 			}
 			header->setSubtitle(parts.join(separator));
@@ -19084,11 +19091,13 @@ void ApplicationShell::refreshCommandEnablement()
 	m_commands->setEnabled(QStringLiteral("map.addPatch"), m_levelMapDocument.format == LevelMapFormat::Quake3Map);
 	m_commands->setEnabled(QStringLiteral("map.stitchPatches"), m_levelMapDocument.format == LevelMapFormat::Quake3Map && m_levelMapDocument.patches.size() >= 2);
 	m_commands->setEnabled(QStringLiteral("map.capPatch"), m_levelMapDocument.format == LevelMapFormat::Quake3Map && !m_levelMapDocument.patches.isEmpty());
-	m_commands->setEnabled(QStringLiteral("map.editBrushComponents"), m_levelMapDocument.selectionKind == LevelMapSelectionKind::QuakeBrush);
-	m_commands->setEnabled(QStringLiteral("map.alignSurfaces"), !levelMapSelectedSurfaces(m_levelMapDocument).isEmpty());
+	const auto groupContext = m_levelMapViewport ? m_levelMapViewport->sceneSelectionContext() : LevelSceneSelectionContext{};
+	const auto primaryObject = levelMapSelectionRefId(levelMapPrimarySelection(m_levelMapDocument));
+	const bool directGroupObject = groupContext.allowedObjects.contains(primaryObject) && !groupContext.closedGroups.contains(primaryObject);
+	m_commands->setEnabled(QStringLiteral("map.editBrushComponents"), m_levelMapDocument.selectionKind == LevelMapSelectionKind::QuakeBrush && directGroupObject);
 	refreshLevelSurfaceTools();
 	m_commands->setEnabled(QStringLiteral("map.editPatch"), m_levelMapDocument.format == LevelMapFormat::Quake3Map
-		&& m_levelMapDocument.selectionKind == LevelMapSelectionKind::QuakePatch);
+		&& m_levelMapDocument.selectionKind == LevelMapSelectionKind::QuakePatch && directGroupObject);
 	m_commands->setEnabled(QStringLiteral("map.addThing"), m_levelMapDocument.format == LevelMapFormat::DoomWad
 		&& m_levelMapDocument.doomFormat != LevelMapDoomFormat::Udmf);
 	m_commands->setEnabled(QStringLiteral("map.selectSimilar"), hasMap && !similarLevelMapObjectsLabel().isEmpty());
@@ -19105,24 +19114,29 @@ void ApplicationShell::refreshCommandEnablement()
 	m_commands->action(QStringLiteral("map.textureLock"))->setChecked(m_settings.levelTextureLock());
 	m_commands->action(QStringLiteral("map.textureScaleLock"))->setChecked(m_settings.levelTextureScaleLock());
 	m_commands->action(QStringLiteral("map.allowValve220"))->setChecked(m_settings.levelAllowValve220());
-	m_commands->setEnabled(QStringLiteral("map.copySelection"), textMapOpen && hasSelection);
-	m_commands->setEnabled(QStringLiteral("map.cutSelection"), textMapOpen && levelMapSelectionIsDeletable(m_levelMapDocument));
+	m_commands->setEnabled(QStringLiteral("map.copySelection"), textMapOpen && (hasSelection || (m_levelControls.copyFaceAttributes && !levelPickedSurfaceFaces().isEmpty())));
+	m_commands->setEnabled(QStringLiteral("map.cutSelection"), textMapOpen && canCutLevelMapSelection());
 	m_commands->setEnabled(QStringLiteral("map.paste"), textMapOpen);
+	m_commands->setEnabled(QStringLiteral("map.pasteAtOriginal"), textMapOpen);
+	m_commands->setEnabled(QStringLiteral("map.pasteAtCursor"), textMapOpen);
+	m_commands->setEnabled(QStringLiteral("map.pasteToCamera"), textMapOpen && m_levelMap3D);
 	m_commands->setEnabled(QStringLiteral("map.pasteWithOffset"), textMapOpen);
-	m_commands->setEnabled(QStringLiteral("map.duplicateWithOffset"), hasMap && levelMapSelectionIsDuplicable(m_levelMapDocument));
-	m_commands->setEnabled(QStringLiteral("map.hideSelection"), hasMap && hasSelection);
+	m_commands->setEnabled(QStringLiteral("map.duplicateWithOffset"), hasMap && canDuplicateLevelMapSelection());
 	m_commands->setEnabled(QStringLiteral("map.rotateLeft"), hasMap && hasSelection);
 	m_commands->setEnabled(QStringLiteral("map.rotatePrecisely"), hasMap && hasSelection);
 	m_commands->setEnabled(QStringLiteral("map.udmfProperties"), hasMap && m_levelMapDocument.doomUdmf != nullptr);
 	m_commands->setEnabled(QStringLiteral("map.rotateRight"), hasMap && hasSelection);
 	m_commands->setEnabled(QStringLiteral("map.flipHorizontal"), hasMap && hasSelection);
 	m_commands->setEnabled(QStringLiteral("map.flipVertical"), hasMap && hasSelection);
+	refreshLevelAxisTransformCommands();
+	refreshLevelNudgeCommands();
+	refreshLevelCameraFocusCommands();
 	m_commands->setEnabled(QStringLiteral("map.selectConnectedGeometry"), hasMap && m_levelMapDocument.format == LevelMapFormat::DoomWad &&
 		std::any_of(m_levelMapDocument.selection.cbegin(), m_levelMapDocument.selection.cend(), [](const auto& ref) {
 			return ref.kind == LevelMapSelectionKind::DoomVertex || ref.kind == LevelMapSelectionKind::DoomLinedef || ref.kind == LevelMapSelectionKind::DoomSector;
 		}));
 	m_commands->setEnabled(QStringLiteral("map.resizeSelection"), hasMap && levelMapSelectionResizable());
-	m_commands->setEnabled(QStringLiteral("map.showAll"), hasMap && m_levelMapViewport && m_levelMapViewport->hiddenCount() > 0);
+	refreshLevelVisibilityCommands();
 	m_commands->setEnabled(QStringLiteral("map.saveView"), hasMap && !m_settings.isReadOnly() && m_levelBookmarks.size() < LevelBookmarkLimit);
 	for (const auto& id : {QStringLiteral("map.linkPlanCenters"), QStringLiteral("map.linkPlanZoom"), QStringLiteral("map.followCamera")}) {
 		m_commands->setEnabled(id, hasMap && !m_settings.isReadOnly());
@@ -19132,7 +19146,17 @@ void ApplicationShell::refreshCommandEnablement()
 	m_commands->setEnabled(QStringLiteral("map.manageViews"), hasMap);
 	m_commands->setEnabled(QStringLiteral("map.nextSavedView"), hasMap && !m_levelBookmarks.isEmpty());
 	m_commands->setEnabled(QStringLiteral("map.previousSavedView"), hasMap && !m_levelBookmarks.isEmpty());
-	m_commands->setEnabled(QStringLiteral("map.gridSmaller"), hasMap && m_levelMapGrid && m_levelMapGrid->currentIndex() > 0);
+	const double finestGrid = levelEditorFinestGridUnits(m_levelMapDocument);
+	m_commands->setEnabled(QStringLiteral("map.gridSmaller"), hasMap && m_levelMapGrid && levelMapGridUnits() > finestGrid);
+	const double workingGrid = levelMapGridUnits();
+	for (const double units : levelEditorGridSizes()) {
+		if (units < 1.0) {
+			m_commands->setEnabled(levelEditorGridCommandId(units), units >= finestGrid);
+		}
+		if (QAction* choice = m_commands->action(levelEditorGridCommandId(units)); choice && units == workingGrid && !choice->isChecked()) {
+			choice->setChecked(true);
+		}
+	}
 	m_commands->setEnabled(QStringLiteral("map.toggle3D"), hasMap);
 	refreshLevelViewWorkspaceActions();
 	const bool previewShowing = hasMap && levelMap3DShowing();
@@ -19154,18 +19178,19 @@ void ApplicationShell::refreshCommandEnablement()
 	}
 	const bool quakeFamilyMap = m_levelMapDocument.format == LevelMapFormat::QuakeMap || m_levelMapDocument.format == LevelMapFormat::Quake3Map;
 	m_commands->setEnabled(QStringLiteral("map.clipTool"), quakeFamilyMap);
+	m_commands->setEnabled(QStringLiteral("map.quickClip"), quakeFamilyMap && levelMapSelectionClippable());
 	if (QAction* tool = m_commands->action(QStringLiteral("map.clipTool"))) {
 		// Loading a map turns the tool off behind a signal blocker, so the check
 		// is read back from the viewport rather than left to the signal.
 		tool->setChecked(m_levelMapViewport && m_levelMapViewport->clipMode());
 	}
-	m_commands->setEnabled(QStringLiteral("map.applyTexture"), quakeFamilyMap && hasSelection);
+	m_commands->setEnabled(QStringLiteral("map.applyTexture"), quakeFamilyMap && !levelSurfaceSelectionTargets().isEmpty() && !levelSurfaceGeometryBusy() && !levelSurfaceEditsPending());
 	m_commands->setEnabled(QStringLiteral("map.paintMaterial"), quakeFamilyMap || levelMapDoomEditable());
 	m_commands->setEnabled(QStringLiteral("map.drawBrush"), quakeFamilyMap);
 	m_commands->setEnabled(QStringLiteral("map.sampleMaterial"), quakeFamilyMap || levelMapDoomEditable());
 	m_commands->setEnabled(QStringLiteral("map.selectAll"), hasMap);
 	m_commands->setEnabled(QStringLiteral("map.selectMatching"), hasMap);
-	m_commands->setEnabled(QStringLiteral("map.selectNone"), hasMap && hasSelection);
+	m_commands->setEnabled(QStringLiteral("map.selectNone"), hasMap && (hasSelection || levelComponentsActive() || !levelPickedSurfaceFaces().isEmpty()));
 	m_commands->setEnabled(QStringLiteral("map.invertSelection"), hasMap);
 	m_commands->setEnabled(QStringLiteral("map.clipSelection"), quakeFamilyMap && levelMapSelectionClippable());
 	m_commands->setEnabled(QStringLiteral("map.hollowSelection"), quakeFamilyMap && levelMapSelectionClippable());
@@ -19178,7 +19203,8 @@ void ApplicationShell::refreshCommandEnablement()
 	}
 	m_commands->setEnabled(QStringLiteral("map.addSector"), levelMapDoomEditable());
 	m_commands->setEnabled(QStringLiteral("map.joinSectors"), levelMapSelectedSectorCount() >= 2);
-	m_commands->setEnabled(QStringLiteral("map.connectEntities"), quakeFamilyMap && m_levelMapDocument.selection.size() >= 2);
+	m_commands->setEnabled(QStringLiteral("map.connectEntities"), quakeFamilyMap && canConnectLevelMapEntities(m_levelMapDocument,levelEntityConnectionRequest()));
+	m_commands->setEnabled(QStringLiteral("map.killConnectEntities"), quakeFamilyMap && canConnectLevelMapEntities(m_levelMapDocument,levelEntityConnectionRequest(true)));
 	// On a Doom map the links are tags: lines to the sectors they act on.
 	const bool linkedMap = quakeFamilyMap || levelMapDoomEditable();
 	m_commands->setEnabled(QStringLiteral("map.selectTargets"), linkedMap && !levelMapLinkedEntities(m_levelMapDocument, true).isEmpty());
@@ -19200,10 +19226,12 @@ void ApplicationShell::refreshCommandEnablement()
 	m_commands->setEnabled(QStringLiteral("map.gridLarger"), hasMap && m_levelMapGrid && m_levelMapGrid->currentIndex() < m_levelMapGrid->count() - 1);
 	m_commands->setEnabled(QStringLiteral("map.replaceTexture"), hasMap && !m_levelMapDocument.textureReferences.isEmpty()
 		&& !(m_levelMapDocument.format == LevelMapFormat::DoomWad && m_levelMapDocument.doomFormat == LevelMapDoomFormat::Udmf));
-	m_commands->setEnabled(QStringLiteral("map.deleteSelection"), hasMap && levelMapSelectionIsDeletable(m_levelMapDocument));
+	refreshLevelMaterialFindCommands();
+	refreshLevelDeletionCommands();
 	// What can be deleted can be copied, but for a Doom map's geometry, which
 	// is drawn: entities other than worldspawn, brushes, patches, and things.
-	m_commands->setEnabled(QStringLiteral("map.duplicateSelection"), hasMap && levelMapSelectionIsDuplicable(m_levelMapDocument));
+	m_commands->setEnabled(QStringLiteral("map.duplicateSelection"), hasMap && canDuplicateLevelMapSelection());
+	m_commands->setEnabled(QStringLiteral("map.duplicateUnique"), hasMap && canDuplicateLevelMapSelection(LevelDuplicateMode::MakeUnique));
 	m_commands->setEnabled(QStringLiteral("map.undo"), hasMap && !m_levelMapDocument.undoStack.isEmpty());
 	m_commands->setEnabled(QStringLiteral("map.redo"), hasMap && !m_levelMapDocument.redoStack.isEmpty());
 	// Point files come from Quake-family compilers; Doom node builders write none.
@@ -19446,6 +19474,12 @@ bool ApplicationShell::eventFilter(QObject* watched, QEvent* event)
 	if (watched == m_levelMap3D && m_levelTextureDragMode && handleLevelTextureDragEvent(event)) {
 		return true;
 	}
+	if (handleLevelCameraFocusEvent(watched, event)) {
+		return true;
+	}
+	if (handleLevelNudgeKey(watched, event)) {
+		return true;
+	}
 	if (event->type() == QEvent::FocusIn || event->type() == QEvent::MouseButtonPress) {
 		if (watched == m_levelMap3D && !m_applyingLevelViewLayout) { m_levelLastFocusedView = m_levelMap3D; }
 		for (auto* view : m_levelPlanViews) {
@@ -19480,6 +19514,10 @@ bool ApplicationShell::eventFilter(QObject* watched, QEvent* event)
 	// reaches the page's Delete Selection, which would take the whole entity.
 	if (watched == m_entityInspector && event->type() == QEvent::ShortcutOverride) {
 		const auto* keyEvent = static_cast<QKeyEvent*>(event);
+		if (keyEvent->modifiers() == Qt::NoModifier && m_entityInspector->currentColumn() == 2
+			&& (keyEvent->key() == Qt::Key_Space || keyEvent->key() == Qt::Key_Return || keyEvent->key() == Qt::Key_Enter)) {
+			event->accept(); return true;
+		}
 		if (keyEvent->key() == Qt::Key_Delete || keyEvent->matches(QKeySequence::Copy) || keyEvent->matches(QKeySequence::Cut)
 			|| keyEvent->matches(QKeySequence::Paste)) {
 			event->accept();
@@ -19510,7 +19548,13 @@ bool ApplicationShell::eventFilter(QObject* watched, QEvent* event)
 		// column 0, where a plain tree would want the current cell to be.
 		if (keyEvent->key() == Qt::Key_Space && keyEvent->modifiers() == Qt::NoModifier) {
 			QTreeWidgetItem* item = m_entityInspector->currentItem();
-			if (item && item->flags().testFlag(Qt::ItemIsUserCheckable) && m_entityInspector->currentColumn() != 0) {
+			if (item && m_entityInspector->currentColumn() == 2 && item->data(2, Qt::CheckStateRole).isValid()) {
+				if (item->flags().testFlag(Qt::ItemIsUserCheckable)) {
+					item->setCheckState(2, item->checkState(2) == Qt::Checked ? Qt::Unchecked : Qt::Checked);
+				}
+				return true;
+			}
+			if (item && item->data(0, Qt::CheckStateRole).isValid() && m_entityInspector->currentColumn() != 0) {
 				item->setCheckState(0, item->checkState(0) == Qt::Checked ? Qt::Unchecked : Qt::Checked);
 				return true;
 			}
@@ -19531,6 +19575,12 @@ bool ApplicationShell::eventFilter(QObject* watched, QEvent* event)
 		const auto* keyEvent = static_cast<QKeyEvent*>(event);
 		if (keyEvent->key() == Qt::Key_Return || keyEvent->key() == Qt::Key_Enter) {
 			QTreeWidgetItem* item = m_entityInspector->currentItem();
+			if (item && m_entityInspector->currentColumn() == 2 && item->data(2, Qt::CheckStateRole).isValid()) {
+				if (item->flags().testFlag(Qt::ItemIsUserCheckable)) {
+					item->setCheckState(2, item->checkState(2) == Qt::Checked ? Qt::Unchecked : Qt::Checked);
+				}
+				return true;
+			}
 			if (item && item->flags().testFlag(Qt::ItemIsEditable)) {
 				m_entityInspector->editItem(item, 1);
 				return true;
@@ -20501,7 +20551,13 @@ void ApplicationShell::acceptTexturePreview(const TexturePreviewResult& result)
 	refreshAssetWorkbenchCommands();
 	// The swatches and their source line follow the image on show.
 	refreshTexturePaletteView(resolution);
-	if (resolution.palette.id == activePaletteId()) { m_paletteResolution = resolution; m_paletteResolutionValid = true; }
+	// Automatic decoding may infer Doom/Heretic/Hexen from this entry even
+	// when the source's fallback palette is Quake. The request revision above
+	// already validates package, installation and palette-choice identity.
+	// Retain the resolved palette so a later browser refresh cannot replace
+	// its source label with a loading message after decoding has finished.
+	m_paletteResolution = resolution;
+	m_paletteResolutionValid = !resolution.palette.id.isEmpty();
 	updateTexturePreviewState();
 	if (virtualPath.isEmpty()) { return; }
 
@@ -20760,6 +20816,47 @@ void ApplicationShell::showModelEditor(const ModelMesh* initial)
 		return true;
 	};
 	editor->showMaterial = [this](const QString& path) { showTextureReference(path); };
+	// Modeller: an MD3 with stored detail levels stages them in one package step.
+	editor->handoffFiles = [this](const QVector<ModelStagedFile>& files, bool place, const LevelMapVec3& origin, bool replace, QString* outputError) {
+		if (m_packageExtractionRunning || m_packageSaveRunning || m_packageReadRunning) { if (outputError) { *outputError = tr("Wait for the package operation to finish before staging a model."); } return false; }
+		QVector<QPair<QString, QByteArray>> payload;
+		for (const auto& file : files) { payload.append({file.path, file.bytes}); }
+		if (!stageModelExports(payload, &m_packageStaging, place ? &m_levelMapDocument : nullptr, origin, replace, outputError)) { return false; }
+		refreshPackageStagingSummary();
+		if (place) { refreshLevelMapWorkbench(); frameLevelMapSelection(); }
+		recordActivity(tr("Mesh Handoff"), files.isEmpty() ? QString() : files.first().path, tr("package"), OperationState::Completed,
+		    tr("Edited model and its detail levels staged as one package step."));
+		return true;
+	};
+	// Modeller: the detail files already beside a staged MD3, for the editor's review.
+	editor->readPackageFiles = [this](const QStringList& paths) {
+		if (m_packageExtractionRunning || m_packageSaveRunning || m_packageReadRunning) { return QHash<QString, QByteArray>{}; }
+		return readStagedModelFiles(m_packageStaging, paths);
+	};
+	// Modeller: delivery targets saved with the open project, or suggested by its installation.
+	editor->deliveryContext = [this]() {
+		ModelEditorDeliveryContext delivery;
+		const ProjectManifest manifest = currentProjectManifestOrDefault();
+		delivery.projectRoot = manifest.rootPath;
+		delivery.project = projectModelDeliveryPreferences(manifest);
+		// The same installation rule as the model CLI commands (core/model_delivery.h).
+		GameInstallationProfile current;
+		const QString selected = selectedGameInstallation(&current) ? current.id : QString();
+		delivery.installation = installationModelDeliveryPreferences(manifest, m_settings.gameInstallations(), selected, &delivery.installationName);
+		return delivery;
+	};
+	editor->saveDeliveryPreferences = [this](const ModelDeliveryPreferences& preferences, QString* outputError) {
+		ProjectManifest manifest = currentProjectManifestOrDefault();
+		if (manifest.rootPath.isEmpty()) { if (outputError) { *outputError = tr("Open a project to save delivery targets with it."); } return false; }
+		// A manifest that exists but cannot be read is not replaced: that would lose every other project setting.
+		QString loadError;
+		if (QFileInfo::exists(projectManifestPath(manifest.rootPath)) && !loadProjectManifest(manifest.rootPath, nullptr, &loadError)) {
+			if (outputError) { *outputError = tr("The project manifest %1 could not be read (%2), so the delivery targets were not saved. Fix or restore it, then save them again.").arg(QDir::toNativeSeparators(projectManifestPath(manifest.rootPath)), loadError); }
+			return false;
+		}
+		setProjectModelDeliveryPreferences(&manifest, preferences);
+		return saveOwnProjectManifest(manifest, outputError);
+	};
 	refreshModelMaterials();
 	const auto preferences = m_settings.accessibilityPreferences();
 	editor->setAccessibility(preferences.theme == StudioTheme::HighContrastDark || preferences.theme == StudioTheme::HighContrastLight, preferences.reducedMotion);
@@ -23076,6 +23173,8 @@ void ApplicationShell::refreshLevelMapViewport()
 	// Sectors exist only in Doom maps, and Quake-family maps call their point
 	// objects entities rather than things.
 	const bool doomMap = m_levelMapDocument.format == LevelMapFormat::DoomWad;
+	// Binary Doom and Hexen maps keep whole units (level_grid_actions.cpp).
+	refreshLevelMapGridChoices();
 	if (m_levelMapShowSectors) {
 		m_levelMapShowSectors->setVisible(doomMap);
 	}
@@ -23083,12 +23182,17 @@ void ApplicationShell::refreshLevelMapViewport()
 	if (m_levelMapShowLinks) {
 		m_levelMapShowLinks->setVisible(!doomMap);
 	}
+	// Linked groups belong to Quake-family maps too.
+	if (m_levelMapShowLinkedGroups) {
+		m_levelMapShowLinkedGroups->setVisible(!doomMap);
+	}
 	if (m_levelMapShowThings) {
 		m_levelMapShowThings->setText(doomMap ? tr("Things") : tr("Entities"));
 		m_levelMapShowThings->setToolTip(doomMap ? tr("Draw Doom things.") : tr("Draw point entities such as lights and spawn points."));
 	}
 	if (m_levelMapDocument.format == LevelMapFormat::Unknown) {
 		for (auto* view : m_levelPlanViews) { view->clearDocument(); }
+		refreshLevelCameraLinkedGroups();
 		return;
 	}
 
@@ -23097,7 +23201,7 @@ void ApplicationShell::refreshLevelMapViewport()
 		m_levelMapViewport->setProjection(static_cast<MapViewportProjection>(std::clamp(projection, 0, 2)));
 	}
 	if (m_levelMapGrid) {
-		m_levelMapViewport->setGridSize(std::max(1, m_levelMapGrid->currentData().toInt()));
+		m_levelMapViewport->setGridSize(levelMapGridUnits());
 	}
 	if (m_levelMapShowThings) {
 		m_levelMapViewport->setShowThings(m_levelMapShowThings->isChecked());
@@ -23111,7 +23215,7 @@ void ApplicationShell::refreshLevelMapViewport()
 	if (m_levelMap3D) {
 		// A drag in the camera lands on the same grid as one in the 2D view.
 		const bool snap = !m_levelMapSnap || m_levelMapSnap->isChecked();
-		m_levelMap3D->setMoveGrid(snap && m_levelMapGrid ? std::max(1, m_levelMapGrid->currentData().toInt()) : 0.0);
+		m_levelMap3D->setMoveGrid(snap && m_levelMapGrid ? levelMapGridUnits() : 0.0);
 	}
 	if (m_levelMapShowGrid) {
 		m_levelMapViewport->setShowGrid(m_levelMapShowGrid->isChecked());
@@ -23124,6 +23228,9 @@ void ApplicationShell::refreshLevelMapViewport()
 	}
 	if (m_levelMapShowLinks) {
 		m_levelMapViewport->setShowTargetLinks(m_levelMapShowLinks->isChecked());
+	}
+	if (m_levelMapShowLinkedGroups) {
+		m_levelMapViewport->setShowLinkedGroups(m_levelMapShowLinkedGroups->isChecked());
 	}
 
 	const AccessibilityPreferences preferences = m_settings.accessibilityPreferences();
@@ -23138,7 +23245,8 @@ void ApplicationShell::refreshLevelMapViewport()
 		.arg(m_levelMapDocument.sourcePath, m_levelMapDocument.mapName, m_levelMapDocument.editState)
 		.append(QStringLiteral("|%1").arg(m_levelMapDocument.revision));
 	bool frameOtherViews = false;
-	if (documentKey != m_levelMapViewportKey) {
+	if (documentKey != m_levelMapViewportKey || m_levelMapViewport->displayDocument().hiddenObjects != m_levelMapDocument.hiddenObjects
+		|| m_levelMapViewport->displayDocument().shownObjects != m_levelMapDocument.shownObjects) {
 		// An edit to the map already open keeps the camera; a different map or a
 		// different file refits, because the old pan and zoom mean nothing there.
 		const QString sourceKey = QStringLiteral("%1|%2").arg(m_levelMapDocument.sourcePath, m_levelMapDocument.mapName);
@@ -23165,15 +23273,22 @@ void ApplicationShell::refreshLevelMapViewport()
 		if (m_levelMapHover) {
 			// The viewport's signals are blocked here, so the readout under it
 			// is brought up to date by hand rather than left on the last map.
-			m_levelMapHover->setText(m_levelMapViewport->hoverSummary());
+			m_levelMapHover->setText(levelSweepReadout(m_levelMapViewport->hoverSummary()));
 		}
 		// The View tab's filters follow the map: an edit can add a light or a
 		// clip brush they hide.
 		applyLevelViewFilters();
 	}
 	const QSignalBlocker selectionBlocker(m_levelMapViewport);
-	m_levelMapViewport->setSelectionSet(m_levelMapDocument.selection);
+	m_levelMapViewport->setSelectionSet(m_levelMapDocument.selection,false);
 	synchronizeLevelPlanViews(frameOtherViews);
+	// The boxes come from the plan view's geometry, just brought up to date.
+	refreshLevelCameraLinkedGroups();
+	refreshLevelTexturedSelectionViews();
+	// A source-file replacement resets plan tools under blocked signals. Keep
+	// the camera and the shared draft in step instead of leaving a camera-only
+	// clip session which no longer propagates its points.
+	if (m_levelMap3D && m_levelMap3D->clipMode() != m_levelMapViewport->clipMode()) { setLevelMapClipMode(false); }
 	refreshLevelCameraBrush();
 }
 
@@ -23740,11 +23855,32 @@ bool ApplicationShell::refreshBrushInspector(const QStringList* textureNames)
 
 QVector<LevelSurfaceFace> ApplicationShell::levelPickedSurfaceFaces() const
 {
+	QVector<LevelSurfaceFace> faces = m_levelTexturedFaces;
+	QSet<QPair<int,int>> seen;
+	for (const auto& face : faces) { seen.insert({face.brushId,face.faceIndex}); }
+	const auto append = [&](const LevelSurfaceFace& face) {
+		const QPair<int,int> key{face.brushId,face.faceIndex};
+		if (!seen.contains(key)) { seen.insert(key); faces.append(face); }
+	};
+	if (levelComponentsActive()) {
+		if (m_levelMapViewport->componentMode() != MapViewport::ComponentMode::Faces) { return faces; }
+		QHash<int,int> counts;
+		for (const auto& brush : m_levelMapDocument.brushes) { counts.insert(brush.id,static_cast<int>(brush.faces.size())); }
+		for (const auto& set : m_levelMapViewport->pickedComponents()) {
+			if (set.object.kind != LevelMapSelectionKind::QuakeBrush || set.kind != LevelBrushComponent::Face) { continue; }
+			for (int index : set.components) {
+				// Never turn an invalid component result into a partial surface edit.
+				if (index < 0 || index >= counts.value(set.object.objectId,0)) { return {}; }
+				append({set.object.objectId,index});
+			}
+		}
+		return faces;
+	}
 	// Picks hold while the selection is the one the last face pick left:
 	// selecting any other way drops them, as in Radiant. Then only faces of
 	// brushes still selected, and still that brush's faces.
 	if (m_levelPickedFaces.isEmpty() || m_levelMapDocument.selection != m_levelPickedSelection) {
-		return {};
+		return faces;
 	}
 	QSet<int> selected;
 	for (const LevelMapSelectionRef& ref : std::as_const(m_levelMapDocument.selection)) {
@@ -23758,10 +23894,9 @@ QVector<LevelSurfaceFace> ApplicationShell::levelPickedSurfaceFaces() const
 			faceCounts.insert(brush.id, static_cast<int>(brush.faces.size()));
 		}
 	}
-	QVector<LevelSurfaceFace> faces;
 	for (const LevelSurfaceFace& face : m_levelPickedFaces) {
 		if (face.faceIndex >= 0 && face.faceIndex < faceCounts.value(face.brushId, 0)) {
-			faces.push_back(face);
+			append(face);
 		}
 	}
 	return faces;
@@ -23770,11 +23905,27 @@ QVector<LevelSurfaceFace> ApplicationShell::levelPickedSurfaceFaces() const
 QVector<LevelSurfaceFace> ApplicationShell::levelSurfaceFaceTargets() const
 {
 	const QVector<LevelSurfaceFace> picked = levelPickedSurfaceFaces();
-	if (!picked.isEmpty()) {
+	if (levelComponentsActive() || !picked.isEmpty()) {
 		return picked;
 	}
 	const LevelSurfaceFace inspected = inspectedLevelMapSurface();
 	return levelMapSelectedSurfaces(m_levelMapDocument).contains(inspected) ? QVector<LevelSurfaceFace> {inspected} : QVector<LevelSurfaceFace> {};
+}
+
+QVector<LevelMaterialTarget> ApplicationShell::levelSurfaceSelectionTargets() const
+{
+	QVector<LevelMaterialTarget> targets = levelComponentsActive() ? QVector<LevelMaterialTarget>{} : levelSurfacePasteSelectionTargets(m_levelMapDocument);
+	QSet<LevelMaterialTarget> seen(targets.cbegin(),targets.cend());
+	const auto append = [&](const LevelMaterialTarget& target) {
+		if (!seen.contains(target)) { seen.insert(target); targets.append(target); }
+	};
+	for (const auto& face : levelPickedSurfaceFaces()) { append({LevelMaterialKind::BrushFace,face.brushId,face.faceIndex}); }
+	// Query-selected patches remain whole surface targets in component mode;
+	// picking a patch control point alone does not turn into a whole-patch edit.
+	for (const auto& ref : m_levelMapDocument.selection) {
+		if (ref.kind == LevelMapSelectionKind::QuakePatch && m_levelTexturedPatches.contains(ref.objectId)) { append({LevelMaterialKind::Patch,ref.objectId,0}); }
+	}
+	return targets;
 }
 
 LevelSurfaceFace ApplicationShell::inspectedLevelMapSurface() const
@@ -23794,6 +23945,8 @@ void ApplicationShell::refreshEntityInspector(const QStringList* textureNames)
 	}
 	const QSignalBlocker blocker(m_entityInspector);
 	m_refreshingEntityInspector = true;
+	const int previousColumn = m_entityInspector->currentColumn();
+	m_entityInspector->setColumnHidden(2, true);
 	m_entityInspector->setAccessibleDescription(entityInspectorDescription());
 	const QString previousKey = m_entityInspector->currentItem() ? m_entityInspector->currentItem()->data(0, Qt::UserRole).toString() : QString();
 	// A field row, and the groups the user opened, come back after a rebuild,
@@ -23830,7 +23983,7 @@ void ApplicationShell::refreshEntityInspector(const QStringList* textureNames)
 		if (current) {
 			// A flag row keeps its check box in column 0, where Space toggles
 			// it; other rows edit their value in column 1.
-			const bool checkable = current->flags().testFlag(Qt::ItemIsUserCheckable);
+			const bool checkable = current->data(0, Qt::CheckStateRole).isValid();
 			m_entityInspector->setCurrentItem(current, checkable ? 0 : 1);
 		}
 	};
@@ -23880,7 +24033,7 @@ void ApplicationShell::refreshEntityInspector(const QStringList* textureNames)
 		return;
 	}
 	if (const QVector<int> ids = selectedLevelMapEntityIds(); ids.size() > 1) {
-		refreshMultiEntityInspector(ids, previousKey);
+		refreshMultiEntityInspector(ids, previousKey, previousColumn);
 		m_refreshingEntityInspector = false;
 		return;
 	}
@@ -23940,11 +24093,10 @@ void ApplicationShell::refreshEntityInspector(const QStringList* textureNames)
 		// A colour key shows its colour beside the numbers.
 		EntityKeyDefinition declared;
 		const bool colorKey = (known && definition.keyForName(property.key, &declared) && declared.type == EntityKeyType::Color)
-			|| property.key.compare(QStringLiteral("_color"), Qt::CaseInsensitive) == 0
-			|| property.key.compare(QStringLiteral("color"), Qt::CaseInsensitive) == 0;
-		EntityColorValue color;
-		if (colorKey && parseEntityColor(property.value, &color)) {
-			row->setData(1, Qt::DecorationRole, color.color);
+			|| isLevelEntityColourKeyName(property.key);
+		LevelEntityColour color;
+		if (colorKey && parseLevelEntityColour(property.value, &color)) {
+			row->setData(1, Qt::DecorationRole, color.color());
 			row->setData(1, kColorKeyRole, true);
 			row->setToolTip(1, tr("%1\nDouble-click to pick the colour; Enter edits the numbers.").arg(row->toolTip(1)));
 		}
@@ -24014,12 +24166,13 @@ void ApplicationShell::refreshEntityInspector(const QStringList* textureNames)
 	if (current) {
 		m_entityInspector->setCurrentItem(current, 1);
 	}
+	refreshEntityProtectionControls(previousKey, previousColumn);
 	m_refreshingEntityInspector = false;
 }
 
 QString ApplicationShell::entityInspectorDescription() const
 {
-	return tr("The selected entity's class, keys with their documented meaning, and spawnflag bits, or a Doom sector's, linedef's, or vertex's fields. Double-click or press Enter on a value to edit it; Space toggles a flag.");
+	return tr("The selected entity's class, keys with their documented meaning, and spawnflag bits, or a Doom sector's, linedef's, or vertex's fields. Double-click or press Enter on a value to edit it; Space toggles a flag. In the Protected column, Space or Enter keeps a property's value or absence local to this instance.");
 }
 
 QVector<int> ApplicationShell::selectedLevelMapEntityIds() const
@@ -24036,7 +24189,7 @@ QVector<int> ApplicationShell::selectedLevelMapEntityIds() const
 	return ids;
 }
 
-void ApplicationShell::refreshMultiEntityInspector(const QVector<int>& entityIds, const QString& previousKey)
+void ApplicationShell::refreshMultiEntityInspector(const QVector<int>& entityIds, const QString& previousKey, int previousColumn)
 {
 	QVector<const LevelMapEntity*> entities;
 	for (const int id : entityIds) {
@@ -24195,11 +24348,16 @@ void ApplicationShell::refreshMultiEntityInspector(const QVector<int>& entityIds
 	if (current) {
 		m_entityInspector->setCurrentItem(current, 1);
 	}
+	refreshEntityProtectionControls(previousKey, previousColumn);
 }
 
 void ApplicationShell::applyEntityInspectorEdit(QTreeWidgetItem* item, int column)
 {
 	if (m_refreshingEntityInspector || !item) {
+		return;
+	}
+	if (column == 2 && item->data(2, Qt::CheckStateRole).isValid()) {
+		applyEntityProtectionCheck(item);
 		return;
 	}
 	if (const QString field = item->data(0, kFieldPathRole).toString(); !field.isEmpty()) {
@@ -24213,7 +24371,7 @@ void ApplicationShell::applyEntityInspectorEdit(QTreeWidgetItem* item, int colum
 	if (several.size() > 1) {
 		QString key;
 		QStringList values;
-		if (column == 0 && item->flags().testFlag(Qt::ItemIsUserCheckable)) {
+		if (column == 0 && item->data(0, Qt::CheckStateRole).isValid()) {
 			// Each entity keeps its other flags.
 			const int bit = item->data(0, Qt::UserRole + 1).toInt();
 			const bool checked = item->checkState(0) == Qt::Checked;
@@ -24263,7 +24421,7 @@ void ApplicationShell::applyEntityInspectorEdit(QTreeWidgetItem* item, int colum
 	}
 	QString key;
 	QString value;
-	if (column == 0 && item->flags().testFlag(Qt::ItemIsUserCheckable)) {
+	if (column == 0 && item->data(0, Qt::CheckStateRole).isValid()) {
 		// A spawnflag check box: recompute the summed value from the group.
 		QTreeWidgetItem* group = item->parent();
 		int spawnflags = 0;
@@ -24328,7 +24486,6 @@ void ApplicationShell::showLevelMapContextMenu(const QPoint& globalPosition, boo
 	const bool textMap = m_levelMapDocument.format == LevelMapFormat::QuakeMap || m_levelMapDocument.format == LevelMapFormat::Quake3Map;
 	const bool doomMap = m_levelMapDocument.format == LevelMapFormat::DoomWad;
 	const bool udmf = doomMap && m_levelMapDocument.doomFormat == LevelMapDoomFormat::Udmf;
-	const bool deletable = levelMapSelectionIsDeletable(m_levelMapDocument);
 
 	// What acts on the selection comes first, the way a right-click is used
 	// most; then creating and selecting; then transforms, properties, and the
@@ -24340,24 +24497,27 @@ void ApplicationShell::showLevelMapContextMenu(const QPoint& globalPosition, boo
 	if (textMap) {
 		cut = menu.addAction(studioIcon(QStringLiteral("trash")), tr("Cut"));
 		cut->setShortcut(QKeySequence::Cut);
-		cut->setEnabled(deletable);
+		cut->setEnabled(canCutLevelMapSelection());
 		copy = menu.addAction(studioIcon(QStringLiteral("copy")), tr("Copy"));
 		copy->setShortcut(QKeySequence::Copy);
 		copy->setEnabled(hasSelection);
 		paste = menu.addAction(studioIcon(QStringLiteral("import")), tr("Paste"));
 		paste->setShortcut(QKeySequence::Paste);
-		paste->setEnabled(QGuiApplication::clipboard()->text().contains(QLatin1Char('{')));
+		const auto clipboardText = QGuiApplication::clipboard()->text();
+		const bool faceText = looksLikeLevelFaceText(clipboardText);
+		paste->setEnabled(faceText || clipboardText.contains(QLatin1Char('{')));
 		pasteOffset = menu.addAction(studioIcon(QStringLiteral("import")), tr("Paste with Offset…"));
-		pasteOffset->setEnabled(paste->isEnabled());
+		pasteOffset->setEnabled(paste->isEnabled() && !faceText);
 	}
 	QAction* duplicate = menu.addAction(studioIcon(QStringLiteral("copy")), tr("Duplicate"));
-	duplicate->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_D));
-	duplicate->setEnabled(levelMapSelectionIsDuplicable(m_levelMapDocument));
+	if (auto* action = m_commands->action(QStringLiteral("map.duplicateSelection"))) { duplicate->setShortcuts(action->shortcuts()); }
+	duplicate->setEnabled(canDuplicateLevelMapSelection());
+	if (auto* action = m_commands->action(QStringLiteral("map.duplicateUnique"))) { menu.addAction(action); }
 	QAction* duplicateOffset = menu.addAction(studioIcon(QStringLiteral("copy")), tr("Duplicate with Offset…"));
 	duplicateOffset->setEnabled(duplicate->isEnabled());
 	QAction* deleteSelection = menu.addAction(studioIcon(QStringLiteral("trash")), tr("Delete"));
 	deleteSelection->setShortcut(QKeySequence::Delete);
-	deleteSelection->setEnabled(deletable);
+	deleteSelection->setEnabled(canDeleteLevelMapSelection());
 	menu.addSeparator();
 
 	QAction* addEntity = doomMap
@@ -24445,10 +24605,43 @@ void ApplicationShell::showLevelMapContextMenu(const QPoint& globalPosition, boo
 	// A right-click on brushes makes a brush entity of them, as in Radiant.
 	if (textMap) {
 		QMenu* brushEntity = buildLevelBrushEntityMenu(&menu);
-		const QAction* tie = m_commands->action(QStringLiteral("map.tieToEntity"));
-		const QAction* world = m_commands->action(QStringLiteral("map.moveToWorld"));
-		brushEntity->menuAction()->setEnabled((tie && tie->isEnabled()) || (world && world->isEnabled()));
+		bool entityCommand = false;
+		for (const auto& id : {QStringLiteral("map.tieToEntity"), QStringLiteral("map.moveToWorld"), QStringLiteral("map.movePrimitivesToEntity"),
+				 QStringLiteral("map.movePrimitivesToFirstEntity"), QStringLiteral("map.explodeEntity")}) {
+			const QAction* command = m_commands->action(id);
+			entityCommand = entityCommand || (command && command->isEnabled());
+		}
+		brushEntity->menuAction()->setEnabled(entityCommand);
 		menu.addMenu(brushEntity);
+		for (const auto& id : {QStringLiteral("map.connectEntities"),QStringLiteral("map.killConnectEntities"),QStringLiteral("map.selectConnectedEntities"),QStringLiteral("map.selectAllOfType"),QStringLiteral("map.selectTextured")}) {
+			if (auto* action = m_commands->action(id)) { menu.addAction(action); }
+		}
+		// NetRadiant Custom's entity menu also colours the selection's entities.
+		for (const auto& id : {QStringLiteral("map.setEntityColour"), QStringLiteral("map.normaliseEntityColour")}) {
+			if (auto* action = m_commands->action(id)) { menu.addAction(action); }
+		}
+	}
+	// NetRadiant Custom's layer commands; TrenchBroom's Move to Layer submenu.
+	if (auto* expand = m_commands->action(QStringLiteral("map.expandSelectionToLayers"))) { menu.addAction(expand); }
+	menu.addMenu(buildLevelMoveToLayerMenu(&menu));
+	// TrenchBroom's map view menu also opens groups and works linked groups.
+	if (textMap) {
+		QMenu* groups = menu.addMenu(studioIcon(QStringLiteral("group")), tr("Groups"));
+		groups->setObjectName(QStringLiteral("levelGroupsMenu"));
+		groups->setAccessibleName(tr("Groups and linked groups"));
+		bool groupCommand = false;
+		for (const auto& id : {QStringLiteral("map.openGroup"), QStringLiteral("map.closeGroup"), QStringLiteral("map.closeAllGroups"), QString(),
+				 QStringLiteral("map.createLinkedDuplicate"), QStringLiteral("map.selectLinkedGroups"), QStringLiteral("map.updateLinkedGroups"),
+				 QStringLiteral("map.separateLinkedGroups"), QStringLiteral("map.extractLinkedGroups"), QString(),
+				 QStringLiteral("map.addProtectedProperty"), QStringLiteral("map.clearProtectedProperties")}) {
+			if (id.isEmpty()) {
+				groups->addSeparator();
+			} else if (auto* action = m_commands->action(id)) {
+				groups->addAction(action);
+				groupCommand = groupCommand || action->isEnabled();
+			}
+		}
+		groups->menuAction()->setEnabled(groupCommand);
 	}
 	menu.addSeparator();
 
@@ -24467,9 +24660,10 @@ void ApplicationShell::showLevelMapContextMenu(const QPoint& globalPosition, boo
 	carve->setToolTip(tr("Carve the selected brushes out of every brush they overlap."));
 	carve->setEnabled(textMap && levelMapSelectionClippable());
 	if (auto* merge = m_commands->action(QStringLiteral("map.mergeBrushes"))) { transform->addAction(merge); }
+	for (const auto& id : {QStringLiteral("map.wrapMerge"),QStringLiteral("map.wrapMergePoints")}) { if (auto* action = m_commands->action(id)) { transform->addAction(action); } }
 	if (textMap) {
 		for (const auto& id : {QStringLiteral("map.intersect"), QStringLiteral("map.makeDetail"), QStringLiteral("map.makeStructural"),
-				 QStringLiteral("map.dropToFloor")}) {
+				 QStringLiteral("map.dropToFloor"), QStringLiteral("map.roundToGrid")}) {
 			if (QAction* action = m_commands->action(id)) {
 				transform->addAction(action);
 			}
@@ -24496,8 +24690,9 @@ void ApplicationShell::showLevelMapContextMenu(const QPoint& globalPosition, boo
 		applyTexture = menu.addAction(studioIcon(QStringLiteral("image")), tr("Apply Texture…"));
 		applyTexture->setEnabled(hasSelection);
 	}
-	QAction* replaceTexture = menu.addAction(studioIcon(QStringLiteral("image")), tr("Replace Texture…"));
+	QAction* replaceTexture = menu.addAction(studioIcon(QStringLiteral("image")), tr("Find and Replace Textures…"));
 	replaceTexture->setEnabled(!m_levelMapDocument.textureReferences.isEmpty() && !udmf);
+	if (QAction* reveal = m_commands->action(QStringLiteral("map.revealMaterial"))) { menu.addAction(reveal); }
 	QAction* copySelector = menu.addAction(studioIcon(QStringLiteral("copy")), tr("Copy Selector"));
 	copySelector->setToolTip(tr("Copy the object's selector, such as entity:1, for the command line."));
 	copySelector->setEnabled(!selector.isEmpty());
@@ -24507,12 +24702,12 @@ void ApplicationShell::showLevelMapContextMenu(const QPoint& globalPosition, boo
 	zoomSelection->setEnabled(hasSelection);
 	QAction* zoomFit = menu.addAction(studioIcon(QStringLiteral("frame")), tr("Zoom to Fit"));
 	QAction* hide = menu.addAction(studioIcon(QStringLiteral("eye")), tr("Hide"));
-	hide->setShortcut(QKeySequence(Qt::Key_H));
-	hide->setEnabled(hasSelection);
-	const int hiddenCount = m_levelMapViewport->hiddenCount();
+	if (const auto* command = m_commands->action(QStringLiteral("map.hideSelection"))) { hide->setShortcut(command->shortcut()); }
+	hide->setEnabled(canChangeLevelVisibility(LevelVisibilityOperation::HideSelected));
+	const int hiddenCount = m_levelMapViewport->temporaryHiddenCount();
 	QAction* showAll = menu.addAction(studioIcon(QStringLiteral("eye")), hiddenCount > 0 ? tr("Show All (%1 Hidden)").arg(hiddenCount) : tr("Show All"));
-	showAll->setShortcut(QKeySequence(Qt::SHIFT | Qt::Key_H));
-	showAll->setEnabled(hiddenCount > 0);
+	if (const auto* command = m_commands->action(QStringLiteral("map.showAll"))) { showAll->setShortcut(command->shortcut()); }
+	showAll->setEnabled(canChangeLevelVisibility(LevelVisibilityOperation::ShowAll));
 	QAction* frameLeak = nullptr;
 	QAction* clearLeak = nullptr;
 	if (m_levelMapViewport->hasLeakTrail()) {
@@ -24629,14 +24824,11 @@ void ApplicationShell::selectLevelMapObjectFromViewport(int selectionKind, int o
 	// selectionChanged again and fight the click that started this.
 	const QSignalBlocker blocker(m_levelMapViewport);
 	const auto kind = static_cast<LevelMapSelectionKind>(selectionKind);
-	QString selector;
 	if (kind == LevelMapSelectionKind::None || objectId < 0) {
-		m_levelMapDocument.selectionKind = LevelMapSelectionKind::None;
-		m_levelMapDocument.selectedObjectId = -1;
+		setLevelMapUserSelection({});
 	} else {
-		selector = QStringLiteral("%1:%2").arg(levelMapSelectionKindId(kind)).arg(objectId);
 		QString error;
-		if (!selectLevelMapObject(&m_levelMapDocument, selector, &error)) {
+		if (!setLevelMapUserSelection({{kind, objectId}}, &error)) {
 			statusBar()->showMessage(error);
 			return;
 		}
@@ -24658,7 +24850,7 @@ void ApplicationShell::syncLevelMapSelectionFromViewport(const QVector<LevelMapS
 		return;
 	}
 	QString error;
-	if (!setLevelMapSelection(&m_levelMapDocument, selection, &error) && !error.isEmpty()) {
+	if (!setLevelMapUserSelection(selection, &error) && !error.isEmpty()) {
 		statusBar()->showMessage(error);
 		return;
 	}
@@ -24686,7 +24878,7 @@ void ApplicationShell::moveLevelMapSelectionFromViewport(double dx, double dy, d
 	// the same grid is idempotent, and passing it keeps the two in step if the
 	// combo changes mid-drag.
 	const double gridSize = (m_levelMapSnap && m_levelMapSnap->isChecked() && m_levelMapGrid)
-		? std::max(1, m_levelMapGrid->currentData().toInt())
+		? levelMapGridUnits()
 		: 0.0;
 	QString error;
 	LevelPlacementRequest request;
@@ -24755,7 +24947,7 @@ void ApplicationShell::refreshLevelMapHistory()
 			description = document.redoStack.at(total - depth).description;
 		}
 		const bool undone = depth > applied;
-		const bool saved = depth == document.savedUndoDepth;
+		const bool saved = levelMapHistoryMatchesSaved(document, depth);
 		QString state = depth == applied ? tr("current") : (undone ? tr("undone") : tr("applied"));
 		if (saved) {
 			state = tr("%1, saved").arg(state);
@@ -24828,7 +25020,7 @@ void ApplicationShell::exportLevelMapImage()
 		options.projection = static_cast<MapRenderProjection>(std::clamp(m_levelMapProjection->currentData().toInt(), 0, 2));
 	}
 	if (m_levelMapGrid) {
-		options.gridSize = std::max(1, m_levelMapGrid->currentData().toInt());
+		options.gridSize = levelMapGridUnits();
 	}
 	if (m_levelMapShowThings) {
 		options.showThings = m_levelMapShowThings->isChecked();
@@ -26751,6 +26943,19 @@ QStringList ApplicationShell::captureUiSnapshots(const QString& directory)
 			if (grab().save(filePath)) {
 				written.push_back(filePath);
 			}
+		}
+	}
+	// With VIBESTUDIO_SNAPSHOT_MESH_EDITOR set, the Mesh Editor's tab as well, to
+	// review its layout at the snapshot size and text scale.
+	if (qEnvironmentVariableIsSet("VIBESTUDIO_SNAPSHOT_MESH_EDITOR")) {
+		showModelEditor();
+		// A third pass lets the editor make room for its views once laid out.
+		for (int pass = 0; pass < 3; ++pass) {
+			QCoreApplication::processEvents(QEventLoop::ExcludeUserInputEvents, 50);
+		}
+		const QString filePath = QDir(directory).filePath(QStringLiteral("mesh-editor.png"));
+		if (m_modelEditorDialog && grab().save(filePath)) {
+			written.push_back(filePath);
 		}
 	}
 	setMode(originalMode);

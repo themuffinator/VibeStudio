@@ -656,8 +656,8 @@ the map's actions in place, in groups that run from the selection outward:
 **Cut**, **Copy**, **Paste**, **Duplicate**, and **Delete**; **Add Entity
 Here…** and **Select All** of the selected entity's class (or thing's type); a
 **Transform** submenu holding **Move…**, **Snap to Grid**, and **Rotate 90°
-Left** and **Right**, with **Edit Key…**, **Replace Texture…**, and **Copy
-Selector** (the object's `entity:1`-style selector, ready for `map edit` and
+Left** and **Right**, with **Edit Key…**, **Find and Replace Textures…**,
+**Reveal Material**, and **Copy Selector** (the object's `entity:1`-style selector, ready for `map edit` and
 `map move` on the command line); then **Zoom to Selection**, **Zoom to Fit**,
 **Hide**, and **Show All**; and, while a leak trail is drawn, **Frame Leak
 Trail** and **Clear Leak Trail**. A right press settles the selection first, the
@@ -736,12 +736,16 @@ that is not a map, or a block that never closes, is refused with a reason. In
 the entity inspector Ctrl+C copies the current row as a `"key" "value"` line
 instead, and cut and paste say where they work rather than act on the map.
 
-**Replace Texture.** **Replace Texture…** (Edit menu, palette, and the map's
-context menu) asks which texture to replace, from the map's own list and
-starting from the selected brush's texture or sector's floor, and what to use
-instead. A count under the fields says how many uses will change and follows
-every edit, with **Only the selected objects** narrowing it, and Replace stays
-off while nothing in scope uses the name. It covers brush faces and patches,
+**Find and Replace Textures.** **Find and Replace Textures…** (Edit menu,
+palette, and the map's context menu) opens a modeless window that asks which
+texture to find, from the map's own list and starting from the selection's
+material, and what to use instead; picking a texture on the Textures tab fills
+the field that last had focus. A summary under the fields says how many uses
+will change and follows every edit, with **Search in** choosing the whole map,
+the selected objects or the picked faces, and Replace stays off while nothing
+in scope uses the name. **Find** picks the matching faces instead, and the
+window stays open between pairs. **Reveal Material** shows the selection's
+single material on the Textures tab. It covers brush faces and patches,
 or a Doom map's wall textures and flats, compares names without case, and
 writes each new name in place: after a `brushDef` texture matrix, inside the
 quotes of a `brushDef3` name, on a patch's shader line, or into the binary
@@ -1107,7 +1111,8 @@ map's own by how often they are used, each with its picture from the open
 package, or a framed placeholder when the package has none. The filter narrows
 them; Enter or a double-click puts one on the selection, as **Apply Texture…**
 does; and its menu selects the objects that use it, offers it as the
-replacement in **Replace Texture…**, or shows it on the Textures surface. A
+replacement in **Find and Replace Textures…**, or shows it on the Textures
+surface. A
 tile's tooltip and spoken name say how often the map uses it, whether it was
 applied lately, and whether the open package has its picture.
 

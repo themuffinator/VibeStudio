@@ -1,4 +1,5 @@
 #include "app/model_material_slots_dialog.h"
+#include "app/dialog_screen_fit.h"
 #include <QCoreApplication>
 #include <QDialogButtonBox>
 #include <QFormLayout>
@@ -112,7 +113,7 @@ ModelMaterialSlotsDialog::ModelMaterialSlotsDialog(const ModelMesh &mesh, const 
 	});
 	connect(m_path, &QLineEdit::textChanged, this, [this] { refresh(); });
 	populate(0);
-	resize(fontMetrics().averageCharWidth() * 80, fontMetrics().height() * 26);
+	fitDialogToScreen(this, QSize(fontMetrics().averageCharWidth() * 80, fontMetrics().height() * 26));
 	m_list->setFocus(Qt::OtherFocusReason);
 }
 ModelEdit ModelMaterialSlotsDialog::edit() const
@@ -177,7 +178,7 @@ void ModelMaterialSlotsDialog::refresh()
 	m_apply->setEnabled(m_materials != m_original && !pending);
 	m_summary->setText(
 		pending ? (pathValid ? Text::tr("The entered path is not in the reviewed list yet. Add or replace it before applying.") : error)
-				: Text::tr("%1 material slots · Primary: %2").arg(m_materials.size()).arg(m_materials.value(0, Text::tr("Unassigned"))));
+				: Text::tr("%Ln material slot(s) · Primary: %1", nullptr, int(m_materials.size())).arg(m_materials.value(0, Text::tr("Unassigned"))));
 	m_summary->setAccessibleDescription(m_summary->text());
 }
 } // namespace vibestudio

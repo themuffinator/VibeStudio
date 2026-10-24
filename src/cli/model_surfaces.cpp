@@ -114,7 +114,8 @@ ModelSurfacesCliResult runModelSurfaces(const QStringList &arguments)
 	if ((move || separate) && values.value("--faces") == "all")
 		for (int face = 0; face < document.mesh().surfaces[edit.selection.surface].triangles.size(); ++face)
 			edit.selection.faces.insert(face);
-	if (!list && !document.edit(edit, &error))
+	ModelEditReport report;
+	if (!list && !document.edit(edit, &error, {}, &report))
 		return fail(4, error);
 	const bool dry = seen.contains("--dry-run");
 	if (!list)
@@ -125,19 +126,12 @@ ModelSurfacesCliResult runModelSurfaces(const QStringList &arguments)
 			return fail(1, target.error);
 		if (target.existed && !seen.contains("--overwrite"))
 			return fail(1, Text::tr("The output already exists; use --overwrite to replace it."));
-		if (dry)
-		{
-			const auto json = editableModelJson(document.mesh(), &error);
-			if (json.isEmpty())
-				return fail(4, error);
-			if (QJsonDocument(json).toJson(QJsonDocument::Compact).size() > modelDocumentMaxSourceBytes)
-				return fail(4, Text::tr("The edited model exceeds the 64 MiB source limit."));
-		}
-		else if (!document.save(output, seen.contains("--overwrite"), &error))
+		if (!document.save(output, seen.contains("--overwrite"), &error, {}, dry))
 			return fail(1, error);
 	}
 	ModelSurfacesCliResult result;
 	QJsonArray surfaces;
+	const bool skeletal = !document.mesh().skeleton.isEmpty();
 	for (const auto &surface : document.mesh().surfaces)
 	{
 		surfaces.append(QJsonObject{{"index", surface.index},
@@ -145,13 +139,25 @@ ModelSurfacesCliResult runModelSurfaces(const QStringList &arguments)
 									{"vertices", surface.vertexCount},
 									{"triangles", qint64(surface.triangles.size())},
 									{"seams", qint64(surface.uvSeams.size())},
+									{"skinned", !surface.skinning.isEmpty()},
 									{"materials", QJsonArray::fromStringList(surface.skinPaths)}});
-		result.lines << Text::tr("%1: %2 · %3 vertices · %4 triangles · Materials: %5")
-							.arg(surface.index)
-							.arg(surface.name)
-							.arg(surface.vertexCount)
-							.arg(surface.triangles.size())
-							.arg(surface.skinPaths.join(", "));
+		// On skeletal models, whether the surface follows the skeleton: joins
+		// and moves refuse to mix skinned and unskinned vertices.
+		if (skeletal)
+			result.lines << Text::tr("%1: %2 · %3 vertices · %4 triangles · %5 · Materials: %6")
+								.arg(surface.index)
+								.arg(surface.name)
+								.arg(surface.vertexCount)
+								.arg(surface.triangles.size())
+								.arg(surface.skinning.isEmpty() ? Text::tr("not skinned") : Text::tr("skinned"))
+								.arg(surface.skinPaths.join(", "));
+		else
+			result.lines << Text::tr("%1: %2 · %3 vertices · %4 triangles · Materials: %5")
+								.arg(surface.index)
+								.arg(surface.name)
+								.arg(surface.vertexCount)
+								.arg(surface.triangles.size())
+								.arg(surface.skinPaths.join(", "));
 	}
 	result.payload = {{"source", QFileInfo(source).absoluteFilePath()},
 					  {"operation", operation},
@@ -165,6 +171,12 @@ ModelSurfacesCliResult runModelSurfaces(const QStringList &arguments)
 		result.payload.insert("adoptTargetMaterials", edit.adoptTargetMaterials);
 		result.payload.insert(
 			"selection", QJsonObject{{"surface", document.selection().surface}, {"faceCount", qint64(document.selection().faces.size())}});
+		// Which joint influences each resulting skinned surface kept.
+		if (!document.mesh().skeleton.isEmpty())
+		{
+			result.payload.insert("skinProvenance", modelSkinProvenanceJson(document.mesh(), report.skin));
+			result.lines += modelSkinProvenanceLines(document.mesh(), report.skin);
+		}
 		result.lines.prepend(dry ? Text::tr("Surface edit validated; no files written.")
 								 : Text::tr("Saved surface edit to %1.").arg(values.value("--output")));
 	}

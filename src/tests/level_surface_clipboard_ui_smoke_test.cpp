@@ -378,6 +378,8 @@ int main(int argc, char** argv)
 				&& QAccessible::queryAccessibleInterface(mappingOnly)->role() == QAccessible::CheckBox, "Radiant values and mapping-only have accessible keyboard controls");
 			panel->findChild<QComboBox*>("surfacePasteMode")->setCurrentIndex(4);
 			ok &= expect(panel->pasteOptions().mode == LevelSurfacePasteMode::RadiantProject && panel->pasteOptions().mappingOnly && !conversion->isEnabled(), "Radiant projection is available in every profile without format conversion");
+			panel->findChild<QComboBox*>("surfacePasteMode")->setCurrentIndex(5);
+			ok &= expect(panel->pasteOptions().mode == LevelSurfacePasteMode::Attributes && panel->pasteOptions().mappingOnly && !conversion->isEnabled(), "Face attributes is available without format conversion");
 			app.processEvents(QEventLoop::ExcludeUserInputEvents); panel->verticalScrollBar()->setValue(0);
 			{ QEventLoop loop; QTimer::singleShot(75, &loop, &QEventLoop::quit); loop.exec(QEventLoop::ExcludeUserInputEvents); }
 			ok &= expect(panel->horizontalScrollBar()->maximum() == 0, "clipboard controls fit scaled expanded RTL panel");
@@ -385,6 +387,14 @@ int main(int argc, char** argv)
 			if (!captures.isEmpty()) {
 				QDir().mkpath(captures); QImage image(panel->size(), QImage::Format_ARGB32_Premultiplied); image.fill(Qt::transparent); panel->render(&image);
 				ok &= image.save(QDir(captures).filePath(QStringLiteral("surface-clipboard-%1.png").arg(scale)));
+				panel->verticalScrollBar()->setValue(panel->verticalScrollBar()->maximum());
+				app.processEvents(QEventLoop::ExcludeUserInputEvents);
+				auto* mode = panel->findChild<QComboBox*>("surfacePasteMode");
+				ok &= expect(mode && panel->viewport()->rect().contains(mode->mapTo(panel->viewport(), QPoint(5, 5)))
+					&& !mode->accessibleName().isEmpty() && mode->focusPolicy() != Qt::NoFocus
+					&& QAccessible::queryAccessibleInterface(mode)->role() == QAccessible::ComboBox, "Face attributes control visible and accessible in scrolled panel");
+				image.fill(Qt::transparent); panel->render(&image);
+				ok &= image.save(QDir(captures).filePath(QStringLiteral("surface-face-attributes-%1.png").arg(scale)));
 			}
 		}
 		if (scale == 200) { app.removeTranslator(&expansion); }

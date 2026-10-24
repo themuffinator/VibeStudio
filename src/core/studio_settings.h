@@ -3,6 +3,7 @@
 #include "core/ai_connectors.h"
 #include "core/compiler_registry.h"
 #include "core/game_installation.h"
+#include "core/level_clipper.h"
 #include "core/model_editor_controls.h"
 #include "core/operation_state.h"
 
@@ -16,6 +17,7 @@
 #include <QVector>
 
 #include <memory>
+#include <array>
 
 namespace vibestudio {
 
@@ -23,6 +25,7 @@ struct PackageDraftSaveLimits;
 struct PackageCopyLimits;
 struct LevelViewLinks;
 struct LevelEditorControls;
+struct LevelPlanPanes;
 
 enum class StudioTheme {
 	System,
@@ -337,14 +340,34 @@ public:
 	// levelViewLayoutId() identifiers. Layout and interaction are independent.
 	QString levelViewLayoutPreference() const;
 	bool setLevelViewLayoutPreference(const QString& id);
+	// The plan panes the three-plan layouts show (core/level_editor_controls.h),
+	// saved as levelPlanPanesId(); every pane when unset or unreadable. False
+	// when the panes are refused (none shown) or the store is read-only.
+	LevelPlanPanes levelPlanPanes() const;
+	bool setLevelPlanPanes(const LevelPlanPanes& panes);
 	LevelViewLinks levelViewLinks() const;
 	bool setLevelViewLinks(const LevelViewLinks& links);
 	bool levelTextureLock() const;
 	void setLevelTextureLock(bool enabled);
+	bool levelComponentUvLock() const;
+	LevelClipperPreferences levelClipperPreferences() const;
+	bool setLevelClipperPreferences(const LevelClipperPreferences& preferences);
+	void setLevelComponentUvLock(bool enabled);
+	// With component UV lock on: fit three corners where an exact lock cannot
+	// hold, instead of refusing the edit. On by default, as Radiant and
+	// TrenchBroom never refuse.
+	bool levelComponentUvFit() const;
+	void setLevelComponentUvFit(bool enabled);
+	std::array<double,3> levelComponentTransformSteps() const;
+	bool setLevelComponentTransformSteps(const std::array<double,3>& steps);
 	bool levelTextureScaleLock() const;
 	void setLevelTextureScaleLock(bool enabled);
 	bool levelAllowValve220() const;
 	void setLevelAllowValve220(bool enabled);
+	// The colour Set Entity Colour last wrote, each channel 0-1; white until
+	// one is chosen. It seeds the picker when the entity has no colour yet.
+	std::array<double,3> levelEntityColour() const;
+	void setLevelEntityColour(const std::array<double,3>& unit);
 	void setLevelRecoveryEnabled(bool enabled);
 	bool codeRecoveryEnabled() const;
 	void setCodeRecoveryEnabled(bool enabled);
@@ -357,6 +380,10 @@ public:
 	void setAudioRecoveryNotifyAtStartup(bool enabled);
 	bool modelRecoveryEnabled() const;
 	void setModelRecoveryEnabled(bool enabled);
+	// The memory Mesh Editor undo history may keep beyond the current model
+	// (model/historyBudgetMiB), 16-4096 MiB, 64 by default.
+	int modelHistoryBudgetMiB() const;
+	void setModelHistoryBudgetMiB(int mib);
 	QStringList packagePublicationDirectories() const;
 	void rememberPackagePublicationDirectory(const QString& path);
 	bool packageRecoveryEnabled() const;

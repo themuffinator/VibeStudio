@@ -128,9 +128,18 @@ void checkMaths()
 	expect(near(std::abs(dot), 1.0, 1e-5), "the rotation comes back out of the matrix");
 	const ModelJointMatrix scaled = modelJointMatrix(q, t, {2, 3, 4});
 	expect(near(modelJointScale(scaled), {2, 3, 4}), "column scale is recovered");
-	expect(near(modelJointTransformNormal(scaled, {0, 0, 1}), modelJointTransformNormal(modelJointMatrix(q, {}, {1, 1, 4}), {0, 0, 1}), 1e-4) ||
-			   true,
-		   "normals use the inverse transpose");
+	const double normalLength = std::sqrt(.25 + 1.0 / 9);
+	const auto expectedNormal = modelQuatRotate(q, {float(.5 / normalLength), float((1.0 / 3) / normalLength), 0});
+	expect(near(modelJointTransformNormal(scaled, {1, 1, 0}), expectedNormal), "normals use the inverse transpose of rotated nonuniform scale");
+	expect(near(modelJointTransformNormal(modelJointMatrix(aboutZ(90), {}), {1, 0, 0}), {0, 1, 0}), "normal rotation follows the forward rotation");
+	ModelSkeleton scaledSkeleton;
+	scaledSkeleton.joints = {{QStringLiteral("root"), -1, scaled}};
+	ModelSurface scaledSurface;
+	scaledSurface.vertexCount = 1;
+	ModelFrameGeometry skinned;
+	expect(modelSkinningFromBindPose(scaledSkeleton, {{1, 2, 3}}, {{1, 0, 0}}, {0}, {1}, 1, &scaledSurface.skinning) &&
+		skinModelSurface(scaledSurface, {scaled}, &skinned) && near(skinned.positions[0], {1, 2, 3}) && near(skinned.normals[0], {1, 0, 0}),
+		"inverse bind direction preserves normals with rotation and nonuniform scale");
 	const ModelJointMatrix yaw = modelJointFromQuakeAngles(0, 90, 0, {});
 	expect(near(modelJointTransformVector(yaw, {1, 0, 0}), {0, 1, 0}), "Quake yaw 90 turns forward to +Y");
 	expect(near(modelJointTransformVector(yaw, {0, 1, 0}), {-1, 0, 0}), "Quake's left axis follows");
@@ -210,8 +219,10 @@ void checkBake()
 void checkEditing()
 {
 	ModelMesh mesh = strip();
+	const ModelMesh original = mesh;
 	QString error;
-	// A topology edit adds vertices: they take their nearest original's weights.
+	// A topology edit adds vertices: they take the interpolation of the
+	// weights of the edge they split, as their positions do.
 	ModelEdit subdivide;
 	subdivide.kind = ModelEditKind::Subdivide;
 	subdivide.selection = {0, {}, {0, 1, 2, 3}};
@@ -220,6 +231,31 @@ void checkEditing()
 		std::cerr << "  " << error.toStdString() << '\n';
 	const auto &surface = mesh.surfaces[0];
 	expect(surface.vertexCount > 6 && surface.skinning.first.size() == surface.vertexCount, "influences cover the new vertices");
+	const auto jointWeight = [](const ModelSurface &s, int vertex, int joint)
+	{
+		double sum = 0;
+		for (int i = s.skinning.first[vertex]; i < s.skinning.first[vertex] + s.skinning.count[vertex]; ++i)
+			sum += s.skinning.influences[i].joint == joint ? s.skinning.influences[i].weight : 0;
+		return sum;
+	};
+	bool interpolated = surface.vertexCount == 6 + 9;
+	const auto &before = original.surfaces[0];
+	for (int v = before.vertexCount; interpolated && v < surface.vertexCount; ++v)
+	{
+		bool found = false;
+		for (const auto &t : before.triangles)
+			for (const auto &[a, b] : {qMakePair(t.a, t.b), qMakePair(t.b, t.c), qMakePair(t.c, t.a)})
+			{
+				const auto pa = before.frames[0].positions[a], pb = before.frames[0].positions[b];
+				if (found || !near(surface.frames[0].positions[v], {(pa.x + pb.x) / 2, (pa.y + pb.y) / 2, (pa.z + pb.z) / 2}))
+					continue;
+				found = true;
+				for (int joint : {0, 1})
+					found &= std::abs(jointWeight(surface, v, joint) - (jointWeight(before, a, joint) + jointWeight(before, b, joint)) / 2) < 1e-6;
+			}
+		interpolated &= found;
+	}
+	expect(interpolated, "each midpoint takes the average weights of the edge it splits, not one end's");
 	expect(validateModelSkeleton(mesh, &error), "the edited skeleton stays valid");
 	// Unchanged vertices keep their influences exactly.
 	ModelFrameGeometry skinned;
@@ -281,14 +317,41 @@ void checkEditing()
 		s.skinning = {};
 	expect(exportEditableModel(plain, QStringLiteral("md5anim"), 0, &error).isEmpty() && !error.isEmpty(), "md5anim needs a skeletal clip");
 
-	// Frame edits keep the clip map in step.
+	// Frame edits keep the clip map in step: clip frames are refused, and an
+	// independent frame edits freely without detaching the clip.
 	ModelMesh frames = strip();
+	const auto clipMap = frames.skeleton.bakedClipForFrame;
 	ModelEdit duplicate;
 	duplicate.kind = ModelEditKind::DuplicateFrame;
 	duplicate.frame = 2;
-	expect(applyModelEdit(&frames, duplicate, &selection, &error) && frames.skeleton.bakedClipForFrame.size() == frames.frames.size(),
-		   "a duplicated frame joins the clip map");
+	auto refused = frames;
+	expect(!applyModelEdit(&refused, duplicate, &selection, &error) && error.contains("skeletal clip") &&
+			   refused.skeleton.bakedClipForFrame == clipMap && refused.frames.size() == frames.frames.size(),
+		   "duplicating a clip frame is refused and keeps the clip map");
+	frames.frames.append(frames.frames[0]);
+	frames.frames.last().name = QStringLiteral("edit");
+	frames.surfaces[0].frames.append(frames.surfaces[0].frames[0]);
+	frames.skeleton.bakedClipForFrame.append(-2);
+	for (const auto &tag : QVector<ModelTag>(frames.tags))
+		if (tag.frameIndex == 0)
+		{
+			frames.tags.append(tag);
+			frames.tags.last().frameIndex = 3;
+		}
+	updateEditableModelMetadata(&frames);
+	duplicate.frame = 3;
+	if (!expect(applyModelEdit(&frames, duplicate, &selection, &error) && frames.skeleton.bakedClipForFrame == clipMap + QVector<int>{-2, -2},
+			"duplicating an independent frame keeps every clip frame's mapping"))
+		std::cerr << "  " << error.toStdString() << '\n';
 	expect(modelBindPoseFrame(frames) == 0, "the bind pose is still found after a frame edit");
+	ModelEdit remove;
+	remove.kind = ModelEditKind::DeleteFrame;
+	for (const int frame : {4, 3})
+	{
+		remove.frame = frame;
+		expect(applyModelEdit(&frames, remove, &selection, &error), "independent frames delete");
+	}
+	expect(frames.skeleton.bakedClipForFrame == clipMap, "deleting the independent frames restores the original clip map");
 }
 } // namespace
 

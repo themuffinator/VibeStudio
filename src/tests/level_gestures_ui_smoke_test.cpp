@@ -145,6 +145,7 @@ int main(int argc, char** argv)
 				ok &= expect(!apply->isEnabled() && !dialog->findChild<QLabel*>("gestureStatus")->text().isEmpty(), "conflict blocks apply with visible diagnostic");
 				ok &= expect(settings.editorGestureOverrides("hammer").isEmpty(), "draft does not write preferences");
 				set("plan.zoomDragButton", ""); set("plan.zoomDragModifiers", ""); set("camera.wheel", "dolly-to-pointer");
+				set("camera.clipDragStyle", "view");
 				set("camera.driveButton", "right");
 				ok &= expect(!apply->isEnabled(), "steering cannot shadow the existing pan gesture");
 				set("camera.panModifiers", "ctrl"); set("camera.discreteDriveKeys", "on"); set("plan.fixedCameraSteps", "on");
@@ -184,6 +185,8 @@ int main(int argc, char** argv)
 						&& pane->controls().panHoldKey == "P", "all plan panes adopt gestures and hold navigation");
 				}
 				ok &= expect(camera->cameraControls().wheel == CameraWheel::DollyToPointer, "camera adopts gestures");
+				ok &= expect(camera->cameraControls().clipDragStyle == CameraClipDragStyle::ViewAxes && !camera->cameraControls().clipViewAxis,
+					"camera point movement applies independently of two-point plane policy");
 				ok &= expect(camera->cameraControls().driveButton == Qt::RightButton && camera->cameraControls().panModifiers == Qt::ControlModifier
 					&& camera->cameraControls().discreteDriveKeys && plan->controls().fixedCameraSteps, "classic navigation settings apply through the common dialog");
 				ok &= expect(camera->cameraControls().flyKeys.forward == "I" && camera->cameraControls().flyKeys.back == "K"
@@ -232,6 +235,11 @@ int main(int argc, char** argv)
 							scroll->verticalScrollBar()->setValue(scroll->verticalScrollBar()->maximum()); app.processEvents(QEventLoop::ExcludeUserInputEvents);
 							dialog->render(&image);
 							ok &= expect(image.save(QDir(captures).filePath(QStringLiteral("gestures-tail-%1-%2.png").arg(tab).arg(scale))), "hold and pitch fields rendered at the end of each page");
+							if (auto* clipMovement = scroll->findChild<QComboBox*>("gesture.camera.clipDragStyle")) {
+								scroll->ensureWidgetVisible(clipMovement,20,180); app.processEvents(QEventLoop::ExcludeUserInputEvents);
+								dialog->render(&image);
+								ok &= expect(image.save(QDir(captures).filePath(QStringLiteral("gesture-clip-movement-%1.png").arg(scale))), "clip point movement control rendered");
+							}
 						}
 					}
 				}

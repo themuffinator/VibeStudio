@@ -1,5 +1,70 @@
 # CLI Strategy
 
+`model curve-transfer` copies or reverses selected parent-local channels over
+an inclusive source range within the current rig. It shares automatic capture,
+exact boundary cropping, rate/time scaling, destination interval replacement,
+combined rebaking and change reports with **Transfer Animation Range**. Output,
+dry-run and overwrite use normal model services. See
+[range automation](MODEL_ANIMATION_CURVES.md#automate-range-transfers).
+
+`model curve-keys` exposes explicit sample/range selection across stored joint
+channels, shared retiming/duplication/removal/reduction, continuous scalar change
+reports and guarded dry-run/output behaviour. See
+[key-group automation](MODEL_ANIMATION_CURVES.md#automate-key-groups).
+
+`model curves` shares persistent skeletal channel capture, key/tangent editing,
+whole-group replacement and explicit baking with **Animation Curves**. It uses
+normal document validation, schema-9/10 persistence, guarded output and non-writing
+dry runs. See [animation curves](MODEL_ANIMATION_CURVES.md#automate-curve-edits).
+
+`model weight-transfer` shares mirrored and spatial weight transfer with the
+Mesh Editor: bounded vertex/triangle correspondence, joint maps, destination
+locks, guarded outputs and dry-run validation. See
+[weight transfer](MODEL_WEIGHT_TRANSFER.md#automate-the-workflow) for the contract.
+
+`model weight-paint` shares replace/add/subtract/smooth strokes, exact joint locks,
+normalised remainders, vertex coverage and atomic pose rebaking with the review
+window. It accepts explicit vertex lists or bounded versioned stroke recipes,
+with guarded `.mesh.json` output and a non-writing dry run. See
+[weight painting](MODEL_WEIGHT_PAINT.md) for the complete command contract.
+
+`model skinning` shares influence inspection/selection, rigid or distance binding,
+explicit rebinding, reduction and unbinding with **Skin Weights and Binding…**.
+Edits require an explicit surface target and guarded `.mesh.json` output, with
+dry-run, overwrite, strict option checks and text/JSON reports. Inspection reports
+raw combined weights and issue flags; selection emits sorted vertex indices.
+See [Skin weights and binding](MODEL_SKINNING.md#automate-the-workflow).
+
+`model rig` shares atomic joint/weight authoring with **Edit Skeleton**, strict
+operation options, guarded `.mesh.json` outputs, explicit overwrite, dry-run
+validation and text/JSON inspection. Hierarchy edits retain poses; weight edits
+reject independent frame changes. See [Skeleton authoring](MODEL_RIG.md).
+
+`model pose` adds strict, indexed skeletal clip and pose operations through the
+same candidate transaction: bind positioning, creation/duplication/rename/delete,
+tail resizing, timing, joint transforms, full joint-pose copying, parent-space
+interpolation and `--operation working-set`, which chooses the clips baked into
+editable frames. Inspection returns clip metadata, preview ranges, the
+`workingSet` report and model-space joint matrices. New displayed clips must
+fit the full editable frame budget; no authoring operation silently skips its
+requested output. `model import` re-bakes a skeletal model over the editable
+budget into a working set and reports `rebaked` and `workingSet`; `--clips`
+chooses the working set by name or index, and a clip that matches nothing is a
+usage error (exit 2) in both commands. Model inputs named relative to the
+working folder are resolved before decoding, so loose companions such as
+md5anims are found as they are for absolute paths. Every skeletal writer
+reports the source it wrote as `outputSource` (`bytes`, `encoding`,
+`limitBytes`), as `model import` and `model edit` do in `source`. See
+[the working set](MODEL_SKELETAL_WORKING_SET.md).
+
+`map clip` shares the editor's atomic brush-cut service. It accepts either
+`--axis` with `--at` or three `--points`, and repeatable `--object`. Unknown,
+duplicate and incomplete options fail before saving. Whole brushes on the
+discarded side are removed, empty brush owners are removed, and any unsafe
+brush refuses the whole operation. `clipped` counts all changed/removed
+brushes; `pieces` lists the remaining selection and `skipped` stays empty for
+schema compatibility. See [the level manual](manual/levels.md#clip-brushes-across-views).
+
 Editor profiles include `q3radiant` (`q3-radiant`, `quake3-radiant`,
 `quake-iii-radiant`). `editor select`, `editor controls` and `editor gestures`
 use its canonical preference store. The shared gesture format also exposes
@@ -145,7 +210,7 @@ Usage errors return 2, review/session read errors 3 and verification/save errors
 The GUI opens the same files as editable queues, including multiple passes from
 one arm in a non-comp review; import/preview retain their existing error codes.
 
-`editor gestures [profile]` reads or edits per-profile pointer and camera-key preferences.
+`editor gestures [profile]` reads or edits per-profile pointer, editing and camera-key preferences.
 JSON reports defaults, effective values, available choices, field types and overrides. Repeated
 `--set field=choice` forms a validated batch (`default` removes one override).
 `--reset`, `--input FILE`, and `--output FILE` are separate operations;
@@ -153,6 +218,25 @@ JSON reports defaults, effective values, available choices, field types and over
 `--overwrite`. Unknown/duplicate options, invalid fields, conflicting gestures,
 wrong-profile imports and protected settings are refused. The GUI and CLI share
 the versioned VibeStudio file parser, settings transaction and validation.
+`editing.nudgeAfterDuplicate=on|off` controls ordinary GUI duplicate placement;
+TB and NRC default to `off`. It uses the same per-profile persistence and portable
+format. `map duplicate` continues to use its explicit offsets.
+`editing.gridChangeEnablesSnap=on|off` decides whether a GUI grid command or
+grid-list choice turns Snap on; NRC and NetRadiant default to `on`. `editor
+controls --json` reports it as `controls.gridChangeTurnsSnapOn`, next to
+`controls.gridSizes` (0.125 to 1024). The working grid is a view setting, so no
+`map` command sets it; map commands take an explicit `--grid`, fractions
+included (`map render --grid 0.5`); `map snap` refuses a fractional grid on
+binary Doom and Hexen maps, which store whole units.
+
+`map duplicate --make-unique` uses NRC's separate unique-copy semantics: selected
+children receive a new entity owner, copied namespace properties are remapped
+together against the destination, and every array copy reserves fresh names.
+`--copies`, `--delta`, texture lock, dry-run and save-as protections use the shared
+placement service. The `clone` alias accepts the same options. JSON
+adds `cloneMode` (`ordinary` or `make-unique`); a recorded single unique copy uses
+the strict version-1 Repeat action kind `duplicate-unique`, with `doomAllowed`
+false. Ordinary duplication and native Doom thing arrays retain their behaviour.
 Key fields use `camera.flyKeys.*`, `camera.driveKeys.*` and
 `camera.lookToggleKey`, `camera.lookHoldKey` and `plan.panHoldKey`; direction
 and hold values are single unmodified portable keys,
@@ -375,18 +459,35 @@ their own admission limits and expose no paths after partial failure; ordinary
 CLI extraction retains its documented per-file completion report.
 
 
-`editor scene list|create|rename|move|assign|visibility|lock|remove|reset|link|update-links|unlink <map>` shares
+`editor scene list|select|translate|create|rename|move|assign|move-to-layer|visibility|lock|remove|reset|save|create-linked-duplicate|select-linked-groups|update-linked-groups|separate-linked-groups|extract-linked-groups <map>` shares
 the map document's scene, validation and serialization services. Mutation output
 is explicit (`--output`), supports `--dry-run`, and requires `--overwrite` for an
 existing destination. WAD operations require `--map-name`. JSON includes stable
-node UUIDs, memberships, visibility, local/inherited locks, links with each copy's
-turn and mirror, and preserved-metadata diagnostics.
+node UUIDs, memberships, visibility, local/inherited locks, links with each linked
+group's affine `frame` and `outOfSync` mark, and preserved-metadata diagnostics.
 `lock --id <UUID> --locked true|false` changes protection; ordinary map edits use
 the same lock boundary and refuse output publication on a protected edit.
-`link --id <UUID> [--offset x,y,z]` makes a linked copy of a group and reports
-`createdId`; `update-links` makes the group's other unlocked copies match it and
-reports `updated`; `unlink` separates it. Ordinary `map` edits keep linked copies in
-step through the same service as the studio. See
+Linked groups take TrenchBroom's command names.
+`create-linked-duplicate --id <UUID> [--offset x,y,z]` duplicates a group and links
+the two, reporting `createdId`; `select-linked-groups --id <UUID>` reports the
+selection of its whole link set; `update-linked-groups --id <UUID>` makes the
+other unlocked members match it and reports `updated`; `separate-linked-groups
+--id <UUID,UUID...>` takes groups out of their sets, keeping several chosen from
+one set linked with each other, and reports `separated`. The earlier names
+`link`, `update-links`, `unlink` and `extract-linked` remain accepted. Ordinary
+`map` edits keep linked groups in step through the same service as the studio,
+and an edit whose linked updates could not be made reports `linkedGroupNotices`;
+saving warns about groups still out of sync. Read-only `select --objects <refs>`
+expands closed groups, with optional `--selection` and `--mode replace|add|toggle`.
+`select --expand-layers` then adds the visible, unlocked objects of the picked
+objects' layers, reporting `layers` and `skippedGroups`, through the service the
+studio's **Expand Selection to Layers** uses. `move-to-layer --id <layer UUID|default>
+--objects <refs>` is **Move to Layer**: closed groups and brush entities move whole
+in one scene undo step, and locks or a group id refuse it before any output.
+`translate --objects <refs> --offset x,y,z` applies those units with texture lock.
+Both accept a per-invocation `--context <group UUID>`; selection ignores outside
+hits and translation refuses them atomically. Context is not written to the map.
+Other low-level `map` commands retain explicit primitive targeting. See
 [Level scene organization](LEVEL_SCENE.md#cli) for operation options.
 
 `package groups <wad-or-draft>` inspects semantic WAD groups and emits a schema-1
@@ -467,6 +568,11 @@ The CLI never changes map bytes or an open GUI camera. See
 `editor layout [profile|single-2d|single-3d|camera-and-plan|four-views|camera-above-plans|camera-beside-plans]` reads or
 sets the level editor layout independently of its controls. JSON includes
 `preference`, `effectiveLayout` and `profileId`; omitted preference is read-only.
+`--panes top,front,side` (any non-empty subset, each once, or `all`) saves the
+plan panes the three-plan layouts show, the GUI's **Show Top/Front/Side View**
+choice; JSON adds `planPanes` (shown pane ids in pane order) and
+`planPanesApply` (whether the effective layout uses them). The layout id and
+pane list are both validated before either preference is written.
 Unknown/duplicate options, unknown IDs and extra positionals return 2, settings
 write failures return 1, and successful reads/writes return 0. Standard settings
 and locale overrides apply. See [Four-View Workspace](LEVEL_EDITOR.md#four-view-workspace).
@@ -475,6 +581,46 @@ The GUI's temporary Maximize/Restore Active View does not change this persisted
 preference or saved-view metadata. `editor controls <profile> --json` reports
 its profile keys and the Equalize View Sizes binding where assigned. The CLI
 does not manipulate the panes of a running GUI process.
+
+`editor clipper` reads or updates the same `levels/clipper` preferences as
+**Clipper Options…**. Repeat `--set field=value` for material
+(`inherit|current|custom`), `customTexture`, `resetPoints`, `resetSide`,
+`twoPointsInPlan`, `wrapMerge` (`on|off`) and `doubleClick` (`none|clip|split`). `--reset`
+restores defaults; `--dry-run` previews a change without writing settings.
+All fields validate before persistence. `map clip --cut-texture <name>` uses
+the shared cut service with an explicit face material; omission inherits the
+brush majority independently of GUI settings. JSON includes `cutTexture`.
+`map clip --wrap-merge --wrap-texture <name>` accepts one to three actual
+`--points`; two points use `--view-axis x|y|z` (default z). It explicitly permits
+NRC-style convex wrap on a one-point/degenerate plane or a no-change cut.
+Geometry or scene failures never trigger fallback. JSON names `operation` and
+reports `changed`, `inheritedFaces`, `newFaces` and `wrapTexture`; `clipped` is
+zero for a wrap. Axis/position planes cannot request wrapping.
+Two-point cuts also work without wrapping when `--view-axis x|y|z` is explicit;
+`--view-sign 1|-1` selects the extrusion direction (default `1`). Alternatively,
+`--camera-eye x,y,z --camera-forward x,y,z` calls the shared NRC dominant-view,
+parallel-segment and outer-face plane service using the selected bounds. Both
+camera options are required, the forward vector must be non-zero, and camera
+options cannot mix with explicit axis/sign. Only two actual points accept these
+options. Two-point JSON adds `planeAxis`, `planeDirection` and `cameraPlane` for
+exact replay; malformed, non-finite or degenerate camera inputs never save.
+`editor gestures netradiant-custom --set camera.clipViewAxis=off` changes the
+two-point plane policy; `--set camera.clipDragStyle=surface|world|view` independently
+chooses the camera point-movement policy. Both use the normal typed per-profile
+settings, dry-run and portable import/export. Numeric `map clip --points`
+reproduces the final freely moved points through the same geometry service.
+`map wrap-merge <map> --texture <name> --output <map>` invokes standalone
+wrapping. Repeat `--object brush:ID|entity:ID` for whole-object replacement or
+`--set brush:ID/vertex|edge|face/IDs` / `patch:ID/vertex/IDs` to retain sources
+and add a component hull. The modes cannot be mixed. Up to three repeated
+`--point x,y,z` options add actual points. The last selected object supplies
+the destination entity and scene group; all new component-hull faces use the
+explicit material, default UVs and zero flags. JSON reports `sourcesRetained`,
+`brushId`, `sourceBrushes`, `sourcePatches`, `vertices`, `faces`, `inheritedFaces`
+and `newFaces`. Strict parsing, `--dry-run`, overwrite policy, scene protection
+and linked propagation share the normal map services.
+See [clipping](manual/levels.md#clip-brushes-across-views) for cut flags,
+undo and cancellation rules.
 
 `editor view-links` reads the GUI's navigation defaults. Optional `--centers`,
 `--zoom` and `--follow-camera` accept `on|off` and retain omitted values. JSON
@@ -485,6 +631,14 @@ settings still allow inspection. See [Linked Navigation](LEVEL_EDITOR.md#linked-
 
 `map export-prefab`, `map inspect-prefab`, and `map insert-prefab` share Levels'
 versioned prefab service, target-link remapping, texture lock and persistence.
+Complete closed groups retain nested hierarchy through export and insertion.
+Grouped assets use version 2; flat version 1 assets remain supported. Inspection
+JSON includes `groups` and `linkedGroups`. Portable link sets receive fresh
+identities, and a lone linked group becomes independent. Linked groups in a prefab
+turn and move their frames with its placement, at any rotation. Native clipboard
+metadata is validated before insertion. `map duplicate` and its arrays preserve
+complete group hierarchies beside their source, keeping existing link sets;
+partial selections retain ordinary object-copy membership.
 Export accepts repeated `--object`, a required `--name`, optional `--description`
 and `--anchor x,y,z`. Insert requires `--prefab` and either `--position x,y,z`
 or repeatable `--replace kind:id`: the objects the prefab takes the place of,
@@ -658,12 +812,36 @@ current face dialect before one undoable insertion. See
   rules follow `ai ask`: `--dry-run`, `--yes`, `--provider`, `--model`,
   `--endpoint`, `--timeout-ms`.
 
+`map repeat <map> --recipe <JSON> --object kind:id --output <map>` replays the
+recorded object sequence through the same atomic service as the GUI. Repeat
+`--object` for several targets, optionally open `--context <group UUID>`, and use
+the normal `--texture-lock on|off`, `--allow-valve220`, `--map-name`, `--dry-run`
+and `--overwrite` policies. **Copy Repeat Recipe** and the JSON map result's
+`repeatRecipe` export version 1 actions. Recipes are limited to 4 MiB and reject
+unknown fields, non-finite or singular transforms and inconsistent rotation
+metadata. Session repeat history is not saved in maps. See [Repeat](LEVEL_REPEAT.md).
+
+`map sweep` uses the shared selected-face sweep service with repeated
+`--set brush:ID/face/IDs`, a material and explicit output. The
+[sweep manual](manual/levels.md#sweep-selected-faces) documents path, taper,
+section and viewport controls. Its existing validation and save safeguards also
+apply to CLI-generated sweeps.
+
 `map rotate --degrees <angle>` uses the GUI's shared atomic rotation service.
 It accepts repeatable `--object`, `--axis x|y|z`, optional `--pivot x,y,z`,
 `--texture-lock on|off` and explicit `--allow-valve220`. Required map-wide
 dialect conversion is authorized through that option. `--turns` uses the same
 texture-lock policy; it cannot accompany `--degrees`. Save As, dry-run, overwrite,
 JSON and quiet contracts remain available. See [rotation limits](LEVEL_EDITOR.md#numeric-rotation-and-texture-lock).
+`map rotate --pivot-grid <units>` turns about the selection's centre rounded to
+that grid, the quick-turn pivot of the NetRadiant Custom and TrenchBroom
+profiles (`core/level_quick_transform.h`); it cannot accompany `--pivot`, and
+JSON reports the resolved `pivot` and `pivotGrid`. The GUI's world-axis
+**Rotate X**, **Rotate Y** and **Rotate Z** are `--axis x --turns -1`,
+`--axis y --turns 1` and `--axis z --turns -1`; **Flip X/Y/Z** are
+`map flip --axis x|y|z`. `editor controls` reports each profile's
+`quickTurnPivot` (`grid` or `centre`), and `editor gestures <profile> --set
+editing.quickTurnSnapsPivot=on|off` changes it.
 
 `map move`, `map flip` and `map resize` also accept `--texture-lock on|off` and
 `--allow-valve220`. Move/flip default to locked; resize defaults to retained
@@ -1295,7 +1473,10 @@ bounds, encoding behavior, batch cancellation, and concurrency limits.
 - [x] `map align-textures <map>` for batch brush and patch surface alignment.
   Select repeatable `--object brush:id|patch:id|entity:id` or
   `--face brushId:faceNumber` (one-based). Choose exactly one of `--shift U,V`,
-  `--scale U,V`, `--degrees N`, `--fit U,V` (a zero keeps that axis),
+  `--scale U,V`, `--scale-step U,V` (NetRadiant Custom's additive scale step
+  about the texture origin, flipping sign at zero), `--degrees N` (with
+  `--anchor centre|origin`; `origin` is Radiant's turn about the texture
+  origin), `--fit U,V` (a zero keeps that axis),
   `--align U,V` with `keep|minimum|center|maximum` modes, `--natural U,V` or
   `--face-aligned U,V` (map units per texel, Radiant's Natural and a projection
   along each face's own plane), or `--flip u|v`.
@@ -1371,9 +1552,38 @@ bounds, encoding behavior, batch cancellation, and concurrency limits.
   ambiguous text-map targets. See [placement](LEVEL_EDITOR.md#placement-and-grid-alignment).
 - [x] `map add-brush` to add an axis-aligned box brush (`--mins`, `--maxs`,
   `--texture`) to worldspawn, written in the map's own face format.
+- [x] `map insert-vertices <map> --brush <id> --position x,y,z
+  [--position x,y,z ...] --output <map>` adds corners through the shared hull
+  service; optional `--grid` snaps new coordinates and `--allow-collapse`
+  permits existing corners to disappear. Every new corner must survive.
+- [x] `map remove-components <map> --brush <id> --kind vertex|edge|face
+  --component <id> [--component <id> ...] --output <map>` removes incident
+  vertices and requires a valid three-dimensional result. Both topology
+  commands retain source mapping/flags/dialect, honour scene locks and normal
+  dry-run/overwrite protections, and report inserted/removed counts in JSON.
+  Component commands reject unknown, irrelevant, duplicate singleton and
+  missing-value options before editing.
+- [x] `map split-components <map> --brush <id> --kind edge|face
+  --component <id> [--component <id> ...] --delta x,y,z --output <map>` adds
+  a corner at each midpoint/centre plus the delta. Optional `--grid` snaps
+  final coordinates; `--allow-collapse` explicitly permits old corners to
+  disappear. Every new point must survive. Uses the same atomic geometry,
+  scene lock and persistence services as GUI splitting, with standard dry-run,
+  overwrite and strict-option checks. Re-query component IDs after each edit.
 - [x] `map brush-components <map> --brush <id>` reports solved zero-based vertex,
   edge and face IDs, positions and face materials. JSON includes a `brush`
   object with `vertices`, `edges` and `faces` arrays. Re-query IDs after editing.
+- [x] `map extrude-faces <map> --face <brush:face> [--face <brush:face> ...]
+  --distance <units> --output <map>` moves selected planes along the first
+  face's normal, preserving every original face. One face per brush and
+  parallel normals are required. `--split` creates a separate section and
+  requires normals pointing the same way. Optional `--grid` chooses the nearer
+  distance-step or vertex-to-grid-plane snap; without it distances are exact.
+  Texture lock is on unless `--no-texture-lock` is supplied. Shared validation,
+  scene locks, linked groups, source/UV preservation and one undo transaction
+  match the GUI. JSON includes `changedBrushes`, `createdBrushes`, `distance`
+  and `activeFaces`; re-query IDs after saving/reopening. Standard dry-run,
+  overwrite and strict-option checks apply.
 - [x] `map move-components <map> --brush <id> --kind vertex|edge|face
   --component <id> [--component <id>...] --delta x,y,z --output <map>` reshapes
   the selected components through a convex hull. `--grid` snaps final positions
@@ -1382,6 +1592,35 @@ bounds, encoding behavior, batch cancellation, and concurrency limits.
   retain their source syntax; deformed faces do not have texture lock. Bounds
   are 128 faces, 256 vertices and ±32768 units. Supports `--dry-run`, `--json`
   and `--overwrite`; JSON includes before/after counts and `collapsedVertices`.
+- [x] `map transform-components <map> --set brush:0/face/4 --operation rotate
+  --axis z --angle 15 --output <map>` transforms picked brush components and
+  patch points atomically. Repeat `--set object:id/vertex|edge|face/ids` once per
+  object; patches require `vertex` and row-major point IDs. `move` uses `--delta`,
+  `scale` uses `--factors`, and `shear` uses distinct `--axis`, `--along` and
+  `--factor`. The shared pivot defaults to selected-corner bounds; `--pivot`
+  overrides it. Optional `--grid`, `--allow-collapse` and `--uv-lock off|on|fit`
+  (default off) share GUI validation; `fit` keeps three corners of a face an
+  exact lock cannot hold instead of refusing, and JSON reports `uvLockMode`
+  and `fittedFaces`. `--allow-valve220` requires UV lock and explicitly permits
+  whole-map mapping conversion. Supports 256 object sets,
+  4,096 IDs per set, finite coordinates within ±32768, `--dry-run`, `--overwrite`
+  and JSON counts/pivot/UV policy. Duplicate, unknown and irrelevant options
+  are rejected before writing. Inspect topology again after editing it.
+  Repeated `--face face:brushId:faceNumber` (one-based, the `faces` that
+  `map select-textured` prints) transforms independently picked faces without
+  selecting their brushes, alone or with `--set`, through the same service as
+  the GUI's Edit Faces mode; `--context GROUP` opens a group first. Missing,
+  hidden, locked or closed-group picks and `snap` are refused with exit code 2.
+  JSON adds the remapped `faces`, `brushGeometrySha256`, `retiredFaces` and
+  `parentBrushesSelected: false` for chained edits.
+- [x] `map select-components <map> --set brush:0/face/4 --operation convert
+  --to vertex` queries component selection without changing geometry. Convert
+  supports `--coverage complete|touching`; Grow/Shrink support `--steps 1..256`;
+  Connected follows the entire object graph. Patch points use four grid
+  neighbours and remain vertices when converting brush modes. Repeat `--set`
+  for up to 256 sets; same-kind sets on one object are merged, and stale IDs
+  fail atomically. JSON includes sorted component sets, counts and replayable
+  `selectors` for `map transform-components`. No `--output` is accepted.
 - [x] `map add-patch` to add a Quake III plane, cylinder, square cylinder, cone,
   sphere, bevel or end cap using `--shape`, `--size x,y,z`, `--origin x,y,z`,
   `--texture`, and optional grid dimensions; `--axis x|y|z` turns it,
@@ -1452,10 +1691,17 @@ bounds, encoding behavior, batch cancellation, and concurrency limits.
   become new linedefs, two-sided inside a sector and walls in the void. The new
   sector is reported as `sector` and the linedefs it added as `newLinedefs`; a
   shape that crosses a linedef or itself is refused with exit code 1.
-- [x] `map connect` to make the `--object` entities target the last one given,
-  which keeps its `targetname`, takes the name a source already targets, or is
-  named `t<N>`; the name is reported as `targetname`. An object named twice
-  counts once, where it was named last.
+- [x] `map connect` (`map connect-entities`) connects the selected owners to the
+  last one. The default keeps multi-source, destination-first naming and `t<N>`
+  allocation. `--profile netradiant-custom` requires two distinct owners, uses
+  source-name priority and allocates a classname-based name in the NRC namespace.
+  `--kill-target` uses that two-object policy with `killtarget` for Quake, Nexuiz
+  or Xonotic; `--game` overrides built-in map inference. JSON includes
+  `targetname`, `property`, `game`, `profile`, `connectionMode`, resolved source
+  and target entities, and the directly changed count. Save As, dry run,
+  selection validation, locks and cancellation share the GUI service. Repeated
+  selectors count once at their last occurrence; unknown/repeated singleton
+  options and ambiguous inputs are rejected.
 - [x] `map shift-sectors` to raise or lower the `--object sector:N` sectors'
   `--field floor`, `ceiling`, or `light` `--by` a whole number (negative
   lowers), within the lumps' ranges, and `map gradient-sectors` to spread a
@@ -1545,11 +1791,98 @@ bounds, encoding behavior, batch cancellation, and concurrency limits.
   Tie to Entity do; an entity left without brushes goes. `map move-to-world`
   gives the `--object` brush entities' brushes back to worldspawn. Both are one
   undo step in the editor and report `entity` or `moved`.
+- [x] `map create-entity <map> --class <classname> [--definitions <path>]
+  (--origin x,y,z | --camera x,y,z | --plane-point ... | --ray-origin ... |
+  --object brush:12...) [--key k=v]... [--context <layer|group>] --output
+  <path>` is TrenchBroom's generated Create <class> command: the class must be
+  a point or brush class of the definitions (or the map's game's built-in
+  ones). A point class goes at the exact origin or is placed against the map
+  through `core/level_paste.h`'s cursor placement with optional `--grid`; a
+  brush class takes the `--object` brushes and patches as `map tie-entity`
+  does. One undo step through `core/level_entity_create.h`, shared with the
+  Levels page's Create commands; reports `className`, `kind`, `entity`,
+  `commandId`, `origin`/`placement` or `brushes`/`patches`, and refuses
+  undefined classes, locked, hidden or out-of-group brushes and a locked layer
+  (exit 4) without writing.
+- [x] `map move-to-entity <map> --object brush:12 --object brush:7 [--target
+  last|first|entity:N] --output <path>` moves the `--object` brushes and patches
+  (and those of given brush entities) into an existing entity, which keeps its
+  keys: by default the entity of the last `--object`, as NetRadiant Custom's
+  Move Primitives to Entity (Ctrl+M) does. Entities left empty go; brushes keep
+  their ids, groups and visibility. `map move-to-world --selected-only` moves
+  only the given primitives to worldspawn (NRC Ungroup Primitives), and
+  `map detail --structural --policy trenchbroom` is TrenchBroom's Make Structural,
+  which also takes the brushes out of brush entities. `map explode-entity <map>
+  --object entity:4 [--rename-targetnames] --output <path>` gives every brush and
+  patch of the given brush entities an entity of its own with identical keys, as
+  bobToolz's Explode Entity does. Each is one undo step through
+  `core/level_entity_ownership.h`, reports `target`, `moved`, `removedEntities`,
+  `createdEntities` or `movedToWorld`, and refuses locked or linked content
+  without writing.
+- [x] `map entity-colour <map> --object entity:3 [--object brush:12]...
+  --colour "r g b"|#rrggbb | --normalise [--each] [--where <query>] [--key
+  _color] --output <path>` writes the `_color` of the given entities and of the
+  entities holding the given brushes and patches, as NetRadiant Custom's Set
+  Entity Colour (K) and Normalise Entity Colour do: one colour in each key's own
+  0-1 or 0-255 form, or the last object's colour scaled so its brightest
+  channel is 1 (black becomes white); `--each` normalises every entity's own
+  colour. World brushes never colour worldspawn and hidden entities are left
+  out. One undo step through `core/level_entity_colour.h`, shared with the
+  Levels page and the Inspector's colour swatches; reports `mode`, `value`,
+  `source`, `entities`, `changed`, `skipped`, `worldPrimitives` and `hidden`,
+  and refuses locked content or a missing colour without writing.
 - [x] `map select-region <map> --object brush:12 --mode
-  inside|touching|complete-tall|partial-tall [--axis x|y|z]` lists, without
-  writing anything, the objects Radiant's region selections would select with
-  those objects' bounds as the region; `--axis` is the axis the tall modes look
-  along (z by default, as in the Top view).
+  inside|touching|complete-tall|partial-tall [--axis x|y|z]` queries profile-specific
+  selection through `--policy bounds|trenchbroom|radiant`. An optional `--output`
+  writes the prepared result, including consumed source volumes; `--dry-run`
+  validates without writing. `--axis` is the projection axis for Tall modes.
+  See [Select by brush volume](manual/levels.md#select-by-brush-volume).
+- [x] `map filters <map> [--off kinds] [--saved] [--invert] [--objects]` lists the
+  Levels view filters the map's format offers, with counts, shown state and the
+  toggling command, through `core/level_view_filters`, and reports the objects a
+  switched-off list (the View tab's saved one with `--saved`) would hide, after
+  Invert Filters with `--invert`. Nothing is written. See the
+  [view filters CLI manual](manual/cli.md#query-view-filters).
+- [x] `map camera-focus <map> [--object selector...] [--level]` reports where
+  **Level Camera** and **Focus Camera on Selection** would put the 3D camera,
+  through `core/level_camera_focus`: `--camera-yaw`, `--camera-pitch`, `--fov`,
+  `--aspect` and `--offset` (free-focus wheel notches) describe the camera,
+  `--camera-position` where it stands when nothing is focused, and `--context`
+  the open group. Hidden objects are refused; nothing is written. See the
+  [camera focus CLI manual](manual/cli.md#query-a-level-camera-focus).
+- [x] `map visibility <map> --mode hide|show-all|isolate` queries temporary
+  visibility using repeated `--object` and `--hidden` selectors and optional
+  `--context`. JSON reports explicit/effective hidden selectors, selection and
+  source hash; no map or undo session is written. See the
+  [visibility CLI manual](manual/cli.md#query-temporary-level-visibility).
+- [x] `map select-type <map> --object brush:12` queries all selected owner
+  classes. `--material` supplies the material fallback or face query source;
+  `--mode faces` returns stable brush-face sets and component selectors without
+  changing object picks. Vertex/edge modes are no-ops. `--context` and repeated
+  `--exclude` share the selection boundaries. JSON reports matched classes,
+  fallback, component-change intent, selectors and source hash; no map is
+  written. See [Select all of a type](manual/levels.md#select-all-of-a-type).
+- [x] `map select-connected <map> --object patch:2` adds one hop of direct
+  incoming/outgoing `target` and `targetname` matches to the supplied selection.
+  Brush and patch owners supply seed names; unanchored entities can match.
+  `--context` and repeated `--exclude` share the selection boundary service.
+  JSON includes original/result selectors, added count, exact connection keys
+  and `transitive: false`; the query never writes a map. See
+  [connected selection](manual/levels.md#select-connected-entities).
+- [x] `map select-type <map> --object brush:12` queries NRC Select All of Type
+  using exact entity classes or the `--material` fallback. `--mode faces`
+  selects matching brush faces; vertex/edge mode keeps the existing selection.
+  Optional `--context` and repeated `--exclude` restrict the query; no map is
+  written. Face results include zero-based component `selectors` and one-based
+  `surfaceTargets`, directly reusable with surface copy/paste and material
+  **--target** options.
+- [x] `map select-siblings <map> --object brush:12` queries selectable siblings
+  through brush-entity ownership, scene layers and closed/open groups.
+  `map select-lines <map> --line "42,57"` resolves positions in the loaded source
+  text, including brush-entity property fallback. Both accept `--context` and
+  repeated `--exclude`; JSON returns `selection`, `sourceSha256`, `queryOnly`
+  and `mapWritten`. They never write a map. See the
+  [source/hierarchy selection manual](manual/levels.md#select-by-hierarchy-or-source-line).
 - [x] `map detail <map> --object brush:3 [--structural] --output <path>`: with
   Quake II or Quake III face flags, sets or clears the detail content bit on
   every face; in Quake maps, ties the brushes to `func_detail` or moves
@@ -1595,6 +1928,63 @@ bounds, encoding behavior, batch cancellation, and concurrency limits.
   of entities' brushes, onto `--grid` and rebuild them, as TrenchBroom's Snap
   Vertices does; a brush the grid would collapse is left as it was and listed
   with its reason under `skipped`.
+- [x] `map nudge <map> --object brush:12 --direction depth-up --view front --output <map>`
+  moves the `--object` selection, or repeated `--set` components, `--steps`
+  grid steps of `--grid` units towards `--direction left|right|forward|back|
+  depth-up|depth-down|z-up|z-down`, resolved as the Levels **Nudge** commands
+  resolve it for a `--view top|front|side` plan view or a camera named by
+  `--camera-yaw` and `--camera-pitch` (core/level_nudge.h). Objects keep
+  `--texture-lock on|off`; components take `--uv-lock off|on|fit`,
+  `--allow-collapse`, `--allow-valve220` and `--context GROUP`. Doom maps
+  nudge along X and Y only. One undo step; `--output`, `--dry-run`,
+  `--overwrite` and `--json` (`axis`, `delta`, counts, save fields).
+  With `--duplicate` the `--object` selection is copied first and the copies
+  move, as the Levels **Duplicate and Move** commands do (TrenchBroom's
+  Ctrl+arrows): one duplicate at the nudge offset, the copies listed under
+  `copies`.
+- [x] `map move <map> --object brush:3 --camera 128,0,64 --grid 16 --output <map>`
+  centres the repeatable `--object` selection on the camera position by Paste
+  to Camera's translation snapped to `--grid` (default 0, none), sizing point
+  entities from optional `--definitions`, as **Move to Camera** does
+  (core/level_paste.h): one move that keeps object identities and source
+  lines. `--texture-lock on|off`, `--allow-valve220` and `--context GROUP`;
+  Quake-family maps only. JSON reports `camera`, `delta`, `grid` and the save
+  fields.
+- [x] `map repeat-transforms <map> --object brush:4 --rotate z,15 --translate 64,0,0 --output <map>`
+  copies the `--object` selection where it is and applies NetRadiant Custom's
+  repeatable transforms to the copies about their centre or `--pivot x,y,z`,
+  or applies them to repeated `--set` components (core/level_repeat.h):
+  `--scale x,y,z`, `--shear AXIS,ALONG,FACTOR`, `--rotate AXIS,DEGREES` and
+  `--translate x,y,z`, in that order. Objects keep `--texture-lock on|off`;
+  components take `--uv-lock off|on|fit` and `--allow-collapse`;
+  `--allow-valve220` and `--context GROUP`. Quake-family maps only. One undo
+  step; `--output`, `--dry-run`, `--overwrite` and `--json` (`transforms`,
+  `mode`, `pivot`, `copies`, counts, save fields).
+- [x] `map view-transform <map> --object brush:12 --transform roll-clockwise --view front --output <map>`
+  turns the `--object` selection 90 degrees or flips it as the Levels
+  page's view-relative commands do: `--transform roll-clockwise|
+  roll-counterclockwise|yaw-clockwise|yaw-counterclockwise|pitch-clockwise|
+  pitch-counterclockwise|flip-horizontal|flip-vertical`, resolved to one world
+  axis for a `--view top|front|side` plan view or a camera named by
+  `--camera-yaw` and `--camera-pitch` (core/level_quick_transform.h). The
+  pivot is the exact centre, `--pivot x,y,z`, or the centre rounded with
+  `--pivot-grid N` (to N for turns, N/2 for flips, as the TrenchBroom profile
+  does). `--texture-lock on|off`, `--allow-valve220` and `--context GROUP`;
+  Doom maps flip along X or Y and turn about Z only. One undo step;
+  `--output`, `--dry-run`, `--overwrite` and `--json` (`transform`, `frame`,
+  `axis`, `degrees`, `mirror`, `pivotPolicy`, `pivot`, save fields).
+- [x] `map round-to-grid <map> --object brush:12 --grid 8 --output <map>`
+  rounds each brush vertex, patch control point and point-entity origin of the
+  `--object` selection onto the grid on its own, as Radiant's Snap To Grid
+  does, through the service behind **Round Selection to Grid**. Brush entities
+  round their brushes and patches and keep their origin key; hidden objects and
+  brushes the grid would collapse are left as they were and listed under
+  `skipped`. Repeated `--set brush:ID/vertex|edge|face/IDs` or
+  `patch:ID/vertex/IDs` rounds only those components instead, all or nothing,
+  with optional `--allow-collapse`. `--uv-lock off|on|fit`, `--allow-valve220`
+  and `--context GROUP` follow `map transform-components`. One undo step;
+  `--output`, `--dry-run`, `--overwrite` and `--json` (counts, `fittedFaces`,
+  `skipped`, save fields) as other map edits.
 - [x] `map clip` to cut brushes (`--object` brushes or brush entities) with a
   plane: `--axis x|y|z --at <units>`, whose front is up the axis, or
   `--points "x,y,z x,y,z x,y,z"`, whose front is (b - a) x (c - a).
@@ -1607,8 +1997,12 @@ bounds, encoding behavior, batch cancellation, and concurrency limits.
   unchanged by default. `--texture-lock on` stretches with the brush and
   `--allow-valve220` permits required conversion. Two numbers leave z as it is.
 - [x] `map replace-texture` to replace every use of `--from` with `--to` on
-  brush faces, patches, or Doom wall textures and flats, across the map or only
-  the `--object` selectors given; the count is reported as `replaced`.
+  brush faces, patches, or Doom wall textures and flats, across the map, only
+  the `--object` selectors given, or only repeated `--face` picks (with
+  optional `--context`); the count is reported as `replaced`, hidden and locked
+  uses as `skipped`, with `scope` and `targets`. Levels' modeless **Find and
+  Replace Textures…** shares the core service (`core/level_material_find.h`),
+  and `map select-textured --within-selection` is its Find.
 - [x] `map compile-plan` for profile-backed compiler command review.
 - [x] `map render` for deterministic SVG pictures of Doom and Quake-family maps,
   usable from CI and documentation without a display; `--leak` adds a compiler
@@ -1711,6 +2105,11 @@ Each resolved path may be a definition file or a folder of them.
   assembly recovery storage with the GUI. Recover/discard require a reviewed UUID
   and SHA-256; recover writes a different source and retains unavailable links,
   while discard checks active-session locks. Both support read-only dry runs.
+- [x] `model assembly --operation players --package <pk3|folder>` and
+  `--new --from-player NAME` share the GUI's Quake III player listing and import:
+  three package parts, the linked skin, native animation from the package's
+  `animation.cfg` and the `player-review` options to publish it again. The package
+  is never written.
 - [x] `model recoveries [--directory <folder>]` lists bounded recovery headers.
   JSON distinguishes header validity from payload verification. `model recover
   <copy.vsmeshrecovery> --output <new.mesh.json>` verifies the payload and writes
@@ -1782,6 +2181,11 @@ Each resolved path may be a definition file or a folder of them.
   zero-based and default to 0. Text reports summarize islands; JSON includes
   their face/vertex indices, bounds and seam edge pairs. Usage errors return
   `2`, source-read failures `1`, invalid sources/topology `4`, and success `0`.
+- [x] `model uv-density <source> --texture-size WIDTHxHEIGHT` measures complete
+  UV islands against the selected reference pose. `--target` with `--output`
+  previews or writes a density adjustment; `--mode individual|group` chooses
+  per-island or combined scaling. See [texture density](MODEL_UV_DENSITY.md)
+  for face expansion, validation, dry-run and output requirements.
 - [x] `model edit --operation uv-mark-seams|uv-clear-seams --edges a:b` edits
   source seam marks. `uv-detach --faces ...` splits shared face corners without
   moving UVs or poses. `--uv-islands` expands component selection for UV
@@ -1849,29 +2253,89 @@ Each resolved path may be a definition file or a folder of them.
   all-pose document service with explicit source, face and target selections.
   Different ordered material lists require `--adopt-target-materials` for Move
   or Join. Edits use `.mesh.json` output, `--dry-run` and normal overwrite/source
-  protection. [Surface Authoring](MODEL_SURFACES.md) documents exact selectors,
+  protection. On skeletal models each surface lists `skinned`, edits report
+  `skinProvenance`, and mixing skinned and unskinned vertices in one surface is
+  refused. [Surface Authoring](MODEL_SURFACES.md) documents exact selectors,
   partition semantics, selection remapping, limits and exit codes.
+- [x] `model skinning <source.mesh.json>` inspects skeletal influences. Its
+  `--operation select|bind|rebind|unbind|prune` routes through shared model
+  services; edits require `.mesh.json` output and support `--dry-run` and
+  `--overwrite`. Binding accepts rigid, joint-distance or bone-distance methods;
+  pruning accepts influence-count and threshold limits. See command help for
+  surface/vertex selectors, weight filters and replacement controls.
+- [x] `model weight-paint <source.mesh.json>` paints selected skeletal vertices
+  using replace, add, subtract or smooth strokes, or replays `--stroke-file`.
+  Joint locks, a remainder joint, strength and opacity control normalised
+  weights. Edits preserve bind geometry and update retained poses atomically;
+  `.mesh.json` output, `--dry-run` and `--overwrite` follow normal model saving.
+  See registered command help for selectors and value limits.
 - [x] `model tool <source.mesh.json> --tool <name> --output <new.mesh.json>` runs one
   edit-mode mesh tool through the same document service as the Mesh Editor:
   rotate-edges, merge, dissolve-vertices, dissolve-faces, poke, beautify,
   make-face, extrude-edges, inset, shrink-fatten, smooth, transform
   (proportional and mirrored), shade-flat, shade-smooth, auto-smooth, bisect,
-  symmetrize, loop-cut, add (primitives), decimate, bevel-vertices, solidify
+  symmetrize, loop-cut, edge-slide, add (primitives), decimate, bevel-vertices, solidify
   and the UV projections uv-cube, uv-view, uv-cylinder and uv-sphere. Components use
   `--surface`, `--faces`, `--vertices` and `--edges`; each tool refuses options
   it does not take. `--dry-run`, `--overwrite`, text/JSON results and exit
   codes (2 usage, 1 read/write, 4 invalid edit, 0 success) match `model edit`.
-  JSON includes the resulting selection for chaining. See
-  [Mesh Tools](MODEL_TOOLS.md).
+  JSON includes the resulting selection for chaining, and on skeletal models a
+  `skinProvenance` report of kept, interpolated, mirrored, rebound, merged and
+  bound weights. Symmetrize on skinned surfaces takes
+  `--joint-map detect|left=right,...` and `--keep-joint-names`; `add` takes
+  `--new-surface NAME` and, on skeletal models, `--bind-joint NAME` or
+  `--bind nearest-bones` (required on a skinned surface) and reports its
+  `binding`. `model edit` adds the same `skinProvenance` report, and its frame
+  operations refuse the bind frame and skeletal clip frames with exit code 4.
+  See
+  [Mesh Tools](MODEL_TOOLS.md) and
+  [skin weights through mesh edits](MODEL_SKIN_PROVENANCE.md).
+  [Edge Slide](MODEL_EDGE_SLIDE.md) takes `--edges` and exactly one of
+  `--slide` (signed fraction) or `--distance` (reference-pose units), with
+  `--frame all|N`, `--reference-frame` and optional `--angle` for quad pairing.
 - [x] `model select <source> --select <operator>` is read-only: all, none,
   invert, linked, more, less, loop, ring, path, similar, non-manifold, loose,
   boundary, sharp, random, checker, side, facing and mirror, in face, vertex
   or edge mode. It prints the selected indices as ready-to-use `--faces`,
-  `--vertices` or `--edges` values. See [Mesh Tools](MODEL_TOOLS.md#selection).
+  `--vertices` or `--edges` values. Loop and ring without `--edge` grow every
+  edge in `--edges` (or between two `--vertices`) through
+  `selectModelEdgeLoops`, the service behind the editor's **Select Edge
+  Loops/Rings of Selection**, and report refused seeds under `refused`;
+  `--extend` gives the editor's result. See [Mesh Tools](MODEL_TOOLS.md#selection).
 - [x] `model lod <source> --output <name.md3>` writes the base MD3 and Quake III
-  detail levels `name_1.md3`, `name_2.md3` beside it (`--levels 1-3`, `--ratio`),
-  each a quadric decimation of the previous level that keeps UV seams and every
-  pose. See [Mesh Tools](MODEL_TOOLS.md#quake-iii-detail-levels).
+  detail levels `name_1.md3`, `name_2.md3` beside it (`--levels`, `--ratio`,
+  `--target-triangles`, `--level-source LEVEL=PATH` for hand-made levels, or the
+  source's stored levels; `--save-recipe` stores them; `--target` for the MD3
+  delivery target, which sets how many levels the game loads), each generated
+  level a quadric decimation of the previous one that keeps UV seams and every
+  pose. `model lod --inspect <base.md3>` (or `--package P --entry E`) checks an
+  existing set's frames, surface names and limits and exits 4 on an error. See
+  [Model Detail Levels](MODEL_LOD.md). The whole set is prepared, checked against the target and
+  reviewed before any file is written; levels that would land on the source are
+  refused, existing files need `--overwrite`, and JSON reports each file's
+  `committed` state, `exportNotes` and `exportOmissions`, with `existing`,
+  `committed` and every omission once for the set. `--strict` exits 4, writing
+  nothing, when a file would leave data out. See
+  [Mesh Tools](MODEL_TOOLS.md#quake-iii-detail-levels).
+- [x] `model targets [<source>]` lists the delivery targets (engines and source
+  ports with their model limits and the sources they were read from), or checks
+  a model against them, reporting every limit it exceeds with the surface, value,
+  maximum and fix. `--format` and `--target` narrow the list; a named `--target`
+  the model does not fit exits 4, and an id shared by several formats (`fte`,
+  `ioquake3`, `q2pro`, `gzdoom`, `doom3`) needs `--format` to check a model
+  (exit 2 without it). Issues name the faces or vertices concerned.
+  `--project DIR` shows each format's target in a project with its origin, and
+  `--save` / `--clear` keep or remove the project's choices and strict setting.
+  `model build --target ID` runs the same
+  preflight before writing (the project's saved target, else the format's
+  default, when omitted) and exits 4 with `targetIssues`. See
+  [Model Delivery Targets](MODEL_TARGETS.md).
+- [x] `model prepare <source> --format <format> --output <new.mesh.json>` applies
+  the fixes a delivery target's preflight suggests (split, join, decimate, fit,
+  influences; `--skip` leaves kinds out) through the shared document edits and
+  reports each change and what still blocks; `--dry-run` reviews only, and it
+  exits 4 when limits remain. See
+  [Prepare For Target](MODEL_TARGETS.md#prepare-for-target).
 - [x] `model skin <source.mesh.json> --file <file.skin> --output <source.mesh.json>`
   applies complete Quake III surface-to-shader assignments through the shared
   document transaction. Package/folder/draft imports use `--package` with
@@ -1882,6 +2346,16 @@ Each resolved path may be a definition file or a folder of them.
   Inputs are protected. Usage/protection errors return 2, read/write errors 1,
   invalid skin data/edits 4 and success 0. See
   [skin assignments](MODEL_MESH.md#quake-iii-skin-assignments).
+- [x] `model skin-variants <source.mesh.json>` lists the named skin variants a
+  source owns; `--operation add|rename|remove|set` with `--name`, `--to` and
+  repeated `--surface-material SURFACE=MATERIAL` edits them through the shared
+  document transaction (one undo step) and requires `--output .mesh.json`.
+  `--dry-run` and `--overwrite` behave as for `model skin`.
+- [x] `model skin-export <model> --output <file.skin>` writes the Quake III `.skin`
+  of the primary materials or `--variant NAME` for an editable source or native
+  model, or with `--format doom3` a Doom 3 skin declaration (`--model-path`,
+  `--decl-name`). Both writers are the Mesh Editor's; refusals exit 4 without
+  writing. See [Skin Variants](MODEL_SKIN_VARIANTS.md).
 - [x] `model import <input> --output <source.mesh.json>` creates an editable
   mesh source from polygonal OBJ, MDL, MD2, MD3, or a baked primitive design. `model edit <source>
   --operation <name> --output <source.mesh.json>` applies a validated component,
@@ -2014,7 +2488,7 @@ package, and level CLI example and the editable JSON schema.
 - [x] `model import <native.mdl> --output <source.mesh.json>` retains all native
   data. Loose imports use a generated preview palette until explicitly changed.
   `model build <source.mesh.json> --output <model.mdl>` applies original Quake
-  limits and reports stored vertices, native frame/skin counts, precision errors
+  limits (or another MDL delivery target with `--target`) and reports stored vertices, native frame/skin counts, precision errors
   and compatibility notes. It does not embed the source palette into the MDL.
 - [x] `model formats` lists every model format the studio reads: suffixes,
   engine families (`idtech1` to `idtech4`, `goldsrc`, `interchange`), games,
@@ -2023,10 +2497,25 @@ package, and level CLI example and the editable JSON schema.
   the identifiers `model build` accepts. See [Native Model Formats](MODEL_FORMATS.md).
 - [x] `model build <source.mesh.json> --output <model.md5mesh|model.md5anim|model.iqm|model.ase>`
   writes skeletal and idTech 4 formats through the same export service as the
-  Mesh Editor. Skeletal output re-binds vertices moved in the bind pose first; for
-  `.md5anim`, `--frame` picks the skeletal clip by index, and a model without one
-  exits 4. A model without joints writes a one-joint MD5 mesh or a static IQM,
-  with a note.
+  Mesh Editor. Skeletal output re-binds vertices moved in the bind pose first. For
+  `.md5anim`, `--clip N|NAME` chooses the clip; `--frame N` selects the clip that
+  frame belongs to, as the editor does; a model with several clips and neither
+  option exits 2, and a model without a clip exits 4. `--md5-frame-rate N`
+  writes a whole rate in place of the clip's own; a fractional clip rate without
+  it exits 4. `--all-clips --output-dir DIR` writes one `<clip>.md5anim` per clip,
+  checking every destination before writing (existing files need `--overwrite`).
+  JSON adds `clip` (index, name, frames, `frameRate`), `exportOmissions`, and for
+  IQM `influencesReduced`, `maxDroppedWeight`, `maxWeightError`, the largest
+  joint translation, rotation and scale quantisation, `maxPositionError`
+  (vertex movement over the clips with the stored weights and channels, a note)
+  and `maxLayoutError` (the same before rounding; beyond 1/64 unit it is an
+  omission). `--strict` exits 4 without writing when any format would leave data
+  out; `--all-clips --strict` prepares every clip first and its JSON lists each
+  clip's `exportOmissions` and `refused`, every omission once, and
+  `sharedNotes`. MDL, MD2 and MD3 omissions are the clips the frame names do not
+  rebuild, authored frame origins (MDL, MD2, OBJ) and a skeleton. A model without
+  joints writes a one-joint MD5 mesh or a static IQM, with a note. Options may
+  come before the source path.
 - [x] `model profiles` lists the modeller's controls profiles (`studio`,
   `blender`, `3ds-max`, `milkshape-3d`) with layout, transform style, sidebar
   family, selection-mode names, what each changes and where it differs from the
@@ -2038,7 +2527,11 @@ package, and level CLI example and the editable JSON schema.
   `--overwrite` for an existing file) writes a `vibestudio.modeller-controls`
   file; `--import <file>` saves its changes for the profile it names; `--select`
   makes the profile current; `--reset` drops saved changes; `--settings-file`
-  works on a separate settings store. See [Modeller Profiles](MODELLER_PROFILES.md).
+  works on a separate settings store. The keys section lists Ctrl+Tab and
+  Ctrl+Shift+Tab (Control+Tab and Control+Shift+Tab on macOS), which every
+  profile keeps for moving focus between panels;
+  saved changes or an imported file that give them to a command are applied
+  without them and reported under `warnings`. See [Modeller Profiles](MODELLER_PROFILES.md).
 
 | Command | Exit | Condition |
 | --- | --- | --- |
@@ -2410,6 +2903,8 @@ format or engine support. See [Editor Profiles](EDITOR_PROFILES.md).
   reads the current level-view layout, or saves the supplied preference. `profile`
   follows the selected interaction profile's default. JSON returns `preference`,
   `effectiveLayout` and `profileId`; `--settings-file` isolates automation settings.
+  `--panes top,front,side|all` saves which plan panes three-plan layouts show;
+  JSON adds `planPanes` and `planPanesApply`.
   Invalid identifiers, repeated/unknown options or excess arguments exit 2;
   settings write failures exit 1 and successful reads/writes exit 0.
 - [x] `editor current`
@@ -2653,7 +3148,7 @@ skin's digest, occurrence and material assignments. See
 [Linked Skins](MODEL_ASSEMBLY.md#linked-skins) for working-directory rules,
 package ambiguity, dry runs and schema compatibility.
 
-`model assembly` exposes native Quake III configuration through `animation-set`, `animation-export` and `animation-clear`. New bindings use `--config`, `--lower-part`, `--upper-part` and optional exact `--lower-animation` / `--upper-animation` identifiers. All require `--output`; dry runs validate all native slots and input protections without publication. Saved clip choices also drive ordinary inspect and bake operations. See [examples and limits](MODEL_ASSEMBLY.md#quake-iii-native-animation).
+`model assembly` exposes native Quake III configuration through `animation-set`, `animation-export` and `animation-clear`. New bindings use `--config` (or `--config-entry PATH` from `--package`, with `--config-entry-index N` for a repeated path), `--lower-part`, `--upper-part` and optional exact `--lower-animation` / `--upper-animation` identifiers. All require `--output`; dry runs validate all native slots and input protections without publication. Saved clip choices also drive ordinary inspect and bake operations. See [examples and limits](MODEL_ASSEMBLY.md#quake-iii-native-animation).
 
 ## Native Player Package CLI
 
@@ -2665,5 +3160,134 @@ optional `--skin-name`, `--icon-kind file|package` and `--icon-entry-index` sele
 native naming and exact package image identity. Export requires `--output` and
 supports `--dry-run` and `--overwrite`; review rejects write-only flags. Portable
 `.vibepackage` inputs include staged material edits. Export failure JSON retains
-commit state, backup/recovery paths and blocked messages. See the full
+commit state, backup/recovery paths and blocked messages. More skins come from
+`--skin-variants a,b`, `--team-variants` (red and blue), repeated
+`--variant-skin NAME:ROLE=PATH` and `--variant-icon NAME=PATH`; detail levels
+from `--lod-levels 1-2 --lod-ratio R` or `--lod-recipes`; custom sounds from
+repeated `--sound NAME=PATH`. `package:PATH` names a package entry. Review
+refuses an upper part without `tag_weapon`, team skins identical to the model's
+own materials and skins that miss a surface. See the full
 [contract and examples](MODEL_ASSEMBLY.md#native-player-packages).
+
+`model assembly --operation players --package PATH` lists the Quake III players
+of a package or folder from entry metadata. `model assembly --new --from-player
+NAME --package PATH --output FILE` opens one through the same
+`importModelQ3Player` service as the GUI's **Open Player…**: lower, upper on
+`tag_torso` and head on `tag_head` as package parts, the `--skin-name` skin linked
+to each, and native animation from the package's `animation.cfg`. It accepts
+`--name`, `--dry-run` and `--overwrite`, refuses part-editing options and
+`--operation`, and writes nothing when the parts do not resolve. JSON `player`
+carries the listing, notes and `publication.arguments`, the `player-review`
+options that publish the player again. The package is read only. See
+[opening a Quake III player](MODEL_ASSEMBLY.md#opening-a-quake-iii-player).
+
+`map insert-vertices` accepts repeated distinct `--brush` IDs. Every brush
+receives the repeated `--position x,y,z` list in one atomic scene transaction;
+a refused hull or locked brush prevents all output. Existing single-brush JSON
+fields remain, with `brushIds`, `brushes` and aggregate inserted/collapsed counts
+for batches. Grid snapping, optional old-corner collapse, dry runs and protected
+output paths use the existing services. GUI direct insertion consumes the same
+batch geometry service and adds stale-source/preview guards before publication.
+
+`editor gestures <profile> --set plan.componentAxisDrag=on --set
+camera.componentAxisDrag=on` selects world-axis component dragging independently
+of insertion chords. Both fields accept `on`/`off`, support dry runs and portable
+profile import/export, and default on for TB. CLI geometry commands continue to
+accept explicit transforms and grid policy; they do not simulate GUI gestures.
+
+`map transform-components <map> --operation snap --set brush:ID/vertex/ID
+--target brush:ID/vertex/ID --output <map>` snaps one geometric brush vertex
+exactly to another. Repeated source sets must identify coincident positions.
+The shared service computes displacement, enables merging and keeps ordinary
+UV, scene-lock, save and dry-run checks. Grid, pivot and delta options are
+refused for snap. JSON includes the target, exact displacement and collapsed
+corner count. Component move displacements may span ±65536 units; resulting
+coordinates remain within ±32768. Two independent gesture fields,
+`plan.componentQuickSnapModifiers` and `camera.componentQuickSnapModifiers`,
+use the existing choice/import/export/reset interface (TB default `shift+alt`,
+otherwise `none`). The gesture schema now contains 95 fields.
+
+### Clipboard target placement
+
+`map paste` retains original/`--delta` insertion and adds `--camera`,
+`--plane-point` with `--plane-normal`/`--ray-direction`, and `--ray-origin` with
+`--ray-direction`/`--view-direction`. Ray targets accept `--orthographic` for a
+line through the orbit focus plane, with frontmost-surface placement on either
+side and focus-depth fallback. Target modes accept `--grid` (0 disables snapping)
+and `--definitions` for point bounds. `--context UUID` chooses a layer
+or opens a group. JSON reports the resolved `delta` and placement mode. All
+variants share bounded parsing, native insertion, scene locks, texture mapping,
+dry-run and overwrite validation. See [Clipboard placement](LEVEL_PASTE.md).
+
+
+### Face clipboard attributes
+
+`map copy-surface --format map` exports ordered raw faces from repeatable targets;
+JSON remains the single-face default. `map paste-surface` detects raw face text
+and defaults to `attributes`, retaining target contents and omitted surface
+flags/value. Explicit mode selection and normal dry-run/overwrite checks apply.
+The same strict parser and transaction service serve normal GUI paste and the
+Surfaces panel. See [Face clipboard](LEVEL_PASTE.md#face-clipboard).
+
+### Object clipboard export and cut
+
+`map copy <map> --object entity:id|brush:id|patch:id --output fragment.map` and
+`map cut <map> --object ... --clipboard fragment.map --output remaining.map`
+share the editor's private preparation, selection validation and ownership
+serializer. Selectors repeat. Dry runs validate without writing; overwrite is
+explicit for either existing output. Parents must exist and cannot traverse
+links. The fragment cannot overwrite either map path. In-place map saves retain
+backups. Two-file cut publishes the fragment first and reports `clipboardWritten`
+and `mapWritten` on success or failure; failed map saving retains the source.
+See [clipboard limits and examples](LEVEL_PASTE.md#cli). **Status: Partial.**
+
+
+### Two-bone inverse kinematics
+
+`model ik` shares the modeller's two-bone solver over an inclusive clip sample
+range. Model-space target/pole inputs, fixed bone lengths, optional nearest
+reachable clamping and end-joint following use the shared service. Normal
+`--dry-run`, `--output .mesh.json` and `--overwrite` publication rules apply.
+See the [CLI manual](manual/cli.md).
+
+
+### Joint animation curves
+
+`model curves` inspects or edits a clip's stored joint curves through the shared
+modeller service. Capture, key insertion/removal/movement, group replacement and
+baking accept the same channels and interpolation/tangent modes as the editor.
+Writes use `--output .mesh.json`, with `--dry-run` validation and explicit
+`--overwrite` for replacement. See the [CLI manual](manual/cli.md).
+
+
+### Temporary visibility queries
+
+`map visibility` runs session Hide, Show All and Isolate without writing native
+map or scene metadata. `--policy inherited` uses TB-style group containers;
+`--policy flat` targets existing members. `--hidden` and `--shown` accept object
+selectors and `group:<UUID>` identities, rejecting contradictory states. JSON
+separates explicit states from `effectiveHidden` object selectors for selection
+query handoffs. GUI and CLI share the resolver, cancellation and validation.
+
+`map visibility --mode inspect` reports supplied states unchanged. Read-only
+`move --node GROUP --parent NODE`, `assign --object SELECTOR --parent NODE`,
+and `duplicate --object SELECTOR --offset x,y,z` modes prepare authoring effects
+through the scene/placement services and return the resulting `scene` alongside
+visibility. They preserve source bytes and hashes and do not publish map files.
+
+`--profile ID` supplies the shared insertion policy and default flat/inherited
+hiding policy. An explicit `--policy` changes hiding only. JSON reports both the
+resolved profile and insertion policy; invalid profiles fail before loading or
+writing. NRC duplicate previews create fresh inherited states, while TB/default
+previews preserve explicit descendants and reveal inserted roots.
+
+### Additive material surface query
+
+`map select-textured` requires `--material` and preserves repeated `--object`
+and one-based `--face` seeds. It returns independent brush faces and matching
+whole patches, canonical `surfaceTargets`, source hash and exact ordered brush
+geometry fingerprints. It shares cancellable preparation, group/visibility/lock
+boundaries and complete-result validation with the forthcoming GUI action.
+No map or package is written. The GUI command, independent-face state and NRC
+shortcut are not yet wired; this route remains Partial. See the
+[CLI manual](manual/cli.md#query-textured-level-surfaces).

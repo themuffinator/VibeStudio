@@ -6,9 +6,11 @@
 #include <QElapsedTimer>
 #include <QEventLoop>
 #include <QImage>
+#include <QPainter>
 #include <QTemporaryDir>
 #include <QThread>
 #include <QTimer>
+#include <QWidget>
 #include <atomic>
 #include <iostream>
 
@@ -53,6 +55,19 @@ public:
 	bool readEntryAt(qsizetype index, QByteArray* out, QString* error, qint64 cap) const override
 	{
 		return pause() && archive.readEntryAt(index, out, error, cap);
+	}
+};
+// A view whose every paint takes 40 ms, as a large camera's can in a debug
+// build or on a busy machine.
+class SlowView final : public QWidget {
+public:
+	int paints = 0;
+protected:
+	void paintEvent(QPaintEvent*) override
+	{
+		QPainter painter(this); painter.fillRect(rect(), ++paints % 2 ? Qt::black : Qt::darkGray);
+		QElapsedTimer busy; busy.start();
+		while (busy.elapsed() < 40) {}
 	}
 };
 } // namespace
@@ -166,6 +181,21 @@ int main(int argc, char** argv)
 	request.sourceKey = QStringLiteral("other-map");
 	ok &= run(1, 0);
 	ok &= expect(latest.geometryCache.retainedBrushes == 1, "new map prunes departed cache entries");
+
+	// A view asked to repaint on every poll, each paint outlasting the poll,
+	// must not hold a rebuild back. With a coarse debounce timer (a
+	// low-priority WM_TIMER on Windows) the queue never emptied, the request
+	// never started and the Levels camera waited for good.
+	{
+		SlowView view; view.resize(320, 240); view.show();
+		const int before = publications; worker.request(request);
+		QElapsedTimer elapsed; elapsed.start();
+		while (worker.busy() && elapsed.elapsed() < 5000) {
+			view.update();
+			QEventLoop loop; QTimer::singleShot(30, &loop, &QEventLoop::quit); loop.exec(QEventLoop::ExcludeUserInputEvents);
+		}
+		ok &= expect(!worker.busy() && publications == before + 1 && view.paints > 1, "a rebuild finishes while a slow view repaints on every poll");
+	}
 	if (!ok && !error.isEmpty()) { std::cerr << error.toStdString() << '\n'; }
 	return ok ? 0 : 1;
 }

@@ -39,6 +39,10 @@ high-contrast theme and the standard theme of the same lightness.
 Status never relies on colour alone: every state also has its own symbol and
 words, such as **AI-free** in the status bar.
 
+The saved theme and text scale apply before the studio finishes its initial
+row layout. Startup prepares each page before styling its complete widget tree
+to reduce repeated work; no extra preference is needed.
+
 ## Text size, density and typeface
 
 - **Text scale** goes from 100% to 200% in 25% steps and scales text, icons and
@@ -91,7 +95,9 @@ Under **Alerts and Screen Readers**:
 - **Announce results to screen readers** (on by default) asks your screen
   reader, such as Narrator, NVDA, JAWS, VoiceOver or Orca, to announce when a
   long task finishes or fails, and what the status bar reports, without moving
-  focus.
+  focus. The Mesh Editor and the modeller's dialogs also announce their
+  results and refusals (see
+  [Use a screen reader, high contrast or reduced motion](models.md#use-a-screen-reader-high-contrast-or-reduced-motion)).
 - **Flash the taskbar when background work finishes** (on by default) flashes
   VibeStudio's taskbar or dock button when a long task ends while another
   window is in front.

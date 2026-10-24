@@ -1,5 +1,6 @@
 #include "core/package_protection_p.h"
 #include "core/package_archive.h"
+#include "core/package_path_identity_p.h"
 
 #include <QCoreApplication>
 #include <QDir>
@@ -32,9 +33,9 @@ bool nativeAbsolute(const QString& path)
 }
 }
 PackageInputProtectionSet::PackageInputProtectionSet(qsizetype maximumPaths, qint64 maximumBytes, QString* error,
-	PackageReadControl control, QString implicitDirectory)
+	PackageReadControl control, QString implicitDirectory, bool portableIdentity)
 	: m_maximumPaths(std::min(maximumPaths, pathCeiling)), m_maximumBytes(std::min(maximumBytes, byteCeiling)),
-	  m_error(error), m_control(std::move(control)), m_implicitDirectory(std::move(implicitDirectory)) {}
+	  m_error(error), m_control(std::move(control)), m_implicitDirectory(std::move(implicitDirectory)), m_portableIdentity(portableIdentity) {}
 bool PackageInputProtectionSet::refuse(const QString& message)
 {
 	if (!m_failed) { m_errorText = message; if (m_error) { *m_error = message; } } m_failed = true; return false;
@@ -68,11 +69,13 @@ bool PackageInputProtectionSet::retain(const QString& path)
 	if (m_paths.size() >= m_maximumPaths || bytes > m_maximumBytes - m_bytes) {
 		return refuse(QCoreApplication::translate("VibeStudioPackageStaging", "Package source protections exceed the limit of %1 paths or %2 metadata bytes.").arg(m_maximumPaths).arg(m_maximumBytes));
 	}
-	m_bytes += bytes; m_keys.insert(key); m_paths.append(QString(path.constData(), path.size())); return true;
+	m_bytes += bytes; m_keys.insert(key); m_paths.append(QString(path.constData(), path.size()));
+	m_identityReady = false; m_identityKeys.clear(); m_identityPaths.clear(); m_portablePaths.clear(); return true;
 }
 bool PackageInputProtectionSet::add(const QString& path, bool captureAliases)
 {
 	if (m_matching) { m_matching = false; m_steps = 0; }
+	if (m_identityReady) { m_identityReady = false; m_identityKeys.clear(); m_identityPaths.clear(); m_portablePaths.clear(); }
 	if (!checkpoint()) { return false; }
 	if (path.isEmpty()) { return true; }
 	if (path.size() > pathCharacterCeiling || !path.isValidUtf16() || path.contains(QChar(0))) {
@@ -142,8 +145,78 @@ bool PackageInputProtectionSet::check(const QString& path, bool* protectedPath)
 		QString resolved;
 		if (!resolve(absolute, &resolved) || (!resolved.isEmpty() && !containsAncestor(resolved, &found))) { return false; }
 	}
+	if (!found) {
+		const auto identity = inspectPackagePathIdentity(absolute, m_portableIdentity);
+		if (!identity.error.isEmpty()) { return refuse(identity.error); }
+		// New and independent destinations cannot alias a different regular input.
+		if (identity.regular && identity.links > 1 &&
+			(!prepareIdentities() || !matchesIdentity(absolute, identity.key, &found))) { return false; }
+	}
 	if (!checkpoint()) { return false; }
 	*protectedPath = found; return true;
+}
+
+bool PackageInputProtectionSet::prepareIdentities()
+{
+	if (m_identityReady) { return checkpoint(); }
+	QStringList pending;
+	QSet<QString> queued;
+	qint64 bytes = 0;
+	const auto enqueue = [&](const QString& path) {
+		if (!checkpoint()) { return false; }
+		if (!nativeAbsolute(path)) { return true; }
+		QString resolved;
+		if (!resolve(path, &resolved)) { return false; }
+		const auto key = pathKey(resolved);
+		if (queued.contains(key)) { return true; }
+		// Account the retained path, key and container record before admitting it.
+		const qint64 cost = resolved.size() * qint64(sizeof(QChar)) * 2 + 128;
+		if (queued.size() >= m_maximumPaths || cost > m_maximumBytes - bytes) {
+			return refuse(QCoreApplication::translate("PackageInputProtection",
+				"Filesystem source protection exceeds the limit of %1 paths or %2 metadata bytes. Choose a new independent output.").arg(m_maximumPaths).arg(m_maximumBytes));
+		}
+		bytes += cost; queued.insert(key); pending.append(resolved); return true;
+	};
+	for (const auto& path : m_paths) { if (!enqueue(path)) { return false; } }
+	for (qsizetype index = 0; index < pending.size(); ++index) {
+		if (!checkpoint()) { return false; }
+		const auto path = pending[index];
+		const auto identity = inspectPackagePathIdentity(path, m_portableIdentity);
+		if (!identity.error.isEmpty()) { return refuse(identity.error); }
+		if (identity.regular) {
+			m_identityPaths.append(path);
+			if (identity.key.isEmpty()) { m_portablePaths.append(path); }
+			else { m_identityKeys.insert(identity.key); }
+		} else if (identity.directory) {
+			std::error_code error;
+			std::filesystem::directory_iterator entry(packageNativeFilesystemPath(path), error), end;
+			while (!error && entry != end) {
+				if (!enqueue(packageQtFilesystemPath(entry->path()))) { return false; }
+				entry.increment(error);
+			}
+			if (error) {
+				return refuse(QCoreApplication::translate("PackageInputProtection", "Cannot enumerate a protected source folder: %1.").arg(path));
+			}
+		}
+	}
+	m_identityReady = true;
+	return checkpoint();
+}
+
+bool PackageInputProtectionSet::matchesIdentity(const QString& path, const QByteArray& key, bool* found)
+{
+	if (!key.isEmpty() && m_identityKeys.contains(key)) { *found = true; return checkpoint(); }
+	const auto& candidates = key.isEmpty() ? m_identityPaths : m_portablePaths;
+	for (const auto& input : candidates) {
+		if (!checkpoint()) { return false; }
+		std::error_code error;
+		const bool equivalent = std::filesystem::equivalent(packageNativeFilesystemPath(path), packageNativeFilesystemPath(input), error);
+		if (error) {
+			return refuse(QCoreApplication::translate("PackageInputProtection", "Cannot compare protected file identities: %1.").arg(input));
+		}
+		if (equivalent) { *found = true; return checkpoint(); }
+	}
+	return checkpoint();
 }
 bool PackageInputProtectionSet::protects(const QString& path)
 {

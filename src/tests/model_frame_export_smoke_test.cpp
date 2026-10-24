@@ -3,6 +3,7 @@
 #include "core/model_frame_export.h"
 #include "core/model_obj.h"
 #include "core/package_draft.h"
+#include "tests/model_output_test_helpers.h"
 
 #include <QCoreApplication>
 #include <QDir>
@@ -192,6 +193,57 @@ int main(int argc, char **argv)
 	request.outputPath = path("models.pak");
 	ok &= expect(!exportModelFrame(mesh, request).succeeded() && read(path("models.pak")) == originalArchive,
 				 "binary package input cannot become an OBJ output");
+	for (bool dryRun : {true, false})
+	{
+		const auto alias = path(dryRun ? "archive-dry.obj" : "archive-write.obj");
+		ok &= expect(tests::modelTestHardLink(path("models.pak"), alias), "prepare disposable archive hard-link output");
+		request.outputPath = alias;
+		request.dryRun = dryRun;
+		result = exportModelFrame(mesh, request);
+		ok &= expect(!result.succeeded() && !result.written && read(alias) == originalArchive && read(path("models.pak")) == originalArchive,
+					 "frame dry-run and publication protect hard-linked package inputs");
+	}
+	// An unrelated multiply-linked output triggers the folder identity scan, but
+	// remains a valid derivative if the complete scan succeeds.
+	const auto scanRoot = path("scan-inputs");
+	bool fixtures = QDir().mkpath(scanRoot);
+	for (int i = 0; i < 512; ++i)
+		fixtures &= write(QDir(scanRoot).filePath(QStringLiteral("entry-%1.bin").arg(i)), QByteArray("fixture"));
+	const auto scanOutput = path("scan-output.obj"), scanAlias = path("scan-output-alias.obj");
+	fixtures &= write(scanOutput, external) && tests::modelTestHardLink(scanOutput, scanAlias);
+	PackageArchive scanFolder;
+	ok &= expect(fixtures && scanFolder.load(scanRoot, &error), "prepare bounded folder and independent multi-link output");
+	request.sourceArchive = std::make_shared<PackageArchive>(scanFolder);
+	request.outputPath = scanOutput;
+	for (bool dryRun : {true, false})
+	{
+		bool pulse = false, observed = false;
+		qint64 scanSteps = 0;
+		ModelWorkControl scanControl;
+		scanControl.progress = [&](ModelWorkPhase phase, qint64 done, qint64 total)
+		{
+			if (phase == ModelWorkPhase::Validating && total == 0 && done >= 256)
+			{
+				scanSteps = done;
+				pulse = true;
+			}
+		};
+		scanControl.cancelled = [&]
+		{
+			if (!pulse || observed) return false;
+			observed = true;
+			return true;
+		};
+		request.dryRun = dryRun;
+		result = exportModelFrame(mesh, request, scanControl);
+		ok &= expect(observed && scanSteps >= 256 && scanSteps < 1024 && result.cancelled && !result.succeeded() && !result.written &&
+					 read(scanOutput) == external && read(scanAlias) == external,
+					 "one-shot cancellation interrupts folder identity capture and preserves both output aliases");
+	}
+	request.dryRun = false;
+	result = exportModelFrame(mesh, request);
+	ok &= expect(result.succeeded() && result.written && read(scanOutput) == stdoutResult.bytes && read(scanAlias) == external,
+				 "completed folder validation permits an independent output and preserves its old alias");
 	if (argc > 1)
 	{
 		QJsonObject output;

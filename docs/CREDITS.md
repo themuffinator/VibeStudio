@@ -108,6 +108,31 @@ animation and token-parser functions into a separately compiled test harness,
 preserving upstream notices and source hashes. Model registration and shader
 lookup are explicit harness shims, not renderer/gameplay certification.
 
+Player package team skins, custom sounds, detail levels and the `tag_weapon`
+check (reviewed 2026-10-22, same licence and snapshot) follow the team-skin and
+icon lookup in `CG_FindClientModelFile`, `CG_FindClientHeadFile` and
+`CG_RegisterClientModelname`, the per-model sound registration and fallback in
+`CG_LoadClientInfo` with the `cg_customSoundNames` list, and the `tag_flag` test
+in [`cg_players.c`](https://github.com/id-Software/Quake-III-Arena/blob/master/code/cgame/cg_players.c);
+the held weapon's `tag_weapon` in
+[`cg_weapons.c`](https://github.com/id-Software/Quake-III-Arena/blob/master/code/cgame/cg_weapons.c)
+(`CG_AddPlayerWeapon`); the `name_1.md3` and `name_2.md3` detail levels in
+[`tr_model.c`](https://github.com/id-Software/Quake-III-Arena/blob/master/code/renderer/tr_model.c);
+and the mono Microsoft PCM requirement in
+[`snd_mem.c`](https://github.com/id-Software/Quake-III-Arena/blob/master/code/client/snd_mem.c)
+(`GetWavinfo`, `S_LoadSound`). Behaviour only; the implementation is original.
+The oracle's team cases extract the same unmodified functions as above.
+
+Opening an existing player as an assembly (`core/model_player_import`, reviewed
+2026-10-22, same licence and snapshot) reads the base layout that
+`CG_RegisterClientModelname` and `CG_RegisterClientSkin` load
+(`models/players/<model>/lower.md3`, `upper.md3`, `head.md3`, `animation.cfg` and
+`<role>_<skin>.skin`), the `icon_<skin>.tga` lookup in `CG_FindClientHeadFile`,
+the custom sounds of `CG_LoadClientInfo` and the 19,998-byte limit of
+`CG_ParseAnimationFile`, all in
+[`cg_players.c`](https://github.com/id-Software/Quake-III-Arena/blob/master/code/cgame/cg_players.c).
+Behaviour only; the implementation is original.
+
 The native animation roster, lower-body frame adjustment, legacy gesture
 fallback and reverse/loop timing reference id Software's
 [`bg_public.h`](https://github.com/id-Software/Quake-III-Arena/blob/master/code/game/bg_public.h)
@@ -144,6 +169,19 @@ The assembly linked-skin workflow reuses this reader and matching contract
 through `core/model_assembly_skin.cpp` (integrated 2026-10-06). Source references,
 verified snapshots, history, preview and bake handoffs are original VibeStudio
 integration; no additional upstream code, assets or dependencies were imported.
+
+The `.skin` writer (`writeModelQ3Skin`, 2026-10-22) emits records this reader
+accepts, following the same `tr_image.c` and `tr_model.c` references. Named
+[skin variants](MODEL_SKIN_VARIANTS.md) also write Doom 3 skin declarations
+following `idDeclSkin::Parse` and `RemapShaderBySkin` in id Software's
+[`neo/framework/DeclSkin.cpp`](https://github.com/id-Software/DOOM-3/blob/master/neo/framework/DeclSkin.cpp)
+(GPL-3.0-or-later with id's additional terms, `master` reviewed 2026-10-22):
+materials map to materials, the first match wins, `*` matches every material and
+`model` lines only associate a model. Materials are compared by the canonical
+names `idDeclManagerLocal::MakeNameCanonical` in
+[`neo/framework/DeclManager.cpp`](https://github.com/id-Software/DOOM-3/blob/master/neo/framework/DeclManager.cpp)
+gives them (lower case, `/` for `\`, the last extension removed). Behaviour only;
+no code was copied.
 
 ## Model Collision
 
@@ -311,6 +349,10 @@ dependency was added. Native macOS/Linux execution remains a release gate.
     GPL-3.0 repository. VibeStudio's detach/install sequence uses public Qt APIs;
     its implementation and nesting regression are original. No Qt code or
     documentation prose was copied.
+    Shell page construction also defers application styling until the widget
+    trees are attached, restoring it before item-view polish and layout. The
+    2026-10-21 timing comparison and implementation use those public APIs;
+    no additional Qt code was incorporated.
   - Progress styling was checked against Qt 6.10.1's
     [stylesheet progress delegation](https://github.com/qt/qtbase/blob/v6.10.1/src/widgets/styles/qstylesheetstyle.cpp)
     and [Fusion progress painting](https://github.com/qt/qtbase/blob/v6.10.1/src/widgets/styles/qfusionstyle.cpp),
@@ -594,11 +636,44 @@ and the [default keymap](https://github.com/blender/blender/blob/main/scripts/pr
 - the navigation gizmo;
 - Triangles to Quads pairing defaults (40 degree face and shape limits).
 
+Texel-density matching also references the workflow described in Blender's
+[Average Island Scale manual](https://docs.blender.org/manual/en/3.3/modeling/meshes/uv/editing.html#average-island-scale)
+(3.3 manual, CC-BY-SA-4.0, reviewed 2026-10-21). The density service, original
+area-ratio calculations, Qt review dialog and CLI are independently written;
+no Blender implementation, manual prose or assets are incorporated. The
+existing GPL-compatible application reference and documentation licence were
+reviewed before using this behavioural reference.
+
 Behaviour only; no Blender code, icons or assets are used. The implementation
 in `src/core/model_geometric_topology.*`, `src/core/model_mesh_tools*.*`,
 `src/core/model_mesh_decimate.cpp`, `src/core/model_selection_tools.*`,
 `src/cli/model_tools.*`, `src/app/model_editor_tools.*` and
 `src/app/model_editor_modal.cpp` is VibeStudio's own.
+
+Knife interaction was reviewed on 2026-10-21 against the
+[Blender 5.4 development knife manual](https://docs.blender.org/manual/en/dev/modeling/meshes/editing/mesh/knife_topology_tool.html)
+(manual CC-BY-SA-4.0; application GPL-2.0-or-later): K, path placement,
+confirmation/cancellation, disconnected chains, path undo, midpoint snapping,
+cut-through and angle constraints. `src/core/model_knife*` and
+`src/app/model_editor_knife.cpp` are original implementations; no upstream
+source, prose, icons or assets were incorporated. VibeStudio's S selection
+scope and semantic keyboard crosshair are documented in [Knife](MODEL_KNIFE.md).
+
+Spin's centre/axis/angle/steps and radial duplication workflow references the
+[Blender 4.0 Spin manual](https://docs.blender.org/manual/en/4.0/modeling/meshes/tools/spin.html)
+(CC-BY-SA-4.0; application GPL-2.0-or-later, reviewed for GPL-3.0 compatibility
+on 2026-10-21). `src/core/model_spin.cpp` and the Qt/CLI integration are original
+implementations. No upstream source, prose, icons or assets were incorporated.
+See [Spin](MODEL_SPIN.md) for VibeStudio's closure, pose and skinning semantics.
+
+Rip's vertex/edge separation, side choice and optional gap fill reference the
+[Blender 4.5 Rip Vertices manual](https://docs.blender.org/manual/en/4.5/modeling/meshes/editing/vertex/rip_vertices.html)
+and [Rip Vertices and Fill](https://docs.blender.org/manual/en/4.5/modeling/meshes/editing/vertex/rip_vertices_fill.html)
+(CC-BY-SA-4.0; application GPL-2.0-or-later, reviewed for GPL-3.0 compatibility
+on 2026-10-21). `src/core/model_rip.cpp`, `model_rip_apply.cpp` and the Qt/CLI
+integration are original implementations. No upstream source, prose, icons or
+assets were incorporated. [Rip](MODEL_RIP.md) documents VibeStudio's explicit
+side-face, nonzero movement, all-pose behaviour and whole-operation cancellation.
 
 Decimation implements the quadric error metric published by Michael Garland and
 Paul S. Heckbert, ["Surface Simplification Using Quadric Error Metrics"](https://doi.org/10.1145/258734.258849)
@@ -646,6 +721,21 @@ in `src/core/level_patch.cpp`, `src/core/level_patch_tools.*`,
 `src/core/level_prefab.cpp` (`replaceLevelMapSelectionWithPrefab`),
 `src/app/map_viewport_components.cpp` and `src/app/level_geometry_actions.cpp`
 is VibeStudio's own, and the source comments name the upstream functions.
+
+### Level deletion policy
+
+Level deletion routing was reviewed on 2026-10-21 against NRC
+[`deleteSelection`](https://github.com/Garux/netradiant-custom/blob/449778b3840f8f2062daab15c87cb012f2ac945c/radiant/select.cpp),
+[`CSG_DeleteComponents`](https://github.com/Garux/netradiant-custom/blob/449778b3840f8f2062daab15c87cb012f2ac945c/radiant/csg.cpp)
+and [`vertexModeBuildHull`](https://github.com/Garux/netradiant-custom/blob/449778b3840f8f2062daab15c87cb012f2ac945c/radiant/brush.cpp),
+revision `449778b3840f8f2062daab15c87cb012f2ac945c` (GPL-2.0-or-later), and TB
+[`MapWindow::deleteSelection`](https://github.com/TrenchBroom/TrenchBroom/blob/4c756be1a54a28d921d18c77716a5f170bdc31d0/lib/TbUiLib/src/MapWindow.cpp),
+v2026.2 / `4c756be1a54a28d921d18c77716a5f170bdc31d0` (GPL-3.0-or-later).
+These licences are compatible with VibeStudio's GPL-3.0. No code was copied.
+The original Qt routing and worker integration preserve NRC's empty-component
+object fallback and ignored patch points, and TB's clip-point priority.
+VibeStudio refuses a whole invalid multi-brush edit atomically; NRC's per-brush
+hull builder can retain an invalid brush while changing another one.
 
 ## Materials, Shaders And Textures (2026-10-08)
 
@@ -901,6 +991,42 @@ the audit retains its per-file SHA-256 inventory and built-tool hashes. FTE and
 FTEQCC remain separate external GPL tools, with their licence notices preserved
 in the temporary reference copy. No engine/compiler implementation is copied
 into VibeStudio or linked into its binaries.
+
+## Model Delivery Targets And The Skeletal Writer Oracle (2026-10-22)
+
+The delivery-target table, preflight, Prepare for Target, saved targets and
+detail levels (`src/core/model_targets.*`, `src/core/model_target_prepare.*`,
+`src/core/model_delivery.*`, `src/core/model_lod.*`, the target checks in
+`src/core/model_export.cpp`, `model_mdl_export.cpp` and `model_format_iqm.cpp`,
+`src/cli/model_tools.cpp`, `src/app/model_editor_tools.cpp`,
+`src/app/model_editor_export.cpp`, `src/app/model_editor_targets.cpp`,
+`src/app/model_lod_dialog.*`) and the independent writer oracle
+(`src/tests/model_skeletal_writer_oracle.py`,
+`model_skeletal_writer_oracle_test.cpp`) are original VibeStudio code. The
+sources below supplied facts only: each engine's model count limits, as the
+constants and checks of its loader and renderer state them, and the
+conventions the oracle reimplements to read MD5, IQM and ASE files the way the
+engines do. No engine code is copied; every fixture is built by the tests. See
+[Model Delivery Targets](MODEL_TARGETS.md) and
+[engine acceptance](MODEL_ENGINE_ACCEPTANCE.md#independent-md5-iqm-and-ase-reader).
+
+| Reference | What it informed | Revision | Licence / use |
+|---|---|---|---|
+| [Quake](https://github.com/id-Software/Quake) (`WinQuake/gl_model.h`, `gl_model.c`, `model.c`, `r_local.h`, `d_iface.h`, `gl_draw.c`) | The original MDL limits: `MAXALIASVERTS`, `MAXALIASTRIS`, `MAXALIASFRAMES`, `MAX_SKINS`, `MAX_LBM_HEIGHT`, the skin width multiple and the 640 by 480 texture buffer | master, reviewed 2026-10-22 | GPL-2.0-or-later; limits only |
+| [QuakeSpasm](https://github.com/sezero/quakespasm) (`Quake/gl_model.h`, `Quake/gl_model.c`) | QuakeSpasm's MDL limits | master, reviewed 2026-10-22 | GPL-2.0-or-later; limits only |
+| [FTE QuakeWorld](https://github.com/fte-team/fteqw) (`engine/common/com_mesh.c`, `engine/client/render.h`, `engine/gl/gl_model.h`) | FTE's MDL seam vertices, 16-bit index builds and `MAX_BONES` | master snapshot, reviewed 2026-10-22 | GPL-2.0-or-later; limits only |
+| [DarkPlaces](https://github.com/DarkPlacesEngine/DarkPlaces) (`model_alias.c`) | DarkPlaces' MDL bounds checks | master, reviewed 2026-10-22 | GPL-2.0-or-later; limits only |
+| [Quake II](https://github.com/id-Software/Quake-2) (`qcommon/qfiles.h`, `ref_gl/gl_model.c`, `ref_soft/r_model.c`, `ref_gl/gl_image.c`) and [Yamagi Quake II](https://github.com/yquake2/yquake2) (`src/common/header/files.h`, `src/client/refresh/files/models.c`) | The MD2 limits | master, reviewed 2026-10-22 | GPL-2.0-or-later; limits only |
+| [Q2PRO](https://github.com/q2pro/q2pro), the preserved upstream of the former github.com/skullernet/q2pro (`inc/format/md2.h`, `inc/format/md3.h`, `src/refresh/models.c`, `src/refresh/gl.h`) | Q2PRO's MD2, MD3 and MD5 replacement limits: `MD2_MAX_*`, `MD3_MAX_*`, `MD5_MAX_*`, `TESS_MAX_VERTICES` (raised to 6144 in `0dc71b8`, 2024-07-21) and how `MOD_LoadMD5` finds `md5/` files and skins | `601a8df` (2025-12-11), reviewed 2026-10-22 | GPL-2.0-or-later; limits only |
+| [Quake III Arena](https://github.com/id-Software/Quake-III-Arena) (`code/qcommon/qfiles.h`, `code/renderer/tr_model.c`, `code/renderer/tr_surface.c`) | `SHADER_MAX_VERTEXES`, `SHADER_MAX_INDEXES` and `MD3_MAX_LODS`; the working limit set by `RB_CheckOverflow`; the detail-level names | master, reviewed 2026-10-22 | GPL-2.0-or-later; limits only |
+| [ioquake3](https://github.com/ioquake/ioq3) (`code/renderergl1/tr_model.c`, `tr_model_iqm.c`, `code/renderercommon/iqm.h`) and [Quake3e](https://github.com/ec-/Quake3e) (`code/renderer/tr_model.c`, `tr_model_iqm.c`, `iqm.h`) | MD3 and IQM load limits, `IQM_MAX_JOINTS` | main and master, reviewed 2026-10-22 | GPL-2.0-or-later; limits only |
+| [Quake III Arena](https://github.com/id-Software/Quake-III-Arena) (`code/renderer/tr_mesh.c` `R_ComputeLOD`, `ProjectRadius` and `R_AddMD3Surfaces`, `tr_main.c` `R_SetupProjection`, `tr_model.c` `R_RegisterModel` and `R_LerpTag`, `code/cgame/cg_view.c` `CG_CalcFov`) | The detail-level switch distances, the frame check against the base model, the empty slot a missing level leaves, and that tags come from the base model | master, reviewed 2026-10-22 | GPL-2.0-or-later; behaviour only |
+| [Return to Castle Wolfenstein single player](https://github.com/id-Software/RTCW-SP) and [multiplayer](https://github.com/id-Software/RTCW-MP) (`src/qcommon/qfiles.h`, `src/renderer/tr_model.c`, `src/renderer/tr_surface.c`) | `SHADER_MAX_VERTEXES`, `SHADER_MAX_INDEXES` and `MD3_MAX_LODS` of each game, the `RB_CheckOverflow` working limits, and MDC loading before MD3 for the base model and every detail level | master, reviewed 2026-10-22 | GPL-3.0-or-later with id's additional terms; limits only |
+| [Wolfenstein: Enemy Territory](https://github.com/id-Software/Enemy-Territory) (`src/qcommon/qfiles.h`, `src/renderer/tr_init.c`, `src/renderer/tr_model.c`, `src/renderer/tr_surface.c`) | Enemy Territory's 1,025-vertex batches, three detail levels and MDC loading before MD3 for the base model and every detail level | master, reviewed 2026-10-22 | GPL-3.0-or-later with id's additional terms; limits only |
+| [GZDoom](https://github.com/ZDoom/gzdoom) (`src/common/models/models_md3.cpp`, `models_iqm.cpp`, `model.h`, `src/r_data/models.cpp`) | That GZDoom sets no MD3 count limits, MODELDEF's 32-surface `SurfaceSkin` range, and IQM's one-byte blend indexes and weights | master `c26ce2e` (2026-08-10), reviewed 2026-10-22 | GPL-3.0-or-later; limits only |
+| [Inter-Quake Model](https://github.com/lsalzman/iqm) by Lee Salzman (`iqm.txt`, `iqm.h`, the reference demo) | The oracle's IQM reader: header, arrays, joints, poses, channels, `Matrix3x3(rotation, scale)` and frame concatenation | master, reviewed 2026-10-22 | MIT; specification only |
+| [Doom 3 GPL source](https://github.com/id-Software/DOOM-3) (`neo/renderer/Model_md5.cpp`, `Model_ase.cpp`, `tr_trisurf.cpp`, `neo/idlib/math/Quat.h`, `Quat.cpp`, `JointTransform.h`, `neo/game/anim/Anim.cpp`, `neo/framework/FileSystem.cpp`, `DeclManager.cpp`) | The oracle's MD5 and ASE readers: `CalcW`, `ToMat3`, weight offsets, joint concatenation, face planes and material naming; Doom 3's absence of MD5 count limits | GPL release, reviewed 2026-10-22 | GPL-3.0 with id's additional terms; conventions only |
+| q3map2 in [q3mapx](https://github.com/themuffinator/q3mapx) (`tools/quake3/q3map2/model.cpp`, `AssModelMesh`) | The oracle's q3map2 ASE shader-name rule | `8975244`, reviewed 2026-10-22 | GPL-2.0-or-later; behaviour only |
 
 ## Imported Compiler Toolchains
 
@@ -1433,7 +1559,7 @@ copied; the references below supplied patterns and behavioural facts.
 | [Blender's sidebar and panels](https://docs.blender.org/manual/en/latest/interface/window_system/regions.html#sidebar) | Tabs down a side region, collapsible panels, folding to the tab column, and the Item panel's numeric transform | Current manual | GPL software, CC-BY-SA-4.0 manual; pattern only |
 | [NetRadiant Custom](https://github.com/Garux/netradiant-custom) [`radiant/select.cpp`](https://github.com/Garux/netradiant-custom/blob/68ecbed64b7be78741878c730279b5471d978c7c/radiant/select.cpp) and [`radiant/brushmanip.cpp`](https://github.com/Garux/netradiant-custom/blob/68ecbed64b7be78741878c730279b5471d978c7c/radiant/brushmanip.cpp) | Select Inside and Select Touching; Make Detail and Make Structural; the Prism, Cone and Sphere commands that replace the selected brush with a shape filling its bounds | `68ecbed64b7be78741878c730279b5471d978c7c`, the revision of VibeStudio's former q3map2 submodule, read 2026-10-08 | GPL-2.0-or-later; behaviour only |
 | [id Software's Q3Radiant `SELECT.CPP`](https://github.com/id-Software/Quake-III-Arena/blob/dbe4ddb10315479fc00086f08e25d968b4b43c49/q3radiant/SELECT.CPP) | Select Complete Tall and Select Partial Tall, looking along the view's depth | `dbe4ddb10315479fc00086f08e25d968b4b43c49`, read 2026-10-08 | GPL-2.0-or-later; behaviour only |
-| [TrenchBroom](https://trenchbroom.github.io/) | CSG Intersect; the shear tool; linked groups, copies that take on each other's edits while each keeps its place; one inspector of Map, Entity and Face tabs; bundled definitions standing in when a game has none | The release credited under Editor Workflow Inspirations (`90de03c`) | GPL-3.0; behaviour only, no code or `_tb_` keys |
+| [TrenchBroom](https://trenchbroom.github.io/) | CSG Intersect; the shear tool; linked groups, groups that take on each other's edits while each keeps its place and frame (see [Linked group frames, nesting and commands](#linked-group-frames-nesting-and-commands)); one inspector of Map, Entity and Face tabs; bundled definitions standing in when a game has none; the `_tb_` map keys of its layers, groups and linked groups (see [TrenchBroom map keys](#trenchbroom-map-keys)) | The release credited under Editor Workflow Inspirations (`90de03c`); linked groups at `4c756be1`; map keys from the 2026.2 manual, read 2026-10-23 | GPL-3.0; behaviour and the documented map format only, no code |
 | Hammer and [J.A.C.K.](https://valvedev.info/tools/jack/jack_manual.pdf) | Tie to Entity and Move to World; the object bar's block, wedge, cylinder, spike, sphere, arch and torus fitted to a drawn box; the Properties, Face Edit and Primitives names | J.A.C.K. manual 1.1 (November 2016), credited above | Proprietary software and documentation; behaviour only |
 | [Sledge](https://github.com/LogicAndTrick/sledge/tree/8762a6de07a9fa486d51aff0913cdc0306fd775c) | Arch and pipe shapes with segment, wall and sweep settings | `8762a6de07a9fa486d51aff0913cdc0306fd775c` | BSD-3-Clause; behaviour only |
 | [Ultimate Doom Builder](https://github.com/UltimateDoomBuilder/UltimateDoomBuilder) | Rectangle and ellipse sector drawing, offered as the Shapes tab's sector shapes; visual mode's texture auto-align along joined walls; Make Sectors mode | `6d9f6038db30adfee0edd74221b74b2de4837f6f` | GPL-3.0; behaviour only |
@@ -1791,3 +1917,1181 @@ worker snapshots, live preview/frozen picking and CLI replay are original
 VibeStudio work. No upstream code was copied.
 Patch-source copying/wrapping, NetRadiant's additional
 paste aliases, work-zone depth and light-color sampling remain adaptations or gaps.
+
+## Brush topology authoring
+
+Explicit brush corner insertion/removal, edge/face splitting, plane extrusion and shared plan/camera
+component selection and movement follow behavioural facts from
+[TrenchBroom's vertex editing manual](https://trenchbroom.github.io/manual/latest/#vertex_editing)
+and [extrusion manual](https://trenchbroom.github.io/manual/latest/#extrusion),
+version 2026.2, reviewed 2026-10-18. The editor's
+[GPL-3.0 licence](https://github.com/TrenchBroom/TrenchBroom/blob/v2026.2/LICENSE.txt)
+is compatible with VibeStudio's GPL-3.0-or-later licence. No upstream source,
+manual text or artwork is copied. The convex-hull implementation, face
+inheritance, plane/split extrusion, normal drag mathematics, validation, GUI,
+CLI and tests in `src/core/level_brush.*`, `src/core/level_brush_extrusion.cpp`,
+`src/core/model_transform.*` and
+`src/app/brush_editor_dialog.*`, `src/app/model_viewport_components.cpp` and
+`src/app/level_camera_component_actions.cpp` are original VibeStudio code.
+The bounded draft worker, source guards and shared plan/camera selection are
+VibeStudio implementations, not copied upstream code or manual text.
+
+## Shared clipper
+
+Two/three-point interaction, moving/removing points, camera face placement
+and exact face-plane matching follow behavioural facts from the
+[TrenchBroom clipping manual](https://trenchbroom.github.io/manual/latest/#clipping),
+version 2026.2, reviewed 2026-10-18. The project uses
+[GPL-3.0](https://github.com/TrenchBroom/TrenchBroom/blob/v2026.2/LICENSE.txt).
+Clip, split, flip, quick entry, caulk/custom material policy, independent reset
+controls, two-point plan cycling and double-click preferences also follow
+[NetRadiant Custom's clippertool.cpp](https://github.com/Garux/netradiant-custom/blob/449778b3840f8f2062daab15c87cb012f2ac945c/radiant/clippertool.cpp),
+revision `449778b3840f8f2062daab15c87cb012f2ac945c`, GPL-2.0-or-later
+(William Joseph / GtkRadiant notices). Both licences are compatible with
+VibeStudio's GPL-3.0-or-later licence. These references were reviewed before
+implementation; no upstream source or manual text was copied. The follow-up
+review on 2026-10-19 covered
+[selection_mtor_clip.h](https://github.com/Garux/netradiant-custom/blob/449778b3840f8f2062daab15c87cb012f2ac945c/radiant/selection_mtor_clip.h),
+[selection_mtor_clip.cpp](https://github.com/Garux/netradiant-custom/blob/449778b3840f8f2062daab15c87cb012f2ac945c/radiant/selection_mtor_clip.cpp),
+[csg.cpp](https://github.com/Garux/netradiant-custom/blob/449778b3840f8f2062daab15c87cb012f2ac945c/radiant/csg.cpp) and
+[filterbar.cpp](https://github.com/Garux/netradiant-custom/blob/449778b3840f8f2062daab15c87cb012f2ac945c/radiant/filterbar.cpp)
+at the same revision and compatible licence. VibeStudio retains its previous
+defaults and uses explicit game-specific material names rather than assuming
+that every game ships the same caulk resource.
+`level_clip_state.h`, `map_viewport_clip.cpp`, `model_viewport_clip.cpp`,
+`level_clip_actions.cpp`, `level_clipper_preferences.cpp`, `core/level_clipper.*`,
+atomic core clipping and the generated fixture tests
+are original VibeStudio implementations.
+
+One-point and no-change-plane wrapping follows `CSG_WrapMerge` and
+`Scene_BrushSplitByPlane` in the credited `radiant/csg.cpp` at the same revision,
+reviewed 2026-10-19. The compatible GPL-2.0-or-later source was checked before
+implementation. VibeStudio uses its own bounded convex-hull implementation;
+no upstream hull code or QuickHull dependency was imported. The shared map
+service, original format/undo/scene fixtures and `level_clip_wrap_smoke_test.cpp`
+implement and test these behavioural facts independently.
+
+Standalone Ctrl+U and component-only wrapping also follow `CSG_WrapMerge`,
+`Scene_gatherSelectedComponents` and `ultimate_group_path` in that same
+`radiant/csg.cpp`, reviewed 2026-10-19 before implementation under its compatible
+GPL-2.0-or-later licence. These define source retention, brush and patch component
+inputs, the current material on every component-hull face and the last-selected
+destination. `core/level_wrap.*`, the hull insertion options, `app/level_wrap_*`,
+the CLI command and component wrap fixtures are independent VibeStudio code.
+
+NRC's two-point camera plane follows `viewdir_set`, `viewdir_fixup` and
+`viewdir_make_cut_worthy` in the same `selection_mtor_clip.cpp`, with camera
+direction conventions checked against
+[`radiant/view.h`](https://github.com/Garux/netradiant-custom/blob/449778b3840f8f2062daab15c87cb012f2ac945c/radiant/view.h)
+and axial ties against
+[`libs/math/vector.h`](https://github.com/Garux/netradiant-custom/blob/449778b3840f8f2062daab15c87cb012f2ac945c/libs/math/vector.h).
+These GPL-2.0-or-later sources at the pinned revision were reviewed on 2026-10-19
+before the independent `core/level_clip_camera.*` implementation. The licence
+is compatible with GPL-3.0-or-later; no upstream implementation was copied.
+GUI/profile/CLI integration and camera-plane fixture tests are original code.
+
+Modified camera-point movement follows `ClipManipulatorImpl::Transform` in
+that clipper and `TranslateFreeXY_Z` in
+[`radiant/selection_mtable_translate.h`](https://github.com/Garux/netradiant-custom/blob/449778b3840f8f2062daab15c87cb012f2ac945c/radiant/selection_mtable_translate.h),
+including its fixed press anchors, XY/Z and axial-view movement, Shift axis
+constraint and relative grid. Nearest-even ties follow `float_snapped` in the
+same pinned `libs/math/vector.h`. These William Joseph GPL-2.0-or-later sources
+were reviewed on 2026-10-19 before the compatible, independent
+`core/level_clip_drag.*` implementation. No upstream source was copied.
+Viewport lifecycle, typed preferences, CLI settings and tests are original;
+broader scene-point snapping remains a documented integration gap.
+
+The original compiler acceptance harness reads IBSP v46 shader, brush-side,
+plane and draw-surface records using the layouts in
+[qfiles.h](https://github.com/Garux/netradiant-custom/blob/449778b3840f8f2062daab15c87cb012f2ac945c/tools/mbspc/qcommon/qfiles.h)
+and the `SURF_NODRAW` value in
+[surfaceflags.h](https://github.com/Garux/netradiant-custom/blob/449778b3840f8f2062daab15c87cb012f2ac945c/tools/mbspc/qcommon/surfaceflags.h),
+GPL-2.0-or-later, id Software copyright, at the same revision (reviewed
+2026-10-19; compatible with GPL-3.0-or-later). No upstream code or game assets
+are copied into the tests.
+
+## Linked object correspondence
+
+The correspondence required by linked-instance operations was reviewed against
+TrenchBroom 2026.2's
+[`Map_Groups.cpp`](https://github.com/TrenchBroom/TrenchBroom/blob/4c756be1a54a28d921d18c77716a5f170bdc31d0/lib/TbMdlLib/src/Map_Groups.cpp),
+revision `4c756be1a54a28d921d18c77716a5f170bdc31d0`, on 2026-10-19.
+TrenchBroom's [GPL-3.0-or-later licence](https://github.com/TrenchBroom/TrenchBroom/blob/v2026.2/LICENSE.txt)
+is compatible with VibeStudio's licence. The VibeStudio implementation in
+`level_linked_objects.cpp`, its scene version 4 codec and transfer/history
+integration are original code. No upstream code or metadata format was copied.
+This establishes object correspondence; it does not claim extraction parity.
+
+## Protected entity properties
+
+Instance protection, protected absence, restoration from unprotected counterparts
+and preservation after linked transforms were reviewed against TrenchBroom
+2026.2's
+[`Map_Entities.cpp`](https://github.com/TrenchBroom/TrenchBroom/blob/4c756be1a54a28d921d18c77716a5f170bdc31d0/lib/TbMdlLib/src/Map_Entities.cpp),
+[`LinkedGroupUtils.cpp`](https://github.com/TrenchBroom/TrenchBroom/blob/4c756be1a54a28d921d18c77716a5f170bdc31d0/lib/TbMdlLib/src/LinkedGroupUtils.cpp)
+and the protection column in
+[`EntityPropertyModel.cpp`](https://github.com/TrenchBroom/TrenchBroom/blob/4c756be1a54a28d921d18c77716a5f170bdc31d0/lib/TbUiLib/src/EntityPropertyModel.cpp),
+revision `4c756be1a54a28d921d18c77716a5f170bdc31d0`, on 2026-10-19.
+The [GPL-3.0-or-later licence](https://github.com/TrenchBroom/TrenchBroom/blob/v2026.2/LICENSE.txt)
+is compatible with VibeStudio's GPL-3.0-or-later licence. The shared protection
+service, native scene version 5, Qt inspector/dialog, CLI and tests are original
+VibeStudio implementations. No upstream source or metadata format was copied.
+VibeStudio retains its existing case-insensitive entity-key matching. Full
+workflow, platform and assistive-technology parity remains unverified.
+
+## Clipboard placement
+
+Cursor/plane placement and profile dispatch were reviewed on 2026-10-20 against
+TrenchBroom v2026.2 at `4c756be1a54a28d921d18c77716a5f170bdc31d0`:
+[`Grid.cpp`](https://github.com/TrenchBroom/TrenchBroom/blob/4c756be1a54a28d921d18c77716a5f170bdc31d0/lib/TbMdlLib/src/Grid.cpp),
+[`Grid.h`](https://github.com/TrenchBroom/TrenchBroom/blob/4c756be1a54a28d921d18c77716a5f170bdc31d0/lib/TbMdlLib/include/mdl/Grid.h),
+[`MapView2D.cpp`](https://github.com/TrenchBroom/TrenchBroom/blob/4c756be1a54a28d921d18c77716a5f170bdc31d0/lib/TbUiLib/src/MapView2D.cpp),
+[`MapView3D.cpp`](https://github.com/TrenchBroom/TrenchBroom/blob/4c756be1a54a28d921d18c77716a5f170bdc31d0/lib/TbUiLib/src/MapView3D.cpp)
+and [`MapWindow.cpp`](https://github.com/TrenchBroom/TrenchBroom/blob/4c756be1a54a28d921d18c77716a5f170bdc31d0/lib/TbUiLib/src/MapWindow.cpp).
+The corner-selection and directional snapping algorithm is adapted from Grid;
+its Kristian Duske copyright and GPL notice are preserved beside the adaptation.
+TB uses [GPL-3.0-or-later](https://github.com/TrenchBroom/TrenchBroom/blob/4c756be1a54a28d921d18c77716a5f170bdc31d0/LICENSE.txt).
+
+NRC's centre-to-camera translation and Shift+V binding were reviewed against
+[`select.cpp`](https://github.com/Garux/netradiant-custom/blob/449778b3840f8f2062daab15c87cb012f2ac945c/radiant/select.cpp)
+at `449778b3840f8f2062daab15c87cb012f2ac945c`, under GPL-2.0-or-later
+(id Software and contributors, 1999–2006). Both licences are compatible with
+VibeStudio's GPL-3.0-or-later licence. The bounded parser, value-only requests,
+Qt worker/actions, ray clipping, CLI and generated fixtures are VibeStudio code.
+No game assets are included. See [Clipboard placement](LEVEL_PASTE.md) for
+behavioural differences and unverified acceptance gates.
+
+## Repeatable object commands
+
+The record/replay sequence, selection boundary, clear and history behaviour was
+reviewed against TrenchBroom v2026.2 at revision
+`4c756be1a54a28d921d18c77716a5f170bdc31d0` on 2026-10-19:
+[`RepeatStack.cpp`](https://github.com/TrenchBroom/TrenchBroom/blob/4c756be1a54a28d921d18c77716a5f170bdc31d0/lib/TbMdlLib/src/RepeatStack.cpp),
+[`Map_Geometry.cpp`](https://github.com/TrenchBroom/TrenchBroom/blob/4c756be1a54a28d921d18c77716a5f170bdc31d0/lib/TbMdlLib/src/Map_Geometry.cpp),
+[`Map_Nodes.cpp`](https://github.com/TrenchBroom/TrenchBroom/blob/4c756be1a54a28d921d18c77716a5f170bdc31d0/lib/TbMdlLib/src/Map_Nodes.cpp)
+and the repeat bindings in
+[`ActionManager.cpp`](https://github.com/TrenchBroom/TrenchBroom/blob/4c756be1a54a28d921d18c77716a5f170bdc31d0/lib/TbUiLib/src/ActionManager.cpp).
+The source credits Kristian Duske (2020/2025) under
+[GPL-3.0-or-later](https://github.com/TrenchBroom/TrenchBroom/blob/4c756be1a54a28d921d18c77716a5f170bdc31d0/LICENSE.txt),
+compatible with this repository's GPL-3.0-or-later licence. The value-based core,
+atomic worker/undo integration, JSON recipe, CLI and generated test fixtures are
+original implementations. No upstream code or assets were copied. VibeStudio's
+single-undo replay and bounded coverage differ from full TrenchBroom parity;
+see [Repeat object commands](LEVEL_REPEAT.md).
+
+## Linked group extraction
+
+The partial-selection extraction workflow was reviewed against TrenchBroom
+2026.2's
+[`Map_Groups.cpp::extractLinkedGroups`](https://github.com/TrenchBroom/TrenchBroom/blob/4c756be1a54a28d921d18c77716a5f170bdc31d0/lib/TbMdlLib/src/Map_Groups.cpp),
+revision `4c756be1a54a28d921d18c77716a5f170bdc31d0`, on 2026-10-19.
+The source credits Kristian Duske (2025) under
+[GPL-3.0-or-later](https://github.com/TrenchBroom/TrenchBroom/blob/4c756be1a54a28d921d18c77716a5f170bdc31d0/LICENSE.txt),
+compatible with VibeStudio's GPL-3.0-or-later licence. The reference covers
+duplicating each instance independently, partitioning two linked families,
+preserving local properties and splitting partially selected brush entities.
+`src/core/level_linked_extraction.*`, the cancellable Qt/CLI integration,
+context-aware undo and generated compiler fixtures are original implementations.
+No upstream code, UI assets or game content was copied. This bounded workflow
+does not establish full TrenchBroom parity.
+
+## Linked group frames, nesting and commands
+
+Linked groups' terminology, command names and update rules were reviewed on
+2026-10-23 against TrenchBroom 2026.2, revision
+`4c756be1a54a28d921d18c77716a5f170bdc31d0`: the
+[manual's Linked Groups chapter](https://github.com/TrenchBroom/TrenchBroom/blob/4c756be1a54a28d921d18c77716a5f170bdc31d0/app/TrenchBroom/resources/documentation/manual/index.md)
+(linked duplicates, nesting, separating, extracting, visualisation);
+[`ActionManager.cpp`](https://github.com/TrenchBroom/TrenchBroom/blob/4c756be1a54a28d921d18c77716a5f170bdc31d0/lib/TbUiLib/src/ActionManager.cpp) (the Groups menu:
+Create Linked Duplicate on Ctrl+Shift+D, Select Linked Groups, Separate Linked
+Groups, Extract Linked Groups, Clear Protected Properties);
+[`Map_Groups.cpp`](https://github.com/TrenchBroom/TrenchBroom/blob/4c756be1a54a28d921d18c77716a5f170bdc31d0/lib/TbMdlLib/src/Map_Groups.cpp) (creating a linked
+duplicate and separating selected members, which stay linked with each other);
+[`LinkedGroupUtils.cpp`](https://github.com/TrenchBroom/TrenchBroom/blob/4c756be1a54a28d921d18c77716a5f170bdc31d0/lib/TbMdlLib/src/LinkedGroupUtils.cpp) (updating a
+member by its transformation after the inverse of the source's, keeping nested
+names and protected properties); and
+[`UpdateLinkedGroupsHelper.cpp`](https://github.com/TrenchBroom/TrenchBroom/blob/4c756be1a54a28d921d18c77716a5f170bdc31d0/lib/TbMdlLib/src/UpdateLinkedGroupsHelper.cpp)
+(ordering nested updates and refusing two changed members of one link set).
+The sources credit Kristian Duske under
+[GPL-3.0-or-later](https://github.com/TrenchBroom/TrenchBroom/blob/4c756be1a54a28d921d18c77716a5f170bdc31d0/LICENSE.txt), compatible with VibeStudio's
+GPL-3.0-or-later licence. Behaviour and names only: `level_linked_groups.*`
+(affine frames detected from each transform's recorded map, outermost-first
+nested propagation, identity-based agreement checks and out-of-sync marks, where
+TrenchBroom refuses the edit), the scene version 6 codec, the 2D-view boxes and
+arrows, the Qt commands and the CLI are original VibeStudio work. No upstream
+code was copied. TrenchBroom's `_tb_` map keys are read and written from its
+documented format; see [TrenchBroom map keys](#trenchbroom-map-keys).
+
+## TrenchBroom map keys
+
+`src/core/level_scene_trenchbroom.*` reads and writes the keys TrenchBroom keeps
+its layers, groups and linked groups in, so a map keeps them between the two
+editors: `func_group` entities with `_tb_type` (`_tb_layer` or `_tb_group`),
+`_tb_id`, `_tb_name`, `_tb_layer_sort_index`, `_tb_layer_hidden`,
+`_tb_layer_locked`, `_tb_linked_group_id` and `_tb_transformation` (a 4x4 matrix
+row by row), and `_tb_group`, `_tb_layer` and `_tb_protected_properties` on
+member entities. The format comes from the
+[TrenchBroom manual](https://trenchbroom.github.io/manual/latest/#linked_groups_map_file)
+("Linked Groups in the Map File"), TrenchBroom 2026.2, read 2026-10-23, and from
+the layout of maps TrenchBroom writes. TrenchBroom is
+[GPL-3.0-or-later](https://github.com/TrenchBroom/TrenchBroom/blob/v2026.2/LICENSE.txt),
+compatible with VibeStudio's GPL-3.0-or-later licence. The implementation is
+independent: no TrenchBroom code was used. Taking the entities out of the text
+and writing them back, matching corresponding objects by their place in each
+group, the stable ids, the out-of-sync check, scene note version 7 and its
+precedence, the Save As type, the CLI option and the tests are original
+VibeStudio work.
+
+## Group editing context
+
+Closed-group unit selection, nested open/close editing, creation inside an open
+group and double-click navigation follow the behaviour documented in the
+[TrenchBroom groups manual](https://trenchbroom.github.io/manual/latest/#groups),
+version 2026.2, reviewed 2026-10-18. TrenchBroom uses
+[GPL-3.0](https://github.com/TrenchBroom/TrenchBroom/blob/v2026.2/LICENSE.txt),
+compatible with VibeStudio's GPL-3.0-or-later licence. No upstream implementation
+was copied. `src/core/level_scene_context.cpp`, shared transaction isolation,
+linked-propagation scoping, GUI/CLI integration and tests are original VibeStudio
+work. Complete-group duplication, portable group hierarchies, fresh linked-family
+identities on clipboard/prefab transfer and linked ordinary duplicates also use
+this behavioural reference (2026.2, reviewed 2026-10-18).
+`src/core/level_scene_transfer.cpp`, map clipboard integration and prefab transfer
+are original implementations. Linked frames and nesting, and protected
+properties, are credited above.
+
+## Component transforms and UV lock
+
+Picked vertex/edge/face rotation, scaling and shear, and a separate UV-lock
+policy for component editing, follow the
+[TrenchBroom 2026.2 vertex editing manual](https://trenchbroom.github.io/manual/latest/#vertex_editing),
+reviewed 2026-10-19. TrenchBroom is
+[GPL-3.0](https://github.com/TrenchBroom/TrenchBroom/blob/v2026.2/LICENSE.txt).
+Pivoted affine transform behaviour also uses
+[NetRadiant Custom's selection.cpp](https://github.com/Garux/netradiant-custom/blob/449778b3840f8f2062daab15c87cb012f2ac945c/radiant/selection.cpp)
+as a reference, revision `449778b3840f8f2062daab15c87cb012f2ac945c`, reviewed
+2026-10-19. Its GPL-2.0-or-later licence and William Joseph 2001–2006 notices
+were checked before implementation. Both licences are compatible with
+VibeStudio's GPL-3.0-or-later licence. No source or manual text was copied.
+`level_component_transform.cpp`, the corner-correspondence UV fitter in
+`level_brush.cpp`, atomic batch publication, Qt controls, CLI and fixture tests
+are original implementations. The shared direct rotate/scale/shear and pivot
+controls in `src/app/level_component_gizmo.*` and its view/shell adapters reuse
+VibeStudio's existing modeller drag mathematics. Their axis, pivot and
+component behaviours reference the same upstream sources and licences above;
+no upstream implementation was copied. Full native profile parity remains
+separate work.
+
+The fitted UV lock (**Fit UVs When Lock Fails**, `--uv-lock fit`) follows the
+behaviour of NetRadiant Custom's texture vertex lock: `TogTexVertexLock` in
+[`radiant/brushmanip.cpp`](https://github.com/Garux/netradiant-custom/blob/449778b3840f8f2062daab15c87cb012f2ac945c/radiant/brushmanip.cpp)
+and the `Texdef_from_ST` fit in `Brush::vertexModeBuildHull`,
+[`radiant/brush.cpp`](https://github.com/Garux/netradiant-custom/blob/449778b3840f8f2062daab15c87cb012f2ac945c/radiant/brush.cpp),
+which keep three corners' texture coordinates and let the others drift, and of
+TrenchBroom's UV Lock action (U) in
+[`ActionManager.cpp`](https://github.com/TrenchBroom/TrenchBroom/blob/4c756be1a54a28d921d18c77716a5f170bdc31d0/lib/TbUiLib/src/ActionManager.cpp),
+v2026.2, which never refuses a vertex edit. NetRadiant Custom revision
+`449778b3840f8f2062daab15c87cb012f2ac945c` (GPL-2.0-or-later) and TrenchBroom
+`4c756be1` (GPL-3.0-or-later) were reviewed on 2026-10-22. The choice of the
+three corners (unmoved corners first), the least-squares nearest classic
+mapping in `nearestClassicLevelTextureProjection()` and the tests are original
+VibeStudio implementations; no upstream source was copied.
+
+**Round Selection to Grid** (`src/core/level_grid_round.*`,
+`src/app/level_grid_round_actions.cpp`, `src/cli/level_grid_round.*`) follows
+the behaviour of NetRadiant Custom's Snap To Grid: `Selection_SnapToGrid`,
+`Scene_SnapToGrid_Selected` and `Scene_SnapToGrid_Component_Selected` in
+[`radiant/select.cpp`](https://github.com/Garux/netradiant-custom/blob/449778b3840f8f2062daab15c87cb012f2ac945c/radiant/select.cpp)
+at `449778b3840f8f2062daab15c87cb012f2ac945c` (GPL-2.0-or-later, reviewed
+2026-10-22), which rounds brush vertices, patch control points and entity
+origins one by one, or only the picked components, on Ctrl+G. The
+implementation over VibeStudio's component transform service, its skip policy
+for collapsing brushes and hidden objects, the CLI and the tests are original.
+
+Shared component clumping and TrenchBroom's plain-toggle/Ctrl-add lasso policy
+also follow the vertex, edge and face tool behaviour in the same 2026.2 manual,
+reviewed 2026-10-19 under GPL-3.0. `src/core/level_component_selection.*` and
+the viewport adapters are original code. The camera compares full component
+geometry rather than handle centres; additive/subtractive alternatives and
+command routing are VibeStudio adaptations. Native input parity is unverified.
+
+Complete/touching mode conversion, topology Grow/Shrink/Connected queries and
+patch-grid boundary erosion in `src/core/level_component_selection_topology.cpp`
+are original VibeStudio extensions of that shared selection workflow. They
+contain no imported implementation and do not claim an upstream-specific
+gesture or shortcut match.
+
+Component depth cycling extends the drill-selection workflow described in the
+[TrenchBroom 2026.2 selection manual](https://trenchbroom.github.io/manual/latest/#selection),
+reviewed 2026-10-19 under the GPL-3.0 licence linked above. The shared grouping,
+ordering, wheel accumulation, Qt view adapters and keyboard commands are original
+VibeStudio implementations. Applying this workflow to component handles and the
+Alt+wheel default are VibeStudio choices, not claims of native TrenchBroom or
+NetRadiant Custom component bindings. No upstream code or manual text is copied.
+
+### Direct vertex insertion
+
+Grid-point insertion on edges/faces, coincident component grouping and the Shift
+entry gesture were reviewed in
+[VertexTool.cpp](https://github.com/TrenchBroom/TrenchBroom/blob/v2026.2/lib/TbUiLib/src/VertexTool.cpp)
+and
+[VertexToolController.cpp](https://github.com/TrenchBroom/TrenchBroom/blob/v2026.2/lib/TbUiLib/src/VertexToolController.cpp),
+TrenchBroom tag `v2026.2`, on 2026-10-19. These files carry Kristian Duske's
+copyright and GPL-3.0-or-later notices; the
+[licence](https://github.com/TrenchBroom/TrenchBroom/blob/v2026.2/LICENSE.txt)
+was reviewed before implementation and is compatible with VibeStudio's
+GPL-3.0-or-later licence. The picking, controller, asynchronous transaction and
+fixture code here are original; no upstream source or manual prose was copied.
+VibeStudio's explicit tool, optional view-plane movement, strict retained-corner policy
+and atomic asynchronous release are its own choices; full native gesture
+parity is not claimed.
+
+### Component drag constraints
+
+World-axis component movement and live constraint/snap behaviour were reviewed
+against TrenchBroom tag `v2026.2` on 2026-10-19:
+[MoveHandleDragTracker.h](https://github.com/TrenchBroom/TrenchBroom/blob/v2026.2/lib/TbUiLib/include/ui/MoveHandleDragTracker.h),
+[HandleDragTracker.h](https://github.com/TrenchBroom/TrenchBroom/blob/v2026.2/lib/TbUiLib/include/ui/HandleDragTracker.h),
+[HandleDragTracker.cpp](https://github.com/TrenchBroom/TrenchBroom/blob/v2026.2/lib/TbUiLib/src/HandleDragTracker.cpp),
+[NodeHandleToolBase.h](https://github.com/TrenchBroom/TrenchBroom/blob/v2026.2/lib/TbUiLib/include/ui/NodeHandleToolBase.h)
+and [NodeHandleToolControllerParts.h](https://github.com/TrenchBroom/TrenchBroom/blob/v2026.2/lib/TbUiLib/include/ui/NodeHandleToolControllerParts.h).
+These sources carry Kristian Duske's copyright and GPL-3.0-or-later notices,
+compatible with VibeStudio's GPL-3.0-or-later licence. Licence review preceded
+implementation. The controller, integration and regression fixtures are
+original implementations of behavioural facts; no upstream code or prose is
+copied. VibeStudio retains asynchronous validation and its existing numeric and
+explicit-axis tools. Remaining differences are recorded in the
+[behaviour audit](plans/level-editor-production.md#component-drag-behaviour-audit).
+
+Exact vertex quick snapping additionally references
+[VertexToolController.cpp](https://github.com/TrenchBroom/TrenchBroom/blob/v2026.2/lib/TbUiLib/src/VertexToolController.cpp)
+and [VertexTool.cpp](https://github.com/TrenchBroom/TrenchBroom/blob/v2026.2/lib/TbUiLib/src/VertexTool.cpp)
+at the same tag, under GPL-3.0-or-later, reviewed 2026-10-19. The single geometric
+vertex, Alt+Shift click and exact target displacement are behavioural
+references. The movement trace's successive labelled axis segments reference
+`MoveHandleDragTracker.h` above. VibeStudio's core/CLI preparation, target
+dialogue, profile migration and palette-aware trace layout are original code;
+no upstream implementation or prose was copied.
+
+### Level editor command catalogue
+
+The source-discovery catalogue in `docs/plans/level-editor-commands.json` and its
+generated report record command identifiers and locations from:
+
+- [TrenchBroom's ActionManager.cpp](https://github.com/TrenchBroom/TrenchBroom/blob/4c756be1a54a28d921d18c77716a5f170bdc31d0/lib/TbUiLib/src/ActionManager.cpp),
+  tag `v2026.2`, revision `4c756be1a54a28d921d18c77716a5f170bdc31d0`.
+  Kristian Duske's source carries GPL-3.0-or-later notices; the
+  [licence](https://github.com/TrenchBroom/TrenchBroom/blob/4c756be1a54a28d921d18c77716a5f170bdc31d0/LICENSE.txt)
+  is compatible with VibeStudio's GPL-3.0-or-later licence.
+- [NetRadiant Custom's core registrations](https://github.com/Garux/netradiant-custom/tree/449778b3840f8f2062daab15c87cb012f2ac945c/radiant),
+  including [filters](https://github.com/Garux/netradiant-custom/blob/449778b3840f8f2062daab15c87cb012f2ac945c/radiant/filters.cpp)
+  and the [plugin registration bridge](https://github.com/Garux/netradiant-custom/blob/449778b3840f8f2062daab15c87cb012f2ac945c/radiant/pluginmanager.cpp),
+  revision `449778b3840f8f2062daab15c87cb012f2ac945c`. These files carry
+  GPL-2.0-or-later notices, compatible with VibeStudio's licence.
+- The same NRC revision's [plugin](https://github.com/Garux/netradiant-custom/tree/449778b3840f8f2062daab15c87cb012f2ac945c/plugins)
+  and [contributed plugin](https://github.com/Garux/netradiant-custom/tree/449778b3840f8f2062daab15c87cb012f2ac945c/contrib)
+  command tables, including Joel Baxter's GPL-2.0-or-later
+  [MeshTex menu generator](https://github.com/Garux/netradiant-custom/blob/449778b3840f8f2062daab15c87cb012f2ac945c/contrib/meshtex/MainMenu.cpp).
+  bobToolz/ctfToolz (Gordon Biggans), GtkGenSurf (David Hyde, Loki Software
+  and qeradiant.com), Portal Viewer (Geoffrey Dewan, Loki Software and
+  qeradiant.com) and SunPlug (Topsun) carry LGPL-2.1-or-later headers;
+  the other inspected plugin headers are GPL-2.0-or-later. These licences
+  are compatible with VibeStudio's licence. The terrain generator has no
+  file-level licence header; only its public command names and locations
+  are recorded, with no implementation imported.
+
+Reviewed 2026-10-19. The scanner, validation tests and parity reviews are original
+VibeStudio code. No upstream implementation, artwork or game content is copied
+or linked. Source locations retain access to upstream copyright/licence notices.
+The catalogue includes optional and legacy source providers without claiming
+that they build or work. Its pinned command-discovery baseline is separate from
+the older editor-profile binding baselines credited above. Command registration
+does not establish workflow parity or production acceptance.
+
+## Brush face sweep
+
+VibeStudio's sweep geometry and repetition follow behavioural references from
+TrenchBroom `v2026.2`, revision
+`4c756be1a54a28d921d18c77716a5f170bdc31d0`, reviewed 2026-10-19:
+[SweepToolUtils.cpp](https://github.com/TrenchBroom/TrenchBroom/blob/4c756be1a54a28d921d18c77716a5f170bdc31d0/lib/TbUiLib/src/SweepToolUtils.cpp),
+[SweepTool.cpp](https://github.com/TrenchBroom/TrenchBroom/blob/4c756be1a54a28d921d18c77716a5f170bdc31d0/lib/TbUiLib/src/SweepTool.cpp)
+and [SweepToolPage.cpp](https://github.com/TrenchBroom/TrenchBroom/blob/4c756be1a54a28d921d18c77716a5f170bdc31d0/lib/TbUiLib/src/SweepToolPage.cpp).
+These sources credit Jackson Palmer and Kristian Duske (2026) under
+[GPL-3.0-or-later](https://github.com/TrenchBroom/TrenchBroom/blob/4c756be1a54a28d921d18c77716a5f170bdc31d0/LICENSE.txt),
+compatible with VibeStudio's licence.
+
+The reference covers face-bound centres and combined normals, straight/arc/
+S-bend station interpolation, shortest rotation, world-axis taper, repeated
+destination transforms, integer station alignment, skipped invalid sections,
+source retention and current-material/default-face semantics. VibeStudio's
+double-precision geometry, native map transaction, asynchronous numeric preview,
+CLI and synthetic compiler fixtures are original implementations. No upstream
+code, UI assets or game content is copied.
+
+Destination interaction also references
+[SweepToolController.cpp](https://github.com/TrenchBroom/TrenchBroom/blob/4c756be1a54a28d921d18c77716a5f170bdc31d0/lib/TbUiLib/src/SweepToolController.cpp),
+[RotateHandleController.cpp](https://github.com/TrenchBroom/TrenchBroom/blob/4c756be1a54a28d921d18c77716a5f170bdc31d0/lib/TbUiLib/src/RotateHandleController.cpp)
+and [Grid.cpp](https://github.com/TrenchBroom/TrenchBroom/blob/4c756be1a54a28d921d18c77716a5f170bdc31d0/lib/TbMdlLib/src/Grid.cpp)
+at the same revision, reviewed 2026-10-19: centre/ring/scale hit priority,
+world-axis rotation composition, source-arm scaling, nearest grid-plane
+snapping, increment/decrement and layered cancellation. These files credit
+Jackson Palmer and Kristian Duske under GPL-3.0-or-later (the Grid copyright
+starts in 2010), compatible with VibeStudio's GPL-3.0-or-later licence.
+The double-precision controls, shared Qt view bindings, command routing,
+asynchronous preview integration and synthetic tests are original code.
+
+
+## Face clipboard attributes
+
+Normal Copy/Paste dispatch, ordered face text and the last-record attribute rule
+were reviewed on 2026-10-20 against TrenchBroom v2026.2, revision
+`4c756be1a54a28d921d18c77716a5f170bdc31d0`:
+[MapWindow.cpp](https://github.com/TrenchBroom/TrenchBroom/blob/4c756be1a54a28d921d18c77716a5f170bdc31d0/lib/TbUiLib/src/MapWindow.cpp),
+[Map_CopyPaste.cpp](https://github.com/TrenchBroom/TrenchBroom/blob/4c756be1a54a28d921d18c77716a5f170bdc31d0/lib/TbMdlLib/src/Map_CopyPaste.cpp),
+[UpdateBrushFaceAttributes.cpp](https://github.com/TrenchBroom/TrenchBroom/blob/4c756be1a54a28d921d18c77716a5f170bdc31d0/lib/TbMdlLib/src/UpdateBrushFaceAttributes.cpp)
+and [ParallelUVCoordSystem.cpp](https://github.com/TrenchBroom/TrenchBroom/blob/4c756be1a54a28d921d18c77716a5f170bdc31d0/lib/TbMdlLib/src/ParallelUVCoordSystem.cpp).
+These are Kristian Duske and contributors' GPL-3.0-or-later sources, compatible
+with VibeStudio's GPL-3.0-or-later licence. The attribute-copy and UV-normal
+rotation behaviours are adapted; parser, Qt dispatch, CLI and synthetic fixtures
+are VibeStudio implementations. No upstream implementation text or assets were
+copied. Matrix transfer is a VibeStudio extension; optional colours, complete
+foreign-format conversion and game-default semantics are not claimed equivalent.
+See [face clipboard behaviour](LEVEL_PASTE.md#face-clipboard).
+
+## Object clipboard ownership and cut
+
+Partial brush-entity ownership and mixed-child ordering were reviewed on
+2026-10-20 against TrenchBroom v2026.2, revision
+`4c756be1a54a28d921d18c77716a5f170bdc31d0`, specifically
+[NodeWriter.cpp](https://github.com/TrenchBroom/TrenchBroom/blob/4c756be1a54a28d921d18c77716a5f170bdc31d0/lib/TbMdlLib/src/NodeWriter.cpp)
+(`writeNodes` and `writeEntityNodes`). Modal-tool Cut eligibility and copy-before-delete
+behaviour were checked in
+[MapWindow.cpp](https://github.com/TrenchBroom/TrenchBroom/blob/4c756be1a54a28d921d18c77716a5f170bdc31d0/lib/TbUiLib/src/MapWindow.cpp).
+These Kristian Duske sources are
+[GPL-3.0-or-later](https://github.com/TrenchBroom/TrenchBroom/blob/4c756be1a54a28d921d18c77716a5f170bdc31d0/LICENSE.txt),
+compatible with VibeStudio's GPL-3.0-or-later licence. The implementation is
+original; no source was copied. Shared workers, incomplete native group handling,
+clipboard race checks and two-file CLI publication are VibeStudio additions.
+See [object clipboard behaviour](LEVEL_PASTE.md#copy-and-cut-objects).
+
+NRC's selected-tree export was also reviewed on 2026-10-20 at revision
+`449778b3840f8f2062daab15c87cb012f2ac945c`:
+[select.cpp](https://github.com/Garux/netradiant-custom/blob/449778b3840f8f2062daab15c87cb012f2ac945c/radiant/select.cpp)
+and [map.cpp](https://github.com/Garux/netradiant-custom/blob/449778b3840f8f2062daab15c87cb012f2ac945c/radiant/map.cpp)
+(`Map_ExportSelected` / `IncludeSelectedWalker`). These files credit id Software
+and contributors and permit GPL-2.0-or-later, compatible with VibeStudio's
+GPL-3.0-or-later licence. No code was copied. Differences in worldspawn-property
+export and child ordering remain explicit in the Partial command review.
+
+
+## Brush-volume selection
+
+Behaviour was reviewed on 2026-10-20 against TrenchBroom v2026.2,
+`4c756be1a54a28d921d18c77716a5f170bdc31d0`:
+[Map_Selection.cpp](https://github.com/TrenchBroom/TrenchBroom/blob/4c756be1a54a28d921d18c77716a5f170bdc31d0/lib/TbMdlLib/src/Map_Selection.cpp),
+[ModelUtils.cpp](https://github.com/TrenchBroom/TrenchBroom/blob/4c756be1a54a28d921d18c77716a5f170bdc31d0/lib/TbMdlLib/src/ModelUtils.cpp),
+[BrushNode.cpp](https://github.com/TrenchBroom/TrenchBroom/blob/4c756be1a54a28d921d18c77716a5f170bdc31d0/lib/TbMdlLib/src/BrushNode.cpp),
+[PatchNode.cpp](https://github.com/TrenchBroom/TrenchBroom/blob/4c756be1a54a28d921d18c77716a5f170bdc31d0/lib/TbMdlLib/src/PatchNode.cpp),
+[EntityNode.cpp](https://github.com/TrenchBroom/TrenchBroom/blob/4c756be1a54a28d921d18c77716a5f170bdc31d0/lib/TbMdlLib/src/EntityNode.cpp)
+and [MapWindow.cpp](https://github.com/TrenchBroom/TrenchBroom/blob/4c756be1a54a28d921d18c77716a5f170bdc31d0/lib/TbUiLib/src/MapWindow.cpp).
+These Kristian Duske and contributors' sources are GPL-3.0-or-later.
+Individual brush containment/intersection, consuming selection, closed-group
+bounds, eight-step quadratic patch grids and entity-definition bounds informed
+the implementation.
+
+NetRadiant Custom's individual AABB tests and Inside/Touching source-retention
+rules were reviewed in
+[select.cpp](https://github.com/Garux/netradiant-custom/blob/449778b3840f8f2062daab15c87cb012f2ac945c/radiant/select.cpp)
+at `449778b3840f8f2062daab15c87cb012f2ac945c`, copyright id Software and
+contributors, GPL-2.0-or-later. Both licences are compatible with VibeStudio's
+GPL-3.0-or-later licence. No implementation text was copied. Convex SAT, projected
+hulls, cancellation, transactional history, Qt/CLI integration and synthetic
+fixtures are original VibeStudio code. See the
+[documented limits](manual/levels.md#select-by-brush-volume), including NRC model
+bounds, TB world limits and native patch-grid intersection limitations.
+
+## Selection history
+
+Object-selection and group-navigation undo were reviewed on 2026-10-20 against
+TrenchBroom v2026.2, revision `4c756be1a54a28d921d18c77716a5f170bdc31d0`:
+[SelectionCommand.cpp](https://github.com/TrenchBroom/TrenchBroom/blob/4c756be1a54a28d921d18c77716a5f170bdc31d0/lib/TbMdlLib/src/SelectionCommand.cpp),
+[CommandProcessor.cpp](https://github.com/TrenchBroom/TrenchBroom/blob/4c756be1a54a28d921d18c77716a5f170bdc31d0/lib/TbMdlLib/src/CommandProcessor.cpp)
+and [Map_Groups.cpp](https://github.com/TrenchBroom/TrenchBroom/blob/4c756be1a54a28d921d18c77716a5f170bdc31d0/lib/TbMdlLib/src/Map_Groups.cpp).
+The upstream GPL-3.0-or-later licence is compatible with VibeStudio.
+These are behavioural references; the implementation and fixtures are original.
+The shared timeline distinguishes content changes from object-selection/context
+changes, preserves reachable equivalent save points, and rejects stale staged
+documents without forcing geometry caches to rebuild on selection.
+Face/component selection, visibility/filter history and native gesture acceptance
+remain incomplete; this is not a full TB command-history parity claim.
+
+## Temporary level visibility
+
+Hide, Show All and Isolate were reviewed on 2026-10-20 against TrenchBroom
+v2026.2, revision `4c756be1a54a28d921d18c77716a5f170bdc31d0`:
+[Map_NodeVisibility.cpp](https://github.com/TrenchBroom/TrenchBroom/blob/4c756be1a54a28d921d18c77716a5f170bdc31d0/lib/TbMdlLib/src/Map_NodeVisibility.cpp),
+[SetVisibilityCommand.cpp](https://github.com/TrenchBroom/TrenchBroom/blob/4c756be1a54a28d921d18c77716a5f170bdc31d0/lib/TbMdlLib/src/SetVisibilityCommand.cpp)
+and [ActionManager.cpp](https://github.com/TrenchBroom/TrenchBroom/blob/4c756be1a54a28d921d18c77716a5f170bdc31d0/lib/TbUiLib/src/ActionManager.cpp)
+(Kristian Duske and contributors, GPL-3.0-or-later). NetRadiant Custom's
+[radiant/select.cpp](https://github.com/Garux/netradiant-custom/blob/449778b3840f8f2062daab15c87cb012f2ac945c/radiant/select.cpp)
+at revision `449778b3840f8f2062daab15c87cb012f2ac945c` (GPL-2.0-or-later)
+informed transient hiding, deselection, entity-label suppression and worldspawn
+visibility. Both licences are compatible with VibeStudio's GPL-3.0-or-later.
+
+Implementation and fixtures are original. Non-content TB history, whole-scene
+isolation and profile bindings follow the references. Document-owned session
+state, structural ID remapping, Doom dependencies, cancellable workers and CLI
+queries are local adaptations. The 2026-10-21 inheritance review also used
+[Node.cpp](https://github.com/TrenchBroom/TrenchBroom/blob/4c756be1a54a28d921d18c77716a5f170bdc31d0/lib/TbMdlLib/src/Node.cpp)
+and [Map_Nodes.cpp](https://github.com/TrenchBroom/TrenchBroom/blob/4c756be1a54a28d921d18c77716a5f170bdc31d0/lib/TbMdlLib/src/Map_Nodes.cpp)
+at that same GPL-3.0-or-later revision. They inform temporary Inherited/Hidden/
+Shown states, resetting shown descendants when hiding a container, and ensuring
+newly authored nodes are visible. VibeStudio retains saved scene visibility as
+a separate mask and supports explicit
+child memberships through a shared hierarchy resolver. Layer-transfer resets and
+recursive attribute cloning follow those sources; the distinction between
+ordinary duplication and linked updates follows
+[LinkedGroupUtils.cpp](https://github.com/TrenchBroom/TrenchBroom/blob/4c756be1a54a28d921d18c77716a5f170bdc31d0/lib/TbMdlLib/src/LinkedGroupUtils.cpp)
+(`cloneAndTransformRecursive`, same GPL-3.0-or-later revision, reviewed
+2026-10-21). Original fixtures exercise scene transfers, arrays, linked copies
+and native Doom/Hexen/UDMF adaptations. Direct empty-container controls and
+saved visibility interactions remain Partial. See the
+[manual](manual/levels.md#temporary-visibility).
+
+NRC insertion and clone visibility were reviewed on 2026-10-21 against
+[`scene::Node`](https://github.com/Garux/netradiant-custom/blob/449778b3840f8f2062daab15c87cb012f2ac945c/libs/scenelib.h),
+[`BrushNode`](https://github.com/Garux/netradiant-custom/blob/449778b3840f8f2062daab15c87cb012f2ac945c/radiant/brushnode.h),
+[`PatchNode`](https://github.com/Garux/netradiant-custom/blob/449778b3840f8f2062daab15c87cb012f2ac945c/radiant/patch.h),
+[`GroupNode`](https://github.com/Garux/netradiant-custom/blob/449778b3840f8f2062daab15c87cb012f2ac945c/plugins/entity/group.cpp),
+and the point-entity constructors in
+[`generic.cpp`](https://github.com/Garux/netradiant-custom/blob/449778b3840f8f2062daab15c87cb012f2ac945c/plugins/entity/generic.cpp)
+and [`eclassmodel.cpp`](https://github.com/Garux/netradiant-custom/blob/449778b3840f8f2062daab15c87cb012f2ac945c/plugins/entity/eclassmodel.cpp).
+These GPL-2.0-or-later sources initialise fresh visibility flags on new and cloned
+nodes. That licence is compatible with VibeStudio's GPL-3.0-or-later. The profile
+policy, session revision handling and tests are original; no code was copied.
+NRC uses fresh inherited insertion states, while TB/default retain the earlier
+attribute-preserving root-reveal policy. Shared scene groups, native Doom formats
+and linked copies are local adaptations, with saved-layer/filter equivalence and
+native interaction still Partial. Hidden-parent culling was checked against
+[`ForEachVisible`](https://github.com/Garux/netradiant-custom/blob/449778b3840f8f2062daab15c87cb012f2ac945c/radiant/renderer.h)
+at the same revision. NRC's `HideSelectedWalker` stores an owner flag when all
+children become hidden; VibeStudio currently derives that label state, so the
+later-child insertion interaction remains a separate parity gap.
+
+## Hierarchy and source-line selection
+
+Select Siblings and Select by Line Number were reviewed on 2026-10-20 against
+TrenchBroom v2026.2, revision `4c756be1a54a28d921d18c77716a5f170bdc31d0`:
+[Map_Selection.cpp](https://github.com/TrenchBroom/TrenchBroom/blob/4c756be1a54a28d921d18c77716a5f170bdc31d0/lib/TbMdlLib/src/Map_Selection.cpp),
+[ModelUtils.cpp](https://github.com/TrenchBroom/TrenchBroom/blob/4c756be1a54a28d921d18c77716a5f170bdc31d0/lib/TbMdlLib/src/ModelUtils.cpp),
+[EditorContext.cpp](https://github.com/TrenchBroom/TrenchBroom/blob/4c756be1a54a28d921d18c77716a5f170bdc31d0/lib/TbMdlLib/src/EditorContext.cpp),
+[Node.cpp](https://github.com/TrenchBroom/TrenchBroom/blob/4c756be1a54a28d921d18c77716a5f170bdc31d0/lib/TbMdlLib/src/Node.cpp),
+[ActionManager.cpp](https://github.com/TrenchBroom/TrenchBroom/blob/4c756be1a54a28d921d18c77716a5f170bdc31d0/lib/TbUiLib/src/ActionManager.cpp)
+and [MapWindow.cpp](https://github.com/TrenchBroom/TrenchBroom/blob/4c756be1a54a28d921d18c77716a5f170bdc31d0/lib/TbUiLib/src/MapWindow.cpp).
+These Kristian Duske and contributors' sources are GPL-3.0-or-later, compatible
+with VibeStudio's licence. Behaviour was used as a reference; implementation and
+fixtures are original. Native parent traversal, entity-property fallback and
+Ctrl+B informed the commands. Strict input validation, VibeStudio scene units,
+worker cancellation, source-snapshot wording and CLI integration are local
+adaptations. Foreign TB group/layer metadata and native-platform input remain
+Partial; see [selection limits](manual/levels.md#select-by-hierarchy-or-source-line).
+
+## Duplicate placement
+
+Reviewed on 2026-10-21: TrenchBroom v2026.2
+[`MapWindow::duplicateSelection`](https://github.com/TrenchBroom/TrenchBroom/blob/4c756be1a54a28d921d18c77716a5f170bdc31d0/lib/TbUiLib/src/MapWindow.cpp)
+(Kristian Duske and contributors, GPL-3.0-or-later) duplicates selected nodes
+without displacement. NRC
+[`Selection_Clone`, `AxisBase_forViewType` and `NudgeAfterClone`](https://github.com/Garux/netradiant-custom/blob/449778b3840f8f2062daab15c87cb012f2ac945c/radiant/select.cpp)
+(Id Software and contributors, GPL-2.0-or-later) require primitive mode and offer
+a right/down grid nudge that defaults off. Both licences are compatible with
+VibeStudio's GPL-3.0-or-later. No source was copied; profile data, preference
+integration and tests are original. Per-profile portable preferences, stale
+worker rejection and native Doom adaptation use VibeStudio services. Native
+input, cross-platform and real-project acceptance remain Partial.
+
+The unique-clone implementation was also reviewed against NRC's
+[`Map_mergeClonedNames` and `BasicNamespace`](https://github.com/Garux/netradiant-custom/blob/449778b3840f8f2062daab15c87cb012f2ac945c/radiant/map.cpp),
+[`uniquenames.h`](https://github.com/Garux/netradiant-custom/blob/449778b3840f8f2062daab15c87cb012f2ac945c/libs/uniquenames.h)
+and [`namekeys.h`](https://github.com/Garux/netradiant-custom/blob/449778b3840f8f2062daab15c87cb012f2ac945c/plugins/entity/namekeys.h)
+at that revision on 2026-10-21 (William Joseph and other contributors,
+GPL-2.0-or-later, compatible with VibeStudio's GPL-3.0-or-later). The original
+implementation in `src/core/level_duplicate.cpp` and `level_map.cpp` follows the
+partial-owner and shared name/reference namespace behaviour. It uses dynamic
+strings and overflow-safe decimal suffix comparison instead of importing the
+upstream integer parsing or fixed buffers. CLI, Repeat, scene/visibility and Qt
+integration, plus synthetic tests, are VibeStudio adaptations. No source was copied.
+
+## NRC entity connections
+
+Reviewed on 2026-10-21: NRC's
+[`Entity_connectSelected`, `Entity_killconnectSelected` and `game_has_killConnect`](https://github.com/Garux/netradiant-custom/blob/449778b3840f8f2062daab15c87cb012f2ac945c/radiant/entity.cpp)
+and [`Quake3EntityCreator::connectEntities` and `ConnectEntities`](https://github.com/Garux/netradiant-custom/blob/449778b3840f8f2062daab15c87cb012f2ac945c/plugins/entity/entity.cpp),
+revision `449778b3840f8f2062daab15c87cb012f2ac945c` (William Joseph and other
+contributors, GPL-2.0-or-later). That licence is compatible with VibeStudio's
+GPL-3.0-or-later. The original service in `level_entity_connections.cpp` follows
+the exact two-instance selection, source-value priority, destination-class name
+generation and Quake/Nexuiz/Xonotic KillConnect gate. It shares the independently
+implemented namespace allocator credited above. No source was copied; atomic
+history, scene locks, cancellation and project game context use VibeStudio
+services. Doom 3's separate `name`/numbered-target scheme is outside the current
+idTech1/2/3 authoring scope.
+
+## Entity primitive ownership
+
+Reviewed on 2026-10-21: NRC's
+[`Entity_moveSelectedPrimitives`, `Entity_ungroupSelectedPrimitives` and the
+`EntityMovePrimitivesToLast` Ctrl+M binding](https://github.com/Garux/netradiant-custom/blob/449778b3840f8f2062daab15c87cb012f2ac945c/radiant/entity.cpp),
+[`Scene_parentSelectedBrushesToEntity`](https://github.com/Garux/netradiant-custom/blob/449778b3840f8f2062daab15c87cb012f2ac945c/radiant/map.cpp)
+and bobToolz's
+[`DoExplodeEntity`](https://github.com/Garux/netradiant-custom/blob/449778b3840f8f2062daab15c87cb012f2ac945c/contrib/bobtoolz/funchandlers-GTK.cpp),
+revision `449778b3840f8f2062daab15c87cb012f2ac945c` (William Joseph, Gordon
+Biggans and other contributors, GPL-2.0-or-later); and TrenchBroom's
+[`MapViewBase::makeStructural` and the Alt+S "Make structural" action](https://github.com/TrenchBroom/TrenchBroom/blob/4c756be1/lib/TbUiLib/src/MapViewBase.cpp)
+at `4c756be1` (v2026.2, Kristian Duske and contributors, GPL-3.0-or-later). Both
+licences are compatible with VibeStudio's GPL-3.0-or-later. The original
+service declared in `src/core/level_entity_ownership.h` and implemented in
+`level_map.cpp` follows the last- or first-selected target, removal of emptied
+source entities, selected-only ungrouping, TrenchBroom's reparenting to the
+world or current group, and one entity copy per primitive with identical keys.
+No source was copied. Primitives keep their ids through one undo step; scene
+locks, linked groups, temporary visibility, the open group, the optional unique
+`targetname` and the `map move-to-entity`/`map explode-entity` commands are
+VibeStudio adaptations. TrenchBroom's smart-tag clearing beyond the detail flag
+is not reproduced.
+
+## NRC entity colour commands
+
+Reviewed on 2026-10-21: NRC's
+[`Entity_setColour`, `Entity_normalizeColor`, `NormalizeColor`, the
+`EntityColorSet` K binding and the remembered `EntitySelectedColor`
+preference](https://github.com/Garux/netradiant-custom/blob/449778b3840f8f2062daab15c87cb012f2ac945c/radiant/entity.cpp),
+revision `449778b3840f8f2062daab15c87cb012f2ac945c` (William Joseph and other
+contributors, GPL-2.0-or-later, compatible with VibeStudio's
+GPL-3.0-or-later). The original service in `src/core/level_entity_colour.cpp`
+follows the picker seeded from the primary entity's `_color` or the last
+colour, one value written to the selected entities and the entities holding
+selected brushes, and normalising so the brightest channel is 1 with black
+becoming white. No source was copied. Keeping each key's 0-255 or 0-1 form
+and trailing text, leaving worldspawn alone when only a world brush is
+selected, skipping hidden entities, Normalise Each, the shared Inspector
+colour parser and the `map entity-colour` command are VibeStudio adaptations;
+scene locks, linked copies, the open group and one undo step come from the
+shared key-editing service. The NetRadiant profile's K binding follows
+[Xonotic NetRadiant's `EntityColor` command](https://github.com/xonotic/netradiant/blob/b4b295d7a37797cc2752e48aa8ce42492e7016f0/radiant/entity.cpp),
+revision `b4b295d7a37797cc2752e48aa8ce42492e7016f0` (GPL-2.0-or-later); only
+the key was used.
+
+## TB generated Create entity commands
+
+Reviewed on 2026-10-22: TrenchBroom's
+[`ActionManager::createEntityDefinitionActions`](https://github.com/TrenchBroom/TrenchBroom/blob/4c756be1a54a28d921d18c77716a5f170bdc31d0/lib/TbUiLib/src/ActionManager.cpp),
+which generates an `Entities/<class>/Create` action for every loaded entity
+definition except worldspawn, and
+[`MapViewBase::createEntity`, `createPointEntity`, `createBrushEntity` and
+`canCreateBrushEntity`](https://github.com/TrenchBroom/TrenchBroom/blob/4c756be1a54a28d921d18c77716a5f170bdc31d0/lib/TbUiLib/src/MapViewBase.cpp)
+with `computePointEntityPosition` in
+[`MapView2D.cpp`](https://github.com/TrenchBroom/TrenchBroom/blob/4c756be1a54a28d921d18c77716a5f170bdc31d0/lib/TbUiLib/src/MapView2D.cpp)
+and [`MapView3D.cpp`](https://github.com/TrenchBroom/TrenchBroom/blob/4c756be1a54a28d921d18c77716a5f170bdc31d0/lib/TbUiLib/src/MapView3D.cpp),
+revision `4c756be1a54a28d921d18c77716a5f170bdc31d0` (v2026.2, Kristian Duske and
+contributors, GPL-3.0-or-later, compatible with VibeStudio's licence). The
+original service in `src/core/level_entity_create.cpp` and the Levels commands
+in `src/app/level_entity_create_actions.cpp` follow the behaviour only: a
+bindable Create command per point and brush class, without default keys; a
+point class at the pointer or the view position, its definition bounds placed
+by the cursor placement already adapted from TrenchBroom's Grid (see
+[Clipboard placement](#clipboard-placement)); a brush class from the selected
+brushes. No source was copied. Commands regenerated when the definitions
+change, keys kept for classes not loaded, the Create Entity… picker, patches
+and selected brush entities as brush-class input, refusing hidden, locked or
+out-of-group brushes, and the `map create-entity` command are VibeStudio
+adaptations.
+
+## NRC layer commands and TB Move to Layer
+
+Reviewed on 2026-10-22: NRC's
+[`Scene_ExpandSelectionToLayers`, `context_moveto_menu`, `LayerAssignVisitor`,
+`LayerSelectWalker` and the `ExpandSelectionToLayers` Ctrl+Q and `LayersMenu`
+Shift+Q bindings in `Layers_registerCommands`](https://github.com/Garux/netradiant-custom/blob/449778b3840f8f2062daab15c87cb012f2ac945c/radiant/layerswindow.cpp),
+revision `449778b3840f8f2062daab15c87cb012f2ac945c` (Id Software, Garux
+and other contributors, GPL-2.0-or-later), and TrenchBroom's
+[Move to Layer submenu of `MapViewBase`'s context menu](https://github.com/TrenchBroom/TrenchBroom/blob/4c756be1a54a28d921d18c77716a5f170bdc31d0/lib/TbUiLib/src/MapViewBase.cpp)
+at `4c756be1a54a28d921d18c77716a5f170bdc31d0` (v2026.2, Kristian Duske and
+contributors, GPL-3.0-or-later). Both licences are compatible with
+VibeStudio's GPL-3.0-or-later. The original service in
+`src/core/level_scene_layers.cpp` and the Levels commands in
+`src/app/level_scene_layer_actions.cpp` follow the behaviour only: the layers
+of the selected objects expanded to every visible object in them, and a menu
+of layers at the pointer, greyed out without a selection, that moves the
+selection into the chosen layer. No source was copied. Layers holding nested
+groups rather than nested layers, closed groups kept whole, brush entities
+moved whole as TrenchBroom moves them, locks, the open group, one scene undo
+step, Ctrl+Shift+Q instead of Quit's Ctrl+Q, Doom maps, and the `editor scene
+select --expand-layers` and `editor scene move-to-layer` commands are
+VibeStudio adaptations.
+
+## NRC connected-entity selection
+
+Reviewed on 2026-10-21: NRC's
+[`Select_ConnectedEntities`, `EntityGetSelectedPropertyValuesWalker_nonEmpty`
+and `EntityFindByPropertyValueWalker`](https://github.com/Garux/netradiant-custom/blob/449778b3840f8f2062daab15c87cb012f2ac945c/radiant/select.cpp),
+revision `449778b3840f8f2062daab15c87cb012f2ac945c` (Id Software and contributors,
+GPL-2.0-or-later, compatible with VibeStudio's GPL-3.0-or-later). The original
+`level_entity_selection.cpp` follows additive, one-hop incoming/outgoing
+`target`/`targetname` matching with exact keys and values, owner-based seeds,
+worldspawn exclusion and visible result traversal. No source was copied.
+Closed groups, locks, open-group boundaries, cancellable preparation and
+selection-only undo use VibeStudio services. A whole-owner selector is omitted
+when it would implicitly select excluded children; visible children can still
+be added. Loaded mixed primitive order uses source spans; new mixed primitives
+without spans use stable native-array order. Doom 3's `name` key is outside the
+current idTech1/2/3 authoring scope.
+
+## NRC type selection
+
+Reviewed on 2026-10-21: NRC's
+[`Select_AllOfType` and `EntityGetSelectedPropertyValuesWalker`](https://github.com/Garux/netradiant-custom/blob/449778b3840f8f2062daab15c87cb012f2ac945c/radiant/select.cpp),
+[`Scene_BrushSelectByShader`, `Scene_BrushSelectByShader_Component` and `FaceSelectByShader`](https://github.com/Garux/netradiant-custom/blob/449778b3840f8f2062daab15c87cb012f2ac945c/radiant/brushmanip.cpp),
+[`Scene_PatchSelectByShader`](https://github.com/Garux/netradiant-custom/blob/449778b3840f8f2062daab15c87cb012f2ac945c/radiant/patchmanip.cpp), and
+[`shader_equal`](https://github.com/Garux/netradiant-custom/blob/449778b3840f8f2062daab15c87cb012f2ac945c/libs/shaderlib.h),
+revision `449778b3840f8f2062daab15c87cb012f2ac945c` (Id Software, William Joseph
+and contributors, GPL-2.0-or-later). The licence is compatible with VibeStudio's
+GPL-3.0-or-later. No source was copied. The original shared entity-selection
+service follows owner-class collection, exact class comparison, material
+fallback, case-insensitive shader comparison, face replacement and vertex/edge
+no-op behaviour. The current texture browser and material picker share the
+material source; NRC Shift+A uses the separate **Select All of Type** action.
+
+VibeStudio's group, hidden-object, filter, lock, cancellation and history rules
+remain shared studio services. Face selection includes brush geometry implied
+by an entity selector, uses validated solved-face identities, and excludes
+hidden, locked and closed-group geometry. NRC's face walker visits directly
+selected brush instances without an extra visibility filter; the studio's
+stronger selection boundary is intentional. The GUI refuses a partial result
+that exceeds its component-handle limits. Source-span ordering and no-span
+primitive ordering follow the
+[connected-entity selection adaptation](#nrc-connected-entity-selection).
+The original studio integration now resolves active component-face picks for
+surface adjustments, alignment and both clipboard routes. It preserves exact
+face identities, selected-versus-explicit-hit flag rules, atomic undo and stale
+result rejection. The camera/Inspector model remains the object-mode source;
+independent additive surface selection for NRC Select Textured has a separate
+query service and viewport state.
+
+## NRC textured surface query
+
+Reviewed on 2026-10-21: NRC's
+[`Select_FacesAndPatchesByShader` and `SelectTextured` registration](https://github.com/Garux/netradiant-custom/blob/449778b3840f8f2062daab15c87cb012f2ac945c/radiant/select.cpp),
+[`Scene_BrushFacesSelectByShader` and `FaceSelectByShader`](https://github.com/Garux/netradiant-custom/blob/449778b3840f8f2062daab15c87cb012f2ac945c/radiant/brushmanip.cpp),
+[`Scene_PatchSelectByShader`](https://github.com/Garux/netradiant-custom/blob/449778b3840f8f2062daab15c87cb012f2ac945c/radiant/patchmanip.cpp),
+the [brush face-instance traversal](https://github.com/Garux/netradiant-custom/blob/449778b3840f8f2062daab15c87cb012f2ac945c/radiant/brush.h)
+and [shader comparison](https://github.com/Garux/netradiant-custom/blob/449778b3840f8f2062daab15c87cb012f2ac945c/libs/shaderlib.h),
+revision `449778b3840f8f2062daab15c87cb012f2ac945c` (Id Software, William Joseph
+and contributors, GPL-2.0-or-later). This licence is compatible with VibeStudio's
+GPL-3.0-or-later. No source was copied.
+
+The original `level_textured_selection.cpp` service follows additive independent
+face picks, whole-patch picks, case-insensitive material matching and no-match
+preservation. It does not turn face matches into parent-brush selection. The
+CLI, exact geometry fingerprints, complete-result limits, cancellation and
+selection history use original studio implementations. New brush and patch
+matches both respect studio visibility, locks and open-group boundaries; closed
+groups must be opened. This deliberately differs from the upstream unfiltered
+brush walker. Existing picks are retained and authoring consumers must recheck
+their editability. The viewport action and NRC Ctrl+Shift+A binding now use this
+service. Staged deselection follows `Selection_Deselect` in the same pinned
+`radiant/select.cpp`: clear surface/component picks, then leave component mode,
+then clear whole objects. The independent state, geometry retirement, capacity
+preflight, dashed plan overlay, camera highlight lookup and accessible counts
+are original Qt implementations.
+
+Independent face manipulation was reviewed on 2026-10-21 against NRC's
+[`FaceInstance::transformComponents` and `BrushInstance::transformComponents`](https://github.com/Garux/netradiant-custom/blob/449778b3840f8f2062daab15c87cb012f2ac945c/radiant/brush.h),
+the face-mode toggle [`SelectFaceMode`](https://github.com/Garux/netradiant-custom/blob/449778b3840f8f2062daab15c87cb012f2ac945c/radiant/tools.cpp)
+and the component branches of `translate`, `rotate`, `scale` and `skew` in
+[`RadiantSelectionSystem`](https://github.com/Garux/netradiant-custom/blob/449778b3840f8f2062daab15c87cb012f2ac945c/radiant/selection.cpp),
+at the same revision and licence, and against the face tool behaviour of
+TrenchBroom v2026.2 (`4c756be1`, GPL-3.0-or-later) already credited above. No
+source was copied. In NRC's face mode, faces selected by Select Textured
+transform with the component selection without selecting their brushes; the
+studio follows that workflow in **Edit Faces** mode. The merge into component
+sets, the corner-based transform through the shared component service (as
+TrenchBroom's face tool moves face corners, rather than NRC's plane
+transform), the plane-based pick remapping, the undo/redo pick restoration, the
+arrow-key nudge, the CLI `--face` route and the scene-lock, visibility and
+group checks are original implementations.
+
+## Reveal material and Find and Replace Textures
+
+Reviewed on 2026-10-22: TrenchBroom v2026.2, revision
+`4c756be1a54a28d921d18c77716a5f170bdc31d0`,
+[`MapWindow::revealMaterial` and `materialToReveal`](https://github.com/TrenchBroom/TrenchBroom/blob/4c756be1a54a28d921d18c77716a5f170bdc31d0/lib/TbUiLib/src/MapWindow.cpp),
+[`MaterialBrowser::revealMaterial`](https://github.com/TrenchBroom/TrenchBroom/blob/4c756be1a54a28d921d18c77716a5f170bdc31d0/lib/TbUiLib/src/MaterialBrowser.cpp)
+and the "Reveal in texture browser" action in
+[ActionManager.cpp](https://github.com/TrenchBroom/TrenchBroom/blob/4c756be1a54a28d921d18c77716a5f170bdc31d0/lib/TbUiLib/src/ActionManager.cpp)
+(Kristian Duske, GPL-3.0-or-later); and NetRadiant Custom revision
+`449778b3840f8f2062daab15c87cb012f2ac945c`,
+[`FindTextureDialog` and its focus tracker](https://github.com/Garux/netradiant-custom/blob/449778b3840f8f2062daab15c87cb012f2ac945c/radiant/findtexturedialog.cpp),
+[`FindReplaceTextures`](https://github.com/Garux/netradiant-custom/blob/449778b3840f8f2062daab15c87cb012f2ac945c/radiant/select.cpp),
+[`Scene_BrushFindReplaceShader*`](https://github.com/Garux/netradiant-custom/blob/449778b3840f8f2062daab15c87cb012f2ac945c/radiant/brushmanip.cpp),
+[`Scene_PatchFindReplaceShader*`](https://github.com/Garux/netradiant-custom/blob/449778b3840f8f2062daab15c87cb012f2ac945c/radiant/patchmanip.cpp)
+and [`TextureBrowser_SetSelectedShader`](https://github.com/Garux/netradiant-custom/blob/449778b3840f8f2062daab15c87cb012f2ac945c/radiant/texwindow.cpp)
+(Id Software, Leonardo Zide, TTimo and contributors, GPL-2.0-or-later). Both
+licences are compatible with VibeStudio's GPL-3.0-or-later. No source was copied.
+
+**Reveal Material** follows TrenchBroom's rule that the selected faces, or the
+faces of the selected brushes, must all share one material, and its browser
+reveal clearing the filter before scrolling to the material. Patches, Doom
+walls and flats, the Textures-tab tile selection that makes the material
+current, the early stop on a second material and the status-tip explanation
+are VibeStudio additions. **Find and Replace Textures** follows NetRadiant
+Custom's modeless window: a texture-browser pick fills the field that last had
+focus, a pick does not texture the selection while the window is open, an
+empty replacement means search, and a replacement is one undo step across the
+map or within the selection. The three-way scope with picked faces, separate
+Find and Replace buttons, the live preview, skipping hidden, filtered, locked
+and out-of-context surfaces, Find reusing the Select Textured service and the
+`map replace-texture --face` and `map select-textured --within-selection` CLI
+routes are original implementations (`core/level_material_find.cpp`,
+`app/level_find_replace_dialog.cpp`, `app/level_find_replace_actions.cpp`).
+
+## Brush file order on save
+
+Reviewed on 2026-10-21: TrenchBroom v2026.2, revision
+`4c756be1a54a28d921d18c77716a5f170bdc31d0`,
+[VertexTool.cpp](https://github.com/TrenchBroom/TrenchBroom/blob/4c756be1a54a28d921d18c77716a5f170bdc31d0/lib/TbUiLib/src/VertexTool.cpp),
+[ExtrudeTool.cpp](https://github.com/TrenchBroom/TrenchBroom/blob/4c756be1a54a28d921d18c77716a5f170bdc31d0/lib/TbUiLib/src/ExtrudeTool.cpp)
+and [ClipTool.cpp](https://github.com/TrenchBroom/TrenchBroom/blob/4c756be1a54a28d921d18c77716a5f170bdc31d0/lib/TbUiLib/src/ClipTool.cpp)
+(Kristian Duske, GPL-3.0-or-later), and NetRadiant Custom revision
+`449778b3840f8f2062daab15c87cb012f2ac945c`,
+[`BrushSplitByPlaneSelected` and `SubtractBrushesFromUnselected`](https://github.com/Garux/netradiant-custom/blob/449778b3840f8f2062daab15c87cb012f2ac945c/radiant/csg.cpp)
+(GPL-2.0-or-later). Both licences are compatible with VibeStudio's
+GPL-3.0-or-later licence. Both editors keep an edited brush in its parent's
+child order, so its place in the saved file stays; NRC's clipper keeps the
+clipped brush in place and adds only the split fragment to the parent. No
+source was copied. `levelMapBrushSaveLine()`, the splice fields on
+`LevelMapBrush`, the replacement heir rule (identity first, then the first
+recorded piece) and `level_brush_file_order_smoke_test.cpp` are original
+VibeStudio implementations; giving the first CSG fragment the original's place
+is a VibeStudio choice that keeps more brush numbers stable than appending
+every fragment.
+
+## Familiar keys for registered Levels commands
+
+Reviewed on 2026-10-21. The TrenchBroom profile's V, E and F (Vertex, Edge
+and Face tools), Ctrl+Alt+Shift+V (Snap Vertices to Grid) and Ctrl+Shift+D
+(Create Linked Duplicate) are default bindings read from TrenchBroom v2026.2
+[`ActionManager.cpp`](https://github.com/TrenchBroom/TrenchBroom/blob/4c756be1a54a28d921d18c77716a5f170bdc31d0/lib/TbUiLib/src/ActionManager.cpp)
+(Kristian Duske and contributors, GPL-3.0-or-later). The NetRadiant Custom
+profile's V, E and F (`DragVertices`, `DragEdges`, `DragFaces`,
+[`radiant/tools.cpp`](https://github.com/Garux/netradiant-custom/blob/449778b3840f8f2062daab15c87cb012f2ac945c/radiant/tools.cpp)),
+the keypad patch row and column keys, Ctrl+I, Ctrl+Shift+M, Ctrl+T, Ctrl+Shift+W
+and Shift+I
+([`radiant/patchmanip.cpp`](https://github.com/Garux/netradiant-custom/blob/449778b3840f8f2062daab15c87cb012f2ac945c/radiant/patchmanip.cpp)),
+Alt+D, Alt+S and Shift+T
+([`radiant/brushmanip.cpp`](https://github.com/Garux/netradiant-custom/blob/449778b3840f8f2062daab15c87cb012f2ac945c/radiant/brushmanip.cpp))
+and Ctrl+Shift+Tab (`CenterXYView`,
+[`radiant/xywindow.cpp`](https://github.com/Garux/netradiant-custom/blob/449778b3840f8f2062daab15c87cb012f2ac945c/radiant/xywindow.cpp))
+are default bindings read from revision
+`449778b3840f8f2062daab15c87cb012f2ac945c` (Id Software, William Joseph and
+contributors, GPL-2.0-or-later). Both licences are compatible with
+VibeStudio's GPL-3.0-or-later licence. Only key facts were used; the commands
+they reach, the shared command registry entries in `src/core/studio_semantics.cpp`
+and `level_palette_coverage_ui_smoke_test.cpp` are original VibeStudio work.
+Keys the studio already gives window-wide commands (Ctrl+Shift+I, Ctrl+W)
+are left unbound.
+
+## Large working grids
+
+Reviewed on 2026-10-22. The Levels grid sizes 512 and 1024, the 1024-unit
+upper limit of **Larger Grid**, and the policy that choosing or stepping the
+grid turns snapping on in the NetRadiant Custom profile follow `GridPower`,
+`GridPrev`, `GridNext` and `setGridPower` in
+[`radiant/grid.cpp`](https://github.com/Garux/netradiant-custom/blob/449778b3840f8f2062daab15c87cb012f2ac945c/radiant/grid.cpp)
+of NetRadiant Custom revision `449778b3840f8f2062daab15c87cb012f2ac945c`
+(William Joseph and contributors, GPL-2.0-or-later). The standalone NetRadiant
+profile keeps the same policy because
+[`radiant/grid.cpp`](https://github.com/xonotic/netradiant/blob/b4b295d7a37797cc2752e48aa8ce42492e7016f0/radiant/grid.cpp)
+at Xonotic NetRadiant `b4b295d7a37797cc2752e48aa8ce42492e7016f0`
+(GPL-2.0-or-later) also sets snapping in those commands. TrenchBroom v2026.2
+(`4c756be1`, GPL-3.0-or-later) stops at 256 in `ActionManager.cpp`, so its
+profile's keys are unchanged. The Eureka profile's 9 and 0 keys for the 512-
+and 1024-unit grids are the `GRID_Set` lines of Eureka's
+[`bindings.cfg`](https://github.com/ioan-chera/eureka-editor/blob/f951281878f1f8f2619e0073592b6995aeea0dfc/bindings.cfg)
+at `f9512818` (GPL-2.0-or-later per upstream README). All three licences are
+compatible with VibeStudio's GPL-3.0-or-later licence. Only behavioural and key
+facts were used; no source was copied. `levelEditorGridSizes()`,
+`LevelEditorControls::gridChangeEnablesSnap`, the `editing.gridChangeEnablesSnap`
+gesture preference, `src/app/level_grid_actions.cpp`, the plan-view grid lines in
+`src/app/map_grid.cpp` and the `level-large-grid` tests are original VibeStudio
+work.
+
+## Fractional working grids
+
+Reviewed on 2026-10-22. The Levels grid sizes 0.125, 0.25 and 0.5, Smaller
+Grid continuing below 1 unit down to 0.125, and the three commands having no
+default key follow `GridPower` (`GRIDPOWER_0125` to `GRIDPOWER_05`), `GridPrev`
+and the `SetGrid0.125`, `SetGrid0.25` and `SetGrid0.5` registrations in
+[`radiant/grid.cpp`](https://github.com/Garux/netradiant-custom/blob/449778b3840f8f2062daab15c87cb012f2ac945c/radiant/grid.cpp)
+of NetRadiant Custom revision `449778b3840f8f2062daab15c87cb012f2ac945c`
+(William Joseph and contributors, GPL-2.0-or-later), and the Decrease Grid
+Size and Set Grid Size 0.125 to 0.5 actions (grid exponents -3 to -1, no
+default key) in
+[`lib/TbUiLib/src/ActionManager.cpp`](https://github.com/TrenchBroom/TrenchBroom/blob/4c756be1a54a28d921d18c77716a5f170bdc31d0/lib/TbUiLib/src/ActionManager.cpp)
+and `canDecGridSize` in `lib/TbUiLib/src/MapWindow.cpp` of TrenchBroom
+v2026.2 (`4c756be1a54a28d921d18c77716a5f170bdc31d0`, Kristian Duske and
+contributors, GPL-3.0-or-later). Both licences are compatible with VibeStudio's
+GPL-3.0-or-later licence. Only behavioural facts were used; no source was
+copied. Keeping binary Doom and Hexen maps on whole units, the thinned-line
+status text, `levelEditorFinestGridUnits()`, `levelEditorSteppedGridUnits()`,
+`levelEditorGridCommandId()`, `ApplicationShell::levelMapGridUnits()`,
+`refreshLevelMapGridChoices()`, `mapGridDrawnSpacing()` and the
+`level-fractional-grid` tests are original VibeStudio work.
+
+## World-axis quick transforms and the quick-turn pivot
+
+Reviewed on 2026-10-22. **Flip X/Y/Z** and **Rotate X/Y/Z**, their signs
+(X -90, Y +90, Z -90), their place under Edit > Transform and their lack of a
+default key follow `Selection_Flipx` to `Selection_Rotatez`,
+`Selection_RotateClockwise` and the `MirrorSelectionX` to `RotateSelectionZ`
+registrations in
+[`radiant/select.cpp`](https://github.com/Garux/netradiant-custom/blob/449778b3840f8f2062daab15c87cb012f2ac945c/radiant/select.cpp),
+and the grid-snapped quick-turn pivot follows `rotateSelected` and
+`scaleSelected` with `snapOrigin` in
+[`radiant/selection.cpp`](https://github.com/Garux/netradiant-custom/blob/449778b3840f8f2062daab15c87cb012f2ac945c/radiant/selection.cpp)
+of NetRadiant Custom revision `449778b3840f8f2062daab15c87cb012f2ac945c`
+(William Joseph and other contributors, GPL-2.0-or-later), and `MapViewBase::rotate`
+(the grid reference point of the selection bounds) and `MapViewBase::flip` (the
+half-grid reference point, TrenchBroom issue 1495) in
+[`lib/TbUiLib/src/MapViewBase.cpp`](https://github.com/TrenchBroom/TrenchBroom/blob/4c756be1a54a28d921d18c77716a5f170bdc31d0/lib/TbUiLib/src/MapViewBase.cpp)
+of TrenchBroom v2026.2 (`4c756be1a54a28d921d18c77716a5f170bdc31d0`, Kristian
+Duske and contributors, GPL-3.0-or-later). Both licences are compatible with
+VibeStudio's GPL-3.0-or-later licence. Only behavioural facts were used; no
+source was copied. `src/core/level_quick_transform.*`,
+`src/app/level_axis_transform_actions.cpp`,
+`LevelEditorControls::quickTurnSnapsPivot`, the `editing.quickTurnSnapsPivot`
+gesture preference, `map rotate --pivot-grid`, keeping flips on the exact
+centre outside the TrenchBroom profile (see the next-but-one entry) and the
+`level-axis-transform` tests are original VibeStudio work.
+
+## Directional and depth nudges
+
+Reviewed on 2026-10-22. The **Nudge** commands follow TrenchBroom's "Move
+objects" actions (Up, Down, Left, Right, Page Up and Page Down) and their order
+of targets (rotation centre, node handles, sweep centre, objects) in
+`MapViewBase::move`, `moveRotationCenter`, `moveSweepCenter` and
+`moveNodeHandles` in
+[`lib/TbUiLib/src/ActionManager.cpp`](https://github.com/TrenchBroom/TrenchBroom/blob/4c756be1a54a28d921d18c77716a5f170bdc31d0/lib/TbUiLib/src/ActionManager.cpp)
+and
+[`lib/TbUiLib/src/MapViewBase.cpp`](https://github.com/TrenchBroom/TrenchBroom/blob/4c756be1a54a28d921d18c77716a5f170bdc31d0/lib/TbUiLib/src/MapViewBase.cpp),
+and the plan and camera axes of `MapView2D::moveDirection` and
+`MapView3D::moveDirection` (the nearest horizontal axis, the camera's up axis
+when it looks straight down or up, and right turned a quarter about Z when it
+snaps onto forward) in `lib/TbUiLib/src/MapView2D.cpp` and
+`lib/TbUiLib/src/MapView3D.cpp` of TrenchBroom v2026.2
+(`4c756be1a54a28d921d18c77716a5f170bdc31d0`, Kristian Duske and contributors,
+GPL-3.0-or-later). The Radiant profiles' <kbd>Alt</kbd>+arrow and keypad plus
+and minus keys, their use of the current plan view's axes from any window and
+their single undo step follow `NudgeSelection`, `AxisBase_forViewType`,
+`Selection_NudgeLeft` to `Selection_NudgeDown`, `Selection_MoveUp`,
+`Selection_MoveDown` and the `SelectNudgeLeft` to `SelectNudgeDown`,
+`MoveSelectionUP` and `MoveSelectionDOWN` registrations in
+[`radiant/select.cpp`](https://github.com/Garux/netradiant-custom/blob/449778b3840f8f2062daab15c87cb012f2ac945c/radiant/select.cpp)
+of NetRadiant Custom revision `449778b3840f8f2062daab15c87cb012f2ac945c`
+(William Joseph and other contributors, GPL-2.0-or-later), which keeps them
+from GtkRadiant. Both licences are compatible with VibeStudio's
+GPL-3.0-or-later licence. Only behavioural and key facts were used; no source
+was copied. `src/core/level_nudge.*`, `src/app/level_nudge_actions.cpp`, the
+views claiming nudge keys ahead of window-wide commands
+(`StudioCommandRegistry::setShortcutScopeClaims`), Doom maps keeping
+<kbd>Page Up</kbd> and <kbd>Page Down</kbd> for Raise Floor and Lower Floor,
+the <kbd>Shift</kbd> eight-step nudge, `map nudge` and the `level-nudge` tests
+are original VibeStudio work.
+
+### Duplicate and Move, Move to Camera and Repeat Transforms
+
+Reviewed on 2026-10-22. **Duplicate and Move Left**, **Right**, **Forward**,
+**Back**, **Depth Up** and **Depth Down**, their <kbd>Ctrl</kbd>+arrow and
+<kbd>Ctrl</kbd>+<kbd>Page Up</kbd>/<kbd>Page Down</kbd> keys in the TrenchBroom
+profile, and their one-transaction copy along the move direction follow the
+"Duplicate and move objects" actions in
+[`lib/TbUiLib/src/ActionManager.cpp`](https://github.com/TrenchBroom/TrenchBroom/blob/4c756be1a54a28d921d18c77716a5f170bdc31d0/lib/TbUiLib/src/ActionManager.cpp)
+and `MapViewBase::duplicateAndMoveObjects` in
+[`lib/TbUiLib/src/MapViewBase.cpp`](https://github.com/TrenchBroom/TrenchBroom/blob/4c756be1a54a28d921d18c77716a5f170bdc31d0/lib/TbUiLib/src/MapViewBase.cpp)
+of TrenchBroom v2026.2 (`4c756be1a54a28d921d18c77716a5f170bdc31d0`, Kristian
+Duske and contributors, GPL-3.0-or-later). **Move to Camera** (its
+<kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>V</kbd> key, the snapped translation from
+the selection's bounds centre to the camera and its single undo step) follows
+`MoveToCamera` and `TranslateToCamera`, and **Repeat Transforms** (its
+<kbd>Ctrl</kbd>+<kbd>R</kbd> key, the clone in object mode, the last
+translation, rotation, scale and skew applied about the current pivot, their
+survival across selection changes, and the component-mode transform) follows
+the `"RepeatTransforms"` and `"ResetTransforms"` registrations in
+[`radiant/select.cpp`](https://github.com/Garux/netradiant-custom/blob/449778b3840f8f2062daab15c87cb012f2ac945c/radiant/select.cpp)
+and `RadiantSelectionSystem::repeatTransforms`, `resetTransforms` and the
+`TransformsObserved` slots in
+[`radiant/selection.cpp`](https://github.com/Garux/netradiant-custom/blob/449778b3840f8f2062daab15c87cb012f2ac945c/radiant/selection.cpp)
+of NetRadiant Custom revision `449778b3840f8f2062daab15c87cb012f2ac945c`
+(William Joseph and other contributors, GPL-2.0-or-later). Both licences are
+compatible with VibeStudio's GPL-3.0-or-later licence. Only behavioural and key
+facts were used; no source was copied. `levelDuplicateMoveCommands()` in
+`src/core/level_nudge.*`, the repeatable-transform slots and replay in
+`src/core/level_repeat.*`, the Affine component transform,
+`moveLevelMapSelectionToCamera()` in `src/core/level_paste.*`,
+`src/app/level_duplicate_move_actions.cpp`, `src/cli/level_move_repeat.*`,
+`map nudge --duplicate`, `map move --camera`, `map repeat-transforms` and the
+`level-duplicate-move` tests are original VibeStudio work.
+
+## View-relative turns and flips
+
+Reviewed on 2026-10-22. **Roll Clockwise** and **Counter-clockwise**, yaw on
+**Rotate 90° Right** and **Left**, **Pitch Clockwise** and
+**Counter-clockwise**, and the view-relative **Flip Horizontal** and **Flip
+Vertical** follow TrenchBroom's "Roll", "Yaw" and "Pitch objects clockwise /
+counter-clockwise" and "Flip objects horizontally / vertically" actions and
+their default keys (<kbd>Alt</kbd>+arrows, <kbd>Alt</kbd>+<kbd>Page Up</kbd> and
+<kbd>Page Down</kbd>, <kbd>Ctrl</kbd>+<kbd>F</kbd> and
+<kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>F</kbd>) in
+[`lib/TbUiLib/src/ActionManager.cpp`](https://github.com/TrenchBroom/TrenchBroom/blob/4c756be1a54a28d921d18c77716a5f170bdc31d0/lib/TbUiLib/src/ActionManager.cpp),
+the turn axes (roll about the reversed forward direction, pitch about right,
+yaw about up, reversed for clockwise), the sweep cap turned by the grid angle
+and the half-grid flip pivot of `MapViewBase::rotate`, `rotationAxis` and
+`flip` in
+[`lib/TbUiLib/src/MapViewBase.cpp`](https://github.com/TrenchBroom/TrenchBroom/blob/4c756be1a54a28d921d18c77716a5f170bdc31d0/lib/TbUiLib/src/MapViewBase.cpp),
+and the plan and camera flip axes of `MapView2D::flipAxis` and
+`MapView3D::flipAxis` in `lib/TbUiLib/src/MapView2D.cpp` and
+`lib/TbUiLib/src/MapView3D.cpp` of TrenchBroom v2026.2
+(`4c756be1a54a28d921d18c77716a5f170bdc31d0`, Kristian Duske and contributors,
+GPL-3.0-or-later), whose licence is VibeStudio's own. Only behavioural and key
+facts were used; no source was copied. The view frames in
+`src/core/level_quick_transform.*` (built on the nudge axes of
+`src/core/level_nudge.*`), `flipLevelMapSelection()` with a pivot,
+`LevelEditorControls::flipSnapsPivot` and the `editing.flipSnapsPivot` gesture
+preference, `LevelSweepGizmo::rotateDestination()`,
+`ApplicationShell::applyLevelViewTransformFromUi()`, the views claiming the
+keys ahead of Go Back, Go Forward and Find, `map view-transform` and the
+`level-view-transform` tests are original VibeStudio work.
+
+## View filter commands and Radiant's world rule
+
+Reviewed on 2026-10-22. The Levels view filters as checkable commands,
+**Invert Filters** (every filter flag toggled in turn), **Show Every Kind**
+(Radiant's reset), the func_group kind and the NetRadiant Custom profile's
+filter keys (<kbd>Alt+1</kbd> World, <kbd>Alt+2</kbd> Entities,
+<kbd>Alt+5</kbd> Liquids, <kbd>Alt+6</kbd> Caulk, <kbd>Alt+7</kbd> Clips,
+<kbd>Alt+8</kbd> Paths, <kbd>Alt+0</kbd> Lights, <kbd>Ctrl+D</kbd> Details,
+<kbd>Ctrl+H</kbd> Hints, <kbd>Shift+M</kbd> Models and
+<kbd>Ctrl+Shift+T</kbd> Triggers) follow `ToggleFilterFlag`, `InvertFilters`,
+`ResetFilters` and `ConstructFilters` in
+[`radiant/filters.cpp`](https://github.com/Garux/netradiant-custom/blob/449778b3840f8f2062daab15c87cb012f2ac945c/radiant/filters.cpp);
+the world rule (worldspawn, func_group and func_detail*), the Entities filter
+as its inverse and the point-entity rule that leaves lights and misc models to
+their own filters follow `filter_entity_world`, `filter_entity_point` and
+`Entity_InitFilters` in
+[`plugins/entity/entity.cpp`](https://github.com/Garux/netradiant-custom/blob/449778b3840f8f2062daab15c87cb012f2ac945c/plugins/entity/entity.cpp)
+of NetRadiant Custom revision `449778b3840f8f2062daab15c87cb012f2ac945c`
+(William Joseph and other contributors, GPL-2.0-or-later). The NetRadiant
+profile keeps the same keys because
+[`radiant/filters.cpp`](https://github.com/xonotic/netradiant/blob/b4b295d7a37797cc2752e48aa8ce42492e7016f0/radiant/filters.cpp)
+at Xonotic NetRadiant `b4b295d7a37797cc2752e48aa8ce42492e7016f0`
+(GPL-2.0-or-later) binds them too. <kbd>Ctrl+P</kbd> (Patches) stays unbound
+because the studio keeps it for **Go to File**. The Brushes kind, every brush
+whatever its owner and no patches, follows the "View Filter > Toggle show
+brushes" action in
+[`lib/TbUiLib/src/ActionManager.cpp`](https://github.com/TrenchBroom/TrenchBroom/blob/4c756be1a54a28d921d18c77716a5f170bdc31d0/lib/TbUiLib/src/ActionManager.cpp)
+and its use in `lib/TbUiLib/src/MapViewBase.cpp` of TrenchBroom v2026.2
+(`4c756be1a54a28d921d18c77716a5f170bdc31d0`, Kristian Duske and contributors,
+GPL-3.0-or-later). All three licences are compatible with VibeStudio's
+GPL-3.0-or-later licence. Only behavioural and key facts were used; no source
+was copied. `levelViewFilterKinds()`, `levelViewFilterCommandId()`,
+`levelViewFilterWorldClass()`, `levelViewFiltersInverted()`, the saved-list
+helpers in `src/core/level_view_filters.*`, `src/app/level_view_filter_actions.cpp`,
+`map filters` (`src/cli/level_view_filters.*`) and the `level-view-filters`
+tests are original VibeStudio work.
+
+## Level camera levelling, focus and zoom reset
+
+Reviewed on 2026-10-22. **Level Camera** (pitch to zero, heading to the nearest
+22.5-degree step, position kept) follows `GlobalCamera_ResetAngles` and its
+`CenterView` command on <kbd>End</kbd>; **Focus Camera on Selection** (heading
+and pitch kept, the camera backed off along the view until every corner of the
+selection's box fits the view's side planes, at least 64 units from its centre,
+with the last selection's box when nothing is selected) follows
+`Camera_getFocusPos` and `GlobalCamera_FocusOnSelected`; and the held free-focus
+key with its wheel offset follows `CameraFreeFocus` (<kbd>Tab</kbd> during free
+move) and `wheelmove_scroll` in
+[`radiant/camwindow.cpp`](https://github.com/Garux/netradiant-custom/blob/449778b3840f8f2062daab15c87cb012f2ac945c/radiant/camwindow.cpp)
+of NetRadiant Custom revision `449778b3840f8f2062daab15c87cb012f2ac945c`
+(GPL-2.0-or-later). The NetRadiant profile keeps <kbd>End</kbd> and
+<kbd>Tab</kbd> because
+[`radiant/camwindow.cpp`](https://github.com/xonotic/netradiant/blob/b4b295d7a37797cc2752e48aa8ce42492e7016f0/radiant/camwindow.cpp)
+at Xonotic NetRadiant `b4b295d7a37797cc2752e48aa8ce42492e7016f0`
+(GPL-2.0-or-later) binds them too. The Radiant family's <kbd>End</kbd> for the
+GtkRadiant, Q3Radiant and DoomEdit profiles follows `ID_VIEW_CENTER` and
+`OnViewCenter` in Q3Radiant's
+[`MainFrm.cpp`](https://github.com/id-Software/Quake-III-Arena/blob/dbe4ddb10315479fc00086f08e25d968b4b43c49/q3radiant/MainFrm.cpp)
+(`dbe4ddb10315479fc00086f08e25d968b4b43c49`, id Software, GPL-2.0-or-later) and
+`Camera_CenterView` in Doom 3's
+[`MainFrm.cpp`](https://github.com/id-Software/DOOM-3/blob/a9c49da5afb18201d31e3f0a429a037e56ce2b9a/neo/tools/radiant/MainFrm.cpp)
+(`a9c49da5afb18201d31e3f0a429a037e56ce2b9a`, id Software, GPL-3.0-or-later with
+additional terms). **Reset Camera Zoom** on <kbd>Ctrl+Alt+Z</kbd> follows the
+"Controls/Map view/Reset camera zoom" action in
+[`lib/TbUiLib/src/ActionManager.cpp`](https://github.com/TrenchBroom/TrenchBroom/blob/4c756be1a54a28d921d18c77716a5f170bdc31d0/lib/TbUiLib/src/ActionManager.cpp)
+and `MapViewBase::resetCameraZoom` of TrenchBroom v2026.2
+(`4c756be1a54a28d921d18c77716a5f170bdc31d0`, Kristian Duske and contributors,
+GPL-3.0-or-later). All of these licences are compatible with VibeStudio's
+GPL-3.0-or-later licence. Only behavioural and key facts were used; no source
+was copied. The frustum fit, the near clearance, the rounding of exact half
+steps, the geometric wheel offset (eight notches halve or double the distance),
+Tab acting only during mouse look, `src/core/level_camera_focus.*`,
+`src/app/level_camera_focus_actions.cpp`, `map camera-focus`
+(`src/cli/level_camera_focus.*`) and the `level-camera-focus` tests are
+original VibeStudio work.
+
+## Plan pane visibility
+
+Reviewed on 2026-10-22. **Show Top View**, **Show Front View** and **Show Side
+View** follow the checkable `ToggleView`, `ToggleFrontView` and
+`ToggleSideView` toggles (`g_xy_top_shown`, `g_xz_front_shown`,
+`g_yz_side_shown`, persisted as `XYVIS`, `XZVIS` and `YZVIS`, no default keys)
+in
+[`radiant/xywindow.cpp`](https://github.com/Garux/netradiant-custom/blob/449778b3840f8f2062daab15c87cb012f2ac945c/radiant/xywindow.cpp)
+and their **View** menu items in
+[`radiant/mainframe.cpp`](https://github.com/Garux/netradiant-custom/blob/449778b3840f8f2062daab15c87cb012f2ac945c/radiant/mainframe.cpp)
+of NetRadiant Custom revision `449778b3840f8f2062daab15c87cb012f2ac945c`
+(William Joseph and contributors, GPL-2.0-or-later, compatible with
+VibeStudio's GPL-3.0-or-later licence). Only the behaviour was used; no source
+was copied. NRC offers the toggles for floating windows only; applying them to
+fixed splitter panes, keeping one pane shown, moving the active plan, per
+combination splitter proportions, revealing a pane from **Top/Front/Side View**,
+`LevelPlanPanes` in `src/core/level_editor_controls.*`,
+`src/app/level_plan_pane_actions.cpp`, `editor layout --panes` and the
+`level-plan-panes` tests are original VibeStudio work.
+
+## Radiant texture steps
+
+NetRadiant Custom's texture step commands were reviewed on 2026-10-22 at revision
+`449778b3840f8f2062daab15c87cb012f2ac945c` (id Software and contributors,
+GPL-2.0-or-later):
+`TexRotateClock`, `TexRotateCounter` and `TexScaleUp`/`Down`/`Left`/`Right` with
+`Texdef_Rotate*`, `Texdef_Scale*` and `Select_RotateTexture`/`Select_ScaleTexture` in
+[radiant/select.cpp](https://github.com/Garux/netradiant-custom/blob/449778b3840f8f2062daab15c87cb012f2ac945c/radiant/select.cpp);
+`Texdef_Scale`, `Texdef_Rotate`, `Valve220_rotate`, `BPTexdef_Scale`,
+`BPTexdef_Rotate` and `TexMatToFakeTexCoords` in
+[radiant/brush_primit.cpp](https://github.com/Garux/netradiant-custom/blob/449778b3840f8f2062daab15c87cb012f2ac945c/radiant/brush_primit.cpp);
+`removeScale`/`addScale` in
+[radiant/brush_primit.h](https://github.com/Garux/netradiant-custom/blob/449778b3840f8f2062daab15c87cb012f2ac945c/radiant/brush_primit.h)
+and [radiant/brush.h](https://github.com/Garux/netradiant-custom/blob/449778b3840f8f2062daab15c87cb012f2ac945c/radiant/brush.h);
+`Patch::ScaleTexture` and `Patch::RotateTexture` in
+[radiant/patch.cpp](https://github.com/Garux/netradiant-custom/blob/449778b3840f8f2062daab15c87cb012f2ac945c/radiant/patch.cpp);
+`Patch_convertScale` in
+[radiant/patchdialog.cpp](https://github.com/Garux/netradiant-custom/blob/449778b3840f8f2062daab15c87cb012f2ac945c/radiant/patchdialog.cpp);
+and the `si_globals_t` increments in
+[radiant/surfacedialog.h](https://github.com/Garux/netradiant-custom/blob/449778b3840f8f2062daab15c87cb012f2ac945c/radiant/surfacedialog.h).
+The licence is compatible with VibeStudio's GPL-3.0-or-later licence. Only the
+arithmetic, defaults and key bindings were used as behavioural facts; no source
+was copied. `RadiantScale`, `RadiantRotate`, `levelSurfaceRadiantScaleStep()` and
+the shared centre turn in `src/core/level_surface.*`, the Surfaces tab controls,
+the `map align-textures --scale-step` and `--anchor` options and the
+`level-surface-step` tests are original VibeStudio work. Patches turn in texels
+rather than NRC's normalised coordinates; see
+[EDITOR_PROFILES.md](EDITOR_PROFILES.md#nrc-texture-steps).

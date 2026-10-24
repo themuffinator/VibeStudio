@@ -5,11 +5,18 @@
 // and import.
 #include "app/model_editor_dialog.h"
 
+#include "app/dialog_screen_fit.h"
+#include "app/form_row_label_lines.h"
 #include "app/model_controls_dialog.h"
 #include "app/model_editor_tools.h"
 #include "app/model_viewport.h"
+#include "app/status_line_label.h"
+#include "app/studio_accessibility.h"
 #include "app/studio_icons.h"
+#include "app/studio_layout.h"
 #include "app/studio_sidebar.h"
+#include "app/wrapping_action_button.h"
+#include "app/wrapping_check_box.h"
 #include "core/model_sidebar.h"
 #include "core/studio_settings.h"
 
@@ -34,10 +41,12 @@
 #include <QMessageBox>
 #include <QMouseEvent>
 #include <QPushButton>
+#include <QResizeEvent>
 #include <QSaveFile>
 #include <QScrollArea>
 #include <QScrollBar>
 #include <QStyle>
+#include <QShowEvent>
 #include <QSplitter>
 #include <QTabWidget>
 #include <QTableWidget>
@@ -46,6 +55,7 @@
 #include <QToolButton>
 
 #include <algorithm>
+#include <utility>
 
 namespace vibestudio
 {
@@ -55,6 +65,9 @@ struct Text
 {
 	Q_DECLARE_TR_FUNCTIONS(VibeStudioModelEditor)
 };
+
+// The smallest a view pane gets, smaller than a lone viewport's own minimum.
+constexpr QSize paneMinimum(160, 120);
 
 QString paneObjectName(int quadrant)
 {
@@ -154,7 +167,9 @@ void ModelEditorDialog::buildToolPages()
 				button->setDefaultAction(action);
 				button->setToolButtonStyle(Qt::ToolButtonTextBesideIcon);
 				button->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
-				grid->addWidget(button, index / 2, index % 2);
+				// One column, as Blender's Add menu lists them: two columns of
+				// captions would widen the sidebar at large text sizes.
+				grid->addWidget(button, index, 0);
 				++index;
 			}
 		}
@@ -235,19 +250,19 @@ void ModelEditorDialog::buildToolPages()
 					if (!m_refreshing)
 						applyProfile(m_profileCombo->currentData().toString());
 				});
-		auto *reference = new QPushButton(Text::tr("Show Every Gesture and Key…"));
+		auto *reference = new WrappingActionButton(Text::tr("Show Every Gesture and Key…"), 2);
 		reference->setObjectName(QStringLiteral("meshControlsReference"));
 		connect(reference, &QPushButton::clicked, this, [this] { showControlsReference(); });
 		controlsForm->addRow(reference);
-		auto *customise = new QPushButton(Text::tr("Customise Controls…"));
+		auto *customise = new WrappingActionButton(Text::tr("Customise Controls…"), 2);
 		customise->setObjectName(QStringLiteral("meshCustomiseControls"));
 		connect(customise, &QPushButton::clicked, this, [this] { customiseControls(); });
 		controlsForm->addRow(customise);
-		auto *exportButton = new QPushButton(Text::tr("Export Controls…"));
+		auto *exportButton = new WrappingActionButton(Text::tr("Export Controls…"), 2);
 		exportButton->setObjectName(QStringLiteral("meshExportControls"));
 		exportButton->setToolTip(Text::tr("Save your changes to this profile as a file to share or keep."));
 		connect(exportButton, &QPushButton::clicked, this, [this] { exportControls(); });
-		auto *importButton = new QPushButton(Text::tr("Import Controls…"));
+		auto *importButton = new WrappingActionButton(Text::tr("Import Controls…"), 2);
 		importButton->setObjectName(QStringLiteral("meshImportControls"));
 		importButton->setToolTip(Text::tr("Load a controls file and save its changes for the profile it names."));
 		connect(importButton, &QPushButton::clicked, this, [this] { importControls(); });
@@ -260,7 +275,7 @@ void ModelEditorDialog::buildToolPages()
 		overlayRows->setContentsMargins(0, 0, 0, 0);
 		const auto toggle = [&](const QString &name, const QString &text, bool checked, auto apply)
 		{
-			auto *box = new QCheckBox(text);
+			auto *box = new WrappingCheckBox(text);
 			box->setObjectName(name);
 			box->setChecked(checked);
 			connect(box, &QCheckBox::toggled, this, apply);
@@ -344,16 +359,171 @@ void ModelEditorDialog::fitSidebarPages()
 {
 	for (auto *page : std::as_const(m_sidebarPages))
 	{
-		// Measure the whole page, including nested group padding and translated
-		// labels. Button text alone misses margins added by high-contrast styles.
 		auto *scroll = page->findChild<QScrollArea *>(QStringLiteral("sidebarPageScroll"));
 		if (!scroll || !scroll->widget())
 			continue;
-		scroll->widget()->ensurePolished();
+		auto *content = scroll->widget();
+		// Text gains lines rather than width: labels, summaries and notes
+		// wrap, and a choice shows ten characters at least (its list shows
+		// each whole). Buttons and check boxes are the wrapping kinds.
+		for (auto *form : content->findChildren<QFormLayout *>())
+		{
+			// A form that keeps labels beside their fields moves a field under
+			// its label when the two do not fit side by side.
+			if (form->rowWrapPolicy() == QFormLayout::DontWrapRows)
+				form->setRowWrapPolicy(QFormLayout::WrapLongRows);
+			for (int row = 0; row < form->rowCount(); ++row)
+			{
+				// A row label's wrapped lines need their height kept.
+				if (auto *item = form->itemAt(row, QFormLayout::LabelRole); item)
+					keepFormRowLabelLines(qobject_cast<QLabel *>(item->widget()));
+			}
+		}
+		for (auto *label : content->findChildren<QLabel *>())
+		{
+			if (!dynamic_cast<ElidedLabel *>(label) && !dynamic_cast<StatusLineLabel *>(label))
+				label->setWordWrap(true);
+		}
+		for (auto *choice : content->findChildren<QComboBox *>())
+		{
+			if (choice->sizeAdjustPolicy() != QComboBox::AdjustToMinimumContentsLengthWithIcon)
+			{
+				choice->setSizeAdjustPolicy(QComboBox::AdjustToMinimumContentsLengthWithIcon);
+				choice->setMinimumContentsLength(10);
+			}
+		}
+		// The page is as wide as what is left that cannot wrap (a number
+		// field, a long word), and at least 18 average characters (16 for the
+		// outliner), so the floor follows the text scale. The editor folds a
+		// sidebar when both no longer leave the views room.
+		page->ensurePolished();
 		const int borders = 2 * page->style()->pixelMetric(QStyle::PM_DefaultFrameWidth, nullptr, page);
-		const int content = scroll->widget()->minimumSizeHint().width() + scroll->verticalScrollBar()->sizeHint().width() + borders;
-		page->setMinimumWidth(std::max(page->pageId() == QStringLiteral("outliner") ? 220 : 280, content));
+		const int floor = page->fontMetrics().averageCharWidth() * (page->pageId() == QStringLiteral("outliner") ? 16 : 18);
+		const int width = std::max(content->minimumSizeHint().width(), floor);
+		page->setMinimumWidth(width + scroll->verticalScrollBar()->sizeHint().width() + borders);
 	}
+}
+
+void ModelEditorDialog::queueViewsFit(StudioSidebar *opened)
+{
+	if (!m_tools)
+		return;
+	if (opened)
+		m_viewsFitOpened = opened;
+	if (m_viewsFitQueued)
+		return;
+	m_viewsFitQueued = true;
+	QTimer::singleShot(0, this, [this] { fitViewsToWidth(); });
+}
+
+void ModelEditorDialog::foldSidebarForViews(StudioSidebar *sidebar, const QString &message)
+{
+	auto *splitter = qobject_cast<QSplitter *>(m_editingControls);
+	auto *other = sidebar == m_leadingSidebar ? m_trailingSidebar : m_leadingSidebar;
+	const int otherIndex = splitter && other ? splitter->indexOf(other) : -1;
+	const int before = otherIndex >= 0 ? splitter->sizes().value(otherIndex) : 0;
+	sidebar->setFolded(true);
+	// Folding hands the width to the widest neighbour, which can be the other
+	// sidebar (just opened, say): it goes to the views instead.
+	if (otherIndex >= 0)
+	{
+		QList<int> sizes = splitter->sizes();
+		if (sizes.size() == 3 && otherIndex != 1 && sizes[otherIndex] > before)
+		{
+			sizes[1] += sizes[otherIndex] - before;
+			sizes[otherIndex] = before;
+			splitter->setSizes(sizes);
+		}
+	}
+	m_status->setText(message, LiveStatus::Result);
+}
+
+void ModelEditorDialog::fitViewsToWidth()
+{
+	m_viewsFitQueued = false;
+	auto *opened = std::exchange(m_viewsFitOpened, nullptr);
+	auto *splitter = qobject_cast<QSplitter *>(m_editingControls);
+	if (!splitter || !m_paneGrid || !m_leadingSidebar || !m_trailingSidebar || !isVisible() || width() <= 0)
+		return;
+	QList<int> sizes = splitter->sizes();
+	if (sizes.size() != 3)
+		return;
+	// The shelf and margins beside the views stay; the views get the rest of
+	// the centre column.
+	const int beside = std::max(0, sizes[1] - m_paneGrid->width());
+	const int wanted = (width() * 45 + 99) / 100;
+	if (sizes[1] - beside >= wanted)
+		return;
+	// The sidebars first give back what they hold beyond their minimum.
+	for (const int index : {2, 0})
+	{
+		auto *sidebar = index == 0 ? m_leadingSidebar : m_trailingSidebar;
+		if (!sidebar->isVisible() || sidebar->isFolded())
+			continue;
+		const int give = std::min(sizes[index] - sidebar->minimumSizeHint().width(), wanted - (sizes[1] - beside));
+		if (give > 0)
+		{
+			sizes[index] -= give;
+			sizes[1] += give;
+		}
+	}
+	splitter->setSizes(sizes);
+	// Then a sidebar folds to its tabs, as Blender's N folds the properties
+	// sidebar: that one, unless the user has just opened it, when the other
+	// folds instead. Any of its tabs opens it again.
+	auto *fold = opened == m_trailingSidebar ? m_leadingSidebar : m_trailingSidebar;
+	if (sizes[1] - beside >= wanted || !fold->isVisible() || fold->isFolded() || fold->pageIds().isEmpty())
+		return;
+	foldSidebarForViews(fold, opened && opened != fold
+								  ? Text::tr("The %1 sidebar is folded to make room for %2. Choose one of its tabs to open it.")
+										.arg(fold->accessibleName(), opened->accessibleName())
+								  : Text::tr("The %1 sidebar is folded to give the views room. Choose one of its tabs to open it.")
+										.arg(fold->accessibleName()));
+}
+
+void ModelEditorDialog::keepSidebarsInRoom(StudioSidebar *opened)
+{
+	auto *other = opened == m_leadingSidebar ? m_trailingSidebar : m_leadingSidebar;
+	if (!opened || !other || other->isFolded() || !other->isVisible() || other->pageIds().isEmpty())
+		return;
+	// The room the editor has: its page in the studio, else the screen. The
+	// panels' minimum is read from the splitter, which measures it afresh;
+	// the editor's own layout catches up only after the next layout pass.
+	const int room = isWindow() ? dialogScreenArea(this).width() : (parentWidget() ? parentWidget()->width() : 0);
+	const QMargins margins = layout() ? layout()->contentsMargins() : QMargins();
+	if (room <= 0 || !m_editingControls || m_editingControls->minimumSizeHint().width() + margins.left() + margins.right() <= room)
+		return;
+	// Both sidebars no longer fit beside the views: the one just opened stays
+	// and the other folds to its tabs, rather than the editor (menus and all)
+	// scrolling sideways in its page.
+	foldSidebarForViews(other, Text::tr("The %1 sidebar is folded to make room for %2. Choose one of its tabs to open it.")
+								   .arg(other->accessibleName(), opened->accessibleName()));
+}
+
+void ModelEditorDialog::changeEvent(QEvent *event)
+{
+	QDialog::changeEvent(event);
+	// A new text scale or theme changes every control's width: refit the
+	// sidebar floors, then make room for the views again.
+	if ((event->type() == QEvent::FontChange || event->type() == QEvent::StyleChange) && m_tools)
+	{
+		fitSidebarPages();
+		queueViewsFit();
+	}
+}
+
+void ModelEditorDialog::showEvent(QShowEvent *event)
+{
+	QDialog::showEvent(event);
+	queueViewsFit();
+}
+
+void ModelEditorDialog::resizeEvent(QResizeEvent *event)
+{
+	QDialog::resizeEvent(event);
+	// Only narrowing can crowd the views; widening leaves the user's sizes.
+	if (event->size().width() < event->oldSize().width())
+		queueViewsFit();
 }
 
 void ModelEditorDialog::saveSidebarState()
@@ -439,7 +609,9 @@ void ModelEditorDialog::applyControls(const ModelEditorControls &controls)
 		timeline->setVisible(m_controls.layout.timelineVisible);
 	if (layoutChanged)
 	{
-		m_viewLayout = ModelViewLayout::Single;
+		// The opposite layout first, so the panes are placed whichever layout
+		// was showing (forcing one view left four panes on screen).
+		m_viewLayout = m_controls.layout.layout == ModelViewLayout::Single ? ModelViewLayout::FourViews : ModelViewLayout::Single;
 		setViewLayout(m_controls.layout.layout);
 		if (m_controls.layout.layout == ModelViewLayout::Single)
 		{
@@ -459,6 +631,9 @@ void ModelEditorDialog::applyControls(const ModelEditorControls &controls)
 	else
 		configurePane(m_preview, m_viewLayout == ModelViewLayout::FourViews ? m_paneViews.value(m_activePane) : ModelPaneView::Perspective, false);
 	refreshProfileControls();
+	// Arranging the sidebars opens them again: make room for the views.
+	if (isVisible())
+		queueViewsFit();
 }
 
 void ModelEditorDialog::refreshProfileControls()
@@ -516,6 +691,8 @@ void ModelEditorDialog::showControlsReference()
 	table->verticalHeader()->hide();
 	table->setEditTriggers(QAbstractItemView::NoEditTriggers);
 	table->setSelectionBehavior(QAbstractItemView::SelectRows);
+	// Arrows move between rows; Tab leaves rather than cycling every cell.
+	table->setTabKeyNavigation(false);
 	const auto rows = modelEditorControlRows(m_controls);
 	table->setRowCount(rows.size());
 	for (int row = 0; row < rows.size(); ++row)
@@ -530,7 +707,7 @@ void ModelEditorDialog::showControlsReference()
 	auto *buttons = new QDialogButtonBox(QDialogButtonBox::Close);
 	connect(buttons, &QDialogButtonBox::rejected, &dialog, &QDialog::reject);
 	layout->addWidget(buttons);
-	dialog.resize(720, 640);
+	fitDialogToScreen(&dialog, QSize(720, 640));
 	dialog.exec();
 }
 
@@ -545,12 +722,15 @@ void ModelEditorDialog::customiseControls()
 	QString error;
 	if (!settings.setModelEditorControlOverrides(m_controls.profileId, overrides, &error))
 	{
-		m_status->setText(error);
+		m_status->setText(error, LiveStatus::Problem);
 		return;
 	}
 	applyControls(dialog.controls());
-	m_status->setText(overrides.isEmpty() ? Text::tr("The %1 controls are back to their defaults.").arg(m_controls.profileId)
-										  : Text::tr("Saved your changes to the %1 controls.").arg(m_controls.profileId));
+	ModelEditorProfile profile;
+	static_cast<void>(modelEditorProfileForId(m_controls.profileId, &profile));
+	m_status->setText(overrides.isEmpty() ? Text::tr("The %1 controls are back to their defaults.").arg(profile.displayName)
+										  : Text::tr("Saved your changes to the %1 controls.").arg(profile.displayName),
+					  LiveStatus::Result);
 }
 
 void ModelEditorDialog::exportControls()
@@ -564,33 +744,52 @@ void ModelEditorDialog::exportControls()
 	if (!file.open(QIODevice::WriteOnly) ||
 		file.write(modelEditorControlsFile(m_controls.profileId, vibestudio::modelEditorControlOverrides(base, m_controls))) < 0 || !file.commit())
 	{
-		m_status->setText(Text::tr("Could not write %1: %2").arg(path, file.errorString()));
+		m_status->setText(Text::tr("Could not write %1: %2").arg(path, file.errorString()), LiveStatus::Problem);
 		return;
 	}
-	m_status->setText(Text::tr("Exported the %1 controls to %2.").arg(m_controls.profileId, path));
+	ModelEditorProfile profile;
+	static_cast<void>(modelEditorProfileForId(m_controls.profileId, &profile));
+	m_status->setText(Text::tr("Exported the %1 controls to %2.").arg(profile.displayName, path), LiveStatus::Result);
 }
 
 void ModelEditorDialog::importControls()
 {
 	const QString path = QFileDialog::getOpenFileName(this, Text::tr("Import Controls"), {}, Text::tr("VibeStudio controls (*.json)"));
-	if (path.isEmpty())
-		return;
+	if (!path.isEmpty())
+		importControlsFile(path);
+}
+
+bool ModelEditorDialog::importControlsFile(const QString &path, QString *error)
+{
+	const auto fail = [this, error](const QString &message)
+	{
+		m_status->setText(message, LiveStatus::Problem);
+		if (error)
+			*error = message;
+		return false;
+	};
 	QFile file(path);
-	QString profileId, error;
+	QString profileId, failure;
 	QJsonObject overrides;
-	if (!file.open(QIODevice::ReadOnly) || !parseModelEditorControlsFile(file.readAll(), &profileId, &overrides, &error))
-	{
-		m_status->setText(error.isEmpty() ? Text::tr("Could not read %1: %2").arg(path, file.errorString()) : error);
-		return;
-	}
+	if (!file.open(QIODevice::ReadOnly) || !parseModelEditorControlsFile(file.readAll(), &profileId, &overrides, &failure))
+		return fail(failure.isEmpty() ? Text::tr("Could not read %1: %2").arg(path, file.errorString()) : failure);
+	// The settings keep only what applies, so what the file asks for and no
+	// profile can take (a key that always moves focus between panels, an
+	// unknown command) is reported now, not dropped in silence.
+	QStringList skipped;
+	ModelEditorControls applied;
+	applyModelEditorControlOverrides(modelEditorControlsForProfile(profileId), overrides, &applied, &skipped);
 	StudioSettings settings;
-	if (!settings.setModelEditorControlOverrides(profileId, overrides, &error))
-	{
-		m_status->setText(error);
-		return;
-	}
+	if (!settings.setModelEditorControlOverrides(profileId, overrides, &failure))
+		return fail(failure);
 	applyProfile(profileId);
-	m_status->setText(Text::tr("Imported the %1 controls from %2.").arg(profileId, path));
+	ModelEditorProfile profile;
+	static_cast<void>(modelEditorProfileForId(profileId, &profile));
+	const QString imported = Text::tr("Imported the %1 controls from %2.").arg(profile.displayName, path);
+	m_status->setText(skipped.isEmpty() ? imported : imported + QLatin1Char(' ') + skipped.join(QLatin1Char(' ')), LiveStatus::Result);
+	if (error)
+		error->clear();
+	return true;
 }
 
 // --- Panes -----------------------------------------------------------------
@@ -616,6 +815,9 @@ void ModelEditorDialog::buildPaneGrid(QWidget *viewport)
 		m_paneLayout->addWidget(frame, quadrant / 2, quadrant % 2);
 	}
 	m_paneFrames[m_activePane]->layout()->addWidget(viewport);
+	// Four panes at the viewport's own minimum would hold the editor open on
+	// a laptop screen at large text sizes.
+	viewport->setMinimumSize(paneMinimum);
 	m_paneSync = new QTimer(this);
 	m_paneSync->setSingleShot(true);
 	m_paneSync->setInterval(30);
@@ -676,9 +878,11 @@ void ModelEditorDialog::placePanes()
 		{
 			auto *mirror = new ModelViewport;
 			mirror->setObjectName(QStringLiteral("meshMirrorPane%1").arg(m_mirrors.size()));
+			mirror->setMinimumSize(paneMinimum);
 			mirror->setBackfaceCulling(false);
 			mirror->setFocusPolicy(Qt::ClickFocus);
 			mirror->installEventFilter(this);
+			connect(mirror, &ModelViewport::playbackRefused, this, [this](const QString &reason) { m_status->setText(reason); });
 			m_mirrors.append(mirror);
 		}
 		int next = 0;
@@ -743,7 +947,7 @@ void ModelEditorDialog::toggleMaximisedView()
 	m_trailingSidebar->setVisible(!m_sidebarsHidden && !m_trailingSidebar->pageIds().isEmpty());
 }
 
-void ModelEditorDialog::activatePane(int quadrant)
+void ModelEditorDialog::activatePane(int quadrant, Qt::FocusReason reason)
 {
 	if (quadrant < 0 || quadrant > 3 || quadrant == m_activePane || m_viewLayout != ModelViewLayout::FourViews)
 		return;
@@ -768,7 +972,27 @@ void ModelEditorDialog::activatePane(int quadrant)
 	mirror->mirrorDisplayFrom(*m_preview);
 	placePanes();
 	m_paneLayout->activate();
-	m_preview->setFocus(Qt::MouseFocusReason);
+	m_preview->setFocus(reason);
+}
+
+bool ModelEditorDialog::stepActivePane(int step)
+{
+	if (m_viewLayout != ModelViewLayout::FourViews)
+	{
+		const auto *toggle = m_tools ? m_tools->action(QStringLiteral("meshToggleQuadView")) : nullptr;
+		const QString keys = toggle && !toggle->shortcuts().isEmpty() ? toggle->shortcuts().first().toString(QKeySequence::NativeText) : QString();
+		m_status->setText(keys.isEmpty() ? Text::tr("Next View and Previous View move between four views; choose four views in Layout on the View page.")
+										 : Text::tr("Next View and Previous View move between four views; %1 turns them on.").arg(keys));
+		return false;
+	}
+	const int quadrant = ((m_activePane + step) % 4 + 4) % 4;
+	activatePane(quadrant, step > 0 ? Qt::TabFocusReason : Qt::BacktabFocusReason);
+	// The preview keeps focus as it moves, so a screen reader hears no focus
+	// change: name the view that is now active.
+	const QString message = Text::tr("Active view: %1.").arg(modelPaneViewDisplayName(m_paneViews.value(m_activePane)));
+	m_status->setText(message);
+	announceStatus(m_preview, message, LiveStatus::Result);
+	return true;
 }
 
 void ModelEditorDialog::syncPanes()

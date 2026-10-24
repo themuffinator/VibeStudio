@@ -152,6 +152,14 @@ before you publish.
 `<name>.manifest.json` with the hashes of every original and final entry. A failed or cancelled save
 keeps your staged changes so you can try again.
 
+Output checks also recognise hard links to protected archive, folder and draft
+inputs. A destination outside the source folder can still refer to a source
+file this way. Checking an existing linked destination may scan protected folder
+contents, with progress and cancellation. If the scan cannot be completed or
+exceeds its limits, choose a new independent output. Extraction uses the same
+source protection. These checks do not reserve the filesystem against changes
+by other applications.
+
 ### Replace an existing package
 
 Saving over a file that already exists, including the open package, is opt-in. VibeStudio asks

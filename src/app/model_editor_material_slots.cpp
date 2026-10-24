@@ -1,5 +1,6 @@
 #include "app/model_editor_dialog.h"
 #include "app/model_material_slots_dialog.h"
+#include "app/wrapping_action_button.h"
 #include <QComboBox>
 #include <QCoreApplication>
 #include <QFormLayout>
@@ -24,13 +25,21 @@ void ModelEditorDialog::addMaterialSlotControls(QFormLayout *surface)
 	m_materialSlot->setSizeAdjustPolicy(QComboBox::AdjustToMinimumContentsLengthWithIcon);
 	m_materialSlot->setMinimumContentsLength(16);
 	surface->addRow(QCoreApplication::translate("VibeStudioModelEditor", "Preview slot"), m_materialSlot);
-	m_manageMaterialSlots = new QPushButton(QCoreApplication::translate("VibeStudioModelEditor", "Manage Material Slots…"));
+	m_manageMaterialSlots = new WrappingActionButton(QCoreApplication::translate("VibeStudioModelEditor", "Manage Material Slots…"), 2);
 	m_manageMaterialSlots->setObjectName("manageMeshMaterialSlots");
 	m_manageMaterialSlots->setAccessibleName(m_manageMaterialSlots->text());
 	m_manageMaterialSlots->setAccessibleDescription(
 		QCoreApplication::translate("VibeStudioModelEditor", "Add, replace, remove or reorder this surface's external material bindings."));
 	m_manageMaterialSlots->setToolTip(m_manageMaterialSlots->accessibleDescription());
 	surface->addRow(m_manageMaterialSlots);
+	m_skinVariants = new QPushButton(QCoreApplication::translate("VibeStudioModelEditor", "Skin Variants…"));
+	m_skinVariants->setObjectName("meshSkinVariants");
+	m_skinVariants->setAccessibleName(m_skinVariants->text());
+	m_skinVariants->setAccessibleDescription(QCoreApplication::translate(
+		"VibeStudioModelEditor", "Name skins such as red and blue that give some surfaces other materials, and write their skin files."));
+	m_skinVariants->setToolTip(m_skinVariants->accessibleDescription());
+	surface->addRow(m_skinVariants);
+	connect(m_skinVariants, &QPushButton::clicked, this, [this] { editSkinVariants(); });
 	connect(m_materialSlot, &QComboBox::currentIndexChanged, this, [this](int slot) {
 		if (m_refreshing || m_working || slot < 0 || m_document.mesh().surfaces.isEmpty())
 			return;
@@ -98,6 +107,7 @@ void ModelEditorDialog::refreshMaterialSlots()
 	m_materialSlot->setCurrentIndex(slot);
 	m_materialSlot->setEnabled(external && !surface.skinPaths.isEmpty());
 	m_manageMaterialSlots->setEnabled(external);
+	m_skinVariants->setEnabled(external);
 	m_manageMaterialSlots->setAccessibleDescription(
 		external ? QCoreApplication::translate("VibeStudioModelEditor",
 											   "Add, replace, remove or reorder this surface's external material bindings.")

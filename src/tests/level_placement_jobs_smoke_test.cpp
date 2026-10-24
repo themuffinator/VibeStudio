@@ -155,6 +155,8 @@ int main(int argc, char** argv) {
 	expect(createLevelSceneNode(&source, LevelSceneNodeKind::Group, "Locked", {}, &node, &error) &&
 			   assignLevelSceneObjects(&source, node, {"brush:0"}, &error) && setLevelSceneLocked(&source, node, true, &error),
 		   "locked source", error);
+	expect(openLevelSceneGroup(&source,node,&error),"open locked source for partial-content copy",error);
+	selectLevelMapObject(&source,"brush:0");
 	const auto protectedBytes = serializeLevelMap(source).bytes;
 	const auto refused = prepareLevelPlacement(source, duplicate);
 	expect(!refused.succeeded && !refused.cancelled && refused.error.contains("Unlock") &&

@@ -62,6 +62,7 @@ QString kindName(const QString& kind)
 	if (kind == QStringLiteral("shader-image")) { return QCoreApplication::translate("VibeStudioLevelDependencyDialog", "Shader image"); }
 	if (kind == QStringLiteral("model")) { return QCoreApplication::translate("VibeStudioLevelDependencyDialog", "Model"); }
 	if (kind == QStringLiteral("model-material")) { return QCoreApplication::translate("VibeStudioLevelDependencyDialog", "Model material"); }
+	if (kind == QStringLiteral("model-lod")) { return QCoreApplication::translate("VibeStudioLevelDependencyDialog", "Model detail level"); }
 	if (kind == QStringLiteral("sound")) { return QCoreApplication::translate("VibeStudioLevelDependencyDialog", "Sound / music"); }
 	if (kind == QStringLiteral("doom-wall")) { return QCoreApplication::translate("VibeStudioLevelDependencyDialog", "Doom wall"); }
 	if (kind == QStringLiteral("doom-flat")) { return QCoreApplication::translate("VibeStudioLevelDependencyDialog", "Doom flat"); }

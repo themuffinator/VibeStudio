@@ -1,4 +1,6 @@
 #include "app/model_assembly_dialog.h"
+#include "app/locale_number.h"
+#include "app/dialog_screen_fit.h"
 #include "app/model_assembly_recovery_dialog.h"
 #include "app/model_assembly_recovery_writer.h"
 #include "app/model_viewport.h"
@@ -20,6 +22,7 @@
 #include <QInputDialog>
 #include <QLabel>
 #include <QLineEdit>
+#include <QLocale>
 #include <QMessageBox>
 #include <QPlainTextEdit>
 #include <QPointer>
@@ -94,7 +97,6 @@ ModelAssemblyDialog::ModelAssemblyDialog(QWidget *parent) : QDialog(parent)
 	setAttribute(Qt::WA_DeleteOnClose);
 	setWindowTitle(QCoreApplication::translate("ModelAssemblyDialog", "Model Assembly"));
 	setAccessibleName(QCoreApplication::translate("ModelAssemblyDialog", "Model Assembly"));
-	resize(1180, 760);
 	ModelAssembly empty;
 	empty.name = QCoreApplication::translate("ModelAssemblyDialog", "Assembly");
 	m_document.setAssembly(empty, QDir::currentPath());
@@ -113,6 +115,9 @@ ModelAssemblyDialog::ModelAssemblyDialog(QWidget *parent) : QDialog(parent)
 		return a;
 	};
 	action(QCoreApplication::translate("ModelAssemblyDialog", "Open…"), "assemblyOpen", [this] { chooseOpen(); }, QKeySequence::Open);
+	action(QCoreApplication::translate("ModelAssemblyDialog", "Open Player…"), "assemblyOpenPlayer", [this] { choosePlayer(); })
+		->setToolTip(QCoreApplication::translate("ModelAssemblyDialog",
+												 "Open a Quake III player of the current package or folder as a new assembly. The package is not changed."));
 	action(QCoreApplication::translate("ModelAssemblyDialog", "Recoveries…"), "assemblyRecoveries", [this] { chooseRecovery(); });
 	action(QCoreApplication::translate("ModelAssemblyDialog", "Save"), "assemblySave", [this] { chooseSave(); }, QKeySequence::Save);
 	action(
@@ -346,7 +351,7 @@ ModelAssemblyDialog::ModelAssemblyDialog(QWidget *parent) : QDialog(parent)
 	splitter->addWidget(scroll);
 	splitter->setStretchFactor(1, 1);
 	splitter->setSizes({185, 630, 310});
-	m_status = new QLabel;
+	m_status = new LiveStatusLabel;
 	m_status->setObjectName(QStringLiteral("assemblyStatus"));
 	m_status->setTextFormat(Qt::PlainText);
 	m_status->setWordWrap(true);
@@ -449,16 +454,18 @@ ModelAssemblyDialog::ModelAssemblyDialog(QWidget *parent) : QDialog(parent)
 				}
 		}
 		applyMaterialImages();
+		// One message per count, so each takes its own plural form.
+		const int ready = int(result.assets.readyCount()), problems = int(result.assets.problemCount());
 		m_materialStatus->setText(result.error.isEmpty()
-									  ? QCoreApplication::translate("ModelAssemblyDialog", "%1 material previews ready; %2 need attention.")
-											.arg(result.assets.readyCount())
-											.arg(result.assets.problemCount())
+									  ? QCoreApplication::translate("ModelAssemblyDialog", "%Ln material preview(s) ready; %1", nullptr, ready)
+											.arg(QCoreApplication::translate("ModelAssemblyDialog", "%Ln problem(s)", nullptr, problems))
 									  : result.error);
 		refreshDetails();
 	};
 	connect(m_render, &QComboBox::currentIndexChanged, this, [this] { refreshMaterials(); });
 	refresh();
 	newPart();
+	fitDialogToScreen(this, QSize(1180, 760));
 }
 ModelAssemblyDialog::~ModelAssemblyDialog()
 {
@@ -473,10 +480,9 @@ ModelAssemblyDialog::~ModelAssemblyDialog()
 	m_recoveryWriter = nullptr;
 }
 
-void ModelAssemblyDialog::report(const QString &message)
+void ModelAssemblyDialog::report(const QString &message, LiveStatus kind)
 {
-	m_status->setText(message);
-	m_status->setAccessibleDescription(message);
+	m_status->setText(message, kind);
 }
 bool ModelAssemblyDialog::performWork(const QString &title, ModelTask task, QString *error, bool durableWrite)
 {
@@ -514,7 +520,7 @@ bool ModelAssemblyDialog::performWork(const QString &title, ModelTask task, QStr
 	}
 	if (!success)
 	{
-		report(failure);
+		report(failure, LiveStatus::Problem);
 	}
 	if (m_closeAfterWork)
 	{
@@ -633,7 +639,7 @@ bool ModelAssemblyDialog::saveSource(const QString &path, bool overwrite, QStrin
 	m_document = std::move(candidate);
 	retireRecovery();
 	refresh(false);
-	report(QCoreApplication::translate("ModelAssemblyDialog", "Saved assembly source: %1").arg(m_document.path()));
+	report(QCoreApplication::translate("ModelAssemblyDialog", "Saved assembly source: %1").arg(m_document.path()), LiveStatus::Result);
 	return true;
 }
 bool ModelAssemblyDialog::applyPart(const QString &previousId, const ModelAssemblyPart &part, QString *error)
@@ -643,7 +649,7 @@ bool ModelAssemblyDialog::applyPart(const QString &previousId, const ModelAssemb
 	{
 		if (error)
 		{
-			report(*error);
+			report(*error, LiveStatus::Problem);
 		}
 		return false;
 	}
@@ -656,7 +662,7 @@ bool ModelAssemblyDialog::removeBranch(const QString &id, QString *error)
 	{
 		if (error)
 		{
-			report(*error);
+			report(*error, LiveStatus::Problem);
 		}
 		return false;
 	}
@@ -721,7 +727,8 @@ bool ModelAssemblyDialog::exportPose(const QString &path, bool overwrite, QStrin
 	{
 		return false;
 	}
-	report(QCoreApplication::translate("ModelAssemblyDialog", "Exported pose: %1. %2").arg(path, result.notes.join(QLatin1Char(' '))));
+	report(QCoreApplication::translate("ModelAssemblyDialog", "Exported pose: %1. %2").arg(path, result.notes.join(QLatin1Char(' '))),
+		   LiveStatus::Result);
 	return true;
 }
 void ModelAssemblyDialog::checkpointRecovery()
@@ -904,11 +911,11 @@ void ModelAssemblyDialog::refresh(bool rebuildTree)
 	report(!m_previewError.isEmpty() ? QCoreApplication::translate("ModelAssemblyDialog", "Preview unavailable: %1").arg(m_previewError)
 		   : m_document.assembly().parts.isEmpty()
 			   ? QCoreApplication::translate("ModelAssemblyDialog", "Add a root model to start an assembly.")
-			   : QCoreApplication::translate("ModelAssemblyDialog", "%1 parts · %2 vertices · %3 triangles · %4 s")
-					 .arg(m_document.assembly().parts.size())
-					 .arg(m_pose.mesh.vertexCount)
-					 .arg(m_pose.mesh.triangleCount)
-					 .arg(m_seconds, 0, 'f', 3));
+			   : QCoreApplication::translate("ModelAssemblyDialog", "%1 · %2 · %3 · %4 s", "part, vertex and triangle counts, then the time")
+					 .arg(QCoreApplication::translate("ModelAssemblyDialog", "%Ln part(s)", nullptr, int(m_document.assembly().parts.size())),
+						  QCoreApplication::translate("ModelAssemblyDialog", "%Ln vert(ex)(ices)", nullptr, int(m_pose.mesh.vertexCount)),
+						  QCoreApplication::translate("ModelAssemblyDialog", "%Ln triangle(s)", nullptr, int(m_pose.mesh.triangleCount)))
+					 .arg(localeNumber(m_seconds, 3, 'f')));
 }
 void ModelAssemblyDialog::refreshInspector()
 {
@@ -1016,18 +1023,16 @@ void ModelAssemblyDialog::refreshDetails()
 	{
 		const auto &input = m_resolved.inputs[i];
 		const auto sample = m_pose.samples.value(i);
-		lines << QCoreApplication::translate("ModelAssemblyDialog", "%1: %2\nSHA-256: %3\n%4 bytes; frame %5 → %6, blend %7")
-					 .arg(input.part, input.source, QString::fromLatin1(input.sha256.toHex()))
-					 .arg(input.bytes)
+		lines << QCoreApplication::translate("ModelAssemblyDialog", "%1: %2\nSHA-256: %3\n%4; frame %L5 → %L6, blend %7")
+					 .arg(input.part, input.source, QString::fromLatin1(input.sha256.toHex()), QLocale().formattedDataSize(input.bytes))
 					 .arg(sample.frame)
 					 .arg(sample.nextFrame)
-					 .arg(sample.fraction, 0, 'f', 4);
+					 .arg(localeNumber(sample.fraction, 4, 'f'));
 		if (input.skin)
 		{
 			const auto &skin = *input.skin;
-			lines << QCoreApplication::translate("ModelAssemblyDialog", "Skin: %1\nSHA-256: %2\n%3 bytes; package entry: %4")
-						 .arg(skin.source, QString::fromLatin1(skin.sha256.toHex()))
-						 .arg(skin.bytes)
+			lines << QCoreApplication::translate("ModelAssemblyDialog", "Skin: %1\nSHA-256: %2\n%3; package entry: %4")
+						 .arg(skin.source, QString::fromLatin1(skin.sha256.toHex()), QLocale().formattedDataSize(skin.bytes))
 						 .arg(skin.entryIndex);
 			lines += modelSkinBindingPlanText(skin.bindings);
 		}
@@ -1256,7 +1261,7 @@ void ModelAssemblyDialog::bake()
 	QString error;
 	if (!editBakedPose(m_pose.mesh, &error))
 	{
-		report(error);
+		report(error, LiveStatus::Problem);
 		return;
 	}
 	report(QCoreApplication::translate(

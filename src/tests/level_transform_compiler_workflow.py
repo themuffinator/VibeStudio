@@ -10,6 +10,7 @@ import json
 import math
 import struct
 import subprocess
+import zipfile
 from level_compiler_test_helpers import png, box, axes, primitive_basis, dot
 
 
@@ -18,6 +19,7 @@ def main():
     parser.add_argument('--binary', type=Path, required=True)
     parser.add_argument('--compiler', type=Path, required=True)
     parser.add_argument('--output-root', type=Path, required=True)
+    parser.add_argument('--components', action='store_true', help='Transform a face, then picked vertices through rotation, scale and shear')
     args = parser.parse_args()
     repo = Path(__file__).resolve().parents[2]
     root = args.output_root.resolve()
@@ -54,12 +56,23 @@ def main():
                           + '\n}\n{\n"classname" "info_player_deathmatch"\n"origin" "256 0 96"\n}\n'
                           + '{\n"classname" "light"\n"origin" "0 0 320"\n"light" "600"\n}\n', encoding='utf-8')
         current = source
-        sequence = [('move', ['--delta', '19.25,-8.5,3.75']), ('rotate', ['--degrees', '90', '--pivot', '0,0,0']),
-                    ('flip', ['--axis', 'x']), ('resize', ['--mins', '-128,-64,48', '--maxs', '128,0,128', '--allow-valve220'])]
+        if args.components:
+            topology = run(f'{kind}-inspect', ['map', 'brush-components', source, '--brush', '6', '--json'])['brush']
+            points = {v['id']: tuple(v[a] for a in ('x', 'y', 'z')) for v in topology['vertices']}
+            top = next(f['id'] for f in topology['faces'] if all(points[i][2] == 88 for i in f['vertices']))
+            ids = ','.join(str(i) for i in sorted(points))
+            sequence = [('move', ['--set', f'brush:6/face/{top}', '--delta', '0,0,8']),
+                        ('rotate', ['--set', f'brush:6/vertex/{ids}', '--axis', 'z', '--angle', '90', '--pivot', '0,0,0']),
+                        ('scale', ['--set', f'brush:6/vertex/{ids}', '--factors', '1.25,0.75,1.5', '--pivot', '0,0,0']),
+                        ('shear', ['--set', f'brush:6/vertex/{ids}', '--axis', 'x', '--along', 'z', '--factor', '0.25', '--pivot', '0,0,0'])]
+        else:
+            sequence = [('move', ['--delta', '19.25,-8.5,3.75']), ('rotate', ['--degrees', '90', '--pivot', '0,0,0']),
+                        ('flip', ['--axis', 'x']), ('resize', ['--mins', '-128,-64,48', '--maxs', '128,0,128', '--allow-valve220'])]
         for command, options in sequence:
             output = maps / f'{kind}-{command}.map'
-            run(f'{kind}-{command}', ['map', command, current, '--object', 'brush:6', '--texture-lock', 'on']
-                + options + ['--output', output, '--overwrite', '--json'])
+            words = (['map', 'transform-components', current, '--operation', command, '--uv-lock', 'on', '--allow-valve220']
+                     if args.components else ['map', command, current, '--object', 'brush:6', '--texture-lock', 'on'])
+            run(f'{kind}-{command}', words + options + ['--output', output, '--overwrite', '--json'])
             current = output
         prefix = [args.compiler.resolve(), '-game', 'quake3', '-fs_basepath', root / 'game', '-fs_homepath', root / 'home', '-fs_game', 'baseq3', '-threads', '2']
         for stage, options in [('bsp', ['-meta']), ('vis', ['-vis', '-fast']), ('light', ['-light', '-fast'])]:
@@ -85,8 +98,10 @@ def main():
             shift = None
             for index in range(header[3], header[3]+header[4]):
                 v = struct.unpack_from('<10f4B', lump(10), index*44)
-                # Independent inverse of move -> Z turn -> X mirror -> resize.
-                p = ((v[1]+64)*2-32, (v[0]+128)/4+16, (v[2]-48)/1.25+24)
+                # Independent inverse, without reading generated face mappings.
+                # Components: top face +8 Z, 90-degree Z turn, XYZ scale, X/Z shear.
+                p = ((v[1]/0.75, -(v[0]-0.25*v[2])/1.25, 24+(v[2]/1.5-24)*64/72)
+                     if args.components else ((v[1]+64)*2-32, (v[0]+128)/4+16, (v[2]-48)/1.25+24))
                 assert abs(p[axis] - ((96, 80, 88) if sign > 0 else (-32, 16, 24))[axis]) < 1e-4
                 if kind == 'primitive':
                     s, t = primitive_basis(axis, sign)
@@ -109,13 +124,20 @@ def main():
         subset = root / f'{kind}-assets.pk3'
         run(f'{kind}-subset', ['package', 'subset', base, subset, '--map-input', current, '--engine', 'idTech3', '--overwrite', '--json'])
         package = root / f'{kind}-level.pk3'
+        source_options = ['--add-file', current, '--as', f'maps/{kind}.map'] if args.components else []
         run(f'{kind}-package', ['package', 'save-as', subset, package, '--format', 'pk3', '--add-file', current.with_suffix('.bsp'),
-                              '--as', f'maps/{kind}-resize.bsp', '--overwrite', '--json'])
+                              '--as', f'maps/{kind}-resize.bsp', '--overwrite', '--json'] + source_options)
         validation = run(f'{kind}-validate', ['package', 'validate', package, '--json'])['validation']
-        assert validation['valid'] and validation['verifiedCount'] == 8, validation
+        assert validation['valid'] and validation['verifiedCount'] == (9 if args.components else 8), validation
+        with zipfile.ZipFile(package) as archive:
+            assert archive.testzip() is None and archive.read(f'maps/{kind}-resize.bsp') == bsp
+            if args.components:
+                assert archive.read(f'maps/{kind}.map') == current.read_bytes()
         reports.append({'dialect': kind, 'verifiedVertices': vertices, 'tileOffsets': tile_offsets,
                         'bspSha256': hashlib.sha256(bsp).hexdigest(), 'packageValidation': validation})
-    (root / 'verified.json').write_text(json.dumps({'stepsPassed': len(steps), 'variants': reports}, indent=2), encoding='utf-8')
+    (root / 'verified.json').write_text(json.dumps({'stepsPassed': len(steps), 'variants': reports, 'components': args.components,
+        'applicationSha256': hashlib.sha256(args.binary.read_bytes()).hexdigest(),
+        'compilerSha256': hashlib.sha256(args.compiler.read_bytes()).hexdigest()}, indent=2), encoding='utf-8')
     print(f'PASS: {len(steps)} steps, three compiled dialects, {sum(r["verifiedVertices"] for r in reports)} UV samples, three verified PK3s.', flush=True)
 
 

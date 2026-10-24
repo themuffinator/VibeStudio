@@ -1,5 +1,6 @@
 #include "app/application_shell.h"
 #include "app/brush_editor_dialog.h"
+#include "app/map_viewport.h"
 #include "app/model_viewport.h"
 #include "app/studio_theme.h"
 #include "core/level_document.h"
@@ -11,6 +12,7 @@
 #include <QComboBox>
 #include <QDialogButtonBox>
 #include <QDir>
+#include <QDoubleSpinBox>
 #include <QFont>
 #include <QImage>
 #include <QLabel>
@@ -75,7 +77,7 @@ int main(int argc, char **argv)
 				 "create brush", error);
 	for (int scale : {100, 200}) {
 		std::cerr << "Brush UI scale " << scale << std::endl;
-		const auto theme = scale == 100 ? StudioTheme::Dark : StudioTheme::HighContrastDark;
+		const auto theme = scale == 100 ? StudioTheme::HighContrastLight : StudioTheme::HighContrastDark;
 		StudioSettings settings;
 		settings.setTheme(theme);
 		settings.setReducedMotion(true);
@@ -140,6 +142,39 @@ int main(int argc, char **argv)
 		ok &= expect(dialog.moveSelected({48, 48, 48, true}), "explicit collapse choice applies");
 		dialog.undo();
 		dialog.selectComponents(LevelBrushComponent::Vertex, {7});
+		auto *remove = dialog.findChild<QPushButton *>(QStringLiteral("brushComponentRemove"));
+		auto *insert = dialog.findChild<QPushButton *>(QStringLiteral("brushComponentInsert"));
+		ok &= expect(remove && insert && !remove->accessibleDescription().isEmpty() && !insert->accessibleDescription().isEmpty()
+			&& remove->focusPolicy() != Qt::NoFocus && insert->focusPolicy() != Qt::NoFocus, "topology buttons expose accessible keyboard controls");
+		remove->click();
+		ok &= expect(table->rowCount() == 7 && !remove->isEnabled(), "remove updates topology and clears stale selection");
+		dialog.undo();
+		ok &= expect(table->rowCount() == 8 && view->selection() == QVector<int>{7}, "topology undo restores vertex selection");
+		dialog.selectComponents(LevelBrushComponent::Face, {0});
+		ok &= expect(!dialog.removeSelected() && table->rowCount() == 6 && !dialog.findChild<QLabel *>(QStringLiteral("brushComponentStatus"))->text().isEmpty(),
+			"flat removal fails visibly without changing draft");
+		dialog.findChild<QDoubleSpinBox *>(QStringLiteral("brushComponentInsert0"))->setValue(32);
+		dialog.findChild<QDoubleSpinBox *>(QStringLiteral("brushComponentInsert1"))->setValue(32);
+		dialog.findChild<QDoubleSpinBox *>(QStringLiteral("brushComponentInsert2"))->setValue(80);
+		insert->click();
+		ok &= expect(table->rowCount() == 9 && view->selection().size() == 1 && dialog.brush().faceCount == 9,
+			"numeric insertion selects its new corner and previews split faces");
+		dialog.undo();
+		ok &= expect(table->rowCount() == 6 && view->selection() == QVector<int>{0}, "insertion undo restores prior face mode and picks");
+		dialog.redo();
+		ok &= expect(table->rowCount() == 9 && view->selection().size() == 1, "insertion redo restores selected new corner");
+		dialog.undo();
+		dialog.selectComponents(LevelBrushComponent::Edge, {0});
+		auto* split = dialog.findChild<QPushButton*>(QStringLiteral("brushComponentSplit"));
+		ok &= expect(split && split->isEnabled() && split->focusPolicy() != Qt::NoFocus && !split->accessibleDescription().isEmpty(),"split button is an accessible keyboard control");
+		ok &= expect(dialog.splitSelected({-16,-16,0,true}) && table->rowCount() == 9 && view->selection().size() == 1,"numeric edge split selects the new vertex");
+		dialog.undo();
+		ok &= expect(table->rowCount() == 12 && view->selection() == QVector<int>{0},"split undo restores edge mode and selection");
+		ok &= expect(!dialog.splitSelected({16,16,0,true}) && table->rowCount() == 12,"inward split keeps numeric draft and mode intact");
+		dialog.redo();
+		ok &= expect(table->rowCount() == 9 && !split->isEnabled(),"split redo restores new corner and disables split in vertex mode");
+		dialog.undo();
+		dialog.selectComponents(LevelBrushComponent::Vertex, {7});
 		dialog.moveSelected({16, 8, 12, true});
 		const auto captureRoot = qEnvironmentVariable("VIBESTUDIO_TEST_CAPTURE_DIR");
 		std::cerr << "Brush UI controls verified" << std::endl;
@@ -200,6 +235,40 @@ int main(int argc, char **argv)
 	ok &= expect(shell.levelDocument().brushes.first().faceCount == 6, "shell undo restores room brush");
 	shell.findChild<QAction *>(QStringLiteral("map.redo"))->trigger();
 	ok &= expect(shell.levelDocument().brushes.first().faceCount > 6, "shell redo restores bent brush");
+	shell.findChild<QAction *>(QStringLiteral("map.undo"))->trigger();
+	auto *plan = shell.findChild<MapViewport *>(QStringLiteral("mapViewport"));
+	if (!expect(plan, "shell component viewport exists")) {
+		return EXIT_FAILURE;
+	}
+	plan->setSelectionSet({{LevelMapSelectionKind::QuakeBrush, id}});
+	plan->selectionSetChanged(plan->selectionSet());
+	shell.findChild<QAction *>(QStringLiteral("map.vertexTool"))->trigger();
+	LevelBrushTopology originalTopology;
+	levelBrushTopology(shell.levelDocument().brushes.first(), &originalTopology);
+	plan->setPickedComponentPositions({{{LevelMapSelectionKind::QuakeBrush, id}, originalTopology.vertices.last()}});
+	plan->componentPicksChanged(1);
+	auto *removeCommand = shell.findChild<QAction *>(QStringLiteral("map.removeComponents"));
+	ok &= expect(removeCommand && removeCommand->isEnabled(), "component removal command follows picks",
+		QStringLiteral("mode=%1 handles=%2 picks=%3 documentSelection=%4 viewSelection=%5")
+			.arg(static_cast<int>(plan->componentMode())).arg(plan->componentHandleCount()).arg(plan->pickedComponentCount())
+			.arg(shell.levelDocument().selection.size()).arg(plan->displayDocument().selection.size()));
+	const auto beforeRemove = serializeLevelMap(shell.levelDocument()).bytes;
+	removeCommand->trigger();
+	LevelBrushTopology removedTopology;
+	levelBrushTopology(shell.levelDocument().brushes.first(), &removedTopology);
+	ok &= expect(removedTopology.vertices.size() == 7 && !removeCommand->isEnabled(), "shell removes picked vertex and clears picks");
+	const auto afterRemove = serializeLevelMap(shell.levelDocument()).bytes;
+	shell.findChild<QAction *>(QStringLiteral("map.deleteSelection"))->trigger();
+	ok &= expect(serializeLevelMap(shell.levelDocument()).bytes == afterRemove, "Delete with no component picks never deletes the brush");
+	shell.findChild<QAction *>(QStringLiteral("map.undo"))->trigger();
+	ok &= expect(serializeLevelMap(shell.levelDocument()).bytes == beforeRemove, "shell removal undo restores exact map");
+	plan->setPickedComponentPositions({{{LevelMapSelectionKind::QuakeBrush, id}, originalTopology.vertices.last()}});
+	plan->componentPicksChanged(1);
+	shell.findChild<QAction *>(QStringLiteral("map.deleteSelection"))->trigger();
+	ok &= expect(serializeLevelMap(shell.levelDocument()).bytes == afterRemove, "Delete routes to the picked components");
+	shell.findChild<QAction *>(QStringLiteral("map.undo"))->trigger();
+	shell.findChild<QAction *>(QStringLiteral("map.vertexTool"))->trigger();
+	ok &= expect(shell.applyLevelBrushGeometry(brush, id, &error), "restore bent brush for save proof", error);
 	const auto output = QDir(temp.path()).filePath(QStringLiteral("room.map"));
 	ok &= expect(shell.saveLevelDocument(output, false, &error), "shell saves component edits", error);
 	std::cerr << "Brush UI map saved" << std::endl;

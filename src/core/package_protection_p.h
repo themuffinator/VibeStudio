@@ -14,12 +14,15 @@ public:
 	static constexpr qint64 byteCeiling = 64ll * 1024 * 1024;
 	static constexpr qsizetype pathCharacterCeiling = 32768;
 	PackageInputProtectionSet(qsizetype maximumPaths, qint64 maximumBytes, QString* error,
-		PackageReadControl control = {}, QString implicitDirectory = {});
+		PackageReadControl control = {}, QString implicitDirectory = {}, bool portableIdentity = false);
 	bool add(const QString& path, bool captureAliases = true);
 	bool finish(bool enumerationComplete = true);
 	[[nodiscard]] QStringList paths() const { return m_paths; }
 	[[nodiscard]] qint64 metadataBytes() const { return m_bytes; }
-	// Queries the captured lexical/resolved roots without rescanning them.
+	// Lexical/resolved matching follows output depth. Existing multiply-linked
+	// outputs lazily prepare a bounded filesystem identity index, including folder
+	// contents. Native Windows/POSIX identities avoid rescanning for later queries;
+	// portableIdentity exercises the standard-library equivalence fallback.
 	// False means cancellation/refusal; never treat that as an unprotected path.
 	bool check(const QString& path, bool* protectedPath);
 	[[nodiscard]] bool protects(const QString& path);
@@ -30,6 +33,8 @@ private:
 	bool retain(const QString& path);
 	bool resolve(const QString& absolute, QString* resolved);
 	bool containsAncestor(QString path, bool* found);
+	bool prepareIdentities();
+	bool matchesIdentity(const QString& path, const QByteArray& key, bool* found);
 	bool refuse(const QString& message);
 	qsizetype m_maximumPaths, m_steps = 0;
 	qint64 m_maximumBytes, m_bytes = 0;
@@ -39,6 +44,9 @@ private:
 	QString m_errorText;
 	QStringList m_paths;
 	QSet<QString> m_keys;
+	QSet<QByteArray> m_identityKeys;
+	QStringList m_identityPaths, m_portablePaths;
+	bool m_identityReady = false, m_portableIdentity = false;
 	bool m_cancelled = false, m_failed = false, m_matching = false;
 };
 } // namespace vibestudio

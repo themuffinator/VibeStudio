@@ -1,4 +1,5 @@
 #include "core/model_assembly.h"
+#include "core/model_archive.h"
 #include "core/package_archive.h"
 
 #include <QCoreApplication>
@@ -136,10 +137,9 @@ bool ModelAssemblyDocument::save(const QString &path, bool overwrite, QString *e
 		return fail(error, QCoreApplication::translate("VibeStudioModelAssembly",
 													   "Save the recovered assembly to a different path from its original source."));
 	}
-	if (archive && (archive->protectsInputPath(target.path) || archive->protectsInputPath(target.resolvedPath)))
+	if (!validateModelArchiveOutputs(archive.get(), {target.path, target.resolvedPath}, error, control))
 	{
-		return fail(
-			error, QCoreApplication::translate("VibeStudioModelAssembly", "Write outside the assembly's input package or portable draft."));
+		return false;
 	}
 	const bool current = modelPathsReferToSameFile(path, m_path);
 	if (current && (!target.existed || target.sha256 != m_sourceHash || !modelPathsReferToSameFile(target.resolvedPath, m_resolvedPath)))

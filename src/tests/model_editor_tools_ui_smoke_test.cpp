@@ -264,6 +264,38 @@ int main(int argc, char **argv)
 	expect(document.selection().edges.size() == 8, "the new loops are selected");
 	editor->findChild<QAction *>(QStringLiteral("undoMesh"))->trigger();
 
+	// A selected edge seeds Loop Cut; a pointer over another edge takes over,
+	// and away from every edge the selected one comes back.
+	{
+		const auto &flat = document.mesh().surfaces[0];
+		const auto selected = modelEdge(vertexAt(flat, 8, 0), vertexAt(flat, 8, 8));
+		const auto other = modelEdge(vertexAt(flat, 0, 8), vertexAt(flat, 8, 8));
+		QPointF c, d;
+		expect(viewport->projectToView(flat.frames[0].positions[other.first], &c) && viewport->projectToView(flat.frames[0].positions[other.second], &d),
+			   "project another edge");
+		tools->applySelection({0, {}, {}, {selected}});
+		expect(tests::settleModelViewport(*viewport), "viewport settles before the seeded loop cut");
+		QPointF empty(-1, -1);
+		for (const QPointF corner : {QPointF(2, 2), QPointF(viewport->width() - 3, 2), QPointF(2, viewport->height() - 3),
+									 QPointF(viewport->width() - 3, viewport->height() - 3)})
+		{
+			if (empty.x() < 0 && !viewport->hitAt(corner).valid)
+				empty = corner;
+		}
+		const QString seeded = QStringLiteral("across the selected edge %1:%2").arg(selected.first).arg(selected.second);
+		expect(tools->beginModal(ModelModalOperator::LoopCut, empty, false) && tools->modalText().contains(seeded),
+			   "Loop Cut starts across the selected edge");
+		tools->moveModal((c + d) / 2);
+		expect(tools->modalText().contains(QStringLiteral("across edge %1:%2").arg(other.first).arg(other.second)), "the pointer over another edge takes over");
+		if (expect(empty.x() >= 0, "a corner of the view is clear of the model"))
+		{
+			tools->moveModal(empty);
+			expect(tools->modalText().contains(seeded), "away from every edge the selected edge seeds the cut again");
+		}
+		tools->finishModal(false);
+		expect(tools->modalOperator() == ModelModalOperator::None && document.mesh().surfaces[0].triangles.size() == 32, "Esc leaves the grid uncut");
+	}
+
 	// Box select every visible face.
 	expect(tests::settleModelViewport(*viewport), "viewport settles before box select");
 	tools->action(QStringLiteral("meshModeFace"))->trigger();

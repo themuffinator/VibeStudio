@@ -2,6 +2,7 @@
 
 #include <QDir>
 #include <QFile>
+#include <QFileInfo>
 #include <QTemporaryDir>
 
 #include <cstdlib>
@@ -85,16 +86,25 @@ int main()
 	if (!steamRoot.mkpath(QStringLiteral("steamapps/common/Quake/id1")) || !writeFile(steamRoot.filePath(QStringLiteral("steamapps/common/Quake/id1/pak0.pak")))) {
 		return fail("Expected Steam Quake fixture.");
 	}
+	// Executables a folder or two below the root (bin/x64) are still found.
+	const QString steamQuakeRoot = steamRoot.filePath(QStringLiteral("steamapps/common/Quake"));
+	const QString steamQuakeExecutable = steamRoot.filePath(QStringLiteral("steamapps/common/Quake/bin/x64/quake.exe"));
+	if (!steamRoot.mkpath(QStringLiteral("steamapps/common/Quake/bin/x64")) || !writeFile(steamQuakeExecutable)) {
+		return fail("Expected nested Steam Quake executable fixture.");
+	}
 	const QVector<vibestudio::GameInstallationDetectionCandidate> steamCandidates = vibestudio::detectSteamGameInstallations({steamDir.path()});
 	if (steamCandidates.isEmpty()) {
 		return fail("Expected Steam detection candidate.");
 	}
 	bool foundSteamQuake = false;
 	for (const vibestudio::GameInstallationDetectionCandidate& candidate : steamCandidates) {
-		if (candidate.sourceId == QStringLiteral("steam") && candidate.profile.gameKey == QStringLiteral("quake") && candidate.profile.rootPath.contains(QStringLiteral("Quake"))) {
+		if (candidate.sourceId == QStringLiteral("steam") && candidate.profile.gameKey == QStringLiteral("quake") && QFileInfo(candidate.profile.rootPath) == QFileInfo(steamQuakeRoot)) {
 			foundSteamQuake = true;
 			if (candidate.profile.manual || candidate.confidencePercent < 80) {
 				return fail("Expected detected Steam profile metadata.");
+			}
+			if (QFileInfo(candidate.profile.executablePath) != QFileInfo(steamQuakeExecutable)) {
+				return fail("Expected the executable two folders below the Steam root.");
 			}
 			break;
 		}
@@ -111,14 +121,23 @@ int main()
 	if (!gogRoot.mkpath(QStringLiteral("Quake III Arena/baseq3")) || !writeFile(gogRoot.filePath(QStringLiteral("Quake III Arena/baseq3/pak0.pk3")))) {
 		return fail("Expected GOG Quake III fixture.");
 	}
+	// The executable search stops two folders below the root, so detection
+	// never walks a whole install that only shares a name hint.
+	const QString gogQuake3Root = gogRoot.filePath(QStringLiteral("Quake III Arena"));
+	if (!gogRoot.mkpath(QStringLiteral("Quake III Arena/tools/build/x64")) || !writeFile(gogRoot.filePath(QStringLiteral("Quake III Arena/tools/build/x64/quake3.exe")))) {
+		return fail("Expected deeply nested GOG Quake III executable fixture.");
+	}
 	const QVector<vibestudio::GameInstallationDetectionCandidate> gogCandidates = vibestudio::detectGogGameInstallations({gogDir.path()});
 	if (gogCandidates.isEmpty()) {
 		return fail("Expected GOG detection candidate.");
 	}
 	bool foundGogQuake3 = false;
 	for (const vibestudio::GameInstallationDetectionCandidate& candidate : gogCandidates) {
-		if (candidate.sourceId == QStringLiteral("gog") && candidate.profile.gameKey == QStringLiteral("quake3") && candidate.profile.rootPath.contains(QStringLiteral("Quake III Arena"))) {
+		if (candidate.sourceId == QStringLiteral("gog") && candidate.profile.gameKey == QStringLiteral("quake3") && QFileInfo(candidate.profile.rootPath) == QFileInfo(gogQuake3Root)) {
 			foundGogQuake3 = true;
+			if (!candidate.profile.executablePath.isEmpty()) {
+				return fail("Expected no executable search three folders below the GOG root.");
+			}
 			break;
 		}
 	}

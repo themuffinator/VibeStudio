@@ -17,6 +17,7 @@ bool fail(QString* error, const QString& message) { if (error) { *error = messag
 QString materialKey(QString name) { return name.trimmed().replace('\\', '/').toCaseFolded(); }
 std::pair<bool, bool> sizeNeeds(const LevelMapBrushFace& source, const LevelMapBrushFace& target, const LevelSurfacePasteOptions& options)
 {
+	if (options.mode == LevelSurfacePasteMode::Attributes) { return {false, false}; }
 	// Native Values stores a texel-scaled clipboard matrix, then normalizes it
 	// for the destination image (NRC brush_primit.h removeScale/addScale;
 	// pinned 68ecbed6, GPL-2.0-or-later behavior reference; see CREDITS.md).
@@ -117,6 +118,38 @@ QJsonObject settings(const LevelMapBrushFace& face)
 	}
 	return {{"material", face.textureName}, {"mapping", mapping}, {"flags", QJsonArray{face.contentFlags, face.surfaceFlags, face.surfaceValue}}};
 }
+bool copyAttributes(LevelMapBrushFace* target, const LevelMapBrushFace& source, QString* error)
+{
+	// TB v2026.2 Map_CopyPaste::pasteBrushFaces and UpdateBrushFaceAttributes::
+	// copyAllExceptContentFlags: copy values, not the source UV coordinate system.
+	// GPL-3.0-or-later behaviour reference, 4c756be1; see CREDITS.md.
+	if (target->explicitTextureMatrix != source.explicitTextureMatrix) {
+		return fail(error, Text::tr("Attribute paste cannot mix texture matrices with shift/rotate/scale mapping. Use World Projection for conversion."));
+	}
+	if (target->explicitTextureMatrix) { target->textureMatrix = source.textureMatrix; return true; }
+	const double rotation = std::fmod(std::fmod(source.rotation, 360.0) + 360.0, 360.0);
+	if (target->explicitTextureAxes) {
+		// ParallelUVCoordSystem::setRotation turns about the UV basis normal,
+		// which need not be parallel to the face plane after projection/shear.
+		const auto u = target->uAxis, v = target->vAxis;
+		MapPlane p{u.y * v.z - u.z * v.y, u.z * v.x - u.x * v.z, u.x * v.y - u.y * v.x, 0, true};
+		const double length = std::hypot(p.normalX, p.normalY, p.normalZ);
+		if (!std::isfinite(length) || length < 1e-12) { return fail(error, Text::tr("The target face has no valid UV basis for attribute rotation.")); }
+		p.normalX /= length; p.normalY /= length; p.normalZ /= length;
+		const auto trig = rotateLevelVector({1, 0, 0, true}, 2, rotation - target->rotation);
+		const auto turn = [&](LevelMapVec3 v) {
+			const double along = p.normalX * v.x + p.normalY * v.y + p.normalZ * v.z;
+			return LevelMapVec3{v.x * trig.x + (p.normalY * v.z - p.normalZ * v.y) * trig.y + p.normalX * along * (1 - trig.x),
+				v.y * trig.x + (p.normalZ * v.x - p.normalX * v.z) * trig.y + p.normalY * along * (1 - trig.x),
+				v.z * trig.x + (p.normalX * v.y - p.normalY * v.x) * trig.y + p.normalZ * along * (1 - trig.x), true};
+		};
+		target->uAxis = turn(target->uAxis); target->vAxis = turn(target->vAxis);
+	}
+	target->uOffset = target->shiftX = source.explicitTextureAxes ? source.uOffset : source.shiftX;
+	target->vOffset = target->shiftY = source.explicitTextureAxes ? source.vOffset : source.shiftY;
+	target->rotation = rotation; target->scaleX = source.scaleX; target->scaleY = source.scaleY;
+	return true;
+}
 bool keys(const QJsonObject& value, const QStringList& expected)
 {
 	const auto actual = value.keys();
@@ -182,6 +215,7 @@ bool parseLevelSurfaceClipboard(const QByteArray& bytes, LevelSurfaceClipboard* 
 	if (!numbers(object.value("flags"), 3, &values)) { return bad(); }
 	for (auto n : values) { if (n != std::trunc(n) || n < -2147483648.0 || n > 4294967295.0) { return bad(); } }
 	face.contentFlags = static_cast<qint64>(values[0]); face.surfaceFlags = static_cast<qint64>(values[1]); face.surfaceValue = static_cast<qint64>(values[2]);
+	face.flagsWritten = true;
 	const auto mapping = object.value("mapping").toObject(); const auto family = mapping.value("kind").toString();
 	if (family == QLatin1String("matrix")) {
 		if (!keys(mapping, {"kind", "matrix"}) || !numbers(mapping.value("matrix"), 6, &values)) { return bad(); }
@@ -226,7 +260,9 @@ LevelSurfaceTransferMaterials levelSurfaceTransferRequiredMaterials(const LevelM
 {
 	if (!clipboard.ready()) { return {}; }
 	QSet<LevelMaterialTarget> wanted(targets.cbegin(), targets.cend());
-	if (options.includeSelection) { for (const auto& target : levelSurfacePasteSelectionTargets(document)) { wanted.insert(target); } }
+	if (options.includeSelection) {
+		for (const auto& target : options.selectionTargets ? *options.selectionTargets : levelSurfacePasteSelectionTargets(document)) { wanted.insert(target); }
+	}
 	QSet<QString> names;
 	LevelSurfaceTransferMaterials result;
 	for (const auto& brush : document.brushes) {
@@ -268,25 +304,29 @@ bool prepareLevelSurfaceTransfer(const LevelMapDocument& document, const QVector
 		return fail(error, Text::tr("Surface paste requires a Quake-family text map."));
 	}
 	if (options.mode != LevelSurfacePasteMode::Parameters && options.mode != LevelSurfacePasteMode::Project
-		&& options.mode != LevelSurfacePasteMode::Seamless && options.mode != LevelSurfacePasteMode::RadiantValues && options.mode != LevelSurfacePasteMode::RadiantProject) {
+		&& options.mode != LevelSurfacePasteMode::Seamless && options.mode != LevelSurfacePasteMode::RadiantValues && options.mode != LevelSurfacePasteMode::RadiantProject && options.mode != LevelSurfacePasteMode::Attributes) {
 		return fail(error, Text::tr("Unknown surface paste mode."));
 	}
 	const bool parameters = options.mode == LevelSurfacePasteMode::Parameters || options.mode == LevelSurfacePasteMode::RadiantValues;
 	const bool nativeProject = options.mode == LevelSurfacePasteMode::RadiantProject;
-	const bool selected = parameters || nativeProject;
-	if (explicitTargets.isEmpty() || explicitTargets.size() > 16384 || (selected && options.allowValve220)) {
+	const bool attributes = options.mode == LevelSurfacePasteMode::Attributes;
+	const bool selected = parameters || nativeProject || attributes;
+	if (explicitTargets.isEmpty() || explicitTargets.size() > 16384 || (selected && options.allowValve220)
+		|| (options.includeSelection && options.selectionTargets && options.selectionTargets->size() > 16384)) {
 		return fail(error, Text::tr("Paste needs 1–16,384 surfaces. Valve 220 conversion requires world projection or seamless wrapping."));
 	}
-	if (options.includeSelection && !selected) { return fail(error, Text::tr("Selection-inclusive paste requires parameters, Radiant values or Radiant projection.")); }
+	if (options.includeSelection && !selected) { return fail(error, Text::tr("Selection-inclusive paste requires parameters, face attributes, Radiant values or Radiant projection.")); }
 	const QSet<LevelMaterialTarget> explicitSet(explicitTargets.cbegin(), explicitTargets.cend());
 	auto all = explicitSet;
-	if (options.includeSelection) { for (const auto& target : levelSurfacePasteSelectionTargets(document)) { all.insert(target); } }
+	if (options.includeSelection) {
+		for (const auto& target : options.selectionTargets ? *options.selectionTargets : levelSurfacePasteSelectionTargets(document)) { all.insert(target); }
+	}
 	if (all.size() > 16384) { return fail(error, Text::tr("Surface transfer exceeds 16,384 targets, including the selection.")); }
 	QMap<int, QSet<int>> targets;
 	QSet<int> patchTargets;
 	for (const auto& ref : all) {
 		if (ref.kind == LevelMaterialKind::BrushFace) { targets[ref.objectId].insert(ref.faceIndex); }
-		else if (ref.kind == LevelMaterialKind::Patch && selected && ref.faceIndex == 0) { patchTargets.insert(ref.objectId); }
+		else if (ref.kind == LevelMaterialKind::Patch && selected && !attributes && ref.faceIndex == 0) { patchTargets.insert(ref.objectId); }
 		else { return fail(error, Text::tr("Transfer needs brush faces. Parameter modes support patch materials; Radiant projection also projects patch UVs.")); }
 	}
 	if (patchTargets.size() > 256) { return fail(error, Text::tr("Surface transfer exceeds 256 patches.")); }
@@ -310,10 +350,12 @@ bool prepareLevelSurfaceTransfer(const LevelMapDocument& document, const QVector
 			if (cancelled && cancelled()) { return fail(error, Text::tr("Surface paste cancelled.")); }
 			if (index < 0 || index >= after.faces.size()) { return fail(error, Text::tr("Brush %1 has no face %2.").arg(it.key()).arg(index + 1)); }
 			auto& target = after.faces[index]; const auto& before = found->faces[index];
-			if (selected && kind(target) != kind(source)) { return fail(error, Text::tr("Native paste requires matching brush mapping formats. Choose World Projection to convert this surface.")); }
+			if (selected && !attributes && kind(target) != kind(source)) { return fail(error, Text::tr("Native paste requires matching brush mapping formats. Choose World Projection to convert this surface.")); }
 			double u = 1, v = 1;
 			if (!transferFactors(source, target, options, &u, &v, error)) { return false; }
-			if (!parameters && (!nativeProject || source.explicitTextureMatrix)) {
+			if (attributes) {
+				if (!copyAttributes(&target, source, error)) { return false; }
+			} else if (!parameters && (!nativeProject || source.explicitTextureMatrix)) {
 				auto projection = options.mode == LevelSurfacePasteMode::Seamless ? wrappedLevelTextureProjection(source, target) : levelTextureProjection(source);
 				projection.u.x *= u; projection.u.y *= u; projection.u.z *= u; projection.offsetU *= u;
 				projection.v.x *= v; projection.v.y *= v; projection.v.z *= v; projection.offsetV *= v;
@@ -337,13 +379,15 @@ bool prepareLevelSurfaceTransfer(const LevelMapDocument& document, const QVector
 				target.textureName = source.textureName;
 				// Native selection-wide value paste applies material/UVs to the
 				// selection, and the copied flags only to the explicit hit faces.
-				if (explicitSet.contains({LevelMaterialKind::BrushFace, it.key(), index})) {
+				if (attributes) {
+					if (source.flagsWritten) { target.surfaceFlags = source.surfaceFlags; target.surfaceValue = source.surfaceValue; target.flagsWritten = true; }
+				} else if (explicitSet.contains({LevelMaterialKind::BrushFace, it.key(), index})) {
 					target.contentFlags = source.contentFlags; target.surfaceFlags = source.surfaceFlags; target.surfaceValue = source.surfaceValue;
 				}
 			}
 			if (!valid(target, error, nativeProject)) { return false; }
 			convertsClassic |= !before.explicitTextureAxes && !before.explicitTextureMatrix && target.explicitTextureAxes;
-			if (settings(target) == settings(before)) { target = before; continue; }
+			if (settings(target) == settings(before) && target.flagsWritten == before.flagsWritten) { target = before; continue; }
 			if (nativeProject && std::abs(mappingArea(target)) <= 1e-14) { ++result.m_edgeOnFaces; }
 			target.textureParametersDirty = true;
 			target.textureDirty |= target.textureName != before.textureName;

@@ -6,6 +6,7 @@
 #include "app/studio_icons.h"
 #include "app/ui_primitives.h"
 #include "core/level_shapes.h"
+#include "core/level_view_filters.h"
 #include <QAction>
 #include <QActionGroup>
 #include <QCheckBox>
@@ -55,7 +56,7 @@ QWidget* ApplicationShell::buildLevelAuthoringBar()
 	tool(QStringLiteral("brush"), QStringLiteral("cube"), tr("Draw Brush"),
 		tr("Drag a brush footprint in the camera, on a construction plane; the wheel sets its depth."));
 	tool(QStringLiteral("clip"), QStringLiteral("clip"), tr("Clip"),
-		tr("Drag a line across brushes in a 2D view to cut them; Tab chooses what stays and Enter cuts."));
+		tr("Place or move clip points in any view; Tab chooses sides and Enter applies the checked cut."));
 	tool(QStringLiteral("vertex"), QStringLiteral("vertex-tool"), tr("Edit Vertices"),
 		tr("Drag the selected brushes' vertices and patches' control points in a 2D view; band or Shift-click to pick several, arrows nudge."));
 	tool(QStringLiteral("paint"), QStringLiteral("paint"), tr("Paint"),
@@ -91,12 +92,16 @@ QWidget* ApplicationShell::buildLevelAuthoringBar()
 		// re-add that action to the button and clear its default-action link.
 	};
 	group(QStringLiteral("levelCreateTools"), tr("Create"), QStringLiteral("add"), tr("Create geometry, entities and reusable prefabs."),
-		{QStringLiteral("map.drawBrush"), QStringLiteral("map.addBrush"), QStringLiteral("map.addEntity"), QStringLiteral("map.addPatch"),
+		{QStringLiteral("map.drawBrush"), QStringLiteral("map.addBrush"), QStringLiteral("map.addEntity"), QStringLiteral("map.createEntity"), QStringLiteral("map.addPatch"),
 		 QStringLiteral("map.addThing"), QStringLiteral("map.placeAtCamera"), QStringLiteral("map.drawSector"), QStringLiteral("map.makeSectorMode"), QStringLiteral("map.addSector"), {},
 		 QStringLiteral("map.insertPrefab"), QStringLiteral("map.replaceWithPrefab"), QStringLiteral("map.exportPrefab"), QStringLiteral("map.stagePrefab"), {},
-		 QStringLiteral("map.tieToEntity"), QStringLiteral("map.moveToWorld")});
+		 QStringLiteral("map.tieToEntity"), QStringLiteral("map.moveToWorld"), QStringLiteral("map.movePrimitivesToEntity"),
+		 QStringLiteral("map.movePrimitivesToFirstEntity"), QStringLiteral("map.moveSelectedToWorld"), QStringLiteral("map.explodeEntity"),
+		 QStringLiteral("map.explodeEntityUnique")});
 	group(QStringLiteral("levelSelectTools"), tr("Select"), QStringLiteral("crosshair"), tr("Find related objects and control working visibility."),
-		{QStringLiteral("map.selectAll"), QStringLiteral("map.selectNone"), QStringLiteral("map.invertSelection"), {},
+		{QStringLiteral("map.openGroup"), QStringLiteral("map.closeGroup"), QStringLiteral("map.closeAllGroups"), QStringLiteral("map.moveToLayer"), {},
+		 QStringLiteral("map.selectAll"), QStringLiteral("map.selectNone"), QStringLiteral("map.invertSelection"),
+		 QStringLiteral("map.selectSiblings"), QStringLiteral("map.expandSelectionToLayers"), QStringLiteral("map.selectSourceLines"), QStringLiteral("map.selectConnectedEntities"), QStringLiteral("map.selectAllOfType"), QStringLiteral("map.selectTextured"), {},
 		 QStringLiteral("map.selectSimilar"), QStringLiteral("map.selectByTexture"), QStringLiteral("map.selectConnectedGeometry"),
 		 QStringLiteral("map.selectTargets"), QStringLiteral("map.selectSources"), QStringLiteral("map.selectWholeEntities"), {},
 		 QStringLiteral("map.selectInside"), QStringLiteral("map.selectTouching"), QStringLiteral("map.selectCompleteTall"),
@@ -108,16 +113,22 @@ QWidget* ApplicationShell::buildLevelAuthoringBar()
 		 QStringLiteral("map.findObject"), QStringLiteral("map.goToCoordinates"), QStringLiteral("map.centerOnSelection"), QStringLiteral("map.zoomToFit")});
 	group(QStringLiteral("levelTransformTools"), tr("Transform"), QStringLiteral("move"), tr("Move, resize, rotate and repeat the selection with exact values."),
 		{QStringLiteral("map.moveSelection"), QStringLiteral("map.resizeSelection"), QStringLiteral("map.rotatePrecisely"),
-		 QStringLiteral("map.duplicateWithOffset"), QStringLiteral("map.snapToGrid"), QStringLiteral("map.dropToFloor"), {},
-		 QStringLiteral("map.rotateLeft"), QStringLiteral("map.rotateRight"), QStringLiteral("map.flipHorizontal"), QStringLiteral("map.flipVertical"), {},
+		 QStringLiteral("map.duplicateWithOffset"), QStringLiteral("map.duplicateUnique"), QStringLiteral("map.snapToGrid"), QStringLiteral("map.roundToGrid"), QStringLiteral("map.dropToFloor"), {},
+		 QStringLiteral("map.rotateLeft"), QStringLiteral("map.rotateRight"), QStringLiteral("map.rollClockwise"), QStringLiteral("map.rollCounterclockwise"),
+		 QStringLiteral("map.pitchClockwise"), QStringLiteral("map.pitchCounterclockwise"), QStringLiteral("map.flipHorizontal"), QStringLiteral("map.flipVertical"), {},
+		 QStringLiteral("map.flipX"), QStringLiteral("map.flipY"), QStringLiteral("map.flipZ"),
+		 QStringLiteral("map.rotateX"), QStringLiteral("map.rotateY"), QStringLiteral("map.rotateZ"), {},
 		 QStringLiteral("map.alignLeft"), QStringLiteral("map.alignRight"), QStringLiteral("map.alignTop"), QStringLiteral("map.alignBottom"),
 		 QStringLiteral("map.alignCentreHorizontal"), QStringLiteral("map.alignCentreVertical"), QStringLiteral("map.shearTool"), QStringLiteral("map.shearSelection"), {},
 		 QStringLiteral("map.textureLock"), QStringLiteral("map.textureScaleLock")});
 	group(QStringLiteral("levelGeometryTools"), tr("Geometry"), QStringLiteral("cube"), tr("Clip, hollow, merge and refine brush or patch geometry."),
 		{QStringLiteral("map.clipTool"), QStringLiteral("map.clipSelection"), QStringLiteral("map.hollowSelection"), QStringLiteral("map.hollowTouching"),
 		 QStringLiteral("map.makeRoom"), QStringLiteral("map.carve"),
-		 QStringLiteral("map.mergeBrushes"), QStringLiteral("map.intersect"), QStringLiteral("map.editBrushComponents"), {},
-		 QStringLiteral("map.vertexTool"), QStringLiteral("map.edgeTool"), QStringLiteral("map.faceTool"), QStringLiteral("map.snapVertices"), {},
+		 QStringLiteral("map.mergeBrushes"), QStringLiteral("map.wrapMerge"), QStringLiteral("map.wrapMergePoints"), QStringLiteral("map.intersect"), QStringLiteral("map.editBrushComponents"), {},
+		 QStringLiteral("map.vertexTool"), QStringLiteral("map.edgeTool"), QStringLiteral("map.faceTool"),
+		 QStringLiteral("map.componentMoveTool"), QStringLiteral("map.componentRotateTool"), QStringLiteral("map.componentScaleTool"), QStringLiteral("map.componentShearTool"), QStringLiteral("map.componentPivotTool"),
+		 QStringLiteral("map.componentResetPivot"), QStringLiteral("map.componentGizmoOptions"), QStringLiteral("map.transformComponents"), QStringLiteral("map.componentUvLock"), QStringLiteral("map.componentUvFit"), QStringLiteral("map.componentXray"), QStringLiteral("map.splitComponents"),
+		 QStringLiteral("map.extrudeFaces"), QStringLiteral("map.extrudeSplit"), QStringLiteral("map.extrudePrecisely"), QStringLiteral("map.removeComponents"), QStringLiteral("map.snapVertices"), {},
 		 QStringLiteral("map.makeDetail"), QStringLiteral("map.makeStructural"), {},
 		 QStringLiteral("map.editPatch"), QStringLiteral("map.stitchPatches"), QStringLiteral("map.capPatch"), QStringLiteral("map.thickenPatch"),
 		 QStringLiteral("map.patchInvert"), QStringLiteral("map.patchTranspose"), {},
@@ -129,7 +140,7 @@ QWidget* ApplicationShell::buildLevelAuthoringBar()
 		 QStringLiteral("map.alignWallTextures")});
 	group(QStringLiteral("levelSurfaceToolsMenu"), tr("Surfaces"), QStringLiteral("image"), tr("Paint, sample and align map materials."),
 		{QStringLiteral("map.paintMaterial"), QStringLiteral("map.sampleMaterial"), QStringLiteral("map.applyTexture"),
-		 QStringLiteral("map.alignSurfaces"), QStringLiteral("map.replaceTexture")});
+		 QStringLiteral("map.alignSurfaces"), QStringLiteral("map.replaceTexture"), QStringLiteral("map.revealMaterial")});
 	// The patch row and column commands, a submenu of Geometry.
 	if (auto* geometry = bar->findChild<QToolButton*>(QStringLiteral("levelGeometryTools")); geometry && geometry->defaultAction()
 		&& geometry->defaultAction()->menu()) {
@@ -144,6 +155,31 @@ QWidget* ApplicationShell::buildLevelAuthoringBar()
 		}
 		geometry->defaultAction()->menu()->insertMenu(m_commands->action(QStringLiteral("map.patchInvert")), matrix);
 	}
+	// The view filters, a submenu of Select after Show All Hidden, so each kind
+	// stays a click away from the views as NetRadiant Custom's filter bar keeps
+	// it. They are the View > Filters commands, check marks included.
+	if (auto* select = bar->findChild<QToolButton*>(QStringLiteral("levelSelectTools")); select && select->defaultAction()
+		&& select->defaultAction()->menu()) {
+		QMenu* selectMenu = select->defaultAction()->menu();
+		QMenu* filters = new QMenu(tr("Filters"), selectMenu);
+		filters->setObjectName(QStringLiteral("levelFilterToolsMenu"));
+		filters->setIcon(studioIcon(QStringLiteral("filter")));
+		filters->setToolTipsVisible(true);
+		for (const LevelViewFilter& kind : levelViewFilterKinds()) {
+			if (QAction* action = m_commands->action(levelViewFilterCommandId(kind.id))) {
+				filters->addAction(action);
+			}
+		}
+		filters->addSeparator();
+		for (const QString& id : {QStringLiteral("map.invertFilters"), QStringLiteral("map.resetFilters")}) {
+			if (QAction* action = m_commands->action(id)) {
+				filters->addAction(action);
+			}
+		}
+		const QList<QAction*> entries = selectMenu->actions();
+		const qsizetype showAll = entries.indexOf(m_commands->action(QStringLiteral("map.showAll")));
+		selectMenu->insertMenu(showAll >= 0 && showAll + 1 < entries.size() ? entries.at(showAll + 1) : nullptr, filters);
+	}
 	return bar;
 }
 
@@ -157,6 +193,7 @@ MapViewport *ApplicationShell::createLevelPlanViewport(int index)
 	view->installEventFilter(this);
 	view->setContextMenuPolicy(Qt::CustomContextMenu);
 	m_levelPlanViews.append(view);
+	connect(view,&MapViewport::groupContextRequested,this,[this,view](const QString& id) { activateLevelPlanViewport(view); changeLevelGroupContext(id); });
 	connect(view, &MapViewport::viewChanged, this, [this, view] {
 		if (!m_applyingLevelViewLayout) { synchronizeLevelViewNavigation(view); }
 	});
@@ -202,14 +239,10 @@ MapViewport *ApplicationShell::createLevelPlanViewport(int index)
 			setLevelMakeSectorMode(false);
 		}
 	});
-	connect(view, &MapViewport::componentMoveRequested, this,
-		[this, view](const QVector<LevelMapComponentSet> &sets, const LevelMapVec3 &delta) {
-			activateLevelPlanViewport(view);
-			moveLevelComponentsFromViewport(sets, delta);
-		});
 	// Picks made in one pane show in the others, so a vertex picked from
 	// above can be dragged in the front view.
 	connect(view, &MapViewport::componentPicksChanged, this, [this, view](int) { shareLevelComponentPicks(view); });
+	connect(view, &MapViewport::texturedSelectionClearRequested, this, &ApplicationShell::selectNoLevelMapObjects);
 	// Escape in one view leaves vertex editing in all of them.
 	connect(view, &MapViewport::componentModeChanged, this, [this](int mode) {
 		if (mode == 0) {
@@ -261,24 +294,14 @@ MapViewport *ApplicationShell::createLevelPlanViewport(int index)
 		statusBar()->showMessage(enabled ? tr("Draw Sector on: click the corners, then the first corner or Enter to close the shape.")
 										 : tr("Draw Sector off."));
 	});
-	connect(view, &MapViewport::clipModeChanged, this, [this, view](bool enabled) {
-		if (view != m_levelMapViewport) {
-			return;
-		}
-		if (auto *action = m_commands ? m_commands->action(QStringLiteral("map.clipTool")) : nullptr) {
-			action->setChecked(enabled);
-		}
-		refreshLevelToolShelf();
-		statusBar()->showMessage(enabled ? tr("Clip tool on: drag a line across the brushes, Tab chooses what stays, Enter cuts.")
-										 : tr("Clip tool off."));
-	});
+	connect(view, &MapViewport::clipModeChanged, this, &ApplicationShell::setLevelMapClipMode);
 	connect(view, &QWidget::customContextMenuRequested, this, [this, view](const QPoint &point) {
 		activateLevelPlanViewport(view);
 		showLevelMapContextMenu(view->mapToGlobal(point), true);
 	});
 	connect(view, &MapViewport::hoverChanged, this, [this](const QString &summary) {
 		if (m_levelMapHover) {
-			m_levelMapHover->setText(summary.isEmpty() ? tr("Move the cursor over the map to inspect geometry.") : summary);
+			m_levelMapHover->setText(levelSweepReadout(summary.isEmpty() ? tr("Move the cursor over the map to inspect geometry.") : summary));
 		}
 	});
 	return view;
@@ -362,6 +385,12 @@ void ApplicationShell::chooseLevelTool(const QString &toolId)
 
 void ApplicationShell::refreshLevelToolShelf()
 {
+	if (m_commands) {
+		m_commands->setEnabled(QStringLiteral("map.cutSelection"), canCutLevelMapSelection());
+		refreshLevelRegionSelectionCommands();
+		refreshLevelObjectSelectionCommands();
+		refreshLevelVisibilityCommands();
+	}
 	if (!m_levelToolActions) {
 		return;
 	}
@@ -428,7 +457,6 @@ void ApplicationShell::activateLevelPlanViewport(MapViewport *view)
 	}
 	if (m_levelMapViewport) {
 		m_levelMapViewport->cancelInteraction();
-		m_levelMapViewport->setClipMode(false);
 		m_levelMapViewport->setDrawMode(false);
 		m_levelMapViewport->setShapeDrawMode(false);
 		if (m_levelMapViewport->makeSectorMode()) {
@@ -444,7 +472,7 @@ void ApplicationShell::activateLevelPlanViewport(MapViewport *view)
 		m_levelMapProjection->setCurrentIndex(static_cast<int>(view->projection()));
 	}
 	if (m_levelMapHover) {
-		m_levelMapHover->setText(view->hoverSummary());
+		m_levelMapHover->setText(levelSweepReadout(view->hoverSummary()));
 	}
 	if (!m_applyingLevelViewLayout) {
 		saveLevelMapViewState();
@@ -469,6 +497,7 @@ void ApplicationShell::synchronizeLevelPlanViews(bool frame)
 		view->setShowVertices(m_levelMapViewport->showVertices());
 		view->setShowLabels(m_levelMapViewport->showLabels());
 		view->setShowTargetLinks(m_levelMapViewport->showTargetLinks());
+		view->setShowLinkedGroups(m_levelMapViewport->showLinkedGroups());
 		view->setHighContrast(preferences.theme == StudioTheme::HighContrastDark || preferences.theme == StudioTheme::HighContrastLight);
 		view->setReducedMotion(preferences.reducedMotion);
 	}
@@ -568,7 +597,7 @@ void ApplicationShell::saveLevelViewSplitters()
 	if (m_applyingLevelViewLayout || m_levelMaximized.view || !m_levelMapUpperViews || !m_levelMapViews->isVisible()) {
 		return;
 	}
-	const QString prefix = QStringLiteral("levelViews/%1/").arg(levelViewLayoutId(m_levelViewLayout));
+	const QString prefix = levelViewSplitterStatePrefix(m_levelViewLayout, m_levelPlanPanes);
 	m_settings.setShellLayoutState(prefix + QStringLiteral("upper"), m_levelMapUpperViews->saveState());
 	if (levelViewLayoutHasThreePlans(m_levelViewLayout)) {
 		m_settings.setShellLayoutState(prefix + QStringLiteral("root"), m_levelMapViews->saveState());
@@ -658,6 +687,7 @@ void ApplicationShell::equalizeLevelViews()
 
 void ApplicationShell::refreshLevelViewWorkspaceActions()
 {
+	refreshLevelPlanPaneActions();
 	const bool cameraShowing = levelMap3DShowing();
 	const bool planShowing = levelMap2DShowing();
 	if (m_levelMap3DButton) { const QSignalBlocker block(m_levelMap3DButton); m_levelMap3DButton->setChecked(cameraShowing); }
@@ -729,7 +759,6 @@ void ApplicationShell::applyLevelViewLayout(LevelViewLayout layout)
 	synchronizeLevelPlanViews();
 	for (auto *view : m_levelPlanViews) {
 		view->cancelInteraction();
-		view->setClipMode(false);
 		view->setDrawMode(false);
 		view->hide();
 	}
@@ -740,9 +769,12 @@ void ApplicationShell::applyLevelViewLayout(LevelViewLayout layout)
 			auto *view = m_levelPlanViews.at(i);
 			view->setProjection(static_cast<MapViewportProjection>(i));
 			(i == 0 && layout == LevelViewLayout::FourViews ? m_levelMapUpperViews : m_levelMapLowerViews)->addWidget(view);
-			view->show();
+			// Show Top/Front/Side View may leave a pane out; setLevelMap3D
+			// below hides a row or column left empty.
+			view->setVisible(m_levelPlanPanes.shown[static_cast<std::size_t>(i)]);
 		}
 		m_levelMapLowerViews->show();
+		moveLevelActivePlanToShownPane();
 	} else {
 		// Keep exactly the camera and active plan in the upper splitter.
 		// Hidden siblings must not consume persisted splitter slots.
@@ -776,7 +808,7 @@ void ApplicationShell::applyLevelViewLayout(LevelViewLayout layout)
 		m_levelMapProjection->setCurrentIndex(static_cast<int>(m_levelMapViewport->projection()));
 	}
 	setLevelMap3D(layout != LevelViewLayout::Single2D);
-	const QString prefix = QStringLiteral("levelViews/%1/").arg(levelViewLayoutId(layout));
+	const QString prefix = levelViewSplitterStatePrefix(layout, m_levelPlanPanes);
 	const int width = std::max(2, m_levelMapViews->width());
 	m_levelMapUpperViews->setSizes({width / 2, width / 2});
 	const auto upper = m_settings.shellLayoutState(prefix + QStringLiteral("upper"));

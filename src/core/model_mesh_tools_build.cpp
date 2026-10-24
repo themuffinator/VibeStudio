@@ -340,15 +340,43 @@ bool addPrimitive(ModelMesh *mesh, const ModelEdit &edit, ModelSelection *select
 	}
 	if (!reserveCapacity(*mesh, selection->surface, built.positions.size(), built.triangles.size(), error))
 		return false;
+	if (!options.newSurface.isEmpty())
+	{
+		// A new surface with the active surface's materials. It starts with no
+		// vertices, so without a binding it stays unskinned on skeletal models.
+		const auto &name = options.newSurface;
+		if (name.size() > 128 || std::any_of(name.cbegin(), name.cend(), [](QChar c) { return c.isNull() || c.category() == QChar::Other_Control; }))
+			return fail(error, Text::tr("Enter a surface name of 1–128 characters without control characters."));
+		if (std::any_of(mesh->surfaces.cbegin(), mesh->surfaces.cend(), [&](const ModelSurface &surface) { return surface.name == name; }))
+			return fail(error, Text::tr("A surface named %1 already exists.").arg(name));
+		if (mesh->surfaces.size() >= modelDocumentMaxSurfaces)
+			return fail(error, Text::tr("The editable model supports at most %1 surfaces.").arg(modelDocumentMaxSurfaces));
+		ModelSurface added;
+		added.name = name;
+		added.index = mesh->surfaces.size();
+		added.skinPaths = mesh->surfaces[selection->surface].skinPaths;
+		added.frames.resize(mesh->frames.size());
+		if (mesh->surfaces[selection->surface].editOrigins.tracked)
+			startModelSurfaceOrigins(&added);
+		mesh->surfaces.append(std::move(added));
+		selection->surface = mesh->surfaces.size() - 1;
+	}
 	auto &surface = mesh->surfaces[selection->surface];
 	const int first = surface.vertexCount;
+	std::map<std::array<float, 3>, int> identities;
 	const P3 centre = arrayPoint(options.point);
 	for (int i = 0; i < built.positions.size(); ++i)
 	{
 		if (!work.step())
 			return false;
 		surface.texCoords.append(built.uvs[i]);
+		appendModelVertexOriginNone(&surface);
 		const auto p = vec(orient(built.positions[i], options.axis) + centre), n = vec(orient(built.normals[i], options.axis));
+		if (!surface.topologyVertices.isEmpty())
+		{
+			const auto [entry, inserted] = identities.emplace(std::array<float, 3>{p.x, p.y, p.z}, first + i);
+			surface.topologyVertices.append(entry->second);
+		}
 		for (auto &frame : surface.frames)
 		{
 			frame.positions.append(p);

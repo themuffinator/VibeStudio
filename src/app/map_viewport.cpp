@@ -1,8 +1,10 @@
 #include "app/map_viewport.h"
+#include "app/studio_theme.h"
 #include "app/map_viewport_p.h"
 #include "app/viewport_hud.h"
 #include "app/viewport_image.h"
 #include "core/level_scene.h"
+#include "core/level_visibility.h"
 #include "core/level_camera_keys.h"
 
 #include <QBrush>
@@ -419,12 +421,24 @@ QString planePointText(MapViewportProjection projection, const QPointF& point)
 MapViewport::MapViewport(QWidget* parent)
 	: QWidget(parent)
 {
+	m_componentGizmo = new LevelComponentGizmo(this);
+	m_vertexInsertion = new LevelVertexInsertion(this);
+	connect(m_vertexInsertion,&LevelVertexInsertion::changed,this,[this] {
+		setAccessibleDescription(accessibleSummary()); Q_EMIT hoverChanged(componentSummary()); update();
+	});
+	connect(m_componentGizmo,&LevelComponentGizmo::changed,this,[this] {
+		setAccessibleDescription(accessibleSummary()); Q_EMIT hoverChanged(componentSummary()); update();
+	});
 	setFocusPolicy(Qt::StrongFocus);
 	setMouseTracking(true);
 	setAcceptDrops(true);
 	setAutoFillBackground(false);
 	setAttribute(Qt::WA_OpaquePaintEvent, true);
 	setAccessibleName(tr("Map viewport"));
+	connect(this,&MapViewport::viewChanged,this,[this] {
+		m_componentCycle.reset(); setAccessibleDescription(accessibleSummary());
+		if (m_componentMode != ComponentMode::Off) { Q_EMIT hoverChanged(componentSummary()); }
+	});
 	setAccessibleDescription(accessibleSummary());
 	m_worldBounds = minMaxRect(-512.0, -512.0, 512.0, 512.0);
 	m_worldCenter = m_worldBounds.center();
@@ -562,10 +576,12 @@ void MapViewport::paintOverlayImage(QPainter& painter, const QImage& image, cons
 
 void MapViewport::setDocument(const LevelMapDocument& document, const MapBrushGeometryCache* prepared)
 {
+	m_texturedFaces.clear(); m_texturedFaceKeys.clear();
 	// A different map shows everything again.
 	if (prepared) { m_brushGeometryCache = *prepared; }
 	else { m_brushGeometryCache.clear(); }
 	m_sourceDocument = document;
+	m_sceneContext = levelSceneSelectionContext(document);
 	m_sourceIndex.rebuild(m_sourceDocument);
 	m_hasWorkZone = false;
 	m_hasCameraBrushDraft = false;
@@ -581,7 +597,7 @@ void MapViewport::setDocument(const LevelMapDocument& document, const MapBrushGe
 	m_hoverHandle = 0;
 	m_banding = false;
 	m_clipDrawing = false;
-	m_hasClipLine = false;
+	m_clipState.points.clear(); m_clipPreview = {};
 	if (m_clipMode) {
 		m_clipMode = false;
 		Q_EMIT clipModeChanged(false);
@@ -593,8 +609,13 @@ void MapViewport::setDocument(const LevelMapDocument& document, const MapBrushGe
 		Q_EMIT drawModeChanged(false);
 	}
 	if (m_componentMode != ComponentMode::Off) {
+		finishComponentMove(false);
+		m_componentSplit = false;
+		m_componentExtrusion = 0;
 		m_componentMode = ComponentMode::Off;
 		m_componentHandles.clear();
+		m_componentCycle.reset();
+		m_componentSelectionTopology.clear();
 		m_pickedHandles.clear();
 		m_componentArmed = m_componentDragging = m_componentBanding = false;
 		Q_EMIT componentModeChanged(static_cast<int>(ComponentMode::Off));
@@ -624,23 +645,14 @@ void MapViewport::updateDocument(const LevelMapDocument& document)
 		return;
 	}
 	// An edit changes geometry, not the camera: keep the pan and zoom the user
-	// set, and only re-solve what is drawn. Hidden objects stay hidden unless
-	// the document now selects them.
+	// set, and only re-solve what is drawn. The document owns visibility and
+	// its undo history; refreshing a view must not silently reveal anything.
 	m_sourceDocument = document;
+	m_sceneContext = levelSceneSelectionContext(document);
 	m_sourceIndex.rebuild(m_sourceDocument);
 	if (document.doomTopologyRevision != m_topologyRevision) {
 		m_topologyRevision = document.doomTopologyRevision;
-		for (auto it = m_hidden.begin(); it != m_hidden.end();) {
-			const auto kind = static_cast<LevelMapSelectionKind>(it->first);
-			if (kind == LevelMapSelectionKind::DoomVertex || kind == LevelMapSelectionKind::DoomLinedef || kind == LevelMapSelectionKind::DoomSector) {
-				it = m_hidden.erase(it);
-			} else {
-				++it;
-			}
-		}
 	}
-	forgetVanishedHidden();
-	revealSelected(document.selection);
 	applyHiddenFilter();
 	adoptDocumentSelection();
 	m_hover = MapViewportHit();
@@ -694,7 +706,10 @@ void MapViewport::setSelectionSetInternal(const QVector<LevelMapSelectionRef>& s
 	QSet<QPair<int, int>> seen;
 	for (auto it = selection.crbegin(); it != selection.crend(); ++it) {
 		const LevelMapSelectionRef& ref = *it;
-		if (ref.kind == LevelMapSelectionKind::None || ref.objectId < 0 || isHidden(ref.kind, ref.objectId)) {
+		const auto object = levelMapSelectionRefId(ref);
+		if (ref.kind == LevelMapSelectionKind::None || ref.objectId < 0
+			|| (!m_sceneContext.openGroup.isEmpty() && !m_sceneContext.allowedObjects.contains(object))
+			|| (isHidden(ref.kind, ref.objectId) && !m_sceneContext.closedGroups.contains(object))) {
 			continue;
 		}
 		const QPair<int, int> key(static_cast<int>(ref.kind), ref.objectId);
@@ -710,14 +725,19 @@ void MapViewport::setSelectionSetInternal(const QVector<LevelMapSelectionRef>& s
 
 void MapViewport::clearDocument()
 {
+	m_texturedFaces.clear(); m_texturedFaceKeys.clear();
+	setComponentMode(ComponentMode::Off);
+	m_componentSelectionTopology.clear();
 	m_selectionRingCache.clear();
 	m_gridFrame = {};
 	m_brushGeometryCache.clear();
 	m_document = LevelMapDocument();
 	m_sourceDocument = LevelMapDocument();
+	m_sceneContext = {};
 	m_sourceIndex = {};
 	m_hidden.clear();
 	m_sceneHidden.clear();
+	m_effectiveHidden.clear();
 	m_filtered.clear();
 	m_leakTrail.clear();
 	m_targetLinks.clear();
@@ -739,7 +759,7 @@ void MapViewport::clearDocument()
 	m_hoverHandle = 0;
 	m_banding = false;
 	m_clipDrawing = false;
-	m_hasClipLine = false;
+	m_clipState.points.clear(); m_clipPreview = {};
 	if (m_clipMode) {
 		m_clipMode = false;
 		Q_EMIT clipModeChanged(false);
@@ -775,6 +795,7 @@ void MapViewport::synchronizeSceneFrom(const MapViewport& source, bool frame)
 		retirePlanRender();
 		m_sceneRevision = source.m_sceneRevision;
 		m_sourceDocument = source.m_sourceDocument;
+		m_sceneContext = source.m_sceneContext;
 		m_document = source.m_document;
 		m_sourceIndex = source.m_sourceIndex;
 		m_sceneIndex = source.m_sceneIndex;
@@ -787,10 +808,12 @@ void MapViewport::synchronizeSceneFrom(const MapViewport& source, bool frame)
 		m_brushGeometryCache = source.m_brushGeometryCache;
 		m_sectorOutlines = source.m_sectorOutlines;
 		m_hidden = source.m_hidden;
+		m_effectiveHidden = source.m_effectiveHidden;
 		m_sceneHidden = source.m_sceneHidden;
 		m_filtered = source.m_filtered;
 		m_targetLinks = source.m_targetLinks;
 		m_tagLinks = source.m_tagLinks;
+		m_linkedGroupBoxes = source.m_linkedGroupBoxes;
 		m_topologyRevision = source.m_topologyRevision;
 		m_hover = MapViewportHit();
 		updateWorldBounds();
@@ -831,11 +854,9 @@ void MapViewport::setProjection(MapViewportProjection projection)
 	if (m_projection == projection) {
 		return;
 	}
-	// The drag plane, the rubber band, and a clip line are all expressed in
-	// the projected axes, so none survives a projection change; sectors are
-	// drawn from above only.
+	// Drag gestures end when the projection changes. World-space clip
+	// points remain shared; sectors are drawn from above only.
 	cancelInteraction();
-	m_hasClipLine = false;
 	if (m_drawMode && projection != MapViewportProjection::TopXY) {
 		setDrawMode(false);
 	}
@@ -873,9 +894,9 @@ void MapViewport::setSelection(LevelMapSelectionKind kind, int objectId)
 	update();
 }
 
-void MapViewport::setSelectionSet(const QVector<LevelMapSelectionRef>& selection)
+void MapViewport::setSelectionSet(const QVector<LevelMapSelectionRef>& selection, bool revealTemporarilyHidden)
 {
-	if (revealSelected(selection)) {
+	if (revealTemporarilyHidden && revealSelected(selection)) {
 		refilterHidden();
 	}
 	setSelectionSetInternal(selection);
@@ -916,10 +937,7 @@ QSet<QPair<int, int>> MapViewport::selectedKeys() const
 
 void MapViewport::replaceSelection(LevelMapSelectionKind kind, int objectId)
 {
-	m_selection.clear();
-	if (kind != LevelMapSelectionKind::None && objectId >= 0) {
-		m_selection.push_back(LevelMapSelectionRef {kind, objectId});
-	}
+	m_selection = pickLevelSceneObjects(m_sceneContext,{},{{kind,objectId}},LevelScenePick::Replace);
 	syncPrimaryFromSelection();
 }
 
@@ -928,11 +946,7 @@ void MapViewport::addToSelection(LevelMapSelectionKind kind, int objectId)
 	if (kind == LevelMapSelectionKind::None || objectId < 0) {
 		return;
 	}
-	const LevelMapSelectionRef ref {kind, objectId};
-	// Adding a member that is already present promotes it to primary rather than
-	// duplicating it.
-	m_selection.removeAll(ref);
-	m_selection.push_back(ref);
+	m_selection = pickLevelSceneObjects(m_sceneContext,m_selection,{{kind,objectId}},LevelScenePick::Add);
 	syncPrimaryFromSelection();
 }
 
@@ -941,27 +955,50 @@ void MapViewport::toggleInSelection(LevelMapSelectionKind kind, int objectId)
 	if (kind == LevelMapSelectionKind::None || objectId < 0) {
 		return;
 	}
-	const LevelMapSelectionRef ref {kind, objectId};
-	if (m_selection.removeAll(ref) > 0) {
-		syncPrimaryFromSelection();
-		return;
-	}
-	m_selection.push_back(ref);
+	m_selection = pickLevelSceneObjects(m_sceneContext,m_selection,{{kind,objectId}},LevelScenePick::Toggle);
 	syncPrimaryFromSelection();
 }
 
-void MapViewport::setGridSize(int units)
+void MapViewport::selectSceneObjects(const QVector<LevelMapSelectionRef>& hits, LevelScenePick mode)
 {
-	const int clamped = std::clamp(units, 1, 4096);
+	m_selection = pickLevelSceneObjects(m_sceneContext,m_selection,hits,mode);
+	syncPrimaryFromSelection(); announceSelection(); update();
+}
+
+bool MapViewport::openGroupAt(const QPointF& point)
+{
+	if (!isEnabled() || m_clipMode || m_drawMode || m_componentMode != ComponentMode::Off || m_shearMode) { return false; }
+	const auto hits = objectsAt(point);
+	const auto id = hits.isEmpty() ? QString{} : m_sceneContext.closedGroups.value(levelMapSelectionRefId(hits[0]));
+	if (!id.isEmpty()) { Q_EMIT groupContextRequested(id); return true; }
+	if (hits.isEmpty() && !m_sceneContext.openGroup.isEmpty()) { Q_EMIT groupContextRequested({}); return true; }
+	return false;
+}
+
+void MapViewport::mouseDoubleClickEvent(QMouseEvent* event)
+{
+	if (m_clipMode && event->button() == Qt::LeftButton
+		&& (event->modifiers() == Qt::NoModifier || event->modifiers() == m_controls.quickClipModifiers)) {
+		activateClipDoubleClick(); event->accept(); return;
+	}
+	if (event->button() == Qt::LeftButton && event->modifiers() == Qt::NoModifier && openGroupAt(event->position())) { event->accept(); return; }
+	QWidget::mouseDoubleClickEvent(event);
+}
+
+void MapViewport::setGridSize(double units)
+{
+	// Grid 0.125 is the finest listed size (core/level_editor_controls.h).
+	const double clamped = std::isfinite(units) ? std::clamp(units, kLevelEditorFinestGridUnits, 4096.0) : 64.0;
 	if (m_gridSize == clamped) {
 		return;
 	}
+	finishComponentMove(false);
 	m_gridSize = clamped;
 	retireOverlayRender(); m_gridFrame = {};
 	update();
 }
 
-int MapViewport::gridSize() const
+double MapViewport::gridSize() const
 {
 	return m_gridSize;
 }
@@ -971,6 +1008,7 @@ void MapViewport::setSnapToGrid(bool enabled)
 	if (m_snapToGrid == enabled) {
 		return;
 	}
+	finishComponentMove(false);
 	m_snapToGrid = enabled;
 	if (m_dragging) {
 		Q_EMIT hoverChanged(dragSummary());
@@ -990,6 +1028,9 @@ bool MapViewport::isDragging() const
 
 void MapViewport::cancelInteraction()
 {
+	m_vertexInsertion->finish(false); m_vertexInsertion->clearHover();
+	m_componentGizmo->finish(false);
+	finishClipPoint(false);
 	setTemporaryPan(false);
 	const bool wasBusy = m_dragging || m_banding || m_pressArmed || m_resizing || m_clipDrawing || m_brushDrawing || m_clickArmed;
 	m_brushArmed = false;
@@ -1007,7 +1048,8 @@ void MapViewport::cancelInteraction()
 	m_banding = false;
 	m_dragAnchorPlane = QPointF();
 	m_dragCurrentPlane = QPointF();
-	if (m_componentDragging || m_componentBanding || m_componentArmed) {
+	if (m_componentDragging || m_componentBanding || m_componentArmed || m_componentNativeArmed) {
+		finishComponentMove(false);
 		m_componentDragging = m_componentBanding = m_componentArmed = false;
 		m_componentGrabbed = -1;
 		update();
@@ -1090,6 +1132,20 @@ bool MapViewport::showLabels() const
 	return m_showLabels;
 }
 
+void MapViewport::setShowLinkedGroups(bool show)
+{
+	if (m_showLinkedGroups == show) {
+		return;
+	}
+	m_showLinkedGroups = show;
+	update();
+}
+
+bool MapViewport::showLinkedGroups() const
+{
+	return m_showLinkedGroups;
+}
+
 void MapViewport::setShowTargetLinks(bool show)
 {
 	if (m_showTargetLinks == show) {
@@ -1142,6 +1198,7 @@ void MapViewport::setHighContrast(bool enabled)
 		return;
 	}
 	m_highContrast = enabled;
+	m_componentCycle.reset();
 	retireOverlayRender(); m_gridFrame = {};
 	update();
 }
@@ -1171,31 +1228,25 @@ void MapViewport::zoomToFit()
 
 int MapViewport::hideSelection()
 {
-	int hidden = 0;
-	for (const LevelMapSelectionRef& ref : std::as_const(m_selection)) {
-		if (ref.kind == LevelMapSelectionKind::Entity || ref.kind == LevelMapSelectionKind::QuakeBrush
-			|| ref.kind == LevelMapSelectionKind::QuakePatch || ref.kind == LevelMapSelectionKind::DoomThing) {
-			m_hidden.insert({static_cast<int>(ref.kind), ref.objectId});
-			++hidden;
-		}
-	}
-	if (hidden == 0) {
-		return 0;
-	}
-	m_selection.clear();
-	syncPrimaryFromSelection();
+	// Standalone viewport clients use the same service as the studio. The
+	// studio publishes its worker candidate into the authoritative document.
+	if (!setLevelMapSelection(&m_sourceDocument,m_selection)) { return 0; }
+	LevelVisibilityReport report;
+	if (!changeLevelMapVisibility(&m_sourceDocument,{},&report)) { return 0; }
+	adoptDocumentSelection();
 	m_hover = MapViewportHit();
 	refilterHidden();
+	adoptDocumentSelection();
 	announceSelection();
-	return hidden;
+	return report.hidden;
 }
 
 void MapViewport::showAllHidden()
 {
-	if (m_hidden.isEmpty()) {
+	if (m_sourceDocument.hiddenObjects.isEmpty() && m_sourceDocument.shownObjects.isEmpty()) {
 		return;
 	}
-	m_hidden.clear();
+	changeLevelMapVisibility(&m_sourceDocument,{LevelVisibilityOperation::ShowAll,false});
 	refilterHidden();
 	setAccessibleDescription(accessibleSummary());
 	update();
@@ -1238,11 +1289,13 @@ int MapViewport::hiddenCount() const
 	return count;
 }
 
+int MapViewport::temporaryHiddenCount() const { return static_cast<int>(m_hidden.size()); }
+
 bool MapViewport::isHidden(LevelMapSelectionKind kind, int objectId) const
 {
-	if (!m_sceneHidden.isEmpty() && m_sceneHidden.contains(levelSceneCanonicalObject(m_sourceDocument, levelMapSelectionRefId({kind, objectId})))) { return true; }
-	if (m_hidden.isEmpty() && m_filtered.isEmpty()) { return false; }
-	const auto held = [this](const QPair<int, int>& key) { return m_hidden.contains(key) || m_filtered.contains(key); };
+	if (!m_effectiveHidden.isEmpty() && m_effectiveHidden.contains(levelSceneCanonicalObject(m_sourceDocument, levelMapSelectionRefId({kind, objectId})))) { return true; }
+	if (m_filtered.isEmpty()) { return false; }
+	const auto held = [this](const QPair<int, int>& key) { return m_filtered.contains(key); };
 	if (held({static_cast<int>(kind), objectId})) {
 		return true;
 	}
@@ -1259,43 +1312,24 @@ bool MapViewport::isHidden(LevelMapSelectionKind kind, int objectId) const
 	return false;
 }
 
-void MapViewport::forgetVanishedHidden()
-{
-	for (auto it = m_hidden.begin(); it != m_hidden.end();) {
-		if (levelMapObjectExists(m_sourceDocument, {static_cast<LevelMapSelectionKind>(it->first), it->second})) {
-			++it;
-		} else {
-			it = m_hidden.erase(it);
-		}
-	}
-}
-
 bool MapViewport::revealSelected(const QVector<LevelMapSelectionRef>& selection)
 {
-	if (m_hidden.isEmpty()) {
-		return false;
-	}
-	bool revealed = false;
-	const int entity = static_cast<int>(LevelMapSelectionKind::Entity);
-	for (const LevelMapSelectionRef& ref : selection) {
-		revealed = m_hidden.remove({static_cast<int>(ref.kind), ref.objectId}) || revealed;
-		if (ref.kind == LevelMapSelectionKind::QuakeBrush) {
-			if (const LevelMapBrush* brush = m_sourceIndex.object(m_sourceDocument.brushes, ref.kind, ref.objectId)) {
-				revealed = m_hidden.remove({entity, brush->entityId}) || revealed;
-			}
-		} else if (ref.kind == LevelMapSelectionKind::QuakePatch) {
-			if (const LevelMapPatch* patch = m_sourceIndex.object(m_sourceDocument.patches, ref.kind, ref.objectId)) {
-				revealed = m_hidden.remove({entity, patch->entityId}) || revealed;
-			}
-		}
-	}
-	return revealed;
+	if (m_sourceDocument.hiddenObjects.isEmpty()) { return false; }
+	const auto before = m_sourceDocument.hiddenObjects, shown = m_sourceDocument.shownObjects;
+	return selectAndRevealLevelMapObjects(&m_sourceDocument,selection,false)
+		&& (before != m_sourceDocument.hiddenObjects || shown != m_sourceDocument.shownObjects);
 }
 
 void MapViewport::applyHiddenFilter()
 {
 	m_document = m_sourceDocument;
+	m_hidden.clear();
 	m_sceneHidden = levelSceneHiddenObjects(m_sourceDocument);
+	m_effectiveHidden = levelMapHiddenObjects(m_sourceDocument);
+	for (const auto& object : m_effectiveHidden - m_sceneHidden) {
+		const auto colon = object.indexOf(':');
+		m_hidden.insert({static_cast<int>(levelMapSelectionKindFromId(object.left(colon))),object.mid(colon+1).toInt()});
+	}
 	if (m_hidden.isEmpty() && m_sceneHidden.isEmpty() && m_filtered.isEmpty()) {
 		return;
 	}
@@ -1312,10 +1346,10 @@ void MapViewport::applyHiddenFilter()
 	}
 	m_document.entities.removeIf([&hiddenEntities](const LevelMapEntity& entity) { return hiddenEntities.contains(entity.id); });
 	m_document.brushes.removeIf([&](const LevelMapBrush& brush) {
-		return hidden(LevelMapSelectionKind::QuakeBrush, brush.id) || hiddenEntities.contains(brush.entityId);
+		return hidden(LevelMapSelectionKind::QuakeBrush, brush.id);
 	});
 	m_document.patches.removeIf([&](const LevelMapPatch& patch) {
-		return hidden(LevelMapSelectionKind::QuakePatch, patch.id) || hiddenEntities.contains(patch.entityId);
+		return hidden(LevelMapSelectionKind::QuakePatch, patch.id);
 	});
 	m_document.doomThings.removeIf([&](const LevelMapDoomThing& thing) { return hidden(LevelMapSelectionKind::DoomThing, thing.id); });
 	// Doom geometry records retain their indices. Painting and picking consult
@@ -1548,7 +1582,6 @@ bool MapViewport::restoreNavigationState(const PlanViewState& state)
 {
 	if (!validatePlanViewState(state)) { return false; }
 	cancelInteraction();
-	setClipMode(false);
 	setDrawMode(false);
 	setProjection(static_cast<MapViewportProjection>(state.projection));
 	m_worldCenter = state.center;
@@ -1598,7 +1631,7 @@ QString MapViewport::hoverSummary() const
 	if (m_resizing) {
 		return resizeSummary();
 	}
-	if (m_clipMode && (m_clipDrawing || !m_hasClipLine)) {
+	if (m_clipMode && (m_clipDrawing || !hasClipLine())) {
 		return clipSummary();
 	}
 	if (m_drawMode) {
@@ -1627,7 +1660,16 @@ QStringList MapViewport::statusLines() const
 	lines << tr("Zoom: %1% (%2 units per pixel)")
 			 .arg(m_zoom * 100.0, 0, 'f', 1)
 			 .arg(m_zoom > 0.0 ? 1.0 / m_zoom : 0.0, 0, 'f', 2);
-	lines << (m_showGrid ? tr("Grid: %1 units").arg(m_gridSize) : tr("Grid: hidden (%1 units)").arg(m_gridSize));
+	// The painter thins the lines out at low zoom (map_grid.cpp); say so when
+	// the drawn spacing is coarser than the grid things snap to.
+	const double drawnGrid = mapGridDrawnSpacing(m_gridSize, m_zoom);
+	if (!m_showGrid) {
+		lines << tr("Grid: hidden (%1 units)").arg(m_gridSize);
+	} else if (drawnGrid > m_gridSize) {
+		lines << tr("Grid: %1 units, drawn every %2 units at this zoom").arg(m_gridSize).arg(drawnGrid);
+	} else {
+		lines << tr("Grid: %1 units").arg(m_gridSize);
+	}
 	if (!m_hasDocument) {
 		lines << tr("Map: not loaded");
 		lines << tr("Selection: none");
@@ -1688,7 +1730,7 @@ QStringList MapViewport::statusLines() const
 		lines << tr("Selection size: %1 by %2 units").arg(extent.width(), 0, 'g', 6).arg(extent.height(), 0, 'g', 6);
 	}
 	if (!m_hidden.isEmpty()) {
-		lines << tr("Hidden objects: %1 (Show All, Shift+H, brings them back)").arg(m_hidden.size());
+		lines << tr("Temporarily hidden objects: %1 (Show All Hidden restores them)").arg(m_hidden.size());
 	}
 	lines << (m_snapToGrid ? tr("Snap: on (%1 units)").arg(m_gridSize) : tr("Snap: off"));
 	if (m_dragging) {
@@ -1732,6 +1774,7 @@ QString MapViewport::accessibleSummary() const
 	QString selection = m_selectionKind == LevelMapSelectionKind::None
 		? tr("nothing selected")
 		: objectLabelText(m_document, m_selectionKind, m_selectedObjectId);
+	if (!m_texturedFaces.isEmpty()) { selection += QStringLiteral("; ") + tr("%n independent textured face(s) selected",nullptr,static_cast<int>(m_texturedFaces.size())); }
 	if (m_selection.size() > 1) {
 		selection = tr("%1, primary of %n selected object(s)", nullptr, static_cast<int>(m_selection.size()))
 				    .arg(selection);
@@ -1744,6 +1787,9 @@ QString MapViewport::accessibleSummary() const
 	}
 	if (!m_targetLinks.isEmpty() && m_showTargetLinks) {
 		overlays += QStringLiteral(" ") + tr("Arrows show %n target link(s) between entities.", nullptr, static_cast<int>(m_targetLinks.size()));
+	}
+	if (const QString linked = levelLinkedGroupsDescription(m_linkedGroupBoxes, linkedGroupsInUse(), m_showLinkedGroups); !linked.isEmpty()) {
+		overlays += QStringLiteral(" ") + linked;
 	}
 	if (!m_hidden.isEmpty()) {
 		overlays += QStringLiteral(" ") + tr("%n object(s) are hidden from the view.", nullptr, static_cast<int>(m_hidden.size()));
@@ -1814,6 +1860,7 @@ void MapViewport::rebuildGeometry()
 	m_brushGeometry.clear();
 	m_sectorOutlines.clear();
 	m_targetLinks.clear();
+	m_linkedGroupBoxes.clear();
 	if (!m_hasDocument) {
 		return;
 	}
@@ -1824,6 +1871,7 @@ void MapViewport::rebuildGeometry()
 		m_tagLinks = levelMapTagLinks(m_document);
 	}
 	m_brushGeometry = m_brushGeometryCache.build(m_document);
+	rebuildLinkedGroupBoxes();
 	// Estimate edge/control work once per scene, including complex small maps.
 	// Keep these reads const: mutable Qt iterators would detach the document
 	// arrays shared with the source and sibling panes.
@@ -1936,10 +1984,10 @@ QPointF MapViewport::viewToWorld(const QPointF& point) const
 		m_worldCenter.y() - (point.y() - height() * 0.5) / m_zoom);
 }
 
-LevelMapVec3 MapViewport::worldPositionAt(const QPointF& viewPoint, double hiddenAxisValue) const
+LevelMapVec3 MapViewport::worldPositionAt(const QPointF& viewPoint, double hiddenAxisValue, bool snap) const
 {
 	QPointF world = viewToWorld(viewPoint);
-	if (m_snapToGrid && m_gridSize > 0) {
+	if (snap && m_snapToGrid && m_gridSize > 0) {
 		world = QPointF(snapLevelMapCoordinate(world.x(), m_gridSize), snapLevelMapCoordinate(world.y(), m_gridSize));
 	}
 	switch (m_projection) {
@@ -1973,7 +2021,7 @@ MapViewportHit MapViewport::hitTest(const QPointF& viewPoint) const
 		world.y() + pickWorld);
 	double best = kPickRadius;
 	const auto consider = [&](LevelMapSelectionKind kind, int id, const QPointF& worldPoint, double distance) {
-		if (isHidden(kind, id)) { return; }
+		if (isHidden(kind, id) || !m_sceneContext.allowedObjects.contains(levelMapSelectionRefId({kind,id}))) { return; }
 		// Outside the pick radius is always rejected; once something is held, a
 		// tie keeps it so that the documented tier and iteration order decides.
 		if (distance > best || (hit.kind != LevelMapSelectionKind::None && distance >= best)) {
@@ -2133,7 +2181,7 @@ QVector<LevelMapSelectionRef> MapViewport::objectsInWorldRect(const QRectF& rect
 	// order without allocating per-object lookups on every pointer move.
 	const int worldspawnId = worldspawnEntityId(m_document);
 	const auto keep = [&](LevelMapSelectionKind kind, int id, const QRectF& bounds) {
-		if (id >= 0 && !isHidden(kind, id) && rectContainsRect(area, bounds)) {
+		if (id >= 0 && !isHidden(kind, id) && m_sceneContext.allowedObjects.contains(levelMapSelectionRefId({kind,id})) && rectContainsRect(area, bounds)) {
 			result.push_back(LevelMapSelectionRef {kind, id});
 		}
 	};
@@ -2324,111 +2372,6 @@ void MapViewport::cancelDrag()
 bool MapViewport::isResizing() const
 {
 	return m_resizing;
-}
-
-void MapViewport::setClipMode(bool enabled)
-{
-	if (m_clipMode == enabled) {
-		return;
-	}
-	cancelInteraction();
-	m_clipMode = enabled;
-	m_clipDrawing = false;
-	m_hasClipLine = false;
-	m_hoverHandle = 0;
-	if (enabled) {
-		setCursor(Qt::CrossCursor);
-	} else {
-		unsetCursor();
-	}
-	setAccessibleDescription(accessibleSummary());
-	Q_EMIT hoverChanged(enabled ? clipSummary() : hoverSummary());
-	Q_EMIT clipModeChanged(enabled);
-	update();
-}
-
-bool MapViewport::clipMode() const
-{
-	return m_clipMode;
-}
-
-void MapViewport::setClipKeep(LevelMapClipKeep keep)
-{
-	m_clipKeep = keep;
-	if (m_clipMode) {
-		Q_EMIT hoverChanged(clipSummary());
-	}
-	update();
-}
-
-LevelMapClipKeep MapViewport::clipKeep() const
-{
-	return m_clipKeep;
-}
-
-bool MapViewport::hasClipLine() const
-{
-	return m_hasClipLine;
-}
-
-void MapViewport::setClipLine(const QPointF& from, const QPointF& to)
-{
-	m_clipFrom = from;
-	m_clipTo = to;
-	m_clipDrawing = false;
-	m_hasClipLine = from != to;
-	update();
-}
-
-void MapViewport::clearClipLine()
-{
-	m_clipDrawing = false;
-	m_hasClipLine = false;
-	update();
-}
-
-bool MapViewport::clipPlanePoints(LevelMapVec3* a, LevelMapVec3* b, LevelMapVec3* c) const
-{
-	if (!m_hasClipLine) {
-		return false;
-	}
-	// The drawing plane's axes put back in the world, and a step toward the
-	// viewer: +z from the top, -y from the front, +x from the side. Drawn
-	// direction x toward-viewer is then the right of the line on screen.
-	const auto world = [this](const QPointF& point) {
-		switch (m_projection) {
-		case MapViewportProjection::TopXY:
-			return LevelMapVec3 {point.x(), point.y(), 0.0, true};
-		case MapViewportProjection::FrontXZ:
-			return LevelMapVec3 {point.x(), 0.0, point.y(), true};
-		case MapViewportProjection::SideZY:
-			return LevelMapVec3 {0.0, point.x(), point.y(), true};
-		}
-		return LevelMapVec3 {point.x(), point.y(), 0.0, true};
-	};
-	const double step = 64.0;
-	LevelMapVec3 toward = world(m_clipFrom);
-	switch (m_projection) {
-	case MapViewportProjection::TopXY:
-		toward.z += step;
-		break;
-	case MapViewportProjection::FrontXZ:
-		toward.y -= step;
-		break;
-	case MapViewportProjection::SideZY:
-		toward.x += step;
-		break;
-	}
-	if (a != nullptr) {
-		*a = world(m_clipFrom);
-	}
-	if (b != nullptr) {
-		*b = world(m_clipTo);
-	}
-	if (c != nullptr) {
-		*c = toward;
-	}
-	return true;
 }
 
 void MapViewport::dragEnterEvent(QDragEnterEvent* event)
@@ -2847,68 +2790,6 @@ QPointF MapViewport::snappedPlanePoint(const QPointF& viewPoint) const
 	return QPointF(snapLevelMapCoordinate(point.x(), grid), snapLevelMapCoordinate(point.y(), grid));
 }
 
-QString MapViewport::clipSummary() const
-{
-	if (m_clipDrawing) {
-		return tr("Clip line from %1 to %2").arg(planePointText(m_projection, m_clipFrom), planePointText(m_projection, m_clipTo));
-	}
-	if (!m_hasClipLine) {
-		return tr("Clip mode: drag a line across the brushes to cut; Escape leaves.");
-	}
-	return m_clipKeep == LevelMapClipKeep::Both ? tr("Clip: splits the brushes in two; Tab keeps one side; Enter cuts.")
-						 : tr("Clip: cuts away the hatched side; Tab switches sides or keeps both; Enter cuts.");
-}
-
-void MapViewport::paintClip(QPainter& painter, const Palette& palette) const
-{
-	if (!m_clipMode || (!m_hasClipLine && !m_clipDrawing)) {
-		return;
-	}
-	const QPointF from = worldToView(m_clipFrom.x(), m_clipFrom.y());
-	const QPointF to = worldToView(m_clipTo.x(), m_clipTo.y());
-	painter.save();
-	painter.setPen(QPen(palette.warning, 1.5));
-	painter.setBrush(palette.warning);
-	painter.drawEllipse(from, 4.0, 4.0);
-	const QPointF travel = to - from;
-	const double length = std::hypot(travel.x(), travel.y());
-	if (length < 1.0) {
-		painter.restore();
-		return;
-	}
-	const QPointF direction = travel / length;
-	// Right of the line as drawn, on a screen whose y points down.
-	const QPointF right(-direction.y(), direction.x());
-	const double reach = std::hypot(static_cast<double>(width()), static_cast<double>(height())) * 2.0;
-	const QPointF start = from - direction * reach;
-	const QPointF end = from + direction * reach;
-	if (m_clipKeep != LevelMapClipKeep::Both) {
-		// The front of the plane is the right of the line; keeping the back
-		// cuts the right away. Hatching marks it without relying on colour.
-		const QPointF away = (m_clipKeep == LevelMapClipKeep::Back ? right : -right) * reach;
-		const QPolygonF removed {start, end, end + away, start + away};
-		QColor wash = palette.warning;
-		wash.setAlpha(m_highContrast ? 70 : 38);
-		painter.setPen(Qt::NoPen);
-		painter.setBrush(wash);
-		painter.drawPolygon(removed);
-		QColor hatch = palette.warning;
-		hatch.setAlpha(m_highContrast ? 200 : 120);
-		painter.setBrush(QBrush(hatch, Qt::BDiagPattern));
-		painter.drawPolygon(removed);
-	}
-	painter.setBrush(Qt::NoBrush);
-	painter.setPen(QPen(palette.warning, m_highContrast ? 2.5 : 2.0, m_clipDrawing ? Qt::DashLine : Qt::SolidLine));
-	painter.drawLine(start, end);
-	painter.setBrush(palette.warning);
-	painter.drawEllipse(from, 4.0, 4.0);
-	painter.drawEllipse(to, 4.0, 4.0);
-	painter.setPen(QPen(palette.text, 1.0));
-	painter.drawText(to + QPointF(10.0, -10.0),
-		m_clipKeep == LevelMapClipKeep::Both ? tr("Splits in two") : tr("Cuts away the hatched side"));
-	painter.restore();
-}
-
 bool MapViewport::resizeBox(QRectF* plane, LevelMapVec3* mins, LevelMapVec3* maxs) const
 {
 	if (!m_hasDocument || m_selection.isEmpty()) {
@@ -2949,6 +2830,9 @@ bool MapViewport::resizeBox(QRectF* plane, LevelMapVec3* mins, LevelMapVec3* max
 
 bool MapViewport::handlesBox(QRectF* box) const
 {
+	// Object resize handles would obscure the component selection at corners
+	// and imply an operation that component mode does not accept.
+	if (m_componentMode != ComponentMode::Off) { return false; }
 	if (m_resizing) {
 		*box = resizedPlaneBox();
 		return true;
@@ -3283,6 +3167,9 @@ void MapViewport::paintSelectionMarkers(QPainter& painter, const Palette& palett
 	painter.drawLine(QPointF(view.x() + 4.0, view.y()), QPointF(view.x() + 16.0, view.y()));
 	painter.drawLine(QPointF(view.x(), view.y() - 16.0), QPointF(view.x(), view.y() - 4.0));
 	painter.drawLine(QPointF(view.x(), view.y() + 4.0), QPointF(view.x(), view.y() + 16.0));
+	// Active component edits use the space around their handles for numeric
+	// traces. Keep selection markers, and restore the object label on release.
+	if (m_componentDragging || m_vertexInsertion->active()) { return; }
 	const auto label = layoutViewportLabel(rect(),view,QFontMetricsF(painter.font(),painter.device()),
 		objectLabelText(m_document,m_selectionKind,m_selectedObjectId),layoutDirection(),hud);
 	paintViewportLabel(painter,label,layoutDirection(),palette.text,palette.background,m_highContrast);
@@ -3662,6 +3549,22 @@ void MapViewport::paintOverlay(QPainter& painter, const Palette& palette) const
 
 	if (m_hasDocument) {
 		paintSelectionMarkers(painter, palette, hud);
+		// A dashed perimeter distinguishes independent surface picks from whole
+		// objects and manipulation handles, including in high-contrast themes.
+		if (!m_texturedFaceKeys.isEmpty()) {
+			painter.save(); painter.setBrush(Qt::NoBrush);
+			painter.setPen(QPen(palette.selection,m_highContrast ? 3.0 : 2.0,Qt::DashLine));
+			for (const auto& brush : m_brushGeometry) {
+				if (!brush.solved || isHidden(LevelMapSelectionKind::QuakeBrush,brush.brushId)) { continue; }
+				for (const auto& face : brush.faces) {
+					if (!m_texturedFaceKeys.contains({brush.brushId,face.faceIndex})) { continue; }
+					QPolygonF polygon;
+					for (const auto& point : face.points) { const auto p = projectPoint(point); polygon << worldToView(p.x(),p.y()); }
+					painter.drawPolygon(polygon);
+				}
+			}
+			painter.restore();
+		}
 		paintComponents(painter, palette);
 		if (m_dragging) {
 			paintDragPreview(painter, palette);
@@ -3702,16 +3605,19 @@ QStringList MapViewport::hudTags() const
 		m_snapToGrid ? tr("Snap on") : tr("Snap off"),
 	};
 	if (m_activePane) { leftParts.insert(1, tr("Active")); }
+	if (!m_texturedFaces.isEmpty()) { leftParts << tr("%n textured face(s)",nullptr,static_cast<int>(m_texturedFaces.size())); }
+	if (const auto* group = levelSceneNode(m_sourceDocument.scene,m_sceneContext.openGroup)) { leftParts << tr("Editing group: %1").arg(group->name); }
 	if (m_hasCameraBrushDraft) { leftParts << tr("Camera brush draft"); }
 	if (isRendering()) { leftParts.insert(1, tr("Updating view…")); }
 	if (m_clipMode) {
-		leftParts << tr("Clip");
+		leftParts << clipSummary();
 	}
 	if (m_drawMode) {
 		leftParts << tr("Draw Sector");
 	}
 	if (m_componentMode != ComponentMode::Off) {
-		leftParts << tr("%1: %2 picked").arg(componentModeName()).arg(m_pickedHandles.size());
+		leftParts << (isMovingComponents() || m_componentSplit || m_componentExtrusion ? componentSummary()
+			: tr("%1: %2 picked").arg(componentModeName()).arg(m_pickedHandles.size()));
 	}
 	if (m_regionDrawMode) {
 		leftParts << tr("Draw Region");
@@ -3762,7 +3668,20 @@ void MapViewport::announceSelection()
 
 bool MapViewport::event(QEvent* event)
 {
+	if (m_componentMode != ComponentMode::Off && (event->type() == QEvent::KeyPress || event->type() == QEvent::ShortcutOverride)) {
+		auto* key = static_cast<QKeyEvent*>(event);
+		if ((key->key() == Qt::Key_Tab || key->key() == Qt::Key_Backtab) && (key->modifiers() & ~Qt::ShiftModifier) == Qt::NoModifier) {
+			if (event->type() == QEvent::KeyPress) { keyPressEvent(key); }
+			event->accept(); return true;
+		}
+	}
+	if (event->type() == QEvent::ShortcutOverride && m_clipMode) {
+		const int key = static_cast<QKeyEvent*>(event)->key();
+		if (key == Qt::Key_Escape || key == Qt::Key_Backspace || key == Qt::Key_Delete || key == Qt::Key_Return || key == Qt::Key_Enter) { event->accept(); return true; }
+	}
 	if (event->type() == QEvent::FocusOut || event->type() == QEvent::Hide || (event->type() == QEvent::EnabledChange && !isEnabled())) {
+		finishComponentMove(false);
+		finishClipPoint(false);
 		setTemporaryPan(false);
 	}
 	if (event->type() == QEvent::ShortcutOverride && (m_componentMode != ComponentMode::Off || m_regionDrawMode)) {
@@ -3815,28 +3734,19 @@ void MapViewport::paintEvent(QPaintEvent*)
 	PaintMeasurement measured(m_measurePainting,&m_paintStatistics.totalNs);
 	Palette palette;
 	if (m_highContrast) {
-		palette.background = QColor(0, 0, 0);
-		palette.gridMinor = QColor(70, 70, 70);
-		palette.gridMajor = QColor(120, 120, 120);
-		palette.axis = QColor(255, 255, 255);
-		palette.oneSided = QColor(255, 255, 255);
-		palette.twoSided = QColor(190, 190, 190);
-		palette.vertex = QColor(255, 255, 0);
-		palette.thing = QColor(0, 255, 255);
-		palette.entity = QColor(0, 255, 255);
-		palette.brush = QColor(255, 255, 255);
-		palette.brushEntity = QColor(255, 255, 0);
-		palette.patch = QColor(0, 255, 0);
-		palette.warning = QColor(255, 96, 0);
-		palette.selection = QColor(255, 0, 255);
-		palette.hover = QColor(255, 255, 255);
-		palette.text = QColor(255, 255, 255);
-		palette.subtleText = QColor(220, 220, 220);
-		palette.focus = QColor(255, 255, 0);
-		palette.sectorDark = QColor(24, 24, 24);
-		palette.sectorBright = QColor(200, 200, 200);
-		palette.leak = QColor(255, 48, 48);
-		palette.link = QColor(140, 180, 255);
+		const auto& current = currentStudioTheme();
+		const auto theme = current.highContrast ? current : studioThemeTokens(current.light ? StudioTheme::HighContrastLight : StudioTheme::HighContrastDark,current.density,current.textScalePercent);
+		const auto& c = theme.colors;
+		const auto grid = [&](double amount) { return QColor::fromRgbF(c.input.redF()+(c.text.redF()-c.input.redF())*amount,
+			c.input.greenF()+(c.text.greenF()-c.input.greenF())*amount,c.input.blueF()+(c.text.blueF()-c.input.blueF())*amount); };
+		palette.background = c.input;
+		palette.gridMinor = grid(0.28); palette.gridMajor = grid(0.48);
+		palette.axis = palette.oneSided = palette.brush = palette.hover = palette.text = c.text;
+		palette.twoSided = palette.subtleText = c.textMuted;
+		palette.vertex = palette.brushEntity = palette.selection = c.selection;
+		palette.thing = palette.entity = palette.link = c.info;
+		palette.patch = c.success; palette.warning = c.warning; palette.leak = c.danger;
+		palette.focus = c.focus; palette.sectorDark = c.panelRaised; palette.sectorBright = c.textFaint;
 	} else {
 		palette.background = QColor(22, 24, 28);
 		palette.gridMinor = QColor(40, 44, 52);
@@ -3886,6 +3796,7 @@ void MapViewport::paintEvent(QPaintEvent*)
 		} else {
 			paintTargetLinks(painter, palette);
 			paintQuake(painter, palette);
+			paintLinkedGroups(painter, palette);
 		}
 	}
 	paintPortals(painter, palette);
@@ -3947,6 +3858,107 @@ void MapViewport::paintTargetLinks(QPainter& painter, const Palette& palette) co
 		painter.setPen(Qt::NoPen);
 		painter.setBrush(colour);
 		painter.drawPolygon(head);
+	}
+	painter.restore();
+}
+
+// Each linked group's box, from the geometry this view solved.
+void MapViewport::rebuildLinkedGroupBoxes()
+{
+	m_linkedGroupBoxes = levelLinkedGroupBoxes(m_document, m_brushGeometry);
+}
+
+QSet<QString> MapViewport::linkedGroupsInUse() const
+{
+	return levelLinkedGroupsInUse(m_linkedGroupBoxes, m_sourceDocument.openSceneGroups, m_sceneContext.groupSelections, m_selection);
+}
+
+// TrenchBroom draws linked groups in a colour of their own and, while one is
+// selected or open, arrows from it to the groups it updates. Here each group
+// of a set in use has its box and name, its own solid and the others dashed,
+// with arrows from it to the others; a group out of sync takes the warning
+// colour, a dash-dot line and says so. Show > Linked Groups draws every linked
+// group.
+void MapViewport::paintLinkedGroups(QPainter& painter, const Palette& palette) const
+{
+	if (m_linkedGroupBoxes.isEmpty()) {
+		return;
+	}
+	const QSet<QString> inUse = linkedGroupsInUse();
+	const QSet<QString> links = levelLinkedSetsInUse(m_linkedGroupBoxes, inUse);
+	if (links.isEmpty() && !m_showLinkedGroups) {
+		return;
+	}
+	// A dragged group takes its box and arrows with it.
+	const QPointF dragDelta = m_dragging ? snappedPlaneDelta() : QPointF();
+	const auto rectOf = [this, &inUse, &dragDelta](const LevelLinkedGroupBox& box) {
+		QRectF world = mapViewportBounds(m_projection, box.mins, box.maxs);
+		if (m_dragging && inUse.contains(box.id) && !m_sourceDocument.openSceneGroups.contains(box.id)) {
+			world.translate(dragDelta);
+		}
+		return QRectF(worldToView(world.left(), world.top()), worldToView(world.right(), world.bottom())).normalized().adjusted(-4, -4, 4, 4);
+	};
+	painter.save();
+	painter.setRenderHint(QPainter::Antialiasing, true);
+	const QFontMetricsF metrics(painter.font());
+	for (const LevelLinkedGroupBox& box : m_linkedGroupBoxes) {
+		const bool shown = links.contains(box.link);
+		if (!shown && !m_showLinkedGroups) {
+			continue;
+		}
+		QColor colour = box.outOfSync ? palette.warning : palette.link;
+		if (!shown && !m_highContrast) {
+			colour.setAlpha(110);
+		}
+		const bool own = inUse.contains(box.id);
+		painter.setPen(QPen(colour, own ? (m_highContrast ? 3.0 : 2.0) : (m_highContrast ? 1.8 : 1.2), levelLinkedGroupPenStyle(box, own)));
+		painter.setBrush(Qt::NoBrush);
+		const QRectF rect = rectOf(box);
+		painter.drawRect(rect);
+		if (shown) {
+			painter.setPen(colour);
+			painter.drawText(QPointF(rect.left(), rect.top() - metrics.descent() - 2), levelLinkedGroupLabel(box));
+		}
+	}
+	// Arrows from each group in use to the others of its set.
+	for (const LevelLinkedGroupBox& from : m_linkedGroupBoxes) {
+		if (!inUse.contains(from.id)) {
+			continue;
+		}
+		const QRectF source = rectOf(from);
+		// How far a line from a box's centre runs before leaving it.
+		const auto exit = [](const QRectF& rect, const QPointF& direction) {
+			const double x = std::abs(direction.x()) > 1e-9 ? rect.width() / 2.0 / std::abs(direction.x()) : 1e9;
+			const double y = std::abs(direction.y()) > 1e-9 ? rect.height() / 2.0 / std::abs(direction.y()) : 1e9;
+			return std::min(x, y);
+		};
+		for (const LevelLinkedGroupBox& to : m_linkedGroupBoxes) {
+			if (to.id == from.id || to.link != from.link) {
+				continue;
+			}
+			const QRectF target = rectOf(to);
+			const QPointF span = target.center() - source.center();
+			const double length = std::hypot(span.x(), span.y());
+			if (length < 24.0) {
+				continue;
+			}
+			const QColor colour = to.outOfSync ? palette.warning : palette.link;
+			const QPointF direction = span / length;
+			// From edge to edge, or centre to centre when the boxes overlap.
+			const double leave = exit(source, direction);
+			const double enter = exit(target, direction);
+			const bool apart = leave + enter + 16.0 < length;
+			const QPointF start = source.center() + direction * (apart ? leave : 0.0);
+			const QPointF tip = target.center() - direction * (apart ? enter : 8.0);
+			painter.setPen(QPen(colour, m_highContrast ? 2.6 : 1.8, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin));
+			painter.setBrush(Qt::NoBrush);
+			painter.drawLine(start, tip);
+			const QPointF normal(-direction.y(), direction.x());
+			const QPolygonF head {tip, tip - direction * 10.0 + normal * 5.0, tip - direction * 10.0 - normal * 5.0};
+			painter.setPen(Qt::NoPen);
+			painter.setBrush(colour);
+			painter.drawPolygon(head);
+		}
 	}
 	painter.restore();
 }
@@ -4073,8 +4085,9 @@ void MapViewport::paintLeakTrail(QPainter& painter, const Palette& palette) cons
 
 void MapViewport::mousePressEvent(QMouseEvent* event)
 {
+	if (m_clipDrawing) { finishClipPoint(false); event->accept(); return; }
 	setFocus(Qt::MouseFocusReason);
-	m_lastPointerPosition = event->position();
+	rememberCommandPointer(event->position());
 	if (m_panHoldActive) { event->accept(); return; }
 	const Qt::MouseButton button = event->button();
 	const Qt::KeyboardModifiers keys = event->modifiers() & (Qt::ShiftModifier | Qt::ControlModifier | Qt::AltModifier | Qt::MetaModifier);
@@ -4149,6 +4162,7 @@ void MapViewport::mousePressEvent(QMouseEvent* event)
 		return;
 	}
 
+	if (beginQuickClipPoint(event->position(),keys)) { event->accept(); return; }
 	// In Draw Sector mode a press puts a corner down, or closes the shape on
 	// its first corner.
 	if (m_drawMode) {
@@ -4167,16 +4181,8 @@ void MapViewport::mousePressEvent(QMouseEvent* event)
 		return;
 	}
 
-	// In clip mode a press starts the clip line where it lands.
 	if (m_clipMode) {
-		m_clipFrom = snappedPlanePoint(event->position());
-		m_clipTo = m_clipFrom;
-		m_clipDrawing = true;
-		m_hasClipLine = false;
-		Q_EMIT hoverChanged(clipSummary());
-		update();
-		event->accept();
-		return;
+		beginClipPoint(event->position()); event->accept(); return;
 	}
 
 	// Vertex editing picks and drags handles rather than objects.
@@ -4332,7 +4338,7 @@ void MapViewport::mousePressEvent(QMouseEvent* event)
 void MapViewport::mouseMoveEvent(QMouseEvent* event)
 {
 	const QPointF position = event->position();
-	m_lastPointerPosition = position;
+	rememberCommandPointer(position);
 	if (m_cameraDrag != CameraDrag::None) {
 		driveCameraTo(position);
 		event->accept();
@@ -4464,14 +4470,9 @@ void MapViewport::mouseMoveEvent(QMouseEvent* event)
 	}
 
 	if (m_clipDrawing) {
-		const QPointF to = snappedPlanePoint(position);
-		if (to != m_clipTo) {
-			m_clipTo = to;
-			update();
-		}
-		Q_EMIT hoverChanged(clipSummary());
-		event->accept();
-		return;
+		if (event->buttons() != Qt::LeftButton) { finishClipPoint(false); }
+		else { moveClipPoint(position); }
+		event->accept(); return;
 	}
 
 	if (m_pressArmed) {
@@ -4590,13 +4591,11 @@ void MapViewport::mouseReleaseEvent(QMouseEvent* event)
 		return;
 	}
 	if (m_clipDrawing) {
-		m_clipDrawing = false;
-		m_hasClipLine = m_clipTo != m_clipFrom;
-		Q_EMIT hoverChanged(clipSummary());
-		update();
-		event->accept();
-		return;
+		if (event->button() == Qt::LeftButton) { moveClipPoint(event->position()); finishClipPoint(true); }
+		else { finishClipPoint(false); }
+		event->accept(); return;
 	}
+
 	if (m_dragging) {
 		commitDrag();
 		event->accept();
@@ -4623,17 +4622,13 @@ void MapViewport::mouseReleaseEvent(QMouseEvent* event)
 		m_bandSector = -1;
 		const Qt::KeyboardModifiers keys = m_bandModifiers & (Qt::ShiftModifier | Qt::ControlModifier | Qt::AltModifier | Qt::MetaModifier);
 		if (modifiersHeld(keys, m_controls.toggleModifiers)) {
-			for (const LevelMapSelectionRef& ref : inside) {
-				toggleInSelection(ref.kind, ref.objectId);
-			}
+			m_selection = pickLevelSceneObjects(m_sceneContext,m_selection,inside,LevelScenePick::Toggle);
 		} else if (modifiersHeld(keys, m_controls.addModifiers) || modifiersHeld(keys, m_controls.bandModifiers)) {
-			for (const LevelMapSelectionRef& ref : inside) {
-				addToSelection(ref.kind, ref.objectId);
-			}
+			m_selection = pickLevelSceneObjects(m_sceneContext,m_selection,inside,LevelScenePick::Add);
 		} else {
-			m_selection = inside;
-			syncPrimaryFromSelection();
+			m_selection = pickLevelSceneObjects(m_sceneContext,{},inside,LevelScenePick::Replace);
 		}
+		syncPrimaryFromSelection();
 		m_bandModifiers = Qt::NoModifier;
 		announceSelection();
 		Q_EMIT hoverChanged(hoverSummary());
@@ -4645,6 +4640,8 @@ void MapViewport::mouseReleaseEvent(QMouseEvent* event)
 
 void MapViewport::wheelEvent(QWheelEvent* event)
 {
+	if (isMovingComponents() || m_componentNativeArmed) { event->accept(); return; }
+	if (componentCycleWheel(event->position(),event->angleDelta().y() ? event->angleDelta().y() : event->angleDelta().x(),event->modifiers())) { event->accept(); return; }
 	const int delta = event->angleDelta().y();
 	if (delta == 0) {
 		QWidget::wheelEvent(event);
@@ -4764,6 +4761,7 @@ void MapViewport::keyPressEvent(QKeyEvent* event)
 		return;
 	case Qt::Key_Backspace:
 	case Qt::Key_Delete:
+		if (m_clipMode) { removeLastClipPoint(); event->accept(); return; }
 		if (m_drawMode && !m_drawCorners.isEmpty()) {
 			m_drawCorners.removeLast();
 			setAccessibleDescription(accessibleSummary());
@@ -4843,7 +4841,9 @@ void MapViewport::keyPressEvent(QKeyEvent* event)
 			event->accept();
 			return;
 		}
-		if (m_selectionKind != LevelMapSelectionKind::None) {
+		if (!m_texturedFaces.isEmpty()) {
+			Q_EMIT texturedSelectionClearRequested();
+		} else if (m_selectionKind != LevelMapSelectionKind::None) {
 			m_selection.clear();
 			syncPrimaryFromSelection();
 			announceSelection();
@@ -4866,17 +4866,13 @@ void MapViewport::keyPressEvent(QKeyEvent* event)
 			// which side stays and Shift+Enter keeps both, as TrenchBroom and
 			// Radiant have them.
 			if ((event->modifiers() & Qt::ControlModifier) != 0) {
-				setClipKeep(m_clipKeep == LevelMapClipKeep::Back ? LevelMapClipKeep::Front : LevelMapClipKeep::Back);
+				setClipKeep(m_clipState.keep == LevelMapClipKeep::Back ? LevelMapClipKeep::Front : LevelMapClipKeep::Back);
 				event->accept();
 				return;
 			}
-			LevelMapVec3 a;
-			LevelMapVec3 b;
-			LevelMapVec3 c;
-			if (clipPlanePoints(&a, &b, &c)) {
-				const LevelMapClipKeep keep = (event->modifiers() & Qt::ShiftModifier) != 0 ? LevelMapClipKeep::Both : m_clipKeep;
-				Q_EMIT clipRequested(a, b, c, static_cast<int>(keep));
-			}
+			finishClipPoint(true);
+			if ((event->modifiers() & Qt::ShiftModifier) != 0) { setClipKeep(LevelMapClipKeep::Both); }
+			requestClip();
 			event->accept();
 			return;
 		}
@@ -4900,7 +4896,7 @@ void MapViewport::keyPressEvent(QKeyEvent* event)
 		// In clip mode Tab chooses what a cut keeps: one side, the other, or
 		// both as two brushes; Shift+Tab goes the other way round.
 		const int step = (event->key() == Qt::Key_Backtab || (event->modifiers() & Qt::ShiftModifier) != 0) ? 2 : 1;
-		setClipKeep(static_cast<LevelMapClipKeep>((static_cast<int>(m_clipKeep) + step) % 3));
+		setClipKeep(static_cast<LevelMapClipKeep>((static_cast<int>(m_clipState.keep) + step) % 3));
 		event->accept();
 		return;
 	}
@@ -4976,6 +4972,8 @@ void MapViewport::resizeEvent(QResizeEvent* event)
 
 void MapViewport::leaveEvent(QEvent* event)
 {
+	m_hasCommandPointer = false;
+	m_vertexInsertion->clearHover();
 	if (m_dragging || m_banding || m_resizing || m_clipDrawing) {
 		// Qt keeps delivering moves to the grabbing widget, so a gesture that
 		// wanders outside the viewport is still live: leave it alone.
@@ -5012,6 +5010,7 @@ QString mapViewportProjectionDisplayName(MapViewportProjection projection)
 
 void MapViewport::setControls(const PlanViewControls& controls)
 {
+	m_componentCycle.reset();
 	cancelInteraction();
 	m_panning = false; m_handMode = false; m_panButton = Qt::NoButton; unsetCursor();
 	m_controls = controls;
@@ -5104,6 +5103,8 @@ bool MapViewport::isTemporarilyPanning() const { return m_panHoldActive; }
 
 void MapViewport::keyReleaseEvent(QKeyEvent* event)
 {
+	if (updateComponentModifiers(event->key(),event->modifiers(),false)) { event->accept(); return; }
+	m_vertexInsertion->clearHover();
 	if (!event->isAutoRepeat() && m_panHoldActive && navigationHoldKeyMatches(m_controls.panHoldKey, event->key(), Qt::NoModifier)) {
 		setTemporaryPan(false); event->accept(); return;
 	}
@@ -5328,7 +5329,7 @@ QVector<LevelMapSelectionRef> MapViewport::objectsAt(const QPointF& viewPoint) c
 	}
 	if (documentIsDoom(m_document)) {
 		const MapViewportHit nearest = hitOrSectorAt(viewPoint);
-		if (nearest.kind != LevelMapSelectionKind::None) {
+		if (nearest.kind != LevelMapSelectionKind::None && m_sceneContext.allowedObjects.contains(levelMapSelectionRefId({nearest.kind,nearest.objectId}))) {
 			stack.push_back({nearest.kind, nearest.objectId});
 		}
 		return stack;
@@ -5433,6 +5434,13 @@ QVector<LevelMapSelectionRef> MapViewport::objectsAt(const QPointF& viewPoint) c
 			stack.push_back({nearest.kind, nearest.objectId});
 		}
 	}
+	QSet<QString> units;
+	stack.removeIf([&](const auto& ref) {
+		const auto object = levelMapSelectionRefId(ref);
+		if (!m_sceneContext.allowedObjects.contains(object)) { return true; }
+		const auto unit = m_sceneContext.closedGroups.value(object,object);
+		if (units.contains(unit)) { return true; } units.insert(unit); return false;
+	});
 	return stack;
 }
 
@@ -5449,9 +5457,10 @@ void MapViewport::cycleSelectionAt(const QPointF& viewPoint)
 	}
 	// Clicking again on what is selected steps to the next one down.
 	int next = 0;
-	if (m_selection.size() == 1) {
+	{
 		for (int index = 0; index < stack.size(); ++index) {
-			if (stack.at(index).kind == m_selection.first().kind && stack.at(index).objectId == m_selection.first().objectId) {
+			const auto unit = pickLevelSceneObjects(m_sceneContext,{}, {stack[index]},LevelScenePick::Replace);
+			if (unit.size() == m_selection.size() && std::all_of(unit.cbegin(),unit.cend(),[&](const auto& ref) { return m_selection.contains(ref); })) {
 				next = (index + 1) % static_cast<int>(stack.size());
 				break;
 			}

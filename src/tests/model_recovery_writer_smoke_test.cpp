@@ -4,6 +4,8 @@
 #include <QCoreApplication>
 #include <QDir>
 #include <QEventLoop>
+#include <QFileInfo>
+#include <QStringList>
 #include <QTemporaryDir>
 #include <QTimer>
 #include <QUuid>
@@ -90,6 +92,32 @@ int main(int argc, char **argv)
 					 "retiring an active ID prevents late completion and requeue from resurrecting it");
 		writer.retire(id);
 		ok &= expect(listModelRecoveries(directory).records.isEmpty(), "retiring a committed copy removes only that copy");
+	}
+	{
+		// A retired copy that cannot be removed (here a folder holds its
+		// name) is retried after every checkpoint, and reported once.
+		const auto blocked = freshId();
+		ok &= expect(QDir().mkpath(QDir(modelRecoveryPath(directory, blocked)).filePath(QStringLiteral("held"))),
+					 "a folder takes a recovery copy's name");
+		ModelRecoveryWriter writer(directory);
+		QStringList failures;
+		writer.finished = [&](const QString &, const QString &failure)
+		{
+			if (!failure.isEmpty())
+				failures << failure;
+		};
+		writer.retire(blocked);
+		const auto other = freshId();
+		writer.checkpoint(other, 1, snapshot);
+		ok &= expect(settle(writer), "a checkpoint beside the stuck removal finishes");
+		writer.checkpoint(other, 2, snapshot);
+		ok &= expect(settle(writer), "and another");
+		ok &= expect(failures.size() == 1, "a retired copy that cannot be removed is reported once, not after every checkpoint");
+		QDir(modelRecoveryPath(directory, blocked)).removeRecursively();
+		writer.checkpoint(other, 3, snapshot);
+		ok &= expect(settle(writer) && failures.size() == 1 && !QFileInfo::exists(modelRecoveryPath(directory, blocked)),
+					 "the removal succeeds once the folder is gone");
+		writer.retire(other);
 	}
 	const auto preserved = freshId();
 	{

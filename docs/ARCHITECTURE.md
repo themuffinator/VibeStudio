@@ -1,11 +1,137 @@
 # VibeStudio Architecture
 
+Rip separates planning (`core/model_rip.cpp`) from candidate construction
+(`core/model_rip_apply.cpp`). All-pose geometric adjacency retains indexed
+UV/normal corners; bounded generation carries source-face provenance to hidden
+face display and documents. The private mesh pose binding helper validates
+retained clip ranges and maps independent baked frames. Qt side picking,
+worker previews, F9, undo/recovery and `model tool --tool rip` use the same
+document edit. Optional `ModelSurface::topologyVertices` stores surface-local
+authoring connectivity in source version 11. Geometric and quad adjacency
+require matching identities as well as all-pose positions. Shared copy,
+compaction and construction paths retain identity through UV/normal splits;
+intentional detachment allocates new identities. Explicit weld/merge can
+reconnect them. Source validation, revision hashing, memory accounting,
+assembly layout, history and recovery include the metadata. Legacy sources
+infer connections until a separation/duplication/join requires explicit
+identity. Native formats generally lack this metadata. See [Rip](MODEL_RIP.md).
+
+Spin uses `core/model_spin.cpp` through the `Spin` document edit. Geometric
+all-pose adjacency identifies profile boundaries; bounded generation retains
+indexed UV charts, source-face provenance and complete skin influence arrays.
+Joint-local displacement and normal binding use the chosen skeletal reference
+pose. Modal previews and F9 adjustments run through the document worker, and
+`model tool --tool spin` uses the same candidate transaction. Existing undo,
+recovery, material/visibility mapping and output protection remain shared. No
+dependency or source schema changes. See [Spin](MODEL_SPIN.md).
+
+Edge sliding uses `model_edge_slide` to derive deterministic rails from the
+shared geometric/quad topology. The `SlideEdges` document edit keeps indices,
+UVs and influences, applies reference-derived fractions to the chosen poses,
+checks affected face winding and refreshes normals. Modal previews, numeric
+adjustment and `model tool --tool edge-slide` share that candidate transaction.
+No dependency or editable-source schema change is required. See
+[edge sliding](MODEL_EDGE_SLIDE.md).
+
+Animation range transfer (`core/model_curve_transfer`) crops exact scalar
+pieces, freezes evaluated slopes and maps selected local TRS channels between
+clips of one rig. Both GUI and CLI use `TransferAnimationCurves`, shared
+combined hierarchy/skin rebaking, protected auxiliary tracks and document
+transactions. Unkeyed channels are captured through the existing TRS service.
+Schema 10 adds hold-next segments so reversed steps retain both limits and exact
+key values; ordinary curves still save as schema 9. Graphs and continuous-change
+reports include knots and their one-sided limits. See
+[range transfer](MODEL_ANIMATION_CURVES.md#transfer-or-reverse-a-range).
+
+`core/model_curve_key_tools` applies explicit joint/channel/sample selections
+atomically. Retiming transforms key times and free slopes; reduction checks
+piecewise polynomial differences continuously against the original. Joint-local
+changes are combined in hierarchy order and use one protected clip rebake.
+`EditCurveKeys` is shared by `model curve-keys` and the Qt review dialog. Its
+native key table stores channel spans rather than one object per key; selection
+conversion and edits run on the worker. The curve schema is selected from the retained interpolation modes. See
+[key groups](MODEL_ANIMATION_CURVES.md#edit-groups-of-keys).
+
+`core/model_animation_curves` retains nine parent-local TRS channels per joint
+alongside dense skeletal clip samples. Scalar evaluation, tangent/range checks,
+strict JSON and document edits are shared by the staged Qt curve editor and
+`model curves`. Whole-group changes feed `replaceModelSkeletalSamples` and its
+skin/tag protection; source validation rejects curves that disagree with dense
+poses. Schemas 9/10 persist authoring data while native writers consume sampled
+motion. Explicit baking removes curves without changing samples. No new
+dependency or renderer is needed. See [animation curves](MODEL_ANIMATION_CURVES.md).
+
+`core/model_ik` solves a two-bone chain with a fixed target and bend pole using
+analytic geometry. Rigid swings preserve existing affine bases and propagate
+to side branches. `replaceModelSkeletalSamples` shares the existing deformation
+guards and auxiliary-track rebuild. The cancellable Qt review and `model ik`
+use the same document edit, validation, history, recovery and native exporters.
+IK is baked into dense samples; no source schema or dependency changes are
+needed. See [inverse kinematics](MODEL_IK.md).
+
+Skin-weight transfer uses `model_weight_transfer` for a frozen bind-space BVH,
+nearest-vertex/triangle correspondence, explicit joint remapping, locks and
+candidate-only application. It shares `model_skinning_work` for protected pose
+rebaking, and normal document validation, undo, recovery and guarded source saves.
+The Qt review window runs preparation in the cancellable worker; CLI and GUI
+apply the same `TransferSkinWeights` edit. See [weight transfer](MODEL_WEIGHT_TRANSFER.md).
+
+`core/model_weight_paint` resolves ordered, bounded vertex-coverage strokes
+through `ModelDocument`. Joint locks remain exact; unlocked remainders are
+normalised, and smoothing reads a frozen one-ring neighbourhood. Binding and
+painting share `model_skinning_work` for independent-frame checks and pose
+rebaking. The weight painting dialog freezes the viewport's depth-tested vertex
+projection for each stroke, stages through cancellable document workers and
+returns a replayable batch after review. A virtual numeric table provides a
+keyboard alternative. `model weight-paint` accepts the same operations and
+coverage recipes; saving, undo, recovery and exports use existing services.
+See [weight painting](MODEL_WEIGHT_PAINT.md) for limits and studio handoffs.
+No new dependency, renderer or CLI architecture is introduced.
+
+`core/model_skinning_tools` inspects aggregated raw influences and produces
+component selections tied to a retained source snapshot. Binding, explicit
+rebinding, reduction and unbinding are candidate-only `ModelDocument` edits.
+Affected geometry is validated before rebaking; offsets, normal policy and
+independent frame edits have explicit preservation rules. The native binding
+dialog reviews a private copy in `runModelTask`, then commits through the normal
+worker/history path after checking source identity. Its virtual weight table
+avoids allocating a widget per vertex. `model skinning` shares these services
+and the guarded writer. No dependency or renderer change is required; see
+[Skin weights and binding](MODEL_SKINNING.md).
+
+`core/model_rig` adds candidate-only skeleton authoring to `ModelDocument`.
+Hierarchy edits remap joints, clip matrices, influences and skeletal tags
+together while preserving model-space poses. Weight edits validate the affected
+surface before changing influences, then update selected vertices and derived normals
+without replacing frame/tag/collision ranges. The existing document worker and
+`model rig` share validation, history and persistence.
+See [Skeleton authoring](MODEL_RIG.md) for limitations and studio handoff.
+
+`core/model_skeletal_edit` handles bind compensation, dense pose operations and
+skeletal clip structure. Parent-relative interpolation preserves hierarchical
+motion. Frame remapping preserves surviving names/origins, custom ranges,
+manual tags, collision and MDL timing. Changed skin/tag samples must match their
+pre-edit skeleton before replacement. `model pose` and the accessible skeletal
+animation dialog use the shared document/worker path; native exporters consume
+the same retained clips and updated baked geometry.
+
+`core/model_joint_tools` resolves retained pose samples, validates model-space
+affine deltas and prepares one-frame skin/tag previews. Viewport workers use
+immutable snapshots; the same delta commits through skeletal document edits or
+`model pose --matrix`. Joint selection is mutually exclusive with other model
+components and persists in history/recovery. GPU pose-cache keys include the
+joint and descendant scope. Bone occlusion uses the completed renderer's triangle
+IDs and planes, and mirror panes receive the same transform with their own camera.
+
 `app/studio_editor_page` hosts the existing mesh, prop, assembly, texture,
 waveform and multitrack document controllers as `Qt::Widget` children in each
 asset mode's tab workspace. The browser remains the first tab. Editor lifetime,
 undo, recovery, staging callbacks and asynchronous close guards remain owned by
 the existing document controllers; removing a tab follows document destruction,
-never bypasses close approval. A scroll host bounds scaled/translated layouts.
+never bypasses close approval. A scroll host bounds scaled/translated layouts;
+the Mesh Editor fits a 1280x720 page at 200% text without it, and
+`app/dialog_screen_fit` bounds modeller dialogs to the screen's available area
+([layout record](MODELLER_PROFILES.md#large-text-and-small-screens)).
 Tab titles follow document titles and modification state. Focus reserves local
 document shortcuts against identical shell keys; shell menus remain available.
 Shell navigation and authoring/recovery handoffs select the existing host tab.
@@ -238,7 +364,9 @@ reuses implicitly shared solved geometry and link arrays while retaining local
 projection/pan/zoom. A scene generation separates geometry changes from cheap
 selection synchronization. The Models camera continues to use the common
 package/staging preview worker. `levels/viewLayout` is a validated setting shared
-by GUI and `editor layout`; splitter states are scoped per layout and do not
+by GUI and `editor layout`; `levels/planPanes` (`LevelPlanPanes`, at least one
+of top/front/side) is shared the same way with `editor layout --panes`.
+Splitter states are scoped per layout and per pane combination and do not
 become game-map or package data. See [Four-View Workspace](LEVEL_EDITOR.md#four-view-workspace).
 Editor-profile binding checks cache the normalized built-in command identifiers;
 localized shortcut and palette descriptions remain uncached so changing language
@@ -1149,6 +1277,14 @@ candidate before selection-aware history publication. Sources, recovery, native
 exports and package handoffs consume the resulting ordinary mesh representation;
 the operation adds no schema or dependency.
 
+`core/model_uv_density` measures unsigned pixel area against model area in an
+explicit reference pose, using original texture dimensions. Candidate-only
+adjustments batch per-island factors through `model_uv_transform`, preserve
+exact corner skin influences and verify density after float storage. The
+snapshot-owned review dialog and `model uv-density` share that document path;
+resolved package image dimensions feed the GUI, while CLI dimensions are
+explicit. Packing, texture changes and native export remain separate services.
+
 `core/model_uv_atlas` supplies automatic charting and packing through pinned
 xatlas, compiled as a private standard C++ static library. A reviewed build
 adaptation preserves indexed boundaries and avoids independent-axis texel
@@ -1193,7 +1329,16 @@ use the same bounded shader/image lookup and diagnostics.
 
 `core/model_file_io` provides bounded reads, reviewed destination identities,
 cancellable staging, writer locks, and atomic publication for mesh and primitive
-design output. New files publish without replacement; existing files retain
+design output. Protected-input comparisons include filesystem hard-link identity,
+with native Unicode paths on Windows and native filename bytes elsewhere.
+`validateModelWriteTarget` rechecks a reviewed destination without writes;
+`ModelDocument::save` and `saveModelDesignBytes` use it for dry runs after complete
+bounded preparation. Dry runs preserve document identity, dirty state and history,
+and do not create directories, staging files or locks. They do not test write
+permissions or reserve a future write. Mesh CLI clients share this preparation
+instead of maintaining separate serialisation paths. Auxiliary stroke, joint-map,
+curve and knife-path inputs cannot become output destinations.
+New files publish without replacement; existing files retain
 content/path checks immediately before `QSaveFile` commits. `core/model_work`
 carries cancellation and phase progress without owning UI state. The editable
 document adopts its saved identity only after publication succeeds.
@@ -1286,6 +1431,13 @@ and full texture/patch/game-code dependency closure remain integration requireme
   pasted primitives keeping the pasted text as their template. A replaced
   texture is written over the name token alone (`replaceFaceTexture()`), so
   points, texture matrices, and flags on the face line stay as they were.
+- Object Copy/Cut use `prepareLevelPlacement()` with private candidates. Copy
+  retains selected brush-entity children in an owner wrapper and complete native
+  group metadata; incomplete wrappers cannot claim a whole group. Cut combines
+  export and whole-object deletion before GUI context/clipboard validation and
+  clipboard-first publication. CLI `map copy`/`map cut` use the same service;
+  Cut reports separate fragment/map commits and preserves normal map backups.
+  See [object clipboard limits](LEVEL_PASTE.md#copy-and-cut-objects).
 - Shared Advanced Studio format helpers for shader text round-tripping, mounted
   texture-reference validation, Doom/Quake sprite package paths, and
   extension-generated staged-file declarations.
@@ -1653,7 +1805,25 @@ The current scaffold contains:
   and resolved aliases with count/text/path caps and latched cancellation.
   Extraction and archive export enumerate once per operation and share the
   resulting hash index across destination checks. Matching walks complete native
-  path ancestors, then freshly resolved output ancestors. The shared
+  path ancestors, then freshly resolved output ancestors. An existing regular
+  destination with multiple hard links also triggers a lazy filesystem identity
+  index of the protected files and folder descendants. New or independent
+  single-link outputs do not require that traversal. `package_path_identity`
+  uses guarded Windows volume/128-bit file IDs and POSIX device/inode pairs;
+  unsupported native queries use `std::filesystem::equivalent` with native
+  filename encoding. These transient IDs never replace portable draft provenance
+  or payload hashes. Native contracts are documented by Microsoft's
+  [FILE_ID_INFO](https://learn.microsoft.com/en-us/windows/win32/api/winbase/ns-winbase-file_id_info)
+  and POSIX [stat fields](https://pubs.opengroup.org/onlinepubs/9699919799/basedefs/sys_stat.h.html).
+  Identity capture admits at most 250,000 unique resolved paths and 64 MiB of
+  accounted path/key metadata, with the protection set's lower configured limits
+  taking precedence. This accounting is not a process-memory ceiling. Failed
+  enumeration, identity comparison, limits or cancellation refuse the output;
+  progress and cancellation continue during capture and portable comparisons.
+  Later output queries reuse the index; adding input roots invalidates it.
+  `validateModelArchiveOutputs` bridges modeller worker callbacks into the same
+  service for frame, assembly and player publication, including backup/lock paths.
+  The shared
   `packageResolvedAbsolutePath` resolver checks cancellation between missing
   prefixes, Windows junction segments and suffixes; no check can interrupt a
   blocking filesystem API itself. Output link/containment and publication guards
@@ -2003,6 +2173,25 @@ The current scaffold contains:
   command with selection restoration. `app/level_merge_dialog` shares immutable
   package/staging assets and the Models renderer; `map merge-brushes` consumes
   the same plan and conflict report. See [Brush Merging](LEVEL_EDITOR.md#brush-merging).
+- `src/core/level_clip_camera.*` chooses a two-point camera extrusion without
+  mutating geometry: dominant view axis, parallel-segment near-plane projection,
+  and selected-bound outer-face correction. The camera stores its axis/sign in
+  shared `LevelClipState`; profile policy is `camera.clipViewAxis`. CLI camera
+  options call the same service and report explicit axis/sign for replay.
+- `src/core/level_clip_drag.*` tracks a point from fixed press anchors on a
+  world or view-axis plane, with orthogonal depth movement, axis constraint
+  and deterministic relative grid rounding. The camera's typed `clipDragStyle`
+  selects the policy; native pointer/modifier events and owned semantic tests
+  share the controller. Surface picking remains in the viewport and clip
+  validation/mutation stays in the existing worker/document service.
+- `src/core/level_wrap.*` shares bounded convex envelopes across standalone
+  whole-brush and brush/patch component wrapping. Components retain their
+  sources and add one dialect-checked hull through `addLevelMapBrushHulls`,
+  with explicit native/scene destination, linked propagation and one undo.
+  `LevelPlacementOperation::WrapMerge` prepares cancellable private candidates;
+  `app/level_wrap_dialog` coalesces numeric edits, loads package/staging materials
+  and compares source/result meshes. Shell publication validates the document,
+  component selection and asset context; `map wrap-merge` uses the same service.
 - `src/core/level_patch_tools.*` holds the patch matrix commands (insert, add and
   delete rows and columns by exact span splits and joins, transpose, invert,
   re-disperse, smooth), Thicken, and natural and planar patch texturing, each on
@@ -2363,6 +2552,16 @@ GUI workers and `model assembly` CLI share these services, including portable
 package drafts. No new renderer, library or build dependency is introduced.
 See [publication contracts](MODEL_ASSEMBLY.md#native-player-packages).
 
+`core/model_player_import` is the reverse direction. `listModelQ3Players` groups
+package entry metadata into `models/players/<name>/` listings, and
+`importModelQ3Player` builds a three-part package assembly with linked skins and
+the parsed `animation.cfg`, plus the `ModelPlayerBundleOptions` that publish the
+player again. It reads only metadata and `animation.cfg`
+(`readModelQ3AnimationEntry`, also used by Native Animation's **Import from
+Package…** and `animation-set --config-entry`); parts resolve later through the
+ordinary assembly path. **Open Player…** and `model assembly --new --from-player`
+call the same functions. See [opening a player](MODEL_ASSEMBLY.md#opening-a-quake-iii-player).
+
 ## Project Releases
 
 `core/release_plan` reads the project through `ProjectContentReader` layers,
@@ -2406,3 +2605,93 @@ The Mesh Editor applies them in `app/model_editor_layout.cpp`,
 `app/model_editor_profiles.cpp` and `app/model_editor_modal.cpp`;
 `cli/model_controls` serves `model profiles`, `model controls` and
 `model formats`. See [Modeller Profiles](MODELLER_PROFILES.md).
+
+
+Profile-aware volume selection lives in `core/level_region_selection`: convex
+half-spaces/SAT and projected hulls for TB; individual brush AABBs for NRC; combined
+bounds for the default profile. It snapshots definitions and view exclusions,
+respects shared scene visibility/locks/context, prepares on the placement worker,
+and publishes consuming edits through ordinary deletion/history. Outer command
+selection snapshots replay after linked followers. GUI publication validates
+view/profile/filter/catalogue state as well as the normal map context. CLI queries
+prepare privately; optional outputs use the shared document writer.
+
+`changeLevelMapSelection` and `changeLevelSceneGroupContext` record validated
+non-content commands in the same timeline as geometry. Internal edit selections
+continue to use `setLevelMapSelection`. Save-state checks traverse content changes
+between the current and saved depths, including redo; trimming and folding retain
+equivalent boundaries. An unreachable save remains modified even with empty undo.
+`historyRevision` invalidates staged document publication on selection-history
+changes; `revision` continues to key geometry/preview caches. Selection commands
+do not propagate linked contents or alter Doom node validity. Compound Doom
+commands count the geometry-changing child/follower steps they actually contain.
+The TB control policy opts GUI object-selection and group-navigation routes in;
+CLI object queries remain transient, with no persisted selection or undo session.
+
+### Object hierarchy and loaded-source queries
+
+`level_object_selection` prepares sibling and source-line selections through
+`LevelPlacementOperation::SelectObjects`. Scene membership and brush-entity
+ownership are indexed separately: world-level sibling traversal descends owner
+containers, while an owned brush's siblings remain in that owner. Scene context
+promotes closed groups and excludes any group containing a hidden/locked/filtered
+member. Results publish once through the existing selection-history service,
+with `undoSelection` supplied by the GUI profile; CLI queries retain no history.
+Source spans use inclusive `startLine`/`endLine` from the loaded text. They are not
+rebased by save adoption, matching the document's retained source diagnostics.
+New objects have no source span. The shared strict parser bounds line lists to
+16,384 positions and 256 KiB of text. Worker cancellation and GUI map, history,
+selection, tool, filter and profile guards prevent stale publication. The same
+selectors can be handed to ordinary authoring/compile/package workflows.
+
+### Session visibility
+
+`level_visibility` owns temporary `hiddenObjects` and `shownObjects` in
+`LevelMapDocument`, separate from serialized scene visibility. Absence from both
+sets inherits from group/owner parents; shown exceptions override temporary
+parent hiding. Hide and Isolate expand closed groups;
+Isolate enumerates the whole scene, including locked/out-of-context objects.
+`levelMapHiddenObjects` combines temporary and persistent hiding with entity/Doom
+dependencies for views, previews, selection queries and paste targets. Worldspawn
+is never a hidden session selector. Hidden brush-entity labels are derived from
+their children so new children are not accidentally hidden by label suppression.
+
+`LevelPlacementOperation::Visibility` prepares a cancellable candidate. The GUI
+uses the existing load/content/history/selection/tool guards before publication.
+TB visibility commands use the non-content history classification; NRC/default
+increment the session history revision without appending a command or clearing
+redo. Explicit object-list reveal combines selection and visibility into one
+transaction. Structural commands reconcile/remap hidden identities and remember
+removed hidden/shown records; replay preserves later transient changes on survivors.
+Native serialization, node invalidation and save markers ignore session visibility.
+CLI `map visibility` returns selectors and source hashes without writing a map.
+The manual records saved-mask, component and owner-label parity limits.
+
+`insertionVisibility` is a session authoring policy supplied by the selected
+profile. TB/default preserve recursive copy attributes and reveal inserted roots;
+NRC creates fresh inherited states. Placement, direct authoring, arrays, prefabs
+and repeated duplication share core reconciliation. Changing the policy advances
+the session revision to invalidate pending candidates without dirtying contents,
+clearing redo or changing existing states. Undo/redo use recorded states, never
+the current insertion policy. `map visibility --profile` exposes the same choice
+for headless queries. Portable files do not contain this preference.
+
+Duplicate displacement stays in `LevelEditorControls::nudgeAfterDuplicate`,
+with overrides in the shared per-profile preference store. The shell converts
+that choice and the active plan into a concrete placement request; authoring,
+undo/redo and Repeat store the resulting offset. The placement publisher checks
+both duplicate policy fields as well as document state before adopting a worker
+result. NRC's object-mode requirement is shared by command enablement and both
+duplicate entry points. CLI map authoring still receives explicit offsets, while
+`editor gestures` controls the GUI preference through the same settings service.
+
+Level deletion routes through `app/level_delete_actions.cpp` and the existing
+placement worker. `DeleteObjects` and `RemoveComponents` prepare private
+documents with scene-lock validation, cancellation checkpoints and one undo
+transaction. The publisher rechecks map/history/selection context and the
+profile's deletion policy. NRC filters patch point sets before component
+removal and restores their exact IDs after publication; the low-level component
+service continues to reject patch removal. Empty component picks become object
+deletion only under the NRC policy. TB clip-point deletion remains transient
+viewport state. CLI `map delete` and `map remove-components` share the same core
+authoring services; neither writes a file through the GUI worker.

@@ -29,13 +29,17 @@ public:
 	// Target, Adjust and Copy and Paste, for the page to remember.
 	[[nodiscard]] QVector<SidebarSection*> sections() const { return m_sections; }
 	void bindCommands(StudioCommandRegistry& commands);
-	void setTargetSummary(int faces, LevelSurfaceFace inspected, int patches = 0);
+	void setTargetSummary(int faces, LevelSurfaceFace inspected, int patches = 0, bool components = false);
 	void setStatus(const QString& text, bool busy);
 	void setClipboardSummary(const LevelSurfaceClipboard& clipboard);
 	LevelSurfacePasteOptions pasteOptions() const;
 	// Map units per texel a Natural or Align to Face reset uses, from the
 	// open map's game.
 	void setDefaultScale(double scale) { m_defaultScale = scale; }
+	// Rotate − and + turn about the texture origin rather than each face centre.
+	[[nodiscard]] bool rotatesAboutOrigin() const;
+	// The editor profile's Rotation step and Rotate about choice.
+	void setProfileSteps(double rotationDegrees, bool aboutOrigin);
 	std::function<void()> targetChanged;
 	std::function<void()> cancelRequested;
 private:
@@ -46,7 +50,8 @@ private:
 	QCheckBox* m_allowValve = nullptr;
 	QCheckBox* m_mappingOnly = nullptr;
 	QLabel* m_clipboard = nullptr;
-	QDoubleSpinBox *m_shift = nullptr, *m_rotation = nullptr, *m_scale = nullptr;
+	QDoubleSpinBox *m_shift = nullptr, *m_rotation = nullptr, *m_scale = nullptr, *m_scaleStep = nullptr;
+	QComboBox* m_rotationAnchor = nullptr;
 	QLabel *m_summary = nullptr, *m_status = nullptr;
 	QProgressBar* m_progress = nullptr;
 	QToolButton* m_cancel = nullptr;

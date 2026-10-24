@@ -42,7 +42,9 @@ QVector<Numbered> primitivesOf(const LevelMapDocument& document, int entityId)
 	for (int index = 0; index < document.brushes.size(); ++index) {
 		const auto& brush = document.brushes.at(index);
 		if (brush.entityId == entityId) {
-			result.push_back({{LevelMapSelectionKind::QuakeBrush, brush.id}, fileLine(brush.startLine), index});
+			// A brush rewritten in place of a source brush is saved, and so
+			// numbered, where that brush stood.
+			result.push_back({{LevelMapSelectionKind::QuakeBrush, brush.id}, fileLine(levelMapBrushSaveLine(document, brush)), index});
 		}
 	}
 	for (int index = 0; index < document.patches.size(); ++index) {

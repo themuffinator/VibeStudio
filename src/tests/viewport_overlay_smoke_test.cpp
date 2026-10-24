@@ -155,6 +155,61 @@ int main(int argc, char** argv)
 	view.zoom = 0.01;
 	const auto sparse = mapGridLines(view);
 	ok &= expect(sparse[0].size() + sparse[1].size() < 50,"adaptive grid avoids dense zoomed-out stripes");
+	// 512- and 1024-unit grids: every sparse line sits on a whole multiple of
+	// the grid, every eighth is major and none repeats or lands on an axis.
+	// Inside the view there is exactly one line per grid multiple (a doubled
+	// step would halve them), and a view between two lines shows nothing but
+	// the axes it contains. Lines just outside the view are allowed: they are
+	// the painter's one-step margin.
+	for (const double units : {512.0,1024.0}) {
+		for (const double zoom : {0.002,0.05,0.25,1.0,3.0}) {
+			const MapGridView large{QSize(800,600),QPointF(1000.5,-3000.25),zoom,1,units,qRgb(1,1,1),qRgb(2,2,2),qRgb(3,3,3)};
+			double step = units;
+			while (step * zoom < 6.0) { step *= 2; }
+			const double width = large.viewport.width(), height = large.viewport.height();
+			const double left = large.center.x() - width * 0.5 / zoom, right = large.center.x() + width * 0.5 / zoom;
+			const double bottom = large.center.y() - height * 0.5 / zoom, top = large.center.y() + height * 0.5 / zoom;
+			const auto multiples = [step](double low, double high) {
+				int count = 0;
+				for (double lane = std::ceil(low / step); lane <= std::floor(high / step); ++lane) { count += lane != 0; }
+				return count;
+			};
+			const auto grid = mapGridLines(large);
+			bool placed = true; QVector<double> seen; int verticals = 0, horizontals = 0;
+			for (int pass = 0; pass < 2; ++pass) {
+				for (const QLineF& line : grid[pass]) {
+					const bool vertical = line.x1() == line.x2();
+					const double at = vertical ? line.x1() : line.y1();
+					const double world = vertical ? large.center.x() + (at - width * 0.5) / zoom : large.center.y() - (at - height * 0.5) / zoom;
+					const double lane = std::round(world / step);
+					placed &= std::abs(world / step - lane) < 1e-6 && lane != 0 && (std::fmod(lane,8.0) == 0) == (pass == 1);
+					const double key = vertical ? world : world + 1e12;
+					placed &= !seen.contains(key); seen.append(key);
+					if (at >= 0 && at <= (vertical ? width : height)) { ++(vertical ? verticals : horizontals); }
+				}
+			}
+			ok &= expect(placed,"large grid lines land on whole grid multiples with majors every eighth line");
+			ok &= expect(verticals == multiples(left,right) && horizontals == multiples(bottom,top),
+				"large grids draw each line in view at their own spacing");
+			MapGridFrame largeFrame;
+			ok &= expect(renderMapGrid(large,&largeFrame) && !largeFrame.image.isNull(),"large grid image renders");
+		}
+		const auto inView = [](const MapGridLines& lines, const QSize& size, int pass) {
+			return std::count_if(lines[pass].cbegin(),lines[pass].cend(),[size](const QLineF& line) {
+				const bool vertical = line.x1() == line.x2();
+				const double at = vertical ? line.x1() : line.y1();
+				return at >= 0 && at <= (vertical ? size.width() : size.height());
+			});
+		};
+		const MapGridView between{QSize(400,300),QPointF(units / 2.0,units / 2.0),4.0,1,units,0,0,0};
+		const auto empty = mapGridLines(between);
+		ok &= expect(inView(empty,between.viewport,0) == 0 && inView(empty,between.viewport,1) == 0 && empty[2].isEmpty(),
+			"a view between large grid lines stays clean");
+		const MapGridView origin{QSize(400,300),QPointF(),4.0,1,units,0,0,0};
+		const auto axes = mapGridLines(origin);
+		ok &= expect(inView(axes,origin.viewport,0) == 0 && inView(axes,origin.viewport,1) == 0 && axes[2].size() == 2,
+			"zoomed in at the origin, a large grid shows just the axes");
+	}
 	QTransform transform(1.5,0,0,1.5,-10.25,20.875);
 	const auto device = viewportImageDevice(transform);
 	ok &= expect(device.pixelRatio == 1.5 && device.pixelPhase == QPointF(0.75,0.875),"negative translations retain positive fractional device phases");

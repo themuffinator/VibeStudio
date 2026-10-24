@@ -53,7 +53,7 @@ const ModelTag *findModelTag(const ModelMesh &mesh, const QString &name, int fra
 bool validModelTagSelection(const ModelMesh &mesh, const ModelSelection &selection)
 {
 	return selection.tag.isEmpty() ||
-		   (selection.surfaces.isEmpty() && selection.collision.isEmpty() && selection.vertices.isEmpty() && selection.faces.isEmpty() && selection.edges.isEmpty() && findModelTag(mesh, selection.tag, 0));
+		   (selection.joint.isEmpty() && selection.surfaces.isEmpty() && selection.collision.isEmpty() && selection.vertices.isEmpty() && selection.faces.isEmpty() && selection.edges.isEmpty() && findModelTag(mesh, selection.tag, 0));
 }
 bool isModelTagEdit(ModelEditKind kind)
 {

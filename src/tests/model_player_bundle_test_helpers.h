@@ -46,8 +46,18 @@ struct PlayerBundleFixture
 			model.surfaces[0].skinPaths = {role == "lower" ? QStringLiteral("models/unassigned") : QStringLiteral("textures/player/a.tga"),
 										   QStringLiteral("textures/player/b.tga")};
 			if (role == "upper")
+			{
+				// The torso carries the head and, in its hand, the weapon.
 				for (auto &tag : model.tags)
 					tag.name = "tag_head";
+				const auto heads = model.tags;
+				for (auto tag : heads)
+				{
+					tag.name = "tag_weapon";
+					tag.origin.x += 6;
+					model.tags.append(tag);
+				}
+			}
 			if (role == "head")
 			{
 				model.frames.resize(1);
@@ -59,7 +69,10 @@ struct PlayerBundleFixture
 			if (!q3Write(dir.filePath(role + ".mesh.json"), QJsonDocument(editableModelJson(model)).toJson()))
 				return false;
 		}
-		if (!q3Write(dir.filePath("lower.skin"), "body,models/player/body\n"))
+		// Team skins for the engine oracle: red changes upper, blue changes head.
+		if (!q3Write(dir.filePath("lower.skin"), "body,models/player/body\n") ||
+			!q3Write(dir.filePath("team_red_upper.skin"), "body,textures/player/b.tga\n") ||
+			!q3Write(dir.filePath("team_blue_head.skin"), "body,textures/player/b.tga\n"))
 			return false;
 		assembly = q3Assembly("lower.mesh.json");
 		assembly.parts[0].source = "upper.mesh.json";

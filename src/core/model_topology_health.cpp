@@ -1,4 +1,5 @@
 #include "core/model_topology_health.h"
+#include "core/model_vertex_identity.h"
 
 #include <QCoreApplication>
 #include <QMap>
@@ -390,6 +391,7 @@ bool repairModelTopology(const ModelSurface &source, ModelTopologyRepair repair,
 			}
 		}
 		candidate.texCoords.clear();
+		candidate.topologyVertices.clear();
 		for (int old : retained)
 		{
 			if (!work.step())
@@ -397,6 +399,7 @@ bool repairModelTopology(const ModelSurface &source, ModelTopologyRepair repair,
 				return false;
 			}
 			candidate.texCoords << source.texCoords[old];
+			if (!source.topologyVertices.isEmpty()) candidate.topologyVertices << source.topologyVertices[old];
 		}
 		for (int f = 0; f < source.frames.size(); ++f)
 		{
@@ -462,6 +465,7 @@ bool repairModelTopology(const ModelSurface &source, ModelTopologyRepair repair,
 		}
 		if (!splits.isEmpty())
 		{
+			if (!materialiseModelVertexIdentities(&candidate, error, control)) return false;
 			candidate.texCoords.reserve(int(required));
 			for (auto &frame : candidate.frames)
 			{
@@ -480,6 +484,7 @@ bool repairModelTopology(const ModelSurface &source, ModelTopologyRepair repair,
 				const int copy = int(candidate.texCoords.size());
 				vertices[fan.vertex] << copy;
 				candidate.texCoords << source.texCoords[fan.vertex];
+				candidate.topologyVertices << copy;
 				for (auto &frame : candidate.frames)
 				{
 					if (!work.step())
@@ -605,6 +610,7 @@ bool repairModelTopology(const ModelSurface &source, ModelTopologyRepair repair,
 		}
 	}
 	candidate.vertexCount = int(candidate.texCoords.size());
+	compactModelVertexIdentities(&candidate);
 	if (repair == ModelTopologyRepair::SplitNonmanifoldEdges)
 	{
 		ModelTopologyHealth checked;

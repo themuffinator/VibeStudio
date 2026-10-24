@@ -101,7 +101,7 @@ void ApplicationShell::refreshLevelCameraPlacementTools()
 	}
 	if (m_levelMapViewport)
 	{
-		m_levelCameraClearance->setSingleStep(m_levelMapViewport->snapToGrid() ? std::max(1, m_levelMapViewport->gridSize()) : 1);
+		m_levelCameraClearance->setSingleStep(m_levelMapViewport->snapToGrid() ? m_levelMapViewport->gridSize() : 1.0);
 	}
 	if (m_commands)
 	{
@@ -132,7 +132,7 @@ void ApplicationShell::placeLevelMapPaletteAtCamera()
 		return;
 	}
 	const auto owner = m_levelMap3DOwners.at(triangle);
-	const double grid = m_levelMapViewport->snapToGrid() ? std::max(1, m_levelMapViewport->gridSize()) : 0;
+	const double grid = m_levelMapViewport->snapToGrid() ? m_levelMapViewport->gridSize() : 0.0;
 	LevelPlacementRequest request;
 	BoxResizePoint origin;
 	QString what;

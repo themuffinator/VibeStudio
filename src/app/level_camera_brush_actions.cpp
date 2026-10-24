@@ -160,7 +160,7 @@ void ApplicationShell::refreshLevelCameraBrush()
 		m_levelBrushWorkSerial = m_levelMapLoadSerial; m_levelBrushWorkSelection = m_levelMapDocument.selection;
 		useLevelBrushWorkZone();
 	}
-	const double step = m_levelMapViewport && m_levelMapViewport->snapToGrid() ? std::max(1,m_levelMapViewport->gridSize()) : 1;
+	const double step = m_levelMapViewport && m_levelMapViewport->snapToGrid() ? m_levelMapViewport->gridSize() : 1.0;
 	m_levelBrushBase->setSingleStep(step); m_levelBrushDepth->setSingleStep(step);
 	m_levelMap3D->setBrushDrawPlane(m_levelMap3D->brushDrawAxis(),m_levelMap3D->brushDrawBase(),m_levelMap3D->brushDrawDepth(),
 		m_levelControls.plan.squareModifiers,m_levelControls.plan.cubeModifiers,m_levelMap3D->brushDrawDirection());

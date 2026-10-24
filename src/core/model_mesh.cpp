@@ -2354,6 +2354,13 @@ QString modelMeshSummaryText(const ModelMesh& mesh)
 	return modelMeshSummaryLines(mesh).join(QLatin1Char('\n'));
 }
 
+QVector<ModelAnimation> modelAnimationsFromFrameNames(const QVector<ModelFrameInfo>& frames)
+{
+	const ModelWorkControl control{};
+	ModelWorkProgress work(control, ModelWorkPhase::Validating);
+	return inferAnimations(frames, work);
+}
+
 QString exportModelFrameObj(const ModelMesh& mesh, int frameIndex, const QString& materialName, const ModelWorkControl& control, QString* error)
 {
 	if (error) { error->clear(); }

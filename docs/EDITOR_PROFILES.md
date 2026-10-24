@@ -43,6 +43,9 @@ quadrants, **Camera Above Plans** or **Camera Beside Plans**, which gives the
 camera a large left pane and stacks three plan panes on the right. The override keeps the
 profile's gestures and keys; **Follow Editor Profile** returns to its layout.
 `vibestudio --cli editor layout [preference] --json` reads or changes this setting.
+**Show Top/Front/Side View** (NetRadiant Custom's XY/XZ/YZ window toggles,
+unbound in every profile as upstream) hide plan panes in the three-plan
+layouts; `editor layout --panes` saves the same choice.
 See [Four-View Workspace](LEVEL_EDITOR.md#four-view-workspace) for active-pane,
 visibility and persistence behavior. `editor controls` continues to describe
 the named profile's gestures with user overrides; `editor layout` reports the
@@ -224,7 +227,9 @@ views answer to under the chosen profile.
 ## Philosophy
 - Editor familiarity is a product feature.
 - One editing core serves every profile: the same documents, commands, undo
-  history, and file formats. A profile changes controls and layout, never
+  history, and file formats. TB also records object selection and group navigation
+  as non-content history; NRC and default controls leave them outside history.
+  A profile changes controls and layout, never
   file compatibility.
 - Profiles are data. The views read a profile's controls and nothing else, so
   a new profile is a new set of values in `src/core/level_editor_controls.cpp`
@@ -359,7 +364,7 @@ projection. Ctrl+U and Shift+U remain unassigned because DoomEdit uses them for
 axial texture operations. Surface and patch inspectors use S and Shift+S.
 `doom3-radiant`, `doom-edit` and `d3radiant` are aliases. This is an adaptation
 for supported map formats: Doom 3 rendering, lights, material editing, floor
-stepping, fractional grids and native texture gestures remain unsupported.
+stepping and native texture gestures remain unsupported.
 It does not claim idStudio or idTech4 format support.
 
 `bsp` follows the [BSP 0.97q7 release settings](https://www.bspquakeeditor.com/downloads.php)
@@ -402,7 +407,7 @@ editing, Shift+C to caps, Shift+T to texture lock and Shift+B to texture fitting
 Shift+arrows and Shift+Page Up/Down use the shared Surfaces target and step
 settings, with centre-anchored rotation. These are independent studio
 adaptations: 1.5 area selection adds rather than toggles members; native
-replacement-area selection, component manipulators, fractional grids, floor
+replacement-area selection, component manipulators, floor
 stepping, Z-checker and preference imports are not emulated. Selecting a
 profile does not add another game format or engine.
 
@@ -420,6 +425,12 @@ Z-checker remain unsupported. Surface sampling/paste keeps the common studio
 clipboard rules rather than reproducing implicit selected-set changes.
 
 ### TrenchBroom Style
+
+The sweep tool additionally follows the pinned `v2026.2` controller reference:
+**Y** activates it, and Enter / `[` / `]` apply or change scale in its active
+viewport. User command overrides replace those local keys. See the
+[sweep workflow](manual/levels.md#sweep-selected-faces) and
+[controller credits](CREDITS.md#brush-face-sweep).
 Reference: [TrenchBroom](https://trenchbroom.github.io/). The values follow its
 defaults as of `master` `90de03c`, September 2026 (see docs/CREDITS.md).
 
@@ -445,12 +456,36 @@ defaults as of `master` `90de03c`, September 2026 (see docs/CREDITS.md).
   - Editing: Ctrl+D duplicates, Del or Backspace deletes, C is the clip tool,
     and Ctrl+Z and Ctrl+Shift+Z undo and redo.
   - Selection: Ctrl+A selects all, Ctrl+Shift+A deselects, and Ctrl+Alt+A
-    inverts.
+    inverts. Ctrl+B selects siblings within the current scene hierarchy.
+    The compiler profile uses Ctrl+Alt+B so these bindings do not conflict.
   - Hiding: Ctrl+I isolates, Ctrl+Alt+I hides, and Ctrl+Shift+I shows all.
-  - Grid: + and - resize it, 1 to 9 set it (1 to 256 units), 0 shows it, and
-    Alt+0 snaps.
+  - Grid: + and - resize it (0.125 to 1024 units), 1 to 9 set it (1 to 256
+    units), 0 shows it, and Alt+0 snaps. TrenchBroom itself stops at 256 and
+    gives its 0.125 to 0.5 grids no key, as here.
   - View: Ctrl+U frames the selection.
   - CSG: Ctrl+K carves (CSG subtract) and Ctrl+Shift+K hollows.
+  - Tags: Alt+S is Make Structural, which here also moves the selected brushes
+    out of brush entities to the world or current group, as TrenchBroom's
+    `MapViewBase::makeStructural` does.
+  - Tools: V, E and F turn on vertex, edge and face editing (again turns the
+    current mode off), Ctrl+Alt+Shift+V snaps the selected brushes' vertices to
+    the grid, Ctrl+Shift+D is **Create Linked Duplicate**, and U toggles **Lock
+    Component UVs** (TrenchBroom's UV Lock; the camera flies on W, S, A, D, Q
+    and X, so U is free). These follow `ActionManager.cpp` at `v2026.2` /
+    `4c756be1`. F takes the plan views' own
+    framing key in this profile; Ctrl+U still frames.
+  - Nudge: the arrows move the selection, picked components, the component
+    pivot or the sweep destination one grid step up, down, left or right in a
+    2D view, and along the camera's nearest horizontal axes in 3D; Page Up and
+    Page Down move along the 2D view's depth axis, or Z in 3D. These follow
+    the "Move objects" actions and `MapView3D::moveDirection` at `v2026.2` /
+    `4c756be1`. On Doom maps Page Up and Page Down still raise and lower floors.
+  - Duplicate and Move: Ctrl+arrows copy the selection and move the copies one
+    grid step the same ways, and Ctrl+Page Up and Ctrl+Page Down along the
+    depth axis, as one undo step (the "Duplicate and move objects" actions at
+    `v2026.2` / `4c756be1`). The views take them only while a copy can be made,
+    so Ctrl+arrows still pan a 2D view with nothing selected, and Doom maps
+    keep Ctrl+Page Up and Ctrl+Page Down for the ceilings.
 - **Left alone:** TrenchBroom's Ctrl+F flips objects, but VibeStudio keeps
   Ctrl+F for Find. Alt+arrows keep going Back and Forward.
 
@@ -475,6 +510,10 @@ plans a VibeMap3 build.
   - The wheel moves toward the pointer.
   - When not looking, the arrows drive: Up and Down move, and Left and Right
     turn.
+  - Holding Tab while looking keeps the selection in view along the camera's
+    heading, and the wheel moves nearer or farther (NRC `camwindow.cpp`
+    CameraFreeFocus at `449778b3`; `camera.focusHoldKey`). Outside mouse look
+    Tab still moves keyboard focus.
   - A left drag on the selection moves it across the ground, and Alt+left
     drag moves it up and down, on the grid.
 - **Selection:**
@@ -494,14 +533,64 @@ plans a VibeMap3 build.
   - The arrows drive the camera, and Alt+arrows nudge the selection.
 - **Keys:**
   - Editing: Space clones, and Del, Backspace, or Z deletes.
+  - Nudge: Alt+arrows move the selection or picked components one grid step
+    in the last 2D view's axes from any view, the camera included, ahead of
+    Go Back and Go Forward, and the keypad's + and - move them along Z ahead
+    of zoom (`SelectNudgeLeft` to `SelectNudgeDown`, `MoveSelectionUP` and
+    `MoveSelectionDOWN` in `radiant/select.cpp` at `449778b3`).
+  - Repeat and camera: Ctrl+R repeats the last move, rotation, scale and
+    shear on a copy of the selection, or on the picked components, and
+    Ctrl+Shift+V moves the selection to the camera (`"RepeatTransforms"` and
+    `"MoveToCamera"` in `radiant/select.cpp` at `449778b3`). Its Alt+R (Reset
+    Transforms) is left to the menu bar; **Reset Repeat Transforms** is in
+    **Edit** > **Repeat** and command search.
   - Selection: C deselects, and I inverts.
   - Hiding: H hides, and Shift+H shows all.
   - Tools: X is the clipper. Enter clips, Shift+Enter keeps both halves, and
     Ctrl+Enter flips which half stays.
   - Grid: [ and ] step it, 1 to 9 set it, and 0 shows it.
-  - View: ` frames the selection.
-  - CSG and entities: Shift+U carves (CSG subtract), Ctrl+G snaps to the
-    grid, and Ctrl+K connects entities.
+  - View: ` frames the selection, and End levels the camera (**Level
+    Camera**, NRC `camwindow.cpp` CenterView at `449778b3`).
+  - CSG and entities: Shift+U carves (CSG subtract), Ctrl+U wraps/merges
+    selected brushes or picked components, Ctrl+G rounds every brush vertex,
+    patch control point and point-entity origin of the selection (or only the
+    picked components) onto the grid, as NRC `select.cpp` Selection_SnapToGrid
+    does (**Round Selection to Grid**; **Snap Selection to Grid**, which moves
+    whole objects, has no key here),
+    Ctrl+K connects entities, and Ctrl+M moves the selected brushes and patches
+    into the entity of the item selected last (NRC `entity.cpp`
+    EntityMovePrimitivesToLast). K opens **Set Entity Colour** for the
+    selected entities and the entities of the selected brushes (NRC
+    EntityColorSet); **Normalise Entity Colour** has no key there either.
+    Shift+Q opens the layers menu (**Move to Layer…**) and Ctrl+Shift+Q runs
+    **Expand Selection to Layers** (NRC `layerswindow.cpp` binds Ctrl+Q, the
+    studio's Quit).
+    Wrap/Merge adds actual clipper points when active;
+    its separate numeric preview command is available in Geometry.
+  - Components and patches, from NRC `449778b3` (`tools.cpp`, `patchmanip.cpp`,
+    `brushmanip.cpp`, `xywindow.cpp`): V, E and F turn on vertex, edge and face
+    editing (F no longer frames there; ` does). Ctrl+Keypad + and
+    Ctrl+Shift+Keypad + insert patch rows and columns, Ctrl+Keypad - and
+    Ctrl+Shift+Keypad - delete the last ones, Ctrl+I inverts a patch,
+    Ctrl+Shift+M transposes it, Ctrl+T thickens it and Ctrl+Shift+W smooths its
+    columns. Shift+I flips texture V, Shift+T toggles Texture Lock, Alt+D and
+    Alt+S make brushes detail or structural, and Ctrl+Shift+Tab centres the 2D
+    views on the selection. Ctrl+Shift+I (flip texture X) and Ctrl+W (smooth
+    patch rows) stay unbound because the studio keeps those window-wide keys for
+    Initialize Project Manifest and Close Package. The standalone NetRadiant
+    profile does not inherit these keys.
+- **Camera clipper:** two points follow the dominant view axis, repair a parallel
+  segment using its projected direction, and turn a plane on an axial outer face
+  into a useful cut. The plane remains shared and fixed when navigating between
+  views. `camera.clipViewAxis` in **Customize Gestures… > 3D Camera** can turn
+  this policy off. Other profiles, including the separate NetRadiant baseline,
+  do not inherit this NRC default. After a plain point press, Shift constrains
+  XY movement, Alt moves Z, and Ctrl returns to brush-face snapping. Relative
+  grid movement uses a fixed press anchor. `camera.clipDragStyle` selects
+  `world` (NRC default), `view` (axial view plane/depth), or `surface` (other
+  profiles' default). Wider native scene-edge/vertex/patch snapping and physical
+  input acceptance remain open; plain first-point dragging still uses
+  VibeStudio's second-point creation behaviour.
 
 ### GtkRadiant 1.6.0 Style
 Reference: [GtkRadiant](https://github.com/TTimo/GtkRadiant). The values follow
@@ -590,14 +679,15 @@ RMF/VMF/JMF, Source 2 and Hammer++-specific tooling are not emulated.
 `darkradiant` follows the Radiant camera/plan arrangement, Shift selection,
 Shift+right plan zoom and toggled right-button free look. Existing Scene layers,
 groups, patches and prefabs are shared. Choosing it does not add Doom 3/Quake 4
-formats, fractional grid steps or Dark Mod game connection.
+formats or Dark Mod game connection.
 
 `doom-builder` accepts Doom Builder 2/X and `db2`/`dbx` names. W switches the
 visual view; ESDF flies, C deselects, Ctrl+D draws sectors, and F9 uses the normal
 build/test pipeline. `ultimate-doom-builder` (`udb`, `gzdoom-builder`, `gzdb`)
 uses Q for the enhanced visual view. `slade` (`slade3`) uses Q and WASD, with
 right-drag plan pan and Shift+G snap. `eureka` uses Tab, WASD/arrows, O duplicate
-and Shift slower flight; digits 1–8 select grids 2–256. These profiles retain
+and Shift slower flight; digits 1–9 and then 0 select grids 2–1024, as
+Eureka's `bindings.cfg` (`GRID_Set`) does. These profiles retain
 VibeStudio's Ctrl selection and explicit paint/sample/property tools. Dedicated
 V/L/S/T modes, native crosshair interactions, right-button drawing/movement,
 wheel height editing, gravity and advanced source-port effects remain gaps.
@@ -638,6 +728,7 @@ distinct from `netradiant-custom`. Its audited defaults use an 8-unit grid,
 for camera driving. The plan uses right pan, Alt+right zoom and middle-button
 camera positioning/aiming. Delete/Insert zoom; Backspace/Z delete; Escape/C
 deselect; Space clones; Shift+A selects similar; Ctrl+Y redoes; F12 maximizes.
+K opens **Set Entity Colour**, as NetRadiant's `entity.cpp` EntityColor does.
 Backtick/Ctrl+Shift+Tab frame the focused view. Camera Tab focus, discrete
 movement, floor stepping, right-button selection painting, selection-box
 semantics and clone-with-unique-targets remain adaptations/gaps.
@@ -708,7 +799,7 @@ gesture files remain valid. New fields can also be used with other perspective
 profiles; default-off fields preserve their existing behavior. Fixed drive steps
 leave active fly bindings continuous, including a held mouse-look gesture.
 
-Native preferences, Z-checker, floor stepping, End camera levelling, terrain,
+Native preferences, Z-checker, floor stepping, terrain,
 bend/rotation modes, Ctrl+right plan clip-point placement and UV-copying texture
 gestures remain unsupported. Middle samples the material name; Shift+middle
 paints one hit surface while preserving its UVs. Ctrl+middle brush copying and
@@ -817,3 +908,202 @@ map or frame-time performance.
 - Every binding reports `implemented`, computed from
   `shellCommandIdExists()` and never asserted; a binding that takes a
   command's keys away carries `clearsKeys`.
+
+
+TB normal copy now exports picked `.map` faces; without picks it copies objects.
+Cut is disabled while TB faces are picked. Other profiles retain object copy,
+with **Copy Surface** available to export a face. Normal paste in every profile
+auto-detects face records and uses Face attributes on the current face/brush
+selection. These choices appear in the control reference and retain shortcut
+overrides. See [Face clipboard](LEVEL_PASTE.md#face-clipboard).
+
+
+### Brush-volume selection
+
+The TB profile uses convex volumes and consumes selected brushes for Inside,
+Touching and Tall, with Ctrl+E, Ctrl+T and Ctrl+Shift+E. NRC uses each brush's
+AABB: Inside removes all selected objects; Touching adds matches and keeps the
+source selection. Other profiles retain the combined-bounds query. These are
+shared selection/undo services, exposed in the profile controls reference and
+localised action tooltips. See [Select by brush volume](manual/levels.md#select-by-brush-volume)
+for restrictions and Partial coverage. NRC tall and TB Partial Tall are extensions.
+
+### Temporary visibility
+
+The existing TB non-content history policy also covers Hide, Show All, Isolate
+and object-list reveal. NRC and default profiles keep these session changes
+outside history. Bindings and overrides flow into the context menu; labels no
+longer assume H/Shift+H in every profile. The TB profile also targets closed
+groups as containers with inherited hiding and explicit shown exceptions. NRC
+and default target their current members. Existing states survive profile
+switches. TB and default authoring reveal inserted roots; duplicate/array and
+linked-copy creation retain explicit descendant attributes. NRC uses fresh
+inherited states for new objects and copies, so a hidden destination still hides
+them. The controls reference exposes this as **New and duplicated objects**.
+
+### Duplicate placement and selection mode
+
+TB and NRC default to duplication in place. `nudgeAfterDuplicate` controls the
+optional right/down grid displacement, using the active plan even when the
+camera has focus. Other profiles retain their current default nudge. The shared
+`editing.nudgeAfterDuplicate` choice is saved per canonical profile, exposed on
+**Customize Gestures…** > **Editing**, and supports the existing CLI, reset and
+portable import/export paths. Changing it rejects a pending placement; completed
+undo/redo and Repeat retain their recorded offsets.
+
+NRC's `duplicateRequiresObjectMode` disables ordinary and explicit-offset
+duplication while vertex, edge or face mode is active. TB continues to duplicate
+selected objects while editing components. These are original adaptations of
+the pinned `MapWindow::duplicateSelection` and NRC `Selection_Clone`/
+`NudgeAfterClone` references; see [credits](CREDITS.md#duplicate-placement).
+**Duplicate, Make Unique** has NRC's separate **Shift+Space** binding; ordinary
+duplication uses **Space**. The shared service clones partial entity owners and
+remaps copied names/references, including outgoing targets. It requires object
+mode in every profile and uses the same nudge preference. Standalone NetRadiant
+keeps its existing bindings. Native input and real-project parity remain Partial.
+The document carries this session-only policy through drawing, placement,
+prefabs, linked creation and repeat. Switching it invalidates pending authoring
+without dirtying the map or rewriting existing undo/redo states. Scene layer
+transfers still reset shown exceptions; linked updates always use inherited child
+states. Saved scene
+visibility interactions remain Partial; see [temporary visibility](manual/levels.md#temporary-visibility).
+
+### Grid sizes and snapping
+
+Every profile offers the working grids 0.125 to 1024 units
+(`levelEditorGridSizes()` in `core/level_editor_controls.h`): the view bar,
+the View tab, `map.grid0.125` to `map.grid1024`, Smaller/Larger Grid and
+profile validation share that list, and a profile's `defaultGridUnits` may be
+any listed size. 0.125, 0.25 and 0.5 follow NetRadiant Custom's
+`GRIDPOWER_0125` to `GRIDPOWER_05` (`SetGrid0.125` to `SetGrid0.5`) and
+TrenchBroom's Set Grid Size 0.125 to 0.5 (grid exponents -3 to -1); neither
+gives them a default key, so no profile does. 512 and 1024 follow NetRadiant
+Custom's `GRIDPOWER_512`/`GRIDPOWER_1024`, which have no default key there;
+TrenchBroom and GtkRadiant stop at 256, so their keys stay as they were.
+Eureka's digits reach 512 and 1024 on 9 and 0. Binary Doom and Hexen maps store
+whole-unit coordinates, so `levelEditorFinestGridUnits()` is 1 for them: the
+fractional entries are greyed out, `map.grid0.125` to `map.grid0.5` are
+disabled, a fractional choice moves to 1 and Smaller Grid stops there. UDMF and
+Quake-family maps go down to 0.125.
+
+NRC's `GridPrev`, `GridNext` and `setGridPower` (and NetRadiant's at
+`b4b295d7`) turn snapping on before choosing a size. Profiles carry this as
+`LevelEditorControls::gridChangeEnablesSnap`, on for `netradiant-custom` and
+`netradiant`. Grid commands, a choice from either grid list and [ / ] then
+tick **Snap**, and the status bar says so; the controls reference shows the
+policy as **Changing the grid**. `editing.gridChangeEnablesSnap` overrides it
+per profile on **Customize Gestures…** > **Editing**, through `editor
+gestures`, and in portable gesture files. Larger Grid is disabled at 1024, so
+] there does not turn Snap on as NRC's always-enabled GridNext would.
+
+### Camera levelling and focus
+
+**View** > **Camera** holds three commands that move only the level camera,
+from `core/level_camera_focus.h`; the plan views, the map and its undo history
+are untouched, so scene locks do not apply.
+
+- **Level Camera** (`map.levelCamera`) keeps the position, sets pitch to zero
+  and rounds the heading to the nearest 22.5-degree step, as Q3Radiant's
+  `OnViewCenter` (`dbe4ddb1`) and NRC's `GlobalCamera_ResetAngles` do. Exact
+  half steps round away from zero rather than Radiant's `+11` bias. End binds
+  it in `netradiant-custom`, `netradiant` (both confirmed by `camwindow.cpp`
+  CenterView at `449778b3` and `b4b295d7`), `gtkradiant-1-6`, `gtkradiant-1-4`,
+  `gtkradiant-1-5`, `q3radiant` and `doomedit` (DOOM-3 `MainFrm.cpp`
+  `Camera_CenterView`). `qeradiant` and `darkradiant` leave it unbound until
+  their own sources confirm it. The orbiting VibeStudio Default view levels its
+  orbit instead.
+- **Focus Camera on Selection** (`map.focusCameraOnSelection`) keeps heading and
+  pitch and places the camera on the line through the selection box's centre,
+  backed off until all eight corners lie inside the view's side planes for its
+  vertical field of view and aspect, never nearer than 64 units and with every
+  corner at least 8 units in front of the camera (NRC `Camera_getFocusPos`,
+  reimplemented). The plan views stay put, unlike **Frame Selection**. An
+  empty selection focuses on the last selection of the same map load (NRC's
+  work zone), limited to objects the open group still allows; hidden objects
+  never count. NRC binds it to Tab; VibeStudio gives it no key, because a
+  window-wide Tab would take keyboard focus navigation away.
+- **Reset Camera Zoom** (`map.resetCameraZoom`) restores the profile's
+  `fieldOfViewDegrees` after Shift+wheel zoom or a saved view's own field of
+  view, as TrenchBroom's `resetCameraZoom` does (Ctrl+Alt+Z in `trenchbroom`,
+  ActionManager at `4c756be1`). Mouse look resumes if it was on.
+
+`CameraViewControls::focusHoldKey` is the held free-focus key. It acts only
+during mouse look (free look toggled on, or a held look button); while held,
+every camera move lands back on the focus line, and each wheel notch scales
+the fitted distance by 2^(-1/8), so eight notches halve or double it, within
+48 notches either way. Releasing the key, leaving mouse look, losing focus or
+hiding the camera ends it. Because it never acts outside mouse look, it is the
+one camera key that may be Tab (`normalizeCameraFocusKey()`); it must differ
+from the fly, drive and mouse-look keys and from any command key. Tab is the
+default in `netradiant-custom` and `netradiant` (NRC CameraFreeFocus, also in
+`b4b295d7`); other perspective profiles can opt in with `camera.focusHoldKey`
+on **Customize Gestures…** > **Camera Keys**, `editor gestures` or a gesture
+file. `map camera-focus` reports the same position from the command line.
+Physical-input and macOS/Linux acceptance of the keys remains open.
+
+### Quick-turn pivot
+
+NRC's `rotateSelected(…, snapOrigin)` (radiant/selection.cpp at `449778b3`)
+snaps the pivot of Rotate X/Y/Z and Rotate Clockwise/Anticlockwise to the snap
+grid unless the pivot is custom, and TrenchBroom's `MapViewBase::rotate`
+(`4c756be1`) turns about `grid.referencePoint(selection bounds)`. Profiles carry
+this as `LevelEditorControls::quickTurnSnapsPivot`, on for `netradiant-custom`
+and `trenchbroom` only (Xonotic NetRadiant was not audited for it). While
+**Snap** is on, **Rotate 90° Left/Right** and **Rotate X/Y/Z** then turn about
+the selection's bounds centre rounded with `snapLevelMapPosition()`, or in
+component mode the picked components' centre; a custom component pivot always
+wins. Ties round away from zero, as every VibeStudio grid snap does, where NRC's
+`llrint` rounds them to even. The controls reference shows the policy as
+**Quick-turn pivot**; `editing.quickTurnSnapsPivot` overrides it per profile
+like any editing preference, and `editor controls` reports `quickTurnPivot`.
+Flips keep the exact centre in every profile: NRC's `scaleSelected(…,
+snapOrigin)` would move a selection an odd number of grid steps wide, which
+TrenchBroom avoids with a half-grid reference point (TrenchBroom issue 1495),
+and for on-grid selections the exact centre gives TrenchBroom's result.
+
+### NRC texture steps
+
+NRC's `TexRotateClock`/`TexRotateCounter` (Shift+PgDown/PgUp) and
+`TexScaleUp`/`Down`/`Left`/`Right` (Ctrl+arrows) in radiant/select.cpp at
+`449778b3` subtract or add the Surface Inspector's increments (`si_globals_t`:
+rotate 45, scale 0.5) about the texture origin. `netradiant-custom` binds them
+to **Rotate Texture −/+** (`map.surfaceRotateLeft`/`Right`) and **Texture Scale
+V +/V −/U −/U +** (`map.surfaceScaleStepUp`/`Down`/`Left`/`Right`), and sets
+`LevelEditorControls::surfaceRotationStep = 45` and `surfaceRotateAboutOrigin`,
+so the Surfaces tab starts at 45° about the **Texture origin**. NRC's
+"clockwise" is minus the increment, so Shift+PgDown is **Rotate Texture −**;
+GtkRadiant's own Clockwise adds it, which is why the GtkRadiant and Q3Radiant
+profiles keep Shift+PgUp on −. The bindings are map commands, so they win over
+the plan view's Ctrl+arrow pan while a surface target enables them; with none,
+the keys still pan. The `netradiant` baseline drops these keys and keeps the
+15° centre turn: NetRadiant `b4b295d7`'s turn sign was not audited. The steps
+share `core/level_surface.h` (`RadiantScale`, `RadiantRotate`) with
+`map align-textures --scale-step` and `--degrees --anchor origin`; the controls
+reference shows **Texture rotation step**, and `editor controls` reports
+`surfaceRotationStep` and `surfaceRotationPivot`. Patches turn in texels rather
+than NRC's normalised coordinates, so a non-square image is not sheared.
+
+### NRC entity connections
+
+NRC alone selects `RadiantTarget` as its Connect policy: exactly two object
+instances, source first, destination last, with source-name priority. Its keys
+are Ctrl+K for Connect and Shift+K for KillConnect. Standalone NetRadiant and
+other profiles retain multi-source, destination-first connections and receive
+no KillConnect key. The command remains discoverable in their menus and Tools.
+KillConnect uses the current game context, not the engine-family label; Quake
+and Quake II both use idTech2 here. The controls reference describes the active
+policy. Changing profile or game during preparation rejects the pending result.
+
+NRC also binds **Ctrl+Shift+E** to **Select Connected Entities**, which adds one
+hop of incoming and outgoing `target`/`targetname` neighbours. It works on object
+picks in component mode and keeps selection outside NRC history. Other profiles
+expose the command without a default binding; TB retains **Select Complete Tall**
+on the same key and records selection undo. Standalone NetRadiant does not
+inherit NRC's connected-selection binding. User overrides remain supported.
+
+NRC **Shift+A** now binds the distinct **Select All of Type** command. It
+considers every selected owner class, falls back to the current material, and
+replaces matching brush-face picks in face mode. The old **Select All of This
+Class** command stays available without an NRC default key; other profiles keep
+their existing class-selection bindings. Standalone NetRadiant does not inherit
+the new binding. The normal shortcut-reference and override paths apply.

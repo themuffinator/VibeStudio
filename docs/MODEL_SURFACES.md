@@ -25,6 +25,16 @@ If every face is moved, the whole surface (including unused vertices) is appende
 to the target and the source surface is removed. Neither operation leaves an
 empty surface.
 
+On skeletal models every vertex keeps the joint influences of the vertex it
+came from, whichever surface that was and however surface indices shift; the
+status line and `model surfaces --json` (`skinProvenance`) report the kept
+weights. A surface cannot mix skinned and unskinned vertices: joining an
+unskinned surface into a skinned one, or moving skinned faces into an unskinned
+surface, is refused until the unskinned surface is bound. The `model surfaces`
+listing marks each surface of a skeletal model skinned or not skinned, in its
+text lines and JSON (`skinned`), so you can see which one to bind first. See
+[skin weights through mesh edits](MODEL_SKIN_PROVENANCE.md).
+
 New or moved faces become the active selection for UV projection, material
 assignment, finishing or transforms. Duplicate selects all copied faces; Join
 selects the resulting whole surface when invoked from Surfaces mode, or all

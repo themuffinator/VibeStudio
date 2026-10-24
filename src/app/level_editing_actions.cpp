@@ -1,21 +1,29 @@
 // Editing tools the popular editors share and the Levels page adds to its
 // menus, context menu and command search: brush entities (Radiant's entity
-// menu, Hammer's Tie to Entity and Move to World), Radiant's region
+// menu, Hammer's Tie to Entity and Move to World, NetRadiant Custom's Move
+// Primitives to Entity and bobToolz's Explode Entity), Radiant's region
 // selections, Make Detail and Make Structural, VibeRadiant's Drop to Floor and
 // TrenchBroom's CSG Intersect. Each is one undo step from core/level_map.h,
 // and each has a `map` CLI command doing the same.
 
 #include "app/application_shell.h"
+#include "core/level_linked_extraction.h"
+#include "core/level_placement.h"
+#include "core/level_repeat.h"
 #include "app/map_viewport.h"
 #include "app/studio_actions.h"
 #include "app/model_viewport.h"
 #include "app/studio_icons.h"
 #include "core/entity_builtin_catalogue.h"
 #include "core/level_doom_align.h"
+#include "core/level_entity_create.h"
+#include "core/level_entity_ownership.h"
 #include "core/level_linked_groups.h"
 #include "core/level_scene.h"
 
 #include <QAction>
+#include <QClipboard>
+#include <QJsonDocument>
 #include <QCheckBox>
 #include <QComboBox>
 #include <QDialog>
@@ -33,10 +41,12 @@
 #include <QSet>
 #include <QSpinBox>
 #include <QStatusBar>
+#include <QTimer>
 
 #include <algorithm>
 #include <cmath>
 #include <numbers>
+#include <utility>
 
 namespace vibestudio {
 
@@ -101,7 +111,16 @@ QMenu* ApplicationShell::buildLevelBrushEntityMenu(QWidget* parent)
 	if (!m_lastTiedEntityClass.isEmpty() && !quick.contains(m_lastTiedEntityClass, Qt::CaseInsensitive)) {
 		quick.prepend(m_lastTiedEntityClass);
 	}
+	// A class the definitions describe has its own Create command, which the
+	// menu uses, so its entry shows and answers to the keys given to it.
+	const auto createCommand = [this](const QString& name) {
+		return m_commands ? m_commands->action(levelEntityCreateCommandId(name)) : nullptr;
+	};
 	for (const QString& name : std::as_const(quick)) {
+		if (QAction* create = createCommand(name)) {
+			menu->addAction(create);
+			continue;
+		}
 		QAction* make = menu->addAction(tr("Make %1").arg(name));
 		make->setObjectName(QStringLiteral("levelMake-") + name);
 		connect(make, &QAction::triggered, this, [this, name]() { tieLevelMapSelectionFromUi(name); });
@@ -127,6 +146,10 @@ QMenu* ApplicationShell::buildLevelBrushEntityMenu(QWidget* parent)
 				}
 				group = made;
 			}
+			if (QAction* create = createCommand(name)) {
+				group->addAction(create);
+				continue;
+			}
 			QAction* make = group->addAction(name);
 			connect(make, &QAction::triggered, this, [this, name]() { tieLevelMapSelectionFromUi(name); });
 		}
@@ -137,6 +160,14 @@ QMenu* ApplicationShell::buildLevelBrushEntityMenu(QWidget* parent)
 	}
 	if (QAction* world = m_commands ? m_commands->action(QStringLiteral("map.moveToWorld")) : nullptr) {
 		menu->addAction(world);
+	}
+	// Moving brushes between existing entities keeps the receiving entity's keys.
+	menu->addSeparator();
+	for (const auto& id : {QStringLiteral("map.movePrimitivesToEntity"), QStringLiteral("map.movePrimitivesToFirstEntity"),
+			 QStringLiteral("map.moveSelectedToWorld"), QStringLiteral("map.explodeEntity"), QStringLiteral("map.explodeEntityUnique")}) {
+		if (QAction* action = m_commands ? m_commands->action(id) : nullptr) {
+			menu->addAction(action);
+		}
 	}
 	return menu;
 }
@@ -158,47 +189,128 @@ void ApplicationShell::registerLevelEditingCommands()
 		};
 		m_commands->registerCommand(command);
 	};
+	add(QStringLiteral("map.repeat"), tr("Repeat Last Commands"),
+		tr("Replay the recorded object transforms and duplications on the current selection, using their original world pivots."),
+		QStringLiteral("refresh"), tr("Repeat"), [this]() {
+			LevelPlacementRequest request;
+			request.operation = LevelPlacementOperation::Repeat;
+			request.textures = {m_settings.levelTextureLock(), m_settings.levelAllowValve220()};
+			QString error;
+			if (!runLevelPlacementFromUi(request, &error)) { statusBar()->showMessage(error, 8000); return; }
+			setLevelComponentMode(0); setLevelMapClipMode(false);
+			refreshLevelMapWorkbench();
+			statusBar()->showMessage(tr("Repeated the object commands as one undo step. Save the map before building."), 7000);
+		});
+	add(QStringLiteral("map.clearRepeat"), tr("Clear Repeatable Commands"),
+		tr("Forget the recorded sequence without changing map contents or undo history."),
+		QStringLiteral("close"), tr("Repeat"), [this]() {
+			clearLevelMapRepeatCommands(&m_levelMapDocument);
+			refreshLevelMapWorkbench();
+			statusBar()->showMessage(tr("Repeatable commands cleared."), 5000);
+		});
+	add(QStringLiteral("map.copyRepeatRecipe"), tr("Copy Repeat Recipe"),
+		tr("Copy the recorded sequence as JSON for map repeat --recipe. It contains world transforms, without object identities."),
+		QStringLiteral("copy"), tr("Repeat"), [this]() {
+			QGuiApplication::clipboard()->setText(QString::fromUtf8(QJsonDocument(levelRepeatCommandsJson(m_levelMapDocument)).toJson()));
+			statusBar()->showMessage(tr("Repeat recipe copied. Save it as a JSON file for map repeat --recipe."), 7000);
+		});
 	add(QStringLiteral("map.replaceKeyValues"), tr("Replace Key Values…"),
 		tr("Find a value of one key across the map's entities, or the selected ones, and replace it, as one undo step."), QStringLiteral("search"),
 		tr("Keys"), [this]() { replaceLevelMapKeyValuesFromUi(); });
+	// NetRadiant Custom's entity colour commands (core/level_entity_colour.h).
+	add(QStringLiteral("map.setEntityColour"), tr("Set Entity Colour…"),
+		tr("Pick a colour and write it to the _color key of the selected entities and of the entities holding the selected brushes, "
+		   "as one undo step, as NetRadiant Custom's K does."),
+		QStringLiteral("palette"), tr("Keys"), [this]() { setLevelMapEntityColourFromUi(); });
+	add(QStringLiteral("map.normaliseEntityColour"), tr("Normalise Entity Colour"),
+		tr("Scale the last-selected entity's _color so its brightest channel is 1, black becoming white, and write it to every "
+		   "selected entity as one undo step."),
+		QStringLiteral("proportional"), tr("Keys"), [this]() { normaliseLevelMapEntityColourFromUi(); });
+	// TrenchBroom's linked groups and its Groups menu names (ActionManager.cpp
+	// at 4c756be1, GPL-3.0-or-later; names and behaviour only, see
+	// docs/CREDITS.md). Groups that share content are linked groups, together
+	// a link set; Create Linked Duplicate makes one.
 	const QString linked = tr("Linked Groups");
-	add(QStringLiteral("map.createLinkedCopy"), tr("Create Linked Copy"),
-		tr("Copy the selection's scene group beside itself and link the copies, as TrenchBroom's linked duplicates: an edit inside one "
-		   "is made to every copy, while moving a whole copy moves only that one."),
-		QStringLiteral("copy"), linked, [this]() { createLinkedLevelCopyFromUi(); });
-	add(QStringLiteral("map.selectLinkedCopies"), tr("Select Linked Copies"),
-		tr("Select every copy of the selection's linked groups."), QStringLiteral("select-box"), linked,
-		[this]() { selectLinkedLevelCopiesFromUi(); });
-	add(QStringLiteral("map.updateLinkedCopies"), tr("Update Linked Copies"),
-		tr("Make the other copies of the selection's linked group match it now, for copies changed in different ways at once."),
-		QStringLiteral("refresh"), linked, [this]() { updateLinkedLevelCopiesFromUi(); });
-	add(QStringLiteral("map.unlinkCopy"), tr("Separate Linked Copy"),
-		tr("Unlink the selection's group from its copies; it keeps its content."), QStringLiteral("close"), linked,
-		[this]() { unlinkLevelCopyFromUi(); });
+	add(QStringLiteral("map.createLinkedDuplicate"), tr("Create Linked Duplicate"),
+		tr("Duplicate the selected group beside itself and link the two: an edit inside either is made to the other, while moving, "
+		   "turning, mirroring or scaling a whole group changes only that one."),
+		QStringLiteral("copy"), linked, [this]() { createLinkedLevelDuplicateFromUi(); });
+	add(QStringLiteral("map.selectLinkedGroups"), tr("Select Linked Groups"),
+		tr("Select every group linked with the selected linked groups."), QStringLiteral("select-box"), linked,
+		[this]() { selectLinkedLevelGroupsFromUi(); });
+	add(QStringLiteral("map.updateLinkedGroups"), tr("Update Linked Groups"),
+		tr("Make the other groups linked with the selected one match it now, such as groups out of sync."),
+		QStringLiteral("refresh"), linked, [this]() { updateLinkedLevelGroupsFromUi(); });
+	add(QStringLiteral("map.separateLinkedGroups"), tr("Separate Linked Groups"),
+		tr("Take the selected linked groups out of their link set, keeping their content. Several from one set stay linked with each other."),
+		QStringLiteral("close"), linked, [this]() { separateLinkedLevelGroupsFromUi(); });
+	add(QStringLiteral("map.addProtectedProperty"), tr("Add Protected Property…"),
+		tr("Add or change an entity key without replacing the corresponding values in linked groups."),
+		QStringLiteral("key"), linked, [this]() { addProtectedEntityPropertyFromUi(); });
+	add(QStringLiteral("map.clearProtectedProperties"), tr("Clear Protected Properties"),
+		tr("Remove protection on the selected linked entities and restore existing values from unprotected linked groups."),
+		QStringLiteral("refresh"), linked, [this]() { clearProtectedEntityPropertiesFromUi(); });
+	add(QStringLiteral("map.extractLinkedGroups"), tr("Extract Linked Groups"),
+		tr("Move the selected contents of the open linked group, and their counterparts in every group linked with it, into a new set of "
+		   "linked groups."),
+		QStringLiteral("group"), linked, [this]() {
+			LevelPlacementRequest request;
+			request.operation = LevelPlacementOperation::ExtractLinkedGroups;
+			QString error;
+			if (!runLevelPlacementFromUi(request, &error)) { statusBar()->showMessage(error, 8000); return; }
+			setLevelComponentMode(0); setLevelMapClipMode(false);
+			refreshLevelMapWorkbench();
+			statusBar()->showMessage(tr("Extracted the selection into a new set of linked groups. Undo restores the original groups and editing context."), 7000);
+		});
 	const QString entities = tr("Brush Entities");
 	add(QStringLiteral("map.tieToEntity"), tr("Make Brush Entity…"),
 		tr("Make the selected brushes into a brush entity of a class you choose, as Radiant's entity menu and Hammer's Tie to Entity do."),
 		QStringLiteral("entity"), entities, [this]() { tieLevelMapSelectionFromUi(QString()); });
+	// TrenchBroom's Create <class> commands, one per class, are registered
+	// with the definitions (level_entity_create_actions.cpp); this types one.
+	add(QStringLiteral("map.createEntity"), tr("Create Entity…"),
+		tr("Type a class of the loaded entity definitions and create it as TrenchBroom's Create commands do: a point class at the pointer or "
+		   "the middle of the view, a brush class from the selected brushes."),
+		QStringLiteral("entity"), entities, [this]() { showLevelEntityCreatePicker(); });
 	add(QStringLiteral("map.moveToWorld"), tr("Move to World"),
 		tr("Give the selected brush entities' brushes back to worldspawn; the entities and their keys go."), QStringLiteral("map"), entities,
 		[this]() { moveLevelMapSelectionToWorldFromUi(); });
+	// NetRadiant Custom's entity menu and bobToolz (core/level_entity_ownership.h).
+	add(QStringLiteral("map.movePrimitivesToEntity"), tr("Move Primitives to Entity"),
+		tr("Move the selected brushes and patches into the brush entity of the item selected last, which keeps its keys; entities left "
+		   "empty go, as NetRadiant Custom's Move Primitives to Entity does."),
+		QStringLiteral("entity"), entities, [this]() { moveLevelMapPrimitivesToEntityFromUi(true); });
+	add(QStringLiteral("map.movePrimitivesToFirstEntity"), tr("Move Primitives to First Entity"),
+		tr("Move the selected brushes and patches into the brush entity of the item selected first, which keeps its keys; entities left empty go."),
+		QStringLiteral("entity"), entities, [this]() { moveLevelMapPrimitivesToEntityFromUi(false); });
+	add(QStringLiteral("map.moveSelectedToWorld"), tr("Move Selected to World"),
+		tr("Give only the selected brushes and patches back to worldspawn; their entities keep the rest and their keys, and go once empty."),
+		QStringLiteral("map"), entities, [this]() { moveLevelMapSelectedPrimitivesToWorldFromUi(); });
+	add(QStringLiteral("map.explodeEntity"), tr("Explode Entity"),
+		tr("Give every brush and patch of the selected brush entities an entity of its own with identical keys, as bobToolz's Explode Entity does."),
+		QStringLiteral("extract"), entities, [this]() { explodeLevelMapEntitiesFromUi(false); });
+	add(QStringLiteral("map.explodeEntityUnique"), tr("Explode Entity, Unique Names"),
+		tr("Explode the selected brush entities and give each new piece its own targetname, so triggers still fire only the original."),
+		QStringLiteral("extract"), entities, [this]() { explodeLevelMapEntitiesFromUi(true); });
 	const QString region = tr("Select by Region");
-	add(QStringLiteral("map.selectInside"), tr("Select Inside"), tr("Select what lies wholly inside the selection's bounds."), QStringLiteral("select-box"),
+	add(QStringLiteral("map.selectInside"), tr("Select Inside"), tr("Select inside profile-specific volumes. TB and NRC remove the source selection in one undo step."), QStringLiteral("select-box"),
 		region, [this]() { selectLevelMapRegionFromUi(LevelMapRegionSelection::Inside); });
-	add(QStringLiteral("map.selectTouching"), tr("Select Touching"), tr("Select what touches or overlaps the selection's bounds."),
+	add(QStringLiteral("map.selectTouching"), tr("Select Touching"), tr("Select touching profile-specific volumes. TB removes source brushes; NRC adds matches and retains the sources."),
 		QStringLiteral("select-box"), region, [this]() { selectLevelMapRegionFromUi(LevelMapRegionSelection::Touching); });
 	add(QStringLiteral("map.selectCompleteTall"), tr("Select Complete Tall"),
-		tr("Select what stands wholly within the selection's footprint in the active 2D view, at any height."), QStringLiteral("select-box"), region,
+		tr("Select objects inside projected volumes in the active 2D view. TB and NRC remove the source selection."), QStringLiteral("select-box"), region,
 		[this]() { selectLevelMapRegionFromUi(LevelMapRegionSelection::CompleteTall); });
 	add(QStringLiteral("map.selectPartialTall"), tr("Select Partial Tall"),
-		tr("Select what overlaps the selection's footprint in the active 2D view, at any height."), QStringLiteral("select-box"), region,
+		tr("Select objects overlapping projected volumes. TB removes source brushes; NRC retains the sources."), QStringLiteral("select-box"), region,
 		[this]() { selectLevelMapRegionFromUi(LevelMapRegionSelection::PartialTall); });
 	const QString geometry = tr("Brush Tools");
 	add(QStringLiteral("map.makeDetail"), tr("Make Detail"),
 		tr("Make the selected brushes detail: the detail content flag in Quake II and III, func_detail in Quake."), QStringLiteral("cube"), geometry,
 		[this]() { setLevelMapDetailFromUi(true); });
-	add(QStringLiteral("map.makeStructural"), tr("Make Structural"), tr("Make the selected detail brushes structural again."), QStringLiteral("cube"),
-		geometry, [this]() { setLevelMapDetailFromUi(false); });
+	add(QStringLiteral("map.makeStructural"), tr("Make Structural"),
+		tr("Make the selected detail brushes structural again. In the TrenchBroom profile the selected brushes also leave brush entities for the "
+		   "world or the current group, as TrenchBroom's Make Structural does."),
+		QStringLiteral("cube"), geometry, [this]() { setLevelMapDetailFromUi(false); });
 	add(QStringLiteral("map.intersect"), tr("CSG Intersect"),
 		tr("Replace the selected brushes with the one brush where they all overlap, as TrenchBroom's CSG Intersect does."), QStringLiteral("merge"),
 		geometry, [this]() { intersectLevelMapSelectionFromUi(); });
@@ -303,6 +415,8 @@ void ApplicationShell::registerLevelEditingCommands()
 	add(QStringLiteral("map.regionCompile"), tr("Compile Region"),
 		tr("Write the region beside the map as a sealed map and compile it with the chosen profile."), QStringLiteral("play"), regions,
 		[this]() { compileLevelRegion(); });
+	// NetRadiant Custom's layer commands (level_scene_layer_actions.cpp).
+	registerLevelSceneLayerCommands();
 }
 
 void ApplicationShell::shiftLevelCameraSurfaceFromUi(int delta, bool light)
@@ -497,6 +611,14 @@ void ApplicationShell::makeLevelSectorFromViewport(const QPointF& point)
 void ApplicationShell::shearLevelMapSelectionFromViewport(int axis, int along, double factor, double anchor)
 {
 	QString error;
+	if (levelComponentsActive()) {
+		LevelComponentTransformRequest request; request.operation = LevelComponentTransformKind::Shear;
+		request.axis = axis; request.along = along; request.amount = factor; request.pivot = {0,0,0,true};
+		if (along == 0) { request.pivot.x = anchor; } else if (along == 1) { request.pivot.y = anchor; } else { request.pivot.z = anchor; }
+		applyLevelComponentUvSettings(&request);
+		if (!applyLevelComponentTransform(request,&error)) { statusBar()->showMessage(error,6000); }
+		return;
+	}
 	const LevelMapTextureLockOptions textures {m_settings.levelTextureLock(), m_settings.levelAllowValve220()};
 	bool unlocked = false;
 	if (!shearLevelMapSelectionAbout(&m_levelMapDocument, axis, along, factor, anchor, textures, &error)) {
@@ -727,11 +849,15 @@ void ApplicationShell::nudgeLevelCameraTextureFromUi(int dx, int dy)
 
 QString ApplicationShell::levelSelectionSceneGroup() const
 {
-	// The one group every selected object belongs to, directly or through the
-	// entity that owns it.
+	// The one closed group the selection holds whole, as TrenchBroom selects
+	// groups; else the one group every selected object belongs to, directly or
+	// through the entity that owns it, unless that group is open for editing.
 	const LevelMapDocument& document = m_levelMapDocument;
 	if (document.selection.isEmpty() || document.format == LevelMapFormat::DoomWad) {
 		return {};
+	}
+	if (const QStringList whole = levelSelectedSceneGroups(document); !whole.isEmpty()) {
+		return whole.size() == 1 ? whole.first() : QString();
 	}
 	QString group;
 	for (const LevelMapSelectionRef& ref : document.selection) {
@@ -758,7 +884,8 @@ QString ApplicationShell::levelSelectionSceneGroup() const
 			}
 		}
 		const LevelSceneNode* node = levelSceneNode(document.scene, holder);
-		if (!node || node->kind != LevelSceneNodeKind::Group || (!group.isEmpty() && holder != group)) {
+		if (!node || node->kind != LevelSceneNodeKind::Group || (!group.isEmpty() && holder != group)
+			|| document.openSceneGroups.contains(holder)) {
 			return {};
 		}
 		group = holder;
@@ -766,83 +893,96 @@ QString ApplicationShell::levelSelectionSceneGroup() const
 	return group;
 }
 
-void ApplicationShell::createLinkedLevelCopyFromUi()
+void ApplicationShell::createLinkedLevelDuplicateFromUi()
 {
 	const QString group = levelSelectionSceneGroup();
 	if (group.isEmpty()) {
-		statusBar()->showMessage(tr("Select objects of one scene group first; the Outliner's Scene section makes and fills groups."));
+		statusBar()->showMessage(tr("Select one closed group first; the Outliner's Scene section makes and fills groups."));
 		return;
 	}
-	const LevelMapVec3 offset = levelLinkedCopyOffset(m_levelMapDocument, group);
+	const QString sourceName = levelSceneNode(m_levelMapDocument.scene, group) ? levelSceneNode(m_levelMapDocument.scene, group)->name : group;
+	const LevelMapVec3 offset = levelLinkedDuplicateOffset(m_levelMapDocument, group);
 	QString created;
 	QString error;
 	if (!createLinkedLevelGroup(&m_levelMapDocument, group, offset, &created, &error)) {
-		statusBar()->showMessage(tr("Could not make a linked copy: %1").arg(error), 5000);
+		statusBar()->showMessage(tr("Could not create a linked duplicate: %1").arg(error), 5000);
 		return;
 	}
 	const LevelSceneNode* copy = levelSceneNode(m_levelMapDocument.scene, created);
-	recordActivity(tr("Linked copy made"), copy ? copy->name : created, QStringLiteral("level-map"), OperationState::Warning, tr("Unsaved map edit"));
+	const QString name = copy ? copy->name : created;
+	recordActivity(tr("Linked duplicate created"), name, QStringLiteral("level-map"), OperationState::Warning, tr("Unsaved map edit"));
 	refreshLevelMapWorkbench();
-	statusBar()->showMessage(tr("%1 is a linked copy %2 units along x; edits inside either reach both.").arg(copy ? copy->name : created).arg(offset.x),
-		5000);
+	statusBar()->showMessage(
+		tr("%1 is linked with %2, %3 units along x: an edit inside either is made to both.").arg(name, sourceName).arg(offset.x), 5000);
 }
 
-void ApplicationShell::selectLinkedLevelCopiesFromUi()
+void ApplicationShell::selectLinkedLevelGroupsFromUi()
 {
-	QVector<LevelMapSelectionRef> members;
-	int copies = 0;
-	QSet<QString> seen;
-	for (const QString& group : levelLinkedGroupsOfSelection(m_levelMapDocument)) {
+	const QStringList groups = levelLinkedGroupsOfSelection(m_levelMapDocument);
+	QSet<QString> members;
+	for (const QString& group : groups) {
 		for (const QString& id : levelLinkedGroupNodes(m_levelMapDocument.scene, group)) {
-			if (!seen.contains(id)) {
-				seen.insert(id);
-				members += levelSceneSelection(m_levelMapDocument, id);
-				++copies;
-			}
+			members.insert(id);
 		}
 	}
-	if (members.isEmpty()) {
-		statusBar()->showMessage(tr("Select part of a linked group first."));
+	const QVector<LevelMapSelectionRef> selection = levelLinkedGroupsSelection(m_levelMapDocument, groups);
+	if (selection.isEmpty()) {
+		statusBar()->showMessage(tr("Select a linked group first."));
 		return;
 	}
-	setLevelMapSelection(&m_levelMapDocument, members);
+	setLevelMapUserSelection(selection);
 	refreshLevelMapWorkbench();
-	statusBar()->showMessage(tr("Selected %n linked copies.", nullptr, copies), 3000);
+	statusBar()->showMessage(tr("Selected %n linked group(s).", nullptr, static_cast<int>(members.size())), 3000);
 }
 
-void ApplicationShell::updateLinkedLevelCopiesFromUi()
+void ApplicationShell::updateLinkedLevelGroupsFromUi()
 {
 	const QStringList groups = levelLinkedGroupsOfSelection(m_levelMapDocument);
 	if (groups.size() != 1) {
-		statusBar()->showMessage(groups.isEmpty() ? tr("Select part of a linked group first.")
-												  : tr("Select part of one linked copy: the one the others should match."));
+		statusBar()->showMessage(groups.isEmpty() ? tr("Select a linked group first.")
+												  : tr("Select one linked group: the one the others should match."));
 		return;
 	}
 	int updated = 0;
 	QString error;
 	if (!updateLinkedLevelGroups(&m_levelMapDocument, groups.first(), &updated, &error)) {
-		statusBar()->showMessage(tr("Could not update the linked copies: %1").arg(error), 5000);
+		statusBar()->showMessage(tr("Could not update the linked groups: %1").arg(error), 5000);
 		return;
 	}
-	recordActivity(tr("Linked copies updated"), groups.first(), QStringLiteral("level-map"), OperationState::Warning, tr("Unsaved map edit"));
+	const LevelSceneNode* node = levelSceneNode(m_levelMapDocument.scene, groups.first());
+	recordActivity(tr("Linked groups updated"), node ? node->name : groups.first(), QStringLiteral("level-map"), OperationState::Warning,
+		tr("Unsaved map edit"));
 	refreshLevelMapWorkbench();
-	statusBar()->showMessage(tr("Updated %n linked copies to match.", nullptr, updated), 3000);
+	statusBar()->showMessage(tr("Updated %n linked group(s) to match.", nullptr, updated), 3000);
 }
 
-void ApplicationShell::unlinkLevelCopyFromUi()
+void ApplicationShell::separateLinkedLevelGroupsFromUi()
 {
 	const QStringList groups = levelLinkedGroupsOfSelection(m_levelMapDocument);
-	if (groups.size() != 1) {
-		statusBar()->showMessage(groups.isEmpty() ? tr("Select part of a linked group first.") : tr("Select part of one linked copy to separate."));
+	if (groups.isEmpty()) {
+		statusBar()->showMessage(tr("Select the linked groups to separate first."));
 		return;
 	}
+	int separated = 0;
 	QString error;
-	if (!unlinkLevelGroup(&m_levelMapDocument, groups.first(), &error)) {
-		statusBar()->showMessage(tr("Could not separate the copy: %1").arg(error), 5000);
+	if (!separateLinkedLevelGroups(&m_levelMapDocument, groups, &separated, &error)) {
+		statusBar()->showMessage(tr("Could not separate the linked groups: %1").arg(error), 5000);
 		return;
 	}
 	refreshLevelMapWorkbench();
-	statusBar()->showMessage(tr("The copy is separate now; edits to it stay with it."), 3000);
+	statusBar()->showMessage(tr("Separated %n linked group(s) from the rest of their link set.", nullptr, separated), 4000);
+}
+
+void ApplicationShell::showLevelLinkedGroupNotices()
+{
+	if (m_levelMapDocument.linkedGroupNotices.isEmpty()) {
+		return;
+	}
+	const QStringList notices = std::exchange(m_levelMapDocument.linkedGroupNotices, {});
+	recordActivity(tr("Linked groups out of sync"), notices.join(QLatin1Char('\n')), QStringLiteral("level-map"), OperationState::Warning,
+		tr("Unsaved map edit"), notices);
+	// After the command's own status message, which would hide it.
+	QTimer::singleShot(0, this, [this, text = notices.join(QLatin1Char(' '))] { statusBar()->showMessage(text, 12000); });
 }
 
 void ApplicationShell::replaceLevelMapKeyValuesFromUi()
@@ -931,6 +1071,7 @@ void ApplicationShell::replaceLevelMapKeyValuesFromUi()
 
 void ApplicationShell::shearLevelMapSelectionFromUi()
 {
+	if (levelComponentsActive()) { transformLevelComponentsFromUi(3); return; }
 	if (m_levelMapDocument.selection.isEmpty() || !m_levelMapViewport) {
 		statusBar()->showMessage(tr("Select objects to shear."));
 		return;
@@ -1113,6 +1254,12 @@ void ApplicationShell::refreshLevelEditingCommands()
 			}
 		} else if (ref.kind == LevelMapSelectionKind::QuakePatch) {
 			brushes = true;
+			for (const LevelMapPatch& patch : document.patches) {
+				if (patch.id == ref.objectId) {
+					ownedGeometry = ownedGeometry || patch.entityId != world;
+					break;
+				}
+			}
 		} else if (ref.kind == LevelMapSelectionKind::Entity && ref.objectId != world) {
 			if (owners.contains(ref.objectId)) {
 				brushes = true;
@@ -1126,20 +1273,33 @@ void ApplicationShell::refreshLevelEditingCommands()
 	const bool hasSelection = !document.selection.isEmpty();
 	m_commands->setEnabled(QStringLiteral("map.tieToEntity"), textMap && brushes);
 	m_commands->setEnabled(QStringLiteral("map.moveToWorld"), textMap && ownedGeometry);
-	for (const auto& id : {QStringLiteral("map.selectInside"), QStringLiteral("map.selectTouching"), QStringLiteral("map.selectCompleteTall"),
-			 QStringLiteral("map.selectPartialTall")}) {
-		m_commands->setEnabled(id, m_levelMapDocument.format != LevelMapFormat::Unknown && hasSelection);
-	}
+	m_commands->setEnabled(QStringLiteral("map.moveSelectedToWorld"), textMap && ownedGeometry);
+	m_commands->setEnabled(QStringLiteral("map.movePrimitivesToEntity"), levelMapSelectionMovableToEntity(document, LevelPrimitiveTarget::LastSelected));
+	m_commands->setEnabled(QStringLiteral("map.movePrimitivesToFirstEntity"), levelMapSelectionMovableToEntity(document, LevelPrimitiveTarget::FirstSelected));
+	const bool explodable = levelMapSelectionExplodable(document);
+	m_commands->setEnabled(QStringLiteral("map.explodeEntity"), explodable);
+	m_commands->setEnabled(QStringLiteral("map.explodeEntityUnique"), explodable);
+	refreshLevelRegionSelectionCommands();
+	refreshLevelObjectSelectionCommands();
+	refreshLevelEntityColourCommands();
+	refreshLevelEntityCreateCommands();
+	refreshLevelSceneLayerCommands();
+	refreshLevelVisibilityCommands();
 	m_commands->setEnabled(QStringLiteral("map.makeDetail"), textMap && brushes);
 	const bool alignable = document.format != LevelMapFormat::Unknown && document.selection.size() >= 2;
 	m_commands->setEnabled(QStringLiteral("map.shearSelection"), document.format != LevelMapFormat::Unknown && hasSelection);
 	m_commands->setEnabled(QStringLiteral("map.shearTool"), document.format != LevelMapFormat::Unknown);
 	m_commands->setEnabled(QStringLiteral("map.replaceKeyValues"), textMap);
-	const bool inLink = textMap && !levelLinkedGroupsOfSelection(document).isEmpty();
-	m_commands->setEnabled(QStringLiteral("map.createLinkedCopy"), textMap && !levelSelectionSceneGroup().isEmpty());
-	m_commands->setEnabled(QStringLiteral("map.selectLinkedCopies"), inLink);
-	m_commands->setEnabled(QStringLiteral("map.updateLinkedCopies"), inLink);
-	m_commands->setEnabled(QStringLiteral("map.unlinkCopy"), inLink);
+	const QStringList reached = textMap ? levelLinkedGroupsOfSelection(document) : QStringList();
+	m_commands->setEnabled(QStringLiteral("map.createLinkedDuplicate"), textMap && !levelSelectionSceneGroup().isEmpty());
+	m_commands->setEnabled(QStringLiteral("map.selectLinkedGroups"), !reached.isEmpty());
+	m_commands->setEnabled(QStringLiteral("map.updateLinkedGroups"), reached.size() == 1);
+	m_commands->setEnabled(QStringLiteral("map.separateLinkedGroups"), !reached.isEmpty());
+	refreshLevelProtectedPropertyCommands();
+	m_commands->setEnabled(QStringLiteral("map.extractLinkedGroups"), canExtractLevelLinkedGroups(document));
+	m_commands->setEnabled(QStringLiteral("map.repeat"), canRepeatLevelMapCommands(document));
+	m_commands->setEnabled(QStringLiteral("map.clearRepeat"), !document.repeat.actions.isEmpty());
+	m_commands->setEnabled(QStringLiteral("map.copyRepeatRecipe"), !document.repeat.actions.isEmpty());
 	m_commands->setEnabled(QStringLiteral("map.curveLinedefs"), levelMapSelectionHasLinedefs());
 	m_commands->setEnabled(QStringLiteral("map.alignWallTextures"), levelMapDoomEditable() && levelMapSelectionHasLinedefs());
 	m_commands->setEnabled(QStringLiteral("map.makeSectorMode"), levelMapDoomEditable());
@@ -1213,36 +1373,101 @@ void ApplicationShell::moveLevelMapSelectionToWorldFromUi()
 	statusBar()->showMessage(tr("Moved %n brush(es) to the world; their entities went with their keys.", nullptr, moved), 6000);
 }
 
-void ApplicationShell::selectLevelMapRegionFromUi(LevelMapRegionSelection mode)
+void ApplicationShell::moveLevelMapPrimitivesToEntityFromUi(bool lastSelected)
 {
-	// The tall selections look down the active 2D view.
-	const int projection = m_levelMapViewport ? static_cast<int>(m_levelMapViewport->projection()) : 0;
-	const int axis = projection == 0 ? 2 : (projection == 1 ? 1 : 0);
+	LevelPrimitiveMoveRequest request;
+	request.target = lastSelected ? LevelPrimitiveTarget::LastSelected : LevelPrimitiveTarget::FirstSelected;
+	LevelPrimitiveMoveReport report;
 	QString error;
-	const QVector<LevelMapSelectionRef> found = levelMapRegionSelection(m_levelMapDocument, mode, axis, &error);
-	if (!error.isEmpty()) {
-		statusBar()->showMessage(error, 5000);
+	if (!moveLevelMapSelectionToEntity(&m_levelMapDocument, request, &report, &error)) {
+		statusBar()->showMessage(tr("Could not move the brushes and patches: %1").arg(error), 6000);
 		return;
 	}
-	int leftHidden = 0;
-	const QVector<LevelMapSelectionRef> objects = visibleLevelMapObjects(found, &leftHidden);
-	if (objects.isEmpty()) {
-		statusBar()->showMessage(leftHidden > 0 ? tr("Only hidden objects are there; Show All brings them back.") : tr("Nothing else is there."), 5000);
-		return;
-	}
-	if (!setLevelMapSelection(&m_levelMapDocument, objects, &error)) {
-		statusBar()->showMessage(error, 5000);
-		return;
-	}
+	const int moved = report.movedBrushes + report.movedPatches;
+	const QString target = QStringLiteral("entity:%1 %2").arg(report.targetEntity).arg(report.targetClass);
+	recordActivity(tr("Brushes and patches moved to an entity"), target, QStringLiteral("level-map"), OperationState::Warning, tr("Unsaved map edit"));
 	refreshLevelMapWorkbench();
-	showLevelSelectionMessage(leftHidden > 0 ? tr("Selected %n object(s); hidden ones were left out.", nullptr, static_cast<int>(objects.size()))
-											 : tr("Selected %n object(s).", nullptr, static_cast<int>(objects.size())));
+	QString message = tr("Moved %n brush(es) and patch(es) into %1; it kept its keys.", nullptr, moved).arg(target);
+	if (!report.removedEntities.isEmpty()) {
+		const int removed = static_cast<int>(report.removedEntities.size());
+		message += QLatin1Char(' ') + tr("%n emptied entit(y)(ies) went.", nullptr, removed);
+	}
+	if (report.keptHidden > 0) {
+		message += QLatin1Char(' ') + tr("%n hidden brush(es) or patch(es) stayed where they were.", nullptr, report.keptHidden);
+	}
+	statusBar()->showMessage(message, 7000);
+}
+
+void ApplicationShell::moveLevelMapSelectedPrimitivesToWorldFromUi()
+{
+	LevelPrimitiveMoveReport report;
+	QString error;
+	if (!moveLevelMapSelectedPrimitivesToWorld(&m_levelMapDocument, &report, &error)) {
+		statusBar()->showMessage(tr("Could not move to the world: %1").arg(error), 6000);
+		return;
+	}
+	const int moved = report.movedBrushes + report.movedPatches;
+	recordActivity(tr("Selected brushes moved to the world"), tr("%n brush(es) and patch(es)", nullptr, moved), QStringLiteral("level-map"),
+		OperationState::Warning, tr("Unsaved map edit"));
+	refreshLevelMapWorkbench();
+	QString message = tr("Moved %n selected brush(es) and patch(es) to the world; their entities kept their keys.", nullptr, moved);
+	if (!report.removedEntities.isEmpty()) {
+		const int removed = static_cast<int>(report.removedEntities.size());
+		message += QLatin1Char(' ') + tr("%n emptied entit(y)(ies) went.", nullptr, removed);
+	}
+	statusBar()->showMessage(message, 7000);
+}
+
+void ApplicationShell::explodeLevelMapEntitiesFromUi(bool renameTargetNames)
+{
+	LevelExplodeRequest request;
+	request.renameTargetNames = renameTargetNames;
+	LevelExplodeReport report;
+	QString error;
+	if (!explodeLevelMapSelectionEntities(&m_levelMapDocument, request, &report, &error)) {
+		statusBar()->showMessage(tr("Could not explode the entity: %1").arg(error), 6000);
+		return;
+	}
+	const int exploded = static_cast<int>(report.explodedEntities.size());
+	const int created = static_cast<int>(report.createdEntities.size());
+	recordActivity(tr("Entities exploded"), tr("%n new entit(y)(ies)", nullptr, created), QStringLiteral("level-map"), OperationState::Warning,
+		tr("Unsaved map edit"));
+	refreshLevelMapWorkbench();
+	QString message = renameTargetNames
+		? tr("Exploded %n entit(y)(ies); each new piece has its own targetname.", nullptr, exploded)
+		: tr("Exploded %n entit(y)(ies); every piece keeps identical keys.", nullptr, exploded);
+	message += QLatin1Char(' ') + tr("%n new entit(y)(ies) are selected with the originals; Undo gathers them back.", nullptr, created);
+	if (report.keptHidden > 0) {
+		message += QLatin1Char(' ') + tr("%n hidden brush(es) or patch(es) stayed where they were.", nullptr, report.keptHidden);
+	}
+	statusBar()->showMessage(message, 7000);
 }
 
 void ApplicationShell::setLevelMapDetailFromUi(bool detail)
 {
 	int changed = 0;
 	QString error;
+	if (!detail) {
+		// The profile picks Make Structural's policy: TrenchBroom's also takes
+		// the brushes out of brush entities, into the world or current group.
+		const LevelStructuralPolicy policy =
+			m_levelControls.makeStructuralLeavesEntities ? LevelStructuralPolicy::LeaveEntities : LevelStructuralPolicy::DetailOnly;
+		LevelStructuralReport report;
+		if (!makeLevelMapSelectionStructural(&m_levelMapDocument, policy, &report, &error)) {
+			statusBar()->showMessage(error, 6000);
+			return;
+		}
+		recordActivity(tr("Brushes made structural"), tr("%n brush(es)", nullptr, report.changed), QStringLiteral("level-map"), OperationState::Warning,
+			tr("Unsaved map edit"));
+		refreshLevelMapWorkbench();
+		const int moved = report.movedToWorld;
+		statusBar()->showMessage(moved > 0 ? tr("Made %n brush(es) structural; %1 of them left their brush entities for the world. Undo restores both.",
+												 nullptr, report.changed)
+												 .arg(moved)
+										   : tr("Made %n brush(es) structural.", nullptr, report.changed),
+			6000);
+		return;
+	}
 	if (!setLevelMapSelectionDetail(&m_levelMapDocument, detail, &changed, &error)) {
 		statusBar()->showMessage(error, 6000);
 		return;
@@ -1356,7 +1581,7 @@ void ApplicationShell::placeLevelBrushEntity(const QString& className, const QPo
 	}
 	const QPointF point = viewPoint.x() < 0.0 ? QPointF(m_levelMapViewport->rect().center()) : viewPoint;
 	const LevelMapVec3 centre = m_levelMapViewport->worldPositionAt(point, levelMapHiddenAxisValue());
-	const double grid = m_levelMapGrid ? std::max(1, m_levelMapGrid->currentData().toInt()) : 16.0;
+	const double grid = levelMapGridUnits();
 	const double half = std::max(16.0, grid * 2.0);
 	const auto snap = [grid](double value) { return std::round(value / grid) * grid; };
 	const LevelMapVec3 mins {snap(centre.x) - half, snap(centre.y) - half, snap(centre.z) - half, true};

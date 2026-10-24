@@ -1,4 +1,5 @@
 #include "app/ui_primitives.h"
+#include "app/studio_accessibility.h"
 #include "app/studio_layout.h"
 #include "app/studio_theme.h"
 #include "app/wrapping_action_button.h"
@@ -449,9 +450,8 @@ void LoadingPane::refresh()
 		m_progress->setRange(0, m_progressValue.total);
 		m_progress->setValue(m_progressValue.current);
 		m_progress->setFormat(QCoreApplication::translate("VibeStudioUiPrimitives", "%1%").arg(operationProgressPercent(m_progressValue)));
-	} else if (busy && !m_reducedMotion) {
-		m_progress->setRange(0, 0);
-		m_progress->setFormat(stateName);
+	} else if (busy) {
+		setBusyProgress(m_progress, m_reducedMotion, stateName);
 	} else {
 		m_progress->setRange(0, 1);
 		m_progress->setValue(operationStateIsTerminal(m_state) ? 1 : 0);

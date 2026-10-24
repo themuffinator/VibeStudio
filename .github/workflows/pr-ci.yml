@@ -28,6 +28,16 @@ jobs:
         os: [windows-latest, macos-latest, ubuntu-latest]
 
     steps:
+      # The Linux build links every test program with the app library's debug
+      # information, which filled the runner's disk before linking finished
+      # ("No space left on device"). Remove preinstalled SDKs it never uses.
+      - name: Free Disk Space (Linux)
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          df -h /
+          sudo rm -rf /usr/local/lib/android /usr/share/dotnet /opt/ghc /usr/local/.ghcup /usr/share/swift /usr/local/share/boost /opt/hostedtoolcache/CodeQL
+          df -h /
+
       - name: Checkout
         uses: actions/checkout@v6
         with:

@@ -325,7 +325,7 @@ QByteArray exportModelDesign(const ModelDesign& design, const QString& format, Q
 }
 
 bool saveModelDesignBytes(const QString& path, const QByteArray& bytes, bool overwrite, QString* error, const QString& protectedSource,
-                          const ModelWorkControl& control)
+                          const ModelWorkControl& control, bool dryRun)
 {
 	if (error) {
 		error->clear();
@@ -343,7 +343,10 @@ bool saveModelDesignBytes(const QString& path, const QByteArray& bytes, bool ove
 		                       "VibeStudioModelDesign",
 		                       "The output exists or is a symbolic link; choose a new path or explicitly enable overwrite."));
 	}
-	return writeModelFile(target, bytes, error, control);
+	if (bytes.size() > modelFileByteLimit) {
+		return fail(error, QCoreApplication::translate("VibeStudioModelDesign", "The exported model exceeds the 64 MiB output limit."));
+	}
+	return dryRun ? validateModelWriteTarget(target, error, control) : writeModelFile(target, bytes, error, control);
 }
 
 bool loadModelDesign(const QString& path, ModelDesign* design, QString* error)
@@ -428,6 +431,65 @@ bool stageModelExport(const QByteArray& bytes, const QString& virtualPath, Packa
 	}
 	*staging = std::move(staged);
 	return true;
+}
+
+bool stageModelExports(const QVector<QPair<QString, QByteArray>>& files, PackageStagingModel* staging, LevelMapDocument* placeInMap,
+                       const LevelMapVec3& origin, bool replaceExisting, QString* error)
+{
+	if (error) {
+		error->clear();
+	}
+	if (files.isEmpty()) {
+		return fail(error, QCoreApplication::translate("VibeStudioModelDesign", "Prepare the model files before staging them."));
+	}
+	if (!staging || !staging->isLoaded() || staging->sourceFormat() == PackageArchiveFormat::Wad) {
+		return fail(error, QCoreApplication::translate("VibeStudioModelDesign", "Open a folder, PAK, ZIP, or PK3 before staging a model."));
+	}
+	// Each file is checked and staged on its own copy first, so the group
+	// below only commits files that stage.
+	auto staged = *staging;
+	if (!staged.beginOperationGroup(QCoreApplication::translate("VibeStudioModelDesign", "Stage model and detail levels"), error)) {
+		return false;
+	}
+	for (const auto& [path, bytes] : files) {
+		auto single = staged;
+		if (!stageModelExport(bytes, path, &single, nullptr, origin, replaceExisting, error)) {
+			staged.endOperationGroup(false);
+			return false;
+		}
+		staged = std::move(single);
+	}
+	if (!staged.endOperationGroup(true, error)) {
+		return false;
+	}
+	if (placeInMap && !placeLevelModel(placeInMap, normalizePackageVirtualPath(files.first().first, false).normalizedPath, origin, nullptr, error)) {
+		return false;
+	}
+	*staging = std::move(staged);
+	return true;
+}
+
+QHash<QString, QByteArray> readStagedModelFiles(const PackageStagingModel& staging, const QStringList& virtualPaths)
+{
+	QHash<QString, QByteArray> files;
+	if (!staging.isLoaded() || virtualPaths.isEmpty()) {
+		return files;
+	}
+	QSet<QString> wanted;
+	for (const auto& path : virtualPaths) {
+		wanted.insert(normalizePackageVirtualPath(path, false).normalizedPath.toLower());
+	}
+	for (const auto& entry : staging.plannedEntries()) {
+		if (entry.kind != PackageEntryKind::File || !wanted.contains(entry.virtualPath.toLower())) {
+			continue;
+		}
+		QByteArray bytes;
+		if (!staging.entryBytes(entry, &bytes, nullptr, modelFileByteLimit)) {
+			bytes.clear();
+		}
+		files.insert(entry.virtualPath, bytes);
+	}
+	return files;
 }
 
 } // namespace vibestudio

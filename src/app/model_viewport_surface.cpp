@@ -15,7 +15,7 @@ bool ModelViewport::materialGestureAt(const QPointF& point, Qt::MouseButton butt
 	const auto action = cameraMaterialGesture(m_controls, button, modifiers);
 	if (!m_materialGesturesEnabled || action == CameraMaterialGesture::None || !isEnabled() || !hasMesh()) { return false; }
 	if (m_looking || m_pointerDriving || m_pressButton != Qt::NoButton || m_surfaceStrokeActive || m_surfaceToolPressed || m_materialStrokeRaster
-		|| m_editMoveActive || m_dragStarted || isDrawingBrush() || isResizingSelection() || !m_heldKeys.isEmpty()) {
+		|| m_editMoveActive || m_dragStarted || isDrawingBrush() || isResizingSelection() || isMovingComponents() || !m_heldKeys.isEmpty()) {
 		Q_EMIT surfaceActionMessage(tr("Finish the current gesture or camera movement before sampling or painting a material."));
 		return false;
 	}
@@ -102,6 +102,8 @@ void ModelViewport::setMaterialStrokePreview(const ModelMesh& mesh, const QHash<
 
 void ModelViewport::setSurfaceTool(ModelViewportSurfaceTool tool)
 {
+	if (tool != ModelViewportSurfaceTool::None && m_clipMode) { setClipMode(false); }
+	if (tool != ModelViewportSurfaceTool::None && m_componentMode) { setComponentHandles(0,{},{}); Q_EMIT componentModeExitRequested(); }
 	setBrushDrawTool(false);
 	if (m_surfaceTool == tool) { return; }
 	finishMaterialStroke(false); clearMaterialStrokePreview();

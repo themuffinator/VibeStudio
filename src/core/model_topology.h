@@ -35,6 +35,9 @@ bool prepareModelSurfaceTopology(const ModelSurface &surface, ModelSurfaceTopolo
 // Lowest-index compatible anchors keep their positions, UVs and normals. All
 // poses must satisfy the distance bound. Collapsed faces are removed, but new
 // duplicate faces, inconsistent winding and nonmanifold edges are refused.
+// On skinned surfaces preserveSeams also keeps vertices with different joint
+// weights apart; without it, an anchor that absorbs other weights takes the
+// equal blend of every vertex welded into it (core/model_vertex_origins.h).
 // Input must already pass editable-model validation. Failure leaves it intact.
 bool weldModelSurface(ModelSurface *surface, const QSet<int> &vertices, double distance, bool preserveSeams, QVector<int> *vertexMap,
 					  QVector<int> *faceMap, QString *error, const ModelWorkControl &control = {});

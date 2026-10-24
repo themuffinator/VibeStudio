@@ -1,5 +1,7 @@
 #include "core/level_scene_locks.h"
 #include "core/level_scene.h"
+#include "core/level_linked_groups.h"
+#include "core/level_udmf.h"
 
 #include <QCoreApplication>
 #include <algorithm>
@@ -15,15 +17,21 @@ bool fail(QString* error, const QString& object) {
 }
 struct EditContext {
 	const LevelMapDocument* candidate = nullptr;
+	// The document the guarded edit began with, unchanged until it publishes.
+	const LevelMapDocument* original = nullptr;
 	QVector<QHash<QString, QString>> remaps;
+	std::optional<LevelMapDocument> contextBaseline;
+	QString contextError;
 };
 // Per-thread, per-document scopes avoid persisting a bypass flag in documents,
 // recovery or copied plans. Nested public editing services share one candidate.
 thread_local QVector<EditContext*> edits;
 struct EditScope {
 	EditContext context;
-	explicit EditScope(const LevelMapDocument* candidate) {
+	explicit EditScope(const LevelMapDocument* candidate, const LevelMapDocument* before) {
 		context.candidate = candidate;
+		context.original = before;
+		if (!before->openSceneGroups.isEmpty()) { context.contextBaseline = *before; }
 		edits << &context;
 	}
 	~EditScope() { edits.removeLast(); }
@@ -53,6 +61,30 @@ struct Protection {
 			   sides.isEmpty() && sectors.isEmpty();
 	}
 };
+void protectDoomBoundaries(const LevelMapDocument& document, Protection& result) {
+	if (!result.sectors.isEmpty() || !result.lines.isEmpty()) {
+		QSet<int> sectorSides;
+		for (const auto& side : document.doomSidedefs) {
+			if (result.sectors.contains(side.sector)) {
+				sectorSides.insert(side.id);
+				result.sides.insert(side.id);
+			}
+		}
+		for (const auto& line : document.doomLinedefs) {
+			if (result.lines.contains(line.id) || sectorSides.contains(line.frontSidedef) || sectorSides.contains(line.backSidedef)) {
+				result.lines.insert(line.id);
+				result.vertices.insert(line.startVertex);
+				result.vertices.insert(line.endVertex);
+				if (line.frontSidedef >= 0) {
+					result.sides.insert(line.frontSidedef);
+				}
+				if (line.backSidedef >= 0) {
+					result.sides.insert(line.backSidedef);
+				}
+			}
+		}
+	}
+}
 Protection protection(const LevelMapDocument& document) {
 	Protection result;
 	const auto nodes = levelSceneLockedNodes(document.scene);
@@ -97,28 +129,7 @@ Protection protection(const LevelMapDocument& document) {
 			}
 		}
 	}
-	if (!result.sectors.isEmpty() || !result.lines.isEmpty()) {
-		QSet<int> sectorSides;
-		for (const auto& side : document.doomSidedefs) {
-			if (result.sectors.contains(side.sector)) {
-				sectorSides.insert(side.id);
-				result.sides.insert(side.id);
-			}
-		}
-		for (const auto& line : document.doomLinedefs) {
-			if (result.lines.contains(line.id) || sectorSides.contains(line.frontSidedef) || sectorSides.contains(line.backSidedef)) {
-				result.lines.insert(line.id);
-				result.vertices.insert(line.startVertex);
-				result.vertices.insert(line.endVertex);
-				if (line.frontSidedef >= 0) {
-					result.sides.insert(line.frontSidedef);
-				}
-				if (line.backSidedef >= 0) {
-					result.sides.insert(line.backSidedef);
-				}
-			}
-		}
-	}
+	protectDoomBoundaries(document,result);
 	return result;
 }
 bool same(const LevelMapVec3& a, const LevelMapVec3& b) { return a.valid == b.valid && a.x == b.x && a.y == b.y && a.z == b.z; }
@@ -270,11 +281,8 @@ bool organizationUnchanged(const LevelMapDocument& before, const LevelSceneState
 	}
 	return true;
 }
-bool validateEdit(const LevelMapDocument& before, const LevelMapDocument& after, const EditContext& edit, QString* error) {
-	if (!organizationUnchanged(before, after.scene, edit, error)) {
-		return false;
-	}
-	auto objects = protection(before);
+bool validateRecords(const LevelMapDocument& before, const LevelMapDocument& after, Protection objects,
+	const EditContext& edit, QString* error, bool protectEntityChildren = true) {
 	if (objects.empty()) {
 		return true;
 	}
@@ -319,7 +327,7 @@ bool validateEdit(const LevelMapDocument& before, const LevelMapDocument& after,
 			if (owners.contains(entity.id) && entity.className.compare(QStringLiteral("worldspawn"), Qt::CaseInsensitive) != 0) {
 				objects.entities.insert(entity.id);
 			}
-			if (protectedEntities.contains(entity.id) && oldChildren.value(entity.id) != newChildren.value(entity.id)) {
+			if (protectEntityChildren && protectedEntities.contains(entity.id) && oldChildren.value(entity.id) != newChildren.value(entity.id)) {
 				return fail(error, ref("entity", entity.id));
 			}
 		}
@@ -365,6 +373,79 @@ bool validateEdit(const LevelMapDocument& before, const LevelMapDocument& after,
 		   unchanged(before.doomLinedefs, after.doomLinedefs, "linedef", objects.lines, edit, error) &&
 		   unchanged(before.doomSidedefs, after.doomSidedefs, "sidedef", objects.sides, edit, error) &&
 		   unchanged(before.doomSectors, after.doomSectors, "sector", objects.sectors, edit, error);
+}
+
+bool validateEdit(const LevelMapDocument& before, const LevelMapDocument& after, const EditContext& edit, QString* error)
+{
+	return organizationUnchanged(before,after.scene,edit,error) && validateRecords(before,after,protection(before),edit,error);
+}
+
+bool unchangedUdmfContext(const LevelMapDocument& before, const LevelMapDocument& after, const Protection& outside, const EditContext& edit)
+{
+	if (!before.doomUdmf) { return true; }
+	if (!after.doomUdmf || before.doomUdmf->nameSpace != after.doomUdmf->nameSpace) { return false; }
+	const auto propertiesEqual = [](const auto& a, const auto& b) {
+		if (a.size() != b.size()) { return false; }
+		for (qsizetype i = 0; i < a.size(); ++i) {
+			if (a[i].name != b[i].name || a[i].literal != b[i].literal || a[i].kind != b[i].kind) { return false; }
+		}
+		return true;
+	};
+	if (!propertiesEqual(before.doomUdmf->globals,after.doomUdmf->globals)) { return false; }
+	QHash<QString,const LevelUdmfBlock*> next;
+	for (const auto& block : after.doomUdmf->blocks) { next.insert(block.selector(),&block); }
+	QSet<QString> existing;
+	const auto known = [](const QString& type) { return type == "vertex" || type == "linedef" || type == "sidedef" || type == "sector" || type == "thing"; };
+	for (const auto& block : before.doomUdmf->blocks) {
+		const auto selector = mapped(block.selector(),edit); existing.insert(selector);
+		const bool protectedBlock = !known(block.type) || (block.type == "vertex" && outside.vertices.contains(block.index))
+			|| (block.type == "linedef" && outside.lines.contains(block.index)) || (block.type == "sidedef" && outside.sides.contains(block.index))
+			|| (block.type == "sector" && outside.sectors.contains(block.index)) || (block.type == "thing" && outside.things.contains(block.index));
+		if (protectedBlock) {
+			const auto* result = next.value(selector);
+			if (!result || !propertiesEqual(block.properties,result->properties)) { return false; }
+		}
+	}
+	for (const auto& block : after.doomUdmf->blocks) {
+		if (!known(block.type) && !existing.contains(block.selector())) { return false; }
+	}
+	return true;
+}
+
+bool validateContextEdit(const LevelMapDocument& before, const LevelMapDocument& after, const EditContext& edit, QString* error)
+{
+	if (before.openSceneGroups.isEmpty()) { return true; }
+	const auto context = levelSceneSelectionContext(before);
+	Protection outside;
+	const auto collect = [&](const auto& records, LevelMapSelectionKind kind, QSet<int>* protectedIds) {
+		for (const auto& item : records) {
+			if (!context.allowedObjects.contains(levelMapSelectionRefId({kind,item.id}))) { protectedIds->insert(item.id); }
+		}
+	};
+	collect(before.brushes,LevelMapSelectionKind::QuakeBrush,&outside.brushes);
+	collect(before.patches,LevelMapSelectionKind::QuakePatch,&outside.patches);
+	if (before.format != LevelMapFormat::DoomWad) { collect(before.entities,LevelMapSelectionKind::Entity,&outside.entities); }
+	collect(before.doomThings,LevelMapSelectionKind::DoomThing,&outside.things);
+	collect(before.doomVertices,LevelMapSelectionKind::DoomVertex,&outside.vertices);
+	collect(before.doomLinedefs,LevelMapSelectionKind::DoomLinedef,&outside.lines);
+	collect(before.doomSectors,LevelMapSelectionKind::DoomSector,&outside.sectors);
+	for (const auto& side : before.doomSidedefs) {
+		if (!context.allowedObjects.contains(levelMapSelectionRefId({LevelMapSelectionKind::DoomSector,side.sector}))) { outside.sides.insert(side.id); }
+	}
+	protectDoomBoundaries(before,outside);
+	QString problem;
+	if (!validateRecords(before,after,outside,edit,&problem,false) || !unchangedUdmfContext(before,after,outside,edit)) {
+		if (error) { *error = QCoreApplication::translate("LevelSceneContext","This edit would change objects outside the open group. Close the group before continuing."); } return false;
+	}
+	const auto next = levelSceneSelectionContext(after);
+	QSet<QString> existing;
+	for (const auto& object : levelSceneObjects(before)) { existing.insert(mapped(object,edit)); }
+	for (const auto& object : levelSceneObjects(after)) {
+		if (!existing.contains(object) && !next.allowedObjects.contains(object)) {
+			if (error) { *error = QCoreApplication::translate("LevelSceneContext","New objects must belong to the open group. Close it to create elsewhere."); } return false;
+		}
+	}
+	return true;
 }
 } // namespace
 
@@ -431,8 +512,15 @@ bool setLevelSceneLocked(LevelMapDocument* document, const QString& id, bool loc
 	return commitLevelSceneState(document, state, QCoreApplication::translate("LevelScene", "Change scene lock"), error);
 }
 
-bool validateLevelSceneOrganizationEdit(const LevelMapDocument& before, const LevelSceneState& after, QString* error) {
-	if (!organizationUnchanged(before, after, {}, error)) {
+bool validateLevelSceneOrganizationEdit(const LevelMapDocument& current, const LevelSceneState& after, QString* error) {
+	// Inside a guarded edit, locks are checked against the document the edit
+	// began with: records the edit made itself may pass through a locked
+	// group on their way, as a linked update's copies of a locked nested
+	// group's content do.
+	const auto found = std::find_if(edits.cbegin(), edits.cend(), [&current](const auto* edit) { return edit->candidate == &current; });
+	const EditContext* edit = found == edits.cend() ? nullptr : *found;
+	const LevelMapDocument& before = edit && edit->original ? *edit->original : current;
+	if (!organizationUnchanged(before, after, edit ? *edit : EditContext{}, error)) {
 		return false;
 	}
 	const auto protectedObjects = levelSceneLockedObjects(before);
@@ -452,7 +540,9 @@ bool validateLevelSceneOrganizationEdit(const LevelMapDocument& before, const Le
 	// Owned/shared records remain protected even when assigned outside the node
 	// that supplies their lock. A scene assignment cannot be used to escape it.
 	for (const auto& object : protectedObjects) {
-		if (oldMemberships.value(object) != newMemberships.value(object)) {
+		const auto now = edit ? mapped(object, *edit) : object;
+		if (oldMemberships.value(object) != newMemberships.value(now)
+			|| before.scene.protectedProperties.value(object) != after.protectedProperties.value(now)) {
 			return fail(error, object);
 		}
 	}
@@ -462,14 +552,16 @@ bool validateLevelSceneOrganizationEdit(const LevelMapDocument& before, const Le
 std::optional<bool> guardLevelSceneEdit(LevelMapDocument* document, QString* error,
 										const std::function<bool(LevelMapDocument*)>& operation) {
 	if (!document || std::any_of(edits.cbegin(), edits.cend(), [document](const auto* edit) { return edit->candidate == document; }) ||
-		std::none_of(document->scene.nodes.cbegin(), document->scene.nodes.cend(), [](const auto& node) { return node.locked; })) {
+		(document->openSceneGroups.isEmpty() && std::none_of(document->scene.nodes.cbegin(), document->scene.nodes.cend(), [](const auto& node) { return node.locked; }))) {
 		return std::nullopt;
 	}
 	LevelMapDocument candidate = *document;
-	EditScope scope(&candidate);
+	EditScope scope(&candidate,document);
 	if (!operation(&candidate) || !validateEdit(*document, candidate, scope.context, error)) {
 		return false;
 	}
+	if (!scope.context.contextError.isEmpty()) { if (error) { *error = scope.context.contextError; } return false; }
+	if (scope.context.contextBaseline && !validateContextEdit(*scope.context.contextBaseline,candidate,{},error)) { return false; }
 	*document = std::move(candidate);
 	return true;
 }
@@ -480,12 +572,23 @@ void recordLevelSceneEdit(const LevelMapDocument* document, const LevelMapUndoCo
 			if (!command.sceneObjectRemap.isEmpty()) {
 				edit->remaps << command.sceneObjectRemap;
 			}
+			if (edit->contextBaseline) {
+				if (edit->contextError.isEmpty() && !levelLinkedGroupPropagationActive(document)) {
+					EditContext step;
+					if (!command.sceneObjectRemap.isEmpty()) { step.remaps << command.sceneObjectRemap; }
+					validateContextEdit(*edit->contextBaseline,*document,step,&edit->contextError);
+				}
+				edit->contextBaseline = *document;
+			}
 			return;
 		}
 	}
 	// New authoring entry points must use the same boundary. Scene operations
 	// have their own hierarchy guard; undo/redo never enter pushUndo.
-	Q_ASSERT(command.commandKind == QStringLiteral("scene") ||
-			 std::none_of(document->scene.nodes.cbegin(), document->scene.nodes.cend(), [](const auto& node) { return node.locked; }));
+	// A paste may introduce the first locked nodes. The guard was decided from
+	// the original scene, so assert against that snapshot, not the new locks.
+	const auto& originalScene = command.hasSceneSnapshot ? command.sceneBefore : document->scene;
+	Q_ASSERT(command.commandKind == QStringLiteral("scene") || levelLinkedGroupPropagationActive(document) ||
+			 (document->openSceneGroups.isEmpty() && std::none_of(originalScene.nodes.cbegin(), originalScene.nodes.cend(), [](const auto& node) { return node.locked; })));
 }
 } // namespace vibestudio

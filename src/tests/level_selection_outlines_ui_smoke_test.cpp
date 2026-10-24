@@ -32,8 +32,14 @@ QImage render(MapViewport& view, int scale = 1)
 }
 bool highlighted(QRgb pixel, bool highContrast)
 {
-	return highContrast ? qRed(pixel) > 230 && qGreen(pixel) < 30 && qBlue(pixel) > 230
-		: qRed(pixel) > 240 && qGreen(pixel) > 185 && qGreen(pixel) < 225 && qBlue(pixel) < 110;
+	// High-visibility canvases use the active theme's selection colour. The
+	// dash-coverage assertion below remains independent of that colour choice.
+	if (highContrast) {
+		const auto selected = QApplication::palette().color(QPalette::Highlight);
+		return std::abs(qRed(pixel)-selected.red()) < 25 && std::abs(qGreen(pixel)-selected.green()) < 25
+			&& std::abs(qBlue(pixel)-selected.blue()) < 25;
+	}
+	return qRed(pixel) > 240 && qGreen(pixel) > 185 && qGreen(pixel) < 225 && qBlue(pixel) < 110;
 }
 int highlightedAlong(const QImage& image, MapViewport& view, QPointF a, QPointF b, bool highContrast)
 {

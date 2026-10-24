@@ -169,9 +169,12 @@ int main(int argc, char** argv) {
 	auto before = assembly;
 	expect(!snapLevelMapSelectionToGrid(&assembly, 16, {true, false}, &error) && error.contains("Unlock"), "locked snap refused", error);
 	unchanged(before, assembly);
-	expect(!duplicateLevelMapSelection(&assembly, 16, 0, 0, {true, false}, &error) && error.contains("Unlock"), "locked copies refused",
-		   error);
-	unchanged(before, assembly);
+	expect(duplicateLevelMapSelection(&assembly, 16, 0, 0, {true, false}, &error) && assembly.scene.nodes.size() == 2 &&
+		assembly.scene.nodes.last().locked && levelSceneNode(assembly.scene,node)->objects == QStringList{"brush:1"},
+		"complete locked group copies without changing protected source",error);
+	expect(undoLevelMapEdit(&assembly,&error),"undo locked group copy",error);
+	expect(serializeLevelMap(assembly).bytes == serializeLevelMap(before).bytes && assembly.scene == before.scene &&
+		assembly.selection == before.selection,"locked group copy undo restores source and selection");
 	const auto copied = levelMapSelectionText(assembly, &error);
 	expect(pasteLevelMapText(&assembly, copied, {128, 0, 0, true}, {true, false}, &error),
 		   "locked originals can be copied into unlocked destination", error);
@@ -184,8 +187,8 @@ int main(int argc, char** argv) {
 	setLevelSceneLocked(&assembly, node, false, &error);
 	selectLevelMapObject(&assembly, "brush:1");
 	expect(duplicateLevelMapSelection(&assembly, 64, 0, 0, {true, false}, &error), "unlocked duplicate", error);
-	expect(levelSceneMembership(assembly.scene, levelMapSelectionRefId(assembly.selection.first())) == node,
-		   "copies inherit scene membership");
+	expect(levelSceneMembership(assembly.scene, levelMapSelectionRefId(assembly.selection.first())) != node &&
+		levelSceneNode(assembly.scene,node)->objects == QStringList{"brush:1"}, "complete group copy has new membership");
 	for (double bad : {0.0, -1.0, std::numeric_limits<double>::quiet_NaN(), std::numeric_limits<double>::infinity()}) {
 		before = assembly;
 		expect(!snapLevelMapSelectionToGrid(&assembly, bad, {true, false}, &error), "invalid grid refused", error);

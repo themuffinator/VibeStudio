@@ -53,6 +53,16 @@ bool waitFor(const std::function<bool()>& ready)
 	}
 	return ready();
 }
+bool clickWhenEnabled(QPushButton* button, const char* message)
+{
+	// Shell commands such as Edit Sound stay disabled until the asynchronous
+	// browser preview confirms that the selected sound is editable.
+	const bool enabled = expect(button && waitFor([&] { return button->isEnabled(); }), message);
+	if (enabled) {
+		button->click();
+	}
+	return enabled;
+}
 bool finish(AudioEditorDialog* editor)
 {
 	return expect(waitFor([&] { return !editor->isBusy(); }),
@@ -279,7 +289,8 @@ int main(int argc, char** argv)
 	if (list && list->count()) {
 		list->setCurrentRow(0);
 	}
-	shell->findChild<QPushButton*>(QStringLiteral("openAudioEditor"))->click();
+	ok &= clickWhenEnabled(shell->findChild<QPushButton*>(QStringLiteral("openAudioEditor")),
+	                       "browser preview enables Edit Sound for the package sound");
 	auto* editor = shell->findChild<AudioEditorDialog*>();
 	ok &= expect(editor != nullptr, "shell opens editor");
 	if (editor) {
@@ -311,7 +322,8 @@ int main(int argc, char** argv)
 		             "handoff waits for explicit package save");
 		if (soundRow >= 0) {
 			list->setCurrentRow(soundRow);
-			shell->findChild<QPushButton*>(QStringLiteral("openAudioEditor"))->click();
+			ok &= clickWhenEnabled(shell->findChild<QPushButton*>(QStringLiteral("openAudioEditor")),
+			                       "browser preview enables Edit Sound for the pending placed sound");
 			ok &= finish(editor);
 			ok &= expect(editor->clip().channels == 1 && editor->clip().sampleRate == 22050 &&
 			                 editor->clip().frameCount() == 2205,

@@ -337,9 +337,16 @@ bool maximum()
 								}};
 	ok &= expect(!document.edit(edit, &error, cancelEdit) && cancelled && document.revisionFingerprint() == before && !document.canUndo(),
 				 "cancellation during track editing publishes neither poses nor history");
-	ok &= expect(document.edit(edit, &error) && document.historyBytes() >= 64 * 1024 * qint64(sizeof(ModelCollisionPose)) &&
-					 document.undo() && document.revisionFingerprint() == before,
-				 "history accounts for every pose and undoes maximum-track edit", error);
+	// History holds the edited track's 1024 poses and the small arrays the
+	// edit detached (frame records, the box list); the other 63 tracks are
+	// shared with the current state and are not counted again.
+	const bool edited = document.edit(edit, &error);
+	const auto history = document.historyBytes();
+	ok &= expect(edited && history >= 1024 * qint64(sizeof(ModelCollisionPose)) &&
+					 history < 8 * 1024 * qint64(sizeof(ModelCollisionPose)) && document.undo() &&
+					 document.revisionFingerprint() == before,
+				 "history accounts for every changed pose, shares unchanged tracks and undoes maximum-track edit",
+				 error + QStringLiteral(" history %1").arg(history));
 	return ok;
 }
 bool cli(const QString &binary, const QString &directory)

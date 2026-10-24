@@ -1,6 +1,7 @@
 #include "app/model_editor_dialog.h"
 #include "app/model_viewport.h"
 #include "app/wrapping_action_button.h"
+#include "app/wrapping_check_box.h"
 #include <QCheckBox>
 #include <QComboBox>
 #include <QCoreApplication>
@@ -42,7 +43,7 @@ void ModelEditorDialog::addCollisionControls(QFormLayout *form)
 		form->addRow(label, field);
 		return field;
 	};
-	m_collisionSummary = new QLabel;
+	m_collisionSummary = new LiveStatusLabel;
 	m_collisionSummary->setObjectName("meshCollisionSummary");
 	m_collisionSummary->setAccessibleName(Text::tr("Collision status"));
 	m_collisionSummary->setTextFormat(Qt::PlainText);
@@ -50,7 +51,7 @@ void ModelEditorDialog::addCollisionControls(QFormLayout *form)
 	m_collisionSummary->setMinimumWidth(0);
 	m_collisionSummary->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Preferred);
 	form->addRow(m_collisionSummary);
-	m_showCollision = new QCheckBox(Text::tr("Show collision boxes"));
+	m_showCollision = new WrappingCheckBox(Text::tr("Show collision boxes"));
 	m_showCollision->setObjectName("meshShowCollision");
 	m_showCollision->setAccessibleName(m_showCollision->text());
 	m_showCollision->setToolTip(
@@ -87,7 +88,7 @@ void ModelEditorDialog::addCollisionControls(QFormLayout *form)
 	axes(Text::tr("Size"), "meshCollisionSize", m_collisionSize, 1, 65536, 16);
 	axes(Text::tr("Rotation"), "meshCollisionRotation", m_collisionRotation, -36000, 36000, 0);
 	const auto button = [&](const char *name, const QString &label, ModelEditKind kind, bool selected) {
-		auto *control = new WrappingActionButton(label);
+		auto *control = new WrappingActionButton(label, 2);
 		control->setObjectName(QString::fromLatin1(name));
 		control->setAccessibleName(label);
 		form->addRow(control);
@@ -140,11 +141,11 @@ void ModelEditorDialog::addCollisionControls(QFormLayout *form)
 	m_collisionMaterial->setAccessibleDescription(m_collisionMaterial->toolTip());
 	form->addRow(Text::tr("Clip shader"), m_collisionMaterial);
 	axes(Text::tr("Map origin"), "meshCollisionMapOrigin", m_collisionOrigin, -32768, 32768, 0);
-	m_collisionExport = new QPushButton(Text::tr("Export Collision Map…"));
+	m_collisionExport = new WrappingActionButton(Text::tr("Export Collision Map…"), 2);
 	m_collisionExport->setObjectName("exportMeshCollision");
 	m_collisionExport->setAccessibleName(m_collisionExport->text());
 	form->addRow(m_collisionExport);
-	m_collisionPlace = new QPushButton(Text::tr("Place Collision in Level"));
+	m_collisionPlace = new WrappingActionButton(Text::tr("Place Collision in Level"), 2);
 	m_collisionPlace->setObjectName("placeMeshCollision");
 	m_collisionPlace->setAccessibleName(m_collisionPlace->text());
 	const auto handoffHelp = Text::tr(
@@ -307,7 +308,8 @@ bool ModelEditorDialog::exportCollision(const QString &path, const ModelCollisio
 		error, true);
 	if (ok)
 	{
-		m_status->setText(Text::tr("Exported %1 collision brushes to %2. %3").arg(result.brushCount).arg(path, result.notes.join(' ')));
+		m_status->setText(Text::tr("Exported %Ln collision brush(es) to %1. %2", nullptr, result.brushCount).arg(path, result.notes.join(' ')),
+						  LiveStatus::Result);
 	}
 	return ok;
 }
@@ -349,7 +351,8 @@ bool ModelEditorDialog::placeCollision(const ModelCollisionExport &request, QStr
 		return false;
 	}
 	m_status->setText(Text::tr("Placed static collision brushes as one level undo step. Save and compile the map. Later model changes "
-							   "require updating these brushes."));
+							   "require updating these brushes."),
+					  LiveStatus::Result);
 	return true;
 }
 void ModelEditorDialog::handoffCollision(bool place)
@@ -364,7 +367,7 @@ void ModelEditorDialog::handoffCollision(bool place)
 	{
 		if (!placeCollision(collisionRequest(), &error))
 		{
-			m_status->setText(error);
+			m_status->setText(error, LiveStatus::Problem);
 		}
 	}
 	else
@@ -372,7 +375,7 @@ void ModelEditorDialog::handoffCollision(bool place)
 		const auto path = QFileDialog::getSaveFileName(this, Text::tr("Export Collision Map"), {}, Text::tr("Quake-family map (*.map)"));
 		if (!path.isEmpty() && !exportCollision(path, collisionRequest(), true, &error))
 		{
-			m_status->setText(error);
+			m_status->setText(error, LiveStatus::Problem);
 		}
 	}
 }

@@ -2,6 +2,7 @@
 #include "core/model_collision.h"
 
 #include "core/model_document.h"
+#include "core/model_targets.h"
 
 #include <QCoreApplication>
 #include <QHash>
@@ -207,13 +208,6 @@ bool buildLayout(const ModelMesh &mesh, Layout *layout, ModelExportReport *repor
 		}
 		layout->vertices << StoredVertex{representative.source, representative.s, representative.t, shared};
 	}
-	if (layout->vertices.size() > 1024)
-	{
-		failure(error,
-				QCoreApplication::translate("VibeStudioModelMdl", "MDL exceeds 1024 vertices after sharing exact all-pose positions, "
-																  "normals and compatible UV seams. Reduce geometry or UV splits."));
-		return false;
-	}
 	for (const auto &triangle : surface.triangles)
 	{
 		layout->triangles << ModelTriangle{stored[sourceCorner[triangle.a]], stored[sourceCorner[triangle.b]],
@@ -239,7 +233,34 @@ std::array<double, 3> faceNormal(ModelVec3 a, ModelVec3 b, ModelVec3 c)
 }
 } // namespace
 
+bool modelMdlVertexCounts(const ModelMesh &mesh, int *stored, int *render, QString *error, const ModelWorkControl &control)
+{
+	if (!mesh.mdl.enabled || mesh.surfaces.size() != 1 || mesh.mdl.skinSize.width() < 1 || mesh.mdl.skinSize.height() < 1)
+	{
+		failure(error, QCoreApplication::translate("VibeStudioModelMdl", "The MDL layout needs MDL settings and one surface."));
+		return false;
+	}
+	ModelWorkProgress work(control, ModelWorkPhase::Validating, error);
+	ModelExportReport unused;
+	Layout layout;
+	if (!work.check() || !buildLayout(mesh, &layout, &unused, error, work))
+	{
+		return false;
+	}
+	*stored = int(layout.vertices.size());
+	*render = *stored + int(std::count_if(layout.vertices.cbegin(), layout.vertices.cend(), [](const StoredVertex &v) { return v.seam; }));
+	return true;
+}
+
 QByteArray exportModelMdl(const ModelMesh &mesh, QString *error, const ModelWorkControl &control, ModelExportReport *report)
+{
+	ModelTargetProfile original;
+	findModelTargetProfile(QStringLiteral("mdl"), {}, &original);
+	return exportModelMdl(mesh, original.limits, error, control, report);
+}
+
+QByteArray exportModelMdl(const ModelMesh &mesh, const ModelTargetLimits &limits, QString *error, const ModelWorkControl &control,
+						  ModelExportReport *report)
 {
 	if (error)
 	{
@@ -259,20 +280,34 @@ QByteArray exportModelMdl(const ModelMesh &mesh, QString *error, const ModelWork
 		return failure(error,
 					   QCoreApplication::translate("VibeStudioModelMdl", "Add an indexed MDL skin and its palette before exporting MDL."));
 	}
-	if (mesh.surfaces.size() != 1 || mesh.frames.size() > 256 || mesh.surfaces[0].triangles.size() > 2048 ||
-		mesh.embeddedSkins.size() > 32 || !mesh.tags.isEmpty())
+	if (mesh.surfaces.size() != 1 || !mesh.tags.isEmpty())
 	{
-		return failure(error,
-					   QCoreApplication::translate("VibeStudioModelMdl", "Original Quake MDL export requires one surface, at most 256 "
-																		 "poses, 2048 triangles, 32 skin slots and no attachment tags."));
+		return failure(error, QCoreApplication::translate("VibeStudioModelMdl", "MDL export requires one surface and no attachment tags."));
+	}
+	// The counts and skin sizes of the delivery target; assessModelTarget
+	// reports every one of them before export.
+	const auto over = [](qint64 value, qint64 maximum) { return maximum > 0 && value > maximum; };
+	if (over(mesh.frames.size(), limits.frames) || over(mesh.surfaces[0].triangles.size(), limits.triangles) ||
+		over(mesh.embeddedSkins.size(), limits.skins))
+	{
+		return failure(error, QCoreApplication::translate("VibeStudioModelMdl",
+														  "The delivery target allows at most %1 poses, %2 triangles and %3 skin slots; the "
+														  "model has %4, %5 and %6.")
+								  .arg(limits.frames)
+								  .arg(limits.triangles)
+								  .arg(limits.skins)
+								  .arg(mesh.frames.size())
+								  .arg(mesh.surfaces[0].triangles.size())
+								  .arg(mesh.embeddedSkins.size()));
 	}
 	const auto size = mesh.mdl.skinSize;
-	if (size.width() % 4 != 0 || size.height() > 480 || qint64(size.width()) * size.height() > 640 * 480)
+	if ((limits.skinWidthMultiple > 1 && size.width() % limits.skinWidthMultiple != 0) || over(size.width(), limits.skinWidth) ||
+		over(size.height(), limits.skinHeight) || over(qint64(size.width()) * size.height(), limits.skinPixels))
 	{
-		return failure(error,
-					   QCoreApplication::translate(
-						   "VibeStudioModelMdl",
-						   "Original Quake skins need a width divisible by four, height at most 480 and at most 307200 pixels per image."));
+		return failure(error, QCoreApplication::translate("VibeStudioModelMdl",
+														  "The %1 by %2 skin does not fit the delivery target. Check the target for its skin limits.")
+								  .arg(size.width())
+								  .arg(size.height()));
 	}
 	for (const auto &frame : mesh.frames)
 	{
@@ -289,6 +324,15 @@ QByteArray exportModelMdl(const ModelMesh &mesh, QString *error, const ModelWork
 	if (!work.check() || !buildLayout(mesh, &layout, &result, error, work))
 	{
 		return {};
+	}
+	const int seamVertices =
+		int(std::count_if(layout.vertices.cbegin(), layout.vertices.cend(), [](const StoredVertex &vertex) { return vertex.seam; }));
+	if (over(layout.vertices.size(), limits.vertices) || over(layout.vertices.size() + seamVertices, limits.renderVertices))
+	{
+		return failure(error, QCoreApplication::translate("VibeStudioModelMdl",
+														  "The MDL stores %1 vertices after sharing exact all-pose positions, normals and "
+														  "compatible UV seams, more than the delivery target holds. Reduce geometry or UV splits.")
+								  .arg(layout.vertices.size()));
 	}
 	const auto &surface = mesh.surfaces[0];
 	std::array<float, 3> minimum, maximum, scale;
@@ -498,6 +542,12 @@ QByteArray exportModelMdl(const ModelMesh &mesh, QString *error, const ModelWork
 		result.notes << QCoreApplication::translate("VibeStudioModelMdl",
 													"Editor clip names/ranges/FPS and external material paths remain in the mesh source. MDL "
 													"uses its embedded skin slots and native frame numbers.");
+		// External material paths are left out here; exportEditableModel reports
+		// the clips the frame names do not rebuild.
+		if (!surface.skinPaths.isEmpty())
+		{
+			result.omissions << result.notes.last();
+		}
 	}
 	if (animatedSkins || groupedFrames)
 	{
@@ -507,7 +557,11 @@ QByteArray exportModelMdl(const ModelMesh &mesh, QString *error, const ModelWork
 	}
 	if (report)
 	{
-		if (!mesh.collisionBoxes.isEmpty()) { result.notes << modelCollisionOmissionNote(); }
+		if (!mesh.collisionBoxes.isEmpty())
+		{
+			result.notes << modelCollisionOmissionNote();
+			result.omissions << result.notes.last();
+		}
 		*report = std::move(result);
 	}
 	return output;

@@ -33,6 +33,7 @@ struct LevelPrefabPlacement {
 };
 struct LevelPrefabReport {
 	LevelMapStatistics statistics;
+	int groups = 0, linkedGroups = 0;
 	QString dialect, prefix;
 	QMap<QString, QString> renamedTargets;
 	QStringList externalTargets, warnings;

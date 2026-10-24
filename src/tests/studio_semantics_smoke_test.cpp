@@ -1,7 +1,9 @@
 #include "core/operation_state.h"
 #include "core/studio_semantics.h"
+#include "core/editor_profiles.h"
 
 #include <QCoreApplication>
+#include <QSet>
 #include <QString>
 #include <QStringList>
 #include <QTranslator>
@@ -184,10 +186,26 @@ bool runShortcutSmoke()
 	ok &= expect(!vibestudio::shellCommandIdExists(QStringLiteral("editor-command.editor.mode.face")),
 		"Expected editor-only command ids to stay outside the shell registry.");
 
+	QSet<QString> profileBoundCommands;
+	for (const auto& profile : vibestudio::editorProfileDescriptors()) {
+		for (const auto& binding : profile.bindings) {
+			// Controls use the shell's camelCase IDs; registry descriptors use
+			// kebab-case IDs. Require a real binding to the resolved command.
+			vibestudio::ShortcutDescriptor resolved;
+			if (binding.implemented && !binding.shortcut.trimmed().isEmpty()
+				&& vibestudio::shortcutForCommandId(binding.commandId,&resolved)) { profileBoundCommands.insert(resolved.commandId); }
+		}
+	}
 	for (const vibestudio::ShortcutDescriptor& descriptor : vibestudio::shortcutDescriptors()) {
 		ok &= expect(!descriptor.id.isEmpty() && !descriptor.commandId.isEmpty() && !descriptor.label.isEmpty() && !descriptor.context.isEmpty(),
 			"Expected every shortcut descriptor to be fully identified.");
-		ok &= expect(!descriptor.defaultSequence.trimmed().isEmpty(), "Expected every shortcut descriptor to carry a default sequence.");
+		bool hasBinding = !descriptor.defaultSequence.trimmed().isEmpty();
+		if (!hasBinding) {
+			// Profile-only commands stay unassigned elsewhere rather than taking
+			// an existing global shortcut. They still need a concrete binding.
+			hasBinding = profileBoundCommands.contains(descriptor.commandId);
+		}
+		ok &= expect(hasBinding, "Expected every shortcut descriptor to carry a default or implemented profile binding.");
 	}
 	return ok;
 }
@@ -201,7 +219,8 @@ bool runCommandPaletteSmoke()
 	ok &= expect(vibestudio::commandPaletteEntryForCommandId(QStringLiteral("package.save-as"), &entry) && entry.destructive && entry.stagedOrDryRun,
 		"Expected package save-as command to be marked staged.");
 
-	for (const auto* id : {"map.mergeBrushes", "map.alignSurfaces", "map.editPatch", "map.capPatch"}) {
+	for (const auto* id : {"map.mergeBrushes", "map.wrapMerge", "map.wrapMergePoints", "map.alignSurfaces", "map.editPatch", "map.capPatch",
+		"map.addProtectedProperty", "map.clearProtectedProperties", "map.extractLinkedGroups", "map.selectSiblings", "map.selectSourceLines"}) {
 		ok &= expect(vibestudio::shellCommandIdExists(QString::fromLatin1(id))
 			&& vibestudio::commandPaletteEntryForCommandId(QString::fromLatin1(id), &entry)
 			&& entry.category == QStringLiteral("Levels") && !entry.summary.isEmpty(),

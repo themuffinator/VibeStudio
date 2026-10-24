@@ -9,8 +9,11 @@
 #include <QMainWindow>
 #include <QStatusBar>
 #include <QTimer>
+#include <QVector>
+#include <QWidget>
 
 #include <iostream>
+#include <utility>
 
 using namespace vibestudio;
 
@@ -119,6 +122,42 @@ bool checkNames()
 	return ok;
 }
 
+// Status announcements from one pass of the event loop settle into one: a
+// problem outranks a result, the later result wins, and an operation's own
+// result after its long task's end keeps the long-task kind, which speech
+// reads under "Long tasks that finish". An update is never announced.
+bool checkAnnouncementSettling()
+{
+	bool ok = true;
+	QVector<std::pair<QString, LiveStatus>> heard;
+	setStatusAnnouncementListener([&heard](const QString& message, LiveStatus kind) { heard.append({message, kind}); });
+	QWidget source;
+	const auto settle = [] {
+		for (int pass = 0; pass < 3; ++pass) {
+			QCoreApplication::processEvents();
+		}
+	};
+	ok &= expect(!announceStatus(&source, QStringLiteral("12 triangles"), LiveStatus::Update), "An update should not be announced.");
+	announceStatus(&source, QStringLiteral("Export MD3 finished."), LiveStatus::Finished);
+	announceStatus(&source, QStringLiteral("Exported box.md3."), LiveStatus::Result);
+	settle();
+	ok &= expect(heard.size() == 1 && heard[0].first == QStringLiteral("Exported box.md3.") && heard[0].second == LiveStatus::Finished,
+		"A long operation's own result should replace its end and keep the long-task kind.");
+	heard.clear();
+	announceStatus(&source, QStringLiteral("Saved box.mesh.json."), LiveStatus::Result);
+	settle();
+	ok &= expect(heard.size() == 1 && heard[0].second == LiveStatus::Result, "A quick result should stay a result.");
+	heard.clear();
+	announceStatus(&source, QStringLiteral("Import finished."), LiveStatus::Finished);
+	announceStatus(&source, QStringLiteral("The bevel would overlap."), LiveStatus::Problem);
+	announceStatus(&source, QStringLiteral("Imported box.obj."), LiveStatus::Result);
+	settle();
+	ok &= expect(heard.size() == 1 && heard[0].second == LiveStatus::Problem && heard[0].first == QStringLiteral("The bevel would overlap."),
+		"A problem should outrank a long task's end and a later result.");
+	setStatusAnnouncementListener({});
+	return ok;
+}
+
 } // namespace
 
 int main(int argc, char** argv)
@@ -132,6 +171,7 @@ int main(int argc, char** argv)
 	ok &= checkSilencedEngine();
 	ok &= checkMessageDuration();
 	ok &= checkNames();
+	ok &= checkAnnouncementSettling();
 	// No screen reader listens to an offscreen run, so nothing is delivered,
 	// and the call says so rather than pretending.
 	QWidget source;

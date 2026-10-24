@@ -34,7 +34,7 @@ void ApplicationShell::refreshLevelCameraResize()
 {
 	if (!m_levelMap3D) { return; }
 	LevelMapVec3 low,high;
-	if (!levelMap3DShowing() || !m_levelMap3D->isEnabled() || !m_levelMap3D->hasMesh()
+	if (!levelMap3DShowing() || !m_levelMap3D->isEnabled() || !m_levelMap3D->hasMesh() || m_levelMap3D->componentMode() || m_levelMap3D->clipMode()
 		|| !levelMapSelectionResizable() || !levelMapSelectionBounds(m_levelMapDocument,&low,&high)) {
 		m_levelMap3D->clearSelectionResizeBox(); return;
 	}

@@ -4,7 +4,8 @@ Requires a user-supplied GPL-2.0-or-later Quake-III-Arena checkout, a VibeStudio
 CLI binary, the retained PlayerBundleFixture, Meson, Ninja and a C compiler.
 Extracted functions keep their original licence header and recorded hashes.
 Small file/renderer shims exercise player discovery, native skin tokenization,
-animation parsing and TGA pixels. This is not a game or a renderer certification.
+team skin lookup, animation parsing and TGA pixels. This is not a game or a
+renderer certification.
 No installed game files, input devices, windows or screen captures are used.
 """
 import argparse
@@ -36,16 +37,17 @@ def validate_md3(data, role):
     version, = struct.unpack_from('<i', data, 4)
     flags, frames, tags, surfaces, skins, frame_at, tag_at, surface_at, end = struct.unpack_from('<9i', data, 72)
     assert version == 15 and frames == (1 if role == 'head' else 12) and surfaces == 1 and end == len(data)
-    assert tags == (0 if role == 'head' else 1) and frame_at == 108
+    assert tags == {'lower': 1, 'upper': 2, 'head': 0}[role] and frame_at == 108
     assert frame_at + frames * 56 == tag_at and tag_at + frames * tags * 112 == surface_at
     for i in range(frames):
         values = struct.unpack_from('<10f', data, frame_at + i * 56)
         assert all(math.isfinite(v) for v in values)
         assert all(values[k] <= values[k + 3] for k in range(3)) and values[9] >= 0
+    for frame in range(frames):
+        names = sorted(data[tag_at + (frame * tags + k) * 112:tag_at + (frame * tags + k) * 112 + 64].split(b'\0')[0].decode() for k in range(tags))
+        assert names == {'lower': ['tag_torso'], 'upper': ['tag_head', 'tag_weapon'], 'head': []}[role]
     for i in range(frames * tags):
         at = tag_at + i * 112
-        name = data[at:at + 64].split(b'\0')[0].decode()
-        assert name == ('tag_torso' if role == 'lower' else 'tag_head')
         values = struct.unpack_from('<12f', data, at + 64)
         assert all(math.isfinite(v) for v in values)
         for k in range(3):
@@ -96,7 +98,7 @@ typedef int qboolean;
 typedef int qhandle_t;
 typedef unsigned char byte;
 enum { qtrue=1, qfalse=0, MAX_TOKEN_CHARS=1024, MAX_QPATH=64, FS_READ=0,
-       GT_TEAM=3, TEAM_BLUE=2, ERR_DROP=1, PRINT_WARNING=1, MAX_SKINS=16, LIGHTMAP_NONE=-1, h_low=0 };
+       GT_TEAM=3, TEAM_RED=1, TEAM_BLUE=2, ERR_DROP=1, PRINT_WARNING=1, MAX_SKINS=16, LIGHTMAP_NONE=-1, h_low=0 };
 #define DEFAULT_BLUETEAM_NAME "Pagans"
 #define DEFAULT_REDTEAM_NAME "Stroggs"
 static char com_token[MAX_TOKEN_CHARS];
@@ -179,8 +181,13 @@ int trap_R_RegisterShaderNoMip(const char* name) { return pixels(name); }
 int main(int argc,char** argv) {
   clientInfo_t ci={0}; int handles[3],i;
   const char* expected[3]={"models/player/body","textures/player/a.tga","textures/player/a.tga"};
-  if(argc!=3) return 2;
+  if(argc!=3 && argc!=7) return 2;
   blocked=argv[2];
+  /* Team games: cgame looks up <role>_red.skin or <role>_blue.skin. */
+  if(argc==7) {
+    if(strcmp(argv[3],"none")) { cgs.gametype=GT_TEAM; ci.team=strcmp(argv[3],"blue") ? TEAM_RED : TEAM_BLUE; }
+    for(i=0;i<3;++i) expected[i]=argv[4+i];
+  }
   if(!CG_RegisterClientModelname(&ci,"synthetic",argv[1],"",argv[1],"")) return 3;
   handles[0]=ci.legsSkin; handles[1]=ci.torsoSkin; handles[2]=ci.headSkin;
   for(i=0;i<3;++i) {
@@ -206,12 +213,18 @@ int main(int argc,char** argv) {
     fixture = args.fixture.resolve()
     original_hashes = {str(p.relative_to(fixture)): digest(p) for p in fixture.rglob('*') if p.is_file()}
     cases = []; comparisons = 0
-    for skin in ('default', 'variant'):
+    # The team package adds red (upper) and blue (head) skins from .skin files;
+    # the other parts keep their own materials in those skins.
+    team = ['--team-variants', '--variant-skin', f'red:upper={fixture / "team_red_upper.skin"}',
+            '--variant-skin', f'blue:head={fixture / "team_blue_head.skin"}']
+    body, a, b = 'models/player/body', 'textures/player/a.tga', 'textures/player/b.tga'
+    for skin, extra in (('default', []), ('variant', []), ('team', team)):
         package = output / f'{skin}.pk3'
         command = [str(args.binary.resolve()), '--cli', 'model', 'assembly', str(fixture / 'player.assembly.json'),
-                   '--operation', 'player-export', '--player-name', 'synthetic', '--head-part', 'head', '--skin-name', skin,
+                   '--operation', 'player-export', '--player-name', 'synthetic', '--head-part', 'head',
+                   '--skin-name', 'default' if skin == 'team' else skin,
                    '--icon', str(fixture / 'icon.png'), '--package', str(fixture / 'assets'), '--output', str(package),
-                   '--settings-file', str(output / 'settings.ini'), '--json']
+                   '--settings-file', str(output / 'settings.ini'), '--json'] + extra
         result = subprocess.run(command, cwd=ROOT, capture_output=True, text=True, timeout=60)
         (output / f'{skin}-cli.json').write_text(result.stdout, encoding='utf-8')
         assert result.returncode == 0, result.stdout + result.stderr
@@ -219,9 +232,9 @@ int main(int argc,char** argv) {
         assert payload['write']['determinismVerified'] and payload['write']['outputCommitted']
         game = output / skin; game.mkdir()
         with zipfile.ZipFile(package) as archive:
-            assert len(archive.infolist()) == 12 and archive.testzip() is None
+            assert len(archive.infolist()) == (20 if skin == 'team' else 12) and archive.testzip() is None
             receipt = json.loads(archive.read('vibestudio/player-bundle.json'))
-            assert receipt['model'] == 'synthetic' and receipt['skin'] == skin
+            assert receipt['model'] == 'synthetic' and receipt['skin'] == ('default' if skin == 'team' else skin)
             for item in receipt['files']:
                 data = archive.read(item['path'])
                 assert hashlib.sha256(data).hexdigest() == item['sha256'] and len(data) == item['bytes']
@@ -233,20 +246,25 @@ int main(int argc,char** argv) {
                 target.write_bytes(archive.read(entry))
             for role in ('lower', 'upper', 'head'):
                 comparisons += validate_md3(archive.read(f'models/players/synthetic/{role}.md3'), role)
-        blocked = ['', 'models/players/synthetic/lower.md3', f'models/players/synthetic/head_{skin}.skin',
-                   'models/players/synthetic/animation.cfg', f'models/players/synthetic/icon_{skin}.tga']
-        for index, missing in enumerate(blocked):
-            result = subprocess.run([str(binary), skin, missing], cwd=game, capture_output=True, text=True, timeout=20)
+        name = 'default' if skin == 'team' else skin
+        blocked = [('none', '', []), ('none', 'models/players/synthetic/lower.md3', []), ('none', f'models/players/synthetic/head_{name}.skin', []),
+                   ('none', 'models/players/synthetic/animation.cfg', []), ('none', f'models/players/synthetic/icon_{name}.tga', [])]
+        if skin == 'team':
+            blocked += [('red', '', [body, b, a]), ('blue', '', [body, a, b]), ('red', 'models/players/synthetic/upper_red.skin', [body, b, a]),
+                        ('blue', 'models/players/synthetic/head_blue.skin', [body, a, b]), ('blue', 'models/players/synthetic/icon_blue.tga', [body, a, b])]
+        for index, (side, missing, shaders) in enumerate(blocked):
+            arguments = [str(binary), name, missing] + ([side] + shaders if shaders else [])
+            result = subprocess.run(arguments, cwd=game, capture_output=True, text=True, timeout=20)
             passed = result.returncode == (3 if missing else 0)
             if not missing:
                 passed &= result.stdout.count('model ') == 3 and result.stdout.count('skin ') == 3 and result.stdout.count('pixels ') == 3
                 comparisons += 3 * 4096 + 31 + 3
-            cases.append({'skin': skin, 'blockedPath': missing, 'returnCode': result.returncode, 'passed': bool(passed),
+            cases.append({'skin': skin, 'team': side, 'blockedPath': missing, 'returnCode': result.returncode, 'passed': bool(passed),
                           'stdout': result.stdout, 'stderr': result.stderr})
             assert passed, cases[-1]
     assert original_hashes == {str(p.relative_to(fixture)): digest(p) for p in fixture.rglob('*') if p.is_file()}
     record = {'passed': True, 'comparisons': comparisons, 'cases': cases,
-              'scope': 'Original player discovery, skin parsing, animation parser and TGA pixels; independent MD3 layout checks. Model registration and shader lookup are shims; no gameplay, renderer or shader-language certification.',
+              'scope': 'Original player discovery, team skin lookup, skin parsing, animation parser and TGA pixels; independent MD3 layout checks. Model registration and shader lookup are shims; no gameplay, renderer or shader-language certification.',
               'inputs': {str(p): digest(p) for p in [*paths.values(), args.binary, Path(__file__), Path(__file__).with_name('model_q3_animation_engine_oracle.py')]},
               'fixtureHashes': original_hashes, 'binarySha256': digest(binary),
               'generatedSourceSha256': digest(source / 'oracle.c')}

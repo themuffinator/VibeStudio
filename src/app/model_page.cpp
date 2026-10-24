@@ -3,6 +3,7 @@
 // model on a trailing one, the preview between them navigating like the
 // modeller under the chosen controls profile.
 #include "app/application_shell.h"
+#include "app/locale_number.h"
 
 #include "app/model_viewport.h"
 #include "app/ui_primitives.h"
@@ -121,7 +122,7 @@ void ApplicationShell::refreshModelSkeletonPanel()
 		auto* item = new QTreeWidgetItem(parent);
 		item->setText(0, joint.name);
 		const ModelVec3 origin = modelJointTranslation(joint.bind);
-		item->setText(1, QStringLiteral("%1, %2, %3").arg(origin.x, 0, 'g', 5).arg(origin.y, 0, 'g', 5).arg(origin.z, 0, 'g', 5));
+		item->setText(1, localeNumberList({origin.x, origin.y, origin.z}, 5));
 		items[index] = item;
 	}
 	auto* clips = new QTreeWidgetItem(m_modelSkeletonTree);
@@ -130,8 +131,8 @@ void ApplicationShell::refreshModelSkeletonPanel()
 	for (const ModelSkeletalClip& clip : skeleton.clips) {
 		auto* item = new QTreeWidgetItem(clips);
 		item->setText(0, clip.name);
-		item->setText(1, clip.framesPerSecond > 0 ? tr("%1 frames at %2 fps").arg(clip.frames.size()).arg(clip.framesPerSecond)
-												  : tr("%1 frames").arg(clip.frames.size()));
+		item->setText(1, clip.framesPerSecond > 0 ? tr("%Ln frame(s) at %1 fps", nullptr, int(clip.frames.size())).arg(localeNumber(clip.framesPerSecond))
+												  : tr("%Ln frame(s)", nullptr, int(clip.frames.size())));
 		item->setToolTip(0, clip.sourcePath);
 	}
 	if (!m_modelMesh.companionPaths.isEmpty()) {

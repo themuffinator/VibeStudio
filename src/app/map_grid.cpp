@@ -20,12 +20,19 @@ bool valid(const MapGridView& view)
 }
 }
 
+double mapGridDrawnSpacing(double units, double zoom)
+{
+	double step = std::isfinite(units) && units > 0 ? units : 64.0;
+	if (!std::isfinite(zoom) || zoom <= 0) { return step; }
+	for (int guard = 0; guard < 40 && step * zoom < 6.0; ++guard) { step *= 2; }
+	return step;
+}
+
 MapGridLines mapGridLines(const MapGridView& view)
 {
 	MapGridLines result;
 	if (!valid(view)) { return result; }
-	double step = view.units > 0 ? double(view.units) : 64.0;
-	for (int guard = 0; guard < 40 && step * view.zoom < 6.0; ++guard) { step *= 2; }
+	const double step = mapGridDrawnSpacing(view.units, view.zoom);
 	if (step * view.zoom < 1.0) { return result; }
 	const double left = view.center.x() - view.viewport.width() * 0.5 / view.zoom;
 	const double right = view.center.x() + view.viewport.width() * 0.5 / view.zoom;

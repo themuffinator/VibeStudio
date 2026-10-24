@@ -40,7 +40,10 @@ class ModelRecoveryWriter final : public QObject
 	};
 	QString m_directory, m_savedId;
 	quint64 m_savedRevision = 0;
-	QSet<QString> m_retired, m_removals;
+	// m_reported: retired copies whose removal failed and was reported. A
+	// removal is retried after every checkpoint, but its failure is reported
+	// once, not every few seconds.
+	QSet<QString> m_retired, m_removals, m_reported;
 	std::optional<Pending> m_pending;
 	std::shared_ptr<Result> m_result;
 	QThread *m_thread = nullptr;

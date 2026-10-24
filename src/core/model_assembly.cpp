@@ -781,8 +781,11 @@ bool exportModelAssemblyPose(const ModelAssembly &assembly, const ModelAssemblyR
 	{
 		return fail(error, target.error);
 	}
-	bool protectedInput = modelPathsReferToSameFile(path, sourcePath) ||
-						  (archive && (archive->protectsInputPath(target.path) || archive->protectsInputPath(target.resolvedPath)));
+	if (!validateModelArchiveOutputs(archive.get(), {target.path, target.resolvedPath}, error, control))
+	{
+		return false;
+	}
+	bool protectedInput = modelPathsReferToSameFile(path, sourcePath);
 	for (const auto &input : resolved.inputs)
 	{
 		protectedInput |= modelAssemblyInputProtectsPath(input, path);

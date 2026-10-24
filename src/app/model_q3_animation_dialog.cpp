@@ -1,4 +1,7 @@
 #include "app/model_q3_animation_dialog.h"
+#include "core/model_player_import.h"
+#include "app/locale_number.h"
+#include "app/dialog_screen_fit.h"
 
 #include <QCheckBox>
 #include <QComboBox>
@@ -8,7 +11,9 @@
 #include <QFileDialog>
 #include <QFileInfo>
 #include <QFormLayout>
+#include <QHBoxLayout>
 #include <QHeaderView>
+#include <QInputDialog>
 #include <QLabel>
 #include <QPushButton>
 #include <QScrollArea>
@@ -37,7 +42,6 @@ ModelQ3AnimationDialog::ModelQ3AnimationDialog(const ModelAssembly &assembly, co
 	setObjectName(QStringLiteral("modelQ3AnimationDialog"));
 	setWindowTitle(QCoreApplication::translate("ModelQ3AnimationDialog", "Quake III Animation"));
 	setAccessibleName(windowTitle());
-	resize(1050, 720);
 	m_binding = assembly.q3Animation.value_or(ModelAssemblyQ3Animation{});
 	auto *layout = new QVBoxLayout(this);
 	m_enabled = new QCheckBox(QCoreApplication::translate("ModelQ3AnimationDialog", "Use native animation"));
@@ -183,7 +187,7 @@ ModelQ3AnimationDialog::ModelQ3AnimationDialog(const ModelAssembly &assembly, co
 	scroll->setWidget(body);
 	split->addWidget(scroll);
 	split->setSizes({470, 530});
-	m_status = new QLabel;
+	m_status = new LiveStatusLabel;
 	m_status->setObjectName(QStringLiteral("q3Status"));
 	m_status->setAccessibleName(QCoreApplication::translate("ModelQ3AnimationDialog", "Native animation validation"));
 	m_status->setTextFormat(Qt::PlainText);
@@ -192,15 +196,33 @@ ModelQ3AnimationDialog::ModelQ3AnimationDialog(const ModelAssembly &assembly, co
 	m_status->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Preferred);
 	m_status->setTextInteractionFlags(Qt::TextSelectableByKeyboard | Qt::TextSelectableByMouse);
 	layout->addWidget(m_status);
+	// The two imports share a row of their own, so long translations of every
+	// button still fit beside Apply.
+	auto *imports = new QHBoxLayout;
+	auto *import = new QPushButton(QCoreApplication::translate("ModelQ3AnimationDialog", "Import…"));
+	import->setObjectName(QStringLiteral("q3Import"));
+	m_importPackage = new QPushButton(QCoreApplication::translate("ModelQ3AnimationDialog", "Import from Package…"));
+	for (auto *button : {import, m_importPackage})
+	{
+		button->setAutoDefault(false);
+		imports->addWidget(button);
+	}
+	imports->addStretch();
+	layout->addLayout(imports);
 	auto *buttons = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel);
 	buttons->button(QDialogButtonBox::Ok)->setText(QCoreApplication::translate("ModelQ3AnimationDialog", "Apply"));
-	auto *import = buttons->addButton(QCoreApplication::translate("ModelQ3AnimationDialog", "Import…"), QDialogButtonBox::ActionRole);
-	import->setObjectName(QStringLiteral("q3Import"));
+	m_importPackage->setObjectName(QStringLiteral("q3ImportPackage"));
+	m_importPackage->setAccessibleName(m_importPackage->text());
+	m_importPackage->setAccessibleDescription(QCoreApplication::translate(
+		"ModelQ3AnimationDialog", "Read an animation.cfg entry of the current package or folder into this draft. The package is not changed."));
+	m_importPackage->setToolTip(m_importPackage->accessibleDescription());
+	m_importPackage->setEnabled(false);
 	auto *exportButton =
 		buttons->addButton(QCoreApplication::translate("ModelQ3AnimationDialog", "Apply and Export…"), QDialogButtonBox::ActionRole);
 	exportButton->setObjectName(QStringLiteral("q3Export"));
 	layout->addWidget(buttons);
 	connect(import, &QPushButton::clicked, this, [this] { chooseImport(); });
+	connect(m_importPackage, &QPushButton::clicked, this, [this] { chooseImportPackage(); });
 	connect(exportButton, &QPushButton::clicked, this, [this] { finish(true); });
 	connect(buttons, &QDialogButtonBox::accepted, this, [this] { finish(false); });
 	connect(buttons, &QDialogButtonBox::rejected, this, &QDialog::reject);
@@ -240,6 +262,7 @@ ModelQ3AnimationDialog::ModelQ3AnimationDialog(const ModelAssembly &assembly, co
 		});
 	refresh();
 	m_slots->setCurrentItem(m_slots->topLevelItem(0));
+	fitDialogToScreen(this, QSize(1050, 720));
 }
 std::optional<ModelAssemblyQ3Animation> ModelQ3AnimationDialog::animation() const
 {
@@ -327,7 +350,7 @@ void ModelQ3AnimationDialog::updateStatus()
 		QCoreApplication::translate("ModelQ3AnimationDialog", "%1 · %2 ms per pose · %3 effective FPS")
 			.arg(QStringLiteral("\u2066%1–%2\u2069").arg(first).arg(first + m_binding.config.clips[m_slot].frameCount - 1))
 			.arg(period)
-			.arg(period ? 1000.0 / period : 0, 0, 'g', 6));
+			.arg(localeNumber(period ? 1000.0 / period : 0, 6)));
 	QString error;
 	const bool valid = validateDraft(&error);
 	m_status->setText(
@@ -368,7 +391,70 @@ void ModelQ3AnimationDialog::chooseImport()
 		error = QCoreApplication::translate("ModelQ3AnimationDialog", "The configuration exceeds 19,998 bytes.");
 	else if (readModelFile(path, &bytes, &error) && setConfigBytes(bytes, &error))
 		return;
-	m_status->setText(error);
+	m_status->setText(error, LiveStatus::Problem);
+}
+void ModelQ3AnimationDialog::setPackage(std::shared_ptr<const PackageArchiveReader> package)
+{
+	m_package = std::move(package);
+	m_importPackage->setEnabled(m_package && m_package->isOpen());
+}
+bool ModelQ3AnimationDialog::importPackageEntry(const QString &path, qsizetype entryIndex, QString *error)
+{
+	QString failure;
+	QByteArray bytes;
+	qsizetype selected = -1;
+	if (!m_package || !m_package->isOpen())
+		failure = QCoreApplication::translate("ModelQ3AnimationDialog", "Open a package or folder before importing from it.");
+	else if (readModelQ3AnimationEntry(*m_package, path, entryIndex, &bytes, &selected, &failure) && setConfigBytes(bytes, &failure))
+	{
+		m_status->setText(QCoreApplication::translate("ModelQ3AnimationDialog", "Imported %1 (package entry %2). Apply to use it.")
+							  .arg(m_package->entries()[selected].virtualPath)
+							  .arg(selected) +
+						  QLatin1Char(' ') + m_status->text());
+		return true;
+	}
+	m_status->setText(failure);
+	if (error)
+		*error = failure;
+	return false;
+}
+void ModelQ3AnimationDialog::chooseImportPackage()
+{
+	if (!m_package || !m_package->isOpen())
+		return;
+	// Every animation.cfg in the snapshot, by path. A repeated path names its
+	// entry so each choice is exact.
+	const auto entries = m_package->entries();
+	QVector<qsizetype> indexes;
+	QHash<QString, int> counts;
+	for (qsizetype i = 0; i < entries.size(); ++i)
+		if (entries[i].kind == PackageEntryKind::File &&
+			QFileInfo(entries[i].virtualPath).fileName().compare(QStringLiteral("animation.cfg"), Qt::CaseInsensitive) == 0)
+		{
+			indexes << i;
+			++counts[entries[i].virtualPath.toCaseFolded()];
+		}
+	std::sort(indexes.begin(), indexes.end(), [&](qsizetype a, qsizetype b) {
+		const int order = entries[a].virtualPath.compare(entries[b].virtualPath, Qt::CaseInsensitive);
+		return order != 0 ? order < 0 : a < b;
+	});
+	QStringList labels;
+	for (const auto index : std::as_const(indexes))
+		labels << (counts.value(entries[index].virtualPath.toCaseFolded()) > 1
+					   ? QCoreApplication::translate("ModelQ3AnimationDialog", "%1 (entry %2)").arg(entries[index].virtualPath).arg(index)
+					   : entries[index].virtualPath);
+	if (labels.isEmpty())
+	{
+		m_status->setText(QCoreApplication::translate("ModelQ3AnimationDialog", "The package has no animation.cfg entries."));
+		return;
+	}
+	bool accepted = false;
+	const auto choice =
+		QInputDialog::getItem(this, QCoreApplication::translate("ModelQ3AnimationDialog", "Import Animation from Package"),
+							  QCoreApplication::translate("ModelQ3AnimationDialog", "Package entry"), labels, 0, false, &accepted);
+	const auto row = labels.indexOf(choice);
+	if (accepted && row >= 0)
+		importPackageEntry(entries[indexes[row]].virtualPath, indexes[row]);
 }
 void ModelQ3AnimationDialog::useSourceClip()
 {
@@ -409,7 +495,7 @@ void ModelQ3AnimationDialog::finish(bool exporting)
 	QString error;
 	if (!validateDraft(&error))
 	{
-		m_status->setText(error);
+		m_status->setText(error, LiveStatus::Problem);
 		m_status->setFocus(Qt::OtherFocusReason);
 		return;
 	}

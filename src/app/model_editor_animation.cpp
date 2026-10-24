@@ -1,6 +1,8 @@
 #include "app/model_editor_dialog.h"
 
 #include "app/model_viewport.h"
+#include "app/wrapping_action_button.h"
+#include "app/wrapping_check_box.h"
 
 #include <QCheckBox>
 #include <QComboBox>
@@ -16,6 +18,7 @@
 #include <QSpinBox>
 
 #include <algorithm>
+#include <utility>
 
 namespace vibestudio
 {
@@ -55,7 +58,7 @@ void ModelEditorDialog::addAnimationControls(QFormLayout *animation)
 	};
 	const auto button = [&](const char *id, const QString &label, const QString &description, ModelEditKind kind)
 	{
-		auto *control = new QPushButton(label);
+		auto *control = new WrappingActionButton(label, 2);
 		control->setObjectName(QString::fromLatin1(id));
 		control->setAccessibleName(label);
 		control->setAccessibleDescription(description);
@@ -103,7 +106,7 @@ void ModelEditorDialog::addAnimationControls(QFormLayout *animation)
 		QCoreApplication::translate("VibeStudioModelEditor",
 			"Session preview speed. Selecting a clip uses its saved FPS when specified. Apply Clip FPS to save timing; game exports require separate animation configuration. Reduced motion disables automatic playback."), .001);
 	m_animationRate->setValue(m_preview->framesPerSecond());
-	auto *smooth = new QCheckBox(QCoreApplication::translate("VibeStudioModelEditor", "Smooth preview"));
+	auto *smooth = new WrappingCheckBox(QCoreApplication::translate("VibeStudioModelEditor", "Smooth preview"));
 	smooth->setObjectName(QStringLiteral("meshAnimationSmooth"));
 	smooth->setAccessibleName(smooth->text());
 	smooth->setToolTip(QCoreApplication::translate(
@@ -284,6 +287,32 @@ void ModelEditorDialog::refreshAnimationControls()
 		int(std::min<qint64>(modelDocumentMaxFrames, modelDocumentMaxFrameVertices / std::max(1, mesh.vertexCount)) - mesh.frames.size());
 	m_inbetweenCount->setMaximum(std::max(1, capacity));
 	m_insertInbetweens->setEnabled(editable && frame + 1 < mesh.frames.size() && capacity > 0);
+	// On skeletal models the bind frame and frames baked from a skeletal clip
+	// follow the skeleton. Frame edits that would detach them are disabled and
+	// say why, as the document would refuse them (core/model_vertex_origins.h).
+	const auto gate = [&](QPushButton *control, ModelEditKind kind)
+	{
+		if (!control)
+			return;
+		if (!control->property("frameEditDescription").isValid())
+			control->setProperty("frameEditDescription", control->accessibleDescription());
+		const auto description = control->property("frameEditDescription").toString();
+		const auto refusal = modelSkeletalFrameEditRefusal(mesh, kind, frame);
+		if (!refusal.isEmpty())
+			control->setEnabled(false);
+		control->setToolTip(refusal.isEmpty() ? description : refusal);
+		control->setAccessibleDescription(refusal.isEmpty() ? description : refusal);
+	};
+	for (const auto &[name, kind] : {std::pair{QStringLiteral("duplicateMeshFrame"), ModelEditKind::DuplicateFrame},
+			 std::pair{QStringLiteral("deleteMeshFrame"), ModelEditKind::DeleteFrame}})
+	{
+		auto *control = findChild<QPushButton *>(name);
+		if (control)
+			control->setEnabled(true);
+		gate(control, kind);
+	}
+	gate(m_copyFramePose, ModelEditKind::CopyFramePose);
+	gate(m_insertInbetweens, ModelEditKind::InsertInbetweens);
 	m_animationSummary->setText(m_preview->playbackSummary());
 	m_animationSummary->setAccessibleDescription(m_animationSummary->text());
 }

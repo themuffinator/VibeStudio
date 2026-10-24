@@ -1,5 +1,6 @@
 #pragma once
 
+#include "app/live_status_label.h"
 #include "app/model_document_work.h"
 #include "app/model_material_worker.h"
 #include "core/model_assembly.h"
@@ -58,6 +59,14 @@ class ModelAssemblyDialog final : public QDialog
 	QString recoveryPath() const;
 	bool setAssembly(const ModelAssembly &assembly, const QString &directory, QString *error = nullptr);
 	bool openSource(const QString &path, QString *error = nullptr);
+	// Opens a Quake III player of the current package as a new, unsaved
+	// assembly (core/model_player_import.h) and fills Player Package from it.
+	// The package is read, never changed. An empty skin takes default.
+	bool openPlayer(const QString &player, const QString &skin = {}, QString *error = nullptr);
+	const ModelPlayerBundleOptions &playerBundleOptions() const
+	{
+		return m_playerBundleOptions;
+	}
 	bool saveSource(const QString &path, bool overwrite = false, QString *error = nullptr);
 	bool applyPart(const QString &previousId, const ModelAssemblyPart &part, QString *error = nullptr);
 	bool applyQ3Animation(const std::optional<ModelAssemblyQ3Animation> &animation, QString *error = nullptr);
@@ -104,7 +113,8 @@ class ModelAssemblyDialog final : public QDialog
 	QScrollArea *m_inspectorScroll = nullptr;
 	ModelViewport *m_preview = nullptr;
 	QPlainTextEdit *m_details = nullptr;
-	QLabel *m_status = nullptr, *m_materialStatus = nullptr;
+	QLabel *m_materialStatus = nullptr;
+	LiveStatusLabel *m_status = nullptr;
 	QLabel *m_recoveryStatus = nullptr;
 	QCheckBox *m_recoveryEnabled = nullptr;
 	QTimer *m_recoveryTimer = nullptr;
@@ -149,6 +159,7 @@ class ModelAssemblyDialog final : public QDialog
 	bool maybeSave();
 	bool chooseSave(bool saveAs = false);
 	void chooseOpen();
+	void choosePlayer();
 	void chooseExport();
 	void bake();
 	void chooseAnimationBake(bool exporting);
@@ -157,6 +168,8 @@ class ModelAssemblyDialog final : public QDialog
 	void addSkinControls(QFormLayout *form);
 	void refreshSkinControls(const ModelAssemblyPart &part);
 	std::optional<ModelAssemblySkin> skinFromInspector() const;
-	void report(const QString &message);
+	// Counts and progress are updates; a save, an export or a refusal is
+	// announced to screen readers as well.
+	void report(const QString &message, LiveStatus kind = LiveStatus::Update);
 };
 } // namespace vibestudio

@@ -26,7 +26,7 @@ struct LevelSurfaceStrokeState {
 
 void ApplicationShell::beginLevelSurfaceStroke()
 {
-	if (!m_levelSurfaceTools || !m_levelSurfaceWorker || levelSurfaceEditsPending() || !m_levelSurfaceClipboard.ready()) {
+	if (!m_levelSurfaceTools || !m_levelSurfaceWorker || levelSurfaceEditsPending() || levelSurfaceGeometryBusy() || !m_levelSurfaceClipboard.ready()) {
 		m_levelMap3D->finishMaterialStroke(false);
 		showLevelMaterialPaintMessage(m_levelSurfaceClipboard.ready() ? tr("Finish or cancel the pending level edit before pasting a surface.")
 			: tr("Copy a brush surface before pasting.")); return;
@@ -35,6 +35,7 @@ void ApplicationShell::beginLevelSurfaceStroke()
 	state->bindings = m_levelPreviewMaterialTargets;
 	auto& work = state->work;
 	work.document = m_levelMapDocument; work.clipboard = m_levelSurfaceClipboard;
+	work.paste.selectionTargets = levelSurfaceSelectionTargets();
 	work.archive = m_packageArchive.snapshotReader();
 	if (!work.archive && m_packageArchive.isOpen()) { work.archive = std::make_shared<const PackageArchive>(m_packageArchive); }
 	if (m_packageStaging.isLoaded()) { work.staging = std::make_shared<const PackageStagingModel>(m_packageStaging); }
@@ -133,6 +134,7 @@ void ApplicationShell::startLevelSurfaceStrokeStep()
 	} else {
 		const auto hit = state->pending.takeFirst(); work.pasteTargets = {hit.target};
 		work.paste = {}; work.paste.textureSize = state->sourceSize;
+		work.paste.selectionTargets = state->work.paste.selectionTargets;
 		work.paste.mappingOnly = hit.action == CameraMaterialGesture::ValuesSelectionOnly || hit.action == CameraMaterialGesture::ProjectSelectionOnly || hit.action == CameraMaterialGesture::WrapFaceOnly;
 		if (hit.action == CameraMaterialGesture::WrapFace || hit.action == CameraMaterialGesture::WrapFaceOnly) {
 			work.paste.mode = LevelSurfacePasteMode::Seamless; work.paste.allowValve220 = m_levelSurfaceTools->pasteOptions().allowValve220;

@@ -1,22 +1,29 @@
 #include "app/model_assembly_dialog.h"
+#include "app/dialog_screen_fit.h"
 #include "app/model_skin_source_dialog.h"
 
+#include <QCheckBox>
 #include <QComboBox>
 #include <QCoreApplication>
 #include <QDialogButtonBox>
+#include <QDoubleSpinBox>
 #include <QFileDialog>
 #include <QFileInfo>
 #include <QFormLayout>
+#include <QHBoxLayout>
 #include <QHeaderView>
 #include <QLabel>
 #include <QLineEdit>
+#include <QLocale>
 #include <QPlainTextEdit>
 #include <QPushButton>
 #include <QScrollArea>
 #include <QSpinBox>
+#include <QTableWidget>
 #include <QTreeWidget>
 #include <QVBoxLayout>
 
+#include <algorithm>
 #include <limits>
 
 namespace vibestudio
@@ -49,7 +56,7 @@ bool ModelAssemblyDialog::preparePlayerBundle(const ModelPlayerBundleOptions &op
 	m_playerBundleOptions = options;
 	candidate.contextRevision = revision;
 	*result = std::move(candidate);
-	report(Text::tr("Player package ready for review: %1 files.").arg(result->files.size()));
+	report(Text::tr("Player package ready for review: %Ln file(s).", nullptr, int(result->files.size())), LiveStatus::Result);
 	return true;
 }
 bool ModelAssemblyDialog::exportPlayerBundle(const ModelPlayerBundle &bundle, const QString &path, bool overwrite,
@@ -99,7 +106,6 @@ void ModelAssemblyDialog::choosePlayerBundle()
 	dialog.setObjectName(QStringLiteral("playerBundleDialog"));
 	dialog.setWindowTitle(Text::tr("Quake III Player Package"));
 	dialog.setAccessibleName(dialog.windowTitle());
-	dialog.resize(740, 800);
 	auto *layout = new QVBoxLayout(&dialog);
 	auto *scroll = new QScrollArea;
 	scroll->setObjectName(QStringLiteral("playerBundleScroll"));
@@ -171,6 +177,110 @@ void ModelAssemblyDialog::choosePlayerBundle()
 	browse->setAutoDefault(false);
 	field(browse, "playerBundleBrowseIcon", Text::tr("Choose image"),
 		  Text::tr("Select a local image or an exact package entry without editing it."));
+	// Skins beside the package's own: each cell is a .skin file (relative to
+	// the assembly folder) or package:PATH; an empty skin cell uses the part's
+	// stored variant of that name, else its own materials, and an empty icon
+	// reuses the package icon.
+	const auto table = [&](QTableWidget *control, const char *id, const QString &label, const QString &description, const QStringList &headers) {
+		control->setColumnCount(int(headers.size()));
+		control->setHorizontalHeaderLabels(headers);
+		control->setEditTriggers(QAbstractItemView::DoubleClicked | QAbstractItemView::EditKeyPressed | QAbstractItemView::AnyKeyPressed);
+		control->setSelectionBehavior(QAbstractItemView::SelectItems);
+		control->setSelectionMode(QAbstractItemView::SingleSelection);
+		// Arrows move between cells; Tab leaves the table for the next control.
+		control->setTabKeyNavigation(false);
+		control->setTextElideMode(Qt::ElideMiddle);
+		control->verticalHeader()->setVisible(false);
+		// Paths share the width and elide in the middle, keeping both ends.
+		control->horizontalHeader()->setSectionResizeMode(QHeaderView::Stretch);
+		control->setLayoutDirection(Qt::LeftToRight);
+		control->setMinimumHeight(control->fontMetrics().lineSpacing() * 6);
+		control->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Preferred);
+		control->setObjectName(QString::fromLatin1(id));
+		control->setAccessibleName(label);
+		control->setAccessibleDescription(description);
+		control->setToolTip(description);
+		auto *text = new QLabel(label);
+		text->setTextFormat(Qt::PlainText);
+		text->setWordWrap(true);
+		text->setBuddy(control);
+		form->addRow(text);
+		form->addRow(control);
+	};
+	auto *team = new QCheckBox(Text::tr("Team skins (red and blue)"));
+	team->setChecked(m_playerBundleOptions.teamVariants);
+	team->setObjectName(QStringLiteral("playerBundleTeam"));
+	team->setAccessibleName(team->text());
+	team->setAccessibleDescription(Text::tr("Team games look for lower_red.skin and lower_blue.skin whichever skin a player chose. Adds red and blue "
+											"skins, which need red or blue materials on at least one part."));
+	team->setToolTip(team->accessibleDescription());
+	form->addRow(team);
+	auto *skins = new QTableWidget;
+	table(skins, "playerBundleSkins", Text::tr("More skins"),
+		  Text::tr("One row per skin. Lower, upper and head take a .skin file or package:PATH; empty uses the part's stored skin variant of the "
+				   "same name, else its own materials. Icon takes an image; empty reuses the package icon. Press F2 to edit a cell."),
+		  {Text::tr("Skin"), Text::tr("Lower"), Text::tr("Upper"), Text::tr("Head"), Text::tr("Icon")});
+	for (const auto &variant : m_playerBundleOptions.variants)
+	{
+		const int row = skins->rowCount();
+		skins->insertRow(row);
+		skins->setItem(row, 0, new QTableWidgetItem(variant.name));
+		for (int role = 0; role < 3; ++role)
+			skins->setItem(row, role + 1, new QTableWidgetItem(variant.skins[role] ? modelPlayerReferenceText(*variant.skins[role]) : QString()));
+		skins->setItem(row, 4, new QTableWidgetItem(variant.icon ? modelPlayerReferenceText(*variant.icon) : QString()));
+	}
+	auto *skinButtons = new QHBoxLayout;
+	auto *addSkin = new QPushButton(Text::tr("Add Skin"));
+	auto *removeSkin = new QPushButton(Text::tr("Remove Skin"));
+	addSkin->setObjectName(QStringLiteral("playerBundleAddSkin"));
+	removeSkin->setObjectName(QStringLiteral("playerBundleRemoveSkin"));
+	addSkin->setAccessibleDescription(Text::tr("Add a row for another skin; type its name in the Skin column."));
+	removeSkin->setAccessibleDescription(Text::tr("Remove the selected skin row."));
+	for (auto *control : {addSkin, removeSkin})
+	{
+		control->setAutoDefault(false);
+		control->setAccessibleName(control->text());
+		control->setToolTip(control->accessibleDescription());
+		skinButtons->addWidget(control);
+	}
+	skinButtons->addStretch();
+	form->addRow(skinButtons);
+	auto *detail = new QComboBox;
+	detail->addItems({Text::tr("None"), Text::tr("Generate"), Text::tr("Each part's stored detail levels")});
+	detail->setCurrentIndex(int(m_playerBundleOptions.detailLevels));
+	field(detail, "playerBundleDetail", Text::tr("Detail levels"),
+		  Text::tr("Quake III loads lower_1.md3 and lower_2.md3 (and the same for upper and head) as lower-detail versions by distance. Generate "
+				   "reduces each part; stored detail levels use each part's own recipe."));
+	auto *levels = new QSpinBox;
+	levels->setRange(1, 2);
+	levels->setValue(std::clamp(m_playerBundleOptions.lodLevels, 1, 2));
+	levels->setLayoutDirection(Qt::LeftToRight);
+	field(levels, "playerBundleLodLevels", Text::tr("Generated levels"), Text::tr("How many detail levels to generate per part, up to the 2 Quake III loads."));
+	auto *ratio = new QDoubleSpinBox;
+	ratio->setRange(0.05, 0.95);
+	ratio->setSingleStep(0.05);
+	ratio->setDecimals(2);
+	ratio->setValue(m_playerBundleOptions.lodRatio);
+	ratio->setLayoutDirection(Qt::LeftToRight);
+	field(ratio, "playerBundleLodRatio", Text::tr("Share kept per level"),
+		  Text::tr("The share of the level above's triangles each generated level keeps."));
+	auto *sounds = new QTableWidget;
+	table(sounds, "playerBundleSounds", Text::tr("Custom sounds"),
+		  Text::tr("A sound file or package:PATH per custom sound, published as sound/player/<player>/<name>.wav. Empty uses the default "
+				   "model's sound. Mono PCM WAV is kept; other audio is converted to 22,050 Hz mono 16-bit PCM. Press F2 to edit a cell."),
+		  {Text::tr("Sound"), Text::tr("Source")});
+	for (const auto &name : modelPlayerSoundNames())
+	{
+		const int row = sounds->rowCount();
+		sounds->insertRow(row);
+		auto *label = new QTableWidgetItem(name);
+		label->setFlags(label->flags() & ~Qt::ItemIsEditable);
+		sounds->setItem(row, 0, label);
+		const auto chosen = std::find_if(m_playerBundleOptions.sounds.cbegin(), m_playerBundleOptions.sounds.cend(),
+										 [&](const auto &sound) { return sound.name == name; });
+		sounds->setItem(row, 1, new QTableWidgetItem(chosen == m_playerBundleOptions.sounds.cend() ? QString() : modelPlayerReferenceText(chosen->source)));
+	}
+	sounds->horizontalHeader()->setSectionResizeMode(0, QHeaderView::ResizeToContents);
 	auto *files = new QTreeWidget;
 	files->setObjectName(QStringLiteral("playerBundleFiles"));
 	files->setAccessibleName(Text::tr("Reviewed player package files"));
@@ -240,6 +350,36 @@ void ModelAssemblyDialog::choosePlayerBundle()
 		connect(edit, &QLineEdit::textChanged, &dialog, invalidate);
 	connect(head, &QComboBox::currentIndexChanged, &dialog, invalidate);
 	connect(index, &QSpinBox::valueChanged, &dialog, invalidate);
+	connect(team, &QCheckBox::toggled, &dialog, invalidate);
+	connect(skins, &QTableWidget::cellChanged, &dialog, invalidate);
+	connect(sounds, &QTableWidget::cellChanged, &dialog, invalidate);
+	connect(levels, &QSpinBox::valueChanged, &dialog, invalidate);
+	connect(ratio, &QDoubleSpinBox::valueChanged, &dialog, invalidate);
+	const auto detailControls = [&] {
+		levels->setEnabled(detail->currentIndex() == int(ModelPlayerDetailLevels::Generated));
+		ratio->setEnabled(detail->currentIndex() == int(ModelPlayerDetailLevels::Generated));
+	};
+	detailControls();
+	connect(detail, &QComboBox::currentIndexChanged, &dialog, [&] {
+		detailControls();
+		invalidate();
+	});
+	connect(addSkin, &QPushButton::clicked, &dialog, [&] {
+		const int row = skins->rowCount();
+		skins->insertRow(row);
+		for (int column = 0; column < 5; ++column)
+			skins->setItem(row, column, new QTableWidgetItem);
+		skins->setCurrentCell(row, 0);
+		skins->setFocus(Qt::OtherFocusReason);
+		invalidate();
+	});
+	connect(removeSkin, &QPushButton::clicked, &dialog, [&] {
+		if (skins->currentRow() >= 0)
+		{
+			skins->removeRow(skins->currentRow());
+			invalidate();
+		}
+	});
 	connect(kind, &QComboBox::currentIndexChanged, &dialog, [&] {
 		index->setEnabled(kind->currentIndex() == 1);
 		invalidate();
@@ -275,12 +415,33 @@ void ModelAssemblyDialog::choosePlayerBundle()
 	});
 	connect(review, &QPushButton::clicked, &dialog, [&] {
 		invalidate();
-		const ModelPlayerBundleOptions options{name->text(),
-											   skin->text(),
-											   head->currentData().toString(),
-											   icon->text(),
-											   kind->currentIndex() == 0 ? ModelAssemblySource::File : ModelAssemblySource::Package,
-											   kind->currentIndex() == 0 ? -1 : index->value()};
+		ModelPlayerBundleOptions options{name->text(),
+										 skin->text(),
+										 head->currentData().toString(),
+										 icon->text(),
+										 kind->currentIndex() == 0 ? ModelAssemblySource::File : ModelAssemblySource::Package,
+										 kind->currentIndex() == 0 ? -1 : index->value()};
+		const auto cell = [](QTableWidget *control, int row, int column) {
+			const auto *item = control->item(row, column);
+			return item ? item->text().trimmed() : QString();
+		};
+		for (int row = 0; row < skins->rowCount(); ++row)
+		{
+			ModelPlayerSkinVariant variant{cell(skins, row, 0), {}, {}};
+			for (int role = 0; role < 3; ++role)
+				if (!cell(skins, row, role + 1).isEmpty())
+					variant.skins[role] = modelPlayerReference(cell(skins, row, role + 1));
+			if (!cell(skins, row, 4).isEmpty())
+				variant.icon = modelPlayerReference(cell(skins, row, 4));
+			options.variants.append(variant);
+		}
+		options.teamVariants = team->isChecked();
+		options.detailLevels = ModelPlayerDetailLevels(detail->currentIndex());
+		options.lodLevels = levels->value();
+		options.lodRatio = ratio->value();
+		for (int row = 0; row < sounds->rowCount(); ++row)
+			if (!cell(sounds, row, 1).isEmpty())
+				options.sounds.append({cell(sounds, row, 0), modelPlayerReference(cell(sounds, row, 1))});
 		body->setEnabled(false);
 		buttons->setEnabled(false);
 		status->setText(Text::tr("Preparing native models and dependencies…"));
@@ -303,9 +464,8 @@ void ModelAssemblyDialog::choosePlayerBundle()
 			row->setData(0, Qt::AccessibleDescriptionRole, identity);
 		}
 		details->setPlainText(bundle.notes.join(QStringLiteral("\n\n")));
-		status->setText(Text::tr("Ready: %1 files, %2 bytes. Review the files and notes before exporting.")
-							.arg(bundle.files.size())
-							.arg(bundle.totalBytes));
+		status->setText(Text::tr("Ready: %Ln file(s), %1. Review the files and notes before exporting.", nullptr, int(bundle.files.size()))
+							.arg(QLocale().formattedDataSize(bundle.totalBytes)));
 		prepared = std::move(bundle);
 		files->clearSelection();
 		files->setCurrentItem(files->topLevelItem(0), 0, QItemSelectionModel::ClearAndSelect);
@@ -331,6 +491,7 @@ void ModelAssemblyDialog::choosePlayerBundle()
 			publish->setEnabled(false);
 	});
 	name->setFocus();
+	fitDialogToScreen(&dialog, QSize(740, 800));
 	dialog.exec();
 }
 } // namespace vibestudio

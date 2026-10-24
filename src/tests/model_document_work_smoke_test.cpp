@@ -92,7 +92,9 @@ int main(int argc, char **argv)
 							 auto *status = widget->findChild<QLabel *>(QStringLiteral("meshOperationStatus"));
 							 if (button && button->isEnabled())
 							 {
-								 usedCancel = status && !status->accessibleName().isEmpty() && status->accessibleName() == status->text() &&
+								 // The status keeps its name; what it says is its description.
+								 usedCancel = status && !status->accessibleName().isEmpty() && status->accessibleName() != status->text() &&
+											  status->accessibleDescription() == status->text() &&
 											  widget->accessibleDescription() == status->text() && button->focusPolicy() != Qt::NoFocus;
 								 const auto evidence = qEnvironmentVariable("VIBESTUDIO_MODELLER_EVIDENCE");
 								 if (!evidence.isEmpty())

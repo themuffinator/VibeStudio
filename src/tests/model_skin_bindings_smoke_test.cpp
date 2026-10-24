@@ -1,5 +1,6 @@
 #include "core/model_skin_bindings.h"
 #include "core/model_document.h"
+#include "tests/model_output_test_helpers.h"
 #include "core/package_draft.h"
 #include "tests/model_skin_binding_test_helpers.h"
 #include "tests/model_skin_source_test_helpers.h"
@@ -229,6 +230,18 @@ int main(int argc, char **argv)
 	ok &= expect(
 		cli({"--package", assets, "--entry", "default.skin", "--output", QDir(assets).filePath("protected.mesh.json"), "--dry-run"}, 2),
 		"CLI cannot overwrite package input paths even on dry runs");
+	for (const auto &packagePath : {assets, draft})
+		for (bool dry : {true, false})
+		{
+			const auto input = packagePath == assets ? QDir(assets).filePath("default.skin") : QDir(draft).filePath("document.json");
+			const auto before = read(input);
+			const auto alias = temporary.filePath(QStringLiteral("%1-%2-alias.mesh.json").arg(packagePath == assets ? "folder" : "draft").arg(dry));
+			ok &= expect(tests::modelTestHardLink(input, alias), "prepare package binding input alias");
+			auto command = QStringList{"--package", packagePath, "--entry", "default.skin", "--output", alias, "--overwrite"};
+			if (dry) command.append("--dry-run");
+			ok &= expect(cli(command, 2) && read(input) == before && read(alias) == before,
+				"skin-binding CLI protects folder and draft input aliases in dry and real writes");
+		}
 	std::cout << "Skin binding parser, transaction, native export, package reads and CLI checks completed.\n";
 	return ok ? 0 : 1;
 }

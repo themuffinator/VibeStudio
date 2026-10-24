@@ -1,4 +1,5 @@
 #include "core/model_geometric_topology.h"
+#include "core/model_vertex_identity.h"
 
 #include "core/model_geometry_helpers.h"
 
@@ -32,6 +33,11 @@ bool samePositions(const ModelSurface &surface, int a, int b)
 quint64 positionHash(const ModelSurface &surface, int vertex)
 {
 	quint64 hash = 1469598103934665603ull;
+	if (!surface.topologyVertices.isEmpty())
+	{
+		hash ^= quint32(surface.topologyVertices[vertex]);
+		hash *= 1099511628211ull;
+	}
 	for (const auto &frame : surface.frames)
 	{
 		const auto p = frame.positions[vertex];
@@ -100,6 +106,7 @@ bool buildModelGeometricTopology(const ModelSurface &surface, ModelGeometricTopo
 		}
 	}
 	ModelGeometricTopology topology;
+	if (!validateModelVertexIdentities(surface, error, control)) return false;
 	topology.vertexGroup.resize(count);
 	topology.copies.resize(count);
 	topology.groupFaces.resize(count);
@@ -113,7 +120,8 @@ bool buildModelGeometricTopology(const ModelSurface &surface, ModelGeometricTopo
 		int group = -1;
 		for (int candidate : std::as_const(bucket))
 		{
-			if (samePositions(surface, candidate, vertex))
+			if ((surface.topologyVertices.isEmpty() || surface.topologyVertices[candidate] == surface.topologyVertices[vertex]) &&
+				samePositions(surface, candidate, vertex))
 			{
 				group = candidate;
 				break;
@@ -157,7 +165,7 @@ bool buildModelGeometricTopology(const ModelSurface &surface, ModelGeometricTopo
 }
 
 bool buildModelQuadTopology(const ModelSurface &surface, int frame, double maxAngleDegrees, ModelQuadTopology *result, QString *error,
-							const ModelWorkControl &control)
+							const ModelWorkControl &control, const QSet<ModelEdge> &protectedEdges)
 {
 	if (error)
 		error->clear();
@@ -172,6 +180,13 @@ bool buildModelQuadTopology(const ModelSurface &surface, int frame, double maxAn
 	ModelQuadTopology topology;
 	if (!buildModelGeometricTopology(surface, &topology.geometry, error, control))
 		return false;
+	QSet<ModelEdge> preserved;
+	for (auto edge : protectedEdges)
+	{
+		if (!work.step())
+			return false;
+		preserved.insert(topology.geometry.geometricEdge(edge.first, edge.second));
+	}
 	const auto &positions = surface.frames[frame];
 	// Directed indexed edges, so a partner must traverse the shared edge in the
 	// opposite direction (consistent winding) and the edge must not branch.
@@ -211,6 +226,8 @@ bool buildModelQuadTopology(const ModelSurface &surface, int frame, double maxAn
 		if (directed.value(qMakePair(b, a), -1) != second)
 			continue;
 		const auto geometricEdge = topology.geometry.geometricEdge(a, b);
+		if (preserved.contains(geometricEdge))
+			continue;
 		if (topology.geometry.edgeFaces.value(geometricEdge).size() != 2)
 			continue;
 		const auto rotated = rotateToEdge(f, a, b);

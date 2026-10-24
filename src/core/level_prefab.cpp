@@ -2,6 +2,8 @@
 #include "core/level_document.h"
 #include "core/level_patch.h"
 #include "core/level_scene_locks.h"
+#include "core/level_scene.h"
+#include "core/level_linked_groups.h"
 #include "core/level_texture_mapping.h"
 #include "core/package_publication.h"
 #include <QCoreApplication>
@@ -203,10 +205,21 @@ bool inspectLevelPrefab(const LevelPrefab &prefab, LevelMapDocument *definition,
 	if (!boundedText(prefab.mapText, error, cancelled)) {
 		return false;
 	}
+	const auto marker = QStringLiteral("\n// VibeStudioScene: ");
+	const auto trailer = prefab.mapText.lastIndexOf(marker);
+	if (trailer >= 0) {
+		auto tail = prefab.mapText.mid(trailer+marker.size());
+		if (tail.endsWith(QLatin1Char('\n'))) { tail.chop(1); }
+		if (tail.endsWith(QLatin1Char('\r'))) { tail.chop(1); }
+		if (tail.contains(QLatin1Char('\n')) || tail.contains(QLatin1Char('\r'))) {
+			return fail(error,QCoreApplication::translate("LevelPrefab", "Prefab scene metadata must be the final map trailer."));
+		}
+	}
 	LevelMapDocument parsed;
 	if (!loadLevelMapBytes({QStringLiteral("prefab.map"), {}, prefab.engineFamily}, prefab.mapText.toUtf8(), &parsed, error)) {
 		return false;
 	}
+	if (!validateLevelScene(parsed,parsed.scene,error)) { return false; }
 	if (!textMap(parsed)) {
 		return fail(error, QCoreApplication::translate("LevelPrefab", "The prefab does not contain a Quake-family map."));
 	}
@@ -265,6 +278,10 @@ bool inspectLevelPrefab(const LevelPrefab &prefab, LevelMapDocument *definition,
 	}
 	LevelPrefabReport summary;
 	summary.statistics = levelMapStatistics(parsed);
+	for (const auto& node : parsed.scene.nodes) {
+		if (node.kind == LevelSceneNodeKind::Group) { ++summary.groups; }
+		if (!node.linkId.isEmpty()) { ++summary.linkedGroups; }
+	}
 	summary.dialect = levelMapBrushDialect(parsed);
 	if (summary.dialect == QStringLiteral("mixed")) {
 		return fail(error, QCoreApplication::translate("LevelPrefab", "A prefab cannot mix brush texture dialects."));
@@ -304,6 +321,7 @@ bool createLevelPrefab(const LevelMapDocument &source, const LevelPrefabCreateRe
 	if (!prefab || !textMap(source) || source.selection.isEmpty()) {
 		return fail(error, QCoreApplication::translate("LevelPrefab", "Select Quake-family map objects to create a prefab."));
 	}
+	if (!validateLevelScene(source,source.scene,error)) { return false; }
 	auto selected = source;
 	QStringList expanded;
 	for (const auto &ref : source.selection) {
@@ -386,11 +404,12 @@ bool createLevelPrefab(const LevelMapDocument &source, const LevelPrefabCreateRe
 
 QByteArray serializeLevelPrefab(const LevelPrefab &prefab, QString *error, LevelPrefabCancellation cancelled)
 {
-	if (!inspectLevelPrefab(prefab, nullptr, nullptr, error, cancelled)) {
+	LevelPrefabReport report;
+	if (!inspectLevelPrefab(prefab, nullptr, &report, error, cancelled)) {
 		return {};
 	}
 	const QJsonObject object{{QStringLiteral("format"), QStringLiteral("VibeStudioPrefab")},
-							 {QStringLiteral("version"), 1},
+							 {QStringLiteral("version"), report.groups > 0 ? 2 : 1},
 							 {QStringLiteral("name"), prefab.name},
 							 {QStringLiteral("description"), prefab.description},
 							 {QStringLiteral("engineFamily"), prefab.engineFamily},
@@ -416,7 +435,7 @@ bool parseLevelPrefab(const QByteArray &bytes, LevelPrefab *prefab, QString *err
 	const auto object = json.object();
 	if (parse.error != QJsonParseError::NoError || !json.isObject() ||
 		object.value(QStringLiteral("format")).toString() != QStringLiteral("VibeStudioPrefab") ||
-		object.value(QStringLiteral("version")).toDouble() != 1) {
+		(object.value(QStringLiteral("version")).toDouble() != 1 && object.value(QStringLiteral("version")).toDouble() != 2)) {
 		return fail(error, QCoreApplication::translate("LevelPrefab", "Unsupported or invalid VibeStudio prefab file."));
 	}
 	LevelPrefab result;
@@ -609,6 +628,30 @@ bool insertLevelPrefab(LevelMapDocument *destination, const LevelPrefab &prefab,
 	}
 	// Use normal property services so source-line rewrites, comments and cached
 	// entity fields remain consistent. These edits happen only in the isolated draft.
+	auto scene = definition.scene;
+	if (summary.linkedGroups > 0) {
+		// Linked groups move with the content below: turned about the anchor,
+		// about x, then y, then z, then moved to the placement. Each frame
+		// takes the same map (core/level_linked_groups.h).
+		std::array<double, 12> map{1, 0, 0, -prefab.anchor.x, 0, 1, 0, -prefab.anchor.y, 0, 0, 1, -prefab.anchor.z};
+		const double turns[3]{placement.rotation.x, placement.rotation.y, placement.rotation.z};
+		for (int axis = 0; axis < 3; ++axis) {
+			std::array<double, 12> turn{};
+			for (int column = 0; column < 3; ++column) {
+				const auto moved = rotateLevelVector({column == 0 ? 1.0 : 0.0, column == 1 ? 1.0 : 0.0, column == 2 ? 1.0 : 0.0, true}, axis, turns[axis]);
+				turn[column] = moved.x; turn[4+column] = moved.y; turn[8+column] = moved.z;
+			}
+			map = levelLinkFrameAfter(turn, map);
+		}
+		map = levelLinkFrameAfter({1, 0, 0, placement.position.x, 0, 1, 0, placement.position.y, 0, 0, 1, placement.position.z}, map);
+		for (auto& node : scene.nodes) {
+			if (!node.linkId.isEmpty()) { node.linkFrame = levelLinkFrameAfter(map, node.linkFrame); }
+		}
+	}
+	// The source's locks and linked-instance propagation apply to editing the
+	// template, not to placement of its isolated geometry. Restore them before
+	// importing, with baselines derived from the fully transformed draft.
+	definition.scene = {};
 	const auto entities = definition.entities;
 	for (const auto &entity : entities) {
 		for (const auto &p : entity.properties) {
@@ -641,6 +684,8 @@ bool insertLevelPrefab(LevelMapDocument *destination, const LevelPrefab &prefab,
 		!moveLevelMapSelection(&definition, delta.x, delta.y, delta.z, {placement.textureLock, false}, error)) {
 		return false;
 	}
+	definition.scene = scene;
+	refreshLevelLinkBaselines(definition,&definition.scene);
 	const auto text = levelMapSelectionText(definition, error);
 	if (text.isEmpty() || !check(cancelled, error)) {
 		return false;
@@ -721,6 +766,8 @@ QJsonObject levelPrefabReportJson(const LevelPrefabReport &report)
 		objects << levelMapSelectionRefId(ref);
 	}
 	return {{QStringLiteral("entities"), report.statistics.entityCount - 1},
+			{QStringLiteral("groups"), report.groups},
+			{QStringLiteral("linkedGroups"), report.linkedGroups},
 			{QStringLiteral("brushes"), report.statistics.brushCount},
 			{QStringLiteral("patches"), report.statistics.patchCount},
 			{QStringLiteral("dialect"), report.dialect},

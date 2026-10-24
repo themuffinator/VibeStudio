@@ -2,6 +2,7 @@
 #include "core/level_document.h"
 #include "core/level_material_paint.h"
 #include "core/level_surface_clipboard.h"
+#include "core/level_face_clipboard.h"
 #include <QCoreApplication>
 #include <QDir>
 #include <QFile>
@@ -10,6 +11,7 @@
 #include <QJsonDocument>
 #include <QSaveFile>
 #include <QSet>
+#include <QStringDecoder>
 
 namespace vibestudio::cli {
 namespace { struct Text { Q_DECLARE_TR_FUNCTIONS(LevelSurfaceClipboardCli) }; }
@@ -18,7 +20,7 @@ LevelSurfaceClipboardCliResult runLevelSurfaceClipboard(const QStringList& argum
 	const auto failure = [](int code, const QString& message) { return LevelSurfaceClipboardCliResult{code, message, {}, {}}; };
 	const QSet<QString> globals{"--settings-file", "--locale", "--catalog-root"};
 	const QSet<QString> flags{"--cli", "--json", "--quiet", "--verbose", "--overwrite", "--dry-run", "--allow-valve220", "--mapping-only", "--stroke"};
-	const QSet<QString> options{"--target", "--clipboard", "--output", "--mode", "--texture-size", "--material-size", "--object"};
+	const QSet<QString> options{"--target", "--clipboard", "--output", "--mode", "--texture-size", "--material-size", "--object", "--format"};
 	const QSet<QString> repeated{"--target", "--material-size", "--object"};
 	QSet<QString> seen; QHash<QString, QString> values; QStringList positional, selectors, objects, materialSizes;
 	for (qsizetype i = 1; i < arguments.size(); ++i) {
@@ -43,8 +45,12 @@ LevelSurfaceClipboardCliResult runLevelSurfaceClipboard(const QStringList& argum
 		return failure(2, Text::tr("Expected map copy-surface|paste-surface <map> with --target and --output."));
 	}
 	const bool paste = positional[1] == QLatin1String("paste-surface");
-	if (selectors.isEmpty() || selectors.size() > 16384 || (!paste && selectors.size() != 1) || !values.contains("--output")) {
-		return failure(2, Text::tr("Copy needs one face target; paste needs 1–16,384 targets. Both require --output, including dry runs."));
+	const auto copyFormat = values.value("--format", "json");
+	if ((paste && seen.contains("--format")) || (copyFormat != QLatin1String("json") && copyFormat != QLatin1String("map"))) {
+		return failure(2, Text::tr("Only copy accepts --format json|map."));
+	}
+	if (selectors.isEmpty() || selectors.size() > 16384 || (!paste && copyFormat == QLatin1String("json") && selectors.size() != 1) || !values.contains("--output")) {
+		return failure(2, Text::tr("JSON copy needs one face; map-text copy and paste accept 1–16,384 targets. Both require --output, including dry runs."));
 	}
 	if ((!paste && (seen.contains("--clipboard") || seen.contains("--mode") || seen.contains("--texture-size") || seen.contains("--allow-valve220")
 		|| seen.contains("--mapping-only") || seen.contains("--material-size") || seen.contains("--object") || seen.contains("--stroke")))
@@ -55,17 +61,17 @@ LevelSurfaceClipboardCliResult runLevelSurfaceClipboard(const QStringList& argum
 		return failure(2, Text::tr("The output would overwrite an input of a different file type. Choose a separate output file."));
 	}
 	LevelSurfacePasteOptions request;
-	const auto mode = values.value("--mode", "parameters");
-	if (mode != QLatin1String("parameters") && mode != QLatin1String("project") && mode != QLatin1String("seamless") && mode != QLatin1String("radiant-values") && mode != QLatin1String("radiant-project")) {
-		return failure(2, Text::tr("Surface mode must be parameters, project, seamless, radiant-values or radiant-project."));
+	auto mode = values.value("--mode", "parameters");
+	if (mode != QLatin1String("parameters") && mode != QLatin1String("project") && mode != QLatin1String("seamless") && mode != QLatin1String("radiant-values") && mode != QLatin1String("radiant-project") && mode != QLatin1String("attributes")) {
+		return failure(2, Text::tr("Surface mode must be parameters, project, seamless, radiant-values, radiant-project or attributes."));
 	}
-	request.mode = mode == QLatin1String("radiant-project") ? LevelSurfacePasteMode::RadiantProject : mode == QLatin1String("radiant-values") ? LevelSurfacePasteMode::RadiantValues : mode == QLatin1String("seamless") ? LevelSurfacePasteMode::Seamless
+	request.mode = mode == QLatin1String("attributes") ? LevelSurfacePasteMode::Attributes : mode == QLatin1String("radiant-project") ? LevelSurfacePasteMode::RadiantProject : mode == QLatin1String("radiant-values") ? LevelSurfacePasteMode::RadiantValues : mode == QLatin1String("seamless") ? LevelSurfacePasteMode::Seamless
 		: mode == QLatin1String("project") ? LevelSurfacePasteMode::Project : LevelSurfacePasteMode::Parameters;
 	request.allowValve220 = seen.contains("--allow-valve220");
 	request.mappingOnly = seen.contains("--mapping-only"); request.includeSelection = !objects.isEmpty();
-	const bool parameters = request.mode == LevelSurfacePasteMode::Parameters || request.mode == LevelSurfacePasteMode::RadiantValues || request.mode == LevelSurfacePasteMode::RadiantProject;
+	const bool parameters = request.mode == LevelSurfacePasteMode::Parameters || request.mode == LevelSurfacePasteMode::RadiantValues || request.mode == LevelSurfacePasteMode::RadiantProject || request.mode == LevelSurfacePasteMode::Attributes;
 	if ((parameters && request.allowValve220) || (!parameters && request.includeSelection)) {
-		return failure(2, Text::tr("Valve conversion requires project or seamless mode; --object requires parameters, radiant-values or radiant-project."));
+		return failure(2, Text::tr("Valve conversion requires project or seamless mode; --object requires parameters, attributes, radiant-values or radiant-project."));
 	}
 	const auto dimensions = [](const QString& value, QSize* result) {
 		const auto size = value.split(','); bool x = false, y = false;
@@ -119,22 +125,36 @@ LevelSurfaceClipboardCliResult runLevelSurfaceClipboard(const QStringList& argum
 	const bool dryRun = seen.contains("--dry-run"), overwrite = seen.contains("--overwrite");
 	result.payload = {{"map", document.sourcePath}, {"output", QFileInfo(output).absoluteFilePath()}, {"dryRun", dryRun}, {"targets", QJsonArray::fromStringList(selectors)}};
 	if (!paste) {
-		if (!copyLevelSurface(document, {targets.first().objectId, targets.first().faceIndex}, &clipboard, &error)) { return failure(4, error); }
+		const auto sourceTarget = copyFormat == QLatin1String("map") ? targets.last() : targets.first();
+		if (!copyLevelSurface(document, {sourceTarget.objectId, sourceTarget.faceIndex}, &clipboard, &error)) { return failure(4, error); }
 		const QFileInfo destination(output);
 		if (destination.exists() && (!destination.isFile() || !overwrite)) { return failure(4, Text::tr("The surface output exists. Choose another file or use --overwrite.")); }
 		if (!destination.dir().exists()) { return failure(4, Text::tr("The output directory does not exist.")); }
-		const auto bytes = serializeLevelSurfaceClipboard(clipboard);
+		QByteArray bytes;
+		if (copyFormat == QLatin1String("map")) {
+			QVector<LevelSurfaceFace> faces; for (const auto& target : targets) { faces << LevelSurfaceFace{target.objectId, target.faceIndex}; }
+			bytes = levelFaceSelectionText(document, faces, &error).toUtf8();
+			if (bytes.isEmpty()) { return failure(4, error); }
+		} else { bytes = serializeLevelSurfaceClipboard(clipboard); }
 		if (!dryRun) {
 			QSaveFile file(output);
 			if (!file.open(QIODevice::WriteOnly) || file.write(bytes) != bytes.size() || !file.commit()) { return failure(4, file.errorString()); }
 		}
 		result.payload.insert("mapping", clipboard.mappingKind()); result.payload.insert("material", clipboard.material());
+		result.payload.insert("format", copyFormat); result.payload.insert("faceCount", targets.size());
 		result.lines << (dryRun ? Text::tr("Would copy surface settings to %1.") : Text::tr("Copied surface settings to %1.")).arg(output);
 		return result;
 	}
 	QFile file(values.value("--clipboard"));
 	if (!file.open(QIODevice::ReadOnly)) { return failure(3, file.errorString()); }
-	if (!parseLevelSurfaceClipboard(file.read(16385), &clipboard, &error)) { return failure(4, error); }
+	const auto bytes = file.read(8388609);
+	QStringDecoder decoder(QStringDecoder::Utf8); const QString faceText = decoder(bytes);
+	if (decoder.hasError() || bytes.size() > 8388608 || faceText.contains(QChar::Null)) { return failure(4, Text::tr("Surface clipboard must be valid UTF-8 within 8 MiB, without NUL characters.")); }
+	const bool rawFaces = looksLikeLevelFaceText(faceText);
+	if (rawFaces) {
+		if (!parseLevelFaceClipboard(faceText, &clipboard, &error)) { return failure(4, error); }
+		if (!seen.contains("--mode")) { request.mode = LevelSurfacePasteMode::Attributes; mode = QStringLiteral("attributes"); }
+	} else if (!parseLevelSurfaceClipboard(bytes, &clipboard, &error)) { return failure(4, error); }
 	LevelSurfaceEditPlan plan;
 	if (stroke) {
 		LevelSurfaceStroke transaction(document, clipboard);

@@ -299,6 +299,49 @@ bool setLevelTextureProjection(LevelMapBrushFace* face, const LevelTextureProjec
 	return true;
 }
 
+LevelTextureProjection nearestClassicLevelTextureProjection(const LevelMapBrushFace& face, const LevelTextureProjection& projection,
+	const QVector<QPair<LevelMapVec3, QPointF>>& anchors)
+{
+	// Workflow reference: NetRadiant Custom Texdef_from_ST at 449778b3
+	// (GPL-2.0-or-later), which keeps a classic face classic by dropping what
+	// it cannot hold. Original least-squares solution; see docs/CREDITS.md.
+	const auto p = plane(face);
+	if (!p.valid || !projection.valid || anchors.isEmpty() || !finite(projection.u) || !finite(projection.v)) { return {}; }
+	const auto n = normal(p);
+	const auto axes = classicAxes(n);
+	const double dropped = component(n, axes[2]);
+	if (std::abs(dropped) < 1e-12) { return {}; }
+	// On the plane, the dropped coordinate follows from the other two, so each
+	// texture axis reduces to a 2D row in the axial plane.
+	const double uNormal = component(projection.u, axes[2]) / dropped, vNormal = component(projection.v, axes[2]) / dropped;
+	const auto u = add(projection.u, scale(n, -uNormal)), v = add(projection.v, scale(n, -vNormal));
+	const double ux = component(u, axes[0]), uy = component(u, axes[1]), vx = component(v, axes[0]), vy = component(v, axes[1]);
+	// Rows a·(c, s) and b·(s, -c), nearest in the least-squares sense: the
+	// angle maximises (u·d1)² + (v·d2)², which is A + B·cos 2θ + C·sin 2θ.
+	const double b2 = (ux * ux - uy * uy + vy * vy - vx * vx) / 2, c2 = ux * uy - vx * vy;
+	const double theta = (b2 == 0 && c2 == 0) ? std::atan2(uy, ux) : std::atan2(c2, b2) / 2;
+	const double c = std::cos(theta), s = std::sin(theta);
+	const double a = ux * c + uy * s, b = vx * s - vy * c;
+	if (!std::isfinite(a) || !std::isfinite(b) || std::abs(a) < 1e-12 || std::abs(b) < 1e-12) { return {}; }
+	LevelTextureProjection result;
+	result.u = {0, 0, 0, true};
+	result.v = result.u;
+	setComponent(&result.u, axes[0], a * c);
+	setComponent(&result.u, axes[1], a * s);
+	setComponent(&result.v, axes[0], b * s);
+	setComponent(&result.v, axes[1], -b * c);
+	double offsetU = 0, offsetV = 0;
+	for (const auto& anchor : anchors) {
+		offsetU += anchor.second.x() - dot(result.u, anchor.first);
+		offsetV += anchor.second.y() - dot(result.v, anchor.first);
+	}
+	result.offsetU = offsetU / static_cast<double>(anchors.size());
+	result.offsetV = offsetV / static_cast<double>(anchors.size());
+	result.normalizedCoordinates = projection.normalizedCoordinates;
+	result.valid = finite(result.u) && finite(result.v) && std::isfinite(result.offsetU) && std::isfinite(result.offsetV);
+	return result;
+}
+
 LevelMapVec3 rotateLevelVector(const LevelMapVec3 &vector, int axis, double degrees)
 {
 	if (axis < 0 || axis > 2 || !finite(vector) || !std::isfinite(degrees)) {

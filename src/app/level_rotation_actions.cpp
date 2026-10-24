@@ -19,6 +19,7 @@ bool ApplicationShell::applyLevelRotation(const LevelMapRotationRequest& request
 	return true;
 }
 void ApplicationShell::rotateLevelMapSelectionPreciselyFromUi() {
+	if (levelComponentsActive()) { transformLevelComponentsFromUi(1); return; }
 	if (m_levelMapDocument.selection.isEmpty()) {
 		return;
 	}

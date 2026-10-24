@@ -48,8 +48,9 @@ constexpr CommandEntry kCommands[] = {
 	{"meshSelectLinkedPick", "select", QT_TRANSLATE_NOOP("VibeStudioModelControls", "Select Linked Under Pointer"), "L"},
 	{"meshSelectMore", "select", QT_TRANSLATE_NOOP("VibeStudioModelControls", "Grow Selection"), "Ctrl+=|Ctrl+Num++"},
 	{"meshSelectLess", "select", QT_TRANSLATE_NOOP("VibeStudioModelControls", "Shrink Selection"), "Ctrl+-|Ctrl+Num+-"},
-	{"meshSelectLoop", "select", QT_TRANSLATE_NOOP("VibeStudioModelControls", "Select Edge Loops of Selection"), ""},
-	{"meshSelectRing", "select", QT_TRANSLATE_NOOP("VibeStudioModelControls", "Select Edge Rings of Selection"), ""},
+	// Keyboard routes to Alt+click and Ctrl+Alt+click, as 3ds Max binds them.
+	{"meshSelectLoop", "select", QT_TRANSLATE_NOOP("VibeStudioModelControls", "Select Edge Loops of Selection"), "Alt+L"},
+	{"meshSelectRing", "select", QT_TRANSLATE_NOOP("VibeStudioModelControls", "Select Edge Rings of Selection"), "Alt+R"},
 	{"meshSelectNonManifold", "select", QT_TRANSLATE_NOOP("VibeStudioModelControls", "Select Non-Manifold"), "Shift+Ctrl+Alt+M"},
 	{"meshSelectMirror", "select", QT_TRANSLATE_NOOP("VibeStudioModelControls", "Mirror Selection"), "Shift+Ctrl+M"},
 	{"meshSimilarMenu", "select", QT_TRANSLATE_NOOP("VibeStudioModelControls", "Select Similar Menu"), "Shift+G"},
@@ -83,8 +84,15 @@ constexpr CommandEntry kCommands[] = {
 	{"meshInset", "mesh", QT_TRANSLATE_NOOP("VibeStudioModelControls", "Inset Faces"), "I"},
 	{"meshDuplicate", "mesh", QT_TRANSLATE_NOOP("VibeStudioModelControls", "Duplicate"), "Shift+D"},
 	{"meshLoopCut", "mesh", QT_TRANSLATE_NOOP("VibeStudioModelControls", "Loop Cut"), "Ctrl+R"},
+	{"meshEdgeSlide", "mesh", QT_TRANSLATE_NOOP("VibeStudioModelControls", "Edge Slide"), ""},
 	{"meshMakeFace", "mesh", QT_TRANSLATE_NOOP("VibeStudioModelControls", "Make Face"), "F"},
 	{"meshBevelVertices", "mesh", QT_TRANSLATE_NOOP("VibeStudioModelControls", "Bevel Vertices"), "Ctrl+Shift+B"},
+	{"meshBevelEdges", "mesh", QT_TRANSLATE_NOOP("VibeStudioModelControls", "Bevel Edges"), "Ctrl+B"},
+	{"meshKnife", "mesh", QT_TRANSLATE_NOOP("VibeStudioModelControls", "Knife"), "K"},
+	{"meshSpin", "mesh", QT_TRANSLATE_NOOP("VibeStudioModelControls", "Spin"), ""},
+	{"meshRip", "mesh", QT_TRANSLATE_NOOP("VibeStudioModelControls", "Rip"), "V"},
+	{"meshRipFill", "mesh", QT_TRANSLATE_NOOP("VibeStudioModelControls", "Rip and Fill"), "Alt+V"},
+	{"meshSpinDuplicate", "mesh", QT_TRANSLATE_NOOP("VibeStudioModelControls", "Spin Duplicates"), ""},
 	{"meshMergeCentre", "mesh", QT_TRANSLATE_NOOP("VibeStudioModelControls", "Merge at Centre"), ""},
 	{"meshMergeCollapse", "mesh", QT_TRANSLATE_NOOP("VibeStudioModelControls", "Collapse"), ""},
 	{"meshMergeDistance", "mesh", QT_TRANSLATE_NOOP("VibeStudioModelControls", "Merge by Distance"), ""},
@@ -108,6 +116,7 @@ constexpr CommandEntry kCommands[] = {
 	{"meshNormalsMenu", "mesh", QT_TRANSLATE_NOOP("VibeStudioModelControls", "Normals Menu"), "Alt+N"},
 	// UVs.
 	{"meshUvMenu", "uv", QT_TRANSLATE_NOOP("VibeStudioModelControls", "UV Mapping Menu"), "U"},
+	{"meshUvDensity", "uv", QT_TRANSLATE_NOOP("VibeStudioModelControls", "Texel Density"), ""},
 	{"meshShowUvEditor", "uv", QT_TRANSLATE_NOOP("VibeStudioModelControls", "Texture Coordinate Editor"), ""},
 	{"meshAssignMaterial", "uv", QT_TRANSLATE_NOOP("VibeStudioModelControls", "Assign Material to Selection"), ""},
 	// View.
@@ -124,6 +133,11 @@ constexpr CommandEntry kCommands[] = {
 	{"meshViewUser", "view", QT_TRANSLATE_NOOP("VibeStudioModelControls", "User View"), ""},
 	{"meshToggleQuadView", "view", QT_TRANSLATE_NOOP("VibeStudioModelControls", "Toggle Four Views"), "Ctrl+Alt+Q"},
 	{"meshMaximizeView", "view", QT_TRANSLATE_NOOP("VibeStudioModelControls", "Maximise View"), "Ctrl+Space"},
+	// The active pane of four views, in reading order. Page keys have no
+	// direction to mirror in right-to-left layouts, and desktops on Linux
+	// take Ctrl+Alt with the arrow keys.
+	{"meshNextView", "view", QT_TRANSLATE_NOOP("VibeStudioModelControls", "Next View"), "Ctrl+Alt+PgDown"},
+	{"meshPreviousView", "view", QT_TRANSLATE_NOOP("VibeStudioModelControls", "Previous View"), "Ctrl+Alt+PgUp"},
 	{"meshToggleSidebars", "view", QT_TRANSLATE_NOOP("VibeStudioModelControls", "Toggle Sidebars"), "N"},
 	{"meshToggleToolShelf", "view", QT_TRANSLATE_NOOP("VibeStudioModelControls", "Toggle Tool Shelf"), "T"},
 	{"meshShadingMenu", "view", QT_TRANSLATE_NOOP("VibeStudioModelControls", "Shading Menu"), "Z"},
@@ -303,6 +317,8 @@ ModelEditorControls maxControls()
 	bind(controls, "meshViewPerspective", {"P"});
 	bind(controls, "meshViewUser", {"U"});
 	bind(controls, "meshMaximizeView", {"Alt+W"});
+	bind(controls, "meshNextView", {"Ctrl+Alt+PgDown"});
+	bind(controls, "meshPreviousView", {"Ctrl+Alt+PgUp"});
 	bind(controls, "meshToggleGrid", {"G"});
 	bind(controls, "meshToggleWireframe", {"F3"});
 	bind(controls, "meshToggleEdges", {"F4"});
@@ -402,6 +418,9 @@ ModelEditorControls milkShapeControls()
 	bind(controls, "meshAssignMaterial", {"F10"});
 	bind(controls, "meshOperatorSearch", {"Ctrl+Shift+P"});
 	bind(controls, "meshViewAll", {"Home"});
+	// Not MilkShape's: a keyboard route between its four views.
+	bind(controls, "meshNextView", {"Ctrl+Alt+PgDown"});
+	bind(controls, "meshPreviousView", {"Ctrl+Alt+PgUp"});
 	return controls;
 }
 
@@ -419,19 +438,19 @@ struct ProfileEntry {
 const ProfileEntry kProfiles[] = {
 	{"studio", QT_TRANSLATE_NOOP("VibeStudioModelControls", "VibeStudio (Blender-style)"), "VibeStudio",
 		QT_TRANSLATE_NOOP("VibeStudioModelControls", "The studio's own controls, following Blender: middle-drag orbits, Shift+middle pans, Ctrl+middle zooms, and Alt+left drag orbits too. G, R and S transform at once; 1, 2 and 3 pick vertices, edges and faces; Tab switches between whole surfaces and their components."),
-		QT_TRANSLATE_NOOP("VibeStudioModelControls", "Starts in the orthographic orbit view. Ctrl+Y also redoes."),
+		QT_TRANSLATE_NOOP("VibeStudioModelControls", "Starts in the orthographic orbit view. Ctrl+Y also redoes. Alt+L and Alt+R grow the selected edges to loops and rings, as in 3ds Max, and Ctrl+Alt+Page Down and Page Up step between four views."),
 		"https://docs.blender.org/manual/en/latest/editors/3dview/navigate/index.html", "vibestudio|default|vibestudio-default", &studioControls},
 	{"blender", QT_TRANSLATE_NOOP("VibeStudioModelControls", "Blender"), "Blender",
 		QT_TRANSLATE_NOOP("VibeStudioModelControls", "Blender 4 defaults: middle-drag orbits, Shift+middle pans, Ctrl+middle zooms, numpad views, G/R/S modal transforms with X/Y/Z constraints and typed values, E extrude, I inset, Ctrl+R loop cut, H/Alt+H hide and reveal, Tab edit mode, Ctrl+Alt+Q four views and Space to play."),
-		QT_TRANSLATE_NOOP("VibeStudioModelControls", "Three-button emulation is off, as in Blender. Ctrl+B bevels vertices only (use Ctrl+Shift+B); the knife, spin, edge slide, rip and the pie menus are not available, so Z, Shift+S and the like open ordinary menus. Arrow keys orbit the view in steps rather than stepping frames."),
+		QT_TRANSLATE_NOOP("VibeStudioModelControls", "Three-button emulation is off, as in Blender. Ctrl+B bevels edges, Ctrl+Shift+B bevels vertices, K starts Knife, V rips and Alt+V rips with a fill. Spin is available in the Edge and Face menus. Z and Shift+S open ordinary menus. Arrow keys orbit the view in steps rather than stepping frames. Alt+L and Alt+R (loops and rings of the selected edges) and Ctrl+Alt+Page Down and Page Up (next and previous of four views) are not Blender keys."),
 		"https://docs.blender.org/manual/en/latest/interface/keymap/blender_default.html", "blender-3d|blender4|b3d", &blenderControls},
 	{"3ds-max", QT_TRANSLATE_NOOP("VibeStudioModelControls", "3ds Max"), "3ds Max",
 		QT_TRANSLATE_NOOP("VibeStudioModelControls", "Autodesk 3ds Max defaults: four views (Top, Front, Left, Perspective), middle-drag pan, Alt+middle orbit, Ctrl+Alt+middle zoom, Q/W/E/R select, move, rotate and scale tools, Ctrl adds and Alt removes, 1-6 sub-object levels, T/F/L/P/U views, Z zoom extents and Alt+W to maximise a view."),
-		QT_TRANSLATE_NOOP("VibeStudioModelControls", "Border (3) switches to edges and selects the open boundary loops of the selection; Element (5) selects whole connected pieces. Shift+drag with the Move tool duplicates the selection rather than cloning an object. Chamfer (Ctrl+Shift+C) bevels vertices; Connect (Ctrl+Shift+E) runs a loop cut; MeshSmooth (Ctrl+M) subdivides. Cut, Quickslice, Swift Loop, soft selection, the Modifier Stack and quad menus are not emulated; right-click opens the context menu."),
+		QT_TRANSLATE_NOOP("VibeStudioModelControls", "Border (3) switches to edges and selects the open boundary loops of the selection; Element (5) selects whole connected pieces. Shift+drag with the Move tool duplicates the selection rather than cloning an object. Chamfer (Ctrl+Shift+C) bevels vertices; Connect (Ctrl+Shift+E) runs a loop cut; MeshSmooth (Ctrl+M) subdivides. Cut, Quickslice, Swift Loop, soft selection, the Modifier Stack and quad menus are not emulated; right-click opens the context menu. Ctrl+Alt+Page Down and Page Up step between the four views, which 3ds Max does not do."),
 		"https://help.autodesk.com/view/3DSMAX/2024/ENU/?guid=GUID-A73E1B09-7BFE-4A22-8153-1D3D2237B8E9", "max|3dsmax|3d-studio-max|3ds|autodesk-3ds-max", &maxControls},
 	{"milkshape-3d", QT_TRANSLATE_NOOP("VibeStudioModelControls", "MilkShape 3D"), "MilkShape 3D",
 		QT_TRANSLATE_NOOP("VibeStudioModelControls", "MilkShape 3D 1.8 defaults: four views (Front, Top, Side, 3D), Ctrl+left drag pans, Shift+left drag zooms, left drag rotates the 3D view, F1-F4 select, move, rotate and scale tools, Shift adds and Shift+right drag removes, Ctrl+W welds, Ctrl+N snaps together, Ctrl+H/Ctrl+U hide and unhide."),
-		QT_TRANSLATE_NOOP("VibeStudioModelControls", "Groups are surfaces and Joints are tags and skeleton joints. F5 and F6 switch to vertex and face selection rather than MilkShape's vertex and face creation tools; F8 picks tags and joints. Snap Together (Ctrl+N) merges the vertices at their centre; Divide Edge (Ctrl+P) splits the selected edges; Subdivide 3 and 4 poke and subdivide faces. Set Keyframe (Ctrl+K) copies the pose to the current frame. Delete All, the sphere, geosphere, box, cylinder and text tools' click-to-create gestures and the Comments tab are not emulated."),
+		QT_TRANSLATE_NOOP("VibeStudioModelControls", "Groups are surfaces and Joints are tags and skeleton joints. F5 and F6 switch to vertex and face selection rather than MilkShape's vertex and face creation tools; F8 picks tags and joints. Snap Together (Ctrl+N) merges the vertices at their centre; Divide Edge (Ctrl+P) splits the selected edges; Subdivide 3 and 4 poke and subdivide faces. Set Keyframe (Ctrl+K) copies the pose to the current frame. Delete All, the sphere, geosphere, box, cylinder and text tools' click-to-create gestures and the Comments tab are not emulated. Ctrl+Alt+Page Down and Page Up step between the four views, which MilkShape 3D does not do; edge loops and rings of the selection are in the Select menu without keys."),
 		"https://chumbalum.swissquake.ch/", "milkshape|ms3d|milkshape3d|milk-shape", &milkShapeControls},
 };
 
@@ -612,6 +631,59 @@ QVector<ModelEditorKeyBinding> modelEditorEffectiveKeys(const ModelEditorControl
 		bindings.append({id, modelEditorCommandKeys(controls, id)});
 	}
 	return bindings;
+}
+
+namespace {
+
+// Qt's Ctrl is the Command key on macOS, where the system keeps Command+Tab
+// for its application switcher and never passes it on. There the physical
+// Control key (Qt's Meta) moves focus instead, as Control+Tab does out of
+// any macOS control that takes Tab itself.
+constexpr Qt::KeyboardModifier kFocusModifier =
+#ifdef Q_OS_MACOS
+	Qt::MetaModifier;
+#else
+	Qt::ControlModifier;
+#endif
+
+// A single key with Tab (Qt reports Shift+Tab as Backtab) and its modifiers.
+bool tabKey(const QString& key, Qt::KeyboardModifiers* modifiers)
+{
+	const QKeySequence sequence = QKeySequence::fromString(key, QKeySequence::PortableText);
+	if (sequence.count() != 1) {
+		return false;
+	}
+	const QKeyCombination combination = sequence[0];
+	*modifiers = combination.keyboardModifiers();
+	return combination.key() == Qt::Key_Tab || combination.key() == Qt::Key_Backtab;
+}
+
+} // namespace
+
+QStringList modelEditorFocusKeys(bool forward)
+{
+	const Qt::KeyboardModifiers modifiers = Qt::KeyboardModifiers(kFocusModifier) | (forward ? Qt::NoModifier : Qt::ShiftModifier);
+	return {QKeySequence(QKeyCombination(modifiers, Qt::Key_Tab)).toString(QKeySequence::PortableText)};
+}
+
+QString modelEditorFocusKeyText()
+{
+	const auto native = [](bool forward) {
+		return QKeySequence::fromString(modelEditorFocusKeys(forward).value(0), QKeySequence::PortableText).toString(QKeySequence::NativeText);
+	};
+	return QCoreApplication::translate("VibeStudioModelControls", "%1 and %2 always move keyboard focus between panels.").arg(native(true), native(false));
+}
+
+bool isModelEditorFocusKey(const QString& key)
+{
+	Qt::KeyboardModifiers modifiers;
+	return tabKey(key, &modifiers) && modifiers.testFlag(kFocusModifier);
+}
+
+bool isModelEditorTabKey(const QString& key)
+{
+	Qt::KeyboardModifiers modifiers;
+	return tabKey(key, &modifiers) && (modifiers & ~Qt::ShiftModifier) == Qt::NoModifier;
 }
 
 // --- Ids -------------------------------------------------------------------
@@ -865,6 +937,16 @@ QVector<ModelEditorControlRow> modelEditorControlRows(const ModelEditorControls&
 	} else {
 		row(QStringLiteral("layout"), layout, QCoreApplication::translate("VibeStudioModelControls", "Views"), controls.layout.startInPerspective ? QCoreApplication::translate("VibeStudioModelControls", "One perspective view") : QCoreApplication::translate("VibeStudioModelControls", "One orbit view"));
 	}
+	// Every profile keeps these, so a view that takes Tab never traps focus.
+	const auto native = [](const QStringList& portable) {
+		QStringList text;
+		for (const QString& key : portable) {
+			text << QKeySequence::fromString(key, QKeySequence::PortableText).toString(QKeySequence::NativeText);
+		}
+		return text.join(QStringLiteral(", "));
+	};
+	row(QStringLiteral("keys"), keys, QCoreApplication::translate("VibeStudioModelControls", "Move focus to the next panel"), native(modelEditorFocusKeys(true)));
+	row(QStringLiteral("keys"), keys, QCoreApplication::translate("VibeStudioModelControls", "Move focus to the previous panel"), native(modelEditorFocusKeys(false)));
 	for (const ModelEditorKeyBinding& binding : modelEditorEffectiveKeys(controls)) {
 		if (binding.keys.isEmpty()) {
 			continue;
@@ -873,11 +955,7 @@ QVector<ModelEditorControlRow> modelEditorControlRows(const ModelEditorControls&
 		if (!modelEditorCommandForId(binding.commandId, &command)) {
 			continue;
 		}
-		QStringList native;
-		for (const QString& key : binding.keys) {
-			native << QKeySequence::fromString(key, QKeySequence::PortableText).toString(QKeySequence::NativeText);
-		}
-		row(QStringLiteral("keys"), keys, command.title, native.join(QStringLiteral(", ")));
+		row(QStringLiteral("keys"), keys, command.title, native(binding.keys));
 	}
 	return rows;
 }
@@ -899,6 +977,11 @@ QStringList modelEditorControlProblems(const ModelEditorControls& controls)
 				continue;
 			}
 			const QString canonical = sequence.toString(QKeySequence::PortableText);
+			if (isModelEditorFocusKey(canonical)) {
+				problems << QCoreApplication::translate("VibeStudioModelControls", "%1 cannot use %2: %3")
+					.arg(binding.commandId, canonical, modelEditorFocusKeyText());
+				continue;
+			}
 			if (keyOwner.contains(canonical) && keyOwner.value(canonical) != binding.commandId) {
 				problems << QCoreApplication::translate("VibeStudioModelControls", "%1 is bound to both %2 and %3.").arg(canonical, keyOwner.value(canonical), binding.commandId);
 			} else {
@@ -1124,15 +1207,31 @@ bool applyModelEditorControlOverrides(const ModelEditorControls& base, const QJs
 		}
 		QStringList list;
 		bool valid = it.value().isArray();
+		bool focusKey = false;
 		for (const QJsonValue& value : it.value().toArray()) {
 			if (!value.isString() || QKeySequence::fromString(value.toString(), QKeySequence::PortableText).isEmpty()) {
 				valid = false;
 				break;
 			}
-			list << QKeySequence::fromString(value.toString(), QKeySequence::PortableText).toString(QKeySequence::PortableText);
+			const QString key = QKeySequence::fromString(value.toString(), QKeySequence::PortableText).toString(QKeySequence::PortableText);
+			// The way out of a view stays with every profile. The warning
+			// reaches the editor's status line, so it names the command and
+			// the key as the user sees them.
+			if (isModelEditorFocusKey(key)) {
+				ModelEditorCommand command;
+				static_cast<void>(modelEditorCommandForId(it.key(), &command));
+				warn(QCoreApplication::translate("VibeStudioModelControls", "Skipped %1 for %2: %3")
+					.arg(QKeySequence::fromString(key, QKeySequence::PortableText).toString(QKeySequence::NativeText), command.title, modelEditorFocusKeyText()));
+				focusKey = true;
+				continue;
+			}
+			list << key;
 		}
 		if (!valid) {
 			warn(QCoreApplication::translate("VibeStudioModelControls", "Skipped keys for \"%1\": expected a list of key sequences.").arg(it.key()));
+			continue;
+		}
+		if (focusKey && list.isEmpty()) {
 			continue;
 		}
 		ModelEditorKeyBinding binding{it.key(), list};

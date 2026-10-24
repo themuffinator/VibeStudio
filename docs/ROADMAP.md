@@ -1,5 +1,34 @@
 # VibeStudio Roadmap
 
+The [modeller production plan](plans/modeller-production.md) tracks complete
+idTech modelling workflows and separate acceptance requirements. Joint hierarchy
+and numeric weight authoring, bind/pose transforms and dense skeletal clips
+share GUI/CLI document operations. Bone overlays and shared viewport joint
+handles are implemented. [Influence inspection/selection, explicit binding and
+weight repair](MODEL_SKINNING.md), [staged weight painting](MODEL_WEIGHT_PAINT.md),
+[mirrored/spatial weight transfer](MODEL_WEIGHT_TRANSFER.md) and
+[two-bone IK](MODEL_IK.md) and [animation curves](MODEL_ANIMATION_CURVES.md) are available.
+Batch key retiming, duplication, removal and bounded reduction are available.
+Animation layers, persistent constraints and
+broader release gates remain open.
+See [Skeleton authoring](MODEL_RIG.md).
+
+The [level editor production gates](plans/level-editor-production.md) track the
+TrenchBroom/NetRadiant Custom parity audit, implementation gaps and acceptance evidence.
+Shared clipper points, numeric XYZ preview and atomic cuts now connect plan,
+camera and CLI paths. NRC quick clip, caulk/reset preferences and optional
+one-point/no-change wrap/merge are implemented. Standalone whole-brush and
+brush/patch component wrapping now share GUI/CLI services, source/result preview
+and numeric extra points. NRC two-point camera cuts choose and retain a shared
+view-dependent plane, correct parallel segments and axial outer-face planes,
+and replay through CLI camera or explicit axis/sign options. Modified point
+dragging adds relative-grid XY/Z or axial view/depth movement, with live Shift
+constraint and Ctrl surface picking. A complete command
+inventory, native input, dense-map performance and real-project acceptance remain open.
+Numeric **Sweep Faces…** now shares straight, arc and S-bend geometry, taper,
+repeated transforms, source/result previews and `map sweep`. Native destination
+cap handles and sweep scale shortcuts remain open; this is Partial parity.
+
 The duplex recording engine now has an optional pinned PortAudio device adapter
 with WASAPI packet timing/dropout fixes, CoreAudio atomic xrun handling and ALSA
 build support. The recording worker adds permission/playback gates, grouped
@@ -52,7 +81,7 @@ Level-editor familiarity now exposes 24 working schemes across brush, Doom
 and modern scene-editor families. QuArK has routed viewport controls; modern
 held-button flight and middle-button orbit/pan use shared routing. Settings,
 Controls help, aliases and CLI expose actual bindings and adaptation gaps.
-Eighty-four gesture and navigation-key settings can now be overridden per profile
+Ninety-seven gesture and navigation-key settings can now be overridden per profile
 through staged GUI controls, validated CLI batches and portable VibeStudio
 import/export. Fly, drive and mouse-look keys share conflict checks and command
 overlap diagnostics. Native preference import and native acceptance remain open.
@@ -148,8 +177,28 @@ linked instances and Doom geometry duplication remain open. See
 Persistent layers and nested groups now share inherited visibility and editing
 locks, GUI/CLI controls, undo, source-bound native metadata, recovery and package
 grouping. Shared authoring transactions protect owned/shared geometry and retain
-atomic model, audio and texture handoffs. Linked instances and native production
-acceptance remain open; see [Scene Organization](LEVEL_SCENE.md).
+atomic model, audio and texture handoffs. Closed groups now select as units across
+plan/camera picks, the Objects list and selection commands. Nested open/close
+contexts isolate editing and direct new content, with shared CLI selection and
+translation, linked-group propagation and pending-draft cancellation. Linked
+groups now nest, keep any affine frame and mark groups out of sync; cross-editor
+metadata and native production acceptance remain open. Complete-group duplication and prefab transfers retain
+hierarchies and linked correspondence. Protected entity values and absence now
+have shared inspector/CLI authoring, clearing, one-step undo and native persistence;
+linked extraction now splits a partial selection across all corresponding copies,
+preserving local properties and partial brush owners, with cancellable GUI
+preparation, shared CLI, atomic undo and compiler/package checks. These workflows
+remain Partial pending wider acceptance. See
+[Scene Organization](LEVEL_SCENE.md).
+
+Object repeat now records moves, rotations, resize/shear/mirror transforms and
+ordinary duplication, retaining world pivots across selection changes. Shared
+GUI/CLI replay has cancellation, locked/group protection, instance-local property
+preservation, one-step undo and stale-result rejection when repeat history is
+cleared. TB profile keys and exported recipes connect it to the build/package
+workflow. This remains Partial: arrays and other command families, dense maps,
+native input, accessibility and cross-platform acceptance need further review.
+See [Repeat object commands](LEVEL_REPEAT.md).
 
 Direct material painting now connects the level camera, package/staging material
 previews, per-surface provenance and one-command map undo. Sampling and explicit
@@ -260,6 +309,15 @@ The level editor now includes map lifecycle/recovery and Quake III patch
 authoring through shared GUI/CLI services. The broader professional-editor
 target remains open; [Level Editor](LEVEL_EDITOR.md) tracks evidence and gaps
 for component editing, materials, organization, navigation, scale and portability.
+
+Edge/face splitting now uses a checked convex draft in the plan views and
+camera, with numeric brush editing and `map split-components`. Successful
+splits select the new corners; all affected brushes commit as one undo step.
+Plane extrusion and split extrusion now share checked plan/camera previews,
+numeric distance entry and `map extrude-faces`, including face texture lock,
+owner/group preservation and linked-copy undo. Arbitrary point insertion,
+component rotation/scale/shear, broader deformation texture lock, exact profile
+gestures and native cross-platform acceptance remain open.
 
 VibeStudio should become the definitive open-source development studio for
 idTech1, idTech2, and idTech3 games: one seamless, modern, cross-platform,
@@ -1074,6 +1132,27 @@ Goal: widen the workbench into a real asset studio.
   pose before one cancellable document transaction. New faces remain selected
   for UV/normal finishing. Candidate-search and geometry/workload limits remain
   explicit; these tools do not close the broader topology release gate.
+- [x] Slide existing edge chains/loops along surrounding quad rails by fraction
+  or reference-pose distance, with frame scope, seam preservation, modal/numeric
+  editing and CLI parity. Invalid branches, ambiguous rails and face collapse
+  refuse atomically. UV correction and broader mesh
+  acceptance remain open. See [edge sliding](MODEL_EDGE_SLIDE.md).
+- [x] Open and fill connected vertex/edge rips with side selection, constrained
+  movement, retained poses/weights, worker preview, F9 and CLI parity.
+  [Rip](MODEL_RIP.md) documents persistent coincident separation and the
+  remaining branched-junction and production acceptance work.
+- [x] Bevel joined edges with chamfers, rounded bands and corner caps, preserving
+  poses and interpolating skin influences. See [edge bevels](MODEL_EDGE_BEVEL.md)
+  for conservative junction limits and the remaining acceptance work.
+- [x] Inspect and match UV texel density with original material dimensions,
+  reference poses, per-island or relative scaling, cancellable reviews and CLI
+  parity. Exact skin influences survive shared-corner splits. See
+  [texture density](MODEL_UV_DENSITY.md) for precision and integration limits.
+- [x] Cut visible or through paths on the active surface, including closed,
+  crossing and disconnected chains, with snapping, keyboard crosshair controls,
+  cancellable previews and CLI parity. Pose/UV/skin interpolation, seam copies
+  and hidden child faces share one transaction. See [knife cutting](MODEL_KNIFE.md)
+  for bounded topology and the wider release gates.
 - [x] Add precise vertex picking, explicit X-ray selection, a translation gizmo,
   shared GUI/CLI delta snapping, and exact orthographic view presets. Previews
   cancel without history and commit through document validation as one undo step.
@@ -1186,7 +1265,16 @@ Goal: widen the workbench into a real asset studio.
 - [ ] Verify the model decoders against real game files and the exported MD5, IQM and ASE models in the
   original engines; read game animation scripts (Jedi Academy `animation.cfg`, Wolfenstein scripts,
   GZDoom MODELDEF/VOXELDEF) for clip names.
-- [ ] Edit joints and weights: bone overlay, pose mode and weight painting.
+- [x] Numeric joint hierarchy, weights, bind/pose transforms and dense skeletal clips.
+- [x] Bone overlays, named joint selection and shared viewport pose handles.
+- [x] Influence inspection/selection, explicit binding and weight repair.
+- [x] Staged weight brushes, joint locks, smoothing, numeric row painting and CLI recipe replay.
+- [x] Mirrored/spatial weight transfer with explicit joint mapping, locks and seam-aware correspondence.
+- [x] Two-bone IK with target/pole, fixed bone lengths, pose review and CLI.
+- [x] Persistent TRS animation curves, key/tangent editing, reviewed sampling and CLI.
+- [x] Multi-key selection, affine retiming, duplication/removal and continuous-error curve reduction.
+- [x] Copy/reverse curve ranges within a rig, preserving cubic shape and exact step directions with reviewed destination motion and CLI parity.
+- [ ] Curve clipboard exchange, layers, persistent constraints, long-chain IK and retargeting.
 - [x] Give the Mesh Editor the Levels page's sidebar layout, one or four views, and Blender, 3ds Max and
   MilkShape 3D controls profiles with customisation and CLI parity. See
   [Modeller Profiles](MODELLER_PROFILES.md).
@@ -2004,13 +2092,42 @@ Quake III `animation.cfg` authoring now connects all 31 native slots, adjusted m
 Per-part linked `.skin` files now share verified loose/package input resolution,
 preview and bake materials, reference rebasing, undo/recovery, protected exports
 and CLI. Schema 3 retains exact package occurrences with path guards and optional
-native animation. The ordinary browser/level-instance runtime skin selector,
-team player variants and custom player sounds remain open. See
-[Linked Skins](MODEL_ASSEMBLY.md#linked-skins).
+native animation. The ordinary browser/level-instance runtime skin selector
+remains open. See [Linked Skins](MODEL_ASSEMBLY.md#linked-skins).
 
-The assembly **Player Package…** workflow publishes a reviewed non-team Quake III
-player PK3 through the normal package writer, retaining every native pose and
-tag, skin assignments, configuration, converted icon and dependency closure.
+The assembly **Player Package…** workflow publishes a reviewed Quake III player
+PK3 through the normal package writer, retaining every native pose and tag, a
+skin set and icon per skin (red and blue team skins included), detail levels,
+custom sounds, configuration and dependency closure, and checks `tag_weapon`.
+Editable sources keep named [skin variants](MODEL_SKIN_VARIANTS.md), written as
+Quake III `.skin` files or Doom 3 skin declarations.
+**Open Player…** and `model assembly --new --from-player` open an existing player
+of a package as a new assembly, ready to edit and publish again.
 CLI review/export and portable package drafts share the service. No release gate
 is closed by this implementation; see [native player packages](MODEL_ASSEMBLY.md#native-player-packages)
 and [the remaining modeller acceptance work](MODELLER_RELEASE.md).
+
+Level component affine transforms now share numeric GUI and batch CLI services,
+optional corner UV lock and atomic linked-group history. Direct plan/camera
+rotation, scale, shear and pivot controls use the same validation worker.
+These are increments toward [level editor production parity](plans/level-editor-production.md);
+dense-map performance, native profile acceptance and the full TB/NRC command
+audit remain open. VibeStudio remains pre-alpha.
+
+Camera component selection now groups genuinely coincident vertices, edges and
+faces, while plan views retain projected stacks. All/None/Invert preserve the
+active component context; profile lasso settings share GUI/CLI persistence.
+Adjacent terrain brushes have shared-corner edit/undo and compiler/package
+coverage. Native profile acceptance remains a production gate.
+
+Component mode changes now preserve compatible picks through complete-boundary
+conversion. Touching conversion, Grow, Shrink and Connected share cached solved
+topology across plan/camera views and the read-only `map select-components` CLI.
+Patch points retain their grid identities and use row/column adjacency.
+Selection queries cancel pending drafts, add no geometry history, and return
+CLI selectors for checked transforms and the compiler/package pipeline. Full
+native gesture acceptance remains open. Component depth cycling now shares
+near/far ordering, full-geometry grouping and exact pick synchronisation between
+plans and camera, with configurable wheel chords and keyboard commands. Camera
+cycling respects visible/X-ray picking; plan dragging preserves the chosen
+depth. High Contrast Light uses its light plan background and dark accents.

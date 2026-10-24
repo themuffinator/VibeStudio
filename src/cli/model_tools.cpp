@@ -1,13 +1,23 @@
 #include "cli/model_tools.h"
 
+#include "core/game_installation.h"
 #include "core/model_document.h"
 #include "core/model_file_io.h"
 #include "core/model_lod.h"
 #include "core/model_mesh_tools.h"
 #include "core/model_selection_tools.h"
+#include "core/model_target_prepare.h"
+#include "core/model_targets.h"
+#include "core/model_vertex_origins.h"
+#include "core/package_archive.h"
+#include "core/package_draft.h"
+#include "core/project_manifest.h"
+#include "core/studio_settings.h"
 
 #include <QCoreApplication>
+#include <QDir>
 #include <QFileInfo>
+#include <QFile>
 #include <QJsonArray>
 #include <QJsonDocument>
 
@@ -268,8 +278,12 @@ ModelToolsCliResult runModelTool(const QStringList &arguments)
 	const QSet<QString> flags{QStringLiteral("--cli"),		   QStringLiteral("--json"),	   QStringLiteral("--quiet"),
 							  QStringLiteral("--verbose"),	   QStringLiteral("--dry-run"),	   QStringLiteral("--overwrite"),
 							  QStringLiteral("--individual"),  QStringLiteral("--no-even"),	   QStringLiteral("--pin-boundary"),
-							  QStringLiteral("--connected"),   QStringLiteral("--allow-boundary"), QStringLiteral("--fit")};
+							  QStringLiteral("--connected"),   QStringLiteral("--allow-boundary"), QStringLiteral("--fit"),
+							  QStringLiteral("--through"), QStringLiteral("--perspective"), QStringLiteral("--opposite"),
+							  QStringLiteral("--duplicate"), QStringLiteral("--no-close"), QStringLiteral("--fill"),
+							  QStringLiteral("--keep-joint-names")};
 	const QSet<QString> options{
+		QStringLiteral("--side-face"),
 		QStringLiteral("--input"),			 QStringLiteral("--output"),		 QStringLiteral("--tool"),		   QStringLiteral("--surface"),
 		QStringLiteral("--faces"),			 QStringLiteral("--vertices"),		 QStringLiteral("--edges"),		   QStringLiteral("--frame"),
 		QStringLiteral("--reference-frame"), QStringLiteral("--merge"),			 QStringLiteral("--point"),		   QStringLiteral("--offset"),
@@ -280,8 +294,12 @@ ModelToolsCliResult runModelTool(const QStringList &arguments)
 		QStringLiteral("--axis"),			 QStringLiteral("--direction"),		 QStringLiteral("--threshold"),	   QStringLiteral("--cuts"),
 		QStringLiteral("--slide"),			 QStringLiteral("--primitive"),		 QStringLiteral("--at"),		   QStringLiteral("--size"),
 		QStringLiteral("--segments"),		 QStringLiteral("--rings"),			 QStringLiteral("--up"),		   QStringLiteral("--ratio"),
-		QStringLiteral("--target-triangles"), QStringLiteral("--width"), QStringLiteral("--tile-size"), QStringLiteral("--u-axis"),
-		QStringLiteral("--v-axis"), QStringLiteral("--settings-file"), QStringLiteral("--locale"),	   QStringLiteral("--catalog-root")};
+		QStringLiteral("--target-triangles"), QStringLiteral("--width"), QStringLiteral("--roundness"), QStringLiteral("--tile-size"), QStringLiteral("--u-axis"),
+		QStringLiteral("--v-axis"), QStringLiteral("--settings-file"), QStringLiteral("--locale"), QStringLiteral("--catalog-root"),
+		QStringLiteral("--path"), QStringLiteral("--path-file"), QStringLiteral("--view"), QStringLiteral("--camera-origin"),
+		QStringLiteral("--camera-right"), QStringLiteral("--camera-up"), QStringLiteral("--camera-forward"),
+		QStringLiteral("--steps"), QStringLiteral("--centre"), QStringLiteral("--axis-vector"), QStringLiteral("--joint-map"),
+		QStringLiteral("--bind"), QStringLiteral("--bind-joint"), QStringLiteral("--new-surface")};
 	Arguments args;
 	QString error;
 	if (!parse(arguments, flags, options, &args, &error))
@@ -290,6 +308,11 @@ ModelToolsCliResult runModelTool(const QStringList &arguments)
 	if (source.isEmpty())
 		return fail(2, error);
 	const QHash<QString, ModelEditKind> tools{
+		{QStringLiteral("spin"), ModelEditKind::Spin},
+		{QStringLiteral("rip"), ModelEditKind::Rip},
+		{QStringLiteral("knife"), ModelEditKind::Knife},
+		{QStringLiteral("bevel-edges"), ModelEditKind::BevelEdges},
+		{QStringLiteral("edge-slide"), ModelEditKind::SlideEdges},
 		{QStringLiteral("rotate-edges"), ModelEditKind::RotateEdges},		{QStringLiteral("merge"), ModelEditKind::MergeVertices},
 		{QStringLiteral("dissolve-vertices"), ModelEditKind::DissolveVertices}, {QStringLiteral("dissolve-faces"), ModelEditKind::DissolveFaces},
 		{QStringLiteral("poke"), ModelEditKind::PokeFaces},					{QStringLiteral("beautify"), ModelEditKind::BeautifyFaces},
@@ -313,6 +336,13 @@ ModelToolsCliResult runModelTool(const QStringList &arguments)
 	const auto kind = tools.value(toolName);
 	// Options each tool accepts beyond the shared source/output/surface ones.
 	const QHash<QString, QStringList> accepted{
+		{QStringLiteral("rip"), {QStringLiteral("--vertices"), QStringLiteral("--edges"), QStringLiteral("--side-face"),
+			QStringLiteral("--offset"), QStringLiteral("--opposite"), QStringLiteral("--fill"), QStringLiteral("--tile-size"), QStringLiteral("--angle")}},
+		{QStringLiteral("knife"), {QStringLiteral("--faces"), QStringLiteral("--path"), QStringLiteral("--path-file"), QStringLiteral("--view"),
+			QStringLiteral("--through"), QStringLiteral("--perspective"), QStringLiteral("--opposite"), QStringLiteral("--camera-origin"),
+			QStringLiteral("--camera-right"), QStringLiteral("--camera-up"), QStringLiteral("--camera-forward")}},
+		{QStringLiteral("bevel-edges"), {QStringLiteral("--edges"), QStringLiteral("--width"), QStringLiteral("--segments"), QStringLiteral("--roundness"), QStringLiteral("--tile-size"), QStringLiteral("--angle")}},
+		{QStringLiteral("edge-slide"), {QStringLiteral("--edges"), QStringLiteral("--slide"), QStringLiteral("--distance"), QStringLiteral("--angle"), QStringLiteral("--frame")}},
 		{QStringLiteral("rotate-edges"), {QStringLiteral("--edges")}},
 		{QStringLiteral("merge"), {QStringLiteral("--faces"), QStringLiteral("--vertices"), QStringLiteral("--edges"), QStringLiteral("--merge"), QStringLiteral("--point")}},
 		{QStringLiteral("dissolve-vertices"), {QStringLiteral("--vertices"), QStringLiteral("--edges"), QStringLiteral("--faces")}},
@@ -321,6 +351,9 @@ ModelToolsCliResult runModelTool(const QStringList &arguments)
 		{QStringLiteral("beautify"), {QStringLiteral("--faces"), QStringLiteral("--angle")}},
 		{QStringLiteral("make-face"), {QStringLiteral("--vertices"), QStringLiteral("--edges")}},
 		{QStringLiteral("extrude-edges"), {QStringLiteral("--edges"), QStringLiteral("--offset")}},
+		{QStringLiteral("spin"), {QStringLiteral("--faces"), QStringLiteral("--edges"), QStringLiteral("--angle"), QStringLiteral("--steps"),
+			QStringLiteral("--centre"), QStringLiteral("--axis"), QStringLiteral("--axis-vector"), QStringLiteral("--duplicate"),
+			QStringLiteral("--no-close"), QStringLiteral("--tile-size")}},
 		{QStringLiteral("inset"), {QStringLiteral("--faces"), QStringLiteral("--thickness"), QStringLiteral("--depth"), QStringLiteral("--individual"), QStringLiteral("--no-even")}},
 		{QStringLiteral("shrink-fatten"), {QStringLiteral("--faces"), QStringLiteral("--vertices"), QStringLiteral("--edges"), QStringLiteral("--distance"), QStringLiteral("--no-even"), QStringLiteral("--frame")}},
 		{QStringLiteral("smooth"), {QStringLiteral("--faces"), QStringLiteral("--vertices"), QStringLiteral("--edges"), QStringLiteral("--factor"), QStringLiteral("--iterations"), QStringLiteral("--pin-boundary"), QStringLiteral("--frame")}},
@@ -331,9 +364,11 @@ ModelToolsCliResult runModelTool(const QStringList &arguments)
 		{QStringLiteral("shade-smooth"), {QStringLiteral("--faces")}},
 		{QStringLiteral("auto-smooth"), {QStringLiteral("--faces"), QStringLiteral("--angle")}},
 		{QStringLiteral("bisect"), {QStringLiteral("--faces"), QStringLiteral("--plane-point"), QStringLiteral("--plane-normal"), QStringLiteral("--keep")}},
-		{QStringLiteral("symmetrize"), {QStringLiteral("--faces"), QStringLiteral("--axis"), QStringLiteral("--direction"), QStringLiteral("--threshold")}},
+		{QStringLiteral("symmetrize"), {QStringLiteral("--faces"), QStringLiteral("--axis"), QStringLiteral("--direction"), QStringLiteral("--threshold"),
+			QStringLiteral("--joint-map"), QStringLiteral("--keep-joint-names")}},
 		{QStringLiteral("loop-cut"), {QStringLiteral("--edges"), QStringLiteral("--cuts"), QStringLiteral("--slide"), QStringLiteral("--angle")}},
-		{QStringLiteral("add"), {QStringLiteral("--primitive"), QStringLiteral("--at"), QStringLiteral("--size"), QStringLiteral("--segments"), QStringLiteral("--rings"), QStringLiteral("--up")}},
+		{QStringLiteral("add"), {QStringLiteral("--primitive"), QStringLiteral("--at"), QStringLiteral("--size"), QStringLiteral("--segments"), QStringLiteral("--rings"), QStringLiteral("--up"),
+			QStringLiteral("--bind"), QStringLiteral("--bind-joint"), QStringLiteral("--new-surface")}},
 		{QStringLiteral("decimate"), {QStringLiteral("--faces"), QStringLiteral("--ratio"), QStringLiteral("--target-triangles"), QStringLiteral("--allow-boundary")}},
 		{QStringLiteral("bevel-vertices"), {QStringLiteral("--vertices"), QStringLiteral("--edges"), QStringLiteral("--faces"), QStringLiteral("--width")}},
 		{QStringLiteral("solidify"), {QStringLiteral("--faces"), QStringLiteral("--thickness"), QStringLiteral("--no-even")}},
@@ -364,7 +399,95 @@ ModelToolsCliResult runModelTool(const QStringList &arguments)
 		 !index(args.values.value(QStringLiteral("--reference-frame")), &referenceFrame)))
 		return fail(2, Text::tr("--surface and --reference-frame take nonnegative indices."));
 	tool.referenceFrame = referenceFrame;
+	if (kind == ModelEditKind::SlideEdges)
+	{
+		if (args.values.contains(QStringLiteral("--slide")) == args.values.contains(QStringLiteral("--distance")))
+			return fail(2, Text::tr("Edge slide requires exactly one of --slide fraction or --distance units."));
+		tool.slideByDistance = args.values.contains(QStringLiteral("--distance"));
+	}
 	edit.pivotFrame = referenceFrame;
+	if (kind == ModelEditKind::Knife)
+	{
+		auto &knife = tool.knife;
+		knife.through = args.seen.contains(QStringLiteral("--through"));
+		knife.perspective = args.seen.contains(QStringLiteral("--perspective"));
+		knife.selectedOnly = args.seen.contains(QStringLiteral("--faces"));
+		if (args.seen.contains(QStringLiteral("--path")) == args.seen.contains(QStringLiteral("--path-file")))
+			return fail(2, Text::tr("Knife requires exactly one of --path or --path-file."));
+		const auto view = args.values.value(QStringLiteral("--view"), QStringLiteral("xy"));
+		if (view == QStringLiteral("xz")) { knife.up = {0, 0, 1}; knife.forward = {0, 1, 0}; }
+		else if (view == QStringLiteral("yz")) { knife.right = {0, 1, 0}; knife.up = {0, 0, 1}; knife.forward = {-1, 0, 0}; }
+		else if (view != QStringLiteral("xy")) return fail(2, Text::tr("Knife views are xy, xz or yz."));
+		const int axes = int(args.seen.contains(QStringLiteral("--camera-right"))) + int(args.seen.contains(QStringLiteral("--camera-up"))) + int(args.seen.contains(QStringLiteral("--camera-forward")));
+		if (axes && (axes != 3 || args.seen.contains(QStringLiteral("--view")) || args.seen.contains(QStringLiteral("--opposite"))))
+			return fail(2, Text::tr("Supply all three camera axes together, without --view or --opposite."));
+		if ((args.seen.contains(QStringLiteral("--camera-origin")) && !triple(args.values.value(QStringLiteral("--camera-origin")), &knife.origin)) ||
+			(axes && (!triple(args.values.value(QStringLiteral("--camera-right")), &knife.right) ||
+				!triple(args.values.value(QStringLiteral("--camera-up")), &knife.up) || !triple(args.values.value(QStringLiteral("--camera-forward")), &knife.forward))))
+			return fail(2, Text::tr("Knife camera values use three comma-separated finite numbers."));
+		if (knife.perspective && !args.seen.contains(QStringLiteral("--camera-origin")))
+			return fail(2, Text::tr("Perspective knife projection requires --camera-origin x,y,z."));
+		if (args.seen.contains(QStringLiteral("--opposite"))) for (double &v : knife.forward) v = -v;
+		QVector<QVector<std::array<double, 2>>> paths;
+		if (args.seen.contains(QStringLiteral("--path-file")))
+		{
+			if (modelPathsReferToSameFile(output, args.values.value(QStringLiteral("--path-file"))))
+				return fail(1, Text::tr("The output cannot replace the knife path input, including aliases of the same file."));
+			QFile file(args.values.value(QStringLiteral("--path-file")));
+			if (!file.open(QIODevice::ReadOnly) || file.size() > 65536)
+				return fail(2, Text::tr("Open a knife path JSON file no larger than 64 KiB."));
+			QJsonParseError problem;
+			const auto data = file.read(65537);
+			if (data.size() > 65536 || file.error() != QFileDevice::NoError)
+				return fail(2, Text::tr("Open a knife path JSON file no larger than 64 KiB."));
+			const auto json = QJsonDocument::fromJson(data, &problem);
+			if (problem.error != QJsonParseError::NoError || !json.isArray())
+				return fail(2, Text::tr("Knife path JSON is an array of paths, each containing [u,v] point arrays."));
+			for (const auto &path : json.array())
+			{
+				if (!path.isArray()) return fail(2, Text::tr("Each knife path must be a point array."));
+				QVector<std::array<double, 2>> points;
+				for (const auto &point : path.toArray())
+				{
+					const auto coordinates = point.toArray();
+					if (!point.isArray() || coordinates.size() != 2 || !coordinates[0].isDouble() || !coordinates[1].isDouble())
+						return fail(2, Text::tr("Each knife point needs exactly two numeric coordinates."));
+					points.append(std::array<double, 2>{coordinates[0].toDouble(), coordinates[1].toDouble()});
+				}
+				paths.append(points);
+			}
+		}
+		else
+		{
+			const auto text = args.values.value(QStringLiteral("--path"));
+			if (text.toUtf8().size() > 65536) return fail(2, Text::tr("The knife path exceeds 64 KiB."));
+			for (const auto &path : text.split(QLatin1Char('|')))
+			{
+				QVector<std::array<double, 2>> points;
+				for (const auto &point : path.split(QLatin1Char(';')))
+				{
+					const auto values = point.split(QLatin1Char(','));
+					std::array<double, 2> coordinates;
+					bool first = false, second = false;
+					if (values.size() == 2)
+					{
+						coordinates[0] = values[0].toDouble(&first);
+						coordinates[1] = values[1].toDouble(&second);
+					}
+					if (!first || !second)
+						return fail(2, Text::tr("Use --path 'u,v;u,v;…'; separate disconnected paths with |."));
+					points.append(coordinates);
+				}
+				paths.append(points);
+			}
+		}
+		for (const auto &path : paths)
+		{
+			if (path.size() < 2) return fail(2, Text::tr("Each knife path needs at least two points."));
+			for (int i = 1; i < path.size(); ++i) knife.segments.append(ModelKnifeSegment{path[i - 1], path[i]});
+		}
+		if (knife.segments.isEmpty() || knife.segments.size() > 256) return fail(2, Text::tr("Use between 1 and 256 knife segments."));
+	}
 	if (args.values.contains(QStringLiteral("--frame")))
 	{
 		const auto text = args.values.value(QStringLiteral("--frame"));
@@ -395,15 +518,21 @@ ModelToolsCliResult runModelTool(const QStringList &arguments)
 	};
 	if (!readNumber(QStringLiteral("--thickness"), toolName == QStringLiteral("solidify") ? &tool.solidifyThickness : &tool.insetThickness,
 					 toolName == QStringLiteral("solidify") ? -1000000 : 0, 1000000) ||
-		!readNumber(QStringLiteral("--width"), &tool.bevelWidth, 0.000001, 1000000) ||
+		!readNumber(QStringLiteral("--width"), &tool.bevelWidth, kind == ModelEditKind::BevelEdges ? 0 : 0.000001, 1000000) ||
+		!readNumber(QStringLiteral("--roundness"), &tool.bevelRoundness, 0, 1) ||
 		!readNumber(QStringLiteral("--tile-size"), &tool.uvTileSize, 0.001, 1000000) ||
 		!readNumber(QStringLiteral("--depth"), &tool.insetDepth, -1000000, 1000000) ||
 		!readNumber(QStringLiteral("--distance"), &tool.offset, -1000000, 1000000) ||
 		!readNumber(QStringLiteral("--factor"), &tool.smoothFactor, 0, 1) || !readInt(QStringLiteral("--iterations"), &tool.iterations, 1, 100) ||
 		!readNumber(QStringLiteral("--proportional-radius"), &tool.proportionalRadius, 0, 1000000) ||
-		!readNumber(QStringLiteral("--angle"), toolName == QStringLiteral("auto-smooth") ? &tool.smoothAngle : &tool.maxAngle, 0, 180) ||
+		!readNumber(QStringLiteral("--angle"), kind == ModelEditKind::Spin ? &tool.spinAngle : toolName == QStringLiteral("auto-smooth") ? &tool.smoothAngle : &tool.maxAngle,
+			kind == ModelEditKind::Spin ? -360 : 0, kind == ModelEditKind::Spin ? 360 : 180) ||
+		!readInt(QStringLiteral("--steps"), &tool.spinSteps, 1, 256) ||
+		!readInt(QStringLiteral("--side-face"), &tool.ripFace, 0, 131071) ||
 		!readNumber(QStringLiteral("--threshold"), &tool.mergeThreshold, 0, 1000) || !readInt(QStringLiteral("--cuts"), &tool.cuts, 1, 64) ||
-		!readNumber(QStringLiteral("--slide"), &tool.slide, -1, 1) || !readInt(QStringLiteral("--segments"), &tool.segments, 3, 256) ||
+		!readNumber(QStringLiteral("--slide"), &tool.slide, -1, 1) ||
+		!readInt(QStringLiteral("--segments"), kind == ModelEditKind::BevelEdges ? &tool.bevelSegments : &tool.segments,
+				 kind == ModelEditKind::BevelEdges ? 1 : 3, kind == ModelEditKind::BevelEdges ? 32 : 256) ||
 		!readInt(QStringLiteral("--rings"), &tool.rings, 1, 256) || !readNumber(QStringLiteral("--ratio"), &tool.ratio, 0, 1) ||
 		!readInt(QStringLiteral("--target-triangles"), &tool.targetTriangles, 1, 1000000))
 		return fail(2, Text::tr("A numeric tool option is malformed or outside its range. See model tool in the CLI reference."));
@@ -413,6 +542,15 @@ ModelToolsCliResult runModelTool(const QStringList &arguments)
 	tool.preserveBoundary = !args.seen.contains(QStringLiteral("--allow-boundary"));
 	tool.inset = args.seen.contains(QStringLiteral("--individual")) ? ModelInsetMode::Individual : ModelInsetMode::Region;
 	tool.uvFit = args.seen.contains(QStringLiteral("--fit"));
+	tool.spinDuplicate = args.seen.contains(QStringLiteral("--duplicate"));
+	tool.spinClose = !args.seen.contains(QStringLiteral("--no-close"));
+	tool.ripFill = args.seen.contains(QStringLiteral("--fill"));
+	tool.ripOpposite = kind == ModelEditKind::Rip && args.seen.contains(QStringLiteral("--opposite"));
+	tool.keepJointNames = args.seen.contains(QStringLiteral("--keep-joint-names"));
+	const bool detectJoints = args.values.value(QStringLiteral("--joint-map")) == QStringLiteral("detect");
+	if (args.values.contains(QStringLiteral("--joint-map")) && !detectJoints &&
+		!parseModelMirrorJointMap(args.values.value(QStringLiteral("--joint-map")), &tool.mirrorJoints, &error))
+		return fail(2, Text::tr("Use --joint-map detect or --joint-map left=right,... %1").arg(error));
 	tool.uvProjection = toolName == QStringLiteral("uv-view")		 ? ModelUvProjection::View
 						: toolName == QStringLiteral("uv-cylinder") ? ModelUvProjection::Cylinder
 						: toolName == QStringLiteral("uv-sphere")	 ? ModelUvProjection::Sphere
@@ -429,7 +567,9 @@ ModelToolsCliResult runModelTool(const QStringList &arguments)
 		else
 			return fail(2, Text::tr("Use --merge centre|point|collapse."));
 	}
-	if ((args.values.contains(QStringLiteral("--point")) && !triple(args.values.value(QStringLiteral("--point")), &tool.point)) ||
+	if ((args.values.contains(QStringLiteral("--centre")) && !triple(args.values.value(QStringLiteral("--centre")), &tool.point)) ||
+		(args.values.contains(QStringLiteral("--axis-vector")) && !triple(args.values.value(QStringLiteral("--axis-vector")), &tool.normal)) ||
+		(args.values.contains(QStringLiteral("--point")) && !triple(args.values.value(QStringLiteral("--point")), &tool.point)) ||
 		(args.values.contains(QStringLiteral("--at")) && !triple(args.values.value(QStringLiteral("--at")), &tool.point)) ||
 		(args.values.contains(QStringLiteral("--plane-point")) && !triple(args.values.value(QStringLiteral("--plane-point")), &tool.point)) ||
 		(args.values.contains(QStringLiteral("--plane-normal")) && !triple(args.values.value(QStringLiteral("--plane-normal")), &tool.normal)) ||
@@ -451,6 +591,12 @@ ModelToolsCliResult runModelTool(const QStringList &arguments)
 	}
 	else if (toolName == QStringLiteral("add") || toolName == QStringLiteral("uv-cylinder") || toolName == QStringLiteral("uv-sphere"))
 		tool.axis = 2;
+	if (kind == ModelEditKind::Spin && args.values.contains(QStringLiteral("--axis")))
+	{
+		if (args.values.contains(QStringLiteral("--axis-vector")))
+			return fail(2, Text::tr("Spin accepts either --axis or --axis-vector, not both."));
+		tool.normal = {0, 0, 0}; tool.normal[tool.axis] = 1;
+	}
 	if (args.values.contains(QStringLiteral("--direction")))
 	{
 		const auto text = args.values.value(QStringLiteral("--direction"));
@@ -533,8 +679,27 @@ ModelToolsCliResult runModelTool(const QStringList &arguments)
 	}
 	else if (kind == ModelEditKind::AddPrimitive)
 		return fail(2, Text::tr("--tool add requires --primitive."));
+	// New geometry on a skeletal model: rigidly to one joint, to the nearest
+	// bones, or unbound (refused on a skinned surface), optionally as a new surface.
+	if (args.values.contains(QStringLiteral("--bind-joint")))
+	{
+		if (args.values.contains(QStringLiteral("--bind")))
+			return fail(2, Text::tr("Use either --bind-joint NAME or --bind nearest-bones, not both."));
+		tool.newGeometryBinding = ModelNewGeometryBinding::Joint;
+		tool.bindJoint = args.values.value(QStringLiteral("--bind-joint"));
+	}
+	else if (args.values.contains(QStringLiteral("--bind")))
+	{
+		if (args.values.value(QStringLiteral("--bind")) != QStringLiteral("nearest-bones"))
+			return fail(2, Text::tr("Use --bind nearest-bones, or --bind-joint NAME for a rigid binding."));
+		tool.newGeometryBinding = ModelNewGeometryBinding::NearestBones;
+	}
+	tool.newSurface = args.values.value(QStringLiteral("--new-surface"));
+	if (args.values.contains(QStringLiteral("--new-surface")) && tool.newSurface.trimmed().isEmpty())
+		return fail(2, Text::tr("--new-surface needs a surface name."));
 	const auto required = [&](const QString &key) { return args.values.contains(key); };
 	if ((kind == ModelEditKind::ExtrudeEdges && !required(QStringLiteral("--offset"))) ||
+		(kind == ModelEditKind::Rip && (!required(QStringLiteral("--offset")) || !required(QStringLiteral("--side-face")))) ||
 		(kind == ModelEditKind::ShrinkFatten && !required(QStringLiteral("--distance"))) ||
 		(kind == ModelEditKind::Bisect && !required(QStringLiteral("--plane-normal"))) ||
 		(kind == ModelEditKind::Decimate && !required(QStringLiteral("--ratio")) && !required(QStringLiteral("--target-triangles"))) ||
@@ -542,6 +707,8 @@ ModelToolsCliResult runModelTool(const QStringList &arguments)
 		 !required(QStringLiteral("--scale"))))
 		return fail(2, Text::tr("--tool %1 is missing a required value. See model tool in the CLI reference.").arg(toolName));
 	ModelDocument document;
+	if (modelPathsReferToSameFile(output, source))
+		return fail(2, Text::tr("Choose an output separate from the source."));
 	if (!document.load(source, &error))
 		return fail(1, error);
 	const auto &mesh = document.mesh();
@@ -552,7 +719,14 @@ ModelToolsCliResult runModelTool(const QStringList &arguments)
 	edit.selection.surface = surfaceIndex;
 	if (!readSelection(args, mesh.surfaces[surfaceIndex], &edit.selection, &error))
 		return fail(2, error);
-	if (!document.edit(edit, &error))
+	// The editor's Detect Pairs: the same name patterns, keeping only pairs
+	// that mirror across this plane and involve a joint of this surface.
+	if (detectJoints)
+		tool.mirrorJoints = modelMirrorJointPairsForAxis(mesh, detectModelMirrorJointPairs(mesh.skeleton), tool.axis, surfaceIndex,
+			std::max(tool.mergeThreshold, 1e-4));
+	const auto jointMap = tool.mirrorJoints;
+	ModelEditReport report;
+	if (!document.edit(edit, &error, {}, &report))
 		return fail(4, error);
 	const bool dry = args.seen.contains(QStringLiteral("--dry-run"));
 	const auto target = inspectModelWriteTarget(output);
@@ -560,17 +734,11 @@ ModelToolsCliResult runModelTool(const QStringList &arguments)
 		return fail(1, target.error);
 	if (target.existed && !args.seen.contains(QStringLiteral("--overwrite")))
 		return fail(1, Text::tr("The output already exists; use --overwrite to replace it."));
-	if (dry)
-	{
-		const auto json = editableModelJson(document.mesh(), &error);
-		if (json.isEmpty())
-			return fail(4, error);
-		if (QJsonDocument(json).toJson(QJsonDocument::Compact).size() > modelDocumentMaxSourceBytes)
-			return fail(4, Text::tr("The edited model exceeds the 64 MiB source limit."));
-	}
-	else if (!document.save(output, args.seen.contains(QStringLiteral("--overwrite")), &error))
+	if (!document.save(output, args.seen.contains(QStringLiteral("--overwrite")), &error, {}, dry))
 		return fail(1, error);
-	const auto &surface = document.mesh().surfaces[surfaceIndex];
+	// Add Primitive with --new-surface reports the surface it created.
+	const int resultSurface = tool.newSurface.isEmpty() ? surfaceIndex : document.selection().surface;
+	const auto &surface = document.mesh().surfaces[resultSurface];
 	ModelToolsCliResult result;
 	result.payload = {{QStringLiteral("source"), QFileInfo(source).absoluteFilePath()},
 					  {QStringLiteral("tool"), toolName},
@@ -579,14 +747,34 @@ ModelToolsCliResult runModelTool(const QStringList &arguments)
 					  {QStringLiteral("dryRun"), dry},
 					  {QStringLiteral("frames"), qint64(document.mesh().frames.size())},
 					  {QStringLiteral("surface"),
-					   QJsonObject{{QStringLiteral("index"), surfaceIndex},
+					   QJsonObject{{QStringLiteral("index"), resultSurface},
 								   {QStringLiteral("name"), surface.name},
 								   {QStringLiteral("vertices"), surface.vertexCount},
 								   {QStringLiteral("triangles"), qint64(surface.triangles.size())},
 								   {QStringLiteral("seams"), qint64(surface.uvSeams.size())}}},
 					  {QStringLiteral("selection"), selectionJson(document.selection())}};
+	if (!document.mesh().skeleton.isEmpty())
+		result.payload.insert(QStringLiteral("skinProvenance"), modelSkinProvenanceJson(document.mesh(), report.skin));
+	if (kind == ModelEditKind::AddPrimitive && !document.mesh().skeleton.isEmpty())
+		result.payload.insert(QStringLiteral("binding"),
+			QJsonObject{{QStringLiteral("method"), tool.newGeometryBinding == ModelNewGeometryBinding::Joint		  ? QStringLiteral("joint")
+												   : tool.newGeometryBinding == ModelNewGeometryBinding::NearestBones ? QStringLiteral("nearest-bones")
+																														: QStringLiteral("none")},
+						{QStringLiteral("joint"), tool.bindJoint},
+						{QStringLiteral("skinned"), !surface.skinning.isEmpty()}});
+	if (kind == ModelEditKind::Symmetrize && !document.mesh().skeleton.isEmpty())
+	{
+		QJsonObject pairs;
+		for (auto i = jointMap.cbegin(); i != jointMap.cend(); ++i)
+			pairs.insert(i.key(), i.value());
+		result.payload.insert(QStringLiteral("jointMap"), pairs);
+		result.payload.insert(QStringLiteral("keepJointNames"), tool.keepJointNames);
+	}
 	result.lines << (dry ? Text::tr("%1 validated; no files written.").arg(toolName) : Text::tr("Saved %1 result to %2.").arg(toolName, output));
-	result.lines << Text::tr("Surface %1 (%2): %3 vertices, %4 triangles.").arg(surfaceIndex).arg(surface.name).arg(surface.vertexCount).arg(surface.triangles.size());
+	result.lines << Text::tr("Surface %1 (%2): %3 vertices, %4 triangles.").arg(resultSurface).arg(surface.name).arg(surface.vertexCount).arg(surface.triangles.size());
+	if (kind == ModelEditKind::Symmetrize && !jointMap.isEmpty())
+		result.lines << Text::tr("Joint mirror map: %1.").arg(modelMirrorJointMapText(jointMap));
+	result.lines += modelSkinProvenanceLines(document.mesh(), report.skin);
 	result.lines += selectionLines(document.selection());
 	return result;
 }
@@ -706,8 +894,22 @@ ModelToolsCliResult runModelSelect(const QStringList &arguments)
 	ModelSelection current{surfaceIndex, {}, {}};
 	if (!readSelection(args, mesh.surfaces[surfaceIndex], &current, &error))
 		return fail(2, error);
+	// Without --edge, loop and ring grow every selected edge (or every edge
+	// between two --vertices) through the service behind the editor's Select
+	// Edge Loops and Select Edge Rings, which seeds the same way.
+	const bool fromSelection = (request.operation == ModelSelectOperation::Loop || request.operation == ModelSelectOperation::Ring) &&
+							   !args.values.contains(QStringLiteral("--edge"));
 	ModelSelection selected;
-	if (!selectModelComponents(mesh, current, request, &selected, &error))
+	ModelEdgeLoopsResult loops;
+	if (fromSelection)
+	{
+		if (current.edges.isEmpty() && current.vertices.isEmpty())
+			return fail(4, Text::tr("Give --edge a:b for one loop or ring, or --edges (or --vertices) to grow every selected edge."));
+		if (!selectModelEdgeLoops(mesh, current, request, {}, &loops, &error))
+			return fail(4, error);
+		selected = loops.selection;
+	}
+	else if (!selectModelComponents(mesh, current, request, &selected, &error))
 		return fail(4, error);
 	ModelToolsCliResult result;
 	result.payload = {{QStringLiteral("source"), QFileInfo(source).absoluteFilePath()},
@@ -715,33 +917,314 @@ ModelToolsCliResult runModelSelect(const QStringList &arguments)
 					  {QStringLiteral("mode"), modeText},
 					  {QStringLiteral("frame"), request.frame},
 					  {QStringLiteral("selection"), selectionJson(selected)}};
+	if (fromSelection)
+	{
+		QJsonArray refused;
+		for (const auto &refusal : std::as_const(loops.refused))
+			refused.append(QJsonObject{{QStringLiteral("edge"), QJsonArray{refusal.edge.first, refusal.edge.second}},
+									   {QStringLiteral("reason"), refusal.reason}});
+		result.payload.insert(QStringLiteral("seeds"), sortedJson(QSet<ModelEdge>(loops.seeds.cbegin(), loops.seeds.cend())));
+		result.payload.insert(QStringLiteral("refused"), refused);
+	}
 	result.lines << Text::tr("Select %1 (%2) on surface %3:").arg(operationName, modeText).arg(surfaceIndex);
 	result.lines += selectionLines(selected);
+	result.lines += modelEdgeLoopRefusalLines(loops);
 	return result;
 }
-ModelToolsCliResult runModelLod(const QStringList &arguments)
+ModelCliDelivery modelCliDelivery(const QString &projectOption, const QString &source)
 {
-	const QSet<QString> flags{QStringLiteral("--cli"), QStringLiteral("--json"), QStringLiteral("--quiet"), QStringLiteral("--verbose"),
-							  QStringLiteral("--dry-run"), QStringLiteral("--overwrite")};
-	const QSet<QString> options{QStringLiteral("--input"), QStringLiteral("--output"), QStringLiteral("--levels"), QStringLiteral("--ratio"),
+	ModelCliDelivery delivery;
+	delivery.projectRoot = !projectOption.trimmed().isEmpty() ? QFileInfo(projectOption).absoluteFilePath() : findModelProjectRoot(source);
+	ProjectManifest manifest;
+	if (!delivery.projectRoot.isEmpty())
+	{
+		QString error;
+		if (loadProjectManifest(delivery.projectRoot, &manifest, &error))
+			delivery.project = projectModelDeliveryPreferences(manifest, &delivery.warnings);
+		else
+		{
+			manifest = {};
+			// An explicit project without a manifest has nothing saved yet.
+			if (projectOption.trimmed().isEmpty() || QFileInfo::exists(projectManifestPath(delivery.projectRoot)))
+				delivery.warnings << Text::tr("The project manifest could not be read, so its saved delivery targets are not used: %1").arg(error);
+		}
+	}
+	// The installation in use suggests targets from its engine, chosen as the
+	// Mesh Editor and releases choose it.
+	const StudioSettings settings(StudioSettings::AccessMode::ReadOnly);
+	delivery.installation =
+		installationModelDeliveryPreferences(manifest, settings.gameInstallations(), settings.selectedGameInstallationId(), &delivery.installationName);
+	return delivery;
+}
+
+ModelDeliveryChoice ModelCliDelivery::target(const QString &format, const QString &explicitTarget) const
+{
+	return resolveModelDeliveryTarget(format, explicitTarget, project, installation);
+}
+
+bool ModelCliDelivery::strict(bool strictFlag, bool noStrictFlag, ModelDeliveryOrigin *origin) const
+{
+	if (strictFlag || noStrictFlag)
+	{
+		if (origin)
+			*origin = ModelDeliveryOrigin::Explicit;
+		return strictFlag;
+	}
+	if (origin)
+		*origin = project.strictSet ? ModelDeliveryOrigin::Project : ModelDeliveryOrigin::Default;
+	return project.strictSet && project.strict;
+}
+
+QJsonObject ModelCliDelivery::json(const QString &format, const ModelDeliveryChoice &choice, bool strictValue, ModelDeliveryOrigin strictOrigin) const
+{
+	QJsonObject object{{QStringLiteral("format"), format},
+					   {QStringLiteral("target"), choice.target},
+					   {QStringLiteral("targetOrigin"), modelDeliveryOriginId(choice.origin)},
+					   {QStringLiteral("strict"), strictValue},
+					   {QStringLiteral("strictOrigin"), modelDeliveryOriginId(strictOrigin)}};
+	if (!projectRoot.isEmpty())
+		object.insert(QStringLiteral("project"), projectRoot);
+	if (!warnings.isEmpty())
+		object.insert(QStringLiteral("warnings"), QJsonArray::fromStringList(warnings));
+	return object;
+}
+
+ModelToolsCliResult runModelTargets(const QStringList &arguments)
+{
+	const QSet<QString> flags{QStringLiteral("--cli"),	QStringLiteral("--json"),  QStringLiteral("--quiet"),	  QStringLiteral("--verbose"),
+							  QStringLiteral("--save"), QStringLiteral("--clear"), QStringLiteral("--strict"), QStringLiteral("--no-strict")};
+	const QSet<QString> options{QStringLiteral("--input"),		   QStringLiteral("--format"), QStringLiteral("--target"),		 QStringLiteral("--project"),
 								QStringLiteral("--settings-file"), QStringLiteral("--locale"), QStringLiteral("--catalog-root")};
 	Arguments args;
 	QString error;
 	if (!parse(arguments, flags, options, &args, &error))
 		return fail(2, error);
-	const auto source = sourceArgument(args, QStringLiteral("lod"), &error);
+	const bool inputOption = args.seen.contains(QStringLiteral("--input"));
+	if (args.positional.value(0) != QStringLiteral("model") || args.positional.value(1) != QStringLiteral("targets") ||
+		args.positional.size() > (inputOption ? 2 : 3))
+		return fail(2, Text::tr("Give at most one model source, positionally or with --input; without one, model targets lists the targets."));
+	const auto source = inputOption ? args.values.value(QStringLiteral("--input")) : args.positional.value(2);
+	const auto format = args.values.value(QStringLiteral("--format")).toLower();
+	const auto targetId = args.values.value(QStringLiteral("--target")).toLower();
+	const bool save = args.seen.contains(QStringLiteral("--save")), clear = args.seen.contains(QStringLiteral("--clear"));
+	const bool strictFlag = args.seen.contains(QStringLiteral("--strict")), noStrictFlag = args.seen.contains(QStringLiteral("--no-strict"));
+	if (!format.isEmpty() && modelTargetProfiles(format).isEmpty())
+		return fail(2, Text::tr("%1 has no delivery targets. Formats with targets: mdl, md2, md3, iqm, md5mesh, md5anim.").arg(format));
+	if (strictFlag && noStrictFlag)
+		return fail(2, Text::tr("Use --strict or --no-strict, not both."));
+	const auto projectOption = args.values.value(QStringLiteral("--project"));
+	// Saving and clearing write the project's choices; they take no source.
+	if (save || clear)
+	{
+		if (save == clear || projectOption.isEmpty() || !source.isEmpty())
+			return fail(2, Text::tr("Use --save or --clear with --project <folder> and no model source."));
+		if (save && targetId.isEmpty() && !strictFlag && !noStrictFlag)
+			return fail(2, Text::tr("--save needs --format and --target, or --strict or --no-strict."));
+		if (clear && (!targetId.isEmpty() || strictFlag || noStrictFlag))
+			return fail(2, Text::tr("--clear takes --format, or nothing to clear every saved choice."));
+		if (!targetId.isEmpty() && format.isEmpty())
+			return fail(2, Text::tr("--save needs --format to say which format's target to save."));
+		if (save && !targetId.isEmpty() && !findModelTargetProfile(format, targetId, nullptr))
+			return fail(2, Text::tr("There is no %1 delivery target called \"%2\". Choose one of: %3.").arg(format, targetId, modelTargetChoices(format)));
+		const auto root = QFileInfo(projectOption).absoluteFilePath();
+		ProjectManifest manifest;
+		if (!loadProjectManifest(root, &manifest, &error))
+		{
+			if (!QFileInfo(root).isDir())
+				return fail(1, Text::tr("%1 is not a project folder.").arg(root));
+			// Only a project without a manifest starts a new one; replacing one
+			// that cannot be read would lose every other project setting.
+			if (QFileInfo::exists(projectManifestPath(root)))
+				return fail(1, Text::tr("The project manifest %1 could not be read (%2), so nothing was saved. Fix or restore it, then save the "
+										"delivery targets again.")
+								   .arg(QDir::toNativeSeparators(projectManifestPath(root)), error));
+			manifest = defaultProjectManifest(root);
+		}
+		QStringList warnings;
+		auto preferences = projectModelDeliveryPreferences(manifest, &warnings);
+		if (save)
+		{
+			if (!targetId.isEmpty())
+				preferences.targets.insert(format, targetId);
+			if (strictFlag || noStrictFlag)
+			{
+				preferences.strictSet = true;
+				preferences.strict = strictFlag;
+			}
+		}
+		else if (!format.isEmpty())
+			preferences.targets.remove(format);
+		else
+			preferences = {};
+		setProjectModelDeliveryPreferences(&manifest, preferences);
+		if (!saveProjectManifest(manifest, &error))
+			return fail(1, Text::tr("The project manifest could not be saved: %1").arg(error));
+		ModelToolsCliResult result;
+		result.payload = {{QStringLiteral("project"), root},
+						  {QStringLiteral("saved"), modelDeliveryPreferencesJson(preferences)},
+						  {QStringLiteral("warnings"), QJsonArray::fromStringList(warnings)}};
+		result.lines << (preferences.isEmpty() ? Text::tr("The project saves no delivery targets.") : Text::tr("Saved delivery targets for %1:").arg(root));
+		for (auto it = preferences.targets.cbegin(); it != preferences.targets.cend(); ++it)
+			result.lines << QStringLiteral("  %1 %2").arg(it.key(), it.value());
+		if (preferences.strictSet)
+			result.lines << (preferences.strict ? Text::tr("  Strict exports: on") : Text::tr("  Strict exports: off"));
+		result.lines += warnings;
+		return result;
+	}
+	if (strictFlag || noStrictFlag)
+		return fail(2, Text::tr("--strict and --no-strict apply with --save."));
+	QVector<ModelTargetProfile> profiles;
+	const bool projectView = !projectOption.isEmpty();
+	const auto delivery = modelCliDelivery(projectOption, source);
+	QJsonArray resolved;
+	if (projectView)
+	{
+		// A project's view: the target each format's exports use.
+		ModelDeliveryOrigin strictOrigin = ModelDeliveryOrigin::Default;
+		const bool strict = delivery.strict(false, false, &strictOrigin);
+		for (const auto &id : modelExportFormatIds())
+		{
+			if (modelTargetProfiles(id).isEmpty() || (!format.isEmpty() && id != format))
+				continue;
+			const auto choice = delivery.target(id, targetId);
+			ModelTargetProfile profile;
+			if (!findModelTargetProfile(id, choice.target, &profile))
+				return fail(2, Text::tr("There is no %1 delivery target called \"%2\". Choose one of: %3.").arg(id, choice.target, modelTargetChoices(id)));
+			profiles.append(profile);
+			resolved.append(delivery.json(id, choice, strict, strictOrigin));
+		}
+	}
+	else
+	{
+		for (const auto &profile : modelTargetProfiles())
+		{
+			if ((format.isEmpty() || profile.format == format) && (targetId.isEmpty() || profile.id == targetId))
+				profiles.append(profile);
+		}
+	}
+	if (profiles.isEmpty())
+	{
+		QStringList ids;
+		for (const auto &profile : modelTargetProfiles())
+		{
+			if (!ids.contains(profile.id))
+				ids << profile.id;
+		}
+		return fail(2, Text::tr("There is no delivery target called \"%1\"%2. Choose one of: %3.")
+						   .arg(targetId, format.isEmpty() ? QString() : Text::tr(" for %1").arg(format),
+								format.isEmpty() ? ids.join(QStringLiteral(", ")) : modelTargetChoices(format)));
+	}
+	// Some ids name targets of several formats (fte for MDL and IQM, ioquake3
+	// for MD3 and IQM); a readiness check needs the one meant.
+	QStringList formats;
+	for (const auto &profile : std::as_const(profiles))
+	{
+		if (!formats.contains(profile.format))
+			formats << profile.format;
+	}
+	if (!source.isEmpty() && !targetId.isEmpty() && formats.size() > 1)
+		return fail(2, Text::tr("\"%1\" names delivery targets for %2; give --format to choose the one to check.")
+						   .arg(targetId, formats.join(QStringLiteral(", "))));
+	ModelToolsCliResult result;
+	if (source.isEmpty())
+	{
+		QJsonArray list;
+		for (int index = 0; index < profiles.size(); ++index)
+		{
+			const auto &profile = profiles.at(index);
+			list.append(modelTargetProfileJson(profile));
+			if (projectView)
+			{
+				const auto origin = modelDeliveryOriginName(delivery.target(profile.format, targetId).origin);
+				result.lines << Text::tr("%1 %2: %3 (%4)").arg(profile.format, profile.id, profile.label, origin);
+				continue;
+			}
+			result.lines << Text::tr("%1 %2%3: %4")
+								.arg(profile.format, profile.id, profile.isDefault ? Text::tr(" (default)") : QString(), profile.label);
+			result.lines << QStringLiteral("  ") + profile.description;
+		}
+		result.payload = {{QStringLiteral("targets"), list}};
+		if (projectView)
+		{
+			result.payload.insert(QStringLiteral("project"), delivery.projectRoot);
+			result.payload.insert(QStringLiteral("delivery"), resolved);
+			result.lines += delivery.warnings;
+		}
+		return result;
+	}
+	ModelDocument document;
+	if (!document.load(source, &error))
+	{
+		ModelMesh imported;
+		QByteArray bytes;
+		if (!readModelFile(source, &bytes, &error) || !importEditableModel(QFileInfo(source).absoluteFilePath(), bytes, &imported, &error) || !document.setMesh(imported, &error))
+			return fail(1, error);
+	}
+	QJsonArray reports;
+	int blocked = 0, blockers = 0;
+	for (const auto &profile : std::as_const(profiles))
+	{
+		ModelTargetReport report;
+		if (!assessModelTarget(document.mesh(), profile, &report, &error))
+			return fail(1, error);
+		blocked += !report.ready();
+		blockers += int(report.issues.size());
+		reports.append(modelTargetReportJson(report));
+		const int issues = int(report.issues.size());
+		result.lines << (report.ready() ? Text::tr("%1 %2 (%3): ready").arg(profile.format, profile.id, profile.label)
+										: Text::tr("%1 %2 (%3): %n blocker(s)", nullptr, issues).arg(profile.format, profile.id, profile.label));
+		for (const auto &line : modelTargetIssueLines(report))
+			result.lines << QStringLiteral("  - ") + line;
+	}
+	result.payload = {{QStringLiteral("source"), QFileInfo(source).absoluteFilePath()},
+					  {QStringLiteral("reports"), reports},
+					  {QStringLiteral("ready"), blocked == 0}};
+	if (projectView)
+	{
+		result.payload.insert(QStringLiteral("project"), delivery.projectRoot);
+		result.payload.insert(QStringLiteral("delivery"), resolved);
+		result.lines += delivery.warnings;
+	}
+	// A named target (one format's) that is not ready fails like a validation;
+	// a survey of several targets reports and succeeds.
+	if (!targetId.isEmpty() && blocked > 0)
+	{
+		result.exitCode = 4;
+		result.error = Text::tr("The model is not ready for the %1 delivery target %2; limits it exceeds: %n.", nullptr, blockers)
+						   .arg(profiles.first().format, targetId);
+	}
+	return result;
+}
+
+ModelToolsCliResult runModelPrepare(const QStringList &arguments)
+{
+	const QSet<QString> flags{QStringLiteral("--cli"),	   QStringLiteral("--json"),	  QStringLiteral("--quiet"), QStringLiteral("--verbose"),
+							  QStringLiteral("--dry-run"), QStringLiteral("--overwrite")};
+	const QSet<QString> options{QStringLiteral("--input"),	QStringLiteral("--output"),		   QStringLiteral("--format"), QStringLiteral("--target"),
+								QStringLiteral("--project"), QStringLiteral("--skip"),		   QStringLiteral("--settings-file"),
+								QStringLiteral("--locale"),	QStringLiteral("--catalog-root")};
+	Arguments args;
+	QString error;
+	if (!parse(arguments, flags, options, &args, &error))
+		return fail(2, error);
+	const auto source = sourceArgument(args, QStringLiteral("prepare"), &error);
 	if (source.isEmpty())
 		return fail(2, error);
+	const auto format = args.values.value(QStringLiteral("--format")).toLower();
+	if (format.isEmpty() || modelTargetProfiles(format).isEmpty())
+		return fail(2, Text::tr("model prepare needs --format mdl, md2, md3, iqm, md5mesh or md5anim: the export the model is prepared for."));
+	const bool dry = args.seen.contains(QStringLiteral("--dry-run")), overwrite = args.seen.contains(QStringLiteral("--overwrite"));
 	const auto output = args.values.value(QStringLiteral("--output"));
-	if (!output.endsWith(QStringLiteral(".md3"), Qt::CaseInsensitive))
-		return fail(2, Text::tr("model lod requires --output <name.md3>; levels are written as name_1.md3 and name_2.md3 beside it."));
-	int levels = 2;
-	double ratio = 0.5;
-	if ((args.values.contains(QStringLiteral("--levels")) &&
-		 (!index(args.values.value(QStringLiteral("--levels")), &levels) || levels < 1 || levels > 3)) ||
-		(args.values.contains(QStringLiteral("--ratio")) &&
-		 (!number(args.values.value(QStringLiteral("--ratio")), &ratio) || ratio < 0.05 || ratio > 0.95)))
-		return fail(2, Text::tr("Use --levels 1-3 and --ratio 0.05-0.95."));
+	if (!dry && !output.endsWith(QStringLiteral(".mesh.json"), Qt::CaseInsensitive))
+		return fail(2, Text::tr("model prepare writes an editable source: give --output <name.mesh.json>, or --dry-run to review only."));
+	ModelTargetPrepareOptions prepareOptions;
+	if (args.values.contains(QStringLiteral("--skip")) && !skipModelTargetFixes(args.values.value(QStringLiteral("--skip")), &prepareOptions, &error))
+		return fail(2, error);
+	const auto delivery = modelCliDelivery(args.values.value(QStringLiteral("--project")), source);
+	const auto choice = delivery.target(format, args.values.value(QStringLiteral("--target")));
+	ModelTargetProfile profile;
+	if (!findModelTargetProfile(format, choice.target, &profile))
+		return fail(2, Text::tr("There is no %1 delivery target called \"%2\". Choose one of: %3.").arg(format, choice.target, modelTargetChoices(format)));
 	ModelDocument document;
 	if (!document.load(source, &error))
 	{
@@ -750,74 +1233,323 @@ ModelToolsCliResult runModelLod(const QStringList &arguments)
 		if (!readModelFile(source, &bytes, &error) || !importEditableModel(source, bytes, &imported, &error) || !document.setMesh(imported, &error))
 			return fail(1, error);
 	}
-	QVector<ModelLodLevel> lods;
-	if (!buildModelLods(document.mesh(), levels, ratio, &lods, &error))
-		return fail(4, error);
-	struct Output
-	{
-		QString path;
-		QByteArray bytes;
-		int level = 0, triangles = 0;
-		QStringList notes;
-	};
-	QVector<Output> outputs;
-	int baseTriangles = 0;
-	for (const auto &surface : document.mesh().surfaces)
-		baseTriangles += surface.triangles.size();
-	outputs.append({output, exportEditableModel(document.mesh(), QStringLiteral("md3"), 0, &error), 0, baseTriangles, {}});
-	if (outputs.last().bytes.isEmpty())
-		return fail(4, error);
-	for (int level = 0; level < lods.size(); ++level)
-	{
-		Output entry{modelLodPath(output, level + 1), exportEditableModel(lods[level].mesh, QStringLiteral("md3"), 0, &error), level + 1,
-					 lods[level].triangles, lods[level].notes};
-		if (entry.bytes.isEmpty())
-			return fail(4, error);
-		outputs.append(entry);
-	}
-	const bool dry = args.seen.contains(QStringLiteral("--dry-run"));
-	QVector<ModelWriteTarget> targets;
-	for (const auto &entry : std::as_const(outputs))
-	{
-		const auto target = inspectModelWriteTarget(entry.path);
-		if (!target.isValid())
-			return fail(1, target.error);
-		if (target.existed && !args.seen.contains(QStringLiteral("--overwrite")))
-			return fail(1, Text::tr("%1 already exists; use --overwrite to replace it.").arg(entry.path));
-		if (modelPathsReferToSameFile(entry.path, source))
-			return fail(2, Text::tr("Choose an output separate from the source."));
-		targets.append(target);
-	}
+	ModelTargetPreparation preparation;
+	if (!prepareModelForTarget(document.mesh(), profile, prepareOptions, &preparation, &error))
+		return fail(1, error);
+	ModelToolsCliResult result;
+	bool written = false;
 	if (!dry)
 	{
-		for (int i = 0; i < outputs.size(); ++i)
+		ModelDocument prepared;
+		if (!prepared.setMesh(preparation.mesh, &error) || !prepared.save(output, overwrite, &error))
+			return fail(output.isEmpty() || QFileInfo::exists(output) ? 2 : 1, error);
+		written = true;
+	}
+	result.lines += modelTargetPreparationLines(preparation);
+	result.lines << (dry ? Text::tr("Reviewed only; nothing was written.") : Text::tr("Wrote %1.").arg(output));
+	result.lines += delivery.warnings;
+	result.payload = modelTargetPreparationJson(preparation);
+	result.payload.insert(QStringLiteral("source"), QFileInfo(source).absoluteFilePath());
+	result.payload.insert(QStringLiteral("targetOrigin"), modelDeliveryOriginId(choice.origin));
+	if (!delivery.projectRoot.isEmpty())
+		result.payload.insert(QStringLiteral("project"), delivery.projectRoot);
+	result.payload.insert(QStringLiteral("dryRun"), dry);
+	result.payload.insert(QStringLiteral("written"), written);
+	if (written)
+		result.payload.insert(QStringLiteral("output"), QFileInfo(output).absoluteFilePath());
+	// Limits no fix met still block the export: the prepared source is written,
+	// and the exit code says it is not ready.
+	if (!preparation.after.ready())
+	{
+		result.exitCode = 4;
+		const int left = int(preparation.after.issues.size());
+		result.error = Text::tr("The prepared model still exceeds %n limit(s) of the %1 delivery target %2.", nullptr, left).arg(format, profile.id);
+	}
+	return result;
+}
+
+ModelToolsCliResult runModelLod(const QStringList &arguments)
+{
+	const QSet<QString> flags{QStringLiteral("--cli"),		 QStringLiteral("--json"),		QStringLiteral("--quiet"),	   QStringLiteral("--verbose"),
+							  QStringLiteral("--dry-run"),	 QStringLiteral("--overwrite"), QStringLiteral("--strict"),	   QStringLiteral("--no-strict"),
+							  QStringLiteral("--inspect"),	 QStringLiteral("--use-recipe"),	QStringLiteral("--save-recipe")};
+	const QSet<QString> options{QStringLiteral("--input"),			  QStringLiteral("--output"),		 QStringLiteral("--levels"),
+								QStringLiteral("--ratio"),			  QStringLiteral("--target"),		 QStringLiteral("--target-triangles"),
+								QStringLiteral("--level-source"),	  QStringLiteral("--project"),		 QStringLiteral("--package"),
+								QStringLiteral("--entry"),			  QStringLiteral("--settings-file"), QStringLiteral("--locale"),
+								QStringLiteral("--catalog-root")};
+	Arguments args;
+	QString error;
+	if (!parse(arguments, flags, options, &args, &error))
+		return fail(2, error);
+	const bool inspect = args.seen.contains(QStringLiteral("--inspect"));
+	const bool package = args.seen.contains(QStringLiteral("--package"));
+	QString source;
+	if (!(inspect && package))
+	{
+		source = sourceArgument(args, QStringLiteral("lod"), &error);
+		if (source.isEmpty())
+			return fail(2, error);
+	}
+	else if (args.positional.size() != 2 || !args.seen.contains(QStringLiteral("--entry")) || args.seen.contains(QStringLiteral("--input")))
+		return fail(2, Text::tr("model lod --inspect --package <package> --entry <models/name.md3> inspects a set in a package; give no other source."));
+	if (args.seen.contains(QStringLiteral("--strict")) && args.seen.contains(QStringLiteral("--no-strict")))
+		return fail(2, Text::tr("Use --strict or --no-strict, not both."));
+	const auto delivery = modelCliDelivery(args.values.value(QStringLiteral("--project")), package ? args.values.value(QStringLiteral("--package")) : source);
+	const auto choice = delivery.target(QStringLiteral("md3"), args.values.value(QStringLiteral("--target")));
+	ModelTargetProfile target;
+	if (!findModelTargetProfile(QStringLiteral("md3"), choice.target, &target))
+		return fail(2, Text::tr("There is no MD3 delivery target called \"%1\". Choose one of: %2.")
+						   .arg(choice.target, modelTargetChoices(QStringLiteral("md3"))));
+	const int loaded = std::max(0, target.limits.detailLevels);
+
+	// Inspecting an existing set: loose files beside the base, or package entries.
+	if (inspect)
+	{
+		for (const auto *option : {"--output", "--levels", "--ratio", "--target-triangles", "--level-source"})
 		{
-			if (!writeModelFile(targets[i], outputs[i].bytes, &error))
+			if (args.seen.contains(QLatin1String(option)))
+				return fail(2, Text::tr("--inspect reads an existing set; %1 applies to writing one.").arg(QLatin1String(option)));
+		}
+		for (const auto *option : {"--use-recipe", "--save-recipe", "--dry-run", "--overwrite", "--strict", "--no-strict"})
+		{
+			if (args.seen.contains(QLatin1String(option)))
+				return fail(2, Text::tr("--inspect reads an existing set; %1 applies to writing one.").arg(QLatin1String(option)));
+		}
+		PackageArchive archive;
+		ModelLodFileReader read = modelLodDiskReader();
+		QString base = source;
+		if (package)
+		{
+			const auto path = args.values.value(QStringLiteral("--package"));
+			if (path.endsWith(QStringLiteral(".vibepackage"), Qt::CaseInsensitive))
+			{
+				PackageStagingModel staging;
+				if (!PackageDraft::load(path, &staging, &error))
+					return fail(1, error);
+				archive = packagePlannedArchive(staging, &error);
+				if (!archive.isOpen())
+					return fail(1, error);
+			}
+			else if (!archive.load(path, &error))
 				return fail(1, error);
+			base = args.values.value(QStringLiteral("--entry"));
+			// The game's file system matches package paths without case.
+			QHash<QString, QString> entries;
+			for (const auto &entry : archive.entries())
+			{
+				if (entry.kind == PackageEntryKind::File)
+					entries.insert(entry.virtualPath.toLower(), entry.virtualPath);
+			}
+			read = [&archive, entries](const QString &entry, QByteArray *bytes, QString *problem)
+			{
+				if (problem)
+					problem->clear();
+				const auto found = entries.constFind(QString(entry).replace(QLatin1Char('\\'), QLatin1Char('/')).toLower());
+				if (found == entries.cend())
+					return false;
+				return archive.readEntryBytes(found.value(), bytes, problem, modelFileByteLimit);
+			};
+		}
+		ModelLodInspection inspection;
+		if (!inspectModelLodSet(base, read, target, &inspection, &error))
+			return fail(1, error);
+		ModelToolsCliResult result;
+		result.lines += modelLodInspectionLines(inspection);
+		result.payload = modelLodInspectionJson(inspection);
+		result.payload.insert(QStringLiteral("base"), package ? base : QFileInfo(base).absoluteFilePath());
+		if (package)
+			result.payload.insert(QStringLiteral("package"), QFileInfo(args.values.value(QStringLiteral("--package"))).absoluteFilePath());
+		result.payload.insert(QStringLiteral("targetOrigin"), modelDeliveryOriginId(choice.origin));
+		if (!inspection.validation.ok())
+		{
+			result.exitCode = 4;
+			const int errors = inspection.validation.count(ModelLodSeverity::Error);
+			result.error = Text::tr("The detail set has %n problem(s) that the game would read wrongly.", nullptr, errors);
+		}
+		return result;
+	}
+	if (package || args.seen.contains(QStringLiteral("--entry")))
+		return fail(2, Text::tr("--package and --entry apply to --inspect."));
+
+	const auto output = args.values.value(QStringLiteral("--output"));
+	const bool saveRecipe = args.seen.contains(QStringLiteral("--save-recipe"));
+	if (!(saveRecipe && output.isEmpty()) && !output.endsWith(QStringLiteral(".md3"), Qt::CaseInsensitive))
+		return fail(2, Text::tr("model lod requires --output <name.md3>; levels are written as name_1.md3 and name_2.md3 beside it."));
+	ModelDocument document;
+	const bool editable = document.load(source, &error);
+	if (!editable)
+	{
+		ModelMesh imported;
+		QByteArray bytes;
+		if (!readModelFile(source, &bytes, &error) || !importEditableModel(QFileInfo(source).absoluteFilePath(), bytes, &imported, &error) || !document.setMesh(imported, &error))
+			return fail(1, error);
+	}
+	if (saveRecipe && !editable)
+		return fail(2, Text::tr("--save-recipe stores the detail levels in an editable .mesh.json source; %1 is not one.").arg(source));
+	// The recipe: the source's own, or one the options describe.
+	const bool described = args.seen.contains(QStringLiteral("--levels")) || args.seen.contains(QStringLiteral("--ratio")) ||
+						   args.seen.contains(QStringLiteral("--target-triangles")) || args.seen.contains(QStringLiteral("--level-source"));
+	const bool useStored = args.seen.contains(QStringLiteral("--use-recipe")) || (!described && !document.mesh().detailLevels.isEmpty());
+	if (useStored && described)
+		return fail(2, Text::tr("--use-recipe builds the levels the source stores; leave out --levels, --ratio, --target-triangles and --level-source."));
+	if (args.seen.contains(QStringLiteral("--use-recipe")) && document.mesh().detailLevels.isEmpty())
+		return fail(4, Text::tr("%1 stores no detail levels; describe them with --levels and --ratio, then --save-recipe.").arg(source));
+	const auto sourceDirectory = QFileInfo(source).absolutePath();
+	QVector<ModelLodRecipeLevel> recipe;
+	if (useStored)
+		recipe = document.mesh().detailLevels;
+	else
+	{
+		int levels = std::min(2, loaded);
+		double ratio = 0.5;
+		QVector<int> triangles;
+		if (args.values.contains(QStringLiteral("--target-triangles")))
+		{
+			for (const auto &part : args.values.value(QStringLiteral("--target-triangles")).split(QLatin1Char(',')))
+			{
+				int value = 0;
+				if (!index(part.trimmed(), &value) || value < 1)
+					return fail(2, Text::tr("--target-triangles takes one positive triangle count per level, such as 1200,600."));
+				triangles << value;
+			}
+			levels = int(triangles.size());
+		}
+		if ((args.values.contains(QStringLiteral("--levels")) &&
+			 (!index(args.values.value(QStringLiteral("--levels")), &levels) || levels < 1 || levels > loaded ||
+			  (!triangles.isEmpty() && levels != triangles.size()))) ||
+			(args.values.contains(QStringLiteral("--ratio")) &&
+			 (!number(args.values.value(QStringLiteral("--ratio")), &ratio) || ratio < 0.05 || ratio > 0.95)))
+			return fail(2, loaded == 0 ? Text::tr("%1 loads no detail levels beside the model; choose an MD3 delivery target that loads them with --target.")
+											 .arg(target.label)
+									   : Text::tr("Use --levels 1-%1 and --ratio 0.05-0.95: %2 loads name_1.md3 up to name_%1.md3 beside the model.")
+											 .arg(loaded)
+											 .arg(target.label));
+		recipe = modelLodGeneratedRecipe(levels, ratio);
+		// A triangle target replaces the ratio, which keeps its default.
+		for (int level = 0; level < triangles.size() && level < recipe.size(); ++level)
+		{
+			recipe[level].targetTriangles = triangles[level];
+			recipe[level].ratio = 0.5;
+		}
+		if (args.values.contains(QStringLiteral("--level-source")))
+		{
+			for (const auto &part : args.values.value(QStringLiteral("--level-source")).split(QLatin1Char(',')))
+			{
+				const auto equals = part.indexOf(QLatin1Char('='));
+				int level = 0;
+				if (equals < 1 || !index(part.left(equals).trimmed(), &level) || level < 1 || level > recipe.size() || part.mid(equals + 1).trimmed().isEmpty())
+					return fail(2, Text::tr("--level-source takes LEVEL=PATH pairs, such as 2=models/prop_low.mesh.json, for levels 1 to %1.").arg(recipe.size()));
+				auto &entry = recipe[level - 1];
+				entry.generated = false;
+				entry.targetTriangles = 0;
+				entry.ratio = 0.5;
+				entry.preserveBoundary = true;
+				// Given relative to here; the source file stores it relative to
+				// its own folder when it is saved (ModelDocument::save).
+				entry.source = QFileInfo(part.mid(equals + 1).trimmed()).absoluteFilePath();
+			}
 		}
 	}
+	if (!validateModelLodRecipe(recipe, loaded, &error))
+		return fail(2, error);
+	ModelDeliveryOrigin strictOrigin = ModelDeliveryOrigin::Default;
+	const bool strict = delivery.strict(args.seen.contains(QStringLiteral("--strict")), args.seen.contains(QStringLiteral("--no-strict")), &strictOrigin);
+	const bool dry = args.seen.contains(QStringLiteral("--dry-run")), overwrite = args.seen.contains(QStringLiteral("--overwrite"));
 	ModelToolsCliResult result;
-	QJsonArray files;
-	result.lines << (dry ? Text::tr("Detail levels validated; no files written.") : Text::tr("Wrote %n model file(s).", nullptr, int(outputs.size())));
-	for (const auto &entry : std::as_const(outputs))
-	{
-		QJsonArray notes;
-		for (const auto &note : entry.notes)
-			notes.append(note);
-		files.append(QJsonObject{{QStringLiteral("path"), QFileInfo(entry.path).absoluteFilePath()},
-								 {QStringLiteral("level"), entry.level},
-								 {QStringLiteral("triangles"), entry.triangles},
-								 {QStringLiteral("bytes"), qint64(entry.bytes.size())},
-								 {QStringLiteral("notes"), notes}});
-		result.lines << Text::tr("Level %1: %2 triangles · %3").arg(entry.level).arg(entry.triangles).arg(entry.path);
-		result.lines += entry.notes;
-	}
 	result.payload = {{QStringLiteral("source"), QFileInfo(source).absoluteFilePath()},
-					  {QStringLiteral("levels"), levels},
-					  {QStringLiteral("ratio"), ratio},
-					  {QStringLiteral("outputs"), files},
-					  {QStringLiteral("written"), !dry},
+					  {QStringLiteral("target"), target.id},
+					  {QStringLiteral("targetOrigin"), modelDeliveryOriginId(choice.origin)},
+					  {QStringLiteral("targetLevels"), loaded},
+					  {QStringLiteral("levels"), int(recipe.size())},
+					  {QStringLiteral("recipe"), modelLodRecipeJson(recipe)},
+					  {QStringLiteral("recipeFromSource"), useStored},
+					  {QStringLiteral("strict"), strict},
+					  {QStringLiteral("strictOrigin"), modelDeliveryOriginId(strictOrigin)},
 					  {QStringLiteral("dryRun"), dry}};
+	if (!delivery.projectRoot.isEmpty())
+		result.payload.insert(QStringLiteral("project"), delivery.projectRoot);
+	ModelLodSet set;
+	if (!output.isEmpty())
+	{
+		if (!prepareModelLodSet(document.mesh(), recipe, sourceDirectory, output, target.id, {source}, strict, &set, &error))
+		{
+			// Aliased or unusable destinations are usage errors; the rest are the
+			// model's (decimation, a hand-made level, or the target's preflight).
+			bool destination = false;
+			for (int level = 0; level <= recipe.size() && !destination; ++level)
+			{
+				const auto path = level == 0 ? output : modelLodPath(output, level);
+				destination = modelPathsReferToSameFile(path, source) || !inspectModelWriteTarget(path).isValid();
+			}
+			return fail(destination ? 2 : 4, error);
+		}
+		const auto existing = set.existing();
+		if (!existing.isEmpty() && !overwrite)
+			return fail(1, Text::tr("Nothing was written: outputs already exist (%n): %1. Use --overwrite to replace them.", nullptr,
+									int(existing.size()))
+							   .arg(existing.join(QStringLiteral(", "))));
+		result.payload.insert(QStringLiteral("existing"), QJsonArray::fromStringList(existing));
+	}
+	// The recipe goes into the source before any detail file is written, so a
+	// set on disk never claims a recipe the source does not have.
+	bool recipeSaved = false;
+	if (saveRecipe && !dry)
+	{
+		auto mesh = document.mesh();
+		mesh.detailLevels = recipe;
+		if (!document.adopt(mesh, document.selection(), document.revisionFingerprint(), &error) || !document.save(source, false, &error))
+			return fail(1, error);
+		recipeSaved = true;
+	}
+	result.payload.insert(QStringLiteral("recipeSaved"), recipeSaved);
+	if (output.isEmpty())
+	{
+		result.lines << (recipeSaved ? Text::tr("Stored %n detail level(s) in %1.", nullptr, int(recipe.size())).arg(source)
+									 : Text::tr("The detail-level recipe is valid; nothing was written."));
+		return result;
+	}
+	bool published = true;
+	if (!dry)
+		published = publishModelLodSet(&set, overwrite, &error);
+	if (!published)
+	{
+		result.exitCode = 1;
+		result.error = error;
+	}
+	const int written = set.written();
+	// Every file's omissions once: the detail levels share the base model's.
+	QStringList omissions;
+	for (const auto &file : std::as_const(set.files))
+	{
+		for (const auto &omission : file.exportOmissions)
+		{
+			if (!omissions.contains(omission))
+				omissions << omission;
+		}
+	}
+	result.lines << (dry ? Text::tr("Detail levels validated for %1; no files written.").arg(set.targetLabel)
+						 : Text::tr("Wrote %n model file(s) for %1.", nullptr, written).arg(set.targetLabel));
+	if (recipeSaved)
+		result.lines << Text::tr("Stored the detail levels in %1.").arg(source);
+	for (const auto &file : std::as_const(set.files))
+	{
+		result.lines << (file.source.isEmpty() ? Text::tr("Level %1: %2 triangles · %3").arg(file.level).arg(file.triangles).arg(file.path)
+											   : Text::tr("Level %1: %2 triangles · %3 (from %4)").arg(file.level).arg(file.triangles).arg(file.path, file.source));
+		result.lines += file.notes;
+		for (const auto &note : file.exportNotes)
+			result.lines << QStringLiteral("  ") + note;
+	}
+	result.lines += modelLodValidationLines(set.validation);
+	// Detail files the set leaves in place still load with it.
+	result.lines += modelLodSiblingLines(set.stale);
+	result.payload.insert(QStringLiteral("leftInPlace"), modelLodSiblingJson(set.stale));
+	result.payload.insert(QStringLiteral("ratio"), set.ratio);
+	result.payload.insert(QStringLiteral("outputs"), modelLodSetJson(set));
+	result.payload.insert(QStringLiteral("written"), !dry && published);
+	result.payload.insert(QStringLiteral("committed"), written);
+	result.payload.insert(QStringLiteral("exportOmissions"), QJsonArray::fromStringList(omissions));
+	result.payload.insert(QStringLiteral("findings"), modelLodValidationJson(set.validation));
 	return result;
 }
 } // namespace vibestudio::cli

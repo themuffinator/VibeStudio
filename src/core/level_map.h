@@ -1,7 +1,10 @@
 #pragma once
 
 #include "core/compiler_profiles.h"
+#include "core/level_clipper.h"
 #include "core/level_scene_types.h"
+#include "core/level_repeat_types.h"
+#include "core/level_visibility_types.h"
 
 #include "core/studio_query.h"
 
@@ -9,6 +12,7 @@
 #include <QHash>
 #include <QMap>
 #include <QMetaType>
+#include <QSet>
 #include <QString>
 #include <QStringList>
 #include <QVector>
@@ -190,6 +194,15 @@ struct LevelMapBrush {
 	// copy's own points. `face.line - sourceFirstLine` indexes a face's line.
 	QStringList sourceLines;
 	int sourceFirstLine = 0;
+	// A brush rewritten in place of a source brush (a component, clip or CSG
+	// result, so startLine 0) is saved where that brush stood: ahead of 1-based
+	// source line `spliceLine`, inside its entity, rather than at the entity's
+	// end. File order, and the numbers compilers and a reopen give the other
+	// brushes, then stay the same. Only the brush whose id is `spliceBrushId`
+	// takes that place, so a copy that inherits the fields is appended like any
+	// new brush. See levelMapBrushSaveLine().
+	int spliceLine = 0;
+	int spliceBrushId = -1;
 	// True once any face's texture was replaced; the faces that changed carry
 	// their own `textureDirty`, and only their names are rewritten.
 	bool texturesDirty = false;
@@ -406,12 +419,32 @@ struct LevelMapPropertyStep {
 };
 
 struct LevelMapUndoCommand {
+	// Session visibility is independent of native map content. Structural
+	// commands retain only removed hidden identities, so transient changes made
+	// after an edit survive its undo/redo (including NRC's non-history hiding).
+	bool remapSessionVisibility = false;
+	// Replay remembers visibility on objects removed on either side, including
+	// transient hiding performed after the original edit. Logical command
+	// contents stay fixed; these two caches follow undo/redo navigation.
+	mutable QSet<QString> removedHiddenObjects, hiddenObjectsRemovedOnUndo;
+	QSet<QString> hiddenObjectsBefore, hiddenObjectsAfter;
+	mutable QSet<QString> removedShownObjects, shownObjectsRemovedOnUndo;
+	QSet<QString> shownObjectsBefore, shownObjectsAfter;
+	// First publication copies explicit attributes onto new identities. Replay
+	// uses the removed-state caches above, preserving later session changes.
+	QSet<QString> initialHiddenObjects, initialShownObjects;
+	// Internal linked replacement creates inherited children instead of authoring roots.
+	bool inheritInsertedVisibility = false;
+	QSet<QString> visibilityLayerTransfers;
+	mutable QSet<QString> shownBeforeLayerTransfer;
 	QByteArray udmfBefore, udmfAfter;
 	// Native UDMF edits distinguish ordinary things from node-builder inputs.
 	bool udmfNodeInputsChanged = false;
 	bool hasSceneSnapshot = false;
 	LevelSceneState sceneBefore;
 	LevelSceneState sceneAfter;
+	bool hasSceneContextSnapshot = false;
+	LevelSceneEditingContext sceneContextBefore, sceneContextAfter;
 	// Structural edits identify surviving/created objects before ids are reused.
 	// Remap is old -> new (empty means removed); origins is new -> source.
 	QHash<QString, QString> sceneObjectRemap;
@@ -496,6 +529,15 @@ struct LevelMapUndoCommand {
 	QVector<LevelMapIssue> issueResults;
 	QVector<LevelMapSelectionRef> selectionSnapshot;
 	QVector<LevelMapSelectionRef> selectionResult;
+	// Restore the outer command's selection after its linked/follow-up edits.
+	bool hasSelectionSnapshot = false;
+	// For `transform-objects` that moved every record the same way: that map,
+	// row by row (3x4, translation last), and the records it moved, so a linked
+	// group moved, turned, mirrored or scaled whole is told from an edit to its
+	// content (core/level_linked_groups.h). Per-record snapping has none.
+	bool hasAffine = false;
+	std::array<double, 12> affine {1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0};
+	QSet<QString> affineObjects;
 	// For `batch`: the commands it is made of, in the order they were done;
 	// undo replays them backwards (collapseLevelMapUndoSteps).
 	std::vector<LevelMapUndoCommand> children;
@@ -513,9 +555,25 @@ struct LevelMapWadSourceLump {
 };
 
 struct LevelMapDocument {
+	// Session visibility: canonical object selectors and group:<scene UUID>.
+	// Absence from both sets means inherit. Shown overrides temporary hiding
+	// inherited from a parent, but never saved scene visibility or filters.
+	// Neither set is serialized into native maps or scene metadata.
+	QSet<QString> hiddenObjects;
+	QSet<QString> shownObjects;
+	// Applies to future authoring only; undo/redo retain the recorded states.
+	LevelInsertionVisibility insertionVisibility = LevelInsertionVisibility::PreserveAndReveal;
+	LevelRepeatState repeat;
 	LevelSceneState scene;
+	// How saving writes the scene: TrenchBroom when the map opened with
+	// TrenchBroom groups or layers, or a save chose that; VibeStudio otherwise.
+	LevelSceneStorage sceneStorage = LevelSceneStorage::VibeStudio;
 	// Transient creation destination. Missing/deleted nodes fall back to Default.
 	QString activeSceneNode;
+	// Session-only group editing path, outermost first. Opening a group directs
+	// creation there; closing the final group restores the previous destination.
+	QStringList openSceneGroups;
+	QString sceneCreationBeforeOpen;
 	QString sourcePath;
 	QByteArray sourceContentHash;
 	QString outputPath;
@@ -550,8 +608,15 @@ struct LevelMapDocument {
 	QVector<LevelMapUndoCommand> undoStack;
 	QVector<LevelMapUndoCommand> redoStack;
 	int undoLimit = 200;
+	// What the last edit's linked group updates could not do, such as linked
+	// groups changed in different ways at once; the studio shows and clears
+	// it, and saving reports what is still out of sync. Session only.
+	QStringList linkedGroupNotices;
 	// Undo depth that matches the last save, or -1 when no save is reachable.
 	int savedUndoDepth = -1;
+	// Changes to the undo timeline, including selection-only steps. Geometry
+	// caches use revision; staged document replacements must check both.
+	quint64 historyRevision = 0;
 	QString editState = QStringLiteral("clean");
 	QMap<QString, QByteArray> doomLumps;
 	QVector<LevelMapWadSourceLump> doomArchiveLumps;
@@ -569,8 +634,8 @@ struct LevelMapDocument {
 	// undone, so a view holding vertex, linedef, or sector ids knows to let
 	// go of them.
 	int doomTopologyRevision = 0;
-	// Bumped by every edit, undo, and redo, so a view keyed on it sees each
-	// change even once the undo stack stops growing at its limit.
+	// Bumped by content/context changes, including undo and redo, so views
+	// see them even at the undo limit. Object picks only bump historyRevision.
 	quint64 revision = 0;
 	// Source lines of deleted entities, brushes, and patches. Save-back drops
 	// them; undoing the deletion takes its ranges out again.
@@ -629,6 +694,8 @@ struct LevelMapSaveReport {
 	QStringList errors;
 	// Lumps that no longer match the edited geometry and need a node build.
 	QStringList staleLumps;
+	// How the scene was written; saving keeps it for the document.
+	LevelSceneStorage sceneStorage = LevelSceneStorage::VibeStudio;
 
 	[[nodiscard]] bool succeeded() const;
 };
@@ -670,6 +737,13 @@ struct LevelMapSerialized {
 	[[nodiscard]] bool succeeded() const { return errors.isEmpty() && !bytes.isEmpty(); }
 };
 LevelMapSerialized serializeLevelMap(const LevelMapDocument& document);
+// With the scene written as `storage` rather than the document's own choice.
+LevelMapSerialized serializeLevelMap(const LevelMapDocument& document, LevelSceneStorage storage);
+// The 1-based source line a Quake-family brush is written at by the next save:
+// its own start line, the place of the source brush it replaced (see
+// LevelMapBrush::spliceLine) while that place is still inside its entity, or 0
+// for a brush appended at the end of its entity or in a new entity's block.
+int levelMapBrushSaveLine(const LevelMapDocument& document, const LevelMapBrush& brush);
 LevelMapStatistics levelMapStatistics(const LevelMapDocument& document);
 LevelMapInspectionSummary levelMapInspectionSummary(const LevelMapDocument& document);
 // Sorted, nonempty material names; ignore Doom's "-" marker, trim whitespace
@@ -715,6 +789,13 @@ void clearLevelMapSelection(LevelMapDocument* document);
 // Replaces the set wholesale. Duplicates collapse to their last occurrence, so
 // the caller's final entry becomes the primary member.
 bool setLevelMapSelection(LevelMapDocument* document, const QVector<LevelMapSelectionRef>& selection, QString* error = nullptr);
+// User selection as one non-content undo step. Invalid references leave the
+// document untouched; duplicates keep their last occurrence. An unchanged set
+// does not add history or discard redo. Internal edit selections use the setter.
+bool changeLevelMapSelection(LevelMapDocument* document, const QVector<LevelMapSelectionRef>& selection, QString* error = nullptr);
+// Includes non-content steps between depth and the save point. Depth uses the
+// same undo/redo timeline as the History panel, including zero.
+[[nodiscard]] bool levelMapHistoryMatchesSaved(const LevelMapDocument& document, int depth);
 bool setLevelMapEntityProperty(LevelMapDocument* document, int entityId, const QString& key, const QString& value, QString* error = nullptr);
 bool removeLevelMapEntityProperty(LevelMapDocument* document, int entityId, const QString& key, QString* error = nullptr);
 // Sets `key` on several entities (Doom things through their mirrors) as one
@@ -729,11 +810,13 @@ bool setLevelMapEntitiesProperty(LevelMapDocument* document, const QVector<int>&
 bool removeLevelMapEntitiesProperty(LevelMapDocument* document, const QVector<int>& entityIds, const QString& key, QString* error = nullptr);
 bool setLevelMapSectorProperty(LevelMapDocument* document, int sectorId, const QString& key, const QString& value, QString* error = nullptr);
 bool setLevelMapSidedefProperty(LevelMapDocument* document, int sidedefId, const QString& key, const QString& value, QString* error = nullptr);
-// Links the selected entities the way Radiant's Connect Entities does: each
+// Existing multi-source connection adaptation: each
 // selected entity but the primary gets a `target` naming the primary, whose
 // `targetname` is kept, or else made up as `t<N>`, the lowest number no entity
 // uses. A selected brush or patch stands for its entity; worldspawn cannot
 // take part. One undo command; `name` reports the targetname linked to.
+// For NRC's exact pairwise naming rules and KillConnect, use the request
+// overload declared in level_entity_connections.h.
 bool connectLevelMapEntities(LevelMapDocument* document, QString* name = nullptr, QString* error = nullptr);
 // The entities the selection's entities target, and the ones that target them.
 QVector<LevelMapSelectionRef> levelMapLinkedEntities(const LevelMapDocument& document, bool targets);
@@ -857,13 +940,20 @@ bool addLevelMapBoxBrush(LevelMapDocument* document, const LevelMapVec3& mins, c
 // entity that holds the original. worldspawn itself is never copied. On a
 // Doom map, things are copied instead. UDMF copies preserve native thing blocks,
 // extension properties and fractional coordinates, including height.
+// Complete closed groups are cloned beside their source; partial copies keep
+// source membership. Internal linked propagation disables hierarchy cloning.
+enum class LevelDuplicateMode { Ordinary, MakeUnique };
+// MakeUnique clones the owner of selected brush/patch children (only those
+// children), and remaps copied NRC namespace names and references together.
+// It accepts Quake-family text maps only.
 bool duplicateLevelMapObjects(LevelMapDocument* document, const QVector<LevelMapSelectionRef>& objects,
 	double dx, double dy, double dz, QString* error = nullptr);
 bool duplicateLevelMapObjects(LevelMapDocument* document, const QVector<LevelMapSelectionRef>& objects,
-	double dx, double dy, double dz, const LevelMapTextureLockOptions& textures, QString* error = nullptr);
+	double dx, double dy, double dz, const LevelMapTextureLockOptions& textures, QString* error = nullptr, bool preserveGroups = true, bool inheritVisibility = false,
+	LevelDuplicateMode mode = LevelDuplicateMode::Ordinary);
 bool duplicateLevelMapSelection(LevelMapDocument* document, double dx, double dy, double dz, QString* error = nullptr);
 bool duplicateLevelMapSelection(LevelMapDocument* document, double dx, double dy, double dz,
-	const LevelMapTextureLockOptions& textures, QString* error = nullptr);
+	const LevelMapTextureLockOptions& textures, QString* error = nullptr, LevelDuplicateMode mode = LevelDuplicateMode::Ordinary);
 inline constexpr int kLevelMapMaxArrayCopies = 256;
 inline constexpr int kLevelMapMaxArrayRecords = 32768;
 inline constexpr int kLevelMapMaxArrayComponents = 262144;
@@ -874,7 +964,7 @@ inline constexpr int kLevelMapMaxArrayComponents = 262144;
 // Bounds native records (including Doom entity mirrors) and brush faces/patch
 // control points before expansion. UDMF supports thing arrays only.
 bool arrayLevelMapSelection(LevelMapDocument* document, const LevelMapVec3& offset, int copies,
-	const LevelMapTextureLockOptions& textures, QString* error = nullptr);
+	const LevelMapTextureLockOptions& textures, QString* error = nullptr, LevelDuplicateMode mode = LevelDuplicateMode::Ordinary);
 // Where an entity is drawn: its origin, or the centre of its brushes and
 // patches for a brush entity. False when it has neither.
 bool levelMapEntityAnchor(const LevelMapDocument& document, int entityId, LevelMapVec3* anchor = nullptr);
@@ -886,9 +976,12 @@ QVector<LevelMapTargetLink> levelMapTargetLinks(const LevelMapDocument& document
 const QStringList& levelMapTargetPropertyKeys();
 // The selection as .map text, the way Quake-family editors put it on the
 // clipboard: each selected entity as a block with its brushes and patches, and
-// other selected brushes and patches as bare blocks, which paste into
-// worldspawn. Each primitive keeps its source format. Empty for Doom maps or
-// an empty selection.
+// selected children of other entities with their owner's properties and only
+// those children. Selected world brushes/patches become bare blocks. Each
+// primitive keeps its source format. Stale/unsupported selections fail whole.
+// Limited to 16,384 objects, 4,194,304 UTF-16 units and 8 MiB of UTF-8, without NUL.
+// Complete closed groups use a full worldspawn block and a bound native scene
+// trailer. Import gives these groups fresh identities in the creation context.
 // A primitive whose braces share lines with other text cannot be copied as
 // text; `error` then says which, and the result is empty.
 QString levelMapSelectionText(const LevelMapDocument& document, QString* error = nullptr);
@@ -908,6 +1001,10 @@ bool pasteLevelMapText(LevelMapDocument* document, const QString& text, const Le
 // textures: selected brushes and patches and those of selected entities, or
 // selected linedefs' sidedefs and selected sectors. Sorted by name.
 QVector<LevelMapTextureUse> levelMapTextureUsage(const LevelMapDocument& document, bool selectionOnly = false);
+// Every textured surface in the same scope, one record per surface with its
+// current name in `oldName` (`newName` empty), in map order: brush faces,
+// patches, Doom sidedef parts and sector flats. See LevelMapTextureChange.
+QVector<LevelMapTextureChange> levelMapTextureSurfaces(const LevelMapDocument& document, bool selectionOnly = false);
 // Every object that uses `texture` (compared without case): brushes with a
 // face that does and patches, or on a Doom map linedefs whose sides do and
 // sectors whose floor or ceiling does. In map order.
@@ -945,6 +1042,15 @@ QStringList levelMapObjectsMatchingQuery(const LevelMapDocument& document, const
 // how many uses changed.
 bool replaceLevelMapTexture(LevelMapDocument* document, const QString& from, const QString& to, bool selectionOnly,
 	int* replaced = nullptr, QString* error = nullptr);
+// The same replacement over explicit surfaces, for Find and Replace Textures
+// (core/level_material_find.h chooses them). Each entry of `uses` names one
+// surface: "face" (brush id, face index), "patch", "sidedef" (part 0 upper,
+// 1 lower, 2 middle) or "sector" (part 0 floor, 1 ceiling); its names are
+// ignored. Surfaces whose current name matches `from` (trimmed, compared
+// without case) and differs from `to` change as one undo command. A surface
+// that no longer exists refuses the whole edit.
+bool replaceLevelMapTextureUses(LevelMapDocument* document, const QString& from, const QString& to,
+	const QVector<LevelMapTextureChange>& uses, int* replaced = nullptr, QString* error = nullptr);
 // Puts `texture` on every face of the selected brushes and on the selected
 // patches, a selected entity's included, the way a texture browser applies a
 // texture, as one undo command. Quake-family maps only; a Doom map's walls
@@ -984,6 +1090,11 @@ bool rotateLevelMapSelection(LevelMapDocument* document, const LevelMapRotationR
 // The default locks Quake brush UVs without dialect conversion.
 bool flipLevelMapSelection(LevelMapDocument* document, int axis, QString* error = nullptr);
 bool flipLevelMapSelection(LevelMapDocument* document, int axis, const LevelMapTextureLockOptions& textures, QString* error = nullptr);
+// The same mirror across the plane through `pivot` instead, when it is valid
+// (only its `axis` coordinate matters), such as TrenchBroom's half-grid point
+// (core/level_quick_transform.h levelFlipPivot()).
+bool flipLevelMapSelection(LevelMapDocument* document, int axis, const LevelMapTextureLockOptions& textures, const LevelMapVec3& pivot,
+	QString* error = nullptr);
 // The box around what a transform of the selection moves: selected entities'
 // origins, brushes and patches (a selected entity's included), and things.
 // False when nothing selected has a position.
@@ -1017,12 +1128,36 @@ enum class LevelMapClipKeep {
 // its front. Each brush the plane passes through is replaced by the part
 // kept, or by both parts: its own face lines, less those the cut leaves
 // without an edge, and a new face on the plane, written the way the brush's
-// faces are, with the texture and flags of its most used face. Brushes the
-// plane misses stay as they are, and so do brushes whose faces share lines
-// with other text, each with its reason in `skipped`. The pieces are
-// selected. One undo command; `clipped` reports how many brushes were cut.
+// faces are, with the texture and flags of its most used face unless options
+// supplies an explicit cut material. Brushes wholly
+// on the discarded side are removed, including emptied brush entities. Kept
+// brushes and replacement pieces remain selected; undo restores the original
+// selection. Invalid geometry, locked objects or unsafe source layouts refuse
+// the whole edit. One undo command; `clipped` counts changed/removed brushes.
+// `skipped` is retained for source compatibility and is always empty.
 bool clipLevelMapSelection(LevelMapDocument* document, const LevelMapVec3& a, const LevelMapVec3& b, const LevelMapVec3& c,
-	LevelMapClipKeep keep, int* clipped = nullptr, QString* error = nullptr, QStringList* skipped = nullptr);
+	LevelMapClipKeep keep, int* clipped = nullptr, QString* error = nullptr, QStringList* skipped = nullptr,
+	const LevelMapClipOptions& options = {}, bool* noChange = nullptr);
+// A noChange result identifies only a valid plane that neither cuts nor removes
+// anything, never a geometry, source-layout or scene-protection failure.
+struct LevelMapClipReport {
+	int changed = 0;
+	bool wrapped = false;
+	int inheritedFaces = 0;
+	int newFaces = 0;
+};
+bool levelMapClipPlane(const QVector<LevelMapVec3>& points, int axis, int direction,
+	LevelMapVec3* a, LevelMapVec3* b, LevelMapVec3* c);
+// NRC-style convex wrap: all selected brush corners plus actual placed points.
+// Fills gaps/concavities; retains the last selected brush's owner and identity.
+// Exterior source mappings survive; new hull faces use texture. Atomic undo,
+// scene protection and linked-instance propagation use normal map services.
+bool wrapLevelMapSelection(LevelMapDocument* document, const QVector<LevelMapVec3>& points, const QString& texture,
+	LevelMapClipReport* report = nullptr, QString* error = nullptr);
+// Shared GUI/CLI clip workflow. With wrapMerge enabled, one point, a degenerate
+// plane or an otherwise valid no-change cut invokes wrap. Failed cuts never do.
+bool clipLevelMapPoints(LevelMapDocument* document, const QVector<LevelMapVec3>& points, int axis, int direction,
+	LevelMapClipKeep keep, const LevelMapClipOptions& options, LevelMapClipReport* report = nullptr, QString* error = nullptr);
 // Turns each selected brush, a selected entity's included, into walls
 // `thickness` units thick, one for each face, so a block becomes a room: each
 // wall is the brush with one more face, the face it grew from pulled in by
@@ -1134,6 +1269,14 @@ bool shearLevelMapSelectionAbout(LevelMapDocument* document, int axis, int along
 // group copies (core/level_linked_groups.h). Entity angles turn with it. One
 // undo step; nothing to do (no turn, no mirror) succeeds without one.
 bool turnLevelMapSelection(LevelMapDocument* document, int quarterTurns, bool mirror, const LevelMapVec3& pivot,
+	const LevelMapTextureLockOptions& textures = {}, QString* error = nullptr);
+// Moves every point of the selection through one invertible affine map, row
+// by row (3x4, translation last), as linked groups place their shared content
+// in each group's frame (core/level_linked_groups.h). Texture lock follows
+// `textures`; entity angles turn when the map keeps headings level (or is a
+// turn about one axis); a mirror keeps faces facing out. Quake-family maps
+// only. One undo step; the identity succeeds without one.
+bool transformLevelMapSelectionAffine(LevelMapDocument* document, const std::array<double, 12>& matrix,
 	const LevelMapTextureLockOptions& textures = {}, QString* error = nullptr);
 // Bends each selected Doom linedef into `segments` linedefs along a circular
 // arc bulging `bulge` units towards its front side (negative towards the

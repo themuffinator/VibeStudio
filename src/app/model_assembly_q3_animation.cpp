@@ -38,6 +38,7 @@ void ModelAssemblyDialog::chooseQ3Animation()
 		return;
 	play(false);
 	ModelQ3AnimationDialog dialog(m_document.assembly(), m_resolved, this);
+	dialog.setPackage(m_materialSource.archive);
 	if (dialog.exec() != QDialog::Accepted)
 		return;
 	QString error;

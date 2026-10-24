@@ -289,9 +289,9 @@ bool run(QApplication &app, int variant, const QString &settingsPath)
 		for (auto *entry : other->menu()->actions())
 			names << entry->objectName();
 	}
-	expect(names == QStringList({QStringLiteral("exportMeshMd5"), QStringLiteral("exportMeshMd5Anim"), QStringLiteral("exportMeshIqm"),
-								 QStringLiteral("exportMeshAse")}),
-		   "Export Other Format offers MD5 mesh, MD5 animation, IQM and ASE");
+	expect(names == QStringList({QStringLiteral("exportMeshMd5"), QStringLiteral("exportMeshMd5Anim"), QStringLiteral("exportMeshMd5AnimAll"),
+								 QStringLiteral("exportMeshIqm"), QStringLiteral("exportMeshAse")}),
+		   "Export Other Format offers MD5 mesh, MD5 animation of one or every clip, IQM and ASE");
 
 	// Closing can ask whether to save the edited grid, a modal question that
 	// waits forever offscreen; destroying the editor skips it.

@@ -34,6 +34,30 @@ if not qt6_core_dep.found()
   error('Qt 6 Core/Gui/Network modules not found. Install Qt 6 and ensure qmake6 is on PATH or pkg-config is available.')
 endif
 
+cpp = meson.get_compiler('cpp')
+if cpp.get_id() == 'msvc'
+  # application_shell.cpp outgrows COFF's default section limit (C1128);
+  # clang-cl switches to the big format by itself. Meson hands cl the
+  # is_system include directories as plain /I, so warnings inside bundled
+  # headers such as dr_flac.h failed -Dwerror=true builds: treat <...>
+  # includes as external and silence them, as -isystem does for GCC and Clang.
+  add_project_arguments('/bigobj', '/external:anglebrackets', '/external:W0', language: 'cpp')
+endif
+
+# Apple clang 21 (Xcode 26) makes __yield a library builtin declared by
+# <arm_acle.h>, and Qt 6.10.1's qyieldcpu.h calls it without that header, so
+# every file that includes Qt fails on Apple silicon with "implicitly declaring
+# library function '__yield'" (an error by default, werror or not). Include
+# the header first only when Qt's headers do not compile without it.
+if host_machine.cpu_family() == 'aarch64' and cpp.get_id() == 'clang'
+  qt_header_check = '#include <QtCore/qglobal.h>'
+  if not cpp.compiles(qt_header_check, dependencies: qt6_core_dep, name: 'Qt headers compile as they are')
+    if cpp.compiles(qt_header_check, args: ['-include', 'arm_acle.h'], dependencies: qt6_core_dep, name: 'Qt headers compile after <arm_acle.h>')
+      add_project_arguments('-include', 'arm_acle.h', language: 'cpp')
+    endif
+  endif
+endif
+
 # Qt Test drives the GUI interaction test. It ships with qtbase; a Qt install
 # without it skips that one test instead of failing the build.
 qt6_test_modules = ['Core', 'Gui', 'Widgets', 'Test']
@@ -100,6 +124,18 @@ subdir('packaging')
 
 python_for_tests = find_program('python', 'python3', required: false)
 if python_for_tests.found()
+  test('level-region-selection-cli-smoke', python_for_tests,
+    args: [files('src/tests/level_region_selection_workflow.py'), '--binary', vibestudio,
+           '--output-root', meson.project_source_root() / '.agents/tmp/level-region-selection/cli'],
+    timeout: 180, env: ['PYTHONDONTWRITEBYTECODE=1'])
+  test('level-paste-cli-smoke', python_for_tests,
+    args: [files('src/tests/level_paste_workflow.py'), '--binary', vibestudio,
+           '--output-root', meson.project_source_root() / '.agents/tmp/level-paste/cli'],
+    timeout: 120, env: ['PYTHONDONTWRITEBYTECODE=1'])
+  test('level-repeat-cli-smoke', python_for_tests,
+    args: [files('src/tests/level_repeat_workflow.py'), '--binary', vibestudio,
+           '--output-root', meson.project_source_root() / '.agents/tmp/level-repeat/cli'],
+    timeout: 120, env: ['PYTHONDONTWRITEBYTECODE=1'])
   test('audio-portaudio-patch-smoke', python_for_tests,
     args: [files('src/tests/audio_portaudio_patch_test.py')])
   test(
@@ -146,6 +182,16 @@ if python_for_tests.found()
     python_for_tests,
     args: [files('scripts/validate_credits.py')],
   )
+  test(
+    'level-command-inventory-validation',
+    python_for_tests,
+    args: [files('scripts/level_command_inventory.py')],
+  )
+  test(
+    'level-command-inventory-smoke',
+    python_for_tests,
+    args: [files('src/tests/level_command_inventory_test.py')],
+  )
   # The committed SPIR-V and OpenGL shader text match src/core/shaders; with
   # glslangValidator on PATH every variant is compiled again and compared.
   test(
@@ -168,6 +214,9 @@ if python_for_tests.found()
     'english-plurals-validation',
     python_for_tests,
     args: [files('scripts/english_plurals.py')],
+    # lupdate scans the complete C++ tree; the default 30 seconds is too short
+    # alongside compilation or the full catalogue extraction check.
+    timeout: 180,
   )
   # Releases, the changelog, brand artwork and the HTML documentation
   # (docs/RELEASING.md, docs/BRANDING.md). The branding and documentation

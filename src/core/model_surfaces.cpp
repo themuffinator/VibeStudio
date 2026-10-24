@@ -1,5 +1,6 @@
 #include "core/model_surfaces.h"
 #include "core/model_document.h"
+#include "core/model_vertex_identity.h"
 
 #include <QCoreApplication>
 #include <algorithm>
@@ -30,6 +31,23 @@ bool capacity(const ModelMesh &mesh, qint64 extraVertices, qint64 extraTriangles
 			triangles <= modelDocumentMaxTriangles) ||
 		   fail(error, Text::tr("The surface edit would exceed the vertex, triangle or animation storage limit."));
 }
+// Named skin variants bind surfaces by name (core/model_skin_variants.h): a
+// surface made from another's faces (Separate, Duplicate) wears what its
+// origin wears in every variant, replacing any binding a former surface of
+// the same name left behind.
+void inheritVariantBindings(ModelMesh *mesh, const QString &from, const QString &to)
+{
+	for (auto &variant : mesh->skinVariants)
+	{
+		variant.bindings.erase(std::remove_if(variant.bindings.begin(), variant.bindings.end(),
+											  [&](const ModelSkinVariantBinding &binding) { return binding.surface == to; }),
+							   variant.bindings.end());
+		const auto found = std::find_if(variant.bindings.cbegin(), variant.bindings.cend(),
+										[&](const ModelSkinVariantBinding &binding) { return binding.surface == from; });
+		if (found != variant.bindings.cend())
+			variant.bindings.append({to, found->material});
+	}
+}
 bool validName(const ModelMesh &mesh, const QString &name, int excluding, QString *error)
 {
 	if (name.isEmpty() || name.size() > 128 ||
@@ -53,6 +71,8 @@ bool selectFaces(ModelSelection *selection, int surface, int first, int count, M
 }
 // Retain original unused vertices in the source; shared boundary vertices are
 // copied, never welded or averaged. Maps retain source order deterministically.
+// Edit provenance follows the same map, so skin reconciliation gives every
+// vertex the influences of the vertex it came from, on whichever surface.
 bool partition(const ModelSurface &source, const QSet<int> &faces, ModelSurface *remaining, ModelSurface *moved, const ModelMesh &mesh,
 			   QString *error, ModelWorkProgress &work)
 {
@@ -75,7 +95,7 @@ bool partition(const ModelSurface &source, const QSet<int> &faces, ModelSurface 
 		output.name = source.name;
 		output.skinPaths = source.skinPaths;
 		output.frames.resize(source.frames.size());
-		QVector<int> map(source.vertexCount, -1);
+		QVector<int> map(source.vertexCount, -1), kept;
 		for (int v = 0; v < source.vertexCount; ++v)
 		{
 			if (!work.step())
@@ -83,7 +103,9 @@ bool partition(const ModelSurface &source, const QSet<int> &faces, ModelSurface 
 			if (part == 0 ? used[v] == 1 : !(used[v] & 1))
 				continue;
 			map[v] = output.texCoords.size();
+			kept.append(v);
 			output.texCoords.append(source.texCoords[v]);
+			if (!source.topologyVertices.isEmpty()) output.topologyVertices.append(source.topologyVertices[v]);
 			for (int f = 0; f < source.frames.size(); ++f)
 			{
 				if (!work.step())
@@ -93,6 +115,8 @@ bool partition(const ModelSurface &source, const QSet<int> &faces, ModelSurface 
 			}
 		}
 		output.vertexCount = output.texCoords.size();
+		compactModelVertexIdentities(&output);
+		rebuildModelVertexOrigins(&output, source.editOrigins, kept);
 		for (int i = 0; i < source.triangles.size(); ++i)
 		{
 			if (!work.step())
@@ -111,9 +135,18 @@ bool partition(const ModelSurface &source, const QSet<int> &faces, ModelSurface 
 	}
 	return true;
 }
-bool appendSurface(ModelSurface *target, const ModelSurface &source, ModelWorkProgress &work)
+bool appendSurface(ModelSurface *target, ModelSurface source, ModelWorkProgress &work, QString *error, const ModelWorkControl &control)
 {
+	// Joining surfaces retains their separate connectivity, including coincident
+	// vertices. An explicit Weld operation can connect them afterwards.
+	if (!materialiseModelVertexIdentities(target, error, control) || !materialiseModelVertexIdentities(&source, error, control))
+		return false;
 	const int offset = target->vertexCount;
+	for (int identity : source.topologyVertices)
+	{
+		if (!work.step()) return false;
+		target->topologyVertices.append(identity + offset);
+	}
 	for (const auto uv : source.texCoords)
 	{
 		if (!work.step())
@@ -140,6 +173,7 @@ bool appendSurface(ModelSurface *target, const ModelSurface &source, ModelWorkPr
 			return false;
 		target->uvSeams.insert({edge.first + offset, edge.second + offset});
 	}
+	appendModelSurfaceOrigins(target, source.editOrigins);
 	target->vertexCount += source.vertexCount;
 	return true;
 }
@@ -217,6 +251,7 @@ bool applyModelSurfaceEdit(ModelMesh *mesh, const ModelEdit &edit, ModelSelectio
 		auto duplicate = source;
 		duplicate.name = edit.text;
 		mesh->surfaces.append(std::move(duplicate));
+		inheritVariantBindings(mesh, source.name, edit.text);
 		if (!selectFaces(selection, mesh->surfaces.size() - 1, 0, source.triangles.size(), work))
 			return false;
 	}
@@ -239,13 +274,14 @@ bool applyModelSurfaceEdit(ModelMesh *mesh, const ModelEdit &edit, ModelSelectio
 			moved.name = edit.text;
 			mesh->surfaces[active] = std::move(remaining);
 			mesh->surfaces.append(std::move(moved));
+			inheritVariantBindings(mesh, source.name, edit.text);
 			if (!selectFaces(selection, mesh->surfaces.size() - 1, 0, edit.selection.faces.size(), work))
 				return false;
 		}
 		else
 		{
 			const int first = mesh->surfaces[target].triangles.size();
-			if (!appendSurface(&mesh->surfaces[target], moved, work))
+			if (!appendSurface(&mesh->surfaces[target], moved, work, error, control))
 				return false;
 			if (all)
 				mesh->surfaces.removeAt(active);
@@ -259,7 +295,7 @@ bool applyModelSurfaceEdit(ModelMesh *mesh, const ModelEdit &edit, ModelSelectio
 	{
 		auto combined = mesh->surfaces[target];
 		for (int i = 0; i < mesh->surfaces.size(); ++i)
-			if (i != target && edit.surfaces.contains(i) && !appendSurface(&combined, mesh->surfaces[i], work))
+			if (i != target && edit.surfaces.contains(i) && !appendSurface(&combined, mesh->surfaces[i], work, error, control))
 				return false;
 		mesh->surfaces[target] = std::move(combined);
 		int newTarget = target;

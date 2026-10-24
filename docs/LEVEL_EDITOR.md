@@ -54,8 +54,59 @@ target. Complete component manipulation, Doom modal/visual editing, additional
 Radiant variants, native preference import, native
 input/accessibility acceptance, production-map performance and cross-platform
 execution still need evidence.
-Profiles do not change supported formats, scene/undo semantics, asset paths,
-compiler targets or deployment permissions.
+Profiles share formats, scene/content edits, asset paths, compiler targets and
+deployment permissions. The TB profile additionally records object selection and
+group navigation as non-content undo steps; NRC and default controls retain
+selection outside history. Face/component selection history remains Partial.
+Session Hide, Show All and Isolate now use the same document service, with
+TB non-content history and NRC/default transient behaviour. Object-list reveal
+is one combined selection/visibility transaction; structural undo/redo remaps
+hidden identities. Plan views, camera previews, hierarchy/region queries and
+paste targets consume the shared visibility state. Saved scene visibility and
+filters remain independent. See [temporary visibility](manual/levels.md#temporary-visibility)
+for limits; full TB inherited/forced node visibility remains Partial.
+
+**Select Siblings** and **Select by Source Line Number** share a cancellable
+worker and CLI query service. Brush-entity ownership, layers, closed/open groups,
+visibility, locks and view exclusions apply. Source spans retain the loaded
+text's coordinates through edits and saves; new objects acquire spans on reopen.
+See [the manual](manual/levels.md#select-by-hierarchy-or-source-line) for input
+rules and remaining foreign-metadata and Doom selection gaps. Status: Partial.
+
+**Select Connected Entities** uses the same cancellable worker and query
+service, with NRC's additive one-hop `target`/`targetname` matching. It resolves
+brush and patch owners and finds unanchored entities independently of the
+drawing graph. The command preserves existing picks, respects group and
+visibility boundaries for new results, and follows the profile's selection
+history policy. See [connected selection](manual/levels.md#select-connected-entities).
+Status: Partial; native input, assistive technology, other platforms and
+real-project acceptance remain open. The older one-direction source/target
+commands still use the drawing graph and require a separate coverage review.
+
+**Select All of Type** is the distinct NRC Shift+A workflow: all selected owner
+classes, current-material fallback, and matching faces in face mode. It uses
+the shared entity query, visibility/group boundaries, cancellable preparation
+and selection-only history, with a read-only `map select-type` CLI route.
+The legacy primary-class command remains separate. See
+[Select all of a type](manual/levels.md#select-all-of-a-type). Status: Partial.
+
+The additive **Select Textured** viewport and CLI query returns independent
+brush faces and whole matching patches while preserving input picks. It uses
+cancellable preparation, visibility/locks/group boundaries, complete-result
+limits and ordered geometry fingerprints. The NRC shortcut is Ctrl+Shift+A;
+plan and camera overlays, accessible counts and staged deselection share the
+same independent selection. Surface authoring consumes exact targets, and patch
+additions are checked against component handle capacity before publication.
+`map select-textured` returns canonical targets for automation. Status: Partial;
+see [textured surfaces](manual/levels.md#select-textured-surfaces).
+
+Active brush-face components now supply exact surface adjustment, clipboard
+and alignment targets, including faces selected through an entity. Empty and
+non-face component selections cannot fall back to editing whole objects.
+Pending surface work rejects changed component picks or mode; ordinary object
+mode retains its camera/Inspector and whole-selection target choices. The CLI
+query's `surfaceTargets` connects the same selection to surface authoring.
+See [component surface targets](manual/levels.md#edit-surfaces-from-component-faces).
 
 Per-profile gesture overrides now share validated settings, GUI editing,
 portable VibeStudio import/export and `editor gestures` CLI diagnostics. The
@@ -79,11 +130,28 @@ keys during mouse look, and required held-look modifiers work with movement.
 Potential command overlaps remain visible in GUI details and CLI diagnostics.
 Physical movement is not simulated by the acceptance suite.
 
+Every command the Levels page registers now has an entry in the shared
+registry (`src/core/studio_semantics.cpp`): its hyphenated id, a translatable
+label and a one-line summary in the Levels category. Editor profile bindings
+count as implemented only for registered commands, so this also lets the
+TrenchBroom and NetRadiant Custom profiles give the vertex, edge and face modes,
+the patch matrix and a few other commands their upstream keys (listed in
+[Editor Profiles](EDITOR_PROFILES.md)). Status: Partial. Two new routes,
+`map.statistics` and `map.worldspawn`, open their Map tab sections.
+`level_palette_coverage_ui_smoke_test` fails when a registered `map.*` action
+has no registry entry or a palette id is listed twice, and checks the familiar
+keys against conflicts, so later commands must add their entries in the same
+change.
+
 ## Coverage of other editors
 
 What the familiar editors offer and where VibeStudio stands, using the status
 labels of `docs/BRANDING.md`. Available means implemented and covered by
 automated tests; none of it has been proven on production maps yet.
+
+The [pinned TB/NRC command audit](plans/level-editor-commands.md) adds individual
+source registrations, reviewed equivalents and explicit remaining gaps. Its
+discovery counts and unreviewed rows do not establish complete workflow parity.
 
 | Area | From | Status |
 |---|---|---|
@@ -113,7 +181,8 @@ automated tests; none of it has been proven on production maps yet.
 | Doom visual mode: editing in the camera | Doom Builder | Available for Doom and Hexen maps: materials painted and sampled, floors, ceilings and light changed at the crosshair, wall textures dragged, nudged and auto-aligned; UDMF vertex heights (slopes) are edited as properties, not in the camera |
 | Regions (cordon): views kept to a box, the region saved and compiled as a sealed map | Radiant regions, Hammer cordon | Available |
 | Shear | TrenchBroom's shear tool | Available: side handles in every 2D view, and a numeric Shear dialog |
-| Linked groups: copies that take on each other's edits, each moved, turned and mirrored on its own | TrenchBroom | Available: quarter turns about the vertical and mirrors; other turns reach every copy |
+| Sweep picked brush faces | TrenchBroom 2026.2 sweep geometry and repetition | Partial: numeric destination, straight/arc/S-bend preview, taper, repetitions and CLI; native cap handles and scale shortcuts remain open |
+| Linked groups: **Create Linked Duplicate**, **Select Linked Groups**, **Separate Linked Groups**, **Extract Linked Groups**, protected properties, nesting, and each group moved, turned, mirrored or scaled on its own | TrenchBroom | Partial: any affine frame, nested linked groups, out-of-sync marking, and link-set boxes and arrows in the 2D views and the 3D camera; extraction refuses nested groups, and TrenchBroom's map keys are not read or written |
 | Align objects to each other | Hammer | Available |
 | Find and replace key values | Hammer's entity search, Radiant's find and replace | Available |
 | Portal file (`.prt`) display | Radiant's portal viewer, TrenchBroom's Load Portal File | Available |
@@ -205,8 +274,12 @@ folds several edits into one), with CLI parity:
 |---|---|---|
 | Tie to Entity | Makes the selected brushes and patches, or the brushes of selected brush entities, into a new brush entity; an entity left empty goes | `map tie-entity` |
 | Move to World | Gives brush entities' brushes back to worldspawn and removes the emptied entities | `map move-to-world` |
-| Select Inside, Touching, Complete Tall, Partial Tall | Radiant's region selections, using the selection's bounds; the tall modes look along the active 2D view's depth | `map select-region` |
-| Make Detail, Make Structural | Quake II and Quake III: the detail content flag on every face; Quake: `func_detail` | `map detail` |
+| Create <class>, Create Entity… | TrenchBroom's generated commands (`core/level_entity_create.h`): `refreshLevelEntityCreateCommands` registers `map.createEntity.<class>` for each point and brush class of `levelEntityCatalogue()` (worldspawn and base classes left out, one per registry token), scoped to the Levels page, and registers them again in one shortcut batch when the classes change (`StudioCommandRegistry::unregisterCommand`). `studio_semantics` resolves the generated ids, and the registry keeps user keys for classes not loaded. A point class runs the `CreateEntity` placement operation with the pointer placement **Paste at Cursor** uses (`levelCursorPlacement`: the camera ray, or the active plan's plane at its brush depth) and its definition bounds through `levelPasteOffset`, then `addLevelMapEntity`; a brush class runs `tieLevelMapSelectionToEntity`. Hidden, locked or out-of-group brushes and a locked current layer are refused before the worker starts. The Brush Entity menu uses the generated actions. No profile binds them, as TrenchBroom does not | `map create-entity` |
+| Move Primitives to Entity (last or first), Move Selected to World | NetRadiant Custom's entity commands (`core/level_entity_ownership.h`): the selected brushes and patches, and the visible ones of selected brush entities, join the entity owning the last- or first-selected item (Ctrl+M in the NRC profile), or worldspawn; the target keeps its keys and emptied sources go. A `replace-objects` step keeps each primitive's id and writes its text at the end of its new owner; that command now also carries patches, in place. A primitive leaving for the world takes its entity's scene node, else the open group or current layer. Locked targets and sources, linked objects and point-entity targets are refused | `map move-to-entity`, `map move-to-world --selected-only` |
+| Explode Entity | bobToolz's Explode Entity: an `add-objects` step copies the entity's keys once per extra visible primitive (copies join the entity's scene node and inherit visibility), then the `replace-objects` step above gives each primitive its copy, folded into one undo step. **Unique Names** renames only each copy's `targetname` through the shared name allocator | `map explode-entity` |
+| Set Entity Colour, Normalise Entity Colour | NetRadiant Custom's colour commands (`core/level_entity_colour.h`, which also reads the Inspector's colour swatches): the targets are the selected entities and the entities holding the selected brushes and patches, never worldspawn through a world brush, without hidden ones. **Set** (K in the NetRadiant Custom and NetRadiant profiles) opens a `QColorDialog` on the primary entity's `_color`, or on the colour remembered in `levels/entityColour`, and writes it in each key's own 0-1 or 0-255 form with its trailing text; **Normalise** divides the primary's colour by its brightest channel (black becomes 1 1 1) and writes it to every target in fractions. One `set-properties` step through `setLevelMapEntitiesProperty`, renamed for the colour, so locks, the open group and linked copies behave as for any key edit; an unchanged value adds no step | `map entity-colour` (`--colour`, `--normalise [--each]`, `--where`, `--key`) |
+| Select Inside, Touching, Complete Tall, Partial Tall | Profile-specific convex/bounds selection and consuming undo; see [Select by brush volume](manual/levels.md#select-by-brush-volume) | `map select-region` |
+| Make Detail, Make Structural | Quake II and Quake III: the detail content flag on every face; Quake: `func_detail`. Make Structural (`makeLevelMapSelectionStructural`) takes only the selected brushes out of a `func_detail`; under the TrenchBroom profile's `LevelEditorControls::makeStructuralLeavesEntities` (Alt+S) it also moves them out of every other brush entity in the same undo step, as TrenchBroom does. TrenchBroom's other smart tags are not cleared | `map detail [--structural --policy trenchbroom]` |
 | Intersect | Replaces overlapping brushes with the brush where they all overlap, each face keeping its source texture | `map intersect` |
 | Drop to Floor | Moves point entities down onto the highest brush or patch top beneath them, keeping their definition's height above it | `map drop-to-floor` |
 | Align Left, Right, Top, Bottom, Centre Horizontally and Vertically | Hammer's Align Objects along the active 2D view's right and up, against the whole selection's bounds; entities move with their brushes, Doom things keep whole units | `map align` |
@@ -217,7 +290,12 @@ folds several edits into one), with CLI parity:
 | Regions | The View tab's Region section keeps the views to a box: world brushes and patches touching it, point entities inside it and brush entities touching it stay drawn, the rest is hidden or shaded (`MapViewport::setRegionBox`). Save Region As writes those objects as a map of their own, sealed by six brushes just outside the box (caulk in Quake III, the chosen material otherwise) and given a player start where the camera stands if none is kept; Compile Region writes it beside the map as `<name>-region.map` and runs the chosen compiler profile on it | `map region` |
 
 `level_map_tools_smoke_test` checks each against exact bytes after undo, redo
-and a reload.
+and a reload; `level_entity_ownership_smoke_test` and
+`level_entity_ownership_ui_smoke_test` cover the ownership commands, their CLI,
+scene placement, locks, linked groups and the per-profile keys.
+`level_entity_create_smoke_test` and `level_entity_create_ui_smoke_test` cover
+the generated Create commands: ids and registry entries, placements, undo,
+refusals, the CLI, the picker, user keys and a definitions reload.
 
 ## Vertex editing, patch tools, regions and navigation
 
@@ -243,8 +321,8 @@ A drag on a picked handle lands the grabbed handle on the grid; the arrow keys
 move the picks a grid step and Shift eight. While handles are picked the view
 accepts the arrows' shortcut override, so a profile's Shift+arrow texture
 shifts do not take them. The view never edits the document: on release it
-emits `componentMoveRequested`, and the shell commits `moveLevelMapComponents()`
-(`src/core/level_brush.*`). Brush components go through the component editor's
+emits `componentMoveRequested`, and the shell prepares `transformLevelMapComponents()`
+(`src/core/level_component_transform.cpp`). Brush components go through the component editor's
 convex rebuild, and a corner moved onto another merges with it, as in
 TrenchBroom's vertex tool; patch control points move directly; every object
 changes in one undo step. After the commit the views find their picks again
@@ -256,6 +334,21 @@ views' mode rather than their check mark, which the page refresh resets.
 rounds every corner of the selected brushes onto the grid and rebuilds them, as
 TrenchBroom's Snap Vertices does; a brush the grid would collapse is skipped
 with its reason, and brushes already on the grid add no undo step.
+
+**Round Selection to Grid** (`roundLevelMapSelectionToGrid` in
+`level_grid_round.*`, `map round-to-grid`, the `RoundToGrid` placement
+operation) is Radiant's Snap To Grid. Object mode gathers the selected brushes,
+the brushes and patches of selected brush entities, patches and point-entity
+origins, checks each brush and patch on its own (a brush the grid would collapse,
+a hidden object or worldspawn is skipped with its reason), then rounds the rest
+through `transformLevelMapComponents()` (identity matrix, the grid, no collapse,
+component UV lock) and one `setLevelMapEntitiesProperty()` for origins, folded
+into one undo step under a `LevelMapHistoryScope`. Brush entities keep their
+origin key. Component mode passes the picked sets straight to the transform,
+all or nothing, with collapse allowed. The NetRadiant Custom profile binds
+Ctrl+G to it and leaves **Snap Selection to Grid** unbound; the NetRadiant
+baseline keeps Ctrl+G on **Snap Selection to Grid**. Doom-format maps fall back
+to **Snap Selection to Grid** in the GUI; the service refuses them.
 
 ### Hollow modes
 
@@ -315,6 +408,28 @@ gathers the faces picked in the camera with the face-pick and add modifiers
 together: the brush stays selected while any of its faces is picked, and the
 camera lights only those faces. `map align-textures` takes `--natural`,
 `--face-aligned`, `--flip u|v` and `patch:id` objects.
+
+**Reveal Material** and **Find and Replace Textures** share
+`core/level_material_find.h`. `levelSelectionMaterial` reads the picked faces
+and query-picked patches when there are any (TrenchBroom's face selection),
+else the selection's surfaces, and stops at the second material, so the
+command's enablement stays cheap on a large mixed selection; a mixed result
+disables `map.revealMaterial` and its status tip names two materials. The
+reveal clears a Textures filter that hides the tile, as TrenchBroom's
+`MaterialBrowser::revealMaterial` does, and makes the tile current, which sets
+the paint material. Find and Replace is a modeless `LevelFindReplaceDialog`:
+picks in the Textures tab, on the Textures surface or from Reveal fill the field
+that last had focus (NetRadiant Custom's `FindActiveTracker`), and tile
+activation fills instead of applying while it is visible. Its preview and
+Replace go through `previewLevelMaterialReplace` and `replaceLevelMapMaterial`
+with a Map, Selection or Picks scope; hidden, view-filtered, locked and
+out-of-context surfaces are skipped and counted rather than refusing the edit,
+while closed-group members stay replaceable as wholes. The edit itself is
+`replaceLevelMapTextureUses`, which shares the undo command and validation of
+`replaceLevelMapTexture`. Find runs Select Textured with the Find text and,
+for **Selected objects**, `LevelTexturedSelectionRequest::withinSelection`;
+Doom maps select lines and sectors instead. `map replace-texture --face` and
+`map select-textured --within-selection` are the CLI routes. Status: Partial.
 
 ### Regions, selection and navigation
 
@@ -401,13 +516,40 @@ the refusals.
 ## View filters
 
 `src/core/level_view_filters.*` sorts a map's objects into kinds (world
-brushes, brush entities, detail, clip, hint and skip, caulk, sky, liquids,
-patches, point entities, lights, triggers, monsters, items, player starts,
-paths and models; Doom thing categories) with counts. The View tab's Filters
-section hides kinds in the 2D views and the camera through
+brushes, entities, brushes, brush entities, func groups, patches, detail, clip,
+hint and skip, caulk, sky, liquids, point entities, lights, triggers, monsters,
+items, player starts, paths and models; Doom thing categories) with counts. The
+View tab's Filters section hides kinds in the 2D views and the camera through
 `MapViewport::setFilteredObjects`, a set separate from objects hidden by hand,
 which Show All Hidden leaves alone. Filters change what is drawn only, never the
 map, its builds or its packages.
+
+World Brushes and Entities follow Radiant's world rule (NRC
+`filter_entity_world`): worldspawn, func_group and func_detail* are the world,
+so the two kinds split every entity between them. Brush Entities leaves
+func_group and func_detail to World Brushes and Func Groups; Point Entities
+leaves lights and models to their own kinds, as NRC's `filter_entity_point`
+does; Brushes names every brush whatever its owner, as TrenchBroom's Show
+Brushes does. An entity is a brush entity when it owns brushes or patches or
+when the built-in Quake, Quake II or Quake III catalogue
+(`core/entity_builtin_catalogue.h`) defines its class as a brush class, so a
+door with no brushes yet is not a point entity, close to NRC's container
+classes. Definitions loaded from a project's .def, .fgd or .ent files do not
+change the split yet.
+
+Every Quake-family kind is also a checkable command, `map.filter<Kind>`
+(`levelViewFilterCommandId`), in **View > Filters** with **Invert Filters**
+(`levelViewFiltersInverted`: every kind the format offers flips, kinds saved for
+other formats stay) and **Show Every Kind**. `src/app/level_view_filter_actions.cpp`
+keeps the commands, the check boxes and the saved `levelView/filtersOff` list in
+step; the NetRadiant Custom and NetRadiant profiles carry Radiant's Filter keys
+(Alt+1 World, Alt+2 Entities and the rest; Ctrl+P stays Go to File). Doom
+categories have no commands because the thing table numbers them. `map filters`
+reports kinds, counts, shown state and the hidden objects through the same
+service, and `--saved` reads the View tab's list. Tests:
+`level_view_filters_smoke_test.cpp` (every kind, Doom, invert, saved list, CLI)
+and `level_view_filters_ui_smoke_test.cpp` (commands, keys, check boxes, invert,
+reset, persistence, Quake-only enablement).
 
 ## Camera surface placement
 
@@ -1639,9 +1781,9 @@ panes, including hidden objects and old leak trails.
 
 Click or focus a plan pane to make it active. Its border and **Active** label
 identify the plane used by toolbar commands, placement, duplicate offsets,
-rotation and clipping. Top/Front/Side commands and the projection chooser
+rotation. Clip points are shared in world space. Top/Front/Side commands and the projection chooser
 activate the corresponding pane in four-view mode. Leaving a pane cancels its
-unfinished local gesture and exits clip/draw mode. The camera marker appears
+unfinished local gesture and exits draw mode; the clip plane survives. The camera marker appears
 in each plan when the profile uses a perspective camera. Existing camera
 preview limits, including static model frames and incomplete shader simulation,
 still apply. Navigation starts independent; the optional links below keep
@@ -1672,6 +1814,50 @@ production-scale profiling remain separate acceptance requirements.
 The 2026-10-04 focused Windows run passed `level-views-ui-smoke`,
 `level-prefab-ui-smoke`, `editor-profiles-smoke` and `studio-semantics-smoke`.
 Final widget renders and validation records are under `.agents/tmp/level-views/`.
+
+### Plan Pane Visibility
+
+**Show Top View**, **Show Front View** and **Show Side View** are checkable View
+commands (palette ids `map-show-top-view`, `map-show-front-view`,
+`map-show-side-view`) that hide or reveal one plan pane in the three-plan
+layouts. They follow NetRadiant Custom's floating-window XY/XZ/YZ toggles
+(`ToggleView`, `ToggleFrontView`, `ToggleSideView`, preferences `XYVIS`,
+`XZVIS`, `YZVIS`) on VibeStudio's fixed splitter panes; TrenchBroom has no
+equivalent. Like NRC they have no default keys in any profile; Keyboard settings
+can bind them. VibeStudio shows every pane by default, where NRC's floating
+layout starts with Top only.
+
+`LevelPlanPanes` in `core/level_editor_controls.h` holds the choice and refuses
+to hide the last shown pane; `StudioSettings::levelPlanPanes()` persists it as
+`levels/planPanes` (`top,front,side`, an unreadable value shows every pane).
+The choice is global to the three-plan layouts and ignored by one-plan
+layouts, whose commands are then disabled with their check state kept.
+`levelViewSplitterStatePrefix()` gives each pane combination its own splitter
+state (`levelViews/four-views/front-side/…`); the all-panes key is unchanged.
+
+`app/level_plan_pane_actions.cpp` applies it: a temporary expansion ends and the
+old combination's proportions are saved first; the active plan, and the
+remembered last-focused plan, move to the next shown pane before a hidden pane
+cancels its gesture; a row or column without a shown pane hides. **Top/Front/
+Side View** and the projection list reveal a hidden pane (and persist that);
+**Next 2D View** and **Cycle Map View** step only through shown panes. Saved
+views keep their own layout and active plan; when that plan is hidden, the next
+shown pane becomes active and the projection list follows it. Pane choices are
+not saved in views. Settings import and `editor layout --panes` apply with the
+next profile/preferences application. The commands never edit the map, its
+selection, revision or undo history, so scene locks, hidden objects and the
+open group are unaffected.
+
+`level-plan-panes-smoke` covers ids, the parser, the last-pane rule, next-pane
+stepping, splitter keys, the settings round trip (including read-only and
+corrupt values), palette entries and `editor layout --panes` (JSON, text,
+usage errors that write nothing). `level-plan-panes-ui-smoke` drives the
+commands, check boxes, layout menu, active-pane moves, empty rows, Top View
+reveal, Next 2D View, every three-plan and a one-plan layout, maximise/restore,
+per-combination splitters, saved views and a restart under the NetRadiant
+Custom and TrenchBroom profiles at 100% and at 200% high-contrast RTL with
+expanded text. Native input, screen readers and macOS/Linux remain open; NRC's
+floating windows are not reproduced.
 
 ## Linked Navigation
 
@@ -1728,6 +1914,42 @@ view layouts, navigation/CLI, bookmarks, settings, Models viewport, Doom preview
 and material painting. The checked source and binary fingerprints stayed stable
 through that run. Reviewed widget renders, build records, test output and
 validator logs are retained under `.agents/tmp/level-view-links/`.
+
+## Camera Levelling and Focus
+
+**View** > **Camera** adds **Level Camera**, **Focus Camera on Selection** and
+**Reset Camera Zoom**, also in the **Tools** tab's **Navigate** group and the
+palette. They change only the level camera (`ModelViewport`), never the plan
+panes, the document, its revision or undo history, so they need no scene-lock
+checks. `src/core/level_camera_focus.*` holds the shared rules:
+`levelCameraLevelledYaw()` (nearest 22.5 degrees), `levelCameraFocusPosition()`
+(a frustum fit of the eight box corners along the current view, at least 64
+units from the centre and 8 units clear of the near plane) and
+`levelCameraFocusObjectsBounds()` (existing, visible objects only). The shell
+keeps the last selection of the current map load as the empty-selection
+fallback and filters it through the open group's allowed objects. The orbiting
+view levels its orbit and frames the box with `frameBounds()` instead.
+
+The held free-focus key (`CameraViewControls::focusHoldKey`, Tab in the
+NetRadiant Custom and NetRadiant profiles) is handled by the shell's event
+filter on the camera, so the shared viewport code stays unchanged. It acts only
+during mouse look: it then claims the key and the wheel, re-places the camera on
+every `viewChanged`, and stops on release, the end of mouse look, focus loss or
+hide. Outside mouse look Tab keeps its focus-navigation role. Reset Camera Zoom
+restores the profile's field of view through `restoreNavigationState()`, which
+ends mouse look; the shell turns it back on, and a held mouse-look key is
+resumed as a held one. `map camera-focus` reports the same positions.
+
+`level-camera-focus-smoke` covers the heading steps, the fit (fixed cases and
+400 pseudo-random boxes, angles, fields of view and aspects), offsets,
+refusals, hidden and missing objects, key rules, profile keys and the CLI.
+`level-camera-focus-ui-smoke` drives the real shell under the NetRadiant Custom
+and TrenchBroom profiles at 100% and at 200% with high contrast, expanded text
+and right-to-left layout: levelling, focusing and its fallback with the plan
+panes unchanged, Shift+wheel and saved-view zoom resets, Tab ignored outside
+mouse look, held Tab through turns and the wheel, and release or leaving mouse
+look ending it, with map bytes, revision and history unchanged. Physical
+keyboards and mice, screen readers and macOS/Linux still require acceptance.
 
 ## Patch Caps
 
@@ -2061,6 +2283,35 @@ Quick actions and the CLI's `map align-textures` use the same surface service
 and mapping rules. The following dialog remains available for arbitrary values,
 individual face lists, negative scaling, repeat counts and detailed previews.
 
+#### Radiant texture steps
+
+`LevelSurfaceOperation::RadiantScale` and `RadiantRotate` (core/level_surface.h)
+are NetRadiant Custom's Surface Inspector steps (radiant/select.cpp
+`Texdef_Scale`/`Texdef_Rotate` and brush_primit.cpp at `449778b3`; workflow
+reference only, see docs/CREDITS.md). A scale step adds its increment to a
+classic or Valve 220 face's scale values through
+`levelSurfaceRadiantScaleStep()`, which flips the sign instead of reaching zero
+and reads a legacy zero scale as one. A brush-primitive matrix stores no scale:
+each row's signed scale is one over its length in texels, and the row is
+rescaled by old over new, which needs the image size. Patches take NRC's
+`Patch_convertScale` factors about 0,0 and need no image. The Radiant turn adds
+to a classic or Valve 220 face's stored rotation (fmod 360, as NRC writes it),
+turns Valve 220 axes about their own normal by minus the angle, and turns the
+plane coordinates a brush-primitive row maps (M·R), so it needs no image; a
+patch turns in texels about 0,0. Offsets stay, so the UV where the world origin
+projects is unchanged. `Rotate` is the same per-format turn followed by the
+offset that keeps each face centre's UV, so both anchors turn every format the
+same way round; before this, Valve 220 axes turned about the face normal and
+brush-primitive matrices in texture space, against classic faces on half the
+faces. The direction is NRC's: classic and Valve 220 faces turn about the
+positive world axis they project along (about -Y on Y walls), brush-primitive
+faces anticlockwise about their normal (`level_surface_step_smoke_test`).
+`LevelEditorControls::surfaceRotationStep` and `surfaceRotateAboutOrigin` seed
+the Surfaces tab when a profile is applied (NRC: 45° about the texture origin);
+the NRC profile binds Shift+Page Up/Down and Ctrl+arrows, and those map
+shortcuts win over the plan view's Ctrl+arrow pan whenever their command is
+enabled. The Surface Alignment dialog keeps the centre turn only.
+
 ### Surface clipboard
 
 **Copy Surface** in the Surfaces tab captures the inspected brush face's material,
@@ -2112,7 +2363,9 @@ pending changes. Values/Project accept patch hits; Wrap still requires brushes.
 
 Material regrouping cannot change a held gesture's target: picking uses the
 mouse-down geometry and texture coverage, while a separate worker rebuilds
-the live preview. Preview requests coalesce and reuse geometry; image decoding,
+the live preview. Initial and held hits use the same subpixel edge refinement,
+including near-plane clipping, against the original rendered corners. Preview
+requests coalesce and reuse geometry; image decoding,
 staging indexes, surface validation and undo construction stay off the GUI thread.
 The queue holds at most 256 pending hits and a stroke accepts at most 4,096 hits,
 16,384 changed surfaces and 256 changed patches. Exceeding a bound discards the
@@ -2577,6 +2830,167 @@ records, exact history, cancellation, locks, WAD preservation and shell adoption
 The optional `src/tests/level_doom_mirror_compiler_workflow.py` proof uses the
 registered ZDBSP wrapper and independently checks compiled seg-side ownership.
 
+### World-axis quick transforms and the quick-turn pivot
+
+`core/level_quick_transform.h` lists NetRadiant Custom's Flip X/Y/Z and Rotate
+X/Y/Z (`map.flipX` to `map.rotateZ`) with its signs: X -90, Y +90, Z -90, each
+clockwise as the side, top or front view shows it. The shell
+(`app/level_axis_transform_actions.cpp`) sends the same Mirror and Rotate
+placement requests as Flip Horizontal/Vertical and Rotate 90° Left/Right, so
+component mode, Texture Lock, entity angles, Repeat, scene locks, open-group
+context and the single undo step behave identically; only the axis ignores the
+active view. `levelAxisTransformSupported()` disables Rotate X/Y and Flip Z for
+Doom-format maps. The commands live in **Edit** > **Transform**, the plan
+view's Transform menu, the Tools tab and the palette, with no default keys in
+any profile, as in NRC.
+
+Every quick turn takes its pivot from `ApplicationShell::levelQuickTurnPivotFromUi()`.
+When the profile's `quickTurnSnapsPivot` is on (NetRadiant Custom and
+TrenchBroom; see [EDITOR_PROFILES.md](EDITOR_PROFILES.md#quick-turn-pivot)) and
+**Snap** is on, the pivot is the centre of `levelMapSelectionBounds()`, or of
+the picked components in component mode, rounded to the working grid with
+`snapLevelMapPosition()`. A quarter turn about a grid point maps every grid
+point to a grid point, so a brush whose two cross sizes differ by an odd number
+of grid steps stays on the grid; the price is a shift of up to half a step,
+which upstream shares. Otherwise, or with a custom component pivot, the
+transform keeps its own default, the exact centre. Repeat records the resolved
+pivot. `map rotate --pivot-grid <units>` resolves the same pivot through
+`levelMapQuickTurnPivot()`. Flips always mirror about the exact centre (see the
+profile notes for why NRC's grid-snapped flip pivot is not copied). Component
+flips still do not feed Repeat, and native physical input and macOS/Linux
+acceptance remain open. `level-axis-transform-smoke` covers the table, rounding,
+odd footprints about every axis in both directions, placement, locks, the
+profile policy and the CLI; `level-axis-transform-ui-smoke` drives the six
+commands, Rotate 90° Right and Left in each projection, Flip Vertical of a Quake brush,
+Snap off, component mode, Repeat and undo under the NRC, TrenchBroom and
+VibeStudio profiles at 100% and 200%, with high contrast, expanded translations
+and right-to-left layout.
+
+### Directional and depth nudges
+
+`core/level_nudge.h` turns the eight **Nudge** commands (`map.nudgeLeft`,
+`map.nudgeRight`, `map.nudgeForward`, `map.nudgeBack`, `map.nudgeDepthUp`,
+`map.nudgeDepthDown`, `map.nudgeWorldUp`, `map.nudgeWorldDown`) into a unit
+world axis. `levelPlanNudgeAxis()` uses a plan view's screen right and up and
+its depth axis towards the viewer (Top +Z, Front -Y, Side +X: each view is a
+right-handed set, as in TrenchBroom's `MapView2D`). `levelCameraNudgeAxis()`
+follows `MapView3D::moveDirection`: Forward is the horizontal world axis
+nearest the view, or the camera's up axis when it looks straight down or up;
+Right is the camera's right axis snapped likewise, turned a quarter about Z if
+it lands on Forward; depth and Z are world Z. `levelNudgeAxisSupported()` keeps
+Doom maps in the plane. `levelNudgeCameraFollowsPlan()` makes the camera use
+the last plan view's axes in profiles whose arrows drive the camera, as
+NetRadiant Custom does from any window.
+
+`app/level_nudge_actions.cpp` routes a nudge to the first active target, in
+TrenchBroom's `MapViewBase::move` order: the sweep destination
+(`LevelSweepGizmo::translateDestination()`), the shared component pivot under
+Rotate Components or Move Component Pivot, the picked components (in-plane
+moves through `MapViewport::nudgeComponents()`, the arrow keys' path with split
+and extrusion; others through `applyLevelComponentTransform()`), and finally
+the selection through the same Move placement as a drag. Each map edit is one
+undo step through the normal services, so scene locks, open-group context,
+Texture Lock and Lock Component UVs apply.
+
+The keys are ordinary profile bindings (`core/level_editor_controls.cpp`, and
+every familiar profile through `familiarLevelControls()`), remappable in
+**Help** > **Keyboard Shortcuts**. `installShortcutScopes()` scopes the
+commands to the plan views and camera and marks them with
+`StudioCommandRegistry::setShortcutScopeClaims()`: their keys are installed
+beside other owners, such as Go Back's window-wide Alt+Left or Raise Floor's
+Page Up, instead of taking them away. `ApplicationShell::handleLevelNudgeKey()`
+filters the views' ShortcutOverride and KeyPress events: while a nudge can act
+(`refreshLevelNudgeCommands()` is re-read on each override) the view claims the
+key, then leaves it to the view's own pan hold, pan keys, drags, the camera's
+flying and driving keys, or the orbit camera's arrows. A disabled nudge lets the
+key reach its other owner, which is how Doom maps keep Raise Floor and Lower
+Floor on Page Up and Page Down in the TrenchBroom profile, and how arrows with
+nothing selected still pan. Shift gives eight steps where no command answers
+the Shift chord in the views. The plan views keep their own arrow-key fallback
+for keys no nudge command claims. `map nudge` resolves the same axes for a
+`--view` or `--camera-yaw`/`--camera-pitch` and sends the same placements.
+`level-nudge-smoke` covers the table, every plan and camera axis, Doom support,
+the profile keys, placements, locks and the CLI; `level-nudge-ui-smoke` drives
+the keys and commands in the TrenchBroom, NetRadiant Custom and VibeStudio
+profiles at 100% and 200%, with high contrast, expanded translations and
+right-to-left layout. Native physical input and macOS/Linux acceptance remain
+open.
+
+### Duplicate and Move
+
+`levelDuplicateMoveCommands()` in `core/level_nudge.h` lists TrenchBroom's six
+"Duplicate and move objects" actions as **Duplicate and Move Left**, **Right**,
+**Forward**, **Back**, **Depth Up** and **Depth Down** (`map.duplicateMoveLeft`
+to `map.duplicateMoveDepthDown`), each carrying the matching nudge direction.
+`ApplicationShell::duplicateMoveLevelSelectionFromUi()`
+(`app/level_duplicate_move_actions.cpp`) resolves the axis exactly as a nudge
+does (`levelNudgeAxisFromUi()`: the plan view the key came from, the camera's
+nearest axes, or the last plan view for Radiant-family cameras), takes one grid
+step (`levelNudgeDelta()`) and sends a single Duplicate placement with that
+offset. `duplicateLevelMapSelection()` therefore makes one undo step and one
+Repeat Last Commands entry and leaves the copies selected, so the next press
+copies the copies, as `MapViewBase::duplicateAndMoveObjects` does in one
+transaction. The commands copy whole objects, so they are disabled in the
+component modes and while the sweep tool is on; Doom maps copy things in the
+plane only. The TrenchBroom profile binds Ctrl+arrows and Ctrl+Page Up/Down;
+the commands share the nudges' scope claims, so `handleLevelNudgeKey()` claims
+those keys only while a copy can be made. With nothing to copy, Ctrl+arrows
+reach the plan view's pan, and on Doom maps Ctrl+Page Up/Down reach Raise
+Ceiling and Lower Ceiling. `map nudge --duplicate` sends the same placement.
+`level-duplicate-move-smoke` covers the table, profile keys, the placement,
+Repeat, undo, Doom support and the CLI; `level-duplicate-move-ui-smoke` drives
+the commands and keys in the TrenchBroom, NetRadiant Custom and VibeStudio
+profiles at 100%, and at 200% with high contrast, expanded translations and
+right-to-left layout. Native physical input and macOS/Linux acceptance remain
+open. Move to Camera is described in [Clipboard placement](LEVEL_PASTE.md) and
+Repeat Transforms in [Repeat object commands](LEVEL_REPEAT.md).
+
+### View-relative turns and flips
+
+`core/level_quick_transform.h` resolves TrenchBroom's view-relative commands to
+one world axis: `levelViewTransforms()` lists Roll Clockwise and
+Counter-clockwise (`map.rollClockwise`, `map.rollCounterclockwise`), yaw on the
+existing Rotate 90° Right and Left (`map.rotateRight`, `map.rotateLeft`), Pitch
+Clockwise and Counter-clockwise, and Flip Horizontal and Vertical.
+`levelPlanViewTransform()` and `levelCameraViewTransform()` build a frame from
+the nudge axes of `core/level_nudge.h` (forward, right, and up: a plan view's
+depth axis towards the viewer, world Z from the camera) and turn +90° about
+-forward (roll), right (pitch) or up (yaw), reversed for clockwise, as
+`MapViewBase::rotationAxis` does; flips mirror along right, and along a plan
+view's screen up or world Z from the camera, as `flipAxis` does. The result is a
+`LevelAxisTransform`, so `levelAxisTransformSupported()` keeps Doom maps to Z
+turns and X/Y flips, and the edit is the ordinary Rotate or Mirror placement.
+The plan resolution reproduces the old projection tables of Rotate 90° and the
+flips exactly.
+
+`app/level_axis_transform_actions.cpp` applies them:
+`applyLevelViewTransformFromUi()` takes the plan view the key came from or the
+last focused view, or the camera where it is the view in use (focused, or the
+only one showing); `levelNudgeCameraFollowsPlan()` keeps Radiant-family
+cameras on the last plan view's axes. While the sweep tool is on, a turn calls
+`LevelSweepGizmo::rotateDestination()` by the gizmo's rotation step (15° by
+default, TrenchBroom's grid angle) and flips are disabled, as TrenchBroom's are
+while a modal tool is active. Otherwise turns use `levelQuickTurnPivotFromUi()`
+and flips `levelFlipPivotFromUi()`: with
+`LevelEditorControls::flipSnapsPivot` (TrenchBroom; gesture
+`editing.flipSnapsPivot`) and Snap on, the centre is rounded to half the grid
+(`levelFlipPivot()`), which `flipLevelMapSelection()` now accepts as a mirror
+plane (`LevelPlacementRequest::mirrorPivot`; components pass it as their scale
+pivot). A custom component pivot always wins. The TrenchBroom profile binds
+Alt+arrows, Alt+Page Up/Down, Ctrl+F and Ctrl+Alt+F; `installShortcutScopes()`
+scopes the eight commands to the views with scope claims and
+`handleLevelNudgeKey()` claims their keys while they are enabled, so Go Back,
+Go Forward and Find keep them elsewhere. `map view-transform` resolves the same
+frames for a `--view` or camera and sends the same placements, with
+`--pivot-grid` rounding to the grid for turns and half of it for flips.
+`level-view-transform-smoke` covers the table, every plan and camera frame,
+pivots, Doom support, profiles, the pivoted Mirror placement, locks and the CLI;
+`level-view-transform-ui-smoke` drives the commands and TrenchBroom keys in the
+TrenchBroom, NetRadiant Custom and VibeStudio profiles at 100% and 200%, with
+high contrast, expanded translations and right-to-left layout. TrenchBroom's
+Rotate-tool angle and centre have no counterpart yet (VibeStudio has no object
+rotate tool), and native physical input and macOS/Linux acceptance remain open.
+
 ### Doom node readiness
 
 Map Health and `map inspect --json` share the `nodeBuild` report for the current
@@ -2724,6 +3138,98 @@ synchronous, and large-map performance still needs dedicated acceptance work.
 Document lifecycle and patch authoring have focused tests; the full editor
 target below remains open.
 
+## Shared clipper
+
+The plan and camera tools share `LevelClipState` in world coordinates. Two
+points retain their originating extrusion axis; three define an arbitrary
+plane. `map_viewport_clip.cpp` and `model_viewport_clip.cpp` own point gestures
+and overlays. The camera resolves hit triangles back to brush faces, snaps
+within the face plane and matches original face points rather than rounded
+render triangles. Numeric XYZ editing and the CLI provide automation paths.
+
+`level_clip_actions.cpp` maintains one active worker and one replaceable
+request. It runs `clipLevelMapPoints` on a private document, publishes a
+bounded kept-result wire and commits that exact document only if revision,
+selection, load serial, file/save bindings, creation context and cut/wrap materials still match.
+Pending apply can be cancelled; no geometry is rebuilt on the GUI thread at
+commit. A source-file replacement ends clipping in every view. Switching plan
+panes, projections or layouts preserves the world-space plane.
+
+The core removes wholly discarded brushes, removes emptied brush entities,
+preserves kept selection and refuses the entire cut on invalid geometry,
+unsafe source layout or scene protection. Replacement faces retain original
+source lines and owner/scene origins; new caps use the dominant material and
+flags unless `LevelMapClipOptions::cutTexture` is explicit. An explicit material
+preserves contents and clears surface flags/value. New faces use the format's
+default projection. One command records geometry,
+selection and scene changes for undo/redo. Patches are outside clip scope.
+
+The preview leaves original surfaces visible and limits wire rendering to
+65,536 segments with an explicit notice. The core still validates every
+selected brush. `LevelClipperPreferences` persists material policy, custom/caulk
+name, point and side resets, two-point plan entry, double-click application and
+explicit wrap/merge fallback (off by default).
+`level_clipper_preferences.cpp` exposes the same validated settings as
+`editor clipper`. The NRC profile's `plan.quickClipModifiers` adds one-shot
+entry, guarded against selection conflicts. Retained points rebase only after
+an accepted cut; external document changes still invalidate them. Full textured
+previews, native input/platform acceptance and dense production-map performance
+remain gaps. See the
+[manual](manual/levels.md#clip-brushes-across-views) and
+[production gates](plans/level-editor-production.md#clipper-increment--2026-10-18).
+
+With wrap enabled, one point, a degenerate plane or a structurally reported
+no-change cut invokes `wrapLevelMapSelection`. A cut failure never triggers a
+wrap. Only actual placed points join the source vertices; the two-point plane's
+synthetic third point does not. The original hull builder accepts interior
+points through `createLevelBrushEnvelope`; primitive creation retains its
+stricter requirement that every input point survive. The persisted result is
+reparsed and checked as a closed hull. Limits are 64 brushes, 2,048 source
+faces, 4,096 input points, 128 output faces and 256 output vertices within
+±32768 units. Duplicate supporting faces use the first selected source;
+new faces use the current material, destination contents and zero surface
+flags/value. Original surface mappings and comments survive. The last selected
+brush keeps its identity, entity and scene membership; empty previous owners
+are removed. The ordinary scene transaction handles locks, group context,
+linked propagation and one-step undo. The worker checks cancellation during
+geometry preparation. Exact-union merging is unchanged.
+
+Standalone **Wrap/Merge** uses `core/level_wrap` through the cancellable placement
+worker and `map wrap-merge`. NRC Ctrl+U selects this operation; other profiles
+expose the same command without inheriting that shortcut. Brush vertices, edge
+endpoints, face corners and patch controls form a new convex hull in component
+mode, retaining original objects and picks. Every new face uses the current
+material, default UVs and zero flags. The last selected object's native owner
+and scene membership supply the destination; point entities fall back to
+worldspawn/current creation context. Up to 256 component sets across 64 objects
+and 4,096 input points are supported, with the same output hull limits.
+
+**Wrap/Merge with Points…** supplies up to three numeric points and a new-face
+material override. It compares source and result meshes using package/staging
+materials, coalesces worker requests, clears invalidated previews and keeps
+validation above the Apply controls outside the scrolling form. Publication
+rejects changes to the document, picks, clipper state and asset context. Source
+retention, owner/group placement, linked additions, cancellation and undo are
+shared with CLI, followed by normal save/compiler/package handoffs. See
+[wrapping](manual/levels.md#wrap-brushes-or-picked-components) for the workflow.
+
+The NRC two-point camera plane uses `levelCameraClipAxis` in
+`core/level_clip_camera.*`. Its initial extrusion opposes the dominant camera
+direction; parallel segments use near-plane projection, and axial outer-face
+planes turn into cuts through the selected bounds. Exact axis/sign travel with
+the shared clip points, so navigation does not silently reinterpret them. Point
+drag cancellation restores the full state. Three-point/face-matched planes are
+unchanged. `camera.clipViewAxis` is a typed gesture preference, enabled by default
+only for the audited NRC profile. The CLI accepts the same camera position and
+forward vector or explicit axis/sign for deterministic replay. Overflow and
+degenerate input refuse atomically. `core/level_clip_drag.*` handles Shift/Alt
+movement from fixed press anchors with relative grid and live Ctrl surface
+picking. `camera.clipDragStyle` selects surface, world XY/Z or axial view/depth
+behaviour independently of clip-plane choice. Projection/grid/profile/focus
+changes cancel the point draft; the eventual cut uses the normal validation,
+undo and save pipeline. Wider scene-point snapping, textured cut previews and
+real-project/platform acceptance remain open.
+
 ## Brush Component Authoring
 
 Select a brush and choose **Edit → Edit Brush Components** (also available in
@@ -2748,10 +3254,11 @@ Local Undo/Redo retains selection and geometry. Apply commits one map undo
 operation; Cancel discards the draft. A map reload or another document edit
 blocks Apply and keeps the draft visible, so stale geometry cannot overwrite
 the current map. Classic, Valve 220, brushDef and brushDef3
-keep their own material syntax, flags and comments. The edited brush is
-re-emitted at the end of its owning entity with the same in-memory ID; saving
-and reloading can therefore renumber brushes. Component IDs describe the current
-topology and must be queried again after changes. Shared brace/face lines and
+keep their own material syntax, flags and comments. The edited brush keeps its
+in-memory ID and is written back where its source text stood, inside its owning
+entity (see [Brush file order on save](#brush-file-order-on-save)), so saving and
+reloading keep brush numbers. Component IDs describe the current topology and
+must be queried again after changes. Shared brace/face lines and
 face definitions split across lines may need normalization in Code first.
 The saved result is parsed and checked against the requested planes before
 the document changes. Copying, duplication, material edits, recovery and CSG
@@ -2761,6 +3268,8 @@ continue through the existing map services.
 vibestudio --cli map brush-components arena.map --brush 7 --json
 vibestudio --cli map move-components arena.map --brush 7 --kind vertex --component 2 --component 3 --delta 0,0,16 --output raised.map
 vibestudio --cli map move-components raised.map --brush 7 --kind face --component 0 --grid 8 --output snapped.map --dry-run --json
+vibestudio --cli map insert-vertices arena.map --brush 7 --position 32,32,80 --grid 8 --output peaked.map
+vibestudio --cli map remove-components arena.map --brush 7 --kind vertex --component 2 --output trimmed.map
 ```
 
 `brush-components` reports zero-based vertices, edges and face vertex lists.
@@ -2768,7 +3277,106 @@ vibestudio --cli map move-components raised.map --brush 7 --kind face --componen
 `--delta x,y,z` and/or `--grid`, and `--output`. Movement precedes snapping of
 the resulting coordinates. `--allow-collapse` explicitly accepts disappearing
 vertices. JSON reports include before/after counts and `collapsedVertices`.
-The write command uses the normal dry-run, overwrite and document protections.
+`insert-vertices` accepts repeated `--position x,y,z` and optional `--grid`.
+Every new point must become a distinct corner; duplicate, interior and
+coplanar points are refused, including with `--allow-collapse`. That option
+only permits existing corners to disappear. `remove-components` removes
+the vertices incident to the selected vertices, edges or faces and rebuilds
+the hull; it refuses a flat or otherwise invalid result. Reports add
+`insertedVertices` and `removedVertices`. All write commands use the normal
+dry-run, overwrite and document protections. Component commands reject
+unknown, repeated, irrelevant and missing-value options before editing.
+
+The component dialog exposes **Insert Vertex** coordinates and **Remove
+Selected Components**, with selection-aware local undo. The Levels geometry
+menu and Tools tab also remove picked components across brushes in one
+transaction; **Delete Selection** routes there while component mode is active.
+Patch control points require the patch row/column tools instead. A refused
+brush or lock leaves every object and history unchanged. All topology edits
+share face inheritance, precision checks, source bindings and persistence.
+**Split Edge/Face** adds corners at the picked edge midpoints or face centres
+plus the drag delta, in both plan and camera views. Existing corners remain;
+all inserted corners must survive the convex rebuild. Interior/coplanar
+insertions, invalid geometry, locks and patch selections refuse the complete
+transaction. Successful splits select the new vertices across all panes.
+The component dialog also exposes **Split Selected Edges/Faces**, using its
+XYZ fields and explicit collapse preference. `map split-components` accepts
+`--kind edge|face`, repeated `--component`, `--delta x,y,z`, optional `--grid`
+and `--allow-collapse`, with the existing output/dry-run/overwrite protections.
+Arbitrary point insertion gestures and broader component transforms remain required in
+the [production gates](plans/level-editor-production.md).
+
+**Extrude Faces** moves a selected plane along its solved normal while leaving
+the other planes fixed. Every original face must remain a valid polygon.
+**Split Extrusion** preserves the original for outward movement and partitions
+it for inward movement. `prepareLevelBrushExtrusion` validates private geometry;
+`extrudeLevelMapFaces` validates native source/texture round trips and commits
+all selected brushes with the ordinary scene guard and `replace-objects`
+transaction. Original brush identities, owners and group membership survive;
+new sections inherit their source membership. Linked groups and undo use the
+normal services. The transaction rejects duplicate IDs and collisions with
+objects that survive the replacement.
+
+Plan handles and the camera's labelled **N** axis use normal-constrained distance
+and vertex-to-grid-plane snapping. **Extrude Faces Precisely…** and
+`map extrude-faces` use the same worker/core operation. Numeric distances are
+exact unless the CLI supplies `--grid`. The shared Texture Lock setting moves
+the face projection with its plane; reversed split caps preserve the same world
+projection, including brush-primitive matrices. The worker validates source and
+Texture Lock state before adopting its checked draft. Result picks come from
+the solved face centres, since adjacent sloping planes can change those centres.
+
+Limits: 128 brushes, one face per brush, parallel normals, finite distances
+within ±32768, at least 0.02 units for split sections and the existing
+128-face/256-vertex topology limit. Opposite normals may move together but
+cannot split together. Behind-face edge hover, exact profile modifier gestures,
+broader deformation UV lock and native input acceptance remain open. See the
+[manual](manual/levels.md#extrude-brush-faces) and production evidence.
+
+**Sweep Faces…** and `map sweep` use `core/level_sweep` through the cancellable
+placement service. Independently selected faces share a bounds centre and
+combined normal, then produce convex envelopes between adjacent stations.
+Straight, arc/helix and cubic Hermite S-bend paths share destination rotation,
+world-axis scaling and repeated affine composition. Integer alignment preserves
+the initial source face and rounds later stations once, sharing each join.
+Invalid sections are individually reported; no valid section means no edit.
+
+`addLevelMapBrushHullBatch` inserts up to 4096 validated hulls with per-profile
+entity/group destinations in one transaction. Sources stay intact; new faces
+use the current material and default mapping/flags in their native face dialect.
+Linked propagation folds before history eviction, including at an undo limit
+of one. The material-aware numeric preview resolves package/staging assets
+asynchronously and verifies document, package and selection snapshots before
+publication. The [manual](manual/levels.md#sweep-selected-faces) documents limits
+and skipped sections. Native cap manipulators, scale shortcuts, large-map
+profiling and real-platform acceptance remain open; sweep parity is Partial.
+
+The level camera now shares native brush vertex/edge/face and patch-point
+handles with the active plan view. `model_viewport_components.cpp` owns only
+projection, depth-aware or X-ray picks, rectangle selection and constrained
+movement. `level_camera_component_actions.cpp` snapshots the document and
+component IDs, coalesces work onto one background thread, and calls
+`transformLevelMapComponents`, `splitLevelMapComponents` or `extrudeLevelMapFaces` on a private draft for
+both camera and plan gestures, including plan arrow nudges. A wire overlay shows the validated
+hull/control grid; the original solid stays visible until commit. A pending
+release waits for the current result. The shell adopts that exact draft only
+while document revision, load serial, object selection, save bindings and
+creation context still match. Picks
+follow surviving moved handles across every pane, and ordinary undo, save,
+compiler and package services retain ownership of persistence and handoff.
+`map transform-components` is the batch affine automation route; the existing
+single-brush `map move-components` and patch CLI operations remain available.
+No second camera-specific geometry algorithm is introduced.
+
+Changing picks, grid, projection, tools, enabled state or focus cancels the
+gesture; superseded worker results cannot apply. Handles are bounded to 128
+objects and 16,384 points, excluding a whole object if it would exceed the
+limit, with a visible limit message. Camera component mode suppresses whole
+object resize and drag-to-move. `level-camera-components-smoke` exercises
+semantic camera operations, shared shell edits, stale contexts, locks, save
+and undo, with four profile definitions, enlarged high-contrast/RTL renders.
+Physical input, screen readers, macOS/Linux and representative project
+acceptance remain required before a production claim.
 
 `level-brush-smoke` covers all four face dialects, every cube edge/face,
 fractional vertex edits, collapse rejection, source comments/material mappings,
@@ -2778,6 +3386,14 @@ commits, save/reload and rendering at 100% and 200%, including high contrast,
 right-to-left layout and expanded labels. Physical gestures and screen-reader
 behavior remain manual acceptance gaps.
 
+On 2026-10-18, `level_topology_compiler_workflow.py` verified insertion and removal
+through VibeMap3 0.4.0 BSP/VIS/LIGHT and dependency packaging for classic, Valve
+220 and brushDef maps: 27 steps passed. Each generated prop retained its eight
+authored corners, ten faces and six inherited materials in the compiled output;
+the map, BSP and texture bytes were verified in validated PK3s. Evidence is in
+`.agents/tmp/level-production-tools/compiler/verified.json`. BrushDef3 is covered
+by native persistence tests, not this Quake III compiler proof. No game was launched.
+
 An original synthetic room reshaped through vertex, edge and face CLI edits
 passed q3map2 BSP, VIS and LIGHT on Windows on 2026-10-04
 (`2.5.17n-git-e62c6f4b`). The resulting BSP was leak-free and retained its
@@ -2785,6 +3401,47 @@ material references. Dependency export and PK3 validation verified the BSP,
 shader script and image: three payloads, no unchecked entries or warnings.
 The command manifest and generated artifacts are under
 `.agents/tmp/level-components/compiler/`. No game was launched.
+
+### Brush file order on save
+
+Edits that rewrite a brush as a whole drop its source lines and keep the new
+text on the brush (`startLine` 0, `sourceLines`). Save used to append that text
+ahead of the owning entity's closing brace, so every later brush of the entity
+moved and a reload numbered them differently. Now the rewritten brush carries
+`LevelMapBrush::spliceLine`, the first source line the edit dropped, and
+`spliceBrushId`, the only brush allowed to take that place, and
+`serializeMapText()` writes it there:
+
+- `replaceLevelMapBrushGeometry()` (component moves, the brush editor, snap
+  vertices, the component batch and the CLI component commands) gives the
+  place to the brush it rewrites. A second edit of the same brush inherits it.
+  A `// brush N` marker above the brush stays, because only the brush lines are
+  dropped.
+- `commitBrushReplacement()` (clip and split, extrude, hollow, CSG carve and
+  intersect, merge and wrap/merge) gives each replaced brush's place to the
+  result that keeps its ID, or else to the first result recorded as made from
+  it (`sceneObjectOrigins`) in the same entity. Its marker goes with the dropped
+  lines, as before. Other results join the end of their entity, as new brushes
+  do. In-memory vector order is unchanged.
+- `levelMapBrushSaveLine()` is the shared answer to "where does Save write this
+  brush": the start line, a valid splice line, or 0 for the entity end. A place
+  outside the brush's current source entity (after Tie to Entity or Move to
+  World) or a copy with a different ID falls back to the entity end.
+  `levelMapObjectAtNumber()`, `levelMapObjectNumber()` and copied `.map` text
+  order brushes by it, so **Find Brush by Number…**, compiler line lookup and
+  copy order agree with the saved file. Scene metadata records object IDs in
+  the same order, so groups and layers survive a reload.
+
+Undo and redo carry the fields in their brush snapshots, so undoing every edit
+restores the source bytes exactly. `level-brush-file-order-smoke` checks
+component, repeated component, clip, split extrusion, carve and duplicate edits
+in classic, Valve 220, brushDef and brushDef3 files: every brush must sit at the
+number the document reports, untouched brushes keep their IDs through save and
+reload, group membership follows, and the CLI writes identical bytes. Workflow
+reference: TrenchBroom keeps edited brush nodes in their parent's order
+(4c756be1, GPL-3.0-or-later), and NetRadiant Custom's clipper keeps the clipped
+brush in place and adds only the fragment (`radiant/csg.cpp`, 449778b3,
+GPL-2.0-or-later). The implementation is original; see `docs/CREDITS.md`.
 
 ## Curved Surface Authoring
 
@@ -2869,6 +3526,21 @@ stitching and planar caps are now available as described above. The main level c
 now resolves material images; the Patch Editor retains its UV checker.
 
 ## Reusable Prefabs
+
+Complete closed group hierarchies survive capture and placement through the
+shared native-map clipboard service. Version 2 `.vprefab` files carry bound
+scene metadata; flat assets continue to use version 1. Each insertion assigns
+fresh group identities, resolves sibling name collisions and preserves owned
+geometry, visibility and locks. Partial selections do not capture their parent
+group. Layers and open ancestors remain editing context. Malformed or stale
+scene metadata is refused rather than discarded.
+
+Portable link sets receive fresh link identities per placement; a lone
+linked group becomes independent. Linked groups in a prefab turn and move their
+frames with its placement, at any rotation, and groups nested in them come with
+them. Ordinary same-document duplicate and array operations keep the original
+link set and source parent. Copy/paste and prefabs use the current creation context.
+The complete geometry and scene change is one undo step.
 
 **Edit > Export Selection as Prefab** captures selected Quake-family brushes,
 patches and entities in a `.vprefab` authoring asset. Selecting any primitive in
@@ -3056,9 +3728,12 @@ Unknown, repeated, missing-value or extra positional arguments fail before
 publication. Output replacement requires `--overwrite`. JSON adds `pasted`,
 `copies` or `snapped` native selectors, the offset/grid and texture-lock policy.
 Use `--engine idTech3` when an otherwise ambiguous classic text map needs that
-target. Duplication and paste retain model, sound, target and material references;
-they do not rename target connections or move asset files. Use reusable prefabs
-when each assembly needs a new internal target namespace. Doom/Hexen duplication
+target. Ordinary duplication and paste retain model, sound, target and material
+references. **Duplicate, Make Unique** and `map duplicate --make-unique` instead
+clone partial entity owners and remap copied NRC namespace properties together,
+including outgoing targets. Repeat resolves new names against the current map;
+each unique array copy reserves its own names. Asset files are unchanged. Reusable
+prefabs offer their own assembly-prefix namespace. Doom/Hexen duplication
 supports things, rounded to their stored whole coordinates. UDMF copies existing
 things with fractional XYZ positions, preserving comments and extension fields;
 Doom map-text paste and geometry duplication remain unsupported.
@@ -3097,6 +3772,55 @@ after history preparation. Publication and workbench refresh still occur on the
 GUI thread, allocation/native library calls are not interruptible, and source
 selection, real-map throughput and complete shell adoption need further work.
 
+### Working grid sizes
+
+The Levels working grid runs from 0.125 to 1024 units in powers of two
+(`levelEditorGridSizes()`, a `QVector<double>` whose sizes are all exact
+binary fractions, so `==` comparisons are safe), the range of NetRadiant
+Custom's Grid menu at `449778b3`; TrenchBroom v2026.2 offers 0.125 to 256. The
+view-bar list, the View tab's mirror, the `map.grid<N>` commands
+(`levelEditorGridCommandId()`: `map.grid0.125` to `map.grid1024`) and their
+palette entries, Smaller/Larger Grid (`levelEditorSteppedGridUnits()`) and
+`levelEditorControlProblems()` all use that list, so a profile may start on
+any listed size. The `map.grid<N>` actions form one exclusive `QActionGroup`
+and are checked while their size is the working grid, as TrenchBroom's Set
+Grid Size items and NetRadiant Custom's Grid menu radio items are; choosing the
+checked one again keeps it checked and still applies the snap policy. The
+grid is a double from the list through
+`ApplicationShell::levelMapGridUnits()`, `MapViewport::gridSize()`, plan
+snapping, nudges, drawn brushes, clip points, component and sweep gizmos,
+placement, the camera's move grid, the 2D export (`MapRenderOptions::gridSize`,
+`map render --grid`) and the saved `levelMapGrid` view state (written as
+`0.125`; older whole-number values still load). Prompts that only take whole
+units (the two Hollow thickness prompts) offer 1 on a fractional grid.
+
+Binary Doom and Hexen lumps store 16-bit integer coordinates, so
+`levelEditorFinestGridUnits()` is 1 for them and 0.125 for UDMF and
+Quake-family maps. `refreshLevelMapGridChoices()` greys out the finer list
+entries in both lists (disabled items are skipped by the keyboard and wheel),
+disables `map.grid0.125` to `map.grid0.5`, moves a fractional choice to 1 with
+a status message, and re-enables them when a map that keeps fractions opens;
+`levelMapGridUnits()` clamps to the finest allowed size as well, so no route
+can hand a Doom map a fractional grid. `map snap` already refuses a fractional
+`--grid` on binary Doom maps.
+
+`src/app/level_grid_actions.cpp` holds the grid commands and the profile snap
+policy (`gridChangeEnablesSnap`). Plan views draw every grid line in view at
+its own spacing while lines are at least 6 pixels apart; below that the
+spacing doubles (`mapGridDrawnSpacing()`), so 0.125-unit lines appear only
+when zoomed in to 48 pixels per unit or more, and the view's status lines say
+"drawn every N units at this zoom" while the lines are thinned. Major lines
+fall every eighth drawn line and the world axes are on top; a view zoomed in
+between two 1024-unit lines draws only the axes it contains. With the
+arrow-key camera drive of the Radiant profiles, one step is the grid size
+but at least 16 units. Tests: `level-fractional-grid-smoke` (sizes, finest
+grid per format, stepping, ids, validation, palette, no default keys, export
+grid and the `editor`, `map snap` and `map render` CLI),
+`level-fractional-grid-ui-smoke` (offscreen shell, three profiles at 100% and
+at 200% with high contrast, expanded strings and right to left, and a binary
+Doom map), `level-large-grid-smoke`, `level-large-grid-ui-smoke` and
+`viewport-overlay-smoke` (sparse line placement at 512 and 1024).
+
 ## Acceptance Areas
 
 | Area | Required outcome | Current evidence and gaps, 2026-10-06 |
@@ -3107,7 +3831,7 @@ selection, real-map throughput and complete shell adoption need further work.
 | Doom geometry | Author sectors, lines, vertices and things; edit heights, flags, actions and tags; handle shared topology; retain map dialect and unrelated WAD content. | Binary Doom/Hexen editing includes shared-pivot rotation, connected X/Y mirroring, rounding/collapse checks and node invalidation. The camera reconstructs concave/holed/disconnected sectors and wall parts with exact material targets; invalid boundaries are reported. Draw/split/join/merge tools exist. UDMF has lossless properties and native move/rotate/mirror/snap/resize, common-field previews, scene locks, recovery and real ZDBSP/package validation. UDMF topology tools, attached partial mirror detach/stitch, broader topology tools and 3D manipulation remain open. |
 | Materials | Browse project/package textures, select faces, paint, align/fit/rotate/scale UVs, edit brush-primitive matrices, and preview the result accurately. | The Surfaces tab adds bounded asynchronous quick adjustments and Q3Radiant texture keys; Surface Alignment adds batch Shift/Scale/Rotate/Fit/Align with original dimensions, one undo step and CLI parity. The camera resolves package images, shader editor images, static model skins, Doom flats and composite walls. Paint/sample uses exact face/patch/wall/floor/ceiling identities; four Radiant profiles add instant material sampling, Q3Radiant/GtkRadiant add material painting plus face/brush paste, NetRadiant adds face parameter paste, and NetRadiant Custom adds single-face seamless wrapping, hit-and-selection values/projection, patch UV projection and mapping-only variants. A material/mapping/flag clipboard, world projection, chained or batch seamless wrapping and portable CLI definitions share the surface worker and undo. Doom offsets/pegging, namespace/staged resolution and dependency input review are implemented. Engine effects, complete surface rendering, multi-package/project search and native gesture acceptance remain incomplete. |
 | Entities and scene organization | Definition-driven creation and inspectors, connection graphs, models, groups/layers, visibility, reusable prefabs, and reliable search. | Definitions, links, query selection, generated props and static package MDL/MD2/MD3 preview exist. Versioned prefabs capture complete owners, preview package assets, namespace internal links and insert through atomic undo with CLI parity. The Scene tab provides persistent layers/nested groups, assignment, selection and visibility with structural-edit inheritance and CLI parity. Inherited editing locks protect native records through shared authoring services. Linked instances, model attachments/animation and broader placement workflows remain incomplete. |
-| Navigation and interaction | Synchronized orthographic/perspective views, configurable layouts, dependable picking/manipulation, grid/snap, isolation, camera bookmarks and complete profile behavior. | Camera/top/front/side panes share map edits, selection, visibility, package-backed previews and compiler trails; layouts and splitter sizes persist independently of profile controls. Optional linked plan centres/zoom and camera-follow share GUI/CLI defaults. Named views retain exact poses and links with per-map storage, a manager and portable files. Nineteen profiles route controls and document adaptations, including QuArK four-view controls and modern held-button flight. Eighty-four gesture and navigation-key preferences share staged GUI editing, validated per-profile settings, portable files and CLI coverage, preserving camera poses, layout and undo. Temporary maximize/restore and equal sizing preserve shared authoring state. Broader manipulation and native acceptance remain incomplete. |
+| Navigation and interaction | Synchronized orthographic/perspective views, configurable layouts, dependable picking/manipulation, grid/snap, isolation, camera bookmarks and complete profile behavior. | Camera/top/front/side panes share map edits, selection, visibility, package-backed previews and compiler trails; layouts and splitter sizes persist independently of profile controls. Optional linked plan centres/zoom and camera-follow share GUI/CLI defaults. Named views retain exact poses and links with per-map storage, a manager and portable files. Twenty-four profiles route controls and document adaptations, including QuArK four-view controls and modern held-button flight. Ninety-seven gesture and navigation-key preferences share staged GUI editing, validated per-profile settings, portable files and CLI coverage, preserving camera poses, layout and undo. Temporary maximize/restore and equal sizing preserve shared authoring state. Broader manipulation and native acceptance remain incomplete. |
 | Validation and production loop | Actionable map health, leak/portal inspection, source-linked compiler diagnostics, reproducible build/package/test with current assets and saved map data. | Quake/Quake II/Quake III prepared workspaces capture unsaved maps and package drafts, verify successful output inventories, and publish engine-specific BSP/lighting and assets through PAK/PK3 writers. Quake includes captured WAD2 textures; Quake II validates WAL/animation dependencies. Complete Quake-family installation deployment shares destination review, per-operation write permission, backup and optional windowed launch across GUI/CLI. Classic targets remember numbered PAK slots and enforce their engine's loading sequence; complete review hashes guard CLI automation. Doom layouts, custom outputs, runtime search precedence, real engine testing and diagnostic remapping after structural edits remain open. |
 | Scale and responsiveness | Large-map loading, selection, editing, rendering, saving and asset indexing remain responsive, cancellable where practical, and measured. | Bounded brush-geometry reuse covers plan edits, worker opens and the camera worker. Scene indexes and cached selection bounds accelerate repeated plan readouts/framing while preserving sparse IDs, hidden ownership and edit/reload invalidation. Quake plan wires, patch borders and selected outlines now prepare on coalescing workers with retired-result rejection and separate GUI paint/completed-image measurements. Cold grid/member images now prepare on an independent coalescing worker for large scenes/selections, including Doom, with current primary/handles/picking and combined accessible pending state. Bounded immediate caches and primary-label layout remain shared. Synthetic 100–10,000-brush editing/rendering benchmarks and load phase, GUI heartbeat, adoption and cancellation measurements exist. Quick and explicit placement prepare on cancellable workers with guarded adoption; redundant face formatting is removed. Parser/transform throughput, full shell adoption, overlapping wireframe painting, complex projects and other synchronous paths still require improvement. Synthetic boxes do not prove production performance. |
 | Accessibility and localization | Scalable, high-contrast, keyboard-accessible controls, screen-reader semantics, RTL/translation expansion and consistent status/undo feedback. | Shared theming and extraction exist. Real keyboard/screen-reader acceptance remains unverified; input automation requires specific user authorization. |
@@ -3270,3 +3994,253 @@ or `map edit` for normal undoable authoring. The pinned compiler ignores MD3
 nonzero frame selection, so review diagnoses those requests and directs authors
 to bake a static pose in Assemblies. Read [Placed Model Appearances](LEVEL_MODEL_APPEARANCE.md)
 for filename conventions, remap priority, strict validation and scope limits.
+
+## Group editing context
+
+Closed groups are selection units across plan/camera picking, the Objects list
+and selection commands. Open/close commands expose nested contents while the
+shared authoring guard protects outside records and directs new objects into the
+context. Scene administration and history remain explicit; builds and packages
+use the full map. Context changes invalidate prepared geometry and cancel drafts.
+Read [Scene organization](LEVEL_SCENE.md#edit-a-group) for ownership, shared Doom
+boundaries, linked propagation, CLI behaviour and remaining hierarchy gaps.
+VibeStudio remains pre-alpha; native profile and production-map acceptance are
+still required.
+
+## Component affine transforms
+
+**Transform Components…** and `map transform-components` share
+`LevelComponentTransformRequest` for moves, axis rotations, XYZ scales and
+shears. Selected corners define a common default pivot; explicit pivot and final
+grid snapping are available. Brushes use the checked convex rebuild; patch
+control points retain their UV values. A separate persistent component UV lock
+fits each resulting face to original corner coordinates and verifies every
+sample. A face no single planar projection can follow is refused unless
+`fitUvLock` is set (**Fit UVs When Lock Fails**, on by default in the GUI;
+`--uv-lock fit` in the CLI): then `fittedUvCorners()` picks three corners,
+unmoved corners first while they span at least a quarter of the widest extent,
+solves the projection from them and lets the others drift, as NetRadiant
+Custom's texture vertex lock does. A classic face that cannot hold the fitted
+projection takes `nearestClassicLevelTextureProjection()`, the least-squares
+rotation and two scales in its axial plane with offsets averaged over the three
+corners, unless Valve 220 conversion is allowed. `LevelBrushEditReport` and
+`LevelMapComponentReport` count `fittedFaces` for the status bar and JSON.
+Explicit Valve 220 permission converts every classic face consistently through
+the native save service.
+
+`replaceLevelMapComponentGeometry` preflights independent native commands from
+one immutable source and publishes one batch before linked-instance propagation.
+Movement, splitting and removal share that transaction boundary. A one-step undo
+limit retains the complete edit. Geometry no-op detection compares corresponding
+face planes, so symmetric turns still move face identity and materials. Numeric
+transforms run through the cancellable placement worker and reject changed
+component picks at publication; surviving handle positions follow the transform.
+The numeric dialog uses standard accessible controls and explicit errors.
+
+Compiler acceptance covers a moved face followed by rotation, scale and shear,
+independent UV checks for classic/Valve/brush-primitive maps, BSP/VIS/LIGHT and
+validated dependency packages. Dense-map
+performance, native input/platform acceptance and topology insertion/removal UV
+policies remain separate production gates. See the
+[manual](manual/levels.md#transform-picked-components) and
+[production record](plans/level-editor-production.md).
+
+Direct component manipulators use `LevelComponentGizmo` in both plan and camera
+views. Its captured projection/rays and serial-numbered preview requests share
+rotation rings, axis/uniform scaling, six shear directions and a non-document
+pivot. The existing component worker keeps one running and one replaceable
+pending request. Release waits for the latest checked result; cancellation,
+changed source state or an invalid result cannot publish earlier geometry.
+Accepted affine drafts use the same atomic component service and preserve
+surviving picks. Angle/factor snapping differs from final coordinate snapping;
+the latter and explicit corner collapse remain in the numeric/CLI path.
+Manipulator options and numeric transforms provide named, focusable Qt controls.
+The pivot is session state shared by numeric transforms and every viewport;
+changing map or leaving component mode clears it. No new dependency, rendering
+backend, AI service or CLI architecture is introduced.
+
+### Independent face manipulation
+
+In face mode, faces picked by **Select Textured** join the component scope
+without selecting their brushes (NRC face-mode parity). The shell supplies
+them as `LevelSurfaceFacePicks` (faces, query geometry fingerprints and view
+filter exclusions). `levelSurfaceFaceComponentSets()` revalidates each pick
+(existing face, unchanged fingerprint, visible, unfiltered, unlocked, inside the
+open group) and merges it into the handle sets: a face joins its brush's face
+set, and a brush with vertex or edge picks receives the face corners as
+vertices, because the transform moves corners. `transformLevelMapSurfaceFaces()`
+then calls `transformLevelMapComponents()`, so the pivot, UV lock, Valve 220
+permission, scene guard, linked-group propagation and single undo step are
+unchanged. After the rebuild each pick is remapped to the face whose solved
+plane matches its corners under the shared matrix; grid-bent faces fall back to
+the pieces built only from those corners, and faces that disappear are retired
+and counted. The numeric dialog, arrow-key nudge (`texturedFacesMoveRequested`
+when no handles are picked), plan and camera manipulators and handle drags use
+the same service through the placement worker or the component worker. The
+shell keeps the pick states on either side of each transform so undo and redo
+restore picks whose geometry matches again; other geometry changes still retire
+them. Vertex/edge modes, splitting, extrusion and insertion stay handle-only.
+`map transform-components --face face:B:N [--context GROUP]` is the CLI route;
+its JSON returns the remapped `faces` for chained edits. Status: Partial.
+
+Component selection uses the shared `level_component_selection` policy for
+replace/add/subtract/toggle operations. Camera clicks clump handles by cached,
+order-independent solved geometry keys (coordinates quantised to 1e-6 map
+units). Edges compare endpoints and faces compare all corners, avoiding false
+clumps at coincident centres. Plan views retain projected-stack selection.
+The camera receives identities from the plan's existing topology pass; clicks
+do not rebuild brush topology. Scene-context filtering and handle limits still
+apply before matching. Selected patch control points use the same vertex key.
+
+All/None/Invert command routing stays inside component mode, preserves object
+selection and cancels pending geometry work. Profile lasso policy is persisted
+by the existing gesture service and exposed by its CLI; geometry automation
+continues to use explicit repeated `map transform-components --set` selectors.
+Native input acceptance remains separate work. No new library
+or stack decision is required.
+
+Component mode changes now convert picks through solved incidence, preserving
+complete boundaries rather than comparing handle centres. The shared
+`level_component_selection_topology` service also provides touching conversion,
+Grow, Shrink and Connected. Compact topology is cached during the existing
+viewport solve, so these GUI queries do not solve brush planes again. Exact
+object/kind/component IDs synchronise selection between panes; position-based
+repicking remains the fallback after geometry changes renumber the topology.
+Results are computed before cancelling drafts or switching mode. A truncated
+handle context or destination limit refuses conversion without dropping picks.
+Patches keep control-point IDs in every mode and use a four-neighbour grid,
+including open-border erosion. Object boundaries are never crossed implicitly.
+Selection changes use no geometry undo entry. `map select-components` exposes
+the same pure service. Opening or clearing a map discards cached incidence,
+handles and picks; inactive viewports refuse selection queries. The CLI
+rejects stale IDs atomically and returns replayable
+selectors for transform/compile/package workflows. No setup, dependency,
+rendering backend or AI service changes are required.
+
+Depth cycling uses a shared pure query over current eligible handles. Full
+geometry keys form stops; depth, screen distance and stable handle IDs order
+them. Each query replaces picks only inside the overlap ring. Plan near-depth
+directions are +Z, -Y and +X for Top/Front/Side; the camera uses its projection
+depth and current visible/X-ray policy. Keyboard and wheel adapters rebuild
+candidates rather than caching stale hit lists. View, geometry, mode and
+external pick changes reset the anchor; a drag on an already picked plan depth
+keeps the exact picks. Selected handles paint after unselected handles; object
+resize handles are hidden while component mode owns the interaction.
+Truncated contexts refuse cycling. Selection commands cancel pending drafts;
+direct key/wheel cycling is inert during an edit or navigation gesture.
+No geometry history or CLI map mutation is introduced: headless automation
+continues to use explicit component IDs. The two wheel chords use the existing
+gesture registry and CLI. High-contrast plan colours now use studio theme
+tokens, including a white background and dark selection in the light variant.
+
+## Direct vertex insertion
+
+**Available:** **Insert Vertex** in Geometry and Tools starts a shared edge/face
+insertion preview in every orthographic pane and the camera. Cached solved
+polygons provide bounded picking and grid points; no hull is rebuilt in pointer
+events. Coincident whole edges/faces contribute all selected incident brushes.
+A single replaceable worker request rebuilds their convex hulls, preserves
+materials/flags and source dialects, validates scene locks and linked instances,
+and publishes one undo transaction. Release waits; cancellation and stale map,
+selection, save state or preview serials cannot publish old geometry.
+
+Existing vertices have picking priority. New corners must lie outside the old
+solid and survive its hull; old corners are preserved. Patches retain their
+matrix tools. The explicit tool works in all profiles; the TB profile defaults
+to Shift insertion and world-axis movement, as described below.
+Topology deformation UV lock, full textured previews and native platform/input
+acceptance remain **Partial**. Numeric insertion and repeated `--brush` CLI
+insertion provide a keyboard and automation path through the same geometry
+validation. No new dependencies or AI services are required.
+
+## Component drag constraints
+
+`LevelComponentDrag` shares world-plane/axis picking, relative or absolute
+snapping and accepted-preview anchors between plan/camera movement and vertex
+insertion. The TB profile enables `componentAxisDrag` for both view types.
+Other profiles retain their established movement policy; numeric displacement,
+affine tools and normal extrusion continue through their existing services.
+Ctrl selection waits for the click/drag decision, so an absolute drag cannot
+accidentally toggle away its source. A dragged geometric clump preserves the
+remaining selection only when every member was already selected.
+
+Modifier changes use the last local pointer position and explicit Qt key
+press/release flags. There is no operating-system input polling or injection.
+Only a matching validated preview advances the constraint anchor. The existing
+bounded worker, exact prepared draft, scene locks, linked groups, UV policy and
+atomic undo remain the publication path. Profile changes, focus loss, Escape
+and stale source state discard unfinished edits. Status descriptions include
+the active plane/axis and snap mode, including hidden-coordinate movement.
+See the [manual](manual/editor-profiles.md#move-and-insert-components) and the
+[production audit](plans/level-editor-production.md#component-drag-behaviour-audit).
+
+`levelMapVertexSnapDelta` validates a single geometric brush-vertex source and
+an existing brush-vertex target, then supplies the exact displacement to the
+shared component transform. Coincident source sets may span brushes. GUI
+**Snap Picked Vertex…**, the TB Alt+Shift click and CLI `--operation snap` use
+this path with collapse enabled, ordinary UV policy, scene guards, asynchronous
+publication and one atomic undo. The GUI exposes handles of selected editable
+brushes; the CLI can name any existing target. The target dialogue guards map
+revision, load serial and component selection. Zero displacement is a no-op.
+Source/target topology preparation remains synchronous; large-selection
+responsiveness still needs measured acceptance.
+
+Plan and camera quick-snap chords are independent preferences. Inherited
+defaults yield to older custom selection bindings; explicit conflicts fail.
+Deferred handle presses preserve the source for a click, while crossing the
+drag threshold begins ordinary movement of the grabbed geometry. Component
+move requests permit ±65536 displacement, with resulting corners/pivots still
+bounded by ±32768; the numeric dialogue matches that range.
+
+`paintLevelComponentTrace` draws successive world X/Y/Z segments for movement
+and insertion, labels distances, emphasises the constrained axis and marks
+pending checks with dashes. It uses the studio palette in high contrast,
+bounds labels to the viewport and avoids overlapping labels. Very small views
+can omit a label when it cannot fit; the full displacement stays in the
+accessible status. Native constraint transitions reset the relative trace
+anchor in step with `LevelComponentDrag`.
+Trace labels reserve the viewport HUD's two possible rows. During a plan
+component drag or insertion, selection rings remain visible and the primary
+object label returns on release, leaving space for the distance readout.
+
+### Targeted clipboard placement
+
+**Partial:** [Clipboard placement](LEVEL_PASTE.md) adds original, cursor and
+camera commands to the existing offset preview. Profile routing, definition
+bounds, visible-brush ray targeting, single-undo insertion and CLI targets share
+the normal cancellable placement service. Full foreign clipboard compatibility
+and native platform acceptance remain open.
+
+
+### Face clipboard dispatch
+
+**Partial:** normal paste recognises raw `.map` faces and applies the last face's
+attributes through the shared cancellable surface worker. TB normal copy exports
+picked faces, other profiles retain object copy, and **Copy Surface** exports
+picked face components in Face mode or the inspected face in object mode.
+Target contents and UV basis are preserved under
+the documented attribute rules; changed picked-face context refuses publication.
+See [Face clipboard](LEVEL_PASTE.md#face-clipboard) for CLI integration, format
+restrictions and remaining compatibility gaps.
+
+## Entity connections and NRC KillConnect
+
+**Partial.** `level_entity_connections` provides the shared selection, owner,
+naming and game-context service. `SourcesToLast` preserves the existing
+multi-source adaptation; `RadiantTarget` and `RadiantKillTarget` implement the
+pinned NRC two-instance rules. Fresh names reuse the namespace allocator used
+by unique duplication. Only the requested source property and destination
+`targetname` change; other inbound references are not rewritten. The normal
+scene guard, linked-instance propagation and undo transaction wrap the edit.
+The placement worker exposes Connecting progress and cancellation, and the UI
+also checks profile/game context before publishing. Save As, dependency review,
+compiler and package workflows continue to consume the native map state.
+
+See the [manual](manual/levels.md) for pick-order and game rules and the
+[CLI reference](manual/cli.md) for reproducible connections. Doom 3 numbered
+entity-name connections are outside the current idTech1/2/3 authoring scope.
+
+The target-link graph also uses exact native property keys. Custom `TARGET` or
+`TARGETNAME` keys cannot masquerade as `target`/`targetname`; the GUI link display,
+source/target navigation and CLI map report share this graph. NRC fresh names
+read the exact `classname` property rather than the permissive inspector label.

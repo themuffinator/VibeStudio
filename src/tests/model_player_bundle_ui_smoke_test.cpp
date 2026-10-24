@@ -1,6 +1,7 @@
 #include "app/model_assembly_dialog.h"
 #include "app/model_skin_source_dialog.h"
 #include "app/studio_theme.h"
+#include "core/audio_clip.h"
 #include "tests/model_player_bundle_test_helpers.h"
 #include "tests/model_skin_source_test_helpers.h"
 
@@ -9,6 +10,8 @@
 #include <QApplication>
 #include <QCheckBox>
 #include <QComboBox>
+#include <QDoubleSpinBox>
+#include <QLabel>
 #include <QLineEdit>
 #include <QPlainTextEdit>
 #include <QPushButton>
@@ -17,6 +20,7 @@
 #include <QScrollBar>
 #include <QSpinBox>
 #include <QTableView>
+#include <QTableWidget>
 #include <QTemporaryDir>
 #include <QTimer>
 #include <QTranslator>
@@ -91,6 +95,15 @@ int main(int argc, char **argv)
 	if (!ok)
 		return 1;
 	const auto originalSource = q3Read(fixture.sourcePath), originalSkin = q3Read(temporary.filePath("lower.skin"));
+	// Team skins from .skin files, and a custom sound.
+	AudioClip sound;
+	sound.channels = 1;
+	sound.sampleRate = 22050;
+	sound.samples.fill(.25f, 2205);
+	ok &= expect(q3Write(temporary.filePath("upper_red_source.skin"), "body,textures/player/b.tga\n") &&
+					 q3Write(temporary.filePath("head_blue_source.skin"), "body,textures/player/b.tga\n") &&
+					 q3Write(temporary.filePath("death.wav"), encodeAudioWav(sound, &error)),
+				 "write team skin and sound sources");
 	for (int scenario = 0; scenario < 3; ++scenario)
 	{
 		std::cout << "Player UI scenario " << scenario << ": open\n";
@@ -178,6 +191,59 @@ int main(int argc, char **argv)
 			app.processEvents();
 			ok &= expect(render(*dialog, QStringLiteral("player-%1-review").arg(scenario)),
 						 "review file list, hashes and limitations render at scale");
+			// Team skins, more skins, detail levels and custom sounds.
+			auto *team = dialog->findChild<QCheckBox *>("playerBundleTeam");
+			auto *skins = dialog->findChild<QTableWidget *>("playerBundleSkins");
+			auto *addSkin = dialog->findChild<QPushButton *>("playerBundleAddSkin");
+			auto *removeSkin = dialog->findChild<QPushButton *>("playerBundleRemoveSkin");
+			auto *detail = dialog->findChild<QComboBox *>("playerBundleDetail");
+			auto *levels = dialog->findChild<QSpinBox *>("playerBundleLodLevels");
+			auto *ratio = dialog->findChild<QDoubleSpinBox *>("playerBundleLodRatio");
+			auto *sounds = dialog->findChild<QTableWidget *>("playerBundleSounds");
+			auto *status = dialog->findChild<QLabel *>("playerBundleStatus");
+			ok &= expect(team && skins && addSkin && removeSkin && detail && levels && ratio && sounds && status,
+						 "skins, detail levels and sounds are part of the review surface");
+			if (!ok)
+			{
+				dialog->reject();
+				return;
+			}
+			for (QWidget *control : std::array<QWidget *, 8>{team, skins, addSkin, removeSkin, detail, levels, ratio, sounds})
+				ok &= expect(!control->accessibleName().isEmpty() && !control->accessibleDescription().isEmpty() && control->focusPolicy() != Qt::NoFocus,
+							 "the new package controls are named, described and focusable");
+			ok &= expect(sounds->rowCount() == 13 && sounds->item(0, 0)->text() == "death1" && skins->rowCount() == 0 && !levels->isEnabled() &&
+							 skins->layoutDirection() == Qt::LeftToRight && !skins->tabKeyNavigation() && !sounds->tabKeyNavigation(),
+						 "the 13 custom sounds are listed and generated levels follow the detail choice");
+			team->setChecked(true);
+			review->click();
+			ok &= expect(!publish->isEnabled() && files->topLevelItemCount() == 0 && status->text().contains("red"),
+						 "team skins without red or blue materials are refused with the reason");
+			const std::array<std::array<QString, 2>, 2> rows{{{"red", temporary.filePath("upper_red_source.skin")},
+															 {"blue", temporary.filePath("head_blue_source.skin")}}};
+			for (int row = 0; row < 2; ++row)
+			{
+				addSkin->click();
+				skins->item(row, 0)->setText(rows[row][0]);
+				skins->item(row, row == 0 ? 2 : 3)->setText(rows[row][1]);
+			}
+			detail->setCurrentIndex(1);
+			levels->setValue(1);
+			sounds->item(0, 1)->setText(temporary.filePath("death.wav"));
+			ok &= expect(levels->isEnabled() && ratio->isEnabled() && skins->rowCount() == 2, "skin rows and generated levels can be set");
+			review->click();
+			ok &= expect(publish->isEnabled() && files->topLevelItemCount() == 24 && details->toPlainText().contains("Team games use the red and blue skins"),
+						 "the review publishes three skins with icons, a level per part and the custom sound");
+			scroll->verticalScrollBar()->setValue(scroll->verticalScrollBar()->maximum() / 2);
+			app.processEvents();
+			ok &= expect(render(*dialog, QStringLiteral("player-%1-skins").arg(scenario)), "skins, levels and sounds render at scale");
+			team->setChecked(false);
+			skins->setCurrentCell(1, 0);
+			removeSkin->click();
+			skins->setCurrentCell(0, 0);
+			removeSkin->click();
+			detail->setCurrentIndex(0);
+			sounds->item(0, 1)->setText({});
+			ok &= expect(skins->rowCount() == 0 && !levels->isEnabled() && !publish->isEnabled(), "skin rows are removed and changes invalidate the review");
 			skin->setText("alternate");
 			ok &= expect(!publish->isEnabled() && files->topLevelItemCount() == 0 && details->toPlainText().isEmpty(),
 						 "editing an option invalidates reviewed bytes visibly");
@@ -272,6 +338,6 @@ int main(int argc, char **argv)
 	}
 	std::cout << checks << " player bundle GUI checks\n";
 	if (!ok)
-		std::cerr << error.toStdString() << '\n';
+		std::cerr << qPrintable(error) << '\n';
 	return ok ? 0 : 1;
 }

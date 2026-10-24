@@ -12,6 +12,7 @@
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
+#include <QKeySequence>
 #include <QProcess>
 #include <QSet>
 #include <QTemporaryDir>
@@ -90,6 +91,18 @@ void checkKeys()
 	expect(keys(QStringLiteral("milkshape-3d"), QStringLiteral("redoMesh")) == QStringList{QStringLiteral("Ctrl+R")}, "MilkShape redoes with Ctrl+R");
 	expect(keys(QStringLiteral("milkshape-3d"), QStringLiteral("meshMergeDistance")) == QStringList{QStringLiteral("Ctrl+W")}, "MilkShape welds with Ctrl+W");
 	expect(keys(QStringLiteral("milkshape-3d"), QStringLiteral("meshLoopCut")).isEmpty(), "MilkShape inherits no Blender keys");
+	// Keyboard routes to what was pointer-only: loops and rings of the
+	// selection (Alt+L and Alt+R, as 3ds Max binds them; MilkShape has no
+	// loops) and Next View / Previous View between four views in every profile.
+	for (const auto &id : {QStringLiteral("studio"), QStringLiteral("blender"), QStringLiteral("3ds-max")})
+		expect(keys(id, QStringLiteral("meshSelectLoop")) == QStringList{QStringLiteral("Alt+L")} &&
+				   keys(id, QStringLiteral("meshSelectRing")) == QStringList{QStringLiteral("Alt+R")},
+			   "Alt+L and Alt+R grow the selected edges to loops and rings");
+	expect(keys(QStringLiteral("milkshape-3d"), QStringLiteral("meshSelectLoop")).isEmpty(), "MilkShape keeps loops in the menus");
+	for (const auto &id : modelEditorProfileIds())
+		expect(keys(id, QStringLiteral("meshNextView")) == QStringList{QStringLiteral("Ctrl+Alt+PgDown")} &&
+				   keys(id, QStringLiteral("meshPreviousView")) == QStringList{QStringLiteral("Ctrl+Alt+PgUp")},
+			   "every profile steps the active view with Ctrl+Alt+Page Down and Page Up");
 	// Every command a profile lists exists.
 	for (const auto &profile : modelEditorProfiles())
 	{
@@ -187,6 +200,83 @@ void checkOverrides()
 	auto clash = base;
 	clash.keys.append({QStringLiteral("meshInset"), {QStringLiteral("G")}});
 	expect(!modelEditorControlProblems(clash).isEmpty(), "a key bound twice is a problem");
+}
+
+// The platform's panel keys in portable and native text.
+QString focusKey(bool forward)
+{
+	return modelEditorFocusKeys(forward).value(0);
+}
+QString nativeFocusKey(bool forward)
+{
+	return QKeySequence::fromString(focusKey(forward), QKeySequence::PortableText).toString(QKeySequence::NativeText);
+}
+
+// Ctrl+Tab and Ctrl+Shift+Tab move focus between panels in every profile, so
+// a view that takes Tab never traps keyboard focus. On macOS, where Qt's Ctrl
+// is Command and the system keeps Command+Tab, they are Control+Tab (Meta).
+void checkFocusKeys()
+{
+#ifdef Q_OS_MACOS
+	const Qt::KeyboardModifier modifier = Qt::MetaModifier;
+	const QString portable = QStringLiteral("Meta"), other = QStringLiteral("Ctrl");
+#else
+	const Qt::KeyboardModifier modifier = Qt::ControlModifier;
+	const QString portable = QStringLiteral("Ctrl"), other = QStringLiteral("Meta");
+#endif
+	const auto combination = [](const QString &key) { return QKeySequence::fromString(key, QKeySequence::PortableText)[0]; };
+	expect(modelEditorFocusKeys(true).size() == 1 && modelEditorFocusKeys(false).size() == 1 &&
+			   combination(focusKey(true)) == QKeyCombination(modifier, Qt::Key_Tab) &&
+			   combination(focusKey(false)) == QKeyCombination(modifier | Qt::ShiftModifier, Qt::Key_Tab),
+		   "Ctrl+Tab and Ctrl+Shift+Tab (Control+Tab on macOS) are the focus keys");
+	expect(isModelEditorFocusKey(focusKey(true)) && isModelEditorFocusKey(focusKey(false)) &&
+			   isModelEditorFocusKey(portable + QStringLiteral("+Shift+Backtab")) && !isModelEditorFocusKey(QStringLiteral("Tab")) &&
+			   !isModelEditorFocusKey(QStringLiteral("Shift+Tab")) && !isModelEditorFocusKey(portable + QStringLiteral("+T")) &&
+			   !isModelEditorFocusKey(other + QStringLiteral("+Tab")),
+		   "any key with the platform's focus modifier and Tab is a focus key, and only that modifier");
+	expect(modelEditorFocusKeyText().contains(nativeFocusKey(true)) && modelEditorFocusKeyText().contains(nativeFocusKey(false)),
+		   "refusals name both focus keys as the platform shows them");
+	expect(isModelEditorTabKey(QStringLiteral("Tab")) && isModelEditorTabKey(QStringLiteral("Shift+Tab")) && !isModelEditorTabKey(QStringLiteral("Ctrl+Tab")) &&
+			   !isModelEditorTabKey(QStringLiteral("Alt+Tab")) && !isModelEditorTabKey(QStringLiteral("T")),
+		   "plain Tab and Shift+Tab are the view's Tab keys");
+	for (const auto &profile : modelEditorProfiles())
+	{
+		bool forward = false, backward = false;
+		for (const auto &row : modelEditorControlRows(profile.controls))
+		{
+			forward |= row.section == QStringLiteral("keys") && row.gesture == nativeFocusKey(true);
+			backward |= row.section == QStringLiteral("keys") && row.gesture == nativeFocusKey(false);
+		}
+		expect(forward && backward, "every profile's reference lists the focus keys");
+		for (const auto &binding : modelEditorEffectiveKeys(profile.controls))
+		{
+			for (const auto &key : binding.keys)
+				expect(!isModelEditorFocusKey(key), "no profile gives a command a focus key");
+		}
+	}
+	expect(keys(QStringLiteral("blender"), QStringLiteral("meshToggleEditMode")) == QStringList{QStringLiteral("Tab")} &&
+			   keys(QStringLiteral("3ds-max"), QStringLiteral("meshToggleEditMode")) == QStringList{QStringLiteral("Ctrl+B")},
+		   "Blender keeps Tab for edit mode; 3ds Max leaves Tab to focus");
+	// Overrides cannot take them: the key is skipped with a warning and any
+	// other keys in the list still apply.
+	const auto base = modelEditorControlsForProfile(QStringLiteral("studio"));
+	ModelEditorControls edited;
+	QStringList warnings;
+	expect(applyModelEditorControlOverrides(base,
+											QJsonObject{{QStringLiteral("keys"),
+														 QJsonObject{{QStringLiteral("meshHide"), QJsonArray{focusKey(true), QStringLiteral("J")}},
+																	 {QStringLiteral("meshReveal"), QJsonArray{focusKey(false)}}}}},
+											&edited, &warnings) &&
+			   warnings.size() == 2 && warnings.join(QLatin1Char(' ')).contains(nativeFocusKey(true)) &&
+			   warnings.join(QLatin1Char(' ')).contains(QStringLiteral("Hide Selected")) && !warnings.join(QLatin1Char(' ')).contains(QStringLiteral("meshHide")),
+		   "overrides that take a focus key are reported by the command's title and the key's own name");
+	expect(modelEditorCommandKeys(edited, QStringLiteral("meshHide")) == QStringList{QStringLiteral("J")} &&
+			   modelEditorCommandKeys(edited, QStringLiteral("meshReveal")) == QStringList{QStringLiteral("Alt+H")},
+		   "a skipped focus key leaves the other keys, or the profile's when it was the only one");
+	auto taken = base;
+	taken.keys.append({QStringLiteral("meshHide"), {focusKey(true)}});
+	const auto problems = modelEditorControlProblems(taken);
+	expect(!problems.isEmpty() && problems.join(QLatin1Char(' ')).contains(focusKey(true)), "a focus key on a command is a problem");
 }
 
 void checkSidebars()
@@ -291,6 +381,25 @@ void checkCli(const QString &executable, const QString &directory)
 	run({QStringLiteral("model"), QStringLiteral("controls"), QStringLiteral("--profile"), QStringLiteral("milkshape-3d"), QStringLiteral("--reset")}, &code);
 	expect(code == 0 && StudioSettings(settings, StudioSettings::AccessMode::ReadOnly).modelEditorControlOverrides(QStringLiteral("milkshape-3d")).isEmpty(),
 		   "model controls resets a profile");
+	// A shared file that gives a command Ctrl+Tab imports without it, saying so.
+	QFile focus(QDir(directory).filePath(QStringLiteral("focus.json")));
+	expect(focus.open(QIODevice::WriteOnly) &&
+			   focus.write(modelEditorControlsFile(QStringLiteral("blender"),
+												   QJsonObject{{QStringLiteral("keys"), QJsonObject{{QStringLiteral("meshHide"), QJsonArray{focusKey(true)}}}}})) > 0,
+		   "a controls file with a focus key is written");
+	focus.close();
+	const auto focused = run({QStringLiteral("model"), QStringLiteral("controls"), QStringLiteral("--import"), focus.fileName(), QStringLiteral("--section"),
+							  QStringLiteral("keys"), QStringLiteral("--json")},
+							 &code);
+	bool focusRow = false;
+	for (const auto &row : focused.value(QStringLiteral("rows")).toArray())
+		focusRow |= row.toObject().value(QStringLiteral("gesture")).toString() == nativeFocusKey(true);
+	const auto hide = focused.value(QStringLiteral("controls")).toObject().value(QStringLiteral("keys")).toObject().value(QStringLiteral("meshHide")).toArray();
+	expect(code == 0 && focusRow && hide.size() == 1 && hide.first().toString() == QStringLiteral("H") &&
+			   focused.value(QStringLiteral("warnings")).toArray().size() == 1 &&
+			   focused.value(QStringLiteral("warnings")).toArray().first().toString().contains(nativeFocusKey(true)),
+		   "model controls keeps Ctrl+Tab for focus, lists it and warns about the import");
+	run({QStringLiteral("model"), QStringLiteral("controls"), QStringLiteral("--profile"), QStringLiteral("blender"), QStringLiteral("--reset")}, &code);
 	run({QStringLiteral("model"), QStringLiteral("controls"), QStringLiteral("--profile"), QStringLiteral("maya")}, &code);
 	expect(code == 2, "an unknown profile is a usage error");
 	const auto formats = run({QStringLiteral("model"), QStringLiteral("formats"), QStringLiteral("--json")}, &code);
@@ -316,6 +425,7 @@ int main(int argc, char **argv)
 	checkKeys();
 	checkGestures();
 	checkOverrides();
+	checkFocusKeys();
 	checkSidebars();
 	checkSettings(directory.path());
 	if (argc > 1)

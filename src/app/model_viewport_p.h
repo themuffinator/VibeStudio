@@ -85,6 +85,8 @@ struct ModelViewport::GeometryKey {
 	bool highContrast = false;
 	bool editMoveActive = false;
 	bool editTagEmpty = true;
+	QString editJoint;
+	bool jointDescendants = true;
 	int editSurface = -1;
 	ModelTransform editTransform;
 	QSet<int> editSurfaces;
@@ -167,6 +169,10 @@ struct ModelViewport::RasterWork {
 	int visibleTriangles = 0, culledTriangles = 0;
 	QVector<TagOverlay> tags;
 	QVector<CollisionOverlay> collision;
+	QVector<JointOverlay> joints;
+	QVector<ModelJointMatrix> jointPose;
+	QString editJoint, jointError;
+	bool showJoints = false, xrayJoints = true, jointDescendants = true;
 	QSize logicalSize;
 	// Physical pixels of the read-back frame and its pixels per logical pixel.
 	QSize size;

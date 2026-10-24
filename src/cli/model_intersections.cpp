@@ -72,7 +72,7 @@ ModelIntersectionsCliResult runModelIntersections(const QStringList &arguments)
 	ModelMesh mesh;
 	if (!readModelFile(source, &bytes, &error))
 		return fail(1, error);
-	if (!importEditableModel(source, bytes, &mesh, &error))
+	if (!importEditableModel(QFileInfo(source).absoluteFilePath(), bytes, &mesh, &error))
 		return fail(4, error);
 	if (request.frame >= mesh.frames.size() || request.surface >= mesh.surfaces.size())
 		return fail(2, Text::tr("The selected surface or frame does not exist."));

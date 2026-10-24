@@ -46,6 +46,8 @@ struct ModelUvIslandTransform
 	int projection = -1;
 	int referenceFrame = 0;
 	int vertexLimit = 65536;
+	// Optional positive factor per selected island, in buildModelUvTopology order.
+	QHash<int, double> islandScales;
 };
 
 // Complete selected islands transform about their own coordinate bounds. Shared
